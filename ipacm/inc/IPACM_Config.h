@@ -97,10 +97,15 @@ public:
 
 	int ipa_nat_max_entries;
 
+	bool ipacm_odu_router_mode;
+
+	bool ipacm_odu_enable;
+	
 	int ipa_nat_iface_entries;
 
 	/* IPACM routing table name for v4/v6 */
 	struct ipa_ioc_get_rt_tbl rt_tbl_lan_v4, rt_tbl_wan_v4, rt_tbl_default_v4, rt_tbl_v6, rt_tbl_wan_v6;
+	struct ipa_ioc_get_rt_tbl rt_tbl_odu_v4, rt_tbl_odu_v6;
 
 	/* To return the instance */
 	static IPACM_Config* GetInstance();
@@ -132,11 +137,12 @@ public:
 
 	int DelNatIfaces(char *dev_name);
 	
+	static const char *DEVICE_NAME_ODU;
+	
 private:
 	static IPACM_Config *pInstance;
 	IPACM_Config(void);
 	int Init(void);
-
 };
 
 #endif /* IPACM_CONFIG */

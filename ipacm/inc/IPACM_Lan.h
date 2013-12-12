@@ -51,6 +51,7 @@ IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #define IPA_MAX_NUM_UNICAST_ROUTE_RULES  6
 #define IPA_WAN_DEFAULT_FILTER_RULE_HANDLES  1
 #define IPA_PRIV_SUBNET_FILTER_RULE_HANDLES  3
+#define IPA_NUM_ODU_ROUTE_RULES 2
 
 /* store each lan-iface unicast routing rule and its handler*/
 struct ipa_lan_rt_rule
@@ -92,6 +93,10 @@ public:
 	/* handle new_address event*/
 	int handle_addr_evt(ipacm_event_data_addr *data);
 
+	int handle_addr_evt_odu_bridge(ipacm_event_data_addr* data);
+
+	static bool odu_up;
+
 private:
 
 	/* dynamically allocate lan iface's unicast routing rule structure */
@@ -103,6 +108,18 @@ private:
 
         int ipv6_set;
 
+//	uint32_t ODU_rt_hdl[IPA_NUM_ODU_ROUTE_RULES];
+
+	uint32_t ODU_hdr_hdl_v4, ODU_hdr_hdl_v6;
+
+	uint32_t *odu_route_rule_v4_hdl;
+
+	uint32_t *odu_route_rule_v6_hdl;
+	
+	bool ipv4_header_set;
+	
+	bool ipv6_header_set;	
+	
 	/* store the number of lan-iface's unicast routing rule */
 	int num_uni_rt;
 
@@ -124,6 +141,15 @@ private:
 	/* handle unicast routing rule del event for ipv6 */
 	int handle_route_del_evt_v6(ipacm_event_data_all *data);
 
+	/* handle odu client initial, construct full headers (tx property) */
+	int handle_odu_hdr_init(uint8_t *mac_addr);
+	
+	/* handle odu default route rule configuration */
+	int handle_odu_route_add();
+	
+	/* handle odu default route rule deletion */
+	int handle_odu_route_del();
+	
 	/*handle wlan iface down event*/
 	int handle_down_evt();
 

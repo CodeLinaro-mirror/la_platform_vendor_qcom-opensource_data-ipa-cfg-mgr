@@ -79,6 +79,7 @@ private:
 	uint32_t firewall_hdl_v4[IPACM_MAX_FIREWALL_ENTRIES];
 	uint32_t firewall_hdl_v6[IPACM_MAX_FIREWALL_ENTRIES];
 	uint32_t dft_wan_fl_hdl[IPA_NUM_DEFAULT_WAN_FILTER_RULES];
+	uint32_t ODU_fl_hdl[IPA_NUM_DEFAULT_WAN_FILTER_RULES];
 	int num_firewall_v4,num_firewall_v6;
 	uint32_t wan_v4_addr;
 	bool active_v4;
@@ -106,6 +107,9 @@ private:
 	/* configure the initial firewall filter rules */
 	int config_dft_firewall_rules(ipa_ip_type iptype);
 
+	/* configure the initial firewall filter rules */
+	int config_dft_embms_rules();
+	
 	/*clean firewall filter rules */
 	int del_dft_firewall_rules(ipa_ip_type iptype);
 

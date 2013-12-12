@@ -116,7 +116,7 @@ int ipacm_read_cfg_xml(char *xml_file, IPACM_conf_t *config)
 {
 	xmlDocPtr doc = NULL;
 	xmlNode* root = NULL;
-	int ret_val;
+	int ret_val = IPACM_SUCCESS;
 
 	/* Invoke the XML parser and obtain the parse tree */
 	doc = xmlReadFile(xml_file, "UTF-8", XML_PARSE_NOBLANKS);
@@ -133,9 +133,11 @@ int ipacm_read_cfg_xml(char *xml_file, IPACM_conf_t *config)
 	/* parse the xml tree returned by libxml */
 	ret_val = ipacm_cfg_xml_parse_tree(root, config);
 
-	if (ret_val != IPACM_SUCCESS) 
-		IPACMDBG("IPACM_xml_parse: ipacm_cfg_xml_parse_tree returned parse error!\n");
-
+	if (ret_val != IPACM_SUCCESS)
+	{
+		IPACMDBG("IPACM_xml_parse: ipacm_cfg_xml_parse_tree returned parse error (%d:%d)!\n",ret_val,IPACM_SUCCESS);
+	}
+	
 	/* Free up the libxml's parse tree */
 	xmlFreeDoc(doc);
 	//xmlCleanupParser();
@@ -167,6 +169,8 @@ static int ipacm_cfg_xml_parse_tree
 			{
 				if (IPACM_util_icmp_string((char*)xml_node->name,
 																	 system_TAG) == 0 ||
+						IPACM_util_icmp_string((char*)xml_node->name,
+																	 ODU_TAG) == 0 ||
 						IPACM_util_icmp_string((char*)xml_node->name,
 																	 IPACMCFG_TAG) == 0 ||
 						IPACM_util_icmp_string((char*)xml_node->name,
@@ -207,6 +211,30 @@ static int ipacm_cfg_xml_parse_tree
 					/* go to child */
 					ret_val = ipacm_cfg_xml_parse_tree(xml_node->children,
 																						 config);
+				}
+				else if (IPACM_util_icmp_string((char*)xml_node->name,
+															ODUMODE_TAG) == 0)
+				{
+					IPACMDBG("inside ODU-XML\n");
+					content = IPACM_read_content_element(xml_node);
+					if (content)
+					{
+						str_size = strlen(content);
+						memset(content_buf, 0, sizeof(content_buf));
+						memcpy(content_buf, (void *)content, str_size);
+						if (0 == strncasecmp(content_buf, ODU_ROUTER_TAG, str_size))
+						{
+							config->odu_enable = true;
+							config->router_mode_enable = true;
+							IPACMDBG("router-mode enable %d\n", config->router_mode_enable);
+						}
+						else if (0 == strncasecmp(content_buf, ODU_BRIDGE_TAG, str_size))
+						{
+							config->odu_enable = true;
+							config->router_mode_enable = false;
+							IPACMDBG("router-mode enable %d\n", config->router_mode_enable);
+						}
+					}
 				}
 				else if (IPACM_util_icmp_string((char*)xml_node->name,
 																				NAME_TAG) == 0)
@@ -255,6 +283,11 @@ static int ipacm_cfg_xml_parse_tree
 							config->iface_config.iface_entries[config->iface_config.num_iface_entries - 1].if_cat = UNKNOWN_IF;
 							IPACMDBG("Category %d\n", config->iface_config.iface_entries[config->iface_config.num_iface_entries - 1].if_cat);
 						}
+						else  if (0 == strncasecmp(content_buf, ODUIF_TAG, str_size))
+						{
+							config->iface_config.iface_entries[config->iface_config.num_iface_entries - 1].if_cat = ODU_IF;
+							IPACMDBG("Category %d\n", config->iface_config.iface_entries[config->iface_config.num_iface_entries - 1].if_cat);
+						}						
 					}
 				}
 				else if (IPACM_util_icmp_string((char*)xml_node->name,

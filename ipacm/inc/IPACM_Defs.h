@@ -55,11 +55,15 @@ extern "C"
 #define IPA_ALG_PROTOCOL_NAME_LEN  10
 
 #define IPA_WLAN_PARTIAL_HDR_OFFSET  12 // dst mac first then src mac
+#define IPA_ODU_PARTIAL_HDR_OFFSET  8 // dst mac first then src mac
 #define IPA_VIRTUAL_IFACE_NAME "bridge0"
 #define IPA_WLAN_PARTIAL_HDR_NAME_v4  "IEEE802_3_v4"
 #define IPA_WLAN_PARTIAL_HDR_NAME_v6  "IEEE802_3_v6"
 #define IPA_WAN_PARTIAL_HDR_NAME_v4  "IEEE802_3_STA_v4"
 #define IPA_WAN_PARTIAL_HDR_NAME_v6  "IEEE802_3_STA_v6"
+#define IPA_ODU_HDR_NAME_v4  "IPACM_ODU_v4"
+#define IPA_ODU_HDR_NAME_v6  "IPACM_ODU_v6"
+
 #define IPA_MAX_IFACE_ENTRIES 15
 #define IPA_MAX_PRIVATE_SUBNET_ENTRIES 3
 #define IPA_MAX_ALG_ENTRIES 10
@@ -70,6 +74,8 @@ extern "C"
 #define V4_WAN_ROUTE_TABLE_NAME  "WANRTBLv4"
 #define V6_COMMON_ROUTE_TABLE_NAME  "COMRTBLv6"
 #define V6_WAN_ROUTE_TABLE_NAME  "WANRTBLv6"
+#define V4_ODU_ROUTE_TABLE_NAME  "ODURTBLv4"
+#define V6_ODU_ROUTE_TABLE_NAME  "ODURTBLv6"
 
 
 
@@ -115,7 +121,8 @@ typedef enum
 	IPA_HANDLE_WAN_UP,                        /* 21 ipacm_event_iface_up  */
 	IPA_HANDLE_WAN_DOWN,                      /* 22 unsigned long  */
 	IPA_HANDLE_WLAN_UP,                       /* 23 ipacm_event_iface_up */
-	IPA_HANDLE_LAN_UP                         /* 24 ipacm_event_iface_up */
+	IPA_HANDLE_LAN_UP,                        /* 24 ipacm_event_iface_up */
+	IPA_WAN_EMBMS_LINK_UP_EVENT,              /* 25 ipacm_event_data_mac */
 } ipa_cm_event_id;
 
 typedef enum
@@ -124,6 +131,8 @@ typedef enum
 	WLAN_IF,
 	WAN_IF,
 	VIRTUAL_IF,
+	EMBMS_IF,
+	ODU_IF,
 	UNKNOWN_IF
 } ipacm_iface_type;
 

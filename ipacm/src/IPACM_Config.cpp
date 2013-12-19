@@ -44,6 +44,7 @@ IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <fcntl.h>
 
 IPACM_Config *IPACM_Config::pInstance = NULL;
+const char *IPACM_Config::DEVICE_NAME_ODU = "/dev/odu_ipa_bridge";
 
 IPACM_Config::IPACM_Config()
 {
@@ -53,6 +54,8 @@ IPACM_Config::IPACM_Config()
 	memset(&ipa_client_rm_map_tbl, 0, sizeof(ipa_client_rm_map_tbl));
 	memset(&ipa_rm_tbl, 0, sizeof(ipa_rm_tbl));
         ipa_rm_a2_check=0;
+	ipacm_odu_enable = false;
+	ipacm_odu_router_mode = false;
 
 	ipa_num_ipa_interfaces = 0;
 	ipa_num_private_subnet = 0;
@@ -65,6 +68,8 @@ IPACM_Config::IPACM_Config()
 	memset(&rt_tbl_wan_v4, 0, sizeof(rt_tbl_wan_v4));
 	memset(&rt_tbl_v6, 0, sizeof(rt_tbl_v6));
 	memset(&rt_tbl_wan_v6, 0, sizeof(rt_tbl_wan_v6));
+	memset(&rt_tbl_odu_v4, 0, sizeof(rt_tbl_odu_v4));
+	memset(&rt_tbl_odu_v6, 0, sizeof(rt_tbl_odu_v6));	
 
 	IPACMDBG(" create IPACM_Config constructor\n");
 	return;
@@ -144,6 +149,12 @@ int IPACM_Config::Init(void)
 	ipa_nat_max_entries = cfg->nat_max_entries;
 	IPACMDBG("Nat Maximum Entries %d\n", ipa_nat_max_entries);
 
+	/* Find ODU is either router mode or bridge mode*/
+	ipacm_odu_enable = cfg->odu_enable;
+	ipacm_odu_router_mode = cfg->router_mode_enable;
+	IPACMDBG("ipacm_odu_enable %d\n", ipacm_odu_enable);
+	IPACMDBG("ipacm_odu_mode %d\n", ipacm_odu_router_mode);
+	
 	/* Allocate more non-nat entries if the monitored iface dun have Tx/Rx properties */
 	pNatIfaces = (NatIfaces *)calloc(ipa_num_ipa_interfaces, sizeof(NatIfaces));
 	if (pNatIfaces == NULL)
@@ -169,6 +180,13 @@ int IPACM_Config::Init(void)
 	rt_tbl_wan_v6.ip = IPA_IP_v6;
 	strncpy(rt_tbl_wan_v6.name, V6_WAN_ROUTE_TABLE_NAME, sizeof(rt_tbl_wan_v6.name));
 
+	rt_tbl_odu_v4.ip = IPA_IP_v4;
+	strncpy(rt_tbl_odu_v4.name, V4_ODU_ROUTE_TABLE_NAME, sizeof(rt_tbl_odu_v4.name));
+	
+	rt_tbl_odu_v6.ip = IPA_IP_v6;
+	strncpy(rt_tbl_odu_v6.name, V6_ODU_ROUTE_TABLE_NAME, sizeof(rt_tbl_odu_v6.name));
+	
+	
 	/* Construct IPACM ipa_client map to rm_resource table */
 	ipa_client_rm_map_tbl[IPA_CLIENT_HSIC1_PROD]= IPA_RM_RESOURCE_HSIC_PROD;
 	ipa_client_rm_map_tbl[IPA_CLIENT_HSIC2_PROD]= IPA_RM_RESOURCE_HSIC_PROD;

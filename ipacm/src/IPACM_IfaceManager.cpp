@@ -53,9 +53,13 @@ iface_instances *IPACM_IfaceManager::head = NULL;
 
 IPACM_IfaceManager::IPACM_IfaceManager() 
 {
-	IPACM_EvtDispatcher::registr(IPA_LINK_UP_EVENT, this);         
-	IPACM_EvtDispatcher::registr(IPA_WLAN_AP_LINK_UP_EVENT, this);  // register for wlan AP-iface
-	IPACM_EvtDispatcher::registr(IPA_WLAN_STA_LINK_UP_EVENT, this); // register for wlan STA-iface
+	IPACM_EvtDispatcher::registr(IPA_LINK_UP_EVENT, this);
+	if(IPACM_Iface::ipacmcfg->ipacm_odu_enable == false)
+	{
+		IPACM_EvtDispatcher::registr(IPA_WLAN_AP_LINK_UP_EVENT, this);  // register for wlan AP-iface
+		IPACM_EvtDispatcher::registr(IPA_WLAN_STA_LINK_UP_EVENT, this); // register for wlan STA-iface
+	}
+	IPACM_EvtDispatcher::registr(IPA_WAN_EMBMS_LINK_UP_EVENT, this);  // register for wan eMBMS-iface
 	return;
 }
 
@@ -68,6 +72,13 @@ void IPACM_IfaceManager::event_callback(ipa_cm_event_id event, void *param)
 
 	case IPA_LINK_UP_EVENT:
 		IPACMDBG("link up %d: \n", evt_data->if_index);
+		/* to check if eMBMS is up already */
+		ipa_interface_index = IPACM_Iface::iface_ipa_index_query(evt_data->if_index);
+		if(IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].if_cat == EMBMS_IF)
+		{   
+		  IPACMDBG("WAN-EMBMS (%s) link already up, iface: %d: \n", IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].iface_name,evt_data->if_index);		
+		}
+		else
 		create_iface_instance(evt_data->if_index);
 		break;
 
@@ -75,7 +86,7 @@ void IPACM_IfaceManager::event_callback(ipa_cm_event_id event, void *param)
 	    ipa_interface_index = IPACM_Iface::iface_ipa_index_query(evt_data->if_index);
 		/* change iface category from unknown to WLAN_IF */
 		if(IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].if_cat == UNKNOWN_IF)
-		{  
+		{
 		  IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].if_cat=WLAN_IF; 
 		  IPACMDBG("WLAN AP (%s) link up, iface: %d: \n", IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].iface_name,evt_data->if_index);		
 		  create_iface_instance(evt_data->if_index);
@@ -100,7 +111,21 @@ void IPACM_IfaceManager::event_callback(ipa_cm_event_id event, void *param)
 		  IPACMDBG("iface %s already up and act as %d mode: \n",IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].iface_name,IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].if_cat);		
 		}
 		break;
-		
+    /* Add new instance open for eMBMS iface and wan iface */
+	case IPA_WAN_EMBMS_LINK_UP_EVENT:
+	    ipa_interface_index = IPACM_Iface::iface_ipa_index_query(evt_data->if_index);
+		/* change iface category from unknown to EMBMS_IF */
+		if(IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].if_cat == WAN_IF)
+		{  
+		  IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].if_cat=EMBMS_IF; 
+		  IPACMDBG("WAN eMBMS (%s) link up, iface: %d: \n", IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].iface_name,evt_data->if_index);		
+		  create_iface_instance(evt_data->if_index);
+		}
+		else
+		{
+		  IPACMDBG("iface %s already up and act as %d mode: \n",IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].iface_name,IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].if_cat);		
+		}
+		break;	
 	default:
 		break;
 	}
@@ -146,6 +171,37 @@ int IPACM_IfaceManager::create_iface_instance(int if_index)
 			}
 			break;
 
+		case ODU_IF:
+			{
+				if(IPACM_Iface::ipacmcfg->ipacm_odu_router_mode == true)
+				{
+					IPACMDBG("Creating ODU interface in router mode\n");
+					IPACM_Lan *odu = new IPACM_Lan(ipa_interface_index);
+					IPACM_EvtDispatcher::registr(IPA_ADDR_ADD_EVENT, odu);
+					IPACM_EvtDispatcher::registr(IPA_NEIGH_CLIENT_IP_ADDR_ADD_EVENT, odu);
+					IPACM_EvtDispatcher::registr(IPA_HANDLE_WAN_UP, odu);
+					IPACM_EvtDispatcher::registr(IPA_HANDLE_WAN_DOWN, odu);
+					IPACM_EvtDispatcher::registr(IPA_LINK_DOWN_EVENT, odu);
+					IPACMDBG("ipa_LAN (%s):ipa_index (%d) instance open/registr ok\n", odu->dev_name, odu->ipa_if_num);
+					registr(ipa_interface_index, odu);
+					/* solve the new_addr comes earlier issue */
+					IPACM_Iface::iface_addr_query(if_index);
+				}
+				else
+				{
+					IPACMDBG("Creating ODU interface in bridge mode\n");
+					IPACM_Lan *odu = new IPACM_Lan(ipa_interface_index);
+					IPACM_EvtDispatcher::registr(IPA_ADDR_ADD_EVENT, odu);
+					IPACM_EvtDispatcher::registr(IPA_NEIGH_CLIENT_IP_ADDR_ADD_EVENT, odu);
+					IPACM_EvtDispatcher::registr(IPA_LINK_DOWN_EVENT, odu);
+					IPACMDBG("ipa_LAN (%s):ipa_index (%d) instance open/registr ok\n", odu->dev_name, odu->ipa_if_num);
+					registr(ipa_interface_index, odu);
+					/* solve the new_addr comes earlier issue */
+					IPACM_Iface::iface_addr_query(if_index);
+				}
+			}
+			break;
+
 		case WLAN_IF:
 			{
 				IPACMDBG("Creating WLan interface\n");
@@ -171,23 +227,39 @@ int IPACM_IfaceManager::create_iface_instance(int if_index)
 
 		case WAN_IF:
 			{
-				IPACMDBG("Creating Wan interface\n");
-				IPACM_Wan *w = new IPACM_Wan(ipa_interface_index);
-				IPACM_EvtDispatcher::registr(IPA_ADDR_ADD_EVENT, w);
-				IPACM_EvtDispatcher::registr(IPA_ROUTE_ADD_EVENT, w);
-				IPACM_EvtDispatcher::registr(IPA_ROUTE_DEL_EVENT, w);
-				IPACM_EvtDispatcher::registr(IPA_FIREWALL_CHANGE_EVENT, w);
-				IPACM_EvtDispatcher::registr(IPA_NEIGH_CLIENT_IP_ADDR_ADD_EVENT, w);
-				IPACM_EvtDispatcher::registr(IPA_SW_ROUTING_ENABLE, w);
-				IPACM_EvtDispatcher::registr(IPA_SW_ROUTING_DISABLE, w);
-				IPACM_EvtDispatcher::registr(IPA_LINK_DOWN_EVENT, w);
-				IPACMDBG("ipa_WAN (%s):ipa_index (%d) instance open/registr ok\n", w->dev_name, w->ipa_if_num);
-				registr(ipa_interface_index, w);
-				/* solve the new_addr comes earlier issue */
-                                IPACM_Iface::iface_addr_query(if_index);
+				if((IPACM_Iface::ipacmcfg->ipacm_odu_enable == false) || (IPACM_Iface::ipacmcfg->ipacm_odu_router_mode == true))
+				{
+					IPACMDBG("Creating Wan interface\n");
+					IPACM_Wan *w = new IPACM_Wan(ipa_interface_index);
+					IPACM_EvtDispatcher::registr(IPA_ADDR_ADD_EVENT, w);
+					IPACM_EvtDispatcher::registr(IPA_ROUTE_ADD_EVENT, w);
+					IPACM_EvtDispatcher::registr(IPA_ROUTE_DEL_EVENT, w);
+					IPACM_EvtDispatcher::registr(IPA_FIREWALL_CHANGE_EVENT, w);
+					IPACM_EvtDispatcher::registr(IPA_NEIGH_CLIENT_IP_ADDR_ADD_EVENT, w);
+					IPACM_EvtDispatcher::registr(IPA_SW_ROUTING_ENABLE, w);
+					IPACM_EvtDispatcher::registr(IPA_SW_ROUTING_DISABLE, w);
+					IPACM_EvtDispatcher::registr(IPA_LINK_DOWN_EVENT, w);
+					IPACMDBG("ipa_WAN (%s):ipa_index (%d) instance open/registr ok\n", w->dev_name, w->ipa_if_num);
+					registr(ipa_interface_index, w);
+					/* solve the new_addr comes earlier issue */
+									IPACM_Iface::iface_addr_query(if_index);
+				}
 			}
 			break;
 
+	    /* WAN-eMBMS instance */
+		case EMBMS_IF:
+			{
+				IPACMDBG("Creating Wan-eMBSM interface\n");
+				IPACM_Wan *embms = new IPACM_Wan(ipa_interface_index);
+				IPACM_EvtDispatcher::registr(IPA_LINK_DOWN_EVENT, embms);
+				IPACMDBG("ipa_WAN (%s):ipa_index (%d) instance open/registr ok\n", embms->dev_name, embms->ipa_if_num);
+				registr(ipa_interface_index, embms);
+			}
+			break;			
+			
+			
+			
 		default:
 			IPACMDBG("Unhandled interface category received iface name: %s, category: %d\n",
 			            IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].iface_name,

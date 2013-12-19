@@ -65,7 +65,17 @@ IPACM_Wan::IPACM_Wan(int iface_index) : IPACM_Iface(iface_index)
 	hdr_hdl_sta_v4 = 0;
 	hdr_hdl_sta_v6 = 0;
 
+	if(IPACM_Iface::ipacmcfg->iface_table[ipa_if_num].if_cat == EMBMS_IF)
+	{   
+		IPACMDBG(" IPACM->IPACM_Wan_eMBMS(%d) constructor: Tx:%d\n", ipa_if_num, iface_query->num_tx_props);
+		config_dft_embms_rules();
+		/* Add corresponding ipa_rm_resource_name of TX-endpoint up before IPV6 RT-rule set */
+        IPACM_Iface::ipacmcfg->AddRmDepend(IPACM_Iface::ipacmcfg->ipa_client_rm_map_tbl[tx_prop->tx[0].dst_pipe],false);
+	}
+	else
+	{
 	IPACMDBG(" IPACM->IPACM_Wan(%d) constructor: Tx:%d\n", ipa_if_num, iface_query->num_tx_props);
+	}
 	return;
 }
 
@@ -1531,6 +1541,155 @@ int IPACM_Wan::config_dft_firewall_rules(ipa_ip_type iptype)
 }
 
 
+/* configure the initial embms filter rules */
+int IPACM_Wan::config_dft_embms_rules()
+{
+	struct ipa_flt_rule_add flt_rule_entry;
+	
+	if (rx_prop == NULL)
+	{
+		IPACMDBG("No rx properties registered for iface %s\n", dev_name);
+		return IPACM_SUCCESS;
+	}
+
+	/* construct ipa_ioc_add_flt_rule with N firewall rules */
+	ipa_ioc_add_flt_rule *m_pFilteringTable;
+
+	/* construc v4 rule */
+	m_pFilteringTable = (struct ipa_ioc_add_flt_rule *)
+		 calloc(1,
+						sizeof(struct ipa_ioc_add_flt_rule) +
+						1 * sizeof(struct ipa_flt_rule_add));
+
+	if (!m_pFilteringTable)
+	{
+		IPACMERR("Error Locate ipa_flt_rule_add memory...\n");
+		return IPACM_FAILURE;
+	}
+	m_pFilteringTable->commit = 1;
+	m_pFilteringTable->ep = rx_prop->rx[0].src_pipe;
+	m_pFilteringTable->global = false;
+	m_pFilteringTable->ip = IPA_IP_v4;
+	m_pFilteringTable->num_rules = (uint8_t)1;
+
+	memset(&flt_rule_entry, 0, sizeof(struct ipa_flt_rule_add));
+
+	/* get eMBMS ODU tbl */
+	IPACMDBG("Retrieving ODU routing hanle for table: %s\n",
+					 IPACM_Iface::ipacmcfg->rt_tbl_odu_v4.name);
+	if (false == m_routing.GetRoutingTable(&IPACM_Iface::ipacmcfg->rt_tbl_odu_v4))
+	{
+		IPACMERR("m_routing.GetRoutingTable(rt_tbl_odu_v4) Failed.\n");
+		free(m_pFilteringTable);
+		return IPACM_FAILURE;
+	}
+	IPACMDBG("Routing hanle for table: %d\n", IPACM_Iface::ipacmcfg->rt_tbl_odu_v4.hdl);
+	
+	flt_rule_entry.flt_rule_hdl = -1;
+	flt_rule_entry.status = -1;
+	flt_rule_entry.at_rear = true;
+	flt_rule_entry.rule.action = IPA_PASS_TO_ROUTING;				
+
+	flt_rule_entry.rule.rt_tbl_hdl = IPACM_Iface::ipacmcfg->rt_tbl_odu_v4.hdl;
+	memcpy(&flt_rule_entry.rule.attrib,
+				 &rx_prop->rx[0].attrib,
+				 sizeof(struct ipa_rule_attrib));
+	flt_rule_entry.rule.attrib.attrib_mask |= IPA_FLT_DST_ADDR;
+	flt_rule_entry.rule.attrib.u.v4.dst_addr_mask = 0x00000000;
+	flt_rule_entry.rule.attrib.u.v4.dst_addr = 0x00000000;
+
+	memcpy(&(m_pFilteringTable->rules[0]), &flt_rule_entry, sizeof(struct ipa_flt_rule_add));
+
+	if (false == m_filtering.AddFilteringRule(m_pFilteringTable))
+	{
+		IPACMERR("Error Adding RuleTable(0) to Filtering, aborting...\n");
+		free(m_pFilteringTable);
+		return IPACM_FAILURE;
+	}
+	else
+	{
+		IPACMDBG("flt rule hdl0=0x%x, status=0x%x\n", m_pFilteringTable->rules[0].flt_rule_hdl, m_pFilteringTable->rules[0].status);
+	}
+	/* copy filter hdls */
+	ODU_fl_hdl[0] = m_pFilteringTable->rules[0].flt_rule_hdl;
+	free(m_pFilteringTable);
+		
+
+	/* construc v6 rule */
+
+	m_pFilteringTable = (struct ipa_ioc_add_flt_rule *)
+		 calloc(1,
+						sizeof(struct ipa_ioc_add_flt_rule) +
+						1 * sizeof(struct ipa_flt_rule_add));
+
+
+	if (!m_pFilteringTable)
+	{
+		IPACMERR("Error Locate ipa_flt_rule_add memory...\n");
+		return IPACM_FAILURE;
+	}
+	m_pFilteringTable->commit = 1;
+	m_pFilteringTable->ep = rx_prop->rx[0].src_pipe;
+	m_pFilteringTable->global = false;
+	m_pFilteringTable->ip = IPA_IP_v6;
+	m_pFilteringTable->num_rules = (uint8_t)1;
+
+	memset(&flt_rule_entry, 0, sizeof(struct ipa_flt_rule_add));
+	/* get eMBMS ODU tbl*/
+	IPACMDBG("Retrieving ODU routing hanle for table: %s\n",
+					 IPACM_Iface::ipacmcfg->rt_tbl_odu_v6.name);
+	if (false == m_routing.GetRoutingTable(&IPACM_Iface::ipacmcfg->rt_tbl_odu_v6))
+	{
+		IPACMERR("m_routing.GetRoutingTable(rt_tbl_odu_v6) Failed.\n");
+		free(m_pFilteringTable);
+		return IPACM_FAILURE;
+	}
+	IPACMDBG("Routing hanle for table: %d\n", IPACM_Iface::ipacmcfg->rt_tbl_odu_v6.hdl);
+	
+	flt_rule_entry.flt_rule_hdl = -1;
+	flt_rule_entry.status = -1;
+	flt_rule_entry.rule.rt_tbl_hdl = IPACM_Iface::ipacmcfg->rt_tbl_odu_v6.hdl;
+
+	flt_rule_entry.at_rear = true;
+	flt_rule_entry.rule.action = IPA_PASS_TO_ROUTING;
+	
+
+	memcpy(&flt_rule_entry.rule.attrib,
+				 &rx_prop->rx[0].attrib,
+				 sizeof(struct ipa_rule_attrib));
+	flt_rule_entry.rule.attrib.attrib_mask |= IPA_FLT_DST_ADDR;
+	flt_rule_entry.rule.attrib.u.v6.dst_addr_mask[0] = 0x00000000;
+	flt_rule_entry.rule.attrib.u.v6.dst_addr_mask[1] = 0x00000000;
+	flt_rule_entry.rule.attrib.u.v6.dst_addr_mask[2] = 0x00000000;
+	flt_rule_entry.rule.attrib.u.v6.dst_addr_mask[3] = 0x00000000;
+	flt_rule_entry.rule.attrib.u.v6.dst_addr[0] = 0X00000000;
+	flt_rule_entry.rule.attrib.u.v6.dst_addr[1] = 0x00000000;
+	flt_rule_entry.rule.attrib.u.v6.dst_addr[2] = 0x00000000;
+	flt_rule_entry.rule.attrib.u.v6.dst_addr[3] = 0X00000000;
+
+	memcpy(&(m_pFilteringTable->rules[0]), &flt_rule_entry, sizeof(struct ipa_flt_rule_add));
+
+	if (false == m_filtering.AddFilteringRule(m_pFilteringTable))
+	{
+		IPACMERR("Error Adding Filtering rules, aborting...\n");
+		free(m_pFilteringTable);
+		return IPACM_FAILURE;
+	}
+	else
+	{
+		IPACMDBG("flt rule hdl0=0x%x, status=0x%x\n", m_pFilteringTable->rules[0].flt_rule_hdl, m_pFilteringTable->rules[0].status);
+	}
+
+	/* copy filter hdls */
+	ODU_fl_hdl[1] = m_pFilteringTable->rules[0].flt_rule_hdl;
+	free(m_pFilteringTable);
+		
+    /* finish construc v6 rule */
+	
+	return IPACM_SUCCESS;
+}
+
+
 
 /*handle wan-iface down event */
 int IPACM_Wan::handle_down_evt()
@@ -1539,6 +1698,40 @@ int IPACM_Wan::handle_down_evt()
 	int i;
 
 	IPACMDBG(" wan handle_down_evt \n");
+
+	/* free ODU filter rule handlers */
+	if(IPACM_Iface::ipacmcfg->iface_table[ipa_if_num].if_cat == EMBMS_IF)
+	{
+
+		/* Delete corresponding ipa_rm_resource_name of TX-endpoint after delete IPV4/V6 RT-rule */
+		IPACM_Iface::ipacmcfg->DelRmDepend(IPACM_Iface::ipacmcfg->ipa_client_rm_map_tbl[tx_prop->tx[0].dst_pipe]);	
+
+		if (rx_prop != NULL)
+		{	
+			if (m_filtering.DeleteFilteringHdls(ODU_fl_hdl,
+														IPA_IP_v4,
+															1) == false)
+			{
+				IPACMERR("Error Delete Filtering rules, aborting...\n");
+				res = IPACM_FAILURE;
+				goto fail;
+			}
+	
+			IPACMDBG("finished delete default v4 ODU filtering rule\n ");
+	
+			if (m_filtering.DeleteFilteringHdls(ODU_fl_hdl[1],
+														IPA_IP_v6,
+															1) == false)
+			{
+				IPACMERR("ErrorDeleting Filtering rule, aborting...\n");
+				res = IPACM_FAILURE;
+				goto fail;
+			}
+	
+			IPACMDBG("finished delete default v6 ODU filtering rule\n ");
+		}
+		goto fail;
+	}		
 
 	/* no iface address up, directly close iface*/
 	if (ip_type == IPACM_IP_NULL)
@@ -1655,6 +1848,9 @@ int IPACM_Wan::handle_down_evt()
 	}
 
 fail:
+	free(wan_route_rule_v4_hdl);
+	free(wan_route_rule_v6_hdl);
+	free(wan_route_rule_v6_hdl_a5);
 	free(tx_prop);
 	free(rx_prop);
 	free(iface_query);

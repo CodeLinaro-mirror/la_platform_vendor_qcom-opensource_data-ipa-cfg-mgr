@@ -141,8 +141,10 @@ public:
 	
 private:
 	static IPACM_Config *pInstance;
+	static const char *DEVICE_NAME;
 	IPACM_Config(void);
 	int Init(void);
+	int m_fd; /* File descriptor of the IPA device node /dev/ipa */
 };
 
 #endif /* IPACM_CONFIG */

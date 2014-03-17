@@ -170,7 +170,7 @@ void* ipa_driver_wlan_notifier(void *param)
 	char buffer[IPA_DRIVER_WLAN_BUF_LEN];
 	struct ipa_msg_meta *event_hdr = NULL;
 	struct ipa_wlan_msg *event_wlan = NULL;
-	struct ipa_wan_msg *event_wan = NULL;			
+	struct ipa_wan_msg *event_wan = NULL;
 	struct ipa_ecm_msg *event_ecm = NULL;
 
 	ipacm_cmd_q_data evt_data;
@@ -237,7 +237,7 @@ void* ipa_driver_wlan_notifier(void *param)
 			IPACMDBG("Received WLAN_AP_CONNECT name: %s\n",event_wlan->name);
 			IPACMDBG("AP Mac Address %02x:%02x:%02x:%02x:%02x:%02x\n",
 							 event_wlan->mac_addr[0], event_wlan->mac_addr[1], event_wlan->mac_addr[2],
-							 event_wlan->mac_addr[3], event_wlan->mac_addr[4], event_wlan->mac_addr[5]); 
+							 event_wlan->mac_addr[3], event_wlan->mac_addr[4], event_wlan->mac_addr[5]);
                         data_fid = (ipacm_event_data_fid *)malloc(sizeof(ipacm_event_data_fid));
 			if(data_fid == NULL)
 			{
@@ -253,7 +253,7 @@ void* ipa_driver_wlan_notifier(void *param)
 			IPACMDBG("Received WLAN_AP_DISCONNECT name: %s\n",event_wlan->name);
 			IPACMDBG("AP Mac Address %02x:%02x:%02x:%02x:%02x:%02x\n",
 							 event_wlan->mac_addr[0], event_wlan->mac_addr[1], event_wlan->mac_addr[2],
-							 event_wlan->mac_addr[3], event_wlan->mac_addr[4], event_wlan->mac_addr[5]); 
+							 event_wlan->mac_addr[3], event_wlan->mac_addr[4], event_wlan->mac_addr[5]);
                         data_fid = (ipacm_event_data_fid *)malloc(sizeof(ipacm_event_data_fid));
 			if(data_fid == NULL)
 			{
@@ -268,7 +268,7 @@ void* ipa_driver_wlan_notifier(void *param)
 			IPACMDBG("Received WLAN_STA_CONNECT name: %s\n",event_wlan->name);
 			IPACMDBG("STA Mac Address %02x:%02x:%02x:%02x:%02x:%02x\n",
 							 event_wlan->mac_addr[0], event_wlan->mac_addr[1], event_wlan->mac_addr[2],
-							 event_wlan->mac_addr[3], event_wlan->mac_addr[4], event_wlan->mac_addr[5]); 
+							 event_wlan->mac_addr[3], event_wlan->mac_addr[4], event_wlan->mac_addr[5]);
                         data_fid = (ipacm_event_data_fid *)malloc(sizeof(ipacm_event_data_fid));
 			if(data_fid == NULL)
 			{
@@ -284,7 +284,7 @@ void* ipa_driver_wlan_notifier(void *param)
 			IPACMDBG("Received WLAN_STA_DISCONNECT name: %s\n",event_wlan->name);
 			IPACMDBG("STA Mac Address %02x:%02x:%02x:%02x:%02x:%02x\n",
 							 event_wlan->mac_addr[0], event_wlan->mac_addr[1], event_wlan->mac_addr[2],
-							 event_wlan->mac_addr[3], event_wlan->mac_addr[4], event_wlan->mac_addr[5]); 
+							 event_wlan->mac_addr[3], event_wlan->mac_addr[4], event_wlan->mac_addr[5]);
                         data_fid = (ipacm_event_data_fid *)malloc(sizeof(ipacm_event_data_fid));
 			if(data_fid == NULL)
 			{
@@ -301,7 +301,7 @@ void* ipa_driver_wlan_notifier(void *param)
 			IPACMDBG("Received WLAN_CLIENT_CONNECT\n");
 			IPACMDBG("Mac Address %02x:%02x:%02x:%02x:%02x:%02x\n",
 							 event_wlan->mac_addr[0], event_wlan->mac_addr[1], event_wlan->mac_addr[2],
-							 event_wlan->mac_addr[3], event_wlan->mac_addr[4], event_wlan->mac_addr[5]); 
+							 event_wlan->mac_addr[3], event_wlan->mac_addr[4], event_wlan->mac_addr[5]);
 		        data = (ipacm_event_data_mac *)malloc(sizeof(ipacm_event_data_mac));
 		        if (data == NULL)
 		        {
@@ -320,7 +320,7 @@ void* ipa_driver_wlan_notifier(void *param)
 			IPACMDBG("Received WLAN_CLIENT_DISCONNECT\n");
 			IPACMDBG("Mac Address %02x:%02x:%02x:%02x:%02x:%02x\n",
 							 event_wlan->mac_addr[0], event_wlan->mac_addr[1], event_wlan->mac_addr[2],
-							 event_wlan->mac_addr[3], event_wlan->mac_addr[4], event_wlan->mac_addr[5]); 
+							 event_wlan->mac_addr[3], event_wlan->mac_addr[4], event_wlan->mac_addr[5]);
 		        data = (ipacm_event_data_mac *)malloc(sizeof(ipacm_event_data_mac));
 		        if (data == NULL)
 		        {
@@ -339,7 +339,7 @@ void* ipa_driver_wlan_notifier(void *param)
 			IPACMDBG("Received WLAN_CLIENT_POWER_SAVE_MODE\n");
 			IPACMDBG("Mac Address %02x:%02x:%02x:%02x:%02x:%02x\n",
 							 event_wlan->mac_addr[0], event_wlan->mac_addr[1], event_wlan->mac_addr[2],
-							 event_wlan->mac_addr[3], event_wlan->mac_addr[4], event_wlan->mac_addr[5]); 
+							 event_wlan->mac_addr[3], event_wlan->mac_addr[4], event_wlan->mac_addr[5]);
 		        data = (ipacm_event_data_mac *)malloc(sizeof(ipacm_event_data_mac));
 		        if (data == NULL)
 		        {
@@ -348,7 +348,7 @@ void* ipa_driver_wlan_notifier(void *param)
 		        }
 			memcpy(data->mac_addr,
 						 event_wlan->mac_addr,
-						 sizeof(event_wlan->mac_addr));			
+						 sizeof(event_wlan->mac_addr));
 			ipa_get_if_index(event_wlan->name, &(data->if_index));
 			evt_data.event = IPA_WLAN_CLIENT_POWER_SAVE_EVENT;
 			evt_data.evt_data = data;
@@ -358,7 +358,7 @@ void* ipa_driver_wlan_notifier(void *param)
 			IPACMDBG("Received WLAN_CLIENT_NORMAL_MODE\n");
 			IPACMDBG("Mac Address %02x:%02x:%02x:%02x:%02x:%02x\n",
 							 event_wlan->mac_addr[0], event_wlan->mac_addr[1], event_wlan->mac_addr[2],
-							 event_wlan->mac_addr[3], event_wlan->mac_addr[4], event_wlan->mac_addr[5]); 
+							 event_wlan->mac_addr[3], event_wlan->mac_addr[4], event_wlan->mac_addr[5]);
 		        data = (ipacm_event_data_mac *)malloc(sizeof(ipacm_event_data_mac));
 		        if (data == NULL)
 		        {
@@ -380,7 +380,7 @@ void* ipa_driver_wlan_notifier(void *param)
 			{
 				IPACMERR("unable to allocate memory for event data_fid\n");
 				return NULL;
-			}			
+			}
 			ipa_get_if_index(event_wan->name, &(data_fid->if_index));
 			evt_data.event = IPA_WAN_EMBMS_LINK_UP_EVENT;
 			evt_data.evt_data = data_fid;

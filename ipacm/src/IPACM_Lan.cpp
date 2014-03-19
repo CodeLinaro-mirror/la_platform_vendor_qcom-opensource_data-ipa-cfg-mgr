@@ -57,14 +57,7 @@ IPACM_Lan::IPACM_Lan(int iface_index) : IPACM_Iface(iface_index)
 	ipv4_header_set = false;
 	ipv6_header_set = false;
 	int m_fd_odu, ret = IPACM_SUCCESS;
-	
-	/* ODU routing table initilization */
-	if(IPACM_Iface::ipacmcfg->iface_table[ipa_if_num].if_cat == ODU_IF)
-	{
-		odu_route_rule_v4_hdl = (uint32_t *)calloc(iface_query->num_tx_props, sizeof(uint32_t));
-		odu_route_rule_v6_hdl = (uint32_t *)calloc(iface_query->num_tx_props, sizeof(uint32_t));
-	}
-	
+
 	rt_rule_len = sizeof(struct ipa_lan_rt_rule) + (iface_query->num_tx_props * sizeof(uint32_t));
 	route_rule = (struct ipa_lan_rt_rule *)calloc(IPA_MAX_NUM_UNICAST_ROUTE_RULES, rt_rule_len);
 	if (route_rule == NULL)
@@ -76,30 +69,41 @@ IPACM_Lan::IPACM_Lan(int iface_index) : IPACM_Iface(iface_index)
 	IPACMDBG(" IPACM->IPACM_Lan(%d) constructor: Tx:%d Rx:%d\n", ipa_if_num,
 					 iface_query->num_tx_props, iface_query->num_rx_props);
 
-	/* only do one time ioctl to odu-driver to infrom in router or bridge mode*/
-	if (IPACM_Lan::odu_up != true)
+	/* ODU routing table initilization */
+	if(IPACM_Iface::ipacmcfg->iface_table[ipa_if_num].if_cat == ODU_IF)
 	{
-	     if (IPACM_Iface::ipacmcfg->ipacm_odu_enable == true)
-	     {
-		m_fd_odu = open(IPACM_Iface::ipacmcfg->DEVICE_NAME_ODU, O_RDWR);
-		if (0 == m_fd_odu)
-		{
-			IPACMERR("Failed opening %s.\n", IPACM_Iface::ipacmcfg->DEVICE_NAME_ODU);
-		}
-		
-		if(IPACM_Iface::ipacmcfg->ipacm_odu_router_mode == true)
-		ret = ioctl(m_fd_odu, ODU_BRIDGE_IOC_SET_MODE, ODU_BRIDGE_MODE_ROUTER);
-		else
-		ret = ioctl(m_fd_odu, ODU_BRIDGE_IOC_SET_MODE, ODU_BRIDGE_MODE_BRIDGE);
+		odu_route_rule_v4_hdl = (uint32_t *)calloc(iface_query->num_tx_props, sizeof(uint32_t));
+		odu_route_rule_v6_hdl = (uint32_t *)calloc(iface_query->num_tx_props, sizeof(uint32_t));
 
-		if (ret)
+		/* only do one time ioctl to odu-driver to infrom in router or bridge mode*/
+		if (IPACM_Lan::odu_up != true)
 		{
-			IPACMERR("Failed tell odu-driver the mode\n");
+			if (IPACM_Iface::ipacmcfg->ipacm_odu_enable == true)
+			{
+				m_fd_odu = open(IPACM_Iface::ipacmcfg->DEVICE_NAME_ODU, O_RDWR);
+				if (0 == m_fd_odu)
+				{
+					IPACMERR("Failed opening %s.\n", IPACM_Iface::ipacmcfg->DEVICE_NAME_ODU);
+				}
+		
+				if(IPACM_Iface::ipacmcfg->ipacm_odu_router_mode == true)
+				{
+					ret = ioctl(m_fd_odu, ODU_BRIDGE_IOC_SET_MODE, ODU_BRIDGE_MODE_ROUTER);
+				}
+				else
+				{
+					ret = ioctl(m_fd_odu, ODU_BRIDGE_IOC_SET_MODE, ODU_BRIDGE_MODE_BRIDGE);
+				}
+		
+				if (ret)
+				{
+					IPACMERR("Failed tell odu-driver the mode\n");
+				}
+				IPACMDBG("Tell odu-driver in router-mode(%d)\n", IPACM_Iface::ipacmcfg->ipacm_odu_router_mode);	
+				close(m_fd_odu);		
+				IPACM_Lan::odu_up = true;		
+			}
 		}
-		IPACMDBG("Tell odu-driver in router-mode(%d)\n", IPACM_Iface::ipacmcfg->ipacm_odu_router_mode);	
-		close(m_fd_odu);		
-			IPACM_Lan::odu_up = true;		
-	     }
 	}
 	return;
 }
@@ -154,7 +158,9 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 			{
 				IPACMDBG("Received IPA_ADDR_ADD_EVENT\n");
 
-				if((IPACM_Iface::ipacmcfg->ipacm_odu_enable == true) && (IPACM_Iface::ipacmcfg->ipacm_odu_router_mode == false) )
+				/* only call ioctl for ODU iface with bridge mode */
+				if((IPACM_Iface::ipacmcfg->ipacm_odu_enable == true) && (IPACM_Iface::ipacmcfg->ipacm_odu_router_mode == false)
+						&& (IPACM_Iface::ipacmcfg->iface_table[ipa_if_num].if_cat == ODU_IF))
 				{
 					if((data->iptype == IPA_IP_v6) && (num_dft_rt_v6 == 0))
 					{
@@ -1294,13 +1300,12 @@ int IPACM_Lan::handle_odu_hdr_init(uint8_t *mac_addr)
 		for (cnt=0; cnt<tx_prop->num_tx_props; cnt++)
 		{
 				 if(tx_prop->tx[cnt].ip==IPA_IP_v4)
-				 {		   
+				 {
 								IPACMDBG("Got partial v4-header name from %d tx props\n", cnt);
 								memset(&sCopyHeader, 0, sizeof(sCopyHeader));
 								memcpy(sCopyHeader.name,
-											 tx_prop->tx[cnt].hdr_name,
+											tx_prop->tx[cnt].hdr_name,
 											 sizeof(sCopyHeader.name));
-												 
 								IPACMDBG("header name: %s in tx:%d\n", sCopyHeader.name,cnt);
 								if (m_header.CopyHeader(&sCopyHeader) == false)
 								{
@@ -1308,7 +1313,6 @@ int IPACM_Lan::handle_odu_hdr_init(uint8_t *mac_addr)
 									res = IPACM_FAILURE;
 									goto fail;
 								}
-												 
 								IPACMDBG("header length: %d, paritial: %d\n", sCopyHeader.hdr_len, sCopyHeader.is_partial);
 								if (sCopyHeader.hdr_len > IPA_HDR_MAX_SIZE)
 								{
@@ -1322,28 +1326,21 @@ int IPACM_Lan::handle_odu_hdr_init(uint8_t *mac_addr)
 												 sCopyHeader.hdr, 
 												 sCopyHeader.hdr_len);
 								}
-						 
 								/* copy client mac_addr to partial header */
 								memcpy(&pHeaderDescriptor->hdr[0].hdr[IPA_ODU_PARTIAL_HDR_OFFSET],
 											 mac_addr,
 											 IPA_MAC_ADDR_SIZE);
-												 
+
 								pHeaderDescriptor->commit = true;
 								pHeaderDescriptor->num_hdrs = 1;
-												 
+
 								memset(pHeaderDescriptor->hdr[0].name, 0,
 											 sizeof(pHeaderDescriptor->hdr[0].name));
-												 
-								//sprintf(index, "%d", ipa_if_num);
-								//strncpy(pHeaderDescriptor->hdr[0].name, index, sizeof(index));
-												 
-								strncat(pHeaderDescriptor->hdr[0].name,
+
+											 strncat(pHeaderDescriptor->hdr[0].name,
 												IPA_ODU_HDR_NAME_v4,
 												sizeof(IPA_ODU_HDR_NAME_v4));
-												 
-								//sprintf(index, "%d", header_name_count);
-								//strncat(pHeaderDescriptor->hdr[0].name, index, sizeof(index));
-												 
+
 								pHeaderDescriptor->hdr[0].hdr_len = sCopyHeader.hdr_len;
 								pHeaderDescriptor->hdr[0].hdr_hdl = -1;
 								pHeaderDescriptor->hdr[0].is_partial = 0;
@@ -1361,18 +1358,18 @@ int IPACM_Lan::handle_odu_hdr_init(uint8_t *mac_addr)
 					ipv4_header_set = true ;
 					IPACMDBG(" ODU v4 full header name:%s header handle:(0x%x)\n",
 										 pHeaderDescriptor->hdr[0].name,
-												 ODU_hdr_hdl_v4);	
-					break;  
+												 ODU_hdr_hdl_v4);
+					break;
 				 }
 		}	
-		
-					 
+
+
 		/* copy partial header for v6*/
 		for (cnt=0; cnt<tx_prop->num_tx_props; cnt++)
 		{
 			if(tx_prop->tx[cnt].ip==IPA_IP_v6)
 			{
-		
+
 				IPACMDBG("Got partial v6-header name from %d tx props\n", cnt);
 				memset(&sCopyHeader, 0, sizeof(sCopyHeader));
 				memcpy(sCopyHeader.name,
@@ -1433,11 +1430,10 @@ int IPACM_Lan::handle_odu_hdr_init(uint8_t *mac_addr)
 				ipv6_header_set = true ;
 				IPACMDBG(" ODU v4 full header name:%s header handle:(0x%x)\n",
 									 pHeaderDescriptor->hdr[0].name,
-											 ODU_hdr_hdl_v6);	
-				break;  
-	
+											 ODU_hdr_hdl_v6);
+				break;
 			}
-		}	
+		}
 	}
 fail:
 	free(pHeaderDescriptor);
@@ -1482,19 +1478,19 @@ int IPACM_Lan::handle_odu_route_add()
 	for (tx_index = 0; tx_index < iface_query->num_tx_props; tx_index++)
 	{
 
-	    if (IPA_IP_v4 == tx_prop->tx[tx_index].ip) 
+	    if (IPA_IP_v4 == tx_prop->tx[tx_index].ip)
 	    {
 	    	strcpy(rt_rule->rt_tbl_name, IPACM_Iface::ipacmcfg->rt_tbl_odu_v4.name);
 			rt_rule_entry->rule.hdr_hdl = ODU_hdr_hdl_v4;
 			rt_rule->ip = IPA_IP_v4;
 	    }
-	    else 
+	    else
 	    {
 	    	strcpy(rt_rule->rt_tbl_name, IPACM_Iface::ipacmcfg->rt_tbl_odu_v6.name);
 			rt_rule_entry->rule.hdr_hdl = ODU_hdr_hdl_v6;
 			rt_rule->ip = IPA_IP_v6;
 	    }
-		
+
 		rt_rule_entry->rule.dst = tx_prop->tx[tx_index].dst_pipe;
 		memcpy(&rt_rule_entry->rule.attrib,
 					 &tx_prop->tx[tx_index].attrib,
@@ -1505,7 +1501,7 @@ int IPACM_Lan::handle_odu_route_add()
 		{
 			rt_rule_entry->rule.attrib.u.v4.dst_addr      = 0;
 			rt_rule_entry->rule.attrib.u.v4.dst_addr_mask = 0;
-		    
+
 			if (false == m_routing.AddRoutingRule(rt_rule))
 		    {
 		    	IPACMERR("Routing rule addition failed!\n");
@@ -1544,7 +1540,6 @@ int IPACM_Lan::handle_odu_route_add()
 
 	}
 	free(rt_rule);
-	
 	return IPACM_SUCCESS;
 }
 
@@ -1557,15 +1552,14 @@ int IPACM_Lan::handle_odu_route_del()
 	{
 	  IPACMDBG("No tx properties, ignore delete default route setting\n");
 	  return IPACM_SUCCESS;
-	}		
-	
-	
+	}
+
 		for (tx_index = 0; tx_index < iface_query->num_tx_props; tx_index++)
 		{
 			if (tx_prop->tx[tx_index].ip == IPA_IP_v4)
 			{
 		    	IPACMDBG("Tx:%d, ip-type: %d match ip-type: %d, RT-rule deleted\n", 
-		    					    tx_index, tx_prop->tx[tx_index].ip,IPA_IP_v4);		
+		    					    tx_index, tx_prop->tx[tx_index].ip,IPA_IP_v4);
 
 				if (m_routing.DeleteRoutingHdl(odu_route_rule_v4_hdl[tx_index], IPA_IP_v4)
 						== false)
@@ -1577,14 +1571,14 @@ int IPACM_Lan::handle_odu_route_del()
 			else
 			{
 		    	IPACMDBG("Tx:%d, ip-type: %d match ip-type: %d, RT-rule deleted\n", 
-		    					    tx_index, tx_prop->tx[tx_index].ip,IPA_IP_v6);		
+		    					    tx_index, tx_prop->tx[tx_index].ip,IPA_IP_v6);
 
 				if (m_routing.DeleteRoutingHdl(odu_route_rule_v6_hdl[tx_index], IPA_IP_v6)
 						== false)
 				{
 					IPACMDBG("IP-family:%d, Routing rule(hdl:0x%x) deletion failed with tx_index %d!\n", IPA_IP_v6, odu_route_rule_v6_hdl[tx_index], tx_index);
 					return IPACM_FAILURE;
-				} 
+				}
 			}
 		}
 
@@ -1598,12 +1592,11 @@ int IPACM_Lan::handle_down_evt()
 	uint32_t tx_index;
 	int res = IPACM_SUCCESS;
 
-	
 	if (IPACM_Iface::ipacmcfg->iface_table[ipa_if_num].if_cat == ODU_IF)
 	{
 		/* delete ODU default RT rules */
 		handle_odu_route_del();
-		
+
 		/* delete full header */
 		if (ipv4_header_set)
 		{
@@ -1629,8 +1622,7 @@ int IPACM_Lan::handle_down_evt()
 			IPACMDBG("ODU ipv6 header delete success\n");
 		}
 	}
-	
-	
+
 	/* no iface address up, directly close iface*/
 	if (ip_type == IPACM_IP_NULL)
 	{
@@ -1667,8 +1659,7 @@ int IPACM_Lan::handle_down_evt()
 			}
 		}
 	}
-
-        IPACMDBG("Finished delete default iface ipv6 rules \n ");	
+	IPACMDBG("Finished delete default iface ipv6 rules \n ");	
 
 	/* free unicast routing rule	*/
 	if (tx_prop != NULL)
@@ -1733,7 +1724,7 @@ int IPACM_Lan::handle_down_evt()
 		}
 	}
 
-        IPACMDBG("Finished delete default iface ipv4 filtering rules \n ");
+    IPACMDBG("Finished delete default iface ipv4 filtering rules \n ");
 
 	if (ip_type != IPA_IP_v4 && rx_prop != NULL)
 	{

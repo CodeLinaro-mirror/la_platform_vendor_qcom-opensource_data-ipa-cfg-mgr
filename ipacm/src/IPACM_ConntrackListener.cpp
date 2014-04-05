@@ -282,6 +282,7 @@ void IPACM_ConntrackListener::TriggerWANUp(void *in_param)
 	 }
 
 	 IPACMDBG("creating nat threads\n");
+	 IPACMERR("isStaMode: %d\n", isStaMode);
 	 CreateNatThreads();
 }
 
@@ -622,7 +623,6 @@ void IPACM_ConntrackListener::ProcessTCPorUDPMsg(
 	 {
 		 IPACMDBG("Neither source Nor destination nat\n");
 		 goto IGNORE;
-		 return;
 	 }
 
 	 /* Retrieve Protocol */
@@ -650,11 +650,15 @@ void IPACM_ConntrackListener::ProcessTCPorUDPMsg(
 	 {
 			 IPACMDBG("Not mtaching with nat ifaces\n")
 			 goto IGNORE;
-		 return;
 	 }
 	 }
 	 else
 	 {
+		 if(isStaMode) {
+			 IPACMDBG("In STA mode, ignore connections destinated to STA interface\n");
+			 goto IGNORE;
+		 }
+
 		 IPACMDBG("For embedded connections add dummy nat rule\n");
                  IPACMDBG("Change private port %d to %d\n",
 				rule.private_port, rule.public_port);

@@ -119,6 +119,8 @@ void IPACM_Wlan::event_callback(ipa_cm_event_id event, void *param)
 				/* reset the AP-iface category to unknown */				 
 				IPACM_Iface::ipacmcfg->iface_table[ipa_if_num].if_cat=UNKNOWN_IF;
 				IPACM_Iface::ipacmcfg->DelNatIfaces(dev_name); // delete NAT-iface
+                                IPACM_Wlan::total_num_wifi_clients = (IPACM_Wlan::total_num_wifi_clients) - \
+                                                                     (num_wifi_client);
 				delete this;
 				return;
 			}
@@ -345,6 +347,8 @@ int IPACM_Wlan::handle_wlan_client_init(uint8_t *mac_addr)
 	}	
 
 	/* start of adding header */
+        IPACMDBG("Wifi client number for this iface: %d & total number of wlan clients: %d\n",
+                 num_wifi_client,IPACM_Wlan::total_num_wifi_clients);
 	if ((num_wifi_client >= IPA_MAX_NUM_WIFI_CLIENTS) ||
 			(IPACM_Wlan::total_num_wifi_clients >= IPA_MAX_NUM_WIFI_CLIENTS))
 	{

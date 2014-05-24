@@ -247,6 +247,7 @@ int IPACM_ConntrackClient::IPA_Conntrack_Filters_Ignore_Local_Addrs
 	if(ioctl(sck, SIOCGIFCONF, &ifc) < 0)
 	{
 		PERROR("ioctl(SIOCGIFCONF)");
+                close(sck);
 		return -1;
 	}
 
@@ -308,6 +309,7 @@ int IPACM_ConntrackClient::IPA_Conntrack_Filters_Ignore_Local_Addrs
 			if(ioctl(sck, SIOCGIFBRDADDR, item) < 0)
 			{
 				PERROR("broadcast address error: ioctl(SIOCGIFBRDADDR)");
+                                close(sck);
 				return -1;
 			}
 

@@ -218,6 +218,7 @@ void IPACM_ConntrackListener::HandleNeighIpAddrEvt(void *in_param, bool del)
 		return;
 	}
 
+        close(fd);
 	for(i = 0; i < NatIfaceCnt; i++)
 	{
 		if (strncmp(ifr.ifr_name, 

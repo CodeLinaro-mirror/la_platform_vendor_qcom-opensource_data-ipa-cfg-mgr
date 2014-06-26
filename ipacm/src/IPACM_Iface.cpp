@@ -443,7 +443,12 @@ int IPACM_Iface::query_iface_property(void)
 
 	iface_query = (struct ipa_ioc_query_intf *)
 		 calloc(1, sizeof(struct ipa_ioc_query_intf));
-
+	if(iface_query == NULL)
+	{
+		IPACMERR("Unable to allocate iface_query memory.\n");
+		close(fd);
+		return IPACM_FAILURE;
+	}
 	IPACMDBG("iface name %s\n", dev_name);
 	memcpy(iface_query->name, dev_name, sizeof(dev_name));
 
@@ -459,7 +464,12 @@ int IPACM_Iface::query_iface_property(void)
 		tx_prop = (struct ipa_ioc_query_intf_tx_props *)
 			 calloc(1, sizeof(struct ipa_ioc_query_intf_tx_props) +
 							iface_query->num_tx_props * sizeof(struct ipa_ioc_tx_intf_prop));
-
+		if(tx_prop == NULL)
+		{
+			IPACMERR("Unable to allocate tx_prop memory.\n");
+			close(fd);
+			return IPACM_FAILURE;
+		}
 	memcpy(tx_prop->name, dev_name, sizeof(tx_prop->name));
 	tx_prop->num_tx_props = iface_query->num_tx_props;
 
@@ -486,7 +496,12 @@ int IPACM_Iface::query_iface_property(void)
 		rx_prop = (struct ipa_ioc_query_intf_rx_props *)
 			 calloc(1, sizeof(struct ipa_ioc_query_intf_rx_props) +
 							iface_query->num_rx_props * sizeof(struct ipa_ioc_rx_intf_prop));
-
+		if(rx_prop == NULL)
+		{
+			IPACMERR("Unable to allocate rx_prop memory.\n");
+			close(fd);
+			return IPACM_FAILURE;
+		}
 	memcpy(rx_prop->name, dev_name,
 				 sizeof(rx_prop->name));
 	rx_prop->num_rx_props = iface_query->num_rx_props;

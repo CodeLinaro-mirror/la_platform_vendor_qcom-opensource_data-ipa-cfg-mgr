@@ -39,14 +39,18 @@ IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.Z
 */
 #include <fcntl.h>
 #include <sys/ioctl.h>
-#include <ifaddrs.h>
-
 #include <IPACM_Netlink.h>
 #include <IPACM_Iface.h>
 #include <IPACM_Lan.h>
 #include <IPACM_Wan.h>
 #include <IPACM_Wlan.h>
+#include <string.h>
+
+extern "C"
+{
 #include <ifaddrs.h>
+}
+
 
 const char *IPACM_Iface::DEVICE_NAME = "/dev/ipa";
 IPACM_Routing IPACM_Iface::m_routing;
@@ -61,6 +65,7 @@ IPACM_Iface::IPACM_Iface(int iface_index)
 	num_dft_rt_v6 = 0;
 	softwarerouting_act = false;
 	ipa_if_num = iface_index;
+	ipa_if_cate = IPACM_Iface::ipacmcfg->iface_table[iface_index].if_cat;
 
 	iface_query = NULL;
 	tx_prop = NULL;
@@ -503,7 +508,11 @@ int IPACM_Iface::query_iface_property(void)
 
 	iface_query = (struct ipa_ioc_query_intf *)
 		 calloc(1, sizeof(struct ipa_ioc_query_intf));
-
+	if(iface_query == NULL)
+	{
+		IPACMERR("Unable to allocate iface_query memory.\n");
+		return IPACM_FAILURE;
+	}
 	IPACMDBG("iface name %s\n", dev_name);
 	memcpy(iface_query->name, dev_name, sizeof(dev_name));
 
@@ -519,7 +528,11 @@ int IPACM_Iface::query_iface_property(void)
 		tx_prop = (struct ipa_ioc_query_intf_tx_props *)
 			 calloc(1, sizeof(struct ipa_ioc_query_intf_tx_props) +
 							iface_query->num_tx_props * sizeof(struct ipa_ioc_tx_intf_prop));
-
+		if(tx_prop == NULL)
+		{
+			IPACMERR("Unable to allocate tx_prop memory.\n");
+			return IPACM_FAILURE;
+		}
 	memcpy(tx_prop->name, dev_name, sizeof(tx_prop->name));
 	tx_prop->num_tx_props = iface_query->num_tx_props;
 
@@ -546,7 +559,11 @@ int IPACM_Iface::query_iface_property(void)
 		rx_prop = (struct ipa_ioc_query_intf_rx_props *)
 			 calloc(1, sizeof(struct ipa_ioc_query_intf_rx_props) +
 							iface_query->num_rx_props * sizeof(struct ipa_ioc_rx_intf_prop));
-
+		if(rx_prop == NULL)
+		{
+			IPACMERR("Unable to allocate rx_prop memory.\n");
+			return IPACM_FAILURE;
+		}
 	memcpy(rx_prop->name, dev_name,
 				 sizeof(rx_prop->name));
 	rx_prop->num_rx_props = iface_query->num_rx_props;
@@ -831,4 +848,82 @@ fail:
 	free(m_pFilteringTable);
 
 	return res;
+}
+
+/*  get ipa interface name */
+int IPACM_Iface::ipa_get_if_index
+(
+  char * if_name,
+  int * if_index
+)
+{
+  int fd;
+  struct ifreq ifr;
+
+  if((fd = socket(AF_INET, SOCK_DGRAM, 0)) < 0)
+  {
+    IPACMERR("get interface index socket create failed \n");
+    return IPACM_FAILURE;
+  }
+
+  memset(&ifr, 0, sizeof(struct ifreq));
+  (void)strncpy(ifr.ifr_name, if_name, sizeof(ifr.ifr_name));
+  IPACMDBG("interface name (%s)\n", ifr.ifr_name);
+
+  if (ioctl(fd,SIOCGIFINDEX , &ifr) < 0)
+  {
+    IPACMERR("call_ioctl_on_dev: ioctl failed, interface name (%s):\n", ifr.ifr_name);
+    close(fd);
+    return IPACM_FAILURE;
+  }
+
+  *if_index = ifr.ifr_ifindex;
+  IPACMDBG("Interface index %d\n", *if_index);
+  close(fd);
+  return IPACM_SUCCESS;
+}
+
+size_t IPACM_Iface::strlcpy(char *dest, const char *src, size_t n)
+{
+	size_t ret = strlen(src);
+	size_t len = 0;
+	if (n > 0) {
+		if(ret >= n)
+		{
+			len = n-1;
+			IPACMERR(" overflow detected \n");
+		}
+		else
+		{
+			len = ret;
+		}
+		dest[len] = '\0';
+		memcpy(dest, src, len);
+	}
+	return ret;
+}
+
+size_t IPACM_Iface::strlcat(char *dest, const char *src, size_t n)
+{
+	size_t dsize = strlen(dest);
+	size_t len = strlen(src);
+	size_t ret = dsize + len;
+
+	if (dsize < n)
+	{
+		dest += dsize;
+		n -= dsize;
+		if (len >= n)
+		{
+			len = n - 1;
+			IPACMERR(" overflow detected \n");
+		}
+		dest[len] = '\0';
+		memcpy(dest, src, len);
+	}
+	else
+	{
+		IPACMERR(" dest buffer full\n");
+	}
+	return ret;
 }

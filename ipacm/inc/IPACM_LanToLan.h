@@ -39,11 +39,16 @@ IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include <stdint.h>
 #include "linux/msm_ipa.h"
-#include <list>
-#include <unordered_map>
 #include "IPACM_Iface.h"
 #include "IPACM_Defs.h"
 #include "IPACM_Lan.h"
+#include <unordered_map>
+
+#ifdef FEATURE_IPA_ANDROID
+#include <libxml/list.h>
+#else/* defined(FEATURE_IPA_ANDROID) */
+#include <list>
+#endif /* ndefined(FEATURE_IPA_ANDROID)*/
 
 struct client_info;
 
@@ -64,6 +69,7 @@ struct offload_link_info
 
 typedef list<peer_info> peer_info_list;
 typedef list<offload_link_info> offload_link_info_list;
+typedef list<ipacm_event_connection> connection_list;
 
 struct client_info
 {
@@ -109,6 +115,9 @@ private:
 		client_table_v4 client_info_v4_;
 		client_table_v6 client_info_v6_;
 
+		connection_list connection_v4_;
+		connection_list connection_v6_;
+
 		static IPACM_LanToLan* p_instance;
 
 		void event_callback(ipa_cm_event_id event, void* param);
@@ -152,6 +161,14 @@ private:
 		void generate_new_connection(ipa_ip_type iptype, client_info* client);
 
 		bool is_lan2lan_connection(ipacm_event_connection* data);
+
+		bool is_potential_lan2lan_connection(ipacm_event_connection* new_conn);
+
+		void cache_new_connection(ipacm_event_connection* new_conn);
+
+		void remove_cache_connection(ipacm_event_connection* del_conn);
+
+		void check_cache_connection(ipa_ip_type iptype, client_info* client);
 
 };
 

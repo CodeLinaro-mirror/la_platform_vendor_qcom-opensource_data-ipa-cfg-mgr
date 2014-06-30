@@ -51,6 +51,7 @@ IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "IPACM_Log.h"
 #include "IPACM_Config.h"
 #include "IPACM_Defs.h"
+#include <string.h>
 
 /* current support 2 ipv6-address*/
 #define MAX_DEFAULT_v4_ROUTE_RULES  1
@@ -72,6 +73,9 @@ public:
 
 	/* IPACM interface id */
 	int ipa_if_num;
+
+	/* IPACM interface category */
+	int ipa_if_cate;
 
 	/* IPACM interface name */
 	char dev_name[IF_NAME_LEN];
@@ -118,8 +122,17 @@ public:
 	/*Query the IPA endpoint property */
 	int query_iface_property(void);
 
+	/*implement IPACM strlcpy */
+	size_t strlcpy(char *dest, const char *src, size_t size);
+
+	/*implement IPACM strlcat */
+	size_t strlcat(char *dest, const char *src, size_t n);
+
 	/*Configure the initial filter rules */
 	virtual int init_fl_rule(ipa_ip_type iptype);
+
+	/* Get interface index */
+	virtual int ipa_get_if_index(char * if_name, int * if_index);
 
 	static IPACM_Routing m_routing;
 	static IPACM_Filtering m_filtering;

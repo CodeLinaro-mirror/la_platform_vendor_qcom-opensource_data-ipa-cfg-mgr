@@ -1,4 +1,4 @@
-/* 
+/*
 Copyright (c) 2013, The Linux Foundation. All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -35,7 +35,7 @@ IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <netinet/in.h>
 #include <sys/ioctl.h>
 #include <net/if.h>
-
+#include "IPACM_Iface.h"
 #include "IPACM_ConntrackListener.h"
 #include "IPACM_ConntrackClient.h"
 #include "IPACM_Log.h"
@@ -171,35 +171,37 @@ int IPACM_ConntrackClient::IPA_Conntrack_Filters_Ignore_Bridge_Addrs
 )
 {
 	int fd;
-	
 	fd = socket(AF_INET, SOCK_DGRAM, 0);
 	if(fd < 0)
 	{
 		PERROR("unable to open socket");
 		return -1;
 	}
-	
+
 	int ret;
 	uint32_t ipv4_addr;
 	struct ifreq ifr;
 
-	/* retrieve bridge0 interface ipv4 address */
-	ifr.ifr_addr.sa_family = AF_INET;	
-	strncpy(ifr.ifr_name, "bridge0", strlen("bridge0"));
+	/* retrieve bridge interface ipv4 address */
+	memset(&ifr, 0, sizeof(struct ifreq));
+	ifr.ifr_addr.sa_family = AF_INET;
+	(void)strncpy(ifr.ifr_name, IPACM_Iface::ipacmcfg->ipa_virtual_iface_name, sizeof(ifr.ifr_name));
+	IPACMDBG("bridge interface name (%s)\n", ifr.ifr_name);
+
 	ret = ioctl(fd, SIOCGIFADDR, &ifr);
 	if (ret < 0)
 	{
-		PERROR("unable to retrieve bridge0 interface address");
+		IPACMERR("unable to retrieve (%s) interface address\n",ifr.ifr_name);
 		close(fd);
 		return -1;
 	}
 	IPACMDBG("Interface (%s) address %s\n", ifr.ifr_name, inet_ntoa(((struct sockaddr_in *)&ifr.ifr_addr)->sin_addr));
-  ipv4_addr = ntohl(((struct sockaddr_in *)&ifr.ifr_addr)->sin_addr.s_addr);
+	ipv4_addr = ntohl(((struct sockaddr_in *)&ifr.ifr_addr)->sin_addr.s_addr);
 	close(fd);
 
 	/* ignore whatever is destined to or originates from broadcast ip address */
 	struct nfct_filter_ipv4 filter_ipv4;
-	
+
 	filter_ipv4.addr = ipv4_addr;
 	filter_ipv4.mask = 0xffffffff;
 
@@ -458,15 +460,15 @@ void* IPACM_ConntrackClient::TCPRegisterWithConnTrack(void *)
 	/* Register callback with netfilter handler */
 	IPACMDBG("tcp handle:%p, fd:%d\n", pClient->tcp_hdl, nfct_fd(pClient->tcp_hdl));
 #ifndef CT_OPT
-	nfct_callback_register(pClient->tcp_hdl, 
-				(NFCT_T_UPDATE | NFCT_T_DESTROY | NFCT_T_NEW),
+	nfct_callback_register(pClient->tcp_hdl,
+			(nf_conntrack_msg_type)	(NFCT_T_UPDATE | NFCT_T_DESTROY | NFCT_T_NEW),
 						IPAConntrackEventCB, NULL);
 #else
-	nfct_callback_register(pClient->tcp_hdl, NFCT_T_ALL, IPAConntrackEventCB, NULL);
+	nfct_callback_register(pClient->tcp_hdl, (nf_conntrack_msg_type) NFCT_T_ALL, IPAConntrackEventCB, NULL);
 #endif
 
 	/* Block to catch events from net filter connection track */
-	/* nfct_catch() receives conntrack events from kernel-space, by default it 
+	/* nfct_catch() receives conntrack events from kernel-space, by default it
 			 blocks waiting for events. */
 	IPACMDBG("Waiting for events\n");
 
@@ -498,7 +500,7 @@ void* IPACM_ConntrackClient::UDPRegisterWithConnTrack(void *)
 {
 	int ret;
 	IPACM_ConntrackClient *pClient = NULL;
-	
+
 	IPACMDBG("\n");
 
 	pClient = IPACM_ConntrackClient::GetInstance();
@@ -563,8 +565,8 @@ ctcatch:
 	nfct_callback_unregister(pClient->udp_hdl);
 	/* close the handle */
 	nfct_close(pClient->udp_hdl);
-  pClient->udp_hdl = NULL;
-	
+	pClient->udp_hdl = NULL;
+
 	pthread_exit(NULL);
 	return NULL;
 }
@@ -693,7 +695,7 @@ void IPACM_ConntrackClient::Read_TcpUdp_Timeout(char *in, int len)
 	{
 		fd = fopen(IPACM_TCP_FULL_FILE_NAME, "r");
 	}
-	else 
+	else
 	{
 		fd = fopen(IPACM_UDP_FULL_FILE_NAME, "r");
 	}
@@ -730,7 +732,7 @@ void *IPACM_ConntrackClient::TCPUDP_Timeout_monitor(void *)
 		IPACMERR("unable to create nat instance\n");
 		return NULL;
 	}
-	
+
 	to_fd = fopen(IPACM_TCP_FULL_FILE_NAME, "r");
 	if(to_fd == NULL)
 	{
@@ -743,7 +745,7 @@ void *IPACM_ConntrackClient::TCPUDP_Timeout_monitor(void *)
 	IPACMDBG("ip conntrack tcp timeout initial value:%d\n", value);
 	nat_inst->UpdateTcpUdpTo(value, IPPROTO_TCP);
 	fclose(to_fd);
-	
+
 	to_fd = fopen(IPACM_UDP_FULL_FILE_NAME, "r");
 	if(to_fd == NULL)
 	{
@@ -793,7 +795,7 @@ void *IPACM_ConntrackClient::TCPUDP_Timeout_monitor(void *)
 			}
 		}
 	}
-	
+
 	(void)inotify_rm_watch(inotify_fd, wd);
 	(void)close(inotify_fd);
 	return NULL;

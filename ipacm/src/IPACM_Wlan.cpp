@@ -83,14 +83,17 @@ IPACM_Wlan::IPACM_Wlan(int iface_index) : IPACM_Lan(iface_index)
 	num_wifi_client = 0;
 	header_name_count = 0;
 
-	wlan_client_len = (sizeof(ipa_wlan_client)) + (iface_query->num_tx_props * sizeof(wlan_client_rt_hdl));
-	wlan_client = (ipa_wlan_client *)calloc(IPA_MAX_NUM_WIFI_CLIENTS, wlan_client_len);
-	if (wlan_client == NULL)
+	if(iface_query != NULL)
 	{
-		IPACMERR("unable to allocate memory\n");
-		return;
+		wlan_client_len = (sizeof(ipa_wlan_client)) + (iface_query->num_tx_props * sizeof(wlan_client_rt_hdl));
+		wlan_client = (ipa_wlan_client *)calloc(IPA_MAX_NUM_WIFI_CLIENTS, wlan_client_len);
+		if (wlan_client == NULL)
+		{
+			IPACMERR("unable to allocate memory\n");
+			return;
+		}
+		IPACMDBG("index:%d constructor: Tx properties:%d\n", iface_index, iface_query->num_tx_props);
 	}
-
 	Nat_App = NatApp::GetInstance();
 	if (Nat_App == NULL)
 	{
@@ -103,7 +106,6 @@ IPACM_Wlan::IPACM_Wlan(int iface_index) : IPACM_Lan(iface_index)
 	IPACMDBG("Now the number of wlan AP iface is %d\n", IPACM_Wlan::num_wlan_ap_iface);
 	add_dummy_flt_rule();
 
-	IPACMDBG("index:%d constructor: Tx properties:%d\n", iface_index, iface_query->num_tx_props);
 	return;
 }
 
@@ -144,6 +146,27 @@ void IPACM_Wlan::event_callback(ipa_cm_event_id event, void *param)
 				IPACM_Iface::ipacmcfg->DelNatIfaces(dev_name); // delete NAT-iface
 				IPACM_Wlan::total_num_wifi_clients = (IPACM_Wlan::total_num_wifi_clients) - \
                                                                      (num_wifi_client);
+				return;
+			}
+		}
+		break;
+
+	case IPA_PRIVATE_SUBNET_CHANGE_EVENT:
+		{
+			ipacm_event_data_fid *data = (ipacm_event_data_fid *)param;
+			/* internel event: data->if_index is ipa_if_index */
+			if (data->if_index == ipa_if_num)
+			{
+				IPACMDBG("Received IPA_PRIVATE_SUBNET_CHANGE_EVENT from itself posting, ignore\n");
+				return;
+			}
+			else
+			{
+				IPACMDBG("Received IPA_PRIVATE_SUBNET_CHANGE_EVENT from other LAN iface \n");
+#ifdef FEATURE_IPA_ANDROID
+				handle_private_subnet_android(IPA_IP_v4);
+#endif
+				IPACMDBG(" delete old private subnet rules, use new sets \n");
 				return;
 			}
 		}
@@ -218,38 +241,43 @@ void IPACM_Wlan::event_callback(ipa_cm_event_id event, void *param)
 					{
 						return;
 					}
+#ifdef FEATURE_IPA_ANDROID
+					add_dummy_private_subnet_flt_rule(data->iptype);
+					handle_private_subnet_android(data->iptype);
+#else
 					handle_private_subnet(data->iptype);
+#endif
 
 					if (IPACM_Wan::isWanUP())
 					{
+						if(data->iptype == IPA_IP_v4 || data->iptype == IPA_IP_MAX)
+						{
 						if(IPACM_Wan::backhaul_is_sta_mode == false)
 						{
-							if(data->iptype == IPA_IP_v4 || data->iptype == IPA_IP_MAX)
-							{
 								ext_prop = IPACM_Iface::ipacmcfg->GetExtProp(IPA_IP_v4);
 								IPACM_Lan::handle_wan_up_ex(ext_prop, IPA_IP_v4);
 							}
-						}
 						else
 						{
 							IPACM_Lan::handle_wan_up(IPA_IP_v4);
 						}
 					}
+					}
 
 					if(IPACM_Wan::isWanUP_V6())
 					{
+						if((data->iptype == IPA_IP_v6 || data->iptype == IPA_IP_MAX) && num_dft_rt_v6 == 1)
+						{
 						if(IPACM_Wan::backhaul_is_sta_mode == false)
 						{
-							if(data->iptype == IPA_IP_v6 || data->iptype == IPA_IP_MAX)
-							{
 								ext_prop = IPACM_Iface::ipacmcfg->GetExtProp(IPA_IP_v6);
 								IPACM_Lan::handle_wan_up_ex(ext_prop, IPA_IP_v6);
 							}
-						}
 						else
 						{
 							IPACM_Lan::handle_wan_up(IPA_IP_v6);
 						}
+					}
 					}
 
 					IPACMDBG("posting IPA_HANDLE_WLAN_UP:Finished checking wan_up\n");
@@ -269,18 +297,18 @@ void IPACM_Wlan::event_callback(ipa_cm_event_id event, void *param)
 			return;
 		}
 		IPACMDBG("Backhaul is sta mode?%d\n", data_wan->is_sta);
+		if(ip_type == IPA_IP_v4 || ip_type == IPA_IP_MAX)
+		{
 		if(data_wan->is_sta == false)
 		{
-			if(ip_type == IPA_IP_v4 || ip_type == IPA_IP_MAX)
-			{
 				ext_prop = IPACM_Iface::ipacmcfg->GetExtProp(IPA_IP_v4);
 				IPACM_Lan::handle_wan_up_ex(ext_prop, IPA_IP_v4);
 			}
-		}
 		else
 		{
 			IPACM_Lan::handle_wan_up(IPA_IP_v4);
 		}
+	}
 	}
 		break;
 
@@ -294,17 +322,17 @@ void IPACM_Wlan::event_callback(ipa_cm_event_id event, void *param)
 			return;
 		}
 		IPACMDBG("Backhaul is sta mode?%d\n", data_wan->is_sta);
+		if(ip_type == IPA_IP_v6 || ip_type == IPA_IP_MAX)
+		{
 		if(data_wan->is_sta == false)
 		{
-			if(ip_type == IPA_IP_v6 || ip_type == IPA_IP_MAX)
-			{
 				ext_prop = IPACM_Iface::ipacmcfg->GetExtProp(IPA_IP_v6);
 				IPACM_Lan::handle_wan_up_ex(ext_prop, IPA_IP_v6);
 			}
-		}
 		else
 		{
 			IPACM_Lan::handle_wan_up(IPA_IP_v6);
+		}
 		}
 		break;
 
@@ -522,6 +550,12 @@ int IPACM_Wlan::init_fl_rule(ipa_ip_type iptype)
 	    IPACM_Iface::ipacmcfg->AddRmDepend(IPACM_Iface::ipacmcfg->ipa_client_rm_map_tbl[rx_prop->rx[0].src_pipe],false);
 		IPACMDBG("Add producer dependency from %s with registered rx-prop\n", dev_name);
 	}
+	else
+	{
+		/* Adding the check if no Rx property registered, no filter rules will be added */
+		IPACMDBG("No rx properties registered for iface %s\n", dev_name);
+		return IPACM_SUCCESS;
+	}
 
 	/* construct ipa_ioc_add_flt_rule with default filter rules */
 	if (iptype == IPA_IP_v4)
@@ -537,6 +571,10 @@ int IPACM_Wlan::init_fl_rule(ipa_ip_type iptype)
 #else
 		offset = wlan_ap_index * (IPV4_DEFAULT_FILTERTING_RULES + NUM_TCP_CTL_FLT_RULE + MAX_OFFLOAD_PAIR + IPACM_Iface::ipacmcfg->ipa_num_private_subnet)
 								+ NUM_TCP_CTL_FLT_RULE + MAX_OFFLOAD_PAIR;
+#endif
+
+#ifdef FEATURE_IPA_ANDROID
+		offset = offset + wlan_ap_index * (IPA_MAX_PRIVATE_SUBNET_ENTRIES - IPACM_Iface::ipacmcfg->ipa_num_private_subnet);
 #endif
 		len = sizeof(struct ipa_ioc_mdfy_flt_rule) + (IPV4_DEFAULT_FILTERTING_RULES * sizeof(struct ipa_flt_rule_mdfy));
 		pFilteringTable = (struct ipa_ioc_mdfy_flt_rule *)calloc(1, len);
@@ -732,6 +770,9 @@ int IPACM_Wlan::add_dummy_lan2lan_flt_rule(ipa_ip_type iptype)
 						+ NUM_TCP_CTL_FLT_RULE;
 #endif
 
+#ifdef FEATURE_IPA_ANDROID
+		offset = offset + wlan_ap_index * (IPA_MAX_PRIVATE_SUBNET_ENTRIES - IPACM_Iface::ipacmcfg->ipa_num_private_subnet);
+#endif
 		for (int i = 0; i < MAX_OFFLOAD_PAIR; i++)
 		{
 			lan2lan_flt_rule_hdl_v4[i].rule_hdl = IPACM_Wlan::dummy_flt_rule_hdl_v4[offset+i];
@@ -854,6 +895,10 @@ int IPACM_Wlan::handle_private_subnet(ipa_ip_type iptype)
 			private_fl_rule_hdl[i] = pFilteringTable->rules[i].rule_hdl;
 		}
 	}
+	else
+	{
+		return IPACM_SUCCESS;
+	}
 fail:
 	free(pFilteringTable);
 	return res;
@@ -949,6 +994,10 @@ int IPACM_Wlan::handle_uplink_filter_rule(ipacm_ext_prop* prop, ipa_ip_type ipty
 		offset = 2*(IPV4_DEFAULT_FILTERTING_RULES + MAX_OFFLOAD_PAIR + IPACM_Iface::ipacmcfg->ipa_num_private_subnet);
 #else
 		offset = 2*(IPV4_DEFAULT_FILTERTING_RULES + NUM_TCP_CTL_FLT_RULE + MAX_OFFLOAD_PAIR + IPACM_Iface::ipacmcfg->ipa_num_private_subnet);
+#endif
+
+#ifdef FEATURE_IPA_ANDROID
+		offset = offset + 2 * (IPA_MAX_PRIVATE_SUBNET_ENTRIES - IPACM_Iface::ipacmcfg->ipa_num_private_subnet);
 #endif
 	}
 	else
@@ -1122,15 +1171,23 @@ int IPACM_Wlan::handle_wlan_client_init_ex(ipacm_event_data_wlan_ex *data)
 				memset(pHeaderDescriptor->hdr[0].name, 0,
 							 sizeof(pHeaderDescriptor->hdr[0].name));
 
-				sprintf(index, "%d", ipa_if_num);
-				strncpy(pHeaderDescriptor->hdr[0].name, index, sizeof(index));
+				snprintf(index,sizeof(index), "%d", ipa_if_num);
+				strlcpy(pHeaderDescriptor->hdr[0].name, index, sizeof(pHeaderDescriptor->hdr[0].name));
 
-				strncat(pHeaderDescriptor->hdr[0].name,
-								IPA_WLAN_PARTIAL_HDR_NAME_v4,
-								sizeof(IPA_WLAN_PARTIAL_HDR_NAME_v4));
+				if (strlcat(pHeaderDescriptor->hdr[0].name, IPA_WLAN_PARTIAL_HDR_NAME_v4, sizeof(pHeaderDescriptor->hdr[0].name)) > IPA_RESOURCE_NAME_MAX)
+				{
+					IPACMERR(" header name construction failed exceed length (%d)\n", strlen(pHeaderDescriptor->hdr[0].name));
+					res = IPACM_FAILURE;
+					goto fail;
+				}
+				snprintf(index,sizeof(index), "%d", header_name_count);
+				if (strlcat(pHeaderDescriptor->hdr[0].name, index, sizeof(pHeaderDescriptor->hdr[0].name)) > IPA_RESOURCE_NAME_MAX)
+				{
+					IPACMERR(" header name construction failed exceed length (%d)\n", strlen(pHeaderDescriptor->hdr[0].name));
+					res = IPACM_FAILURE;
+					goto fail;
+				}
 
-				sprintf(index, "%d", header_name_count);
-								strncat(pHeaderDescriptor->hdr[0].name, index, sizeof(index));
 
 				pHeaderDescriptor->hdr[0].hdr_len = sCopyHeader.hdr_len;
 				pHeaderDescriptor->hdr[0].hdr_hdl = -1;
@@ -1219,15 +1276,22 @@ int IPACM_Wlan::handle_wlan_client_init_ex(ipacm_event_data_wlan_ex *data)
 				memset(pHeaderDescriptor->hdr[0].name, 0,
 							 sizeof(pHeaderDescriptor->hdr[0].name));
 
-				sprintf(index, "%d", ipa_if_num);
-				strncpy(pHeaderDescriptor->hdr[0].name, index, sizeof(index));
+				snprintf(index,sizeof(index), "%d", ipa_if_num);
+				strlcpy(pHeaderDescriptor->hdr[0].name, index, sizeof(pHeaderDescriptor->hdr[0].name));
+				if (strlcat(pHeaderDescriptor->hdr[0].name, IPA_WLAN_PARTIAL_HDR_NAME_v6, sizeof(pHeaderDescriptor->hdr[0].name)) > IPA_RESOURCE_NAME_MAX)
+				{
+					IPACMERR(" header name construction failed exceed length (%d)\n", strlen(pHeaderDescriptor->hdr[0].name));
+					res = IPACM_FAILURE;
+					goto fail;
+				}
 
-				strncat(pHeaderDescriptor->hdr[0].name,
-								IPA_WLAN_PARTIAL_HDR_NAME_v6,
-								sizeof(IPA_WLAN_PARTIAL_HDR_NAME_v6));
-
-				sprintf(index, "%d", header_name_count);
-				strncat(pHeaderDescriptor->hdr[0].name, index, sizeof(index));
+				snprintf(index,sizeof(index), "%d", header_name_count);
+				if (strlcat(pHeaderDescriptor->hdr[0].name, index, sizeof(pHeaderDescriptor->hdr[0].name)) > IPA_RESOURCE_NAME_MAX)
+				{
+					IPACMERR(" header name construction failed exceed length (%d)\n", strlen(pHeaderDescriptor->hdr[0].name));
+					res = IPACM_FAILURE;
+					goto fail;
+				}
 
 				pHeaderDescriptor->hdr[0].hdr_len = sCopyHeader.hdr_len;
 				pHeaderDescriptor->hdr[0].hdr_hdl = -1;
@@ -1252,23 +1316,26 @@ int IPACM_Wlan::handle_wlan_client_init_ex(ipacm_event_data_wlan_ex *data)
 				break;
 			}
 		}
-	}
 
-	/* initialize wifi client*/
-	get_client_memptr(wlan_client, num_wifi_client)->route_rule_set_v4 = false;
-    get_client_memptr(wlan_client, num_wifi_client)->route_rule_set_v6 = 0;
-	get_client_memptr(wlan_client, num_wifi_client)->ipv4_set = false;
-    get_client_memptr(wlan_client, num_wifi_client)->ipv6_set = 0;
-    get_client_memptr(wlan_client, num_wifi_client)->power_save_set=false;
-	num_wifi_client++;
-	header_name_count++; //keep increasing header_name_count
-	IPACM_Wlan::total_num_wifi_clients++;
-	res = IPACM_SUCCESS;
-	IPACMDBG("Wifi client number: %d\n", num_wifi_client);
+		/* initialize wifi client*/
+		get_client_memptr(wlan_client, num_wifi_client)->route_rule_set_v4 = false;
+		get_client_memptr(wlan_client, num_wifi_client)->route_rule_set_v6 = 0;
+		get_client_memptr(wlan_client, num_wifi_client)->ipv4_set = false;
+		get_client_memptr(wlan_client, num_wifi_client)->ipv6_set = 0;
+		get_client_memptr(wlan_client, num_wifi_client)->power_save_set=false;
+		num_wifi_client++;
+		header_name_count++; //keep increasing header_name_count
+		IPACM_Wlan::total_num_wifi_clients++;
+		res = IPACM_SUCCESS;
+		IPACMDBG("Wifi client number: %d\n", num_wifi_client);
+	}
+	else
+	{
+		return res;
+	}
 
 fail:
 	free(pHeaderDescriptor);
-
 	return res;
 }
 
@@ -1781,6 +1848,17 @@ int IPACM_Wlan::handle_down_evt()
 
 		IPACMDBG("Delete private v4 filter rules\n");
 		/* delete private-ipv4 filter rules */
+#ifdef FEATURE_IPA_ANDROID
+		for(i=0; i<IPA_MAX_PRIVATE_SUBNET_ENTRIES; i++)
+		{
+			if(reset_to_dummy_flt_rule(IPA_IP_v4, private_fl_rule_hdl[i]) == IPACM_FAILURE)
+			{
+				IPACMERR("Error deleting private subnet IPv4 flt rules.\n");
+				res = IPACM_FAILURE;
+				goto fail;
+			}
+		}
+#else
 		for(i=0; i<IPACM_Iface::ipacmcfg->ipa_num_private_subnet; i++)
 		{
 			if(reset_to_dummy_flt_rule(IPA_IP_v4, private_fl_rule_hdl[i]) == IPACM_FAILURE)
@@ -1790,6 +1868,7 @@ int IPACM_Wlan::handle_down_evt()
 				goto fail;
 			}
 		}
+#endif
 	}
 
 	/* Delete v6 filtering rules */
@@ -1925,9 +2004,26 @@ int IPACM_Wlan::handle_down_evt()
 	/* free the wlan clients cache */
 	IPACMDBG("Free wlan clients cache\n");
 
+	/* Delete private subnet*/
+#ifdef FEATURE_IPA_ANDROID
+	if (ip_type != IPA_IP_v6)
+	{
+		IPACMDBG("current IPACM private subnet_addr number(%d)\n", IPACM_Iface::ipacmcfg->ipa_num_private_subnet);
+		IPACMDBG(" Delete IPACM private subnet_addr as: 0x%x \n", if_ipv4_subnet);
+		if(IPACM_Iface::ipacmcfg->DelPrivateSubnet(if_ipv4_subnet, ipa_if_num) == false)
+		{
+			IPACMERR(" can't Delete IPACM private subnet_addr as: 0x%x \n", if_ipv4_subnet);
+		}
+	}
+#endif /* defined(FEATURE_IPA_ANDROID)*/
+
 fail:
 	/* Delete corresponding ipa_rm_resource_name of RX-endpoint after delete all IPV4V6 FT-rule */
+	if (rx_prop != NULL)
+	{
 	IPACM_Iface::ipacmcfg->DelRmDepend(IPACM_Iface::ipacmcfg->ipa_client_rm_map_tbl[rx_prop->rx[0].src_pipe]);
+		free(rx_prop);
+	}
 
 	for (i = 0; i < num_wifi_client; i++)
 	{
@@ -1938,10 +2034,7 @@ fail:
 	{
 		free(tx_prop);
 	}
-	if (rx_prop != NULL)
-	{
-		free(rx_prop);
-	}
+
 	if (iface_query != NULL)
 	{
 		free(iface_query);
@@ -2137,7 +2230,7 @@ int IPACM_Wlan::add_lan2lan_hdr(ipa_ip_type iptype, uint8_t* src_mac, uint8_t* d
 				pHeader->num_hdrs = 1;
 
 				memset(pHeader->hdr[0].name, 0, sizeof(pHeader->hdr[0].name));
-				strncpy(pHeader->hdr[0].name, IPA_LAN_TO_LAN_WLAN_HDR_NAME_V4, sizeof(IPA_LAN_TO_LAN_WLAN_HDR_NAME_V4));
+				strlcpy(pHeader->hdr[0].name, IPA_LAN_TO_LAN_WLAN_HDR_NAME_V4, sizeof(pHeader->hdr[0].name));
 
 				for(j=0; j<MAX_OFFLOAD_PAIR; j++)
 				{
@@ -2154,8 +2247,14 @@ int IPACM_Wlan::add_lan2lan_hdr(ipa_ip_type iptype, uint8_t* src_mac, uint8_t* d
 					goto fail;
 				}
 				lan2lan_hdr_hdl_v4[j].valid = true;
-				sprintf(index, "%d", j);
-				strncat(pHeader->hdr[0].name, index, sizeof(index));
+				snprintf(index,sizeof(index), "%d", j);
+
+				if (strlcat(pHeader->hdr[0].name, index, sizeof(pHeader->hdr[0].name)) > IPA_RESOURCE_NAME_MAX)
+				{
+					IPACMERR(" header name construction failed exceed length (%d)\n", strlen(pHeader->hdr[0].name));
+					res = IPACM_FAILURE;
+					goto fail;
+				}
 
 				pHeader->hdr[0].hdr_len = sCopyHeader.hdr_len;
 				pHeader->hdr[0].is_partial = 0;
@@ -2248,7 +2347,8 @@ int IPACM_Wlan::add_lan2lan_hdr(ipa_ip_type iptype, uint8_t* src_mac, uint8_t* d
 				pHeader->num_hdrs = 1;
 
 				memset(pHeader->hdr[0].name, 0, sizeof(pHeader->hdr[0].name));
-				strncpy(pHeader->hdr[0].name, IPA_LAN_TO_LAN_WLAN_HDR_NAME_V6, sizeof(IPA_LAN_TO_LAN_WLAN_HDR_NAME_V6));
+				strlcpy(pHeader->hdr[0].name, IPA_LAN_TO_LAN_WLAN_HDR_NAME_V6, sizeof(pHeader->hdr[0].name));
+
 
 				for(j=0; j<MAX_OFFLOAD_PAIR; j++)
 				{
@@ -2265,9 +2365,14 @@ int IPACM_Wlan::add_lan2lan_hdr(ipa_ip_type iptype, uint8_t* src_mac, uint8_t* d
 					goto fail;
 				}
 				lan2lan_hdr_hdl_v6[j].valid = true;
-				sprintf(index, "%d", j);
-				strncat(pHeader->hdr[0].name, index, sizeof(index));
+				snprintf(index,sizeof(index), "%d", j);
 
+				if (strlcat(pHeader->hdr[0].name, index, sizeof(pHeader->hdr[0].name)) > IPA_RESOURCE_NAME_MAX)
+				{
+					IPACMERR(" header name construction failed exceed length (%d)\n", strlen(pHeader->hdr[0].name));
+					res = IPACM_FAILURE;
+					goto fail;
+				}
 				pHeader->hdr[0].hdr_len = sCopyHeader.hdr_len;
 				pHeader->hdr[0].is_partial = 0;
 				pHeader->hdr[0].hdr_hdl = -1;
@@ -2316,6 +2421,11 @@ void IPACM_Wlan::add_dummy_flt_rule()
 		num_v4_dummy_rule = 2*(IPV4_DEFAULT_FILTERTING_RULES + NUM_TCP_CTL_FLT_RULE + MAX_OFFLOAD_PAIR + IPACM_Iface::ipacmcfg->ipa_num_private_subnet);
 		num_v6_dummy_rule = 2*(IPV6_DEFAULT_FILTERTING_RULES + NUM_TCP_CTL_FLT_RULE + MAX_OFFLOAD_PAIR);
 #endif
+
+#ifdef FEATURE_IPA_ANDROID
+		num_v4_dummy_rule = num_v4_dummy_rule - 2* IPACM_Iface::ipacmcfg->ipa_num_private_subnet + 2 * IPA_MAX_PRIVATE_SUBNET_ENTRIES;
+#endif
+
 		IPACM_Wlan::dummy_flt_rule_hdl_v4 = (uint32_t*)malloc(num_v4_dummy_rule * sizeof(uint32_t));
 		if(IPACM_Wlan::dummy_flt_rule_hdl_v4 == NULL)
 		{
@@ -2497,6 +2607,11 @@ void IPACM_Wlan::del_dummy_flt_rule()
 		num_v4_dummy_rule = 2*(IPV4_DEFAULT_FILTERTING_RULES + NUM_TCP_CTL_FLT_RULE + MAX_OFFLOAD_PAIR + IPACM_Iface::ipacmcfg->ipa_num_private_subnet);
 		num_v6_dummy_rule = 2*(IPV6_DEFAULT_FILTERTING_RULES + NUM_TCP_CTL_FLT_RULE + MAX_OFFLOAD_PAIR);
 #endif
+
+#ifdef FEATURE_IPA_ANDROID
+		num_v4_dummy_rule = num_v4_dummy_rule - 2* IPACM_Iface::ipacmcfg->ipa_num_private_subnet + 2 * IPA_MAX_PRIVATE_SUBNET_ENTRIES;
+#endif
+
 		if(m_filtering.DeleteFilteringHdls(IPACM_Wlan::dummy_flt_rule_hdl_v4, IPA_IP_v4, num_v4_dummy_rule) == false)
 		{
 			IPACMERR("Failed to delete ipv4 dummy flt rules.\n");
@@ -2536,6 +2651,9 @@ void IPACM_Wlan::install_tcp_ctl_flt_rule(ipa_ip_type iptype)
 			return;
 		}
 		offset = wlan_ap_index * (IPV4_DEFAULT_FILTERTING_RULES + NUM_TCP_CTL_FLT_RULE + MAX_OFFLOAD_PAIR + IPACM_Iface::ipacmcfg->ipa_num_private_subnet);
+#ifdef FEATURE_IPA_ANDROID
+		offset = offset + wlan_ap_index * (IPA_MAX_PRIVATE_SUBNET_ENTRIES - IPACM_Iface::ipacmcfg->ipa_num_private_subnet);
+#endif
 	}
 	else
 	{
@@ -2650,3 +2768,39 @@ fail:
 	return;
 }
 
+int IPACM_Wlan::add_dummy_private_subnet_flt_rule(ipa_ip_type iptype)
+{
+	if(rx_prop == NULL)
+	{
+		IPACMDBG("There is no rx_prop for iface %s, not able to add dummy lan2lan filtering rule.\n", dev_name);
+		return IPACM_FAILURE;
+	}
+
+	int offset;
+	if(iptype == IPA_IP_v4)
+	{
+		if(IPACM_Wlan::dummy_flt_rule_hdl_v4 == NULL)
+		{
+			IPACMERR("Dummy ipv4 flt rule has not been installed.\n");
+			return IPACM_FAILURE;
+		}
+
+#ifndef CT_OPT
+		offset = wlan_ap_index * (IPV4_DEFAULT_FILTERTING_RULES + MAX_OFFLOAD_PAIR + IPACM_Iface::ipacmcfg->ipa_num_private_subnet)
+						+ IPV4_DEFAULT_FILTERTING_RULES + MAX_OFFLOAD_PAIR;
+#else
+		offset = wlan_ap_index * (IPV4_DEFAULT_FILTERTING_RULES + NUM_TCP_CTL_FLT_RULE + MAX_OFFLOAD_PAIR + IPACM_Iface::ipacmcfg->ipa_num_private_subnet)
+						+ IPV4_DEFAULT_FILTERTING_RULES + MAX_OFFLOAD_PAIR + NUM_TCP_CTL_FLT_RULE;
+#endif
+
+#ifdef FEATURE_IPA_ANDROID
+		offset = offset + wlan_ap_index * (IPA_MAX_PRIVATE_SUBNET_ENTRIES - IPACM_Iface::ipacmcfg->ipa_num_private_subnet);
+#endif
+		for (int i = 0; i < IPA_MAX_PRIVATE_SUBNET_ENTRIES; i++)
+		{
+			private_fl_rule_hdl[i] = IPACM_Wlan::dummy_flt_rule_hdl_v4[offset+i];
+			IPACMDBG("Private subnet v4 flt rule %d hdl:0x%x\n", i, private_fl_rule_hdl[i]);
+		}
+	}
+	return IPACM_SUCCESS;
+}

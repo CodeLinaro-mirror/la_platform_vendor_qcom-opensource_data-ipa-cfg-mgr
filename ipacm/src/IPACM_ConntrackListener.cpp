@@ -60,7 +60,6 @@ IPACM_ConntrackListener::IPACM_ConntrackListener()
 	 IPACM_EvtDispatcher::registr(IPA_NEIGH_CLIENT_IP_ADDR_DEL_EVENT, this);
 
 	IPACMDBG("creating conntrack threads\n");
-	CreateConnTrackThreads();
 
 #ifdef CT_OPT
 	 p_lan2lan = IPACM_LanToLan::getLan2LanInstance();
@@ -94,6 +93,7 @@ void IPACM_ConntrackListener::event_callback(ipa_cm_event_id evt,
 
 	 case IPA_HANDLE_WAN_UP:
 			IPACMDBG("Received IPA_HANDLE_WAN_UP event\n");
+			CreateConnTrackThreads();
 			if(!isWanUp())
 			{
 				TriggerWANUp(data);
@@ -116,7 +116,8 @@ void IPACM_ConntrackListener::event_callback(ipa_cm_event_id evt,
 			IPACMDBG("Received event: %d with ifname: %s and address: 0x%x\n",
 							 evt, ((ipacm_event_iface_up *)data)->ifname,
 							 ((ipacm_event_iface_up *)data)->ipv4_addr);
-   		IPACM_ConntrackClient::UpdateUDPFilters(data, false);
+			CreateConnTrackThreads();
+			IPACM_ConntrackClient::UpdateUDPFilters(data, false);
 			IPACM_ConntrackClient::UpdateTCPFilters(data, false);
 			break;
 
@@ -361,23 +362,12 @@ int IPACM_ConntrackListener::CreateConnTrackThreads(void)
 
 				 IPACMDBG("created UDP conntrack event listner thread\n");
 			}
-
 			isCTReg = true;
 	 }
 
 	 return 0;
 
 error:
-	 if(tcp_thread)
-	 {
-			pthread_cancel(tcp_thread);
-	 }
-
-	 if(udp_thread)
-	 {
-			pthread_cancel(tcp_thread);
-	 }
-
 	 return -1;
 }
 int IPACM_ConntrackListener::CreateNatThreads(void)
@@ -419,16 +409,6 @@ int IPACM_ConntrackListener::CreateNatThreads(void)
 	 return 0;
 
 error:
-	 if(udpcto_thread)
-	 {
-			pthread_cancel(udpcto_thread);
-	 }
-
-	 if(to_monitor_thread)
-	 {
-		 pthread_cancel(to_monitor_thread);
-	 }
-
 	 return -1;
 }
 

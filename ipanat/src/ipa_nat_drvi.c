@@ -1739,6 +1739,7 @@ int ipa_nati_post_del_dma_cmd(uint8_t tbl_indx,
 
 	uint16_t prev_entry = IPA_NAT_INVALID_NAT_ENTRY;
 	uint16_t next_entry = IPA_NAT_INVALID_NAT_ENTRY;
+	uint16_t indx_next_entry = IPA_NAT_INVALID_NAT_ENTRY;
 	uint16_t table_entry;
 
 	size = sizeof(struct ipa_ioc_nat_dma_cmd) +
@@ -1927,6 +1928,7 @@ int ipa_nati_post_del_dma_cmd(uint8_t tbl_indx,
 																																	cmd->dma[no_of_cmds].base_addr,
 																																	indx_tbl_entry);
 		cmd->dma[no_of_cmds].offset += IPA_NAT_INDEX_RULE_NEXT_FIELD_OFFSET;
+		indx_next_entry = next_entry;
 	}
 
 	/* 
@@ -2028,8 +2030,12 @@ int ipa_nati_post_del_dma_cmd(uint8_t tbl_indx,
 	if (IPA_NAT_DEL_TYPE_HEAD == indx_rule_pos)
 	{
 		/* Reset the next entry to IPA_NAT_DEL_TYPE_HEAD as we copied
-				 the next entry to IPA_NAT_DEL_TYPE_HEAD */
-		indx_tbl_ptr[next_entry].tbl_entry_nxt_indx = 0;
+						 the next entry to IPA_NAT_DEL_TYPE_HEAD */
+
+		IPADBG("Resetting, index table entry(Proper): %d\n",
+						(cache_ptr->table_entries + indx_next_entry));
+
+		indx_tbl_ptr[indx_next_entry].tbl_entry_nxt_indx = 0;
 
 		/* 
 			 In case of IPA_NAT_DEL_TYPE_HEAD, update the sw specific parameters

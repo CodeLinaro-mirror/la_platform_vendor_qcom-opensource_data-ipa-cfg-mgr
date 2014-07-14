@@ -542,8 +542,8 @@ int IPACM_Lan::handle_addr_evt(ipacm_event_data_addr *data)
 #ifdef CT_OPT
 		install_tcp_ctl_flt_rule(IPA_IP_v4);
 #endif
-		add_dummy_lan2lan_flt_rule(data->iptype);
 		init_fl_rule(data->iptype);
+		add_dummy_lan2lan_flt_rule(data->iptype);
 	}
 	else
 	{

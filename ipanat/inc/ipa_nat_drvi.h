@@ -192,9 +192,9 @@ typedef struct
 	----------------------------------------------
 */
 typedef struct {
-  uint16_t tbl_entry;
-  uint16_t next_index;
-}tbl_ent_nxt_indx;
+	uint16_t tbl_entry;
+	uint16_t next_index;
+} tbl_ent_nxt_indx;
 
 /*-------------------------------------------------- 
    32 bit sw_spec_params is interpreted as follows 
@@ -206,9 +206,9 @@ typedef struct {
 	 ------------------------------------
 --------------------------------------------------*/
 typedef struct {
-  uint16_t prev_index;
-  uint16_t index_table_entry;
-}sw_spec_params;
+	uint16_t prev_index;
+	uint16_t index_table_entry;
+} sw_spec_params;
 
 /*------------------------  NAT Table Entry  ---------------------------------------
  
@@ -379,20 +379,22 @@ void ipa_nati_parse_ipv4_rule_hdl(uint8_t tbl_hdl,
 uint16_t ipa_nati_make_rule_hdl(uint16_t tbl_hdl, 
                            uint16_t tbl_entry);
 
-uint32_t ipa_nati_get_index_entry_offset(struct ipa_nat_ip4_table_cache *cache_ptr,
-                                    nat_table_type tbl_type,
-                                    uint16_t indx_tbl_entry);
-uint32_t ipa_nati_get_entry_offset(struct ipa_nat_ip4_table_cache *cache_ptr,
-                              nat_table_type tbl_type,
-                              uint16_t  tbl_entry);
+uint32_t ipa_nati_get_index_entry_offset(
+				struct ipa_nat_ip4_table_cache*,
+				nat_table_type tbl_type,
+				uint16_t indx_tbl_entry);
+uint32_t ipa_nati_get_entry_offset(
+				struct ipa_nat_ip4_table_cache*,
+				nat_table_type tbl_type,
+				uint16_t  tbl_entry);
 
 int ipa_nati_add_ipv4_tbl(uint32_t public_ip_addr,
                           uint16_t number_of_entries,
                           uint32_t *table_hanle);
 
 int ipa_nati_alloc_table(uint16_t number_of_entries,
-                         struct ipa_ioc_nat_alloc_mem *mem,
-                         uint16_t *tbl_entries, uint16_t *expn_tbl_entries);
+				struct ipa_ioc_nat_alloc_mem *mem,
+				uint16_t*, uint16_t*);
 
 int ipa_nati_update_cache(struct ipa_ioc_nat_alloc_mem *,
                           uint32_t public_ip_addr,
@@ -466,10 +468,11 @@ void ipa_nati_del_dead_ipv4_head_nodes(uint8_t tbl_indx);
             Debug functions
    ========================================================*/
 #ifdef NAT_DUMP
-void ipa_nati_print_rule(struct ipa_nat_rule *rule, uint32_t rule_id);
-void ipa_nat_dump_ipv4_table(uint32_t tbl_hdl);
-void ipa_nati_print_index_rule(struct ipa_nat_indx_tbl_rule *param, uint32_t rule_id);
-int ipa_nati_query_nat_rules(uint32_t tbl_hdl, nat_table_type tbl_type);
+void ipa_nati_print_rule(struct ipa_nat_rule*, uint32_t);
+void ipa_nat_dump_ipv4_table(uint32_t);
+void ipa_nati_print_index_rule(struct ipa_nat_indx_tbl_rule*,
+				uint32_t, uint16_t);
+int ipa_nati_query_nat_rules(uint32_t, nat_table_type);
 #endif
 
 #endif /* #ifndef IPA_NAT_DRVI_H */

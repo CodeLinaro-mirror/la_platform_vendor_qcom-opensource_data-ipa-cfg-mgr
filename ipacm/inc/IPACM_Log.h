@@ -67,11 +67,13 @@ static char buffer_send[MAX_BUF_LEN];
 					  ipacm_log_send (buffer_send); \
                       perror(fmt);
 
-#define IPACMERR(fmt, ...)	memset(buffer_send, 0, MAX_BUF_LEN);\
+#define IPACMERR(fmt, ...)	syslog(LOG_ERR, "ERR: %s:%d %s() " fmt, __FILE__,  __LINE__, __FUNCTION__, ##__VA_ARGS__);\
+							memset(buffer_send, 0, MAX_BUF_LEN);\
 							snprintf(buffer_send,MAX_BUF_LEN,"ERR: %s:%d %s() " fmt, __FILE__,  __LINE__, __FUNCTION__, ##__VA_ARGS__);\
 							ipacm_log_send (buffer_send);\
 							printf("ERR: %s:%d %s() " fmt, __FILE__,  __LINE__, __FUNCTION__, ##__VA_ARGS__);
-#define IPACMDBG_H(fmt, ...) memset(buffer_send, 0, MAX_BUF_LEN);\
+#define IPACMDBG_H(fmt, ...) syslog(LOG_DEBUG, "%s:%d %s() " fmt, __FILE__,  __LINE__, __FUNCTION__, ##__VA_ARGS__);\
+							 memset(buffer_send, 0, MAX_BUF_LEN);\
 							 snprintf(buffer_send,MAX_BUF_LEN,"%s:%d %s() " fmt, __FILE__,  __LINE__, __FUNCTION__, ##__VA_ARGS__);\
 							 ipacm_log_send (buffer_send);\
 							 printf("%s:%d %s() " fmt, __FILE__,  __LINE__, __FUNCTION__, ##__VA_ARGS__);

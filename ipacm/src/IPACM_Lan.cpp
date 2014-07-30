@@ -1850,6 +1850,16 @@ int IPACM_Lan::handle_uplink_filter_rule(ipacm_ext_prop* prop, ipa_ip_type iptyp
 		IPACMERR("Failed opening %s.\n", IPA_DEVICE_NAME);
 	}
 
+	if( (iptype == IPA_IP_v4 && flt_rule_count_v4 == 0)
+		|| (iptype == IPA_IP_v6 && flt_rule_count_v6 == 0))
+	{
+		IPACMERR("Modem UL static filtering rules start at index 0 for iptype %d.\n", iptype);
+		for(cnt=0; cnt<prop->num_ext_props; cnt++)
+		{
+			IPACMDBG_H("Filtering rule handle %d has index %d.\n", prop->prop[cnt].filter_hdl, cnt);
+		}
+	}
+
 	memset(&flt_index, 0, sizeof(flt_index));
 	flt_index.source_pipe_index = ioctl(fd, IPA_IOC_QUERY_EP_MAPPING, rx_prop->rx[0].src_pipe);
 	flt_index.install_status = IPA_QMI_RESULT_SUCCESS_V01;

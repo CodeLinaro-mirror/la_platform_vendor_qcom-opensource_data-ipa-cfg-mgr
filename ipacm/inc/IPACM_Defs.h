@@ -56,12 +56,16 @@ extern "C"
 
 #define IPA_WLAN_PARTIAL_HDR_OFFSET  0 // dst mac first then src mac
 //#define IPA_ETH_PARTIAL_HDR_OFFSET  8 // dst mac first then src mac
+#define IPA_ODU_PARTIAL_HDR_OFFSET  8 // dst mac first then src mac
 #define IPA_WLAN_PARTIAL_HDR_NAME_v4  "IEEE802_3_v4"
 #define IPA_WLAN_PARTIAL_HDR_NAME_v6  "IEEE802_3_v6"
 #define IPA_WAN_PARTIAL_HDR_NAME_v4  "IEEE802_3_STA_v4"
 #define IPA_WAN_PARTIAL_HDR_NAME_v6  "IEEE802_3_STA_v6"
 #define IPA_ETH_HDR_NAME_v4  "IPACM_ETH_v4"
 #define IPA_ETH_HDR_NAME_v6  "IPACM_ETH_v6"
+#define IPA_ODU_HDR_NAME_v4  "IPACM_ODU_v4"
+#define IPA_ODU_HDR_NAME_v6  "IPACM_ODU_v6"
+
 
 #define IPA_MAX_IFACE_ENTRIES 15
 #define IPA_MAX_PRIVATE_SUBNET_ENTRIES 3
@@ -76,6 +80,8 @@ extern "C"
 #define V6_WAN_ROUTE_TABLE_NAME  "WANRTBLv6"
 #define V4_LAN_TO_LAN_ROUTE_TABLE_NAME "LANTOLANRTBLv4"
 #define V6_LAN_TO_LAN_ROUTE_TABLE_NAME "LANTOLANRTBLv6"
+#define V4_ODU_ROUTE_TABLE_NAME  "ODURTBLv4"
+#define V6_ODU_ROUTE_TABLE_NAME  "ODURTBLv6"
 
 #define WWAN_QMI_IOCTL_DEVICE_NAME "/dev/wwan_ioctl"
 #define IPA_DEVICE_NAME "/dev/ipa"
@@ -153,6 +159,7 @@ typedef enum
 	IPA_WLAN_LINK_DOWN_EVENT,                 /* 37 ipacm_event_data_mac */
 	IPA_USB_LINK_UP_EVENT,                    /* 38 ipacm_event_data_fid */
 	IPA_PROCESS_CT_MESSAGE_V6,				  /* 39 ipacm_ct_evt_data */
+	IPA_WAN_EMBMS_LINK_UP_EVENT,              /* 40 ipacm_event_data_mac */
 	IPACM_EVENT_MAX
 } ipa_cm_event_id;
 
@@ -169,6 +176,8 @@ typedef enum
 	WAN_IF,
 	VIRTUAL_IF,
 	ETH_IF,
+	EMBMS_IF,
+	ODU_IF,
 	UNKNOWN_IF
 } ipacm_iface_type;
 

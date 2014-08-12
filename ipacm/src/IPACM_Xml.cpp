@@ -224,13 +224,11 @@ static int ipacm_cfg_xml_parse_tree
 						memcpy(content_buf, (void *)content, str_size);
 						if (0 == strncasecmp(content_buf, ODU_ROUTER_TAG, str_size))
 						{
-							config->odu_enable = true;
 							config->router_mode_enable = true;
 							IPACMDBG("router-mode enable %d\n", config->router_mode_enable);
 						}
 						else if (0 == strncasecmp(content_buf, ODU_BRIDGE_TAG, str_size))
 						{
-							config->odu_enable = true;
 							config->router_mode_enable = false;
 							IPACMDBG("router-mode enable %d\n", config->router_mode_enable);
 						}

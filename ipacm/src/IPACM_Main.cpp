@@ -130,7 +130,7 @@ void* firewall_monitor(void *param)
 		if (length < 0)
 		{
 			IPACMERR("inotify read() error return length: %d and mask: 0x%x 0x%x\n", length, event->mask, mask);
-			return NULL;
+			continue;
 		}
 
 		if (event->len > 0)
@@ -181,6 +181,7 @@ void* ipa_driver_wlan_notifier(void *param)
 	if (fd == 0)
 	{
 		IPACMERR("Failed opening %s.\n", IPA_DRIVER);
+		return NULL;
 	}
 	
 	while (1)
@@ -195,7 +196,7 @@ void* ipa_driver_wlan_notifier(void *param)
 		if (length < 0)
 		{
 			PERROR("didn't read IPA_driver correctly");
-			return NULL;
+			continue;
 		}
 
 		event_hdr = (struct ipa_msg_meta *)buffer;

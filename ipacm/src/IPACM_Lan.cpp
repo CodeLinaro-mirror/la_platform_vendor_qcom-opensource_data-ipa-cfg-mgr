@@ -78,21 +78,22 @@ IPACM_Lan::IPACM_Lan(int iface_index) : IPACM_Iface(iface_index)
 		/* only do one time ioctl to odu-driver to infrom in router or bridge mode*/
 		if (IPACM_Lan::odu_up != true)
 		{
-			if (IPACM_Iface::ipacmcfg->ipacm_odu_enable == true)
-			{
 				m_fd_odu = open(IPACM_Iface::ipacmcfg->DEVICE_NAME_ODU, O_RDWR);
 				if (0 == m_fd_odu)
 				{
 					IPACMERR("Failed opening %s.\n", IPACM_Iface::ipacmcfg->DEVICE_NAME_ODU);
+					return;
 				}
 		
 				if(IPACM_Iface::ipacmcfg->ipacm_odu_router_mode == true)
 				{
 					ret = ioctl(m_fd_odu, ODU_BRIDGE_IOC_SET_MODE, ODU_BRIDGE_MODE_ROUTER);
+					IPACM_Iface::ipacmcfg->ipacm_odu_enable = true;
 				}
 				else
 				{
 					ret = ioctl(m_fd_odu, ODU_BRIDGE_IOC_SET_MODE, ODU_BRIDGE_MODE_BRIDGE);
+					IPACM_Iface::ipacmcfg->ipacm_odu_enable = true;
 				}
 		
 				if (ret)
@@ -102,7 +103,6 @@ IPACM_Lan::IPACM_Lan(int iface_index) : IPACM_Iface(iface_index)
 				IPACMDBG("Tell odu-driver in router-mode(%d)\n", IPACM_Iface::ipacmcfg->ipacm_odu_router_mode);	
 				close(m_fd_odu);		
 				IPACM_Lan::odu_up = true;		
-			}
 		}
 	}
 	return;

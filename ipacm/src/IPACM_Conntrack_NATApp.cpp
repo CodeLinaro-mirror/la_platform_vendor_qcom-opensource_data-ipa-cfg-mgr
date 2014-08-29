@@ -1,4 +1,4 @@
-/* 
+/*
 Copyright (c) 2013, The Linux Foundation. All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -177,7 +177,7 @@ bool NatApp::ChkForDup(const nat_table_entry *rule)
 	int cnt = 0;
 	IPACMDBG("%s() %d\n", __FUNCTION__, __LINE__);
 
-	for(; cnt < curCnt; cnt++)
+	for(; cnt < max_entries; cnt++)
 	{
 		if(cache[cnt].private_ip == rule->private_ip &&
 			 cache[cnt].target_ip == rule->target_ip &&
@@ -224,21 +224,15 @@ int NatApp::DeleteEntry(const nat_table_entry *rule)
 					return -1;
 				}
 
-				IPACMDBG("Deleted below Nat entry Successfully\n");
+				IPACMDBG("Deleted Nat entry(%d) Successfully\n", cnt);
 			}
 			else
 			{
-				IPACMDBG("Deleted below Nat entry only from cache\n");
+				IPACMDBG("Deleted Nat entry(%d) only from cache\n", cnt);
 			}
-			
+
 			memset(&cache[cnt], 0, sizeof(cache[cnt]));
 			curCnt--;
-			
-			IPACM_ConntrackClient::iptodot("Private IP", rule->private_ip);
-			IPACM_ConntrackClient::iptodot("Target IP", rule->target_ip);
-			IPACMDBG("Private Port: %d\t Target Port: %d\t", rule->private_port, rule->target_port);
-			IPACMDBG("protocolcol: %d\n", rule->protocol);
-			
 			break; 
 		}
 	}
@@ -255,6 +249,13 @@ int NatApp::AddEntry(const nat_table_entry *rule)
 	IPACMDBG("%s() %d\n", __FUNCTION__, __LINE__);
 
 	CHK_TBL_HDL();
+
+	IPACMDBG("Received below nat entry for addition\n");
+	IPACM_ConntrackClient::iptodot("Private IP", rule->private_ip);
+	IPACM_ConntrackClient::iptodot("Target IP", rule->target_ip);
+	IPACMDBG("Private Port:%d \t Target Port: %d\t", rule->private_port, rule->target_port);
+	IPACMDBG("Public Port:%d\n", rule->public_port);
+	IPACMDBG("protocol: %d\n", rule->protocol);
 
 	if(isAlgPort(rule->protocol, rule->private_port) ||
 		 isAlgPort(rule->protocol, rule->target_port))
@@ -305,7 +306,7 @@ int NatApp::AddEntry(const nat_table_entry *rule)
 			nat_rule.private_port = rule->private_port;
 			nat_rule.public_port = rule->public_port;
 			nat_rule.protocol = rule->protocol;
-			
+
 			if(isPwrSaveIf(rule->private_ip) ||
 				 isPwrSaveIf(rule->target_ip))
 			{
@@ -345,12 +346,11 @@ int NatApp::AddEntry(const nat_table_entry *rule)
 
 	if(cache[cnt].enabled == true)
 	{
-		IPACMDBG("Added below rule successfully\n");
-		IPACM_ConntrackClient::iptodot("Private IP", rule->private_ip);
-		IPACM_ConntrackClient::iptodot("Target IP", rule->target_ip);
-		IPACMDBG("Private Port:%d \t Target Port: %d\t", rule->private_port, rule->target_port);
-		IPACMDBG("Public Port:%d\n", rule->public_port);
-		IPACMDBG("protocol: %d\n", rule->protocol);
+		IPACMDBG("Added rule(%d) successfully\n", cnt);
+	}
+	else
+	{
+		IPACMDBG("Cached rule(%d) successfully\n", cnt);
 	}
 
 	return 0;
@@ -383,7 +383,7 @@ void NatApp::UpdateCTUdpTs(nat_table_entry *rule, uint32_t new_ts)
 			return;
 		}
 	}
-	
+
 	nfct_set_attr_u8(ct, ATTR_L3PROTO, AF_INET);
 	if(rule->protocol == IPPROTO_UDP)
 	{
@@ -420,9 +420,9 @@ void NatApp::UpdateCTUdpTs(nat_table_entry *rule, uint32_t new_ts)
 	IPACM_ConntrackClient::iptodot("Source IP:", nfct_get_attr_u32(ct, ATTR_IPV4_SRC));
 	IPACM_ConntrackClient::iptodot("Destination IP:",  nfct_get_attr_u32(ct, ATTR_IPV4_DST));
 	IPACMDBG("Source Port: %d, Destination Port: %d\n",
-					 nfct_get_attr_u16(ct, ATTR_PORT_SRC), nfct_get_attr_u16(ct, ATTR_PORT_DST)); 
-	
-	IPACMDBG("updating %d connection with time: %d\n", 
+					 nfct_get_attr_u16(ct, ATTR_PORT_SRC), nfct_get_attr_u16(ct, ATTR_PORT_DST));
+
+	IPACMDBG("updating %d connection with time: %d\n",
 					 rule->protocol, nfct_get_attr_u32(ct, ATTR_TIMEOUT));
 
 	ret = nfct_query(ct_hdl, NFCT_Q_UPDATE, ct);
@@ -444,7 +444,7 @@ void NatApp::UpdateUDPTimeStamp()
 	int cnt;
 	uint32_t ts;
 
-	for(cnt = 0; cnt < curCnt; cnt++)
+	for(cnt = 0; cnt < max_entries; cnt++)
 	{
 		ts = 0;
 		if(cache[cnt].enabled == true)
@@ -462,7 +462,7 @@ void NatApp::UpdateUDPTimeStamp()
 								                  cache[cnt].timestamp, ts);
 				continue;
 			}
-			
+
 			UpdateCTUdpTs(&cache[cnt], ts);
 		} /* end of outer if */
 
@@ -504,7 +504,7 @@ bool NatApp::isPwrSaveIf(uint32_t ip_addr)
 int NatApp::UpdatePwrSaveIf(uint32_t client_lan_ip)
 {
 	int cnt;
-	IPACMDBG("\n");
+	IPACMDBG("Received IP address: 0x%x\n", client_lan_ip);
 
 	if(client_lan_ip == INVALID_IP_ADDR)
 	{
@@ -533,7 +533,7 @@ int NatApp::UpdatePwrSaveIf(uint32_t client_lan_ip)
 		}
 	}
 
-	for(cnt = 0; cnt < curCnt; cnt++)
+	for(cnt = 0; cnt < max_entries; cnt++)
 	{
 		if(cache[cnt].private_ip == client_lan_ip &&
 			 cache[cnt].enabled == true)
@@ -557,7 +557,7 @@ int NatApp::ResetPwrSaveIf(uint32_t client_lan_ip)
 	int cnt;
 	ipa_nat_ipv4_rule nat_rule;
 
-	IPACMDBG("\n");
+	IPACMDBG("Received ip address: 0x%x\n", client_lan_ip);
 
 	if(client_lan_ip == INVALID_IP_ADDR)
 	{
@@ -574,7 +574,7 @@ int NatApp::ResetPwrSaveIf(uint32_t client_lan_ip)
 		}
 	}
 
-	for(cnt = 0; cnt < curCnt; cnt++)
+	for(cnt = 0; cnt < max_entries; cnt++)
 	{
 		if(cache[cnt].private_ip == client_lan_ip &&
 			 cache[cnt].enabled == false)
@@ -586,7 +586,7 @@ int NatApp::ResetPwrSaveIf(uint32_t client_lan_ip)
 			nat_rule.private_port = cache[cnt].private_port;
 			nat_rule.public_port = cache[cnt].public_port;
 			nat_rule.protocol = cache[cnt].protocol;
-			
+
 			if(ipa_nat_add_ipv4_rule(nat_table_hdl, &nat_rule, &cache[cnt].rule_hdl) < 0)
 			{
 				IPACMERR("unable to add the rule delete from cache\n");

@@ -247,6 +247,7 @@ void* ipa_driver_wlan_notifier(void *param)
 	char buffer[IPA_DRIVER_WLAN_BUF_LEN];
 	struct ipa_msg_meta event_hdr;
 	struct ipa_ecm_msg event_ecm;
+	struct ipa_wan_msg event_wan;
 	struct ipa_wlan_msg_ex event_ex_o;
 	struct ipa_wlan_msg *event_wlan=NULL;
 	struct ipa_wlan_msg_ex *event_ex= NULL;
@@ -520,6 +521,21 @@ void* ipa_driver_wlan_notifier(void *param)
 			}
 			data_fid->if_index = event_ecm.ifindex;
 			evt_data.event = IPA_LINK_DOWN_EVENT;
+			evt_data.evt_data = data_fid;
+			break;
+
+        /* Add for embms case */
+		case WAN_EMBMS_CONNECT:
+			memcpy(&event_wan, buffer + sizeof(struct ipa_msg_meta), sizeof(struct ipa_wan_msg));
+			IPACMDBG("Received WAN_EMBMS_CONNECT name: %s\n",event_wan.upstream_ifname);
+			data_fid = (ipacm_event_data_fid *)malloc(sizeof(ipacm_event_data_fid));
+			if(data_fid == NULL)
+			{
+				IPACMERR("unable to allocate memory for event data_fid\n");
+				return NULL;
+			}
+			ipa_get_if_index(event_wan.upstream_ifname, &(data_fid->if_index));
+			evt_data.event = IPA_WAN_EMBMS_LINK_UP_EVENT;
 			evt_data.evt_data = data_fid;
 			break;
 

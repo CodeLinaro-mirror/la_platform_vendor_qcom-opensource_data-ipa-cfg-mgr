@@ -1,4 +1,4 @@
-/* 
+/*
 Copyright (c) 2013, The Linux Foundation. All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -47,6 +47,7 @@ IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #endif
 
 #define MAX_NAT_IFACES 50
+#define MAX_STA_CLNT_IFACES 10
 
 using namespace std;
 
@@ -60,14 +61,16 @@ private:
 	 NatApp *nat_inst;
 
 	 int NatIfaceCnt;
+   int StaClntCnt;
 	 NatIfaces *pNatIfaces;
 	 uint32_t nat_iface_ipv4_addr[MAX_NAT_IFACES];
 	 uint32_t nonnat_iface_ipv4_addr[MAX_NAT_IFACES];
+   uint32_t sta_clnt_ipv4_addr[MAX_STA_CLNT_IFACES];
 	 IPACM_Config *pConfig;
 #ifdef CT_OPT
 	 IPACM_LanToLan *p_lan2lan;
 #endif
-	 
+
 	 void ProcessCTMessage(void *);
 	 void ProcessTCPorUDPMsg(struct nf_conntrack *,
 			enum nf_conntrack_msg_type, u_int8_t);
@@ -79,6 +82,8 @@ private:
 #ifdef CT_OPT
 	 void ProcessCTV6Message(void *);
 #endif
+
+
 
 public:
 	 char wan_ifname[IPA_IFACE_NAME_LEN];
@@ -94,6 +99,9 @@ public:
 
    void HandleNeighIpAddrAddEvt(ipacm_event_data_all *);
    void HandleNeighIpAddrDelEvt(uint32_t);
+
+   void HandleSTAClientAddEvt(uint32_t);
+   void HandleSTAClientDelEvt(uint32_t);
 };
 
 extern IPACM_ConntrackListener *CtList;

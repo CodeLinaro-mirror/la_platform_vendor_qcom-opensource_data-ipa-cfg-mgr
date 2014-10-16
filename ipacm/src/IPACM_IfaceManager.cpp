@@ -228,6 +228,14 @@ int IPACM_IfaceManager::create_iface_instance(int if_index, ipacm_wan_iface_type
 				IPACM_EvtDispatcher::registr(IPA_CFG_CHANGE_EVENT, w); 		// register for IPA_CFG_CHANGE event
 				IPACM_EvtDispatcher::registr(IPA_LINK_DOWN_EVENT, w);
 				IPACM_EvtDispatcher::registr(IPA_WLAN_LINK_DOWN_EVENT, w); // for STA mode
+				if(is_sta_mode == WLAN_WAN)
+				{
+					IPACM_EvtDispatcher::registr(IPA_WLAN_LINK_DOWN_EVENT, w); // for STA mode
+				}
+				else
+				{
+					IPACM_EvtDispatcher::registr(IPA_LINK_DOWN_EVENT, w);
+				}
 				IPACMDBG_H("ipa_WAN (%s):ipa_index (%d) instance open/registr ok\n", w->dev_name, w->ipa_if_num);
 				registr(ipa_interface_index, w);
 				/* solve the new_addr comes earlier issue */

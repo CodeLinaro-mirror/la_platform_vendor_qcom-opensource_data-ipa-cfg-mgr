@@ -54,6 +54,7 @@ IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #define IPA_PRIV_SUBNET_FILTER_RULE_HANDLES  3
 #define MAX_WAN_UL_FILTER_RULES 20
 #define NUM_IPV6_PREFIX_FLT_RULE 1
+#define NUM_IPV6_ICMP_FLT_RULE 1
 
 /* store each lan-iface unicast routing rule and its handler*/
 struct ipa_lan_rt_rule
@@ -163,6 +164,8 @@ protected:
 
 	int install_ipv6_prefix_flt_rule(uint32_t* prefix);
 
+	int install_ipv6_icmp_flt_rule();
+
 	void post_del_self_evt();
 
 	lan2lan_flt_rule_hdl lan2lan_flt_rule_hdl_v4[MAX_OFFLOAD_PAIR];
@@ -186,6 +189,7 @@ protected:
 	uint32_t tcp_ctl_flt_rule_hdl_v6[NUM_TCP_CTL_FLT_RULE];
 
 	uint32_t ipv6_prefix_flt_rule_hdl[NUM_IPV6_PREFIX_FLT_RULE];
+	uint32_t ipv6_icmp_flt_rule_hdl[NUM_IPV6_ICMP_FLT_RULE];
 
 	int num_wan_ul_fl_rule_v4;
 	int num_wan_ul_fl_rule_v6;

@@ -213,6 +213,7 @@ void IPACM_ConntrackListener::HandleNeighIpAddrAddEvt(ipacm_event_data_all *data
 				if(nat_iface_ipv4_addr[j] == 0)
 				{
 					nat_iface_ipv4_addr[j] = data->ipv4_addr;
+					nat_inst->ResetPwrSaveIf(data->ipv4_addr);
 					nat_inst->FlushTempEntries(data->ipv4_addr, true);
 					break;
 				}
@@ -712,11 +713,13 @@ void IPACM_ConntrackListener::ProcessTCPorUDPMsg(
 		 {
 			 IPACMDBG("orig src ip:0x%x equal to wan ip\n",orig_src_ip);
 			 status = IPS_SRC_NAT;
+			 rule.public_ip = wan_ipaddr;
 		 }
 		 else if(orig_dst_ip == wan_ipaddr)
 		 {
 			 IPACMDBG("orig Dst IP:0x%x equal to wan ip\n",orig_dst_ip);
 			 status = IPS_DST_NAT;
+	 	 	 rule.public_ip = wan_ipaddr;
 		 }
 		 else
 		 {
@@ -943,7 +946,12 @@ ADD:
 			if(TCP_CONNTRACK_ESTABLISHED == tcp_state)
 			{
 				 IPACMDBG("TCP state TCP_CONNTRACK_ESTABLISHED(%d)\n", tcp_state);
-				 if(isTempEntry)
+				 if(!CtList->isWanUp())
+				 {
+				 	 IPACMDBG("Wan is not up, cache connections\n");
+					 nat_inst->CacheEntry(&rule);
+				 }
+				 else if(isTempEntry)
 				 {
 					 nat_inst->AddTempEntry(&rule);
 				 }
@@ -983,7 +991,12 @@ ADD:
 			if(NFCT_T_NEW == type)
 			{
 				 IPACMDBG("New UDP connection at time %ld\n", time(NULL));
-				 if(isTempEntry)
+				 if(!CtList->isWanUp())
+				 {
+				 	 IPACMDBG("Wan is not up, cache connections\n");
+					 nat_inst->CacheEntry(&rule);
+				 }
+				 else if(isTempEntry)
 				 {
 					 nat_inst->AddTempEntry(&rule);
 				 }

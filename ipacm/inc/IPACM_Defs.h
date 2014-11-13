@@ -85,7 +85,7 @@ extern "C"
 
 #define WWAN_QMI_IOCTL_DEVICE_NAME "/dev/wwan_ioctl"
 #define IPA_DEVICE_NAME "/dev/ipa"
-#define IPA_MAX_FLT_RULE 36
+#define IPA_MAX_FLT_RULE 50
 
 #define MAX_OFFLOAD_PAIR 3
 #define MAX_NUM_PROP 8
@@ -147,19 +147,19 @@ typedef enum
 	IPA_HANDLE_WLAN_UP,                       /* 24 ipacm_event_iface_up */
 	IPA_HANDLE_LAN_UP,                        /* 25 ipacm_event_iface_up */
 	IPA_WLAN_CLIENT_ADD_EVENT_EX,             /* 26 ipacm_event_data_wlan_ex */
-	IPA_HANDLE_WAN_UP_V6,					  /* 27 NULL */
-	IPA_HANDLE_WAN_DOWN_V6,					  /* 28 NULL */
-	IPA_LAN_CLIENT_ACTIVE,					  /* 29 ipacm_event_lan_client*/
-	IPA_LAN_CLIENT_INACTIVE,				  /* 30 ipacm_event_lan_client*/
-	IPA_LAN_CLIENT_DISCONNECT,				  /* 31 ipacm_event_lan_client*/
-	IPA_LAN_CLIENT_POWER_SAVE,				  /* 32 ipacm_event_lan_client*/
-	IPA_LAN_CLIENT_POWER_RECOVER,			  /* 33 ipacm_event_lan_client*/
-	IPA_LAN_TO_LAN_NEW_CONNECTION,			  /* 34 ipacm_event_connection */
-	IPA_LAN_TO_LAN_DEL_CONNECTION,			  /* 35 ipacm_event_connection */
-	IPA_LAN_DELETE_SELF,					  /* 36 ipacm_event_data_fid */
+	IPA_HANDLE_WAN_UP_V6,                     /* 27 NULL */
+	IPA_HANDLE_WAN_DOWN_V6,                   /* 28 NULL */
+	IPA_LAN_CLIENT_ACTIVE,                    /* 29 ipacm_event_lan_client*/
+	IPA_LAN_CLIENT_INACTIVE,                  /* 30 ipacm_event_lan_client*/
+	IPA_LAN_CLIENT_DISCONNECT,                /* 31 ipacm_event_lan_client*/
+	IPA_LAN_CLIENT_POWER_SAVE,                /* 32 ipacm_event_lan_client*/
+	IPA_LAN_CLIENT_POWER_RECOVER,             /* 33 ipacm_event_lan_client*/
+	IPA_LAN_TO_LAN_NEW_CONNECTION,            /* 34 ipacm_event_connection */
+	IPA_LAN_TO_LAN_DEL_CONNECTION,            /* 35 ipacm_event_connection */
+	IPA_LAN_DELETE_SELF,                      /* 36 ipacm_event_data_fid */
 	IPA_WLAN_LINK_DOWN_EVENT,                 /* 37 ipacm_event_data_mac */
 	IPA_USB_LINK_UP_EVENT,                    /* 38 ipacm_event_data_fid */
-	IPA_PROCESS_CT_MESSAGE_V6,				  /* 39 ipacm_ct_evt_data */
+	IPA_PROCESS_CT_MESSAGE_V6,                /* 39 ipacm_ct_evt_data */
 	IPA_WAN_EMBMS_LINK_UP_EVENT,              /* 40 ipacm_event_data_mac */
 	IPACM_EVENT_MAX
 } ipa_cm_event_id;

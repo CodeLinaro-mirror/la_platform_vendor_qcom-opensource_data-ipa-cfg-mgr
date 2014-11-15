@@ -206,15 +206,14 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 						/* use previous ipv4 first */
 						if(data->if_index != neighbor_client[i].iface_index)
 						{
-							IPACMERR("update new kernel iface index \n");
+							IPACMDBG_H("update new kernel iface index \n");
 							neighbor_client[i].iface_index = data->if_index;
 						}
 
 						/* check if client associated with previous network interface */
 						if(ipa_interface_index != neighbor_client[i].ipa_if_num)
 						{
-							IPACMERR("client associate to different AP \n");
-							return;
+							IPACMDBG_H("client associate to different AP \n");
 						}
 
 						if (neighbor_client[i].v4_addr != 0) /* not 0.0.0.0 */
@@ -250,34 +249,32 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 				/* check if iface is not bridge interface*/
 				if (strcmp(IPACM_Iface::ipacmcfg->ipa_virtual_iface_name, IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].iface_name) != 0)
 				{
-
-				if (num_neighbor_client_temp < IPA_MAX_NUM_NEIGHBOR_CLIENTS)
-				{
-					memcpy(neighbor_client[num_neighbor_client_temp].mac_addr,
-								 data->mac_addr,
-								 sizeof(data->mac_addr));
-					neighbor_client[num_neighbor_client_temp].iface_index = data->if_index;
-					/* cache the network interface client associated */
-					neighbor_client[num_neighbor_client_temp].ipa_if_num = ipa_interface_index;
-					neighbor_client[num_neighbor_client_temp].v4_addr = 0;
-					IPACMDBG_H("Copy wlan-iface client MAC %02x:%02x:%02x:%02x:%02x:%02x\n, total client: %d\n",
-									 neighbor_client[num_neighbor_client_temp].mac_addr[0],
-									 neighbor_client[num_neighbor_client_temp].mac_addr[1],
-									 neighbor_client[num_neighbor_client_temp].mac_addr[2],
-									 neighbor_client[num_neighbor_client_temp].mac_addr[3],
-									 neighbor_client[num_neighbor_client_temp].mac_addr[4],
-									 neighbor_client[num_neighbor_client_temp].mac_addr[5],
-									 num_neighbor_client);
-					num_neighbor_client++;
-					return;
+					if (num_neighbor_client_temp < IPA_MAX_NUM_NEIGHBOR_CLIENTS)
+					{
+						memcpy(neighbor_client[num_neighbor_client_temp].mac_addr,
+									data->mac_addr,
+									sizeof(data->mac_addr));
+						neighbor_client[num_neighbor_client_temp].iface_index = data->if_index;
+						/* cache the network interface client associated */
+						neighbor_client[num_neighbor_client_temp].ipa_if_num = ipa_interface_index;
+						neighbor_client[num_neighbor_client_temp].v4_addr = 0;
+						IPACMDBG_H("Copy wlan-iface client MAC %02x:%02x:%02x:%02x:%02x:%02x\n, total client: %d\n",
+										neighbor_client[num_neighbor_client_temp].mac_addr[0],
+										neighbor_client[num_neighbor_client_temp].mac_addr[1],
+										neighbor_client[num_neighbor_client_temp].mac_addr[2],
+										neighbor_client[num_neighbor_client_temp].mac_addr[3],
+										neighbor_client[num_neighbor_client_temp].mac_addr[4],
+										neighbor_client[num_neighbor_client_temp].mac_addr[5],
+										num_neighbor_client);
+						num_neighbor_client++;
+						return;
+					}
+					else
+					{
+						IPACMERR("error:  neighbor client oversize!");
+						return;
+					}
 				}
-				else
-				{
-					IPACMERR("error:  neighbor client oversize!");
-					return;
-				}
-				}
-
 			}
 		}
 	} //ipv6 ends

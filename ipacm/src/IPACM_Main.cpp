@@ -386,6 +386,19 @@ void* ipa_driver_wlan_notifier(void *param)
 
 		case WLAN_CLIENT_CONNECT_EX:
 			IPACMDBG_H("Received WLAN_CLIENT_CONNECT_EX\n");
+
+			ipacm_cmd_q_data new_neigh_evt;
+			ipacm_event_data_all* new_neigh_data;
+			new_neigh_data = (ipacm_event_data_all*)malloc(sizeof(ipacm_event_data_all));
+			if(new_neigh_data == NULL)
+			{
+				IPACMERR("Failed to allocate memory.\n");
+				return NULL;
+			}
+			memset(new_neigh_data, 0, sizeof(ipacm_event_data_all));
+			memset(&new_neigh_evt, 0, sizeof(ipacm_cmd_q_data));
+			new_neigh_data->iptype = IPA_IP_v6;
+
 			memcpy(&event_ex_o, buffer + sizeof(struct ipa_msg_meta),sizeof(struct ipa_wlan_msg_ex));
 			if(event_ex_o.num_of_attribs > IPA_DRIVER_WLAN_EVENT_MAX_OF_ATTRIBS)
 			{
@@ -416,6 +429,7 @@ void* ipa_driver_wlan_notifier(void *param)
 			{
 				if(event_ex->attribs[cnt].attrib_type == WLAN_HDR_ATTRIB_MAC_ADDR)
 				{
+					memcpy(new_neigh_data->mac_addr, event_ex->attribs[cnt].u.mac_addr, sizeof(new_neigh_data->mac_addr));
 					IPACMDBG_H("Mac Address %02x:%02x:%02x:%02x:%02x:%02x\n",
 								 event_ex->attribs[cnt].u.mac_addr[0], event_ex->attribs[cnt].u.mac_addr[1], event_ex->attribs[cnt].u.mac_addr[2],
 								 event_ex->attribs[cnt].u.mac_addr[3], event_ex->attribs[cnt].u.mac_addr[4], event_ex->attribs[cnt].u.mac_addr[5]);
@@ -431,9 +445,15 @@ void* ipa_driver_wlan_notifier(void *param)
 			}
 
 			ipa_get_if_index(event_ex->name, &(data_ex->if_index));
-		    evt_data.event = IPA_WLAN_CLIENT_ADD_EVENT_EX;
+			evt_data.event = IPA_WLAN_CLIENT_ADD_EVENT_EX;
 			evt_data.evt_data = data_ex;
 			free(event_ex);
+
+			new_neigh_data->if_index = data_ex->if_index;
+			new_neigh_evt.evt_data = (void*)new_neigh_data;
+			new_neigh_evt.event = IPA_NEW_NEIGH_EVENT;
+			IPACMDBG_H("Internally post event IPA_NEW_NEIGH_EVENT\n");
+			IPACM_EvtDispatcher::PostEvt(&new_neigh_evt);
 			break;
 
 		case WLAN_CLIENT_DISCONNECT:

@@ -256,6 +256,8 @@ void* ipa_driver_wlan_notifier(void *param)
 	ipacm_event_data_mac *data = NULL;
     ipacm_event_data_fid *data_fid = NULL;
 	ipacm_event_data_wlan_ex *data_ex;
+	ipacm_cmd_q_data new_neigh_evt;
+	ipacm_event_data_all* new_neigh_data;
 
 	fd = open(IPA_DRIVER, O_RDWR);
 	if (fd == 0)
@@ -269,6 +271,8 @@ void* ipa_driver_wlan_notifier(void *param)
 		IPACMDBG_H("Waiting for nofications from IPA driver \n");
 		memset(buffer, 0, sizeof(buffer));
 		memset(&evt_data, 0, sizeof(evt_data));
+		memset(&new_neigh_evt, 0, sizeof(ipacm_cmd_q_data));
+		new_neigh_data = NULL;
 		data = NULL;
 		data_fid = NULL;
 
@@ -386,19 +390,6 @@ void* ipa_driver_wlan_notifier(void *param)
 
 		case WLAN_CLIENT_CONNECT_EX:
 			IPACMDBG_H("Received WLAN_CLIENT_CONNECT_EX\n");
-
-			ipacm_cmd_q_data new_neigh_evt;
-			ipacm_event_data_all* new_neigh_data;
-			new_neigh_data = (ipacm_event_data_all*)malloc(sizeof(ipacm_event_data_all));
-			if(new_neigh_data == NULL)
-			{
-				IPACMERR("Failed to allocate memory.\n");
-				return NULL;
-			}
-			memset(new_neigh_data, 0, sizeof(ipacm_event_data_all));
-			memset(&new_neigh_evt, 0, sizeof(ipacm_cmd_q_data));
-			new_neigh_data->iptype = IPA_IP_v6;
-
 			memcpy(&event_ex_o, buffer + sizeof(struct ipa_msg_meta),sizeof(struct ipa_wlan_msg_ex));
 			if(event_ex_o.num_of_attribs > IPA_DRIVER_WLAN_EVENT_MAX_OF_ATTRIBS)
 			{
@@ -425,6 +416,19 @@ void* ipa_driver_wlan_notifier(void *param)
 			memcpy(data_ex->attribs,
 						event_ex->attribs,
 						event_ex->num_of_attribs * sizeof(ipa_wlan_hdr_attrib_val));
+			ipa_get_if_index(event_ex->name, &(data_ex->if_index));
+			evt_data.event = IPA_WLAN_CLIENT_ADD_EVENT_EX;
+			evt_data.evt_data = data_ex;
+
+			/* Construct new_neighbor msg with netdev device internally */
+			new_neigh_data = (ipacm_event_data_all*)malloc(sizeof(ipacm_event_data_all));
+			if(new_neigh_data == NULL)
+			{
+				IPACMERR("Failed to allocate memory.\n");
+				return NULL;
+			}
+			memset(new_neigh_data, 0, sizeof(ipacm_event_data_all));
+			new_neigh_data->iptype = IPA_IP_v6;
 			for(cnt = 0; cnt < event_ex->num_of_attribs; cnt++)
 			{
 				if(event_ex->attribs[cnt].attrib_type == WLAN_HDR_ATTRIB_MAC_ADDR)
@@ -443,17 +447,11 @@ void* ipa_driver_wlan_notifier(void *param)
 					IPACMDBG_H("Wlan message has unexpected type!\n");
 				}
 			}
-
-			ipa_get_if_index(event_ex->name, &(data_ex->if_index));
-			evt_data.event = IPA_WLAN_CLIENT_ADD_EVENT_EX;
-			evt_data.evt_data = data_ex;
-			free(event_ex);
-
 			new_neigh_data->if_index = data_ex->if_index;
 			new_neigh_evt.evt_data = (void*)new_neigh_data;
 			new_neigh_evt.event = IPA_NEW_NEIGH_EVENT;
-			IPACMDBG_H("Internally post event IPA_NEW_NEIGH_EVENT\n");
-			IPACM_EvtDispatcher::PostEvt(&new_neigh_evt);
+
+			free(event_ex);
 			break;
 
 		case WLAN_CLIENT_DISCONNECT:
@@ -568,6 +566,12 @@ void* ipa_driver_wlan_notifier(void *param)
 		/* finish command queue */
 		IPACMDBG_H("Posting event:%d\n", evt_data.event);
 		IPACM_EvtDispatcher::PostEvt(&evt_data);
+		 /* push new_neighbor with netdev device internally */
+		if(new_neigh_data != NULL)
+		{
+			IPACMDBG_H("Internally post event IPA_NEW_NEIGH_EVENT\n");
+			IPACM_EvtDispatcher::PostEvt(&new_neigh_evt);
+		}
 	}
 
 	(void)close(fd);

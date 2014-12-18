@@ -66,6 +66,7 @@ int IPACM_Wan::num_ipv4_modem_pdn = 0;
 int IPACM_Wan::num_ipv6_modem_pdn = 0;
 
 uint32_t IPACM_Wan::backhaul_ipv6_prefix[2];
+uint8_t IPACM_Wan::ext_router_mac_addr[IPA_MAC_ADDR_SIZE];
 
 IPACM_Wan::IPACM_Wan(int iface_index, ipacm_wan_iface_type is_sta_mode) : IPACM_Iface(iface_index)
 {
@@ -632,11 +633,6 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 						}
 					}
 				}
-				handle_header_add_evt(data->mac_addr);
-
-				/* new */
-				IPACMDBG_H("wan-iface got client \n");
-				/* first construc WAN-client full header */
 				if(memcmp(data->mac_addr,
 									invalid_mac,
 									sizeof(data->mac_addr)) == 0)
@@ -647,6 +643,18 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 					return;
 				}
 
+				if(m_is_sta_mode == WLAN_WAN)
+				{
+					handle_header_add_evt(IPACM_Wan::ext_router_mac_addr);
+				}
+				else
+				{
+					handle_header_add_evt(data->mac_addr);
+				}
+
+				/* new */
+				IPACMDBG_H("wan-iface got client \n");
+				/* first construc WAN-client full header */
 				handle_wan_hdr_init(data->mac_addr);
 				IPACMDBG_H("construct wan header and route rules \n");
 				/* Associate with IP and construct RT-rule */

@@ -114,6 +114,7 @@ public:
 	static bool backhaul_is_sta_mode;
 	static bool is_ext_prop_set;
 	static uint32_t backhaul_ipv6_prefix[2];
+	static uint8_t ext_router_mac_addr[IPA_MAC_ADDR_SIZE];
 
 private:
 	uint32_t *wan_route_rule_v4_hdl;

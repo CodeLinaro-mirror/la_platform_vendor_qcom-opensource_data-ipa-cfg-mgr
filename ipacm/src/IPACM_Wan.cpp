@@ -634,6 +634,25 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 			if (ipa_interface_index == ipa_if_num)
 			{
 				IPACMDBG_H("Received IPA_NEIGH_CLIENT_IP_ADDR_ADD_EVENT in STA mode\n");
+				if (data->iptype == IPA_IP_v4 && data->ipv4_addr == wan_v4_addr)
+				{
+					IPACMDBG_H("Ignore IPA_NEIGH_CLIENT_IP_ADDR_ADD_EVENT for its own ipv4 address\n");
+					return;
+				}
+				else if (data->iptype == IPA_IP_v6)
+				{
+					for (int num_ipv6_addr = 0; num_ipv6_addr < num_dft_rt_v6; num_ipv6_addr++)
+					{
+						if ((ipv6_addr[num_ipv6_addr][0] == data->ipv6_addr[0]) &&
+							(ipv6_addr[num_ipv6_addr][1] == data->ipv6_addr[1]) &&
+							(ipv6_addr[num_ipv6_addr][2] == data->ipv6_addr[2]) &&
+							(ipv6_addr[num_ipv6_addr][3] == data->ipv6_addr[3]))
+						{
+							IPACMDBG_H("Ignore IPA_NEIGH_CLIENT_IP_ADDR_ADD_EVENT for its own ipv6 address\n");
+							return;
+						}
+					}
+				}
 				handle_header_add_evt(data->mac_addr);
 
 				/* new */

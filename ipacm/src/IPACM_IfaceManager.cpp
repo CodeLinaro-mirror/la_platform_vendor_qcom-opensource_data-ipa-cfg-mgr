@@ -66,6 +66,7 @@ void IPACM_IfaceManager::event_callback(ipa_cm_event_id event, void *param)
 {
 	int ipa_interface_index;
 	ipacm_event_data_fid *evt_data = (ipacm_event_data_fid *)param;
+	ipacm_event_data_mac *sta_data = NULL;
 	switch(event)
 	{
 		case IPA_CFG_CHANGE_EVENT:
@@ -115,14 +116,16 @@ void IPACM_IfaceManager::event_callback(ipa_cm_event_id event, void *param)
 			break;
 
 		case IPA_WLAN_STA_LINK_UP_EVENT:
-			ipa_interface_index = IPACM_Iface::iface_ipa_index_query(evt_data->if_index);
+			sta_data = (ipacm_event_data_mac *)param;
+			ipa_interface_index = IPACM_Iface::iface_ipa_index_query(sta_data->if_index);
 			/* change iface category from unknown to WAN_IF */
 			if(IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].if_cat==UNKNOWN_IF)
 			{
 				/* wlan-backhaul using sta_mode WLAN_WAN */
 				IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].if_cat=WAN_IF;
-				IPACMDBG_H("WLAN STA (%s) link up, iface: %d: \n", IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].iface_name,evt_data->if_index);
-				create_iface_instance(evt_data->if_index, WLAN_WAN);
+				IPACMDBG_H("WLAN STA (%s) link up, iface: %d: \n", IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].iface_name, sta_data->if_index);
+				memcpy(IPACM_Wan::ext_router_mac_addr, sta_data->mac_addr, sizeof(IPACM_Wan::ext_router_mac_addr));
+				create_iface_instance(sta_data->if_index, WLAN_WAN);
 			}
 			else
 			{

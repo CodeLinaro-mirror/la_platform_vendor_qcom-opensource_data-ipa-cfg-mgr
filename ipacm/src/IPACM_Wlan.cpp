@@ -1840,17 +1840,6 @@ int IPACM_Wlan::handle_down_evt()
 				goto fail;
 			}
 		}
-
-		/* delete icmp filter rules */
-		if(wlan_ap_index == 0)
-		{
-			if(m_filtering.DeleteFilteringHdls(ipv6_icmp_flt_rule_hdl, IPA_IP_v6, NUM_IPV6_ICMP_FLT_RULE) == false)
-			{
-				IPACMERR("Error Deleting ICMPv6 Filtering Rule, aborting...\n");
-				res = IPACM_FAILURE;
-				goto fail;
-			}
-		}
 #ifdef CT_OPT
 		IPACMDBG_H("Delete tcp control flt rules.\n");
 		/* Delete tcp control flt rules */
@@ -1891,6 +1880,16 @@ int IPACM_Wlan::handle_down_evt()
 	/* Delete v6 filtering rules */
 	if (ip_type != IPA_IP_v4 && rx_prop != NULL)
 	{
+		/* delete icmp filter rules */
+		if(wlan_ap_index == 0)
+		{
+			if(m_filtering.DeleteFilteringHdls(ipv6_icmp_flt_rule_hdl, IPA_IP_v6, NUM_IPV6_ICMP_FLT_RULE) == false)
+			{
+				IPACMERR("Error Deleting ICMPv6 Filtering Rule, aborting...\n");
+				res = IPACM_FAILURE;
+				goto fail;
+			}
+		}
 		IPACMDBG_H("Delete default %d v6 filter rules\n", IPV6_DEFAULT_FILTERTING_RULES);
 		/* delete default filter rules */
 		for(i=0; i<IPV6_DEFAULT_FILTERTING_RULES; i++)

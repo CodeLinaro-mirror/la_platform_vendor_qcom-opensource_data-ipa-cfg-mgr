@@ -137,7 +137,7 @@ void IPACM_IfaceManager::event_callback(ipa_cm_event_id event, void *param)
 		case IPA_WAN_EMBMS_LINK_UP_EVENT:
 			ipa_interface_index = IPACM_Iface::iface_ipa_index_query(evt_data->if_index);
 			/* change iface category from unknown to EMBMS_IF */
-			if (IPACM_Iface::ipacmcfg->ipacm_odu_enable == true)
+			if ((IPACM_Iface::ipacmcfg->ipacm_odu_enable == true) && (IPACM_Iface::ipacmcfg->ipacm_odu_embms_enable == true))
 			{
 				IPACMDBG(" ODU-mode enable or not (%d) \n",IPACM_Iface::ipacmcfg->ipacm_odu_enable);
 				if(IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].if_cat == WAN_IF)

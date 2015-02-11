@@ -54,6 +54,7 @@ IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #define IPA_PRIV_SUBNET_FILTER_RULE_HANDLES  3
 #define IPA_NUM_ODU_ROUTE_RULES 2
 #define MAX_WAN_UL_FILTER_RULES MAX_NUM_EXT_PROPS
+#define NUM_IPV4_ICMP_FLT_RULE 1
 #define NUM_IPV6_PREFIX_FLT_RULE 1
 #define NUM_IPV6_ICMP_FLT_RULE 1
 
@@ -186,6 +187,7 @@ public:
 	int del_lan2lan_hdr(ipa_ip_type iptype, uint32_t hdr_hdl);
 
 
+	int install_ipv4_icmp_flt_rule();
 
 	static ipa_hdr_l2_type usb_hdr_type;
 	static ipa_hdr_l2_type wlan_hdr_type;
@@ -290,6 +292,7 @@ protected:
 
 	virtual void install_tcp_ctl_flt_rule(ipa_ip_type iptype);
 
+	uint32_t ipv4_icmp_flt_rule_hdl[NUM_IPV4_ICMP_FLT_RULE];
 	uint32_t tcp_ctl_flt_rule_hdl_v4[NUM_TCP_CTL_FLT_RULE];
 	uint32_t tcp_ctl_flt_rule_hdl_v6[NUM_TCP_CTL_FLT_RULE];
 

@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2013, The Linux Foundation. All rights reserved.
+Copyright (c) 2013-2015, The Linux Foundation. All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are
@@ -709,22 +709,20 @@ void IPACM_ConntrackListener::ProcessTCPorUDPMsg(
 			 return;
 		 }
 
-		 if(orig_src_ip == wan_ipaddr)
-		 {
-			 IPACMDBG("orig src ip:0x%x equal to wan ip\n",orig_src_ip);
-			 status = IPS_SRC_NAT;
-			 rule.public_ip = wan_ipaddr;
-		 }
-		 else if(orig_dst_ip == wan_ipaddr)
-		 {
-			 IPACMDBG("orig Dst IP:0x%x equal to wan ip\n",orig_dst_ip);
-			 status = IPS_DST_NAT;
-	 	 	 rule.public_ip = wan_ipaddr;
-		 }
-		 else
-		 {
-			 IPACMDBG("Neither orig src ip:0x%x Nor orig Dst IP:0x%x equal to wan ip:0x%x\n",
-						orig_src_ip, orig_dst_ip, wan_ipaddr);
+		if(orig_src_ip == wan_ipaddr)
+		{
+			IPACMDBG("orig src ip:0x%x equal to wan ip\n",orig_src_ip);
+			status = IPS_SRC_NAT;
+		}
+		else if(orig_dst_ip == wan_ipaddr)
+		{
+			IPACMDBG("orig Dst IP:0x%x equal to wan ip\n",orig_dst_ip);
+			status = IPS_DST_NAT;
+		}
+		else
+		{
+			IPACMDBG("Neither orig src ip:0x%x Nor orig Dst IP:0x%x equal to wan ip:0x%x\n",
+					orig_src_ip, orig_dst_ip, wan_ipaddr);
 
 #ifdef CT_OPT
 		if(p_lan2lan == NULL)
@@ -859,13 +857,13 @@ void IPACM_ConntrackListener::ProcessTCPorUDPMsg(
 			 }
 		 }
 
-		 if(cnt == MAX_NAT_IFACES)
-		 {
-			 IPACMDBG("Not mtaching with nat ifaces\n")
-			 if(pConfig == NULL)
-			 {
-				 goto IGNORE;
-			 }
+		if(cnt == MAX_NAT_IFACES)
+		{
+			IPACMDBG("Not mtaching with nat ifaces\n");
+			if(pConfig == NULL)
+			{
+				goto IGNORE;
+			}
 
 			 if(pConfig->isPrivateSubnet(rule.private_ip) ||
 						pConfig->isPrivateSubnet(rule.target_ip))
@@ -895,35 +893,35 @@ void IPACM_ConntrackListener::ProcessTCPorUDPMsg(
 
    /* Check whether target is in STA client list or not
       if not ignore the connection */
-   int nCnt;
+	 int nCnt;
 
-   if(!isStaMode || (StaClntCnt == 0))
-   {
-     goto ADD;
-   }
+	 if(!isStaMode || (StaClntCnt == 0))
+	 {
+		goto ADD;
+	 }
 
-   if((sta_clnt_ipv4_addr[0] & 0xFFFFFF00) !=
-         (rule.target_ip & 0xFFFFFF00))
-   {
-     IPACMDBG("STA client subnet mask not matching\n");
-     goto ADD;
-   }
+	 if((sta_clnt_ipv4_addr[0] & 0xFFFFFF00) !=
+		 (rule.target_ip & 0xFFFFFF00))
+	 {
+		IPACMDBG("STA client subnet mask not matching\n");
+		goto ADD;
+	 }
 
-   IPACMDBG("StaClntCnt %d\n", StaClntCnt);
-   for(nCnt = 0; nCnt < StaClntCnt; nCnt++)
-   {
-     IPACMDBG("Comparing trgt_ip 0x%x with sta clnt ip: 0x%x\n",
-              rule.target_ip, sta_clnt_ipv4_addr[nCnt]);
-     if(rule.target_ip == sta_clnt_ipv4_addr[nCnt])
-     {
-       IPACMDBG("Match index %d\n", nCnt);
-       goto ADD;
-     }
-   }
+	 IPACMDBG("StaClntCnt %d\n", StaClntCnt);
+	 for(nCnt = 0; nCnt < StaClntCnt; nCnt++)
+	 {
+		IPACMDBG("Comparing trgt_ip 0x%x with sta clnt ip: 0x%x\n",
+			 rule.target_ip, sta_clnt_ipv4_addr[nCnt]);
+		if(rule.target_ip == sta_clnt_ipv4_addr[nCnt])
+		{
+			IPACMDBG("Match index %d\n", nCnt);
+			goto ADD;
+		}
+	 }
 
-   IPACMDBG("Not matching with STA Clnt Ip Addrs 0x%x\n",
-            rule.target_ip);
-   goto IGNORE;
+	IPACMDBG("Not matching with STA Clnt Ip Addrs 0x%x\n",
+		rule.target_ip);
+	isTempEntry = true;
 
 
 ADD:
@@ -935,12 +933,13 @@ ADD:
 	 IPACMDBG("public port or reply dst port: 0x%x, Decimal:%d\n", rule.public_port, rule.public_port);
 	 IPACMDBG("Protocol: %d, destination nat flag: %d\n", rule.protocol, rule.dst_nat);
 
-	 if(IPPROTO_TCP == rule.protocol)
-	 {
-			if(nat_inst == NULL)
-			{
-				return;
-			}
+	rule.public_ip = wan_ipaddr;
+	if(IPPROTO_TCP == rule.protocol)
+	{
+		if(nat_inst == NULL)
+		{
+			return;
+		}
 
 			tcp_state = nfct_get_attr_u8(ct, ATTR_TCP_STATE);
 			if(TCP_CONNTRACK_ESTABLISHED == tcp_state)
@@ -1069,7 +1068,8 @@ void IPACM_ConntrackListener::HandleSTAClientAddEvt(uint32_t clnt_ip_addr)
 
   }
 
-  return;
+	 nat_inst->FlushTempEntries(clnt_ip_addr, true);
+	 return;
 }
 
 void IPACM_ConntrackListener::HandleSTAClientDelEvt(uint32_t clnt_ip_addr)
@@ -1092,7 +1092,8 @@ void IPACM_ConntrackListener::HandleSTAClientDelEvt(uint32_t clnt_ip_addr)
     }
   }
 
-  return;
+	 nat_inst->FlushTempEntries(clnt_ip_addr, false);
+   return;
 }
 
 

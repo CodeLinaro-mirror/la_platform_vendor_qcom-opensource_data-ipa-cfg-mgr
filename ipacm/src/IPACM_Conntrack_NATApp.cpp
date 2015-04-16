@@ -476,7 +476,8 @@ void NatApp::UpdateCTUdpTs(nat_table_entry *rule, uint32_t new_ts)
 	ret = nfct_query(ct_hdl, NFCT_Q_UPDATE, ct);
 	if(ret == -1)
 	{
-		PERROR("unable to update time stamp");
+		IPACMERR("unable to update time stamp");
+		DeleteEntry(rule);
 	}
 	else
 	{
@@ -685,11 +686,29 @@ void NatApp::AddTempEntry(const nat_table_entry *new_entry)
 {
 	int cnt;
 
-	IPACMDBG("Received below nat entry\n");
+	IPACMDBG("Received below Temp Nat entry\n");
 	iptodot("Private IP", new_entry->private_ip);
 	iptodot("Target IP", new_entry->target_ip);
 	IPACMDBG("Private Port: %d\t Target Port: %d\t", new_entry->private_port, new_entry->target_port);
 	IPACMDBG("protocolcol: %d\n", new_entry->protocol);
+
+	if(ChkForDup(new_entry))
+	{
+		return;
+	}
+
+	for(cnt=0; cnt<MAX_TEMP_ENTRIES; cnt++)
+	{
+		if(temp[cnt].private_ip == new_entry->private_ip &&
+			 temp[cnt].target_ip == new_entry->target_ip &&
+			 temp[cnt].private_port ==  new_entry->private_port  &&
+			 temp[cnt].target_port == new_entry->target_port &&
+			 temp[cnt].protocol == new_entry->protocol)
+		{
+			IPACMDBG("Received duplicate Temp entry\n");
+			return;
+		}
+	}
 
 	for(cnt=0; cnt<MAX_TEMP_ENTRIES; cnt++)
 	{
@@ -702,7 +721,7 @@ void NatApp::AddTempEntry(const nat_table_entry *new_entry)
 		}
 	}
 
-	IPACMDBG("unable to add temp entry, cache full\n");
+	IPACMDBG("Unable to add temp entry, cache full\n");
 	return;
 }
 
@@ -730,7 +749,7 @@ void NatApp::DeleteTempEntry(const nat_table_entry *entry)
 		}
 	}
 
-	IPACMDBG("No Such Entry exists\n");
+	IPACMDBG("No Such Temp Entry exists\n");
 	return;
 }
 
@@ -815,7 +834,7 @@ int NatApp::DelEntriesOnClntDiscon(uint32_t ip_addr)
 
 int NatApp::DelEntriesOnSTAClntDiscon(uint32_t ip_addr)
 {
- 	int cnt, tmp = curCnt;
+	int cnt, tmp = curCnt;
 	IPACMDBG("Received IP address: 0x%x\n", ip_addr);
 
 	if(ip_addr == INVALID_IP_ADDR)
@@ -825,25 +844,25 @@ int NatApp::DelEntriesOnSTAClntDiscon(uint32_t ip_addr)
 	}
 
 
-  for(cnt = 0; cnt < max_entries; cnt++)
-  {
-    if(cache[cnt].target_ip == ip_addr)
-    {
-      if(cache[cnt].enabled == true)
-      {
-        if(ipa_nat_del_ipv4_rule(nat_table_hdl, cache[cnt].rule_hdl) < 0)
-        {
-          IPACMERR("unable to delete the rule\n");
-          continue;
-        }
-      }
+	for(cnt = 0; cnt < max_entries; cnt++)
+	{
+		if(cache[cnt].target_ip == ip_addr)
+		{
+			if(cache[cnt].enabled == true)
+			{
+				if(ipa_nat_del_ipv4_rule(nat_table_hdl, cache[cnt].rule_hdl) < 0)
+				{
+					IPACMERR("unable to delete the rule\n");
+					continue;
+				}
+			}
 
-      memset(&cache[cnt], 0, sizeof(cache[cnt]));
-      curCnt--;
-    }
-  }
+			memset(&cache[cnt], 0, sizeof(cache[cnt]));
+			curCnt--;
+		}
+	}
 
-  IPACMDBG("Deleted %d entries\n", (tmp - curCnt));
+	IPACMDBG("Deleted %d entries\n", (tmp - curCnt));
 	return 0;
 }
 

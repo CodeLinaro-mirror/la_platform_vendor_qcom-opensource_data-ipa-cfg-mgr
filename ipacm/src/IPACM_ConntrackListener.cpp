@@ -965,14 +965,8 @@ ADD:
 				 IPACMDBG("TCP state TCP_CONNTRACK_FIN_WAIT(%d) "
 						"or type NFCT_T_DESTROY(%d)\n", tcp_state, type);
 
-				 if(isTempEntry)
-				 {
-					 nat_inst->DeleteTempEntry(&rule);
-				 }
-				 else
-				 {
-					 nat_inst->DeleteEntry(&rule);
-				 }
+				 nat_inst->DeleteEntry(&rule);
+				 nat_inst->DeleteTempEntry(&rule);
 			}
 			else
 			{
@@ -1007,14 +1001,8 @@ ADD:
 			else if(NFCT_T_DESTROY == type)
 			{
 				 IPACMDBG("UDP connection close at time %ld\n", time(NULL));
-				 if(isTempEntry)
-				 {
-					 nat_inst->DeleteTempEntry(&rule);
-				 }
-				 else
-				 {
-					 nat_inst->DeleteEntry(&rule);
-				 }
+				 nat_inst->DeleteEntry(&rule);
+				 nat_inst->DeleteTempEntry(&rule);
 			}
 	 }
 	 else

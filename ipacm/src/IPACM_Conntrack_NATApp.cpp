@@ -131,7 +131,7 @@ int NatApp::AddTable(uint32_t pub_ip)
 	int ret;
 	int cnt = 0;
 	ipa_nat_ipv4_rule nat_rule;
-	IPACMDBG("%s() %d\n", __FUNCTION__, __LINE__);
+	IPACMDBG_H("%s() %d\n", __FUNCTION__, __LINE__);
 
 	/* Not reset the cache wait it timeout by destroy event */
 #if 0
@@ -204,7 +204,7 @@ void NatApp::Reset()
 int NatApp::DeleteTable(uint32_t pub_ip)
 {
 	int ret;
-	IPACMDBG("%s() %d\n", __FUNCTION__, __LINE__);
+	IPACMDBG_H("%s() %d\n", __FUNCTION__, __LINE__);
 
 	CHK_TBL_HDL();
 
@@ -232,7 +232,6 @@ bool NatApp::ChkForDup(const nat_table_entry *rule)
 {
 	int cnt = 0;
 	IPACMDBG("%s() %d\n", __FUNCTION__, __LINE__);
-
 	for(; cnt < max_entries; cnt++)
 	{
 		if(cache[cnt].private_ip == rule->private_ip &&
@@ -241,11 +240,8 @@ bool NatApp::ChkForDup(const nat_table_entry *rule)
 			 cache[cnt].target_port == rule->target_port &&
 			 cache[cnt].protocol == rule->protocol)
 		{
-			IPACMDBG("Duplicate Rule\n");
-			iptodot("Private IP", rule->private_ip);
-			iptodot("Target IP", rule->target_ip);
-			IPACMDBG("Private Port: %d\t Target Port: %d\t", rule->private_port, rule->target_port);
-			IPACMDBG("protocolcol: %d\n", rule->protocol);
+			log_nat(rule->protocol,rule->private_ip,rule->target_ip,rule->private_port,\
+			rule->target_port,"Duplicate Rule");
 			return true;
 		}
 	}
@@ -259,11 +255,9 @@ int NatApp::DeleteEntry(const nat_table_entry *rule)
 	int cnt = 0;
 	IPACMDBG("%s() %d\n", __FUNCTION__, __LINE__);
 
-	IPACMDBG("Received below nat entry for deletion\n");
-	iptodot("Private IP", rule->private_ip);
-	iptodot("Target IP", rule->target_ip);
-	IPACMDBG("Private Port: %d\t Target Port: %d\t", rule->private_port, rule->target_port);
-	IPACMDBG("protocolcol: %d\n", rule->protocol);
+	log_nat(rule->protocol,rule->private_ip,rule->target_ip,rule->private_port,\
+	rule->target_port,"for deletion");
+
 
 	for(; cnt < max_entries; cnt++)
 	{
@@ -306,13 +300,8 @@ int NatApp::AddEntry(const nat_table_entry *rule)
 	IPACMDBG("%s() %d\n", __FUNCTION__, __LINE__);
 
 	CHK_TBL_HDL();
-
-	IPACMDBG("Received below nat entry for addition\n");
-	iptodot("Private IP", rule->private_ip);
-	iptodot("Target IP", rule->target_ip);
-	IPACMDBG("Private Port: %d\t Target Port: %d\t", rule->private_port, rule->target_port);
-	IPACMDBG("protocolcol: %d\n", rule->protocol);
-
+	log_nat(rule->protocol,rule->private_ip,rule->target_ip,rule->private_port,\
+	rule->target_port,"for addition");
 	if(isAlgPort(rule->protocol, rule->private_port) ||
 		 isAlgPort(rule->protocol, rule->target_port))
 	{
@@ -479,7 +468,8 @@ void NatApp::UpdateCTUdpTs(nat_table_entry *rule, uint32_t new_ts)
 	ret = nfct_query(ct_hdl, NFCT_Q_UPDATE, ct);
 	if(ret == -1)
 	{
-		PERROR("unable to update time stamp");
+		IPACMERR("unable to update time stamp");
+		DeleteEntry(rule);
 	}
 	else
 	{
@@ -688,11 +678,29 @@ void NatApp::AddTempEntry(const nat_table_entry *new_entry)
 {
 	int cnt;
 
-	IPACMDBG("Received below nat entry\n");
+	IPACMDBG("Received below Temp Nat entry\n");
 	iptodot("Private IP", new_entry->private_ip);
 	iptodot("Target IP", new_entry->target_ip);
 	IPACMDBG("Private Port: %d\t Target Port: %d\t", new_entry->private_port, new_entry->target_port);
 	IPACMDBG("protocolcol: %d\n", new_entry->protocol);
+
+	if(ChkForDup(new_entry))
+	{
+		return;
+	}
+
+	for(cnt=0; cnt<MAX_TEMP_ENTRIES; cnt++)
+	{
+		if(temp[cnt].private_ip == new_entry->private_ip &&
+			 temp[cnt].target_ip == new_entry->target_ip &&
+			 temp[cnt].private_port ==  new_entry->private_port  &&
+			 temp[cnt].target_port == new_entry->target_port &&
+			 temp[cnt].protocol == new_entry->protocol)
+		{
+			IPACMDBG("Received duplicate Temp entry\n");
+			return;
+		}
+	}
 
 	for(cnt=0; cnt<MAX_TEMP_ENTRIES; cnt++)
 	{
@@ -705,7 +713,7 @@ void NatApp::AddTempEntry(const nat_table_entry *new_entry)
 		}
 	}
 
-	IPACMDBG("unable to add temp entry, cache full\n");
+	IPACMDBG("Unable to add temp entry, cache full\n");
 	return;
 }
 
@@ -733,7 +741,7 @@ void NatApp::DeleteTempEntry(const nat_table_entry *entry)
 		}
 	}
 
-	IPACMDBG("No Such Entry exists\n");
+	IPACMDBG("No Such Temp Entry exists\n");
 	return;
 }
 
@@ -826,6 +834,7 @@ int NatApp::DelEntriesOnSTAClntDiscon(uint32_t ip_addr)
 		IPACMERR("Invalid ip address received\n");
 		return -1;
 	}
+
 
 	for(cnt = 0; cnt < max_entries; cnt++)
 	{

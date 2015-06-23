@@ -99,6 +99,9 @@ public:
 
 	int ipa_nat_iface_entries;
 
+	/* Store SW-enable or not */
+	bool ipa_sw_rt_enable;
+
 	/* IPACM routing table name for v4/v6 */
 	struct ipa_ioc_get_rt_tbl rt_tbl_lan_v4, rt_tbl_wan_v4, rt_tbl_default_v4, rt_tbl_v6, rt_tbl_wan_v6;
 

@@ -410,6 +410,41 @@ void* ipa_driver_wlan_notifier(void *param)
 }
 
 
+void IPACM_Sig_Handler(int sig)
+{
+	ipacm_cmd_q_data evt_data;
+
+	printf("Received Signal: %d\n", sig);
+	memset(&evt_data, 0, sizeof(evt_data));
+
+	switch(sig)
+	{
+		case SIGUSR1:
+			IPACMDBG("Received SW_ROUTING_ENABLE request \n");
+			evt_data.event = IPA_SW_ROUTING_ENABLE;
+			IPACM_Iface::ipacmcfg->ipa_sw_rt_enable = true;
+			break;
+
+		case SIGUSR2:
+			IPACMDBG("Received SW_ROUTING_DISABLE request \n");
+			evt_data.event = IPA_SW_ROUTING_DISABLE;
+			IPACM_Iface::ipacmcfg->ipa_sw_rt_enable = false;
+			break;
+	}
+	/* finish command queue */
+	IPACMDBG("Posting event:%d\n", evt_data.event);
+	IPACM_EvtDispatcher::PostEvt(&evt_data);
+	return NULL;
+}
+
+void RegisterForSignals(void)
+{
+
+	signal(SIGUSR1, IPACM_Sig_Handler);
+	signal(SIGUSR2, IPACM_Sig_Handler);
+}
+
+
 int main(int argc, char **argv)
 {
 	int ret;
@@ -422,7 +457,8 @@ int main(int argc, char **argv)
 	IPACMDBG("Staring IPA main\n");
 	IPACMDBG("ipa_cmdq_successful\n");
 
-
+	RegisterForSignals();
+	
 	if (IPACM_SUCCESS == cmd_queue_thread)
 	{
 		ret = pthread_create(&cmd_queue_thread, NULL, MessageQueue::Process, NULL);

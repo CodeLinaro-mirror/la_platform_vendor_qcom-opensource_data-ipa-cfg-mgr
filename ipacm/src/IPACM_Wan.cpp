@@ -277,6 +277,13 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 				{
 				  IPACMDBG("Got IPA_ADDR_ADD_EVENT ip-family:%d, v6 num %d: \n",data->iptype,num_dft_rt_v6);
 					handle_addr_evt(data);
+					/* checking if SW-RT_enable */
+					if (IPACM_Iface::ipacmcfg->ipa_sw_rt_enable == true)
+					{
+						/* handle software routing enable event*/
+						IPACMDBG("IPA_SW_ROUTING_ENABLE for iface: %s \n",IPACM_Iface::ipacmcfg->iface_table[ipa_if_num].iface_name);
+						handle_software_routing_enable();
+					}
 				}
 			}
 		}

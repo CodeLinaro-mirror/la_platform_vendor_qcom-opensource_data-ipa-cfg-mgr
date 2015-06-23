@@ -134,7 +134,9 @@ int IPACM_Iface::handle_software_routing_enable(void)
 	memcpy(&(m_pFilteringTable->rules[0]), &flt_rule_entry, sizeof(struct ipa_flt_rule_add));
 
 	/* check iface is v4 or v6 or both*/
+#if 0
 	if (ip_type == IPA_IP_MAX)
+#endif
 	{
 		/* handle v4 */
 		m_pFilteringTable->ip = IPA_IP_v4;
@@ -176,6 +178,7 @@ int IPACM_Iface::handle_software_routing_enable(void)
 		software_routing_fl_rule_hdl[1] = m_pFilteringTable->rules[0].flt_rule_hdl;
 		softwarerouting_act = true;
 	}
+#if 0
 	else
 	{
 		if (ip_type == IPA_IP_v4) 
@@ -212,6 +215,7 @@ int IPACM_Iface::handle_software_routing_enable(void)
 		}
 		softwarerouting_act = true;
 	}
+#endif
 
 fail:
 	free(m_pFilteringTable);
@@ -238,7 +242,9 @@ int IPACM_Iface::handle_software_routing_disable(void)
 		return IPACM_SUCCESS;
 	}	
 
+#if 0
 	if (ip_type == IPA_IP_MAX)
+#endif
 	{
 		/* ipv4 case */
 		if (m_filtering.DeleteFilteringHdls(&software_routing_fl_rule_hdl[0],
@@ -259,6 +265,7 @@ int IPACM_Iface::handle_software_routing_disable(void)
 		}
 		softwarerouting_act = false;
 	}
+#if 0
 	else
 	{
 		if (ip_type == IPA_IP_v4)
@@ -288,7 +295,7 @@ int IPACM_Iface::handle_software_routing_disable(void)
 		}
 		softwarerouting_act = false;
 	}
-
+#endif
 fail:
 	return res;
 }

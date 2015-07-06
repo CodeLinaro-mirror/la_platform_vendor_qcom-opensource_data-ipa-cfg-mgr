@@ -1201,6 +1201,9 @@ int IPACM_Wan::handle_route_add_evt(ipa_ip_type iptype)
 	{
 		IPACM_Wan::wan_up_v6 = true;
 		active_v6 = true;
+		memcpy(IPACM_Wan::wan_up_dev_name,
+			dev_name,
+				sizeof(IPACM_Wan::wan_up_dev_name));
 
 		if(m_is_sta_mode == Q6_WAN)
 		{
@@ -3217,6 +3220,46 @@ int IPACM_Wan::add_dft_filtering_rule(struct ipa_flt_rule_add *rules, int rule_o
 
 		memcpy(&(rules[rule_offset + 2]), &flt_rule_entry, sizeof(struct ipa_flt_rule_add));
 
+#ifdef FEATURE_IPA_ANDROID
+		IPACMDBG_H("Add TCP ctrl rules: total num %d\n", IPA_V2_NUM_DEFAULT_WAN_FILTER_RULE_IPV6);
+		memset(&flt_rule_entry, 0, sizeof(struct ipa_flt_rule_add));
+
+		flt_rule_entry.at_rear = true;
+		flt_rule_entry.flt_rule_hdl = -1;
+		flt_rule_entry.status = -1;
+
+		flt_rule_entry.rule.retain_hdr = 1;
+		flt_rule_entry.rule.to_uc = 0;
+		flt_rule_entry.rule.action = IPA_PASS_TO_ROUTING;
+		flt_rule_entry.rule.rt_tbl_idx = rt_tbl_idx.idx;
+		flt_rule_entry.rule.eq_attrib_type = 1;
+
+		flt_rule_entry.rule.eq_attrib.rule_eq_bitmap = 0;
+
+		flt_rule_entry.rule.eq_attrib.rule_eq_bitmap |= (1<<1);
+		flt_rule_entry.rule.eq_attrib.protocol_eq_present = 1;
+		flt_rule_entry.rule.eq_attrib.protocol_eq = IPACM_FIREWALL_IPPROTO_TCP;
+
+		flt_rule_entry.rule.eq_attrib.rule_eq_bitmap |= (1<<8);
+		flt_rule_entry.rule.eq_attrib.num_ihl_offset_meq_32 = 1;
+		flt_rule_entry.rule.eq_attrib.ihl_offset_meq_32[0].offset = 12;
+
+		/* add TCP FIN rule*/
+		flt_rule_entry.rule.eq_attrib.ihl_offset_meq_32[0].value = (((uint32_t)1)<<TCP_FIN_SHIFT);
+		flt_rule_entry.rule.eq_attrib.ihl_offset_meq_32[0].mask = (((uint32_t)1)<<TCP_FIN_SHIFT);
+		memcpy(&(rules[rule_offset + 3]), &flt_rule_entry, sizeof(struct ipa_flt_rule_add));
+
+		/* add TCP SYN rule*/
+		flt_rule_entry.rule.eq_attrib.ihl_offset_meq_32[0].value = (((uint32_t)1)<<TCP_SYN_SHIFT);
+		flt_rule_entry.rule.eq_attrib.ihl_offset_meq_32[0].mask = (((uint32_t)1)<<TCP_SYN_SHIFT);
+		memcpy(&(rules[rule_offset + 4]), &flt_rule_entry, sizeof(struct ipa_flt_rule_add));
+
+		/* add TCP RST rule*/
+		flt_rule_entry.rule.eq_attrib.ihl_offset_meq_32[0].value = (((uint32_t)1)<<TCP_RST_SHIFT);
+		flt_rule_entry.rule.eq_attrib.ihl_offset_meq_32[0].mask = (((uint32_t)1)<<TCP_RST_SHIFT);
+		memcpy(&(rules[rule_offset + 5]), &flt_rule_entry, sizeof(struct ipa_flt_rule_add));
+#endif
+
 		IPACM_Wan::num_v6_flt_rule += IPA_V2_NUM_DEFAULT_WAN_FILTER_RULE_IPV6;
 		IPACMDBG_H("Constructed %d default filtering rules for ip type %d\n", IPA_V2_NUM_DEFAULT_WAN_FILTER_RULE_IPV6, iptype);
 	}
@@ -3433,7 +3476,14 @@ int IPACM_Wan::handle_route_del_evt(ipa_ip_type iptype)
 			IPACMDBG_H("setup wan_up/active_v4= false \n");
 			IPACM_Wan::wan_up = false;
 			active_v4 = false;
-			memset(IPACM_Wan::wan_up_dev_name, 0, sizeof(IPACM_Wan::wan_up_dev_name));
+			if(IPACM_Wan::wan_up_v6)
+			{
+				IPACMDBG_H("modem v6-call still up(%s), not reset\n", IPACM_Wan::wan_up_dev_name);
+			}
+			else
+			{
+				memset(IPACM_Wan::wan_up_dev_name, 0, sizeof(IPACM_Wan::wan_up_dev_name));
+			}
 		}
 		else
 		{
@@ -3454,6 +3504,14 @@ int IPACM_Wan::handle_route_del_evt(ipa_ip_type iptype)
 			IPACMDBG_H("setup wan_up_v6/active_v6= false \n");
 			IPACM_Wan::wan_up_v6 = false;
 			active_v6 = false;
+			if(IPACM_Wan::wan_up)
+			{
+				IPACMDBG_H("modem v4-call still up(%s), not reset\n", IPACM_Wan::wan_up_dev_name);
+			}
+			else
+			{
+				memset(IPACM_Wan::wan_up_dev_name, 0, sizeof(IPACM_Wan::wan_up_dev_name));
+			}
 		}
 	}
 	else
@@ -3528,7 +3586,14 @@ int IPACM_Wan::handle_route_del_evt_ex(ipa_ip_type iptype)
 			IPACMDBG_H("setup wan_up/active_v4= false \n");
 			IPACM_Wan::wan_up = false;
 			active_v4 = false;
-			memset(IPACM_Wan::wan_up_dev_name, 0, sizeof(IPACM_Wan::wan_up_dev_name));
+			if(IPACM_Wan::wan_up_v6)
+			{
+				IPACMDBG_H("modem v6-call still up(%s), not reset\n", IPACM_Wan::wan_up_dev_name);
+			}
+			else
+			{
+				memset(IPACM_Wan::wan_up_dev_name, 0, sizeof(IPACM_Wan::wan_up_dev_name));
+			}
 		}
 		else
 		{
@@ -3549,6 +3614,14 @@ int IPACM_Wan::handle_route_del_evt_ex(ipa_ip_type iptype)
 			IPACMDBG_H("setup wan_up_v6/active_v6= false \n");
 			IPACM_Wan::wan_up_v6 = false;
 			active_v6 = false;
+			if(IPACM_Wan::wan_up)
+			{
+				IPACMDBG_H("modem v4-call still up(%s), not reset\n", IPACM_Wan::wan_up_dev_name);
+			}
+			else
+			{
+				memset(IPACM_Wan::wan_up_dev_name, 0, sizeof(IPACM_Wan::wan_up_dev_name));
+			}
 		}
 	}
 	else
@@ -3945,7 +4018,14 @@ int IPACM_Wan::handle_down_evt_ex()
 			del_wan_firewall_rule(IPA_IP_v4);
 			install_wan_filtering_rule(false);
 			handle_route_del_evt_ex(IPA_IP_v4);
-			memset(IPACM_Wan::wan_up_dev_name, 0, sizeof(IPACM_Wan::wan_up_dev_name));
+			if(IPACM_Wan::wan_up_v6)
+			{
+				IPACMDBG_H("modem v6-call still up(%s), not reset\n", IPACM_Wan::wan_up_dev_name);
+			}
+			else
+			{
+				memset(IPACM_Wan::wan_up_dev_name, 0, sizeof(IPACM_Wan::wan_up_dev_name));
+			}
 		}
 
 		/* only when the last ipv4 modem interface goes down, delete ipv4 default flt rules*/
@@ -3971,10 +4051,18 @@ int IPACM_Wan::handle_down_evt_ex()
 		/* only when default gw goes down we post WAN_DOWN event*/
 		if(is_default_gateway == true)
 		{
-		IPACM_Wan::wan_up_v6 = false;
+			IPACM_Wan::wan_up_v6 = false;
 			del_wan_firewall_rule(IPA_IP_v6);
 			install_wan_filtering_rule(false);
 			handle_route_del_evt_ex(IPA_IP_v6);
+			if(IPACM_Wan::wan_up)
+			{
+				IPACMDBG_H("modem v4-call still up(%s), not reset\n", IPACM_Wan::wan_up_dev_name);
+			}
+			else
+			{
+				memset(IPACM_Wan::wan_up_dev_name, 0, sizeof(IPACM_Wan::wan_up_dev_name));
+			}
 		}
 
 		/* only when the last ipv6 modem interface goes down, delete ipv6 default flt rules*/
@@ -4008,11 +4096,11 @@ int IPACM_Wan::handle_down_evt_ex()
 			IPACM_Wan::wan_up = false;
 			del_wan_firewall_rule(IPA_IP_v4);
 			handle_route_del_evt_ex(IPA_IP_v4);
-			memset(IPACM_Wan::wan_up_dev_name, 0, sizeof(IPACM_Wan::wan_up_dev_name));
 
 			IPACM_Wan::wan_up_v6 = false;
 			del_wan_firewall_rule(IPA_IP_v6);
 			handle_route_del_evt_ex(IPA_IP_v6);
+			memset(IPACM_Wan::wan_up_dev_name, 0, sizeof(IPACM_Wan::wan_up_dev_name));
 
 			install_wan_filtering_rule(false);
 		}

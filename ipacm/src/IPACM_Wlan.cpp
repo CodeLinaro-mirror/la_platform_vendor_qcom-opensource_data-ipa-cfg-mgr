@@ -858,7 +858,24 @@ void IPACM_Wlan::event_callback(ipa_cm_event_id event, void *param)
 		}
 	}
 	break;
-
+	case IPA_TETHERING_STATS_UPDATE_EVENT:
+	{
+		IPACMDBG_H("Received IPA_TETHERING_STATS_UPDATE_EVENT event.\n");
+		if (IPACM_Wan::isWanUP() || IPACM_Wan::isWanUP_V6())
+		{
+			if(IPACM_Wan::backhaul_is_sta_mode == false) /* LTE */
+			{
+				ipa_get_data_stats_resp_msg_v01 *data = (ipa_get_data_stats_resp_msg_v01 *)param;
+				if (data->ipa_stats_type != QMI_IPA_STATS_TYPE_PIPE_V01)
+				{
+					IPACMERR("not valid pipe stats\n");
+					return;
+				}
+				handle_tethering_stats_event(data);
+			};
+		}
+	}
+	break;
 	default:
 		break;
 	}
@@ -1110,6 +1127,54 @@ int IPACM_Wlan::init_fl_rule(ipa_ip_type iptype)
 		flt_rule.rule.attrib.u.v6.dst_addr[3] = 0X00000000;
 		flt_rule.rule_hdl = IPACM_Wlan::dummy_flt_rule_hdl_v6[offset+2];
 		memcpy(&(pFilteringTable->rules[2]), &flt_rule, sizeof(struct ipa_flt_rule_mdfy));
+
+#ifdef FEATURE_IPA_ANDROID
+		memset(&flt_rule, 0, sizeof(struct ipa_flt_rule_mdfy));
+
+		flt_rule.status = -1;
+
+		flt_rule.rule.retain_hdr = 1;
+		flt_rule.rule.to_uc = 0;
+		flt_rule.rule.action = IPA_PASS_TO_EXCEPTION;
+		flt_rule.rule.eq_attrib_type = 1;
+
+		flt_rule.rule.eq_attrib.rule_eq_bitmap = 0;
+
+		if(rx_prop->rx[0].attrib.attrib_mask & IPA_FLT_META_DATA)
+		{
+			flt_rule.rule.eq_attrib.rule_eq_bitmap |= (1<<14);
+			flt_rule.rule.eq_attrib.metadata_meq32_present = 1;
+			flt_rule.rule.eq_attrib.metadata_meq32.offset = 0;
+			flt_rule.rule.eq_attrib.metadata_meq32.value = rx_prop->rx[0].attrib.meta_data;
+			flt_rule.rule.eq_attrib.metadata_meq32.mask = rx_prop->rx[0].attrib.meta_data_mask;
+		}
+
+		flt_rule.rule.eq_attrib.rule_eq_bitmap |= (1<<1);
+		flt_rule.rule.eq_attrib.protocol_eq_present = 1;
+		flt_rule.rule.eq_attrib.protocol_eq = IPACM_FIREWALL_IPPROTO_TCP;
+
+		flt_rule.rule.eq_attrib.rule_eq_bitmap |= (1<<8);
+		flt_rule.rule.eq_attrib.num_ihl_offset_meq_32 = 1;
+		flt_rule.rule.eq_attrib.ihl_offset_meq_32[0].offset = 12;
+
+		/* add TCP FIN rule*/
+		flt_rule.rule.eq_attrib.ihl_offset_meq_32[0].value = (((uint32_t)1)<<TCP_FIN_SHIFT);
+		flt_rule.rule.eq_attrib.ihl_offset_meq_32[0].mask = (((uint32_t)1)<<TCP_FIN_SHIFT);
+		flt_rule.rule_hdl = IPACM_Wlan::dummy_flt_rule_hdl_v6[offset+3];
+		memcpy(&(pFilteringTable->rules[3]), &flt_rule, sizeof(struct ipa_flt_rule_mdfy));
+
+		/* add TCP SYN rule*/
+		flt_rule.rule.eq_attrib.ihl_offset_meq_32[0].value = (((uint32_t)1)<<TCP_SYN_SHIFT);
+		flt_rule.rule.eq_attrib.ihl_offset_meq_32[0].mask = (((uint32_t)1)<<TCP_SYN_SHIFT);
+		flt_rule.rule_hdl = IPACM_Wlan::dummy_flt_rule_hdl_v6[offset+4];
+		memcpy(&(pFilteringTable->rules[4]), &flt_rule, sizeof(struct ipa_flt_rule_mdfy));
+
+		/* add TCP RST rule*/
+		flt_rule.rule.eq_attrib.ihl_offset_meq_32[0].value = (((uint32_t)1)<<TCP_RST_SHIFT);
+		flt_rule.rule.eq_attrib.ihl_offset_meq_32[0].mask = (((uint32_t)1)<<TCP_RST_SHIFT);
+		flt_rule.rule_hdl = IPACM_Wlan::dummy_flt_rule_hdl_v6[offset+5];
+		memcpy(&(pFilteringTable->rules[5]), &flt_rule, sizeof(struct ipa_flt_rule_mdfy));
+#endif
 
 		if (m_filtering.ModifyFilteringRule(pFilteringTable) == false)
 		{

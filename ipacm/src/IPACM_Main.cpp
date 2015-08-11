@@ -427,6 +427,19 @@ void* ipa_driver_wlan_notifier(void *param)
 	return NULL;
 }
 
+void IPACM_Panic_Handler(int sig)
+{
+	IPACMDBG("Received SEGV singal.\n");
+	exit(1);
+	return;
+}
+
+void RegisterForSignals(void)
+{
+
+	signal(SIGSEGV, IPACM_Panic_Handler);
+}
+
 
 int main(int argc, char **argv)
 {
@@ -440,6 +453,7 @@ int main(int argc, char **argv)
 	IPACMDBG("Staring IPA main\n");
 	IPACMDBG("ipa_cmdq_successful\n");
 
+	RegisterForSignals();
 
 	if (IPACM_SUCCESS == cmd_queue_thread)
 	{

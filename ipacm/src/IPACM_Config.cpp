@@ -230,7 +230,8 @@ int IPACM_Config::Init(void)
 	ipa_rm_tbl[2].consumer_rm2 = IPA_RM_RESOURCE_HSIC_CONS;
 	
 fail:
-	free(cfg);
+	if (cfg != NULL)
+		free(cfg);
 
 	return ret;
 }

@@ -51,11 +51,31 @@ IPACM_Wan::IPACM_Wan(int iface_index) : IPACM_Iface(iface_index)
 {
 	num_firewall_v4 = 0;
 	num_firewall_v6 = 0;
+	wan_route_rule_v4_hdl = NULL;
+	wan_route_rule_v6_hdl = NULL;
+	wan_route_rule_v6_hdl_a5 = NULL;
 
 	wan_route_rule_v4_hdl = (uint32_t *)calloc(iface_query->num_tx_props, sizeof(uint32_t));
+	if (wan_route_rule_v4_hdl == NULL)
+	{
+		IPACMERR("unable to allocate memory for V4 wan route handle\n");			
+		return;
+	}
 	wan_route_rule_v6_hdl = (uint32_t *)calloc(iface_query->num_tx_props, sizeof(uint32_t));
+	if (wan_route_rule_v6_hdl == NULL)
+	{
+		IPACMERR("unable to allocate memory for V6 wan route handle\n");
+		free(wan_route_rule_v4_hdl);
+		return;
+	}
 	wan_route_rule_v6_hdl_a5 = (uint32_t *)calloc(iface_query->num_tx_props, sizeof(uint32_t));
-
+	if (wan_route_rule_v6_hdl_a5 == NULL)
+	{
+		IPACMERR("unable to allocate memory for V6 wan A5 route handle\n");
+		free(wan_route_rule_v4_hdl);
+		free(wan_route_rule_v6_hdl);
+		return;
+	}
 	active_v4 = false;
 	active_v6 = false;
   header_set_v4 = false;
@@ -534,11 +554,14 @@ int IPACM_Wan::handle_route_add_evt(ipa_ip_type iptype)
 		    	free(rt_rule);
 		    	return IPACM_FAILURE;
 		    }
-			wan_route_rule_v4_hdl[tx_index] = rt_rule_entry->rt_rule_hdl;
-		    IPACMDBG("Got ipv4 wan-route rule hdl:0x%x,tx:%d,ip-type: %d \n",
-						 wan_route_rule_v4_hdl[tx_index],
-						 tx_index,
-						 iptype);
+			if (wan_route_rule_v4_hdl != NULL)
+			{
+				wan_route_rule_v4_hdl[tx_index] = rt_rule_entry->rt_rule_hdl;
+		    	IPACMDBG("Got ipv4 wan-route rule hdl:0x%x,tx:%d,ip-type: %d \n",
+							 wan_route_rule_v4_hdl[tx_index],
+							 tx_index,
+							 iptype);
+			}
 		}
 		else
 		{
@@ -557,12 +580,14 @@ int IPACM_Wan::handle_route_add_evt(ipa_ip_type iptype)
 		    	free(rt_rule);
 		    	return IPACM_FAILURE;
 		}
-			wan_route_rule_v6_hdl[tx_index] = rt_rule_entry->rt_rule_hdl;
-			IPACMDBG("Set ipv6 wan-route rule hdl for v6_lan_table:0x%x,tx:%d,ip-type: %d \n",
-		                 wan_route_rule_v6_hdl[tx_index],
-		                 tx_index,
-		                 iptype);
-            
+			if (wan_route_rule_v6_hdl != NULL)
+			{
+				wan_route_rule_v6_hdl[tx_index] = rt_rule_entry->rt_rule_hdl;
+				IPACMDBG("Set ipv6 wan-route rule hdl for v6_lan_table:0x%x,tx:%d,ip-type: %d \n",
+		                	 wan_route_rule_v6_hdl[tx_index],
+		                 	tx_index,
+		                 	iptype);
+			}
 			/* insert one more rule for WANRTBLv6 table*/							 
             strcpy(rt_rule->rt_tbl_name, IPACM_Iface::ipacmcfg->rt_tbl_wan_v6.name);
             memset(rt_rule_entry, 0, sizeof(struct ipa_flt_rule_add));
@@ -584,11 +609,14 @@ int IPACM_Wan::handle_route_add_evt(ipa_ip_type iptype)
 			free(rt_rule);
 			return IPACM_FAILURE;
 		}
-			wan_route_rule_v6_hdl_a5[tx_index] = rt_rule_entry->rt_rule_hdl;
-			IPACMDBG("Set ipv6 wan-route rule hdl for v6_wan_table:0x%x,tx:%d,ip-type: %d \n",
-		                 wan_route_rule_v6_hdl_a5[tx_index],
-		                 tx_index,
-		                 iptype);
+			if (wan_route_rule_v6_hdl_a5 != NULL)
+			{
+				wan_route_rule_v6_hdl_a5[tx_index] = rt_rule_entry->rt_rule_hdl;
+				IPACMDBG("Set ipv6 wan-route rule hdl for v6_wan_table:0x%x,tx:%d,ip-type: %d \n",
+		           	      wan_route_rule_v6_hdl_a5[tx_index],
+		             	    tx_index,
+		              	   iptype);
+			}
 		}
 
 	}
@@ -668,8 +696,9 @@ int IPACM_Wan::handle_route_del_evt(ipa_ip_type iptype)
 		    	IPACMDBG("Tx:%d, ip-type: %d match ip-type: %d, RT-rule deleted\n", 
 		    					    tx_index, tx_prop->tx[tx_index].ip,iptype);		
 
-				if (m_routing.DeleteRoutingHdl(wan_route_rule_v4_hdl[tx_index], IPA_IP_v4)
-						== false)
+				if ((wan_route_rule_v4_hdl != NULL) &&
+					(m_routing.DeleteRoutingHdl(wan_route_rule_v4_hdl[tx_index], IPA_IP_v4)
+						== false))
 				{
 					IPACMDBG("IP-family:%d, Routing rule(hdl:0x%x) deletion failed with tx_index %d!\n", IPA_IP_v4, wan_route_rule_v4_hdl[tx_index], tx_index);
 					return IPACM_FAILURE;
@@ -681,15 +710,17 @@ int IPACM_Wan::handle_route_del_evt(ipa_ip_type iptype)
 		    	IPACMDBG("Tx:%d, ip-type: %d match ip-type: %d, RT-rule deleted\n", 
 		    					    tx_index, tx_prop->tx[tx_index].ip,iptype);		
 
-				if (m_routing.DeleteRoutingHdl(wan_route_rule_v6_hdl[tx_index], IPA_IP_v6)
-						== false)
+				if ((wan_route_rule_v6_hdl != NULL) &&
+					(m_routing.DeleteRoutingHdl(wan_route_rule_v6_hdl[tx_index], IPA_IP_v6)
+						== false))
 				{
 					IPACMDBG("IP-family:%d, Routing rule(hdl:0x%x) deletion failed with tx_index %d!\n", IPA_IP_v6, wan_route_rule_v6_hdl[tx_index], tx_index);
 					return IPACM_FAILURE;
 				}
 			   
-			   if (m_routing.DeleteRoutingHdl(wan_route_rule_v6_hdl_a5[tx_index], IPA_IP_v6)
-			   		== false)
+			   if ((wan_route_rule_v6_hdl_a5 != NULL) &&
+			   		(m_routing.DeleteRoutingHdl(wan_route_rule_v6_hdl_a5[tx_index], IPA_IP_v6)
+			   		== false))
 			   {
 			   	IPACMDBG("IP-family:%d, Routing rule(hdl:0x%x) deletion failed with tx_index %d!\n",IPA_IP_v6,wan_route_rule_v6_hdl_a5[tx_index],tx_index);
 			   	return IPACM_FAILURE;

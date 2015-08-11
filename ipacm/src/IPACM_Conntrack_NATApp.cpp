@@ -98,8 +98,10 @@ int NatApp::Init(void)
 	return 0;
 
 fail:
-	free(cache);
-	free(pALGPorts);
+	if (cache != NULL)
+		free(cache);
+	if (pALGPorts != NULL)
+		free(pALGPorts);
 	return -1;
 }
 

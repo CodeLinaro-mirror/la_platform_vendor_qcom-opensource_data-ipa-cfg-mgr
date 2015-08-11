@@ -56,6 +56,8 @@ IPACM_Lan::IPACM_Lan(int iface_index) : IPACM_Iface(iface_index)
 	ipv6_set = 0;
 	ipv4_header_set = false;
 	ipv6_header_set = false;
+	odu_route_rule_v4_hdl = NULL;
+	odu_route_rule_v6_hdl = NULL;
 	int m_fd_odu, ret = IPACM_SUCCESS;
 
 	rt_rule_len = sizeof(struct ipa_lan_rt_rule) + (iface_query->num_tx_props * sizeof(uint32_t));
@@ -73,8 +75,19 @@ IPACM_Lan::IPACM_Lan(int iface_index) : IPACM_Iface(iface_index)
 	if(IPACM_Iface::ipacmcfg->iface_table[ipa_if_num].if_cat == ODU_IF)
 	{
 		odu_route_rule_v4_hdl = (uint32_t *)calloc(iface_query->num_tx_props, sizeof(uint32_t));
+		if (odu_route_rule_v4_hdl == NULL)
+		{
+			IPACMERR("unable to allocate memory for V4 ODU handle\n");
+			free(route_rule);
+			return;
+		}
 		odu_route_rule_v6_hdl = (uint32_t *)calloc(iface_query->num_tx_props, sizeof(uint32_t));
-
+		if (odu_route_rule_v6_hdl == NULL)
+		{
+			IPACMERR("unable to allocate memory for V6 ODU handle\n");			
+			free(route_rule);
+			return;
+		}
 		/* only do one time ioctl to odu-driver to infrom in router or bridge mode*/
 		if (IPACM_Lan::odu_up != true)
 		{

@@ -81,10 +81,11 @@ static int ipa_nl_open_socket
 	optlen = sizeof(sendbuff);
 	res = getsockopt(*p_sk_fd, SOL_SOCKET, SO_SNDBUF, &sendbuff, &optlen);
 
-	if(res == -1)
+	if (res == -1) {
 		IPACMDBG("Error getsockopt one");
-	else
+	} else {
 		IPACMDBG("orignal send buffer size = %d\n", sendbuff);
+	}
 
 	IPACMDBG("sets the send buffer to %d\n", buf_size);
 	if (setsockopt(*p_sk_fd, SOL_SOCKET, SO_RCVBUF, &buf_size, sizeof(int)) == -1) {
@@ -217,7 +218,6 @@ static struct msghdr* ipa_nl_alloc_msg
 	if(msgh == NULL)
 	{
 		IPACMERR("Failed malloc for msghdr\n");
-		free(msgh);
 		return NULL;
 	}
 
@@ -225,7 +225,6 @@ static struct msghdr* ipa_nl_alloc_msg
 	if(nladdr == NULL)
 	{
 		IPACMERR("Failed malloc for sockaddr\n");
-		free(nladdr);
 		free(msgh);
 		return NULL;
 	}
@@ -234,7 +233,6 @@ static struct msghdr* ipa_nl_alloc_msg
 	if(iov == NULL)
 	{
 		PERROR("Failed malloc for iovec");
-		free(iov);
 		free(nladdr);
 		free(msgh);
 		return NULL;
@@ -244,7 +242,6 @@ static struct msghdr* ipa_nl_alloc_msg
 	if(buf == NULL)
 	{
 		IPACMERR("Failed malloc for mglen\n");
-		free(buf);
 		free(iov);
 		free(nladdr);
 		free(msgh);

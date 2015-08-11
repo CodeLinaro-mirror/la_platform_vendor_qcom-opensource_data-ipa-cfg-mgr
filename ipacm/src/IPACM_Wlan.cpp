@@ -347,7 +347,7 @@ int IPACM_Wlan::handle_wlan_client_init(uint8_t *mac_addr)
 	}	
 
 	/* start of adding header */
-        IPACMDBG("Wifi client number for this iface: %d & total number of wlan clients: %d\n",	998
+        IPACMDBG("Wifi client number for this iface: %d & total number of wlan clients: %d\n",
                  num_wifi_client,IPACM_Wlan::total_num_wifi_clients);
 	if ((num_wifi_client >= IPA_MAX_NUM_WIFI_CLIENTS) ||
 			(IPACM_Wlan::total_num_wifi_clients >= IPA_MAX_NUM_WIFI_CLIENTS))
@@ -1825,7 +1825,10 @@ fail:
 	/* Delete corresponding ipa_rm_resource_name of RX-endpoint after delete all IPV4V6 FT-rule */ 
 	IPACM_Iface::ipacmcfg->DelRmDepend(IPA_RM_RESOURCE_HSIC_PROD);
 
-	free(wlan_client);
+	if (wlan_client != NULL)
+	{
+		free(wlan_client);
+	}
 	if (tx_prop != NULL)
 	{
 		free(tx_prop);

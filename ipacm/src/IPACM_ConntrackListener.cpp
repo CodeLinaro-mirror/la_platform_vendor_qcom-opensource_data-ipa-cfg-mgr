@@ -608,9 +608,12 @@ void IPACM_ConntrackListener::ProcessCTV6Message(void *param)
 	}
 	else if((IPPROTO_UDP == l4proto && NFCT_T_DESTROY == evt_data->type) ||
 					(IPPROTO_TCP == l4proto &&
-					 nfct_get_attr_u8(ct, ATTR_TCP_STATE) == TCP_CONNTRACK_FIN_WAIT))
+					 nfct_get_attr_u8(ct, ATTR_TCP_STATE) == TCP_CONNTRACK_FIN_WAIT &&
+							  (status & IPS_ASSURED)) )
 	{
-			p_lan2lan->handle_del_connection(&lan2lan_conn);
+		IPACMDBG("l4proto: %d status: 0x%x  assured_bit: %d\n",
+				 l4proto, status, (status & IPS_ASSURED));
+		p_lan2lan->handle_del_connection(&lan2lan_conn);
 	}
 
 IGNORE:
@@ -742,8 +745,11 @@ void IPACM_ConntrackListener::ProcessTCPorUDPMsg(
 			 }
 			 else if((IPPROTO_UDP == rule.protocol && NFCT_T_DESTROY == type) ||
 							 (IPPROTO_TCP == rule.protocol &&
-								nfct_get_attr_u8(ct, ATTR_TCP_STATE) == TCP_CONNTRACK_FIN_WAIT))
+								nfct_get_attr_u8(ct, ATTR_TCP_STATE) == TCP_CONNTRACK_FIN_WAIT &&
+							  (status & IPS_ASSURED)))
 			 {
+				 IPACMDBG("l4proto: %d status: 0x%x  assured_bit: %d\n",
+						  rule.protocol, status, (status & IPS_ASSURED));
 				 p_lan2lan->handle_del_connection(&lan2lan_conn);
 			 }
 #endif

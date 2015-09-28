@@ -1861,7 +1861,6 @@ int IPACM_Lan::handle_eth_hdr_init(uint8_t *mac_addr)
 	}
 fail:
 	free(pHeaderDescriptor);
-
 	return res;
 }
 
@@ -2324,7 +2323,6 @@ int IPACM_Lan::handle_odu_hdr_init(uint8_t *mac_addr)
 	}
 fail:
 	free(pHeaderDescriptor);
-
 	return res;
 }
 
@@ -5427,10 +5425,8 @@ int IPACM_Lan::eth_bridge_add_wlan_client_flt_rule(uint8_t* mac, ipa_ip_type ipt
 	}
 
 fail:
-	if(pFilteringTable == NULL)
-	{
-		free(pFilteringTable);
-	}
+	free(pFilteringTable);
+
 	return res;
 }
 
@@ -5698,10 +5694,8 @@ int IPACM_Lan::eth_bridge_add_lan_client_flt_rule(uint8_t* mac, ipa_ip_type ipty
 	}
 
 fail:
-	if (pFilteringTable == NULL)
-	{
-		free(pFilteringTable);
-	}
+	free(pFilteringTable);
+
 	return res;
 }
 

@@ -189,14 +189,6 @@ IPACM_Wlan::IPACM_Wlan(int iface_index) : IPACM_Lan(iface_index)
 		}
 	}
 #endif
-
-#ifdef FEATURE_IPA_ANDROID
-	/* set the IPA-client pipe enum */
-	if(IPACM_Iface::ipacmcfg->iface_table[ipa_if_num].if_cat == WLAN_IF)
-	{
-		handle_tethering_client(false, IPACM_CLIENT_WLAN);
-	}
-#endif
 	return;
 }
 
@@ -220,7 +212,6 @@ void IPACM_Wlan::event_callback(ipa_cm_event_id event, void *param)
 	int wlan_index;
 	ipacm_ext_prop* ext_prop;
 	ipacm_event_iface_up* data_wan;
-	ipacm_event_iface_up_tehter* data_wan_tether;
 
 	switch (event)
 	{
@@ -351,7 +342,7 @@ void IPACM_Wlan::event_callback(ipa_cm_event_id event, void *param)
 					}
 #endif
 
-					if (IPACM_Wan::isWanUP(ipa_if_num))
+					if (IPACM_Wan::isWanUP())
 					{
 						if(data->iptype == IPA_IP_v4 || data->iptype == IPA_IP_MAX)
 						{
@@ -368,7 +359,7 @@ void IPACM_Wlan::event_callback(ipa_cm_event_id event, void *param)
 						}
 					}
 
-					if(IPACM_Wan::isWanUP_V6(ipa_if_num))
+					if(IPACM_Wan::isWanUP_V6())
 					{
 						if((data->iptype == IPA_IP_v6 || data->iptype == IPA_IP_MAX) && num_dft_rt_v6 == 1)
 						{
@@ -400,130 +391,6 @@ void IPACM_Wlan::event_callback(ipa_cm_event_id event, void *param)
 			}
 		}
 		break;
-#ifdef FEATURE_IPA_ANDROID
-	case IPA_HANDLE_WAN_UP_TETHER:
-		IPACMDBG_H("Received IPA_HANDLE_WAN_UP_TETHER event\n");
-
-		data_wan_tether = (ipacm_event_iface_up_tehter*)param;
-		if(data_wan_tether == NULL)
-		{
-			IPACMERR("No event data is found.\n");
-			return;
-		}
-		IPACMDBG_H("Backhaul is sta mode?%d, if_index_tether:%d tether_if_name:%s\n", data_wan_tether->is_sta,
-					data_wan_tether->if_index_tether,
-					IPACM_Iface::ipacmcfg->iface_table[data_wan_tether->if_index_tether].iface_name);
-		if (data_wan_tether->if_index_tether == ipa_if_num)
-		{
-			if(ip_type == IPA_IP_v4 || ip_type == IPA_IP_MAX)
-			{
-				if(data_wan_tether->is_sta == false)
-				{
-					ext_prop = IPACM_Iface::ipacmcfg->GetExtProp(IPA_IP_v4);
-					IPACM_Lan::handle_wan_up_ex(ext_prop, IPA_IP_v4, 0);
-				}
-				else
-				{
-					IPACM_Lan::handle_wan_up(IPA_IP_v4);
-				}
-			}
-		}
-		break;
-
-	case IPA_HANDLE_WAN_UP_V6_TETHER:
-		IPACMDBG_H("Received IPA_HANDLE_WAN_UP_V6_TETHER event\n");
-
-		data_wan_tether = (ipacm_event_iface_up_tehter*)param;
-		if(data_wan_tether == NULL)
-		{
-			IPACMERR("No event data is found.\n");
-			return;
-		}
-		IPACMDBG_H("Backhaul is sta mode?%d, if_index_tether:%d tether_if_name:%s\n", data_wan_tether->is_sta,
-					data_wan_tether->if_index_tether,
-					IPACM_Iface::ipacmcfg->iface_table[data_wan_tether->if_index_tether].iface_name);
-		if (data_wan_tether->if_index_tether == ipa_if_num)
-		{
-			if(ip_type == IPA_IP_v6 || ip_type == IPA_IP_MAX)
-			{
-				if(wlan_ap_index == 0) //install ipv6 prefix rule only once
-				{
-					install_ipv6_prefix_flt_rule(data_wan_tether->ipv6_prefix);
-				}
-				if(data_wan_tether->is_sta == false)
-				{
-					ext_prop = IPACM_Iface::ipacmcfg->GetExtProp(IPA_IP_v6);
-					IPACM_Lan::handle_wan_up_ex(ext_prop, IPA_IP_v6, 0);
-				}
-				else
-				{
-					IPACM_Lan::handle_wan_up(IPA_IP_v6);
-				}
-			}
-		}
-		break;
-
-	case IPA_HANDLE_WAN_DOWN_TETHER:
-		IPACMDBG_H("Received IPA_HANDLE_WAN_DOWN_TETHER event\n");
-		data_wan_tether = (ipacm_event_iface_up_tehter*)param;
-		if(data_wan_tether == NULL)
-		{
-			IPACMERR("No event data is found.\n");
-			return;
-		}
-		IPACMDBG_H("Backhaul is sta mode?%d, if_index_tether:%d tether_if_name:%s\n", data_wan_tether->is_sta,
-					data_wan_tether->if_index_tether,
-					IPACM_Iface::ipacmcfg->iface_table[data_wan_tether->if_index_tether].iface_name);
-		if (data_wan_tether->if_index_tether == ipa_if_num)
-		{
-			if(data_wan_tether->is_sta == false && wlan_ap_index > 0)
-			{
-				IPACMDBG_H("This is not the first AP instance and not STA mode, ignore WAN_DOWN event.\n");
-				return;
-			}
-			if (rx_prop != NULL)
-			{
-				if(ip_type == IPA_IP_v4 || ip_type == IPA_IP_MAX)
-				{
-					handle_wan_down(data_wan_tether->is_sta);
-				}
-			}
-		}
-		break;
-
-	case IPA_HANDLE_WAN_DOWN_V6_TETHER:
-		IPACMDBG_H("Received IPA_HANDLE_WAN_DOWN_V6_TETHER event\n");
-		data_wan_tether = (ipacm_event_iface_up_tehter*)param;
-		if(data_wan_tether == NULL)
-		{
-			IPACMERR("No event data is found.\n");
-			return;
-		}
-		IPACMDBG_H("Backhaul is sta mode?%d, if_index_tether:%d tether_if_name:%s\n", data_wan_tether->is_sta,
-					data_wan_tether->if_index_tether,
-					IPACM_Iface::ipacmcfg->iface_table[data_wan_tether->if_index_tether].iface_name);
-		if (data_wan_tether->if_index_tether == ipa_if_num)
-		{
-			/* clean up v6 RT rules*/
-			IPACMDBG_H("Received IPA_WAN_V6_DOWN in WLAN-instance and need clean up client IPv6 address \n");
-			/* reset wifi-client ipv6 rt-rules */
-			handle_wlan_client_reset_rt(IPA_IP_v6);
-
-			if(data_wan_tether->is_sta == false && wlan_ap_index > 0)
-			{
-				IPACMDBG_H("This is not the first AP instance and not STA mode, ignore WAN_DOWN event.\n");
-				return;
-			}
-			if (rx_prop != NULL)
-			{
-				if(ip_type == IPA_IP_v6 || ip_type == IPA_IP_MAX)
-				{
-					handle_wan_down_v6(data_wan_tether->is_sta);
-				}
-			}
-		}
-		break;
-#else
 	case IPA_HANDLE_WAN_UP:
 		IPACMDBG_H("Received IPA_HANDLE_WAN_UP event\n");
 
@@ -625,7 +492,6 @@ void IPACM_Wlan::event_callback(ipa_cm_event_id event, void *param)
 			}
 		}
 		break;
-#endif
 
 	case IPA_WLAN_CLIENT_ADD_EVENT_EX:
 		{
@@ -1006,7 +872,7 @@ void IPACM_Wlan::event_callback(ipa_cm_event_id event, void *param)
 	case IPA_TETHERING_STATS_UPDATE_EVENT:
 	{
 		IPACMDBG_H("Received IPA_TETHERING_STATS_UPDATE_EVENT event.\n");
-		if (IPACM_Wan::isWanUP(ipa_if_num) || IPACM_Wan::isWanUP_V6(ipa_if_num))
+		if (IPACM_Wan::isWanUP() || IPACM_Wan::isWanUP_V6())
 		{
 			if(IPACM_Wan::backhaul_is_sta_mode == false) /* LTE */
 			{
@@ -2470,13 +2336,13 @@ int IPACM_Wlan::handle_down_evt()
 #endif
 
 	/* delete wan filter rule */
-	if (IPACM_Wan::isWanUP(ipa_if_num) && rx_prop != NULL)
+	if (IPACM_Wan::isWanUP() && rx_prop != NULL)
 	{
 		IPACMDBG_H("LAN IF goes down, backhaul type %d\n", IPACM_Wan::backhaul_is_sta_mode);
 		IPACM_Lan::handle_wan_down(IPACM_Wan::backhaul_is_sta_mode);
 	}
 
-	if (IPACM_Wan::isWanUP_V6(ipa_if_num) && rx_prop != NULL)
+	if (IPACM_Wan::isWanUP_V6() && rx_prop != NULL)
 	{
 		IPACMDBG_H("LAN IF goes down, backhaul type %d\n", IPACM_Wan::backhaul_is_sta_mode);
 		IPACM_Lan::handle_wan_down_v6(IPACM_Wan::backhaul_is_sta_mode);
@@ -2764,8 +2630,6 @@ int IPACM_Wlan::handle_down_evt()
 			IPACMERR(" can't Delete IPACM private subnet_addr as: 0x%x \n", if_ipv4_subnet);
 		}
 	}
-	/* reset the IPA-client pipe enum */
-	handle_tethering_client(true, IPACM_CLIENT_WLAN);
 #endif /* defined(FEATURE_IPA_ANDROID)*/
 
 fail:

@@ -189,6 +189,7 @@ typedef enum
 	IPA_WLAN_SWITCH_TO_MCC,                   /* 51 No Data */
 	IPA_CRADLE_WAN_MODE_SWITCH,               /* 52 ipacm_event_cradle_wan_mode */
 	IPA_WAN_XLAT_CONNECT_EVENT,               /* 53 ipacm_event_data_fid */
+	IPA_BRIDGE_LINK_UP_EVENT,                 /* 54 ipacm_event_data_all */
 	IPACM_EVENT_MAX
 } ipa_cm_event_id;
 

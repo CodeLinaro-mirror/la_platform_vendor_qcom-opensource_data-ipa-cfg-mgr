@@ -110,36 +110,6 @@
   			   <Port>53</Port>
 			   <Description>DNS</Description>
 		    </ALG>
-			<ALG>
-  			   <Protocol>UDP</Protocol>
-  			   <Port>10080</Port>
-			   <Description>AMANDA</Description>
-		    </ALG>
-			<ALG>
-  			   <Protocol>UDP</Protocol>
-  			   <Port>1719</Port>
-			   <Description>H323</Description>
-		    </ALG>
-			<ALG>
-  			   <Protocol>TCP</Protocol>
-  			   <Port>1720</Port>
-			   <Description>H323</Description>
-		    </ALG>
-			<ALG>
-  			   <Protocol>TCP</Protocol>
-  			   <Port>6667</Port>
-			   <Description>IRC</Description>
-		    </ALG>
-			<ALG>
-  			   <Protocol>UDP</Protocol>
-  			   <Port>137</Port>
-			   <Description>NETBIOS_NS</Description>
-		    </ALG>
-			<ALG>
-  			   <Protocol>TCP</Protocol>
-  			   <Port>6566</Port>
-			   <Description>SANE</Description>
-		    </ALG>
 		</IPACMALG>
 		<IPACMNAT>		
  	        <MaxNatEntries>500</MaxNatEntries>

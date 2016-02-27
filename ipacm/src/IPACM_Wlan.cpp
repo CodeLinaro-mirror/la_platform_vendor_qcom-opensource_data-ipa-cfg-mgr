@@ -1237,7 +1237,7 @@ int IPACM_Wlan::handle_private_subnet(ipa_ip_type iptype)
 			return IPACM_FAILURE;
 		}
 #ifdef FEATURE_ETH_BRIDGE_LE
-		offset = IPV4_DEFAULT_FILTERTING_RULES + IPACM_Iface::ipacmcfg->ipa_num_private_subnet + IPA_LAN_TO_LAN_MAX_WLAN_CLIENT + IPA_LAN_TO_LAN_MAX_LAN_CLIENT;
+		offset = IPV4_DEFAULT_FILTERTING_RULES + IPA_LAN_TO_LAN_MAX_WLAN_CLIENT + IPA_LAN_TO_LAN_MAX_LAN_CLIENT;
 #else
 #ifndef CT_OPT
 		offset = wlan_ap_index * (IPV4_DEFAULT_FILTERTING_RULES + MAX_OFFLOAD_PAIR + IPACM_Iface::ipacmcfg->ipa_num_private_subnet)

@@ -384,11 +384,12 @@ bool IPACM_Filtering::ModifyFilteringRule(struct ipa_ioc_mdfy_flt_rule* ruleTabl
 	int i, ret = 0;
 
 	IPACMDBG("Printing filtering add attributes\n");
-	IPACMDBG("IP type: %d Number of rules: %d commit value: %d\n", ruleTable->ip, ruleTable->num_rules, ruleTable->commit);
+	IPACMDBG_H("IP type: %d Number of rules: %d commit value: %d\n", ruleTable->ip, ruleTable->num_rules, ruleTable->commit);
 
 	for (i=0; i<ruleTable->num_rules; i++)
 	{
-		IPACMDBG("Filter rule:%d attrib mask: 0x%x\n", i, ruleTable->rules[i].rule.attrib.attrib_mask);
+		IPACMDBG_H("Filter rule:%d attrib mask: 0x%x rule hdl: %d\n", i, ruleTable->rules[i].rule.attrib.attrib_mask,
+			ruleTable->rules[i].rule_hdl);
 	}
 
 	ret = ioctl(fd, IPA_IOC_MDFY_FLT_RULE, ruleTable);

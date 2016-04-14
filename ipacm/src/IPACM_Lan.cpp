@@ -4390,7 +4390,7 @@ int IPACM_Lan::add_lan2lan_rt_rule(ipa_ip_type iptype, uint32_t src_v4_addr, uin
 	{
 		IPACMDBG_H("src_v4_addr: 0x%08x dst_v4_addr: 0x%08x\n", src_v4_addr, dst_v4_addr);
 
-		strcpy(rt_rule->rt_tbl_name, IPACM_Iface::ipacmcfg->rt_tbl_lan2lan_v4.name);
+		strlcpy(rt_rule->rt_tbl_name, IPACM_Iface::ipacmcfg->rt_tbl_lan2lan_v4.name, sizeof(rt_rule->rt_tbl_name));
 		rt_rule_entry = &rt_rule->rules[0];
 		rt_rule_entry->at_rear = false;
 		rt_rule_entry->rt_rule_hdl = 0;
@@ -4439,7 +4439,7 @@ int IPACM_Lan::add_lan2lan_rt_rule(ipa_ip_type iptype, uint32_t src_v4_addr, uin
 		IPACMDBG_H("src_v6_addr: 0x%08x%08x%08x%08x, dst_v6_addr: 0x%08x%08x%08x%08x\n", src_v6_addr[0], src_v6_addr[1],
 				src_v6_addr[2], src_v6_addr[3], dst_v6_addr[0], dst_v6_addr[1], dst_v6_addr[2], dst_v6_addr[3]);
 
-		strcpy(rt_rule->rt_tbl_name, IPACM_Iface::ipacmcfg->rt_tbl_lan2lan_v6.name);
+		strlcpy(rt_rule->rt_tbl_name, IPACM_Iface::ipacmcfg->rt_tbl_lan2lan_v6.name, sizeof(rt_rule->rt_tbl_name));
 		rt_rule_entry = &rt_rule->rules[0];
 		rt_rule_entry->at_rear = false;
 		rt_rule_entry->rt_rule_hdl = 0;

@@ -77,9 +77,15 @@ void IPACM_IfaceManager::event_callback(ipa_cm_event_id event, void *param)
 				IPACMDBG_H(" RESET IPACM_cfg \n");
 				IPACM_Iface::ipacmcfg->Init();
 			break;
+
 		case IPA_LINK_UP_EVENT:
 			IPACMDBG_H("Recieved IPA_LINK_UP_EVENT event: link up %d: \n", evt_data->if_index);
 			ipa_interface_index = IPACM_Iface::iface_ipa_index_query(evt_data->if_index);
+			/* check for failure return */
+			if (IPACM_FAILURE == ipa_interface_index) {
+				IPACMERR("IPA_LINK_UP_EVENT: not supported iface id: %d\n", evt_data->if_index);
+				break;
+			}
 			/* LTE-backhaul */
 			if(IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].if_cat == EMBMS_IF)
 			{
@@ -97,6 +103,11 @@ void IPACM_IfaceManager::event_callback(ipa_cm_event_id event, void *param)
 		case IPA_USB_LINK_UP_EVENT:
 			IPACMDBG_H("Recieved IPA_USB_LINK_UP_EVENT event: link up %d: \n", evt_data->if_index);
 			ipa_interface_index = IPACM_Iface::iface_ipa_index_query(evt_data->if_index);
+			/* check for failure return */
+			if (IPACM_FAILURE == ipa_interface_index) {
+				IPACMERR("IPA_USB_LINK_UP_EVENT: not supported iface id: %d\n", evt_data->if_index);
+				break;
+			}
 			/* check if it's WAN_IF */
 			if(IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].if_cat == WAN_IF)
 			{
@@ -116,6 +127,11 @@ void IPACM_IfaceManager::event_callback(ipa_cm_event_id event, void *param)
 
 		case IPA_WLAN_AP_LINK_UP_EVENT:
 			ipa_interface_index = IPACM_Iface::iface_ipa_index_query(evt_data->if_index);
+			/* check for failure return */
+			if (IPACM_FAILURE == ipa_interface_index) {
+				IPACMERR("IPA_WLAN_AP_LINK_UP_EVENT: not supported iface id: %d\n", evt_data->if_index);
+				break;
+			}
 			/* change iface category from unknown to WLAN_IF */
 			if(IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].if_cat == UNKNOWN_IF)
 			{
@@ -133,6 +149,11 @@ void IPACM_IfaceManager::event_callback(ipa_cm_event_id event, void *param)
 
 		case IPA_WLAN_STA_LINK_UP_EVENT:
 			ipa_interface_index = IPACM_Iface::iface_ipa_index_query(StaData->if_index);
+			/* check for failure return */
+			if (IPACM_FAILURE == ipa_interface_index) {
+				IPACMERR("IPA_WLAN_STA_LINK_UP_EVENT: not supported iface id: %d\n", StaData->if_index);
+				break;
+			}
 			/* change iface category from unknown to WAN_IF */
 			if(IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].if_cat == UNKNOWN_IF)
 			{
@@ -157,6 +178,11 @@ void IPACM_IfaceManager::event_callback(ipa_cm_event_id event, void *param)
 		/* Add new instance open for eMBMS iface and wan iface */
 		case IPA_WAN_EMBMS_LINK_UP_EVENT:
 			ipa_interface_index = IPACM_Iface::iface_ipa_index_query(evt_data->if_index);
+			/* check for failure return */
+			if (IPACM_FAILURE == ipa_interface_index) {
+				IPACMERR("IPA_WAN_EMBMS_LINK_UP_EVENT: not supported iface id: %d\n", evt_data->if_index);
+				break;
+			}
 			/* change iface category from unknown to EMBMS_IF */
 			if ((IPACM_Iface::ipacmcfg->ipacm_odu_enable == true) && (IPACM_Iface::ipacmcfg->ipacm_odu_embms_enable == true))
 			{

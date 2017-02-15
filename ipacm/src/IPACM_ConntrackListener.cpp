@@ -139,6 +139,47 @@ void IPACM_ConntrackListener::event_callback(ipa_cm_event_id evt,
 	 }
 }
 
+int IPACM_ConntrackListener:: GetPacketThreshhold(void)
+{
+	int i = 0;
+	int pkt_thrshld = 0;
+	FILE *cmd = NULL;
+	int acct = 0;
+	const char acct_proc[] = "cat /proc/sys/net/netfilter/nf_conntrack_acct";
+	const char pkt_thresh_proc[] = "cat /proc/sys/net/netfilter/nf_conntrack_pkt_threshold";
+	char input_value[MAX_CMD_SIZE] = {0};
+
+	cmd = popen(acct_proc, "r");
+	if(cmd)
+	{
+		fgets(input_value, MAX_CMD_SIZE, cmd);
+		acct = atoi(input_value);
+		pclose(cmd);
+		if ( acct == 1 )
+		{
+			IPACMDBG_H("Accounting is enabled.\n");
+			cmd = popen(pkt_thresh_proc, "r");
+			if(cmd)
+			{
+				memset(input_value, 0, MAX_CMD_SIZE);
+				fgets(input_value, MAX_CMD_SIZE, cmd);
+				pkt_thrshld = atoi(input_value);
+				IPACMDBG_H("Configured packet threshold: %d\n", pkt_thrshld);
+				pclose(cmd);
+			}
+			else
+			{
+				IPACMDBG_H("Packet threshold is not enabled.\n");
+			}
+		}
+		else
+		{
+			IPACMDBG_H("Accounting is not enabled.\n");
+		}
+	}
+	return pkt_thrshld;
+}
+
 int IPACM_ConntrackListener::CheckNatIface(
    ipacm_event_data_all *data, bool *NatIface)
 {
@@ -770,6 +811,8 @@ bool IPACM_ConntrackListener::AddIface(
 void IPACM_ConntrackListener::AddORDeleteNatEntry(const nat_entry_bundle *input)
 {
 	u_int8_t tcp_state;
+	u_int64_t pkt_count = 0;
+	int pkt_threshld = IPACM_ConntrackListener::GetPacketThreshhold();
 
 	if (nat_inst == NULL)
 	{
@@ -791,10 +834,15 @@ void IPACM_ConntrackListener::AddORDeleteNatEntry(const nat_entry_bundle *input)
 	IPACMDBG("Protocol: %d, destination nat flag: %d\n",
 			 input->rule->protocol, input->rule->dst_nat);
 
+	pkt_count = nfct_get_attr_u64(input->ct, ATTR_ORIG_COUNTER_PACKETS) +
+				nfct_get_attr_u64(input->ct, ATTR_REPL_COUNTER_PACKETS);
+
 	if (IPPROTO_TCP == input->rule->protocol)
 	{
 		tcp_state = nfct_get_attr_u8(input->ct, ATTR_TCP_STATE);
-		if (TCP_CONNTRACK_ESTABLISHED == tcp_state)
+		if ((TCP_CONNTRACK_ESTABLISHED == tcp_state) &&
+                    (((pkt_threshld != 0) && (pkt_count >= pkt_threshld)) ||
+                    (pkt_threshld == 0)))
 		{
 			IPACMDBG("TCP state TCP_CONNTRACK_ESTABLISHED(%d)\n", tcp_state);
 			if (!CtList->isWanUp())
@@ -829,7 +877,9 @@ void IPACM_ConntrackListener::AddORDeleteNatEntry(const nat_entry_bundle *input)
 	}
 	else if (IPPROTO_UDP == input->rule->protocol)
 	{
-		if (NFCT_T_NEW == input->type)
+		if (((NFCT_T_NEW == input->type) && (pkt_threshld == 0)) ||
+		    ((pkt_threshld != 0) && (pkt_count >= pkt_threshld)
+                     && (NFCT_T_UPDATE == input->type)))
 		{
 			IPACMDBG("New UDP connection at time %ld\n", time(NULL));
 			if (!CtList->isWanUp())

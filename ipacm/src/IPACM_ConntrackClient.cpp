@@ -498,7 +498,8 @@ void* IPACM_ConntrackClient::UDPRegisterWithConnTrack(void *)
 	}
 
 	pClient->udp_hdl = nfct_open(CONNTRACK,
-					(NF_NETLINK_CONNTRACK_NEW | NF_NETLINK_CONNTRACK_DESTROY));
+					(NF_NETLINK_CONNTRACK_NEW | NF_NETLINK_CONNTRACK_UPDATE |
+					NF_NETLINK_CONNTRACK_DESTROY));
 	if(pClient->udp_hdl == NULL)
 	{
 		PERROR("nfct_open\n");
@@ -524,7 +525,7 @@ void* IPACM_ConntrackClient::UDPRegisterWithConnTrack(void *)
 	/* Register callback with netfilter handler */
 	IPACMDBG_H("udp handle:%p, fd:%d\n", pClient->udp_hdl, nfct_fd(pClient->udp_hdl));
 	nfct_callback_register(pClient->udp_hdl,
-			(nf_conntrack_msg_type)(NFCT_T_NEW | NFCT_T_DESTROY),
+			(nf_conntrack_msg_type)(NFCT_T_NEW | NFCT_T_UPDATE | NFCT_T_DESTROY),
 			IPAConntrackEventCB,
 			NULL);
 

@@ -77,13 +77,9 @@ IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #define IPACM_FIREWALL_FILE_NAME    "mobileap_firewall.xml"
 #define IPACM_CFG_FILE_NAME    "IPACM_cfg.xml"
-#ifdef FEATURE_IPA_ANDROID
 #define IPACM_PID_FILE "/data/misc/ipa/ipacm.pid"
-#define IPACM_DIR_NAME     "/data"
-#else/* defined(FEATURE_IPA_ANDROID) */
-#define IPACM_PID_FILE "/etc/ipacm.pid"
-#define IPACM_DIR_NAME     "/etc"
-#endif /* defined(NOT FEATURE_IPA_ANDROID)*/
+#define IPACM_DIR_NAME     "/data/misc/ipa/"
+#define IPACM_FIREWALL_DIR_NAME     "/data"
 #define IPACM_NAME "ipacm"
 
 #define INOTIFY_EVENT_SIZE  (sizeof(struct inotify_event))
@@ -126,7 +122,7 @@ void* netlink_start(void *param)
 void* firewall_monitor(void *param)
 {
 	int length;
-	int wd;
+	int wd, wd1;
 	char buffer[INOTIFY_BUF_LEN];
 	int inotify_fd;
 	ipacm_cmd_q_data evt_data;
@@ -138,10 +134,14 @@ void* firewall_monitor(void *param)
 		PERROR("inotify_init");
 	}
 
-	IPACMDBG_H("Waiting for nofications in dir %s with mask: 0x%x\n", IPACM_DIR_NAME, mask);
+	IPACMDBG_H("Waiting for nofications in dirs %s:%s with mask: 0x%x\n", IPACM_DIR_NAME,
+		IPACM_FIREWALL_DIR_NAME, mask);
 
 	wd = inotify_add_watch(inotify_fd,
 												 IPACM_DIR_NAME,
+												 mask);
+	wd1 = inotify_add_watch(inotify_fd,
+												 IPACM_FIREWALL_DIR_NAME,
 												 mask);
 
 	while (1)
@@ -200,6 +200,7 @@ void* firewall_monitor(void *param)
 	}
 
 	(void)inotify_rm_watch(inotify_fd, wd);
+	(void)inotify_rm_watch(inotify_fd, wd1);
 	(void)close(inotify_fd);
 	return NULL;
 }

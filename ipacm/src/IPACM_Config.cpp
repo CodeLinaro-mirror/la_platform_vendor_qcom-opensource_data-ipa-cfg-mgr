@@ -173,7 +173,12 @@ int IPACM_Config::Init(void)
 	{
 		IPACMERR("Failed opening %s.\n", DEVICE_NAME);
 	}
+
+#ifdef FEATURE_IPA_ANDROID
 	strncpy(IPACM_config_file, "/etc/IPACM_cfg.xml", sizeof(IPACM_config_file));
+#else
+	strncpy(IPACM_config_file, "/data/misc/ipa/IPACM_cfg.xml", sizeof(IPACM_config_file));
+#endif
 
 	IPACMDBG_H("\n IPACM XML file is %s \n", IPACM_config_file);
 	if (IPACM_SUCCESS == ipacm_read_cfg_xml(IPACM_config_file, cfg))
@@ -347,6 +352,8 @@ int IPACM_Config::Init(void)
 	ipa_client_rm_map_tbl[IPA_CLIENT_ODU_PROD]= IPA_RM_RESOURCE_ODU_ADAPT_PROD;
 	ipa_client_rm_map_tbl[IPA_CLIENT_ODU_EMB_CONS]= IPA_RM_RESOURCE_ODU_ADAPT_CONS;
 	ipa_client_rm_map_tbl[IPA_CLIENT_ODU_TETH_CONS]= IPA_RM_RESOURCE_ODU_ADAPT_CONS;
+	ipa_client_rm_map_tbl[IPA_CLIENT_ETHERNET_PROD]= IPA_RM_RESOURCE_ETHERNET_PROD;
+	ipa_client_rm_map_tbl[IPA_CLIENT_ETHERNET_CONS]= IPA_RM_RESOURCE_ETHERNET_CONS;
 
 	/* Create the entries which IPACM wants to add dependencies on */
 	ipa_rm_tbl[0].producer_rm1 = IPA_RM_RESOURCE_WLAN_PROD;
@@ -378,7 +385,22 @@ int IPACM_Config::Init(void)
 	ipa_rm_tbl[5].consumer_rm1 = IPA_RM_RESOURCE_USB_CONS;
 	ipa_rm_tbl[5].producer_rm2 = IPA_RM_RESOURCE_USB_PROD;
 	ipa_rm_tbl[5].consumer_rm2 = IPA_RM_RESOURCE_ODU_ADAPT_CONS;
-	ipa_max_valid_rm_entry = 6; /* max is IPA_MAX_RM_ENTRY (6)*/
+
+	ipa_rm_tbl[6].producer_rm1 = IPA_RM_RESOURCE_ETHERNET_PROD;
+	ipa_rm_tbl[6].consumer_rm1 = IPA_RM_RESOURCE_Q6_CONS;
+	ipa_rm_tbl[6].producer_rm2 = IPA_RM_RESOURCE_Q6_PROD;
+	ipa_rm_tbl[6].consumer_rm2 = IPA_RM_RESOURCE_ETHERNET_CONS;
+
+	ipa_rm_tbl[7].producer_rm1 = IPA_RM_RESOURCE_ETHERNET_PROD;
+	ipa_rm_tbl[7].consumer_rm1 = IPA_RM_RESOURCE_USB_CONS;
+	ipa_rm_tbl[7].producer_rm2 = IPA_RM_RESOURCE_USB_PROD;
+	ipa_rm_tbl[7].consumer_rm2 = IPA_RM_RESOURCE_ETHERNET_CONS;
+
+	ipa_rm_tbl[8].producer_rm1 = IPA_RM_RESOURCE_WLAN_PROD;
+	ipa_rm_tbl[8].consumer_rm1 = IPA_RM_RESOURCE_ETHERNET_CONS;
+	ipa_rm_tbl[8].producer_rm2 = IPA_RM_RESOURCE_ETHERNET_PROD;
+	ipa_rm_tbl[8].consumer_rm2 = IPA_RM_RESOURCE_WLAN_CONS;
+	ipa_max_valid_rm_entry = 9; /* max is IPA_MAX_RM_ENTRY (9)*/
 
 	IPACMDBG_H(" depend MAP-0 rm index %d to rm index: %d \n", IPA_RM_RESOURCE_WLAN_PROD, IPA_RM_RESOURCE_Q6_CONS);
 	IPACMDBG_H(" depend MAP-1 rm index %d to rm index: %d \n", IPA_RM_RESOURCE_USB_PROD, IPA_RM_RESOURCE_Q6_CONS);
@@ -386,6 +408,9 @@ int IPACM_Config::Init(void)
 	IPACMDBG_H(" depend MAP-3 rm index %d to rm index: %d \n", IPA_RM_RESOURCE_ODU_ADAPT_PROD, IPA_RM_RESOURCE_Q6_CONS);
 	IPACMDBG_H(" depend MAP-4 rm index %d to rm index: %d \n", IPA_RM_RESOURCE_WLAN_PROD, IPA_RM_RESOURCE_ODU_ADAPT_CONS);
 	IPACMDBG_H(" depend MAP-5 rm index %d to rm index: %d \n", IPA_RM_RESOURCE_ODU_ADAPT_PROD, IPA_RM_RESOURCE_USB_CONS);
+	IPACMDBG_H(" depend MAP-6 rm index %d to rm index: %d \n", IPA_RM_RESOURCE_ETHERNET_PROD, IPA_RM_RESOURCE_Q6_CONS);
+	IPACMDBG_H(" depend MAP-7 rm index %d to rm index: %d \n", IPA_RM_RESOURCE_ETHERNET_PROD, IPA_RM_RESOURCE_USB_CONS);
+	IPACMDBG_H(" depend MAP-8 rm index %d to rm index: %d \n", IPA_RM_RESOURCE_WLAN_PROD, IPA_RM_RESOURCE_ETHERNET_CONS);
 
 fail:
 	if (cfg != NULL)

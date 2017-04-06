@@ -48,8 +48,8 @@ LOCAL_MODULE := libipanat
 LOCAL_PRELINK_MODULE := false
 include $(BUILD_SHARED_LIBRARY)
 
-etcdir = ${sysconfdir}
-etc_SCRIPTS = IPACM_cfg.xml
+flashdir = "/data/misc/ipa"
+flash_DATA = IPACM_cfg.xml
 
 init_ddir = ${sysconfdir}/init.d
 init_d_SCRIPTS = start_ipacm_le

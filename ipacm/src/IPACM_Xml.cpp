@@ -567,6 +567,29 @@ static int IPACM_firewall_xml_parse_tree
 					/* go to child */
 					ret_val = IPACM_firewall_xml_parse_tree(xml_node->children, config);
 				}
+#ifdef FEATURE_IPACM_UL_FIREWALL
+				else if (0 == IPACM_util_icmp_string((char*)xml_node->name, FirewallDirection_TAG))
+				{ /* Getting an info about direction (UL/DL) */
+					content = IPACM_read_content_element(xml_node);
+					if (content)
+					{
+						str_size = strlen(content);
+						memset(content_buf, 0, sizeof(content_buf));
+						memcpy(content_buf, (void *)content, str_size);
+						content_buf[MAX_XML_STR_LEN-1] = '\0';
+						if (0 == IPACM_util_icmp_string((char*)content_buf, UL_TAG))
+						{
+							config->extd_firewall_entries[config->num_extd_firewall_entries - 1].firewall_direction
+							= IPACM_MSGR_UL_FIREWALL;  /* Its UL*/
+						}
+						else if (0 == IPACM_util_icmp_string((char*)content_buf, DL_TAG))
+						{
+							config->extd_firewall_entries[config->num_extd_firewall_entries - 1].firewall_direction
+							= IPACM_MSGR_DL_FIREWALL;  /* Its DL*/
+						}
+					}
+				}
+#endif //FEATURE_IPACM_UL_FIREWALL
 				else if (0 == IPACM_util_icmp_string((char*)xml_node->name, IPFamily_TAG))
 				{
 					content = IPACM_read_content_element(xml_node);

@@ -120,6 +120,7 @@ IPACM_Wlan::IPACM_Wlan(int iface_index) : IPACM_Lan(iface_index)
 		handle_tethering_client(false, IPACM_CLIENT_WLAN);
 	}
 #endif
+
 	return;
 }
 
@@ -202,6 +203,24 @@ void IPACM_Wlan::event_callback(ipa_cm_event_id event, void *param)
 		break;
 	}
 
+#ifdef FEATURE_IPACM_UL_FIREWALL
+	case IPA_FIREWALL_CHANGE_EVENT:
+	{
+		IPACMDBG_H("Received IPA_FIREWALL_CHANGE_EVENT\n");
+
+		if(ip_type != IPA_IP_v4)
+		{
+			IPACMDBG_H ("iface_ul_firewall Addr = (0x%x)\n", &iface_ul_firewall);
+			re_config_dft_firewall_rules_ul(IPA_IP_v6, &iface_ul_firewall);
+		}
+		else
+		{
+			IPACMERR("IP type is not valid.\n");
+		}
+		break;
+	}
+#endif //FEATURE_IPACM_UL_FIREWALL
+
 	case IPA_ADDR_ADD_EVENT:
 		{
 			ipacm_event_data_addr *data = (ipacm_event_data_addr *)param;
@@ -279,9 +298,33 @@ void IPACM_Wlan::event_callback(ipa_cm_event_id event, void *param)
 							}
 						}
 					}
-
-					if(IPACM_Wan::isWanUP_V6(ipa_if_num))
+#ifdef FEATURE_IPACM_UL_FIREWALL
+					IPACM_Wan::read_firewall_filter_rules_ul();
+#endif //FEATURE_IPACM_UL_FIREWALL
+					if(IPACM_Wan::isWanUP_V6(ipa_if_num)) /* Modem v6 call is UP?*/
 					{
+#ifdef FEATURE_IPACM_UL_FIREWALL
+						IPACMDBG_H("LTE BH UP\n");
+						if (IPACM_Wan::firewall_config_ul.rule_action_accept == true) /* is whitelist ?? */
+						{	/* Configure and send the firewall filter table to Q6*/
+							delete_uplink_filter_rule_ul(data->iptype, &iface_ul_firewall);
+
+							/* Configure and send the firewall filter table to Q6*/
+							IPACM_Lan::config_dft_firewall_rules_ul_ex(IPACM_Wan::firewall_flt_rule_v6_ul, data->iptype);
+							IPACM_Lan::config_wan_frag_firewall_rule_ul_ex(true, data->iptype, &iface_ul_firewall);
+							IPACMDBG_H ("New config rules sent to Q6\n");
+						}
+						else
+						{	/* Config and install it on pipes directly, since it is Blacklisted */
+
+							IPACMDBG_H ("Send indication to Q6 to disable UL firewall\n");
+							IPACM_Lan::config_wan_frag_firewall_rule_ul_ex(false, data->iptype, &iface_ul_firewall);
+							install_wan_firewall_rule_ul(false, data->iptype);
+
+							IPACM_Lan::config_dft_firewall_rules_ul(IPACM_Wan::firewall_flt_rule_v6_ul, data->iptype, &iface_ul_firewall);
+							IPACMDBG_H ("Pipe (%d) configured with the new UL rules\n", rx_prop->rx[0].src_pipe);
+						}
+#endif //FEATURE_IPACM_UL_FIREWALL
 						if((data->iptype == IPA_IP_v6 || data->iptype == IPA_IP_MAX) && num_dft_rt_v6 == 1)
 						{
 							memcpy(ipv6_prefix, IPACM_Wan::backhaul_ipv6_prefix, sizeof(ipv6_prefix));
@@ -298,7 +341,19 @@ void IPACM_Wlan::event_callback(ipa_cm_event_id event, void *param)
 							}
 						}
 					}
+#ifdef FEATURE_IPACM_UL_FIREWALL
+					else
+					{
+						IPACMDBG_H("NON - LTE BH UP\n");
+						/* Config and install it on pipes directly, Other backhaul case*/
+						IPACMDBG_H ("Send indication to Q6 to disable UL firewall\n");
+						IPACM_Lan::config_wan_frag_firewall_rule_ul_ex(false, data->iptype, &iface_ul_firewall);
+						IPACM_Lan::install_wan_firewall_rule_ul(false, data->iptype);
 
+						IPACM_Lan::config_dft_firewall_rules_ul(IPACM_Wan::firewall_flt_rule_v6_ul, data->iptype, &iface_ul_firewall);
+						IPACMDBG_H ("Pipe (%d) configured with the new UL rules\n", rx_prop->rx[0].src_pipe);
+					}
+#endif //FEATURE_IPACM_UL_FIREWALL
 					IPACMDBG_H("posting IPA_HANDLE_WLAN_UP:Finished checking wan_up\n");
 					/* checking if SW-RT_enable */
 					if (IPACM_Iface::ipacmcfg->ipa_sw_rt_enable == true)
@@ -465,6 +520,44 @@ void IPACM_Wlan::event_callback(ipa_cm_event_id event, void *param)
 		IPACMDBG_H("Backhaul is sta mode?%d\n", data_wan->is_sta);
 		if(ip_type == IPA_IP_v6 || ip_type == IPA_IP_MAX)
 		{
+#ifdef FEATURE_IPACM_UL_FIREWALL
+			IPACM_Wan::read_firewall_filter_rules_ul();
+			if(IPACM_Wan::isWanUP_V6(ipa_if_num))
+			{
+				IPACMDBG_H("LTE BH UP\n");
+				if (IPACM_Wan::firewall_config_ul.rule_action_accept == true) /* is whitelist ?? */
+				{	/* Configure and send the firewall filter table to Q6*/
+					delete_uplink_filter_rule_ul(ip_type, &iface_ul_firewall);
+
+					/* Configure and send the firewall filter table to Q6*/
+					IPACM_Lan::config_dft_firewall_rules_ul_ex(IPACM_Wan::firewall_flt_rule_v6_ul, ip_type);
+					IPACM_Lan::config_wan_frag_firewall_rule_ul_ex(true, ip_type, &iface_ul_firewall);
+					IPACMDBG_H ("New config rules sent to Q6\n");
+				}
+				else
+				{	/* Config and install it on pipes directly, since it is Blacklisted */
+
+					IPACMDBG_H ("Send indication to Q6 to disable UL firewall\n");
+					IPACM_Lan::config_wan_frag_firewall_rule_ul_ex(false, ip_type, &iface_ul_firewall);
+					install_wan_firewall_rule_ul(false, ip_type);
+
+					IPACM_Lan::config_dft_firewall_rules_ul(IPACM_Wan::firewall_flt_rule_v6_ul, ip_type, &iface_ul_firewall);
+					IPACMDBG_H ("Pipe (%d) configured with the new UL rules\n", rx_prop->rx[0].src_pipe);
+				}
+			}
+			else
+			{
+				IPACMDBG_H("NON - LTE BH UP\n");
+				/* Config and install it on pipes directly, Other backhaul case*/
+				IPACMDBG_H ("Send indication to Q6 to disable UL firewall\n");
+				IPACM_Lan::config_wan_frag_firewall_rule_ul_ex(false, ip_type, &iface_ul_firewall);
+				install_wan_firewall_rule_ul(false, ip_type);
+
+				IPACM_Lan::config_dft_firewall_rules_ul(IPACM_Wan::firewall_flt_rule_v6_ul, ip_type, &iface_ul_firewall);
+				IPACMDBG_H ("Pipe (%d) configured with the new UL rules\n", rx_prop->rx[0].src_pipe);
+
+			}
+#endif //FEATURE_IPACM_UL_FIREWALL
 			memcpy(ipv6_prefix, data_wan->ipv6_prefix, sizeof(ipv6_prefix));
 			install_ipv6_prefix_flt_rule(data_wan->ipv6_prefix);
 

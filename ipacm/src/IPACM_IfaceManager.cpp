@@ -272,6 +272,9 @@ int IPACM_IfaceManager::create_iface_instance(ipacm_ifacemgr_data *param)
 				IPACM_EvtDispatcher::registr(IPA_HANDLE_WAN_UP_V6, lan);
 				IPACM_EvtDispatcher::registr(IPA_HANDLE_WAN_DOWN, lan);
 				IPACM_EvtDispatcher::registr(IPA_HANDLE_WAN_DOWN_V6, lan);
+#ifdef FEATURE_IPACM_UL_FIREWALL
+				IPACM_EvtDispatcher::registr(IPA_FIREWALL_CHANGE_EVENT, lan);			// register for Firewall change event
+#endif //FEATURE_IPACM_UL_FIREWALL
 #endif
 				IPACM_EvtDispatcher::registr(IPA_CFG_CHANGE_EVENT, lan); 				// register for IPA_CFG_CHANGE event
 				IPACM_EvtDispatcher::registr(IPA_PRIVATE_SUBNET_CHANGE_EVENT, lan); 	// register for IPA_PRIVATE_SUBNET_CHANGE_EVENT event
@@ -303,6 +306,9 @@ int IPACM_IfaceManager::create_iface_instance(ipacm_ifacemgr_data *param)
 				IPACM_EvtDispatcher::registr(IPA_HANDLE_WAN_DOWN_V6, ETH);
 				IPACM_EvtDispatcher::registr(IPA_CRADLE_WAN_MODE_SWITCH, ETH);
 				IPACM_EvtDispatcher::registr(IPA_LINK_DOWN_EVENT, ETH);
+#ifdef FEATURE_IPACM_UL_FIREWALL
+				IPACM_EvtDispatcher::registr(IPA_FIREWALL_CHANGE_EVENT, ETH);			// register for Firewall change event
+#endif //FEATURE_IPACM_UL_FIREWALL
 				/* IPA_LAN_DELETE_SELF should be always last */
 				IPACM_EvtDispatcher::registr(IPA_LAN_DELETE_SELF, ETH);
 				IPACMDBG_H("ipa_LAN (%s):ipa_index (%d) instance open/registr ok\n", ETH->dev_name, ETH->ipa_if_num);
@@ -329,6 +335,9 @@ int IPACM_IfaceManager::create_iface_instance(ipacm_ifacemgr_data *param)
 					IPACM_EvtDispatcher::registr(IPA_HANDLE_WAN_DOWN_V6, odu);
 					IPACM_EvtDispatcher::registr(IPA_CRADLE_WAN_MODE_SWITCH, odu);
 					IPACM_EvtDispatcher::registr(IPA_LINK_DOWN_EVENT, odu);
+#ifdef FEATURE_IPACM_UL_FIREWALL
+					IPACM_EvtDispatcher::registr(IPA_FIREWALL_CHANGE_EVENT, odu);			// register for Firewall change event
+#endif //FEATURE_IPACM_UL_FIREWALL
 					/* IPA_LAN_DELETE_SELF should be always last */
 					IPACM_EvtDispatcher::registr(IPA_LAN_DELETE_SELF, odu);
 					IPACMDBG_H("ipa_LAN (%s):ipa_index (%d) instance open/registr ok\n", odu->dev_name, odu->ipa_if_num);
@@ -360,6 +369,9 @@ int IPACM_IfaceManager::create_iface_instance(ipacm_ifacemgr_data *param)
 				IPACMDBG_H("Creating WLan interface\n");
 				IPACM_Wlan *wl = new IPACM_Wlan(ipa_interface_index);
 				IPACM_EvtDispatcher::registr(IPA_ADDR_ADD_EVENT, wl);
+#ifdef FEATURE_IPACM_UL_FIREWALL
+				IPACM_EvtDispatcher::registr(IPA_FIREWALL_CHANGE_EVENT, wl);			// register for Firewall change event
+#endif //FEATURE_IPACM_UL_FIREWALL
 				IPACM_EvtDispatcher::registr(IPA_ROUTE_DEL_EVENT, wl);
 				IPACM_EvtDispatcher::registr(IPA_WLAN_CLIENT_ADD_EVENT, wl);
 				IPACM_EvtDispatcher::registr(IPA_WLAN_CLIENT_ADD_EVENT_EX, wl);

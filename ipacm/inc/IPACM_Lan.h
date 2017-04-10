@@ -97,6 +97,15 @@ typedef struct _ipa_eth_client
 	eth_client_rt_hdl eth_rt_hdl[0]; /* depends on number of tx properties */
 }ipa_eth_client;
 
+#ifdef FEATURE_IPACM_UL_FIREWALL
+typedef struct ul_firewall {
+	uint32_t ul_firewall_handle[IPACM_MAX_FIREWALL_ENTRIES];
+	bool ul_firewall_installed;
+	bool ul_catch_installed;
+	bool ul_frag_installed;
+	uint32_t ul_frag_handle;
+} ul_firewall_t;
+#endif
 
 /* lan iface */
 class IPACM_Lan : public IPACM_Iface
@@ -112,6 +121,9 @@ public:
 	/* store private-subnet filter rule handlers */
 	uint32_t private_fl_rule_hdl[IPA_MAX_PRIVATE_SUBNET_ENTRIES];
 
+#ifdef FEATURE_IPACM_UL_FIREWALL
+	ul_firewall_t iface_ul_firewall;
+#endif
 	/* LAN-iface's callback function */
 	void event_callback(ipa_cm_event_id event, void *data);
 
@@ -141,6 +153,25 @@ public:
 	/* install UL filter rule from Q6 */
 	virtual int handle_uplink_filter_rule(ipacm_ext_prop* prop, ipa_ip_type iptype, uint8_t xlat_mux_id);
 
+#ifdef FEATURE_IPACM_UL_FIREWALL
+	/* Re Configure and install the UL firewall rules */
+	virtual int re_config_dft_firewall_rules_ul(ipa_ip_type iptype, ul_firewall_t *ul_firewall);
+
+	/* Configure and install the UL firewall rules on other BH */
+	virtual int config_dft_firewall_rules_ul(struct ipa_flt_rule_add *rules, ipa_ip_type iptype, ul_firewall_t *ul_firewall);
+
+	/* Config UL firewall filter rules on LTE BH */
+	virtual int config_dft_firewall_rules_ul_ex(struct ipa_flt_rule_add *rules, ipa_ip_type iptype);
+
+	/* Config UL frag firewall filter rules */
+	virtual int config_wan_frag_firewall_rule_ul_ex(bool install, ipa_ip_type iptype, ul_firewall_t *ul_firewall);
+
+	/* Send the UL firewall rules to Q6 via QMI */
+	virtual int install_wan_firewall_rule_ul(bool enable, ipa_ip_type iptype);
+
+	/* Delete UL firewall filter rules */
+	int delete_uplink_filter_rule_ul(ipa_ip_type iptype, ul_firewall_t *ul_firewall);
+#endif
 	int handle_cradle_wan_mode_switch(bool is_wan_bridge_mode);
 
 	int install_ipv4_icmp_flt_rule();
@@ -385,6 +416,9 @@ private:
 
 	/*handle reset usb-client rt-rules */
 	int handle_lan_client_reset_rt(ipa_ip_type iptype);
+#ifdef FEATURE_IPACM_UL_FIREWALL
+	void change_to_network_order(ipa_ip_type iptype, ipa_rule_attrib* attrib);
+#endif
 };
 
 #endif /* IPACM_LAN_H */

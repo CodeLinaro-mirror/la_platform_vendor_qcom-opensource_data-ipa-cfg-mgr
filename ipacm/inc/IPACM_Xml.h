@@ -116,6 +116,11 @@ if (!(a)) {                                                 \
 #define FirewallEnabled_TAG                  "FirewallEnabled"
 #define FirewallPktsAllowed_TAG              "FirewallPktsAllowed"
 
+#ifdef FEATURE_IPACM_UL_FIREWALL
+#define FirewallDirection_TAG                "FirewallDirection"
+#define UL_TAG                               "UL"
+#define DL_TAG                               "DL"
+#endif
 #define IPFamily_TAG                         "IPFamily"
 #define IPV4SourceAddress_TAG                "IPV4SourceAddress"
 #define IPV4SourceIPAddress_TAG              "IPV4SourceIPAddress"
@@ -213,7 +218,15 @@ typedef enum
 	IP_V4 = 4,
 	IP_V6 = 6
 } firewall_ip_version_enum;
-  
+
+#ifdef FEATURE_IPACM_UL_FIREWALL
+/* Direction of the firewall rule. */
+typedef enum
+{
+	IPACM_MSGR_UL_FIREWALL = 0x01,
+	IPACM_MSGR_DL_FIREWALL = 0x02
+} IPACM_msgr_firewall_direction;
+#endif
 /*---------------------------------------------------------------------------
            Extended FireWall Entry Configuration.
 ---------------------------------------------------------------------------*/
@@ -221,6 +234,9 @@ typedef struct
 {
 	struct ipa_rule_attrib attrib;
 	firewall_ip_version_enum  ip_vsn;
+#ifdef FEATURE_IPACM_UL_FIREWALL
+	IPACM_msgr_firewall_direction firewall_direction;
+#endif
 } IPACM_extd_firewall_entry_conf_t;
 
 

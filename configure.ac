@@ -51,10 +51,9 @@ AC_ARG_ENABLE(target,
 
 if test "x$TARGET" = "xsdx20"; then
     echo "\n UL firewall feature enabled\n"
-    CPPFLAGS="${CPPFLAGS} -DFEATURE_IPACM_UL_FIREWALL"
-    CFLAGS="${CFLAGS} -DFEATURE_IPACM_UL_FIREWALL"
+    CPPFLAGS="${CPPFLAGS} -DFEATURE_IPACM_UL_FIREWALL -DFEATURE_IPACM_PER_CLIENT_STATS"
+    CFLAGS="${CFLAGS} -DFEATURE_IPACM_UL_FIREWALL -DFEATURE_IPACM_PER_CLIENT_STATS"
 fi
-
 
 # Checks for header files.
 AC_CHECK_HEADERS([fcntl.h netinet/in.h sys/ioctl.h unistd.h])

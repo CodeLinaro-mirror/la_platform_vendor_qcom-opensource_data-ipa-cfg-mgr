@@ -186,6 +186,11 @@ if (!(a)) {                                                 \
 #define IP_PassthroughFlag_TAG               "IPPassthroughFlag"
 #define IP_PassthroughMode_TAG               "IPPassthroughMode"
 
+#ifdef FEATURE_IPACM_PER_CLIENT_STATS
+#define LAN_Stats_TAG                        "LANStats"
+#define LAN_Stats_Enable_TAG                 "EnableLANStats"
+#endif
+
 /*---------------------------------------------------------------------------
       IP protocol numbers - use in dss_socket() to identify protocols.
       Also contains the extension header types for IPv6.
@@ -296,6 +301,9 @@ typedef struct  _IPACM_conf_t
 	bool odu_embms_enable;
 	int num_wlan_guest_ap;
 	bool ip_passthrough_mode;
+#ifdef FEATURE_IPACM_PER_CLIENT_STATS
+	bool lan_stats_enable;
+#endif
 } IPACM_conf_t;  
 
 /* This function read IPACM XML configuration*/

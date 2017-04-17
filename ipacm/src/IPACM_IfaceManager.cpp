@@ -275,6 +275,10 @@ int IPACM_IfaceManager::create_iface_instance(ipacm_ifacemgr_data *param)
 #ifdef FEATURE_IPACM_UL_FIREWALL
 				IPACM_EvtDispatcher::registr(IPA_FIREWALL_CHANGE_EVENT, lan);			// register for Firewall change event
 #endif //FEATURE_IPACM_UL_FIREWALL
+#ifdef FEATURE_IPACM_PER_CLIENT_STATS
+				IPACM_EvtDispatcher::registr(IPA_LAN_CLIENT_CONNECT_EVENT, lan);
+				IPACM_EvtDispatcher::registr(IPA_LAN_CLIENT_DISCONNECT_EVENT, lan);
+#endif
 #endif
 				IPACM_EvtDispatcher::registr(IPA_CFG_CHANGE_EVENT, lan); 				// register for IPA_CFG_CHANGE event
 				IPACM_EvtDispatcher::registr(IPA_PRIVATE_SUBNET_CHANGE_EVENT, lan); 	// register for IPA_PRIVATE_SUBNET_CHANGE_EVENT event
@@ -309,6 +313,10 @@ int IPACM_IfaceManager::create_iface_instance(ipacm_ifacemgr_data *param)
 #ifdef FEATURE_IPACM_UL_FIREWALL
 				IPACM_EvtDispatcher::registr(IPA_FIREWALL_CHANGE_EVENT, ETH);			// register for Firewall change event
 #endif //FEATURE_IPACM_UL_FIREWALL
+#ifdef FEATURE_IPACM_PER_CLIENT_STATS
+				IPACM_EvtDispatcher::registr(IPA_LAN_CLIENT_CONNECT_EVENT, ETH);
+				IPACM_EvtDispatcher::registr(IPA_LAN_CLIENT_DISCONNECT_EVENT, ETH);
+#endif
 				/* IPA_LAN_DELETE_SELF should be always last */
 				IPACM_EvtDispatcher::registr(IPA_LAN_DELETE_SELF, ETH);
 				IPACMDBG_H("ipa_LAN (%s):ipa_index (%d) instance open/registr ok\n", ETH->dev_name, ETH->ipa_if_num);
@@ -338,6 +346,10 @@ int IPACM_IfaceManager::create_iface_instance(ipacm_ifacemgr_data *param)
 #ifdef FEATURE_IPACM_UL_FIREWALL
 					IPACM_EvtDispatcher::registr(IPA_FIREWALL_CHANGE_EVENT, odu);			// register for Firewall change event
 #endif //FEATURE_IPACM_UL_FIREWALL
+#ifdef FEATURE_IPACM_PER_CLIENT_STATS
+					IPACM_EvtDispatcher::registr(IPA_LAN_CLIENT_CONNECT_EVENT, odu);
+					IPACM_EvtDispatcher::registr(IPA_LAN_CLIENT_DISCONNECT_EVENT, odu);
+#endif
 					/* IPA_LAN_DELETE_SELF should be always last */
 					IPACM_EvtDispatcher::registr(IPA_LAN_DELETE_SELF, odu);
 					IPACMDBG_H("ipa_LAN (%s):ipa_index (%d) instance open/registr ok\n", odu->dev_name, odu->ipa_if_num);
@@ -401,6 +413,11 @@ int IPACM_IfaceManager::create_iface_instance(ipacm_ifacemgr_data *param)
 #ifndef FEATURE_IPA_ANDROID
 				IPACM_EvtDispatcher::registr(IPA_WLAN_SWITCH_TO_SCC, wl);
 				IPACM_EvtDispatcher::registr(IPA_WLAN_SWITCH_TO_MCC, wl);
+#ifdef FEATURE_IPACM_PER_CLIENT_STATS
+				IPACM_EvtDispatcher::registr(IPA_LAN_CLIENT_CONNECT_EVENT, wl);
+				IPACM_EvtDispatcher::registr(IPA_LAN_CLIENT_DISCONNECT_EVENT, wl);
+				IPACM_EvtDispatcher::registr(IPA_LAN_CLIENT_UPDATE_EVENT, wl);
+#endif
 #else
 				IPACM_EvtDispatcher::registr(IPA_TETHERING_STATS_UPDATE_EVENT, wl);
 #endif

@@ -106,6 +106,7 @@ extern "C"
 #define TCP_SYN_SHIFT 17
 #define TCP_RST_SHIFT 18
 #define NUM_IPV6_PREFIX_FLT_RULE 1
+#define MAX_CMD_SIZE 100
 
 /*---------------------------------------------------------------------------
 										Return values indicating error status

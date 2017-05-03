@@ -94,6 +94,7 @@ private:
 	void CheckSTAClient(const nat_table_entry *, bool *);
 	int CheckNatIface(ipacm_event_data_all *, bool *);
 	void HandleNonNatIPAddr(void *, bool);
+	int GetPacketThreshhold(void);
 
 #ifdef CT_OPT
 	void ProcessCTV6Message(void *);

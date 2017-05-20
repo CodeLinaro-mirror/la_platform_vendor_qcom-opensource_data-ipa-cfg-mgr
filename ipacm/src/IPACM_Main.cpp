@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2013-2016, The Linux Foundation. All rights reserved.
+Copyright (c) 2013-2017, The Linux Foundation. All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are
@@ -230,6 +230,8 @@ void* ipa_driver_msg_notifier(void *param)
 	ipacm_event_data_wlan_ex *data_ex;
 	ipa_get_data_stats_resp_msg_v01 *data_tethering_stats = NULL;
 	ipa_get_apn_data_stats_resp_msg_v01 *data_network_stats = NULL;
+	ipa_ioc_vlan_iface_info *vlan_info = NULL;
+	ipa_ioc_l2tp_vlan_mapping_info *mapping = NULL;
 
 	ipacm_cmd_q_data new_neigh_evt;
 	ipacm_event_data_all* new_neigh_data;
@@ -665,7 +667,6 @@ void* ipa_driver_msg_notifier(void *param)
 			evt_data.event = IPA_NETWORK_STATS_UPDATE_EVENT;
 			evt_data.evt_data = data_network_stats;
 			break;
-
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
 		case IPA_PER_CLIENT_STATS_CONNECT_EVENT:
 			IPACMDBG_H("Received IPA_PER_CLIENT_STATS_CONNECT_EVENT\n");
@@ -701,7 +702,55 @@ void* ipa_driver_msg_notifier(void *param)
 			evt_data.evt_data = data;
 			break;
 #endif
+#ifdef FEATURE_L2TP
+		case ADD_VLAN_IFACE:
+			vlan_info = (ipa_ioc_vlan_iface_info *)malloc(sizeof(*vlan_info));
+			if(vlan_info == NULL)
+			{
+				IPACMERR("Failed to allocate memory.\n");
+				return NULL;
+			}
+			memcpy(vlan_info, buffer + sizeof(struct ipa_msg_meta), sizeof(*vlan_info));
+			evt_data.event = IPA_ADD_VLAN_IFACE;
+			evt_data.evt_data = vlan_info;
+			break;
 
+		case DEL_VLAN_IFACE:
+			vlan_info = (ipa_ioc_vlan_iface_info *)malloc(sizeof(*vlan_info));
+			if(vlan_info == NULL)
+			{
+				IPACMERR("Failed to allocate memory.\n");
+				return NULL;
+			}
+			memcpy(vlan_info, buffer + sizeof(struct ipa_msg_meta), sizeof(*vlan_info));
+			evt_data.event = IPA_DEL_VLAN_IFACE;
+			evt_data.evt_data = vlan_info;
+			break;
+
+		case ADD_L2TP_VLAN_MAPPING:
+			mapping = (ipa_ioc_l2tp_vlan_mapping_info *)malloc(sizeof(*mapping));
+			if(mapping == NULL)
+			{
+				IPACMERR("Failed to allocate memory.\n");
+				return NULL;
+			}
+			memcpy(mapping, buffer + sizeof(struct ipa_msg_meta), sizeof(*mapping));
+			evt_data.event = IPA_ADD_L2TP_VLAN_MAPPING;
+			evt_data.evt_data = mapping;
+			break;
+
+		case DEL_L2TP_VLAN_MAPPING:
+			mapping = (ipa_ioc_l2tp_vlan_mapping_info *)malloc(sizeof(*mapping));
+			if(mapping == NULL)
+			{
+				IPACMERR("Failed to allocate memory.\n");
+				return NULL;
+			}
+			memcpy(mapping, buffer + sizeof(struct ipa_msg_meta), sizeof(*mapping));
+			evt_data.event = IPA_DEL_L2TP_VLAN_MAPPING;
+			evt_data.evt_data = mapping;
+			break;
+#endif
 		default:
 			IPACMDBG_H("Unhandled message type: %d\n", event_hdr.msg_type);
 			continue;
@@ -772,7 +821,7 @@ int main(int argc, char **argv)
 	IPACM_IfaceManager *ifacemgr = new IPACM_IfaceManager();
 
 #ifdef FEATURE_ETH_BRIDGE_LE
-	IPACM_LanToLan* lan2lan = new IPACM_LanToLan();
+	IPACM_LanToLan* lan2lan = IPACM_LanToLan::get_instance();
 #endif
 
 	IPACM_ConntrackClient *cc = IPACM_ConntrackClient::GetInstance();

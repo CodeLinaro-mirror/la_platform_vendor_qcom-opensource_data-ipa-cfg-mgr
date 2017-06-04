@@ -88,6 +88,11 @@ const char *ipacm_event_name[] = {
 	__stringify(IPA_WAN_XLAT_CONNECT_EVENT),               /* ipacm_event_data_fid */
 	__stringify(IPA_TETHERING_STATS_UPDATE_EVENT),         /* ipacm_event_data_fid */
 	__stringify(IPA_NETWORK_STATS_UPDATE_EVENT),           /* ipacm_event_data_fid */
+#ifdef FEATURE_IPACM_PER_CLIENT_STATS
+	__stringify(IPA_LAN_CLIENT_CONNECT_EVENT),             /* ipacm_event_data_mac */
+	__stringify(IPA_LAN_CLIENT_DISCONNECT_EVENT),          /* ipacm_event_data_mac */
+	__stringify(IPA_LAN_CLIENT_UPDATE_EVENT),              /* ipacm_event_data_mac */
+#endif
 	__stringify(IPA_EXTERNAL_EVENT_MAX),
 	__stringify(IPA_HANDLE_WAN_UP),                        /* ipacm_event_iface_up  */
 	__stringify(IPA_HANDLE_WAN_DOWN),                      /* ipacm_event_iface_up  */
@@ -117,6 +122,11 @@ IPACM_Config::IPACM_Config()
 	memset(&ipa_rm_tbl, 0, sizeof(ipa_rm_tbl));
 	ipa_rm_a2_check=0;
 	ipacm_odu_enable = false;
+#ifdef FEATURE_IPACM_PER_CLIENT_STATS
+	ipacm_lan_stats_enable = false;
+	ipacm_lan_stats_enable_set = false;
+	ipacm_lan_stats_enable_wan_set = false;
+#endif
 	ipacm_odu_router_mode = false;
 	ipa_num_wlan_guest_ap = 0;
 
@@ -287,6 +297,16 @@ int IPACM_Config::Init(void)
 
 	ipacm_ip_passthrough_mode = cfg->ip_passthrough_mode;
 	IPACMDBG_H("ipacm_ip_passthrough_mode %d. \n", ipacm_ip_passthrough_mode);
+
+#ifdef FEATURE_IPACM_PER_CLIENT_STATS
+	if (!ipacm_lan_stats_enable_set)
+	{
+		/* Read the configuration only once. */
+		ipacm_lan_stats_enable = cfg->lan_stats_enable;
+		ipacm_lan_stats_enable_set = true;
+		IPACMDBG_H("ipacm_lan_stats_enable %d. \n", ipacm_lan_stats_enable);
+	}
+#endif
 
 	ipa_num_wlan_guest_ap = cfg->num_wlan_guest_ap;
 	IPACMDBG_H("ipa_num_wlan_guest_ap %d\n",ipa_num_wlan_guest_ap);

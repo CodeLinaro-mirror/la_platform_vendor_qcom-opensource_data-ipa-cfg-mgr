@@ -219,6 +219,9 @@ void* ipa_driver_msg_notifier(void *param)
 	struct ipa_wlan_msg_ex *event_ex= NULL;
 	struct ipa_get_data_stats_resp_msg_v01 event_data_stats;
 	struct ipa_get_apn_data_stats_resp_msg_v01 event_network_stats;
+#ifdef FEATURE_IPACM_PER_CLIENT_STATS
+	struct ipa_lan_client_msg event_lan_client;
+#endif
 
 	ipacm_cmd_q_data evt_data;
 	ipacm_event_data_mac *data = NULL;
@@ -662,6 +665,42 @@ void* ipa_driver_msg_notifier(void *param)
 			evt_data.event = IPA_NETWORK_STATS_UPDATE_EVENT;
 			evt_data.evt_data = data_network_stats;
 			break;
+
+#ifdef FEATURE_IPACM_PER_CLIENT_STATS
+		case IPA_PER_CLIENT_STATS_CONNECT_EVENT:
+			IPACMDBG_H("Received IPA_PER_CLIENT_STATS_CONNECT_EVENT\n");
+			memcpy(&event_lan_client, buffer + sizeof(struct ipa_msg_meta), sizeof(struct ipa_lan_client_msg));
+			data = (ipacm_event_data_mac *)malloc(sizeof(ipacm_event_data_mac));
+			if(data == NULL)
+			{
+				IPACMERR("unable to allocate memory for event data\n");
+				return NULL;
+			}
+			memcpy(data->mac_addr,
+						 event_lan_client.mac,
+						 sizeof(event_lan_client.mac));
+			ipa_get_if_index(event_lan_client.lanIface, &(data->if_index));
+			evt_data.event = IPA_LAN_CLIENT_CONNECT_EVENT;
+			evt_data.evt_data = data;
+			break;
+
+		case IPA_PER_CLIENT_STATS_DISCONNECT_EVENT:
+			IPACMDBG_H("Received IPA_PER_CLIENT_STATS_DISCONNECT_EVENT\n");
+			memcpy(&event_lan_client, buffer + sizeof(struct ipa_msg_meta), sizeof(struct ipa_lan_client_msg));
+			data = (ipacm_event_data_mac *)malloc(sizeof(ipacm_event_data_mac));
+			if(data == NULL)
+			{
+				IPACMERR("unable to allocate memory for event data\n");
+				return NULL;
+			}
+			memcpy(data->mac_addr,
+						 event_lan_client.mac,
+						 sizeof(event_lan_client.mac));
+			ipa_get_if_index(event_lan_client.lanIface, &(data->if_index));
+			evt_data.event = IPA_LAN_CLIENT_DISCONNECT_EVENT;
+			evt_data.evt_data = data;
+			break;
+#endif
 
 		default:
 			IPACMDBG_H("Unhandled message type: %d\n", event_hdr.msg_type);

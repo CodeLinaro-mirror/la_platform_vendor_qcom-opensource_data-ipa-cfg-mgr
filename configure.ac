@@ -42,7 +42,19 @@ if (test "x${with_glib}" = "xyes"); then
 fi
 
 AM_CONDITIONAL(USE_GLIB, test "x${with_glib}" = "xyes")
-	  
+
+AC_ARG_ENABLE(target,
+    [AS_HELP_STRING([--enable-target=TARGET], [Specify the target product to build])],
+    [TARGET=$enableval],
+    [TARGET=none]
+)
+
+if test "x$TARGET" = "xsdx20"; then
+    echo "\n UL firewall feature enabled\n"
+    CPPFLAGS="${CPPFLAGS} -DFEATURE_IPACM_UL_FIREWALL -DFEATURE_IPACM_PER_CLIENT_STATS"
+    CFLAGS="${CFLAGS} -DFEATURE_IPACM_UL_FIREWALL -DFEATURE_IPACM_PER_CLIENT_STATS"
+fi
+
 # Checks for header files.
 AC_CHECK_HEADERS([fcntl.h netinet/in.h sys/ioctl.h unistd.h])
 

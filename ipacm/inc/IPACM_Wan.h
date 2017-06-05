@@ -100,7 +100,14 @@ public:
 	static uint32_t curr_wan_ip;
 	IPACM_Wan(int, ipacm_wan_iface_type, uint8_t *);
 	virtual ~IPACM_Wan();
+#ifdef FEATURE_IPACM_UL_FIREWALL
+	/* IPACM firewall Configuration file*/
+	static IPACM_firewall_conf_t firewall_config_ul;
 
+	static int read_firewall_filter_rules_ul(void);
+
+	static bool check_dft_firewall_rules_attr_mask_ul(IPACM_firewall_conf_t *firewall_config);
+#endif
 	static bool isWanUP(int ipa_if_num_tether)
 	{
 #ifdef FEATURE_IPA_ANDROID
@@ -156,14 +163,23 @@ public:
 
 	static struct ipa_flt_rule_add flt_rule_v4[IPA_MAX_FLT_RULE];
 	static struct ipa_flt_rule_add flt_rule_v6[IPA_MAX_FLT_RULE];
+#ifdef FEATURE_IPACM_UL_FIREWALL
+	static struct ipa_flt_rule_add firewall_flt_rule_v6_ul[IPACM_MAX_FIREWALL_ENTRIES+1];
+#endif
 
 	static int num_v4_flt_rule;
 	static int num_v6_flt_rule;
+#ifdef FEATURE_IPACM_UL_FIREWALL
+	static int num_firewall_v6_ul;
+#endif
 
 	ipacm_wan_iface_type m_is_sta_mode;
 	static bool backhaul_is_sta_mode;
 	static bool is_ext_prop_set;
 	static uint32_t backhaul_ipv6_prefix[2];
+#ifdef FEATURE_IPACM_UL_FIREWALL
+	static int m_fd_ipa_ul;
+#endif
 
 	static bool embms_is_on;
 	static bool backhaul_is_wan_bridge;
@@ -180,6 +196,9 @@ public:
 	static int ipa_if_num_tether_v6[IPA_MAX_IFACE_ENTRIES];
 #endif
 
+#ifdef FEATURE_IPACM_UL_FIREWALL
+	static bool is_v6_ul_firewall_sent_to_q6;
+#endif
 private:
 
 	bool is_ipv6_frag_firewall_flt_rule_installed;

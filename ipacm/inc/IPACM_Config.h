@@ -117,6 +117,12 @@ public:
 
 	bool ipacm_ip_passthrough_mode;
 
+#ifdef FEATURE_IPACM_PER_CLIENT_STATS
+	bool ipacm_lan_stats_enable;
+	bool ipacm_lan_stats_enable_set;
+	bool ipacm_lan_stats_enable_wan_set;
+#endif
+
 	int ipa_nat_iface_entries;
 
 	/* Store the total number of wlan guest ap configured */

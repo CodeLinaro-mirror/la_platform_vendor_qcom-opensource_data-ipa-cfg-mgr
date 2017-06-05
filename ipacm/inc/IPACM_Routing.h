@@ -55,6 +55,9 @@ public:
 	~IPACM_Routing();
 
 	bool AddRoutingRule(struct ipa_ioc_add_rt_rule *ruleTable);
+#ifdef FEATURE_IPACM_PER_CLIENT_STATS
+	bool AddRoutingRuleExt(struct ipa_ioc_add_rt_rule_ext *ruleTable);
+#endif
 	bool DeleteRoutingRule(struct ipa_ioc_del_rt_rule *ruleTable);
 
 	bool Commit(enum ipa_ip_type ip);

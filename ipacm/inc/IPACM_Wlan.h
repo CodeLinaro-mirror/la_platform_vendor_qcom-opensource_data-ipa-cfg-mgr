@@ -71,6 +71,15 @@ typedef struct _ipa_wlan_client
 	bool ipv4_header_set;
 	bool ipv6_header_set;
 	bool power_save_set;
+#ifdef FEATURE_IPACM_PER_CLIENT_STATS
+	bool ipv4_ul_rules_set;
+	bool ipv6_ul_rules_set;
+	/* store ipv4 UL filter rule handlers from Q6*/
+	uint32_t wan_ul_fl_rule_hdl_v4[MAX_WAN_UL_FILTER_RULES];
+	/* store ipv6 UL filter rule handlers from Q6*/
+	uint32_t wan_ul_fl_rule_hdl_v6[MAX_WAN_UL_FILTER_RULES];
+	int8_t lan_stats_idx;
+#endif
 	wlan_client_rt_hdl wifi_rt_hdl[0]; /* depends on number of tx properties */
 }ipa_wlan_client;
 
@@ -88,6 +97,45 @@ public:
 	void event_callback(ipa_cm_event_id event, void *data);
 
 	bool is_guest_ap();
+
+#ifdef FEATURE_IPACM_PER_CLIENT_STATS
+	/* install UL filter rule from Q6 per client */
+	int install_uplink_filter_rule_per_client
+	(
+		ipacm_ext_prop* prop,
+		ipa_ip_type iptype,
+		uint8_t xlat_mux_id,
+		uint8_t *mac_addr
+	);
+
+	/* install UL filter rule from Q6 for all clients */
+	int install_uplink_filter_rule
+	(
+		ipacm_ext_prop* prop,
+		ipa_ip_type iptype,
+		uint8_t xlat_mux_id
+	);
+
+	/* Delete UL filter rule from Q6 for all clients */
+	int delete_uplink_filter_rule
+	(
+		ipa_ip_type iptype
+	);
+
+	/* Delet UL filter rule from Q6 per client */
+	int delete_uplink_filter_rule_per_client
+	(
+		ipa_ip_type iptype,
+		uint8_t *mac_addr
+	);
+
+	/* handle lan client connect event. */
+	int handle_lan_client_connect(uint8_t *mac_addr);
+
+	/* handle lan client disconnect event. */
+	int handle_lan_client_disconnect(uint8_t *mac_addr);
+
+#endif
 
 private:
 
@@ -108,6 +156,13 @@ private:
 	static int num_wlan_ap_iface;
 
 	NatApp *Nat_App;
+
+#ifdef FEATURE_IPACM_PER_CLIENT_STATS
+	/* Clients which take HW path. */
+	static ipa_lan_client_idx active_lan_client_index[IPA_MAX_NUM_HW_PATH_CLIENTS];
+	/* Clients which take SW path. */
+	static ipa_lan_client_idx inactive_lan_client_index[IPA_MAX_NUM_HW_PATH_CLIENTS];
+#endif
 
 	inline ipa_wlan_client* get_client_memptr(ipa_wlan_client *param, int cnt)
 	{
@@ -211,6 +266,218 @@ private:
 		return IPACM_SUCCESS;
 	}
 
+#ifdef FEATURE_IPACM_PER_CLIENT_STATS
+		inline bool is_lan_stats_index_available()
+		{
+			int cnt;
+	
+			for(cnt = 0; cnt < IPA_MAX_NUM_HW_PATH_CLIENTS; cnt++)
+			{
+				if (IPACM_Wlan::active_lan_client_index[cnt].lan_stats_idx == -1) {
+					IPACMDBG_H("Available free index :%d\n", cnt);
+					return true;
+				}
+			}
+	
+			IPACMDBG_H("No free index available\n");
+			return false;
+		}
+	
+		inline int8_t get_free_active_lan_stats_index(uint8_t *mac_addr, int ipa_if_num)
+		{
+			int cnt;
+	
+			if (!IPACM_Iface::ipacmcfg->ipacm_lan_stats_enable)
+			{
+				IPACMDBG_H("LAN stats functionality is not enabled.\n");
+				return -1;
+			}
+	
+			IPACMDBG_H("Received mac_addr MAC %02x:%02x:%02x:%02x:%02x:%02x\n",
+					mac_addr[0], mac_addr[1], mac_addr[2],
+					mac_addr[3], mac_addr[4], mac_addr[5]);
+	
+			for(cnt = 0; cnt < IPA_MAX_NUM_HW_PATH_CLIENTS; cnt++)
+			{
+				if (IPACM_Wlan::active_lan_client_index[cnt].lan_stats_idx == -1) {
+					IPACMDBG_H("Got active lan stats index :%d, reserve it\n", cnt);
+					IPACM_Wlan::active_lan_client_index[cnt].lan_stats_idx = cnt;
+					memcpy(IPACM_Wlan::active_lan_client_index[cnt].mac,
+							mac_addr,
+							IPA_MAC_ADDR_SIZE);
+					IPACM_Wlan::active_lan_client_index[cnt].ipa_if_num = ipa_if_num;
+					return cnt;
+				}
+			}
+	
+			IPACMDBG_H("index not available\n");
+			return -1;
+		}
+	
+		inline int8_t get_free_inactive_lan_stats_index(uint8_t *mac_addr)
+		{
+			int cnt;
+	
+			if (!IPACM_Iface::ipacmcfg->ipacm_lan_stats_enable)
+			{
+				IPACMDBG_H("LAN stats functionality is not enabled.\n");
+				return -1;
+			}
+	
+			IPACMDBG_H("Received mac_addr MAC %02x:%02x:%02x:%02x:%02x:%02x\n",
+					mac_addr[0], mac_addr[1], mac_addr[2],
+					mac_addr[3], mac_addr[4], mac_addr[5]);
+	
+			for(cnt = 0; cnt < IPA_MAX_NUM_HW_PATH_CLIENTS; cnt++)
+			{
+				if (IPACM_Wlan::inactive_lan_client_index[cnt].lan_stats_idx == -1) {
+					IPACMDBG_H("Got inactive lan stats index :%d, reserve it\n", cnt);
+					IPACM_Wlan::inactive_lan_client_index[cnt].lan_stats_idx = cnt;
+					memcpy(IPACM_Wlan::inactive_lan_client_index[cnt].mac,
+							mac_addr,
+							IPA_MAC_ADDR_SIZE);
+					IPACM_Wlan::inactive_lan_client_index[cnt].ipa_if_num = ipa_if_num;
+					return cnt;
+				}
+			}
+	
+			IPACMDBG_H("index not available\n");
+			return -1;
+		}
+	
+		inline int8_t get_lan_stats_index(uint8_t *mac_addr)
+		{
+			int cnt;
+	
+			if (!IPACM_Iface::ipacmcfg->ipacm_lan_stats_enable)
+			{
+				IPACMDBG_H("LAN stats functionality is not enabled.\n");
+				return -1;
+			}
+	
+			IPACMDBG_H("Received mac_addr MAC %02x:%02x:%02x:%02x:%02x:%02x\n",
+					mac_addr[0], mac_addr[1], mac_addr[2],
+					mac_addr[3], mac_addr[4], mac_addr[5]);
+	
+			for(cnt = 0; cnt < IPA_MAX_NUM_HW_PATH_CLIENTS; cnt++)
+			{
+				if (memcmp(IPACM_Wlan::active_lan_client_index[cnt].mac,
+							mac_addr,
+							IPA_MAC_ADDR_SIZE) == 0) {
+					IPACMDBG_H("Got lan stats index :%d, return\n", cnt);
+					IPACM_Wlan::active_lan_client_index[cnt].lan_stats_idx = cnt;
+					memcpy(IPACM_Wlan::active_lan_client_index[cnt].mac,
+							mac_addr,
+							IPA_MAC_ADDR_SIZE);
+					return cnt;
+				}
+			}
+	
+			IPACMDBG_H("index not available\n");
+			return -1;
+		}
+	
+		inline int get_available_inactive_lan_client(uint8_t *mac_addr, int *ipa_if_num)
+		{
+			int cnt;
+	
+			if (!IPACM_Iface::ipacmcfg->ipacm_lan_stats_enable)
+			{
+				IPACMDBG_H("LAN stats functionality is not enabled.\n");
+				return IPACM_FAILURE;
+			}
+	
+			IPACMDBG_H("Received mac_addr MAC %02x:%02x:%02x:%02x:%02x:%02x\n",
+					mac_addr[0], mac_addr[1], mac_addr[2],
+					mac_addr[3], mac_addr[4], mac_addr[5]);
+	
+			for(cnt = 0; cnt < IPA_MAX_NUM_HW_PATH_CLIENTS; cnt++)
+			{
+				if (IPACM_Wlan::inactive_lan_client_index[cnt].lan_stats_idx != -1) {
+					IPACMDBG_H("Got inactive lan stats index :%d, return the mac\n", cnt);
+					memcpy(mac_addr, IPACM_Wlan::inactive_lan_client_index[cnt].mac, IPA_MAC_ADDR_SIZE);
+					*ipa_if_num = IPACM_Wlan::inactive_lan_client_index[cnt].ipa_if_num;
+					return IPACM_SUCCESS;
+				}
+			}
+	
+			IPACMDBG_H("No inactive client\n");
+			return IPACM_FAILURE;
+		}
+	
+		inline int8_t reset_active_lan_stats_index(int8_t idx, uint8_t *mac_addr)
+		{
+			if (!IPACM_Iface::ipacmcfg->ipacm_lan_stats_enable)
+			{
+				IPACMDBG_H("LAN stats functionality is not enabled.\n");
+				return IPACM_FAILURE;
+			}
+	
+			IPACMDBG_H("Received mac_addr MAC %02x:%02x:%02x:%02x:%02x:%02x\n",
+					mac_addr[0], mac_addr[1], mac_addr[2],
+					mac_addr[3], mac_addr[4], mac_addr[5]);
+	
+			if (idx < 0 || idx >= IPA_MAX_NUM_HW_PATH_CLIENTS ||
+				memcmp(IPACM_Wlan::active_lan_client_index[idx].mac,
+								mac_addr,
+								IPA_MAC_ADDR_SIZE))
+			{
+				IPACMDBG_H("Index :%d invalid\n", idx);
+				return IPACM_FAILURE;
+			}
+			memset(&IPACM_Wlan::active_lan_client_index[idx], -1, sizeof(ipa_lan_client_idx));
+			return IPACM_SUCCESS;
+		}
+	
+		inline int8_t reset_inactive_lan_stats_index(uint8_t *mac_addr)
+		{
+			int cnt;
+	
+			if (!IPACM_Iface::ipacmcfg->ipacm_lan_stats_enable)
+			{
+				IPACMDBG_H("LAN stats functionality is not enabled.\n");
+				return IPACM_FAILURE;
+			}
+	
+			IPACMDBG_H("Received mac_addr MAC %02x:%02x:%02x:%02x:%02x:%02x\n",
+					mac_addr[0], mac_addr[1], mac_addr[2],
+					mac_addr[3], mac_addr[4], mac_addr[5]);
+	
+			for(cnt = 0; cnt < IPA_MAX_NUM_HW_PATH_CLIENTS; cnt++)
+			{
+				if (memcmp(IPACM_Wlan::inactive_lan_client_index[cnt].mac,
+								mac_addr,
+								IPA_MAC_ADDR_SIZE) == 0)
+				{
+					memset(&IPACM_Wlan::inactive_lan_client_index[cnt], -1, sizeof(ipa_lan_client_idx));
+					return IPACM_SUCCESS;
+				}
+			}
+			return IPACM_FAILURE;
+		}
+	
+		inline void reset_lan_stats_index()
+		{
+			int i;
+	
+			if (!IPACM_Iface::ipacmcfg->ipacm_lan_stats_enable)
+			{
+				IPACMDBG_H("LAN stats functionality is not enabled.\n");
+				return;
+			}
+	
+			/* Reset everything based on ipa_if_num. */
+			for (i = 0; i < IPA_MAX_NUM_HW_PATH_CLIENTS; i++)
+			{
+				if (IPACM_Wlan::active_lan_client_index[i].ipa_if_num == ipa_if_num)
+					memset(&IPACM_Wlan::active_lan_client_index[i], -1, sizeof(ipa_lan_client_idx));
+				if (IPACM_Wlan::inactive_lan_client_index[i].ipa_if_num == ipa_if_num)
+					memset(&IPACM_Wlan::inactive_lan_client_index[i], -1, sizeof(ipa_lan_client_idx));
+			}
+		}
+	
+#endif
+
 	/* for handle wifi client initial,copy all partial headers (tx property) */
 	int handle_wlan_client_init_ex(ipacm_event_data_wlan_ex *data);
 
@@ -219,6 +486,11 @@ private:
 
 	/*handle wifi client routing rule*/
 	int handle_wlan_client_route_rule(uint8_t *mac_addr, ipa_ip_type iptype);
+
+#ifdef FEATURE_IPACM_PER_CLIENT_STATS
+	/*handle wifi client routing rule with rule id*/
+	int handle_wlan_client_route_rule_ext(uint8_t *mac_addr, ipa_ip_type iptype);
+#endif
 
 	/*handle wifi client power-save mode*/
 	int handle_wlan_client_pwrsave(uint8_t *mac_addr);

@@ -112,6 +112,49 @@ bool IPACM_Routing::AddRoutingRule(struct ipa_ioc_add_rt_rule *ruleTable)
 	return true;
 }
 
+#ifdef FEATURE_IPACM_PER_CLIENT_STATS
+bool IPACM_Routing::AddRoutingRuleExt(struct ipa_ioc_add_rt_rule_ext *ruleTable)
+{
+	int retval = 0, cnt=0;
+	bool isInvalid = false;
+
+	if (!DeviceNodeIsOpened())
+	{
+		IPACMERR("Device is not opened\n");
+		return false;
+	}
+
+	for(cnt=0; cnt<ruleTable->num_rules; cnt++)
+	{
+		if(ruleTable->rules[cnt].rule.dst > IPA_CLIENT_MAX)
+		{
+			IPACMERR("Invalid dst pipe, Rule:%d  dst_pipe:%d\n", cnt, ruleTable->rules[cnt].rule.dst);
+			isInvalid = true;
+		}
+	}
+
+	if(isInvalid)
+	{
+		return false;
+	}
+
+	retval = ioctl(m_fd, IPA_IOC_ADD_RT_RULE_EXT, ruleTable);
+	if (retval)
+	{
+		IPACMERR("Failed adding routing rule %p\n", ruleTable);
+		return false;
+	}
+
+	for(cnt=0; cnt<ruleTable->num_rules; cnt++)
+	{
+		IPACMDBG("Rule:%d  dst_pipe:%d\n", cnt, ruleTable->rules[cnt].rule.dst);
+	}
+
+	IPACMDBG_H("Added routing rule %p\n", ruleTable);
+	return true;
+}
+#endif
+
 bool IPACM_Routing::DeleteRoutingRule(struct ipa_ioc_del_rt_rule *ruleTable)
 {
 	int retval = 0;

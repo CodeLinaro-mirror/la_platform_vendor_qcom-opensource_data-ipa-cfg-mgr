@@ -59,8 +59,16 @@ uint32_t IPACM_Wan::curr_wan_ip = 0;
 int IPACM_Wan::num_v4_flt_rule = 0;
 int IPACM_Wan::num_v6_flt_rule = 0;
 
+#ifdef FEATURE_IPACM_UL_FIREWALL
+int IPACM_Wan::num_firewall_v6_ul = 0;
+#endif //FEATURE_IPACM_UL_FIREWALL
+
 struct ipa_flt_rule_add IPACM_Wan::flt_rule_v4[IPA_MAX_FLT_RULE];
 struct ipa_flt_rule_add IPACM_Wan::flt_rule_v6[IPA_MAX_FLT_RULE];
+
+#ifdef FEATURE_IPACM_UL_FIREWALL
+struct ipa_flt_rule_add IPACM_Wan::firewall_flt_rule_v6_ul[IPACM_MAX_FIREWALL_ENTRIES+1];
+#endif //FEATURE_IPACM_UL_FIREWALL
 
 char IPACM_Wan::wan_up_dev_name[IF_NAME_LEN];
 
@@ -74,6 +82,14 @@ bool IPACM_Wan::embms_is_on = false;
 bool IPACM_Wan::backhaul_is_wan_bridge = false;
 
 uint32_t IPACM_Wan::backhaul_ipv6_prefix[2];
+
+#ifdef FEATURE_IPACM_UL_FIREWALL
+IPACM_firewall_conf_t IPACM_Wan::firewall_config_ul;
+
+bool IPACM_Wan::is_v6_ul_firewall_sent_to_q6;
+
+int IPACM_Wan::m_fd_ipa_ul = 0;
+#endif //FEATURE_IPACM_UL_FIREWALL
 
 #ifdef FEATURE_IPA_ANDROID
 int	IPACM_Wan::ipa_if_num_tether_v4_total = 0;
@@ -120,6 +136,10 @@ IPACM_Wan::IPACM_Wan(int iface_index,
 	memset(wan_v6_addr_gw, 0, sizeof(wan_v6_addr_gw));
 	ext_prop = NULL;
 	is_ipv6_frag_firewall_flt_rule_installed = false;
+
+#ifdef FEATURE_IPACM_UL_FIREWALL
+	is_v6_ul_firewall_sent_to_q6 = false;
+#endif //FEATURE_IPACM_UL_FIREWALL
 	ipv6_frag_firewall_flt_rule_hdl = 0;
 
 	num_wan_client = 0;
@@ -159,7 +179,9 @@ IPACM_Wan::IPACM_Wan(int iface_index,
 	{
 		IPACMERR("Failed to open %s\n",IPA_DEVICE_NAME);
 	}
-
+#ifdef FEATURE_IPACM_UL_FIREWALL
+	m_fd_ipa_ul = m_fd_ipa;
+#endif //FEATURE_IPACM_UL_FIREWALL
 	if(IPACM_Iface::ipacmcfg->iface_table[ipa_if_num].if_cat == EMBMS_IF)
 	{
 		IPACMDBG(" IPACM->IPACM_Wan_eMBMS(%d)\n", ipa_if_num);
@@ -1874,7 +1896,13 @@ bool IPACM_Wan::check_dft_firewall_rules_attr_mask(IPACM_firewall_conf_t *firewa
 
 	for (int i = 0; i < firewall_config->num_extd_firewall_entries; i++)
 	{
+#ifndef FEATURE_IPACM_UL_FIREWALL
 		if (firewall_config->extd_firewall_entries[i].ip_vsn == 6)
+#else //n FEATURE_IPACM_UL_FIREWALL
+		if (firewall_config->extd_firewall_entries[i].ip_vsn == 6 &&
+			firewall_config->extd_firewall_entries[i].firewall_direction
+			!= IPACM_MSGR_UL_FIREWALL)
+#endif //n FEATURE_IPACM_UL_FIREWALL
 		{
 			if (firewall_config->extd_firewall_entries[i].attrib.attrib_mask & attrib_mask)
 			{
@@ -1887,12 +1915,45 @@ bool IPACM_Wan::check_dft_firewall_rules_attr_mask(IPACM_firewall_conf_t *firewa
 	return false;
 }
 
+#ifdef FEATURE_IPACM_UL_FIREWALL
+/* For checking attribute mask field in firewall rules for IPv6 UL only */
+bool IPACM_Wan::check_dft_firewall_rules_attr_mask_ul(IPACM_firewall_conf_t *firewall_config)
+{
+	uint32_t attrib_mask = 0ul;
+	attrib_mask =	IPA_FLT_SRC_PORT_RANGE |
+			IPA_FLT_DST_PORT_RANGE |
+			IPA_FLT_TYPE |
+			IPA_FLT_CODE |
+			IPA_FLT_SPI |
+			IPA_FLT_SRC_PORT |
+			IPA_FLT_DST_PORT;
+
+	for (int i = 0; i < firewall_config->num_extd_firewall_entries; i++)
+	{
+		if (firewall_config->extd_firewall_entries[i].ip_vsn == 6 &&
+			firewall_config->extd_firewall_entries[i].firewall_direction
+			== IPACM_MSGR_UL_FIREWALL)
+		{
+			if (firewall_config->extd_firewall_entries[i].attrib.attrib_mask & attrib_mask)
+			{
+				IPACMDBG_H("IHL based attribute mask is found: install IPv6 frag firewall rule \n");
+				return true;
+			}
+		}
+	}
+	IPACMDBG_H("IHL based attribute mask is not found: no IPv6 frag firewall rule \n");
+	return false;
+}
+#endif //FEATURE_IPACM_UL_FIREWALL
+
 /* for STA mode: add firewall rules */
 int IPACM_Wan::config_dft_firewall_rules(ipa_ip_type iptype)
 {
 	struct ipa_flt_rule_add flt_rule_entry;
 	int i, rule_v4 = 0, rule_v6 = 0, len;
-
+#ifdef FEATURE_IPACM_UL_FIREWALL
+	int rule_v6_ul = 0;
+#endif //FEATURE_IPACM_UL_FIREWALL
 	IPACMDBG_H("ip-family: %d; \n", iptype);
 
 	if (rx_prop == NULL)
@@ -1918,12 +1979,23 @@ int IPACM_Wan::config_dft_firewall_rules(ipa_ip_type iptype)
 		{
 			rule_v4++;
 		}
+#ifdef FEATURE_IPACM_UL_FIREWALL
+		else if (firewall_config.extd_firewall_entries[i].firewall_direction ==
+			IPACM_MSGR_UL_FIREWALL)
+		{
+			rule_v6_ul++;
+		}
+#endif //FEATURE_IPACM_UL_FIREWALL
 		else
 		{
 			rule_v6++;
 		}
 	}
-	IPACMDBG_H("firewall rule v4:%d v6:%d total:%d\n", rule_v4, rule_v6, firewall_config.num_extd_firewall_entries);
+	IPACMDBG_H("firewall rule v4:%d v6:%d total:%d\n",
+		rule_v4, rule_v6, firewall_config.num_extd_firewall_entries);
+#ifdef FEATURE_IPACM_UL_FIREWALL
+	IPACMDBG_H("UL firewall rule cnt v6ul:%d\n", rule_v6_ul);
+#endif //FEATURE_IPACM_UL_FIREWALL
 		}
 		else
 		{
@@ -2417,7 +2489,13 @@ int IPACM_Wan::config_dft_firewall_rules(ipa_ip_type iptype)
 			rule_v6 = 0;
 			for (i = 0; i < firewall_config.num_extd_firewall_entries; i++)
 			{
-				if (firewall_config.extd_firewall_entries[i].ip_vsn == 6)
+#ifndef FEATURE_IPACM_UL_FIREWALL
+			if (firewall_config.extd_firewall_entries[i].ip_vsn == 6)
+#else //n FEATURE_IPACM_UL_FIREWALL
+			if (firewall_config.extd_firewall_entries[i].ip_vsn == 6 &&
+					firewall_config.extd_firewall_entries[i].firewall_direction !=
+					IPACM_MSGR_UL_FIREWALL)
+#endif //n FEATURE_IPACM_UL_FIREWALL
 				{
 					memset(&flt_rule_entry, 0, sizeof(struct ipa_flt_rule_add));
 
@@ -2942,7 +3020,13 @@ int IPACM_Wan::config_dft_firewall_rules_ex(struct ipa_flt_rule_add *rules, int 
 		{
 			for (i = 0; i < firewall_config.num_extd_firewall_entries; i++)
 			{
+#ifndef FEATURE_IPACM_UL_FIREWALL
 				if (firewall_config.extd_firewall_entries[i].ip_vsn == 6)
+#else // n FEATURE_IPACM_UL_FIREWALL
+				if (firewall_config.extd_firewall_entries[i].ip_vsn == 6 &&
+					firewall_config.extd_firewall_entries[i].firewall_direction
+					!= IPACM_MSGR_UL_FIREWALL)
+#endif //n FEATURE_IPACM_UL_FIREWALL
 				{
 					memset(&flt_rule_entry, 0, sizeof(struct ipa_flt_rule_add));
 
@@ -3136,6 +3220,47 @@ int IPACM_Wan::config_dft_firewall_rules_ex(struct ipa_flt_rule_add *rules, int 
 	return IPACM_SUCCESS;
 }
 
+#ifdef FEATURE_IPACM_UL_FIREWALL
+int IPACM_Wan::read_firewall_filter_rules_ul(void)
+{
+	int i = 0;
+	/* default firewall is disable and the rule action is drop */
+	memset(&firewall_config_ul, 0, sizeof(firewall_config_ul));
+	strlcpy(firewall_config_ul.firewall_config_file, "/data/mobileap_firewall.xml", sizeof(firewall_config_ul.firewall_config_file));
+
+	if (firewall_config_ul.firewall_config_file)
+	{
+		IPACMDBG_H("Firewall XML file is %s \n", firewall_config_ul.firewall_config_file);
+		if (IPACM_SUCCESS == IPACM_read_firewall_xml(firewall_config_ul.firewall_config_file, &firewall_config_ul))
+		{
+			IPACMDBG_H("QCMAP Firewall XML read OK \n");
+			IPACMDBG_H("Existing firewall rule v6_ul:%d\n", num_firewall_v6_ul);
+			num_firewall_v6_ul = 0;
+			/* find the number of IPv6 UL firewall rules */
+			for (i = 0; i < firewall_config_ul.num_extd_firewall_entries; i++)
+			{
+				if (firewall_config_ul.extd_firewall_entries[i].ip_vsn == 6 &&
+					firewall_config_ul.extd_firewall_entries[i].firewall_direction ==
+					IPACM_MSGR_UL_FIREWALL)
+				{
+					num_firewall_v6_ul++;
+				}
+			}
+			IPACMDBG_H("firewall rule v6_ul:%d total:%d\n", num_firewall_v6_ul, firewall_config_ul.num_extd_firewall_entries);
+		}
+		else
+		{
+			IPACMERR("QCMAP Firewall XML read failed, no that file, use default configuration \n");
+		}
+	}
+	else
+	{
+		IPACMERR("No firewall xml mentioned \n");
+		return IPACM_FAILURE;
+	}
+
+}
+#endif //FEATURE_IPACM_UL_FIREWALL
 int IPACM_Wan::init_fl_rule_ex(ipa_ip_type iptype)
 {
 	int res = IPACM_SUCCESS;

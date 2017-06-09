@@ -256,6 +256,84 @@ fail:
 	return res;
 }
 
+#ifdef FEATURE_IPACM_UL_FIREWALL
+bool IPACM_Filtering::AddWanULFilteringRule(struct ipa_ioc_add_flt_rule const * rule_table_v6, uint8_t mux_id, bool is_enable)
+{
+	int ret = 0, cnt, num_rules = 0, pos = 0;
+
+	ipa_configure_ul_firewall_rules_req_msg_v01 qmi_rule_msg;
+
+	int fd_wwan_ioctl = open(WWAN_QMI_IOCTL_DEVICE_NAME, O_RDWR);
+	if(fd_wwan_ioctl < 0)
+	{
+		IPACMERR("Failed to open %s.\n",WWAN_QMI_IOCTL_DEVICE_NAME);
+		return false;
+	}
+
+	/* Used in v6 case only*/
+	if(rule_table_v6 != NULL)
+	{
+		num_rules += rule_table_v6->num_rules;
+		IPACMDBG_H("Get %d WAN UL IPv6 filtering rules.\n", rule_table_v6->num_rules);
+	}
+	else
+	{
+		IPACMERR("Invalid filter table addr\n");
+		close(fd_wwan_ioctl);
+		return false;
+	}
+
+	if(num_rules > QMI_IPA_MAX_UL_FIREWALL_RULES_V01)
+	{
+		IPACMERR("The number of ul filtering rules exceed limit.\n");
+		close(fd_wwan_ioctl);
+		return false;
+	}
+	else
+	{
+		memset(&qmi_rule_msg, 0, sizeof(qmi_rule_msg));
+		qmi_rule_msg.firewall_rules_list_len = num_rules;
+		IPACMDBG_H("Get %d WAN UL filtering rules in total.\n", num_rules);
+
+		if(rule_table_v6 != NULL)
+		{
+			for(cnt = rule_table_v6->num_rules - 1; cnt >= 0; cnt--)
+			{
+				if (pos < QMI_IPA_MAX_UL_FIREWALL_RULES_V01)
+				{
+					qmi_rule_msg.firewall_rules_list[pos].ip_type = QMI_IPA_IP_TYPE_V6_V01;
+					memcpy(&qmi_rule_msg.firewall_rules_list[pos].filter_rule,
+						&rule_table_v6->rules[cnt].rule.eq_attrib,
+						sizeof(struct ipa_filter_rule_type_v01));
+					pos++;
+				}
+				else
+				{
+					IPACMERR(" QMI only support max %d rules, current (%d)\n ", QMI_IPA_MAX_UL_FIREWALL_RULES_V01, pos);
+				}
+			}
+
+			qmi_rule_msg.mux_id = mux_id;
+			if (is_enable == false)
+			{
+				qmi_rule_msg.disable_valid = 1;
+				qmi_rule_msg.disable = 1;
+			}
+		}
+
+		ret = ioctl(fd_wwan_ioctl, WAN_IOC_ADD_UL_FLT_RULE, &qmi_rule_msg);
+		if (ret != 0)
+		{
+			IPACMERR("Failed adding Filtering rule %p with ret %d\n ", &qmi_rule_msg, ret);
+			close(fd_wwan_ioctl);
+			return false;
+		}
+	}
+	close(fd_wwan_ioctl);
+	return true;
+}
+#endif
+
 bool IPACM_Filtering::AddWanDLFilteringRule(struct ipa_ioc_add_flt_rule const *rule_table_v4, struct ipa_ioc_add_flt_rule const * rule_table_v6, uint8_t mux_id)
 {
 	int ret = 0, cnt, num_rules = 0, pos = 0;

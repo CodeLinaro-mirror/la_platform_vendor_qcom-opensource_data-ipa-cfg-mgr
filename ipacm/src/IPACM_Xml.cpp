@@ -175,6 +175,9 @@ static int ipacm_cfg_xml_parse_tree
 						IPACM_util_icmp_string((char*)xml_node->name, IPACMALG_TAG) == 0 ||
 						IPACM_util_icmp_string((char*)xml_node->name, ALG_TAG) == 0 ||
 						IPACM_util_icmp_string((char*)xml_node->name, IPACMNat_TAG) == 0 ||
+#ifdef FEATURE_IPACM_PER_CLIENT_STATS
+						IPACM_util_icmp_string((char*)xml_node->name, LAN_Stats_TAG) == 0 ||
+#endif
 						IPACM_util_icmp_string((char*)xml_node->name, IP_PassthroughFlag_TAG) == 0)
 				{
 					if (0 == IPACM_util_icmp_string((char*)xml_node->name, IFACE_TAG))
@@ -218,6 +221,29 @@ static int ipacm_cfg_xml_parse_tree
 						}
 					}
 				}
+#ifdef FEATURE_IPACM_PER_CLIENT_STATS
+				else if (IPACM_util_icmp_string((char*)xml_node->name, LAN_Stats_Enable_TAG) == 0)
+				{
+					IPACMDBG_H("inside enable lan statistics\n");
+					content = IPACM_read_content_element(xml_node);
+					if (content)
+					{
+						str_size = strlen(content);
+						memset(content_buf, 0, sizeof(content_buf));
+						memcpy(content_buf, (void *)content, str_size);
+						if (atoi(content_buf))
+						{
+							config->lan_stats_enable = true;
+							IPACMDBG_H("LAN Stats enable %d buf(%d)\n", config->lan_stats_enable, atoi(content_buf));
+						}
+						else
+						{
+							config->lan_stats_enable = false;
+							IPACMDBG_H("LAN Stats enable %d buf(%d)\n", config->lan_stats_enable, atoi(content_buf));
+						}
+					}
+				}
+#endif
 				else if (IPACM_util_icmp_string((char*)xml_node->name, ODUMODE_TAG) == 0)
 				{
 					IPACMDBG_H("inside ODU-XML\n");
@@ -567,6 +593,29 @@ static int IPACM_firewall_xml_parse_tree
 					/* go to child */
 					ret_val = IPACM_firewall_xml_parse_tree(xml_node->children, config);
 				}
+#ifdef FEATURE_IPACM_UL_FIREWALL
+				else if (0 == IPACM_util_icmp_string((char*)xml_node->name, FirewallDirection_TAG))
+				{ /* Getting an info about direction (UL/DL) */
+					content = IPACM_read_content_element(xml_node);
+					if (content)
+					{
+						str_size = strlen(content);
+						memset(content_buf, 0, sizeof(content_buf));
+						memcpy(content_buf, (void *)content, str_size);
+						content_buf[MAX_XML_STR_LEN-1] = '\0';
+						if (0 == IPACM_util_icmp_string((char*)content_buf, UL_TAG))
+						{
+							config->extd_firewall_entries[config->num_extd_firewall_entries - 1].firewall_direction
+							= IPACM_MSGR_UL_FIREWALL;  /* Its UL*/
+						}
+						else if (0 == IPACM_util_icmp_string((char*)content_buf, DL_TAG))
+						{
+							config->extd_firewall_entries[config->num_extd_firewall_entries - 1].firewall_direction
+							= IPACM_MSGR_DL_FIREWALL;  /* Its DL*/
+						}
+					}
+				}
+#endif //FEATURE_IPACM_UL_FIREWALL
 				else if (0 == IPACM_util_icmp_string((char*)xml_node->name, IPFamily_TAG))
 				{
 					content = IPACM_read_content_element(xml_node);

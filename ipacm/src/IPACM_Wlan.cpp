@@ -901,6 +901,11 @@ void IPACM_Wlan::event_callback(ipa_cm_event_id event, void *param)
 				}
 				return;
 			}
+			/* Check if the client is inactive list and remove it*/
+			if (reset_inactive_lan_stats_index(data->mac_addr) == -1)
+			{
+				IPACMDBG_H("Failed to reset inactive lan_stats index, return\n");
+			}
 			/* Check if the client is already initialized and add filter/routing rules. */
 			IPACM_Wlan::handle_lan_client_connect(data->mac_addr);
 		}

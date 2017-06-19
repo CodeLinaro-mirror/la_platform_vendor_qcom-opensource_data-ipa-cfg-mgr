@@ -906,6 +906,11 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 					}
 					return;
 				}
+				/* Check if the client is inactive list and remove it*/
+				if (reset_inactive_lan_stats_index(data->mac_addr) == -1)
+				{
+					IPACMDBG_H("Failed to reset inactive lan_stats index, return\n");
+				}
 				/* Check if the client is already initialized and add filter/routing rules. */
 				IPACM_Lan::handle_lan_client_connect(data->mac_addr);
 			}
@@ -2324,7 +2329,20 @@ int IPACM_Lan::handle_lan_client_connect(uint8_t *mac_addr)
 			goto fail;
 		}
 		memset(client_info, 0, sizeof(struct wan_ioctl_lan_client_info));
-		client_info->device_type = IPACM_CLIENT_DEVICE_TYPE_WLAN;
+		if (ipa_if_cate == LAN_IF)
+		{
+			client_info->device_type = IPACM_CLIENT_DEVICE_TYPE_USB;
+		}
+		else if (ipa_if_cate == ODU_IF)
+		{
+			client_info->device_type = IPACM_CLIENT_DEVICE_TYPE_ETH;
+		}
+		else
+		{
+			IPACMERR("Unsupported interface category: %d\n", ipa_if_cate);
+			res = IPACM_FAILURE;
+			goto fail;
+		}
 		memcpy(client_info->mac,
 				get_client_memptr(eth_client, eth_index)->mac,
 				IPA_MAC_ADDR_SIZE);

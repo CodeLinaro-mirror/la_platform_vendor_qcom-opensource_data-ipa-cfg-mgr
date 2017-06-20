@@ -4,6 +4,9 @@
 		<OduMode>router</OduMode>
 		<eMBMS_offload>0</eMBMS_offload>
 	</ODUCFG>
+	<LANStats>
+		<EnableLANStats>0</EnableLANStats>
+	</LANStats>
 	<IPACM>
 		<IPACMIface>
 			<Iface>

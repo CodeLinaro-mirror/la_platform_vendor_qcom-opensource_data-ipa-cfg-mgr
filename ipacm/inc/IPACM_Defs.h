@@ -167,7 +167,11 @@ typedef enum
 	IPA_WAN_XLAT_CONNECT_EVENT,               /* ipacm_event_data_fid */
 	IPA_TETHERING_STATS_UPDATE_EVENT,         /* ipacm_event_data_fid */
 	IPA_NETWORK_STATS_UPDATE_EVENT,           /* ipacm_event_data_fid */
-
+#ifdef FEATURE_IPACM_PER_CLIENT_STATS
+	IPA_LAN_CLIENT_CONNECT_EVENT,             /* ipacm_event_data_mac */
+	IPA_LAN_CLIENT_DISCONNECT_EVENT,          /* ipacm_event_data_mac */
+	IPA_LAN_CLIENT_UPDATE_EVENT,              /* ipacm_event_data_mac */
+#endif
 	IPA_EXTERNAL_EVENT_MAX,
 
 	IPA_HANDLE_WAN_UP,                        /* ipacm_event_iface_up  */

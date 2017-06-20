@@ -4648,24 +4648,22 @@ int IPACM_Lan::install_uplink_filter_rule
 		{
 			if (iptype == IPA_IP_v4)
 			{
-				if (modem_ul_v4_set == false)
+				if (get_client_memptr(eth_client, i)->ipv4_ul_rules_set == false)
 				{
-					IPACMDBG_H("IPA_IP_v4 xlat_mux_id: %d, modem_ul_v4_set %d\n", xlat_mux_id, modem_ul_v4_set);
 					ret = install_uplink_filter_rule_per_client(prop, iptype, xlat_mux_id, get_client_memptr(eth_client, i)->mac);
-					modem_ul_v4_set = true;
+					IPACMDBG_H("IPA_IP_v4 xlat_mux_id: %d, modem_ul_v4_set %d\n", xlat_mux_id, get_client_memptr(eth_client, i)->ipv4_ul_rules_set);
 				}
 			}
 			else if (iptype == IPA_IP_v6)
 			{
-				if (num_dft_rt_v6 ==1 && modem_ul_v6_set == FALSE)
+				if (num_dft_rt_v6 ==1 && get_client_memptr(eth_client, i)->ipv6_ul_rules_set == false)
 				{
-					IPACMDBG_H("IPA_IP_v6 num_dft_rt_v6 %d xlat_mux_id: %d modem_ul_v6_set: %d\n", num_dft_rt_v6, xlat_mux_id, modem_ul_v6_set);
 					ret = install_uplink_filter_rule_per_client(prop, iptype, xlat_mux_id, get_client_memptr(eth_client, i)->mac);
-					modem_ul_v6_set = true;
+					IPACMDBG_H("IPA_IP_v6 num_dft_rt_v6 %d xlat_mux_id: %d modem_ul_v6_set: %d\n", num_dft_rt_v6, xlat_mux_id, get_client_memptr(eth_client, i)->ipv6_ul_rules_set);
 				}
 			} else {
 				IPACMDBG_H("ip-type: %d modem_ul_v4_set: %d, modem_ul_v6_set %d\n",
-					iptype, modem_ul_v4_set, modem_ul_v6_set);
+					iptype, get_client_memptr(eth_client, i)->ipv4_ul_rules_set, get_client_memptr(eth_client, i)->ipv6_ul_rules_set);
 
 			}
 		} /* end of for loop */

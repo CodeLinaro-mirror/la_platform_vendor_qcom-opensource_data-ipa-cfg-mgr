@@ -109,6 +109,8 @@ IPACM_Wan::IPACM_Wan(int iface_index,
 	wan_route_rule_v6_hdl = NULL;
 	wan_route_rule_v6_hdl_a5 = NULL;
 	wan_client = NULL;
+	wan_client_len = 0;
+	is_default_gateway = true;
 
 	if(iface_query != NULL)
 	{
@@ -150,19 +152,6 @@ IPACM_Wan::IPACM_Wan(int iface_index,
 	hdr_hdl_dummy_v6 = 0;
 	hdr_proc_hdl_dummy_v6 = 0;
 
-	if(iface_query != NULL)
-	{
-		wan_client_len = (sizeof(ipa_wan_client)) + (iface_query->num_tx_props * sizeof(wan_client_rt_hdl));
-		wan_client = (ipa_wan_client *)calloc(IPA_MAX_NUM_WAN_CLIENTS, wan_client_len);
-		if (wan_client == NULL)
-		{
-			IPACMERR("unable to allocate memory\n");
-			return;
-		}
-		IPACMDBG_H("index:%d constructor: Tx properties:%d\n", iface_index, iface_query->num_tx_props);
-	}
-
-
 	if(m_is_sta_mode == Q6_WAN)
 	{
 		IPACMDBG_H("The new WAN interface is modem.\n");
@@ -178,6 +167,18 @@ IPACM_Wan::IPACM_Wan(int iface_index,
 	if(0 == m_fd_ipa)
 	{
 		IPACMERR("Failed to open %s\n",IPA_DEVICE_NAME);
+	}
+	if(iface_query != NULL)
+	{
+		wan_client_len = (sizeof(ipa_wan_client)) + (iface_query->num_tx_props * sizeof(wan_client_rt_hdl));
+		wan_client = (ipa_wan_client *)calloc(IPA_MAX_NUM_WAN_CLIENTS, wan_client_len);
+		if (wan_client == NULL)
+		{
+			IPACMERR("unable to allocate memory\n");
+			close(m_fd_ipa);
+			return;
+		}
+		IPACMDBG_H("index:%d constructor: Tx properties:%d\n", iface_index, iface_query->num_tx_props);
 	}
 #ifdef FEATURE_IPACM_UL_FIREWALL
 	m_fd_ipa_ul = m_fd_ipa;
@@ -3258,7 +3259,7 @@ int IPACM_Wan::read_firewall_filter_rules_ul(void)
 		IPACMERR("No firewall xml mentioned \n");
 		return IPACM_FAILURE;
 	}
-
+	return IPACM_SUCCESS;
 }
 #endif //FEATURE_IPACM_UL_FIREWALL
 int IPACM_Wan::init_fl_rule_ex(ipa_ip_type iptype)

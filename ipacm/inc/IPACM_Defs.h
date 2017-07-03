@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2013-2016, The Linux Foundation. All rights reserved.
+Copyright (c) 2013-2017, The Linux Foundation. All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are
@@ -190,6 +190,12 @@ typedef enum
 	IPA_ETH_BRIDGE_CLIENT_DEL,                /* ipacm_event_eth_bridge*/
 	IPA_ETH_BRIDGE_WLAN_SCC_MCC_SWITCH,       /* ipacm_event_eth_bridge*/
 	IPA_LAN_DELETE_SELF,                      /* ipacm_event_data_fid */
+	IPA_ADD_VLAN_IFACE,                       /* ipa_ioc_vlan_iface_info */
+	IPA_DEL_VLAN_IFACE,                       /* ipa_ioc_vlan_iface_info */
+	IPA_ADD_L2TP_VLAN_MAPPING,                /* ipa_ioc_l2tp_vlan_mapping_info */
+	IPA_DEL_L2TP_VLAN_MAPPING,                /* ipa_ioc_l2tp_vlan_mapping_info */
+	IPA_HANDLE_VLAN_CLIENT_INFO,              /* ipacm_event_data_all */
+	IPA_HANDLE_VLAN_IFACE_INFO,               /* ipacm_event_data_all */
 	IPACM_EVENT_MAX
 } ipa_cm_event_id;
 
@@ -252,6 +258,7 @@ typedef struct _ipacm_event_data_all
 	uint32_t  ipv4_addr;
 	uint32_t  ipv6_addr[4];
 	uint8_t mac_addr[IPA_MAC_ADDR_SIZE];
+	char iface_name[IPA_IFACE_NAME_LEN];
 } ipacm_event_data_all;
 
 class IPACM_Lan;
@@ -266,6 +273,7 @@ typedef struct
 	IPACM_Lan *p_iface;
 	ipa_ip_type iptype;
 	uint8_t mac_addr[6];
+	char iface_name[IPA_IFACE_NAME_LEN];
 } ipacm_event_eth_bridge;
 
 typedef struct
@@ -298,6 +306,7 @@ typedef struct _ipacm_event_data_iptype
 typedef struct _ipacm_event_data_addr
 {
 	enum ipa_ip_type iptype;
+	char iface_name[IPA_IFACE_NAME_LEN];
 	int if_index;
 	uint32_t  ipv4_addr_gw;
 	uint32_t  ipv4_addr;

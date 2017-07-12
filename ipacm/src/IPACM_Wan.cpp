@@ -1952,7 +1952,7 @@ int IPACM_Wan::config_dft_firewall_rules(ipa_ip_type iptype)
 	struct ipa_flt_rule_add flt_rule_entry;
 	int i, rule_v4 = 0, rule_v6 = 0, len;
 #ifdef FEATURE_IPACM_UL_FIREWALL
-	int rule_v6_ul = 0;
+	int rule_v4_ul = 0, rule_v6_ul = 0;
 #endif //FEATURE_IPACM_UL_FIREWALL
 	IPACMDBG_H("ip-family: %d; \n", iptype);
 
@@ -1975,27 +1975,35 @@ int IPACM_Wan::config_dft_firewall_rules(ipa_ip_type iptype)
 	/* find the number of v4/v6 firewall rules */
 	for (i = 0; i < firewall_config.num_extd_firewall_entries; i++)
 	{
-		if (firewall_config.extd_firewall_entries[i].ip_vsn == 4)
-		{
-			rule_v4++;
-		}
 #ifdef FEATURE_IPACM_UL_FIREWALL
-		else if (firewall_config.extd_firewall_entries[i].firewall_direction ==
-			IPACM_MSGR_UL_FIREWALL)
+		if (firewall_config.extd_firewall_entries[i].ip_vsn == 4 &&
+			firewall_config.extd_firewall_entries[i].firewall_direction
+				== IPACM_MSGR_UL_FIREWALL)
+		{
+			rule_v4_ul++;
+		}
+		else if (firewall_config.extd_firewall_entries[i].ip_vsn == 6 &&
+			firewall_config.extd_firewall_entries[i].firewall_direction
+				== IPACM_MSGR_UL_FIREWALL)
 		{
 			rule_v6_ul++;
 		}
 #endif //FEATURE_IPACM_UL_FIREWALL
+		if (firewall_config.extd_firewall_entries[i].ip_vsn == 4)
+		{
+			rule_v4++;
+		}
 		else
 		{
 			rule_v6++;
 		}
 	}
+#ifdef FEATURE_IPACM_UL_FIREWALL
+	IPACMDBG_H("UL firewall rule cnt v4ul:%d v6ul:%d\n",
+		rule_v4_ul, rule_v6_ul);
+#endif //FEATURE_IPACM_UL_FIREWALL
 	IPACMDBG_H("firewall rule v4:%d v6:%d total:%d\n",
 		rule_v4, rule_v6, firewall_config.num_extd_firewall_entries);
-#ifdef FEATURE_IPACM_UL_FIREWALL
-	IPACMDBG_H("UL firewall rule cnt v6ul:%d\n", rule_v6_ul);
-#endif //FEATURE_IPACM_UL_FIREWALL
 		}
 		else
 		{
@@ -2167,7 +2175,13 @@ int IPACM_Wan::config_dft_firewall_rules(ipa_ip_type iptype)
 			rule_v4 = 0;
 			for (i = 0; i < firewall_config.num_extd_firewall_entries; i++)
 			{
+#ifdef FEATURE_IPACM_UL_FIREWALL
+				if (firewall_config.extd_firewall_entries[i].ip_vsn == 4 &&
+					firewall_config.extd_firewall_entries[i].firewall_direction !=
+					IPACM_MSGR_UL_FIREWALL)
+#else //FEATURE_IPACM_UL_FIREWALL
 				if (firewall_config.extd_firewall_entries[i].ip_vsn == 4)
+#endif //FEATURE_IPACM_UL_FIREWALL
 				{
 					memset(&flt_rule_entry, 0, sizeof(struct ipa_flt_rule_add));
 
@@ -2799,7 +2813,13 @@ int IPACM_Wan::config_dft_firewall_rules_ex(struct ipa_flt_rule_add *rules, int 
 		{
 			for (i = 0; i < firewall_config.num_extd_firewall_entries; i++)
 			{
+#ifdef FEATURE_IPACM_UL_FIREWALL
+				if (firewall_config.extd_firewall_entries[i].ip_vsn == 4 &&
+					firewall_config.extd_firewall_entries[i].firewall_direction !=
+					IPACM_MSGR_UL_FIREWALL)
+#else //FEATURE_IPACM_UL_FIREWALL
 				if (firewall_config.extd_firewall_entries[i].ip_vsn == 4)
+#endif //FEATURE_IPACM_UL_FIREWALL
 				{
 					memset(&flt_rule_entry, 0, sizeof(struct ipa_flt_rule_add));
 

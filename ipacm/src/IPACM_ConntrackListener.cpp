@@ -183,7 +183,7 @@ int IPACM_ConntrackListener:: GetPacketThreshhold(void)
 int IPACM_ConntrackListener::CheckNatIface(
    ipacm_event_data_all *data, bool *NatIface)
 {
-	int fd = 0, len = 0, cnt, i, j;
+	int fd = 0, len = 0, cnt, i;
 	struct ifreq ifr;
 	*NatIface = false;
 
@@ -254,8 +254,8 @@ int IPACM_ConntrackListener::CheckNatIface(
 					sizeof(pNatIfaces[i].iface_name)) == 0)
 		{
 			IPACMDBG_H("Nat iface (%s), entry (%d), dont cache",
-						pNatIfaces[i].iface_name, j);
-			iptodot("with ipv4 address: ", nat_iface_ipv4_addr[j]);
+						pNatIfaces[i].iface_name, i);
+			iptodot("with ipv4 address: ", nat_iface_ipv4_addr[i]);
 			*NatIface = true;
 			return IPACM_SUCCESS;
 		}

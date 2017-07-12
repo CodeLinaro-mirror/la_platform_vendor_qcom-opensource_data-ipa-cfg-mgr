@@ -89,6 +89,7 @@ IPACM_Wlan::IPACM_Wlan(int iface_index) : IPACM_Lan(iface_index)
 	num_wifi_client = 0;
 	header_name_count = 0;
 	wlan_client = NULL;
+	wlan_client_len = 0;
 
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
 		for (i = 0; i < IPA_MAX_NUM_HW_PATH_CLIENTS; i++)
@@ -2853,7 +2854,7 @@ int IPACM_Wlan::install_uplink_filter_rule_per_client
 	int len = 0, cnt, ret = IPACM_SUCCESS;
 	ipa_ioc_add_flt_rule *pFilteringTable;
 	int fd;
-	int i, index;
+	int i, index = 0;
 	uint32_t value = 0;
 	int clnt_indx;
 	uint8_t num_offset_meq_128;

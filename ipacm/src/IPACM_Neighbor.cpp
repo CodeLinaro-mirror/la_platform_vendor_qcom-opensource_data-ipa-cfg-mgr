@@ -77,6 +77,7 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 				break;
 			}
 			uint8_t client_mac_addr[6];
+			memset(client_mac_addr,0,sizeof(client_mac_addr));
 
 			IPACMDBG_H("Received IPA_WLAN_CLIENT_ADD_EVENT\n");
 			for(i = 0; i < data->num_of_attribs; i++)

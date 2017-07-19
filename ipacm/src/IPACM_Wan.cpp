@@ -109,6 +109,8 @@ IPACM_Wan::IPACM_Wan(int iface_index,
 	wan_route_rule_v6_hdl = NULL;
 	wan_route_rule_v6_hdl_a5 = NULL;
 	wan_client = NULL;
+	wan_client_len = 0;
+	is_default_gateway = true;
 
 	if(iface_query != NULL)
 	{
@@ -150,19 +152,6 @@ IPACM_Wan::IPACM_Wan(int iface_index,
 	hdr_hdl_dummy_v6 = 0;
 	hdr_proc_hdl_dummy_v6 = 0;
 
-	if(iface_query != NULL)
-	{
-		wan_client_len = (sizeof(ipa_wan_client)) + (iface_query->num_tx_props * sizeof(wan_client_rt_hdl));
-		wan_client = (ipa_wan_client *)calloc(IPA_MAX_NUM_WAN_CLIENTS, wan_client_len);
-		if (wan_client == NULL)
-		{
-			IPACMERR("unable to allocate memory\n");
-			return;
-		}
-		IPACMDBG_H("index:%d constructor: Tx properties:%d\n", iface_index, iface_query->num_tx_props);
-	}
-
-
 	if(m_is_sta_mode == Q6_WAN)
 	{
 		IPACMDBG_H("The new WAN interface is modem.\n");
@@ -178,6 +167,18 @@ IPACM_Wan::IPACM_Wan(int iface_index,
 	if(0 == m_fd_ipa)
 	{
 		IPACMERR("Failed to open %s\n",IPA_DEVICE_NAME);
+	}
+	if(iface_query != NULL)
+	{
+		wan_client_len = (sizeof(ipa_wan_client)) + (iface_query->num_tx_props * sizeof(wan_client_rt_hdl));
+		wan_client = (ipa_wan_client *)calloc(IPA_MAX_NUM_WAN_CLIENTS, wan_client_len);
+		if (wan_client == NULL)
+		{
+			IPACMERR("unable to allocate memory\n");
+			close(m_fd_ipa);
+			return;
+		}
+		IPACMDBG_H("index:%d constructor: Tx properties:%d\n", iface_index, iface_query->num_tx_props);
 	}
 #ifdef FEATURE_IPACM_UL_FIREWALL
 	m_fd_ipa_ul = m_fd_ipa;
@@ -1952,7 +1953,7 @@ int IPACM_Wan::config_dft_firewall_rules(ipa_ip_type iptype)
 	struct ipa_flt_rule_add flt_rule_entry;
 	int i, rule_v4 = 0, rule_v6 = 0, len;
 #ifdef FEATURE_IPACM_UL_FIREWALL
-	int rule_v6_ul = 0;
+	int rule_v4_ul = 0, rule_v6_ul = 0;
 #endif //FEATURE_IPACM_UL_FIREWALL
 	IPACMDBG_H("ip-family: %d; \n", iptype);
 
@@ -1975,27 +1976,35 @@ int IPACM_Wan::config_dft_firewall_rules(ipa_ip_type iptype)
 	/* find the number of v4/v6 firewall rules */
 	for (i = 0; i < firewall_config.num_extd_firewall_entries; i++)
 	{
-		if (firewall_config.extd_firewall_entries[i].ip_vsn == 4)
-		{
-			rule_v4++;
-		}
 #ifdef FEATURE_IPACM_UL_FIREWALL
-		else if (firewall_config.extd_firewall_entries[i].firewall_direction ==
-			IPACM_MSGR_UL_FIREWALL)
+		if (firewall_config.extd_firewall_entries[i].ip_vsn == 4 &&
+			firewall_config.extd_firewall_entries[i].firewall_direction
+				== IPACM_MSGR_UL_FIREWALL)
+		{
+			rule_v4_ul++;
+		}
+		else if (firewall_config.extd_firewall_entries[i].ip_vsn == 6 &&
+			firewall_config.extd_firewall_entries[i].firewall_direction
+				== IPACM_MSGR_UL_FIREWALL)
 		{
 			rule_v6_ul++;
 		}
 #endif //FEATURE_IPACM_UL_FIREWALL
+		if (firewall_config.extd_firewall_entries[i].ip_vsn == 4)
+		{
+			rule_v4++;
+		}
 		else
 		{
 			rule_v6++;
 		}
 	}
+#ifdef FEATURE_IPACM_UL_FIREWALL
+	IPACMDBG_H("UL firewall rule cnt v4ul:%d v6ul:%d\n",
+		rule_v4_ul, rule_v6_ul);
+#endif //FEATURE_IPACM_UL_FIREWALL
 	IPACMDBG_H("firewall rule v4:%d v6:%d total:%d\n",
 		rule_v4, rule_v6, firewall_config.num_extd_firewall_entries);
-#ifdef FEATURE_IPACM_UL_FIREWALL
-	IPACMDBG_H("UL firewall rule cnt v6ul:%d\n", rule_v6_ul);
-#endif //FEATURE_IPACM_UL_FIREWALL
 		}
 		else
 		{
@@ -2167,7 +2176,13 @@ int IPACM_Wan::config_dft_firewall_rules(ipa_ip_type iptype)
 			rule_v4 = 0;
 			for (i = 0; i < firewall_config.num_extd_firewall_entries; i++)
 			{
+#ifdef FEATURE_IPACM_UL_FIREWALL
+				if (firewall_config.extd_firewall_entries[i].ip_vsn == 4 &&
+					firewall_config.extd_firewall_entries[i].firewall_direction !=
+					IPACM_MSGR_UL_FIREWALL)
+#else //FEATURE_IPACM_UL_FIREWALL
 				if (firewall_config.extd_firewall_entries[i].ip_vsn == 4)
+#endif //FEATURE_IPACM_UL_FIREWALL
 				{
 					memset(&flt_rule_entry, 0, sizeof(struct ipa_flt_rule_add));
 
@@ -2799,7 +2814,13 @@ int IPACM_Wan::config_dft_firewall_rules_ex(struct ipa_flt_rule_add *rules, int 
 		{
 			for (i = 0; i < firewall_config.num_extd_firewall_entries; i++)
 			{
+#ifdef FEATURE_IPACM_UL_FIREWALL
+				if (firewall_config.extd_firewall_entries[i].ip_vsn == 4 &&
+					firewall_config.extd_firewall_entries[i].firewall_direction !=
+					IPACM_MSGR_UL_FIREWALL)
+#else //FEATURE_IPACM_UL_FIREWALL
 				if (firewall_config.extd_firewall_entries[i].ip_vsn == 4)
+#endif //FEATURE_IPACM_UL_FIREWALL
 				{
 					memset(&flt_rule_entry, 0, sizeof(struct ipa_flt_rule_add));
 
@@ -3258,7 +3279,7 @@ int IPACM_Wan::read_firewall_filter_rules_ul(void)
 		IPACMERR("No firewall xml mentioned \n");
 		return IPACM_FAILURE;
 	}
-
+	return IPACM_SUCCESS;
 }
 #endif //FEATURE_IPACM_UL_FIREWALL
 int IPACM_Wan::init_fl_rule_ex(ipa_ip_type iptype)

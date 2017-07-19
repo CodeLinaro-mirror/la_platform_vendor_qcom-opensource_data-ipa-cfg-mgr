@@ -525,12 +525,11 @@ int IPACM_Config::AddNatIfaces(char *dev_name)
 
 	if (ipa_nat_iface_entries < ipa_num_ipa_interfaces)
 	{
-		memcpy(pNatIfaces[ipa_nat_iface_entries - 1].iface_name,
-					 dev_name, IPA_IFACE_NAME_LEN);
-
+		strlcpy(pNatIfaces[ipa_nat_iface_entries - 1].iface_name,dev_name,
+				IPA_IFACE_NAME_LEN);
 		IPACMDBG_H("Add Nat IfaceName: %s ,update nat-ifaces number: %d\n",
-						 pNatIfaces[ipa_nat_iface_entries - 1].iface_name,
-						 ipa_nat_iface_entries);
+				pNatIfaces[ipa_nat_iface_entries - 1].iface_name,
+				ipa_nat_iface_entries);
 	}
 
 	return 0;

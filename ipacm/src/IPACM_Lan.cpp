@@ -441,7 +441,9 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 								install_wan_firewall_rule_ul(false, data->iptype);
 
 								IPACM_Lan::config_dft_firewall_rules_ul(IPACM_Wan::firewall_flt_rule_v6_ul, data->iptype, &iface_ul_firewall);
-								IPACMDBG_H ("Pipe (%d) configured with the new UL rules\n", rx_prop->rx[0].src_pipe);
+								if(rx_prop) {
+									IPACMDBG_H ("Pipe (%d) configured with the new UL rules\n", rx_prop->rx[0].src_pipe);
+								}
 							}
 #endif //FEATURE_IPACM_UL_FIREWALL
 							if((data->iptype == IPA_IP_v6 || data->iptype == IPA_IP_MAX) && num_dft_rt_v6 == 1)
@@ -469,7 +471,9 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 							install_wan_firewall_rule_ul(false, data->iptype);
 
 							IPACM_Lan::config_dft_firewall_rules_ul(IPACM_Wan::firewall_flt_rule_v6_ul, data->iptype, &iface_ul_firewall);
-							IPACMDBG_H ("Pipe (%d) configured with the new UL rules\n", rx_prop->rx[0].src_pipe);
+							if(rx_prop) {
+								IPACMDBG_H ("Pipe (%d) configured with the new UL rules\n", rx_prop->rx[0].src_pipe);
+							}
 						}
 #endif //FEATURE_IPACM_UL_FIREWALL
 						/* Post event to NAT */
@@ -678,7 +682,9 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 					install_wan_firewall_rule_ul(false, ip_type);
 
 					IPACM_Lan::config_dft_firewall_rules_ul(IPACM_Wan::firewall_flt_rule_v6_ul, ip_type, &iface_ul_firewall);
-					IPACMDBG_H ("Pipe (%d) configured with the new UL rules\n", rx_prop->rx[0].src_pipe);
+					if(rx_prop) {
+						IPACMDBG_H ("Pipe (%d) configured with the new UL rules\n", rx_prop->rx[0].src_pipe);
+					}
 				}
 			}
 			else
@@ -690,7 +696,9 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 				install_wan_firewall_rule_ul(false, ip_type);
 
 				IPACM_Lan::config_dft_firewall_rules_ul(IPACM_Wan::firewall_flt_rule_v6_ul, ip_type, &iface_ul_firewall);
-				IPACMDBG_H ("Pipe (%d) configured with the new UL rules\n", rx_prop->rx[0].src_pipe);
+				if(rx_prop) {
+					IPACMDBG_H ("Pipe (%d) configured with the new UL rules\n", rx_prop->rx[0].src_pipe);
+				}
 			}
 #endif //FEATURE_IPACM_UL_FIREWALL
 			memcpy(ipv6_prefix, data_wan->ipv6_prefix, sizeof(ipv6_prefix));

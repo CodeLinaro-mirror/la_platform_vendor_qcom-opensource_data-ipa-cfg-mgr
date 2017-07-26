@@ -158,7 +158,7 @@ void IPACM_Wlan::event_callback(ipa_cm_event_id event, void *param)
 	}
 
 	int ipa_interface_index;
-	int wlan_index;
+	int wlan_index, cnt;
 	ipacm_ext_prop* ext_prop;
 	ipacm_event_iface_up* data_wan;
 	ipacm_event_iface_up_tehter* data_wan_tether;
@@ -798,6 +798,16 @@ void IPACM_Wlan::event_callback(ipa_cm_event_id event, void *param)
 
 	case IPA_WLAN_SWITCH_TO_MCC:
 		IPACMDBG_H("Received IPA_WLAN_SWITCH_TO_MCC\n");
+		/* check if alt_dst_pipe set or not */
+		for (cnt = 0; cnt < tx_prop->num_tx_props; cnt++)
+		{
+			if (tx_prop->tx[cnt].alt_dst_pipe == 0)
+			{
+				IPACMERR("Tx(%d): wrong tx property: alt_dst_pipe: 0. \n", cnt);
+				return;
+			}
+		}
+
 		if(ip_type == IPA_IP_MAX)
 		{
 			handle_SCC_MCC_switch(IPA_IP_v4);

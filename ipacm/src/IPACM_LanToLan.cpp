@@ -1042,7 +1042,7 @@ void IPACM_LanToLan_Iface::add_one_client_flt_rule(IPACM_LanToLan_Iface *peer_if
 void IPACM_LanToLan_Iface::add_client_flt_rule(peer_iface_info *peer, client_info *client, ipa_ip_type iptype)
 {
 	list<flt_rule_info>::iterator it_flt;
-	uint32_t flt_rule_hdl;
+	uint32_t flt_rule_hdl = 0;
 	uint32_t l2tp_first_pass_flt_rule_hdl = 0, l2tp_second_pass_flt_rule_hdl = 0;
 	flt_rule_info new_flt_info;
 	ipa_ioc_get_rt_tbl rt_tbl;

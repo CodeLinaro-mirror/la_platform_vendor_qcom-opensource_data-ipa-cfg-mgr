@@ -66,6 +66,7 @@ IPACM_Lan::IPACM_Lan(int iface_index) : IPACM_Iface(iface_index)
 	odu_route_rule_v6_hdl = NULL;
 	eth_client = NULL;
 	int i, m_fd_odu, ret = IPACM_SUCCESS;
+	eth_client_len = 0;
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
 	int max_clients = (IPACM_Iface::ipacmcfg->ipacm_lan_stats_enable) ? IPA_MAX_NUM_HW_PATH_CLIENTS:
 		IPA_MAX_NUM_ETH_CLIENTS;
@@ -79,6 +80,24 @@ IPACM_Lan::IPACM_Lan(int iface_index) : IPACM_Iface(iface_index)
 		IPACMERR("unable to get Nat App instance \n");
 		return;
 	}
+
+	num_wan_ul_fl_rule_v4 = 0;
+	num_wan_ul_fl_rule_v6 = 0;
+	hdr_len = 0;
+	memset(wan_ul_fl_rule_hdl_v4, 0, MAX_WAN_UL_FILTER_RULES * sizeof(uint32_t));
+	memset(wan_ul_fl_rule_hdl_v6, 0, MAX_WAN_UL_FILTER_RULES * sizeof(uint32_t));
+
+	is_active = true;
+	memset(ipv4_icmp_flt_rule_hdl, 0, NUM_IPV4_ICMP_FLT_RULE * sizeof(uint32_t));
+
+	is_mode_switch = false;
+	if_ipv4_subnet =0;
+	memset(private_fl_rule_hdl, 0, IPA_MAX_PRIVATE_SUBNET_ENTRIES * sizeof(uint32_t));
+	memset(ipv6_prefix_flt_rule_hdl, 0, NUM_IPV6_PREFIX_FLT_RULE * sizeof(uint32_t));
+	memset(ipv6_icmp_flt_rule_hdl, 0, NUM_IPV6_ICMP_FLT_RULE * sizeof(uint32_t));
+	modem_ul_v4_set = false;
+	modem_ul_v6_set = false;
+	memset(ipv6_prefix, 0, sizeof(ipv6_prefix));
 
 	/* support eth multiple clients */
 	if(iface_query != NULL)
@@ -105,28 +124,18 @@ IPACM_Lan::IPACM_Lan(int iface_index) : IPACM_Iface(iface_index)
 			if ((odu_route_rule_v4_hdl == NULL) || (odu_route_rule_v6_hdl == NULL))
 			{
 				IPACMERR("unable to allocate memory\n");
+				if(odu_route_rule_v4_hdl != NULL)
+				{
+					free(odu_route_rule_v4_hdl);
+				}
+				else if(odu_route_rule_v6_hdl != NULL)
+				{
+					free(odu_route_rule_v6_hdl);
+				}
 				return;
 			}
 		}
 	}
-
-	num_wan_ul_fl_rule_v4 = 0;
-	num_wan_ul_fl_rule_v6 = 0;
-	hdr_len = 0;
-	memset(wan_ul_fl_rule_hdl_v4, 0, MAX_WAN_UL_FILTER_RULES * sizeof(uint32_t));
-	memset(wan_ul_fl_rule_hdl_v6, 0, MAX_WAN_UL_FILTER_RULES * sizeof(uint32_t));
-
-	is_active = true;
-	memset(ipv4_icmp_flt_rule_hdl, 0, NUM_IPV4_ICMP_FLT_RULE * sizeof(uint32_t));
-
-	is_mode_switch = false;
-	if_ipv4_subnet =0;
-	memset(private_fl_rule_hdl, 0, IPA_MAX_PRIVATE_SUBNET_ENTRIES * sizeof(uint32_t));
-	memset(ipv6_prefix_flt_rule_hdl, 0, NUM_IPV6_PREFIX_FLT_RULE * sizeof(uint32_t));
-	memset(ipv6_icmp_flt_rule_hdl, 0, NUM_IPV6_ICMP_FLT_RULE * sizeof(uint32_t));
-	modem_ul_v4_set = false;
-	modem_ul_v6_set = false;
-	memset(ipv6_prefix, 0, sizeof(ipv6_prefix));
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
 	for (i = 0; i < IPA_MAX_NUM_HW_PATH_CLIENTS; i++)
 	{
@@ -3464,7 +3473,6 @@ fail:
 				if (clear_lan_client_info(client_info))
 				{
 					res = IPACM_FAILURE;
-					free(client_info);
 				}
 				free(client_info);
 			}
@@ -4458,7 +4466,7 @@ int IPACM_Lan::install_uplink_filter_rule_per_client
 	int len = 0, cnt, ret = IPACM_SUCCESS;
 	ipa_ioc_add_flt_rule *pFilteringTable;
 	int fd;
-	int i, index;
+	int i, index = 0;
 	uint32_t value = 0;
 	int clnt_indx;
 	uint8_t num_offset_meq_128 = 0;
@@ -6721,6 +6729,12 @@ int IPACM_Lan::add_l2tp_rt_rule(ipa_ip_type iptype, uint8_t *dst_mac, uint32_t *
 		hdr_proc_ctx->hdr_hdl = hdr.hdl;
 		hdr_proc_ctx->l2tp_params.hdr_remove_param.hdr_len_remove = 62;
 		hdr_proc_ctx->l2tp_params.hdr_remove_param.eth_hdr_retained = 1;
+		hdr_proc_ctx->l2tp_params.is_dst_pipe_valid = 1;
+		hdr_proc_ctx->l2tp_params.dst_pipe = tx_prop->tx[0].dst_pipe;
+		IPACMDBG_H("Header_remove: hdr len %d, hdr retained %d, dst client: %d\n",
+			hdr_proc_ctx->l2tp_params.hdr_remove_param.hdr_len_remove,
+			hdr_proc_ctx->l2tp_params.hdr_remove_param.eth_hdr_retained,
+			hdr_proc_ctx->l2tp_params.dst_pipe);
 		if(m_header.AddHeaderProcCtx(hdr_proc_ctx_table) == false)
 		{
 			IPACMERR("Failed to add hdr proc ctx with status: %d\n", hdr_proc_ctx_table->proc_ctx[0].status);

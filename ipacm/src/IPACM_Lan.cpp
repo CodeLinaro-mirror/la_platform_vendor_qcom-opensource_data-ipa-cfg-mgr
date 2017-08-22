@@ -3277,13 +3277,17 @@ int IPACM_Lan::handle_down_evt()
 		}
 		IPACM_Iface::ipacmcfg->decreaseFltRuleCount(rx_prop->rx[0].src_pipe, IPA_IP_v4, NUM_IPV4_ICMP_FLT_RULE);
 
-		if (m_filtering.DeleteFilteringHdls(dft_v4fl_rule_hdl, IPA_IP_v4, IPV4_DEFAULT_FILTERTING_RULES) == false)
+		if(dft_v4fl_rule_hdl[0] != 0)
 		{
-			IPACMERR("Error Deleting Filtering Rule, aborting...\n");
-			res = IPACM_FAILURE;
-			goto fail;
+				if (m_filtering.DeleteFilteringHdls(dft_v4fl_rule_hdl, IPA_IP_v4,
+						IPV4_DEFAULT_FILTERTING_RULES) == false)
+				{
+					IPACMERR("Error Deleting Filtering Rule, aborting...\n");
+					res = IPACM_FAILURE;
+					goto fail;
+				}
+				IPACM_Iface::ipacmcfg->decreaseFltRuleCount(rx_prop->rx[0].src_pipe, IPA_IP_v4, IPV4_DEFAULT_FILTERTING_RULES);
 		}
-		IPACM_Iface::ipacmcfg->decreaseFltRuleCount(rx_prop->rx[0].src_pipe, IPA_IP_v4, IPV4_DEFAULT_FILTERTING_RULES);
 
 		/* free private-subnet ipv4 filter rules */
 		if (IPACM_Iface::ipacmcfg->ipa_num_private_subnet > IPA_PRIV_SUBNET_FILTER_RULE_HANDLES)
@@ -3324,13 +3328,16 @@ int IPACM_Lan::handle_down_evt()
 		}
 		IPACM_Iface::ipacmcfg->decreaseFltRuleCount(rx_prop->rx[0].src_pipe, IPA_IP_v6, NUM_IPV6_ICMP_FLT_RULE);
 
-		if (m_filtering.DeleteFilteringHdls(dft_v6fl_rule_hdl, IPA_IP_v6, IPV6_DEFAULT_FILTERTING_RULES) == false)
+		if (dft_v6fl_rule_hdl[0] != 0)
 		{
-			IPACMERR("Error Adding RuleTable(1) to Filtering, aborting...\n");
-			res = IPACM_FAILURE;
-			goto fail;
+			if (m_filtering.DeleteFilteringHdls(dft_v6fl_rule_hdl, IPA_IP_v6, IPV6_DEFAULT_FILTERTING_RULES) == false)
+			{
+				IPACMERR("Error Adding RuleTable(1) to Filtering, aborting...\n");
+				res = IPACM_FAILURE;
+				goto fail;
+			}
+				IPACM_Iface::ipacmcfg->decreaseFltRuleCount(rx_prop->rx[0].src_pipe, IPA_IP_v6, IPV6_DEFAULT_FILTERTING_RULES);
 		}
-		IPACM_Iface::ipacmcfg->decreaseFltRuleCount(rx_prop->rx[0].src_pipe, IPA_IP_v6, IPV6_DEFAULT_FILTERTING_RULES);
 	}
 	IPACMDBG_H("Finished delete default iface ipv6 filtering rules \n ");
 
@@ -6729,6 +6736,12 @@ int IPACM_Lan::add_l2tp_rt_rule(ipa_ip_type iptype, uint8_t *dst_mac, uint32_t *
 		hdr_proc_ctx->hdr_hdl = hdr.hdl;
 		hdr_proc_ctx->l2tp_params.hdr_remove_param.hdr_len_remove = 62;
 		hdr_proc_ctx->l2tp_params.hdr_remove_param.eth_hdr_retained = 1;
+		hdr_proc_ctx->l2tp_params.is_dst_pipe_valid = 1;
+		hdr_proc_ctx->l2tp_params.dst_pipe = tx_prop->tx[0].dst_pipe;
+		IPACMDBG_H("Header_remove: hdr len %d, hdr retained %d, dst client: %d\n",
+			hdr_proc_ctx->l2tp_params.hdr_remove_param.hdr_len_remove,
+			hdr_proc_ctx->l2tp_params.hdr_remove_param.eth_hdr_retained,
+			hdr_proc_ctx->l2tp_params.dst_pipe);
 		if(m_header.AddHeaderProcCtx(hdr_proc_ctx_table) == false)
 		{
 			IPACMERR("Failed to add hdr proc ctx with status: %d\n", hdr_proc_ctx_table->proc_ctx[0].status);

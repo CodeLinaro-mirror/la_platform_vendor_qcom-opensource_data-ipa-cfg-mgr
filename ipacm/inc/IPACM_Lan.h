@@ -352,6 +352,12 @@ protected:
 	/* handle tethering client */
 	int handle_tethering_client(bool reset, ipacm_client_enum ipa_client);
 
+	/* add tcp syn flt rule */
+	int add_tcp_syn_flt_rule(ipa_ip_type iptype);
+
+	/* add tcp syn flt rule for l2tp interface*/
+	int add_tcp_syn_flt_rule_l2tp(ipa_ip_type inner_ip_type);
+
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
 	inline bool is_lan_stats_index_available()
 	{
@@ -581,6 +587,8 @@ protected:
 	uint32_t if_ipv4_subnet;
 
 	uint32_t ipv6_prefix[2];
+
+	uint32_t tcp_syn_flt_rule_hdl[IPA_IP_MAX];
 
 private:
 

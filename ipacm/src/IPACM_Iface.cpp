@@ -578,15 +578,7 @@ int IPACM_Iface::query_iface_property(void)
 					close(fd);
 					return IPACM_FAILURE;
 				}
-				if (tx_prop->tx[cnt].alt_dst_pipe == 0 &&
-					((memcmp(dev_name, "wlan0", sizeof("wlan0")) == 0) ||
-					(memcmp(dev_name, "wlan1", sizeof("wlan1")) == 0)))
-				{
-					IPACMERR("Tx(%d): wrong tx property: alt_dst_pipe: 0. \n", cnt);
-					close(fd);
-					return IPACM_FAILURE;
-				}
-
+				/* Move the alt_dst_pipe logic to wlan/wan instance */
 			}
 		}
 

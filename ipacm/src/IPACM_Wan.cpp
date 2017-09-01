@@ -531,7 +531,7 @@ fail:
 
 void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 {
-	int ipa_interface_index;
+	int ipa_interface_index, cnt;
 
 	switch (event)
 	{
@@ -1188,6 +1188,16 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 			break;
 
 		case IPA_WLAN_SWITCH_TO_MCC:
+			/* check if alt_dst_pipe set or not */
+			for (cnt = 0; cnt < tx_prop->num_tx_props; cnt++)
+			{
+				if (tx_prop->tx[cnt].alt_dst_pipe == 0)
+				{
+					IPACMERR("Tx(%d): wrong tx property: alt_dst_pipe: 0. \n", cnt);
+					return;
+				}
+			}
+
 			if(IPACM_Wan::backhaul_is_sta_mode == true)
 			{
 				IPACMDBG_H("Received IPA_WLAN_SWITCH_TO_MCC\n");

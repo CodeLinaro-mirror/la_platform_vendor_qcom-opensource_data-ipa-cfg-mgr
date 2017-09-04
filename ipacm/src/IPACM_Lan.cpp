@@ -902,6 +902,12 @@ int IPACM_Lan::handle_wan_down(bool is_sta_mode)
 
 		memset(&flt_index, 0, sizeof(flt_index));
 		flt_index.source_pipe_index = ioctl(fd, IPA_IOC_QUERY_EP_MAPPING, rx_prop->rx[0].src_pipe);
+		if (flt_index.source_pipe_index == -1)
+		{
+			IPACMERR("Error Query src pipe idx, aborting...\n");
+			close(fd);
+			return IPACM_FAILURE;
+		}
 		flt_index.install_status = IPA_QMI_RESULT_SUCCESS_V01;
 #ifndef FEATURE_IPA_V3
 		flt_index.filter_index_list_len = 0;
@@ -911,6 +917,12 @@ int IPACM_Lan::handle_wan_down(bool is_sta_mode)
 #endif
 		flt_index.embedded_pipe_index_valid = 1;
 		flt_index.embedded_pipe_index = ioctl(fd, IPA_IOC_QUERY_EP_MAPPING, IPA_CLIENT_APPS_LAN_WAN_PROD);
+		if (flt_index.embedded_pipe_index == -1)
+		{
+			IPACMERR("Error Query emb pipe idx, aborting...\n");
+			close(fd);
+			return IPACM_FAILURE;
+		}
 		flt_index.retain_header_valid = 1;
 		flt_index.retain_header = 0;
 		flt_index.embedded_call_mux_id_valid = 1;
@@ -2544,12 +2556,20 @@ int IPACM_Lan::handle_down_evt()
 	{
 		IPACMDBG_H("LAN IF goes down, backhaul type %d\n", IPACM_Wan::backhaul_is_sta_mode);
 		handle_wan_down(IPACM_Wan::backhaul_is_sta_mode);
+#ifdef FEATURE_IPA_ANDROID
+		/* Clean-up tethered-iface list */
+		IPACM_Wan::delete_tether_iface(IPA_IP_v4, ipa_if_num);
+#endif
 	}
 
 	if (IPACM_Wan::isWanUP_V6(ipa_if_num) && rx_prop != NULL)
 	{
 		IPACMDBG_H("LAN IF goes down, backhaul type %d\n", IPACM_Wan::backhaul_is_sta_mode);
 		handle_wan_down_v6(IPACM_Wan::backhaul_is_sta_mode);
+#ifdef FEATURE_IPA_ANDROID
+		/* Clean-up tethered-iface list */
+		IPACM_Wan::delete_tether_iface(IPA_IP_v6, ipa_if_num);
+#endif
 	}
 
 	/* delete default filter rules */
@@ -2824,6 +2844,13 @@ int IPACM_Lan::handle_uplink_filter_rule(ipacm_ext_prop *prop, ipa_ip_type iptyp
 
 	memset(&flt_index, 0, sizeof(flt_index));
 	flt_index.source_pipe_index = ioctl(fd, IPA_IOC_QUERY_EP_MAPPING, rx_prop->rx[0].src_pipe);
+	if (flt_index.source_pipe_index == -1)
+	{
+		IPACMERR("Error Query src pipe idx, aborting...\n");
+		close(fd);
+		return IPACM_FAILURE;
+	}
+
 	flt_index.install_status = IPA_QMI_RESULT_SUCCESS_V01;
 #ifndef FEATURE_IPA_V3
 	flt_index.filter_index_list_len = prop->num_ext_props;
@@ -2833,6 +2860,13 @@ int IPACM_Lan::handle_uplink_filter_rule(ipacm_ext_prop *prop, ipa_ip_type iptyp
 #endif
 	flt_index.embedded_pipe_index_valid = 1;
 	flt_index.embedded_pipe_index = ioctl(fd, IPA_IOC_QUERY_EP_MAPPING, IPA_CLIENT_APPS_LAN_WAN_PROD);
+	if (flt_index.embedded_pipe_index == -1)
+	{
+		IPACMERR("Error Query emb pipe idx, aborting...\n");
+		close(fd);
+		return IPACM_FAILURE;
+	}
+
 	flt_index.retain_header_valid = 1;
 	flt_index.retain_header = 0;
 	flt_index.embedded_call_mux_id_valid = 1;
@@ -3029,6 +3063,12 @@ int IPACM_Lan::handle_wan_down_v6(bool is_sta_mode)
 
 		memset(&flt_index, 0, sizeof(flt_index));
 		flt_index.source_pipe_index = ioctl(fd, IPA_IOC_QUERY_EP_MAPPING, rx_prop->rx[0].src_pipe);
+		if (flt_index.source_pipe_index == -1)
+		{
+			IPACMERR("Error Query src pipe idx, aborting...\n");
+			close(fd);
+			return IPACM_FAILURE;
+		}
 		flt_index.install_status = IPA_QMI_RESULT_SUCCESS_V01;
 #ifndef FEATURE_IPA_V3
 		flt_index.filter_index_list_len = 0;
@@ -3038,6 +3078,13 @@ int IPACM_Lan::handle_wan_down_v6(bool is_sta_mode)
 #endif
 		flt_index.embedded_pipe_index_valid = 1;
 		flt_index.embedded_pipe_index = ioctl(fd, IPA_IOC_QUERY_EP_MAPPING, IPA_CLIENT_APPS_LAN_WAN_PROD);
+		if (flt_index.embedded_pipe_index == -1)
+		{
+			IPACMERR("Error Query emb pipe idx, aborting...\n");
+			close(fd);
+			return IPACM_FAILURE;
+		}
+
 		flt_index.retain_header_valid = 1;
 		flt_index.retain_header = 0;
 		flt_index.embedded_call_mux_id_valid = 1;

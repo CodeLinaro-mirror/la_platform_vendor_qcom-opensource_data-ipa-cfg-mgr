@@ -158,7 +158,7 @@ void IPACM_Wlan::event_callback(ipa_cm_event_id event, void *param)
 	}
 
 	int ipa_interface_index;
-	int wlan_index;
+	int wlan_index, cnt;
 	ipacm_ext_prop* ext_prop;
 	ipacm_event_iface_up* data_wan;
 	ipacm_event_iface_up_tehter* data_wan_tether;
@@ -798,6 +798,16 @@ void IPACM_Wlan::event_callback(ipa_cm_event_id event, void *param)
 
 	case IPA_WLAN_SWITCH_TO_MCC:
 		IPACMDBG_H("Received IPA_WLAN_SWITCH_TO_MCC\n");
+		/* check if alt_dst_pipe set or not */
+		for (cnt = 0; cnt < tx_prop->num_tx_props; cnt++)
+		{
+			if (tx_prop->tx[cnt].alt_dst_pipe == 0)
+			{
+				IPACMERR("Tx(%d): wrong tx property: alt_dst_pipe: 0. \n", cnt);
+				return;
+			}
+		}
+
 		if(ip_type == IPA_IP_MAX)
 		{
 			handle_SCC_MCC_switch(IPA_IP_v4);
@@ -2329,16 +2339,17 @@ int IPACM_Wlan::handle_down_evt()
 			goto fail;
 		}
 		IPACM_Iface::ipacmcfg->decreaseFltRuleCount(rx_prop->rx[0].src_pipe, IPA_IP_v4, NUM_IPV4_ICMP_FLT_RULE);
-
-		if (m_filtering.DeleteFilteringHdls(dft_v4fl_rule_hdl, IPA_IP_v4, IPV4_DEFAULT_FILTERTING_RULES) == false)
+		if (dft_v4fl_rule_hdl[0] != 0)
 		{
-			IPACMERR("Error Deleting Filtering Rule, aborting...\n");
-			res = IPACM_FAILURE;
-			goto fail;
+			if (m_filtering.DeleteFilteringHdls(dft_v4fl_rule_hdl, IPA_IP_v4, IPV4_DEFAULT_FILTERTING_RULES) == false)
+			{
+				IPACMERR("Error Deleting Filtering Rule, aborting...\n");
+				res = IPACM_FAILURE;
+				goto fail;
+			}
+			IPACM_Iface::ipacmcfg->decreaseFltRuleCount(rx_prop->rx[0].src_pipe, IPA_IP_v4, IPV4_DEFAULT_FILTERTING_RULES);
+			IPACMDBG_H("Deleted default v4 filter rules successfully.\n");
 		}
-		IPACM_Iface::ipacmcfg->decreaseFltRuleCount(rx_prop->rx[0].src_pipe, IPA_IP_v4, IPV4_DEFAULT_FILTERTING_RULES);
-		IPACMDBG_H("Deleted default v4 filter rules successfully.\n");
-
 		/* delete private-ipv4 filter rules */
 #ifdef FEATURE_IPA_ANDROID
 		if(m_filtering.DeleteFilteringHdls(private_fl_rule_hdl, IPA_IP_v4, IPA_MAX_PRIVATE_SUBNET_ENTRIES) == false)
@@ -2360,6 +2371,15 @@ int IPACM_Wlan::handle_down_evt()
 		IPACM_Iface::ipacmcfg->decreaseFltRuleCount(rx_prop->rx[0].src_pipe, IPA_IP_v4, num_private_subnet_fl_rule);
 #endif
 		IPACMDBG_H("Deleted private subnet v4 filter rules successfully.\n");
+
+#ifdef FEATURE_L2TP
+		if(m_filtering.DeleteFilteringHdls(&tcp_syn_flt_rule_hdl[IPA_IP_v4], IPA_IP_v4, 1) == false)
+		{
+			IPACMERR("Error deleting tcp syn flt rule, aborting...\n");
+			res = IPACM_FAILURE;
+			goto fail;
+		}
+#endif
 	}
 
 	/* Delete v6 filtering rules */
@@ -2374,14 +2394,25 @@ int IPACM_Wlan::handle_down_evt()
 		}
 		IPACM_Iface::ipacmcfg->decreaseFltRuleCount(rx_prop->rx[0].src_pipe, IPA_IP_v6, NUM_IPV6_ICMP_FLT_RULE);
 
-		if (m_filtering.DeleteFilteringHdls(dft_v6fl_rule_hdl, IPA_IP_v6, IPV6_DEFAULT_FILTERTING_RULES) == false)
+		if (dft_v6fl_rule_hdl[0] != 0)
 		{
-			IPACMERR("Error Adding RuleTable(1) to Filtering, aborting...\n");
+			if (m_filtering.DeleteFilteringHdls(dft_v6fl_rule_hdl, IPA_IP_v6, IPV6_DEFAULT_FILTERTING_RULES) == false)
+			{
+				IPACMERR("Error Adding RuleTable(1) to Filtering, aborting...\n");
+				res = IPACM_FAILURE;
+				goto fail;
+			}
+			IPACM_Iface::ipacmcfg->decreaseFltRuleCount(rx_prop->rx[0].src_pipe, IPA_IP_v6, IPV6_DEFAULT_FILTERTING_RULES);
+			IPACMDBG_H("Deleted default v6 filter rules successfully.\n");
+		}
+#ifdef FEATURE_L2TP
+		if(m_filtering.DeleteFilteringHdls(&tcp_syn_flt_rule_hdl[IPA_IP_v6], IPA_IP_v6, 1) == false)
+		{
+			IPACMERR("Error deleting tcp syn flt rule, aborting...\n");
 			res = IPACM_FAILURE;
 			goto fail;
 		}
-		IPACM_Iface::ipacmcfg->decreaseFltRuleCount(rx_prop->rx[0].src_pipe, IPA_IP_v6, IPV6_DEFAULT_FILTERTING_RULES);
-		IPACMDBG_H("Deleted default v6 filter rules successfully.\n");
+#endif
 	}
 	IPACMDBG_H("finished delete filtering rules\n ");
 

@@ -295,6 +295,13 @@ IPACM_Lan::IPACM_Lan(int iface_index) : IPACM_Iface(iface_index)
 	lan_client_rt_from_lan_info_count_v6 = 0;
 	lan_client_rt_from_wlan_info_count_v4 = 0;
 	lan_client_rt_from_wlan_info_count_v6 = 0;
+	is_l2tp_iface = false;
+#ifdef FEATURE_L2TP_E2E
+	if(ipa_if_cate == ODU_IF)
+	{
+		install_l2tp_ul_hdr_proc_ctx();
+	}
+#endif
 
 	return;
 }
@@ -441,6 +448,14 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 				return;
 			}
 
+#ifdef FEATURE_L2TP_E2E
+			if(data->iptype == IPA_IP_v6 && is_vlan_event(data->iface_name) && is_unique_local_ipv6_addr(data->ipv6_addr))
+			{
+				IPACMDBG_H("Got IPv6 new addr event for a vlan iface %s.\n", data->iface_name);
+				IPACM_Iface::ipacmcfg->handle_vlan_iface_info(data);
+				return;
+			}
+#endif
 
 			if (ipa_interface_index == ipa_if_num)
 			{
@@ -481,6 +496,12 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 						/* ADD ipv6 icmp rule */
 						if ((num_dft_rt_v6 == 1) && (data->iptype == IPA_IP_v6))
 						{
+#ifdef FEATURE_L2TP_E2E
+							if(ipa_if_cate == ODU_IF)
+							{
+								install_l2tp_inner_private_subnet_flt_rule(); /* encapsulated IPv4 private subnet rule */
+							}
+#endif
 							install_ipv6_icmp_flt_rule();
 						}
 						handle_private_subnet(data->iptype);
@@ -680,53 +701,120 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 				}
 			}
 
-			if (ipa_interface_index == ipa_if_num)
+			if (ipa_interface_index == ipa_if_num
+#ifdef FEATURE_L2TP_E2E
+				|| is_vlan_event(data->iface_name)
+				|| (is_l2tp_event(data->iface_name) && ipa_if_cate == ODU_IF)
+#endif
+				)
 			{
 				IPACMDBG_H("ETH iface got client \n");
 				/* first construc ETH full header */
-				handle_eth_hdr_init(data->mac_addr);
-				handle_lan2lan_client_active(data, IPA_LAN_CLIENT_ACTIVE);
-				IPACMDBG_H("construct ETH header and route rules \n");
-				/* Associate with IP and construct RT-rule */
-				if (handle_eth_client_ipaddr(data) == IPACM_FAILURE)
+				if(ipa_interface_index == ipa_if_num)
 				{
-					return;
-				}
-				handle_eth_client_route_rule(data->mac_addr, data->iptype);
-				if (data->iptype == IPA_IP_v4)
-				{
-					/* Add NAT rules after ipv4 RT rules are set */
-					CtList->HandleNeighIpAddrAddEvt(data);
-				}
+					handle_eth_hdr_init(data->mac_addr);
+					handle_lan2lan_client_active(data, IPA_LAN_CLIENT_ACTIVE);
+					IPACMDBG_H("construct ETH header and route rules \n");
+					/* Associate with IP and construct RT-rule */
+					if (handle_eth_client_ipaddr(data) == IPACM_FAILURE)
+					{
+						return;
+					}
+					handle_eth_client_route_rule(data->mac_addr, data->iptype);
+					if (data->iptype == IPA_IP_v4)
+					{
+						/* Add NAT rules after ipv4 RT rules are set */
+						CtList->HandleNeighIpAddrAddEvt(data);
+					}
 #ifdef FEATURE_ETH_BRIDGE_LE
-				if (IPACM_Iface::ipacmcfg->iface_table[ipa_if_num].if_cat == LAN_IF)
-				{
-					if (IPACM_Lan::cpe_to_usb_hdr_proc_ctx.valid == true)
+					if (IPACM_Iface::ipacmcfg->iface_table[ipa_if_num].if_cat == LAN_IF)
 					{
-						eth_bridge_add_lan_client_rt_rule(data->mac_addr, SRC_LAN, IPA_IP_v4);
-						eth_bridge_add_lan_client_rt_rule(data->mac_addr, SRC_LAN, IPA_IP_v6);
+						if (IPACM_Lan::cpe_to_usb_hdr_proc_ctx.valid == true)
+						{
+							eth_bridge_add_lan_client_rt_rule(data->mac_addr, SRC_LAN, IPA_IP_v4);
+							eth_bridge_add_lan_client_rt_rule(data->mac_addr, SRC_LAN, IPA_IP_v6);
+						}
+						if (IPACM_Lan::wlan_to_usb_hdr_proc_ctx.valid == true)
+						{
+							eth_bridge_add_lan_client_rt_rule(data->mac_addr, SRC_WLAN, IPA_IP_v4);
+							eth_bridge_add_lan_client_rt_rule(data->mac_addr, SRC_WLAN, IPA_IP_v6);
+						}
 					}
-					if (IPACM_Lan::wlan_to_usb_hdr_proc_ctx.valid == true)
+					if (IPACM_Iface::ipacmcfg->iface_table[ipa_if_num].if_cat == ODU_IF)
 					{
-						eth_bridge_add_lan_client_rt_rule(data->mac_addr, SRC_WLAN, IPA_IP_v4);
-						eth_bridge_add_lan_client_rt_rule(data->mac_addr, SRC_WLAN, IPA_IP_v6);
+						if (IPACM_Lan::usb_to_cpe_hdr_proc_ctx.valid == true)
+						{
+							eth_bridge_add_lan_client_rt_rule(data->mac_addr, SRC_LAN, IPA_IP_v4);
+							eth_bridge_add_lan_client_rt_rule(data->mac_addr, SRC_LAN, IPA_IP_v6);
+						}
+						if (IPACM_Lan::wlan_to_cpe_hdr_proc_ctx.valid == true)
+						{
+							eth_bridge_add_lan_client_rt_rule(data->mac_addr, SRC_WLAN, IPA_IP_v4);
+							eth_bridge_add_lan_client_rt_rule(data->mac_addr, SRC_WLAN, IPA_IP_v6);
+						}
+					}
+					eth_bridge_post_lan_client_event(data->mac_addr, IPA_ETH_BRIDGE_LAN_CLIENT_ADD_EVENT);
+					eth_bridge_add_lan_client(data->mac_addr);
+#endif
+				}
+#ifdef FEATURE_L2TP_E2E
+				else if(is_l2tp_event(data->iface_name))
+				{
+					if (data->iptype == IPA_IP_v4)
+					{
+						int index;
+
+						index = get_eth_client_index(data->mac_addr);
+						if(index != IPACM_INVALID_INDEX)
+						{
+							IPACMERR("eth client is found/attached already with index %d \n", index);
+							return;
+						}
+						if(num_eth_client >= IPA_MAX_NUM_ETH_CLIENTS)
+						{
+							IPACMERR("Reached maximum number(%d) of eth clients\n", IPA_MAX_NUM_ETH_CLIENTS);
+							return;
+						}
+
+						/* Add NAT rules after ipv4 RT rules are set */
+						CtList->HandleNeighIpAddrAddEvt(data);
+
+						IPACMDBG_H("Netdev %s add producer dependency\n", dev_name);
+						if(tx_prop != NULL)
+						{
+							IPACMDBG_H("Dependency pipe: %d, rm index: %d \n", tx_prop->tx[0].dst_pipe,
+								IPACM_Iface::ipacmcfg->ipa_client_rm_map_tbl[tx_prop->tx[0].dst_pipe]);
+							IPACM_Iface::ipacmcfg->AddRmDepend(IPACM_Iface::ipacmcfg->ipa_client_rm_map_tbl[tx_prop->tx[0].dst_pipe], false);
+						}
+
+						index = num_eth_client;
+						if(install_l2tp_dl_rules(data, index) != IPACM_SUCCESS)
+						{
+							IPACMERR("Failed to add l2tp dl rules.\n");
+							return;
+						}	
+
+						if(install_l2tp_ul_rules(data, index) != IPACM_SUCCESS)
+						{
+							IPACMERR("Failed to add l2tp ul rules.\n");
+							/* delete dl rules */
+							m_routing.DeleteRoutingHdl(get_client_memptr(eth_client, index)->dl_first_pass_rt_rule_hdl, IPA_IP_v4);
+							m_routing.DeleteRoutingHdl(get_client_memptr(eth_client, index)->dl_second_pass_rt_rule_hdl, IPA_IP_v6);
+							m_header.DeleteHeaderProcCtx(get_client_memptr(eth_client, index)->dl_first_pass_hdr_proc_ctx_hdl);
+							m_header.DeleteHeaderHdl(get_client_memptr(eth_client, index)->dl_first_pass_hdr_hdl);
+							m_header.DeleteHeaderHdl(get_client_memptr(eth_client, index)->dl_second_pass_hdr_hdl);
+							return;
+						}
+						num_eth_client++;
 					}
 				}
-				if (IPACM_Iface::ipacmcfg->iface_table[ipa_if_num].if_cat == ODU_IF)
+				else	//it is vlan event
 				{
-					if (IPACM_Lan::usb_to_cpe_hdr_proc_ctx.valid == true)
+					if(data->iptype == IPA_IP_v6 && is_unique_local_ipv6_addr(data->ipv6_addr))
 					{
-						eth_bridge_add_lan_client_rt_rule(data->mac_addr, SRC_LAN, IPA_IP_v4);
-						eth_bridge_add_lan_client_rt_rule(data->mac_addr, SRC_LAN, IPA_IP_v6);
-					}
-					if (IPACM_Lan::wlan_to_cpe_hdr_proc_ctx.valid == true)
-					{
-						eth_bridge_add_lan_client_rt_rule(data->mac_addr, SRC_WLAN, IPA_IP_v4);
-						eth_bridge_add_lan_client_rt_rule(data->mac_addr, SRC_WLAN, IPA_IP_v6);
+						IPACM_Iface::ipacmcfg->handle_vlan_client_info(data);
 					}
 				}
-				eth_bridge_post_lan_client_event(data->mac_addr, IPA_ETH_BRIDGE_LAN_CLIENT_ADD_EVENT);
-				eth_bridge_add_lan_client(data->mac_addr);
 #endif
 				return;
 			}
@@ -748,42 +836,58 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 				return;
 			}
 
-			if (ipa_interface_index == ipa_if_num)
-			{
-				if (data->iptype == IPA_IP_v6)
-				{
-					handle_del_ipv6_addr(data);
-					return;
-				}
-#ifdef FEATURE_ETH_BRIDGE_LE
-				if (IPACM_Iface::ipacmcfg->iface_table[ipa_if_num].if_cat == LAN_IF)
-				{
-					if (IPACM_Lan::cpe_to_usb_hdr_proc_ctx.valid == true)
-					{
-						eth_bridge_del_lan_client_rt_rule(data->mac_addr, SRC_LAN);
-					}
-					if (IPACM_Lan::wlan_to_usb_hdr_proc_ctx.valid == true)
-					{
-						eth_bridge_del_lan_client_rt_rule(data->mac_addr, SRC_WLAN);
-					}
-				}
-				if (IPACM_Iface::ipacmcfg->iface_table[ipa_if_num].if_cat == ODU_IF)
-				{
-					if (IPACM_Lan::usb_to_cpe_hdr_proc_ctx.valid == true)
-					{
-						eth_bridge_del_lan_client_rt_rule(data->mac_addr, SRC_LAN);
-					}
-					if (IPACM_Lan::wlan_to_cpe_hdr_proc_ctx.valid == true)
-					{
-						eth_bridge_del_lan_client_rt_rule(data->mac_addr, SRC_WLAN);
-					}
-				}
-				eth_bridge_post_lan_client_event(data->mac_addr, IPA_ETH_BRIDGE_LAN_CLIENT_DEL_EVENT);
-				eth_bridge_del_lan_client(data->mac_addr);
+			if (ipa_interface_index == ipa_if_num
+#ifdef FEATURE_L2TP_E2E
+				|| (is_l2tp_event(data->iface_name) && ipa_if_cate == ODU_IF)
 #endif
-				IPACMDBG_H("LAN iface delete client \n");
-				handle_eth_client_down_evt(data->mac_addr);
-				handle_lan2lan_client_active(data, IPA_LAN_CLIENT_INACTIVE);
+				)
+			{
+				if(ipa_interface_index == ipa_if_num)
+				{
+					if (data->iptype == IPA_IP_v6)
+					{
+						handle_del_ipv6_addr(data);
+						return;
+					}
+#ifdef FEATURE_ETH_BRIDGE_LE
+					if (IPACM_Iface::ipacmcfg->iface_table[ipa_if_num].if_cat == LAN_IF)
+					{
+						if (IPACM_Lan::cpe_to_usb_hdr_proc_ctx.valid == true)
+						{
+							eth_bridge_del_lan_client_rt_rule(data->mac_addr, SRC_LAN);
+						}
+						if (IPACM_Lan::wlan_to_usb_hdr_proc_ctx.valid == true)
+						{
+							eth_bridge_del_lan_client_rt_rule(data->mac_addr, SRC_WLAN);
+						}
+					}
+					if (IPACM_Iface::ipacmcfg->iface_table[ipa_if_num].if_cat == ODU_IF)
+					{
+						if (IPACM_Lan::usb_to_cpe_hdr_proc_ctx.valid == true)
+						{
+							eth_bridge_del_lan_client_rt_rule(data->mac_addr, SRC_LAN);
+						}
+						if (IPACM_Lan::wlan_to_cpe_hdr_proc_ctx.valid == true)
+						{
+							eth_bridge_del_lan_client_rt_rule(data->mac_addr, SRC_WLAN);
+						}
+					}
+					eth_bridge_post_lan_client_event(data->mac_addr, IPA_ETH_BRIDGE_LAN_CLIENT_DEL_EVENT);
+					eth_bridge_del_lan_client(data->mac_addr);
+#endif
+					IPACMDBG_H("LAN iface delete client \n");
+					handle_eth_client_down_evt(data->mac_addr);
+					handle_lan2lan_client_active(data, IPA_LAN_CLIENT_INACTIVE);
+				}
+#ifdef FEATURE_L2TP_E2E
+				else
+				{
+					if(data->iptype == IPA_IP_v4)
+					{
+						uninstall_l2tp_rules(data);
+					}
+				}
+#endif
 				return;
 			}
 		}
@@ -1600,6 +1704,13 @@ int IPACM_Lan::handle_wan_up_ex(ipacm_ext_prop *ext_prop, ipa_ip_type iptype, ui
 	if ((num_dft_rt_v6 ==1 && iptype ==IPA_IP_v6) ||
 			(iptype ==IPA_IP_v4))
 	{
+#ifdef FEATURE_L2TP_E2E
+		if(iptype == IPA_IP_v6 && ipa_if_cate == ODU_IF)
+		{
+			IPACMDBG_H("not installing modem UL IPv6 rules in L2TP E2E use case.\n");
+			return IPACM_SUCCESS;
+		}
+#endif
 		IPACMDBG_H("num_dft_rt_v6 %d iptype %d xlat_mux_id: %d \n", num_dft_rt_v6, iptype, xlat_mux_id);
 		ret = handle_uplink_filter_rule(ext_prop, iptype, xlat_mux_id);
 	}
@@ -2632,6 +2743,9 @@ int IPACM_Lan::handle_down_evt()
 	int i;
 	int res = IPACM_SUCCESS;
 	uint32_t temp_eth_bridge_flt_rule[IPA_LAN_TO_LAN_MAX_WLAN_CLIENT];
+	list<l2tp_client_info>::iterator it;
+	ipacm_cmd_q_data evt_data;
+	ipacm_event_data_all *data_all;
 
 	IPACMDBG_H("lan handle_down_evt\n ");
 	if (IPACM_Iface::ipacmcfg->iface_table[ipa_if_num].if_cat == ODU_IF)
@@ -2668,6 +2782,25 @@ int IPACM_Lan::handle_down_evt()
 			IPACMERR("ODU ipv6 header delete success\n");
 		}
 	}
+
+#ifdef FEATURE_L2TP_E2E
+	if(ipa_if_cate == ODU_IF)
+	{
+		if(m_header.DeleteHeaderProcCtx(l2tp_ul_hdr_proc_ctx_hdl) == false)
+		{
+			IPACMERR("Failed to delete l2tp ul hdr proc ctx.\n");
+			res = IPACM_FAILURE;
+			goto fail;
+		}
+
+		if(m_header.DeleteHeaderHdl(l2tp_ul_dummy_hdr_hdl) == false)
+		{
+			IPACMERR("Failed to delete l2tp ul dummy hdr.\n");
+			res = IPACM_FAILURE;
+			goto fail;
+		}
+	}
+#endif
 
 	/* no iface address up, directly close iface*/
 	if (ip_type == IPACM_IP_NULL)
@@ -2831,6 +2964,19 @@ int IPACM_Lan::handle_down_evt()
 			goto fail;
 		}
 		IPACM_Iface::ipacmcfg->decreaseFltRuleCount(rx_prop->rx[0].src_pipe, IPA_IP_v6, NUM_IPV6_ICMP_FLT_RULE);
+#ifdef FEATURE_L2TP_E2E
+		if(ipa_if_cate == ODU_IF)
+		{
+			if (m_filtering.DeleteFilteringHdls(l2tp_inner_private_subnet_flt_rule_hdl, IPA_IP_v6,
+				IPACM_Iface::ipacmcfg->ipa_num_private_subnet) == false)
+			{
+				IPACMERR("Error Deleting Filtering, aborting...\n");
+				res = IPACM_FAILURE;
+				goto fail;
+			}
+			IPACM_Iface::ipacmcfg->decreaseFltRuleCount(rx_prop->rx[0].src_pipe, IPA_IP_v6, IPACM_Iface::ipacmcfg->ipa_num_private_subnet);
+		}
+#endif
 
 		if (m_filtering.DeleteFilteringHdls(dft_v6fl_rule_hdl, IPA_IP_v6, IPV6_DEFAULT_FILTERTING_RULES) == false)
 		{
@@ -2938,8 +3084,10 @@ int IPACM_Lan::handle_down_evt()
 	IPACMDBG_H("Finished delete default iface ipv6 rules \n ");
 	/* clean eth-client header, routing rules */
 	IPACMDBG_H("left %d eth clients need to be deleted \n ", num_eth_client);
-	for (i = 0; i < num_eth_client; i++)
+	for(i = 0; i < num_eth_client; i++)
 	{
+		if(is_l2tp_iface == false)
+		{
 #ifdef FEATURE_ETH_BRIDGE_LE
 			eth_bridge_del_lan_client_rt_rule(get_client_memptr(eth_client, i)->mac, SRC_LAN);
 			eth_bridge_del_lan_client_rt_rule(get_client_memptr(eth_client, i)->mac, SRC_WLAN);
@@ -2983,14 +3131,85 @@ int IPACM_Lan::handle_down_evt()
 
 			if(get_client_memptr(eth_client, i)->ipv6_header_set == true)
 			{
-			if (m_header.DeleteHeaderHdl(get_client_memptr(eth_client, i)->hdr_hdl_v6)
-					== false)
+				if (m_header.DeleteHeaderHdl(get_client_memptr(eth_client, i)->hdr_hdl_v6)
+						== false)
+				{
+					res = IPACM_FAILURE;
+					goto fail;
+				}
+			}
+		}
+#ifdef FEATURE_L2TP_E2E
+		else
+		{
+			IPACMDBG_H("Clean Nat Rules for ipv4: 0x%08x\n", get_client_memptr(eth_client, i)->v4_addr);
+			CtList->HandleNeighIpAddrDelEvt(get_client_memptr(eth_client, i)->v4_addr);
+
+			/* delete dl rules */
+			if(m_routing.DeleteRoutingHdl(get_client_memptr(eth_client, i)->dl_first_pass_rt_rule_hdl, IPA_IP_v4) == false)
 			{
-				res = IPACM_FAILURE;
-				goto fail;
+				IPACMERR("Failed to delete first pass rt rule.\n");
+				return IPACM_FAILURE;
 			}
+
+			if(m_routing.DeleteRoutingHdl(get_client_memptr(eth_client, i)->dl_second_pass_rt_rule_hdl, IPA_IP_v6) == false)
+			{
+				IPACMERR("Failed to delete second pass rt rule.\n");
+				return IPACM_FAILURE;
 			}
+
+			if(m_header.DeleteHeaderProcCtx(get_client_memptr(eth_client, i)->dl_first_pass_hdr_proc_ctx_hdl) == false)
+			{
+				IPACMERR("Failed to delete first pass hdr proc ctx.\n");
+				return IPACM_FAILURE;
+			}
+
+			if(m_header.DeleteHeaderHdl(get_client_memptr(eth_client, i)->dl_first_pass_hdr_hdl) == false)
+			{
+				IPACMERR("Failed to delete first pass hdr.\n");
+				return IPACM_FAILURE;
+			}
+
+			if(m_header.DeleteHeaderHdl(get_client_memptr(eth_client, i)->dl_second_pass_hdr_hdl) == false)
+			{
+				IPACMERR("Failed to delete second pass hdr.\n");
+				return IPACM_FAILURE;
+			}
+#if 0
+			/* delete ul rules */
+			if(m_filtering.DeleteFilteringHdls(&get_client_memptr(eth_client, i)->ul_first_pass_flt_rule_hdl, IPA_IP_v6, 1) == false)
+			{
+				IPACMERR("Failed to delete ul flt rule.\n");
+				return IPACM_FAILURE;
+			}
+			IPACM_Iface::ipacmcfg->decreaseFltRuleCount(rx_prop->rx[0].src_pipe, IPA_IP_v6, 1);
+#endif
+			if(m_routing.DeleteRoutingHdl(get_client_memptr(eth_client, i)->ul_first_pass_rt_rule_hdl, IPA_IP_v6) == false)
+			{
+				IPACMERR("Failed to delete ul rt rule.\n");
+				return IPACM_FAILURE;
+			}
+		}
+#endif
 	} /* end of for loop */
+#ifdef FEATURE_L2TP_E2E
+	/* post IPA_DEL_L2TP_CLIENT event */
+	for(it = IPACM_Iface::ipacmcfg->l2tp_client.begin(); it != IPACM_Iface::ipacmcfg->l2tp_client.end(); it++)
+	{
+		memset(&evt_data, 0, sizeof(evt_data));
+		data_all = (ipacm_event_data_all *)malloc(sizeof(ipacm_event_data_all));
+		if(data_all == NULL)
+		{
+			IPACMERR("Unable to allocate memory for event data.\n");
+			return IPACM_FAILURE;
+		}
+		strlcpy(data_all->iface_name, it->client_iface_name, sizeof(data_all->iface_name));
+		evt_data.event = IPA_DEL_L2TP_CLIENT;
+		evt_data.evt_data = data_all;
+		IPACM_EvtDispatcher::PostEvt(&evt_data);
+	}
+	IPACM_Iface::ipacmcfg->l2tp_client.clear();
+#endif
 
 	/* free the edm clients cache */
 	IPACMDBG_H("Free ecm clients cache\n");
@@ -3294,7 +3513,8 @@ int IPACM_Lan::handle_wan_down_v6(bool is_sta_mode)
 			close(fd);
 			return IPACM_FAILURE;
 		}
-
+#ifndef FEATURE_L2TP_E2E
+		/* When OCU is enabled, no need to delete modem UL IPv6 rules. */
 		if (m_filtering.DeleteFilteringHdls(wan_ul_fl_rule_hdl_v6,
 			IPA_IP_v6, num_wan_ul_fl_rule_v6) == false)
 		{
@@ -3306,7 +3526,7 @@ int IPACM_Lan::handle_wan_down_v6(bool is_sta_mode)
 
 		memset(wan_ul_fl_rule_hdl_v6, 0, MAX_WAN_UL_FILTER_RULES * sizeof(uint32_t));
 		num_wan_ul_fl_rule_v6 = 0;
-
+#endif
 		memset(&flt_index, 0, sizeof(flt_index));
 		flt_index.source_pipe_index = ioctl(fd, IPA_IOC_QUERY_EP_MAPPING, rx_prop->rx[0].src_pipe);
 		flt_index.install_status = IPA_QMI_RESULT_SUCCESS_V01;
@@ -4938,7 +5158,70 @@ int IPACM_Lan::install_ipv6_icmp_flt_rule()
 	}
 	return IPACM_SUCCESS;
 }
+#ifdef FEATURE_L2TP_E2E
+int IPACM_Lan::install_l2tp_inner_private_subnet_flt_rule()
+{
+	int i;
+	ipa_ioc_add_flt_rule *m_pFilteringTable;
+	ipa_flt_rule_add *flt_rule_entry;
 
+	if(rx_prop == NULL)
+	{
+		IPACMDBG_H("No rx properties registered for iface %s\n", dev_name);
+		return IPACM_SUCCESS;
+	}
+
+	m_pFilteringTable = (struct ipa_ioc_add_flt_rule *)
+		 calloc(1, sizeof(struct ipa_ioc_add_flt_rule) +
+			(IPACM_Iface::ipacmcfg->ipa_num_private_subnet) * sizeof(struct ipa_flt_rule_add));
+	if(!m_pFilteringTable)
+	{
+		IPACMERR("Failed to allocate memory.\n");
+		return IPACM_FAILURE;
+	}
+	m_pFilteringTable->commit = 1;
+	m_pFilteringTable->ep = rx_prop->rx[0].src_pipe;
+	m_pFilteringTable->global = false;
+	m_pFilteringTable->ip = IPA_IP_v6;
+	m_pFilteringTable->num_rules = (uint8_t)IPACM_Iface::ipacmcfg->ipa_num_private_subnet;
+
+	for(i = 0; i < (IPACM_Iface::ipacmcfg->ipa_num_private_subnet); i++)
+	{
+		flt_rule_entry = &m_pFilteringTable->rules[i];
+		flt_rule_entry->at_rear = true;
+		flt_rule_entry->rule.retain_hdr = 1;
+		flt_rule_entry->flt_rule_hdl = -1;
+		flt_rule_entry->status = -1;
+		flt_rule_entry->rule.action = IPA_PASS_TO_EXCEPTION;
+
+		memcpy(&flt_rule_entry->rule.attrib, &rx_prop->rx[1].attrib,
+			sizeof(flt_rule_entry->rule.attrib));
+		flt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_NEXT_HDR;
+		flt_rule_entry->rule.attrib.u.v6.next_hdr = 0x73;
+		flt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_L2TP_INNER_IP_TYPE;
+		flt_rule_entry->rule.attrib.type = 0x40;
+		flt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_L2TP_INNER_IPV4_DST_ADDR;
+		flt_rule_entry->rule.attrib.u.v4.dst_addr_mask = IPACM_Iface::ipacmcfg->private_subnet_table[i].subnet_mask;
+		flt_rule_entry->rule.attrib.u.v4.dst_addr = IPACM_Iface::ipacmcfg->private_subnet_table[i].subnet_addr;
+	}
+
+	if(false == m_filtering.AddFilteringRule(m_pFilteringTable))
+	{
+		IPACMERR("Error Adding Filtering, aborting...\n");
+		free(m_pFilteringTable);
+		return IPACM_FAILURE;
+	}
+	IPACM_Iface::ipacmcfg->increaseFltRuleCount(rx_prop->rx[0].src_pipe, IPA_IP_v6, IPACM_Iface::ipacmcfg->ipa_num_private_subnet);
+
+	/* copy filter rule hdls */
+	for (i = 0; i < IPACM_Iface::ipacmcfg->ipa_num_private_subnet; i++)
+	{
+		l2tp_inner_private_subnet_flt_rule_hdl[i] = m_pFilteringTable->rules[i].flt_rule_hdl;
+	}
+	free(m_pFilteringTable);
+	return IPACM_SUCCESS;
+}
+#endif
 int IPACM_Lan::handle_addr_evt_odu_bridge(ipacm_event_data_addr* data)
 {
 	int fd, res = IPACM_SUCCESS;
@@ -6860,6 +7143,668 @@ int IPACM_Lan::handle_cradle_wan_mode_switch(bool is_wan_bridge_mode)
 	free(m_pFilteringTable);
 	return IPACM_SUCCESS;
 }
+#ifdef FEATURE_L2TP_E2E
+bool IPACM_Lan::is_vlan_event(char *event_iface_name)
+{
+	int self_name_len, event_iface_name_len;
+	if(event_iface_name == NULL)
+	{
+		IPACMERR("Invalid input\n");
+		return false;
+	}
 
+	IPACMDBG_H("Self iface %s, event iface %s\n", dev_name, event_iface_name);
+	self_name_len = strlen(dev_name);
+	event_iface_name_len = strlen(event_iface_name);
 
+	if(event_iface_name_len > self_name_len && strncmp(dev_name, event_iface_name, self_name_len) == 0)
+	{
+		IPACMDBG_H("This is vlan event.\n");
+		return true;
+	}
+	return false;
+}
 
+/* check if the event is associated with l2tp interface */
+bool IPACM_Lan::is_l2tp_event(char *event_iface_name)
+{
+	if(event_iface_name == NULL)
+	{
+		IPACMERR("Invalid input\n");
+		return false;
+	}
+
+	IPACMDBG_H("Self iface %s, event iface %s\n", dev_name, event_iface_name);
+	if(strncmp(event_iface_name, "l2tp", 4) == 0)
+	{
+		IPACMDBG_H("This is l2tp event.\n");
+		return true;
+	}
+	return false;
+}
+
+/* install l2tp dl rules */
+int IPACM_Lan::install_l2tp_dl_rules(ipacm_event_data_all *data, int index)
+{
+	int i, size;
+	ipa_ioc_add_hdr *hdr_table;
+	ipa_hdr_add *hdr;
+	ipa_ioc_add_hdr_proc_ctx *hdr_proc_ctx_table;
+	ipa_hdr_proc_ctx_add *hdr_proc_ctx;
+	ipa_ioc_add_rt_rule* rt_rule_table;
+	ipa_rt_rule_add *rt_rule;
+	ipa_ioc_copy_hdr copy_hdr;
+	l2tp_vlan_mapping_info info;
+	uint32_t vlan_iface_ipv6_addr_network[4], vlan_client_ipv6_addr_network[4];
+	l2tp_client_info new_client_info;
+	ipacm_cmd_q_data evt_data;
+	ipacm_event_data_all *data_all;
+
+	if(tx_prop == NULL)
+	{
+		IPACMERR("No tx prop.\n");
+		return IPACM_FAILURE;
+	}
+
+	if(IPACM_Iface::ipacmcfg->get_vlan_l2tp_mapping(data->iface_name, info) == IPACM_FAILURE)
+	{
+		IPACMERR("Fail to get vlan-l2tp mapping.\n");
+		return IPACM_FAILURE;
+	}
+
+	get_client_memptr(eth_client, index)->v4_addr = data->ipv4_addr;
+	is_l2tp_iface = true;
+	memcpy(get_client_memptr(eth_client, index)->mac, data->mac_addr,
+		sizeof(get_client_memptr(eth_client, index)->mac));
+
+	/* =========== install first pass hdr template (IPv6 + L2TP + inner ETH header = 62 bytes) ============= */
+	size = sizeof(ipa_ioc_add_hdr) + sizeof(ipa_hdr_add);
+	hdr_table = (ipa_ioc_add_hdr*)malloc(size);
+	if(hdr_table == NULL)
+	{
+		IPACMERR("Failed to allocate memory.\n");
+		return IPACM_FAILURE;
+	}
+	memset(hdr_table, 0, size);
+
+	hdr_table->commit = 1;
+	hdr_table->num_hdrs = 1;
+	hdr = &hdr_table->hdr[0];
+
+	snprintf(hdr->name, sizeof(hdr->name), "vlan_%d_l2tp_%d_v4", info.vlan_id, info.l2tp_session_id);
+
+	hdr->hdr_len = 62;
+	hdr->type = IPA_HDR_L2_ETHERNET_II;
+	hdr->is_partial = 0;
+
+	hdr->hdr[0] = 0x60;	/* version */
+	hdr->hdr[6] = 0x73; /* next header = L2TP */
+	hdr->hdr[7] = 0x40; /* hop limit = 64 */
+	for(i = 0; i < 4; i++)
+	{
+		vlan_iface_ipv6_addr_network[i] = htonl(info.vlan_iface_ipv6_addr[i]);
+		vlan_client_ipv6_addr_network[i] = htonl(info.vlan_client_ipv6_addr[i]);
+	}
+	memcpy(hdr->hdr + 8, vlan_iface_ipv6_addr_network, 16); /* source IPv6 addr */
+	memcpy(hdr->hdr + 24, vlan_client_ipv6_addr_network, 16); /* dest IPv6 addr */
+	hdr->hdr[43] = (uint8_t)(info.l2tp_session_id & 0xFF); /* l2tp header */
+	hdr->hdr[42] = (uint8_t)(info.l2tp_session_id >> 8 & 0xFF);
+	hdr->hdr[41] = (uint8_t)(info.l2tp_session_id >> 16 & 0xFF);
+	hdr->hdr[40] = (uint8_t)(info.l2tp_session_id >> 24 & 0xFF);
+	/* inner ETH header */
+	memcpy(hdr->hdr + 48, data->mac_addr, 6); /* dst mac */
+	hdr->hdr[60] = 0x08; /* Ether type */
+	hdr->hdr[61] = 0x00;
+
+	if(m_header.AddHeader(hdr_table) == false)
+	{
+		IPACMERR("Failed to add hdr with status: %d\n", hdr_table->hdr[0].status);
+		free(hdr_table);
+		return IPACM_FAILURE;
+	}
+	get_client_memptr(eth_client, index)->dl_first_pass_hdr_hdl = hdr_table->hdr[0].hdr_hdl;
+	IPACMDBG_H("Installed first pass hdr: hdl %d\n", hdr_table->hdr[0].hdr_hdl);
+	free(hdr_table);
+
+	/* =========== install first pass hdr proc ctx ============= */
+	size = sizeof(ipa_ioc_add_hdr_proc_ctx) + sizeof(ipa_hdr_proc_ctx_add);
+	hdr_proc_ctx_table = (ipa_ioc_add_hdr_proc_ctx*)malloc(size);
+	if(hdr_proc_ctx_table == NULL)
+	{
+		IPACMERR("Failed to allocate memory.\n");
+		return IPACM_FAILURE;
+	}
+	memset(hdr_proc_ctx_table, 0, size);
+
+	hdr_proc_ctx_table->commit = 1;
+	hdr_proc_ctx_table->num_proc_ctxs = 1;
+	hdr_proc_ctx = &hdr_proc_ctx_table->proc_ctx[0];
+
+	hdr_proc_ctx->type = IPA_HDR_PROC_L2TP_HEADER_ADD;
+	hdr_proc_ctx->hdr_hdl = get_client_memptr(eth_client, index)->dl_first_pass_hdr_hdl;
+	hdr_proc_ctx->l2tp_params.hdr_add_param.eth_hdr_retained = 0;
+	hdr_proc_ctx->l2tp_params.hdr_add_param.input_ip_version = IPA_IP_v4;
+	hdr_proc_ctx->l2tp_params.hdr_add_param.output_ip_version = IPA_IP_v6;
+	if(m_header.AddHeaderProcCtx(hdr_proc_ctx_table) == false)
+	{
+		IPACMERR("Failed to add hdr proc ctx with status: %d\n", hdr_proc_ctx_table->proc_ctx[0].status);
+		free(hdr_proc_ctx_table);
+		return IPACM_FAILURE;
+	}
+	get_client_memptr(eth_client, index)->dl_first_pass_hdr_proc_ctx_hdl =
+		hdr_proc_ctx_table->proc_ctx[0].proc_ctx_hdl;
+	IPACMDBG_H("Installed first pass hdr proc ctx: hdl %d\n", hdr_proc_ctx_table->proc_ctx[0].proc_ctx_hdl);
+	free(hdr_proc_ctx_table);
+
+	/* =========== install first pass rt rules (match dst MAC then doing UCP) ============= */
+	size = sizeof(ipa_ioc_add_rt_rule) + sizeof(ipa_rt_rule_add);
+	rt_rule_table = (ipa_ioc_add_rt_rule*)malloc(size);
+	if (rt_rule_table == NULL)
+	{
+		IPACMERR("Failed to allocate memory.\n");
+		return IPACM_FAILURE;
+	}
+	memset(rt_rule_table, 0, size);
+
+	rt_rule_table->commit = 1;
+	rt_rule_table->ip = IPA_IP_v4;
+	rt_rule_table->num_rules = 1;
+
+	strlcpy(rt_rule_table->rt_tbl_name, IPACM_Iface::ipacmcfg->rt_tbl_lan_v4.name,
+		sizeof(rt_rule_table->rt_tbl_name));
+	rt_rule_table->rt_tbl_name[IPA_RESOURCE_NAME_MAX-1] = 0;
+
+	rt_rule = &rt_rule_table->rules[0];
+	for(i = 0; i < iface_query->num_tx_props; i++)
+	{
+		if(tx_prop->tx[i].ip == IPA_IP_v4)
+		{
+			rt_rule->at_rear = false;
+			rt_rule->status = -1;
+			rt_rule->rt_rule_hdl = -1;
+			rt_rule->rule.hashable = true;
+			rt_rule->rule.hdr_hdl = 0;
+			rt_rule->rule.hdr_proc_ctx_hdl =
+				get_client_memptr(eth_client, index)->dl_first_pass_hdr_proc_ctx_hdl;
+			rt_rule->rule.dst = IPA_CLIENT_DUMMY_CONS;
+
+			memcpy(&rt_rule->rule.attrib, &tx_prop->tx[i].attrib, sizeof(rt_rule->rule.attrib));
+			rt_rule->rule.attrib.attrib_mask |= IPA_FLT_DST_ADDR;
+			rt_rule->rule.attrib.u.v4.dst_addr = data->ipv4_addr;
+			rt_rule->rule.attrib.u.v4.dst_addr_mask = 0xFFFFFFFF;
+			break;
+		}
+	}
+	if(m_routing.AddRoutingRule(rt_rule_table) == false)
+	{
+		IPACMERR("Failed to add first pass rt rules.\n");
+		free(rt_rule_table);
+		return IPACM_FAILURE;
+	}
+	get_client_memptr(eth_client, index)->dl_first_pass_rt_rule_hdl =
+		rt_rule_table->rules[0].rt_rule_hdl;
+	free(rt_rule_table);
+
+	/* =========== install second pass hdr (Ethernet header with L2TP tag = 18 bytes) ============= */
+	size = sizeof(ipa_ioc_add_hdr) + sizeof(ipa_hdr_add);
+	hdr_table = (ipa_ioc_add_hdr*)malloc(size);
+	if(hdr_table == NULL)
+	{
+		IPACMERR("Failed to allocate memory.\n");
+		return IPACM_FAILURE;
+	}
+	memset(hdr_table, 0, size);
+
+	hdr_table->commit = 1;
+	hdr_table->num_hdrs = 1;
+	hdr = &hdr_table->hdr[0];
+
+	snprintf(hdr->name, sizeof(hdr->name), "vlan_%d_v6", info.vlan_id);
+
+	hdr->type = IPA_HDR_L2_ETHERNET_II;
+	hdr->is_partial = 0;
+	for(i = 0; i < tx_prop->num_tx_props; i++)
+	{
+		if(tx_prop->tx[i].ip == IPA_IP_v6)
+		{
+			memset(&copy_hdr, 0, sizeof(copy_hdr));
+			strlcpy(copy_hdr.name, tx_prop->tx[i].hdr_name,
+				sizeof(copy_hdr.name));
+			IPACMDBG_H("Header name: %s in tx:%d\n", copy_hdr.name, i);
+			if(m_header.CopyHeader(&copy_hdr) == false)
+			{
+				IPACMERR("Failed to get partial header.\n");
+				free(hdr_table);
+				return IPACM_FAILURE;
+			}
+			IPACMDBG_H("Header length: %d\n", copy_hdr.hdr_len);
+			hdr->hdr_len = copy_hdr.hdr_len;
+			memcpy(hdr->hdr, copy_hdr.hdr, hdr->hdr_len);
+			break;
+		}
+	}
+	/* copy vlan client mac */
+	memcpy(hdr->hdr, info.vlan_client_mac, 6);
+	hdr->hdr[hdr->hdr_len - 3] = (uint8_t)info.vlan_id & 0xFF;
+	hdr->hdr[hdr->hdr_len - 4] = (uint8_t)(info.vlan_id >> 8) & 0xFF;
+
+	if(m_header.AddHeader(hdr_table) == false)
+	{
+		IPACMERR("Failed to add hdr with status: %d\n", hdr->status);
+		free(hdr_table);
+		return IPACM_FAILURE;
+	}
+	get_client_memptr(eth_client, index)->dl_second_pass_hdr_hdl = hdr->hdr_hdl;
+	IPACMDBG_H("Installed second pass hdr: hdl %d\n",
+		get_client_memptr(eth_client, index)->dl_second_pass_hdr_hdl);
+	free(hdr_table);
+
+	/* =========== install second pass rt rules (match VLAN interface IPv6 address at dst client side) ============= */
+	size = sizeof(ipa_ioc_add_rt_rule) + sizeof(ipa_rt_rule_add);
+	rt_rule_table = (ipa_ioc_add_rt_rule*)malloc(size);
+	if (rt_rule_table == NULL)
+	{
+		IPACMERR("Failed to allocate memory.\n");
+		return IPACM_FAILURE;
+	}
+	memset(rt_rule_table, 0, size);
+
+	rt_rule_table->commit = 1;
+	rt_rule_table->ip = IPA_IP_v6;
+	rt_rule_table->num_rules = 1;
+
+	strlcpy(rt_rule_table->rt_tbl_name, IPACM_Iface::ipacmcfg->rt_tbl_wan_v6.name, sizeof(rt_rule_table->rt_tbl_name));
+	rt_rule_table->rt_tbl_name[IPA_RESOURCE_NAME_MAX-1] = '\0';
+
+	rt_rule = &rt_rule_table->rules[0];
+	for(i = 0; i < iface_query->num_tx_props; i++)
+	{
+		if(tx_prop->tx[i].ip == IPA_IP_v6)
+		{
+			rt_rule->at_rear = false;
+			rt_rule->status = -1;
+			rt_rule->rt_rule_hdl = -1;
+			rt_rule->rule.hashable = true;
+			rt_rule->rule.hdr_hdl = get_client_memptr(eth_client, index)->dl_second_pass_hdr_hdl;
+			rt_rule->rule.hdr_proc_ctx_hdl = 0;
+			rt_rule->rule.dst = tx_prop->tx[i].dst_pipe;
+
+			memcpy(&rt_rule->rule.attrib, &tx_prop->tx[i].attrib, sizeof(rt_rule->rule.attrib));
+			rt_rule->rule.attrib.attrib_mask |= IPA_FLT_DST_ADDR;
+			memcpy(rt_rule->rule.attrib.u.v6.dst_addr, info.vlan_client_ipv6_addr,
+				sizeof(rt_rule->rule.attrib.u.v6.dst_addr));
+			memset(rt_rule->rule.attrib.u.v6.dst_addr_mask, 0xFF, sizeof(rt_rule->rule.attrib.u.v6.dst_addr_mask));
+			break;
+		}
+	}
+	if(m_routing.AddRoutingRule(rt_rule_table) == false)
+	{
+		IPACMERR("Failed to add second pass rt rules.\n");
+		free(rt_rule_table);
+		return IPACM_FAILURE;
+	}
+	get_client_memptr(eth_client, index)->dl_second_pass_rt_rule_hdl =
+		rt_rule_table->rules[0].rt_rule_hdl;
+	free(rt_rule_table);
+
+	strlcpy(new_client_info.client_iface_name, data->iface_name, sizeof(new_client_info.client_iface_name));
+	IPACM_Iface::ipacmcfg->l2tp_client.push_back(new_client_info);
+
+	/* post IPA_ADD_L2TP_CLIENT event */
+	memset(&evt_data, 0, sizeof(evt_data));
+	data_all = (ipacm_event_data_all *)malloc(sizeof(ipacm_event_data_all));
+	if(data_all == NULL)
+	{
+		IPACMERR("Unable to allocate memory for event data.\n");
+		return IPACM_FAILURE;
+	}
+	strlcpy(data_all->iface_name, data->iface_name, sizeof(data_all->iface_name));
+	evt_data.event = IPA_ADD_L2TP_CLIENT;
+	evt_data.evt_data = data_all;
+	IPACM_EvtDispatcher::PostEvt(&evt_data);
+
+	return IPACM_SUCCESS;
+}
+
+/* install l2tp ul rules */
+int IPACM_Lan::install_l2tp_ul_rules(ipacm_event_data_all *data, int index)
+{
+	int i, size;
+	ipa_ioc_add_rt_rule* rt_rule_table;
+	ipa_rt_rule_add *rt_rule;
+	ipa_ioc_add_flt_rule_after *pFilteringTable;
+	ipa_flt_rule_add *flt_rule_entry;
+	l2tp_vlan_mapping_info info;
+	l2tp_client_info new_client_info;
+
+	if(tx_prop == NULL || rx_prop == NULL)
+	{
+		IPACMERR("No tx/rx prop.\n");
+		return IPACM_FAILURE;
+	}
+
+	if(IPACM_Iface::ipacmcfg->get_vlan_l2tp_mapping(data->iface_name, info) == IPACM_FAILURE)
+	{
+		IPACMERR("Fail to get vlan-l2tp mapping.\n");
+		return IPACM_FAILURE;
+	}
+
+	if(l2tp_ul_hdr_proc_ctx_hdl == 0)
+	{
+		IPACMERR("Ul hdr proc ctx was not installed.\n");
+		return IPACM_FAILURE;
+	}
+
+	IPACMDBG_H("Installing l2tp ul rt rules.\n");
+
+	/* =========== install ul rt rule ============= */
+	size = sizeof(ipa_ioc_add_rt_rule) + sizeof(ipa_rt_rule_add);
+	rt_rule_table = (ipa_ioc_add_rt_rule*)malloc(size);
+	if (rt_rule_table == NULL)
+	{
+		IPACMERR("Failed to allocate memory.\n");
+		return IPACM_FAILURE;
+	}
+	memset(rt_rule_table, 0, size);
+
+	rt_rule_table->commit = 1;
+	rt_rule_table->ip = IPA_IP_v6;
+	rt_rule_table->num_rules = 1;
+
+	strlcpy(rt_rule_table->rt_tbl_name, IPACM_Iface::ipacmcfg->rt_tbl_v6.name,
+		sizeof(rt_rule_table->rt_tbl_name));
+	rt_rule_table->rt_tbl_name[IPA_RESOURCE_NAME_MAX-1] = '\0';
+
+	rt_rule = &rt_rule_table->rules[0];
+	for(i = 0; i < iface_query->num_tx_props; i++)
+	{
+		if(tx_prop->tx[i].ip == IPA_IP_v6)
+		{
+			rt_rule->at_rear = false;
+			rt_rule->status = -1;
+			rt_rule->rt_rule_hdl = -1;
+			rt_rule->rule.hashable = false;
+			rt_rule->rule.hdr_hdl = 0;
+			rt_rule->rule.hdr_proc_ctx_hdl =
+				l2tp_ul_hdr_proc_ctx_hdl;
+			rt_rule->rule.dst = IPA_CLIENT_DUMMY_CONS;
+
+			memcpy(&rt_rule->rule.attrib, &tx_prop->tx[i].attrib, sizeof(rt_rule->rule.attrib));
+			rt_rule->rule.attrib.attrib_mask |= IPA_FLT_DST_ADDR;
+			memcpy(rt_rule->rule.attrib.u.v6.dst_addr, info.vlan_iface_ipv6_addr,
+				sizeof(rt_rule->rule.attrib.u.v6.dst_addr));
+			memset(rt_rule->rule.attrib.u.v6.dst_addr_mask, 0xFF,
+				sizeof(rt_rule->rule.attrib.u.v6.dst_addr_mask));
+			break;
+		}
+	}
+	if(m_routing.AddRoutingRule(rt_rule_table) == false)
+	{
+		IPACMERR("Failed to add first pass rt rules.\n");
+		free(rt_rule_table);
+		return IPACM_FAILURE;
+	}
+	get_client_memptr(eth_client, index)->ul_first_pass_rt_rule_hdl =
+		rt_rule_table->rules[0].rt_rule_hdl;
+	free(rt_rule_table);
+
+	IPACMDBG_H("Installing l2tp ul flt rules.\n");
+
+	/* =========== install ul flt rule ============= */
+	size = sizeof(struct ipa_ioc_add_flt_rule_after) + sizeof(struct ipa_flt_rule_add);
+	pFilteringTable = (struct ipa_ioc_add_flt_rule_after*)malloc(size);
+	if (!pFilteringTable)
+	{
+		IPACMERR("Failed to allocate ipa_ioc_add_flt_rule_after memory...\n");
+		return IPACM_FAILURE;
+	}
+	memset(pFilteringTable, 0, size);
+
+	pFilteringTable->commit = 1;
+	pFilteringTable->ep = rx_prop->rx[0].src_pipe;
+	pFilteringTable->ip = IPA_IP_v6;
+	pFilteringTable->num_rules = 1;
+	pFilteringTable->add_after_hdl = ipv6_icmp_flt_rule_hdl[0];
+
+	if(false == m_routing.GetRoutingTable(&IPACM_Iface::ipacmcfg->rt_tbl_v6))
+	{
+		IPACMERR("m_routing.GetRoutingTable Failed.\n");
+		free(pFilteringTable);
+		return IPACM_FAILURE;
+	}
+
+	flt_rule_entry = &pFilteringTable->rules[0];
+	flt_rule_entry->at_rear = 1;
+
+	flt_rule_entry->rule.retain_hdr = 0;
+	flt_rule_entry->rule.to_uc = 0;
+	flt_rule_entry->rule.action = IPA_PASS_TO_ROUTING;
+	flt_rule_entry->rule.eq_attrib_type = 0;
+	flt_rule_entry->rule.rt_tbl_hdl = IPACM_Iface::ipacmcfg->rt_tbl_v6.hdl;
+	flt_rule_entry->rule.hashable = false;
+
+	memcpy(&flt_rule_entry->rule.attrib, &rx_prop->rx[0].attrib, sizeof(flt_rule_entry->rule.attrib));
+	flt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_DST_ADDR;
+	memcpy(flt_rule_entry->rule.attrib.u.v6.dst_addr, info.vlan_iface_ipv6_addr,
+		sizeof(flt_rule_entry->rule.attrib.u.v6.dst_addr));
+	memset(flt_rule_entry->rule.attrib.u.v6.dst_addr_mask, 0xFF,
+		sizeof(flt_rule_entry->rule.attrib.u.v6.dst_addr_mask));
+	flt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_NEXT_HDR;
+	flt_rule_entry->rule.attrib.u.v6.next_hdr = 0x73;
+	flt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_L2TP_INNER_IP_TYPE;
+	flt_rule_entry->rule.attrib.type = 0x40;
+#if 0
+	if(m_filtering.AddFilteringRuleAfter(pFilteringTable) == false)
+	{
+		IPACMERR("Failed to add l2tp ul flt rule.\n");
+		free(pFilteringTable);
+		return IPACM_FAILURE;
+	}
+#endif
+	IPACM_Iface::ipacmcfg->increaseFltRuleCount(rx_prop->rx[0].src_pipe, IPA_IP_v6, 1);
+	get_client_memptr(eth_client, index)->ul_first_pass_flt_rule_hdl =
+		pFilteringTable->rules[0].flt_rule_hdl;
+	free(pFilteringTable);
+	return IPACM_SUCCESS;
+}
+
+/* uninstall l2tp rules */
+int IPACM_Lan::uninstall_l2tp_rules(ipacm_event_data_all *data)
+{
+	int index;
+	list<l2tp_client_info>::iterator it;
+	ipacm_cmd_q_data evt_data;
+	ipacm_event_data_all *data_all;
+
+	index = get_eth_client_index(data->mac_addr);
+	if(index == IPACM_INVALID_INDEX)
+	{
+		IPACMDBG_H("Eth client not attached\n");
+		return IPACM_SUCCESS;
+	}
+
+	if(is_l2tp_iface == false)
+	{
+		IPACMDBG_H("This is not L2TP client.\n");
+		return IPACM_SUCCESS;
+	}
+
+	IPACMDBG_H("Clean Nat Rules for ipv4: 0x%08x\n", get_client_memptr(eth_client, index)->v4_addr);
+	CtList->HandleNeighIpAddrDelEvt(get_client_memptr(eth_client, index)->v4_addr);
+
+	/* delete dl rules */
+	if(m_routing.DeleteRoutingHdl(get_client_memptr(eth_client, index)->dl_first_pass_rt_rule_hdl, IPA_IP_v4) == false)
+	{
+		IPACMERR("Failed to delete first pass rt rule.\n");
+		return IPACM_FAILURE;
+	}
+
+	if(m_routing.DeleteRoutingHdl(get_client_memptr(eth_client, index)->dl_second_pass_rt_rule_hdl, IPA_IP_v6) == false)
+	{
+		IPACMERR("Failed to delete second pass rt rule.\n");
+		return IPACM_FAILURE;
+	}
+
+	if(m_header.DeleteHeaderProcCtx(get_client_memptr(eth_client, index)->dl_first_pass_hdr_proc_ctx_hdl) == false)
+	{
+		IPACMERR("Failed to delete first pass hdr proc ctx.\n");
+		return IPACM_FAILURE;
+	}
+
+	if(m_header.DeleteHeaderHdl(get_client_memptr(eth_client, index)->dl_first_pass_hdr_hdl) == false)
+	{
+		IPACMERR("Failed to delete first pass hdr.\n");
+		return IPACM_FAILURE;
+	}
+
+	if(m_header.DeleteHeaderHdl(get_client_memptr(eth_client, index)->dl_second_pass_hdr_hdl) == false)
+	{
+		IPACMERR("Failed to delete second pass hdr.\n");
+		return IPACM_FAILURE;
+	}
+#if 0
+	/* delete ul rules */
+	if(m_filtering.DeleteFilteringHdls(&get_client_memptr(eth_client, index)->ul_first_pass_flt_rule_hdl, IPA_IP_v6, 1) == false)
+	{
+		IPACMERR("Failed to delete ul flt rule.\n");
+		return IPACM_FAILURE;
+	}
+	IPACM_Iface::ipacmcfg->decreaseFltRuleCount(rx_prop->rx[0].src_pipe, IPA_IP_v6, 1);
+#endif
+	if(m_routing.DeleteRoutingHdl(get_client_memptr(eth_client, index)->ul_first_pass_rt_rule_hdl, IPA_IP_v6) == false)
+	{
+		IPACMERR("Failed to delete ul rt rule.\n");
+		return IPACM_FAILURE;
+	}
+
+	for(; index < num_eth_client-1; index++)
+	{
+		*get_client_memptr(eth_client, index) = *get_client_memptr(eth_client, index+1);
+	}
+	num_eth_client--;
+
+	for(it = IPACM_Iface::ipacmcfg->l2tp_client.begin(); it != IPACM_Iface::ipacmcfg->l2tp_client.end(); it++)
+	{
+		if(strncmp(it->client_iface_name, data->iface_name, sizeof(it->client_iface_name)) == 0)
+		{
+			IPACM_Iface::ipacmcfg->l2tp_client.erase(it);
+			break;
+		}
+	}
+
+	/* post IPA_DEL_L2TP_CLIENT event */
+	memset(&evt_data, 0, sizeof(evt_data));
+	data_all = (ipacm_event_data_all *)malloc(sizeof(ipacm_event_data_all));
+	if(data_all == NULL)
+	{
+		IPACMERR("Unable to allocate memory for event data.\n");
+		return IPACM_FAILURE;
+	}
+	strlcpy(data_all->iface_name, data->iface_name, sizeof(data_all->iface_name));
+	evt_data.event = IPA_DEL_L2TP_CLIENT;
+	evt_data.evt_data = data_all;
+	IPACM_EvtDispatcher::PostEvt(&evt_data);
+
+	/* Del RM dependency */
+	if(num_eth_client == 0)
+	{
+		IPACMDBG_H("Netdev %s delete dependency\n", dev_name);
+		if(tx_prop != NULL)
+		{
+			IPACMDBG_H("Dependency pipe: %d, rm index: %d\n", tx_prop->tx[0].dst_pipe, IPACM_Iface::ipacmcfg->ipa_client_rm_map_tbl[tx_prop->tx[0].dst_pipe]);
+			IPACM_Iface::ipacmcfg->DelRmDepend(IPACM_Iface::ipacmcfg->ipa_client_rm_map_tbl[tx_prop->tx[0].dst_pipe]);
+		}
+	}
+
+	return IPACM_SUCCESS;
+}
+
+int IPACM_Lan::install_l2tp_ul_hdr_proc_ctx()
+{
+	int size;
+	ipa_ioc_add_hdr *hdr_table;
+	ipa_hdr_add *hdr;
+	ipa_ioc_add_hdr_proc_ctx *hdr_proc_ctx_table;
+	ipa_hdr_proc_ctx_add *hdr_proc_ctx;
+
+	/* =========== install l2tp ul dummy header ============= */
+	size = sizeof(ipa_ioc_add_hdr) + sizeof(ipa_hdr_add);
+	hdr_table = (ipa_ioc_add_hdr*)malloc(size);
+	if(hdr_table == NULL)
+	{
+		IPACMERR("Failed to allocate memory.\n");
+		return IPACM_FAILURE;
+	}
+	memset(hdr_table, 0, size);
+
+	hdr_table->commit = 1;
+	hdr_table->num_hdrs = 1;
+	hdr = &hdr_table->hdr[0];
+	snprintf(hdr->name, sizeof(hdr->name), "l2tp_ul");
+
+	hdr->hdr_len = 4;
+	hdr->type = IPA_HDR_L2_ETHERNET_II;
+	hdr->is_partial = 0;
+
+	if(m_header.AddHeader(hdr_table) == false)
+	{
+		IPACMERR("Failed to add hdr with status: %d\n", hdr_table->hdr[0].status);
+		free(hdr_table);
+		return IPACM_FAILURE;
+	}
+	l2tp_ul_dummy_hdr_hdl = hdr_table->hdr[0].hdr_hdl;
+	IPACMDBG_H("Installed l2tp ul hdr: hdl %d\n", l2tp_ul_dummy_hdr_hdl);
+	free(hdr_table);
+
+	/* =========== install l2tp ul hdr proc ctx ============= */
+	size = sizeof(ipa_ioc_add_hdr_proc_ctx) + sizeof(ipa_hdr_proc_ctx_add);
+	hdr_proc_ctx_table = (ipa_ioc_add_hdr_proc_ctx*)malloc(size);
+	if(hdr_proc_ctx_table == NULL)
+	{
+		IPACMERR("Failed to allocate memory.\n");
+		return IPACM_FAILURE;
+	}
+	memset(hdr_proc_ctx_table, 0, size);
+
+	hdr_proc_ctx_table->commit = 1;
+	hdr_proc_ctx_table->num_proc_ctxs = 1;
+	hdr_proc_ctx = &hdr_proc_ctx_table->proc_ctx[0];
+
+	hdr_proc_ctx->type = IPA_HDR_PROC_L2TP_HEADER_REMOVE;
+	hdr_proc_ctx->hdr_hdl = l2tp_ul_dummy_hdr_hdl;
+	hdr_proc_ctx->l2tp_params.hdr_remove_param.hdr_len_remove = 62;
+	hdr_proc_ctx->l2tp_params.hdr_remove_param.eth_hdr_retained = 0;
+	if(m_header.AddHeaderProcCtx(hdr_proc_ctx_table) == false)
+	{
+		IPACMERR("Failed to add hdr proc ctx with status: %d\n", hdr_proc_ctx_table->proc_ctx[0].status);
+		free(hdr_proc_ctx_table);
+		return IPACM_FAILURE;
+	}
+	l2tp_ul_hdr_proc_ctx_hdl = hdr_proc_ctx_table->proc_ctx[0].proc_ctx_hdl;
+	IPACMDBG_H("Installed l2tp ul hdr proc ctx: hdl %d\n", l2tp_ul_hdr_proc_ctx_hdl);
+	free(hdr_proc_ctx_table);
+
+	return IPACM_SUCCESS;
+}
+
+bool IPACM_Lan::is_unique_local_ipv6_addr(uint32_t* ipv6_addr)
+{
+	uint32_t ipv6_unique_local_prefix, ipv6_unique_local_prefix_mask;
+
+	if(ipv6_addr == NULL)
+	{
+		IPACMERR("IPv6 address is empty.\n");
+		return false;
+	}
+	IPACMDBG_H("Get ipv6 address with first word 0x%08x.\n", ipv6_addr[0]);
+
+	ipv6_unique_local_prefix = 0xFD000000;
+	ipv6_unique_local_prefix_mask = 0xFF000000;
+	if((ipv6_addr[0] & ipv6_unique_local_prefix_mask) == (ipv6_unique_local_prefix & ipv6_unique_local_prefix_mask))
+	{
+		IPACMDBG_H("This IPv6 address is unique local IPv6 address.\n");
+		return true;
+	}
+	return false;
+}
+#endif

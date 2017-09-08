@@ -423,7 +423,13 @@ private:
 	void handle_wlan_SCC_MCC_switch(bool, ipa_ip_type);
 
 	void handle_wan_client_SCC_MCC_switch(bool, ipa_ip_type);
+#ifdef FEATURE_L2TP_E2E
+	void handle_l2tp_client_add(char *iface_name);
 
+	void handle_l2tp_client_del(char *iface_name);
+
+	void install_l2tp_flt_rule(ipa_flt_rule_add* rules, int rule_offset, char *iface_name);
+#endif
 	/* construct dummy ethernet header */
 	int add_dummy_rx_hdr();
 

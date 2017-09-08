@@ -190,6 +190,8 @@ typedef enum
 	IPA_CRADLE_WAN_MODE_SWITCH,               /* 52 ipacm_event_cradle_wan_mode */
 	IPA_WAN_XLAT_CONNECT_EVENT,               /* 53 ipacm_event_data_fid */
 	IPA_BRIDGE_LINK_UP_EVENT,                 /* 54 ipacm_event_data_all */
+	IPA_ADD_L2TP_CLIENT,                      /* 55 ipacm_event_data_all */
+	IPA_DEL_L2TP_CLIENT,                      /* 56 ipacm_event_data_all */
 	IPACM_EVENT_MAX
 } ipa_cm_event_id;
 
@@ -252,6 +254,7 @@ typedef struct _ipacm_event_data_all
 	uint32_t  ipv4_addr;
 	uint32_t  ipv6_addr[4];
 	uint8_t mac_addr[IPA_MAC_ADDR_SIZE];
+	char iface_name[IPA_IFACE_NAME_LEN];
 } ipacm_event_data_all;
 
 class IPACM_Lan;
@@ -299,6 +302,7 @@ typedef struct _ipacm_event_data_iptype
 typedef struct _ipacm_event_data_addr
 {
 	enum ipa_ip_type iptype;
+	char iface_name[IPA_IFACE_NAME_LEN];
 	int if_index;
 	uint32_t  ipv4_addr_gw;
 	uint32_t  ipv4_addr;
@@ -344,5 +348,35 @@ typedef struct _ipacm_ifacemgr_data
 	ipacm_wan_iface_type if_type;
 	uint8_t mac_addr[IPA_MAC_ADDR_SIZE];
 }ipacm_ifacemgr_data;
+
+struct vlan_iface_info
+{
+	char vlan_iface_name[IPA_RESOURCE_NAME_MAX];
+	uint8_t vlan_id;
+	uint32_t vlan_iface_ipv6_addr[4];
+	uint8_t vlan_client_mac[6];
+	uint32_t vlan_client_ipv6_addr[4];
+};
+
+struct l2tp_vlan_mapping_info
+{
+	/* the following are l2tp iface info (name, session id) */
+	char l2tp_iface_name[IPA_RESOURCE_NAME_MAX];
+	uint8_t l2tp_session_id;
+	/* the following are mdm vlan iface info (name, vlan id, ipv6 addr) */
+	char vlan_iface_name[IPA_RESOURCE_NAME_MAX];
+	uint8_t vlan_id;
+	uint32_t vlan_iface_ipv6_addr[4];
+	/* the following are MIB3 vlan client info (mac, ipv6 addr) */
+	uint8_t vlan_client_mac[6];
+	uint32_t vlan_client_ipv6_addr[4];
+	/* the following is MIB3 l2tp client info (mac) */
+	uint8_t l2tp_client_mac[6];
+};
+
+struct l2tp_client_info
+{
+	char client_iface_name[IPA_IFACE_NAME_LEN];
+};
 
 #endif /* IPA_CM_DEFS_H */

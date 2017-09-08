@@ -56,6 +56,8 @@ struct ipa_neighbor_client
 	int iface_index;
 	uint32_t v4_addr;
 	int ipa_if_num;
+	/* add support for handling L2TP clients which associated with eth0 vlan interface */
+	char iface_name[IPA_IFACE_NAME_LEN];
 };
 
 class IPACM_Neighbor : public IPACM_Listener

@@ -43,6 +43,7 @@ IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "IPACM_Defs.h"
 #include "IPACM_Xml.h"
 #include "IPACM_EvtDispatcher.h"
+#include <list>
 
 typedef struct
 {
@@ -145,10 +146,26 @@ public:
 	struct ipa_ioc_get_rt_tbl rt_tbl_eth_bridge_lan_lan_v6, rt_tbl_eth_bridge_lan_wlan_v6, rt_tbl_eth_bridge_wlan_wlan_v6;
 
 	bool isMCC_Mode;
-
+#if defined(FEATURE_L2TP_E2E) || defined(FEATURE_L2TP)
+	std::list<l2tp_client_info> l2tp_client;
+#endif
 	/* To return the instance */
 	static IPACM_Config* GetInstance();
+#if defined(FEATURE_L2TP_E2E) || defined(FEATURE_L2TP)
+	void add_vlan_iface(ipa_ioc_vlan_iface_info *data);
 
+	void del_vlan_iface(ipa_ioc_vlan_iface_info *data);
+
+	void add_l2tp_vlan_mapping(ipa_ioc_l2tp_vlan_mapping_info *data);
+
+	void del_l2tp_vlan_mapping(ipa_ioc_l2tp_vlan_mapping_info *data);
+
+	void handle_vlan_iface_info(ipacm_event_data_addr *data);
+
+	void handle_vlan_client_info(ipacm_event_data_all *data);
+
+	int get_vlan_l2tp_mapping(char *client_iface, l2tp_vlan_mapping_info& info);
+#endif
 	inline void increaseFltRuleCount(int index, ipa_ip_type iptype, int increment)
 	{
 		if((index >= IPA_CLIENT_CONS - IPA_CLIENT_PROD) || (index < 0))
@@ -351,6 +368,11 @@ private:
 	uint8_t qmap_id;
 	ipacm_ext_prop ext_prop_v4;
 	ipacm_ext_prop ext_prop_v6;
+#if defined(FEATURE_L2TP_E2E) || defined(FEATURE_L2TP)
+	pthread_mutex_t vlan_l2tp_lock;
+	std::list<vlan_iface_info> m_vlan_iface;
+	std::list<l2tp_vlan_mapping_info> m_l2tp_vlan_mapping;
+#endif
 };
 
 #endif /* IPACM_CONFIG */

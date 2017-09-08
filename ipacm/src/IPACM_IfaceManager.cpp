@@ -393,6 +393,10 @@ int IPACM_IfaceManager::create_iface_instance(ipacm_ifacemgr_data *param)
 					IPACM_EvtDispatcher::registr(IPA_SW_ROUTING_DISABLE, w);
 					IPACM_EvtDispatcher::registr(IPA_CFG_CHANGE_EVENT, w); 		// register for IPA_CFG_CHANGE event
 					IPACM_EvtDispatcher::registr(IPA_WAN_XLAT_CONNECT_EVENT, w);
+#ifdef FEATURE_L2TP_E2E
+					IPACM_EvtDispatcher::registr(IPA_ADD_L2TP_CLIENT, w);
+					IPACM_EvtDispatcher::registr(IPA_DEL_L2TP_CLIENT, w);
+#endif
 					if(is_sta_mode == WLAN_WAN)
 					{
 						IPACM_EvtDispatcher::registr(IPA_WLAN_LINK_DOWN_EVENT, w); // for STA mode

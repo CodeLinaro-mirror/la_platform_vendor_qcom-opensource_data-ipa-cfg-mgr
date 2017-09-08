@@ -53,31 +53,6 @@ IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #define MAX_NUM_IFACE 10
 #define MAX_NUM_CLIENT 16
 
-struct vlan_iface_info
-{
-	char vlan_iface_name[IPA_RESOURCE_NAME_MAX];
-	uint8_t vlan_id;
-	uint32_t vlan_iface_ipv6_addr[4];
-	uint8_t vlan_client_mac[6];
-	uint32_t vlan_client_ipv6_addr[4];
-};
-
-struct l2tp_vlan_mapping_info
-{
-	/* the following are l2tp iface info (name, session id) */
-	char l2tp_iface_name[IPA_RESOURCE_NAME_MAX];
-	uint8_t l2tp_session_id;
-	/* the following are mdm vlan iface info (name, vlan id, ipv6 addr) */
-	char vlan_iface_name[IPA_RESOURCE_NAME_MAX];
-	uint8_t vlan_id;
-	uint32_t vlan_iface_ipv6_addr[4];
-	/* the following are MIB3 vlan client info (mac, ipv6 addr) */
-	uint8_t vlan_client_mac[6];
-	uint32_t vlan_client_ipv6_addr[4];
-	/* the following is MIB3 l2tp client info (mac) */
-	uint8_t l2tp_client_mac[6];
-};
-
 struct rt_rule_info
 {
 	int num_hdl[IPA_IP_MAX];	/* one client may need more than one routing rules on the same routing table depending on tx_prop */
@@ -239,10 +214,6 @@ private:
 
 	list<ipacm_event_eth_bridge> m_cached_client_add_event;
 
-	list<vlan_iface_info> m_vlan_iface;
-
-	list<l2tp_vlan_mapping_info> m_l2tp_vlan_mapping;
-
 	void handle_iface_up(ipacm_event_eth_bridge *data);
 
 	void handle_iface_down(ipacm_event_eth_bridge *data);
@@ -252,20 +223,6 @@ private:
 	void handle_client_del(ipacm_event_eth_bridge *data);
 
 	void handle_wlan_scc_mcc_switch(ipacm_event_eth_bridge *data);
-
-#ifdef FEATURE_L2TP
-	void handle_add_vlan_iface(ipa_ioc_vlan_iface_info *data);
-
-	void handle_del_vlan_iface(ipa_ioc_vlan_iface_info *data);
-
-	void handle_add_l2tp_vlan_mapping(ipa_ioc_l2tp_vlan_mapping_info *data);
-
-	void handle_del_l2tp_vlan_mapping(ipa_ioc_l2tp_vlan_mapping_info *data);
-
-	void handle_vlan_client_info(ipacm_event_data_all *data);
-
-	void handle_vlan_iface_info(ipacm_event_data_all *data);
-#endif
 
 	void handle_new_iface_up(IPACM_LanToLan_Iface *new_iface, IPACM_LanToLan_Iface *exist_iface);
 

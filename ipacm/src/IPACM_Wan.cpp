@@ -3364,6 +3364,33 @@ int IPACM_Wan::add_dft_filtering_rule(struct ipa_flt_rule_add *rules, int rule_o
 					 sizeof(flt_rule_entry.rule.eq_attrib));
 		memcpy(&(rules[rule_offset + 1]), &flt_rule_entry, sizeof(struct ipa_flt_rule_add));
 
+#ifdef FEATURE_L2TP_SYN
+		/* Configuring TCP SYN Filtering Rule */
+		memcpy(&flt_rule_entry.rule.attrib, &rx_prop->rx[0].attrib,
+			sizeof(flt_rule_entry.rule.attrib));
+		/* remove meta data mask since we only install default flt rules once for all modem PDN*/
+		flt_rule_entry.rule.attrib.attrib_mask &= ~((uint32_t)IPA_FLT_META_DATA);
+		flt_rule_entry.rule.attrib.attrib_mask |= IPA_FLT_PROTOCOL;
+		flt_rule_entry.rule.attrib.u.v4.protocol = IPACM_FIREWALL_IPPROTO_TCP;
+		flt_rule_entry.rule.attrib.attrib_mask |= IPA_FLT_TCP_SYN;
+
+		change_to_network_order(IPA_IP_v4, &flt_rule_entry.rule.attrib);
+
+		memset(&flt_eq, 0, sizeof(flt_eq));
+		memcpy(&flt_eq.attrib, &flt_rule_entry.rule.attrib, sizeof(flt_eq.attrib));
+		flt_eq.ip = iptype;
+		if(0 != ioctl(m_fd_ipa, IPA_IOC_GENERATE_FLT_EQ, &flt_eq))
+		{
+			IPACMERR("Failed to get eq_attrib\n");
+			res = IPACM_FAILURE;
+			goto fail;
+		}
+
+		memcpy(&flt_rule_entry.rule.eq_attrib, &flt_eq.eq_attrib,
+			sizeof(flt_rule_entry.rule.eq_attrib));
+		memcpy(&(rules[rule_offset + 2]), &flt_rule_entry, sizeof(struct ipa_flt_rule_add));
+#endif
+
 		IPACM_Wan::num_v4_flt_rule += IPA_V2_NUM_DEFAULT_WAN_FILTER_RULE_IPV4;
 		IPACMDBG_H("Constructed %d default filtering rules for ip type %d\n", IPA_V2_NUM_DEFAULT_WAN_FILTER_RULE_IPV4, iptype);
 	}

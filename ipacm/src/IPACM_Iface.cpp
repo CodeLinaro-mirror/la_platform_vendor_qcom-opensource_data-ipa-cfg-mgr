@@ -41,6 +41,7 @@ IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.Z
 #include <sys/ioctl.h>
 #include <IPACM_Netlink.h>
 #include <IPACM_Iface.h>
+#include <IPACM_Xml.h>
 #include <IPACM_Lan.h>
 #include <IPACM_Wan.h>
 #include <IPACM_Wlan.h>
@@ -772,6 +773,14 @@ int IPACM_Iface::init_fl_rule(ipa_ip_type iptype)
 		flt_rule_entry.rule.attrib.u.v4.dst_addr = 0xFFFFFFFF;
 		memcpy(&(m_pFilteringTable->rules[2]), &flt_rule_entry, sizeof(struct ipa_flt_rule_add));
 
+#ifdef FEATURE_L2TP_E2E
+		memcpy(&flt_rule_entry.rule.attrib, &rx_prop->rx[0].attrib,
+			sizeof(flt_rule_entry.rule.attrib));
+		flt_rule_entry.rule.attrib.attrib_mask |= IPA_FLT_PROTOCOL;
+		flt_rule_entry.rule.attrib.u.v4.protocol = IPACM_FIREWALL_IPPROTO_TCP;
+		flt_rule_entry.rule.attrib.attrib_mask |= IPA_FLT_TCP_SYN;
+		memcpy(&(m_pFilteringTable->rules[3]), &flt_rule_entry, sizeof(struct ipa_flt_rule_add));
+#endif
 		if (false == m_filtering.AddFilteringRule(m_pFilteringTable))
 		{
 			IPACMERR("Error Adding Filtering rule, aborting...\n");

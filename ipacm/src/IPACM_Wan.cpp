@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2013, The Linux Foundation. All rights reserved.
+Copyright (c) 2013-2017, The Linux Foundation. All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are
@@ -193,7 +193,7 @@ IPACM_Wan::IPACM_Wan(int iface_index,
 		{
 			IPACMDBG_H("dev %s add producer dependency\n", dev_name);
 			IPACMDBG_H("depend Got pipe %d rm index : %d \n", tx_prop->tx[0].dst_pipe, IPACM_Iface::ipacmcfg->ipa_client_rm_map_tbl[tx_prop->tx[0].dst_pipe]);
-        	IPACM_Iface::ipacmcfg->AddRmDepend(IPACM_Iface::ipacmcfg->ipa_client_rm_map_tbl[tx_prop->tx[0].dst_pipe],false);
+      		IPACM_Iface::ipacmcfg->AddRmDepend(IPACM_Iface::ipacmcfg->ipa_client_rm_map_tbl[tx_prop->tx[0].dst_pipe],false);
 		}
 	}
 	else
@@ -531,7 +531,7 @@ fail:
 
 void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 {
-	int ipa_interface_index;
+	int ipa_interface_index, cnt;
 
 	switch (event)
 	{
@@ -1188,6 +1188,16 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 			break;
 
 		case IPA_WLAN_SWITCH_TO_MCC:
+			/* check if alt_dst_pipe set or not */
+			for (cnt = 0; cnt < tx_prop->num_tx_props; cnt++)
+			{
+				if (tx_prop->tx[cnt].alt_dst_pipe == 0)
+				{
+					IPACMERR("Tx(%d): wrong tx property: alt_dst_pipe: 0. \n", cnt);
+					return;
+				}
+			}
+
 			if(IPACM_Wan::backhaul_is_sta_mode == true)
 			{
 				IPACMDBG_H("Received IPA_WLAN_SWITCH_TO_MCC\n");
@@ -1314,7 +1324,7 @@ int IPACM_Wan::handle_route_add_evt(ipa_ip_type iptype)
 	    IPACMDBG_H("header length: %d, paritial: %d\n", sCopyHeader.hdr_len, sCopyHeader.is_partial);
 	    if(sCopyHeader.is_partial)
 	    {
- 	        IPACMDBG_H("Not setup default WAN routing rules cuz the header is not complete\n");
+		IPACMDBG_H("Not setup default WAN routing rules cuz the header is not complete\n");
             if(iptype==IPA_IP_v4)
 			{
 				header_partial_default_wan_v4 = true;
@@ -1989,7 +1999,13 @@ int IPACM_Wan::config_dft_firewall_rules(ipa_ip_type iptype)
 		{
 			rule_v6_ul++;
 		}
-#endif //FEATURE_IPACM_UL_FIREWALL
+		else if (firewall_config.extd_firewall_entries[i].ip_vsn == 6 &&
+			firewall_config.extd_firewall_entries[i].firewall_direction
+				!= IPACM_MSGR_UL_FIREWALL)
+		{
+			rule_v6++;
+		}
+#else //FEATURE_IPACM_UL_FIREWALL
 		if (firewall_config.extd_firewall_entries[i].ip_vsn == 4)
 		{
 			rule_v4++;
@@ -1998,6 +2014,8 @@ int IPACM_Wan::config_dft_firewall_rules(ipa_ip_type iptype)
 		{
 			rule_v6++;
 		}
+#endif //n FEATURE_IPACM_UL_FIREWALL
+
 	}
 #ifdef FEATURE_IPACM_UL_FIREWALL
 	IPACMDBG_H("UL firewall rule cnt v4ul:%d v6ul:%d\n",
@@ -2088,6 +2106,8 @@ int IPACM_Wan::config_dft_firewall_rules(ipa_ip_type iptype)
 			flt_rule_entry.flt_rule_hdl = -1;
 			flt_rule_entry.status = -1;
 
+#ifndef FEATURE_IPACM_UL_FIREWALL
+
 			/* firewall disable, all traffic are allowed */
 			if(firewall_config.firewall_enable == true)
 			{
@@ -2111,6 +2131,7 @@ int IPACM_Wan::config_dft_firewall_rules(ipa_ip_type iptype)
 				}
 			}
 			else
+#endif //FEATURE_IPACM_UL_FIREWALL
 			{
 				flt_rule_entry.at_rear = true;
 				if(IPACM_Iface::ipacmcfg->iface_table[ipa_if_num].if_mode == ROUTER)
@@ -2176,13 +2197,7 @@ int IPACM_Wan::config_dft_firewall_rules(ipa_ip_type iptype)
 			rule_v4 = 0;
 			for (i = 0; i < firewall_config.num_extd_firewall_entries; i++)
 			{
-#ifdef FEATURE_IPACM_UL_FIREWALL
-				if (firewall_config.extd_firewall_entries[i].ip_vsn == 4 &&
-					firewall_config.extd_firewall_entries[i].firewall_direction !=
-					IPACM_MSGR_UL_FIREWALL)
-#else //FEATURE_IPACM_UL_FIREWALL
 				if (firewall_config.extd_firewall_entries[i].ip_vsn == 4)
-#endif //FEATURE_IPACM_UL_FIREWALL
 				{
 					memset(&flt_rule_entry, 0, sizeof(struct ipa_flt_rule_add));
 
@@ -2298,6 +2313,7 @@ int IPACM_Wan::config_dft_firewall_rules(ipa_ip_type iptype)
 				}
 			} /* end of firewall ipv4 filter rule add for loop*/
             }
+
 			/* configure default filter rule */
 			memset(&flt_rule_entry, 0, sizeof(struct ipa_flt_rule_add));
 
@@ -2810,17 +2826,15 @@ int IPACM_Wan::config_dft_firewall_rules_ex(struct ipa_flt_rule_add *rules, int 
 	if (iptype == IPA_IP_v4)
 	{
 		original_num_rules = IPACM_Wan::num_v4_flt_rule;
+
+/* only install ipv4 DL firewall on modem endpoint when UL_FIREWALL FR not there */
+#ifndef FEATURE_IPACM_UL_FIREWALL
+
 		if(firewall_config.firewall_enable == true)
 		{
 			for (i = 0; i < firewall_config.num_extd_firewall_entries; i++)
 			{
-#ifdef FEATURE_IPACM_UL_FIREWALL
-				if (firewall_config.extd_firewall_entries[i].ip_vsn == 4 &&
-					firewall_config.extd_firewall_entries[i].firewall_direction !=
-					IPACM_MSGR_UL_FIREWALL)
-#else //FEATURE_IPACM_UL_FIREWALL
 				if (firewall_config.extd_firewall_entries[i].ip_vsn == 4)
-#endif //FEATURE_IPACM_UL_FIREWALL
 				{
 					memset(&flt_rule_entry, 0, sizeof(struct ipa_flt_rule_add));
 
@@ -2942,6 +2956,8 @@ int IPACM_Wan::config_dft_firewall_rules_ex(struct ipa_flt_rule_add *rules, int 
 				}
 			} /* end of firewall ipv4 filter rule add for loop*/
 		}
+#endif //FEATURE_IPACM_UL_FIREWALL
+
 		/* configure default filter rule */
 		memset(&flt_rule_entry, 0, sizeof(struct ipa_flt_rule_add));
 
@@ -2953,6 +2969,7 @@ int IPACM_Wan::config_dft_firewall_rules_ex(struct ipa_flt_rule_add *rules, int 
 		flt_rule_entry.rule.to_uc = 0;
 		flt_rule_entry.rule.eq_attrib_type = 1;
 
+#ifndef FEATURE_IPACM_UL_FIREWALL
 		/* firewall disable, all traffic are allowed */
 		if(firewall_config.firewall_enable == true)
 		{
@@ -2967,6 +2984,7 @@ int IPACM_Wan::config_dft_firewall_rules_ex(struct ipa_flt_rule_add *rules, int 
 			}
 		}
 		else
+#endif //FEATURE_IPACM_UL_FIREWALL
 		{
 			if(isWan_Bridge_Mode())
 			{

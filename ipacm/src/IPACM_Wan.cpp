@@ -1832,7 +1832,13 @@ int IPACM_Wan::handle_sta_header_add_evt()
 		}
 	}
 
-	/* checking if the ipv4 same as default route */
+	/* see if default routes are setup before constructing full header */
+	if(header_partial_default_wan_v4 == true)
+	{
+	   handle_route_add_evt(IPA_IP_v4);
+	}
+
+	/* checking if the ipv6 same as default route */
 	if(wan_v6_addr_gw_set)
 	{
 		index = get_wan_client_index_ipv6(wan_v6_addr_gw);
@@ -1881,10 +1887,6 @@ int IPACM_Wan::handle_sta_header_add_evt()
 	}
 
 	/* see if default routes are setup before constructing full header */
-	if(header_partial_default_wan_v4 == true)
-	{
-	   handle_route_add_evt(IPA_IP_v4);
-	}
 
 	if(header_partial_default_wan_v6 == true)
 	{

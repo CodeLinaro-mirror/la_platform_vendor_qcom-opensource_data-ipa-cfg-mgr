@@ -3903,7 +3903,7 @@ int IPACM_Lan::delete_uplink_filter_rule_ul(ipa_ip_type iptype, ul_firewall_t *u
 	if (true == ul_firewall->ul_catch_installed)
 		num_of_rules++;
 
-	if (num_of_rules)
+	if (num_of_rules && num_of_rules < IPACM_MAX_FIREWALL_ENTRIES)
 	{
 		flt_rule_hdls = ul_firewall->ul_firewall_handle;
 		if (m_filtering.DeleteFilteringHdls(flt_rule_hdls,
@@ -3914,6 +3914,10 @@ int IPACM_Lan::delete_uplink_filter_rule_ul(ipa_ip_type iptype, ul_firewall_t *u
 		}
 		IPACM_Iface::ipacmcfg->decreaseFltRuleCount(rx_prop->rx[0].src_pipe, IPA_IP_v6, num_of_rules);
 		IPACMDBG_H("%d num UL rules on pipe (%d) deleted successfully\n", num_of_rules, rx_prop->rx[0].src_pipe);
+	}
+	else if (num_of_rules > IPACM_MAX_FIREWALL_ENTRIES)
+	{
+		IPACMDBG_H("The number of ul firewall rules exceed limit.\n");
 	}
 	else
 	{

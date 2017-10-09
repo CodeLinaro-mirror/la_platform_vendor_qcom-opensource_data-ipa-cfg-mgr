@@ -108,6 +108,9 @@ extern "C"
 #define NUM_IPV6_PREFIX_FLT_RULE 1
 #define MAX_CMD_SIZE 100
 
+/* WAN IP address in IP Passthrough mode. */
+#define IPACM_IPPASSTHROUGH_WAN_IP "169.254.5.1"
+
 /*---------------------------------------------------------------------------
 										Return values indicating error status
 ---------------------------------------------------------------------------*/

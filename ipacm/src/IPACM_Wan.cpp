@@ -50,6 +50,9 @@ IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "IPACM_Defs.h"
 #include <IPACM_ConntrackListener.h>
 #include "linux/ipa_qmi_service_v01.h"
+#ifdef FEATURE_IPACM_HAL
+#include "IPACM_OffloadManager.h"
+#endif
 
 bool IPACM_Wan::wan_up = false;
 bool IPACM_Wan::wan_up_v6 = false;
@@ -200,8 +203,11 @@ int IPACM_Wan::handle_addr_evt(ipacm_event_data_addr *data)
 	struct ipa_ioc_get_hdr hdr;
 
 	const int NUM_RULES = 1;
-	int num_ipv6_addr, len;
-	int res = IPACM_SUCCESS;
+	uint32_t num_ipv6_addr;
+	int res = IPACM_SUCCESS,len;
+#ifdef FEATURE_IPACM_HAL
+	IPACM_OffloadManager* OffloadMng;
+#endif
 
 	memset(&hdr, 0, sizeof(hdr));
 	if(tx_prop == NULL || rx_prop == NULL)
@@ -501,6 +507,16 @@ int IPACM_Wan::handle_addr_evt(ipacm_event_data_addr *data)
 		IPACMDBG_H("Receved wan ipv4-addr:0x%x\n",wan_v4_addr);
 	}
 
+#ifdef FEATURE_IPACM_HAL
+	/* check if having pending add_downstream cache*/
+	OffloadMng = IPACM_OffloadManager::GetInstance();
+	if (OffloadMng == NULL) {
+		IPACMERR("failed to get IPACM_OffloadManager instance !\n");
+	} else {
+		IPACMDBG_H(" check iface %s if having add_downstream cache events\n", dev_name);
+		OffloadMng->search_framwork_cache(dev_name);
+	}
+#endif
 	IPACMDBG_H("number of default route rules %d\n", num_dft_rt_v6);
 
 fail:
@@ -3717,9 +3733,13 @@ int IPACM_Wan::add_dft_filtering_rule(struct ipa_flt_rule_add *rules, int rule_o
 					 sizeof(flt_rule_entry.rule.eq_attrib));
 
 		memcpy(&(rules[rule_offset + 2]), &flt_rule_entry, sizeof(struct ipa_flt_rule_add));
-
+#ifdef FEATURE_IPA_ANDROID
 		IPACM_Wan::num_v6_flt_rule += IPA_V2_NUM_MULTICAST_WAN_FILTER_RULE_IPV6;
 		IPACMDBG_H("Constructed %d default filtering rules for ip type %d\n", IPA_V2_NUM_MULTICAST_WAN_FILTER_RULE_IPV6, iptype);
+#else
+		IPACM_Wan::num_v6_flt_rule += IPA_V2_NUM_DEFAULT_WAN_FILTER_RULE_IPV6;
+		IPACMDBG_H("Constructed %d default filtering rules for ip type %d\n", IPA_V2_NUM_DEFAULT_WAN_FILTER_RULE_IPV6, iptype);
+#endif
 	}
 
 fail:
@@ -3768,8 +3788,9 @@ int IPACM_Wan::add_tcpv6_filtering_rule(struct ipa_flt_rule_add *rules, int rule
 		flt_rule_entry.rule.action = IPA_PASS_TO_ROUTING;
 		flt_rule_entry.rule.rt_tbl_idx = rt_tbl_idx.idx;
 
+#ifdef FEATURE_IPA_ANDROID
 		IPACMDBG_H("Add TCP ctrl rules: total num %d\n", IPA_V2_NUM_TCP_WAN_FILTER_RULE_IPV6);
-
+#endif
 		memcpy(&flt_rule_entry.rule.attrib,
 					 &rx_prop->rx[0].attrib,
 					 sizeof(flt_rule_entry.rule.attrib));
@@ -3791,7 +3812,11 @@ int IPACM_Wan::add_tcpv6_filtering_rule(struct ipa_flt_rule_add *rules, int rule
 		flt_rule_entry.rule.eq_attrib.protocol_eq_present = 1;
 		flt_rule_entry.rule.eq_attrib.protocol_eq = IPACM_FIREWALL_IPPROTO_TCP;
 
+#ifdef FEATURE_IPA_V3
+		flt_rule_entry.rule.eq_attrib.rule_eq_bitmap |= (1<<7);
+#else
 		flt_rule_entry.rule.eq_attrib.rule_eq_bitmap |= (1<<8);
+#endif
 		flt_rule_entry.rule.eq_attrib.num_ihl_offset_meq_32 = 1;
 		flt_rule_entry.rule.eq_attrib.ihl_offset_meq_32[0].offset = 12;
 
@@ -3810,8 +3835,10 @@ int IPACM_Wan::add_tcpv6_filtering_rule(struct ipa_flt_rule_add *rules, int rule
 		flt_rule_entry.rule.eq_attrib.ihl_offset_meq_32[0].mask = (((uint32_t)1)<<TCP_RST_SHIFT);
 		memcpy(&(rules[rule_offset + 2]), &flt_rule_entry, sizeof(struct ipa_flt_rule_add));
 
+#ifdef FEATURE_IPA_ANDROID
 		IPACM_Wan::num_v6_flt_rule += IPA_V2_NUM_TCP_WAN_FILTER_RULE_IPV6;
 		IPACMDBG_H("Constructed %d ICMP filtering rules for ip type %d\n", IPA_V2_NUM_TCP_WAN_FILTER_RULE_IPV6, IPA_IP_v6);
+#endif
 
 fail:
 	return res;

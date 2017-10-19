@@ -263,6 +263,13 @@ RET IPACM_OffloadManager::addDownstream(const char * downstream_name, const Pref
 		return SUCCESS;
 	}
 
+	/* Iface is valid, add to list if not present */
+	if (std::find(valid_ifaces.begin(), valid_ifaces.end(), downstream_name) == valid_ifaces.end())
+	{
+		/* Iface is new, add it to the list */
+		valid_ifaces.push_back(downstream_name);
+	}
+
 	evt_data = (ipacm_event_ipahal_stream*)malloc(sizeof(ipacm_event_ipahal_stream));
 	if(evt_data == NULL)
 	{
@@ -291,6 +298,17 @@ RET IPACM_OffloadManager::removeDownstream(const char * downstream_name, const P
 	ipacm_event_ipahal_stream *evt_data;
 
 	IPACMDBG_H("removeDownstream name(%s), ip-family(%d) \n", downstream_name, prefix.fam);
+	if(strnlen(downstream_name, sizeof(downstream_name)) == 0)
+	{
+		IPACMERR("iface length is 0.\n");
+		return FAIL_HARDWARE;
+	}
+	if (std::find(valid_ifaces.begin(), valid_ifaces.end(), downstream_name) == valid_ifaces.end())
+	{
+		IPACMERR("iface is not present in list.\n");
+		return FAIL_HARDWARE;
+	}
+
 	if(ipa_get_if_index(downstream_name, &index))
 	{
 		IPACMERR("fail to get iface index.\n");
@@ -477,12 +495,22 @@ RET IPACM_OffloadManager::setUpstream(const char *upstream_name, const Prefix& g
 RET IPACM_OffloadManager::stopAllOffload()
 {
 	Prefix v4gw, v6gw;
+	RET result = SUCCESS;
+
 	memset(&v4gw, 0, sizeof(v4gw));
 	memset(&v6gw, 0, sizeof(v6gw));
 	v4gw.fam = V4;
 	v6gw.fam = V6;
 	IPACMDBG_H("posting setUpstream(NULL), ipv4-fam(%d) ipv6-fam(%d)\n", v4gw.fam, v6gw.fam);
-	return setUpstream(NULL, v4gw, v6gw);
+	result = setUpstream(NULL, v4gw, v6gw);
+
+	/* reset the event cache */
+	default_gw_index = INVALID_IFACE;
+	upstream_v4_up = false;
+	upstream_v6_up = false;
+	memset(event_cache, 0, MAX_EVENT_CACHE*sizeof(framework_event_cache));
+	latest_cache_index = 0;
+	return result;
 }
 
 RET IPACM_OffloadManager::setQuota(const char * upstream_name /* upstream */, uint64_t mb/* limit */)
@@ -548,6 +576,7 @@ RET IPACM_OffloadManager::getStats(const char * upstream_name /* upstream */,
 	offload_stats.rx = stats.rx_bytes;
 
 	IPACMDBG_H("send getStats tx:%lld rx:%lld \n", offload_stats.tx, offload_stats.rx);
+	close(fd);
 	return SUCCESS;
 }
 
@@ -648,6 +677,7 @@ int IPACM_OffloadManager::resetTetherStats(const char * upstream_name /* upstrea
 		return FAIL_HARDWARE;
 	}
 	IPACMDBG_H("Reset Interface %s stats\n", upstream_name);
+	close(fd);
 	return IPACM_SUCCESS;
 }
 

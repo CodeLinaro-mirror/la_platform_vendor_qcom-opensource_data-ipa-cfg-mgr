@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2013-2016, The Linux Foundation. All rights reserved.
+Copyright (c) 2013-2017, The Linux Foundation. All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are
@@ -425,11 +425,13 @@ void* IPACM_ConntrackClient::TCPRegisterWithConnTrack(void *)
 	}
 
 	subscrips = (NF_NETLINK_CONNTRACK_UPDATE | NF_NETLINK_CONNTRACK_DESTROY);
-#ifdef CT_OPT
+
+#if defined(CT_OPT) || defined(FEATURE_IPACM_UL_FIREWALL)
 	subscrips |= NF_NETLINK_CONNTRACK_NEW;
 #endif
 
 	pClient->tcp_hdl = nfct_open(CONNTRACK, subscrips);
+
 	if(pClient->tcp_hdl == NULL)
 	{
 		PERROR("nfct_open\n");

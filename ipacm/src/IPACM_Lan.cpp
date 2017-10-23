@@ -337,6 +337,21 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 				}
 			}
 #endif
+
+#ifdef FEATURE_ETH_BRIDGE_LE
+			if(rx_prop != NULL)
+			{
+				free(rx_prop);
+			}
+			if(tx_prop != NULL)
+			{
+				free(tx_prop);
+			}
+			if(iface_query != NULL)
+			{
+				free(iface_query);
+			}
+#endif
 			delete this;
 		}
 		break;
@@ -2076,6 +2091,37 @@ int IPACM_Lan::handle_eth_client_ipaddr(ipacm_event_data_all *data)
 		IPACMDBG_H("ipv4 address: 0x%x\n", data->ipv4_addr);
 		if (data->ipv4_addr != 0) /* not 0.0.0.0 */
 		{
+			/* Special handling for Passthrough IP. */
+			if (IPACM_Iface::ipacmcfg->ipacm_ip_passthrough_mode)
+			{
+				/* if the MAC matches or RNDIS/ECM, then IP should not be private subnet. */
+				if (!memcmp(data->mac_addr, IPACM_Iface::ipacmcfg->ipacm_ip_passthrough_mac,
+					IPA_MAC_ADDR_SIZE))
+				{
+					/* check if the ip is in private subnet and ignore. */
+					if (IPACM_Iface::ipacmcfg->isPrivateSubnet(data->ipv4_addr))
+					{
+						IPACMDBG_H("Client is in IP passthrough mode, but got private IP: 0x%x\n", data->ipv4_addr);
+						return IPACM_FAILURE;
+					}
+				}
+				/* Check if the IP is not in private subnet and ignore. */
+				else if (!IPACM_Iface::ipacmcfg->isPrivateSubnet(data->ipv4_addr))
+				{
+					IPACMDBG_H("Client is not in IP passthrough mode, but got public IP: 0x%x\n", data->ipv4_addr);
+					return IPACM_FAILURE;
+				}
+			}
+			else
+			{
+				/* Check if the IP is not in private subnet and ignore. */
+				if (!IPACM_Iface::ipacmcfg->isPrivateSubnet(data->ipv4_addr))
+				{
+					IPACMDBG_H("Client is not in IP passthrough mode, but got public IP: 0x%x\n", data->ipv4_addr);
+					return IPACM_FAILURE;
+				}
+			}
+
 			if (get_client_memptr(eth_client, clnt_indx)->ipv4_set == false)
 			{
 				get_client_memptr(eth_client, clnt_indx)->v4_addr = data->ipv4_addr;
@@ -3554,14 +3600,16 @@ fail:
 		IPACMDBG_H("depend Got pipe %d rm index : %d \n", rx_prop->rx[0].src_pipe, IPACM_Iface::ipacmcfg->ipa_client_rm_map_tbl[rx_prop->rx[0].src_pipe]);
 		IPACM_Iface::ipacmcfg->DelRmDepend(IPACM_Iface::ipacmcfg->ipa_client_rm_map_tbl[rx_prop->rx[0].src_pipe]);
 		IPACMDBG_H("Finished delete dependency \n ");
+#ifndef FEATURE_ETH_BRIDGE_LE
 		free(rx_prop);
+#endif
 	}
 
 	if (eth_client != NULL)
 	{
 		free(eth_client);
 	}
-
+#ifndef FEATURE_ETH_BRIDGE_LE
 	if (tx_prop != NULL)
 	{
 		free(tx_prop);
@@ -3570,7 +3618,7 @@ fail:
 	{
 		free(iface_query);
 	}
-
+#endif
 	is_active = false;
 	post_del_self_evt();
 
@@ -3886,7 +3934,7 @@ int IPACM_Lan::delete_uplink_filter_rule_ul(ipa_ip_type iptype, ul_firewall_t *u
 	if (true == ul_firewall->ul_catch_installed)
 		num_of_rules++;
 
-	if (num_of_rules)
+	if (num_of_rules && num_of_rules < IPACM_MAX_FIREWALL_ENTRIES)
 	{
 		flt_rule_hdls = ul_firewall->ul_firewall_handle;
 		if (m_filtering.DeleteFilteringHdls(flt_rule_hdls,
@@ -3897,6 +3945,10 @@ int IPACM_Lan::delete_uplink_filter_rule_ul(ipa_ip_type iptype, ul_firewall_t *u
 		}
 		IPACM_Iface::ipacmcfg->decreaseFltRuleCount(rx_prop->rx[0].src_pipe, IPA_IP_v6, num_of_rules);
 		IPACMDBG_H("%d num UL rules on pipe (%d) deleted successfully\n", num_of_rules, rx_prop->rx[0].src_pipe);
+	}
+	else if (num_of_rules > IPACM_MAX_FIREWALL_ENTRIES)
+	{
+		IPACMDBG_H("The number of ul firewall rules exceed limit.\n");
 	}
 	else
 	{

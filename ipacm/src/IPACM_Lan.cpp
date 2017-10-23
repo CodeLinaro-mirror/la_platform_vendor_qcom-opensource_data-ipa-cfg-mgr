@@ -3175,7 +3175,7 @@ int IPACM_Lan::handle_down_evt()
 				IPACMERR("Failed to delete second pass hdr.\n");
 				return IPACM_FAILURE;
 			}
-#if 0
+
 			/* delete ul rules */
 			if(m_filtering.DeleteFilteringHdls(&get_client_memptr(eth_client, i)->ul_first_pass_flt_rule_hdl, IPA_IP_v6, 1) == false)
 			{
@@ -3183,7 +3183,7 @@ int IPACM_Lan::handle_down_evt()
 				return IPACM_FAILURE;
 			}
 			IPACM_Iface::ipacmcfg->decreaseFltRuleCount(rx_prop->rx[0].src_pipe, IPA_IP_v6, 1);
-#endif
+
 			if(m_routing.DeleteRoutingHdl(get_client_memptr(eth_client, i)->ul_first_pass_rt_rule_hdl, IPA_IP_v6) == false)
 			{
 				IPACMERR("Failed to delete ul rt rule.\n");
@@ -7593,14 +7593,14 @@ int IPACM_Lan::install_l2tp_ul_rules(ipacm_event_data_all *data, int index)
 	flt_rule_entry->rule.attrib.u.v6.next_hdr = 0x73;
 	flt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_L2TP_INNER_IP_TYPE;
 	flt_rule_entry->rule.attrib.type = 0x40;
-#if 0
+
 	if(m_filtering.AddFilteringRuleAfter(pFilteringTable) == false)
 	{
 		IPACMERR("Failed to add l2tp ul flt rule.\n");
 		free(pFilteringTable);
 		return IPACM_FAILURE;
 	}
-#endif
+
 	IPACM_Iface::ipacmcfg->increaseFltRuleCount(rx_prop->rx[0].src_pipe, IPA_IP_v6, 1);
 	get_client_memptr(eth_client, index)->ul_first_pass_flt_rule_hdl =
 		pFilteringTable->rules[0].flt_rule_hdl;
@@ -7662,7 +7662,7 @@ int IPACM_Lan::uninstall_l2tp_rules(ipacm_event_data_all *data)
 		IPACMERR("Failed to delete second pass hdr.\n");
 		return IPACM_FAILURE;
 	}
-#if 0
+
 	/* delete ul rules */
 	if(m_filtering.DeleteFilteringHdls(&get_client_memptr(eth_client, index)->ul_first_pass_flt_rule_hdl, IPA_IP_v6, 1) == false)
 	{
@@ -7670,7 +7670,7 @@ int IPACM_Lan::uninstall_l2tp_rules(ipacm_event_data_all *data)
 		return IPACM_FAILURE;
 	}
 	IPACM_Iface::ipacmcfg->decreaseFltRuleCount(rx_prop->rx[0].src_pipe, IPA_IP_v6, 1);
-#endif
+
 	if(m_routing.DeleteRoutingHdl(get_client_memptr(eth_client, index)->ul_first_pass_rt_rule_hdl, IPA_IP_v6) == false)
 	{
 		IPACMERR("Failed to delete ul rt rule.\n");

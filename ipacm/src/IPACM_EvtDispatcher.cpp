@@ -58,7 +58,17 @@ int IPACM_EvtDispatcher::PostEvt
 	Message *item = NULL;
 	MessageQueue *MsgQueue = NULL;
 
-	MsgQueue = MessageQueue::getInstance();
+	if(data->event < IPA_EXTERNAL_EVENT_MAX)
+	{
+		IPACMDBG("Insert event into external queue.\n");
+		MsgQueue = MessageQueue::getInstanceExternal();
+	}
+	else
+	{
+		IPACMDBG("Insert event into internal queue.\n");
+		MsgQueue = MessageQueue::getInstanceInternal();
+	}
+
 	if(MsgQueue == NULL)
 	{
 		IPACMERR("unable to retrieve MsgQueue instance\n");
@@ -72,7 +82,6 @@ int IPACM_EvtDispatcher::PostEvt
 		return IPACM_FAILURE;
 	}
 
-	IPACMDBG("Populating item to post to queue\n");
 	item->evt.callback_ptr = IPACM_EvtDispatcher::ProcessEvt;
 	memcpy(&item->evt.data, data, sizeof(ipacm_cmd_q_data));
 

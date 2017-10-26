@@ -85,7 +85,8 @@ private:
 	Message *Head;
 	Message *Tail;
 	Message* dequeue(void);
-	static MessageQueue *inst;
+	static MessageQueue *inst_internal;
+	static MessageQueue *inst_external;
 
 	MessageQueue()
 	{
@@ -99,7 +100,8 @@ public:
 	void enqueue(Message *item);
 
 	static void* Process(void *);
-	static MessageQueue* getInstance();
+	static MessageQueue* getInstanceInternal();
+	static MessageQueue* getInstanceExternal();
 
 };
 

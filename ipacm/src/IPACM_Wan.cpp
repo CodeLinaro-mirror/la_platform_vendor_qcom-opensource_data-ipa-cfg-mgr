@@ -1582,6 +1582,7 @@ int IPACM_Wan::handle_route_add_evt(ipa_ip_type iptype)
 		{
 			IPACM_Wan::xlat_mux_id = 0;
 			wanup_data->xlat_mux_id = 0;
+			wanup_data->mux_id = ext_prop->ext[0].mux_id;
 			IPACMDBG_H("No xlat configuratio:\n");
 		}
 		evt_data.event = IPA_HANDLE_WAN_UP;

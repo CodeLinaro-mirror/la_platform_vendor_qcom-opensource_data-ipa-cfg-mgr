@@ -231,6 +231,7 @@ static int ipacm_cfg_xml_parse_tree
 						str_size = strlen(content);
 						memset(content_buf, 0, sizeof(content_buf));
 						memcpy(content_buf, (void *)content, str_size);
+						content_buf[MAX_XML_STR_LEN-1] = '\0';
 						IPACMDBG_H("IP Passthrough mac: %s\n", content_buf);
 						eth_addr = ether_aton(content_buf);
 						memset(&config->ip_passthrough_mac, 0, sizeof(config->ip_passthrough_mac));

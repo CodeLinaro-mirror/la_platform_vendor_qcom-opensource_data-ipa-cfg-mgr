@@ -142,6 +142,9 @@ bool IPACM_Filtering::AddFilteringRuleAfter(struct ipa_ioc_add_flt_rule_after co
 		return false;
 	}
 	IPACMDBG("Added Filtering rule %p\n", ruleTable);
+#else
+	if (ruleTable)
+	IPACMERR("Not support adding Filtering rule %p\n", ruleTable);
 #endif
 	return true;
 }
@@ -264,6 +267,7 @@ bool IPACM_Filtering::AddWanDLFilteringRule(struct ipa_ioc_add_flt_rule const *r
 	ipa_install_fltr_rule_req_ex_msg_v01 qmi_rule_ex_msg;
 #endif
 
+	memset(&qmi_rule_msg, 0, sizeof(qmi_rule_msg));
 	int fd_wwan_ioctl = open(WWAN_QMI_IOCTL_DEVICE_NAME, O_RDWR);
 	if(fd_wwan_ioctl < 0)
 	{
@@ -292,8 +296,6 @@ bool IPACM_Filtering::AddWanDLFilteringRule(struct ipa_ioc_add_flt_rule const *r
 	}
 	else
 	{
-		memset(&qmi_rule_msg, 0, sizeof(qmi_rule_msg));
-
 		if (num_rules > 0)
 		{
 			qmi_rule_msg.filter_spec_list_valid = true;

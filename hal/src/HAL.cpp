@@ -41,6 +41,7 @@
 /* External Includes */
 #include <cutils/log.h>
 #include <string>
+#include <sys/socket.h>
 #include <sys/types.h>
 #include <vector>
 
@@ -87,7 +88,7 @@ void HAL::registerAsSystemService(const char* name) {
     status_t ret = 0;
 
     ret = IOffloadControl::registerAsService();
-    if (ret != 0) ALOGE("Failed to register IOffloadControl (%d)", ret);
+    if (ret != 0) ALOGE("Failed to register IOffloadControl (%d) name(%s)", ret, name);
     else if (DBG) {
         ALOGI("Successfully registered IOffloadControl");
     }
@@ -399,15 +400,26 @@ Return<void> HAL::setLocalPrefixes
     const hidl_vec<hidl_string>& prefixes,
     setLocalPrefixes_cb hidl_cb
 ) {
+    BoolResult res;
+    PrefixParser parser;
+    vector<string> prefixesStr = convertHidlStrToStdStr(prefixes);
+
     LocalLogBuffer::FunctionLog fl(__func__);
-    fl.addArg("prefixes", "unused");
-    #pragma unused(prefixes)
+    fl.addArg("prefixes", prefixesStr);
 
-    /* Fake Success */
-    BoolResult res = ipaResultToBoolResult(RET::SUCCESS);
+    if (!isInitialized()) {
+        BoolResult res = makeInputCheckFailure("Not initialized");
+    } else if(prefixesStr.size() < 1) {
+        res = ipaResultToBoolResult(RET::FAIL_INPUT_CHECK);
+    } else if (!parser.add(prefixesStr)) {
+        res = makeInputCheckFailure(parser.getLastErrAsStr());
+    } else {
+        res = ipaResultToBoolResult(RET::SUCCESS);
+    }
+
     hidl_cb(res.success, res.errMsg);
-
     fl.setResult(res.success, res.errMsg);
+    mLogs.addLog(fl);
     return Void();
 } /* setLocalPrefixes */
 
@@ -451,11 +463,17 @@ Return<void> HAL::setDataLimit
     fl.addArg("upstream", upstream);
     fl.addArg("limit", limit);
 
-    RET ipaReturn = mIPA->setQuota(upstream.c_str(), limit);
-    BoolResult res = ipaResultToBoolResult(ipaReturn);
-    hidl_cb(res.success, res.errMsg);
+    if (!isInitialized()) {
+        BoolResult res = makeInputCheckFailure("Not initialized (setDataLimit)");
+        hidl_cb(res.success, res.errMsg);
+        fl.setResult(res.success, res.errMsg);
+    } else {
+        RET ipaReturn = mIPA->setQuota(upstream.c_str(), limit);
+        BoolResult res = ipaResultToBoolResult(ipaReturn);
+        hidl_cb(res.success, res.errMsg);
+        fl.setResult(res.success, res.errMsg);
+    }
 
-    fl.setResult(res.success, res.errMsg);
     mLogs.addLog(fl);
     return Void();
 } /* setDataLimit */
@@ -484,7 +502,12 @@ Return<void> HAL::setUpstreamParameters
      * qualified here.  But then, how do we allow them to be empty/null as well
      * while still preserving a sane API on PrefixParser?
      */
-    if (!v4AddrParser.addV4(v4Addr) && !v4Addr.empty()) {
+    if (!isInitialized()) {
+        BoolResult res = makeInputCheckFailure("Not initialized (setUpstreamParameters)");
+        hidl_cb(res.success, res.errMsg);
+        fl.setResult(res.success, res.errMsg);
+    }
+    else if (!v4AddrParser.addV4(v4Addr) && !v4Addr.empty()) {
         BoolResult res = makeInputCheckFailure(v4AddrParser.getLastErrAsStr());
         hidl_cb(res.success, res.errMsg);
         fl.setResult(res.success, res.errMsg);
@@ -496,19 +519,6 @@ Return<void> HAL::setUpstreamParameters
         BoolResult res = makeInputCheckFailure(v6GwParser.getLastErrAsStr());
         hidl_cb(res.success, res.errMsg);
         fl.setResult(res.success, res.errMsg);
-    } else if (v6GwParser.size() > 1) {
-        RET ipaReturn = mIPA->stopAllOffload();
-        if (ipaReturn != RET::SUCCESS) {
-            BoolResult res =
-                    makeInputCheckFailure("Cannot accept more than 1 IPv6 Gateway.  Offload still running and may result in data path errors");
-            hidl_cb(res.success, res.errMsg);
-            fl.setResult(res.success, res.errMsg);
-        } else {
-            BoolResult res =
-                    makeInputCheckFailure("Cannot accept more than 1 IPv6 Gateway.  In an effort to avoid any data path errors, offload has been stopped");
-            hidl_cb(res.success, res.errMsg);
-            fl.setResult(res.success, res.errMsg);
-        }
     } else {
         RET ipaReturn = mIPA->setUpstream(
                 iface.c_str(),
@@ -535,7 +545,12 @@ Return<void> HAL::addDownstream
 
     PrefixParser prefixParser;
 
-    if (!prefixParser.add(prefix)) {
+    if (!isInitialized()) {
+        BoolResult res = makeInputCheckFailure("Not initialized (setUpstreamParameters)");
+        hidl_cb(res.success, res.errMsg);
+        fl.setResult(res.success, res.errMsg);
+    }
+    else if (!prefixParser.add(prefix)) {
         BoolResult res = makeInputCheckFailure(prefixParser.getLastErrAsStr());
         hidl_cb(res.success, res.errMsg);
         fl.setResult(res.success, res.errMsg);
@@ -564,7 +579,12 @@ Return<void> HAL::removeDownstream
 
     PrefixParser prefixParser;
 
-    if (!prefixParser.add(prefix)) {
+    if (!isInitialized()) {
+        BoolResult res = makeInputCheckFailure("Not initialized (setUpstreamParameters)");
+        hidl_cb(res.success, res.errMsg);
+        fl.setResult(res.success, res.errMsg);
+    }
+    else if (!prefixParser.add(prefix)) {
         BoolResult res = makeInputCheckFailure(prefixParser.getLastErrAsStr());
         hidl_cb(res.success, res.errMsg);
         fl.setResult(res.success, res.errMsg);

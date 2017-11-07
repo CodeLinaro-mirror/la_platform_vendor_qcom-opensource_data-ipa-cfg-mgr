@@ -885,7 +885,7 @@ void IPACM_Config::add_l2tp_vlan_mapping(ipa_ioc_l2tp_vlan_mapping_info *data)
 		}
 	}
 
-	IPACM_Iface::ipacmcfg->AddNatIfaces(data->l2tp_iface_name);
+	AddNatIfaces(data->l2tp_iface_name);
 	IPACMDBG_H("Add l2tp iface %s to nat ifaces.\n", data->l2tp_iface_name);
 
 	memset(&new_mapping, 0, sizeof(new_mapping));
@@ -938,7 +938,7 @@ void IPACM_Config::del_l2tp_vlan_mapping(ipa_ioc_l2tp_vlan_mapping_info *data)
 				sizeof(data->vlan_iface_name)) == 0)
 			{
 				m_l2tp_vlan_mapping.erase(it);
-				IPACM_Iface::ipacmcfg->DelNatIfaces(data->l2tp_iface_name);
+				DelNatIfaces(data->l2tp_iface_name);
 				IPACMDBG_H("Del l2tp iface %s to nat ifaces.\n", data->l2tp_iface_name);
 			}
 			else

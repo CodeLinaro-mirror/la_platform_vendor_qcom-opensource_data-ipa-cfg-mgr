@@ -3364,7 +3364,7 @@ int IPACM_Wan::add_dft_filtering_rule(struct ipa_flt_rule_add *rules, int rule_o
 					 sizeof(flt_rule_entry.rule.eq_attrib));
 		memcpy(&(rules[rule_offset + 1]), &flt_rule_entry, sizeof(struct ipa_flt_rule_add));
 
-#ifdef FEATURE_L2TP_SYN
+#ifdef FEATURE_L2TP_E2E
 		/* Configuring TCP SYN Filtering Rule */
 		memcpy(&flt_rule_entry.rule.attrib, &rx_prop->rx[0].attrib,
 			sizeof(flt_rule_entry.rule.attrib));

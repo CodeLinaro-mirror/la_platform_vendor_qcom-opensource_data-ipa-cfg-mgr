@@ -694,7 +694,7 @@ void* ipa_driver_msg_notifier(void *param)
 			}
 			memcpy(vlan_info, buffer + sizeof(struct ipa_msg_meta), sizeof(*vlan_info));
 			IPACM_Iface::ipacmcfg->add_vlan_iface(vlan_info);
-			break;
+			continue;
 
 		case DEL_VLAN_IFACE:
 			vlan_info = (ipa_ioc_vlan_iface_info *)malloc(sizeof(*vlan_info));
@@ -705,7 +705,7 @@ void* ipa_driver_msg_notifier(void *param)
 			}
 			memcpy(vlan_info, buffer + sizeof(struct ipa_msg_meta), sizeof(*vlan_info));
 			IPACM_Iface::ipacmcfg->del_vlan_iface(vlan_info);
-			break;
+			continue;
 
 		case ADD_L2TP_VLAN_MAPPING:
 			mapping = (ipa_ioc_l2tp_vlan_mapping_info *)malloc(sizeof(*mapping));
@@ -716,7 +716,7 @@ void* ipa_driver_msg_notifier(void *param)
 			}
 			memcpy(mapping, buffer + sizeof(struct ipa_msg_meta), sizeof(*mapping));
 			IPACM_Iface::ipacmcfg->add_l2tp_vlan_mapping(mapping);
-			break;
+			continue;
 
 		case DEL_L2TP_VLAN_MAPPING:
 			mapping = (ipa_ioc_l2tp_vlan_mapping_info *)malloc(sizeof(*mapping));
@@ -727,7 +727,7 @@ void* ipa_driver_msg_notifier(void *param)
 			}
 			memcpy(mapping, buffer + sizeof(struct ipa_msg_meta), sizeof(*mapping));
 			IPACM_Iface::ipacmcfg->del_l2tp_vlan_mapping(mapping);
-			break;
+			continue;
 #endif
 		default:
 			IPACMDBG_H("Unhandled message type: %d\n", event_hdr.msg_type);

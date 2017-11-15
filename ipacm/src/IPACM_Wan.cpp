@@ -1107,6 +1107,7 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 			handle_l2tp_client_add(data->iface_name);
 			install_wan_filtering_rule(false);
 		}
+		break;
 
 	case IPA_DEL_L2TP_CLIENT:
 		if(active_v4)
@@ -1115,6 +1116,7 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 			handle_l2tp_client_del(data->iface_name);
 			install_wan_filtering_rule(false);
 		}
+		break;
 #endif
 	default:
 		break;

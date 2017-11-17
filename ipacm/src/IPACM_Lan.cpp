@@ -1687,9 +1687,10 @@ int IPACM_Lan::handle_wan_up_ex(ipacm_ext_prop *ext_prop, ipa_ip_type iptype, ui
 	IPACM_Config* ipacm_config = IPACM_Iface::ipacmcfg;
 	struct ipa_ioc_write_qmapid mux;
 
-	if(rx_prop != NULL)
+	/* not  needed for newer versions since it will be overridden by NAT metadata replacement for IPAv4 and up */
+	if((IPACM_Iface::ipacmcfg->GetIPAVer() < IPA_HW_v4_0) && (rx_prop != NULL))
 	{
-		/* give mud ID to IPA-driver for WLAN/LAN pkts */
+		/* give mux ID of the default PDN to IPA-driver for WLAN/LAN pkts */
 		fd = open(IPA_DEVICE_NAME, O_RDWR);
 		if (0 == fd)
 		{
@@ -2212,9 +2213,12 @@ int IPACM_Lan::handle_eth_client_route_rule(uint8_t *mac_addr, ipa_ip_type iptyp
 		   	    rt_rule_entry->rule.hdr_hdl = get_client_memptr(eth_client, eth_index)->hdr_hdl_v4;
 				rt_rule_entry->rule.attrib.u.v4.dst_addr = get_client_memptr(eth_client, eth_index)->v4_addr;
 				rt_rule_entry->rule.attrib.u.v4.dst_addr_mask = 0xFFFFFFFF;
-#ifdef FEATURE_IPA_V3
-				rt_rule_entry->rule.hashable = false;
-#endif
+
+				if(IPACM_Iface::ipacmcfg->GetIPAVer() >= IPA_HW_v4_0)
+				{
+					rt_rule_entry->rule.hashable = true;
+				}
+
 				if (false == m_routing.AddRoutingRule(rt_rule))
 				{
 					IPACMERR("Routing rule addition failed!\n");
@@ -3194,6 +3198,10 @@ int IPACM_Lan::handle_uplink_filter_rule(ipacm_ext_prop *prop, ipa_ip_type iptyp
 		else
 		{
 			flt_rule_entry.rule.action = IPA_PASS_TO_SRC_NAT;
+
+			/* NAT block will set the proper MUX ID in the metadata according to the relevant PDN */
+			if (IPACM_Iface::ipacmcfg->GetIPAVer() >= IPA_HW_v4_0)
+				flt_rule_entry.rule.set_metadata = true;
 		}
 	}
 	else if(iptype == IPA_IP_v6)

@@ -59,6 +59,8 @@ IPACM_OffloadManager::IPACM_OffloadManager()
 	upstream_v6_up = false;
 	memset(event_cache, 0, MAX_EVENT_CACHE*sizeof(framework_event_cache));
 	latest_cache_index = 0;
+	elrInstance = NULL;
+	touInstance = NULL;
 	return ;
 }
 
@@ -213,6 +215,14 @@ RET IPACM_OffloadManager::addDownstream(const char * downstream_name, const Pref
 		return FAIL_INPUT_CHECK;
 	}
 
+	/* Iface is valid, add to list if not present */
+	if (std::find(valid_ifaces.begin(), valid_ifaces.end(), std::string(downstream_name)) == valid_ifaces.end())
+	{
+		/* Iface is new, add it to the list */
+		valid_ifaces.push_back(downstream_name);
+		IPACMDBG_H("add iface(%s) to list\n", downstream_name);
+	}
+
 	/* check if downstream netdev driver finished its configuration on IPA-HW */
 	if (IPACM_Iface::ipacmcfg->CheckNatIfaces(downstream_name))
 	{
@@ -263,13 +273,6 @@ RET IPACM_OffloadManager::addDownstream(const char * downstream_name, const Pref
 		return SUCCESS;
 	}
 
-	/* Iface is valid, add to list if not present */
-	if (std::find(valid_ifaces.begin(), valid_ifaces.end(), downstream_name) == valid_ifaces.end())
-	{
-		/* Iface is new, add it to the list */
-		valid_ifaces.push_back(downstream_name);
-	}
-
 	evt_data = (ipacm_event_ipahal_stream*)malloc(sizeof(ipacm_event_ipahal_stream));
 	if(evt_data == NULL)
 	{
@@ -303,7 +306,7 @@ RET IPACM_OffloadManager::removeDownstream(const char * downstream_name, const P
 		IPACMERR("iface length is 0.\n");
 		return FAIL_HARDWARE;
 	}
-	if (std::find(valid_ifaces.begin(), valid_ifaces.end(), downstream_name) == valid_ifaces.end())
+	if (std::find(valid_ifaces.begin(), valid_ifaces.end(), std::string(downstream_name)) == valid_ifaces.end())
 	{
 		IPACMERR("iface is not present in list.\n");
 		return FAIL_HARDWARE;
@@ -442,8 +445,14 @@ RET IPACM_OffloadManager::setUpstream(const char *upstream_name, const Prefix& g
 			if (upstream_v6_up == false) {
 				IPACMDBG_H("IPV6 gateway: %08x:%08x:%08x:%08x \n",
 						gw_addr_v6.v6Addr[0], gw_addr_v6.v6Addr[1], gw_addr_v6.v6Addr[2], gw_addr_v6.v6Addr[3]);
-				post_route_evt(IPA_IP_v6, index, IPA_WAN_UPSTREAM_ROUTE_ADD_EVENT, gw_addr_v6);
-				upstream_v6_up = true;
+				/* check v6-address valid or not */
+				if((gw_addr_v6.v6Addr[0] == 0) && (gw_addr_v6.v6Addr[1] ==0) && (gw_addr_v6.v6Addr[2] == 0) && (gw_addr_v6.v6Addr[3] == 0))
+				{
+					IPACMDBG_H("Invliad ipv6-address, ignored v6-setupstream\n");
+				} else {
+					post_route_evt(IPA_IP_v6, index, IPA_WAN_UPSTREAM_ROUTE_ADD_EVENT, gw_addr_v6);
+					upstream_v6_up = true;
+				}
 			} else {
 				IPACMDBG_H("already setupstream iface(%s) ipv6 previously\n", upstream_name);
 			}
@@ -477,8 +486,14 @@ RET IPACM_OffloadManager::setUpstream(const char *upstream_name, const Prefix& g
 			if (upstream_v6_up == false) {
 				IPACMDBG_H("IPV6 gateway: %08x:%08x:%08x:%08x \n",
 						gw_addr_v6.v6Addr[0], gw_addr_v6.v6Addr[1], gw_addr_v6.v6Addr[2], gw_addr_v6.v6Addr[3]);
-				post_route_evt(IPA_IP_v6, index, IPA_WAN_UPSTREAM_ROUTE_ADD_EVENT, gw_addr_v6);
-				upstream_v6_up = true;
+				/* check v6-address valid or not */
+				if((gw_addr_v6.v6Addr[0] == 0) && (gw_addr_v6.v6Addr[1] ==0) && (gw_addr_v6.v6Addr[2] == 0) && (gw_addr_v6.v6Addr[3] == 0))
+				{
+					IPACMDBG_H("Invliad ipv6-address, ignored v6-setupstream\n");
+				} else {
+					post_route_evt(IPA_IP_v6, index, IPA_WAN_UPSTREAM_ROUTE_ADD_EVENT, gw_addr_v6);
+					upstream_v6_up = true;
+				}
 			} else {
 				IPACMDBG_H("already setupstream iface(%s) ipv6 previously\n", upstream_name);
 				result = SUCCESS_DUPLICATE_CONFIG;
@@ -508,6 +523,7 @@ RET IPACM_OffloadManager::stopAllOffload()
 	upstream_v6_up = false;
 	memset(event_cache, 0, MAX_EVENT_CACHE*sizeof(framework_event_cache));
 	latest_cache_index = 0;
+	valid_ifaces.clear();
 	return result;
 }
 

@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2013, The Linux Foundation. All rights reserved.
+Copyright (c) 2013, 2017 The Linux Foundation. All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are
@@ -1254,7 +1254,16 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 				}
 			}
 			break;
-
+#ifdef FEATURE_IPACM_HAL
+		/* WA for WLAN to clean up NAT instance during SSR */
+		case IPA_SSR_NOTICE: //sky
+			IPACMDBG_H("Received IPA_SSR_NOTICE event.\n");
+			if(m_is_sta_mode == WLAN_WAN)
+			{
+				IPACM_Iface::ipacmcfg->DelNatIfaces(dev_name); // delete NAT-iface
+			}
+		break;
+#endif
 	default:
 		break;
 	}
@@ -1604,6 +1613,7 @@ int IPACM_Wan::handle_route_add_evt(ipa_ip_type iptype)
 		{
 			IPACM_Wan::xlat_mux_id = 0;
 			wanup_data->xlat_mux_id = 0;
+			wanup_data->mux_id = ext_prop->ext[0].mux_id;
 			IPACMDBG_H("No xlat configuratio:\n");
 		}
 		evt_data.event = IPA_HANDLE_WAN_UP;

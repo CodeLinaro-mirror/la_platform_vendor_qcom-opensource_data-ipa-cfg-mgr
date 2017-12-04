@@ -4259,11 +4259,16 @@ int IPACM_Lan::re_config_dft_firewall_rules_ul(ipa_ip_type iptype, ul_firewall_t
 
 	IPACM_Wan::read_firewall_filter_rules_ul();
 	IPACMDBG_H ("Firewall Status (%d)\n", IPACM_Wan::firewall_config_ul.firewall_enable);
-	IPACMDBG_H("UL firewall needs to be reconfig on pipe (%d)\n", rx_prop->rx[0].src_pipe);
-	if (IPACM_Wan::firewall_config_ul.firewall_enable )
+
+	if (IPACM_Wan::firewall_config_ul.firewall_enable)
 	{
-		if (IPACM_Wan::isWanUP_V6(ipa_if_num) &&
-			(IPACM_Wan::backhaul_is_sta_mode == false) &&
+		if (!IPACM_Wan::isWanUP_V6(ipa_if_num))
+		{
+			IPACMDBG_H("WAN v6 is not UP\n");
+			return IPACM_SUCCESS;
+		}
+
+		if ((IPACM_Wan::backhaul_is_sta_mode == false) &&
 			(IPACM_Wan::firewall_config_ul.rule_action_accept == true)) /* v6 LTE and WL ?*/
 		{
 			delete_uplink_filter_rule_ul(IPA_IP_v6, ul_firewall);
@@ -4283,14 +4288,12 @@ int IPACM_Lan::re_config_dft_firewall_rules_ul(ipa_ip_type iptype, ul_firewall_t
 			IPACMDBG_H ("Pipe (%d) reconfigured with the new UL rules\n", rx_prop->rx[0].src_pipe);
 		}
 	}
-	else if (ul_firewall->ul_firewall_installed &&
-			!IPACM_Wan::firewall_config_ul.firewall_enable)
-	{
-		delete_uplink_filter_rule_ul(IPA_IP_v6, ul_firewall);
-	}
 	else
 	{
-		IPACMDBG_H ("UL firewall rules are not installed \n");
+		if (ul_firewall->ul_firewall_installed == true)
+			delete_uplink_filter_rule_ul(IPA_IP_v6, ul_firewall);
+		else
+			IPACMDBG_H ("UL firewall rules are not installed \n");
 	}
 
 	if (IPACM_Wan::is_v6_ul_firewall_sent_to_q6 == true &&

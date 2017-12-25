@@ -95,7 +95,6 @@ void IPACM_ConntrackListener::event_callback(ipa_cm_event_id evt,
 
 	 case IPA_HANDLE_WAN_UP:
 			IPACMDBG_H("Received IPA_HANDLE_WAN_UP event\n");
-			CreateConnTrackThreads();
 			if(!isWanUp())
 			{
 				TriggerWANUp(data);
@@ -118,7 +117,6 @@ void IPACM_ConntrackListener::event_callback(ipa_cm_event_id evt,
 			IPACMDBG_H("Received event: %d with ifname: %s and address: 0x%x\n",
 							 evt, ((ipacm_event_iface_up *)data)->ifname,
 							 ((ipacm_event_iface_up *)data)->ipv4_addr);
-			CreateConnTrackThreads();
 			IPACM_ConntrackClient::UpdateUDPFilters(data, false);
 			IPACM_ConntrackClient::UpdateTCPFilters(data, false);
 			break;
@@ -498,9 +496,9 @@ void IPACM_ConntrackListener::TriggerWANDown(uint32_t wan_addr)
 {
 	 IPACMDBG_H("Deleting ipv4 nat table with");
 	 IPACMDBG_H(" public ip address(0x%x): %d.%d.%d.%d\n", wan_addr,
-		    ((wan_addr>>24) & 0xFF), ((wan_addr>>16) & 0xFF), 
+		    ((wan_addr>>24) & 0xFF), ((wan_addr>>16) & 0xFF),
 		    ((wan_addr>>8) & 0xFF), (wan_addr & 0xFF));
-	 
+
 	 WanUp = false;
 
 	 if(nat_inst != NULL)

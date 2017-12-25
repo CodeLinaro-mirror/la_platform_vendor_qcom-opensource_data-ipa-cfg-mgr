@@ -898,6 +898,9 @@ int main(int argc, char **argv)
 		}
 	}
 
+	/* Create Conntrack listener threads here to support on-demand PDN’s connections before WAN is up */
+	CtList->CreateConnTrackThreads();
+
 	pthread_join(cmd_queue_thread, NULL);
 	pthread_join(netlink_thread, NULL);
 	pthread_join(monitor_thread, NULL);

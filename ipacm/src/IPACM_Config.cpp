@@ -165,7 +165,6 @@ IPACM_Config::IPACM_Config()
 	memset(flt_rule_count_v4, 0, IPA_CLIENT_MAX*sizeof(int));
 	memset(flt_rule_count_v6, 0, IPA_CLIENT_MAX*sizeof(int));
 	memset(bridge_mac, 0, IPA_MAC_ADDR_SIZE*sizeof(uint8_t));
-	ver = GetIPAVer(true);
 
 	IPACMDBG_H(" create IPACM_Config constructor\n");
 	return;
@@ -192,6 +191,7 @@ int IPACM_Config::Init(void)
 	{
 		IPACMERR("Failed opening %s.\n", DEVICE_NAME);
 	}
+	ver = GetIPAVer(true);
 
 #ifdef FEATURE_IPA_ANDROID
 	strncpy(IPACM_config_file, "/etc/IPACM_cfg.xml", sizeof(IPACM_config_file));

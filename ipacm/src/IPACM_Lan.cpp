@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2013-2016, The Linux Foundation. All rights reserved.
+Copyright (c) 2013-2018, The Linux Foundation. All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are
@@ -1639,14 +1639,10 @@ int IPACM_Lan::handle_wan_up_ex(ipacm_ext_prop *ext_prop, ipa_ip_type iptype, ui
 	/* Install filter rules for the client. */
 	if (IPACM_Iface::ipacmcfg->ipacm_lan_stats_enable == true)
 	{
-		if (IPACM_Iface::ipacmcfg->ipacm_lan_stats_enable_wan_set == false)
+		if (enable_per_client_stats(&IPACM_Iface::ipacmcfg->ipacm_lan_stats_enable))
 		{
-			if (enable_per_client_stats(&IPACM_Iface::ipacmcfg->ipacm_lan_stats_enable))
-			{
-				IPACMERR("Failed to enable per client stats %d\n", IPACM_Iface::ipacmcfg->ipacm_lan_stats_enable);
-				return IPACM_FAILURE;
-			}
-			IPACM_Iface::ipacmcfg->ipacm_lan_stats_enable_wan_set = true;
+			IPACMERR("Failed to enable per client stats %d\n", IPACM_Iface::ipacmcfg->ipacm_lan_stats_enable);
+			return IPACM_FAILURE;
 		}
 	}
 #endif

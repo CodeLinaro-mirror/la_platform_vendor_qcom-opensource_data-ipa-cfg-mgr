@@ -170,7 +170,7 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 
 			ipacm_event_data_all *data = (ipacm_event_data_all *)param;
 			ipa_interface_index = IPACM_Iface::iface_ipa_index_query(data->if_index);
-#ifndef FEATURE_L2TP
+#if !defined(FEATURE_L2TP) && !defined(FEATURE_VLAN_MPDN)
 			/* check for failure return */
 			if (IPACM_FAILURE == ipa_interface_index) {
 				IPACMERR("not supported iface id: %d\n", data->if_index);

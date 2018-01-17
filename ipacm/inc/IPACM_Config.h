@@ -157,29 +157,33 @@ public:
 	struct ipa_ioc_get_rt_tbl rt_tbl_odu_v4, rt_tbl_odu_v6;
 
 	bool isMCC_Mode;
-#if defined(FEATURE_L2TP_E2E) || defined(FEATURE_L2TP)
-	std::list<l2tp_client_info> l2tp_client;
-	pthread_mutex_t vlan_l2tp_lock;
-	std::list<vlan_iface_info> m_vlan_iface;
-	std::list<l2tp_vlan_mapping_info> m_l2tp_vlan_mapping;
-#endif
+
 	/* To return the instance */
 	static IPACM_Config* GetInstance();
-#if defined(FEATURE_L2TP_E2E) || defined(FEATURE_L2TP)
+
+#if defined(FEATURE_L2TP_E2E) || defined(FEATURE_L2TP) || defined(FEATURE_VLAN_MPDN)
+	pthread_mutex_t vlan_l2tp_lock;
+	std::list<vlan_iface_info> m_vlan_iface;
+
 	void add_vlan_iface(ipa_ioc_vlan_iface_info *data);
 
 	void del_vlan_iface(ipa_ioc_vlan_iface_info *data);
+
+	void handle_vlan_iface_info(ipacm_event_data_addr *data);
+
+	void handle_vlan_client_info(ipacm_event_data_all *data);
+#ifndef FEATURE_VLAN_MPDN
+	std::list<l2tp_vlan_mapping_info> m_l2tp_vlan_mapping;
+	std::list<l2tp_client_info> l2tp_client;
 
 	void add_l2tp_vlan_mapping(ipa_ioc_l2tp_vlan_mapping_info *data);
 
 	void del_l2tp_vlan_mapping(ipa_ioc_l2tp_vlan_mapping_info *data);
 
-	void handle_vlan_iface_info(ipacm_event_data_addr *data);
-
-	void handle_vlan_client_info(ipacm_event_data_all *data);
-
 	int get_vlan_l2tp_mapping(char *client_iface, l2tp_vlan_mapping_info& info);
-#endif
+#endif //#ifndef FEATURE_VLAN_MPDN
+#endif //defined(FEATURE_L2TP_E2E) || defined(FEATURE_L2TP) || defined(FEATURE_VLAN_MPDN)
+
 	const char* getEventName(ipa_cm_event_id event_id);
 
 	inline void increaseFltRuleCount(int index, ipa_ip_type iptype, int increment)

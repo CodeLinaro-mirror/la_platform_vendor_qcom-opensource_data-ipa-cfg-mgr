@@ -231,7 +231,7 @@ void* ipa_driver_msg_notifier(void *param)
 	ipa_get_data_stats_resp_msg_v01 *data_tethering_stats = NULL;
 	ipa_get_apn_data_stats_resp_msg_v01 *data_network_stats = NULL;
 
-#if defined(FEATURE_L2TP_E2E) || defined(FEATURE_L2TP)
+#if defined(FEATURE_L2TP_E2E) || defined(FEATURE_L2TP) || defined(FEATURE_VLAN_MPDN)
 	ipa_ioc_vlan_iface_info *vlan_info = NULL;
 	ipa_ioc_l2tp_vlan_mapping_info *mapping = NULL;
 #endif
@@ -704,7 +704,7 @@ void* ipa_driver_msg_notifier(void *param)
 			evt_data.evt_data = data;
 			break;
 #endif
-#if defined(FEATURE_L2TP_E2E) || defined(FEATURE_L2TP)
+#if defined(FEATURE_L2TP_E2E) || defined(FEATURE_L2TP) || defined (FEATURE_VLAN_MPDN)
 		case ADD_VLAN_IFACE:
 			vlan_info = (ipa_ioc_vlan_iface_info *)malloc(sizeof(*vlan_info));
 			if(vlan_info == NULL)
@@ -726,7 +726,7 @@ void* ipa_driver_msg_notifier(void *param)
 			memcpy(vlan_info, buffer + sizeof(struct ipa_msg_meta), sizeof(*vlan_info));
 			IPACM_Iface::ipacmcfg->del_vlan_iface(vlan_info);
 			continue;
-
+#ifndef FEATURE_VLAN_MPDN
 		case ADD_L2TP_VLAN_MAPPING:
 			mapping = (ipa_ioc_l2tp_vlan_mapping_info *)malloc(sizeof(*mapping));
 			if(mapping == NULL)
@@ -748,7 +748,8 @@ void* ipa_driver_msg_notifier(void *param)
 			memcpy(mapping, buffer + sizeof(struct ipa_msg_meta), sizeof(*mapping));
 			IPACM_Iface::ipacmcfg->del_l2tp_vlan_mapping(mapping);
 			continue;
-#endif
+#endif //#ifndef FEATURE_VLAN_MPDN
+#endif //#if defined(FEATURE_L2TP_E2E) || defined(FEATURE_L2TP) || defined (FEATURE_VLAN_MPDN)
 		default:
 			IPACMDBG_H("Unhandled message type: %d\n", event_hdr.msg_type);
 			continue;

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014, 2018 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2018 The Linux Foundation. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -26,60 +26,28 @@
  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
+#ifndef IPA_MEM_DESCRIPTOR_H
+#define IPA_MEM_DESCRIPTOR_H
 
-/*=========================================================================*/
-/*!
-	@file
-	ipa_nat_test002.c
+#include <stdint.h>
+#include <linux/msm_ipa.h>
 
-	@brief
-	Verify the following scenario:
-	1. Add ipv4 table
-	2. Add ipv4 rule
-	3. delete ipv4 rule
-	4. Delete ipv4 table
-*/
-/*=========================================================================*/
-
-#include "ipa_nat_test.h"
-#include "ipa_nat_drv.h"
-
-int ipa_nat_test002(int total_entries, u32 tbl_hdl, u8 sep)
+typedef struct
 {
-	int ret;
-	u32 rule_hdl;
-	ipa_nat_ipv4_rule ipv4_rule = {0};
+	int size;
+	void* base_addr;
+	uint32_t addr_offset;
+	unsigned long allocate_ioctl_num;
+	unsigned long delete_ioctl_num;
+	char name[IPA_RESOURCE_NAME_MAX];
+	uint8_t table_index;
+	uint8_t valid;
+} ipa_mem_descriptor;
 
-	u32 pub_ip_add = 0x011617c0;   /* "192.23.22.1" */
+void ipa_mem_descriptor_init(ipa_mem_descriptor* desc, const char* device_name, int size,
+	uint8_t table_index, unsigned long allocate_ioctl_num, unsigned long delete_ioctl_num);
+int ipa_mem_descriptor_allocate_memory(ipa_mem_descriptor* desc, int ipa_fd);
+int ipa_mem_descriptor_delete(ipa_mem_descriptor* desc, int ipa_fd);
 
-	ipv4_rule.target_ip = 0xC1171601; /* 193.23.22.1 */
-	ipv4_rule.target_port = 1234;
+#endif
 
-	ipv4_rule.private_ip = 0xC2171601; /* 194.23.22.1 */
-	ipv4_rule.private_port = 5678;
-
-	ipv4_rule.protocol = IPPROTO_TCP;
-	ipv4_rule.public_port = 9050;
-
-	IPADBG("%s()\n",__FUNCTION__);
-
-	if(sep)
-	{
-		ret = ipa_nat_add_ipv4_tbl(pub_ip_add, total_entries, &tbl_hdl);
-		CHECK_ERR(ret);
-	}
-
-	ret = ipa_nat_add_ipv4_rule(tbl_hdl, &ipv4_rule, &rule_hdl);
-	CHECK_ERR(ret);
-
-	ret = ipa_nat_del_ipv4_rule(tbl_hdl, rule_hdl);
-	CHECK_ERR(ret);
-
-	if(sep)
-	{
-		ret = ipa_nat_del_ipv4_tbl(tbl_hdl);
-		CHECK_ERR(ret);
-	}
-
-	return 0;
-}

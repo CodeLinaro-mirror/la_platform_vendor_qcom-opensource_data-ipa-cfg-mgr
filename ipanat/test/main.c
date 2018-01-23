@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2014, 2018 The Linux Foundation. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -34,38 +34,37 @@
 #include <string.h>
 #include <sys/stat.h>
 #include <fcntl.h>
+#include <errno.h>
 
+#include "ipa_nat_test.h"
 #include "ipa_nat_drv.h"
 #include "ipa_nat_drvi.h"
-#include "ipa_nat_test.h"
 
 extern struct ipa_nat_cache ipv4_nat_cache;
 
-int chk_for_loop(u32 tbl_hdl)
+static int chk_for_loop(u32 tbl_hdl)
 {
 	struct ipa_nat_rule *tbl_ptr;
 	struct ipa_nat_indx_tbl_rule *indx_tbl_ptr;
 	int cnt;
 	uint16_t cur_entry;
 
-	if (IPA_NAT_INVALID_NAT_ENTRY == tbl_hdl ||
-			tbl_hdl > IPA_NAT_MAX_IP4_TBLS) {
+	if (tbl_hdl == IPA_TABLE_INVALID_ENTRY || tbl_hdl > IPA_NAT_MAX_IP4_TBLS) {
 		IPAERR("invalid table handle passed \n");
 		return -EINVAL;
 	}
 
 	IPADBG("checking ipv4 rules:\n");
 	tbl_ptr = (struct ipa_nat_rule *)
-			ipv4_nat_cache.ip4_tbl[tbl_hdl-1].ipv4_rules_addr;
+			ipv4_nat_cache.ip4_tbl[tbl_hdl - 1].table.table_addr;
 	for (cnt = 0;
-		cnt < ipv4_nat_cache.ip4_tbl[tbl_hdl - 1].table_entries;
+		cnt < ipv4_nat_cache.ip4_tbl[tbl_hdl - 1].table.table_entries;
 		cnt++) {
-		if (Read16BitFieldValue(tbl_ptr[cnt].ip_cksm_enbl,ENABLE_FIELD)) {
-			if(Read16BitFieldValue(tbl_ptr[cnt].nxt_indx_pub_port,
-							NEXT_INDEX_FIELD) == cnt)
+		if (tbl_ptr[cnt].enable) {
+			if (tbl_ptr[cnt].next_index == cnt)
 			{
-				IPAERR("Infinite loop detected, entry\n");
-				ipa_nati_print_rule(&tbl_ptr[cnt], cnt);
+				IPAERR("Infinite loop detected in IPv4 base table, entry %d\n", cnt);
+				ipa_nat_dump_ipv4_table(tbl_hdl);
 				return -EINVAL;
 			}
 		}
@@ -74,20 +73,18 @@ int chk_for_loop(u32 tbl_hdl)
 	/* Print ipv4 expansion rules */
 	IPADBG("checking ipv4 active expansion rules:\n");
 	tbl_ptr = (struct ipa_nat_rule *)
-			ipv4_nat_cache.ip4_tbl[tbl_hdl-1].ipv4_expn_rules_addr;
+			ipv4_nat_cache.ip4_tbl[tbl_hdl - 1].table.expn_table_addr;
 	for (cnt = 0;
-		cnt <= ipv4_nat_cache.ip4_tbl[tbl_hdl - 1].expn_table_entries;
+		cnt <= ipv4_nat_cache.ip4_tbl[tbl_hdl - 1].table.expn_table_entries;
 		cnt++) {
-		if (Read16BitFieldValue(tbl_ptr[cnt].ip_cksm_enbl,
-								ENABLE_FIELD)) {
+		if (tbl_ptr[cnt].enable)
+		{
 			cur_entry =
-				cnt + ipv4_nat_cache.ip4_tbl[tbl_hdl - 1].table_entries;
-			if (Read16BitFieldValue(tbl_ptr[cnt].nxt_indx_pub_port,
-							NEXT_INDEX_FIELD) == cur_entry)
+				cnt + ipv4_nat_cache.ip4_tbl[tbl_hdl - 1].table.table_entries;
+			if (tbl_ptr[cnt].next_index == cur_entry)
 			{
-				IPAERR("Infinite loop detected\n");
-				ipa_nati_print_rule(&tbl_ptr[cnt],
-					(cnt + ipv4_nat_cache.ip4_tbl[tbl_hdl - 1].table_entries));
+				IPAERR("Infinite loop detected in IPv4 expansion table, entry %d\n", cur_entry);
+				ipa_nat_dump_ipv4_table(tbl_hdl);
 				return -EINVAL;
 			}
 		}
@@ -96,17 +93,15 @@ int chk_for_loop(u32 tbl_hdl)
 	/* Print ipv4 index rules */
 	IPADBG("checking ipv4 index active rules: \n");
 	indx_tbl_ptr = (struct ipa_nat_indx_tbl_rule *)
-			ipv4_nat_cache.ip4_tbl[tbl_hdl-1].index_table_addr;
+			ipv4_nat_cache.ip4_tbl[tbl_hdl - 1].index_table.table_addr;
 	for (cnt = 0;
-		 cnt < ipv4_nat_cache.ip4_tbl[tbl_hdl - 1].table_entries;
+		 cnt < ipv4_nat_cache.ip4_tbl[tbl_hdl - 1].table.table_entries;
 			 cnt++) {
-		if (Read16BitFieldValue(indx_tbl_ptr[cnt].tbl_entry_nxt_indx,
-							INDX_TBL_TBL_ENTRY_FIELD)) {
-			if (Read16BitFieldValue(indx_tbl_ptr[cnt].tbl_entry_nxt_indx,
-							INDX_TBL_NEXT_INDEX_FILED) == cnt)
+		if (indx_tbl_ptr[cnt].tbl_entry) {
+			if (indx_tbl_ptr[cnt].next_index == cnt)
 			{
-				IPAERR("Infinite loop detected\n");
-				ipa_nati_print_index_rule(&indx_tbl_ptr[cnt], cnt, 0);
+				IPAERR("Infinite loop detected in IPv4 index table, entry %d\n", cnt);
+				ipa_nat_dump_ipv4_table(tbl_hdl);
 				return -EINVAL;
 			}
 		}
@@ -115,21 +110,18 @@ int chk_for_loop(u32 tbl_hdl)
 	/* Print ipv4 index expansion rules */
 	IPADBG("Checking ipv4 index expansion active rules: \n");
 	indx_tbl_ptr = (struct ipa_nat_indx_tbl_rule *)
-			ipv4_nat_cache.ip4_tbl[tbl_hdl-1].index_table_expn_addr;
+			ipv4_nat_cache.ip4_tbl[tbl_hdl - 1].index_table.expn_table_addr;
 	for (cnt = 0;
-		cnt <= ipv4_nat_cache.ip4_tbl[tbl_hdl - 1].expn_table_entries;
+		cnt <= ipv4_nat_cache.ip4_tbl[tbl_hdl - 1].table.expn_table_entries;
 			 cnt++) {
-		if (Read16BitFieldValue(indx_tbl_ptr[cnt].tbl_entry_nxt_indx,
-							INDX_TBL_TBL_ENTRY_FIELD)) {
+		if (indx_tbl_ptr[cnt].tbl_entry)
+		{
 			cur_entry =
-				cnt + ipv4_nat_cache.ip4_tbl[tbl_hdl - 1].table_entries;
-			if (Read16BitFieldValue(indx_tbl_ptr[cnt].tbl_entry_nxt_indx,
-							INDX_TBL_NEXT_INDEX_FILED) == cur_entry)
+				cnt + ipv4_nat_cache.ip4_tbl[tbl_hdl - 1].table.table_entries;
+			if (indx_tbl_ptr[cnt].next_index == cur_entry)
 			{
-				IPAERR("Infinite loop detected\n");
-				ipa_nati_print_index_rule(&indx_tbl_ptr[cnt],
-					(cnt + ipv4_nat_cache.ip4_tbl[tbl_hdl - 1].table_entries),
-				ipv4_nat_cache.ip4_tbl[tbl_hdl - 1].index_expn_table_meta[cnt].prev_index);
+				IPAERR("Infinite loop detected in IPv4 index expansion table, entry %d\n", cur_entry);
+				ipa_nat_dump_ipv4_table(tbl_hdl);
 				return -EINVAL;
 			}
 		}
@@ -137,46 +129,44 @@ int chk_for_loop(u32 tbl_hdl)
 	return 0;
 }
 
-uint8_t is_base_entry_valid(u32 tbl_hdl, u16 entry)
+static uint8_t is_base_entry_valid(u32 tbl_hdl, u16 entry)
 {
 	struct ipa_nat_rule *tbl_ptr;
 
-	if (entry >
-		ipv4_nat_cache.ip4_tbl[tbl_hdl - 1].table_entries)
+	if (entry >=
+		ipv4_nat_cache.ip4_tbl[tbl_hdl - 1].table.table_entries)
 	{
 		tbl_ptr = (struct ipa_nat_rule *)
-				ipv4_nat_cache.ip4_tbl[tbl_hdl-1].ipv4_expn_rules_addr;
+				ipv4_nat_cache.ip4_tbl[tbl_hdl - 1].table.expn_table_addr;
 		entry -=
-			ipv4_nat_cache.ip4_tbl[tbl_hdl - 1].table_entries;
+			ipv4_nat_cache.ip4_tbl[tbl_hdl - 1].table.table_entries;
 	}
 	else
 	{
 		tbl_ptr = (struct ipa_nat_rule *)
-				ipv4_nat_cache.ip4_tbl[tbl_hdl-1].ipv4_rules_addr;
+				ipv4_nat_cache.ip4_tbl[tbl_hdl - 1].table.table_addr;
 	}
-	return (Read16BitFieldValue(tbl_ptr[entry].ip_cksm_enbl,
-							ENABLE_FIELD));
+	return (tbl_ptr[entry].enable);
 }
 
-uint8_t is_index_entry_valid(u32 tbl_hdl, u16 entry)
+static uint8_t is_index_entry_valid(u32 tbl_hdl, u16 entry)
 {
 	struct ipa_nat_indx_tbl_rule *tbl_ptr;
 
-	if (entry >
-		ipv4_nat_cache.ip4_tbl[tbl_hdl - 1].table_entries)
+	if (entry >=
+		ipv4_nat_cache.ip4_tbl[tbl_hdl - 1].table.table_entries)
 	{
 		tbl_ptr = (struct ipa_nat_indx_tbl_rule *)
-				ipv4_nat_cache.ip4_tbl[tbl_hdl-1].index_table_expn_addr;
+				ipv4_nat_cache.ip4_tbl[tbl_hdl - 1].index_table.expn_table_addr;
 		entry -=
-			ipv4_nat_cache.ip4_tbl[tbl_hdl - 1].table_entries;
+			ipv4_nat_cache.ip4_tbl[tbl_hdl - 1].table.table_entries;
 	}
 	else
 	{
 		tbl_ptr = (struct ipa_nat_indx_tbl_rule *)
-				ipv4_nat_cache.ip4_tbl[tbl_hdl-1].index_table_addr;
+				ipv4_nat_cache.ip4_tbl[tbl_hdl - 1].index_table.table_addr;
 	}
-	if (Read16BitFieldValue(tbl_ptr[entry].tbl_entry_nxt_indx,
-						INDX_TBL_TBL_ENTRY_FIELD)) {
+	if (tbl_ptr[entry].tbl_entry) {
 		return 1;
 	}
 	else
@@ -185,101 +175,94 @@ uint8_t is_index_entry_valid(u32 tbl_hdl, u16 entry)
 	}
 }
 
-int chk_for_validity(u32 tbl_hdl)
+static int chk_for_validity(u32 tbl_hdl)
 {
 	struct ipa_nat_rule *tbl_ptr;
 	struct ipa_nat_indx_tbl_rule *indx_tbl_ptr;
 	uint16_t nxt_index, prv_index;
 	int cnt;
 
-	if (IPA_NAT_INVALID_NAT_ENTRY == tbl_hdl ||
-			tbl_hdl > IPA_NAT_MAX_IP4_TBLS) {
-		IPAERR("invalid table handle passed \n");
+	if (tbl_hdl == IPA_TABLE_INVALID_ENTRY || tbl_hdl > IPA_NAT_MAX_IP4_TBLS) {
+		IPAERR("invalid table handle passed %d\n", tbl_hdl);
 		return -EINVAL;
 	}
 
 	/* Validate base table next_indx and prev_indx values */
 	IPADBG("Validating ipv4 active rules: \n");
 	tbl_ptr = (struct ipa_nat_rule *)
-			ipv4_nat_cache.ip4_tbl[tbl_hdl-1].ipv4_rules_addr;
+			ipv4_nat_cache.ip4_tbl[tbl_hdl - 1].table.table_addr;
 	for (cnt = 0;
-		cnt < ipv4_nat_cache.ip4_tbl[tbl_hdl - 1].table_entries;
+		cnt < ipv4_nat_cache.ip4_tbl[tbl_hdl - 1].table.table_entries;
 			 cnt++) {
-		if (Read16BitFieldValue(tbl_ptr[cnt].ip_cksm_enbl,
-						ENABLE_FIELD)) {
-			nxt_index =
-			Read16BitFieldValue(tbl_ptr[cnt].nxt_indx_pub_port,
-						NEXT_INDEX_FIELD);
-			if (!is_base_entry_valid(tbl_hdl, nxt_index)) {
-				IPAERR("Invalid next index found, entry:%d\n", cnt);
+		if (tbl_ptr[cnt].enable) {
+			nxt_index = tbl_ptr[cnt].next_index;
+			if (nxt_index && !is_base_entry_valid(tbl_hdl, nxt_index)) {
+				IPAERR("Invalid next index %d found in base table entry %d\n", tbl_ptr[cnt].next_index, cnt);
+				return -EINVAL;
 			}
 		}
 	}
 
 	IPADBG("Validating ipv4 expansion active rules: \n");
 	tbl_ptr = (struct ipa_nat_rule *)
-			ipv4_nat_cache.ip4_tbl[tbl_hdl-1].ipv4_expn_rules_addr;
+			ipv4_nat_cache.ip4_tbl[tbl_hdl - 1].table.expn_table_addr;
 	for (cnt = 0;
-		cnt <= ipv4_nat_cache.ip4_tbl[tbl_hdl - 1].expn_table_entries;
+		cnt <= ipv4_nat_cache.ip4_tbl[tbl_hdl - 1].table.expn_table_entries;
 			 cnt++) {
-		if (Read16BitFieldValue(tbl_ptr[cnt].ip_cksm_enbl,
-							ENABLE_FIELD)) {
+		if (tbl_ptr[cnt].enable) {
 			/* Validate next index */
-			nxt_index =
-				Read16BitFieldValue(tbl_ptr[cnt].nxt_indx_pub_port,
-									NEXT_INDEX_FIELD);
-			if (!is_base_entry_valid(tbl_hdl, nxt_index)) {
-				IPAERR("Invalid next index found, entry:%d\n", cnt);
+			nxt_index = tbl_ptr[cnt].next_index;
+			if (nxt_index && !is_base_entry_valid(tbl_hdl, nxt_index)) {
+				IPAERR("Invalid next index %d found in expansion table entry %d\n", tbl_ptr[cnt].next_index, cnt);
+				return -EINVAL;
 			}
 			/* Validate previous index */
-			prv_index =
-				Read16BitFieldValue(tbl_ptr[cnt].sw_spec_params,
-						SW_SPEC_PARAM_PREV_INDEX_FIELD);
-			if (!is_base_entry_valid(tbl_hdl, prv_index)) {
-				IPAERR("Invalid Previous index found, entry:%d\n", cnt);
+			prv_index = tbl_ptr[cnt].prev_index;
+			if (prv_index && !is_base_entry_valid(tbl_hdl, prv_index)) {
+				IPAERR("Invalid previous index %d found in expansion table entry %d\n", tbl_ptr[cnt].prev_index, cnt);
+				return -EINVAL;
 			}
 		}
 	}
 
 	IPADBG("Validating ipv4 index active rules: \n");
 	indx_tbl_ptr = (struct ipa_nat_indx_tbl_rule *)
-				ipv4_nat_cache.ip4_tbl[tbl_hdl-1].index_table_addr;
+				ipv4_nat_cache.ip4_tbl[tbl_hdl - 1].index_table.table_addr;
 	for (cnt = 0;
-		cnt < ipv4_nat_cache.ip4_tbl[tbl_hdl - 1].table_entries;
+		cnt < ipv4_nat_cache.ip4_tbl[tbl_hdl - 1].table.table_entries;
 			 cnt++) {
-		if (Read16BitFieldValue(indx_tbl_ptr[cnt].tbl_entry_nxt_indx,
-							INDX_TBL_TBL_ENTRY_FIELD)) {
-			nxt_index =
-				Read16BitFieldValue(indx_tbl_ptr[cnt].tbl_entry_nxt_indx,
-							INDX_TBL_NEXT_INDEX_FILED);
-			if (!is_index_entry_valid(tbl_hdl, nxt_index)) {
-				IPAERR("Invalid next index found, entry:%d\n", cnt);
+		if (indx_tbl_ptr[cnt].tbl_entry) {
+			nxt_index = indx_tbl_ptr[cnt].next_index;
+			if (nxt_index && !is_index_entry_valid(tbl_hdl, nxt_index)) {
+				IPAERR("Invalid next index %d found in index table entry %d\n", tbl_ptr[cnt].next_index, cnt);
+				return -EINVAL;
 			}
 		}
 	}
 
 	IPADBG("Validating ipv4 index expansion active rules: \n");
 	indx_tbl_ptr = (struct ipa_nat_indx_tbl_rule *)
-	ipv4_nat_cache.ip4_tbl[tbl_hdl-1].index_table_expn_addr;
+	ipv4_nat_cache.ip4_tbl[tbl_hdl - 1].index_table.expn_table_addr;
 	for (cnt = 0;
-		cnt <= ipv4_nat_cache.ip4_tbl[tbl_hdl - 1].expn_table_entries;
+		cnt <= ipv4_nat_cache.ip4_tbl[tbl_hdl - 1].table.expn_table_entries;
 			 cnt++) {
-		if (Read16BitFieldValue(indx_tbl_ptr[cnt].tbl_entry_nxt_indx,
-								INDX_TBL_TBL_ENTRY_FIELD)) {
+		if (indx_tbl_ptr[cnt].tbl_entry) {
 			/* Validate next index*/
-			nxt_index =
-				Read16BitFieldValue(indx_tbl_ptr[cnt].tbl_entry_nxt_indx,
-								INDX_TBL_NEXT_INDEX_FILED);
-			if (!is_index_entry_valid(tbl_hdl, nxt_index)) {
-				IPAERR("Invalid next index found, entry:%d\n", cnt);
+			nxt_index = indx_tbl_ptr[cnt].next_index;
+			if (nxt_index && !is_index_entry_valid(tbl_hdl, nxt_index)) {
+				IPAERR("Invalid next index %d found in index expansion table entry %d\n",
+					tbl_ptr[cnt].next_index, cnt);
+				return -EINVAL;
 			}
 
 			/* Validate previous index*/
 			prv_index =
-				ipv4_nat_cache.ip4_tbl[tbl_hdl-1].index_expn_table_meta[cnt].prev_index;
+				ipv4_nat_cache.ip4_tbl[tbl_hdl - 1].index_expn_table_meta[cnt].prev_index;
 
-			if (!is_index_entry_valid(tbl_hdl, prv_index)) {
-				IPAERR("Invalid Previous index found, entry:%d\n", cnt);
+			if (prv_index && !is_index_entry_valid(tbl_hdl, prv_index)) {
+				IPAERR("Invalid previous index %d found in index expansion table entry %d\n",
+					tbl_ptr[cnt].prev_index, cnt);
+				return -EINVAL;
 			}
 		}
 	}
@@ -635,6 +618,6 @@ int main(int argc, char* argv[])
 		}
 	}
 	/*=======  Printing Results ==========*/
-	IPADBG("Total ipa_nat Tests Run:%d, Pass:%d, Fail:%d\n",exec, pass, exec-pass);
+	IPADBG("Total ipa_nat Tests Run:%d, Pass:%d, Fail:%d\n", exec, pass, exec - pass);
 	return 0;
 }

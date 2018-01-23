@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2014, 2018 The Linux Foundation. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -73,10 +73,7 @@
  }
 #endif
 
-#define IPADBG(fmt, args...) printf(" %s:%d " fmt, __FUNCTION__, __LINE__, ## args)
-#define IPAERR(fmt, args...) printf(" %s:%d " fmt, __FUNCTION__, __LINE__, ## args)
-
-#define NAT_DUMP
+#define NAT_DEBUG
 int ipa_nat_validate_ipv4_table(u32);
 
 int ipa_nat_test000(int, u32, u8);

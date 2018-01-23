@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014, 2018 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2013, 2018 The Linux Foundation. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -26,60 +26,48 @@
  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
+#ifndef IPA_NAT_UTILS_H
+#define IPA_NAT_UTILS_H
 
-/*=========================================================================*/
-/*!
-	@file
-	ipa_nat_test002.c
+#include <stdio.h>
+#include <string.h>
+#include <syslog.h>
+#include <linux/msm_ipa.h>
 
-	@brief
-	Verify the following scenario:
-	1. Add ipv4 table
-	2. Add ipv4 rule
-	3. delete ipv4 rule
-	4. Delete ipv4 table
-*/
-/*=========================================================================*/
+#ifndef FALSE
+#define FALSE 0
+#endif
 
-#include "ipa_nat_test.h"
-#include "ipa_nat_drv.h"
+#ifndef TRUE
+#define TRUE 1
+#endif
 
-int ipa_nat_test002(int total_entries, u32 tbl_hdl, u8 sep)
+#if !defined(MSM_IPA_TESTS) && !defined(FEATURE_IPA_ANDROID)
+#ifdef USE_GLIB
+#include <glib.h>
+#define strlcpy g_strlcpy
+#else
+size_t strlcpy(char* dst, const char* src, size_t size);
+#endif
+#endif
+
+#define IPAERR(fmt, ...)  printf("ERR: %s:%d %s() " fmt, __FILE__,  __LINE__, __FUNCTION__, ##__VA_ARGS__);
+
+#ifdef NAT_DEBUG
+#define IPADBG(fmt, ...) printf("%s:%d %s() " fmt, __FILE__,  __LINE__, __FUNCTION__, ##__VA_ARGS__);
+#else
+#define IPADBG(fmt, ...)
+#endif
+
+typedef struct
 {
-	int ret;
-	u32 rule_hdl;
-	ipa_nat_ipv4_rule ipv4_rule = {0};
+	int fd;
+	enum ipa_hw_type ver;
+} ipa_descriptor;
 
-	u32 pub_ip_add = 0x011617c0;   /* "192.23.22.1" */
+ipa_descriptor* ipa_descriptor_open(void);
+void ipa_descriptor_close(void);
 
-	ipv4_rule.target_ip = 0xC1171601; /* 193.23.22.1 */
-	ipv4_rule.target_port = 1234;
+void ipa_read_debug_info(const char* debug_file_path);
 
-	ipv4_rule.private_ip = 0xC2171601; /* 194.23.22.1 */
-	ipv4_rule.private_port = 5678;
-
-	ipv4_rule.protocol = IPPROTO_TCP;
-	ipv4_rule.public_port = 9050;
-
-	IPADBG("%s()\n",__FUNCTION__);
-
-	if(sep)
-	{
-		ret = ipa_nat_add_ipv4_tbl(pub_ip_add, total_entries, &tbl_hdl);
-		CHECK_ERR(ret);
-	}
-
-	ret = ipa_nat_add_ipv4_rule(tbl_hdl, &ipv4_rule, &rule_hdl);
-	CHECK_ERR(ret);
-
-	ret = ipa_nat_del_ipv4_rule(tbl_hdl, rule_hdl);
-	CHECK_ERR(ret);
-
-	if(sep)
-	{
-		ret = ipa_nat_del_ipv4_tbl(tbl_hdl);
-		CHECK_ERR(ret);
-	}
-
-	return 0;
-}
+#endif /* IPA_NAT_UTILS_H */

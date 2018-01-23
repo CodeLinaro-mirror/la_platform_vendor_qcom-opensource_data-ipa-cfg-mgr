@@ -14,7 +14,11 @@ LOCAL_C_INCLUDES += $(TARGET_OUT_INTERMEDIATES)/KERNEL_OBJ/usr/include
 LOCAL_ADDITIONAL_DEPENDENCIES := $(TARGET_OUT_INTERMEDIATES)/KERNEL_OBJ/usr
 
 LOCAL_SRC_FILES := ipa_nat_drv.c \
-                   ipa_nat_drvi.c
+                   ipa_nat_drvi.c \
+                   ipa_nat_utils.c \
+                   ipa_table.c \
+                   ipa_mem_descriptor.c \
+                   ipa_ipv6ct.c
 
 LOCAL_CFLAGS := -DDEBUG
 LOCAL_MODULE := libipanat

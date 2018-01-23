@@ -1,8 +1,8 @@
 AM_CFLAGS = -Wall -Wundef -Wstrict-prototypes -Wno-trigraphs
 if KERNELMODULES
-AM_CFLAGS += -I./../inc $(KERNEL_DIR)/include
+AM_CFLAGS += -I../inc $(KERNEL_DIR)/include
 else
-AM_CFLAGS += -I./../inc
+AM_CFLAGS += -I../inc
 endif
 #AM_CFLAGS += -DDEBUG -g
 
@@ -19,11 +19,17 @@ endif
 
 c_sources   = ipa_nat_drv.c \
               ipa_nat_drvi.c \
-              ipa_nat_logi.c
+              ipa_nat_utils.c \
+              ipa_table.c \
+              ipa_mem_descriptor.c \
+              ipa_ipv6ct.c
 
-library_include_HEADERS = ./../inc/ipa_nat_drvi.h \
-                          ./../inc/ipa_nat_drv.h \
-                          ./../inc/ipa_nat_logi.h
+library_include_HEADERS = ../inc/ipa_nat_drvi.h \
+                          ../inc/ipa_nat_drv.h \
+                          ../inc/ipa_nat_utils.h \
+                          ../inc/ipa_table.h \
+                          ../inc/ipa_mem_descriptor.h \
+                          ../inc/ipa_ipv6ct.h
 
 if KERNELMODULES
 noinst_LIBRARIES = libipanat.a

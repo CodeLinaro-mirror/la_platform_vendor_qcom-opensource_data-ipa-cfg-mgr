@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2014, 2018 The Linux Foundation. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -48,7 +48,7 @@ int ipa_nat_test013(int total_entries, u32 tbl_hdl, u8 sep)
 {
 	int ret;
 	u32 rule_hdl, rule_hdl1, rule_hdl2;
-	ipa_nat_ipv4_rule ipv4_rule, ipv4_rule1, ipv4_rule2;
+	ipa_nat_ipv4_rule ipv4_rule = {0}, ipv4_rule1 = {0}, ipv4_rule2 = {0};
 	u32 pub_ip_add = 0x011617c0;   /* "192.23.22.1" */
 
 	ipv4_rule.target_ip = 0xC1171601; /* 193.23.22.1 */

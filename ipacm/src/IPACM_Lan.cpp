@@ -1082,6 +1082,12 @@ int IPACM_Lan::handle_wan_down(bool is_sta_mode)
 		return IPACM_FAILURE;
 	}
 
+	if (rx_prop == NULL)
+	{
+		IPACMERR("Rx prop is NULL, return\n");
+		return IPACM_SUCCESS;
+	}
+
 	if(is_sta_mode == false)
 	{
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
@@ -5011,6 +5017,11 @@ int IPACM_Lan::handle_wan_down_v6(bool is_sta_mode)
 		return IPACM_FAILURE;
 	}
 
+	if (rx_prop == NULL)
+	{
+		IPACMERR("Rx prop is NULL, return\n");
+		return IPACM_SUCCESS;
+	}
 	delete_ipv6_prefix_flt_rule();
 
 	memset(ipv6_prefix, 0, sizeof(ipv6_prefix));

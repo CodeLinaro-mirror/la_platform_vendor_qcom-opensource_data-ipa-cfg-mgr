@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2013-2017, The Linux Foundation. All rights reserved.
+Copyright (c) 2013-2018, The Linux Foundation. All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are
@@ -167,6 +167,9 @@ public:
 	/* Clients which take SW path. This will be used as a place holder to move clients back to HW path. */
 	ipa_lan_client_idx inactive_lan_client_index[IPA_MAX_NUM_HW_PATH_CLIENTS];
 #endif
+#ifdef FEATURE_VLAN_MPDN
+	bool dummy_prefix_installed;
+#endif
 
 	/* LAN-iface's callback function */
 	void event_callback(ipa_cm_event_id event, void *data);
@@ -183,7 +186,13 @@ public:
 	virtual int handle_wan_down_v6(bool is_sta_mode);
 
 	/* configure private subnet filter rules*/
+	int modify_private_subnet();
 	virtual int handle_private_subnet(ipa_ip_type iptype);
+#ifdef FEATURE_VLAN_MPDN
+	int add_vlan_private_subnet(ipacm_bridge *bridge);
+	int add_dummy_ipv6_prefix_flt_rule();
+	int modify_ipv6_prefix_flt_rule();
+#endif
 
 	/* handle new_address event*/
 	int handle_addr_evt(ipacm_event_data_addr *data);
@@ -597,7 +606,7 @@ protected:
 
 	uint32_t ipv4_icmp_flt_rule_hdl[NUM_IPV4_ICMP_FLT_RULE];
 
-	uint32_t ipv6_prefix_flt_rule_hdl[NUM_IPV6_PREFIX_FLT_RULE];
+	uint32_t ipv6_prefix_flt_rule_hdl[IPA_MAX_IPV6_PREFIX_FLT_RULE];
 	uint32_t ipv6_icmp_flt_rule_hdl[NUM_IPV6_ICMP_FLT_RULE];
 #ifdef FEATURE_L2TP_E2E
 	uint32_t l2tp_inner_private_subnet_flt_rule_hdl[IPA_MAX_PRIVATE_SUBNET_ENTRIES];
@@ -755,7 +764,9 @@ private:
 	}
 
 	/* handle eth client initial, construct full headers (tx property) */
-	int handle_eth_hdr_init(uint8_t *mac_addr);
+	int handle_eth_hdr_init(uint8_t *mac_addr,
+		ipacm_bridge *bridge = NULL,
+		uint8_t vlan_id = 0, bool isVlan = false);
 
 	/* handle eth client ip-address */
 	int handle_eth_client_ipaddr(ipacm_event_data_all *data);

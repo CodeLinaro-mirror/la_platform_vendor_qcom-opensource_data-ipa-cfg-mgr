@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2013-2017, The Linux Foundation. All rights reserved.
+Copyright (c) 2013-2018, The Linux Foundation. All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are
@@ -156,6 +156,7 @@ int IPACM_ConntrackClient::IPA_Conntrack_Filters_Ignore_Bridge_Addrs
 (
 	 struct nfct_filter *filter
 )
+#ifndef FEATURE_VLAN_MPDN
 {
 	int fd;
 	fd = socket(AF_INET, SOCK_DGRAM, 0);
@@ -214,6 +215,41 @@ int IPACM_ConntrackClient::IPA_Conntrack_Filters_Ignore_Bridge_Addrs
 
 	return 0;
 }
+#else
+{
+	uint8_t testmac[IPA_MAC_ADDR_SIZE];
+
+	memset(testmac, 0, IPA_MAC_ADDR_SIZE * sizeof(uint8_t));
+	for(int i = 0; i < IPA_MAX_NUM_BRIDGES; i++)
+	{
+		/* mac address !=0 i.e. bridge exists*/
+		if(memcmp(IPACM_Iface::ipacmcfg->vlan_bridges[i].bridge_mac,
+			testmac,
+			sizeof(uint8_t) * IPA_MAC_ADDR_SIZE))
+		{
+			IPACMDBG("bridge (%s)", IPACM_Iface::ipacmcfg->vlan_bridges[i].bridge_name);
+			/* ignore whatever is destined to or originates from broadcast ip address */
+			struct nfct_filter_ipv4 filter_ipv4;
+
+			filter_ipv4.addr = IPACM_Iface::ipacmcfg->vlan_bridges[i].bridge_ipv4_addr;
+			filter_ipv4.mask = 0xffffffff;
+			iptodot("ignore connections destined to", filter_ipv4.addr);
+			nfct_filter_set_logic(filter,
+				NFCT_FILTER_DST_IPV4,
+				NFCT_FILTER_LOGIC_NEGATIVE);
+
+			nfct_filter_add_attr(filter, NFCT_FILTER_DST_IPV4, &filter_ipv4);
+
+			nfct_filter_set_logic(filter,
+				NFCT_FILTER_SRC_IPV4,
+				NFCT_FILTER_LOGIC_NEGATIVE);
+
+			nfct_filter_add_attr(filter, NFCT_FILTER_SRC_IPV4, &filter_ipv4);
+		}
+	}
+	return IPACM_SUCCESS;
+}
+#endif
 
 int IPACM_ConntrackClient::IPA_Conntrack_Filters_Ignore_Local_Iface
 (

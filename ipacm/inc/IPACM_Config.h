@@ -99,6 +99,11 @@ public:
 	/* Store private subnet configuration from XML file */
 	ipa_private_subnet private_subnet_table[IPA_MAX_PRIVATE_SUBNET_ENTRIES];
 
+#ifdef FEATURE_VLAN_MPDN
+	int num_ipv6_prefixes;
+	uint32_t ipa_ipv6_prefixes[IPA_MAX_IPV6_PREFIX_FLT_RULE][2];
+#endif
+
 	/* Store the non nat iface names */
 	NatIfaces *pNatIfaces;
 
@@ -147,6 +152,9 @@ public:
 	/* Store bridge netdev mac */
 	uint8_t bridge_mac[IPA_MAC_ADDR_SIZE];
 
+#ifdef FEATURE_VLAN_MPDN
+	ipacm_bridge vlan_bridges[IPA_MAX_NUM_BRIDGES];
+#endif
 	/* Store the flt rule count for each producer client*/
 	int flt_rule_count_v4[IPA_CLIENT_MAX];
 	int flt_rule_count_v6[IPA_CLIENT_MAX];
@@ -183,6 +191,13 @@ public:
 	int get_vlan_l2tp_mapping(char *client_iface, l2tp_vlan_mapping_info& info);
 #endif //#ifndef FEATURE_VLAN_MPDN
 #endif //defined(FEATURE_L2TP_E2E) || defined(FEATURE_L2TP) || defined(FEATURE_VLAN_MPDN)
+
+#ifdef FEATURE_VLAN_MPDN
+	void add_vlan_bridge(ipacm_event_data_all * data_all);
+	ipacm_bridge *get_vlan_bridge(char *name);
+	bool is_added_vlan_iface(char *iface_name);
+	int get_vlan_id(char *iface_name, uint8_t *vlan_id);
+#endif
 
 	const char* getEventName(ipa_cm_event_id event_id);
 
@@ -379,6 +394,89 @@ public:
 		return false;
 	}
 #endif /* defined(FEATURE_IPA_ANDROID)*/
+
+#ifdef FEATURE_VLAN_MPDN
+	/* add to prefixes list if needed and notify LAN objects to modify rules*/
+	inline int add_vlan_ipv6_prefix(uint32_t* prefix, int ipa_if_num)
+	{
+		for(int i = 0; i < (num_ipv6_prefixes); i++)
+		{
+			if((prefix[0] == ipa_ipv6_prefixes[i][0]) && (prefix[1] == ipa_ipv6_prefixes[i][1]))
+			{
+				IPACMDBG_H("prefix 0x[%X][%X] already exists\n", prefix[0], prefix[1]);
+				return IPACM_SUCCESS;
+			}
+		}
+
+		if(num_ipv6_prefixes >= IPA_MAX_IPV6_PREFIX_FLT_RULE)
+		{
+			IPACMERR("we already reached maximum prefix rules\n");
+			return IPACM_FAILURE;
+		}
+
+		ipa_ipv6_prefixes[num_ipv6_prefixes][0] = prefix[0];
+		ipa_ipv6_prefixes[num_ipv6_prefixes][1] = prefix[1];
+		num_ipv6_prefixes++;
+
+		IPACMDBG("added v6 prefix 0x[%X][%X]\n", prefix[0], prefix[1]);
+
+		/* tell other LAN interfaces that we have a new private subnet */
+		ipacm_event_data_fid *data_fid;
+		ipacm_cmd_q_data evt_data;
+
+		data_fid = (ipacm_event_data_fid *)malloc(sizeof(ipacm_event_data_fid));
+		if(data_fid == NULL)
+		{
+			IPACMERR("unable to allocate memory for event data_fid\n");
+			return IPACM_FAILURE;
+		}
+		data_fid->if_index = ipa_if_num;
+		evt_data.event = IPA_PREFIX_CHANGE_EVENT;
+		evt_data.evt_data = data_fid;
+
+		/* Insert IPA_PRIVATE_SUBNET_CHANGE_EVENT to command queue */
+		IPACMDBG("posting IPA_PREFIX_CHANGE_EVENT\n");
+		IPACM_EvtDispatcher::PostEvt(&evt_data);
+		return IPACM_SUCCESS;
+	}
+
+	/* remove from prefixes list if needed and notify LAN objects to modify rules*/
+	inline int del_vlan_ipv6_prefix(uint32_t* prefix, int ipa_if_num)
+	{
+		for(int i = 0; i < (num_ipv6_prefixes); i++)
+		{
+			if((prefix[0] == ipa_ipv6_prefixes[i][0]) && (prefix[1] == ipa_ipv6_prefixes[i][1]))
+			{
+				IPACMDBG_H("prefix 0x[%X][%X] will be removed\n", prefix[0], prefix[1]);
+				for(; i < (num_ipv6_prefixes - 1); i++)
+				{
+					ipa_ipv6_prefixes[i][0] = ipa_ipv6_prefixes[i + 1][0];
+					ipa_ipv6_prefixes[i][1] = ipa_ipv6_prefixes[i + 1][1];
+				}
+				num_ipv6_prefixes--;
+
+				/* tell other LAN interfaces that we have a new private subnet */
+				ipacm_event_data_fid *data_fid;
+				ipacm_cmd_q_data evt_data;
+				data_fid = (ipacm_event_data_fid *)malloc(sizeof(ipacm_event_data_fid));
+				if(data_fid == NULL)
+				{
+					IPACMERR("unable to allocate memory for event data_fid\n");
+					return IPACM_FAILURE;
+				}
+				data_fid->if_index = ipa_if_num;
+				evt_data.event = IPA_PREFIX_CHANGE_EVENT;
+				evt_data.evt_data = data_fid;
+
+				/* Insert IPA_PRIVATE_SUBNET_CHANGE_EVENT to command queue */
+				IPACM_EvtDispatcher::PostEvt(&evt_data);
+				return IPACM_SUCCESS;
+			}
+		}
+		IPACMERR("couldn't find prefix 0x[%X][%X]\n", prefix[0], prefix[1]);
+		return IPACM_FAILURE;
+	}
+#endif
 
 	static const char *DEVICE_NAME_ODU;
 

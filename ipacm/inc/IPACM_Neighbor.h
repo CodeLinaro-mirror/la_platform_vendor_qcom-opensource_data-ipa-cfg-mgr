@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2013-2017, The Linux Foundation. All rights reserved.
+Copyright (c) 2013-2018, The Linux Foundation. All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are
@@ -58,6 +58,9 @@ struct ipa_neighbor_client
 	int ipa_if_num;
 	/* add support for handling L2TP clients which associated with eth0 vlan interface */
 	char iface_name[IPA_IFACE_NAME_LEN];
+#ifdef FEATURE_VLAN_MPDN
+	ipacm_bridge *bridge;
+#endif
 };
 
 class IPACM_Neighbor : public IPACM_Listener

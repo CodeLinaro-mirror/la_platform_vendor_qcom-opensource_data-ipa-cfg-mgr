@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2013-2017, The Linux Foundation. All rights reserved.
+Copyright (c) 2013-2018, The Linux Foundation. All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are
@@ -196,7 +196,7 @@ void IPACM_Wlan::event_callback(ipa_cm_event_id event, void *param)
 			else
 			{
 				IPACMDBG_H("Received IPA_PRIVATE_SUBNET_CHANGE_EVENT from other LAN iface \n");
-#ifdef FEATURE_IPA_ANDROID
+#if defined(FEATURE_IPA_ANDROID) || defined(FEATURE_VLAN_MPDN)
 				handle_private_subnet_android(IPA_IP_v4);
 #endif
 				IPACMDBG_H(" delete old private subnet rules, use new sets \n");
@@ -306,7 +306,7 @@ void IPACM_Wlan::event_callback(ipa_cm_event_id event, void *param)
 						return;
 					}
 
-#ifdef FEATURE_IPA_ANDROID
+#if defined(FEATURE_IPA_ANDROID) || defined(FEATURE_VLAN_MPDN)
 					add_dummy_private_subnet_flt_rule(data->iptype);
 					handle_private_subnet_android(data->iptype);
 #else
@@ -361,7 +361,6 @@ void IPACM_Wlan::event_callback(ipa_cm_event_id event, void *param)
 						{
 							memcpy(ipv6_prefix, IPACM_Wan::backhaul_ipv6_prefix, sizeof(ipv6_prefix));
 							install_ipv6_prefix_flt_rule(IPACM_Wan::backhaul_ipv6_prefix);
-
 							if(IPACM_Wan::backhaul_is_sta_mode == false)
 							{
 								ext_prop = IPACM_Iface::ipacmcfg->GetExtProp(IPA_IP_v6);
@@ -437,7 +436,6 @@ void IPACM_Wlan::event_callback(ipa_cm_event_id event, void *param)
 			{
 				memcpy(ipv6_prefix, data_wan_tether->ipv6_prefix, sizeof(ipv6_prefix));
 				install_ipv6_prefix_flt_rule(data_wan_tether->ipv6_prefix);
-
 				if(data_wan_tether->is_sta == false)
 				{
 					ext_prop = IPACM_Iface::ipacmcfg->GetExtProp(IPA_IP_v6);
@@ -573,7 +571,6 @@ void IPACM_Wlan::event_callback(ipa_cm_event_id event, void *param)
 #endif //FEATURE_IPACM_UL_FIREWALL
 			memcpy(ipv6_prefix, data_wan->ipv6_prefix, sizeof(ipv6_prefix));
 			install_ipv6_prefix_flt_rule(data_wan->ipv6_prefix);
-
 			if(data_wan->is_sta == false)
 			{
 				ext_prop = IPACM_Iface::ipacmcfg->GetExtProp(IPA_IP_v6);

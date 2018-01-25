@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2013-2017, The Linux Foundation. All rights reserved.
+Copyright (c) 2013-2018, The Linux Foundation. All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are
@@ -1406,6 +1406,7 @@ static int ipa_nl_decode_nlmsg
 		    }
 		    else
 		    {
+			IPACMDBG_H("ss_family = %d\n", msg_ptr->nl_neigh_info.attr_info.local_addr.ss_family);
 		        data_all->iptype = IPA_IP_v6;
 		    }
 
@@ -1465,37 +1466,40 @@ static int ipa_nl_decode_nlmsg
 				IPACMDBG("\n GOT RTM_DELNEIGH event (%s) ip %d\n",dev_name,msg_ptr->nl_neigh_info.attr_info.local_addr.ss_family);
 			}
 
-				/* insert to command queue */
-				data_all = (ipacm_event_data_all *)malloc(sizeof(ipacm_event_data_all));
-				if(data_all == NULL)
-				{
-					IPACMERR("unable to allocate memory for event data_all\n");
-					return IPACM_FAILURE;
-				}
+			/* insert to command queue */
+			data_all = (ipacm_event_data_all *)malloc(sizeof(ipacm_event_data_all));
+			if(data_all == NULL)
+			{
+				IPACMERR("unable to allocate memory for event data_all\n");
+				return IPACM_FAILURE;
+			}
 
-		    memset(data_all, 0, sizeof(ipacm_event_data_all));
-		    if(msg_ptr->nl_neigh_info.attr_info.local_addr.ss_family == AF_INET6)
-				{
-					IPACM_NL_REPORT_ADDR( " ", msg_ptr->nl_neigh_info.attr_info.local_addr);
-					IPACM_EVENT_COPY_ADDR_v6( data_all->ipv6_addr, msg_ptr->nl_neigh_info.attr_info.local_addr);
+			memset(data_all, 0, sizeof(ipacm_event_data_all));
 
-					data_all->ipv6_addr[0] = ntohl(data_all->ipv6_addr[0]);
-					data_all->ipv6_addr[1] = ntohl(data_all->ipv6_addr[1]);
-					data_all->ipv6_addr[2] = ntohl(data_all->ipv6_addr[2]);
-					data_all->ipv6_addr[3] = ntohl(data_all->ipv6_addr[3]);
-					data_all->iptype = IPA_IP_v6;
-				}
-		    else if (msg_ptr->nl_neigh_info.attr_info.local_addr.ss_family == AF_INET)
-				{
-					IPACM_NL_REPORT_ADDR( " ", msg_ptr->nl_neigh_info.attr_info.local_addr);
-					IPACM_EVENT_COPY_ADDR_v4( data_all->ipv4_addr, msg_ptr->nl_neigh_info.attr_info.local_addr);
-					data_all->ipv4_addr = ntohl(data_all->ipv4_addr);
-					data_all->iptype = IPA_IP_v4;
-				}
-		    else
-		    {
-		        data_all->iptype = IPA_IP_v6;
-		    }
+			strlcpy(data_all->iface_name, dev_name, sizeof(data_all->iface_name));
+
+			if(msg_ptr->nl_neigh_info.attr_info.local_addr.ss_family == AF_INET6)
+			{
+				IPACM_NL_REPORT_ADDR(" ", msg_ptr->nl_neigh_info.attr_info.local_addr);
+				IPACM_EVENT_COPY_ADDR_v6(data_all->ipv6_addr, msg_ptr->nl_neigh_info.attr_info.local_addr);
+
+				data_all->ipv6_addr[0] = ntohl(data_all->ipv6_addr[0]);
+				data_all->ipv6_addr[1] = ntohl(data_all->ipv6_addr[1]);
+				data_all->ipv6_addr[2] = ntohl(data_all->ipv6_addr[2]);
+				data_all->ipv6_addr[3] = ntohl(data_all->ipv6_addr[3]);
+				data_all->iptype = IPA_IP_v6;
+			}
+			else if (msg_ptr->nl_neigh_info.attr_info.local_addr.ss_family == AF_INET)
+			{
+				IPACM_NL_REPORT_ADDR(" ", msg_ptr->nl_neigh_info.attr_info.local_addr);
+				IPACM_EVENT_COPY_ADDR_v4(data_all->ipv4_addr, msg_ptr->nl_neigh_info.attr_info.local_addr);
+				data_all->ipv4_addr = ntohl(data_all->ipv4_addr);
+				data_all->iptype = IPA_IP_v4;
+			}
+			else
+			{
+				data_all->iptype = IPA_IP_v6;
+			}
 
 		    IPACMDBG("NDA_LLADDR:MAC %02x:%02x:%02x:%02x:%02x:%02x\n",
 		     (unsigned char)(msg_ptr->nl_neigh_info.attr_info.lladdr_hwaddr).sa_data[0],

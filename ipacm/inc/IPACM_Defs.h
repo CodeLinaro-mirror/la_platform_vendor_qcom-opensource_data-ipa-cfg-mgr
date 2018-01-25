@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2013-2017, The Linux Foundation. All rights reserved.
+Copyright (c) 2013-2018, The Linux Foundation. All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are
@@ -76,7 +76,11 @@ extern "C"
 
 
 #define IPA_MAX_IFACE_ENTRIES 20
+#ifdef FEATURE_VLAN_MPDN
+#define IPA_MAX_PRIVATE_SUBNET_ENTRIES 4
+#else
 #define IPA_MAX_PRIVATE_SUBNET_ENTRIES 3
+#endif
 #define IPA_MAX_ALG_ENTRIES 20
 #define IPA_MAX_RM_ENTRY 9
 
@@ -105,7 +109,13 @@ extern "C"
 #define TCP_FIN_SHIFT 16
 #define TCP_SYN_SHIFT 17
 #define TCP_RST_SHIFT 18
-#define NUM_IPV6_PREFIX_FLT_RULE 1
+#ifdef FEATURE_VLAN_MPDN
+/* support default PDN+3 VLAN PDNs */
+#define IPA_MAX_IPV6_PREFIX_FLT_RULE  4
+#else
+/* support only default PDN */
+#define IPA_MAX_IPV6_PREFIX_FLT_RULE  1
+#endif
 #define MAX_CMD_SIZE 100
 
 /* WAN IP address in IP Passthrough mode. */
@@ -126,7 +136,7 @@ extern "C"
 #define IPA_MAX_NUM_ETH_CLIENTS  15
 #define IPA_MAX_NUM_AMPDU_RULE  15
 #define IPA_MAC_ADDR_SIZE  6
-
+#define IPA_MAX_NUM_BRIDGES 8
 /*===========================================================================
 										 GLOBAL DEFINITIONS AND DECLARATIONS
 ===========================================================================*/
@@ -197,6 +207,9 @@ typedef enum
 	IPA_ADD_L2TP_CLIENT,                      /* ipacm_event_data_all */
 	IPA_DEL_L2TP_CLIENT,                      /* ipacm_event_data_all */
 #endif
+#ifdef FEATURE_VLAN_MPDN
+	IPA_PREFIX_CHANGE_EVENT,                  /* ipacm_event_data_fid */
+#endif
 	IPACM_EVENT_MAX
 } ipa_cm_event_id;
 
@@ -232,6 +245,14 @@ typedef enum
 
 typedef struct
 {
+	char bridge_name[IF_NAME_LEN];
+	uint32_t bridge_netmask;
+	uint32_t bridge_ipv4_addr;
+	uint8_t bridge_mac[IPA_MAC_ADDR_SIZE];
+}ipacm_bridge;
+
+typedef struct
+{
 	struct nf_conntrack *ct;
 	enum nf_conntrack_msg_type type;
 }ipacm_ct_evt_data;
@@ -261,6 +282,13 @@ typedef struct _ipacm_event_data_all
 	uint8_t mac_addr[IPA_MAC_ADDR_SIZE];
 	char iface_name[IPA_IFACE_NAME_LEN];
 } ipacm_event_data_all;
+
+typedef struct _ipacm_event_new_neigh_vlan
+{
+	/* must be first since might be treated as data_all event */
+	ipacm_event_data_all data_all;
+	ipacm_bridge *bridge;
+} ipacm_event_new_neigh_vlan;
 
 class IPACM_Lan;
 

@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2013, The Linux Foundation. All rights reserved.
+Copyright (c) 2013, 2018, The Linux Foundation. All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are
@@ -199,6 +199,7 @@ public:
 #ifdef FEATURE_IPACM_UL_FIREWALL
 	static bool is_v6_ul_firewall_sent_to_q6;
 #endif
+	static bool is_global_ipv6_addr(uint32_t* ipv6_addr);
 private:
 
 	bool is_ipv6_frag_firewall_flt_rule_installed;
@@ -500,8 +501,6 @@ private:
 	int install_wan_filtering_rule(bool is_sw_routing);
 
 	void change_to_network_order(ipa_ip_type iptype, ipa_rule_attrib* attrib);
-
-	bool is_global_ipv6_addr(uint32_t* ipv6_addr);
 
 	void handle_wlan_SCC_MCC_switch(bool, ipa_ip_type);
 

@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2013-2017, The Linux Foundation. All rights reserved.
+Copyright (c) 2013-2018, The Linux Foundation. All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are
@@ -1638,6 +1638,9 @@ int IPACM_Wan::handle_route_add_evt(ipa_ip_type iptype)
 			wanup_data->is_sta = false;
 		}
 		memcpy(wanup_data->ipv6_prefix, ipv6_prefix, sizeof(wanup_data->ipv6_prefix));
+#ifdef FEATURE_VLAN_MPDN
+		IPACM_Iface::ipacmcfg->add_vlan_ipv6_prefix(wanup_data->ipv6_prefix, ipa_if_num);
+#endif
 		IPACMDBG_H("Posting IPA_HANDLE_WAN_UP_V6 with below information:\n");
 		IPACMDBG_H("if_name:%s, is sta mode: %d\n", wanup_data->ifname, wanup_data->is_sta);
 		IPACMDBG_H("ipv6 prefix: 0x%08x%08x.\n", ipv6_prefix[0], ipv6_prefix[1]);
@@ -4341,6 +4344,9 @@ int IPACM_Wan::handle_route_del_evt_ex(ipa_ip_type iptype)
 				wandown_data->is_sta = false;
 			}
 			memcpy(wandown_data->ipv6_prefix, ipv6_prefix, sizeof(wandown_data->ipv6_prefix));
+#ifdef FEATURE_VLAN_MPDN
+			IPACM_Iface::ipacmcfg->del_vlan_ipv6_prefix(ipv6_prefix, -1);
+#endif
 			evt_data.event = IPA_HANDLE_WAN_DOWN_V6;
 			evt_data.evt_data = (void *)wandown_data;
 			IPACMDBG_H("posting IPA_HANDLE_WAN_DOWN_V6 for IPv6 with prefix 0x%08x%08x\n", ipv6_prefix[0], ipv6_prefix[1]);

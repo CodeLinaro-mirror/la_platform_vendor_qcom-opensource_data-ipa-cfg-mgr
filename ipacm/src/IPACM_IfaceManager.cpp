@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2013-2016, The Linux Foundation. All rights reserved.
+Copyright (c) 2013-2016, 2018, The Linux Foundation. All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are
@@ -81,12 +81,23 @@ void IPACM_IfaceManager::event_callback(ipa_cm_event_id event, void *param)
 				IPACM_Iface::ipacmcfg->Init();
 			break;
 		case IPA_BRIDGE_LINK_UP_EVENT:
-			IPACMDBG_H(" Save the bridge0 mac info in IPACM_cfg \n");
+			IPACMDBG_H(" Save the bridge mac info in IPACM_cfg \n");
 			ipa_interface_index = IPACM_Iface::iface_ipa_index_query(data_all->if_index);
 			/* check for failure return */
 			if (IPACM_FAILURE == ipa_interface_index) {
+#ifdef FEATURE_VLAN_MPDN
+				/* add bridgeX (X != 0) to the bridges list */
+				IPACMDBG_H("trying to add the bridge %s with MAC %02x:%02x:%02x:%02x:%02x:%02x\n",
+					data_all->iface_name, data_all->mac_addr[0],
+					data_all->mac_addr[1], data_all->mac_addr[2],
+					data_all->mac_addr[3], data_all->mac_addr[4],
+					data_all->mac_addr[5]);
+				IPACM_Iface::ipacmcfg->add_vlan_bridge(data_all);
+				break;
+#else
 				IPACMERR("IPA_BRIDGE_LINK_UP_EVENT: not supported iface id: %d\n", data_all->if_index);
 				break;
+#endif
 			}
 			/* check if iface is bridge interface*/
 			if (strcmp(IPACM_Iface::ipacmcfg->ipa_virtual_iface_name, IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].iface_name) == 0)
@@ -98,6 +109,15 @@ void IPACM_IfaceManager::event_callback(ipa_cm_event_id event, void *param)
 				IPACMDBG_H("cached bridge0 MAC %02x:%02x:%02x:%02x:%02x:%02x\n",
 						 IPACM_Iface::ipacmcfg->bridge_mac[0], IPACM_Iface::ipacmcfg->bridge_mac[1], IPACM_Iface::ipacmcfg->bridge_mac[2],
 						 IPACM_Iface::ipacmcfg->bridge_mac[3], IPACM_Iface::ipacmcfg->bridge_mac[4], IPACM_Iface::ipacmcfg->bridge_mac[5]);
+#ifdef FEATURE_VLAN_MPDN
+				/* also add bridge0 (XML bridge) to the list*/
+				IPACMDBG_H("trying to add the bridge %s with MAC %02x:%02x:%02x:%02x:%02x:%02x\n",
+					data_all->iface_name, data_all->mac_addr[0],
+					data_all->mac_addr[1], data_all->mac_addr[2],
+					data_all->mac_addr[3], data_all->mac_addr[4],
+					data_all->mac_addr[5]);
+				IPACM_Iface::ipacmcfg->add_vlan_bridge(data_all);
+#endif
 			}
 			break;
 		case IPA_LINK_UP_EVENT:

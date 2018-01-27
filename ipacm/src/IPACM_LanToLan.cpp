@@ -94,14 +94,6 @@ IPACM_LanToLan::IPACM_LanToLan()
 	IPACM_EvtDispatcher::registr(IPA_ETH_BRIDGE_CLIENT_ADD, this);
 	IPACM_EvtDispatcher::registr(IPA_ETH_BRIDGE_CLIENT_DEL, this);
 	IPACM_EvtDispatcher::registr(IPA_ETH_BRIDGE_WLAN_SCC_MCC_SWITCH, this);
-#ifdef FEATURE_L2TP
-	IPACM_EvtDispatcher::registr(IPA_ADD_VLAN_IFACE, this);
-	IPACM_EvtDispatcher::registr(IPA_DEL_VLAN_IFACE, this);
-	IPACM_EvtDispatcher::registr(IPA_ADD_L2TP_VLAN_MAPPING, this);
-	IPACM_EvtDispatcher::registr(IPA_DEL_L2TP_VLAN_MAPPING, this);
-	IPACM_EvtDispatcher::registr(IPA_HANDLE_VLAN_CLIENT_INFO, this);
-	IPACM_EvtDispatcher::registr(IPA_HANDLE_VLAN_IFACE_INFO, this);
-#endif
 	m_has_l2tp_iface = false;
 	return;
 }
@@ -189,45 +181,6 @@ void IPACM_LanToLan::event_callback(ipa_cm_event_id event, void* param)
 			break;
 		}
 
-#ifdef FEATURE_L2TP
-		case IPA_ADD_VLAN_IFACE:
-		{
-			vlan_iface_data = (ipa_ioc_vlan_iface_info*)param;
-			handle_add_vlan_iface(vlan_iface_data);
-			break;
-		}
-
-		case IPA_DEL_VLAN_IFACE:
-		{
-			vlan_iface_data = (ipa_ioc_vlan_iface_info*)param;
-			handle_del_vlan_iface(vlan_iface_data);
-			break;
-		}
-		case IPA_ADD_L2TP_VLAN_MAPPING:
-		{
-			l2tp_vlan_mapping_data = (ipa_ioc_l2tp_vlan_mapping_info*)param;
-			handle_add_l2tp_vlan_mapping(l2tp_vlan_mapping_data);
-			break;
-		}
-		case IPA_DEL_L2TP_VLAN_MAPPING:
-		{
-			l2tp_vlan_mapping_data = (ipa_ioc_l2tp_vlan_mapping_info*)param;
-			handle_del_l2tp_vlan_mapping(l2tp_vlan_mapping_data);
-			break;
-		}
-		case IPA_HANDLE_VLAN_CLIENT_INFO:
-		{
-			vlan_data = (ipacm_event_data_all*)param;
-			handle_vlan_client_info(vlan_data);
-			break;
-		}
-		case IPA_HANDLE_VLAN_IFACE_INFO:
-		{
-			vlan_data = (ipacm_event_data_all*)param;
-			handle_vlan_iface_info(vlan_data);
-			break;
-		}
-#endif
 		default:
 			break;
 	}
@@ -294,7 +247,7 @@ void IPACM_LanToLan::handle_iface_up(ipacm_event_eth_bridge *data)
 
 		IPACM_LanToLan_Iface &front_iface = m_iface.front();
 #ifdef FEATURE_L2TP
-		for(it_mapping = m_l2tp_vlan_mapping.begin(); it_mapping != m_l2tp_vlan_mapping.end(); it_mapping++)
+		for(it_mapping = IPACM_Iface::ipacmcfg->m_l2tp_vlan_mapping.begin(); it_mapping != IPACM_Iface::ipacmcfg->m_l2tp_vlan_mapping.end(); it_mapping++)
 		{
 			if(front_iface.set_l2tp_iface(it_mapping->vlan_iface_name) == true)
 			{
@@ -445,7 +398,7 @@ void IPACM_LanToLan::handle_client_add(ipacm_event_eth_bridge *data)
 	IPACMDBG_H("Incoming client MAC: 0x%02x%02x%02x%02x%02x%02x, interface: %s\n", data->mac_addr[0], data->mac_addr[1],
 		data->mac_addr[2], data->mac_addr[3], data->mac_addr[4], data->mac_addr[5], data->p_iface->dev_name);
 #ifdef FEATURE_L2TP
-	for(it_mapping = m_l2tp_vlan_mapping.begin(); it_mapping != m_l2tp_vlan_mapping.end(); it_mapping++)
+	for(it_mapping = IPACM_Iface::ipacmcfg->m_l2tp_vlan_mapping.begin(); it_mapping != IPACM_Iface::ipacmcfg->m_l2tp_vlan_mapping.end(); it_mapping++)
 	{
 		if(strncmp(it_mapping->l2tp_iface_name, data->iface_name,
 			sizeof(it_mapping->l2tp_iface_name)) == 0)
@@ -529,245 +482,6 @@ void IPACM_LanToLan::handle_wlan_scc_mcc_switch(ipacm_event_eth_bridge *data)
 	return;
 }
 
-#ifdef FEATURE_L2TP
-void IPACM_LanToLan::handle_add_vlan_iface(ipa_ioc_vlan_iface_info *data)
-{
-	list<vlan_iface_info>::iterator it_vlan;
-	list<l2tp_vlan_mapping_info>::iterator it_mapping;
-	vlan_iface_info new_vlan_info;
-
-	IPACMDBG_H("Vlan iface: %s vlan id: %d\n", data->name, data->vlan_id);
-	for(it_vlan = m_vlan_iface.begin(); it_vlan != m_vlan_iface.end(); it_vlan++)
-	{
-		if(strncmp(it_vlan->vlan_iface_name, data->name, sizeof(it_vlan->vlan_iface_name)) == 0)
-		{
-			IPACMERR("The vlan iface was added before with id %d\n", it_vlan->vlan_id);
-			return;
-		}
-	}
-
-	for(it_mapping = m_l2tp_vlan_mapping.begin(); it_mapping != m_l2tp_vlan_mapping.end(); it_mapping++)
-	{
-		if(strncmp(data->name, it_mapping->vlan_iface_name, sizeof(data->name)) == 0)
-		{
-			IPACMDBG_H("Found a mapping: l2tp iface %s.\n", it_mapping->l2tp_iface_name);
-			it_mapping->vlan_id = data->vlan_id;
-		}
-	}
-
-	memset(&new_vlan_info, 0 , sizeof(new_vlan_info));
-	strlcpy(new_vlan_info.vlan_iface_name, data->name, sizeof(new_vlan_info.vlan_iface_name));
-	new_vlan_info.vlan_id = data->vlan_id;
-	m_vlan_iface.push_front(new_vlan_info);
-	return;
-}
-
-void IPACM_LanToLan::handle_del_vlan_iface(ipa_ioc_vlan_iface_info *data)
-{
-	list<vlan_iface_info>::iterator it_vlan;
-	list<l2tp_vlan_mapping_info>::iterator it_mapping;
-
-	IPACMDBG_H("Vlan iface: %s vlan id: %d\n", data->name, data->vlan_id);
-	for(it_vlan = m_vlan_iface.begin(); it_vlan != m_vlan_iface.end(); it_vlan++)
-	{
-		if(strncmp(it_vlan->vlan_iface_name, data->name, sizeof(it_vlan->vlan_iface_name)) == 0)
-		{
-			IPACMDBG_H("Found the vlan interface\n");
-			m_vlan_iface.erase(it_vlan);
-			break;
-		}
-	}
-
-	it_mapping = m_l2tp_vlan_mapping.begin();
-	while(it_mapping != m_l2tp_vlan_mapping.end())
-	{
-		if(strncmp(data->name, it_mapping->vlan_iface_name, sizeof(data->name)) == 0)
-		{
-			IPACMDBG_H("Delete mapping with l2tp iface %s\n", it_mapping->l2tp_iface_name);
-			it_mapping = m_l2tp_vlan_mapping.erase(it_mapping);
-		}
-		else
-		{
-			it_mapping++;
-		}
-	}
-	return;
-}
-void IPACM_LanToLan::handle_add_l2tp_vlan_mapping(ipa_ioc_l2tp_vlan_mapping_info *data)
-{
-	list<l2tp_vlan_mapping_info>::iterator it_mapping;
-	list<vlan_iface_info>::iterator it_vlan;
-	list<IPACM_LanToLan_Iface>::iterator it_iface;
-	IPACM_LanToLan_Iface *l2tp_iface;
-	l2tp_vlan_mapping_info new_mapping;
-	bool has_l2tp_iface = false;
-
-	IPACMDBG_H("L2tp iface: %s session id: %d vlan iface: %s \n",
-		data->l2tp_iface_name, data->l2tp_session_id, data->vlan_iface_name);
-	for(it_mapping = m_l2tp_vlan_mapping.begin(); it_mapping != m_l2tp_vlan_mapping.end(); it_mapping++)
-	{
-		if(strncmp(data->l2tp_iface_name, it_mapping->l2tp_iface_name,
-			sizeof(data->l2tp_iface_name)) == 0)
-		{
-			IPACMERR("L2tp mapping was added before mapped to vlan %s.\n", it_mapping->vlan_iface_name);
-			return;
-		}
-	}
-	memset(&new_mapping, 0, sizeof(new_mapping));
-	strlcpy(new_mapping.l2tp_iface_name, data->l2tp_iface_name,
-		sizeof(new_mapping.l2tp_iface_name));
-	strlcpy(new_mapping.vlan_iface_name, data->vlan_iface_name,
-		sizeof(new_mapping.vlan_iface_name));
-	new_mapping.l2tp_session_id = data->l2tp_session_id;
-
-	for(it_vlan = m_vlan_iface.begin(); it_vlan != m_vlan_iface.end(); it_vlan++)
-	{
-		if(strncmp(it_vlan->vlan_iface_name, data->vlan_iface_name, sizeof(it_vlan->vlan_iface_name)) == 0)
-		{
-			IPACMDBG_H("Found vlan iface with id %d\n", it_vlan->vlan_id);
-			new_mapping.vlan_id = it_vlan->vlan_id;
-			memcpy(new_mapping.vlan_iface_ipv6_addr, it_vlan->vlan_iface_ipv6_addr,
-				sizeof(new_mapping.vlan_iface_ipv6_addr));
-			memcpy(new_mapping.vlan_client_mac, it_vlan->vlan_client_mac,
-				sizeof(new_mapping.vlan_client_mac));
-			memcpy(new_mapping.vlan_client_ipv6_addr, it_vlan->vlan_client_ipv6_addr,
-				sizeof(new_mapping.vlan_client_ipv6_addr));
-			break;
-		}
-	}
-	m_l2tp_vlan_mapping.push_front(new_mapping);
-
-	for(it_iface = m_iface.begin(); it_iface != m_iface.end(); it_iface++)
-	{
-		if(it_iface->set_l2tp_iface(data->vlan_iface_name) == true)
-		{
-			has_l2tp_iface = true;
-			l2tp_iface = &(*it_iface);
-			break;
-		}
-	}
-
-	if(m_has_l2tp_iface == false && has_l2tp_iface == true)
-	{
-		IPACMDBG_H("There is l2tp iface, add rt rules for l2tp iface.\n");
-		m_has_l2tp_iface = true;
-		for(it_iface = m_iface.begin(); it_iface != m_iface.end(); it_iface++)
-		{
-			if(it_iface->is_l2tp_iface() == false)
-			{
-				it_iface->handle_l2tp_enable();
-			}
-		}
-		l2tp_iface->switch_to_l2tp_iface();
-	}
-	return;
-}
-
-void IPACM_LanToLan::handle_del_l2tp_vlan_mapping(ipa_ioc_l2tp_vlan_mapping_info *data)
-{
-	list<l2tp_vlan_mapping_info>::iterator it;
-	list<IPACM_LanToLan_Iface>::iterator it_iface;
-
-	IPACMDBG_H("L2tp iface: %s session id: %d vlan iface: %s \n",
-		data->l2tp_iface_name, data->l2tp_session_id, data->vlan_iface_name);
-	for(it = m_l2tp_vlan_mapping.begin(); it != m_l2tp_vlan_mapping.end(); it++)
-	{
-		if(strncmp(data->l2tp_iface_name, it->l2tp_iface_name,
-			sizeof(data->l2tp_iface_name)) == 0)
-		{
-			IPACMDBG_H("Found l2tp iface mapped to vlan %s.\n", it->vlan_iface_name);
-			if(strncmp(data->vlan_iface_name, it->vlan_iface_name,
-				sizeof(data->vlan_iface_name)) == 0)
-			{
-				m_l2tp_vlan_mapping.erase(it);
-			}
-			else
-			{
-				IPACMERR("Incoming mapping is incorrect.\n");
-			}
-			break;
-		}
-	}
-	return;
-}
-void IPACM_LanToLan::handle_vlan_client_info(ipacm_event_data_all *data)
-{
-	list<l2tp_vlan_mapping_info>::iterator it_mapping;
-	list<vlan_iface_info>::iterator it_vlan;
-
-	IPACMDBG_H("Incoming vlan client iface: %s IPv6 address: 0x%08x%08x%08x%08x\n", data->iface_name,
-		data->ipv6_addr[0], data->ipv6_addr[1], data->ipv6_addr[2], data->ipv6_addr[3]);
-	IPACMDBG_H("MAC address: 0x%02x%02x%02x%02x%02x%02x\n", data->mac_addr[0], data->mac_addr[1],
-		data->mac_addr[2], data->mac_addr[3], data->mac_addr[4], data->mac_addr[5]);
-
-	for(it_vlan = m_vlan_iface.begin(); it_vlan != m_vlan_iface.end(); it_vlan++)
-	{
-		if(strncmp(it_vlan->vlan_iface_name, data->iface_name, sizeof(it_vlan->vlan_iface_name)) == 0)
-		{
-			IPACMDBG_H("Found vlan iface in vlan list: %s\n", it_vlan->vlan_iface_name);
-			if(it_vlan->vlan_client_ipv6_addr[0] > 0 || it_vlan->vlan_client_ipv6_addr[1] > 0 ||
-				it_vlan->vlan_client_ipv6_addr[2] > 0 || it_vlan->vlan_client_ipv6_addr[3] > 0)
-			{
-				IPACMDBG_H("Vlan client info has been populated before, return.\n");
-				return;
-			}
-			memcpy(it_vlan->vlan_client_mac, data->mac_addr, sizeof(it_vlan->vlan_client_mac));
-			memcpy(it_vlan->vlan_client_ipv6_addr, data->ipv6_addr, sizeof(it_vlan->vlan_client_ipv6_addr));
-		}
-	}
-
-	for(it_mapping = m_l2tp_vlan_mapping.begin(); it_mapping != m_l2tp_vlan_mapping.end(); it_mapping++)
-	{
-		if(strncmp(it_mapping->vlan_iface_name, data->iface_name, sizeof(it_mapping->vlan_iface_name)) == 0)
-		{
-			IPACMDBG_H("Found vlan iface in l2tp mapping list: %s, l2tp iface: %s\n", it_mapping->vlan_iface_name,
-				it_mapping->l2tp_iface_name);
-			memcpy(it_mapping->vlan_client_mac, data->mac_addr, sizeof(it_mapping->vlan_client_mac));
-			memcpy(it_mapping->vlan_client_ipv6_addr, data->ipv6_addr, sizeof(it_mapping->vlan_client_ipv6_addr));
-		}
-	}
-	return;
-}
-
-void IPACM_LanToLan::handle_vlan_iface_info(ipacm_event_data_all *data)
-{
-	list<vlan_iface_info>::iterator it_vlan;
-	list<l2tp_vlan_mapping_info>::iterator it_mapping;
-
-	IPACMDBG_H("Incoming vlan iface: %s IPv6 address: 0x%08x%08x%08x%08x\n", data->iface_name,
-		data->ipv6_addr[0], data->ipv6_addr[1], data->ipv6_addr[2], data->ipv6_addr[3]);
-
-	for(it_vlan = m_vlan_iface.begin(); it_vlan != m_vlan_iface.end(); it_vlan++)
-	{
-		if(strncmp(it_vlan->vlan_iface_name, data->iface_name,
-			sizeof(it_vlan->vlan_iface_name)) == 0)
-		{
-			IPACMDBG_H("Found vlan iface: %s\n", it_vlan->vlan_iface_name);
-			memcpy(it_vlan->vlan_iface_ipv6_addr, data->ipv6_addr,
-				sizeof(it_vlan->vlan_iface_ipv6_addr));
-
-			for(it_mapping = m_l2tp_vlan_mapping.begin(); it_mapping != m_l2tp_vlan_mapping.end(); it_mapping++)
-			{
-				if(strncmp(it_mapping->vlan_iface_name, it_vlan->vlan_iface_name,
-					sizeof(it_mapping->vlan_iface_name)) == 0)
-				{
-					IPACMDBG_H("Found the l2tp-vlan mapping: l2tp %s\n", it_mapping->l2tp_iface_name);
-					memcpy(it_mapping->vlan_iface_ipv6_addr, data->ipv6_addr,
-						sizeof(it_mapping->vlan_iface_ipv6_addr));
-				}
-			}
-			break;
-		}
-	}
-
-	if(it_vlan == m_vlan_iface.end())
-	{
-		IPACMDBG_H("Failed to find the vlan iface: %s\n", data->iface_name);
-	}
-	return;
-}
-#endif
-
 void IPACM_LanToLan::handle_cached_client_add_event(IPACM_Lan *p_iface)
 {
 	list<ipacm_event_eth_bridge>::iterator it;
@@ -820,37 +534,6 @@ void IPACM_LanToLan::print_data_structure_info()
 	int i;
 
 	IPACMDBG_H("Is there l2tp interface? %d\n", m_has_l2tp_iface);
-
-#ifdef FEATURE_L2TP
-	IPACMDBG_H("There are %d vlan interfaces.\n", m_vlan_iface.size());
-	for(it_vlan = m_vlan_iface.begin(); it_vlan != m_vlan_iface.end(); it_vlan++)
-	{
-		IPACMDBG_H("Vlan iface: %s, id: %d, ipv6 addr: 0x%08x%08x%08x%08x\n", it_vlan->vlan_iface_name,
-			it_vlan->vlan_id, it_vlan->vlan_iface_ipv6_addr[0], it_vlan->vlan_iface_ipv6_addr[1],
-			it_vlan->vlan_iface_ipv6_addr[2], it_vlan->vlan_iface_ipv6_addr[3]);
-		IPACMDBG_H("Vlan client mac: 0x%02x%02x%02x%02x%02x%02x, ipv6 addr: 0x%08x%08x%08x%08x\n",
-			it_vlan->vlan_client_mac[0], it_vlan->vlan_client_mac[1], it_vlan->vlan_client_mac[2],
-			it_vlan->vlan_client_mac[3], it_vlan->vlan_client_mac[4], it_vlan->vlan_client_mac[5],
-			it_vlan->vlan_client_ipv6_addr[0], it_vlan->vlan_client_ipv6_addr[1], it_vlan->vlan_client_ipv6_addr[2],
-			it_vlan->vlan_client_ipv6_addr[3]);
-	}
-
-	IPACMDBG_H("There are %d vlan-l2tp mapping.\n", m_l2tp_vlan_mapping.size());
-	for(it_mapping = m_l2tp_vlan_mapping.begin(); it_mapping != m_l2tp_vlan_mapping.end(); it_mapping++)
-	{
-		IPACMDBG_H("L2tp iface: %s, session id: %d\n", it_mapping->l2tp_iface_name, it_mapping->l2tp_session_id);
-		IPACMDBG_H("Vlan iface: %s, id: %d, ipv6 addr: 0x%08x%08x%08x%08x\n", it_mapping->vlan_iface_name,
-			it_mapping->vlan_id, it_mapping->vlan_iface_ipv6_addr[0], it_mapping->vlan_iface_ipv6_addr[1],
-			it_mapping->vlan_iface_ipv6_addr[2], it_mapping->vlan_iface_ipv6_addr[3]);
-		IPACMDBG_H("Vlan client mac: 0x%02x%02x%02x%02x%02x%02x, ipv6 addr: 0x%08x%08x%08x%08x\n",
-			it_mapping->vlan_client_mac[0], it_mapping->vlan_client_mac[1], it_mapping->vlan_client_mac[2],
-			it_mapping->vlan_client_mac[3], it_mapping->vlan_client_mac[4], it_mapping->vlan_client_mac[5],
-			it_mapping->vlan_client_ipv6_addr[0], it_mapping->vlan_client_ipv6_addr[1], it_mapping->vlan_client_ipv6_addr[2],
-			it_mapping->vlan_client_ipv6_addr[3]);
-		IPACMDBG_H("L2tp client mac: 0x%02x%02x%02x%02x%02x%02x\n", it_mapping->l2tp_client_mac[0], it_mapping->l2tp_client_mac[1],
-			it_mapping->l2tp_client_mac[2], it_mapping->l2tp_client_mac[3], it_mapping->l2tp_client_mac[4], it_mapping->l2tp_client_mac[5]);
-	}
-#endif
 	IPACMDBG_H("There are %d interfaces in total.\n", m_iface.size());
 	for(it = m_iface.begin(); it != m_iface.end(); it++)
 	{

@@ -1230,7 +1230,25 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 				}
 			}
 			break;
+#ifdef FEATURE_L2TP_E2E
+	case IPA_ADD_L2TP_CLIENT:
+		if(active_v4)
+		{
+			ipacm_event_data_all *data = (ipacm_event_data_all *)param;
+			handle_l2tp_client_add(data->iface_name);
+			install_wan_filtering_rule(false);
+		}
+		break;
 
+	case IPA_DEL_L2TP_CLIENT:
+		if(active_v4)
+		{
+			ipacm_event_data_all *data = (ipacm_event_data_all *)param;
+			handle_l2tp_client_del(data->iface_name);
+			install_wan_filtering_rule(false);
+		}
+		break;
+#endif
 	default:
 		break;
 	}
@@ -3624,6 +3642,7 @@ int IPACM_Wan::query_ext_prop()
 
 int IPACM_Wan::config_wan_firewall_rule(ipa_ip_type iptype)
 {
+	list<l2tp_client_info>::iterator it;
 	int res = IPACM_SUCCESS;
 
 	IPACMDBG_H("Configure WAN DL firewall rules.\n");
@@ -3646,10 +3665,22 @@ int IPACM_Wan::config_wan_firewall_rule(ipa_ip_type iptype)
 			goto fail;
 		}
 		IPACMDBG_H("Succeded in constructing firewall rules for ip type %d\n", iptype);
+#ifdef FEATURE_L2TP_E2E
+		for(it = IPACM_Iface::ipacmcfg->l2tp_client.begin(); it != IPACM_Iface::ipacmcfg->l2tp_client.end(); it++)
+		{
+			handle_l2tp_client_add(it->client_iface_name);
+		}
+#endif
 	}
 	else if(iptype == IPA_IP_v6)
 	{
 		IPACM_Wan::num_v6_flt_rule = IPA_V2_NUM_DEFAULT_WAN_FILTER_RULE_IPV6;
+#ifdef FEATURE_L2TP_E2E
+		if(active_v4)
+		{
+			IPACM_Wan::num_v6_flt_rule += IPACM_Iface::ipacmcfg->l2tp_client.size();
+		}
+#endif
 		if(IPACM_FAILURE == add_icmp_alg_rules(flt_rule_v6, IPACM_Wan::num_v6_flt_rule, IPA_IP_v6))
 		{
 			IPACMERR("Failed to add ICMP and ALG port filtering rules.\n");
@@ -3946,17 +3977,30 @@ fail:
 
 int IPACM_Wan::del_wan_firewall_rule(ipa_ip_type iptype)
 {
+	list<l2tp_client_info>::iterator it;
 	if(iptype == IPA_IP_v4)
 	{
 		IPACM_Wan::num_v4_flt_rule = IPA_V2_NUM_DEFAULT_WAN_FILTER_RULE_IPV4;
 		memset(&IPACM_Wan::flt_rule_v4[IPA_V2_NUM_DEFAULT_WAN_FILTER_RULE_IPV4], 0,
 			(IPA_MAX_FLT_RULE - IPA_V2_NUM_DEFAULT_WAN_FILTER_RULE_IPV4) * sizeof(struct ipa_flt_rule_add));
+#ifdef FEATURE_L2TP_E2E
+		for(it = IPACM_Iface::ipacmcfg->l2tp_client.begin(); it != IPACM_Iface::ipacmcfg->l2tp_client.end(); it++)
+		{
+			handle_l2tp_client_del(it->client_iface_name);
+		}
+#endif
 	}
 	else if(iptype == IPA_IP_v6)
 	{
 		IPACM_Wan::num_v6_flt_rule = IPA_V2_NUM_DEFAULT_WAN_FILTER_RULE_IPV6;
-		memset(&IPACM_Wan::flt_rule_v6[IPA_V2_NUM_DEFAULT_WAN_FILTER_RULE_IPV6], 0,
-			(IPA_MAX_FLT_RULE - IPA_V2_NUM_DEFAULT_WAN_FILTER_RULE_IPV6) * sizeof(struct ipa_flt_rule_add));
+#ifdef FEATURE_L2TP_E2E
+		if(active_v4)
+		{
+			IPACM_Wan::num_v6_flt_rule += IPACM_Iface::ipacmcfg->l2tp_client.size();
+		}
+#endif
+		memset(&IPACM_Wan::flt_rule_v6[IPACM_Wan::num_v6_flt_rule], 0,
+			(IPA_MAX_FLT_RULE - IPACM_Wan::num_v6_flt_rule) * sizeof(struct ipa_flt_rule_add));
 	}
 	else
 	{
@@ -6324,3 +6368,138 @@ int IPACM_Wan::add_dummy_rx_hdr()
 	}
 	return IPACM_SUCCESS;
 }
+#ifdef FEATURE_L2TP_E2E
+void IPACM_Wan::handle_l2tp_client_add(char *iface_name)
+{
+	int i;
+
+	if(IPACM_Wan::num_v4_flt_rule >= IPA_MAX_FLT_RULE)
+	{
+		IPACMERR("Model DL flt rule has reached cap.\n");
+		return;
+	}
+
+	for(i = IPACM_Wan::num_v4_flt_rule - 1; i >= IPA_V2_NUM_DEFAULT_WAN_FILTER_RULE_IPV6; i--)
+	{
+		flt_rule_v6[i+1] = flt_rule_v6[i];
+	}
+
+	install_l2tp_flt_rule(flt_rule_v6, IPA_V2_NUM_DEFAULT_WAN_FILTER_RULE_IPV6, iface_name);
+	IPACM_Wan::num_v6_flt_rule++;
+	IPACMDBG_H("Now num of v6 dl flt rule is %d.\n", IPACM_Wan::num_v6_flt_rule);
+	return;
+}
+
+void IPACM_Wan::handle_l2tp_client_del(char *iface_name)
+{
+	int i;
+	l2tp_vlan_mapping_info info;
+	uint32_t ipv6_addr[4];
+
+	if(IPACM_Iface::ipacmcfg->get_vlan_l2tp_mapping(iface_name, info) == IPACM_FAILURE)
+	{
+		IPACMERR("Failed to find vlan-l2tp mapping.\n");
+		return;
+	}
+
+	memcpy(ipv6_addr, info.vlan_client_ipv6_addr, sizeof(ipv6_addr));
+	for(i=0; i<4; i++)
+	{
+		ipv6_addr[i] = htonl(ipv6_addr[i]);
+	}
+
+	for(i = IPA_V2_NUM_DEFAULT_WAN_FILTER_RULE_IPV6; i < IPACM_Wan::num_v6_flt_rule; i++)
+	{
+		if( (flt_rule_v6[i].rule.attrib.attrib_mask | IPA_FLT_DST_ADDR)
+			&& memcmp(flt_rule_v6[i].rule.attrib.u.v6.dst_addr, ipv6_addr,
+				sizeof(flt_rule_v6[i].rule.attrib.u.v6.dst_addr)) == 0)
+		{
+			IPACMDBG_H("Found modem DL flt rule at position %d.\n", i);
+			break;
+		}
+	}
+
+	if(i == IPACM_Wan::num_v6_flt_rule)
+	{
+		IPACMERR("Failed to find the flt rule.\n");
+		return;
+	}
+
+	for(; i < IPACM_Wan::num_v6_flt_rule - 1; i++)
+	{
+		flt_rule_v6[i] = flt_rule_v6[i+1];
+	}
+
+	IPACM_Wan::num_v6_flt_rule--;
+	IPACMDBG_H("Now the num of v6 dl flt rule is %d.\n", IPACM_Wan::num_v6_flt_rule);
+	return;
+}
+
+void IPACM_Wan::install_l2tp_flt_rule(ipa_flt_rule_add* rules, int rule_offset, char *iface_name)
+{
+	l2tp_vlan_mapping_info info;
+	ipa_flt_rule_add flt_rule_entry;
+	ipa_ioc_generate_flt_eq flt_eq;
+	ipa_ioc_get_rt_tbl_indx rt_tbl_idx;
+
+	if(IPACM_Iface::ipacmcfg->get_vlan_l2tp_mapping(iface_name, info) == IPACM_FAILURE)
+	{
+		IPACMERR("Failed to find vlan-l2tp mapping.\n");
+		return;
+	}
+
+	memset(&rt_tbl_idx, 0, sizeof(rt_tbl_idx));
+	strlcpy(rt_tbl_idx.name, IPACM_Iface::ipacmcfg->rt_tbl_wan_v6.name, IPA_RESOURCE_NAME_MAX);
+	rt_tbl_idx.name[IPA_RESOURCE_NAME_MAX-1] = '\0';
+	rt_tbl_idx.ip = IPA_IP_v6;
+	if(ioctl(m_fd_ipa, IPA_IOC_QUERY_RT_TBL_INDEX, &rt_tbl_idx) != 0)
+	{
+		IPACMERR("Failed to get routing table index from name\n");
+		return;
+	}
+
+	IPACMDBG_H("WAN DL routing table %s has index %d\n", IPACM_Iface::ipacmcfg->rt_tbl_wan_v6.name, rt_tbl_idx.idx);
+
+	memset(&flt_rule_entry, 0, sizeof(ipa_flt_rule_add));
+
+	flt_rule_entry.at_rear = true;
+	flt_rule_entry.flt_rule_hdl = -1;
+	flt_rule_entry.status = -1;
+
+	flt_rule_entry.rule.retain_hdr = 0;
+	flt_rule_entry.rule.to_uc = 0;
+	flt_rule_entry.rule.eq_attrib_type = 1;
+	flt_rule_entry.rule.action = IPA_PASS_TO_ROUTING;
+#ifdef FEATURE_IPA_V3
+	flt_rule_entry.rule.hashable = true;
+#endif
+	flt_rule_entry.rule.rt_tbl_idx = rt_tbl_idx.idx;
+
+	/* Configuring dest IP based filtering rule */
+	memcpy(&flt_rule_entry.rule.attrib, &rx_prop->rx[1].attrib,
+		sizeof(flt_rule_entry.rule.attrib));
+	flt_rule_entry.rule.attrib.attrib_mask |= IPA_FLT_DST_ADDR;
+	memcpy(flt_rule_entry.rule.attrib.u.v6.dst_addr, info.vlan_client_ipv6_addr,
+		sizeof(flt_rule_entry.rule.attrib.u.v6.dst_addr));
+	memset(flt_rule_entry.rule.attrib.u.v6.dst_addr_mask, 0xFF,
+		sizeof(flt_rule_entry.rule.attrib.u.v6.dst_addr_mask));
+
+	change_to_network_order(IPA_IP_v6, &flt_rule_entry.rule.attrib);
+
+	memset(&flt_eq, 0, sizeof(flt_eq));
+	memcpy(&flt_eq.attrib, &flt_rule_entry.rule.attrib, sizeof(flt_eq.attrib));
+	flt_eq.ip = IPA_IP_v6;
+	if(ioctl(m_fd_ipa, IPA_IOC_GENERATE_FLT_EQ, &flt_eq) != 0)
+	{
+		IPACMERR("Failed to get eq_attrib\n");
+		return;
+	}
+
+	memcpy(&flt_rule_entry.rule.eq_attrib, &flt_eq.eq_attrib,
+		sizeof(flt_rule_entry.rule.eq_attrib));
+
+	memcpy(&(rules[rule_offset]), &flt_rule_entry, sizeof(struct ipa_flt_rule_add));
+
+	return;
+}
+#endif

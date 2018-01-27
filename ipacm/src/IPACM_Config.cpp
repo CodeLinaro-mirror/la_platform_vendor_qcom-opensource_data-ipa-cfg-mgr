@@ -42,6 +42,7 @@ IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <IPACM_Iface.h>
 #include <sys/ioctl.h>
 #include <fcntl.h>
+#include <string.h>
 
 IPACM_Config *IPACM_Config::pInstance = NULL;
 const char *IPACM_Config::DEVICE_NAME = "/dev/ipa";
@@ -110,13 +111,9 @@ const char *ipacm_event_name[] = {
 	__stringify(IPA_ETH_BRIDGE_CLIENT_DEL),                /* ipacm_event_eth_bridge*/
 	__stringify(IPA_ETH_BRIDGE_WLAN_SCC_MCC_SWITCH),       /* ipacm_event_eth_bridge*/
 	__stringify(IPA_LAN_DELETE_SELF),                      /* ipacm_event_data_fid */
-#ifdef FEATURE_L2TP
-	__stringify(IPA_ADD_VLAN_IFACE),                       /* ipa_ioc_vlan_iface_info */
-	__stringify(IPA_DEL_VLAN_IFACE),                       /* ipa_ioc_vlan_iface_info */
-	__stringify(IPA_ADD_L2TP_VLAN_MAPPING),                /* ipa_ioc_l2tp_vlan_mapping_info */
-	__stringify(IPA_DEL_L2TP_VLAN_MAPPING),                /* ipa_ioc_l2tp_vlan_mapping_info */
-	__stringify(IPA_VLAN_CLIENT_INFO),                     /* ipacm_event_data_all */
-	__stringify(IPA_VLAN_IFACE_INFO),                      /* ipacm_event_data_all */
+#ifdef FEATURE_L2TP_E2E
+	__stringify(IPA_ADD_L2TP_CLIENT),                      /* ipacm_event_data_all */
+	__stringify(IPA_DEL_L2TP_CLIENT),                      /* ipacm_event_data_all */
 #endif
 	__stringify(IPACM_EVENT_MAX),
 };
@@ -165,6 +162,10 @@ IPACM_Config::IPACM_Config()
 	memset(flt_rule_count_v6, 0, IPA_CLIENT_MAX*sizeof(int));
 	memset(bridge_mac, 0, IPA_MAC_ADDR_SIZE*sizeof(uint8_t));
 
+	ver = GetIPAVer(true);
+#if defined(FEATURE_L2TP_E2E) || defined(FEATURE_L2TP)
+	pthread_mutex_init(&vlan_l2tp_lock, NULL);
+#endif
 	IPACMDBG_H(" create IPACM_Config constructor\n");
 	return;
 }
@@ -886,3 +887,302 @@ enum ipa_hw_type IPACM_Config::GetIPAVer(bool get)
 	IPACMDBG_H("IPA version is %d.\n", ver);
 	return ver;
 }
+
+#if defined(FEATURE_L2TP_E2E) || defined(FEATURE_L2TP)
+void IPACM_Config::add_vlan_iface(ipa_ioc_vlan_iface_info *data)
+{
+	list<vlan_iface_info>::iterator it_vlan;
+	list<l2tp_vlan_mapping_info>::iterator it_mapping;
+	vlan_iface_info new_vlan_info;
+
+	if(pthread_mutex_lock(&vlan_l2tp_lock) != 0)
+	{
+		IPACMERR("Unable to lock the mutex\n");
+		return;
+	}
+
+	IPACMDBG_H("Vlan iface: %s vlan id: %d\n", data->name, data->vlan_id);
+	for(it_vlan = m_vlan_iface.begin(); it_vlan != m_vlan_iface.end(); it_vlan++)
+	{
+		if(strncmp(it_vlan->vlan_iface_name, data->name, sizeof(it_vlan->vlan_iface_name)) == 0)
+		{
+			IPACMERR("The vlan iface was added before with id %d\n", it_vlan->vlan_id);
+			pthread_mutex_unlock(&vlan_l2tp_lock);
+			return;
+		}
+	}
+
+	for(it_mapping = m_l2tp_vlan_mapping.begin(); it_mapping != m_l2tp_vlan_mapping.end(); it_mapping++)
+	{
+		if(strncmp(data->name, it_mapping->vlan_iface_name, sizeof(data->name)) == 0)
+		{
+			IPACMDBG_H("Found a mapping: l2tp iface %s.\n", it_mapping->l2tp_iface_name);
+			it_mapping->vlan_id = data->vlan_id;
+		}
+	}
+
+	memset(&new_vlan_info, 0 , sizeof(new_vlan_info));
+	strncpy(new_vlan_info.vlan_iface_name, data->name, sizeof(new_vlan_info.vlan_iface_name));
+	new_vlan_info.vlan_id = data->vlan_id;
+	m_vlan_iface.push_front(new_vlan_info);
+	pthread_mutex_unlock(&vlan_l2tp_lock);
+
+	return;
+}
+
+void IPACM_Config::del_vlan_iface(ipa_ioc_vlan_iface_info *data)
+{
+	list<vlan_iface_info>::iterator it_vlan;
+	list<l2tp_vlan_mapping_info>::iterator it_mapping;
+
+	if(pthread_mutex_lock(&vlan_l2tp_lock) != 0)
+	{
+		IPACMERR("Unable to lock the mutex\n");
+		return;
+	}
+
+	IPACMDBG_H("Vlan iface: %s vlan id: %d\n", data->name, data->vlan_id);
+	for(it_vlan = m_vlan_iface.begin(); it_vlan != m_vlan_iface.end(); it_vlan++)
+	{
+		if(strncmp(it_vlan->vlan_iface_name, data->name, sizeof(it_vlan->vlan_iface_name)) == 0)
+		{
+			IPACMDBG_H("Found the vlan interface\n");
+			m_vlan_iface.erase(it_vlan);
+			break;
+		}
+	}
+
+	it_mapping = m_l2tp_vlan_mapping.begin();
+	while(it_mapping != m_l2tp_vlan_mapping.end())
+	{
+		if(strncmp(data->name, it_mapping->vlan_iface_name, sizeof(data->name)) == 0)
+		{
+			IPACMDBG_H("Delete mapping with l2tp iface %s\n", it_mapping->l2tp_iface_name);
+			it_mapping = m_l2tp_vlan_mapping.erase(it_mapping);
+		}
+		else
+		{
+			it_mapping++;
+		}
+	}
+	pthread_mutex_unlock(&vlan_l2tp_lock);
+
+	return;
+}
+
+void IPACM_Config::add_l2tp_vlan_mapping(ipa_ioc_l2tp_vlan_mapping_info *data)
+{
+	list<l2tp_vlan_mapping_info>::iterator it_mapping;
+	list<vlan_iface_info>::iterator it_vlan;
+	l2tp_vlan_mapping_info new_mapping;
+
+	if(pthread_mutex_lock(&vlan_l2tp_lock) != 0)
+	{
+		IPACMERR("Unable to lock the mutex\n");
+		return;
+	}
+
+	IPACMDBG_H("L2tp iface: %s session id: %d vlan iface: %s \n",
+		data->l2tp_iface_name, data->l2tp_session_id, data->vlan_iface_name);
+	for(it_mapping = m_l2tp_vlan_mapping.begin(); it_mapping != m_l2tp_vlan_mapping.end(); it_mapping++)
+	{
+		if(strncmp(data->l2tp_iface_name, it_mapping->l2tp_iface_name,
+			sizeof(data->l2tp_iface_name)) == 0)
+		{
+			IPACMERR("L2tp mapping was added before mapped to vlan %s.\n", it_mapping->vlan_iface_name);
+			pthread_mutex_unlock(&vlan_l2tp_lock);
+			return;
+		}
+	}
+
+	AddNatIfaces(data->l2tp_iface_name);
+	IPACMDBG_H("Add l2tp iface %s to nat ifaces.\n", data->l2tp_iface_name);
+
+	memset(&new_mapping, 0, sizeof(new_mapping));
+	strncpy(new_mapping.l2tp_iface_name, data->l2tp_iface_name,
+		sizeof(new_mapping.l2tp_iface_name));
+	strncpy(new_mapping.vlan_iface_name, data->vlan_iface_name,
+		sizeof(new_mapping.vlan_iface_name));
+	new_mapping.l2tp_session_id = data->l2tp_session_id;
+
+	for(it_vlan = m_vlan_iface.begin(); it_vlan != m_vlan_iface.end(); it_vlan++)
+	{
+		if(strncmp(it_vlan->vlan_iface_name, data->vlan_iface_name, sizeof(it_vlan->vlan_iface_name)) == 0)
+		{
+			IPACMDBG_H("Found vlan iface with id %d\n", it_vlan->vlan_id);
+			new_mapping.vlan_id = it_vlan->vlan_id;
+			memcpy(new_mapping.vlan_iface_ipv6_addr, it_vlan->vlan_iface_ipv6_addr,
+				sizeof(new_mapping.vlan_iface_ipv6_addr));
+			memcpy(new_mapping.vlan_client_mac, it_vlan->vlan_client_mac,
+				sizeof(new_mapping.vlan_client_mac));
+			memcpy(new_mapping.vlan_client_ipv6_addr, it_vlan->vlan_client_ipv6_addr,
+				sizeof(new_mapping.vlan_client_ipv6_addr));
+			break;
+		}
+	}
+	m_l2tp_vlan_mapping.push_front(new_mapping);
+	pthread_mutex_unlock(&vlan_l2tp_lock);
+
+	return;
+}
+
+void IPACM_Config::del_l2tp_vlan_mapping(ipa_ioc_l2tp_vlan_mapping_info *data)
+{
+	list<l2tp_vlan_mapping_info>::iterator it;
+
+	if(pthread_mutex_lock(&vlan_l2tp_lock) != 0)
+	{
+		IPACMERR("Unable to lock the mutex\n");
+		return;
+	}
+
+	IPACMDBG_H("L2tp iface: %s session id: %d vlan iface: %s \n",
+		data->l2tp_iface_name, data->l2tp_session_id, data->vlan_iface_name);
+	for(it = m_l2tp_vlan_mapping.begin(); it != m_l2tp_vlan_mapping.end(); it++)
+	{
+		if(strncmp(data->l2tp_iface_name, it->l2tp_iface_name,
+			sizeof(data->l2tp_iface_name)) == 0)
+		{
+			IPACMDBG_H("Found l2tp iface mapped to vlan %s.\n", it->vlan_iface_name);
+			if(strncmp(data->vlan_iface_name, it->vlan_iface_name,
+				sizeof(data->vlan_iface_name)) == 0)
+			{
+				m_l2tp_vlan_mapping.erase(it);
+				DelNatIfaces(data->l2tp_iface_name);
+				IPACMDBG_H("Del l2tp iface %s to nat ifaces.\n", data->l2tp_iface_name);
+			}
+			else
+			{
+				IPACMERR("Incoming mapping is incorrect.\n");
+			}
+			break;
+		}
+	}
+	pthread_mutex_unlock(&vlan_l2tp_lock);
+
+	return;
+}
+
+void IPACM_Config::handle_vlan_iface_info(ipacm_event_data_addr *data)
+{
+	list<vlan_iface_info>::iterator it_vlan;
+	list<l2tp_vlan_mapping_info>::iterator it_mapping;
+
+	if(pthread_mutex_lock(&vlan_l2tp_lock) != 0)
+	{
+		IPACMERR("Unable to lock the mutex\n");
+		return;
+	}
+
+	IPACMDBG_H("Incoming vlan iface: %s IPv6 address: 0x%08x%08x%08x%08x\n", data->iface_name,
+		data->ipv6_addr[0], data->ipv6_addr[1], data->ipv6_addr[2], data->ipv6_addr[3]);
+
+	for(it_vlan = m_vlan_iface.begin(); it_vlan != m_vlan_iface.end(); it_vlan++)
+	{
+		if(strncmp(it_vlan->vlan_iface_name, data->iface_name,
+			sizeof(it_vlan->vlan_iface_name)) == 0)
+		{
+			IPACMDBG_H("Found vlan iface: %s\n", it_vlan->vlan_iface_name);
+			memcpy(it_vlan->vlan_iface_ipv6_addr, data->ipv6_addr,
+				sizeof(it_vlan->vlan_iface_ipv6_addr));
+
+			for(it_mapping = m_l2tp_vlan_mapping.begin(); it_mapping != m_l2tp_vlan_mapping.end(); it_mapping++)
+			{
+				if(strncmp(it_mapping->vlan_iface_name, it_vlan->vlan_iface_name,
+					sizeof(it_mapping->vlan_iface_name)) == 0)
+				{
+					IPACMDBG_H("Found the l2tp-vlan mapping: l2tp %s\n", it_mapping->l2tp_iface_name);
+					memcpy(it_mapping->vlan_iface_ipv6_addr, data->ipv6_addr,
+						sizeof(it_mapping->vlan_iface_ipv6_addr));
+				}
+			}
+			break;
+		}
+	}
+
+	if(it_vlan == m_vlan_iface.end())
+	{
+		IPACMDBG_H("Failed to find the vlan iface: %s\n", data->iface_name);
+	}
+	pthread_mutex_unlock(&vlan_l2tp_lock);
+
+	return;
+}
+
+void IPACM_Config::handle_vlan_client_info(ipacm_event_data_all *data)
+{
+	list<l2tp_vlan_mapping_info>::iterator it_mapping;
+	list<vlan_iface_info>::iterator it_vlan;
+
+	if(pthread_mutex_lock(&vlan_l2tp_lock) != 0)
+	{
+		IPACMERR("Unable to lock the mutex\n");
+		return;
+	}
+
+	IPACMDBG_H("Incoming vlan client iface: %s IPv6 address: 0x%08x%08x%08x%08x\n", data->iface_name,
+		data->ipv6_addr[0], data->ipv6_addr[1], data->ipv6_addr[2], data->ipv6_addr[3]);
+	IPACMDBG_H("MAC address: 0x%02x%02x%02x%02x%02x%02x\n", data->mac_addr[0], data->mac_addr[1],
+		data->mac_addr[2], data->mac_addr[3], data->mac_addr[4], data->mac_addr[5]);
+
+	for(it_vlan = m_vlan_iface.begin(); it_vlan != m_vlan_iface.end(); it_vlan++)
+	{
+		if(strncmp(it_vlan->vlan_iface_name, data->iface_name, sizeof(it_vlan->vlan_iface_name)) == 0)
+		{
+			IPACMDBG_H("Found vlan iface in vlan list: %s\n", it_vlan->vlan_iface_name);
+			if(it_vlan->vlan_client_ipv6_addr[0] > 0 || it_vlan->vlan_client_ipv6_addr[1] > 0 ||
+				it_vlan->vlan_client_ipv6_addr[2] > 0 || it_vlan->vlan_client_ipv6_addr[3] > 0)
+			{
+				IPACMDBG_H("Vlan client info has been populated before, return.\n");
+				pthread_mutex_unlock(&vlan_l2tp_lock);
+				return;
+			}
+			memcpy(it_vlan->vlan_client_mac, data->mac_addr, sizeof(it_vlan->vlan_client_mac));
+			memcpy(it_vlan->vlan_client_ipv6_addr, data->ipv6_addr, sizeof(it_vlan->vlan_client_ipv6_addr));
+			break;
+		}
+	}
+
+	for(it_mapping = m_l2tp_vlan_mapping.begin(); it_mapping != m_l2tp_vlan_mapping.end(); it_mapping++)
+	{
+		if(strncmp(it_mapping->vlan_iface_name, data->iface_name, sizeof(it_mapping->vlan_iface_name)) == 0)
+		{
+			IPACMDBG_H("Found vlan iface in l2tp mapping list: %s, l2tp iface: %s\n", it_mapping->vlan_iface_name,
+				it_mapping->l2tp_iface_name);
+			memcpy(it_mapping->vlan_client_mac, data->mac_addr, sizeof(it_mapping->vlan_client_mac));
+			memcpy(it_mapping->vlan_client_ipv6_addr, data->ipv6_addr, sizeof(it_mapping->vlan_client_ipv6_addr));
+		}
+	}
+	pthread_mutex_unlock(&vlan_l2tp_lock);
+
+	return;
+}
+
+int IPACM_Config::get_vlan_l2tp_mapping(char *client_iface, l2tp_vlan_mapping_info& info)
+{
+	list<l2tp_vlan_mapping_info>::iterator it_mapping;
+
+	if(pthread_mutex_lock(&vlan_l2tp_lock) != 0)
+	{
+		IPACMERR("Unable to lock the mutex\n");
+		return IPACM_FAILURE;
+	}
+
+	IPACMDBG_H("Incoming client iface name: %s\n", client_iface);
+
+	for(it_mapping = m_l2tp_vlan_mapping.begin(); it_mapping != m_l2tp_vlan_mapping.end(); it_mapping++)
+	{
+		if(strncmp(client_iface, it_mapping->l2tp_iface_name,
+			strlen(client_iface)) == 0)
+		{
+			IPACMDBG_H("Found vlan-l2tp mapping.\n");
+			info = *it_mapping;
+			pthread_mutex_unlock(&vlan_l2tp_lock);
+			return IPACM_SUCCESS;
+		}
+	}
+
+	pthread_mutex_unlock(&vlan_l2tp_lock);
+	return IPACM_FAILURE;
+}
+#endif

@@ -103,6 +103,15 @@ typedef struct _ipa_eth_client
 	uint32_t wan_ul_fl_rule_hdl_v6[MAX_WAN_UL_FILTER_RULES];
 	int8_t lan_stats_idx;
 #endif
+#ifdef FEATURE_L2TP_E2E
+	uint32_t dl_first_pass_hdr_hdl;
+	uint32_t dl_first_pass_hdr_proc_ctx_hdl;
+	uint32_t dl_first_pass_rt_rule_hdl;
+	uint32_t dl_second_pass_hdr_hdl;
+	uint32_t dl_second_pass_rt_rule_hdl;
+	uint32_t ul_first_pass_rt_rule_hdl;
+	uint32_t ul_first_pass_flt_rule_hdl;
+#endif
 	eth_client_rt_hdl eth_rt_hdl[0]; /* depends on number of tx properties */
 }ipa_eth_client;
 
@@ -347,6 +356,10 @@ protected:
 
 	int install_ipv6_icmp_flt_rule();
 
+#ifdef FEATURE_L2TP_E2E
+	int install_l2tp_inner_private_subnet_flt_rule();
+#endif
+
 	void post_del_self_evt();
 
 	/* handle tethering stats */
@@ -582,6 +595,9 @@ protected:
 
 	uint32_t ipv6_prefix_flt_rule_hdl[NUM_IPV6_PREFIX_FLT_RULE];
 	uint32_t ipv6_icmp_flt_rule_hdl[NUM_IPV6_ICMP_FLT_RULE];
+#ifdef FEATURE_L2TP_E2E
+	uint32_t l2tp_inner_private_subnet_flt_rule_hdl[IPA_MAX_PRIVATE_SUBNET_ENTRIES];
+#endif
 
 	bool is_active;
 	bool modem_ul_v4_set;
@@ -628,6 +644,12 @@ private:
 
 	bool ipv6_header_set;
 
+	bool is_l2tp_iface;
+#ifdef FEATURE_L2TP_E2E
+	uint32_t l2tp_ul_dummy_hdr_hdl; /* 4-byte dummy header */
+
+	uint32_t l2tp_ul_hdr_proc_ctx_hdl;
+#endif
 	inline ipa_eth_client* get_client_memptr(ipa_eth_client *param, int cnt)
 	{
 	    char *ret = ((char *)param) + (eth_client_len * cnt);
@@ -759,8 +781,22 @@ private:
 
 	/*handle reset usb-client rt-rules */
 	int handle_lan_client_reset_rt(ipa_ip_type iptype);
+
 #ifdef FEATURE_IPACM_UL_FIREWALL
 	void change_to_network_order(ipa_ip_type iptype, ipa_rule_attrib* attrib);
+#endif
+#ifdef FEATURE_L2TP_E2E
+	/* install l2tp dl rules */
+	int install_l2tp_dl_rules(ipacm_event_data_all *data, int index);
+
+	/* install l2tp ul rules */
+	int install_l2tp_ul_rules(ipacm_event_data_all *data, int index);
+
+	/* uninstall l2tp rules */
+	int uninstall_l2tp_rules(ipacm_event_data_all *data);
+
+	/* install UL hdr proc ctx for L2TP E2E use case */
+	int install_l2tp_ul_hdr_proc_ctx();
 #endif
 };
 

@@ -112,6 +112,7 @@ int ipa_ipv6ct_add_tbl(uint16_t number_of_entries, uint32_t* table_handle)
 	if (ipv6ct.ipa_desc->ver < IPA_HW_v4_0)
 	{
 		IPAERR("IPv6 connection tracking isn't supported for IPA version %d\n", ipv6ct.ipa_desc->ver);
+		ret = -EPERM;
 		goto bail_ipa_desc;
 	}
 

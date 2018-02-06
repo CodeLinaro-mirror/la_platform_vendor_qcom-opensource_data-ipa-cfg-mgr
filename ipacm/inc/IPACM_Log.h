@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2013, The Linux Foundation. All rights reserved.
+Copyright (c) 2013, 2018, The Linux Foundation. All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are
@@ -48,6 +48,8 @@ extern "C"
 
 #include <stdio.h>
 #include <string.h>
+#include <stdlib.h>
+#include <math.h>
 #include <syslog.h>
 
 #define MAX_BUF_LEN 256
@@ -61,6 +63,60 @@ extern "C"
 typedef struct ipacm_log_buffer_s {
 	char	user_data[MAX_BUF_LEN];
 } ipacm_log_buffer_t;
+
+#ifndef FEATURE_IPA_ANDROID
+
+#define KERNEL_VERSION_LENGTH 16
+#define MAX_COMMAND_STR_LEN 200
+#define KERNEL_VER 5
+
+inline int get_kernel_version(float *kernel_ver_f)
+{
+	FILE *fp = NULL;
+	char command[MAX_COMMAND_STR_LEN];
+	char kernel_ver[KERNEL_VERSION_LENGTH];
+	char version[KERNEL_VER];
+	float curr_kernel_ver = 0.0;
+	int index = 0;
+	char c;
+
+	memset(kernel_ver, 0, KERNEL_VERSION_LENGTH);
+
+	snprintf(command, MAX_COMMAND_STR_LEN,
+            "uname -r | awk '{print $1}' | cut -d '-' -f 1 > /data/kernel_ver.txt");
+	system(command);
+	fp = fopen("/data/kernel_ver.txt", "r");
+
+	if ( fp == NULL )
+	{
+		printf("Error opening Kernel version file\n");
+		return -1;
+	}
+
+	while ((c = fgetc(fp)) != EOF)
+	{
+		kernel_ver[index++] = c;
+		if (index == KERNEL_VERSION_LENGTH)
+		{
+			kernel_ver[index - 1] = '\0';
+			break;
+		}
+	}
+
+	memcpy(version, kernel_ver, sizeof(KERNEL_VER));
+
+	fclose(fp);
+
+	curr_kernel_ver = (float)strtof(version, NULL);
+
+	printf ("\ncurr_kernel_ver = %f\n", curr_kernel_ver);
+
+	*kernel_ver_f = curr_kernel_ver;
+
+	return 0;
+}
+
+#endif
 
 void ipacm_log_send( void * user_data);
 

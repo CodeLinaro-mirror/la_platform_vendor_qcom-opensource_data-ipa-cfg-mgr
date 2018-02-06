@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2013-2017, The Linux Foundation. All rights reserved.
+Copyright (c) 2013-2018, The Linux Foundation. All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are
@@ -47,6 +47,13 @@ extern "C"
 #define IPACM_TCP_FULL_FILE_NAME  "/proc/sys/net/ipv4/netfilter/ip_conntrack_tcp_timeout_established"
 #define IPACM_UDP_FULL_FILE_NAME   "/proc/sys/net/ipv4/netfilter/ip_conntrack_udp_timeout_stream"
 
+#ifndef FEATURE_IPA_ANDROID
+
+#define IPACM_TCP_FULL_FILE_NAME_NEW  "/proc/sys/net/netfilter/nf_conntrack_tcp_timeout_established"
+#define IPACM_UDP_FULL_FILE_NAME_NEW  "/proc/sys/net/netfilter/nf_conntrack_udp_timeout_stream2"
+
+#endif
+
 typedef struct _nat_table_entry
 {
 	uint32_t private_ip;
@@ -88,6 +95,11 @@ private:
 
 	uint32_t tcp_timeout;
 	uint32_t udp_timeout;
+
+#ifndef FEATURE_IPA_ANDROID
+	static float kernel_ver;
+	static bool kernel_ver_updated;
+#endif
 
 	uint32_t PwrSaveIfs[IPA_MAX_NUM_WIFI_CLIENTS];
 

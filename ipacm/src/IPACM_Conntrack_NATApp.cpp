@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2013-2017, The Linux Foundation. All rights reserved.
+Copyright (c) 2013-2018, The Linux Foundation. All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are
@@ -37,6 +37,12 @@ IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 /* NatApp class Implementation */
 NatApp *NatApp::pInstance = NULL;
+
+#ifndef FEATURE_IPA_ANDROID
+	float NatApp::kernel_ver = 0.0;
+	bool NatApp::kernel_ver_updated = false;
+#endif
+
 NatApp::NatApp()
 {
 	max_entries = 0;
@@ -952,13 +958,36 @@ void NatApp::CacheEntry(const nat_table_entry *rule)
 }
 
 void NatApp::Read_TcpUdp_Timeout(void) {
+#ifdef FEATURE_IPA_ANDROID
+	tcp_timeout = 432000;
+	udp_timeout = 180;
+	IPACMDBG_H("udp timeout value: %d\n", udp_timeout);
+	IPACMDBG_H("tcp timeout value: %d\n", tcp_timeout);
+#else
 	FILE *udp_fd = NULL, *tcp_fd = NULL;
 
-	/* Read UDP timeout value */
-	udp_fd = fopen(IPACM_UDP_FULL_FILE_NAME, "r");
-	if (udp_fd == NULL) {
-		IPACMERR("unable to open %s\n", IPACM_UDP_FULL_FILE_NAME);
-		goto fail;
+	float comp_kernel_ver = 4.9;
+
+	if (kernel_ver_updated == false)
+	{
+		get_kernel_version(&kernel_ver);
+		kernel_ver_updated = true;
+	}
+
+	if (kernel_ver >= comp_kernel_ver) {
+		/* Read UDP timeout value */
+		udp_fd = fopen(IPACM_UDP_FULL_FILE_NAME_NEW, "r");
+		if (udp_fd == NULL) {
+			IPACMERR("unable to open %s\n", IPACM_UDP_FULL_FILE_NAME_NEW);
+			goto fail;
+		}
+	} else {
+		/* Read UDP timeout value */
+		udp_fd = fopen(IPACM_UDP_FULL_FILE_NAME, "r");
+		if (udp_fd == NULL) {
+			IPACMERR("unable to open %s\n", IPACM_UDP_FULL_FILE_NAME);
+			goto fail;
+		}
 	}
 
 	if (fscanf(udp_fd, "%d", &udp_timeout) != 1) {
@@ -966,14 +995,21 @@ void NatApp::Read_TcpUdp_Timeout(void) {
 	}
 	IPACMDBG_H("udp timeout value: %d\n", udp_timeout);
 
-
-	/* Read TCP timeout value */
-	tcp_fd = fopen(IPACM_TCP_FULL_FILE_NAME, "r");
-	if (tcp_fd == NULL) {
-		IPACMERR("unable to open %s\n", IPACM_TCP_FULL_FILE_NAME);
-		goto fail;
+	if (kernel_ver >= comp_kernel_ver) {
+		/* Read TCP timeout value */
+		tcp_fd = fopen(IPACM_TCP_FULL_FILE_NAME_NEW, "r");
+		if (tcp_fd == NULL) {
+			IPACMERR("unable to open %s\n", IPACM_TCP_FULL_FILE_NAME_NEW);
+			goto fail;
+		}
+	} else {
+		/* Read TCP timeout value */
+		tcp_fd = fopen(IPACM_TCP_FULL_FILE_NAME, "r");
+		if (tcp_fd == NULL) {
+			IPACMERR("unable to open %s\n", IPACM_TCP_FULL_FILE_NAME);
+			goto fail;
+		}
 	}
-
 
 	if (fscanf(tcp_fd, "%d", &tcp_timeout) != 1) {
 		IPACMERR("Error reading tcp timeout\n");
@@ -987,6 +1023,6 @@ fail:
 	if (tcp_fd) {
 		fclose(tcp_fd);
 	}
-
+#endif //FEATURE_IPA_ANDROID
 	return;
 }

@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2013-2016, The Linux Foundation. All rights reserved.
+Copyright (c) 2013-2018, The Linux Foundation. All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are
@@ -1082,6 +1082,12 @@ int IPACM_Lan::handle_wan_down(bool is_sta_mode)
 		return IPACM_FAILURE;
 	}
 
+	if (rx_prop == NULL)
+	{
+		IPACMERR("Rx prop is NULL, return\n");
+		return IPACM_SUCCESS;
+	}
+
 	if(is_sta_mode == false)
 	{
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
@@ -1638,14 +1644,10 @@ int IPACM_Lan::handle_wan_up_ex(ipacm_ext_prop *ext_prop, ipa_ip_type iptype, ui
 	/* Install filter rules for the client. */
 	if (IPACM_Iface::ipacmcfg->ipacm_lan_stats_enable == true)
 	{
-		if (IPACM_Iface::ipacmcfg->ipacm_lan_stats_enable_wan_set == false)
+		if (enable_per_client_stats(&IPACM_Iface::ipacmcfg->ipacm_lan_stats_enable))
 		{
-			if (enable_per_client_stats(&IPACM_Iface::ipacmcfg->ipacm_lan_stats_enable))
-			{
-				IPACMERR("Failed to enable per client stats %d\n", IPACM_Iface::ipacmcfg->ipacm_lan_stats_enable);
-				return IPACM_FAILURE;
-			}
-			IPACM_Iface::ipacmcfg->ipacm_lan_stats_enable_wan_set = true;
+			IPACMERR("Failed to enable per client stats %d\n", IPACM_Iface::ipacmcfg->ipacm_lan_stats_enable);
+			return IPACM_FAILURE;
 		}
 	}
 #endif
@@ -5011,6 +5013,11 @@ int IPACM_Lan::handle_wan_down_v6(bool is_sta_mode)
 		return IPACM_FAILURE;
 	}
 
+	if (rx_prop == NULL)
+	{
+		IPACMERR("Rx prop is NULL, return\n");
+		return IPACM_SUCCESS;
+	}
 	delete_ipv6_prefix_flt_rule();
 
 	memset(ipv6_prefix, 0, sizeof(ipv6_prefix));

@@ -100,6 +100,8 @@ int	IPACM_Wan::ipa_if_num_tether_v4[IPA_MAX_IFACE_ENTRIES];
 int	IPACM_Wan::ipa_if_num_tether_v6[IPA_MAX_IFACE_ENTRIES];
 #endif
 
+#define MOBILE_FIREWALL_FILE "/etc/data/mobileap_firewall.xml"
+
 IPACM_Wan::IPACM_Wan(int iface_index,
 	ipacm_wan_iface_type is_sta_mode,
 	uint8_t *mac_addr) : IPACM_Iface(iface_index)
@@ -1997,8 +1999,7 @@ int IPACM_Wan::config_dft_firewall_rules(ipa_ip_type iptype)
 
 	/* default firewall is disable and the rule action is drop */
 	memset(&firewall_config, 0, sizeof(firewall_config));
-	strlcpy(firewall_config.firewall_config_file, "/etc/data/mobileap_firewall.xml", sizeof(firewall_config.firewall_config_file));
-
+	strlcpy(firewall_config.firewall_config_file, MOBILE_FIREWALL_FILE, sizeof(firewall_config.firewall_config_file));
 	if (firewall_config.firewall_config_file)
 	{
 		IPACMDBG_H("Firewall XML file is %s \n", firewall_config.firewall_config_file);
@@ -2767,8 +2768,8 @@ int IPACM_Wan::config_dft_firewall_rules_ex(struct ipa_flt_rule_add *rules, int 
 
 	/* default firewall is disable and the rule action is drop */
 	memset(&firewall_config, 0, sizeof(firewall_config));
-	strlcpy(firewall_config.firewall_config_file, "/etc/data/mobileap_firewall.xml", sizeof(firewall_config.firewall_config_file));
 
+	strlcpy(firewall_config.firewall_config_file, MOBILE_FIREWALL_FILE, sizeof(firewall_config.firewall_config_file));
 	if (firewall_config.firewall_config_file)
 	{
 		IPACMDBG_H("Firewall XML file is %s \n", firewall_config.firewall_config_file);
@@ -3287,8 +3288,7 @@ int IPACM_Wan::read_firewall_filter_rules_ul(void)
 	int i = 0;
 	/* default firewall is disable and the rule action is drop */
 	memset(&firewall_config_ul, 0, sizeof(firewall_config_ul));
-	strlcpy(firewall_config_ul.firewall_config_file, "/etc/data/mobileap_firewall.xml", sizeof(firewall_config_ul.firewall_config_file));
-
+	strlcpy(firewall_config_ul.firewall_config_file, MOBILE_FIREWALL_FILE, sizeof(firewall_config_ul.firewall_config_file));
 	if (firewall_config_ul.firewall_config_file)
 	{
 		IPACMDBG_H("Firewall XML file is %s \n", firewall_config_ul.firewall_config_file);

@@ -57,7 +57,8 @@ extern "C"
 #ifdef FEATURE_IPA_ANDROID
 #define IPACMLOG_FILE "/dev/socket/ipacm_log_file"
 #else/* defined(FEATURE_IPA_ANDROID) */
-#define IPACMLOG_FILE "/data/misc/ipa/ipacm_log_file"
+#define IPACMLOG_FILE "/var/run/ipacm_log_file"
+#define KERNEL_VER_FILE "/tmp/kernel_ver.txt"
 #endif /* defined(NOT FEATURE_IPA_ANDROID)*/
 
 typedef struct ipacm_log_buffer_s {

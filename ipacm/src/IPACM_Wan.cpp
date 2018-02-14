@@ -1997,7 +1997,7 @@ int IPACM_Wan::config_dft_firewall_rules(ipa_ip_type iptype)
 
 	/* default firewall is disable and the rule action is drop */
 	memset(&firewall_config, 0, sizeof(firewall_config));
-	strlcpy(firewall_config.firewall_config_file, "/data/mobileap_firewall.xml", sizeof(firewall_config.firewall_config_file));
+	strlcpy(firewall_config.firewall_config_file, "/etc/data/mobileap_firewall.xml", sizeof(firewall_config.firewall_config_file));
 
 	if (firewall_config.firewall_config_file)
 	{
@@ -2767,7 +2767,7 @@ int IPACM_Wan::config_dft_firewall_rules_ex(struct ipa_flt_rule_add *rules, int 
 
 	/* default firewall is disable and the rule action is drop */
 	memset(&firewall_config, 0, sizeof(firewall_config));
-	strlcpy(firewall_config.firewall_config_file, "/data/mobileap_firewall.xml", sizeof(firewall_config.firewall_config_file));
+	strlcpy(firewall_config.firewall_config_file, "/etc/data/mobileap_firewall.xml", sizeof(firewall_config.firewall_config_file));
 
 	if (firewall_config.firewall_config_file)
 	{
@@ -3287,7 +3287,7 @@ int IPACM_Wan::read_firewall_filter_rules_ul(void)
 	int i = 0;
 	/* default firewall is disable and the rule action is drop */
 	memset(&firewall_config_ul, 0, sizeof(firewall_config_ul));
-	strlcpy(firewall_config_ul.firewall_config_file, "/data/mobileap_firewall.xml", sizeof(firewall_config_ul.firewall_config_file));
+	strlcpy(firewall_config_ul.firewall_config_file, "/etc/data/mobileap_firewall.xml", sizeof(firewall_config_ul.firewall_config_file));
 
 	if (firewall_config_ul.firewall_config_file)
 	{

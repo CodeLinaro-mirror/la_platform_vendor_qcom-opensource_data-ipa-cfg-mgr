@@ -83,9 +83,9 @@ inline int get_kernel_version(float *kernel_ver_f)
 	memset(kernel_ver, 0, KERNEL_VERSION_LENGTH);
 
 	snprintf(command, MAX_COMMAND_STR_LEN,
-            "uname -r | awk '{print $1}' | cut -d '-' -f 1 > /data/kernel_ver.txt");
+            "uname -r | awk '{print $1}' | cut -d '-' -f 1 > /tmp/kernel_ver.txt");
 	system(command);
-	fp = fopen("/data/kernel_ver.txt", "r");
+	fp = fopen("/tmp/kernel_ver.txt", "r");
 
 	if ( fp == NULL )
 	{

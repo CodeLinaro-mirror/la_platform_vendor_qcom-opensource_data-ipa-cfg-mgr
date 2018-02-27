@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2013-2017, The Linux Foundation. All rights reserved.
+Copyright (c) 2013-2018, The Linux Foundation. All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are
@@ -538,7 +538,7 @@ void IPACM_Wlan::event_callback(ipa_cm_event_id event, void *param)
 		if(ipa_interface_index == ipa_if_num)
 		{
 			IPACMDBG_H("Received IPA_DOWNSTREAM_ADD event.\n");
-			if(is_downstream_set[data->prefix.iptype] == false)
+			if(is_downstream_set[data->prefix.iptype] == false && data->prefix.iptype < IPA_IP_MAX)
 			{
 				IPACMDBG_H("Add downstream for IP iptype %d.\n", data->prefix.iptype);
 				is_downstream_set[data->prefix.iptype] = true;

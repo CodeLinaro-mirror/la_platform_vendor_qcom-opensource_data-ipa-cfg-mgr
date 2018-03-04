@@ -1,31 +1,31 @@
-/* 
-Copyright (c) 2013, The Linux Foundation. All rights reserved.
-
-Redistribution and use in source and binary forms, with or without
-modification, are permitted provided that the following conditions are
-met:
-    * Redistributions of source code must retain the above copyright
-      notice, this list of conditions and the following disclaimer.
-    * Redistributions in binary form must reproduce the above
-      copyright notice, this list of conditions and the following
-      disclaimer in the documentation and/or other materials provided
-      with the distribution.
-    * Neither the name of The Linux Foundation nor the names of its
-      contributors may be used to endorse or promote products derived
-      from this software without specific prior written permission.
-
-THIS SOFTWARE IS PROVIDED "AS IS" AND ANY EXPRESS OR IMPLIED
-WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
-MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NON-INFRINGEMENT
-ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS
-BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
-SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR
-BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
-WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
-OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
-IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-*/
+/*
+ * Copyright (c) 2013, 2018 The Linux Foundation. All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions are
+ * met:
+ *    * Redistributions of source code must retain the above copyright
+ *      notice, this list of conditions and the following disclaimer.
+ *    * Redistributions in binary form must reproduce the above
+ *      copyright notice, this list of conditions and the following
+ *      disclaimer in the documentation and/or other materials provided
+ *      with the distribution.
+ *    * Neither the name of The Linux Foundation nor the names of its
+ *      contributors may be used to endorse or promote products derived
+ *      from this software without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED "AS IS" AND ANY EXPRESS OR IMPLIED
+ * WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
+ * MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NON-INFRINGEMENT
+ * ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS
+ * BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR
+ * BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
+ * WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
+ * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
+ * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ */
 /*!
   @file
   IPACM_Xml.h
@@ -54,7 +54,7 @@ IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 extern "C" {
 #endif
 
-  
+
 #define IPACM_ASSERT(a)                                     \
 if (!(a)) {                                                 \
 	fprintf(stderr, "%s, %d: assertion (a) failed!",    \
@@ -62,7 +62,7 @@ if (!(a)) {                                                 \
 	__LINE__);                                          \
 	abort();                                            \
 }
-  
+
 /* Max allowed size of the XML file (2 MB) */
 #define IPACM_XML_MAX_FILESIZE               (2 << 20)
 #define IPACM_MAX_FIREWALL_ENTRIES            50
@@ -73,7 +73,7 @@ if (!(a)) {                                                 \
 #define IPACM_XML_CLIP_SPACE_QUOTES  " '\""
 
 #define MAX_XML_STR_LEN                 120
-  
+
 /* IPA Config Entries */
 #define system_TAG                           "system"
 #define ODU_TAG                              "ODUCFG"
@@ -184,6 +184,10 @@ if (!(a)) {                                                 \
 #define IPACMNat_TAG                         "IPACMNAT"
 #define NAT_MaxEntries_TAG                   "MaxNatEntries"
 
+#define IPACM_IPV6CT_TAG                     "IPACMIPV6CT"
+#define IPV6CT_ENABLED_TAG                   "IPv6CTEnabled"
+#define IPV6CT_MAX_ENTRIES_TAG               "MaxIpv6CTEntries"
+
 #define IP_PassthroughFlag_TAG               "IPPassthroughFlag"
 #define IP_PassthroughMode_TAG               "IPPassthroughMode"
 #define IP_PassthroughMacAddr_TAG            "IPPassthroughMacAddr"
@@ -264,7 +268,7 @@ typedef struct
 	bool rule_action_accept;
 	bool firewall_enable;
 } IPACM_firewall_conf_t;
-  
+
 
 
 typedef struct
@@ -291,13 +295,15 @@ typedef struct
 	ipacm_alg alg_entries[IPA_MAX_ALG_ENTRIES];
 } ipacm_alg_conf_t;
 
- 
+
 typedef struct  _IPACM_conf_t
 {
 	ipacm_iface_conf_t iface_config;
 	ipacm_private_subnet_conf_t private_subnet_config;
 	ipacm_alg_conf_t alg_config;
 	int nat_max_entries;
+	int ipv6ct_max_entries;
+	bool ipv6ct_enable;
 	bool odu_enable;
 	bool router_mode_enable;
 	bool odu_embms_enable;
@@ -307,7 +313,7 @@ typedef struct  _IPACM_conf_t
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
 	bool lan_stats_enable;
 #endif
-} IPACM_conf_t;  
+} IPACM_conf_t;
 
 /* This function read IPACM XML configuration*/
 int ipacm_read_cfg_xml

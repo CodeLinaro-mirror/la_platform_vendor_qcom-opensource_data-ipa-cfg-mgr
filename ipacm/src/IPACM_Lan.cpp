@@ -1,33 +1,31 @@
 /*
-Copyright (c) 2013-2018, The Linux Foundation. All rights reserved.
-
-Redistribution and use in source and binary forms, with or without
-modification, are permitted provided that the following conditions are
-met:
-* Redistributions of source code must retain the above copyright
-notice, this list of conditions and the following disclaimer.
-
-* Redistributions in binary form must reproduce the above
-copyright notice, this list of conditions and the following
-disclaimer in the documentation and/or other materials provided
-with the distribution.
-
-* Neither the name of The Linux Foundation nor the names of its
-contributors may be used to endorse or promote products derived
-from this software without specific prior written permission.
-
-THIS SOFTWARE IS PROVIDED "AS IS" AND ANY EXPRESS OR IMPLIED
-WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
-MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NON-INFRINGEMENT
-ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS
-BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
-SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR
-BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
-WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
-OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
-IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-*/
+ * Copyright (c) 2013-2018 The Linux Foundation. All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions are
+ * met:
+ *    * Redistributions of source code must retain the above copyright
+ *      notice, this list of conditions and the following disclaimer.
+ *    * Redistributions in binary form must reproduce the above
+ *      copyright notice, this list of conditions and the following
+ *      disclaimer in the documentation and/or other materials provided
+ *      with the distribution.
+ *    * Neither the name of The Linux Foundation nor the names of its
+ *      contributors may be used to endorse or promote products derived
+ *      from this software without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED "AS IS" AND ANY EXPRESS OR IMPLIED
+ * WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
+ * MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NON-INFRINGEMENT
+ * ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS
+ * BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR
+ * BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
+ * WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
+ * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
+ * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ */
 /*!
 	@file
 	IPACM_Lan.cpp
@@ -1742,7 +1740,7 @@ int IPACM_Lan::handle_wan_up(ipa_ip_type ip_type)
 		IPACMDBG_H("Routing hanle for table: %d\n", IPACM_Iface::ipacmcfg->rt_tbl_wan_v4.hdl);
 
 
-		memset(&flt_rule_entry, 0, sizeof(struct ipa_flt_rule_add)); // Zero All Fields
+		memset(&flt_rule_entry, 0, sizeof(struct ipa_flt_rule_add));
 		flt_rule_entry.at_rear = true;
 		flt_rule_entry.flt_rule_hdl = -1;
 		flt_rule_entry.status = -1;
@@ -1752,7 +1750,7 @@ int IPACM_Lan::handle_wan_up(ipa_ip_type ip_type)
 		}
 		else
 		{
-			flt_rule_entry.rule.action = IPA_PASS_TO_SRC_NAT; //IPA_PASS_TO_ROUTING
+			flt_rule_entry.rule.action = IPA_PASS_TO_SRC_NAT;
 		}
 #ifdef FEATURE_IPA_V3
 		flt_rule_entry.rule.hashable = true;
@@ -1818,7 +1816,15 @@ int IPACM_Lan::handle_wan_up(ipa_ip_type ip_type)
 		flt_rule_entry.at_rear = true;
 		flt_rule_entry.flt_rule_hdl = -1;
 		flt_rule_entry.status = -1;
-		flt_rule_entry.rule.action = IPA_PASS_TO_ROUTING;
+		if (IPACM_Iface::ipacmcfg->IsIpv6CTEnabled() && !IPACM_Wan::isWan_Bridge_Mode())
+		{
+			flt_rule_entry.rule.action = IPA_PASS_TO_SRC_NAT;
+		}
+		else
+		{
+			flt_rule_entry.rule.action = IPA_PASS_TO_ROUTING;
+		}
+
 #ifdef FEATURE_IPA_V3
 		flt_rule_entry.rule.hashable = true;
 #endif
@@ -3010,7 +3016,7 @@ int IPACM_Lan::handle_eth_client_route_rule_ext(uint8_t *mac_addr, ipa_ip_type i
 				rt_rule_entry->rule_id, iptype);
 
 				get_client_memptr(eth_client, eth_index)->route_rule_set_v4 = true;
-				/* Add NAT rules after ipv4 RT rules are set */ 		
+				/* Add NAT rules after ipv4 RT rules are set */
 				memset(&data, 0, sizeof(data));
 				data.if_index = IPACM_Iface::ipacmcfg->iface_table[ipa_if_num].netlink_interface_index;
 				data.iptype = IPA_IP_v4;
@@ -3450,7 +3456,7 @@ int IPACM_Lan::handle_eth_client_down_evt(uint8_t *mac_addr)
 	{
 			IPACMDBG_H("Clean Nat Rules for ipv4:0x%x\n", get_client_memptr(eth_client, clt_indx)->v4_addr);
 			CtList->HandleNeighIpAddrDelEvt(get_client_memptr(eth_client, clt_indx)->v4_addr);
- 	}
+	}
 
 	if (delete_eth_rtrules(clt_indx, IPA_IP_v4))
 	{
@@ -4206,7 +4212,10 @@ int IPACM_Lan::handle_uplink_filter_rule(ipacm_ext_prop *prop, ipa_ip_type iptyp
 		}
 	}
 	else if(iptype == IPA_IP_v6)
-		flt_rule_entry.rule.action = IPA_PASS_TO_ROUTING;
+	{
+		flt_rule_entry.rule.action = IPACM_Iface::ipacmcfg->IsIpv6CTEnabled()?
+			IPA_PASS_TO_SRC_NAT : IPA_PASS_TO_ROUTING;
+	}
 	else
 	{
 		IPACMERR("IP type is not expected.\n");
@@ -4932,10 +4941,10 @@ int IPACM_Lan::config_dft_firewall_rules_ul(struct ipa_flt_rule_add *rules, ipa_
 				flt_rule_entry.flt_rule_hdl = -1;
 				flt_rule_entry.status = -1;
 
-			    /* matched rules for v6 go PASS_TO_ROUTE */
 				if(IPACM_Wan::firewall_config_ul.rule_action_accept == true)
 				{
-					flt_rule_entry.rule.action = IPA_PASS_TO_ROUTING;
+					flt_rule_entry.rule.action =
+						IPACM_Iface::ipacmcfg->IsIpv6CTEnabled() ? IPA_PASS_TO_SRC_NAT : IPA_PASS_TO_ROUTING;
 				}
 				else
 				{
@@ -5124,7 +5133,10 @@ int IPACM_Lan::install_uplink_filter_rule_per_client
 		}
 	}
 	else if(iptype == IPA_IP_v6)
-		flt_rule_entry.rule.action = IPA_PASS_TO_ROUTING;
+	{
+		flt_rule_entry.rule.action = IPACM_Iface::ipacmcfg->IsIpv6CTEnabled()?
+				IPA_PASS_TO_SRC_NAT : IPA_PASS_TO_ROUTING;
+	}
 	else
 	{
 		IPACMERR("IP type is not expected.\n");

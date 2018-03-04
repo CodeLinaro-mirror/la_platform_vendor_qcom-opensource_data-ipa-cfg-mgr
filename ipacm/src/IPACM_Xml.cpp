@@ -1,31 +1,31 @@
 /*
-Copyright (c) 2013, The Linux Foundation. All rights reserved.
-
-Redistribution and use in source and binary forms, with or without
-modification, are permitted provided that the following conditions are
-met:
- * Redistributions of source code must retain the above copyright
-   notice, this list of conditions and the following disclaimer.
- * Redistributions in binary form must reproduce the above
-   copyright notice, this list of conditions and the following
-   disclaimer in the documentation and/or other materials provided
-   with the distribution.
- * Neither the name of The Linux Foundation nor the names of its
-   contributors may be used to endorse or promote products derived
-   from this software without specific prior written permission.
-
-THIS SOFTWARE IS PROVIDED "AS IS" AND ANY EXPRESS OR IMPLIED
-WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
-MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NON-INFRINGEMENT
-ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS
-BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
-SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR
-BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
-WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
-OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
-IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-*/
+ * Copyright (c) 2013, 2018 The Linux Foundation. All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions are
+ * met:
+ *    * Redistributions of source code must retain the above copyright
+ *      notice, this list of conditions and the following disclaimer.
+ *    * Redistributions in binary form must reproduce the above
+ *      copyright notice, this list of conditions and the following
+ *      disclaimer in the documentation and/or other materials provided
+ *      with the distribution.
+ *    * Neither the name of The Linux Foundation nor the names of its
+ *      contributors may be used to endorse or promote products derived
+ *      from this software without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED "AS IS" AND ANY EXPRESS OR IMPLIED
+ * WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
+ * MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NON-INFRINGEMENT
+ * ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS
+ * BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR
+ * BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
+ * WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
+ * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
+ * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ */
 /*!
   @file
    IPACM_Xml.cpp
@@ -176,6 +176,7 @@ static int ipacm_cfg_xml_parse_tree
 						IPACM_util_icmp_string((char*)xml_node->name, IPACMALG_TAG) == 0 ||
 						IPACM_util_icmp_string((char*)xml_node->name, ALG_TAG) == 0 ||
 						IPACM_util_icmp_string((char*)xml_node->name, IPACMNat_TAG) == 0 ||
+						IPACM_util_icmp_string((char*)xml_node->name, IPACM_IPV6CT_TAG) == 0 ||
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
 						IPACM_util_icmp_string((char*)xml_node->name, LAN_Stats_TAG) == 0 ||
 #endif
@@ -481,6 +482,52 @@ static int ipacm_cfg_xml_parse_tree
 						memcpy(content_buf, (void *)content, str_size);
 						config->nat_max_entries = atoi(content_buf);
 						IPACMDBG_H("Nat Table Max Entries %d\n", config->nat_max_entries);
+					}
+				}
+				else if (IPACM_util_icmp_string((char*)xml_node->name, IPV6CT_ENABLED_TAG) == 0)
+				{
+					content = IPACM_read_content_element(xml_node);
+					if (content == NULL)
+					{
+						IPACMERR("Failed to read the content of the tag %s\n", IPV6CT_ENABLED_TAG);
+					}
+					else
+					{
+						str_size = strlen(content);
+						if (str_size >= sizeof(content_buf))
+						{
+							IPACMERR("The content of the tag %s is too long\n", IPV6CT_ENABLED_TAG);
+						}
+						else
+						{
+							memset(content_buf, 0, sizeof(content_buf));
+							memcpy(content_buf, (void *)content, str_size);
+							config->ipv6ct_enable = atoi(content_buf);
+							IPACMDBG_H("IPv6CT enable %d\n", config->ipv6ct_enable);
+						}
+					}
+				}
+				else if (IPACM_util_icmp_string((char*)xml_node->name, IPV6CT_MAX_ENTRIES_TAG) == 0)
+				{
+					content = IPACM_read_content_element(xml_node);
+					if (content == NULL)
+					{
+						IPACMERR("Failed to read the content of the tag %s\n", IPV6CT_MAX_ENTRIES_TAG);
+					}
+					else
+					{
+						str_size = strlen(content);
+						if (str_size >= sizeof(content_buf))
+						{
+							IPACMERR("The content of the tag %s is too long\n", IPV6CT_MAX_ENTRIES_TAG);
+						}
+						else
+						{
+							memset(content_buf, 0, sizeof(content_buf));
+							memcpy(content_buf, (void *)content, str_size);
+							config->ipv6ct_max_entries = atoi(content_buf);
+							IPACMDBG_H("IPv6CT Table Max Entries %d\n", config->ipv6ct_max_entries);
+						}
 					}
 				}
 			}

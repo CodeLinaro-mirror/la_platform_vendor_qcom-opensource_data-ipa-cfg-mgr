@@ -167,8 +167,12 @@
 			   <Description>SANE</Description>
 		    </ALG>
 		</IPACMALG>
-		<IPACMNAT>		
- 	        <MaxNatEntries>500</MaxNatEntries>
+		<IPACMNAT>
+			<MaxNatEntries>500</MaxNatEntries>
 		</IPACMNAT>
-		</IPACM>
+		<IPACMIPV6CT>
+			<IPv6CTEnabled>0</IPv6CTEnabled>
+			<MaxIpv6CTEntries>500</MaxIpv6CTEntries>
+		</IPACMIPV6CT>
+	</IPACM>
 </system>

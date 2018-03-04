@@ -1,31 +1,31 @@
 /*
-Copyright (c) 2013-2018, The Linux Foundation. All rights reserved.
-
-Redistribution and use in source and binary forms, with or without
-modification, are permitted provided that the following conditions are
-met:
-		* Redistributions of source code must retain the above copyright
-			notice, this list of conditions and the following disclaimer.
-		* Redistributions in binary form must reproduce the above
-			copyright notice, this list of conditions and the following
-			disclaimer in the documentation and/or other materials provided
-			with the distribution.
-		* Neither the name of The Linux Foundation nor the names of its
-			contributors may be used to endorse or promote products derived
-			from this software without specific prior written permission.
-
-THIS SOFTWARE IS PROVIDED "AS IS" AND ANY EXPRESS OR IMPLIED
-WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
-MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NON-INFRINGEMENT
-ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS
-BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
-SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR
-BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
-WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
-OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
-IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-*/
+ * Copyright (c) 2013-2018, The Linux Foundation. All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions are
+ * met:
+ *    * Redistributions of source code must retain the above copyright
+ *      notice, this list of conditions and the following disclaimer.
+ *    * Redistributions in binary form must reproduce the above
+ *      copyright notice, this list of conditions and the following
+ *      disclaimer in the documentation and/or other materials provided
+ *      with the distribution.
+ *    * Neither the name of The Linux Foundation nor the names of its
+ *      contributors may be used to endorse or promote products derived
+ *      from this software without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED "AS IS" AND ANY EXPRESS OR IMPLIED
+ * WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
+ * MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NON-INFRINGEMENT
+ * ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS
+ * BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR
+ * BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
+ * WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
+ * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
+ * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ */
 /*!
 		@file
 		IPACM_Wan.cpp
@@ -2517,31 +2517,46 @@ int IPACM_Wan::config_dft_firewall_rules(ipa_ip_type iptype)
 			flt_rule_entry.rule.rt_tbl_hdl = IPACM_Iface::ipacmcfg->rt_tbl_wan_v6.hdl;
 
 			/* firewall disable, all traffic are allowed */
-                        if(firewall_config.firewall_enable == true)
+			if (firewall_config.firewall_enable == true)
 			{
-			   flt_rule_entry.at_rear = true;
+				flt_rule_entry.at_rear = true;
 
-			   /* default action for v6 is PASS_TO_ROUTE unless user set to exception*/
-                           if(firewall_config.rule_action_accept == true)
-			   {
-			       flt_rule_entry.rule.action = IPA_PASS_TO_EXCEPTION;
-			   }
-			   else
-			   {
-			       flt_rule_entry.rule.action = IPA_PASS_TO_ROUTING;
-                           }
-		        }
+				if (firewall_config.rule_action_accept == true)
+				{
+					flt_rule_entry.rule.action = IPA_PASS_TO_EXCEPTION;
+				}
+				else
+				{
+					if (IPACM_Iface::ipacmcfg->IsIpv6CTEnabled() &&
+						IPACM_Iface::ipacmcfg->iface_table[ipa_if_num].if_mode == ROUTER)
+					{
+						flt_rule_entry.rule.action = IPA_PASS_TO_DST_NAT;
+					}
+					else
+					{
+						flt_rule_entry.rule.action = IPA_PASS_TO_ROUTING;
+					}
+				}
+			}
 			else
 			{
-			  flt_rule_entry.at_rear = true;
-			  flt_rule_entry.rule.action = IPA_PASS_TO_ROUTING;
-                        }
+				flt_rule_entry.at_rear = true;
+				if (IPACM_Iface::ipacmcfg->IsIpv6CTEnabled() &&
+					IPACM_Iface::ipacmcfg->iface_table[ipa_if_num].if_mode == ROUTER)
+				{
+					flt_rule_entry.rule.action = IPA_PASS_TO_DST_NAT;
+				}
+				else
+				{
+					flt_rule_entry.rule.action = IPA_PASS_TO_ROUTING;
+				}
+			}
 #ifdef FEATURE_IPA_V3
 			flt_rule_entry.rule.hashable = true;
 #endif
 			memcpy(&flt_rule_entry.rule.attrib,
-						 &rx_prop->rx[0].attrib,
-						 sizeof(struct ipa_rule_attrib));
+				&rx_prop->rx[0].attrib,
+				sizeof(struct ipa_rule_attrib));
 			flt_rule_entry.rule.attrib.attrib_mask |= IPA_FLT_DST_ADDR;
 			flt_rule_entry.rule.attrib.u.v6.dst_addr_mask[0] = 0x00000000;
 			flt_rule_entry.rule.attrib.u.v6.dst_addr_mask[1] = 0x00000000;
@@ -2586,108 +2601,115 @@ int IPACM_Wan::config_dft_firewall_rules(ipa_ip_type iptype)
 				return IPACM_FAILURE;
 			}
 
-            if(firewall_config.firewall_enable == true)
-            {
-			rule_v6 = 0;
-			for (i = 0; i < firewall_config.num_extd_firewall_entries; i++)
+			if (firewall_config.firewall_enable == true)
 			{
-#ifndef FEATURE_IPACM_UL_FIREWALL
-			if (firewall_config.extd_firewall_entries[i].ip_vsn == 6)
-#else //n FEATURE_IPACM_UL_FIREWALL
-			if (firewall_config.extd_firewall_entries[i].ip_vsn == 6 &&
-					firewall_config.extd_firewall_entries[i].firewall_direction !=
-					IPACM_MSGR_UL_FIREWALL)
-#endif //n FEATURE_IPACM_UL_FIREWALL
+				rule_v6 = 0;
+				for (i = 0; i < firewall_config.num_extd_firewall_entries; i++)
 				{
-					memset(&flt_rule_entry, 0, sizeof(struct ipa_flt_rule_add));
+#ifndef FEATURE_IPACM_UL_FIREWALL
+					if (firewall_config.extd_firewall_entries[i].ip_vsn == 6)
+#else //n FEATURE_IPACM_UL_FIREWALL
+					if (firewall_config.extd_firewall_entries[i].ip_vsn == 6 &&
+						firewall_config.extd_firewall_entries[i].firewall_direction !=
+						IPACM_MSGR_UL_FIREWALL)
+#endif //n FEATURE_IPACM_UL_FIREWALL
+					{
+						memset(&flt_rule_entry, 0, sizeof(struct ipa_flt_rule_add));
 
-		    			flt_rule_entry.at_rear = true;
-					flt_rule_entry.flt_rule_hdl = -1;
-					flt_rule_entry.status = -1;
+						flt_rule_entry.at_rear = true;
+						flt_rule_entry.flt_rule_hdl = -1;
+						flt_rule_entry.status = -1;
 
-				    /* matched rules for v6 go PASS_TO_ROUTE */
-                                    if(firewall_config.rule_action_accept == true)
-			            {
-			                flt_rule_entry.rule.action = IPA_PASS_TO_ROUTING;
-			            }
-			            else
-			            {
-					flt_rule_entry.rule.action = IPA_PASS_TO_EXCEPTION;
-                                    }
+						if (firewall_config.rule_action_accept == true)
+						{
+							if (IPACM_Iface::ipacmcfg->IsIpv6CTEnabled() &&
+								IPACM_Iface::ipacmcfg->iface_table[ipa_if_num].if_mode == ROUTER)
+							{
+								flt_rule_entry.rule.action = IPA_PASS_TO_DST_NAT;
+							}
+							else
+							{
+								flt_rule_entry.rule.action = IPA_PASS_TO_ROUTING;
+							}
+						}
+						else
+						{
+							flt_rule_entry.rule.action = IPA_PASS_TO_EXCEPTION;
+						}
 #ifdef FEATURE_IPA_V3
-					flt_rule_entry.rule.hashable = true;
+						flt_rule_entry.rule.hashable = true;
 #endif
-		    			flt_rule_entry.rule.rt_tbl_hdl = IPACM_Iface::ipacmcfg->rt_tbl_wan_v6.hdl;
-					memcpy(&flt_rule_entry.rule.attrib,
-								 &firewall_config.extd_firewall_entries[i].attrib,
-								 sizeof(struct ipa_rule_attrib));
-					flt_rule_entry.rule.attrib.attrib_mask |= rx_prop->rx[0].attrib.attrib_mask;
-					flt_rule_entry.rule.attrib.meta_data_mask = rx_prop->rx[0].attrib.meta_data_mask;
-					flt_rule_entry.rule.attrib.meta_data = rx_prop->rx[0].attrib.meta_data;
+						flt_rule_entry.rule.rt_tbl_hdl = IPACM_Iface::ipacmcfg->rt_tbl_wan_v6.hdl;
+						memcpy(&flt_rule_entry.rule.attrib,
+							&firewall_config.extd_firewall_entries[i].attrib,
+							sizeof(struct ipa_rule_attrib));
+						flt_rule_entry.rule.attrib.attrib_mask |= rx_prop->rx[0].attrib.attrib_mask;
+						flt_rule_entry.rule.attrib.meta_data_mask = rx_prop->rx[0].attrib.meta_data_mask;
+						flt_rule_entry.rule.attrib.meta_data = rx_prop->rx[0].attrib.meta_data;
 
-					/* check if the rule is define as TCP/UDP */
-					if (firewall_config.extd_firewall_entries[i].attrib.u.v6.next_hdr == IPACM_FIREWALL_IPPROTO_TCP_UDP)
-					{
-						/* insert TCP rule*/
-						flt_rule_entry.rule.attrib.u.v6.next_hdr = IPACM_FIREWALL_IPPROTO_TCP;
-						memcpy(&(m_pFilteringTable->rules[0]), &flt_rule_entry, sizeof(struct ipa_flt_rule_add));
-						if (false == m_filtering.AddFilteringRule(m_pFilteringTable))
+						/* check if the rule is define as TCP/UDP */
+						if (firewall_config.extd_firewall_entries[i].attrib.u.v6.next_hdr == IPACM_FIREWALL_IPPROTO_TCP_UDP)
 						{
-							IPACMERR("Error Adding Filtering rules, aborting...\n");
-							free(m_pFilteringTable);
-							return IPACM_FAILURE;
+							/* insert TCP rule*/
+							flt_rule_entry.rule.attrib.u.v6.next_hdr = IPACM_FIREWALL_IPPROTO_TCP;
+							memcpy(&(m_pFilteringTable->rules[0]), &flt_rule_entry, sizeof(struct ipa_flt_rule_add));
+							if (false == m_filtering.AddFilteringRule(m_pFilteringTable))
+							{
+								IPACMERR("Error Adding Filtering rules, aborting...\n");
+								free(m_pFilteringTable);
+								return IPACM_FAILURE;
+							}
+							else
+							{
+								IPACM_Iface::ipacmcfg->increaseFltRuleCount(rx_prop->rx[0].src_pipe, IPA_IP_v6, 1);
+								/* save v4 firewall filter rule handler */
+								IPACMDBG_H("flt rule hdl0=0x%x, status=0x%x\n", m_pFilteringTable->rules[0].flt_rule_hdl, m_pFilteringTable->rules[0].status);
+								firewall_hdl_v6[rule_v6] = m_pFilteringTable->rules[0].flt_rule_hdl;
+								num_firewall_v6++;
+								rule_v6++;
+							}
+
+							/* insert UDP rule*/
+							flt_rule_entry.rule.attrib.u.v6.next_hdr = IPACM_FIREWALL_IPPROTO_UDP;
+							memcpy(&(m_pFilteringTable->rules[0]), &flt_rule_entry, sizeof(struct ipa_flt_rule_add));
+							if (false == m_filtering.AddFilteringRule(m_pFilteringTable))
+							{
+								IPACMERR("Error Adding Filtering rules, aborting...\n");
+								free(m_pFilteringTable);
+								return IPACM_FAILURE;
+							}
+							else
+							{
+								IPACM_Iface::ipacmcfg->increaseFltRuleCount(rx_prop->rx[0].src_pipe, IPA_IP_v6, 1);
+								/* save v6 firewall filter rule handler */
+								IPACMDBG_H("flt rule hdl0=0x%x, status=0x%x\n", m_pFilteringTable->rules[0].flt_rule_hdl, m_pFilteringTable->rules[0].status);
+								firewall_hdl_v6[rule_v6] = m_pFilteringTable->rules[0].flt_rule_hdl;
+								num_firewall_v6++;
+								rule_v6++;
+							}
 						}
 						else
 						{
-							IPACM_Iface::ipacmcfg->increaseFltRuleCount(rx_prop->rx[0].src_pipe, IPA_IP_v6, 1);
-							/* save v4 firewall filter rule handler */
-							IPACMDBG_H("flt rule hdl0=0x%x, status=0x%x\n", m_pFilteringTable->rules[0].flt_rule_hdl, m_pFilteringTable->rules[0].status);
-							firewall_hdl_v6[rule_v6] = m_pFilteringTable->rules[0].flt_rule_hdl;
-							num_firewall_v6++;
-							rule_v6++;
-						}
-
-						/* insert UDP rule*/
-						flt_rule_entry.rule.attrib.u.v6.next_hdr = IPACM_FIREWALL_IPPROTO_UDP;
-						memcpy(&(m_pFilteringTable->rules[0]), &flt_rule_entry, sizeof(struct ipa_flt_rule_add));
-						if (false == m_filtering.AddFilteringRule(m_pFilteringTable))
-						{
-							IPACMERR("Error Adding Filtering rules, aborting...\n");
-							free(m_pFilteringTable);
-							return IPACM_FAILURE;
-						}
-						else
-						{
-							IPACM_Iface::ipacmcfg->increaseFltRuleCount(rx_prop->rx[0].src_pipe, IPA_IP_v6, 1);
-							/* save v6 firewall filter rule handler */
-							IPACMDBG_H("flt rule hdl0=0x%x, status=0x%x\n", m_pFilteringTable->rules[0].flt_rule_hdl, m_pFilteringTable->rules[0].status);
-							firewall_hdl_v6[rule_v6] = m_pFilteringTable->rules[0].flt_rule_hdl;
-							num_firewall_v6++;
-							rule_v6++;
+							memcpy(&(m_pFilteringTable->rules[0]), &flt_rule_entry, sizeof(struct ipa_flt_rule_add));
+							if (false == m_filtering.AddFilteringRule(m_pFilteringTable))
+							{
+								IPACMERR("Error Adding Filtering rules, aborting...\n");
+								free(m_pFilteringTable);
+								return IPACM_FAILURE;
+							}
+							else
+							{
+								IPACM_Iface::ipacmcfg->increaseFltRuleCount(rx_prop->rx[0].src_pipe, IPA_IP_v6, 1);
+								/* save v6 firewall filter rule handler */
+								IPACMDBG_H("flt rule hdl0=0x%x, status=0x%x\n", m_pFilteringTable->rules[0].flt_rule_hdl, m_pFilteringTable->rules[0].status);
+								firewall_hdl_v6[rule_v6] = m_pFilteringTable->rules[0].flt_rule_hdl;
+								num_firewall_v6++;
+								rule_v6++;
+							}
 						}
 					}
-					else
-					{
-						memcpy(&(m_pFilteringTable->rules[0]), &flt_rule_entry, sizeof(struct ipa_flt_rule_add));
-						if (false == m_filtering.AddFilteringRule(m_pFilteringTable))
-						{
-							IPACMERR("Error Adding Filtering rules, aborting...\n");
-							free(m_pFilteringTable);
-							return IPACM_FAILURE;
-						}
-						else
-						{
-							IPACM_Iface::ipacmcfg->increaseFltRuleCount(rx_prop->rx[0].src_pipe, IPA_IP_v6, 1);
-							/* save v6 firewall filter rule handler */
-							IPACMDBG_H("flt rule hdl0=0x%x, status=0x%x\n", m_pFilteringTable->rules[0].flt_rule_hdl, m_pFilteringTable->rules[0].status);
-							firewall_hdl_v6[rule_v6] = m_pFilteringTable->rules[0].flt_rule_hdl;
-							num_firewall_v6++;
-							rule_v6++;
-						}
-					}
-				}
-			} /* end of firewall ipv6 filter rule add for loop*/
-            }
+				} /* end of firewall ipv6 filter rule add for loop*/
+			}
 
 			/* Construct ICMP rule */
 			memset(&flt_rule_entry, 0, sizeof(struct ipa_flt_rule_add));
@@ -2701,8 +2723,8 @@ int IPACM_Wan::config_dft_firewall_rules(ipa_ip_type iptype)
 			flt_rule_entry.rule.hashable = true;
 #endif
 			memcpy(&flt_rule_entry.rule.attrib,
-					 &rx_prop->rx[0].attrib,
-					 sizeof(struct ipa_rule_attrib));
+				&rx_prop->rx[0].attrib,
+				sizeof(struct ipa_rule_attrib));
 			flt_rule_entry.rule.attrib.attrib_mask |= IPA_FLT_NEXT_HDR;
 			flt_rule_entry.rule.attrib.u.v6.next_hdr = (uint8_t)IPACM_FIREWALL_IPPROTO_ICMP6;
 			memcpy(&(m_pFilteringTable->rules[0]), &flt_rule_entry, sizeof(struct ipa_flt_rule_add));
@@ -2730,31 +2752,46 @@ int IPACM_Wan::config_dft_firewall_rules(ipa_ip_type iptype)
 			flt_rule_entry.rule.rt_tbl_hdl = IPACM_Iface::ipacmcfg->rt_tbl_wan_v6.hdl;
 
 			/* firewall disable, all traffic are allowed */
-                        if(firewall_config.firewall_enable == true)
+			if (firewall_config.firewall_enable == true)
 			{
-			   flt_rule_entry.at_rear = true;
+				flt_rule_entry.at_rear = true;
 
-			   /* default action for v6 is PASS_TO_ROUTE unless user set to exception*/
-               if(firewall_config.rule_action_accept == true)
-			   {
-			        flt_rule_entry.rule.action = IPA_PASS_TO_EXCEPTION;
-			   }
-			   else
-			   {
-			flt_rule_entry.rule.action = IPA_PASS_TO_ROUTING;
-                           }
-		        }
+				if (firewall_config.rule_action_accept == true)
+				{
+					flt_rule_entry.rule.action = IPA_PASS_TO_EXCEPTION;
+				}
+				else
+				{
+					if (IPACM_Iface::ipacmcfg->IsIpv6CTEnabled() &&
+						IPACM_Iface::ipacmcfg->iface_table[ipa_if_num].if_mode == ROUTER)
+					{
+						flt_rule_entry.rule.action = IPA_PASS_TO_DST_NAT;
+					}
+					else
+					{
+						flt_rule_entry.rule.action = IPA_PASS_TO_ROUTING;
+					}
+				}
+			}
 			else
 			{
-			  flt_rule_entry.at_rear = true;
-			  flt_rule_entry.rule.action = IPA_PASS_TO_ROUTING;
-                        }
+				flt_rule_entry.at_rear = true;
+				if (IPACM_Iface::ipacmcfg->IsIpv6CTEnabled() &&
+					IPACM_Iface::ipacmcfg->iface_table[ipa_if_num].if_mode == ROUTER)
+				{
+					flt_rule_entry.rule.action = IPA_PASS_TO_DST_NAT;
+				}
+				else
+				{
+					flt_rule_entry.rule.action = IPA_PASS_TO_ROUTING;
+				}
+			}
 #ifdef FEATURE_IPA_V3
 			flt_rule_entry.rule.hashable = true;
 #endif
 			memcpy(&flt_rule_entry.rule.attrib,
-						 &rx_prop->rx[0].attrib,
-						 sizeof(struct ipa_rule_attrib));
+				&rx_prop->rx[0].attrib,
+				sizeof(struct ipa_rule_attrib));
 			flt_rule_entry.rule.attrib.attrib_mask |= IPA_FLT_DST_ADDR;
 			flt_rule_entry.rule.attrib.u.v6.dst_addr_mask[0] = 0x00000000;
 			flt_rule_entry.rule.attrib.u.v6.dst_addr_mask[1] = 0x00000000;
@@ -2783,7 +2820,7 @@ int IPACM_Wan::config_dft_firewall_rules(ipa_ip_type iptype)
 		}
 	}
 
-	if(m_pFilteringTable != NULL)
+	if (m_pFilteringTable != NULL)
 	{
 		free(m_pFilteringTable);
 	}
@@ -3147,20 +3184,21 @@ int IPACM_Wan::config_dft_firewall_rules_ex(struct ipa_flt_rule_add *rules, int 
 					flt_rule_entry.rule.retain_hdr = 1;
 					flt_rule_entry.rule.to_uc = 0;
 					flt_rule_entry.rule.eq_attrib_type = 1;
-					flt_rule_entry.rule.action = IPA_PASS_TO_ROUTING;
 #ifdef FEATURE_IPA_V3
 					flt_rule_entry.rule.hashable = true;
 #endif
 					memset(&rt_tbl_idx, 0, sizeof(rt_tbl_idx));
 					rt_tbl_idx.ip = iptype;
 
-					/* matched rules for v6 go PASS_TO_ROUTE */
 					if(firewall_config.rule_action_accept == true)
 					{
+						flt_rule_entry.rule.action =
+							IPACM_Iface::ipacmcfg->IsIpv6CTEnabled() ? IPA_PASS_TO_DST_NAT : IPA_PASS_TO_ROUTING;
 						strlcpy(rt_tbl_idx.name, IPACM_Iface::ipacmcfg->rt_tbl_wan_v6.name, IPA_RESOURCE_NAME_MAX);
 					}
 					else
 					{
+						flt_rule_entry.rule.action = IPA_PASS_TO_ROUTING;
 						strlcpy(rt_tbl_idx.name, IPACM_Iface::ipacmcfg->rt_tbl_wan_dl.name, IPA_RESOURCE_NAME_MAX);
 					}
 					rt_tbl_idx.name[IPA_RESOURCE_NAME_MAX-1] = '\0';
@@ -3260,27 +3298,30 @@ int IPACM_Wan::config_dft_firewall_rules_ex(struct ipa_flt_rule_add *rules, int 
 		flt_rule_entry.rule.retain_hdr = 1;
 		flt_rule_entry.rule.to_uc = 0;
 		flt_rule_entry.rule.eq_attrib_type = 1;
-		flt_rule_entry.rule.action = IPA_PASS_TO_ROUTING;
 #ifdef FEATURE_IPA_V3
 		flt_rule_entry.rule.hashable = true;
 #endif
 		memset(&rt_tbl_idx, 0, sizeof(rt_tbl_idx));
 		rt_tbl_idx.ip = iptype;
 		/* firewall disable, all traffic are allowed */
-		if(firewall_config.firewall_enable == true)
+		if (firewall_config.firewall_enable == true)
 		{
-			/* default action for v6 is PASS_TO_ROUTE unless user set to exception*/
-			if(firewall_config.rule_action_accept == true)
+			if (firewall_config.rule_action_accept == true)
 			{
+				flt_rule_entry.rule.action = IPA_PASS_TO_ROUTING;
 				strlcpy(rt_tbl_idx.name, IPACM_Iface::ipacmcfg->rt_tbl_wan_dl.name, IPA_RESOURCE_NAME_MAX);
 			}
 			else
 			{
+				flt_rule_entry.rule.action = IPACM_Iface::ipacmcfg->IsIpv6CTEnabled() ?
+						IPA_PASS_TO_DST_NAT : IPA_PASS_TO_ROUTING;
 				strlcpy(rt_tbl_idx.name, IPACM_Iface::ipacmcfg->rt_tbl_wan_v6.name, IPA_RESOURCE_NAME_MAX);
 			}
 		}
 		else
 		{
+			flt_rule_entry.rule.action = IPACM_Iface::ipacmcfg->IsIpv6CTEnabled() ?
+					IPA_PASS_TO_DST_NAT : IPA_PASS_TO_ROUTING;
 			strlcpy(rt_tbl_idx.name, IPACM_Iface::ipacmcfg->rt_tbl_wan_v6.name, IPA_RESOURCE_NAME_MAX);
 		}
 		rt_tbl_idx.name[IPA_RESOURCE_NAME_MAX-1] = '\0';

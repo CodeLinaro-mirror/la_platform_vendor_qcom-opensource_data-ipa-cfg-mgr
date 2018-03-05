@@ -86,6 +86,22 @@ typedef struct _ipa_wan_client
 	wan_client_rt_hdl wan_rt_hdl[0]; /* depends on number of tx properties */
 }ipa_wan_client;
 
+class IPACM_Wan;
+
+typedef struct
+{
+	uint32_t ipv4_addr;
+	bool wan_up_vlan;
+	IPACM_Wan *pIface;
+}ipacm_ipv4_wan_iface;
+
+typedef struct
+{
+	uint32_t ipv6_prefix[2];
+	bool wan_up_vlan_v6;
+	IPACM_Wan *pIface;
+}ipacm_ipv6_wan_iface;
+
 /* wan iface */
 class IPACM_Wan : public IPACM_Iface
 {
@@ -96,6 +112,7 @@ public:
 	static bool wan_up;
 	static bool wan_up_v6;
 	static uint8_t xlat_mux_id;
+
 	/* IPACM interface name */
 	static char wan_up_dev_name[IF_NAME_LEN];
 	static uint32_t curr_wan_ip;
@@ -201,6 +218,10 @@ public:
 	static bool is_v6_ul_firewall_sent_to_q6;
 #endif
 	static bool is_global_ipv6_addr(uint32_t* ipv6_addr);
+#ifdef FEATURE_VLAN_MPDN
+	static ipacm_ipv4_wan_iface ipv4_to_iface[IPA_MAX_NUM_SW_PDNS];
+	static ipacm_ipv6_wan_iface ipv6_to_iface[IPA_MAX_NUM_SW_PDNS];
+#endif
 private:
 
 	bool is_ipv6_frag_firewall_flt_rule_installed;

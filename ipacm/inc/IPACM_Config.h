@@ -408,21 +408,21 @@ public:
 
 #ifdef FEATURE_VLAN_MPDN
 	/* add to prefixes list if needed and notify LAN objects to modify rules*/
-	inline int add_vlan_ipv6_prefix(uint32_t* prefix, int ipa_if_num)
+	inline bool add_vlan_ipv6_prefix(uint32_t *prefix, int ipa_if_num)
 	{
 		for(int i = 0; i < (num_ipv6_prefixes); i++)
 		{
 			if((prefix[0] == ipa_ipv6_prefixes[i][0]) && (prefix[1] == ipa_ipv6_prefixes[i][1]))
 			{
 				IPACMDBG_H("prefix 0x[%X][%X] already exists\n", prefix[0], prefix[1]);
-				return IPACM_SUCCESS;
+				return false;
 			}
 		}
 
 		if(num_ipv6_prefixes >= IPA_MAX_IPV6_PREFIX_FLT_RULE)
 		{
 			IPACMERR("we already reached maximum prefix rules\n");
-			return IPACM_FAILURE;
+			return false;
 		}
 
 		ipa_ipv6_prefixes[num_ipv6_prefixes][0] = prefix[0];
@@ -439,7 +439,7 @@ public:
 		if(data_fid == NULL)
 		{
 			IPACMERR("unable to allocate memory for event data_fid\n");
-			return IPACM_FAILURE;
+			return false;
 		}
 		data_fid->if_index = ipa_if_num;
 		evt_data.event = IPA_PREFIX_CHANGE_EVENT;
@@ -448,7 +448,7 @@ public:
 		/* Insert IPA_PRIVATE_SUBNET_CHANGE_EVENT to command queue */
 		IPACMDBG("posting IPA_PREFIX_CHANGE_EVENT\n");
 		IPACM_EvtDispatcher::PostEvt(&evt_data);
-		return IPACM_SUCCESS;
+		return true;
 	}
 
 	/* remove from prefixes list if needed and notify LAN objects to modify rules*/

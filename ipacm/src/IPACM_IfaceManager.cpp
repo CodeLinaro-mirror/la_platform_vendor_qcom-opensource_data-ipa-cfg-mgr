@@ -84,15 +84,22 @@ void IPACM_IfaceManager::event_callback(ipa_cm_event_id event, void *param)
 			IPACMDBG_H(" Save the bridge mac info in IPACM_cfg \n");
 			ipa_interface_index = IPACM_Iface::iface_ipa_index_query(data_all->if_index);
 			/* check for failure return */
-			if (IPACM_FAILURE == ipa_interface_index) {
+			if(IPACM_FAILURE == ipa_interface_index) {
 #ifdef FEATURE_VLAN_MPDN
 				/* add bridgeX (X != 0) to the bridges list */
-				IPACMDBG_H("trying to add the bridge %s with MAC %02x:%02x:%02x:%02x:%02x:%02x\n",
-					data_all->iface_name, data_all->mac_addr[0],
-					data_all->mac_addr[1], data_all->mac_addr[2],
-					data_all->mac_addr[3], data_all->mac_addr[4],
-					data_all->mac_addr[5]);
-				IPACM_Iface::ipacmcfg->add_vlan_bridge(data_all);
+				if(strstr(data_all->iface_name, "bridge"))
+				{
+					IPACMDBG_H("trying to add the bridge %s with MAC %02x:%02x:%02x:%02x:%02x:%02x\n",
+						data_all->iface_name, data_all->mac_addr[0],
+						data_all->mac_addr[1], data_all->mac_addr[2],
+						data_all->mac_addr[3], data_all->mac_addr[4],
+						data_all->mac_addr[5]);
+					IPACM_Iface::ipacmcfg->add_vlan_bridge(data_all);
+				}
+				else
+				{
+					IPACMDBG_H("ignoring IPA_BRIDGE_LINK_UP_EVENT for iface %s\n", data_all->iface_name);
+				}
 				break;
 #else
 				IPACMERR("IPA_BRIDGE_LINK_UP_EVENT: not supported iface id: %d\n", data_all->if_index);

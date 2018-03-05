@@ -137,6 +137,8 @@ extern "C"
 #define IPA_MAX_NUM_AMPDU_RULE  15
 #define IPA_MAC_ADDR_SIZE  6
 #define IPA_MAX_NUM_BRIDGES 8
+#define IPA_MAX_NUM_SW_PDNS 15
+#define IPA_MAX_NUM_HW_PDNS 4
 /*===========================================================================
 										 GLOBAL DEFINITIONS AND DECLARATIONS
 ===========================================================================*/
@@ -209,6 +211,7 @@ typedef enum
 #endif
 #ifdef FEATURE_VLAN_MPDN
 	IPA_PREFIX_CHANGE_EVENT,                  /* ipacm_event_data_fid */
+	IPA_ROUTE_ADD_VLAN_PDN_EVENT,             /* ipacm_event_route_vlan */
 #endif
 	IPACM_EVENT_MAX
 } ipa_cm_event_id;
@@ -376,6 +379,14 @@ typedef struct _ipacm_event_iface_up_tether
 	uint32_t ipv6_prefix[2];
 	bool is_sta;
 }ipacm_event_iface_up_tehter;
+
+typedef struct
+{
+	enum ipa_ip_type iptype;
+	uint16_t VlanID;
+	uint32_t wan_ipv4_addr;
+	uint32_t wan_ipv6_prefix[2];
+}ipacm_event_route_vlan;
 
 typedef enum
 {

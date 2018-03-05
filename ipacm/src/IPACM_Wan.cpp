@@ -100,6 +100,10 @@ int	IPACM_Wan::ipa_if_num_tether_v6_total = 0;
 int	IPACM_Wan::ipa_if_num_tether_v4[IPA_MAX_IFACE_ENTRIES];
 int	IPACM_Wan::ipa_if_num_tether_v6[IPA_MAX_IFACE_ENTRIES];
 #endif
+#ifdef FEATURE_VLAN_MPDN
+ipacm_ipv4_wan_iface IPACM_Wan::ipv4_to_iface[IPA_MAX_NUM_SW_PDNS];
+ipacm_ipv6_wan_iface IPACM_Wan::ipv6_to_iface[IPA_MAX_NUM_SW_PDNS];
+#endif
 
 #define MOBILE_FIREWALL_FILE "/etc/data/mobileap_firewall.xml"
 
@@ -422,6 +426,10 @@ int IPACM_Wan::handle_addr_evt(ipacm_event_data_addr *data)
 		if(is_global_ipv6_addr(data->ipv6_addr))
 		{
 			memcpy(ipv6_prefix, data->ipv6_addr, sizeof(ipv6_prefix));
+#ifdef FEATURE_VLAN_MPDN
+			memcpy(IPACM_Wan::ipv6_to_iface[modem_ipv6_pdn_index].ipv6_prefix, data->ipv6_addr, sizeof(uint32_t) * 2);
+			IPACM_Wan::ipv6_to_iface[modem_ipv6_pdn_index].pIface = this;
+#endif
 		}
 	    num_dft_rt_v6++;
     }
@@ -511,6 +519,10 @@ int IPACM_Wan::handle_addr_evt(ipacm_event_data_addr *data)
 			if(m_is_sta_mode == Q6_WAN)
 			{
 				modem_ipv4_pdn_index = num_ipv4_modem_pdn;
+#ifdef FEATURE_VLAN_MPDN
+				IPACM_Wan::ipv4_to_iface[modem_ipv4_pdn_index].ipv4_addr = data->ipv4_addr;
+				IPACM_Wan::ipv4_to_iface[modem_ipv4_pdn_index].pIface = this;
+#endif
 				num_ipv4_modem_pdn++;
 				IPACMDBG_H("Now the number of modem ipv4 pdn is %d.\n", num_ipv4_modem_pdn);
 				init_fl_rule_ex(data->iptype);
@@ -4868,6 +4880,10 @@ int IPACM_Wan::handle_down_evt_ex()
 
 	if(ip_type == IPA_IP_v4)
 	{
+#ifdef FEATURE_VLAN_MPDN
+		IPACM_Wan::ipv4_to_iface[modem_ipv4_pdn_index].ipv4_addr = 0;
+		IPACM_Wan::ipv4_to_iface[modem_ipv4_pdn_index].pIface = NULL;
+#endif
 		num_ipv4_modem_pdn--;
 		IPACMDBG_H("Now the number of ipv4 modem pdn is %d.\n", num_ipv4_modem_pdn);
 		/* only when default gw goes down we post WAN_DOWN event*/
@@ -4919,8 +4935,14 @@ int IPACM_Wan::handle_down_evt_ex()
 	}
 	else if(ip_type == IPA_IP_v6)
 	{
-	    if (num_dft_rt_v6 > 1)
+		if(num_dft_rt_v6 > 1)
+		{
+#ifdef FEATURE_VLAN_MPDN
+			memset(&IPACM_Wan::ipv6_to_iface[modem_ipv6_pdn_index].ipv6_prefix, 0, sizeof(uint32_t) * 2);
+			IPACM_Wan::ipv6_to_iface[modem_ipv6_pdn_index].pIface = this;
+#endif
 			num_ipv6_modem_pdn--;
+		}
 		IPACMDBG_H("Now the number of ipv6 modem pdn is %d.\n", num_ipv6_modem_pdn);
 		/* only when default gw goes down we post WAN_DOWN event*/
 		if(is_default_gateway == true)

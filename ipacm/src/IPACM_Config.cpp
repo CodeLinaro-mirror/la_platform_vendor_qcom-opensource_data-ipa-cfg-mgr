@@ -173,6 +173,8 @@ IPACM_Config::IPACM_Config()
 	memset(flt_rule_count_v6, 0, IPA_CLIENT_MAX*sizeof(int));
 	memset(bridge_mac, 0, IPA_MAC_ADDR_SIZE*sizeof(uint8_t));
 #ifdef FEATURE_VLAN_MPDN
+	num_ipv6_prefixes = 0;
+	memset(ipa_ipv6_prefixes, 0, sizeof(ipa_ipv6_prefixes));
 	memset(vlan_bridges, 0, IPA_MAX_NUM_BRIDGES * sizeof(vlan_bridges[0]));
 #endif
 

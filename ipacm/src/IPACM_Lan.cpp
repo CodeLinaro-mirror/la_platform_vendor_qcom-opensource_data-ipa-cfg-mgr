@@ -1120,6 +1120,7 @@ int IPACM_Lan::handle_vlan_neighbor(ipacm_event_data_all *data)
 {
 	ipacm_event_new_neigh_vlan *data_vlan;
 	uint8_t vlan_id;
+	bool new_prefix;
 
 	if (IPACM_Iface::ipacmcfg->get_vlan_id(data->iface_name, &vlan_id))
 	{
@@ -1140,7 +1141,7 @@ int IPACM_Lan::handle_vlan_neighbor(ipacm_event_data_all *data)
 		if(IPACM_Wan::is_global_ipv6_addr(data_vlan->data_all.ipv6_addr))
 		{
 			/* add ipv6 prefix */
-			IPACM_Iface::ipacmcfg->add_vlan_ipv6_prefix(data_vlan->data_all.ipv6_addr, ipa_if_num);
+			new_prefix = IPACM_Iface::ipacmcfg->add_vlan_ipv6_prefix(data_vlan->data_all.ipv6_addr, ipa_if_num);
 		}
 	}
 	else if(data_vlan->data_all.iptype == IPA_IP_v4)
@@ -1173,6 +1174,31 @@ int IPACM_Lan::handle_vlan_neighbor(ipacm_event_data_all *data)
 		handle_eth_client_route_rule_ext(data->mac_addr, data->iptype);
 	}
 #endif
+	/*
+	 * if this is the first time we have this global ipv6 prefix (or this
+	 * is the deafult pdn prefix) we can notify WAN that it is a v6 vlan pdn
+	 */
+	if(new_prefix ||
+		((IPACM_Wan::backhaul_ipv6_prefix[0] == data_vlan->data_all.ipv6_addr[0]) &&
+			(IPACM_Wan::backhaul_ipv6_prefix[1] == data_vlan->data_all.ipv6_addr[1])))
+	{
+		ipacm_cmd_q_data evt_data;
+		ipacm_event_route_vlan *data;
+
+		evt_data.event = IPA_ROUTE_ADD_VLAN_PDN_EVENT;
+		data = (ipacm_event_route_vlan *)malloc(sizeof(ipacm_event_route_vlan));
+		if(!data)
+		{
+			IPACMERR("couldn't allocate memory for new vlan pdn event\n");
+			return IPACM_FAILURE;
+		}
+		data->iptype = IPA_IP_v6;
+		data->VlanID = vlan_id;
+		data->wan_ipv6_prefix[0] = data_vlan->data_all.ipv6_addr[0];
+		data->wan_ipv6_prefix[1] = data_vlan->data_all.ipv6_addr[1];
+		evt_data.evt_data = data;
+		IPACM_EvtDispatcher::PostEvt(&evt_data);
+	}
 	return IPACM_SUCCESS;
 }
 #endif

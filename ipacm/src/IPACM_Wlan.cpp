@@ -272,35 +272,9 @@ void IPACM_Wlan::event_callback(ipa_cm_event_id event, void *param)
 				    || ((data->iptype==IPA_IP_v6) && (num_dft_rt_v6!=MAX_DEFAULT_v6_ROUTE_RULES)))
 				{
 					IPACMDBG_H("Got IPA_ADDR_ADD_EVENT ip-family:%d, v6 num %d: \n",data->iptype,num_dft_rt_v6);
+
 					/* Post event to NAT */
-					if (data->iptype == IPA_IP_v4)
-					{
-						ipacm_cmd_q_data evt_data;
-						ipacm_event_iface_up *info;
-
-						info = (ipacm_event_iface_up *)
-							 malloc(sizeof(ipacm_event_iface_up));
-						if (info == NULL)
-						{
-							IPACMERR("Unable to allocate memory\n");
-							return;
-						}
-
-						memcpy(info->ifname, dev_name, IF_NAME_LEN);
-						info->ipv4_addr = data->ipv4_addr;
-						info->addr_mask = IPACM_Iface::ipacmcfg->private_subnet_table[0].subnet_mask;
-
-						evt_data.event = IPA_HANDLE_WLAN_UP;
-						evt_data.evt_data = (void *)info;
-
-						/* Insert IPA_HANDLE_WLAN_UP to command queue */
-						IPACMDBG_H("posting IPA_HANDLE_WLAN_UP for IPv4 with below information\n");
-						IPACMDBG_H("IPv4 address:0x%x, IPv4 address mask:0x%x\n",
-										 info->ipv4_addr, info->addr_mask);
-						IPACM_EvtDispatcher::PostEvt(&evt_data);
-					}
-
-					if(handle_addr_evt(data) == IPACM_FAILURE)
+					if (post_lan_up_event(data) || handle_addr_evt(data) == IPACM_FAILURE)
 					{
 						return;
 					}
@@ -375,7 +349,7 @@ void IPACM_Wlan::event_callback(ipa_cm_event_id event, void *param)
 					else
 						IPACMDBG_H("WAN v6 is not UP\n");
 #endif //FEATURE_IPACM_UL_FIREWALL
-					IPACMDBG_H("posting IPA_HANDLE_WLAN_UP:Finished checking wan_up\n");
+					IPACMDBG_H("Finished checking wan_up\n");
 					/* checking if SW-RT_enable */
 					if (IPACM_Iface::ipacmcfg->ipa_sw_rt_enable == true)
 					{
@@ -3246,3 +3220,4 @@ int IPACM_Wlan::delete_uplink_filter_rule
 	return ret;
 }
 #endif
+

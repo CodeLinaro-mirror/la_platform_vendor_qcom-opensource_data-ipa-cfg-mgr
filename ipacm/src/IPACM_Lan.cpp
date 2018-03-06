@@ -515,33 +515,13 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 						else
 							IPACMDBG_H("WAN v6 is not UP\n");
 #endif //FEATURE_IPACM_UL_FIREWALL
+
 						/* Post event to NAT */
-						if (data->iptype == IPA_IP_v4)
+						if (post_lan_up_event(data))
 						{
-							ipacm_cmd_q_data evt_data;
-							ipacm_event_iface_up *info;
-
-							info = (ipacm_event_iface_up *)
-								malloc(sizeof(ipacm_event_iface_up));
-							if (info == NULL)
-							{
-								IPACMERR("Unable to allocate memory\n");
-								return;
-							}
-
-							memcpy(info->ifname, dev_name, IF_NAME_LEN);
-							info->ipv4_addr = data->ipv4_addr;
-							info->addr_mask = IPACM_Iface::ipacmcfg->private_subnet_table[0].subnet_mask;
-
-							evt_data.event = IPA_HANDLE_LAN_UP;
-							evt_data.evt_data = (void *)info;
-
-							/* Insert IPA_HANDLE_LAN_UP to command queue */
-							IPACMDBG_H("posting IPA_HANDLE_LAN_UP for IPv4 with below information\n");
-							IPACMDBG_H("IPv4 address:0x%x, IPv4 address mask:0x%x\n",
-											info->ipv4_addr, info->addr_mask);
-							IPACM_EvtDispatcher::PostEvt(&evt_data);
+							return;
 						}
+
 						IPACMDBG_H("Finish handling IPA_ADDR_ADD_EVENT for ip-family(%d)\n", data->iptype);
 					}
 
@@ -8682,3 +8662,46 @@ int IPACM_Lan::install_l2tp_ul_hdr_proc_ctx()
 	return IPACM_SUCCESS;
 }
 #endif
+
+int IPACM_Lan::post_lan_up_event(const ipacm_event_data_addr* data) const
+{
+	ipacm_cmd_q_data evt_data;
+	ipacm_event_iface_up* info;
+
+	evt_data.evt_data = malloc(sizeof(ipacm_event_iface_up));
+	if (evt_data.evt_data == NULL)
+	{
+		IPACMERR("Unable to allocate memory\n");
+		return -ENOMEM;
+	}
+
+	info = static_cast<ipacm_event_iface_up*>(evt_data.evt_data);
+	memcpy(info->ifname, dev_name, IF_NAME_LEN);
+
+	switch (data->iptype)
+	{
+	case IPA_IP_v4:
+		info->ipv4_addr = data->ipv4_addr;
+		info->addr_mask = IPACM_Iface::ipacmcfg->private_subnet_table[0].subnet_mask;
+		evt_data.event = IPA_HANDLE_LAN_WLAN_UP;
+
+		IPACMDBG_H("posting client interface up for IPv4 with below information\n");
+		IPACMDBG_H("IPv4 address:0x%x, IPv4 address mask:0x%x\n", info->ipv4_addr, info->addr_mask);
+		break;
+	case IPA_IP_v6:
+		memcpy(info->ipv6_addr, data->ipv6_addr, sizeof(info->ipv6_addr));
+		evt_data.event = IPA_HANDLE_LAN_WLAN_UP_V6;
+
+		IPACMDBG_H("posting client interface up for IPv6 with below information\n");
+		IPACMDBG_H("IPv6 address:0x%x%x%x%x\n",
+			info->ipv6_addr[0], info->ipv6_addr[1], info->ipv6_addr[2], info->ipv6_addr[3]);
+		break;
+	default:
+		IPACMERR("Unsupported IP type %d\n", data->iptype);
+		return -EINVAL;
+	}
+
+	IPACM_EvtDispatcher::PostEvt(&evt_data);
+	return 0;
+}
+

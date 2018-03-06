@@ -197,8 +197,8 @@ typedef enum
 	IPA_HANDLE_WAN_DOWN_TETHER,               /* ipacm_event_iface_up_tehter */
 	IPA_HANDLE_WAN_UP_V6_TETHER,              /* ipacm_event_iface_up_tehter */
 	IPA_HANDLE_WAN_DOWN_V6_TETHER,            /* ipacm_event_iface_up_tehter */
-	IPA_HANDLE_WLAN_UP,                       /* ipacm_event_iface_up */
-	IPA_HANDLE_LAN_UP,                        /* ipacm_event_iface_up */
+	IPA_HANDLE_LAN_WLAN_UP,                   /* ipacm_event_iface_up */
+	IPA_HANDLE_LAN_WLAN_UP_V6,                /* ipacm_event_iface_up */
 	IPA_ETH_BRIDGE_IFACE_UP,                  /* ipacm_event_eth_bridge*/
 	IPA_ETH_BRIDGE_IFACE_DOWN,                /* ipacm_event_eth_bridge*/
 	IPA_ETH_BRIDGE_CLIENT_ADD,                /* ipacm_event_eth_bridge */
@@ -368,6 +368,7 @@ typedef struct _ipacm_event_iface_up
 	uint32_t ipv4_addr;
 	uint32_t addr_mask;
 	uint32_t ipv6_prefix[2];
+	uint32_t ipv6_addr[4];
 	bool is_sta;
 	uint8_t xlat_mux_id;
 	uint8_t mux_id;

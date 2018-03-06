@@ -1,32 +1,31 @@
 /*
-Copyright (c) 2013-2018, The Linux Foundation. All rights reserved.
-
-Redistribution and use in source and binary forms, with or without
-modification, are permitted provided that the following conditions are
-met:
-		* Redistributions of source code must retain the above copyright
-			notice, this list of conditions and the following disclaimer.
-		* Redistributions in binary form must reproduce the above
-			copyright notice, this list of conditions and the following
-			disclaimer in the documentation and/or other materials provided
-			with the distribution.
-		* Neither the name of The Linux Foundation nor the names of its
-			contributors may be used to endorse or promote products derived
-			from this software without specific prior written permission.
-
-THIS SOFTWARE IS PROVIDED "AS IS" AND ANY EXPRESS OR IMPLIED
-WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
-MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NON-INFRINGEMENT
-ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS
-BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
-SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR
-BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
-WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
-OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
-IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-*/
-
+ * Copyright (c) 2013-2018 The Linux Foundation. All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions are
+ * met:
+ *    * Redistributions of source code must retain the above copyright
+ *      notice, this list of conditions and the following disclaimer.
+ *    * Redistributions in binary form must reproduce the above
+ *      copyright notice, this list of conditions and the following
+ *      disclaimer in the documentation and/or other materials provided
+ *      with the distribution.
+ *    * Neither the name of The Linux Foundation nor the names of its
+ *      contributors may be used to endorse or promote products derived
+ *      from this software without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED "AS IS" AND ANY EXPRESS OR IMPLIED
+ * WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
+ * MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NON-INFRINGEMENT
+ * ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS
+ * BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR
+ * BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
+ * WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
+ * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
+ * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -301,6 +300,31 @@ int IPACM_ConntrackClient::IPA_Conntrack_Filters_Ignore_Local_Iface
 	return 0;
 }
 
+void IPACM_ConntrackClient::IPA_Conntrack_Filters_Ignore_Local_Iface_v6(struct nfct_filter *filter,
+	struct nfct_handle *handle, ipacm_event_iface_up *data)
+{
+	const struct nfct_filter_ipv6 filter_ipv6_addr =
+	{
+		{data->ipv6_addr[0], data->ipv6_addr[1], data->ipv6_addr[2], data->ipv6_addr[3]},
+		{0xffffffff, 0xffffffff, 0xffffffff, 0xffffffff},
+	};
+	IPA_Conntrack_Filters_Ipv6_Add_Src_Dst_Attr(filter, filter_ipv6_addr);
+
+	if (handle == NULL)
+	{
+		return;
+	}
+
+	IPACMDBG("attaching the filter to the handle\n");
+	int ret = nfct_filter_attach(nfct_fd(handle), filter);
+	if (ret)
+	{
+		PERROR("unable to attach the filter to the handle\n");
+		IPACMERR("The handle:%pK, fd:%d Error: %d\n", handle, nfct_fd(handle), ret);
+		return;
+	}
+}
+
 /* Function which sets up filters to ignore
 		 connections to and from local interfaces */
 int IPACM_ConntrackClient::IPA_Conntrack_Filters_Ignore_Local_Addrs
@@ -328,6 +352,49 @@ int IPACM_ConntrackClient::IPA_Conntrack_Filters_Ignore_Local_Addrs
 
 	return 0;
 } /* IPA_Conntrack_Filters_Ignore_Local_Addrs() */
+
+/* Function which sets up received filter to ignore connections to and from link-local, site-local, unique-local and
+   multicast addresses */
+void IPACM_ConntrackClient::IPA_Conntrack_Filters_Ignore_Ipv6_Addresses(struct nfct_filter *filter)
+{
+	const struct nfct_filter_ipv6 filter_ipv6_private_network_addresses =
+	{
+		{0xfc000000, 0x0, 0x0, 0x0},
+		{0xfe000000, 0x0, 0x0, 0x0},
+	};
+	IPA_Conntrack_Filters_Ipv6_Add_Src_Dst_Attr(filter, filter_ipv6_private_network_addresses);
+
+	const struct nfct_filter_ipv6 filter_ipv6_link_local_addresses =
+	{
+		{0xfe800000, 0x0, 0x0, 0x0},
+		{0xffc00000, 0x0, 0x0, 0x0},
+	};
+	IPA_Conntrack_Filters_Ipv6_Add_Src_Dst_Attr(filter, filter_ipv6_link_local_addresses);
+
+	const struct nfct_filter_ipv6 filter_ipv6_site_local_addresses =
+	{
+		{0xfec00000, 0x0, 0x0, 0x0},
+		{0xffc00000, 0x0, 0x0, 0x0},
+	};
+	IPA_Conntrack_Filters_Ipv6_Add_Src_Dst_Attr(filter, filter_ipv6_site_local_addresses);
+
+	const struct nfct_filter_ipv6 filter_ipv6_multi_cast_addresses =
+	{
+		{0xff000000, 0x0, 0x0, 0x0},
+		{0xff000000, 0x0, 0x0, 0x0},
+	};
+	IPA_Conntrack_Filters_Ipv6_Add_Src_Dst_Attr(filter, filter_ipv6_multi_cast_addresses);
+}
+
+void IPACM_ConntrackClient::IPA_Conntrack_Filters_Ipv6_Add_Src_Dst_Attr(struct nfct_filter *filter,
+	const struct nfct_filter_ipv6 &attr)
+{
+	nfct_filter_set_logic(filter, NFCT_FILTER_DST_IPV6, NFCT_FILTER_LOGIC_NEGATIVE);
+	nfct_filter_add_attr(filter, NFCT_FILTER_DST_IPV6, &attr);
+
+	nfct_filter_set_logic(filter, NFCT_FILTER_SRC_IPV6, NFCT_FILTER_LOGIC_NEGATIVE);
+	nfct_filter_add_attr(filter, NFCT_FILTER_SRC_IPV6, &attr);
+}
 
 /* Initialize TCP Filter */
 int IPACM_ConntrackClient::IPA_Conntrack_TCP_Filter_Init(void)
@@ -388,6 +455,9 @@ int IPACM_ConntrackClient::IPA_Conntrack_TCP_Filter_Init(void)
 	nfct_filter_add_attr(pClient->tcp_filter,
 											 NFCT_FILTER_L4PROTO_STATE,
 											 &tcp_proto_state);
+
+	IPA_Conntrack_Filters_Ignore_Ipv6_Addresses(pClient->tcp_filter);
+
 	return 0;
 }
 
@@ -412,6 +482,8 @@ int IPACM_ConntrackClient::IPA_Conntrack_UDP_Filter_Init(void)
 	}
 	/* set protocol filters as tcp and udp */
 	nfct_filter_add_attr_u32(pClient->udp_filter, NFCT_FILTER_L4PROTO, IPPROTO_UDP);
+
+	IPA_Conntrack_Filters_Ignore_Ipv6_Addresses(pClient->udp_filter);
 
 	return 0;
 }
@@ -694,5 +766,18 @@ void IPACM_ConntrackClient::UpdateTCPFilters(void *param, bool isWan)
 	}
 
   return;
+}
+
+void IPACM_ConntrackClient::UpdateFilters_v6(ipacm_event_iface_up* data)
+{
+	IPACM_ConntrackClient* client = IPACM_ConntrackClient::GetInstance();
+	if (client == NULL)
+	{
+		IPACMERR("unable to retrieve conntrack client instance\n");
+		return;
+	}
+
+	IPA_Conntrack_Filters_Ignore_Local_Iface_v6(client->udp_filter, client->udp_hdl, data);
+	IPA_Conntrack_Filters_Ignore_Local_Iface_v6(client->tcp_filter, client->tcp_hdl, data);
 }
 

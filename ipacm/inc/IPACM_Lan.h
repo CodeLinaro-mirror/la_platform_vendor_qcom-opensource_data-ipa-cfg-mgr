@@ -622,6 +622,10 @@ protected:
 
 	uint32_t tcp_syn_flt_rule_hdl[IPA_IP_MAX];
 
+protected:
+
+	int post_lan_up_event(const ipacm_event_data_addr* data) const;
+
 private:
 
 	/* get hdr proc ctx type given source and destination l2 hdr type */

@@ -59,7 +59,11 @@ IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #endif
 
 #define NETWORK_STATS "%s %lu %lu %lu %lu"
+#ifdef FEATURE_IPA_ANDROID
 #define IPA_NETWORK_STATS_FILE_NAME "/data/misc/ipa/network_stats"
+#else
+#define IPA_NETWORK_STATS_FILE_NAME "/tmp/network_stats"
+#endif
 
 typedef struct _wan_client_rt_hdl
 {

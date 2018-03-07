@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2013-2017, The Linux Foundation. All rights reserved.
+Copyright (c) 2013-2018, The Linux Foundation. All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are
@@ -77,9 +77,14 @@ IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #define IPACM_FIREWALL_FILE_NAME    "mobileap_firewall.xml"
 #define IPACM_CFG_FILE_NAME    "IPACM_cfg.xml"
+#ifndef FEATURE_IPA_ANDROID
+#define IPACM_PID_FILE "/var/run/ipacm.pid"
+#define IPACM_DIR_NAME     "/etc/data/ipa"
+#else
 #define IPACM_PID_FILE "/data/misc/ipa/ipacm.pid"
 #define IPACM_DIR_NAME     "/data/misc/ipa/"
-#define IPACM_FIREWALL_DIR_NAME     "/data"
+#endif
+#define IPACM_FIREWALL_DIR_NAME     "/etc/data"
 #define IPACM_NAME "ipacm"
 
 #define INOTIFY_EVENT_SIZE  (sizeof(struct inotify_event))

@@ -61,7 +61,11 @@ IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 /* <in->out_bytes> <in->out_pkts> <out->in_bytes> <out->in_pkts */
 
 #define PIPE_STATS "%s %s %lu %lu %lu %lu"
+#ifdef FEATURE_IPA_ANDROID
 #define IPA_PIPE_STATS_FILE_NAME "/data/misc/ipa/tether_stats"
+#else
+#define IPA_PIPE_STATS_FILE_NAME "/tmp/tether_stats"
+#endif
 
 /* store each lan-iface unicast routing rule and its handler*/
 struct ipa_lan_rt_rule

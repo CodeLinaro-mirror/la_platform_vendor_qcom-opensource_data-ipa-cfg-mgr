@@ -51,6 +51,7 @@ IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <linux/if.h>
 #include <linux/netlink.h>
 #include <linux/rtnetlink.h>
+#include <linux/limits.h>
 #include <fcntl.h>
 #include <sys/inotify.h>
 #include <stdlib.h>
@@ -83,7 +84,7 @@ IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #define IPACM_NAME "ipacm"
 
 #define INOTIFY_EVENT_SIZE  (sizeof(struct inotify_event))
-#define INOTIFY_BUF_LEN     (INOTIFY_EVENT_SIZE + 2*sizeof(IPACM_FIREWALL_FILE_NAME))
+#define INOTIFY_BUF_LEN     (INOTIFY_EVENT_SIZE +  NAME_MAX + 1)
 
 #define IPA_DRIVER_WLAN_EVENT_MAX_OF_ATTRIBS  3
 #define IPA_DRIVER_WLAN_EVENT_SIZE  (sizeof(struct ipa_wlan_msg_ex)+ IPA_DRIVER_WLAN_EVENT_MAX_OF_ATTRIBS*sizeof(ipa_wlan_hdr_attrib_val))

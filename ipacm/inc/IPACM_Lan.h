@@ -117,6 +117,9 @@ typedef struct _ipa_eth_client
 	uint32_t ul_first_pass_flt_rule_hdl;
 #endif
 	eth_client_rt_hdl eth_rt_hdl[0]; /* depends on number of tx properties */
+#ifdef FEATURE_VLAN_MPDN
+	uint8_t vlan_id;
+#endif
 }ipa_eth_client;
 
 #ifdef FEATURE_IPACM_UL_FIREWALL
@@ -677,7 +680,7 @@ private:
 		return (ipa_eth_client *)ret;
 	}
 
-	inline int get_eth_client_index(uint8_t *mac_addr)
+	inline int get_eth_client_index(uint8_t *mac_addr, uint8_t vlan_id = 0)
 	{
 		int cnt;
 		int num_eth_client_tmp = num_eth_client;
@@ -700,8 +703,21 @@ private:
 								mac_addr,
 								sizeof(get_client_memptr(eth_client, cnt)->mac)) == 0)
 			{
-				IPACMDBG_H("Matched client index: %d\n", cnt);
-				return cnt;
+#ifdef FEATURE_VLAN_MPDN
+				if(vlan_id)
+				{
+					if(get_client_memptr(eth_client, cnt)->vlan_id)
+					{
+						IPACMDBG_H("Matched client index: %d for vid %d\n", cnt, vlan_id);
+						return cnt;
+					}
+				}
+				else
+#endif
+				{
+					IPACMDBG_H("Matched client index: %d\n", cnt);
+					return cnt;
+				}
 			}
 		}
 
@@ -780,7 +796,7 @@ private:
 	int handle_eth_client_ipaddr(ipacm_event_data_all *data);
 
 	/* handle eth client routing rule*/
-	int handle_eth_client_route_rule(uint8_t *mac_addr, ipa_ip_type iptype);
+	int handle_eth_client_route_rule(uint8_t *mac_addr, ipa_ip_type iptype, uint8_t vlan_id = 0);
 
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
 	/* handle eth client routing rule with rule id*/
@@ -788,7 +804,7 @@ private:
 #endif
 
 	/*handle eth client del mode*/
-	int handle_eth_client_down_evt(uint8_t *mac_addr);
+	int handle_eth_client_down_evt(uint8_t *mac_addr, uint8_t vlan_id = 0);
 
 	/* handle odu client initial, construct full headers (tx property) */
 	int handle_odu_hdr_init(uint8_t *mac_addr);

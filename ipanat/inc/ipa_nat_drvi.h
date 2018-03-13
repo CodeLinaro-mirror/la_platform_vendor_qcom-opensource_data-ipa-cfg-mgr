@@ -170,6 +170,14 @@ int ipa_nati_query_timestamp(uint32_t  tbl_hdl,
 
 int ipa_nati_modify_pdn(struct ipa_ioc_nat_pdn_entry *entry);
 
+int ipa_nati_get_pdn_index(uint32_t public_ip, uint8_t *pdn_index);
+
+int ipa_nati_alloc_pdn(ipa_nat_pdn_entry *pdn_info, uint8_t *pdn_index);
+
+int ipa_nati_get_pdn_cnt(void);
+
+int ipa_nati_dealloc_pdn(uint8_t pdn_index);
+
 int ipa_nati_add_ipv4_rule(uint32_t tbl_hdl,
 				const ipa_nat_ipv4_rule *clnt_rule,
 				uint32_t *rule_hdl);

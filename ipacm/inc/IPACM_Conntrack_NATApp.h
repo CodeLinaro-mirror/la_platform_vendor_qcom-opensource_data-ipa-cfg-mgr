@@ -64,6 +64,9 @@ typedef struct _nat_table_entry
 
 	uint32_t public_ip;
 	uint16_t public_port;
+#ifdef FEATURE_VLAN_MPDN
+	uint8_t pdn_index;
+#endif
 
 	u_int8_t  protocol;
 	uint32_t timestamp;
@@ -119,6 +122,10 @@ private:
 public:
 	static NatApp* GetInstance();
 
+#ifdef FEATURE_VLAN_MPDN
+	int AddPdn(uint32_t pub_ip, uint8_t mux_id);
+	int RemovePdn(uint32_t pub_ip);
+#endif
 	int AddTable(uint32_t, uint8_t mux_id);
 	uint32_t GetTableHdl(uint32_t);
 	int DeleteTable(uint32_t);

@@ -108,6 +108,10 @@ private:
 	void ProcessCTMessage(void *);
 	void ProcessTCPorUDPMsg(struct nf_conntrack *,
 	enum nf_conntrack_msg_type, u_int8_t);
+#ifdef FEATURE_VLAN_MPDN
+	void HandleVlanUp(void *);
+	void HandleVlanDown(void *);
+#endif
 	void TriggerWANUp(void *);
 	void TriggerWANDown(uint32_t);
 	int  CreateNatThreads(void);

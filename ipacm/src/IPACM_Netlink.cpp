@@ -1424,6 +1424,10 @@ static int ipa_nl_decode_nlmsg
 		    			 sizeof(data_all->mac_addr));
 			data_all->if_index = msg_ptr->nl_neigh_info.metainfo.ndm_ifindex;
 			strlcpy(data_all->iface_name, dev_name, sizeof(data_all->iface_name));
+
+			IPACMDBG_H("for IF %s, got ndm_family %d, ndm_state %d\n", dev_name, msg_ptr->nl_neigh_info.metainfo.ndm_family,
+				msg_ptr->nl_neigh_info.metainfo.ndm_state);
+
 			/* Add support to replace src-mac as bridge0 mac */
 			if((msg_ptr->nl_neigh_info.metainfo.ndm_family == AF_BRIDGE) &&
 				(msg_ptr->nl_neigh_info.metainfo.ndm_state == NUD_PERMANENT))

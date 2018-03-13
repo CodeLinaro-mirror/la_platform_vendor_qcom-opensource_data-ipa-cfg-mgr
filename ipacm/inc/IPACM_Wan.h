@@ -106,6 +106,12 @@ typedef struct
 	IPACM_Wan *pIface;
 }ipacm_ipv6_wan_iface;
 
+struct ipacm_pdn_flt_rule
+{
+	struct ipa_flt_rule_add flt_rule;
+	uint8_t mux_id;
+};
+
 /* wan iface */
 class IPACM_Wan : public IPACM_Iface
 {
@@ -116,7 +122,9 @@ public:
 	static bool wan_up;
 	static bool wan_up_v6;
 	static uint8_t xlat_mux_id;
-
+#ifdef FEATURE_VLAN_MPDN
+	uint8_t associated_VID;
+#endif
 	/* IPACM interface name */
 	static char wan_up_dev_name[IF_NAME_LEN];
 	static uint32_t curr_wan_ip;
@@ -150,6 +158,34 @@ public:
 #endif
 	}
 
+#ifdef FEATURE_VLAN_MPDN
+	static bool isVlanWanUP()
+	{
+		for(int i = 0; i < IPA_MAX_NUM_SW_PDNS; i++)
+		{
+			if(ipv4_to_iface[i].ipv4_addr && ipv4_to_iface[i].wan_up_vlan)
+			{
+				IPACMDBG_H("iface %s is vlan up\n", ipv4_to_iface[i].pIface->dev_name);
+				return true;
+			}
+		}
+		return false;
+	}
+
+	static bool isVlanWanUP_V6()
+	{
+		for(int i = 0; i < IPA_MAX_NUM_SW_PDNS; i++)
+		{
+			if(ipv6_to_iface[i].wan_up_vlan_v6)
+			{
+				IPACMDBG_H("iface %s is vlan up v6\n", ipv6_to_iface[i].pIface->dev_name);
+				return true;
+			}
+		}
+		return false;
+	}
+#endif
+
 	static bool isWanUP_V6(int ipa_if_num_tether)
 	{
 #ifdef FEATURE_IPA_ANDROID
@@ -180,11 +216,15 @@ public:
 		return xlat_mux_id;
 	}
 
-	void event_callback(ipa_cm_event_id event,
-											void *data);
+	void event_callback(ipa_cm_event_id event, void *data);
 
+#ifdef FEATURE_VLAN_MPDN
+	static struct ipacm_pdn_flt_rule pdn_flt_rule_v4[IPA_MAX_FLT_RULE];
+	static struct ipacm_pdn_flt_rule pdn_flt_rule_v6[IPA_MAX_FLT_RULE];
+#else
 	static struct ipa_flt_rule_add flt_rule_v4[IPA_MAX_FLT_RULE];
 	static struct ipa_flt_rule_add flt_rule_v6[IPA_MAX_FLT_RULE];
+#endif
 #ifdef FEATURE_IPACM_UL_FIREWALL
 	static struct ipa_flt_rule_add firewall_flt_rule_v6_ul[IPACM_MAX_FIREWALL_ENTRIES+1];
 #endif
@@ -232,7 +272,6 @@ private:
 	uint32_t ipv6_frag_firewall_flt_rule_hdl;
 	uint32_t *wan_route_rule_v4_hdl;
 	uint32_t *wan_route_rule_v6_hdl;
-	uint32_t *wan_route_rule_v6_hdl_a5;
 	uint32_t hdr_hdl_sta_v4;
 	uint32_t hdr_hdl_sta_v6;
 	uint32_t firewall_hdl_v4[IPACM_MAX_FIREWALL_ENTRIES];
@@ -258,6 +297,8 @@ private:
 	bool header_partial_default_wan_v6;
 	uint8_t ext_router_mac_addr[IPA_MAC_ADDR_SIZE];
 	uint8_t netdev_mac[IPA_MAC_ADDR_SIZE];
+
+	static uint32_t wan_route_rule_v6_hdl_a5;
 
 	static int num_ipv4_modem_pdn;
 
@@ -475,6 +516,10 @@ private:
 	/* wan default route/filter rule configuration */
 	int handle_route_add_evt(ipa_ip_type iptype);
 
+#ifdef FEATURE_VLAN_MPDN
+	int handle_route_add_vlan_pdn_evt(ipa_ip_type iptype, uint8_t vlan_id);
+#endif
+
 	/* construct complete STA ethernet header */
 	int handle_sta_header_add_evt();
 
@@ -504,14 +549,23 @@ private:
 	int handle_route_del_evt_ex(ipa_ip_type iptype);
 
 	/* configure the initial firewall filter rules */
+#ifdef FEATURE_VLAN_MPDN
+	int config_dft_firewall_rules_ex(struct ipacm_pdn_flt_rule* rules, int rule_offset,
+		ipa_ip_type iptype);
+#else
 	int config_dft_firewall_rules_ex(struct ipa_flt_rule_add* rules, int rule_offset,
 		ipa_ip_type iptype);
+#endif
 
 	/* init filtering rule in wan dl filtering table */
 	int init_fl_rule_ex(ipa_ip_type iptype);
 
 	/* add ICMP and ALG rules in wan dl filtering table */
+#ifdef FEATURE_VLAN_MPDN
+	int add_icmp_alg_rules(struct ipacm_pdn_flt_rule *rules, int rule_offset, ipa_ip_type iptype);
+#else
 	int add_icmp_alg_rules(struct ipa_flt_rule_add* rules, int rule_offset, ipa_ip_type iptype);
+#endif
 
 	/* query extended property */
 	int query_ext_prop();
@@ -522,7 +576,11 @@ private:
 
 	int del_wan_firewall_rule(ipa_ip_type iptype);
 
+#ifdef FEATURE_VLAN_MPDN
+	int add_dft_filtering_rule(struct ipacm_pdn_flt_rule *rules, int rule_offset, ipa_ip_type iptype);
+#else
 	int add_dft_filtering_rule(struct ipa_flt_rule_add* rules, int rule_offset, ipa_ip_type iptype);
+#endif
 
 	int install_wan_filtering_rule(bool is_sw_routing);
 

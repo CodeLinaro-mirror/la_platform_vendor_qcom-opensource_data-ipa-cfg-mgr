@@ -48,6 +48,7 @@ struct ipa_nat_cache ipv4_nat_cache;
 static pthread_mutex_t nat_mutex = PTHREAD_MUTEX_INITIALIZER;
 
 static ipa_nat_pdn_entry pdns[IPA_MAX_PDN_NUM];
+static int num_pdns = 0;
 
 static int ipa_nati_create_table(struct ipa_nat_ip4_table_cache* nat_table,
 	uint32_t public_ip_addr, uint16_t number_of_entries, uint8_t table_index);
@@ -394,6 +395,7 @@ int ipa_nati_add_ipv4_tbl(uint32_t public_ip_addr,
 		use this ip as the single PDN address
 	*/
 	pdns[0].public_ip = public_ip_addr;
+	num_pdns++;
 
 	/* Return table handle */
 	++ipv4_nat_cache.table_cnt;
@@ -707,6 +709,127 @@ int ipa_nati_modify_pdn(struct ipa_ioc_nat_pdn_entry *entry)
 
 	IPADBG("posted IPA_IOC_NAT_MODIFY_PDN to kernel successfully and stored in cache\n index %d, ip 0x%X, src_metdata 0x%X, dst_metadata 0x%X\n",
 		entry->pdn_index, entry->public_ip, entry->src_metadata, entry->dst_metadata);
+	return 0;
+}
+
+int ipa_nati_get_pdn_index(uint32_t public_ip, uint8_t *pdn_index)
+{
+	int i = 0;
+
+	for(i = 0; i < (IPA_MAX_PDN_NUM - 1); i++) {
+		if(pdns[i].public_ip == public_ip) {
+			IPADBG("ip 0x%X matches PDN index %d\n", public_ip, i);
+			*pdn_index = i;
+			return 0;
+		}
+	}
+
+	IPAERR("ip 0x%X does not match any PDN\n", public_ip);
+	return -EIO;
+}
+
+int ipa_nati_alloc_pdn(ipa_nat_pdn_entry *pdn_info, uint8_t *pdn_index)
+{
+	ipa_nat_pdn_entry zero_test;
+	struct ipa_ioc_nat_pdn_entry pdn_data;
+	int i, ret;
+
+	IPADBG("alloc PDN  for ip %d\n", pdn_info->public_ip);
+
+	memset(&zero_test, 0, sizeof(zero_test));
+
+	if(num_pdns >= (IPA_MAX_PDN_NUM - 1)) {
+		IPAERR("exceeded max num of PDNs\n");
+		return -EIO;
+	}
+
+	for(i = 0; i < (IPA_MAX_PDN_NUM - 1); i++) {
+		if(pdns[i].public_ip == pdn_info->public_ip)
+		{
+			IPADBG("found the same pdn in index %d\n", i);
+			*pdn_index = i;
+			if((pdns[i].src_metadata != pdn_info->src_metadata) ||
+				(pdns[i].dst_metadata != pdn_info->dst_metadata))
+			{
+				IPAERR("WARNING: metadata values don't match! [%d, %d], [%d, %d]\n\n",
+					pdns[i].src_metadata, pdn_info->src_metadata,
+					pdns[i].dst_metadata, pdn_info->dst_metadata);
+			}
+			return 0;
+		}
+		if(memcmp((pdns + i), &zero_test, sizeof(ipa_nat_pdn_entry)))
+		{
+			IPADBG("found an empty pdn in index %d\n", i);
+			break;
+		}
+	}
+
+	if(i >= (IPA_MAX_PDN_NUM - 1))
+	{
+		IPAERR("couldn't find an empty entry while num is %d\n",
+			num_pdns);
+		return -EIO;
+	}
+
+	pdn_data.pdn_index = i;
+	pdn_data.public_ip = pdn_info->public_ip;
+	pdn_data.src_metadata = pdn_info->src_metadata;
+	pdn_data.dst_metadata = pdn_info->dst_metadata;
+
+	ret = ipa_nati_modify_pdn(&pdn_data);
+	if(!ret)
+	{
+		num_pdns++;
+		*pdn_index = i;
+	}
+
+	return ret;
+}
+
+int ipa_nati_get_pdn_cnt(void)
+{
+	return num_pdns;
+}
+
+int ipa_nati_dealloc_pdn(uint8_t pdn_index)
+{
+	ipa_nat_pdn_entry zero_test;
+	struct ipa_ioc_nat_pdn_entry pdn_data;
+	int ret;
+
+	IPADBG(" trying to deallocate PDN index %d\n", pdn_index);
+
+	if(!num_pdns)
+	{
+		IPAERR("pdn table is already empty\n");
+		return -EIO;
+	}
+
+	memset(&zero_test, 0, sizeof(zero_test));
+
+	if(memcmp((pdns + pdn_index), &zero_test, sizeof(ipa_nat_pdn_entry)))
+	{
+		IPAERR("pdn entry is a zero entry\n");
+		return -EIO;
+	}
+
+	IPADBG("PDN in index %d has ip 0x%X\n", pdn_index, pdns[pdn_index].public_ip);
+
+	pdn_data.pdn_index = pdn_index;
+	pdn_data.src_metadata = 0;
+	pdn_data.dst_metadata = 0;
+	pdn_data.public_ip = 0;
+
+	ret = ipa_nati_modify_pdn(&pdn_data);
+	if(ret)
+	{
+		IPAERR("failed modifying PDN\n");
+		return -EIO;
+	}
+
+	memset((pdns + pdn_index), 0, sizeof(ipa_nat_pdn_entry));
+	num_pdns--;
+	IPADBG("successfully removed pdn from index %d\n", pdn_index);
 	return 0;
 }
 

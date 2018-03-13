@@ -62,7 +62,12 @@ public:
 													 ipa_ip_type ip,
 													 uint8_t num_rules);
 
+#ifdef FEATURE_VLAN_MPDN
+	bool AddWanDLFilteringRule(struct ipa_ioc_add_flt_rule const *rule_table_v4, struct ipa_ioc_add_flt_rule const * rule_table_v6,
+		uint8_t *mux_id_v4, uint8_t *mux_id_v6);
+#else
 	bool AddWanDLFilteringRule(struct ipa_ioc_add_flt_rule const *rule_table_v4, struct ipa_ioc_add_flt_rule const * rule_table_v6, uint8_t mux_id);
+#endif
 #ifdef FEATURE_IPACM_UL_FIREWALL
 	bool AddWanULFilteringRule(struct ipa_ioc_add_flt_rule const * rule_table_v6, uint8_t mux_id, bool is_enable);
 #endif

@@ -212,6 +212,8 @@ typedef enum
 #ifdef FEATURE_VLAN_MPDN
 	IPA_PREFIX_CHANGE_EVENT,                  /* ipacm_event_data_fid */
 	IPA_ROUTE_ADD_VLAN_PDN_EVENT,             /* ipacm_event_route_vlan */
+	IPA_HANDLE_WAN_VLAN_PDN_UP,                   /* ipacm_event_vlan_pdn */
+	IPA_HANDLE_WAN_VLAN_PDN_DOWN,                 /* ipacm_event_vlan_pdn */
 #endif
 	IPACM_EVENT_MAX
 } ipa_cm_event_id;
@@ -388,6 +390,14 @@ typedef struct
 	uint32_t wan_ipv4_addr;
 	uint32_t wan_ipv6_prefix[2];
 }ipacm_event_route_vlan;
+
+typedef struct
+{
+	enum ipa_ip_type iptype;
+	uint8_t VlanID;
+	int mux_id;
+	int ipv4_addr;
+}ipacm_event_vlan_pdn;
 
 typedef enum
 {

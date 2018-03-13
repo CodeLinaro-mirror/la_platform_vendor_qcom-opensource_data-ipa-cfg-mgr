@@ -124,6 +124,9 @@ const char *ipacm_event_name[] = {
 #endif
 #ifdef FEATURE_VLAN_MPDN
 	__stringify(IPA_PREFIX_CHANGE_EVENT),                 /* ipacm_event_data_fid */
+	__stringify(IPA_ROUTE_ADD_VLAN_PDN_EVENT),            /* ipacm_event_route_vlan */
+	__stringify(IPA_HANDLE_WAN_VLAN_PDN_UP),                  /* ipacm_event_vlan_pdn */
+	__stringify(IPA_HANDLE_WAN_VLAN_PDN_DOWN),                /* ipacm_event_vlan_pdn */
 #endif
 	__stringify(IPACM_EVENT_MAX),
 };

@@ -140,7 +140,107 @@ uint32_t NatApp::GenerateMetdata(uint8_t mux_id)
 }
 
 /* NAT APP related object function definitions */
+#ifdef FEATURE_VLAN_MPDN
+int NatApp::AddPdn(uint32_t pub_ip, uint8_t mux_id)
+{
+	int ret;
+	int cnt = 0;
+	ipa_nat_ipv4_rule nat_rule;
+	ipa_nat_pdn_entry entry;
+	uint8_t pdn_index;
+	uint8_t pdn_count = 0;
+	IPACMDBG_H("%s() %d\n", __FUNCTION__, __LINE__);
 
+	entry.dst_metadata = 0;
+	entry.src_metadata = GenerateMetdata(mux_id);
+	entry.public_ip = pub_ip;
+
+	ret = ipa_nat_get_pdn_count(&pdn_count);
+	if(ret)
+	{
+		IPACMERR("unable to get pdn count Error:%d\n", ret);
+		return ret;
+	}
+
+	if(!pdn_count)
+	{
+		/* create the NAT table, the PDN will be stored in index 0 */
+		ret = ipa_nat_add_ipv4_tbl(pub_ip, max_entries, &nat_table_hdl);
+		if(ret)
+		{
+			IPACMERR("unable to create nat table Error:%d\n", ret);
+			return ret;
+		}
+		IPACMDBG_H("succeesfully created NAT table for ip 0x%X\n", pub_ip);
+
+		/* modify PDN 0 so it will hold the mux ID in the src metadata field */
+		pdn_index = 0;
+		ret = ipa_nat_modify_pdn(nat_table_hdl, pdn_index, &entry);
+		if(ret)
+		{
+			IPACMERR("unable to modify PDN 0 entry Error:%d\n", ret);
+			return ret;
+		}
+	}
+	else
+	{
+		/* only allocate a PDN if it is a new one */
+		if(ipa_nat_get_pdn_index(pub_ip, &pdn_index) < 0)
+		{
+			ret = ipa_nat_alloc_pdn(&entry, &pdn_index);
+			if(ret)
+			{
+				IPACMERR("couldn't allocate a pdn index\n");
+				return ret;
+			}
+			IPACMDBG_H("successfully allocated index %d for ip 0x%X\n", pdn_index, pub_ip);
+		}
+		else
+		{
+			IPACMDBG_H("pdn already existed with index %d\n", pdn_index);
+		}
+	}
+
+	/* now traverse cache and add the PDN entries */
+	for(cnt = 0; cnt < max_entries; cnt++)
+	{
+		if((cache[cnt].private_ip != 0)
+			/* flush only entries which are related to this PDN */
+			&& (cache[cnt].public_ip == pub_ip))
+		{
+			memset(&nat_rule, 0, sizeof(nat_rule));
+			nat_rule.private_ip = cache[cnt].private_ip;
+			nat_rule.target_ip = cache[cnt].target_ip;
+			nat_rule.target_port = cache[cnt].target_port;
+			nat_rule.private_port = cache[cnt].private_port;
+			nat_rule.public_port = cache[cnt].public_port;
+			nat_rule.protocol = cache[cnt].protocol;
+			nat_rule.pdn_index = pdn_index;
+			cache[cnt].pdn_index = pdn_index;
+
+			if(ipa_nat_add_ipv4_rule(nat_table_hdl, &nat_rule, &cache[cnt].rule_hdl) < 0)
+			{
+				IPACMERR("unable to add the rule delete from cache\n");
+				memset(&cache[cnt], 0, sizeof(cache[cnt]));
+				curCnt--;
+				continue;
+			}
+			cache[cnt].enabled = true;
+
+			IPACMDBG("new pdn added below rule successfully\n");
+			iptodot("Private IP", nat_rule.private_ip);
+			iptodot("Target IP", nat_rule.target_ip);
+			IPACMDBG("Private Port:%d \t Target Port: %d\t", nat_rule.private_port, nat_rule.target_port);
+			IPACMDBG("Public Port:%d\n", nat_rule.public_port);
+			IPACMDBG("protocol: %d\n", nat_rule.protocol);
+			IPACMDBG("pdn index: %d\n", nat_rule.pdn_index);
+		}
+
+	}
+
+	return IPACM_SUCCESS;
+}
+#endif
 int NatApp::AddTable(uint32_t pub_ip, uint8_t mux_id)
 {
 	int ret;
@@ -163,6 +263,7 @@ int NatApp::AddTable(uint32_t pub_ip, uint8_t mux_id)
 		IPACMERR("unable to create nat table Error:%d\n", ret);
 		return ret;
 	}
+
 	if(IPACM_Iface::ipacmcfg->GetIPAVer() >= IPA_HW_v4_0) {
 		/* modify PDN 0 so it will hold the mux ID in the src metadata field */
 		ipa_nat_pdn_entry entry;
@@ -183,7 +284,7 @@ int NatApp::AddTable(uint32_t pub_ip, uint8_t mux_id)
 		IPACMDBG("Restore the cache to ipa NAT-table\n");
 		for(cnt = 0; cnt < max_entries; cnt++)
 		{
-			if(cache[cnt].private_ip !=0)
+			if((cache[cnt].private_ip !=0))
 			{
 				memset(&nat_rule, 0 , sizeof(nat_rule));
 				nat_rule.private_ip = cache[cnt].private_ip;
@@ -228,6 +329,69 @@ void NatApp::Reset()
 		cache[cnt].enabled = false;
 	}
 }
+
+#ifdef FEATURE_VLAN_MPDN
+int NatApp::RemovePdn(uint32_t pub_ip)
+{
+	int ret;
+	uint8_t pdn_index;
+	uint8_t pdn_cnt;
+	IPACMDBG_H("%s() %d\n", __FUNCTION__, __LINE__);
+
+	CHK_TBL_HDL();
+
+	ret = ipa_nat_get_pdn_index(pub_ip, &pdn_index);
+	if(ret)
+	{
+		IPACMERR("pdn doesn't exist on pdn table\n");
+		return IPACM_FAILURE;
+	}
+
+	/* remove all PDN entries */
+	for(int cnt = 0; cnt < max_entries; cnt++)
+	{
+		if((cache[cnt].pdn_index == pdn_index) &&
+			(cache[cnt].enabled == true))
+		{
+			if(ipa_nat_del_ipv4_rule(nat_table_hdl, cache[cnt].rule_hdl) < 0)
+			{
+				IPACMERR("unable to delete rule with private ip 0x%X\n", cache[cnt].private_ip);
+				continue;
+			}
+			memset(&cache[cnt], 0, sizeof(cache[cnt]));
+		}
+	}
+
+	ret = ipa_nat_dealloc_pdn(pdn_index);
+	if(ret)
+	{
+		IPACMERR(" couldn't deallocate PDN in index %d\n",pdn_index);
+		return IPACM_FAILURE;
+	}
+
+	ret = ipa_nat_get_pdn_count(&pdn_cnt);
+	if(ret)
+	{
+		IPACMERR(" couldn't acquire number of PDNs\n");
+		return IPACM_FAILURE;
+	}
+
+	if(!pdn_cnt)
+	{
+		IPACMDBG_H("removing NAT table\n");
+		ret = ipa_nat_del_ipv4_tbl(nat_table_hdl);
+		if(ret)
+		{
+			IPACMERR("unable to delete nat table Error: %d\n", ret);;
+			return ret;
+		}
+
+		Reset();
+	}
+
+	return 0;
+}
+#endif
 
 int NatApp::DeleteTable(uint32_t pub_ip)
 {
@@ -325,6 +489,9 @@ int NatApp::AddEntry(const nat_table_entry *rule)
 {
 	int cnt = 0;
 	ipa_nat_ipv4_rule nat_rule;
+#ifdef FEATURE_VLAN_MPDN
+	uint8_t pdn_index;
+#endif
 
 	IPACMDBG("%s() %d\n", __FUNCTION__, __LINE__);
 
@@ -347,6 +514,13 @@ int NatApp::AddEntry(const nat_table_entry *rule)
 		IPACMERR("Invalid Connection, ignoring it\n");
 		return 0;
 	}
+#ifdef FEATURE_VLAN_MPDN
+	if(ipa_nat_get_pdn_index(rule->public_ip, &pdn_index))
+	{
+		IPACMERR("couldn't acquire PDN index for public ip 0x%X\n", rule->public_ip);
+		return IPACM_FAILURE;
+	}
+#endif
 
 	if(!ChkForDup(rule))
 	{
@@ -376,6 +550,9 @@ int NatApp::AddEntry(const nat_table_entry *rule)
 			nat_rule.private_port = rule->private_port;
 			nat_rule.public_port = rule->public_port;
 			nat_rule.protocol = rule->protocol;
+#ifdef FEATURE_VLAN_MPDN
+			nat_rule.pdn_index = pdn_index;
+#endif
 
 			if(isPwrSaveIf(rule->private_ip) ||
 				 isPwrSaveIf(rule->target_ip))
@@ -404,6 +581,9 @@ int NatApp::AddEntry(const nat_table_entry *rule)
 			cache[cnt].timestamp = 0;
 			cache[cnt].public_port = rule->public_port;
 			cache[cnt].dst_nat = rule->dst_nat;
+#ifdef FEATURE_VLAN_MPDN
+			cache[cnt].pdn_index = pdn_index;
+#endif
 			curCnt++;
 		}
 
@@ -664,6 +844,9 @@ int NatApp::ResetPwrSaveIf(uint32_t client_lan_ip)
 			nat_rule.private_port = cache[cnt].private_port;
 			nat_rule.public_port = cache[cnt].public_port;
 			nat_rule.protocol = cache[cnt].protocol;
+#ifdef FEATURE_VLAN_MPDN
+			nat_rule.pdn_index = cache[cnt].pdn_index;
+#endif
 
 			if(ipa_nat_add_ipv4_rule(nat_table_hdl, &nat_rule, &cache[cnt].rule_hdl) < 0)
 			{
@@ -942,6 +1125,9 @@ void NatApp::CacheEntry(const nat_table_entry *rule)
 			cache[cnt].timestamp = 0;
 			cache[cnt].public_port = rule->public_port;
 			cache[cnt].public_ip = rule->public_ip;
+#ifdef FEATURE_VLAN_MPDN
+			cache[cnt].pdn_index = rule->pdn_index;
+#endif
 			cache[cnt].dst_nat = rule->dst_nat;
 			curCnt++;
 		}

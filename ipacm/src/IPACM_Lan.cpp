@@ -1100,7 +1100,7 @@ int IPACM_Lan::handle_vlan_neighbor(ipacm_event_data_all *data)
 {
 	ipacm_event_new_neigh_vlan *data_vlan;
 	uint8_t vlan_id;
-	bool new_prefix;
+	bool new_prefix = false;
 
 	if (IPACM_Iface::ipacmcfg->get_vlan_id(data->iface_name, &vlan_id))
 	{
@@ -1130,7 +1130,7 @@ int IPACM_Lan::handle_vlan_neighbor(ipacm_event_data_all *data)
 	}
 
 	/* first construc ETH full header */
-	handle_eth_hdr_init(data->mac_addr, data_vlan->bridge, vlan_id);
+	handle_eth_hdr_init(data->mac_addr, data_vlan->bridge, vlan_id, true);
 	IPACMDBG_H("construct ETH header and route rules \n");
 	/* Associate with IP and construct RT-rule */
 	if(handle_eth_client_ipaddr(data) == IPACM_FAILURE)
@@ -1156,14 +1156,22 @@ int IPACM_Lan::handle_vlan_neighbor(ipacm_event_data_all *data)
 #endif
 	/*
 	 * if this is the first time we have this global ipv6 prefix (or this
-	 * is the deafult pdn prefix) we can notify WAN that it is a v6 vlan pdn
+	 * is the default pdn prefix) we can notify WAN that it is a v6 vlan pdn
 	 */
 	if(new_prefix ||
-		((IPACM_Wan::backhaul_ipv6_prefix[0] == data_vlan->data_all.ipv6_addr[0]) &&
+		((IPACM_Wan::backhaul_ipv6_prefix[0] || IPACM_Wan::backhaul_ipv6_prefix[1]) &&
+			(IPACM_Wan::backhaul_ipv6_prefix[0] == data_vlan->data_all.ipv6_addr[0]) &&
 			(IPACM_Wan::backhaul_ipv6_prefix[1] == data_vlan->data_all.ipv6_addr[1])))
 	{
 		ipacm_cmd_q_data evt_data;
 		ipacm_event_route_vlan *data;
+
+		IPACMDBG_H("generating IPA_ROUTE_ADD_VLAN_PDN_EVENT, new_prefix %d\n", new_prefix);
+		IPACMDBG_H("prefixes 0x[%X][%X], 0x[%X][%X]\n",
+			IPACM_Wan::backhaul_ipv6_prefix[0],
+			IPACM_Wan::backhaul_ipv6_prefix[1],
+			data_vlan->data_all.ipv6_addr[0],
+			data_vlan->data_all.ipv6_addr[1])
 
 		evt_data.event = IPA_ROUTE_ADD_VLAN_PDN_EVENT;
 		data = (ipacm_event_route_vlan *)malloc(sizeof(ipacm_event_route_vlan));
@@ -2089,15 +2097,18 @@ int IPACM_Lan::handle_eth_hdr_init(uint8_t *mac_addr, ipacm_bridge *bridge, uint
 				if(isVlan)
 				{
 					uint16_t vlan_tci =
-						(*((uint16_t *)(pHeaderDescriptor->hdr[0].hdr[sCopyHeader.eth2_ofst +
+						(*((uint16_t *)&(pHeaderDescriptor->hdr[0].hdr[sCopyHeader.eth2_ofst +
 							2 * IPA_MAC_ADDR_SIZE +
 							VLAN_TPID_SIZE])));
-					vlan_tci = (vlan_tci & ~VLAN_VID_MASK) | (vlan_id && VLAN_VID_MASK);
+					vlan_tci = (vlan_tci & ~VLAN_VID_MASK) | (vlan_id & VLAN_VID_MASK);
 					memcpy(&pHeaderDescriptor->hdr[0].hdr[sCopyHeader.eth2_ofst +
 						2 * IPA_MAC_ADDR_SIZE +
 						VLAN_TPID_SIZE],
 						&vlan_tci,
 						sizeof(vlan_tci));
+					IPACMDBG_H("v4: updated the vlan_tci, now 0x%X, vlan tag is 0x%X\n", vlan_tci,
+						*((uint32_t *)&(pHeaderDescriptor->hdr[0].hdr[sCopyHeader.eth2_ofst +
+							2 * IPA_MAC_ADDR_SIZE])));
 				}
 
 				/* VLAN case */
@@ -2227,16 +2238,20 @@ int IPACM_Lan::handle_eth_hdr_init(uint8_t *mac_addr, ipacm_bridge *bridge, uint
 				if(isVlan)
 				{
 					uint16_t vlan_tci =
-						(*((uint16_t *)(pHeaderDescriptor->hdr[0].hdr[sCopyHeader.eth2_ofst +
+						(*((uint16_t *)&(pHeaderDescriptor->hdr[0].hdr[sCopyHeader.eth2_ofst +
 							2 * IPA_MAC_ADDR_SIZE +
 							VLAN_TPID_SIZE])));
-						vlan_tci = (vlan_tci & ~VLAN_VID_MASK) | (vlan_id && VLAN_VID_MASK);
+						vlan_tci = (vlan_tci & ~VLAN_VID_MASK) | (vlan_id & VLAN_VID_MASK);
 
 					memcpy(&pHeaderDescriptor->hdr[0].hdr[sCopyHeader.eth2_ofst +
 						2 * IPA_MAC_ADDR_SIZE +
 						VLAN_TPID_SIZE],
 						&vlan_tci,
 						sizeof(vlan_tci));
+
+					IPACMDBG_H("v6 updated the vlan_tci, now 0x%X, vlan tag is 0x%X\n", vlan_tci,
+						*((uint32_t *)&(pHeaderDescriptor->hdr[0].hdr[sCopyHeader.eth2_ofst +
+							2 * IPA_MAC_ADDR_SIZE])));
 				}
 				/* VLAN case */
 				if(bridge)
@@ -4762,6 +4777,8 @@ int IPACM_Lan::re_config_dft_firewall_rules_ul(ipa_ip_type iptype, ul_firewall_t
 			IPACMDBG_H("WAN v6 is not UP\n");
 			return IPACM_SUCCESS;
 		}
+
+		IPACMDBG_H("is sta %d, accept %d\n", IPACM_Wan::backhaul_is_sta_mode, IPACM_Wan::firewall_config_ul.rule_action_accept);
 
 		if ((IPACM_Wan::backhaul_is_sta_mode == false) &&
 			(IPACM_Wan::firewall_config_ul.rule_action_accept == true)) /* v6 LTE and WL ?*/

@@ -334,7 +334,12 @@ bool IPACM_Filtering::AddWanULFilteringRule(struct ipa_ioc_add_flt_rule const * 
 }
 #endif
 
+#ifdef FEATURE_VLAN_MPDN
+bool IPACM_Filtering::AddWanDLFilteringRule(struct ipa_ioc_add_flt_rule const *rule_table_v4, struct ipa_ioc_add_flt_rule const * rule_table_v6,
+	uint8_t *mux_id_v4, uint8_t *mux_id_v6)
+#else
 bool IPACM_Filtering::AddWanDLFilteringRule(struct ipa_ioc_add_flt_rule const *rule_table_v4, struct ipa_ioc_add_flt_rule const * rule_table_v6, uint8_t mux_id)
+#endif
 {
 	int ret = 0, cnt, num_rules = 0, pos = 0;
 	ipa_install_fltr_rule_req_msg_v01 qmi_rule_msg;
@@ -351,11 +356,25 @@ bool IPACM_Filtering::AddWanDLFilteringRule(struct ipa_ioc_add_flt_rule const *r
 
 	if(rule_table_v4 != NULL)
 	{
+#ifdef FEATURE_VLAN_MPDN
+		if(!mux_id_v4)
+		{
+			IPACMERR("got NULL v4 mux IDs array\n");
+			return false;
+		}
+#endif
 		num_rules += rule_table_v4->num_rules;
 		IPACMDBG_H("Get %d WAN DL IPv4 filtering rules.\n", rule_table_v4->num_rules);
 	}
 	if(rule_table_v6 != NULL)
 	{
+#ifdef FEATURE_VLAN_MPDN
+		if(!mux_id_v6)
+		{
+			IPACMERR("got NULL v6 mux IDs array\n");
+			return false;
+		}
+#endif
 		num_rules += rule_table_v6->num_rules;
 		IPACMDBG_H("Get %d WAN DL IPv6 filtering rules.\n", rule_table_v6->num_rules);
 	}
@@ -398,7 +417,11 @@ bool IPACM_Filtering::AddWanDLFilteringRule(struct ipa_ioc_add_flt_rule const *r
 					qmi_rule_msg.filter_spec_list[pos].is_routing_table_index_valid = 1;
 					qmi_rule_msg.filter_spec_list[pos].route_table_index = rule_table_v4->rules[cnt].rule.rt_tbl_idx;
 					qmi_rule_msg.filter_spec_list[pos].is_mux_id_valid = 1;
+#ifdef FEATURE_VLAN_MPDN
+					qmi_rule_msg.filter_spec_list[pos].mux_id = mux_id_v4[cnt];
+#else
 					qmi_rule_msg.filter_spec_list[pos].mux_id = mux_id;
+#endif
 					memcpy(&qmi_rule_msg.filter_spec_list[pos].filter_rule,
 						&rule_table_v4->rules[cnt].rule.eq_attrib,
 						sizeof(struct ipa_filter_rule_type_v01));
@@ -423,7 +446,11 @@ bool IPACM_Filtering::AddWanDLFilteringRule(struct ipa_ioc_add_flt_rule const *r
 					qmi_rule_msg.filter_spec_list[pos].is_routing_table_index_valid = 1;
 					qmi_rule_msg.filter_spec_list[pos].route_table_index = rule_table_v6->rules[cnt].rule.rt_tbl_idx;
 					qmi_rule_msg.filter_spec_list[pos].is_mux_id_valid = 1;
+#ifdef FEATURE_VLAN_MPDN
+					qmi_rule_msg.filter_spec_list[pos].mux_id = mux_id_v6[cnt];
+#else
 					qmi_rule_msg.filter_spec_list[pos].mux_id = mux_id;
+#endif
 					memcpy(&qmi_rule_msg.filter_spec_list[pos].filter_rule,
 						&rule_table_v6->rules[cnt].rule.eq_attrib,
 						sizeof(struct ipa_filter_rule_type_v01));
@@ -480,7 +507,11 @@ bool IPACM_Filtering::AddWanDLFilteringRule(struct ipa_ioc_add_flt_rule const *r
 					qmi_rule_ex_msg.filter_spec_ex_list[pos].is_routing_table_index_valid = 1;
 					qmi_rule_ex_msg.filter_spec_ex_list[pos].route_table_index = rule_table_v4->rules[cnt].rule.rt_tbl_idx;
 					qmi_rule_ex_msg.filter_spec_ex_list[pos].is_mux_id_valid = 1;
+#ifdef FEATURE_VLAN_MPDN
+					qmi_rule_ex_msg.filter_spec_ex_list[pos].mux_id = mux_id_v4[cnt];
+#else
 					qmi_rule_ex_msg.filter_spec_ex_list[pos].mux_id = mux_id;
+#endif
 					qmi_rule_ex_msg.filter_spec_ex_list[pos].rule_id = rule_table_v4->rules[cnt].rule.rule_id;
 					qmi_rule_ex_msg.filter_spec_ex_list[pos].is_rule_hashable = rule_table_v4->rules[cnt].rule.hashable;
 					memcpy(&qmi_rule_ex_msg.filter_spec_ex_list[pos].filter_rule,
@@ -507,7 +538,11 @@ bool IPACM_Filtering::AddWanDLFilteringRule(struct ipa_ioc_add_flt_rule const *r
 					qmi_rule_ex_msg.filter_spec_ex_list[pos].is_routing_table_index_valid = 1;
 					qmi_rule_ex_msg.filter_spec_ex_list[pos].route_table_index = rule_table_v6->rules[cnt].rule.rt_tbl_idx;
 					qmi_rule_ex_msg.filter_spec_ex_list[pos].is_mux_id_valid = 1;
+#ifdef FEATURE_VLAN_MPDN
+					qmi_rule_ex_msg.filter_spec_ex_list[pos].mux_id = mux_id_v6[cnt];
+#else
 					qmi_rule_ex_msg.filter_spec_ex_list[pos].mux_id = mux_id;
+#endif
 					qmi_rule_ex_msg.filter_spec_ex_list[pos].rule_id = rule_table_v6->rules[cnt].rule.rule_id;
 					qmi_rule_ex_msg.filter_spec_ex_list[pos].is_rule_hashable = rule_table_v6->rules[cnt].rule.hashable;
 					memcpy(&qmi_rule_ex_msg.filter_spec_ex_list[pos].filter_rule,

@@ -144,6 +144,49 @@ int ipa_nat_query_timestamp(uint32_t  table_handle,
 int ipa_nat_modify_pdn(uint32_t  tbl_hdl,
 	uint8_t pdn_index,
 	ipa_nat_pdn_entry *pdn_info);
+	
+/**
+* ipa_nat_get_pdn_index() - get a PDN index for a public ip
+* @public_ip : [in] IPv4 address of the PDN entry
+* @pdn_index : [out] the index of the requested PDN entry
+*
+* Get a PDN entry
+*
+* Returns:	0  On Success, negative on failure
+*/
+int ipa_nat_get_pdn_index(uint32_t public_ip, uint8_t *pdn_index);
+
+/**
+* ipa_nat_alloc_pdn() - allocate a PDN for new WAN
+* @pdn_info : [in] values for the PDN entry to be created
+* @pdn_index : [out] the index of the requested PDN entry
+*
+* allocate a new PDN entry
+*
+* Returns:	0  On Success, negative on failure
+*/
+int ipa_nat_alloc_pdn(ipa_nat_pdn_entry *pdn_info,
+	uint8_t *pdn_index);
+
+/**
+* ipa_nat_get_pdn_count() - get the number of allocated PDNs
+* @pdn_cnt : [out] the number of allocated PDNs
+*
+* get the number of allocated PDNs
+*
+* Returns:	0  On Success, negative on failure
+*/
+int ipa_nat_get_pdn_count(uint8_t *pdn_cnt);
+
+/**
+* ipa_nat_dealloc_pdn() - deallocate a PDN entry
+* @pdn_index : [in] pdn index to be deallocated
+*
+* deallocate a PDN in specified index - zero the PDN entry
+*
+* Returns:	0  On Success, negative on failure
+*/
+int ipa_nat_dealloc_pdn(uint8_t pdn_index);
 
 
 /**

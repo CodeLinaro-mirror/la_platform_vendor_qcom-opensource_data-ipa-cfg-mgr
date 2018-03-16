@@ -50,7 +50,7 @@ extern "C"
 #ifndef FEATURE_IPA_ANDROID
 
 #define IPACM_TCP_FULL_FILE_NAME_NEW  "/proc/sys/net/netfilter/nf_conntrack_tcp_timeout_established"
-#define IPACM_UDP_FULL_FILE_NAME_NEW  "/proc/sys/net/netfilter/nf_conntrack_udp_timeout_stream2"
+#define IPACM_UDP_FULL_FILE_NAME_NEW  "/proc/sys/net/netfilter/nf_conntrack_udp_timeout_stream"
 
 #endif
 

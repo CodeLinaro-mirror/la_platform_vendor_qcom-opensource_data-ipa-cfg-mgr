@@ -2356,7 +2356,7 @@ int IPACM_Lan::handle_eth_hdr_init(uint8_t *mac_addr, ipacm_bridge *bridge, uint
 					IPA_MAC_ADDR_SIZE);
 			client_info->client_init = 1;
 			client_info->client_idx = get_client_memptr(eth_client, clnt_indx)->lan_stats_idx;
-			client_info->ul_src_pipe = IPA_CLIENT_MAX;
+			client_info->ul_src_pipe = (enum ipa_client_type) IPA_CLIENT_MAX;
 			client_info->hdr_len = hdr_len;
 			if (rx_prop)
 			{
@@ -2814,7 +2814,7 @@ int IPACM_Lan::handle_lan_client_connect(uint8_t *mac_addr)
 				IPA_MAC_ADDR_SIZE);
 		client_info->client_init = 1;
 		client_info->client_idx = get_client_memptr(eth_client, eth_index)->lan_stats_idx;
-		client_info->ul_src_pipe = IPA_CLIENT_MAX;
+		client_info->ul_src_pipe = (enum ipa_client_type) IPA_CLIENT_MAX;
 		client_info->hdr_len = hdr_len;
 		if (rx_prop)
 		{
@@ -3556,7 +3556,7 @@ int IPACM_Lan::handle_eth_client_down_evt(uint8_t *mac_addr)
 				IPA_MAC_ADDR_SIZE);
 		client_info->client_init = 0;
 		client_info->client_idx = get_client_memptr(eth_client, clt_indx)->lan_stats_idx;
-		client_info->ul_src_pipe = IPA_CLIENT_MAX;
+		client_info->ul_src_pipe = (enum ipa_client_type) IPA_CLIENT_MAX;
 		if (rx_prop)
 		{
 			client_info->ul_src_pipe = rx_prop->rx[0].src_pipe;
@@ -3964,7 +3964,7 @@ fail:
 							IPA_MAC_ADDR_SIZE);
 					client_info->client_init = 0;
 					client_info->client_idx = get_client_memptr(eth_client, i)->lan_stats_idx;
-					client_info->ul_src_pipe = IPA_CLIENT_MAX;
+					client_info->ul_src_pipe = (enum ipa_client_type) IPA_CLIENT_MAX;
 					if (rx_prop)
 					{
 						client_info->ul_src_pipe = rx_prop->rx[0].src_pipe;

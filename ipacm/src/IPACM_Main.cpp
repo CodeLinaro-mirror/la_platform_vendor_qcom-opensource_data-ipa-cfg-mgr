@@ -85,7 +85,7 @@ IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #define IPACM_PID_FILE "/data/misc/ipa/ipacm.pid"
 #define IPACM_DIR_NAME     "/data/misc/ipa/"
 #endif
-#define IPACM_FIREWALL_DIR_NAME     "/etc/data"
+#define IPACM_FIREWALL_DIR_NAME     "/systemrw"
 #define IPACM_NAME "ipacm"
 
 #define INOTIFY_EVENT_SIZE  (sizeof(struct inotify_event))

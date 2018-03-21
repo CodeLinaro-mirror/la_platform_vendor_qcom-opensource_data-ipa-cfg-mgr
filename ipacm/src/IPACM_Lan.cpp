@@ -270,7 +270,7 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 			if (rx_prop != NULL || tx_prop != NULL)
 			{
 				IPACMDBG_H(" Has rx/tx properties registered for iface %s, add for NATTING \n", dev_name);
-				IPACM_Iface::ipacmcfg->AddNatIfaces(dev_name);
+				IPACM_Iface::ipacmcfg->AddNatIfaces(dev_name, IPA_IP_MAX);
 			}
 		}
 		break;
@@ -461,6 +461,18 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 							IPACMDBG_H("Finished checking wan_up_v6\n");
 						} else {
 							IPACMDBG_H("Wan_V6 haven't up yet\n");
+						}
+#else
+						/* check if Upstream was set before */
+						if (IPACM_Wan::isWanUP(ipa_if_num))
+						{
+							IPACMDBG_H("Upstream was set previously for ipv4, change is_upstream_set flag\n");
+							is_upstream_set[IPA_IP_v4] = true;
+						}
+						if (IPACM_Wan::isWanUP_V6(ipa_if_num))
+						{
+							IPACMDBG_H("Upstream was set previously for ipv6, change is_upstream_set flag\n");
+							is_upstream_set[IPA_IP_v6] = true;
 						}
 #endif
 						/* Post event to NAT */
@@ -736,7 +748,7 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 		if (ipa_interface_index == ipa_if_num)
 		{
 			IPACMDBG_H("Received IPA_DOWNSTREAM_ADD event.\n");
-			if (is_downstream_set[data->prefix.iptype] == false && data->prefix.iptype < IPA_IP_MAX)
+			if (data->prefix.iptype < IPA_IP_MAX && is_downstream_set[data->prefix.iptype] == false)
 			{
 				IPACMDBG_H("Add downstream for IP iptype %d\n", data->prefix.iptype);
 				is_downstream_set[data->prefix.iptype] = true;

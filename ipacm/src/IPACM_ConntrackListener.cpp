@@ -1,31 +1,31 @@
 /*
-* Copyright (c) 2013-2018 The Linux Foundation. All rights reserved.
-*
-* Redistribution and use in source and binary forms, with or without
-* modification, are permitted provided that the following conditions are
-* met:
-*    * Redistributions of source code must retain the above copyright
-*      notice, this list of conditions and the following disclaimer.
-*    * Redistributions in binary form must reproduce the above
-*      copyright notice, this list of conditions and the following
-*      disclaimer in the documentation and/or other materials provided
-*      with the distribution.
-*    * Neither the name of The Linux Foundation nor the names of its
-*      contributors may be used to endorse or promote products derived
-*      from this software without specific prior written permission.
-*
-* THIS SOFTWARE IS PROVIDED "AS IS" AND ANY EXPRESS OR IMPLIED
-* WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
-* MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NON-INFRINGEMENT
-* ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS
-* BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
-* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR
-* BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
-* WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
-* OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
-* IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-*/
+ * Copyright (c) 2013-2018 The Linux Foundation. All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions are
+ * met:
+ *    * Redistributions of source code must retain the above copyright
+ *      notice, this list of conditions and the following disclaimer.
+ *    * Redistributions in binary form must reproduce the above
+ *      copyright notice, this list of conditions and the following
+ *      disclaimer in the documentation and/or other materials provided
+ *      with the distribution.
+ *    * Neither the name of The Linux Foundation nor the names of its
+ *      contributors may be used to endorse or promote products derived
+ *      from this software without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED "AS IS" AND ANY EXPRESS OR IMPLIED
+ * WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
+ * MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NON-INFRINGEMENT
+ * ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS
+ * BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR
+ * BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
+ * WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
+ * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
+ * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ */
 #include <sys/ioctl.h>
 #include <net/if.h>
 
@@ -35,7 +35,14 @@
 #include "IPACM_Iface.h"
 #include "IPACM_Wan.h"
 
-IPACM_ConntrackListener::IPACM_ConntrackListener()
+IPACM_ConntrackListener::IPACM_ConntrackListener() :
+	WanUp_v6(false),
+	ipv6ct_inst(Ipv6ct::GetInstance()),
+	StaClntCnt_v6(0),
+	nat_iface_ipv6_addr(*(new Ipv6IpAddressesCollection(MAX_IFACE_ADDRESS))),
+	nonnat_iface_ipv6_addr(*(new Ipv6IpAddressesCollection(MAX_IFACE_ADDRESS))),
+	sta_clnt_ipv6_addr(*(new Ipv6IpAddressesCollection(MAX_STA_CLNT_IFACES))),
+	wan_ipaddr_v6(*(new Ipv6IpAddress))
 {
 	 IPACMDBG("\n");
 
@@ -58,6 +65,11 @@ IPACM_ConntrackListener::IPACM_ConntrackListener()
 
 	 IPACM_EvtDispatcher::registr(IPA_HANDLE_WAN_UP, this);
 	 IPACM_EvtDispatcher::registr(IPA_HANDLE_WAN_DOWN, this);
+	if (IsIpv6CTEnabled())
+	{
+		IPACM_EvtDispatcher::registr(IPA_HANDLE_WAN_UP_V6, this);
+		IPACM_EvtDispatcher::registr(IPA_HANDLE_WAN_DOWN_V6, this);
+	}
 	 IPACM_EvtDispatcher::registr(IPA_PROCESS_CT_MESSAGE, this);
 	 IPACM_EvtDispatcher::registr(IPA_PROCESS_CT_MESSAGE_V6, this);
 	IPACM_EvtDispatcher::registr(IPA_HANDLE_LAN_WLAN_UP, this);
@@ -70,10 +82,18 @@ IPACM_ConntrackListener::IPACM_ConntrackListener()
 #endif
 }
 
+IPACM_ConntrackListener::~IPACM_ConntrackListener()
+{
+	delete &nat_iface_ipv6_addr;
+	delete &nonnat_iface_ipv6_addr;
+	delete &sta_clnt_ipv6_addr;
+	delete &wan_ipaddr_v6;
+}
+
 void IPACM_ConntrackListener::event_callback(ipa_cm_event_id evt,
 						void *data)
 {
-	 ipacm_event_iface_up *wan_down = NULL;
+	const ipacm_event_iface_up *wan_data = NULL;
 
 	 if(data == NULL)
 	 {
@@ -88,16 +108,24 @@ void IPACM_ConntrackListener::event_callback(ipa_cm_event_id evt,
 			ProcessCTMessage(data);
 			break;
 
+	case IPA_PROCESS_CT_MESSAGE_V6:
+	{
+		if (IsIpv6CTEnabled())
+		{
+			IPACMDBG_H("Received IPA_PROCESS_CT_MESSAGE_V6 event\n");
+			const ipacm_ct_evt_data* evt_data = static_cast<const ipacm_ct_evt_data*>(data);
+			Ipv6ctEntry entry;
+			CreateIpv6ctEntryFromCtEventData(evt_data, entry);
+			ProcessCTMessage_v6(evt_data, entry);
+		}
 #ifdef CT_OPT
-	 case IPA_PROCESS_CT_MESSAGE_V6:
-			IPACMDBG("Received IPA_PROCESS_CT_MESSAGE_V6 event\n");
 			ProcessCTV6Message(data);
-			break;
 #endif
-
+		break;
+	}
 	 case IPA_HANDLE_WAN_UP:
 			IPACMDBG_H("Received IPA_HANDLE_WAN_UP event\n");
-			if(!isWanUp())
+			if (!WanUp)
 			{
 				TriggerWANUp(data);
 			}
@@ -116,12 +144,33 @@ void IPACM_ConntrackListener::event_callback(ipa_cm_event_id evt,
 
 	 case IPA_HANDLE_WAN_DOWN:
 			IPACMDBG_H("Received IPA_HANDLE_WAN_DOWN event\n");
-			wan_down = (ipacm_event_iface_up *)data;
-			if(isWanUp())
+			wan_data = (ipacm_event_iface_up *)data;
+			if (WanUp)
 			{
-				TriggerWANDown(wan_down->ipv4_addr);
+				TriggerWANDown(wan_data->ipv4_addr);
 			}
 			break;
+
+	case IPA_HANDLE_WAN_UP_V6:
+		IPACMDBG_H("Received IPA_HANDLE_WAN_UP_V6 event\n");
+		if (!WanUp_v6)
+		{
+			wan_data = static_cast<const ipacm_event_iface_up*>(data);
+			static_cast<Ipv6IpAddress&>(wan_ipaddr_v6).CreateFromArray(wan_data->ipv6_addr, false);
+			TriggerWANUp_v6(wan_data);
+		}
+		break;
+
+	case IPA_HANDLE_WAN_DOWN_V6:
+		IPACMDBG_H("Received IPA_HANDLE_WAN_DOWN_V6 event\n");
+		if (WanUp_v6)
+		{
+			wan_data = static_cast<const ipacm_event_iface_up*>(data);
+			Ipv6IpAddress wan_addr;
+			wan_addr.CreateFromArray(wan_data->ipv6_addr, false);
+			TriggerWANDown_v6(wan_addr);
+		}
+		break;
 
 	/* modify TCP/UDP filters to ignore local WLAN or LAN IPv4 connections */
 	case IPA_HANDLE_LAN_WLAN_UP:
@@ -153,10 +202,9 @@ void IPACM_ConntrackListener::event_callback(ipa_cm_event_id evt,
 	 }
 }
 
-int IPACM_ConntrackListener:: GetPacketThreshhold(void)
+uint32_t IPACM_ConntrackListener::GetPacketThreshhold(void)
 {
-	int i = 0;
-	int pkt_thrshld = 0;
+	uint32_t pkt_thrshld = 0;
 	FILE *cmd = NULL;
 	int acct = 0;
 	const char acct_proc[] = "cat /proc/sys/net/netfilter/nf_conntrack_acct";
@@ -177,7 +225,7 @@ int IPACM_ConntrackListener:: GetPacketThreshhold(void)
 			{
 				memset(input_value, 0, MAX_CMD_SIZE);
 				fgets(input_value, MAX_CMD_SIZE, cmd);
-				pkt_thrshld = atoi(input_value);
+				pkt_thrshld = strtoul(input_value, NULL, 0);
 				IPACMDBG_H("Configured packet threshold: %d\n", pkt_thrshld);
 				pclose(cmd);
 			}
@@ -194,21 +242,13 @@ int IPACM_ConntrackListener:: GetPacketThreshhold(void)
 	return pkt_thrshld;
 }
 
-int IPACM_ConntrackListener::CheckNatIface(
-   ipacm_event_data_all *data, bool *NatIface)
+int IPACM_ConntrackListener::CheckNatIface(int if_index, bool *NatIface)
 {
 	int fd = 0, len = 0, cnt, i;
 	struct ifreq ifr;
 	*NatIface = false;
 
-	if (data->ipv4_addr == 0 || data->iptype != IPA_IP_v4)
-	{
-		IPACMDBG("Ignoring\n");
-		return IPACM_FAILURE;
-	}
-
-	IPACMDBG("Received interface index %d with ip type: %d", data->if_index, data->iptype);
-	iptodot(" and ipv4 address", data->ipv4_addr);
+	IPACMDBG("Received interface index %d", if_index);
 
 	if (pConfig == NULL)
 	{
@@ -252,7 +292,7 @@ int IPACM_ConntrackListener::CheckNatIface(
 	}
 
 	memset(&ifr, 0, sizeof(struct ifreq));
-	ifr.ifr_ifindex = data->if_index;
+	ifr.ifr_ifindex = if_index;
 	if (ioctl(fd, SIOCGIFNAME, &ifr) < 0)
 	{
 		PERROR("call_ioctl_on_dev: ioctl failed:");
@@ -277,7 +317,30 @@ int IPACM_ConntrackListener::CheckNatIface(
 	return IPACM_SUCCESS;
 }
 
-void IPACM_ConntrackListener::HandleNonNatIPAddr(
+void IPACM_ConntrackListener::HandleNonNatIPAddr(void* inParam, bool AddOp)
+{
+	const ipacm_event_data_all *data = (ipacm_event_data_all *)inParam;
+	switch (data->iptype)
+	{
+	case IPA_IP_v4:
+		/* For IPv4 legacy HandleNonNatIPAddr renamed to HandleNonNatIPAddr_v4 */
+		HandleNonNatIPAddr_v4(inParam, AddOp);
+		break;
+	case IPA_IP_v6:
+	{
+		if (IsIpv6CTEnabled())
+		{
+			Ipv6IpAddress ipv6Addr(data->ipv6_addr, false);
+			HandleNonNatIPAddr_v6(ipv6Addr, data->if_index, AddOp);
+		}
+		break;
+	}
+	default:
+		IPACMERR("Not supported IP type %d", data->iptype);
+	}
+}
+
+void IPACM_ConntrackListener::HandleNonNatIPAddr_v4(
    void *inParam, bool AddOp)
 {
 	ipacm_event_data_all *data = (ipacm_event_data_all *)inParam;
@@ -290,12 +353,18 @@ void IPACM_ConntrackListener::HandleNonNatIPAddr(
 		return;
 	}
 
+	if (data->ipv4_addr == 0)
+	{
+		IPACMDBG("Ignoring\n");
+		return;
+	}
+
 	/* Handle only non nat ifaces, NAT iface should be handle
 	   separately to avoid race conditions between route/nat
 	   rules add/delete operations */
 	if (AddOp)
 	{
-		ret = CheckNatIface(data, &NatIface);
+		ret = CheckNatIface(data->if_index, &NatIface);
 		if (!NatIface && ret == IPACM_SUCCESS)
 		{
 			/* Cache the non nat iface ip address */
@@ -335,13 +404,74 @@ void IPACM_ConntrackListener::HandleNonNatIPAddr(
 	return;
 }
 
+void IPACM_ConntrackListener::HandleNonNatIPAddr_v6(const IpAddress& ip, int if_index, bool AddOp)
+{
+	IPACMDBG_H("\n");
+	if (isStaMode)
+	{
+		IPACMDBG("In STA mode, don't add dummy rules for non nat ifaces\n");
+		return;
+	}
+
+	ip.DebugDump("Handle nonnat interface with following address\n");
+
+	/*
+	 * Handle only non NAT intefraces, NAT interfaces should be handle separately to avoid race conditions between
+	 * route/NAT rules add/delete operations
+	 */
+	if (AddOp)
+	{
+		bool NatIface = false;
+		int ret = CheckNatIface(if_index, &NatIface);
+		if (NatIface || ret != IPACM_SUCCESS)
+		{
+			return;
+		}
+
+		if (nonnat_iface_ipv6_addr.Find(ip) != NULL)
+		{
+			IPACMDBG_H("IP duplication. Ignore\n");
+			return;
+		}
+
+		IpAddress* entry = nonnat_iface_ipv6_addr.GetFirstEmpty();
+		if (entry == NULL)
+		{
+			IPACMERR("Unable to add, reached maximum nonnat_interfaces\n");
+			return;
+		}
+
+		*entry = ip;
+
+		/* Add dummy NAT rule for non NAT interfaces */
+		ipv6ct_inst->FlushTempEntries(ip, true, true, false);
+
+		IPACMDBG_H("Successfully added nonnat interface\n");
+	}
+	else
+	{
+		/* for delete operation */
+		IpAddress* entry = nonnat_iface_ipv6_addr.Find(ip);
+		if (entry == NULL)
+		{
+			IPACMDBG_H("The interface is not in nonnat interfaces\n");
+			return;
+		}
+
+		entry->Clear();
+		ipv6ct_inst->FlushTempEntries(ip, false, true, false);
+		ipv6ct_inst->DelEntriesOnClntDiscon(ip);
+		IPACMDBG("Successfully deleted nonnat interface\n");
+	}
+}
+
 void IPACM_ConntrackListener::HandleNeighIpAddrAddEvt(
    ipacm_event_data_all *data)
 {
 	bool NatIface = false;
 	int j, ret;
 
-	ret = CheckNatIface(data, &NatIface);
+	ret = CheckNatIface(data->if_index, &NatIface);
 	if (NatIface && ret == IPACM_SUCCESS)
 	{
 		for (j = 0; j < MAX_IFACE_ADDRESS; j++)
@@ -382,6 +512,43 @@ void IPACM_ConntrackListener::HandleNeighIpAddrAddEvt(
 		}
 	}
 	return;
+}
+
+void IPACM_ConntrackListener::HandleNeighIpAddrAddEvt_v6(const IpAddress& ip, int if_index)
+{
+	IPACMDBG_H("\n");
+
+	if (!IsIpv6CTEnabled() || !ip.Valid())
+	{
+		IPACMDBG("Ignoring\n");
+		return;
+	}
+
+	ip.DebugDump("Add NAT interface with following address\n");
+
+	bool NatIface = false;
+	int ret = CheckNatIface(if_index, &NatIface);
+	if (!NatIface || ret != IPACM_SUCCESS)
+	{
+		return;
+	}
+
+	if (nat_iface_ipv6_addr.Find(ip) == NULL)
+	{
+		IpAddress* entry = nat_iface_ipv6_addr.GetFirstEmpty();
+		if (entry == NULL)
+		{
+			IPACMERR("Unable to add, reached maximum nat_interfaces\n");
+			return;
+		}
+
+		*entry = ip;
+	}
+
+	ipv6ct_inst->ResetPwrSaveIf(ip);
+	ipv6ct_inst->FlushTempEntries(ip, true, false, false);
+
+	IPACMDBG_H("Successfully added NAT interface\n");
 }
 
 #ifdef FEATURE_VLAN_MPDN
@@ -443,6 +610,32 @@ void IPACM_ConntrackListener::HandleNeighIpAddrDelEvt(
 	return;
 }
 
+void IPACM_ConntrackListener::HandleNeighIpAddrDelEvt_v6(const IpAddress& ip)
+{
+	IPACMDBG_H("\n");
+
+	if (!IsIpv6CTEnabled() || !ip.Valid())
+	{
+		IPACMDBG("Ignoring\n");
+		return;
+	}
+
+	ip.DebugDump("Delete NAT interface with following address\n");
+
+	IpAddress* entry = nat_iface_ipv6_addr.Find(ip);
+	if (entry == NULL)
+	{
+		IPACMDBG_H("The interface is not NAT interface\n");
+		return;
+	}
+
+	entry->Clear();
+	ipv6ct_inst->FlushTempEntries(ip, false, false, false);
+	ipv6ct_inst->DelEntriesOnClntDiscon(ip);
+
+	IPACMDBG_H("Successfully deleted NAT interface\n");
+}
+
 #ifdef FEATURE_VLAN_MPDN
 void IPACM_ConntrackListener::HandleVlanUp(void *in_param)
 {
@@ -460,8 +653,6 @@ void IPACM_ConntrackListener::HandleVlanUp(void *in_param)
 
 	if(vlanup_data->iptype == IPA_IP_v4)
 	{
-		ipa_nat_pdn_entry pdn;
-
 		/* we exceeded max num pdns */
 		if(num_vlan_pdns >= IPA_MAX_NUM_HW_PDNS)
 			return;
@@ -524,6 +715,40 @@ void IPACM_ConntrackListener::TriggerWANUp(void *in_param)
 
 	 IPACMDBG("creating nat threads\n");
 	 CreateNatThreads();
+}
+
+void IPACM_ConntrackListener::TriggerWANUp_v6(const ipacm_event_iface_up* evt_data)
+{
+	IPACMDBG_H("\n");
+	if (!IsIpv6CTEnabled())
+	{
+		IPACMDBG("Ignoring\n");
+		return;
+	}
+
+	if (!wan_ipaddr_v6.Valid())
+	{
+		IPACMERR("Invalid WAN address,ignoring WAN UP event\n");
+		return;
+	}
+
+	IPACMDBG_H("Recevied below information during wanup\n");
+	IPACMDBG_H("if_name: %s", evt_data->ifname);
+	wan_ipaddr_v6.DebugDump("WAN");
+
+	isStaMode = evt_data->is_sta;
+	IPACMDBG_H("isStaMode: %d\n", isStaMode);
+
+	memcpy(wan_ifname, evt_data->ifname, sizeof(wan_ifname));
+
+	ipv6ct_inst->AddTable(wan_ipaddr_v6);
+
+	IPACMDBG_H("creating nat threads\n");
+	CreateNatThreads();
+
+	WanUp_v6 = true;
+
+	IPACMDBG_H("return\n");
 }
 
 int IPACM_ConntrackListener::CreateConnTrackThreads(void)
@@ -655,6 +880,27 @@ void IPACM_ConntrackListener::TriggerWANDown(uint32_t wan_addr)
 	}
 }
 
+void IPACM_ConntrackListener::TriggerWANDown_v6(const IpAddress& wan_addr)
+{
+	IPACMDBG_H("\n");
+	if (!IsIpv6CTEnabled())
+	{
+		IPACMDBG("Ignoring\n");
+		return;
+	}
+
+	WanUp_v6 = false;
+
+	if (wan_addr != wan_ipaddr_v6)
+	{
+		IPACMDBG_H("WAN IP address is not matching\n");
+		return;
+	}
+
+	wan_addr.DebugDump("Deleting the table with");
+	ipv6ct_inst->DeleteTable(wan_addr);
+	IPACMDBG_H("return\n");
+}
 
 void ParseCTMessage(struct nf_conntrack *ct)
 {
@@ -873,6 +1119,27 @@ void IPACM_ConntrackListener::ProcessCTMessage(void *param)
 	 return;
 }
 
+void IPACM_ConntrackListener::ProcessCTMessage_v6(const ipacm_ct_evt_data* evt_data, const NatEntryBase& entry)
+{
+	IPACMDBG_H("\n");
+#ifdef IPACM_DEBUG
+	char buf[1024];
+
+	/* Process message and generate ioctl call to kernel thread */
+	nfct_snprintf(buf, sizeof(buf), evt_data->ct, evt_data->type, NFCT_O_PLAIN, NFCT_OF_TIME);
+	IPACMDBG("%s\n", buf);
+#endif
+
+	if (entry.Valid())
+	{
+		ProcessTCPorUDPMsg_v6(evt_data, entry);
+	}
+
+	/* Cleanup item that was allocated during the original CT callback */
+	nfct_destroy(evt_data->ct);
+	IPACMDBG_H("return\n");
+}
+
 bool IPACM_ConntrackListener::AddIface(
    nat_table_entry *rule, bool *isTempEntry)
 {
@@ -958,7 +1225,7 @@ int IPACM_ConntrackListener::AddORDeleteNatEntry(const nat_entry_bundle *input, 
 {
 	u_int8_t tcp_state;
 	u_int64_t pkt_count = 0;
-	int pkt_threshld = IPACM_ConntrackListener::GetPacketThreshhold();
+	uint32_t pkt_threshld = GetPacketThreshhold();
 
 	if (nat_inst == NULL)
 	{
@@ -1018,7 +1285,7 @@ int IPACM_ConntrackListener::AddORDeleteNatEntry(const nat_entry_bundle *input, 
 				}
 			} else
 #endif
-			if (!CtList->isWanUp())
+			if (!WanUp)
 			{
 				IPACMDBG("Wan is not up, cache connections\n");
 				nat_inst->CacheEntry(input->rule);
@@ -1076,7 +1343,7 @@ int IPACM_ConntrackListener::AddORDeleteNatEntry(const nat_entry_bundle *input, 
 			}
 			else
 #endif
-			if (!CtList->isWanUp())
+			if (!WanUp)
 			{
 				IPACMDBG("Wan is not up, cache connections\n");
 				nat_inst->CacheEntry(input->rule);
@@ -1099,6 +1366,80 @@ int IPACM_ConntrackListener::AddORDeleteNatEntry(const nat_entry_bundle *input, 
 	}
 
 	return IPACM_SUCCESS;
+}
+
+void IPACM_ConntrackListener::AddORDeleteNatEntry_v6(const ipacm_ct_evt_data* evt_data,
+	const NatEntryBase& entry, bool isTempEntry)
+{
+	IPACMDBG_H("\n");
+
+	uint32_t pkt_threshld = GetPacketThreshhold();
+	uint64_t pkt_count = nfct_get_attr_u64(evt_data->ct, ATTR_ORIG_COUNTER_PACKETS) +
+		nfct_get_attr_u64(evt_data->ct, ATTR_REPL_COUNTER_PACKETS);
+
+	if (IPPROTO_TCP == entry.m_protocol)
+	{
+		uint8_t tcp_state = nfct_get_attr_u8(evt_data->ct, ATTR_TCP_STATE);
+		if (TCP_CONNTRACK_ESTABLISHED == tcp_state && pkt_count >= pkt_threshld)
+		{
+			IPACMDBG_H("TCP state TCP_CONNTRACK_ESTABLISHED(%d)\n", tcp_state);
+			if (!WanUp_v6)
+			{
+				IPACMDBG_H("Wan is not up, cache connections\n");
+				ipv6ct_inst->CacheEntry(entry);
+			}
+			else if (isTempEntry)
+			{
+				ipv6ct_inst->AddTempEntry(entry);
+			}
+			else
+			{
+				ipv6ct_inst->AddEntry(entry);
+			}
+		}
+		else if (TCP_CONNTRACK_FIN_WAIT == tcp_state || evt_data->type == NFCT_T_DESTROY)
+		{
+			IPACMDBG_H("TCP state TCP_CONNTRACK_FIN_WAIT(%d) or type NFCT_T_DESTROY(%d)\n", tcp_state, evt_data->type);
+
+			ipv6ct_inst->DeleteEntry(entry);
+			ipv6ct_inst->DeleteTempEntry(entry);
+		}
+		else
+		{
+			IPACMDBG_H("Ignore tcp state: %d and type: %d\n",
+				tcp_state, evt_data->type);
+		}
+
+	}
+	else if (IPPROTO_UDP == entry.m_protocol)
+	{
+		if (((NFCT_T_NEW == evt_data->type) && (pkt_threshld == 0)) ||
+			((pkt_threshld != 0) && (pkt_count >= pkt_threshld)
+			&& (NFCT_T_UPDATE == evt_data->type)))
+		{
+			IPACMDBG_H("New UDP connection at time %ld\n", time(NULL));
+			if (!WanUp_v6)
+			{
+				IPACMDBG_H("Wan is not up, cache connections\n");
+				ipv6ct_inst->CacheEntry(entry);
+			}
+			else if (isTempEntry)
+			{
+				ipv6ct_inst->AddTempEntry(entry);
+			}
+			else
+			{
+				ipv6ct_inst->AddEntry(entry);
+			}
+		}
+		else if (NFCT_T_DESTROY == evt_data->type)
+		{
+			IPACMDBG_H("UDP connection close at time %ld\n", time(NULL));
+			ipv6ct_inst->DeleteEntry(entry);
+			ipv6ct_inst->DeleteTempEntry(entry);
+		}
+	}
+	IPACMDBG_H("return\n");
 }
 
 void IPACM_ConntrackListener::PopulateTCPorUDPEntry(
@@ -1232,35 +1573,92 @@ void IPACM_ConntrackListener::CheckSTAClient(
 {
 	int nCnt;
 
-	/* Check whether target is in STA client list or not
-      if not ignore the connection */
-	 if(!isStaMode || (StaClntCnt == 0))
-	 {
+	/* Check whether target is in STA client list or not if not ignore the connection */
+	if (!isStaMode || !StaClntCnt)
+	{
 		return;
-	 }
+	}
 
-	 if((sta_clnt_ipv4_addr[0] & STA_CLNT_SUBNET_MASK) !=
-		 (rule->target_ip & STA_CLNT_SUBNET_MASK))
-	 {
+	for (nCnt = 0; nCnt < MAX_STA_CLNT_IFACES; ++nCnt)
+	{
+		if (sta_clnt_ipv4_addr[nCnt])
+		{
+			break;
+		}
+	}
+
+	if (nCnt == MAX_STA_CLNT_IFACES)
+	{
+		IPACMERR("The STA client IP addresses collection is inconsistent with STA client counter\n");
+		return;
+	}
+
+	if ((sta_clnt_ipv4_addr[nCnt] & STA_CLNT_SUBNET_MASK) != (rule->target_ip & STA_CLNT_SUBNET_MASK))
+	{
 		IPACMDBG("STA client subnet mask not matching\n");
 		return;
-	 }
+	}
 
-	 IPACMDBG("StaClntCnt %d\n", StaClntCnt);
-	 for(nCnt = 0; nCnt < StaClntCnt; nCnt++)
-	 {
-		IPACMDBG("Comparing trgt_ip 0x%x with sta clnt ip: 0x%x\n",
-			 rule->target_ip, sta_clnt_ipv4_addr[nCnt]);
-		if(rule->target_ip == sta_clnt_ipv4_addr[nCnt])
+	IPACMDBG("StaClntCnt %d\n", StaClntCnt);
+	for (; nCnt < MAX_STA_CLNT_IFACES; ++nCnt)
+	{
+		if (!sta_clnt_ipv4_addr[nCnt])
+		{
+			continue;
+		}
+
+		IPACMDBG("Comparing trgt_ip 0x%x with sta clnt ip: 0x%x\n", rule->target_ip, sta_clnt_ipv4_addr[nCnt]);
+		if (rule->target_ip == sta_clnt_ipv4_addr[nCnt])
 		{
 			IPACMDBG("Match index %d\n", nCnt);
 			return;
 		}
-	 }
+	}
 
-	IPACMDBG_H("Not matching with STA Clnt Ip Addrs 0x%x\n",
-		rule->target_ip);
+	IPACMDBG_H("Not matching with STA Clnt Ip Addrs 0x%x\n", rule->target_ip);
 	*isTempEntry = true;
+}
+
+void IPACM_ConntrackListener::CheckSTAClient_v6(const NatEntryBase& entry, bool& isTempEntry)
+{
+	IPACMDBG_H("\n");
+
+	if (!isStaMode || !StaClntCnt_v6)
+	{
+		return;
+	}
+
+	int i;
+	for (i = 0; i < MAX_STA_CLNT_IFACES; ++i)
+	{
+		if (sta_clnt_ipv6_addr[i].Valid())
+		{
+			break;
+		}
+	}
+
+	if (i == MAX_STA_CLNT_IFACES)
+	{
+		IPACMERR("The STA client IP addresses collection is inconsistent with STA client counter\n");
+		return;
+	}
+
+	const IpAddress& target_ip = entry.GetTargetIp();
+	if (!target_ip.IsSameSubnet(sta_clnt_ipv6_addr[i]))
+	{
+		IPACMDBG("Not STA client\n");
+		return;
+	}
+
+	if (sta_clnt_ipv6_addr.Find(target_ip) != NULL)
+	{
+		IPACMDBG_H("The target is in STA client list\n");
+		return;
+	}
+
+	entry.GetTargetIp().DebugDump("Not matching with STA Clnt Ip Addrs");
+	isTempEntry = true;
+	IPACMDBG_H("return\n");
 }
 
 /* conntrack send in host order and ipa expects in host order */
@@ -1530,6 +1928,30 @@ IGNORE:
 	return;
 }
 
+void IPACM_ConntrackListener::ProcessTCPorUDPMsg_v6(const ipacm_ct_evt_data* evt_data, const NatEntryBase& entry)
+{
+	IPACMDBG_H("Received conntrack event with type: %d\n", evt_data->type);
+	entry.DebugDump("with");
+
+	bool isTempEntry = false;
+	if (entry.m_direction == NatEntryBase::DirectionUnknown)
+	{
+		if (!IsIpv6PrivateSubnet(entry.GetClientIp()) && !IsIpv6PrivateSubnet(entry.GetTargetIp()))
+		{
+			IPACMDBG_H("Ignore the entry\n");
+			return;
+		}
+		isTempEntry = true;
+	}
+	else
+	{
+		CheckSTAClient_v6(entry, isTempEntry);
+	}
+
+	AddORDeleteNatEntry_v6(evt_data, entry, isTempEntry);
+	IPACMDBG_H("return\n");
+}
+
 void IPACM_ConntrackListener::HandleSTAClientAddEvt(uint32_t clnt_ip_addr)
 {
 	 int cnt;
@@ -1566,6 +1988,41 @@ void IPACM_ConntrackListener::HandleSTAClientAddEvt(uint32_t clnt_ip_addr)
 	 return;
 }
 
+void IPACM_ConntrackListener::HandleSTAClientAddEvt_v6(const IpAddress& ip)
+{
+	IPACMDBG_H("\n");
+
+	if (!IsIpv6CTEnabled() || !ip.Valid())
+	{
+		IPACMDBG("Ignoring\n");
+		return;
+	}
+
+	ip.DebugDump("Add STA client with following address\n");
+
+	if (StaClntCnt_v6 >= MAX_STA_CLNT_IFACES)
+	{
+		IPACMDBG("Max STA client reached, ignore\n");
+		return;
+	}
+
+	if (sta_clnt_ipv6_addr.Find(ip) != NULL)
+	{
+		IPACMDBG("Ignoring duplicate\n");
+	}
+	else
+	{
+		++StaClntCnt_v6;
+		IpAddress* entry = sta_clnt_ipv6_addr.GetFirstEmpty();
+		*entry = ip;
+		IPACMDBG("STA client cnt %d\n", StaClntCnt_v6);
+	}
+
+	ipv6ct_inst->FlushTempEntries(ip, true, false, true);
+
+	IPACMDBG_H("Successfully added STA client\n");
+}
+
 void IPACM_ConntrackListener::HandleSTAClientDelEvt(uint32_t clnt_ip_addr)
 {
 	 int cnt;
@@ -1589,3 +2046,156 @@ void IPACM_ConntrackListener::HandleSTAClientDelEvt(uint32_t clnt_ip_addr)
 	 nat_inst->FlushTempEntries(clnt_ip_addr, false);
    return;
 }
+
+void IPACM_ConntrackListener::HandleSTAClientDelEvt_v6(const IpAddress& ip)
+{
+	IPACMDBG_H("\n");
+
+	if (!IsIpv6CTEnabled() || !ip.Valid())
+	{
+		IPACMDBG("Ignoring\n");
+		return;
+	}
+
+	ip.DebugDump("Delete STA client with following address\n");
+
+	IpAddress* entry = sta_clnt_ipv6_addr.Find(ip);
+	if (entry == NULL)
+	{
+		IPACMDBG_H("The received IP is not an STA client\n");
+	}
+	else
+	{
+		--StaClntCnt_v6;
+		entry->Clear();
+		ipv6ct_inst->DelEntriesOnSTAClntDiscon(ip);
+		IPACMDBG("STA client cnt %d\n", StaClntCnt_v6);
+	}
+
+	ipv6ct_inst->FlushTempEntries(ip, false, false, true);
+
+	IPACMDBG_H("Successfully deleted STA client\n");
+}
+
+void IPACM_ConntrackListener::CreateIpv6ctEntryFromCtEventData(const ipacm_ct_evt_data* evt_data,
+	Ipv6ctEntry& entry) const
+{
+	IPACMDBG_H("\n");
+	struct nfct_attr_grp_ipv6 orig_params;
+	nfct_get_attr_grp(evt_data->ct, ATTR_GRP_ORIG_IPV6, (void *)&orig_params);
+	const Ipv6IpAddress srcAddr(orig_params.src, true), dstAddr(orig_params.dst, true);
+
+	uint16_t srcPort = nfct_get_attr_u16(evt_data->ct, ATTR_ORIG_PORT_SRC);
+	uint16_t dstPort = nfct_get_attr_u16(evt_data->ct, ATTR_ORIG_PORT_DST);
+
+	entry.m_protocol = nfct_get_attr_u8(evt_data->ct, ATTR_ORIG_L4PROTO);
+	if (entry.m_protocol == IPPROTO_UDP)
+	{
+		IPACMDBG("Received UDP packet\n");
+	}
+	else if (entry.m_protocol == IPPROTO_TCP)
+	{
+		IPACMDBG("Received TCP packet\n");
+	}
+	else
+	{
+		IPACMDBG("Received unexpected protocl %d conntrack message\n", entry.m_protocol);
+		goto bail;
+	}
+
+	if (nat_iface_ipv6_addr.Find(srcAddr) != NULL)
+	{
+		entry.m_direction = NatEntryBase::DirectionOutbound;
+	}
+	else if (nat_iface_ipv6_addr.Find(dstAddr) != NULL)
+	{
+		entry.m_direction = NatEntryBase::DirectionInbound;
+	}
+	else if (srcAddr == wan_ipaddr_v6 || nonnat_iface_ipv6_addr.Find(srcAddr) != NULL)
+	{
+		if (isStaMode)
+		{
+			IPACMDBG("Don't install dummy rules in STA mode\n");
+			goto bail;
+		}
+
+		entry.m_isDummy = true;
+		entry.m_direction = NatEntryBase::DirectionOutbound;
+	}
+	else if (dstAddr == wan_ipaddr_v6 || nonnat_iface_ipv6_addr.Find(dstAddr) != NULL)
+	{
+		if (isStaMode)
+		{
+			IPACMDBG("Don't install dummy rules in STA mode\n");
+			goto bail;
+		}
+
+		entry.m_isDummy = true;
+		entry.m_direction = NatEntryBase::DirectionInbound;
+	}
+	else
+	{
+		IPACMDBG("Neither source Nor destination NAT. Should be decided during adding the client\n");
+		entry.m_direction = NatEntryBase::DirectionUnknown;
+	}
+
+	if (entry.m_direction == NatEntryBase::DirectionOutbound || entry.m_direction == NatEntryBase::DirectionUnknown)
+	{
+		entry.m_srcAddr = srcAddr;
+		entry.m_srcPort = srcPort;
+		entry.m_dstAddr = dstAddr;
+		entry.m_dstPort = dstPort;
+	}
+	else if (entry.m_direction == NatEntryBase::DirectionInbound)
+	{
+		entry.m_srcAddr = dstAddr;
+		entry.m_srcPort = dstPort;
+		entry.m_dstAddr = srcAddr;
+		entry.m_dstPort = srcPort;
+	}
+	else
+	{
+		IPACMERR("Bad direction %d\n", entry.m_direction);
+		goto bail;
+	}
+
+	IPACMDBG_H("return\n");
+	return;
+
+bail:
+	entry.Clear();
+}
+
+bool IPACM_ConntrackListener::IsIpv6PrivateSubnet(const IpAddress& ip)
+{
+	bool ret = false;
+
+	IPACMDBG_H("\n");
+#ifdef FEATURE_VLAN_MPDN
+	if (pConfig == NULL)
+	{
+		pConfig = IPACM_Config::GetInstance();
+	}
+
+	if (pConfig != NULL)
+	{
+		const Ipv6IpAddress& ipv6 = static_cast<const Ipv6IpAddress&>(ip);
+		for (int i = 0; i < pConfig->num_ipv6_prefixes; ++i)
+		{
+			if (ipv6.IsSameSubnet(pConfig->ipa_ipv6_prefixes[i]))
+			{
+				ret = true;
+				break;
+			}
+		}
+	}
+	else
+#endif
+	{
+		ret = ip.IsSameSubnet(wan_ipaddr_v6);
+	}
+
+	IPACMDBG_H("return\n");
+	return ret;
+}
+

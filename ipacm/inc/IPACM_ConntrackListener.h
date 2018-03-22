@@ -88,40 +88,56 @@ private:
 	bool isCTReg;
 	bool isNatThreadStart;
 	bool WanUp;
+	bool WanUp_v6;
 	NatApp *nat_inst;
+	NatBase* const ipv6ct_inst;
 
 	int NatIfaceCnt;
 	int StaClntCnt;
+	int StaClntCnt_v6;
 	NatIfaces *pNatIfaces;
 	nat_client_info nat_clients[MAX_IFACE_ADDRESS];
+	IpAddressesCollectionBase& nat_iface_ipv6_addr;
 #ifdef FEATURE_VLAN_MPDN
 	nat_pdn_entry vlan_pdns[IPA_MAX_NUM_HW_PDNS];
 	int num_vlan_pdns;
 #endif
 	uint32_t nonnat_iface_ipv4_addr[MAX_IFACE_ADDRESS];
+	IpAddressesCollectionBase& nonnat_iface_ipv6_addr;
 	uint32_t sta_clnt_ipv4_addr[MAX_STA_CLNT_IFACES];
+	IpAddressesCollectionBase& sta_clnt_ipv6_addr;
 	IPACM_Config *pConfig;
 #ifdef CT_OPT
 	IPACM_LanToLan *p_lan2lan;
 #endif
 
 	void ProcessCTMessage(void *);
+	void ProcessCTMessage_v6(const ipacm_ct_evt_data* evt_data, const NatEntryBase& entry);
 	void ProcessTCPorUDPMsg(struct nf_conntrack *,
-	enum nf_conntrack_msg_type, u_int8_t);
+		enum nf_conntrack_msg_type, u_int8_t);
+	void ProcessTCPorUDPMsg_v6(const ipacm_ct_evt_data* evt_data, const NatEntryBase& entry);
+	void CreateIpv6ctEntryFromCtEventData(const ipacm_ct_evt_data* evt_data, Ipv6ctEntry& entry) const;
 #ifdef FEATURE_VLAN_MPDN
 	void HandleVlanUp(void *);
 	void HandleVlanDown(void *);
 #endif
 	void TriggerWANUp(void *);
+	void TriggerWANUp_v6(const ipacm_event_iface_up* evt_data);
 	void TriggerWANDown(uint32_t);
+	void TriggerWANDown_v6(const IpAddress& wan_addr);
 	int  CreateNatThreads(void);
 	bool AddIface(nat_table_entry *, bool *);
 	int AddORDeleteNatEntry(const nat_entry_bundle *, bool *sendVlanEvent);
+	void AddORDeleteNatEntry_v6(const ipacm_ct_evt_data* evt_data, const NatEntryBase& entry, bool isTempEntry);
 	void PopulateTCPorUDPEntry(struct nf_conntrack *, uint32_t, nat_table_entry *);
-	void CheckSTAClient(const nat_table_entry *, bool *);
-	int CheckNatIface(ipacm_event_data_all *, bool *);
+	void CheckSTAClient(const nat_table_entry *rule, bool *isTempEntry);
+	void CheckSTAClient_v6(const NatEntryBase& entry, bool& isTempEntry);
+	int CheckNatIface(int if_index, bool *NatIface);
 	void HandleNonNatIPAddr(void *, bool);
-	int GetPacketThreshhold(void);
+	void HandleNonNatIPAddr_v4(void* inParam, bool AddOp);
+	void HandleNonNatIPAddr_v6(const IpAddress& ip, int if_index, bool AddOp);
+	uint32_t GetPacketThreshhold(void);
+	bool IsIpv6PrivateSubnet(const IpAddress& ip);
 
 #ifdef CT_OPT
 	void ProcessCTV6Message(void *);
@@ -129,22 +145,29 @@ private:
 		enum nf_conntrack_msg_type, nat_table_entry* );
 #endif
 
+	bool IsIpv6CTEnabled() const
+	{
+		return ipv6ct_inst != NULL;
+	}
+
 public:
 	char wan_ifname[IPA_IFACE_NAME_LEN];
 	uint32_t wan_ipaddr;
+	IpAddress& wan_ipaddr_v6;
 	bool isStaMode;
 	IPACM_ConntrackListener();
+	~IPACM_ConntrackListener();
 	void event_callback(ipa_cm_event_id, void *data);
-	inline bool isWanUp()
-	{
-		return WanUp;
-	}
-
 	int  CreateConnTrackThreads(void);
+
 	void HandleNeighIpAddrAddEvt(ipacm_event_data_all *);
+	void HandleNeighIpAddrAddEvt_v6(const IpAddress& ip, int if_index);
 	void HandleNeighIpAddrDelEvt(uint32_t);
+	void HandleNeighIpAddrDelEvt_v6(const IpAddress& ip);
 	void HandleSTAClientAddEvt(uint32_t);
+	void HandleSTAClientAddEvt_v6(const IpAddress& ip);
 	void HandleSTAClientDelEvt(uint32_t);
+	void HandleSTAClientDelEvt_v6(const IpAddress& ip);
 #ifdef FEATURE_VLAN_MPDN
 	bool IsVlanIPv4(uint32_t ipv4_address, uint8_t *VlanId);
 #endif

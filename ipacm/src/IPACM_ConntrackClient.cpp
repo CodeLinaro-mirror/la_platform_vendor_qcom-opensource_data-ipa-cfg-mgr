@@ -106,12 +106,11 @@ int IPACM_ConntrackClient::IPAConntrackEventCB
 	ip_type = nfct_get_attr_u8(ct, ATTR_REPL_L3PROTO);
 
 #ifndef CT_OPT
-	if(AF_INET6 == ip_type)
+	if(AF_INET6 == ip_type && !IPACM_Config::GetInstance()->IsIpv6CTEnabled())
 	{
 		IPACMDBG("Ignoring ipv6(%d) connections\n", ip_type);
 		goto IGNORE;
 	}
-
 #endif
 
 	ct_data = (ipacm_ct_evt_data *)malloc(sizeof(ipacm_ct_evt_data));
@@ -127,12 +126,10 @@ int IPACM_ConntrackClient::IPAConntrackEventCB
 	evt_data.event = IPA_PROCESS_CT_MESSAGE;
 	evt_data.evt_data = (void *)ct_data;
 
-#ifdef CT_OPT
 	if(AF_INET6 == ip_type)
 	{
 		evt_data.event = IPA_PROCESS_CT_MESSAGE_V6;
 	}
-#endif
 
 	if(0 != IPACM_EvtDispatcher::PostEvt(&evt_data))
 	{
@@ -499,12 +496,37 @@ void* IPACM_ConntrackClient::UDPConnTimeoutUpdate(void *ptr)
 	if(nat_inst == NULL)
 	{
 		IPACMERR("unable to create nat instance\n");
+	}
+
+	uint32_t natsCount = 0;
+	NatBase* nats[] = {NULL, NULL};
+	Ipv6ct* ipv6ct = Ipv6ct::GetInstance();
+	if (ipv6ct != NULL)
+	{
+		nats[natsCount++] = ipv6ct;
+	}
+
+	if (!natsCount && nat_inst == NULL)
+	{
+		IPACMERR("There are no NAT instances. Exiting 'Conntrack Timeout Update' thread\n");
 		return NULL;
 	}
 
+	ConntrackTimestampUtil::Init();
+
 	while(1)
 	{
-		nat_inst->UpdateUDPTimeStamp();
+		if (nat_inst != NULL)
+		{
+			nat_inst->UpdateUDPTimeStamp();
+		}
+
+		bool isTcpUdpTimeoutUpToDate = false;
+		for (uint32_t i = 0; i < natsCount; ++i)
+		{
+			nats[i]->UpdateTcpUdpTimeStamps(isTcpUdpTimeoutUpToDate);
+		}
+
 		sleep(UDP_TIMEOUT_UPDATE);
 	} /* end of while(1) loop */
 

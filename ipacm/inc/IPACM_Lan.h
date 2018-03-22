@@ -394,6 +394,10 @@ protected:
 	/* add tcp syn flt rule for l2tp interface*/
 	int add_tcp_syn_flt_rule_l2tp(ipa_ip_type inner_ip_type);
 
+	void HandleNeighIpAddrAddEvt(ipacm_event_data_all *data);
+	void HandleNeighIpAddrDelEvt(bool ipv4_set, uint32_t ipv4_addr,
+		int ipv6_set, const uint32_t ipv6_addr[IPV6_NUM_ADDR][IPA_IPV6_ADDR_SIZE_IN_WORDS]);
+
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
 	inline bool is_lan_stats_index_available()
 	{
@@ -628,8 +632,6 @@ protected:
 	uint32_t ipv6_prefix[2];
 
 	uint32_t tcp_syn_flt_rule_hdl[IPA_IP_MAX];
-
-protected:
 
 	int post_lan_up_event(const ipacm_event_data_addr* data) const;
 

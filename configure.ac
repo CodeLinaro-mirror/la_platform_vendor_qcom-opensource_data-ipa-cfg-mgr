@@ -56,6 +56,11 @@ if test "x$TARGET" = "xsdx20"; then
     CFLAGS="${CFLAGS} -DFEATURE_IPACM_UL_FIREWALL -DFEATURE_IPACM_PER_CLIENT_STATS"
 fi
 
+if test "x$TARGET" = "xsdxpoorwills"; then
+    echo "\n UL firewall feature enabled\n"
+    CPPFLAGS="${CPPFLAGS} -DFEATURE_IPACM_UL_FIREWALL -DFEATURE_IPACM_PER_CLIENT_STATS"
+    CFLAGS="${CFLAGS} -DFEATURE_IPACM_UL_FIREWALL -DFEATURE_IPACM_PER_CLIENT_STATS"
+fi
 AM_CONDITIONAL(IS_SDx20, test "x$TARGET" = "xsdx20")
 
 # Checks for header files.

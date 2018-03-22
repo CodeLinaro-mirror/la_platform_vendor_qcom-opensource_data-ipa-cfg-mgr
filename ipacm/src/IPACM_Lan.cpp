@@ -877,13 +877,28 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 				if(ipa_interface_index == ipa_if_num)
 #endif
 				{
+					uint8_t vlan_id = 0;
+
 					if (data->iptype == IPA_IP_v6)
 					{
 						handle_del_ipv6_addr(data);
 						return;
 					}
+#ifdef FEATURE_VLAN_MPDN
+					if(is_vlan_event(data->iface_name))
+					{
+						IPACMDBG_H("handling vlan ETH client del v6 ip address for iface %s\n",
+							data->iface_name);
+						if(IPACM_Iface::ipacmcfg->get_vlan_id(data->iface_name, &vlan_id))
+						{
+							IPACMERR("failed getting vlan id for iface %s\n",
+								data->iface_name);
+							return;
+						}
+					}
+#endif
 					IPACMDBG_H("LAN iface delete client \n");
-					handle_eth_client_down_evt(data->mac_addr);
+					handle_eth_client_down_evt(data->mac_addr, vlan_id);
 				}
 #if defined(FEATURE_L2TP) || defined(FEATURE_L2TP)
 				else
@@ -1141,7 +1156,7 @@ int IPACM_Lan::handle_vlan_neighbor(ipacm_event_data_all *data)
 	if(IPACM_Iface::ipacmcfg->ipacm_lan_stats_enable == false)
 #endif
 	{
-		handle_eth_client_route_rule(data->mac_addr, data->iptype);
+		handle_eth_client_route_rule(data->mac_addr, data->iptype, vlan_id);
 		if(data->iptype == IPA_IP_v4)
 		{
 			/* Add NAT rules after ipv4 RT rules are set */
@@ -1196,8 +1211,21 @@ int IPACM_Lan::handle_del_ipv6_addr(ipacm_event_data_all *data)
 	uint32_t tx_index;
 	uint32_t rt_hdl;
 	int num_v6 =0, clnt_indx;
+	uint8_t vlan_id = 0;
 
-	clnt_indx = get_eth_client_index(data->mac_addr);
+#ifdef FEATURE_VLAN_MPDN
+	if(is_vlan_event(data->iface_name))
+	{
+		IPACMDBG_H("handling vlan ETH client del v6 ip address for iface %s\n", data->iface_name);
+		if(IPACM_Iface::ipacmcfg->get_vlan_id(data->iface_name, &vlan_id))
+		{
+			IPACMERR("failed getting vlan id for iface %s\n", data->iface_name);
+			return IPACM_FAILURE;
+		}
+	}
+#endif
+
+	clnt_indx = get_eth_client_index(data->mac_addr, vlan_id);
 	if (clnt_indx == IPACM_INVALID_INDEX)
 	{
 		IPACMERR("eth client not found/attached \n");
@@ -1987,8 +2015,14 @@ int IPACM_Lan::handle_eth_hdr_init(uint8_t *mac_addr, ipacm_bridge *bridge, uint
 #else
 	int max_clients = IPA_MAX_NUM_ETH_CLIENTS;
 #endif
-
-	clnt_indx = get_eth_client_index(mac_addr);
+	if(isVlan)
+	{
+		clnt_indx = get_eth_client_index(mac_addr, vlan_id);
+	}
+	else
+	{
+		clnt_indx = get_eth_client_index(mac_addr);
+	}
 
 	if (clnt_indx != IPACM_INVALID_INDEX)
 	{
@@ -2431,6 +2465,7 @@ int IPACM_Lan::handle_eth_client_ipaddr(ipacm_event_data_all *data)
 	int v6_num;
 	uint32_t ipv6_link_local_prefix = 0xFE800000;
 	uint32_t ipv6_link_local_prefix_mask = 0xFFC00000;
+	uint8_t vlan_id = 0;
 
 	IPACMDBG_H("number of eth clients: %d\n", num_eth_client);
 	IPACMDBG_H("event MAC %02x:%02x:%02x:%02x:%02x:%02x\n",
@@ -2440,14 +2475,24 @@ int IPACM_Lan::handle_eth_client_ipaddr(ipacm_event_data_all *data)
 					 data->mac_addr[3],
 					 data->mac_addr[4],
 					 data->mac_addr[5]);
-
-	clnt_indx = get_eth_client_index(data->mac_addr);
-
-		if (clnt_indx == IPACM_INVALID_INDEX)
+#ifdef FEATURE_VLAN_MPDN
+	if(is_vlan_event(data->iface_name))
+	{
+		IPACMDBG_H("handling vlan ETH client ip address for iface %s\n", data->iface_name);
+		if(IPACM_Iface::ipacmcfg->get_vlan_id(data->iface_name, &vlan_id))
 		{
-			IPACMERR("eth client not found/attached \n");
+			IPACMERR("failed getting vlan id for iface %s\n", data->iface_name);
 			return IPACM_FAILURE;
 		}
+	}
+#endif
+
+	clnt_indx = get_eth_client_index(data->mac_addr, vlan_id);
+	if(clnt_indx == IPACM_INVALID_INDEX)
+	{
+		IPACMERR("eth client not found/attached \n");
+		return IPACM_FAILURE;
+	}
 
 	IPACMDBG_H("Ip-type received %d\n", data->iptype);
 	if (data->iptype == IPA_IP_v4)
@@ -2563,7 +2608,7 @@ int IPACM_Lan::handle_eth_client_ipaddr(ipacm_event_data_all *data)
 }
 
 /*handle eth client routing rule*/
-int IPACM_Lan::handle_eth_client_route_rule(uint8_t *mac_addr, ipa_ip_type iptype)
+int IPACM_Lan::handle_eth_client_route_rule(uint8_t *mac_addr, ipa_ip_type iptype, uint8_t vlan_id)
 {
 	struct ipa_ioc_add_rt_rule *rt_rule;
 	struct ipa_rt_rule_add *rt_rule_entry;
@@ -2581,7 +2626,7 @@ int IPACM_Lan::handle_eth_client_route_rule(uint8_t *mac_addr, ipa_ip_type iptyp
 					 mac_addr[0], mac_addr[1], mac_addr[2],
 					 mac_addr[3], mac_addr[4], mac_addr[5]);
 
-	eth_index = get_eth_client_index(mac_addr);
+	eth_index = get_eth_client_index(mac_addr, vlan_id);
 	if (eth_index == IPACM_INVALID_INDEX)
 	{
 		IPACMDBG_H("eth client not found/attached \n");
@@ -3459,7 +3504,7 @@ int IPACM_Lan::handle_odu_route_del()
 }
 
 /*handle eth client del mode*/
-int IPACM_Lan::handle_eth_client_down_evt(uint8_t *mac_addr)
+int IPACM_Lan::handle_eth_client_down_evt(uint8_t *mac_addr, uint8_t vlan_id)
 {
 	int clt_indx;
 	uint32_t tx_index;
@@ -3471,7 +3516,7 @@ int IPACM_Lan::handle_eth_client_down_evt(uint8_t *mac_addr)
 
 	IPACMDBG_H("total client: %d\n", num_eth_client_tmp);
 
-	clt_indx = get_eth_client_index(mac_addr);
+	clt_indx = get_eth_client_index(mac_addr, vlan_id);
 	if (clt_indx == IPACM_INVALID_INDEX)
 	{
 		IPACMDBG_H("eth client not attached\n");

@@ -2375,7 +2375,7 @@ int IPACM_Lan::handle_eth_hdr_init(uint8_t *mac_addr, ipacm_bridge *bridge, uint
 		num_eth_client++;
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
 		if (IPACM_Iface::ipacmcfg->ipacm_lan_stats_enable == true &&
-			get_client_memptr(eth_client, num_eth_client)->lan_stats_idx != -1)
+			get_client_memptr(eth_client, clnt_indx)->lan_stats_idx != -1)
 		{
 			/* Store the client info at WAN driver. */
 			client_info = (struct wan_ioctl_lan_client_info *)malloc(sizeof(struct wan_ioctl_lan_client_info));

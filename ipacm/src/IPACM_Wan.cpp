@@ -150,6 +150,7 @@ IPACM_Wan::IPACM_Wan(int iface_index,
 	num_ipv6_dest_flt_rule = 0;
 	memset(ipv6_dest_flt_rule_hdl, 0, MAX_DEFAULT_v6_ROUTE_RULES*sizeof(uint32_t));
 	memset(ipv6_prefix, 0, sizeof(ipv6_prefix));
+	memset(m_ipv6_addr, 0, sizeof(m_ipv6_addr));
 	memset(wan_v6_addr_gw, 0, sizeof(wan_v6_addr_gw));
 	ext_prop = NULL;
 	is_ipv6_frag_firewall_flt_rule_installed = false;
@@ -431,6 +432,7 @@ int IPACM_Wan::handle_addr_evt(ipacm_event_data_addr *data)
 		if(is_global_ipv6_addr(data->ipv6_addr))
 		{
 			memcpy(ipv6_prefix, data->ipv6_addr, sizeof(ipv6_prefix));
+			memcpy(m_ipv6_addr, data->ipv6_addr, sizeof(m_ipv6_addr));
 #ifdef FEATURE_VLAN_MPDN
 			memcpy(ipv6_to_iface[modem_ipv6_pdn_index].ipv6_prefix, data->ipv6_addr, sizeof(uint32_t) * 2);
 			ipv6_to_iface[modem_ipv6_pdn_index].pIface = this;
@@ -1905,12 +1907,14 @@ int IPACM_Wan::handle_route_add_evt(ipa_ip_type iptype)
 			wanup_data->is_sta = false;
 		}
 		memcpy(wanup_data->ipv6_prefix, ipv6_prefix, sizeof(wanup_data->ipv6_prefix));
+		memcpy(wanup_data->ipv6_addr, m_ipv6_addr, sizeof(wanup_data->ipv6_addr));
 #ifdef FEATURE_VLAN_MPDN
 		IPACM_Iface::ipacmcfg->add_vlan_ipv6_prefix(wanup_data->ipv6_prefix, ipa_if_num);
 #endif
 		IPACMDBG_H("Posting IPA_HANDLE_WAN_UP_V6 with below information:\n");
 		IPACMDBG_H("if_name:%s, is sta mode: %d\n", wanup_data->ifname, wanup_data->is_sta);
 		IPACMDBG_H("ipv6 prefix: 0x%08x%08x.\n", ipv6_prefix[0], ipv6_prefix[1]);
+		IPACMDBG_H("ipv6 addr: 0x%08x%08x%08x%08x\n", m_ipv6_addr[0], m_ipv6_addr[1], m_ipv6_addr[2], m_ipv6_addr[3]);
 		memset(&evt_data, 0, sizeof(evt_data));
 		evt_data.event = IPA_HANDLE_WAN_UP_V6;
 		evt_data.evt_data = (void *)wanup_data;
@@ -5208,49 +5212,45 @@ int IPACM_Wan::handle_down_evt()
 	IPACMDBG_H("left %d wan clients need to be deleted \n ", num_wan_client);
 	for (i = 0; i < num_wan_client; i++)
 	{
-			/* Del NAT rules before ipv4 RT rules are delete */
-			if(get_client_memptr(wan_client, i)->ipv4_set == true)
-			{
-				IPACMDBG_H("Clean Nat Rules for ipv4:0x%x\n", get_client_memptr(wan_client, i)->v4_addr);
-				CtList->HandleSTAClientDelEvt(get_client_memptr(wan_client, i)->v4_addr);
-			}
+		/* Del NAT rules before RT rules are delete */
+		HandleSTAClientDelEvt(get_client_memptr(wan_client, i));
 
-			if (delete_wan_rtrules(i, IPA_IP_v4))
+		if (delete_wan_rtrules(i, IPA_IP_v4))
+		{
+			IPACMERR("unbale to delete wan-client v4 route rules for index %d\n", i);
+			res = IPACM_FAILURE;
+			goto fail;
+		}
+
+		if (delete_wan_rtrules(i, IPA_IP_v6))
+		{
+			IPACMERR("unbale to delete ecm-client v6 route rules for index %d\n", i);
+			res = IPACM_FAILURE;
+			goto fail;
+		}
+
+		IPACMDBG_H("Delete %d client header\n", num_wan_client);
+
+
+		if (get_client_memptr(wan_client, i)->ipv4_header_set == true)
+		{
+			if (m_header.DeleteHeaderHdl(get_client_memptr(wan_client, i)->hdr_hdl_v4)
+				== false)
 			{
-				IPACMERR("unbale to delete wan-client v4 route rules for index %d\n", i);
 				res = IPACM_FAILURE;
 				goto fail;
 			}
+		}
 
-			if (delete_wan_rtrules(i, IPA_IP_v6))
-			{
-				IPACMERR("unbale to delete ecm-client v6 route rules for index %d\n", i);
-				res = IPACM_FAILURE;
-				goto fail;
-			}
-
-			IPACMDBG_H("Delete %d client header\n", num_wan_client);
-
-
-			if(get_client_memptr(wan_client, i)->ipv4_header_set == true)
-			{
-				if (m_header.DeleteHeaderHdl(get_client_memptr(wan_client, i)->hdr_hdl_v4)
-					== false)
-				{
-					res = IPACM_FAILURE;
-					goto fail;
-				}
-			}
-
-			if(get_client_memptr(wan_client, i)->ipv6_header_set == true)
-			{
+		if (get_client_memptr(wan_client, i)->ipv6_header_set == true)
+		{
 			if (m_header.DeleteHeaderHdl(get_client_memptr(wan_client, i)->hdr_hdl_v6)
-					== false)
+				== false)
 			{
 				res = IPACM_FAILURE;
 				goto fail;
 			}
-			}
+		}
 	} /* end of for loop */
 
 	/* free the edm clients cache */
@@ -6646,37 +6646,43 @@ int IPACM_Wan::handle_wan_client_ipaddr(ipacm_event_data_all *data)
 	}
 	else
 	{
-		if ((data->ipv6_addr[0] != 0) || (data->ipv6_addr[1] != 0) ||
-				(data->ipv6_addr[2] != 0) || (data->ipv6_addr[3] || 0)) /* check if all 0 not valid ipv6 address */
+		/* check if all 0 not valid ipv6 address */
+		if (data->ipv6_addr[0] || data->ipv6_addr[1] || data->ipv6_addr[2] || data->ipv6_addr[3])
 		{
-		   IPACMDBG_H("ipv6 address: 0x%x:%x:%x:%x\n", data->ipv6_addr[0], data->ipv6_addr[1], data->ipv6_addr[2], data->ipv6_addr[3]);
-                   if(get_client_memptr(wan_client, clnt_indx)->ipv6_set < IPV6_NUM_ADDR)
-		   {
+			IPACMDBG_H("ipv6 address: 0x%x:%x:%x:%x\n", data->ipv6_addr[0], data->ipv6_addr[1], data->ipv6_addr[2], data->ipv6_addr[3]);
+			if (get_client_memptr(wan_client, clnt_indx)->ipv6_set < IPV6_NUM_ADDR)
+			{
 
-		       for(v6_num=0;v6_num < get_client_memptr(wan_client, clnt_indx)->ipv6_set;v6_num++)
-	               {
-			      if( data->ipv6_addr[0] == get_client_memptr(wan_client, clnt_indx)->v6_addr[v6_num][0] &&
-			           data->ipv6_addr[1] == get_client_memptr(wan_client, clnt_indx)->v6_addr[v6_num][1] &&
-			  	        data->ipv6_addr[2]== get_client_memptr(wan_client, clnt_indx)->v6_addr[v6_num][2] &&
-			  	         data->ipv6_addr[3] == get_client_memptr(wan_client, clnt_indx)->v6_addr[v6_num][3])
-			      {
-			  	    IPACMDBG_H("Already see this ipv6 addr for client:%d\n", clnt_indx);
-			  	    return IPACM_FAILURE; /* not setup the RT rules*/
-			      }
-		       }
+				for (v6_num = 0; v6_num < get_client_memptr(wan_client, clnt_indx)->ipv6_set; v6_num++)
+				{
+					if (data->ipv6_addr[0] == get_client_memptr(wan_client, clnt_indx)->v6_addr[v6_num][0] &&
+						data->ipv6_addr[1] == get_client_memptr(wan_client, clnt_indx)->v6_addr[v6_num][1] &&
+						data->ipv6_addr[2] == get_client_memptr(wan_client, clnt_indx)->v6_addr[v6_num][2] &&
+						data->ipv6_addr[3] == get_client_memptr(wan_client, clnt_indx)->v6_addr[v6_num][3])
+					{
+						IPACMDBG_H("Already see this ipv6 addr for client:%d\n", clnt_indx);
+						return IPACM_FAILURE; /* not setup the RT rules*/
+					}
+				}
 
-		       /* not see this ipv6 before for wifi client*/
-			   get_client_memptr(wan_client, clnt_indx)->v6_addr[get_client_memptr(wan_client, clnt_indx)->ipv6_set][0] = data->ipv6_addr[0];
-			   get_client_memptr(wan_client, clnt_indx)->v6_addr[get_client_memptr(wan_client, clnt_indx)->ipv6_set][1] = data->ipv6_addr[1];
-			   get_client_memptr(wan_client, clnt_indx)->v6_addr[get_client_memptr(wan_client, clnt_indx)->ipv6_set][2] = data->ipv6_addr[2];
-			   get_client_memptr(wan_client, clnt_indx)->v6_addr[get_client_memptr(wan_client, clnt_indx)->ipv6_set][3] = data->ipv6_addr[3];
-			   get_client_memptr(wan_client, clnt_indx)->ipv6_set++;
-		    }
-		    else
-		    {
-		         IPACMDBG_H("Already got 3 ipv6 addr for client:%d\n", clnt_indx);
-			 return IPACM_FAILURE; /* not setup the RT rules*/
-		    }
+				/*
+				 * The client got new IPv6 address.
+				 * NOTE: The new address doesn't replace the existing one but being added (up to IPV6_NUM_ADDR),
+				 *       so the previous IPv6 addresses of the client will not be deleted.
+				 */
+				get_client_memptr(wan_client, clnt_indx)->v6_addr[get_client_memptr(wan_client, clnt_indx)->ipv6_set][0] = data->ipv6_addr[0];
+				get_client_memptr(wan_client, clnt_indx)->v6_addr[get_client_memptr(wan_client, clnt_indx)->ipv6_set][1] = data->ipv6_addr[1];
+				get_client_memptr(wan_client, clnt_indx)->v6_addr[get_client_memptr(wan_client, clnt_indx)->ipv6_set][2] = data->ipv6_addr[2];
+				get_client_memptr(wan_client, clnt_indx)->v6_addr[get_client_memptr(wan_client, clnt_indx)->ipv6_set][3] = data->ipv6_addr[3];
+				get_client_memptr(wan_client, clnt_indx)->ipv6_set++;
+
+				CtList->HandleSTAClientAddEvt_v6(Ipv6IpAddress(data->ipv6_addr, false));
+			}
+			else
+			{
+				IPACMDBG_H("Already got 3 ipv6 addr for client:%d\n", clnt_indx);
+				return IPACM_FAILURE; /* not setup the RT rules*/
+			}
 		}
 	}
 
@@ -7500,3 +7506,17 @@ void IPACM_Wan::install_l2tp_flt_rule(ipa_flt_rule_add* rules, int rule_offset, 
 	return;
 }
 #endif
+
+void IPACM_Wan::HandleSTAClientDelEvt(const ipa_wan_client* client)
+{
+	if (client->ipv4_set == true)
+	{
+		CtList->HandleSTAClientDelEvt(client->v4_addr);
+	}
+
+	for (int i = 0; i < client->ipv6_set; ++i)
+	{
+		CtList->HandleSTAClientDelEvt_v6(Ipv6IpAddress(client->v6_addr[i], false));
+	}
+}
+

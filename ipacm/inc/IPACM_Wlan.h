@@ -1,31 +1,31 @@
 /*
-Copyright (c) 2013-2016, The Linux Foundation. All rights reserved.
-
-Redistribution and use in source and binary forms, with or without
-modification, are permitted provided that the following conditions are
-met:
-    * Redistributions of source code must retain the above copyright
-      notice, this list of conditions and the following disclaimer.
-    * Redistributions in binary form must reproduce the above
-      copyright notice, this list of conditions and the following
-      disclaimer in the documentation and/or other materials provided
-      with the distribution.
-    * Neither the name of The Linux Foundation nor the names of its
-      contributors may be used to endorse or promote products derived
-      from this software without specific prior written permission.
-
-THIS SOFTWARE IS PROVIDED "AS IS" AND ANY EXPRESS OR IMPLIED
-WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
-MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NON-INFRINGEMENT
-ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS
-BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
-SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR
-BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
-WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
-OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
-IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-*/
+ * Copyright (c) 2013-2018 The Linux Foundation. All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions are
+ * met:
+ *    * Redistributions of source code must retain the above copyright
+ *      notice, this list of conditions and the following disclaimer.
+ *    * Redistributions in binary form must reproduce the above
+ *      copyright notice, this list of conditions and the following
+ *      disclaimer in the documentation and/or other materials provided
+ *      with the distribution.
+ *    * Neither the name of The Linux Foundation nor the names of its
+ *      contributors may be used to endorse or promote products derived
+ *      from this software without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED "AS IS" AND ANY EXPRESS OR IMPLIED
+ * WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
+ * MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NON-INFRINGEMENT
+ * ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS
+ * BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR
+ * BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
+ * WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
+ * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
+ * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ */
 /*!
 		@file
 		IPACM_Wlan.h
@@ -156,6 +156,7 @@ private:
 	static int num_wlan_ap_iface;
 
 	NatApp *Nat_App;
+	NatBase* const ipv6ct_inst;
 
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
 	/* Clients which take HW path. */
@@ -270,7 +271,7 @@ private:
 		inline bool is_lan_stats_index_available()
 		{
 			int cnt;
-	
+
 			for(cnt = 0; cnt < IPA_MAX_NUM_HW_PATH_CLIENTS; cnt++)
 			{
 				if (IPACM_Wlan::active_lan_client_index[cnt].lan_stats_idx == -1) {
@@ -278,25 +279,25 @@ private:
 					return true;
 				}
 			}
-	
+
 			IPACMDBG_H("No free index available\n");
 			return false;
 		}
-	
+
 		inline int8_t get_free_active_lan_stats_index(uint8_t *mac_addr, int ipa_if_num)
 		{
 			int cnt;
-	
+
 			if (!IPACM_Iface::ipacmcfg->ipacm_lan_stats_enable)
 			{
 				IPACMDBG_H("LAN stats functionality is not enabled.\n");
 				return -1;
 			}
-	
+
 			IPACMDBG_H("Received mac_addr MAC %02x:%02x:%02x:%02x:%02x:%02x\n",
 					mac_addr[0], mac_addr[1], mac_addr[2],
 					mac_addr[3], mac_addr[4], mac_addr[5]);
-	
+
 			for(cnt = 0; cnt < IPA_MAX_NUM_HW_PATH_CLIENTS; cnt++)
 			{
 				if (IPACM_Wlan::active_lan_client_index[cnt].lan_stats_idx == -1) {
@@ -309,25 +310,25 @@ private:
 					return cnt;
 				}
 			}
-	
+
 			IPACMDBG_H("index not available\n");
 			return -1;
 		}
-	
+
 		inline int8_t get_free_inactive_lan_stats_index(uint8_t *mac_addr)
 		{
 			int cnt;
-	
+
 			if (!IPACM_Iface::ipacmcfg->ipacm_lan_stats_enable)
 			{
 				IPACMDBG_H("LAN stats functionality is not enabled.\n");
 				return -1;
 			}
-	
+
 			IPACMDBG_H("Received mac_addr MAC %02x:%02x:%02x:%02x:%02x:%02x\n",
 					mac_addr[0], mac_addr[1], mac_addr[2],
 					mac_addr[3], mac_addr[4], mac_addr[5]);
-	
+
 			for(cnt = 0; cnt < IPA_MAX_NUM_HW_PATH_CLIENTS; cnt++)
 			{
 				if (IPACM_Wlan::inactive_lan_client_index[cnt].lan_stats_idx == -1) {
@@ -340,25 +341,25 @@ private:
 					return cnt;
 				}
 			}
-	
+
 			IPACMDBG_H("index not available\n");
 			return -1;
 		}
-	
+
 		inline int8_t get_lan_stats_index(uint8_t *mac_addr)
 		{
 			int cnt;
-	
+
 			if (!IPACM_Iface::ipacmcfg->ipacm_lan_stats_enable)
 			{
 				IPACMDBG_H("LAN stats functionality is not enabled.\n");
 				return -1;
 			}
-	
+
 			IPACMDBG_H("Received mac_addr MAC %02x:%02x:%02x:%02x:%02x:%02x\n",
 					mac_addr[0], mac_addr[1], mac_addr[2],
 					mac_addr[3], mac_addr[4], mac_addr[5]);
-	
+
 			for(cnt = 0; cnt < IPA_MAX_NUM_HW_PATH_CLIENTS; cnt++)
 			{
 				if (memcmp(IPACM_Wlan::active_lan_client_index[cnt].mac,
@@ -372,25 +373,25 @@ private:
 					return cnt;
 				}
 			}
-	
+
 			IPACMDBG_H("index not available\n");
 			return -1;
 		}
-	
+
 		inline int get_available_inactive_lan_client(uint8_t *mac_addr, int *ipa_if_num)
 		{
 			int cnt;
-	
+
 			if (!IPACM_Iface::ipacmcfg->ipacm_lan_stats_enable)
 			{
 				IPACMDBG_H("LAN stats functionality is not enabled.\n");
 				return IPACM_FAILURE;
 			}
-	
+
 			IPACMDBG_H("Received mac_addr MAC %02x:%02x:%02x:%02x:%02x:%02x\n",
 					mac_addr[0], mac_addr[1], mac_addr[2],
 					mac_addr[3], mac_addr[4], mac_addr[5]);
-	
+
 			for(cnt = 0; cnt < IPA_MAX_NUM_HW_PATH_CLIENTS; cnt++)
 			{
 				if (IPACM_Wlan::inactive_lan_client_index[cnt].lan_stats_idx != -1) {
@@ -400,11 +401,11 @@ private:
 					return IPACM_SUCCESS;
 				}
 			}
-	
+
 			IPACMDBG_H("No inactive client\n");
 			return IPACM_FAILURE;
 		}
-	
+
 		inline int8_t reset_active_lan_stats_index(int8_t idx, uint8_t *mac_addr)
 		{
 			if (!IPACM_Iface::ipacmcfg->ipacm_lan_stats_enable)
@@ -412,11 +413,11 @@ private:
 				IPACMDBG_H("LAN stats functionality is not enabled.\n");
 				return IPACM_FAILURE;
 			}
-	
+
 			IPACMDBG_H("Received mac_addr MAC %02x:%02x:%02x:%02x:%02x:%02x\n",
 					mac_addr[0], mac_addr[1], mac_addr[2],
 					mac_addr[3], mac_addr[4], mac_addr[5]);
-	
+
 			if (idx < 0 || idx >= IPA_MAX_NUM_HW_PATH_CLIENTS ||
 				memcmp(IPACM_Wlan::active_lan_client_index[idx].mac,
 								mac_addr,
@@ -428,21 +429,21 @@ private:
 			memset(&IPACM_Wlan::active_lan_client_index[idx], -1, sizeof(ipa_lan_client_idx));
 			return IPACM_SUCCESS;
 		}
-	
+
 		inline int8_t reset_inactive_lan_stats_index(uint8_t *mac_addr)
 		{
 			int cnt;
-	
+
 			if (!IPACM_Iface::ipacmcfg->ipacm_lan_stats_enable)
 			{
 				IPACMDBG_H("LAN stats functionality is not enabled.\n");
 				return IPACM_FAILURE;
 			}
-	
+
 			IPACMDBG_H("Received mac_addr MAC %02x:%02x:%02x:%02x:%02x:%02x\n",
 					mac_addr[0], mac_addr[1], mac_addr[2],
 					mac_addr[3], mac_addr[4], mac_addr[5]);
-	
+
 			for(cnt = 0; cnt < IPA_MAX_NUM_HW_PATH_CLIENTS; cnt++)
 			{
 				if (memcmp(IPACM_Wlan::inactive_lan_client_index[cnt].mac,
@@ -455,17 +456,17 @@ private:
 			}
 			return IPACM_FAILURE;
 		}
-	
+
 		inline void reset_lan_stats_index()
 		{
 			int i;
-	
+
 			if (!IPACM_Iface::ipacmcfg->ipacm_lan_stats_enable)
 			{
 				IPACMDBG_H("LAN stats functionality is not enabled.\n");
 				return;
 			}
-	
+
 			/* Reset everything based on ipa_if_num. */
 			for (i = 0; i < IPA_MAX_NUM_HW_PATH_CLIENTS; i++)
 			{
@@ -475,7 +476,7 @@ private:
 					memset(&IPACM_Wlan::inactive_lan_client_index[i], -1, sizeof(ipa_lan_client_idx));
 			}
 		}
-	
+
 #endif
 
 	/* for handle wifi client initial,copy all partial headers (tx property) */

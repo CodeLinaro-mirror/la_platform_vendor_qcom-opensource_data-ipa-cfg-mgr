@@ -311,6 +311,7 @@ private:
 	bool is_default_gateway;
 
 	uint32_t ipv6_prefix[2];
+	uint32_t m_ipv6_addr[IPA_IPV6_ADDR_SIZE_IN_WORDS];
 
 	/* IPACM firewall Configuration file*/
 	IPACM_firewall_conf_t firewall_config;
@@ -604,6 +605,8 @@ private:
 
 	/* construct dummy ethernet header */
 	int add_dummy_rx_hdr();
+
+	void HandleSTAClientDelEvt(const ipa_wan_client* client);
 };
 
 #endif /* IPACM_WAN_H */

@@ -30,6 +30,14 @@ IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "IPACM_ConntrackClient.h"
 #include "IPACM_Iface.h"
 
+extern "C"
+{
+#include <ipa_ipv6ct.h>
+#include <ipa_nat_drv.h>
+}
+
+#include <algorithm>
+
 #define INVALID_IP_ADDR 0x0
 
 #define HDR_METADATA_MUX_ID_BMASK 0x00FF0000
@@ -467,8 +475,10 @@ int NatApp::DeleteEntry(const nat_table_entry *rule)
 				{
 					IPACMERR("%s() %d deletion failed\n", __FUNCTION__, __LINE__);
 				}
-
-				IPACMDBG_H("Deleted Nat entry(%d) Successfully\n", cnt);
+				else
+				{
+					IPACMDBG_H("Deleted Nat entry(%d) Successfully\n", cnt);
+				}
 			}
 			else
 			{
@@ -867,17 +877,7 @@ int NatApp::ResetPwrSaveIf(uint32_t client_lan_ip)
 		}
 	}
 
-	return -1;
-}
-
-uint32_t NatApp::GetTableHdl(uint32_t in_ip_addr)
-{
-	if(in_ip_addr == pub_ip_addr)
-	{
-		return nat_table_hdl;
-	}
-
-	return -1;
+	return 0;
 }
 
 void NatApp::AddTempEntry(const nat_table_entry *new_entry)
@@ -1212,3 +1212,1220 @@ fail:
 #endif //FEATURE_IPA_ANDROID
 	return;
 }
+
+IpAddress::IpAddress(ipa_ip_type type) : m_type(type)
+{
+	IPACMDBG_H("\n");
+}
+
+IpAddress::~IpAddress()
+{
+	IPACMDBG_H("\n");
+}
+
+Ipv6IpAddress::Ipv6IpAddress() : IpAddress(IPA_IP_v6), m_msb(0), m_lsb(0)
+{
+	IPACMDBG_H("\n");
+}
+
+Ipv6IpAddress::Ipv6IpAddress(const uint32_t* addr, bool inputNetworkEndianness) :
+	IpAddress(IPA_IP_v6),
+	m_msb(Convert2x32to64(addr, inputNetworkEndianness)),
+	m_lsb(Convert2x32to64(addr + 2, inputNetworkEndianness))
+{
+	IPACMDBG_H("\n");
+}
+
+bool Ipv6IpAddress::Compare(const IpAddress& other) const
+{
+	IPACMDBG_H("\n");
+	if (other.GetType() != IPA_IP_v6)
+	{
+		IPACMERR("Wrong IP type\n");
+		return false;
+	}
+
+	const Ipv6IpAddress& ip = static_cast<const Ipv6IpAddress&>(other);
+	bool ret = m_lsb == ip.m_lsb && m_msb == ip.m_msb;
+	IPACMDBG_H("return\n");
+	return ret;
+}
+
+bool Ipv6IpAddress::IsSameSubnet(const IpAddress& other) const
+{
+	IPACMDBG_H("\n");
+	if (other.GetType() != IPA_IP_v6)
+	{
+		IPACMERR("Wrong IP type\n");
+		return false;
+	}
+
+	const Ipv6IpAddress& ip = static_cast<const Ipv6IpAddress&>(other);
+	bool ret = m_msb == ip.m_msb;
+	IPACMDBG_H("return\n");
+	return ret;
+}
+
+void Ipv6IpAddress::Copy(const IpAddress& other)
+{
+	IPACMDBG_H("\n");
+	if (other.GetType() != IPA_IP_v6)
+	{
+		IPACMERR("Wrong IP type\n");
+		return;
+	}
+
+	const Ipv6IpAddress& ip = static_cast<const Ipv6IpAddress&>(other);
+	m_msb = ip.m_msb;
+	m_lsb = ip.m_lsb;
+	IPACMDBG_H("return\n");
+}
+
+void Ipv6IpAddress::Clear()
+{
+	IPACMDBG_H("\n");
+	m_msb = 0;
+	m_lsb = 0;
+	IPACMDBG_H("return\n");
+}
+
+bool Ipv6IpAddress::Valid() const
+{
+	IPACMDBG_H("\n");
+	return m_lsb != 0 || m_msb != 0;
+}
+
+void Ipv6IpAddress::DebugDump(const char* msg_prefix) const
+{
+	IPACMDBG_H("%s IPv6 address 0x%llx%llx\n", msg_prefix, m_msb, m_lsb);
+}
+
+bool Ipv6IpAddress::IsSameSubnet(uint32_t* prefix) const
+{
+	IPACMDBG_H("\n");
+	return m_msb == Convert2x32to64(prefix, false);
+}
+
+void Ipv6IpAddress::CreateFromArray(const uint32_t* addr, bool inputNetworkEndianness)
+{
+	IPACMDBG_H("\n");
+	m_msb = Convert2x32to64(addr, inputNetworkEndianness);
+	m_lsb = Convert2x32to64(addr + 2, inputNetworkEndianness);
+	DebugDump("Ipv6IpAddress::CreateFromArray received");
+}
+
+void Ipv6IpAddress::ToArray(uint32_t* addr, bool outputNetworkEndianness) const
+{
+	IPACMDBG_H("\n");
+	Convert64to2x32(m_msb, addr, outputNetworkEndianness);
+	Convert64to2x32(m_lsb, addr + 2, outputNetworkEndianness);
+	IPACMDBG_H("return\n");
+}
+
+uint64_t Ipv6IpAddress::Convert2x32to64(const uint32_t* pair32, bool inputNetworkEndianness)
+{
+	IPACMDBG_H("\n");
+	uint32_t msb = pair32[0], lsb = pair32[1];
+	if (inputNetworkEndianness)
+	{
+		msb = ntohl(msb);
+		lsb = ntohl(lsb);
+	}
+	IPACMDBG_H("return\n");
+	return static_cast<uint64_t>(msb) << 32 | lsb;
+}
+
+void Ipv6IpAddress::Convert64to2x32(uint64_t in, uint32_t* pair32, bool outputNetworkEndianness)
+{
+	IPACMDBG_H("\n");
+	pair32[0] = in >> 32;
+	pair32[1] = static_cast<uint32_t>(in);
+	if (outputNetworkEndianness)
+	{
+		pair32[0] = htonl(pair32[0]);
+		pair32[1] = htonl(pair32[1]);
+	}
+	IPACMDBG_H("return\n");
+}
+
+NatEntryBase::NatEntryBase(ipa_ip_type type) :
+	m_type(type),
+	m_timestamp(0),
+	m_direction(DirectionUnknown),
+	m_ruleHandle(0),
+	m_protocol(0),
+	m_enabled(false),
+	m_isDummy(false)
+{
+	IPACMDBG_H("\n");
+}
+
+NatEntryBase::~NatEntryBase()
+{
+	IPACMDBG_H("\n");
+}
+
+bool NatEntryBase::Compare(const NatEntryBase& other) const
+{
+	IPACMDBG_H("\n");
+	return m_protocol == other.m_protocol;
+}
+
+void NatEntryBase::Copy(const NatEntryBase& other)
+{
+	IPACMDBG_H("\n");
+	m_timestamp = other.m_timestamp;
+	m_direction = other.m_direction;
+	m_ruleHandle = other.m_ruleHandle;
+	m_protocol = other.m_protocol;
+	m_enabled = other.m_enabled;
+	m_isDummy = other.m_isDummy;
+	IPACMDBG_H("return\n");
+}
+
+void NatEntryBase::Clear()
+{
+	IPACMDBG_H("\n");
+	m_timestamp = 0;
+	m_direction = DirectionUnknown;
+	m_ruleHandle = 0;
+	m_protocol = 0;
+	m_enabled = false;
+	m_isDummy = false;
+	IPACMDBG_H("return\n");
+}
+
+void NatEntryBase::DebugDump(const char* msg_prefix) const
+{
+	IPACMDBG_H("%s protocol %d direction %s\n", msg_prefix, m_protocol, DirectionToStr(m_direction));
+}
+
+/*
+ * This function recognize entry direction based on client IP address - client can be private client or STA client.
+ * Mostly required for IPv6CT, because contract library cannot determine direction for IPv6 connections.
+ */
+bool NatEntryBase::UpdateDirection(const IpAddress& clientIp, bool isStaClientIp)
+{
+	/* Direction of IPV4 connections is generally known before the function is called. */
+	if (m_direction != DirectionUnknown)
+	{
+		IPACMDBG_H("The direction already specified. Nothing to do\n");
+		return true;
+	}
+
+	IPACMDBG_H("The received client is%s an STA client\n", (isStaClientIp) ? "" : " not");
+	clientIp.DebugDump("The received client\n");
+	DebugDump("Convert direction of the following entry according to the received client IP\n");
+
+	if (GetClientIp() == clientIp)
+	{
+		if (isStaClientIp)
+		{
+			m_direction = DirectionInbound;
+			InvertDirection();
+		}
+		else
+		{
+			m_direction = DirectionOutbound;
+		}
+	}
+	else if (GetTargetIp() == clientIp)
+	{
+		if (isStaClientIp)
+		{
+			m_direction = DirectionOutbound;
+		}
+		else
+		{
+			m_direction = DirectionInbound;
+			InvertDirection();
+		}
+	}
+	else
+	{
+		return false;
+	}
+
+	IPACMDBG_H("return\n");
+	return true;
+}
+
+const char* NatEntryBase::DirectionToStr(NatEntryBase::Direction direction)
+{
+	switch (direction)
+	{
+	case DirectionUnknown:
+		return "unknown";
+	case DirectionOutbound:
+		return "outbound";
+	case DirectionInbound:
+		return "inbound";
+	default:
+		IPACMERR("Unsupported direction %d\n", direction);
+	}
+	return "unknown";
+}
+
+Ipv6ctEntry::Ipv6ctEntry() : NatEntryBase(IPA_IP_v6), m_dstPort(0), m_srcPort(0)
+{
+	IPACMDBG_H("\n");
+}
+
+bool Ipv6ctEntry::Compare(const NatEntryBase& other) const
+{
+	IPACMDBG_H("\n");
+	if (other.m_type != IPA_IP_v6)
+	{
+		IPACMERR("Wrong IP type\n");
+		return false;
+	}
+
+	const Ipv6ctEntry& entry = static_cast<const Ipv6ctEntry&>(other);
+	return NatEntryBase::Compare(other) &&
+		m_srcAddr == entry.m_srcAddr &&
+		m_dstAddr == entry.m_dstAddr &&
+		m_dstPort == entry.m_dstPort &&
+		m_srcPort == entry.m_srcPort;
+}
+
+void Ipv6ctEntry::Copy(const NatEntryBase& other)
+{
+	IPACMDBG_H("\n");
+	if (other.m_type != IPA_IP_v6)
+	{
+		IPACMERR("Wrong IP type\n");
+		return;
+	}
+
+	NatEntryBase::Copy(other);
+
+	const Ipv6ctEntry& entry = static_cast<const Ipv6ctEntry&>(other);
+	m_srcAddr = entry.m_srcAddr;
+	m_dstAddr = entry.m_dstAddr;
+	m_dstPort = entry.m_dstPort;
+	m_srcPort = entry.m_srcPort;
+	IPACMDBG_H("return\n");
+}
+
+void Ipv6ctEntry::Clear()
+{
+	IPACMDBG_H("\n");
+	NatEntryBase::Clear();
+
+	m_srcAddr.Clear();
+	m_dstAddr.Clear();
+	m_dstPort = 0;
+	m_srcPort = 0;
+	IPACMDBG_H("return\n");
+}
+
+bool Ipv6ctEntry::Valid() const
+{
+	IPACMDBG_H("\n");
+	return m_dstPort && m_srcPort && m_srcAddr.Valid() && m_dstAddr.Valid();
+}
+
+void Ipv6ctEntry::DebugDump(const char* msg_prefix) const
+{
+	NatEntryBase::DebugDump(msg_prefix);
+	m_srcAddr.DebugDump("Source");
+	m_dstAddr.DebugDump("Destination");
+	IPACMDBG_H("Source port %d\n", m_srcPort);
+	IPACMDBG_H("Destination port %d\n", m_dstPort);
+}
+
+void Ipv6ctEntry::InvertDirection()
+{
+	std::swap(m_srcAddr, m_dstAddr);
+	std::swap(m_srcPort, m_dstPort);
+}
+
+const IpAddress& Ipv6ctEntry::GetClientIp() const
+{
+	return m_srcAddr;
+}
+
+const IpAddress& Ipv6ctEntry::GetTargetIp() const
+{
+	return m_dstAddr;
+}
+
+CollectionBase::CollectionBase(int max_entries) : m_maxEntries(max_entries)
+{
+	IPACMDBG_H("\n");
+}
+
+CollectionBase::~CollectionBase()
+{
+	IPACMDBG_H("\n");
+}
+
+uint32_t ConntrackTimestampUtil::tcp_timeout = 432000;
+uint32_t ConntrackTimestampUtil::udp_timeout = 180;
+struct nf_conntrack* ConntrackTimestampUtil::ct = NULL;
+struct nfct_handle* ConntrackTimestampUtil::ct_hdl = NULL;
+
+ConntrackTimestampUtil::ConntrackTimestampUtil()
+{
+	IPACMDBG_H("\n");
+}
+
+ConntrackTimestampUtil::~ConntrackTimestampUtil()
+{
+	IPACMDBG_H("\n");
+}
+
+void ConntrackTimestampUtil::Init()
+{
+	IPACMDBG_H("\n");
+
+	if (ct_hdl == NULL)
+	{
+		ct_hdl = nfct_open(CONNTRACK, 0);
+		if (ct_hdl == NULL)
+		{
+			PERROR("nfct_open");
+			return;
+		}
+	}
+
+	if (ct == NULL)
+	{
+		ct = nfct_new();
+		if (ct == NULL)
+		{
+			PERROR("nfct_new");
+			return;
+		}
+	}
+
+	IPACMDBG_H("return\n");
+}
+
+#ifndef FEATURE_IPA_ANDROID
+/*
+ * ConntrackTimestampUtil::ReadTcpUdpTimeout() is equivalent to NatApp::Read_TcpUdp_Timeout()
+ *
+ * NOTE: Kernel version check is omitted from the function, because the function is called only if IPv6CT is enabled.
+ */
+void ConntrackTimestampUtil::ReadTcpUdpTimeout()
+{
+	IPACMDBG_H("\n");
+
+	FILE *udp_fd = NULL, *tcp_fd = NULL;
+
+	/* Read UDP timeout value */
+	udp_fd = fopen(IPACM_UDP_FULL_FILE_NAME_NEW, "r");
+	if (udp_fd == NULL)
+	{
+		IPACMERR("unable to open %s\n", IPACM_UDP_FULL_FILE_NAME_NEW);
+		goto bail;
+	}
+
+	if (fscanf(udp_fd, "%d", &udp_timeout) != 1)
+	{
+		IPACMERR("Error reading udp timeout\n");
+	}
+	IPACMDBG_H("udp timeout value: %d\n", udp_timeout);
+
+	/* Read TCP timeout value */
+	tcp_fd = fopen(IPACM_TCP_FULL_FILE_NAME_NEW, "r");
+	if (tcp_fd == NULL)
+	{
+		IPACMERR("unable to open %s\n", IPACM_TCP_FULL_FILE_NAME_NEW);
+		goto bail;
+	}
+
+	if (fscanf(tcp_fd, "%d", &tcp_timeout) != 1)
+	{
+		IPACMERR("Error reading tcp timeout\n");
+	}
+	IPACMDBG_H("tcp timeout value: %d\n", tcp_timeout);
+
+bail:
+	if (udp_fd != NULL)
+	{
+		fclose(udp_fd);
+	}
+	if (tcp_fd != NULL)
+	{
+		fclose(tcp_fd);
+	}
+
+	IPACMDBG_H("return\n");
+}
+#endif
+
+int ConntrackTimestampUtil::UpdateConntrackTimeStamp(const NatEntryBase& entry)
+{
+	IPACMDBG_H("\n");
+
+	entry.DebugDump("Going to update timestamp for following entry");
+
+	nfct_set_attr_u8(ct, ATTR_L4PROTO, entry.m_protocol);
+	nfct_set_attr_u32(ct, ATTR_TIMEOUT, (entry.m_protocol == IPPROTO_UDP) ? udp_timeout : tcp_timeout);
+
+	SetConnectionDetails(entry);
+
+	int ret = nfct_query(ct_hdl, NFCT_Q_UPDATE, ct);
+
+	IPACMDBG_H("return value %d\n", ret);
+	return ret;
+}
+
+void Ipv6ctConntrackTimestampUtil::SetConnectionDetails(const NatEntryBase& entry)
+{
+	IPACMDBG_H("\n");
+	if (entry.m_type != IPA_IP_v6)
+	{
+		IPACMERR("Wrong IP type\n");
+		return;
+	}
+
+	uint16_t src_port, dst_port;
+	struct nfct_attr_grp_ipv6 attr_grp;
+	const Ipv6ctEntry& ipv6_entry = static_cast<const Ipv6ctEntry&>(entry);
+
+	switch (ipv6_entry.m_direction)
+	{
+	case NatEntryBase::DirectionOutbound:
+		ipv6_entry.m_srcAddr.ToArray(attr_grp.src, true);
+		src_port = ipv6_entry.m_srcPort;
+
+		ipv6_entry.m_dstAddr.ToArray(attr_grp.dst, true);
+		dst_port = ipv6_entry.m_dstPort;
+		break;
+	case NatEntryBase::DirectionInbound:
+		ipv6_entry.m_srcAddr.ToArray(attr_grp.dst, true);
+		src_port = ipv6_entry.m_dstPort;
+
+		ipv6_entry.m_dstAddr.ToArray(attr_grp.src, true);
+		dst_port = ipv6_entry.m_srcPort;
+		break;
+	default:
+		IPACMERR("Unknown direction in an offloaded connection\n");
+		entry.DebugDump("Unknown direction in following connection\n");
+		return;
+	}
+
+	nfct_set_attr_u8(ct, ATTR_L3PROTO, AF_INET6);
+	nfct_set_attr_grp(ct, ATTR_GRP_ORIG_IPV6, &attr_grp);
+	nfct_set_attr_u16(ct, ATTR_PORT_SRC, htons(src_port));
+	nfct_set_attr_u16(ct, ATTR_PORT_DST, htons(dst_port));
+
+	IPACMDBG_H("return\n");
+}
+
+NatProxyBase::NatProxyBase() : m_tableHandle(0)
+{
+	IPACMDBG_H("\n");
+}
+
+NatProxyBase::~NatProxyBase()
+{
+	IPACMDBG_H("\n");
+}
+
+int NatProxyBase::AddTable(uint16_t number_of_entries)
+{
+	IPACMDBG_H("\n");
+	uint32_t table_handle;
+	int ret = DoAddTable(number_of_entries, table_handle);
+	if (!ret)
+	{
+		m_tableHandle = table_handle;
+	}
+	IPACMDBG_H("return\n");
+	return ret;
+}
+
+int NatProxyBase::DeleteTable()
+{
+	IPACMDBG_H("\n");
+	if (!m_tableHandle)
+	{
+		IPACMERR("The table wasn't allocated by AddTable\n");
+		return -EINVAL;
+	}
+
+	int ret = DoDeleteTable();
+	m_tableHandle = 0;
+	IPACMDBG_H("return\n");
+	return ret;
+}
+
+int NatProxyBase::AddEntry(NatEntryBase& entry)
+{
+	IPACMDBG_H("\n");
+	if (!m_tableHandle)
+	{
+		IPACMERR("The table wasn't allocated by AddTable\n");
+		return -EINVAL;
+	}
+
+	uint32_t entry_handle;
+	int ret = DoAddEntry(entry, entry_handle);
+	if (!ret)
+	{
+		entry.m_ruleHandle = entry_handle;
+		entry.m_timestamp = 0;
+		entry.m_enabled = true;
+	}
+	IPACMDBG_H("return\n");
+	return ret;
+}
+
+int NatProxyBase::DelEntry(NatEntryBase& entry)
+{
+	IPACMDBG_H("\n");
+	if (!m_tableHandle)
+	{
+		IPACMERR("The table wasn't allocated by AddTable\n");
+		return -EINVAL;
+	}
+
+	int ret = DoDelEntry(entry);
+	entry.Clear();
+	IPACMDBG_H("return\n");
+	return ret;
+}
+
+int Ipv6ctProxy::DoAddTable(uint16_t number_of_entries, uint32_t& table_handle)
+{
+	IPACMDBG_H("\n");
+	int ret = ipa_ipv6ct_add_tbl(number_of_entries, &table_handle);
+	IPACMDBG_H("return\n");
+	return ret;
+}
+
+int Ipv6ctProxy::DoDeleteTable()
+{
+	IPACMDBG_H("\n");
+	int ret = ipa_ipv6ct_del_tbl(m_tableHandle);
+	IPACMDBG_H("return\n");
+	return ret;
+}
+
+int Ipv6ctProxy::DoAddEntry(const NatEntryBase& entry, uint32_t& entry_handle)
+{
+	IPACMDBG_H("\n");
+	if (entry.m_type != IPA_IP_v6)
+	{
+		IPACMERR("Wrong IP type\n");
+		return -EINVAL;
+	}
+
+	ipa_ipv6ct_rule rule;
+	const Ipv6ctEntry& ipv6ct_entry = static_cast<const Ipv6ctEntry&>(entry);
+	rule.src_ipv6_lsb = ipv6ct_entry.m_srcAddr.GetLsb();
+	rule.src_ipv6_msb = ipv6ct_entry.m_srcAddr.GetMsb();
+	rule.dest_ipv6_lsb = ipv6ct_entry.m_dstAddr.GetLsb();
+	rule.dest_ipv6_msb = ipv6ct_entry.m_dstAddr.GetMsb();
+	rule.direction_settings = IPA_IPV6CT_DIRECTION_ALLOW_ALL;
+	rule.src_port = ipv6ct_entry.m_srcPort;
+	rule.dest_port = ipv6ct_entry.m_dstPort;
+	rule.protocol = ipv6ct_entry.m_protocol;
+	int ret = ipa_ipv6ct_add_rule(m_tableHandle, &rule, &entry_handle);
+	IPACMDBG_H("return\n");
+	return ret;
+}
+
+int Ipv6ctProxy::DoDelEntry(const NatEntryBase& entry)
+{
+	IPACMDBG_H("\n");
+	if (entry.m_type != IPA_IP_v6)
+	{
+		IPACMERR("Wrong IP type\n");
+		return -EINVAL;
+	}
+
+	int ret = ipa_ipv6ct_del_rule(m_tableHandle, entry.m_ruleHandle);
+	IPACMDBG_H("return\n");
+	return ret;
+}
+
+int Ipv6ctProxy::QueryTimestamp(const NatEntryBase& entry, uint32_t& time_stamp) const
+{
+	IPACMDBG_H("\n");
+	if (entry.m_type != IPA_IP_v6)
+	{
+		IPACMERR("Wrong IP type\n");
+		return -EINVAL;
+	}
+
+	int ret = ipa_ipv6ct_query_timestamp(m_tableHandle, entry.m_ruleHandle, &time_stamp);
+	IPACMDBG_H("return\n");
+	return ret;
+}
+
+void Ipv6ctProxy::DumpTable()
+{
+	IPACMDBG_H("\n");
+	ipa_ipv6ct_dump_table(m_tableHandle);
+	IPACMDBG_H("return\n");
+}
+
+NatObjectsGeneratorBase::NatObjectsGeneratorBase()
+{
+	IPACMDBG_H("\n");
+}
+
+NatObjectsGeneratorBase::~NatObjectsGeneratorBase()
+{
+	IPACMDBG_H("\n");
+}
+
+NatProxyBase& Ipv6ctObjectsGenerator::GetProxy() const
+{
+	IPACMDBG_H("\n");
+	return *new Ipv6ctProxy;
+}
+
+NatEntriesCollectionBase& Ipv6ctObjectsGenerator::GetEntriesCollection(int max_entries) const
+{
+	IPACMDBG_H("\n");
+	return *new Ipv6ctEntriesCollection(max_entries);
+}
+
+IpAddressesCollectionBase& Ipv6ctObjectsGenerator::GetIpAddressesCollection(int max_entries) const
+{
+	IPACMDBG_H("\n");
+	return *new Ipv6IpAddressesCollection(max_entries);
+}
+
+IpAddress& Ipv6ctObjectsGenerator::GetIpAddress() const
+{
+	IPACMDBG_H("\n");
+	return *new Ipv6IpAddress;
+}
+
+ConntrackTimestampUtil& Ipv6ctObjectsGenerator::GetConntrackTimestampUtil() const
+{
+	IPACMDBG_H("\n");
+	return *new Ipv6ctConntrackTimestampUtil;
+}
+
+NatBase::NatBase(ipa_ip_type type, int max_entries, const NatObjectsGeneratorBase& objectsGenerator)
+	:
+	m_type(type),
+	m_temp(objectsGenerator.GetEntriesCollection(MAX_TEMP_ENTRIES)),
+	m_pwrSaveIfs(objectsGenerator.GetIpAddressesCollection(IPA_MAX_NUM_WIFI_CLIENTS)),
+	m_maxEntries(max_entries),
+	m_curCnt(0),
+	m_proxy(objectsGenerator.GetProxy()),
+	m_ctTimestampUtil(objectsGenerator.GetConntrackTimestampUtil()),
+	m_cache(objectsGenerator.GetEntriesCollection(max_entries)),
+	m_previousWanAddress(objectsGenerator.GetIpAddress())
+{
+	IPACMDBG_H("\n");
+}
+
+NatBase::~NatBase()
+{
+	IPACMDBG_H("\n");
+	delete &m_temp;
+	delete &m_pwrSaveIfs;
+	delete &m_proxy;
+	delete &m_ctTimestampUtil;
+	delete &m_cache;
+	delete &m_previousWanAddress;
+	IPACMDBG_H("return\n");
+}
+
+int NatBase::AddTable(const IpAddress& wan_ip)
+{
+	IPACMDBG_H("\n");
+	int ret = m_proxy.AddTable(m_maxEntries);
+	if (ret)
+	{
+		IPACMERR("unable to create the table Error:%d\n", ret);
+		return ret;
+	}
+	/* Add back the cached NAT-entry */
+	if (wan_ip == m_previousWanAddress)
+	{
+		IPACMDBG_H("Restore the cache to ipa NAT-table\n");
+		for (int cnt = 0; cnt < m_maxEntries; ++cnt)
+		{
+			NatEntryBase& entry = m_cache[cnt];
+			if (entry.Valid())
+			{
+				if (m_proxy.AddEntry(entry))
+				{
+					IPACMERR("unable to add the rule delete from cache\n");
+					entry.Clear();
+					--m_curCnt;
+					continue;
+				}
+				entry.DebugDump("On wan-iface reset added below rule successfully\n");
+			}
+		}
+	}
+
+	IPACMDBG_H("return\n");
+	return 0;
+}
+
+int NatBase::DeleteTable(const IpAddress& wan_addr)
+{
+	IPACMDBG_H("\n");
+	int ret = m_proxy.DeleteTable();
+	if (ret)
+	{
+		IPACMERR("unable to delete the table Error: %d\n", ret);;
+		return ret;
+	}
+
+	m_previousWanAddress = wan_addr;
+	Reset();
+	IPACMDBG_H("return\n");
+	return 0;
+}
+
+int NatBase::AddEntry(const NatEntryBase& entry)
+{
+	IPACMDBG_H("\n");
+	entry.DebugDump("The new entry to add");
+
+	if (!entry.Valid())
+	{
+		IPACMERR("Invalid Connection, ignoring it\n");
+		return 0;
+	}
+
+	if (m_cache.Find(entry) != NULL)
+	{
+		IPACMERR("Duplicate rule. Ignore it\n");
+		return -EPERM;
+	}
+
+	NatEntryBase* new_entry = m_cache.GetFirstEmpty();
+	if (new_entry == NULL)
+	{
+		IPACMERR("Error: Unable to add, reached maximum rules\n");
+		return -EPERM;
+	}
+
+	*new_entry = entry;
+
+	if (m_pwrSaveIfs.Find(new_entry->GetClientIp()) != NULL || m_pwrSaveIfs.Find(new_entry->GetTargetIp()) != NULL)
+	{
+		IPACMDBG_H("Device is Power Save mode: Don't send to HW but successfully cached\n");
+	}
+	else
+	{
+		if (m_proxy.AddEntry(*new_entry))
+		{
+			IPACMERR("unable to add the rule\n");
+			new_entry->Clear();
+			return -EPERM;
+		}
+		IPACMDBG_H("Added entry successfully\n");
+	}
+
+	++m_curCnt;
+	IPACMDBG_H("return\n");
+	return 0;
+}
+
+void NatBase::DeleteEntry(const NatEntryBase& entry)
+{
+	IPACMDBG_H("\n");
+	entry.DebugDump("The entry to delete");
+
+	NatEntryBase* entryDelete = m_cache.Find(entry);
+	if (entryDelete == NULL)
+	{
+		IPACMDBG_H("No Such Entry exists\n");
+		return;
+	}
+
+	if (entryDelete->m_enabled)
+	{
+		if (m_proxy.DelEntry(*entryDelete))
+		{
+			IPACMERR("Deletion failed\n");
+		}
+		else
+		{
+			IPACMDBG_H("Deleted NAT entry successfully\n");
+		}
+	}
+	entryDelete->Clear();
+	--m_curCnt;
+
+	IPACMDBG_H("return\n");
+}
+
+void NatBase::CacheEntry(const NatEntryBase& entry)
+{
+	IPACMDBG_H("\n");
+	entry.DebugDump("The new entry to cache");
+
+	if (!entry.Valid())
+	{
+		IPACMERR("Invalid Connection, ignoring it\n");
+		return;
+	}
+
+	if (m_cache.Find(entry) != NULL)
+	{
+		IPACMERR("Duplicate rule. Ignore it\n");
+		return;
+	}
+
+	NatEntryBase* new_entry = m_cache.GetFirstEmpty();
+	if (new_entry == NULL)
+	{
+		IPACMERR("Error: Unable to add, reached maximum rules\n");
+		return;
+	}
+
+	*new_entry = entry;
+	++m_curCnt;
+	IPACMDBG_H("Cached rule successfully\n");
+}
+
+void NatBase::AddTempEntry(const NatEntryBase& entry)
+{
+	IPACMDBG_H("\n");
+	entry.DebugDump("Received Temp Nat entry to add\n");
+
+	if (m_cache.Find(entry) != NULL || m_temp.Find(entry) != NULL)
+	{
+		IPACMERR("Duplicate rule. Ignore it\n");
+		return;
+	}
+
+	NatEntryBase* new_entry = m_temp.GetFirstEmpty();
+	if (new_entry == NULL)
+	{
+		IPACMERR("Error: Unable to add, reached maximum temp rules\n");
+		return;
+	}
+
+	*new_entry = entry;
+	IPACMDBG_H("Added Temp Entry\n");
+}
+
+void NatBase::DeleteTempEntry(const NatEntryBase& entry)
+{
+	IPACMDBG_H("\n");
+	entry.DebugDump("Received Temp Nat entry to delete\n");
+
+	NatEntryBase* entryDelete = m_temp.Find(entry);
+	if (entryDelete == NULL)
+	{
+		IPACMDBG_H("No Such Temp Entry exists\n");
+		return;
+	}
+
+	entryDelete->Clear();
+	IPACMDBG_H("The Temp Entry successfully deleted\n");
+}
+
+void NatBase::FlushTempEntries(const IpAddress& clientIp, bool isAdd, bool isDummy, bool isStaClientIp)
+{
+	IPACMDBG_H("\n");
+	clientIp.DebugDump("Flush temp entries for");
+
+	for (int cnt = 0; cnt < MAX_TEMP_ENTRIES; ++cnt)
+	{
+		NatEntryBase& curr = m_temp[cnt];
+		if (!curr.UpdateDirection(clientIp, isStaClientIp))
+		{
+			continue;
+		}
+		curr.DebugDump((isAdd) ? "Add temp entry to cache" : "Delete temp entry");
+
+		if (isAdd)
+		{
+			if (isDummy)
+			{
+				curr.m_isDummy = true;
+			}
+
+			int ret = AddEntry(curr);
+			if (ret)
+			{
+				IPACMERR("unable to add temp entry: %d\n", ret);
+				continue;
+			}
+			IPACMDBG_H("Successfully flushed the entrty\n");
+		}
+
+		curr.Clear();
+	}
+	IPACMDBG_H("return\n");
+}
+
+void NatBase::UpdateTcpUdpTimeStamps(bool& isTcpUdpTimeoutUpToDate)
+{
+	IPACMDBG_H("\n");
+	int ret;
+	uint32_t timestamp;
+
+	for (int cnt = 0; cnt < m_maxEntries; ++cnt)
+	{
+		NatEntryBase& curr = m_cache[cnt];
+		if (!curr.m_enabled || curr.m_isDummy)
+		{
+			continue;
+		}
+
+		if (m_proxy.QueryTimestamp(curr, timestamp))
+		{
+			IPACMERR("unable to retrieve timeout for rule handle: %d\n", curr.m_ruleHandle);
+			continue;
+		}
+
+		if (curr.m_timestamp == timestamp)
+		{
+			continue;
+		}
+
+#ifndef FEATURE_IPA_ANDROID
+		if (!isTcpUdpTimeoutUpToDate)
+		{
+			m_ctTimestampUtil.ReadTcpUdpTimeout();
+			isTcpUdpTimeoutUpToDate = true;
+		}
+#endif
+		ret = m_ctTimestampUtil.UpdateConntrackTimeStamp(curr);
+		if (ret)
+		{
+			IPACMERR("unable to update time stamp");
+			m_proxy.DelEntry(curr);
+			continue;
+		}
+
+		curr.m_timestamp = timestamp;
+		IPACMDBG("Updated time stamp successfully\n");
+	}
+	IPACMDBG_H("return\n");
+}
+
+int NatBase::UpdatePwrSaveIf(const IpAddress& client_lan_ip)
+{
+	IPACMDBG_H("\n");
+
+	client_lan_ip.DebugDump("Received");
+
+	if (!client_lan_ip.Valid())
+	{
+		IPACMERR("Invalid ip address received\n");
+		return -EINVAL;
+	}
+
+	if (m_pwrSaveIfs.Find(client_lan_ip) != NULL)
+	{
+		IPACMDBG("The client is already in power save\n");
+		return 0;
+	}
+
+	IpAddress* entry = m_pwrSaveIfs.GetFirstEmpty();
+	if (entry == NULL)
+	{
+		IPACMERR("Power save clients collection is full\n");
+		return -EPERM;
+	}
+	*entry = client_lan_ip;
+
+	for (int cnt = 0; cnt < m_maxEntries; ++cnt)
+	{
+		NatEntryBase& curr = m_cache[cnt];
+		if (curr.GetClientIp() != client_lan_ip || !curr.m_enabled)
+		{
+			continue;
+		}
+
+		curr.DebugDump("Going to disable following entry for power save\n");
+
+		if (m_proxy.DelEntry(curr))
+		{
+			IPACMERR("unable to delete the rule\n");
+			continue;
+		}
+
+		curr.m_enabled = false;
+		curr.m_ruleHandle = 0;
+	}
+	IPACMDBG_H("return\n");
+	return 0;
+}
+
+int NatBase::ResetPwrSaveIf(const IpAddress& client_lan_ip)
+{
+	IPACMDBG_H("\n");
+	client_lan_ip.DebugDump("Received");
+
+	if (!client_lan_ip.Valid())
+	{
+		IPACMERR("Invalid ip address received\n");
+		return -EINVAL;
+	}
+
+	IpAddress* entry = m_pwrSaveIfs.Find(client_lan_ip);
+	if (entry != NULL)
+	{
+		entry->Clear();
+	}
+
+	for (int cnt = 0; cnt < m_maxEntries; ++cnt)
+	{
+		NatEntryBase& curr = m_cache[cnt];
+		if (curr.GetClientIp() != client_lan_ip || curr.m_enabled)
+		{
+			continue;
+		}
+
+		curr.DebugDump("Going to enable following entry after power save\n");
+
+		if (m_proxy.AddEntry(curr))
+		{
+			IPACMERR("unable to add the rule delete from cache\n");
+			curr.Clear();
+			--m_curCnt;
+			continue;
+		}
+		curr.m_enabled = true;
+	}
+
+	IPACMDBG_H("return\n");
+	return 0;
+}
+
+int NatBase::DelEntriesOnClntDiscon(const IpAddress& client_lan_ip)
+{
+	IPACMDBG_H("\n");
+
+	client_lan_ip.DebugDump("Received");
+
+	if (!client_lan_ip.Valid())
+	{
+		IPACMERR("Invalid ip address received\n");
+		return -EINVAL;
+	}
+
+	IpAddress* entry = m_pwrSaveIfs.Find(client_lan_ip);
+	if (entry != NULL)
+	{
+		entry->Clear();
+		IPACMDBG("Remove power save entry\n");
+	}
+
+	int tmp = 0;
+	for (int cnt = 0; cnt < m_maxEntries; ++cnt)
+	{
+		NatEntryBase& curr = m_cache[cnt];
+		if (curr.GetClientIp() != client_lan_ip)
+		{
+			continue;
+		}
+
+		if (!curr.m_enabled)
+		{
+			continue;
+		}
+
+		curr.DebugDump("Going to disable following entry upon client disconnection\n");
+
+		if (m_proxy.DelEntry(curr))
+		{
+			IPACMERR("unable to delete the rule\n");
+			continue;
+		}
+
+		curr.m_enabled = false;
+		++tmp;
+	}
+
+	IPACMDBG_H("Deleted (but cached) %d entries\n", tmp);
+	return 0;
+}
+
+int NatBase::DelEntriesOnSTAClntDiscon(const IpAddress& client_lan_ip)
+{
+	IPACMDBG_H("\n");
+
+	client_lan_ip.DebugDump("Received");
+
+	if (!client_lan_ip.Valid())
+	{
+		IPACMERR("Invalid ip address received\n");
+		return -EINVAL;
+	}
+
+	int tmp = m_curCnt;
+	for (int cnt = 0; cnt < m_maxEntries; ++cnt)
+	{
+		NatEntryBase& curr = m_cache[cnt];
+		if (curr.GetTargetIp() != client_lan_ip)
+		{
+			continue;
+		}
+
+		if (!curr.m_enabled)
+		{
+			continue;
+		}
+
+		curr.DebugDump("Going to disable following entry upon STA client disconnection\n");
+
+		if (m_proxy.DelEntry(curr))
+		{
+			IPACMERR("unable to delete the rule\n");
+			continue;
+		}
+
+		curr.Clear();
+		--m_curCnt;
+	}
+
+	IPACMDBG_H("Deleted %d entries\n", (tmp - m_curCnt));
+	return 0;
+}
+
+void NatBase::Reset()
+{
+	IPACMDBG_H("\n");
+	for (int cnt = 0; cnt < m_maxEntries; ++cnt)
+	{
+		m_cache[cnt].m_enabled = false;
+	}
+	IPACMDBG_H("return\n");
+}
+
+Ipv6ct* Ipv6ct::m_instance = NULL;
+
+Ipv6ct* Ipv6ct::GetInstance()
+{
+	IPACMDBG_H("\n");
+	if (m_instance != NULL)
+	{
+		return m_instance;
+	}
+
+	IPACM_Config *pConfig = IPACM_Config::GetInstance();
+	if (pConfig == NULL)
+	{
+		IPACMERR("Unable to get Config instance\n");
+		return NULL;
+	}
+
+	if (!pConfig->IsIpv6CTEnabled())
+	{
+		IPACMDBG_H("IPv6 Connection tracking is disabled\n");
+		return NULL;
+	}
+
+	m_instance = new Ipv6ct(pConfig->GetIpv6CTMaxEntries());
+	IPACMDBG_H("return\n");
+	return m_instance;
+}
+
+Ipv6ct::Ipv6ct(int max_entries) : NatBase(IPA_IP_v6, max_entries, Ipv6ctObjectsGenerator())
+{
+	IPACMDBG_H("\n");
+}
+

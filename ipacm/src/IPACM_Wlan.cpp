@@ -60,7 +60,7 @@ ipa_lan_client_idx IPACM_Wlan::active_lan_client_index[IPA_MAX_NUM_HW_PATH_CLIEN
 ipa_lan_client_idx IPACM_Wlan::inactive_lan_client_index[IPA_MAX_NUM_HW_PATH_CLIENTS];
 #endif
 
-IPACM_Wlan::IPACM_Wlan(int iface_index) : IPACM_Lan(iface_index)
+IPACM_Wlan::IPACM_Wlan(int iface_index) : IPACM_Lan(iface_index), ipv6ct_inst(Ipv6ct::GetInstance())
 {
 	int i = 0;
 #define WLAN_AMPDU_DEFAULT_FILTER_RULES 3
@@ -697,6 +697,15 @@ void IPACM_Wlan::event_callback(ipa_cm_event_id event, void *param)
 							handle_wlan_client_route_rule_ext(data->mac_addr, IPA_IP_v6);
 						}
 #endif
+						if (ipv6ct_inst != NULL)
+						{
+							for (int i = 0; i < get_client_memptr(wlan_client, wlan_index)->ipv6_set; ++i)
+							{
+								IPACMDBG_H("Adding IPv6 address %d IPv6CT Rules\n", i);
+								ipv6ct_inst->ResetPwrSaveIf(
+									Ipv6IpAddress(get_client_memptr(wlan_client, wlan_index)->v6_addr[i], false));
+							}
+						}
 					}
 				}
 			}
@@ -719,12 +728,9 @@ void IPACM_Wlan::event_callback(ipa_cm_event_id event, void *param)
 #endif
 				{
 					handle_wlan_client_route_rule(data->mac_addr, data->iptype);
-					if (data->iptype == IPA_IP_v4)
-					{
-						/* Add NAT rules after ipv4 RT rules are set */
-						CtList->HandleNeighIpAddrAddEvt(data);
-						//Nat_App->ResetPwrSaveIf(data->ipv4_addr);
-					}
+
+					/* Add NAT/IPv6CT rules after RT rules are set */
+					HandleNeighIpAddrAddEvt(data);
 				}
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
 				else
@@ -1378,7 +1384,11 @@ int IPACM_Wlan::handle_wlan_client_ipaddr(ipacm_event_data_all *data)
 					}
 				}
 
-		       /* not see this ipv6 before for wifi client*/
+				/*
+				 * The client got new IPv6 address.
+				 * NOTE: The new address doesn't replace the existing one but being added (up to IPV6_NUM_ADDR),
+				 *       so the previous IPv6 addresses of the client will not be deleted.
+				 */
 			   get_client_memptr(wlan_client, clnt_indx)->v6_addr[get_client_memptr(wlan_client, clnt_indx)->ipv6_set][0] = data->ipv6_addr[0];
 			   get_client_memptr(wlan_client, clnt_indx)->v6_addr[get_client_memptr(wlan_client, clnt_indx)->ipv6_set][1] = data->ipv6_addr[1];
 			   get_client_memptr(wlan_client, clnt_indx)->v6_addr[get_client_memptr(wlan_client, clnt_indx)->ipv6_set][2] = data->ipv6_addr[2];
@@ -2025,6 +2035,14 @@ int IPACM_Wlan::handle_wlan_client_route_rule_ext(uint8_t *mac_addr, ipa_ip_type
 
 					IPACMDBG_H("tx:%d, rt rule id=%x ip-type: %d\n", tx_index,
 							rt_rule_entry->rule_id, iptype);
+
+					/* Add IPv6CT rules after ipv6 RT rules are set */
+					memset(&data, 0, sizeof(data));
+					data.if_index = IPACM_Iface::ipacmcfg->iface_table[ipa_if_num].netlink_interface_index;
+					data.iptype = IPA_IP_v6;
+					memcpy(data.ipv6_addr,
+						get_client_memptr(wlan_client, wlan_index)->v6_addr[v6_num], sizeof(data.ipv6_addr));
+					CtList->HandleNeighIpAddrAddEvt_v6(Ipv6IpAddress(data.ipv6_addr, false), data.if_index);
 				}
 				get_client_memptr(wlan_client, wlan_index)->route_rule_set_v6 = get_client_memptr(wlan_client, wlan_index)->ipv6_set;
 			}
@@ -2051,19 +2069,28 @@ int IPACM_Wlan::handle_wlan_client_pwrsave(uint8_t *mac_addr)
 		return IPACM_SUCCESS;
 	}
 
-        if (get_client_memptr(wlan_client, clt_indx)->power_save_set == false)
+	if (get_client_memptr(wlan_client, clt_indx)->power_save_set == false)
 	{
-		/* First reset nat rules and then route rules */
-	    if(get_client_memptr(wlan_client, clt_indx)->ipv4_set == true)
-	    {
+		/* First reset NAT/IPv6CT rules and then route rules */
+		if (get_client_memptr(wlan_client, clt_indx)->ipv4_set == true)
+		{
 			IPACMDBG_H("Deleting Nat Rules\n");
 			Nat_App->UpdatePwrSaveIf(get_client_memptr(wlan_client, clt_indx)->v4_addr);
- 	     }
+		}
+		if (ipv6ct_inst != NULL)
+		{
+			for (int i = 0; i < get_client_memptr(wlan_client, clt_indx)->ipv6_set; ++i)
+			{
+				IPACMDBG_H("Deleting IPv6 address %d IPv6CT Rules\n", i);
+				ipv6ct_inst->UpdatePwrSaveIf(
+					Ipv6IpAddress(get_client_memptr(wlan_client, clt_indx)->v6_addr[i], false));
+			}
+		}
 
 		IPACMDBG_H("Deleting default qos Route Rules\n");
 		delete_default_qos_rtrules(clt_indx, IPA_IP_v4);
 		delete_default_qos_rtrules(clt_indx, IPA_IP_v6);
-                get_client_memptr(wlan_client, clt_indx)->power_save_set = true;
+		get_client_memptr(wlan_client, clt_indx)->power_save_set = true;
 	}
 	else
 	{
@@ -2093,12 +2120,12 @@ int IPACM_Wlan::handle_wlan_client_down_evt(uint8_t *mac_addr)
 		return IPACM_SUCCESS;
 	}
 
-	/* First reset nat rules and then route rules */
-	if(get_client_memptr(wlan_client, clt_indx)->ipv4_set == true)
-	{
-	        IPACMDBG_H("Clean Nat Rules for ipv4:0x%x\n", get_client_memptr(wlan_client, clt_indx)->v4_addr);
-			CtList->HandleNeighIpAddrDelEvt(get_client_memptr(wlan_client, clt_indx)->v4_addr);
- 	}
+	/* First reset NAT/IPv6CT rules and then route rules */
+	HandleNeighIpAddrDelEvt(
+		get_client_memptr(wlan_client, clt_indx)->ipv4_set,
+		get_client_memptr(wlan_client, clt_indx)->v4_addr,
+		get_client_memptr(wlan_client, clt_indx)->ipv6_set,
+		get_client_memptr(wlan_client, clt_indx)->v6_addr);
 
 	if (delete_default_qos_rtrules(clt_indx, IPA_IP_v4))
 	{
@@ -2445,12 +2472,12 @@ fail:
 	IPACMDBG_H("left %d wifi clients need to be deleted \n ", num_wifi_client);
 	for (i = 0; i < num_wifi_client; i++)
 	{
-		/* First reset nat rules and then route rules */
-		if(get_client_memptr(wlan_client, i)->ipv4_set == true)
-		{
-	        IPACMDBG_H("Clean Nat Rules for ipv4:0x%x\n", get_client_memptr(wlan_client, i)->v4_addr);
-			CtList->HandleNeighIpAddrDelEvt(get_client_memptr(wlan_client, i)->v4_addr);
-		}
+		/* First reset NAT/IPv6CT rules and then route rules */
+		HandleNeighIpAddrDelEvt(
+			get_client_memptr(wlan_client, i)->ipv4_set,
+			get_client_memptr(wlan_client, i)->v4_addr,
+			get_client_memptr(wlan_client, i)->ipv6_set,
+			get_client_memptr(wlan_client, i)->v6_addr);
 
 		if (delete_default_qos_rtrules(i, IPA_IP_v4))
 		{

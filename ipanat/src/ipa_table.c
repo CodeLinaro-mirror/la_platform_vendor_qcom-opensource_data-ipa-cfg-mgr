@@ -345,7 +345,7 @@ void ipa_table_dma_cmd_generate(ipa_table_dma_cmd_helper* dma_cmd_helper,
 	dma->offset = dma_cmd_helper->offset + entry_offset;
 	dma->data = data;
 
-	IPADBG("Updating field in %s index: %d, base_addr: %d, value: %d offset: %d\n",
+	IPADBG("Updating field with index: %u, base_addr: 0x%x, value: 0x%x offset: 0x%x\n",
 		dma->table_index, dma->base_addr, dma->data, dma->offset);
 }
 

@@ -136,10 +136,6 @@ int ipa_ipv6ct_add_tbl(uint16_t number_of_entries, uint32_t* table_handle)
 	++ipv6ct.table_cnt;
 	*table_handle = ipv6ct.table_cnt;
 
-#ifdef NAT_DEBUG
-	ipa_ipv6ct_dump_table(*table_handle);
-#endif
-
 	IPADBG("Returning table handle 0x%x\n", *table_handle);
 	return 0;
 
@@ -284,10 +280,6 @@ int ipa_ipv6ct_add_rule(uint32_t table_handle, const ipa_ipv6ct_rule* user_rule,
 		return -EPERM;
 	}
 
-#ifdef NAT_DEBUG
-	ipa_ipv6ct_dump_table(table_handle);
-#endif
-
 	*rule_handle = new_entry_handle;
 
 	IPADBG("return\n");
@@ -384,11 +376,6 @@ int ipa_ipv6ct_del_rule(uint32_t table_handle, uint32_t rule_handle)
 			((ipa_ipv6ct_hw_entry*)table_iterator.prev_entry)->protocol == IPA_IPV6CT_INVALID_PROTO_FIELD_CMP);
 		ipa_table_delete_entry(&ipv6ct_table->table, &table_iterator, is_prev_empty);
 	}
-
-#ifdef NAT_DEBUG
-	IPADBG("Dumping Table after deleting an entry\n");
-	ipa_ipv6ct_dump_table(table_handle);
-#endif
 
 fail:
 	free(cmd);

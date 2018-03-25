@@ -401,10 +401,6 @@ int ipa_nati_add_ipv4_tbl(uint32_t public_ip_addr,
 	++ipv4_nat_cache.table_cnt;
 	*tbl_hdl = ipv4_nat_cache.table_cnt;
 
-#ifdef NAT_DEBUG
-	ipa_nat_dump_ipv4_table(*tbl_hdl);
-#endif
-
 	IPADBG("return\n");
 	return 0;
 
@@ -934,10 +930,6 @@ int ipa_nati_add_ipv4_rule(uint32_t tbl_hdl,
 		return -EPERM;
 	}
 
-#ifdef NAT_DEBUG
-	ipa_nat_dump_ipv4_table(tbl_hdl);
-#endif
-
 	*rule_hdl = new_entry_handle;
 
 	IPADBG("return\n");
@@ -1047,11 +1039,6 @@ int ipa_nati_del_ipv4_rule(uint32_t tbl_hdl, uint32_t rule_hdl)
 	if (index_table_iterator.curr_index >= nat_table->index_table.table_entries)
 		nat_table->index_expn_table_meta[index_table_iterator.curr_index - nat_table->index_table.table_entries].
 			prev_index = IPA_TABLE_INVALID_ENTRY;
-
-#ifdef NAT_DEBUG
-	IPADBG("Dumping Table after deleting rule\n");
-	ipa_nat_dump_ipv4_table(tbl_hdl);
-#endif
 
 fail:
 	free(cmd);

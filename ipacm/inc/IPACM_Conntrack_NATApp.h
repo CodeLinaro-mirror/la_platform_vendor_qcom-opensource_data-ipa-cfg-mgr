@@ -405,7 +405,7 @@ private:
 
 class Ipv6ctConntrackTimestampUtil : public ConntrackTimestampUtil
 {
-public:
+private:
 
 	virtual void SetConnectionDetails(const NatEntryBase& entry);
 };

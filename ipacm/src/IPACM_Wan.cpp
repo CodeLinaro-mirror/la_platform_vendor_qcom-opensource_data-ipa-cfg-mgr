@@ -229,6 +229,40 @@ IPACM_Wan::~IPACM_Wan()
 	return;
 }
 
+#ifdef FEATURE_VLAN_MPDN
+
+int IPACM_Wan::GetMuxByVid(uint8_t vlan_id, uint8_t *mux_id, ipa_ip_type iptype)
+{
+	if(vlan_id == 0)
+		return IPACM_FAILURE;
+
+	for(int i = 0; i < IPA_MAX_NUM_SW_PDNS; i++)
+	{
+		if(iptype == IPA_IP_v4)
+		{
+			if(IPACM_Wan::ipv4_to_iface[i].ipv4_addr)
+			{
+				if(IPACM_Wan::ipv4_to_iface[i].pIface->associated_VID == vlan_id)
+				{
+					*mux_id = IPACM_Wan::ipv4_to_iface[i].pIface->ext_prop->ext[0].mux_id;
+					return IPACM_SUCCESS;
+				}
+			}
+		}
+		else
+		{
+			if(IPACM_Wan::ipv6_to_iface[i].ipv6_prefix[0] || IPACM_Wan::ipv6_to_iface[i].ipv6_prefix[1])
+			{
+				if(IPACM_Wan::ipv6_to_iface[i].pIface->associated_VID == vlan_id)
+				{
+					*mux_id = IPACM_Wan::ipv6_to_iface[i].pIface->ext_prop->ext[0].mux_id;
+					return IPACM_SUCCESS;
+				}
+			}
+		}
+	}
+}
+#endif
 /* handle new_address event */
 int IPACM_Wan::handle_addr_evt(ipacm_event_data_addr *data)
 {

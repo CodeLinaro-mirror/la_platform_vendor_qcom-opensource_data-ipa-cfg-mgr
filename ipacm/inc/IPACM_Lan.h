@@ -116,10 +116,10 @@ typedef struct _ipa_eth_client
 	uint32_t ul_first_pass_rt_rule_hdl;
 	uint32_t ul_first_pass_flt_rule_hdl;
 #endif
-	eth_client_rt_hdl eth_rt_hdl[0]; /* depends on number of tx properties */
 #ifdef FEATURE_VLAN_MPDN
 	uint8_t vlan_id;
 #endif
+	eth_client_rt_hdl eth_rt_hdl[0]; /* depends on number of tx properties */
 }ipa_eth_client;
 
 #ifdef FEATURE_IPACM_UL_FIREWALL
@@ -186,6 +186,9 @@ public:
 	/* configure filter rule for wan_up event*/
 	virtual int handle_wan_up_ex(ipacm_ext_prop* ext_prop, ipa_ip_type iptype, uint8_t xlat_mux_id);
 
+	/* send notification about UL filtering rules removal */
+	virtual int notify_flt_removed(uint8_t mux_id);
+
 	/* delete filter rule for wan_down event*/
 	virtual int handle_wan_down(bool is_sta_mode);
 
@@ -211,7 +214,13 @@ public:
 	static bool odu_up;
 
 	/* install UL filter rule from Q6 */
+#ifdef FEATURE_VLAN_MPDN
+	virtual int handle_uplink_filter_rule(ipacm_ext_prop *prop, ipa_ip_type iptype, uint8_t pdn_mux_id, bool notif_only);
+#else
 	virtual int handle_uplink_filter_rule(ipacm_ext_prop* prop, ipa_ip_type iptype, uint8_t xlat_mux_id);
+#endif
+
+	virtual int del_ul_flt_rules(enum ipa_ip_type iptype);
 
 #ifdef FEATURE_IPACM_UL_FIREWALL
 	/* Re Configure and install the UL firewall rules */
@@ -676,6 +685,116 @@ private:
 
 	uint32_t l2tp_ul_hdr_proc_ctx_hdl;
 #endif
+
+#ifdef FEATURE_VLAN_MPDN
+	uint8_t v4_mux_up[IPA_MAX_NUM_HW_PDNS];
+	uint8_t num_v4_mux;
+	uint8_t v6_mux_up[IPA_MAX_NUM_HW_PDNS];
+	uint8_t num_v6_mux;
+
+	inline bool is_mux_up(uint8_t mux_id, ipa_ip_type iptype)
+	{
+		uint8_t *mux = v4_mux_up;
+
+		if(mux_id == 0)
+			return false;
+		if(iptype == IPA_IP_v6)
+			mux = v6_mux_up;
+
+		for(int i = 0; i < IPA_MAX_NUM_HW_PDNS; i++)
+		{
+			if(mux[i] == mux_id)
+			{
+				IPACMDBG_H("mux id %d is up for dev %s, iptype %d\n", mux_id, dev_name, iptype);
+				return true;
+			}
+		}
+		IPACMDBG_H("mux id %d is not up for dev %s iptype %d\n", mux_id, dev_name, iptype);
+		return false;
+	}
+
+	inline int set_mux_up(uint8_t mux_id, ipa_ip_type iptype)
+	{
+		uint8_t *mux = v4_mux_up;
+
+		if(mux_id == 0)
+		{
+			IPACMERR("0 mux id!\n");
+			return IPACM_FAILURE;
+		}
+
+		if(is_mux_up(mux_id, iptype))
+		{
+			IPACMERR("mux id %d is already up, not setting it iptype %d\n", mux_id, iptype);
+			return IPACM_FAILURE;
+		}
+
+		if(iptype == IPA_IP_v6)
+			mux = v6_mux_up;
+
+		for(int i = 0; i < IPA_MAX_NUM_HW_PDNS; i++)
+		{
+			if(mux[i] == 0)
+			{
+				mux[i] = mux_id;
+				IPACMDBG_H("successfully set mux id %d for dev %s, i = %d, iptype\n", mux_id, dev_name, i, iptype);
+				return IPACM_SUCCESS;
+			}
+		}
+		IPACMERR("exceeded max num mux ids, couldn't set mux %d, iptype %d\n", mux_id, iptype);
+		return IPACM_FAILURE;
+	}
+
+	inline int set_mux_down(uint8_t mux_id, ipa_ip_type iptype)
+	{
+		uint8_t *mux = v4_mux_up;
+
+		if(mux_id == 0)
+		{
+			IPACMERR("0 mux id!\n");
+			return IPACM_FAILURE;
+		}
+
+		if(iptype == IPA_IP_v6)
+			mux = v6_mux_up;
+
+		for(int i = 0; i < IPA_MAX_NUM_HW_PDNS; i++)
+		{
+			if(mux[i] == mux_id)
+			{
+				mux[i] = 0;
+				IPACMDBG_H("successfully removed mux id %d for dev %s, i = %d, iptype\n", mux_id, dev_name, i, iptype);
+				return IPACM_SUCCESS;
+			}
+		}
+		IPACMERR("could not find mux %d, iptype %d\n", mux_id, iptype);
+		return IPACM_FAILURE;
+	}
+
+	inline bool is_any_mux_up(ipa_ip_type iptype)
+	{
+		uint8_t *mux = v4_mux_up;
+		bool res = false;
+
+		if(iptype == IPA_IP_v6)
+			mux = v6_mux_up;
+
+		for(int i = 0; i < IPA_MAX_NUM_HW_PDNS; i++)
+		{
+			if(mux[i])
+			{
+				IPACMDBG("mux id %d up for dev %s, i = %d, iptype %d\n", mux[i], dev_name, i, iptype);
+				res = true;
+			}
+		}
+
+		if(res)
+			return res;
+
+		IPACMDBG_H("no vlan mux up for dev %s, iptype %d\n", dev_name, iptype);
+		return false;
+	}
+#endif
 	inline ipa_eth_client* get_client_memptr(ipa_eth_client *param, int cnt)
 	{
 	    char *ret = ((char *)param) + (eth_client_len * cnt);
@@ -708,7 +827,9 @@ private:
 #ifdef FEATURE_VLAN_MPDN
 				if(vlan_id)
 				{
-					if(get_client_memptr(eth_client, cnt)->vlan_id)
+					IPACMDBG("VLAN IF MAC match, looking for vlan ID %d, current %d\n", vlan_id,
+						get_client_memptr(eth_client, cnt)->vlan_id);
+					if(get_client_memptr(eth_client, cnt)->vlan_id == vlan_id)
 					{
 						IPACMDBG_H("Matched client index: %d for vid %d\n", cnt, vlan_id);
 						return cnt;
@@ -841,6 +962,11 @@ private:
 #endif
 #ifdef FEATURE_VLAN_MPDN
 	int handle_vlan_neighbor(ipacm_event_data_all *data);
+	bool is_vlan_IF(uint8_t vlan_id);
+	int handle_vlan_pdn_up(ipacm_event_vlan_pdn *data);
+	int handle_vlan_pdn_down(ipacm_event_vlan_pdn *data);
+	int handle_vlan_phys_if_down();
+	int check_vlan_PDNUp(enum ipa_ip_type iptype);
 #endif
 };
 

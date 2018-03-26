@@ -70,10 +70,14 @@ IPACM_ConntrackListener::IPACM_ConntrackListener() :
 		IPACM_EvtDispatcher::registr(IPA_HANDLE_WAN_UP_V6, this);
 		IPACM_EvtDispatcher::registr(IPA_HANDLE_WAN_DOWN_V6, this);
 	}
+#ifdef FEATURE_VLAN_MPDN
+	 IPACM_EvtDispatcher::registr(IPA_HANDLE_WAN_VLAN_PDN_UP, this);
+	 IPACM_EvtDispatcher::registr(IPA_HANDLE_WAN_VLAN_PDN_DOWN, this);
+#endif
 	 IPACM_EvtDispatcher::registr(IPA_PROCESS_CT_MESSAGE, this);
 	 IPACM_EvtDispatcher::registr(IPA_PROCESS_CT_MESSAGE_V6, this);
-	IPACM_EvtDispatcher::registr(IPA_HANDLE_LAN_WLAN_UP, this);
-	IPACM_EvtDispatcher::registr(IPA_HANDLE_LAN_WLAN_UP_V6, this);
+	 IPACM_EvtDispatcher::registr(IPA_HANDLE_LAN_WLAN_UP, this);
+	 IPACM_EvtDispatcher::registr(IPA_HANDLE_LAN_WLAN_UP_V6, this);
 	 IPACM_EvtDispatcher::registr(IPA_NEIGH_CLIENT_IP_ADDR_ADD_EVENT, this);
 	 IPACM_EvtDispatcher::registr(IPA_NEIGH_CLIENT_IP_ADDR_DEL_EVENT, this);
 
@@ -485,6 +489,16 @@ void IPACM_ConntrackListener::HandleNeighIpAddrAddEvt(
 			{
 				nat_clients[j].nat_iface_ipv4_addr = data->ipv4_addr;
 #ifdef FEATURE_VLAN_MPDN
+				if (pConfig == NULL)
+				{
+					pConfig = IPACM_Config::GetInstance();
+					if (pConfig == NULL)
+					{
+						IPACMERR("Unable to get Config instance\n");
+						return;
+					}
+				}
+
 				if(pConfig->get_vlan_id(data->iface_name, &nat_clients[j].vlan_id) == IPACM_SUCCESS)
 				{
 					nat_clients[j].is_vlan_client = true;
@@ -668,9 +682,11 @@ void IPACM_ConntrackListener::HandleVlanUp(void *in_param)
 			{
 				if(vlan_pdns[i].public_ip == 0)
 				{
+					IPACMDBG_H("found empty PDN entry in %d\n", i);
 					vlan_pdns[i].public_ip = vlanup_data->ipv4_addr;
 					vlan_pdns[i].vlan_id = vlanup_data->VlanID;
 					num_vlan_pdns++;
+					break;
 				}
 			}
 			if(!isNatThreadStart)
@@ -849,9 +865,11 @@ void IPACM_ConntrackListener::HandleVlanDown(void *in_param)
 		{
 			if(vlan_pdns[i].public_ip == vlanup_data->ipv4_addr)
 			{
+				IPACMDBG_H("removing pdn entry in %d\n", i);
 				vlan_pdns[i].public_ip = 0;
 				vlan_pdns[i].vlan_id = 0;
 				num_vlan_pdns--;
+				break;
 			}
 		}
 	}

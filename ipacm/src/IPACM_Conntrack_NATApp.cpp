@@ -523,7 +523,7 @@ int NatApp::AddEntry(const nat_table_entry *rule)
 
 	CHK_TBL_HDL();
 	log_nat(rule->protocol,rule->private_ip,rule->target_ip,rule->private_port,\
-	rule->target_port,"for addition\n");
+	rule->public_port,"for addition\n");
 
 	if(rule->private_ip == 0 ||
 		 rule->target_ip == 0 ||
@@ -603,6 +603,7 @@ int NatApp::AddEntry(const nat_table_entry *rule)
 			cache[cnt].dst_nat = rule->dst_nat;
 #ifdef FEATURE_VLAN_MPDN
 			cache[cnt].pdn_index = pdn_index;
+			cache[cnt].public_ip = rule->public_ip;
 #endif
 			curCnt++;
 		}
@@ -680,8 +681,12 @@ void NatApp::UpdateCTUdpTs(nat_table_entry *rule, uint32_t new_ts)
 	{
 		nfct_set_attr_u32(ct, ATTR_IPV4_SRC, htonl(rule->target_ip));
 		nfct_set_attr_u16(ct, ATTR_PORT_SRC, htons(rule->target_port));
-
+#ifdef FEATURE_VLAN_MPDN
+		nfct_set_attr_u32(ct, ATTR_IPV4_DST, htonl(rule->public_ip));
+#else
 		nfct_set_attr_u32(ct, ATTR_IPV4_DST, htonl(pub_ip_addr));
+#endif
+
 		nfct_set_attr_u16(ct, ATTR_PORT_DST, htons(rule->public_port));
 
 		IPACMDBG("dst nat is set\n");

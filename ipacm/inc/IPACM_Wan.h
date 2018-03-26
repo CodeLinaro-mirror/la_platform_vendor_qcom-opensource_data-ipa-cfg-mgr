@@ -259,6 +259,7 @@ public:
 #ifdef FEATURE_VLAN_MPDN
 	static ipacm_ipv4_wan_iface ipv4_to_iface[IPA_MAX_NUM_SW_PDNS];
 	static ipacm_ipv6_wan_iface ipv6_to_iface[IPA_MAX_NUM_SW_PDNS];
+	static int GetMuxByVid(uint8_t vlan_id, uint8_t *mux_id, ipa_ip_type iptype);
 #endif
 private:
 

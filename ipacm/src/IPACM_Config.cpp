@@ -1226,6 +1226,72 @@ bool IPACM_Config::is_added_vlan_iface(char *iface_name)
 	return ret;
 }
 
+bool IPACM_Config::iface_in_vlan_mode(char *phys_iface_name)
+{
+	list<vlan_iface_info>::iterator it_vlan;
+	bool ret = false;
+
+	if(pthread_mutex_lock(&vlan_l2tp_lock) != 0)
+	{
+		IPACMERR("Unable to lock the mutex\n");
+		return false;
+	}
+
+	for(it_vlan = m_vlan_iface.begin(); it_vlan != m_vlan_iface.end(); it_vlan++)
+	{
+		if(strstr(it_vlan->vlan_iface_name, phys_iface_name))
+		{
+			IPACMDBG_H("Found vlan iface in vlan list: %s\n", it_vlan->vlan_iface_name);
+			ret = true;
+			break;
+		}
+	}
+
+	pthread_mutex_unlock(&vlan_l2tp_lock);
+
+	return ret;
+}
+
+int IPACM_Config::get_iface_vlan_ids(char *phys_iface_name, uint8_t *Ids)
+{
+	list<vlan_iface_info>::iterator it_vlan;
+	int cnt = 0;
+
+	if(!Ids)
+	{
+		IPACMERR("got NULL Ids array\n");
+		return IPACM_FAILURE;
+	}
+
+	if(pthread_mutex_lock(&vlan_l2tp_lock) != 0)
+	{
+		IPACMERR("Unable to lock the mutex\n");
+		return false;
+	}
+
+	for(it_vlan = m_vlan_iface.begin(); it_vlan != m_vlan_iface.end(); it_vlan++)
+	{
+		if(strstr(it_vlan->vlan_iface_name, phys_iface_name))
+		{
+			IPACMDBG_H("Found vlan iface in vlan list: %s\n", it_vlan->vlan_iface_name);
+			Ids[cnt] = it_vlan->vlan_id;
+			cnt++;
+		}
+	}
+
+	pthread_mutex_unlock(&vlan_l2tp_lock);
+
+	IPACMDBG_H("found %d vlan interfaces for dev %s\n", cnt, phys_iface_name);
+
+	while(cnt < IPA_MAX_NUM_HW_PDNS)
+	{
+		Ids[cnt] = 0;
+		cnt++;
+	}
+
+	return IPACM_SUCCESS;
+}
+
 int IPACM_Config::get_vlan_id(char *iface_name, uint8_t *vlan_id)
 {
 	list<vlan_iface_info>::iterator it_vlan;
@@ -1243,7 +1309,7 @@ int IPACM_Config::get_vlan_id(char *iface_name, uint8_t *vlan_id)
 		{
 			IPACMDBG_H("Found vlan iface in vlan list: %s\n", it_vlan->vlan_iface_name);
 			*vlan_id = it_vlan->vlan_id;
-			ret = 0;
+			ret = IPACM_SUCCESS;
 			break;
 		}
 	}

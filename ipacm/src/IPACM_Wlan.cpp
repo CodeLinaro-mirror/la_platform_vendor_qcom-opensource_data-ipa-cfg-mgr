@@ -2395,13 +2395,14 @@ int IPACM_Wlan::handle_down_evt()
 
 		if (dft_v6fl_rule_hdl[0] != 0)
 		{
-			if (m_filtering.DeleteFilteringHdls(dft_v6fl_rule_hdl, IPA_IP_v6, IPV6_DEFAULT_FILTERTING_RULES) == false)
+			if (!m_filtering.DeleteFilteringHdls(dft_v6fl_rule_hdl, IPA_IP_v6, m_ipv6_default_filterting_rules_count))
 			{
 				IPACMERR("Error Adding RuleTable(1) to Filtering, aborting...\n");
 				res = IPACM_FAILURE;
 				goto fail;
 			}
-			IPACM_Iface::ipacmcfg->decreaseFltRuleCount(rx_prop->rx[0].src_pipe, IPA_IP_v6, IPV6_DEFAULT_FILTERTING_RULES);
+			IPACM_Iface::ipacmcfg->decreaseFltRuleCount(
+				rx_prop->rx[0].src_pipe, IPA_IP_v6, m_ipv6_default_filterting_rules_count);
 			IPACMDBG_H("Deleted default v6 filter rules successfully.\n");
 		}
 #ifdef FEATURE_L2TP

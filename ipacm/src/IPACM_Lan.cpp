@@ -1905,7 +1905,7 @@ int IPACM_Lan::handle_wan_up(ipa_ip_type ip_type)
 		}
 
 		/* copy filter hdls */
-		dft_v6fl_rule_hdl[IPV6_DEFAULT_FILTERTING_RULES] = m_pFilteringTable->rules[0].flt_rule_hdl;
+		dft_v6fl_rule_hdl[m_ipv6_default_filterting_rules_count] = m_pFilteringTable->rules[0].flt_rule_hdl;
 		free(m_pFilteringTable);
 	}
 
@@ -3884,13 +3884,14 @@ int IPACM_Lan::handle_down_evt()
 
 		if (dft_v6fl_rule_hdl[0] != 0)
 		{
-			if (m_filtering.DeleteFilteringHdls(dft_v6fl_rule_hdl, IPA_IP_v6, IPV6_DEFAULT_FILTERTING_RULES) == false)
+			if (!m_filtering.DeleteFilteringHdls(dft_v6fl_rule_hdl, IPA_IP_v6, m_ipv6_default_filterting_rules_count))
 			{
 				IPACMERR("Error Adding RuleTable(1) to Filtering, aborting...\n");
 				res = IPACM_FAILURE;
 				goto fail;
 			}
-				IPACM_Iface::ipacmcfg->decreaseFltRuleCount(rx_prop->rx[0].src_pipe, IPA_IP_v6, IPV6_DEFAULT_FILTERTING_RULES);
+			IPACM_Iface::ipacmcfg->decreaseFltRuleCount(
+				rx_prop->rx[0].src_pipe, IPA_IP_v6, m_ipv6_default_filterting_rules_count);
 		}
 #ifdef FEATURE_L2TP
 		if(ipa_if_cate == ODU_IF)
@@ -4618,6 +4619,11 @@ int IPACM_Lan::config_wan_frag_firewall_rule_ul_ex(bool install, ipa_ip_type ipt
 		return IPACM_SUCCESS;
 	}
 
+	if (ipacmcfg->IsIpv6CTEnabled())
+	{
+		IPACMDBG_H("The fragment rule already installed. Nothing to do\n");
+		return IPACM_SUCCESS;
+	}
 
 	if (false == install)
 	{
@@ -4929,7 +4935,7 @@ int IPACM_Lan::config_dft_firewall_rules_ul(struct ipa_flt_rule_add *rules, ipa_
 		return IPACM_FAILURE;
 	}
 
-	/* Catch-all filter rule in case of whitelisting case, redirecting packets to execption path */
+	/* Catch-all filter rule in case of whitelisting case, redirecting packets to exception path */
 	if (IPACM_Wan::firewall_config_ul.firewall_enable == true &&
 		IPACM_Wan::firewall_config_ul.rule_action_accept == true)
 	{
@@ -4968,9 +4974,10 @@ int IPACM_Lan::config_dft_firewall_rules_ul(struct ipa_flt_rule_add *rules, ipa_
 		}
 	}
 
-	if (IPACM_Wan::firewall_config_ul.firewall_enable == true &&
+	if (!ipacmcfg->IsIpv6CTEnabled() &&
+		IPACM_Wan::firewall_config_ul.firewall_enable &&
 		(IPACM_Wan::check_dft_firewall_rules_attr_mask_ul(&IPACM_Wan::firewall_config_ul) ||
-		IPACM_Wan::firewall_config_ul.rule_action_accept == true))
+			IPACM_Wan::firewall_config_ul.rule_action_accept))
 	{
 		ul_firewall->ul_firewall_installed = true;
 		ul_firewall->ul_frag_installed = true;
@@ -5689,10 +5696,9 @@ int IPACM_Lan::handle_wan_down_v6(bool is_sta_mode)
 	}
 	else
 	{
-		if (m_filtering.DeleteFilteringHdls(&dft_v6fl_rule_hdl[IPV6_DEFAULT_FILTERTING_RULES],
-																				IPA_IP_v6, 1) == false)
+		if (!m_filtering.DeleteFilteringHdls(&dft_v6fl_rule_hdl[m_ipv6_default_filterting_rules_count], IPA_IP_v6, 1))
 		{
-			IPACMERR("Error Adding RuleTable(1) to Filtering, aborting...\n");
+			IPACMERR("Error Deleting last default flt rule, aborting...\n");
 			close(fd);
 			return IPACM_FAILURE;
 		}

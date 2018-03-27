@@ -1,30 +1,30 @@
 /*
-Copyright (c) 2013, The Linux Foundation. All rights reserved.
-
-Redistribution and use in source and binary forms, with or without
-modification, are permitted provided that the following conditions are
-met:
-* Redistributions of source code must retain the above copyright
-  notice, this list of conditions and the following disclaimer.
-* Redistributions in binary form must reproduce the above
-  copyright notice, this list of conditions and the following
-  disclaimer in the documentation and/or other materials provided
-  with the distribution.
-* Neither the name of The Linux Foundation nor the names of its
-  contributors may be used to endorse or promote products derived
-  from this software without specific prior written permission.
-
-THIS SOFTWARE IS PROVIDED "AS IS" AND ANY EXPRESS OR IMPLIED
-WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
-MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NON-INFRINGEMENT
-ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS
-BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
-SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR
-BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
-WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
-OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
-IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.Z
+* Copyright (c) 2013, 2018 The Linux Foundation. All rights reserved.
+*
+* Redistribution and use in source and binary forms, with or without
+* modification, are permitted provided that the following conditions are
+* met:
+*  * Redistributions of source code must retain the above copyright
+*    notice, this list of conditions and the following disclaimer.
+*  * Redistributions in binary form must reproduce the above
+*    copyright notice, this list of conditions and the following
+*    disclaimer in the documentation and/or other materials provided
+*    with the distribution.
+*  * Neither the name of The Linux Foundation nor the names of its
+*    contributors may be used to endorse or promote products derived
+*    from this software without specific prior written permission.
+*
+* THIS SOFTWARE IS PROVIDED "AS IS" AND ANY EXPRESS OR IMPLIED
+* WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
+* MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NON-INFRINGEMENT
+* ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS
+* BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR
+* BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
+* WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
+* OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
+* IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 /*!
   @file
@@ -59,7 +59,7 @@ IPACM_Header IPACM_Iface::m_header;
 
 IPACM_Config *IPACM_Iface::ipacmcfg = IPACM_Config::GetInstance();
 
-IPACM_Iface::IPACM_Iface(int iface_index)
+IPACM_Iface::IPACM_Iface(int iface_index) : m_ipv6_default_filterting_rules_count(0)
 {
 	ip_type = IPACM_IP_NULL; /* initially set invalid */
 	num_dft_rt_v6 = 0;
@@ -766,6 +766,7 @@ int IPACM_Iface::init_fl_rule(ipa_ip_type iptype)
 	}
 	else
 	{
+		m_ipv6_default_filterting_rules_count = 0;
 		len = sizeof(struct ipa_ioc_add_flt_rule) +
 			 (IPV6_DEFAULT_FILTERTING_RULES * sizeof(struct ipa_flt_rule_add));
 
@@ -780,7 +781,6 @@ int IPACM_Iface::init_fl_rule(ipa_ip_type iptype)
 		m_pFilteringTable->ep = rx_prop->rx[0].src_pipe;
 		m_pFilteringTable->global = false;
 		m_pFilteringTable->ip = iptype;
-		m_pFilteringTable->num_rules = (uint8_t)IPV6_DEFAULT_FILTERTING_RULES;
 
 		memset(&flt_rule_entry, 0, sizeof(struct ipa_flt_rule_add));
 
@@ -789,6 +789,22 @@ int IPACM_Iface::init_fl_rule(ipa_ip_type iptype)
 		flt_rule_entry.flt_rule_hdl = -1;
 		flt_rule_entry.status = -1;
 		flt_rule_entry.rule.action = IPA_PASS_TO_EXCEPTION;
+
+		IPACMDBG_H("rx property attrib mask:0x%x\n", rx_prop->rx[0].attrib.attrib_mask);
+
+		if (ipacmcfg->IsIpv6CTEnabled())
+		{
+			/* Configuring Fragment Filtering Rule */
+#ifdef FEATURE_IPA_V3
+			flt_rule_entry.at_rear = false;
+			flt_rule_entry.rule.hashable = false;
+#endif
+			memcpy(&flt_rule_entry.rule.attrib, &rx_prop->rx[0].attrib, sizeof(flt_rule_entry.rule.attrib));
+			flt_rule_entry.rule.attrib.attrib_mask |= IPA_FLT_FRAGMENT;
+			memcpy(&(m_pFilteringTable->rules[m_ipv6_default_filterting_rules_count++]),
+				&flt_rule_entry, sizeof(struct ipa_flt_rule_add));
+		}
+
 		/* Configuring Multicast Filtering Rule */
 		memcpy(&flt_rule_entry.rule.attrib,
 					 &rx_prop->rx[0].attrib,
@@ -806,7 +822,8 @@ int IPACM_Iface::init_fl_rule(ipa_ip_type iptype)
 		flt_rule_entry.at_rear = true;
 		flt_rule_entry.rule.hashable = true;
 #endif
-		memcpy(&(m_pFilteringTable->rules[0]), &flt_rule_entry, sizeof(struct ipa_flt_rule_add));
+		memcpy(&(m_pFilteringTable->rules[m_ipv6_default_filterting_rules_count++]),
+			&flt_rule_entry, sizeof(struct ipa_flt_rule_add));
 
 		/* Configuring fe80::/10 Link-Scoped Unicast Filtering Rule */
 		flt_rule_entry.rule.attrib.u.v6.dst_addr_mask[0] = 0XFFC00000;
@@ -821,7 +838,8 @@ int IPACM_Iface::init_fl_rule(ipa_ip_type iptype)
 		flt_rule_entry.at_rear = true;
 		flt_rule_entry.rule.hashable = true;
 #endif
-		memcpy(&(m_pFilteringTable->rules[1]), &flt_rule_entry, sizeof(struct ipa_flt_rule_add));
+		memcpy(&(m_pFilteringTable->rules[m_ipv6_default_filterting_rules_count++]),
+			&flt_rule_entry, sizeof(struct ipa_flt_rule_add));
 
 		/* Configuring fec0::/10 Reserved by IETF Filtering Rule */
 		flt_rule_entry.rule.attrib.u.v6.dst_addr_mask[0] = 0XFFC00000;
@@ -836,7 +854,8 @@ int IPACM_Iface::init_fl_rule(ipa_ip_type iptype)
 		flt_rule_entry.at_rear = true;
 		flt_rule_entry.rule.hashable = true;
 #endif
-		memcpy(&(m_pFilteringTable->rules[2]), &flt_rule_entry, sizeof(struct ipa_flt_rule_add));
+		memcpy(&(m_pFilteringTable->rules[m_ipv6_default_filterting_rules_count++]),
+			&flt_rule_entry, sizeof(struct ipa_flt_rule_add));
 
 		/* Configuring fd00::/8 Unique Local Ipv6 Address */
 		flt_rule_entry.rule.attrib.u.v6.dst_addr_mask[0] = 0xFF000000;
@@ -851,10 +870,11 @@ int IPACM_Iface::init_fl_rule(ipa_ip_type iptype)
 		flt_rule_entry.at_rear = true;
 		flt_rule_entry.rule.hashable = true;
 #endif
-		memcpy(&(m_pFilteringTable->rules[3]), &flt_rule_entry, sizeof(struct ipa_flt_rule_add));
+		memcpy(&(m_pFilteringTable->rules[m_ipv6_default_filterting_rules_count++]),
+			&flt_rule_entry, sizeof(struct ipa_flt_rule_add));
 
 #ifdef FEATURE_IPA_ANDROID
-		IPACMDBG_H("Add TCP ctrl rules: total num %d\n", IPV6_DEFAULT_FILTERTING_RULES);
+		IPACMDBG_H("Add TCP ctrl rules\n");
 		memset(&flt_rule_entry, 0, sizeof(struct ipa_flt_rule_add));
 
 		flt_rule_entry.at_rear = true;
@@ -887,18 +907,23 @@ int IPACM_Iface::init_fl_rule(ipa_ip_type iptype)
 		/* add TCP FIN rule*/
 		flt_rule_entry.rule.eq_attrib.ihl_offset_meq_32[0].value = (((uint32_t)1)<<TCP_FIN_SHIFT);
 		flt_rule_entry.rule.eq_attrib.ihl_offset_meq_32[0].mask = (((uint32_t)1)<<TCP_FIN_SHIFT);
-		memcpy(&(m_pFilteringTable->rules[4]), &flt_rule_entry, sizeof(struct ipa_flt_rule_add));
+		memcpy(&(m_pFilteringTable->rules[m_ipv6_default_filterting_rules_count++]),
+			&flt_rule_entry, sizeof(struct ipa_flt_rule_add));
 
 		/* add TCP SYN rule*/
 		flt_rule_entry.rule.eq_attrib.ihl_offset_meq_32[0].value = (((uint32_t)1)<<TCP_SYN_SHIFT);
 		flt_rule_entry.rule.eq_attrib.ihl_offset_meq_32[0].mask = (((uint32_t)1)<<TCP_SYN_SHIFT);
-		memcpy(&(m_pFilteringTable->rules[5]), &flt_rule_entry, sizeof(struct ipa_flt_rule_add));
+		memcpy(&(m_pFilteringTable->rules[m_ipv6_default_filterting_rules_count++]),
+			&flt_rule_entry, sizeof(struct ipa_flt_rule_add));
 
 		/* add TCP RST rule*/
 		flt_rule_entry.rule.eq_attrib.ihl_offset_meq_32[0].value = (((uint32_t)1)<<TCP_RST_SHIFT);
 		flt_rule_entry.rule.eq_attrib.ihl_offset_meq_32[0].mask = (((uint32_t)1)<<TCP_RST_SHIFT);
-		memcpy(&(m_pFilteringTable->rules[6]), &flt_rule_entry, sizeof(struct ipa_flt_rule_add));
+		memcpy(&(m_pFilteringTable->rules[m_ipv6_default_filterting_rules_count++]),
+			&flt_rule_entry, sizeof(struct ipa_flt_rule_add));
 #endif
+		IPACMDBG_H("Total num %d\n", m_ipv6_default_filterting_rules_count);
+		m_pFilteringTable->num_rules = m_ipv6_default_filterting_rules_count;
 		if (m_filtering.AddFilteringRule(m_pFilteringTable) == false)
 		{
 			IPACMERR("Error Adding Filtering rule, aborting...\n");
@@ -907,11 +932,10 @@ int IPACM_Iface::init_fl_rule(ipa_ip_type iptype)
 		}
 		else
 		{
-			IPACM_Iface::ipacmcfg->increaseFltRuleCount(rx_prop->rx[0].src_pipe, IPA_IP_v6, IPV6_DEFAULT_FILTERTING_RULES);
+			IPACM_Iface::ipacmcfg->increaseFltRuleCount(
+				rx_prop->rx[0].src_pipe, IPA_IP_v6, m_ipv6_default_filterting_rules_count);
 			/* copy filter hdls */
-			for (int i = 0;
-					 i < IPV6_DEFAULT_FILTERTING_RULES;
-					 i++)
+			for (int i = 0; i < m_ipv6_default_filterting_rules_count; ++i)
 			{
 				if (m_pFilteringTable->rules[i].status == 0)
 				{

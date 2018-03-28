@@ -611,13 +611,14 @@ static int ipa_nl_decode_nlmsg
 	struct nlmsghdr *nlh = (struct nlmsghdr *)buffer;
 
 	uint32_t if_ipv4_addr =0, if_ipipv4_addr_mask =0, temp =0, if_ipv4_addr_gw =0;
+	uint8_t nullMac[IPA_MAC_ADDR_SIZE];
 
 	ipacm_cmd_q_data evt_data;
 	ipacm_event_data_all *data_all;
 	ipacm_event_data_fid *data_fid;
 	ipacm_event_data_addr *data_addr;
 
-
+	memset(nullMac, 0, sizeof(nullMac));
 	while(NLMSG_OK(nlh, buflen))
 	{
 		memset(dev_name,0,IF_NAME_LEN);
@@ -1376,6 +1377,15 @@ static int ipa_nl_decode_nlmsg
 				IPACMDBG("\n GOT RTM_NEWNEIGH event (%s) ip %d\n",dev_name,msg_ptr->nl_neigh_info.attr_info.local_addr.ss_family);
 			}
 
+
+			// This check is to  prevent handling of netlink messages with NULL MAC addr
+			if(!(memcmp(msg_ptr->nl_neigh_info.attr_info.lladdr_hwaddr.sa_data,
+						nullMac,sizeof(nullMac))))
+			{
+			  IPACMDBG_H("RTM_NEWNEIGH received with NULL MAC\n");
+			  return IPACM_SUCCESS;
+			}
+
 			/* insert to command queue */
 		    data_all = (ipacm_event_data_all *)malloc(sizeof(ipacm_event_data_all));
 		    if(data_all == NULL)
@@ -1463,13 +1473,21 @@ static int ipa_nl_decode_nlmsg
 				IPACMDBG("\n GOT RTM_DELNEIGH event (%s) ip %d\n",dev_name,msg_ptr->nl_neigh_info.attr_info.local_addr.ss_family);
 			}
 
-				/* insert to command queue */
-				data_all = (ipacm_event_data_all *)malloc(sizeof(ipacm_event_data_all));
-				if(data_all == NULL)
-				{
-					IPACMERR("unable to allocate memory for event data_all\n");
-					return IPACM_FAILURE;
-				}
+			//This check is to prevent handling of netlink messages with NULL MAC addr
+			if(!(memcmp(msg_ptr->nl_neigh_info.attr_info.lladdr_hwaddr.sa_data,
+				nullMac,sizeof(nullMac))))
+			{
+			  IPACMDBG_H("RTM_DELNEIGH received with NULL MAC\n");
+			  return IPACM_SUCCESS;
+			}
+
+			/* insert to command queue */
+			data_all = (ipacm_event_data_all *)malloc(sizeof(ipacm_event_data_all));
+			if(data_all == NULL)
+			{
+				IPACMERR("unable to allocate memory for event data_all\n");
+				return IPACM_FAILURE;
+			}
 
 		    memset(data_all, 0, sizeof(ipacm_event_data_all));
 		    if(msg_ptr->nl_neigh_info.attr_info.local_addr.ss_family == AF_INET6)

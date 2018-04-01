@@ -588,7 +588,6 @@ private:
 
 	void UpdateCTUdpTs(nat_table_entry *, uint32_t);
 	bool ChkForDup(const nat_table_entry *);
-	bool isAlgPort(uint8_t, uint16_t);
 	void Reset();
 	bool isPwrSaveIf(uint32_t);
 	uint32_t GenerateMetdata(uint8_t mux_id);
@@ -597,10 +596,12 @@ public:
 	static NatApp* GetInstance();
 
 #ifdef FEATURE_VLAN_MPDN
-	int AddPdn(uint32_t pub_ip, uint8_t mux_id);
+	int AddPdn(uint32_t pub_ip, uint8_t mux_id, bool is_sta);
 	int RemovePdn(uint32_t pub_ip);
 #endif
-	int AddTable(uint32_t, uint8_t mux_id);
+	bool isAlgPort(uint8_t, uint16_t);
+
+	int AddTable(uint32_t, uint8_t mux_id, bool is_sta);
 	int DeleteTable(uint32_t);
 
 	int AddEntry(const nat_table_entry *);

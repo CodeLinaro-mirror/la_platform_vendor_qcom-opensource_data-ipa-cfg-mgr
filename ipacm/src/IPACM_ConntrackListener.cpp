@@ -658,7 +658,7 @@ void IPACM_ConntrackListener::HandleVlanUp(void *in_param)
 			return;
 
 		IPACMDBG_H("ipv4 address for new PDN 0x%X\n", vlanup_data->ipv4_addr);
-		if(nat_inst->AddPdn(vlanup_data->ipv4_addr, vlanup_data->mux_id))
+		if(nat_inst->AddPdn(vlanup_data->ipv4_addr, vlanup_data->mux_id, false))
 		{
 			IPACMERR("failed adding pdn\n");
 		}
@@ -707,9 +707,9 @@ void IPACM_ConntrackListener::TriggerWANUp(void *in_param)
 	 if(nat_inst != NULL)
 	 {
 #ifdef FEATURE_VLAN_MPDN
-		 nat_inst->AddPdn(wanup_data->ipv4_addr, wanup_data->mux_id);
+		 nat_inst->AddPdn(wanup_data->ipv4_addr, wanup_data->mux_id, isStaMode);
 #else
-		 nat_inst->AddTable(wanup_data->ipv4_addr, wanup_data->mux_id);
+		 nat_inst->AddTable(wanup_data->ipv4_addr, wanup_data->mux_id, isStaMode);
 #endif
 	 }
 
@@ -1156,6 +1156,36 @@ bool IPACM_ConntrackListener::AddIface(
 				rule->private_ip);
 			return true;
 		}
+	}
+
+	if (nat_inst == NULL)
+	{
+		IPACMERR("Nat instance is NULL, unable to check ALG\n");
+		return false;
+	}
+
+	/* Handle ALG port traffic */
+	if(nat_inst->isAlgPort(rule->protocol, rule->private_port) ||
+		 nat_inst->isAlgPort(rule->protocol, rule->target_port)) {
+
+		IPACMDBG("ALG port connection, prot=%u, private_port=%u, target_port=%u\n",
+			rule->protocol, rule->private_port, rule->target_port);
+
+		if (isStaMode) {
+			IPACMDBG("ALG port in STA mode, ignore the event\n");
+			return false;
+		}
+
+		if (!rule->dst_nat) {
+			IPACMDBG("ALG port with src NAT event, ignore it\n");
+			return false;
+		}
+
+		IPACMDBG("Install dummy NAT rule for ALG port DL flow public_ip=%u public_port=%u\n",
+			rule->public_ip, rule->public_port);
+		rule->private_ip = rule->public_ip;
+		rule->private_port = rule->public_port;
+		return true;
 	}
 
 	/* check whether nat iface or not */

@@ -3947,79 +3947,14 @@ int IPACM_Wan::add_icmp_alg_rules(struct ipa_flt_rule_add *rules, int rule_offse
 		memcpy(&(rules[rule_offset]), &flt_rule_entry, sizeof(struct ipa_flt_rule_add));
 		IPACM_Wan::num_v4_flt_rule++;
 #endif
-		/* Configure ALG filtering rules */
-		memcpy(&flt_rule_entry.rule.attrib,
-					 &rx_prop->rx[0].attrib,
-					 sizeof(flt_rule_entry.rule.attrib));
-		/* remove meta data mask */
-		flt_rule_entry.rule.attrib.attrib_mask &= ~((uint32_t)IPA_FLT_META_DATA);
-		flt_rule_entry.rule.attrib.attrib_mask |= IPA_FLT_SRC_PORT;
-		flt_rule_entry.rule.attrib.attrib_mask |= IPA_FLT_PROTOCOL;
-		for(i = 0; i < ipacm_config->ipa_num_alg_ports; i++)
-		{
-			flt_rule_entry.rule.attrib.src_port = ipacm_config->alg_table[i].port;
-			flt_rule_entry.rule.attrib.u.v4.protocol = ipacm_config->alg_table[i].protocol;
 
-			memset(&flt_eq, 0, sizeof(flt_eq));
-			memcpy(&flt_eq.attrib, &flt_rule_entry.rule.attrib, sizeof(flt_eq.attrib));
-			flt_eq.ip = iptype;
-			if(0 != ioctl(m_fd_ipa, IPA_IOC_GENERATE_FLT_EQ, &flt_eq))
-			{
-				IPACMERR("Failed to get eq_attrib\n");
-				res = IPACM_FAILURE;
-				goto fail;
-			}
-			memcpy(&flt_rule_entry.rule.eq_attrib,
-						 &flt_eq.eq_attrib,
-						 sizeof(flt_rule_entry.rule.eq_attrib));
-#ifdef FEATURE_VLAN_MPDN
-			/* metadata is not filtered, MUX ID doesn't matter */
-			rules[rule_offset + num_icmp_rules + i].mux_id = 0;
-			memcpy(&(rules[rule_offset + num_icmp_rules + i].flt_rule), &flt_rule_entry, sizeof(struct ipa_flt_rule_add));
-#else
-			memcpy(&(rules[rule_offset + 1 + i]), &flt_rule_entry, sizeof(struct ipa_flt_rule_add));
-#endif
-			IPACM_Wan::num_v4_flt_rule++;
-		}
+		/*
+		 * Removed from here the code to general filtering rules for
+		 * ALG ports. ALG ports are now handled by NAT exception for UL
+		 * and NAT dummy rules for DL.
+		 *
+		 */
 
-		memcpy(&flt_rule_entry.rule.attrib,
-					 &rx_prop->rx[0].attrib,
-					 sizeof(flt_rule_entry.rule.attrib));
-		/* remove meta data mask */
-		flt_rule_entry.rule.attrib.attrib_mask &= ~((uint32_t)IPA_FLT_META_DATA);
-		flt_rule_entry.rule.attrib.attrib_mask |= IPA_FLT_DST_PORT;
-		flt_rule_entry.rule.attrib.attrib_mask |= IPA_FLT_PROTOCOL;
-		for(i = 0; i < ipacm_config->ipa_num_alg_ports; i++)
-		{
-			flt_rule_entry.rule.attrib.dst_port = ipacm_config->alg_table[i].port;
-			flt_rule_entry.rule.attrib.u.v4.protocol = ipacm_config->alg_table[i].protocol;
-
-			memset(&flt_eq, 0, sizeof(flt_eq));
-			memcpy(&flt_eq.attrib, &flt_rule_entry.rule.attrib, sizeof(flt_eq.attrib));
-			flt_eq.ip = iptype;
-			if(0 != ioctl(m_fd_ipa, IPA_IOC_GENERATE_FLT_EQ, &flt_eq))
-			{
-				IPACMERR("Failed to get eq_attrib\n");
-				res = IPACM_FAILURE;
-				goto fail;
-			}
-
-			memcpy(&flt_rule_entry.rule.eq_attrib,
-						 &flt_eq.eq_attrib,
-						 sizeof(flt_rule_entry.rule.eq_attrib));
-#ifdef FEATURE_VLAN_MPDN
-			/* metadata is not filtered, MUX ID doesn't matter */
-			rules[rule_offset + ipacm_config->ipa_num_alg_ports + num_icmp_rules + i].mux_id = 0;
-			memcpy(&(rules[rule_offset + ipacm_config->ipa_num_alg_ports + num_icmp_rules + i].flt_rule),
-				&flt_rule_entry,
-				sizeof(struct ipa_flt_rule_add));
-#else
-			memcpy(&(rules[rule_offset + ipacm_config->ipa_num_alg_ports + 1 + i]),
-				&flt_rule_entry,
-				sizeof(struct ipa_flt_rule_add));
-#endif
-			IPACM_Wan::num_v4_flt_rule++;
-		}
 		num_rules = IPACM_Wan::num_v4_flt_rule - original_num_rules;
 	}
 	else /* IPv6 case */

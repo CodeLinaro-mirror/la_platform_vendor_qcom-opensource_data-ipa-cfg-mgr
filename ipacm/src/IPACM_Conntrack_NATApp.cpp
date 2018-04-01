@@ -149,7 +149,7 @@ uint32_t NatApp::GenerateMetdata(uint8_t mux_id)
 
 /* NAT APP related object function definitions */
 #ifdef FEATURE_VLAN_MPDN
-int NatApp::AddPdn(uint32_t pub_ip, uint8_t mux_id)
+int NatApp::AddPdn(uint32_t pub_ip, uint8_t mux_id, bool is_sta)
 {
 	int ret;
 	int cnt = 0;
@@ -216,6 +216,14 @@ int NatApp::AddPdn(uint32_t pub_ip, uint8_t mux_id)
 			/* flush only entries which are related to this PDN */
 			&& (cache[cnt].public_ip == pub_ip))
 		{
+			if(is_sta && (isAlgPort(cache[cnt].protocol, cache[cnt].private_port) ||
+				isAlgPort(cache[cnt].protocol, cache[cnt].target_port))) {
+				IPACMERR("STA backhaul: connection using ALG Port, ignore\n");
+				memset(&cache[cnt], 0, sizeof(cache[cnt]));
+				curCnt--;
+				continue;
+			}
+
 			memset(&nat_rule, 0, sizeof(nat_rule));
 			nat_rule.private_ip = cache[cnt].private_ip;
 			nat_rule.target_ip = cache[cnt].target_ip;
@@ -249,7 +257,7 @@ int NatApp::AddPdn(uint32_t pub_ip, uint8_t mux_id)
 	return IPACM_SUCCESS;
 }
 #endif
-int NatApp::AddTable(uint32_t pub_ip, uint8_t mux_id)
+int NatApp::AddTable(uint32_t pub_ip, uint8_t mux_id, bool is_sta)
 {
 	int ret;
 	int cnt = 0;
@@ -294,6 +302,14 @@ int NatApp::AddTable(uint32_t pub_ip, uint8_t mux_id)
 		{
 			if((cache[cnt].private_ip !=0))
 			{
+				if(is_sta && (isAlgPort(cache[cnt].protocol, cache[cnt].private_port) ||
+					isAlgPort(cache[cnt].protocol, cache[cnt].target_port))) {
+					IPACMERR("STA backhaul: connection using ALG Port, ignore\n");
+					memset(&cache[cnt], 0, sizeof(cache[cnt]));
+					curCnt--;
+					continue;
+				}
+
 				memset(&nat_rule, 0 , sizeof(nat_rule));
 				nat_rule.private_ip = cache[cnt].private_ip;
 				nat_rule.target_ip = cache[cnt].target_ip;
@@ -508,12 +524,6 @@ int NatApp::AddEntry(const nat_table_entry *rule)
 	CHK_TBL_HDL();
 	log_nat(rule->protocol,rule->private_ip,rule->target_ip,rule->private_port,\
 	rule->target_port,"for addition\n");
-	if(isAlgPort(rule->protocol, rule->private_port) ||
-		 isAlgPort(rule->protocol, rule->target_port))
-	{
-		IPACMERR("connection using ALG Port, ignore\n");
-		return -1;
-	}
 
 	if(rule->private_ip == 0 ||
 		 rule->target_ip == 0 ||
@@ -889,13 +899,6 @@ void NatApp::AddTempEntry(const nat_table_entry *new_entry)
 	iptodot("Target IP", new_entry->target_ip);
 	IPACMDBG("Private Port: %d\t Target Port: %d\t", new_entry->private_port, new_entry->target_port);
 	IPACMDBG("protocolcol: %d\n", new_entry->protocol);
-
-	if(isAlgPort(new_entry->protocol, new_entry->private_port) ||
-		 isAlgPort(new_entry->protocol, new_entry->target_port))
-	{
-		IPACMDBG("connection using ALG Port. Dont insert into nat cache\n");
-		return;
-	}
 
 	if(ChkForDup(new_entry))
 	{

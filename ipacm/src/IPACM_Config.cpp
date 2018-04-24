@@ -1226,7 +1226,7 @@ bool IPACM_Config::is_added_vlan_iface(char *iface_name)
 	return ret;
 }
 
-bool IPACM_Config::iface_in_vlan_mode(char *phys_iface_name)
+bool IPACM_Config::iface_in_vlan_mode(const char *phys_iface_name)
 {
 	list<vlan_iface_info>::iterator it_vlan;
 	bool ret = false;

@@ -273,11 +273,9 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 						if(event == IPA_NEW_NEIGH_EVENT)
 						{
 #ifdef FEATURE_VLAN_MPDN
-							/* if this is a vlan interface that was not added we ignore*/
-							if((IPACM_FAILURE == ipa_interface_index) &&
-								!(IPACM_Iface::ipacmcfg->is_added_vlan_iface(data->iface_name)))
+							if(IPACM_FAILURE == ipa_interface_index)
 							{
-								IPACMDBG_H("not added VLAN interface %s, ignoring\n", data->iface_name);
+								IPACMDBG_H("non bridged VLAN interface %s, ignoring\n", data->iface_name);
 								return;
 							}
 #endif

@@ -375,6 +375,12 @@ int IPACM_IfaceManager::create_iface_instance(ipacm_ifacemgr_data *param)
 					IPACM_EvtDispatcher::registr(IPA_HANDLE_WAN_DOWN_V6, odu);
 					IPACM_EvtDispatcher::registr(IPA_CRADLE_WAN_MODE_SWITCH, odu);
 					IPACM_EvtDispatcher::registr(IPA_LINK_DOWN_EVENT, odu);
+#ifdef FEATURE_VLAN_MPDN
+					IPACM_EvtDispatcher::registr(IPA_PREFIX_CHANGE_EVENT, odu);
+					IPACM_EvtDispatcher::registr(IPA_HANDLE_WAN_VLAN_PDN_UP, odu);
+					IPACM_EvtDispatcher::registr(IPA_HANDLE_WAN_VLAN_PDN_DOWN, odu);
+					IPACM_EvtDispatcher::registr(IPA_PRIVATE_SUBNET_CHANGE_EVENT, odu); 	// register for IPA_PRIVATE_SUBNET_CHANGE_EVENT event
+#endif
 #ifdef FEATURE_IPACM_UL_FIREWALL
 					IPACM_EvtDispatcher::registr(IPA_FIREWALL_CHANGE_EVENT, odu);			// register for Firewall change event
 #endif //FEATURE_IPACM_UL_FIREWALL

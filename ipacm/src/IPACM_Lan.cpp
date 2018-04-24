@@ -949,7 +949,7 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 #ifdef FEATURE_VLAN_MPDN
 					if(is_vlan_event(data->iface_name))
 					{
-						IPACMDBG_H("handling vlan ETH client del v6 ip address for iface %s\n",
+						IPACMDBG_H("handling vlan ETH client del v4 ip address for iface %s\n",
 							data->iface_name);
 						if(IPACM_Iface::ipacmcfg->get_vlan_id(data->iface_name, &vlan_id))
 						{

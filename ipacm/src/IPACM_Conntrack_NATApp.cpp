@@ -511,11 +511,12 @@ int NatApp::DeleteEntry(const nat_table_entry *rule)
 }
 
 /* Add new entry to the nat table on new connection */
-int NatApp::AddEntry(const nat_table_entry *rule)
+int NatApp::AddEntry(const nat_table_entry *rule, bool isVlan)
 {
 	int cnt = 0;
 	ipa_nat_ipv4_rule nat_rule;
 #ifdef FEATURE_VLAN_MPDN
+	bool cacheOnly = false;
 	uint8_t pdn_index;
 #endif
 
@@ -537,8 +538,19 @@ int NatApp::AddEntry(const nat_table_entry *rule)
 #ifdef FEATURE_VLAN_MPDN
 	if(ipa_nat_get_pdn_index(rule->public_ip, &pdn_index))
 	{
-		IPACMERR("couldn't acquire PDN index for public ip 0x%X\n", rule->public_ip);
-		return IPACM_FAILURE;
+		if(isVlan)
+		{
+			IPACMDBG_H("vlan iface doesn't have a valid pdn, only moving to cache");
+			iptodot("private ip", rule->private_ip);
+			iptodot("target ip", rule->target_ip);
+			iptodot("public ip", rule->public_ip);
+			cacheOnly = true;
+		}
+		else
+		{
+			IPACMERR("couldn't acquire PDN index for public ip 0x%X\n", rule->public_ip);
+			return IPACM_FAILURE;
+		}
 	}
 #endif
 
@@ -575,9 +587,22 @@ int NatApp::AddEntry(const nat_table_entry *rule)
 #endif
 
 			if(isPwrSaveIf(rule->private_ip) ||
-				 isPwrSaveIf(rule->target_ip))
+				 isPwrSaveIf(rule->target_ip)
+#ifdef FEATURE_VLAN_MPDN
+				|| cacheOnly
+#endif
+				)
 			{
-				IPACMDBG("Device is Power Save mode: Dont insert into nat table but cache\n");
+#ifdef FEATURE_VLAN_MPDN
+				if(cacheOnly)
+				{
+					IPACMDBG("only caching vlan rule\n");
+				}
+				else
+#endif
+				{
+					IPACMDBG("Device is Power Save mode: Dont insert into nat table but cache\n");
+				}
 				cache[cnt].enabled = false;
 				cache[cnt].rule_hdl = 0;
 			}
@@ -903,7 +928,7 @@ void NatApp::AddTempEntry(const nat_table_entry *new_entry)
 	iptodot("Private IP", new_entry->private_ip);
 	iptodot("Target IP", new_entry->target_ip);
 	IPACMDBG("Private Port: %d\t Target Port: %d\t", new_entry->private_port, new_entry->target_port);
-	IPACMDBG("protocolcol: %d\n", new_entry->protocol);
+	IPACMDBG("protocol: %d\n", new_entry->protocol);
 
 	if(ChkForDup(new_entry))
 	{
@@ -965,6 +990,50 @@ void NatApp::DeleteTempEntry(const nat_table_entry *entry)
 	IPACMDBG("No Such Temp Entry exists\n");
 	return;
 }
+
+#ifdef FEATURE_VLAN_MPDN
+void NatApp::FlushAndCacheVlanTempEntries(uint32_t ip_addr, bool *entry_exists, uint32_t *public_ip)
+{
+	int cnt;
+	int ret;
+
+	IPACMDBG("searching temp entries for ");
+	iptodot("IP Address: ", ip_addr);
+	if(!entry_exists)
+	{
+		IPACMERR("got NULL for entry_exists\n");
+		return;
+	}
+
+	if(!public_ip)
+	{
+		IPACMERR("got NULL for public_ip\n");
+		return;
+	}
+
+	*entry_exists = false;
+	*public_ip = 0;
+	for(cnt = 0; cnt < MAX_TEMP_ENTRIES; cnt++)
+	{
+		if(temp[cnt].private_ip == ip_addr ||
+			temp[cnt].target_ip == ip_addr)
+		{
+			ret = AddEntry(&temp[cnt], true);
+			if(ret)
+			{
+				IPACMERR("unable to add temp entry: %d\n", ret);
+				continue;
+			}
+			/* all entries should have the same public ip (each vlan mapped to single pdn) */
+			*entry_exists = true;
+			*public_ip = temp[cnt].public_ip;
+		}
+		memset(&temp[cnt], 0, sizeof(nat_table_entry));
+	}
+
+	return;
+}
+#endif
 
 void NatApp::FlushTempEntries(uint32_t ip_addr, bool isAdd,
 		bool isDummy)

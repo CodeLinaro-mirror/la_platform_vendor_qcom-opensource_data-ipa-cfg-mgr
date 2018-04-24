@@ -604,7 +604,7 @@ public:
 	int AddTable(uint32_t, uint8_t mux_id, bool is_sta);
 	int DeleteTable(uint32_t);
 
-	int AddEntry(const nat_table_entry *);
+	int AddEntry(const nat_table_entry *, bool isVlan = false);
 	int DeleteEntry(const nat_table_entry *);
 
 	void UpdateUDPTimeStamp();
@@ -619,6 +619,9 @@ public:
 	void AddTempEntry(const nat_table_entry *);
 	void CacheEntry(const nat_table_entry *);
 	void DeleteTempEntry(const nat_table_entry *);
+#ifdef FEATURE_VLAN_MPDN
+	void FlushAndCacheVlanTempEntries(uint32_t ip_addr, bool *entry_exists, uint32_t *public_ip);
+#endif
 	void FlushTempEntries(uint32_t, bool, bool isDummy = false);
 };
 

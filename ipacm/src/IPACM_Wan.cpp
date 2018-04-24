@@ -219,6 +219,12 @@ IPACM_Wan::IPACM_Wan(int iface_index,
 	{
 		IPACMDBG(" IPACM->IPACM_Wan(%d)\n", ipa_if_num);
 	}
+
+	modem_ipv6_pdn_index = -1;
+	modem_ipv4_pdn_index = -1;
+#ifdef FEATURE_VLAN_MPDN
+	associated_VID = 0;
+#endif
 	return;
 }
 
@@ -1064,7 +1070,7 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 						IPACMERR("v4 vlan wan is already up for %s, ignoring\n", dev_name);
 						return;
 					}
-					if(ipv6_to_iface[modem_ipv6_pdn_index].wan_up_vlan_v6 && (data->VlanID != associated_VID))
+					if((modem_ipv6_pdn_index >= 0) && ipv6_to_iface[modem_ipv6_pdn_index].wan_up_vlan_v6 && (data->VlanID != associated_VID))
 					{
 						IPACMERR("inconsistency on new v4 VID (%d) and exisiting v6 VID (%d) ignoring\n", data->VlanID, associated_VID);
 						return;
@@ -1083,7 +1089,7 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 						IPACMERR("v6 vlan wan is already up for %s, ignoring\n", dev_name);
 						return;
 					}
-					if(ipv4_to_iface[modem_ipv4_pdn_index].wan_up_vlan && (data->VlanID != associated_VID))
+					if((modem_ipv4_pdn_index >= 0) && ipv4_to_iface[modem_ipv4_pdn_index].wan_up_vlan && (data->VlanID != associated_VID))
 					{
 						IPACMERR("inconsistency on new v6 VID (%d) and exisiting v4 VID (%d) ignoring\n", data->VlanID, associated_VID);
 						return;

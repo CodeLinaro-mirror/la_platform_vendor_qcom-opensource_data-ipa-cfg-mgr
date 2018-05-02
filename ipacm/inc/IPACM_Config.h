@@ -155,6 +155,7 @@ public:
 
 #ifdef FEATURE_VLAN_MPDN
 	ipacm_bridge vlan_bridges[IPA_MAX_NUM_BRIDGES];
+	bool vlan_devices[IPA_VLAN_IF_MAX];
 #endif
 	/* Store the flt rule count for each producer client*/
 	int flt_rule_count_v4[IPA_CLIENT_MAX];
@@ -181,6 +182,7 @@ public:
 	void handle_vlan_iface_info(ipacm_event_data_addr *data);
 
 	void handle_vlan_client_info(ipacm_event_data_all *data);
+
 #ifndef FEATURE_VLAN_MPDN
 	std::list<l2tp_vlan_mapping_info> m_l2tp_vlan_mapping;
 	std::list<l2tp_client_info> l2tp_client;
@@ -200,6 +202,7 @@ public:
 	bool iface_in_vlan_mode(const char * phys_iface_name);
 	int get_iface_vlan_ids(char *phys_iface_name, uint8_t *Ids);
 	int get_vlan_id(char *iface_name, uint8_t *vlan_id);
+	void get_vlan_mode_ifaces();
 #endif
 
 	const char* getEventName(ipa_cm_event_id event_id);

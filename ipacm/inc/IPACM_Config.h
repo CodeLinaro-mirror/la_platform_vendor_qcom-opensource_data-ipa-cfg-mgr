@@ -154,6 +154,8 @@ public:
 	uint8_t bridge_mac[IPA_MAC_ADDR_SIZE];
 
 #ifdef FEATURE_VLAN_MPDN
+	bool vlan_firewall_change_handle;
+
 	ipacm_bridge vlan_bridges[IPA_MAX_NUM_BRIDGES];
 	bool vlan_devices[IPA_VLAN_IF_MAX];
 #endif

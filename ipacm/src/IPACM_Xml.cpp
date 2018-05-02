@@ -62,11 +62,7 @@ static int ipacm_cfg_xml_parse_tree
 	 IPACM_conf_t *config
 );
 
-static int IPACM_firewall_xml_parse_tree
-(
-	 xmlNode* xml_node,
-	 IPACM_firewall_conf_t *config
-);
+static int IPACM_firewall_xml_parse_tree(const char *xml_file, xmlNode* xml_node, IPACM_firewall_t &firewall_config);
 
 /*Reads content (stored as child) of the element */
 static char* IPACM_read_content_element
@@ -542,14 +538,13 @@ static int ipacm_cfg_xml_parse_tree
 }
 
 /* This function read QCMAP CM Firewall XML and populate the QCMAP CM Cfg */
-int IPACM_read_firewall_xml(char *xml_file, IPACM_firewall_conf_t *config)
+int IPACM_read_firewall_xml(const char *xml_file, IPACM_firewall_t &firewall_config)
 {
 	xmlDocPtr doc = NULL;
 	xmlNode* root = NULL;
-	int ret_val;
+	int ret_val = IPACM_SUCCESS;
 
-	IPACM_ASSERT(xml_file != NULL);
-	IPACM_ASSERT(config != NULL);
+	memset(&firewall_config, 0, sizeof(firewall_config));
 
 	/* invoke the XML parser and obtain the parse tree */
 	doc = xmlReadFile(xml_file, "UTF-8", XML_PARSE_NOBLANKS);
@@ -559,28 +554,82 @@ int IPACM_read_firewall_xml(char *xml_file, IPACM_firewall_conf_t *config)
 	}
 	/*get the root of the tree*/
 	root = xmlDocGetRootElement(doc);
-
-	/* parse the xml tree returned by libxml*/
-	ret_val = IPACM_firewall_xml_parse_tree(root, config);
-
-	if (ret_val != IPACM_SUCCESS)
+	if (root == NULL || IPACM_util_icmp_string((char*)root->name, system_TAG) != 0)
 	{
-		IPACMDBG_H("IPACM_xml_parse: ipacm_firewall_xml_parse_tree returned parse error!\n");
+		IPACMERR("The XML %s is not valid. Please start from %s tag", xml_file, system_TAG);
+		ret_val = IPACM_FAILURE;
+		goto bail;
 	}
 
+	/* parse the xml tree returned by libxml*/
+	ret_val = IPACM_firewall_xml_parse_tree(xml_file, root->children, firewall_config);
+	if (ret_val != IPACM_SUCCESS)
+	{
+		IPACMERR("IPACM_xml_parse: ipacm_firewall_xml_parse_tree returned parse error!\n");
+		memset(&firewall_config, 0, sizeof(firewall_config));
+		ret_val = IPACM_FAILURE;
+		goto bail;
+	}
+
+bail:
 	/* free the tree */
 	xmlFreeDoc(doc);
 
 	return ret_val;
 }
 
+int IPACM_read_firewall_xml(const char *xml_file, IPACM_firewall_conf_t &default_pdn_firewall_config)
+{
+	memset(&default_pdn_firewall_config, 0, sizeof(default_pdn_firewall_config));
+
+	IPACM_firewall_t firewall_config;
+
+	int ret_val = IPACM_read_firewall_xml(xml_file, firewall_config);
+	if (ret_val != IPACM_SUCCESS)
+	{
+		IPACMERR("Failed to read the XML %s\n", xml_file);
+		return ret_val;
+	}
+
+	if (firewall_config.pdn_count == 0)
+	{
+		IPACMDBG_H("There are no firewal rules in %s\n", xml_file);
+		return IPACM_SUCCESS;
+	}
+
+	uint8_t pdn_index;
+	if (!firewall_config.default_profile)
+	{
+		if (firewall_config.pdn_count != 1)
+		{
+			IPACMERR("The XML %s is not valid. Please add %s tag\n", xml_file, DefaultProfile_TAG);
+			return IPACM_FAILURE;
+		}
+		pdn_index = 0;
+	}
+	else
+	{
+		for (pdn_index = 0; pdn_index < firewall_config.pdn_count; ++pdn_index)
+		{
+			if (firewall_config.default_profile == firewall_config.pdns[pdn_index].profile)
+			{
+				break;
+			}
+		}
+		if (pdn_index == firewall_config.pdn_count)
+		{
+			IPACMERR("The XML %s is not valid. The default profile %d isn't located\n",
+				xml_file, firewall_config.default_profile);
+			return IPACM_FAILURE;
+		}
+	}
+
+	memcpy(&default_pdn_firewall_config, &firewall_config.pdns[pdn_index], sizeof(default_pdn_firewall_config));
+	return IPACM_SUCCESS;
+}
 
 /* This function traverses the firewall xml tree */
-static int IPACM_firewall_xml_parse_tree
-(
-	 xmlNode* xml_node,
-	 IPACM_firewall_conf_t *config
-)
+static int IPACM_firewall_xml_parse_tree(const char *xml_file, xmlNode* xml_node, IPACM_firewall_t &firewall_config)
 {
 	int mask_value_v6, mask_index;
 	int32_t ret_val = IPACM_SUCCESS;
@@ -589,10 +638,8 @@ static int IPACM_firewall_xml_parse_tree
 	char content_buf[MAX_XML_STR_LEN];
 	struct in6_addr ip6_addr;
 
-	IPACM_ASSERT(config != NULL);
-
 	if (NULL == xml_node)
-		return ret_val;
+		return IPACM_SUCCESS;
 
 	while ( xml_node != NULL &&
 				 ret_val == IPACM_SUCCESS)
@@ -601,12 +648,44 @@ static int IPACM_firewall_xml_parse_tree
 		{
 
 		case XML_ELEMENT_NODE:
+		{
+			if (IPACM_util_icmp_string((char*)xml_node->name, DefaultProfile_TAG) == 0)
 			{
-				if (0 == IPACM_util_icmp_string((char*)xml_node->name, system_TAG) ||
-						0 == IPACM_util_icmp_string((char*)xml_node->name, MobileAPFirewallCfg_TAG) ||
-						0 == IPACM_util_icmp_string((char*)xml_node->name, Firewall_TAG) ||
-						0 == IPACM_util_icmp_string((char*)xml_node->name, FirewallEnabled_TAG)  ||
-						0 == IPACM_util_icmp_string((char*)xml_node->name, FirewallPktsAllowed_TAG))
+				content = IPACM_read_content_element(xml_node);
+				if (content != NULL)
+				{
+					memset(content_buf, 0, sizeof(content_buf));
+					memcpy(content_buf, (void *)content, strlen(content));
+					firewall_config.default_profile = atoi(content_buf);
+					IPACMDBG_H("Default profile is %d\n", firewall_config.default_profile);
+				}
+			}
+			else if (IPACM_util_icmp_string((char*)xml_node->name, MobileAPFirewallCfg_TAG) == 0)
+			{
+				IPACMDBG_H("MobileAPFirewallCfg_TAG\n");
+				if (++firewall_config.pdn_count == IPA_MAX_NUM_SW_PDNS)
+				{
+					IPACMERR("The XML %s is not valid. The number of %s tags should be at most %d\n",
+						xml_file, MobileAPFirewallCfg_TAG, IPA_MAX_NUM_SW_PDNS);
+					return IPACM_FAILURE;
+				}
+				/* go to child */
+				ret_val = IPACM_firewall_xml_parse_tree(xml_file, xml_node->children, firewall_config);
+			}
+			else
+			{
+				if (!firewall_config.pdn_count)
+				{
+					IPACMERR("The XML %s is not valid. Please add %s tag as a child of %s tag",
+						xml_file, MobileAPFirewallCfg_TAG, system_TAG);
+					return IPACM_FAILURE;
+				}
+
+				IPACM_firewall_conf_t* config = &firewall_config.pdns[firewall_config.pdn_count - 1];
+
+				if (0 == IPACM_util_icmp_string((char*)xml_node->name, Firewall_TAG) ||
+					0 == IPACM_util_icmp_string((char*)xml_node->name, FirewallEnabled_TAG)  ||
+					0 == IPACM_util_icmp_string((char*)xml_node->name, FirewallPktsAllowed_TAG))
 				{
 					if (0 == IPACM_util_icmp_string((char*)xml_node->name, Firewall_TAG))
 					{
@@ -633,7 +712,7 @@ static int IPACM_firewall_xml_parse_tree
 							}
 							IPACMDBG_H(" Allow traffic which matches rules ?:%d\n",config->rule_action_accept);
 					    }
-				        }
+				    }
 
 					if (0 == IPACM_util_icmp_string((char*)xml_node->name, FirewallEnabled_TAG))
 					{
@@ -653,10 +732,10 @@ static int IPACM_firewall_xml_parse_tree
 								config->firewall_enable = false;
 							}
 							IPACMDBG_H(" Firewall Enable?:%d\n", config->firewall_enable);
-				            }
+				        }
 					}
 					/* go to child */
-					ret_val = IPACM_firewall_xml_parse_tree(xml_node->children, config);
+					ret_val = IPACM_firewall_xml_parse_tree(xml_file, xml_node->children, firewall_config);
 				}
 #ifdef FEATURE_IPACM_UL_FIREWALL
 				else if (0 == IPACM_util_icmp_string((char*)xml_node->name, FirewallDirection_TAG))
@@ -699,7 +778,7 @@ static int IPACM_firewall_xml_parse_tree
 				{
 					config->extd_firewall_entries[config->num_extd_firewall_entries - 1].attrib.attrib_mask |= IPA_FLT_SRC_ADDR;
 					/* go to child */
-					ret_val = IPACM_firewall_xml_parse_tree(xml_node->children, config);
+					ret_val = IPACM_firewall_xml_parse_tree(xml_file, xml_node->children, firewall_config);
 				}
 				else if (0 == IPACM_util_icmp_string((char*)xml_node->name, IPV4SourceIPAddress_TAG))
 				{
@@ -733,7 +812,7 @@ static int IPACM_firewall_xml_parse_tree
 				{
 					config->extd_firewall_entries[config->num_extd_firewall_entries - 1].attrib.attrib_mask |= IPA_FLT_DST_ADDR;
 					/* go to child */
-					ret_val = IPACM_firewall_xml_parse_tree(xml_node->children, config);
+					ret_val = IPACM_firewall_xml_parse_tree(xml_file, xml_node->children, firewall_config);
 				}
 				else if (0 == IPACM_util_icmp_string((char*)xml_node->name, IPV4DestinationIPAddress_TAG))
 				{
@@ -770,7 +849,7 @@ static int IPACM_firewall_xml_parse_tree
 				{
 					config->extd_firewall_entries[config->num_extd_firewall_entries - 1].attrib.attrib_mask |= IPA_FLT_TOS;
 					/* go to child */
-					ret_val = IPACM_firewall_xml_parse_tree(xml_node->children, config);
+					ret_val = IPACM_firewall_xml_parse_tree(xml_file, xml_node->children, firewall_config);
 				}
 				else if (0 == IPACM_util_icmp_string((char*)xml_node->name, TOSValue_TAG))
 				{
@@ -819,7 +898,7 @@ static int IPACM_firewall_xml_parse_tree
 					config->extd_firewall_entries[config->num_extd_firewall_entries - 1].attrib.attrib_mask |=
 						 IPA_FLT_SRC_ADDR;
 					/* go to child */
-					ret_val = IPACM_firewall_xml_parse_tree(xml_node->children, config);
+					ret_val = IPACM_firewall_xml_parse_tree(xml_file, xml_node->children, firewall_config);
 				}
 				else if (0 == IPACM_util_icmp_string((char*)xml_node->name, IPV6SourceIPAddress_TAG))
 				{
@@ -871,7 +950,7 @@ static int IPACM_firewall_xml_parse_tree
 					config->extd_firewall_entries[config->num_extd_firewall_entries - 1].attrib.attrib_mask |=
 						 IPA_FLT_DST_ADDR;
 					/* go to child */
-					ret_val = IPACM_firewall_xml_parse_tree(xml_node->children, config);
+					ret_val = IPACM_firewall_xml_parse_tree(xml_file, xml_node->children, firewall_config);
 				}
 				else if (0 == IPACM_util_icmp_string((char*)xml_node->name, IPV6DestinationIPAddress_TAG))
 				{
@@ -921,7 +1000,7 @@ static int IPACM_firewall_xml_parse_tree
 				{
 					config->extd_firewall_entries[config->num_extd_firewall_entries - 1].attrib.attrib_mask |= IPA_FLT_TC;
 					/* go to child */
-					ret_val = IPACM_firewall_xml_parse_tree(xml_node->children, config);
+					ret_val = IPACM_firewall_xml_parse_tree(xml_file, xml_node->children, firewall_config);
 				}
 				else if (0 == IPACM_util_icmp_string((char*)xml_node->name, TrfClsValue_TAG))
 				{
@@ -968,7 +1047,7 @@ static int IPACM_firewall_xml_parse_tree
 				else if (0 == IPACM_util_icmp_string((char*)xml_node->name, TCPSource_TAG))
 				{
 					/* go to child */
-					ret_val = IPACM_firewall_xml_parse_tree(xml_node->children, config);
+					ret_val = IPACM_firewall_xml_parse_tree(xml_file, xml_node->children, firewall_config);
 				}
 				else if (0 == IPACM_util_icmp_string((char*)xml_node->name, TCPSourcePort_TAG))
 				{
@@ -1013,7 +1092,7 @@ static int IPACM_firewall_xml_parse_tree
 				else if (0 == IPACM_util_icmp_string((char*)xml_node->name, TCPDestination_TAG))
 				{
 					/* go to child */
-					ret_val = IPACM_firewall_xml_parse_tree(xml_node->children, config);
+					ret_val = IPACM_firewall_xml_parse_tree(xml_file, xml_node->children, firewall_config);
 				}
 				else if (0 == IPACM_util_icmp_string((char*)xml_node->name, TCPDestinationPort_TAG))
 				{
@@ -1058,7 +1137,7 @@ static int IPACM_firewall_xml_parse_tree
 				else if (0 == IPACM_util_icmp_string((char*)xml_node->name, UDPSource_TAG))
 				{
 					/* go to child */
-					ret_val = IPACM_firewall_xml_parse_tree(xml_node->children, config);
+					ret_val = IPACM_firewall_xml_parse_tree(xml_file, xml_node->children, firewall_config);
 				}
 				else if (0 == IPACM_util_icmp_string((char*)xml_node->name, UDPSourcePort_TAG))
 				{
@@ -1103,7 +1182,7 @@ static int IPACM_firewall_xml_parse_tree
 				else if (0 == IPACM_util_icmp_string((char*)xml_node->name, UDPDestination_TAG))
 				{
 					/* go to child */
-					ret_val = IPACM_firewall_xml_parse_tree(xml_node->children, config);
+					ret_val = IPACM_firewall_xml_parse_tree(xml_file, xml_node->children, firewall_config);
 				}
 				else if (0 == IPACM_util_icmp_string((char*)xml_node->name, UDPDestinationPort_TAG))
 				{
@@ -1190,7 +1269,7 @@ static int IPACM_firewall_xml_parse_tree
 				else if (0 == IPACM_util_icmp_string((char*)xml_node->name, TCP_UDPSource_TAG))
 				{
 					/* go to child */
-					ret_val = IPACM_firewall_xml_parse_tree(xml_node->children, config);
+					ret_val = IPACM_firewall_xml_parse_tree(xml_file, xml_node->children, firewall_config);
 				}
 				else if (0 == IPACM_util_icmp_string((char*)xml_node->name, TCP_UDPSourcePort_TAG))
 				{
@@ -1235,7 +1314,7 @@ static int IPACM_firewall_xml_parse_tree
 				}
 				else if (0 == IPACM_util_icmp_string((char*)xml_node->name, TCP_UDPDestination_TAG))
 				{
-					ret_val = IPACM_firewall_xml_parse_tree(xml_node->children, config);
+					ret_val = IPACM_firewall_xml_parse_tree(xml_file, xml_node->children, firewall_config);
 				}
 				else if (0 == IPACM_util_icmp_string((char*)xml_node->name, TCP_UDPDestinationPort_TAG))
 				{
@@ -1277,9 +1356,43 @@ static int IPACM_firewall_xml_parse_tree
 						}
 					}
 				}
+				else if (IPACM_util_icmp_string((char*)xml_node->name, NetDev_TAG) == 0)
+				{
+					content = IPACM_read_content_element(xml_node);
+					if (content != NULL)
+					{
+						str_size = strlen(content);
+						if (str_size >= IPA_IFACE_NAME_LEN)
+						{
+							IPACMERR("The length of NetDev tag content is bigger than %d in %s",
+								IPA_IFACE_NAME_LEN, xml_file);
+						}
+						else if (content[0] == '0')
+						{
+							strlcpy(config->net_dev, UNKNOWN_NetDev_TAG, strlen(UNKNOWN_NetDev_TAG));
+							IPACMDBG_H("NetDev is %s\n", config->net_dev);
+						}
+						else
+						{
+							memcpy(config->net_dev, content, str_size);
+							IPACMDBG_H("NetDev is %s\n", config->net_dev);
+						}
+					}
+				}
+				else if (IPACM_util_icmp_string((char*)xml_node->name, Profile_TAG) == 0)
+				{
+					content = IPACM_read_content_element(xml_node);
+					if (content != NULL)
+					{
+						memset(content_buf, 0, sizeof(content_buf));
+						memcpy(content_buf, (void *)content, strlen(content));
+						config->profile = atoi(content_buf);
+						IPACMDBG_H("Profile is %d\n", config->profile);
+					}
+				}
 			}
 			break;
-
+		}
 		default:
 			break;
 		}

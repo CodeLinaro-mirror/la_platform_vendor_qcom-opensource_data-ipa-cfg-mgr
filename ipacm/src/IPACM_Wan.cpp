@@ -1611,6 +1611,19 @@ IPACM_firewall_conf_t* IPACM_Wan::get_curr_pdn_firewall_config(IPACM_firewall_t 
 		}
 	}
 
+	if(firewall_configs.pdn_count == 1)
+	{
+		if(!strncmp(firewall_configs.pdns[0].net_dev, "UNKNOWN", strlen("UNKNOWN")))
+		{
+			IPACMDBG_H("only one profile in file and no name, return it");
+			return &firewall_configs.pdns[0];
+		}
+		IPACMERR("one pdn with a differnet name (%s) != (%s), return it\n",
+			firewall_configs.pdns[0].net_dev,
+			curr_dev_name);
+		return &firewall_configs.pdns[0];
+	}
+
 	return NULL;
 }
 #endif

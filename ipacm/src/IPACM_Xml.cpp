@@ -1369,12 +1369,12 @@ static int IPACM_firewall_xml_parse_tree(const char *xml_file, xmlNode* xml_node
 						}
 						else if (content[0] == '0')
 						{
-							strlcpy(config->net_dev, UNKNOWN_NetDev_TAG, strlen(UNKNOWN_NetDev_TAG));
+							strlcpy(config->net_dev, UNKNOWN_NetDev_TAG, sizeof(config->net_dev));
 							IPACMDBG_H("NetDev is %s\n", config->net_dev);
 						}
 						else
 						{
-							memcpy(config->net_dev, content, str_size);
+							memcpy(config->net_dev, content, sizeof(config->net_dev));
 							IPACMDBG_H("NetDev is %s\n", config->net_dev);
 						}
 					}

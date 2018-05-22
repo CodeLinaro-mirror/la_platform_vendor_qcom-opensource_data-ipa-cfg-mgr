@@ -80,12 +80,12 @@
 #define IPACM_CFG_FILE_NAME    "IPACM_cfg.xml"
 #ifndef FEATURE_IPA_ANDROID
 #define IPACM_PID_FILE "/var/run/ipacm.pid"
-#define IPACM_DIR_NAME     "/etc/data/ipa"
+#define IPACM_DIR_NAME     "/systemrw/data/ipa"
 #else
 #define IPACM_PID_FILE "/data/misc/ipa/ipacm.pid"
 #define IPACM_DIR_NAME     "/data/misc/ipa/"
 #endif
-#define IPACM_FIREWALL_DIR_NAME     "/systemrw"
+#define IPACM_FIREWALL_DIR_NAME     "/systemrw/data"
 #define IPACM_NAME "ipacm"
 
 #define INOTIFY_EVENT_SIZE  (sizeof(struct inotify_event))

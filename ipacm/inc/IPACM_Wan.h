@@ -308,9 +308,6 @@ private:
 	uint32_t ipv6_prefix[2];
 	uint32_t m_ipv6_addr[IPA_IPV6_ADDR_SIZE_IN_WORDS];
 
-	/* IPACM firewall Configuration file*/
-	IPACM_firewall_conf_t firewall_config;
-
 	/* STA mode wan-client*/
 	int wan_client_len;
 	ipa_wan_client *wan_client;
@@ -602,6 +599,19 @@ private:
 	int add_dummy_rx_hdr();
 
 	void HandleSTAClientDelEvt(const ipa_wan_client* client);
+	
+	int add_catchup_all_filtering_rule_each_pdn(const IPACM_firewall_conf_t& firewall_config, ipa_ip_type iptype,
+		const struct ipa_rule_attrib& rx_prop_attrib, struct ipa_flt_rule_add& flt_rule_add, int fltr_rule_number);
+	int add_ipv6_frag_filtering_rule_ex(const struct ipa_rule_attrib& rx_prop_attrib,
+		struct ipa_flt_rule_add& flt_rule_add, int fltr_rule_number);
+#ifndef FEATURE_VLAN_MPDN
+	int add_firewall_rules_ex(const IPACM_firewall_conf_t& firewall_config, ipa_ip_type iptype,
+		const struct ipa_rule_attrib& rx_prop_attrib, struct ipa_flt_rule_add *rules, int rules_size, int& pos);
+#else
+	int add_firewall_rules_ex(const IPACM_firewall_conf_t& firewall_config, ipa_ip_type iptype, uint8_t curr_mux_id,
+		const struct ipa_rule_attrib& rx_prop_attrib, ipacm_pdn_flt_rule* rules, int rules_size, int& pos);
+	IPACM_firewall_conf_t* get_curr_pdn_firewall_config(IPACM_firewall_t &firewall_configs, const char* dev_name);
+#endif
 };
 
 #endif /* IPACM_WAN_H */

@@ -50,10 +50,6 @@
 #include <stdint.h>
 #include <libxml/parser.h>
 #include <libxml/tree.h>
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 
 #define IPACM_ASSERT(a)                                     \
 if (!(a)) {                                                 \
@@ -112,10 +108,15 @@ if (!(a)) {                                                 \
 #define UDP_PROTOCOL_TAG                     "UDP"
 
 /* FIREWALL Config Entries */
+#define DefaultProfile_TAG                   "DefaultProfile"
+#define Profile_TAG                          "Profile"
+#define NetDev_TAG                           "NetDev"
 #define Firewall_TAG                         "Firewall"
 #define MobileAPFirewallCfg_TAG              "MobileAPFirewallCfg"
 #define FirewallEnabled_TAG                  "FirewallEnabled"
 #define FirewallPktsAllowed_TAG              "FirewallPktsAllowed"
+
+#define UNKNOWN_NetDev_TAG                   "UNKNOWN"
 
 #ifdef FEATURE_IPACM_UL_FIREWALL
 #define FirewallDirection_TAG                "FirewallDirection"
@@ -259,17 +260,22 @@ typedef union
 	IPACM_extd_firewall_entry_conf_t extd_firewall_entry;
 } IPACM_extd_firewall_conf_t;
 
-
 typedef struct
 {
-	char firewall_config_file[IPA_MAX_FILE_LEN];
-	uint8_t  num_extd_firewall_entries;
+	char net_dev[IPA_IFACE_NAME_LEN];
 	IPACM_extd_firewall_entry_conf_t extd_firewall_entries[IPACM_MAX_FIREWALL_ENTRIES];
+	uint8_t num_extd_firewall_entries;
+	uint8_t profile;
 	bool rule_action_accept;
 	bool firewall_enable;
 } IPACM_firewall_conf_t;
 
-
+struct IPACM_firewall_t
+{
+	IPACM_firewall_conf_t pdns[IPA_MAX_NUM_SW_PDNS];
+	uint8_t pdn_count;
+	uint8_t default_profile;
+};
 
 typedef struct
 {
@@ -294,7 +300,6 @@ typedef struct
 	uint8_t num_alg_entries;
 	ipacm_alg alg_entries[IPA_MAX_ALG_ENTRIES];
 } ipacm_alg_conf_t;
-
 
 typedef struct  _IPACM_conf_t
 {
@@ -322,15 +327,12 @@ int ipacm_read_cfg_xml
 	IPACM_conf_t *config                         /* Mobile AP config data */
 );
 
-/* This function reads QCMAP Firewall XML and store in IPACM Firewall stucture */
+/* This function reads QCMAP Firewall XML and store in IPACM Firewall structure */
 int IPACM_read_firewall_xml
 (
-	char *xml_file,                                 /* Filename and path     */
-	IPACM_firewall_conf_t *config                   /* Mobile AP config data */
+	const char *xml_file,                        /* Filename and path */
+	IPACM_firewall_t &firewall_config            /* Mobile AP firewall config data */
 );
-
-#ifdef __cplusplus
-}
-#endif
+int IPACM_read_firewall_xml(const char *xml_file, IPACM_firewall_conf_t &default_pdn_firewall_config);
 
 #endif //IPACM_XML

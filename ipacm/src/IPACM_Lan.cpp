@@ -65,6 +65,7 @@ IPACM_Lan::IPACM_Lan(int iface_index) : IPACM_Iface(iface_index)
 	eth_client = NULL;
 	int i, m_fd_odu, ret = IPACM_SUCCESS;
 	eth_client_len = 0;
+	is_l2tp_iface = false;
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
 	int max_clients = (IPACM_Iface::ipacmcfg->ipacm_lan_stats_enable) ? IPA_MAX_NUM_HW_PATH_CLIENTS:
 		IPA_MAX_NUM_ETH_CLIENTS;
@@ -194,7 +195,7 @@ IPACM_Lan::IPACM_Lan(int iface_index) : IPACM_Iface(iface_index)
 		handle_tethering_client(false, IPACM_CLIENT_USB);
 	}
 #endif
-	is_l2tp_iface = false;
+
 #ifdef FEATURE_L2TP_E2E
 	if(ipa_if_cate == ODU_IF)
 	{

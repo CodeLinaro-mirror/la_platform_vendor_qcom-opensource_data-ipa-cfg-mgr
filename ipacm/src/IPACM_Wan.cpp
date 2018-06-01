@@ -168,6 +168,9 @@ IPACM_Wan::IPACM_Wan(int iface_index,
 	hdr_hdl_dummy_v6 = 0;
 	hdr_proc_hdl_dummy_v6 = 0;
 
+	modem_ipv6_pdn_index = -1;
+	modem_ipv4_pdn_index = -1;
+
 	if(m_is_sta_mode == Q6_WAN)
 	{
 		IPACMDBG_H("The new WAN interface is modem.\n");
@@ -220,8 +223,6 @@ IPACM_Wan::IPACM_Wan(int iface_index,
 		IPACMDBG(" IPACM->IPACM_Wan(%d)\n", ipa_if_num);
 	}
 
-	modem_ipv6_pdn_index = -1;
-	modem_ipv4_pdn_index = -1;
 #ifdef FEATURE_VLAN_MPDN
 	associated_VID = 0;
 #endif

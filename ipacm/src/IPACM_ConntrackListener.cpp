@@ -2151,8 +2151,13 @@ void IPACM_ConntrackListener::HandleSTAClientAddEvt_v6(const IpAddress& ip)
 	{
 		++StaClntCnt_v6;
 		IpAddress* entry = sta_clnt_ipv6_addr.GetFirstEmpty();
-		*entry = ip;
-		IPACMDBG("STA client cnt %d\n", StaClntCnt_v6);
+		if (entry)
+		{
+			*entry = ip;
+			IPACMDBG("STA client cnt %d\n", StaClntCnt_v6);
+		}
+		else
+			IPACMDBG_H("Entry is NULL\n");
 	}
 
 	ipv6ct_inst->FlushTempEntries(ip, true, false, true);

@@ -99,6 +99,7 @@ int IPACM_ConntrackClient::IPAConntrackEventCB
 	ipacm_cmd_q_data evt_data;
 	ipacm_ct_evt_data *ct_data;
 	uint8_t ip_type = 0;
+	IPACM_Config *config_instance = NULL;
 
 	IPACMDBG("Event callback called with msgtype: %d\n",type);
 
@@ -106,10 +107,15 @@ int IPACM_ConntrackClient::IPAConntrackEventCB
 	ip_type = nfct_get_attr_u8(ct, ATTR_REPL_L3PROTO);
 
 #ifndef CT_OPT
-	if(AF_INET6 == ip_type && !IPACM_Config::GetInstance()->IsIpv6CTEnabled())
+	if(AF_INET6 == ip_type)
 	{
-		IPACMDBG("Ignoring ipv6(%d) connections\n", ip_type);
-		goto IGNORE;
+		config_instance = IPACM_Config::GetInstance();
+		if((config_instance == NULL) ||
+			!config_instance->IsIpv6CTEnabled())
+		{
+			IPACMDBG("Ignoring ipv6(%d) connections\n", ip_type);
+			goto IGNORE;
+		}
 	}
 #endif
 

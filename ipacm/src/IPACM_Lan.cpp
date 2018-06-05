@@ -2213,8 +2213,8 @@ int IPACM_Lan::add_vlan_private_subnet(ipacm_bridge *bridge)
 
 	IPACMDBG_H("(%s) handle_vlan_private_subnet (0x%X & 0x%X)\n",
 		bridge->bridge_name,
-		IPACM_Iface::ipacmcfg->private_subnet_table[i].subnet_mask,
-		IPACM_Iface::ipacmcfg->private_subnet_table[i].subnet_addr);
+		bridge->bridge_netmask,
+		bridge->bridge_ipv4_addr);
 
 	for(i = 0; i < IPACM_Iface::ipacmcfg->ipa_num_private_subnet; i++)
 	{

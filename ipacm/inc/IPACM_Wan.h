@@ -178,6 +178,28 @@ public:
 		}
 		return false;
 	}
+
+	static bool isDefaultGatewayIfaceUp(IPACM_Wan *iface)
+	{
+		if(wan_up && iface->is_default_gateway)
+		{
+			IPACMDBG("iface %s, wan_up %d, is_default_gateway %d\n",
+				iface->dev_name, wan_up, iface->is_default_gateway);
+			return true;
+		}
+		return false;
+	}
+
+	static bool isDefaultGatewayIfaceUp_v6(IPACM_Wan *iface)
+	{
+		if(wan_up_v6 && iface->is_default_gateway)
+		{
+			IPACMDBG("iface %s, wan_up_v6 %d, is_default_gateway %d\n",
+				iface->dev_name, wan_up_v6, iface->is_default_gateway);
+			return true;
+		}
+		return false;
+	}
 #endif
 
 	static bool isWanUP_V6(int ipa_if_num_tether)

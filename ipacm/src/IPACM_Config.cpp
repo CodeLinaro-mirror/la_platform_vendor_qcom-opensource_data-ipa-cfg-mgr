@@ -962,6 +962,37 @@ void IPACM_Config::add_vlan_iface(ipa_ioc_vlan_iface_info *data)
 	return;
 }
 
+void IPACM_Config::restore_vlan_nat_ifaces(const char *phys_iface_name)
+{
+	list<vlan_iface_info>::iterator it_vlan;
+
+	if(!phys_iface_name)
+	{
+		IPACMERR("got NULL iface_name\n");
+		return;
+	}
+
+	if(pthread_mutex_lock(&vlan_l2tp_lock) != 0)
+	{
+		IPACMERR("Unable to lock the mutex\n");
+		return;
+	}
+
+	IPACMDBG_H("searching iface %s vlan interfaces to add to NAT devices\n", phys_iface_name)
+
+	for(it_vlan = m_vlan_iface.begin(); it_vlan != m_vlan_iface.end(); it_vlan++)
+	{
+		if(strstr(it_vlan->vlan_iface_name, phys_iface_name))
+		{
+			AddNatIfaces(it_vlan->vlan_iface_name);
+			IPACMDBG_H("restored VLAN iface %s to nat ifaces.\n", it_vlan->vlan_iface_name);
+		}
+	}
+
+	pthread_mutex_unlock(&vlan_l2tp_lock);
+	return;
+}
+
 void IPACM_Config::del_vlan_iface(ipa_ioc_vlan_iface_info *data)
 {
 	list<vlan_iface_info>::iterator it_vlan;
@@ -1133,7 +1164,7 @@ void IPACM_Config::get_vlan_mode_ifaces()
 		vlan_devices[IPA_VLAN_IF_ECM]);
 }
 
-void IPACM_Config::add_vlan_bridge(ipacm_event_data_all *data_all)
+void IPACM_Config::add_vlan_bridge(ipacm_event_data_all *data_all, bool is_linkup)
 {
 	uint8_t testmac[IPA_MAC_ADDR_SIZE];
 
@@ -1182,13 +1213,34 @@ void IPACM_Config::add_vlan_bridge(ipacm_event_data_all *data_all)
 			}
 			IPACMDBG("Interface (%s) address %s\n", ifr.ifr_name, inet_ntoa(((struct sockaddr_in *)&ifr.ifr_addr)->sin_addr));
 			IPACM_Iface::ipacmcfg->vlan_bridges[i].bridge_ipv4_addr = ntohl(((struct sockaddr_in *)&ifr.ifr_addr)->sin_addr.s_addr);
-			close(fd);
 
 			strlcpy(IPACM_Iface::ipacmcfg->vlan_bridges[i].bridge_name, data_all->iface_name, IF_NAME_LEN);
 
-			memcpy(IPACM_Iface::ipacmcfg->vlan_bridges[i].bridge_mac,
-				data_all->mac_addr,
-				sizeof(IPACM_Iface::ipacmcfg->vlan_bridges[i].bridge_mac));
+			if(is_linkup)
+			{
+				memcpy(IPACM_Iface::ipacmcfg->vlan_bridges[i].bridge_mac,
+					data_all->mac_addr,
+					sizeof(IPACM_Iface::ipacmcfg->vlan_bridges[i].bridge_mac));
+			}
+			else
+			{
+				memset(&ifr, 0, sizeof(struct ifreq));
+				ifr.ifr_addr.sa_family = AF_INET;
+				strlcpy(ifr.ifr_name, data_all->iface_name, sizeof(ifr.ifr_name));
+				if(ioctl(fd, SIOCGIFHWADDR, &ifr) < 0)
+				{
+					IPACMERR("unable to retrieve (%s) bridge address\n", ifr.ifr_name);
+					IPACM_Iface::ipacmcfg->vlan_bridges[i].bridge_netmask = 0;
+					IPACM_Iface::ipacmcfg->vlan_bridges[i].bridge_ipv4_addr = 0;
+					close(fd);
+					return;
+				}
+				memcpy(IPACM_Iface::ipacmcfg->vlan_bridges[i].bridge_mac,
+					ifr.ifr_hwaddr.sa_data,
+					sizeof(IPACM_Iface::ipacmcfg->vlan_bridges[i].bridge_mac));
+				IPACMDBG_H("got bridge MAC using IOCTL\n");
+			}
+			close(fd);
 			IPACMDBG_H("added bridge named %s, MAC %02x:%02x:%02x:%02x:%02x:%02x\n",
 				IPACM_Iface::ipacmcfg->vlan_bridges[i].bridge_name,
 				IPACM_Iface::ipacmcfg->vlan_bridges[i].bridge_mac[0],

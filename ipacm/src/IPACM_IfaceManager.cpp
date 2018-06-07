@@ -94,7 +94,7 @@ void IPACM_IfaceManager::event_callback(ipa_cm_event_id event, void *param)
 						data_all->mac_addr[1], data_all->mac_addr[2],
 						data_all->mac_addr[3], data_all->mac_addr[4],
 						data_all->mac_addr[5]);
-					IPACM_Iface::ipacmcfg->add_vlan_bridge(data_all);
+					IPACM_Iface::ipacmcfg->add_vlan_bridge(data_all, true);
 				}
 				else
 				{
@@ -123,7 +123,7 @@ void IPACM_IfaceManager::event_callback(ipa_cm_event_id event, void *param)
 					data_all->mac_addr[1], data_all->mac_addr[2],
 					data_all->mac_addr[3], data_all->mac_addr[4],
 					data_all->mac_addr[5]);
-				IPACM_Iface::ipacmcfg->add_vlan_bridge(data_all);
+				IPACM_Iface::ipacmcfg->add_vlan_bridge(data_all, true);
 #endif
 			}
 			break;
@@ -380,6 +380,7 @@ int IPACM_IfaceManager::create_iface_instance(ipacm_ifacemgr_data *param)
 					IPACM_EvtDispatcher::registr(IPA_HANDLE_WAN_VLAN_PDN_UP, odu);
 					IPACM_EvtDispatcher::registr(IPA_HANDLE_WAN_VLAN_PDN_DOWN, odu);
 					IPACM_EvtDispatcher::registr(IPA_PRIVATE_SUBNET_CHANGE_EVENT, odu); 	// register for IPA_PRIVATE_SUBNET_CHANGE_EVENT event
+					IPACM_EvtDispatcher::registr(IPA_CFG_CHANGE_EVENT, odu); 				// register for IPA_CFG_CHANGE event
 #endif
 #ifdef FEATURE_IPACM_UL_FIREWALL
 					IPACM_EvtDispatcher::registr(IPA_FIREWALL_CHANGE_EVENT, odu);			// register for Firewall change event

@@ -265,6 +265,9 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 			{
 				IPACMDBG_H(" Has rx/tx properties registered for iface %s, add for NATTING \n", dev_name);
 				IPACM_Iface::ipacmcfg->AddNatIfaces(dev_name);
+#ifdef FEATURE_VLAN_MPDN
+				IPACM_Iface::ipacmcfg->restore_vlan_nat_ifaces(dev_name);
+#endif
 			}
 		}
 		break;
@@ -3124,7 +3127,12 @@ int IPACM_Lan::handle_eth_client_ipaddr(ipacm_event_data_all *data)
 		{
 			IPACMDBG_H("ipv6 address: 0x%x:%x:%x:%x\n", data->ipv6_addr[0], data->ipv6_addr[1], data->ipv6_addr[2], data->ipv6_addr[3]);
 			if( (data->ipv6_addr[0] & ipv6_link_local_prefix_mask) != (ipv6_link_local_prefix & ipv6_link_local_prefix_mask) &&
+#ifdef FEATURE_VLAN_MPDN
+				/* returns true if a VLAN PDN or default PDN should be offloaded */
+				IPACM_Iface::ipacmcfg->is_offload_ipv6_prefix(data->ipv6_addr) != true)
+#else
 				memcmp(ipv6_prefix, data->ipv6_addr, sizeof(ipv6_prefix)) != 0)
+#endif
 			{
 				IPACMDBG_H("This global IPv6 address is not with correct prefix, ignore.\n");
 				return IPACM_FAILURE;
@@ -4223,6 +4231,10 @@ int IPACM_Lan::handle_eth_client_down_evt(uint8_t *mac_addr, uint8_t vlan_id)
 
 		get_client_memptr(eth_client, clt_indx)->route_rule_set_v4 = get_client_memptr(eth_client, (clt_indx + 1))->route_rule_set_v4;
 		get_client_memptr(eth_client, clt_indx)->route_rule_set_v6 = get_client_memptr(eth_client, (clt_indx + 1))->route_rule_set_v6;
+
+#ifdef FEATURE_VLAN_MPDN
+		get_client_memptr(eth_client, clt_indx)->vlan_id = get_client_memptr(eth_client, (clt_indx + 1))->vlan_id;
+#endif
 
         for (num_v6=0;num_v6< get_client_memptr(eth_client, clt_indx)->ipv6_set;num_v6++)
 	    {

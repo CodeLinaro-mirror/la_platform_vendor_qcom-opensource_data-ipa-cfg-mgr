@@ -1065,7 +1065,7 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 			{
 				if(data->wan_ipv4_addr == wan_v4_addr)
 				{
-					IPACMDBG_H("received v4 IPA_ROUTE_ADD_VLAN_PDN_EVENT for VID %d, wan %s, %d ", data->VlanID, dev_name, ipa_if_num);
+					IPACMDBG_H("received v4 IPA_ROUTE_ADD_VLAN_PDN_EVENT for VID %d, wan %s, %d\n", data->VlanID, dev_name, ipa_if_num);
 					if(ipv4_to_iface[modem_ipv4_pdn_index].wan_up_vlan)
 					{
 						IPACMERR("v4 vlan wan is already up for %s, ignoring\n", dev_name);
@@ -1084,7 +1084,7 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 				if((data->wan_ipv6_prefix[0] == ipv6_prefix[0]) &&
 					(data->wan_ipv6_prefix[1] == ipv6_prefix[1]))
 				{
-					IPACMDBG_H("received v6 IPA_ROUTE_ADD_VLAN_PDN_EVENT for VID %d, wan %s, %d ", data->VlanID, dev_name, ipa_if_num);
+					IPACMDBG_H("received v6 IPA_ROUTE_ADD_VLAN_PDN_EVENT for VID %d, wan %s, %d\n", data->VlanID, dev_name, ipa_if_num);
 					if(ipv6_to_iface[modem_ipv6_pdn_index].wan_up_vlan_v6)
 					{
 						IPACMERR("v6 vlan wan is already up for %s, ignoring\n", dev_name);
@@ -1604,11 +1604,18 @@ IPACM_firewall_conf_t* IPACM_Wan::get_curr_pdn_firewall_config(IPACM_firewall_t 
 	}
 
 	size_t len = strlen(curr_dev_name);
+
+	IPACMDBG_H("looking for dev %s\n", curr_dev_name);
 	for (uint8_t i = 0; i < firewall_configs.pdn_count; ++i)
 	{
 		if (strncmp(firewall_configs.pdns[i].net_dev, curr_dev_name, len) == 0)
 		{
+			IPACMDBG_H("found dev %s, entry %d\n", curr_dev_name, i);
 			return &firewall_configs.pdns[i];
+		}
+		else
+		{
+			IPACMDBG("dev %s doesn't match\n", firewall_configs.pdns[i].net_dev);
 		}
 	}
 
@@ -3260,12 +3267,12 @@ int IPACM_Wan::config_dft_firewall_rules_ex(struct ipa_flt_rule_add *rules, int 
 		++i)
 	{
 		if (ipv4_to_iface[i].pIface &&
-			(ipv4_to_iface[i].wan_up_vlan || ipv4_to_iface[i].pIface->wan_up))
+			(ipv4_to_iface[i].wan_up_vlan || isDefaultGatewayIfaceUp(ipv4_to_iface[i].pIface)))
 		{
 			IPACMDBG_H("identified pdn (%s): wan_up: %d, wan_up_vlan: %d, getting FW config\n",
 				ipv4_to_iface[i].pIface->dev_name,
-				ipv4_to_iface[i].pIface->wan_up,
-				ipv4_to_iface[i].wan_up_vlan)
+				isDefaultGatewayIfaceUp(ipv4_to_iface[i].pIface),
+				ipv4_to_iface[i].wan_up_vlan);
 
 			IPACM_firewall_conf_t* curr_pdn_firewall_config =
 				get_curr_pdn_firewall_config(firewall_config, ipv4_to_iface[i].pIface->dev_name);
@@ -3282,16 +3289,22 @@ int IPACM_Wan::config_dft_firewall_rules_ex(struct ipa_flt_rule_add *rules, int 
 			}
 		}
 	}
+	IPACMDBG_H("found %d v4 pdns in firewall file\n", offloaded_pdns_count_v4);
 
-	uint32_t offloaded_pdns_count_v6;
+	uint32_t offloaded_pdns_count_v6 = 0;
 	std::pair<IPACM_firewall_conf_t*, ipacm_ipv6_wan_iface*> offloaded_pdns_v6[IPA_MAX_NUM_HW_PDNS];
-	for (uint32_t i = 0, offloaded_pdns_count_v6 = 0;
+	for (uint32_t i = 0;
 		i < IPA_MAX_NUM_SW_PDNS && offloaded_pdns_count_v6 < IPA_MAX_NUM_HW_PDNS;
 		++i)
 	{
 		if (ipv6_to_iface[i].pIface &&
-			(ipv6_to_iface[i].wan_up_vlan_v6 || ipv6_to_iface[i].pIface->wan_up_v6))
+			(ipv6_to_iface[i].wan_up_vlan_v6 || isDefaultGatewayIfaceUp_v6(ipv6_to_iface[i].pIface)))
 		{
+			IPACMDBG_H("identified v6 pdn (%s): wan_up_v6: %d, wan_up_vlan_v6: %d, getting FW config\n",
+				ipv6_to_iface[i].pIface->dev_name,
+				isDefaultGatewayIfaceUp_v6(ipv6_to_iface[i].pIface),
+				ipv6_to_iface[i].wan_up_vlan_v6);
+
 			IPACM_firewall_conf_t* curr_pdn_firewall_config =
 				get_curr_pdn_firewall_config(firewall_config, ipv6_to_iface[i].pIface->dev_name);
 			if (curr_pdn_firewall_config != NULL)
@@ -3303,6 +3316,7 @@ int IPACM_Wan::config_dft_firewall_rules_ex(struct ipa_flt_rule_add *rules, int 
 			}
 		}
 	}
+	IPACMDBG_H("found %d v6 pdns in firewall file\n", offloaded_pdns_count_v6);
 #endif
 
 	/* add IPv6 frag rule when firewall is enabled*/
@@ -3604,7 +3618,8 @@ int IPACM_Wan::add_icmp_alg_rules(struct ipa_flt_rule_add *rules, int rule_offse
 		num_icmp_rules = 0;
 		for(i = 0; i < IPA_MAX_NUM_SW_PDNS; i++)
 		{
-			if(ipv4_to_iface[i].pIface && (ipv4_to_iface[i].wan_up_vlan || ipv4_to_iface[i].pIface->wan_up))
+			if(ipv4_to_iface[i].pIface &&
+				(ipv4_to_iface[i].wan_up_vlan || isDefaultGatewayIfaceUp(ipv4_to_iface[i].pIface)))
 			{
 				IPACMDBG_H("adding ICMP rule for IF %s \n", ipv4_to_iface[i].pIface->dev_name);
 				rules[rule_offset + i].mux_id = ipv4_to_iface[i].pIface->ext_prop->ext[0].mux_id;
@@ -3684,7 +3699,7 @@ int IPACM_Wan::add_icmp_alg_rules(struct ipa_flt_rule_add *rules, int rule_offse
 		num_icmp_rules = 0;
 		for(i = 0; i < IPA_MAX_NUM_SW_PDNS; i++)
 		{
-			if(ipv6_to_iface[i].pIface && (ipv6_to_iface[i].wan_up_vlan_v6 || ipv6_to_iface[i].pIface->wan_up_v6))
+			if(ipv6_to_iface[i].pIface && (ipv6_to_iface[i].wan_up_vlan_v6 || isDefaultGatewayIfaceUp_v6(ipv6_to_iface[i].pIface)))
 			{
 				IPACMDBG_H("adding ICMPv6 rule for IF %s \n", ipv6_to_iface[i].pIface->dev_name);
 				rules[rule_offset + i].mux_id = ipv6_to_iface[i].pIface->ext_prop->ext[0].mux_id;

@@ -181,6 +181,8 @@ public:
 
 	void del_vlan_iface(ipa_ioc_vlan_iface_info *data);
 
+	void restore_vlan_nat_ifaces(const char *phys_iface_name);
+
 	void handle_vlan_iface_info(ipacm_event_data_addr *data);
 
 	void handle_vlan_client_info(ipacm_event_data_all *data);
@@ -198,7 +200,7 @@ public:
 #endif //defined(FEATURE_L2TP_E2E) || defined(FEATURE_L2TP) || defined(FEATURE_VLAN_MPDN)
 
 #ifdef FEATURE_VLAN_MPDN
-	void add_vlan_bridge(ipacm_event_data_all * data_all);
+	void add_vlan_bridge(ipacm_event_data_all * data_all, bool is_linkup);
 	ipacm_bridge *get_vlan_bridge(char *name);
 	bool is_added_vlan_iface(char *iface_name);
 	bool iface_in_vlan_mode(const char * phys_iface_name);
@@ -295,7 +297,7 @@ public:
 	int GetNatIfaces(int nPorts, NatIfaces *ifaces);
 
 	/* for IPACM resource manager dependency usage */
-	void AddRmDepend(ipa_rm_resource_name rm1,bool rx_bypass_ipa);
+	void AddRmDepend(ipa_rm_resource_name rm1, bool rx_bypass_ipa);
 
 	void DelRmDepend(ipa_rm_resource_name rm1);
 
@@ -325,10 +327,10 @@ public:
 
 	inline bool isPrivateSubnet(uint32_t ip_addr)
 	{
-		for(int cnt=0; cnt<ipa_num_private_subnet; cnt++)
+		for(int cnt = 0; cnt < ipa_num_private_subnet; cnt++)
 		{
 			if(private_subnet_table[cnt].subnet_addr ==
-				 (private_subnet_table[cnt].subnet_mask & ip_addr))
+				(private_subnet_table[cnt].subnet_mask & ip_addr))
 			{
 				return true;
 			}
@@ -342,7 +344,7 @@ public:
 		ipacm_cmd_q_data evt_data;
 		ipacm_event_data_fid *data_fid;
 		uint32_t subnet_mask = ~0;
-		for(int cnt=0; cnt<ipa_num_private_subnet; cnt++)
+		for(int cnt = 0; cnt < ipa_num_private_subnet; cnt++)
 		{
 			if(private_subnet_table[cnt].subnet_addr == ip_addr)
 			{
@@ -381,14 +383,14 @@ public:
 	{
 		ipacm_cmd_q_data evt_data;
 		ipacm_event_data_fid *data_fid;
-		for(int cnt=0; cnt<ipa_num_private_subnet; cnt++)
+		for(int cnt = 0; cnt < ipa_num_private_subnet; cnt++)
 		{
 			if(private_subnet_table[cnt].subnet_addr == ip_addr)
 			{
 				IPACMDBG("Found private subnet_addr as: 0x%x in entry(%d) \n", ip_addr, cnt);
-				for (; cnt < ipa_num_private_subnet - 1; cnt++)
+				for(; cnt < ipa_num_private_subnet - 1; cnt++)
 				{
-					private_subnet_table[cnt].subnet_addr = private_subnet_table[cnt+1].subnet_addr;
+					private_subnet_table[cnt].subnet_addr = private_subnet_table[cnt + 1].subnet_addr;
 				}
 				ipa_num_private_subnet = ipa_num_private_subnet - 1;
 
@@ -417,7 +419,7 @@ public:
 	/* add to prefixes list if needed and notify LAN objects to modify rules*/
 	inline bool add_vlan_ipv6_prefix(uint32_t *prefix, int ipa_if_num)
 	{
-		for(int i = 0; i < (num_ipv6_prefixes); i++)
+		for(int i = 0; i < num_ipv6_prefixes; i++)
 		{
 			if((prefix[0] == ipa_ipv6_prefixes[i][0]) && (prefix[1] == ipa_ipv6_prefixes[i][1]))
 			{
@@ -461,7 +463,7 @@ public:
 	/* remove from prefixes list if needed and notify LAN objects to modify rules*/
 	inline int del_vlan_ipv6_prefix(uint32_t* prefix, int ipa_if_num)
 	{
-		for(int i = 0; i < (num_ipv6_prefixes); i++)
+		for(int i = 0; i < num_ipv6_prefixes; i++)
 		{
 			if((prefix[0] == ipa_ipv6_prefixes[i][0]) && (prefix[1] == ipa_ipv6_prefixes[i][1]))
 			{
@@ -493,6 +495,25 @@ public:
 		}
 		IPACMERR("couldn't find prefix 0x[%X][%X]\n", prefix[0], prefix[1]);
 		return IPACM_FAILURE;
+	}
+
+	/* returns true if a VLAN PDN or default PDN should be offloaded */
+	inline bool is_offload_ipv6_prefix(uint32_t *prefix)
+	{
+		IPACMDBG_H("checking prefix 0x[%X][%X]\n", prefix[0], prefix[1]);
+		for(int i = 0; i < num_ipv6_prefixes; i++)
+		{
+			if((prefix[0] == ipa_ipv6_prefixes[i][0]) && (prefix[1] == ipa_ipv6_prefixes[i][1]))
+			{
+				IPACMDBG_H("prefix 0x[%X][%X] is a known ipv6 prefix\n", prefix[0], prefix[1]);
+				return true;
+			}
+			else
+			{
+				IPACMDBG("no match with [%X][%X]\n", ipa_ipv6_prefixes[i][0], ipa_ipv6_prefixes[i][1]);
+			}
+		}
+		return false;
 	}
 #endif
 

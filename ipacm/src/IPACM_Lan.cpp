@@ -2709,7 +2709,13 @@ int IPACM_Lan::handle_eth_hdr_init(uint8_t *mac_addr, ipacm_bridge *bridge, uint
 					IPA_MAC_ADDR_SIZE],
 					bridge->bridge_mac,
 					IPA_MAC_ADDR_SIZE);
-					IPACMDBG_H("device is in bridge mode (VLAN)\n");
+					IPACMDBG_H("device is in bridge mode (VLAN), MAC 0x[%X][%X][%X][%X][%X][%X]\n",
+						bridge->bridge_mac[0],
+						bridge->bridge_mac[1],
+						bridge->bridge_mac[2],
+						bridge->bridge_mac[3],
+						bridge->bridge_mac[4],
+						bridge->bridge_mac[5]);
 				}
 				/* non VLAN case */
 				else
@@ -2719,7 +2725,13 @@ int IPACM_Lan::handle_eth_hdr_init(uint8_t *mac_addr, ipacm_bridge *bridge, uint
 					memcpy(&pHeaderDescriptor->hdr[0].hdr[sCopyHeader.eth2_ofst + IPA_MAC_ADDR_SIZE],
 						IPACM_Iface::ipacmcfg->bridge_mac,
 						IPA_MAC_ADDR_SIZE);
-					IPACMDBG_H("device is in bridge mode (XML)\n");
+					IPACMDBG_H("device is in bridge mode (XML), MAC 0x[%X][%X][%X][%X][%X][%X]\n",
+						IPACM_Iface::ipacmcfg->bridge_mac[0],
+						IPACM_Iface::ipacmcfg->bridge_mac[1],
+						IPACM_Iface::ipacmcfg->bridge_mac[2],
+						IPACM_Iface::ipacmcfg->bridge_mac[3],
+						IPACM_Iface::ipacmcfg->bridge_mac[4],
+						IPACM_Iface::ipacmcfg->bridge_mac[5]);
 				}
 
 				pHeaderDescriptor->commit = true;
@@ -2853,20 +2865,31 @@ int IPACM_Lan::handle_eth_hdr_init(uint8_t *mac_addr, ipacm_bridge *bridge, uint
 						IPA_MAC_ADDR_SIZE],
 						bridge->bridge_mac,
 						IPA_MAC_ADDR_SIZE);
-					IPACMDBG_H("device is in bridge mode (VLAN)\n");
+					IPACMDBG_H("device is in bridge mode (VLAN), MAC 0x[%X][%X][%X][%X][%X][%X]\n",
+						bridge->bridge_mac[0],
+						bridge->bridge_mac[1],
+						bridge->bridge_mac[2],
+						bridge->bridge_mac[3],
+						bridge->bridge_mac[4],
+						bridge->bridge_mac[5]);
 				}
 				/* non VLAN case */
 				else
-#else
+#endif
 				/* replace src mac to bridge mac_addr if any  */
 				if (IPACM_Iface::ipacmcfg->ipa_bridge_enable)
 				{
 					memcpy(&pHeaderDescriptor->hdr[0].hdr[sCopyHeader.eth2_ofst+IPA_MAC_ADDR_SIZE],
 							IPACM_Iface::ipacmcfg->bridge_mac,
 							IPA_MAC_ADDR_SIZE);
-					IPACMDBG_H("device is in bridge mode (XML)\n");
+					IPACMDBG_H("device is in bridge mode (XML), MAC 0x[%X][%X][%X][%X][%X][%X]\n",
+						IPACM_Iface::ipacmcfg->bridge_mac[0],
+						IPACM_Iface::ipacmcfg->bridge_mac[1],
+						IPACM_Iface::ipacmcfg->bridge_mac[2],
+						IPACM_Iface::ipacmcfg->bridge_mac[3],
+						IPACM_Iface::ipacmcfg->bridge_mac[4],
+						IPACM_Iface::ipacmcfg->bridge_mac[5]);
 				}
-#endif
 
 				pHeaderDescriptor->commit = true;
 				pHeaderDescriptor->num_hdrs = 1;

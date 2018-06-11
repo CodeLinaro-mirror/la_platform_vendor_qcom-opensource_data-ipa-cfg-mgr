@@ -1317,9 +1317,16 @@ void IPACM_Config::add_vlan_bridge(ipacm_event_data_all *data_all)
 		/* no MAC was assigned before i.e. this is the first unused entry*/
 		else if(!memcmp(IPACM_Iface::ipacmcfg->vlan_bridges[i].bridge_mac, testmac, sizeof(uint8_t) * IPA_MAC_ADDR_SIZE))
 		{
+			bool default_bridge = false;
+
+			if(strcmp(ipa_virtual_iface_name, data_all->iface_name) == 0)
+			{
+				default_bridge = true;
+			}
+
 			if(get_bridge_vlan_mapping(&mapping_info))
 			{
-				if(strcmp(ipa_virtual_iface_name, data_all->iface_name) == 0)
+				if(default_bridge)
 				{
 					IPACMDBG_H("default bridge doesn't have vlan mapping\n");
 				}
@@ -1360,6 +1367,17 @@ void IPACM_Config::add_vlan_bridge(ipacm_event_data_all *data_all)
 				ifr.ifr_hwaddr.sa_data,
 				sizeof(vlan_bridges[i].bridge_mac));
 			IPACMDBG("got bridge MAC using IOCTL\n");
+			if(default_bridge)
+			{
+				memcpy(IPACM_Iface::ipacmcfg->bridge_mac,
+					ifr.ifr_hwaddr.sa_data,
+					sizeof(IPACM_Iface::ipacmcfg->bridge_mac));
+
+				IPACM_Iface::ipacmcfg->ipa_bridge_enable = true;
+
+				IPACMDBG("set default bridge flag dev %s\n",
+					data_all->iface_name);
+			}
 			close(fd);
 			IPACMDBG_H("added bridge named %s, MAC %02x:%02x:%02x:%02x:%02x:%02x\n",
 				IPACM_Iface::ipacmcfg->vlan_bridges[i].bridge_name,

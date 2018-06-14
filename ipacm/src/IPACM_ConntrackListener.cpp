@@ -868,7 +868,8 @@ void IPACM_ConntrackListener::AddORDeleteNatEntry(const nat_entry_bundle *input)
 	}
 	else if (IPPROTO_UDP == input->rule->protocol)
 	{
-		if (((NFCT_T_NEW == input->type) && (pkt_threshld == 0)) ||
+		if ((((NFCT_T_NEW == input->type) || (NFCT_T_UPDATE == input->type))
+			&& (pkt_threshld == 0)) ||
 		    ((pkt_threshld != 0) && (pkt_count >= pkt_threshld)
                      && (NFCT_T_UPDATE == input->type)))
 		{

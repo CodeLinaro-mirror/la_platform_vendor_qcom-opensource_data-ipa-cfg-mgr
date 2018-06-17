@@ -406,6 +406,18 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 								/* find the client */
 								if (memcmp(neighbor_client[i].mac_addr, data->mac_addr, sizeof(neighbor_client[i].mac_addr)) == 0)
 								{
+#ifdef FEATURE_VLAN_MPDN
+									/* for VLAN interfaces make sure this is the correct interface */
+									if(IPACM_Iface::ipacmcfg->iface_in_vlan_mode(neighbor_client[i].iface_name))
+									{
+										if(strcmp(neighbor_client[i].iface_name, data->iface_name) != 0)
+										{
+											IPACMDBG_H("IP_ADDR_DEL_EVENT: MAC match but iface name is different %s <-> %s, skip\n",
+												data->iface_name, neighbor_client[i].iface_name);
+											continue;
+										}
+									}
+#endif
 									IPACMDBG_H("Clean %d-st Cached client-MAC %02x:%02x:%02x:%02x:%02x:%02x\n, total client: %d\n",
 												i,
 												neighbor_client[i].mac_addr[0],

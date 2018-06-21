@@ -1270,9 +1270,14 @@ int IPACM_Lan::del_ul_flt_rules(enum ipa_ip_type iptype)
 		IPACMERR("Rx prop is NULL, return\n");
 		return IPACM_SUCCESS;
 	}
-	
+
 	if(iptype == IPA_IP_v4)
 	{
+		if (num_wan_ul_fl_rule_v4 == 0)
+		{
+			IPACMERR("No modem UL rules were installed, return...\n");
+			return IPACM_FAILURE;
+		}
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
 		if(IPACM_Iface::ipacmcfg->ipacm_lan_stats_enable == false)
 #endif
@@ -1282,11 +1287,7 @@ int IPACM_Lan::del_ul_flt_rules(enum ipa_ip_type iptype)
 				IPACMERR("number of wan_ul_fl_rule_v4 (%d) > MAX_WAN_UL_FILTER_RULES (%d), aborting...\n", num_wan_ul_fl_rule_v4, MAX_WAN_UL_FILTER_RULES);
 				return IPACM_FAILURE;
 			}
-			if (num_wan_ul_fl_rule_v4 == 0)
-			{
-				IPACMERR("No modem UL rules were installed, return...\n");
-				return IPACM_FAILURE;
-			}
+
 			if(m_filtering.DeleteFilteringHdls(wan_ul_fl_rule_hdl_v4,
 				IPA_IP_v4, num_wan_ul_fl_rule_v4) == false)
 			{
@@ -1312,6 +1313,11 @@ int IPACM_Lan::del_ul_flt_rules(enum ipa_ip_type iptype)
 	}
 	else
 	{
+		if(num_wan_ul_fl_rule_v6 == 0)
+		{
+			IPACMERR("No modem UL rules were installed, return...\n");
+			return IPACM_FAILURE;
+		}
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
 		if(IPACM_Iface::ipacmcfg->ipacm_lan_stats_enable == false)
 #endif
@@ -1321,11 +1327,7 @@ int IPACM_Lan::del_ul_flt_rules(enum ipa_ip_type iptype)
 				IPACMERR(" the number of rules (%d) are bigger than array (%d), aborting...\n", num_wan_ul_fl_rule_v6, MAX_WAN_UL_FILTER_RULES);
 				return IPACM_FAILURE;
 			}
-			if(num_wan_ul_fl_rule_v6 == 0)
-			{
-				IPACMERR("No modem UL rules were installed, return...\n");
-				return IPACM_FAILURE;
-			}
+
 #ifndef FEATURE_L2TP_E2E
 			/* When OCU is enabled, no need to delete modem UL IPv6 rules. */
 			if(m_filtering.DeleteFilteringHdls(wan_ul_fl_rule_hdl_v6,

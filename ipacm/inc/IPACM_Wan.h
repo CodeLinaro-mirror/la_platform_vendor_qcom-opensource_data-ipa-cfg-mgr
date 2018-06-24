@@ -247,6 +247,9 @@ public:
 
 	static int num_v4_flt_rule;
 	static int num_v6_flt_rule;
+#ifdef FEATURE_VLAN_MPDN
+	static int ipv6_mpdn_default_filterting_rules_count;
+#endif
 #ifdef FEATURE_IPACM_UL_FIREWALL
 	static int num_firewall_v6_ul;
 #endif

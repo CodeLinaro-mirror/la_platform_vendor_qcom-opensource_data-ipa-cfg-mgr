@@ -58,6 +58,9 @@ uint8_t IPACM_Wan::xlat_mux_id = 0;
 uint32_t IPACM_Wan::curr_wan_ip = 0;
 int IPACM_Wan::num_v4_flt_rule = 0;
 int IPACM_Wan::num_v6_flt_rule = 0;
+#ifdef FEATURE_VLAN_MPDN
+int IPACM_Wan::ipv6_mpdn_default_filterting_rules_count = 0;
+#endif
 
 int IPACM_Wan::ipa_pm_q6_check = 0;
 
@@ -3355,7 +3358,7 @@ int IPACM_Wan::config_dft_firewall_rules_ex(struct ipa_flt_rule_add *rules, int 
 	if (iptype == IPA_IP_v4)
 	{
 		original_num_rules = IPACM_Wan::num_v4_flt_rule;
-
+		IPACM_Wan::num_firewall_v4 = 0;
 /* only install ipv4 DL firewall on modem endpoint when UL_FIREWALL FR not there */
 #ifndef FEATURE_IPACM_UL_FIREWALL
 #ifdef FEATURE_VLAN_MPDN
@@ -3395,6 +3398,10 @@ int IPACM_Wan::config_dft_firewall_rules_ex(struct ipa_flt_rule_add *rules, int 
 			rules[pos].mux_id = curr_interface->ext_prop->ext[0].mux_id;
 			++pos;
 		}
+		if(offloaded_pdns_count_v4)
+			num_rules = IPACM_Wan::num_v4_flt_rule - original_num_rules - 1;
+		else
+			num_rules = 0;
 #else
 		res = add_catchup_all_filtering_rule_each_pdn(firewall_config, iptype, rx_prop->rx[0].attrib, rules[pos], pos);
 		if (res != IPACM_SUCCESS)
@@ -3402,12 +3409,16 @@ int IPACM_Wan::config_dft_firewall_rules_ex(struct ipa_flt_rule_add *rules, int 
 			return res;
 		}
 		++pos;
+		if(isWanUP())
+			num_rules = IPACM_Wan::num_v4_flt_rule - original_num_rules - 1;
+		else
+			num_rules = 0;
 #endif
-		num_rules = IPACM_Wan::num_v4_flt_rule - original_num_rules - 1;
 	}
 	else
 	{
 		original_num_rules = IPACM_Wan::num_v6_flt_rule;
+		IPACM_Wan::num_firewall_v6 = 0;
 
 #ifdef FEATURE_VLAN_MPDN
 		/* firewall rules for all PDNs which are up */
@@ -3445,6 +3456,11 @@ int IPACM_Wan::config_dft_firewall_rules_ex(struct ipa_flt_rule_add *rules, int 
 			rules[pos].mux_id = curr_interface->ext_prop->ext[0].mux_id;
 			++pos;
 		}
+
+		if(offloaded_pdns_count_v6)
+			num_rules = IPACM_Wan::num_v6_flt_rule - original_num_rules - 1;
+		else
+			num_rules = 0;
 #else
 		res = add_catchup_all_filtering_rule_each_pdn(firewall_config, iptype, rx_prop->rx[1].attrib, rules[pos], pos);
 		if (res != IPACM_SUCCESS)
@@ -3452,9 +3468,11 @@ int IPACM_Wan::config_dft_firewall_rules_ex(struct ipa_flt_rule_add *rules, int 
 			return res;
 		}
 		++pos;
+		if(isWanUP_V6())
+			num_rules = IPACM_Wan::num_v6_flt_rule - original_num_rules - 1;
+		else
+			num_rules = 0;
 #endif
-
-		num_rules = IPACM_Wan::num_v6_flt_rule - original_num_rules - 1;
 	}
 	IPACMDBG_H("Constructed %d firewall rules for ip type %d\n", num_rules, iptype);
 	return IPACM_SUCCESS;
@@ -3827,7 +3845,11 @@ int IPACM_Wan::config_wan_firewall_rule(ipa_ip_type iptype)
 	}
 	else if(iptype == IPA_IP_v6)
 	{
+#ifdef FEATURE_VLAN_MPDN
+		IPACM_Wan::num_v6_flt_rule = IPACM_Wan::ipv6_mpdn_default_filterting_rules_count;
+#else
 		IPACM_Wan::num_v6_flt_rule = m_ipv6_default_filterting_rules_count;
+#endif
 #ifdef FEATURE_L2TP_E2E
 		if(active_v4)
 		{
@@ -4021,6 +4043,8 @@ int IPACM_Wan::add_dft_filtering_rule(struct ipa_flt_rule_add *rules, int rule_o
 			flt_rule_entry.rule.hashable = false;
 #endif
 			memcpy(&flt_rule_entry.rule.attrib, &rx_prop->rx[0].attrib, sizeof(flt_rule_entry.rule.attrib));
+			/* remove meta data mask since we only install default flt rules once for all modem PDN*/
+			flt_rule_entry.rule.attrib.attrib_mask &= ~((uint32_t)IPA_FLT_META_DATA);
 			flt_rule_entry.rule.attrib.attrib_mask |= IPA_FLT_FRAGMENT;
 
 			change_to_network_order(IPA_IP_v6, &flt_rule_entry.rule.attrib);
@@ -4209,6 +4233,13 @@ int IPACM_Wan::add_dft_filtering_rule(struct ipa_flt_rule_add *rules, int rule_o
 #endif
 
 		IPACM_Wan::num_v6_flt_rule += m_ipv6_default_filterting_rules_count;
+#ifdef FEATURE_VLAN_MPDN
+		/**
+		 * store the default filtering rules count since on each WAN IFACE construction
+		 * this variable is zeroed, but it is incremented only at this init function which is called with the first pdn
+		 */
+		IPACM_Wan::ipv6_mpdn_default_filterting_rules_count = m_ipv6_default_filterting_rules_count;
+#endif
 		IPACMDBG_H("Constructed %d default filtering rules for ip type %d\n",
 			m_ipv6_default_filterting_rules_count, iptype);
 	}
@@ -4239,7 +4270,11 @@ int IPACM_Wan::del_wan_firewall_rule(ipa_ip_type iptype)
 	}
 	else if(iptype == IPA_IP_v6)
 	{
+#ifdef FEATURE_VLAN_MPDN
+		IPACM_Wan::num_v6_flt_rule = IPACM_Wan::ipv6_mpdn_default_filterting_rules_count;
+#else
 		IPACM_Wan::num_v6_flt_rule = m_ipv6_default_filterting_rules_count;
+#endif
 #ifdef FEATURE_L2TP_E2E
 		if(active_v4)
 		{
@@ -5358,6 +5393,7 @@ int IPACM_Wan::handle_down_evt_ex()
 			IPACMDBG_H("Now the number of modem ipv6 interface is 0, delete default flt rules.\n");
 			IPACM_Wan::num_v6_flt_rule = 0;
 #ifdef FEATURE_VLAN_MPDN
+			IPACM_Wan::ipv6_mpdn_default_filterting_rules_count = 0;
 			memset(IPACM_Wan::pdn_flt_rule_v6, 0, IPA_MAX_FLT_RULE * sizeof(struct ipacm_pdn_flt_rule));
 #else
 			memset(IPACM_Wan::flt_rule_v6, 0, IPA_MAX_FLT_RULE * sizeof(struct ipa_flt_rule_add));

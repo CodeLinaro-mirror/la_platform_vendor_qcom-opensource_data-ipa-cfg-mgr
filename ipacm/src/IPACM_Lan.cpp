@@ -730,20 +730,20 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 				if ((IPACM_Wan::backhaul_is_sta_mode == false) &&
 					IPACM_Wan::firewall_config_ul.rule_action_accept == true) /* LTE && whitelist ?? */
 				{	/* Configure and send the firewall filter table to Q6*/
-					delete_uplink_filter_rule_ul(ip_type, &iface_ul_firewall);
+					delete_uplink_filter_rule_ul(IPA_IP_v6, &iface_ul_firewall);
 
 					/* Configure and send the firewall filter table to Q6*/
-					IPACM_Lan::config_dft_firewall_rules_ul_ex(IPACM_Wan::firewall_flt_rule_v6_ul, ip_type);
-					IPACM_Lan::config_wan_frag_firewall_rule_ul_ex(true, ip_type, &iface_ul_firewall);
+					IPACM_Lan::config_dft_firewall_rules_ul_ex(IPACM_Wan::firewall_flt_rule_v6_ul, IPA_IP_v6);
+					IPACM_Lan::config_wan_frag_firewall_rule_ul_ex(true, IPA_IP_v6, &iface_ul_firewall);
 					IPACMDBG_H ("New config rules sent to Q6\n");
 				}
 				else
 				{	/* Config and install it on pipes directly, since it is Blacklisted */
 					IPACMDBG_H ("Send indication to Q6 to disable UL firewall\n");
-					IPACM_Lan::config_wan_frag_firewall_rule_ul_ex(false, ip_type, &iface_ul_firewall);
-					install_wan_firewall_rule_ul(false, ip_type);
+					IPACM_Lan::config_wan_frag_firewall_rule_ul_ex(false, IPA_IP_v6, &iface_ul_firewall);
+					install_wan_firewall_rule_ul(false, IPA_IP_v6);
 
-					IPACM_Lan::config_dft_firewall_rules_ul(IPACM_Wan::firewall_flt_rule_v6_ul, ip_type, &iface_ul_firewall);
+					IPACM_Lan::config_dft_firewall_rules_ul(IPACM_Wan::firewall_flt_rule_v6_ul, IPA_IP_v6, &iface_ul_firewall);
 					if(rx_prop) {
 						IPACMDBG_H ("Pipe (%d) configured with the new UL rules\n", rx_prop->rx[0].src_pipe);
 					}

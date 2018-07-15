@@ -1483,7 +1483,7 @@ int IPACM_Config::get_iface_vlan_ids(char *phys_iface_name, uint8_t *Ids)
 		return false;
 	}
 
-	for(it_vlan = m_vlan_iface.begin(); it_vlan != m_vlan_iface.end(); it_vlan++)
+	for(it_vlan = m_vlan_iface.begin(); it_vlan != m_vlan_iface.end() && cnt < IPA_MAX_NUM_HW_PDNS; it_vlan++)
 	{
 		if(strstr(it_vlan->vlan_iface_name, phys_iface_name))
 		{

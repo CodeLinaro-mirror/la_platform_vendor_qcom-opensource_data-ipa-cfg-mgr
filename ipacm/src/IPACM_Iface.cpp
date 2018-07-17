@@ -987,3 +987,10 @@ size_t IPACM_Iface::strlcat(char *dest, const char *src, size_t n)
 	}
 	return ret;
 }
+
+void IPACM_Iface::delete_iface(void)
+{
+	IPACMDBG_H("netdev (%s):ipa_index (%d) instance close \n",
+			IPACM_Iface::ipacmcfg->iface_table[ipa_if_num].iface_name, ipa_if_num);
+	delete this;
+}

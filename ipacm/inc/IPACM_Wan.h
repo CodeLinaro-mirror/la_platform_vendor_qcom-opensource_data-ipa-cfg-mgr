@@ -117,6 +117,9 @@ public:
 	static bool wan_up_v6;
 	static uint8_t xlat_mux_id;
 #ifdef FEATURE_VLAN_MPDN
+#ifdef FEATURE_IPACM_UL_FIREWALL
+	int num_firewall_v6_ul_pdn;
+#endif
 	uint8_t associated_VID;
 #endif
 	/* IPACM interface name */
@@ -127,10 +130,29 @@ public:
 #ifdef FEATURE_IPACM_UL_FIREWALL
 	/* IPACM firewall Configuration file*/
 	static IPACM_firewall_conf_t firewall_config_ul;
-
+#ifdef FEATURE_VLAN_MPDN
+	static IPACM_firewall_t firewall_mpdn_config_ul;
+#endif //FEATURE_VLAN_MPDN
 	static int read_firewall_filter_rules_ul(void);
 
 	static bool check_dft_firewall_rules_attr_mask_ul(IPACM_firewall_conf_t *firewall_config);
+
+#ifdef FEATURE_VLAN_MPDN
+	static int get_v6_pdn_firewall_configs(
+		std::pair<IPACM_firewall_conf_t*, ipacm_ipv6_wan_iface*> wan_firewall_pair[],
+		IPACM_firewall_t &firewall_configs);
+
+	static IPACM_firewall_conf_t* get_firewall_conf_by_vid_ul(int vid);
+#endif //FEATURE_VLAN_MPDN
+	static IPACM_firewall_conf_t* get_default_profile_firewall_conf_ul(int *default_vid);
+
+	static int set_pdn_num_fw_rules_by_vid(int vid, int num_fw_rules);
+
+	static int get_pdn_num_fw_rules_by_vid(int vid, int *num_fw_rules);
+#endif //FEATURE_IPACM_UL_FIREWALL
+#ifdef FEATURE_VLAN_MPDN
+	static int GetV6PrefixByVid(int vid, uint32_t *v6_prefix);
+	static IPACM_firewall_conf_t* get_curr_pdn_firewall_config(IPACM_firewall_t &firewall_configs, const char* dev_name);
 #endif
 	static bool isWanUP(int ipa_if_num_tether)
 	{
@@ -277,9 +299,6 @@ public:
 	static int ipa_if_num_tether_v6[IPA_MAX_IFACE_ENTRIES];
 #endif
 
-#ifdef FEATURE_IPACM_UL_FIREWALL
-	static bool is_v6_ul_firewall_sent_to_q6;
-#endif
 	static bool is_global_ipv6_addr(uint32_t* ipv6_addr);
 #ifdef FEATURE_VLAN_MPDN
 	static ipacm_ipv4_wan_iface ipv4_to_iface[IPA_MAX_NUM_SW_PDNS];
@@ -574,7 +593,6 @@ private:
 	int config_dft_firewall_rules_ex(struct ipa_flt_rule_add* rules, int rule_offset,
 		ipa_ip_type iptype);
 #endif
-
 	/* init filtering rule in wan dl filtering table */
 	int init_fl_rule_ex(ipa_ip_type iptype);
 
@@ -635,7 +653,6 @@ private:
 #else
 	int add_firewall_rules_ex(const IPACM_firewall_conf_t& firewall_config, ipa_ip_type iptype, uint8_t curr_mux_id,
 		const struct ipa_rule_attrib& rx_prop_attrib, ipacm_pdn_flt_rule* rules, int rules_size, int& pos);
-	IPACM_firewall_conf_t* get_curr_pdn_firewall_config(IPACM_firewall_t &firewall_configs, const char* dev_name);
 #endif
 };
 

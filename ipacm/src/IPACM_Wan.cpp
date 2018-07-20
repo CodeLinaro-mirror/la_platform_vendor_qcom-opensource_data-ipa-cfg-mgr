@@ -96,9 +96,10 @@ bool IPACM_Wan::backhaul_is_wan_bridge = false;
 uint32_t IPACM_Wan::backhaul_ipv6_prefix[2];
 
 #ifdef FEATURE_IPACM_UL_FIREWALL
+#ifdef FEATURE_VLAN_MPDN
+IPACM_firewall_t IPACM_Wan::firewall_mpdn_config_ul;
+#endif
 IPACM_firewall_conf_t IPACM_Wan::firewall_config_ul;
-
-bool IPACM_Wan::is_v6_ul_firewall_sent_to_q6;
 
 int IPACM_Wan::m_fd_ipa_ul = 0;
 #endif //FEATURE_IPACM_UL_FIREWALL
@@ -159,7 +160,9 @@ IPACM_Wan::IPACM_Wan(int iface_index,
 	is_ipv6_frag_firewall_flt_rule_installed = false;
 
 #ifdef FEATURE_IPACM_UL_FIREWALL
-	is_v6_ul_firewall_sent_to_q6 = false;
+#ifdef FEATURE_VLAN_MPDN
+	num_firewall_v6_ul_pdn = 0;
+#endif
 #endif //FEATURE_IPACM_UL_FIREWALL
 	ipv6_frag_firewall_flt_rule_hdl = 0;
 
@@ -243,9 +246,6 @@ IPACM_Wan::~IPACM_Wan()
 
 int IPACM_Wan::GetMuxByVid(uint8_t vlan_id, uint8_t *mux_id, ipa_ip_type iptype)
 {
-	if(vlan_id == 0)
-		return IPACM_FAILURE;
-
 	for(int i = 0; i < IPA_MAX_NUM_SW_PDNS; i++)
 	{
 		if(iptype == IPA_IP_v4)
@@ -271,6 +271,8 @@ int IPACM_Wan::GetMuxByVid(uint8_t vlan_id, uint8_t *mux_id, ipa_ip_type iptype)
 			}
 		}
 	}
+	IPACMERR("couldn't find MUX for VID %d\n", vlan_id);
+	return IPACM_FAILURE;
 }
 #endif
 /* handle new_address event */
@@ -3225,6 +3227,41 @@ int IPACM_Wan::config_dft_firewall_rules(ipa_ip_type iptype)
 	return IPACM_SUCCESS;
 }
 
+#ifdef FEATURE_VLAN_MPDN
+int IPACM_Wan::get_v6_pdn_firewall_configs(
+	std::pair<IPACM_firewall_conf_t*, ipacm_ipv6_wan_iface*> wan_firewall_pair[],
+	IPACM_firewall_t &firewall_configs)
+{
+	int num_v6_pdns = 0;
+
+	for(uint32_t i = 0;
+	i < IPA_MAX_NUM_SW_PDNS && num_v6_pdns < IPA_MAX_NUM_HW_PDNS;
+		++i)
+	{
+		if(ipv6_to_iface[i].pIface &&
+			(ipv6_to_iface[i].wan_up_vlan_v6 || isDefaultGatewayIfaceUp_v6(ipv6_to_iface[i].pIface)))
+		{
+			IPACMDBG_H("identified v6 pdn (%s): wan_up_v6: %d, wan_up_vlan_v6: %d, getting FW config\n",
+				ipv6_to_iface[i].pIface->dev_name,
+				isDefaultGatewayIfaceUp_v6(ipv6_to_iface[i].pIface),
+				ipv6_to_iface[i].wan_up_vlan_v6);
+
+			IPACM_firewall_conf_t* curr_pdn_firewall_config =
+				get_curr_pdn_firewall_config(firewall_configs, ipv6_to_iface[i].pIface->dev_name);
+			if(curr_pdn_firewall_config != NULL)
+			{
+				std::pair<IPACM_firewall_conf_t*, ipacm_ipv6_wan_iface*>* curr =
+					&wan_firewall_pair[num_v6_pdns++];
+				curr->first = curr_pdn_firewall_config;
+				curr->second = &ipv6_to_iface[i];
+			}
+		}
+	}
+	IPACMDBG_H("found %d v6 pdns in firewall file\n", num_v6_pdns);
+	return num_v6_pdns;
+}
+#endif
+
 /* configure the initial firewall filter rules */
 #ifdef FEATURE_VLAN_MPDN
 int IPACM_Wan::config_dft_firewall_rules_ex(struct ipacm_pdn_flt_rule* rules, int rule_offset, ipa_ip_type iptype)
@@ -3251,7 +3288,6 @@ int IPACM_Wan::config_dft_firewall_rules_ex(struct ipa_flt_rule_add *rules, int 
 		return IPACM_FAILURE;
 	}
 
-	/* default firewall is disable and the rule action is drop */
 	IPACMDBG_H("Firewall XML file is %s\n", MOBILE_FIREWALL_FILE);
 	if (IPACM_read_firewall_xml(MOBILE_FIREWALL_FILE, firewall_config) == IPACM_SUCCESS)
 	{
@@ -3259,7 +3295,7 @@ int IPACM_Wan::config_dft_firewall_rules_ex(struct ipa_flt_rule_add *rules, int 
 	}
 	else
 	{
-		IPACMERR("QCMAP Firewall XML read failed, no that file, use default configuration \n");
+		IPACMERR("QCMAP Firewall XML read failed, no such file, use default configuration \n");
 	}
 
 #ifdef FEATURE_VLAN_MPDN
@@ -3409,7 +3445,7 @@ int IPACM_Wan::config_dft_firewall_rules_ex(struct ipa_flt_rule_add *rules, int 
 			return res;
 		}
 		++pos;
-		if(isWanUP())
+		if(wan_up)
 			num_rules = IPACM_Wan::num_v4_flt_rule - original_num_rules - 1;
 		else
 			num_rules = 0;
@@ -3468,7 +3504,7 @@ int IPACM_Wan::config_dft_firewall_rules_ex(struct ipa_flt_rule_add *rules, int 
 			return res;
 		}
 		++pos;
-		if(isWanUP_V6())
+		if(wan_up_v6)
 			num_rules = IPACM_Wan::num_v6_flt_rule - original_num_rules - 1;
 		else
 			num_rules = 0;
@@ -3479,35 +3515,284 @@ int IPACM_Wan::config_dft_firewall_rules_ex(struct ipa_flt_rule_add *rules, int 
 }
 
 #ifdef FEATURE_IPACM_UL_FIREWALL
+
 int IPACM_Wan::read_firewall_filter_rules_ul(void)
 {
 	int i = 0;
-
-	/* default firewall is disable and the rule action is drop */
+#ifdef FEATURE_VLAN_MPDN
+	std::pair<IPACM_firewall_conf_t*, ipacm_ipv6_wan_iface*> offloaded_pdns_v6[IPA_MAX_NUM_HW_PDNS];
+	int firewall_num_v6_pdns_ul = 0;
+	int num_mpdn_firewall_v6_ul[IPA_MAX_NUM_HW_PDNS];
+#endif
 	IPACMDBG_H("Firewall XML file is %s\n", MOBILE_FIREWALL_FILE);
-	if (IPACM_read_firewall_xml(MOBILE_FIREWALL_FILE, firewall_config_ul) == IPACM_SUCCESS)
+#ifdef FEATURE_VLAN_MPDN
+	if(IPACM_read_firewall_xml(MOBILE_FIREWALL_FILE, firewall_mpdn_config_ul) == IPACM_SUCCESS)
+#else
+	if(IPACM_read_firewall_xml(MOBILE_FIREWALL_FILE, firewall_config_ul) == IPACM_SUCCESS)
+#endif
 	{
 		IPACMDBG_H("QCMAP Firewall XML read OK \n");
-		IPACMDBG_H("Existing firewall rule v6_ul:%d\n", num_firewall_v6_ul);
-		num_firewall_v6_ul = 0;
-		/* find the number of IPv6 UL firewall rules */
-		for (i = 0; i < firewall_config_ul.num_extd_firewall_entries; i++)
-		{
-			if (firewall_config_ul.extd_firewall_entries[i].ip_vsn == 6 &&
-				firewall_config_ul.extd_firewall_entries[i].firewall_direction ==
-				IPACM_MSGR_UL_FIREWALL)
-			{
-				num_firewall_v6_ul++;
-			}
-		}
-		IPACMDBG_H("firewall rule v6_ul:%d total:%d\n", num_firewall_v6_ul, firewall_config_ul.num_extd_firewall_entries);
 	}
 	else
 	{
 		IPACMERR("QCMAP Firewall XML read failed, no such file, use default configuration \n");
+		return IPACM_FAILURE;
 	}
+#ifdef FEATURE_VLAN_MPDN
+	firewall_num_v6_pdns_ul = get_v6_pdn_firewall_configs(offloaded_pdns_v6, firewall_mpdn_config_ul);
+
+	for(int j = 0; j < firewall_num_v6_pdns_ul; j++)
+	{
+		IPACM_firewall_conf_t* curr_conf = offloaded_pdns_v6[j].first;
+		char *dev = offloaded_pdns_v6[j].second->pIface->dev_name;
+		/* find the number of IPv6 UL firewall rules */
+		if(curr_conf->firewall_enable)
+		{
+			num_mpdn_firewall_v6_ul[j] = 0;
+			for(int i = 0; i < curr_conf->num_extd_firewall_entries; i++)
+			{
+				if(curr_conf->extd_firewall_entries[i].ip_vsn == 6 &&
+					curr_conf->extd_firewall_entries[i].firewall_direction ==
+					IPACM_MSGR_UL_FIREWALL)
+				{
+					num_mpdn_firewall_v6_ul[j]++;
+				}
+				/* limit the total number of firewall entries for this pdn,
+				 * another limitation is applied when we install the rules on LAN prod or send to Q6
+				 */
+				if(num_mpdn_firewall_v6_ul[j] == IPACM_MAX_FIREWALL_ENTRIES)
+				{
+					IPACMERR("reached MAX num firewall rules, dev %s, j %d, num pdns %d\n",
+						dev,
+						j, firewall_num_v6_pdns_ul);
+					break;
+				}
+			}
+			IPACMDBG_H("dev %s, num ul firewall %d\n",
+				dev,
+				num_mpdn_firewall_v6_ul[j]);
+		}
+		else
+		{
+			IPACMDBG_H("firewall disabled, dev %s\n",
+				dev);
+			num_mpdn_firewall_v6_ul[j] = 0;
+		}
+	}
+#else
+	int total_num_firewall_v6_ul = 0;
+
+	/* find the number of IPv6 UL firewall rules */
+	for(i = 0; i < firewall_config_ul.num_extd_firewall_entries; i++)
+	{
+		if(firewall_config_ul.extd_firewall_entries[i].ip_vsn == 6 &&
+			firewall_config_ul.extd_firewall_entries[i].firewall_direction ==
+			IPACM_MSGR_UL_FIREWALL)
+		{
+			total_num_firewall_v6_ul++;
+		}
+
+		/* limit the total number of firewall entries for all pdns */
+		if(total_num_firewall_v6_ul == IPACM_MAX_FIREWALL_ENTRIES)
+		{
+			IPACMDBG_H("reached maximal number of FW rules\n");
+			break;
+		}
+	}
+	IPACMDBG_H("firewall rule v6_ul:%d total:%d\n", total_num_firewall_v6_ul, firewall_config_ul.num_extd_firewall_entries);
+#endif
 	return IPACM_SUCCESS;
 }
+
+int IPACM_Wan::set_pdn_num_fw_rules_by_vid(int vid, int num_fw_rules)
+{
+#ifdef FEATURE_VLAN_MPDN
+	for(int i = 0; i < IPA_MAX_NUM_SW_PDNS; i++)
+	{
+		if(ipv6_to_iface[i].pIface &&
+			(ipv6_to_iface[i].wan_up_vlan_v6 || isDefaultGatewayIfaceUp_v6(ipv6_to_iface[i].pIface)))
+		{
+			if((ipv6_to_iface[i].pIface->associated_VID == vid) ||
+				(isDefaultGatewayIfaceUp_v6(ipv6_to_iface[i].pIface) && !vid))
+			{
+				IPACMDBG_H("found dev %s, vid %d, num_ul_fw_rules %d update to %d\n",
+					ipv6_to_iface[i].pIface->dev_name,
+					ipv6_to_iface[i].pIface->associated_VID,
+					ipv6_to_iface[i].pIface->num_firewall_v6_ul_pdn,
+					num_fw_rules);
+				int orig_num = IPACM_Wan::num_firewall_v6_ul;
+				IPACM_Wan::num_firewall_v6_ul -= ipv6_to_iface[i].pIface->num_firewall_v6_ul_pdn;
+				IPACM_Wan::num_firewall_v6_ul += num_fw_rules;
+				IPACMDBG_H("num_firewall_v6_ul (%d)->(%d)\n", orig_num, IPACM_Wan::num_firewall_v6_ul);
+
+				ipv6_to_iface[i].pIface->num_firewall_v6_ul_pdn = num_fw_rules;
+				return IPACM_SUCCESS;
+			}
+		}
+	}
+#else
+	if(vid == 0)
+	{
+		num_firewall_v6_ul = num_fw_rules;
+		return IPACM_SUCCESS;
+	}
+#endif
+	IPACMERR("couldn't find match for vid %d\n", vid);
+	return IPACM_FAILURE;
+}
+int IPACM_Wan::get_pdn_num_fw_rules_by_vid(int vid, int *num_fw_rules)
+{
+#ifdef FEATURE_VLAN_MPDN
+	for(int i = 0; i < IPA_MAX_NUM_SW_PDNS; i++)
+	{
+		if(ipv6_to_iface[i].pIface &&
+			(ipv6_to_iface[i].wan_up_vlan_v6 || isDefaultGatewayIfaceUp_v6(ipv6_to_iface[i].pIface)))
+		{
+			if((ipv6_to_iface[i].pIface->associated_VID == vid) ||
+				(isDefaultGatewayIfaceUp_v6(ipv6_to_iface[i].pIface) && !vid))
+			{
+				IPACMDBG_H("found dev %s, vid %d, num_ul_fw_rules %d\n",
+					ipv6_to_iface[i].pIface->dev_name,
+					ipv6_to_iface[i].pIface->associated_VID,
+					ipv6_to_iface[i].pIface->num_firewall_v6_ul_pdn);
+				*num_fw_rules = ipv6_to_iface[i].pIface->num_firewall_v6_ul_pdn;
+				return IPACM_SUCCESS;
+			}
+		}
+	}
+#else
+	if(vid == 0)
+	{
+		*num_fw_rules = num_firewall_v6_ul;
+		return IPACM_SUCCESS;
+	}
+#endif
+	IPACMERR("couldn't find match for vid %d\n", vid);
+	return IPACM_FAILURE;
+}
+
+#ifdef FEATURE_VLAN_MPDN
+int IPACM_Wan::GetV6PrefixByVid(int vid, uint32_t *v6_prefix)
+{
+	if(!vid)
+	{
+		v6_prefix[0] = backhaul_ipv6_prefix[0];
+		v6_prefix[1] = backhaul_ipv6_prefix[1];
+		return IPACM_SUCCESS;
+	}
+
+	for(int i = 0; i < IPA_MAX_NUM_SW_PDNS; i++)
+	{
+		if(ipv6_to_iface[i].pIface && ipv6_to_iface[i].wan_up_vlan_v6)
+		{
+			if((ipv6_to_iface[i].pIface->associated_VID == vid))
+			{
+				IPACMDBG_H("found dev %s, vid %d, v6_prefix 0x[%X][%X]\n",
+					ipv6_to_iface[i].pIface->dev_name,
+					ipv6_to_iface[i].pIface->associated_VID,
+					ipv6_to_iface[i].pIface->ipv6_prefix[0],
+					ipv6_to_iface[i].pIface->ipv6_prefix[1]);
+				v6_prefix[0] = ipv6_to_iface[i].pIface->ipv6_prefix[0];
+				v6_prefix[1] = ipv6_to_iface[i].pIface->ipv6_prefix[1];
+				return IPACM_SUCCESS;
+			}
+		}
+	}
+	IPACMERR("couldn't find match for vid %d\n", vid);
+	return IPACM_FAILURE;
+}
+#endif //FEATURE_VLAN_MPDN
+
+IPACM_firewall_conf_t* IPACM_Wan::get_default_profile_firewall_conf_ul(int *default_vid)
+{
+	IPACM_firewall_conf_t* firewall_conf = NULL;
+#ifdef FEATURE_VLAN_MPDN
+	int idx = 0;
+	int num_pdns = firewall_mpdn_config_ul.pdn_count;
+
+	if(firewall_mpdn_config_ul.default_profile == 0)
+	{
+		if(firewall_mpdn_config_ul.pdn_count != 1)
+		{
+			IPACMERR("can't identify default pdn\n");
+			return NULL;
+		}
+		idx = 0;
+	}
+	else
+	{
+		for(idx = 0; idx < num_pdns; ++idx)
+		{
+			if(firewall_mpdn_config_ul.default_profile == firewall_mpdn_config_ul.pdns[idx].profile)
+			{
+				break;
+			}
+		}
+		if(idx == num_pdns)
+		{
+			IPACMERR("The XML is not valid. The default profile %d wasn't located\n",
+				firewall_mpdn_config_ul.default_profile);
+			return NULL;
+		}
+	}
+	firewall_conf = &firewall_mpdn_config_ul.pdns[idx];
+	*default_vid = 0;
+	for(int i = 0; i < IPA_MAX_NUM_SW_PDNS; i++)
+	{
+		if(ipv6_to_iface[i].pIface &&
+			(ipv6_to_iface[i].wan_up_vlan_v6 || isDefaultGatewayIfaceUp_v6(ipv6_to_iface[i].pIface)))
+		{
+			if(!strcmp(firewall_mpdn_config_ul.pdns[idx].net_dev,
+				ipv6_to_iface[i].pIface->dev_name))
+			{
+				IPACMDBG("found %s dev in index %d, VID %d\n",
+					firewall_mpdn_config_ul.pdns[idx].net_dev,
+					i,
+					ipv6_to_iface[i].pIface->associated_VID);
+				*default_vid = ipv6_to_iface[i].pIface->associated_VID;
+			}
+		}
+	}
+#else
+	firewall_conf = &firewall_config_ul;
+	*default_vid = 0;
+#endif
+	return firewall_conf;
+}
+
+#ifdef FEATURE_VLAN_MPDN
+IPACM_firewall_conf_t* IPACM_Wan::get_firewall_conf_by_vid_ul(int vid)
+{
+	int num_pdns = firewall_mpdn_config_ul.pdn_count;
+
+	for(int i = 0; i < IPA_MAX_NUM_SW_PDNS; i++)
+	{
+		if(ipv6_to_iface[i].pIface &&
+			(ipv6_to_iface[i].wan_up_vlan_v6 || isDefaultGatewayIfaceUp_v6(ipv6_to_iface[i].pIface)))
+		{
+			if(vid == ipv6_to_iface[i].pIface->associated_VID)
+			{
+				IPACMDBG("found %s dev in index %d, VID %d\n",
+					ipv6_to_iface[i].pIface->dev_name,
+					i,
+					ipv6_to_iface[i].pIface->associated_VID);
+				for(int j = 0; j < num_pdns; j++)
+				{
+					if(!strcmp(firewall_mpdn_config_ul.pdns[j].net_dev,
+						ipv6_to_iface[i].pIface->dev_name))
+					{
+						IPACMDBG("found %s dev in index %d\n",
+							firewall_mpdn_config_ul.pdns[j].net_dev, j);
+						return &firewall_mpdn_config_ul.pdns[j];
+					}
+				}
+			}
+		}
+	}
+	return NULL;
+}
+#endif //FEATURE_VLAN_MPDN
+
 #endif //FEATURE_IPACM_UL_FIREWALL
 int IPACM_Wan::init_fl_rule_ex(ipa_ip_type iptype)
 {

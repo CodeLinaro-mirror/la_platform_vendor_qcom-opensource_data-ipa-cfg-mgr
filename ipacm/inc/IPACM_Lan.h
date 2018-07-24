@@ -125,10 +125,14 @@ typedef struct _ipa_eth_client
 #ifdef FEATURE_IPACM_UL_FIREWALL
 typedef struct ul_firewall {
 	uint32_t ul_firewall_handle[IPACM_MAX_FIREWALL_ENTRIES];
-	bool ul_firewall_installed;
-	bool ul_catch_installed;
+	int num_ul_firewall_installed;
+#ifdef FEATURE_VLAN_MPDN
+	int num_ul_frag_installed;
+	uint32_t ul_frag_handle[IPA_MAX_NUM_HW_PDNS];
+#else
 	bool ul_frag_installed;
 	uint32_t ul_frag_handle;
+#endif
 } ul_firewall_t;
 #endif
 
@@ -223,23 +227,35 @@ public:
 	virtual int del_ul_flt_rules(enum ipa_ip_type iptype);
 
 #ifdef FEATURE_IPACM_UL_FIREWALL
-	/* Re Configure and install the UL firewall rules */
-	virtual int re_config_dft_firewall_rules_ul(ipa_ip_type iptype, ul_firewall_t *ul_firewall);
+	/* configure UL firewalls for all PDNs relevant for this LAN */
+	virtual void configure_v6_ul_firewall(void);
 
-	/* Configure and install the UL firewall rules on other BH */
-	virtual int config_dft_firewall_rules_ul(struct ipa_flt_rule_add *rules, ipa_ip_type iptype, ul_firewall_t *ul_firewall);
+	/* configure UL firewall for a single profile\pdn */
+	virtual int configure_v6_ul_firewall_one_profile(IPACM_firewall_conf_t* firewall_conf, bool isDefault, int vid);
 
-	/* Config UL firewall filter rules on LTE BH */
-	virtual int config_dft_firewall_rules_ul_ex(struct ipa_flt_rule_add *rules, ipa_ip_type iptype);
+	/* Configure and install the UL firewall rules on the LAN prod pipe */
+	virtual int config_dft_firewall_rules_ul(
+		IPACM_firewall_conf_t* firewall_conf,
+		ul_firewall_t *ul_firewall,
+		int vid);
 
-	/* Config UL frag firewall filter rules */
-	virtual int config_wan_frag_firewall_rule_ul_ex(bool install, ipa_ip_type iptype, ul_firewall_t *ul_firewall);
+	/* Config WL UL firewall filter rules on LTE BH (FW on Q6 routing table) */
+	virtual int config_dft_firewall_rules_ul_ex(
+		IPACM_firewall_conf_t* firewall_conf,
+		struct ipa_flt_rule_add *rules,
+		int vid);
+
+	/* send fragments to exception when UL FW is installed on Q6 routing table*/
+	virtual int config_wan_frag_firewall_rule_ul_ex(ul_firewall_t *ul_firewall, int vid);
 
 	/* Send the UL firewall rules to Q6 via QMI */
-	virtual int install_wan_firewall_rule_ul(bool enable, ipa_ip_type iptype);
+	virtual int install_wan_firewall_rule_ul(bool enable, int vid, int num_of_ul_rules);
 
-	/* Delete UL firewall filter rules */
-	int delete_uplink_filter_rule_ul(ipa_ip_type iptype, ul_firewall_t *ul_firewall);
+	/* Delete UL firewall filter rules from LAN prod pipe */
+	virtual int delete_uplink_filter_rule_ul(ul_firewall_t *ul_firewall);
+	
+	/* delete UL firewall rules, to be sent to Q6 side*/
+	virtual int disable_dft_firewall_rules_ul_ex(int vid);
 #endif
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
 

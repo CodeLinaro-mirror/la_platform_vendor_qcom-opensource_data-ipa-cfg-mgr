@@ -1051,7 +1051,17 @@ void NatApp::FlushTempEntries(uint32_t ip_addr, bool isAdd,
 		{
 			if(isAdd)
 			{
+#ifdef FEATURE_VLAN_MPDN
+				/*
+				 * We dont need pub_ip_addr check in MPDN support.
+				 * But, we shouldn't flush the entries
+				 * if pub_ip_addr doesn't match any of our pdns.
+				 * And this we are taken care in AddEntry
+				 * using ipa_nat_get_pdn_index
+				 */
+#else
 				if(temp[cnt].public_ip == pub_ip_addr)
+#endif
 				{
 					if (isDummy) {
 						/* To avoild DL expections for non IPA path */

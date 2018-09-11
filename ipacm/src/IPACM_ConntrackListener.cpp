@@ -1798,7 +1798,7 @@ void IPACM_ConntrackListener::ProcessTCPorUDPMsg(
 	 uint32_t public_ip;
 	 uint32_t repl_src_ip, repl_dst_ip;
 	 bool SendVlanEvent = false;
-	 uint8_t VlanID;
+	 uint8_t VlanID = 0;
 	 bool embedded_vlan = false;
 #endif
 	 bool isAdd = false;

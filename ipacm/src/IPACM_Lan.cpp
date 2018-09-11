@@ -98,6 +98,12 @@ IPACM_Lan::IPACM_Lan(int iface_index) : IPACM_Iface(iface_index)
 	modem_ul_v6_set = false;
 	memset(ipv6_prefix, 0, sizeof(ipv6_prefix));
 
+#ifdef FEATURE_VLAN_MPDN
+	dummy_prefix_installed = false;
+	memset(v4_mux_up, 0, sizeof(v4_mux_up[0]) * IPA_MAX_NUM_HW_PDNS);
+	memset(v6_mux_up, 0, sizeof(v6_mux_up[0]) * IPA_MAX_NUM_HW_PDNS);
+#endif
+
 	/* support eth multiple clients */
 	if(iface_query != NULL)
 	{
@@ -201,11 +207,6 @@ IPACM_Lan::IPACM_Lan(int iface_index) : IPACM_Iface(iface_index)
 	{
 		install_l2tp_ul_hdr_proc_ctx();
 	}
-#endif
-#ifdef FEATURE_VLAN_MPDN
-	dummy_prefix_installed = false;
-	memset(v4_mux_up, 0, sizeof(v4_mux_up[0]) * IPA_MAX_NUM_HW_PDNS);
-	memset(v6_mux_up, 0, sizeof(v6_mux_up[0]) * IPA_MAX_NUM_HW_PDNS);
 #endif
 
 	return;
@@ -5414,7 +5415,9 @@ int IPACM_Lan::disable_dft_firewall_rules_ul_ex(int vid)
 	if(IPACM_Wan::set_pdn_num_fw_rules_by_vid(vid, 0))
 	{
 		IPACMERR("failed setting num of Q6 rules for VID %d\n", vid);
+		return IPACM_FAILURE;
 	}
+	return IPACM_SUCCESS;
 }
 
 /* Configure and install UL firewall rules, to be installed on client side */
@@ -5634,6 +5637,12 @@ int IPACM_Lan::config_dft_firewall_rules_ul(IPACM_firewall_conf_t* firewall_conf
 #endif
 
 			/* check if the rule is define as TCP/UDP */
+			if ( ul_firewall->num_ul_firewall_installed >= IPACM_MAX_FIREWALL_ENTRIES) {
+				IPACMERR("UL firewall rule has reached at max\n");
+				res = IPACM_FAILURE;
+				goto fail;
+			}
+
 			if (firewall_conf->extd_firewall_entries[i].attrib.u.v6.next_hdr == IPACM_FIREWALL_IPPROTO_TCP_UDP)
 			{
 				/* insert TCP rule*/

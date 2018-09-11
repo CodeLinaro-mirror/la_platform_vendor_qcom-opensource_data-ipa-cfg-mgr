@@ -255,6 +255,7 @@ void* ipa_driver_msg_notifier(void *param)
 #endif
 	ipacm_cmd_q_data new_neigh_evt;
 	ipacm_event_data_all* new_neigh_data;
+	ipa_ioc_gsb_info *event_gsb = NULL;
 
 	fd = open(IPA_DRIVER, O_RDWR);
 	if (fd < 0)
@@ -782,6 +783,35 @@ void* ipa_driver_msg_notifier(void *param)
 			continue;
 #endif //#ifndef FEATURE_VLAN_MPDN
 #endif //#if defined(FEATURE_L2TP_E2E) || defined(FEATURE_L2TP) || defined (FEATURE_VLAN_MPDN)
+
+		case IPA_GSB_CONNECT:
+			event_gsb = (ipa_ioc_gsb_info *) (buffer + sizeof(struct ipa_msg_meta));
+			IPACMDBG_H("Received IPA_GSB_CONNECT name: %s\n",event_gsb->name);
+            		data_fid = (ipacm_event_data_fid *)malloc(sizeof(ipacm_event_data_fid));
+			if(data_fid == NULL)
+			{
+				IPACMERR("unable to allocate memory for event_gsb\n");
+				return NULL;
+			}
+			ipa_get_if_index(event_gsb->name, &(data_fid->if_index));
+			evt_data.event = IPA_USB_LINK_UP_EVENT;
+			evt_data.evt_data = data_fid;
+			break;
+
+		case IPA_GSB_DISCONNECT:
+			event_gsb = (ipa_ioc_gsb_info *)(buffer + sizeof(struct ipa_msg_meta));
+			IPACMDBG_H("Received IPA_GSB_DISCONNECT name: %s\n",event_gsb->name);
+            		data_fid = (ipacm_event_data_fid *)malloc(sizeof(ipacm_event_data_fid));
+			if(data_fid == NULL)
+			{
+				IPACMERR("unable to allocate memory for event_gsb\n");
+				return NULL;
+			}
+			ipa_get_if_index(event_gsb->name, &(data_fid->if_index));
+			evt_data.event = IPA_LINK_DOWN_EVENT;
+			evt_data.evt_data = data_fid;
+			break;
+
 		default:
 			IPACMDBG_H("Unhandled message type: %d\n", event_hdr.msg_type);
 			continue;

@@ -722,6 +722,20 @@ void* ipa_driver_msg_notifier(void *param)
 			evt_data.evt_data = data;
 			break;
 #endif
+#ifdef FEATURE_VLAN_MPDN
+		case ADD_BRIDGE_VLAN_MAPPING:
+			ipa_ioc_bridge_vlan_mapping_info add_bridge_vlan_info;
+
+			memcpy(&add_bridge_vlan_info, buffer + sizeof(struct ipa_msg_meta), sizeof(add_bridge_vlan_info));
+			IPACM_Iface::ipacmcfg->add_bridge_vlan_mapping(&add_bridge_vlan_info);
+			continue;
+		case DEL_BRIDGE_VLAN_MAPPING:
+			ipa_ioc_bridge_vlan_mapping_info del_bridge_vlan_info;
+
+			memcpy(&del_bridge_vlan_info, buffer + sizeof(struct ipa_msg_meta), sizeof(del_bridge_vlan_info));
+			IPACM_Iface::ipacmcfg->del_bridge_vlan_mapping(&del_bridge_vlan_info);
+			continue;
+#endif
 #if defined(FEATURE_L2TP_E2E) || defined(FEATURE_L2TP) || defined (FEATURE_VLAN_MPDN)
 		case ADD_VLAN_IFACE:
 			vlan_info = (ipa_ioc_vlan_iface_info *)malloc(sizeof(*vlan_info));

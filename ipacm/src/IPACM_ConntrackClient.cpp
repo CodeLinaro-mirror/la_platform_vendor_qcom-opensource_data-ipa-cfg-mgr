@@ -99,6 +99,7 @@ int IPACM_ConntrackClient::IPAConntrackEventCB
 	ipacm_cmd_q_data evt_data;
 	ipacm_ct_evt_data *ct_data;
 	uint8_t ip_type = 0;
+	IPACM_Config *config_instance = NULL;
 
 	IPACMDBG("Event callback called with msgtype: %d\n",type);
 
@@ -106,10 +107,15 @@ int IPACM_ConntrackClient::IPAConntrackEventCB
 	ip_type = nfct_get_attr_u8(ct, ATTR_REPL_L3PROTO);
 
 #ifndef CT_OPT
-	if(AF_INET6 == ip_type && !IPACM_Config::GetInstance()->IsIpv6CTEnabled())
+	if(AF_INET6 == ip_type)
 	{
-		IPACMDBG("Ignoring ipv6(%d) connections\n", ip_type);
-		goto IGNORE;
+		config_instance = IPACM_Config::GetInstance();
+		if((config_instance == NULL) ||
+			!config_instance->IsIpv6CTEnabled())
+		{
+			IPACMDBG("Ignoring ipv6(%d) connections\n", ip_type);
+			goto IGNORE;
+		}
 	}
 #endif
 
@@ -152,7 +158,6 @@ int IPACM_ConntrackClient::IPA_Conntrack_Filters_Ignore_Bridge_Addrs
 (
 	 struct nfct_filter *filter
 )
-#ifndef FEATURE_VLAN_MPDN
 {
 	int fd;
 	fd = socket(AF_INET, SOCK_DGRAM, 0);
@@ -198,21 +203,18 @@ int IPACM_ConntrackClient::IPA_Conntrack_Filters_Ignore_Bridge_Addrs
 	filter_ipv4.mask = 0xffffffff;
 
 	nfct_filter_set_logic(filter,
-												NFCT_FILTER_DST_IPV4,
-												NFCT_FILTER_LOGIC_NEGATIVE);
+		NFCT_FILTER_DST_IPV4,
+		NFCT_FILTER_LOGIC_NEGATIVE);
 
 	nfct_filter_add_attr(filter, NFCT_FILTER_DST_IPV4, &filter_ipv4);
 
 	nfct_filter_set_logic(filter,
-												NFCT_FILTER_SRC_IPV4,
-												NFCT_FILTER_LOGIC_NEGATIVE);
+		NFCT_FILTER_SRC_IPV4,
+		NFCT_FILTER_LOGIC_NEGATIVE);
 
 	nfct_filter_add_attr(filter, NFCT_FILTER_SRC_IPV4, &filter_ipv4);
 
-	return 0;
-}
-#else
-{
+#ifdef FEATURE_VLAN_MPDN
 	uint8_t testmac[IPA_MAC_ADDR_SIZE];
 
 	memset(testmac, 0, IPA_MAC_ADDR_SIZE * sizeof(uint8_t));
@@ -223,6 +225,13 @@ int IPACM_ConntrackClient::IPA_Conntrack_Filters_Ignore_Bridge_Addrs
 			testmac,
 			sizeof(uint8_t) * IPA_MAC_ADDR_SIZE))
 		{
+			/* skip the default bridge - was handled above */
+			if(strcmp(IPACM_Iface::ipacmcfg->ipa_virtual_iface_name,
+				IPACM_Iface::ipacmcfg->vlan_bridges[i].bridge_name) == 0)
+			{
+				continue;
+			}
+
 			IPACMDBG("bridge (%s)", IPACM_Iface::ipacmcfg->vlan_bridges[i].bridge_name);
 			/* ignore whatever is destined to or originates from broadcast ip address */
 			struct nfct_filter_ipv4 filter_ipv4;
@@ -243,9 +252,9 @@ int IPACM_ConntrackClient::IPA_Conntrack_Filters_Ignore_Bridge_Addrs
 			nfct_filter_add_attr(filter, NFCT_FILTER_SRC_IPV4, &filter_ipv4);
 		}
 	}
+#endif
 	return IPACM_SUCCESS;
 }
-#endif
 
 int IPACM_ConntrackClient::IPA_Conntrack_Filters_Ignore_Local_Iface
 (

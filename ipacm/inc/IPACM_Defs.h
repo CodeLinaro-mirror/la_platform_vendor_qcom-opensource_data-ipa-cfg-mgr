@@ -255,6 +255,7 @@ typedef struct
 	uint32_t bridge_netmask;
 	uint32_t bridge_ipv4_addr;
 	uint8_t bridge_mac[IPA_MAC_ADDR_SIZE];
+	uint32_t associate_VID;
 }ipacm_bridge;
 
 typedef struct
@@ -437,6 +438,14 @@ struct l2tp_vlan_mapping_info
 	uint32_t vlan_client_ipv6_addr[4];
 	/* the following is MIB3 l2tp client info (mac) */
 	uint8_t l2tp_client_mac[6];
+};
+
+struct bridge_vlan_mapping_info
+{
+	char bridge_iface_name[IPA_RESOURCE_NAME_MAX];
+	uint32_t bridge_associated_VID;
+	uint32_t bridge_ipv4;
+	uint32_t subnet_mask;
 };
 
 struct l2tp_client_info

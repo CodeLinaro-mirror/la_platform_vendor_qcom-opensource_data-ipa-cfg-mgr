@@ -753,7 +753,7 @@ int ipa_nati_alloc_pdn(ipa_nat_pdn_entry *pdn_info, uint8_t *pdn_index)
 			}
 			return 0;
 		}
-		if(memcmp((pdns + i), &zero_test, sizeof(ipa_nat_pdn_entry)))
+		if(!memcmp((pdns + i), &zero_test, sizeof(ipa_nat_pdn_entry)))
 		{
 			IPADBG("found an empty pdn in index %d\n", i);
 			break;
@@ -803,7 +803,7 @@ int ipa_nati_dealloc_pdn(uint8_t pdn_index)
 
 	memset(&zero_test, 0, sizeof(zero_test));
 
-	if(memcmp((pdns + pdn_index), &zero_test, sizeof(ipa_nat_pdn_entry)))
+	if(!memcmp((pdns + pdn_index), &zero_test, sizeof(ipa_nat_pdn_entry)))
 	{
 		IPAERR("pdn entry is a zero entry\n");
 		return -EIO;

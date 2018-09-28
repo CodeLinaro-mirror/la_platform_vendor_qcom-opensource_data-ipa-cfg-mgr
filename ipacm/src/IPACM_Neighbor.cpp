@@ -180,6 +180,16 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 				break;
 			}
 #endif
+#ifdef FEATURE_VLAN_MPDN
+			if(IPACM_FAILURE != ipa_interface_index)
+			{
+				if(IPACM_Iface::ipacmcfg->iface_in_vlan_mode(data->iface_name))
+				{
+					IPACMDBG_H("ignoring physical IFACE neighbor event in VLAN mode\n");
+					break;
+				}
+			}
+#endif
 			if (data->iptype == IPA_IP_v4)
 			{
 				if (data->ipv4_addr != 0) /* not 0.0.0.0 */
@@ -203,8 +213,15 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 						ipacm_bridge *bridge = IPACM_Iface::ipacmcfg->get_vlan_bridge(data->iface_name);
 						if(!bridge)
 						{
-							IPACMERR("couldn't find bridge %s, not sending internal event\n", data->iface_name);
-							return;
+							IPACMDBG("couldn't find the bridge %s, trying to add\n", data->iface_name);
+							/* since we know that this is a bridge, let's try to add */
+							IPACM_Iface::ipacmcfg->add_vlan_bridge(data);
+							bridge = IPACM_Iface::ipacmcfg->get_vlan_bridge(data->iface_name);
+							if(!bridge)
+							{
+								IPACMERR("couldn't find or add bridge %s, not sending internal event\n", data->iface_name);
+								return;
+							}
 						}
 #endif
 						/* search if seen this client or not*/
@@ -212,6 +229,39 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 						{
 							if (memcmp(neighbor_client[i].mac_addr, data->mac_addr, sizeof(neighbor_client[i].mac_addr)) == 0)
 							{
+#ifdef FEATURE_VLAN_MPDN
+								if(neighbor_client[i].bridge)
+								{
+									if(neighbor_client[i].bridge != bridge)
+									{
+										IPACMERR("client (dev %s) already associated with a different bridge %s->%s, keep looking for same MAC\n",
+											neighbor_client[i].iface_name,
+											neighbor_client[i].bridge->bridge_name,
+											bridge->bridge_name);
+										continue;
+									}
+								}
+								else
+								{
+									/* for VLAN interfaces make sure bridge is with correct VID */
+									if(IPACM_Iface::ipacmcfg->iface_in_vlan_mode(neighbor_client[i].iface_name))
+									{
+										uint8_t vlan_id;
+										if(IPACM_Iface::ipacmcfg->get_vlan_id(neighbor_client[i].iface_name, &vlan_id))
+										{
+											IPACMERR("failed to get iface vlan ID, skipping\n");
+											continue;
+										}
+										if(bridge->associate_VID != vlan_id)
+										{
+											IPACMDBG("client bridge vid mismatch (%d)(%d), skip\n",
+												vlan_id, bridge->associate_VID);
+											continue;
+										}
+										IPACMDBG_H("client - bridge vid match (%d)\n", vlan_id);
+									}
+								}
+#endif
 								data->if_index = neighbor_client[i].iface_index;
 								strlcpy(data->iface_name, neighbor_client[i].iface_name, sizeof(data->iface_name));
 								neighbor_client[i].v4_addr = data->ipv4_addr; // cache client's previous ipv4 address
@@ -356,6 +406,18 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 								/* find the client */
 								if (memcmp(neighbor_client[i].mac_addr, data->mac_addr, sizeof(neighbor_client[i].mac_addr)) == 0)
 								{
+#ifdef FEATURE_VLAN_MPDN
+									/* for VLAN interfaces make sure this is the correct interface */
+									if(IPACM_Iface::ipacmcfg->iface_in_vlan_mode(neighbor_client[i].iface_name))
+									{
+										if(strcmp(neighbor_client[i].iface_name, data->iface_name) != 0)
+										{
+											IPACMDBG_H("IP_ADDR_DEL_EVENT: MAC match but iface name is different %s <-> %s, skip\n",
+												data->iface_name, neighbor_client[i].iface_name);
+											continue;
+										}
+									}
+#endif
 									IPACMDBG_H("Clean %d-st Cached client-MAC %02x:%02x:%02x:%02x:%02x:%02x\n, total client: %d\n",
 												i,
 												neighbor_client[i].mac_addr[0],
@@ -371,7 +433,9 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 									neighbor_client[i].v4_addr = 0;
 									neighbor_client[i].ipa_if_num = 0;
 									memset(neighbor_client[i].iface_name, 0, sizeof(neighbor_client[i].iface_name));
-
+#ifdef FEATURE_VLAN_MPDN
+									neighbor_client[i].bridge = NULL;
+#endif
 									for (; i < num_neighbor_client_temp - 1; i++)
 									{
 										memcpy(neighbor_client[i].mac_addr,
@@ -426,8 +490,15 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 						ipacm_bridge *bridge = IPACM_Iface::ipacmcfg->get_vlan_bridge(data->iface_name);
 						if(!bridge)
 						{
-							IPACMERR("couldn't find bridge %s, not sending internal event\n", data->iface_name);
-							return;
+							IPACMDBG("couldn't find the bridge %s, trying to add\n", data->iface_name);
+							/* since we know that this is a bridge, let's try to add */
+							IPACM_Iface::ipacmcfg->add_vlan_bridge(data);
+							bridge = IPACM_Iface::ipacmcfg->get_vlan_bridge(data->iface_name);
+							if(!bridge)
+							{
+								IPACMERR("couldn't find or add bridge %s, not sending internal event\n", data->iface_name);
+								return;
+							}
 						}
 #endif
 						/* search if seen this client or not*/
@@ -435,10 +506,43 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 						{
 							if (memcmp(neighbor_client[i].mac_addr, data->mac_addr, sizeof(neighbor_client[i].mac_addr)) == 0)
 							{
+#ifdef FEATURE_VLAN_MPDN
+								if(neighbor_client[i].bridge)
+								{
+									if(neighbor_client[i].bridge != bridge)
+									{
+										IPACMERR("client (dev %s) already associated with a different bridge %s->%s, keep looking for same MAC\n",
+											neighbor_client[i].iface_name,
+											neighbor_client[i].bridge->bridge_name,
+											bridge->bridge_name);
+										continue;
+									}
+								}
+								else
+								{
+									/* for VLAN interfaces make sure bridge is with correct VID */
+									if(IPACM_Iface::ipacmcfg->iface_in_vlan_mode(neighbor_client[i].iface_name))
+									{
+										uint8_t vlan_id;
+										if(IPACM_Iface::ipacmcfg->get_vlan_id(neighbor_client[i].iface_name, &vlan_id))
+										{
+											IPACMERR("failed to get iface vlan ID, skipping\n");
+											continue;
+										}
+										if(bridge->associate_VID != vlan_id)
+										{
+											IPACMDBG("client bridge vid mismatch (%d)(%d), skip\n",
+												vlan_id, bridge->associate_VID);
+											continue;
+										}
+										IPACMDBG_H("client - bridge vid match (%d)\n", vlan_id);
+									}
+								}
+#endif
 								data->if_index = neighbor_client[i].iface_index;
 								strlcpy(data->iface_name, neighbor_client[i].iface_name, sizeof(data->iface_name));
 								/* construct IPA_NEIGH_CLIENT_IP_ADDR_ADD_EVENT command and insert to command-queue */
-								if (event == IPA_NEW_NEIGH_EVENT)
+								if(event == IPA_NEW_NEIGH_EVENT)
 									evt_data.event = IPA_NEIGH_CLIENT_IP_ADDR_ADD_EVENT;
 								else
 									evt_data.event = IPA_NEIGH_CLIENT_IP_ADDR_DEL_EVENT;
@@ -484,7 +588,7 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 										data->iface_name);
 								}
 								break;
-							};
+							}
 						}
 					}
 					else
@@ -533,6 +637,16 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 							if (strcmp(IPACM_Iface::ipacmcfg->ipa_virtual_iface_name, data->iface_name) != 0)
 #endif
 							{
+#ifdef FEATURE_VLAN_MPDN
+								/* VLAN interface && not the same iface name */
+								if(IPACM_FAILURE == ipa_interface_index &&
+									strcmp(neighbor_client[i].iface_name, data->iface_name) != 0)
+								{
+									IPACMDBG_H("VLAN interface name (%s) is different (%s): keep looking\n",
+										neighbor_client[i].iface_name, data->iface_name);
+									continue;
+								}
+#endif
 								/* use previous ipv4 first */
 								if(data->if_index != neighbor_client[i].iface_index)
 								{
@@ -609,7 +723,9 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 								neighbor_client[i].v4_addr = 0;
 								neighbor_client[i].ipa_if_num = 0;
 								memset(neighbor_client[i].iface_name, 0, sizeof(neighbor_client[i].iface_name));
-
+#ifdef FEATURE_VLAN_MPDN
+								neighbor_client[i].bridge = NULL;
+#endif
 								for (; i < num_neighbor_client_temp - 1; i++)
 								{
 									memcpy(neighbor_client[i].mac_addr,

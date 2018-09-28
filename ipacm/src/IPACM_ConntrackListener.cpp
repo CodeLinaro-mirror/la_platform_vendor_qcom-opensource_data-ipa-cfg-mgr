@@ -1432,9 +1432,10 @@ int IPACM_ConntrackListener::AddORDeleteNatEntry(const nat_entry_bundle *input, 
 	}
 	else if (IPPROTO_UDP == input->rule->protocol)
 	{
-		if (((NFCT_T_NEW == input->type) && (pkt_threshld == 0)) ||
-		    ((pkt_threshld != 0) && (pkt_count >= pkt_threshld)
-                     && (NFCT_T_UPDATE == input->type)))
+		if (((NFCT_T_NEW == input->type || NFCT_T_UPDATE == input->type)
+			&& (pkt_threshld == 0)) ||
+			((pkt_threshld != 0) && (pkt_count >= pkt_threshld)
+			&& (NFCT_T_UPDATE == input->type)))
 		{
 			IPACMDBG("New UDP connection at time %ld\n", time(NULL));
 #ifdef FEATURE_VLAN_MPDN
@@ -1535,7 +1536,8 @@ void IPACM_ConntrackListener::AddORDeleteNatEntry_v6(const ipacm_ct_evt_data* ev
 	}
 	else if (IPPROTO_UDP == entry.m_protocol)
 	{
-		if (((NFCT_T_NEW == evt_data->type) && (pkt_threshld == 0)) ||
+		if (((NFCT_T_NEW == evt_data->type || NFCT_T_UPDATE == evt_data->type)
+			&& (pkt_threshld == 0)) ||
 			((pkt_threshld != 0) && (pkt_count >= pkt_threshld)
 			&& (NFCT_T_UPDATE == evt_data->type)))
 		{
@@ -2151,8 +2153,13 @@ void IPACM_ConntrackListener::HandleSTAClientAddEvt_v6(const IpAddress& ip)
 	{
 		++StaClntCnt_v6;
 		IpAddress* entry = sta_clnt_ipv6_addr.GetFirstEmpty();
-		*entry = ip;
-		IPACMDBG("STA client cnt %d\n", StaClntCnt_v6);
+		if (entry)
+		{
+			*entry = ip;
+			IPACMDBG("STA client cnt %d\n", StaClntCnt_v6);
+		}
+		else
+			IPACMDBG_H("Entry is NULL\n");
 	}
 
 	ipv6ct_inst->FlushTempEntries(ip, true, false, true);

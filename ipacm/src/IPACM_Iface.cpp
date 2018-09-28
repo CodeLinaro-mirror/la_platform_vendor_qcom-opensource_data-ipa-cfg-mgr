@@ -1040,3 +1040,10 @@ void IPACM_Iface::config_ip_type(ipa_ip_type iptype)
 
 	return;
 }
+
+void IPACM_Iface::delete_iface(void)
+{
+	IPACMDBG_H("netdev (%s):ipa_index (%d) instance close \n",
+			IPACM_Iface::ipacmcfg->iface_table[ipa_if_num].iface_name, ipa_if_num);
+	delete this;
+}

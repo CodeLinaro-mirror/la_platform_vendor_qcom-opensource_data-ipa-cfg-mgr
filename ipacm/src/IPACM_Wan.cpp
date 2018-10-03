@@ -6312,17 +6312,19 @@ int IPACM_Wan::install_wan_filtering_rule(bool is_sw_routing)
 			{
 #ifdef FEATURE_VLAN_MPDN
 				/* embms get's the mux ID of the default PDN */
-				mux_id_v6[0] = IPACM_Iface::ipacmcfg->GetQmapId();
-				for(int i = 1; i < IPACM_Wan::num_v6_flt_rule + 1; i++)
-				{
-					mux_id_v6[i] = IPACM_Wan::pdn_flt_rule_v6[i].mux_id;
-					memcpy(&pFilteringTable_v6->rules[i],
-						&IPACM_Wan::pdn_flt_rule_v6[i].flt_rule,
-						sizeof(ipa_flt_rule_add));
-				}
+				if (mux_id_v6 != NULL) {
+					mux_id_v6[0] = IPACM_Iface::ipacmcfg->GetQmapId();
+					for(int i = 1; i < IPACM_Wan::num_v6_flt_rule + 1; i++)
+					{
+						mux_id_v6[i] = IPACM_Wan::pdn_flt_rule_v6[i].mux_id;
+						memcpy(&pFilteringTable_v6->rules[i],
+							&IPACM_Wan::pdn_flt_rule_v6[i].flt_rule,
+							sizeof(ipa_flt_rule_add));
+					}
 #else
-				memcpy(&(pFilteringTable_v6->rules[1]), IPACM_Wan::flt_rule_v6, IPACM_Wan::num_v6_flt_rule * sizeof(ipa_flt_rule_add));
+					memcpy(&(pFilteringTable_v6->rules[1]), IPACM_Wan::flt_rule_v6, IPACM_Wan::num_v6_flt_rule * sizeof(ipa_flt_rule_add));
 #endif
+				}
 			}
 		}
 	}

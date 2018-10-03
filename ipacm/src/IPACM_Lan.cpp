@@ -5081,6 +5081,11 @@ int IPACM_Lan::delete_uplink_filter_rule_ul(ul_firewall_t *ul_firewall)
 	if(ul_firewall->num_ul_frag_installed)
 	{
 		IPACMDBG_H("deleting %d UL frag flt rules\n", ul_firewall->num_ul_frag_installed);
+		if (ul_firewall->num_ul_frag_installed > IPA_MAX_NUM_HW_PDNS)
+		{
+			IPACMDBG_H("Invalid number of UL fragment rules\n");
+			return IPACM_FAILURE;
+		}
 		flt_rule_hdls = ul_firewall->ul_frag_handle;
 		if(m_filtering.DeleteFilteringHdls(flt_rule_hdls, IPA_IP_v6, ul_firewall->num_ul_frag_installed) == false)
 		{
@@ -5629,7 +5634,7 @@ int IPACM_Lan::config_dft_firewall_rules_ul(IPACM_firewall_conf_t* firewall_conf
 
 	for (i = 0; i < firewall_conf->num_extd_firewall_entries; i++)
 	{
-		if(ul_firewall->num_ul_firewall_installed >= IPACM_MAX_FIREWALL_ENTRIES)
+		if(ul_firewall->num_ul_firewall_installed >= (IPACM_MAX_FIREWALL_ENTRIES - 1))
 		{
 			IPACMERR("reached MAX num of UL FW rules for ep, breaking\n");
 			break;
@@ -5676,12 +5681,6 @@ int IPACM_Lan::config_dft_firewall_rules_ul(IPACM_firewall_conf_t* firewall_conf
 #endif
 
 			/* check if the rule is define as TCP/UDP */
-			if ( ul_firewall->num_ul_firewall_installed >= IPACM_MAX_FIREWALL_ENTRIES) {
-				IPACMERR("UL firewall rule has reached at max\n");
-				res = IPACM_FAILURE;
-				goto fail;
-			}
-
 			if (firewall_conf->extd_firewall_entries[i].attrib.u.v6.next_hdr == IPACM_FIREWALL_IPPROTO_TCP_UDP)
 			{
 				/* insert TCP rule*/

@@ -53,6 +53,11 @@
 
 bool IPACM_Lan::odu_up = false;
 
+#ifdef FEATURE_IPACM_PER_CLIENT_STATS
+ipa_lan_client_idx IPACM_Lan::active_lan_client_index_odu[IPA_MAX_NUM_HW_PATH_CLIENTS];
+ipa_lan_client_idx IPACM_Lan::inactive_lan_client_index_odu[IPA_MAX_NUM_HW_PATH_CLIENTS];
+#endif
+
 IPACM_Lan::IPACM_Lan(int iface_index) : IPACM_Iface(iface_index)
 {
 	num_eth_client = 0;
@@ -69,6 +74,7 @@ IPACM_Lan::IPACM_Lan(int iface_index) : IPACM_Iface(iface_index)
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
 	int max_clients = (IPACM_Iface::ipacmcfg->ipacm_lan_stats_enable) ? IPA_MAX_NUM_HW_PATH_CLIENTS:
 		IPA_MAX_NUM_ETH_CLIENTS;
+	is_odu = false;
 #else
 	int max_clients = IPA_MAX_NUM_ETH_CLIENTS;
 #endif
@@ -142,6 +148,15 @@ IPACM_Lan::IPACM_Lan(int iface_index) : IPACM_Iface(iface_index)
 		}
 	}
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
+	if (rx_prop)
+	{
+		if (rx_prop->rx[0].src_pipe == IPA_CLIENT_ODU_PROD)
+			is_odu = true;
+		else
+			is_odu = false;
+	}
+	IPACMDBG_H ("Is ODU client? %s\n", is_odu?"Yes":"No");
+
 	for (i = 0; i < IPA_MAX_NUM_HW_PATH_CLIENTS; i++)
 	{
 		active_lan_client_index[i].lan_stats_idx = -1;
@@ -149,6 +164,14 @@ IPACM_Lan::IPACM_Lan(int iface_index) : IPACM_Iface(iface_index)
 		inactive_lan_client_index[i].lan_stats_idx = -1;
 		memset(inactive_lan_client_index[i].mac, 0, IPA_MAC_ADDR_SIZE);
 	}
+	for (i = 0; i < IPA_MAX_NUM_HW_PATH_CLIENTS; i++)
+	{
+		active_lan_client_index_odu[i].lan_stats_idx = -1;
+		memset(active_lan_client_index_odu[i].mac, 0, IPA_MAC_ADDR_SIZE);
+		inactive_lan_client_index_odu[i].lan_stats_idx = -1;
+		memset(inactive_lan_client_index_odu[i].mac, 0, IPA_MAC_ADDR_SIZE);
+	}
+
 #endif
 	/* ODU routing table initilization */
 	if(ipa_if_cate == ODU_IF)
@@ -2838,6 +2861,7 @@ int IPACM_Lan::handle_eth_hdr_init(uint8_t *mac_addr, ipacm_bridge *bridge, uint
 		get_client_memptr(eth_client, num_eth_client)->ipv4_set = false;
 		get_client_memptr(eth_client, num_eth_client)->ipv6_set = 0;
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
+		IPACMDBG_H ("Is ODU client? %s\n", is_odu?"Yes":"No");
 		get_client_memptr(eth_client, num_eth_client)->ipv4_ul_rules_set = false;
 		get_client_memptr(eth_client, num_eth_client)->ipv4_ul_rules_set = false;
 		get_client_memptr(eth_client, num_eth_client)->lan_stats_idx = get_lan_stats_index(get_client_memptr(eth_client, num_eth_client)->mac);
@@ -2862,6 +2886,10 @@ int IPACM_Lan::handle_eth_hdr_init(uint8_t *mac_addr, ipacm_bridge *bridge, uint
 			if (ipa_if_cate == LAN_IF)
 			{
 				client_info->device_type = IPACM_CLIENT_DEVICE_TYPE_USB;
+			}
+			else if (ipa_if_cate == ODU_IF && is_odu == true)
+			{
+				client_info->device_type = IPACM_CLIENT_DEVICE_TYPE_ODU;
 			}
 			else if (ipa_if_cate == ODU_IF)
 			{
@@ -3326,6 +3354,7 @@ int IPACM_Lan::handle_lan_client_connect(uint8_t *mac_addr)
 		return IPACM_FAILURE;
 	}
 
+	IPACMDBG_H ("Is ODU client? %s\n", is_odu?"Yes":"No");
 	get_client_memptr(eth_client, eth_index)->lan_stats_idx = get_lan_stats_index(mac_addr);
 
 	if (get_client_memptr(eth_client, eth_index)->lan_stats_idx == -1)
@@ -3347,6 +3376,10 @@ int IPACM_Lan::handle_lan_client_connect(uint8_t *mac_addr)
 		if (ipa_if_cate == LAN_IF)
 		{
 			client_info->device_type = IPACM_CLIENT_DEVICE_TYPE_USB;
+		}
+		else if (ipa_if_cate == ODU_IF && is_odu == true)
+		{
+			client_info->device_type = IPACM_CLIENT_DEVICE_TYPE_ODU;
 		}
 		else if (ipa_if_cate == ODU_IF)
 		{
@@ -3411,6 +3444,8 @@ int IPACM_Lan::handle_lan_client_disconnect(uint8_t *mac_addr)
 {
 	int i;
 	uint8_t mac[IPA_MAC_ADDR_SIZE];
+
+	IPACMDBG_H ("Is ODU client? %s\n", is_odu?"Yes":"No");
 
 	/* Check if the client is in active list and remove it. */
 	if (reset_active_lan_stats_index(get_lan_stats_index(mac_addr), mac_addr) == -1)
@@ -4105,6 +4140,10 @@ int IPACM_Lan::handle_eth_client_down_evt(uint8_t *mac_addr, uint8_t vlan_id)
 		if (ipa_if_cate == LAN_IF)
 		{
 			client_info->device_type = IPACM_CLIENT_DEVICE_TYPE_USB;
+		}
+		else if (ipa_if_cate == ODU_IF && is_odu == true)
+		{
+				client_info->device_type = IPACM_CLIENT_DEVICE_TYPE_ODU;
 		}
 		else if (ipa_if_cate == ODU_IF)
 		{

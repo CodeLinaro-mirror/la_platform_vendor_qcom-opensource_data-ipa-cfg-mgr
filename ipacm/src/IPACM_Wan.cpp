@@ -481,8 +481,11 @@ int IPACM_Wan::handle_addr_evt(ipacm_event_data_addr *data)
 			memcpy(ipv6_prefix, data->ipv6_addr, sizeof(ipv6_prefix));
 			memcpy(m_ipv6_addr, data->ipv6_addr, sizeof(m_ipv6_addr));
 #ifdef FEATURE_VLAN_MPDN
-			memcpy(ipv6_to_iface[modem_ipv6_pdn_index].ipv6_prefix, data->ipv6_addr, sizeof(uint32_t) * 2);
-			ipv6_to_iface[modem_ipv6_pdn_index].pIface = this;
+			if(m_is_sta_mode == Q6_WAN)
+			{
+				memcpy(ipv6_to_iface[modem_ipv6_pdn_index].ipv6_prefix, data->ipv6_addr, sizeof(uint32_t) * 2);
+				ipv6_to_iface[modem_ipv6_pdn_index].pIface = this;
+			}
 #endif
 		}
 	    num_dft_rt_v6++;

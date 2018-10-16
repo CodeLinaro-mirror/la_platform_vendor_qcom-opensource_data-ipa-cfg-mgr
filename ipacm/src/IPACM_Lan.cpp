@@ -2271,6 +2271,11 @@ int IPACM_Lan::handle_wan_up(ipa_ip_type ip_type)
 	}
 	else if(ip_type == IPA_IP_v6)
 	{
+		if(IPACM_Iface::ipacmcfg->ipv6_nat_enable)
+		{
+			IPACMDBG_H("IPV6 NAT is enabled. Don't install v6 rules\n");
+			return IPACM_SUCCESS;
+		}
 		/* add default v6 filter rule */
 		m_pFilteringTable = (struct ipa_ioc_add_flt_rule *)
 			 calloc(1, sizeof(struct ipa_ioc_add_flt_rule) +
@@ -2407,6 +2412,11 @@ int IPACM_Lan::handle_wan_up_ex(ipacm_ext_prop *ext_prop, ipa_ip_type iptype, ui
 				return IPACM_SUCCESS;
 			}
 #endif
+			if (IPACM_Iface::ipacmcfg->ipv6_nat_enable)
+			{
+				IPACMDBG_H("IPV6 NAT is enabled. Don't install v6 rules\n");
+				return IPACM_SUCCESS;
+			}
 #ifdef FEATURE_VLAN_MPDN
 			ret = handle_uplink_filter_rule(ext_prop, iptype, xlat_mux_id, false, true);
 #else

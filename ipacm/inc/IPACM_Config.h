@@ -136,6 +136,7 @@ public:
 	bool ipacm_lan_stats_enable_set;
 #endif
 
+	bool ipv6_nat_enable;
 	int ipa_nat_iface_entries;
 
 	/* Store the total number of wlan guest ap configured */

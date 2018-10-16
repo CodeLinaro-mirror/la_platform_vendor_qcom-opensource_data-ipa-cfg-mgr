@@ -198,6 +198,8 @@ if (!(a)) {                                                 \
 #define LAN_Stats_Enable_TAG                 "EnableLANStats"
 #endif
 
+#define IPACM_IPV6NAT_TAG                     "IPACMIPV6NAT"
+#define IPACM_IPV6NAT_Enable_TAG              "IPV6NATEnabled"
 /*---------------------------------------------------------------------------
       IP protocol numbers - use in dss_socket() to identify protocols.
       Also contains the extension header types for IPv6.
@@ -318,6 +320,7 @@ typedef struct  _IPACM_conf_t
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
 	bool lan_stats_enable;
 #endif
+	bool ipv6_nat_enable;
 } IPACM_conf_t;
 
 /* This function read IPACM XML configuration*/

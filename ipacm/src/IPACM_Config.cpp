@@ -144,6 +144,7 @@ IPACM_Config::IPACM_Config()
 	ipacm_lan_stats_enable = false;
 	ipacm_lan_stats_enable_set = false;
 #endif
+	ipv6_nat_enable = false;
 	ipacm_odu_router_mode = false;
 	ipa_num_wlan_guest_ap = 0;
 
@@ -346,7 +347,7 @@ int IPACM_Config::Init(void)
 		IPACMDBG_H("ipacm_lan_stats_enable %d. \n", ipacm_lan_stats_enable);
 	}
 #endif
-
+	ipv6_nat_enable = cfg->ipv6_nat_enable;
 	ipa_num_wlan_guest_ap = cfg->num_wlan_guest_ap;
 	IPACMDBG_H("ipa_num_wlan_guest_ap %d\n",ipa_num_wlan_guest_ap);
 

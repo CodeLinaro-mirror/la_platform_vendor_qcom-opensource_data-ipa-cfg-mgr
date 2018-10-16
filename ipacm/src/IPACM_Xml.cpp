@@ -173,6 +173,7 @@ static int ipacm_cfg_xml_parse_tree
 						IPACM_util_icmp_string((char*)xml_node->name, ALG_TAG) == 0 ||
 						IPACM_util_icmp_string((char*)xml_node->name, IPACMNat_TAG) == 0 ||
 						IPACM_util_icmp_string((char*)xml_node->name, IPACM_IPV6CT_TAG) == 0 ||
+						IPACM_util_icmp_string((char*)xml_node->name, IPACM_IPV6NAT_TAG) == 0 ||
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
 						IPACM_util_icmp_string((char*)xml_node->name, LAN_Stats_TAG) == 0 ||
 #endif
@@ -523,6 +524,33 @@ static int ipacm_cfg_xml_parse_tree
 							memcpy(content_buf, (void *)content, str_size);
 							config->ipv6ct_max_entries = atoi(content_buf);
 							IPACMDBG_H("IPv6CT Table Max Entries %d\n", config->ipv6ct_max_entries);
+						}
+					}
+				}
+				else if (IPACM_util_icmp_string((char*)xml_node->name, IPACM_IPV6NAT_Enable_TAG) == 0)
+				{
+					IPACMDBG_H("inside enable IPV6 NAT\n");
+					content = IPACM_read_content_element(xml_node);
+					if (content == NULL)
+					{
+						IPACMERR("Failed to read the content of the tag %s\n", IPACM_IPV6NAT_Enable_TAG);
+					}
+					else
+					{
+						str_size = strlen(content);
+						memset(content_buf, 0, sizeof(content_buf));
+						memcpy(content_buf, (void *)content, str_size);
+						if (atoi(content_buf))
+						{
+							config->ipv6_nat_enable = true;
+							IPACMDBG_H("IPV6 NAT enable %d buf(%d)\n",
+								config->ipv6_nat_enable, atoi(content_buf));
+						}
+						else
+						{
+							config->ipv6_nat_enable = false;
+							IPACMDBG_H("IPV6 NAT enable %d buf(%d)\n",
+								config->ipv6_nat_enable, atoi(content_buf));
 						}
 					}
 				}

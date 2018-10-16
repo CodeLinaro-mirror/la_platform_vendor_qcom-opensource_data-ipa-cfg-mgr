@@ -174,5 +174,8 @@
 			<IPv6CTEnabled>0</IPv6CTEnabled>
 			<MaxIpv6CTEntries>500</MaxIpv6CTEntries>
 		</IPACMIPV6CT>
+		<IPACMIPV6NAT>
+			<IPV6NATEnabled>0</IPV6NATEnabled>
+		</IPACMIPV6NAT>
 	</IPACM>
 </system>

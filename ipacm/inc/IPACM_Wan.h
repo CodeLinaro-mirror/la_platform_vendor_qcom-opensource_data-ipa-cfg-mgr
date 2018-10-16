@@ -361,7 +361,6 @@ private:
 	bool is_xlat;
 
 	/* update network stats for CNE */
-	int ipa_network_stats_fd;
 	uint32_t hdr_hdl_dummy_v6;
 	uint32_t hdr_proc_hdl_dummy_v6;
 

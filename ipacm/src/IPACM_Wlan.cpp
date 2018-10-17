@@ -2319,7 +2319,7 @@ int IPACM_Wlan::handle_down_evt()
 			IPACMDBG_H("Deleted default v4 filter rules successfully.\n");
 		}
 		/* delete private-ipv4 filter rules */
-#ifdef FEATURE_IPA_ANDROID
+#if defined(FEATURE_IPA_ANDROID) || defined(FEATURE_VLAN_MPDN)
 		if(m_filtering.DeleteFilteringHdls(private_fl_rule_hdl, IPA_IP_v4, IPA_MAX_PRIVATE_SUBNET_ENTRIES) == false)
 		{
 			IPACMERR("Error deleting private subnet IPv4 flt rules.\n");

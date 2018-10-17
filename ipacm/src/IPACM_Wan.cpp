@@ -139,6 +139,9 @@ IPACM_Wan::IPACM_Wan(int iface_index,
 	m_is_sta_mode = is_sta_mode;
 
 	/* Used to store the Public IP info in IP passthrough mode. */
+	wan_v4_addr = 0;
+	wan_v4_addr_gw = 0;
+	public_wan_v4_addr = 0;
 	public_wan_v4_addr_set = false;
 	wan_v4_addr_set = false;
 	wan_v4_addr_gw_set = false;

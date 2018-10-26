@@ -371,6 +371,7 @@ public:
 
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
 private:
+	static bool lan_stats_inited;
 	static ipa_lan_client_idx active_lan_client_index_odu[IPA_MAX_NUM_HW_PATH_CLIENTS];
 	/* Clients which take SW path. */
 	static ipa_lan_client_idx inactive_lan_client_index_odu[IPA_MAX_NUM_HW_PATH_CLIENTS];

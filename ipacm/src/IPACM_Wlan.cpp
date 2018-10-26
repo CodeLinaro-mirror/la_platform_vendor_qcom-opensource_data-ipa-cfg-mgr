@@ -56,6 +56,7 @@ int IPACM_Wlan::total_num_wifi_clients = 0;
 int IPACM_Wlan::num_wlan_ap_iface = 0;
 
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
+bool IPACM_Wlan::lan_stats_inited = false;
 ipa_lan_client_idx IPACM_Wlan::active_lan_client_index[IPA_MAX_NUM_HW_PATH_CLIENTS];
 ipa_lan_client_idx IPACM_Wlan::inactive_lan_client_index[IPA_MAX_NUM_HW_PATH_CLIENTS];
 #endif
@@ -91,12 +92,16 @@ IPACM_Wlan::IPACM_Wlan(int iface_index) : IPACM_Lan(iface_index), ipv6ct_inst(Ip
 	wlan_client_len = 0;
 
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
-		for (i = 0; i < IPA_MAX_NUM_HW_PATH_CLIENTS; i++)
+		if (lan_stats_inited == false)
 		{
-			active_lan_client_index[i].lan_stats_idx = -1;
-			memset(active_lan_client_index[i].mac, 0, IPA_MAC_ADDR_SIZE);
-			inactive_lan_client_index[i].lan_stats_idx = -1;
-			memset(inactive_lan_client_index[i].mac, 0, IPA_MAC_ADDR_SIZE);
+			for (i = 0; i < IPA_MAX_NUM_HW_PATH_CLIENTS; i++)
+			{
+				active_lan_client_index[i].lan_stats_idx = -1;
+				memset(active_lan_client_index[i].mac, 0, IPA_MAC_ADDR_SIZE);
+				inactive_lan_client_index[i].lan_stats_idx = -1;
+				memset(inactive_lan_client_index[i].mac, 0, IPA_MAC_ADDR_SIZE);
+			}
+			lan_stats_inited = true;
 		}
 #endif
 

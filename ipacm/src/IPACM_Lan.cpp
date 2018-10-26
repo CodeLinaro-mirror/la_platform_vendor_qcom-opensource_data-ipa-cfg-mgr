@@ -54,6 +54,7 @@
 bool IPACM_Lan::odu_up = false;
 
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
+bool IPACM_Lan::lan_stats_inited = false;
 ipa_lan_client_idx IPACM_Lan::active_lan_client_index_odu[IPA_MAX_NUM_HW_PATH_CLIENTS];
 ipa_lan_client_idx IPACM_Lan::inactive_lan_client_index_odu[IPA_MAX_NUM_HW_PATH_CLIENTS];
 #endif
@@ -164,12 +165,16 @@ IPACM_Lan::IPACM_Lan(int iface_index) : IPACM_Iface(iface_index)
 		inactive_lan_client_index[i].lan_stats_idx = -1;
 		memset(inactive_lan_client_index[i].mac, 0, IPA_MAC_ADDR_SIZE);
 	}
-	for (i = 0; i < IPA_MAX_NUM_HW_PATH_CLIENTS; i++)
+	if (lan_stats_inited == false)
 	{
-		active_lan_client_index_odu[i].lan_stats_idx = -1;
-		memset(active_lan_client_index_odu[i].mac, 0, IPA_MAC_ADDR_SIZE);
-		inactive_lan_client_index_odu[i].lan_stats_idx = -1;
-		memset(inactive_lan_client_index_odu[i].mac, 0, IPA_MAC_ADDR_SIZE);
+		for (i = 0; i < IPA_MAX_NUM_HW_PATH_CLIENTS; i++)
+		{
+			active_lan_client_index_odu[i].lan_stats_idx = -1;
+			memset(active_lan_client_index_odu[i].mac, 0, IPA_MAC_ADDR_SIZE);
+			inactive_lan_client_index_odu[i].lan_stats_idx = -1;
+			memset(inactive_lan_client_index_odu[i].mac, 0, IPA_MAC_ADDR_SIZE);
+		}
+		lan_stats_inited = true;
 	}
 
 #endif

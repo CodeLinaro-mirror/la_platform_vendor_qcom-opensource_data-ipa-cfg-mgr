@@ -159,6 +159,7 @@ private:
 	NatBase* const ipv6ct_inst;
 
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
+	static bool lan_stats_inited;
 	/* Clients which take HW path. */
 	static ipa_lan_client_idx active_lan_client_index[IPA_MAX_NUM_HW_PATH_CLIENTS];
 	/* Clients which take SW path. */

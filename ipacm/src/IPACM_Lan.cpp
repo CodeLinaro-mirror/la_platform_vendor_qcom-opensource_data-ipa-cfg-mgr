@@ -4623,6 +4623,10 @@ fail:
 					{
 						client_info->device_type = IPACM_CLIENT_DEVICE_TYPE_USB;
 					}
+					else if (ipa_if_cate == ODU_IF && is_odu == true)
+					{
+						client_info->device_type = IPACM_CLIENT_DEVICE_TYPE_ODU;
+					}
 					else if (ipa_if_cate == ODU_IF)
 					{
 						client_info->device_type = IPACM_CLIENT_DEVICE_TYPE_ETH;

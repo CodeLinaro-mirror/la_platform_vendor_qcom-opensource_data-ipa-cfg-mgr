@@ -201,6 +201,32 @@ public:
 		return false;
 	}
 
+	static int getFreePDNIndex_V4()
+	{
+		for(int i = 0; i < IPA_MAX_NUM_SW_PDNS; i++)
+		{
+			if(!ipv4_to_iface[i].pIface)
+			{
+				IPACMDBG_H("iface index %d is free\n", i);
+				return i;
+			}
+		}
+		return -1;
+	}
+
+	static int getFreePDNIndex_V6()
+	{
+		for(int i = 0; i < IPA_MAX_NUM_SW_PDNS; i++)
+		{
+			if(!ipv6_to_iface[i].pIface)
+			{
+				IPACMDBG_H("iface index %d is free\n", i);
+				return i;
+			}
+		}
+		return -1;
+	}
+
 	static bool isDefaultGatewayIfaceUp(IPACM_Wan *iface)
 	{
 		if(wan_up && iface->is_default_gateway)

@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2013-2017, The Linux Foundation. All rights reserved.
+Copyright (c) 2013-2018, The Linux Foundation. All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are
@@ -3434,8 +3434,7 @@ int IPACM_Wan::add_icmp_alg_rules(struct ipa_flt_rule_add *rules, int rule_offse
 		memcpy(&flt_rule_entry.rule.attrib,
 					 &rx_prop->rx[0].attrib,
 					 sizeof(flt_rule_entry.rule.attrib));
-		/* remove meta data mask */
-		flt_rule_entry.rule.attrib.attrib_mask &= ~((uint32_t)IPA_FLT_META_DATA);
+		/* Multiple PDNs may exist so keep meta-data */
 		flt_rule_entry.rule.attrib.attrib_mask |= IPA_FLT_SRC_PORT;
 		flt_rule_entry.rule.attrib.attrib_mask |= IPA_FLT_PROTOCOL;
 		for(i = 0; i < ipacm_config->ipa_num_alg_ports; i++)
@@ -3462,8 +3461,7 @@ int IPACM_Wan::add_icmp_alg_rules(struct ipa_flt_rule_add *rules, int rule_offse
 		memcpy(&flt_rule_entry.rule.attrib,
 					 &rx_prop->rx[0].attrib,
 					 sizeof(flt_rule_entry.rule.attrib));
-		/* remove meta data mask */
-		flt_rule_entry.rule.attrib.attrib_mask &= ~((uint32_t)IPA_FLT_META_DATA);
+		/* Multiple PDNs may exist so keep meta-data */
 		flt_rule_entry.rule.attrib.attrib_mask |= IPA_FLT_DST_PORT;
 		flt_rule_entry.rule.attrib.attrib_mask |= IPA_FLT_PROTOCOL;
 		for(i = 0; i < ipacm_config->ipa_num_alg_ports; i++)

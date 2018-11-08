@@ -2408,7 +2408,7 @@ int IPACM_Lan::handle_wan_up_ex(ipacm_ext_prop *ext_prop, ipa_ip_type iptype, ui
 			}
 #endif
 #ifdef FEATURE_VLAN_MPDN
-			ret = handle_uplink_filter_rule(ext_prop, iptype, ipacm_config->GetQmapId(), false);
+			ret = handle_uplink_filter_rule(ext_prop, iptype, xlat_mux_id, false, true);
 #else
 			ret = handle_uplink_filter_rule(ext_prop, iptype, xlat_mux_id);
 #endif
@@ -2417,7 +2417,7 @@ int IPACM_Lan::handle_wan_up_ex(ipacm_ext_prop *ext_prop, ipa_ip_type iptype, ui
 #ifdef FEATURE_VLAN_MPDN
 		else
 		{
-			ret = handle_uplink_filter_rule(ext_prop, iptype, ipacm_config->GetQmapId(), true);
+			ret = handle_uplink_filter_rule(ext_prop, iptype, xlat_mux_id, true, true);
 		}
 #endif
 	}
@@ -2427,7 +2427,7 @@ int IPACM_Lan::handle_wan_up_ex(ipacm_ext_prop *ext_prop, ipa_ip_type iptype, ui
 		{
 			IPACMDBG_H("IPA_IP_v4 xlat_mux_id: %d, modem_ul_v4_set %d\n", xlat_mux_id, modem_ul_v4_set);
 #ifdef FEATURE_VLAN_MPDN
-			ret = handle_uplink_filter_rule(ext_prop, iptype, ipacm_config->GetQmapId(), false);
+			ret = handle_uplink_filter_rule(ext_prop, iptype, xlat_mux_id, false, true);
 #else
 			ret = handle_uplink_filter_rule(ext_prop, iptype, xlat_mux_id);
 #endif
@@ -2436,7 +2436,7 @@ int IPACM_Lan::handle_wan_up_ex(ipacm_ext_prop *ext_prop, ipa_ip_type iptype, ui
 #ifdef FEATURE_VLAN_MPDN
 		else
 		{
-			ret = handle_uplink_filter_rule(ext_prop, iptype, ipacm_config->GetQmapId(), true);
+			ret = handle_uplink_filter_rule(ext_prop, iptype, xlat_mux_id, true, true);
 		}
 #endif
 	}
@@ -4785,7 +4785,7 @@ fail:
 
 /* install UL filter rule from Q6 */
 #ifdef FEATURE_VLAN_MPDN
-int IPACM_Lan::handle_uplink_filter_rule(ipacm_ext_prop *prop, ipa_ip_type iptype, uint8_t pdn_mux_id, bool notif_only)
+int IPACM_Lan::handle_uplink_filter_rule(ipacm_ext_prop *prop, ipa_ip_type iptype, uint8_t pdn_mux_id, bool notif_only, bool is_xlat)
 #else
 int IPACM_Lan::handle_uplink_filter_rule(ipacm_ext_prop *prop, ipa_ip_type iptype, uint8_t xlat_mux_id)
 #endif
@@ -4851,7 +4851,10 @@ int IPACM_Lan::handle_uplink_filter_rule(ipacm_ext_prop *prop, ipa_ip_type iptyp
 	flt_index.retain_header = 0;
 	flt_index.embedded_call_mux_id_valid = 1;
 #ifdef FEATURE_VLAN_MPDN
-	flt_index.embedded_call_mux_id = pdn_mux_id;
+	if (is_xlat)
+		flt_index.embedded_call_mux_id = IPACM_Iface::ipacmcfg->GetQmapId();
+	else
+		flt_index.embedded_call_mux_id = pdn_mux_id;
 #else
 	flt_index.embedded_call_mux_id = IPACM_Iface::ipacmcfg->GetQmapId();
 #endif
@@ -4938,6 +4941,19 @@ int IPACM_Lan::handle_uplink_filter_rule(ipacm_ext_prop *prop, ipa_ip_type iptyp
 			flt_rule_entry.rule.eq_attrib.metadata_meq32.mask = 0x00FF0000;
 			IPACMDBG_H("xlat meta-data is modified for rule: %d has index %d with xlat_mux_id: %d\n",
 					cnt, index, xlat_mux_id);
+		}
+#else
+		/* Handle XLAT configuration */
+		if ((iptype == IPA_IP_v4) && prop->prop[cnt].is_xlat_rule && (pdn_mux_id != 0) && is_xlat)
+		{
+			/* fill the value of meta-data */
+			value = pdn_mux_id;
+			flt_rule_entry.rule.eq_attrib.metadata_meq32_present = 1;
+			flt_rule_entry.rule.eq_attrib.metadata_meq32.offset = 0;
+			flt_rule_entry.rule.eq_attrib.metadata_meq32.value = (value & 0xFF) << 16;
+			flt_rule_entry.rule.eq_attrib.metadata_meq32.mask = 0x00FF0000;
+			IPACMDBG_H("xlat meta-data is modified for rule: %d has index %d with xlat_mux_id: %d\n",
+					cnt, index, pdn_mux_id);
 		}
 #endif
 #ifdef FEATURE_IPA_V3

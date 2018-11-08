@@ -568,7 +568,7 @@ private:
 		return IPACM_SUCCESS;
 	}
 
-	int handle_wan_hdr_init(uint8_t *mac_addr);
+	int handle_wan_hdr_init(uint8_t *mac_addr, bool gw_addr);
 	int handle_wan_client_ipaddr(ipacm_event_data_all *data);
 	int handle_wan_client_route_rule(uint8_t *mac_addr, ipa_ip_type iptype);
 

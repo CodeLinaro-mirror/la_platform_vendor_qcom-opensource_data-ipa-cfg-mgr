@@ -1180,6 +1180,7 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 	case IPA_NEIGH_CLIENT_IP_ADDR_ADD_EVENT:
 		{
 			ipacm_event_data_all *data = (ipacm_event_data_all *)param;
+			bool gw_addr = false;
 			ipa_interface_index = iface_ipa_index_query(data->if_index);
 
 			if (ipa_interface_index == ipa_if_num)
@@ -1223,7 +1224,19 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 					return;
 				}
 
-				handle_wan_hdr_init(data->mac_addr);
+				if ((data->iptype == IPA_IP_v4) && wan_v4_addr_gw_set && (data->ipv4_addr == wan_v4_addr_gw))
+					gw_addr = true;
+
+				if ((data->iptype == IPA_IP_v6) && wan_v6_addr_gw_set)
+				{
+					if(data->ipv6_addr[0] == wan_v6_addr_gw[0] &&
+					   data->ipv6_addr[1] == wan_v6_addr_gw[1] &&
+					   data->ipv6_addr[2] == wan_v6_addr_gw[2] &&
+					   data->ipv6_addr[3] == wan_v6_addr_gw[3])
+					   	gw_addr = true;
+				}
+
+				handle_wan_hdr_init(data->mac_addr, gw_addr);
 				IPACMDBG_H("construct wan-client header and route rules \n");
 				/* Associate with IP and construct RT-rule */
 				if (handle_wan_client_ipaddr(data) == IPACM_FAILURE)
@@ -6430,7 +6443,7 @@ bool IPACM_Wan::is_global_ipv6_addr(uint32_t* ipv6_addr)
 
 /* handle STA WAN-client */
 /* handle WAN client initial, construct full headers (tx property) */
-int IPACM_Wan::handle_wan_hdr_init(uint8_t *mac_addr)
+int IPACM_Wan::handle_wan_hdr_init(uint8_t *mac_addr, bool gw_addr)
 {
 
 #define WAN_IFACE_INDEX_LEN 2
@@ -6454,6 +6467,13 @@ int IPACM_Wan::handle_wan_hdr_init(uint8_t *mac_addr)
 	if (num_wan_client >= IPA_MAX_NUM_WAN_CLIENTS)
 	{
 		IPACMERR("Reached maximum number(%d) of eth clients\n", IPA_MAX_NUM_WAN_CLIENTS);
+		return IPACM_FAILURE;
+	}
+
+	/* Reserve entry for storing the GW address. */
+	if ((num_wan_client >= (IPA_MAX_NUM_WAN_CLIENTS - 1)) && !gw_addr)
+	{
+		IPACMERR("Reached maximum number(%d) of eth clients without GW address\n", num_wan_client);
 		return IPACM_FAILURE;
 	}
 

@@ -512,7 +512,11 @@ void IPACM_Wlan::event_callback(ipa_cm_event_id event, void *param)
 				IPACMDBG_H("WAN v6 is not UP\n");
 #endif //FEATURE_IPACM_UL_FIREWALL
 			memcpy(ipv6_prefix, data_wan->ipv6_prefix, sizeof(ipv6_prefix));
+#ifndef FEATURE_VLAN_MPDN
 			install_ipv6_prefix_flt_rule(data_wan->ipv6_prefix);
+#else
+			modify_ipv6_prefix_flt_rule();
+#endif
 			if(data_wan->is_sta == false)
 			{
 				ext_prop = IPACM_Iface::ipacmcfg->GetExtProp(IPA_IP_v6);

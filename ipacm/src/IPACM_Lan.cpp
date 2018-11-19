@@ -54,6 +54,7 @@
 bool IPACM_Lan::odu_up = false;
 
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
+bool IPACM_Lan::lan_stats_inited = false;
 ipa_lan_client_idx IPACM_Lan::active_lan_client_index_odu[IPA_MAX_NUM_HW_PATH_CLIENTS];
 ipa_lan_client_idx IPACM_Lan::inactive_lan_client_index_odu[IPA_MAX_NUM_HW_PATH_CLIENTS];
 #endif
@@ -164,12 +165,16 @@ IPACM_Lan::IPACM_Lan(int iface_index) : IPACM_Iface(iface_index)
 		inactive_lan_client_index[i].lan_stats_idx = -1;
 		memset(inactive_lan_client_index[i].mac, 0, IPA_MAC_ADDR_SIZE);
 	}
-	for (i = 0; i < IPA_MAX_NUM_HW_PATH_CLIENTS; i++)
+	if (lan_stats_inited == false)
 	{
-		active_lan_client_index_odu[i].lan_stats_idx = -1;
-		memset(active_lan_client_index_odu[i].mac, 0, IPA_MAC_ADDR_SIZE);
-		inactive_lan_client_index_odu[i].lan_stats_idx = -1;
-		memset(inactive_lan_client_index_odu[i].mac, 0, IPA_MAC_ADDR_SIZE);
+		for (i = 0; i < IPA_MAX_NUM_HW_PATH_CLIENTS; i++)
+		{
+			active_lan_client_index_odu[i].lan_stats_idx = -1;
+			memset(active_lan_client_index_odu[i].mac, 0, IPA_MAC_ADDR_SIZE);
+			inactive_lan_client_index_odu[i].lan_stats_idx = -1;
+			memset(inactive_lan_client_index_odu[i].mac, 0, IPA_MAC_ADDR_SIZE);
+		}
+		lan_stats_inited = true;
 	}
 
 #endif
@@ -2403,7 +2408,7 @@ int IPACM_Lan::handle_wan_up_ex(ipacm_ext_prop *ext_prop, ipa_ip_type iptype, ui
 			}
 #endif
 #ifdef FEATURE_VLAN_MPDN
-			ret = handle_uplink_filter_rule(ext_prop, iptype, ipacm_config->GetQmapId(), false);
+			ret = handle_uplink_filter_rule(ext_prop, iptype, xlat_mux_id, false, true);
 #else
 			ret = handle_uplink_filter_rule(ext_prop, iptype, xlat_mux_id);
 #endif
@@ -2412,7 +2417,7 @@ int IPACM_Lan::handle_wan_up_ex(ipacm_ext_prop *ext_prop, ipa_ip_type iptype, ui
 #ifdef FEATURE_VLAN_MPDN
 		else
 		{
-			ret = handle_uplink_filter_rule(ext_prop, iptype, ipacm_config->GetQmapId(), true);
+			ret = handle_uplink_filter_rule(ext_prop, iptype, xlat_mux_id, true, true);
 		}
 #endif
 	}
@@ -2422,7 +2427,7 @@ int IPACM_Lan::handle_wan_up_ex(ipacm_ext_prop *ext_prop, ipa_ip_type iptype, ui
 		{
 			IPACMDBG_H("IPA_IP_v4 xlat_mux_id: %d, modem_ul_v4_set %d\n", xlat_mux_id, modem_ul_v4_set);
 #ifdef FEATURE_VLAN_MPDN
-			ret = handle_uplink_filter_rule(ext_prop, iptype, ipacm_config->GetQmapId(), false);
+			ret = handle_uplink_filter_rule(ext_prop, iptype, xlat_mux_id, false, true);
 #else
 			ret = handle_uplink_filter_rule(ext_prop, iptype, xlat_mux_id);
 #endif
@@ -2431,7 +2436,7 @@ int IPACM_Lan::handle_wan_up_ex(ipacm_ext_prop *ext_prop, ipa_ip_type iptype, ui
 #ifdef FEATURE_VLAN_MPDN
 		else
 		{
-			ret = handle_uplink_filter_rule(ext_prop, iptype, ipacm_config->GetQmapId(), true);
+			ret = handle_uplink_filter_rule(ext_prop, iptype, xlat_mux_id, true, true);
 		}
 #endif
 	}
@@ -4618,6 +4623,10 @@ fail:
 					{
 						client_info->device_type = IPACM_CLIENT_DEVICE_TYPE_USB;
 					}
+					else if (ipa_if_cate == ODU_IF && is_odu == true)
+					{
+						client_info->device_type = IPACM_CLIENT_DEVICE_TYPE_ODU;
+					}
 					else if (ipa_if_cate == ODU_IF)
 					{
 						client_info->device_type = IPACM_CLIENT_DEVICE_TYPE_ETH;
@@ -4776,7 +4785,7 @@ fail:
 
 /* install UL filter rule from Q6 */
 #ifdef FEATURE_VLAN_MPDN
-int IPACM_Lan::handle_uplink_filter_rule(ipacm_ext_prop *prop, ipa_ip_type iptype, uint8_t pdn_mux_id, bool notif_only)
+int IPACM_Lan::handle_uplink_filter_rule(ipacm_ext_prop *prop, ipa_ip_type iptype, uint8_t pdn_mux_id, bool notif_only, bool is_xlat)
 #else
 int IPACM_Lan::handle_uplink_filter_rule(ipacm_ext_prop *prop, ipa_ip_type iptype, uint8_t xlat_mux_id)
 #endif
@@ -4842,7 +4851,10 @@ int IPACM_Lan::handle_uplink_filter_rule(ipacm_ext_prop *prop, ipa_ip_type iptyp
 	flt_index.retain_header = 0;
 	flt_index.embedded_call_mux_id_valid = 1;
 #ifdef FEATURE_VLAN_MPDN
-	flt_index.embedded_call_mux_id = pdn_mux_id;
+	if (is_xlat)
+		flt_index.embedded_call_mux_id = IPACM_Iface::ipacmcfg->GetQmapId();
+	else
+		flt_index.embedded_call_mux_id = pdn_mux_id;
 #else
 	flt_index.embedded_call_mux_id = IPACM_Iface::ipacmcfg->GetQmapId();
 #endif
@@ -4929,6 +4941,19 @@ int IPACM_Lan::handle_uplink_filter_rule(ipacm_ext_prop *prop, ipa_ip_type iptyp
 			flt_rule_entry.rule.eq_attrib.metadata_meq32.mask = 0x00FF0000;
 			IPACMDBG_H("xlat meta-data is modified for rule: %d has index %d with xlat_mux_id: %d\n",
 					cnt, index, xlat_mux_id);
+		}
+#else
+		/* Handle XLAT configuration */
+		if ((iptype == IPA_IP_v4) && prop->prop[cnt].is_xlat_rule && (pdn_mux_id != 0) && is_xlat)
+		{
+			/* fill the value of meta-data */
+			value = pdn_mux_id;
+			flt_rule_entry.rule.eq_attrib.metadata_meq32_present = 1;
+			flt_rule_entry.rule.eq_attrib.metadata_meq32.offset = 0;
+			flt_rule_entry.rule.eq_attrib.metadata_meq32.value = (value & 0xFF) << 16;
+			flt_rule_entry.rule.eq_attrib.metadata_meq32.mask = 0x00FF0000;
+			IPACMDBG_H("xlat meta-data is modified for rule: %d has index %d with xlat_mux_id: %d\n",
+					cnt, index, pdn_mux_id);
 		}
 #endif
 #ifdef FEATURE_IPA_V3
@@ -5081,6 +5106,11 @@ int IPACM_Lan::delete_uplink_filter_rule_ul(ul_firewall_t *ul_firewall)
 	if(ul_firewall->num_ul_frag_installed)
 	{
 		IPACMDBG_H("deleting %d UL frag flt rules\n", ul_firewall->num_ul_frag_installed);
+		if (ul_firewall->num_ul_frag_installed > IPA_MAX_NUM_HW_PDNS)
+		{
+			IPACMDBG_H("Invalid number of UL fragment rules\n");
+			return IPACM_FAILURE;
+		}
 		flt_rule_hdls = ul_firewall->ul_frag_handle;
 		if(m_filtering.DeleteFilteringHdls(flt_rule_hdls, IPA_IP_v6, ul_firewall->num_ul_frag_installed) == false)
 		{
@@ -5629,7 +5659,7 @@ int IPACM_Lan::config_dft_firewall_rules_ul(IPACM_firewall_conf_t* firewall_conf
 
 	for (i = 0; i < firewall_conf->num_extd_firewall_entries; i++)
 	{
-		if(ul_firewall->num_ul_firewall_installed >= IPACM_MAX_FIREWALL_ENTRIES)
+		if(ul_firewall->num_ul_firewall_installed >= (IPACM_MAX_FIREWALL_ENTRIES - 1))
 		{
 			IPACMERR("reached MAX num of UL FW rules for ep, breaking\n");
 			break;
@@ -5676,12 +5706,6 @@ int IPACM_Lan::config_dft_firewall_rules_ul(IPACM_firewall_conf_t* firewall_conf
 #endif
 
 			/* check if the rule is define as TCP/UDP */
-			if ( ul_firewall->num_ul_firewall_installed >= IPACM_MAX_FIREWALL_ENTRIES) {
-				IPACMERR("UL firewall rule has reached at max\n");
-				res = IPACM_FAILURE;
-				goto fail;
-			}
-
 			if (firewall_conf->extd_firewall_entries[i].attrib.u.v6.next_hdr == IPACM_FIREWALL_IPPROTO_TCP_UDP)
 			{
 				/* insert TCP rule*/

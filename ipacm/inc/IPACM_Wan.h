@@ -201,6 +201,32 @@ public:
 		return false;
 	}
 
+	static int getFreePDNIndex_V4()
+	{
+		for(int i = 0; i < IPA_MAX_NUM_SW_PDNS; i++)
+		{
+			if(!ipv4_to_iface[i].pIface)
+			{
+				IPACMDBG_H("iface index %d is free\n", i);
+				return i;
+			}
+		}
+		return -1;
+	}
+
+	static int getFreePDNIndex_V6()
+	{
+		for(int i = 0; i < IPA_MAX_NUM_SW_PDNS; i++)
+		{
+			if(!ipv6_to_iface[i].pIface)
+			{
+				IPACMDBG_H("iface index %d is free\n", i);
+				return i;
+			}
+		}
+		return -1;
+	}
+
 	static bool isDefaultGatewayIfaceUp(IPACM_Wan *iface)
 	{
 		if(wan_up && iface->is_default_gateway)
@@ -361,7 +387,6 @@ private:
 	bool is_xlat;
 
 	/* update network stats for CNE */
-	int ipa_network_stats_fd;
 	uint32_t hdr_hdl_dummy_v6;
 	uint32_t hdr_proc_hdl_dummy_v6;
 
@@ -543,7 +568,7 @@ private:
 		return IPACM_SUCCESS;
 	}
 
-	int handle_wan_hdr_init(uint8_t *mac_addr);
+	int handle_wan_hdr_init(uint8_t *mac_addr, bool gw_addr);
 	int handle_wan_client_ipaddr(ipacm_event_data_all *data);
 	int handle_wan_client_route_rule(uint8_t *mac_addr, ipa_ip_type iptype);
 

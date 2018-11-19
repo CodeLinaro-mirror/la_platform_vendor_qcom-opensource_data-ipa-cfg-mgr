@@ -56,6 +56,7 @@ int IPACM_Wlan::total_num_wifi_clients = 0;
 int IPACM_Wlan::num_wlan_ap_iface = 0;
 
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
+bool IPACM_Wlan::lan_stats_inited = false;
 ipa_lan_client_idx IPACM_Wlan::active_lan_client_index[IPA_MAX_NUM_HW_PATH_CLIENTS];
 ipa_lan_client_idx IPACM_Wlan::inactive_lan_client_index[IPA_MAX_NUM_HW_PATH_CLIENTS];
 #endif
@@ -91,12 +92,16 @@ IPACM_Wlan::IPACM_Wlan(int iface_index) : IPACM_Lan(iface_index), ipv6ct_inst(Ip
 	wlan_client_len = 0;
 
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
-		for (i = 0; i < IPA_MAX_NUM_HW_PATH_CLIENTS; i++)
+		if (lan_stats_inited == false)
 		{
-			active_lan_client_index[i].lan_stats_idx = -1;
-			memset(active_lan_client_index[i].mac, 0, IPA_MAC_ADDR_SIZE);
-			inactive_lan_client_index[i].lan_stats_idx = -1;
-			memset(inactive_lan_client_index[i].mac, 0, IPA_MAC_ADDR_SIZE);
+			for (i = 0; i < IPA_MAX_NUM_HW_PATH_CLIENTS; i++)
+			{
+				active_lan_client_index[i].lan_stats_idx = -1;
+				memset(active_lan_client_index[i].mac, 0, IPA_MAC_ADDR_SIZE);
+				inactive_lan_client_index[i].lan_stats_idx = -1;
+				memset(inactive_lan_client_index[i].mac, 0, IPA_MAC_ADDR_SIZE);
+			}
+			lan_stats_inited = true;
 		}
 #endif
 
@@ -507,7 +512,11 @@ void IPACM_Wlan::event_callback(ipa_cm_event_id event, void *param)
 				IPACMDBG_H("WAN v6 is not UP\n");
 #endif //FEATURE_IPACM_UL_FIREWALL
 			memcpy(ipv6_prefix, data_wan->ipv6_prefix, sizeof(ipv6_prefix));
+#ifndef FEATURE_VLAN_MPDN
 			install_ipv6_prefix_flt_rule(data_wan->ipv6_prefix);
+#else
+			modify_ipv6_prefix_flt_rule();
+#endif
 			if(data_wan->is_sta == false)
 			{
 				ext_prop = IPACM_Iface::ipacmcfg->GetExtProp(IPA_IP_v6);
@@ -2319,7 +2328,7 @@ int IPACM_Wlan::handle_down_evt()
 			IPACMDBG_H("Deleted default v4 filter rules successfully.\n");
 		}
 		/* delete private-ipv4 filter rules */
-#ifdef FEATURE_IPA_ANDROID
+#if defined(FEATURE_IPA_ANDROID) || defined(FEATURE_VLAN_MPDN)
 		if(m_filtering.DeleteFilteringHdls(private_fl_rule_hdl, IPA_IP_v4, IPA_MAX_PRIVATE_SUBNET_ENTRIES) == false)
 		{
 			IPACMERR("Error deleting private subnet IPv4 flt rules.\n");

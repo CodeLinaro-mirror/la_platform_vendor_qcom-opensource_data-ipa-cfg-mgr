@@ -450,6 +450,7 @@ static int ipa_nl_decode_rtm_addr
 	addr_info->metainfo = *((struct ifaddrmsg *)NLMSG_DATA(nlh));
 	buflen -= sizeof(struct nlmsghdr);
 
+	memset(&addr_info->attr_info, 0, sizeof(addr_info->attr_info));
 	/* Extract the available attributes */
 	addr_info->attr_info.param_mask = IPA_NLA_PARAM_NONE;
 
@@ -491,6 +492,7 @@ static int ipa_nl_decode_rtm_neigh
 	neigh_info->metainfo = *((struct ndmsg *)NLMSG_DATA(nlh));
 	buflen -= sizeof(struct nlmsghdr);
 
+	memset(&neigh_info->attr_info, 0, sizeof(neigh_info->attr_info));
 	/* Extract the available attributes */
 	neigh_info->attr_info.param_mask = IPA_NLA_PARAM_NONE;
 
@@ -539,6 +541,7 @@ static int ipa_nl_decode_rtm_route
 	route_info->metainfo = *((struct rtmsg *)NLMSG_DATA(nlh));
 	buflen -= sizeof(struct nlmsghdr);
 
+	memset(&route_info->attr_info, 0, sizeof(route_info->attr_info));
 	route_info->attr_info.param_mask = IPA_RTA_PARAM_NONE;
 	rtah = RTM_RTA(NLMSG_DATA(nlh));
 
@@ -1642,7 +1645,7 @@ int ipa_get_if_name
 
 	if(ioctl(fd, SIOCGIFNAME, &ifr) < 0)
 	{
-		IPACMERR("call_ioctl_on_dev: ioctl failed:\n");
+		IPACMERR("call_ioctl_on_dev: ioctl failed: %d:\n", errno);
 		close(fd);
 		return IPACM_FAILURE;
 	}

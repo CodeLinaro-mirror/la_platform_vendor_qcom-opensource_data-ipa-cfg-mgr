@@ -177,6 +177,7 @@ public:
 	ipa_lan_client_idx active_lan_client_index[IPA_MAX_NUM_HW_PATH_CLIENTS];
 	/* Clients which take SW path. This will be used as a place holder to move clients back to HW path. */
 	ipa_lan_client_idx inactive_lan_client_index[IPA_MAX_NUM_HW_PATH_CLIENTS];
+	bool is_odu;
 #endif
 #ifdef FEATURE_VLAN_MPDN
 	bool dummy_prefix_installed;
@@ -219,7 +220,7 @@ public:
 
 	/* install UL filter rule from Q6 */
 #ifdef FEATURE_VLAN_MPDN
-	virtual int handle_uplink_filter_rule(ipacm_ext_prop *prop, ipa_ip_type iptype, uint8_t pdn_mux_id, bool notif_only);
+	virtual int handle_uplink_filter_rule(ipacm_ext_prop *prop, ipa_ip_type iptype, uint8_t pdn_mux_id, bool notif_only, bool is_xlat = false);
 #else
 	virtual int handle_uplink_filter_rule(ipacm_ext_prop* prop, ipa_ip_type iptype, uint8_t xlat_mux_id);
 #endif
@@ -368,6 +369,14 @@ public:
 	int handle_l2tp_neigh(ipacm_event_data_all *data);
 #endif
 
+#ifdef FEATURE_IPACM_PER_CLIENT_STATS
+private:
+	static bool lan_stats_inited;
+	static ipa_lan_client_idx active_lan_client_index_odu[IPA_MAX_NUM_HW_PATH_CLIENTS];
+	/* Clients which take SW path. */
+	static ipa_lan_client_idx inactive_lan_client_index_odu[IPA_MAX_NUM_HW_PATH_CLIENTS];
+#endif
+
 protected:
 
 	int each_client_rt_rule_count[IPA_IP_MAX];
@@ -424,15 +433,30 @@ protected:
 		int ipv6_set, const uint32_t ipv6_addr[IPV6_NUM_ADDR][IPA_IPV6_ADDR_SIZE_IN_WORDS]);
 
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
+
 	inline bool is_lan_stats_index_available()
 	{
 		int cnt;
 
-		for(cnt = 0; cnt < IPA_MAX_NUM_HW_PATH_CLIENTS; cnt++)
+		IPACMDBG_H ("Is ODU client? %s\n", is_odu?"Yes":"No");
+		if (is_odu)
 		{
-			if (active_lan_client_index[cnt].lan_stats_idx == -1) {
-				IPACMDBG_H("Available free index :%d\n", cnt);
-				return true;
+			for(cnt = 0; cnt < IPA_MAX_NUM_HW_PATH_CLIENTS; cnt++)
+			{
+				if (active_lan_client_index_odu[cnt].lan_stats_idx == -1) {
+					IPACMDBG_H("Available free index :%d\n", cnt);
+					return true;
+				}
+			}
+		}
+		else
+		{
+			for(cnt = 0; cnt < IPA_MAX_NUM_HW_PATH_CLIENTS; cnt++)
+			{
+				if (active_lan_client_index[cnt].lan_stats_idx == -1) {
+					IPACMDBG_H("Available free index :%d\n", cnt);
+					return true;
+				}
 			}
 		}
 
@@ -454,16 +478,35 @@ protected:
 				mac_addr[0], mac_addr[1], mac_addr[2],
 				mac_addr[3], mac_addr[4], mac_addr[5]);
 
-		for(cnt = 0; cnt < IPA_MAX_NUM_HW_PATH_CLIENTS; cnt++)
+		IPACMDBG_H ("Is ODU client? %s\n", is_odu?"Yes":"No");
+		if (is_odu)
 		{
-			if (active_lan_client_index[cnt].lan_stats_idx == -1) {
-				IPACMDBG_H("Got active lan stats index :%d, reserve it\n", cnt);
-				active_lan_client_index[cnt].lan_stats_idx = cnt;
-				memcpy(active_lan_client_index[cnt].mac,
-						mac_addr,
-						IPA_MAC_ADDR_SIZE);
-				active_lan_client_index[cnt].ipa_if_num = ipa_if_num;
-				return cnt;
+			for(cnt = 0; cnt < IPA_MAX_NUM_HW_PATH_CLIENTS; cnt++)
+			{
+				if (active_lan_client_index_odu[cnt].lan_stats_idx == -1) {
+					IPACMDBG_H("Got active lan stats index :%d, reserve it\n", cnt);
+					active_lan_client_index_odu[cnt].lan_stats_idx = cnt;
+					memcpy(active_lan_client_index_odu[cnt].mac,
+							mac_addr,
+							IPA_MAC_ADDR_SIZE);
+					active_lan_client_index_odu[cnt].ipa_if_num = ipa_if_num;
+					return cnt;
+				}
+			}
+		}
+		else
+		{
+			for(cnt = 0; cnt < IPA_MAX_NUM_HW_PATH_CLIENTS; cnt++)
+			{
+				if (active_lan_client_index[cnt].lan_stats_idx == -1) {
+					IPACMDBG_H("Got active lan stats index :%d, reserve it\n", cnt);
+					active_lan_client_index[cnt].lan_stats_idx = cnt;
+					memcpy(active_lan_client_index[cnt].mac,
+							mac_addr,
+							IPA_MAC_ADDR_SIZE);
+					active_lan_client_index[cnt].ipa_if_num = ipa_if_num;
+					return cnt;
+				}
 			}
 		}
 
@@ -485,16 +528,35 @@ protected:
 				mac_addr[0], mac_addr[1], mac_addr[2],
 				mac_addr[3], mac_addr[4], mac_addr[5]);
 
-		for(cnt = 0; cnt < IPA_MAX_NUM_HW_PATH_CLIENTS; cnt++)
+		IPACMDBG_H ("Is ODU client? %s\n", is_odu?"Yes":"No");
+		if (is_odu)
 		{
-			if (inactive_lan_client_index[cnt].lan_stats_idx == -1) {
-				IPACMDBG_H("Got inactive lan stats index :%d, reserve it\n", cnt);
-				inactive_lan_client_index[cnt].lan_stats_idx = cnt;
-				memcpy(inactive_lan_client_index[cnt].mac,
-						mac_addr,
-						IPA_MAC_ADDR_SIZE);
-				inactive_lan_client_index[cnt].ipa_if_num = ipa_if_num;
-				return cnt;
+			for(cnt = 0; cnt < IPA_MAX_NUM_HW_PATH_CLIENTS; cnt++)
+			{
+				if (inactive_lan_client_index_odu[cnt].lan_stats_idx == -1) {
+					IPACMDBG_H("Got inactive lan stats index :%d, reserve it\n", cnt);
+					inactive_lan_client_index_odu[cnt].lan_stats_idx = cnt;
+					memcpy(inactive_lan_client_index_odu[cnt].mac,
+							mac_addr,
+							IPA_MAC_ADDR_SIZE);
+					inactive_lan_client_index_odu[cnt].ipa_if_num = ipa_if_num;
+					return cnt;
+				}
+			}
+		}
+		else
+		{
+			for(cnt = 0; cnt < IPA_MAX_NUM_HW_PATH_CLIENTS; cnt++)
+			{
+				if (inactive_lan_client_index[cnt].lan_stats_idx == -1) {
+					IPACMDBG_H("Got inactive lan stats index :%d, reserve it\n", cnt);
+					inactive_lan_client_index[cnt].lan_stats_idx = cnt;
+					memcpy(inactive_lan_client_index[cnt].mac,
+							mac_addr,
+							IPA_MAC_ADDR_SIZE);
+					inactive_lan_client_index[cnt].ipa_if_num = ipa_if_num;
+					return cnt;
+				}
 			}
 		}
 
@@ -516,19 +578,39 @@ protected:
 				mac_addr[0], mac_addr[1], mac_addr[2],
 				mac_addr[3], mac_addr[4], mac_addr[5]);
 
-		for(cnt = 0; cnt < IPA_MAX_NUM_HW_PATH_CLIENTS; cnt++)
+		IPACMDBG_H ("Is ODU client? %s\n", is_odu?"Yes":"No");
+		if (is_odu)
 		{
-			if (memcmp(active_lan_client_index[cnt].mac,
-						mac_addr,
-						IPA_MAC_ADDR_SIZE) == 0) {
-				IPACMDBG_H("Got lan stats index :%d, return\n", cnt);
-				active_lan_client_index[cnt].lan_stats_idx = cnt;
-				memcpy(active_lan_client_index[cnt].mac,
-						mac_addr,
-						IPA_MAC_ADDR_SIZE);
-				return cnt;
+			for(cnt = 0; cnt < IPA_MAX_NUM_HW_PATH_CLIENTS; cnt++)
+			{
+				if (memcmp(active_lan_client_index_odu[cnt].mac,
+							mac_addr,
+							IPA_MAC_ADDR_SIZE) == 0) {
+					IPACMDBG_H("Got lan stats index :%d, return\n", cnt);
+					active_lan_client_index_odu[cnt].lan_stats_idx = cnt;
+					memcpy(active_lan_client_index_odu[cnt].mac,
+							mac_addr,
+							IPA_MAC_ADDR_SIZE);
+					return cnt;
+				}
 			}
 		}
+		else
+		{
+			for(cnt = 0; cnt < IPA_MAX_NUM_HW_PATH_CLIENTS; cnt++)
+			{
+				if (memcmp(active_lan_client_index[cnt].mac,
+							mac_addr,
+							IPA_MAC_ADDR_SIZE) == 0) {
+					IPACMDBG_H("Got lan stats index :%d, return\n", cnt);
+					active_lan_client_index[cnt].lan_stats_idx = cnt;
+					memcpy(active_lan_client_index[cnt].mac,
+							mac_addr,
+							IPA_MAC_ADDR_SIZE);
+					return cnt;
+				}
+			}
+			}
 
 		IPACMDBG_H("index not available\n");
 		return -1;
@@ -547,13 +629,27 @@ protected:
 		IPACMDBG_H("Received mac_addr MAC %02x:%02x:%02x:%02x:%02x:%02x\n",
 				mac_addr[0], mac_addr[1], mac_addr[2],
 				mac_addr[3], mac_addr[4], mac_addr[5]);
-
-		for(cnt = 0; cnt < IPA_MAX_NUM_HW_PATH_CLIENTS; cnt++)
+		IPACMDBG_H ("Is ODU client? %s\n", is_odu?"Yes":"No");
+		if (is_odu)
 		{
-			if (inactive_lan_client_index[cnt].lan_stats_idx != -1) {
-				IPACMDBG_H("Got inactive lan stats index :%d, return the mac\n", cnt);
-				memcpy(mac_addr, inactive_lan_client_index[cnt].mac, IPA_MAC_ADDR_SIZE);
-				return IPACM_SUCCESS;
+			for(cnt = 0; cnt < IPA_MAX_NUM_HW_PATH_CLIENTS; cnt++)
+			{
+				if (inactive_lan_client_index_odu[cnt].lan_stats_idx != -1) {
+					IPACMDBG_H("Got inactive lan stats index :%d, return the mac\n", cnt);
+					memcpy(mac_addr, inactive_lan_client_index_odu[cnt].mac, IPA_MAC_ADDR_SIZE);
+					return IPACM_SUCCESS;
+				}
+			}
+		}
+		else
+		{
+			for(cnt = 0; cnt < IPA_MAX_NUM_HW_PATH_CLIENTS; cnt++)
+			{
+				if (inactive_lan_client_index[cnt].lan_stats_idx != -1) {
+					IPACMDBG_H("Got inactive lan stats index :%d, return the mac\n", cnt);
+					memcpy(mac_addr, inactive_lan_client_index[cnt].mac, IPA_MAC_ADDR_SIZE);
+					return IPACM_SUCCESS;
+				}
 			}
 		}
 
@@ -573,15 +669,31 @@ protected:
 				mac_addr[0], mac_addr[1], mac_addr[2],
 				mac_addr[3], mac_addr[4], mac_addr[5]);
 
-		if (idx < 0 || idx >= IPA_MAX_NUM_HW_PATH_CLIENTS ||
-			memcmp(active_lan_client_index[idx].mac,
-							mac_addr,
-							IPA_MAC_ADDR_SIZE))
+		IPACMDBG_H ("Is ODU client? %s\n", is_odu?"Yes":"No");
+		if (is_odu)
 		{
-			IPACMDBG_H("Index :%d invalid\n", idx);
-			return IPACM_FAILURE;
+			if (idx < 0 || idx >= IPA_MAX_NUM_HW_PATH_CLIENTS ||
+				memcmp(active_lan_client_index_odu[idx].mac,
+								mac_addr,
+								IPA_MAC_ADDR_SIZE))
+			{
+				IPACMDBG_H("Index :%d invalid\n", idx);
+				return IPACM_FAILURE;
+			}
+			memset(&active_lan_client_index_odu[idx], -1, sizeof(ipa_lan_client_idx));
 		}
-		memset(&active_lan_client_index[idx], -1, sizeof(ipa_lan_client_idx));
+		else
+		{
+			if (idx < 0 || idx >= IPA_MAX_NUM_HW_PATH_CLIENTS ||
+				memcmp(active_lan_client_index[idx].mac,
+								mac_addr,
+								IPA_MAC_ADDR_SIZE))
+			{
+				IPACMDBG_H("Index :%d invalid\n", idx);
+				return IPACM_FAILURE;
+			}
+			memset(&active_lan_client_index[idx], -1, sizeof(ipa_lan_client_idx));
+		}
 		return IPACM_SUCCESS;
 	}
 
@@ -599,14 +711,31 @@ protected:
 				mac_addr[0], mac_addr[1], mac_addr[2],
 				mac_addr[3], mac_addr[4], mac_addr[5]);
 
-		for(cnt = 0; cnt < IPA_MAX_NUM_HW_PATH_CLIENTS; cnt++)
+		IPACMDBG_H ("Is ODU client? %s\n", is_odu?"Yes":"No");
+		if (is_odu)
 		{
-			if (memcmp(inactive_lan_client_index[cnt].mac,
-							mac_addr,
-							IPA_MAC_ADDR_SIZE) == 0)
+			for(cnt = 0; cnt < IPA_MAX_NUM_HW_PATH_CLIENTS; cnt++)
 			{
-				memset(&inactive_lan_client_index[cnt], -1, sizeof(ipa_lan_client_idx));
-				return IPACM_SUCCESS;
+				if (memcmp(inactive_lan_client_index_odu[cnt].mac,
+								mac_addr,
+								IPA_MAC_ADDR_SIZE) == 0)
+				{
+					memset(&inactive_lan_client_index_odu[cnt], -1, sizeof(ipa_lan_client_idx));
+					return IPACM_SUCCESS;
+				}
+			}
+		}
+		else
+		{
+			for(cnt = 0; cnt < IPA_MAX_NUM_HW_PATH_CLIENTS; cnt++)
+			{
+				if (memcmp(inactive_lan_client_index[cnt].mac,
+								mac_addr,
+								IPA_MAC_ADDR_SIZE) == 0)
+				{
+					memset(&inactive_lan_client_index[cnt], -1, sizeof(ipa_lan_client_idx));
+					return IPACM_SUCCESS;
+				}
 			}
 		}
 		return IPACM_FAILURE;
@@ -623,12 +752,26 @@ protected:
 		}
 
 		/* Reset everything based on ipa_if_num. */
-		for (i = 0; i < IPA_MAX_NUM_HW_PATH_CLIENTS; i++)
+		IPACMDBG_H ("Is ODU client? %s\n", is_odu?"Yes":"No");
+		if (is_odu)
 		{
-			if (active_lan_client_index[i].ipa_if_num == ipa_if_num)
-				memset(&active_lan_client_index[i], -1, sizeof(ipa_lan_client_idx));
-			if (inactive_lan_client_index[i].ipa_if_num == ipa_if_num)
-				memset(&inactive_lan_client_index[i], -1, sizeof(ipa_lan_client_idx));
+			for (i = 0; i < IPA_MAX_NUM_HW_PATH_CLIENTS; i++)
+			{
+				if (active_lan_client_index_odu[i].ipa_if_num == ipa_if_num)
+					memset(&active_lan_client_index_odu[i], -1, sizeof(ipa_lan_client_idx));
+				if (inactive_lan_client_index_odu[i].ipa_if_num == ipa_if_num)
+					memset(&inactive_lan_client_index_odu[i], -1, sizeof(ipa_lan_client_idx));
+			}
+		}
+		else
+		{
+			for (i = 0; i < IPA_MAX_NUM_HW_PATH_CLIENTS; i++)
+			{
+				if (active_lan_client_index[i].ipa_if_num == ipa_if_num)
+					memset(&active_lan_client_index[i], -1, sizeof(ipa_lan_client_idx));
+				if (inactive_lan_client_index[i].ipa_if_num == ipa_if_num)
+					memset(&inactive_lan_client_index[i], -1, sizeof(ipa_lan_client_idx));
+			}
 		}
 	}
 

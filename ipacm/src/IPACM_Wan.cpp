@@ -139,6 +139,9 @@ IPACM_Wan::IPACM_Wan(int iface_index,
 	m_is_sta_mode = is_sta_mode;
 
 	/* Used to store the Public IP info in IP passthrough mode. */
+	wan_v4_addr = 0;
+	wan_v4_addr_gw = 0;
+	public_wan_v4_addr = 0;
 	public_wan_v4_addr_set = false;
 	wan_v4_addr_set = false;
 	wan_v4_addr_gw_set = false;
@@ -404,7 +407,13 @@ int IPACM_Wan::handle_addr_evt(ipacm_event_data_addr *data)
 		{
 			if(m_is_sta_mode == Q6_WAN)
 			{
-				modem_ipv6_pdn_index = num_ipv6_modem_pdn;
+				modem_ipv6_pdn_index = getFreePDNIndex_V6();
+				if (modem_ipv6_pdn_index == -1)
+				{
+					IPACMERR("No Free index available.!\n");
+					res = IPACM_FAILURE;
+					goto fail;
+				}
 				num_ipv6_modem_pdn++;
 				IPACMDBG_H("Now the number of modem ipv6 pdn is %d.\n", num_ipv6_modem_pdn);
 				init_fl_rule_ex(data->iptype);
@@ -481,8 +490,11 @@ int IPACM_Wan::handle_addr_evt(ipacm_event_data_addr *data)
 			memcpy(ipv6_prefix, data->ipv6_addr, sizeof(ipv6_prefix));
 			memcpy(m_ipv6_addr, data->ipv6_addr, sizeof(m_ipv6_addr));
 #ifdef FEATURE_VLAN_MPDN
-			memcpy(ipv6_to_iface[modem_ipv6_pdn_index].ipv6_prefix, data->ipv6_addr, sizeof(uint32_t) * 2);
-			ipv6_to_iface[modem_ipv6_pdn_index].pIface = this;
+			if(m_is_sta_mode == Q6_WAN)
+			{
+				memcpy(ipv6_to_iface[modem_ipv6_pdn_index].ipv6_prefix, data->ipv6_addr, sizeof(uint32_t) * 2);
+				ipv6_to_iface[modem_ipv6_pdn_index].pIface = this;
+			}
 #endif
 		}
 	    num_dft_rt_v6++;
@@ -572,7 +584,13 @@ int IPACM_Wan::handle_addr_evt(ipacm_event_data_addr *data)
 			/* initial multicast/broadcast/fragment filter rule */
 			if(m_is_sta_mode == Q6_WAN)
 			{
-				modem_ipv4_pdn_index = num_ipv4_modem_pdn;
+				modem_ipv4_pdn_index = getFreePDNIndex_V4();
+				if (modem_ipv4_pdn_index == -1)
+				{
+					IPACMERR("No Free index available.!\n");
+					res = IPACM_FAILURE;
+					goto fail;
+				}
 #ifdef FEATURE_VLAN_MPDN
 				ipv4_to_iface[modem_ipv4_pdn_index].ipv4_addr = data->ipv4_addr;
 				ipv4_to_iface[modem_ipv4_pdn_index].pIface = this;
@@ -1162,6 +1180,7 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 	case IPA_NEIGH_CLIENT_IP_ADDR_ADD_EVENT:
 		{
 			ipacm_event_data_all *data = (ipacm_event_data_all *)param;
+			bool gw_addr = false;
 			ipa_interface_index = iface_ipa_index_query(data->if_index);
 
 			if (ipa_interface_index == ipa_if_num)
@@ -1205,7 +1224,19 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 					return;
 				}
 
-				handle_wan_hdr_init(data->mac_addr);
+				if ((data->iptype == IPA_IP_v4) && wan_v4_addr_gw_set && (data->ipv4_addr == wan_v4_addr_gw))
+					gw_addr = true;
+
+				if ((data->iptype == IPA_IP_v6) && wan_v6_addr_gw_set)
+				{
+					if(data->ipv6_addr[0] == wan_v6_addr_gw[0] &&
+					   data->ipv6_addr[1] == wan_v6_addr_gw[1] &&
+					   data->ipv6_addr[2] == wan_v6_addr_gw[2] &&
+					   data->ipv6_addr[3] == wan_v6_addr_gw[3])
+					   	gw_addr = true;
+				}
+
+				handle_wan_hdr_init(data->mac_addr, gw_addr);
 				IPACMDBG_H("construct wan-client header and route rules \n");
 				/* Associate with IP and construct RT-rule */
 				if (handle_wan_client_ipaddr(data) == IPACM_FAILURE)
@@ -6309,17 +6340,19 @@ int IPACM_Wan::install_wan_filtering_rule(bool is_sw_routing)
 			{
 #ifdef FEATURE_VLAN_MPDN
 				/* embms get's the mux ID of the default PDN */
-				mux_id_v6[0] = IPACM_Iface::ipacmcfg->GetQmapId();
-				for(int i = 1; i < IPACM_Wan::num_v6_flt_rule + 1; i++)
-				{
-					mux_id_v6[i] = IPACM_Wan::pdn_flt_rule_v6[i].mux_id;
-					memcpy(&pFilteringTable_v6->rules[i],
-						&IPACM_Wan::pdn_flt_rule_v6[i].flt_rule,
-						sizeof(ipa_flt_rule_add));
-				}
+				if (mux_id_v6 != NULL) {
+					mux_id_v6[0] = IPACM_Iface::ipacmcfg->GetQmapId();
+					for(int i = 1; i < IPACM_Wan::num_v6_flt_rule + 1; i++)
+					{
+						mux_id_v6[i] = IPACM_Wan::pdn_flt_rule_v6[i].mux_id;
+						memcpy(&pFilteringTable_v6->rules[i],
+							&IPACM_Wan::pdn_flt_rule_v6[i].flt_rule,
+							sizeof(ipa_flt_rule_add));
+					}
 #else
-				memcpy(&(pFilteringTable_v6->rules[1]), IPACM_Wan::flt_rule_v6, IPACM_Wan::num_v6_flt_rule * sizeof(ipa_flt_rule_add));
+					memcpy(&(pFilteringTable_v6->rules[1]), IPACM_Wan::flt_rule_v6, IPACM_Wan::num_v6_flt_rule * sizeof(ipa_flt_rule_add));
 #endif
+				}
 			}
 		}
 	}
@@ -6410,7 +6443,7 @@ bool IPACM_Wan::is_global_ipv6_addr(uint32_t* ipv6_addr)
 
 /* handle STA WAN-client */
 /* handle WAN client initial, construct full headers (tx property) */
-int IPACM_Wan::handle_wan_hdr_init(uint8_t *mac_addr)
+int IPACM_Wan::handle_wan_hdr_init(uint8_t *mac_addr, bool gw_addr)
 {
 
 #define WAN_IFACE_INDEX_LEN 2
@@ -6434,6 +6467,13 @@ int IPACM_Wan::handle_wan_hdr_init(uint8_t *mac_addr)
 	if (num_wan_client >= IPA_MAX_NUM_WAN_CLIENTS)
 	{
 		IPACMERR("Reached maximum number(%d) of eth clients\n", IPA_MAX_NUM_WAN_CLIENTS);
+		return IPACM_FAILURE;
+	}
+
+	/* Reserve entry for storing the GW address. */
+	if ((num_wan_client >= (IPA_MAX_NUM_WAN_CLIENTS - 1)) && !gw_addr)
+	{
+		IPACMERR("Reached maximum number(%d) of eth clients without GW address\n", num_wan_client);
 		return IPACM_FAILURE;
 	}
 

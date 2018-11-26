@@ -764,10 +764,12 @@ void IPACM_ConntrackListener::HandleVlanUp(void *in_param)
 void IPACM_ConntrackListener::TriggerWANUp(void *in_param)
 {
 	 ipacm_event_iface_up *wanup_data = (ipacm_event_iface_up *)in_param;
+	 uint8_t mux_id;
 
 	 IPACMDBG_H("Recevied below information during wanup,\n");
-	 IPACMDBG_H("if_name:%s, ipv4_address:0x%x\n",
-						wanup_data->ifname, wanup_data->ipv4_addr);
+	 IPACMDBG_H("if_name:%s, ipv4_address:0x%x mux_id:%d, xlat_mux_id:%d\n",
+						wanup_data->ifname, wanup_data->ipv4_addr, wanup_data->mux_id,
+						wanup_data->xlat_mux_id);
 
 	 if(wanup_data->ipv4_addr == 0)
 	 {
@@ -784,10 +786,14 @@ void IPACM_ConntrackListener::TriggerWANUp(void *in_param)
 
 	 if(nat_inst != NULL)
 	 {
+	   if (wanup_data->mux_id == 0)
+	   	 mux_id = wanup_data->xlat_mux_id;
+	   else
+	   	 mux_id = wanup_data->mux_id;
 #ifdef FEATURE_VLAN_MPDN
-		 nat_inst->AddPdn(wanup_data->ipv4_addr, wanup_data->mux_id, isStaMode);
+		 nat_inst->AddPdn(wanup_data->ipv4_addr, mux_id, isStaMode);
 #else
-		 nat_inst->AddTable(wanup_data->ipv4_addr, wanup_data->mux_id, isStaMode);
+		 nat_inst->AddTable(wanup_data->ipv4_addr, mux_id, isStaMode);
 #endif
 	 }
 

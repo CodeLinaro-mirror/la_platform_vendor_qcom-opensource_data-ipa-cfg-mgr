@@ -2488,6 +2488,12 @@ int IPACM_Wan::config_dft_firewall_rules(ipa_ip_type iptype)
 		return IPACM_SUCCESS;
 	}
 
+	if(iptype == IPA_IP_v6 && IPACM_Iface::ipacmcfg->ipv6_nat_enable)
+	{
+		IPACMDBG_H("IPv6 NAT is enable. Don't configure firewall rule\n");
+		return IPACM_SUCCESS;
+	}
+
 	/* default firewall is disable and the rule action is drop */
 	IPACM_firewall_conf_t firewall_config;
 	IPACMDBG_H("Firewall XML file is %s\n", MOBILE_FIREWALL_FILE);
@@ -4125,6 +4131,12 @@ int IPACM_Wan::config_wan_firewall_rule(ipa_ip_type iptype)
 	list<l2tp_client_info>::iterator it;
 	int res = IPACM_SUCCESS;
 
+	if(iptype == IPA_IP_v6 && IPACM_Iface::ipacmcfg->ipv6_nat_enable)
+	{
+		IPACMDBG_H("IPv6 NAT is enable. Don't configure firewall rule\n");
+		return IPACM_SUCCESS;
+	}
+
 	IPACMDBG_H("Configure WAN DL firewall rules.\n");
 
 	if(iptype == IPA_IP_v4)
@@ -4661,6 +4673,12 @@ int IPACM_Wan::del_dft_firewall_rules(ipa_ip_type iptype)
 	/* free v6 firewall filter rule */
 	if ((iptype == IPA_IP_v6) && (active_v6 == true))
 	{
+		if(IPACM_Iface::ipacmcfg->ipv6_nat_enable)
+		{
+			IPACMDBG_H("IPv6 NAT is enable. No change needed for firewall rules\n");
+			return IPACM_SUCCESS;
+		}
+
 		if (num_firewall_v6 > IPACM_MAX_FIREWALL_ENTRIES)
 		{
 			IPACMERR("the number of v6 firewall entries overflow, aborting...\n");

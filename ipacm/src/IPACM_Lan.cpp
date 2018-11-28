@@ -5485,6 +5485,11 @@ int IPACM_Lan::config_dft_firewall_rules_ul_ex(IPACM_firewall_conf_t* firewall_c
 /* delete UL firewall rules, to be sent to Q6 side*/
 int IPACM_Lan::disable_dft_firewall_rules_ul_ex(int vid)
 {
+	if(IPACM_Iface::ipacmcfg->ipv6_nat_enable)
+	{
+		IPACMDBG_H("IPv6 NAT is enable. No change needed for firewall rule\n");
+		return IPACM_SUCCESS;
+	}
 	if(IPACM_Lan::install_wan_firewall_rule_ul(false, vid, 0))
 	{
 		IPACMERR("failed sending QMI to Q6\n");
@@ -5839,9 +5844,14 @@ int IPACM_Lan::configure_v6_ul_firewall_one_profile(IPACM_firewall_conf_t* firew
  */
 void IPACM_Lan::configure_v6_ul_firewall(void)
 {
-	IPACM_firewall_conf_t *firewall_config;
+	IPACM_firewall_conf_t *firewall_config = NULL;
 	int default_vid = 0;
 
+	if (IPACM_Iface::ipacmcfg->ipv6_nat_enable)
+	{
+		IPACMDBG_H("IPv6 NAT is enable. Don't configure firewall rule\n");
+		return;
+	}
 	/* first of all clear LAN pipe frag, catch all and FW rules if installed */
 	delete_uplink_filter_rule_ul(&iface_ul_firewall);
 

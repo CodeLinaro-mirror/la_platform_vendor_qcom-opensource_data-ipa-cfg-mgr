@@ -81,6 +81,8 @@ IPACM_Wan::IPACM_Wan(int iface_index,
 	wan_route_rule_v6_hdl = NULL;
 	wan_route_rule_v6_hdl_a5 = NULL;
 	wan_client = NULL;
+	wan_client_len = 0;
+	is_default_gateway = true;
 
 	if(iface_query != NULL)
 	{
@@ -116,6 +118,12 @@ IPACM_Wan::IPACM_Wan(int iface_index,
 	hdr_hdl_dummy_v6 = 0;
 	hdr_proc_hdl_dummy_v6 = 0;
 
+	m_fd_ipa = open(IPA_DEVICE_NAME, O_RDWR);
+	if(0 == m_fd_ipa)
+	{
+		IPACMERR("Failed to open %s\n",IPA_DEVICE_NAME);
+	}
+
 	if(iface_query != NULL)
 	{
 		wan_client_len = (sizeof(ipa_wan_client)) + (iface_query->num_tx_props * sizeof(wan_client_rt_hdl));
@@ -128,7 +136,6 @@ IPACM_Wan::IPACM_Wan(int iface_index,
 		IPACMDBG_H("index:%d constructor: Tx properties:%d\n", iface_index, iface_query->num_tx_props);
 	}
 
-
 	if(m_is_sta_mode == Q6_WAN)
 	{
 		IPACMDBG_H("The new WAN interface is modem.\n");
@@ -138,12 +145,6 @@ IPACM_Wan::IPACM_Wan(int iface_index,
 	else
 	{
 		IPACMDBG_H("The new WAN interface is WLAN STA.\n");
-	}
-
-	m_fd_ipa = open(IPA_DEVICE_NAME, O_RDWR);
-	if(0 == m_fd_ipa)
-	{
-		IPACMERR("Failed to open %s\n",IPA_DEVICE_NAME);
 	}
 
 	if(IPACM_Iface::ipacmcfg->iface_table[ipa_if_num].if_cat == EMBMS_IF)

@@ -90,6 +90,12 @@ IPACM_Lan::IPACM_Lan(int iface_index) : IPACM_Iface(iface_index)
 	int m_fd_odu, ret = IPACM_SUCCESS;
 	uint32_t* hdr_template_ptr;
 
+	client_rt_info_size_v4 = 0;
+	client_rt_info_size_v6 = 0;
+	exp_index_v4 = 0;
+	exp_index_v6 = 0;
+	eth_client_len = 0;
+
 	Nat_App = NatApp::GetInstance();
 	if (Nat_App == NULL)
 	{
@@ -297,6 +303,8 @@ IPACM_Lan::IPACM_Lan(int iface_index) : IPACM_Iface(iface_index)
 	lan_client_rt_from_wlan_info_count_v6 = 0;
 	is_l2tp_iface = false;
 #ifdef FEATURE_L2TP_E2E
+	l2tp_ul_hdr_proc_ctx_hdl = 0;
+	l2tp_ul_dummy_hdr_hdl = 0;
 	if(ipa_if_cate == ODU_IF)
 	{
 		install_l2tp_ul_hdr_proc_ctx();
@@ -1096,7 +1104,7 @@ int IPACM_Lan::handle_del_ipv6_addr(ipacm_event_data_all *data)
 {
 	uint32_t tx_index;
 	uint32_t rt_hdl;
-	int num_v6, clnt_indx;
+	int num_v6 = 0, clnt_indx;
 
 	clnt_indx = get_eth_client_index(data->mac_addr);
 	if (clnt_indx == IPACM_INVALID_INDEX)
@@ -5405,7 +5413,7 @@ int IPACM_Lan::eth_bridge_handle_dummy_lan_client_flt_rule(ipa_ip_type iptype)
 		return 0;
 	}
 
-	int i, len, res = IPACM_SUCCESS, num_dummy_rules;
+	int i, len, res = IPACM_SUCCESS, num_dummy_rules = 0;
 	struct ipa_flt_rule_add flt_rule;
 	ipa_ioc_add_flt_rule* pFilteringTable;
 
@@ -6696,7 +6704,7 @@ int IPACM_Lan::eth_bridge_del_lan_client_rt_rule(uint8_t* mac, eth_bridge_src_if
 
 	IPACMDBG_H("Received client MAC 0x%02x%02x%02x%02x%02x%02x. src_iface: %d \n", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5], src);
 
-	int i, position;
+	int i, position = -1;
 
 	/* first delete the rt rules from IPv4 rt table*/
 	if(src == SRC_LAN)
@@ -6710,7 +6718,7 @@ int IPACM_Lan::eth_bridge_del_lan_client_rt_rule(uint8_t* mac, eth_bridge_src_if
 				break;
 			}
 		}
-		if(i == lan_client_rt_from_lan_info_count_v4)
+		if(i == lan_client_rt_from_lan_info_count_v4 || position < 0)
 		{
 			IPACMERR("The client is not found.\n");
 			return IPACM_FAILURE;
@@ -6727,7 +6735,7 @@ int IPACM_Lan::eth_bridge_del_lan_client_rt_rule(uint8_t* mac, eth_bridge_src_if
 				break;
 			}
 		}
-		if(i == lan_client_rt_from_wlan_info_count_v4)
+		if(i == lan_client_rt_from_wlan_info_count_v4 || position < 0)
 		{
 			IPACMERR("The client is not found.\n");
 			return IPACM_FAILURE;

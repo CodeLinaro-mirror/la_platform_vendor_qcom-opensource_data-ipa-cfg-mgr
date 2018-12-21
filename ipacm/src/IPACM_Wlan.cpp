@@ -91,6 +91,7 @@ IPACM_Wlan::IPACM_Wlan(int iface_index) : IPACM_Lan(iface_index)
 	num_wifi_client = 0;
 	header_name_count = 0;
 	wlan_client = NULL;
+	wlan_client_len = 0;
 
 	if(iface_query != NULL)
 	{
@@ -4388,7 +4389,7 @@ int IPACM_Wlan::eth_bridge_del_wlan_client_rt_rule(uint8_t* mac, eth_bridge_src_
 
 	IPACMDBG_H("Receive WLAN client MAC 0x%02x%02x%02x%02x%02x%02x.\n", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
 
-	int i, position;
+	int i, position = -1;
 
 	/* first delete the rt rules from IPv4 rt table*/
 	if(src == SRC_WLAN)
@@ -4402,7 +4403,7 @@ int IPACM_Wlan::eth_bridge_del_wlan_client_rt_rule(uint8_t* mac, eth_bridge_src_
 				break;
 			}
 		}
-		if(i == wlan_client_rt_from_wlan_info_count_v4)
+		if(i == wlan_client_rt_from_wlan_info_count_v4 || position < 0)
 		{
 			IPACMERR("The client is not found.\n");
 			return IPACM_FAILURE;
@@ -4419,7 +4420,7 @@ int IPACM_Wlan::eth_bridge_del_wlan_client_rt_rule(uint8_t* mac, eth_bridge_src_
 				break;
 			}
 		}
-		if(i == wlan_client_rt_from_lan_info_count_v4)
+		if(i == wlan_client_rt_from_lan_info_count_v4 || position < 0)
 		{
 			IPACMERR("The client is not found.\n");
 			return IPACM_FAILURE;

@@ -45,6 +45,11 @@ IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <linux/msm_ipa.h>
 #include "IPACM_Log.h"
 
+#ifdef USE_GLIB
+#include <glib.h>
+#define strlcpy g_strlcpy
+#endif
+
 extern "C"
 {
 #include <libnetfilter_conntrack/libnetfilter_conntrack.h>

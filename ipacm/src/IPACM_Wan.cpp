@@ -5574,8 +5574,6 @@ int IPACM_Wan::handle_down_evt_ex()
 			ipacm_event_vlan_pdn *vlandown_data;
 
 			ipv6_to_iface[modem_ipv6_pdn_index].wan_up_vlan_v6 = false;
-			memset(&ipv6_to_iface[modem_ipv6_pdn_index].ipv6_prefix, 0, sizeof(uint32_t) * 2);
-			ipv6_to_iface[modem_ipv6_pdn_index].pIface = NULL;
 
 			if(!isVlanWanUP_V6())
 			{
@@ -5624,6 +5622,8 @@ int IPACM_Wan::handle_down_evt_ex()
 				install_wan_filtering_rule(false);
 			}
 		}
+		memset(&ipv6_to_iface[modem_ipv6_pdn_index].ipv6_prefix, 0, sizeof(uint32_t) * 2);
+		ipv6_to_iface[modem_ipv6_pdn_index].pIface = NULL;
 
 		/* if no PDN is up, remove rm dependencies */
 		if(!isVlanWanUP() && !isVlanWanUP_V6() && !wan_up && !wan_up_v6)
@@ -5758,28 +5758,20 @@ int IPACM_Wan::handle_down_evt_ex()
 				ipv6_to_iface[modem_ipv6_pdn_index].wan_up_vlan_v6)
 			{
 				vlandown_data->iptype = IPA_IP_MAX;
+				vlandown_data->ipv4_addr = wan_v4_addr;
 				ipv4_to_iface[modem_ipv4_pdn_index].wan_up_vlan = false;
-				ipv4_to_iface[modem_ipv4_pdn_index].ipv4_addr = 0;
-				ipv4_to_iface[modem_ipv4_pdn_index].pIface = NULL;
-
 				ipv6_to_iface[modem_ipv6_pdn_index].wan_up_vlan_v6 = false;
-				memset(&ipv6_to_iface[modem_ipv6_pdn_index].ipv6_prefix, 0, sizeof(uint32_t) * 2);
-				ipv6_to_iface[modem_ipv6_pdn_index].pIface = NULL;
 			}
 			else if(ipv4_to_iface[modem_ipv4_pdn_index].wan_up_vlan)
 			{
 				vlandown_data->iptype = IPA_IP_v4;
 				vlandown_data->ipv4_addr = wan_v4_addr;
 				ipv4_to_iface[modem_ipv4_pdn_index].wan_up_vlan = false;
-				ipv4_to_iface[modem_ipv4_pdn_index].ipv4_addr = 0;
-				ipv4_to_iface[modem_ipv4_pdn_index].pIface = NULL;
 			}
 			else
 			{
 				vlandown_data->iptype = IPA_IP_v6;
 				ipv6_to_iface[modem_ipv6_pdn_index].wan_up_vlan_v6 = false;
-				memset(&ipv6_to_iface[modem_ipv6_pdn_index].ipv6_prefix, 0, sizeof(uint32_t) * 2);
-				ipv6_to_iface[modem_ipv6_pdn_index].pIface = NULL;
 			}
 
 			vlandown_data->VlanID = associated_VID;
@@ -5793,6 +5785,11 @@ int IPACM_Wan::handle_down_evt_ex()
 
 			IPACM_EvtDispatcher::PostEvt(&evt_data);
 		}
+
+		ipv4_to_iface[modem_ipv4_pdn_index].ipv4_addr = 0;
+		ipv4_to_iface[modem_ipv4_pdn_index].pIface = NULL;
+		memset(&ipv6_to_iface[modem_ipv6_pdn_index].ipv6_prefix, 0, sizeof(uint32_t) * 2);
+		ipv6_to_iface[modem_ipv6_pdn_index].pIface = NULL;
 
 		if(!isVlanWanUP())
 		{

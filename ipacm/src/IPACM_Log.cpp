@@ -1,5 +1,5 @@
 /* 
-Copyright (c) 2013, The Linux Foundation. All rights reserved.
+Copyright (c) 2013,2019, The Linux Foundation. All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are
@@ -53,6 +53,37 @@ IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 void logmessage(int log_level)
 {
 	return;
+}
+
+bool is_kernel_version_newer_than(
+			char *version,
+			const char *cmp_verison)
+{
+	char *ver = NULL, *cmp_ver = NULL;
+	char *ptr1 = NULL, *ptr2 = NULL;
+	char buff[KERNEL_VERSION_LENGTH];
+
+	printf ("\n version %s cmp_verison = %s\n", version,
+		cmp_verison);
+
+	strlcpy(buff, cmp_verison, KERNEL_VERSION_LENGTH);
+	ver = strtok_r(version,".", &ptr1);
+	cmp_ver = strtok_r(buff,".", &ptr2);
+
+	while ((ver != NULL) && (cmp_ver != NULL)) {
+		if (atoi(ver) > atoi(cmp_ver))
+			return true;
+		else if (atoi(ver) < atoi(cmp_ver))
+			return false;
+
+		ver = strtok_r(NULL,".",&ptr1);
+		cmp_ver = strtok_r(NULL,".",&ptr2);
+	}
+
+	if (cmp_ver == NULL)
+		return true;
+	else
+		return false;
 }
 
 /* start IPACMDIAG socket*/

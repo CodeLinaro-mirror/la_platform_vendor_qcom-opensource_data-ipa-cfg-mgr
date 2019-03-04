@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2013-2018, The Linux Foundation. All rights reserved.
+Copyright (c) 2013-2019, The Linux Foundation. All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are
@@ -573,10 +573,8 @@ private:
 	uint32_t tcp_timeout;
 	uint32_t udp_timeout;
 
-#ifndef FEATURE_IPA_ANDROID
-	static float kernel_ver;
 	static bool kernel_ver_updated;
-#endif
+	static bool is_kernel_ver_upgraded;
 
 	uint32_t PwrSaveIfs[IPA_MAX_NUM_WIFI_CLIENTS];
 

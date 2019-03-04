@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2013-2018, The Linux Foundation. All rights reserved.
+Copyright (c) 2013-2019, The Linux Foundation. All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are
@@ -46,10 +46,8 @@ extern "C"
 /* NatApp class Implementation */
 NatApp *NatApp::pInstance = NULL;
 
-#ifndef FEATURE_IPA_ANDROID
-	float NatApp::kernel_ver = 0.0;
-	bool NatApp::kernel_ver_updated = false;
-#endif
+bool NatApp::kernel_ver_updated = false;
+bool NatApp::is_kernel_ver_upgraded = false;
 
 NatApp::NatApp()
 {
@@ -1238,16 +1236,24 @@ void NatApp::Read_TcpUdp_Timeout(void) {
 	IPACMDBG_H("tcp timeout value: %d\n", tcp_timeout);
 #else
 	FILE *udp_fd = NULL, *tcp_fd = NULL;
+	char kernel_ver[KERNEL_VERSION_LENGTH];
 
-	float comp_kernel_ver = 4.9;
+	if (kernel_ver_updated == false) {
 
-	if (kernel_ver_updated == false)
-	{
-		get_kernel_version(&kernel_ver);
+		get_kernel_version(kernel_ver);
+
+		IPACMDBG_H("Kernel Version %s\n", kernel_ver);
+
+		is_kernel_ver_upgraded = is_kernel_version_newer_than(kernel_ver,
+		KERNEL_VERSION_4_9);
+
 		kernel_ver_updated = true;
+
+		IPACMDBG_H("Kernel Version %s compare to %s\n",
+			is_kernel_ver_upgraded?"upgraded":"non upgraded", KERNEL_VERSION_4_9);
 	}
 
-	if (kernel_ver >= comp_kernel_ver) {
+	if (is_kernel_ver_upgraded) {
 		/* Read UDP timeout value */
 		udp_fd = fopen(IPACM_UDP_FULL_FILE_NAME_NEW, "r");
 		if (udp_fd == NULL) {
@@ -1268,7 +1274,7 @@ void NatApp::Read_TcpUdp_Timeout(void) {
 	}
 	IPACMDBG_H("udp timeout value: %d\n", udp_timeout);
 
-	if (kernel_ver >= comp_kernel_ver) {
+	if (is_kernel_ver_upgraded) {
 		/* Read TCP timeout value */
 		tcp_fd = fopen(IPACM_TCP_FULL_FILE_NAME_NEW, "r");
 		if (tcp_fd == NULL) {

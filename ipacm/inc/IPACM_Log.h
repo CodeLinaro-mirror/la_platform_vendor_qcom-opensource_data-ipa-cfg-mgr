@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2013, 2018, The Linux Foundation. All rights reserved.
+Copyright (c) 2013, 2019, The Linux Foundation. All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are
@@ -65,17 +65,20 @@ typedef struct ipacm_log_buffer_s {
 	char	user_data[MAX_BUF_LEN];
 } ipacm_log_buffer_t;
 
-#ifndef FEATURE_IPA_ANDROID
+#define KERNEL_VERSION_4_9 "4.9"
 
 #define KERNEL_VERSION_LENGTH 16
 #define MAX_COMMAND_STR_LEN 200
 #define KERNEL_VER 5
 
-inline int get_kernel_version(float *kernel_ver_f)
+bool is_kernel_version_newer_than(
+			char *version,
+			const char *cmp_verison);
+
+inline void get_kernel_version(char *kernel_ver)
 {
 	FILE *fp = NULL;
 	char command[MAX_COMMAND_STR_LEN];
-	char kernel_ver[KERNEL_VERSION_LENGTH];
 	char version[KERNEL_VER];
 	float curr_kernel_ver = 0.0;
 	int index = 0;
@@ -88,10 +91,10 @@ inline int get_kernel_version(float *kernel_ver_f)
 	system(command);
 	fp = fopen("/tmp/kernel_ver.txt", "r");
 
-	if ( fp == NULL )
+	if (fp == NULL)
 	{
 		printf("Error opening Kernel version file\n");
-		return -1;
+		return;
 	}
 
 	while ((c = fgetc(fp)) != EOF)
@@ -111,13 +114,7 @@ inline int get_kernel_version(float *kernel_ver_f)
 	curr_kernel_ver = (float)strtof(version, NULL);
 
 	printf ("\ncurr_kernel_ver = %f\n", curr_kernel_ver);
-
-	*kernel_ver_f = curr_kernel_ver;
-
-	return 0;
 }
-
-#endif
 
 void ipacm_log_send( void * user_data);
 

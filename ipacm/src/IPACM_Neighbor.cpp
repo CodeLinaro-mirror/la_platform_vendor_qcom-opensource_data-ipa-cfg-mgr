@@ -359,6 +359,9 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 									/* cache the network interface client associated */
 									neighbor_client[num_neighbor_client_temp].ipa_if_num = ipa_interface_index;
 									neighbor_client[num_neighbor_client_temp].v4_addr = data->ipv4_addr;
+#ifdef FEATURE_VLAN_MPDN
+									neighbor_client[num_neighbor_client_temp].bridge = NULL;
+#endif
 									strlcpy(neighbor_client[num_neighbor_client_temp].iface_name,
 										data->iface_name, sizeof(neighbor_client[num_neighbor_client_temp].iface_name));
 									num_neighbor_client++;
@@ -382,6 +385,9 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 									/* cache the network interface client associated */
 									neighbor_client[circular_index].ipa_if_num = ipa_interface_index;
 									neighbor_client[circular_index].v4_addr = 0;
+#ifdef FEATURE_VLAN_MPDN
+									neighbor_client[circular_index].bridge = NULL;
+#endif
 									strlcpy(neighbor_client[circular_index].iface_name,
 										data->iface_name, sizeof(neighbor_client[circular_index].iface_name));
 									IPACMDBG_H("Copy wlan-iface client MAC %02x:%02x:%02x:%02x:%02x:%02x\n, total client: %d, circular %d\n",
@@ -428,14 +434,6 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 												neighbor_client[i].mac_addr[5],
 												num_neighbor_client);
 
-									memset(neighbor_client[i].mac_addr, 0, sizeof(neighbor_client[i].mac_addr));
-									neighbor_client[i].iface_index = 0;
-									neighbor_client[i].v4_addr = 0;
-									neighbor_client[i].ipa_if_num = 0;
-									memset(neighbor_client[i].iface_name, 0, sizeof(neighbor_client[i].iface_name));
-#ifdef FEATURE_VLAN_MPDN
-									neighbor_client[i].bridge = NULL;
-#endif
 									for (; i < num_neighbor_client_temp - 1; i++)
 									{
 										memcpy(neighbor_client[i].mac_addr,
@@ -450,6 +448,15 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 										strlcpy(neighbor_client[i].iface_name, neighbor_client[i+1].iface_name,
 											sizeof(neighbor_client[i].iface_name));
 									}
+									memset(neighbor_client[i].mac_addr, 0, sizeof(neighbor_client[i].mac_addr));
+									neighbor_client[i].iface_index = 0;
+									neighbor_client[i].v4_addr = 0;
+									neighbor_client[i].ipa_if_num = 0;
+									memset(neighbor_client[i].iface_name, 0, sizeof(neighbor_client[i].iface_name));
+#ifdef FEATURE_VLAN_MPDN
+									neighbor_client[i].bridge = NULL;
+#endif
+
 									num_neighbor_client--;
 									IPACMDBG_H(" total number of left cased clients: %d\n", num_neighbor_client);
 									break;
@@ -718,14 +725,6 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 										neighbor_client[i].mac_addr[5],
 										num_neighbor_client);
 
-								memset(neighbor_client[i].mac_addr, 0, sizeof(neighbor_client[i].mac_addr));
-								neighbor_client[i].iface_index = 0;
-								neighbor_client[i].v4_addr = 0;
-								neighbor_client[i].ipa_if_num = 0;
-								memset(neighbor_client[i].iface_name, 0, sizeof(neighbor_client[i].iface_name));
-#ifdef FEATURE_VLAN_MPDN
-								neighbor_client[i].bridge = NULL;
-#endif
 								for (; i < num_neighbor_client_temp - 1; i++)
 								{
 									memcpy(neighbor_client[i].mac_addr,
@@ -740,6 +739,14 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 									strlcpy(neighbor_client[i].iface_name, neighbor_client[i+1].iface_name,
 										sizeof(neighbor_client[i].iface_name));
 								}
+								memset(neighbor_client[i].mac_addr, 0, sizeof(neighbor_client[i].mac_addr));
+								neighbor_client[i].iface_index = 0;
+								neighbor_client[i].v4_addr = 0;
+								neighbor_client[i].ipa_if_num = 0;
+								memset(neighbor_client[i].iface_name, 0, sizeof(neighbor_client[i].iface_name));
+#ifdef FEATURE_VLAN_MPDN
+								neighbor_client[i].bridge = NULL;
+#endif
 								num_neighbor_client--;
 								IPACMDBG_H(" total number of left cased clients: %d\n", num_neighbor_client);
 							}
@@ -775,6 +782,9 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 								/* cache the network interface client associated */
 								neighbor_client[num_neighbor_client_temp].ipa_if_num = ipa_interface_index;
 								neighbor_client[num_neighbor_client_temp].v4_addr = 0;
+#ifdef FEATURE_VLAN_MPDN
+								neighbor_client[num_neighbor_client_temp].bridge = NULL;
+#endif
 								strlcpy(neighbor_client[num_neighbor_client_temp].iface_name, data->iface_name,
 									sizeof(neighbor_client[num_neighbor_client_temp].iface_name));
 								num_neighbor_client++;
@@ -798,6 +808,9 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 								/* cache the network interface client associated */
 								neighbor_client[circular_index].ipa_if_num = ipa_interface_index;
 								neighbor_client[circular_index].v4_addr = 0;
+#ifdef FEATURE_VLAN_MPDN
+								neighbor_client[circular_index].bridge = NULL;
+#endif
 								strlcpy(neighbor_client[circular_index].iface_name, data->iface_name,
 									sizeof(neighbor_client[circular_index].iface_name));
 								IPACMDBG_H("Copy wlan-iface client MAC %02x:%02x:%02x:%02x:%02x:%02x\n, total client: %d, circular %d\n",

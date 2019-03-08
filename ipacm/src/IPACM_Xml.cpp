@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2018 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2013, 2018-2019 The Linux Foundation. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -177,6 +177,8 @@ static int ipacm_cfg_xml_parse_tree
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
 						IPACM_util_icmp_string((char*)xml_node->name, LAN_Stats_TAG) == 0 ||
 #endif
+						IPACM_util_icmp_string((char*)xml_node->name, IPACM_L2TP_TAG) == 0 ||
+						IPACM_util_icmp_string((char*)xml_node->name, IPACM_MPDN_TAG) == 0 ||
 						IPACM_util_icmp_string((char*)xml_node->name, IP_PassthroughFlag_TAG) == 0)
 				{
 					if (0 == IPACM_util_icmp_string((char*)xml_node->name, IFACE_TAG))
@@ -553,6 +555,49 @@ static int ipacm_cfg_xml_parse_tree
 								config->ipv6_nat_enable, atoi(content_buf));
 						}
 					}
+				}
+				else if (IPACM_util_icmp_string((char*)xml_node->name, IPACM_L2TP_Enable_TAG) == 0)
+				{
+						IPACMDBG_H("inside enable L2tp\n");
+						content = IPACM_read_content_element(xml_node);
+						if (content == NULL)
+						{
+							IPACMERR("Failed to read the content of the tag %s\n", IPACM_L2TP_Enable_TAG);
+						}
+						else
+						{
+							str_size = strlen(content);
+							memset(content_buf, 0, sizeof(content_buf));
+							memcpy(content_buf, (void *)content, str_size);
+							config->ipacm_l2tp_enable = atoi(content_buf);
+						}
+				}
+				else if (IPACM_util_icmp_string((char*)xml_node->name, IPACM_MPDN_Enable_TAG) == 0)
+				{
+						IPACMDBG_H("inside enable MPDN\n");
+						content = IPACM_read_content_element(xml_node);
+						if (content == NULL)
+						{
+							IPACMERR("Failed to read the content of the tag %s\n", IPACM_MPDN_Enable_TAG);
+						}
+						else
+						{
+							str_size = strlen(content);
+							memset(content_buf, 0, sizeof(content_buf));
+							memcpy(content_buf, (void *)content, str_size);
+							if (atoi(content_buf))
+							{
+								config->ipacm_mpdn_enable = true;
+								IPACMDBG_H("IPACM VLAN_MPDN is enable %d buf(%d)\n",
+								config->ipacm_mpdn_enable, atoi(content_buf));
+							}
+							else
+							{
+								config->ipacm_mpdn_enable = false;
+								IPACMDBG_H("IPACM VLAN_MPDN enable %d buf(%d)\n",
+								config->ipacm_mpdn_enable, atoi(content_buf));
+							}
+						}
 				}
 			}
 			break;

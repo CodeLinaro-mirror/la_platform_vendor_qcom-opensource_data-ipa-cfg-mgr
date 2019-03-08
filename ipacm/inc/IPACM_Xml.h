@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2018 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2013, 2018-2019, The Linux Foundation. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -200,6 +200,12 @@ if (!(a)) {                                                 \
 
 #define IPACM_IPV6NAT_TAG                     "IPACMIPV6NAT"
 #define IPACM_IPV6NAT_Enable_TAG              "IPV6NATEnabled"
+
+#define IPACM_L2TP_TAG                       "IPACML2TP"
+#define IPACM_L2TP_Enable_TAG                "IPACML2TPEnabled"
+
+#define IPACM_MPDN_TAG                       "IPACMMPDN"
+#define IPACM_MPDN_Enable_TAG                "IPACMMPDNEnabled"
 /*---------------------------------------------------------------------------
       IP protocol numbers - use in dss_socket() to identify protocols.
       Also contains the extension header types for IPv6.
@@ -321,6 +327,8 @@ typedef struct  _IPACM_conf_t
 	bool lan_stats_enable;
 #endif
 	bool ipv6_nat_enable;
+	int ipacm_l2tp_enable;
+	bool ipacm_mpdn_enable;
 } IPACM_conf_t;
 
 /* This function read IPACM XML configuration*/

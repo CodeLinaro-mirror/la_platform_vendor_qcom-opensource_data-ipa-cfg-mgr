@@ -177,5 +177,11 @@
 		<IPACMIPV6NAT>
 			<IPV6NATEnabled>0</IPV6NATEnabled>
 		</IPACMIPV6NAT>
+		<IPACML2TP>
+			<IPACML2TPEnabled>0</IPACML2TPEnabled>
+		</IPACML2TP>
+		<IPACMMPDN>
+			<IPACMMPDNEnabled>1</IPACMMPDNEnabled>
+		</IPACMMPDN>
 	</IPACM>
 </system>

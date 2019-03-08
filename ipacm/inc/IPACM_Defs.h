@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2013-2018, The Linux Foundation. All rights reserved.
+Copyright (c) 2013-2019, The Linux Foundation. All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are
@@ -121,6 +121,9 @@ extern "C"
 /* WAN IP address in IP Passthrough mode. */
 #define IPACM_IPPASSTHROUGH_WAN_IP "169.254.5.1"
 
+#define IPACM_L2TP_DISABLE 0
+#define IPACM_L2TP 1
+#define IPACM_L2TP_E2E 2
 /*---------------------------------------------------------------------------
 										Return values indicating error status
 ---------------------------------------------------------------------------*/
@@ -206,7 +209,7 @@ typedef enum
 	IPA_ETH_BRIDGE_CLIENT_DEL,                /* ipacm_event_eth_bridge*/
 	IPA_ETH_BRIDGE_WLAN_SCC_MCC_SWITCH,       /* ipacm_event_eth_bridge*/
 	IPA_LAN_DELETE_SELF,                      /* ipacm_event_data_fid */
-#ifdef FEATURE_L2TP_E2E
+#ifdef FEATURE_L2TP
 	IPA_ADD_L2TP_CLIENT,                      /* ipacm_event_data_all */
 	IPA_DEL_L2TP_CLIENT,                      /* ipacm_event_data_all */
 #endif

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013-2018, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2013-2019, The Linux Foundation. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -118,7 +118,7 @@ const char *ipacm_event_name[] = {
 	__stringify(IPA_ETH_BRIDGE_CLIENT_DEL),                /* ipacm_event_eth_bridge*/
 	__stringify(IPA_ETH_BRIDGE_WLAN_SCC_MCC_SWITCH),       /* ipacm_event_eth_bridge*/
 	__stringify(IPA_LAN_DELETE_SELF),                      /* ipacm_event_data_fid */
-#ifdef FEATURE_L2TP_E2E
+#ifdef FEATURE_L2TP
 	__stringify(IPA_ADD_L2TP_CLIENT),                      /* ipacm_event_data_all */
 	__stringify(IPA_DEL_L2TP_CLIENT),                      /* ipacm_event_data_all */
 #endif
@@ -158,6 +158,8 @@ IPACM_Config::IPACM_Config()
 	ipa_bridge_enable = false;
 	isMCC_Mode = false;
 	ipa_max_valid_rm_entry = 0;
+	ipacm_l2tp_enable = 0;
+	ipacm_mpdn_enable = TRUE;   /* default setting as mpdn enable/l2tp disable */
 
 	memset(&rt_tbl_default_v4, 0, sizeof(rt_tbl_default_v4));
 	memset(&rt_tbl_lan_v4, 0, sizeof(rt_tbl_lan_v4));
@@ -182,7 +184,7 @@ IPACM_Config::IPACM_Config()
 	memset(vlan_bridges, 0, IPA_MAX_NUM_BRIDGES * sizeof(vlan_bridges[0]));
 	memset(vlan_devices, 0, IPA_VLAN_IF_MAX * sizeof(vlan_devices[0]));
 #endif
-#if defined(FEATURE_L2TP_E2E) || defined(FEATURE_L2TP) || defined(FEATURE_VLAN_MPDN)
+#if defined(FEATURE_L2TP) || defined(FEATURE_VLAN_MPDN)
 	pthread_mutex_init(&vlan_l2tp_lock, NULL);
 #endif
 	IPACMDBG_H(" create IPACM_Config constructor\n");
@@ -348,6 +350,15 @@ int IPACM_Config::Init(void)
 	}
 #endif
 	ipv6_nat_enable = cfg->ipv6_nat_enable;
+	ipacm_l2tp_enable = cfg->ipacm_l2tp_enable;
+	ipacm_mpdn_enable = cfg->ipacm_mpdn_enable;
+
+	if (ipacm_mpdn_enable == TRUE && ipacm_l2tp_enable != IPACM_L2TP_DISABLE)
+	{
+		IPACMERR("Not support both VLAN_MPDN and L2TP are enable \n");
+		goto fail;
+	}
+
 	ipa_num_wlan_guest_ap = cfg->num_wlan_guest_ap;
 	IPACMDBG_H("ipa_num_wlan_guest_ap %d\n",ipa_num_wlan_guest_ap);
 
@@ -1044,7 +1055,7 @@ int IPACM_Config::get_bridge_vlan_mapping(ipa_ioc_bridge_vlan_mapping_info *data
 }
 #endif
 
-#if defined(FEATURE_L2TP_E2E) || defined(FEATURE_L2TP) || defined(FEATURE_VLAN_MPDN)
+#if defined(FEATURE_L2TP) || defined(FEATURE_VLAN_MPDN)
 void IPACM_Config::add_vlan_iface(ipa_ioc_vlan_iface_info *data)
 {
 	list<vlan_iface_info>::iterator it_vlan;
@@ -1066,20 +1077,26 @@ void IPACM_Config::add_vlan_iface(ipa_ioc_vlan_iface_info *data)
 			return;
 		}
 	}
-#ifndef FEATURE_VLAN_MPDN
-	list<l2tp_vlan_mapping_info>::iterator it_mapping;
-	for(it_mapping = m_l2tp_vlan_mapping.begin(); it_mapping != m_l2tp_vlan_mapping.end(); it_mapping++)
+#ifdef FEATURE_L2TP
+	if ((ipacm_mpdn_enable == false) && ((ipacm_l2tp_enable == IPACM_L2TP) || (ipacm_l2tp_enable == IPACM_L2TP_E2E)))
 	{
-		if(strncmp(data->name, it_mapping->vlan_iface_name, sizeof(data->name)) == 0)
+		list<l2tp_vlan_mapping_info>::iterator it_mapping;
+		for(it_mapping = m_l2tp_vlan_mapping.begin(); it_mapping != m_l2tp_vlan_mapping.end(); it_mapping++)
 		{
-			IPACMDBG_H("Found a mapping: l2tp iface %s.\n", it_mapping->l2tp_iface_name);
-			it_mapping->vlan_id = data->vlan_id;
+			if(strncmp(data->name, it_mapping->vlan_iface_name, sizeof(data->name)) == 0)
+			{
+				IPACMDBG_H("Found a mapping: l2tp iface %s.\n", it_mapping->l2tp_iface_name);
+				it_mapping->vlan_id = data->vlan_id;
+			}
 		}
 	}
 #endif
 #ifdef FEATURE_VLAN_MPDN
-	AddNatIfaces(data->name);
-	IPACMDBG_H("Add VLAN iface %s to nat ifaces.\n", data->name);
+	if (IPACM_Iface::ipacmcfg->ipacm_mpdn_enable == TRUE)
+	{
+		AddNatIfaces(data->name);
+		IPACMDBG_H("Add VLAN iface %s to nat ifaces.\n", data->name);
+	}
 #endif
 	memset(&new_vlan_info, 0 , sizeof(new_vlan_info));
 	strlcpy(new_vlan_info.vlan_iface_name, data->name, sizeof(new_vlan_info.vlan_iface_name));
@@ -1142,23 +1159,28 @@ void IPACM_Config::del_vlan_iface(ipa_ioc_vlan_iface_info *data)
 		}
 	}
 #ifdef FEATURE_VLAN_MPDN
-	DelNatIfaces(data->name);
-	IPACMDBG_H("Del VLAN iface %s to nat ifaces.\n", data->name);
-#endif
-
-#ifndef FEATURE_VLAN_MPDN
-	list<l2tp_vlan_mapping_info>::iterator it_mapping;
-	it_mapping = m_l2tp_vlan_mapping.begin();
-	while(it_mapping != m_l2tp_vlan_mapping.end())
+	if (IPACM_Iface::ipacmcfg->ipacm_mpdn_enable == TRUE)
 	{
-		if(strncmp(data->name, it_mapping->vlan_iface_name, sizeof(data->name)) == 0)
+		DelNatIfaces(data->name);
+		IPACMDBG_H("Del VLAN iface %s to nat ifaces.\n", data->name);
+	}
+#endif
+#ifdef FEATURE_L2TP
+	if ((ipacm_mpdn_enable == false) && ((ipacm_l2tp_enable == IPACM_L2TP) || (ipacm_l2tp_enable == IPACM_L2TP_E2E)))
+	{
+		list<l2tp_vlan_mapping_info>::iterator it_mapping;
+		it_mapping = m_l2tp_vlan_mapping.begin();
+		while(it_mapping != m_l2tp_vlan_mapping.end())
 		{
-			IPACMDBG_H("Delete mapping with l2tp iface %s\n", it_mapping->l2tp_iface_name);
-			it_mapping = m_l2tp_vlan_mapping.erase(it_mapping);
-		}
-		else
-		{
-			it_mapping++;
+			if(strncmp(data->name, it_mapping->vlan_iface_name, sizeof(data->name)) == 0)
+			{
+				IPACMDBG_H("Delete mapping with l2tp iface %s\n", it_mapping->l2tp_iface_name);
+				it_mapping = m_l2tp_vlan_mapping.erase(it_mapping);
+			}
+			else
+			{
+				it_mapping++;
+			}
 		}
 	}
 #endif
@@ -1189,20 +1211,23 @@ void IPACM_Config::handle_vlan_iface_info(ipacm_event_data_addr *data)
 			memcpy(it_vlan->vlan_iface_ipv6_addr, data->ipv6_addr,
 				sizeof(it_vlan->vlan_iface_ipv6_addr));
 
-#ifndef FEATURE_VLAN_MPDN
-			list<l2tp_vlan_mapping_info>::iterator it_mapping;
-
-			for(it_mapping = m_l2tp_vlan_mapping.begin(); it_mapping != m_l2tp_vlan_mapping.end(); it_mapping++)
+#ifdef FEATURE_L2TP
+			if ((ipacm_mpdn_enable == false) && ((ipacm_l2tp_enable == IPACM_L2TP) || (ipacm_l2tp_enable == IPACM_L2TP_E2E)))
 			{
-				if(strncmp(it_mapping->vlan_iface_name, it_vlan->vlan_iface_name,
-					sizeof(it_mapping->vlan_iface_name)) == 0)
+				list<l2tp_vlan_mapping_info>::iterator it_mapping;
+
+				for(it_mapping = m_l2tp_vlan_mapping.begin(); it_mapping != m_l2tp_vlan_mapping.end(); it_mapping++)
 				{
-					IPACMDBG_H("Found the l2tp-vlan mapping: l2tp %s\n", it_mapping->l2tp_iface_name);
-					memcpy(it_mapping->vlan_iface_ipv6_addr, data->ipv6_addr,
-						sizeof(it_mapping->vlan_iface_ipv6_addr));
+					if(strncmp(it_mapping->vlan_iface_name, it_vlan->vlan_iface_name,
+						sizeof(it_mapping->vlan_iface_name)) == 0)
+					{
+						IPACMDBG_H("Found the l2tp-vlan mapping: l2tp %s\n", it_mapping->l2tp_iface_name);
+						memcpy(it_mapping->vlan_iface_ipv6_addr, data->ipv6_addr,
+							sizeof(it_mapping->vlan_iface_ipv6_addr));
+					}
 				}
+				break;
 			}
-			break;
 #endif
 		}
 	}
@@ -1249,15 +1274,18 @@ void IPACM_Config::handle_vlan_client_info(ipacm_event_data_all *data)
 			break;
 		}
 	}
-#ifndef FEATURE_VLAN_MPDN
-	for(it_mapping = m_l2tp_vlan_mapping.begin(); it_mapping != m_l2tp_vlan_mapping.end(); it_mapping++)
+#ifdef FEATURE_L2TP
+	if ((ipacm_mpdn_enable == false) && (ipacm_l2tp_enable == IPACM_L2TP) || (ipacm_l2tp_enable == IPACM_L2TP_E2E))
 	{
-		if(strncmp(it_mapping->vlan_iface_name, data->iface_name, sizeof(it_mapping->vlan_iface_name)) == 0)
+		for(it_mapping = m_l2tp_vlan_mapping.begin(); it_mapping != m_l2tp_vlan_mapping.end(); it_mapping++)
 		{
-			IPACMDBG_H("Found vlan iface in l2tp mapping list: %s, l2tp iface: %s\n", it_mapping->vlan_iface_name,
-				it_mapping->l2tp_iface_name);
-			memcpy(it_mapping->vlan_client_mac, data->mac_addr, sizeof(it_mapping->vlan_client_mac));
-			memcpy(it_mapping->vlan_client_ipv6_addr, data->ipv6_addr, sizeof(it_mapping->vlan_client_ipv6_addr));
+			if(strncmp(it_mapping->vlan_iface_name, data->iface_name, sizeof(it_mapping->vlan_iface_name)) == 0)
+			{
+				IPACMDBG_H("Found vlan iface in l2tp mapping list: %s, l2tp iface: %s\n", it_mapping->vlan_iface_name,
+					it_mapping->l2tp_iface_name);
+				memcpy(it_mapping->vlan_client_mac, data->mac_addr, sizeof(it_mapping->vlan_client_mac));
+				memcpy(it_mapping->vlan_client_ipv6_addr, data->ipv6_addr, sizeof(it_mapping->vlan_client_ipv6_addr));
+			}
 		}
 	}
 #endif
@@ -1535,7 +1563,7 @@ int IPACM_Config::get_vlan_id(char *iface_name, uint8_t *vlan_id)
 }
 #endif
 
-#if defined(FEATURE_L2TP_E2E) || defined(FEATURE_L2TP)
+#if defined(FEATURE_L2TP)
 void IPACM_Config::add_l2tp_vlan_mapping(ipa_ioc_l2tp_vlan_mapping_info *data)
 {
 	list<l2tp_vlan_mapping_info>::iterator it_mapping;

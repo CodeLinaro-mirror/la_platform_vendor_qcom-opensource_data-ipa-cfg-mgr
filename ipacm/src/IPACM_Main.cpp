@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013-2018 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2013-2019 The Linux Foundation. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -249,7 +249,7 @@ void* ipa_driver_msg_notifier(void *param)
 	ipa_get_data_stats_resp_msg_v01 *data_tethering_stats = NULL;
 	ipa_get_apn_data_stats_resp_msg_v01 *data_network_stats = NULL;
 
-#if defined(FEATURE_L2TP_E2E) || defined(FEATURE_L2TP) || defined(FEATURE_VLAN_MPDN)
+#if defined(FEATURE_L2TP) || defined(FEATURE_VLAN_MPDN)
 	ipa_ioc_vlan_iface_info *vlan_info = NULL;
 	ipa_ioc_l2tp_vlan_mapping_info *mapping = NULL;
 #endif
@@ -737,7 +737,7 @@ void* ipa_driver_msg_notifier(void *param)
 			IPACM_Iface::ipacmcfg->del_bridge_vlan_mapping(&del_bridge_vlan_info);
 			continue;
 #endif
-#if defined(FEATURE_L2TP_E2E) || defined(FEATURE_L2TP) || defined (FEATURE_VLAN_MPDN)
+#if defined(FEATURE_L2TP) || defined (FEATURE_VLAN_MPDN)
 		case ADD_VLAN_IFACE:
 			vlan_info = (ipa_ioc_vlan_iface_info *)malloc(sizeof(*vlan_info));
 			if(vlan_info == NULL)
@@ -759,7 +759,7 @@ void* ipa_driver_msg_notifier(void *param)
 			memcpy(vlan_info, buffer + sizeof(struct ipa_msg_meta), sizeof(*vlan_info));
 			IPACM_Iface::ipacmcfg->del_vlan_iface(vlan_info);
 			continue;
-#ifndef FEATURE_VLAN_MPDN
+#ifdef FEATURE_L2TP
 		case ADD_L2TP_VLAN_MAPPING:
 			mapping = (ipa_ioc_l2tp_vlan_mapping_info *)malloc(sizeof(*mapping));
 			if(mapping == NULL)
@@ -781,8 +781,8 @@ void* ipa_driver_msg_notifier(void *param)
 			memcpy(mapping, buffer + sizeof(struct ipa_msg_meta), sizeof(*mapping));
 			IPACM_Iface::ipacmcfg->del_l2tp_vlan_mapping(mapping);
 			continue;
-#endif //#ifndef FEATURE_VLAN_MPDN
-#endif //#if defined(FEATURE_L2TP_E2E) || defined(FEATURE_L2TP) || defined (FEATURE_VLAN_MPDN)
+#endif //#ifdef FEATURE_L2TP
+#endif //defined(FEATURE_L2TP) || defined (FEATURE_VLAN_MPDN)
 
 		case IPA_GSB_CONNECT:
 			event_gsb = (ipa_ioc_gsb_info *) (buffer + sizeof(struct ipa_msg_meta));

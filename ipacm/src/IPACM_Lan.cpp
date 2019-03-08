@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013-2018 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2013-2019 The Linux Foundation. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -230,8 +230,8 @@ IPACM_Lan::IPACM_Lan(int iface_index) : IPACM_Iface(iface_index)
 	}
 #endif
 
-#ifdef FEATURE_L2TP_E2E
-	if(ipa_if_cate == ODU_IF)
+#ifdef FEATURE_L2TP
+	if(ipa_if_cate == ODU_IF && IPACM_Iface::ipacmcfg->ipacm_l2tp_enable == IPACM_L2TP_E2E)
 	{
 		install_l2tp_ul_hdr_proc_ctx();
 	}
@@ -295,7 +295,10 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 				IPACMDBG_H(" Has rx/tx properties registered for iface %s, add for NATTING \n", dev_name);
 				IPACM_Iface::ipacmcfg->AddNatIfaces(dev_name);
 #ifdef FEATURE_VLAN_MPDN
-				IPACM_Iface::ipacmcfg->restore_vlan_nat_ifaces(dev_name);
+				if (IPACM_Iface::ipacmcfg->ipacm_mpdn_enable == TRUE)
+				{
+					IPACM_Iface::ipacmcfg->restore_vlan_nat_ifaces(dev_name);
+				}
 #endif
 			}
 		}
@@ -414,14 +417,15 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 				IPACMDBG_H("Invalid address, ignore IPA_ADDR_ADD_EVENT event\n");
 				return;
 			}
-#if defined(FEATURE_L2TP_E2E) || defined(FEATURE_L2TP) || defined(FEATURE_VLAN_MPDN)
+#if defined(FEATURE_L2TP) || defined(FEATURE_VLAN_MPDN)
 			if(is_vlan_event(data->iface_name)) {
 				if(data->iptype == IPA_IP_v6
-#ifndef FEATURE_VLAN_MPDN
+
 					// for VLAN_MPDN we only have link local addresses
-					&& is_unique_local_ipv6_addr(data->ipv6_addr)
-#endif
-					)
+					&& (is_unique_local_ipv6_addr(data->ipv6_addr) &&
+						(IPACM_Iface::ipacmcfg->ipacm_mpdn_enable == false) &&
+						(IPACM_Iface::ipacmcfg->ipacm_l2tp_enable == IPACM_L2TP) ||
+						(IPACM_Iface::ipacmcfg->ipacm_l2tp_enable == IPACM_L2TP_E2E)))
 				{
 					IPACMDBG_H("Got IPv6 new addr event for a vlan iface %s.\n", data->iface_name);
 					IPACM_Iface::ipacmcfg->handle_vlan_iface_info(data);
@@ -442,8 +446,15 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 						handle_addr_evt_odu_bridge(data);
 					}
 #if defined(FEATURE_IPA_ANDROID) || defined(FEATURE_VLAN_MPDN)
-					add_dummy_private_subnet_flt_rule(data->iptype);
-					handle_private_subnet_android(data->iptype);
+					if(IPACM_Iface::ipacmcfg->ipacm_mpdn_enable == TRUE)
+					{
+						add_dummy_private_subnet_flt_rule(data->iptype);
+						handle_private_subnet_android(data->iptype);
+					}
+					else
+					{
+						handle_private_subnet(data->iptype);
+					}
 #else
 					handle_private_subnet(data->iptype);
 #endif
@@ -460,19 +471,27 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 						{
 							return;
 						}
-#if defined(FEATURE_IPA_ANDROID) || defined(FEATURE_VLAN_MPDN)
-						add_dummy_private_subnet_flt_rule(data->iptype);
-						handle_private_subnet_android(data->iptype);
-#else
-#ifdef FEATURE_L2TP_E2E
-						if ((num_dft_rt_v6 == 1) && (data->iptype == IPA_IP_v6))
+#if defined(FEATURE_IPA_ANDROID) || defined(FEATURE_VLAN_MPDN) || defined(FEATURE_L2TP)
+						if (IPACM_Iface::ipacmcfg->ipacm_mpdn_enable == TRUE)
 						{
-							if(ipa_if_cate == ODU_IF)
+							add_dummy_private_subnet_flt_rule(data->iptype);
+							handle_private_subnet_android(data->iptype);
+						}
+						else
+#ifdef FEATURE_L2TP
+						{
+							if ((IPACM_Iface::ipacmcfg->ipacm_l2tp_enable == IPACM_L2TP_E2E)
+								&& (num_dft_rt_v6 == 1) && (data->iptype == IPA_IP_v6))
 							{
-								install_l2tp_inner_private_subnet_flt_rule(); /* encapsulated IPv4 private subnet rule */
+								if(ipa_if_cate == ODU_IF)
+								{
+									install_l2tp_inner_private_subnet_flt_rule(); /* encapsulated IPv4 private subnet rule */
+								}
 							}
 						}
 #endif
+						handle_private_subnet(data->iptype);
+#else
 						handle_private_subnet(data->iptype);
 #endif
 #ifdef FEATURE_VLAN_MPDN
@@ -689,7 +708,8 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 		IPACMDBG_H("Backhaul is sta mode?%d\n", data_wan->is_sta);
 #ifdef FEATURE_VLAN_MPDN
 		/* VLAN IFACES don't care about default route */
-		if((IPACM_Iface::ipacmcfg->iface_in_vlan_mode(dev_name)))
+		if((IPACM_Iface::ipacmcfg->iface_in_vlan_mode(dev_name)) &&
+			(IPACM_Iface::ipacmcfg->ipacm_mpdn_enable == TRUE))
 		{
 			IPACMDBG_H("IF %s is vlan IF, ignoring IPA_HANDLE_WAN_UP", dev_name);
 			return;
@@ -706,7 +726,7 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 			{
 				handle_wan_up(IPA_IP_v4);
 			}
-			}
+		}
 		break;
 
 	case IPA_HANDLE_WAN_UP_V6:
@@ -721,7 +741,8 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 		IPACMDBG_H("Backhaul is sta mode?%d\n", data_wan->is_sta);
 #ifdef FEATURE_VLAN_MPDN
 		/* VLAN IFACES don't care about default route */
-		if((IPACM_Iface::ipacmcfg->iface_in_vlan_mode(dev_name)))
+		if((IPACM_Iface::ipacmcfg->iface_in_vlan_mode(dev_name)) &&
+			(IPACM_Iface::ipacmcfg->ipacm_mpdn_enable == TRUE))
 		{
 			IPACMDBG_H("IF %s is vlan IF, ignoring IPA_HANDLE_WAN_UP_V6", dev_name);
 			return;
@@ -734,8 +755,10 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 #endif //FEATURE_IPACM_UL_FIREWALL
 			memcpy(ipv6_prefix, data_wan->ipv6_prefix, sizeof(ipv6_prefix));
 #ifdef FEATURE_VLAN_MPDN
-			/* new prefix was added - update flt rules */
-			modify_ipv6_prefix_flt_rule();
+			if (IPACM_Iface::ipacmcfg->ipacm_mpdn_enable == TRUE)
+				modify_ipv6_prefix_flt_rule();
+			else
+				install_ipv6_prefix_flt_rule(data_wan->ipv6_prefix);
 #else
 			install_ipv6_prefix_flt_rule(data_wan->ipv6_prefix);
 #endif
@@ -762,7 +785,8 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 		IPACMDBG_H("Backhaul is sta mode?%d\n", data_wan->is_sta);
 #ifdef FEATURE_VLAN_MPDN
 		/* VLAN IFACES don't care about default route */
-		if((IPACM_Iface::ipacmcfg->iface_in_vlan_mode(dev_name)))
+		if((IPACM_Iface::ipacmcfg->iface_in_vlan_mode(dev_name)) &&
+			(IPACM_Iface::ipacmcfg->ipacm_mpdn_enable == TRUE))
 		{
 			IPACMDBG_H("IF %s is vlan IF, ignoring IPA_HANDLE_WAN_DOWN", dev_name);
 			return;
@@ -786,7 +810,8 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 		IPACMDBG_H("Received IPA_WAN_V6_DOWN in LAN-instance and need clean up client IPv6 address \n");
 #ifdef FEATURE_VLAN_MPDN
 		/* VLAN IFACES don't care about default route */
-		if((IPACM_Iface::ipacmcfg->iface_in_vlan_mode(dev_name)))
+		if((IPACM_Iface::ipacmcfg->iface_in_vlan_mode(dev_name)) &&
+			(IPACM_Iface::ipacmcfg->ipacm_mpdn_enable == TRUE))
 		{
 			IPACMDBG_H("IF %s is vlan IF, ignoring IPA_HANDLE_WAN_DOWN_V6", dev_name);
 			return;
@@ -877,24 +902,31 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 #endif
 				eth_bridge_post_event(IPA_ETH_BRIDGE_CLIENT_ADD, IPA_IP_MAX, data->mac_addr, NULL, data->iface_name);
 			}
-#if defined(FEATURE_L2TP_E2E) || defined(FEATURE_L2TP)
-			else if(is_l2tp_event(data->iface_name) && ipa_if_cate == ODU_IF)
+#ifdef FEATURE_L2TP
+			if((IPACM_Iface::ipacmcfg->ipacm_l2tp_enable == IPACM_L2TP_E2E ||
+				IPACM_Iface::ipacmcfg->ipacm_l2tp_enable == IPACM_L2TP) &&
+				is_l2tp_event(data->iface_name) && ipa_if_cate == ODU_IF)
 			{
 				handle_l2tp_neigh(data);
 			}
 #endif
-#if defined(FEATURE_L2TP_E2E) || defined(FEATURE_L2TP) || defined(FEATURE_VLAN_MPDN)
-			else if(is_vlan_event(data->iface_name))
+#if defined(FEATURE_L2TP) || defined(FEATURE_VLAN_MPDN)
+			if(is_vlan_event(data->iface_name))
 			{
-#ifndef FEATURE_VLAN_MPDN
+#ifdef FEATURE_L2TP
 				IPACMDBG_H("vlan neighbor event for iface %s\n", data->iface_name);
 				/* in VLAN_MPDN we handle all VLAN neighbors */
-				if(data->iptype == IPA_IP_v6 && is_unique_local_ipv6_addr(data->ipv6_addr))
+				if((IPACM_Iface::ipacmcfg->ipacm_l2tp_enable == IPACM_L2TP_E2E ||
+					IPACM_Iface::ipacmcfg->ipacm_l2tp_enable == IPACM_L2TP) &&
+					data->iptype == IPA_IP_v6 && is_unique_local_ipv6_addr(data->ipv6_addr))
 				{
 					IPACM_Iface::ipacmcfg->handle_vlan_client_info(data);
 				}
 #else
-				handle_vlan_neighbor(data);
+				if(IPACM_Iface::ipacmcfg->ipacm_mpdn_enable)
+				{
+					handle_vlan_neighbor(data);
+				}
 #endif
 			}
 #endif
@@ -917,15 +949,19 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 			}
 
 			if (ipa_interface_index == ipa_if_num
-#if defined(FEATURE_L2TP_E2E) || defined(FEATURE_L2TP)
-				|| (is_l2tp_event(data->iface_name) && ipa_if_cate == ODU_IF)
-#elif defined (FEATURE_VLAN_MPDN)
-				|| is_vlan_event(data->iface_name)
+#ifdef FEATURE_L2TP
+				|| ((IPACM_Iface::ipacmcfg->ipacm_l2tp_enable == IPACM_L2TP_E2E ||
+					IPACM_Iface::ipacmcfg->ipacm_l2tp_enable == IPACM_L2TP) &&
+					is_l2tp_event(data->iface_name) && ipa_if_cate == ODU_IF)
+#endif
+#ifdef FEATURE_VLAN_MPDN
+				|| ((IPACM_Iface::ipacmcfg->ipacm_mpdn_enable == TRUE) &&
+						is_vlan_event(data->iface_name))
 #endif
 				)
 			{
-#ifndef FEATURE_VLAN_MPDN
-				if(ipa_interface_index == ipa_if_num)
+#if !defined(FEATURE_VLAN_MPDN) || defined(FEATURE_L2TP)
+				if((IPACM_Iface::ipacmcfg->ipacm_mpdn_enable == false) && (ipa_interface_index == ipa_if_num))
 #endif
 				{
 					uint8_t vlan_id = 0;
@@ -936,7 +972,8 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 						return;
 					}
 #ifdef FEATURE_VLAN_MPDN
-					if(is_vlan_event(data->iface_name))
+					if((IPACM_Iface::ipacmcfg->ipacm_mpdn_enable == TRUE) &&
+						is_vlan_event(data->iface_name))
 					{
 						IPACMDBG_H("handling vlan ETH client del v4 ip address for iface %s\n",
 							data->iface_name);
@@ -951,19 +988,21 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 					IPACMDBG_H("LAN iface delete client \n");
 					handle_eth_client_down_evt(data->mac_addr, vlan_id);
 				}
-#if defined(FEATURE_L2TP) || defined(FEATURE_L2TP)
+#ifdef FEATURE_L2TP
 				else
 				{
-#ifdef FEATURE_L2TP
-					eth_bridge_post_event(IPA_ETH_BRIDGE_CLIENT_DEL, IPA_IP_MAX, data->mac_addr, NULL, data->iface_name);
-#endif
-#ifdef FEATURE_L2TP_E2E
 
-					if(data->iptype == IPA_IP_v4)
+					if (IPACM_Iface::ipacmcfg->ipacm_l2tp_enable == IPACM_L2TP)
+					{
+						eth_bridge_post_event(IPA_ETH_BRIDGE_CLIENT_DEL,
+							IPA_IP_MAX, data->mac_addr, NULL, data->iface_name);
+					}
+
+					if((IPACM_Iface::ipacmcfg->ipacm_l2tp_enable == IPACM_L2TP_E2E) &&
+						data->iptype == IPA_IP_v4)
 					{
 						uninstall_l2tp_rules(data);
 					}
-#endif
 				}
 #endif
 				return;
@@ -1142,7 +1181,7 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 
 	return;
 }
-#if defined(FEATURE_L2TP_E2E) || defined(FEATURE_L2TP)
+#ifdef FEATURE_L2TP
 int IPACM_Lan::handle_l2tp_neigh(ipacm_event_data_all *data)
 {
 	if(IPACM_Iface::ipacmcfg->GetIPAVer() >= IPA_HW_None && IPACM_Iface::ipacmcfg->GetIPAVer() < IPA_HW_v4_0)
@@ -1155,8 +1194,8 @@ int IPACM_Lan::handle_l2tp_neigh(ipacm_event_data_all *data)
 			IPACM_Iface::ipacmcfg->AddRmDepend(IPACM_Iface::ipacmcfg->ipa_client_rm_map_tbl[tx_prop->tx[0].dst_pipe], false);
 		}
 	}
-#ifdef FEATURE_L2TP_E2E
-	if(data->iptype == IPA_IP_v4)
+	if((IPACM_Iface::ipacmcfg->ipacm_l2tp_enable == IPACM_L2TP_E2E) &&
+		data->iptype == IPA_IP_v4)
 	{
 		int index;
 
@@ -1195,9 +1234,12 @@ int IPACM_Lan::handle_l2tp_neigh(ipacm_event_data_all *data)
 		}
 		num_eth_client++;
 	}
-#endif
 #ifdef FEATURE_L2TP
-	eth_bridge_post_event(IPA_ETH_BRIDGE_CLIENT_ADD, IPA_IP_MAX, data->mac_addr, NULL, data->iface_name);
+	if(IPACM_Iface::ipacmcfg->ipacm_l2tp_enable == IPACM_L2TP)
+	{
+		eth_bridge_post_event(IPA_ETH_BRIDGE_CLIENT_ADD,
+			IPA_IP_MAX, data->mac_addr, NULL, data->iface_name);
+	}
 #endif
 	return 0;
 }
@@ -1268,18 +1310,21 @@ int IPACM_Lan::del_ul_flt_rules(enum ipa_ip_type iptype)
 				return IPACM_FAILURE;
 			}
 
-#ifndef FEATURE_L2TP_E2E
-			/* When OCU is enabled, no need to delete modem UL IPv6 rules. */
-			if(m_filtering.DeleteFilteringHdls(wan_ul_fl_rule_hdl_v6,
-				IPA_IP_v6, num_wan_ul_fl_rule_v6) == false)
-			{
-				IPACMERR("Error Deleting RuleTable(1) to Filtering, aborting...\n");
-				return IPACM_FAILURE;
-			}
-			IPACM_Iface::ipacmcfg->decreaseFltRuleCount(rx_prop->rx[0].src_pipe, IPA_IP_v6, num_wan_ul_fl_rule_v6);
-			memset(wan_ul_fl_rule_hdl_v6, 0, MAX_WAN_UL_FILTER_RULES * sizeof(uint32_t));
-			num_wan_ul_fl_rule_v6 = 0;
+#ifdef FEATURE_L2TP
+			if(IPACM_Iface::ipacmcfg->ipacm_l2tp_enable != IPACM_L2TP_E2E)
 #endif
+			{
+				/* When OCU is enabled, no need to delete modem UL IPv6 rules. */
+				if(m_filtering.DeleteFilteringHdls(wan_ul_fl_rule_hdl_v6,
+					IPA_IP_v6, num_wan_ul_fl_rule_v6) == false)
+				{
+					IPACMERR("Error Deleting RuleTable(1) to Filtering, aborting...\n");
+					return IPACM_FAILURE;
+				}
+				IPACM_Iface::ipacmcfg->decreaseFltRuleCount(rx_prop->rx[0].src_pipe, IPA_IP_v6, num_wan_ul_fl_rule_v6);
+				memset(wan_ul_fl_rule_hdl_v6, 0, MAX_WAN_UL_FILTER_RULES * sizeof(uint32_t));
+				num_wan_ul_fl_rule_v6 = 0;
+			}
 		}
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
 		else {
@@ -1899,7 +1944,8 @@ int IPACM_Lan::handle_addr_evt(ipacm_event_data_addr *data)
 
 		init_fl_rule(data->iptype);
 #ifdef FEATURE_L2TP
-		if(ipa_if_cate == WLAN_IF)
+		if((IPACM_Iface::ipacmcfg->ipacm_l2tp_enable == IPACM_L2TP) &&
+			ipa_if_cate == WLAN_IF)
 		{
 			add_tcp_syn_flt_rule(data->iptype);
 		}
@@ -1996,14 +2042,17 @@ int IPACM_Lan::handle_addr_evt(ipacm_event_data_addr *data)
 		if (num_dft_rt_v6 == 0)
 		{
 #ifdef FEATURE_L2TP
-			if(ipa_if_cate == WLAN_IF)
+			if (IPACM_Iface::ipacmcfg->ipacm_l2tp_enable == IPACM_L2TP)
 			{
-				add_tcp_syn_flt_rule(data->iptype);
-			}
-			else if(ipa_if_cate == ODU_IF)
-			{
-				add_tcp_syn_flt_rule_l2tp(IPA_IP_v4);
-				add_tcp_syn_flt_rule_l2tp(IPA_IP_v6);
+				if(ipa_if_cate == WLAN_IF)
+				{
+					add_tcp_syn_flt_rule(data->iptype);
+				}
+				else if(ipa_if_cate == ODU_IF)
+				{
+					add_tcp_syn_flt_rule_l2tp(IPA_IP_v4);
+					add_tcp_syn_flt_rule_l2tp(IPA_IP_v6);
+				}
 			}
 #endif
 			install_ipv6_icmp_flt_rule();
@@ -2405,8 +2454,9 @@ int IPACM_Lan::handle_wan_up_ex(ipacm_ext_prop *ext_prop, ipa_ip_type iptype, ui
 		if(num_dft_rt_v6 == 1 && modem_ul_v6_set == FALSE)
 		{
 			IPACMDBG_H("IPA_IP_v6 num_dft_rt_v6 %d xlat_mux_id: %d modem_ul_v6_set: %d\n", num_dft_rt_v6, xlat_mux_id, modem_ul_v6_set);
-#ifdef FEATURE_L2TP_E2E
-			if(ipa_if_cate == ODU_IF)
+#ifdef FEATURE_L2TP
+			if((IPACM_Iface::ipacmcfg->ipacm_l2tp_enable == IPACM_L2TP_E2E) &&
+				ipa_if_cate == ODU_IF)
 			{
 				IPACMDBG_H("not installing modem UL IPv6 rules in L2TP E2E use case.\n");
 				return IPACM_SUCCESS;
@@ -4343,8 +4393,9 @@ int IPACM_Lan::handle_down_evt()
 		}
 	}
 
-#ifdef FEATURE_L2TP_E2E
-	if(ipa_if_cate == ODU_IF)
+#ifdef FEATURE_L2TP
+	if((IPACM_Iface::ipacmcfg->ipacm_l2tp_enable == IPACM_L2TP_E2E) &&
+		ipa_if_cate == ODU_IF)
 	{
 		if(m_header.DeleteHeaderProcCtx(l2tp_ul_hdr_proc_ctx_hdl) == false)
 		{
@@ -4426,14 +4477,27 @@ int IPACM_Lan::handle_down_evt()
 			goto fail;
 		}
 
-#if defined(FEATURE_IPA_ANDROID) || defined(FEATURE_VLAN_MPDN)
-		if(m_filtering.DeleteFilteringHdls(private_fl_rule_hdl, IPA_IP_v4, IPA_MAX_PRIVATE_SUBNET_ENTRIES) == false)
+#if defined(FEATURE_IPA_ANDROID) || defined(FEATURE_VLAN_MPDN) || defined(FEATURE_L2TP)
+		if(IPACM_Iface::ipacmcfg->ipacm_mpdn_enable == TRUE)
 		{
-			IPACMERR("Error deleting private subnet IPv4 flt rules.\n");
-			res = IPACM_FAILURE;
-			goto fail;
+			if(m_filtering.DeleteFilteringHdls(private_fl_rule_hdl, IPA_IP_v4, IPA_MAX_PRIVATE_SUBNET_ENTRIES) == false)
+			{
+				IPACMERR("Error deleting private subnet IPv4 flt rules.\n");
+				res = IPACM_FAILURE;
+				goto fail;
+			}
+			IPACM_Iface::ipacmcfg->decreaseFltRuleCount(rx_prop->rx[0].src_pipe, IPA_IP_v4, IPA_MAX_PRIVATE_SUBNET_ENTRIES);
 		}
-		IPACM_Iface::ipacmcfg->decreaseFltRuleCount(rx_prop->rx[0].src_pipe, IPA_IP_v4, IPA_MAX_PRIVATE_SUBNET_ENTRIES);
+		else
+		{
+			if (m_filtering.DeleteFilteringHdls(private_fl_rule_hdl, IPA_IP_v4, IPACM_Iface::ipacmcfg->ipa_num_private_subnet) == false)
+			{
+				IPACMERR("Error deleting private subnet IPv4 flt rules.\n");
+				res = IPACM_FAILURE;
+				goto fail;
+			}
+			IPACM_Iface::ipacmcfg->decreaseFltRuleCount(rx_prop->rx[0].src_pipe, IPA_IP_v4, IPACM_Iface::ipacmcfg->ipa_num_private_subnet);
+		}
 #else
 		if (m_filtering.DeleteFilteringHdls(private_fl_rule_hdl, IPA_IP_v4, IPACM_Iface::ipacmcfg->ipa_num_private_subnet) == false)
 		{
@@ -4468,8 +4532,9 @@ int IPACM_Lan::handle_down_evt()
 		dummy_prefix_installed = false;
 #endif
 
-#ifdef FEATURE_L2TP_E2E
-		if(ipa_if_cate == ODU_IF)
+#ifdef FEATURE_L2TP
+		if((IPACM_Iface::ipacmcfg->ipacm_l2tp_enable == IPACM_L2TP_E2E) &&
+			ipa_if_cate == ODU_IF)
 		{
 			if (m_filtering.DeleteFilteringHdls(l2tp_inner_private_subnet_flt_rule_hdl, IPA_IP_v6,
 				IPACM_Iface::ipacmcfg->ipa_num_private_subnet) == false)
@@ -4494,7 +4559,8 @@ int IPACM_Lan::handle_down_evt()
 				rx_prop->rx[0].src_pipe, IPA_IP_v6, m_ipv6_default_filterting_rules_count);
 		}
 #ifdef FEATURE_L2TP
-		if(ipa_if_cate == ODU_IF)
+		if((IPACM_Iface::ipacmcfg->ipacm_l2tp_enable == IPACM_L2TP) &&
+			ipa_if_cate == ODU_IF)
 		{
 			if(m_filtering.DeleteFilteringHdls(tcp_syn_flt_rule_hdl, IPA_IP_v6, IPA_IP_MAX) == false)
 			{
@@ -4661,78 +4727,84 @@ fail:
 			}
 #endif
 		}
-#ifdef FEATURE_L2TP_E2E
+#ifdef FEATURE_L2TP
 		else
 		{
-			HandleNeighIpAddrDelEvt(
-				get_client_memptr(eth_client, i)->ipv4_set,
-				get_client_memptr(eth_client, i)->v4_addr,
-				get_client_memptr(eth_client, i)->ipv6_set,
-				get_client_memptr(eth_client, i)->v6_addr);
+			if(IPACM_Iface::ipacmcfg->ipacm_l2tp_enable == IPACM_L2TP_E2E)
+			{
+				HandleNeighIpAddrDelEvt(
+					get_client_memptr(eth_client, i)->ipv4_set,
+					get_client_memptr(eth_client, i)->v4_addr,
+					get_client_memptr(eth_client, i)->ipv6_set,
+					get_client_memptr(eth_client, i)->v6_addr);
 
-			/* delete dl rules */
-			if(m_routing.DeleteRoutingHdl(get_client_memptr(eth_client, i)->dl_first_pass_rt_rule_hdl, IPA_IP_v4) == false)
-			{
-				IPACMERR("Failed to delete first pass rt rule.\n");
-				return IPACM_FAILURE;
-			}
+				/* delete dl rules */
+				if(m_routing.DeleteRoutingHdl(get_client_memptr(eth_client, i)->dl_first_pass_rt_rule_hdl, IPA_IP_v4) == false)
+				{
+					IPACMERR("Failed to delete first pass rt rule.\n");
+					return IPACM_FAILURE;
+				}
 
-			if(m_routing.DeleteRoutingHdl(get_client_memptr(eth_client, i)->dl_second_pass_rt_rule_hdl, IPA_IP_v6) == false)
-			{
-				IPACMERR("Failed to delete second pass rt rule.\n");
-				return IPACM_FAILURE;
-			}
+				if(m_routing.DeleteRoutingHdl(get_client_memptr(eth_client, i)->dl_second_pass_rt_rule_hdl, IPA_IP_v6) == false)
+				{
+					IPACMERR("Failed to delete second pass rt rule.\n");
+					return IPACM_FAILURE;
+				}
 
-			if(m_header.DeleteHeaderProcCtx(get_client_memptr(eth_client, i)->dl_first_pass_hdr_proc_ctx_hdl) == false)
-			{
-				IPACMERR("Failed to delete first pass hdr proc ctx.\n");
-				return IPACM_FAILURE;
-			}
+				if(m_header.DeleteHeaderProcCtx(get_client_memptr(eth_client, i)->dl_first_pass_hdr_proc_ctx_hdl) == false)
+				{
+					IPACMERR("Failed to delete first pass hdr proc ctx.\n");
+					return IPACM_FAILURE;
+				}
 
-			if(m_header.DeleteHeaderHdl(get_client_memptr(eth_client, i)->dl_first_pass_hdr_hdl) == false)
-			{
-				IPACMERR("Failed to delete first pass hdr.\n");
-				return IPACM_FAILURE;
-			}
+				if(m_header.DeleteHeaderHdl(get_client_memptr(eth_client, i)->dl_first_pass_hdr_hdl) == false)
+				{
+					IPACMERR("Failed to delete first pass hdr.\n");
+					return IPACM_FAILURE;
+				}
 
-			if(m_header.DeleteHeaderHdl(get_client_memptr(eth_client, i)->dl_second_pass_hdr_hdl) == false)
-			{
-				IPACMERR("Failed to delete second pass hdr.\n");
-				return IPACM_FAILURE;
-			}
-			/* delete ul rules */
-			if(m_filtering.DeleteFilteringHdls(&get_client_memptr(eth_client, i)->ul_first_pass_flt_rule_hdl, IPA_IP_v6, 1) == false)
-			{
-				IPACMERR("Failed to delete ul flt rule.\n");
-				return IPACM_FAILURE;
-			}
-			IPACM_Iface::ipacmcfg->decreaseFltRuleCount(rx_prop->rx[0].src_pipe, IPA_IP_v6, 1);
+				if(m_header.DeleteHeaderHdl(get_client_memptr(eth_client, i)->dl_second_pass_hdr_hdl) == false)
+				{
+					IPACMERR("Failed to delete second pass hdr.\n");
+					return IPACM_FAILURE;
+				}
+				/* delete ul rules */
+				if(m_filtering.DeleteFilteringHdls(&get_client_memptr(eth_client, i)->ul_first_pass_flt_rule_hdl, IPA_IP_v6, 1) == false)
+				{
+					IPACMERR("Failed to delete ul flt rule.\n");
+					return IPACM_FAILURE;
+				}
+				IPACM_Iface::ipacmcfg->decreaseFltRuleCount(rx_prop->rx[0].src_pipe, IPA_IP_v6, 1);
 
-			if(m_routing.DeleteRoutingHdl(get_client_memptr(eth_client, i)->ul_first_pass_rt_rule_hdl, IPA_IP_v6) == false)
-			{
-				IPACMERR("Failed to delete ul rt rule.\n");
-				return IPACM_FAILURE;
+				if(m_routing.DeleteRoutingHdl(get_client_memptr(eth_client, i)->ul_first_pass_rt_rule_hdl, IPA_IP_v6) == false)
+				{
+					IPACMERR("Failed to delete ul rt rule.\n");
+					return IPACM_FAILURE;
+				}
 			}
 		}
 #endif
 	} /* end of for loop */
-#ifdef FEATURE_L2TP_E2E
-	/* post IPA_DEL_L2TP_CLIENT event */
-	for(it = IPACM_Iface::ipacmcfg->l2tp_client.begin(); it != IPACM_Iface::ipacmcfg->l2tp_client.end(); it++)
+#ifdef FEATURE_L2TP
+	if(IPACM_Iface::ipacmcfg->ipacm_l2tp_enable == IPACM_L2TP_E2E)
 	{
-		memset(&evt_data, 0, sizeof(evt_data));
-		data_all = (ipacm_event_data_all *)malloc(sizeof(ipacm_event_data_all));
-		if(data_all == NULL)
+		/* post IPA_DEL_L2TP_CLIENT event */
+		for(it = IPACM_Iface::ipacmcfg->l2tp_client.begin(); it != IPACM_Iface::ipacmcfg->l2tp_client.end(); it++)
 		{
-			IPACMERR("Unable to allocate memory for event data.\n");
-			return IPACM_FAILURE;
+			memset(&evt_data, 0, sizeof(evt_data));
+			data_all = (ipacm_event_data_all *)malloc(sizeof(ipacm_event_data_all));
+			if(data_all == NULL)
+			{
+				IPACMERR("Unable to allocate memory for event data.\n");
+				return IPACM_FAILURE;
+			}
+			strlcpy(data_all->iface_name, it->client_iface_name, sizeof(data_all->iface_name));
+			evt_data.event = IPA_DEL_L2TP_CLIENT;
+			evt_data.evt_data = data_all;
+			IPACM_EvtDispatcher::PostEvt(&evt_data);
 		}
-		strlcpy(data_all->iface_name, it->client_iface_name, sizeof(data_all->iface_name));
-		evt_data.event = IPA_DEL_L2TP_CLIENT;
-		evt_data.evt_data = data_all;
-		IPACM_EvtDispatcher::PostEvt(&evt_data);
+		IPACM_Iface::ipacmcfg->l2tp_client.clear();
 	}
-	IPACM_Iface::ipacmcfg->l2tp_client.clear();
 #endif
 
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
@@ -6702,7 +6774,7 @@ int IPACM_Lan::install_ipv6_icmp_flt_rule()
 	return IPACM_SUCCESS;
 }
 
-#ifdef FEATURE_L2TP_E2E
+#ifdef FEATURE_L2TP
 int IPACM_Lan::install_l2tp_inner_private_subnet_flt_rule()
 {
 	int i;
@@ -7922,7 +7994,7 @@ int IPACM_Lan::eth_bridge_del_hdr_proc_ctx(uint32_t hdr_proc_ctx_hdl)
 	return IPACM_SUCCESS;
 }
 
-#if defined(FEATURE_L2TP_E2E) || defined(FEATURE_L2TP) || defined(FEATURE_VLAN_MPDN)
+#if defined(FEATURE_L2TP) || defined(FEATURE_VLAN_MPDN)
 /* check if the event is associated with vlan interface */
 bool IPACM_Lan::is_vlan_event(char *event_iface_name)
 {
@@ -7944,7 +8016,7 @@ bool IPACM_Lan::is_vlan_event(char *event_iface_name)
 	}
 	return false;
 }
-#ifndef FEATURE_VLAN_MPDN
+#ifdef FEATURE_L2TP
 /* check if the event is associated with l2tp interface */
 bool IPACM_Lan::is_l2tp_event(char *event_iface_name)
 {
@@ -7962,8 +8034,8 @@ bool IPACM_Lan::is_l2tp_event(char *event_iface_name)
 	}
 	return false;
 }
-#endif //#ifndef FEATURE_VLAN_MPDN
-#endif //#if defined(FEATURE_L2TP_E2E) || defined(FEATURE_L2TP) || defined(FEATURE_VLAN_MPDN)
+#endif //#ifdef FEATURE_L2TP
+#endif defined(FEATURE_L2TP) || defined(FEATURE_VLAN_MPDN)
 #ifdef FEATURE_L2TP
 /* add l2tp rt rule for l2tp client */
 int IPACM_Lan::add_l2tp_rt_rule(ipa_ip_type iptype, uint8_t *dst_mac, ipa_hdr_l2_type peer_l2_hdr_type,
@@ -8870,7 +8942,7 @@ int IPACM_Lan::add_tcp_syn_flt_rule_l2tp(ipa_ip_type inner_ip_type)
 	return IPACM_SUCCESS;
 }
 
-#ifdef FEATURE_L2TP_E2E
+#ifdef FEATURE_L2TP
 /* install l2tp dl rules */
 int IPACM_Lan::install_l2tp_dl_rules(ipacm_event_data_all *data, int index)
 {

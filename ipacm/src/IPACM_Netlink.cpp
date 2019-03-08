@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2013-2018, The Linux Foundation. All rights reserved.
+Copyright (c) 2013-2019, The Linux Foundation. All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are
@@ -487,6 +487,7 @@ static int ipa_nl_decode_rtm_neigh
 {
 	struct nlmsghdr *nlh = (struct nlmsghdr *)buffer;  /* NL message header */
 	struct rtattr *rtah = NULL;
+	bool address_set = false;
 
 	/* Extract the header data */
 	neigh_info->metainfo = *((struct ndmsg *)NLMSG_DATA(nlh));
@@ -504,8 +505,13 @@ static int ipa_nl_decode_rtm_neigh
 		{
 
 		case NDA_DST:
-			neigh_info->attr_info.local_addr.ss_family = neigh_info->metainfo.ndm_family;
-			IPACM_NL_COPY_ADDR( neigh_info, local_addr );
+			if (!address_set)
+			{
+				neigh_info->attr_info.local_addr.ss_family = neigh_info->metainfo.ndm_family;
+				IPACM_NL_COPY_ADDR( neigh_info, local_addr );
+				IPACM_NL_REPORT_ADDR( " ", neigh_info->attr_info.local_addr);
+				address_set = true;
+			}
 			break;
 
 		case NDA_LLADDR:

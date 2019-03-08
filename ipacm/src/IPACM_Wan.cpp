@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013-2018, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2013-2019, The Linux Foundation. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -71,10 +71,10 @@ int IPACM_Wan::num_firewall_v6_ul = 0;
 #ifdef FEATURE_VLAN_MPDN
 struct ipacm_pdn_flt_rule IPACM_Wan::pdn_flt_rule_v4[IPA_MAX_FLT_RULE];
 struct ipacm_pdn_flt_rule IPACM_Wan::pdn_flt_rule_v6[IPA_MAX_FLT_RULE];
-#else
+#endif
+
 struct ipa_flt_rule_add IPACM_Wan::flt_rule_v4[IPA_MAX_FLT_RULE];
 struct ipa_flt_rule_add IPACM_Wan::flt_rule_v6[IPA_MAX_FLT_RULE];
-#endif
 
 #ifdef FEATURE_IPACM_UL_FIREWALL
 struct ipa_flt_rule_add IPACM_Wan::firewall_flt_rule_v6_ul[IPACM_MAX_FIREWALL_ENTRIES+1];
@@ -1397,7 +1397,7 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 				}
 			}
 			break;
-#ifdef FEATURE_L2TP_E2E
+#ifdef FEATURE_L2TP
 	case IPA_ADD_L2TP_CLIENT:
 		if(active_v4)
 		{
@@ -4165,8 +4165,10 @@ int IPACM_Wan::config_wan_firewall_rule(ipa_ip_type iptype)
 			goto fail;
 		}
 		IPACMDBG_H("Succeded in constructing firewall rules for ip type %d\n", iptype);
-#ifdef FEATURE_L2TP_E2E
-		for(it = IPACM_Iface::ipacmcfg->l2tp_client.begin(); it != IPACM_Iface::ipacmcfg->l2tp_client.end(); it++)
+#ifdef FEATURE_L2TP
+		for(it = IPACM_Iface::ipacmcfg->l2tp_client.begin();
+			it != IPACM_Iface::ipacmcfg->l2tp_client.end() &&
+			(IPACM_Iface::ipacmcfg->ipacm_l2tp_enable == IPACM_L2TP_E2E); it++)
 		{
 			handle_l2tp_client_add(it->client_iface_name);
 		}
@@ -4179,8 +4181,8 @@ int IPACM_Wan::config_wan_firewall_rule(ipa_ip_type iptype)
 #else
 		IPACM_Wan::num_v6_flt_rule = m_ipv6_default_filterting_rules_count;
 #endif
-#ifdef FEATURE_L2TP_E2E
-		if(active_v4)
+#ifdef FEATURE_L2TP
+		if(active_v4 && (IPACM_Iface::ipacmcfg->ipacm_l2tp_enable == IPACM_L2TP_E2E))
 		{
 			IPACM_Wan::num_v6_flt_rule += IPACM_Iface::ipacmcfg->l2tp_client.size();
 		}
@@ -4590,8 +4592,9 @@ int IPACM_Wan::del_wan_firewall_rule(ipa_ip_type iptype)
 		memset(&IPACM_Wan::flt_rule_v4[IPA_V2_NUM_DEFAULT_WAN_FILTER_RULE_IPV4], 0,
 			(IPA_MAX_FLT_RULE - IPA_V2_NUM_DEFAULT_WAN_FILTER_RULE_IPV4) * sizeof(struct ipa_flt_rule_add));
 #endif
-#ifdef FEATURE_L2TP_E2E
-		for(it = IPACM_Iface::ipacmcfg->l2tp_client.begin(); it != IPACM_Iface::ipacmcfg->l2tp_client.end(); it++)
+#ifdef FEATURE_L2TP
+		for(it = IPACM_Iface::ipacmcfg->l2tp_client.begin(); it != IPACM_Iface::ipacmcfg->l2tp_client.end() &&
+			(IPACM_Iface::ipacmcfg->ipacm_l2tp_enable == IPACM_L2TP_E2E); it++)
 		{
 			handle_l2tp_client_del(it->client_iface_name);
 		}
@@ -4604,8 +4607,8 @@ int IPACM_Wan::del_wan_firewall_rule(ipa_ip_type iptype)
 #else
 		IPACM_Wan::num_v6_flt_rule = m_ipv6_default_filterting_rules_count;
 #endif
-#ifdef FEATURE_L2TP_E2E
-		if(active_v4)
+#ifdef FEATURE_L2TP
+		if(active_v4 && (IPACM_Iface::ipacmcfg->ipacm_l2tp_enable == IPACM_L2TP_E2E))
 		{
 			IPACM_Wan::num_v6_flt_rule += IPACM_Iface::ipacmcfg->l2tp_client.size();
 		}
@@ -7527,7 +7530,7 @@ int IPACM_Wan::add_dummy_rx_hdr()
 	}
 	return IPACM_SUCCESS;
 }
-#ifdef FEATURE_L2TP_E2E
+#ifdef FEATURE_L2TP
 void IPACM_Wan::handle_l2tp_client_add(char *iface_name)
 {
 	int i;
@@ -7540,10 +7543,17 @@ void IPACM_Wan::handle_l2tp_client_add(char *iface_name)
 
 	for (i = IPACM_Wan::num_v4_flt_rule - 1; i >= m_ipv6_default_filterting_rules_count; --i)
 	{
+#ifdef FEATURE_VLAN_MPDN
+		pdn_flt_rule_v6[i+1] = pdn_flt_rule_v6[i];
+#else
 		flt_rule_v6[i+1] = flt_rule_v6[i];
+#endif
 	}
-
+#ifdef FEATURE_VLAN_MPDN
+	install_l2tp_flt_rule(pdn_flt_rule_v6, m_ipv6_default_filterting_rules_count, iface_name);
+#else
 	install_l2tp_flt_rule(flt_rule_v6, m_ipv6_default_filterting_rules_count, iface_name);
+#endif
 	IPACM_Wan::num_v6_flt_rule++;
 	IPACMDBG_H("Now num of v6 dl flt rule is %d.\n", IPACM_Wan::num_v6_flt_rule);
 	return;
@@ -7569,9 +7579,15 @@ void IPACM_Wan::handle_l2tp_client_del(char *iface_name)
 
 	for (i = m_ipv6_default_filterting_rules_count; i < IPACM_Wan::num_v6_flt_rule; ++i)
 	{
+#ifdef FEATURE_VLAN_MPDN
+		if( (pdn_flt_rule_v6[i].flt_rule.rule.attrib.attrib_mask | IPA_FLT_DST_ADDR)
+			&& memcmp(pdn_flt_rule_v6[i].flt_rule.rule.attrib.u.v6.dst_addr, ipv6_addr,
+				sizeof(pdn_flt_rule_v6[i].flt_rule.rule.attrib.u.v6.dst_addr)) == 0)
+#else
 		if( (flt_rule_v6[i].rule.attrib.attrib_mask | IPA_FLT_DST_ADDR)
 			&& memcmp(flt_rule_v6[i].rule.attrib.u.v6.dst_addr, ipv6_addr,
 				sizeof(flt_rule_v6[i].rule.attrib.u.v6.dst_addr)) == 0)
+#endif
 		{
 			IPACMDBG_H("Found modem DL flt rule at position %d.\n", i);
 			break;
@@ -7586,15 +7602,22 @@ void IPACM_Wan::handle_l2tp_client_del(char *iface_name)
 
 	for(; i < IPACM_Wan::num_v6_flt_rule - 1; i++)
 	{
+#ifdef FEATURE_VLAN_MPDN
+		pdn_flt_rule_v6[i] = pdn_flt_rule_v6[i+1];
+#else
 		flt_rule_v6[i] = flt_rule_v6[i+1];
+#endif
 	}
 
 	IPACM_Wan::num_v6_flt_rule--;
 	IPACMDBG_H("Now the num of v6 dl flt rule is %d.\n", IPACM_Wan::num_v6_flt_rule);
 	return;
 }
-
+#ifdef FEATURE_VLAN_MPDN
+void IPACM_Wan::install_l2tp_flt_rule(ipacm_pdn_flt_rule* rules, int rule_offset, char *iface_name)
+#else
 void IPACM_Wan::install_l2tp_flt_rule(ipa_flt_rule_add* rules, int rule_offset, char *iface_name)
+#endif
 {
 	l2tp_vlan_mapping_info info;
 	ipa_flt_rule_add flt_rule_entry;

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013-2018, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2013-2019, The Linux Foundation. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -407,6 +407,7 @@ int IPACM_Wan::handle_addr_evt(ipacm_event_data_addr *data)
 		{
 			if(m_is_sta_mode == Q6_WAN)
 			{
+#ifdef FEATURE_VLAN_MPDN
 				modem_ipv6_pdn_index = getFreePDNIndex_V6();
 				if (modem_ipv6_pdn_index == -1)
 				{
@@ -416,6 +417,7 @@ int IPACM_Wan::handle_addr_evt(ipacm_event_data_addr *data)
 				}
 				num_ipv6_modem_pdn++;
 				IPACMDBG_H("Now the number of modem ipv6 pdn is %d.\n", num_ipv6_modem_pdn);
+#endif
 				init_fl_rule_ex(data->iptype);
 			}
 			else
@@ -584,6 +586,7 @@ int IPACM_Wan::handle_addr_evt(ipacm_event_data_addr *data)
 			/* initial multicast/broadcast/fragment filter rule */
 			if(m_is_sta_mode == Q6_WAN)
 			{
+#ifdef FEATURE_VLAN_MPDN
 				modem_ipv4_pdn_index = getFreePDNIndex_V4();
 				if (modem_ipv4_pdn_index == -1)
 				{
@@ -591,7 +594,6 @@ int IPACM_Wan::handle_addr_evt(ipacm_event_data_addr *data)
 					res = IPACM_FAILURE;
 					goto fail;
 				}
-#ifdef FEATURE_VLAN_MPDN
 				ipv4_to_iface[modem_ipv4_pdn_index].ipv4_addr = data->ipv4_addr;
 				ipv4_to_iface[modem_ipv4_pdn_index].pIface = this;
 #endif
@@ -6337,7 +6339,8 @@ int IPACM_Wan::install_wan_filtering_rule(bool is_sw_routing)
 			{
 #ifdef FEATURE_VLAN_MPDN
 				/* embms get's the mux ID of the default PDN */
-				if (mux_id_v6 != NULL) {
+				if (mux_id_v6 != NULL)
+				{
 					mux_id_v6[0] = IPACM_Iface::ipacmcfg->GetQmapId();
 					for(int i = 1; i < IPACM_Wan::num_v6_flt_rule + 1; i++)
 					{
@@ -6346,10 +6349,11 @@ int IPACM_Wan::install_wan_filtering_rule(bool is_sw_routing)
 							&IPACM_Wan::pdn_flt_rule_v6[i].flt_rule,
 							sizeof(ipa_flt_rule_add));
 					}
+				}
 #else
 					memcpy(&(pFilteringTable_v6->rules[1]), IPACM_Wan::flt_rule_v6, IPACM_Wan::num_v6_flt_rule * sizeof(ipa_flt_rule_add));
+
 #endif
-				}
 			}
 		}
 	}

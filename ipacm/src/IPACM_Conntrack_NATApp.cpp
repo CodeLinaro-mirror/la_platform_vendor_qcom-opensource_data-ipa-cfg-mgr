@@ -1235,6 +1235,10 @@ void NatApp::Read_TcpUdp_Timeout(void) {
 	IPACMDBG_H("udp timeout value: %d\n", udp_timeout);
 	IPACMDBG_H("tcp timeout value: %d\n", tcp_timeout);
 #else
+	tcp_timeout = 3600;
+	udp_timeout = 60;
+	IPACMDBG_H("udp timeout value: %d\n", udp_timeout);
+	IPACMDBG_H("tcp timeout value: %d\n", tcp_timeout);
 	FILE *udp_fd = NULL, *tcp_fd = NULL;
 	char kernel_ver[KERNEL_VERSION_LENGTH];
 

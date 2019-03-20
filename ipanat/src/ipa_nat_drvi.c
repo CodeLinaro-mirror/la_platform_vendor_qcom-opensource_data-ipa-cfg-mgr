@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013 - 2018 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2013 - 2019 The Linux Foundation. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -36,6 +36,7 @@
 #include <errno.h>
 #include <pthread.h>
 #include <unistd.h>
+#include <linux/msm_ipa.h>
 
 #define MAX_DMA_ENTRIES_FOR_ADD 2
 #define MAX_DMA_ENTRIES_FOR_DEL 3
@@ -854,7 +855,7 @@ int ipa_nati_add_ipv4_rule(uint32_t tbl_hdl,
 
 	IPADBG("\n");
 
-	if (clnt_rule->protocol == IPA_NAT_INVALID_PROTO_FIELD_CMP) {
+	if (clnt_rule->protocol == IPAHAL_NAT_INVALID_PROTOCOL) {
 		IPAERR("invalid parameter protocol=%d\n", clnt_rule->protocol);
 		return -EINVAL;
 	}
@@ -1031,7 +1032,7 @@ int ipa_nati_del_ipv4_rule(uint32_t tbl_hdl, uint32_t rule_hdl)
 	if (!ipa_table_iterator_is_head_with_tail(&table_iterator)) {
 		/* The entry can be deleted */
 		uint8_t is_prev_empty = (table_iterator.prev_entry != NULL &&
-			((struct ipa_nat_rule*)table_iterator.prev_entry)->protocol == IPA_NAT_INVALID_PROTO_FIELD_CMP);
+			((struct ipa_nat_rule*)table_iterator.prev_entry)->protocol == IPAHAL_NAT_INVALID_PROTOCOL);
 		ipa_table_delete_entry(&nat_table->table, &table_iterator, is_prev_empty);
 	}
 

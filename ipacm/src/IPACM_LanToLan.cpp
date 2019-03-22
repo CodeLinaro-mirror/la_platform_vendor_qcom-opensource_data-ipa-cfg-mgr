@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2014-2017, The Linux Foundation. All rights reserved.
+Copyright (c) 2014-2019, The Linux Foundation. All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are
@@ -247,23 +247,26 @@ void IPACM_LanToLan::handle_iface_up(ipacm_event_eth_bridge *data)
 
 		IPACM_LanToLan_Iface &front_iface = m_iface.front();
 #ifdef FEATURE_L2TP
-		for(it_mapping = IPACM_Iface::ipacmcfg->m_l2tp_vlan_mapping.begin(); it_mapping != IPACM_Iface::ipacmcfg->m_l2tp_vlan_mapping.end(); it_mapping++)
+		if (IPACM_Iface::ipacmcfg->ipacm_l2tp_enable == IPACM_L2TP)
 		{
-			if(front_iface.set_l2tp_iface(it_mapping->vlan_iface_name) == true)
+			for(it_mapping = IPACM_Iface::ipacmcfg->m_l2tp_vlan_mapping.begin(); it_mapping != IPACM_Iface::ipacmcfg->m_l2tp_vlan_mapping.end(); it_mapping++)
 			{
-				has_l2tp_iface = true;
-			}
-		}
-
-		if(m_has_l2tp_iface == false && has_l2tp_iface == true)
-		{
-			IPACMDBG_H("There is l2tp iface, add rt rules for l2tp iface.\n");
-			m_has_l2tp_iface = true;
-			for(it = ++m_iface.begin(); it != m_iface.end(); it++)
-			{
-				if(it->is_l2tp_iface() == false)
+				if(front_iface.set_l2tp_iface(it_mapping->vlan_iface_name) == true)
 				{
-					it->handle_l2tp_enable();
+					has_l2tp_iface = true;
+				}
+			}
+
+			if(m_has_l2tp_iface == false && has_l2tp_iface == true)
+			{
+				IPACMDBG_H("There is l2tp iface, add rt rules for l2tp iface.\n");
+				m_has_l2tp_iface = true;
+				for(it = ++m_iface.begin(); it != m_iface.end(); it++)
+				{
+					if(it->is_l2tp_iface() == false)
+					{
+						it->handle_l2tp_enable();
+					}
 				}
 			}
 		}
@@ -327,23 +330,26 @@ void IPACM_LanToLan::handle_iface_down(ipacm_event_eth_bridge *data)
 	it_target_iface->handle_down_event();
 	m_iface.erase(it_target_iface);
 #ifdef FEATURE_L2TP
-	for(it_target_iface = m_iface.begin(); it_target_iface != m_iface.end(); it_target_iface++)
+	if(IPACM_Iface::ipacmcfg->ipacm_l2tp_enable == IPACM_L2TP)
 	{
-		if(it_target_iface->is_l2tp_iface() == true)
-		{
-			has_l2tp_iface = true;
-			break;
-		}
-	}
-	if(m_has_l2tp_iface == true && has_l2tp_iface == false)
-	{
-		IPACMDBG_H("There is no l2tp iface now, delete rt rules for l2tp iface.\n");
-		m_has_l2tp_iface = false;
 		for(it_target_iface = m_iface.begin(); it_target_iface != m_iface.end(); it_target_iface++)
 		{
-			if(it_target_iface->is_l2tp_iface() == false)
+			if(it_target_iface->is_l2tp_iface() == true)
 			{
-				it_target_iface->handle_l2tp_disable();
+				has_l2tp_iface = true;
+				break;
+			}
+		}
+		if(m_has_l2tp_iface == true && has_l2tp_iface == false)
+		{
+			IPACMDBG_H("There is no l2tp iface now, delete rt rules for l2tp iface.\n");
+			m_has_l2tp_iface = false;
+			for(it_target_iface = m_iface.begin(); it_target_iface != m_iface.end(); it_target_iface++)
+			{
+				if(it_target_iface->is_l2tp_iface() == false)
+				{
+					it_target_iface->handle_l2tp_disable();
+				}
 			}
 		}
 	}
@@ -398,19 +404,22 @@ void IPACM_LanToLan::handle_client_add(ipacm_event_eth_bridge *data)
 	IPACMDBG_H("Incoming client MAC: 0x%02x%02x%02x%02x%02x%02x, interface: %s\n", data->mac_addr[0], data->mac_addr[1],
 		data->mac_addr[2], data->mac_addr[3], data->mac_addr[4], data->mac_addr[5], data->p_iface->dev_name);
 #ifdef FEATURE_L2TP
-	for(it_mapping = IPACM_Iface::ipacmcfg->m_l2tp_vlan_mapping.begin(); it_mapping != IPACM_Iface::ipacmcfg->m_l2tp_vlan_mapping.end(); it_mapping++)
+	if(IPACM_Iface::ipacmcfg->ipacm_l2tp_enable == IPACM_L2TP)
 	{
-		if(strncmp(it_mapping->l2tp_iface_name, data->iface_name,
-			sizeof(it_mapping->l2tp_iface_name)) == 0)
+		for(it_mapping = IPACM_Iface::ipacmcfg->m_l2tp_vlan_mapping.begin(); it_mapping != IPACM_Iface::ipacmcfg->m_l2tp_vlan_mapping.end(); it_mapping++)
 		{
-			IPACMDBG_H("Found l2tp iface %s with l2tp client MAC 0x%02x%02x%02x%02x%02x%02x\n",
-				it_mapping->l2tp_iface_name, it_mapping->l2tp_client_mac[0], it_mapping->l2tp_client_mac[1],
-				it_mapping->l2tp_client_mac[2], it_mapping->l2tp_client_mac[3], it_mapping->l2tp_client_mac[4],
-				it_mapping->l2tp_client_mac[5]);
-			memcpy(it_mapping->l2tp_client_mac, data->mac_addr, sizeof(it_mapping->l2tp_client_mac));
-			mapping_info = &(*it_mapping);
-			is_l2tp_client = true;
-			break;
+			if(strncmp(it_mapping->l2tp_iface_name, data->iface_name,
+				sizeof(it_mapping->l2tp_iface_name)) == 0)
+			{
+				IPACMDBG_H("Found l2tp iface %s with l2tp client MAC 0x%02x%02x%02x%02x%02x%02x\n",
+					it_mapping->l2tp_iface_name, it_mapping->l2tp_client_mac[0], it_mapping->l2tp_client_mac[1],
+					it_mapping->l2tp_client_mac[2], it_mapping->l2tp_client_mac[3], it_mapping->l2tp_client_mac[4],
+					it_mapping->l2tp_client_mac[5]);
+				memcpy(it_mapping->l2tp_client_mac, data->mac_addr, sizeof(it_mapping->l2tp_client_mac));
+				mapping_info = &(*it_mapping);
+				is_l2tp_client = true;
+				break;
+			}
 		}
 	}
 #endif
@@ -565,12 +574,15 @@ void IPACM_LanToLan_Iface::add_client_rt_rule_for_new_iface()
 		for(it = m_client_info.begin(); it != m_client_info.end(); it++)
 		{
 #ifdef FEATURE_L2TP
+		if(IPACM_Iface::ipacmcfg->ipacm_l2tp_enable == IPACM_L2TP)
+		{
 			if(it->is_l2tp_client == false)
 			{
 				add_client_rt_rule(&peer, &(*it));
 			}
 			/* add l2tp rt rules */
 			add_l2tp_client_rt_rule(&peer, &(*it));
+		}
 #else
 			add_client_rt_rule(&peer, &(*it));
 #endif
@@ -763,7 +775,7 @@ void IPACM_LanToLan_Iface::add_client_flt_rule(peer_iface_info *peer, client_inf
 	}
 
 #ifdef FEATURE_L2TP
-	if(m_is_l2tp_iface)
+	if((IPACM_Iface::ipacmcfg->ipacm_l2tp_enable == IPACM_L2TP) && m_is_l2tp_iface)
 	{
 		m_p_iface->add_l2tp_flt_rule(client->mac_addr, &l2tp_first_pass_flt_rule_hdl);
 	}
@@ -771,7 +783,7 @@ void IPACM_LanToLan_Iface::add_client_flt_rule(peer_iface_info *peer, client_inf
 #endif
 	{
 #ifdef FEATURE_L2TP
-		if(client->is_l2tp_client)
+		if((IPACM_Iface::ipacmcfg->ipacm_l2tp_enable == IPACM_L2TP) && client->is_l2tp_client)
 		{
 			m_p_iface->add_l2tp_flt_rule(iptype, client->mac_addr, client->mapping_info->vlan_client_ipv6_addr,
 				&l2tp_first_pass_flt_rule_hdl, &l2tp_second_pass_flt_rule_hdl);
@@ -850,7 +862,7 @@ void IPACM_LanToLan_Iface::del_client_flt_rule(peer_iface_info *peer, client_inf
 				else
 				{
 #ifdef FEATURE_L2TP
-					if(client->is_l2tp_client)
+					if((IPACM_Iface::ipacmcfg->ipacm_l2tp_enable == IPACM_L2TP) && client->is_l2tp_client)
 					{
 						m_p_iface->del_l2tp_flt_rule(IPA_IP_v4, it_flt->l2tp_first_pass_flt_rule_hdl[IPA_IP_v4],
 							it_flt->l2tp_second_pass_flt_rule_hdl);
@@ -869,7 +881,7 @@ void IPACM_LanToLan_Iface::del_client_flt_rule(peer_iface_info *peer, client_inf
 			if(m_is_ip_addr_assigned[IPA_IP_v6])
 			{
 #ifdef FEATURE_L2TP
-				if(m_is_l2tp_iface)
+				if((IPACM_Iface::ipacmcfg->ipacm_l2tp_enable == IPACM_L2TP) && m_is_l2tp_iface)
 				{
 					m_p_iface->del_l2tp_flt_rule(it_flt->l2tp_first_pass_flt_rule_hdl[IPA_IP_v6]);
 					IPACMDBG_H("Deleted IPv6 flt rule %d.\n", it_flt->l2tp_first_pass_flt_rule_hdl[IPA_IP_v6]);
@@ -878,7 +890,7 @@ void IPACM_LanToLan_Iface::del_client_flt_rule(peer_iface_info *peer, client_inf
 #endif
 				{
 #ifdef FEATURE_L2TP
-					if(client->is_l2tp_client)
+					if((IPACM_Iface::ipacmcfg->ipacm_l2tp_enable == IPACM_L2TP) && client->is_l2tp_client)
 					{
 						m_p_iface->del_l2tp_flt_rule(IPA_IP_v6, it_flt->l2tp_first_pass_flt_rule_hdl[IPA_IP_v6],
 							it_flt->l2tp_second_pass_flt_rule_hdl);
@@ -929,7 +941,8 @@ void IPACM_LanToLan_Iface::del_client_rt_rule(peer_iface_info *peer, client_info
 			}
 			client->inter_iface_rt_rule_hdl[peer_l2_hdr_type].num_hdl[IPA_IP_v6] = 0;
 #ifdef FEATURE_L2TP
-			if(IPACM_LanToLan::get_instance()->has_l2tp_iface() == true)
+			if((IPACM_Iface::ipacmcfg->ipacm_l2tp_enable == IPACM_L2TP) &&
+				IPACM_LanToLan::get_instance()->has_l2tp_iface() == true)
 			{
 				m_p_iface->del_l2tp_rt_rule(IPA_IP_v6, client->l2tp_rt_rule_hdl[peer_l2_hdr_type].num_rt_hdl[IPA_IP_v6],
 					client->l2tp_rt_rule_hdl[peer_l2_hdr_type].first_pass_rt_rule_hdl[IPA_IP_v6]);
@@ -939,14 +952,17 @@ void IPACM_LanToLan_Iface::del_client_rt_rule(peer_iface_info *peer, client_info
 		else
 		{
 #ifdef FEATURE_L2TP
-			m_p_iface->del_l2tp_rt_rule(IPA_IP_v4, client->l2tp_rt_rule_hdl[peer_l2_hdr_type].first_pass_hdr_hdl,
-				client->l2tp_rt_rule_hdl[peer_l2_hdr_type].first_pass_hdr_proc_ctx_hdl[IPA_IP_v4], client->l2tp_rt_rule_hdl[peer_l2_hdr_type].second_pass_hdr_hdl,
-				client->l2tp_rt_rule_hdl[peer_l2_hdr_type].num_rt_hdl[IPA_IP_v4], client->l2tp_rt_rule_hdl[peer_l2_hdr_type].first_pass_rt_rule_hdl[IPA_IP_v4],
-				client->l2tp_rt_rule_hdl[peer_l2_hdr_type].second_pass_rt_rule_hdl);
+			if(IPACM_Iface::ipacmcfg->ipacm_l2tp_enable == IPACM_L2TP_E2E)
+			{
+				m_p_iface->del_l2tp_rt_rule(IPA_IP_v4, client->l2tp_rt_rule_hdl[peer_l2_hdr_type].first_pass_hdr_hdl,
+					client->l2tp_rt_rule_hdl[peer_l2_hdr_type].first_pass_hdr_proc_ctx_hdl[IPA_IP_v4], client->l2tp_rt_rule_hdl[peer_l2_hdr_type].second_pass_hdr_hdl,
+					client->l2tp_rt_rule_hdl[peer_l2_hdr_type].num_rt_hdl[IPA_IP_v4], client->l2tp_rt_rule_hdl[peer_l2_hdr_type].first_pass_rt_rule_hdl[IPA_IP_v4],
+					client->l2tp_rt_rule_hdl[peer_l2_hdr_type].second_pass_rt_rule_hdl);
 
-			m_p_iface->del_l2tp_rt_rule(IPA_IP_v6, 0, client->l2tp_rt_rule_hdl[peer_l2_hdr_type].first_pass_hdr_proc_ctx_hdl[IPA_IP_v6],
-				0, client->l2tp_rt_rule_hdl[peer_l2_hdr_type].num_rt_hdl[IPA_IP_v6], client->l2tp_rt_rule_hdl[peer_l2_hdr_type].first_pass_rt_rule_hdl[IPA_IP_v6],
-				NULL);
+				m_p_iface->del_l2tp_rt_rule(IPA_IP_v6, 0, client->l2tp_rt_rule_hdl[peer_l2_hdr_type].first_pass_hdr_proc_ctx_hdl[IPA_IP_v6],
+					0, client->l2tp_rt_rule_hdl[peer_l2_hdr_type].num_rt_hdl[IPA_IP_v6], client->l2tp_rt_rule_hdl[peer_l2_hdr_type].first_pass_rt_rule_hdl[IPA_IP_v6],
+					NULL);
+			}
 #endif
 		}
 	}
@@ -1052,7 +1068,8 @@ void IPACM_LanToLan_Iface::clear_all_flt_rule_for_one_peer_iface(peer_iface_info
 			else
 			{
 #ifdef FEATURE_L2TP
-				if(it->p_client->is_l2tp_client)
+				if((IPACM_Iface::ipacmcfg->ipacm_l2tp_enable == IPACM_L2TP) &&
+					it->p_client->is_l2tp_client)
 				{
 					m_p_iface->del_l2tp_flt_rule(IPA_IP_v4, it->l2tp_first_pass_flt_rule_hdl[IPA_IP_v4],
 						it->l2tp_second_pass_flt_rule_hdl);
@@ -1071,7 +1088,7 @@ void IPACM_LanToLan_Iface::clear_all_flt_rule_for_one_peer_iface(peer_iface_info
 		if(m_is_ip_addr_assigned[IPA_IP_v6])
 		{
 #ifdef FEATURE_L2TP
-			if(m_is_l2tp_iface)
+			if((IPACM_Iface::ipacmcfg->ipacm_l2tp_enable == IPACM_L2TP) && m_is_l2tp_iface)
 			{
 				m_p_iface->del_l2tp_flt_rule(it->l2tp_first_pass_flt_rule_hdl[IPA_IP_v6]);
 				IPACMDBG_H("Deleted IPv6 flt rule %d.\n", it->l2tp_first_pass_flt_rule_hdl[IPA_IP_v6]);
@@ -1080,7 +1097,7 @@ void IPACM_LanToLan_Iface::clear_all_flt_rule_for_one_peer_iface(peer_iface_info
 #endif
 			{
 #ifdef FEATURE_L2TP
-				if(it->p_client->is_l2tp_client)
+				if((IPACM_Iface::ipacmcfg->ipacm_l2tp_enable == IPACM_L2TP) && it->p_client->is_l2tp_client)
 				{
 					m_p_iface->del_l2tp_flt_rule(IPA_IP_v6, it->l2tp_first_pass_flt_rule_hdl[IPA_IP_v6],
 						it->l2tp_second_pass_flt_rule_hdl);
@@ -1113,7 +1130,8 @@ void IPACM_LanToLan_Iface::clear_all_rt_rule_for_one_peer_iface(peer_iface_info 
 			del_client_rt_rule(peer, &(*it));
 		}
 #ifdef FEATURE_L2TP
-		if(IPACM_LanToLan::get_instance()->has_l2tp_iface() == true)
+		if((IPACM_Iface::ipacmcfg->ipacm_l2tp_enable == IPACM_L2TP) &&
+			IPACM_LanToLan::get_instance()->has_l2tp_iface() == true)
 		{
 			m_p_iface->eth_bridge_del_hdr_proc_ctx(hdr_proc_ctx_for_l2tp);
 			hdr_proc_ctx_for_l2tp = 0;
@@ -1298,8 +1316,11 @@ void IPACM_LanToLan_Iface::handle_client_add(uint8_t *mac, bool is_l2tp_client, 
 					add_client_rt_rule(&(*it_peer_info), &front_client);
 				}
 #ifdef FEATURE_L2TP
-				/* add l2tp rt rules */
-				add_l2tp_client_rt_rule(&(*it_peer_info), &front_client);
+				if(IPACM_Iface::ipacmcfg->ipacm_l2tp_enable == IPACM_L2TP)
+				{
+					/* add l2tp rt rules */
+					add_l2tp_client_rt_rule(&(*it_peer_info), &front_client);
+				}
 #endif
 				flag[it_peer_info->peer->get_iface_pointer()->tx_prop->tx[0].hdr_l2_type] = true;
 			}
@@ -1362,7 +1383,8 @@ void IPACM_LanToLan_Iface::handle_client_del(uint8_t *mac)
 					IPACMDBG_H("Delete client routing rule for peer interface.\n");
 					del_client_rt_rule(&(*it_peer_info), &(*it_client));
 #ifdef FEATURE_L2TP
-					if(it_client->is_l2tp_client == false && IPACM_LanToLan::get_instance()->has_l2tp_iface() == true
+					if((IPACM_Iface::ipacmcfg->ipacm_l2tp_enable == IPACM_L2TP) &&
+						it_client->is_l2tp_client == false && IPACM_LanToLan::get_instance()->has_l2tp_iface() == true
 						&& m_client_info.size() == 1)
 					{
 						m_p_iface->eth_bridge_del_hdr_proc_ctx(hdr_proc_ctx_for_l2tp);
@@ -1486,50 +1508,53 @@ void IPACM_LanToLan_Iface::print_data_structure_info()
 					}
 
 #ifdef FEATURE_L2TP
-					if(it_client->is_l2tp_client)
+					if(IPACM_Iface::ipacmcfg->ipacm_l2tp_enable == IPACM_L2TP)
 					{
-						IPACMDBG_H("Printing l2tp hdr info for l2tp client.\n");
-						IPACMDBG_H("First pass hdr hdl: %d, IPv4 hdr proc ctx hdl: IPv6 hdr proc ctx hdl: %d\n",
-							it_client->l2tp_rt_rule_hdl[j].first_pass_hdr_hdl, it_client->l2tp_rt_rule_hdl[j].first_pass_hdr_proc_ctx_hdl[IPA_IP_v4],
-							it_client->l2tp_rt_rule_hdl[j].first_pass_hdr_proc_ctx_hdl[IPA_IP_v6]);
-						IPACMDBG_H("Second pass hdr hdl: %d\n", it_client->l2tp_rt_rule_hdl[j].second_pass_hdr_hdl);
-
-						IPACMDBG_H("Printing l2tp routing rule info for l2tp client.\n");
-						IPACMDBG_H("Number of IPv4 routing rules is %d, first pass handles:\n", it_client->l2tp_rt_rule_hdl[j].num_rt_hdl[IPA_IP_v4]);
-						for(k = 0; k < it_client->l2tp_rt_rule_hdl[j].num_rt_hdl[IPA_IP_v4]; k++)
+						if(it_client->is_l2tp_client)
 						{
-							IPACMDBG_H("%d\n", it_client->l2tp_rt_rule_hdl[j].first_pass_rt_rule_hdl[IPA_IP_v4][k]);
-						}
-						IPACMDBG_H("Number of IPv6 routing rules is %d, first pass handles:\n", it_client->l2tp_rt_rule_hdl[j].num_rt_hdl[IPA_IP_v6]);
-						for(k = 0; k < it_client->l2tp_rt_rule_hdl[j].num_rt_hdl[IPA_IP_v6]; k++)
-						{
-							IPACMDBG_H("%d\n", it_client->l2tp_rt_rule_hdl[j].first_pass_rt_rule_hdl[IPA_IP_v6][k]);
-						}
-						IPACMDBG_H("Second pass handles:\n");
-						for(k = 0; k < it_client->l2tp_rt_rule_hdl[j].num_rt_hdl[IPA_IP_v6]; k++)
-						{
-							IPACMDBG_H("%d\n", it_client->l2tp_rt_rule_hdl[j].second_pass_rt_rule_hdl[k]);
-						}
-					}
-					else
-					{
-						if(IPACM_LanToLan::get_instance()->has_l2tp_iface())
-						{
-							IPACMDBG_H("Printing l2tp hdr info for non l2tp client.\n");
-							IPACMDBG_H("Hdr hdl: %d, IPv4 hdr proc ctx hdl: IPv6 hdr proc ctx hdl: %d\n",
+							IPACMDBG_H("Printing l2tp hdr info for l2tp client.\n");
+							IPACMDBG_H("First pass hdr hdl: %d, IPv4 hdr proc ctx hdl: IPv6 hdr proc ctx hdl: %d\n",
 								it_client->l2tp_rt_rule_hdl[j].first_pass_hdr_hdl, it_client->l2tp_rt_rule_hdl[j].first_pass_hdr_proc_ctx_hdl[IPA_IP_v4],
 								it_client->l2tp_rt_rule_hdl[j].first_pass_hdr_proc_ctx_hdl[IPA_IP_v6]);
+							IPACMDBG_H("Second pass hdr hdl: %d\n", it_client->l2tp_rt_rule_hdl[j].second_pass_hdr_hdl);
 
-							IPACMDBG_H("Printing l2tp routing rule info for non l2tp client.\n");
-							IPACMDBG_H("Number of IPv4 routing rules is %d, handles:\n", it_client->l2tp_rt_rule_hdl[j].num_rt_hdl[IPA_IP_v4]);
+							IPACMDBG_H("Printing l2tp routing rule info for l2tp client.\n");
+							IPACMDBG_H("Number of IPv4 routing rules is %d, first pass handles:\n", it_client->l2tp_rt_rule_hdl[j].num_rt_hdl[IPA_IP_v4]);
 							for(k = 0; k < it_client->l2tp_rt_rule_hdl[j].num_rt_hdl[IPA_IP_v4]; k++)
 							{
 								IPACMDBG_H("%d\n", it_client->l2tp_rt_rule_hdl[j].first_pass_rt_rule_hdl[IPA_IP_v4][k]);
 							}
-							IPACMDBG_H("Number of IPv6 routing rules is %d, handles:\n", it_client->l2tp_rt_rule_hdl[j].num_rt_hdl[IPA_IP_v6]);
+							IPACMDBG_H("Number of IPv6 routing rules is %d, first pass handles:\n", it_client->l2tp_rt_rule_hdl[j].num_rt_hdl[IPA_IP_v6]);
 							for(k = 0; k < it_client->l2tp_rt_rule_hdl[j].num_rt_hdl[IPA_IP_v6]; k++)
 							{
 								IPACMDBG_H("%d\n", it_client->l2tp_rt_rule_hdl[j].first_pass_rt_rule_hdl[IPA_IP_v6][k]);
+							}
+							IPACMDBG_H("Second pass handles:\n");
+							for(k = 0; k < it_client->l2tp_rt_rule_hdl[j].num_rt_hdl[IPA_IP_v6]; k++)
+							{
+								IPACMDBG_H("%d\n", it_client->l2tp_rt_rule_hdl[j].second_pass_rt_rule_hdl[k]);
+							}
+						}
+						else
+						{
+							if(IPACM_LanToLan::get_instance()->has_l2tp_iface())
+							{
+								IPACMDBG_H("Printing l2tp hdr info for non l2tp client.\n");
+								IPACMDBG_H("Hdr hdl: %d, IPv4 hdr proc ctx hdl: IPv6 hdr proc ctx hdl: %d\n",
+									it_client->l2tp_rt_rule_hdl[j].first_pass_hdr_hdl, it_client->l2tp_rt_rule_hdl[j].first_pass_hdr_proc_ctx_hdl[IPA_IP_v4],
+									it_client->l2tp_rt_rule_hdl[j].first_pass_hdr_proc_ctx_hdl[IPA_IP_v6]);
+
+								IPACMDBG_H("Printing l2tp routing rule info for non l2tp client.\n");
+								IPACMDBG_H("Number of IPv4 routing rules is %d, handles:\n", it_client->l2tp_rt_rule_hdl[j].num_rt_hdl[IPA_IP_v4]);
+								for(k = 0; k < it_client->l2tp_rt_rule_hdl[j].num_rt_hdl[IPA_IP_v4]; k++)
+								{
+									IPACMDBG_H("%d\n", it_client->l2tp_rt_rule_hdl[j].first_pass_rt_rule_hdl[IPA_IP_v4][k]);
+								}
+								IPACMDBG_H("Number of IPv6 routing rules is %d, handles:\n", it_client->l2tp_rt_rule_hdl[j].num_rt_hdl[IPA_IP_v6]);
+								for(k = 0; k < it_client->l2tp_rt_rule_hdl[j].num_rt_hdl[IPA_IP_v6]; k++)
+								{
+									IPACMDBG_H("%d\n", it_client->l2tp_rt_rule_hdl[j].first_pass_rt_rule_hdl[IPA_IP_v6][k]);
+								}
 							}
 						}
 					}

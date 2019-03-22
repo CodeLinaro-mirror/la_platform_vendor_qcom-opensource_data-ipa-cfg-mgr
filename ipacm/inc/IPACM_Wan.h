@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2013, 2018, The Linux Foundation. All rights reserved.
+Copyright (c) 2013, 2018-2019, The Linux Foundation. All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are
@@ -285,10 +285,10 @@ public:
 #ifdef FEATURE_VLAN_MPDN
 	static struct ipacm_pdn_flt_rule pdn_flt_rule_v4[IPA_MAX_FLT_RULE];
 	static struct ipacm_pdn_flt_rule pdn_flt_rule_v6[IPA_MAX_FLT_RULE];
-#else
+#endif
 	static struct ipa_flt_rule_add flt_rule_v4[IPA_MAX_FLT_RULE];
 	static struct ipa_flt_rule_add flt_rule_v6[IPA_MAX_FLT_RULE];
-#endif
+
 #ifdef FEATURE_IPACM_UL_FIREWALL
 	static struct ipa_flt_rule_add firewall_flt_rule_v6_ul[IPACM_MAX_FIREWALL_ENTRIES+1];
 #endif
@@ -650,12 +650,16 @@ private:
 	void handle_wlan_SCC_MCC_switch(bool, ipa_ip_type);
 
 	void handle_wan_client_SCC_MCC_switch(bool, ipa_ip_type);
-#ifdef FEATURE_L2TP_E2E
+#ifdef FEATURE_L2TP
 	void handle_l2tp_client_add(char *iface_name);
 
 	void handle_l2tp_client_del(char *iface_name);
-
+#ifdef FEATURE_VLAN_MPDN
+	void install_l2tp_flt_rule(ipacm_pdn_flt_rule* rules, int rule_offset, char *iface_name);
+#else
 	void install_l2tp_flt_rule(ipa_flt_rule_add* rules, int rule_offset, char *iface_name);
+#endif
+
 #endif
 	int handle_network_stats_evt();
 

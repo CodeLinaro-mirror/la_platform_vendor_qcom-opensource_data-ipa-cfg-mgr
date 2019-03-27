@@ -51,6 +51,8 @@ extern "C"
 #include <stdlib.h>
 #include <math.h>
 #include <syslog.h>
+#include <sys/utsname.h>
+#include <errno.h>
 
 #define MAX_BUF_LEN 256
 
@@ -68,53 +70,10 @@ typedef struct ipacm_log_buffer_s {
 #define KERNEL_VERSION_4_9 "4.9"
 
 #define KERNEL_VERSION_LENGTH 16
-#define MAX_COMMAND_STR_LEN 200
-#define KERNEL_VER 5
 
 bool is_kernel_version_newer_than(
 			char *version,
 			const char *cmp_verison);
-
-inline void get_kernel_version(char *kernel_ver)
-{
-	FILE *fp = NULL;
-	char command[MAX_COMMAND_STR_LEN];
-	char version[KERNEL_VER];
-	float curr_kernel_ver = 0.0;
-	int index = 0;
-	char c;
-
-	memset(kernel_ver, 0, KERNEL_VERSION_LENGTH);
-
-	snprintf(command, MAX_COMMAND_STR_LEN,
-            "uname -r | awk '{print $1}' | cut -d '-' -f 1 > /tmp/kernel_ver.txt");
-	system(command);
-	fp = fopen("/tmp/kernel_ver.txt", "r");
-
-	if (fp == NULL)
-	{
-		printf("Error opening Kernel version file\n");
-		return;
-	}
-
-	while ((c = fgetc(fp)) != EOF)
-	{
-		kernel_ver[index++] = c;
-		if (index == KERNEL_VERSION_LENGTH)
-		{
-			kernel_ver[index - 1] = '\0';
-			break;
-		}
-	}
-
-	memcpy(version, kernel_ver, sizeof(KERNEL_VER));
-
-	fclose(fp);
-
-	curr_kernel_ver = (float)strtof(version, NULL);
-
-	printf ("\ncurr_kernel_ver = %f\n", curr_kernel_ver);
-}
 
 void ipacm_log_send( void * user_data);
 
@@ -160,6 +119,22 @@ static char dmesg_cmd[MAX_BUF_LEN];
 #endif
 #define IPACMDBG(fmt, ...)	printf("%s:%d %s() " fmt, __FILE__,  __LINE__, __FUNCTION__, ##__VA_ARGS__);
 #define IPACMLOG(fmt, ...)  printf(fmt, ##__VA_ARGS__);
+
+inline void get_kernel_version(char *kernel_ver)
+{
+	struct utsname utsname;
+	int ret;
+	memset(kernel_ver, 0, KERNEL_VERSION_LENGTH);
+	ret = uname(&utsname);
+	if (ret)
+	{
+		IPACMERR("Error: uname %d (%s)\n",
+			ret, strerror(errno));
+		return;
+	}
+	memcpy(kernel_ver, utsname.release, KERNEL_VERSION_LENGTH);
+	IPACMDBG_H("kernel_ver %s\n", kernel_ver);
+}
 
 #ifdef __cplusplus
 }

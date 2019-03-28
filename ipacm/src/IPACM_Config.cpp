@@ -356,7 +356,7 @@ int IPACM_Config::Init(void)
 	if (ipacm_mpdn_enable == TRUE && ipacm_l2tp_enable != IPACM_L2TP_DISABLE)
 	{
 		IPACMERR("Not support both VLAN_MPDN and L2TP are enable \n");
-		goto fail;
+		exit(0);
 	}
 
 	ipa_num_wlan_guest_ap = cfg->num_wlan_guest_ap;

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013 - 2018 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2013 - 2019 The Linux Foundation. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -48,7 +48,6 @@
 #define IPA_NAT_FLAG_ENABLE_BIT  1
 
 #define IPA_NAT_INVALID_PROTO_FIELD_VALUE 0xFF00
-#define IPA_NAT_INVALID_PROTO_FIELD_CMP   0xFF
 
 typedef enum {
 	IPA_NAT_TABLE_FLAGS,

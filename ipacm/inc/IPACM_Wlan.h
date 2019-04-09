@@ -79,6 +79,11 @@ typedef struct _ipa_wlan_client
 	/* store ipv6 UL filter rule handlers from Q6*/
 	uint32_t wan_ul_fl_rule_hdl_v6[MAX_WAN_UL_FILTER_RULES];
 	int8_t lan_stats_idx;
+#ifdef IPA_HW_FNR_STATS
+	int ul_cnt_idx;
+	int dl_cnt_idx;
+	bool index_populated;
+#endif //IPA_HW_FNR_STATS
 #endif
 	wlan_client_rt_hdl wifi_rt_hdl[0]; /* depends on number of tx properties */
 }ipa_wlan_client;
@@ -107,6 +112,17 @@ public:
 		uint8_t xlat_mux_id,
 		uint8_t *mac_addr
 	);
+#ifdef IPA_HW_FNR_STATS
+	int install_uplink_filter_rule_per_client_v2
+	(
+		ipacm_ext_prop* prop,
+		ipa_ip_type iptype,
+		uint8_t xlat_mux_id,
+		uint8_t *mac_addr,
+		uint8_t ul_cnt_idx
+	);
+#endif //IPA_HW_FNR_STATS
+	int handle_wlan_client_route_rule_ext_v2(uint8_t *mac_addr, ipa_ip_type iptype);
 
 	/* install UL filter rule from Q6 for all clients */
 	int install_uplink_filter_rule

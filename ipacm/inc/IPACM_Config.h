@@ -43,6 +43,7 @@
 #include "IPACM_Defs.h"
 #include "IPACM_Xml.h"
 #include "IPACM_EvtDispatcher.h"
+#include <linux/rmnet_ipa_fd_ioctl.h>
 #ifdef FEATURE_IPA_ANDROID
 #include <libxml/list.h>
 #else
@@ -75,6 +76,18 @@ typedef struct
 	uint8_t num_ext_props;
 	ipa_ioc_ext_intf_prop prop[MAX_NUM_EXT_PROPS];
 } ipacm_ext_prop;
+
+#if defined(FEATURE_IPACM_PER_CLIENT_STATS) && defined(IPA_HW_FNR_STATS)
+/* Used to keep track of free and used
+ * h/w counter indices
+ * @in_use : set to "true" in case an index is being used
+ * @counter_index : index value, range 1-120
+ * */
+struct cnt_idx {
+	bool in_use;
+	uint8_t counter_index;
+};
+#endif //IPA_HW_FNR_STATS
 
 /* iface */
 class IPACM_Config
@@ -134,6 +147,13 @@ public:
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
 	bool ipacm_lan_stats_enable;
 	bool ipacm_lan_stats_enable_set;
+#ifdef IPA_HW_FNR_STATS
+	struct ipa_ioc_flt_rt_counter_alloc fnr_counters;
+	/* Setting an index to 1 would mean that it is under use and 0, unused*/
+	struct cnt_idx cnt_idx[IPA_MAX_FLT_RT_CLIENTS];
+	pthread_mutex_t cnt_idx_lock;
+	bool hw_fnr_stats_support;
+#endif //IPA_HW_FNR_STATS
 #endif
 
 	bool ipv6_nat_enable;
@@ -218,6 +238,13 @@ public:
 	int get_iface_vlan_ids(char *phys_iface_name, uint8_t *Ids);
 	int get_vlan_id(char *iface_name, uint8_t *vlan_id);
 	void get_vlan_mode_ifaces();
+#endif
+
+#if defined(FEATURE_IPACM_PER_CLIENT_STATS) && defined(IPA_HW_FNR_STATS)
+	int ipacm_alloc_fnr_counters(struct ipa_ioc_flt_rt_counter_alloc *fnr_counters, const int fd);
+	int reset_cnt_idx(int index, bool reset_all);
+	int get_free_cnt_idx(void);
+	int ipacm_reset_hw_fnr_counters(const uint8_t start_id, const uint8_t end_id);
 #endif
 
 	const char* getEventName(ipa_cm_event_id event_id);

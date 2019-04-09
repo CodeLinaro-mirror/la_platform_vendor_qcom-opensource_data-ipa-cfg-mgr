@@ -53,6 +53,9 @@ public:
 	IPACM_Filtering();
 	~IPACM_Filtering();
 	bool AddFilteringRule(struct ipa_ioc_add_flt_rule const *ruleTable);
+#if defined(FEATURE_IPACM_PER_CLIENT_STATS) && defined(IPA_HW_FNR_STATS)
+	bool AddFilteringRule_v2(struct ipa_ioc_add_flt_rule_v2 const *ruleTable);
+#endif //IPA_HW_FNR_STATS
 	bool AddFilteringRuleAfter(struct ipa_ioc_add_flt_rule_after const *ruleTable);
 	bool DeleteFilteringRule(struct ipa_ioc_del_flt_rule *ruleTable);
 	bool Commit(enum ipa_ip_type ip);

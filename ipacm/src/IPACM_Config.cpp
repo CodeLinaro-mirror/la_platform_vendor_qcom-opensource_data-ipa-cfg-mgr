@@ -44,6 +44,7 @@
 #include <net/if.h>
 #include <fcntl.h>
 #include <string.h>
+#include <errno.h>
 
 IPACM_Config *IPACM_Config::pInstance = NULL;
 const char *IPACM_Config::DEVICE_NAME = "/dev/ipa";
@@ -143,6 +144,11 @@ IPACM_Config::IPACM_Config()
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
 	ipacm_lan_stats_enable = false;
 	ipacm_lan_stats_enable_set = false;
+#ifdef IPA_HW_FNR_STATS
+	memset(&fnr_counters, 0, sizeof(fnr_counters));
+	memset(cnt_idx, 0, sizeof(cnt_idx));
+	hw_fnr_stats_support = false;
+#endif //IPA_HW_FNR_STATS
 #endif
 	ipv6_nat_enable = false;
 	ipacm_odu_router_mode = false;
@@ -190,6 +196,183 @@ IPACM_Config::IPACM_Config()
 	IPACMDBG_H(" create IPACM_Config constructor\n");
 	return;
 }
+
+#if defined(FEATURE_IPACM_PER_CLIENT_STATS) && defined(IPA_HW_FNR_STATS)
+static int ipacm_fnr_v2_ioctl(const int fd, unsigned int request, void *arg)
+{
+	if (!fd) {
+		IPACMERR("Invalid fd!\n");
+		return -EFAULT;
+	}
+	return ioctl(fd, request, arg);
+}
+
+static void dump_fnr_counters(const struct ipa_ioc_flt_rt_counter_alloc *fnr)
+{
+	if (!fnr)
+		return;
+	IPACMERR("hw hdl = %d, 0x%x\n"
+		 "hw_num_counters = %u\n"
+	 	 "hw_start_id = %u\n, hw_allow_less = %u\n",
+		 fnr->hdl, fnr->hw_counter.num_counters, fnr->hw_counter.allow_less,
+		 fnr->hw_counter.start_id);
+	IPACMERR("sw hdl = %d, 0x%x\n"
+		 "sw_num_counters = %u\n"
+	 	 "sw_start_id = %u\n, sw_allow_less = %u\n",
+		 fnr->hdl, fnr->sw_counter.num_counters, fnr->sw_counter.allow_less,
+		 fnr->sw_counter.start_id);
+}
+
+int IPACM_Config::get_free_cnt_idx(void)
+{
+	int i;
+
+	for (i=0; i < IPA_MAX_FLT_RT_CLIENTS; i++) {
+		if (cnt_idx[i].in_use ==  false) {
+			cnt_idx[i].in_use = true;
+			/* reset the counter index and counter index + 1 before sending it to client */
+			ipacm_reset_hw_fnr_counters(cnt_idx[i].counter_index, cnt_idx[i].counter_index + 1);
+			return cnt_idx[i].counter_index;
+		}
+	}
+	IPACMERR("No free/unused index found.\n");
+	return IPACM_FAILURE;
+}
+
+int IPACM_Config::ipacm_reset_hw_fnr_counters(const uint8_t start_id, const uint8_t end_id)
+{
+	struct ipa_ioc_flt_rt_query *query;
+	int ret = IPACM_SUCCESS;
+	int num_counters, i;
+
+	int fd = open(DEVICE_NAME, O_RDWR);
+
+	if (fd < 0) {
+		IPACMERR("fnr: Failed to open /dev/ipa\n");
+		return IPACM_FAILURE;
+	}
+	query = (struct ipa_ioc_flt_rt_query *)malloc(sizeof(struct ipa_ioc_flt_rt_query));
+	if (!query)
+	{
+		IPACMERR("Failed to allocate memory for fnr query\n");
+		ret = -ENOMEM;
+		goto fail;
+	}
+
+	/* Create a query with required params */
+	query->start_id = start_id;
+	query->end_id = end_id;
+	query->reset = true;
+	query->stats_size = sizeof(struct ipa_flt_rt_stats);
+	num_counters = end_id - start_id + 1;
+
+	query->stats = (uint64_t)calloc(num_counters, query->stats_size);
+	if (!query->stats) {
+		IPACMERR("fnr : Failed to allocate memory for query stats\n");
+		free(query);
+		ret = IPACM_FAILURE;
+		goto fail;
+	}
+	/* For now just query the stats and print it here */
+	if (fd  >= 0)
+	{
+		ret = ipacm_fnr_v2_ioctl(fd, IPA_IOC_FNR_COUNTER_QUERY, query);
+		if (ret < 0)
+			IPACMERR("IOCTL %d failed\n", IPA_IOC_FNR_COUNTER_QUERY);
+	}
+
+	free(query);
+fail:
+	close(fd);
+	return ret;
+}
+
+/**
+ * @param in: index : The counter index ranging between 0-127
+ * This is expected to be , i.e. UL index
+ * UL % 2 == 0
+ * DL = UL + 1
+ */
+int IPACM_Config::reset_cnt_idx(int index, bool reset_all)
+{
+	int i;
+
+	if (reset_all) {
+		for (i = 0; i < IPA_MAX_FLT_RT_CLIENTS; i++)
+			cnt_idx[i].in_use = false;
+		ipacm_reset_hw_fnr_counters(fnr_counters.hw_counter.start_id,
+			fnr_counters.hw_counter.start_id +
+				fnr_counters.hw_counter.num_counters - 1);
+	}else {
+		for (i = 0; i <  IPA_MAX_FLT_RT_CLIENTS; i++) {
+			if (cnt_idx[i].counter_index == index &&
+				cnt_idx[i].in_use) {
+				cnt_idx[i].in_use = false;
+				ipacm_reset_hw_fnr_counters(index, index + 1);
+			}
+		}
+	}
+	return IPACM_SUCCESS;
+}
+
+int IPACM_Config::ipacm_alloc_fnr_counters(struct ipa_ioc_flt_rt_counter_alloc *fnr_counters, const int fd)
+{
+	int i, ret = 0;
+	int nfd = open(DEVICE_NAME, O_RDWR);
+	int counter_idx;
+
+	if (nfd < 0) {
+		IPACMERR("fnr: error opening device file\n");
+		return IPACM_FAILURE;
+	}
+
+	fnr_counters->hw_counter.num_counters = IPA_MAX_FLT_RT_CLIENTS * 2;
+	fnr_counters->hw_counter.allow_less = false;
+
+	IPACMDBG_H("Allocating %d counters, with start id %d\n", fnr_counters->hw_counter.num_counters,
+		fnr_counters->hw_counter.start_id);
+	/* reset all the counters after allocation */
+	ret = ipacm_fnr_v2_ioctl(nfd, IPA_IOC_FNR_COUNTER_ALLOC, fnr_counters);
+	if (ret < 0)
+	{
+		IPACMERR("Failed to execute ioctl %d\n", IPA_IOC_FNR_COUNTER_ALLOC);
+		goto bail;
+	}
+
+	IPACMDBG_H("Reset counters after allocation, start %u %u\n",
+			fnr_counters->hw_counter.start_id, fnr_counters->hw_counter.start_id + fnr_counters->hw_counter.num_counters - 1);
+	if (ipacm_reset_hw_fnr_counters(fnr_counters->hw_counter.start_id, fnr_counters->hw_counter.start_id + fnr_counters->hw_counter.num_counters - 1))
+	{
+		IPACMERR("Failed to reset hw counters, should return fail here\n");
+	} else
+		IPACMDBG_H("counter reset done\n");
+
+	IPACMERR("Fnr counters allocated. Ret = %d, start id = %u\n", ret, fnr_counters->hw_counter.start_id);
+	counter_idx = fnr_counters->hw_counter.start_id;
+	memset(cnt_idx, 0xff, sizeof(cnt_idx));
+	if (counter_idx == 0) {
+			IPACMERR("Invalid counter id %u\n", counter_idx);
+			ret = IPACM_FAILURE;
+			goto bail;
+	}
+	for (i = 0; i < IPA_MAX_FLT_RT_CLIENTS; i++) {
+		if (counter_idx > (fnr_counters->hw_counter.start_id + fnr_counters->hw_counter.num_counters)) {
+			IPACMERR("Counter index not in range. Invalid start id %u, requested counters = %u\n",
+				fnr_counters->hw_counter.start_id, fnr_counters->hw_counter.num_counters);
+			memset(cnt_idx, 0xff, sizeof(cnt_idx));
+			ret = IPACM_FAILURE;
+			goto bail;
+		}
+		cnt_idx[i].in_use = false;
+		cnt_idx[i].counter_index = counter_idx;
+		counter_idx += 2;
+	}
+bail:
+	close(nfd);
+	return ret;
+}
+
+#endif //IPA_HW_FNR_STATS
 
 int IPACM_Config::Init(void)
 {
@@ -348,6 +531,23 @@ int IPACM_Config::Init(void)
 		ipacm_lan_stats_enable_set = true;
 		IPACMDBG_H("ipacm_lan_stats_enable %d. \n", ipacm_lan_stats_enable);
 	}
+#ifdef IPA_HW_FNR_STATS
+	if(ipacm_lan_stats_enable && (GetIPAVer(true) >= IPA_HW_v4_5)) {
+		hw_fnr_stats_support = true;
+		pthread_mutex_init(&cnt_idx_lock, NULL);
+		if (fnr_counters.hw_counter.start_id > 0) {
+			IPACMERR("Multiple FnR counter allocations are not supported\n");
+			ret = IPACM_FAILURE;
+			goto fail;
+		}
+		if (ipacm_alloc_fnr_counters(&fnr_counters, m_fd))
+		{
+			IPACMERR("Failed to allocate fnr counters.\n");
+			goto fail;
+		} else
+			IPACMDBG_H("Allocating fnr counters :  Done\n");
+	}
+#endif //IPA_HW_FNR_STATS
 #endif
 	ipv6_nat_enable = cfg->ipv6_nat_enable;
 	ipacm_l2tp_enable = cfg->ipacm_l2tp_enable;

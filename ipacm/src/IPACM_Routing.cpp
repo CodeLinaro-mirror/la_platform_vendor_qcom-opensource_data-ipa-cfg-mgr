@@ -42,6 +42,8 @@ IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <fcntl.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <errno.h>
+#include <linux/msm_ipa.h>
 
 #include "IPACM_Routing.h"
 #include <IPACM_Log.h>
@@ -153,6 +155,46 @@ bool IPACM_Routing::AddRoutingRuleExt(struct ipa_ioc_add_rt_rule_ext *ruleTable)
 	IPACMDBG_H("Added routing rule %p\n", ruleTable);
 	return true;
 }
+#if defined(FEATURE_IPACM_PER_CLIENT_STATS) && defined(IPA_HW_FNR_STATS)
+bool IPACM_Routing::AddRoutingRuleExt_v2(struct ipa_ioc_add_rt_rule_ext_v2 *ruleTable)
+{
+	int retval = 0, cnt=0;
+	bool isInvalid = false;
+
+	if (!DeviceNodeIsOpened())
+	{
+		IPACMERR("Device is not opened\n");
+		return false;
+	}
+
+	for(cnt=0; cnt<ruleTable->num_rules; cnt++)
+	{
+		if(((struct ipa_rt_rule_add_ext_v2 *)&ruleTable->rules)[cnt].rule.dst > IPA_CLIENT_MAX)
+		{
+			IPACMERR("Invalid dst pipe, Rule:%d  dst_pipe:%d\n", cnt, ((struct ipa_rt_rule_add_ext_v2 *)&ruleTable->rules)[cnt].rule.dst);
+			isInvalid = true;
+		}
+	}
+
+	if(isInvalid)
+	{
+		return false;
+	}
+	retval = ioctl(m_fd, IPA_IOC_ADD_RT_RULE_EXT_V2, ruleTable);
+	if (retval)
+	{
+		IPACMERR("Failed adding routing rule %p\n", ruleTable);
+		return false;
+	}
+	for(cnt=0; cnt<ruleTable->num_rules; cnt++)
+	{
+		IPACMDBG("Rule:%d  dst_pipe:%d\n", cnt, ((struct ipa_rt_rule_add_ext_v2 *)&ruleTable->rules)[cnt].rule.dst);
+	}
+
+	IPACMDBG_H("Added routing rule %p\n", ruleTable);
+	return true;
+}
+#endif //IPA_HW_FNR_STATS
 #endif
 
 bool IPACM_Routing::DeleteRoutingRule(struct ipa_ioc_del_rt_rule *ruleTable)

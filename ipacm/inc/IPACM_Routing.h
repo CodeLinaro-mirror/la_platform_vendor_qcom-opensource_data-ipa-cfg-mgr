@@ -44,6 +44,7 @@ IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include <stdint.h>
 #include <linux/msm_ipa.h>
+#include <linux/rmnet_ipa_fd_ioctl.h>
 #include <IPACM_Defs.h>
 
 using namespace std;
@@ -56,6 +57,9 @@ public:
 
 	bool AddRoutingRule(struct ipa_ioc_add_rt_rule *ruleTable);
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
+#ifdef IPA_HW_FNR_STATS
+	bool AddRoutingRuleExt_v2(struct ipa_ioc_add_rt_rule_ext_v2 *ruleTable);
+#endif //IPA_HW_FNR_STATS
 	bool AddRoutingRuleExt(struct ipa_ioc_add_rt_rule_ext *ruleTable);
 #endif
 	bool DeleteRoutingRule(struct ipa_ioc_del_rt_rule *ruleTable);

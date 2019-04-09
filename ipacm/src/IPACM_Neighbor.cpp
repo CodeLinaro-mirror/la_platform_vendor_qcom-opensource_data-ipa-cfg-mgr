@@ -281,7 +281,7 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 								else
 									/* not to clean-up the client mac cache on bridge0 delneigh */
 									evt_data.event = IPA_NEIGH_CLIENT_IP_ADDR_DEL_EVENT;
-#if defined(FEATURE_VLAN_MPDN)
+#ifdef FEATURE_VLAN_MPDN
 								if(IPACM_Iface::ipacmcfg->ipacm_mpdn_enable == TRUE)
 								{
 									data_vlan = (ipacm_event_new_neigh_vlan *)malloc(sizeof(ipacm_event_new_neigh_vlan));

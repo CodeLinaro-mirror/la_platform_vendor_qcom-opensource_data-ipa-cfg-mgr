@@ -488,9 +488,9 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 									install_l2tp_inner_private_subnet_flt_rule(); /* encapsulated IPv4 private subnet rule */
 								}
 							}
+							handle_private_subnet(data->iptype);
 						}
 #endif
-						handle_private_subnet(data->iptype);
 #else
 						handle_private_subnet(data->iptype);
 #endif
@@ -913,7 +913,6 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 #if defined(FEATURE_L2TP) || defined(FEATURE_VLAN_MPDN)
 			if(is_vlan_event(data->iface_name))
 			{
-#ifdef FEATURE_L2TP
 				IPACMDBG_H("vlan neighbor event for iface %s\n", data->iface_name);
 				/* in VLAN_MPDN we handle all VLAN neighbors */
 				if((IPACM_Iface::ipacmcfg->ipacm_l2tp_enable == IPACM_L2TP_E2E ||
@@ -922,12 +921,10 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 				{
 					IPACM_Iface::ipacmcfg->handle_vlan_client_info(data);
 				}
-#else
-				if(IPACM_Iface::ipacmcfg->ipacm_mpdn_enable)
+				else if(IPACM_Iface::ipacmcfg->ipacm_mpdn_enable == TRUE)
 				{
 					handle_vlan_neighbor(data);
 				}
-#endif
 			}
 #endif
 			return;
@@ -8035,7 +8032,7 @@ bool IPACM_Lan::is_l2tp_event(char *event_iface_name)
 	return false;
 }
 #endif //#ifdef FEATURE_L2TP
-#endif defined(FEATURE_L2TP) || defined(FEATURE_VLAN_MPDN)
+#endif //defined(FEATURE_L2TP) || defined(FEATURE_VLAN_MPDN)
 #ifdef FEATURE_L2TP
 /* add l2tp rt rule for l2tp client */
 int IPACM_Lan::add_l2tp_rt_rule(ipa_ip_type iptype, uint8_t *dst_mac, ipa_hdr_l2_type peer_l2_hdr_type,

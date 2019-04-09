@@ -204,7 +204,7 @@ public:
 
 	int get_vlan_l2tp_mapping(char *client_iface, l2tp_vlan_mapping_info& info);
 #endif //#ifdef FEATURE_L2TP
-#endif defined(FEATURE_L2TP) || defined(FEATURE_VLAN_MPDN)
+#endif //defined(FEATURE_L2TP) || defined(FEATURE_VLAN_MPDN)
 
 #ifdef FEATURE_VLAN_MPDN
 	std::list<bridge_vlan_mapping_info> m_bridge_vlan_mapping;

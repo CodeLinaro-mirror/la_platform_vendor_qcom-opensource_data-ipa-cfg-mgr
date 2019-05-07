@@ -69,6 +69,52 @@ bool IPACM_Filtering::DeviceNodeIsOpened()
 	return fd;
 }
 
+#if defined(FEATURE_IPACM_PER_CLIENT_STATS) && defined(IPA_HW_FNR_STATS)
+bool IPACM_Filtering::AddFilteringRule_v2(struct ipa_ioc_add_flt_rule_v2 const *ruleTable)
+{
+	int retval = 0;
+	int i;
+	int num_rules = ruleTable->num_rules;
+	int cnt;
+
+	IPACMDBG_H("Printing filter add attributes\n");
+	IPACMDBG_H("ip type: %d\n", ruleTable->ip);
+	IPACMDBG_H("Number of rules: %d\n", ruleTable->num_rules);
+	IPACMDBG_H("End point: %d and global value: %d\n", ruleTable->ep, ruleTable->global);
+	IPACMDBG_H("commit value: %d\n", ruleTable->commit);
+	for (int cnt=0; cnt<ruleTable->num_rules; cnt++)
+	{
+		IPACMDBG("Filter rule:%d attrib mask: 0x%x\n", cnt,
+				((struct ipa_flt_rule_add_v2  *)&ruleTable->rules)[cnt].rule.attrib.attrib_mask);
+	}
+
+	retval = ioctl(fd, IPA_IOC_ADD_FLT_RULE_V2, ruleTable);
+	if (retval != 0)
+	{
+		for (cnt = 0; cnt < ruleTable->num_rules; cnt++)
+		{
+			if (((struct ipa_flt_rule_add_v2  *)&ruleTable->rules)[cnt].status != 0)
+			{
+				IPACMDBG_H("Adding Filter rule:%d failed with status:%d\n",
+								 cnt, ((struct ipa_flt_rule_add_v2 *)ruleTable->rules)[cnt].status);
+			}
+		}
+		return false;
+	}
+
+	for (cnt = 0; cnt<ruleTable->num_rules; cnt++)
+	{
+		if (((struct ipa_flt_rule_add_v2  *)&ruleTable->rules)[cnt].status != 0)
+		{
+			IPACMERR("Adding Filter rule:%d failed with status:%d\n",
+							 cnt, ((struct ipa_flt_rule_add_v2 *)ruleTable->rules)[cnt].status);
+		}
+	}
+	IPACMDBG("Added Filtering rule %p\n", ruleTable);
+	return true;
+}
+#endif //IPA_HW_FNR_STATS
+
 bool IPACM_Filtering::AddFilteringRule(struct ipa_ioc_add_flt_rule const *ruleTable)
 {
 	int retval = 0;

@@ -106,6 +106,12 @@ typedef struct _ipa_eth_client
 	/* store ipv6 UL filter rule handlers from Q6*/
 	uint32_t wan_ul_fl_rule_hdl_v6[MAX_WAN_UL_FILTER_RULES];
 	int8_t lan_stats_idx;
+#ifdef IPA_HW_FNR_STATS
+	/* H/w counters */
+	int ul_cnt_idx;
+	int dl_cnt_idx;
+	bool index_populated;
+#endif //IPA_HW_FNR_STATS
 #endif
 #ifdef FEATURE_L2TP
 	uint32_t dl_first_pass_hdr_hdl;
@@ -274,7 +280,16 @@ public:
 		uint8_t xlat_mux_id,
 		uint8_t *mac_addr
 	);
-
+#ifdef IPA_HW_FNR_STATS
+	virtual int install_uplink_filter_rule_per_client_v2
+	(
+		ipacm_ext_prop* prop,
+		ipa_ip_type iptype,
+		uint8_t xlat_mux_id,
+		uint8_t *mac_addr,
+		uint8_t ul_cnt_idx
+	);
+#endif //IPA_HW_FNR_STATS
 	/* install UL filter rule from Q6 for all clients */
 	virtual int install_uplink_filter_rule
 	(
@@ -1083,6 +1098,9 @@ private:
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
 	/* handle eth client routing rule with rule id*/
 	int handle_eth_client_route_rule_ext(uint8_t *mac_addr, ipa_ip_type iptype);
+#ifdef IPA_HW_FNR_STATS
+	int handle_eth_client_route_rule_ext_v2(uint8_t *mac_addr, ipa_ip_type iptype, uint8_t dl_cnt_idx);
+#endif //IPA_HW_FNR_STATS
 #endif
 
 	/*handle eth client del mode*/

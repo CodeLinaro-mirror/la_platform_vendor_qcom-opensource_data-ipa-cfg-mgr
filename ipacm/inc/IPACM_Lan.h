@@ -104,7 +104,11 @@ typedef struct _ipa_eth_client
 	/* store ipv4 UL filter rule handlers from Q6*/
 	uint32_t wan_ul_fl_rule_hdl_v4[MAX_WAN_UL_FILTER_RULES];
 	/* store ipv6 UL filter rule handlers from Q6*/
+#ifndef IPA_V6_UL_WL_FIREWALL_HANDLE
 	uint32_t wan_ul_fl_rule_hdl_v6[MAX_WAN_UL_FILTER_RULES];
+#else
+	uint32_t wan_ul_fl_rule_hdl_v6[IPACM_MAX_V6_UL_WL_FIREWALL_ENTRIES];
+#endif
 	int8_t lan_stats_idx;
 #ifdef IPA_HW_FNR_STATS
 	/* H/w counters */
@@ -251,7 +255,11 @@ public:
 		IPACM_firewall_conf_t* firewall_conf,
 		struct ipa_flt_rule_add *rules,
 		int vid);
-
+#ifdef IPA_V6_UL_WL_FIREWALL_HANDLE
+	virtual bool replicate_flt_rule(ipa_flt_rule_add *replicate_rule,
+			ipa_flt_rule_add *q6_rule,
+			ipa_flt_rule_add *fw_rule);
+#endif
 	/* send fragments to exception when UL FW is installed on Q6 routing table*/
 	virtual int config_wan_frag_firewall_rule_ul_ex(ul_firewall_t *ul_firewall, int vid);
 
@@ -800,7 +808,11 @@ protected:
 	uint32_t wan_ul_fl_rule_hdl_v4[MAX_WAN_UL_FILTER_RULES];
 
 	/* store ipv6 UL filter rule handlers from Q6*/
+#ifndef IPA_V6_UL_WL_FIREWALL_HANDLE
 	uint32_t wan_ul_fl_rule_hdl_v6[MAX_WAN_UL_FILTER_RULES];
+#else
+	uint32_t wan_ul_fl_rule_hdl_v6[IPACM_MAX_V6_UL_WL_FIREWALL_ENTRIES];
+#endif
 
 	uint32_t ipv4_icmp_flt_rule_hdl[NUM_IPV4_ICMP_FLT_RULE];
 

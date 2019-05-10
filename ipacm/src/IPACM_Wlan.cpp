@@ -67,7 +67,7 @@ IPACM_Wlan::IPACM_Wlan(int iface_index) : IPACM_Lan(iface_index), ipv6ct_inst(Ip
 #define WLAN_AMPDU_DEFAULT_FILTER_RULES 3
 
 	wlan_ap_index = IPACM_Wlan::num_wlan_ap_iface;
-	if(wlan_ap_index < 0 || wlan_ap_index > 1)
+	if(wlan_ap_index < 0 || wlan_ap_index > 2)
 	{
 		IPACMERR("Wlan_ap_index is not correct: %d, not creating instance.\n", wlan_ap_index);
 		if (tx_prop != NULL)

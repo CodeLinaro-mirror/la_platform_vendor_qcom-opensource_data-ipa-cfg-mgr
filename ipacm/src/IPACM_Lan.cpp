@@ -3551,7 +3551,7 @@ int IPACM_Lan::handle_lan_client_connect(uint8_t *mac_addr)
 			{
 				ext_prop = IPACM_Iface::ipacmcfg->GetExtProp(IPA_IP_v4);
 #ifdef IPA_HW_FNR_STATS
-				if (IPACM_Iface::ipacmcfg->GetIPAVer(false) >=  IPA_HW_v4_5)
+				if (IPACM_Iface::ipacmcfg->hw_fnr_stats_support)
 						install_uplink_filter_rule_per_client_v2(ext_prop, IPA_IP_v4, IPACM_Wan::getXlat_Mux_Id(),
 							get_client_memptr(eth_client, eth_index)->mac,
 							get_client_memptr(eth_client, eth_index)->ul_cnt_idx);
@@ -3567,7 +3567,7 @@ int IPACM_Lan::handle_lan_client_connect(uint8_t *mac_addr)
 			{
 				ext_prop = IPACM_Iface::ipacmcfg->GetExtProp(IPA_IP_v6);
 #ifdef IPA_HW_FNR_STATS
-				if (IPACM_Iface::ipacmcfg->GetIPAVer(false) >=  IPA_HW_v4_5)
+				if (IPACM_Iface::ipacmcfg->hw_fnr_stats_support)
 					install_uplink_filter_rule_per_client_v2(ext_prop, IPA_IP_v6, 0, get_client_memptr(eth_client, eth_index)->mac,
 							get_client_memptr(eth_client, eth_index)->ul_cnt_idx);
 				else
@@ -3577,7 +3577,7 @@ int IPACM_Lan::handle_lan_client_connect(uint8_t *mac_addr)
 			}
 		}
 #ifdef IPA_HW_FNR_STATS
-		if (IPACM_Iface::ipacmcfg->GetIPAVer(false) >=  IPA_HW_v4_5) {
+		if (IPACM_Iface::ipacmcfg->hw_fnr_stats_support) {
 			handle_eth_client_route_rule_ext_v2(get_client_memptr(eth_client, eth_index)->mac, IPA_IP_v4,
 				get_client_memptr(eth_client, eth_index)->dl_cnt_idx);
 			handle_eth_client_route_rule_ext_v2(get_client_memptr(eth_client, eth_index)->mac, IPA_IP_v6,

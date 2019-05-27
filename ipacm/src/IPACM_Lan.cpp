@@ -3711,7 +3711,7 @@ int IPACM_Lan::handle_eth_client_route_rule_ext_v2(uint8_t *mac_addr, ipa_ip_typ
 			return IPACM_FAILURE;
 		}
 
-		rt_rule->rules = (uint64_t)calloc(NUM, sizeof(struct ipa_rt_rule_add_ext_v2));
+		rt_rule->rules = (uintptr_t)calloc(NUM, sizeof(struct ipa_rt_rule_add_ext_v2));
 		if (!rt_rule->rules) {
 			IPACMERR("Error allocating memory for routing rule\n");
 			free(rt_rule);
@@ -6425,7 +6425,7 @@ int IPACM_Lan::install_uplink_filter_rule_per_client_v2
 
 	memset(pFilteringTable, 0, len);
 
-	pFilteringTable->rules = (uint64_t)calloc(prop->num_ext_props, sizeof(struct ipa_flt_rule_add_v2));
+	pFilteringTable->rules = (uintptr_t)calloc(prop->num_ext_props, sizeof(struct ipa_flt_rule_add_v2));
 	if (!pFilteringTable->rules) {
 		IPACMERR("Failed to allocate memory for filtering rules\n");
 		ret = IPACM_FAILURE;

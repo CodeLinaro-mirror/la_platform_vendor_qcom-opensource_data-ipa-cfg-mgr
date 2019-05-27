@@ -169,9 +169,9 @@ bool IPACM_Routing::AddRoutingRuleExt_v2(struct ipa_ioc_add_rt_rule_ext_v2 *rule
 
 	for(cnt=0; cnt<ruleTable->num_rules; cnt++)
 	{
-		if(((struct ipa_rt_rule_add_ext_v2 *)&ruleTable->rules)[cnt].rule.dst > IPA_CLIENT_MAX)
+		if(((struct ipa_rt_rule_add_ext_v2 *)ruleTable->rules)[cnt].rule.dst > IPA_CLIENT_MAX)
 		{
-			IPACMERR("Invalid dst pipe, Rule:%d  dst_pipe:%d\n", cnt, ((struct ipa_rt_rule_add_ext_v2 *)&ruleTable->rules)[cnt].rule.dst);
+			IPACMERR("Invalid dst pipe, Rule:%d  dst_pipe:%d\n", cnt, ((struct ipa_rt_rule_add_ext_v2 *)ruleTable->rules)[cnt].rule.dst);
 			isInvalid = true;
 		}
 	}
@@ -188,7 +188,7 @@ bool IPACM_Routing::AddRoutingRuleExt_v2(struct ipa_ioc_add_rt_rule_ext_v2 *rule
 	}
 	for(cnt=0; cnt<ruleTable->num_rules; cnt++)
 	{
-		IPACMDBG("Rule:%d  dst_pipe:%d\n", cnt, ((struct ipa_rt_rule_add_ext_v2 *)&ruleTable->rules)[cnt].rule.dst);
+		IPACMDBG("Rule:%d  dst_pipe:%d\n", cnt, ((struct ipa_rt_rule_add_ext_v2 *)ruleTable->rules)[cnt].rule.dst);
 	}
 
 	IPACMDBG_H("Added routing rule %p\n", ruleTable);

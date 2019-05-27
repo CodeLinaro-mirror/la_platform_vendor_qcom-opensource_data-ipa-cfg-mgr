@@ -2569,6 +2569,7 @@ int IPACM_Wlan::handle_wlan_client_down_evt(uint8_t *mac_addr)
 		{
 			get_client_memptr(wlan_client, clt_indx)->ul_cnt_idx = -1;
 			get_client_memptr(wlan_client, clt_indx)->dl_cnt_idx = -1;
+			get_client_memptr(wlan_client, clt_indx)->index_populated = false;
 			pthread_mutex_lock(&IPACM_Wan::ipacmcfg->cnt_idx_lock);
 			if (IPACM_Wan::ipacmcfg->reset_cnt_idx(client_info->ul_cnt_idx, false))
 				IPACMERR("Failed to reset counter index %u\n", client_info->ul_cnt_idx);
@@ -2929,6 +2930,7 @@ fail:
 					client_info->dl_cnt_idx = get_client_memptr(wlan_client, i)->dl_cnt_idx;
 					get_client_memptr(wlan_client, i)->ul_cnt_idx = -1;
 					get_client_memptr(wlan_client, i)->dl_cnt_idx = -1;
+					get_client_memptr(wlan_client, i)->index_populated = false;
 					pthread_mutex_lock(&IPACM_Wan::ipacmcfg->cnt_idx_lock);
 					if (IPACM_Wan::ipacmcfg->reset_cnt_idx(client_info->ul_cnt_idx, false))
 						IPACMERR("Failed to reset counter index = %u\n", client_info->ul_cnt_idx);

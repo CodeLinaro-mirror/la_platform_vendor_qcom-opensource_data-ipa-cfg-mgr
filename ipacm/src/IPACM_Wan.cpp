@@ -762,9 +762,9 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 						}
 					}
 #ifdef FEATURE_IPA_ANDROID
-#ifdef FEATURE_IPACM_HAL
-					post_wan_up_tether_evt(data->iptype, 0);
-#else
+#ifndef FEATURE_IPACM_HAL
+					/* Fixed CR 2438491 for HAL-android platform trgets.
+					   Need to revisit for non-hal-android-platform targets if issue could be reproduced there as well */
 					/* using ipa_if_index, not netdev_index */
 					post_wan_up_tether_evt(data->iptype, iface_ipa_index_query(data->if_index_tether));
 #endif
@@ -797,15 +797,14 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 							handle_route_add_evt(data->iptype);
 						}
 					}
-#ifdef FEATURE_IPA_ANDROID
-#ifdef FEATURE_IPACM_HAL
-					post_wan_up_tether_evt(data->iptype, 0);
-#else
-					/* using ipa_if_index, not netdev_index */
-					post_wan_up_tether_evt(data->iptype, iface_ipa_index_query(data->if_index_tether));
-#endif
-#endif
 				}
+#ifdef FEATURE_IPA_ANDROID
+#ifndef FEATURE_IPACM_HAL
+				/* using ipa_if_index, not netdev_index */
+				post_wan_up_tether_evt(data->iptype, iface_ipa_index_query(data->if_index_tether));
+#endif
+#endif
+
 			}
 			else /* double check if current default iface is not itself */
 			{
@@ -1629,6 +1628,10 @@ int IPACM_Wan::handle_route_add_evt(ipa_ip_type iptype)
 		evt_data.event = IPA_HANDLE_WAN_UP;
 		evt_data.evt_data = (void *)wanup_data;
 		IPACM_EvtDispatcher::PostEvt(&evt_data);
+
+#ifdef FEATURE_IPACM_HAL
+		post_wan_up_tether_evt(IPA_IP_v4, 0);
+#endif
 	}
 	else
 	{
@@ -1668,6 +1671,10 @@ int IPACM_Wan::handle_route_add_evt(ipa_ip_type iptype)
 		evt_data.event = IPA_HANDLE_WAN_UP_V6;
 		evt_data.evt_data = (void *)wanup_data;
 		IPACM_EvtDispatcher::PostEvt(&evt_data);
+
+#ifdef FEATURE_IPACM_HAL
+                post_wan_up_tether_evt(IPA_IP_v6, 0);
+#endif
 	}
 
 	/* Add corresponding ipa_rm_resource_name of TX-endpoint up before IPV6 RT-rule set */
@@ -3764,34 +3771,11 @@ int IPACM_Wan::add_dft_filtering_rule(struct ipa_flt_rule_add *rules, int rule_o
 
 		memcpy(&(rules[rule_offset + 2]), &flt_rule_entry, sizeof(struct ipa_flt_rule_add));
 
-		/* Add the fragment filtering rule. */
-		memset(&flt_rule_entry, 0, sizeof(struct ipa_flt_rule_add));
-
-		flt_rule_entry.at_rear = true;
-		flt_rule_entry.flt_rule_hdl = -1;
-		flt_rule_entry.status = -1;
-
-		flt_rule_entry.rule.retain_hdr = 1;
-		flt_rule_entry.rule.to_uc = 0;
-		flt_rule_entry.rule.eq_attrib_type = 1;
-		flt_rule_entry.rule.action = IPA_PASS_TO_ROUTING;
-#ifdef FEATURE_IPA_V3
-		flt_rule_entry.rule.hashable = true;
-#endif
-		flt_rule_entry.rule.rt_tbl_idx = rt_tbl_idx.idx;
-		flt_rule_entry.rule.eq_attrib.rule_eq_bitmap |= (1<<1);
-		flt_rule_entry.rule.eq_attrib.protocol_eq_present = 1;
-		flt_rule_entry.rule.eq_attrib.protocol_eq = IPACM_FIREWALL_IPPROTO_TCP;
-		flt_rule_entry.rule.attrib.u.v6.next_hdr = (uint8_t)IPACM_FIREWALL_IPPROTO_TCP;
-
 		/* Configuring fragment Filtering Rule */
-		memcpy(&flt_rule_entry.rule.attrib,
-					 &rx_prop->rx[0].attrib,
-					 sizeof(flt_rule_entry.rule.attrib));
-		/* remove meta data mask since we only install default flt rules once for all modem PDN*/
-		flt_rule_entry.rule.attrib.attrib_mask &= ~((uint32_t)IPA_FLT_META_DATA);
-
+		flt_rule_entry.rule.attrib.attrib_mask &= ~((uint32_t)IPA_FLT_DST_ADDR);
 		flt_rule_entry.rule.attrib.attrib_mask |= IPA_FLT_FRAGMENT;
+		flt_rule_entry.rule.attrib.attrib_mask |= IPA_FLT_NEXT_HDR;
+		flt_rule_entry.rule.attrib.u.v6.next_hdr = IPACM_FIREWALL_IPPROTO_TCP;
 
 		memset(&flt_eq, 0, sizeof(flt_eq));
 		memcpy(&flt_eq.attrib, &flt_rule_entry.rule.attrib, sizeof(flt_eq.attrib));

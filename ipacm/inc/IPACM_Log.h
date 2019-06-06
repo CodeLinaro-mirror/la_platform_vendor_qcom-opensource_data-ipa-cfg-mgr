@@ -132,7 +132,7 @@ inline void get_kernel_version(char *kernel_ver)
 			ret, strerror(errno));
 		return;
 	}
-	memcpy(kernel_ver, utsname.release, KERNEL_VERSION_LENGTH);
+	memcpy(kernel_ver, utsname.release, KERNEL_VERSION_LENGTH - 1);
 	IPACMDBG_H("kernel_ver %s\n", kernel_ver);
 }
 

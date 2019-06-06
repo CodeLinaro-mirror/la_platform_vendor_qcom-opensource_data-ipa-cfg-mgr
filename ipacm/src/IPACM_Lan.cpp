@@ -6419,8 +6419,8 @@ int IPACM_Lan::install_uplink_filter_rule_per_client_v2
 	if (pFilteringTable == NULL)
 	{
 		IPACMERR("Error Locate ipa_flt_rule_add memory...\n");
-		ret = IPACM_FAILURE;
-		goto fail;
+		close(fd);
+		return IPACM_FAILURE;
 	}
 
 	memset(pFilteringTable, 0, len);

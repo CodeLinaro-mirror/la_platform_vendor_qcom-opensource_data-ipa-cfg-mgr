@@ -3381,6 +3381,10 @@ int IPACM_Wlan::install_uplink_filter_rule_per_client
 		else
 		{
 			flt_rule_entry.rule.action = IPA_PASS_TO_SRC_NAT;
+
+			/* NAT block will set the proper MUX ID in the metadata according to the relevant PDN */
+			if (IPACM_Iface::ipacmcfg->GetIPAVer() >= IPA_HW_v4_0)
+				flt_rule_entry.rule.set_metadata = true;
 		}
 	}
 	else if(iptype == IPA_IP_v6)
@@ -3614,6 +3618,10 @@ int IPACM_Wlan::install_uplink_filter_rule_per_client_v2
 		else
 		{
 			flt_rule_entry.rule.action = IPA_PASS_TO_SRC_NAT;
+
+			/* NAT block will set the proper MUX ID in the metadata according to the relevant PDN */
+			if (IPACM_Iface::ipacmcfg->GetIPAVer() >= IPA_HW_v4_0)
+				flt_rule_entry.rule.set_metadata = true;
 		}
 	}
 	else if(iptype == IPA_IP_v6)

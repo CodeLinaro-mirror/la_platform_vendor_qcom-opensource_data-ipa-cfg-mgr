@@ -85,7 +85,7 @@ bool IPACM_Filtering::AddFilteringRule_v2(struct ipa_ioc_add_flt_rule_v2 const *
 	for (int cnt=0; cnt<ruleTable->num_rules; cnt++)
 	{
 		IPACMDBG("Filter rule:%d attrib mask: 0x%x\n", cnt,
-				((struct ipa_flt_rule_add_v2  *)&ruleTable->rules)[cnt].rule.attrib.attrib_mask);
+				((struct ipa_flt_rule_add_v2  *)ruleTable->rules)[cnt].rule.attrib.attrib_mask);
 	}
 
 	retval = ioctl(fd, IPA_IOC_ADD_FLT_RULE_V2, ruleTable);

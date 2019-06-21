@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2013-2017, The Linux Foundation. All rights reserved.
+Copyright (c) 2013-2017, 2019, The Linux Foundation. All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are
@@ -94,6 +94,9 @@ typedef struct _ipa_eth_client
 	int ipv6_set;
 	bool ipv4_header_set;
 	bool ipv6_header_set;
+#ifdef FEATURE_VLAN_OFFLOAD
+	uint8_t vlan_id;
+#endif
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
 	bool ipv4_ul_rules_set;
 	bool ipv6_ul_rules_set;
@@ -631,7 +634,7 @@ private:
 		return (ipa_eth_client *)ret;
 	}
 
-	inline int get_eth_client_index(uint8_t *mac_addr)
+	inline int get_eth_client_index(uint8_t *mac_addr, uint8_t vlan_id = 0)
 	{
 		int cnt;
 		int num_eth_client_tmp = num_eth_client;
@@ -654,8 +657,23 @@ private:
 								mac_addr,
 								sizeof(get_client_memptr(eth_client, cnt)->mac)) == 0)
 			{
-				IPACMDBG_H("Matched client index: %d\n", cnt);
-				return cnt;
+#ifdef FEATURE_VLAN_OFFLOAD
+				if(vlan_id)
+				{
+					IPACMDBG("VLAN IF MAC match, looking for vlan ID %d, current %d\n", vlan_id,
+							get_client_memptr(eth_client, cnt)->vlan_id);
+					if(get_client_memptr(eth_client, cnt)->vlan_id == vlan_id)
+					{
+						IPACMDBG_H("Matched client index: %d for vid %d\n",cnt, vlan_id);
+						return cnt;
+					}
+				}
+				else
+#endif
+				{
+					IPACMDBG_H("Matched client index: %d\n", cnt);
+					return cnt;
+				}
 			}
 		}
 
@@ -726,13 +744,13 @@ private:
 	}
 
 	/* handle eth client initial, construct full headers (tx property) */
-	int handle_eth_hdr_init(uint8_t *mac_addr);
+	int handle_eth_hdr_init(uint8_t *mac_addr, uint8_t vlan_id = 0, bool isVlan = false);
 
 	/* handle eth client ip-address */
 	int handle_eth_client_ipaddr(ipacm_event_data_all *data);
 
 	/* handle eth client routing rule*/
-	int handle_eth_client_route_rule(uint8_t *mac_addr, ipa_ip_type iptype);
+	int handle_eth_client_route_rule(uint8_t *mac_addr, ipa_ip_type iptype, uint8_t vlan_id = 0);
 
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
 	/* handle eth client routing rule with rule id*/
@@ -740,7 +758,7 @@ private:
 #endif
 
 	/*handle eth client del mode*/
-	int handle_eth_client_down_evt(uint8_t *mac_addr);
+	int handle_eth_client_down_evt(uint8_t *mac_addr, uint8_t vlan_id = 0);
 
 	/* handle odu client initial, construct full headers (tx property) */
 	int handle_odu_hdr_init(uint8_t *mac_addr);

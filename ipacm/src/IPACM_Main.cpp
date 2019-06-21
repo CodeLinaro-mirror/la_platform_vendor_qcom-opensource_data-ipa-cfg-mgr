@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2013-2017, The Linux Foundation. All rights reserved.
+Copyright (c) 2013-2017, 2019, The Linux Foundation. All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are
@@ -703,8 +703,9 @@ void* ipa_driver_msg_notifier(void *param)
 			evt_data.evt_data = data;
 			break;
 #endif
-#ifdef FEATURE_L2TP
+#if defined(FEATURE_L2TP) || defined(FEATURE_VLAN_OFFLOAD)
 		case ADD_VLAN_IFACE:
+			IPACMDBG_H("Received ADD_VLAN_IFACE event");
 			vlan_info = (ipa_ioc_vlan_iface_info *)malloc(sizeof(*vlan_info));
 			if(vlan_info == NULL)
 			{
@@ -712,8 +713,13 @@ void* ipa_driver_msg_notifier(void *param)
 				return NULL;
 			}
 			memcpy(vlan_info, buffer + sizeof(struct ipa_msg_meta), sizeof(*vlan_info));
+#ifdef FEATURE_VLAN_OFFLOAD
+			IPACM_Iface::ipacmcfg->add_vlan_iface(vlan_info);
+			continue;
+#else
 			evt_data.event = IPA_ADD_VLAN_IFACE;
 			evt_data.evt_data = vlan_info;
+#endif
 			break;
 
 		case DEL_VLAN_IFACE:
@@ -724,8 +730,13 @@ void* ipa_driver_msg_notifier(void *param)
 				return NULL;
 			}
 			memcpy(vlan_info, buffer + sizeof(struct ipa_msg_meta), sizeof(*vlan_info));
+#ifdef FEATURE_VLAN_OFFLOAD
+			IPACM_Iface::ipacmcfg->del_vlan_iface(vlan_info);
+			continue;
+#else
 			evt_data.event = IPA_DEL_VLAN_IFACE;
 			evt_data.evt_data = vlan_info;
+#endif
 			break;
 
 		case ADD_L2TP_VLAN_MAPPING:

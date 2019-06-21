@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2013-2016, The Linux Foundation. All rights reserved.
+Copyright (c) 2013-2016, 2019, The Linux Foundation. All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are
@@ -43,11 +43,24 @@ IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "IPACM_Defs.h"
 #include "IPACM_Xml.h"
 #include "IPACM_EvtDispatcher.h"
+#include <linux/rmnet_ipa_fd_ioctl.h>
+#include <list>
 
 typedef struct
 {
   char iface_name[IPA_IFACE_NAME_LEN];
 }NatIfaces;
+
+#ifdef FEATURE_VLAN_OFFLOAD
+struct vlan_iface_info
+{
+	char vlan_iface_name[IPA_RESOURCE_NAME_MAX];
+	uint8_t vlan_id;
+	uint32_t vlan_iface_ipv6_addr[4];
+	uint8_t vlan_client_mac[6];
+	uint32_t vlan_client_ipv6_addr[4];
+};
+#endif
 
 /* for IPACM rm dependency use*/
 typedef struct _ipa_rm_client
@@ -140,6 +153,10 @@ public:
 	/* Store bridge mode or not */
 	bool ipa_bridge_enable;
 
+#ifdef FEATURE_VLAN_OFFLOAD
+	bool vlan_devices[IPA_VLAN_IF_MAX];
+#endif
+
 	/* Store bridge netdev mac */
 	uint8_t bridge_mac[IPA_MAC_ADDR_SIZE];
 
@@ -158,6 +175,14 @@ public:
 	static IPACM_Config* GetInstance();
 
 	const char* getEventName(ipa_cm_event_id event_id);
+
+#ifdef FEATURE_VLAN_OFFLOAD
+	void get_vlan_mode_ifaces();
+	int get_vlan_id(char *iface_name, uint8_t *vlan_id);
+	bool iface_in_vlan_mode(const char *phys_iface_name);
+	void add_vlan_iface(ipa_ioc_vlan_iface_info *data);
+	void del_vlan_iface(ipa_ioc_vlan_iface_info *data);
+#endif
 
 	inline void increaseFltRuleCount(int index, ipa_ip_type iptype, int increment)
 	{
@@ -361,6 +386,11 @@ private:
 	uint8_t qmap_id;
 	ipacm_ext_prop ext_prop_v4;
 	ipacm_ext_prop ext_prop_v6;
+
+#ifdef FEATURE_VLAN_OFFLOAD
+	pthread_mutex_t vlan_l2tp_lock;
+	std::list<vlan_iface_info> m_vlan_iface;
+#endif
 };
 
 #endif /* IPACM_CONFIG */

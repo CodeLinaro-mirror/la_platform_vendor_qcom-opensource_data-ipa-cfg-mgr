@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2014-2017, The Linux Foundation. All rights reserved.
+Copyright (c) 2014-2017, 2019, The Linux Foundation. All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are
@@ -53,6 +53,7 @@ IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #define MAX_NUM_IFACE 10
 #define MAX_NUM_CLIENT 16
 
+#ifndef FEATURE_VLAN_OFFLOAD
 struct vlan_iface_info
 {
 	char vlan_iface_name[IPA_RESOURCE_NAME_MAX];
@@ -61,6 +62,7 @@ struct vlan_iface_info
 	uint8_t vlan_client_mac[6];
 	uint32_t vlan_client_ipv6_addr[4];
 };
+#endif
 
 struct l2tp_vlan_mapping_info
 {
@@ -224,9 +226,9 @@ public:
 	static IPACM_LanToLan* p_instance;
 	static IPACM_LanToLan* get_instance();
 	bool has_l2tp_iface();
+	int get_vlan_id(char *iface_name, uint8_t *vlan_id);
 
 private:
-
 	IPACM_LanToLan();
 
 	~IPACM_LanToLan();

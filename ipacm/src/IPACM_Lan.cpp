@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2013-2016, The Linux Foundation. All rights reserved.
+Copyright (c) 2013-2016, 2019, The Linux Foundation. All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are
@@ -44,6 +44,7 @@ IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <sys/ioctl.h>
 #include "IPACM_Netlink.h"
 #include "IPACM_Lan.h"
+#include "IPACM_LanToLan.h"
 #include "IPACM_Wan.h"
 #include "IPACM_IfaceManager.h"
 #include "linux/rmnet_ipa_fd_ioctl.h"
@@ -52,6 +53,8 @@ IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "IPACM_ConntrackListener.h"
 #include <sys/ioctl.h>
 #include <fcntl.h>
+
+#define IPA_MUX_RETRY_NUM 10
 
 bool IPACM_Lan::odu_up = false;
 
@@ -802,10 +805,43 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 				|| (is_l2tp_event(data->iface_name) && ipa_if_cate == ODU_IF))
 			{
 				IPACMDBG_H("ETH iface got client \n");
+				uint8_t vlan_id = 0;
+				bool isVlan = false;
+#ifdef FEATURE_VLAN_OFFLOAD
+				if(IPACM_Iface::ipacmcfg->iface_in_vlan_mode(data->iface_name))
+				{
+					IPACMDBG_H("physical iface in vlan mode got neighbor event with iptype %d, ip4 0x%X, ip6 pref [0x%X] [0x%X]\n",
+						data->iptype, data->ipv4_addr, data->ipv6_addr[0], data->ipv6_addr[1]);
+					IPACMDBG_H("ignoring non vlan neighbor event for vlan device\n");
+					return;
+				}
+#endif
+
+				IPACMDBG_H("iface (%s)\n", data->iface_name);
+				IPACMDBG_H("ipa_interface_index %d == ipa_if_num %d \n", ipa_interface_index, ipa_if_num);
+
+#ifdef FEATURE_VLAN_OFFLOAD
+
+				if(is_vlan_event(data->iface_name))
+				{
+					isVlan = true;
+					IPACMDBG_H("handling vlan ETH client for iface %s\n",
+							data->iface_name);
+					if(IPACM_Iface::ipacmcfg->get_vlan_id(data->iface_name, &vlan_id))
+					{
+						IPACMERR("failed getting vlan id for iface %s\n",
+								data->iface_name);
+						return;
+					}
+				}
+#endif
+
+#ifndef FEATURE_VLAN_OFFLOAD
 				if(ipa_interface_index == ipa_if_num)
+#endif
 				{
 					/* first construc ETH full header */
-					handle_eth_hdr_init(data->mac_addr);
+					handle_eth_hdr_init(data->mac_addr, vlan_id, isVlan);
 					IPACMDBG_H("construct ETH header and route rules \n");
 					/* Associate with IP and construct RT-rule */
 					if (handle_eth_client_ipaddr(data) == IPACM_FAILURE)
@@ -816,10 +852,19 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 					if (IPACM_Iface::ipacmcfg->ipacm_lan_stats_enable == false)
 #endif
 					{
-						handle_eth_client_route_rule(data->mac_addr, data->iptype);
+						handle_eth_client_route_rule(data->mac_addr, data->iptype, vlan_id);
 						if (data->iptype == IPA_IP_v4)
 						{
+#ifdef FEATURE_VLAN_OFFLOAD
+							if(is_vlan_event(data->iface_name))
+							{
+								/* Reset interface index.*/
+								data->if_index =
+									IPACM_Iface::ipacmcfg->iface_table[ipa_if_num].netlink_interface_index;
+							}
+#endif
 							/* Add NAT rules after ipv4 RT rules are set */
+							IPACMDBG_H("Add NAT Entries. \n");
 							CtList->HandleNeighIpAddrAddEvt(data);
 						}
 					}
@@ -831,8 +876,11 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 #endif
 					eth_bridge_post_event(IPA_ETH_BRIDGE_CLIENT_ADD, IPA_IP_MAX, data->mac_addr, NULL, data->iface_name);
 				}
+#ifndef FEATURE_VLAN_OFFLOAD
+				else
+#endif
 #ifdef FEATURE_L2TP
-				else if(is_l2tp_event(data->iface_name) && ipa_if_cate == ODU_IF)
+				if(is_l2tp_event(data->iface_name) && ipa_if_cate == ODU_IF)
 				{
 					if(tx_prop != NULL)
 					{
@@ -869,17 +917,35 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 			}
 
 			if (ipa_interface_index == ipa_if_num
+#ifdef FEATURE_VLAN_OFFLOAD
+				|| is_vlan_event(data->iface_name)
+#endif
 				|| (is_l2tp_event(data->iface_name) && ipa_if_cate == ODU_IF))
 			{
 				if(ipa_interface_index == ipa_if_num)
 				{
+					uint8_t vlan_id = 0;
+
 					if (data->iptype == IPA_IP_v6)
 					{
 						handle_del_ipv6_addr(data);
 						return;
 					}
+#ifdef FEATURE_VLAN_OFFLOAD
+					if(is_vlan_event(data->iface_name))
+					{
+						IPACMDBG_H("handling vlan ETH client del v6 ip address for iface %s\n",
+								data->iface_name);
+						if(IPACM_Iface::ipacmcfg->get_vlan_id(data->iface_name, &vlan_id))
+						{
+							IPACMERR("failed getting vlan id for iface %s\n",
+									data->iface_name);
+							return;
+						}
+					}
+#endif
 					IPACMDBG_H("LAN iface delete client \n");
-					handle_eth_client_down_evt(data->mac_addr);
+					handle_eth_client_down_evt(data->mac_addr, vlan_id);
 				}
 				else
 				{
@@ -1622,7 +1688,7 @@ int IPACM_Lan::handle_wan_up_ex(ipacm_ext_prop *ext_prop, ipa_ip_type iptype, ui
 	int fd, ret = IPACM_SUCCESS, cnt;
 	IPACM_Config* ipacm_config = IPACM_Iface::ipacmcfg;
 	struct ipa_ioc_write_qmapid mux;
-	int i=0;
+	int i = 0;
 
 	if(rx_prop != NULL)
 	{
@@ -1635,11 +1701,26 @@ int IPACM_Lan::handle_wan_up_ex(ipacm_ext_prop *ext_prop, ipa_ip_type iptype, ui
 		}
 
 		mux.qmap_id = ipacm_config->GetQmapId();
+
 		for(cnt=0; cnt<rx_prop->num_rx_props; cnt++)
 		{
 			mux.client = rx_prop->rx[cnt].src_pipe;
-			ret = ioctl(fd, IPA_IOC_WRITE_QMAPID, &mux);
-			if (ret)
+
+			for (i = 0;i < IPA_MUX_RETRY_NUM;i++)
+			{
+				ret = ioctl(fd, IPA_IOC_WRITE_QMAPID, &mux);
+				sleep(1);
+				if (ret != 0)
+				{
+					continue;
+				}
+				else
+				{
+					break;
+				}
+			}
+
+			if (i == IPA_IOC_WRITE_QMAPID && ret != 0)
 			{
 				IPACMERR("Failed to write mux id %d\n", mux.qmap_id);
 				close(fd);
@@ -1694,10 +1775,12 @@ int IPACM_Lan::handle_wan_up_ex(ipacm_ext_prop *ext_prop, ipa_ip_type iptype, ui
 }
 
 /* handle ETH client initial, construct full headers (tx property) */
-int IPACM_Lan::handle_eth_hdr_init(uint8_t *mac_addr)
+int IPACM_Lan::handle_eth_hdr_init(uint8_t *mac_addr,  uint8_t vlan_id, bool isVlan)
 {
 
 #define ETH_IFACE_INDEX_LEN 2
+#define VLAN_TPID_SIZE 2
+#define VLAN_VID_MASK 0x0FFF
 
 	int res = IPACM_SUCCESS, len = 0;
 	char index[ETH_IFACE_INDEX_LEN];
@@ -1714,7 +1797,16 @@ int IPACM_Lan::handle_eth_hdr_init(uint8_t *mac_addr)
 	int max_clients = IPA_MAX_NUM_ETH_CLIENTS;
 #endif
 
-	clnt_indx = get_eth_client_index(mac_addr);
+#ifdef FEATURE_VLAN_OFFLOAD
+	 if(isVlan)
+	{
+		clnt_indx = get_eth_client_index(mac_addr, vlan_id);
+	}
+	else
+#endif
+	{
+		clnt_indx = get_eth_client_index(mac_addr);
+	}
 
 	if (clnt_indx != IPACM_INVALID_INDEX)
 	{
@@ -1736,6 +1828,12 @@ int IPACM_Lan::handle_eth_hdr_init(uint8_t *mac_addr)
 				 sizeof(get_client_memptr(eth_client, num_eth_client)->mac));
 
 
+#ifdef FEATURE_VLAN_OFFLOAD
+	if (isVlan)
+	{
+		get_client_memptr(eth_client, num_eth_client)->vlan_id = vlan_id;
+	}
+#endif
 	IPACMDBG_H("Received Client MAC %02x:%02x:%02x:%02x:%02x:%02x\n",
 					 mac_addr[0], mac_addr[1], mac_addr[2],
 					 mac_addr[3], mac_addr[4], mac_addr[5]);
@@ -1748,6 +1846,9 @@ int IPACM_Lan::handle_eth_hdr_init(uint8_t *mac_addr)
 					 get_client_memptr(eth_client, num_eth_client)->mac[4],
 					 get_client_memptr(eth_client, num_eth_client)->mac[5]);
 
+#ifdef FEATURE_VLAN_OFFLOAD
+	IPACMDBG_H("isvlan %d, vlan_id %d\n", isVlan, vlan_id);
+#endif
 	/* add header to IPA */
 	if(tx_prop != NULL)
 	{
@@ -1800,6 +1901,32 @@ int IPACM_Lan::handle_eth_hdr_init(uint8_t *mac_addr)
 											 mac_addr,
 											 IPA_MAC_ADDR_SIZE);
 								}
+#ifdef FEATURE_VLAN_OFFLOAD
+								/* 802.1Q header (comes after dst and src MAC)
+								--------------------------------------------
+								|    0   |    1   |     2    |    3        |
+								--------------------------------------------
+								|       TPID(2B)  |       TCI(2B)          |
+								--------------------------------------------
+								|                 |   PCP+|  VLAN ID(12b)  |
+								|                 |DEI(4b)|                |
+								--------------------------------------------  */
+								if(isVlan)
+								{
+									uint16_t vlan_tci =
+										(*((uint16_t *)&(pHeaderDescriptor->hdr[0].hdr[sCopyHeader.eth2_ofst +
+											2 * IPA_MAC_ADDR_SIZE + VLAN_TPID_SIZE])));
+									vlan_tci = (vlan_tci & ~VLAN_VID_MASK) | (vlan_id & VLAN_VID_MASK);
+									/* change vlan_tci to HW format */
+									vlan_tci = htons(vlan_tci);
+									memcpy(&pHeaderDescriptor->hdr[0].hdr[sCopyHeader.eth2_ofst +
+										2 * IPA_MAC_ADDR_SIZE + VLAN_TPID_SIZE], &vlan_tci,
+										sizeof(vlan_tci));
+									IPACMDBG_H("v4: updated the vlan_tci, now 0x%X, vlan tag is 0x%X\n", vlan_tci,
+										*((uint32_t *)&(pHeaderDescriptor->hdr[0].hdr[sCopyHeader.eth2_ofst +
+										 2 * IPA_MAC_ADDR_SIZE])));
+								}
+#endif
 								/* replace src mac to bridge mac_addr if any  */
 								if (IPACM_Iface::ipacmcfg->ipa_bridge_enable)
 								{
@@ -1902,6 +2029,33 @@ int IPACM_Lan::handle_eth_hdr_init(uint8_t *mac_addr)
 						mac_addr,
 						IPA_MAC_ADDR_SIZE);
 				}
+#ifdef FEATURE_VLAN_OFFLOAD
+				/* 802.1Q header (comes after dst and src MAC)
+				--------------------------------------------
+				|    0   |    1   |     2    |    3        |
+				--------------------------------------------
+				|       TPID(2B)  |       TCI(2B)          |
+				--------------------------------------------
+				|                 |   PCP+|  VLAN ID(12b)  |
+				|                 |DEI(4b)|                |
+				--------------------------------------------
+				*/
+				if(isVlan)
+				{
+					uint16_t vlan_tci =
+						(*((uint16_t *)&(pHeaderDescriptor->hdr[0].hdr[sCopyHeader.eth2_ofst +
+							2 * IPA_MAC_ADDR_SIZE + VLAN_TPID_SIZE])));
+					vlan_tci = (vlan_tci & ~VLAN_VID_MASK) | (vlan_id & VLAN_VID_MASK);
+					 /* change vlan_tci to HW format */
+					vlan_tci = htons(vlan_tci);
+					memcpy(&pHeaderDescriptor->hdr[0].hdr[sCopyHeader.eth2_ofst +
+						2 * IPA_MAC_ADDR_SIZE + VLAN_TPID_SIZE], &vlan_tci,
+						sizeof(vlan_tci));
+					IPACMDBG_H("v6: updated the vlan_tci, now 0x%X, vlan tag is 0x%X\n", vlan_tci,
+							*((uint32_t *)&(pHeaderDescriptor->hdr[0].hdr[sCopyHeader.eth2_ofst +
+							2 * IPA_MAC_ADDR_SIZE])));
+				}
+#endif
 				/* replace src mac to bridge mac_addr if any  */
 				if (IPACM_Iface::ipacmcfg->ipa_bridge_enable)
 				{
@@ -2067,6 +2221,7 @@ int IPACM_Lan::handle_eth_client_ipaddr(ipacm_event_data_all *data)
 	int v6_num;
 	uint32_t ipv6_link_local_prefix = 0xFE800000;
 	uint32_t ipv6_link_local_prefix_mask = 0xFFC00000;
+	uint8_t vlan_id = 0;
 
 	IPACMDBG_H("number of eth clients: %d\n", num_eth_client);
 	IPACMDBG_H("event MAC %02x:%02x:%02x:%02x:%02x:%02x\n",
@@ -2076,8 +2231,19 @@ int IPACM_Lan::handle_eth_client_ipaddr(ipacm_event_data_all *data)
 					 data->mac_addr[3],
 					 data->mac_addr[4],
 					 data->mac_addr[5]);
+#ifdef FEATURE_VLAN_OFFLOAD
+	if(is_vlan_event(data->iface_name))
+	{
+		IPACMDBG_H("handling vlan ETH client ip address for iface %s\n", data->iface_name);
+		if(IPACM_Iface::ipacmcfg->get_vlan_id(data->iface_name, &vlan_id))
+		{
+			IPACMERR("failed getting vlan id for iface %s\n", data->iface_name);
+			return IPACM_FAILURE;
+		}
+	}
+#endif
 
-	clnt_indx = get_eth_client_index(data->mac_addr);
+	clnt_indx = get_eth_client_index(data->mac_addr, vlan_id);
 
 		if (clnt_indx == IPACM_INVALID_INDEX)
 		{
@@ -2114,14 +2280,21 @@ int IPACM_Lan::handle_eth_client_ipaddr(ipacm_event_data_all *data)
 			}
 			else
 			{
-				/* Check if the IP is not in private subnet and ignore. */
-				if (!IPACM_Iface::ipacmcfg->isPrivateSubnet(data->ipv4_addr))
+#ifdef FEATURE_VLAN_OFFLOAD
+				if (!is_vlan_event(data->iface_name))
+#endif
 				{
-					IPACMDBG_H("Client is not in IP passthrough mode, but got public IP: 0x%x\n", data->ipv4_addr);
-					return IPACM_FAILURE;
+					if (!IPACM_Iface::ipacmcfg->isPrivateSubnet(data->ipv4_addr))
+					{
+						IPACMDBG_H("Client is not in IP passthrough mode, but got public IP: 0x%x\n", data->ipv4_addr);
+						return IPACM_FAILURE;
+					}
 				}
+#ifdef FEATURE_VLAN_OFFLOAD
+				else
+					IPACMERR("IGNORING PRIVATE SUBNET CHECK : VLAN\n");
+#endif
 			}
-
 			if (get_client_memptr(eth_client, clnt_indx)->ipv4_set == false)
 			{
 				get_client_memptr(eth_client, clnt_indx)->v4_addr = data->ipv4_addr;
@@ -2199,7 +2372,7 @@ int IPACM_Lan::handle_eth_client_ipaddr(ipacm_event_data_all *data)
 }
 
 /*handle eth client routing rule*/
-int IPACM_Lan::handle_eth_client_route_rule(uint8_t *mac_addr, ipa_ip_type iptype)
+int IPACM_Lan::handle_eth_client_route_rule(uint8_t *mac_addr, ipa_ip_type iptype, uint8_t vlan_id)
 {
 	struct ipa_ioc_add_rt_rule *rt_rule;
 	struct ipa_rt_rule_add *rt_rule_entry;
@@ -2217,7 +2390,7 @@ int IPACM_Lan::handle_eth_client_route_rule(uint8_t *mac_addr, ipa_ip_type iptyp
 					 mac_addr[0], mac_addr[1], mac_addr[2],
 					 mac_addr[3], mac_addr[4], mac_addr[5]);
 
-	eth_index = get_eth_client_index(mac_addr);
+	eth_index = get_eth_client_index(mac_addr, vlan_id);
 	if (eth_index == IPACM_INVALID_INDEX)
 	{
 		IPACMDBG_H("eth client not found/attached \n");
@@ -3088,7 +3261,7 @@ int IPACM_Lan::handle_odu_route_del()
 }
 
 /*handle eth client del mode*/
-int IPACM_Lan::handle_eth_client_down_evt(uint8_t *mac_addr)
+int IPACM_Lan::handle_eth_client_down_evt(uint8_t *mac_addr, uint8_t vlan_id)
 {
 	int clt_indx;
 	uint32_t tx_index;
@@ -3100,7 +3273,7 @@ int IPACM_Lan::handle_eth_client_down_evt(uint8_t *mac_addr)
 
 	IPACMDBG_H("total client: %d\n", num_eth_client_tmp);
 
-	clt_indx = get_eth_client_index(mac_addr);
+	clt_indx = get_eth_client_index(mac_addr, vlan_id);
 	if (clt_indx == IPACM_INVALID_INDEX)
 	{
 		IPACMDBG_H("eth client not attached\n");
@@ -3112,7 +3285,7 @@ int IPACM_Lan::handle_eth_client_down_evt(uint8_t *mac_addr)
 	{
 			IPACMDBG_H("Clean Nat Rules for ipv4:0x%x\n", get_client_memptr(eth_client, clt_indx)->v4_addr);
 			CtList->HandleNeighIpAddrDelEvt(get_client_memptr(eth_client, clt_indx)->v4_addr);
- 	}
+	}
 
 	if (delete_eth_rtrules(clt_indx, IPA_IP_v4))
 	{

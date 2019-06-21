@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2013-2017, The Linux Foundation. All rights reserved.
+Copyright (c) 2013-2017, 2019, The Linux Foundation. All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are
@@ -134,7 +134,7 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 							memcpy(data_all->mac_addr,
 									neighbor_client[i].mac_addr,
 												sizeof(data_all->mac_addr));
-#ifdef FEATURE_L2TP
+#if defined(FEATURE_L2TP) || defined(FEATURE_VLAN_OFFLOAD)
 							memcpy(data_all->iface_name, neighbor_client[i].iface_name,
 								sizeof(data_all->iface_name));
 #endif

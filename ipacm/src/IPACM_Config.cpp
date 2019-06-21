@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2013-2017, The Linux Foundation. All rights reserved.
+Copyright (c) 2013-2017, 2019, The Linux Foundation. All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are
@@ -207,6 +207,12 @@ int IPACM_Config::Init(void)
 		ret = IPACM_FAILURE;
 		goto fail;
 	}
+
+#ifdef FEATURE_VLAN_OFFLOAD
+	pthread_mutex_init(&vlan_l2tp_lock, NULL);
+	memset(vlan_devices, 0, IPA_VLAN_IF_MAX * sizeof(vlan_devices[0]));
+	get_vlan_mode_ifaces();
+#endif
 
 	/* Construct IPACM Iface table */
 	ipa_num_ipa_interfaces = cfg->iface_config.num_iface_entries;
@@ -866,3 +872,145 @@ const char* IPACM_Config::getEventName(ipa_cm_event_id event_id)
 
 	return ipacm_event_name[event_id];
 }
+
+#ifdef FEATURE_VLAN_OFFLOAD
+void IPACM_Config::get_vlan_mode_ifaces()
+{
+	struct ipa_ioc_get_vlan_mode vlan_mode;
+	int retval;
+
+	for(int i = 0; i < IPA_VLAN_IF_MAX; i++)
+	{
+		vlan_mode.iface = static_cast<ipa_vlan_ifaces>(i);
+		retval = ioctl(m_fd, IPA_IOC_GET_VLAN_MODE, &vlan_mode);
+		if(retval)
+		{
+			IPACMERR("failed reading vlan mode for %d, error %d\n", i ,retval);
+			vlan_devices[i] = 0;
+		}
+		vlan_devices[i] = vlan_mode.is_vlan_mode;
+	}
+
+	IPACMDBG_H("modes are EMAC %d, RNDIS %d, ECM %d\n",
+		vlan_devices[IPA_VLAN_IF_ETH],
+		vlan_devices[IPA_VLAN_IF_RNDIS],
+		vlan_devices[IPA_VLAN_IF_ECM]);
+}
+
+bool IPACM_Config::iface_in_vlan_mode(const char *phys_iface_name)
+{
+	char *str;
+	unsigned int len = 0;
+
+	IPACMDBG_H("iface %s\n", phys_iface_name);
+
+	str = (char*)strchr(phys_iface_name, '.');
+
+	if (str != NULL)
+	{
+		return false;
+	}
+
+	if(strstr(phys_iface_name, "eth"))
+	{
+		IPACMDBG_H("eth vlan mode %d\n", vlan_devices[IPA_VLAN_IF_ETH]);
+		return vlan_devices[IPA_VLAN_IF_ETH];
+	}
+
+	if(strstr(phys_iface_name, "rndis"))
+	{
+		IPACMDBG_H("rndis vlan mode %d\n", vlan_devices[IPA_VLAN_IF_RNDIS]);
+		return vlan_devices[IPA_VLAN_IF_RNDIS];
+	}
+
+	if(strstr(phys_iface_name, "ecm"))
+	{
+		IPACMDBG_H("ecm vlan mode %d\n", vlan_devices[IPA_VLAN_IF_RNDIS]);
+		return vlan_devices[IPA_VLAN_IF_ECM];
+	}
+
+	IPACMDBG("iface %s did not match any known ifaces\n", phys_iface_name);
+
+	return false;
+}
+
+int IPACM_Config::get_vlan_id(char *iface_name, uint8_t *vlan_id)
+{
+        list<vlan_iface_info>::iterator it_vlan;
+        int ret = IPACM_FAILURE;
+
+        if(pthread_mutex_lock(&vlan_l2tp_lock) != 0)
+        {
+                IPACMERR("Unable to lock the mutex\n");
+                return IPACM_FAILURE;
+        }
+        IPACMDBG_H("Incoming client iface name: %s\n", iface_name);
+        for(it_vlan = m_vlan_iface.begin(); it_vlan != m_vlan_iface.end(); it_vlan++)
+        {
+                if(strncmp(it_vlan->vlan_iface_name, iface_name, sizeof(it_vlan->vlan_iface_name)) == 0)
+                {
+                        IPACMDBG_H("Found vlan iface in vlan list: %s\n", it_vlan->vlan_iface_name);
+                        *vlan_id = it_vlan->vlan_id;
+                        ret = IPACM_SUCCESS;
+                        break;
+                }
+        }
+
+        pthread_mutex_unlock(&vlan_l2tp_lock);
+
+        return ret;
+}
+
+void IPACM_Config::add_vlan_iface(ipa_ioc_vlan_iface_info *data)
+{
+	list<vlan_iface_info>::iterator it_vlan;
+	vlan_iface_info new_vlan_info;
+
+	if(pthread_mutex_lock(&vlan_l2tp_lock) != 0)
+	{
+		IPACMERR("Unable to lock the mutex\n");
+		return;
+	}
+
+	IPACMDBG_H("Vlan iface: %s vlan id: %d\n", data->name, data->vlan_id);
+	for(it_vlan = m_vlan_iface.begin(); it_vlan != m_vlan_iface.end(); it_vlan++)
+	{
+		if(strncmp(it_vlan->vlan_iface_name, data->name, sizeof(it_vlan->vlan_iface_name)) == 0)
+		{
+			IPACMERR("The vlan iface was added before with id %d\n", it_vlan->vlan_id);
+			pthread_mutex_unlock(&vlan_l2tp_lock);
+			return;
+		}
+	}
+
+	memset(&new_vlan_info, 0 , sizeof(new_vlan_info));
+	strlcpy(new_vlan_info.vlan_iface_name, data->name, sizeof(new_vlan_info.vlan_iface_name));
+	new_vlan_info.vlan_id = data->vlan_id;
+	m_vlan_iface.push_front(new_vlan_info);
+	pthread_mutex_unlock(&vlan_l2tp_lock);
+}
+
+void IPACM_Config::del_vlan_iface(ipa_ioc_vlan_iface_info *data)
+{
+	list<vlan_iface_info>::iterator it_vlan;
+
+	if(pthread_mutex_lock(&vlan_l2tp_lock) != 0)
+	{
+		IPACMERR("Unable to lock the mutex\n");
+		return;
+	}
+
+	IPACMDBG_H("Vlan iface: %s vlan id: %d\n", data->name, data->vlan_id);
+	for(it_vlan = m_vlan_iface.begin(); it_vlan != m_vlan_iface.end(); it_vlan++)
+	{
+		if(strncmp(it_vlan->vlan_iface_name, data->name, sizeof(it_vlan->vlan_iface_name)) == 0)
+		{
+			IPACMDBG_H("Found the vlan interface\n");
+			m_vlan_iface.erase(it_vlan);
+			break;
+		}
+	}
+	pthread_mutex_unlock(&vlan_l2tp_lock);
+	return;
+}
+#endif

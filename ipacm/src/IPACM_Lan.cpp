@@ -4616,8 +4616,37 @@ int IPACM_Lan::handle_eth_client_down_evt(uint8_t *mac_addr, uint8_t vlan_id)
 			   	 get_client_memptr(eth_client, (clt_indx + 1))->eth_rt_hdl[tx_index].eth_rt_rule_hdl_v6_wan[num_v6];
 		    }
 		}
+
+#ifdef FEATURE_IPACM_PER_CLIENT_STATS
+		memcpy(get_client_memptr(eth_client, clt_indx)->wan_ul_fl_rule_hdl_v4,
+			get_client_memptr(eth_client, clt_indx + 1)->wan_ul_fl_rule_hdl_v4,
+			MAX_WAN_UL_FILTER_RULES * sizeof(uint32_t));
+		memcpy(get_client_memptr(eth_client, clt_indx)->wan_ul_fl_rule_hdl_v6,
+			get_client_memptr(eth_client, clt_indx + 1)->wan_ul_fl_rule_hdl_v6,
+			MAX_WAN_UL_FILTER_RULES * sizeof(uint32_t));
+		get_client_memptr(eth_client, clt_indx)->lan_stats_idx =
+			get_client_memptr(eth_client, clt_indx + 1)->lan_stats_idx;
+#ifdef IPA_HW_FNR_STATS
+		get_client_memptr(eth_client, clt_indx)->ul_cnt_idx =
+			get_client_memptr(eth_client, clt_indx + 1)->ul_cnt_idx;
+		get_client_memptr(eth_client, clt_indx)->dl_cnt_idx =
+			get_client_memptr(eth_client, clt_indx + 1)->dl_cnt_idx;
+		get_client_memptr(eth_client, clt_indx)->index_populated =
+			get_client_memptr(eth_client, clt_indx + 1)->index_populated;
+#endif //IPA_HW_FNR_STATS
+#endif
 	}
 
+#ifdef FEATURE_IPACM_PER_CLIENT_STATS
+	get_client_memptr(eth_client, clt_indx)->lan_stats_idx = -1;
+#ifdef IPA_HW_FNR_STATS
+	get_client_memptr(eth_client, clt_indx)->ul_cnt_idx = -1;
+	get_client_memptr(eth_client, clt_indx)->dl_cnt_idx = -1;
+	get_client_memptr(eth_client, clt_indx)->index_populated = false;
+#endif
+	memset(get_client_memptr(eth_client, clt_indx)->wan_ul_fl_rule_hdl_v4, 0, MAX_WAN_UL_FILTER_RULES * sizeof(uint32_t));
+	memset(get_client_memptr(eth_client, clt_indx)->wan_ul_fl_rule_hdl_v6, 0, MAX_WAN_UL_FILTER_RULES * sizeof(uint32_t));
+#endif
 	IPACMDBG_H(" %d eth client deleted successfully \n", num_eth_client);
 	num_eth_client = num_eth_client - 1;
 	IPACMDBG_H(" Number of eth client: %d\n", num_eth_client);

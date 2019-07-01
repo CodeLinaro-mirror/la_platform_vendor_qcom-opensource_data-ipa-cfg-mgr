@@ -379,9 +379,11 @@ private:
 
 			for(cnt = 0; cnt < IPA_MAX_NUM_HW_PATH_CLIENTS; cnt++)
 			{
-				if (memcmp(IPACM_Wlan::active_lan_client_index[cnt].mac,
-							mac_addr,
-							IPA_MAC_ADDR_SIZE) == 0) {
+				if ((memcmp(IPACM_Wlan::active_lan_client_index[cnt].mac,
+						mac_addr,
+						IPA_MAC_ADDR_SIZE) == 0) &&
+						(IPACM_Wlan::active_lan_client_index[cnt].ipa_if_num
+						== ipa_if_num)) {
 					IPACMDBG_H("Got lan stats index :%d, return\n", cnt);
 					IPACM_Wlan::active_lan_client_index[cnt].lan_stats_idx = cnt;
 					memcpy(IPACM_Wlan::active_lan_client_index[cnt].mac,

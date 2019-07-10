@@ -478,8 +478,8 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 							handle_private_subnet_android(data->iptype);
 						}
 						else
-#ifdef FEATURE_L2TP
 						{
+#ifdef FEATURE_L2TP
 							if ((IPACM_Iface::ipacmcfg->ipacm_l2tp_enable == IPACM_L2TP_E2E)
 								&& (num_dft_rt_v6 == 1) && (data->iptype == IPA_IP_v6))
 							{
@@ -489,8 +489,8 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 								}
 							}
 							handle_private_subnet(data->iptype);
-						}
 #endif
+						}
 #else
 						handle_private_subnet(data->iptype);
 #endif

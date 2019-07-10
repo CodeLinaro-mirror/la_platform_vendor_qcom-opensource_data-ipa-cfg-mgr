@@ -59,7 +59,7 @@ extern "C"
 #ifdef FEATURE_IPA_ANDROID
 #define IPACMLOG_FILE "/dev/socket/ipacm_log_file"
 #else/* defined(FEATURE_IPA_ANDROID) */
-#define IPACMLOG_FILE "/var/run/ipacm_log_file"
+#define IPACMLOG_FILE "/dev/socket/data/ipa/ipacm_log_file"
 #define KERNEL_VER_FILE "/tmp/kernel_ver.txt"
 #endif /* defined(NOT FEATURE_IPA_ANDROID)*/
 
@@ -132,7 +132,7 @@ inline void get_kernel_version(char *kernel_ver)
 			ret, strerror(errno));
 		return;
 	}
-	memcpy(kernel_ver, utsname.release, KERNEL_VERSION_LENGTH);
+	memcpy(kernel_ver, utsname.release, KERNEL_VERSION_LENGTH - 1);
 	IPACMDBG_H("kernel_ver %s\n", kernel_ver);
 }
 

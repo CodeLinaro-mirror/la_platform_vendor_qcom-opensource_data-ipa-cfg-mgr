@@ -232,6 +232,7 @@ int IPACM_Config::get_free_cnt_idx(void)
 			cnt_idx[i].in_use = true;
 			/* reset the counter index and counter index + 1 before sending it to client */
 			ipacm_reset_hw_fnr_counters(cnt_idx[i].counter_index, cnt_idx[i].counter_index + 1);
+			IPACMDBG_H("Returned free index = %d\n", cnt_idx[i].counter_index);
 			return cnt_idx[i].counter_index;
 		}
 	}
@@ -533,20 +534,21 @@ int IPACM_Config::Init(void)
 	}
 #ifdef IPA_HW_FNR_STATS
 	if(ipacm_lan_stats_enable && (GetIPAVer(true) >= IPA_HW_v4_5)) {
-		hw_fnr_stats_support = true;
-		pthread_mutex_init(&cnt_idx_lock, NULL);
-		if (fnr_counters.hw_counter.start_id > 0) {
-			IPACMERR("Multiple FnR counter allocations are not supported\n");
-			ret = IPACM_FAILURE;
-			goto fail;
+		if (hw_fnr_stats_support == true) {
+			IPACMERR("FnR counter allocated already, skip dup allocation\n");
+			goto skip_fnr_alloc;
 		}
+		pthread_mutex_init(&cnt_idx_lock, NULL);
 		if (ipacm_alloc_fnr_counters(&fnr_counters, m_fd))
 		{
 			IPACMERR("Failed to allocate fnr counters.\n");
 			goto fail;
 		} else
 			IPACMDBG_H("Allocating fnr counters :  Done\n");
+
+		hw_fnr_stats_support = true;
 	}
+skip_fnr_alloc:
 #endif //IPA_HW_FNR_STATS
 #endif
 	ipv6_nat_enable = cfg->ipv6_nat_enable;

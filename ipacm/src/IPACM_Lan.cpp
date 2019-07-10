@@ -3551,7 +3551,7 @@ int IPACM_Lan::handle_lan_client_connect(uint8_t *mac_addr)
 			{
 				ext_prop = IPACM_Iface::ipacmcfg->GetExtProp(IPA_IP_v4);
 #ifdef IPA_HW_FNR_STATS
-				if (IPACM_Iface::ipacmcfg->GetIPAVer(false) >=  IPA_HW_v4_5)
+				if (IPACM_Iface::ipacmcfg->hw_fnr_stats_support)
 						install_uplink_filter_rule_per_client_v2(ext_prop, IPA_IP_v4, IPACM_Wan::getXlat_Mux_Id(),
 							get_client_memptr(eth_client, eth_index)->mac,
 							get_client_memptr(eth_client, eth_index)->ul_cnt_idx);
@@ -3567,7 +3567,7 @@ int IPACM_Lan::handle_lan_client_connect(uint8_t *mac_addr)
 			{
 				ext_prop = IPACM_Iface::ipacmcfg->GetExtProp(IPA_IP_v6);
 #ifdef IPA_HW_FNR_STATS
-				if (IPACM_Iface::ipacmcfg->GetIPAVer(false) >=  IPA_HW_v4_5)
+				if (IPACM_Iface::ipacmcfg->hw_fnr_stats_support)
 					install_uplink_filter_rule_per_client_v2(ext_prop, IPA_IP_v6, 0, get_client_memptr(eth_client, eth_index)->mac,
 							get_client_memptr(eth_client, eth_index)->ul_cnt_idx);
 				else
@@ -3577,7 +3577,7 @@ int IPACM_Lan::handle_lan_client_connect(uint8_t *mac_addr)
 			}
 		}
 #ifdef IPA_HW_FNR_STATS
-		if (IPACM_Iface::ipacmcfg->GetIPAVer(false) >=  IPA_HW_v4_5) {
+		if (IPACM_Iface::ipacmcfg->hw_fnr_stats_support) {
 			handle_eth_client_route_rule_ext_v2(get_client_memptr(eth_client, eth_index)->mac, IPA_IP_v4,
 				get_client_memptr(eth_client, eth_index)->dl_cnt_idx);
 			handle_eth_client_route_rule_ext_v2(get_client_memptr(eth_client, eth_index)->mac, IPA_IP_v6,
@@ -3711,7 +3711,7 @@ int IPACM_Lan::handle_eth_client_route_rule_ext_v2(uint8_t *mac_addr, ipa_ip_typ
 			return IPACM_FAILURE;
 		}
 
-		rt_rule->rules = (uint64_t)calloc(NUM, sizeof(struct ipa_rt_rule_add_ext_v2));
+		rt_rule->rules = (uintptr_t)calloc(NUM, sizeof(struct ipa_rt_rule_add_ext_v2));
 		if (!rt_rule->rules) {
 			IPACMERR("Error allocating memory for routing rule\n");
 			free(rt_rule);
@@ -4554,6 +4554,7 @@ int IPACM_Lan::handle_eth_client_down_evt(uint8_t *mac_addr, uint8_t vlan_id)
 			client_info->dl_cnt_idx = get_client_memptr(eth_client, clt_indx)->dl_cnt_idx;
 			get_client_memptr(eth_client, clt_indx)->ul_cnt_idx = -1;
 			get_client_memptr(eth_client, clt_indx)->dl_cnt_idx = -1;
+			get_client_memptr(eth_client, clt_indx)->index_populated = false;
 			pthread_mutex_lock(&IPACM_Iface::ipacmcfg->cnt_idx_lock);
 			if (IPACM_Iface::ipacmcfg->reset_cnt_idx(client_info->ul_cnt_idx, false))
 				IPACMERR("Failed to reset counter index %u\n", client_info->ul_cnt_idx);
@@ -4615,8 +4616,37 @@ int IPACM_Lan::handle_eth_client_down_evt(uint8_t *mac_addr, uint8_t vlan_id)
 			   	 get_client_memptr(eth_client, (clt_indx + 1))->eth_rt_hdl[tx_index].eth_rt_rule_hdl_v6_wan[num_v6];
 		    }
 		}
+
+#ifdef FEATURE_IPACM_PER_CLIENT_STATS
+		memcpy(get_client_memptr(eth_client, clt_indx)->wan_ul_fl_rule_hdl_v4,
+			get_client_memptr(eth_client, clt_indx + 1)->wan_ul_fl_rule_hdl_v4,
+			MAX_WAN_UL_FILTER_RULES * sizeof(uint32_t));
+		memcpy(get_client_memptr(eth_client, clt_indx)->wan_ul_fl_rule_hdl_v6,
+			get_client_memptr(eth_client, clt_indx + 1)->wan_ul_fl_rule_hdl_v6,
+			MAX_WAN_UL_FILTER_RULES * sizeof(uint32_t));
+		get_client_memptr(eth_client, clt_indx)->lan_stats_idx =
+			get_client_memptr(eth_client, clt_indx + 1)->lan_stats_idx;
+#ifdef IPA_HW_FNR_STATS
+		get_client_memptr(eth_client, clt_indx)->ul_cnt_idx =
+			get_client_memptr(eth_client, clt_indx + 1)->ul_cnt_idx;
+		get_client_memptr(eth_client, clt_indx)->dl_cnt_idx =
+			get_client_memptr(eth_client, clt_indx + 1)->dl_cnt_idx;
+		get_client_memptr(eth_client, clt_indx)->index_populated =
+			get_client_memptr(eth_client, clt_indx + 1)->index_populated;
+#endif //IPA_HW_FNR_STATS
+#endif
 	}
 
+#ifdef FEATURE_IPACM_PER_CLIENT_STATS
+	get_client_memptr(eth_client, clt_indx)->lan_stats_idx = -1;
+#ifdef IPA_HW_FNR_STATS
+	get_client_memptr(eth_client, clt_indx)->ul_cnt_idx = -1;
+	get_client_memptr(eth_client, clt_indx)->dl_cnt_idx = -1;
+	get_client_memptr(eth_client, clt_indx)->index_populated = false;
+#endif
+	memset(get_client_memptr(eth_client, clt_indx)->wan_ul_fl_rule_hdl_v4, 0, MAX_WAN_UL_FILTER_RULES * sizeof(uint32_t));
+	memset(get_client_memptr(eth_client, clt_indx)->wan_ul_fl_rule_hdl_v6, 0, MAX_WAN_UL_FILTER_RULES * sizeof(uint32_t));
+#endif
 	IPACMDBG_H(" %d eth client deleted successfully \n", num_eth_client);
 	num_eth_client = num_eth_client - 1;
 	IPACMDBG_H(" Number of eth client: %d\n", num_eth_client);
@@ -5060,6 +5090,7 @@ fail:
 						client_info->dl_cnt_idx = get_client_memptr(eth_client, i)->dl_cnt_idx;
 						get_client_memptr(eth_client, i)->ul_cnt_idx = -1;
 						get_client_memptr(eth_client, i)->dl_cnt_idx = -1;
+						get_client_memptr(eth_client, i)->index_populated = false;
 						pthread_mutex_lock(&IPACM_Iface::ipacmcfg->cnt_idx_lock);
 						if (IPACM_Iface::ipacmcfg->reset_cnt_idx(client_info->ul_cnt_idx, false))
 							IPACMERR("Failed to reset counter index %u\n", client_info->ul_cnt_idx);
@@ -6417,13 +6448,13 @@ int IPACM_Lan::install_uplink_filter_rule_per_client_v2
 	if (pFilteringTable == NULL)
 	{
 		IPACMERR("Error Locate ipa_flt_rule_add memory...\n");
-		ret = IPACM_FAILURE;
-		goto fail;
+		close(fd);
+		return IPACM_FAILURE;
 	}
 
 	memset(pFilteringTable, 0, len);
 
-	pFilteringTable->rules = (uint64_t)calloc(prop->num_ext_props, sizeof(struct ipa_flt_rule_add_v2));
+	pFilteringTable->rules = (uintptr_t)calloc(prop->num_ext_props, sizeof(struct ipa_flt_rule_add_v2));
 	if (!pFilteringTable->rules) {
 		IPACMERR("Failed to allocate memory for filtering rules\n");
 		ret = IPACM_FAILURE;

@@ -5877,9 +5877,7 @@ int IPACM_Lan::config_dft_firewall_rules_ul_ex(IPACM_firewall_conf_t* firewall_c
 	}
 #endif
 
-	/* 1: Delete inserted UL rules */
-	del_ul_flt_rules(IPA_IP_v6);
-
+	/* 1. Delete: Already expected to be taken care */
 	/* 2: ext_prop will have a Q6 UL rules*/
 	ext_prop = IPACM_Iface::ipacmcfg->GetExtProp(IPA_IP_v6);
 
@@ -6342,17 +6340,17 @@ int IPACM_Lan::disable_dft_firewall_rules_ul_ex(int vid)
 	}
 #else //IPA_V6_UL_WL_FIREWALL_HANDLE
 	/* Install the deleted UL rules back, since the firewall is disabled */
-	del_ul_flt_rules(IPA_IP_v6);
+	if(IPACM_Wan::isWanUP_V6(ipa_if_num)) {
 #ifdef FEATURE_VLAN_MPDN
-	if(!handle_uplink_filter_rule(IPACM_Iface::ipacmcfg->GetExtProp(IPA_IP_v6),
-		IPA_IP_v6, IPACM_Iface::ipacmcfg->GetQmapId(), false, true))
-		modem_ul_v6_set = true;
+		if(!handle_uplink_filter_rule(IPACM_Iface::ipacmcfg->GetExtProp(IPA_IP_v6),
+			IPA_IP_v6, IPACM_Iface::ipacmcfg->GetQmapId(), false, true))
+			modem_ul_v6_set = true;
 #else
-	if(!handle_uplink_filter_rule(IPACM_Iface::ipacmcfg->GetExtProp(IPA_IP_v6),
-		IPA_IP_v6, IPACM_Iface::ipacmcfg->GetQmapId()))
-		modem_ul_v6_set = true;
+		if(!handle_uplink_filter_rule(IPACM_Iface::ipacmcfg->GetExtProp(IPA_IP_v6),
+			IPA_IP_v6, IPACM_Iface::ipacmcfg->GetQmapId()))
+			modem_ul_v6_set = true;
 #endif //FEATURE_VLAN_MPDN
-
+	}
 #endif //IPA_V6_UL_WL_FIREWALL_HANDLE
 
 	if(IPACM_Wan::set_pdn_num_fw_rules_by_vid(vid, 0))
@@ -6713,10 +6711,14 @@ void IPACM_Lan::configure_v6_ul_firewall(void)
 		return;
 	}
 
-#ifndef IPA_V6_UL_WL_FIREWALL_HANDLE
 	/* first of all clear LAN pipe frag, catch all and FW rules if installed */
 	delete_uplink_filter_rule_ul(&iface_ul_firewall);
+
+#ifdef IPA_V6_UL_WL_FIREWALL_HANDLE
+	/* Delete Q6 UL rules */
+	del_ul_flt_rules(IPA_IP_v6);
 #endif
+
 	/* now read XML and rebuild FW for all PDNs */
 	if(IPACM_Wan::read_firewall_filter_rules_ul())
 	{

@@ -996,7 +996,7 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 					}
 #endif
 					IPACMDBG_H("LAN iface delete client \n");
-					handle_eth_client_down_evt(data->mac_addr, vlan_id);
+					handle_eth_client_down_evt(data->mac_addr, vlan_id, data);
 				}
 #ifdef FEATURE_L2TP
 				else
@@ -4435,7 +4435,7 @@ int IPACM_Lan::handle_odu_route_del()
 }
 
 /*handle eth client del mode*/
-int IPACM_Lan::handle_eth_client_down_evt(uint8_t *mac_addr, uint8_t vlan_id)
+int IPACM_Lan::handle_eth_client_down_evt(uint8_t *mac_addr, uint8_t vlan_id, ipacm_event_data_all *data)
 {
 	int clt_indx;
 	uint32_t tx_index;
@@ -4452,6 +4452,17 @@ int IPACM_Lan::handle_eth_client_down_evt(uint8_t *mac_addr, uint8_t vlan_id)
 	{
 		IPACMDBG_H("eth client not attached\n");
 		return IPACM_SUCCESS;
+	}
+
+	if (get_client_memptr(eth_client, clt_indx)->ipv4_set &&
+		get_client_memptr(eth_client, clt_indx)->v4_addr &&
+		data->ipv4_addr)
+	{
+		if (data->ipv4_addr != get_client_memptr(eth_client, clt_indx)->v4_addr)
+		{
+			IPACMERR("IPv4 address not matching, do not delete: %d\n", clt_indx);
+			return IPACM_FAILURE;
+		}
 	}
 
 	/* First reset NAT rules and then route rules */

@@ -1120,7 +1120,7 @@ private:
 #endif
 
 	/*handle eth client del mode*/
-	int handle_eth_client_down_evt(uint8_t *mac_addr, uint8_t vlan_id = 0);
+	int handle_eth_client_down_evt(uint8_t *mac_addr, uint8_t vlan_id = 0, ipacm_event_data_all *data = NULL);
 
 	/* handle odu client initial, construct full headers (tx property) */
 	int handle_odu_hdr_init(uint8_t *mac_addr);

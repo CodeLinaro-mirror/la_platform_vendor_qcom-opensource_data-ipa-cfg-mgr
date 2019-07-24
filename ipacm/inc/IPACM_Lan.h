@@ -208,7 +208,7 @@ public:
 	virtual int handle_wan_down(bool is_sta_mode);
 
 	/* delete filter rule for wan_down event*/
-	virtual int handle_wan_down_v6(bool is_sta_mode);
+	virtual int handle_wan_down_v6(bool is_sta_mode, bool is_support_mpdn = true);
 
 	/* configure private subnet filter rules*/
 	int modify_private_subnet();

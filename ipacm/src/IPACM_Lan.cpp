@@ -93,6 +93,11 @@ IPACM_Lan::IPACM_Lan(int iface_index) : IPACM_Iface(iface_index)
 	memset(wan_ul_fl_rule_hdl_v4, 0, MAX_WAN_UL_FILTER_RULES * sizeof(uint32_t));
 	memset(wan_ul_fl_rule_hdl_v6, 0, MAX_WAN_UL_FILTER_RULES * sizeof(uint32_t));
 
+#ifdef FEATURE_IPACM_UL_FIREWALL
+	IPACMDBG_H("Mem-setting iface_ul_firewall of size %d\n", sizeof(iface_ul_firewall));
+	memset(&iface_ul_firewall, 0, sizeof(iface_ul_firewall));
+#endif
+
 	is_active = true;
 	memset(ipv4_icmp_flt_rule_hdl, 0, NUM_IPV4_ICMP_FLT_RULE * sizeof(uint32_t));
 
@@ -4747,6 +4752,13 @@ int IPACM_Lan::handle_down_evt()
 	ipacm_cmd_q_data evt_data;
 	ipacm_event_data_all *data_all;
 	IPACMDBG_H("lan handle_down_evt\n ");
+
+#ifdef FEATURE_IPACM_UL_FIREWALL
+	/* Clear IPv6 UL firewall rules: LAN pipe frag, catch all and FW rules if installed */
+	if (ip_type != IPA_IP_v4)
+		delete_uplink_filter_rule_ul(&iface_ul_firewall);
+#endif
+
 	if (ipa_if_cate == ODU_IF)
 	{
 		/* delete ODU default RT rules */
@@ -7555,7 +7567,7 @@ int IPACM_Lan::enable_per_client_stats(bool *status)
 	return ret;
 }
 #endif
-int IPACM_Lan::handle_wan_down_v6(bool is_sta_mode)
+int IPACM_Lan::handle_wan_down_v6(bool is_sta_mode, bool is_support_mpdn)
 {
 
 	if (rx_prop == NULL)
@@ -7566,7 +7578,10 @@ int IPACM_Lan::handle_wan_down_v6(bool is_sta_mode)
 
 #ifdef FEATURE_VLAN_MPDN
 	/* prefixes list updated, install rules accordingly */
-	modify_ipv6_prefix_flt_rule();
+	if (is_support_mpdn == true)
+		modify_ipv6_prefix_flt_rule();
+	else
+		delete_ipv6_prefix_flt_rule();
 #else
 	delete_ipv6_prefix_flt_rule();
 #endif

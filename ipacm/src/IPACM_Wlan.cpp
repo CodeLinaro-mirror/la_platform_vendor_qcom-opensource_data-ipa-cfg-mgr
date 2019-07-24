@@ -460,7 +460,7 @@ void IPACM_Wlan::event_callback(ipa_cm_event_id event, void *param)
 			{
 				if(ip_type == IPA_IP_v6 || ip_type == IPA_IP_MAX)
 				{
-					handle_wan_down_v6(data_wan_tether->is_sta);
+					handle_wan_down_v6(data_wan_tether->is_sta, false);
 				}
 			}
 		}
@@ -512,11 +512,7 @@ void IPACM_Wlan::event_callback(ipa_cm_event_id event, void *param)
 				IPACMDBG_H("WAN v6 is not UP\n");
 #endif //FEATURE_IPACM_UL_FIREWALL
 			memcpy(ipv6_prefix, data_wan->ipv6_prefix, sizeof(ipv6_prefix));
-#ifndef FEATURE_VLAN_MPDN
 			install_ipv6_prefix_flt_rule(data_wan->ipv6_prefix);
-#else
-			modify_ipv6_prefix_flt_rule();
-#endif
 			if(data_wan->is_sta == false)
 			{
 				ext_prop = IPACM_Iface::ipacmcfg->GetExtProp(IPA_IP_v6);
@@ -569,7 +565,7 @@ void IPACM_Wlan::event_callback(ipa_cm_event_id event, void *param)
 				disable_dft_firewall_rules_ul_ex(0);
 				configure_v6_ul_firewall();
 #endif
-				handle_wan_down_v6(data_wan->is_sta);
+				handle_wan_down_v6(data_wan->is_sta, false);
 			}
 		}
 		break;
@@ -2692,6 +2688,13 @@ int IPACM_Wlan::handle_down_evt()
 #endif
 
 	IPACMDBG_H("WLAN ip-type: %d \n", ip_type);
+
+#ifdef FEATURE_IPACM_UL_FIREWALL
+	/* Clear IPv6 UL firewall rules: LAN pipe frag, catch all and FW rules if installed */
+	 if (ip_type != IPA_IP_v4)
+	 	IPACM_Lan::delete_uplink_filter_rule_ul(&iface_ul_firewall);
+#endif
+
 	/* no iface address up, directly close iface*/
 	if (ip_type == IPACM_IP_NULL)
 	{
@@ -2709,7 +2712,7 @@ int IPACM_Wlan::handle_down_evt()
 	if (IPACM_Wan::isWanUP_V6(ipa_if_num) && rx_prop != NULL)
 	{
 		IPACMDBG_H("LAN IF goes down, backhaul type %d\n", IPACM_Wan::backhaul_is_sta_mode);
-		handle_wan_down_v6(IPACM_Wan::backhaul_is_sta_mode);
+		handle_wan_down_v6(IPACM_Wan::backhaul_is_sta_mode, false);
 	}
 	IPACMDBG_H("finished deleting wan filtering rules\n ");
 

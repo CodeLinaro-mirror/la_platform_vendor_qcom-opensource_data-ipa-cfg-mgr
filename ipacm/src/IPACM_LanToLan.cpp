@@ -574,15 +574,17 @@ void IPACM_LanToLan_Iface::add_client_rt_rule_for_new_iface()
 		for(it = m_client_info.begin(); it != m_client_info.end(); it++)
 		{
 #ifdef FEATURE_L2TP
-		if(IPACM_Iface::ipacmcfg->ipacm_l2tp_enable == IPACM_L2TP)
-		{
-			if(it->is_l2tp_client == false)
+			if(IPACM_Iface::ipacmcfg->ipacm_l2tp_enable == IPACM_L2TP)
 			{
-				add_client_rt_rule(&peer, &(*it));
+				if(it->is_l2tp_client == false)
+				{
+					add_client_rt_rule(&peer, &(*it));
+				}
+				/* add l2tp rt rules */
+				add_l2tp_client_rt_rule(&peer, &(*it));
 			}
-			/* add l2tp rt rules */
-			add_l2tp_client_rt_rule(&peer, &(*it));
-		}
+			else
+				add_client_rt_rule(&peer, &(*it));
 #else
 			add_client_rt_rule(&peer, &(*it));
 #endif

@@ -255,6 +255,26 @@ public:
 		IPACM_firewall_conf_t* firewall_conf,
 		struct ipa_flt_rule_add *rules,
 		int vid);
+
+	void prepare_v6_ul_fw_flt_rules (
+		int fd, ipacm_ext_prop *ext_prop,
+		IPACM_firewall_conf_t *firewall_conf,
+		struct ipa_fltr_installed_notif_req_msg_v01 *flt_index,
+		struct ipa_ioc_add_flt_rule *pFilteringTable
+	);
+
+	int install_v6_ul_fw_flt_rule_per_client (
+		ipa_ioc_add_flt_rule* prop,
+		ipa_ip_type iptype,
+		uint8_t *mac_addr,
+		uint8_t ul_cnt_idx
+	);
+
+	int config_dft_firewall_rules_ul_ex_per_client (
+		IPACM_firewall_conf_t* firewall_conf,
+		struct ipa_flt_rule_add *rules, int vid
+	);
+
 #ifdef IPA_V6_UL_WL_FIREWALL_HANDLE
 	virtual bool replicate_flt_rule(ipa_flt_rule_add *replicate_rule,
 			ipa_flt_rule_add *q6_rule,
@@ -295,8 +315,11 @@ public:
 		ipa_ip_type iptype,
 		uint8_t xlat_mux_id,
 		uint8_t *mac_addr,
-		uint8_t ul_cnt_idx
+		uint8_t ul_cnt_idx,
+		ipa_ioc_add_flt_rule *fw_q6_rules = NULL,
+		bool isFirewall = false
 	);
+
 #endif //IPA_HW_FNR_STATS
 	/* install UL filter rule from Q6 for all clients */
 	virtual int install_uplink_filter_rule

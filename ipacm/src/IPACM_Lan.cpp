@@ -2302,20 +2302,25 @@ int IPACM_Lan::handle_eth_client_ipaddr(ipacm_event_data_all *data)
 			}
 			else
 			{
-			   /* check if client got new IPv4 address*/
-			   if(data->ipv4_addr == get_client_memptr(eth_client, clnt_indx)->v4_addr)
-			   {
-				IPACMDBG_H("Already setup ipv4 addr for client:%d, ipv4 address didn't change\n", clnt_indx);
-				 return IPACM_FAILURE;
-			   }
-			   else
-			   {
-					IPACMDBG_H("ipv4 addr for client:%d is changed \n", clnt_indx);
-					/* delete NAT rules first */
-					CtList->HandleNeighIpAddrDelEvt(get_client_memptr(eth_client, clnt_indx)->v4_addr);
-					delete_eth_rtrules(clnt_indx,IPA_IP_v4);
-					get_client_memptr(eth_client, clnt_indx)->route_rule_set_v4 = false;
-					get_client_memptr(eth_client, clnt_indx)->v4_addr = data->ipv4_addr;
+				/* check if client got new IPv4 address*/
+				if(data->ipv4_addr == get_client_memptr(eth_client, clnt_indx)->v4_addr)
+				{
+					IPACMDBG_H("Already setup ipv4 addr for client:%d, ipv4 address didn't change\n", clnt_indx);
+					return IPACM_FAILURE;
+				}
+				else
+				{
+#ifdef FEATURE_VLAN_OFFLOAD
+					if(!is_vlan_event(data->iface_name))
+#endif
+					{
+						IPACMDBG_H("ipv4 addr for client:%d is changed \n", clnt_indx);
+						/* delete NAT rules first */
+						CtList->HandleNeighIpAddrDelEvt(get_client_memptr(eth_client, clnt_indx)->v4_addr);
+						delete_eth_rtrules(clnt_indx,IPA_IP_v4);
+						get_client_memptr(eth_client, clnt_indx)->route_rule_set_v4 = false;
+						get_client_memptr(eth_client, clnt_indx)->v4_addr = data->ipv4_addr;
+					}
 				}
 			}
 		}

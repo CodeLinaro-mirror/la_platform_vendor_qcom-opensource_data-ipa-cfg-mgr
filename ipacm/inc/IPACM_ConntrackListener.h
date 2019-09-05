@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013 - 2018 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2013 - 2019 The Linux Foundation. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -89,12 +89,14 @@ private:
 	bool isNatThreadStart;
 	bool WanUp;
 	bool WanUp_v6;
+	bool is_acct_enabled;
 	NatApp *nat_inst;
 	NatBase* const ipv6ct_inst;
 
 	int NatIfaceCnt;
 	int StaClntCnt;
 	int StaClntCnt_v6;
+	uint32_t pkt_threshld;
 	NatIfaces *pNatIfaces;
 	nat_client_info nat_clients[MAX_IFACE_ADDRESS];
 	IpAddressesCollectionBase& nat_iface_ipv6_addr;
@@ -168,6 +170,7 @@ public:
 	void HandleSTAClientAddEvt_v6(const IpAddress& ip);
 	void HandleSTAClientDelEvt(uint32_t);
 	void HandleSTAClientDelEvt_v6(const IpAddress& ip);
+	void ReadNfConntrackAcct();
 #ifdef FEATURE_VLAN_MPDN
 	bool IsVlanIPv4(uint32_t ipv4_address, uint8_t *VlanId);
 #endif

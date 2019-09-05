@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013-2018 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2013-2019 The Linux Foundation. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -84,6 +84,13 @@ IPACM_ConntrackListener::IPACM_ConntrackListener() :
 #ifdef CT_OPT
 	 p_lan2lan = IPACM_LanToLan::getLan2LanInstance();
 #endif
+	/*check if accounting is enabled*/
+	is_acct_enabled = false;
+	ReadNfConntrackAcct();
+	pkt_threshld = 0;
+
+	if (is_acct_enabled)
+		pkt_threshld = GetPacketThreshhold();
 }
 
 IPACM_ConntrackListener::~IPACM_ConntrackListener()
@@ -206,13 +213,11 @@ void IPACM_ConntrackListener::event_callback(ipa_cm_event_id evt,
 	 }
 }
 
-uint32_t IPACM_ConntrackListener::GetPacketThreshhold(void)
+void IPACM_ConntrackListener::ReadNfConntrackAcct()
 {
-	uint32_t pkt_thrshld = 0;
+	const char acct_proc[] = "cat /proc/sys/net/netfilter/nf_conntrack_acct";
 	FILE *cmd = NULL;
 	int acct = 0;
-	const char acct_proc[] = "cat /proc/sys/net/netfilter/nf_conntrack_acct";
-	const char pkt_thresh_proc[] = "cat /proc/sys/net/netfilter/nf_conntrack_pkt_threshold";
 	char input_value[MAX_CMD_SIZE] = {0};
 
 	cmd = popen(acct_proc, "r");
@@ -221,28 +226,39 @@ uint32_t IPACM_ConntrackListener::GetPacketThreshhold(void)
 		fgets(input_value, MAX_CMD_SIZE, cmd);
 		acct = atoi(input_value);
 		pclose(cmd);
-		if ( acct == 1 )
+		if (acct == 1)
 		{
-			IPACMDBG_H("Accounting is enabled.\n");
-			cmd = popen(pkt_thresh_proc, "r");
-			if(cmd)
-			{
-				memset(input_value, 0, MAX_CMD_SIZE);
-				fgets(input_value, MAX_CMD_SIZE, cmd);
-				pkt_thrshld = strtoul(input_value, NULL, 0);
-				IPACMDBG_H("Configured packet threshold: %d\n", pkt_thrshld);
-				pclose(cmd);
-			}
-			else
-			{
-				IPACMDBG_H("Packet threshold is not enabled.\n");
-			}
+			IPACMDBG_H("Accounting is enabled. \n");
+			is_acct_enabled = true;
 		}
 		else
 		{
 			IPACMDBG_H("Accounting is not enabled.\n");
+			is_acct_enabled = false;
 		}
 	}
+}
+
+uint32_t IPACM_ConntrackListener::GetPacketThreshhold(void)
+{
+	uint32_t pkt_thrshld = 0;
+	FILE *cmd = NULL;
+	const char pkt_thresh_proc[] = "cat /proc/sys/net/netfilter/nf_conntrack_pkt_threshold";
+	char input_value[MAX_CMD_SIZE] = {0};
+
+	cmd = popen(pkt_thresh_proc, "r");
+	if(cmd)
+	{
+		fgets(input_value, MAX_CMD_SIZE, cmd);
+		pkt_thrshld = strtoul(input_value, NULL, 0);
+		IPACMDBG_H("Configured packet threshold: %d\n", pkt_thrshld);
+		pclose(cmd);
+	}
+	else
+	{
+		IPACMDBG_H("Packet threshold is not enabled.\n");
+	}
+
 	return pkt_thrshld;
 }
 
@@ -1341,7 +1357,6 @@ int IPACM_ConntrackListener::AddORDeleteNatEntry(const nat_entry_bundle *input, 
 {
 	u_int8_t tcp_state;
 	u_int64_t pkt_count = 0;
-	uint32_t pkt_threshld = GetPacketThreshhold();
 
 	if (nat_inst == NULL)
 	{
@@ -1502,7 +1517,6 @@ void IPACM_ConntrackListener::AddORDeleteNatEntry_v6(const ipacm_ct_evt_data* ev
 {
 	IPACMDBG_H("\n");
 
-	uint32_t pkt_threshld = GetPacketThreshhold();
 	uint64_t pkt_count = nfct_get_attr_u64(evt_data->ct, ATTR_ORIG_COUNTER_PACKETS) +
 		nfct_get_attr_u64(evt_data->ct, ATTR_REPL_COUNTER_PACKETS);
 

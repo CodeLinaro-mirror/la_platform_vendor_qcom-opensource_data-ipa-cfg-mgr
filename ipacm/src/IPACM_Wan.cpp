@@ -3904,6 +3904,12 @@ int IPACM_Wan::add_icmp_alg_rules(struct ipa_flt_rule_add *rules, int rule_offse
 		return IPACM_FAILURE;
 	}
 
+	if (rx_prop == NULL)
+	{
+		IPACMDBG_H("No rx properties registered for iface %s\n", dev_name);
+		return IPACM_SUCCESS;
+	}
+
 	if(iptype == IPA_IP_v4)
 	{
 		original_num_rules = IPACM_Wan::num_v4_flt_rule;

@@ -63,6 +63,9 @@ if (!(a)) {                                                 \
 #define IPACM_XML_MAX_FILESIZE               (2 << 20)
 #define IPACM_MAX_FIREWALL_ENTRIES            50
 #define IPACM_IPV6_ADDR_LEN                   16
+#ifdef IPA_V6_UL_WL_FIREWALL_HANDLE
+#define IPACM_MAX_V6_UL_WL_FIREWALL_ENTRIES (256)
+#endif
 
 /* Defines for clipping space or space & quotes (single, double) */
 #define IPACM_XML_CLIP_SPACE         " "

@@ -69,6 +69,193 @@ bool IPACM_Filtering::DeviceNodeIsOpened()
 	return fd;
 }
 
+bool IPACM_Filtering::combine_flt_attribute(ipa_flt_rule_add *replicate_rule,
+		ipa_flt_rule_add *q6_rule)
+{
+	unsigned int index = 0, q_index = 0, r_index = 0;
+	int fd = 0;
+	struct ipa_ioc_generate_flt_eq flt_eq;
+	fd = open(IPA_DEVICE_NAME, O_RDWR);
+
+	if (0 == fd)
+	{
+		IPACMERR("Failed opening %s.\n", IPA_DEVICE_NAME);
+		return false;
+	}
+
+	memset(&flt_eq, 0, sizeof(flt_eq));
+	memcpy(&flt_eq.attrib, &replicate_rule->rule.attrib, sizeof(flt_eq.attrib));
+	flt_eq.ip = IPA_IP_v6;
+
+	if(0 != ioctl(fd, IPA_IOC_GENERATE_FLT_EQ, &flt_eq))
+	{
+		IPACMERR("Failed to get eq_attrib\n");
+		goto fail;
+	}
+
+	memcpy(&replicate_rule->rule.eq_attrib,
+			&flt_eq.eq_attrib,
+			sizeof(replicate_rule->rule.eq_attrib));
+
+	if (q6_rule->rule.eq_attrib.tos_eq_present == 1)
+	{
+		replicate_rule->rule.eq_attrib.tos_eq_present = 1;
+		replicate_rule->rule.eq_attrib.tos_eq =
+			q6_rule->rule.eq_attrib.tos_eq;
+	}
+
+	if (q6_rule->rule.eq_attrib.protocol_eq_present == 1)
+	{
+		replicate_rule->rule.eq_attrib.protocol_eq_present = 1;
+		replicate_rule->rule.eq_attrib.protocol_eq =
+			q6_rule->rule.eq_attrib.protocol_eq;
+	}
+
+	r_index = replicate_rule->rule.eq_attrib.num_ihl_offset_range_16;
+	q_index = q6_rule->rule.eq_attrib.num_ihl_offset_range_16;
+	if ((r_index + q_index) > IPA_IPFLTR_NUM_IHL_RANGE_16_EQNS)
+	{
+		IPACMDBG_H ("num_ihl_offset_range_16  Max %d passed value %d + %d\n",
+				IPA_IPFLTR_NUM_IHL_RANGE_16_EQNS,
+				q_index, r_index);
+		goto fail;
+	}
+	for (index = 0; index < q_index; index++)
+	{
+		replicate_rule->rule.eq_attrib.ihl_offset_range_16[r_index].offset =
+			q6_rule->rule.eq_attrib.ihl_offset_range_16[index].offset;
+		replicate_rule->rule.eq_attrib.ihl_offset_range_16[r_index].range_low =
+			q6_rule->rule.eq_attrib.ihl_offset_range_16[index].range_low;
+		replicate_rule->rule.eq_attrib.ihl_offset_range_16[r_index].range_high =
+			q6_rule->rule.eq_attrib.ihl_offset_range_16[index].range_high;
+		replicate_rule->rule.eq_attrib.num_ihl_offset_range_16++;
+	}
+
+	r_index = replicate_rule->rule.eq_attrib.num_offset_meq_32;
+	q_index = q6_rule->rule.eq_attrib.num_offset_meq_32;
+	if ((r_index + q_index) > IPA_IPFLTR_NUM_MEQ_32_EQNS)
+	{
+		IPACMDBG_H ("num_offset_meq_32	Max %d passed value %d + %d\n",
+				IPA_IPFLTR_NUM_MEQ_32_EQNS,
+				q_index, r_index);
+		goto fail;
+	}
+	for (index = 0; index < q_index; index++)
+	{
+		replicate_rule->rule.eq_attrib.offset_meq_32[r_index].offset =
+			q6_rule->rule.eq_attrib.offset_meq_32[index].offset;
+		replicate_rule->rule.eq_attrib.offset_meq_32[r_index].mask =
+			q6_rule->rule.eq_attrib.offset_meq_32[index].mask;
+		replicate_rule->rule.eq_attrib.offset_meq_32[r_index].value =
+			q6_rule->rule.eq_attrib.offset_meq_32[index].value;
+		replicate_rule->rule.eq_attrib.num_offset_meq_32++;
+	}
+
+	if (q6_rule->rule.eq_attrib.tc_eq_present == 1)
+	{
+		replicate_rule->rule.eq_attrib.tc_eq_present = 1;
+		replicate_rule->rule.eq_attrib.tc_eq =
+			q6_rule->rule.eq_attrib.tc_eq;
+	}
+
+	if (q6_rule->rule.eq_attrib.fl_eq_present == 1)
+	{
+		replicate_rule->rule.eq_attrib.fl_eq_present = 1;
+		replicate_rule->rule.eq_attrib.fl_eq =
+			q6_rule->rule.eq_attrib.fl_eq;
+	}
+
+	if (q6_rule->rule.eq_attrib.ihl_offset_eq_16_present == 1)
+	{
+		replicate_rule->rule.eq_attrib.ihl_offset_eq_16_present =
+			q6_rule->rule.eq_attrib.ihl_offset_eq_16_present;
+		replicate_rule->rule.eq_attrib.ihl_offset_eq_16.offset =
+			q6_rule->rule.eq_attrib.ihl_offset_eq_16.offset;
+		replicate_rule->rule.eq_attrib.ihl_offset_eq_16.offset =
+			q6_rule->rule.eq_attrib.ihl_offset_eq_16.value;
+	}
+
+	if (q6_rule->rule.eq_attrib.ihl_offset_eq_32_present == 1)
+	{
+		replicate_rule->rule.eq_attrib.ihl_offset_eq_32_present =
+			q6_rule->rule.eq_attrib.ihl_offset_eq_32_present;
+		replicate_rule->rule.eq_attrib.ihl_offset_eq_32.offset =
+			q6_rule->rule.eq_attrib.ihl_offset_eq_32.offset;
+		replicate_rule->rule.eq_attrib.ihl_offset_eq_32.value =
+			q6_rule->rule.eq_attrib.ihl_offset_eq_32.value;
+	}
+
+
+	r_index = replicate_rule->rule.eq_attrib.num_ihl_offset_meq_32;
+	q_index = q6_rule->rule.eq_attrib.num_ihl_offset_meq_32;
+	if ((r_index + q_index) > IPA_IPFLTR_NUM_IHL_MEQ_32_EQNS)
+	{
+		IPACMDBG_H ("num_ihl_offset_meq_32	Max %d passed value %d + %d\n",
+				IPA_IPFLTR_NUM_IHL_MEQ_32_EQNS,
+				q_index, r_index);
+		goto fail;
+	}
+	for (index = 0; index < q_index; index++)
+	{
+		replicate_rule->rule.eq_attrib.ihl_offset_meq_32[r_index].offset =
+			q6_rule->rule.eq_attrib.ihl_offset_meq_32[index].offset;
+		replicate_rule->rule.eq_attrib.ihl_offset_meq_32[r_index].mask =
+			q6_rule->rule.eq_attrib.ihl_offset_meq_32[index].mask;
+		replicate_rule->rule.eq_attrib.ihl_offset_meq_32[r_index].value =
+			q6_rule->rule.eq_attrib.ihl_offset_meq_32[index].value;
+
+		replicate_rule->rule.eq_attrib.num_ihl_offset_meq_32++;
+	}
+
+	r_index = replicate_rule->rule.eq_attrib.num_offset_meq_128;
+	q_index = q6_rule->rule.eq_attrib.num_offset_meq_128;
+	if ((r_index + q_index) > IPA_IPFLTR_NUM_MEQ_128_EQNS)
+	{
+		IPACMDBG_H ("num_offset_meq_128  Max %d passed value %d + %d\n",
+				IPA_IPFLTR_NUM_MEQ_128_EQNS,
+				q_index, r_index);
+		goto fail;
+	}
+	for (index = 0; index < q_index; index++)
+	{
+
+		replicate_rule->rule.eq_attrib.offset_meq_128[r_index].offset =
+			q6_rule->rule.eq_attrib.offset_meq_128[index].offset;
+
+
+		memcpy(&replicate_rule->rule.eq_attrib.offset_meq_128[r_index].mask,
+				&q6_rule->rule.eq_attrib.offset_meq_128[index].mask,
+				sizeof(uint8_t) * 16);
+
+		memcpy(&replicate_rule->rule.eq_attrib.offset_meq_128[r_index].value,
+				&q6_rule->rule.eq_attrib.offset_meq_128[index].value,
+				sizeof(uint8_t) * 16);
+
+		replicate_rule->rule.eq_attrib.num_offset_meq_128++;
+	}
+
+	if (q6_rule->rule.eq_attrib.metadata_meq32_present == 1)
+	{
+		replicate_rule->rule.eq_attrib.metadata_meq32_present =
+			q6_rule->rule.eq_attrib.metadata_meq32_present;
+		replicate_rule->rule.eq_attrib.metadata_meq32.offset =
+			q6_rule->rule.eq_attrib.metadata_meq32.offset;
+		replicate_rule->rule.eq_attrib.metadata_meq32.mask =
+			q6_rule->rule.eq_attrib.metadata_meq32.mask;
+		replicate_rule->rule.eq_attrib.metadata_meq32.value =
+			q6_rule->rule.eq_attrib.metadata_meq32.value;
+	}
+	replicate_rule->rule.eq_attrib.rule_eq_bitmap |=
+		q6_rule->rule.eq_attrib.rule_eq_bitmap;
+
+	close(fd);
+	return true;
+
+fail:
+	close(fd);
+	return false;
+}
+
 #if defined(FEATURE_IPACM_PER_CLIENT_STATS) && defined(IPA_HW_FNR_STATS)
 bool IPACM_Filtering::AddFilteringRule_v2(struct ipa_ioc_add_flt_rule_v2 const *ruleTable)
 {

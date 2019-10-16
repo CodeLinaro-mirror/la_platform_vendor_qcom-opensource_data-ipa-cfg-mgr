@@ -104,7 +104,11 @@ typedef struct _ipa_eth_client
 	/* store ipv4 UL filter rule handlers from Q6*/
 	uint32_t wan_ul_fl_rule_hdl_v4[MAX_WAN_UL_FILTER_RULES];
 	/* store ipv6 UL filter rule handlers from Q6*/
+#ifndef IPA_V6_UL_WL_FIREWALL_HANDLE
 	uint32_t wan_ul_fl_rule_hdl_v6[MAX_WAN_UL_FILTER_RULES];
+#else
+	uint32_t wan_ul_fl_rule_hdl_v6[IPACM_MAX_V6_UL_WL_FIREWALL_ENTRIES];
+#endif
 	int8_t lan_stats_idx;
 #ifdef IPA_HW_FNR_STATS
 	/* H/w counters */
@@ -204,7 +208,7 @@ public:
 	virtual int handle_wan_down(bool is_sta_mode);
 
 	/* delete filter rule for wan_down event*/
-	virtual int handle_wan_down_v6(bool is_sta_mode);
+	virtual int handle_wan_down_v6(bool is_sta_mode, bool is_support_mpdn = true);
 
 	/* configure private subnet filter rules*/
 	int modify_private_subnet();
@@ -252,6 +256,30 @@ public:
 		struct ipa_flt_rule_add *rules,
 		int vid);
 
+	void prepare_v6_ul_fw_flt_rules (
+		int fd, ipacm_ext_prop *ext_prop,
+		IPACM_firewall_conf_t *firewall_conf,
+		struct ipa_fltr_installed_notif_req_msg_v01 *flt_index,
+		struct ipa_ioc_add_flt_rule *pFilteringTable
+	);
+
+	int install_v6_ul_fw_flt_rule_per_client (
+		ipa_ioc_add_flt_rule* prop,
+		ipa_ip_type iptype,
+		uint8_t *mac_addr,
+		uint8_t ul_cnt_idx
+	);
+
+	int config_dft_firewall_rules_ul_ex_per_client (
+		IPACM_firewall_conf_t* firewall_conf,
+		struct ipa_flt_rule_add *rules, int vid
+	);
+
+#ifdef IPA_V6_UL_WL_FIREWALL_HANDLE
+	virtual bool replicate_flt_rule(ipa_flt_rule_add *replicate_rule,
+			ipa_flt_rule_add *q6_rule,
+			ipa_flt_rule_add *fw_rule);
+#endif
 	/* send fragments to exception when UL FW is installed on Q6 routing table*/
 	virtual int config_wan_frag_firewall_rule_ul_ex(ul_firewall_t *ul_firewall, int vid);
 
@@ -287,8 +315,11 @@ public:
 		ipa_ip_type iptype,
 		uint8_t xlat_mux_id,
 		uint8_t *mac_addr,
-		uint8_t ul_cnt_idx
+		uint8_t ul_cnt_idx,
+		ipa_ioc_add_flt_rule *fw_q6_rules = NULL,
+		bool isFirewall = false
 	);
+
 #endif //IPA_HW_FNR_STATS
 	/* install UL filter rule from Q6 for all clients */
 	virtual int install_uplink_filter_rule
@@ -598,9 +629,11 @@ protected:
 		{
 			for(cnt = 0; cnt < IPA_MAX_NUM_HW_PATH_CLIENTS; cnt++)
 			{
-				if (memcmp(active_lan_client_index_odu[cnt].mac,
-							mac_addr,
-							IPA_MAC_ADDR_SIZE) == 0) {
+				if ((memcmp(active_lan_client_index_odu[cnt].mac,
+						mac_addr,
+						IPA_MAC_ADDR_SIZE) == 0) &&
+						(active_lan_client_index_odu[cnt].ipa_if_num
+						== ipa_if_num)) {
 					IPACMDBG_H("Got lan stats index :%d, return\n", cnt);
 					active_lan_client_index_odu[cnt].lan_stats_idx = cnt;
 					memcpy(active_lan_client_index_odu[cnt].mac,
@@ -614,9 +647,11 @@ protected:
 		{
 			for(cnt = 0; cnt < IPA_MAX_NUM_HW_PATH_CLIENTS; cnt++)
 			{
-				if (memcmp(active_lan_client_index[cnt].mac,
-							mac_addr,
-							IPA_MAC_ADDR_SIZE) == 0) {
+				if ((memcmp(active_lan_client_index[cnt].mac,
+						mac_addr,
+						IPA_MAC_ADDR_SIZE) == 0) &&
+						(active_lan_client_index[cnt].ipa_if_num
+						== ipa_if_num)) {
 					IPACMDBG_H("Got lan stats index :%d, return\n", cnt);
 					active_lan_client_index[cnt].lan_stats_idx = cnt;
 					memcpy(active_lan_client_index[cnt].mac,
@@ -796,7 +831,11 @@ protected:
 	uint32_t wan_ul_fl_rule_hdl_v4[MAX_WAN_UL_FILTER_RULES];
 
 	/* store ipv6 UL filter rule handlers from Q6*/
+#ifndef IPA_V6_UL_WL_FIREWALL_HANDLE
 	uint32_t wan_ul_fl_rule_hdl_v6[MAX_WAN_UL_FILTER_RULES];
+#else
+	uint32_t wan_ul_fl_rule_hdl_v6[IPACM_MAX_V6_UL_WL_FIREWALL_ENTRIES];
+#endif
 
 	uint32_t ipv4_icmp_flt_rule_hdl[NUM_IPV4_ICMP_FLT_RULE];
 
@@ -1104,7 +1143,7 @@ private:
 #endif
 
 	/*handle eth client del mode*/
-	int handle_eth_client_down_evt(uint8_t *mac_addr, uint8_t vlan_id = 0);
+	int handle_eth_client_down_evt(uint8_t *mac_addr, uint8_t vlan_id = 0, ipacm_event_data_all *data = NULL);
 
 	/* handle odu client initial, construct full headers (tx property) */
 	int handle_odu_hdr_init(uint8_t *mac_addr);

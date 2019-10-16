@@ -77,7 +77,11 @@ typedef struct _ipa_wlan_client
 	/* store ipv4 UL filter rule handlers from Q6*/
 	uint32_t wan_ul_fl_rule_hdl_v4[MAX_WAN_UL_FILTER_RULES];
 	/* store ipv6 UL filter rule handlers from Q6*/
+#ifdef IPA_V6_UL_WL_FIREWALL_HANDLE
+	uint32_t wan_ul_fl_rule_hdl_v6[IPACM_MAX_V6_UL_WL_FIREWALL_ENTRIES];
+#else
 	uint32_t wan_ul_fl_rule_hdl_v6[MAX_WAN_UL_FILTER_RULES];
+#endif
 	int8_t lan_stats_idx;
 #ifdef IPA_HW_FNR_STATS
 	int ul_cnt_idx;
@@ -119,8 +123,19 @@ public:
 		ipa_ip_type iptype,
 		uint8_t xlat_mux_id,
 		uint8_t *mac_addr,
-		uint8_t ul_cnt_idx
+		uint8_t ul_cnt_idx,
+		ipa_ioc_add_flt_rule *fw_q6_rules = NULL,
+		bool isFirewall = false
 	);
+
+	int config_dft_firewall_rules_ul_ex(IPACM_firewall_conf_t* firewall_conf, int vid);
+
+#ifdef IPA_V6_UL_WL_FIREWALL_HANDLE
+	int disable_dft_firewall_rules_ul_ex_per_wlan_client(int vid);
+
+	void configure_v6_ul_firewall_wlan();
+#endif //IPA_V6_UL_WL_FIREWALL_HANDLE
+
 #endif //IPA_HW_FNR_STATS
 	int handle_wlan_client_route_rule_ext_v2(uint8_t *mac_addr, ipa_ip_type iptype);
 
@@ -379,9 +394,11 @@ private:
 
 			for(cnt = 0; cnt < IPA_MAX_NUM_HW_PATH_CLIENTS; cnt++)
 			{
-				if (memcmp(IPACM_Wlan::active_lan_client_index[cnt].mac,
-							mac_addr,
-							IPA_MAC_ADDR_SIZE) == 0) {
+				if ((memcmp(IPACM_Wlan::active_lan_client_index[cnt].mac,
+						mac_addr,
+						IPA_MAC_ADDR_SIZE) == 0) &&
+						(IPACM_Wlan::active_lan_client_index[cnt].ipa_if_num
+						== ipa_if_num)) {
 					IPACMDBG_H("Got lan stats index :%d, return\n", cnt);
 					IPACM_Wlan::active_lan_client_index[cnt].lan_stats_idx = cnt;
 					memcpy(IPACM_Wlan::active_lan_client_index[cnt].mac,

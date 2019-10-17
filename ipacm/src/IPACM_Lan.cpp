@@ -2355,6 +2355,7 @@ int IPACM_Lan::handle_wan_up_ex(ipacm_ext_prop *ext_prop, ipa_ip_type iptype, ui
 	IPACM_Config* ipacm_config = IPACM_Iface::ipacmcfg;
 	struct ipa_ioc_write_qmapid mux;
 	int i=0;
+	bool notif_only = false;
 
 	/* not  needed for newer versions since it will be overridden by NAT metadata replacement for IPAv4 and up */
 	if((IPACM_Iface::ipacmcfg->GetIPAVer() < IPA_HW_v4_0) && (rx_prop != NULL))
@@ -2408,6 +2409,7 @@ int IPACM_Lan::handle_wan_up_ex(ipacm_ext_prop *ext_prop, ipa_ip_type iptype, ui
 			}
 #endif
 #ifdef FEATURE_VLAN_MPDN
+			notif_only = false;
 			ret = handle_uplink_filter_rule(ext_prop, iptype, xlat_mux_id, false, true);
 #else
 			ret = handle_uplink_filter_rule(ext_prop, iptype, xlat_mux_id);
@@ -2417,6 +2419,7 @@ int IPACM_Lan::handle_wan_up_ex(ipacm_ext_prop *ext_prop, ipa_ip_type iptype, ui
 #ifdef FEATURE_VLAN_MPDN
 		else
 		{
+			notif_only = true;
 			ret = handle_uplink_filter_rule(ext_prop, iptype, xlat_mux_id, true, true);
 		}
 #endif
@@ -2427,6 +2430,8 @@ int IPACM_Lan::handle_wan_up_ex(ipacm_ext_prop *ext_prop, ipa_ip_type iptype, ui
 		{
 			IPACMDBG_H("IPA_IP_v4 xlat_mux_id: %d, modem_ul_v4_set %d\n", xlat_mux_id, modem_ul_v4_set);
 #ifdef FEATURE_VLAN_MPDN
+			/* for v4, always install the rules like before */
+			notif_only = false;
 			ret = handle_uplink_filter_rule(ext_prop, iptype, xlat_mux_id, false, true);
 #else
 			ret = handle_uplink_filter_rule(ext_prop, iptype, xlat_mux_id);
@@ -2436,6 +2441,8 @@ int IPACM_Lan::handle_wan_up_ex(ipacm_ext_prop *ext_prop, ipa_ip_type iptype, ui
 #ifdef FEATURE_VLAN_MPDN
 		else
 		{
+			/* for v4, always install the rules like before */
+			notif_only = false;
 			ret = handle_uplink_filter_rule(ext_prop, iptype, xlat_mux_id, true, true);
 		}
 #endif
@@ -2448,10 +2455,16 @@ int IPACM_Lan::handle_wan_up_ex(ipacm_ext_prop *ext_prop, ipa_ip_type iptype, ui
 
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
 	/* Install filter rules for the client. */
-	if (IPACM_Iface::ipacmcfg->ipacm_lan_stats_enable == true)
+	if (!notif_only && IPACM_Iface::ipacmcfg->ipacm_lan_stats_enable == true)
 	{
 		IPACMDBG_H("xlat_mux_id: %d, iptype %d\n", xlat_mux_id, iptype);
 		ret = install_uplink_filter_rule(ext_prop, iptype, xlat_mux_id);
+	}
+	else if (notif_only == true)
+	{
+		IPACMDBG_H("UL filtering rules already installed for %s, only sent notification for modem (mux %d)\n",
+						dev_name, xlat_mux_id);
+		ret = IPACM_SUCCESS;
 	}
 #endif
 

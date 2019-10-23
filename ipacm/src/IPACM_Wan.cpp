@@ -639,6 +639,7 @@ fail:
 
 void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 {
+	int if_index = 0;
 	int ipa_interface_index, cnt;
 
 	switch (event)
@@ -767,6 +768,30 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 				IPACM_Iface::ipacmcfg->DelNatIfaces(dev_name); // delete NAT-iface
 				delete this;
 				return;
+			}
+			else if (IPACM_Iface::ipacmcfg->ipacm_ip_passthrough_mode)
+			{
+				/* In Passthrough mode, config will be updated after WAN is up.
+				 * restore the WAN netdev index.
+				 */
+				if(IPACM_Iface::ipa_get_if_index(dev_name, &(if_index)))
+				{
+					IPACMERR("Error while getting interface index for %s device", dev_name);
+					break;
+				}
+				/* Map the interface index. */
+				ipa_interface_index = IPACM_Iface::iface_ipa_index_query(if_index);
+				if (ipa_interface_index == ipa_if_num)
+				{
+					IPACMDBG_H("In passthrough mode, mapping complete: WAN-LTE (%s) link up, iface: %d\n",
+							IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].iface_name,
+							ipa_if_num);
+				}
+				else
+				{
+					IPACMERR("In passthrough mode, Error while mapping interface index for %s device, index, int_index",
+						dev_name, ipa_if_num, ipa_interface_index);
+				}
 			}
 		}
 		break;

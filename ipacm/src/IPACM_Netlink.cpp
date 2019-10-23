@@ -791,11 +791,13 @@ static int ipa_nl_decode_nlmsg
 				ret_val = ipa_get_if_name(dev_name, msg_ptr->nl_link_info.metainfo.ifi_index);
 				if(ret_val != IPACM_SUCCESS)
 				{
-					IPACMERR("Error while getting interface name\n");
-					return IPACM_FAILURE;
+					IPACMERR("Error while getting interface name with index %d, continue as the interface might have already been down.\n",
+						msg_ptr->nl_link_info.metainfo.ifi_index);
 				}
-				IPACMDBG("Interface %s bring down \n", dev_name);
-
+				else
+				{
+					IPACMDBG("Interface %s bring down \n", dev_name);
+				}
 				/* post link down to command queue */
 				evt_data.event = IPA_LINK_DOWN_EVENT;
 				data_fid = (ipacm_event_data_fid *)malloc(sizeof(ipacm_event_data_fid));

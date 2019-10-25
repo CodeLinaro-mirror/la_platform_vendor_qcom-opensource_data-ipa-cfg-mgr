@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2013-2018, The Linux Foundation. All rights reserved.
+Copyright (c) 2013-2019, The Linux Foundation. All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are
@@ -73,6 +73,10 @@ public:
 	void event_callback(ipa_cm_event_id event,
 											void *data);
 
+	void post_phys_iface_event(const char *iface_name, int ipa_if_num, int if_idx);
+
+	void update_neigh_cache();
+
 private:
 
 	int num_neighbor_client;
@@ -82,5 +86,4 @@ private:
 	ipa_neighbor_client neighbor_client[IPA_MAX_NUM_NEIGHBOR_CLIENTS];
 
 };
-
 #endif /* IPACM_NEIGHBOR_H */

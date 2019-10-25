@@ -39,11 +39,22 @@ IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
 #include <sys/ioctl.h>
+#include <linux/if.h>
 #include <IPACM_Neighbor.h>
 #include <IPACM_EvtDispatcher.h>
 #include "IPACM_Defs.h"
 #include "IPACM_Log.h"
 
+#define MAX_FDB_ROW_LEN 200
+#define MAX_FDB_PARAM_CNT 5
+#define MAX_FDB_PARAM_LEN 50
+#define IPA_SYS_CMD_LEN 200
+#define ETH_INTF "eth0"
+#define RNDIS_INTF "rndis0"
+#define ECM_INTF "ecm0"
+
+#define IPA_TMP_DIR "/tmp/data"
+#define IPA_FDB_TABLE IPA_TMP_DIR"/ipa_fdb_table.txt"
 
 IPACM_Neighbor::IPACM_Neighbor()
 {
@@ -53,6 +64,7 @@ IPACM_Neighbor::IPACM_Neighbor()
 	IPACM_EvtDispatcher::registr(IPA_WLAN_CLIENT_ADD_EVENT_EX, this);
 	IPACM_EvtDispatcher::registr(IPA_NEW_NEIGH_EVENT, this);
 	IPACM_EvtDispatcher::registr(IPA_DEL_NEIGH_EVENT, this);
+
 	return;
 }
 
@@ -920,3 +932,230 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 	}
 	return;
 }
+
+void IPACM_Neighbor::update_neigh_cache()
+{
+	FILE *fp;
+	char fdb_row[MAX_FDB_ROW_LEN], *tok, *ptr, *params[MAX_FDB_PARAM_CNT], cmd[IPA_SYS_CMD_LEN];
+	char rdev_name[IPA_IFACE_NAME_LEN];
+	char mac[MAX_FDB_PARAM_LEN];
+	uint8_t mac_addr_fdb[IPA_MAC_ADDR_SIZE];
+	int tmp_var[IPA_MAC_ADDR_SIZE];
+	int query_ifindex, query_ipa_if_num, j, i;
+	bool is_phy_iface = false, is_client_cached = false, parse_error = false;;
+
+	snprintf(cmd, IPA_SYS_CMD_LEN, "bridge fdb show | grep \"master bridge\" > %s",IPA_FDB_TABLE);
+	system(cmd);
+
+	fp = fopen(IPA_FDB_TABLE, "r");
+	if (fp == NULL)
+	{
+		IPACMERR("can't open fdb file\n");
+		return;
+	}
+
+	while (fgets(fdb_row, MAX_FDB_ROW_LEN, fp) != NULL)
+	{
+		if (strstr(fdb_row,"dev bridge")) {
+			continue;
+		}
+		else if (strstr(fdb_row,"permanent")) {
+			is_phy_iface = true;
+		}
+
+		/*parse the fdb entry*/
+		tok = strtok_r(fdb_row, " ", &ptr);
+		for (i = 0; (tok != NULL) && i < MAX_FDB_PARAM_CNT; ++i )
+		{
+			params[i] = tok;
+			tok = strtok_r(NULL, " ", &ptr);
+		}
+
+		for(i = 0; i < MAX_FDB_PARAM_CNT; ++i)
+		{
+			if(strncmp("dev",params[i], IPA_IFACE_NAME_LEN)==0)
+			{
+				strlcpy(rdev_name, params[i+1], IPA_IFACE_NAME_LEN);
+			}
+			else if(strstr(params[i],":"))
+			{
+				strlcpy(mac, params[i], MAX_FDB_PARAM_LEN);
+				if( IPA_MAC_ADDR_SIZE != sscanf( mac, "%x:%x:%x:%x:%x:%x%*c",
+					&tmp_var[0], &tmp_var[1], &tmp_var[2],
+					&tmp_var[3], &tmp_var[4], &tmp_var[5] ) )
+				{
+					IPACMERR("couldnt parse the mac address\n");
+					parse_error = true;
+					break;
+				}
+				else
+				{
+					for (j = 0 ; j < IPA_MAC_ADDR_SIZE; j++)
+					{
+						mac_addr_fdb[j] = (uint8_t)tmp_var[j];
+					}
+				}
+			}
+		}
+
+		if (parse_error) {
+			parse_error = false;
+			continue;
+		}
+
+		/* Check if already cached*/
+		for (i = 0; i < num_neighbor_client; ++i)
+		{
+			if (memcmp(mac_addr_fdb, neighbor_client[i].mac_addr, sizeof(neighbor_client[i].mac_addr)) == 0) {
+				is_client_cached = true;
+				break;
+			}
+		}
+
+		if(is_client_cached) {
+			is_client_cached = false;
+			continue;
+		}
+
+		if(IPACM_Iface::ipa_get_if_index(rdev_name, &query_ifindex))
+		{
+			IPACMERR("Error while getting interface index for %s device\n", rdev_name);
+			continue;
+		}
+		query_ipa_if_num = IPACM_Iface::iface_ipa_index_query(query_ifindex);
+
+#if !defined(FEATURE_L2TP) && !defined(FEATURE_VLAN_MPDN)
+		if (IPACM_FAILURE == query_ipa_if_num) {
+			IPACMERR("not supported iface id: %d\n", query_ifindex);
+			continue;
+		}
+#endif
+
+		/* Post USB_LINK_UP event for parent phy netdev intf */
+		post_phys_iface_event( rdev_name, query_ipa_if_num, query_ifindex);
+
+		if (is_phy_iface) {
+			is_phy_iface =false;
+			continue;
+		}
+
+		/* In case of vlan ignore the fdb entry for phy netdev  */
+#ifdef FEATURE_VLAN_MPDN
+		if(IPACM_FAILURE != query_ipa_if_num && (IPACM_Iface::ipacmcfg->ipacm_mpdn_enable == TRUE))
+		{
+			if(IPACM_Iface::ipacmcfg->iface_in_vlan_mode(rdev_name))
+			{
+				IPACMDBG_H("ignoring physical IFACE neighbor event in VLAN mode\n");
+				continue;
+			}
+		}
+
+		/* if this is a vlan interface that was not added we ignore*/
+		if((IPACM_Iface::ipacmcfg->ipacm_mpdn_enable == TRUE) &&
+			(IPACM_FAILURE == query_ipa_if_num) &&
+			!(IPACM_Iface::ipacmcfg->is_added_vlan_iface(rdev_name)))
+		{
+			IPACMDBG_H("not added VLAN interface %s, ignoring\n", rdev_name);
+			continue;
+		}
+#endif
+
+		/*Insert in client list */
+		if (num_neighbor_client < IPA_MAX_NUM_NEIGHBOR_CLIENTS)
+		{
+			memcpy(neighbor_client[num_neighbor_client].mac_addr,
+						mac_addr_fdb,
+						sizeof(mac_addr_fdb));
+#ifdef FEATURE_VLAN_MPDN
+			if(IPACM_Iface::ipacmcfg->ipacm_mpdn_enable == TRUE)
+				neighbor_client[circular_index].bridge = NULL;
+#endif
+			neighbor_client[num_neighbor_client].iface_index = query_ifindex;
+			/* cache the network interface client associated */
+			neighbor_client[num_neighbor_client].ipa_if_num = query_ipa_if_num;
+			neighbor_client[num_neighbor_client].v4_addr = 0;
+			strlcpy(neighbor_client[num_neighbor_client].iface_name,
+				rdev_name, sizeof(neighbor_client[num_neighbor_client].iface_name));
+			IPACMDBG_H("Cache client MAC %02x:%02x:%02x:%02x:%02x:%02x\n, total client: %d\n",
+						neighbor_client[num_neighbor_client].mac_addr[0],
+						neighbor_client[num_neighbor_client].mac_addr[1],
+						neighbor_client[num_neighbor_client].mac_addr[2],
+						neighbor_client[num_neighbor_client].mac_addr[3],
+						neighbor_client[num_neighbor_client].mac_addr[4],
+						neighbor_client[num_neighbor_client].mac_addr[5],
+						num_neighbor_client);
+			num_neighbor_client++;
+		}
+		else
+		{
+			IPACMERR("error:  neighbor client oversize! recycle %d-st entry ! \n", circular_index);
+			memcpy(neighbor_client[circular_index].mac_addr,
+						mac_addr_fdb,
+						sizeof(mac_addr_fdb));
+			neighbor_client[circular_index].iface_index = query_ifindex;
+			neighbor_client[circular_index].ipa_if_num = query_ipa_if_num;
+			neighbor_client[circular_index].v4_addr = 0;
+#ifdef FEATURE_VLAN_MPDN
+			if(IPACM_Iface::ipacmcfg->ipacm_mpdn_enable == TRUE)
+				neighbor_client[circular_index].bridge = NULL;
+#endif
+			strlcpy(neighbor_client[circular_index].iface_name,
+				rdev_name, sizeof(neighbor_client[circular_index].iface_name));\
+			IPACMDBG_H("Copy client MAC %02x:%02x:%02x:%02x:%02x:%02x\n, total client: %d, circular %d\n",
+							neighbor_client[circular_index].mac_addr[0],
+							neighbor_client[circular_index].mac_addr[1],
+							neighbor_client[circular_index].mac_addr[2],
+							neighbor_client[circular_index].mac_addr[3],
+							neighbor_client[circular_index].mac_addr[4],
+							neighbor_client[circular_index].mac_addr[5],
+							num_neighbor_client,
+							circular_index);
+			circular_index = (circular_index + 1) % IPA_MAX_NUM_NEIGHBOR_CLIENTS;
+		}
+	}
+	fclose(fp);
+}
+
+void IPACM_Neighbor::post_phys_iface_event(const char *iface_name, int ipa_if_num, int if_idx)
+{
+	char phys_iface_name[IPA_IFACE_NAME_LEN];
+	int phys_if_idx;
+	ipacm_event_data_fid *data_fid;
+	ipacm_cmd_q_data evt_data;
+
+	/* Vlan client */
+	if (IPACM_FAILURE == ipa_if_num) {
+		if (strstr(iface_name,ETH_INTF)) {
+			strlcpy(phys_iface_name, ETH_INTF, IPA_IFACE_NAME_LEN);
+		}
+		else if (strstr(iface_name,RNDIS_INTF)) {
+			strlcpy(phys_iface_name, RNDIS_INTF, IPA_IFACE_NAME_LEN);
+		}
+		else if (strstr(iface_name,ECM_INTF)) {
+			strlcpy(phys_iface_name, ECM_INTF, IPA_IFACE_NAME_LEN);
+		}
+		else
+			return;
+		if(IPACM_Iface::ipa_get_if_index(phys_iface_name, &phys_if_idx))
+		{
+			IPACMERR("Error while getting interface index for %s device", phys_iface_name);
+			return;
+		}
+	}
+	else
+		phys_if_idx = if_idx;
+
+	data_fid = (ipacm_event_data_fid *)malloc(sizeof(ipacm_event_data_fid));
+	if (data_fid == NULL) {
+		IPACMERR("unable to allocate memory for event data_fid\n");
+		return;
+	}
+
+	data_fid->if_index = phys_if_idx;
+	evt_data.event = IPA_USB_LINK_UP_EVENT;
+	evt_data.evt_data = data_fid;
+	IPACMDBG_H("Posting usb IPA_LINK_UP_EVENT with if index: %d iface_name : %s\n",
+						 data_fid->if_index, iface_name);
+	IPACM_EvtDispatcher::PostEvt(&evt_data);
+}
+

@@ -133,7 +133,7 @@ public:
 	void config_ip_type(ipa_ip_type iptype);
 
 	/* Get interface index */
-	virtual int ipa_get_if_index(char * if_name, int * if_index);
+	static int ipa_get_if_index(char * if_name, int * if_index);
 
 	static IPACM_Routing m_routing;
 	static IPACM_Filtering m_filtering;

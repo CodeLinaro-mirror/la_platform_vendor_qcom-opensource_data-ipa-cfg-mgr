@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014, 2018-2019 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2019 The Linux Foundation. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -27,24 +27,20 @@
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-
 /*=========================================================================*/
 /*!
 	@file
-	ipa_nat_test015.cpp
+	ipa_nat_testXXX.c
 
 	@brief
 	Verify the following scenario:
-	1. Add ipv4 table
-	2. add same 3 ipv rules
-	3. delete first, third and second
-	4. Delete ipv4 table
+
 */
-/*=========================================================================*/
+/*===========================================================================*/
 
 #include "ipa_nat_test.h"
 
-int ipa_nat_test015(
+int ipa_nat_testXXX(
 	const char* nat_mem_type,
 	u32 pub_ip_add,
 	int total_entries,
@@ -53,17 +49,8 @@ int ipa_nat_test015(
 	void* arb_data_ptr)
 {
 	int* tbl_hdl_ptr = (int*) arb_data_ptr;
+
 	int ret;
-	u32 rule_hdl1, rule_hdl2, rule_hdl3;
-	ipa_nat_ipv4_rule ipv4_rule = {0};
-
-	ipv4_rule.target_ip = RAN_ADDR;
-	ipv4_rule.target_port = RAN_PORT;
-
-	ipv4_rule.private_ip = RAN_ADDR;
-	ipv4_rule.private_port = RAN_PORT;
-	ipv4_rule.protocol = IPPROTO_TCP;
-	ipv4_rule.public_port = RAN_PORT;
 
 	IPADBG("In\n");
 
@@ -72,24 +59,6 @@ int ipa_nat_test015(
 		ret = ipa_nat_add_ipv4_tbl(pub_ip_add, nat_mem_type, total_entries, &tbl_hdl);
 		CHECK_ERR_TBL_STOP(ret, tbl_hdl);
 	}
-
-	ret = ipa_nat_add_ipv4_rule(tbl_hdl, &ipv4_rule, &rule_hdl1);
-	CHECK_ERR_TBL_STOP(ret, tbl_hdl);
-
-	ret = ipa_nat_add_ipv4_rule(tbl_hdl, &ipv4_rule, &rule_hdl2);
-	CHECK_ERR_TBL_STOP(ret, tbl_hdl);
-
-	ret = ipa_nat_add_ipv4_rule(tbl_hdl, &ipv4_rule, &rule_hdl3);
-	CHECK_ERR_TBL_STOP(ret, tbl_hdl);
-
-	ret = ipa_nat_del_ipv4_rule(tbl_hdl, rule_hdl1);
-	CHECK_ERR_TBL_STOP(ret, tbl_hdl);
-
-	ret = ipa_nat_del_ipv4_rule(tbl_hdl, rule_hdl3);
-	CHECK_ERR_TBL_STOP(ret, tbl_hdl);
-
-	ret = ipa_nat_del_ipv4_rule(tbl_hdl, rule_hdl2);
-	CHECK_ERR_TBL_STOP(ret, tbl_hdl);
 
 	if ( sep )
 	{

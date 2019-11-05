@@ -567,6 +567,8 @@ private:
 
 	int curCnt, max_entries;
 
+	const char* mem_type;
+
 	ipacm_alg *pALGPorts;
 	uint16_t nALGPort;
 

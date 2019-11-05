@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2018 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2013, 2018-2019 The Linux Foundation. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -37,10 +37,6 @@
 
 static char dbg_buff[IPA_MAX_MSG_LEN];
 
-static ipa_descriptor ipa_desc;
-static int ipa_desc_count;
-static pthread_mutex_t ipa_desc_mutex = PTHREAD_MUTEX_INITIALIZER;
-
 #if !defined(MSM_IPA_TESTS) && !defined(USE_GLIB) && !defined(FEATURE_IPA_ANDROID)
 size_t strlcpy(char* dst, const char* src, size_t size)
 {
@@ -60,75 +56,70 @@ size_t strlcpy(char* dst, const char* src, size_t size)
 
 ipa_descriptor* ipa_descriptor_open(void)
 {
-	int res;
-	ipa_descriptor* ret = &ipa_desc;
+	ipa_descriptor* desc_ptr;
+	int res = 0;
 
-	IPADBG("\n");
+	IPADBG("In\n");
 
-	if (pthread_mutex_lock(&ipa_desc_mutex))
+	desc_ptr = calloc(1, sizeof(ipa_descriptor));
+
+	if ( desc_ptr == NULL )
 	{
-		IPAERR("unable to lock the IPA descriptor mutex\n");
-		return NULL;
-	}
-
-	if (ipa_desc_count)
-		goto incr_count;
-
-	ipa_desc.fd = open(IPA_DEV_NAME, O_RDONLY);
-	if (ipa_desc.fd < 0)
-	{
-		IPAERR("unable to open ipa device\n");
-		ret = NULL;
+		IPAERR("Unable to allocate ipa_descriptor\n");
 		goto bail;
 	}
 
+	desc_ptr->fd = open(IPA_DEV_NAME, O_RDONLY);
 
-	res = ioctl(ipa_desc.fd, IPA_IOC_GET_HW_VERSION, &ipa_desc.ver);
-	if (res)
+	if (desc_ptr->fd < 0)
 	{
-		IPAERR("unable to get IPA version. Error %d\n", res);
-		ipa_desc.ver = IPA_HW_None;
+		IPAERR("Unable to open ipa device\n");
+		goto free;
+	}
+
+	res = ioctl(desc_ptr->fd, IPA_IOC_GET_HW_VERSION, &desc_ptr->ver);
+
+	if (res == 0)
+	{
+		IPADBG("IPA version is %d\n", desc_ptr->ver);
 	}
 	else
 	{
-		IPADBG("IPA version is %d\n", ipa_desc.ver);
+		IPAERR("Unable to get IPA version. Error %d\n", res);
+		desc_ptr->ver = IPA_HW_None;
 	}
 
-incr_count:
-	++ipa_desc_count;
+	goto bail;
+
+free:
+	free(desc_ptr);
+	desc_ptr = NULL;
+
 bail:
-	if (pthread_mutex_unlock(&ipa_desc_mutex))
-	{
-		IPAERR("unable to unlock the IPA descriptor mutex\n");
-	}
-	return ret;
+	IPADBG("Out\n");
+
+	return desc_ptr;
 }
 
-void ipa_descriptor_close(void)
+void ipa_descriptor_close(
+	ipa_descriptor* desc_ptr)
 {
-	IPADBG("\n");
-	if (pthread_mutex_lock(&ipa_desc_mutex))
+	IPADBG("In\n");
+
+	if ( desc_ptr )
 	{
-		IPAERR("unable to lock the IPA descriptor mutex\n");
-		return;
+		if ( desc_ptr->fd >= 0)
+		{
+			close(desc_ptr->fd);
+		}
+		free(desc_ptr);
 	}
 
-	if (--ipa_desc_count)
-	{
-		return;
-	}
-
-	close(ipa_desc.fd);
-	memset(&ipa_desc, 0, sizeof(ipa_desc));
-
-	if (pthread_mutex_unlock(&ipa_desc_mutex))
-	{
-		IPAERR("unable to unlock the IPA descriptor mutex\n");
-	}
-	IPADBG("return\n");
+	IPADBG("Out\n");
 }
 
-void ipa_read_debug_info(const char* debug_file_path)
+void ipa_read_debug_info(
+	const char* debug_file_path)
 {
 	size_t result;
 	FILE* debug_file;
@@ -175,4 +166,50 @@ void log_nat_message(char *msg)
 	 return;
 }
 
+int currTimeAs(
+	TimeAs_t  timeAs,
+	uint64_t* valPtr )
+{
+	struct timespec timeSpec;
 
+	int ret = 0;
+
+	if ( ! VALID_TIMEAS(timeAs) || ! valPtr )
+	{
+		IPAERR("Bad arg: timeAs (%u) and/or valPtr (%p)\n",
+			   timeAs, valPtr );
+		ret = -1;
+		goto bail;
+	}
+
+	memset(&timeSpec, 0, sizeof(timeSpec));
+
+	if ( clock_gettime(CLOCK_MONOTONIC, &timeSpec) != 0 )
+	{
+		IPAERR("Can't get system clock time\n" );
+		ret = -1;
+		goto bail;
+	}
+
+	switch( timeAs )
+	{
+	case TimeAsNanSecs:
+		*valPtr =
+			(uint64_t) (SECS2NanSECS((uint64_t) timeSpec.tv_sec) +
+						((uint64_t) timeSpec.tv_nsec));
+		break;
+	case TimeAsMicSecs:
+		*valPtr =
+			(uint64_t) (SECS2MicSECS((uint64_t) timeSpec.tv_sec) +
+						((uint64_t) timeSpec.tv_nsec / 1000));
+		break;
+	case TimeAsMilSecs:
+		*valPtr =
+			(uint64_t) (SECS2MilSECS((uint64_t) timeSpec.tv_sec) +
+						((uint64_t) timeSpec.tv_nsec / 1000000));
+		break;
+	}
+
+bail:
+	return ret;
+}

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2018-2019 The Linux Foundation. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -99,7 +99,7 @@ int ipa_ipv6ct_add_tbl(uint16_t number_of_entries, uint32_t* table_handle)
 		return -EINVAL;
 	}
 
-	if (!ipv6ct.table_cnt)
+	if (!ipv6ct.ipa_desc)
 	{
 		ipv6ct.ipa_desc = ipa_descriptor_open();
 		if (ipv6ct.ipa_desc == NULL)
@@ -142,8 +142,10 @@ int ipa_ipv6ct_add_tbl(uint16_t number_of_entries, uint32_t* table_handle)
 bail_ipv6ct_table:
 	ipa_ipv6ct_destroy_table(ipv6ct_table);
 bail_ipa_desc:
-	if (!ipv6ct.table_cnt)
-		ipa_descriptor_close();
+	if (!ipv6ct.table_cnt) {
+		ipa_descriptor_close(ipv6ct.ipa_desc);
+		ipv6ct.ipa_desc = NULL;
+	}
 	return ret;
 }
 
@@ -188,8 +190,10 @@ int ipa_ipv6ct_del_tbl(uint32_t table_handle)
 		goto unlock;
 	}
 
-	if (!--ipv6ct.table_cnt)
-		ipa_descriptor_close();
+	if (!--ipv6ct.table_cnt) {
+		ipa_descriptor_close(ipv6ct.ipa_desc);
+		ipv6ct.ipa_desc = NULL;
+	}
 
 unlock:
 	if (pthread_mutex_unlock(&ipv6ct_mutex))
@@ -221,7 +225,7 @@ int ipa_ipv6ct_add_rule(uint32_t table_handle, const ipa_ipv6ct_rule* user_rule,
 	if (table_handle == IPA_TABLE_INVALID_ENTRY || table_handle > IPA_IPV6CT_MAX_TBLS ||
 		rule_handle == NULL || user_rule == NULL)
 	{
-		IPAERR("invalide parameters table_handle=%d rule_handle=%pK user_rule=%pK\n",
+		IPAERR("Invalid parameters table_handle=%d rule_handle=%pK user_rule=%pK\n",
 			table_handle, rule_handle, user_rule);
 		return -EINVAL;
 	}
@@ -315,7 +319,7 @@ int ipa_ipv6ct_del_rule(uint32_t table_handle, uint32_t rule_handle)
 	if (table_handle == IPA_TABLE_INVALID_ENTRY || table_handle > IPA_IPV6CT_MAX_TBLS ||
 		rule_handle == IPA_TABLE_INVALID_ENTRY)
 	{
-		IPAERR("invalide parameters table_handle=%d rule_handle=%d\n", table_handle, rule_handle);
+		IPAERR("Invalid parameters table_handle=%d rule_handle=%d\n", table_handle, rule_handle);
 		return -EINVAL;
 	}
 	IPADBG("Passed Table: 0x%x and rule handle 0x%x\n", table_handle, rule_handle);
@@ -661,7 +665,7 @@ static int ipa_ipv6ct_create_table(ipa_ipv6ct_table* ipv6ct_table, uint16_t numb
 
 	IPADBG("\n");
 
-	ipa_table_init(&ipv6ct_table->table, IPA_IPV6CT_TABLE_NAME, sizeof(ipa_ipv6ct_hw_entry), NULL, &entry_interface);
+	ipa_table_init(&ipv6ct_table->table, IPA_IPV6CT_TABLE_NAME, IPA_NAT_MEM_IN_DDR, sizeof(ipa_ipv6ct_hw_entry), NULL, 0, &entry_interface);
 
 	ret = ipa_table_calculate_entries_num(&ipv6ct_table->table, number_of_entries);
 	if (ret)
@@ -715,15 +719,19 @@ static int ipa_ipv6ct_destroy_table(ipa_ipv6ct_table* ipv6ct_table)
 }
 
 /**
- * ipa_ipv6ct_create_table_dma_cmd_helpers() - Creates dma_cmd_helpers for base table in the received IPv6CT table
+ * ipa_ipv6ct_create_table_dma_cmd_helpers() -
+ *   Creates dma_cmd_helpers for base table in the received IPv6CT table
  * @ipv6ct_table: [in] IPv6CT table
  * @table_indx: [in] The index of the IPv6CT table
  *
- * A DMA command helper helps to generate the DMA command for one specific field change. Each table has 3 different
- * types of field change: update_head, update_entry and delete_head. This function creates the helpers and updates the
- * base table correspondingly.
+ * A DMA command helper helps to generate the DMA command for one
+ * specific field change. Each table has 3 different types of field
+ * change: update_head, update_entry and delete_head. This function
+ * creates the helpers and updates the base table correspondingly.
  */
-static void ipa_ipv6ct_create_table_dma_cmd_helpers(ipa_ipv6ct_table* ipv6ct_table, uint8_t table_indx)
+static void ipa_ipv6ct_create_table_dma_cmd_helpers(
+	ipa_ipv6ct_table* ipv6ct_table,
+	uint8_t table_indx )
 {
 	IPADBG("\n");
 
@@ -733,12 +741,14 @@ static void ipa_ipv6ct_create_table_dma_cmd_helpers(ipa_ipv6ct_table* ipv6ct_tab
 		IPA_IPV6CT_BASE_TBL,
 		IPA_IPV6CT_EXPN_TBL,
 		ipv6ct_table->mem_desc.addr_offset + IPA_IPV6CT_RULE_FLAG_FIELD_OFFSET);
+
 	ipa_table_dma_cmd_helper_init(
 		&ipv6ct_table->table_dma_cmd_helpers[IPA_IPV6CT_TABLE_NEXT_INDEX],
 		table_indx,
 		IPA_IPV6CT_BASE_TBL,
 		IPA_IPV6CT_EXPN_TBL,
 		ipv6ct_table->mem_desc.addr_offset + IPA_IPV6CT_RULE_NEXT_FIELD_OFFSET);
+
 	ipa_table_dma_cmd_helper_init(
 		&ipv6ct_table->table_dma_cmd_helpers[IPA_IPV6CT_TABLE_PROTOCOL],
 		table_indx,
@@ -746,9 +756,12 @@ static void ipa_ipv6ct_create_table_dma_cmd_helpers(ipa_ipv6ct_table* ipv6ct_tab
 		IPA_IPV6CT_EXPN_TBL,
 		ipv6ct_table->mem_desc.addr_offset + IPA_IPV6CT_RULE_PROTO_FIELD_OFFSET);
 
-	ipv6ct_table->table.update_head_dma_cmd_helper = &ipv6ct_table->table_dma_cmd_helpers[IPA_IPV6CT_TABLE_FLAGS];
-	ipv6ct_table->table.update_entry_dma_cmd_helper = &ipv6ct_table->table_dma_cmd_helpers[IPA_IPV6CT_TABLE_NEXT_INDEX];
-	ipv6ct_table->table.delete_head_dma_cmd_helper = &ipv6ct_table->table_dma_cmd_helpers[IPA_IPV6CT_TABLE_PROTOCOL];
+	ipv6ct_table->table.dma_help[HELP_UPDATE_HEAD] =
+		&ipv6ct_table->table_dma_cmd_helpers[IPA_IPV6CT_TABLE_FLAGS];
+	ipv6ct_table->table.dma_help[HELP_UPDATE_ENTRY] =
+		&ipv6ct_table->table_dma_cmd_helpers[IPA_IPV6CT_TABLE_NEXT_INDEX];
+	ipv6ct_table->table.dma_help[HELP_DELETE_HEAD] =
+		&ipv6ct_table->table_dma_cmd_helpers[IPA_IPV6CT_TABLE_PROTOCOL];
 
 	IPADBG("return\n");
 }
@@ -784,9 +797,12 @@ static int ipa_ipv6ct_post_dma_cmd(struct ipa_ioc_nat_dma_cmd* cmd)
 {
 	IPADBG("\n");
 
+	cmd->mem_type = IPA_NAT_MEM_IN_DDR;
+
 	if (ioctl(ipv6ct.ipa_desc->fd, IPA_IOC_TABLE_DMA_CMD, cmd))
 	{
-		IPAERR("unable to call dma icotl IPA fd %d\n", ipv6ct.ipa_desc->fd);
+		IPAERR("ioctl (IPA_IOC_TABLE_DMA_CMD) on fd %d has failed\n",
+			   ipv6ct.ipa_desc->fd);
 		return -EIO;
 	}
 	IPADBG("posted IPA_IOC_TABLE_DMA_CMD to kernel successfully\n");
@@ -831,4 +847,3 @@ unlock:
 	if (pthread_mutex_unlock(&ipv6ct_mutex))
 		IPAERR("unable to unlock the ipv6ct mutex\n");
 }
-

@@ -130,6 +130,7 @@ public:
 
 	int ipa_num_alg_ports;
 
+	const char* ipa_nat_memtype;
 	int ipa_nat_max_entries;
 	int ipa_ipv6ct_max_entries;
 
@@ -316,6 +317,11 @@ public:
 	inline int GetNatMaxEntries(void)
 	{
 		return ipa_nat_max_entries;
+	}
+
+	inline const char* GetNatMemType(void)
+	{
+		return ipa_nat_memtype;
 	}
 
 	inline int GetIpv6CTMaxEntries(void)
@@ -560,6 +566,7 @@ public:
 private:
 
 	static const int DEFAULT_IPV6CT_MAX_ENTRIES = 500;
+	const char* DEFAULT_NAT_MEMTYPE = "DDR";
 
 	enum ipa_hw_type ver;
 	static IPACM_Config *pInstance;

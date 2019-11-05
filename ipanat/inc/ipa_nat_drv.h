@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013 - 2018 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2013-2019 The Linux Foundation. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -41,6 +41,9 @@
  * @private_port: private port
  * @protocol: protocol of rule (tcp/udp)
  * @pdn_index: PDN index in the PDN config table
+ * @redirect: used internally by various API calls
+ * @enable: used internally by various API calls
+ * @time_stamp: used internally by various API calls
  */
 typedef struct {
 	uint32_t target_ip;
@@ -50,7 +53,39 @@ typedef struct {
 	uint16_t public_port;
 	uint8_t  protocol;
 	uint8_t  pdn_index;
+	uint8_t  redirect;
+	uint8_t  enable;
+	uint32_t time_stamp;
 } ipa_nat_ipv4_rule;
+
+static inline char* prep_nat_ipv4_rule_4print(
+	ipa_nat_ipv4_rule* rule_ptr,
+	char*              buf_ptr,
+	uint32_t           buf_sz )
+{
+	if ( rule_ptr && buf_ptr && buf_sz )
+	{
+		snprintf(
+			buf_ptr, buf_sz,
+			"IPV4 RULE: "
+			"protocol(0x%02X) "
+			"public_port(0x%04X) "
+			"target_ip(0x%08X) "
+			"target_port(0x%04X) "
+			"private_ip(0x%08X) "
+			"private_port(0x%04X) "
+			"pdn_index(0x%02X)",
+			rule_ptr->protocol,
+			rule_ptr->public_port,
+			rule_ptr->target_ip,
+			rule_ptr->target_port,
+			rule_ptr->private_ip,
+			rule_ptr->private_port,
+			rule_ptr->pdn_index);
+	}
+
+	return buf_ptr;
+}
 
 /**
  * struct ipa_nat_pdn_entry - holds a PDN entry data
@@ -67,6 +102,7 @@ typedef struct {
 /**
  * ipa_nat_add_ipv4_tbl() - create ipv4 nat table
  * @public_ip_addr: [in] public ipv4 address
+ * @mem_type_ptr: [in] type of memory table is to reside in
  * @number_of_entries: [in]  number of nat entries
  * @table_handle: [out] Handle of new ipv4 nat table
  *
@@ -74,9 +110,11 @@ typedef struct {
  *
  * Returns:	0  On Success, negative on failure
  */
-int ipa_nat_add_ipv4_tbl(uint32_t public_ip_addr,
-				uint16_t number_of_entries,
-				uint32_t *table_handle);
+int ipa_nat_add_ipv4_tbl(
+	uint32_t public_ip_addr,
+	const char *mem_type_ptr,
+	uint16_t number_of_entries,
+	uint32_t *table_handle);
 
 /**
  * ipa_nat_del_ipv4_tbl() - delete ipv4 table
@@ -144,7 +182,7 @@ int ipa_nat_query_timestamp(uint32_t  table_handle,
 int ipa_nat_modify_pdn(uint32_t  tbl_hdl,
 	uint8_t pdn_index,
 	ipa_nat_pdn_entry *pdn_info);
-	
+
 /**
 * ipa_nat_get_pdn_index() - get a PDN index for a public ip
 * @public_ip : [in] IPv4 address of the PDN entry
@@ -194,6 +232,9 @@ int ipa_nat_dealloc_pdn(uint8_t pdn_index);
  * @table_handle: [in] handle of IPv4 NAT table
  */
 void ipa_nat_dump_ipv4_table(uint32_t tbl_hdl);
+
+int ipa_nat_switch_to(
+	enum ipa3_nat_mem_in nmi );
 
 #endif
 

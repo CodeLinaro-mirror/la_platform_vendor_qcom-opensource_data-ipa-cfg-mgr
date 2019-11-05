@@ -157,6 +157,7 @@ IPACM_Config::IPACM_Config()
 	ipa_num_ipa_interfaces = 0;
 	ipa_num_private_subnet = 0;
 	ipa_num_alg_ports = 0;
+	ipa_nat_memtype = DEFAULT_NAT_MEMTYPE;
 	ipa_nat_max_entries = 0;
 	ipa_ipv6ct_max_entries = 0;
 	ipa_nat_iface_entries = 0;
@@ -499,6 +500,11 @@ int IPACM_Config::Init(void)
 
 	ipa_nat_max_entries = cfg->nat_max_entries;
 	IPACMDBG_H("Nat Maximum Entries %d\n", ipa_nat_max_entries);
+
+	ipa_nat_memtype =
+		(cfg->nat_table_memtype) ?
+		cfg->nat_table_memtype   : DEFAULT_NAT_MEMTYPE;
+	IPACMDBG_H("Nat Mem Type %s\n", ipa_nat_memtype);
 
 	if (cfg->ipv6ct_enable > 0)
 	{

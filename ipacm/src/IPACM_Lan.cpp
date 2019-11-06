@@ -2779,6 +2779,7 @@ int IPACM_Lan::handle_eth_hdr_init(uint8_t *mac_addr, ipacm_bridge *bridge, uint
 
 				pHeaderDescriptor->hdr[0].hdr_len = sCopyHeader.hdr_len;
 				hdr_len = sCopyHeader.hdr_len;
+				pHeaderDescriptor->hdr[0].type = sCopyHeader.type;
 				pHeaderDescriptor->hdr[0].hdr_hdl = -1;
 				pHeaderDescriptor->hdr[0].is_partial = 0;
 				pHeaderDescriptor->hdr[0].status = -1;
@@ -2935,6 +2936,7 @@ int IPACM_Lan::handle_eth_hdr_init(uint8_t *mac_addr, ipacm_bridge *bridge, uint
 
 				pHeaderDescriptor->hdr[0].hdr_len = sCopyHeader.hdr_len;
 				hdr_len = sCopyHeader.hdr_len;
+				pHeaderDescriptor->hdr[0].type = sCopyHeader.type;
 				pHeaderDescriptor->hdr[0].hdr_hdl = -1;
 				pHeaderDescriptor->hdr[0].is_partial = 0;
 				pHeaderDescriptor->hdr[0].status = -1;
@@ -4200,6 +4202,7 @@ int IPACM_Lan::handle_odu_hdr_init(uint8_t *mac_addr)
 											 sizeof(pHeaderDescriptor->hdr[0].name));
 								strlcpy(pHeaderDescriptor->hdr[0].name, IPA_ODU_HDR_NAME_v4, sizeof(pHeaderDescriptor->hdr[0].name));
 								pHeaderDescriptor->hdr[0].hdr_len = sCopyHeader.hdr_len;
+								pHeaderDescriptor->hdr[0].type = sCopyHeader.type;
 								pHeaderDescriptor->hdr[0].hdr_hdl = -1;
 								pHeaderDescriptor->hdr[0].is_partial = 0;
 								pHeaderDescriptor->hdr[0].status = -1;
@@ -4280,6 +4283,7 @@ int IPACM_Lan::handle_odu_hdr_init(uint8_t *mac_addr)
 
 				strlcpy(pHeaderDescriptor->hdr[0].name, IPA_ODU_HDR_NAME_v6, sizeof(pHeaderDescriptor->hdr[0].name));
 				pHeaderDescriptor->hdr[0].hdr_len = sCopyHeader.hdr_len;
+				pHeaderDescriptor->hdr[0].type = sCopyHeader.type;
 				pHeaderDescriptor->hdr[0].hdr_hdl = -1;
 				pHeaderDescriptor->hdr[0].is_partial = 0;
 				pHeaderDescriptor->hdr[0].status = -1;

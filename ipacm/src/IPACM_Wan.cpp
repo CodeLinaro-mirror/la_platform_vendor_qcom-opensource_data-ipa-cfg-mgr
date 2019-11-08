@@ -4880,6 +4880,9 @@ int IPACM_Wan::handle_route_del_evt(ipa_ip_type iptype)
 				wandown_data->is_sta = false;
 			}
 			memcpy(wandown_data->ipv6_prefix, ipv6_prefix, sizeof(wandown_data->ipv6_prefix));
+#ifdef FEATURE_VLAN_MPDN
+			IPACM_Iface::ipacmcfg->del_vlan_ipv6_prefix(ipv6_prefix, -1);
+#endif
 			evt_data.event = IPA_HANDLE_WAN_DOWN_V6;
 			evt_data.evt_data = (void *)wandown_data;
 			/* Insert IPA_HANDLE_WAN_DOWN to command queue */

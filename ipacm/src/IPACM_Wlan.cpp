@@ -2297,9 +2297,6 @@ int IPACM_Wlan::handle_wlan_client_route_rule_ext_v2(uint8_t *mac_addr, ipa_ip_t
 				}
 
 				rt_rule_entry->rule_id = 0;
-				if (get_client_memptr(wlan_client, wlan_index)->lan_stats_idx != -1) {
-					rt_rule_entry->rule_id = get_client_memptr(wlan_client, wlan_index)->lan_stats_idx | 0x200;
-				}
 				if (false == m_routing.AddRoutingRuleExt_v2(rt_rule))
 				{
 					IPACMERR("Routing rule addition failed!\n");
@@ -2401,9 +2398,6 @@ int IPACM_Wlan::handle_wlan_client_route_rule_ext_v2(uint8_t *mac_addr, ipa_ip_t
 					rt_rule_entry->rule.hashable = true;
 #endif
 					rt_rule_entry->rule_id = 0;
-					if (get_client_memptr(wlan_client, wlan_index)->lan_stats_idx != -1) {
-						rt_rule_entry->rule_id = get_client_memptr(wlan_client, wlan_index)->lan_stats_idx | 0x200;
-					}
 					if (false == m_routing.AddRoutingRuleExt_v2(rt_rule))
 					{
 						IPACMERR("Routing rule addition failed!\n");
@@ -4188,11 +4182,10 @@ int IPACM_Wlan::install_uplink_filter_rule_per_client_v2
 			flt_rule_entry.rule.rt_tbl_idx = fw_q6_rules->rules[cnt].rule.rt_tbl_idx;
 
 			IPACMDBG_H("rule: %d has rule_id %d\n",
-					cnt, prop->prop[cnt].rule_id);
+					cnt, fw_q6_rules->rules[cnt].rule.rule_id);
 
 			flt_rule_entry.rule.hashable = fw_q6_rules->rules[cnt].rule.hashable;
-			flt_rule_entry.rule.rule_id = (fw_q6_rules->rules[cnt].rule.rule_id & 0x1F) |
-				(get_client_memptr(wlan_client, clnt_indx)->lan_stats_idx << 5) | 0x200;
+			flt_rule_entry.rule.rule_id = fw_q6_rules->rules[cnt].rule.rule_id;
 		}
 		else
 		{
@@ -4205,8 +4198,7 @@ int IPACM_Wlan::install_uplink_filter_rule_per_client_v2
 					cnt, prop->prop[cnt].rule_id);
 
 			flt_rule_entry.rule.hashable = prop->prop[cnt].is_rule_hashable;
-			flt_rule_entry.rule.rule_id = (prop->prop[cnt].rule_id & 0x1F) |
-				(get_client_memptr(wlan_client, clnt_indx)->lan_stats_idx << 5) | 0x200;
+			flt_rule_entry.rule.rule_id = prop->prop[cnt].rule_id;
 		}
 		IPACMDBG_H("Modified rule: %d has rule_id %d\n",
 				cnt, flt_rule_entry.rule.rule_id);

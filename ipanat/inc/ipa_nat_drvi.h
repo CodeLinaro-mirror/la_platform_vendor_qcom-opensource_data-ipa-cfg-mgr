@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013 - 2019 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2013-2019 The Linux Foundation. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -34,6 +34,21 @@
 #include "ipa_mem_descriptor.h"
 #include "ipa_nat_utils.h"
 
+#undef MAKE_TBL_HDL
+#define MAKE_TBL_HDL(hdl, mt) \
+	((mt) << 31 | (hdl))
+
+#undef BREAK_TBL_HDL
+#define BREAK_TBL_HDL(hdl_in, mt, hdl_out) \
+	do { \
+		mt      = (hdl_in) >> 31 & 0x0000000001; \
+		hdl_out = (hdl_in)       & 0x00000000FF; \
+	} while ( 0 )
+
+#undef VALID_TBL_HDL
+#define VALID_TBL_HDL(h) \
+	(((h) & 0x00000000FF) == IPA_NAT_MAX_IP4_TBLS)
+
 /*======= IMPLEMENTATION related data structures and functions ======= */
 
 #define IPA_NAT_MAX_IP4_TBLS   1
@@ -48,6 +63,14 @@
 #define IPA_NAT_FLAG_ENABLE_BIT  1
 
 #define IPA_NAT_INVALID_PROTO_FIELD_VALUE 0xFF00
+/*
+ * IPA_NAT_INVALID_PROTO_FIELD_VALUE above is what's passed to the IPA
+ * in a DMA command.  It is written into the NAT's rule, by the
+ * IPA. After being written, It minifests in the rule in the form
+ * below, hence it will be used when perusing the "struct
+ * ipa_nat_rule".
+ */
+#define IPA_NAT_INVALID_PROTO_FIELD_VALUE_IN_RULE  0xFF
 
 typedef enum {
 	IPA_NAT_TABLE_FLAGS,
@@ -58,25 +81,29 @@ typedef enum {
 	IPA_NAT_TABLE_DMA_CMD_MAX
 } ipa_nat_table_dma_cmd_type;
 
-/*------------------------  NAT Table Entry  -----------------------------------------
-
-  ------------------------------------------------------------------------------------
-  |   7    |    6    |   5    |    4    |     3        |  2   |    1    |    0      |
-  ------------------------------------------------------------------------------------
-  |             Target IP(4B)           |             Private IP(4B)                 |
-  ------------------------------------------------------------------------------------
-  |Target Port(2B)   | Private Port(2B) | Public Port(2B)     | Next Index(2B)       |
-  ------------------------------------------------------------------------------------
-  | Proto   |      TimeStamp(3B)        |       Flags(2B)     | IP check sum Diff(2B)|
-  | (1B)    |                           |EN|Redirect|Resv     |                      |
-  ------------------------------------------------------------------------------------
-  | TCP/UDP checksum |PDN info|Reserved |    SW Specific Parameters(4B)              |
-  |    diff (2B)     |  (1B)  |  (1B)   |                                            |
-  ------------------------------------------------------------------------------------
-
-  Dont change below structure definition.
-  It should be same as above(little endian order)
-  -------------------------------------------------------------------------------*/
+/*
+ * ------------------------  NAT Table Entry  -----------------------------------------
+ *
+ * ------------------------------------------------------------------------------------
+ * |   7    |    6    |   5    |    4    |     3        |  2   |    1    |    0       |
+ * ------------------------------------------------------------------------------------
+ * |             Target IP(4B)           |             Private IP(4B)                 |
+ * ------------------------------------------------------------------------------------
+ * |Target Port(2B)   | Private Port(2B) | Public Port(2B)     | Next Index(2B)       |
+ * ------------------------------------------------------------------------------------
+ * | Proto   |      TimeStamp(3B)        |       Flags(2B)     | IP check sum Diff(2B)|
+ * | (1B)    |                           |EN|Redirect|Resv     |                      |
+ * ------------------------------------------------------------------------------------
+ * | TCP/UDP checksum |PDN info|Reserved |    SW Specific Parameters(4B)              |
+ * |    diff (2B)     |  (1B)  |  (1B)   |                                            |
+ * ------------------------------------------------------------------------------------
+ *
+ * Dont change below structure definition.
+ *
+ * It should be same as above(little endian order)
+ *
+ * -------------------------------------------------------------------------------
+ */
 struct ipa_nat_rule {
 	uint64_t private_ip:32;
 	uint64_t target_ip:32;
@@ -119,6 +146,86 @@ struct ipa_nat_rule {
 	uint64_t tcp_udp_chksum:16;
 };
 
+static inline char* prep_nat_rule_4print(
+	struct ipa_nat_rule* rule_ptr,
+	char*                buf_ptr,
+	uint32_t             buf_sz )
+{
+	if ( rule_ptr && buf_ptr && buf_sz )
+	{
+		snprintf(
+			buf_ptr, buf_sz,
+			"NAT RULE: "
+			"protocol(0x%02X) "
+			"public_port(0x%04X) "
+			"target_ip(0x%08X) "
+			"target_port(0x%04X) "
+			"private_ip(0x%08X) "
+			"private_port(0x%04X) "
+			"pdn_index(0x%02X) "
+			"ip_chksum(0x%04X) "
+			"tcp_udp_chksum(0x%04X) "
+			"redirect(0x%02X) "
+			"enable(0x%02X) "
+			"time_stamp(0x%08X) "
+			"indx_tbl_entry(0x%04X) "
+			"prev_index(0x%04X) "
+			"next_index(0x%04X)",
+			rule_ptr->protocol,
+			rule_ptr->public_port,
+			rule_ptr->target_ip,
+			rule_ptr->target_port,
+			rule_ptr->private_ip,
+			rule_ptr->private_port,
+			rule_ptr->pdn_index,
+			rule_ptr->ip_chksum,
+			rule_ptr->tcp_udp_chksum,
+			rule_ptr->redirect,
+			rule_ptr->enable,
+			rule_ptr->time_stamp,
+			rule_ptr->indx_tbl_entry,
+			rule_ptr->prev_index,
+			rule_ptr->next_index);
+	}
+
+	return buf_ptr;
+}
+
+static inline const char *ipa3_nat_mem_in_as_str(
+	enum ipa3_nat_mem_in nmi)
+{
+	switch (nmi) {
+	case IPA_NAT_MEM_IN_DDR:
+		return "IPA_NAT_MEM_IN_DDR";
+	case IPA_NAT_MEM_IN_SRAM:
+		return "IPA_NAT_MEM_IN_SRAM";
+	default:
+		break;
+	}
+	return "???";
+}
+
+static inline char *ipa_ioc_v4_nat_init_as_str(
+	struct ipa_ioc_v4_nat_init *ptr,
+	char                       *buf,
+	uint32_t                    buf_sz)
+{
+	if (ptr && buf && buf_sz) {
+		snprintf(
+			buf, buf_sz,
+			"V4 NAT INIT: tbl_index(0x%02X) ipv4_rules_offset(0x%08X) expn_rules_offset(0x%08X) index_offset(0x%08X) index_expn_offset(0x%08X) table_entries(0x%04X) expn_table_entries(0x%04X) ip_addr(0x%08X)",
+			ptr->tbl_index,
+			ptr->ipv4_rules_offset,
+			ptr->expn_rules_offset,
+			ptr->index_offset,
+			ptr->index_expn_offset,
+			ptr->table_entries,
+			ptr->expn_table_entries,
+			ptr->ip_addr);
+	}
+	return buf;
+}
+
 /*
 	---------------------------------------
 	|         1        |         0        |
@@ -155,11 +262,14 @@ struct ipa_nat_cache {
 	ipa_descriptor* ipa_desc;
 	struct ipa_nat_ip4_table_cache ip4_tbl[IPA_NAT_MAX_IP4_TBLS];
 	uint8_t table_cnt;
+	enum ipa3_nat_mem_in nmi;
 };
 
-int ipa_nati_add_ipv4_tbl(uint32_t public_ip_addr,
-				uint16_t number_of_entries,
-				uint32_t *table_hanle);
+int ipa_nati_add_ipv4_tbl(
+	uint32_t    public_ip_addr,
+	const char *mem_type_ptr,
+	uint16_t    number_of_entries,
+	uint32_t   *table_hanle);
 
 int ipa_nati_del_ipv4_table(uint32_t tbl_hdl);
 
@@ -184,5 +294,85 @@ int ipa_nati_add_ipv4_rule(uint32_t tbl_hdl,
 int ipa_nati_del_ipv4_rule(uint32_t tbl_hdl,
 				uint32_t rule_hdl);
 
-#endif /* #ifndef IPA_NAT_DRVI_H */
+int ipa_nati_get_sram_size(
+	uint32_t* size_ptr);
 
+int ipa_nati_clear_ipv4_tbl(
+	uint32_t tbl_hdl );
+
+int ipa_nati_copy_ipv4_tbl(
+	uint32_t          src_tbl_hdl,
+	uint32_t          dst_tbl_hdl,
+	ipa_table_walk_cb copy_cb );
+
+typedef enum
+{
+	USE_NAT_TABLE   = 0,
+	USE_INDEX_TABLE = 1,
+
+	USE_MAX
+} WhichTbl2Use;
+
+#define VALID_WHICHTBL2USE(w) \
+	( (w) >= USE_NAT_TABLE && (w) < USE_MAX )
+
+int ipa_nati_walk_ipv4_tbl(
+	uint32_t          tbl_hdl,
+	WhichTbl2Use      which,
+	ipa_table_walk_cb walk_cb,
+	void*             arb_data_ptr );
+
+int ipa_nati_ipv4_tbl_stats(
+	uint32_t              tbl_hdl,
+	WhichTbl2Use          which,
+	enum ipa3_nat_mem_in* nmi_ptr,
+	uint32_t*    tot_base_ents_ptr,
+	uint32_t*    tot_base_ents_filled_ptr,
+	uint32_t*    tot_expn_ents_ptr,
+	uint32_t*    tot_expn_ents_filled_ptr );
+
+int ipa_NATI_add_ipv4_tbl(
+	enum ipa3_nat_mem_in nmi,
+	uint32_t             public_ip_addr,
+	uint16_t             number_of_entries,
+	uint32_t*            tbl_hdl);
+
+int ipa_NATI_del_ipv4_table(
+	uint32_t tbl_hdl);
+
+int ipa_NATI_clear_ipv4_tbl(
+	uint32_t tbl_hdl );
+
+int ipa_NATI_walk_ipv4_tbl(
+	uint32_t          tbl_hdl,
+	WhichTbl2Use      which,
+	ipa_table_walk_cb walk_cb,
+	void*             arb_data_ptr );
+
+int ipa_NATI_ipv4_tbl_stats(
+	uint32_t              tbl_hdl,
+	WhichTbl2Use          which,
+	enum ipa3_nat_mem_in* nmi_ptr,
+	uint32_t*    tot_base_ents_ptr,
+	uint32_t*    tot_base_ents_filled_ptr,
+	uint32_t*    tot_expn_ents_ptr,
+	uint32_t*    tot_expn_ents_filled_ptr );
+
+int ipa_NATI_query_timestamp(
+	uint32_t  tbl_hdl,
+	uint32_t  rule_hdl,
+	uint32_t* time_stamp);
+
+int ipa_NATI_add_ipv4_rule(
+	uint32_t                 tbl_hdl,
+	const ipa_nat_ipv4_rule* clnt_rule,
+	uint32_t*                rule_hdl);
+
+int ipa_NATI_del_ipv4_rule(
+	uint32_t tbl_hdl,
+	uint32_t rule_hdl);
+
+int ipa_NATI_post_ipv4_init_cmd(
+	uint32_t tbl_hdl );
+
+#endif /* #ifndef IPA_NAT_DRVI_H */

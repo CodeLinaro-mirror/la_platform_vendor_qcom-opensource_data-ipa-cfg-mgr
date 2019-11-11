@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2018-2019 The Linux Foundation. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -30,24 +30,40 @@
 #define IPA_MEM_DESCRIPTOR_H
 
 #include <stdint.h>
+#include <stdbool.h>
 #include <linux/msm_ipa.h>
 
 typedef struct
 {
-	int size;
+	int orig_rqst_size;
+	int mmap_size;
 	void* base_addr;
+	void* mmap_addr;
 	uint32_t addr_offset;
 	unsigned long allocate_ioctl_num;
 	unsigned long delete_ioctl_num;
 	char name[IPA_RESOURCE_NAME_MAX];
 	uint8_t table_index;
 	uint8_t valid;
+	bool sram_will_be_used;
+	struct ipa_nat_in_sram_info nat_sram_info;
 } ipa_mem_descriptor;
 
-void ipa_mem_descriptor_init(ipa_mem_descriptor* desc, const char* device_name, int size,
-	uint8_t table_index, unsigned long allocate_ioctl_num, unsigned long delete_ioctl_num);
-int ipa_mem_descriptor_allocate_memory(ipa_mem_descriptor* desc, int ipa_fd);
-int ipa_mem_descriptor_delete(ipa_mem_descriptor* desc, int ipa_fd);
+void ipa_mem_descriptor_init(
+	ipa_mem_descriptor* desc,
+	const char* device_name,
+	int size,
+	uint8_t table_index,
+	unsigned long allocate_ioctl_num,
+	unsigned long delete_ioctl_num);
+
+int ipa_mem_descriptor_allocate_memory(
+	ipa_mem_descriptor* desc,
+	int ipa_fd);
+
+int ipa_mem_descriptor_delete(
+	ipa_mem_descriptor* desc,
+	int ipa_fd);
 
 #endif
 

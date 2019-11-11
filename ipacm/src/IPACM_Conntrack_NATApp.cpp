@@ -52,6 +52,8 @@ bool NatApp::is_kernel_ver_upgraded = false;
 NatApp::NatApp()
 {
 	max_entries = 0;
+	mem_type = NULL;
+
 	cache = NULL;
 
 	nat_table_hdl = 0;
@@ -79,6 +81,8 @@ int NatApp::Init(void)
 		IPACMERR("Unable to get Config instance\n");
 		return -1;
 	}
+
+	mem_type = pConfig->GetNatMemType();
 
 	max_entries = pConfig->GetNatMaxEntries();
 
@@ -171,7 +175,7 @@ int NatApp::AddPdn(uint32_t pub_ip, uint8_t mux_id, bool is_sta)
 	if(!pdn_count)
 	{
 		/* create the NAT table, the PDN will be stored in index 0 */
-		ret = ipa_nat_add_ipv4_tbl(pub_ip, max_entries, &nat_table_hdl);
+		ret = ipa_nat_add_ipv4_tbl(pub_ip, mem_type, max_entries, &nat_table_hdl);
 		if(ret)
 		{
 			IPACMERR("unable to create nat table Error:%d\n", ret);
@@ -271,7 +275,7 @@ int NatApp::AddTable(uint32_t pub_ip, uint8_t mux_id, bool is_sta)
 		curCnt = 0;
 	}
 #endif
-	ret = ipa_nat_add_ipv4_tbl(pub_ip, max_entries, &nat_table_hdl);
+	ret = ipa_nat_add_ipv4_tbl(pub_ip, mem_type, max_entries, &nat_table_hdl);
 	if(ret)
 	{
 		IPACMERR("unable to create nat table Error:%d\n", ret);

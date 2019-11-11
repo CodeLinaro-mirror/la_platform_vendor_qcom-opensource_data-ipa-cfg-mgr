@@ -169,6 +169,7 @@
 		</IPACMALG>
 		<IPACMNAT>
 			<MaxNatEntries>500</MaxNatEntries>
+			<NatTableType>HYBRID</NatTableType>
 		</IPACMNAT>
 		<IPACMIPV6CT>
 			<IPv6CTEnabled>0</IPv6CTEnabled>

@@ -18,7 +18,9 @@ LOCAL_SRC_FILES := ipa_nat_drv.c \
                    ipa_nat_utils.c \
                    ipa_table.c \
                    ipa_mem_descriptor.c \
-                   ipa_ipv6ct.c
+                   ipa_ipv6ct.c \
+                   ipa_nat_statemach.c \
+                   ipa_nat_map.cpp
 
 LOCAL_CFLAGS := -DDEBUG
 LOCAL_MODULE := libipanat

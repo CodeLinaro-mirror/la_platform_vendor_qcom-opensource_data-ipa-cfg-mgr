@@ -2357,8 +2357,7 @@ int IPACM_Lan::handle_wan_up_ex(ipacm_ext_prop *ext_prop, ipa_ip_type iptype, ui
 	int i=0;
 	bool notif_only = false;
 
-	/* not  needed for newer versions since it will be overridden by NAT metadata replacement for IPAv4 and up */
-	if((IPACM_Iface::ipacmcfg->GetIPAVer() < IPA_HW_v4_0) && (rx_prop != NULL))
+	if(rx_prop != NULL)
 	{
 		/* give mux ID of the default PDN to IPA-driver for WLAN/LAN pkts */
 		fd = open(IPA_DEVICE_NAME, O_RDWR);
@@ -4918,7 +4917,8 @@ int IPACM_Lan::handle_uplink_filter_rule(ipacm_ext_prop *prop, ipa_ip_type iptyp
 			flt_rule_entry.rule.action = IPA_PASS_TO_SRC_NAT;
 
 			/* NAT block will set the proper MUX ID in the metadata according to the relevant PDN */
-			if (IPACM_Iface::ipacmcfg->GetIPAVer() >= IPA_HW_v4_0)
+			if ((IPACM_Iface::ipacmcfg->GetIPAVer() >= IPA_HW_v4_0) &&
+				(ipa_if_cate != WLAN_IF))
 				flt_rule_entry.rule.set_metadata = true;
 		}
 	}

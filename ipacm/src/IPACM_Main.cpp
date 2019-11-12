@@ -888,6 +888,9 @@ int main(int argc, char **argv)
 	IPACM_ConntrackClient *cc = IPACM_ConntrackClient::GetInstance();
 	CtList = new IPACM_ConntrackListener();
 
+	/* Query bridge FDB to populate neighbor cache and create interfaces if missed any*/
+	neigh->update_neigh_cache();
+
 	IPACMDBG_H("Staring IPA main\n");
 	IPACMDBG_H("ipa_cmdq_successful\n");
 

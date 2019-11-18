@@ -935,11 +935,12 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 
 void IPACM_Neighbor::update_neigh_cache()
 {
-	FILE *fp;
-	char fdb_row[MAX_FDB_ROW_LEN], *tok, *ptr, *params[MAX_FDB_PARAM_CNT], cmd[IPA_SYS_CMD_LEN];
-	char rdev_name[IPA_IFACE_NAME_LEN];
-	char mac[MAX_FDB_PARAM_LEN];
-	uint8_t mac_addr_fdb[IPA_MAC_ADDR_SIZE];
+	FILE *fp = NULL;
+	char *tok = NULL, *ptr = NULL;
+	char *params[MAX_FDB_PARAM_CNT] = { NULL };
+	char rdev_name[IPA_IFACE_NAME_LEN] = {0}, mac[MAX_FDB_PARAM_LEN] = {0};
+	char fdb_row[MAX_FDB_ROW_LEN] = {0}, cmd[IPA_SYS_CMD_LEN] = {0};
+	uint8_t mac_addr_fdb[IPA_MAC_ADDR_SIZE] = {0};
 	int tmp_var[IPA_MAC_ADDR_SIZE];
 	int query_ifindex, query_ipa_if_num, j, i;
 	bool is_phy_iface = false, is_client_cached = false, parse_error = false;;
@@ -973,11 +974,11 @@ void IPACM_Neighbor::update_neigh_cache()
 
 		for(i = 0; i < MAX_FDB_PARAM_CNT; ++i)
 		{
-			if(strncmp("dev",params[i], IPA_IFACE_NAME_LEN)==0)
+			if ((strncmp("dev",params[i], IPA_IFACE_NAME_LEN)==0) && (i < MAX_FDB_PARAM_CNT -1))
 			{
 				strlcpy(rdev_name, params[i+1], IPA_IFACE_NAME_LEN);
 			}
-			else if(strstr(params[i],":"))
+			else if (strstr(params[i],":"))
 			{
 				strlcpy(mac, params[i], MAX_FDB_PARAM_LEN);
 				if( IPA_MAC_ADDR_SIZE != sscanf( mac, "%x:%x:%x:%x:%x:%x%*c",
@@ -1118,9 +1119,9 @@ void IPACM_Neighbor::update_neigh_cache()
 
 void IPACM_Neighbor::post_phys_iface_event(const char *iface_name, int ipa_if_num, int if_idx)
 {
-	char phys_iface_name[IPA_IFACE_NAME_LEN];
+	char phys_iface_name[IPA_IFACE_NAME_LEN] = {0};
 	int phys_if_idx;
-	ipacm_event_data_fid *data_fid;
+	ipacm_event_data_fid *data_fid = NULL;
 	ipacm_cmd_q_data evt_data;
 
 	/* Vlan client */

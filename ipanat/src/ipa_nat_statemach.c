@@ -292,22 +292,14 @@ int ipa_nati_walk_ipv4_tbl(
 }
 
 int ipa_nati_ipv4_tbl_stats(
-	uint32_t              tbl_hdl,
-	WhichTbl2Use          which,
-	enum ipa3_nat_mem_in* nmi_ptr,
-	uint32_t*    tot_base_ents_ptr,
-	uint32_t*    tot_base_ents_filled_ptr,
-	uint32_t*    tot_expn_ents_ptr,
-	uint32_t*    tot_expn_ents_filled_ptr )
+	uint32_t            tbl_hdl,
+	ipa_nati_tbl_stats* nat_stats_ptr,
+	ipa_nati_tbl_stats* idx_stats_ptr )
 {
 	arb_t* args[] = {
 		(arb_t*) tbl_hdl,
-		(arb_t*) which,
-		(arb_t*) nmi_ptr,
-		(arb_t*) tot_base_ents_ptr,
-		(arb_t*) tot_base_ents_filled_ptr,
-		(arb_t*) tot_expn_ents_ptr,
-		(arb_t*) tot_expn_ents_filled_ptr,
+		(arb_t*) nat_stats_ptr,
+		(arb_t*) idx_stats_ptr,
 	};
 
 	int ret;
@@ -1198,13 +1190,9 @@ static int _smStatTbl(
 {
 	arb_t** args = arb_data_ptr;
 
-	uint32_t     tbl_hdl                  = (uint32_t)      args[0];
-	WhichTbl2Use which                    = (WhichTbl2Use)  args[1];
-	enum ipa3_nat_mem_in* nmi_ptr = (enum ipa3_nat_mem_in*) args[2];
-	uint32_t*    tot_base_ents_ptr        = (uint32_t*)     args[3];
-	uint32_t*    tot_base_ents_filled_ptr = (uint32_t*)     args[4];
-	uint32_t*    tot_expn_ents_ptr        = (uint32_t*)     args[5];
-	uint32_t*    tot_expn_ents_filled_ptr = (uint32_t*)     args[6];
+	uint32_t            tbl_hdl       = (uint32_t)            args[0];
+	ipa_nati_tbl_stats* nat_stats_ptr = (ipa_nati_tbl_stats*) args[1];
+	ipa_nati_tbl_stats* idx_stats_ptr = (ipa_nati_tbl_stats*) args[2];
 
 	int ret;
 
@@ -1212,12 +1200,7 @@ static int _smStatTbl(
 
 	IPADBG("tbl_hdl(0x%08X)\n", tbl_hdl);
 
-	ret = ipa_NATI_ipv4_tbl_stats(
-		tbl_hdl,
-		which,
-		nmi_ptr,
-		tot_base_ents_ptr, tot_base_ents_filled_ptr,
-		tot_expn_ents_ptr, tot_expn_ents_filled_ptr);
+	ret = ipa_NATI_ipv4_tbl_stats(tbl_hdl, nat_stats_ptr, idx_stats_ptr);
 
 	IPADBG("Out\n");
 
@@ -1252,24 +1235,16 @@ static int _smStatTblHybrid(
 {
 	arb_t** args = arb_data_ptr;
 
-	uint32_t     tbl_hdl                  = (uint32_t)      args[0];
-	WhichTbl2Use which                    = (WhichTbl2Use)  args[1];
-	enum ipa3_nat_mem_in* nmi_ptr = (enum ipa3_nat_mem_in*) args[2];
-	uint32_t*    tot_base_ents_ptr        = (uint32_t*)     args[3];
-	uint32_t*    tot_base_ents_filled_ptr = (uint32_t*)     args[4];
-	uint32_t*    tot_expn_ents_ptr        = (uint32_t*)     args[5];
-	uint32_t*    tot_expn_ents_filled_ptr = (uint32_t*)     args[6];
+	uint32_t            tbl_hdl       = (uint32_t)            args[0];
+	ipa_nati_tbl_stats* nat_stats_ptr = (ipa_nati_tbl_stats*) args[1];
+	ipa_nati_tbl_stats* idx_stats_ptr = (ipa_nati_tbl_stats*) args[2];
 
 	arb_t* new_args[] = {
 		(arb_t*) (nati_obj_ptr->curr_state == NATI_STATE_HYBRID) ?
 		         tbl_hdl :
 		         nati_obj_ptr->ddr_tbl_hdl,
-		(arb_t*) which,
-		(arb_t*) nmi_ptr,
-		(arb_t*) tot_base_ents_ptr,
-		(arb_t*) tot_base_ents_filled_ptr,
-		(arb_t*) tot_expn_ents_ptr,
-		(arb_t*) tot_expn_ents_filled_ptr
+		(arb_t*) nat_stats_ptr,
+		(arb_t*) idx_stats_ptr,
 	};
 
 	int ret;
@@ -1761,16 +1736,25 @@ static int _smSwitchFromDdrToSram(
 {
 	nati_switch_stats* sw_stats_ptr = CHOOSE_SW_STATS();
 
-	uint64_t start, stop;
+	uint32_t*          cnt_ptr      = CHOOSE_CNTR();
 
-	int ret;
+	ipa_nati_tbl_stats nat_stats, idx_stats;
+
+	const char*        mem_type;
+
+	uint64_t           start, stop;
+
+	int stats_ret, ret;
 
 	IPADBG("In\n");
+
+	stats_ret = ipa_NATI_ipv4_tbl_stats(
+		nati_obj_ptr->ddr_tbl_hdl, &nat_stats, &idx_stats);
 
 	currTimeAs(TimeAsNanSecs, &start);
 
 	/*
-	 * First switch focus to SRAM...
+	 * First, switch focus to SRAM...
 	 */
 	ret = ipa_nati_statemach(nati_obj_ptr, NATI_TRIG_GOTO_SRAM, 0);
 
@@ -1808,6 +1792,81 @@ static int _smSwitchFromDdrToSram(
 		{
 			sw_stats_ptr->fail += 1;
 		}
+
+		IPADBG("Transistion pass/fail counts (DDR to SRAM) PASS: %u FAIL: %u\n",
+			   sw_stats_ptr->pass,
+			   sw_stats_ptr->fail);
+
+		if ( stats_ret == 0 )
+		{
+			mem_type = ipa3_nat_mem_in_as_str(nat_stats.nmi);
+
+			/*
+			 * NAT table stats...
+			 */
+			IPADBG("Able to add (%u) records to %s "
+				   "NAT table of size (%u) or (%f) percent\n",
+				   *cnt_ptr,
+				   mem_type,
+				   nat_stats.tot_ents,
+				   ((float) *cnt_ptr / (float) nat_stats.tot_ents) * 100.0);
+
+			IPADBG("Able to add (%u) records to %s "
+				   "NAT BASE table of size (%u) or (%f) percent\n",
+				   nat_stats.tot_base_ents_filled,
+				   mem_type,
+				   nat_stats.tot_base_ents,
+				   ((float) nat_stats.tot_base_ents_filled /
+					(float) nat_stats.tot_base_ents) * 100.0);
+
+			IPADBG("Able to add (%u) records to %s "
+				   "NAT EXPN table of size (%u) or (%f) percent\n",
+				   nat_stats.tot_expn_ents_filled,
+				   mem_type,
+				   nat_stats.tot_expn_ents,
+				   ((float) nat_stats.tot_expn_ents_filled /
+					(float) nat_stats.tot_expn_ents) * 100.0);
+
+			IPADBG("%s NAT table chains: tot_chains(%u) min_len(%u) max_len(%u) avg_len(%f)\n",
+				   mem_type,
+				   nat_stats.tot_chains,
+				   nat_stats.min_chain_len,
+				   nat_stats.max_chain_len,
+				   nat_stats.avg_chain_len);
+
+			/*
+			 * INDEX table stats...
+			 */
+			IPADBG("Able to add (%u) records to %s "
+				   "IDX table of size (%u) or (%f) percent\n",
+				   *cnt_ptr,
+				   mem_type,
+				   idx_stats.tot_ents,
+				   ((float) *cnt_ptr / (float) idx_stats.tot_ents) * 100.0);
+
+			IPADBG("Able to add (%u) records to %s "
+				   "IDX BASE table of size (%u) or (%f) percent\n",
+				   idx_stats.tot_base_ents_filled,
+				   mem_type,
+				   idx_stats.tot_base_ents,
+				   ((float) idx_stats.tot_base_ents_filled /
+					(float) idx_stats.tot_base_ents) * 100.0);
+
+			IPADBG("Able to add (%u) records to %s "
+				   "IDX EXPN table of size (%u) or (%f) percent\n",
+				   idx_stats.tot_expn_ents_filled,
+				   mem_type,
+				   idx_stats.tot_expn_ents,
+				   ((float) idx_stats.tot_expn_ents_filled /
+					(float) idx_stats.tot_expn_ents) * 100.0);
+
+			IPADBG("%s IDX table chains: tot_chains(%u) min_len(%u) max_len(%u) avg_len(%f)\n",
+				   mem_type,
+				   idx_stats.tot_chains,
+				   idx_stats.min_chain_len,
+				   idx_stats.max_chain_len,
+				   idx_stats.avg_chain_len);
+		}
 	}
 
 	IPADBG("Out\n");
@@ -1843,11 +1902,20 @@ static int _smSwitchFromSramToDdr(
 {
 	nati_switch_stats* sw_stats_ptr = CHOOSE_SW_STATS();
 
-	uint64_t start, stop;
+	uint32_t*          cnt_ptr      = CHOOSE_CNTR();
 
-	int ret;
+	ipa_nati_tbl_stats nat_stats, idx_stats;
+
+	const char*        mem_type;
+
+	uint64_t           start, stop;
+
+	int stats_ret, ret;
 
 	IPADBG("In\n");
+
+	stats_ret = ipa_NATI_ipv4_tbl_stats(
+		nati_obj_ptr->sram_tbl_hdl, &nat_stats, &idx_stats);
 
 	currTimeAs(TimeAsNanSecs, &start);
 
@@ -1889,6 +1957,81 @@ static int _smSwitchFromSramToDdr(
 		else
 		{
 			sw_stats_ptr->fail += 1;
+		}
+
+		IPADBG("Transistion pass/fail counts (SRAM to DDR) PASS: %u FAIL: %u\n",
+			   sw_stats_ptr->pass,
+			   sw_stats_ptr->fail);
+
+		if ( stats_ret == 0 )
+		{
+			mem_type = ipa3_nat_mem_in_as_str(nat_stats.nmi);
+
+			/*
+			 * NAT table stats...
+			 */
+			IPADBG("Able to add (%u) records to %s "
+				   "NAT table of size (%u) or (%f) percent\n",
+				   *cnt_ptr,
+				   mem_type,
+				   nat_stats.tot_ents,
+				   ((float) *cnt_ptr / (float) nat_stats.tot_ents) * 100.0);
+
+			IPADBG("Able to add (%u) records to %s "
+				   "NAT BASE table of size (%u) or (%f) percent\n",
+				   nat_stats.tot_base_ents_filled,
+				   mem_type,
+				   nat_stats.tot_base_ents,
+				   ((float) nat_stats.tot_base_ents_filled /
+					(float) nat_stats.tot_base_ents) * 100.0);
+
+			IPADBG("Able to add (%u) records to %s "
+				   "NAT EXPN table of size (%u) or (%f) percent\n",
+				   nat_stats.tot_expn_ents_filled,
+				   mem_type,
+				   nat_stats.tot_expn_ents,
+				   ((float) nat_stats.tot_expn_ents_filled /
+					(float) nat_stats.tot_expn_ents) * 100.0);
+
+			IPADBG("%s NAT table chains: tot_chains(%u) min_len(%u) max_len(%u) avg_len(%f)\n",
+				   mem_type,
+				   nat_stats.tot_chains,
+				   nat_stats.min_chain_len,
+				   nat_stats.max_chain_len,
+				   nat_stats.avg_chain_len);
+
+			/*
+			 * INDEX table stats...
+			 */
+			IPADBG("Able to add (%u) records to %s "
+				   "IDX table of size (%u) or (%f) percent\n",
+				   *cnt_ptr,
+				   mem_type,
+				   idx_stats.tot_ents,
+				   ((float) *cnt_ptr / (float) idx_stats.tot_ents) * 100.0);
+
+			IPADBG("Able to add (%u) records to %s "
+				   "IDX BASE table of size (%u) or (%f) percent\n",
+				   idx_stats.tot_base_ents_filled,
+				   mem_type,
+				   idx_stats.tot_base_ents,
+				   ((float) idx_stats.tot_base_ents_filled /
+					(float) idx_stats.tot_base_ents) * 100.0);
+
+			IPADBG("Able to add (%u) records to %s "
+				   "IDX EXPN table of size (%u) or (%f) percent\n",
+				   idx_stats.tot_expn_ents_filled,
+				   mem_type,
+				   idx_stats.tot_expn_ents,
+				   ((float) idx_stats.tot_expn_ents_filled /
+					(float) idx_stats.tot_expn_ents) * 100.0);
+
+			IPADBG("%s IDX table chains: tot_chains(%u) min_len(%u) max_len(%u) avg_len(%f)\n",
+				   mem_type,
+				   idx_stats.tot_chains,
+				   idx_stats.min_chain_len,
+				   idx_stats.max_chain_len,
+				   idx_stats.avg_chain_len);
 		}
 	}
 

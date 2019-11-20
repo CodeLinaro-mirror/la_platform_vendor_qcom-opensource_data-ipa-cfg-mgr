@@ -322,14 +322,27 @@ int ipa_nati_walk_ipv4_tbl(
 	ipa_table_walk_cb walk_cb,
 	void*             arb_data_ptr );
 
+/*
+ * The following used for retrieving table stats.
+ */
+typedef struct
+{
+	enum ipa3_nat_mem_in nmi;
+	uint32_t tot_ents;
+	uint32_t tot_base_ents;
+	uint32_t tot_base_ents_filled;
+	uint32_t tot_expn_ents;
+	uint32_t tot_expn_ents_filled;
+	uint32_t tot_chains;
+	uint32_t min_chain_len;
+	uint32_t max_chain_len;
+	float    avg_chain_len;
+} ipa_nati_tbl_stats;
+
 int ipa_nati_ipv4_tbl_stats(
-	uint32_t              tbl_hdl,
-	WhichTbl2Use          which,
-	enum ipa3_nat_mem_in* nmi_ptr,
-	uint32_t*    tot_base_ents_ptr,
-	uint32_t*    tot_base_ents_filled_ptr,
-	uint32_t*    tot_expn_ents_ptr,
-	uint32_t*    tot_expn_ents_filled_ptr );
+	uint32_t            tbl_hdl,
+	ipa_nati_tbl_stats* nat_stats_ptr,
+	ipa_nati_tbl_stats* idx_stats_ptr );
 
 int ipa_NATI_add_ipv4_tbl(
 	enum ipa3_nat_mem_in nmi,
@@ -350,13 +363,9 @@ int ipa_NATI_walk_ipv4_tbl(
 	void*             arb_data_ptr );
 
 int ipa_NATI_ipv4_tbl_stats(
-	uint32_t              tbl_hdl,
-	WhichTbl2Use          which,
-	enum ipa3_nat_mem_in* nmi_ptr,
-	uint32_t*    tot_base_ents_ptr,
-	uint32_t*    tot_base_ents_filled_ptr,
-	uint32_t*    tot_expn_ents_ptr,
-	uint32_t*    tot_expn_ents_filled_ptr );
+	uint32_t            tbl_hdl,
+	ipa_nati_tbl_stats* nat_stats_ptr,
+	ipa_nati_tbl_stats* idx_stats_ptr );
 
 int ipa_NATI_query_timestamp(
 	uint32_t  tbl_hdl,

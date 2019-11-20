@@ -45,6 +45,10 @@
 #define VALID_RULE_HDL(hdl) \
 	( (hdl) != IPA_TABLE_INVALID_ENTRY )
 
+#undef GOTO_REC
+#define GOTO_REC(tbl, rec_idx) \
+	( (tbl)->table_addr + ((rec_idx) * (tbl)->entry_size) )
+
 typedef enum
 {
 	IPA_NAT_BASE_TBL       = 0,

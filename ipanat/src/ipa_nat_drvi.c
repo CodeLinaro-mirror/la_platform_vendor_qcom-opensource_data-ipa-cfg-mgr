@@ -48,6 +48,12 @@
 #define IPA_NAT_TABLE_NAME "IPA NAT table"
 #define IPA_NAT_INDEX_TABLE_NAME "IPA NAT index table"
 
+#undef min
+#define min(a, b) ((a) < (b)) ? (a) : (b)
+
+#undef max
+#define max(a, b) ((a) > (b)) ? (a) : (b)
+
 static struct ipa_nat_cache ipv4_nat_cache[IPA_NAT_MEM_IN_MAX];
 
 static struct ipa_nat_cache *active_nat_cache_ptr = NULL;
@@ -2365,14 +2371,99 @@ bail:
 	return ret;
 }
 
+typedef struct
+{
+	WhichTbl2Use        which;
+	uint32_t            tot_for_avg;
+	ipa_nati_tbl_stats* stats_ptr;
+} chain_stat_help;
+
+static int gen_chain_stats(
+	ipa_table*      table_ptr,
+	uint32_t        rule_hdl,
+	void*           record_ptr,
+	uint16_t        record_index,
+	void*           meta_record_ptr,
+	uint16_t        meta_record_index,
+	void*           arb_data_ptr )
+{
+	chain_stat_help* csh_ptr = (chain_stat_help*) arb_data_ptr;
+
+	enum ipa3_nat_mem_in nmi;
+	uint8_t              is_expn_tbl;
+	uint16_t             rule_index;
+
+	uint32_t             chain_len = 0;
+
+	BREAK_RULE_HDL(table_ptr, rule_hdl, nmi, is_expn_tbl, rule_index);
+
+	if ( is_expn_tbl )
+	{
+		return 1;
+	}
+
+	if ( csh_ptr->which == USE_NAT_TABLE )
+	{
+		struct ipa_nat_rule* list_elem_ptr =
+			(struct ipa_nat_rule*) record_ptr;
+
+		if ( list_elem_ptr->next_index )
+		{
+			chain_len = 1;
+
+			while ( list_elem_ptr->next_index )
+			{
+				chain_len++;
+
+				list_elem_ptr = GOTO_REC(table_ptr, list_elem_ptr->next_index);
+			}
+		}
+	}
+	else
+	{
+		struct ipa_nat_indx_tbl_rule* list_elem_ptr =
+			(struct ipa_nat_indx_tbl_rule*) record_ptr;
+
+		if ( list_elem_ptr->next_index )
+		{
+			chain_len = 1;
+
+			while ( list_elem_ptr->next_index )
+			{
+				chain_len++;
+
+				list_elem_ptr = GOTO_REC(table_ptr, list_elem_ptr->next_index);
+			}
+		}
+	}
+
+	if ( chain_len )
+	{
+		csh_ptr->stats_ptr->tot_chains += 1;
+
+		csh_ptr->tot_for_avg += chain_len;
+
+		if ( csh_ptr->stats_ptr->min_chain_len == 0 )
+		{
+			csh_ptr->stats_ptr->min_chain_len = chain_len;
+		}
+		else
+		{
+			csh_ptr->stats_ptr->min_chain_len =
+				min(csh_ptr->stats_ptr->min_chain_len, chain_len);
+		}
+
+		csh_ptr->stats_ptr->max_chain_len =
+			max(csh_ptr->stats_ptr->max_chain_len, chain_len);
+	}
+
+	return 0;
+}
+
 int ipa_NATI_ipv4_tbl_stats(
-	uint32_t              tbl_hdl,
-	WhichTbl2Use          which,
-	enum ipa3_nat_mem_in* nmi_ptr,
-	uint32_t*    tot_base_ents_ptr,
-	uint32_t*    tot_base_ents_filled_ptr,
-	uint32_t*    tot_expn_ents_ptr,
-	uint32_t*    tot_expn_ents_filled_ptr )
+	uint32_t            tbl_hdl,
+	ipa_nati_tbl_stats* nat_stats_ptr,
+	ipa_nati_tbl_stats* idx_stats_ptr )
 {
 	enum ipa3_nat_mem_in            nmi;
 	uint32_t                        broken_tbl_hdl;
@@ -2380,33 +2471,23 @@ int ipa_NATI_ipv4_tbl_stats(
 	struct ipa_nat_ip4_table_cache* nat_table;
 	ipa_table*                      ipa_tbl_ptr;
 
+	chain_stat_help                 csh;
+
 	int ret = 0;
 
 	IPADBG("In\n");
 
 	if ( ! VALID_TBL_HDL(tbl_hdl) ||
-		 ! VALID_WHICHTBL2USE(which) ||
-		 ! nmi_ptr ||
-		 ! tot_base_ents_ptr ||
-		 ! tot_base_ents_filled_ptr ||
-		 ! tot_expn_ents_ptr ||
-		 ! tot_expn_ents_filled_ptr )
+		 ! nat_stats_ptr ||
+		 ! idx_stats_ptr )
 	{
 		IPAERR("Bad arg: "
 			   "tbl_hdl(0x%08X) and/or "
-			   "WhichTbl2Use(%u) and/or "
-			   "nmi_ptr(%p) and/or "
-			   "tot_base_ents_ptr(%p) and/or "
-			   "tot_base_ents_filled_ptr(%p) and/or "
-			   "tot_expn_ents_ptr(%p) and/or "
-			   "tot_expn_ents_filled_ptr(%p)\n",
+			   "nat_stats_ptr(%p) and/or "
+			   "idx_stats_ptr(%p)\n",
 			   tbl_hdl,
-			   which,
-			   nmi_ptr,
-			   tot_base_ents_ptr,
-			   tot_base_ents_filled_ptr,
-			   tot_expn_ents_ptr,
-			   tot_expn_ents_filled_ptr);
+			   nat_stats_ptr,
+			   idx_stats_ptr );
 		ret = -EINVAL;
 		goto bail;
 	}
@@ -2418,6 +2499,9 @@ int ipa_NATI_ipv4_tbl_stats(
 		goto bail;
 	}
 
+	memset(nat_stats_ptr, 0, sizeof(ipa_nati_tbl_stats));
+	memset(idx_stats_ptr, 0, sizeof(ipa_nati_tbl_stats));
+
 	BREAK_TBL_HDL(tbl_hdl, nmi, broken_tbl_hdl);
 
 	if ( ! IPA_VALID_NAT_MEM_IN(nmi) )
@@ -2426,8 +2510,6 @@ int ipa_NATI_ipv4_tbl_stats(
 		ret = -EINVAL;
 		goto unlock;
 	}
-
-	*nmi_ptr = nmi;
 
 	nat_cache_ptr = &ipv4_nat_cache[nmi];
 
@@ -2440,16 +2522,79 @@ int ipa_NATI_ipv4_tbl_stats(
 
 	nat_table = &nat_cache_ptr->ip4_tbl[broken_tbl_hdl - 1];
 
-	ipa_tbl_ptr =
-		(which == USE_NAT_TABLE) ?
-		&nat_table->table        :
-		&nat_table->index_table;
+	/*
+	 * Gather NAT table stats...
+	 */
+	ipa_tbl_ptr = &nat_table->table;
 
-	*tot_base_ents_ptr        = ipa_tbl_ptr->table_entries;
-	*tot_base_ents_filled_ptr = ipa_tbl_ptr->cur_tbl_cnt;
+	nat_stats_ptr->nmi                  = nmi;
 
-	*tot_expn_ents_ptr        = ipa_tbl_ptr->expn_table_entries;
-	*tot_expn_ents_filled_ptr = ipa_tbl_ptr->cur_expn_tbl_cnt;
+	nat_stats_ptr->tot_base_ents        = ipa_tbl_ptr->table_entries;
+	nat_stats_ptr->tot_expn_ents        = ipa_tbl_ptr->expn_table_entries;
+	nat_stats_ptr->tot_ents             =
+		nat_stats_ptr->tot_base_ents + nat_stats_ptr->tot_expn_ents;
+
+	nat_stats_ptr->tot_base_ents_filled = ipa_tbl_ptr->cur_tbl_cnt;
+	nat_stats_ptr->tot_expn_ents_filled = ipa_tbl_ptr->cur_expn_tbl_cnt;
+
+	memset(&csh, 0, sizeof(chain_stat_help));
+
+	csh.which     = USE_NAT_TABLE;
+	csh.stats_ptr = nat_stats_ptr;
+
+	ret = ipa_table_walk(
+		ipa_tbl_ptr, 0, WHEN_SLOT_FILLED, gen_chain_stats, &csh);
+
+	if ( ret < 0 )
+	{
+		IPAERR("Error gathering chain stats\n");
+		ret = -EINVAL;
+		goto unlock;
+	}
+
+	if ( csh.tot_for_avg && nat_stats_ptr->tot_chains )
+	{
+		nat_stats_ptr->avg_chain_len =
+			(float) csh.tot_for_avg / (float) nat_stats_ptr->tot_chains;
+	}
+
+	/*
+	 * Now lets gather index table stats...
+	 */
+	ipa_tbl_ptr = &nat_table->index_table;
+
+	idx_stats_ptr->nmi                  = nmi;
+
+	idx_stats_ptr->tot_base_ents        = ipa_tbl_ptr->table_entries;
+	idx_stats_ptr->tot_expn_ents        = ipa_tbl_ptr->expn_table_entries;
+	idx_stats_ptr->tot_ents             =
+		idx_stats_ptr->tot_base_ents + idx_stats_ptr->tot_expn_ents;
+
+	idx_stats_ptr->tot_base_ents_filled = ipa_tbl_ptr->cur_tbl_cnt;
+	idx_stats_ptr->tot_expn_ents_filled = ipa_tbl_ptr->cur_expn_tbl_cnt;
+
+	memset(&csh, 0, sizeof(chain_stat_help));
+
+	csh.which     = USE_INDEX_TABLE;
+	csh.stats_ptr = idx_stats_ptr;
+
+	ret = ipa_table_walk(
+		ipa_tbl_ptr, 0, WHEN_SLOT_FILLED, gen_chain_stats, &csh);
+
+	if ( ret < 0 )
+	{
+		IPAERR("Error gathering chain stats\n");
+		ret = -EINVAL;
+		goto unlock;
+	}
+
+	if ( csh.tot_for_avg && idx_stats_ptr->tot_chains )
+	{
+		idx_stats_ptr->avg_chain_len =
+			(float) csh.tot_for_avg / (float) idx_stats_ptr->tot_chains;
+	}
+
+	ret = 0;
 
 unlock:
 	if ( pthread_mutex_unlock(&nat_mutex) )

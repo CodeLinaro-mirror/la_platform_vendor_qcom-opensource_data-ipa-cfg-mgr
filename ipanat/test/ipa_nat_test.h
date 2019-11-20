@@ -176,4 +176,5 @@ int ipa_nat_test021(const char*, u32, int, u32, int, void*);
 int ipa_nat_test022(const char*, u32, int, u32, int, void*);
 int ipa_nat_test023(const char*, u32, int, u32, int, void*);
 int ipa_nat_test024(const char*, u32, int, u32, int, void*);
+int ipa_nat_test025(const char*, u32, int, u32, int, void*);
 int ipa_nat_test999(const char*, u32, int, u32, int, void*);

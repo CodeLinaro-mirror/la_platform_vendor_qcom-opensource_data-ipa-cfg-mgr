@@ -6149,16 +6149,6 @@ int IPACM_Lan::config_dft_firewall_rules_ul_ex(IPACM_firewall_conf_t* firewall_c
 		goto alloc_fail;
 	}
 
-	memset(&flt_rule_entry, 0, sizeof(struct ipa_flt_rule_add)); // Zero All Fields
-	flt_rule_entry.at_rear = true;
-	flt_rule_entry.flt_rule_hdl = -1;
-	flt_rule_entry.status = -1;
-	flt_rule_entry.rule.retain_hdr = 1;
-
-	/* Catch-all rule*/
-	flt_rule_entry.rule.action = IPA_PASS_TO_EXCEPTION;
-	memcpy(&pFilteringTable->rules[total_rules-1], &flt_rule_entry, sizeof(flt_rule_entry));
-
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
 	if (IPACM_Iface::ipacmcfg->ipacm_lan_stats_enable == false)
 #endif

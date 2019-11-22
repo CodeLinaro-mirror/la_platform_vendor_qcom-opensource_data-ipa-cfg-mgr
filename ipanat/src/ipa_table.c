@@ -34,10 +34,6 @@
 #define IPA_BASE_TABLE_PERCENTAGE      .8
 #define IPA_EXPANSION_TABLE_PERCENTAGE .2
 
-#undef GOTO_REC
-#define GOTO_REC(tbl, rec_idx) \
-	( (tbl)->table_addr + ((rec_idx) * (tbl)->entry_size) )
-
 /*
  * The table number of entries is limited by Entry ID structure
  * above. The base table max entries is limited by index into table

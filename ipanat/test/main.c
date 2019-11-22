@@ -350,6 +350,7 @@ static NatTests nt_array[] = {
 	NAT_TEST_ENTRY(ipa_nat_test022, IPA_NAT_TEST_PRE_COND_TE, 0),
 	NAT_TEST_ENTRY(ipa_nat_test023, IPA_NAT_TEST_PRE_COND_TE, 0),
 	NAT_TEST_ENTRY(ipa_nat_test024, IPA_NAT_TEST_PRE_COND_TE, 0),
+	NAT_TEST_ENTRY(ipa_nat_test025, IPA_NAT_TEST_PRE_COND_TE, 0),
 	/*
 	 * Add new tests just above this comment. Keep the following two
 	 * at the end...

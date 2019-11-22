@@ -31,6 +31,7 @@ ipanattest_SOURCES = \
 		ipa_nat_test022.c \
 		ipa_nat_test023.c \
 		ipa_nat_test024.c \
+		ipa_nat_test025.c \
 		ipa_nat_test999.c \
 		main.c
 

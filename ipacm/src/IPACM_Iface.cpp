@@ -792,9 +792,9 @@ int IPACM_Iface::init_fl_rule(ipa_ip_type iptype)
 
 		IPACMDBG_H("rx property attrib mask:0x%x\n", rx_prop->rx[0].attrib.attrib_mask);
 
-		if (ipacmcfg->IsIpv6CTEnabled())
+		 /* always add ipv6 frag exception rule except for WLAN-backhaul */
+		if (ipa_if_cate != WAN_IF)
 		{
-			/* Configuring Fragment Filtering Rule */
 #ifdef FEATURE_IPA_V3
 			flt_rule_entry.at_rear = false;
 			flt_rule_entry.rule.hashable = false;

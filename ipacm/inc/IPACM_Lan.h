@@ -169,7 +169,7 @@ public:
 	uint32_t lan_wan_fl_rule_hdl[IPA_WAN_DEFAULT_FILTER_RULE_HANDLES];
 
 	/* store private-subnet filter rule handlers */
-	uint32_t private_fl_rule_hdl[IPA_MAX_PRIVATE_SUBNET_ENTRIES];
+	uint32_t private_fl_rule_hdl[IPA_MAX_PRIVATE_SUBNET_ENTRIES + IPA_MAX_MTU_ENTRIES];
 
 #ifdef FEATURE_IPACM_UL_FIREWALL
 	ul_firewall_t iface_ul_firewall;
@@ -839,7 +839,7 @@ protected:
 
 	uint32_t ipv4_icmp_flt_rule_hdl[NUM_IPV4_ICMP_FLT_RULE];
 
-	uint32_t ipv6_prefix_flt_rule_hdl[IPA_MAX_IPV6_PREFIX_FLT_RULE];
+	uint32_t ipv6_prefix_flt_rule_hdl[IPA_MAX_IPV6_PREFIX_FLT_RULE + IPA_MAX_MTU_ENTRIES];
 	uint32_t ipv6_icmp_flt_rule_hdl[NUM_IPV6_ICMP_FLT_RULE];
 #ifdef FEATURE_L2TP
 	uint32_t l2tp_inner_private_subnet_flt_rule_hdl[IPA_MAX_PRIVATE_SUBNET_ENTRIES];
@@ -1184,6 +1184,8 @@ private:
 	int handle_vlan_phys_if_down();
 	int check_vlan_PDNUp(enum ipa_ip_type iptype);
 #endif
+
+	int construct_mtu_rule(struct ipa_flt_rule *rule, enum ipa_ip_type iptype, uint16_t mtu);
 };
 
 #endif /* IPACM_LAN_H */

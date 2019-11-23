@@ -110,11 +110,11 @@ public:
 	ipacm_alg *alg_table;
 
 	/* Store private subnet configuration from XML file */
-	ipa_private_subnet private_subnet_table[IPA_MAX_PRIVATE_SUBNET_ENTRIES];
+	ipa_private_subnet private_subnet_table[IPA_MAX_PRIVATE_SUBNET_ENTRIES + IPA_MAX_MTU_ENTRIES];
 
 #ifdef FEATURE_VLAN_MPDN
 	int num_ipv6_prefixes;
-	uint32_t ipa_ipv6_prefixes[IPA_MAX_IPV6_PREFIX_FLT_RULE][2];
+	uint32_t ipa_ipv6_prefixes[IPA_MAX_IPV6_PREFIX_FLT_RULE + IPA_MAX_MTU_ENTRIES][2];
 #endif
 
 	/* Store the non nat iface names */

@@ -442,6 +442,12 @@ struct l2tp_vlan_mapping_info
 	/* the following are l2tp iface info (name, session id) */
 	char l2tp_iface_name[IPA_RESOURCE_NAME_MAX];
 	uint8_t l2tp_session_id;
+	/* Add support for L2TP over UDP. */
+#ifdef IPA_L2TP_TUNNEL_UDP
+	enum ipa_l2tp_tunnel_type tunnel_type;
+	uint16_t src_port;
+	uint16_t dst_port;
+#endif
 	/* the following are mdm vlan iface info (name, vlan id, ipv6 addr) */
 	char vlan_iface_name[IPA_RESOURCE_NAME_MAX];
 	uint8_t vlan_id;

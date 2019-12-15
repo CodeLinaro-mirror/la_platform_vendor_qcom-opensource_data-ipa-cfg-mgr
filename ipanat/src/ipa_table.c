@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2019 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2018-2020 The Linux Foundation. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -31,8 +31,11 @@
 
 #include <errno.h>
 
-#define IPA_BASE_TABLE_PERCENTAGE      .8
-#define IPA_EXPANSION_TABLE_PERCENTAGE .2
+#define IPA_BASE_TABLE_PERCENTAGE       .8
+#define IPA_EXPANSION_TABLE_PERCENTAGE  .2
+
+#define IPA_BASE_TABLE_PCNT_4SRAM      1.00
+#define IPA_EXPANSION_TABLE_PCNT_4SRAM 0.43
 
 /*
  * The table number of entries is limited by Entry ID structure
@@ -101,10 +104,12 @@ void ipa_table_init(
 }
 
 int ipa_table_calculate_entries_num(
-	ipa_table* table,
-	uint16_t number_of_entries)
+	ipa_table*           table,
+	uint16_t             number_of_entries,
+	enum ipa3_nat_mem_in nmi)
 {
 	uint16_t table_entries, expn_table_entries;
+	float btp, etp;
 	int result = 0;
 
 	IPADBG("In\n");
@@ -117,10 +122,19 @@ int ipa_table_calculate_entries_num(
 		goto bail;
 	}
 
-	table_entries =
-		Get2PowerTightUpperBound(number_of_entries * IPA_BASE_TABLE_PERCENTAGE);
-	expn_table_entries =
-		GetEvenTightUpperBound(number_of_entries * IPA_EXPANSION_TABLE_PERCENTAGE);
+	if ( nmi == IPA_NAT_MEM_IN_SRAM )
+	{
+		btp = IPA_BASE_TABLE_PCNT_4SRAM;
+		etp = IPA_EXPANSION_TABLE_PCNT_4SRAM;
+	}
+	else
+	{
+		btp = IPA_BASE_TABLE_PERCENTAGE;
+		etp = IPA_EXPANSION_TABLE_PERCENTAGE;
+	}
+
+	table_entries      = Get2PowerTightUpperBound(number_of_entries * btp);
+	expn_table_entries = GetEvenTightUpperBound(number_of_entries * etp);
 
 	table->tot_tbl_ents = table_entries + expn_table_entries;
 
@@ -1081,9 +1095,6 @@ static int GetEvenTightUpperBound(uint16_t num)
 
 	return (num % 2) ? num + 1 : num;
 }
-
-#define IPA_BASE_TABLE_PCNT_4SRAM      1.00
-#define IPA_EXPANSION_TABLE_PCNT_4SRAM 0.43
 
 int ipa_calc_num_sram_table_entries(
 	uint32_t  sram_size,

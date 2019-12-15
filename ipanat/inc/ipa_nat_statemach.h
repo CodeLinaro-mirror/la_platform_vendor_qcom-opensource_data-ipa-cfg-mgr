@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2019-2020 The Linux Foundation. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -150,6 +150,28 @@ typedef struct
 #define IN_HYBRID_STATE() \
 	( nati_obj.curr_state == NATI_STATE_HYBRID || \
 	  nati_obj.curr_state == NATI_STATE_HYBRID_DDR )
+
+#undef  SRAM_CURRENTLY_ACTIVE
+#define SRAM_CURRENTLY_ACTIVE() \
+	( nati_obj.curr_state == NATI_STATE_SRAM_ONLY || \
+	  nati_obj.curr_state == NATI_STATE_HYBRID )
+
+#define SRAM_TO_BE_ACCESSED(t) \
+	( SRAM_CURRENTLY_ACTIVE() || \
+	  (t) == NATI_TRIG_GOTO_SRAM || \
+	  (t) == NATI_TRIG_TBL_SWITCH )
+
+/*
+ * NOTE: The exclusion of timestamp retrieval below.
+ *
+ * Why? Because timestamp retrieval institutes too many repetitive
+ * accesses, hence would lead to too many successive votes. Instead,
+ * it will be handled differently and in the app layer above.
+ */
+#undef  VOTE_REQUIRED
+#define VOTE_REQUIRED(t) \
+	( SRAM_TO_BE_ACCESSED(t) && \
+	  (t) != NATI_TRIG_GET_TSTAMP )
 
 /******************************************************************************/
 /**

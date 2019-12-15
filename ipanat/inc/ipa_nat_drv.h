@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013-2019 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2013-2020 The Linux Foundation. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -32,6 +32,12 @@
 #include "ipa_nat_utils.h"
 
 #include <stdint.h>  /* uint32_t */
+#include <stdbool.h>
+
+/**
+ * ipa_nat_is_sram_supported() - Reports if sram is available for use
+ */
+bool ipa_nat_is_sram_supported(void);
 
 /**
  * struct ipa_nat_ipv4_rule - To hold ipv4 nat rule
@@ -232,6 +238,13 @@ int ipa_nat_dealloc_pdn(uint8_t pdn_index);
  * @table_handle: [in] handle of IPv4 NAT table
  */
 void ipa_nat_dump_ipv4_table(uint32_t tbl_hdl);
+
+/**
+ * ipa_nat_vote_clock() - used for voting clock
+ * @vote_type: [in] desired vote type
+ */
+int ipa_nat_vote_clock(
+	enum ipa_app_clock_vote_type vote_type );
 
 int ipa_nat_switch_to(
 	enum ipa3_nat_mem_in nmi );

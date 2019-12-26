@@ -51,7 +51,6 @@ IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "IPACM_Conntrack_NATApp.h"
 
 #define IPA_WAN_DEFAULT_FILTER_RULE_HANDLES  1
-#define IPA_PRIV_SUBNET_FILTER_RULE_HANDLES  3
 #define IPA_NUM_ODU_ROUTE_RULES 2
 #define MAX_WAN_UL_FILTER_RULES MAX_NUM_EXT_PROPS
 #define NUM_IPV4_ICMP_FLT_RULE 1
@@ -369,7 +368,7 @@ public:
 		ipa_hdr_l2_type peer_l2_hdr_type, ipa_ip_type iptype, uint32_t *rt_rule_hdl, int rt_rule_count);
 
 	/* add filtering rule and return handle to lan2lan controller */
-	int eth_bridge_add_flt_rule(uint8_t *mac, uint32_t rt_tbl_hdl, ipa_ip_type iptype, uint32_t *flt_rule_hdl);
+	int eth_bridge_add_flt_rule(uint8_t *mac, uint32_t rt_tbl_hdl, ipa_ip_type iptype, uint32_t *flt_rule_hdl, uint8_t vlan_id = 0);
 
 	/* delete filtering rule */
 	int eth_bridge_del_flt_rule(uint32_t flt_rule_hdl, ipa_ip_type iptype);
@@ -431,7 +430,7 @@ protected:
 
 	/* mac address has to be provided for client related events */
 	void eth_bridge_post_event(ipa_cm_event_id evt, ipa_ip_type iptype, uint8_t *mac,
-		uint32_t *ipv6_addr, char *iface_name);
+		uint32_t *ipv6_addr, char *iface_name, uint8_t VlanID = 0);
 
 #if defined(FEATURE_L2TP) || defined(FEATURE_VLAN_MPDN)
 	/* check if the event is associated with vlan interface */
@@ -860,7 +859,9 @@ protected:
 private:
 
 	/* get hdr proc ctx type given source and destination l2 hdr type */
-	ipa_hdr_proc_type eth_bridge_get_hdr_proc_type(ipa_hdr_l2_type t1, ipa_hdr_l2_type t2);
+	ipa_hdr_proc_type eth_bridge_get_hdr_proc_type(ipa_hdr_l2_type t1,
+		ipa_hdr_l2_type t2,
+	struct ipa_eth_II_to_eth_II_ex_procparams &generic_params);
 
 	/* get partial header (header template of hdr proc ctx) */
 	int eth_bridge_get_hdr_template_hdl(uint32_t* hdr_hdl);

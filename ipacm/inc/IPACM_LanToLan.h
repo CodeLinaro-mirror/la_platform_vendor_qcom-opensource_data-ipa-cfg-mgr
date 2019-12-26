@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2014-2017, The Linux Foundation. All rights reserved.
+Copyright (c) 2014-2017, 2019, The Linux Foundation. All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are
@@ -38,6 +38,7 @@ IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #define IPACM_LANTOLAN_H
 
 #include <stdint.h>
+#include <map>
 #include "linux/msm_ipa.h"
 #include "IPACM_Iface.h"
 #include "IPACM_Defs.h"
@@ -51,8 +52,11 @@ IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #define MAX_NUM_CACHED_CLIENT_ADD_EVENT 10
 #define MAX_NUM_IFACE 10
+#ifdef FEATURE_VLAN_MPDN
+#define MAX_NUM_CLIENT 32
+#else
 #define MAX_NUM_CLIENT 16
-
+#endif
 struct rt_rule_info
 {
 	int num_hdl[IPA_IP_MAX];	/* one client may need more than one routing rules on the same routing table depending on tx_prop */
@@ -77,6 +81,7 @@ struct client_info
 	bool is_l2tp_client;
 	l2tp_vlan_mapping_info *mapping_info;
 	l2tp_rt_rule_info l2tp_rt_rule_hdl[IPA_HDR_L2_MAX];
+	uint8_t vlan_id;
 };
 
 struct flt_rule_info
@@ -93,6 +98,10 @@ struct peer_iface_info
 	char rt_tbl_name_for_rt[IPA_IP_MAX][IPA_RESOURCE_NAME_MAX];
 	char rt_tbl_name_for_flt[IPA_IP_MAX][IPA_RESOURCE_NAME_MAX];
 	list<flt_rule_info> flt_rule;
+#ifdef FEATURE_VLAN_MPDN
+	/* MAC addresses as key, ref count as value - counts clients with same mac but different vlan id - change on client add\del */
+	std::map<std::array<uint8_t, 6>, int > mac_rt_rule_ref;
+#endif
 };
 
 class IPACM_LanToLan_Iface
@@ -103,7 +112,13 @@ public:
 
 	void add_client_rt_rule_for_new_iface();
 
-	void add_all_inter_interface_client_flt_rule(ipa_ip_type iptype);
+#ifdef FEATURE_VLAN_MPDN
+	void add_all_inter_interface_client_flt_rule_one_vlan_id(ipa_ip_type iptype, uint8_t vlan_id);
+	void handle_vlan_id_add(uint8_t vlan_id);
+	void handle_vlan_id_del(uint8_t vlan_id);
+#endif
+
+	void add_all_inter_interface_client_flt_rule(ipa_ip_type iptype, uint8_t *Ids = NULL);
 
 	void add_all_intra_interface_client_flt_rule(ipa_ip_type iptype);
 
@@ -116,9 +131,9 @@ public:
 	void handle_new_iface_up(char rt_tbl_name_for_flt[][IPA_RESOURCE_NAME_MAX], char rt_tbl_name_for_rt[][IPA_RESOURCE_NAME_MAX],
 		IPACM_LanToLan_Iface *peer_iface);
 
-	void handle_client_add(uint8_t *mac, bool is_l2tp_client, l2tp_vlan_mapping_info *mapping_info);
+	void handle_client_add(uint8_t *mac, bool is_l2tp_client, l2tp_vlan_mapping_info *mapping_info, uint8_t vlan_id = 0);
 
-	void handle_client_del(uint8_t *mac);
+	void handle_client_del(uint8_t *mac, uint8_t vlan_id);
 
 	void print_data_structure_info();
 
@@ -146,6 +161,10 @@ public:
 
 	void handle_l2tp_disable();
 #endif
+#ifdef FEATURE_VLAN_MPDN
+	void set_is_vlan(bool is_vlan) { m_is_vlan = is_vlan; }
+	bool get_is_vlan() { return m_is_vlan; };
+#endif
 private:
 
 	IPACM_Lan *m_p_iface;
@@ -153,8 +172,11 @@ private:
 	bool m_support_inter_iface_offload;
 	bool m_support_intra_iface_offload;
 	bool m_is_l2tp_iface;
-
-	int ref_cnt_peer_l2_hdr_type[IPA_HDR_L2_MAX];	/* reference count of l2 header type of peer interfaces */
+#ifdef FEATURE_VLAN_MPDN
+	bool m_is_vlan;
+#endif
+	/* reference count of l2 header type of peer interfaces - counts peer interfaces with relevant header type - change on iface up\down */
+	int ref_cnt_peer_l2_hdr_type[IPA_HDR_L2_MAX];
 	uint32_t hdr_proc_ctx_for_inter_interface[IPA_HDR_L2_MAX];
 	uint32_t hdr_proc_ctx_for_intra_interface;
 	uint32_t hdr_proc_ctx_for_l2tp;		/* uc needs to remove 62 bytes IPv6 + L2TP + inner Ethernet header */
@@ -225,7 +247,11 @@ private:
 	void handle_wlan_scc_mcc_switch(ipacm_event_eth_bridge *data);
 
 	void handle_new_iface_up(IPACM_LanToLan_Iface *new_iface, IPACM_LanToLan_Iface *exist_iface);
+#ifdef FEATURE_VLAN_MPDN
+	void handle_vlan_id_add(ipacm_event_eth_bridge * data);
 
+	void handle_vlan_id_del(ipacm_event_eth_bridge *data);
+#endif
 	void event_callback(ipa_cm_event_id event, void* param);
 
 	void handle_cached_client_add_event(IPACM_Lan *p_iface);

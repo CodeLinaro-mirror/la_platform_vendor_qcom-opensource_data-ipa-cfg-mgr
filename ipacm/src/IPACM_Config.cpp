@@ -118,6 +118,10 @@ const char *ipacm_event_name[] = {
 	__stringify(IPA_ETH_BRIDGE_CLIENT_ADD),                /* ipacm_event_eth_bridge*/
 	__stringify(IPA_ETH_BRIDGE_CLIENT_DEL),                /* ipacm_event_eth_bridge*/
 	__stringify(IPA_ETH_BRIDGE_WLAN_SCC_MCC_SWITCH),       /* ipacm_event_eth_bridge*/
+#ifdef FEATURE_VLAN_MPDN
+	__stringify(IPA_ETH_BRIDGE_ADD_VLAN_ID),               /* ipacm_event_eth_bridge*/
+	__stringify(IPA_ETH_BRIDGE_DEL_VLAN_ID),               /* ipacm_event_eth_bridge*/
+#endif
 	__stringify(IPA_LAN_DELETE_SELF),                      /* ipacm_event_data_fid */
 #ifdef FEATURE_L2TP
 	__stringify(IPA_ADD_L2TP_CLIENT),                      /* ipacm_event_data_all */
@@ -1311,7 +1315,30 @@ void IPACM_Config::add_vlan_iface(ipa_ioc_vlan_iface_info *data)
 	new_vlan_info.vlan_id = data->vlan_id;
 	m_vlan_iface.push_front(new_vlan_info);
 	pthread_mutex_unlock(&vlan_l2tp_lock);
+#ifdef FEATURE_VLAN_MPDN
+	ipacm_event_eth_bridge *evt_data_eth_bridge;
+	ipacm_cmd_q_data eth_bridge_evt;
 
+	evt_data_eth_bridge = (ipacm_event_eth_bridge*)malloc(sizeof(*evt_data_eth_bridge));
+	if(evt_data_eth_bridge == NULL)
+	{
+		IPACMERR("Failed to allocate memory.\n");
+		return;
+	}
+	memset(evt_data_eth_bridge, 0, sizeof(*evt_data_eth_bridge));
+
+	memcpy(evt_data_eth_bridge->iface_name, data->name,
+		sizeof(evt_data_eth_bridge->iface_name));
+
+	evt_data_eth_bridge->VlanID = data->vlan_id;
+
+	eth_bridge_evt.evt_data = (void*)evt_data_eth_bridge;
+	eth_bridge_evt.event = IPA_ETH_BRIDGE_ADD_VLAN_ID;
+
+	IPACMDBG_H("Posting event %s\n",
+		IPACM_Iface::ipacmcfg->getEventName(eth_bridge_evt.event));
+	IPACM_EvtDispatcher::PostEvt(&eth_bridge_evt);
+#endif
 	return;
 }
 
@@ -1393,6 +1420,31 @@ void IPACM_Config::del_vlan_iface(ipa_ioc_vlan_iface_info *data)
 	}
 #endif
 	pthread_mutex_unlock(&vlan_l2tp_lock);
+
+#ifdef FEATURE_VLAN_MPDN
+	ipacm_event_eth_bridge *evt_data_eth_bridge;
+	ipacm_cmd_q_data eth_bridge_evt;
+
+	evt_data_eth_bridge = (ipacm_event_eth_bridge*)malloc(sizeof(*evt_data_eth_bridge));
+	if(evt_data_eth_bridge == NULL)
+	{
+		IPACMERR("Failed to allocate memory.\n");
+		return;
+	}
+	memset(evt_data_eth_bridge, 0, sizeof(*evt_data_eth_bridge));
+
+	memcpy(evt_data_eth_bridge->iface_name, data->name,
+		sizeof(evt_data_eth_bridge->iface_name));
+
+	evt_data_eth_bridge->VlanID = data->vlan_id;
+
+	eth_bridge_evt.evt_data = (void*)evt_data_eth_bridge;
+	eth_bridge_evt.event = IPA_ETH_BRIDGE_DEL_VLAN_ID;
+
+	IPACMDBG_H("Posting event %s\n",
+		IPACM_Iface::ipacmcfg->getEventName(eth_bridge_evt.event));
+	IPACM_EvtDispatcher::PostEvt(&eth_bridge_evt);
+#endif
 
 	return;
 }
@@ -1695,7 +1747,7 @@ bool IPACM_Config::iface_in_vlan_mode(const char *phys_iface_name)
 
 	if(strstr(phys_iface_name, "ecm"))
 	{
-		IPACMDBG("ecm vlan mode %d\n", vlan_devices[IPA_VLAN_IF_RNDIS]);
+		IPACMDBG("ecm vlan mode %d\n", vlan_devices[IPA_VLAN_IF_ECM]);
 		return vlan_devices[IPA_VLAN_IF_ECM];
 	}
 

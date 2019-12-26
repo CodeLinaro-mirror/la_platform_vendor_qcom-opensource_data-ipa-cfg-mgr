@@ -856,6 +856,12 @@ bool IPACM_Filtering::ModifyFilteringRule(struct ipa_ioc_mdfy_flt_rule* ruleTabl
 	IPACMDBG("Printing filtering add attributes\n");
 	IPACMDBG("IP type: %d Number of rules: %d commit value: %d\n", ruleTable->ip, ruleTable->num_rules, ruleTable->commit);
 
+	if(!ruleTable->num_rules)
+	{
+		IPACMERR("0 rules to modify, iptype %s\n", ruleTable->ip == IPA_IP_v4 ? "v4" : "v6");
+		return false;
+	}
+
 	for (i=0; i<ruleTable->num_rules; i++)
 	{
 		IPACMDBG("Filter rule:%d attrib mask: 0x%x\n", i, ruleTable->rules[i].rule.attrib.attrib_mask);

@@ -136,6 +136,7 @@ extern "C"
 
 #define IPA_MAX_NUM_WIFI_CLIENTS  32
 #define IPA_MAX_NUM_WAN_CLIENTS  10
+#define IPA_MAX_NUM_VLAN_CLIENTS 32
 #define IPA_MAX_NUM_ETH_CLIENTS  15
 #define IPA_MAX_NUM_AMPDU_RULE  15
 #define IPA_MAC_ADDR_SIZE  6
@@ -208,6 +209,10 @@ typedef enum
 	IPA_ETH_BRIDGE_CLIENT_ADD,                /* ipacm_event_eth_bridge */
 	IPA_ETH_BRIDGE_CLIENT_DEL,                /* ipacm_event_eth_bridge*/
 	IPA_ETH_BRIDGE_WLAN_SCC_MCC_SWITCH,       /* ipacm_event_eth_bridge*/
+#ifdef FEATURE_VLAN_MPDN
+	IPA_ETH_BRIDGE_ADD_VLAN_ID,               /* ipacm_event_eth_bridge */
+	IPA_ETH_BRIDGE_DEL_VLAN_ID,               /* ipacm_event_eth_bridge */
+#endif
 	IPA_LAN_DELETE_SELF,                      /* ipacm_event_data_fid */
 #ifdef FEATURE_L2TP
 	IPA_ADD_L2TP_CLIENT,                      /* ipacm_event_data_all */
@@ -312,6 +317,7 @@ typedef struct
 	IPACM_Lan *p_iface;
 	ipa_ip_type iptype;
 	uint8_t mac_addr[6];
+	uint8_t VlanID;
 	char iface_name[IPA_IFACE_NAME_LEN];
 } ipacm_event_eth_bridge;
 

@@ -79,6 +79,10 @@ IPACM_Lan::IPACM_Lan(int iface_index) : IPACM_Iface(iface_index)
 #else
 	int max_clients = IPA_MAX_NUM_ETH_CLIENTS;
 #endif
+#ifdef FEATURE_VLAN_MPDN
+	if(IPACM_Iface::ipacmcfg->ipacm_mpdn_enable)
+		max_clients = IPA_MAX_NUM_VLAN_CLIENTS;
+#endif
 
 	Nat_App = NatApp::GetInstance();
 	if (Nat_App == NULL)
@@ -975,9 +979,16 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 #endif
 				)
 			{
-#if !defined(FEATURE_VLAN_MPDN) || defined(FEATURE_L2TP)
-				if((IPACM_Iface::ipacmcfg->ipacm_mpdn_enable == false) && (ipa_interface_index == ipa_if_num))
+				if (
+#ifdef FEATURE_VLAN_MPDN
+					(IPACM_Iface::ipacmcfg->ipacm_mpdn_enable)
+					||
 #endif
+#ifdef FEATURE_L2TP
+					 (IPACM_Iface::ipacmcfg->ipacm_l2tp_enable) &&
+#endif
+					(ipa_interface_index == ipa_if_num)
+					)
 				{
 					uint8_t vlan_id = 0;
 
@@ -1002,6 +1013,7 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 #endif
 					IPACMDBG_H("LAN iface delete client \n");
 					handle_eth_client_down_evt(data->mac_addr, vlan_id, data);
+					eth_bridge_post_event(IPA_ETH_BRIDGE_CLIENT_DEL, IPA_IP_MAX, data->mac_addr, NULL, data->iface_name, vlan_id);
 				}
 #ifdef FEATURE_L2TP
 				else
@@ -1449,6 +1461,9 @@ int IPACM_Lan::handle_vlan_neighbor(ipacm_event_data_all *data)
 		evt_data.evt_data = data;
 		IPACM_EvtDispatcher::PostEvt(&evt_data);
 	}
+
+	eth_bridge_post_event(IPA_ETH_BRIDGE_CLIENT_ADD, IPA_IP_MAX, data->mac_addr, NULL, data->iface_name, vlan_id);
+
 	return IPACM_SUCCESS;
 }
 
@@ -2580,6 +2595,8 @@ int IPACM_Lan::handle_eth_hdr_init(uint8_t *mac_addr, ipacm_bridge *bridge, uint
 	int max_clients = IPA_MAX_NUM_ETH_CLIENTS;
 #endif
 #ifdef FEATURE_VLAN_MPDN
+	if(IPACM_Iface::ipacmcfg->ipacm_mpdn_enable)
+		max_clients = IPA_MAX_NUM_VLAN_CLIENTS;
 	if(isVlan)
 	{
 		clnt_indx = get_eth_client_index(mac_addr, vlan_id);
@@ -4886,7 +4903,7 @@ int IPACM_Lan::handle_down_evt()
 		}
 
 		/* free private-subnet ipv4 filter rules */
-		if (IPACM_Iface::ipacmcfg->ipa_num_private_subnet > IPA_PRIV_SUBNET_FILTER_RULE_HANDLES)
+		if (IPACM_Iface::ipacmcfg->ipa_num_private_subnet > IPA_MAX_PRIVATE_SUBNET_ENTRIES)
 		{
 			IPACMERR(" the number of rules are bigger than array, aborting...\n");
 			res = IPACM_FAILURE;
@@ -8371,6 +8388,12 @@ int IPACM_Lan::modify_ipv6_prefix_flt_rule()
 		return IPACM_FAILURE;
 	}
 
+	if(!IPACM_Iface::ipacmcfg->num_ipv6_prefixes)
+	{
+		IPACMDBG_H("no v6 prefixes yet, stay with dummy\n");
+		return IPACM_SUCCESS;
+	}
+
 	IPACMDBG_H("modifying prefixes, num %d\n", IPACM_Iface::ipacmcfg->num_ipv6_prefixes);
 
 	for(i = 0; i < IPA_MAX_IPV6_PREFIX_FLT_RULE; i++)
@@ -8552,30 +8575,32 @@ int IPACM_Lan::handle_addr_evt_odu_bridge(ipacm_event_data_addr* data)
 	return res;
 }
 
-ipa_hdr_proc_type IPACM_Lan::eth_bridge_get_hdr_proc_type(ipa_hdr_l2_type t1, ipa_hdr_l2_type t2)
+ipa_hdr_proc_type IPACM_Lan::eth_bridge_get_hdr_proc_type(ipa_hdr_l2_type t1,
+	ipa_hdr_l2_type t2,
+	struct ipa_eth_II_to_eth_II_ex_procparams &generic_params)
 {
-	if(t1 == IPA_HDR_L2_ETHERNET_II)
-	{
+	switch(t1) {
+	case IPA_HDR_L2_ETHERNET_II:
 		if(t2 == IPA_HDR_L2_ETHERNET_II)
-		{
 			return IPA_HDR_PROC_ETHII_TO_ETHII;
-		}
 		if(t2 == IPA_HDR_L2_802_3)
-		{
 			return IPA_HDR_PROC_ETHII_TO_802_3;
-		}
-	}
-
-	if(t1 == IPA_HDR_L2_802_3)
-	{
+		break;
+	case IPA_HDR_L2_802_3:
 		if(t2 == IPA_HDR_L2_ETHERNET_II)
-		{
 			return IPA_HDR_PROC_802_3_TO_ETHII;
-		}
 		if(t2 == IPA_HDR_L2_802_3)
-		{
 			return IPA_HDR_PROC_802_3_TO_802_3;
+		break;
+	case IPA_HDR_L2_802_1Q:
+		if(t2 == IPA_HDR_L2_802_1Q) {
+			generic_params.input_ethhdr_negative_offset = 18;
+			generic_params.output_ethhdr_negative_offset = 18;
+			return IPA_HDR_PROC_ETHII_TO_ETHII_EX;
 		}
+		break;
+	default:
+		return IPA_HDR_PROC_NONE;
 	}
 
 	return IPA_HDR_PROC_NONE;
@@ -8852,7 +8877,8 @@ int IPACM_Lan::handle_tethering_client(bool reset, ipacm_client_enum ipa_client)
 }
 
 /* mac address has to be provided for client related events */
-void IPACM_Lan::eth_bridge_post_event(ipa_cm_event_id evt, ipa_ip_type iptype, uint8_t *mac, uint32_t *ipv6_addr, char *iface_name)
+void IPACM_Lan::eth_bridge_post_event(ipa_cm_event_id evt, ipa_ip_type iptype, uint8_t *mac, uint32_t *ipv6_addr, char *iface_name,
+	uint8_t VlanID)
 {
 	ipacm_cmd_q_data eth_bridge_evt;
 	ipacm_event_eth_bridge *evt_data_eth_bridge;
@@ -8883,6 +8909,7 @@ void IPACM_Lan::eth_bridge_post_event(ipa_cm_event_id evt, ipa_ip_type iptype, u
 		memcpy(evt_data_eth_bridge->iface_name, iface_name,
 			sizeof(evt_data_eth_bridge->iface_name));
 	}
+	evt_data_eth_bridge->VlanID = VlanID;
 	eth_bridge_evt.evt_data = (void*)evt_data_eth_bridge;
 
 	IPACMDBG_H("Posting event %s\n",
@@ -8914,7 +8941,10 @@ int IPACM_Lan::eth_bridge_add_hdr_proc_ctx(ipa_hdr_l2_type peer_l2_hdr_type, uin
 	memset(pHeaderProcTable, 0, len);
 	pHeaderProcTable->commit = 1;
 	pHeaderProcTable->num_proc_ctxs = 1;
-	pHeaderProcTable->proc_ctx[0].type = eth_bridge_get_hdr_proc_type(peer_l2_hdr_type, tx_prop->tx[0].hdr_l2_type);
+	pHeaderProcTable->proc_ctx[0].type =
+		eth_bridge_get_hdr_proc_type(peer_l2_hdr_type,
+			tx_prop->tx[0].hdr_l2_type,
+			pHeaderProcTable->proc_ctx[0].generic_params);
 	eth_bridge_get_hdr_template_hdl(&hdr_template);
 	pHeaderProcTable->proc_ctx[0].hdr_hdl = hdr_template;
 	if (m_header.AddHeaderProcCtx(pHeaderProcTable) == false)
@@ -8996,10 +9026,23 @@ int IPACM_Lan::eth_bridge_add_rt_rule(uint8_t *mac, char *rt_tbl_name, uint32_t 
 			}
 
 			memcpy(&rt_rule.rule.attrib, &tx_prop->tx[i].attrib, sizeof(rt_rule.rule.attrib));
-			if(peer_l2_hdr_type == IPA_HDR_L2_ETHERNET_II)
+
+			switch(peer_l2_hdr_type)
+			{
+			case IPA_HDR_L2_ETHERNET_II:
 				rt_rule.rule.attrib.attrib_mask |= IPA_FLT_MAC_DST_ADDR_ETHER_II;
-			else
+				break;
+			case IPA_HDR_L2_802_3:
 				rt_rule.rule.attrib.attrib_mask |= IPA_FLT_MAC_DST_ADDR_802_3;
+				break;
+			case IPA_HDR_L2_802_1Q:
+				rt_rule.rule.attrib.attrib_mask |= IPA_FLT_MAC_DST_ADDR_802_1Q;
+				break;
+			default:
+				IPACMERR("unknown header type\n");
+				res = IPACM_FAILURE;
+				goto end;
+			}
 			memcpy(rt_rule.rule.attrib.dst_mac_addr, mac, sizeof(rt_rule.rule.attrib.dst_mac_addr));
 			memset(rt_rule.rule.attrib.dst_mac_addr_mask, 0xFF, sizeof(rt_rule.rule.attrib.dst_mac_addr_mask));
 
@@ -9095,10 +9138,23 @@ int IPACM_Lan::eth_bridge_modify_rt_rule(uint8_t *mac, uint32_t hdr_proc_ctx_hdl
 #endif
 			memcpy(&rt_rule_entry->rule.attrib, &tx_prop->tx[index].attrib,
 					sizeof(rt_rule_entry->rule.attrib));
-			if(peer_l2_hdr_type == IPA_HDR_L2_ETHERNET_II)
+
+			switch(peer_l2_hdr_type)
+			{
+			case IPA_HDR_L2_ETHERNET_II:
 				rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_MAC_DST_ADDR_ETHER_II;
-			else
+				break;
+			case IPA_HDR_L2_802_3:
 				rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_MAC_DST_ADDR_802_3;
+				break;
+			case IPA_HDR_L2_802_1Q:
+				rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_MAC_DST_ADDR_802_1Q;
+				break;
+			default:
+				IPACMERR("unknown header type\n");
+				res = IPACM_FAILURE;
+				goto end;
+			}
 			memcpy(rt_rule_entry->rule.attrib.dst_mac_addr, mac,
 					sizeof(rt_rule_entry->rule.attrib.dst_mac_addr));
 			memset(rt_rule_entry->rule.attrib.dst_mac_addr_mask, 0xFF,
@@ -9128,7 +9184,7 @@ end:
 	return res;
 }
 
-int IPACM_Lan::eth_bridge_add_flt_rule(uint8_t *mac, uint32_t rt_tbl_hdl, ipa_ip_type iptype, uint32_t *flt_rule_hdl)
+int IPACM_Lan::eth_bridge_add_flt_rule(uint8_t *mac, uint32_t rt_tbl_hdl, ipa_ip_type iptype, uint32_t *flt_rule_hdl, uint8_t vlan_id)
 {
 	int len, res = IPACM_SUCCESS;
 	struct ipa_flt_rule_add flt_rule_entry;
@@ -9170,17 +9226,44 @@ int IPACM_Lan::eth_bridge_add_flt_rule(uint8_t *mac, uint32_t rt_tbl_hdl, ipa_ip
 	flt_rule_entry.rule.hashable = true;
 
 	memcpy(&flt_rule_entry.rule.attrib, &rx_prop->rx[0].attrib, sizeof(flt_rule_entry.rule.attrib));
-	if(tx_prop->tx[0].hdr_l2_type == IPA_HDR_L2_ETHERNET_II)
+	switch(tx_prop->tx[0].hdr_l2_type)
 	{
+	case IPA_HDR_L2_ETHERNET_II:
 		flt_rule_entry.rule.attrib.attrib_mask |= IPA_FLT_MAC_DST_ADDR_ETHER_II;
-	}
-	else
-	{
+		break;
+	case IPA_HDR_L2_802_3:
 		flt_rule_entry.rule.attrib.attrib_mask |= IPA_FLT_MAC_DST_ADDR_802_3;
+		break;
+	case IPA_HDR_L2_802_1Q:
+		flt_rule_entry.rule.attrib.attrib_mask |= IPA_FLT_MAC_DST_ADDR_802_1Q;
+		break;
+	default:
+		IPACMERR("unknown header type\n");
+		res = IPACM_FAILURE;
+		goto end;
 	}
 
 	memcpy(flt_rule_entry.rule.attrib.dst_mac_addr, mac, sizeof(flt_rule_entry.rule.attrib.dst_mac_addr));
 	memset(flt_rule_entry.rule.attrib.dst_mac_addr_mask, 0xFF, sizeof(flt_rule_entry.rule.attrib.dst_mac_addr_mask));
+
+#ifdef FEATURE_VLAN_MPDN
+	if((IPACM_Iface::ipacmcfg->iface_in_vlan_mode(dev_name)))
+	{
+		if(!vlan_id)
+		{
+			IPACMERR("got vlan id 0 for vlan iface %s\n", dev_name);
+			res = IPACM_FAILURE;
+			goto end;
+		}
+
+		flt_rule_entry.rule.attrib.attrib_mask |= IPA_FLT_VLAN_ID;
+		flt_rule_entry.rule.attrib.vlan_id = vlan_id;
+	}
+	else if(vlan_id)
+	{
+		IPACMERR("vlan id is not 0 (%d) for non vlan iface %s!\n", vlan_id, dev_name);
+	}
+#endif //FEATURE_VLAN_MPDN
 
 	memcpy(&(pFilteringTable->rules[0]), &flt_rule_entry, sizeof(flt_rule_entry));
 	if (false == m_filtering.AddFilteringRuleAfter(pFilteringTable))

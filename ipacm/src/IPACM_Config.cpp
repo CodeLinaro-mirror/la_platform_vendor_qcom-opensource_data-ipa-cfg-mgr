@@ -1772,7 +1772,7 @@ int IPACM_Config::get_iface_vlan_ids(char *phys_iface_name, uint8_t *Ids)
 		return false;
 	}
 
-	for(it_vlan = m_vlan_iface.begin(); it_vlan != m_vlan_iface.end() && cnt < IPA_MAX_NUM_HW_PDNS; it_vlan++)
+	for(it_vlan = m_vlan_iface.begin(); it_vlan != m_vlan_iface.end() && cnt < IPA_MAX_NUM_OFFLOAD_VLANS; it_vlan++)
 	{
 		if(strstr(it_vlan->vlan_iface_name, phys_iface_name))
 		{
@@ -1786,7 +1786,7 @@ int IPACM_Config::get_iface_vlan_ids(char *phys_iface_name, uint8_t *Ids)
 
 	IPACMDBG_H("found %d vlan interfaces for dev %s\n", cnt, phys_iface_name);
 
-	while(cnt < IPA_MAX_NUM_HW_PDNS)
+	while(cnt < IPA_MAX_NUM_OFFLOAD_VLANS)
 	{
 		Ids[cnt] = 0;
 		cnt++;

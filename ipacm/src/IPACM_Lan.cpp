@@ -1498,7 +1498,8 @@ int IPACM_Lan::check_vlan_PDNUp(enum ipa_ip_type iptype)
 {
 	int i = 0;
 	ipacm_event_vlan_pdn vlan_data;
-	uint8_t Ids[IPA_MAX_NUM_HW_PDNS];
+	uint8_t Ids[IPA_MAX_NUM_OFFLOAD_VLANS];
+	uint8_t cnt = 0;
 
 	if(IPACM_Iface::ipacmcfg->get_iface_vlan_ids(dev_name, Ids))
 	{
@@ -1508,7 +1509,7 @@ int IPACM_Lan::check_vlan_PDNUp(enum ipa_ip_type iptype)
 
 	if(iptype == IPA_IP_v4)
 	{
-		for(i = 0; i < IPA_MAX_NUM_HW_PDNS; i++)
+		for(i = 0; i < IPA_MAX_NUM_OFFLOAD_VLANS; i++)
 		{
 			uint8_t mux_id;
 
@@ -1536,6 +1537,13 @@ int IPACM_Lan::check_vlan_PDNUp(enum ipa_ip_type iptype)
 						Ids[i],
 						dev_name);
 				}
+
+				cnt++;
+				if(cnt == IPA_MAX_NUM_HW_PDNS)
+				{
+					IPACMDBG_H("reached max num of v4 offload PDNs, not sending more events\n");
+					break;
+				}
 			}
 		}
 	}
@@ -1544,7 +1552,7 @@ int IPACM_Lan::check_vlan_PDNUp(enum ipa_ip_type iptype)
 #ifdef FEATURE_IPACM_UL_FIREWALL
 		bool firewall_updated = false;
 #endif
-		for(i = 0; i < IPA_MAX_NUM_HW_PDNS; i++)
+		for(i = 0; i < IPA_MAX_NUM_OFFLOAD_VLANS; i++)
 		{
 			uint8_t mux_id;
 
@@ -1579,6 +1587,13 @@ int IPACM_Lan::check_vlan_PDNUp(enum ipa_ip_type iptype)
 					IPACMDBG_H("handled v6 vlan pdn up for VID %d, dev %s\n",
 						Ids[i],
 						dev_name);
+				}
+
+				cnt++;
+				if(cnt == IPA_MAX_NUM_HW_PDNS)
+				{
+					IPACMDBG_H("reached max num of v6 offload PDNs, not sending more events\n");
+					break;
 				}
 			}
 		}
@@ -2239,9 +2254,16 @@ int IPACM_Lan::add_vlan_private_subnet(ipacm_bridge *bridge)
 		}
 	}
 
+	IPACMDBG("current num private subnets %d\n", IPACM_Iface::ipacmcfg->ipa_num_private_subnet);
+
 	if(IPACM_Iface::ipacmcfg->ipa_num_private_subnet >= IPA_MAX_PRIVATE_SUBNET_ENTRIES)
 	{
-		IPACMERR("IPACM private subnet_addr overflow, total entry(%d)\n", IPACM_Iface::ipacmcfg->ipa_num_private_subnet);
+		IPACMERR("IPACM private subnet_addr overflow, total entry(%d) existing:\n", IPACM_Iface::ipacmcfg->ipa_num_private_subnet);
+		for(i = 0; i < IPACM_Iface::ipacmcfg->ipa_num_private_subnet; i++)
+		{
+			IPACMERR("0x%X\n", IPACM_Iface::ipacmcfg->private_subnet_table[i].subnet_addr);
+		}
+		IPACMERR("not adding: 0x%X\n", bridge->bridge_ipv4_addr & bridge->bridge_netmask);
 		return IPACM_FAILURE;
 	}
 
@@ -6872,7 +6894,7 @@ void IPACM_Lan::configure_v6_ul_firewall(void)
 		}
 	}
 #ifdef FEATURE_VLAN_MPDN
-	uint8_t Ids[IPA_MAX_NUM_HW_PDNS];
+	uint8_t Ids[IPA_MAX_NUM_OFFLOAD_VLANS];
 
 	if(IPACM_Iface::ipacmcfg->get_iface_vlan_ids(dev_name, Ids))
 	{
@@ -6880,7 +6902,7 @@ void IPACM_Lan::configure_v6_ul_firewall(void)
 		return;
 	}
 
-	for(int i = 0; i < IPA_MAX_NUM_HW_PDNS; i++)
+	for(int i = 0; i < IPA_MAX_NUM_OFFLOAD_VLANS; i++)
 	{
 		if(Ids[i] != 0)
 		{

@@ -218,7 +218,7 @@ void IPACM_LanToLan::handle_iface_up(ipacm_event_eth_bridge *data)
 	bool has_l2tp_iface = false;
 #ifdef FEATURE_VLAN_MPDN
 	bool IsVlan = (IPACM_Iface::ipacmcfg->iface_in_vlan_mode(data->p_iface->dev_name));
-	uint8_t Ids[IPA_MAX_NUM_HW_PDNS];
+	uint8_t Ids[IPA_MAX_NUM_OFFLOAD_VLANS];
 #endif
 
 	IPACMDBG_H("Interface name: %s IP type: %d\n", data->p_iface->dev_name, data->iptype);
@@ -979,7 +979,7 @@ void IPACM_LanToLan_Iface::add_all_inter_interface_client_flt_rule(ipa_ip_type i
 			if(Ids)
 			{
 				int i;
-				for(i = 0; i < IPA_MAX_NUM_HW_PDNS; i++)
+				for(i = 0; i < IPA_MAX_NUM_OFFLOAD_VLANS; i++)
 				{
 					if(Ids[i] == it_client->vlan_id)
 					{
@@ -989,7 +989,7 @@ void IPACM_LanToLan_Iface::add_all_inter_interface_client_flt_rule(ipa_ip_type i
 				}
 
 				/* iface VLAN IDs does not match the client vlan id */
-				if(i >= IPA_MAX_NUM_HW_PDNS)
+				if(i >= IPA_MAX_NUM_OFFLOAD_VLANS)
 				{
 					IPACMDBG("no match for vlan id %d\n", it_client->vlan_id);
 					continue;
@@ -1071,14 +1071,18 @@ void IPACM_LanToLan_Iface::add_client_flt_rule(peer_iface_info *peer, client_inf
 		}
 		if(it_flt != peer->flt_rule.end())
 		{
-			IPACMDBG_H("not adding rule for already found client 0x[%X][%X][%X][%X][%X][%X] vlan %d\n",
-				it_flt->p_client->mac_addr[0], it_flt->p_client->mac_addr[1], it_flt->p_client->mac_addr[2],
-				it_flt->p_client->mac_addr[3], it_flt->p_client->mac_addr[4], it_flt->p_client->mac_addr[5],
-				it_flt->p_client->vlan_id);
-			return;
+			if(it_flt->flt_rule_hdl[iptype]) {
+				IPACMDBG_H("not adding rule for already found client 0x[%X][%X][%X][%X][%X][%X] vlan %d, iptype %d\n",
+					it_flt->p_client->mac_addr[0], it_flt->p_client->mac_addr[1], it_flt->p_client->mac_addr[2],
+					it_flt->p_client->mac_addr[3], it_flt->p_client->mac_addr[4], it_flt->p_client->mac_addr[5],
+					it_flt->p_client->vlan_id, iptype);
+				return;
+			}
+
+			IPACMDBG_H("flt rule is already present for other iptype (not %d), continue\n", iptype);
 		}
 
-		uint8_t Ids[IPA_MAX_NUM_HW_PDNS];
+		uint8_t Ids[IPA_MAX_NUM_OFFLOAD_VLANS];
 
 		if(IPACM_Iface::ipacmcfg->get_iface_vlan_ids(get_iface_pointer()->dev_name, Ids))
 		{
@@ -1087,7 +1091,7 @@ void IPACM_LanToLan_Iface::add_client_flt_rule(peer_iface_info *peer, client_inf
 		}
 
 		int i;
-		for(i = 0; i < IPA_MAX_NUM_HW_PDNS; i++)
+		for(i = 0; i < IPA_MAX_NUM_OFFLOAD_VLANS; i++)
 		{
 			if(Ids[i] == client->vlan_id)
 			{
@@ -1095,7 +1099,7 @@ void IPACM_LanToLan_Iface::add_client_flt_rule(peer_iface_info *peer, client_inf
 				break;
 			}
 		}
-		if(i >= IPA_MAX_NUM_HW_PDNS)
+		if(i >= IPA_MAX_NUM_OFFLOAD_VLANS)
 		{
 			IPACMDBG_H("client vlan Id %d doesn't match with iface %s VLAN ID list\n", client->vlan_id, get_iface_pointer()->dev_name);
 			return;

@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2014-2017, 2019, The Linux Foundation. All rights reserved.
+Copyright (c) 2014-2017, 2019-2020, The Linux Foundation. All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are
@@ -114,6 +114,7 @@ public:
 
 #ifdef FEATURE_VLAN_MPDN
 	void add_all_inter_interface_client_flt_rule_one_vlan_id(ipa_ip_type iptype, uint8_t vlan_id);
+	void del_all_inter_interface_client_flt_rule_one_vlan_id(uint8_t vlan_id);
 	void handle_vlan_id_add(uint8_t vlan_id);
 	void handle_vlan_id_del(uint8_t vlan_id);
 #endif

@@ -1249,6 +1249,10 @@ bool IPACM_ConntrackListener::AddIface(
 
 	*isTempEntry = false;
 
+	/* WA to not to add NAT entries for embedded connections in IP Passthrough mode.
+	 * Keep it enabled till original DNAT issue is fixed in SW.
+	 */
+#ifndef FEATURE_IPPASS_WA
 	/* Special handling for Passthrough IP. */
 	if (IPACM_Iface::ipacmcfg->ipacm_ip_passthrough_mode)
 	{
@@ -1259,6 +1263,7 @@ bool IPACM_ConntrackListener::AddIface(
 			return true;
 		}
 	}
+#endif
 
 	if (nat_inst == NULL)
 	{

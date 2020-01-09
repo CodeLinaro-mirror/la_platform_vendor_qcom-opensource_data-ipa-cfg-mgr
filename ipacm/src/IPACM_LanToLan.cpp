@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2014-2019, The Linux Foundation. All rights reserved.
+Copyright (c) 2014-2020, The Linux Foundation. All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are
@@ -542,10 +542,6 @@ void IPACM_LanToLan::handle_vlan_id_del(ipacm_event_eth_bridge *data)
 				return;
 			}
 
-			/*
-			 * remove all clients associated with this vlan. id in general we shouldn't
-			 * find any client since the vlan iface will be down and all clients shall be removed
-			 */
 			it_to_del->handle_vlan_id_del(data->VlanID);
 			break;
 		}
@@ -957,6 +953,25 @@ void IPACM_LanToLan_Iface::add_all_inter_interface_client_flt_rule_one_vlan_id(i
 		}
 	}
 }
+
+void IPACM_LanToLan_Iface::del_all_inter_interface_client_flt_rule_one_vlan_id(uint8_t vlan_id)
+{
+	list<peer_iface_info>::iterator it_iface;
+	list<client_info>::iterator it_client;
+
+	/* go over all peers (must be vlan interfaces) */
+	for(it_iface = m_peer_iface_info.begin(); it_iface != m_peer_iface_info.end(); it_iface++)
+	{
+		IPACMDBG_H("del flt rules for clients of interface %s with vlan id %d.\n", it_iface->peer->get_iface_pointer()->dev_name, vlan_id);
+
+		/* look for specific client with this vlan id */
+		for(it_client = it_iface->peer->m_client_info.begin(); it_client != it_iface->peer->m_client_info.end(); it_client++)
+		{
+			if(vlan_id == it_client->vlan_id)
+				del_client_flt_rule(&(*it_iface), &(*it_client));
+		}
+	}
+}
 #endif
 
 void IPACM_LanToLan_Iface::add_all_inter_interface_client_flt_rule(ipa_ip_type iptype, uint8_t *Ids)
@@ -1278,7 +1293,9 @@ void IPACM_LanToLan_Iface::del_client_rt_rule(peer_iface_info *peer, client_info
 			return;
 		}
 
-		IPACMDBG_H("ref count is now %d, peer %p\n", it->second, peer);
+		IPACMDBG_H("ref count is now %d, peer %p, mac 0x[%X][%X][%X][%X][%X][%X]\n", it->second, peer,
+			client->mac_addr[0], client->mac_addr[1], client->mac_addr[2],
+			client->mac_addr[3], client->mac_addr[4], client->mac_addr[5]);
 		(it->second)--;
 		IPACMDBG_H("reduce to %d", it->second);
 		if(it->second)
@@ -1451,6 +1468,9 @@ void IPACM_LanToLan_Iface::handle_vlan_id_del(uint8_t vlan_id)
 			handle_client_del(it_client->mac_addr, vlan_id);
 		}
 	}
+
+	/* remove flt rules for clients with this vlan id */
+	del_all_inter_interface_client_flt_rule_one_vlan_id(vlan_id);
 }
 #endif
 
@@ -1709,7 +1729,7 @@ void IPACM_LanToLan_Iface::handle_client_add(uint8_t *mac, bool is_l2tp_client, 
 		return;
 	}
 
-	IPACMDBG_H("is_l2tp_client: %d, mapping_info: %p\n", is_l2tp_client, mapping_info);
+	IPACMDBG_H("is_l2tp_client: %d, mapping_info: %p, vlan id %d\n", is_l2tp_client, mapping_info, vlan_id);
 	memset(&new_client, 0, sizeof(new_client));
 	memcpy(new_client.mac_addr, mac, sizeof(new_client.mac_addr));
 	new_client.is_l2tp_client = is_l2tp_client;

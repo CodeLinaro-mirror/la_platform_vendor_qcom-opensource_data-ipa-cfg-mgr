@@ -190,6 +190,7 @@ public:
 #endif
 #ifdef FEATURE_VLAN_MPDN
 	bool dummy_prefix_installed;
+	bool is_vlan_offload_disabled;
 #endif
 
 	/* LAN-iface's callback function */
@@ -216,6 +217,7 @@ public:
 	int add_vlan_private_subnet(ipacm_bridge *bridge);
 	int add_dummy_ipv6_prefix_flt_rule();
 	int modify_ipv6_prefix_flt_rule();
+	int handle_backhaul_switch_vlan_mode(bool to_sta);
 #endif
 
 	/* handle new_address event*/
@@ -1180,7 +1182,7 @@ private:
 #ifdef FEATURE_VLAN_MPDN
 	int handle_vlan_neighbor(ipacm_event_data_all *data);
 	bool is_vlan_IF(uint8_t vlan_id);
-	int handle_vlan_pdn_up(ipacm_event_vlan_pdn *data);
+	int handle_vlan_pdn_up(ipacm_event_vlan_pdn *data, bool set_mux = true);
 	int handle_vlan_pdn_down(ipacm_event_vlan_pdn *data);
 	int handle_vlan_phys_if_down();
 	int check_vlan_PDNUp(enum ipa_ip_type iptype);

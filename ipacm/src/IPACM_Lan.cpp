@@ -116,6 +116,7 @@ IPACM_Lan::IPACM_Lan(int iface_index) : IPACM_Iface(iface_index)
 
 #ifdef FEATURE_VLAN_MPDN
 	dummy_prefix_installed = false;
+	is_vlan_offload_disabled = false;
 	memset(v4_mux_up, 0, sizeof(v4_mux_up[0]) * IPA_MAX_NUM_HW_PDNS);
 	memset(v6_mux_up, 0, sizeof(v6_mux_up[0]) * IPA_MAX_NUM_HW_PDNS);
 #endif
@@ -720,7 +721,14 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 		if((IPACM_Iface::ipacmcfg->iface_in_vlan_mode(dev_name)) &&
 			(IPACM_Iface::ipacmcfg->ipacm_mpdn_enable == TRUE))
 		{
-			IPACMDBG_H("IF %s is vlan IF, ignoring IPA_HANDLE_WAN_UP", dev_name);
+			if(data_wan->is_sta == false)
+			{
+				handle_backhaul_switch_vlan_mode(false);
+			}
+			else
+			{
+				handle_backhaul_switch_vlan_mode(true);
+			}
 			return;
 		}
 #endif
@@ -753,7 +761,14 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 		if((IPACM_Iface::ipacmcfg->iface_in_vlan_mode(dev_name)) &&
 			(IPACM_Iface::ipacmcfg->ipacm_mpdn_enable == TRUE))
 		{
-			IPACMDBG_H("IF %s is vlan IF, ignoring IPA_HANDLE_WAN_UP_V6", dev_name);
+			if(data_wan->is_sta == false)
+			{
+				handle_backhaul_switch_vlan_mode(false);
+			}
+			else
+			{
+				handle_backhaul_switch_vlan_mode(true);
+			}
 			return;
 		}
 #endif
@@ -1607,15 +1622,22 @@ int IPACM_Lan::check_vlan_PDNUp(enum ipa_ip_type iptype)
 	return IPACM_SUCCESS;
 }
 
-int IPACM_Lan::handle_vlan_pdn_up(ipacm_event_vlan_pdn *data)
+int IPACM_Lan::handle_vlan_pdn_up(ipacm_event_vlan_pdn *data, bool set_mux)
 {
 	int ret;
+
+	if(is_vlan_offload_disabled)
+	{
+		/* only cache mux id, once backhaul changes back to LTE we will install UL rules*/
+		set_mux_up(data->mux_id, data->iptype);
+		return IPACM_SUCCESS;
+	}
 
 	/* check only add static UL filter rule once */
 	if(data->iptype == IPA_IP_v6)
 	{
 		IPACMDBG_H("IPA_IP_v6 num_dft_rt_v6 %d mux_id: %d modem_ul_v6_set: %d\n", num_dft_rt_v6, data->mux_id, modem_ul_v6_set);
-		if(set_mux_up(data->mux_id, data->iptype))
+		if(set_mux && set_mux_up(data->mux_id, data->iptype))
 		{
 			IPACMERR("couldn't set mux up\n");
 			return IPACM_FAILURE;
@@ -1635,7 +1657,7 @@ int IPACM_Lan::handle_vlan_pdn_up(ipacm_event_vlan_pdn *data)
 	else
 	{
 		IPACMDBG_H("IPA_IP_v4 mux_id: %d, modem_ul_v4_set %d\n", data->mux_id, modem_ul_v4_set);
-		if(set_mux_up(data->mux_id, data->iptype))
+		if(set_mux && set_mux_up(data->mux_id, data->iptype))
 		{
 			IPACMERR("couldn't set mux up\n");
 			return IPACM_FAILURE;
@@ -2290,9 +2312,85 @@ int IPACM_Lan::add_vlan_private_subnet(ipacm_bridge *bridge)
 
 	return IPACM_SUCCESS;
 }
+
+
+int IPACM_Lan::handle_backhaul_switch_vlan_mode(bool to_sta)
+{
+	if(to_sta)
+	{
+		/* remove modem UL rules and notify */
+		if(is_any_mux_up(IPA_IP_v4))
+		{
+			IPACMDBG_H("backhaul switch to STA and VLAN PDN up, delete modem ul rules (v4)\n");
+			del_ul_flt_rules(IPA_IP_v4);
+			for(int i = 0; i < IPA_MAX_NUM_HW_PDNS; i++)
+			{
+				if(v4_mux_up[i])
+				{
+					IPACMDBG_H("mux %d up, notify modem we deleted v4 flt rules in STA mode\n", v4_mux_up[i]);
+					notify_flt_removed(v4_mux_up[i]);
+				}
+			}
+		}
+		if(is_any_mux_up(IPA_IP_v6))
+		{
+			IPACMDBG_H("backhaul switch to STA and VLAN PDN up, delete modem ul rules (v6)\n");
+			del_ul_flt_rules(IPA_IP_v6);
+			for(int i = 0; i < IPA_MAX_NUM_HW_PDNS; i++)
+			{
+				if(v6_mux_up[i])
+				{
+					IPACMDBG_H("mux %d up, notify modem we deleted v6 flt rules in STA mode\n", v6_mux_up[i]);
+					notify_flt_removed(v6_mux_up[i]);
+				}
+			}
+		}
+		is_vlan_offload_disabled = true;
+	}
+	else
+	{
+		ipacm_event_vlan_pdn data;
+
+		if(!is_vlan_offload_disabled)
+		{
+			IPACMDBG_H("not a backhaul switch, return\n");
+			return IPACM_SUCCESS;
+		}
+		is_vlan_offload_disabled = false;
+		/* restore modem ul rules */
+		if(is_any_mux_up(IPA_IP_v4))
+		{
+			IPACMDBG_H("backhaul switch to LTE and VLAN PDN up, restore modem ul rules (v4)\n");
+			for(int i = 0; i < IPA_MAX_NUM_HW_PDNS; i++)
+			{
+				data.iptype = IPA_IP_v4;
+				if(v4_mux_up[i])
+				{
+					IPACMDBG_H("mux %d up, restore v4 VLAN PDN on transition to LTE\n", v4_mux_up[i]);
+					data.mux_id = v4_mux_up[i];
+					handle_vlan_pdn_up(&data, false);
+				}
+			}
+		}
+		if(is_any_mux_up(IPA_IP_v6))
+		{
+			IPACMDBG_H("backhaul switch to LTE and VLAN PDN up, restore modem ul rules (v6)\n");
+			for(int i = 0; i < IPA_MAX_NUM_HW_PDNS; i++)
+			{
+				data.iptype = IPA_IP_v6;
+				if(v6_mux_up[i])
+				{
+					IPACMDBG_H("mux %d up, restore v6 VLAN PDN on transition to LTE\n", v6_mux_up[i]);
+					data.mux_id = v6_mux_up[i];
+					handle_vlan_pdn_up(&data, false);
+				}
+			}
+		}
+	}
+
+	return IPACM_SUCCESS;
+}
 #endif
-
-
 /* for STA mode wan up:  configure filter rule for wan_up event*/
 int IPACM_Lan::handle_wan_up(ipa_ip_type ip_type)
 {
@@ -2590,7 +2688,6 @@ int IPACM_Lan::handle_wan_up_ex(ipacm_ext_prop *ext_prop, ipa_ip_type iptype, ui
 		ret = IPACM_SUCCESS;
 	}
 #endif
-
 	return ret;
 }
 

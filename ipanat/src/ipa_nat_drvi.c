@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013-2019 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2013-2020 The Linux Foundation. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -711,7 +711,8 @@ static int ipa_nati_create_table(
 
 	ret = ipa_table_calculate_entries_num(
 		&nat_table->table,
-		number_of_entries);
+		number_of_entries,
+		nat_cache_ptr->nmi);
 
 	if (ret) {
 		IPAERR(
@@ -2601,6 +2602,41 @@ unlock:
 	{
 		IPAERR("unable to unlock the nat mutex\n");
 		ret = (ret) ? ret : -EPERM;
+	}
+
+bail:
+	IPADBG("Out\n");
+
+	return ret;
+}
+
+int ipa_nati_vote_clock(
+    enum ipa_app_clock_vote_type vote_type )
+{
+	struct ipa_nat_cache* nat_cache_ptr =
+		&ipv4_nat_cache[IPA_NAT_MEM_IN_SRAM];
+
+	int ret = 0;
+
+	IPADBG("In\n");
+
+	if ( ! nat_cache_ptr->ipa_desc ) {
+		nat_cache_ptr->ipa_desc = ipa_descriptor_open();
+		if ( nat_cache_ptr->ipa_desc == NULL ) {
+			IPAERR("failed to open IPA driver file descriptor\n");
+			ret = -EIO;
+			goto bail;
+		}
+	}
+
+	ret = ioctl(nat_cache_ptr->ipa_desc->fd,
+				IPA_IOC_APP_CLOCK_VOTE,
+				vote_type);
+
+	if (ret) {
+		IPAERR("APP_CLOCK_VOTE ioctl failure %d on IPA fd %d\n",
+			   ret, nat_cache_ptr->ipa_desc->fd);
+		goto bail;
 	}
 
 bail:

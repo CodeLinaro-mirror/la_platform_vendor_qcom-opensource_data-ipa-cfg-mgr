@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013-2019, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2013-2020, The Linux Foundation. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -382,9 +382,11 @@ bail:
 
 int IPACM_Config::Init(void)
 {
+	static bool already_reset = false;
 	/* Read IPACM Config file */
 	char	IPACM_config_file[IPA_MAX_FILE_LEN];
 	IPACM_conf_t	*cfg;
+
 	cfg = (IPACM_conf_t *)malloc(sizeof(IPACM_conf_t));
 	if(cfg == NULL)
 	{
@@ -401,7 +403,17 @@ int IPACM_Config::Init(void)
 	{
 		IPACMERR("Failed opening %s.\n", DEVICE_NAME);
 	}
+
 	ver = GetIPAVer(true);
+
+	if ( ! already_reset )
+	{
+		if ( ResetClkVote() == 0 )
+		{
+			already_reset = true;
+		}
+	}
+
 #ifdef FEATURE_VLAN_MPDN
 	get_vlan_mode_ifaces();
 #endif
@@ -1138,6 +1150,24 @@ enum ipa_hw_type IPACM_Config::GetIPAVer(bool get)
 	}
 	IPACMDBG_H("IPA version is %d.\n", ver);
 	return ver;
+}
+
+int IPACM_Config::ResetClkVote(void)
+{
+	int ret = -1;
+
+	if ( m_fd > 0 )
+	{
+		ret = ioctl(m_fd, IPA_IOC_APP_CLOCK_VOTE, IPA_APP_CLK_RESET_VOTE);
+
+		if ( ret )
+		{
+			IPACMERR("APP_CLOCK_VOTE ioctl failure %d on IPA fd %d\n",
+					 ret, m_fd);
+		}
+	}
+
+	return ret;
 }
 
 #ifdef FEATURE_VLAN_MPDN

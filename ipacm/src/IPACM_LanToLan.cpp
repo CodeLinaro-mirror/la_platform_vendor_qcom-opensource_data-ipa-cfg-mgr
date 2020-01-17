@@ -783,7 +783,7 @@ void IPACM_LanToLan_Iface::add_client_rt_rule(peer_iface_info *peer_info, client
 	uint32_t rt_rule_hdl[MAX_NUM_PROP];
 	ipa_hdr_l2_type peer_l2_hdr_type;
 #ifdef FEATURE_VLAN_MPDN
-	std::array<uint8_t, 6> mac;
+	std::array<uint8_t, 6> mac = {0};
 	std::map<std::array<uint8_t, 6>, int >::iterator it;
 #endif
 

@@ -1993,8 +1993,7 @@ int IPACM_Wan::handle_route_add_evt(ipa_ip_type iptype)
 		rt_rule_entry->rule.hashable = true;
 #endif
 #ifdef FEATURE_VLAN_MPDN
-		if (((m_is_sta_mode == Q6_WAN) && (!isVlanWanUP_V6()))
-			|| (m_is_sta_mode != Q6_WAN))
+		if (!isVlanWanUP_V6())
 #endif
 		{
 			if(false == m_routing.AddRoutingRule(rt_rule))

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013-2019 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2013-2020 The Linux Foundation. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -136,7 +136,13 @@ void IPACM_ConntrackListener::event_callback(ipa_cm_event_id evt,
 	}
 	 case IPA_HANDLE_WAN_UP:
 			IPACMDBG_H("Received IPA_HANDLE_WAN_UP event\n");
-			if (!WanUp)
+#ifdef FEATURE_VLAN_MPDN
+			if(IPACM_Iface::ipacmcfg->ipacm_mpdn_enable)
+			{
+				TriggerWANUp(data);
+			} else
+#endif
+			if(!WanUp)
 			{
 				TriggerWANUp(data);
 			}
@@ -792,6 +798,30 @@ void IPACM_ConntrackListener::TriggerWANUp(void *in_param)
 		 IPACMERR("Invalid ipv4 address,ignoring IPA_HANDLE_WAN_UP event\n");
 		 return;
 	 }
+#ifdef FEATURE_VLAN_MPDN
+	 if(WanUp)
+	 {
+		 if(wanup_data->ipv4_addr == wan_ipaddr)
+		 {
+			 IPACMERR("WanUpAddreess hasn't changed, ignoring\n");
+			 return;
+		 }
+		 IPACMDBG_H("WanUpAddreess changed STA %d->%d, IF %s->%s \n",
+			 isStaMode, wanup_data->is_sta, wan_ifname, wanup_data->ifname);
+
+		 if(!IPACM_Iface::ipacmcfg->ipacm_mpdn_enable)
+		 {
+			 IPACMDBG_H("Wan still up, ignore\n");
+			 return;
+		 }
+		 /*
+		  * if backhaul changed, we can safely remove previous pdn to
+		  * make sure we have space in pdn table
+		  */
+		 if(wanup_data->is_sta != isStaMode)
+			nat_inst->RemovePdn(wan_ipaddr);
+	 }
+#endif
 
 	 WanUp = true;
 	 isStaMode = wanup_data->is_sta;
@@ -967,10 +997,22 @@ void IPACM_ConntrackListener::TriggerWANDown(uint32_t wan_addr)
 	IPACMDBG_H("Deleting ipv4 nat table with");
 #endif
 	IPACMDBG_H(" public ip address(0x%x): %d.%d.%d.%d\n", wan_addr,
-		    ((wan_addr>>24) & 0xFF), ((wan_addr>>16) & 0xFF),
-		    ((wan_addr>>8) & 0xFF), (wan_addr & 0xFF));
+		((wan_addr >> 24) & 0xFF), ((wan_addr >> 16) & 0xFF),
+		((wan_addr >> 8) & 0xFF), (wan_addr & 0xFF));
 
-	WanUp = false;
+#ifdef FEATURE_VLAN_MPDN
+	if(IPACM_Iface::ipacmcfg->ipacm_mpdn_enable)
+	{
+		if(wan_addr == wan_ipaddr)
+		{
+			WanUp = false;
+		}
+	}
+	else
+#endif
+	{
+		WanUp = false;
+	}
 
 	if(nat_inst != NULL)
 	{

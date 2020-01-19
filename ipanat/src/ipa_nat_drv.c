@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013-2019 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2013-2020 The Linux Foundation. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -328,4 +328,21 @@ int ipa_nat_dealloc_pdn(
 	}
 
 	return ipa_nati_dealloc_pdn(pdn_index);
+}
+
+/**
+ * ipa_nat_vote_clock() - used for voting clock
+ * @vote_type: [in] desired vote type
+ */
+int ipa_nat_vote_clock(
+	enum ipa_app_clock_vote_type vote_type )
+{
+	if ( ! (vote_type >= IPA_APP_CLK_DEVOTE &&
+			vote_type <= IPA_APP_CLK_RESET_VOTE) )
+	{
+		IPAERR("Bad vote_type(%u) parameter\n", vote_type);
+		return -EINVAL;
+	}
+
+	return ipa_nati_vote_clock(vote_type);
 }

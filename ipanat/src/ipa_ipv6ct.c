@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2019 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2018-2020 The Linux Foundation. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -665,9 +665,13 @@ static int ipa_ipv6ct_create_table(ipa_ipv6ct_table* ipv6ct_table, uint16_t numb
 
 	IPADBG("\n");
 
-	ipa_table_init(&ipv6ct_table->table, IPA_IPV6CT_TABLE_NAME, IPA_NAT_MEM_IN_DDR, sizeof(ipa_ipv6ct_hw_entry), NULL, 0, &entry_interface);
+	ipa_table_init(
+		&ipv6ct_table->table, IPA_IPV6CT_TABLE_NAME, IPA_NAT_MEM_IN_DDR,
+		sizeof(ipa_ipv6ct_hw_entry), NULL, 0, &entry_interface);
 
-	ret = ipa_table_calculate_entries_num(&ipv6ct_table->table, number_of_entries);
+	ret = ipa_table_calculate_entries_num(
+		&ipv6ct_table->table, number_of_entries, IPA_NAT_MEM_IN_DDR);
+
 	if (ret)
 	{
 		IPAERR("unable to calculate number of entries in ipv6ct table %d, while required by user %d\n",

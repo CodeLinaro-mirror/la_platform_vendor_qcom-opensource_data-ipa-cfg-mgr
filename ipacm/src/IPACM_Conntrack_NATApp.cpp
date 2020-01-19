@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2013-2019, The Linux Foundation. All rights reserved.
+Copyright (c) 2013-2020, The Linux Foundation. All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are
@@ -42,6 +42,14 @@ extern "C"
 
 #define HDR_METADATA_MUX_ID_BMASK 0x00FF0000
 #define HDR_METADATA_MUX_ID_SHFT 0x10
+
+#undef strcasesame
+#define strcasesame(a, b) (!strcasecmp(a, b))
+
+#undef  SRAM_IN_USE
+#define SRAM_IN_USE() \
+	( strcasesame(mem_type, "HYBRID" ) || \
+	  strcasesame(mem_type, "SRAM" ) )
 
 /* NatApp class Implementation */
 NatApp *NatApp::pInstance = NULL;
@@ -747,6 +755,20 @@ void NatApp::UpdateUDPTimeStamp()
 	int cnt;
 	uint32_t ts;
 	bool read_to = false;
+	bool keep_awake;
+
+	keep_awake = ( max_entries && SRAM_IN_USE() && ipa_nat_is_sram_supported() );
+
+	if ( keep_awake )
+	{
+		IPACMDBG("Voting clock on\n");
+
+		if ( ipa_nat_vote_clock(IPA_APP_CLK_VOTE) != 0 )
+		{
+			IPACMERR("Voting clock on failed\n");
+			return;
+		}
+	}
 
 	for(cnt = 0; cnt < max_entries; cnt++)
 	{
@@ -778,6 +800,15 @@ void NatApp::UpdateUDPTimeStamp()
 
 	} /* end of for loop */
 
+	if ( keep_awake )
+	{
+		IPACMDBG("Voting clock off\n");
+
+		if ( ipa_nat_vote_clock(IPA_APP_CLK_DEVOTE) != 0 )
+		{
+			IPACMERR("Voting clock off failed\n");
+		}
+	}
 }
 
 bool NatApp::isAlgPort(uint8_t proto, uint16_t port)

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013-2019 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2013-2020 The Linux Foundation. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -343,6 +343,9 @@ int ipa_nati_ipv4_tbl_stats(
 	uint32_t            tbl_hdl,
 	ipa_nati_tbl_stats* nat_stats_ptr,
 	ipa_nati_tbl_stats* idx_stats_ptr );
+
+int ipa_nati_vote_clock(
+	enum ipa_app_clock_vote_type vote_type );
 
 int ipa_NATI_add_ipv4_tbl(
 	enum ipa3_nat_mem_in nmi,

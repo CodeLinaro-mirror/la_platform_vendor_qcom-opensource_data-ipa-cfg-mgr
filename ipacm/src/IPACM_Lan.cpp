@@ -9123,6 +9123,8 @@ int IPACM_Lan::eth_bridge_add_rt_rule(uint8_t *mac, char *rt_tbl_name, uint32_t 
 	struct ipa_rt_rule_add rt_rule;
 	int position, num_rt_rule;
 
+	*rt_rule_count = 0;
+
 	IPACMDBG_H("Received client MAC 0x%02x%02x%02x%02x%02x%02x.\n",
 			mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
 

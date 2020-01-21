@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2019-2020 The Linux Foundation. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -413,6 +413,11 @@ bail:
 	IPADBG("Out\n");
 
 	return ret;
+}
+
+bool ipa_nat_is_sram_supported(void)
+{
+	return VALID_TBL_HDL(nati_obj.sram_tbl_hdl);
 }
 
 /******************************************************************************/
@@ -2317,6 +2322,12 @@ int ipa_nati_statemach(
 	ipa_nati_trigger trigger,
 	arb_t*           arb_data_ptr )
 {
+	const char* ss_ptr  = _state_mach_tbl[nati_obj_ptr->curr_state][trigger].state_as_str;
+	const char* ts_ptr  = _state_mach_tbl[nati_obj_ptr->curr_state][trigger].trigger_as_str;
+	const char* cbs_ptr = _state_mach_tbl[nati_obj_ptr->curr_state][trigger].sm_cb_as_str;
+
+	bool vote = false;
+
 	int ret;
 
 	IPADBG("In\n");
@@ -2338,14 +2349,38 @@ int ipa_nati_statemach(
 		goto bail;
 	}
 
-	IPADBG("STATE(%s) TRIGGER(%s) CB(%s)\n",
-		   _state_mach_tbl[nati_obj_ptr->curr_state][trigger].state_as_str,
-		   _state_mach_tbl[nati_obj_ptr->curr_state][trigger].trigger_as_str,
-		   _state_mach_tbl[nati_obj_ptr->curr_state][trigger].sm_cb_as_str);
+	IPADBG("STATE(%s) TRIGGER(%s) CB(%s)\n", ss_ptr, ts_ptr, cbs_ptr);
+
+	vote = VOTE_REQUIRED(trigger);
+
+	if ( vote )
+	{
+		IPADBG("Voting clock on STATE(%s) TRIGGER(%s)\n",
+			   ss_ptr, ts_ptr);
+
+		if ( ipa_nat_vote_clock(IPA_APP_CLK_VOTE) != 0 )
+		{
+			IPAERR("Voting failed STATE(%s) TRIGGER(%s)\n", ss_ptr, ts_ptr);
+			ret = -EINVAL;
+			goto unlock;
+		}
+	}
 
 	ret = _state_mach_tbl[nati_obj_ptr->curr_state][trigger].sm_cb(
 		nati_obj_ptr, trigger, arb_data_ptr);
 
+	if ( vote )
+	{
+		IPADBG("Voting clock off STATE(%s) TRIGGER(%s)\n",
+			   ss_ptr, ts_ptr);
+
+		if ( ipa_nat_vote_clock(IPA_APP_CLK_DEVOTE) != 0 )
+		{
+			IPAERR("Voting failed STATE(%s) TRIGGER(%s)\n", ss_ptr, ts_ptr);
+		}
+	}
+
+unlock:
 	if ( pthread_mutex_unlock(&nat_mutex) )
 	{
 		IPAERR("Unable to unlock the nat mutex\n");

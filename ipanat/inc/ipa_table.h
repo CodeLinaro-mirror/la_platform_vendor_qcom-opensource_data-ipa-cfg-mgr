@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2019 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2018-2020 The Linux Foundation. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -201,8 +201,9 @@ void ipa_table_init(
 	ipa_table_entry_interface* entry_interface);
 
 int ipa_table_calculate_entries_num(
-	ipa_table* table,
-	uint16_t   number_of_entries);
+	ipa_table*           table,
+	uint16_t             number_of_entries,
+	enum ipa3_nat_mem_in nmi);
 
 int ipa_table_calculate_size(
 	ipa_table* table);

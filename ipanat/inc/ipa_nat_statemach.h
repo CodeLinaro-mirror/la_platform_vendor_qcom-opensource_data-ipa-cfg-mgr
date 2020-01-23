@@ -162,16 +162,28 @@ typedef struct
 	  (t) == NATI_TRIG_TBL_SWITCH )
 
 /*
- * NOTE: The exclusion of timestamp retrieval below.
+ * NOTE: The exclusion of timestamp retrieval and table creation
+ *       below.
  *
- * Why? Because timestamp retrieval institutes too many repetitive
- * accesses, hence would lead to too many successive votes. Instead,
- * it will be handled differently and in the app layer above.
+ * Why?
+ *
+ *  In re timestamp:
+ *
+ *   Because timestamp retrieval institutes too many repetitive
+ *   accesses, hence would lead to too many successive votes. Instead,
+ *   it will be handled differently and in the app layer above.
+ *
+ *  In re table creation:
+ *
+ *    Because it can't be known, apriori, whether or not sram is
+ *    really available for use. Instead, we'll move table creation
+ *    voting to a place where we know sram is available.
  */
 #undef  VOTE_REQUIRED
 #define VOTE_REQUIRED(t) \
 	( SRAM_TO_BE_ACCESSED(t) && \
-	  (t) != NATI_TRIG_GET_TSTAMP )
+	  (t) != NATI_TRIG_GET_TSTAMP && \
+	  (t) != NATI_TRIG_ADD_TABLE )
 
 /******************************************************************************/
 /**

@@ -121,6 +121,13 @@ IPACM_Lan::IPACM_Lan(int iface_index) : IPACM_Iface(iface_index)
 	memset(v6_mux_up, 0, sizeof(v6_mux_up[0]) * IPA_MAX_NUM_HW_PDNS);
 #endif
 
+#ifdef FEATURE_L2TP
+#ifdef IPA_L2TP_TUNNEL_UDP
+	l2tp_udp_dflt_flt_tule_offset = 0;
+	memset(tcp_syn_flt_rule_hdl, 0, sizeof(tcp_syn_flt_rule_hdl));
+	memset(l2tp_udp_dflt_flt_rule_hdl, 0, sizeof(l2tp_udp_dflt_flt_rule_hdl));
+#endif
+#endif
 	/* support eth multiple clients */
 	if(iface_query != NULL)
 	{
@@ -2128,8 +2135,10 @@ int IPACM_Lan::handle_addr_evt(ipacm_event_data_addr *data)
 				}
 				else if(ipa_if_cate == ODU_IF)
 				{
+#ifndef IPA_L2TP_TUNNEL_UDP
 					add_tcp_syn_flt_rule_l2tp(IPA_IP_v4);
 					add_tcp_syn_flt_rule_l2tp(IPA_IP_v6);
+#endif
 				}
 			}
 #endif
@@ -2137,6 +2146,15 @@ int IPACM_Lan::handle_addr_evt(ipacm_event_data_addr *data)
 
 			/* populate the flt rule offset for eth bridge */
 			eth_bridge_flt_rule_offset[data->iptype] = ipv6_icmp_flt_rule_hdl[0];
+#ifdef FEATURE_L2TP
+			if (IPACM_Iface::ipacmcfg->ipacm_l2tp_enable == IPACM_L2TP)
+			{
+#ifdef IPA_L2TP_TUNNEL_UDP
+				if (ipa_if_cate == ODU_IF)
+					add_l2tp_udp_dflt_flt_rules(l2tp_udp_dflt_flt_rule_hdl);
+#endif
+			}
+#endif
 			eth_bridge_post_event(IPA_ETH_BRIDGE_IFACE_UP, IPA_IP_v6, NULL, NULL, NULL);
 
 			init_fl_rule(data->iptype);
@@ -5120,6 +5138,14 @@ int IPACM_Lan::handle_down_evt()
 				res = IPACM_FAILURE;
 				goto fail;
 			}
+#ifdef IPA_L2TP_TUNNEL_UDP
+			if(del_l2tp_udp_dflt_flt_rules(l2tp_udp_dflt_flt_rule_hdl) == IPACM_FAILURE)
+			{
+				IPACMERR("Error Deleting default L2TP UDP rules, aborting...\n");
+				res = IPACM_FAILURE;
+				goto fail;
+			}
+#endif
 		}
 #endif
 	}
@@ -10074,11 +10100,10 @@ int IPACM_Lan::add_l2tp_flt_rule(uint8_t *dst_mac, uint32_t *flt_rule_hdl)
 /* delete l2tp flt rule on l2tp interface */
 int IPACM_Lan::del_l2tp_flt_rule(uint32_t flt_rule_hdl)
 {
-	if(m_filtering.DeleteFilteringHdls(&flt_rule_hdl, IPA_IP_v6, 1) == false)
+	if(m_filtering.DeleteFilteringHdls(&(flt_rule_hdl), IPA_IP_v6, 1) == false)
 	{
 		return IPACM_FAILURE;
 	}
-
 	return IPACM_SUCCESS;
 }
 
@@ -10213,7 +10238,7 @@ int IPACM_Lan::add_l2tp_flt_rule(ipa_ip_type iptype, uint8_t *dst_mac, uint32_t 
 /* delete l2tp flt rule on non l2tp interface */
 int IPACM_Lan::del_l2tp_flt_rule(ipa_ip_type iptype, uint32_t first_pass_flt_rule_hdl, uint32_t second_pass_flt_rule_hdl)
 {
-	if(first_pass_flt_rule_hdl != 0)
+	if (first_pass_flt_rule_hdl != 0)
 	{
 		if(m_filtering.DeleteFilteringHdls(&first_pass_flt_rule_hdl, iptype, 1) == false)
 		{
@@ -10231,6 +10256,727 @@ int IPACM_Lan::del_l2tp_flt_rule(ipa_ip_type iptype, uint32_t first_pass_flt_rul
 
 	return IPACM_SUCCESS;
 }
+
+#ifdef IPA_L2TP_TUNNEL_UDP
+/* add l2tp rt rule for l2tp client */
+int IPACM_Lan::add_l2tp_udp_rt_rule(ipa_ip_type iptype, uint8_t *dst_mac, ipa_hdr_l2_type peer_l2_hdr_type,
+	ipa_l2tp_tunnel_type tunnel_type, uint32_t l2tp_session_id, uint16_t src_port, uint16_t dst_port,
+	uint32_t vlan_id, uint8_t *vlan_client_mac, uint32_t *vlan_iface_ipv6_addr,
+	uint32_t *vlan_client_ipv6_addr, uint32_t *hdr_hdl, uint32_t *hdr_proc_ctx_hdl, int *num_rt_hdl,
+	uint32_t *rt_rule_hdl)
+{
+	int i, size, position;
+	uint32_t vlan_iface_ipv6_addr_network[4], vlan_client_ipv6_addr_network[4];
+	ipa_ioc_add_hdr *hdr_table;
+	ipa_hdr_add *hdr;
+	ipa_ioc_add_hdr_proc_ctx *hdr_proc_ctx_table;
+	ipa_hdr_proc_ctx_add *hdr_proc_ctx;
+	ipa_ioc_add_rt_rule* rt_rule_table;
+	ipa_rt_rule_add *rt_rule;
+	ipa_ioc_copy_hdr copy_hdr;
+
+	if(tx_prop == NULL)
+	{
+		IPACMERR("No tx prop.\n");
+		return IPACM_FAILURE;
+	}
+
+/* =========== install hdr template (Outer VLAN Header(18) + IPv6(40) + UDP(8) + L2TP(16) + inner ETH header(14) = 96 bytes) ============= */
+	size = sizeof(ipa_ioc_add_hdr) + sizeof(ipa_hdr_add);
+	hdr_table = (ipa_ioc_add_hdr*)malloc(size);
+	if(hdr_table == NULL)
+	{
+		IPACMERR("Failed to allocate memory.\n");
+		return IPACM_FAILURE;
+	}
+	memset(hdr_table, 0, size);
+
+	hdr_table->commit = 1;
+	hdr_table->num_hdrs = 1;
+	hdr = &hdr_table->hdr[0];
+
+	if(iptype == IPA_IP_v4)
+	{
+		snprintf(hdr->name, sizeof(hdr->name), "vlan_%d_l2tp_%d_v4", vlan_id, l2tp_session_id);
+	}
+	else
+	{
+		snprintf(hdr->name, sizeof(hdr->name), "vlan_%d_l2tp_%d_v6", vlan_id, l2tp_session_id);
+	}
+	hdr->hdr_len = 96;
+	hdr->type = IPA_HDR_L2_ETHERNET_II;
+	hdr->is_partial = 0;
+
+	/* Update the VLAN header. */
+	for(i = 0; i < tx_prop->num_tx_props; i++)
+	{
+		if(tx_prop->tx[i].ip == IPA_IP_v6)
+		{
+			memset(&copy_hdr, 0, sizeof(copy_hdr));
+			strlcpy(copy_hdr.name, tx_prop->tx[i].hdr_name,
+				sizeof(copy_hdr.name));
+			IPACMDBG_H("Header name: %s in tx:%d\n", copy_hdr.name, i);
+			if(m_header.CopyHeader(&copy_hdr) == false)
+			{
+				IPACMERR("Failed to get partial header.\n");
+				free(hdr_table);
+				return IPACM_FAILURE;
+			}
+			IPACMDBG_H("Header length: %d\n", copy_hdr.hdr_len);
+			memcpy(hdr->hdr, copy_hdr.hdr, hdr->hdr_len);
+			break;
+		}
+	}
+	/* copy vlan client mac */
+	memcpy(hdr->hdr, vlan_client_mac, 6);
+	/* VLAN ID is 12 bits. So update accordingly. */
+	hdr->hdr[15] = (uint8_t)vlan_id & 0xFF;
+	hdr->hdr[14] = (uint8_t)(vlan_id >> 8) & 0x0F;
+
+	/* Update IPv6 Version. */
+	hdr->hdr[18] = 0x60;	/* version */
+	hdr->hdr[24] = 0x11; /* next header = UDP */
+	hdr->hdr[25] = 0x40; /* hop limit = 64 */
+	for(i = 0; i < 4; i++)
+	{
+		vlan_iface_ipv6_addr_network[i] = htonl(vlan_iface_ipv6_addr[i]);
+		vlan_client_ipv6_addr_network[i] = htonl(vlan_client_ipv6_addr[i]);
+	}
+	memcpy(hdr->hdr + 26, vlan_iface_ipv6_addr_network, 16); /* source IPv6 addr */
+	memcpy(hdr->hdr + 42, vlan_client_ipv6_addr_network, 16); /* dest IPv6 addr */
+	/* Update UDP source port and Destination Port*/
+	*(uint16_t *)(&hdr->hdr[58]) = htons(src_port);
+	*(uint16_t *)(&hdr->hdr[60]) = htons(dst_port);
+	/* Update the UDP Version info. */
+	*(uint32_t *)(&hdr->hdr[66]) = 0x0300;
+	/* Updated the Session ID. */
+	hdr->hdr[73] = (uint8_t)(l2tp_session_id & 0xFF); /* l2tp header */
+	hdr->hdr[72] = (uint8_t)(l2tp_session_id >> 8 & 0xFF);
+	hdr->hdr[71] = (uint8_t)(l2tp_session_id >> 16 & 0xFF);
+	hdr->hdr[70] = (uint8_t)(l2tp_session_id >> 24 & 0xFF);
+
+	if(iptype == IPA_IP_v4)
+	{
+		/* Update Inner Ether Type to 0x800.*/
+		hdr->hdr[94] = 0x08;
+		hdr->hdr[95] = 0x00;
+	}
+	else
+	{
+		/* Update Inner Ether Type to 0x86dd.*/
+		hdr->hdr[94] = 0x86;
+		hdr->hdr[95] = 0xdd;
+	}
+
+	if(m_header.AddHeader(hdr_table) == false)
+	{
+		IPACMERR("Failed to add hdr with status: %d\n", hdr_table->hdr[0].status);
+		free(hdr_table);
+		return IPACM_FAILURE;
+	}
+	*hdr_hdl = hdr_table->hdr[0].hdr_hdl;
+	IPACMDBG_H("Installed L2TP over UDP hdr: hdl %d\n", *hdr_hdl);
+	free(hdr_table);
+
+	/* =========== install hdr proc ctx (populate src/dst MAC and Ether type) ============= */
+	size = sizeof(ipa_ioc_add_hdr_proc_ctx) + sizeof(ipa_hdr_proc_ctx_add);
+	hdr_proc_ctx_table = (ipa_ioc_add_hdr_proc_ctx*)malloc(size);
+	if(hdr_proc_ctx_table == NULL)
+	{
+		IPACMERR("Failed to allocate memory.\n");
+		return IPACM_FAILURE;
+	}
+	memset(hdr_proc_ctx_table, 0, size);
+
+	hdr_proc_ctx_table->commit = 1;
+	hdr_proc_ctx_table->num_proc_ctxs = 1;
+	hdr_proc_ctx = &hdr_proc_ctx_table->proc_ctx[0];
+
+	hdr_proc_ctx->type = IPA_HDR_PROC_L2TP_UDP_HEADER_ADD;
+	hdr_proc_ctx->hdr_hdl = *hdr_hdl;
+	hdr_proc_ctx->l2tp_params.hdr_add_param.eth_hdr_retained = 1;
+	/* Boolean to indicate whether uC needs to perform second pass or not. */
+	hdr_proc_ctx->l2tp_params.hdr_add_param.second_pass = 0;
+	hdr_proc_ctx->l2tp_params.hdr_add_param.input_ip_version = iptype;
+	hdr_proc_ctx->l2tp_params.hdr_add_param.output_ip_version = IPA_IP_v6;
+	if(m_header.AddHeaderProcCtx(hdr_proc_ctx_table) == false)
+	{
+		IPACMERR("Failed to add hdr proc ctx with status: %d\n", hdr_proc_ctx_table->proc_ctx[0].status);
+		free(hdr_proc_ctx_table);
+		return IPACM_FAILURE;
+	}
+	*hdr_proc_ctx_hdl = hdr_proc_ctx_table->proc_ctx[0].proc_ctx_hdl;
+	IPACMDBG_H("Installed hdr proc ctx: hdl %d\n", *hdr_proc_ctx_hdl);
+	free(hdr_proc_ctx_table);
+
+	/* =========== install routing rules (match dst MAC then doing UCP) ============= */
+	*num_rt_hdl = each_client_rt_rule_count[iptype];
+	size = sizeof(ipa_ioc_add_rt_rule) + (*num_rt_hdl) * sizeof(ipa_rt_rule_add);
+	rt_rule_table = (ipa_ioc_add_rt_rule*)malloc(size);
+	if (rt_rule_table == NULL)
+	{
+		IPACMERR("Failed to allocate memory.\n");
+		return IPACM_FAILURE;
+	}
+	memset(rt_rule_table, 0, size);
+
+	rt_rule_table->commit = 1;
+	rt_rule_table->ip = iptype;
+	rt_rule_table->num_rules = *num_rt_hdl;
+	snprintf(rt_rule_table->rt_tbl_name, sizeof(rt_rule_table->rt_tbl_name), "l2tp");
+	rt_rule_table->rt_tbl_name[IPA_RESOURCE_NAME_MAX-1] = 0;
+
+	position = 0;
+	for(i = 0; i < iface_query->num_tx_props; i++)
+	{
+		if(tx_prop->tx[i].ip == iptype)
+		{
+			if(position >= *num_rt_hdl || position >= MAX_NUM_PROP)
+			{
+				IPACMERR("Number of routing rules already exceeds limit.\n");
+				free(rt_rule_table);
+				return IPACM_FAILURE;
+			}
+
+			rt_rule = &rt_rule_table->rules[position];
+			rt_rule->at_rear = false;
+			rt_rule->status = -1;
+			rt_rule->rt_rule_hdl = -1;
+			rt_rule->rule.hashable = false;	//WLAN->ETH direction rules are set to non-hashable to keep consistent with the other direction
+			rt_rule->rule.hdr_hdl = 0;
+			rt_rule->rule.hdr_proc_ctx_hdl = *hdr_proc_ctx_hdl;
+			rt_rule->rule.dst = tx_prop->tx[i].dst_pipe;
+
+			memcpy(&rt_rule->rule.attrib, &tx_prop->tx[i].attrib, sizeof(rt_rule->rule.attrib));
+			/* This is to maintain backward compatibility. Currently WLAN header is only Ethernet header. */
+			if(peer_l2_hdr_type == IPA_HDR_L2_ETHERNET_II)
+				rt_rule->rule.attrib.attrib_mask |= IPA_FLT_MAC_DST_ADDR_ETHER_II;
+			else
+				rt_rule->rule.attrib.attrib_mask |= IPA_FLT_MAC_DST_ADDR_802_3;
+			memcpy(rt_rule->rule.attrib.dst_mac_addr, dst_mac, sizeof(rt_rule->rule.attrib.dst_mac_addr));
+			memset(rt_rule->rule.attrib.dst_mac_addr_mask, 0xFF, sizeof(rt_rule->rule.attrib.dst_mac_addr_mask));
+			position++;
+		}
+	}
+	if(m_routing.AddRoutingRule(rt_rule_table) == false)
+	{
+		IPACMERR("Failed to add first pass rt rules.\n");
+		free(rt_rule_table);
+		return IPACM_FAILURE;
+	}
+	for(i = 0; i < position; i++)
+	{
+		rt_rule_hdl[i] = rt_rule_table->rules[i].rt_rule_hdl;
+	}
+	free(rt_rule_table);
+
+	return IPACM_SUCCESS;
+}
+
+/* delete l2tp udp rt rule for l2tp client */
+int IPACM_Lan::del_l2tp_udp_rt_rule(ipa_ip_type iptype, uint32_t hdr_hdl, uint32_t hdr_proc_ctx_hdl,
+	int num_rt_hdl, uint32_t *rt_rule_hdl)
+{
+	int i;
+
+	if(num_rt_hdl < 0)
+	{
+		IPACMERR("Invalid num rt rule: %d\n", num_rt_hdl);
+		return IPACM_FAILURE;
+	}
+
+	for(i = 0; i < num_rt_hdl; i++)
+	{
+		if(rt_rule_hdl != NULL)
+		{
+			if(m_routing.DeleteRoutingHdl(rt_rule_hdl[i], iptype) == false)
+			{
+				return IPACM_FAILURE;
+			}
+		}
+	}
+
+	if(hdr_proc_ctx_hdl != 0)
+	{
+		if(m_header.DeleteHeaderProcCtx(hdr_proc_ctx_hdl) == false)
+		{
+			return IPACM_FAILURE;
+		}
+	}
+
+	if(hdr_hdl != 0)
+	{
+		if(m_header.DeleteHeaderHdl(hdr_hdl) == false)
+		{
+			return IPACM_FAILURE;
+		}
+	}
+
+	return IPACM_SUCCESS;
+}
+
+/* add l2tp udp rt rule for non l2tp client */
+int IPACM_Lan::add_l2tp_udp_rt_rule(ipa_ip_type iptype, uint8_t *dst_mac, uint32_t *hdr_proc_ctx_hdl,
+	int *num_rt_hdl, uint32_t *rt_rule_hdl)
+{
+	int i, size, position;
+	ipa_ioc_add_hdr_proc_ctx *hdr_proc_ctx_table;
+	ipa_hdr_proc_ctx_add *hdr_proc_ctx;
+	ipa_ioc_add_rt_rule* rt_rule_table;
+	ipa_rt_rule_add *rt_rule;
+	ipa_ioc_get_hdr hdr;
+
+	if(tx_prop == NULL)
+	{
+		IPACMERR("No tx prop.\n");
+		return IPACM_FAILURE;
+	}
+
+	memset(&hdr, 0, sizeof(hdr));
+	for(i = 0; i < tx_prop->num_tx_props; i++)
+	{
+		if(tx_prop->tx[i].ip == iptype)
+		{
+			strlcpy(hdr.name, tx_prop->tx[i].hdr_name,
+				sizeof(hdr.name));
+			break;
+		}
+	}
+	if(m_header.GetHeaderHandle(&hdr) == false)
+	{
+		IPACMERR("Failed to get template hdr hdl.\n");
+		return IPACM_FAILURE;
+	}
+
+	/* =========== install hdr proc ctx (uC needs to remove IPv6(40) + UDP (8) +L2TP (16) header = 64 bytes) ============= */
+	if(*hdr_proc_ctx_hdl != 0)
+	{
+		IPACMDBG_H("Hdr proc ctx was added before.\n");
+	}
+	else
+	{
+		size = sizeof(ipa_ioc_add_hdr_proc_ctx) + sizeof(ipa_hdr_proc_ctx_add);
+		hdr_proc_ctx_table = (ipa_ioc_add_hdr_proc_ctx*)malloc(size);
+		if(hdr_proc_ctx_table == NULL)
+		{
+			IPACMERR("Failed to allocate memory.\n");
+			return IPACM_FAILURE;
+		}
+		memset(hdr_proc_ctx_table, 0, size);
+
+		hdr_proc_ctx_table->commit = 1;
+		hdr_proc_ctx_table->num_proc_ctxs = 1;
+		hdr_proc_ctx = &hdr_proc_ctx_table->proc_ctx[0];
+
+		hdr_proc_ctx->type = IPA_HDR_PROC_L2TP_UDP_HEADER_REMOVE;
+		hdr_proc_ctx->l2tp_params.hdr_remove_param.hdr_len_remove = 64;
+		hdr_proc_ctx->l2tp_params.hdr_remove_param.eth_hdr_retained = 1;
+		hdr_proc_ctx->l2tp_params.is_dst_pipe_valid = 1;
+		hdr_proc_ctx->l2tp_params.dst_pipe = tx_prop->tx[0].dst_pipe;
+		IPACMDBG_H("Header_remove: hdr len %d, hdr retained %d, dst client: %d\n",
+			hdr_proc_ctx->l2tp_params.hdr_remove_param.hdr_len_remove,
+			hdr_proc_ctx->l2tp_params.hdr_remove_param.eth_hdr_retained,
+			hdr_proc_ctx->l2tp_params.dst_pipe);
+		if(m_header.AddHeaderProcCtx(hdr_proc_ctx_table) == false)
+		{
+			IPACMERR("Failed to add hdr proc ctx with status: %d\n", hdr_proc_ctx_table->proc_ctx[0].status);
+			free(hdr_proc_ctx_table);
+			return IPACM_FAILURE;
+		}
+		*hdr_proc_ctx_hdl = hdr_proc_ctx_table->proc_ctx[0].proc_ctx_hdl;
+		IPACMDBG_H("Installed hdr proc ctx: hdl %d\n", *hdr_proc_ctx_hdl);
+		free(hdr_proc_ctx_table);
+	}
+
+	/* =========== install rt rules (match dst MAC within 64 bytes header) ============= */
+	*num_rt_hdl = each_client_rt_rule_count[iptype];
+	size = sizeof(ipa_ioc_add_rt_rule) + (*num_rt_hdl) * sizeof(ipa_rt_rule_add);
+	rt_rule_table = (ipa_ioc_add_rt_rule*)malloc(size);
+	if (rt_rule_table == NULL)
+	{
+		IPACMERR("Failed to allocate memory.\n");
+		return IPACM_FAILURE;
+	}
+	memset(rt_rule_table, 0, size);
+
+	rt_rule_table->commit = 1;
+	rt_rule_table->ip = iptype;
+	rt_rule_table->num_rules = *num_rt_hdl;
+	snprintf(rt_rule_table->rt_tbl_name, sizeof(rt_rule_table->rt_tbl_name), "l2tp");
+	rt_rule_table->rt_tbl_name[IPA_RESOURCE_NAME_MAX-1] = 0;
+
+	position = 0;
+	for(i = 0; i < iface_query->num_tx_props; i++)
+	{
+		if(tx_prop->tx[i].ip == iptype)
+		{
+			if(position >= *num_rt_hdl || position >= MAX_NUM_PROP)
+			{
+				IPACMERR("Number of routing rules already exceeds limit.\n");
+				free(rt_rule_table);
+				return IPACM_FAILURE;
+			}
+
+			rt_rule = &rt_rule_table->rules[position];
+			rt_rule->at_rear = false;
+			rt_rule->status = -1;
+			rt_rule->rt_rule_hdl = -1;
+			rt_rule->rule.hashable = false;	//ETH->WLAN direction rules need to be non-hashable due to encapsulation
+
+			rt_rule->rule.hdr_hdl = 0;
+			rt_rule->rule.hdr_proc_ctx_hdl = *hdr_proc_ctx_hdl;
+			rt_rule->rule.dst = tx_prop->tx[i].dst_pipe;
+
+			memcpy(&rt_rule->rule.attrib, &tx_prop->tx[i].attrib, sizeof(rt_rule->rule.attrib));
+
+			rt_rule->rule.attrib.attrib_mask |= IPA_FLT_L2TP_UDP_INNER_MAC_DST_ADDR;
+			memset(rt_rule->rule.attrib.dst_mac_addr_mask, 0xFF, sizeof(rt_rule->rule.attrib.dst_mac_addr_mask));
+			memcpy(rt_rule->rule.attrib.dst_mac_addr, dst_mac, sizeof(rt_rule->rule.attrib.dst_mac_addr));
+
+			position++;
+		}
+	}
+	if(m_routing.AddRoutingRule(rt_rule_table) == false)
+	{
+		IPACMERR("Failed to add first pass rt rules.\n");
+		free(rt_rule_table);
+		return IPACM_FAILURE;
+	}
+	for(i = 0; i < position; i++)
+		rt_rule_hdl[i] = rt_rule_table->rules[i].rt_rule_hdl;
+
+	free(rt_rule_table);
+	return IPACM_SUCCESS;
+}
+
+/* add l2tp udp flt rule on l2tp interface */
+int IPACM_Lan::add_l2tp_udp_flt_rule(uint8_t *dst_mac, uint32_t *vlan_iface_ipv6_addr,
+	uint32_t *vlan_client_ipv6_addr, uint16_t src_port, uint16_t dst_port, uint32_t *flt_rule_hdl)
+{
+	int len;
+	int fd_ipa = 0;
+	struct ipa_flt_rule_add flt_rule_entry;
+	struct ipa_ioc_add_flt_rule_after *pFilteringTable = NULL;
+	ipa_ioc_get_rt_tbl rt_tbl;
+	int ret = IPACM_SUCCESS;
+
+	if (rx_prop == NULL || tx_prop == NULL)
+	{
+		IPACMDBG_H("No rx or tx properties registered for iface %s\n", dev_name);
+		return IPACM_FAILURE;
+	}
+
+	len = sizeof(struct ipa_ioc_add_flt_rule_after) + sizeof(struct ipa_flt_rule_add);
+	pFilteringTable = (struct ipa_ioc_add_flt_rule_after*)malloc(len);
+	if (!pFilteringTable)
+	{
+		IPACMERR("Failed to allocate ipa_ioc_add_flt_rule_after memory...\n");
+		return IPACM_FAILURE;
+	}
+	memset(pFilteringTable, 0, len);
+
+	pFilteringTable->commit = 1;
+	pFilteringTable->ep = rx_prop->rx[0].src_pipe;
+	pFilteringTable->ip = IPA_IP_v6;
+	pFilteringTable->num_rules = 1;
+	pFilteringTable->add_after_hdl = l2tp_udp_dflt_flt_tule_offset;
+
+	fd_ipa = open(IPA_DEVICE_NAME, O_RDWR);
+	if(fd_ipa == 0)
+	{
+		IPACMERR("Failed to open %s\n",IPA_DEVICE_NAME);
+		ret = IPACM_FAILURE;
+		goto end;
+	}
+
+	rt_tbl.ip = IPA_IP_v6;
+	snprintf(rt_tbl.name, sizeof(rt_tbl.name), "l2tp");
+	rt_tbl.name[IPA_RESOURCE_NAME_MAX-1] = '\0';
+	IPACMDBG_H("This flt rule points to rt tbl %s.\n", rt_tbl.name);
+	if(m_routing.GetRoutingTable(&rt_tbl) == false)
+	{
+		IPACMERR("Failed to get routing table from name\n");
+		ret = IPACM_FAILURE;
+		goto end;
+	}
+
+	memset(&flt_rule_entry, 0, sizeof(flt_rule_entry));
+	flt_rule_entry.at_rear = 1;
+
+	flt_rule_entry.rule.retain_hdr = 0;
+	flt_rule_entry.rule.to_uc = 0;
+	flt_rule_entry.rule.action = IPA_PASS_TO_ROUTING;
+	flt_rule_entry.rule.eq_attrib_type = 0;
+	flt_rule_entry.rule.rt_tbl_hdl = rt_tbl.hdl;
+	flt_rule_entry.rule.hashable = false;	//ETH->WLAN direction rules need to be non-hashable due to encapsulation
+
+	memcpy(&flt_rule_entry.rule.attrib, &rx_prop->rx[0].attrib, sizeof(flt_rule_entry.rule.attrib));
+
+	/* Match if it is an L2TP packet and then match the desination mac. */
+	flt_rule_entry.rule.attrib.attrib_mask |= IPA_FLT_DST_ADDR;
+	memcpy(flt_rule_entry.rule.attrib.u.v6.dst_addr, vlan_iface_ipv6_addr,
+		sizeof(flt_rule_entry.rule.attrib.u.v6.dst_addr));
+	memset(flt_rule_entry.rule.attrib.u.v6.dst_addr_mask, 0xFF,
+		sizeof(flt_rule_entry.rule.attrib.u.v6.dst_addr_mask));
+
+	flt_rule_entry.rule.attrib.attrib_mask |= IPA_FLT_SRC_ADDR;
+	memcpy(flt_rule_entry.rule.attrib.u.v6.src_addr, vlan_client_ipv6_addr,
+		sizeof(flt_rule_entry.rule.attrib.u.v6.src_addr));
+	memset(flt_rule_entry.rule.attrib.u.v6.src_addr_mask, 0xFF,
+		sizeof(flt_rule_entry.rule.attrib.u.v6.src_addr_mask));
+
+	flt_rule_entry.rule.attrib.attrib_mask |= IPA_FLT_DST_PORT;
+	flt_rule_entry.rule.attrib.dst_port = dst_port;
+
+	flt_rule_entry.rule.attrib.attrib_mask |= IPA_FLT_SRC_PORT;
+	flt_rule_entry.rule.attrib.src_port = src_port;
+
+	flt_rule_entry.rule.attrib.attrib_mask |= IPA_FLT_NEXT_HDR;
+	flt_rule_entry.rule.attrib.u.v6.next_hdr = (uint8_t)IPACM_FIREWALL_IPPROTO_UDP;
+
+	/* flt rule is matching dst MAC within 62 bytes header */
+	flt_rule_entry.rule.attrib.attrib_mask |= IPA_FLT_L2TP_UDP_INNER_MAC_DST_ADDR;
+	memset(flt_rule_entry.rule.attrib.dst_mac_addr_mask, 0xFF, sizeof(flt_rule_entry.rule.attrib.dst_mac_addr_mask));
+	memcpy(flt_rule_entry.rule.attrib.dst_mac_addr, dst_mac, sizeof(flt_rule_entry.rule.attrib.dst_mac_addr));
+
+	memcpy(&(pFilteringTable->rules[0]), &flt_rule_entry, sizeof(flt_rule_entry));
+	if(m_filtering.AddFilteringRuleAfter(pFilteringTable) == false)
+	{
+		IPACMERR("Failed to add client filtering rules.\n");
+		ret = IPACM_FAILURE;
+		goto end;
+	}
+	*flt_rule_hdl = pFilteringTable->rules[0].flt_rule_hdl;
+
+end:
+	if (pFilteringTable)
+		free(pFilteringTable);
+	if (fd_ipa)
+		close(fd_ipa);
+	return ret;
+}
+
+/* add default exception rules for l2tp udp client */
+int IPACM_Lan::add_l2tp_udp_dflt_flt_rules(uint32_t *l2tp_dflt_rules)
+{
+	int len, i =0;
+	int fd_ipa;
+	struct ipa_flt_rule_add flt_rule_entry;
+	struct ipa_ioc_add_flt_rule_after *pFilteringTable = NULL;
+	int ret = IPACM_SUCCESS;
+
+	if (rx_prop == NULL || tx_prop == NULL)
+	{
+		IPACMDBG_H("No rx or tx properties registered for iface %s\n", dev_name);
+		return IPACM_FAILURE;
+	}
+
+	len = sizeof(struct ipa_ioc_add_flt_rule_after) + NUM_L2TP_UDP_DFLT_RULES*sizeof(struct ipa_flt_rule_add);
+	pFilteringTable = (struct ipa_ioc_add_flt_rule_after*)malloc(len);
+	if (!pFilteringTable)
+	{
+		IPACMERR("Failed to allocate ipa_ioc_add_flt_rule_after memory...\n");
+		return IPACM_FAILURE;
+	}
+	memset(pFilteringTable, 0, len);
+
+	pFilteringTable->commit = 1;
+	pFilteringTable->ep = rx_prop->rx[0].src_pipe;
+	pFilteringTable->ip = IPA_IP_v6;
+	pFilteringTable->num_rules = NUM_L2TP_UDP_DFLT_RULES;
+	pFilteringTable->add_after_hdl = eth_bridge_flt_rule_offset[IPA_IP_v6];
+
+	fd_ipa = open(IPA_DEVICE_NAME, O_RDWR);
+	if(fd_ipa == 0)
+	{
+		IPACMERR("Failed to open %s\n",IPA_DEVICE_NAME);
+		ret = IPACM_FAILURE;
+		goto end;
+	}
+
+	memset(&flt_rule_entry, 0, sizeof(flt_rule_entry));
+	flt_rule_entry.at_rear = 0;
+
+	flt_rule_entry.rule.retain_hdr = 0;
+	flt_rule_entry.rule.to_uc = 0;
+	flt_rule_entry.rule.action = IPA_PASS_TO_EXCEPTION;
+	flt_rule_entry.rule.eq_attrib_type = 0;
+	flt_rule_entry.rule.hashable = false;	//ETH->WLAN direction rules need to be non-hashable due to encapsulation
+
+	memcpy(&flt_rule_entry.rule.attrib, &rx_prop->rx[0].attrib, sizeof(flt_rule_entry.rule.attrib));
+
+	/* ARP Exception rule. */
+	flt_rule_entry.rule.attrib.ext_attrib_mask |= IPA_FLT_EXT_L2TP_UDP_INNER_ETHER_TYPE;
+	flt_rule_entry.rule.attrib.ether_type = ETH_P_ARP;
+	flt_rule_entry.rule.attrib.attrib_mask |= IPA_FLT_NEXT_HDR;
+	flt_rule_entry.rule.attrib.u.v6.next_hdr = (uint8_t)IPACM_FIREWALL_IPPROTO_UDP;
+	memcpy(&(pFilteringTable->rules[0]), &flt_rule_entry, sizeof(flt_rule_entry));
+
+	/* TCP SYN Exception rule for inner IPv4 packet. */
+	flt_rule_entry.rule.attrib.ext_attrib_mask |= IPA_FLT_EXT_L2TP_UDP_TCP_SYN;
+	flt_rule_entry.rule.attrib.ether_type = ETH_P_IP;
+	memcpy(&(pFilteringTable->rules[1]), &flt_rule_entry, sizeof(flt_rule_entry));
+
+	/* TCP SYN Exception rule for inner IPv6 packet. */
+	flt_rule_entry.rule.attrib.ext_attrib_mask |= IPA_FLT_EXT_L2TP_UDP_TCP_SYN;
+	flt_rule_entry.rule.attrib.ether_type = ETH_P_IPV6;
+	memcpy(&(pFilteringTable->rules[2]), &flt_rule_entry, sizeof(flt_rule_entry));
+
+	/* ICMPv6 Exception rule for inner IPv6 packet. */
+	flt_rule_entry.rule.attrib.ext_attrib_mask &= ~IPA_FLT_EXT_L2TP_UDP_TCP_SYN;
+	flt_rule_entry.rule.attrib.ext_attrib_mask |= IPA_FLT_EXT_L2TP_UDP_INNER_NEXT_HDR;
+	flt_rule_entry.rule.attrib.l2tp_udp_next_hdr = (uint8_t)IPACM_FIREWALL_IPPROTO_ICMP6;
+	memcpy(&(pFilteringTable->rules[3]), &flt_rule_entry, sizeof(flt_rule_entry));
+
+	if(m_filtering.AddFilteringRuleAfter(pFilteringTable) == false)
+	{
+		IPACMERR("Failed to add client filtering rules.\n");
+		ret = IPACM_FAILURE;
+		goto end;
+	}
+	for (i = 0; i < NUM_L2TP_UDP_DFLT_RULES; i++)
+		l2tp_dflt_rules[i] = pFilteringTable->rules[i].flt_rule_hdl;
+
+	/* Update the dflt flt rule offset so that client rules are added after this rule. */
+	l2tp_udp_dflt_flt_tule_offset = l2tp_dflt_rules[NUM_L2TP_UDP_DFLT_RULES-1];
+
+end:
+	if (pFilteringTable)
+		free(pFilteringTable);
+	if (fd_ipa)
+		close(fd_ipa);
+
+	return ret;
+}
+
+/* delete l2tp flt rule on l2tp interface */
+int IPACM_Lan::del_l2tp_udp_dflt_flt_rules(uint32_t *dflt_rules)
+{
+
+	if(m_filtering.DeleteFilteringHdls(dflt_rules, IPA_IP_v6, NUM_L2TP_UDP_DFLT_RULES) == false)
+	{
+		return IPACM_FAILURE;
+	}
+	l2tp_udp_dflt_flt_tule_offset = eth_bridge_flt_rule_offset[IPA_IP_v6];
+	return IPACM_SUCCESS;
+}
+
+
+/* add l2tp udp flt rule on non l2tp interface */
+int IPACM_Lan::add_l2tp_udp_flt_rule(ipa_ip_type iptype, uint8_t *dst_mac, uint32_t *flt_rule_hdl)
+{
+	int len;
+	struct ipa_flt_rule_add flt_rule_entry;
+	struct ipa_ioc_add_flt_rule_after *pFilteringTable = NULL;
+	uint16_t v4_mtu = 1422; /*1500 - L2TP payload (Ipv6 header (40) + UDP (8) + L2tp (16) + Inner Ethernet (14)).*/
+	uint16_t v6_mtu = 1382; /*1500 - Ipv6 Header - L2TP Payload (Ipv6 header (40) + UDP (8) + L2tp (16) + Inner Ethernet (14)).*/
+	struct ipa_ioc_get_rt_tbl_indx rt_tbl_idx;
+	int fd_ipa = 0;
+	ipa_ioc_get_rt_tbl rt_tbl;
+	int ret = IPACM_SUCCESS;
+
+	if (rx_prop == NULL || tx_prop == NULL)
+	{
+		IPACMDBG_H("No rx or tx properties registered for iface %s\n", dev_name);
+		return IPACM_FAILURE;
+	}
+
+	fd_ipa = open(IPA_DEVICE_NAME, O_RDWR);
+	if(0 == fd_ipa)
+	{
+		IPACMERR("Failed to open %s\n",IPA_DEVICE_NAME);
+		return IPACM_FAILURE;
+	}
+
+	IPACMDBG_H("Dst client MAC 0x%02x%02x%02x%02x%02x%02x.\n", dst_mac[0], dst_mac[1],
+		dst_mac[2], dst_mac[3], dst_mac[4], dst_mac[5]);
+
+	len = sizeof(struct ipa_ioc_add_flt_rule_after) + sizeof(struct ipa_flt_rule_add);
+	pFilteringTable = (struct ipa_ioc_add_flt_rule_after*)malloc(len);
+	if (!pFilteringTable)
+	{
+		IPACMERR("Failed to allocate ipa_ioc_add_flt_rule_after memory...\n");
+		ret = IPACM_FAILURE;
+		goto end;
+	}
+	memset(pFilteringTable, 0, len);
+
+	pFilteringTable->commit = 1;
+	pFilteringTable->ep = rx_prop->rx[0].src_pipe;
+	pFilteringTable->ip = iptype;
+	pFilteringTable->num_rules = 1;
+	pFilteringTable->add_after_hdl = eth_bridge_flt_rule_offset[iptype];
+
+	/* =========== add flt rule (match dst MAC) ============= */
+	rt_tbl.ip = iptype;
+	snprintf(rt_tbl.name, sizeof(rt_tbl.name), "l2tp");
+	IPACMDBG_H("This flt rule points to rt tbl %s.\n", rt_tbl.name);
+
+	if(m_routing.GetRoutingTable(&rt_tbl) == false)
+	{
+		IPACMERR("Failed to get routing table.\n");
+		ret = IPACM_FAILURE;
+		goto end;
+	}
+
+	memset(&flt_rule_entry, 0, sizeof(flt_rule_entry));
+	flt_rule_entry.at_rear = 1;
+
+	flt_rule_entry.rule.retain_hdr = 0;
+	flt_rule_entry.rule.to_uc = 0;
+	flt_rule_entry.rule.action = IPA_PASS_TO_ROUTING;
+	flt_rule_entry.rule.eq_attrib_type = 0;
+	flt_rule_entry.rule.rt_tbl_hdl = rt_tbl.hdl;
+	flt_rule_entry.rule.hashable = false;	//WLAN->ETH direction rules are set to non-hashable to keep consistent with the other direction
+
+	memcpy(&flt_rule_entry.rule.attrib, &rx_prop->rx[0].attrib, sizeof(flt_rule_entry.rule.attrib));
+	if(tx_prop->tx[0].hdr_l2_type == IPA_HDR_L2_ETHERNET_II)
+	{
+		flt_rule_entry.rule.attrib.attrib_mask |= IPA_FLT_MAC_DST_ADDR_ETHER_II;
+	}
+	else
+	{
+		flt_rule_entry.rule.attrib.attrib_mask |= IPA_FLT_MAC_DST_ADDR_802_3;
+	}
+
+	memcpy(flt_rule_entry.rule.attrib.dst_mac_addr, dst_mac, sizeof(flt_rule_entry.rule.attrib.dst_mac_addr));
+	memset(flt_rule_entry.rule.attrib.dst_mac_addr_mask, 0xFF, sizeof(flt_rule_entry.rule.attrib.dst_mac_addr_mask));
+	/* Make sure packets are within MTU range. */
+	flt_rule_entry.rule.attrib.ext_attrib_mask |= IPA_FLT_EXT_MTU;
+	flt_rule_entry.rule.attrib.payload_length = (iptype == IPA_IP_v4) ? v4_mtu : v6_mtu;
+	memcpy(&(pFilteringTable->rules[0]), &flt_rule_entry, sizeof(flt_rule_entry));
+	if (false == m_filtering.AddFilteringRuleAfter(pFilteringTable))
+	{
+		IPACMERR("Failed to add first pass filtering rules.\n");
+		ret = IPACM_FAILURE;
+		goto end;
+	}
+	*flt_rule_hdl = pFilteringTable->rules[0].flt_rule_hdl;
+
+end:
+	if (pFilteringTable)
+		free(pFilteringTable);
+	if (fd_ipa)
+		close(fd_ipa);
+
+	return ret;
+}
+
+/* delete l2tp udp flt rule on non l2tp interface */
+int IPACM_Lan::del_l2tp_udp_flt_rule(ipa_ip_type iptype, uint32_t flt_rule_hdl)
+{
+	if(flt_rule_hdl != 0)
+	{
+		if(m_filtering.DeleteFilteringHdls(&flt_rule_hdl, iptype, 1) == false)
+		{
+			return IPACM_FAILURE;
+		}
+	}
+	return IPACM_SUCCESS;
+}
+
+#endif
+
 #endif
 bool IPACM_Lan::is_unique_local_ipv6_addr(uint32_t* ipv6_addr)
 {

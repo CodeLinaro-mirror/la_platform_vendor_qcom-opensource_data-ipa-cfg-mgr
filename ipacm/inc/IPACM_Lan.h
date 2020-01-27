@@ -55,6 +55,11 @@ IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #define MAX_WAN_UL_FILTER_RULES MAX_NUM_EXT_PROPS
 #define NUM_IPV4_ICMP_FLT_RULE 1
 #define NUM_IPV6_ICMP_FLT_RULE 1
+#ifdef IPA_L2TP_TUNNEL_UDP
+/* Default rules to route 1) ARP, 2) IP TCP SYN, 3) IPv6 TCP SYN and 
+ * 4) ICMPv6 packets to exception. */
+#define NUM_L2TP_UDP_DFLT_RULES 4
+#endif
 
 /* ndc bandwidth ipatetherstats <ifaceIn> <ifaceOut> */
 /* <in->out_bytes> <in->out_pkts> <out->in_bytes> <out->in_pkts */
@@ -411,8 +416,41 @@ public:
 
 	/* delete l2tp flt rule on non l2tp interface */
 	int del_l2tp_flt_rule(ipa_ip_type iptype, uint32_t first_pass_flt_rule_hdl, uint32_t second_pass_flt_rule_hdl);
+
+#ifdef IPA_L2TP_TUNNEL_UDP
+		/* add l2tp udp rt rule for l2tp client to add the L2TP header. */
+		int add_l2tp_udp_rt_rule(ipa_ip_type iptype, uint8_t *dst_mac, ipa_hdr_l2_type peer_l2_hdr_type,
+			ipa_l2tp_tunnel_type tunnel_type, uint32_t l2tp_session_id, uint16_t src_port, uint16_t dst_port,
+			uint32_t vlan_id, uint8_t *vlan_client_mac, uint32_t *vlan_iface_ipv6_addr,
+			uint32_t *vlan_client_ipv6_addr, uint32_t *hdr_hdl, uint32_t *hdr_proc_ctx_hdl, int *num_rt_hdl,
+			uint32_t *rt_rule_hdl);
+
+		/* add default rules for l2tp udp client */
+		int add_l2tp_udp_dflt_flt_rules(uint32_t *l2tp_dflt_rules);
+
+		/* delete default rules for l2tp udp client */
+		int del_l2tp_udp_dflt_flt_rules(uint32_t *dflt_rules);
+
+		/* add l2tp udp rt rule for non l2tp client */
+		int add_l2tp_udp_rt_rule(ipa_ip_type iptype, uint8_t *dst_mac, uint32_t *hdr_proc_ctx_hdl,
+			int *num_rt_hdl, uint32_t *rt_rule_hdl);
+
+		/* add l2tp udp flt rule on l2tp interface */
+		int add_l2tp_udp_flt_rule(uint8_t *dst_mac, uint32_t *vlan_iface_ipv6_addr,
+			uint32_t *vlan_client_ipv6_addr, uint16_t src_port, uint16_t dst_port, uint32_t *flt_rule_hdl);
+
+		/* add l2tp udp flt rule on non l2tp interface */
+		int add_l2tp_udp_flt_rule(ipa_ip_type iptype, uint8_t *dst_mac, uint32_t *flt_rule_hdl);
+
+		/* delete l2tp udp rt rule for l2tp client */
+		int del_l2tp_udp_rt_rule(ipa_ip_type iptype, uint32_t hdr_hdl, uint32_t hdr_proc_ctx_hdl,
+			int num_rt_hdl, uint32_t *rt_rule_hdl);
+
+		/* delete l2tp udp flt rule on non l2tp interface */
+		int del_l2tp_udp_flt_rule(ipa_ip_type iptype, uint32_t flt_rule_hdl);
 #endif
-#if defined(FEATURE_L2TP)
+
+	/* Handle L2TP Neigh events. */
 	int handle_l2tp_neigh(ipacm_event_data_all *data);
 #endif
 
@@ -430,6 +468,11 @@ protected:
 
 	uint32_t eth_bridge_flt_rule_offset[IPA_IP_MAX];
 
+#ifdef FEATURE_L2TP
+#ifdef IPA_L2TP_TUNNEL_UDP
+	uint32_t l2tp_udp_dflt_flt_tule_offset;
+#endif
+#endif
 	/* mac address has to be provided for client related events */
 	void eth_bridge_post_event(ipa_cm_event_id evt, ipa_ip_type iptype, uint8_t *mac,
 		uint32_t *ipv6_addr, char *iface_name, uint8_t VlanID = 0);
@@ -855,7 +898,9 @@ protected:
 	uint32_t ipv6_prefix[2];
 
 	uint32_t tcp_syn_flt_rule_hdl[IPA_IP_MAX];
-
+#ifdef IPA_L2TP_TUNNEL_UDP
+	uint32_t l2tp_udp_dflt_flt_rule_hdl[NUM_L2TP_UDP_DFLT_RULES];
+#endif
 	int post_lan_up_event(const ipacm_event_data_addr* data) const;
 
 private:

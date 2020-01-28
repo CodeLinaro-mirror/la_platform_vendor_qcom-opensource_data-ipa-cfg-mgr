@@ -50,6 +50,7 @@
 #include "IPACM_Defs.h"
 #include <IPACM_ConntrackListener.h>
 #include "linux/ipa_qmi_service_v01.h"
+#include <IPACM_Netlink.h>
 
 bool IPACM_Wan::wan_up = false;
 bool IPACM_Wan::wan_up_v6 = false;
@@ -116,6 +117,8 @@ ipacm_ipv4_wan_iface IPACM_Wan::ipv4_to_iface[IPA_MAX_NUM_SW_PDNS];
 ipacm_ipv6_wan_iface IPACM_Wan::ipv6_to_iface[IPA_MAX_NUM_SW_PDNS];
 #endif
 
+uint16_t IPACM_Wan::mtu_default_wan = DEFAULT_MTU_SIZE;
+
 #define MOBILE_FIREWALL_FILE "/etc/data/mobileap_firewall.xml"
 
 IPACM_Wan::IPACM_Wan(int iface_index,
@@ -161,6 +164,7 @@ IPACM_Wan::IPACM_Wan(int iface_index,
 	memset(wan_v6_addr_gw, 0, sizeof(wan_v6_addr_gw));
 	ext_prop = NULL;
 	is_ipv6_frag_firewall_flt_rule_installed = false;
+	mtu_size = DEFAULT_MTU_SIZE;
 
 #ifdef FEATURE_IPACM_UL_FIREWALL
 #ifdef FEATURE_VLAN_MPDN
@@ -1018,6 +1022,12 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 		{
 			ipacm_event_data_addr *data = (ipacm_event_data_addr *)param;
 			ipa_interface_index = iface_ipa_index_query(data->if_index);
+
+			/* query and save the interface mtu size*/
+			// Note: This should be put in handle_route_add but not
+			// working for the case where v4 mtu is 1500 and then v6 mtu is brought up with < 1500
+			query_mtu_size();
+
 			if (ipa_interface_index == ipa_if_num)
 			{
 				IPACMDBG_H("Received IPA_ROUTE_ADD_EVENT\n");
@@ -2004,6 +2014,11 @@ int IPACM_Wan::handle_route_add_evt(ipa_ip_type iptype)
 		}
 #endif
 	}
+
+	/* set mtu_default_wan to current default wan instance */
+	mtu_default_wan = mtu_size;
+
+	IPACMDBG_H("replace the mtu_default_wan to %d\n", mtu_default_wan);
 
 	ipacm_event_iface_up *wanup_data;
 	wanup_data = (ipacm_event_iface_up *)malloc(sizeof(ipacm_event_iface_up));
@@ -4858,6 +4873,7 @@ int IPACM_Wan::handle_route_del_evt(ipa_ip_type iptype)
 			IPACM_EvtDispatcher::PostEvt(&evt_data);
 			IPACMDBG_H("setup wan_up/active_v4= false \n");
 			IPACM_Wan::wan_up = false;
+			mtu_size = DEFAULT_MTU_SIZE;
 			active_v4 = false;
 			if(IPACM_Wan::wan_up_v6)
 			{
@@ -4889,6 +4905,7 @@ int IPACM_Wan::handle_route_del_evt(ipa_ip_type iptype)
 			IPACM_EvtDispatcher::PostEvt(&evt_data);
 			IPACMDBG_H("setup wan_up_v6/active_v6= false \n");
 			IPACM_Wan::wan_up_v6 = false;
+			mtu_size = DEFAULT_MTU_SIZE;
 			active_v6 = false;
 			if(IPACM_Wan::wan_up)
 			{
@@ -5019,6 +5036,7 @@ int IPACM_Wan::handle_route_del_evt_ex(ipa_ip_type iptype)
 
 			IPACMDBG_H("setup wan_up/active_v4= false \n");
 			IPACM_Wan::wan_up = false;
+			mtu_size = DEFAULT_MTU_SIZE;
 			active_v4 = false;
 			if(IPACM_Wan::wan_up_v6)
 			{
@@ -5051,6 +5069,7 @@ int IPACM_Wan::handle_route_del_evt_ex(ipa_ip_type iptype)
 
 			IPACMDBG_H("setup wan_up_v6/active_v6= false \n");
 			IPACM_Wan::wan_up_v6 = false;
+			mtu_size = DEFAULT_MTU_SIZE;
 			active_v6 = false;
 			if(IPACM_Wan::wan_up)
 			{
@@ -8156,5 +8175,35 @@ int IPACM_Wan::add_firewall_rules_ex(const IPACM_firewall_conf_t& firewall_confi
 			++(*num_flt_rule);
 		}
 	} /* end of firewall filter rule add for loop*/
+	return IPACM_SUCCESS;
+}
+
+int IPACM_Wan::query_mtu_size()
+{
+	int fd;
+	struct ifreq if_mtu;
+
+	fd = socket(AF_INET, SOCK_DGRAM, 0);
+	if ( fd < 0 ) {
+		IPACMERR("ipacm: socket open failed [%d]\n", fd);
+		return IPACM_FAILURE;
+	}
+
+	strlcpy(if_mtu.ifr_name, dev_name, IFNAMSIZ);
+	IPACMDBG_H("device name: %s\n", dev_name);
+	if_mtu.ifr_name[IFNAMSIZ - 1] = '\0';
+
+	if ( ioctl(fd, SIOCGIFMTU, &if_mtu) < 0 ) {
+		IPACMERR("ioctl failed to get mtu\n");
+		close(fd);
+		return IPACM_FAILURE;
+	}
+	IPACMDBG_H("mtu=[%d]\n", if_mtu.ifr_mtu);
+	if (if_mtu.ifr_mtu < DEFAULT_MTU_SIZE) {
+		mtu_size = if_mtu.ifr_mtu;
+		IPACMDBG_H("replaced mtu=[%d] for (%s)\n", mtu_size, dev_name);
+	}
+
+	close(fd);
 	return IPACM_SUCCESS;
 }

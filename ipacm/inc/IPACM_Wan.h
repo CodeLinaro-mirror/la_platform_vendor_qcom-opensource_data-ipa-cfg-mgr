@@ -122,6 +122,8 @@ public:
 #endif
 	uint8_t associated_VID;
 #endif
+	static uint16_t mtu_default_wan;
+	uint16_t mtu_size;
 	/* IPACM interface name */
 	static char wan_up_dev_name[IF_NAME_LEN];
 	static uint32_t curr_wan_ip;
@@ -172,6 +174,26 @@ public:
 #else
 		return wan_up;
 #endif
+	}
+
+	static uint16_t queryMTU(int ipa_if_num_tether, enum ipa_ip_type iptype)
+	{
+		if (iptype == IPA_IP_v4)
+		{
+			if (isWanUP(ipa_if_num_tether))
+			{
+				return mtu_default_wan;
+			}
+		}
+		else if (iptype == IPA_IP_v6)
+		{
+			if (isWanUP_V6(ipa_if_num_tether))
+			{
+				return mtu_default_wan;
+
+			}
+		}
+		return DEFAULT_MTU_SIZE;
 	}
 
 #ifdef FEATURE_VLAN_MPDN
@@ -683,6 +705,9 @@ private:
 	int add_firewall_rules_ex(const IPACM_firewall_conf_t& firewall_config, ipa_ip_type iptype, uint8_t curr_mux_id,
 		const struct ipa_rule_attrib& rx_prop_attrib, ipacm_pdn_flt_rule* rules, int rules_size, int& pos);
 #endif
+
+	/* Query mtu size */
+	int query_mtu_size();
 };
 
 #endif /* IPACM_WAN_H */

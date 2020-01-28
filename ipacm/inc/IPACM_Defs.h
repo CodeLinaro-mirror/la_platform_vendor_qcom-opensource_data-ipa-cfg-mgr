@@ -78,8 +78,10 @@ extern "C"
 #define IPA_MAX_IFACE_ENTRIES 20
 #ifdef FEATURE_VLAN_MPDN
 #define IPA_MAX_PRIVATE_SUBNET_ENTRIES 8
+#define IPA_MAX_MTU_ENTRIES 4
 #else
 #define IPA_MAX_PRIVATE_SUBNET_ENTRIES 3
+#define IPA_MAX_MTU_ENTRIES 1
 #endif
 #define IPA_MAX_ALG_ENTRIES 20
 #define IPA_MAX_RM_ENTRY 9
@@ -145,6 +147,7 @@ extern "C"
 #define IPA_MAX_NUM_SW_PDNS 15
 #define IPA_MAX_NUM_HW_PDNS 4
 #define IPA_MAX_NUM_OFFLOAD_VLANS 8
+#define DEFAULT_MTU_SIZE 1500
 /*===========================================================================
 										 GLOBAL DEFINITIONS AND DECLARATIONS
 ===========================================================================*/

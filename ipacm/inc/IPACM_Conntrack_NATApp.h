@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2013-2019, The Linux Foundation. All rights reserved.
+Copyright (c) 2013-2020, The Linux Foundation. All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are
@@ -209,6 +209,10 @@ struct Ipv6ctEntry : public NatEntryBase
 	uint16_t m_dstPort;
 	uint16_t m_srcPort;
 
+	bool m_ucp;
+	bool m_s;
+	uint16_t m_uc_activation_index;
+
 private:
 
 	virtual void InvertDirection();
@@ -234,6 +238,10 @@ typedef struct _nat_table_entry
 	bool dst_nat;
 	bool enabled;
 	uint32_t rule_hdl;
+
+	uint16_t uc_activation_index;
+	bool s;
+	bool ucp;
 
 }nat_table_entry;
 

@@ -114,9 +114,19 @@ struct ipa_nat_rule {
 	uint64_t target_port:16;
 
 	uint64_t ip_chksum:16;
-	uint64_t rsvd1:14;
+
+	/*--------------------------------------------------
+	IPA NAT Flag is interpreted as follows
+	---------------------------------------------------
+	|  EN   |FIN/RST|  S   | IPv4 uC activation index |
+	| [15]  | [14]  | [13] |          [12:0]          |
+	---------------------------------------------------
+	--------------------------------------------------*/
+	uint64_t uc_activation_index:13;
+	uint64_t s:1;
 	uint64_t redirect:1;
 	uint64_t enable:1;
+
 	uint64_t time_stamp:24;
 	uint64_t protocol:8;
 
@@ -134,15 +144,17 @@ struct ipa_nat_rule {
 	uint64_t rsvd2:8;
 	/*-----------------------------------------
 	8 bit PDN info is interpreted as following
-	------------------------------------
-	|     4 bits      |     4 bits     |
-	------------------------------------
-	|  PDN index      |    reserved    |
-	|                 |                |
-	------------------------------------
+	-----------------------------------------------------
+	|     4 bits      |     1 bit      |     3 bits     |
+	-----------------------------------------------------
+	|  PDN index      |  uC processing |     Reserved   |
+	|      [7:4]      |       [3]      |      [2:0]     |
+	-----------------------------------------------------
 	-------------------------------------------*/
-	uint64_t rsvd3:4;
+	uint64_t rsvd3:3;
+	uint64_t ucp:1;
 	uint64_t pdn_index:4;
+
 	uint64_t tcp_udp_chksum:16;
 };
 
@@ -227,15 +239,15 @@ static inline char *ipa_ioc_v4_nat_init_as_str(
 }
 
 /*
-	---------------------------------------
-	|         1        |         0        |
-	---------------------------------------
-	|               Flags(2B)             |
-	|Enable|Redirect|Resv                 |
-	---------------------------------------
+	IPA NAT Flag is interpreted as follows
+	---------------------------------------------------
+	|  EN   |FIN/RST|  S   | IPv4 uC activation index |
+	| [15]  | [14]  | [13] |          [12:0]          |
+	---------------------------------------------------
 */
 typedef struct {
-	uint32_t rsvd1:14;
+	uint32_t uc_activation_index:13;
+	uint32_t s:1;
 	uint32_t redirect:1;
 	uint32_t enable:1;
 } ipa_nat_flags;

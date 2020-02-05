@@ -248,14 +248,20 @@ void* ipa_driver_msg_notifier(void *param)
 	ipacm_event_data_wlan_ex *data_ex;
 	ipa_get_data_stats_resp_msg_v01 *data_tethering_stats = NULL;
 	ipa_get_apn_data_stats_resp_msg_v01 *data_network_stats = NULL;
+	ipacm_event_connection *data_event_conn = NULL;
 
 #if defined(FEATURE_L2TP) || defined(FEATURE_VLAN_MPDN)
-	ipa_ioc_vlan_iface_info *vlan_info = NULL;
-	ipa_ioc_l2tp_vlan_mapping_info *mapping = NULL;
+	ipa_ioc_vlan_iface_info vlan_info;
+	ipa_ioc_l2tp_vlan_mapping_info mapping;
 #endif
 	ipacm_cmd_q_data new_neigh_evt;
 	ipacm_event_data_all* new_neigh_data;
 	ipa_ioc_gsb_info *event_gsb = NULL;
+
+#ifdef FEATURE_SOCKSv5
+	ipa_socksv5_msg add_socksv5_info;
+	uint32_t del_socksv5_info;
+#endif
 
 	fd = open(IPA_DRIVER, O_RDWR);
 	if (fd < 0)
@@ -739,51 +745,128 @@ void* ipa_driver_msg_notifier(void *param)
 #endif
 #if defined(FEATURE_L2TP) || defined (FEATURE_VLAN_MPDN)
 		case ADD_VLAN_IFACE:
-			vlan_info = (ipa_ioc_vlan_iface_info *)malloc(sizeof(*vlan_info));
-			if(vlan_info == NULL)
-			{
-				IPACMERR("Failed to allocate memory.\n");
-				return NULL;
-			}
-			memcpy(vlan_info, buffer + sizeof(struct ipa_msg_meta), sizeof(*vlan_info));
-			IPACM_Iface::ipacmcfg->add_vlan_iface(vlan_info);
+			memcpy(&vlan_info, buffer + sizeof(struct ipa_msg_meta), sizeof(vlan_info));
+			IPACM_Iface::ipacmcfg->add_vlan_iface(&vlan_info);
 			continue;
 
 		case DEL_VLAN_IFACE:
-			vlan_info = (ipa_ioc_vlan_iface_info *)malloc(sizeof(*vlan_info));
-			if(vlan_info == NULL)
-			{
-				IPACMERR("Failed to allocate memory.\n");
-				return NULL;
-			}
-			memcpy(vlan_info, buffer + sizeof(struct ipa_msg_meta), sizeof(*vlan_info));
-			IPACM_Iface::ipacmcfg->del_vlan_iface(vlan_info);
+			memcpy(&vlan_info, buffer + sizeof(struct ipa_msg_meta), sizeof(vlan_info));
+			IPACM_Iface::ipacmcfg->del_vlan_iface(&vlan_info);
 			continue;
 #ifdef FEATURE_L2TP
 		case ADD_L2TP_VLAN_MAPPING:
-			mapping = (ipa_ioc_l2tp_vlan_mapping_info *)malloc(sizeof(*mapping));
-			if(mapping == NULL)
-			{
-				IPACMERR("Failed to allocate memory.\n");
-				return NULL;
-			}
-			memcpy(mapping, buffer + sizeof(struct ipa_msg_meta), sizeof(*mapping));
-			IPACM_Iface::ipacmcfg->add_l2tp_vlan_mapping(mapping);
+			memcpy(&mapping, buffer + sizeof(struct ipa_msg_meta), sizeof(mapping));
+			IPACM_Iface::ipacmcfg->add_l2tp_vlan_mapping(&mapping);
 			continue;
 
 		case DEL_L2TP_VLAN_MAPPING:
-			mapping = (ipa_ioc_l2tp_vlan_mapping_info *)malloc(sizeof(*mapping));
-			if(mapping == NULL)
-			{
-				IPACMERR("Failed to allocate memory.\n");
-				return NULL;
-			}
-			memcpy(mapping, buffer + sizeof(struct ipa_msg_meta), sizeof(*mapping));
-			IPACM_Iface::ipacmcfg->del_l2tp_vlan_mapping(mapping);
+			memcpy(&mapping, buffer + sizeof(struct ipa_msg_meta), sizeof(mapping));
+			IPACM_Iface::ipacmcfg->del_l2tp_vlan_mapping(&mapping);
 			continue;
 #endif //#ifdef FEATURE_L2TP
 #endif //defined(FEATURE_L2TP) || defined (FEATURE_VLAN_MPDN)
+#if defined(FEATURE_SOCKSv5) && defined(IPA_SOCKV5_EVENT_MAX)
+		case IPA_SOCKV5_ADD:
+			/* enable socksv5 */
+			IPACM_Iface::ipacmcfg->ipacm_socksv5_enable = TRUE;
+			IPACM_Iface::ipacmcfg->ipa_ipv6ct_max_entries = 500;
 
+			IPACMDBG_H("Received IPA_SOCKV5_ADD (%d) \n", IPACM_Iface::ipacmcfg->ipacm_socksv5_enable);
+			memcpy(&add_socksv5_info, buffer + sizeof(struct ipa_msg_meta), sizeof(add_socksv5_info));
+
+			if (add_socksv5_info.ul_in.ip_type == IPA_IP_v4)
+			{
+				IPACMERR("not support inner ipv4 connections \n");
+				continue;
+			}
+			/* adjust network order */
+			if (add_socksv5_info.ul_in.ip_type == IPA_IP_v6)
+			{
+				add_socksv5_info.ul_in.ipv6_src[0] = ntohl(add_socksv5_info.ul_in.ipv6_src[0]);
+				add_socksv5_info.ul_in.ipv6_src[1] = ntohl(add_socksv5_info.ul_in.ipv6_src[1]);
+				add_socksv5_info.ul_in.ipv6_src[2] = ntohl(add_socksv5_info.ul_in.ipv6_src[2]);
+				add_socksv5_info.ul_in.ipv6_src[3] = ntohl(add_socksv5_info.ul_in.ipv6_src[3]);
+				add_socksv5_info.ul_in.ipv6_dst[0] = ntohl(add_socksv5_info.ul_in.ipv6_dst[0]);
+				add_socksv5_info.ul_in.ipv6_dst[1] = ntohl(add_socksv5_info.ul_in.ipv6_dst[1]);
+				add_socksv5_info.ul_in.ipv6_dst[2] = ntohl(add_socksv5_info.ul_in.ipv6_dst[2]);
+				add_socksv5_info.ul_in.ipv6_dst[3] = ntohl(add_socksv5_info.ul_in.ipv6_dst[3]);
+			}
+			if (add_socksv5_info.dl_in.ip_type == IPA_IP_v6)
+			{
+				add_socksv5_info.dl_in.ipv6_src[0] = ntohl(add_socksv5_info.dl_in.ipv6_src[0]);
+				add_socksv5_info.dl_in.ipv6_src[1] = ntohl(add_socksv5_info.dl_in.ipv6_src[1]);
+				add_socksv5_info.dl_in.ipv6_src[2] = ntohl(add_socksv5_info.dl_in.ipv6_src[2]);
+				add_socksv5_info.dl_in.ipv6_src[3] = ntohl(add_socksv5_info.dl_in.ipv6_src[3]);
+				add_socksv5_info.dl_in.ipv6_dst[0] = ntohl(add_socksv5_info.dl_in.ipv6_dst[0]);
+				add_socksv5_info.dl_in.ipv6_dst[1] = ntohl(add_socksv5_info.dl_in.ipv6_dst[1]);
+				add_socksv5_info.dl_in.ipv6_dst[2] = ntohl(add_socksv5_info.dl_in.ipv6_dst[2]);
+				add_socksv5_info.dl_in.ipv6_dst[3] = ntohl(add_socksv5_info.dl_in.ipv6_dst[3]);
+			}
+			else if(add_socksv5_info.dl_in.ip_type == IPA_IP_v4)
+			{
+				add_socksv5_info.dl_in.ipv4_src = ntohl(add_socksv5_info.dl_in.ipv4_src);
+				add_socksv5_info.dl_in.ipv4_dst = ntohl(add_socksv5_info.dl_in.ipv4_dst);
+				IPACMDBG("dst_ipv4 addr:0x%x src_ipv4 addr:0x%x\n",
+					add_socksv5_info.dl_in.ipv4_dst,
+					add_socksv5_info.dl_in.ipv4_src);
+			}
+
+			if (IPACM_Iface::ipacmcfg->socksv5_conn.size() == 0)
+			{
+				IPACMDBG_H("socksv5_conn size %d \n", IPACM_Iface::ipacmcfg->socksv5_conn.size());
+				IPACMDBG("src_ipv6 addr:0x%x:%x:%x:%x\n",
+					add_socksv5_info.ul_in.ipv6_src[0],
+					add_socksv5_info.ul_in.ipv6_src[1],
+					add_socksv5_info.ul_in.ipv6_src[2],
+					add_socksv5_info.ul_in.ipv6_src[3]);
+				IPACMDBG("dst_ipv6 addr:0x%x:%x:%x:%x\n",
+					add_socksv5_info.ul_in.ipv6_dst[0],
+					add_socksv5_info.ul_in.ipv6_dst[1],
+					add_socksv5_info.ul_in.ipv6_dst[2],
+					add_socksv5_info.ul_in.ipv6_dst[3]);
+
+				data_event_conn = (ipacm_event_connection *)malloc(sizeof(ipacm_event_connection));
+				if(data_event_conn == NULL)
+				{
+					IPACMERR("unable to allocate memory for event_wlan data_event_conn\n");
+				return NULL;
+				}//sky
+				data_event_conn->iptype = add_socksv5_info.ul_in.ip_type;
+				data_event_conn->src_ipv6_addr[0] = add_socksv5_info.ul_in.ipv6_src[0];
+				data_event_conn->src_ipv6_addr[1] = add_socksv5_info.ul_in.ipv6_src[1];
+				data_event_conn->src_ipv6_addr[2] = add_socksv5_info.ul_in.ipv6_src[2];
+				data_event_conn->src_ipv6_addr[3] = add_socksv5_info.ul_in.ipv6_src[3];
+				data_event_conn->dst_ipv6_addr[0] = add_socksv5_info.ul_in.ipv6_dst[0];
+				data_event_conn->dst_ipv6_addr[1] = add_socksv5_info.ul_in.ipv6_dst[1];
+				data_event_conn->dst_ipv6_addr[2] = add_socksv5_info.ul_in.ipv6_dst[2];
+				data_event_conn->dst_ipv6_addr[3] = add_socksv5_info.ul_in.ipv6_dst[3];
+				evt_data.event = IPA_HANDLE_SOCKSv5_UP;
+				evt_data.evt_data = data_event_conn;
+				/* finish command queue */
+				IPACMDBG_H("Posting IPA_HANDLE_SOCKSv5_UP event:%d\n", evt_data.event);
+				IPACM_EvtDispatcher::PostEvt(&evt_data);
+			}
+				IPACMDBG_H("socksv5_conn size %d \n", IPACM_Iface::ipacmcfg->socksv5_conn.size());
+				IPACM_Iface::ipacmcfg->add_socksv5_conn(&add_socksv5_info);
+			continue;
+
+		case IPA_SOCKV5_DEL:
+			IPACMDBG_H("Received IPA_SOCKV5_DEL \n");
+			memcpy(&del_socksv5_info, buffer + sizeof(struct ipa_msg_meta), sizeof(del_socksv5_info));
+			IPACM_Iface::ipacmcfg->del_socksv5_conn(&del_socksv5_info);
+
+			if (IPACM_Iface::ipacmcfg->socksv5_conn.size() == 0)
+			{
+				evt_data.event = IPA_HANDLE_SOCKSv5_DOWN;
+				evt_data.evt_data = NULL;
+				break;
+			}
+			else
+			{
+				IPACMDBG_H("socksv5_conn size %d \n", IPACM_Iface::ipacmcfg->socksv5_conn.size());
+				continue;
+			}
+#endif //defined(FEATURE_SOCKSv5) && defined(IPA_SOCKV5_EVENT_MAX)
 		case IPA_GSB_CONNECT:
 			event_gsb = (ipa_ioc_gsb_info *) (buffer + sizeof(struct ipa_msg_meta));
 			IPACMDBG_H("Received IPA_GSB_CONNECT name: %s\n",event_gsb->name);
@@ -801,7 +884,7 @@ void* ipa_driver_msg_notifier(void *param)
 		case IPA_GSB_DISCONNECT:
 			event_gsb = (ipa_ioc_gsb_info *)(buffer + sizeof(struct ipa_msg_meta));
 			IPACMDBG_H("Received IPA_GSB_DISCONNECT name: %s\n",event_gsb->name);
-            		data_fid = (ipacm_event_data_fid *)malloc(sizeof(ipacm_event_data_fid));
+			data_fid = (ipacm_event_data_fid *)malloc(sizeof(ipacm_event_data_fid));
 			if(data_fid == NULL)
 			{
 				IPACMERR("unable to allocate memory for event_gsb\n");

@@ -73,7 +73,7 @@ extern "C"
 #define IPA_ETH_HDR_NAME_v6  "IPACM_ETH_v6"
 #define IPA_ODU_HDR_NAME_v4  "IPACM_ODU_v4"
 #define IPA_ODU_HDR_NAME_v6  "IPACM_ODU_v6"
-
+#define IPA_IF_SOCKSv5_NAME  "IPACM_SOCKSv5"
 
 #define IPA_MAX_IFACE_ENTRIES 20
 #ifdef FEATURE_VLAN_MPDN
@@ -200,8 +200,8 @@ typedef enum
 
 	IPA_HANDLE_WAN_UP,                        /* ipacm_event_iface_up  */
 	IPA_HANDLE_WAN_DOWN,                      /* ipacm_event_iface_up  */
-	IPA_HANDLE_WAN_UP_V6,                     /* NULL */
-	IPA_HANDLE_WAN_DOWN_V6,                   /* NULL */
+	IPA_HANDLE_WAN_UP_V6,                     /* ipacm_event_iface_up */
+	IPA_HANDLE_WAN_DOWN_V6,                   /* ipacm_event_iface_up */
 	IPA_HANDLE_WAN_UP_TETHER,                 /* ipacm_event_iface_up_tehter */
 	IPA_HANDLE_WAN_DOWN_TETHER,               /* ipacm_event_iface_up_tehter */
 	IPA_HANDLE_WAN_UP_V6_TETHER,              /* ipacm_event_iface_up_tehter */
@@ -225,8 +225,14 @@ typedef enum
 #ifdef FEATURE_VLAN_MPDN
 	IPA_PREFIX_CHANGE_EVENT,                  /* ipacm_event_data_fid */
 	IPA_ROUTE_ADD_VLAN_PDN_EVENT,             /* ipacm_event_route_vlan */
-	IPA_HANDLE_WAN_VLAN_PDN_UP,                   /* ipacm_event_vlan_pdn */
-	IPA_HANDLE_WAN_VLAN_PDN_DOWN,                 /* ipacm_event_vlan_pdn */
+	IPA_HANDLE_WAN_VLAN_PDN_UP,               /* ipacm_event_vlan_pdn */
+	IPA_HANDLE_WAN_VLAN_PDN_DOWN,             /* ipacm_event_vlan_pdn */
+#endif
+#ifdef FEATURE_SOCKSv5
+	IPA_HANDLE_SOCKSv5_UP,                    /* ipacm_event_connection */
+	IPA_HANDLE_SOCKSv5_DOWN,                  /* NULL */
+	IPA_ADD_SOCKSv5_CONN,              	      /* ipa_socksv5_msg */
+	IPA_DEL_SOCKSv5_CONN,                     /* ipa_socksv5_msg */
 #endif
 	IPACM_EVENT_MAX
 } ipa_cm_event_id;
@@ -471,5 +477,21 @@ struct l2tp_client_info
 {
 	char client_iface_name[IPA_IFACE_NAME_LEN];
 };
+
+#ifdef FEATURE_SOCKSv5
+struct socksv5_conn_info
+{
+	ipa_socksv5_msg conn_info;
+	/* v6-ct handles */
+	/* v4-nat handles */
+};
+
+struct rmnet_mux_id_info
+{
+	char iface_name[IPA_IFACE_NAME_LEN];
+	uint32_t ipv4_addr;
+	uint8_t mux_id;
+};
+#endif
 
 #endif /* IPA_CM_DEFS_H */

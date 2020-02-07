@@ -4019,8 +4019,6 @@ int IPACM_Wlan::config_dft_firewall_rules_ul_ex(IPACM_firewall_conf_t* firewall_
 			get_client_memptr(wlan_client, wlan_idx)->mac,
 			get_client_memptr(wlan_client, wlan_idx)->ul_cnt_idx,
 			pFilteringTable, true);
-		IPACM_Iface::ipacmcfg->increaseFltRuleCount(rx_prop->rx[0].src_pipe, IPA_IP_v6,
-			pFilteringTable->num_rules - 1); //Do not insert last added catch-all
 	}
 	/************************/
 #else

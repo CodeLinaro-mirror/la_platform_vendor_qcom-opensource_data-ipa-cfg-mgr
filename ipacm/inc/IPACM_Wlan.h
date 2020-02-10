@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013-2018 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2013-2018,2020 The Linux Foundation. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -224,7 +224,7 @@ private:
 
 			if(memcmp(get_client_memptr(wlan_client, cnt)->mac,
 								mac_addr,
-								sizeof(get_client_memptr(wlan_client, cnt)->mac)) == 0)
+								IPA_MAC_ADDR_SIZE * sizeof(uint8_t)) == 0)
 			{
 				IPACMDBG_H("Matched client index: %d\n", cnt);
 				return cnt;

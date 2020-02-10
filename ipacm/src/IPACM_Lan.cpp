@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013-2019 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2013-2019,2020 The Linux Foundation. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -2757,6 +2757,7 @@ int IPACM_Lan::handle_eth_hdr_init(uint8_t *mac_addr, ipacm_bridge *bridge, uint
 	struct ipa_ioc_add_hdr *pHeaderDescriptor = NULL;
 	uint32_t cnt;
 	int clnt_indx;
+	uint8_t *mac_address;
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
 	struct wan_ioctl_lan_client_info *client_info;
 	ipacm_ext_prop* ext_prop;
@@ -2792,10 +2793,9 @@ int IPACM_Lan::handle_eth_hdr_init(uint8_t *mac_addr, ipacm_bridge *bridge, uint
 	}
 
 	IPACMDBG_H("ETH client number: %d\n", num_eth_client);
-
 	memcpy(get_client_memptr(eth_client, num_eth_client)->mac,
 				 mac_addr,
-				 sizeof(get_client_memptr(eth_client, num_eth_client)->mac));
+				 IPA_MAC_ADDR_SIZE * sizeof(uint8_t));
 #ifdef FEATURE_VLAN_MPDN
 	if (isVlan)
 	{
@@ -4804,7 +4804,7 @@ int IPACM_Lan::handle_eth_client_down_evt(uint8_t *mac_addr, uint8_t vlan_id, ip
 	{
 		memcpy(get_client_memptr(eth_client, clt_indx)->mac,
 					 get_client_memptr(eth_client, (clt_indx + 1))->mac,
-					 sizeof(get_client_memptr(eth_client, clt_indx)->mac));
+					 IPA_MAC_ADDR_SIZE * sizeof(uint8_t));
 
 		get_client_memptr(eth_client, clt_indx)->hdr_hdl_v4 = get_client_memptr(eth_client, (clt_indx + 1))->hdr_hdl_v4;
 		get_client_memptr(eth_client, clt_indx)->hdr_hdl_v6 = get_client_memptr(eth_client, (clt_indx + 1))->hdr_hdl_v6;
@@ -11291,7 +11291,7 @@ int IPACM_Lan::install_l2tp_dl_rules(ipacm_event_data_all *data, int index)
 	get_client_memptr(eth_client, index)->v4_addr = data->ipv4_addr;
 	is_l2tp_iface = true;
 	memcpy(get_client_memptr(eth_client, index)->mac, data->mac_addr,
-		sizeof(get_client_memptr(eth_client, index)->mac));
+		IPA_MAC_ADDR_SIZE * sizeof(uint8_t));
 
 	/* =========== install first pass hdr template (IPv6 + L2TP + inner ETH header = 62 bytes) ============= */
 	size = sizeof(ipa_ioc_add_hdr) + sizeof(ipa_hdr_add);

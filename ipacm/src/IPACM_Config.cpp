@@ -1361,28 +1361,31 @@ void IPACM_Config::add_vlan_iface(ipa_ioc_vlan_iface_info *data)
 	m_vlan_iface.push_front(new_vlan_info);
 	pthread_mutex_unlock(&vlan_l2tp_lock);
 #ifdef FEATURE_VLAN_MPDN
-	ipacm_event_eth_bridge *evt_data_eth_bridge;
-	ipacm_cmd_q_data eth_bridge_evt;
-
-	evt_data_eth_bridge = (ipacm_event_eth_bridge*)malloc(sizeof(*evt_data_eth_bridge));
-	if(evt_data_eth_bridge == NULL)
+	if (IPACM_Iface::ipacmcfg->ipacm_mpdn_enable == TRUE)
 	{
-		IPACMERR("Failed to allocate memory.\n");
-		return;
+		ipacm_event_eth_bridge *evt_data_eth_bridge;
+		ipacm_cmd_q_data eth_bridge_evt;
+
+		evt_data_eth_bridge = (ipacm_event_eth_bridge*)malloc(sizeof(*evt_data_eth_bridge));
+		if(evt_data_eth_bridge == NULL)
+		{
+			IPACMERR("Failed to allocate memory.\n");
+			return;
+		}
+		memset(evt_data_eth_bridge, 0, sizeof(*evt_data_eth_bridge));
+
+		memcpy(evt_data_eth_bridge->iface_name, data->name,
+			sizeof(evt_data_eth_bridge->iface_name));
+
+		evt_data_eth_bridge->VlanID = data->vlan_id;
+
+		eth_bridge_evt.evt_data = (void*)evt_data_eth_bridge;
+		eth_bridge_evt.event = IPA_ETH_BRIDGE_ADD_VLAN_ID;
+
+		IPACMDBG_H("Posting event %s\n",
+			IPACM_Iface::ipacmcfg->getEventName(eth_bridge_evt.event));
+		IPACM_EvtDispatcher::PostEvt(&eth_bridge_evt);
 	}
-	memset(evt_data_eth_bridge, 0, sizeof(*evt_data_eth_bridge));
-
-	memcpy(evt_data_eth_bridge->iface_name, data->name,
-		sizeof(evt_data_eth_bridge->iface_name));
-
-	evt_data_eth_bridge->VlanID = data->vlan_id;
-
-	eth_bridge_evt.evt_data = (void*)evt_data_eth_bridge;
-	eth_bridge_evt.event = IPA_ETH_BRIDGE_ADD_VLAN_ID;
-
-	IPACMDBG_H("Posting event %s\n",
-		IPACM_Iface::ipacmcfg->getEventName(eth_bridge_evt.event));
-	IPACM_EvtDispatcher::PostEvt(&eth_bridge_evt);
 #endif
 	return;
 }
@@ -1467,28 +1470,31 @@ void IPACM_Config::del_vlan_iface(ipa_ioc_vlan_iface_info *data)
 	pthread_mutex_unlock(&vlan_l2tp_lock);
 
 #ifdef FEATURE_VLAN_MPDN
-	ipacm_event_eth_bridge *evt_data_eth_bridge;
-	ipacm_cmd_q_data eth_bridge_evt;
-
-	evt_data_eth_bridge = (ipacm_event_eth_bridge*)malloc(sizeof(*evt_data_eth_bridge));
-	if(evt_data_eth_bridge == NULL)
+	if (IPACM_Iface::ipacmcfg->ipacm_mpdn_enable == TRUE)
 	{
-		IPACMERR("Failed to allocate memory.\n");
-		return;
+		ipacm_event_eth_bridge *evt_data_eth_bridge;
+		ipacm_cmd_q_data eth_bridge_evt;
+
+		evt_data_eth_bridge = (ipacm_event_eth_bridge*)malloc(sizeof(*evt_data_eth_bridge));
+		if(evt_data_eth_bridge == NULL)
+		{
+			IPACMERR("Failed to allocate memory.\n");
+			return;
+		}
+		memset(evt_data_eth_bridge, 0, sizeof(*evt_data_eth_bridge));
+
+		memcpy(evt_data_eth_bridge->iface_name, data->name,
+			sizeof(evt_data_eth_bridge->iface_name));
+
+		evt_data_eth_bridge->VlanID = data->vlan_id;
+
+		eth_bridge_evt.evt_data = (void*)evt_data_eth_bridge;
+		eth_bridge_evt.event = IPA_ETH_BRIDGE_DEL_VLAN_ID;
+
+		IPACMDBG_H("Posting event %s\n",
+			IPACM_Iface::ipacmcfg->getEventName(eth_bridge_evt.event));
+		IPACM_EvtDispatcher::PostEvt(&eth_bridge_evt);
 	}
-	memset(evt_data_eth_bridge, 0, sizeof(*evt_data_eth_bridge));
-
-	memcpy(evt_data_eth_bridge->iface_name, data->name,
-		sizeof(evt_data_eth_bridge->iface_name));
-
-	evt_data_eth_bridge->VlanID = data->vlan_id;
-
-	eth_bridge_evt.evt_data = (void*)evt_data_eth_bridge;
-	eth_bridge_evt.event = IPA_ETH_BRIDGE_DEL_VLAN_ID;
-
-	IPACMDBG_H("Posting event %s\n",
-		IPACM_Iface::ipacmcfg->getEventName(eth_bridge_evt.event));
-	IPACM_EvtDispatcher::PostEvt(&eth_bridge_evt);
 #endif
 
 	return;

@@ -11263,7 +11263,7 @@ int IPACM_Lan::add_l2tp_udp_rt_rule(ipa_ip_type iptype, uint8_t *dst_mac, uint32
 		return IPACM_FAILURE;
 	}
 
-	/* =========== install hdr proc ctx (uC needs to remove IPv6(40) + UDP (8) +L2TP (16) header = 64 bytes) ============= */
+	/* =========== install hdr proc ctx (uC needs to remove IPv6(40) + UDP (8) +L2TP (16) header + Inner ETH (14) = 78 bytes) ============= */
 	if(*hdr_proc_ctx_hdl != 0)
 	{
 		IPACMDBG_H("Hdr proc ctx was added before.\n");
@@ -11284,7 +11284,8 @@ int IPACM_Lan::add_l2tp_udp_rt_rule(ipa_ip_type iptype, uint8_t *dst_mac, uint32
 		hdr_proc_ctx = &hdr_proc_ctx_table->proc_ctx[0];
 
 		hdr_proc_ctx->type = IPA_HDR_PROC_L2TP_UDP_HEADER_REMOVE;
-		hdr_proc_ctx->l2tp_params.hdr_remove_param.hdr_len_remove = 64;
+		hdr_proc_ctx->hdr_hdl = hdr.hdl;
+		hdr_proc_ctx->l2tp_params.hdr_remove_param.hdr_len_remove = 78;
 		hdr_proc_ctx->l2tp_params.hdr_remove_param.eth_hdr_retained = 1;
 		hdr_proc_ctx->l2tp_params.is_dst_pipe_valid = 1;
 		hdr_proc_ctx->l2tp_params.dst_pipe = tx_prop->tx[0].dst_pipe;

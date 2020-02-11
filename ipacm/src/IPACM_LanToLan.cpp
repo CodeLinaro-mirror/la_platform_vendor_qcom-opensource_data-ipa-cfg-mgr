@@ -217,7 +217,8 @@ void IPACM_LanToLan::handle_iface_up(ipacm_event_eth_bridge *data)
 	list<l2tp_vlan_mapping_info>::iterator it_mapping;
 	bool has_l2tp_iface = false;
 #ifdef FEATURE_VLAN_MPDN
-	bool IsVlan = (IPACM_Iface::ipacmcfg->iface_in_vlan_mode(data->p_iface->dev_name));
+	bool IsVlan = (IPACM_Iface::ipacmcfg->ipacm_mpdn_enable &&
+		IPACM_Iface::ipacmcfg->iface_in_vlan_mode(data->p_iface->dev_name));
 	uint8_t Ids[IPA_MAX_NUM_OFFLOAD_VLANS];
 #endif
 
@@ -593,18 +594,21 @@ void IPACM_LanToLan::handle_client_add(ipacm_event_eth_bridge *data)
 		{
 			IPACMDBG_H("Found the interface.\n");
 #ifdef FEATURE_VLAN_MPDN
-			if(it_iface->get_is_vlan())
+			if (IPACM_Iface::ipacmcfg->ipacm_mpdn_enable == true)
 			{
-				if(!data->VlanID)
+				if(it_iface->get_is_vlan())
 				{
-					IPACMERR("got VlanID 0 for IF in VLAN mode\n");
+					if(!data->VlanID)
+					{
+						IPACMERR("got VlanID 0 for IF in VLAN mode\n");
+						return;
+					}
+				}
+				else if(data->VlanID)
+				{
+					IPACMERR("got event with vlan id for non VLAN IF");
 					return;
 				}
-			}
-			else if(data->VlanID)
-			{
-				IPACMERR("got event with vlan id for non VLAN IF");
-				return;
 			}
 #endif //FEATURE_VLAN_MPDN
 			it_iface->handle_client_add(data->mac_addr, is_l2tp_client, mapping_info, data->VlanID);
@@ -1694,7 +1698,8 @@ void IPACM_LanToLan_Iface::handle_client_add(uint8_t *mac, bool is_l2tp_client, 
 	{
 		if((memcmp(it_client->mac_addr, mac, sizeof(it_client->mac_addr)) == 0)
 #ifdef FEATURE_VLAN_MPDN
-			&& (m_is_vlan && (it_client->vlan_id == vlan_id))
+			&& (((IPACM_Iface::ipacmcfg->ipacm_mpdn_enable && m_is_vlan && (it_client->vlan_id == vlan_id))) ||
+			!IPACM_Iface::ipacmcfg->ipacm_mpdn_enable || !m_is_vlan)
 #endif
 			)
 		{

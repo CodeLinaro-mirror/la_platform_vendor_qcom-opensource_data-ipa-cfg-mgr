@@ -784,11 +784,24 @@ static int _smAddSramTbl(
 				   nati_obj_ptr->tot_slots_in_sram,
 				   nati_obj_ptr->back_to_sram_thresh);
 
+			IPADBG("Voting clock on for sram table creation\n");
+
+			if ( (ret = ipa_nat_vote_clock(IPA_APP_CLK_VOTE)) != 0 )
+			{
+				IPAERR("Voting clock on failed\n");
+				goto done;
+			}
+
 			ret = ipa_NATI_add_ipv4_tbl(
 				IPA_NAT_MEM_IN_SRAM,
 				public_ip_addr,
 				nati_obj_ptr->tot_slots_in_sram,
 				&nati_obj_ptr->sram_tbl_hdl);
+
+			if ( ipa_nat_vote_clock(IPA_APP_CLK_DEVOTE) != 0 )
+			{
+				IPAWARN("Voting clock off failed\n");
+			}
 
 			if ( ret == 0 )
 			{
@@ -800,6 +813,7 @@ static int _smAddSramTbl(
 		}
 	}
 
+done:
 	IPADBG("Out\n");
 
 	return ret;

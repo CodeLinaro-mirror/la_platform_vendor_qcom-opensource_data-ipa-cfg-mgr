@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013-2019, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2013-2019,2020, The Linux Foundation. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -1019,7 +1019,7 @@ int IPACM_Wlan::handle_wlan_client_init_ex(ipacm_event_data_wlan_ex *data)
 					{
 						memcpy(get_client_memptr(wlan_client, num_wifi_client)->mac,
 								data->attribs[i].u.mac_addr,
-								sizeof(get_client_memptr(wlan_client, num_wifi_client)->mac));
+								IPA_MAC_ADDR_SIZE * sizeof(uint8_t));
 
 						/* copy client mac_addr to partial header */
 						memcpy(&pHeaderDescriptor->hdr[0].hdr[data->attribs[i].offset],
@@ -2615,7 +2615,7 @@ int IPACM_Wlan::handle_wlan_client_down_evt(uint8_t *mac_addr)
 
 		memcpy(get_client_memptr(wlan_client, clt_indx)->mac,
 					 get_client_memptr(wlan_client, (clt_indx + 1))->mac,
-					 sizeof(get_client_memptr(wlan_client, clt_indx)->mac));
+					 IPA_MAC_ADDR_SIZE * sizeof(uint8_t));
 
 		get_client_memptr(wlan_client, clt_indx)->hdr_hdl_v4 = get_client_memptr(wlan_client, (clt_indx + 1))->hdr_hdl_v4;
 		get_client_memptr(wlan_client, clt_indx)->hdr_hdl_v6 = get_client_memptr(wlan_client, (clt_indx + 1))->hdr_hdl_v6;

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2018, 2020 The Linux Foundation. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -68,17 +68,23 @@ typedef enum
   ---------------------------------------------------------------------------------------------------
   |                              Outbound Dest IPv6 Address (8 MSB Bytes)                           |
   ---------------------------------------------------------------------------------------------------
-  | Protocol  |           TimeStamp (3B)            |       Flags (2B)      |     Reserved (2B)     |
-  |    (1B)   |                                     |Enable|Redirect|Resv   |                       |
+  | Protocol  |           TimeStamp (3B)            |       Flags (2B)      |Rsvd   |S |uC activatio|
+  |    (1B)   |                                     |Enable|Redirect|Resv   |[15:14]|13|Index [12:0]|
   ---------------------------------------------------------------------------------------------------
-  |Reserved   |Direction(1B)|     Src Port (2B)     |     Dest Port (2B)    |    Next Index (2B)    |
-  |  (1B)     |IN|OUT|Resv  |                       |                       |                       |
+  |Reserved   |Settings     |     Src Port (2B)     |     Dest Port (2B)    |    Next Index (2B)    |
+  |  (1B)     |  (1B)       |                       |                       |                       |
   ---------------------------------------------------------------------------------------------------
   |           SW Specific Parameters(4B)            |                   Reserved (4B)               |
   |     Prev Index (2B)     |    Reserved (2B)      |                                               |
   ---------------------------------------------------------------------------------------------------
   |                                             Reserved (8B)                                       |
   ---------------------------------------------------------------------------------------------------
+
+  Settings(1B)
+ -----------------------------------------------
+ |IN Allowed|OUT Allowed|Reserved|uC processing|
+ |[7:7]     |[6:6]      |[5:1]   |[0:0]        |
+ -----------------------------------------------
 
   Dont change below structure definition.
   It should be same as above(little endian order)
@@ -90,7 +96,9 @@ typedef struct
 	uint64_t dest_ipv6_lsb : 64;
 	uint64_t dest_ipv6_msb : 64;
 
-	uint64_t rsvd1 : 30;
+	uint64_t uc_activation_index : 13;
+	uint64_t s : 1;
+	uint64_t rsvd1 : 16;
 	uint64_t redirect : 1;
 	uint64_t enable : 1;
 	uint64_t time_stamp : 24;
@@ -99,7 +107,8 @@ typedef struct
 	uint64_t next_index : 16;
 	uint64_t dest_port : 16;
 	uint64_t src_port : 16;
-	uint64_t rsvd2 : 6;
+	uint64_t ucp : 1;
+	uint64_t rsvd2 : 5;
 	uint64_t out_allowed : 1;
 	uint64_t in_allowed : 1;
 	uint64_t rsvd3 : 8;

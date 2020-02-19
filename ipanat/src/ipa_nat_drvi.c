@@ -318,6 +318,9 @@ static int table_entry_copy_from_user(
 	nat_entry->target_ip    = user_rule->target_ip;
 	nat_entry->target_port  = user_rule->target_port;
 	nat_entry->pdn_index    = user_rule->pdn_index;
+	nat_entry->uc_activation_index = user_rule->uc_activation_index;
+	nat_entry->s = user_rule->s;
+	nat_entry->ucp = user_rule->ucp;
 
 	nat_entry->ip_chksum =
 		ipa_nati_calc_ip_cksum(pub_ip_addr, user_rule->private_ip);
@@ -342,6 +345,7 @@ static int table_entry_head_insert(
 	uint16_t*  dma_command_data)
 {
 	int  ret;
+	struct ipa_nat_rule* nat_entry = (struct ipa_nat_rule*) entry;
 
 	IPADBG("In\n");
 
@@ -358,8 +362,10 @@ static int table_entry_head_insert(
 	}
 
 	*dma_command_data = 0;
-
 	((ipa_nat_flags*)dma_command_data)->enable = IPA_NAT_FLAG_ENABLE_BIT;
+	((ipa_nat_flags*)dma_command_data)->uc_activation_index =
+		nat_entry->uc_activation_index;
+	((ipa_nat_flags*)dma_command_data)->s = nat_entry->s;
 
 bail:
 	IPADBG("Out\n");

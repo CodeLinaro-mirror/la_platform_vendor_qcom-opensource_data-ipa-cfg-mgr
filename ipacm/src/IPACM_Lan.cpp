@@ -6496,8 +6496,8 @@ int IPACM_Lan::config_dft_firewall_rules_ul_ex(IPACM_firewall_conf_t* firewall_c
 		}
 		else
 		{	/* No? just install as it is */
-			flt_rule_entry.rule.action = IPA_PASS_TO_EXCEPTION;
-			flt_rule_entry.rule.rt_tbl_idx = 0;
+			flt_rule_entry.rule.action = IPACM_Iface::ipacmcfg->IsIpv6CTEnabled()?
+				IPA_PASS_TO_SRC_NAT : IPA_PASS_TO_ROUTING;
 			memcpy(&pFilteringTable->rules[k], &flt_rule_entry, sizeof(flt_rule_entry));
 			IPACMDBG_H("Modem UL filtering rule %d has index %d\n", i, index);
 			flt_index.rule_id_ex[k] = ext_prop->prop[i].rule_id;

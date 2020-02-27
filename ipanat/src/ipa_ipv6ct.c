@@ -682,10 +682,19 @@ static int ipa_ipv6ct_create_table(ipa_ipv6ct_table* ipv6ct_table, uint16_t numb
 	size = ipa_table_calculate_size(&ipv6ct_table->table);
 	IPADBG("IPv6CT table size: %d\n", size);
 
-	ipa_mem_descriptor_init(&ipv6ct_table->mem_desc, IPA_IPV6CT_DEV_NAME, size, table_index,
-		IPA_IOC_ALLOC_IPV6CT_TABLE, IPA_IOC_DEL_IPV6CT_TABLE);
+	ipa_mem_descriptor_init(
+		&ipv6ct_table->mem_desc,
+		IPA_IPV6CT_DEV_NAME,
+		size,
+		table_index,
+		IPA_IOC_ALLOC_IPV6CT_TABLE,
+		IPA_IOC_DEL_IPV6CT_TABLE,
+		false); /* false here means don't consider using sram */
 
-	ret = ipa_mem_descriptor_allocate_memory(&ipv6ct_table->mem_desc, ipv6ct.ipa_desc->fd);
+	ret = ipa_mem_descriptor_allocate_memory(
+		&ipv6ct_table->mem_desc,
+		ipv6ct.ipa_desc->fd);
+
 	if (ret)
 	{
 		IPAERR("unable to allocate ipv6ct memory descriptor Error: %d\n", ret);

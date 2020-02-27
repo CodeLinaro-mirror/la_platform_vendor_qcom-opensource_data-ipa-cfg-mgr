@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2019 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2018-2020 The Linux Foundation. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -45,7 +45,9 @@ typedef struct
 	char name[IPA_RESOURCE_NAME_MAX];
 	uint8_t table_index;
 	uint8_t valid;
-	bool sram_will_be_used;
+	bool consider_using_sram;
+	bool sram_available;
+	bool sram_to_be_used;
 	struct ipa_nat_in_sram_info nat_sram_info;
 } ipa_mem_descriptor;
 
@@ -55,7 +57,8 @@ void ipa_mem_descriptor_init(
 	int size,
 	uint8_t table_index,
 	unsigned long allocate_ioctl_num,
-	unsigned long delete_ioctl_num);
+	unsigned long delete_ioctl_num,
+	bool consider_using_sram );
 
 int ipa_mem_descriptor_allocate_memory(
 	ipa_mem_descriptor* desc,
@@ -66,4 +69,3 @@ int ipa_mem_descriptor_delete(
 	int ipa_fd);
 
 #endif
-

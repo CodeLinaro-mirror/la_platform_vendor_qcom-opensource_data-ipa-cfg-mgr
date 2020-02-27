@@ -773,7 +773,8 @@ static int ipa_nati_create_table(
 		size,
 		table_index,
 		IPA_IOC_ALLOC_NAT_TABLE,
-		IPA_IOC_DEL_NAT_TABLE);
+		IPA_IOC_DEL_NAT_TABLE,
+		true);  /* true here means do consider using sram */
 
 	ret = ipa_mem_descriptor_allocate_memory(
 		&nat_table->mem_desc,

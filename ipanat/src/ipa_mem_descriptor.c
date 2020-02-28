@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2019 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2018-2020 The Linux Foundation. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -41,94 +41,6 @@
 #define IPA_DEVICE_MMAP_MEM_SIZE (2 * 1024UL * 1024UL - 1)
 #endif
 
-static int AllocateMemory(ipa_mem_descriptor* desc, int ipa_fd);
-static int MapMemory(ipa_mem_descriptor* desc, int ipa_fd);
-static int DeallocateMemory(ipa_mem_descriptor* desc, int ipa_fd);
-
-void ipa_mem_descriptor_init(
-	ipa_mem_descriptor* desc,
-	const char* device_name,
-	int size,
-	uint8_t table_index,
-	unsigned long allocate_ioctl_num,
-	unsigned long delete_ioctl_num)
-{
-	IPADBG("In\n");
-
-	strlcpy(desc->name, device_name, IPA_RESOURCE_NAME_MAX);
-
-	desc->orig_rqst_size     = desc->mmap_size = size;
-	desc->table_index        = table_index;
-	desc->allocate_ioctl_num = allocate_ioctl_num;
-	desc->delete_ioctl_num   = delete_ioctl_num;
-
-	IPADBG("Out\n");
-}
-
-int ipa_mem_descriptor_allocate_memory(
-	ipa_mem_descriptor* desc,
-	int ipa_fd)
-{
-	int ret;
-
-	IPADBG("In\n");
-
-	ret = AllocateMemory(desc, ipa_fd);
-
-	if (ret)
-	{
-		IPAERR("unable to allocate %s\n", desc->name);
-		goto bail;
-	}
-
-	ret = MapMemory(desc, ipa_fd);
-
-	if (ret)
-	{
-		IPAERR("unable to map %s\n", desc->name);
-		DeallocateMemory(desc, ipa_fd);
-		goto bail;
-	}
-
-	desc->valid = TRUE;
-
-bail:
-	IPADBG("Out\n");
-
-	return ret;
-}
-
-int ipa_mem_descriptor_delete(
-	ipa_mem_descriptor* desc,
-	int ipa_fd)
-{
-	int ret = 0;
-
-	IPADBG("In\n");
-
-	if (! desc->valid)
-	{
-		IPAERR("invalid desc handle passed\n");
-		ret = -EINVAL;
-		goto bail;
-	}
-
-	desc->valid = FALSE;
-
-#ifndef IPA_ON_R3PC
-	munmap(desc->mmap_addr, desc->mmap_size);
-#else
-	munmap(desc->mmap_addr, IPA_DEVICE_MMAP_MEM_SIZE);
-#endif
-
-	ret = DeallocateMemory(desc, ipa_fd);
-
-bail:
-	IPADBG("Out\n");
-
-	return ret;
-}
-
 static int AllocateMemory(
 	ipa_mem_descriptor* desc,
 	int ipa_fd)
@@ -159,7 +71,7 @@ static int AllocateMemory(
 	 * more space to ensure that the table is completely within the
 	 * mmap'd virtual memory.
 	 */
-	desc->sram_will_be_used = false;
+	desc->sram_available = desc->sram_to_be_used = false;
 
 	memset(&desc->nat_sram_info, 0, sizeof(desc->nat_sram_info));
 
@@ -177,10 +89,15 @@ static int AllocateMemory(
 			   desc->nat_sram_info.nat_table_offset_into_mmap,
 			   desc->nat_sram_info.best_nat_in_sram_size_rqst);
 
-		if (desc->orig_rqst_size <=
-			desc->nat_sram_info.sram_mem_available_for_nat)
+		desc->sram_available = true;
+
+		if ( desc->consider_using_sram )
 		{
-			desc->sram_will_be_used = true;
+			if (desc->orig_rqst_size <=
+				desc->nat_sram_info.sram_mem_available_for_nat)
+			{
+				desc->sram_to_be_used = true;
+			}
 		}
 	}
 #endif
@@ -268,7 +185,7 @@ static int MapMemory(
 	 * mmap'd virtual memory.
 	 */
 	desc->mmap_size =
-		(desc->sram_will_be_used)                      ?
+		( desc->sram_to_be_used )                      ?
 		desc->nat_sram_info.best_nat_in_sram_size_rqst :
 		desc->orig_rqst_size;
 
@@ -280,7 +197,6 @@ static int MapMemory(
 			MAP_SHARED,
 			device_fd,
 			0);
-	/* (desc->sram_will_be_used) ? 0 : 4096); */
 #else
 	IPADBG("user space r3pc\n");
 	desc->mmap_addr = desc->base_addr =
@@ -300,7 +216,7 @@ static int MapMemory(
 		goto close;
 	}
 
-	if (desc->sram_will_be_used)
+	if ( desc->sram_to_be_used )
 	{
 		desc->base_addr =
 			(uint8_t*) (desc->base_addr) +
@@ -339,7 +255,9 @@ static int DeallocateMemory(
 	cmd.table_index = desc->table_index;
 
 	cmd.mem_type =
-		(desc->sram_will_be_used) ? IPA_NAT_MEM_IN_SRAM : IPA_NAT_MEM_IN_DDR;
+		( desc->sram_to_be_used ) ?
+		IPA_NAT_MEM_IN_SRAM       :
+		IPA_NAT_MEM_IN_DDR;
 
 	ret = ioctl(ipa_fd, desc->delete_ioctl_num, &cmd);
 
@@ -351,6 +269,92 @@ static int DeallocateMemory(
 	}
 
 	IPADBG("posted delete command for %s to kernel successfully\n", desc->name);
+
+bail:
+	IPADBG("Out\n");
+
+	return ret;
+}
+
+void ipa_mem_descriptor_init(
+	ipa_mem_descriptor* desc,
+	const char* device_name,
+	int size,
+	uint8_t table_index,
+	unsigned long allocate_ioctl_num,
+	unsigned long delete_ioctl_num,
+	bool consider_using_sram )
+{
+	IPADBG("In\n");
+
+	strlcpy(desc->name, device_name, IPA_RESOURCE_NAME_MAX);
+
+	desc->orig_rqst_size      = desc->mmap_size = size;
+	desc->table_index         = table_index;
+	desc->allocate_ioctl_num  = allocate_ioctl_num;
+	desc->delete_ioctl_num    = delete_ioctl_num;
+	desc->consider_using_sram = consider_using_sram;
+
+	IPADBG("Out\n");
+}
+
+int ipa_mem_descriptor_allocate_memory(
+	ipa_mem_descriptor* desc,
+	int ipa_fd)
+{
+	int ret;
+
+	IPADBG("In\n");
+
+	ret = AllocateMemory(desc, ipa_fd);
+
+	if (ret)
+	{
+		IPAERR("unable to allocate %s\n", desc->name);
+		goto bail;
+	}
+
+	ret = MapMemory(desc, ipa_fd);
+
+	if (ret)
+	{
+		IPAERR("unable to map %s\n", desc->name);
+		DeallocateMemory(desc, ipa_fd);
+		goto bail;
+	}
+
+	desc->valid = TRUE;
+
+bail:
+	IPADBG("Out\n");
+
+	return ret;
+}
+
+int ipa_mem_descriptor_delete(
+	ipa_mem_descriptor* desc,
+	int ipa_fd)
+{
+	int ret = 0;
+
+	IPADBG("In\n");
+
+	if (! desc->valid)
+	{
+		IPAERR("invalid desc handle passed\n");
+		ret = -EINVAL;
+		goto bail;
+	}
+
+	desc->valid = FALSE;
+
+#ifndef IPA_ON_R3PC
+	munmap(desc->mmap_addr, desc->mmap_size);
+#else
+	munmap(desc->mmap_addr, IPA_DEVICE_MMAP_MEM_SIZE);
+#endif
+
+	ret = DeallocateMemory(desc, ipa_fd);
 
 bail:
 	IPADBG("Out\n");

@@ -128,6 +128,11 @@ IPACM_Lan::IPACM_Lan(int iface_index) : IPACM_Iface(iface_index)
 	memset(l2tp_udp_dflt_flt_rule_hdl, 0, sizeof(l2tp_udp_dflt_flt_rule_hdl));
 #endif
 #endif
+
+#ifdef FEATURE_SOCKSv5
+        socksv5_flt_hdl_v6 = 0;
+#endif
+
 	/* support eth multiple clients */
 	if(iface_query != NULL)
 	{
@@ -723,6 +728,7 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 			return;
 		}
 		IPACMDBG_H("Backhaul is sta mode?%d\n", data_wan->is_sta);
+#ifndef FEATURE_SOCKSv5
 #ifdef FEATURE_VLAN_MPDN
 		/* VLAN IFACES don't care about default route */
 		if((IPACM_Iface::ipacmcfg->iface_in_vlan_mode(dev_name)) &&
@@ -738,6 +744,7 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 			}
 			return;
 		}
+#endif
 #endif
 		if(ip_type == IPA_IP_v4 || ip_type == IPA_IP_MAX)
 		{
@@ -964,9 +971,17 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 					data->iptype == IPA_IP_v6 && is_unique_local_ipv6_addr(data->ipv6_addr))
 				{
 					IPACM_Iface::ipacmcfg->handle_vlan_client_info(data);
+					IPACMDBG_H("ipacm_socksv5_enable %d\n", IPACM_Iface::ipacmcfg->ipacm_socksv5_enable);
+					if (IPACM_Iface::ipacmcfg->ipacm_socksv5_enable == TRUE)
+					{
+						IPACMDBG_H("construct socksv5 DL rt-rule\n");
+						handle_vlan_neighbor(data);
+					}
 				}
-				else if(IPACM_Iface::ipacmcfg->ipacm_mpdn_enable == TRUE)
+				else if((IPACM_Iface::ipacmcfg->ipacm_mpdn_enable == TRUE) ||
+					(IPACM_Iface::ipacmcfg->ipacm_socksv5_enable == TRUE))
 				{
+					IPACMDBG_H("construct end2end DL rt-rule for clients\n");
 					handle_vlan_neighbor(data);
 				}
 			}
@@ -1058,6 +1073,21 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 			}
 		}
 		break;
+
+#ifdef FEATURE_SOCKSv5
+	case IPA_HANDLE_SOCKSv5_UP:
+		{
+			IPACMDBG_H("Received IPA_HANDLE_SOCKSv5_UP\n");
+			ipacm_event_connection *data_evt_conn = (ipacm_event_connection *)param;
+			add_socksv5_flt_rule(data_evt_conn);
+		}
+		break;
+
+	case IPA_HANDLE_SOCKSv5_DOWN:
+		IPACMDBG_H("Received IPA_HANDLE_SOCKSv5_DOWN\n");
+		del_socksv5_flt_rule();
+		break;
+#endif
 
 	case IPA_SW_ROUTING_ENABLE:
 		IPACMDBG_H("Received IPA_SW_ROUTING_ENABLE\n");
@@ -1295,6 +1325,120 @@ int IPACM_Lan::handle_l2tp_neigh(ipacm_event_data_all *data)
 }
 #endif
 
+
+#ifdef FEATURE_SOCKSv5
+/* add socksv5 flt rule */
+int IPACM_Lan::add_socksv5_flt_rule(ipacm_event_connection *data_event_conn)
+{
+	int len;
+	int fd_ipa = 0;
+	struct ipa_flt_rule_add flt_rule_entry;
+	struct ipa_ioc_add_flt_rule_after *pFilteringTable = NULL;
+	int ret = IPACM_SUCCESS;
+
+	if (rx_prop == NULL || tx_prop == NULL)
+	{
+		IPACMDBG_H("No rx or tx properties registered for iface %s\n", dev_name);
+		return IPACM_FAILURE;
+	}
+
+	len = sizeof(struct ipa_ioc_add_flt_rule_after) + sizeof(struct ipa_flt_rule_add);
+	pFilteringTable = (struct ipa_ioc_add_flt_rule_after*)malloc(len);
+	if (!pFilteringTable)
+	{
+		IPACMERR("Failed to allocate ipa_ioc_add_flt_rule_after memory...\n");
+		return IPACM_FAILURE;
+	}
+	memset(pFilteringTable, 0, len);
+
+	pFilteringTable->commit = 1;
+	pFilteringTable->ep = rx_prop->rx[0].src_pipe;
+	pFilteringTable->ip = IPA_IP_v6;
+	pFilteringTable->num_rules = 1;
+	/* since socksv5 is tcp, should be compatible to l2tp over udp*/
+
+	pFilteringTable->add_after_hdl = eth_bridge_flt_rule_offset[IPA_IP_v6];
+
+	fd_ipa = open(IPA_DEVICE_NAME, O_RDWR);
+	if(fd_ipa == 0)
+	{
+		IPACMERR("Failed to open %s\n",IPA_DEVICE_NAME);
+		ret = IPACM_FAILURE;
+		goto end;
+	}
+
+	memset(&flt_rule_entry, 0, sizeof(flt_rule_entry));
+	flt_rule_entry.at_rear = 1;
+	flt_rule_entry.rule.action = IPA_PASS_TO_SRC_NAT;
+	flt_rule_entry.rule.hashable = true;
+	memcpy(&flt_rule_entry.rule.attrib, &rx_prop->rx[0].attrib, sizeof(flt_rule_entry.rule.attrib));
+
+	/* Match src/dst ipv6 */
+	flt_rule_entry.rule.attrib.attrib_mask |= IPA_FLT_DST_ADDR;
+	flt_rule_entry.rule.attrib.u.v6.dst_addr[0] = data_event_conn->dst_ipv6_addr[0];
+	flt_rule_entry.rule.attrib.u.v6.dst_addr[1] = data_event_conn->dst_ipv6_addr[1];
+	flt_rule_entry.rule.attrib.u.v6.dst_addr[2] = data_event_conn->dst_ipv6_addr[2];
+	flt_rule_entry.rule.attrib.u.v6.dst_addr[3] = data_event_conn->dst_ipv6_addr[3];
+	flt_rule_entry.rule.attrib.u.v6.dst_addr_mask[0] = 0xFFFFFFFF;
+	flt_rule_entry.rule.attrib.u.v6.dst_addr_mask[1] = 0xFFFFFFFF;
+	flt_rule_entry.rule.attrib.u.v6.dst_addr_mask[2] = 0xFFFFFFFF;
+	flt_rule_entry.rule.attrib.u.v6.dst_addr_mask[3] = 0xFFFFFFFF;
+
+	flt_rule_entry.rule.attrib.attrib_mask |= IPA_FLT_SRC_ADDR;
+	flt_rule_entry.rule.attrib.u.v6.src_addr[0] = data_event_conn->src_ipv6_addr[0];
+	flt_rule_entry.rule.attrib.u.v6.src_addr[1] = data_event_conn->src_ipv6_addr[1];
+	flt_rule_entry.rule.attrib.u.v6.src_addr[2] = data_event_conn->src_ipv6_addr[2];
+	flt_rule_entry.rule.attrib.u.v6.src_addr[3] = data_event_conn->src_ipv6_addr[3];
+	flt_rule_entry.rule.attrib.u.v6.src_addr_mask[0] = 0xFFFFFFFF;
+	flt_rule_entry.rule.attrib.u.v6.src_addr_mask[1] = 0xFFFFFFFF;
+	flt_rule_entry.rule.attrib.u.v6.src_addr_mask[2] = 0xFFFFFFFF;
+	flt_rule_entry.rule.attrib.u.v6.src_addr_mask[3] = 0xFFFFFFFF;
+
+	flt_rule_entry.rule.attrib.attrib_mask |= IPA_FLT_NEXT_HDR;
+	flt_rule_entry.rule.attrib.u.v6.next_hdr = (uint8_t)IPACM_FIREWALL_IPPROTO_TCP;
+
+	/* get rt_tbl_v6 handle */
+	if (false == m_routing.GetRoutingTable(&IPACM_Iface::ipacmcfg->rt_tbl_v6))
+	{
+		IPACMERR("m_routing.GetRoutingTable(&IPACM_Iface::ipacmcfg->rt_tbl_v6=0x%p) Failed.\n", &IPACM_Iface::ipacmcfg->rt_tbl_v6);
+		ret = IPACM_FAILURE;
+		goto end;
+	}
+	flt_rule_entry.rule.rt_tbl_hdl = IPACM_Iface::ipacmcfg->rt_tbl_v6.hdl;
+	IPACMDBG_H("rt_tbl_v6.hdl %d\n", flt_rule_entry.rule.rt_tbl_hdl);
+
+	memcpy(&(pFilteringTable->rules[0]), &flt_rule_entry, sizeof(flt_rule_entry));
+	if(m_filtering.AddFilteringRuleAfter(pFilteringTable) == false)
+	{
+		IPACMERR("Failed to add client filtering rules.\n");
+		ret = IPACM_FAILURE;
+		goto end;
+	}
+	socksv5_flt_hdl_v6 = pFilteringTable->rules[0].flt_rule_hdl;
+
+end:
+	if (pFilteringTable)
+		free(pFilteringTable);
+	if (fd_ipa)
+		close(fd_ipa);
+	return ret;
+}
+
+/* del socksv5 flt rule */
+int IPACM_Lan::del_socksv5_flt_rule(void)
+{
+	if(socksv5_flt_hdl_v6 != 0)
+	{
+		if(m_filtering.DeleteFilteringHdls(&socksv5_flt_hdl_v6, IPA_IP_v6, 1) == false)
+		{
+			return IPACM_FAILURE;
+		}
+	}
+	return IPACM_SUCCESS;
+}
+#endif
+
+
 int IPACM_Lan::del_ul_flt_rules(enum ipa_ip_type iptype)
 {
 	if (rx_prop == NULL)
@@ -1409,6 +1553,8 @@ int IPACM_Lan::handle_vlan_neighbor(ipacm_event_data_all *data)
 	uint8_t vlan_id = 0;
 	bool new_prefix = false;
 
+	IPACMDBG_H("\n");
+
 	if (IPACM_Iface::ipacmcfg->get_vlan_id(data->iface_name, &vlan_id))
 	{
 		if(!IPACM_Iface::ipacmcfg->is_added_vlan_iface(data->iface_name))
@@ -1422,7 +1568,7 @@ int IPACM_Lan::handle_vlan_neighbor(ipacm_event_data_all *data)
 
 	IPACMDBG_H("VLAN IF %s got client, vlan id %d \n", data->iface_name, vlan_id);
 	data_vlan = (ipacm_event_new_neigh_vlan *)data;
-
+#ifndef FEATURE_SOCKSv5
 	if(data_vlan->data_all.iptype == IPA_IP_v6)
 	{
 		if(IPACM_Wan::is_global_ipv6_addr(data_vlan->data_all.ipv6_addr))
@@ -1438,6 +1584,11 @@ int IPACM_Lan::handle_vlan_neighbor(ipacm_event_data_all *data)
 
 	/* first construc ETH full header */
 	handle_eth_hdr_init(data->mac_addr, data_vlan->bridge, vlan_id, true);
+#else
+	/* first construc ETH full header */
+	handle_eth_hdr_init(data->mac_addr, NULL, vlan_id, true);
+#endif
+
 	IPACMDBG_H("construct ETH header and route rules \n");
 	/* Associate with IP and construct RT-rule */
 	if(handle_eth_client_ipaddr(data) == IPACM_FAILURE)
@@ -1446,6 +1597,7 @@ int IPACM_Lan::handle_vlan_neighbor(ipacm_event_data_all *data)
 	}
 	
 	handle_eth_client_route_rule(data->mac_addr, data->iptype, vlan_id);
+#ifndef FEATURE_SOCKSv5
 
 	/* Add NAT rules after ipv4 RT rules are set */
 	HandleNeighIpAddrAddEvt(data);
@@ -1485,6 +1637,7 @@ int IPACM_Lan::handle_vlan_neighbor(ipacm_event_data_all *data)
 	}
 
 	eth_bridge_post_event(IPA_ETH_BRIDGE_CLIENT_ADD, IPA_IP_MAX, data->mac_addr, NULL, data->iface_name, vlan_id);
+#endif
 
 	return IPACM_SUCCESS;
 }
@@ -2335,6 +2488,7 @@ int IPACM_Lan::add_vlan_private_subnet(ipacm_bridge *bridge)
 
 	return IPACM_SUCCESS;
 }
+#endif
 
 
 int IPACM_Lan::handle_backhaul_switch_vlan_mode(bool to_sta)
@@ -2413,7 +2567,6 @@ int IPACM_Lan::handle_backhaul_switch_vlan_mode(bool to_sta)
 
 	return IPACM_SUCCESS;
 }
-#endif
 /* for STA mode wan up:  configure filter rule for wan_up event*/
 int IPACM_Lan::handle_wan_up(ipa_ip_type ip_type)
 {
@@ -2820,6 +2973,7 @@ int IPACM_Lan::handle_eth_hdr_init(uint8_t *mac_addr, ipacm_bridge *bridge, uint
 	/* add header to IPA */
 	if(tx_prop != NULL)
 	{
+#ifndef FEATURE_SOCKSv5
 #ifdef FEATURE_VLAN_MPDN
 		if(isVlan && !bridge)
 		{
@@ -2827,7 +2981,7 @@ int IPACM_Lan::handle_eth_hdr_init(uint8_t *mac_addr, ipacm_bridge *bridge, uint
 			return IPACM_FAILURE;
 		}
 #endif
-
+#endif
 		len = sizeof(struct ipa_ioc_add_hdr) + (1 * sizeof(struct ipa_hdr_add));
 		pHeaderDescriptor = (struct ipa_ioc_add_hdr *)calloc(1, len);
 		if (pHeaderDescriptor == NULL)
@@ -2926,6 +3080,8 @@ int IPACM_Lan::handle_eth_hdr_init(uint8_t *mac_addr, ipacm_bridge *bridge, uint
 				/* non VLAN case */
 				else
 #endif
+
+#ifndef FEATURE_SOCKSv5
 				if(IPACM_Iface::ipacmcfg->ipa_bridge_enable)
 				{
 					memcpy(&pHeaderDescriptor->hdr[0].hdr[sCopyHeader.eth2_ofst + IPA_MAC_ADDR_SIZE],
@@ -2939,7 +3095,7 @@ int IPACM_Lan::handle_eth_hdr_init(uint8_t *mac_addr, ipacm_bridge *bridge, uint
 						IPACM_Iface::ipacmcfg->bridge_mac[4],
 						IPACM_Iface::ipacmcfg->bridge_mac[5]);
 				}
-
+#endif
 				pHeaderDescriptor->commit = true;
 				pHeaderDescriptor->num_hdrs = 1;
 
@@ -3083,6 +3239,7 @@ int IPACM_Lan::handle_eth_hdr_init(uint8_t *mac_addr, ipacm_bridge *bridge, uint
 				/* non VLAN case */
 				else
 #endif
+#ifndef FEATURE_SOCKSv5
 				/* replace src mac to bridge mac_addr if any  */
 				if (IPACM_Iface::ipacmcfg->ipa_bridge_enable)
 				{
@@ -3097,7 +3254,7 @@ int IPACM_Lan::handle_eth_hdr_init(uint8_t *mac_addr, ipacm_bridge *bridge, uint
 						IPACM_Iface::ipacmcfg->bridge_mac[4],
 						IPACM_Iface::ipacmcfg->bridge_mac[5]);
 				}
-
+#endif
 				pHeaderDescriptor->commit = true;
 				pHeaderDescriptor->num_hdrs = 1;
 
@@ -3395,6 +3552,7 @@ int IPACM_Lan::handle_eth_client_ipaddr(ipacm_event_data_all *data)
 				(data->ipv6_addr[2] != 0) || (data->ipv6_addr[3] || 0)) /* check if all 0 not valid ipv6 address */
 		{
 			IPACMDBG_H("ipv6 address: 0x%x:%x:%x:%x\n", data->ipv6_addr[0], data->ipv6_addr[1], data->ipv6_addr[2], data->ipv6_addr[3]);
+#ifndef FEATURE_SOCKSv5
 			if( (data->ipv6_addr[0] & ipv6_link_local_prefix_mask) != (ipv6_link_local_prefix & ipv6_link_local_prefix_mask) &&
 #ifdef FEATURE_VLAN_MPDN
 				/* returns true if a VLAN PDN or default PDN should be offloaded */
@@ -3406,7 +3564,7 @@ int IPACM_Lan::handle_eth_client_ipaddr(ipacm_event_data_all *data)
 				IPACMDBG_H("This global IPv6 address is not with correct prefix, ignore.\n");
 				return IPACM_FAILURE;
 			}
-
+#endif
 			if(get_client_memptr(eth_client, clnt_indx)->ipv6_set < IPV6_NUM_ADDR)
 			{
 				for(v6_num=0;v6_num < get_client_memptr(eth_client, clnt_indx)->ipv6_set;v6_num++)
@@ -11917,11 +12075,13 @@ void IPACM_Lan::HandleNeighIpAddrAddEvt(ipacm_event_data_all *data)
 	case IPA_IP_v4:
 		CtList->HandleNeighIpAddrAddEvt(data);
 		break;
+#ifndef FEATURE_SOCKSv5
 	case IPA_IP_v6:
 	{
 		CtList->HandleNeighIpAddrAddEvt_v6(Ipv6IpAddress(data->ipv6_addr, false), data->if_index);
 		break;
 	}
+#endif
 	default:
 		IPACMERR("Not supported IP type %d", data->iptype);
 	}

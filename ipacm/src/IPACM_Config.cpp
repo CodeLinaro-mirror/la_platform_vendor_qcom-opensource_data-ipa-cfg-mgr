@@ -128,10 +128,16 @@ const char *ipacm_event_name[] = {
 	__stringify(IPA_DEL_L2TP_CLIENT),                      /* ipacm_event_data_all */
 #endif
 #ifdef FEATURE_VLAN_MPDN
-	__stringify(IPA_PREFIX_CHANGE_EVENT),                 /* ipacm_event_data_fid */
-	__stringify(IPA_ROUTE_ADD_VLAN_PDN_EVENT),            /* ipacm_event_route_vlan */
-	__stringify(IPA_HANDLE_WAN_VLAN_PDN_UP),                  /* ipacm_event_vlan_pdn */
-	__stringify(IPA_HANDLE_WAN_VLAN_PDN_DOWN),                /* ipacm_event_vlan_pdn */
+	__stringify(IPA_PREFIX_CHANGE_EVENT),                  /* ipacm_event_data_fid */
+	__stringify(IPA_ROUTE_ADD_VLAN_PDN_EVENT),             /* ipacm_event_route_vlan */
+	__stringify(IPA_HANDLE_WAN_VLAN_PDN_UP),               /* ipacm_event_vlan_pdn */
+	__stringify(IPA_HANDLE_WAN_VLAN_PDN_DOWN),             /* ipacm_event_vlan_pdn */
+#endif
+#ifdef FEATURE_SOCKSv5
+	__stringify(IPA_HANDLE_SOCKSv5_UP),                    /* ipacm_event_connection */
+	__stringify(IPA_HANDLE_SOCKSv5_DOWN),                  /* NULL */
+	__stringify(IPA_ADD_SOCKSv5_CONN),                     /* ipa_socksv5_msg */
+	__stringify(IPA_DEL_SOCKSv5_CONN),                     /* ipa_socksv5_msg */
 #endif
 	__stringify(IPACM_EVENT_MAX),
 };
@@ -171,6 +177,7 @@ IPACM_Config::IPACM_Config()
 	ipa_max_valid_rm_entry = 0;
 	ipacm_l2tp_enable = 0;
 	ipacm_mpdn_enable = TRUE;   /* default setting as mpdn enable/l2tp disable */
+	ipacm_socksv5_enable = false;
 
 	memset(&rt_tbl_default_v4, 0, sizeof(rt_tbl_default_v4));
 	memset(&rt_tbl_lan_v4, 0, sizeof(rt_tbl_lan_v4));
@@ -189,6 +196,9 @@ IPACM_Config::IPACM_Config()
 	memset(flt_rule_count_v4, 0, IPA_CLIENT_MAX*sizeof(int));
 	memset(flt_rule_count_v6, 0, IPA_CLIENT_MAX*sizeof(int));
 	memset(bridge_mac, 0, IPA_MAC_ADDR_SIZE*sizeof(uint8_t));
+#if defined(FEATURE_SOCKSv5) && defined (IPA_SOCKV5_EVENT_MAX)
+	socksv5_v4_pdn = 0;
+#endif //defined(FEATURE_SOCKSv5) && defined (IPA_SOCKV5_ADD)
 #ifdef FEATURE_VLAN_MPDN
 	num_ipv6_prefixes = 0;
 	memset(ipa_ipv6_prefixes, 0, sizeof(ipa_ipv6_prefixes));
@@ -1550,7 +1560,7 @@ void IPACM_Config::handle_vlan_client_info(ipacm_event_data_all *data)
 
 	IPACMDBG_H("Incoming vlan client iface: %s IPv6 address: 0x%08x%08x%08x%08x\n", data->iface_name,
 		data->ipv6_addr[0], data->ipv6_addr[1], data->ipv6_addr[2], data->ipv6_addr[3]);
-	IPACMDBG_H("MAC address: 0x%02x%02x%02x%02x%02x%02x\n", data->mac_addr[0], data->mac_addr[1],
+	IPACMDBG_H("MAC address: 0x%02x::%02x::%02x::%02x::%02x::%02x\n", data->mac_addr[0], data->mac_addr[1],
 		data->mac_addr[2], data->mac_addr[3], data->mac_addr[4], data->mac_addr[5]);
 
 	for(it_vlan = m_vlan_iface.begin(); it_vlan != m_vlan_iface.end(); it_vlan++)
@@ -1990,3 +2000,320 @@ int IPACM_Config::get_vlan_l2tp_mapping(char *client_iface, l2tp_vlan_mapping_in
 	return IPACM_FAILURE;
 }
 #endif
+
+#if defined(FEATURE_SOCKSv5) && defined (IPA_SOCKV5_EVENT_MAX)
+void IPACM_Config::add_socksv5_conn(ipa_socksv5_msg *add_socksv5_info)
+{
+	list<socksv5_conn_info>::iterator it_mapping;
+	socksv5_conn_info new_mapping;
+	int i = 0;
+	bool SendVlanPDNUpEvent = true;
+
+	if(pthread_mutex_lock(&socksv5_lock) != 0)
+	{
+		IPACMERR("Unable to lock the mutex\n");
+		return;
+	}
+
+	/* print the info */
+	if(add_socksv5_info->ul_in.ip_type == IPA_IP_v4)
+	{
+		IPACMDBG_H("ul-in: ipv4 src:0x%X dst:0x%X\n",
+		add_socksv5_info->ul_in.ipv4_src,
+		add_socksv5_info->ul_in.ipv4_dst);
+	}
+	else
+	{
+		IPACMDBG_H("ul-in: ipv6 src address: 0x%x:%x:%x:%x\n",
+		add_socksv5_info->ul_in.ipv6_src[0],
+		add_socksv5_info->ul_in.ipv6_src[1],
+		add_socksv5_info->ul_in.ipv6_src[2],
+		add_socksv5_info->ul_in.ipv6_src[3]);
+		IPACMDBG_H("ul-in: ipv6 dst address: 0x%x:%x:%x:%x\n",
+		add_socksv5_info->ul_in.ipv6_dst[0],
+		add_socksv5_info->ul_in.ipv6_dst[1],
+		add_socksv5_info->ul_in.ipv6_dst[2],
+		add_socksv5_info->ul_in.ipv6_dst[3]);
+	}
+	IPACMDBG_H("ul-in: src_port:%d dst_port:%d\n",
+		add_socksv5_info->ul_in.src_port,
+		add_socksv5_info->ul_in.dst_port);
+	/* print the info */
+	if(add_socksv5_info->dl_in.ip_type == IPA_IP_v4)
+	{
+		IPACMDBG_H("dl-in: ipv4 src:0x%X dst:0x%X\n",
+		add_socksv5_info->dl_in.ipv4_src,
+		add_socksv5_info->dl_in.ipv4_dst);
+	}
+	else
+	{
+		IPACMDBG_H("dl-in: ipv6 src address: 0x%x:%x:%x:%x\n",
+		add_socksv5_info->dl_in.ipv6_src[0],
+		add_socksv5_info->dl_in.ipv6_src[1],
+		add_socksv5_info->dl_in.ipv6_src[2],
+		add_socksv5_info->dl_in.ipv6_src[3]);
+		IPACMDBG_H("dl-in: ipv6 dst address: 0x%x:%x:%x:%x\n",
+		add_socksv5_info->dl_in.ipv6_dst[0],
+		add_socksv5_info->dl_in.ipv6_dst[1],
+		add_socksv5_info->dl_in.ipv6_dst[2],
+		add_socksv5_info->dl_in.ipv6_dst[3]);
+	}
+	IPACMDBG_H("dl-in: src_port:%d dst_port:%d\n",
+		add_socksv5_info->dl_in.src_port,
+		add_socksv5_info->dl_in.dst_port);
+
+	IPACMDBG_H("handle %d \n", add_socksv5_info->handle);
+
+	/* check connection existed or not */
+	for(it_mapping = socksv5_conn.begin(); it_mapping != socksv5_conn.end(); it_mapping++)
+	{
+		if(add_socksv5_info->dl_in.ip_type == IPA_IP_MAX)
+		{
+			IPACMERR("Invalid entry \n");
+			goto fail;
+		}
+		else if(add_socksv5_info->dl_in.ip_type == IPA_IP_v4)
+		{
+			IPACMDBG_H("compare: ipv4 add_socksv5_info:0x%X it_mapping:0x%X\n",
+				add_socksv5_info->dl_in.ipv4_dst,
+				it_mapping->conn_info.dl_in.ipv4_dst);
+			if (add_socksv5_info->dl_in.ipv4_dst == it_mapping->conn_info.dl_in.ipv4_dst)
+			{
+				IPACMDBG_H(" ipv4 same dst address\n");
+				/* see this dst-ipv4 already */
+				if ((add_socksv5_info->dl_in.ipv4_src == it_mapping->conn_info.dl_in.ipv4_src) &&
+					(add_socksv5_info->dl_in.src_port == it_mapping->conn_info.dl_in.src_port) &&
+					(add_socksv5_info->dl_in.dst_port == it_mapping->conn_info.dl_in.dst_port))
+				{
+					IPACMDBG_H("This connection was added before with index %d\n",
+						it_mapping->conn_info.dl_in.index);
+					goto fail;
+				}
+			}
+		}
+		else
+		{
+			/* no need SendVlanPDNUp for ipv6 */
+			if ((add_socksv5_info->dl_in.ipv6_src[0] == it_mapping->conn_info.dl_in.ipv6_src[0]) &&
+				(add_socksv5_info->dl_in.ipv6_src[1] == it_mapping->conn_info.dl_in.ipv6_src[1]) &&
+				(add_socksv5_info->dl_in.ipv6_src[2] == it_mapping->conn_info.dl_in.ipv6_src[2]) &&
+				(add_socksv5_info->dl_in.ipv6_src[3] == it_mapping->conn_info.dl_in.ipv6_src[3]) &&
+				(add_socksv5_info->dl_in.ipv6_dst[0] == it_mapping->conn_info.dl_in.ipv6_dst[0]) &&
+				(add_socksv5_info->dl_in.ipv6_dst[1] == it_mapping->conn_info.dl_in.ipv6_dst[1]) &&
+				(add_socksv5_info->dl_in.ipv6_dst[2] == it_mapping->conn_info.dl_in.ipv6_dst[2]) &&
+				(add_socksv5_info->dl_in.ipv6_dst[3] == it_mapping->conn_info.dl_in.ipv6_dst[3]))
+			{
+				if ((add_socksv5_info->dl_in.src_port == it_mapping->conn_info.dl_in.src_port) &&
+					(add_socksv5_info->dl_in.dst_port == it_mapping->conn_info.dl_in.dst_port))
+				{
+						IPACMERR("This connection was added before with index %d\n",
+						it_mapping->conn_info.dl_in.index);
+						goto fail;
+				}
+			}
+		}
+	}
+	/* send vlan-pdn up */
+	if (add_socksv5_info->dl_in.ip_type == IPA_IP_v4) {
+		for ( i=0; i < socksv5_v4_pdn;i++)
+		{
+			if (add_socksv5_info->dl_in.ipv4_dst == pdn_ipv4[i])
+			{
+				IPACMERR(" PDN enry %d already add for 0x%X \n",
+				i, add_socksv5_info->dl_in.ipv4_dst);
+				SendVlanPDNUpEvent = false;
+				break;
+			}
+		}
+	}
+
+	if (SendVlanPDNUpEvent == true)
+	{
+		/* check if reaching max */
+		if (socksv5_v4_pdn < IPA_MAX_NUM_HW_PDNS)
+		{
+			pdn_ipv4[i] = add_socksv5_info->dl_in.ipv4_dst;
+			post_socksv5_add_vlan_evt(add_socksv5_info->dl_in.ipv4_dst);
+			IPACMDBG_H(" ADD 0x%X to PDN entry %d, total %d\n",
+			add_socksv5_info->dl_in.ipv4_dst, i, socksv5_v4_pdn+1);
+			socksv5_v4_pdn++;
+		}
+		else
+		{
+			IPACMERR("This connection exceed max pdn support %d \n",
+				IPA_MAX_NUM_HW_PDNS);
+				goto fail;
+		}
+	}
+
+	/* Insert to the list*/
+	memset(&new_mapping, 0, sizeof(new_mapping));
+	memcpy(&new_mapping.conn_info, add_socksv5_info, sizeof(new_mapping.conn_info));
+
+	IPACMDBG_H("ipv4 0x%X it_mapping:0x%X\n",
+				new_mapping.conn_info.dl_in.ipv4_dst);
+
+	socksv5_conn.push_front(new_mapping);
+
+	/* push event for v6-ct to add the entry */
+	post_socksv5_evt(add_socksv5_info, true);
+
+fail:
+	pthread_mutex_unlock(&socksv5_lock);
+	return;
+}
+
+
+void IPACM_Config::del_socksv5_conn(uint32_t *socksv5_handle)
+{
+	list<socksv5_conn_info>::iterator it_mapping;
+
+	/* print the info */
+	IPACMDBG_H("deleting the socksv5 conn handle %d\n",
+		*socksv5_handle);
+
+	if(pthread_mutex_lock(&socksv5_lock) != 0)
+	{
+		IPACMERR("Unable to lock the mutex\n");
+		return;
+	}
+
+	/* find the entry and clean up*/
+	for(it_mapping = socksv5_conn.begin(); it_mapping != socksv5_conn.end(); it_mapping++)
+	{
+		if(it_mapping->conn_info.handle == *socksv5_handle)
+		{
+			IPACMDBG_H("Found the handle matched (%d)\n",
+				it_mapping->conn_info.handle);
+
+			/* push event for v6-ct to delete the entry */
+			post_socksv5_evt(&(it_mapping->conn_info), false);
+			socksv5_conn.erase(it_mapping);
+			break;
+		}
+	}
+
+	if (it_mapping == socksv5_conn.end())
+	{
+		IPACMERR("Can't find the matched socksv5_conn!\n");
+	}
+
+	pthread_mutex_unlock(&socksv5_lock);
+	return;
+}
+
+void IPACM_Config::add_mux_id_mapping(rmnet_mux_id_info *add_mux_id_info)
+{
+	list<rmnet_mux_id_info>::iterator it_mapping;
+	rmnet_mux_id_info new_mapping;
+
+	/* print the info */
+	if (!add_mux_id_info)
+	{
+		IPACMDBG_H("add_mux_id_info is NULL\n");
+		return;
+	}
+
+	IPACMDBG_H("adding the muxd name %s, addr 0x%X mudxd %d\n",
+		add_mux_id_info->iface_name,
+		add_mux_id_info->ipv4_addr,
+		add_mux_id_info->mux_id);
+
+	/* check entry existed or not */
+	for(it_mapping = mux_id_mapping.begin(); it_mapping != mux_id_mapping.end(); it_mapping++)
+	{
+
+		if (add_mux_id_info->ipv4_addr == it_mapping->ipv4_addr)
+		{
+			IPACMERR("This qmuxd mapping was added before with muxd %d\n",
+			it_mapping->mux_id);
+			goto fail;
+		}
+	}
+
+	/* Insert to the list*/
+	memset(&new_mapping, 0, sizeof(new_mapping));
+	memcpy(&new_mapping, add_mux_id_info, sizeof(new_mapping));
+
+	IPACMDBG_H("ipv4 0x%X map to muxd:0x%d\n",
+				new_mapping.ipv4_addr,
+				new_mapping.mux_id);
+
+	mux_id_mapping.push_front(new_mapping);
+
+fail:
+	return;
+}
+
+void IPACM_Config::del_mux_id_mapping(rmnet_mux_id_info *del_mux_id_info)
+{
+	list<rmnet_mux_id_info>::iterator it_mapping;
+
+	/* print the info */
+	if (!del_mux_id_info)
+	{
+		IPACMDBG_H("del_mux_id_info is NULL\n");
+		return;
+	}
+
+	IPACMDBG_H("Removing the muxd name %s, addr 0x%X mudxd %d\n",
+		del_mux_id_info->iface_name,
+		del_mux_id_info->ipv4_addr,
+		del_mux_id_info->mux_id);
+
+	/* check entry exist */
+	for(it_mapping = mux_id_mapping.begin(); it_mapping != mux_id_mapping.end(); it_mapping++)
+	{
+		if (del_mux_id_info->ipv4_addr == it_mapping->ipv4_addr)
+		{
+			IPACMDBG_H("Del this mapping with muxd %d\n",
+			it_mapping->mux_id);
+			mux_id_mapping.erase(it_mapping);
+			break;
+		}
+	}
+
+	if (it_mapping == mux_id_mapping.end())
+	{
+		IPACMERR("Can't find the matched rmnet_mux_id_info!\n");
+	}
+
+	return;
+}
+
+int IPACM_Config::query_mux_id(rmnet_mux_id_info *mux_id_info)
+{
+	list<rmnet_mux_id_info>::iterator it_mapping;
+
+	/* print the info */
+	if (!mux_id_info)
+	{
+		IPACMDBG_H("mux_id_info is NULL\n");
+		return IPACM_FAILURE;
+	}
+
+	IPACMDBG_H("try to find 0x%X qmuxd\n", mux_id_info->ipv4_addr);
+
+	/* check entry*/
+	for(it_mapping = mux_id_mapping.begin(); it_mapping != mux_id_mapping.end(); it_mapping++)
+	{
+		if (mux_id_info->ipv4_addr == it_mapping->ipv4_addr)
+		{
+			mux_id_info->mux_id = it_mapping->mux_id;
+			IPACMDBG_H("Found the mapping with muxd %d\n",
+			mux_id_info->mux_id);
+			break;
+		}
+	}
+
+	if (it_mapping == mux_id_mapping.end())
+	{
+		IPACMERR("Can't find the matched rmnet_mux_id_info!\n");
+		return IPACM_FAILURE;
+	}
+
+	return IPACM_SUCCESS;
+}
+
+#endif //defined(FEATURE_SOCKSv5) && defined (IPA_SOCKV5_ADD)
+

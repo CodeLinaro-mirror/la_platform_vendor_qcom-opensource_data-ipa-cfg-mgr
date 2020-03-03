@@ -682,8 +682,8 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 						memcpy(data_all, data, sizeof(ipacm_event_data_all));
 						evt_data.evt_data = (void *)data_all;
 						IPACM_EvtDispatcher::PostEvt(&evt_data);
-						IPACMDBG_H("Posted event %d with %s for ipv6\n",
-							evt_data.event, data->iface_name);
+						IPACMDBG_H("Posted event %d with %s for ipv6 (%d)\n",
+							evt_data.event, data_all->iface_name, data_all->iptype);
 					}
 				}
 				else

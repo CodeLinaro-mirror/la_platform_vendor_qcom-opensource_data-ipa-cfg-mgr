@@ -568,6 +568,11 @@ static int migrate_rule(
 	v4_rule.redirect     = nat_rule_ptr->redirect;
 	v4_rule.enable       = nat_rule_ptr->enable;
 	v4_rule.time_stamp   = nat_rule_ptr->time_stamp;
+	v4_rule.uc_activation_index = nat_rule_ptr->uc_activation_index;
+	v4_rule.s = nat_rule_ptr->s;
+	v4_rule.ucp = nat_rule_ptr->ucp;
+	v4_rule.dst_only = nat_rule_ptr->dst_only;
+	v4_rule.src_only = nat_rule_ptr->src_only;
 
 	ret = ipa_NATI_add_ipv4_rule(dst_tbl_hdl, &v4_rule, &new_rule_hdl);
 

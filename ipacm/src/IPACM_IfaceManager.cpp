@@ -374,7 +374,7 @@ int IPACM_IfaceManager::create_iface_instance(ipacm_ifacemgr_data *param)
 					IPACM_EvtDispatcher::registr(IPA_CFG_CHANGE_EVENT, odu); 				// register for IPA_CFG_CHANGE event
 #endif
 #ifdef FEATURE_SOCKSv5
-						IPACM_EvtDispatcher::registr(IPA_HANDLE_SOCKSv5_UP, odu);
+						IPACM_EvtDispatcher::registr(IPA_HANDLE_SOCKSv5_READY, odu);
 						IPACM_EvtDispatcher::registr(IPA_HANDLE_SOCKSv5_DOWN, odu);
 #endif
 #ifdef FEATURE_IPACM_UL_FIREWALL

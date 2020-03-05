@@ -249,6 +249,8 @@ void IPACM_ConntrackListener::event_callback(ipa_cm_event_id evt,
 			static_cast<Ipv6IpAddress&>(wan_ipaddr_v6).CreateFromArray(wan_data->ipv6_addr, false);
 			TriggerWANUp_v6(wan_data);
 		}
+		/*post IPA_HANDLE_SOCKSv5_READY */
+		PostSocksv5Ready(data_evt_conn);
 		break;
 
 	case IPA_HANDLE_SOCKSv5_DOWN:
@@ -1515,6 +1517,25 @@ void IPACM_ConntrackListener::PostRouteAddVlanPdn(uint32_t public_ip)
 		vlan_data->iptype);
 	iptodot("pdn ip", public_ip);
 
+	IPACM_EvtDispatcher::PostEvt(&evt_data);
+}
+
+void IPACM_ConntrackListener::PostSocksv5Ready(ipacm_event_connection* data_evt_conn)
+{
+	ipacm_cmd_q_data evt_data;
+	ipacm_event_connection *data_event_conn = NULL;
+
+	data_event_conn = (ipacm_event_connection *)malloc(sizeof(ipacm_event_connection));
+	if(data_event_conn == NULL)
+	{
+		IPACMERR("unable to allocate memory for event_wlan data_event_conn\n");
+		return;
+	}
+	memcpy(data_event_conn, data_evt_conn, sizeof(ipacm_event_connection));
+	evt_data.event = IPA_HANDLE_SOCKSv5_READY;
+	evt_data.evt_data = data_event_conn;
+	/* finish command queue */
+	IPACMDBG_H("Posting IPA_HANDLE_SOCKSv5_Ready event:%d\n", evt_data.event);
 	IPACM_EvtDispatcher::PostEvt(&evt_data);
 }
 #endif //defined(FEATURE_SOCKSv5) && defined (IPA_SOCKV5_EVENT_MAX)

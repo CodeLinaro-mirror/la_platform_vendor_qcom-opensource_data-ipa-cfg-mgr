@@ -230,6 +230,7 @@ typedef enum
 #endif
 #ifdef FEATURE_SOCKSv5
 	IPA_HANDLE_SOCKSv5_UP,                    /* ipacm_event_connection */
+	IPA_HANDLE_SOCKSv5_READY,                 /* ipacm_event_connection */
 	IPA_HANDLE_SOCKSv5_DOWN,                  /* NULL */
 	IPA_ADD_SOCKSv5_CONN,              	      /* ipa_socksv5_msg */
 	IPA_DEL_SOCKSv5_CONN,                     /* ipa_socksv5_msg */

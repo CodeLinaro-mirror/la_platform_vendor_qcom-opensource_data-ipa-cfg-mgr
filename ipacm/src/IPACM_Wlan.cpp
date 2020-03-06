@@ -1702,6 +1702,37 @@ int IPACM_Wlan::handle_wlan_client_ipaddr(ipacm_event_data_all *data)
 		IPACMDBG_H("ipv4 address: 0x%x\n", data->ipv4_addr);
 		if (data->ipv4_addr != 0) /* not 0.0.0.0 */
 		{
+			/* Special handling for Passthrough IP. */
+			if (IPACM_Iface::ipacmcfg->ipacm_ip_passthrough_mode)
+			{
+				/* if the MAC matches, then IP should not be private subnet. */
+				if (!memcmp(data->mac_addr, IPACM_Iface::ipacmcfg->ipacm_ip_passthrough_mac,
+					IPA_MAC_ADDR_SIZE))
+				{
+					/* check if the ip is in private subnet and ignore. */
+					if (IPACM_Iface::ipacmcfg->isPrivateSubnet(data->ipv4_addr))
+					{
+						IPACMDBG_H("Client is in IP passthrough mode, but got private IP: 0x%x\n", data->ipv4_addr);
+						return IPACM_FAILURE;
+					}
+				}
+				/* Check if the IP is not in private subnet and ignore. */
+				else if (!IPACM_Iface::ipacmcfg->isPrivateSubnet(data->ipv4_addr))
+				{
+					IPACMDBG_H("Client is not in IP passthrough mode, but got public IP: 0x%x\n", data->ipv4_addr);
+					return IPACM_FAILURE;
+				}
+			}
+			else
+			{
+				/* Check if the IP is not in private subnet and ignore. */
+				if (!IPACM_Iface::ipacmcfg->isPrivateSubnet(data->ipv4_addr))
+				{
+					IPACMDBG_H("Client is not in IP passthrough mode, but got public IP: 0x%x\n", data->ipv4_addr);
+					return IPACM_FAILURE;
+				}
+			}
+
 			if (get_client_memptr(wlan_client, clnt_indx)->ipv4_set == false)
 			{
 				get_client_memptr(wlan_client, clnt_indx)->v4_addr = data->ipv4_addr;

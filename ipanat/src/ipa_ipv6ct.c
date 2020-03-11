@@ -578,6 +578,9 @@ static int table_entry_copy_from_user(void* entry, void* user_data)
 	ipv6ct_entry->protocol = user_rule->protocol;
 	ipv6ct_entry->src_port = user_rule->src_port;
 	ipv6ct_entry->dest_port = user_rule->dest_port;
+	ipv6ct_entry->ucp = user_rule->ucp;
+	ipv6ct_entry->uc_activation_index = user_rule->uc_activation_index;
+	ipv6ct_entry->s = user_rule->s;
 
 	switch (user_rule->direction_settings)
 	{

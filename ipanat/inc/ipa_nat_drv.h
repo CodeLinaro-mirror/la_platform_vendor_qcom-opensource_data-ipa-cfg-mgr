@@ -50,6 +50,9 @@ bool ipa_nat_is_sram_supported(void);
  * @redirect: used internally by various API calls
  * @enable: used internally by various API calls
  * @time_stamp: used internally by various API calls
+ * @uc_activation_index: index pointing to uc activation table
+ * @s: bit indication to use the system or local (1 or 0) addr for above table
+ * @ucp: enable uc processing
  */
 typedef struct {
 	uint32_t target_ip;
@@ -62,6 +65,9 @@ typedef struct {
 	uint8_t  redirect;
 	uint8_t  enable;
 	uint32_t time_stamp;
+	uint16_t uc_activation_index;
+	bool s;
+	bool ucp;
 } ipa_nat_ipv4_rule;
 
 static inline char* prep_nat_ipv4_rule_4print(

@@ -30,6 +30,7 @@
 #define IPA_IPV6CT_H
 
 #include <stdint.h>
+#include <stdbool.h>
 
 /**
  * enum ipa_ipv6_ct_direction_settings_type - direction filter settings
@@ -57,6 +58,9 @@ typedef enum
  * @src_port: source port
  * @dest_port: destination port
  * @protocol: protocol of rule (tcp/udp)
+ * @uc_activation_index: index pointing to uc activation table
+ * @s: bit indication to use the system or local (1 or 0) addr for above table
+ * @ucp: enable uc processing
  */
 typedef struct {
 	uint64_t src_ipv6_lsb;
@@ -64,6 +68,9 @@ typedef struct {
 	uint64_t dest_ipv6_lsb;
 	uint64_t dest_ipv6_msb;
 	ipa_ipv6_ct_direction_settings_type  direction_settings;
+	bool  ucp;
+	bool s;
+	uint16_t uc_activation_index;
 	uint16_t src_port;
 	uint16_t dest_port;
 	uint8_t  protocol;

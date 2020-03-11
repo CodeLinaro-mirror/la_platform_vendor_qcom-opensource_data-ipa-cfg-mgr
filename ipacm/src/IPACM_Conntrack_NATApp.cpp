@@ -241,6 +241,9 @@ int NatApp::AddPdn(uint32_t pub_ip, uint8_t mux_id, bool is_sta)
 			nat_rule.private_port = cache[cnt].private_port;
 			nat_rule.public_port = cache[cnt].public_port;
 			nat_rule.protocol = cache[cnt].protocol;
+			nat_rule.uc_activation_index = cache[cnt].uc_activation_index;
+			nat_rule.ucp = cache[cnt].ucp;
+			nat_rule.s = cache[cnt].s;
 			nat_rule.pdn_index = pdn_index;
 			cache[cnt].pdn_index = pdn_index;
 
@@ -327,6 +330,10 @@ int NatApp::AddTable(uint32_t pub_ip, uint8_t mux_id, bool is_sta)
 				nat_rule.private_port = cache[cnt].private_port;
 				nat_rule.public_port = cache[cnt].public_port;
 				nat_rule.protocol = cache[cnt].protocol;
+				nat_rule.uc_activation_index = cache[cnt].uc_activation_index;
+				nat_rule.ucp = cache[cnt].ucp;
+				nat_rule.s = cache[cnt].s;
+
 
 				if(ipa_nat_add_ipv4_rule(nat_table_hdl, &nat_rule, &cache[cnt].rule_hdl) < 0)
 				{
@@ -592,6 +599,12 @@ int NatApp::AddEntry(const nat_table_entry *rule, bool isVlan)
 			nat_rule.private_port = rule->private_port;
 			nat_rule.public_port = rule->public_port;
 			nat_rule.protocol = rule->protocol;
+
+		if(IPACM_Iface::ipacmcfg->GetIPAVer() >= IPA_HW_v4_5) {
+			nat_rule.uc_activation_index = rule->uc_activation_index;
+			nat_rule.ucp = rule->ucp;
+			nat_rule.s = rule->s;
+		}
 #ifdef FEATURE_VLAN_MPDN
 			nat_rule.pdn_index = pdn_index;
 #endif
@@ -636,6 +649,12 @@ int NatApp::AddEntry(const nat_table_entry *rule, bool isVlan)
 			cache[cnt].timestamp = 0;
 			cache[cnt].public_port = rule->public_port;
 			cache[cnt].dst_nat = rule->dst_nat;
+
+		if(IPACM_Iface::ipacmcfg->GetIPAVer() >= IPA_HW_v4_5) {
+			cache[cnt].uc_activation_index = rule->uc_activation_index;
+			cache[cnt].ucp = rule->ucp;
+			cache[cnt].s = rule->s;
+		}
 #ifdef FEATURE_VLAN_MPDN
 			cache[cnt].pdn_index = pdn_index;
 			cache[cnt].public_ip = rule->public_ip;
@@ -927,6 +946,9 @@ int NatApp::ResetPwrSaveIf(uint32_t client_lan_ip)
 			nat_rule.private_port = cache[cnt].private_port;
 			nat_rule.public_port = cache[cnt].public_port;
 			nat_rule.protocol = cache[cnt].protocol;
+			nat_rule.uc_activation_index = cache[cnt].uc_activation_index;
+			nat_rule.ucp = cache[cnt].ucp;
+			nat_rule.s = cache[cnt].s;
 #ifdef FEATURE_VLAN_MPDN
 			nat_rule.pdn_index = cache[cnt].pdn_index;
 #endif
@@ -1245,6 +1267,9 @@ void NatApp::CacheEntry(const nat_table_entry *rule)
 			cache[cnt].timestamp = 0;
 			cache[cnt].public_port = rule->public_port;
 			cache[cnt].public_ip = rule->public_ip;
+			cache[cnt].uc_activation_index = rule->uc_activation_index;
+			cache[cnt].ucp = rule->ucp;
+			cache[cnt].s = rule->s;
 #ifdef FEATURE_VLAN_MPDN
 			cache[cnt].pdn_index = rule->pdn_index;
 #endif
@@ -1957,6 +1982,11 @@ int Ipv6ctProxy::DoAddEntry(const NatEntryBase& entry, uint32_t& entry_handle)
 	rule.src_port = ipv6ct_entry.m_srcPort;
 	rule.dest_port = ipv6ct_entry.m_dstPort;
 	rule.protocol = ipv6ct_entry.m_protocol;
+	if (IPACM_Iface::ipacmcfg->GetIPAVer() >= IPA_HW_v4_5) {
+		rule.ucp = ipv6ct_entry.m_ucp;
+		rule.uc_activation_index = ipv6ct_entry.m_uc_activation_index;
+		rule.s = ipv6ct_entry.m_s;
+	}
 	int ret = ipa_ipv6ct_add_rule(m_tableHandle, &rule, &entry_handle);
 	IPACMDBG_H("return\n");
 	return ret;

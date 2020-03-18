@@ -1188,12 +1188,12 @@ int ipa_nati_alloc_pdn(
 	struct ipa_ioc_nat_pdn_entry pdn_data;
 	int i, ret;
 
-	IPADBG("alloc PDN  for ip %d\n", pdn_info->public_ip);
+	IPADBG("alloc PDN  for ip 0x%x\n", pdn_info->public_ip);
 
 	memset(&zero_test, 0, sizeof(zero_test));
 
 	if(num_pdns >= (IPA_MAX_PDN_NUM - 1)) {
-		IPAERR("exceeded max num of PDNs\n");
+		IPAERR("exceeded max num of PDNs, num_pdns %d\n", num_pdns);
 		return -EIO;
 	}
 
@@ -1236,6 +1236,7 @@ int ipa_nati_alloc_pdn(
 	{
 		num_pdns++;
 		*pdn_index = i;
+		IPADBG("modify num_pdns (%d)\n", num_pdns);
 	}
 
 	return ret;
@@ -1287,7 +1288,7 @@ int ipa_nati_dealloc_pdn(
 
 	num_pdns--;
 
-	IPADBG("successfully removed pdn from index %d\n", pdn_index);
+	IPADBG("successfully removed pdn from index %d num_pdns %d\n", pdn_index, num_pdns);
 
 	return 0;
 }
@@ -1456,8 +1457,7 @@ int ipa_NATI_add_ipv4_tbl(
 	 * always use this ip as the single PDN address
 	 */
 	pdns[0].public_ip = public_ip_addr;
-
-	num_pdns++;
+	num_pdns = 1;
 
 	nat_cache_ptr->table_cnt++;
 
@@ -1466,7 +1466,7 @@ int ipa_NATI_add_ipv4_tbl(
 	 */
 	*tbl_hdl = MAKE_TBL_HDL(nat_cache_ptr->table_cnt, nmi);
 
-	IPADBG("tbl_hdl value(0x%08X)\n", *tbl_hdl);
+	IPADBG("tbl_hdl value(0x%08X) num_pdns (%d)\n", *tbl_hdl, num_pdns);
 
 	goto unlock;
 

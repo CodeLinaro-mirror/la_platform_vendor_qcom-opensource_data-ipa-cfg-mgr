@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2013-2018, The Linux Foundation. All rights reserved.
+Copyright (c) 2013-2018, 2020, The Linux Foundation. All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are
@@ -151,7 +151,7 @@ uint32_t NatApp::GenerateMetdata(uint8_t mux_id)
 #ifdef FEATURE_VLAN_MPDN
 int NatApp::AddPdn(uint32_t pub_ip, uint8_t mux_id, bool is_sta)
 {
-	int ret;
+	int ret = IPACM_SUCCESS;
 	int cnt = 0;
 	ipa_nat_ipv4_rule nat_rule;
 	ipa_nat_pdn_entry entry;
@@ -206,6 +206,7 @@ int NatApp::AddPdn(uint32_t pub_ip, uint8_t mux_id, bool is_sta)
 		else
 		{
 			IPACMDBG_H("pdn already existed with index %d\n", pdn_index);
+			ret = IPACM_FAILURE;
 		}
 	}
 
@@ -254,7 +255,7 @@ int NatApp::AddPdn(uint32_t pub_ip, uint8_t mux_id, bool is_sta)
 
 	}
 
-	return IPACM_SUCCESS;
+	return ret;
 }
 #endif
 int NatApp::AddTable(uint32_t pub_ip, uint8_t mux_id, bool is_sta)

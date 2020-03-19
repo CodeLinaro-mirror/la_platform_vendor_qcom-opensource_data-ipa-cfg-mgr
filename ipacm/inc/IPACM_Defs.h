@@ -148,6 +148,7 @@ extern "C"
 #define IPA_MAX_NUM_HW_PDNS 4
 #define IPA_MAX_NUM_OFFLOAD_VLANS 8
 #define DEFAULT_MTU_SIZE 1500
+#define IPA_L2TP_UDP_DEFAULT_MTU_SIZE 1422 /* 1500 - (IPv6(40) + UDP (8) + L2TP (16) + ETH (14)). */
 /*===========================================================================
 										 GLOBAL DEFINITIONS AND DECLARATIONS
 ===========================================================================*/
@@ -454,6 +455,7 @@ struct l2tp_vlan_mapping_info
 	enum ipa_l2tp_tunnel_type tunnel_type;
 	uint16_t src_port;
 	uint16_t dst_port;
+	uint16_t mtu;
 #endif
 	/* the following are mdm vlan iface info (name, vlan id, ipv6 addr) */
 	char vlan_iface_name[IPA_RESOURCE_NAME_MAX];

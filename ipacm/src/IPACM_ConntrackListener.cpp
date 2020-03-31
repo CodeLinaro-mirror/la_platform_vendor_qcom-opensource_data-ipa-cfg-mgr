@@ -57,7 +57,8 @@ IPACM_ConntrackListener::IPACM_ConntrackListener() :
 	 NatIfaceCnt = 0;
 	 StaClntCnt = 0;
 	 pNatIfaces = NULL;
-	 pConfig = IPACM_Config::GetInstance();;
+	 pConfig = IPACM_Config::GetInstance();
+	 isStaMode = false;
 	 memset(nat_clients, 0, sizeof(nat_clients));
 	 memset(nat_clients_v6, 0, sizeof(nat_clients_v6));
 #ifdef FEATURE_VLAN_MPDN

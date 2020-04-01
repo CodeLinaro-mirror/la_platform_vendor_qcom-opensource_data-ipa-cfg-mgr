@@ -672,6 +672,9 @@ int IPACM_Config::Init(void)
 	ipacm_msgflt_enable = cfg->msgflt_enable;
 	IPACMDBG_H("ipacm_msgflt_feature_enable %d\n", ipacm_msgflt_enable);
 
+	ipacm_ip_passthrough_pdn_ip_addr = inet_network(IPACM_IP_PASSTHROUGH_WAN_IP);
+	IPACMDBG_H("Passthrough mode wan ipv4-addr:0x%x\n",ipacm_ip_passthrough_pdn_ip_addr);
+
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
 	if (!ipacm_lan_stats_enable_set)
 	{
@@ -3589,4 +3592,39 @@ bool IPACM_Config::delMacsecMap(struct ipa_macsec_map *macsecMap) {
 	IPACM_EvtDispatcher::PostEvt(&eventItem);
 
 	return true;
+}
+
+void IPACM_Config::update_ip_ppasthrough_config(ipa_ioc_pdn_config *pdn_config)
+{
+
+	if (pdn_config->enable)
+	{
+		IPACMDBG_H("Enable IP Passthrough: devic_type: %d, Nat config: %d and PDN IP: 0x%x!\n",
+			pdn_config->pdn_cfg_type, pdn_config->u.passthrough_cfg.skip_nat,
+			htonl(pdn_config->u.passthrough_cfg.pdn_ip_addr));
+		IPACMDBG_H("Received mac_addr MAC %02x:%02x:%02x:%02x:%02x:%02x\n",
+						 pdn_config->u.passthrough_cfg.client_mac_addr[0],
+						 pdn_config->u.passthrough_cfg.client_mac_addr[1],
+						 pdn_config->u.passthrough_cfg.client_mac_addr[2],
+						 pdn_config->u.passthrough_cfg.client_mac_addr[3],
+						 pdn_config->u.passthrough_cfg.client_mac_addr[4],
+						 pdn_config->u.passthrough_cfg.client_mac_addr[5]);
+		ipacm_ip_passthrough_mode = true;
+		ipacm_ip_passthrough_dev_type = pdn_config->u.passthrough_cfg.device_type;
+		memcpy(ipacm_ip_passthrough_mac, pdn_config->u.passthrough_cfg.client_mac_addr,
+			IPA_MAC_ADDR_SIZE);
+		ipacm_ip_passthrough_skip_nat = pdn_config->u.passthrough_cfg.skip_nat;
+		ipacm_ip_passthrough_pdn_ip_addr =  htonl(pdn_config->u.passthrough_cfg.pdn_ip_addr);
+	}
+	else
+	{
+		IPACMERR("Disable IP Passthrough\n");
+		/* Reset the configuration. */
+		ipacm_ip_passthrough_mode = false;
+		ipacm_ip_passthrough_skip_nat = false;
+		ipacm_ip_passthrough_dev_type = IPACM_CLIENT_DEVICE_MAX;
+		memset(ipacm_ip_passthrough_mac, 0,
+			IPA_MAC_ADDR_SIZE);
+		ipacm_ip_passthrough_pdn_ip_addr = 0;
+	}
 }

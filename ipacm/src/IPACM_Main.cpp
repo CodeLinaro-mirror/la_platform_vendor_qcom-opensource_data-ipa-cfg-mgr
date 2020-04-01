@@ -330,6 +330,7 @@ void* ipa_driver_msg_notifier(void *param)
 	ipacm_cmd_q_data new_neigh_evt;
 	ipacm_event_data_all* new_neigh_data;
 	ipa_ioc_gsb_info *event_gsb = NULL;
+	ipa_ioc_pdn_config *pdn_info = NULL;
 
 #ifdef FEATURE_SOCKSv5
 	ipa_socksv5_msg add_socksv5_info;
@@ -979,6 +980,15 @@ void* ipa_driver_msg_notifier(void *param)
 			IPACMDBG_H("Updated vlan priority successfully!\n");
 			continue;
 #endif
+
+		case IPA_PDN_IP_PASSTHROUGH_MODE_CONFIG:
+			pdn_info = (ipa_ioc_pdn_config *)(buffer + sizeof(struct ipa_msg_meta));
+			IPACMDBG_H("Received IPA_PDN_IP_PASSTHROUGH_MODE_CONFIG name: %s, type: %d, enable: %d\n",
+				pdn_info->dev_name, pdn_info->pdn_cfg_type, pdn_info->enable);
+
+			/* Update IP Passthrough config. */
+			IPACM_Iface::ipacmcfg->update_ip_ppasthrough_config(pdn_info);
+			continue;
 
 		default:
 			IPACMDBG_H("Unhandled message type: %d\n", event_hdr.msg_type);

@@ -2093,6 +2093,28 @@ bool IPACM_ConntrackListener::AddIface(
 	if(nat_inst->isAlgPort(rule->protocol, rule->private_port) ||
 		 nat_inst->isAlgPort(rule->protocol, rule->target_port)) {
 
+		/* Special handling for Passthrough IP. */
+		if (IPACM_Iface::ipacmcfg->ipacm_ip_passthrough_mode)
+		{
+			if (IPACM_Iface::ipacmcfg->ipacm_ip_passthrough_skip_nat)
+			{
+				/* In passthrough mode, dummy NAT is same as regular NAT. But add them as regular
+				 * NAT entries to be more specific.
+				 */
+				IPACMDBG("Allow ALG entries to be added to HW when NAT is skipped.\n");
+				return true;
+			}
+			else
+			{
+				/* Cannot add dummy NAT entries for ALG packets in Passthrough mode.
+				 * If we add dummy NAT entries, all packets will be forwarded to passthrough
+				 * client because of destination route.
+				 */
+				IPACMDBG("Do not add dummy NAT entries for ALG packets in passthrough mode.\n");
+				return false;
+			}
+		}
+
 		IPACMDBG("ALG port connection, prot=%u, private_port=%u, target_port=%u\n",
 			rule->protocol, rule->private_port, rule->target_port);
 
@@ -2129,7 +2151,8 @@ bool IPACM_ConntrackListener::AddIface(
 		}
 	}
 
-	if (!isStaMode)
+	/* In Passthrough mode, cannot add dummy NAT entries. */
+	if (!isStaMode && !IPACM_Iface::ipacmcfg->ipacm_ip_passthrough_mode)
 	{
 		/* check whether non nat iface or not, on Non Nat iface
 		   add dummy rule by copying public ip to private ip */

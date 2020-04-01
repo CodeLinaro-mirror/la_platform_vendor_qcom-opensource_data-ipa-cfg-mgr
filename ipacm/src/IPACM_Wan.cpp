@@ -926,7 +926,7 @@ int IPACM_Wan::handle_addr_evt(ipacm_event_data_addr *data)
 
 		/* Store the public ip address when in passthrough mode which will be used when wan is down. */
 		if ((m_is_sta_mode == Q6_WAN) && (is_default_gateway == true) &&
-			data->ipv4_addr == inet_network(IPACM_IPPASSTHROUGH_WAN_IP))
+			data->ipv4_addr == IPACM_Iface::ipacmcfg->ipacm_ip_passthrough_pdn_ip_addr)
 		{
 			curr_wan_ip = data->ipv4_addr;
 			public_wan_v4_addr = wan_v4_addr;

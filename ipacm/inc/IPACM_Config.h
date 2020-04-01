@@ -215,6 +215,15 @@ public:
 	/* nat_iface_lock */
 	pthread_mutex_t nat_iface_lock;
 
+	/* Store ippassthrough device type. */
+	ipacm_per_client_device_type ipacm_ip_passthrough_dev_type;
+
+	/* Skip NAT configuration for default PDN. */
+	uint8_t ipacm_ip_passthrough_skip_nat;
+
+	/* PDN IP Address assigned in IP Passthrough mode. */
+	uint32_t ipacm_ip_passthrough_pdn_ip_addr;
+
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
 	bool ipacm_lan_stats_enable;
 	bool ipacm_lan_stats_enable_set;
@@ -403,6 +412,7 @@ public:
 	int ipacm_reset_hw_fnr_counters(const uint8_t start_id, const uint8_t end_id);
 	void alloc_fnr_counter(void);
 #endif
+	void update_ip_ppasthrough_config(ipa_ioc_pdn_config *pdn_config);
 
 	const char* getEventName(ipa_cm_event_id event_id);
 

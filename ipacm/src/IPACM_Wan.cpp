@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013-2019, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2013-2020, The Linux Foundation. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -4727,13 +4727,16 @@ int IPACM_Wan::del_wan_firewall_rule(ipa_ip_type iptype)
 			IPACM_Wan::num_v6_flt_rule += IPACM_Iface::ipacmcfg->l2tp_client.size();
 		}
 #endif
+		if(IPACM_Wan::num_v6_flt_rule < IPA_MAX_FLT_RULE)
+                {
 #ifdef FEATURE_VLAN_MPDN
-		memset(&IPACM_Wan::pdn_flt_rule_v6[IPACM_Wan::num_v6_flt_rule], 0,
-			(IPA_MAX_FLT_RULE - IPACM_Wan::num_v6_flt_rule) * sizeof(struct ipacm_pdn_flt_rule));
+			memset(&IPACM_Wan::pdn_flt_rule_v6[IPACM_Wan::num_v6_flt_rule], 0,
+				(IPA_MAX_FLT_RULE - IPACM_Wan::num_v6_flt_rule) * sizeof(struct ipacm_pdn_flt_rule));
 #else
-		memset(&IPACM_Wan::flt_rule_v6[IPACM_Wan::num_v6_flt_rule], 0,
-			(IPA_MAX_FLT_RULE - IPACM_Wan::num_v6_flt_rule) * sizeof(struct ipa_flt_rule_add));
+			memset(&IPACM_Wan::flt_rule_v6[IPACM_Wan::num_v6_flt_rule], 0,
+				(IPA_MAX_FLT_RULE - IPACM_Wan::num_v6_flt_rule) * sizeof(struct ipa_flt_rule_add));
 #endif
+		}
 	}
 	else
 	{

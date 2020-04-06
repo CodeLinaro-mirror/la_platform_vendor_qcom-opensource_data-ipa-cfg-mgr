@@ -122,6 +122,8 @@ IPACM_Lan::IPACM_Lan(int iface_index) : IPACM_Iface(iface_index)
 #endif
 
 #ifdef FEATURE_L2TP
+	l2tp_ul_dummy_hdr_hdl = 0;
+	l2tp_ul_hdr_proc_ctx_hdl = 0;
 #ifdef IPA_L2TP_TUNNEL_UDP
 	l2tp_udp_dflt_flt_tule_offset = 0;
 	memset(tcp_syn_flt_rule_hdl, 0, sizeof(tcp_syn_flt_rule_hdl));

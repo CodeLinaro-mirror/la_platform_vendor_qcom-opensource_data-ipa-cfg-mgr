@@ -1279,6 +1279,7 @@ void IPACM_LanToLan_Iface::add_client_flt_rule(peer_iface_info *peer, client_inf
 	else
 	{
 		IPACMDBG_H("The client is not found in flt info list, insert a new one.\n");
+		memset(new_flt_info.flt_rule_hdl, 0, IPA_IP_MAX*sizeof(uint32_t));
 		new_flt_info.p_client = client;
 		new_flt_info.flt_rule_hdl[iptype] = flt_rule_hdl;
 		/* Create empty list. */

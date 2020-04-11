@@ -963,6 +963,7 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 							/* if this is a vlan interface that was not added we ignore*/
 							if((IPACM_Iface::ipacmcfg->ipacm_mpdn_enable == TRUE) &&
 								(IPACM_FAILURE == ipa_interface_index) &&
+								(IPACM_Iface::ipacmcfg->iface_in_vlan_mode(data->iface_name)) &&
 								!(IPACM_Iface::ipacmcfg->is_added_vlan_iface(data->iface_name)))
 							{
 								IPACMDBG_H("not added VLAN interface %s, ignoring\n", data->iface_name);
@@ -1155,6 +1156,7 @@ void IPACM_Neighbor::update_neigh_cache()
 		/* if this is a vlan interface that was not added we ignore*/
 		if((IPACM_Iface::ipacmcfg->ipacm_mpdn_enable == TRUE) &&
 			(IPACM_FAILURE == query_ipa_if_num) &&
+			(IPACM_Iface::ipacmcfg->iface_in_vlan_mode(rdev_name)) &&
 			!(IPACM_Iface::ipacmcfg->is_added_vlan_iface(rdev_name)))
 		{
 			IPACMDBG_H("not added VLAN interface %s, ignoring\n", rdev_name);

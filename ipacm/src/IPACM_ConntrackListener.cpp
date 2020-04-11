@@ -471,6 +471,16 @@ void IPACM_ConntrackListener::HandleNonNatIPAddr_v4(
 		ret = CheckNatIface(data->if_index, &NatIface);
 		if (!NatIface && ret == IPACM_SUCCESS)
 		{
+			/* Check for duplicates. */
+			for (cnt = 0; cnt < MAX_IFACE_ADDRESS; cnt++)
+			{
+				if (nonnat_iface_ipv4_addr[cnt] == data->ipv4_addr)
+				{
+					/* Duplicate IP address. Ignore */
+					return;
+				}
+			}
+
 			/* Cache the non nat iface ip address */
 			for (cnt = 0; cnt < MAX_IFACE_ADDRESS; cnt++)
 			{

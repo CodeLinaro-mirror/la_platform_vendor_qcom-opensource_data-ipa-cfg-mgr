@@ -419,7 +419,9 @@ int IPACM_Iface::iface_ipa_index_query
 /* Query ipa_interface ipv4_addr by given linux interface_index */
 void IPACM_Iface::iface_addr_query
 (
-	 int interface_index
+	int interface_index,
+	bool post_new_addr_event,
+	uint32_t *curr_ip4_addr
 )
 {
 	int fd;
@@ -451,18 +453,18 @@ void IPACM_Iface::iface_addr_query
 	close(fd);
 
 	/* query ipv4/v6 address */
-    if(getifaddrs(&myaddrs) != 0)
+	if(getifaddrs(&myaddrs) != 0)
 	{
-        IPACMERR("getifaddrs");
+        	IPACMERR("getifaddrs");
 		return ;
 	}
 
-    for (ifa = myaddrs; ifa != NULL; ifa = ifa->ifa_next)
-    {
-        if (ifa->ifa_addr == NULL)
-            continue;
-        if (!(ifa->ifa_flags & IFF_UP))
-            continue;
+	for (ifa = myaddrs; ifa != NULL; ifa = ifa->ifa_next)
+    	{
+		if (ifa->ifa_addr == NULL)
+			continue;
+		if (!(ifa->ifa_flags & IFF_UP))
+			continue;
 
 		if(strcmp(ifr.ifr_name,ifa->ifa_name) == 0) // find current iface
 		{
@@ -474,61 +476,92 @@ void IPACM_Iface::iface_addr_query
 					struct sockaddr_in *s4 = (struct sockaddr_in *)ifa->ifa_addr;
 					IPACMDBG_H("ipv4 address %s\n",inet_ntoa(s4->sin_addr));
 					iface_ipv4 = s4->sin_addr;
-					/* post new_addr event to command queue */
-					data_addr = (ipacm_event_data_addr *)malloc(sizeof(ipacm_event_data_addr));
-					if(data_addr == NULL)
-					{
-						IPACMERR("unable to allocate memory for event data_addr\n");
-						freeifaddrs(myaddrs);
-						return ;
-					}
-					memset(data_addr, 0, sizeof(ipacm_event_data_addr));
-					data_addr->iptype = IPA_IP_v4;
-					data_addr->if_index = interface_index;
-					data_addr->ipv4_addr = 	iface_ipv4.s_addr;
-					data_addr->ipv4_addr = ntohl(data_addr->ipv4_addr);
-					strlcpy(data_addr->iface_name, ifr.ifr_name, sizeof(data_addr->iface_name));
-					IPACMDBG_H("Posting IPA_ADDR_ADD_EVENT with if index:%d, if name:%s, ipv4 addr:0x%x\n",
-						data_addr->if_index,
-						data_addr->iface_name,
-						data_addr->ipv4_addr);
 
-					evt_data.event = IPA_ADDR_ADD_EVENT;
-					evt_data.evt_data = data_addr;
-					IPACM_EvtDispatcher::PostEvt(&evt_data);
+					if (curr_ip4_addr != NULL && (post_new_addr_event == false))
+					{
+						if(ntohl(iface_ipv4.s_addr) != (*curr_ip4_addr))
+						{
+							IPACMDBG_H("current_ip4_addr: (0x%x)\n", (*curr_ip4_addr));
+							IPACMDBG_H("iface ip4 address: (0x%x)\n", ntohl(iface_ipv4.s_addr));
+
+							*curr_ip4_addr = ntohl(iface_ipv4.s_addr);
+							return;
+						}
+						else
+						{
+							IPACMDBG_H("curr_ip4_addr is same as iface addr\n");
+							return;
+						}
+					}
+					else if (post_new_addr_event)
+					{
+						IPACMDBG_H("Post IPA_NEW_ADDR_ADD_EVENT for v4\n");
+						/* post new_addr event to command queue */
+						data_addr = (ipacm_event_data_addr *)malloc(sizeof(ipacm_event_data_addr));
+						if(data_addr == NULL)
+						{
+							IPACMERR("unable to allocate memory for event data_addr\n");
+							freeifaddrs(myaddrs);
+							return;
+						}
+						memset(data_addr, 0, sizeof(ipacm_event_data_addr));
+						data_addr->iptype = IPA_IP_v4;
+						data_addr->if_index = interface_index;
+						data_addr->ipv4_addr = 	iface_ipv4.s_addr;
+						data_addr->ipv4_addr = ntohl(data_addr->ipv4_addr);
+						strlcpy(data_addr->iface_name, ifr.ifr_name, sizeof(data_addr->iface_name));
+						IPACMDBG_H("Posting IPA_ADDR_ADD_EVENT with if index:%d, if name:%s, ipv4 addr:0x%x\n",
+							data_addr->if_index,
+							data_addr->iface_name,
+							data_addr->ipv4_addr);
+
+						evt_data.event = IPA_ADDR_ADD_EVENT;
+						evt_data.evt_data = data_addr;
+						IPACM_EvtDispatcher::PostEvt(&evt_data);
+					}
+					else
+					{
+						IPACMDBG_H("post_new_addr_event is false\n");
+					}
 					break;
 				}
-
 				case AF_INET6:
 				{
-					struct sockaddr_in6 *s6 = (struct sockaddr_in6 *)ifa->ifa_addr;
-					/* post new_addr event to command queue */
-					data_addr = (ipacm_event_data_addr *)malloc(sizeof(ipacm_event_data_addr));
-					if(data_addr == NULL)
+					if (post_new_addr_event)
 					{
-						IPACMERR("unable to allocate memory for event data_addr\n");
-						freeifaddrs(myaddrs);
-						return ;
-					}
-					memset(data_addr, 0, sizeof(ipacm_event_data_addr));
-					data_addr->iptype = IPA_IP_v6;
-					data_addr->if_index = interface_index;
-					memcpy(data_addr->ipv6_addr,
+						struct sockaddr_in6 *s6 = (struct sockaddr_in6 *)ifa->ifa_addr;
+						/* post new_addr event to command queue */
+						data_addr = (ipacm_event_data_addr *)malloc(sizeof(ipacm_event_data_addr));
+						if(data_addr == NULL)
+						{
+							IPACMERR("unable to allocate memory for event data_addr\n");
+							freeifaddrs(myaddrs);
+							return;
+						}
+						memset(data_addr, 0, sizeof(ipacm_event_data_addr));
+						data_addr->iptype = IPA_IP_v6;
+						data_addr->if_index = interface_index;
+						memcpy(data_addr->ipv6_addr,
 									&s6->sin6_addr,
 									sizeof(data_addr->ipv6_addr));
-					data_addr->ipv6_addr[0] = ntohl(data_addr->ipv6_addr[0]);
-					data_addr->ipv6_addr[1] = ntohl(data_addr->ipv6_addr[1]);
-					data_addr->ipv6_addr[2] = ntohl(data_addr->ipv6_addr[2]);
-					data_addr->ipv6_addr[3] = ntohl(data_addr->ipv6_addr[3]);
-					strlcpy(data_addr->iface_name, ifr.ifr_name, sizeof(data_addr->iface_name));
-					IPACMDBG_H("Posting IPA_ADDR_ADD_EVENT with if index:%d, if name:%s, ipv6 addr:0x%x:%x:%x:%x\n",
+						data_addr->ipv6_addr[0] = ntohl(data_addr->ipv6_addr[0]);
+						data_addr->ipv6_addr[1] = ntohl(data_addr->ipv6_addr[1]);
+						data_addr->ipv6_addr[2] = ntohl(data_addr->ipv6_addr[2]);
+						data_addr->ipv6_addr[3] = ntohl(data_addr->ipv6_addr[3]);
+						strlcpy(data_addr->iface_name, ifr.ifr_name, sizeof(data_addr->iface_name));
+						IPACMDBG_H("Posting IPA_ADDR_ADD_EVENT with if index:%d, if name:%s, ipv6 addr:0x%x:%x:%x:%x\n",
 							data_addr->if_index,
 							data_addr->iface_name,
 							data_addr->ipv6_addr[0], data_addr->ipv6_addr[1], data_addr->ipv6_addr[2], data_addr->ipv6_addr[3]);
 
-					evt_data.event = IPA_ADDR_ADD_EVENT;
-					evt_data.evt_data = data_addr;
-					IPACM_EvtDispatcher::PostEvt(&evt_data);
+						evt_data.event = IPA_ADDR_ADD_EVENT;
+						evt_data.evt_data = data_addr;
+						IPACM_EvtDispatcher::PostEvt(&evt_data);
+					}
+					else
+					{
+						IPACMDBG_H("post_new_addr_event is false\n");
+					}
 					break;
 				}
 

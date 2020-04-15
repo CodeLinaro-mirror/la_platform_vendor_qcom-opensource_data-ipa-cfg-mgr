@@ -1894,7 +1894,16 @@ void IPACM_Config::add_l2tp_vlan_mapping(ipa_ioc_l2tp_vlan_mapping_info *data)
 	strlcpy(new_mapping.vlan_iface_name, data->vlan_iface_name,
 		sizeof(new_mapping.vlan_iface_name));
 	new_mapping.l2tp_session_id = data->l2tp_session_id;
-
+#ifdef IPA_L2TP_TUNNEL_UDP
+	IPACMDBG_H("L2tp tunnel type %d: Source Port: %d Dest Port: %d \n",
+	data->tunnel_type, data->src_port, data->dst_port);
+	new_mapping.tunnel_type = data->tunnel_type;
+	if (new_mapping.tunnel_type == IPA_L2TP_TUNNEL_UDP)
+	{
+		new_mapping.src_port = data->src_port;
+		new_mapping.dst_port = data->dst_port;
+	}
+#endif
 	for(it_vlan = m_vlan_iface.begin(); it_vlan != m_vlan_iface.end(); it_vlan++)
 	{
 		if(strncmp(it_vlan->vlan_iface_name, data->vlan_iface_name, sizeof(it_vlan->vlan_iface_name)) == 0)

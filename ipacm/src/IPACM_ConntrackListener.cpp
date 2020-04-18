@@ -756,6 +756,15 @@ void IPACM_ConntrackListener::HandleVlanUp(void *in_param)
 		}
 		else
 		{
+			/* Check if pdn is allocated as well as saved in vlan pdn cache*/
+			for(int i = 0; i < IPA_MAX_NUM_HW_PDNS; i++)
+			{
+				if(vlan_pdns[i].public_ip == vlanup_data->ipv4_addr) {
+					IPACMDBG_H("found existing PDN entry in %d \n", i);
+					return;
+				}
+			}
+
 			for(int i = 0; i < IPA_MAX_NUM_HW_PDNS; i++)
 			{
 				if(vlan_pdns[i].public_ip == 0)

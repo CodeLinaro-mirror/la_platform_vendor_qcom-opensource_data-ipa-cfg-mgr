@@ -121,7 +121,7 @@ extern "C"
 #define MAX_CMD_SIZE 100
 
 /* WAN IP address in IP Passthrough mode. */
-#define IPACM_IPPASSTHROUGH_WAN_IP "169.254.5.1"
+#define IPACM_IP_PASSTHROUGH_WAN_IP "169.254.5.1"
 
 #define IPACM_L2TP_DISABLE 0
 #define IPACM_L2TP 1

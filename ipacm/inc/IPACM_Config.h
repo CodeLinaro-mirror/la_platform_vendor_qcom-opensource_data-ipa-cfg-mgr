@@ -250,10 +250,17 @@ public:
 	std::list<socksv5_conn_info> socksv5_conn;
 	std::list<rmnet_mux_id_info> mux_id_mapping;
 
+	void update_socksv5_client_v6_addr(uint32_t* ipv6_addr);
 	void add_socksv5_conn(ipa_socksv5_msg *add_socksv5_info);
 	void del_socksv5_conn(uint32_t *socksv5_handle);
 	int socksv5_v4_pdn;
+	int socksv5_v6_pdn;
+	uint32_t socksv5_client_v6_addr[4];
 	int pdn_ipv4[IPA_MAX_NUM_HW_PDNS];
+	uint32_t pdn_ipv6[IPA_MAX_NUM_HW_PDNS][4];
+	int pdn_ipv6_in_use[IPA_MAX_NUM_HW_PDNS];
+	/* less impact on v6-embedded traffic */
+	int total_pdn_ipv6_in_use;
 	void add_mux_id_mapping(rmnet_mux_id_info *add_muxd_info);
 	void del_mux_id_mapping(rmnet_mux_id_info *del_muxd_info);
 	int query_mux_id(rmnet_mux_id_info *muxd_info);
@@ -582,6 +589,19 @@ public:
 #endif
 
 #if defined(FEATURE_SOCKSv5) && defined (IPA_SOCKV5_EVENT_MAX)
+	/* post IPA_UPDATE_SOCKSv5_v6_CONN msg */
+	inline int post_socksv5_v6_evt(void)
+	{
+		/* tell wan we have v6 pdn-update */
+		ipacm_cmd_q_data evt_data;
+
+		evt_data.event = IPA_UPDATE_SOCKSv5_v6_CONN;
+		evt_data.evt_data = NULL;
+		IPACMDBG("posting IPA_UPDATE_SOCKSv5_v6_CONN\n");
+		IPACM_EvtDispatcher::PostEvt(&evt_data);
+		return IPACM_SUCCESS;
+	}
+
 	/* post IPA_ADD_SOCKSv5_CONN msg */
 	inline int post_socksv5_evt(ipa_socksv5_msg *socksv5_info, bool is_add)
 	{
@@ -614,7 +634,7 @@ public:
 	}
 
 	/* post IPA_ROUTE_ADD_VLAN_PDN_EVENT msg */
-	inline int post_socksv5_add_vlan_evt(uint32_t public_ip)
+	inline int post_socksv5_add_vlan_evt(ipa_ip_type iptype, uint32_t public_ip, uint32_t *prefix)
 	{
 		ipacm_cmd_q_data evt_data;
 		ipacm_event_route_vlan *vlan_data;
@@ -626,8 +646,25 @@ public:
 			IPACMERR("unable to allocate memory for event data_socksv5\n");
 			return IPACM_FAILURE;
 		}
-		vlan_data->iptype = IPA_IP_v4;
-		vlan_data->wan_ipv4_addr = public_ip;
+
+		if (iptype == IPA_IP_v4)
+		{
+			vlan_data->iptype = IPA_IP_v4;
+			vlan_data->wan_ipv4_addr = public_ip;
+		}
+		else if (iptype == IPA_IP_v6)
+		{
+			vlan_data->iptype = IPA_IP_v6;
+			vlan_data->wan_ipv6_prefix[0] = prefix[0];
+			vlan_data->wan_ipv6_prefix[1] = prefix[1];
+		}
+		else
+		{
+			IPACMERR("wrong ip-type %d\n", vlan_data->iptype);
+			free(vlan_data);
+			return IPACM_FAILURE;
+		}
+
 		evt_data.evt_data = vlan_data;
 		IPACMDBG("sending IPA_ROUTE_ADD_VLAN_PDN_EVENT vlan id %d, iptype %d,\n",
 						vlan_data->VlanID,

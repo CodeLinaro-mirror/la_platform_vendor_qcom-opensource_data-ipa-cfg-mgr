@@ -242,7 +242,8 @@ typedef struct _nat_table_entry
 	uint16_t uc_activation_index;
 	bool s;
 	bool ucp;
-
+	bool dst_only;
+	bool src_only;
 }nat_table_entry;
 
 #define CHK_TBL_HDL()  if(nat_table_hdl == 0){ return -1; }
@@ -275,7 +276,7 @@ public:
 
 	EntryBaseClass* Find(const EntryBaseClass& other)
 	{
-		IPACMDBG_H("\n");
+		IPACMDBG_H("m_maxEntries %d\n", m_maxEntries);
 		for (int i = 0; i < m_maxEntries; ++i)
 		{
 			EntryBaseClass& curr = Get(i);
@@ -523,6 +524,9 @@ public:
 	int DelEntriesOnClntDiscon(const IpAddress& client_lan_ip);
 	int DelEntriesOnSTAClntDiscon(const IpAddress& client_lan_ip);
 
+#ifdef FEATURE_SOCKSv5
+	std::list<Ipv6ctEntry> socksv5_v6_conn;
+#endif //FEATURE_SOCKSv5
 protected:
 
 	NatBase(ipa_ip_type type, int max_entries, const NatObjectsGeneratorBase& objectsGenerator);

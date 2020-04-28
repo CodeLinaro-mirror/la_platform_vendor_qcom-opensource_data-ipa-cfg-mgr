@@ -190,6 +190,9 @@ public:
 	/* Indicates whether mpdn is enabled or not. */
 	bool ipacm_mpdn_enable;
 
+	/* Indicates whether socksv5 is enabled or not. */
+	bool ipacm_socksv5_enable;
+
 #ifdef FEATURE_VLAN_MPDN
 	bool vlan_firewall_change_handle;
 
@@ -249,6 +252,21 @@ public:
 	int get_vlan_id(char *iface_name, uint8_t *vlan_id);
 	void get_vlan_mode_ifaces();
 #endif
+
+
+#if defined(FEATURE_SOCKSv5) && defined(IPA_SOCKV5_EVENT_MAX)
+	pthread_mutex_t socksv5_lock;
+	std::list<socksv5_conn_info> socksv5_conn;
+	std::list<rmnet_mux_id_info> mux_id_mapping;
+
+	void add_socksv5_conn(ipa_socksv5_msg *add_socksv5_info);
+	void del_socksv5_conn(uint32_t *socksv5_handle);
+	int socksv5_v4_pdn;
+	int pdn_ipv4[IPA_MAX_NUM_HW_PDNS];
+	void add_mux_id_mapping(rmnet_mux_id_info *add_muxd_info);
+	void del_mux_id_mapping(rmnet_mux_id_info *del_muxd_info);
+	int query_mux_id(rmnet_mux_id_info *muxd_info);
+#endif //defined(FEATURE_SOCKSv5) && defined (IPA_SOCKV5_EVENT_MAX)
 
 #if defined(FEATURE_IPACM_PER_CLIENT_STATS) && defined(IPA_HW_FNR_STATS)
 	int ipacm_alloc_fnr_counters(struct ipa_ioc_flt_rt_counter_alloc *fnr_counters, const int fd);
@@ -510,7 +528,7 @@ public:
 		evt_data.event = IPA_PREFIX_CHANGE_EVENT;
 		evt_data.evt_data = data_fid;
 
-		/* Insert IPA_PRIVATE_SUBNET_CHANGE_EVENT to command queue */
+		/* Insert IPA_PREFIX_CHANGE_EVENT to command queue */
 		IPACMDBG("posting IPA_PREFIX_CHANGE_EVENT\n");
 		IPACM_EvtDispatcher::PostEvt(&evt_data);
 		return true;
@@ -544,7 +562,7 @@ public:
 				evt_data.event = IPA_PREFIX_CHANGE_EVENT;
 				evt_data.evt_data = data_fid;
 
-				/* Insert IPA_PRIVATE_SUBNET_CHANGE_EVENT to command queue */
+				/* Insert IPA_PREFIX_CHANGE_EVENT to command queue */
 				IPACM_EvtDispatcher::PostEvt(&evt_data);
 				return IPACM_SUCCESS;
 			}
@@ -572,6 +590,62 @@ public:
 		return false;
 	}
 #endif
+
+#if defined(FEATURE_SOCKSv5) && defined (IPA_SOCKV5_EVENT_MAX)
+	/* post IPA_ADD_SOCKSv5_CONN msg */
+	inline int post_socksv5_evt(ipa_socksv5_msg *socksv5_info, bool is_add)
+	{
+		/* tell other LAN interfaces that we have a new private subnet */
+		ipa_socksv5_msg *data_socksv5;
+		ipacm_cmd_q_data evt_data;
+
+		data_socksv5 = (ipa_socksv5_msg *)malloc(sizeof(ipa_socksv5_msg));
+		if(data_socksv5 == NULL)
+		{
+			IPACMERR("unable to allocate memory for event data_socksv5\n");
+			return IPACM_FAILURE;
+		}
+		memcpy(data_socksv5, socksv5_info, sizeof(ipa_socksv5_msg));
+		evt_data.evt_data = data_socksv5;
+
+		if (is_add == true)
+		{
+			evt_data.event = IPA_ADD_SOCKSv5_CONN;
+			IPACMDBG("posting IPA_ADD_SOCKSv5_CONN\n");
+		}
+		else
+		{
+			evt_data.event = IPA_DEL_SOCKSv5_CONN;
+			IPACMDBG("posting IPA_DEL_SOCKSv5_CONN\n");
+		}
+		/* Insert IPA_ADD/DEL_SOCKSv5_CONN to command queue */
+		IPACM_EvtDispatcher::PostEvt(&evt_data);
+		return IPACM_SUCCESS;
+	}
+
+	/* post IPA_ROUTE_ADD_VLAN_PDN_EVENT msg */
+	inline int post_socksv5_add_vlan_evt(uint32_t public_ip)
+	{
+		ipacm_cmd_q_data evt_data;
+		ipacm_event_route_vlan *vlan_data;
+
+		evt_data.event = IPA_ROUTE_ADD_VLAN_PDN_EVENT;
+		vlan_data = (ipacm_event_route_vlan *)malloc(sizeof(ipacm_event_route_vlan));
+		if(vlan_data == NULL)
+		{
+			IPACMERR("unable to allocate memory for event data_socksv5\n");
+			return IPACM_FAILURE;
+		}
+		vlan_data->iptype = IPA_IP_v4;
+		vlan_data->wan_ipv4_addr = public_ip;
+		evt_data.evt_data = vlan_data;
+		IPACMDBG("sending IPA_ROUTE_ADD_VLAN_PDN_EVENT vlan id %d, iptype %d,\n",
+						vlan_data->VlanID,
+						vlan_data->iptype);
+		IPACM_EvtDispatcher::PostEvt(&evt_data);
+		return IPACM_SUCCESS;
+	}
+#endif //defined(FEATURE_SOCKSv5) && defined (IPA_SOCKV5_EVENT_MAX)
 
 	static const char *DEVICE_NAME_ODU;
 

@@ -53,6 +53,8 @@ bool ipa_nat_is_sram_supported(void);
  * @uc_activation_index: index pointing to uc activation table
  * @s: bit indication to use the system or local (1 or 0) addr for above table
  * @ucp: enable uc processing
+ * @dst_only: construct NAT for DL only
+ * @src_only: construct NAT for UL only
  */
 typedef struct {
 	uint32_t target_ip;
@@ -68,6 +70,8 @@ typedef struct {
 	uint16_t uc_activation_index;
 	bool s;
 	bool ucp;
+	bool dst_only;
+	bool src_only;
 } ipa_nat_ipv4_rule;
 
 static inline char* prep_nat_ipv4_rule_4print(

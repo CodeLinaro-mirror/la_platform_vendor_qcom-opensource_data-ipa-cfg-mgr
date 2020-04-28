@@ -873,7 +873,8 @@ int IPACM_Iface::init_fl_rule(ipa_ip_type iptype)
 		memcpy(&(m_pFilteringTable->rules[m_ipv6_default_filterting_rules_count++]),
 			&flt_rule_entry, sizeof(struct ipa_flt_rule_add));
 
-#ifdef FEATURE_IPA_ANDROID
+/* on socksv5 (v6->v4) need route syn/fin/rst to AP */
+#if defined(FEATURE_IPA_ANDROID) || defined(FEATURE_SOCKSv5)
 		IPACMDBG_H("Add TCP ctrl rules\n");
 		memset(&flt_rule_entry, 0, sizeof(struct ipa_flt_rule_add));
 

@@ -66,11 +66,19 @@ IPACM_ConntrackListener::IPACM_ConntrackListener() :
 
 	 IPACM_EvtDispatcher::registr(IPA_HANDLE_WAN_UP, this);
 	 IPACM_EvtDispatcher::registr(IPA_HANDLE_WAN_DOWN, this);
+#ifdef FEATURE_SOCKSv5
+	 IPACM_EvtDispatcher::registr(IPA_HANDLE_SOCKSv5_UP, this);
+	 IPACM_EvtDispatcher::registr(IPA_HANDLE_SOCKSv5_DOWN, this);
+	 IPACM_EvtDispatcher::registr(IPA_ADD_SOCKSv5_CONN, this);
+	 IPACM_EvtDispatcher::registr(IPA_DEL_SOCKSv5_CONN, this);
+#else
 	if (IsIpv6CTEnabled())
 	{
 		IPACM_EvtDispatcher::registr(IPA_HANDLE_WAN_UP_V6, this);
 		IPACM_EvtDispatcher::registr(IPA_HANDLE_WAN_DOWN_V6, this);
 	}
+#endif
+
 #ifdef FEATURE_VLAN_MPDN
 	 IPACM_EvtDispatcher::registr(IPA_HANDLE_WAN_VLAN_PDN_UP, this);
 	 IPACM_EvtDispatcher::registr(IPA_HANDLE_WAN_VLAN_PDN_DOWN, this);
@@ -106,6 +114,11 @@ void IPACM_ConntrackListener::event_callback(ipa_cm_event_id evt,
 						void *data)
 {
 	const ipacm_event_iface_up *wan_data = NULL;
+	ipacm_event_connection *data_evt_conn = NULL;
+	ipacm_event_iface_up wan_data_local;
+#ifdef FEATURE_SOCKSv5
+	ipa_socksv5_msg *socksv5_info = NULL;
+#endif
 
 	 if(data == NULL)
 	 {
@@ -119,7 +132,29 @@ void IPACM_ConntrackListener::event_callback(ipa_cm_event_id evt,
 			IPACMDBG("Received IPA_PROCESS_CT_MESSAGE event\n");
 			ProcessCTMessage(data);
 			break;
+#if defined(FEATURE_SOCKSv5) && defined (IPA_SOCKV5_EVENT_MAX)
+	case IPA_ADD_SOCKSv5_CONN:
+	{
+		if (IsIpv6CTEnabled())
+		{
+			IPACMDBG_H("Received IPA_ADD_SOCKSv5_CONN event\n");
+			socksv5_info = (ipa_socksv5_msg*)data;
+			ProcessSocksv5Conn(socksv5_info, true);
+		}
+		break;
+	}
 
+	case IPA_DEL_SOCKSv5_CONN:
+	{
+		if (IsIpv6CTEnabled())
+		{
+			IPACMDBG_H("Received IPA_DEL_SOCKSv5_CONN event\n");
+			socksv5_info = (ipa_socksv5_msg*)data;
+			ProcessSocksv5Conn(socksv5_info, false);
+		}
+		break;
+	}
+#else
 	case IPA_PROCESS_CT_MESSAGE_V6:
 	{
 		if (IsIpv6CTEnabled())
@@ -135,6 +170,7 @@ void IPACM_ConntrackListener::event_callback(ipa_cm_event_id evt,
 #endif
 		break;
 	}
+#endif //defined(FEATURE_SOCKSv5) && defined (IPA_SOCKV5_EVENT_MAX)
 	 case IPA_HANDLE_WAN_UP:
 			IPACMDBG_H("Received IPA_HANDLE_WAN_UP event\n");
 #ifdef FEATURE_VLAN_MPDN
@@ -189,6 +225,43 @@ void IPACM_ConntrackListener::event_callback(ipa_cm_event_id evt,
 			TriggerWANDown_v6(wan_addr);
 		}
 		break;
+#ifdef FEATURE_SOCKSv5
+	/* socksv5 use-case */
+	case IPA_HANDLE_SOCKSv5_UP:
+		/* get the instance */
+		if (!ipv6ct_inst)
+		{
+			ipv6ct_inst = Ipv6ct::GetInstance();
+		}
+		/* create v6-ct tble */
+		data_evt_conn = (ipacm_event_connection*)data;
+		IPACMDBG_H("Received IPA_HANDLE_SOCKSv5_UP event\n");
+		memset(&wan_data_local, 0, sizeof(wan_data_local));
+		wan_data_local.ipv6_addr[0] = data_evt_conn->dst_ipv6_addr[0];
+		wan_data_local.ipv6_addr[1] = data_evt_conn->dst_ipv6_addr[1];
+		wan_data_local.ipv6_addr[2] = data_evt_conn->dst_ipv6_addr[2];
+		wan_data_local.ipv6_addr[3] = data_evt_conn->dst_ipv6_addr[3];
+		strlcpy(wan_data_local.ifname, IPA_IF_SOCKSv5_NAME, sizeof(wan_data_local.ifname));
+		IPACMDBG_H("WanUp_v6 %d\n", WanUp_v6);
+		if (!WanUp_v6)
+		{
+			IPACMDBG_H("WanUp_v6 %d\n", WanUp_v6);
+			wan_data = static_cast<const ipacm_event_iface_up*>(&wan_data_local);
+			static_cast<Ipv6IpAddress&>(wan_ipaddr_v6).CreateFromArray(wan_data->ipv6_addr, false);
+			TriggerWANUp_v6(wan_data);
+		}
+		break;
+
+	case IPA_HANDLE_SOCKSv5_DOWN:
+		IPACMDBG_H("Received IPA_HANDLE_SOCKSv5_DOWN event\n");
+		if (WanUp_v6)
+		{
+			Ipv6IpAddress wan_addr;
+			wan_addr.CreateFromArray(wan_data_local.ipv6_addr, false);
+			TriggerWANDown_v6(wan_addr);
+		}
+		break;
+#endif
 
 	/* modify TCP/UDP filters to ignore local WLAN or LAN IPv4 connections */
 	case IPA_HANDLE_LAN_WLAN_UP:
@@ -354,6 +427,7 @@ void IPACM_ConntrackListener::HandleNonNatIPAddr(void* inParam, bool AddOp)
 		/* For IPv4 legacy HandleNonNatIPAddr renamed to HandleNonNatIPAddr_v4 */
 		HandleNonNatIPAddr_v4(inParam, AddOp);
 		break;
+#ifndef FEATURE_SOCKSv5
 	case IPA_IP_v6:
 	{
 		if (IsIpv6CTEnabled())
@@ -363,8 +437,9 @@ void IPACM_ConntrackListener::HandleNonNatIPAddr(void* inParam, bool AddOp)
 		}
 		break;
 	}
+#endif
 	default:
-		IPACMERR("Not supported IP type %d", data->iptype);
+		IPACMERR("Not supported IP type %d\n", data->iptype);
 	}
 }
 
@@ -866,13 +941,14 @@ void IPACM_ConntrackListener::TriggerWANUp_v6(const ipacm_event_iface_up* evt_da
 		IPACMDBG("Ignoring\n");
 		return;
 	}
-
+/* need QCMAP changes to remove below feature flag and use run time flag instead*/
+#ifndef FEATURE_SOCKSv5
 	if (!wan_ipaddr_v6.Valid())
 	{
 		IPACMERR("Invalid WAN address,ignoring WAN UP event\n");
 		return;
 	}
-
+#endif
 	IPACMDBG_H("Recevied below information during wanup\n");
 	IPACMDBG_H("if_name: %s", evt_data->ifname);
 	wan_ipaddr_v6.DebugDump("WAN");
@@ -882,11 +958,16 @@ void IPACM_ConntrackListener::TriggerWANUp_v6(const ipacm_event_iface_up* evt_da
 
 	memcpy(wan_ifname, evt_data->ifname, sizeof(wan_ifname));
 
+	if (!ipv6ct_inst)
+		ipv6ct_inst = Ipv6ct::GetInstance();
+
 	ipv6ct_inst->AddTable(wan_ipaddr_v6);
 
+/* need QCMAP changes to remove below feature flag and use run time flag instead*/
+#ifndef FEATURE_SOCKSv5
 	IPACMDBG_H("creating nat threads\n");
 	CreateNatThreads();
-
+#endif
 	WanUp_v6 = true;
 
 	IPACMDBG_H("return\n");
@@ -1046,13 +1127,14 @@ void IPACM_ConntrackListener::TriggerWANDown_v6(const IpAddress& wan_addr)
 
 	WanUp_v6 = false;
 
+#ifndef FEATURE_SOCKSv5
 	if (wan_addr != wan_ipaddr_v6)
 	{
 		IPACMDBG_H("WAN IP address is not matching\n");
 		return;
 	}
-
 	wan_addr.DebugDump("Deleting the table with");
+#endif
 	ipv6ct_inst->DeleteTable(wan_addr);
 	IPACMDBG_H("return\n");
 }
@@ -1295,6 +1377,159 @@ void IPACM_ConntrackListener::ProcessCTMessage_v6(const ipacm_ct_evt_data* evt_d
 	IPACMDBG_H("return\n");
 }
 
+#if defined(FEATURE_SOCKSv5) && defined (IPA_SOCKV5_EVENT_MAX)
+void IPACM_ConntrackListener::ProcessSocksv5Conn(ipa_socksv5_msg *socksv5_info, bool is_add)
+{
+	Ipv6ctEntry entry;
+	nat_table_entry rule;
+
+	IPACMDBG_H("\n");
+
+	if (socksv5_info->ul_in.ip_type == IPA_IP_v6) {
+		entry.m_srcAddr = Ipv6IpAddress(socksv5_info->ul_in.ipv6_src, false);
+		entry.m_dstAddr = Ipv6IpAddress(socksv5_info->ul_in.ipv6_dst, false);
+		entry.m_srcPort = socksv5_info->ul_in.src_port;
+		entry.m_dstPort = socksv5_info->ul_in.dst_port;
+		entry.m_protocol = IPACM_FIREWALL_IPPROTO_TCP;
+		entry.m_ucp = true;
+		entry.m_s = true;
+		entry.m_uc_activation_index = (uint16_t) socksv5_info->ul_in.index;
+		if (is_add)
+			ipv6ct_inst->AddEntry(entry);
+		else
+			ipv6ct_inst->DeleteEntry(entry);
+	}
+
+	if (socksv5_info->dl_in.ip_type == IPA_IP_v6) {
+		entry.m_srcAddr = Ipv6IpAddress(socksv5_info->dl_in.ipv6_src, false);
+		entry.m_dstAddr = Ipv6IpAddress(socksv5_info->dl_in.ipv6_dst, false);
+		entry.m_srcPort = socksv5_info->dl_in.src_port;
+		entry.m_dstPort = socksv5_info->dl_in.dst_port;
+		entry.m_protocol = IPACM_FIREWALL_IPPROTO_TCP;
+		entry.m_ucp = true;
+		entry.m_s = true;
+		entry.m_uc_activation_index = (uint16_t) socksv5_info->dl_in.index;
+		if (is_add)
+			ipv6ct_inst->AddEntry(entry);
+		else
+			ipv6ct_inst->DeleteEntry(entry);
+	}
+	else
+	{
+		/* post IPA_ROUTE_ADD_VLAN_PDN_EVENT*/
+		PostRouteAddVlanPdn(socksv5_info->dl_in.ipv4_dst);
+		/* construct v4 nat */
+		memset(&rule, 0, sizeof(rule));
+		rule.private_ip = socksv5_info->dl_in.ipv4_dst;
+		rule.private_port = socksv5_info->dl_in.dst_port;
+		rule.target_ip = socksv5_info->dl_in.ipv4_src;
+		rule.target_port = socksv5_info->dl_in.src_port;
+		rule.public_ip = socksv5_info->dl_in.ipv4_dst;
+		rule.public_port = socksv5_info->dl_in.dst_port;
+		rule.protocol = IPACM_FIREWALL_IPPROTO_TCP;
+		rule.enabled = true;
+		if (is_add) {
+			/* clean the existing NAT entry */
+			nat_inst->DeleteEntry(&rule);
+			/* construct the DL nat socksv5 rule */
+			rule.uc_activation_index = (uint16_t) socksv5_info->dl_in.index;
+			rule.s = true;
+			rule.ucp = true;
+			rule.src_only = false;
+			rule.dst_only = true;
+			nat_inst->AddEntry(&rule, true);
+
+			/* construct the UL nat socksv5 rule */
+			rule.uc_activation_index = 0;
+			rule.s = false;
+			rule.ucp = false;
+			rule.dst_only = false;
+			rule.src_only = true;
+			nat_inst->AddEntry(&rule, true);
+		}
+		else
+		{
+			/* delete DL nat socksv5 rule */
+			rule.uc_activation_index = (uint16_t) socksv5_info->dl_in.index;
+			rule.s = true;
+			rule.ucp = true;
+			rule.src_only = false;
+			rule.dst_only = true;
+			nat_inst->DeleteEntry(&rule);
+			/* delete UL nat socksv5 rule */
+			rule.uc_activation_index = 0;
+			rule.s = false;
+			rule.ucp = false;
+			rule.dst_only = false;
+			rule.src_only = true;
+			nat_inst->DeleteEntry(&rule);
+		}
+	}
+	IPACMDBG_H("return\n");
+}
+
+void IPACM_ConntrackListener::PostRouteAddVlanPdn(uint32_t public_ip)
+{
+	int i;
+	ipacm_cmd_q_data evt_data;
+	ipacm_event_route_vlan *vlan_data;
+	ipacm_event_vlan_pdn data;
+	rmnet_mux_id_info info;
+
+	for(i = 0; i < IPA_MAX_NUM_HW_PDNS; i++)
+	{
+		/* check if we already got vlan_pdn_up event for this ip */
+		if(vlan_pdns[i].public_ip == public_ip)
+		{
+			IPACMDBG_H("vlan pdn already up for ");
+			iptodot("ip", public_ip);
+			return;
+		}
+	}
+
+	if((i >= IPA_MAX_NUM_HW_PDNS) && (num_vlan_pdns >= IPA_MAX_NUM_HW_PDNS))
+	{
+		iptodot("pdn ip", public_ip);
+		IPACMERR("can't add more PDN, already got max \n");
+		return;
+	}
+
+	/* create PDN tbl first */
+	info.ipv4_addr = public_ip;
+	/* query qmuxd mapping*/
+	if ( IPACM_Iface::ipacmcfg->query_mux_id(&info) == IPACM_SUCCESS)
+	{
+		IPACMDBG_H(" Find the ipv4 0x%X map to muxd %d\n", public_ip, info.mux_id);
+		data.iptype = IPA_IP_v4;
+		data.VlanID = 0;
+		data.mux_id = info.mux_id;
+		data.ipv4_addr = public_ip;
+		HandleVlanUp(&data);
+	}
+	else
+	{
+		IPACMERR("failed to find qqmuxd and HandleVlanUp for 0x%X\n", public_ip);
+	}
+
+	evt_data.event = IPA_ROUTE_ADD_VLAN_PDN_EVENT;
+	vlan_data = (ipacm_event_route_vlan *)malloc(sizeof(ipacm_event_route_vlan));
+	if(!vlan_data)
+	{
+		IPACMERR("couldn't allocate memory for new vlan pdn event\n");
+		return;
+	}
+	vlan_data->iptype = IPA_IP_v4;
+	vlan_data->wan_ipv4_addr = public_ip;
+	evt_data.evt_data = vlan_data;
+	IPACMDBG("sending IPA_ROUTE_ADD_VLAN_PDN_EVENT vlan id %d, iptype %d,\n",
+		vlan_data->VlanID,
+		vlan_data->iptype);
+	iptodot("pdn ip", public_ip);
+
+	IPACM_EvtDispatcher::PostEvt(&evt_data);
+}
+#endif //defined(FEATURE_SOCKSv5) && defined (IPA_SOCKV5_EVENT_MAX)
+
 bool IPACM_ConntrackListener::AddIface(
    nat_table_entry *rule, bool *isTempEntry)
 {
@@ -1367,7 +1602,7 @@ bool IPACM_ConntrackListener::AddIface(
 			rule->public_ip, rule->public_port);
 		rule->private_ip = rule->public_ip;
 		rule->private_port = rule->public_port;
-		return true;
+			return true;
 	}
 
 	/* check whether nat iface or not */

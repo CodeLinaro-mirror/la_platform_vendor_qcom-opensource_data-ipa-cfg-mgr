@@ -507,6 +507,17 @@ int IPACM_Wan::handle_addr_evt(ipacm_event_data_addr *data)
     }
 	else
 	{
+#if defined(FEATURE_SOCKSv5) && defined (IPA_SOCKV5_EVENT_MAX)
+	if(m_is_sta_mode == Q6_WAN)
+	{
+		/* add qmuxd mapping*/
+		rmnet_mux_id_info info;
+		info.ipv4_addr = data->ipv4_addr;
+		info.mux_id = ext_prop->ext[0].mux_id;;
+		memcpy(info.iface_name, dev_name, sizeof(dev_name));
+		IPACM_Iface::ipacmcfg->add_mux_id_mapping(&info);
+	}
+#endif // defined(FEATURE_SOCKSv5) && defined (IPA_SOCKV5_EVENT_MAX)
 		if(wan_v4_addr_set)
 		{
 			/* check iface ipv4 same or not */
@@ -526,6 +537,21 @@ int IPACM_Wan::handle_addr_evt(ipacm_event_data_addr *data)
 					res = IPACM_FAILURE;
 					goto fail;
 				}
+#if defined(FEATURE_SOCKSv5) && defined (IPA_SOCKV5_EVENT_MAX)
+				if(m_is_sta_mode == Q6_WAN)
+				{
+					rmnet_mux_id_info info;
+					/* clean old mapping */
+					info.ipv4_addr = wan_v4_addr;
+					info.mux_id = ext_prop->ext[0].mux_id;;
+					memcpy(info.iface_name, dev_name, sizeof(dev_name));
+					IPACM_Iface::ipacmcfg->del_mux_id_mapping(&info);
+					/* add qmuxd mapping*/
+					info.ipv4_addr = data->ipv4_addr;
+					info.mux_id = ext_prop->ext[0].mux_id;;
+					IPACM_Iface::ipacmcfg->add_mux_id_mapping(&info);
+				}
+#endif // defined(FEATURE_SOCKSv5) && defined (IPA_SOCKV5_EVENT_MAX)
 			}
 		}
 
@@ -804,6 +830,9 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 		{
 			ipacm_event_data_fid *data = (ipacm_event_data_fid *)param;
 			ipa_interface_index = iface_ipa_index_query(data->if_index);
+#ifdef FEATURE_SOCKSv5
+			rmnet_mux_id_info info;
+#endif
 			if (ipa_interface_index == ipa_if_num)
 			{
 				if(m_is_sta_mode == Q6_WAN)
@@ -811,6 +840,13 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 						IPACMDBG_H("Received IPA_LINK_DOWN_EVENT\n");
 						handle_down_evt_ex();
 						IPACMDBG_H("IPA_WAN_Q6 (%s):ipa_index (%d) instance close \n", IPACM_Iface::ipacmcfg->iface_table[ipa_if_num].iface_name, ipa_if_num);
+#if defined(FEATURE_SOCKSv5) && defined (IPA_SOCKV5_EVENT_MAX)
+						info.ipv4_addr = wan_v4_addr;
+						info.mux_id = ext_prop->ext[0].mux_id;;
+						memcpy(info.iface_name, dev_name, sizeof(dev_name));
+						/* add qmuxd mapping*/
+						IPACM_Iface::ipacmcfg->del_mux_id_mapping(&info);
+#endif //defined(FEATURE_SOCKSv5) && defined (IPA_SOCKV5_EVENT_MAX)
 						IPACM_Iface::ipacmcfg->DelNatIfaces(dev_name); // delete NAT-iface
 						delete this;
 						return;
@@ -1450,6 +1486,29 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 			ipacm_event_data_all *data = (ipacm_event_data_all *)param;
 			handle_l2tp_client_del(data->iface_name);
 			install_wan_filtering_rule(false);
+		}
+		break;
+#endif
+#ifdef FEATURE_SOCKSv5
+	case IPA_HANDLE_SOCKSv5_UP:
+		{
+			ipacm_event_data_addr data_addr;
+
+			memset(&data_addr, 0, sizeof(data_addr));
+			IPACMDBG_H("sky Received IPA_HANDLE_SOCKSv5_UP\n");
+			/* install v6 DL filter rule */
+			if ((active_v4 == true) && (active_v6 == false))
+			{
+				IPACMDBG_H("start v6-call  skylar v4(%d) v6(%d)\n", active_v4, active_v6);
+				data_addr.iptype = IPA_IP_v6;
+				data_addr.ipv6_addr[0] = 0xfe800000;
+				IPACMDBG_H("v6(%d) 0x%08x\n", data_addr.iptype, data_addr.ipv6_addr[0]);
+				handle_addr_evt(&data_addr);
+				data_addr.ipv6_addr[0] = 0x20020000;
+				IPACMDBG_H("v6(%d) 0x%08x\n", data_addr.iptype, data_addr.ipv6_addr[0]);
+				handle_addr_evt(&data_addr);
+				handle_route_add_evt(IPA_IP_v6);
+			}
 		}
 		break;
 #endif
@@ -3394,16 +3453,26 @@ int IPACM_Wan::config_dft_firewall_rules_ex(struct ipa_flt_rule_add *rules, int 
 
 			IPACM_firewall_conf_t* curr_pdn_firewall_config =
 				get_curr_pdn_firewall_config(firewall_config, ipv4_to_iface[i].pIface->dev_name);
-			if (curr_pdn_firewall_config != NULL)
+			IPACMDBG_H("ipacm_socksv5_enable %d\n", IPACM_Iface::ipacmcfg->ipacm_socksv5_enable)
+			if (IPACM_Iface::ipacmcfg->ipacm_socksv5_enable == TRUE)
 			{
 				std::pair<IPACM_firewall_conf_t*, ipacm_ipv4_wan_iface*>* curr =
 					&offloaded_pdns_v4[offloaded_pdns_count_v4++];
-				curr->first = curr_pdn_firewall_config;
 				curr->second = &ipv4_to_iface[i];
 			}
 			else
 			{
-				IPACMERR("couldn't find pdn %s firewall config\n", ipv4_to_iface[i].pIface->dev_name);
+				if (curr_pdn_firewall_config != NULL)
+				{
+					std::pair<IPACM_firewall_conf_t*, ipacm_ipv4_wan_iface*>* curr =
+						&offloaded_pdns_v4[offloaded_pdns_count_v4++];
+					curr->first = curr_pdn_firewall_config;
+					curr->second = &ipv4_to_iface[i];
+				}
+				else
+				{
+					IPACMERR("couldn't find pdn %s firewall config\n", ipv4_to_iface[i].pIface->dev_name);
+				}
 			}
 		}
 	}
@@ -3475,29 +3544,31 @@ int IPACM_Wan::config_dft_firewall_rules_ex(struct ipa_flt_rule_add *rules, int 
 		original_num_rules = IPACM_Wan::num_v4_flt_rule;
 		IPACM_Wan::num_firewall_v4 = 0;
 /* only install ipv4 DL firewall on modem endpoint when UL_FIREWALL FR not there */
+		if (IPACM_Iface::ipacmcfg->ipacm_socksv5_enable != TRUE)
+		{
 #ifndef FEATURE_IPACM_UL_FIREWALL
 #ifdef FEATURE_VLAN_MPDN
-		/* firewall rules for all PDNs which are up */
-		for (uint32_t i = 0; i < offloaded_pdns_count_v4; ++i)
-		{
-			IPACM_Wan* curr_interface = offloaded_pdns_v4[i].second->pIface;
-			IPACMDBG_H("adding firewall rules for iface %s\n", curr_interface->dev_name);
-			res = add_firewall_rules_ex(*offloaded_pdns_v4[i].first, iptype, curr_interface->ext_prop->ext[0].mux_id,
-				curr_interface->rx_prop->rx[0].attrib, rules, IPA_MAX_FLT_RULE - offloaded_pdns_count_v4, pos);
+			/* firewall rules for all PDNs which are up */
+			for (uint32_t i = 0; i < offloaded_pdns_count_v4; ++i)
+			{
+				IPACM_Wan* curr_interface = offloaded_pdns_v4[i].second->pIface;
+				IPACMDBG_H("adding firewall rules for iface %s\n", curr_interface->dev_name);
+				res = add_firewall_rules_ex(*offloaded_pdns_v4[i].first, iptype, curr_interface->ext_prop->ext[0].mux_id,
+					curr_interface->rx_prop->rx[0].attrib, rules, IPA_MAX_FLT_RULE - offloaded_pdns_count_v4, pos);
+				if (res != IPACM_SUCCESS)
+				{
+					return res;
+				}
+			}
+#else
+			res = add_firewall_rules_ex(firewall_config, iptype, rx_prop->rx[0].attrib, rules, IPA_MAX_FLT_RULE - 1, pos);
 			if (res != IPACM_SUCCESS)
 			{
 				return res;
 			}
-		}
-#else
-		res = add_firewall_rules_ex(firewall_config, iptype, rx_prop->rx[0].attrib, rules, IPA_MAX_FLT_RULE - 1, pos);
-		if (res != IPACM_SUCCESS)
-		{
-			return res;
-		}
 #endif
 #endif //FEATURE_IPACM_UL_FIREWALL
-
+		}
 #ifdef FEATURE_VLAN_MPDN
 		/* default rule for all PDNs which are up */
 		for (uint32_t i = 0; i < offloaded_pdns_count_v4; ++i)
@@ -3540,7 +3611,7 @@ int IPACM_Wan::config_dft_firewall_rules_ex(struct ipa_flt_rule_add *rules, int 
 		for (uint32_t i = 0; i < offloaded_pdns_count_v6; ++i)
 		{
 			IPACM_Wan* curr_interface = offloaded_pdns_v6[i].second->pIface;
-			IPACMDBG_H("adding firewall rules for iface %s\n", curr_interface->dev_name);
+			IPACMDBG_H("adding firewall rules for iface %s ip-type %d\n", curr_interface->dev_name, iptype);
 			res = add_firewall_rules_ex(*offloaded_pdns_v6[i].first, iptype, curr_interface->ext_prop->ext[0].mux_id,
 				curr_interface->rx_prop->rx[0].attrib, rules, IPA_MAX_FLT_RULE - offloaded_pdns_count_v6, pos);
 			if (res != IPACM_SUCCESS)
@@ -3561,7 +3632,7 @@ int IPACM_Wan::config_dft_firewall_rules_ex(struct ipa_flt_rule_add *rules, int 
 		for (uint32_t i = 0; i < offloaded_pdns_count_v6; ++i)
 		{
 			IPACM_Wan* curr_interface = offloaded_pdns_v6[i].second->pIface;
-			IPACMDBG_H("adding default rule for iface %s\n", curr_interface->dev_name);
+			IPACMDBG_H("adding default rule for iface %s ip-type %d\n", curr_interface->dev_name, iptype);
 			res = add_catchup_all_filtering_rule_each_pdn(*offloaded_pdns_v6[i].first, iptype,
 				curr_interface->rx_prop->rx[0].attrib, rules[pos].flt_rule, pos);
 			if (res != IPACM_SUCCESS)
@@ -4009,7 +4080,7 @@ int IPACM_Wan::add_icmp_alg_rules(struct ipa_flt_rule_add *rules, int rule_offse
 			if(ipv4_to_iface[i].pIface &&
 				(ipv4_to_iface[i].wan_up_vlan || isDefaultGatewayIfaceUp(ipv4_to_iface[i].pIface)))
 			{
-				IPACMDBG_H("adding ICMP rule for IF %s \n", ipv4_to_iface[i].pIface->dev_name);
+				IPACMDBG_H("adding ICMP rule for IF %s ipv4\n", ipv4_to_iface[i].pIface->dev_name);
 				rules[rule_offset + i].mux_id = ipv4_to_iface[i].pIface->ext_prop->ext[0].mux_id;
 				memcpy(&(rules[rule_offset + i].flt_rule), &flt_rule_entry, sizeof(struct ipa_flt_rule_add));
 				IPACM_Wan::num_v4_flt_rule++;
@@ -4178,11 +4249,13 @@ int IPACM_Wan::config_wan_firewall_rule(ipa_ip_type iptype)
 	list<l2tp_client_info>::iterator it;
 	int res = IPACM_SUCCESS;
 
+#ifndef FEATURE_SOCKSv5
 	if(iptype == IPA_IP_v6 && IPACM_Iface::ipacmcfg->ipv6_nat_enable)
 	{
 		IPACMDBG_H("IPv6 NAT is enable. Don't configure firewall rule\n");
 		return IPACM_SUCCESS;
 	}
+#endif
 
 	IPACMDBG_H("Configure WAN DL firewall rules.\n");
 
@@ -5755,7 +5828,7 @@ int IPACM_Wan::handle_down_evt_ex()
 #endif
 			install_wan_filtering_rule(false);
 			handle_route_del_evt_ex(IPA_IP_v6);
-#ifdef FEATURE_IPA_ANDROID //sky
+#ifdef FEATURE_IPA_ANDROID
 			/* posting wan_down_tether for all lan clients */
 			for (i=0; i < IPACM_Wan::ipa_if_num_tether_v6_total; i++)
 			{
@@ -7826,6 +7899,14 @@ int IPACM_Wan::add_catchup_all_filtering_rule_each_pdn(const IPACM_firewall_conf
 	}
 	else if (iptype == IPA_IP_v6)
 	{
+		/* sky socksv5 */
+		if (IPACM_Iface::ipacmcfg->ipacm_socksv5_enable == TRUE)
+		{
+			/* remove meta data mask since we only install default flt rules once for all modem PDN on socksv5 2s-pass */
+			IPACMDBG_H("sky unmask meta_data. ipv6 \n");
+			flt_rule_entry.rule.attrib.attrib_mask &= ~((uint32_t)IPA_FLT_META_DATA);
+		}
+
 		num_firewall = &num_firewall_v6;
 		num_flt_rule = &num_v6_flt_rule;
 
@@ -7855,8 +7936,12 @@ int IPACM_Wan::add_catchup_all_filtering_rule_each_pdn(const IPACM_firewall_conf
 		}
 		else
 		{
+#ifndef FEATURE_SOCKSv5
 			flt_rule_entry.rule.action = IPACM_Iface::ipacmcfg->IsIpv6CTEnabled() ?
 				IPA_PASS_TO_DST_NAT : IPA_PASS_TO_ROUTING;
+#else
+			flt_rule_entry.rule.action = IPA_PASS_TO_ROUTING;
+#endif
 			rt_tbl_name = ipacmcfg->rt_tbl_wan_v6.name;
 		}
 	}

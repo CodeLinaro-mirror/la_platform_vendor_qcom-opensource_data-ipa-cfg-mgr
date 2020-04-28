@@ -76,13 +76,6 @@ extern "C"
 #define IPA_IF_SOCKSv5_NAME  "IPACM_SOCKSv5"
 
 #define IPA_MAX_IFACE_ENTRIES 20
-#ifdef FEATURE_VLAN_MPDN
-#define IPA_MAX_PRIVATE_SUBNET_ENTRIES 8
-#define IPA_MAX_MTU_ENTRIES 4
-#else
-#define IPA_MAX_PRIVATE_SUBNET_ENTRIES 3
-#define IPA_MAX_MTU_ENTRIES 1
-#endif
 #define IPA_MAX_ALG_ENTRIES 20
 #define IPA_MAX_RM_ENTRY 9
 
@@ -111,13 +104,6 @@ extern "C"
 #define TCP_FIN_SHIFT 16
 #define TCP_SYN_SHIFT 17
 #define TCP_RST_SHIFT 18
-#ifdef FEATURE_VLAN_MPDN
-/* support default PDN+3 VLAN PDNs */
-#define IPA_MAX_IPV6_PREFIX_FLT_RULE  4
-#else
-/* support only default PDN */
-#define IPA_MAX_IPV6_PREFIX_FLT_RULE  1
-#endif
 #define MAX_CMD_SIZE 100
 
 /* WAN IP address in IP Passthrough mode. */
@@ -143,10 +129,19 @@ extern "C"
 #define IPA_MAX_NUM_AMPDU_RULE  15
 #define IPA_MAC_ADDR_SIZE  6
 #define IPA_IPV6_ADDR_SIZE_IN_WORDS 4
-#define IPA_MAX_NUM_BRIDGES 8
+#define IPA_MAX_NUM_OFFLOAD_VLANS 14
+#define IPA_MAX_NUM_BRIDGES IPA_MAX_NUM_OFFLOAD_VLANS
 #define IPA_MAX_NUM_SW_PDNS 15
-#define IPA_MAX_NUM_HW_PDNS 4
-#define IPA_MAX_NUM_OFFLOAD_VLANS 8
+#define IPA_MAX_NUM_HW_PDNS (IPA_MAX_PDN_NUM - 1) /* currently 7 - 1 = 6 */
+#ifdef FEATURE_VLAN_MPDN
+#define IPA_MAX_PRIVATE_SUBNET_ENTRIES IPA_MAX_NUM_OFFLOAD_VLANS
+#define IPA_MAX_MTU_ENTRIES IPA_MAX_NUM_HW_PDNS
+#define IPA_MAX_IPV6_PREFIX_FLT_RULE IPA_MAX_NUM_HW_PDNS
+#else
+#define IPA_MAX_PRIVATE_SUBNET_ENTRIES 3
+#define IPA_MAX_IPV6_PREFIX_FLT_RULE  1
+#define IPA_MAX_MTU_ENTRIES 1
+#endif
 #define DEFAULT_MTU_SIZE 1500
 /*===========================================================================
 										 GLOBAL DEFINITIONS AND DECLARATIONS

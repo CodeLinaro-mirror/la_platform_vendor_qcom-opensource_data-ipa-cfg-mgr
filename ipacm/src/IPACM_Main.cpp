@@ -258,7 +258,9 @@ void* ipa_driver_msg_notifier(void *param)
 	ipacm_event_data_all* new_neigh_data;
 	ipa_ioc_gsb_info *event_gsb = NULL;
 	ipa_ioc_pdn_config *pdn_info = NULL;
-
+#ifdef ipa_ioc_mac_client_list_type
+	ipa_ioc_mac_client_list_type *event_mac_flt = NULL;
+#endif
 #ifdef FEATURE_SOCKSv5
 	ipa_socksv5_msg add_socksv5_info;
 	uint32_t del_socksv5_info;
@@ -903,8 +905,24 @@ void* ipa_driver_msg_notifier(void *param)
 
 			/* Update IP Passthrough config. */
 			IPACM_Iface::ipacmcfg->update_ip_ppasthrough_config(pdn_info);
-			continue;
+			break;
+#ifdef ipa_ioc_mac_client_list_type
+		case IPA_MAC_FLT_EVENT:
+			event_mac_flt = (ipa_ioc_mac_client_list_type *)(buffer + sizeof(struct ipa_msg_meta));
+			IPACMDBG_H("Received IPA_MAC_FLT_EVENT having flt state %d\n", event_mac_flt->flt_state);
 
+			IPACM_Iface::ipacmcfg->mac_flt_info(event_mac_flt);
+			IPACMDBG_H("map updated with current input \n");
+		        data_fid = (ipacm_event_data_fid *)malloc(sizeof(ipacm_event_data_fid));
+                        if(data_fid == NULL)
+                        {
+                                IPACMERR("unable to allocate memory for mac_flt_event\n");
+                                return NULL;
+                        }
+			evt_data.event = IPA_MAC_ADD_DEL_FLT_EVENT;
+			evt_data.evt_data = NULL;
+			break;
+#endif
 		default:
 			IPACMDBG_H("Unhandled message type: %d\n", event_hdr.msg_type);
 			continue;

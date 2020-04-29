@@ -49,6 +49,8 @@
 #else
 #include <list>
 #endif
+#include <map>
+#include<algorithm>
 
 typedef struct
 {
@@ -88,6 +90,19 @@ struct cnt_idx {
 	uint8_t counter_index;
 };
 #endif //IPA_HW_FNR_STATS
+
+/*use to keep track of blacklisted mac addrs
+ * @is_blacklist : true to blacklist , false to whitelist
+ * @mac_v4_rt_del_flt_set : true to represent v4 UL rule added rt/NAT rule deleted
+ * @mac_v6_rt_del_flt_set : true to represnet v6 UL rule added & rt deleted
+*/
+typedef struct {
+	bool is_blacklist;
+	bool mac_v4_rt_del_flt_set;
+	bool mac_v6_rt_del_flt_set;
+	uint32_t mac_v4_flt_rule_hdl;
+	uint32_t mac_v6_flt_rule_hdl;
+} mac_flt_type;
 
 /* iface */
 class IPACM_Config
@@ -209,7 +224,16 @@ public:
 	struct ipa_ioc_get_rt_tbl rt_tbl_odu_v4, rt_tbl_odu_v6;
 
 	bool isMCC_Mode;
-
+	pthread_mutex_t mac_flt_info_lock;
+	/* map to store whitelisted and blacklisted unique mac adrrs */
+	std::map<std::array<uint8_t, 6>, mac_flt_type *> mac_flt_lists;
+#ifdef ipa_ioc_mac_client_list_type
+	void mac_flt_info(ipa_ioc_mac_client_list_type *mac_flt_data);
+#endif
+	bool mac_addr_in_blacklist(uint8_t *mac_addr);
+	void clear_whitelist_mac_add(uint8_t *mac_addr);
+	std::map<std::array<uint8_t, 6>, mac_flt_type *> get_mac_flt_lists();
+	void update_mac_flt_lists(uint8_t *mac_addr, mac_flt_type *mac_flt_value);
 	/* To return the instance */
 	static IPACM_Config* GetInstance();
 

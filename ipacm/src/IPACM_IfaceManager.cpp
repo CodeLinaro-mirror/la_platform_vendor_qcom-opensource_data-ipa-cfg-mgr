@@ -268,6 +268,7 @@ int IPACM_IfaceManager::create_iface_instance(ipacm_ifacemgr_data *param)
 				IPACM_EvtDispatcher::registr(IPA_NEIGH_CLIENT_IP_ADDR_DEL_EVENT, lan);
 				IPACM_EvtDispatcher::registr(IPA_SW_ROUTING_ENABLE, lan);
 				IPACM_EvtDispatcher::registr(IPA_SW_ROUTING_DISABLE, lan);
+				IPACM_EvtDispatcher::registr(IPA_MAC_ADD_DEL_FLT_EVENT, lan);
 #ifdef FEATURE_IPA_ANDROID
 				IPACM_EvtDispatcher::registr(IPA_HANDLE_WAN_UP_TETHER, lan);
 				IPACM_EvtDispatcher::registr(IPA_HANDLE_WAN_UP_V6_TETHER, lan);
@@ -327,6 +328,7 @@ int IPACM_IfaceManager::create_iface_instance(ipacm_ifacemgr_data *param)
 				IPACM_EvtDispatcher::registr(IPA_HANDLE_WAN_DOWN_V6, ETH);
 				IPACM_EvtDispatcher::registr(IPA_CRADLE_WAN_MODE_SWITCH, ETH);
 				IPACM_EvtDispatcher::registr(IPA_LINK_DOWN_EVENT, ETH);
+				IPACM_EvtDispatcher::registr(IPA_MAC_ADD_DEL_FLT_EVENT, ETH);
 #ifdef FEATURE_IPACM_UL_FIREWALL
 				IPACM_EvtDispatcher::registr(IPA_FIREWALL_CHANGE_EVENT, ETH);			// register for Firewall change event
 #endif //FEATURE_IPACM_UL_FIREWALL
@@ -366,6 +368,7 @@ int IPACM_IfaceManager::create_iface_instance(ipacm_ifacemgr_data *param)
 					IPACM_EvtDispatcher::registr(IPA_HANDLE_WAN_DOWN_V6, odu);
 					IPACM_EvtDispatcher::registr(IPA_CRADLE_WAN_MODE_SWITCH, odu);
 					IPACM_EvtDispatcher::registr(IPA_LINK_DOWN_EVENT, odu);
+					IPACM_EvtDispatcher::registr(IPA_MAC_ADD_DEL_FLT_EVENT, odu);
 #ifdef FEATURE_VLAN_MPDN
 					IPACM_EvtDispatcher::registr(IPA_PREFIX_CHANGE_EVENT, odu);
 					IPACM_EvtDispatcher::registr(IPA_HANDLE_WAN_VLAN_PDN_UP, odu);
@@ -441,6 +444,7 @@ int IPACM_IfaceManager::create_iface_instance(ipacm_ifacemgr_data *param)
 				IPACM_EvtDispatcher::registr(IPA_NEIGH_CLIENT_IP_ADDR_ADD_EVENT, wl);
 				IPACM_EvtDispatcher::registr(IPA_SW_ROUTING_ENABLE, wl);
 				IPACM_EvtDispatcher::registr(IPA_SW_ROUTING_DISABLE, wl);
+				IPACM_EvtDispatcher::registr(IPA_MAC_ADD_DEL_FLT_EVENT, wl);
 #ifdef FEATURE_IPA_ANDROID
 				IPACM_EvtDispatcher::registr(IPA_HANDLE_WAN_UP_TETHER, wl);
 				IPACM_EvtDispatcher::registr(IPA_HANDLE_WAN_UP_V6_TETHER, wl);

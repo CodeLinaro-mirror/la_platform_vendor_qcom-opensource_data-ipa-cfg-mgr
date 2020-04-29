@@ -546,6 +546,9 @@ int IPACM_Config::Init(void)
 
 	memcpy(ipacm_ip_passthrough_mac, cfg->ip_passthrough_mac.ether_addr_octet, IPA_MAC_ADDR_SIZE);
 
+	ipacm_ip_passthrough_pdn_ip_addr = inet_network(IPACM_IP_PASSTHROUGH_WAN_IP);
+	IPACMDBG_H("Passthrough mode wan ipv4-addr:0x%x\n",ipacm_ip_passthrough_pdn_ip_addr);
+
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
 	if (!ipacm_lan_stats_enable_set)
 	{
@@ -1894,7 +1897,16 @@ void IPACM_Config::add_l2tp_vlan_mapping(ipa_ioc_l2tp_vlan_mapping_info *data)
 	strlcpy(new_mapping.vlan_iface_name, data->vlan_iface_name,
 		sizeof(new_mapping.vlan_iface_name));
 	new_mapping.l2tp_session_id = data->l2tp_session_id;
-
+#ifdef IPA_L2TP_TUNNEL_UDP
+	IPACMDBG_H("L2tp tunnel type %d: Source Port: %d Dest Port: %d \n",
+	data->tunnel_type, data->src_port, data->dst_port);
+	new_mapping.tunnel_type = data->tunnel_type;
+	if (new_mapping.tunnel_type == IPA_L2TP_TUNNEL_UDP)
+	{
+		new_mapping.src_port = data->src_port;
+		new_mapping.dst_port = data->dst_port;
+	}
+#endif
 	for(it_vlan = m_vlan_iface.begin(); it_vlan != m_vlan_iface.end(); it_vlan++)
 	{
 		if(strncmp(it_vlan->vlan_iface_name, data->vlan_iface_name, sizeof(it_vlan->vlan_iface_name)) == 0)
@@ -1981,3 +1993,38 @@ int IPACM_Config::get_vlan_l2tp_mapping(char *client_iface, l2tp_vlan_mapping_in
 	return IPACM_FAILURE;
 }
 #endif
+
+void IPACM_Config::update_ip_ppasthrough_config(ipa_ioc_pdn_config *pdn_config)
+{
+
+	if (pdn_config->enable)
+	{
+		IPACMDBG_H("Enable IP Passthrough: devic_type: %d, Nat config: %d and PDN IP: 0x%x!\n",
+			pdn_config->pdn_cfg_type, pdn_config->u.passthrough_cfg.skip_nat,
+			htonl(pdn_config->u.passthrough_cfg.pdn_ip_addr));
+		IPACMDBG_H("Received mac_addr MAC %02x:%02x:%02x:%02x:%02x:%02x\n",
+						 pdn_config->u.passthrough_cfg.client_mac_addr[0],
+						 pdn_config->u.passthrough_cfg.client_mac_addr[1],
+						 pdn_config->u.passthrough_cfg.client_mac_addr[2],
+						 pdn_config->u.passthrough_cfg.client_mac_addr[3],
+						 pdn_config->u.passthrough_cfg.client_mac_addr[4],
+						 pdn_config->u.passthrough_cfg.client_mac_addr[5]);
+		ipacm_ip_passthrough_mode = true;
+		ipacm_ip_passthrough_dev_type = pdn_config->u.passthrough_cfg.device_type;
+		memcpy(ipacm_ip_passthrough_mac, pdn_config->u.passthrough_cfg.client_mac_addr,
+			IPA_MAC_ADDR_SIZE);
+		ipacm_ip_passthrough_skip_nat = pdn_config->u.passthrough_cfg.skip_nat;
+		ipacm_ip_passthrough_pdn_ip_addr =  htonl(pdn_config->u.passthrough_cfg.pdn_ip_addr);
+	}
+	else
+	{
+		IPACMERR("Disable IP Passthrough\n");
+		/* Reset the configuration. */
+		ipacm_ip_passthrough_mode = false;
+		ipacm_ip_passthrough_skip_nat = false;
+		ipacm_ip_passthrough_dev_type = IPACM_CLIENT_DEVICE_MAX;
+		memset(ipacm_ip_passthrough_mac, 0,
+			IPA_MAC_ADDR_SIZE);
+		ipacm_ip_passthrough_pdn_ip_addr = 0;
+	}
+}

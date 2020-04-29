@@ -84,11 +84,15 @@ struct client_info
 	uint8_t vlan_id;
 };
 
+struct lt2p_flt_rule_hdl{
+	list<uint32_t> flt_rule_hdls;
+};
+
 struct flt_rule_info
 {
 	client_info *p_client;
 	uint32_t flt_rule_hdl[IPA_IP_MAX];
-	uint32_t l2tp_first_pass_flt_rule_hdl[IPA_IP_MAX];	/* L2TP filtering rules are destination MAC based */
+	struct lt2p_flt_rule_hdl l2tp_first_pass_flt_rule_hdl[IPA_IP_MAX];	/* L2TP filtering rules are destination MAC based */
 	uint32_t l2tp_second_pass_flt_rule_hdl;
 };
 
@@ -201,6 +205,8 @@ private:
 	void del_client_rt_rule(peer_iface_info *peer, client_info *client);
 
 	void add_l2tp_client_rt_rule(peer_iface_info *peer, client_info *client);
+
+	void add_l2tp_udp_client_rules_new_mapping(peer_iface_info *peer, l2tp_vlan_mapping_info *mapping_info);
 
 	void clear_all_flt_rule_for_one_peer_iface(peer_iface_info *peer);
 

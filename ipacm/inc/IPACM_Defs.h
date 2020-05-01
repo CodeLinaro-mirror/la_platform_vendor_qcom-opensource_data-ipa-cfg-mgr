@@ -144,6 +144,17 @@ extern "C"
 #endif
 #define DEFAULT_MTU_SIZE 1500
 #define IPA_L2TP_UDP_DEFAULT_MTU_SIZE 1422 /* 1500 - (IPv6(40) + UDP (8) + L2TP (16) + ETH (14)). */
+
+#ifdef FEATURE_VLAN_MPDN
+/* support default PDN+3 VLAN PDNs */
+/* all PDNs can be non_offload PDNs, but only 4 can be offloaded */
+#define IPA_MAX_IPV6_PREFIX_FLT_RULE IPA_MAX_NUM_HW_PDNS
+#define IPA_MAX_IPV6_NO_OFFLOAD_PREFIX_FLT_RULE IPA_MAX_NUM_SW_PDNS
+#else
+/* support only default PDN */
+#define IPA_MAX_IPV6_PREFIX_FLT_RULE 1
+#endif
+
 /*===========================================================================
 										 GLOBAL DEFINITIONS AND DECLARATIONS
 ===========================================================================*/

@@ -505,6 +505,7 @@ int IPACM_Wan::handle_addr_evt(ipacm_event_data_addr *data)
 
 				num_ipv6_modem_pdn++;
 				IPACMDBG_H("Now the number of modem ipv6 pdn is %d.\n", num_ipv6_modem_pdn);
+				IPACM_Iface::ipacmcfg->add_no_offload_ipv6_prefix(ipv6_to_iface[modem_ipv6_pdn_index].ipv6_prefix);
 			}
 #endif
 		}

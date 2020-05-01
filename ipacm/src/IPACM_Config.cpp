@@ -206,7 +206,9 @@ IPACM_Config::IPACM_Config()
 #endif //defined(FEATURE_SOCKSv5) && defined (IPA_SOCKV5_ADD)
 #ifdef FEATURE_VLAN_MPDN
 	num_ipv6_prefixes = 0;
+	num_no_offload_ipv6_prefix = 0;
 	memset(ipa_ipv6_prefixes, 0, sizeof(ipa_ipv6_prefixes));
+	memset(ipa_no_offload_ipv6_prefixes, 0, sizeof(ipa_no_offload_ipv6_prefixes));
 	memset(vlan_bridges, 0, IPA_MAX_NUM_BRIDGES * sizeof(vlan_bridges[0]));
 	memset(vlan_devices, 0, IPA_VLAN_IF_MAX * sizeof(vlan_devices[0]));
 	memset(ip_pass_mpdn_table, 0, sizeof(ip_pass_mpdn_table));

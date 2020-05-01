@@ -500,6 +500,7 @@ int IPACM_Wan::handle_addr_evt(ipacm_event_data_addr *data)
 			{
 				memcpy(ipv6_to_iface[modem_ipv6_pdn_index].ipv6_prefix, data->ipv6_addr, sizeof(uint32_t) * 2);
 				ipv6_to_iface[modem_ipv6_pdn_index].pIface = this;
+				IPACM_Iface::ipacmcfg->add_no_offload_ipv6_prefix(ipv6_to_iface[modem_ipv6_pdn_index].ipv6_prefix);
 			}
 #endif
 		}

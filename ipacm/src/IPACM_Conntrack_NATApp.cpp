@@ -224,7 +224,7 @@ int NatApp::AddPdn(uint32_t pub_ip, uint8_t mux_id, bool is_sta)
 	{
 		if((cache[cnt].private_ip != 0)
 			/* flush only entries which are related to this PDN */
-			&& (cache[cnt].public_ip == pub_ip))
+			&& (cache[cnt].public_ip == pub_ip) && (cache[cnt].enabled == false))
 		{
 			if(is_sta && (isAlgPort(cache[cnt].protocol, cache[cnt].private_port) ||
 				isAlgPort(cache[cnt].protocol, cache[cnt].target_port))) {
@@ -472,10 +472,12 @@ bool NatApp::ChkForDup(const nat_table_entry *rule)
 			 cache[cnt].target_ip == rule->target_ip &&
 			 cache[cnt].private_port ==  rule->private_port  &&
 			 cache[cnt].target_port == rule->target_port &&
-			 cache[cnt].protocol == rule->protocol)
+			 cache[cnt].protocol == rule->protocol  &&
+			 cache[cnt].dst_only == rule->dst_only  &&
+			 cache[cnt].src_only == rule->src_only)
 		{
 			log_nat(rule->protocol,rule->private_ip,rule->target_ip,rule->private_port,\
-			rule->target_port,"Duplicate Rule\n");
+			rule->public_port,rule->target_port,rule->src_only,rule->dst_only,"Duplicate Rule\n");
 			return true;
 		}
 	}
@@ -490,7 +492,7 @@ int NatApp::DeleteEntry(const nat_table_entry *rule)
 	IPACMDBG("%s() %d\n", __FUNCTION__, __LINE__);
 
 	log_nat(rule->protocol,rule->private_ip,rule->target_ip,rule->private_port,\
-	rule->target_port,"for deletion\n");
+	rule->public_port,rule->target_port,rule->src_only,rule->dst_only,"for deletion\n");
 
 
 	for(; cnt < max_entries; cnt++)
@@ -499,11 +501,15 @@ int NatApp::DeleteEntry(const nat_table_entry *rule)
 			 cache[cnt].target_ip == rule->target_ip &&
 			 cache[cnt].private_port ==  rule->private_port  &&
 			 cache[cnt].target_port == rule->target_port &&
-			 cache[cnt].protocol == rule->protocol)
+			 cache[cnt].protocol == rule->protocol &&
+			 cache[cnt].dst_only == rule->dst_only &&
+			 cache[cnt].src_only == rule->src_only)
 		{
 
 			if(cache[cnt].enabled == true)
 			{
+				log_nat(cache[cnt].protocol,cache[cnt].private_ip,cache[cnt].target_ip,cache[cnt].private_port,\
+					cache[cnt].public_port,cache[cnt].target_port,cache[cnt].src_only,cache[cnt].dst_only,"for deletion\n");
 				if(ipa_nat_del_ipv4_rule(nat_table_hdl, cache[cnt].rule_hdl) < 0)
 				{
 					IPACMERR("%s() %d deletion failed\n", __FUNCTION__, __LINE__);
@@ -541,7 +547,7 @@ int NatApp::AddEntry(const nat_table_entry *rule, bool isVlan)
 
 	CHK_TBL_HDL();
 	log_nat(rule->protocol,rule->private_ip,rule->target_ip,rule->private_port,\
-	rule->public_port,"for addition\n");
+	rule->public_port,rule->target_port,rule->src_only,rule->dst_only,"for addition\n");
 
 	if(rule->private_ip == 0 ||
 		 rule->target_ip == 0 ||
@@ -581,6 +587,7 @@ int NatApp::AddEntry(const nat_table_entry *rule, bool isVlan)
 				 cache[cnt].target_port == 0 &&
 				 cache[cnt].protocol == 0)
 			{
+				IPACMDBG_H("found free cache entry %d\n", cnt);
 				break;
 			}
 		}
@@ -604,6 +611,8 @@ int NatApp::AddEntry(const nat_table_entry *rule, bool isVlan)
 			nat_rule.uc_activation_index = rule->uc_activation_index;
 			nat_rule.ucp = rule->ucp;
 			nat_rule.s = rule->s;
+			nat_rule.dst_only = rule->dst_only;
+			nat_rule.src_only = rule->src_only;
 		}
 #ifdef FEATURE_VLAN_MPDN
 			nat_rule.pdn_index = pdn_index;
@@ -631,13 +640,12 @@ int NatApp::AddEntry(const nat_table_entry *rule, bool isVlan)
 			}
 			else
 			{
-
 				if(ipa_nat_add_ipv4_rule(nat_table_hdl, &nat_rule, &cache[cnt].rule_hdl) < 0)
 				{
 					IPACMERR("unable to add the rule\n");
 					return -1;
 				}
-
+				IPACMDBG_H("cache entry %d rule handle %d\n", cnt, cache[cnt].rule_hdl);
 				cache[cnt].enabled = true;
 			}
 
@@ -651,9 +659,11 @@ int NatApp::AddEntry(const nat_table_entry *rule, bool isVlan)
 			cache[cnt].dst_nat = rule->dst_nat;
 
 		if(IPACM_Iface::ipacmcfg->GetIPAVer() >= IPA_HW_v4_5) {
-			cache[cnt].uc_activation_index = rule->uc_activation_index;
+			cache[cnt].uc_activation_index = (uint16_t) rule->uc_activation_index;
 			cache[cnt].ucp = rule->ucp;
 			cache[cnt].s = rule->s;
+			cache[cnt].dst_only = rule->dst_only;
+			cache[cnt].src_only = rule->src_only;
 		}
 #ifdef FEATURE_VLAN_MPDN
 			cache[cnt].pdn_index = pdn_index;
@@ -671,7 +681,7 @@ int NatApp::AddEntry(const nat_table_entry *rule, bool isVlan)
 
 	if(cache[cnt].enabled == true)
 	{
-		IPACMDBG_H("Added rule(%d) successfully\n", cnt);
+		IPACMDBG_H("Added rule(%d) successfully handle (%d)\n", cnt, cache[cnt].rule_hdl);
 	}
   else
   {
@@ -960,6 +970,8 @@ int NatApp::ResetPwrSaveIf(uint32_t client_lan_ip)
 				curCnt--;
 				continue;
 			}
+
+			IPACMDBG_H("cache entry %d rule handle %d\n", cnt, cache[cnt].rule_hdl);
 			cache[cnt].enabled = true;
 
 			IPACMDBG("On power reset added below rule successfully\n");
@@ -1514,7 +1526,7 @@ NatEntryBase::NatEntryBase(ipa_ip_type type) :
 	m_enabled(false),
 	m_isDummy(false)
 {
-	IPACMDBG_H("\n");
+	IPACMDBG_H("%d \n", type);
 }
 
 NatEntryBase::~NatEntryBase()
@@ -1709,7 +1721,7 @@ const IpAddress& Ipv6ctEntry::GetTargetIp() const
 
 CollectionBase::CollectionBase(int max_entries) : m_maxEntries(max_entries)
 {
-	IPACMDBG_H("\n");
+	IPACMDBG_H("max_entries %d\n", max_entries);
 }
 
 CollectionBase::~CollectionBase()
@@ -2103,6 +2115,7 @@ int NatBase::AddTable(const IpAddress& wan_ip)
 		IPACMERR("unable to create the table Error:%d\n", ret);
 		return ret;
 	}
+#ifndef FEATURE_SOCKSv5
 	/* Add back the cached NAT-entry */
 	if (wan_ip == m_previousWanAddress)
 	{
@@ -2123,6 +2136,7 @@ int NatBase::AddTable(const IpAddress& wan_ip)
 			}
 		}
 	}
+#endif
 
 	IPACMDBG_H("return\n");
 	return 0;
@@ -2147,6 +2161,19 @@ int NatBase::DeleteTable(const IpAddress& wan_addr)
 int NatBase::AddEntry(const NatEntryBase& entry)
 {
 	IPACMDBG_H("\n");
+#ifdef FEATURE_SOCKSv5
+	Ipv6ctEntry new_entry;
+
+	memcpy(&new_entry, &entry, sizeof(Ipv6ctEntry));
+
+	if (m_proxy.AddEntry(new_entry))
+	{
+		IPACMERR("unable to add the v6-ct entry\n");
+		return -EPERM;
+	}
+	IPACMDBG_H("Added entry successfully handle (%d)\n", new_entry.m_ruleHandle);
+	socksv5_v6_conn.push_front(new_entry);
+#else
 	entry.DebugDump("The new entry to add");
 
 	if (!entry.Valid())
@@ -2184,7 +2211,8 @@ int NatBase::AddEntry(const NatEntryBase& entry)
 		}
 		IPACMDBG_H("Added entry successfully\n");
 	}
-
+#endif
+	IPACMDBG_H("\n");
 	++m_curCnt;
 	IPACMDBG_H("return\n");
 	return 0;
@@ -2193,6 +2221,41 @@ int NatBase::AddEntry(const NatEntryBase& entry)
 void NatBase::DeleteEntry(const NatEntryBase& entry)
 {
 	IPACMDBG_H("\n");
+#ifdef FEATURE_SOCKSv5
+	Ipv6ctEntry new_entry;
+	list<Ipv6ctEntry>::iterator it_mapping;
+
+	memcpy(&new_entry, &entry, sizeof(Ipv6ctEntry));
+
+	/* find the entry and clean up*/
+	for(it_mapping = socksv5_v6_conn.begin(); it_mapping != socksv5_v6_conn.end(); it_mapping++)
+	{
+		if((it_mapping->m_srcAddr == new_entry.m_srcAddr) && (it_mapping->m_dstAddr == new_entry.m_dstAddr) &&
+			(it_mapping->m_srcPort == new_entry.m_srcPort) && (it_mapping->m_dstPort == new_entry.m_dstPort) &&
+			(it_mapping->m_protocol == new_entry.m_protocol))
+		{
+			new_entry.m_ruleHandle = it_mapping->m_ruleHandle;
+			IPACMDBG_H("Found the matched handle (%d)\n",
+				new_entry.m_ruleHandle);
+
+			if (m_proxy.DelEntry(new_entry))
+			{
+				IPACMERR("unable to delete the v6-ct entry\n");
+				return;
+			}
+			IPACMDBG_H("Deleted entry successfully\n");
+
+			/* delete the entry */
+			socksv5_v6_conn.erase(it_mapping);
+			break;
+		}
+	}
+
+	if (it_mapping == socksv5_v6_conn.end())
+	{
+		IPACMERR("Can't find the matched socksv5_v6_conn!\n");
+	}
+#else
 	entry.DebugDump("The entry to delete");
 
 	NatEntryBase* entryDelete = m_cache.Find(entry);
@@ -2214,6 +2277,7 @@ void NatBase::DeleteEntry(const NatEntryBase& entry)
 		}
 	}
 	entryDelete->Clear();
+#endif
 	--m_curCnt;
 
 	IPACMDBG_H("return\n");

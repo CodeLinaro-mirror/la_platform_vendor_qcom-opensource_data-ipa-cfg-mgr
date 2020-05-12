@@ -91,7 +91,7 @@ private:
 	bool WanUp_v6;
 	bool is_acct_enabled;
 	NatApp *nat_inst;
-	NatBase* const ipv6ct_inst;
+	NatBase* ipv6ct_inst;
 
 	int NatIfaceCnt;
 	int StaClntCnt;
@@ -115,6 +115,10 @@ private:
 
 	void ProcessCTMessage(void *);
 	void ProcessCTMessage_v6(const ipacm_ct_evt_data* evt_data, const NatEntryBase& entry);
+#if defined(FEATURE_SOCKSv5) && defined (IPA_SOCKV5_EVENT_MAX)
+	void ProcessSocksv5Conn(ipa_socksv5_msg *socksv5_info, bool is_add);
+	void PostRouteAddVlanPdn(uint32_t public_ip);
+#endif //defined(FEATURE_SOCKSv5) && defined (IPA_SOCKV5_EVENT_MAX)
 	void ProcessTCPorUDPMsg(struct nf_conntrack *,
 		enum nf_conntrack_msg_type, u_int8_t);
 	void ProcessTCPorUDPMsg_v6(const ipacm_ct_evt_data* evt_data, const NatEntryBase& entry);

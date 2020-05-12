@@ -147,11 +147,13 @@ struct ipa_nat_rule {
 	-----------------------------------------------------
 	|     4 bits      |     1 bit      |     3 bits     |
 	-----------------------------------------------------
-	|  PDN index      |  uC processing |     Reserved   |
-	|      [7:4]      |       [3]      |      [2:0]     |
+	|  PDN index      |  uC processing |  src dst Rsrv3 |
+	|      [7:4]      |       [3]      |  [2] [1]  [0]  |
 	-----------------------------------------------------
 	-------------------------------------------*/
-	uint64_t rsvd3:3;
+	uint64_t rsvd3:1;
+	uint64_t dst_only:1;
+	uint64_t src_only:1;
 	uint64_t ucp:1;
 	uint64_t pdn_index:4;
 

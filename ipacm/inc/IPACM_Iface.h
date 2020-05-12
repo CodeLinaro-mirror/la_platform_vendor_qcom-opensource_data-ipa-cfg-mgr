@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013-2016, 2018 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2013-2016, 2018, 2020 The Linux Foundation. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -58,7 +58,7 @@
 #define MAX_DEFAULT_v6_ROUTE_RULES  2
 #define IPV4_DEFAULT_FILTERTING_RULES 3
 
-#ifdef FEATURE_IPA_ANDROID
+#if defined(FEATURE_IPA_ANDROID) || defined(FEATURE_SOCKSv5)
 #define IPV6_DEFAULT_FILTERTING_RULES 8
 #else
 #define IPV6_DEFAULT_FILTERTING_RULES 5
@@ -121,7 +121,8 @@ public:
 	static int iface_ipa_index_query(int interface_index);
 
 	/* Query ipa_interface ipv4_addr by given linux interface_index */
-	static void iface_addr_query(int interface_index);
+	static void iface_addr_query(int interface_index, bool post_new_addr_event = true,
+		uint32_t *curr_ip4_addr = 0);
 
 	/*Query the IPA endpoint property */
 	int query_iface_property(void);

@@ -140,7 +140,9 @@ const char *ipacm_event_name[] = {
 	__stringify(IPA_DEL_SOCKSv5_CONN),                     /* ipa_socksv5_msg */
 #endif
 	__stringify(IPA_MAC_ADD_DEL_FLT_EVENT),                /* ipacm_event_data_mac */
-	__stringify(IPACM_EVENT_MAX),
+	__stringify(IPA_IP_PASS_UPDATE_EVENT),          /* ipacm_ip_pass_pdn_info */
+	__stringify(IPA_HANDLE_IP_PASS_PDN_INFO_UPDATE_EVENT),         /* Handle PDN info update.*/
+	__stringify(IPACM_EVENT_MAX)
 };
 
 IPACM_Config::IPACM_Config()
@@ -179,7 +181,6 @@ IPACM_Config::IPACM_Config()
 	ipacm_l2tp_enable = 0;
 	ipacm_mpdn_enable = TRUE;   /* default setting as mpdn enable/l2tp disable */
 	ipacm_socksv5_enable = false;
-	ipacm_ip_passthrough_mode = false;
 
 	memset(&rt_tbl_default_v4, 0, sizeof(rt_tbl_default_v4));
 	memset(&rt_tbl_lan_v4, 0, sizeof(rt_tbl_lan_v4));
@@ -206,9 +207,8 @@ IPACM_Config::IPACM_Config()
 	memset(ipa_ipv6_prefixes, 0, sizeof(ipa_ipv6_prefixes));
 	memset(vlan_bridges, 0, IPA_MAX_NUM_BRIDGES * sizeof(vlan_bridges[0]));
 	memset(vlan_devices, 0, IPA_VLAN_IF_MAX * sizeof(vlan_devices[0]));
-	memset(ipacm_ip_passthrough_mac, 0, IPA_MAC_ADDR_SIZE);
-
-	ipacm_ip_passthrough_pdn_ip_addr = inet_network(IPACM_IP_PASSTHROUGH_WAN_IP);
+	memset(ip_pass_mpdn_table, 0, sizeof(ip_pass_mpdn_table));
+	pthread_mutex_init(&ip_pass_mpdn_lock, NULL);
 #endif
 #if defined(FEATURE_L2TP) || defined(FEATURE_VLAN_MPDN)
 	pthread_mutex_init(&vlan_l2tp_lock, NULL);
@@ -556,6 +556,7 @@ int IPACM_Config::Init(void)
 	IPACMDBG_H("ipacm_odu_enable %d\n", ipacm_odu_enable);
 	IPACMDBG_H("ipacm_odu_mode %d\n", ipacm_odu_router_mode);
 	IPACMDBG_H("ipacm_odu_embms_enable %d\n", ipacm_odu_embms_enable);
+
 
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
 	if (!ipacm_lan_stats_enable_set)
@@ -2008,39 +2009,60 @@ int IPACM_Config::get_vlan_l2tp_mapping(char *client_iface, l2tp_vlan_mapping_in
 }
 #endif
 
-void IPACM_Config::update_ip_ppasthrough_config(ipa_ioc_pdn_config *pdn_config)
+void IPACM_Config::ip_pass_config_update(ipa_ioc_pdn_config *pdn_config)
 {
+	int indx;
+
+	if(pthread_mutex_lock(&ip_pass_mpdn_lock) != 0)
+	{
+		IPACMERR("Unable to lock the mutex\n");
+		return;
+	}
 
 	if (pdn_config->enable)
 	{
-		IPACMDBG_H("Enable IP Passthrough: devic_type: %d, Nat config: %d and PDN IP: 0x%x!\n",
-			pdn_config->pdn_cfg_type, pdn_config->u.passthrough_cfg.skip_nat,
-			htonl(pdn_config->u.passthrough_cfg.pdn_ip_addr));
-		IPACMDBG_H("Received mac_addr MAC %02x:%02x:%02x:%02x:%02x:%02x\n",
-						 pdn_config->u.passthrough_cfg.client_mac_addr[0],
-						 pdn_config->u.passthrough_cfg.client_mac_addr[1],
-						 pdn_config->u.passthrough_cfg.client_mac_addr[2],
-						 pdn_config->u.passthrough_cfg.client_mac_addr[3],
-						 pdn_config->u.passthrough_cfg.client_mac_addr[4],
-						 pdn_config->u.passthrough_cfg.client_mac_addr[5]);
-		ipacm_ip_passthrough_mode = true;
-		ipacm_ip_passthrough_dev_type = pdn_config->u.passthrough_cfg.device_type;
-		memcpy(ipacm_ip_passthrough_mac, pdn_config->u.passthrough_cfg.client_mac_addr,
-			IPA_MAC_ADDR_SIZE);
-		ipacm_ip_passthrough_skip_nat = pdn_config->u.passthrough_cfg.skip_nat;
-		ipacm_ip_passthrough_pdn_ip_addr =  htonl(pdn_config->u.passthrough_cfg.pdn_ip_addr);
+		indx = get_free_ip_pass_pdn_index(pdn_config->dev_name);
+		if (indx < MAX_NUM_IP_PASS_MPDN)
+		{
+			IPACMDBG_H("Enable IP Passthrough: table index %d\n", indx);
+			ip_pass_mpdn_table[indx].valid_entry = true;
+			memcpy(ip_pass_mpdn_table[indx].ip_pass_mac,
+				pdn_config->u.passthrough_cfg.client_mac_addr, IPA_MAC_ADDR_SIZE);
+			ip_pass_mpdn_table[indx].ip_pass_dev_type =
+				pdn_config->u.passthrough_cfg.device_type;
+			ip_pass_mpdn_table[indx].ip_pass_skip_nat =
+				pdn_config->u.passthrough_cfg.skip_nat;
+			ip_pass_mpdn_table[indx].ip_pass_pdn_ip_addr =
+				htonl(pdn_config->u.passthrough_cfg.pdn_ip_addr);
+			ip_pass_mpdn_table[indx].vlan_id = pdn_config->u.passthrough_cfg.vlan_id;
+			strlcpy(ip_pass_mpdn_table[indx].dev_name,
+			pdn_config->dev_name, IPA_RESOURCE_NAME_MAX);
+		}
+		else
+			IPACMERR("IP Passthrough supports only 15 PDNs\n");
 	}
 	else
 	{
-		IPACMERR("Disable IP Passthrough\n");
-		/* Reset the configuration. */
-		ipacm_ip_passthrough_mode = false;
-		ipacm_ip_passthrough_skip_nat = false;
-		ipacm_ip_passthrough_dev_type = IPACM_CLIENT_DEVICE_MAX;
-		memset(ipacm_ip_passthrough_mac, 0,
-			IPA_MAC_ADDR_SIZE);
-		ipacm_ip_passthrough_pdn_ip_addr = 0;
+		indx = get_ip_pass_pdn_index(pdn_config);
+		if (indx < MAX_NUM_IP_PASS_MPDN)
+		{
+			/* Reset the configuration */
+			IPACMDBG_H("Reset IP Passthrough config: table index: %d devic_type: %d and PDN IP: 0x%x!\n",
+				indx, pdn_config->pdn_cfg_type, htonl(pdn_config->u.passthrough_cfg.pdn_ip_addr));
+			ip_pass_mpdn_table[indx].valid_entry = false;
+			ip_pass_mpdn_table[indx].ip_pass_skip_nat = false;
+			ip_pass_mpdn_table[indx].ip_pass_dev_type =
+				IPACM_CLIENT_DEVICE_MAX;
+			memset(ip_pass_mpdn_table[indx].ip_pass_mac, 0, IPA_MAC_ADDR_SIZE);
+			ip_pass_mpdn_table[indx].vlan_id = 0;
+			ip_pass_mpdn_table[indx].ip_pass_pdn_ip_addr = false;
+			memset(ip_pass_mpdn_table[indx].dev_name, 0, IPA_RESOURCE_NAME_MAX);
+		}
+		else
+			IPACMERR("IP Passthrough PDN not found\n");
 	}
+
+	pthread_mutex_unlock(&ip_pass_mpdn_lock);
 }
 
 #if defined(FEATURE_SOCKSv5) && defined (IPA_SOCKV5_EVENT_MAX)
@@ -2519,4 +2541,3 @@ void IPACM_Config::update_mac_flt_lists(uint8_t * mac_addr , mac_flt_type *mac_f
 	pthread_mutex_unlock(&mac_flt_info_lock);
 	return;
 }
-

@@ -86,6 +86,9 @@ public:
 	/* IPACM interface name */
 	char dev_name[IF_NAME_LEN];
 
+	/* IPACM Device type. */
+	ipacm_per_client_device_type device_type;
+
 	/* IPACM interface iptype v4, v6 or both */
 	ipa_ip_type ip_type;
 

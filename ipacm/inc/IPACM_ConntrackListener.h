@@ -78,6 +78,9 @@ typedef struct _nat_pdn_entry
 {
 	uint32_t public_ip;
 	uint8_t vlan_id;
+	uint8_t ip_pass_enable;
+	uint32_t ip_pass_dummy_ip;
+	uint8_t ip_pass_skip_nat;
 }nat_pdn_entry;
 #endif
 
@@ -88,6 +91,9 @@ private:
 	bool isCTReg;
 	bool isNatThreadStart;
 	bool WanUp;
+	uint8_t ip_pass_enable_default_pdn;
+	uint32_t ip_pass_dummy_ip_default_pdn;
+	uint8_t ip_pass_skip_nat_default_pdn;
 	bool WanUp_v6;
 	bool is_acct_enabled;
 	NatApp *nat_inst;
@@ -132,7 +138,8 @@ private:
 	void TriggerWANDown(uint32_t);
 	void TriggerWANDown_v6(const IpAddress& wan_addr);
 	int  CreateNatThreads(void);
-	bool AddIface(nat_table_entry *, bool *);
+	bool AddIface(nat_table_entry *, bool *, bool IsVlanUp,
+  		 uint8_t ip_pass_enable, uint32_t ip_pass_dummy_ip, uint8_t ip_pass_skip_nat);
 	int AddORDeleteNatEntry(const nat_entry_bundle *, bool *sendVlanEvent);
 	void AddORDeleteNatEntry_v6(const ipacm_ct_evt_data* evt_data, const NatEntryBase& entry, bool isTempEntry);
 	void PopulateTCPorUDPEntry(struct nf_conntrack *, uint32_t, nat_table_entry *);
@@ -175,6 +182,7 @@ public:
 	void HandleSTAClientDelEvt(uint32_t);
 	void HandleSTAClientDelEvt_v6(const IpAddress& ip);
 	void ReadNfConntrackAcct();
+	void HandleIPPassPDNInfoUpdate(void *in_param);
 #ifdef FEATURE_VLAN_MPDN
 	bool IsVlanIPv4(uint32_t ipv4_address, uint8_t *VlanId);
 #endif

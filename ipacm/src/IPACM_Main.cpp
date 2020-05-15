@@ -322,6 +322,7 @@ void* ipa_driver_msg_notifier(void *param)
 	ipa_get_data_stats_resp_msg_v01 *data_tethering_stats = NULL;
 	ipa_get_apn_data_stats_resp_msg_v01 *data_network_stats = NULL;
 	ipacm_event_data_addr *data_addr = NULL;
+	ipacm_event_ip_pass_pdn_info *ip_pass_pdn_data;
 
 #if defined(FEATURE_L2TP) || defined(FEATURE_VLAN_MPDN)
 	ipa_vlan_iface_info vlan_info;
@@ -983,12 +984,33 @@ void* ipa_driver_msg_notifier(void *param)
 
 		case IPA_PDN_IP_PASSTHROUGH_MODE_CONFIG:
 			pdn_info = (ipa_ioc_pdn_config *)(buffer + sizeof(struct ipa_msg_meta));
-			IPACMDBG_H("Received IPA_PDN_IP_PASSTHROUGH_MODE_CONFIG name: %s, type: %d, enable: %d\n",
-				pdn_info->dev_name, pdn_info->pdn_cfg_type, pdn_info->enable);
+			IPACMDBG_H("Received IPA_PDN_IP_PASSTHROUGH_MODE_CONFIG name: %s, type: %d, enable: %d, VLAN ID: %d, Nat config: %d and PDN IP: 0x%x!\n",
+				pdn_info->dev_name, pdn_info->pdn_cfg_type, pdn_info->enable, pdn_info->u.passthrough_cfg.vlan_id,
+				pdn_info->u.passthrough_cfg.skip_nat, htonl(pdn_info->u.passthrough_cfg.pdn_ip_addr));
+			IPACMDBG_H("Received mac_addr MAC %02x:%02x:%02x:%02x:%02x:%02x\n",
+							 pdn_info->u.passthrough_cfg.client_mac_addr[0],
+							 pdn_info->u.passthrough_cfg.client_mac_addr[1],
+							 pdn_info->u.passthrough_cfg.client_mac_addr[2],
+							 pdn_info->u.passthrough_cfg.client_mac_addr[3],
+							 pdn_info->u.passthrough_cfg.client_mac_addr[4],
+							 pdn_info->u.passthrough_cfg.client_mac_addr[5]);
 
 			/* Update IP Passthrough config. */
-			IPACM_Iface::ipacmcfg->update_ip_ppasthrough_config(pdn_info);
-			continue;
+			IPACM_Iface::ipacmcfg->ip_pass_config_update(pdn_info);
+			evt_data.event = IPA_IP_PASS_UPDATE_EVENT;
+			ip_pass_pdn_data = (ipacm_event_ip_pass_pdn_info *)malloc(sizeof(ipacm_event_ip_pass_pdn_info));
+			if(!ip_pass_pdn_data)
+			{
+				IPACMERR("unable to allocate memory for pdn_config\n");
+				return NULL;
+			}
+			ip_pass_pdn_data->skip_nat = pdn_info->u.passthrough_cfg.skip_nat;
+			ip_pass_pdn_data->pdn_ip_addr = htonl(pdn_info->u.passthrough_cfg.pdn_ip_addr);
+			ip_pass_pdn_data->VlanID = pdn_info->u.passthrough_cfg.vlan_id;
+			ip_pass_pdn_data->enable = pdn_info->enable;
+			evt_data.evt_data = ip_pass_pdn_data;
+			ipa_get_if_index(pdn_info->dev_name, &(ip_pass_pdn_data->if_index));
+			break;
 
 		default:
 			IPACMDBG_H("Unhandled message type: %d\n", event_hdr.msg_type);

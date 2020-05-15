@@ -235,7 +235,25 @@ IPACM_Lan::IPACM_Lan(int iface_index) : IPACM_Iface(iface_index)
 		else
 			is_odu = false;
 	}
-	IPACMDBG_H ("Is ODU client? %s\n", is_odu?"Yes":"No");
+
+	/* Update the device type. */
+	if (ipa_if_cate == LAN_IF)
+	{
+		device_type = IPACM_CLIENT_DEVICE_TYPE_USB;
+	}
+	else if (ipa_if_cate == ODU_IF && is_odu)
+	{
+		device_type = IPACM_CLIENT_DEVICE_TYPE_ODU;
+	}
+	else if (ipa_if_cate == ODU_IF || ipa_if_cate == ETH_IF)
+	{
+		device_type = IPACM_CLIENT_DEVICE_TYPE_ETH;
+	}
+	else
+		IPACMERR ("Invalid iface category %d\n", ipa_if_cate);
+
+
+	IPACMDBG_H ("Device type %d\n", device_type);
 
 	for (i = 0; i < IPA_MAX_NUM_HW_PATH_CLIENTS; i++)
 	{
@@ -4719,24 +4737,14 @@ int IPACM_Lan::handle_eth_client_ipaddr(ipacm_event_data_all *data)
 		IPACMDBG_H("ipv4 address: 0x%x\n", data->ipv4_addr);
 		if (data->ipv4_addr != 0) /* not 0.0.0.0 */
 		{
-			/* Special handling for Passthrough IP. */
-			if (IPACM_Iface::ipacmcfg->ipacm_ip_passthrough_mode)
+			if (IPACM_Iface::ipacmcfg->is_ip_pass_enabled(device_type,
+				data->mac_addr, vlan_id))
 			{
-				/* if the MAC matches or RNDIS/ECM, then IP should not be private subnet. */
-				if (!memcmp(data->mac_addr, IPACM_Iface::ipacmcfg->ipacm_ip_passthrough_mac,
-					IPA_MAC_ADDR_SIZE))
+
+				/* check if the ip is in private subnet and ignore. */
+				if (IPACM_Iface::ipacmcfg->isPrivateSubnet(data->ipv4_addr))
 				{
-					/* check if the ip is in private subnet and ignore. */
-					if (IPACM_Iface::ipacmcfg->isPrivateSubnet(data->ipv4_addr))
-					{
-						IPACMDBG_H("Client is in IP passthrough mode, but got private IP: 0x%x\n", data->ipv4_addr);
-						return IPACM_FAILURE;
-					}
-				}
-				/* Check if the IP is not in private subnet and ignore. */
-				else if (!IPACM_Iface::ipacmcfg->isPrivateSubnet(data->ipv4_addr))
-				{
-					IPACMDBG_H("Client is not in IP passthrough mode, but got public IP: 0x%x\n", data->ipv4_addr);
+					IPACMDBG_H("Client is in IP passthrough mode, but got private IP: 0x%x\n", data->ipv4_addr);
 					return IPACM_FAILURE;
 				}
 			}

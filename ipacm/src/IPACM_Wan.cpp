@@ -215,6 +215,7 @@ IPACM_Wan::IPACM_Wan(int iface_index,
 	ext_prop = NULL;
 	is_ipv6_frag_firewall_flt_rule_installed = false;
 	mtu_size = DEFAULT_MTU_SIZE;
+	memset(&ip_pass_pdn_info, 0 ,sizeof(ip_pass_pdn_info));
 
 #ifdef FEATURE_IPACM_UL_FIREWALL
 #ifdef FEATURE_VLAN_MPDN
@@ -800,13 +801,20 @@ int IPACM_Wan::handle_addr_evt(ipacm_event_data_addr *data)
 			else
 			{
 				IPACMDBG_H(" device (%s) ipv4 addr is changed\n", dev_name);
-				/* Delete default v4 RT rule */
-				IPACMDBG_H("Delete default v4 routing rules\n");
-				if (m_routing.DeleteRoutingHdl(dft_rt_rule_hdl[0], IPA_IP_v4) == false)
+				/*Don't remove route for WAN IP in IP Passthrough mode
+				it may lead to stall as NAT entry is still pointing to
+				default route entry*/
+				if (!ip_pass_pdn_info.enable)
 				{
-					IPACMERR("Routing old RT rule deletion failed!\n");
-					res = IPACM_FAILURE;
-					goto fail;
+					/* Delete default v4 RT rule */
+					IPACMDBG_H("Delete default v4 routing rules\n");
+					if (m_routing.DeleteRoutingHdl(dft_rt_rule_hdl[0],
+									 IPA_IP_v4) == false)
+					{
+						IPACMERR("Routing old RT rule deletion failed!\n");
+						res = IPACM_FAILURE;
+						goto fail;
+					}
 				}
 #if defined(FEATURE_SOCKSv5) && defined (IPA_SOCKV5_EVENT_MAX)
 				if(m_is_sta_mode == Q6_WAN)
@@ -925,8 +933,9 @@ int IPACM_Wan::handle_addr_evt(ipacm_event_data_addr *data)
 		}
 
 		/* Store the public ip address when in passthrough mode which will be used when wan is down. */
-		if ((m_is_sta_mode == Q6_WAN) && (is_default_gateway == true) &&
-			data->ipv4_addr == IPACM_Iface::ipacmcfg->ipacm_ip_passthrough_pdn_ip_addr)
+		if ((m_is_sta_mode == Q6_WAN) &&
+			ip_pass_pdn_info.enable &&
+			data->ipv4_addr == ip_pass_pdn_info.pdn_ip_addr)
 		{
 			curr_wan_ip = data->ipv4_addr;
 			public_wan_v4_addr = wan_v4_addr;
@@ -1100,7 +1109,7 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 				delete this;
 				return;
 			}
-			else if (IPACM_Iface::ipacmcfg->ipacm_ip_passthrough_mode)
+			else if (ip_pass_pdn_info.enable)
 			{
 				/* In Passthrough mode, config will be updated after WAN is up.
 				 * restore the WAN netdev index.
@@ -1487,6 +1496,74 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 			}
 		}
 		break;
+	case IPA_IP_PASS_UPDATE_EVENT:
+		{
+			ipacm_event_ip_pass_pdn_info *data = (ipacm_event_ip_pass_pdn_info *)param;
+			ipacm_event_vlan_pdn *pdn_update = NULL;
+			ipacm_cmd_q_data evt_data;
+
+			ipa_interface_index = iface_ipa_index_query(data->if_index);
+			if (ipa_interface_index == ipa_if_num)
+			{
+				IPACMDBG_H("received v4 IPA_IP_PASS_UPDATE_EVENT for wan %s, %d\n", dev_name, ipa_if_num);
+				ip_pass_pdn_info.enable = data->enable;
+				if (ip_pass_pdn_info.enable)
+				{
+					ip_pass_pdn_info.pdn_ip_addr = data->pdn_ip_addr;
+					ip_pass_pdn_info.skip_nat = data->skip_nat;
+					ip_pass_pdn_info.VlanID = data->VlanID;
+					IPACMDBG_H("IP Passthrough enabled: IP 0x%x, Skip NAT: %d, VlanID: %d\n",
+						ip_pass_pdn_info.pdn_ip_addr,
+						ip_pass_pdn_info.skip_nat,
+						data->VlanID);
+				}
+				else
+				{
+					IPACMDBG_H("IP Passthrough disabled, reset config\n");
+					ip_pass_pdn_info.pdn_ip_addr = 0;
+					ip_pass_pdn_info.skip_nat = 0;
+					ip_pass_pdn_info.VlanID = 0;
+				}
+				/* Need to update the IPPassthrough information when passthrough is disabled or
+                                 * non VLAN scenario and PDN is up.
+				 */
+				if (!ip_pass_pdn_info.enable || (ip_pass_pdn_info.enable && ((!data->VlanID && active_v4) ||
+					ipv4_to_iface[modem_ipv4_pdn_index].wan_up_vlan)))
+				{
+					pdn_update = (ipacm_event_vlan_pdn *)malloc(sizeof(ipacm_event_vlan_pdn));
+					if(pdn_update == NULL)
+					{
+						IPACMERR("Unable to allocate memory\n");
+						break;
+					}
+					memset(pdn_update, 0, sizeof(ipacm_event_vlan_pdn));
+					pdn_update->ipv4_addr = wan_v4_addr;
+					pdn_update->ip_pass_enable = ip_pass_pdn_info.enable;
+					pdn_update->ip_pass_dummy_ip = (ip_pass_pdn_info.enable) ?
+						ip_pass_pdn_info.pdn_ip_addr : 0;
+					pdn_update->ip_pass_skip_nat = (ip_pass_pdn_info.enable) ? ip_pass_pdn_info.pdn_ip_addr : 0;
+
+					evt_data.event = IPA_HANDLE_IP_PASS_PDN_INFO_UPDATE_EVENT;
+					evt_data.evt_data = (void *)pdn_update;
+					IPACM_EvtDispatcher::PostEvt(&evt_data);
+					IPACMDBG_H("Posting IPA_HANDLE_IP_PASS_PDN_INFO_UPDATE_EVENT\n");
+				}
+				else
+				{
+					/* Post the VLAN PDN up event in case of non default PDNs. */
+					/* We get conntrack events without SRC_NAT and DST_NAT flags, so if
+					 * we don't post the event now in a way it is a deadlock where PDN_NAT event will never be posted.
+					 */
+					IPACMDBG_H("VLAN PDN not up\n");
+					if (ip_pass_pdn_info.enable &&
+						(ip_pass_pdn_info.VlanID != 0))
+					{
+						handle_route_add_vlan_pdn_evt(IPA_IP_v4, ip_pass_pdn_info.VlanID);
+					}
+				}
+			}
+			break;
+		}
 
 		case IPA_WLAN_GW_ADDR_ADD_EVENT:
 		{
@@ -2325,15 +2402,22 @@ void IPACM_Wan::post_wan_vlan_pdn_event(ipa_ip_type iptype, int pdn_idx, int vla
 				return;
 			}
 			vlan_data->iptype = IPA_IP_v4;
-			vlan_data->ipv4_addr = wan_v4_addr;
 			if(m_is_sta_mode == WLAN_WAN)
 			{
+				vlan_data->ipv4_addr = wan_v4_addr;
 				vlan_data->mux_id = 0;
 				IPACM_Wan::wlan_v4_vlan_index = pdn_idx;
 				IPACMDBG_H("IPACM_Wan::wlan_v4_vlan_index: %d\n", IPACM_Wan::wlan_v4_vlan_index);
 			}
 			else
 			{
+				vlan_data->ipv4_addr = (public_wan_v4_addr_set) ?
+					public_wan_v4_addr : wan_v4_addr;
+				vlan_data->ip_pass_enable = ip_pass_pdn_info.enable;
+				vlan_data->ip_pass_dummy_ip = (ip_pass_pdn_info.enable) ?
+					ip_pass_pdn_info.pdn_ip_addr : 0;
+				vlan_data->ip_pass_skip_nat = (ip_pass_pdn_info.enable) ?
+					ip_pass_pdn_info.skip_nat : 0;
 				if(ext_prop != NULL)
 					vlan_data->mux_id = ext_prop->ext[0].mux_id;
 				/* send xlat configuration for installing uplink rules */
@@ -3469,7 +3553,7 @@ int IPACM_Wan::handle_route_add_evt(ipa_ip_type iptype)
 		}
 
 		memcpy(wanup_data->ifname, dev_name, sizeof(wanup_data->ifname));
-		wanup_data->ipv4_addr = wan_v4_addr;
+		wanup_data->ipv4_addr = (public_wan_v4_addr_set) ? public_wan_v4_addr : wan_v4_addr;
 		if (m_is_sta_mode!=Q6_WAN)
 		{
 			wanup_data->is_sta = true;
@@ -6528,7 +6612,7 @@ int IPACM_Wan::handle_route_del_evt(ipa_ip_type iptype, bool wan_up_vlan)
 
 		if (iptype == IPA_IP_v4)
 		{
-			wandown_data->ipv4_addr = wan_v4_addr;
+			wandown_data->ipv4_addr = (public_wan_v4_addr_set) ? public_wan_v4_addr : wan_v4_addr;
 			if (m_is_sta_mode!=Q6_WAN)
 			{
 				wandown_data->is_sta = true;
@@ -7484,7 +7568,7 @@ int IPACM_Wan::handle_down_evt_ex()
 
 			vlandown_data->iptype = IPA_IP_v4;
 			vlandown_data->VlanID = associated_VID;
-			vlandown_data->ipv4_addr = wan_v4_addr;
+			vlandown_data->ipv4_addr = (public_wan_v4_addr_set) ? public_wan_v4_addr : wan_v4_addr;
 			vlandown_data->mux_id = ext_prop->ext[0].mux_id;
 
 			IPACMDBG_H("Posting IPA_HANDLE_WAN_VLAN_PDN_DOWN with below information:\n");
@@ -7830,9 +7914,9 @@ int IPACM_Wan::handle_down_evt_ex()
 				ipv6_to_iface[modem_ipv6_pdn_index].wan_up_vlan_v6)
 			{
 				vlandown_data->iptype = IPA_IP_MAX;
-				vlandown_data->ipv4_addr = wan_v4_addr;
 				vlandown_data->VlanID = ipv6_to_iface[modem_ipv6_pdn_index].associated_VIDs[0];
 				memcpy(vlandown_data->ipv6_prefix, ipv6_to_iface[modem_ipv6_pdn_index].ipv6_prefix, sizeof(ipv6_to_iface[modem_ipv6_pdn_index].ipv6_prefix));
+				vlandown_data->ipv4_addr = (public_wan_v4_addr_set) ? public_wan_v4_addr : wan_v4_addr;
 				ipv4_to_iface[modem_ipv4_pdn_index].wan_up_vlan = false;
 				memset(ipv4_to_iface[modem_ipv4_pdn_index].associated_VIDs, 0, sizeof(ipv4_to_iface[modem_ipv4_pdn_index].associated_VIDs));
 				ipv4_to_iface[modem_ipv4_pdn_index].VID_cnt = 0;
@@ -7844,8 +7928,8 @@ int IPACM_Wan::handle_down_evt_ex()
 			else if(ipv4_to_iface[modem_ipv4_pdn_index].wan_up_vlan)
 			{
 				vlandown_data->iptype = IPA_IP_v4;
-				vlandown_data->ipv4_addr = wan_v4_addr;
 				vlandown_data->VlanID = associated_VID;
+				vlandown_data->ipv4_addr = (public_wan_v4_addr_set) ? public_wan_v4_addr : wan_v4_addr;
 				ipv4_to_iface[modem_ipv4_pdn_index].wan_up_vlan = false;
 				memset(ipv4_to_iface[modem_ipv4_pdn_index].associated_VIDs, 0, sizeof(ipv4_to_iface[modem_ipv4_pdn_index].associated_VIDs));
 				ipv4_to_iface[modem_ipv4_pdn_index].VID_cnt = 0;
@@ -10245,7 +10329,6 @@ int IPACM_Wan::add_catchup_all_filtering_rule_each_pdn(ipa_ip_type iptype,
 		{
 			flt_rule_entry.rule.action = IPACM_Iface::ipacmcfg->IsIpv6CTEnabled() ?
 				IPA_PASS_TO_DST_NAT : IPA_PASS_TO_ROUTING;
-
 			rt_tbl_name = ipacmcfg->rt_tbl_wan_v6.name;
 		}
 	}

@@ -416,6 +416,7 @@ public:
 
 	ipacm_wan_iface_type m_is_sta_mode;
 	static bool backhaul_is_sta_mode;
+	ipacm_event_ip_pass_pdn_info ip_pass_pdn_info;
 	static bool is_ext_prop_set;
 	static uint32_t backhaul_ipv6_prefix[2];
 #ifdef FEATURE_IPACM_UL_FIREWALL

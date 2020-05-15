@@ -151,6 +151,11 @@ IPACM_Wlan::IPACM_Wlan(int iface_index) : IPACM_Lan(iface_index), ipv6ct_inst(Ip
 	}
 #endif
 
+	/* Update the device type. */
+	device_type = IPACM_CLIENT_DEVICE_TYPE_WLAN;
+
+	IPACMDBG_H ("Device type %d\n", device_type);
+
 	return;
 }
 
@@ -1703,23 +1708,13 @@ int IPACM_Wlan::handle_wlan_client_ipaddr(ipacm_event_data_all *data)
 		if (data->ipv4_addr != 0) /* not 0.0.0.0 */
 		{
 			/* Special handling for Passthrough IP. */
-			if (IPACM_Iface::ipacmcfg->ipacm_ip_passthrough_mode)
+			if (IPACM_Iface::ipacmcfg->is_ip_pass_enabled(device_type, data->mac_addr, 0))
 			{
-				/* if the MAC matches, then IP should not be private subnet. */
-				if (!memcmp(data->mac_addr, IPACM_Iface::ipacmcfg->ipacm_ip_passthrough_mac,
-					IPA_MAC_ADDR_SIZE))
+
+				/* check if the ip is in private subnet and ignore. */
+				if (IPACM_Iface::ipacmcfg->isPrivateSubnet(data->ipv4_addr))
 				{
-					/* check if the ip is in private subnet and ignore. */
-					if (IPACM_Iface::ipacmcfg->isPrivateSubnet(data->ipv4_addr))
-					{
-						IPACMDBG_H("Client is in IP passthrough mode, but got private IP: 0x%x\n", data->ipv4_addr);
-						return IPACM_FAILURE;
-					}
-				}
-				/* Check if the IP is not in private subnet and ignore. */
-				else if (!IPACM_Iface::ipacmcfg->isPrivateSubnet(data->ipv4_addr))
-				{
-					IPACMDBG_H("Client is not in IP passthrough mode, but got public IP: 0x%x\n", data->ipv4_addr);
+					IPACMDBG_H("Client is in IP passthrough mode, but got private IP: 0x%x\n", data->ipv4_addr);
 					return IPACM_FAILURE;
 				}
 			}

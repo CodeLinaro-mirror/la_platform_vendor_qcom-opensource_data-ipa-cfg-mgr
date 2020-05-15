@@ -335,6 +335,8 @@ typedef struct _nat_table_entry
 	bool dst_only;
 	bool src_only;
 	bool sw_allow;
+	bool dummy_nat;
+
 }nat_table_entry;
 
 #define CHK_TBL_HDL() \
@@ -755,7 +757,7 @@ public:
 	static NatApp* GetInstance();
 
 #ifdef FEATURE_VLAN_MPDN
-	int AddPdn(uint32_t pub_ip, uint8_t mux_id, bool is_sta);
+	int AddPdn(uint32_t pub_ip, uint8_t mux_id, bool is_sta, bool ip_pass = false);
 	int RemovePdn(uint32_t pub_ip);
 #endif
 	bool isAlgPort(uint8_t, uint16_t);
@@ -771,6 +773,7 @@ public:
 	int UpdatePwrSaveIf(uint32_t);
 	int ResetPwrSaveIf(uint32_t);
 	int DelEntriesOnClntDiscon(uint32_t);
+	int DelDummyNatEntries(uint32_t ip_addr);
 	int DelEntriesOnSTAClntDiscon(uint32_t);
 
 	void Read_TcpUdp_Timeout(void);

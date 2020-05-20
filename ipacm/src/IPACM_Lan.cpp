@@ -6329,7 +6329,6 @@ int IPACM_Lan::config_dft_firewall_rules_ul_ex(IPACM_firewall_conf_t* firewall_c
 
 	total_rules = ((replicate_rules * v6_ul_wl_rules) +
 			(q6_v6_ul_rules - replicate_rules));
-	total_rules += 1; //catch all rule
 	IPACMDBG_H("total_rules %d\n", total_rules);
 
 	/* ***** */
@@ -6452,6 +6451,24 @@ int IPACM_Lan::config_dft_firewall_rules_ul_ex(IPACM_firewall_conf_t* firewall_c
 						temp_rule.rule.attrib.u.v6.src_addr_mask[2];
 					flt_rule_entry_fw.rule.attrib.u.v6.src_addr_mask[0] =
 						temp_rule.rule.attrib.u.v6.src_addr_mask[3];
+
+					flt_rule_entry_fw.rule.attrib.u.v6.dst_addr[3] =
+						temp_rule.rule.attrib.u.v6.dst_addr[0];
+					flt_rule_entry_fw.rule.attrib.u.v6.dst_addr[2] =
+						temp_rule.rule.attrib.u.v6.dst_addr[1];
+					flt_rule_entry_fw.rule.attrib.u.v6.dst_addr[1] =
+						temp_rule.rule.attrib.u.v6.dst_addr[2];
+					flt_rule_entry_fw.rule.attrib.u.v6.dst_addr[0] =
+						temp_rule.rule.attrib.u.v6.dst_addr[3];
+
+					flt_rule_entry_fw.rule.attrib.u.v6.dst_addr_mask[3] =
+						temp_rule.rule.attrib.u.v6.dst_addr_mask[0];
+					flt_rule_entry_fw.rule.attrib.u.v6.dst_addr_mask[2] =
+						temp_rule.rule.attrib.u.v6.dst_addr_mask[1];
+					flt_rule_entry_fw.rule.attrib.u.v6.dst_addr_mask[1] =
+						temp_rule.rule.attrib.u.v6.dst_addr_mask[2];
+					flt_rule_entry_fw.rule.attrib.u.v6.dst_addr_mask[0] =
+						temp_rule.rule.attrib.u.v6.dst_addr_mask[3];
 
 					/* check if the rule is define as TCP/UDP */
 					if (firewall_conf->extd_firewall_entries[j].attrib.u.v6.next_hdr == IPACM_FIREWALL_IPPROTO_TCP_UDP)
@@ -6593,7 +6610,6 @@ int IPACM_Lan::config_dft_firewall_rules_ul_ex(IPACM_firewall_conf_t* firewall_c
 		}
 #endif
 		/*All rules installation */
-		pFilteringTable->num_rules -= 1; //Do not insert last added catch-all
 		num_wan_ul_fl_rule_v6 = pFilteringTable->num_rules;
 		for (eth_idx = 0; eth_idx < num_eth_client; eth_idx++)
 		{
@@ -6601,8 +6617,6 @@ int IPACM_Lan::config_dft_firewall_rules_ul_ex(IPACM_firewall_conf_t* firewall_c
 				get_client_memptr(eth_client, eth_idx)->mac,
 				get_client_memptr(eth_client, eth_idx)->ul_cnt_idx,
 				pFilteringTable, true);
-			IPACM_Iface::ipacmcfg->increaseFltRuleCount(rx_prop->rx[0].src_pipe, IPA_IP_v6,
-				pFilteringTable->num_rules - 1); //Do not insert last added catch-all
 		}
 	/************************/
 #else

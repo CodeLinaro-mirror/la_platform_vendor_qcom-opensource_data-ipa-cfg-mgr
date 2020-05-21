@@ -1037,7 +1037,7 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 			}
 #endif
 #if defined(FEATURE_L2TP) || defined(FEATURE_VLAN_MPDN)
-			if(is_vlan_event(data->iface_name))
+			if(IPACM_Iface::ipacmcfg->iface_in_vlan_mode(dev_name) && is_vlan_event(data->iface_name))
 			{
 				IPACMDBG_H("vlan neighbor event for iface %s\n", data->iface_name);
 				/* in VLAN_MPDN we handle all VLAN neighbors */

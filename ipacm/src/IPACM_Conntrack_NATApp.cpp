@@ -216,7 +216,6 @@ int NatApp::AddPdn(uint32_t pub_ip, uint8_t mux_id, bool is_sta)
 		else
 		{
 			IPACMDBG_H("pdn already existed with index %d\n", pdn_index);
-			ret = IPACM_FAILURE;
 		}
 	}
 

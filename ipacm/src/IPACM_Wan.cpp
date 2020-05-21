@@ -4075,7 +4075,6 @@ int IPACM_Wan::handle_route_del_evt(ipa_ip_type iptype)
 		IPACMDBG_H("No tx properties, ignore delete default route setting\n");
 		return IPACM_SUCCESS;
 	}
-
 	is_default_gateway = false;
 	IPACMDBG_H("Default route is deleted to iface %s.\n", dev_name);
 
@@ -4220,7 +4219,6 @@ int IPACM_Wan::handle_route_del_evt_ex(ipa_ip_type iptype)
 		return IPACM_SUCCESS;
 	}
 
-	is_default_gateway = false;
 	IPACMDBG_H("Default route is deleted to iface %s.\n", dev_name);
 
 	if (((iptype == IPA_IP_v4) && (active_v4 == true)) ||
@@ -4282,6 +4280,7 @@ int IPACM_Wan::handle_route_del_evt_ex(ipa_ip_type iptype)
 			else
 			{
 				memset(IPACM_Wan::wan_up_dev_name, 0, sizeof(IPACM_Wan::wan_up_dev_name));
+				is_default_gateway = false;
 			}
 		}
 		else
@@ -4310,6 +4309,7 @@ int IPACM_Wan::handle_route_del_evt_ex(ipa_ip_type iptype)
 			else
 			{
 				memset(IPACM_Wan::wan_up_dev_name, 0, sizeof(IPACM_Wan::wan_up_dev_name));
+				is_default_gateway = false;
 			}
 		}
 	}

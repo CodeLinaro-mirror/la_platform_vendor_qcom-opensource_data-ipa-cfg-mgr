@@ -712,6 +712,7 @@ public:
 			IPACMERR("unable to allocate memory for event data_socksv5\n");
 			return IPACM_FAILURE;
 		}
+		memset(vlan_data, 0, sizeof(ipacm_event_route_vlan));
 
 		if (iptype == IPA_IP_v4)
 		{

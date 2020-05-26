@@ -10643,6 +10643,7 @@ void IPACM_Lan::eth_bridge_post_event(ipa_cm_event_id evt, ipa_ip_type iptype, u
 	ipacm_cmd_q_data eth_bridge_evt;
 	ipacm_event_eth_bridge *evt_data_eth_bridge;
 	ipacm_event_data_all *evt_data_all;
+	const char* eventName;
 
 	memset(&eth_bridge_evt, 0, sizeof(ipacm_cmd_q_data));
 	eth_bridge_evt.event = evt;
@@ -10671,9 +10672,9 @@ void IPACM_Lan::eth_bridge_post_event(ipa_cm_event_id evt, ipa_ip_type iptype, u
 	}
 	evt_data_eth_bridge->VlanID = VlanID;
 	eth_bridge_evt.evt_data = (void*)evt_data_eth_bridge;
-
-	IPACMDBG_H("Posting event %s\n",
-		IPACM_Iface::ipacmcfg->getEventName(evt));
+	eventName = IPACM_Iface::ipacmcfg->getEventName(evt);
+	if (eventName != NULL)
+		IPACMDBG_H("Posting event %s\n", eventName);
 	IPACM_EvtDispatcher::PostEvt(&eth_bridge_evt);
 }
 

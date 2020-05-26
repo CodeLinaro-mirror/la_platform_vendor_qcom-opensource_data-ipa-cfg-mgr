@@ -1,5 +1,5 @@
 /* 
-Copyright (c) 2013-2016, The Linux Foundation. All rights reserved.
+Copyright (c) 2013-2020, The Linux Foundation. All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are
@@ -122,6 +122,7 @@ void* MessageQueue::Process(void *param)
 	MessageQueue *MsgQueueInternal = NULL;
 	MessageQueue *MsgQueueExternal = NULL;
 	Message *item = NULL;
+	const char* eventName;
 	IPACMDBG("MessageQueue::Process()\n");
 
 	MsgQueueInternal = MessageQueue::getInstanceInternal();
@@ -152,14 +153,32 @@ void* MessageQueue::Process(void *param)
 			item = MsgQueueExternal->dequeue();
 			if(item)
 			{
-				IPACMDBG("Get event %s from external queue (%d).\n",
-					IPACM_Iface::ipacmcfg->getEventName(item->evt.data.event), item->evt.data.event);
+				eventName = IPACM_Iface::ipacmcfg->getEventName(item->evt.data.event);
+				if (eventName != NULL)
+				{
+					IPACMDBG("Get event %s from external queue (%d).\n",
+						eventName, item->evt.data.event);
+				}
+				else
+				{
+					IPACMDBG("Get NULL event from external queue (%d).\n",
+						item->evt.data.event);
+				}
 			}
 		}
 		else
 		{
-			IPACMDBG("Get event %s from internal queue (%d).\n",
-				IPACM_Iface::ipacmcfg->getEventName(item->evt.data.event), item->evt.data.event);
+			eventName = IPACM_Iface::ipacmcfg->getEventName(item->evt.data.event);
+			if (eventName != NULL)
+			{
+				IPACMDBG("Get event %s from internal queue (%d).\n",
+					eventName, item->evt.data.event);
+			}
+			else
+			{
+				IPACMDBG("Get NULL event from internal queue (%d).\n",
+					item->evt.data.event);
+			}
 		}
 
 		if(item == NULL)

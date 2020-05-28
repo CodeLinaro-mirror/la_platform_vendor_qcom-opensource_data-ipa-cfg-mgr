@@ -161,7 +161,7 @@ uint32_t NatApp::GenerateMetdata(uint8_t mux_id)
 #ifdef FEATURE_VLAN_MPDN
 int NatApp::AddPdn(uint32_t pub_ip, uint8_t mux_id, bool is_sta)
 {
-	int ret;
+	int ret = IPACM_SUCCESS;
 	int cnt = 0;
 	ipa_nat_ipv4_rule nat_rule;
 	ipa_nat_pdn_entry entry;
@@ -267,7 +267,7 @@ int NatApp::AddPdn(uint32_t pub_ip, uint8_t mux_id, bool is_sta)
 
 	}
 
-	return IPACM_SUCCESS;
+	return ret;
 }
 #endif
 int NatApp::AddTable(uint32_t pub_ip, uint8_t mux_id, bool is_sta)

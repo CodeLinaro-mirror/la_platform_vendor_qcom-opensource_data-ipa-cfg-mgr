@@ -606,7 +606,7 @@ skip_fnr_alloc:
 		IPACMDBG_H("RESET IPACM_Config::pNatIfaces \n");
 	}
 	ipa_nat_iface_entries = 0;
-	pNatIfaces = (NatIfaces *)calloc(ipa_num_ipa_interfaces, sizeof(NatIfaces));
+	pNatIfaces = (NatIfaces *)calloc(IPA_MAX_NAT_IFACE, sizeof(NatIfaces));
 	if (pNatIfaces == NULL)
 	{
 		IPACMERR("unable to allocate nat ifaces\n");
@@ -804,7 +804,7 @@ int IPACM_Config::AddNatIfaces(char *dev_name)
 					          dev_name, ipa_nat_iface_entries);
 	ipa_nat_iface_entries++;
 
-	if (ipa_nat_iface_entries < ipa_num_ipa_interfaces)
+	if (ipa_nat_iface_entries < IPA_MAX_NAT_IFACE)
 	{
 		strlcpy(pNatIfaces[ipa_nat_iface_entries - 1].iface_name,dev_name,
 				IPA_IFACE_NAME_LEN);

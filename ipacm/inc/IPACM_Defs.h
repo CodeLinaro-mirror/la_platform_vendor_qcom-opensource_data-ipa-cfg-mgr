@@ -148,6 +148,12 @@ extern "C"
 #define IPA_MAX_NUM_HW_PDNS 4
 #define IPA_MAX_NUM_OFFLOAD_VLANS 8
 #define DEFAULT_MTU_SIZE 1500
+
+#define IPA_MAX_ACTIVE_LAN_IFACE 2
+#define IPA_MAX_ACTIVE_WLAN_IFACE 4
+#define IPA_MAX_NAT_IFACE (IPA_MAX_ACTIVE_LAN_IFACE*IPA_MAX_NUM_OFFLOAD_VLANS+ \
+	IPA_MAX_ACTIVE_LAN_IFACE + IPA_MAX_ACTIVE_WLAN_IFACE + IPA_MAX_NUM_SW_PDNS)
+
 /*===========================================================================
 										 GLOBAL DEFINITIONS AND DECLARATIONS
 ===========================================================================*/

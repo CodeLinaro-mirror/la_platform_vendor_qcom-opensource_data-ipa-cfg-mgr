@@ -598,8 +598,16 @@ void IPACM_Wlan::event_callback(ipa_cm_event_id event, void *param)
 				{
 					if(data->attribs[i].attrib_type == WLAN_HDR_ATTRIB_MAC_ADDR)
 					{
-						eth_bridge_post_event(IPA_ETH_BRIDGE_CLIENT_ADD, IPA_IP_MAX, data->attribs[i].u.mac_addr, NULL, NULL);
-						break;
+						if(IPACM_Iface::ipacmcfg->mac_addr_in_blacklist(data->attribs[i].u.mac_addr) == false)
+						{
+							eth_bridge_post_event(IPA_ETH_BRIDGE_CLIENT_ADD, IPA_IP_MAX, data->attribs[i].u.mac_addr, NULL, NULL);
+							break;
+						}
+						else
+						{
+							IPACMDBG_H("Client is blacklisted for mac based filtering, avoid adding to lan2lan offload \n");
+							break;
+						}
 					}
 				}
 				IPACMDBG_H("Received IPA_WLAN_CLIENT_ADD_EVENT\n");
@@ -1010,6 +1018,8 @@ int IPACM_Wlan::handle_wlan_mac_flt_event()
 					}
 					it->second->mac_v6_rt_del_flt_set = true;
 				}
+				/* remove from lan2lan offload module */
+				eth_bridge_post_event(IPA_ETH_BRIDGE_CLIENT_DEL, IPA_IP_MAX, mac_addr, NULL, NULL);
 				/* In case of client blackklisted, update config mac list with copy mac flt list value */
 				IPACM_Iface::ipacmcfg->update_mac_flt_lists(mac_addr, it->second);
 			}
@@ -1046,6 +1056,8 @@ int IPACM_Wlan::handle_wlan_mac_flt_event()
 					}
 					it->second->mac_v6_rt_del_flt_set = false;
 				}
+				/* add back to the lan2lan offload module */
+				eth_bridge_post_event(IPA_ETH_BRIDGE_CLIENT_ADD, IPA_IP_MAX, mac_addr, NULL, NULL);
 				/* remove from original/copy client list as whitelisted client */
 				IPACM_Iface::ipacmcfg->clear_whitelist_mac_add(mac_addr);
 				mac_flt_lists.erase(it->first);

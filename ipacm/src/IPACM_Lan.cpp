@@ -108,7 +108,7 @@ IPACM_Lan::IPACM_Lan(int iface_index) : IPACM_Iface(iface_index)
 	is_mode_switch = false;
 	if_ipv4_subnet =0;
 	memset(private_fl_rule_hdl, 0, (IPA_MAX_PRIVATE_SUBNET_ENTRIES + IPA_MAX_MTU_ENTRIES) * sizeof(uint32_t));
-	memset(ipv6_prefix_flt_rule_hdl, 0, (IPA_MAX_IPV6_PREFIX_FLT_RULE + IPA_MAX_MTU_ENTRIES)  * sizeof(uint32_t));
+	memset(ipv6_prefix_flt_rule_hdl, 0, (IPA_MAX_IPV6_NO_OFFLOAD_PREFIX_FLT_RULE + IPA_MAX_MTU_ENTRIES)  * sizeof(uint32_t));
 	memset(ipv6_icmp_flt_rule_hdl, 0, NUM_IPV6_ICMP_FLT_RULE * sizeof(uint32_t));
 	modem_ul_v4_set = false;
 	modem_ul_v6_set = false;
@@ -962,7 +962,7 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 			}
 #endif
 #if defined(FEATURE_L2TP) || defined(FEATURE_VLAN_MPDN)
-			if(is_vlan_event(data->iface_name))
+			if(IPACM_Iface::ipacmcfg->iface_in_vlan_mode(dev_name) && is_vlan_event(data->iface_name))
 			{
 				IPACMDBG_H("vlan neighbor event for iface %s\n", data->iface_name);
 				/* in VLAN_MPDN we handle all VLAN neighbors */
@@ -5292,13 +5292,13 @@ int IPACM_Lan::handle_down_evt()
 		IPACM_Iface::ipacmcfg->decreaseFltRuleCount(rx_prop->rx[0].src_pipe, IPA_IP_v6, NUM_IPV6_ICMP_FLT_RULE);
 #ifdef FEATURE_VLAN_MPDN
 		if(m_filtering.DeleteFilteringHdls(ipv6_prefix_flt_rule_hdl, IPA_IP_v6,
-			IPA_MAX_IPV6_PREFIX_FLT_RULE + IPA_MAX_MTU_ENTRIES) == false)
+			IPA_MAX_IPV6_NO_OFFLOAD_PREFIX_FLT_RULE + IPA_MAX_MTU_ENTRIES) == false)
 		{
 			IPACMERR("Error Deleting Filtering, aborting...\n");
 			res = IPACM_FAILURE;
 			goto fail;
 		}
-		IPACM_Iface::ipacmcfg->decreaseFltRuleCount(rx_prop->rx[0].src_pipe, IPA_IP_v6, IPA_MAX_IPV6_PREFIX_FLT_RULE + IPA_MAX_MTU_ENTRIES);
+		IPACM_Iface::ipacmcfg->decreaseFltRuleCount(rx_prop->rx[0].src_pipe, IPA_IP_v6, IPA_MAX_IPV6_NO_OFFLOAD_PREFIX_FLT_RULE + IPA_MAX_MTU_ENTRIES);
 		dummy_prefix_installed = false;
 #endif
 
@@ -8665,7 +8665,7 @@ int IPACM_Lan::add_dummy_ipv6_prefix_flt_rule()
 		return IPACM_SUCCESS;
 	}
 
-	len = sizeof(struct ipa_ioc_add_flt_rule) + (IPA_MAX_IPV6_PREFIX_FLT_RULE + IPA_MAX_MTU_ENTRIES)  * sizeof(struct ipa_flt_rule_add);
+	len = sizeof(struct ipa_ioc_add_flt_rule) + (IPA_MAX_IPV6_NO_OFFLOAD_PREFIX_FLT_RULE + IPA_MAX_MTU_ENTRIES)  * sizeof(struct ipa_flt_rule_add);
 
 	pFilteringTable = (struct ipa_ioc_add_flt_rule *)malloc(len);
 	if(pFilteringTable == NULL)
@@ -8679,7 +8679,7 @@ int IPACM_Lan::add_dummy_ipv6_prefix_flt_rule()
 	pFilteringTable->ep = rx_prop->rx[0].src_pipe;
 	pFilteringTable->global = false;
 	pFilteringTable->ip = IPA_IP_v6;
-	pFilteringTable->num_rules = IPA_MAX_IPV6_PREFIX_FLT_RULE + IPA_MAX_MTU_ENTRIES;
+	pFilteringTable->num_rules = IPA_MAX_IPV6_NO_OFFLOAD_PREFIX_FLT_RULE + IPA_MAX_MTU_ENTRIES;
 
 	memset(&flt_rule, 0, sizeof(struct ipa_flt_rule_add));
 
@@ -8714,7 +8714,7 @@ int IPACM_Lan::add_dummy_ipv6_prefix_flt_rule()
 	flt_rule.rule.attrib.u.v6.src_addr_mask[2] = ~0;
 	flt_rule.rule.attrib.u.v6.src_addr_mask[3] = ~0;
 
-	for(i = 0; i < IPA_MAX_IPV6_PREFIX_FLT_RULE + IPA_MAX_MTU_ENTRIES; i++)
+	for(i = 0; i < IPA_MAX_IPV6_NO_OFFLOAD_PREFIX_FLT_RULE + IPA_MAX_MTU_ENTRIES; i++)
 	{
 		memcpy(&(pFilteringTable->rules[i]), &flt_rule, sizeof(struct ipa_flt_rule_add));
 	}
@@ -8727,11 +8727,11 @@ int IPACM_Lan::add_dummy_ipv6_prefix_flt_rule()
 	}
 	else
 	{
-		IPACM_Iface::ipacmcfg->increaseFltRuleCount(rx_prop->rx[0].src_pipe, IPA_IP_v6, IPA_MAX_IPV6_PREFIX_FLT_RULE + IPA_MAX_MTU_ENTRIES);
+		IPACM_Iface::ipacmcfg->increaseFltRuleCount(rx_prop->rx[0].src_pipe, IPA_IP_v6, IPA_MAX_IPV6_NO_OFFLOAD_PREFIX_FLT_RULE + IPA_MAX_MTU_ENTRIES);
 		dummy_prefix_installed = true;
 
 		/* copy filter rule hdls */
-		for(int i = 0; i < IPA_MAX_IPV6_PREFIX_FLT_RULE + IPA_MAX_MTU_ENTRIES; i++)
+		for(int i = 0; i < IPA_MAX_IPV6_NO_OFFLOAD_PREFIX_FLT_RULE + IPA_MAX_MTU_ENTRIES; i++)
 		{
 			if(pFilteringTable->rules[i].status == 0)
 			{
@@ -8759,8 +8759,8 @@ int IPACM_Lan::modify_ipv6_prefix_flt_rule()
 	struct ipa_ioc_mdfy_flt_rule* pFilteringTable;
 	int mtu_rule_cnt = 0;
 	uint16_t mtu[IPA_MAX_IPV6_PREFIX_FLT_RULE + IPA_MAX_MTU_ENTRIES] = { };
-	int mtu_rule_idx = IPACM_Iface::ipacmcfg->num_ipv6_prefixes;
-
+	int mtu_rule_idx = IPACM_Iface::ipacmcfg->num_ipv6_prefixes +
+						IPACM_Iface::ipacmcfg->num_no_offload_ipv6_prefix;
 	if(rx_prop == NULL)
 	{
 		IPACMERR("no rx props\n");
@@ -8774,9 +8774,10 @@ int IPACM_Lan::modify_ipv6_prefix_flt_rule()
 		return IPACM_SUCCESS;
 	}
 
-	IPACMDBG_H("modifying prefixes, num %d\n", IPACM_Iface::ipacmcfg->num_ipv6_prefixes);
+	IPACMDBG_H("modifying offload prefixes, num %d\n", IPACM_Iface::ipacmcfg->num_ipv6_prefixes);
+	IPACMDBG_H("modifying no offload prefixes, num %d\n", IPACM_Iface::ipacmcfg->num_no_offload_ipv6_prefix);
 
-	for(i = 0; i < IPA_MAX_IPV6_PREFIX_FLT_RULE + IPA_MAX_MTU_ENTRIES; i++)
+	for(i = 0; i < IPA_MAX_IPV6_NO_OFFLOAD_PREFIX_FLT_RULE + IPA_MAX_MTU_ENTRIES; i++)
 	{
 		reset_to_dummy_flt_rule(IPA_IP_v6, ipv6_prefix_flt_rule_hdl[i]);
 	}
@@ -8792,7 +8793,7 @@ int IPACM_Lan::modify_ipv6_prefix_flt_rule()
 	IPACMDBG_H("mtu = %d\n", mtu[0]);
 	mtu_rule_cnt++;
 
-	len = sizeof(struct ipa_ioc_mdfy_flt_rule) + (IPACM_Iface::ipacmcfg->num_ipv6_prefixes + mtu_rule_cnt) * sizeof(struct ipa_flt_rule_mdfy);
+	len = sizeof(struct ipa_ioc_mdfy_flt_rule) + (IPACM_Iface::ipacmcfg->num_ipv6_prefixes + IPACM_Iface::ipacmcfg->num_no_offload_ipv6_prefix + mtu_rule_cnt) * sizeof(struct ipa_flt_rule_mdfy);
 	pFilteringTable = (struct ipa_ioc_mdfy_flt_rule*)malloc(len);
 	if(!pFilteringTable)
 	{
@@ -8803,16 +8804,20 @@ int IPACM_Lan::modify_ipv6_prefix_flt_rule()
 
 	pFilteringTable->commit = 1;
 	pFilteringTable->ip = IPA_IP_v6;
-	pFilteringTable->num_rules = (uint8_t)IPACM_Iface::ipacmcfg->num_ipv6_prefixes + mtu_rule_cnt;
-
+	pFilteringTable->num_rules = (uint8_t)IPACM_Iface::ipacmcfg->num_ipv6_prefixes + IPACM_Iface::ipacmcfg->num_no_offload_ipv6_prefix + mtu_rule_cnt;
+	if (pFilteringTable->num_rules > IPA_MAX_IPV6_NO_OFFLOAD_PREFIX_FLT_RULE + IPA_MAX_MTU_ENTRIES)
+	{
+		IPACMERR("Number of rules crossed the maximum available space");
+		return IPACM_FAILURE;
+	}
 	memset(&flt_rule, 0, sizeof(struct ipa_flt_rule_mdfy));
 	flt_rule.status = -1;
-
 	flt_rule.rule.retain_hdr = 1;
 	flt_rule.rule.to_uc = 0;
 	flt_rule.rule.action = IPA_PASS_TO_EXCEPTION;
 	flt_rule.rule.eq_attrib_type = 0;
 
+	/* first install DST address exception rules for offloaded PDNs */
 	for(i = 0; i < (IPACM_Iface::ipacmcfg->num_ipv6_prefixes); i++)
 	{
 		/* add private prefix rule for ipv6 */
@@ -8829,7 +8834,6 @@ int IPACM_Lan::modify_ipv6_prefix_flt_rule()
 		flt_rule.rule.attrib.u.v6.dst_addr_mask[1] = 0xFFFFFFFF;
 		flt_rule.rule.attrib.u.v6.dst_addr_mask[2] = 0x0;
 		flt_rule.rule.attrib.u.v6.dst_addr_mask[3] = 0x0;
-
 		memcpy(&(pFilteringTable->rules[i]), &flt_rule, sizeof(struct ipa_flt_rule_mdfy));
 		IPACMDBG_H(" IPACM v6 prefix as: 0x[%X][%X] entry(%d)\n",
 			flt_rule.rule.attrib.u.v6.dst_addr[0],
@@ -8859,9 +8863,30 @@ int IPACM_Lan::modify_ipv6_prefix_flt_rule()
 		}
 	}
 
+	flt_rule.rule.attrib.attrib_mask &= ~IPA_FLT_DST_ADDR;
+	flt_rule.rule.attrib.attrib_mask |= IPA_FLT_SRC_ADDR;
+	/* now install SRC address exception rules for no offload PDNs */
+	for(i = 0; i < (IPACM_Iface::ipacmcfg->num_no_offload_ipv6_prefix); i++)
+	{
+		flt_rule.rule_hdl = ipv6_prefix_flt_rule_hdl[i];
+		flt_rule.rule.attrib.u.v6.src_addr[0] = IPACM_Iface::ipacmcfg->ipa_no_offload_ipv6_prefixes[i][0];
+		flt_rule.rule.attrib.u.v6.src_addr[1] = IPACM_Iface::ipacmcfg->ipa_no_offload_ipv6_prefixes[i][1];
+		flt_rule.rule.attrib.u.v6.src_addr[2] = 0x0;
+		flt_rule.rule.attrib.u.v6.src_addr[3] = 0x0;
+		flt_rule.rule.attrib.u.v6.src_addr_mask[0] = 0xFFFFFFFF;
+		flt_rule.rule.attrib.u.v6.src_addr_mask[1] = 0xFFFFFFFF;
+		flt_rule.rule.attrib.u.v6.src_addr_mask[2] = 0x0;
+		flt_rule.rule.attrib.u.v6.src_addr_mask[3] = 0x0;
+		memcpy(&(pFilteringTable->rules[IPACM_Iface::ipacmcfg->num_ipv6_prefixes + i]), &flt_rule, sizeof(struct ipa_flt_rule_mdfy));
+		IPACMDBG_H(" IPACM v6 no offload prefix as: 0x[%X][%X] entry(%d)\n",
+				flt_rule.rule.attrib.u.v6.src_addr[0],
+				flt_rule.rule.attrib.u.v6.src_addr[1],
+				IPACM_Iface::ipacmcfg->num_ipv6_prefixes + i);
+	}
+
 	if(false == m_filtering.ModifyFilteringRule(pFilteringTable))
 	{
-		IPACMERR("Failed to modify private subnet filtering rules.\n");
+		IPACMERR("Failed to modify prefix filtering rules.\n");
 		res = IPACM_FAILURE;
 		goto fail;
 	}

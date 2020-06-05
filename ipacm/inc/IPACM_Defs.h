@@ -76,13 +76,6 @@ extern "C"
 #define IPA_IF_SOCKSv5_NAME  "IPACM_SOCKSv5"
 
 #define IPA_MAX_IFACE_ENTRIES 20
-#ifdef FEATURE_VLAN_MPDN
-#define IPA_MAX_PRIVATE_SUBNET_ENTRIES 8
-#define IPA_MAX_MTU_ENTRIES 4
-#else
-#define IPA_MAX_PRIVATE_SUBNET_ENTRIES 3
-#define IPA_MAX_MTU_ENTRIES 1
-#endif
 #define IPA_MAX_ALG_ENTRIES 20
 #define IPA_MAX_RM_ENTRY 9
 
@@ -111,13 +104,6 @@ extern "C"
 #define TCP_FIN_SHIFT 16
 #define TCP_SYN_SHIFT 17
 #define TCP_RST_SHIFT 18
-#ifdef FEATURE_VLAN_MPDN
-/* support default PDN+3 VLAN PDNs */
-#define IPA_MAX_IPV6_PREFIX_FLT_RULE  4
-#else
-/* support only default PDN */
-#define IPA_MAX_IPV6_PREFIX_FLT_RULE  1
-#endif
 #define MAX_CMD_SIZE 100
 
 /* WAN IP address in IP Passthrough mode. */
@@ -143,12 +129,37 @@ extern "C"
 #define IPA_MAX_NUM_AMPDU_RULE  15
 #define IPA_MAC_ADDR_SIZE  6
 #define IPA_IPV6_ADDR_SIZE_IN_WORDS 4
-#define IPA_MAX_NUM_BRIDGES 8
+#define IPA_MAX_NUM_OFFLOAD_VLANS 14
+#define IPA_MAX_NUM_BRIDGES IPA_MAX_NUM_OFFLOAD_VLANS
 #define IPA_MAX_NUM_SW_PDNS 15
-#define IPA_MAX_NUM_HW_PDNS 4
-#define IPA_MAX_NUM_OFFLOAD_VLANS 8
+#define IPA_MAX_NUM_HW_PDNS (IPA_MAX_PDN_NUM - 1) /* currently 7 - 1 = 6 */
+#ifdef FEATURE_VLAN_MPDN
+#define IPA_MAX_PRIVATE_SUBNET_ENTRIES IPA_MAX_NUM_OFFLOAD_VLANS
+#define IPA_MAX_MTU_ENTRIES IPA_MAX_NUM_HW_PDNS
+#define IPA_MAX_IPV6_PREFIX_FLT_RULE IPA_MAX_NUM_HW_PDNS
+#else
+#define IPA_MAX_PRIVATE_SUBNET_ENTRIES 3
+#define IPA_MAX_IPV6_PREFIX_FLT_RULE  1
+#define IPA_MAX_MTU_ENTRIES 1
+#endif
 #define DEFAULT_MTU_SIZE 1500
 #define IPA_L2TP_UDP_DEFAULT_MTU_SIZE 1422 /* 1500 - (IPv6(40) + UDP (8) + L2TP (16) + ETH (14)). */
+
+#ifdef FEATURE_VLAN_MPDN
+/* support default PDN+3 VLAN PDNs */
+/* all PDNs can be non_offload PDNs, but only 4 can be offloaded */
+#define IPA_MAX_IPV6_PREFIX_FLT_RULE IPA_MAX_NUM_HW_PDNS
+#define IPA_MAX_IPV6_NO_OFFLOAD_PREFIX_FLT_RULE IPA_MAX_NUM_SW_PDNS
+#else
+/* support only default PDN */
+#define IPA_MAX_IPV6_PREFIX_FLT_RULE 1
+#endif
+
+#define IPA_MAX_ACTIVE_LAN_IFACE 2
+#define IPA_MAX_ACTIVE_WLAN_IFACE 4
+#define IPA_MAX_NAT_IFACE (IPA_MAX_ACTIVE_LAN_IFACE*IPA_MAX_NUM_OFFLOAD_VLANS+ \
+	IPA_MAX_ACTIVE_LAN_IFACE + IPA_MAX_ACTIVE_WLAN_IFACE + IPA_MAX_NUM_SW_PDNS)
+
 /*===========================================================================
 										 GLOBAL DEFINITIONS AND DECLARATIONS
 ===========================================================================*/
@@ -449,7 +460,7 @@ struct l2tp_vlan_mapping_info
 {
 	/* the following are l2tp iface info (name, session id) */
 	char l2tp_iface_name[IPA_RESOURCE_NAME_MAX];
-	uint8_t l2tp_session_id;
+	uint32_t l2tp_session_id;
 	/* Add support for L2TP over UDP. */
 #ifdef IPA_L2TP_TUNNEL_UDP
 	enum ipa_l2tp_tunnel_type tunnel_type;

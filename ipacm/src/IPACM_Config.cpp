@@ -201,7 +201,9 @@ IPACM_Config::IPACM_Config()
 #endif //defined(FEATURE_SOCKSv5) && defined (IPA_SOCKV5_ADD)
 #ifdef FEATURE_VLAN_MPDN
 	num_ipv6_prefixes = 0;
+	num_no_offload_ipv6_prefix = 0;
 	memset(ipa_ipv6_prefixes, 0, sizeof(ipa_ipv6_prefixes));
+	memset(ipa_no_offload_ipv6_prefixes, 0, sizeof(ipa_no_offload_ipv6_prefixes));
 	memset(vlan_bridges, 0, IPA_MAX_NUM_BRIDGES * sizeof(vlan_bridges[0]));
 	memset(vlan_devices, 0, IPA_VLAN_IF_MAX * sizeof(vlan_devices[0]));
 #endif
@@ -604,7 +606,7 @@ skip_fnr_alloc:
 		IPACMDBG_H("RESET IPACM_Config::pNatIfaces \n");
 	}
 	ipa_nat_iface_entries = 0;
-	pNatIfaces = (NatIfaces *)calloc(ipa_num_ipa_interfaces, sizeof(NatIfaces));
+	pNatIfaces = (NatIfaces *)calloc(IPA_MAX_NAT_IFACE, sizeof(NatIfaces));
 	if (pNatIfaces == NULL)
 	{
 		IPACMERR("unable to allocate nat ifaces\n");
@@ -802,7 +804,7 @@ int IPACM_Config::AddNatIfaces(char *dev_name)
 					          dev_name, ipa_nat_iface_entries);
 	ipa_nat_iface_entries++;
 
-	if (ipa_nat_iface_entries < ipa_num_ipa_interfaces)
+	if (ipa_nat_iface_entries < IPA_MAX_NAT_IFACE)
 	{
 		strlcpy(pNatIfaces[ipa_nat_iface_entries - 1].iface_name,dev_name,
 				IPA_IFACE_NAME_LEN);

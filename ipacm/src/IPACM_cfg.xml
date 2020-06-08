@@ -80,10 +80,6 @@
 			   <Category>VIRTUAL</Category>
 		    </Iface>
 		</IPACMIface>
-		<IPPassthroughFlag>
-			<IPPassthroughMode>0</IPPassthroughMode>
-			<IPPassthroughMacAddr>0</IPPassthroughMacAddr>
-		</IPPassthroughFlag>
 		<IPACMPrivateSubnet>
 			<Subnet>
   			   <SubnetAddress>192.168.225.0</SubnetAddress>

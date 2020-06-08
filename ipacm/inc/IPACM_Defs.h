@@ -234,6 +234,7 @@ typedef enum
 	IPA_ADD_SOCKSv5_CONN,              	      /* ipa_socksv5_msg */
 	IPA_DEL_SOCKSv5_CONN,                     /* ipa_socksv5_msg */
 #endif
+	IPA_MAC_ADD_DEL_FLT_EVENT,                /* NULL */
 	IPACM_EVENT_MAX
 } ipa_cm_event_id;
 

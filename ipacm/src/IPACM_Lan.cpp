@@ -931,16 +931,22 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 				if (IPACM_Iface::ipacmcfg->ipacm_lan_stats_enable == false)
 #endif
 				{
-					handle_eth_client_route_rule(data->mac_addr, data->iptype);
+					/* Do not add rt and NAT rule if mac flt enable for client */
+					if(IPACM_Iface::ipacmcfg->mac_addr_in_blacklist(data->mac_addr) == false)
+					{
+						handle_eth_client_route_rule(data->mac_addr, data->iptype);
 
-					/* Add NAT rules after RT rules are set */
-					HandleNeighIpAddrAddEvt(data);
+						/* Add NAT rules after RT rules are set */
+						HandleNeighIpAddrAddEvt(data);
+					}
 				}
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
 				else
 				{
 #ifdef IPA_HW_FNR_STATS
-					if (IPACM_Iface::ipacmcfg->hw_fnr_stats_support) {
+					if (IPACM_Iface::ipacmcfg->hw_fnr_stats_support &&
+							IPACM_Iface::ipacmcfg->mac_addr_in_blacklist(data->mac_addr) == false)
+					{
 						eth_index = get_eth_client_index(data->mac_addr);
 						retval = handle_eth_client_route_rule_ext_v2(data->mac_addr, data->iptype,
 							get_client_memptr(eth_client, eth_index)->dl_cnt_idx);
@@ -948,7 +954,10 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 					}
 					else
 #endif //IPA_HW_FNR_STATS
-						handle_eth_client_route_rule_ext(data->mac_addr, data->iptype);
+					{
+						if(IPACM_Iface::ipacmcfg->mac_addr_in_blacklist(data->mac_addr) == false)
+							handle_eth_client_route_rule_ext(data->mac_addr, data->iptype);
+					}
 				}
 #endif
 				eth_bridge_post_event(IPA_ETH_BRIDGE_CLIENT_ADD, IPA_IP_MAX, data->mac_addr, NULL, data->iface_name);
@@ -986,6 +995,9 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 				}
 			}
 #endif
+			/* add mac balcklist rule if client is added after mac flt event is received */
+			if(IPACM_Iface::ipacmcfg->mac_addr_in_blacklist(data->mac_addr) == true)
+					handle_eth_mac_flt_conn_disc(data->mac_addr, true);
 			return;
 		}
 		break;
@@ -1048,6 +1060,9 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 						}
 					}
 #endif
+					/* clear mac flt rules for client if any */
+					if(IPACM_Iface::ipacmcfg->mac_addr_in_blacklist(data->mac_addr))
+					 	handle_eth_mac_flt_conn_disc(data->mac_addr, false);
 					IPACMDBG_H("LAN iface delete client \n");
 					handle_eth_client_down_evt(data->mac_addr, vlan_id, data);
 					eth_bridge_post_event(IPA_ETH_BRIDGE_CLIENT_DEL, IPA_IP_MAX, data->mac_addr, NULL, data->iface_name, vlan_id);
@@ -1254,13 +1269,391 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 		}
 		break;
 #endif
-
+	case IPA_MAC_ADD_DEL_FLT_EVENT:
+		{
+			IPACMDBG_H(" IPA_MAC_ADD_FLT_EVENT received\n");
+			if(handle_eth_mac_flt_event())
+			{
+				IPACMERR("failed to handle IPA_MAC_ADD_DEL_FLT_EVENT \n");
+			}
+		}
+		break;
 	default:
 		break;
 	}
 
 	return;
 }
+
+/* handle_eth_mac_flt_event add/del rule based on mac addr and their flt state */
+int IPACM_Lan::handle_eth_mac_flt_event()
+{
+	IPACMDBG_H("handle_eth_mac_flt_event\n ");
+	uint8_t mac_addr[6];
+	int eth_index;
+	ipacm_event_data_all data;
+	/* work on copy list to avoid concurrency issues*/
+	std::map<std::array<uint8_t, 6>, mac_flt_type *> mac_flt_lists = IPACM_Iface::ipacmcfg->get_mac_flt_lists();
+
+	for (auto it = mac_flt_lists.begin(); it != mac_flt_lists.end(); ++it)
+	{
+		std::copy(std::begin(it->first), std::end(it->first), std::begin(mac_addr));
+		eth_index = get_eth_client_index(mac_addr);
+		if(eth_index != IPACM_INVALID_INDEX)
+		{
+			if(it->second->is_blacklist)
+			{
+				if(get_client_memptr(eth_client, eth_index)->ipv4_set && !it->second->mac_v4_rt_del_flt_set)
+				{
+					/* add a new UL flt rule, del NAT and route rule for client */
+					if(add_mac_flt_blacklist_rule(mac_addr,IPA_IP_v4, &(it->second->mac_v4_flt_rule_hdl)))
+					{
+						IPACMERR("unbale to add mac flt blacklist v4 UL rule for index: %d\n", eth_index);
+						return IPACM_FAILURE;
+					}
+					/* ongoing/new allowing connections will have NAT-miss issue, will optimize future */
+					CtList->HandleNeighIpAddrDelEvt(get_client_memptr(eth_client, eth_index)->v4_addr);
+					if(handle_eth_client_mac_flt_route_rule(IPA_IP_v4, eth_index, it->second->is_blacklist))
+					{
+						IPACMERR("unbale to del v4 rt rule for index: %d\n", eth_index);
+						return IPACM_FAILURE;
+					}
+					it->second->mac_v4_rt_del_flt_set = true;
+				}
+				if (get_client_memptr(eth_client, eth_index)->ipv6_set && !it->second->mac_v6_rt_del_flt_set)
+				{
+					/* add a new ul flt rule for s/w path & del route rule for client */
+					if(add_mac_flt_blacklist_rule(mac_addr,IPA_IP_v6, &(it->second->mac_v6_flt_rule_hdl)))
+					{
+						IPACMERR("unbale to add mac flt blacklist v6 UL rule for index: %d\n", eth_index);
+						return IPACM_FAILURE;
+					}
+					if(handle_eth_client_mac_flt_route_rule(IPA_IP_v6, eth_index, it->second->is_blacklist))
+					{
+						IPACMERR("unbale to del v6 rt rule for index: %d\n", eth_index);
+						return IPACM_FAILURE;
+					}
+					it->second->mac_v6_rt_del_flt_set = true;
+				}
+				/* In case of client blackklisted, update config mac list with copy mac flt list value */
+				IPACM_Iface::ipacmcfg->update_mac_flt_lists(mac_addr, it->second);
+			}
+			else
+			{
+				if(it->second->mac_v4_rt_del_flt_set)
+				{
+					/* del ul flt rule for s/w path & add route/Nat rule for client */
+					if(del_mac_flt_blacklist_rule(it->second->mac_v4_flt_rule_hdl,	IPA_IP_v4))
+					{
+						IPACMERR("unbale to del mac flt blacklist v4 UL rule for index: %d\n", eth_index);
+						return IPACM_FAILURE;
+					}
+					if(handle_eth_client_mac_flt_route_rule(IPA_IP_v4, eth_index, it->second->is_blacklist))
+					{
+						IPACMERR("unbale to add v4 rt rule for index: %d\n", eth_index);
+						return IPACM_FAILURE;
+					}
+					it->second->mac_v4_rt_del_flt_set = false;
+				}
+				if(it->second->mac_v6_rt_del_flt_set)
+				{
+					/* del ul flt rule for s/w path & add route rule for client */
+					if(del_mac_flt_blacklist_rule(it->second->mac_v6_flt_rule_hdl,	IPA_IP_v6))
+					{
+						IPACMERR("unbale to del mac flt blacklist v6 UL rule for index: %d\n", eth_index);
+						return IPACM_FAILURE;
+					}
+					if(handle_eth_client_mac_flt_route_rule(IPA_IP_v6, eth_index, it->second->is_blacklist))
+					{
+						IPACMERR("unbale to add v6 rt rule for index: %d\n", eth_index);
+						return IPACM_FAILURE;
+					}
+					it->second->mac_v6_rt_del_flt_set = false;
+				}
+				/* remove from original/copy client list as whitelisted client */
+				IPACM_Iface::ipacmcfg->clear_whitelist_mac_add(mac_addr);
+				mac_flt_lists.erase(it->first);
+			}
+		}
+	}
+	return IPACM_SUCCESS;
+}
+
+/* add_mac_flt_ul_rule add UL rule for mac based filtering on top */
+int IPACM_Lan::add_mac_flt_blacklist_rule(uint8_t *mac_addr, ipa_ip_type iptype, uint32_t *flt_rule_hdl)
+{
+		IPACMDBG_H(" mac_flt_add_rule \n");
+
+	int len =0;
+	struct ipa_ioc_add_flt_rule_v2 *pFilteringTable_v2 = NULL;
+	struct ipa_flt_rule_add_v2 flt_rule_entry_v2;
+	uint8_t mac_a[6];
+	std::array<uint8_t, 6> mac = {0};
+	std::map<std::array<uint8_t, 6>, mac_flt_type * >::iterator it;
+
+	memcpy(mac_a,mac_addr,IPA_MAC_ADDR_SIZE);
+	std::copy(std::begin(mac_a), std::end(mac_a), std::begin(mac));
+
+	len = sizeof(struct ipa_ioc_add_flt_rule_v2);
+	pFilteringTable_v2 = (struct ipa_ioc_add_flt_rule_v2*)malloc(len);
+	if (!pFilteringTable_v2)
+	{
+		IPACMERR("Failed to allocate ipa_ioc_add_flt_rule_v2 memory...\n");
+		return IPACM_FAILURE;
+	}
+
+	memset(pFilteringTable_v2, 0, len);
+	pFilteringTable_v2->rules = (uintptr_t)calloc(1, sizeof(struct ipa_flt_rule_add_v2));
+	if (!pFilteringTable_v2->rules)
+	{
+		IPACMERR("Failed to allocate ipa_flt_rule_add_v2 memory...\n");
+		free(pFilteringTable_v2);
+		return IPACM_FAILURE;
+	}
+
+	pFilteringTable_v2->commit = 1;
+	pFilteringTable_v2->ep = rx_prop->rx[0].src_pipe;
+	pFilteringTable_v2->global = false;
+	pFilteringTable_v2->num_rules = 1;
+	pFilteringTable_v2->ip = iptype;
+	pFilteringTable_v2->flt_rule_size = sizeof(struct ipa_flt_rule_add_v2);
+
+	memset(&flt_rule_entry_v2, 0, sizeof(struct ipa_flt_rule_add_v2)); // Zero All Fields
+	flt_rule_entry_v2.at_rear = false;
+	flt_rule_entry_v2.flt_rule_hdl = -1;
+	flt_rule_entry_v2.status = -1;
+	flt_rule_entry_v2.rule.retain_hdr = 1;
+	flt_rule_entry_v2.rule.action = IPA_PASS_TO_EXCEPTION;
+	flt_rule_entry_v2.rule.hashable = false;
+
+	flt_rule_entry_v2.rule.attrib.attrib_mask |= IPA_FLT_MAC_SRC_ADDR_ETHER_II;
+	memset(flt_rule_entry_v2.rule.attrib.src_mac_addr_mask, 0xFF, sizeof(flt_rule_entry_v2.rule.attrib.src_mac_addr_mask));
+	memcpy(flt_rule_entry_v2.rule.attrib.src_mac_addr, mac_addr, sizeof(flt_rule_entry_v2.rule.attrib.src_mac_addr));
+
+	memcpy((void *)pFilteringTable_v2->rules, &flt_rule_entry_v2, sizeof(flt_rule_entry_v2));
+
+	if(false == m_filtering.AddFilteringRule_v2(pFilteringTable_v2)) {
+		IPACMERR("Error Adding RuleTable to Filtering, aborting...\n");
+		free((void *)pFilteringTable_v2->rules);
+		free(pFilteringTable_v2);
+		return IPACM_FAILURE;
+	}
+	else
+	{
+		*flt_rule_hdl = ((struct ipa_flt_rule_add_v2 *)pFilteringTable_v2->rules)[0].flt_rule_hdl;
+	}
+
+free((void *)pFilteringTable_v2->rules);
+free(pFilteringTable_v2);
+return IPACM_SUCCESS;
+}
+
+int IPACM_Lan::handle_eth_client_mac_flt_route_rule(ipa_ip_type ip_type, int clt_index, bool is_blacklist)
+{
+	ipacm_event_data_all data;
+
+	if(is_blacklist)
+	{
+		if(ip_type == IPA_IP_v4 )
+		{
+			if(delete_eth_rtrules(clt_index,IPA_IP_v4))
+			{
+					IPACMERR("unbale to delete v4 rt rules for index: %d\n", clt_index);
+					return IPACM_FAILURE;
+			}
+		}
+
+		if(ip_type ==  IPA_IP_v6)
+		{
+			if(delete_eth_rtrules(clt_index,IPA_IP_v6))
+			{
+					IPACMERR("unbale to delete v6 rt rules for index: %d\n", clt_index);
+					return IPACM_FAILURE;
+			}
+		}
+	}
+	else
+	{
+		if(ip_type == IPA_IP_v4)
+		{
+#ifdef FEATURE_IPACM_PER_CLIENT_STATS
+			if (IPACM_Iface::ipacmcfg->ipacm_lan_stats_enable == false)
+#endif
+			{
+				if(handle_eth_client_route_rule(get_client_memptr(eth_client, clt_index)->mac, IPA_IP_v4))
+				{
+					IPACMERR("unbale to add v4 route rules for index: %d\n", clt_index);
+					return IPACM_FAILURE;
+				}
+				memset(&data, 0, sizeof(data));
+				data.ipv4_addr = get_client_memptr(eth_client, clt_index)->v4_addr,
+				data.if_index =  get_client_memptr(eth_client, clt_index)->if_index;
+				data.iptype = IPA_IP_v4;
+				CtList->HandleNeighIpAddrAddEvt(&data);
+			}
+#ifdef FEATURE_IPACM_PER_CLIENT_STATS
+			else
+			{
+#ifdef IPA_HW_FNR_STATS
+				if (IPACM_Iface::ipacmcfg->hw_fnr_stats_support)
+				{
+					if(handle_eth_client_route_rule_ext_v2(get_client_memptr(eth_client, clt_index)->mac,IPA_IP_v4,
+					get_client_memptr(eth_client, clt_index)->dl_cnt_idx))
+					{
+						IPACMERR("unbale to add v4 route rules for index: %d\n", clt_index);
+						return IPACM_FAILURE;
+					}
+				}
+				else
+#endif //IPA_HW_FNR_STATS
+				{
+					if(handle_eth_client_route_rule_ext(get_client_memptr(eth_client, clt_index)->mac, IPA_IP_v4))
+					{
+						IPACMERR("unbale to add v4 route rules for index: %d\n", clt_index);
+						return IPACM_FAILURE;
+					}
+				}
+			}
+#endif
+		}
+
+		if(ip_type == IPA_IP_v6)
+		{
+#ifdef FEATURE_IPACM_PER_CLIENT_STATS
+			if (IPACM_Iface::ipacmcfg->ipacm_lan_stats_enable == false)
+#endif
+			{
+				if(handle_eth_client_route_rule(get_client_memptr(eth_client, clt_index)->mac, IPA_IP_v6))
+				{
+					IPACMERR("unbale to add v6 route rules for index: %d\n", clt_index);
+					return IPACM_FAILURE;
+				}
+			}
+#ifdef FEATURE_IPACM_PER_CLIENT_STATS
+			else
+			{
+#ifdef IPA_HW_FNR_STATS
+				if (IPACM_Iface::ipacmcfg->hw_fnr_stats_support)
+				{
+					if(handle_eth_client_route_rule_ext_v2(get_client_memptr(eth_client, clt_index)->mac,IPA_IP_v6,
+					get_client_memptr(eth_client, clt_index)->dl_cnt_idx))
+					{
+						IPACMERR("unbale to add v4 route rules for index: %d\n", clt_index);
+						return IPACM_FAILURE;
+					}
+				}
+				else
+#endif //IPA_HW_FNR_STATS
+				{
+					if(handle_eth_client_route_rule_ext(get_client_memptr(eth_client, clt_index)->mac, IPA_IP_v6))
+					{
+						IPACMERR("unbale to add v4 route rules for index: %d\n", clt_index);
+						return IPACM_FAILURE;
+					}
+				}
+			}
+#endif
+		}
+	}
+	return IPACM_SUCCESS;
+}
+int IPACM_Lan::del_mac_flt_blacklist_rule(uint32_t flt_rule_hdl, ipa_ip_type iptype)
+{
+	if(m_filtering.DeleteFilteringHdls(&flt_rule_hdl, iptype, 1) == false)
+	{
+		IPACMDBG("mac flt rule deletion failed\n");
+		return IPACM_FAILURE;
+	}
+		return IPACM_SUCCESS;
+}
+
+/* del all mac rules for wan client */
+void IPACM_Lan::delete_eth_mac_flt_rules()
+{
+	uint8_t mac_addr[6];
+	int eth_index;
+	/* copy current list to avoid concurrency issues*/
+	std::map<std::array<uint8_t, 6>, mac_flt_type *> mac_flt_lists = IPACM_Iface::ipacmcfg->get_mac_flt_lists();
+	for (auto it = mac_flt_lists.begin(); it != mac_flt_lists.end(); ++it)
+	{
+		std::copy(std::begin(it->first), std::end(it->first), std::begin(mac_addr));
+		eth_index = get_eth_client_index(mac_addr);
+		if(eth_index != IPACM_INVALID_INDEX && it->second->is_blacklist)
+		{
+			handle_eth_mac_flt_conn_disc(mac_addr, false);
+		}
+	}
+ }
+
+/* handle_wlan_mac_flt_conn_disc handles the scenario when mac flt ioctl is received before the client
+	structure is created */
+int IPACM_Lan::handle_eth_mac_flt_conn_disc(uint8_t *mac_addr, bool eth_client_conn)
+{
+
+	uint8_t mac_a[6];
+	std::map<std::array<uint8_t, 6>, mac_flt_type * >::iterator it;
+	std::map<std::array<uint8_t, 6>, mac_flt_type *> mac_flt_lists;
+	int eth_index;
+	std::array<uint8_t, 6> mac = {0};
+
+	memcpy(mac_a,mac_addr,IPA_MAC_ADDR_SIZE);
+	std::copy(std::begin(mac_a), std::end(mac_a), std::begin(mac));
+	mac_flt_lists = IPACM_Iface::ipacmcfg->get_mac_flt_lists();
+
+	it = IPACM_Iface::ipacmcfg->mac_flt_lists.find(mac);
+	eth_index = get_eth_client_index(mac_addr);
+
+	if(eth_index != IPACM_INVALID_INDEX)
+	{
+		if(eth_client_conn)
+		{
+			/* install UL and rt rules */
+			if(get_client_memptr(eth_client, eth_index)->ipv4_set && !it->second->mac_v4_rt_del_flt_set)
+			{
+				if(add_mac_flt_blacklist_rule(mac_addr,IPA_IP_v4, &(it->second->mac_v4_flt_rule_hdl)))
+				{
+					IPACMERR("unbale to add mac flt blacklist v4 UL rule for index: %d\n", eth_index);
+					return IPACM_FAILURE;
+				}
+				it->second->mac_v4_rt_del_flt_set = true;
+			}
+			if (get_client_memptr(eth_client, eth_index)->ipv6_set && !it->second->mac_v6_rt_del_flt_set)
+			{
+				if(add_mac_flt_blacklist_rule(mac_addr,IPA_IP_v6, &(it->second->mac_v6_flt_rule_hdl)))
+				{
+					IPACMERR("unbale to add mac flt blacklist v6 UL rule for index: %d\n", eth_index);
+					return IPACM_FAILURE;
+				}
+				it->second->mac_v6_rt_del_flt_set = true;
+			}
+		}
+		else
+		{
+			if(it->second->mac_v4_rt_del_flt_set)
+			{
+				if(del_mac_flt_blacklist_rule(it->second->mac_v4_flt_rule_hdl,  IPA_IP_v4))
+				{
+					IPACMERR("unbale to del mac flt blacklist v4 UL rule for index: %d\n", eth_index);
+					return IPACM_FAILURE;
+				}
+				it->second->mac_v4_rt_del_flt_set = false;
+			}
+			if(it->second->mac_v6_rt_del_flt_set)
+			{
+				if(del_mac_flt_blacklist_rule(it->second->mac_v4_flt_rule_hdl,  IPA_IP_v6))
+				{
+					IPACMERR("unbale to del mac flt blacklist v6 UL rule for index: %d\n", eth_index);
+					return IPACM_FAILURE;
+				}
+				it->second->mac_v6_rt_del_flt_set = false;
+			}
+		}
+		/* In case of client blackklisted, update config mac list with copy mac flt list value */
+		IPACM_Iface::ipacmcfg->update_mac_flt_lists(mac_addr, it->second);
+	}
+	return IPACM_SUCCESS;
+}
+
 #ifdef FEATURE_L2TP
 int IPACM_Lan::handle_l2tp_neigh(ipacm_event_data_all *data)
 {
@@ -5387,7 +5780,8 @@ int IPACM_Lan::handle_down_evt()
 		}
 	}
 	eth_bridge_post_event(IPA_ETH_BRIDGE_IFACE_DOWN, IPA_IP_MAX, NULL, NULL, NULL);
-
+	/* delete eth client mac rules if any */
+	delete_eth_mac_flt_rules();
 /* Delete private subnet*/
 #ifdef FEATURE_IPA_ANDROID
 	if (ip_type != IPA_IP_v6)

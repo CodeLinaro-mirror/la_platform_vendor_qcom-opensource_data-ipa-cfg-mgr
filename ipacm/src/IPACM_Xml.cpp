@@ -179,8 +179,7 @@ static int ipacm_cfg_xml_parse_tree
 #endif
 						IPACM_util_icmp_string((char*)xml_node->name, IPACM_L2TP_TAG) == 0 ||
 						IPACM_util_icmp_string((char*)xml_node->name, IPACM_MPDN_TAG) == 0 ||
-						IPACM_util_icmp_string((char*)xml_node->name, IPACM_SOCKSv5_TAG) == 0 ||
-						IPACM_util_icmp_string((char*)xml_node->name, IP_PassthroughFlag_TAG) == 0)
+						IPACM_util_icmp_string((char*)xml_node->name, IPACM_SOCKSv5_TAG) == 0)
 				{
 					if (0 == IPACM_util_icmp_string((char*)xml_node->name, IFACE_TAG))
 					{
@@ -201,44 +200,6 @@ static int ipacm_cfg_xml_parse_tree
 					}
 					/* go to child */
 					ret_val = ipacm_cfg_xml_parse_tree(xml_node->children, config);
-				}
-				else if (IPACM_util_icmp_string((char*)xml_node->name, IP_PassthroughMode_TAG) == 0)
-				{
-					IPACMDBG_H("inside IP Passthrough\n");
-					content = IPACM_read_content_element(xml_node);
-					if (content)
-					{
-						str_size = strlen(content);
-						memset(content_buf, 0, sizeof(content_buf));
-						memcpy(content_buf, (void *)content, str_size);
-						if (atoi(content_buf))
-						{
-							config->ip_passthrough_mode = true;
-							IPACMDBG_H("Passthrough enable %d buf(%d)\n", config->ip_passthrough_mode, atoi(content_buf));
-						}
-						else
-						{
-							config->ip_passthrough_mode = false;
-							IPACMDBG_H("Passthrough enable %d buf(%d)\n", config->ip_passthrough_mode, atoi(content_buf));
-						}
-					}
-				}
-				else if (IPACM_util_icmp_string((char*)xml_node->name, IP_PassthroughMacAddr_TAG) == 0)
-				{
-					IPACMDBG_H("inside IP Passthrough\n");
-					content = IPACM_read_content_element(xml_node);
-					if (content)
-					{
-						str_size = strlen(content);
-						memset(content_buf, 0, sizeof(content_buf));
-						memcpy(content_buf, (void *)content, str_size);
-						content_buf[MAX_XML_STR_LEN-1] = '\0';
-						IPACMDBG_H("IP Passthrough mac: %s\n", content_buf);
-						eth_addr = ether_aton(content_buf);
-						memset(&config->ip_passthrough_mac, 0, sizeof(config->ip_passthrough_mac));
-						if (eth_addr)
-							config->ip_passthrough_mac = *eth_addr;
-					}
 				}
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
 				else if (IPACM_util_icmp_string((char*)xml_node->name, LAN_Stats_Enable_TAG) == 0)

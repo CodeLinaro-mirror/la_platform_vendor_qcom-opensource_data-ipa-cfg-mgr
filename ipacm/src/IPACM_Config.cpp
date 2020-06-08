@@ -553,7 +553,7 @@ int IPACM_Config::Init(void)
 	IPACMDBG_H("ipacm_odu_mode %d\n", ipacm_odu_router_mode);
 	IPACMDBG_H("ipacm_odu_embms_enable %d\n", ipacm_odu_embms_enable);
 
-	ipacm_ip_passthrough_mode = cfg->ip_passthrough_mode;
+	ipacm_ip_passthrough_mode = false;
 	IPACMDBG_H("ipacm_ip_passthrough_mode %d. \n", ipacm_ip_passthrough_mode);
 
 	memcpy(ipacm_ip_passthrough_mac, cfg->ip_passthrough_mac.ether_addr_octet, IPA_MAC_ADDR_SIZE);

@@ -196,10 +196,6 @@ if (!(a)) {                                                 \
 #define IPV6CT_ENABLED_TAG                   "IPv6CTEnabled"
 #define IPV6CT_MAX_ENTRIES_TAG               "MaxIpv6CTEntries"
 
-#define IP_PassthroughFlag_TAG               "IPPassthroughFlag"
-#define IP_PassthroughMode_TAG               "IPPassthroughMode"
-#define IP_PassthroughMacAddr_TAG            "IPPassthroughMacAddr"
-
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
 #define LAN_Stats_TAG                        "LANStats"
 #define LAN_Stats_Enable_TAG                 "EnableLANStats"
@@ -331,7 +327,6 @@ typedef struct  _IPACM_conf_t
 	bool router_mode_enable;
 	bool odu_embms_enable;
 	int num_wlan_guest_ap;
-	bool ip_passthrough_mode;
 	struct ether_addr ip_passthrough_mac;
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
 	bool lan_stats_enable;

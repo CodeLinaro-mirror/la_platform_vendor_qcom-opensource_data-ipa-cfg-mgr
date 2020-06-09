@@ -227,7 +227,7 @@ public:
 	pthread_mutex_t mac_flt_info_lock;
 	/* map to store whitelisted and blacklisted unique mac adrrs */
 	std::map<std::array<uint8_t, 6>, mac_flt_type *> mac_flt_lists;
-#ifdef ipa_ioc_mac_client_list_type
+#ifdef IPA_IOC_SET_MAC_FLT
 	void mac_flt_info(ipa_ioc_mac_client_list_type *mac_flt_data);
 #endif
 	bool mac_addr_in_blacklist(uint8_t *mac_addr);

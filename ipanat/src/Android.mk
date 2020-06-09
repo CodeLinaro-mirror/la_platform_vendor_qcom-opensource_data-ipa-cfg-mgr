@@ -1,6 +1,10 @@
 BOARD_PLATFORM_LIST := msm8909
 BOARD_PLATFORM_LIST += msm8916
 BOARD_PLATFORM_LIST += msm8917
+ifeq ($(TARGET_BOARD_SUFFIX),_gvmq)
+BOARD_PLATFORM_LIST += msmnile
+endif
+
 ifneq ($(call is-board-platform-in-list,$(BOARD_PLATFORM_LIST)),true)
 ifneq (,$(filter $(QCOM_BOARD_PLATFORMS),$(TARGET_BOARD_PLATFORM)))
 ifneq (, $(filter aarch64 arm arm64, $(TARGET_ARCH)))

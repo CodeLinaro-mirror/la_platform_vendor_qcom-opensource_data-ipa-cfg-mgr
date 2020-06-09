@@ -531,7 +531,7 @@ int IPACM_IfaceManager::create_iface_instance(ipacm_ifacemgr_data *param)
 #ifdef FEATURE_SOCKSv5
 					IPACM_EvtDispatcher::registr(IPA_HANDLE_SOCKSv5_UP, w);
 					IPACM_EvtDispatcher::registr(IPA_HANDLE_SOCKSv5_DOWN, w);
-
+					IPACM_EvtDispatcher::registr(IPA_UPDATE_SOCKSv5_v6_CONN, w);
 #endif
 					if(is_sta_mode == WLAN_WAN)
 					{

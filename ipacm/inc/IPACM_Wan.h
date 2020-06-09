@@ -620,6 +620,10 @@ private:
 	/* configure the initial firewall filter rules */
 	int config_dft_embms_rules(ipa_ioc_add_flt_rule *pFilteringTable_v4, ipa_ioc_add_flt_rule *pFilteringTable_v6);
 
+#ifdef FEATURE_SOCKSv5
+	/* configure the socksv5 dl rules */
+	int config_socksv5_rules(ipa_ioc_add_flt_rule *pFilteringTable_v6);
+#endif
 	int handle_route_del_evt(ipa_ip_type iptype);
 
 	int del_dft_firewall_rules(ipa_ip_type iptype);
@@ -665,7 +669,7 @@ private:
 	int add_dft_filtering_rule(struct ipa_flt_rule_add* rules, int rule_offset, ipa_ip_type iptype);
 #endif
 
-	int install_wan_filtering_rule(bool is_sw_routing);
+	int install_wan_filtering_rule(bool is_sw_routing, bool is_socksv5_en = false);
 
 	void change_to_network_order(ipa_ip_type iptype, ipa_rule_attrib* attrib);
 

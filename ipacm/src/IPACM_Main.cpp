@@ -258,7 +258,7 @@ void* ipa_driver_msg_notifier(void *param)
 	ipacm_event_data_all* new_neigh_data;
 	ipa_ioc_gsb_info *event_gsb = NULL;
 	ipa_ioc_pdn_config *pdn_info = NULL;
-#ifdef ipa_ioc_mac_client_list_type
+#ifdef IPA_IOC_SET_MAC_FLT
 	ipa_ioc_mac_client_list_type *event_mac_flt = NULL;
 #endif
 #ifdef FEATURE_SOCKSv5
@@ -906,7 +906,7 @@ void* ipa_driver_msg_notifier(void *param)
 			/* Update IP Passthrough config. */
 			IPACM_Iface::ipacmcfg->update_ip_ppasthrough_config(pdn_info);
 			break;
-#ifdef ipa_ioc_mac_client_list_type
+#ifdef IPA_IOC_SET_MAC_FLT
 		case IPA_MAC_FLT_EVENT:
 			event_mac_flt = (ipa_ioc_mac_client_list_type *)(buffer + sizeof(struct ipa_msg_meta));
 			IPACMDBG_H("Received IPA_MAC_FLT_EVENT having flt state %d\n", event_mac_flt->flt_state);

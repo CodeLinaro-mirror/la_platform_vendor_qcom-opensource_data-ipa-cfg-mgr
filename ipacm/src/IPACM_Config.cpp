@@ -2363,7 +2363,7 @@ int IPACM_Config::query_mux_id(rmnet_mux_id_info *mux_id_info)
 
 #endif //defined(FEATURE_SOCKSv5) && defined (IPA_SOCKV5_ADD)
 
-#ifdef ipa_ioc_mac_client_list_type
+#ifdef IPA_IOC_SET_MAC_FLT
 /* mac_flt_info updates the map that contains mac addrs provided by QCMAP to be
    offloaded to S/W or HW path based on flt_state value */
 void IPACM_Config::mac_flt_info(ipa_ioc_mac_client_list_type *mac_flt_data)

@@ -373,6 +373,10 @@ int IPACM_IfaceManager::create_iface_instance(ipacm_ifacemgr_data *param)
 					IPACM_EvtDispatcher::registr(IPA_PRIVATE_SUBNET_CHANGE_EVENT, odu); 	// register for IPA_PRIVATE_SUBNET_CHANGE_EVENT event
 					IPACM_EvtDispatcher::registr(IPA_CFG_CHANGE_EVENT, odu); 				// register for IPA_CFG_CHANGE event
 #endif
+#ifdef FEATURE_SOCKSv5
+						IPACM_EvtDispatcher::registr(IPA_HANDLE_SOCKSv5_UP, odu);
+						IPACM_EvtDispatcher::registr(IPA_HANDLE_SOCKSv5_DOWN, odu);
+#endif
 #ifdef FEATURE_IPACM_UL_FIREWALL
 					IPACM_EvtDispatcher::registr(IPA_FIREWALL_CHANGE_EVENT, odu);			// register for Firewall change event
 #endif //FEATURE_IPACM_UL_FIREWALL
@@ -523,6 +527,11 @@ int IPACM_IfaceManager::create_iface_instance(ipacm_ifacemgr_data *param)
 						IPACM_EvtDispatcher::registr(IPA_ADD_L2TP_CLIENT, w);
 						IPACM_EvtDispatcher::registr(IPA_DEL_L2TP_CLIENT, w);
 					}
+#endif
+#ifdef FEATURE_SOCKSv5
+					IPACM_EvtDispatcher::registr(IPA_HANDLE_SOCKSv5_UP, w);
+					IPACM_EvtDispatcher::registr(IPA_HANDLE_SOCKSv5_DOWN, w);
+
 #endif
 					if(is_sta_mode == WLAN_WAN)
 					{

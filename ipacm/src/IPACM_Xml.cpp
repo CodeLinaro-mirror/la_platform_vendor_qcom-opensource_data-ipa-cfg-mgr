@@ -179,6 +179,7 @@ static int ipacm_cfg_xml_parse_tree
 #endif
 						IPACM_util_icmp_string((char*)xml_node->name, IPACM_L2TP_TAG) == 0 ||
 						IPACM_util_icmp_string((char*)xml_node->name, IPACM_MPDN_TAG) == 0 ||
+						IPACM_util_icmp_string((char*)xml_node->name, IPACM_SOCKSv5_TAG) == 0 ||
 						IPACM_util_icmp_string((char*)xml_node->name, IP_PassthroughFlag_TAG) == 0)
 				{
 					if (0 == IPACM_util_icmp_string((char*)xml_node->name, IFACE_TAG))

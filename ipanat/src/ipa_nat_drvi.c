@@ -48,6 +48,7 @@
 #define IPA_NAT_TABLE_NAME "IPA NAT table"
 #define IPA_NAT_INDEX_TABLE_NAME "IPA NAT index table"
 
+
 #undef min
 #define min(a, b) ((a) < (b)) ? (a) : (b)
 
@@ -74,7 +75,7 @@ extern pthread_mutex_t nat_mutex;
 
 static ipa_nat_pdn_entry pdns[IPA_MAX_PDN_NUM];
 static int num_pdns = 0;
-
+static int Hash_token = 69;
 /*
  * ----------------------------------------------------------------------------
  * Private helpers for manipulating regular tables
@@ -321,6 +322,8 @@ static int table_entry_copy_from_user(
 	nat_entry->uc_activation_index = user_rule->uc_activation_index;
 	nat_entry->s = user_rule->s;
 	nat_entry->ucp = user_rule->ucp;
+	nat_entry->dst_only = user_rule->dst_only;
+	nat_entry->src_only = user_rule->src_only;
 
 	nat_entry->ip_chksum =
 		ipa_nati_calc_ip_cksum(pub_ip_addr, user_rule->private_ip);
@@ -1188,12 +1191,12 @@ int ipa_nati_alloc_pdn(
 	struct ipa_ioc_nat_pdn_entry pdn_data;
 	int i, ret;
 
-	IPADBG("alloc PDN  for ip %d\n", pdn_info->public_ip);
+	IPADBG("alloc PDN  for ip 0x%x\n", pdn_info->public_ip);
 
 	memset(&zero_test, 0, sizeof(zero_test));
 
 	if(num_pdns >= (IPA_MAX_PDN_NUM - 1)) {
-		IPAERR("exceeded max num of PDNs\n");
+		IPAERR("exceeded max num of PDNs, num_pdns %d\n", num_pdns);
 		return -EIO;
 	}
 
@@ -1236,6 +1239,7 @@ int ipa_nati_alloc_pdn(
 	{
 		num_pdns++;
 		*pdn_index = i;
+		IPADBG("modify num_pdns (%d)\n", num_pdns);
 	}
 
 	return ret;
@@ -1287,7 +1291,7 @@ int ipa_nati_dealloc_pdn(
 
 	num_pdns--;
 
-	IPADBG("successfully removed pdn from index %d\n", pdn_index);
+	IPADBG("successfully removed pdn from index %d num_pdns %d\n", pdn_index, num_pdns);
 
 	return 0;
 }
@@ -1456,8 +1460,7 @@ int ipa_NATI_add_ipv4_tbl(
 	 * always use this ip as the single PDN address
 	 */
 	pdns[0].public_ip = public_ip_addr;
-
-	num_pdns++;
+	num_pdns = 1;
 
 	nat_cache_ptr->table_cnt++;
 
@@ -1466,7 +1469,7 @@ int ipa_NATI_add_ipv4_tbl(
 	 */
 	*tbl_hdl = MAKE_TBL_HDL(nat_cache_ptr->table_cnt, nmi);
 
-	IPADBG("tbl_hdl value(0x%08X)\n", *tbl_hdl);
+	IPADBG("tbl_hdl value(0x%08X) num_pdns (%d)\n", *tbl_hdl, num_pdns);
 
 	goto unlock;
 
@@ -1712,6 +1715,22 @@ int ipa_NATI_add_ipv4_rule(
 		goto unlock;
 	}
 
+	/* src_only */
+	if (clnt_rule->src_only) {
+		new_entry_index = dst_hash(
+			nat_cache_ptr,
+			pdns[clnt_rule->pdn_index].public_ip,
+			clnt_rule->target_ip,
+			clnt_rule->target_port,
+			clnt_rule->public_port,
+			clnt_rule->protocol,
+			nat_table->table.table_entries - 1) + Hash_token;
+		new_entry_index = (new_entry_index & (nat_table->table.table_entries - 1));
+		if (new_entry_index == 0) {
+			new_entry_index = nat_table->table.table_entries - 1;
+		}
+		Hash_token++;
+	} else {
 	new_entry_index = dst_hash(
 		nat_cache_ptr,
 		pdns[clnt_rule->pdn_index].public_ip,
@@ -1720,6 +1739,7 @@ int ipa_NATI_add_ipv4_rule(
 		clnt_rule->public_port,
 		clnt_rule->protocol,
 		nat_table->table.table_entries - 1);
+	}
 
 	ret = ipa_table_add_entry(
 		&nat_table->table,
@@ -1733,6 +1753,21 @@ int ipa_NATI_add_ipv4_rule(
 		goto unlock;
 	}
 
+	/* dst_only */
+	if (clnt_rule->dst_only) {
+		new_index_tbl_entry_index =
+			src_hash(clnt_rule->private_ip,
+				 clnt_rule->private_port,
+				 clnt_rule->target_ip,
+				 clnt_rule->target_port,
+				 clnt_rule->protocol,
+				 nat_table->table.table_entries - 1) + Hash_token;
+		new_index_tbl_entry_index = (new_index_tbl_entry_index & (nat_table->table.table_entries - 1));
+		if (new_index_tbl_entry_index == 0) {
+			new_index_tbl_entry_index = nat_table->table.table_entries - 1;
+		}
+		Hash_token++;
+	} else {
 	new_index_tbl_entry_index =
 		src_hash(clnt_rule->private_ip,
 				 clnt_rule->private_port,
@@ -1740,7 +1775,7 @@ int ipa_NATI_add_ipv4_rule(
 				 clnt_rule->target_port,
 				 clnt_rule->protocol,
 				 nat_table->table.table_entries - 1);
-
+	}
 	ret = ipa_table_add_entry(
 		&nat_table->index_table,
 		(void*) &new_entry_index,

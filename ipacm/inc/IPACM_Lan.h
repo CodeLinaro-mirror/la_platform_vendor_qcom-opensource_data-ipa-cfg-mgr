@@ -454,6 +454,13 @@ public:
 	int handle_l2tp_neigh(ipacm_event_data_all *data);
 #endif
 
+
+#ifdef FEATURE_SOCKSv5
+	/* add socksv5 flt rule */
+	int add_socksv5_flt_rule(ipacm_event_connection *data_event_conn);
+	int del_socksv5_flt_rule(void);
+#endif
+
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
 private:
 	static bool lan_stats_inited;
@@ -887,6 +894,10 @@ protected:
 	uint32_t ipv6_icmp_flt_rule_hdl[NUM_IPV6_ICMP_FLT_RULE];
 #ifdef FEATURE_L2TP
 	uint32_t l2tp_inner_private_subnet_flt_rule_hdl[IPA_MAX_PRIVATE_SUBNET_ENTRIES];
+#endif
+
+#ifdef FEATURE_SOCKSv5
+	uint32_t socksv5_flt_hdl_v6;
 #endif
 
 	bool is_active;

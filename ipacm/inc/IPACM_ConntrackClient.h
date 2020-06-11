@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2018 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2013, 2018, 2020 The Linux Foundation. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -101,8 +101,8 @@ public:
 		 IPACMLOG(" %s(0x%x): %d.%d.%d.%d\n", X, Y, ((Y>>24) & 0xFF), ((Y>>16) & 0xFF), ((Y>>8) & 0xFF), (Y & 0xFF));
 #endif
 
-#define log_nat(A,B,C,D,E,F) \
-		IPACMDBG_H("protocol %d Private IP: %d.%d.%d.%d\t Target IP: %d.%d.%d.%d\t private port: %d public port: %d %s",A,((B>>24) & 0xFF), ((B>>16) & 0xFF), ((B>>8) & 0xFF), (B & 0xFF), ((C>>24) & 0xFF), ((C>>16) & 0xFF),((C>>8) & 0xFF),(C & 0xFF),D,E,F);
+#define log_nat(A,B,C,D,E,F,G,H,I) \
+		IPACMDBG_H("protocol %d Private IP: %d.%d.%d.%d\t Target IP: %d.%d.%d.%d\t private port: %d public port: %d target port: %d src-only: %d dst-only:%d %s",A,((B>>24) & 0xFF), ((B>>16) & 0xFF), ((B>>8) & 0xFF), (B & 0xFF), ((C>>24) & 0xFF), ((C>>16) & 0xFF),((C>>8) & 0xFF),(C & 0xFF),D,E,F,G,H,I);
 
 };
 

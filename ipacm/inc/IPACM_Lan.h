@@ -102,6 +102,7 @@ typedef struct _ipa_eth_client
 	int ipv6_set;
 	bool ipv4_header_set;
 	bool ipv6_header_set;
+	int if_index;
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
 	bool ipv4_ul_rules_set;
 	bool ipv6_ul_rules_set;
@@ -528,6 +529,9 @@ protected:
 	void HandleNeighIpAddrAddEvt(ipacm_event_data_all *data);
 	void HandleNeighIpAddrDelEvt(bool ipv4_set, uint32_t ipv4_addr,
 		int ipv6_set, const uint32_t ipv6_addr[IPV6_NUM_ADDR][IPA_IPV6_ADDR_SIZE_IN_WORDS]);
+
+	int add_mac_flt_blacklist_rule(uint8_t *mac_addr, ipa_ip_type iptype, uint32_t *flt_rule_hdl);
+	int del_mac_flt_blacklist_rule(uint32_t flt_rule_hdl, ipa_ip_type iptype);
 
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
 
@@ -1245,6 +1249,12 @@ private:
 #endif
 
 	int construct_mtu_rule(struct ipa_flt_rule *rule, enum ipa_ip_type iptype, uint16_t mtu);
+
+/* functions to handle eth client mac flt based filetring*/
+	int handle_eth_mac_flt_event();
+	void delete_eth_mac_flt_rules();
+	int handle_eth_client_mac_flt_route_rule(ipa_ip_type iptype, int clt_index, bool is_blacklist);
+	int handle_eth_mac_flt_conn_disc(uint8_t * mac_addr, bool con_state_flag);
 };
 
 #endif /* IPACM_LAN_H */

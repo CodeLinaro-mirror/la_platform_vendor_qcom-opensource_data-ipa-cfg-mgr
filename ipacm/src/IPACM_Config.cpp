@@ -139,6 +139,7 @@ const char *ipacm_event_name[] = {
 	__stringify(IPA_ADD_SOCKSv5_CONN),                     /* ipa_socksv5_msg */
 	__stringify(IPA_DEL_SOCKSv5_CONN),                     /* ipa_socksv5_msg */
 #endif
+	__stringify(IPA_MAC_ADD_DEL_FLT_EVENT),                /* ipacm_event_data_mac */
 	__stringify(IPACM_EVENT_MAX),
 };
 
@@ -209,6 +210,7 @@ IPACM_Config::IPACM_Config()
 	pthread_mutex_init(&vlan_l2tp_lock, NULL);
 #endif
 	IPACMDBG_H(" create IPACM_Config constructor\n");
+	pthread_mutex_init(&mac_flt_info_lock, NULL);
 	return;
 }
 
@@ -1359,28 +1361,31 @@ void IPACM_Config::add_vlan_iface(ipa_ioc_vlan_iface_info *data)
 	m_vlan_iface.push_front(new_vlan_info);
 	pthread_mutex_unlock(&vlan_l2tp_lock);
 #ifdef FEATURE_VLAN_MPDN
-	ipacm_event_eth_bridge *evt_data_eth_bridge;
-	ipacm_cmd_q_data eth_bridge_evt;
-
-	evt_data_eth_bridge = (ipacm_event_eth_bridge*)malloc(sizeof(*evt_data_eth_bridge));
-	if(evt_data_eth_bridge == NULL)
+	if (IPACM_Iface::ipacmcfg->ipacm_mpdn_enable == TRUE)
 	{
-		IPACMERR("Failed to allocate memory.\n");
-		return;
+		ipacm_event_eth_bridge *evt_data_eth_bridge;
+		ipacm_cmd_q_data eth_bridge_evt;
+
+		evt_data_eth_bridge = (ipacm_event_eth_bridge*)malloc(sizeof(*evt_data_eth_bridge));
+		if(evt_data_eth_bridge == NULL)
+		{
+			IPACMERR("Failed to allocate memory.\n");
+			return;
+		}
+		memset(evt_data_eth_bridge, 0, sizeof(*evt_data_eth_bridge));
+
+		memcpy(evt_data_eth_bridge->iface_name, data->name,
+			sizeof(evt_data_eth_bridge->iface_name));
+
+		evt_data_eth_bridge->VlanID = data->vlan_id;
+
+		eth_bridge_evt.evt_data = (void*)evt_data_eth_bridge;
+		eth_bridge_evt.event = IPA_ETH_BRIDGE_ADD_VLAN_ID;
+
+		IPACMDBG_H("Posting event %s\n",
+			IPACM_Iface::ipacmcfg->getEventName(eth_bridge_evt.event));
+		IPACM_EvtDispatcher::PostEvt(&eth_bridge_evt);
 	}
-	memset(evt_data_eth_bridge, 0, sizeof(*evt_data_eth_bridge));
-
-	memcpy(evt_data_eth_bridge->iface_name, data->name,
-		sizeof(evt_data_eth_bridge->iface_name));
-
-	evt_data_eth_bridge->VlanID = data->vlan_id;
-
-	eth_bridge_evt.evt_data = (void*)evt_data_eth_bridge;
-	eth_bridge_evt.event = IPA_ETH_BRIDGE_ADD_VLAN_ID;
-
-	IPACMDBG_H("Posting event %s\n",
-		IPACM_Iface::ipacmcfg->getEventName(eth_bridge_evt.event));
-	IPACM_EvtDispatcher::PostEvt(&eth_bridge_evt);
 #endif
 	return;
 }
@@ -1465,28 +1470,31 @@ void IPACM_Config::del_vlan_iface(ipa_ioc_vlan_iface_info *data)
 	pthread_mutex_unlock(&vlan_l2tp_lock);
 
 #ifdef FEATURE_VLAN_MPDN
-	ipacm_event_eth_bridge *evt_data_eth_bridge;
-	ipacm_cmd_q_data eth_bridge_evt;
-
-	evt_data_eth_bridge = (ipacm_event_eth_bridge*)malloc(sizeof(*evt_data_eth_bridge));
-	if(evt_data_eth_bridge == NULL)
+	if (IPACM_Iface::ipacmcfg->ipacm_mpdn_enable == TRUE)
 	{
-		IPACMERR("Failed to allocate memory.\n");
-		return;
+		ipacm_event_eth_bridge *evt_data_eth_bridge;
+		ipacm_cmd_q_data eth_bridge_evt;
+
+		evt_data_eth_bridge = (ipacm_event_eth_bridge*)malloc(sizeof(*evt_data_eth_bridge));
+		if(evt_data_eth_bridge == NULL)
+		{
+			IPACMERR("Failed to allocate memory.\n");
+			return;
+		}
+		memset(evt_data_eth_bridge, 0, sizeof(*evt_data_eth_bridge));
+
+		memcpy(evt_data_eth_bridge->iface_name, data->name,
+			sizeof(evt_data_eth_bridge->iface_name));
+
+		evt_data_eth_bridge->VlanID = data->vlan_id;
+
+		eth_bridge_evt.evt_data = (void*)evt_data_eth_bridge;
+		eth_bridge_evt.event = IPA_ETH_BRIDGE_DEL_VLAN_ID;
+
+		IPACMDBG_H("Posting event %s\n",
+			IPACM_Iface::ipacmcfg->getEventName(eth_bridge_evt.event));
+		IPACM_EvtDispatcher::PostEvt(&eth_bridge_evt);
 	}
-	memset(evt_data_eth_bridge, 0, sizeof(*evt_data_eth_bridge));
-
-	memcpy(evt_data_eth_bridge->iface_name, data->name,
-		sizeof(evt_data_eth_bridge->iface_name));
-
-	evt_data_eth_bridge->VlanID = data->vlan_id;
-
-	eth_bridge_evt.evt_data = (void*)evt_data_eth_bridge;
-	eth_bridge_evt.event = IPA_ETH_BRIDGE_DEL_VLAN_ID;
-
-	IPACMDBG_H("Posting event %s\n",
-		IPACM_Iface::ipacmcfg->getEventName(eth_bridge_evt.event));
-	IPACM_EvtDispatcher::PostEvt(&eth_bridge_evt);
 #endif
 
 	return;
@@ -2354,4 +2362,165 @@ int IPACM_Config::query_mux_id(rmnet_mux_id_info *mux_id_info)
 }
 
 #endif //defined(FEATURE_SOCKSv5) && defined (IPA_SOCKV5_ADD)
+
+#ifdef IPA_IOC_SET_MAC_FLT
+/* mac_flt_info updates the map that contains mac addrs provided by QCMAP to be
+   offloaded to S/W or HW path based on flt_state value */
+void IPACM_Config::mac_flt_info(ipa_ioc_mac_client_list_type *mac_flt_data)
+{
+	std::list<std::array<uint8_t, 6>> mac_list;
+	std::list<std::array<uint8_t, 6>>::iterator it_mac_list;
+	std::array<uint8_t, 6> mac = {0};
+	uint8_t mac_addr[6];
+
+	if(pthread_mutex_lock(&mac_flt_info_lock) != 0)
+	{
+		IPACMERR("Unable to lock the mutex\n");
+		return;
+	}
+
+	IPACMDBG_H("Mac filtering state %d", mac_flt_data->flt_state);
+	/* if flt state is true then only populate mac_list which contains mac addrs
+	   to be blacklisted and num of clients should be max 5. If flt state is false
+	   then do not add anything to list */
+	if(mac_flt_data->flt_state)
+	{
+		for(int i=0; i<mac_flt_data->num_of_clients && mac_flt_data->num_of_clients <=IPA_MAX_NUM_MAC_FLT; i++)
+		{
+			IPACMDBG_H("Passed MAC addr to be blacklisted %02x:%02x:%02x:%02x:%02x:%02x\n",
+						 mac_flt_data->mac_addr[i][0], mac_flt_data->mac_addr[i][1], mac_flt_data->mac_addr[i][2],
+						 mac_flt_data->mac_addr[i][3], mac_flt_data->mac_addr[i][4], mac_flt_data->mac_addr[i][5]);
+			std::copy(std::begin(mac_flt_data->mac_addr[i]), std::end(mac_flt_data->mac_addr[i]), std::begin(mac));
+			mac_list.push_front(mac);
+
+			/* if flt state provided by QCMAP is true then create a node of mac_flt_type
+			   having is_blacklist state as true and insert it into map if not already
+		   	   present */
+			if(IPACM_Iface::ipacmcfg->mac_flt_lists.count(mac) == 0)
+			{
+				mac_flt_type *temp = (mac_flt_type *)malloc(sizeof(mac_flt_type));
+				if(temp == NULL)
+				{
+					IPACMDBG_H("Failed to allocate memmory \n")
+					goto UPDATE;
+				}
+				memset(temp, 0, sizeof(mac_flt_type));
+				temp->is_blacklist = true;
+				IPACM_Iface::ipacmcfg->mac_flt_lists.insert(std::make_pair(mac, temp));
+			}
+		}
+	}
+
+	/* List contains current mac addrs that needs to be offloaded to SW. if empty
+	   then update is_blacklist as false for all stored mac addrs else update only for
+	   those mac addrs that are not present in current list */
+UPDATE:
+	for (auto it = IPACM_Iface::ipacmcfg->mac_flt_lists.begin(); it != IPACM_Iface::ipacmcfg->mac_flt_lists.end();++it)
+	{
+		it_mac_list = std::find(mac_list.begin() , mac_list.end() , it->first);
+			if(!(it_mac_list != mac_list.end()))
+			{
+				std::copy(std::begin(it->first), std::end(it->first), std::begin(mac_addr));
+				IPACMDBG_H("Previous  MAC addr to be whitelisted %02x:%02x:%02x:%02x:%02x:%02x\n",
+						 mac_addr[0], mac_addr[1], mac_addr[2],
+						 mac_addr[3], mac_addr[4], mac_addr[5]);
+				it->second->is_blacklist = false;
+			}
+	}
+	mac_list.clear();
+	pthread_mutex_unlock(&mac_flt_info_lock);
+	return ;
+}
+#endif
+/* mac_addr_in_blacklist checks whether a particular mac addr is blacklisted or not */
+bool IPACM_Config::mac_addr_in_blacklist(uint8_t *mac_addr)
+{
+	uint8_t mac_a[6];
+	std::map<std::array<uint8_t, 6>, mac_flt_type * >::iterator it;
+	std::array<uint8_t, 6> mac = {0};
+
+	if(pthread_mutex_lock(&mac_flt_info_lock) != 0)
+	{
+		IPACMERR("Unable to lock the mutex\n");
+		return false;
+	}
+
+	memcpy(mac_a,mac_addr,IPA_MAC_ADDR_SIZE);
+	std::copy(std::begin(mac_a), std::end(mac_a), std::begin(mac));
+
+	it = IPACM_Iface::ipacmcfg->mac_flt_lists.find(mac);
+	if(it != IPACM_Iface::ipacmcfg->mac_flt_lists.end() && it->second->is_blacklist)
+	{
+		pthread_mutex_unlock(&mac_flt_info_lock);
+		return true;
+	}
+	else
+	{
+		pthread_mutex_unlock(&mac_flt_info_lock);
+		return false;
+	}
+}
+
+/* clear_whitelist_mac_add removes whitelisted mac addr from the previous stored
+   blacklisted mac addrs*/
+void IPACM_Config::clear_whitelist_mac_add(uint8_t * mac_addr)
+{
+	uint8_t mac_a[6];
+	std::array<uint8_t, 6> mac = {0};
+
+	if(pthread_mutex_lock(&mac_flt_info_lock) != 0)
+	{
+		IPACMERR("Unable to lock the mutex\n");
+		return;
+	}
+
+	memcpy(mac_a,mac_addr,IPA_MAC_ADDR_SIZE);
+	std::copy(std::begin(mac_a), std::end(mac_a), std::begin(mac));
+
+	IPACM_Iface::ipacmcfg->mac_flt_lists.erase(mac);
+	IPACMDBG_H("Cleared macaddr from map %02x:%02x:%02x:%02x:%02x:%02x\n",
+						 mac_a[0], mac_a[1], mac_a[2],
+						 mac_a[3], mac_a[4], mac_a[5]);
+	pthread_mutex_unlock(&mac_flt_info_lock);
+	return;
+}
+
+/* return copy of current mac flt list to prevent concurrency issues */
+std::map<std::array<uint8_t, 6>, mac_flt_type *> IPACM_Config::get_mac_flt_lists()
+{
+	std::map<std::array<uint8_t, 6>, mac_flt_type *> copy_mac_flt_lists ;
+	if(pthread_mutex_lock(&mac_flt_info_lock) != 0)
+	{
+		IPACMERR("Unable to lock the mutex\n");
+		return copy_mac_flt_lists;
+	}
+	/* clears previous elemenst from copy list and add current mac flt list elements */
+	copy_mac_flt_lists = mac_flt_lists;
+	pthread_mutex_unlock(&mac_flt_info_lock);
+	return copy_mac_flt_lists;
+}
+
+/* upadte global config list with current state of mac addr */
+void IPACM_Config::update_mac_flt_lists(uint8_t * mac_addr , mac_flt_type *mac_flt_value)
+{
+	uint8_t mac_a[6];
+	std::array<uint8_t, 6> mac = {0};
+
+	if(pthread_mutex_lock(&mac_flt_info_lock) != 0)
+	{
+		IPACMERR("Unable to lock the mutex\n");
+		return ;
+	}
+
+	memcpy(mac_a,mac_addr,IPA_MAC_ADDR_SIZE);
+	std::copy(std::begin(mac_a), std::end(mac_a), std::begin(mac));
+	/*updating all values except flt state as it might change in new list */
+	mac_flt_lists.at(mac)->mac_v4_rt_del_flt_set  = mac_flt_value->mac_v4_rt_del_flt_set;
+	mac_flt_lists.at(mac)->mac_v6_rt_del_flt_set  = mac_flt_value->mac_v6_rt_del_flt_set;
+	mac_flt_lists.at(mac)->mac_v4_flt_rule_hdl = mac_flt_value->mac_v4_flt_rule_hdl;
+	mac_flt_lists.at(mac)->mac_v6_flt_rule_hdl = mac_flt_value->mac_v6_flt_rule_hdl;
+
+	pthread_mutex_unlock(&mac_flt_info_lock);
+	return;
+}
 

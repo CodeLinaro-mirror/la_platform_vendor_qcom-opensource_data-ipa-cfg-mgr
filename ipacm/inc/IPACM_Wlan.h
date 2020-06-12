@@ -71,6 +71,7 @@ typedef struct _ipa_wlan_client
 	bool ipv4_header_set;
 	bool ipv6_header_set;
 	bool power_save_set;
+	int if_index;
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
 	bool ipv4_ul_rules_set;
 	bool ipv6_ul_rules_set;
@@ -540,6 +541,12 @@ private:
 	int handle_wlan_client_reset_rt(ipa_ip_type iptype);
 
 	void handle_SCC_MCC_switch(ipa_ip_type);
+
+/* functions to handle wlan client mac based filtering */
+	int handle_wlan_mac_flt_event();
+	void delete_wlan_mac_flt_rules();
+	int handle_wlan_client_mac_flt_route_rule(ipa_ip_type iptype, int clt_index, bool is_blacklist);
+	int handle_wlan_mac_flt_conn_disc(uint8_t * mac_addr, bool con_state_flag);
 
 };
 

@@ -1070,14 +1070,14 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 #ifdef FEATURE_SOCKSv5
 	case IPA_HANDLE_SOCKSv5_READY:
 		{
-			IPACMDBG_H("Received IPA_HANDLE_SOCKSv5_READY\n");
+			IPACMDBG_H("Received IPA_HANDLE_SOCKSv5_READY %d\n", IPA_HANDLE_SOCKSv5_READY);
 			ipacm_event_connection *data_evt_conn = (ipacm_event_connection *)param;
 			add_socksv5_flt_rule(data_evt_conn);
 		}
 		break;
 
 	case IPA_HANDLE_SOCKSv5_DOWN:
-		IPACMDBG_H("Received IPA_HANDLE_SOCKSv5_DOWN\n");
+		IPACMDBG_H("Received IPA_HANDLE_SOCKSv5_DOWN, %d\n", IPA_HANDLE_SOCKSv5_DOWN);
 		del_socksv5_flt_rule();
 		break;
 #endif
@@ -1376,16 +1376,6 @@ int IPACM_Lan::add_socksv5_flt_rule(ipacm_event_connection *data_event_conn)
 	flt_rule_entry.rule.attrib.u.v6.dst_addr_mask[1] = 0xFFFFFFFF;
 	flt_rule_entry.rule.attrib.u.v6.dst_addr_mask[2] = 0xFFFFFFFF;
 	flt_rule_entry.rule.attrib.u.v6.dst_addr_mask[3] = 0xFFFFFFFF;
-
-	flt_rule_entry.rule.attrib.attrib_mask |= IPA_FLT_SRC_ADDR;
-	flt_rule_entry.rule.attrib.u.v6.src_addr[0] = data_event_conn->src_ipv6_addr[0];
-	flt_rule_entry.rule.attrib.u.v6.src_addr[1] = data_event_conn->src_ipv6_addr[1];
-	flt_rule_entry.rule.attrib.u.v6.src_addr[2] = data_event_conn->src_ipv6_addr[2];
-	flt_rule_entry.rule.attrib.u.v6.src_addr[3] = data_event_conn->src_ipv6_addr[3];
-	flt_rule_entry.rule.attrib.u.v6.src_addr_mask[0] = 0xFFFFFFFF;
-	flt_rule_entry.rule.attrib.u.v6.src_addr_mask[1] = 0xFFFFFFFF;
-	flt_rule_entry.rule.attrib.u.v6.src_addr_mask[2] = 0xFFFFFFFF;
-	flt_rule_entry.rule.attrib.u.v6.src_addr_mask[3] = 0xFFFFFFFF;
 
 	flt_rule_entry.rule.attrib.attrib_mask |= IPA_FLT_NEXT_HDR;
 	flt_rule_entry.rule.attrib.u.v6.next_hdr = (uint8_t)IPACM_FIREWALL_IPPROTO_TCP;
@@ -2706,7 +2696,12 @@ int IPACM_Lan::handle_wan_up(ipa_ip_type ip_type)
 		flt_rule_entry.status = -1;
 		if (IPACM_Iface::ipacmcfg->IsIpv6CTEnabled() && !IPACM_Wan::isWan_Bridge_Mode())
 		{
+#ifndef FEATURE_SOCKSv5
+			/* for v6nat, need to revisit all v6ct related logic*/
 			flt_rule_entry.rule.action = IPA_PASS_TO_SRC_NAT;
+#else
+			flt_rule_entry.rule.action = IPA_PASS_TO_ROUTING;
+#endif
 		}
 		else
 		{
@@ -5786,8 +5781,13 @@ int IPACM_Lan::handle_uplink_filter_rule(ipacm_ext_prop *prop, ipa_ip_type iptyp
 	}
 	else if(iptype == IPA_IP_v6)
 	{
+#ifndef FEATURE_SOCKSv5
+		/* for v6nat, need to revisit all v6ct related logic*/
 		flt_rule_entry.rule.action = IPACM_Iface::ipacmcfg->IsIpv6CTEnabled()?
 			IPA_PASS_TO_SRC_NAT : IPA_PASS_TO_ROUTING;
+#else
+		flt_rule_entry.rule.action = IPA_PASS_TO_ROUTING;
+#endif
 	}
 	else
 	{
@@ -6216,9 +6216,12 @@ bool IPACM_Lan::replicate_flt_rule(ipa_flt_rule_add *replicate_rule,
 	replicate_rule->rule.hashable = q6_rule->rule.hashable;
 	replicate_rule->rule.rule_id = q6_rule->rule.rule_id;
 	replicate_rule->rule.rt_tbl_hdl = q6_rule->rule.rt_tbl_hdl;
+#ifndef FEATURE_SOCKSv5
 	replicate_rule->rule.action = IPACM_Iface::ipacmcfg->IsIpv6CTEnabled()?
 		IPA_PASS_TO_SRC_NAT : IPA_PASS_TO_ROUTING;
-
+#else
+	replicate_rule->rule.action = IPA_PASS_TO_ROUTING;
+#endif
 exit:
 	return ret;
 }
@@ -6495,8 +6498,8 @@ int IPACM_Lan::config_dft_firewall_rules_ul_ex(IPACM_firewall_conf_t* firewall_c
 		}
 		else
 		{	/* No? just install as it is */
-			flt_rule_entry.rule.action = IPA_PASS_TO_EXCEPTION;
-			flt_rule_entry.rule.rt_tbl_idx = 0;
+			flt_rule_entry.rule.action = IPACM_Iface::ipacmcfg->IsIpv6CTEnabled()?
+				IPA_PASS_TO_SRC_NAT : IPA_PASS_TO_ROUTING;
 			memcpy(&pFilteringTable->rules[k], &flt_rule_entry, sizeof(flt_rule_entry));
 			IPACMDBG_H("Modem UL filtering rule %d has index %d\n", i, index);
 			flt_index.rule_id_ex[k] = ext_prop->prop[i].rule_id;
@@ -6783,6 +6786,7 @@ int IPACM_Lan::config_dft_firewall_rules_ul_ex(IPACM_firewall_conf_t* firewall_c
 int IPACM_Lan::disable_dft_firewall_rules_ul_ex(int vid)
 {
 	int ret;
+	ipacm_event_vlan_pdn data;
 
 	if(IPACM_Iface::ipacmcfg->ipv6_nat_enable)
 	{
@@ -6796,13 +6800,32 @@ int IPACM_Lan::disable_dft_firewall_rules_ul_ex(int vid)
 		return IPACM_FAILURE;
 	}
 #else //IPA_V6_UL_WL_FIREWALL_HANDLE
-	/* Install the deleted UL rules back, since the firewall is disabled */
-	if(IPACM_Wan::isWanUP_V6(ipa_if_num)) {
 #ifdef FEATURE_VLAN_MPDN
+	/* Install the deleted UL rules back, since the firewall is disabled */
+	if((IPACM_Iface::ipacmcfg->iface_in_vlan_mode(dev_name)) &&
+				(IPACM_Iface::ipacmcfg->ipacm_mpdn_enable == true))
+	{
+		if(is_any_mux_up(IPA_IP_v6))
+		{
+			IPACMDBG_H("firewall disabled & VLAN PDN up, restore modem ul rules (v6)\n");
+			for(int i = 0; i < IPA_MAX_NUM_HW_PDNS; i++)
+			{
+				data.iptype = IPA_IP_v6;
+				if(v6_mux_up[i])
+				{
+					IPACMDBG_H("mux %d up, restore v6 VLAN PDN rules\n", v6_mux_up[i]);
+					data.mux_id = v6_mux_up[i];
+					handle_vlan_pdn_up(&data, false);
+				}
+			}
+		}
+	}
+	else if (IPACM_Wan::isWanUP_V6(ipa_if_num)) {
 		if(!handle_uplink_filter_rule(IPACM_Iface::ipacmcfg->GetExtProp(IPA_IP_v6),
 			IPA_IP_v6, IPACM_Iface::ipacmcfg->GetQmapId(), false, true))
 			modem_ul_v6_set = true;
 #else
+	if (IPACM_Wan::isWanUP_V6(ipa_if_num)) {
 		if(!handle_uplink_filter_rule(IPACM_Iface::ipacmcfg->GetExtProp(IPA_IP_v6),
 			IPA_IP_v6, IPACM_Iface::ipacmcfg->GetQmapId()))
 			modem_ul_v6_set = true;
@@ -7017,8 +7040,12 @@ int IPACM_Lan::config_dft_firewall_rules_ul(IPACM_firewall_conf_t* firewall_conf
 
 			if(firewall_conf->rule_action_accept == true)
 			{
+#ifndef FEATURE_SOCKSv5
 				flt_rule_entry.rule.action =
 					IPACM_Iface::ipacmcfg->IsIpv6CTEnabled() ? IPA_PASS_TO_SRC_NAT : IPA_PASS_TO_ROUTING;
+#else
+				flt_rule_entry.rule.action = IPA_PASS_TO_ROUTING;
+#endif
 			}
 			else
 			{
@@ -7192,7 +7219,38 @@ void IPACM_Lan::configure_v6_ul_firewall(void)
 
 #ifdef IPA_V6_UL_WL_FIREWALL_HANDLE
 	/* Delete Q6 UL rules */
-	del_ul_flt_rules(IPA_IP_v6);
+#ifdef FEATURE_VLAN_MPDN
+	if((IPACM_Iface::ipacmcfg->iface_in_vlan_mode(dev_name)) &&
+				(IPACM_Iface::ipacmcfg->ipacm_mpdn_enable == TRUE))
+	{
+		if(is_any_mux_up(IPA_IP_v6))
+		{
+			IPACMDBG_H("Vlan config - delete all modem ul rules (v6) to handle new firewall config\n");
+			if(del_ul_flt_rules(IPA_IP_v6))
+				return;
+
+			for(int i = 0; i < IPA_MAX_NUM_HW_PDNS; i++)
+			{
+				if(v6_mux_up[i])
+				{
+					IPACMDBG_H("mux %d up, notify modem we deleted v6 flt rules\n", v6_mux_up[i]);
+					if (notify_flt_removed(v6_mux_up[i]))
+						return;
+				}
+			}
+		}
+	}
+	else
+#endif
+	{
+		IPACMDBG_H(" delete all modem ul rules (v6) to handle new frewall config\n");
+		if(del_ul_flt_rules(IPA_IP_v6))
+			return;
+
+		if(notify_flt_removed(IPACM_Iface::ipacmcfg->GetQmapId()))
+			return;
+	}
+
 #endif
 
 	if(IPACM_Wan::isWanUP_V6(ipa_if_num))
@@ -7400,8 +7458,12 @@ int IPACM_Lan::install_uplink_filter_rule_per_client_v2
 	}
 	else if(iptype == IPA_IP_v6)
 	{
+#ifndef FEATURE_SOCKSv5
 		flt_rule_entry.rule.action = IPACM_Iface::ipacmcfg->IsIpv6CTEnabled()?
 				IPA_PASS_TO_SRC_NAT : IPA_PASS_TO_ROUTING;
+#else
+		flt_rule_entry.rule.action = IPA_PASS_TO_ROUTING;
+#endif
 	}
 	else
 	{
@@ -7649,8 +7711,12 @@ int IPACM_Lan::install_uplink_filter_rule_per_client
 	}
 	else if(iptype == IPA_IP_v6)
 	{
+#ifndef FEATURE_SOCKSv5
 		flt_rule_entry.rule.action = IPACM_Iface::ipacmcfg->IsIpv6CTEnabled()?
 				IPA_PASS_TO_SRC_NAT : IPA_PASS_TO_ROUTING;
+#else
+		flt_rule_entry.rule.action = IPA_PASS_TO_ROUTING;
+#endif
 	}
 	else
 	{

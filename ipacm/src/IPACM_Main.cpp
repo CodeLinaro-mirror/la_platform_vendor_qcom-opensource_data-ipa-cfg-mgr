@@ -814,23 +814,26 @@ void* ipa_driver_msg_notifier(void *param)
 			if (IPACM_Iface::ipacmcfg->socksv5_conn.size() == 0)
 			{
 				IPACMDBG_H("socksv5_conn size %d \n", IPACM_Iface::ipacmcfg->socksv5_conn.size());
-				IPACMDBG("src_ipv6 addr:0x%x:%x:%x:%x\n",
+				IPACMDBG_H("src_ipv6 addr:0x%x:%x:%x:%x\n",
 					add_socksv5_info.ul_in.ipv6_src[0],
 					add_socksv5_info.ul_in.ipv6_src[1],
 					add_socksv5_info.ul_in.ipv6_src[2],
 					add_socksv5_info.ul_in.ipv6_src[3]);
-				IPACMDBG("dst_ipv6 addr:0x%x:%x:%x:%x\n",
+				IPACMDBG_H("dst_ipv6 addr:0x%x:%x:%x:%x\n",
 					add_socksv5_info.ul_in.ipv6_dst[0],
 					add_socksv5_info.ul_in.ipv6_dst[1],
 					add_socksv5_info.ul_in.ipv6_dst[2],
 					add_socksv5_info.ul_in.ipv6_dst[3]);
+				/* update client ipv6 */
+				IPACM_Iface::ipacmcfg->update_socksv5_client_v6_addr(add_socksv5_info.ul_in.ipv6_src);
+				IPACMDBG_H("socksv5_conn size %d \n", IPACM_Iface::ipacmcfg->socksv5_conn.size());
 
 				data_event_conn = (ipacm_event_connection *)malloc(sizeof(ipacm_event_connection));
 				if(data_event_conn == NULL)
 				{
 					IPACMERR("unable to allocate memory for event_wlan data_event_conn\n");
 				return NULL;
-				}//sky
+				}
 				data_event_conn->iptype = add_socksv5_info.ul_in.ip_type;
 				data_event_conn->src_ipv6_addr[0] = add_socksv5_info.ul_in.ipv6_src[0];
 				data_event_conn->src_ipv6_addr[1] = add_socksv5_info.ul_in.ipv6_src[1];
@@ -857,6 +860,7 @@ void* ipa_driver_msg_notifier(void *param)
 
 			if (IPACM_Iface::ipacmcfg->socksv5_conn.size() == 0)
 			{
+				IPACM_Iface::ipacmcfg->ipacm_socksv5_enable = false;
 				evt_data.event = IPA_HANDLE_SOCKSv5_DOWN;
 				evt_data.evt_data = NULL;
 				break;

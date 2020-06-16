@@ -1790,7 +1790,7 @@ bool IPACM_Config::is_added_vlan_iface(char *iface_name)
 
 bool IPACM_Config::iface_in_vlan_mode(const char *phys_iface_name)
 {
-	if(strstr(phys_iface_name, "eth"))
+	if(strstr(phys_iface_name, "eth") || strstr(phys_iface_name, "macsec"))
 	{
 		IPACMDBG("eth vlan mode %d\n", vlan_devices[IPA_VLAN_IF_EMAC]);
 		return vlan_devices[IPA_VLAN_IF_EMAC];

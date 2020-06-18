@@ -1333,7 +1333,7 @@ void IPACM_LanToLan_Iface::del_client_flt_rule(peer_iface_info *peer, client_inf
 					{
 						for(it_flt_hdl = it_flt->l2tp_first_pass_flt_rule_hdl[IPA_IP_v4].flt_rule_hdls.begin();
 							(it_flt_hdl != it_flt->l2tp_first_pass_flt_rule_hdl[IPA_IP_v4].flt_rule_hdls.end()) &&
-							(it_flt->l2tp_first_pass_flt_rule_hdl[IPA_IP_v4].flt_rule_hdls.size() != 0); it_flt_hdl++)
+							(it_flt->l2tp_first_pass_flt_rule_hdl[IPA_IP_v4].flt_rule_hdls.size() != 0); ++it_flt_hdl)
 						{
 							m_p_iface->del_l2tp_flt_rule(IPA_IP_v4,
 								*it_flt_hdl,
@@ -1341,9 +1341,10 @@ void IPACM_LanToLan_Iface::del_client_flt_rule(peer_iface_info *peer, client_inf
 							IPACMDBG_H("Deleted IPv4 first pass flt rule %d and second pass flt rule %d.\n",
 								*it_flt_hdl, it_flt->l2tp_second_pass_flt_rule_hdl);
 							*it_flt_hdl = 0;
-							it_flt->l2tp_first_pass_flt_rule_hdl[IPA_IP_v4].flt_rule_hdls.erase(it_flt_hdl);
 							it_flt->l2tp_second_pass_flt_rule_hdl = 0;
 						}
+						/* Clear the list. */
+						it_flt->l2tp_first_pass_flt_rule_hdl[IPA_IP_v4].flt_rule_hdls.clear();
 					}
 					else
 #endif
@@ -1360,13 +1361,14 @@ void IPACM_LanToLan_Iface::del_client_flt_rule(peer_iface_info *peer, client_inf
 				{
 					for(it_flt_hdl = it_flt->l2tp_first_pass_flt_rule_hdl[IPA_IP_v6].flt_rule_hdls.begin();
 						(it_flt_hdl != it_flt->l2tp_first_pass_flt_rule_hdl[IPA_IP_v6].flt_rule_hdls.end()) &&
-						(it_flt->l2tp_first_pass_flt_rule_hdl[IPA_IP_v6].flt_rule_hdls.size() != 0); it_flt_hdl++)
+						(it_flt->l2tp_first_pass_flt_rule_hdl[IPA_IP_v6].flt_rule_hdls.size() != 0); ++it_flt_hdl)
 					{
 						m_p_iface->del_l2tp_flt_rule(*it_flt_hdl);
 						IPACMDBG_H("Deleted IPv6 flt rule id %d\n", *it_flt_hdl);
 						*it_flt_hdl = 0;
-						it_flt->l2tp_first_pass_flt_rule_hdl[IPA_IP_v6].flt_rule_hdls.erase(it_flt_hdl);
 					}
+					/* Clear the list. */
+					it_flt->l2tp_first_pass_flt_rule_hdl[IPA_IP_v6].flt_rule_hdls.clear();
 				}
 				else
 #endif
@@ -1376,16 +1378,17 @@ void IPACM_LanToLan_Iface::del_client_flt_rule(peer_iface_info *peer, client_inf
 					{
 						for(it_flt_hdl = it_flt->l2tp_first_pass_flt_rule_hdl[IPA_IP_v6].flt_rule_hdls.begin();
 							(it_flt_hdl != it_flt->l2tp_first_pass_flt_rule_hdl[IPA_IP_v6].flt_rule_hdls.end()) &&
-							(it_flt->l2tp_first_pass_flt_rule_hdl[IPA_IP_v6].flt_rule_hdls.size() != 0); it_flt_hdl++)
+							(it_flt->l2tp_first_pass_flt_rule_hdl[IPA_IP_v6].flt_rule_hdls.size() != 0); ++it_flt_hdl)
 						{
 							m_p_iface->del_l2tp_flt_rule(IPA_IP_v6, *it_flt_hdl,
 								it_flt->l2tp_second_pass_flt_rule_hdl);
 							IPACMDBG_H("Deleted IPv6 first pass flt rule %d and second pass flt rule %d.\n",
 								*it_flt_hdl, it_flt->l2tp_second_pass_flt_rule_hdl);
 								*it_flt_hdl = 0;
-								it_flt->l2tp_first_pass_flt_rule_hdl[IPA_IP_v6].flt_rule_hdls.erase(it_flt_hdl);
-								it_flt->l2tp_second_pass_flt_rule_hdl = 0;
+							it_flt->l2tp_second_pass_flt_rule_hdl = 0;
 						}
+						/* Clear the list. */
+						it_flt->l2tp_first_pass_flt_rule_hdl[IPA_IP_v6].flt_rule_hdls.clear();
 					}
 					else
 #endif
@@ -1636,7 +1639,7 @@ void IPACM_LanToLan_Iface::clear_all_flt_rule_for_one_peer_iface(peer_iface_info
 				{
 					for(it_flt_hdl = it->l2tp_first_pass_flt_rule_hdl[IPA_IP_v4].flt_rule_hdls.begin();
 						(it_flt_hdl != it->l2tp_first_pass_flt_rule_hdl[IPA_IP_v4].flt_rule_hdls.end()) &&
-						(it->l2tp_first_pass_flt_rule_hdl[IPA_IP_v4].flt_rule_hdls.size() != 0); it_flt_hdl++)
+						(it->l2tp_first_pass_flt_rule_hdl[IPA_IP_v4].flt_rule_hdls.size() != 0); ++it_flt_hdl)
 					{
 						m_p_iface->del_l2tp_flt_rule(IPA_IP_v4,
 							*it_flt_hdl,
@@ -1644,9 +1647,10 @@ void IPACM_LanToLan_Iface::clear_all_flt_rule_for_one_peer_iface(peer_iface_info
 						IPACMDBG_H("Deleted IPv4 first pass flt rule %d and second pass flt rule %d.\n",
 							*it_flt_hdl, it->l2tp_second_pass_flt_rule_hdl);
 						*it_flt_hdl = 0;
-						it->l2tp_first_pass_flt_rule_hdl[IPA_IP_v4].flt_rule_hdls.erase(it_flt_hdl);
 						it->l2tp_second_pass_flt_rule_hdl = 0;
 					}
+					/* Clear the list. */
+					it->l2tp_first_pass_flt_rule_hdl[IPA_IP_v4].flt_rule_hdls.clear();
 				}
 				else
 #endif
@@ -1669,13 +1673,14 @@ void IPACM_LanToLan_Iface::clear_all_flt_rule_for_one_peer_iface(peer_iface_info
 			{
 				for(it_flt_hdl = it->l2tp_first_pass_flt_rule_hdl[IPA_IP_v6].flt_rule_hdls.begin();
 					(it_flt_hdl != it->l2tp_first_pass_flt_rule_hdl[IPA_IP_v6].flt_rule_hdls.end()) &&
-					(it->l2tp_first_pass_flt_rule_hdl[IPA_IP_v6].flt_rule_hdls.size() != 0); it_flt_hdl++)
+					(it->l2tp_first_pass_flt_rule_hdl[IPA_IP_v6].flt_rule_hdls.size() != 0); ++it_flt_hdl)
 				{
 					m_p_iface->del_l2tp_flt_rule(*it_flt_hdl);
 					IPACMDBG_H("Deleted IPv6 flt rule id %d\n", *it_flt_hdl);
 					*it_flt_hdl = 0;
-					it->l2tp_first_pass_flt_rule_hdl[IPA_IP_v6].flt_rule_hdls.erase(it_flt_hdl);
 				}
+				/* Clear the list. */
+				it->l2tp_first_pass_flt_rule_hdl[IPA_IP_v6].flt_rule_hdls.clear();
 			}
 			else
 #endif
@@ -1685,16 +1690,17 @@ void IPACM_LanToLan_Iface::clear_all_flt_rule_for_one_peer_iface(peer_iface_info
 				{
 					for(it_flt_hdl = it->l2tp_first_pass_flt_rule_hdl[IPA_IP_v6].flt_rule_hdls.begin();
 						(it_flt_hdl != it->l2tp_first_pass_flt_rule_hdl[IPA_IP_v6].flt_rule_hdls.end()) &&
-						(it->l2tp_first_pass_flt_rule_hdl[IPA_IP_v6].flt_rule_hdls.size() != 0); it_flt_hdl++)
+						(it->l2tp_first_pass_flt_rule_hdl[IPA_IP_v6].flt_rule_hdls.size() != 0); ++it_flt_hdl)
 					{
 						m_p_iface->del_l2tp_flt_rule(IPA_IP_v6, *it_flt_hdl,
 							it->l2tp_second_pass_flt_rule_hdl);
 						IPACMDBG_H("Deleted IPv6 first pass flt rule %d and second pass flt rule %d.\n",
 							*it_flt_hdl, it->l2tp_second_pass_flt_rule_hdl);
 							*it_flt_hdl = 0;
-							it->l2tp_first_pass_flt_rule_hdl[IPA_IP_v6].flt_rule_hdls.erase(it_flt_hdl);
-							it->l2tp_second_pass_flt_rule_hdl = 0;
+						it->l2tp_second_pass_flt_rule_hdl = 0;
 					}
+					/* Clear the list. */
+					it->l2tp_first_pass_flt_rule_hdl[IPA_IP_v6].flt_rule_hdls.clear();
 				}
 				else
 #endif
@@ -2249,15 +2255,15 @@ void IPACM_LanToLan_Iface::print_peer_info(peer_iface_info *peer_info)
 		{
 			IPACMDBG_H("IPv4 %d\n", it_flt->flt_rule_hdl[IPA_IP_v4]);
 			for (it_flt_hdl = it_flt->l2tp_first_pass_flt_rule_hdl[IPA_IP_v4].flt_rule_hdls.begin();
-				it_flt_hdl != it_flt->l2tp_first_pass_flt_rule_hdl[IPA_IP_v4].flt_rule_hdls.end(); it_flt_hdl++)
+				it_flt_hdl != it_flt->l2tp_first_pass_flt_rule_hdl[IPA_IP_v4].flt_rule_hdls.end(); ++it_flt_hdl)
 				IPACMDBG_H("IPv4 l2tp flt rule handle: %d\n", *it_flt_hdl);
 		}
 		if(m_is_ip_addr_assigned[IPA_IP_v6])
 		{
 			IPACMDBG_H("IPv6 %d\n", it_flt->flt_rule_hdl[IPA_IP_v6]);
 			for (it_flt_hdl = it_flt->l2tp_first_pass_flt_rule_hdl[IPA_IP_v6].flt_rule_hdls.begin();
-				it_flt_hdl != it_flt->l2tp_first_pass_flt_rule_hdl[IPA_IP_v6].flt_rule_hdls.end(); it_flt_hdl++)
-				IPACMDBG_H("IPv4 l2tp flt rule handle: %d\n", *it_flt_hdl);
+				it_flt_hdl != it_flt->l2tp_first_pass_flt_rule_hdl[IPA_IP_v6].flt_rule_hdls.end(); ++it_flt_hdl)
+				IPACMDBG_H("IPv6 l2tp flt rule handle: %d\n", *it_flt_hdl);
 		}
 		IPACMDBG_H("L2tp second pass flt rule: %d\n", it_flt->l2tp_second_pass_flt_rule_hdl);
 	}

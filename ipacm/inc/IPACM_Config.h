@@ -135,6 +135,9 @@ typedef struct
 	/* Store interface name */
 	char dev_name[IPA_RESOURCE_NAME_MAX];
 
+	/* Flag indicating default pdn. */
+	uint8_t is_default_pdn;
+
 	/* Store ip_passthrough mac */
 	uint8_t ip_pass_mac[IPA_MAC_ADDR_SIZE];
 
@@ -474,6 +477,7 @@ public:
 	{
 		int indx;
 		bool ret = false;
+		uint8_t null_mac[IPA_MAC_ADDR_SIZE] = {0};
 
 		if(pthread_mutex_lock(&ip_pass_mpdn_lock) != 0)
 		{
@@ -488,6 +492,19 @@ public:
 				if ((ip_pass_mpdn_table[indx].ip_pass_dev_type == dev_type) &&
 					(memcmp(ip_pass_mpdn_table[indx].ip_pass_mac, client_mac, IPA_MAC_ADDR_SIZE) == 0) &&
 					(ip_pass_mpdn_table[indx].vlan_id == vlan_id))
+				{
+						ret = true;
+						break;
+				}
+
+	            /* Special case when mac is NULL. Passthrough will be enabled for first client. */
+				/* Device type will be specified as MAX to support WLAN/USB/ETH clients and
+				 * VLAN id can be 0 in case of WLAN or non VLAN interface. */
+				if (ip_pass_mpdn_table[indx].ip_pass_skip_nat &&
+					(memcmp(ip_pass_mpdn_table[indx].ip_pass_mac, null_mac, IPA_MAC_ADDR_SIZE) == 0) &&
+					(ip_pass_mpdn_table[indx].ip_pass_dev_type == IPACM_CLIENT_DEVICE_MAX) &&
+					((ip_pass_mpdn_table[indx].vlan_id == vlan_id) ||
+					(ip_pass_mpdn_table[indx].is_default_pdn && vlan_id == 0)))
 				{
 						ret = true;
 						break;

@@ -984,8 +984,8 @@ void* ipa_driver_msg_notifier(void *param)
 
 		case IPA_PDN_IP_PASSTHROUGH_MODE_CONFIG:
 			pdn_info = (ipa_ioc_pdn_config *)(buffer + sizeof(struct ipa_msg_meta));
-			IPACMDBG_H("Received IPA_PDN_IP_PASSTHROUGH_MODE_CONFIG name: %s, type: %d, enable: %d, VLAN ID: %d, Nat config: %d and PDN IP: 0x%x!\n",
-				pdn_info->dev_name, pdn_info->pdn_cfg_type, pdn_info->enable, pdn_info->u.passthrough_cfg.vlan_id,
+			IPACMDBG_H("Received IPA_PDN_IP_PASSTHROUGH_MODE_CONFIG name: %s, default_pdn: %d, type: %d, enable: %d, VLAN ID: %d, Nat config: %d and PDN IP: 0x%x!\n",
+				pdn_info->dev_name, pdn_info->default_pdn, pdn_info->pdn_cfg_type, pdn_info->enable, pdn_info->u.passthrough_cfg.vlan_id,
 				pdn_info->u.passthrough_cfg.skip_nat, htonl(pdn_info->u.passthrough_cfg.pdn_ip_addr));
 			IPACMDBG_H("Received mac_addr MAC %02x:%02x:%02x:%02x:%02x:%02x\n",
 							 pdn_info->u.passthrough_cfg.client_mac_addr[0],

@@ -3618,6 +3618,7 @@ void IPACM_Config::ip_pass_config_update(ipa_ioc_pdn_config *pdn_config)
 			ip_pass_mpdn_table[indx].vlan_id = pdn_config->u.passthrough_cfg.vlan_id;
 			strlcpy(ip_pass_mpdn_table[indx].dev_name,
 					pdn_config->dev_name, IPA_RESOURCE_NAME_MAX);
+			ip_pass_mpdn_table[indx].is_default_pdn = pdn_config->default_pdn;
 		}
 		else
 			IPACMERR("IP Passthrough supports only 15 PDNs\n");
@@ -3638,6 +3639,7 @@ void IPACM_Config::ip_pass_config_update(ipa_ioc_pdn_config *pdn_config)
 			ip_pass_mpdn_table[indx].vlan_id = 0;
 			ip_pass_mpdn_table[indx].ip_pass_pdn_ip_addr = false;
 			memset(ip_pass_mpdn_table[indx].dev_name, 0, IPA_RESOURCE_NAME_MAX);
+			ip_pass_mpdn_table[indx].is_default_pdn = false;
 		}
 		else
 			IPACMERR("IP Passthrough PDN not found\n");

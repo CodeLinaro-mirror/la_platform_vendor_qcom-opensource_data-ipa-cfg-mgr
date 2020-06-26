@@ -179,6 +179,7 @@ IPACM_Config::IPACM_Config()
 	ipacm_l2tp_enable = 0;
 	ipacm_mpdn_enable = TRUE;   /* default setting as mpdn enable/l2tp disable */
 	ipacm_socksv5_enable = false;
+	ipacm_ip_passthrough_mode = false;
 
 	memset(&rt_tbl_default_v4, 0, sizeof(rt_tbl_default_v4));
 	memset(&rt_tbl_lan_v4, 0, sizeof(rt_tbl_lan_v4));
@@ -205,6 +206,9 @@ IPACM_Config::IPACM_Config()
 	memset(ipa_ipv6_prefixes, 0, sizeof(ipa_ipv6_prefixes));
 	memset(vlan_bridges, 0, IPA_MAX_NUM_BRIDGES * sizeof(vlan_bridges[0]));
 	memset(vlan_devices, 0, IPA_VLAN_IF_MAX * sizeof(vlan_devices[0]));
+	memset(ipacm_ip_passthrough_mac, 0, IPA_MAC_ADDR_SIZE);
+
+	ipacm_ip_passthrough_pdn_ip_addr = inet_network(IPACM_IP_PASSTHROUGH_WAN_IP);
 #endif
 #if defined(FEATURE_L2TP) || defined(FEATURE_VLAN_MPDN)
 	pthread_mutex_init(&vlan_l2tp_lock, NULL);
@@ -552,14 +556,6 @@ int IPACM_Config::Init(void)
 	IPACMDBG_H("ipacm_odu_enable %d\n", ipacm_odu_enable);
 	IPACMDBG_H("ipacm_odu_mode %d\n", ipacm_odu_router_mode);
 	IPACMDBG_H("ipacm_odu_embms_enable %d\n", ipacm_odu_embms_enable);
-
-	ipacm_ip_passthrough_mode = false;
-	IPACMDBG_H("ipacm_ip_passthrough_mode %d. \n", ipacm_ip_passthrough_mode);
-
-	memcpy(ipacm_ip_passthrough_mac, cfg->ip_passthrough_mac.ether_addr_octet, IPA_MAC_ADDR_SIZE);
-
-	ipacm_ip_passthrough_pdn_ip_addr = inet_network(IPACM_IP_PASSTHROUGH_WAN_IP);
-	IPACMDBG_H("Passthrough mode wan ipv4-addr:0x%x\n",ipacm_ip_passthrough_pdn_ip_addr);
 
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
 	if (!ipacm_lan_stats_enable_set)

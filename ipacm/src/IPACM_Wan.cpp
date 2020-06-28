@@ -529,13 +529,20 @@ int IPACM_Wan::handle_addr_evt(ipacm_event_data_addr *data)
 			else
 			{
 				IPACMDBG_H(" device (%s) ipv4 addr is changed\n", dev_name);
-				/* Delete default v4 RT rule */
-				IPACMDBG_H("Delete default v4 routing rules\n");
-				if (m_routing.DeleteRoutingHdl(dft_rt_rule_hdl[0], IPA_IP_v4) == false)
+				/*Don't remove route for WAN IP in IP Passthrough mode
+				it may lead to stall as NAT entry is still pointing to
+				default route entry*/
+				if (!IPACM_Iface::ipacmcfg->ipacm_ip_passthrough_mode)
 				{
-					IPACMERR("Routing old RT rule deletion failed!\n");
-					res = IPACM_FAILURE;
-					goto fail;
+					/* Delete default v4 RT rule */
+					IPACMDBG_H("Delete default v4 routing rules\n");
+					if (m_routing.DeleteRoutingHdl(dft_rt_rule_hdl[0],
+									 IPA_IP_v4) == false)
+					{
+						IPACMERR("Routing old RT rule deletion failed!\n");
+						res = IPACM_FAILURE;
+						goto fail;
+					}
 				}
 #if defined(FEATURE_SOCKSv5) && defined (IPA_SOCKV5_EVENT_MAX)
 				if(m_is_sta_mode == Q6_WAN)

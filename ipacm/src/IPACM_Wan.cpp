@@ -3670,16 +3670,34 @@ int IPACM_Wan::config_dft_firewall_rules_ex(struct ipa_flt_rule_add *rules, int 
 
 #ifdef FEATURE_IPACM_UL_FIREWALL
 
+typedef struct
+{
+	uint8_t profile;
+	bool firewall_enabled;
+}_firewall_state_t;
+
 int IPACM_Wan::read_firewall_filter_rules_ul(void)
 {
 	int i = 0;
 #ifdef FEATURE_VLAN_MPDN
 	std::pair<IPACM_firewall_conf_t*, ipacm_ipv6_wan_iface*> offloaded_pdns_v6[IPA_MAX_NUM_HW_PDNS];
+	_firewall_state_t firewall_state[IPA_MAX_NUM_HW_PDNS];
+	int firewall_profile_cnt;
+	bool has_firewall_changed = false;
 	int firewall_num_v6_pdns_ul = 0;
 	int num_mpdn_firewall_v6_ul[IPA_MAX_NUM_HW_PDNS];
 #endif
 	IPACMDBG_H("Firewall XML file is %s\n", MOBILE_FIREWALL_FILE);
 #ifdef FEATURE_VLAN_MPDN
+	/* Save current state of firewall */
+	memset(&firewall_state, 0, IPA_MAX_NUM_HW_PDNS*sizeof(_firewall_state_t));
+	firewall_profile_cnt = firewall_mpdn_config_ul.pdn_count;
+	for (i = 0; i < firewall_profile_cnt; ++i)
+	{
+		firewall_state[i].profile = firewall_mpdn_config_ul.pdns[i].profile;
+		firewall_state[i].firewall_enabled = firewall_mpdn_config_ul.pdns[i].firewall_enable;
+	}
+
 	if(IPACM_read_firewall_xml(MOBILE_FIREWALL_FILE, firewall_mpdn_config_ul) == IPACM_SUCCESS)
 #else
 	if(IPACM_read_firewall_xml(MOBILE_FIREWALL_FILE, firewall_config_ul) == IPACM_SUCCESS)
@@ -3702,6 +3720,7 @@ int IPACM_Wan::read_firewall_filter_rules_ul(void)
 		/* find the number of IPv6 UL firewall rules */
 		if(curr_conf->firewall_enable)
 		{
+			has_firewall_changed = true;
 			num_mpdn_firewall_v6_ul[j] = 0;
 			for(int i = 0; i < curr_conf->num_extd_firewall_entries; i++)
 			{
@@ -3728,11 +3747,28 @@ int IPACM_Wan::read_firewall_filter_rules_ul(void)
 		}
 		else
 		{
-			IPACMDBG_H("firewall disabled, dev %s\n",
-				dev);
+			/*Dont handle if firewall disabled state hasnt changed, ignore hoax notification */
+			for (i = 0 ; i < firewall_profile_cnt; ++i)
+			{
+				if (curr_conf->profile == firewall_state[i].profile)
+				{
+					if (!firewall_state[i].firewall_enabled)
+					{
+						IPACMDBG_H("For pdn %s fw state is disabled & hasnt changed, ignore the event\n ", dev);
+					}
+					else
+					{
+						IPACMDBG_H("firewall disabled, dev %s\n",dev);
+						has_firewall_changed = true;
+					}
+					break;
+				}
+			}
 			num_mpdn_firewall_v6_ul[j] = 0;
 		}
 	}
+	if (!has_firewall_changed)
+		return IPACM_FAILURE;
 #else
 	int total_num_firewall_v6_ul = 0;
 

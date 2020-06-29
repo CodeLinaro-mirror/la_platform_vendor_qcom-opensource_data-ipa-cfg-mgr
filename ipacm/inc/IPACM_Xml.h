@@ -327,7 +327,6 @@ typedef struct  _IPACM_conf_t
 	bool router_mode_enable;
 	bool odu_embms_enable;
 	int num_wlan_guest_ap;
-	struct ether_addr ip_passthrough_mac;
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
 	bool lan_stats_enable;
 #endif

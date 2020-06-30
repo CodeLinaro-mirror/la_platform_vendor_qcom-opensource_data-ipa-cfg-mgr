@@ -2324,7 +2324,7 @@ void IPACM_LanToLan_Iface::handle_client_add(uint8_t *mac, bool is_l2tp_client, 
 		if((memcmp(it_client->mac_addr, mac, sizeof(it_client->mac_addr)) == 0)
 #ifdef FEATURE_VLAN_MPDN
 			&& (((IPACM_Iface::ipacmcfg->ipacm_mpdn_enable && m_is_vlan && (it_client->vlan_id == vlan_id))) ||
-			!IPACM_Iface::ipacmcfg->ipacm_mpdn_enable)
+			!IPACM_Iface::ipacmcfg->ipacm_mpdn_enable || !m_is_vlan)
 #endif
 			)
 		{

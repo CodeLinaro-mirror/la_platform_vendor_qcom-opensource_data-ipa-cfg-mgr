@@ -292,6 +292,26 @@ public:
 #endif
 	}
 
+	static bool isWan_active_with_prefix(uint32_t *v6_addr)
+	{
+		if(v6_addr == NULL)
+		{
+			IPACMERR("IPv6 address is empty.\n");
+			return false;
+		}
+		for(int i = 0; i < IPA_MAX_NUM_SW_PDNS; i++)
+		{
+			if(ipv6_to_iface[i].ipv6_prefix[0] == v6_addr[0] &&
+				ipv6_to_iface[i].ipv6_prefix[1] == v6_addr[1])
+			{
+				IPACMDBG_H("v6 prefix mached pdn %s\n", ipv6_to_iface[i].pIface->dev_name);
+				return true;
+			}
+		}
+		IPACMDBG_H("V6 prefix didnt match any active wan iface\n");
+		return false;
+	}
+
 	static uint32_t getWANIP()
 	{
 		return curr_wan_ip;

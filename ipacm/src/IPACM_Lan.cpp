@@ -1560,6 +1560,9 @@ int IPACM_Lan::handle_vlan_neighbor(ipacm_event_data_all *data)
 		{
 			if(IPACM_Wan::is_global_ipv6_addr(data_vlan->data_all.ipv6_addr))
 			{
+				if (!IPACM_Wan::isWan_active_with_prefix(data_vlan->data_all.ipv6_addr))
+					return IPACM_FAILURE;
+
 				/* add ipv6 prefix */
 				new_prefix = IPACM_Iface::ipacmcfg->add_vlan_ipv6_prefix(data_vlan->data_all.ipv6_addr, ipa_if_num);
 			}

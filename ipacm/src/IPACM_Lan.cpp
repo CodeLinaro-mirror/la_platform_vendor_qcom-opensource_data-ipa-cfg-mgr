@@ -588,12 +588,36 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 							}
 						}
 #ifdef FEATURE_VLAN_MPDN
+
+
+#ifdef FEATURE_SOCKSv5
+						/* handle socksv5 MPDN logic */
+						else if(!IPACM_Iface::ipacmcfg->ipacm_mpdn_enable)
+						{
+							if(IPACM_Wan::isWanUP(ipa_if_num) || IPACM_Wan::isVlanWanUP())
+							{
+								if(data->iptype == IPA_IP_v4 || data->iptype == IPA_IP_MAX)
+								{
+									if(IPACM_Wan::backhaul_is_sta_mode == false)
+									{
+										ext_prop = IPACM_Iface::ipacmcfg->GetExtProp(IPA_IP_v4);
+										handle_wan_up_ex(ext_prop, IPA_IP_v4,
+											IPACM_Wan::getXlat_Mux_Id());
+									}
+									else
+									{
+										handle_wan_up(IPA_IP_v4);
+									}
+								}
+							}
+						}
+#endif //FEATURE_SOCKSv5
 						else
 							check_vlan_PDNUp(IPA_IP_v4);
 
 						/* VLAN IFACES don't care about default route */
 						if(!(IPACM_Iface::ipacmcfg->iface_in_vlan_mode(dev_name)))
-#endif
+#endif //FEATURE_VLAN_MPDN
 						{
 							if(IPACM_Wan::isWanUP_V6(ipa_if_num)) /* Modem v6 call is UP?*/
 							{
@@ -626,9 +650,37 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 #endif //FEATURE_IPACM_UL_FIREWALL
 						}
 #ifdef FEATURE_VLAN_MPDN
+#ifdef FEATURE_SOCKSv5
+						/* handle socksv5 MPDN logic */
+						else if(!IPACM_Iface::ipacmcfg->ipacm_mpdn_enable)
+						{
+							if(IPACM_Wan::isWanUP_V6(ipa_if_num) ||  IPACM_Wan::isVlanWanUP_V6()) /* Modem v6 call is UP?*/
+							{
+#ifdef FEATURE_IPACM_UL_FIREWALL
+								if(data->iptype == IPA_IP_v6)
+									configure_v6_ul_firewall();
+#endif //FEATURE_IPACM_UL_FIREWALL
+								if((data->iptype == IPA_IP_v6 || data->iptype == IPA_IP_MAX) && num_dft_rt_v6 == 1)
+								{
+									memcpy(ipv6_prefix, IPACM_Wan::backhaul_ipv6_prefix, sizeof(ipv6_prefix));
+									modify_ipv6_prefix_flt_rule();
+
+									if(IPACM_Wan::backhaul_is_sta_mode == false)
+									{
+										ext_prop = IPACM_Iface::ipacmcfg->GetExtProp(IPA_IP_v6);
+										handle_wan_up_ex(ext_prop, IPA_IP_v6, 0);
+									}
+									else
+									{
+										handle_wan_up(IPA_IP_v6);
+									}
+								}
+							}
+						}
+#endif //FEATURE_SOCKSv5
 						else
 							check_vlan_PDNUp(IPA_IP_v6);
-#endif
+#endif //FEATURE_VLAN_MPDN
 
 						/* Post event to NAT */
 						if (post_lan_up_event(data))
@@ -894,10 +946,11 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 		IPACMDBG_H("Backhaul is sta mode?%d\n", data_wan->is_sta);
 #ifdef FEATURE_VLAN_MPDN
 		/* VLAN IFACES don't care about default route */
-		if((IPACM_Iface::ipacmcfg->iface_in_vlan_mode(dev_name)) &&
-			(IPACM_Iface::ipacmcfg->ipacm_mpdn_enable == TRUE))
+		if(IPACM_Iface::ipacmcfg->iface_in_vlan_mode(dev_name) &&
+			(IPACM_Iface::ipacmcfg->ipacm_mpdn_enable == TRUE ||
+			IPACM_Wan::isVlanWanUP()))
 		{
-			IPACMDBG_H("IF %s is vlan IF, ignoring IPA_HANDLE_WAN_DOWN", dev_name);
+			IPACMDBG_H("IF %s is vlan IF, ignoring IPA_HANDLE_WAN_DOWN\n", dev_name);
 			return;
 		}
 #endif
@@ -933,10 +986,11 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 		IPACMDBG_H("Received IPA_WAN_V6_DOWN in LAN-instance and need clean up client IPv6 address \n");
 #ifdef FEATURE_VLAN_MPDN
 		/* VLAN IFACES don't care about default route */
-		if((IPACM_Iface::ipacmcfg->iface_in_vlan_mode(dev_name)) &&
-			(IPACM_Iface::ipacmcfg->ipacm_mpdn_enable == TRUE))
+		if(IPACM_Iface::ipacmcfg->iface_in_vlan_mode(dev_name) &&
+			(IPACM_Iface::ipacmcfg->ipacm_mpdn_enable == TRUE ||
+			IPACM_Wan::isVlanWanUP_V6()))
 		{
-			IPACMDBG_H("IF %s is vlan IF, ignoring IPA_HANDLE_WAN_DOWN_V6", dev_name);
+			IPACMDBG_H("IF %s is vlan IF, ignoring IPA_HANDLE_WAN_DOWN_V6\n", dev_name);
 			return;
 		}
 #endif
@@ -2023,7 +2077,7 @@ int IPACM_Lan::del_ul_flt_rules(enum ipa_ip_type iptype)
 		if (num_wan_ul_fl_rule_v4 == 0)
 		{
 			IPACMERR("No modem UL rules were installed, return...\n");
-			return IPACM_FAILURE;
+			return IPACM_SUCCESS;
 		}
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
 		if(IPACM_Iface::ipacmcfg->ipacm_lan_stats_enable == false)
@@ -2064,7 +2118,7 @@ int IPACM_Lan::del_ul_flt_rules(enum ipa_ip_type iptype)
 		if(num_wan_ul_fl_rule_v6 == 0)
 		{
 			IPACMERR("No modem UL rules were installed, return...\n");
-			return IPACM_FAILURE;
+			return IPACM_SUCCESS;
 		}
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
 		if(IPACM_Iface::ipacmcfg->ipacm_lan_stats_enable == false)
@@ -2284,6 +2338,15 @@ bool IPACM_Lan::is_vlan_IF(uint8_t vlan_id)
 	char vlan_iface_name[IPA_RESOURCE_NAME_MAX];
 	char vlan_suffix[5];
 
+#ifdef FEATURE_SOCKSv5
+	/* handle socksv5 MPDN logic */
+	if (IPACM_Iface::ipacmcfg->ipacm_mpdn_enable == false)
+	{
+		IPACMDBG_H("MPDN is disabled, return true\n");
+		return true;
+	}
+#endif //FEATURE_SOCKSv5
+
 	/* concatenate the vlan id to the IF name and check iface exists */
 	snprintf(vlan_suffix, sizeof(vlan_suffix), ".%d", vlan_id);
 	strlcpy(vlan_iface_name, dev_name, sizeof(vlan_iface_name));
@@ -2489,6 +2552,13 @@ int IPACM_Lan::handle_vlan_pdn_down(ipacm_event_vlan_pdn *data)
 		if(is_any_mux_up(data->iptype) == true)
 			notif_only = true;
 
+#ifdef FEATURE_SOCKSv5
+		/* socksv5 case */
+		if (IPACM_Iface::ipacmcfg->ipacm_mpdn_enable == false &&
+			(IPACM_Wan::isWanUP(ipa_if_num) || IPACM_Wan::isVlanWanUP()))
+			notif_only = true;
+#endif //FEATURE_SOCKSv5
+
 		if(!notif_only)
 		{
 			if(del_ul_flt_rules(IPA_IP_v4))
@@ -2510,6 +2580,13 @@ int IPACM_Lan::handle_vlan_pdn_down(ipacm_event_vlan_pdn *data)
 
 		if(is_any_mux_up(data->iptype) == true)
 			notif_only = true;
+
+#ifdef FEATURE_SOCKSv5
+		/* socksv5 case */
+		if (IPACM_Iface::ipacmcfg->ipacm_mpdn_enable == false &&
+			(IPACM_Wan::isWanUP_V6(ipa_if_num) || IPACM_Wan::isVlanWanUP_V6()))
+			notif_only = true;
+#endif //FEATURE_SOCKSv5
 
 		/* prefixes list updated, install rules accordingly */
 		modify_ipv6_prefix_flt_rule();
@@ -2546,6 +2623,14 @@ int IPACM_Lan::handle_vlan_pdn_down(ipacm_event_vlan_pdn *data)
 
 		if(is_any_mux_up(IPA_IP_v6) == true)
 			notif_only_v6 = true;
+
+#ifdef FEATURE_SOCKSv5
+		/* socksv5 case */
+		if (IPACM_Iface::ipacmcfg->ipacm_mpdn_enable == false &&
+			((IPACM_Wan::isWanUP(ipa_if_num) || IPACM_Wan::isVlanWanUP()) ||
+			(IPACM_Wan::isWanUP(ipa_if_num) || IPACM_Wan::isVlanWanUP())))
+			notif_only = true;
+#endif //FEATURE_SOCKSv5
 
 		/* prefixes list updated, install rules accordingly */
 		modify_ipv6_prefix_flt_rule();
@@ -3504,11 +3589,9 @@ int IPACM_Lan::handle_wan_up_ex(ipacm_ext_prop *ext_prop, ipa_ip_type iptype, ui
 	{
 		/* add MTU rules for ipv4 */
 		modify_private_subnet();
-
 		/* MTU might have changed. Need to update ipv6 MTU rule if up */
 		if (IPACM_Wan::isWanUP_V6(ipa_if_num))
 			modify_ipv6_prefix_flt_rule();
-
 		if(modem_ul_v4_set == false)
 		{
 			IPACMDBG_H("IPA_IP_v4 xlat_mux_id: %d, modem_ul_v4_set %d\n", xlat_mux_id, modem_ul_v4_set);
@@ -5756,6 +5839,31 @@ int IPACM_Lan::handle_eth_client_down_evt(uint8_t *mac_addr, uint8_t vlan_id, ip
 /* handle LINK DOWN of a physical IF in vlan mode */
 int IPACM_Lan::handle_vlan_phys_if_down()
 {
+
+#ifdef FEATURE_SOCKSv5
+	/* socksv5 case */
+	if (IPACM_Iface::ipacmcfg->ipacm_mpdn_enable == false)
+	{
+		if(IPACM_Wan::isWanUP(ipa_if_num) || IPACM_Wan::isVlanWanUP())
+		{
+			if(del_ul_flt_rules(IPA_IP_v4))
+			{
+				return IPACM_FAILURE;
+			}
+		}
+		if(IPACM_Wan::isWanUP_V6(ipa_if_num) || IPACM_Wan::isVlanWanUP_V6())
+		{
+			/* reset usb-client ipv6 rt-rules */
+			handle_lan_client_reset_rt(IPA_IP_v6);
+
+			if(del_ul_flt_rules(IPA_IP_v6))
+			{
+				return IPACM_FAILURE;
+			}
+		}
+	}
+#endif //FEATURE_SOCKSv5
+
 	/* delete rules once for each iptype */
 	if(is_any_mux_up(IPA_IP_v4))
 	{

@@ -119,6 +119,8 @@ const char *ipacm_event_name[] = {
 	__stringify(IPA_LAN_DELETE_SELF),                      /* ipacm_event_data_fid */
 	__stringify(IPA_WIGIG_CLIENT_ADD_EVENT),               /* ipacm_event_data_mac_ep */
 	__stringify(IPA_WIGIG_FST_SWITCH),                     /* ipacm_event_data_fst */
+	__stringify(IPA_VLAN_WAN_IFACE_UP),                    /* ipacm_event_data_fid */
+	__stringify(IPA_VLAN_WAN_IFACE_DOWN),                  /* ipacm_event_data_fid */
 	__stringify(IPACM_EVENT_MAX),
 };
 
@@ -291,6 +293,14 @@ int IPACM_Config::Init(void)
 		IPACMDBG_H("IPACM_Config::ipacm_alg[%d] = %d, port=%d\n", i, alg_table[i].protocol, alg_table[i].port);
 	}
 
+	qos_config.num_mappings = cfg->qos_config.num_mappings;
+	for (i = 0 ; i < IPA_MAX_QOS_ENTRIES; ++i)
+	{
+		qos_config.vlan_dscp_map[i].vlan_id = cfg->qos_config.vlan_dscp_map[i].vlan_id;
+		qos_config.vlan_dscp_map[i].dscp = cfg->qos_config.vlan_dscp_map[i].dscp;
+		IPACMDBG_H("IPACM_Config::ipacm_qos[%d] vlanid = %d, dscp=%d\n",
+			i, qos_config.vlan_dscp_map[i].vlan_id, qos_config.vlan_dscp_map[i].dscp);
+	}
 	ipa_nat_max_entries = cfg->nat_max_entries;
 	IPACMDBG_H("Nat Maximum Entries %d\n", ipa_nat_max_entries);
 
@@ -409,6 +419,7 @@ int IPACM_Config::Init(void)
 	IPACMDBG_H(" depend MAP-4 rm index %d to rm index: %d \n", IPA_RM_RESOURCE_WLAN_PROD, IPA_RM_RESOURCE_ODU_ADAPT_CONS);
 	IPACMDBG_H(" depend MAP-5 rm index %d to rm index: %d \n", IPA_RM_RESOURCE_ODU_ADAPT_PROD, IPA_RM_RESOURCE_USB_CONS);
 
+	memset(vlan_devices, 0, IPA_VLAN_IF_MAX*sizeof(bool));
 fail:
 	if (cfg != NULL)
 	{
@@ -905,3 +916,24 @@ enum ipa_hw_type IPACM_Config::GetIPAVer(bool get)
 	IPACMDBG_H("IPA version is %d.\n", ver);
 	return ver;
 }
+
+void IPACM_Config::set_iface_vlan_mode(enum ipa_vlan_ifaces dev, bool state)
+{
+	if (vlan_devices[dev] == state)
+	{
+		IPACMDBG_H("vlan iface (eth 0 /rndis 1/ecm 2) %d already in state : %d\n", dev, state);
+	}
+	vlan_devices[dev] = state;
+}
+
+bool IPACM_Config::iface_in_vlan_mode(const char *phys_iface_name)
+{
+	if(phys_iface_name && strstr(phys_iface_name, VETH_NETDEV))
+	{
+		IPACMDBG("eth vlan mode %d\n", vlan_devices[IPA_VLAN_IF_ETH]);
+		return vlan_devices[IPA_VLAN_IF_ETH];
+	}
+	IPACMDBG("iface did not match any known ifaces\n");
+	return false;
+}
+

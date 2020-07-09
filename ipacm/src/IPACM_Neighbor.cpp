@@ -171,11 +171,17 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 			ipa_interface_index = IPACM_Iface::iface_ipa_index_query(data->if_index);
 #ifndef FEATURE_L2TP
 			/* check for failure return */
-			if (IPACM_FAILURE == ipa_interface_index) {
+			if (IPACM_FAILURE == ipa_interface_index && !IPACM_Iface::ipacmcfg->iface_in_vlan_mode(data->iface_name)) {
 				IPACMERR("not supported iface id: %d\n", data->if_index);
 				break;
 			}
 #endif
+			if ((IPACM_FAILURE != ipa_interface_index) && (IPACM_Iface::ipacmcfg->iface_in_vlan_mode(data->iface_name)))
+			{
+				IPACMDBG_H("iface %s is in vlan mode ignoring phy iface niegh events\n",data->iface_name);
+				break;
+			}
+
 			if (data->iptype == IPA_IP_v4)
 			{
 				if (data->ipv4_addr != 0) /* not 0.0.0.0 */

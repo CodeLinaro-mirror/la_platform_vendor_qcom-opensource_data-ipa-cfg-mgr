@@ -110,6 +110,13 @@ void IPACM_IfaceManager::event_callback(ipa_cm_event_id event, void *param)
 				IPACMERR("IPA_LINK_UP_EVENT: not supported iface id: %d\n", evt_data->if_index);
 				break;
 			}
+			/* Ignore non-LTE backhaul*/
+			if (strstr(IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].iface_name, VETH_NETDEV)) {
+				IPACMDBG("Ignoring link up for %s\n",
+					IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].iface_name)
+				break;
+			}
+
 			/* LTE-backhaul */
 			if(IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].if_cat == EMBMS_IF)
 			{
@@ -135,10 +142,14 @@ void IPACM_IfaceManager::event_callback(ipa_cm_event_id event, void *param)
 			/* check if it's WAN_IF */
 			if(IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].if_cat == WAN_IF)
 			{
-				/* usb-backhaul using sta_mode ECM_WAN*/
-				IPACMDBG_H("WAN-usb (%s) link up, iface: %d: \n", IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].iface_name, evt_data->if_index);
+				/* ETH/usb-backhaul using sta_mode ECM_WAN*/
+				IPACMDBG_H("WAN-(%s) link up, iface: %d: \n", IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].iface_name, evt_data->if_index);
 				ifmgr_data.if_index = evt_data->if_index;
-				ifmgr_data.if_type = ECM_WAN;
+				if (strncmp(IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].iface_name,
+						VETH_NETDEV, IPA_IFACE_NAME_LEN) == 0)
+					ifmgr_data.if_type = ETH_WAN;
+				else
+					ifmgr_data.if_type = ECM_WAN;
 				create_iface_instance(&ifmgr_data);
 			}
 			else
@@ -481,6 +492,11 @@ int IPACM_IfaceManager::create_iface_instance(ipacm_ifacemgr_data *param)
 						IPACM_EvtDispatcher::registr(IPA_WLAN_FWR_SSR_BEFORE_SHUTDOWN_NOTICE, w);
 #endif
 #endif
+					}
+					else if (is_sta_mode == ETH_WAN)
+					{
+						IPACM_EvtDispatcher::registr(IPA_VLAN_WAN_IFACE_UP, w);
+						IPACM_EvtDispatcher::registr(IPA_VLAN_WAN_IFACE_DOWN, w);
 					}
 					else
 					{

@@ -152,6 +152,9 @@ public:
 	int hw_counter_offset;
 	int sw_counter_offset;
 
+	/* Store vlan dscp mappingfrom XML file */
+	ipacm_qos_conf_t qos_config;
+
 	/* To return the instance */
 	static IPACM_Config* GetInstance();
 
@@ -354,6 +357,11 @@ public:
 #endif /* defined(FEATURE_IPA_ANDROID)*/
 
 	static const char *DEVICE_NAME_ODU;
+
+	/* VLAN devices */
+	bool vlan_devices[IPA_VLAN_IF_MAX];
+	void set_iface_vlan_mode(enum ipa_vlan_ifaces dev, bool state);
+	bool iface_in_vlan_mode(const char *phys_iface_name);
 
 private:
 	enum ipa_hw_type ver;

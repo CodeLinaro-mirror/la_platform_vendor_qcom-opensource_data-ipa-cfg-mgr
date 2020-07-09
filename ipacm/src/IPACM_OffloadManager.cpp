@@ -617,6 +617,8 @@ RET IPACM_OffloadManager::setQuota(const char * upstream_name /* upstream */, ui
 	if ((fd = open(DEVICE_NAME, O_RDWR)) < 0)
 	{
 		IPACMERR("Failed opening %s.\n", DEVICE_NAME);
+		if (IPACM_Iface::ipacmcfg->isVlanBackhaulSupported() && strstr(upstream_name,VETH_NETDEV))
+			return SUCCESS;
 		return FAIL_HARDWARE;
 	}
 
@@ -658,12 +660,19 @@ RET IPACM_OffloadManager::getStats(const char * upstream_name /* upstream */,
 	wan_ioctl_query_tether_stats_all stats;
 
 	if ((fd = open(DEVICE_NAME, O_RDWR)) < 0) {
-        IPACMERR("Failed opening %s.\n", DEVICE_NAME);
-        return FAIL_HARDWARE;
-    }
+		IPACMERR("Failed opening %s.\n", DEVICE_NAME);
+		if (IPACM_Iface::ipacmcfg->isVlanBackhaulSupported() && strstr(upstream_name,VETH_NETDEV)) {
+			//stub out getStats for APQ platform
+			IPACMDBG_H("upstream %s reset %d ignored on APQ platform\n", upstream_name, reset);
+			offload_stats.tx = 1;
+			offload_stats.rx = 1;
+			return SUCCESS;
+		}
+		return FAIL_HARDWARE;
+	}
 
-    memset(&stats, 0, sizeof(stats));
-    if (strlcpy(stats.upstreamIface, upstream_name, IFNAMSIZ) >= IFNAMSIZ) {
+	memset(&stats, 0, sizeof(stats));
+	if (strlcpy(stats.upstreamIface, upstream_name, IFNAMSIZ) >= IFNAMSIZ) {
 		IPACMERR("String truncation occurred on upstream\n");
 		close(fd);
 		return FAIL_INPUT_CHECK;
@@ -773,12 +782,14 @@ int IPACM_OffloadManager::resetTetherStats(const char * upstream_name /* upstrea
 	wan_ioctl_reset_tether_stats stats;
 
 	if ((fd = open(DEVICE_NAME, O_RDWR)) < 0) {
-        IPACMERR("Failed opening %s.\n", DEVICE_NAME);
-        return FAIL_HARDWARE;
-    }
+		IPACMERR("Failed opening %s.\n", DEVICE_NAME);
+		if (IPACM_Iface::ipacmcfg->isVlanBackhaulSupported() && strstr(upstream_name,VETH_NETDEV))
+			return IPACM_SUCCESS;
+		return FAIL_HARDWARE;
+	}
 
-    memset(stats.upstreamIface, 0, IFNAMSIZ);
-    if (strlcpy(stats.upstreamIface, upstream_name, IFNAMSIZ) >= IFNAMSIZ) {
+	memset(stats.upstreamIface, 0, IFNAMSIZ);
+	if (strlcpy(stats.upstreamIface, upstream_name, IFNAMSIZ) >= IFNAMSIZ) {
 		IPACMERR("String truncation occurred on upstream\n");
 		close(fd);
 		return FAIL_INPUT_CHECK;

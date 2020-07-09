@@ -11,6 +11,7 @@ cc_binary {
         "-Wall",
         "-Werror",
         "-Wno-error=macro-redefined",
+	"-DFEATURE_VLAN_BACKHAUL",
     ],
 
     srcs: [

@@ -1249,6 +1249,7 @@ private:
 #endif
 
 	int construct_mtu_rule(struct ipa_flt_rule *rule, enum ipa_ip_type iptype, uint16_t mtu);
+	int add_mtu_rule_v4_default_pdn();
 
 /* functions to handle eth client mac flt based filetring*/
 	int handle_eth_mac_flt_event();

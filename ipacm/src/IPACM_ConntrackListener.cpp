@@ -115,6 +115,7 @@ void IPACM_ConntrackListener::event_callback(ipa_cm_event_id evt,
 	const ipacm_event_iface_up *wan_data = NULL;
 	ipacm_event_connection *data_evt_conn = NULL;
 	ipacm_event_iface_up wan_data_local;
+	memset(&wan_data_local, 0, sizeof(wan_data_local));
 #ifdef FEATURE_SOCKSv5
 	ipa_socksv5_msg *socksv5_info = NULL;
 #endif
@@ -1518,6 +1519,7 @@ void IPACM_ConntrackListener::PostRouteAddVlanPdn(uint32_t public_ip)
 		IPACMERR("couldn't allocate memory for new vlan pdn event\n");
 		return;
 	}
+	memset(vlan_data, 0, sizeof(ipacm_event_route_vlan));
 	vlan_data->iptype = IPA_IP_v4;
 	vlan_data->wan_ipv4_addr = public_ip;
 	evt_data.evt_data = vlan_data;

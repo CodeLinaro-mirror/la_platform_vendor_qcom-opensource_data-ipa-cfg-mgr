@@ -146,6 +146,8 @@ IPACM_Wan::IPACM_Wan(int iface_index,
 	wan_client_len = 0;
 	m_is_sta_mode = is_sta_mode;
 #ifdef FEATURE_VLAN_BACKHAUL
+	hdr_proc_ctx_sta_v4_set = false;
+	hdr_proc_ctx_sta_v6_set = false;
 	vlan_wan_ctx.netdev_in_vlan_mode = false;
 #endif
 	if(iface_query != NULL)
@@ -1406,6 +1408,9 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 				}
 				else if (data->iptype == IPA_IP_v6)
 					vlan_iface->v6_upstream_set = false;
+				hdr_proc_ctx_sta_v4_set = false;
+				hdr_proc_ctx_sta_v6_set = false;
+				vlan_wan_ctx.upstream_if_index = -1;
 			}
 #endif
 			if (ipa_interface_index == ipa_if_num || vlan_upstream)
@@ -2012,12 +2017,22 @@ int IPACM_Wan::handle_route_add_evt(ipa_ip_type iptype)
 			if (iptype == IPA_IP_v4)
 			{
 				strlcpy(rt_rule->rt_tbl_name, IPACM_Iface::ipacmcfg->rt_tbl_wan_v4.name, sizeof(rt_rule->rt_tbl_name));
-				rt_rule_entry->rule.hdr_hdl = hdr_hdl_sta_v4;
+#ifdef FEATURE_VLAN_BACKHAUL
+				if (hdr_proc_ctx_sta_v4_set)
+					rt_rule_entry->rule.hdr_proc_ctx_hdl = hdr_proc_ctx_hdl_sta_v4;
+				else
+#endif
+					rt_rule_entry->rule.hdr_hdl = hdr_hdl_sta_v4;
 			}
 			else
 			{
 				strlcpy(rt_rule->rt_tbl_name, IPACM_Iface::ipacmcfg->rt_tbl_v6.name, sizeof(rt_rule->rt_tbl_name));
-				rt_rule_entry->rule.hdr_hdl = hdr_hdl_sta_v6;
+#ifdef FEATURE_VLAN_BACKHAUL
+				if (hdr_proc_ctx_sta_v6_set)
+					rt_rule_entry->rule.hdr_proc_ctx_hdl = hdr_proc_ctx_hdl_sta_v6;
+				else
+#endif
+					rt_rule_entry->rule.hdr_hdl = hdr_hdl_sta_v6;
 			}
 
 			IPACMDBG_H(" WAN table created %s \n", rt_rule->rt_tbl_name);
@@ -2478,6 +2493,14 @@ int IPACM_Wan::handle_sta_header_add_evt()
 
 			if(get_client_memptr(wan_client, index)->ipv4_header_set)
 			{
+#ifdef FEATURE_VLAN_BACKHAUL
+				if (get_client_memptr(wan_client, index)->ipv4_header_proc_set)
+				{
+					hdr_proc_ctx_hdl_sta_v4 = get_client_memptr(wan_client, index)->hdr_proc_ctx_hdl_v4;
+					hdr_proc_ctx_sta_v4_set = true;
+					IPACMDBG_H("STA ipv4 proc ctx hdl set to : (%x)\n", hdr_proc_ctx_hdl_sta_v4);
+				}
+#endif
 				hdr_hdl_sta_v4 = get_client_memptr(wan_client, index)->hdr_hdl_v4;
 				header_set_v4 = true;
 				IPACMDBG_H("add full ipv4 header hdl: (%x)\n", get_client_memptr(wan_client, index)->hdr_hdl_v4);
@@ -2492,6 +2515,14 @@ int IPACM_Wan::handle_sta_header_add_evt()
 
 			if(get_client_memptr(wan_client, index)->ipv6_header_set)
 			{
+#ifdef FEATURE_VLAN_BACKHAUL
+				if (get_client_memptr(wan_client, index)->ipv6_header_proc_set)
+				{
+					hdr_proc_ctx_hdl_sta_v6 = get_client_memptr(wan_client, index)->hdr_proc_ctx_hdl_v6;
+					hdr_proc_ctx_sta_v6_set = true;
+					IPACMDBG_H("STA ipv6 proc ctx hdl set to : (%x)\n", hdr_proc_ctx_hdl_sta_v6);
+				}
+#endif
 				hdr_hdl_sta_v6 = get_client_memptr(wan_client, index)->hdr_hdl_v6;
 				header_set_v6 = true;
 				IPACMDBG_H("add full ipv6 header hdl: (%x)\n", get_client_memptr(wan_client, index)->hdr_hdl_v6);
@@ -2526,6 +2557,14 @@ int IPACM_Wan::handle_sta_header_add_evt()
 
 			if(get_client_memptr(wan_client, index)->ipv6_header_set)
 			{
+#ifdef FEATURE_VLAN_BACKHAUL
+				if (get_client_memptr(wan_client, index)->ipv6_header_proc_set)
+				{
+					hdr_proc_ctx_hdl_sta_v6 = get_client_memptr(wan_client, index)->hdr_proc_ctx_hdl_v6;
+					hdr_proc_ctx_sta_v6_set= true;
+					IPACMDBG_H("STA ipv6 proc ctx hdl set to : (%x)\n", hdr_proc_ctx_hdl_sta_v6);
+				}
+#endif
 				hdr_hdl_sta_v6 = get_client_memptr(wan_client, index)->hdr_hdl_v6;
 				header_set_v6 = true;
 				IPACMDBG_H("add full ipv6 header hdl: (%x)\n", get_client_memptr(wan_client, index)->hdr_hdl_v6);
@@ -2540,6 +2579,14 @@ int IPACM_Wan::handle_sta_header_add_evt()
 
 			if(get_client_memptr(wan_client, index)->ipv4_header_set)
 			{
+#ifdef FEATURE_VLAN_BACKHAUL
+				if (get_client_memptr(wan_client, index)->ipv4_header_proc_set)
+				{
+					hdr_proc_ctx_hdl_sta_v4 = get_client_memptr(wan_client, index)->hdr_proc_ctx_hdl_v4;
+					hdr_proc_ctx_sta_v4_set = true;
+					IPACMDBG_H("STA ipv4 proc ctx hdl set to : (%x)\n", hdr_proc_ctx_hdl_sta_v4);
+				}
+#endif
 				hdr_hdl_sta_v4 = get_client_memptr(wan_client, index)->hdr_hdl_v4;
 				header_set_v4 = true;
 				IPACMDBG_H("add full ipv4 header hdl: (%x)\n", get_client_memptr(wan_client, index)->hdr_hdl_v4);
@@ -6105,7 +6152,7 @@ fail:
 /* handle STA WAN-client */
 /* handle WAN client initial, construct full headers (tx property) */
 #ifdef FEATURE_VLAN_BACKHAUL
-int IPACM_Wan::handle_wan_hdr_init(uint8_t *mac_addr, uint16_t vlan_id)
+int IPACM_Wan::handle_wan_hdr_init(uint8_t *mac_addr, uint16_t vlan_id, uint8_t dscp)
 #else
 int IPACM_Wan::handle_wan_hdr_init(uint8_t *mac_addr)
 #endif
@@ -6239,7 +6286,14 @@ int IPACM_Wan::handle_wan_hdr_init(uint8_t *mac_addr)
 						*((uint32_t *)&(pHeaderDescriptor->hdr[0].hdr[eth2_ofst +
 							2 * IPA_MAC_ADDR_SIZE])));
 				}
+
+				if (dscp != 0)
+				{
+					pHeaderDescriptor->hdr[0].hdr[eth2_ofst + hdr_len] = dscp;
+					hdr_len++;
+				}
 #endif
+
 
 				pHeaderDescriptor->commit = true;
 				pHeaderDescriptor->num_hdrs = 1;
@@ -6367,6 +6421,12 @@ int IPACM_Wan::handle_wan_hdr_init(uint8_t *mac_addr)
 						*((uint32_t *)&(pHeaderDescriptor->hdr[0].hdr[eth2_ofst +
 							2 * IPA_MAC_ADDR_SIZE])));
 				}
+
+				if (dscp != 0)
+				{
+					pHeaderDescriptor->hdr[0].hdr[eth2_ofst + hdr_len] = dscp;
+					hdr_len++;
+				}
 #endif
 				pHeaderDescriptor->commit = true;
 				pHeaderDescriptor->num_hdrs = 1;
@@ -6430,9 +6490,14 @@ int IPACM_Wan::handle_wan_hdr_init(uint8_t *mac_addr)
 		return res;
 	}
 
+#ifdef FEATURE_VLAN_BACKHAUL
+	/* Install header proc ctx for vlan backhaul*/
+	if (dscp != 0)
+		res = handle_wan_hdr_proc_init(mac_addr);
+#endif
+
 fail:
 	free(pHeaderDescriptor);
-
 	return res;
 }
 
@@ -8406,7 +8471,7 @@ int IPACM_Wan::handle_vlan_wan_iface_neigh_evt(ipacm_event_data_all *data)
 	}
 
 	IPACMDBG_H("wan-iface %s got vlan client \n",data->iface_name);
-	handle_wan_hdr_init(data->mac_addr, vlan_iface->vlan_id);
+	handle_wan_hdr_init(data->mac_addr, vlan_iface->vlan_id, vlan_iface->dscp);
 	if (handle_wan_client_ipaddr(data))
 		goto fail;
 
@@ -8453,6 +8518,8 @@ int IPACM_Wan::handle_vlan_wan_iface_upstream_add(ipacm_event_data_iptype *data)
 			del_dft_firewall_rules(IPA_IP_v6);
 			handle_route_del_evt(IPA_IP_v6);
 		}
+		hdr_proc_ctx_sta_v4_set = false;
+		hdr_proc_ctx_sta_v6_set = false;
 	}
 
 	/* Header & route rule creation remains same for new and switched bh */
@@ -8592,10 +8659,93 @@ int IPACM_Wan::handle_vlan_wan_iface_down(int if_index)
 		}
 		get_client_memptr(wan_client, clnt_id)->ipv6_header_set = false;
 	}
+	if(get_client_memptr(wan_client, clnt_id)->ipv4_header_proc_set)
+	{
+		if (!m_header.DeleteHeaderProcCtx(
+			get_client_memptr(wan_client, clnt_id)->hdr_proc_ctx_hdl_v4))
+		{
+			res = IPACM_FAILURE;
+			goto fail;
+		}
+		get_client_memptr(wan_client, clnt_id)->ipv4_header_proc_set = false;
+	}
+	if(get_client_memptr(wan_client, clnt_id)->ipv6_header_proc_set)
+	{
+		if (!m_header.DeleteHeaderProcCtx(
+			get_client_memptr(wan_client, clnt_id)->hdr_proc_ctx_hdl_v6))
+		{
+			res = IPACM_FAILURE;
+			goto fail;
+		}
+		get_client_memptr(wan_client, clnt_id)->ipv6_header_proc_set = false;
+	}
 
 fail:
 	free(it->second);
 	vlan_wan_ctx.vlan_iface_table.erase(it);
+	return res;
+}
+
+int IPACM_Wan::handle_wan_hdr_proc_init(uint8_t *mac_addr)
+{
+	int res = IPACM_SUCCESS;
+	int clnt_indx;
+	uint32_t size;
+	ipa_ioc_add_hdr_proc_ctx *hdr_proc_ctx_table;
+	ipa_hdr_proc_ctx_add *hdr_proc_ctx;
+
+	clnt_indx = get_wan_client_index(mac_addr);
+
+	size = sizeof(ipa_ioc_add_hdr_proc_ctx) + 2*sizeof(ipa_hdr_proc_ctx_add);
+	hdr_proc_ctx_table = (ipa_ioc_add_hdr_proc_ctx*)malloc(size);
+	if(hdr_proc_ctx_table == NULL)
+	{
+		IPACMERR("Failed to allocate memory.\n");
+		res = IPACM_FAILURE;
+		goto fail;
+	}
+	memset(hdr_proc_ctx_table, 0, size);
+
+	hdr_proc_ctx_table->commit = 1;
+	hdr_proc_ctx_table->num_proc_ctxs = 1;
+
+	if(get_client_memptr(wan_client, clnt_indx)->ipv4_header_set)
+	{
+		hdr_proc_ctx = &hdr_proc_ctx_table->proc_ctx[0];
+		hdr_proc_ctx->type = IPA_HDR_PROC_SET_DSCP;
+		hdr_proc_ctx->hdr_hdl = get_client_memptr(wan_client, clnt_indx)->hdr_hdl_v4;
+		if(m_header.AddHeaderProcCtx(hdr_proc_ctx_table) == false)
+		{
+			IPACMERR("Failed to add hdr proc ctx with status: %d\n", hdr_proc_ctx_table->proc_ctx[0].status);
+			res = IPACM_FAILURE;
+			goto fail;
+		}
+		get_client_memptr(wan_client, clnt_indx)->hdr_proc_ctx_hdl_v4 = hdr_proc_ctx_table->proc_ctx[0].proc_ctx_hdl;
+		get_client_memptr(wan_client, clnt_indx)->ipv4_header_proc_set=true;
+		IPACMDBG_H("Installed hdr proc ctx: V4 hdl %d\n",
+			get_client_memptr(wan_client, clnt_indx)->hdr_proc_ctx_hdl_v4);
+	}
+
+	if(get_client_memptr(wan_client, clnt_indx)->ipv6_header_set)
+	{
+		hdr_proc_ctx = &hdr_proc_ctx_table->proc_ctx[0];
+		hdr_proc_ctx->type = IPA_HDR_PROC_SET_DSCP;
+		hdr_proc_ctx->hdr_hdl = get_client_memptr(wan_client, clnt_indx)->hdr_hdl_v6;
+		if(m_header.AddHeaderProcCtx(hdr_proc_ctx_table) == false)
+		{
+			IPACMERR("Failed to add hdr proc ctx with status: %d\n", hdr_proc_ctx_table->proc_ctx[0].status);
+			res = IPACM_FAILURE;
+			goto fail;
+		}
+		get_client_memptr(wan_client, clnt_indx)->hdr_proc_ctx_hdl_v6 = hdr_proc_ctx_table->proc_ctx[0].proc_ctx_hdl;
+		get_client_memptr(wan_client, clnt_indx)->ipv6_header_proc_set=true;
+		IPACMDBG_H("Installed hdr proc ctx: V6 hdl %d\n",
+			get_client_memptr(wan_client, clnt_indx)->hdr_proc_ctx_hdl_v6);
+	}
+
+fail:
+	if (hdr_proc_ctx_table)
+		free(hdr_proc_ctx_table);
 	return res;
 }
 #endif

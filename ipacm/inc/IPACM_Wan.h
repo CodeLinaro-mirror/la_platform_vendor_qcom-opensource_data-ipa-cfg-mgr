@@ -87,6 +87,12 @@ typedef struct _ipa_wan_client
 	bool ipv6_header_set;
 	bool power_save_set;
 	wan_client_rt_hdl wan_rt_hdl[0]; /* depends on number of tx properties */
+#ifdef FEATURE_VLAN_BACKHAUL
+	uint32_t hdr_proc_ctx_hdl_v4;
+	uint32_t hdr_proc_ctx_hdl_v6;
+	uint32_t ipv4_header_proc_set;
+	uint32_t ipv6_header_proc_set;
+#endif
 }ipa_wan_client;
 
 typedef struct
@@ -436,6 +442,10 @@ private:
 	uint32_t tcp_rst_hdl;
 
 #ifdef FEATURE_VLAN_BACKHAUL
+	uint32_t hdr_proc_ctx_hdl_sta_v4;
+	uint32_t hdr_proc_ctx_hdl_sta_v6;
+	bool hdr_proc_ctx_sta_v4_set;
+	bool hdr_proc_ctx_sta_v6_set;
 	vlan_wan_context vlan_wan_ctx;
 #endif
 
@@ -620,7 +630,7 @@ private:
 #ifndef FEATURE_VLAN_BACKHAUL
 	int handle_wan_hdr_init(uint8_t *mac_addr);
 #else
-	int handle_wan_hdr_init(uint8_t *mac_addr, uint16_t vlan_id = 0);
+	int handle_wan_hdr_init(uint8_t *mac_addr, uint16_t vlan_id = 0, uint8_t dscp = 0);
 #endif
 
 	int handle_wan_client_ipaddr(ipacm_event_data_all *data);
@@ -726,6 +736,8 @@ private:
 	int handle_vlan_wan_iface_upstream_add(ipacm_event_data_iptype *data = NULL);
 
 	int handle_vlan_wan_iface_down(int if_index);
+
+	int handle_wan_hdr_proc_init(uint8_t *mac_addr);
 #endif
 };
 

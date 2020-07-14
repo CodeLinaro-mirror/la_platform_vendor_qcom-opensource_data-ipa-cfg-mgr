@@ -3233,13 +3233,22 @@ int IPACM_Lan::handle_wan_up_ex(ipacm_ext_prop *ext_prop, ipa_ip_type iptype, ui
 #else
 			ret = handle_uplink_filter_rule(ext_prop, iptype, xlat_mux_id);
 #endif
-			modem_ul_v6_set = true;
+			if (num_wan_ul_fl_rule_v6 != 0)
+				modem_ul_v6_set = true;
+			else {
+				IPACMERR("Modem UL v6 rules not installed, error: %d \n",ret);
+				goto fail;
+			}
 		}
 #ifdef FEATURE_VLAN_MPDN
 		else
 		{
 			notif_only = true;
 			ret = handle_uplink_filter_rule(ext_prop, iptype, xlat_mux_id, true, true);
+			if (num_wan_ul_fl_rule_v6 == 0) {
+				IPACMERR("Modem UL v6 rules not installed, error: %d \n",ret);
+				goto fail;
+			}
 		}
 #endif
 	}
@@ -3262,14 +3271,23 @@ int IPACM_Lan::handle_wan_up_ex(ipacm_ext_prop *ext_prop, ipa_ip_type iptype, ui
 #else
 			ret = handle_uplink_filter_rule(ext_prop, iptype, xlat_mux_id);
 #endif
-			modem_ul_v4_set = true;
+			if (num_wan_ul_fl_rule_v4 != 0)
+				modem_ul_v4_set = true;
+			else {
+				IPACMERR("Modem UL v4 rules not installed, error: %d \n",ret);
+				goto fail;
+			}
 		}
 #ifdef FEATURE_VLAN_MPDN
 		else
 		{
 			/* for v4, always install the rules like before */
 			notif_only = false;
-			ret = handle_uplink_filter_rule(ext_prop, iptype, xlat_mux_id, true, true);
+			ret = handle_uplink_filter_rule(ext_prop, iptype, xlat_mux_id, true	, true);
+			if (num_wan_ul_fl_rule_v4 == 0) {
+				IPACMERR("Modem UL v4 rules not installed, error: %d \n",ret);
+				goto fail;
+			}
 		}
 #endif
 	}
@@ -3293,6 +3311,7 @@ int IPACM_Lan::handle_wan_up_ex(ipacm_ext_prop *ext_prop, ipa_ip_type iptype, ui
 		ret = IPACM_SUCCESS;
 	}
 #endif
+fail:
 	return ret;
 }
 

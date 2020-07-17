@@ -927,8 +927,6 @@ void* ipa_driver_msg_notifier(void *param)
 			ip_pass_pdn_data->enable = pdn_info->enable;
 			evt_data.evt_data = ip_pass_pdn_data;
 			ipa_get_if_index(pdn_info->dev_name, &(ip_pass_pdn_data->if_index));
-			IPACMDBG_H("Posting event:%d\n", evt_data.event);
-			IPACM_EvtDispatcher::PostEvt(&evt_data);
 			break;
 
 #ifdef IPA_IOC_SET_MAC_FLT

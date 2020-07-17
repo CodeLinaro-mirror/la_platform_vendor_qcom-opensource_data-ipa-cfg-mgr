@@ -106,6 +106,12 @@ IPACM_Lan::IPACM_Lan(int iface_index) : IPACM_Iface(iface_index)
 	/* support eth multiple clients */
 	if(iface_query != NULL)
 	{
+		IPACMDBG_H(" IPACM->IPACM_Lan(%d) constructor: Tx:%d Rx:%d \n", ipa_if_num,
+			 iface_query->num_tx_props, iface_query->num_rx_props);
+
+		if (iface_query->num_tx_props == 0 && iface_query->num_rx_props == 0)
+			return;
+
 		if(IPACM_Iface::ipacmcfg->iface_table[ipa_if_num].if_cat != WLAN_IF)
 		{
 			eth_client_len = (sizeof(ipa_eth_client)) + (iface_query->num_tx_props * sizeof(eth_client_rt_hdl));
@@ -117,8 +123,6 @@ IPACM_Lan::IPACM_Lan(int iface_index) : IPACM_Iface(iface_index)
 			}
 		}
 
-		IPACMDBG_H(" IPACM->IPACM_Lan(%d) constructor: Tx:%d Rx:%d \n", ipa_if_num,
-					 iface_query->num_tx_props, iface_query->num_rx_props);
 #ifdef FEATURE_ETH_BRIDGE_LE
 		if((IPACM_Iface::ipacmcfg->iface_table[ipa_if_num].if_cat == LAN_IF
 			|| IPACM_Iface::ipacmcfg->iface_table[ipa_if_num].if_cat == ODU_IF) && tx_prop != NULL)

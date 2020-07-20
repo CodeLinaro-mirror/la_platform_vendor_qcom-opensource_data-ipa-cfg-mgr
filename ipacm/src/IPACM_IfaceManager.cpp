@@ -279,6 +279,8 @@ int IPACM_IfaceManager::create_iface_instance(ipacm_ifacemgr_data *param)
 				IPACM_EvtDispatcher::registr(IPA_HANDLE_WAN_UP_V6, lan);
 				IPACM_EvtDispatcher::registr(IPA_HANDLE_WAN_DOWN, lan);
 				IPACM_EvtDispatcher::registr(IPA_HANDLE_WAN_DOWN_V6, lan);
+				/* only need for vlan supported lan instance */
+				IPACM_EvtDispatcher::registr(IPA_HANDLE_WAN_ADDR_ADD_V6, lan);
 #ifdef FEATURE_IPACM_UL_FIREWALL
 				IPACM_EvtDispatcher::registr(IPA_FIREWALL_CHANGE_EVENT, lan);			// register for Firewall change event
 #endif //FEATURE_IPACM_UL_FIREWALL
@@ -336,6 +338,8 @@ int IPACM_IfaceManager::create_iface_instance(ipacm_ifacemgr_data *param)
 				IPACM_EvtDispatcher::registr(IPA_LAN_CLIENT_CONNECT_EVENT, ETH);
 				IPACM_EvtDispatcher::registr(IPA_LAN_CLIENT_DISCONNECT_EVENT, ETH);
 #endif
+				/* only need for vlan supported lan instance */
+				IPACM_EvtDispatcher::registr(IPA_HANDLE_WAN_ADDR_ADD_V6, ETH);
 				/* IPA_LAN_DELETE_SELF should be always last */
 				IPACM_EvtDispatcher::registr(IPA_LAN_DELETE_SELF, ETH);
 				IPACMDBG_H("ipa_LAN (%s):ipa_index (%d) instance open/registr ok\n", ETH->dev_name, ETH->ipa_if_num);
@@ -366,6 +370,8 @@ int IPACM_IfaceManager::create_iface_instance(ipacm_ifacemgr_data *param)
 					IPACM_EvtDispatcher::registr(IPA_HANDLE_WAN_UP_V6, odu);
 					IPACM_EvtDispatcher::registr(IPA_HANDLE_WAN_DOWN, odu);
 					IPACM_EvtDispatcher::registr(IPA_HANDLE_WAN_DOWN_V6, odu);
+					/* only need for vlan supported lan instance */
+					IPACM_EvtDispatcher::registr(IPA_HANDLE_WAN_ADDR_ADD_V6, odu);
 					IPACM_EvtDispatcher::registr(IPA_CRADLE_WAN_MODE_SWITCH, odu);
 					IPACM_EvtDispatcher::registr(IPA_LINK_DOWN_EVENT, odu);
 					IPACM_EvtDispatcher::registr(IPA_MAC_ADD_DEL_FLT_EVENT, odu);

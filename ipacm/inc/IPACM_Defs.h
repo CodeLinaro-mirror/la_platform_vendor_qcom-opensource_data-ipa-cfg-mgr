@@ -153,6 +153,11 @@ extern "C"
 #define IPA_MAX_IPV6_PREFIX_FLT_RULE 1
 #endif
 
+#define IPA_MAX_ACTIVE_LAN_IFACE 2
+#define IPA_MAX_ACTIVE_WLAN_IFACE 4
+#define IPA_MAX_NAT_IFACE (IPA_MAX_ACTIVE_LAN_IFACE*IPA_MAX_NUM_OFFLOAD_VLANS+ \
+	IPA_MAX_ACTIVE_LAN_IFACE + IPA_MAX_ACTIVE_WLAN_IFACE + IPA_MAX_NUM_SW_PDNS)
+
 /*===========================================================================
 										 GLOBAL DEFINITIONS AND DECLARATIONS
 ===========================================================================*/

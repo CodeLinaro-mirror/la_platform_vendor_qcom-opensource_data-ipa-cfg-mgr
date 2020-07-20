@@ -198,6 +198,8 @@ public:
 	bool is_vlan_offload_disabled;
 #endif
 
+	std::list <ipacm_event_data_all> neigh_cache;
+
 	/* LAN-iface's callback function */
 	void event_callback(ipa_cm_event_id event, void *data);
 

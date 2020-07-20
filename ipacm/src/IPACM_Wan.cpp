@@ -870,6 +870,8 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 		{
 			ipacm_event_data_addr *data = (ipacm_event_data_addr *)param;
 			ipa_interface_index = iface_ipa_index_query(data->if_index);
+			ipacm_event_iface_up *wanup_data = NULL;
+			ipacm_cmd_q_data evt_data;
 
 			if ( (data->iptype == IPA_IP_v4 && data->ipv4_addr == 0) ||
 					 (data->iptype == IPA_IP_v6 &&
@@ -902,6 +904,27 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 						handle_software_routing_enable();
 					}
 
+					if(data->iptype == IPA_IP_v6)
+					{
+						wanup_data = (ipacm_event_iface_up *)malloc(sizeof(ipacm_event_iface_up));
+						if (wanup_data == NULL)
+						{
+							IPACMERR("Unable to allocate memory\n");
+							break;
+						}
+						memset(wanup_data, 0, sizeof(ipacm_event_iface_up));
+						memcpy(wanup_data->ifname, dev_name, sizeof(wanup_data->ifname));
+						wanup_data->mux_id = ext_prop->ext[0].mux_id;
+						wanup_data->ipv6_prefix[0] = data->ipv6_addr[0];
+						wanup_data->ipv6_prefix[1] = data->ipv6_addr[1];
+						IPACMDBG_H("Posting IPA_HANDLE_WAN_ADDR_ADD_V6 with below information:\n");
+						IPACMDBG_H("if_name:%s ipv6 prefix: 0x%08x%08x mux_id %d\n", wanup_data->ifname,
+							wanup_data->ipv6_prefix[0], wanup_data->ipv6_prefix[1], wanup_data->mux_id);
+						memset(&evt_data, 0, sizeof(evt_data));
+						evt_data.event = IPA_HANDLE_WAN_ADDR_ADD_V6;
+						evt_data.evt_data = (void *)wanup_data;
+						IPACM_EvtDispatcher::PostEvt(&evt_data);
+					}
 				}
 			}
 		}

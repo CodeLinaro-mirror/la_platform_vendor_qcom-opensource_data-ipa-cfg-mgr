@@ -6786,6 +6786,7 @@ int IPACM_Lan::config_dft_firewall_rules_ul_ex(IPACM_firewall_conf_t* firewall_c
 int IPACM_Lan::disable_dft_firewall_rules_ul_ex(int vid)
 {
 	int ret;
+	ipacm_event_vlan_pdn data;
 
 	if(IPACM_Iface::ipacmcfg->ipv6_nat_enable)
 	{
@@ -6799,13 +6800,32 @@ int IPACM_Lan::disable_dft_firewall_rules_ul_ex(int vid)
 		return IPACM_FAILURE;
 	}
 #else //IPA_V6_UL_WL_FIREWALL_HANDLE
-	/* Install the deleted UL rules back, since the firewall is disabled */
-	if(IPACM_Wan::isWanUP_V6(ipa_if_num)) {
 #ifdef FEATURE_VLAN_MPDN
+	/* Install the deleted UL rules back, since the firewall is disabled */
+	if((IPACM_Iface::ipacmcfg->iface_in_vlan_mode(dev_name)) &&
+				(IPACM_Iface::ipacmcfg->ipacm_mpdn_enable == true))
+	{
+		if(is_any_mux_up(IPA_IP_v6))
+		{
+			IPACMDBG_H("firewall disabled & VLAN PDN up, restore modem ul rules (v6)\n");
+			for(int i = 0; i < IPA_MAX_NUM_HW_PDNS; i++)
+			{
+				data.iptype = IPA_IP_v6;
+				if(v6_mux_up[i])
+				{
+					IPACMDBG_H("mux %d up, restore v6 VLAN PDN rules\n", v6_mux_up[i]);
+					data.mux_id = v6_mux_up[i];
+					handle_vlan_pdn_up(&data, false);
+				}
+			}
+		}
+	}
+	else if (IPACM_Wan::isWanUP_V6(ipa_if_num)) {
 		if(!handle_uplink_filter_rule(IPACM_Iface::ipacmcfg->GetExtProp(IPA_IP_v6),
 			IPA_IP_v6, IPACM_Iface::ipacmcfg->GetQmapId(), false, true))
 			modem_ul_v6_set = true;
 #else
+	if (IPACM_Wan::isWanUP_V6(ipa_if_num)) {
 		if(!handle_uplink_filter_rule(IPACM_Iface::ipacmcfg->GetExtProp(IPA_IP_v6),
 			IPA_IP_v6, IPACM_Iface::ipacmcfg->GetQmapId()))
 			modem_ul_v6_set = true;
@@ -7195,7 +7215,38 @@ void IPACM_Lan::configure_v6_ul_firewall(void)
 
 #ifdef IPA_V6_UL_WL_FIREWALL_HANDLE
 	/* Delete Q6 UL rules */
-	del_ul_flt_rules(IPA_IP_v6);
+#ifdef FEATURE_VLAN_MPDN
+	if((IPACM_Iface::ipacmcfg->iface_in_vlan_mode(dev_name)) &&
+				(IPACM_Iface::ipacmcfg->ipacm_mpdn_enable == TRUE))
+	{
+		if(is_any_mux_up(IPA_IP_v6))
+		{
+			IPACMDBG_H("Vlan config - delete all modem ul rules (v6) to handle new firewall config\n");
+			if(del_ul_flt_rules(IPA_IP_v6))
+				return;
+
+			for(int i = 0; i < IPA_MAX_NUM_HW_PDNS; i++)
+			{
+				if(v6_mux_up[i])
+				{
+					IPACMDBG_H("mux %d up, notify modem we deleted v6 flt rules\n", v6_mux_up[i]);
+					if (notify_flt_removed(v6_mux_up[i]))
+						return;
+				}
+			}
+		}
+	}
+	else
+#endif
+	{
+		IPACMDBG_H(" delete all modem ul rules (v6) to handle new frewall config\n");
+		if(del_ul_flt_rules(IPA_IP_v6))
+			return;
+
+		if(notify_flt_removed(IPACM_Iface::ipacmcfg->GetQmapId()))
+			return;
+	}
+
 #endif
 
 	if(IPACM_Wan::isWanUP_V6(ipa_if_num))

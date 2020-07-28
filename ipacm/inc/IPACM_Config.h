@@ -73,6 +73,7 @@ typedef struct _ipa_rm_client
 typedef struct
 {
 	uint8_t num_ext_props;
+	uint8_t num_v4_xlat_props;
 	ipa_ioc_ext_intf_prop prop[MAX_NUM_EXT_PROPS];
 } ipacm_ext_prop;
 

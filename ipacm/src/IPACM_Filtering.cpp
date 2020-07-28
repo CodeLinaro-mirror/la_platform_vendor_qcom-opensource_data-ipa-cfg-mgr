@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2013-2016, The Linux Foundation. All rights reserved.
+Copyright (c) 2013-2016, 2021 The Linux Foundation. All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are
@@ -80,8 +80,16 @@ bool IPACM_Filtering::AddFilteringRule(struct ipa_ioc_add_flt_rule const *ruleTa
 	IPACMDBG("commit value: %d\n", ruleTable->commit);
 	for (int cnt=0; cnt<ruleTable->num_rules; cnt++)
 	{
-		IPACMDBG("Filter rule:%d attrib mask: 0x%x\n", cnt,
+		if (ruleTable->rules[cnt].rule.eq_attrib_type)
+		{
+			IPACMDBG_H("Filter rule : %d eq attrib mask : 0x%x\n",
+				cnt, ruleTable->rules[cnt].rule.eq_attrib.rule_eq_bitmap);
+		}
+		else
+		{
+			IPACMDBG("Filter rule:%d attrib mask: 0x%x\n", cnt,
 				ruleTable->rules[cnt].rule.attrib.attrib_mask);
+		}
 	}
 
 	retval = ioctl(fd, IPA_IOC_ADD_FLT_RULE, ruleTable);

@@ -90,6 +90,7 @@ typedef struct
 {
 	uint32_t ipv4_addr;
 	bool wan_up_vlan;
+	bool is_xlat;
 	IPACM_Wan *pIface;
 }ipacm_ipv4_wan_iface;
 
@@ -374,6 +375,7 @@ public:
 	static ipacm_ipv4_wan_iface ipv4_to_iface[IPA_MAX_NUM_SW_PDNS];
 	static ipacm_ipv6_wan_iface ipv6_to_iface[IPA_MAX_NUM_SW_PDNS];
 	static int GetMuxByVid(uint16_t vlan_id, uint8_t *mux_id, ipa_ip_type iptype);
+	static bool is_xlat_by_vid(uint16_t vlan_id);
 #endif
 private:
 

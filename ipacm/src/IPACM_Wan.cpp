@@ -252,7 +252,7 @@ IPACM_Wan::~IPACM_Wan()
 
 #ifdef FEATURE_VLAN_MPDN
 
-int IPACM_Wan::GetMuxByVid(uint8_t vlan_id, uint8_t *mux_id, ipa_ip_type iptype)
+int IPACM_Wan::GetMuxByVid(uint16_t vlan_id, uint8_t *mux_id, ipa_ip_type iptype)
 {
 	for(int i = 0; i < IPA_MAX_NUM_SW_PDNS; i++)
 	{
@@ -281,6 +281,20 @@ int IPACM_Wan::GetMuxByVid(uint8_t vlan_id, uint8_t *mux_id, ipa_ip_type iptype)
 	}
 	IPACMERR("couldn't find MUX for VID %d\n", vlan_id);
 	return IPACM_FAILURE;
+}
+
+bool IPACM_Wan::is_xlat_by_vid(uint16_t vlan_id)
+{
+	for(int i = 0; i < IPA_MAX_NUM_SW_PDNS; i++)
+	{
+		if(IPACM_Wan::ipv4_to_iface[i].ipv4_addr)
+		{
+			if(IPACM_Wan::ipv4_to_iface[i].pIface->associated_VID == vlan_id)
+				return IPACM_Wan::ipv4_to_iface[i].is_xlat;
+		}
+	}
+	IPACMERR("couldn't find MUX xlat info for VID %d\n", vlan_id);
+	return false;
 }
 #endif
 /* handle new_address event */
@@ -704,7 +718,7 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 			if ((ipa_interface_index == ipa_if_num) && (m_is_sta_mode == Q6_WAN))
 			{
 				is_xlat = true;
-				IPACMDBG_H("WAN-LTE (%s) link up, iface: %d is_xlat: \n",
+				IPACMDBG_H("WAN-LTE (%s) link up, iface: %d is_xlat: %d \n",
 						IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].iface_name,data->if_index, is_xlat);
 			}
 			break;
@@ -1667,6 +1681,13 @@ int IPACM_Wan::handle_route_add_vlan_pdn_evt(ipa_ip_type iptype, uint8_t vlan_id
 		wanup_vlan_data->VlanID = vlan_id;
 		wanup_vlan_data->ipv4_addr = wan_v4_addr;
 
+		/* send xlat configuration for installing uplink rules */
+		if (is_xlat)
+		{
+			wanup_vlan_data->is_xlat = true;
+			ipv4_to_iface[modem_ipv4_pdn_index].is_xlat=true;
+			IPACMDBG_H("xlat config enabled\n");
+		}
 		IPACMDBG_H("Posting IPA_HANDLE_WAN_VLAN_PDN_UP with below information:\n");
 		IPACMDBG_H("iptype IPA_IP_v4, VlanID %d, mux_id %d, if num %d\n", vlan_id, ext_prop->ext[0].mux_id, ipa_if_num);
 
@@ -5563,6 +5584,7 @@ int IPACM_Wan::handle_down_evt_ex()
 			ipacm_event_vlan_pdn *vlandown_data;
 
 			ipv4_to_iface[modem_ipv4_pdn_index].wan_up_vlan = false;
+			ipv4_to_iface[modem_ipv4_pdn_index].is_xlat = false;
 
 			vlandown_data = (ipacm_event_vlan_pdn *)malloc(sizeof(ipacm_event_vlan_pdn));
 			if(vlandown_data == NULL)

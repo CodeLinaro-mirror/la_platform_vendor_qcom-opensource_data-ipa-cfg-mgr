@@ -440,6 +440,7 @@ typedef struct
 	uint8_t ip_pass_enable;
 	uint32_t ip_pass_dummy_ip;
 	uint8_t ip_pass_skip_nat;
+	bool is_xlat;
 }ipacm_event_vlan_pdn;
 
 typedef enum

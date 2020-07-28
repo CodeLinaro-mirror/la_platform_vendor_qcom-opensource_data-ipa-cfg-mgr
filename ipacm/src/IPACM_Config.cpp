@@ -1127,6 +1127,7 @@ int IPACM_Config::SetExtProp(ipa_ioc_query_intf_ext_props *prop)
 	}
 
 	num = prop->num_ext_props;
+	ext_prop_v4.num_v4_xlat_props = 0;
 	for(i=0; i<num; i++)
 	{
 		if(prop->ext[i].ip == IPA_IP_v4)
@@ -1138,6 +1139,8 @@ int IPACM_Config::SetExtProp(ipa_ioc_query_intf_ext_props *prop)
 			}
 			memcpy(&ext_prop_v4.prop[ext_prop_v4.num_ext_props], &prop->ext[i], sizeof(struct ipa_ioc_ext_intf_prop));
 			ext_prop_v4.num_ext_props++;
+			if (prop->ext[i].is_xlat_rule)
+				ext_prop_v4.num_v4_xlat_props++;
 		}
 		else if(prop->ext[i].ip == IPA_IP_v6)
 		{

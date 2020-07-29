@@ -106,9 +106,6 @@ extern "C"
 #define TCP_RST_SHIFT 18
 #define MAX_CMD_SIZE 100
 
-/* WAN IP address in IP Passthrough mode. */
-#define IPACM_IP_PASSTHROUGH_WAN_IP "169.254.5.1"
-
 #define IPACM_L2TP_DISABLE 0
 #define IPACM_L2TP 1
 #define IPACM_L2TP_E2E 2
@@ -129,10 +126,10 @@ extern "C"
 #define IPA_MAX_NUM_AMPDU_RULE  15
 #define IPA_MAC_ADDR_SIZE  6
 #define IPA_IPV6_ADDR_SIZE_IN_WORDS 4
-#define IPA_MAX_NUM_OFFLOAD_VLANS 14
+#define IPA_MAX_NUM_OFFLOAD_VLANS 15
 #define IPA_MAX_NUM_BRIDGES IPA_MAX_NUM_OFFLOAD_VLANS
 #define IPA_MAX_NUM_SW_PDNS 15
-#define IPA_MAX_NUM_HW_PDNS (IPA_MAX_PDN_NUM - 1) /* currently 7 - 1 = 6 */
+#define IPA_MAX_NUM_HW_PDNS (IPA_MAX_PDN_NUM - 1) /* currently 16 - 1 = 15 */
 #ifdef FEATURE_VLAN_MPDN
 #define IPA_MAX_PRIVATE_SUBNET_ENTRIES IPA_MAX_NUM_OFFLOAD_VLANS
 #define IPA_MAX_MTU_ENTRIES IPA_MAX_NUM_HW_PDNS
@@ -230,6 +227,8 @@ typedef enum
 	IPA_DEL_SOCKSv5_CONN,                     /* ipa_socksv5_msg */
 #endif
 	IPA_MAC_ADD_DEL_FLT_EVENT,                /* NULL */
+	IPA_IP_PASS_UPDATE_EVENT,			  /* ipacm_ip_pass_pdn_info */
+	IPA_HANDLE_IP_PASS_PDN_INFO_UPDATE_EVENT,	  /* Handle ip pass pdn info update.*/
 	IPACM_EVENT_MAX
 } ipa_cm_event_id;
 
@@ -410,10 +409,22 @@ typedef struct
 
 typedef struct
 {
+	uint8_t enable;
+	uint32_t pdn_ip_addr;
+	uint16_t VlanID;
+	uint8_t skip_nat;
+	int if_index;
+}ipacm_event_ip_pass_pdn_info;
+
+typedef struct
+{
 	enum ipa_ip_type iptype;
-	uint8_t VlanID;
+	uint16_t VlanID;
 	int mux_id;
 	int ipv4_addr;
+	uint8_t ip_pass_enable;
+	uint32_t ip_pass_dummy_ip;
+	uint8_t ip_pass_skip_nat;
 }ipacm_event_vlan_pdn;
 
 typedef enum

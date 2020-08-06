@@ -655,15 +655,17 @@ void* IPACM_ConntrackClient::TCPRegisterWithConnTrack(void *)
 			 blocks waiting for events. */
 	IPACMDBG("Waiting for events\n");
 
+ctcatch:
 	ret = nfct_catch(pClient->tcp_hdl);
 	if((ret == -1) && (errno != ENOMSG) && (errno != ENOBUFS))
 	{
-		IPACMERR("(%d)(%s)\n", ret, strerror(errno));
+		IPACMERR("(%d)(%d)(%s)\n", ret, errno, strerror(errno));
 		return NULL;
 	}
 	else
 	{
-		IPACMERR("(%d)(%s)\n", ret, strerror(errno));
+		IPACMDBG("ctcatch ret:%d, errno:%d\n", ret, errno);
+		goto ctcatch;
 	}
 
 	IPACMDBG("Exit from tcp thread\n");
@@ -766,12 +768,12 @@ ctcatch:
 	ret = nfct_catch(pClient->udp_hdl);
 	if((ret == -1) && (errno != ENOMSG) && (errno != ENOBUFS))
 	{
-		IPACMDBG("(%d)(%s)\n", ret, strerror(errno));
+		IPACMDBG("(%d)(%d)(%s)\n", ret, errno, strerror(errno));
 		return NULL;
 	}
 	else
 	{
-		IPACMDBG("ctcatch ret:%d\n", ret);
+		IPACMDBG("ctcatch ret:%d, errno:%d\n", ret, errno);
 		goto ctcatch;
 	}
 
@@ -860,11 +862,11 @@ void IPACM_ConntrackClient::UpdateTCPFilters(void *param, bool isWan)
 																	(ipacm_event_iface_up *)param);
 
 		if(!isIgnore)
-		{
-			IPA_Conntrack_Filters_Ignore_Bridge_Addrs(pClient->udp_filter);
-			IPA_Conntrack_Filters_Ignore_Local_Addrs(pClient->udp_filter);
-			isIgnore = true;
-		}
+                {
+                    IPA_Conntrack_Filters_Ignore_Bridge_Addrs(pClient->tcp_filter);
+                    IPA_Conntrack_Filters_Ignore_Local_Addrs(pClient->tcp_filter);
+                    isIgnore = true;
+                }
 	}
 
 	/* Attach the filter to tcp handle */

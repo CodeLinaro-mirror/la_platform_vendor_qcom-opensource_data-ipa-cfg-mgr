@@ -1,6 +1,9 @@
 /*
  * Copyright (c) 2013-2018 The Linux Foundation. All rights reserved.
  *
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
+ *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
  * met:
@@ -26,9 +29,6 @@
  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * Changes from Qualcomm Innovation Center are provided under the following license:
- * Copyright (c) 2023-2024 Qualcomm Innovation Center, Inc. All rights reserved.
- * SPDX-License-Identifier: BSD-3-Clause-Clear.
  */
 #include <stdio.h>
 #include <stdlib.h>
@@ -672,15 +672,17 @@ void* IPACM_ConntrackClient::TCPRegisterWithConnTrack(void *)
 			 blocks waiting for events. */
 	IPACMDBG("Waiting for events\n");
 
+ctcatch:
 	ret = nfct_catch(pClient->tcp_hdl);
 	if((ret == -1) && (errno != ENOMSG) && (errno != ENOBUFS))
 	{
-		IPACMERR("(%d)(%s)\n", ret, strerror(errno));
+		IPACMERR("(%d)(%d)(%s)\n", ret, errno, strerror(errno));
 		return NULL;
 	}
 	else
 	{
-		IPACMERR("(%d)(%s)\n", ret, strerror(errno));
+		IPACMDBG("ctcatch ret:%d, errno:%d\n", ret, errno);
+		goto ctcatch;
 	}
 
 	IPACMDBG("Exit from tcp thread\n");
@@ -783,12 +785,12 @@ ctcatch:
 	ret = nfct_catch(pClient->udp_hdl);
 	if((ret == -1) && (errno != ENOMSG) && (errno != ENOBUFS))
 	{
-		IPACMDBG("(%d)(%s)\n", ret, strerror(errno));
+		IPACMDBG("(%d)(%d)(%s)\n", ret, errno, strerror(errno));
 		return NULL;
 	}
 	else
 	{
-		IPACMDBG("ctcatch ret:%d\n", ret);
+		IPACMDBG("ctcatch ret:%d, errno:%d\n", ret, errno);
 		goto ctcatch;
 	}
 

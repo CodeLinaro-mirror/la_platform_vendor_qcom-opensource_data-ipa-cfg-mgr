@@ -6658,8 +6658,8 @@ int IPACM_Wan::install_wan_filtering_rule(bool is_sw_routing, bool is_socksv5_en
 			memcpy(&(pFilteringTable_v6->rules[IPACM_Iface::ipacmcfg->total_pdn_ipv6_in_use + 1]),
 				IPACM_Wan::flt_rule_v6, IPACM_Wan::num_v6_flt_rule * sizeof(ipa_flt_rule_add));
 #endif
-			pthread_mutex_unlock(&IPACM_Iface::ipacmcfg->socksv5_lock);
 		}
+		pthread_mutex_unlock(&IPACM_Iface::ipacmcfg->socksv5_lock);
 	} //end of socksv5_enable handling
 	else
 	{

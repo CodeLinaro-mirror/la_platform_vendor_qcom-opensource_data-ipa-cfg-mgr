@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2013-2016, The Linux Foundation. All rights reserved.
+Copyright (c) 2013-2016, 2020, The Linux Foundation. All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are
@@ -121,7 +121,8 @@ public:
 	static int iface_ipa_index_query(int interface_index);
 
 	/* Query ipa_interface ipv4_addr by given linux interface_index */
-	static void iface_addr_query(int interface_index);
+	static void iface_addr_query(int interface_index, bool post_new_addr_event = true,
+		uint32_t *curr_ip4_addr = 0);
 
 	/*Query the IPA endpoint property */
 	int query_iface_property(void);

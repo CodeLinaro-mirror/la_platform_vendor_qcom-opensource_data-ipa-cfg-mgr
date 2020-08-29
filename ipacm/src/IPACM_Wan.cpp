@@ -4281,7 +4281,7 @@ int IPACM_Wan::init_fl_rule_ex(ipa_ip_type iptype)
 
 	if(iptype == IPA_IP_v4)
 	{
-		if(modem_ipv4_pdn_index == 0)	/* install ipv4 default modem DL filtering rules only once */
+		if(num_ipv4_modem_pdn == 1)	/* install ipv4 default modem DL filtering rules only once */
 		{
 			/* reset the num_v4_flt_rule*/
 			IPACM_Wan::num_v4_flt_rule = 0;
@@ -4296,7 +4296,7 @@ int IPACM_Wan::init_fl_rule_ex(ipa_ip_type iptype)
 	{
 		IPACMDBG_H(" modem_ipv6_pdn_index %d\n", modem_ipv6_pdn_index);
 
-		if(modem_ipv6_pdn_index == 0)	/* install ipv6 default modem DL filtering rules only once */
+		if(num_ipv6_modem_pdn == 1)	/* install ipv6 default modem DL filtering rules only once */
 		{
 			/* reset the num_v6_flt_rule*/
 			IPACM_Wan::num_v6_flt_rule = 0;

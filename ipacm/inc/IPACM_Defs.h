@@ -483,6 +483,7 @@ struct bridge_vlan_mapping_info
 	uint32_t bridge_associated_VID;
 	uint32_t bridge_ipv4;
 	uint32_t subnet_mask;
+	uint8_t lan2lan_sw;
 };
 
 struct l2tp_client_info

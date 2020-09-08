@@ -198,6 +198,7 @@ typedef enum
 	IPA_HANDLE_WAN_DOWN_TETHER,               /* ipacm_event_iface_up_tehter */
 	IPA_HANDLE_WAN_UP_V6_TETHER,              /* ipacm_event_iface_up_tehter */
 	IPA_HANDLE_WAN_DOWN_V6_TETHER,            /* ipacm_event_iface_up_tehter */
+	IPA_HANDLE_WAN_ADDR_ADD_V6,               /* ipacm_event_iface_up */
 	IPA_HANDLE_LAN_WLAN_UP,                   /* ipacm_event_iface_up */
 	IPA_HANDLE_LAN_WLAN_UP_V6,                /* ipacm_event_iface_up */
 	IPA_ETH_BRIDGE_IFACE_UP,                  /* ipacm_event_eth_bridge*/

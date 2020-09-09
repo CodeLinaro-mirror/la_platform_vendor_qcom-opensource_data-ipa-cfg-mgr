@@ -1693,7 +1693,7 @@ int IPACM_Lan::handle_vlan_neighbor(ipacm_event_data_all *data)
 	std::list <ipacm_event_data_all>::iterator it;
 
 	IPACMDBG_H("\n");
-
+	memset(&data_all, 0, sizeof(ipacm_event_data_all));
 	if (IPACM_Iface::ipacmcfg->get_vlan_id(data->iface_name, &vlan_id))
 	{
 		if(!IPACM_Iface::ipacmcfg->is_added_vlan_iface(data->iface_name))
@@ -3770,6 +3770,7 @@ int IPACM_Lan::handle_eth_client_ipaddr(ipacm_event_data_all *data)
 					 data->mac_addr[3],
 					 data->mac_addr[4],
 					 data->mac_addr[5]);
+	memset(&data_all, 0, sizeof(ipacm_event_data_all));
 #ifdef FEATURE_VLAN_MPDN
 	if(is_vlan_event(data->iface_name))
 	{

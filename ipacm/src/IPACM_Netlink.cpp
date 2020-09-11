@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2013-2019, The Linux Foundation. All rights reserved.
+Copyright (c) 2013-2020, The Linux Foundation. All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are
@@ -311,6 +311,7 @@ static struct msghdr* ipa_nl_alloc_msg
 	msgh->msg_iovlen = 1;
 
 	memset(iov, 0x0, sizeof(struct iovec));
+	memset(buf, 0, msglen);
 	iov->iov_base = buf;
 	iov->iov_len = msglen;
 

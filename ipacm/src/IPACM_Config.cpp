@@ -596,6 +596,21 @@ skip_fnr_alloc:
 		exit(0);
 	}
 
+	/* Construct IPACM GRE info */
+	ipacm_gre_enable = cfg->gre_conf.gre_enable;
+	IPACMDBG_H("ipacm_gre_enable %d. \n", ipacm_gre_enable);
+	memset(&ipacm_gre_server_ipv4, 0, sizeof(ipacm_gre_server_ipv4));
+
+	memcpy(&ipacm_gre_server_ipv4,
+					 &cfg->gre_conf.gre_server_ipv4,
+					 sizeof(cfg->gre_conf.gre_server_ipv4));
+
+
+	subnet_addr = htonl(ipacm_gre_server_ipv4);
+	memcpy(&in_addr_print,&subnet_addr,sizeof(in_addr_print));
+	IPACMDBG_H("GRE_SERVER_IPv4= %s \n ",
+						 inet_ntoa(in_addr_print));
+
 	ipa_num_wlan_guest_ap = cfg->num_wlan_guest_ap;
 	IPACMDBG_H("ipa_num_wlan_guest_ap %d\n",ipa_num_wlan_guest_ap);
 

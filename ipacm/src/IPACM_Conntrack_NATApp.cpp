@@ -558,8 +558,6 @@ int NatApp::AddEntry(const nat_table_entry *rule, bool isVlan)
 
 	if(rule->private_ip == 0 ||
 		 rule->target_ip == 0 ||
-		 rule->private_port == 0  ||
-		 rule->target_port == 0 ||
 		 rule->protocol == 0)
 	{
 		IPACMERR("Invalid Connection, ignoring it\n");
@@ -770,6 +768,13 @@ void NatApp::UpdateCTUdpTs(nat_table_entry *rule, uint32_t new_ts)
 
 	IPACMDBG("updating %d connection with time: %d\n",
 					 rule->protocol, nfct_get_attr_u32(ct, ATTR_TIMEOUT));
+
+	/* not update timeout for GRE static NAT entry */
+	if(rule->protocol == IPPROTO_GRE)
+	{
+		IPACMERR("not update timeout for GRE static NAT entry for entry");
+		return;
+	}
 
 	ret = nfct_query(ct_hdl, NFCT_Q_UPDATE, ct);
 	if(ret == -1)

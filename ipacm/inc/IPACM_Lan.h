@@ -131,9 +131,11 @@ typedef struct _ipa_eth_client
 	uint32_t ul_first_pass_rt_rule_hdl;
 	uint32_t ul_first_pass_flt_rule_hdl;
 #endif
+
 #ifdef FEATURE_VLAN_MPDN
 	uint8_t vlan_id;
 #endif
+	bool gre_nat_set;
 	eth_client_rt_hdl eth_rt_hdl[0]; /* depends on number of tx properties */
 }ipa_eth_client;
 

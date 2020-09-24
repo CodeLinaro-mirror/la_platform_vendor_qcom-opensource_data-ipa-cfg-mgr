@@ -889,6 +889,20 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 		{
 			handle_wan_down(data_wan->is_sta);
 		}
+
+		/* reset GRE flag */
+		if (IPACM_Iface::ipacmcfg->ipacm_gre_enable == true)
+		{
+			int i;
+
+			for (i = 0; i < num_eth_client; i++)
+			{
+				if (get_client_memptr(eth_client, i)->ipv4_set == true)
+					IPACMDBG_H("Resettng eth client %d gre_nat_set to false", i);
+					get_client_memptr(eth_client, clnt_indx)->gre_nat_set = false;
+			}
+		}
+
 		break;
 
 	case IPA_HANDLE_WAN_DOWN_V6:
@@ -3889,11 +3903,12 @@ int IPACM_Lan::handle_eth_hdr_init(uint8_t *mac_addr, ipacm_bridge *bridge, uint
 
 			}
 		}
-		/* initialize wifi client*/
+		/* initialize lan client */
 		get_client_memptr(eth_client, num_eth_client)->route_rule_set_v4 = false;
 		get_client_memptr(eth_client, num_eth_client)->route_rule_set_v6 = 0;
 		get_client_memptr(eth_client, num_eth_client)->ipv4_set = false;
 		get_client_memptr(eth_client, num_eth_client)->ipv6_set = 0;
+		get_client_memptr(eth_client, num_eth_client)->gre_nat_set = false;
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
 		IPACMDBG_H ("Is ODU client? %s\n", is_odu?"Yes":"No");
 		get_client_memptr(eth_client, num_eth_client)->ipv4_ul_rules_set = false;
@@ -4098,14 +4113,28 @@ int IPACM_Lan::handle_eth_client_ipaddr(ipacm_event_data_all *data)
 			}
 			else
 			{
-			   /* check if client got new IPv4 address*/
-			   if(data->ipv4_addr == get_client_memptr(eth_client, clnt_indx)->v4_addr)
-			   {
-				IPACMDBG_H("Already setup ipv4 addr for client:%d, ipv4 address didn't change\n", clnt_indx);
-				 return IPACM_FAILURE;
-			   }
-			   else
-			   {
+				/* check if client got new IPv4 address*/
+				if(data->ipv4_addr == get_client_memptr(eth_client, clnt_indx)->v4_addr)
+				{
+					IPACMDBG_H("Already setup ipv4 addr for client:%d, ipv4 address didn't change\n", clnt_indx);
+					/* INSTALL GRE NAT rules */
+					if (IPACM_Iface::ipacmcfg->ipacm_gre_enable == true)
+					{
+						IPACMDBG_H(" check route_rule_set_v4 %d isWanUP %d gre_nat_set %d\n",
+							get_client_memptr(eth_client, clnt_indx)->route_rule_set_v4, IPACM_Wan::isWanUP(ipa_if_num),
+							get_client_memptr(eth_client, clnt_indx)->gre_nat_set);
+						if (get_client_memptr(eth_client, clnt_indx)->route_rule_set_v4 == true &&
+							IPACM_Wan::isWanUP(ipa_if_num) == true && get_client_memptr(eth_client, clnt_indx)->gre_nat_set == false)
+						{
+							IPACMDBG_H(" setup GRE ipv4 NAT for client:%d ip:0x%x\n", clnt_indx, data->ipv4_addr);
+							CtList->HandleGREIpAddrAddEvt(data->ipv4_addr, IPACM_Iface::ipacmcfg->ipacm_gre_server_ipv4);
+							get_client_memptr(eth_client, clnt_indx)->gre_nat_set = true;
+						}
+					}
+					return IPACM_FAILURE;
+				}
+				else
+				{
 					IPACMDBG_H("ipv4 addr for client:%d is changed \n", clnt_indx);
 					/* delete NAT rules first */
 					CtList->HandleNeighIpAddrDelEvt(get_client_memptr(eth_client, clnt_indx)->v4_addr);
@@ -5495,6 +5524,7 @@ int IPACM_Lan::handle_eth_client_down_evt(uint8_t *mac_addr, uint8_t vlan_id, ip
 	get_client_memptr(eth_client, clt_indx)->ipv6_header_set = false;
 	get_client_memptr(eth_client, clt_indx)->route_rule_set_v4 = false;
 	get_client_memptr(eth_client, clt_indx)->route_rule_set_v6 = 0;
+	get_client_memptr(eth_client, clt_indx)->gre_nat_set = false;
 #ifdef FEATURE_VLAN_MPDN
 	get_client_memptr(eth_client, clt_indx)->vlan_id = 0;
 #endif
@@ -5573,6 +5603,7 @@ int IPACM_Lan::handle_eth_client_down_evt(uint8_t *mac_addr, uint8_t vlan_id, ip
 		get_client_memptr(eth_client, clt_indx)->route_rule_set_v4 = get_client_memptr(eth_client, (clt_indx + 1))->route_rule_set_v4;
 		get_client_memptr(eth_client, clt_indx)->route_rule_set_v6 = get_client_memptr(eth_client, (clt_indx + 1))->route_rule_set_v6;
 
+		get_client_memptr(eth_client, clt_indx)->gre_nat_set = get_client_memptr(eth_client, (clt_indx + 1))->gre_nat_set;
 #ifdef FEATURE_VLAN_MPDN
 		get_client_memptr(eth_client, clt_indx)->vlan_id = get_client_memptr(eth_client, (clt_indx + 1))->vlan_id;
 #endif
@@ -6492,6 +6523,7 @@ int IPACM_Lan::handle_uplink_filter_rule(ipacm_ext_prop *prop, ipa_ip_type iptyp
 				{
 					wan_ul_fl_rule_hdl_v6[num_wan_ul_fl_rule_v6] = pFilteringTable->rules[i].flt_rule_hdl;
 					num_wan_ul_fl_rule_v6++;
+
 				}
 				IPACM_Iface::ipacmcfg->increaseFltRuleCount(rx_prop->rx[0].src_pipe, iptype, pFilteringTable->num_rules);
 			}
@@ -7293,6 +7325,7 @@ int IPACM_Lan::config_dft_firewall_rules_ul_ex(IPACM_firewall_conf_t* firewall_c
 			}
 			flt_rule_entry.rule.rt_tbl_idx = rt_tbl_idx.idx;
 			IPACMDBG_H("Routing table %s has index %d\n", rt_tbl_idx.name, rt_tbl_idx.idx);
+
 
 			memcpy(&flt_rule_entry.rule.attrib,
 			&firewall_conf->extd_firewall_entries[i].attrib,

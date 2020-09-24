@@ -822,6 +822,26 @@ bool IPACM_ConntrackListener::IsVlanIPv4(uint32_t ipv4_address, uint8_t *VlanId)
 }
 #endif
 
+void IPACM_ConntrackListener::HandleGREIpAddrAddEvt(
+   uint32_t ipv4_addr_client, uint32_t ipv4_addr_target)
+{
+	int ret = 0;
+	nat_table_entry rule;
+	memset(&rule, 0, sizeof(rule));
+	rule.private_ip = ipv4_addr_client;
+	rule.target_ip = ipv4_addr_target;
+	rule.public_ip = wan_ipaddr;
+	rule.protocol = IPPROTO_GRE;
+	/* add static gre nat entry */
+	ret = nat_inst->AddEntry(&rule);
+	if(ret)
+	{
+		IPACMERR("unable to add static GRE entry: %d\n", ret);
+		return;
+	}
+	return;
+}
+
 void IPACM_ConntrackListener::HandleNeighIpAddrDelEvt(
    uint32_t ipv4_addr)
 {

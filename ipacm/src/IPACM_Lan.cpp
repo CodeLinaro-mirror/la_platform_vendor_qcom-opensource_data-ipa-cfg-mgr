@@ -1061,6 +1061,8 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 				}
 			}
 #endif
+			eth_index = get_eth_client_index(data->mac_addr);
+			get_client_memptr(eth_client, eth_index)->if_index = data->if_index;
 			/* add mac balcklist rule if client is added after mac flt event is received */
 			if(IPACM_Iface::ipacmcfg->mac_addr_in_blacklist(data->mac_addr) == true)
 					handle_eth_mac_flt_conn_disc(data->mac_addr, true);

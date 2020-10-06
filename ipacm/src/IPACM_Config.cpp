@@ -55,7 +55,11 @@ const char *IPACM_Config::DEVICE_NAME_ODU = "/dev/odu_ipa_bridge";
 #ifdef FEATURE_IPA_ANDROID
 #define IPACM_CONFIG_FILE "/etc/IPACM_cfg.xml"
 #else
+#ifdef DATA_CONFIG_DIR_PATH
+#define IPACM_CONFIG_FILE DATA_CONFIG_DIR_PATH"/ipa/IPACM_cfg.xml"
+#else
 #define IPACM_CONFIG_FILE "/etc/data/ipa/IPACM_cfg.xml"
+#endif
 #endif
 
 const char *ipacm_event_name[] = {

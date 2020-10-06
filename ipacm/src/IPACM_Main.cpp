@@ -80,12 +80,18 @@
 #define IPACM_CFG_FILE_NAME    "IPACM_cfg.xml"
 #ifndef FEATURE_IPA_ANDROID
 #define IPACM_PID_FILE "/var/run/data/ipa/ipacm.pid"
+#ifdef DATA_CONFIG_DIR_PATH
+#define IPACM_DIR_NAME DATA_CONFIG_DIR_PATH"/ipa"
+#define IPACM_FIREWALL_DIR_NAME DATA_CONFIG_DIR_PATH
+#else
 #define IPACM_DIR_NAME     "/systemrw/data/ipa"
+#define IPACM_FIREWALL_DIR_NAME     "/systemrw/data"
+#endif
 #else
 #define IPACM_PID_FILE "/data/misc/ipa/ipacm.pid"
 #define IPACM_DIR_NAME     "/data/misc/ipa/"
-#endif
 #define IPACM_FIREWALL_DIR_NAME     "/systemrw/data"
+#endif
 #define IPACM_NAME "ipacm"
 
 #define INOTIFY_EVENT_SIZE  (sizeof(struct inotify_event))
@@ -977,6 +983,9 @@ int main(int argc, char **argv)
 	IPACMDBG_H("Staring IPA main\n");
 	IPACMDBG_H("ipa_cmdq_successful\n");
 
+#ifdef DATA_CONFIG_DIR_PATH
+	IPACMDBG_H("using DATA_CONFIG_DIR_PATH %s\n", DATA_CONFIG_DIR_PATH);
+#endif
 
 	RegisterForSignals();
 

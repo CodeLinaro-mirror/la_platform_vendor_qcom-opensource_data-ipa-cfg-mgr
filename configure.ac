@@ -50,6 +50,12 @@ AC_ARG_ENABLE(target,
     [TARGET=none]
 )
 
+AC_ARG_ENABLE(baseproduct,
+  [AS_HELP_STRING([--enable-baseproduct=BASEPRODUCT], [Specify the base product to build])],
+  [BASEPRODUCT=$enableval],
+  [BASEPRODUCT=none]
+)
+
 if test "x$TARGET" = "xsdx20"; then
     echo "\n UL firewall feature enabled\n"
     CPPFLAGS="${CPPFLAGS} -DFEATURE_IPACM_UL_FIREWALL -DFEATURE_IPACM_PER_CLIENT_STATS"
@@ -67,6 +73,12 @@ if test "x$TARGET" = "xsdxprairie"; then
     CPPFLAGS="${CPPFLAGS} -DFEATURE_IPACM_UL_FIREWALL -DFEATURE_IPACM_PER_CLIENT_STATS -DFEATURE_VLAN_MPDN -DFEATURE_L2TP -DFEATURE_SOCKSv5 "
     CFLAGS="${CFLAGS} -DFEATURE_IPACM_UL_FIREWALL -DFEATURE_IPACM_PER_CLIENT_STATS -DFEATURE_VLAN_MPDN -DFEATURE_L2TP -DFEATURE_SOCKSv5"
 fi
+
+if test "x$BASEPRODUCT" = "xauto"; then
+	CPPFLAGS="${CPPFLAGS} -DDATA_CONFIG_DIR_PATH='\"/etc/data\"'"
+	CFLAGS="${CFLAGS} -DDATA_CONFIG_DIR_PATH='\"/etc/data\"'"
+fi
+
 AM_CONDITIONAL(NO_L2TP, test "x$TARGET" = "xsdx20" || test "x$TARGET" = "xsdxpoorwills")
 
 # Checks for header files.

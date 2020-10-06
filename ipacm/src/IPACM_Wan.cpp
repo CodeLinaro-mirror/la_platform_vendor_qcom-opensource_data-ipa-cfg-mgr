@@ -119,7 +119,12 @@ ipacm_ipv6_wan_iface IPACM_Wan::ipv6_to_iface[IPA_MAX_NUM_SW_PDNS];
 
 uint16_t IPACM_Wan::mtu_default_wan = DEFAULT_MTU_SIZE;
 
+#ifdef DATA_CONFIG_DIR_PATH
+#define MOBILE_FIREWALL_FILE DATA_CONFIG_DIR_PATH"/mobileap_firewall.xml"
+#else
 #define MOBILE_FIREWALL_FILE "/etc/data/mobileap_firewall.xml"
+#endif
+
 
 IPACM_Wan::IPACM_Wan(int iface_index,
 	ipacm_wan_iface_type is_sta_mode,

@@ -1541,12 +1541,16 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 					pdn_update->ip_pass_enable = ip_pass_pdn_info.enable;
 					pdn_update->ip_pass_dummy_ip = (ip_pass_pdn_info.enable) ?
 						ip_pass_pdn_info.pdn_ip_addr : 0;
-					pdn_update->ip_pass_skip_nat = (ip_pass_pdn_info.enable) ? ip_pass_pdn_info.pdn_ip_addr : 0;
-
+					pdn_update->ip_pass_skip_nat = (ip_pass_pdn_info.enable) ? ip_pass_pdn_info.skip_nat : 0;
+					IPACMDBG_H("Posting IPA_HANDLE_IP_PASS_PDN_INFO_UPDATE_EVENT\n");
+					IPACMDBG_H("IP Passthrough enabled:%d WAN IP: 0x%x, Dummy IP 0x%x, Skip NAT: %d\n",
+						pdn_update->ip_pass_enable,
+						pdn_update->ipv4_addr,
+						pdn_update->ip_pass_dummy_ip,
+						pdn_update->ip_pass_skip_nat);
 					evt_data.event = IPA_HANDLE_IP_PASS_PDN_INFO_UPDATE_EVENT;
 					evt_data.evt_data = (void *)pdn_update;
 					IPACM_EvtDispatcher::PostEvt(&evt_data);
-					IPACMDBG_H("Posting IPA_HANDLE_IP_PASS_PDN_INFO_UPDATE_EVENT\n");
 				}
 				else
 				{

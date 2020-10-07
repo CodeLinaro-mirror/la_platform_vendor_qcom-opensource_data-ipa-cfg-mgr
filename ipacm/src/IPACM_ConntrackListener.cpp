@@ -837,7 +837,7 @@ void IPACM_ConntrackListener::HandleIPPassPDNInfoUpdate(void *in_param)
 	ipacm_event_vlan_pdn *pdn_data = (ipacm_event_vlan_pdn *)in_param;
 	IPACMDBG_H("Recevied below information after VLAN PDN up,\n");
 	IPACMDBG_H("PDN IP 0x%x\n", pdn_data->ipv4_addr);
-	IPACMDBG_H("ip_passthrough: %d, ip_pass_dummy_ip:%d, ip_pass_skip_nat %d\n",
+	IPACMDBG_H("ip_passthrough: %d, ip_pass_dummy_ip:0x%x, ip_pass_skip_nat %d\n",
 		pdn_data->ip_pass_enable,
 		pdn_data->ip_pass_dummy_ip,
 		pdn_data->ip_pass_skip_nat);

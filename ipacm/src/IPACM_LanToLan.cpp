@@ -1598,20 +1598,29 @@ void IPACM_LanToLan_Iface::handle_vlan_id_add(uint8_t vlan_id)
 void IPACM_LanToLan_Iface::handle_vlan_id_del(uint8_t vlan_id)
 {
 	list<client_info>::iterator it_client;
+	int size = 0, count = 0;
 
 	IPACMDBG_H("iface %s got vlan id %d del, looking for clients to remove\n",
 		get_iface_pointer()->dev_name, vlan_id);
 
 	/* go over all clients and remove those with the removed vlan id */
+	size = m_client_info.size();
+	IPACMDBG_H("There are %d m_client_info in total.\n", size);
 	for(it_client = m_client_info.begin(); it_client != m_client_info.end(); it_client++)
 	{
+		count++;
 		if(it_client->vlan_id == vlan_id)
 		{
-			IPACMDBG_H("found client with MAC 0x[%X][%X][%X][%X][%X][%X] and vlan id %d, removing\n",
+			IPACMDBG_H("found client with MAC 0x[%X][%X][%X][%X][%X][%X] and vlan id %d count %d, removing\n",
 				it_client->mac_addr[0], it_client->mac_addr[1], it_client->mac_addr[2],
 				it_client->mac_addr[3], it_client->mac_addr[4], it_client->mac_addr[5],
-				vlan_id);
+				vlan_id,
+				count);
 			handle_client_del(it_client->mac_addr, vlan_id);
+		}
+		if (count == size) {
+			IPACMDBG_H("Reaching last element %d\n", count);
+			break;
 		}
 	}
 

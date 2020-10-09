@@ -147,6 +147,9 @@ public:
 	/* Store ippassthrough mac */
 	uint8_t ipacm_ip_passthrough_mac[IPA_MAC_ADDR_SIZE];
 
+	/* nat_iface_lock */
+	pthread_mutex_t nat_iface_lock;
+
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
 	bool ipacm_lan_stats_enable;
 	bool ipacm_lan_stats_enable_set;
@@ -364,7 +367,16 @@ public:
 
 	inline int GetNatIfacesCnt()
 	{
-		return ipa_nat_iface_entries;
+		int nat_iface_entries;
+
+		if(pthread_mutex_lock(&nat_iface_lock) != 0)
+		{
+			IPACMERR("Unable to lock the mutex\n");
+			return 0;
+		}
+		nat_iface_entries = ipa_nat_iface_entries;
+		pthread_mutex_unlock(&nat_iface_lock);
+		return nat_iface_entries;
 	}
 	int GetNatIfaces(int nPorts, NatIfaces *ifaces);
 

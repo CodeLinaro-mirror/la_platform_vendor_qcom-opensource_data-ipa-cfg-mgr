@@ -1973,7 +1973,7 @@ int IPACM_Lan::del_ul_flt_rules(enum ipa_ip_type iptype)
 		if (num_wan_ul_fl_rule_v4 == 0)
 		{
 			IPACMERR("No modem UL rules were installed, return...\n");
-			return IPACM_FAILURE;
+			return IPACM_SUCCESS;
 		}
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
 		if(IPACM_Iface::ipacmcfg->ipacm_lan_stats_enable == false)
@@ -2014,7 +2014,7 @@ int IPACM_Lan::del_ul_flt_rules(enum ipa_ip_type iptype)
 		if(num_wan_ul_fl_rule_v6 == 0)
 		{
 			IPACMERR("No modem UL rules were installed, return...\n");
-			return IPACM_FAILURE;
+			return IPACM_SUCCESS;
 		}
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
 		if(IPACM_Iface::ipacmcfg->ipacm_lan_stats_enable == false)

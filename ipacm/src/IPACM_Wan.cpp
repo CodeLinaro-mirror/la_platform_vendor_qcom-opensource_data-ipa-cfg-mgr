@@ -412,17 +412,6 @@ int IPACM_Wan::handle_addr_evt(ipacm_event_data_addr *data)
 		{
 			if(m_is_sta_mode == Q6_WAN)
 			{
-#ifdef FEATURE_VLAN_MPDN
-				modem_ipv6_pdn_index = getFreePDNIndex_V6();
-				if (modem_ipv6_pdn_index == -1)
-				{
-					IPACMERR("No Free index available.!\n");
-					res = IPACM_FAILURE;
-					goto fail;
-				}
-				num_ipv6_modem_pdn++;
-				IPACMDBG_H("Now the number of modem ipv6 pdn is %d.\n", num_ipv6_modem_pdn);
-#endif
 				init_fl_rule_ex(data->iptype);
 			}
 			else
@@ -499,8 +488,22 @@ int IPACM_Wan::handle_addr_evt(ipacm_event_data_addr *data)
 #ifdef FEATURE_VLAN_MPDN
 			if(m_is_sta_mode == Q6_WAN)
 			{
+				modem_ipv6_pdn_index = getFreePDNIndex_V6();
+				if (modem_ipv6_pdn_index == -1)
+				{
+					IPACMERR("No Free index available.!\n");
+					res = IPACM_FAILURE;
+					goto fail;
+				}
+
 				memcpy(ipv6_to_iface[modem_ipv6_pdn_index].ipv6_prefix, data->ipv6_addr, sizeof(uint32_t) * 2);
 				ipv6_to_iface[modem_ipv6_pdn_index].pIface = this;
+				IPACMDBG_H("index %d prefix: 0x%08x%08x\n", modem_ipv6_pdn_index,
+				ipv6_to_iface[modem_ipv6_pdn_index].ipv6_prefix[0],
+				ipv6_to_iface[modem_ipv6_pdn_index].ipv6_prefix[1]);
+
+				num_ipv6_modem_pdn++;
+				IPACMDBG_H("Now the number of modem ipv6 pdn is %d.\n", num_ipv6_modem_pdn);
 			}
 #endif
 		}

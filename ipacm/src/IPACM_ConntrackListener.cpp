@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013-2019 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2013-2020 The Linux Foundation. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -752,7 +752,7 @@ void IPACM_ConntrackListener::HandleVlanUp(void *in_param)
 		IPACMDBG_H("ipv4 address for new PDN 0x%X\n", vlanup_data->ipv4_addr);
 		if(nat_inst->AddPdn(vlanup_data->ipv4_addr, vlanup_data->mux_id, false))
 		{
-			IPACMERR("failed adding pdn\n");
+			IPACMERR("failed adding pdn, num_vlan_pdns %d\n", num_vlan_pdns);
 		}
 		else
 		{
@@ -760,7 +760,7 @@ void IPACM_ConntrackListener::HandleVlanUp(void *in_param)
 			{
 				if(vlan_pdns[i].public_ip == 0)
 				{
-					IPACMDBG_H("found empty PDN entry in %d\n", i);
+					IPACMDBG_H("found empty PDN entry in %d num_vlan_pdns %d\n", i, num_vlan_pdns);
 					vlan_pdns[i].public_ip = vlanup_data->ipv4_addr;
 					vlan_pdns[i].vlan_id = vlanup_data->VlanID;
 					num_vlan_pdns++;

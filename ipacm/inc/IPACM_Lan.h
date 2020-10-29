@@ -56,9 +56,9 @@ IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #define NUM_IPV4_ICMP_FLT_RULE 1
 #define NUM_IPV6_ICMP_FLT_RULE 1
 #ifdef IPA_L2TP_TUNNEL_UDP
-/* Default rules to route 1) ARP, 2) IP TCP SYN, 3) IPv6 TCP SYN and 
- * 4) ICMPv6 packets to exception. */
-#define NUM_L2TP_UDP_DFLT_RULES 4
+/* Default rules to route 1) Frag packets, 2) ARP, 3) IP TCP SYN, 4) IPv6 TCP SYN and
+ * 5) ICMPv6 packets to exception. */
+#define NUM_L2TP_UDP_DFLT_RULES 5
 #endif
 
 /* ndc bandwidth ipatetherstats <ifaceIn> <ifaceOut> */
@@ -131,9 +131,11 @@ typedef struct _ipa_eth_client
 	uint32_t ul_first_pass_rt_rule_hdl;
 	uint32_t ul_first_pass_flt_rule_hdl;
 #endif
+
 #ifdef FEATURE_VLAN_MPDN
 	uint8_t vlan_id;
 #endif
+	bool gre_nat_set;
 	eth_client_rt_hdl eth_rt_hdl[0]; /* depends on number of tx properties */
 }ipa_eth_client;
 
@@ -443,7 +445,8 @@ public:
 			uint32_t *vlan_client_ipv6_addr, uint16_t src_port, uint16_t dst_port, uint32_t *flt_rule_hdl);
 
 		/* add l2tp udp flt rule on non l2tp interface */
-		int add_l2tp_udp_flt_rule(ipa_ip_type iptype, uint8_t *dst_mac, uint32_t *flt_rule_hdl);
+		int add_l2tp_udp_flt_rule(ipa_ip_type iptype, uint8_t *dst_mac, uint16_t mtu,
+			uint32_t *flt_rule_hdl);
 
 		/* delete l2tp udp rt rule for l2tp client */
 		int del_l2tp_udp_rt_rule(ipa_ip_type iptype, uint32_t hdr_hdl, uint32_t hdr_proc_ctx_hdl,

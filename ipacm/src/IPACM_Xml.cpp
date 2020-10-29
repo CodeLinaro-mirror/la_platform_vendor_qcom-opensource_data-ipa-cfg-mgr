@@ -179,7 +179,9 @@ static int ipacm_cfg_xml_parse_tree
 #endif
 						IPACM_util_icmp_string((char*)xml_node->name, IPACM_L2TP_TAG) == 0 ||
 						IPACM_util_icmp_string((char*)xml_node->name, IPACM_MPDN_TAG) == 0 ||
-						IPACM_util_icmp_string((char*)xml_node->name, IPACM_SOCKSv5_TAG) == 0)
+
+						IPACM_util_icmp_string((char*)xml_node->name, IPACM_SOCKSv5_TAG) == 0 ||
+						IPACM_util_icmp_string((char*)xml_node->name, GRE_TAG) == 0)
 				{
 					if (0 == IPACM_util_icmp_string((char*)xml_node->name, IFACE_TAG))
 					{
@@ -200,6 +202,42 @@ static int ipacm_cfg_xml_parse_tree
 					}
 					/* go to child */
 					ret_val = ipacm_cfg_xml_parse_tree(xml_node->children, config);
+				}
+				else if (IPACM_util_icmp_string((char*)xml_node->name, GREEnabled_TAG) == 0)
+				{
+					IPACMDBG_H("inside GRE TAG \n");
+
+					content = IPACM_read_content_element(xml_node);
+					if (content)
+					{
+						str_size = strlen(content);
+						memset(content_buf, 0, sizeof(content_buf));
+						memcpy(content_buf, (void *)content, str_size);
+						if (atoi(content_buf))
+						{
+							config->gre_conf.gre_enable = true;
+							IPACMDBG_H("GRE enable %d buf(%d)\n", config->gre_conf.gre_enable, atoi(content_buf));
+						}
+						else
+						{
+							config->gre_conf.gre_enable = false;
+							IPACMDBG_H("GRE enable %d buf(%d)\n", config->gre_conf.gre_enable, atoi(content_buf));
+						}
+					}
+				}
+				else if (IPACM_util_icmp_string((char*)xml_node->name, GRE_Server_TAG) == 0)
+				{
+					content = IPACM_read_content_element(xml_node);
+					if (content)
+					{
+						str_size = strlen(content);
+						memset(content_buf, 0, sizeof(content_buf));
+						memcpy(content_buf, (void *)content, str_size);
+						content_buf[MAX_XML_STR_LEN-1] = '\0';
+						config->gre_conf.gre_server_ipv4
+							 = ntohl(inet_addr(content_buf));
+						IPACMDBG_H("subnet_addr: %s \n", content_buf);
+					}
 				}
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
 				else if (IPACM_util_icmp_string((char*)xml_node->name, LAN_Stats_Enable_TAG) == 0)

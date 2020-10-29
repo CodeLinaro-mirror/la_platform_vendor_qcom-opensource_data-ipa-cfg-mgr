@@ -596,6 +596,21 @@ skip_fnr_alloc:
 		exit(0);
 	}
 
+	/* Construct IPACM GRE info */
+	ipacm_gre_enable = cfg->gre_conf.gre_enable;
+	IPACMDBG_H("ipacm_gre_enable %d. \n", ipacm_gre_enable);
+	memset(&ipacm_gre_server_ipv4, 0, sizeof(ipacm_gre_server_ipv4));
+
+	memcpy(&ipacm_gre_server_ipv4,
+					 &cfg->gre_conf.gre_server_ipv4,
+					 sizeof(cfg->gre_conf.gre_server_ipv4));
+
+
+	subnet_addr = htonl(ipacm_gre_server_ipv4);
+	memcpy(&in_addr_print,&subnet_addr,sizeof(in_addr_print));
+	IPACMDBG_H("GRE_SERVER_IPv4= %s \n ",
+						 inet_ntoa(in_addr_print));
+
 	ipa_num_wlan_guest_ap = cfg->num_wlan_guest_ap;
 	IPACMDBG_H("ipa_num_wlan_guest_ap %d\n",ipa_num_wlan_guest_ap);
 
@@ -1914,13 +1929,14 @@ void IPACM_Config::add_l2tp_vlan_mapping(ipa_ioc_l2tp_vlan_mapping_info *data)
 		sizeof(new_mapping.vlan_iface_name));
 	new_mapping.l2tp_session_id = data->l2tp_session_id;
 #ifdef IPA_L2TP_TUNNEL_UDP
-	IPACMDBG_H("L2tp tunnel type %d: Source Port: %d Dest Port: %d \n",
-	data->tunnel_type, data->src_port, data->dst_port);
+	IPACMDBG_H("L2tp tunnel type %d: Source Port: %d Dest Port: %d MTU: %d\n",
+	data->tunnel_type, data->src_port, data->dst_port, data->mtu);
 	new_mapping.tunnel_type = data->tunnel_type;
 	if (new_mapping.tunnel_type == IPA_L2TP_TUNNEL_UDP)
 	{
 		new_mapping.src_port = data->src_port;
 		new_mapping.dst_port = data->dst_port;
+		new_mapping.mtu = (data->mtu ? data->mtu : IPA_L2TP_UDP_DEFAULT_MTU_SIZE);
 	}
 #endif
 	for(it_vlan = m_vlan_iface.begin(); it_vlan != m_vlan_iface.end(); it_vlan++)

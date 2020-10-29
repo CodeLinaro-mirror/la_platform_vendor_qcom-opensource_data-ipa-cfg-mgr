@@ -889,6 +889,20 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 		{
 			handle_wan_down(data_wan->is_sta);
 		}
+
+		/* reset GRE flag */
+		if (IPACM_Iface::ipacmcfg->ipacm_gre_enable == true)
+		{
+			int i;
+
+			for (i = 0; i < num_eth_client; i++)
+			{
+				if (get_client_memptr(eth_client, i)->ipv4_set == true)
+					IPACMDBG_H("Resettng eth client %d gre_nat_set to false", i);
+					get_client_memptr(eth_client, clnt_indx)->gre_nat_set = false;
+			}
+		}
+
 		break;
 
 	case IPA_HANDLE_WAN_DOWN_V6:
@@ -1037,7 +1051,7 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 			}
 #endif
 #if defined(FEATURE_L2TP) || defined(FEATURE_VLAN_MPDN)
-			if(is_vlan_event(data->iface_name))
+			if(IPACM_Iface::ipacmcfg->iface_in_vlan_mode(dev_name) && is_vlan_event(data->iface_name))
 			{
 				IPACMDBG_H("vlan neighbor event for iface %s\n", data->iface_name);
 				/* in VLAN_MPDN we handle all VLAN neighbors */
@@ -1061,6 +1075,8 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 				}
 			}
 #endif
+			eth_index = get_eth_client_index(data->mac_addr);
+			get_client_memptr(eth_client, eth_index)->if_index = data->if_index;
 			/* add mac balcklist rule if client is added after mac flt event is received */
 			if(IPACM_Iface::ipacmcfg->mac_addr_in_blacklist(data->mac_addr) == true)
 					handle_eth_mac_flt_conn_disc(data->mac_addr, true);
@@ -1137,10 +1153,11 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 				else
 				{
 
-					if (IPACM_Iface::ipacmcfg->ipacm_l2tp_enable == IPACM_L2TP)
+					if (IPACM_Iface::ipacmcfg->ipacm_l2tp_enable == IPACM_L2TP &&
+						data->iptype == IPA_IP_v4)
 					{
 						eth_bridge_post_event(IPA_ETH_BRIDGE_CLIENT_DEL,
-							IPA_IP_MAX, data->mac_addr, NULL, data->iface_name);
+							data->iptype, data->mac_addr, NULL, data->iface_name);
 					}
 
 					if((IPACM_Iface::ipacmcfg->ipacm_l2tp_enable == IPACM_L2TP_E2E) &&
@@ -3886,11 +3903,12 @@ int IPACM_Lan::handle_eth_hdr_init(uint8_t *mac_addr, ipacm_bridge *bridge, uint
 
 			}
 		}
-		/* initialize wifi client*/
+		/* initialize lan client */
 		get_client_memptr(eth_client, num_eth_client)->route_rule_set_v4 = false;
 		get_client_memptr(eth_client, num_eth_client)->route_rule_set_v6 = 0;
 		get_client_memptr(eth_client, num_eth_client)->ipv4_set = false;
 		get_client_memptr(eth_client, num_eth_client)->ipv6_set = 0;
+		get_client_memptr(eth_client, num_eth_client)->gre_nat_set = false;
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
 		IPACMDBG_H ("Is ODU client? %s\n", is_odu?"Yes":"No");
 		get_client_memptr(eth_client, num_eth_client)->ipv4_ul_rules_set = false;
@@ -4095,14 +4113,28 @@ int IPACM_Lan::handle_eth_client_ipaddr(ipacm_event_data_all *data)
 			}
 			else
 			{
-			   /* check if client got new IPv4 address*/
-			   if(data->ipv4_addr == get_client_memptr(eth_client, clnt_indx)->v4_addr)
-			   {
-				IPACMDBG_H("Already setup ipv4 addr for client:%d, ipv4 address didn't change\n", clnt_indx);
-				 return IPACM_FAILURE;
-			   }
-			   else
-			   {
+				/* check if client got new IPv4 address*/
+				if(data->ipv4_addr == get_client_memptr(eth_client, clnt_indx)->v4_addr)
+				{
+					IPACMDBG_H("Already setup ipv4 addr for client:%d, ipv4 address didn't change\n", clnt_indx);
+					/* INSTALL GRE NAT rules */
+					if (IPACM_Iface::ipacmcfg->ipacm_gre_enable == true)
+					{
+						IPACMDBG_H(" check route_rule_set_v4 %d isWanUP %d gre_nat_set %d\n",
+							get_client_memptr(eth_client, clnt_indx)->route_rule_set_v4, IPACM_Wan::isWanUP(ipa_if_num),
+							get_client_memptr(eth_client, clnt_indx)->gre_nat_set);
+						if (get_client_memptr(eth_client, clnt_indx)->route_rule_set_v4 == true &&
+							IPACM_Wan::isWanUP(ipa_if_num) == true && get_client_memptr(eth_client, clnt_indx)->gre_nat_set == false)
+						{
+							IPACMDBG_H(" setup GRE ipv4 NAT for client:%d ip:0x%x\n", clnt_indx, data->ipv4_addr);
+							CtList->HandleGREIpAddrAddEvt(data->ipv4_addr, IPACM_Iface::ipacmcfg->ipacm_gre_server_ipv4);
+							get_client_memptr(eth_client, clnt_indx)->gre_nat_set = true;
+						}
+					}
+					return IPACM_FAILURE;
+				}
+				else
+				{
 					IPACMDBG_H("ipv4 addr for client:%d is changed \n", clnt_indx);
 					/* delete NAT rules first */
 					CtList->HandleNeighIpAddrDelEvt(get_client_memptr(eth_client, clnt_indx)->v4_addr);
@@ -5492,6 +5524,7 @@ int IPACM_Lan::handle_eth_client_down_evt(uint8_t *mac_addr, uint8_t vlan_id, ip
 	get_client_memptr(eth_client, clt_indx)->ipv6_header_set = false;
 	get_client_memptr(eth_client, clt_indx)->route_rule_set_v4 = false;
 	get_client_memptr(eth_client, clt_indx)->route_rule_set_v6 = 0;
+	get_client_memptr(eth_client, clt_indx)->gre_nat_set = false;
 #ifdef FEATURE_VLAN_MPDN
 	get_client_memptr(eth_client, clt_indx)->vlan_id = 0;
 #endif
@@ -5570,6 +5603,7 @@ int IPACM_Lan::handle_eth_client_down_evt(uint8_t *mac_addr, uint8_t vlan_id, ip
 		get_client_memptr(eth_client, clt_indx)->route_rule_set_v4 = get_client_memptr(eth_client, (clt_indx + 1))->route_rule_set_v4;
 		get_client_memptr(eth_client, clt_indx)->route_rule_set_v6 = get_client_memptr(eth_client, (clt_indx + 1))->route_rule_set_v6;
 
+		get_client_memptr(eth_client, clt_indx)->gre_nat_set = get_client_memptr(eth_client, (clt_indx + 1))->gre_nat_set;
 #ifdef FEATURE_VLAN_MPDN
 		get_client_memptr(eth_client, clt_indx)->vlan_id = get_client_memptr(eth_client, (clt_indx + 1))->vlan_id;
 #endif
@@ -6489,6 +6523,7 @@ int IPACM_Lan::handle_uplink_filter_rule(ipacm_ext_prop *prop, ipa_ip_type iptyp
 				{
 					wan_ul_fl_rule_hdl_v6[num_wan_ul_fl_rule_v6] = pFilteringTable->rules[i].flt_rule_hdl;
 					num_wan_ul_fl_rule_v6++;
+
 				}
 				IPACM_Iface::ipacmcfg->increaseFltRuleCount(rx_prop->rx[0].src_pipe, iptype, pFilteringTable->num_rules);
 			}
@@ -7290,6 +7325,7 @@ int IPACM_Lan::config_dft_firewall_rules_ul_ex(IPACM_firewall_conf_t* firewall_c
 			}
 			flt_rule_entry.rule.rt_tbl_idx = rt_tbl_idx.idx;
 			IPACMDBG_H("Routing table %s has index %d\n", rt_tbl_idx.name, rt_tbl_idx.idx);
+
 
 			memcpy(&flt_rule_entry.rule.attrib,
 			&firewall_conf->extd_firewall_entries[i].attrib,
@@ -11768,28 +11804,37 @@ int IPACM_Lan::add_l2tp_udp_dflt_flt_rules(uint32_t *l2tp_dflt_rules)
 
 	memcpy(&flt_rule_entry.rule.attrib, &rx_prop->rx[0].attrib, sizeof(flt_rule_entry.rule.attrib));
 
+	/* Add Frag exception rule for external packet. In L2TP scenario, there can be frag packets
+	 * with only frag exception header and do not containing the offset or MF bit. These packets
+	 * will not match IS_FRAG equation. We need to explicitly match the next header byte.
+	 */
+	flt_rule_entry.rule.attrib.ext_attrib_mask |= IPA_FLT_EXT_NEXT_HDR;
+	flt_rule_entry.rule.attrib.u.v6.next_hdr = (uint8_t)IPACM_FIREWALL_IPPROTO_FRAG_HDR;
+	memcpy(&(pFilteringTable->rules[0]), &flt_rule_entry, sizeof(flt_rule_entry));
+
 	/* ARP Exception rule. */
+	flt_rule_entry.rule.attrib.ext_attrib_mask &= ~IPA_FLT_EXT_NEXT_HDR;
 	flt_rule_entry.rule.attrib.ext_attrib_mask |= IPA_FLT_EXT_L2TP_UDP_INNER_ETHER_TYPE;
 	flt_rule_entry.rule.attrib.ether_type = ETH_P_ARP;
 	flt_rule_entry.rule.attrib.attrib_mask |= IPA_FLT_NEXT_HDR;
 	flt_rule_entry.rule.attrib.u.v6.next_hdr = (uint8_t)IPACM_FIREWALL_IPPROTO_UDP;
-	memcpy(&(pFilteringTable->rules[0]), &flt_rule_entry, sizeof(flt_rule_entry));
+	memcpy(&(pFilteringTable->rules[1]), &flt_rule_entry, sizeof(flt_rule_entry));
 
 	/* TCP SYN Exception rule for inner IPv4 packet. */
 	flt_rule_entry.rule.attrib.ext_attrib_mask |= IPA_FLT_EXT_L2TP_UDP_TCP_SYN;
 	flt_rule_entry.rule.attrib.ether_type = ETH_P_IP;
-	memcpy(&(pFilteringTable->rules[1]), &flt_rule_entry, sizeof(flt_rule_entry));
+	memcpy(&(pFilteringTable->rules[2]), &flt_rule_entry, sizeof(flt_rule_entry));
 
 	/* TCP SYN Exception rule for inner IPv6 packet. */
 	flt_rule_entry.rule.attrib.ext_attrib_mask |= IPA_FLT_EXT_L2TP_UDP_TCP_SYN;
 	flt_rule_entry.rule.attrib.ether_type = ETH_P_IPV6;
-	memcpy(&(pFilteringTable->rules[2]), &flt_rule_entry, sizeof(flt_rule_entry));
+	memcpy(&(pFilteringTable->rules[3]), &flt_rule_entry, sizeof(flt_rule_entry));
 
 	/* ICMPv6 Exception rule for inner IPv6 packet. */
 	flt_rule_entry.rule.attrib.ext_attrib_mask &= ~IPA_FLT_EXT_L2TP_UDP_TCP_SYN;
 	flt_rule_entry.rule.attrib.ext_attrib_mask |= IPA_FLT_EXT_L2TP_UDP_INNER_NEXT_HDR;
 	flt_rule_entry.rule.attrib.l2tp_udp_next_hdr = (uint8_t)IPACM_FIREWALL_IPPROTO_ICMP6;
-	memcpy(&(pFilteringTable->rules[3]), &flt_rule_entry, sizeof(flt_rule_entry));
+	memcpy(&(pFilteringTable->rules[4]), &flt_rule_entry, sizeof(flt_rule_entry));
 
 	if(m_filtering.AddFilteringRuleAfter(pFilteringTable) == false)
 	{
@@ -11826,13 +11871,12 @@ int IPACM_Lan::del_l2tp_udp_dflt_flt_rules(uint32_t *dflt_rules)
 
 
 /* add l2tp udp flt rule on non l2tp interface */
-int IPACM_Lan::add_l2tp_udp_flt_rule(ipa_ip_type iptype, uint8_t *dst_mac, uint32_t *flt_rule_hdl)
+int IPACM_Lan::add_l2tp_udp_flt_rule(ipa_ip_type iptype, uint8_t *dst_mac,
+	uint16_t mtu, uint32_t *flt_rule_hdl)
 {
 	int len;
 	struct ipa_flt_rule_add flt_rule_entry;
 	struct ipa_ioc_add_flt_rule_after *pFilteringTable = NULL;
-	uint16_t v4_mtu = 1422; /*1500 - L2TP payload (Ipv6 header (40) + UDP (8) + L2tp (16) + Inner Ethernet (14)).*/
-	uint16_t v6_mtu = 1382; /*1500 - Ipv6 Header - L2TP Payload (Ipv6 header (40) + UDP (8) + L2tp (16) + Inner Ethernet (14)).*/
 	struct ipa_ioc_get_rt_tbl_indx rt_tbl_idx;
 	int fd_ipa = 0;
 	ipa_ioc_get_rt_tbl rt_tbl;
@@ -11906,7 +11950,11 @@ int IPACM_Lan::add_l2tp_udp_flt_rule(ipa_ip_type iptype, uint8_t *dst_mac, uint3
 	memset(flt_rule_entry.rule.attrib.dst_mac_addr_mask, 0xFF, sizeof(flt_rule_entry.rule.attrib.dst_mac_addr_mask));
 	/* Make sure packets are within MTU range. */
 	flt_rule_entry.rule.attrib.ext_attrib_mask |= IPA_FLT_EXT_MTU;
-	flt_rule_entry.rule.attrib.payload_length = (iptype == IPA_IP_v4) ? v4_mtu : v6_mtu;
+	/* Update the payload length based on IP type. For IPv4, length field includes the header.
+	 * For IPv6, length field doesn't include header so we need to subtract IPv6 header length
+	 * of 40 bytes.
+	 */
+	flt_rule_entry.rule.attrib.payload_length = (iptype == IPA_IP_v4) ? mtu : (mtu - 40);
 	memcpy(&(pFilteringTable->rules[0]), &flt_rule_entry, sizeof(flt_rule_entry));
 	if (false == m_filtering.AddFilteringRuleAfter(pFilteringTable))
 	{

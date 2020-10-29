@@ -80,6 +80,10 @@
 			   <Category>VIRTUAL</Category>
 		    </Iface>
 		</IPACMIface>
+		<GREFlag>
+			<GREEnabled>1</GREEnabled>
+			 <GREServer>172.20.98.78</GREServer>
+		</GREFlag>
 		<IPACMPrivateSubnet>
 			<Subnet>
   			   <SubnetAddress>192.168.225.0</SubnetAddress>

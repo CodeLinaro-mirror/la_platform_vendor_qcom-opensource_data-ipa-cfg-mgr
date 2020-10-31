@@ -137,6 +137,13 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 					{
 						if (neighbor_client[i].v4_addr != 0) /* not 0.0.0.0 */
 						{
+							/* check if getting real netdev name yet */
+							if(strcmp(neighbor_client[i].iface_name, IPA_NO_IFACE_NAME) == 0)
+							{
+								IPACMERR("client %d name %s not real\n", i, neighbor_client[i].iface_name);
+								return;
+							}
+
 							if(strcmp(neighbor_client[i].bridge->bridge_name, BRIDGE_0) != 0)
 							{
 								if(IPACM_Iface::ipacmcfg->is_added_vlan_iface(iface_name))
@@ -620,6 +627,12 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 								data->if_index = neighbor_client[i].iface_index;
 								strlcpy(data->iface_name, neighbor_client[i].iface_name, sizeof(data->iface_name));
 								neighbor_client[i].v4_addr = data->ipv4_addr; // cache client's previous ipv4 address
+								/* check if getting real netdev name yet */
+								if(strcmp(data->iface_name, IPA_NO_IFACE_NAME) == 0)
+								{
+									IPACMERR("client %d name %s not real\n", i, data->iface_name);
+									return;
+								}
 								/* construct IPA_NEIGH_CLIENT_IP_ADDR_ADD_EVENT command and insert to command-queue */
 								if (event == IPA_NEW_NEIGH_EVENT)
 									evt_data.event = IPA_NEIGH_CLIENT_IP_ADDR_ADD_EVENT;
@@ -904,10 +917,7 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 
 									num_neighbor_client--;
 									IPACMDBG_H(" total number of left cased clients: %d\n", num_neighbor_client);
-									//IPA_LAN_CLIENT_DEL_EVENT
-									//IPV4
 									/* check if getting real netdev name yet */
-
 									if(strcmp(data->iface_name, IPA_NO_IFACE_NAME) == 0)
 									{
 										IPACMERR("client %d name %s not real\n", i, data->iface_name);
@@ -928,6 +938,12 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 								}
 							}
 							/* not find client, no need clean-up */
+						}
+						/* check if getting real netdev name yet */
+						if(strcmp(data->iface_name, IPA_NO_IFACE_NAME) == 0)
+						{
+							IPACMERR("client %d name %s not real\n", i, data->iface_name);
+							return;
 						}
 
 						data_all = (ipacm_event_data_all *)malloc(sizeof(ipacm_event_data_all));
@@ -1044,6 +1060,12 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 #endif
 								data->if_index = neighbor_client[i].iface_index;
 								strlcpy(data->iface_name, neighbor_client[i].iface_name, sizeof(data->iface_name));
+								/* check if getting real netdev name yet */
+								if(strcmp(data->iface_name, IPA_NO_IFACE_NAME) == 0)
+								{
+									IPACMERR("client %d name %s not real\n", i, data->iface_name);
+									return;
+								}
 								/* construct IPA_NEIGH_CLIENT_IP_ADDR_ADD_EVENT command and insert to command-queue */
 								if(event == IPA_NEW_NEIGH_EVENT)
 									evt_data.event = IPA_NEIGH_CLIENT_IP_ADDR_ADD_EVENT;
@@ -1221,6 +1243,12 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 
 								if (neighbor_client[i].v4_addr != 0) /* not 0.0.0.0 */
 								{
+									/* check if getting real netdev name yet */
+									if(strcmp(neighbor_client[i].iface_name, IPA_NO_IFACE_NAME) == 0)
+									{
+										IPACMERR("client %d name %s not real\n", i, neighbor_client[i].iface_name);
+										return;
+									}
 									/* construct IPA_NEIGH_CLIENT_IP_ADDR_ADD_EVENT command and insert to command-queue */
 									if (event == IPA_NEW_NEIGH_EVENT)
 									{

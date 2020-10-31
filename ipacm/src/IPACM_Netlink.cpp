@@ -853,6 +853,7 @@ static int ipa_nl_decode_nlmsg
 				if(ret_val != IPACM_SUCCESS)
 				{
 					IPACMERR("Error while getting interface name\n");
+					return IPACM_FAILURE;
 				}
 				IPACMDBG("Interface %s \n", dev_name);
 

@@ -629,6 +629,7 @@ skip_fnr_alloc:
 	if (pNatIfaces == NULL)
 	{
 		IPACMERR("unable to allocate nat ifaces\n");
+		pthread_mutex_unlock(&nat_iface_lock);
 		ret = IPACM_FAILURE;
 		free(iface_table);
 		free(alg_table);

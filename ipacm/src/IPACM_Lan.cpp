@@ -1361,7 +1361,7 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 #endif
 	case IPA_MAC_ADD_DEL_FLT_EVENT:
 		{
-			IPACMDBG_H(" IPA_MAC_ADD_FLT_EVENT received\n");
+			IPACMDBG_H(" IPA_MAC_ADD_DEL_FLT_EVENT received\n");
 			if(handle_eth_mac_flt_event())
 			{
 				IPACMERR("failed to handle IPA_MAC_ADD_DEL_FLT_EVENT \n");

@@ -1923,6 +1923,7 @@ void IPACM_LanToLan_Iface::handle_client_add(uint8_t *mac, bool is_l2tp_client, 
 			/* add client filtering rule on peer interfaces */
 			it_peer_info->peer->add_one_client_flt_rule(this, &front_client);
 
+#ifdef FEATURE_L2TP
 #ifdef IPA_L2TP_TUNNEL_UDP
 			/* Update the rules for the client with new mapping. */
 			if(IPACM_Iface::ipacmcfg->ipacm_l2tp_enable == IPACM_L2TP && m_is_l2tp_iface &&
@@ -1930,6 +1931,7 @@ void IPACM_LanToLan_Iface::handle_client_add(uint8_t *mac, bool is_l2tp_client, 
 			{
 				add_l2tp_udp_client_rules_new_mapping(&(*it_peer_info), mapping_info);
 			}
+#endif
 #endif
 
 		}

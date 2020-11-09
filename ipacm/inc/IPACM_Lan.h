@@ -55,10 +55,12 @@ IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #define MAX_WAN_UL_FILTER_RULES MAX_NUM_EXT_PROPS
 #define NUM_IPV4_ICMP_FLT_RULE 1
 #define NUM_IPV6_ICMP_FLT_RULE 1
+#if defined(FEATURE_L2TP)
 #ifdef IPA_L2TP_TUNNEL_UDP
 /* Default rules to route 1) Frag packets, 2) ARP, 3) IP TCP SYN, 4) IPv6 TCP SYN and
  * 5) ICMPv6 packets to exception. */
 #define NUM_L2TP_UDP_DFLT_RULES 5
+#endif
 #endif
 
 /* ndc bandwidth ipatetherstats <ifaceIn> <ifaceOut> */
@@ -918,8 +920,10 @@ protected:
 	uint32_t ipv6_prefix[2];
 
 	uint32_t tcp_syn_flt_rule_hdl[IPA_IP_MAX];
+#if defined(FEATURE_L2TP)
 #ifdef IPA_L2TP_TUNNEL_UDP
 	uint32_t l2tp_udp_dflt_flt_rule_hdl[NUM_L2TP_UDP_DFLT_RULES];
+#endif
 #endif
 	int post_lan_up_event(const ipacm_event_data_addr* data) const;
 

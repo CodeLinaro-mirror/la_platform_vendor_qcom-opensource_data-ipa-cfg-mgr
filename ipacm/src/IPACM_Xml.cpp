@@ -762,7 +762,7 @@ static int IPACM_firewall_xml_parse_tree(const char *xml_file, xmlNode* xml_node
 			else if (IPACM_util_icmp_string((char*)xml_node->name, MobileAPFirewallCfg_TAG) == 0)
 			{
 				IPACMDBG_H("MobileAPFirewallCfg_TAG\n");
-				if (++firewall_config.pdn_count == IPA_MAX_NUM_SW_PDNS)
+				if (++firewall_config.pdn_count > IPA_MAX_NUM_SW_PDNS)
 				{
 					IPACMERR("The XML %s is not valid. The number of %s tags should be at most %d\n",
 						xml_file, MobileAPFirewallCfg_TAG, IPA_MAX_NUM_SW_PDNS);

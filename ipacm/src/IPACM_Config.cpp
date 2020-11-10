@@ -2450,9 +2450,9 @@ void IPACM_Config::mac_flt_info(ipa_ioc_mac_client_list_type *mac_flt_data)
 		return;
 	}
 
-	IPACMDBG_H("Mac filtering state %d", mac_flt_data->flt_state);
+	IPACMDBG_H("Mac filtering state enable (%d) num of clients %d\n", mac_flt_data->flt_state, mac_flt_data->num_of_clients);
 	/* if flt state is true then only populate mac_list which contains mac addrs
-	   to be blacklisted and num of clients should be max 5. If flt state is false
+	   to be blacklisted and num of clients should be max 32. If flt state is false
 	   then do not add anything to list */
 	if(mac_flt_data->flt_state)
 	{

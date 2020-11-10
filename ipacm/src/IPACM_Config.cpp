@@ -844,15 +844,16 @@ int IPACM_Config::AddNatIfaces(char *dev_name)
 
 	IPACMDBG_H("Add iface %s to NAT-ifaces, origin it has %d nat ifaces\n",
 					          dev_name, ipa_nat_iface_entries);
-	ipa_nat_iface_entries++;
 
 	if (ipa_nat_iface_entries < IPA_MAX_NAT_IFACE)
 	{
-		strlcpy(pNatIfaces[ipa_nat_iface_entries - 1].iface_name,dev_name,
+		strlcpy(pNatIfaces[ipa_nat_iface_entries].iface_name,dev_name,
 				IPA_IFACE_NAME_LEN);
-		IPACMDBG_H("Add Nat IfaceName: %s ,update nat-ifaces number: %d\n",
-				pNatIfaces[ipa_nat_iface_entries - 1].iface_name,
-				ipa_nat_iface_entries);
+		IPACMDBG_H("Added Nat Iface: %s\n",
+			pNatIfaces[ipa_nat_iface_entries].iface_name);
+		ipa_nat_iface_entries++;
+		IPACMDBG_H("Update nat-ifaces number: %d\n",
+			ipa_nat_iface_entries);
 	}
 
 	pthread_mutex_unlock(&nat_iface_lock);

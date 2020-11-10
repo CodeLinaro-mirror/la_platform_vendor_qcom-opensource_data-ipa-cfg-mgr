@@ -75,7 +75,7 @@ extern "C"
 #define IPA_ODU_HDR_NAME_v6  "IPACM_ODU_v6"
 #define IPA_IF_SOCKSv5_NAME  "IPACM_SOCKSv5"
 
-#define IPA_MAX_IFACE_ENTRIES 20
+#define IPA_MAX_IFACE_ENTRIES 30 /* current: 15 rmnet + 4 wlan + bridge+ eth+ rndis + ecm.*/
 #define IPA_MAX_ALG_ENTRIES 20
 #define IPA_MAX_RM_ENTRY 9
 

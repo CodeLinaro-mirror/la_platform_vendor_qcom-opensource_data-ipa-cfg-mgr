@@ -162,6 +162,7 @@ IPACM_Config::IPACM_Config()
 	memset(&fnr_counters, 0, sizeof(fnr_counters));
 	memset(cnt_idx, 0, sizeof(cnt_idx));
 	hw_fnr_stats_support = false;
+	pthread_mutex_init(&cnt_idx_lock, NULL);
 #endif //IPA_HW_FNR_STATS
 #endif
 	ipv6_nat_enable = false;
@@ -214,6 +215,7 @@ IPACM_Config::IPACM_Config()
 #if defined(FEATURE_L2TP) || defined(FEATURE_VLAN_MPDN)
 	pthread_mutex_init(&vlan_l2tp_lock, NULL);
 #endif
+	pthread_mutex_init(&nat_iface_lock, NULL);
 	IPACMDBG_H(" create IPACM_Config constructor\n");
 	pthread_mutex_init(&mac_flt_info_lock, NULL);
 	return;
@@ -573,7 +575,6 @@ int IPACM_Config::Init(void)
 			IPACMERR("FnR counter allocated already, skip dup allocation\n");
 			goto skip_fnr_alloc;
 		}
-		pthread_mutex_init(&cnt_idx_lock, NULL);
 		if (ipacm_alloc_fnr_counters(&fnr_counters, m_fd))
 		{
 			IPACMERR("Failed to allocate fnr counters.\n");
@@ -615,6 +616,13 @@ skip_fnr_alloc:
 	IPACMDBG_H("ipa_num_wlan_guest_ap %d\n",ipa_num_wlan_guest_ap);
 
 	/* Allocate more non-nat entries if the monitored iface dun have Tx/Rx properties */
+
+	if(pthread_mutex_lock(&nat_iface_lock) != 0)
+	{
+		IPACMERR("Unable to lock the mutex\n");
+		goto fail;
+	}
+
 	if (pNatIfaces != NULL)
 	{
 		free(pNatIfaces);
@@ -622,7 +630,7 @@ skip_fnr_alloc:
 		IPACMDBG_H("RESET IPACM_Config::pNatIfaces \n");
 	}
 	ipa_nat_iface_entries = 0;
-	pNatIfaces = (NatIfaces *)calloc(ipa_num_ipa_interfaces, sizeof(NatIfaces));
+	pNatIfaces = (NatIfaces *)calloc(IPA_MAX_NAT_IFACE, sizeof(NatIfaces));
 	if (pNatIfaces == NULL)
 	{
 		IPACMERR("unable to allocate nat ifaces\n");
@@ -631,6 +639,7 @@ skip_fnr_alloc:
 		free(alg_table);
 		goto fail;
 	}
+	pthread_mutex_unlock(&nat_iface_lock);
 
 	/* Construct the routing table ictol name in iface static member*/
 	rt_tbl_default_v4.ip = IPA_IP_v4;
@@ -784,9 +793,16 @@ int IPACM_Config::GetAlgPorts(int nPorts, ipacm_alg *pAlgPorts)
 
 int IPACM_Config::GetNatIfaces(int nIfaces, NatIfaces *pIfaces)
 {
+
 	if (nIfaces <= 0 || pIfaces == NULL)
 	{
 		IPACMERR("Invalid input\n");
+		return -1;
+	}
+
+	if(pthread_mutex_lock(&nat_iface_lock) != 0)
+	{
+		IPACMERR("Unable to lock the mutex\n");
 		return -1;
 	}
 
@@ -797,6 +813,7 @@ int IPACM_Config::GetNatIfaces(int nIfaces, NatIfaces *pIfaces)
 					 sizeof(pIfaces[cnt].iface_name));
 	}
 
+	pthread_mutex_unlock(&nat_iface_lock);
 	return 0;
 }
 
@@ -804,6 +821,13 @@ int IPACM_Config::GetNatIfaces(int nIfaces, NatIfaces *pIfaces)
 int IPACM_Config::AddNatIfaces(char *dev_name)
 {
 	int i;
+
+	if(pthread_mutex_lock(&nat_iface_lock) != 0)
+	{
+		IPACMERR("Unable to lock the mutex\n");
+		return 0;
+	}
+
 	/* Check if this iface already in NAT-iface*/
 	for(i = 0; i < ipa_nat_iface_entries; i++)
 	{
@@ -812,7 +836,8 @@ int IPACM_Config::AddNatIfaces(char *dev_name)
 							 sizeof(pNatIfaces[i].iface_name)) == 0)
 		{
 			IPACMDBG("Interface (%s) is add to nat iface already\n", dev_name);
-				return 0;
+			pthread_mutex_unlock(&nat_iface_lock);
+			return 0;
 		}
 	}
 
@@ -820,7 +845,7 @@ int IPACM_Config::AddNatIfaces(char *dev_name)
 					          dev_name, ipa_nat_iface_entries);
 	ipa_nat_iface_entries++;
 
-	if (ipa_nat_iface_entries < ipa_num_ipa_interfaces)
+	if (ipa_nat_iface_entries < IPA_MAX_NAT_IFACE)
 	{
 		strlcpy(pNatIfaces[ipa_nat_iface_entries - 1].iface_name,dev_name,
 				IPA_IFACE_NAME_LEN);
@@ -829,12 +854,19 @@ int IPACM_Config::AddNatIfaces(char *dev_name)
 				ipa_nat_iface_entries);
 	}
 
+	pthread_mutex_unlock(&nat_iface_lock);
 	return 0;
 }
 
 int IPACM_Config::DelNatIfaces(char *dev_name)
 {
 	int i = 0;
+
+	if(pthread_mutex_lock(&nat_iface_lock) != 0)
+	{
+		IPACMERR("Unable to lock the mutex\n");
+		return 0;
+	}
 	IPACMDBG_H("Del iface %s from NAT-ifaces, origin it has %d nat ifaces\n",
 					 dev_name, ipa_nat_iface_entries);
 
@@ -858,12 +890,14 @@ int IPACM_Config::DelNatIfaces(char *dev_name)
 			}
 			ipa_nat_iface_entries--;
 			IPACMDBG_H("Update nat-ifaces number: %d\n", ipa_nat_iface_entries);
+			pthread_mutex_unlock(&nat_iface_lock);
 			return 0;
 		}
 	}
 
 	IPACMDBG_H("Can't find Nat IfaceName: %s with total nat-ifaces number: %d\n",
 					    dev_name, ipa_nat_iface_entries);
+	pthread_mutex_unlock(&nat_iface_lock);
 	return 0;
 }
 

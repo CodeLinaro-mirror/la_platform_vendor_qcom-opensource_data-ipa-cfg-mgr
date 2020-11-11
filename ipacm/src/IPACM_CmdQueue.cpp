@@ -194,7 +194,7 @@ void* MessageQueue::Process(void *param)
 				return NULL;
 			}
 
-			IPACMDBG("Processing item %p event ID: %d\n",item,item->evt.data.event);
+			IPACMDBG("Processing item %p event ID: %d\n", item, item->evt.data.event);
 			item->evt.callback_ptr(&item->evt.data);
 			delete item;
 			item = NULL;

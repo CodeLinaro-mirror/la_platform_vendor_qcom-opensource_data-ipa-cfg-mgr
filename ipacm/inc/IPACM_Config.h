@@ -188,6 +188,9 @@ public:
 
 	pthread_mutex_t ip_pass_mpdn_lock;
 
+	/* nat_iface_lock */
+	pthread_mutex_t nat_iface_lock;
+
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
 	bool ipacm_lan_stats_enable;
 	bool ipacm_lan_stats_enable_set;
@@ -201,6 +204,11 @@ public:
 #endif
 
 	bool ipv6_nat_enable;
+
+	bool ipacm_gre_enable;
+
+	uint32_t ipacm_gre_server_ipv4;
+
 	int ipa_nat_iface_entries;
 
 	/* Store the total number of wlan guest ap configured */
@@ -492,7 +500,16 @@ public:
 
 	inline int GetNatIfacesCnt()
 	{
-		return ipa_nat_iface_entries;
+		int nat_iface_entries;
+
+		if(pthread_mutex_lock(&nat_iface_lock) != 0)
+		{
+			IPACMERR("Unable to lock the mutex\n");
+			return 0;
+		}
+		nat_iface_entries = ipa_nat_iface_entries;
+		pthread_mutex_unlock(&nat_iface_lock);
+		return nat_iface_entries;
 	}
 	int GetNatIfaces(int nPorts, NatIfaces *ifaces);
 

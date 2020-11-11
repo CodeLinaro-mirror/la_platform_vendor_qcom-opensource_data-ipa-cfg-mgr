@@ -809,7 +809,15 @@ void IPACM_Wlan::event_callback(ipa_cm_event_id event, void *param)
 					}
 				}
 #endif
+				wlan_index = get_wlan_client_index(data->mac_addr);
+				if (wlan_index == IPACM_INVALID_INDEX)
+				{
+					IPACMDBG_H("wlan client not found/attached \n");
+					return;
+				}
 				get_client_memptr(wlan_client, wlan_index)->if_index = data->if_index;
+				IPACMDBG_H("index %d if_index %d \n", wlan_index, get_client_memptr(wlan_client, wlan_index)->if_index);
+				/* add mac balcklist rule if client is added after mac flt event is received */
 				if(IPACM_Iface::ipacmcfg->mac_addr_in_blacklist(data->mac_addr) == true)
 				{
 					handle_wlan_mac_flt_conn_disc(data->mac_addr, true);
@@ -1001,7 +1009,7 @@ void IPACM_Wlan::event_callback(ipa_cm_event_id event, void *param)
 
 	case IPA_MAC_ADD_DEL_FLT_EVENT:
 		{
-			IPACMDBG_H(" IPA_MAC_ADD_FLT_EVENT received\n");
+			IPACMDBG_H(" IPA_MAC_ADD_DEL_FLT_EVENT received\n");
 			if(handle_wlan_mac_flt_event())
 			{
 				IPACMERR("failed to handle IPA_MAC_ADD_DEL_FLT_EVENT \n");

@@ -713,7 +713,7 @@ void IPACM_ConntrackListener::HandleIPPassPDNInfoUpdate(void *in_param)
 	ipacm_event_vlan_pdn *pdn_data = (ipacm_event_vlan_pdn *)in_param;
 	IPACMDBG_H("Recevied below information after VLAN PDN up,\n");
 	IPACMDBG_H("PDN IP 0x%x\n", pdn_data->ipv4_addr);
-	IPACMDBG_H("ip_passthrough: %d, ip_pass_dummy_ip:%d, ip_pass_skip_nat %d\n",
+	IPACMDBG_H("ip_passthrough: %d, ip_pass_dummy_ip:0x%x, ip_pass_skip_nat %d\n",
 		pdn_data->ip_pass_enable,
 		pdn_data->ip_pass_dummy_ip,
 		pdn_data->ip_pass_skip_nat);
@@ -821,6 +821,26 @@ bool IPACM_ConntrackListener::IsVlanIPv4(uint32_t ipv4_address, uint8_t *VlanId)
 	return false;
 }
 #endif
+
+void IPACM_ConntrackListener::HandleGREIpAddrAddEvt(
+   uint32_t ipv4_addr_client, uint32_t ipv4_addr_target)
+{
+	int ret = 0;
+	nat_table_entry rule;
+	memset(&rule, 0, sizeof(rule));
+	rule.private_ip = ipv4_addr_client;
+	rule.target_ip = ipv4_addr_target;
+	rule.public_ip = wan_ipaddr;
+	rule.protocol = IPPROTO_GRE;
+	/* add static gre nat entry */
+	ret = nat_inst->AddEntry(&rule);
+	if(ret)
+	{
+		IPACMERR("unable to add static GRE entry: %d\n", ret);
+		return;
+	}
+	return;
+}
 
 void IPACM_ConntrackListener::HandleNeighIpAddrDelEvt(
    uint32_t ipv4_addr)

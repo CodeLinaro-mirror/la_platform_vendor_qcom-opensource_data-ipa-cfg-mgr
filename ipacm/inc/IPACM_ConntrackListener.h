@@ -175,6 +175,7 @@ public:
 
 	void HandleNeighIpAddrAddEvt(ipacm_event_data_all *);
 	void HandleNeighIpAddrAddEvt_v6(const IpAddress& ip, int if_index);
+	void HandleGREIpAddrAddEvt(uint32_t, uint32_t);
 	void HandleNeighIpAddrDelEvt(uint32_t);
 	void HandleNeighIpAddrDelEvt_v6(const IpAddress& ip);
 	void HandleSTAClientAddEvt(uint32_t);

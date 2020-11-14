@@ -1224,9 +1224,10 @@ void IPACM_Config::add_bridge_vlan_mapping(ipa_ioc_bridge_vlan_mapping_info *dat
 	new_mapping.bridge_associated_VID = data->vlan_id;
 	new_mapping.bridge_ipv4 = data->bridge_ipv4;
 	new_mapping.subnet_mask = data->subnet_mask;
+	new_mapping.lan2lan_sw = data->lan2lan_sw;
 
 	m_bridge_vlan_mapping.push_front(new_mapping);
-	IPACMDBG_H("added bridge %s with VID %d\n", data->bridge_name, data->vlan_id);
+	IPACMDBG_H("added bridge %s with VID %d, lan2lan_sw=%d\n", data->bridge_name, data->vlan_id, data->lan2lan_sw);
 
 	pthread_mutex_unlock(&vlan_l2tp_lock);
 
@@ -1306,7 +1307,37 @@ int IPACM_Config::get_bridge_vlan_mapping(ipa_ioc_bridge_vlan_mapping_info *data
 			data->vlan_id = it_mapping->bridge_associated_VID;
 			data->bridge_ipv4 = it_mapping->bridge_ipv4;
 			data->subnet_mask = it_mapping->subnet_mask;
+			data->lan2lan_sw = it_mapping->lan2lan_sw;
 			ret = IPACM_SUCCESS;
+			break;
+		}
+	}
+
+	pthread_mutex_unlock(&vlan_l2tp_lock);
+	return ret;
+}
+
+bool IPACM_Config::is_lan2lan_sw_path(uint8_t vlan_id)
+{
+	list<bridge_vlan_mapping_info>::iterator it_mapping;
+	bool ret = false;
+
+	/* always offload non-vlan lan2lan */
+	if (vlan_id == 0)
+		return false;
+
+	if(pthread_mutex_lock(&vlan_l2tp_lock) != 0)
+	{
+		IPACMERR("Unable to lock the mutex\n");
+		return ret;
+	}
+
+	for(it_mapping = m_bridge_vlan_mapping.begin(); it_mapping != m_bridge_vlan_mapping.end(); it_mapping++)
+	{
+		if(it_mapping->bridge_associated_VID == vlan_id && it_mapping->lan2lan_sw)
+		{
+			IPACMDBG_H("lan2lan_sw is enabled for bridge %s, VID %D\n", it_mapping->bridge_iface_name, it_mapping->bridge_associated_VID);
+			ret = true;
 			break;
 		}
 	}
@@ -1686,10 +1717,11 @@ void IPACM_Config::add_vlan_bridge(ipacm_event_data_all *data_all)
 			vlan_bridges[i].bridge_ipv4_addr = mapping_info.bridge_ipv4;
 			strlcpy(vlan_bridges[i].bridge_name, data_all->iface_name, IF_NAME_LEN);
 			vlan_bridges[i].associate_VID = mapping_info.vlan_id;
-			IPACMDBG("bridge (%s) mask 0x%X, address 0x%X, VID %d\n", data_all->iface_name,
+			IPACMDBG("bridge (%s) mask 0x%X, address 0x%X, VID %d, lan2lan_sw %d\n", data_all->iface_name,
 				mapping_info.subnet_mask,
 				mapping_info.bridge_ipv4,
-				mapping_info.vlan_id);
+				mapping_info.vlan_id,
+				mapping_info.lan2lan_sw);
 
 			struct ifreq ifr;
 			int fd;

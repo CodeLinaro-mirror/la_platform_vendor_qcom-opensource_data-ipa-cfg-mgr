@@ -9814,6 +9814,11 @@ void IPACM_Lan::eth_bridge_post_event(ipa_cm_event_id evt, ipa_ip_type iptype, u
 	ipacm_event_data_all *evt_data_all;
 	const char* eventName;
 
+#ifdef FEATURE_VLAN_MPDN
+	if(VlanID && IPACM_Iface::ipacmcfg->is_lan2lan_sw_path(VlanID))
+		return;
+#endif
+
 	memset(&eth_bridge_evt, 0, sizeof(ipacm_cmd_q_data));
 	eth_bridge_evt.event = evt;
 

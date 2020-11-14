@@ -4725,7 +4725,7 @@ int IPACM_Wan::add_dft_filtering_rule(struct ipa_flt_rule_add *rules, int rule_o
 			&flt_rule_entry, sizeof(struct ipa_flt_rule_add));
 #endif
 
-#ifdef FEATURE_IPA_ANDROID
+#if defined(FEATURE_IPA_ANDROID) || defined(FEATURE_SOCKSv5)
 		IPACMDBG_H("Add TCP ctrl rules\n");
 		memset(&flt_rule_entry, 0, sizeof(struct ipa_flt_rule_add));
 
@@ -6556,6 +6556,7 @@ int IPACM_Wan::install_wan_filtering_rule(bool is_sw_routing, bool is_socksv5_en
 		softwarerouting_act = true;
 		/* end of contruct SW-RT rules to Q6*/
 	}
+#ifdef FEATURE_SOCKSv5
 	else if (is_socksv5_en == true ||
 		IPACM_Iface::ipacmcfg->ipacm_socksv5_enable == true) {
 		/* socksv5 handling */
@@ -6673,6 +6674,7 @@ int IPACM_Wan::install_wan_filtering_rule(bool is_sw_routing, bool is_socksv5_en
 		}
 		pthread_mutex_unlock(&IPACM_Iface::ipacmcfg->socksv5_lock);
 	} //end of socksv5_enable handling
+#endif
 	else
 	{
 		if(embms_is_on == false)

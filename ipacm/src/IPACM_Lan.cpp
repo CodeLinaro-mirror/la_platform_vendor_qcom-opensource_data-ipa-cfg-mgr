@@ -936,8 +936,8 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 
 	case IPA_NEIGH_CLIENT_IP_ADDR_ADD_EVENT:
 		{
-#if defined(FEATURE_IPACM_PER_CLIENT_STATS) && defined(IPA_HW_FNR_STATS)
 			int eth_index;
+#if defined(FEATURE_IPACM_PER_CLIENT_STATS) && defined(IPA_HW_FNR_STATS)
 			int retval;
 #endif //IPA_HW_FNR_STATS
 			ipacm_event_data_all *data = (ipacm_event_data_all *)param;

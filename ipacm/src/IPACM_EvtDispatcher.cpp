@@ -132,12 +132,12 @@ void IPACM_EvtDispatcher::ProcessEvt(ipacm_cmd_q_data *data)
 		{
 			ipacm_event_stats[data->event]++;
 			tmp1.obj->event_callback(data->event, data->evt_data);
-			IPACMDBG(" Find matched registered events\n");
+			IPACMDBG(" Find matched registered events %d\n", data->event);
 		}
 	        tmp = tmp1.next;
 	}
 
-	IPACMDBG(" Finished process events\n");
+	IPACMDBG(" Finished process events %d\n", data->event);
 			
 	if(data->evt_data != NULL)
 	{

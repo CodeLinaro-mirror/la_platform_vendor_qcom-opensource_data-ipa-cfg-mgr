@@ -75,7 +75,7 @@ extern "C"
 #define IPA_ODU_HDR_NAME_v6  "IPACM_ODU_v6"
 #define IPA_IF_SOCKSv5_NAME  "IPACM_SOCKSv5"
 
-#define IPA_MAX_IFACE_ENTRIES 20
+#define IPA_MAX_IFACE_ENTRIES 30 /* current: 15 rmnet + 4 wlan + bridge+ eth+ rndis + ecm.*/
 #define IPA_MAX_ALG_ENTRIES 20
 #define IPA_MAX_RM_ENTRY 9
 
@@ -141,6 +141,12 @@ extern "C"
 #endif
 #define DEFAULT_MTU_SIZE 1500
 #define IPA_L2TP_UDP_DEFAULT_MTU_SIZE 1422 /* 1500 - (IPv6(40) + UDP (8) + L2TP (16) + ETH (14)). */
+
+#define IPA_MAX_ACTIVE_LAN_IFACE 2
+#define IPA_MAX_ACTIVE_WLAN_IFACE 4
+#define IPA_MAX_NAT_IFACE (IPA_MAX_ACTIVE_LAN_IFACE*IPA_MAX_NUM_OFFLOAD_VLANS+ \
+	IPA_MAX_ACTIVE_LAN_IFACE + IPA_MAX_ACTIVE_WLAN_IFACE + IPA_MAX_NUM_SW_PDNS)
+
 /*===========================================================================
 										 GLOBAL DEFINITIONS AND DECLARATIONS
 ===========================================================================*/

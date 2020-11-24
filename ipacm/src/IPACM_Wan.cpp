@@ -412,17 +412,6 @@ int IPACM_Wan::handle_addr_evt(ipacm_event_data_addr *data)
 		{
 			if(m_is_sta_mode == Q6_WAN)
 			{
-#ifdef FEATURE_VLAN_MPDN
-				modem_ipv6_pdn_index = getFreePDNIndex_V6();
-				if (modem_ipv6_pdn_index == -1)
-				{
-					IPACMERR("No Free index available.!\n");
-					res = IPACM_FAILURE;
-					goto fail;
-				}
-				num_ipv6_modem_pdn++;
-				IPACMDBG_H("Now the number of modem ipv6 pdn is %d.\n", num_ipv6_modem_pdn);
-#endif
 				init_fl_rule_ex(data->iptype);
 			}
 			else
@@ -499,8 +488,22 @@ int IPACM_Wan::handle_addr_evt(ipacm_event_data_addr *data)
 #ifdef FEATURE_VLAN_MPDN
 			if(m_is_sta_mode == Q6_WAN)
 			{
+				modem_ipv6_pdn_index = getFreePDNIndex_V6();
+				if (modem_ipv6_pdn_index == -1)
+				{
+					IPACMERR("No Free index available.!\n");
+					res = IPACM_FAILURE;
+					goto fail;
+				}
+
 				memcpy(ipv6_to_iface[modem_ipv6_pdn_index].ipv6_prefix, data->ipv6_addr, sizeof(uint32_t) * 2);
 				ipv6_to_iface[modem_ipv6_pdn_index].pIface = this;
+				IPACMDBG_H("index %d prefix: 0x%08x%08x\n", modem_ipv6_pdn_index,
+				ipv6_to_iface[modem_ipv6_pdn_index].ipv6_prefix[0],
+				ipv6_to_iface[modem_ipv6_pdn_index].ipv6_prefix[1]);
+
+				num_ipv6_modem_pdn++;
+				IPACMDBG_H("Now the number of modem ipv6 pdn is %d.\n", num_ipv6_modem_pdn);
 			}
 #endif
 		}
@@ -1234,12 +1237,16 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 					pdn_update->ip_pass_enable = ip_pass_pdn_info.enable;
 					pdn_update->ip_pass_dummy_ip = (ip_pass_pdn_info.enable) ?
 						ip_pass_pdn_info.pdn_ip_addr : 0;
-					pdn_update->ip_pass_skip_nat = (ip_pass_pdn_info.enable) ? ip_pass_pdn_info.pdn_ip_addr : 0;
-
+					pdn_update->ip_pass_skip_nat = (ip_pass_pdn_info.enable) ? ip_pass_pdn_info.skip_nat : 0;
+					IPACMDBG_H("Posting IPA_HANDLE_IP_PASS_PDN_INFO_UPDATE_EVENT\n");
+					IPACMDBG_H("IP Passthrough enabled:%d WAN IP: 0x%x, Dummy IP 0x%x, Skip NAT: %d\n",
+						pdn_update->ip_pass_enable,
+						pdn_update->ipv4_addr,
+						pdn_update->ip_pass_dummy_ip,
+						pdn_update->ip_pass_skip_nat);
 					evt_data.event = IPA_HANDLE_IP_PASS_PDN_INFO_UPDATE_EVENT;
 					evt_data.evt_data = (void *)pdn_update;
 					IPACM_EvtDispatcher::PostEvt(&evt_data);
-					IPACMDBG_H("Posting IPA_HANDLE_IP_PASS_PDN_INFO_UPDATE_EVENT\n");
 				}
 				else
 				{

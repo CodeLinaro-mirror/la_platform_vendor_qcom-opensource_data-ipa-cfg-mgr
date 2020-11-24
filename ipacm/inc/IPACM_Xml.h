@@ -211,6 +211,10 @@ if (!(a)) {                                                 \
 #define IPACM_MPDN_Enable_TAG                "IPACMMPDNEnabled"
 #define IPACM_SOCKSv5_TAG                    "IPACMSOCKSv5"
 #define IPACM_SOCKSv5_Enable_TAG             "IPACMSOCKSv5Enabled"
+#define GRE_TAG                              "GREFlag"
+#define GREEnabled_TAG                       "GREEnabled"
+#define GRE_Server_TAG                       "GREServer"
+
 /*---------------------------------------------------------------------------
       IP protocol numbers - use in dss_socket() to identify protocols.
       Also contains the extension header types for IPv6.
@@ -314,6 +318,12 @@ typedef struct
 	ipacm_alg alg_entries[IPA_MAX_ALG_ENTRIES];
 } ipacm_alg_conf_t;
 
+typedef struct
+{
+	bool gre_enable;
+	uint32_t gre_server_ipv4;
+} ipacm_gre_conf_t;
+
 typedef struct  _IPACM_conf_t
 {
 	ipacm_iface_conf_t iface_config;
@@ -334,6 +344,7 @@ typedef struct  _IPACM_conf_t
 	int ipacm_l2tp_enable;
 	bool ipacm_mpdn_enable;
 	bool ipacm_socksv5_enable;
+	ipacm_gre_conf_t gre_conf;
 } IPACM_conf_t;
 
 /* This function read IPACM XML configuration*/

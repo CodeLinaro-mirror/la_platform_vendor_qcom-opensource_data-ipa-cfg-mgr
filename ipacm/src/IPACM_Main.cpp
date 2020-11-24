@@ -73,7 +73,9 @@
 #ifndef FEATURE_IPA_ANDROID
 #include "IPACM_LanToLan.h"
 #endif
-
+#if defined(FEATURE_SOCKSv5) && defined(FEATURE_IPV6_NAT)
+#error SOCKSv5 and IPV6_NAT cannot work without run time modifications
+#endif
 #define IPA_DRIVER  "/dev/ipa"
 
 #define IPACM_FIREWALL_FILE_NAME    "mobileap_firewall.xml"

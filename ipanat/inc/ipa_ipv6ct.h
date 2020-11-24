@@ -31,6 +31,7 @@
 
 #include <stdint.h>
 #include <stdbool.h>
+#include <linux/msm_ipa.h>
 
 /**
  * enum ipa_ipv6_ct_direction_settings_type - direction filter settings
@@ -137,6 +138,22 @@ int ipa_ipv6ct_query_timestamp(uint32_t table_handle, uint32_t rule_handle, uint
  * @table_handle: [in] handle of IPv6CT table
  */
 void ipa_ipv6ct_dump_table(uint32_t tbl_hdl);
+
+/**
+ * ipa_ipv6ct_add_uc_act_entry() - add uc activation entry
+ * @u: [in] structure specifying the uC activation entry
+ *
+ * Returns:	0  On Success, negative on failure
+ */
+int ipa_ipv6ct_add_uc_act_entry(union ipa_ioc_uc_activation_entry *u);
+
+/**
+ * ipa_ipv6ct_del_uc_act_entry() - del uc activation entry
+ * @index: [in] index of the uc activation entry to be removed
+ *
+ * Returns:	0  On Success, negative on failure
+ */
+int ipa_ipv6ct_del_uc_act_entry(uint16_t index);
 
 #endif
 

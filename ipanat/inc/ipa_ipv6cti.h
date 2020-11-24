@@ -129,9 +129,9 @@ typedef struct
 */
 typedef struct
 {
-	uint32_t rsvd1 : 14;
-	uint32_t redirect : 1;
-	uint32_t enable : 1;
+	uint16_t rsvd1 : 14;
+	uint16_t redirect : 1;
+	uint16_t enable : 1;
 } ipa_ipv6ct_flags;
 
 typedef struct

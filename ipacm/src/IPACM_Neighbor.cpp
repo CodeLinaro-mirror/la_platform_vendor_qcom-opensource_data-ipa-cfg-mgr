@@ -131,8 +131,10 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 						/* check if client associated with previous network interface */
 						if(ipa_interface_index != neighbor_client[i].ipa_if_num)
 						{
-							IPACMERR("client associate to different AP \n");
-							return;
+							/* replacing the updated iface */
+							IPACMERR("client associate to different AP, update to %s \n", IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].iface_name);
+							neighbor_client[i].ipa_if_num = ipa_interface_index;
+							strlcpy(neighbor_client[i].iface_name, IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].iface_name, sizeof(neighbor_client[i].iface_name));
 						}
 
 						if (neighbor_client[i].v4_addr != 0) /* not 0.0.0.0 */
@@ -832,7 +834,10 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 								/* check if client associated with previous network interface */
 								if(ipa_interface_index != neighbor_client[i].ipa_if_num)
 								{
-									IPACMDBG_H("client associate to different AP \n");
+									/* replacing the updated iface */
+									IPACMDBG_H("client associate to different AP %s\n", data->iface_name);
+									neighbor_client[i].ipa_if_num = ipa_interface_index;
+									strlcpy(neighbor_client[i].iface_name, data->iface_name, sizeof(neighbor_client[i].iface_name));
 								}
 
 								if (neighbor_client[i].v4_addr != 0) /* not 0.0.0.0 */

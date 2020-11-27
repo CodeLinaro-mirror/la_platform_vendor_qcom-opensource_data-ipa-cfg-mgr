@@ -256,7 +256,7 @@ fail:
 	return false;
 }
 
-#if defined(FEATURE_IPACM_PER_CLIENT_STATS) && defined(IPA_HW_FNR_STATS)
+#if defined(FEATURE_IPACM_PER_CLIENT_STATS)
 bool IPACM_Filtering::AddFilteringRule_v2(struct ipa_ioc_add_flt_rule_v2 const *ruleTable)
 {
 	int retval = 0;

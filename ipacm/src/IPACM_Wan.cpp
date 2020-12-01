@@ -216,7 +216,8 @@ IPACM_Wan::IPACM_Wan(int iface_index,
 	is_ipv6_frag_firewall_flt_rule_installed = false;
 	mtu_size = DEFAULT_MTU_SIZE;
 	memset(&ip_pass_pdn_info, 0 ,sizeof(ip_pass_pdn_info));
-
+	/* Used to store route handle of previous wan ip incase of passthrough enbaled. */
+	ipps_dft_v4_rt_rule_hdl = 0;
 #ifdef FEATURE_IPACM_UL_FIREWALL
 #ifdef FEATURE_VLAN_MPDN
 	num_firewall_v6_ul_pdn = 0;
@@ -815,6 +816,31 @@ int IPACM_Wan::handle_addr_evt(ipacm_event_data_addr *data)
 						res = IPACM_FAILURE;
 						goto fail;
 					}
+					if( ipps_dft_v4_rt_rule_hdl != 0)
+					{
+						IPACMDBG_H("Delete previous stored ippt wan ip route rule. \n");
+						if (m_routing.DeleteRoutingHdl(ipps_dft_v4_rt_rule_hdl,
+									 IPA_IP_v4) == false)
+						{
+							IPACMERR("Routing old RT rule deletion failed!\n");
+							res = IPACM_FAILURE;
+							goto fail;
+						}
+						ipps_dft_v4_rt_rule_hdl = 0;
+					}
+				}
+				else
+				{
+					/* Need to store previous rt hdl of route rule for WAN Ip as we don't delete it as in IP Passthrough mode
+					   it may lead to stall as NAT entry is still pointing to default route entry .
+					   But when passthrough is disabled we need to clear previous rt rule as we go ahead and create one.*/
+
+					if( ipps_dft_v4_rt_rule_hdl == 0)
+					{
+						IPACMDBG_H("In Passthrough mode, not deleting v4 route rule, storing it to clear later on \n");
+						ipps_dft_v4_rt_rule_hdl = dft_rt_rule_hdl[0];
+					}
+					IPACMDBG_H("ipv4 wan iface v4-rt-rule hdll=0x%x\n", ipps_dft_v4_rt_rule_hdl);
 				}
 #if defined(FEATURE_SOCKSv5) && defined (IPA_SOCKV5_EVENT_MAX)
 				if(m_is_sta_mode == Q6_WAN)
@@ -7329,6 +7355,18 @@ int IPACM_Wan::handle_down_evt()
 		ipv4_to_iface[wlan_ipv4_pdn_index].ipv4_addr = 0;
 		ipv4_to_iface[wlan_ipv4_pdn_index].pIface = NULL;
 		wlan_ipv4_pdn_index = -1;
+
+		if( ipps_dft_v4_rt_rule_hdl != 0)
+		{
+			IPACMDBG_H("Delete previous stored ippt wan ip route rule. \n")
+			if (m_routing.DeleteRoutingHdl(ipps_dft_v4_rt_rule_hdl,
+				 IPA_IP_v4) == false)
+			{
+				IPACMERR("Routing old RT rule deletion failed!\n");
+				res = IPACM_FAILURE;
+				goto fail;
+			}
+		}
 	}
 
 	/* delete default v6 RT rule */
@@ -7705,6 +7743,18 @@ int IPACM_Wan::handle_down_evt_ex()
 			IPACMERR("Routing rule deletion failed!\n");
 			res = IPACM_FAILURE;
 			goto fail;
+		}
+
+		if( ipps_dft_v4_rt_rule_hdl != 0)
+		{
+			IPACMDBG_H("Delete previous stored ippt wan ip route rule. \n");
+			if (m_routing.DeleteRoutingHdl(ipps_dft_v4_rt_rule_hdl,
+				 IPA_IP_v4) == false)
+			{
+				IPACMERR("Routing old RT rule deletion failed!\n");
+				res = IPACM_FAILURE;
+				goto fail;
+			}
 		}
 	}
 	if(ip_type == IPA_IP_v6 || xlat_cfg)
@@ -8136,6 +8186,18 @@ int IPACM_Wan::handle_down_evt_ex()
 			IPACMERR("Routing rule deletion failed!\n");
 			res = IPACM_FAILURE;
 			goto fail;
+		}
+		if( ipps_dft_v4_rt_rule_hdl != 0)
+		{
+
+			IPACMDBG_H("Delete previous stored ippt wan ip route rule. \n");
+			if (m_routing.DeleteRoutingHdl(ipps_dft_v4_rt_rule_hdl,
+				 IPA_IP_v4) == false)
+			{
+				IPACMERR("Routing old RT rule deletion failed!\n");
+				res = IPACM_FAILURE;
+				goto fail;
+			}
 		}
 
 		for (i = 0; i < 2*num_dft_rt_v6; i++)

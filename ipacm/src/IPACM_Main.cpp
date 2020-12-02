@@ -55,7 +55,7 @@
 #include <fcntl.h>
 #include <sys/inotify.h>
 #include <stdlib.h>
-#include <signal.h>
+#include <execinfo.h>
 #include "linux/ipa_qmi_service_v01.h"
 
 #include "IPACM_CmdQueue.h"
@@ -925,39 +925,125 @@ void* ipa_driver_msg_notifier(void *param)
 	return NULL;
 }
 
-void IPACM_Sig_Handler(int sig)
-{
-	int cnt;
-	ipacm_cmd_q_data evt_data;
+void RegisterForSignals(bool default_handler);
 
-	printf("Received Signal: %d\n", sig);
+#define MAX_IPACM_TRACE_STACK 20
+
+static void IPACM_Signals_handler(int sig, siginfo_t *info, void *extra)
+{
+	ipacm_cmd_q_data evt_data;
+	ucontext_t *p;
+	int addr;
+	void *array[MAX_IPACM_TRACE_STACK];
+	int size, i;
+	char **messages;
+
+	IPACMERR("Received Signal: %d %s\n", sig, strsignal(sig));
 	memset(&evt_data, 0, sizeof(evt_data));
 
 	switch(sig)
 	{
-		case SIGUSR1:
-			IPACMDBG_H("Received SW_ROUTING_ENABLE request \n");
-			evt_data.event = IPA_SW_ROUTING_ENABLE;
-			IPACM_Iface::ipacmcfg->ipa_sw_rt_enable = true;
-			break;
+	case SIGUSR1:
+		IPACMDBG_H("Received SW_ROUTING_ENABLE request \n");
+		evt_data.event = IPA_SW_ROUTING_ENABLE;
+		IPACM_Iface::ipacmcfg->ipa_sw_rt_enable = true;
+		break;
+	case SIGUSR2:
+		IPACMDBG_H("Received SW_ROUTING_DISABLE request \n");
+		evt_data.event = IPA_SW_ROUTING_DISABLE;
+		IPACM_Iface::ipacmcfg->ipa_sw_rt_enable = false;
+		break;
+	case SIGFPE:
+	case SIGSEGV:
+	case SIGILL:
+	case SIGBUS:
+	case SIGABRT:
+	case SIGTERM:
+		p = (ucontext_t *)extra;
+		IPACMERR("siginfo address=%x\n", info->si_addr);
+		IPACMERR("arm_pc address = 0x%X\n", p->uc_mcontext.arm_pc);
+		IPACMERR("cpsr = 0x%X\n", p->uc_mcontext.arm_cpsr);
+		IPACMERR("fault address = 0x%X\n", p->uc_mcontext.fault_address);
+		IPACMERR("arm_sp address = 0x%X\n", p->uc_mcontext.arm_sp);
+		IPACMERR("arm_lr address = 0x%X\n", p->uc_mcontext.arm_lr);
+		IPACMERR("arm_r0  address = 0x%X\n", p->uc_mcontext.arm_r0);
+		size = backtrace(array, MAX_IPACM_TRACE_STACK);
 
-		case SIGUSR2:
-			IPACMDBG_H("Received SW_ROUTING_DISABLE request \n");
-			evt_data.event = IPA_SW_ROUTING_DISABLE;
-			IPACM_Iface::ipacmcfg->ipa_sw_rt_enable = false;
-			break;
+		messages = backtrace_symbols(array, size);
+
+		/* skip first stack frame (points here) */
+		IPACMERR("crash stack:\n")
+		for(i = 1; i < size && messages != NULL; ++i)
+		{
+			IPACMERR("[bt]: (%d) %s\n", i, messages[i])
+		}
+		IPACMERR("return to default signal handler\n");
+
+		/* make sure buffer is printed to stodut before we crash */
+		fflush(stdout);
+
+		free(messages);
+
+		/* got regular kill <PID>, kill -9 <PID> generates SIGKILL that cannot be handled by a signal handler */
+		if(sig == SIGTERM)
+		{
+			IPACMERR("IPACM gracefully requested to quit by PID %d, complying\n", info->si_pid);
+			exit(-1);
+		}
+
+		/* restore to default signal handler so core dump is generated from original fault point */
+		RegisterForSignals(true);
+		return;
+		break;
+	default:
+		IPACMERR("unknown signal %d\n", sig);
+		/* restore to default signal handler so core dump is generated from original fault point */
+		RegisterForSignals(true);
+		return;
 	}
+
 	/* finish command queue */
 	IPACMDBG_H("Posting event:%d\n", evt_data.event);
 	IPACM_EvtDispatcher::PostEvt(&evt_data);
 	return;
 }
 
-void RegisterForSignals(void)
+void RegisterForSignals(bool default_handler)
 {
+	struct sigaction action = {};
 
-	signal(SIGUSR1, IPACM_Sig_Handler);
-	signal(SIGUSR2, IPACM_Sig_Handler);
+	printf("register signal handlers\n");
+
+	action.sa_flags = SA_SIGINFO;
+	if(default_handler)
+		action.sa_handler = SIG_DFL;
+	else
+		action.sa_sigaction = IPACM_Signals_handler;
+
+	if(sigaction(SIGFPE, &action, NULL) == -1) {
+		printf("couldn't register for SIGFPE\n");
+	}
+	if(sigaction(SIGSEGV, &action, NULL) == -1) {
+		printf("couldn't register for SIGSEGV\n");
+	}
+	if(sigaction(SIGILL, &action, NULL) == -1) {
+		printf("couldn't register for SIGILL\n");
+	}
+	if(sigaction(SIGBUS, &action, NULL) == -1) {
+		printf("couldn't register for SIGBUS\n");
+	}
+	if(sigaction(SIGTERM, &action, NULL) == -1) {
+		printf("couldn't register for SIGTERM\n");
+	}
+	if(sigaction(SIGABRT, &action, NULL) == -1) {
+		printf("couldn't register for SIGABRT\n");
+	}
+	if(sigaction(SIGUSR1, &action, NULL) == -1) {
+		printf("couldn't register for SIGUSR1\n");
+	}
+	if(sigaction(SIGUSR2, &action, NULL) == -1) {
+		printf("couldn't register for SIGUSR2\n");
+	}
 }
 
 
@@ -991,7 +1077,7 @@ int main(int argc, char **argv)
 	IPACMDBG_H("using DATA_CONFIG_DIR_PATH %s\n", DATA_CONFIG_DIR_PATH);
 #endif
 
-	RegisterForSignals();
+	RegisterForSignals(false);
 
 	if (IPACM_SUCCESS == cmd_queue_thread)
 	{

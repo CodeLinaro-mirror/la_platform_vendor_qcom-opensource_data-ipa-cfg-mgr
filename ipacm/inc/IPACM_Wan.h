@@ -124,8 +124,10 @@ public:
 #endif
 	uint16_t associated_VID;
 #endif
-	static uint16_t mtu_default_wan;
-	uint16_t mtu_size;
+
+	static uint16_t mtu_default_wan_v4;
+	static uint16_t mtu_default_wan_v6;
+
 	/* IPACM interface name */
 	static char wan_up_dev_name[IF_NAME_LEN];
 	static uint32_t curr_wan_ip;
@@ -185,15 +187,14 @@ public:
 		{
 			if (isWanUP(ipa_if_num_tether))
 			{
-				return mtu_default_wan;
+				return mtu_default_wan_v4;
 			}
 		}
 		else if (iptype == IPA_IP_v6)
 		{
 			if (isWanUP_V6(ipa_if_num_tether))
 			{
-				return mtu_default_wan;
-
+				return mtu_default_wan_v6;
 			}
 		}
 		return DEFAULT_MTU_SIZE;
@@ -440,6 +441,14 @@ private:
 	/* update network stats for CNE */
 	uint32_t hdr_hdl_dummy_v6;
 	uint32_t hdr_proc_hdl_dummy_v6;
+
+	/* V4 MTU value. */
+	uint16_t mtu_v4;
+	bool mtu_v4_set;
+
+	/* V6 MTU value. */
+	uint16_t mtu_v6;
+	bool mtu_v6_set;
 
 	inline ipa_wan_client* get_client_memptr(ipa_wan_client *param, int cnt)
 	{
@@ -736,7 +745,7 @@ private:
 		const struct ipa_rule_attrib& rx_prop_attrib, ipacm_pdn_flt_rule* rules, int rules_size, int& pos);
 #endif
 
-	/* Query mtu size */
+	/* MTU helper functions */
 	int query_mtu_size();
 };
 

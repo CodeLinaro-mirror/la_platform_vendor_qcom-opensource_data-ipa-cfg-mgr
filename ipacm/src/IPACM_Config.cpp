@@ -124,6 +124,10 @@ const char *ipacm_event_name[] = {
 	__stringify(IPA_ETH_BRIDGE_DEL_VLAN_ID),               /* ipacm_event_eth_bridge*/
 #endif
 	__stringify(IPA_LAN_DELETE_SELF),                      /* ipacm_event_data_fid */
+#ifdef IPA_MTU_EVENT_MAX
+	__stringify(IPA_MTU_SET),                              /* ipa_mtu_info */
+	__stringify(IPA_MTU_UPDATE),                           /* ipacm_event_mtu_info */
+#endif
 #ifdef FEATURE_L2TP
 	__stringify(IPA_ADD_L2TP_CLIENT),                      /* ipacm_event_data_all */
 	__stringify(IPA_DEL_L2TP_CLIENT),                      /* ipacm_event_data_all */

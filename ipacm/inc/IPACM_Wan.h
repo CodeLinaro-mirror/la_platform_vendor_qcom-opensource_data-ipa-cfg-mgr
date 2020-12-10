@@ -384,6 +384,9 @@ private:
 	uint32_t firewall_hdl_v4[IPACM_MAX_FIREWALL_ENTRIES];
 	uint32_t firewall_hdl_v6[IPACM_MAX_FIREWALL_ENTRIES];
 	uint32_t dft_wan_fl_hdl[IPA_NUM_DEFAULT_WAN_FILTER_RULES];
+#ifdef FEATURE_IPV6_NAT
+	uint32_t ipv6_ula_prefix_hdl;
+#endif
 	uint32_t ipv6_dest_flt_rule_hdl[MAX_DEFAULT_v6_ROUTE_RULES];
 	int num_ipv6_dest_flt_rule;
 	uint32_t ODU_fl_hdl[IPA_NUM_DEFAULT_WAN_FILTER_RULES];
@@ -720,6 +723,18 @@ private:
 	
 	int add_catchup_all_filtering_rule_each_pdn(const IPACM_firewall_conf_t& firewall_config, ipa_ip_type iptype,
 		const struct ipa_rule_attrib& rx_prop_attrib, struct ipa_flt_rule_add& flt_rule_add, int fltr_rule_number);
+
+#ifdef FEATURE_IPV6_NAT
+#ifdef FEATURE_VLAN_MPDN
+	int add_ipv6_nat_ula_prefix_flt_rule_ex(const struct ipa_rule_attrib& rx_prop_attrib,
+		ipacm_pdn_flt_rule* rules, int fltr_rule_number);
+#else
+	int add_ipv6_nat_ula_prefix_flt_rule_ex(const struct ipa_rule_attrib& rx_prop_attrib,
+	struct ipa_flt_rule_add *rules, int fltr_rule_number);
+#endif
+
+	int add_ipv6_nat_ula_prefix_flt_rule(ipa_ioc_add_flt_rule *m_pFilteringTable);
+#endif // FEATURE_IPV6_NAT
 	int add_ipv6_frag_filtering_rule_ex(const struct ipa_rule_attrib& rx_prop_attrib,
 		struct ipa_flt_rule_add& flt_rule_add, int fltr_rule_number);
 #ifndef FEATURE_VLAN_MPDN

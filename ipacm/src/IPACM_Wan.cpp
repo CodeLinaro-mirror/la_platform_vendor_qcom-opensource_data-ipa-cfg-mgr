@@ -2642,13 +2642,13 @@ int IPACM_Wan::config_dft_firewall_rules(ipa_ip_type iptype)
 		IPACMDBG_H("No rx properties registered for iface %s\n", dev_name);
 		return IPACM_SUCCESS;
 	}
-
+#ifndef FEATURE_IPV6_NAT
 	if(iptype == IPA_IP_v6 && IPACM_Iface::ipacmcfg->ipv6_nat_enable)
 	{
 		IPACMDBG_H("IPv6 NAT is enable. Don't configure firewall rule\n");
 		return IPACM_SUCCESS;
 	}
-
+#endif
 	/* default firewall is disable and the rule action is drop */
 	IPACM_firewall_conf_t firewall_config;
 	IPACMDBG_H("Firewall XML file is %s\n", MOBILE_FIREWALL_FILE);
@@ -2672,8 +2672,12 @@ int IPACM_Wan::config_dft_firewall_rules(ipa_ip_type iptype)
 				rule_v6_ul++;
 			}
 			else if (firewall_config.extd_firewall_entries[i].ip_vsn == 6 &&
-				firewall_config.extd_firewall_entries[i].firewall_direction
+				(firewall_config.extd_firewall_entries[i].firewall_direction
 				!= IPACM_MSGR_UL_FIREWALL)
+#ifdef FEATURE_IPV6_NAT
+				&& !IPACM_Iface::ipacmcfg->ipv6_nat_enable
+#endif
+				)
 			{
 				rule_v6++;
 			}
@@ -3108,12 +3112,22 @@ int IPACM_Wan::config_dft_firewall_rules(ipa_ip_type iptype)
 			flt_rule_entry.flt_rule_hdl = -1;
 			flt_rule_entry.status = -1;
 			flt_rule_entry.rule.rt_tbl_hdl = IPACM_Iface::ipacmcfg->rt_tbl_wan_v6.hdl;
-
-			/* firewall disable, all traffic are allowed */
-			if (firewall_config.firewall_enable == true)
+			flt_rule_entry.at_rear = true;
+#ifdef FEATURE_IPV6_NAT
+			if(IPACM_Iface::ipacmcfg->ipv6_nat_enable)
 			{
-				flt_rule_entry.at_rear = true;
+				/* add 2nd pass rule ULA address go to RT for STA mode */
+				if(IPACM_Iface::ipacmcfg->ipv6_nat_enable)
+					add_ipv6_nat_ula_prefix_flt_rule(m_pFilteringTable);
 
+				/* 1st pass rule - go to DST NAT */
+				flt_rule_entry.rule.action = IPA_PASS_TO_DST_NAT;
+			}
+			/* firewall disable, all traffic are allowed */
+			else
+#endif
+				if (firewall_config.firewall_enable == true)
+			{
 				if (firewall_config.rule_action_accept == true)
 				{
 					flt_rule_entry.rule.action = IPA_PASS_TO_EXCEPTION;
@@ -3133,7 +3147,6 @@ int IPACM_Wan::config_dft_firewall_rules(ipa_ip_type iptype)
 			}
 			else
 			{
-				flt_rule_entry.at_rear = true;
 				if (IPACM_Iface::ipacmcfg->IsIpv6CTEnabled() &&
 					IPACM_Iface::ipacmcfg->iface_table[ipa_if_num].if_mode == ROUTER)
 				{
@@ -3536,7 +3549,7 @@ int IPACM_Wan::config_dft_firewall_rules_ex(struct ipa_flt_rule_add *rules, int 
 	uint32_t offloaded_pdns_count_v6 = 0;
 	std::pair<IPACM_firewall_conf_t*, ipacm_ipv6_wan_iface*> offloaded_pdns_v6[IPA_MAX_NUM_HW_PDNS];
 	for (uint32_t i = 0;
-		i < IPA_MAX_NUM_SW_PDNS && offloaded_pdns_count_v6 < IPA_MAX_NUM_HW_PDNS;
+		(i < IPA_MAX_NUM_SW_PDNS) && (offloaded_pdns_count_v6 < IPA_MAX_NUM_HW_PDNS);
 		++i)
 	{
 		if (ipv6_to_iface[i].pIface &&
@@ -3663,31 +3676,51 @@ int IPACM_Wan::config_dft_firewall_rules_ex(struct ipa_flt_rule_add *rules, int 
 
 #ifdef FEATURE_VLAN_MPDN
 		/* firewall rules for all PDNs which are up */
-		for (uint32_t i = 0; i < offloaded_pdns_count_v6; ++i)
+		for(uint32_t i = 0; i < offloaded_pdns_count_v6; ++i)
 		{
 			IPACM_Wan* curr_interface = offloaded_pdns_v6[i].second->pIface;
 			IPACMDBG_H("adding firewall rules for iface %s ip-type %d\n", curr_interface->dev_name, iptype);
 			res = add_firewall_rules_ex(*offloaded_pdns_v6[i].first, iptype, curr_interface->ext_prop->ext[0].mux_id,
 				curr_interface->rx_prop->rx[0].attrib, rules, IPA_MAX_FLT_RULE - offloaded_pdns_count_v6, pos);
-			if (res != IPACM_SUCCESS)
+			if(res != IPACM_SUCCESS)
 			{
 				return res;
 			}
 		}
 #else
 		res = add_firewall_rules_ex(firewall_config, iptype, rx_prop->rx[0].attrib, rules, IPA_MAX_FLT_RULE - 1, pos);
-		if (res != IPACM_SUCCESS)
+		if(res != IPACM_SUCCESS)
 		{
 			return res;
 		}
 #endif
+#ifdef FEATURE_IPV6_NAT
+		if(IPACM_Iface::ipacmcfg->ipv6_nat_enable && wan_up_v6)
+		{
+			/*
+			 * construct 2nd pass DL v6nat flt rule to send all ULA
+			 * destination address (after NAT) packets to routing
+			 */
+			res = add_ipv6_nat_ula_prefix_flt_rule_ex(rx_prop->rx[1].attrib, rules, pos);
+			if(res != IPACM_SUCCESS)
+			{
+				return res;
+			}
 
+#ifdef FEATURE_VLAN_MPDN
+			/* this rule shall apply to all PDNs, but we must send some MUX ID in the QMI */
+			rules[pos].mux_id = ext_prop->ext[0].mux_id;
+#endif
+			++pos;
+		}
+#endif
 #ifdef FEATURE_VLAN_MPDN
 		/* default rule for all PDNs which are up */
 		for (uint32_t i = 0; i < offloaded_pdns_count_v6; ++i)
 		{
 			IPACM_Wan* curr_interface = offloaded_pdns_v6[i].second->pIface;
 			IPACMDBG_H("adding default rule for iface %s ip-type %d\n", curr_interface->dev_name, iptype);
+			/* for ipv6 nat case this shall be the 2nd pass catch all rule to send to v6 LAN RT table*/
 			res = add_catchup_all_filtering_rule_each_pdn(*offloaded_pdns_v6[i].first, iptype,
 				curr_interface->rx_prop->rx[0].attrib, rules[pos].flt_rule, pos);
 			if (res != IPACM_SUCCESS)
@@ -4334,7 +4367,7 @@ int IPACM_Wan::config_wan_firewall_rule(ipa_ip_type iptype)
 	list<l2tp_client_info>::iterator it;
 	int res = IPACM_SUCCESS;
 
-#ifndef FEATURE_SOCKSv5
+#if !defined(FEATURE_SOCKSv5) && !defined(FEATURE_IPV6_NAT)
 	if(iptype == IPA_IP_v6 && IPACM_Iface::ipacmcfg->ipv6_nat_enable)
 	{
 		IPACMDBG_H("IPv6 NAT is enable. Don't configure firewall rule\n");
@@ -4572,6 +4605,8 @@ int IPACM_Wan::add_dft_filtering_rule(struct ipa_flt_rule_add *rules, int rule_o
 
 		IPACMDBG_H("rx property attrib mask:0x%x\n", rx_prop->rx[0].attrib.attrib_mask);
 
+		flt_rule_entry.rule.rt_tbl_idx = rt_tbl_idx.idx;
+
 		if (ipacmcfg->IsIpv6CTEnabled())
 		{
 			/* Configuring Fragment Filtering Rule */
@@ -4610,7 +4645,6 @@ int IPACM_Wan::add_dft_filtering_rule(struct ipa_flt_rule_add *rules, int rule_o
 #ifdef FEATURE_IPA_V3
 		flt_rule_entry.rule.hashable = true;
 #endif
-		flt_rule_entry.rule.rt_tbl_idx = rt_tbl_idx.idx;
 
 		/* Configuring Multicast Filtering Rule */
 		memcpy(&flt_rule_entry.rule.attrib,
@@ -4884,12 +4918,13 @@ int IPACM_Wan::del_dft_firewall_rules(ipa_ip_type iptype)
 	/* free v6 firewall filter rule */
 	if ((iptype == IPA_IP_v6) && (active_v6 == true))
 	{
+#ifndef FEATURE_IPV6_NAT
 		if(IPACM_Iface::ipacmcfg->ipv6_nat_enable)
 		{
 			IPACMDBG_H("IPv6 NAT is enable. No change needed for firewall rules\n");
 			return IPACM_SUCCESS;
 		}
-
+#endif
 		if (num_firewall_v6 > IPACM_MAX_FIREWALL_ENTRIES)
 		{
 			IPACMERR("the number of v6 firewall entries overflow, aborting...\n");
@@ -4909,7 +4944,17 @@ int IPACM_Wan::del_dft_firewall_rules(ipa_ip_type iptype)
 		{
 			IPACMDBG_H("No ipv6 firewall rules, no need deleted\n");
 		}
-
+#ifdef FEATURE_IPV6_NAT
+		if(IPACM_Iface::ipacmcfg->ipv6_nat_enable)
+		{
+			if(m_filtering.DeleteFilteringHdls(&ipv6_ula_prefix_hdl, IPA_IP_v6, 1) == false)
+			{
+				IPACMERR("Error Deleting Filtering rules, aborting...\n");
+				return IPACM_FAILURE;
+			}
+			IPACM_Iface::ipacmcfg->decreaseFltRuleCount(rx_prop->rx[0].src_pipe, IPA_IP_v6, 1);
+		}
+#endif
 		if (m_filtering.DeleteFilteringHdls(&dft_wan_fl_hdl[1],
 																				IPA_IP_v6, 1) == false)
 		{
@@ -5225,13 +5270,14 @@ int IPACM_Wan::handle_route_del_evt_ex(ipa_ip_type iptype)
 			{
 				wandown_data->is_sta = false;
 			}
-			memcpy(wandown_data->ipv6_prefix, ipv6_prefix, sizeof(wandown_data->ipv6_prefix));
+
+			memcpy(wandown_data->ipv6_addr, m_ipv6_addr, sizeof(wandown_data->ipv6_addr));
 #ifdef FEATURE_VLAN_MPDN
 			IPACM_Iface::ipacmcfg->del_vlan_ipv6_prefix(ipv6_prefix, -1);
 #endif
 			evt_data.event = IPA_HANDLE_WAN_DOWN_V6;
 			evt_data.evt_data = (void *)wandown_data;
-			IPACMDBG_H("posting IPA_HANDLE_WAN_DOWN_V6 for IPv6 with prefix 0x%08x%08x\n", ipv6_prefix[0], ipv6_prefix[1]);
+			IPACMDBG_H("posting IPA_HANDLE_WAN_DOWN_V6 for IPv6 with prefix 0x%08x%08x\n", wandown_data->ipv6_addr[0], wandown_data->ipv6_addr[1]);
 			IPACM_EvtDispatcher::PostEvt(&evt_data);
 
 			IPACMDBG_H("setup wan_up_v6/active_v6= false \n");
@@ -6041,7 +6087,7 @@ int IPACM_Wan::handle_down_evt_ex()
 			/* if there are still secondary PDNs up we need to reconfigure firewall */
 			if(isVlanWanUP_V6())
 			{
-				config_wan_firewall_rule(IPA_IP_v4);
+				config_wan_firewall_rule(IPA_IP_v6);
 			}
 #endif
 			install_wan_filtering_rule(false);
@@ -6674,7 +6720,7 @@ int IPACM_Wan::install_wan_filtering_rule(bool is_sw_routing, bool is_socksv5_en
 		}
 		pthread_mutex_unlock(&IPACM_Iface::ipacmcfg->socksv5_lock);
 	} //end of socksv5_enable handling
-#endif
+#endif //#ifdef FEATURE_SOCKSv5
 	else
 	{
 		if(embms_is_on == false)
@@ -8175,7 +8221,165 @@ void IPACM_Wan::HandleSTAClientDelEvt(const ipa_wan_client* client)
 		CtList->HandleSTAClientDelEvt_v6(Ipv6IpAddress(client->v6_addr[i], false));
 	}
 }
+#ifdef FEATURE_IPV6_NAT
+/* Construct 2nd-pass v6NAT flt rule to send ULA destined packets to RT for STA mode */
+int IPACM_Wan::add_ipv6_nat_ula_prefix_flt_rule(ipa_ioc_add_flt_rule *m_pFilteringTable)
+{
+	struct ipa_flt_rule_add flt_rule_entry;
 
+	memset(&flt_rule_entry, 0, sizeof(struct ipa_flt_rule_add));
+
+	const char* rt_tbl_name;
+	ipa_ioc_get_rt_tbl_indx rt_tbl_idx;
+	rt_tbl_name = ipacmcfg->rt_tbl_wan_v6.name;
+	memset(&rt_tbl_idx, 0, sizeof(rt_tbl_idx));
+	rt_tbl_idx.ip = IPA_IP_v6;
+	strlcpy(rt_tbl_idx.name, rt_tbl_name, IPA_RESOURCE_NAME_MAX);
+	rt_tbl_idx.name[IPA_RESOURCE_NAME_MAX - 1] = '\0';
+	if(ioctl(m_fd_ipa, IPA_IOC_QUERY_RT_TBL_INDEX, &rt_tbl_idx))
+	{
+		IPACMERR("Failed to get routing table index from name\n");
+		return IPACM_FAILURE;
+	}
+	flt_rule_entry.rule.rt_tbl_idx = rt_tbl_idx.idx;
+	IPACMDBG_H("Routing table %s has index %d\n", rt_tbl_idx.name, rt_tbl_idx.idx);
+
+	flt_rule_entry.rule.action = IPA_PASS_TO_ROUTING;
+
+	flt_rule_entry.at_rear = true;
+	flt_rule_entry.flt_rule_hdl = -1;
+	flt_rule_entry.status = -1;
+
+	flt_rule_entry.rule.retain_hdr = 1;
+	flt_rule_entry.rule.to_uc = 0;
+	flt_rule_entry.rule.eq_attrib_type = 1;
+#ifdef FEATURE_IPA_V3
+	flt_rule_entry.rule.hashable = true;
+#endif
+	memcpy(&flt_rule_entry.rule.attrib,
+		&rx_prop->rx[0].attrib,
+		sizeof(struct ipa_rule_attrib));
+	flt_rule_entry.rule.attrib.attrib_mask |= IPA_FLT_DST_ADDR;
+
+	flt_rule_entry.rule.attrib.u.v6.dst_addr_mask[0] = 0xFF000000;
+	flt_rule_entry.rule.attrib.u.v6.dst_addr_mask[1] = 0x00000000;
+	flt_rule_entry.rule.attrib.u.v6.dst_addr_mask[2] = 0x00000000;
+	flt_rule_entry.rule.attrib.u.v6.dst_addr_mask[3] = 0x00000000;
+	flt_rule_entry.rule.attrib.u.v6.dst_addr[0] = 0xFD000000;
+	flt_rule_entry.rule.attrib.u.v6.dst_addr[1] = 0x00000000;
+	flt_rule_entry.rule.attrib.u.v6.dst_addr[2] = 0x00000000;
+	flt_rule_entry.rule.attrib.u.v6.dst_addr[3] = 0X00000000;
+
+	change_to_network_order(IPA_IP_v6, &flt_rule_entry.rule.attrib);
+
+	memcpy(&(m_pFilteringTable->rules[0]), &flt_rule_entry, sizeof(struct ipa_flt_rule_add));
+
+	if(false == m_filtering.AddFilteringRule(m_pFilteringTable))
+	{
+		IPACMERR("Error Adding Filtering rules, aborting...\n");
+		return IPACM_FAILURE;
+	}
+	else
+	{
+		IPACM_Iface::ipacmcfg->increaseFltRuleCount(rx_prop->rx[0].src_pipe, IPA_IP_v6, 1);
+		IPACMDBG_H("flt rule hdl0=0x%x, status=0x%x\n", m_pFilteringTable->rules[0].flt_rule_hdl, m_pFilteringTable->rules[0].status);
+	}
+	/* copy filter hdl */
+	ipv6_ula_prefix_hdl = m_pFilteringTable->rules[0].flt_rule_hdl;
+	return IPACM_SUCCESS;
+}
+
+/* Construct 2nd-pass v6NAT flt rule to send all ula destination address packets to routing */
+#ifdef FEATURE_VLAN_MPDN
+int IPACM_Wan::add_ipv6_nat_ula_prefix_flt_rule_ex(
+	const struct ipa_rule_attrib& rx_prop_attrib,
+	ipacm_pdn_flt_rule* rules, int fltr_rule_number)
+#else
+int IPACM_Wan::add_ipv6_nat_ula_prefix_flt_rule_ex(
+	const struct ipa_rule_attrib& rx_prop_attrib,
+	struct ipa_flt_rule_add *rules, int fltr_rule_number)
+#endif
+
+{
+	IPACMDBG_H("\n");
+	/* Check for "out of boundary" failure before adding a rule */
+	if(fltr_rule_number >= IPA_MAX_FLT_RULE)
+	{
+		IPACMERR("Filtering table is full. Number of rules %d allowed %d\n", fltr_rule_number + 1, IPA_MAX_FLT_RULE);
+		return IPACM_FAILURE;
+	}
+
+	struct ipa_flt_rule_add flt_rule_entry;
+	memset(&flt_rule_entry, 0, sizeof(struct ipa_flt_rule_add));
+
+	const char* rt_tbl_name;
+	ipa_ioc_get_rt_tbl_indx rt_tbl_idx;
+	rt_tbl_name = ipacmcfg->rt_tbl_wan_v6.name;
+	memset(&rt_tbl_idx, 0, sizeof(rt_tbl_idx));
+	rt_tbl_idx.ip = IPA_IP_v6;
+	strlcpy(rt_tbl_idx.name, rt_tbl_name, IPA_RESOURCE_NAME_MAX);
+	rt_tbl_idx.name[IPA_RESOURCE_NAME_MAX - 1] = '\0';
+	if(ioctl(m_fd_ipa, IPA_IOC_QUERY_RT_TBL_INDEX, &rt_tbl_idx))
+	{
+		IPACMERR("Failed to get routing table index from name\n");
+		return IPACM_FAILURE;
+	}
+	flt_rule_entry.rule.rt_tbl_idx = rt_tbl_idx.idx;
+	IPACMDBG_H("Routing table %s has index %d\n", rt_tbl_idx.name, rt_tbl_idx.idx);
+
+	flt_rule_entry.rule.action = IPA_PASS_TO_ROUTING;
+
+	flt_rule_entry.at_rear = true;
+	flt_rule_entry.flt_rule_hdl = -1;
+	flt_rule_entry.status = -1;
+
+	flt_rule_entry.rule.retain_hdr = 1;
+	flt_rule_entry.rule.to_uc = 0;
+	flt_rule_entry.rule.eq_attrib_type = 1;
+#ifdef FEATURE_IPA_V3
+	flt_rule_entry.rule.hashable = true;
+#endif
+	memcpy(&flt_rule_entry.rule.attrib, &rx_prop_attrib, sizeof(struct ipa_rule_attrib));
+	/* catch all rule applies to all NATed PDNs */
+	flt_rule_entry.rule.attrib.attrib_mask = IPA_FLT_DST_ADDR;
+
+	int *num_flt_rule;
+
+	num_flt_rule = &num_v6_flt_rule;
+
+	flt_rule_entry.rule.attrib.u.v6.dst_addr_mask[0] = 0xFF000000;
+	flt_rule_entry.rule.attrib.u.v6.dst_addr_mask[1] = 0x00000000;
+	flt_rule_entry.rule.attrib.u.v6.dst_addr_mask[2] = 0x00000000;
+	flt_rule_entry.rule.attrib.u.v6.dst_addr_mask[3] = 0x00000000;
+	flt_rule_entry.rule.attrib.u.v6.dst_addr[0] = 0xFD000000;
+	flt_rule_entry.rule.attrib.u.v6.dst_addr[1] = 0x00000000;
+	flt_rule_entry.rule.attrib.u.v6.dst_addr[2] = 0x00000000;
+	flt_rule_entry.rule.attrib.u.v6.dst_addr[3] = 0X00000000;
+	change_to_network_order(IPA_IP_v6, &flt_rule_entry.rule.attrib);
+
+	ipa_ioc_generate_flt_eq flt_eq;
+	memset(&flt_eq, 0, sizeof(flt_eq));
+	memcpy(&flt_eq.attrib, &flt_rule_entry.rule.attrib, sizeof(flt_eq.attrib));
+	flt_eq.ip = IPA_IP_v6;
+	if(ioctl(m_fd_ipa, IPA_IOC_GENERATE_FLT_EQ, &flt_eq))
+	{
+		IPACMERR("Failed to get eq_attrib\n");
+		return IPACM_FAILURE;
+	}
+
+	memcpy(&flt_rule_entry.rule.eq_attrib, &flt_eq.eq_attrib, sizeof(flt_rule_entry.rule.eq_attrib));
+#ifdef FEATURE_VLAN_MPDN
+	memcpy(&(rules[fltr_rule_number].flt_rule), &flt_rule_entry, sizeof(struct ipa_flt_rule_add));
+	IPACMDBG_H("Filter rule attrib mask: 0x%x\n", rules[fltr_rule_number].flt_rule.rule.attrib.attrib_mask);
+#else
+	memcpy(&(rules[fltr_rule_number]), &flt_rule_entry, sizeof(struct ipa_flt_rule_add));
+	IPACMDBG_H("Filter rule attrib mask: 0x%x\n", rules[fltr_rule_number].rule.attrib.attrib_mask);
+#endif
+
+	++(*num_flt_rule);
+	return IPACM_SUCCESS;
+}
+#endif // FEATURE_IPV6_NAT
 
 int IPACM_Wan::add_catchup_all_filtering_rule_each_pdn(const IPACM_firewall_conf_t& firewall_config, ipa_ip_type iptype,
 	const struct ipa_rule_attrib& rx_prop_attrib, struct ipa_flt_rule_add& flt_rule_add, int fltr_rule_number)
@@ -8258,9 +8462,16 @@ int IPACM_Wan::add_catchup_all_filtering_rule_each_pdn(const IPACM_firewall_conf
 		flt_rule_entry.rule.attrib.u.v6.dst_addr[1] = 0x00000000;
 		flt_rule_entry.rule.attrib.u.v6.dst_addr[2] = 0x00000000;
 		flt_rule_entry.rule.attrib.u.v6.dst_addr[3] = 0X00000000;
-
-		/* firewall disable, all traffic are allowed */
-		if (firewall_config.firewall_enable)
+#ifdef FEATURE_IPV6_NAT
+		if(IPACM_Iface::ipacmcfg->ipv6_nat_enable)
+		{
+			/* 1st pass rule, send all packets to destination nat */
+			flt_rule_entry.rule.action = IPA_PASS_TO_DST_NAT;
+			rt_tbl_name = ipacmcfg->rt_tbl_wan_v6.name;
+		}
+		else
+#endif
+			if (firewall_config.firewall_enable)
 		{
 			if (firewall_config.rule_action_accept)
 			{
@@ -8274,6 +8485,7 @@ int IPACM_Wan::add_catchup_all_filtering_rule_each_pdn(const IPACM_firewall_conf
 				rt_tbl_name = ipacmcfg->rt_tbl_wan_v6.name;
 			}
 		}
+		/* firewall disable, all traffic are allowed */
 		else
 		{
 #ifndef FEATURE_SOCKSv5

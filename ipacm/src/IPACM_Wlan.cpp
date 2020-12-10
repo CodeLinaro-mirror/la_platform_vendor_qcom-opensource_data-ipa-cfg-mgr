@@ -1464,6 +1464,13 @@ int IPACM_Wlan::handle_wlan_client_ipaddr(ipacm_event_data_all *data)
 				(data->ipv6_addr[2] != 0) || (data->ipv6_addr[3] || 0)) /* check if all 0 not valid ipv6 address */
 		{
 			IPACMDBG_H("ipv6 address: 0x%x:%x:%x:%x\n", data->ipv6_addr[0], data->ipv6_addr[1], data->ipv6_addr[2], data->ipv6_addr[3]);
+#ifdef FEATURE_IPV6_NAT
+			if(IPACM_Iface::ipacmcfg->ipv6_nat_enable && is_unique_local_ipv6_addr(data->ipv6_addr))
+			{
+				IPACMDBG_H("ipv6 nat enabled - add ULA ip address\n")
+			}
+			else
+#endif
 			if( (data->ipv6_addr[0] & ipv6_link_local_prefix_mask) != (ipv6_link_local_prefix & ipv6_link_local_prefix_mask) &&
 				memcmp(ipv6_prefix, data->ipv6_addr, sizeof(ipv6_prefix)) != 0)
 			{
@@ -3981,8 +3988,14 @@ int IPACM_Wlan::install_uplink_filter_rule_per_client
 	}
 	else if(iptype == IPA_IP_v6)
 	{
-		flt_rule_entry.rule.action = IPACM_Iface::ipacmcfg->IsIpv6CTEnabled() ?
-			IPA_PASS_TO_SRC_NAT : IPA_PASS_TO_ROUTING;
+#ifdef FEATURE_IPV6_NAT
+		/* for v6 nat, second pass should go directly to RT block */
+		if(IPACM_Iface::ipacmcfg->ipv6_nat_enable)
+			flt_rule_entry.rule.action = IPA_PASS_TO_ROUTING;
+		else
+#endif
+			flt_rule_entry.rule.action = IPACM_Iface::ipacmcfg->IsIpv6CTEnabled() ?
+				IPA_PASS_TO_SRC_NAT : IPA_PASS_TO_ROUTING;
 	}
 	else
 	{
@@ -4238,8 +4251,14 @@ int IPACM_Wlan::install_uplink_filter_rule_per_client_v2
 	}
 	else if(iptype == IPA_IP_v6)
 	{
-		flt_rule_entry.rule.action = IPACM_Iface::ipacmcfg->IsIpv6CTEnabled() ?
-			IPA_PASS_TO_SRC_NAT : IPA_PASS_TO_ROUTING;
+#ifdef FEATURE_IPV6_NAT
+		/* for v6 nat, second pass should go directly to RT block */
+		if(IPACM_Iface::ipacmcfg->ipv6_nat_enable)
+			flt_rule_entry.rule.action = IPA_PASS_TO_ROUTING;
+		else
+#endif
+			flt_rule_entry.rule.action = IPACM_Iface::ipacmcfg->IsIpv6CTEnabled() ?
+				IPA_PASS_TO_SRC_NAT : IPA_PASS_TO_ROUTING;
 	}
 	else
 	{

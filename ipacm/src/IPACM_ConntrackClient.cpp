@@ -217,7 +217,7 @@ int IPACM_ConntrackClient::IPA_Conntrack_Filters_Ignore_Bridge_Addrs
 #ifdef FEATURE_VLAN_MPDN
 	uint8_t testmac[IPA_MAC_ADDR_SIZE];
 
-	memset(testmac, 0, IPA_MAC_ADDR_SIZE * sizeof(uint8_t));
+	memset(testmac, 0, IPA_MAC_ADDR_SIZE);
 	for(int i = 0; i < IPA_MAX_NUM_BRIDGES; i++)
 	{
 		/* mac address !=0 i.e. bridge exists*/

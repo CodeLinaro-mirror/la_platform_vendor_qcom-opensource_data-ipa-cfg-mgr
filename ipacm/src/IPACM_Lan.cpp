@@ -2930,12 +2930,13 @@ int IPACM_Lan::handle_wan_up(ipa_ip_type ip_type)
 		if (IPACM_Wan::isWanUP(ipa_if_num))
 			add_mtu_rule_v4_default_pdn();
 #endif
-
+#ifndef FEATURE_IPV6_NAT
 		if(IPACM_Iface::ipacmcfg->ipv6_nat_enable)
 		{
 			IPACMDBG_H("IPV6 NAT is enabled. Don't install v6 rules\n");
 			return IPACM_SUCCESS;
 		}
+#endif
 		/* add default v6 filter rule */
 		m_pFilteringTable = (struct ipa_ioc_add_flt_rule *)
 			 calloc(1, sizeof(struct ipa_ioc_add_flt_rule) +
@@ -2965,10 +2966,20 @@ int IPACM_Lan::handle_wan_up(ipa_ip_type ip_type)
 		flt_rule_entry.at_rear = true;
 		flt_rule_entry.flt_rule_hdl = -1;
 		flt_rule_entry.status = -1;
-		if (IPACM_Iface::ipacmcfg->IsIpv6CTEnabled() && !IPACM_Wan::isWan_Bridge_Mode())
+#ifdef FEATURE_IPV6_NAT
+		if(IPACM_Iface::ipacmcfg->ipv6_nat_enable)
+		{
+			/* construct 1st pass v6NAT flt-rule */
+			add_ipv6_nat_ula_prefix_flt_rule();
+
+			/* 2nd pass rule - go to RT block */
+			flt_rule_entry.rule.action = IPA_PASS_TO_ROUTING;
+		}
+		else
+#endif
+			if (IPACM_Iface::ipacmcfg->IsIpv6CTEnabled() && !IPACM_Wan::isWan_Bridge_Mode())
 		{
 #ifndef FEATURE_SOCKSv5
-			/* for v6nat, need to revisit all v6ct related logic*/
 			flt_rule_entry.rule.action = IPA_PASS_TO_SRC_NAT;
 #else
 			flt_rule_entry.rule.action = IPA_PASS_TO_ROUTING;
@@ -3098,8 +3109,12 @@ int IPACM_Lan::handle_wan_up_ex(ipacm_ext_prop *ext_prop, ipa_ip_type iptype, ui
 #endif
 			if (IPACM_Iface::ipacmcfg->ipv6_nat_enable)
 			{
+#ifdef FEATURE_IPV6_NAT
+				add_ipv6_nat_ula_prefix_flt_rule();
+#else
 				IPACMDBG_H("IPV6 NAT is enabled. Don't install v6 rules\n");
 				return IPACM_SUCCESS;
+#endif
 			}
 #ifdef FEATURE_VLAN_MPDN
 			notif_only = false;
@@ -3866,7 +3881,13 @@ int IPACM_Lan::handle_eth_client_ipaddr(ipacm_event_data_all *data)
 
 			if(IPACM_Iface::ipacmcfg->ipacm_mpdn_enable)
 			{
-				if( (data->ipv6_addr[0] & ipv6_link_local_prefix_mask) != (ipv6_link_local_prefix & ipv6_link_local_prefix_mask) &&
+#ifdef FEATURE_IPV6_NAT
+				if(IPACM_Iface::ipacmcfg->ipv6_nat_enable && is_unique_local_ipv6_addr(data->ipv6_addr))
+				{
+					IPACMDBG_H("ipv6 nat enabled - add ULA ip address\n")
+				} else
+#endif
+				if( ((data->ipv6_addr[0] & ipv6_link_local_prefix_mask) != (ipv6_link_local_prefix & ipv6_link_local_prefix_mask)) &&
 #ifdef FEATURE_VLAN_MPDN
 					/* returns true if a VLAN PDN or default PDN should be offloaded */
 					IPACM_Iface::ipacmcfg->is_offload_ipv6_prefix(data->ipv6_addr) != true)
@@ -6176,9 +6197,14 @@ int IPACM_Lan::handle_uplink_filter_rule(ipacm_ext_prop *prop, ipa_ip_type iptyp
 	else if(iptype == IPA_IP_v6)
 	{
 #ifndef FEATURE_SOCKSv5
-		/* for v6nat, need to revisit all v6ct related logic*/
-		flt_rule_entry.rule.action = IPACM_Iface::ipacmcfg->IsIpv6CTEnabled()?
-			IPA_PASS_TO_SRC_NAT : IPA_PASS_TO_ROUTING;
+#ifdef FEATURE_IPV6_NAT
+		/* for v6 nat, second pass should go directly to RT block */
+		if(IPACM_Iface::ipacmcfg->ipv6_nat_enable)
+			flt_rule_entry.rule.action = IPA_PASS_TO_ROUTING;
+		else
+#endif
+			flt_rule_entry.rule.action = IPACM_Iface::ipacmcfg->IsIpv6CTEnabled()?
+				IPA_PASS_TO_SRC_NAT : IPA_PASS_TO_ROUTING;
 #else
 		flt_rule_entry.rule.action = IPA_PASS_TO_ROUTING;
 #endif
@@ -7850,11 +7876,17 @@ int IPACM_Lan::install_uplink_filter_rule_per_client_v2
 	}
 	else if(iptype == IPA_IP_v6)
 	{
-#ifndef FEATURE_SOCKSv5
-		flt_rule_entry.rule.action = IPACM_Iface::ipacmcfg->IsIpv6CTEnabled()?
-				IPA_PASS_TO_SRC_NAT : IPA_PASS_TO_ROUTING;
-#else
+#ifdef FEATURE_SOCKSv5
 		flt_rule_entry.rule.action = IPA_PASS_TO_ROUTING;
+#else
+#ifdef FEATURE_IPV6_NAT
+		/* for v6 nat, second pass should go directly to RT block */
+		if(IPACM_Iface::ipacmcfg->ipv6_nat_enable)
+			flt_rule_entry.rule.action = IPA_PASS_TO_ROUTING;
+		else
+#endif
+			flt_rule_entry.rule.action = IPACM_Iface::ipacmcfg->IsIpv6CTEnabled()?
+					IPA_PASS_TO_SRC_NAT : IPA_PASS_TO_ROUTING;
 #endif
 	}
 	else
@@ -8103,11 +8135,17 @@ int IPACM_Lan::install_uplink_filter_rule_per_client
 	}
 	else if(iptype == IPA_IP_v6)
 	{
-#ifndef FEATURE_SOCKSv5
-		flt_rule_entry.rule.action = IPACM_Iface::ipacmcfg->IsIpv6CTEnabled()?
-				IPA_PASS_TO_SRC_NAT : IPA_PASS_TO_ROUTING;
-#else
+#ifdef FEATURE_SOCKSv5
 		flt_rule_entry.rule.action = IPA_PASS_TO_ROUTING;
+#else
+#ifdef FEATURE_IPV6_NAT
+		/* for v6 nat, second pass should go directly to RT block */
+		if(IPACM_Iface::ipacmcfg->ipv6_nat_enable)
+			flt_rule_entry.rule.action = IPA_PASS_TO_ROUTING;
+		else
+#endif
+			flt_rule_entry.rule.action = IPACM_Iface::ipacmcfg->IsIpv6CTEnabled()?
+					IPA_PASS_TO_SRC_NAT : IPA_PASS_TO_ROUTING;
 #endif
 	}
 	else
@@ -8538,7 +8576,10 @@ int IPACM_Lan::handle_wan_down_v6(bool is_sta_mode, bool is_support_mpdn)
 	delete_ipv6_prefix_flt_rule();
 #endif
 	memset(ipv6_prefix, 0, sizeof(ipv6_prefix));
-
+#ifdef FEATURE_IPV6_NAT
+	if(IPACM_Iface::ipacmcfg->ipv6_nat_enable)
+		delete_ipv6_nat_ula_prefix_flt_rule();
+#endif
 	if(is_sta_mode == false)
 	{
 		if(del_ul_flt_rules(IPA_IP_v6))
@@ -9357,7 +9398,106 @@ fail:
 	return res;
 }
 #endif
+#ifdef FEATURE_IPV6_NAT
+/* construct 1st pass v6NAT flt-rule to trigger v6ct */
+int IPACM_Lan::add_ipv6_nat_ula_prefix_flt_rule()
+{
+	int len;
+	struct ipa_ioc_add_flt_rule* flt_rule;
+	struct ipa_flt_rule_add flt_rule_entry;
+	int rule_cnt = 1;
+	ipacm_ext_prop* ext_prop = NULL;
+	int res = IPACM_SUCCESS;
 
+	if(rx_prop == NULL || tx_prop == NULL)
+	{
+		IPACMERR("no valid props\n");
+		return IPACM_FAILURE;
+	}
+	IPACMDBG_H("adding ULA prefix rule to send packets to IPv6 NAT\n");
+
+	len = sizeof(struct ipa_ioc_add_flt_rule) + rule_cnt * sizeof(struct ipa_flt_rule_add);
+
+	flt_rule = (struct ipa_ioc_add_flt_rule *)calloc(rule_cnt, len);
+	if(!flt_rule)
+	{
+		IPACMERR("Error Locate ipa_flt_rule_add memory...\n");
+		return IPACM_FAILURE;
+	}
+
+	ext_prop = IPACM_Iface::ipacmcfg->GetExtProp(IPA_IP_v6);
+
+	flt_rule->commit = 1;
+	flt_rule->ep = rx_prop->rx[0].src_pipe;
+	flt_rule->global = false;
+	flt_rule->ip = IPA_IP_v6;
+	flt_rule->num_rules = rule_cnt;
+
+	memset(&flt_rule_entry, 0, sizeof(struct ipa_flt_rule_add));
+
+	flt_rule_entry.rule.retain_hdr = 1;
+	flt_rule_entry.rule.to_uc = 0;
+	flt_rule_entry.rule.eq_attrib_type = 0;
+	flt_rule_entry.at_rear = true;
+	flt_rule_entry.flt_rule_hdl = -1;
+	flt_rule_entry.status = -1;
+	flt_rule_entry.rule.action = IPA_PASS_TO_SRC_NAT;
+	/*
+	 * this is the first pass rule, packet shall do another pass
+	 * before reaching the RT block but we must provide valid rt table hdl
+	 */
+	 /* get rt_tbl_v6 handle */
+	if(false == m_routing.GetRoutingTable(&IPACM_Iface::ipacmcfg->rt_tbl_v6))
+	{
+		IPACMERR("m_routing.GetRoutingTable(&IPACM_Iface::ipacmcfg->rt_tbl_v6=0x%p) Failed.\n", &IPACM_Iface::ipacmcfg->rt_tbl_v6);
+		res = IPACM_FAILURE;
+		goto fail;
+	}
+	flt_rule_entry.rule.rt_tbl_hdl = IPACM_Iface::ipacmcfg->rt_tbl_v6.hdl;
+	IPACMDBG_H("rt_tbl_v6.hdl %d\n", flt_rule_entry.rule.rt_tbl_hdl);
+#ifdef FEATURE_IPA_V3
+	flt_rule_entry.rule.hashable = true;
+#endif
+	memcpy(&flt_rule_entry.rule.attrib, &rx_prop->rx[0].attrib, sizeof(flt_rule_entry.rule.attrib));
+	flt_rule_entry.rule.attrib.u.v6.src_addr[0] = 0xFD000000;
+	flt_rule_entry.rule.attrib.u.v6.src_addr[1] = 0x0;
+	flt_rule_entry.rule.attrib.u.v6.src_addr[2] = 0x0;
+	flt_rule_entry.rule.attrib.u.v6.src_addr[3] = 0x0;
+	flt_rule_entry.rule.attrib.u.v6.src_addr_mask[0] = 0xFF000000;
+	flt_rule_entry.rule.attrib.u.v6.src_addr_mask[1] = 0x0;
+	flt_rule_entry.rule.attrib.u.v6.src_addr_mask[2] = 0x0;
+	flt_rule_entry.rule.attrib.u.v6.src_addr_mask[3] = 0x0;
+	flt_rule_entry.rule.attrib.attrib_mask |= IPA_FLT_SRC_ADDR;
+	memcpy(&(flt_rule->rules[0]), &flt_rule_entry, sizeof(struct ipa_flt_rule_add));
+
+	if(m_filtering.AddFilteringRule(flt_rule) == false)
+	{
+		IPACMERR("Error Adding Filtering rule, aborting...\n");
+		res = IPACM_FAILURE;
+		goto fail;
+	}
+	else
+	{
+		IPACM_Iface::ipacmcfg->increaseFltRuleCount(rx_prop->rx[0].src_pipe, IPA_IP_v6, 1);
+		ipv6_nat_ula_prefix_flt_rule_hdl = flt_rule->rules[0].flt_rule_hdl;
+		IPACMDBG_H("IPv6 ULA prefix filter rule HDL:0x%x\n", ipv6_nat_ula_prefix_flt_rule_hdl);
+	}
+fail:
+	free(flt_rule);
+	return res;
+}
+
+void IPACM_Lan::delete_ipv6_nat_ula_prefix_flt_rule()
+{
+	if(m_filtering.DeleteFilteringHdls(&ipv6_nat_ula_prefix_flt_rule_hdl, IPA_IP_v6, 1) == false)
+	{
+		IPACMERR("Failed to delete ipv6 prefix flt rule.\n");
+		return;
+	}
+	IPACM_Iface::ipacmcfg->decreaseFltRuleCount(rx_prop->rx[0].src_pipe, IPA_IP_v6, 1);
+	return;
+}
+#endif
 int IPACM_Lan::install_ipv6_prefix_flt_rule(uint32_t* prefix)
 {
 	if(prefix == NULL)

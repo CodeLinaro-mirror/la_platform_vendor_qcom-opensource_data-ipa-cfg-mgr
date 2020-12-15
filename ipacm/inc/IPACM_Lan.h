@@ -503,7 +503,10 @@ protected:
 	int handle_private_subnet_android(ipa_ip_type iptype);
 
 	int reset_to_dummy_flt_rule(ipa_ip_type iptype, uint32_t rule_hdl);
-
+#ifdef FEATURE_IPV6_NAT
+	int add_ipv6_nat_ula_prefix_flt_rule();
+	void delete_ipv6_nat_ula_prefix_flt_rule();
+#endif
 	virtual int install_ipv6_prefix_flt_rule(uint32_t* prefix);
 
 	virtual void delete_ipv6_prefix_flt_rule();
@@ -896,6 +899,9 @@ protected:
 	uint32_t ipv6_prefix_flt_rule_hdl[IPA_MAX_IPV6_NO_OFFLOAD_PREFIX_FLT_RULE + IPA_MAX_MTU_ENTRIES];
 #else
 	uint32_t ipv6_prefix_flt_rule_hdl[IPA_MAX_IPV6_PREFIX_FLT_RULE + IPA_MAX_MTU_ENTRIES];
+#endif
+#ifdef FEATURE_IPV6_NAT
+	uint32_t ipv6_nat_ula_prefix_flt_rule_hdl;
 #endif
 	uint32_t ipv6_icmp_flt_rule_hdl[NUM_IPV6_ICMP_FLT_RULE];
 #ifdef FEATURE_L2TP

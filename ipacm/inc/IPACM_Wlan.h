@@ -224,7 +224,7 @@ private:
 
 			if(memcmp(get_client_memptr(wlan_client, cnt)->mac,
 								mac_addr,
-								IPA_MAC_ADDR_SIZE * sizeof(uint8_t)) == 0)
+								IPA_MAC_ADDR_SIZE) == 0)
 			{
 				IPACMDBG_H("Matched client index: %d\n", cnt);
 				return cnt;

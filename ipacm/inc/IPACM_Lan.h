@@ -1106,7 +1106,7 @@ private:
 
 			if(memcmp(get_client_memptr(eth_client, cnt)->mac,
 								mac_addr,
-								IPA_MAC_ADDR_SIZE * sizeof(uint8_t)) == 0)
+								IPA_MAC_ADDR_SIZE) == 0)
 			{
 #ifdef FEATURE_VLAN_MPDN
 				if(vlan_id)

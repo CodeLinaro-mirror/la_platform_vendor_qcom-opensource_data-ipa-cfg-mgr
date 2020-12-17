@@ -201,7 +201,7 @@ IPACM_Config::IPACM_Config()
 
 	memset(flt_rule_count_v4, 0, IPA_CLIENT_MAX*sizeof(int));
 	memset(flt_rule_count_v6, 0, IPA_CLIENT_MAX*sizeof(int));
-	memset(bridge_mac, 0, IPA_MAC_ADDR_SIZE*sizeof(uint8_t));
+	memset(bridge_mac, 0, IPA_MAC_ADDR_SIZE);
 #if defined(FEATURE_SOCKSv5) && defined (IPA_SOCKV5_EVENT_MAX)
 	socksv5_v4_pdn = 0;
 	socksv5_v6_pdn = 0;
@@ -1711,7 +1711,7 @@ void IPACM_Config::add_vlan_bridge(ipacm_event_data_all *data_all)
 	uint8_t testmac[IPA_MAC_ADDR_SIZE];
 	ipa_ioc_bridge_vlan_mapping_info mapping_info;
 
-	memset(testmac, 0, IPA_MAC_ADDR_SIZE * sizeof(uint8_t));
+	memset(testmac, 0, IPA_MAC_ADDR_SIZE);
 	memset(&mapping_info, 0, sizeof(mapping_info));
 
 	strlcpy(mapping_info.bridge_name, data_all->iface_name, IF_NAME_LEN);
@@ -1730,7 +1730,7 @@ void IPACM_Config::add_vlan_bridge(ipacm_event_data_all *data_all)
 			return;
 		}
 		/* no MAC was assigned before i.e. this is the first unused entry*/
-		else if(!memcmp(IPACM_Iface::ipacmcfg->vlan_bridges[i].bridge_mac, testmac, sizeof(uint8_t) * IPA_MAC_ADDR_SIZE))
+		else if(!memcmp(IPACM_Iface::ipacmcfg->vlan_bridges[i].bridge_mac, testmac, IPA_MAC_ADDR_SIZE))
 		{
 			bool default_bridge = false;
 

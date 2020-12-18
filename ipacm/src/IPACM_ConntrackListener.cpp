@@ -2521,6 +2521,7 @@ void IPACM_ConntrackListener::ProcessTCPorUDPMsg(
 					}
 					if (nat_entry.isVlan)
 						nat_entry.IsVlanUp = true;
+					ip_pass_enable = vlan_pdns[i].ip_pass_enable;
 					break;
 				}
 				else if(vlan_pdns[i].public_ip == orig_dst_ip)
@@ -2536,7 +2537,7 @@ void IPACM_ConntrackListener::ProcessTCPorUDPMsg(
 					}
 					if (nat_entry.isVlan)
 						nat_entry.IsVlanUp = true;
-
+					ip_pass_enable = vlan_pdns[i].ip_pass_enable;
 					break;
 				}
 			}
@@ -2595,6 +2596,8 @@ void IPACM_ConntrackListener::ProcessTCPorUDPMsg(
 		 IPACMDBG_H("Change private port %d to %d\n",
 				  rule.private_port, rule.public_port);
 		 rule.private_port = rule.public_port;
+		if (ip_pass_enable)
+			rule.ip_pass_entry = true;
 	 }
 #ifdef IPA_IOC_SET_IPPT_SW_FLT
 /* Special handling for Passthrough IP SW-flt */

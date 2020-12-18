@@ -2978,6 +2978,7 @@ void IPACM_ConntrackListener::ProcessTCPorUDPMsg(
 						nat_entry.isVlan = IsVlanIPv4(orig_src_ip, &VlanID);
 					if (nat_entry.isVlan)
 						nat_entry.IsVlanUp = true;
+					ip_pass_enable = vlan_pdns[i].ip_pass_enable;
 					break;
 				}
 				else if(vlan_pdns[i].public_ip == orig_dst_ip)
@@ -2991,7 +2992,7 @@ void IPACM_ConntrackListener::ProcessTCPorUDPMsg(
 						nat_entry.isVlan = IsVlanIPv4(orig_dst_ip, &VlanID);
 					if (nat_entry.isVlan)
 						nat_entry.IsVlanUp = true;
-
+					ip_pass_enable = vlan_pdns[i].ip_pass_enable;
 					break;
 				}
 			}
@@ -3049,6 +3050,8 @@ void IPACM_ConntrackListener::ProcessTCPorUDPMsg(
 		 IPACMDBG("Change private port %d to %d\n",
 				  rule.private_port, rule.public_port);
 		 rule.private_port = rule.public_port;
+		if (ip_pass_enable)
+			rule.ip_pass_entry = true;
 	 }
 
 	 CheckSTAClient(&rule, &nat_entry.isTempEntry);

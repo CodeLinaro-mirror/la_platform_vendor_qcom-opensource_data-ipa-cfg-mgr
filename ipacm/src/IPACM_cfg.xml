@@ -109,7 +109,7 @@
 		    </Iface>
 		</IPACMIface>
 		<GREFlag>
-			<GREEnabled>1</GREEnabled>
+			<GREEnabled>0</GREEnabled>
 			 <GREServer>172.20.98.78</GREServer>
 		</GREFlag>
 		<IPACMPrivateSubnet>

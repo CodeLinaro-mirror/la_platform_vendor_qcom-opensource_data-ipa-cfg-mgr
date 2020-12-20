@@ -129,15 +129,14 @@ public:
 		bool isFirewall = false
 	);
 
-	int config_dft_firewall_rules_ul_ex(IPACM_firewall_conf_t* firewall_conf, int vid);
+#endif //IPA_HW_FNR_STATS
 
 #ifdef IPA_V6_UL_WL_FIREWALL_HANDLE
+	int config_dft_firewall_rules_ul_ex(IPACM_firewall_conf_t* firewall_conf, int vid);
 	int disable_dft_firewall_rules_ul_ex_per_wlan_client(int vid);
-
 	void configure_v6_ul_firewall_wlan();
 #endif //IPA_V6_UL_WL_FIREWALL_HANDLE
 
-#endif //IPA_HW_FNR_STATS
 	int handle_wlan_client_route_rule_ext_v2(uint8_t *mac_addr, ipa_ip_type iptype);
 
 	/* install UL filter rule from Q6 for all clients */

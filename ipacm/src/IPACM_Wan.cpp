@@ -1,6 +1,5 @@
 /*
  * Copyright (c) 2013-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -29,7 +28,7 @@
  *
  * Changes from Qualcomm Innovation Center are provided under the following license:
  *
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022,2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted (subject to the limitations in the
@@ -294,6 +293,23 @@ IPACM_Wan::IPACM_Wan(int iface_index,
 
 IPACM_Wan::~IPACM_Wan()
 {
+	if (wan_route_rule_v4_hdl != NULL)
+	{
+		free(wan_route_rule_v4_hdl);
+	}
+	if (wan_route_rule_v6_hdl != NULL)
+	{
+		free(wan_route_rule_v6_hdl);
+	}
+	if (wan_client != NULL)
+	{
+		free(wan_client);
+	}
+	if (ext_prop != NULL)
+	{
+		free(ext_prop);
+	}
+
 	IPACM_EvtDispatcher::deregistr(this);
 	IPACM_IfaceManager::deregistr(this);
 	return;
@@ -5660,6 +5676,7 @@ int IPACM_Wan::query_ext_prop()
 			IPACMERR("ioctl IPA_IOC_QUERY_INTF_EXT_PROPS failed\n");
 			/* ext_prop memory will free when iface-down*/
 			free(ext_prop);
+			ext_prop = NULL;
 			close(fd);
 			return ret;
 		}
@@ -7122,26 +7139,32 @@ fail:
 	if (tx_prop != NULL)
 	{
 		free(tx_prop);
+		tx_prop = NULL;
 	}
 	if (rx_prop != NULL)
 	{
 		free(rx_prop);
+		rx_prop = NULL;
 	}
 	if (iface_query != NULL)
 	{
 		free(iface_query);
+		iface_query = NULL;
 	}
 	if (wan_route_rule_v4_hdl != NULL)
 	{
 		free(wan_route_rule_v4_hdl);
+		wan_route_rule_v4_hdl = NULL;
 	}
 	if (wan_route_rule_v6_hdl != NULL)
 	{
 		free(wan_route_rule_v6_hdl);
+		wan_route_rule_v6_hdl = NULL;
 	}
 	if (wan_client != NULL)
 	{
 		free(wan_client);
+		wan_client = NULL;
 	}
 	close(m_fd_ipa);
 	return res;
@@ -7803,30 +7826,37 @@ fail:
 	if (tx_prop != NULL)
 	{
 		free(tx_prop);
+		tx_prop = NULL;
 	}
 	if (rx_prop != NULL)
 	{
 		free(rx_prop);
+		rx_prop = NULL;
 	}
 	if (ext_prop != NULL)
 	{
 		free(ext_prop);
+		ext_prop = NULL;
 	}
 	if (iface_query != NULL)
 	{
 		free(iface_query);
+		iface_query = NULL;
 	}
 	if (wan_route_rule_v4_hdl != NULL)
 	{
 		free(wan_route_rule_v4_hdl);
+		wan_route_rule_v4_hdl = NULL;
 	}
 	if (wan_route_rule_v6_hdl != NULL)
 	{
 		free(wan_route_rule_v6_hdl);
+		wan_route_rule_v6_hdl = NULL;
 	}
 	if (wan_client != NULL)
 	{
 		free(wan_client);
+		wan_client = NULL;
 	}
 	close(m_fd_ipa);
 	return res;

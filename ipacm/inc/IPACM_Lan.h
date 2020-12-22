@@ -131,7 +131,7 @@ typedef struct _ipa_eth_client
 	uint32_t ul_first_pass_flt_rule_hdl;
 #endif
 #ifdef FEATURE_VLAN_MPDN
-	uint8_t vlan_id;
+	uint16_t vlan_id;
 #endif
 	eth_client_rt_hdl eth_rt_hdl[0]; /* depends on number of tx properties */
 }ipa_eth_client;
@@ -377,7 +377,7 @@ public:
 		ipa_hdr_l2_type peer_l2_hdr_type, ipa_ip_type iptype, uint32_t *rt_rule_hdl, int rt_rule_count);
 
 	/* add filtering rule and return handle to lan2lan controller */
-	int eth_bridge_add_flt_rule(uint8_t *mac, uint32_t rt_tbl_hdl, ipa_ip_type iptype, uint32_t *flt_rule_hdl, uint8_t vlan_id = 0);
+	int eth_bridge_add_flt_rule(uint8_t *mac, uint32_t rt_tbl_hdl, ipa_ip_type iptype, uint32_t *flt_rule_hdl, uint16_t vlan_id = 0);
 
 	/* delete filtering rule */
 	int eth_bridge_del_flt_rule(uint32_t flt_rule_hdl, ipa_ip_type iptype);
@@ -485,7 +485,7 @@ protected:
 #endif
 	/* mac address has to be provided for client related events */
 	void eth_bridge_post_event(ipa_cm_event_id evt, ipa_ip_type iptype, uint8_t *mac,
-		uint32_t *ipv6_addr, char *iface_name, uint8_t VlanID = 0);
+		uint32_t *ipv6_addr, char *iface_name, uint16_t VlanID = 0);
 
 #if defined(FEATURE_L2TP) || defined(FEATURE_VLAN_MPDN)
 	/* check if the event is associated with vlan interface */
@@ -1085,7 +1085,7 @@ private:
 		return (ipa_eth_client *)ret;
 	}
 
-	inline int get_eth_client_index(uint8_t *mac_addr, uint8_t vlan_id = 0)
+	inline int get_eth_client_index(uint8_t *mac_addr, uint16_t vlan_id = 0)
 	{
 		int cnt;
 		int num_eth_client_tmp = num_eth_client;
@@ -1197,13 +1197,13 @@ private:
 	/* handle eth client initial, construct full headers (tx property) */
 	int handle_eth_hdr_init(uint8_t *mac_addr,
 		ipacm_bridge *bridge = NULL,
-		uint8_t vlan_id = 0, bool isVlan = false);
+		uint16_t vlan_id = 0, bool isVlan = false);
 
 	/* handle eth client ip-address */
 	int handle_eth_client_ipaddr(ipacm_event_data_all *data);
 
 	/* handle eth client routing rule*/
-	int handle_eth_client_route_rule(uint8_t *mac_addr, ipa_ip_type iptype, uint8_t vlan_id = 0);
+	int handle_eth_client_route_rule(uint8_t *mac_addr, ipa_ip_type iptype, uint16_t vlan_id = 0);
 
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
 	/* handle eth client routing rule with rule id*/
@@ -1214,7 +1214,7 @@ private:
 #endif
 
 	/*handle eth client del mode*/
-	int handle_eth_client_down_evt(uint8_t *mac_addr, uint8_t vlan_id = 0, ipacm_event_data_all *data = NULL);
+	int handle_eth_client_down_evt(uint8_t *mac_addr, uint16_t vlan_id = 0, ipacm_event_data_all *data = NULL);
 
 	/* handle odu client initial, construct full headers (tx property) */
 	int handle_odu_hdr_init(uint8_t *mac_addr);
@@ -1249,7 +1249,7 @@ private:
 #endif
 #ifdef FEATURE_VLAN_MPDN
 	int handle_vlan_neighbor(ipacm_event_data_all *data);
-	bool is_vlan_IF(uint8_t vlan_id);
+	bool is_vlan_IF(uint16_t vlan_id);
 	int handle_vlan_pdn_up(ipacm_event_vlan_pdn *data, bool set_mux = true);
 	int handle_vlan_pdn_down(ipacm_event_vlan_pdn *data);
 	int handle_vlan_phys_if_down();

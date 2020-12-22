@@ -81,7 +81,7 @@ struct client_info
 	bool is_l2tp_client;
 	l2tp_vlan_mapping_info *mapping_info;
 	l2tp_rt_rule_info l2tp_rt_rule_hdl[IPA_HDR_L2_MAX];
-	uint8_t vlan_id;
+	uint16_t vlan_id;
 };
 
 struct lt2p_flt_rule_hdl{
@@ -117,13 +117,13 @@ public:
 	void add_client_rt_rule_for_new_iface();
 
 #ifdef FEATURE_VLAN_MPDN
-	void add_all_inter_interface_client_flt_rule_one_vlan_id(ipa_ip_type iptype, uint8_t vlan_id);
-	void del_all_inter_interface_client_flt_rule_one_vlan_id(uint8_t vlan_id);
-	void handle_vlan_id_add(uint8_t vlan_id);
-	void handle_vlan_id_del(uint8_t vlan_id);
+	void add_all_inter_interface_client_flt_rule_one_vlan_id(ipa_ip_type iptype, uint16_t vlan_id);
+	void del_all_inter_interface_client_flt_rule_one_vlan_id(uint16_t vlan_id);
+	void handle_vlan_id_add(uint16_t vlan_id);
+	void handle_vlan_id_del(uint16_t vlan_id);
 #endif
 
-	void add_all_inter_interface_client_flt_rule(ipa_ip_type iptype, uint8_t *Ids = NULL);
+	void add_all_inter_interface_client_flt_rule(ipa_ip_type iptype, uint16_t *Ids = NULL);
 
 	void add_all_intra_interface_client_flt_rule(ipa_ip_type iptype);
 
@@ -136,9 +136,9 @@ public:
 	void handle_new_iface_up(char rt_tbl_name_for_flt[][IPA_RESOURCE_NAME_MAX], char rt_tbl_name_for_rt[][IPA_RESOURCE_NAME_MAX],
 		IPACM_LanToLan_Iface *peer_iface);
 
-	void handle_client_add(uint8_t *mac, bool is_l2tp_client, l2tp_vlan_mapping_info *mapping_info, uint8_t vlan_id = 0);
+	void handle_client_add(uint8_t *mac, bool is_l2tp_client, l2tp_vlan_mapping_info *mapping_info, uint16_t vlan_id = 0);
 
-	void handle_client_del(uint8_t *mac, uint8_t vlan_id);
+	void handle_client_del(uint8_t *mac, uint16_t vlan_id);
 
 	void print_data_structure_info();
 

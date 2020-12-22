@@ -287,6 +287,19 @@ IPACM_Lan::IPACM_Lan(int iface_index) : IPACM_Iface(iface_index)
 
 IPACM_Lan::~IPACM_Lan()
 {
+	/* free the client details*/
+	if(eth_client != NULL)
+	{
+		free(eth_client);
+	}
+	if(odu_route_rule_v4_hdl != NULL)
+	{
+		free(odu_route_rule_v4_hdl);
+	}
+	if(odu_route_rule_v6_hdl != NULL)
+	{
+		free(odu_route_rule_v6_hdl);
+	}
 	IPACM_EvtDispatcher::deregistr(this);
 	IPACM_IfaceManager::deregistr(this);
 	return;
@@ -436,14 +449,17 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 			if(rx_prop != NULL)
 			{
 				free(rx_prop);
+				rx_prop = NULL;
 			}
 			if(tx_prop != NULL)
 			{
 				free(tx_prop);
+				tx_prop = NULL;
 			}
 			if(iface_query != NULL)
 			{
 				free(iface_query);
+				iface_query = NULL;
 			}
 #endif
 			delete this;
@@ -6585,10 +6601,12 @@ fail:
 	if (odu_route_rule_v4_hdl != NULL)
 	{
 		free(odu_route_rule_v4_hdl);
+		odu_route_rule_v4_hdl = NULL;
 	}
 	if (odu_route_rule_v6_hdl != NULL)
 	{
 		free(odu_route_rule_v6_hdl);
+		odu_route_rule_v6_hdl = NULL;
 	}
 	if (rx_prop != NULL)
 	{
@@ -6602,21 +6620,25 @@ fail:
 		}
 #ifndef FEATURE_ETH_BRIDGE_LE
 		free(rx_prop);
+		rx_prop = NULL;
 #endif
 	}
 
 	if (eth_client != NULL)
 	{
 		free(eth_client);
+		eth_client = NULL;
 	}
 #ifndef FEATURE_ETH_BRIDGE_LE
 	if (tx_prop != NULL)
 	{
 		free(tx_prop);
+		tx_prop = NULL;
 	}
 	if (iface_query != NULL)
 	{
 		free(iface_query);
+		iface_query = NULL;
 	}
 #endif
 	is_active = false;

@@ -343,7 +343,7 @@ typedef struct
 	IPACM_Lan *p_iface;
 	ipa_ip_type iptype;
 	uint8_t mac_addr[6];
-	uint8_t VlanID;
+	uint16_t VlanID;
 	char iface_name[IPA_IFACE_NAME_LEN];
 } ipacm_event_eth_bridge;
 
@@ -465,7 +465,7 @@ typedef struct _ipacm_ifacemgr_data
 struct vlan_iface_info
 {
 	char vlan_iface_name[IPA_RESOURCE_NAME_MAX];
-	uint8_t vlan_id;
+	uint16_t vlan_id;
 	uint32_t vlan_iface_ipv6_addr[4];
 	uint8_t vlan_client_mac[6];
 	uint32_t vlan_client_ipv6_addr[4];
@@ -485,7 +485,7 @@ struct l2tp_vlan_mapping_info
 #endif
 	/* the following are mdm vlan iface info (name, vlan id, ipv6 addr) */
 	char vlan_iface_name[IPA_RESOURCE_NAME_MAX];
-	uint8_t vlan_id;
+	uint16_t vlan_id;
 	uint32_t vlan_iface_ipv6_addr[4];
 	/* the following are MIB3 vlan client info (mac, ipv6 addr) */
 	uint8_t vlan_client_mac[6];

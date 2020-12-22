@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2013, 2018-2019, The Linux Foundation. All rights reserved.
+Copyright (c) 2013, 2018-2019, 2021 The Linux Foundation. All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are
@@ -121,7 +121,7 @@ public:
 #ifdef FEATURE_IPACM_UL_FIREWALL
 	int num_firewall_v6_ul_pdn;
 #endif
-	uint8_t associated_VID;
+	uint16_t associated_VID;
 #endif
 	static uint16_t mtu_default_wan;
 	uint16_t mtu_size;
@@ -373,7 +373,7 @@ public:
 #ifdef FEATURE_VLAN_MPDN
 	static ipacm_ipv4_wan_iface ipv4_to_iface[IPA_MAX_NUM_SW_PDNS];
 	static ipacm_ipv6_wan_iface ipv6_to_iface[IPA_MAX_NUM_SW_PDNS];
-	static int GetMuxByVid(uint8_t vlan_id, uint8_t *mux_id, ipa_ip_type iptype);
+	static int GetMuxByVid(uint16_t vlan_id, uint8_t *mux_id, ipa_ip_type iptype);
 #endif
 private:
 
@@ -623,7 +623,7 @@ private:
 	int handle_route_add_evt(ipa_ip_type iptype);
 
 #ifdef FEATURE_VLAN_MPDN
-	int handle_route_add_vlan_pdn_evt(ipa_ip_type iptype, uint8_t vlan_id);
+	int handle_route_add_vlan_pdn_evt(ipa_ip_type iptype, uint16_t vlan_id);
 #endif
 
 	/* construct complete STA ethernet header */

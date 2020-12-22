@@ -4227,7 +4227,7 @@ void IPACM_Wlan::configure_v6_ul_firewall_wlan()
 	}
 #ifdef FEATURE_VLAN_MPDN
 #if 0
-		uint8_t Ids[IPA_MAX_NUM_HW_PDNS];
+		uint16_t Ids[IPA_MAX_NUM_HW_PDNS];
 
 		if(IPACM_Iface::ipacmcfg->get_iface_vlan_ids(dev_name, Ids))
 		{

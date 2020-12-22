@@ -255,6 +255,31 @@ IPACM_Wan::IPACM_Wan(int iface_index,
 
 IPACM_Wan::~IPACM_Wan()
 {
+	/* EventDispatcher/IfaceManager deregistration is performed
+	* before object destruction in the WAN event handling path.
+	* Destructor only releases locally owned resources.
+	*/
+	if (wan_route_rule_v4_hdl != NULL)
+	{
+		free(wan_route_rule_v4_hdl);
+		wan_route_rule_v4_hdl = NULL;
+	}
+	if (wan_route_rule_v6_hdl != NULL)
+	{
+		free(wan_route_rule_v6_hdl);
+		wan_route_rule_v6_hdl = NULL;
+	}
+	if (wan_client != NULL)
+	{
+		free(wan_client);
+		wan_client = NULL;
+	}
+	if (ext_prop != NULL)
+	{
+		free(ext_prop);
+		ext_prop = NULL;
+	}
+
 	IPACM_EvtDispatcher::deregistr(this);
 	IPACM_IfaceManager::deregistr(this);
 	return;
@@ -441,6 +466,8 @@ int IPACM_Wan::handle_addr_evt(ipacm_event_data_addr *data)
 			if(m_header.GetHeaderHandle(&hdr) == false)
 			{
 				IPACMERR("Failed to get QMAP header.\n");
+				free(rt_rule);
+				rt_rule = NULL;
 				return IPACM_FAILURE;
 			}
 			rt_rule_entry->rule.hdr_hdl = hdr.hdl;
@@ -691,6 +718,8 @@ int IPACM_Wan::handle_addr_evt(ipacm_event_data_addr *data)
 			if(m_header.GetHeaderHandle(&hdr) == false)
 			{
 				IPACMERR("Failed to get QMAP header.\n");
+				free(rt_rule);
+				rt_rule = NULL;
 				return IPACM_FAILURE;
 			}
 			rt_rule_entry->rule.hdr_hdl = hdr.hdl;
@@ -782,6 +811,7 @@ fail:
 	if(rt_rule != NULL)
 	{
 		free(rt_rule);
+		rt_rule = NULL;
 	}
 
 	return res;
@@ -1861,6 +1891,8 @@ int IPACM_Wan::handle_route_add_vlan_pdn_evt(ipa_ip_type iptype, uint16_t vlan_i
 			if(m_header.GetHeaderHandle(&hdr) == false)
 			{
 				IPACMERR("Failed to get QMAP header.\n");
+				free(rt_rule);
+				rt_rule = NULL;
 				return IPACM_FAILURE;
 			}
 			rt_rule_entry->rule.hdr_hdl = hdr.hdl;
@@ -1882,6 +1914,7 @@ int IPACM_Wan::handle_route_add_vlan_pdn_evt(ipa_ip_type iptype, uint16_t vlan_i
 			{
 				IPACMERR("Routing rule addition failed!\n");
 				free(rt_rule);
+				rt_rule = NULL;
 				return IPACM_FAILURE;
 			}
 			wan_route_rule_v6_hdl_a5 = rt_rule_entry->rt_rule_hdl;
@@ -1889,6 +1922,7 @@ int IPACM_Wan::handle_route_add_vlan_pdn_evt(ipa_ip_type iptype, uint16_t vlan_i
 				wan_route_rule_v6_hdl_a5, 0, iptype);
 
 			free(rt_rule);
+			rt_rule = NULL;
 		}
 			/* Xlat case pdn_index might not be populated*/
 			if (modem_ipv6_pdn_index == -1) {
@@ -2281,6 +2315,7 @@ int IPACM_Wan::handle_route_add_evt(ipa_ip_type iptype)
 				{
 		    		IPACMERR("Routing rule addition failed!\n");
 		    		free(rt_rule);
+					rt_rule = NULL;
 		    		return IPACM_FAILURE;
 				}
 				wan_route_rule_v4_hdl[tx_index] = rt_rule_entry->rt_rule_hdl;
@@ -2306,6 +2341,7 @@ int IPACM_Wan::handle_route_add_evt(ipa_ip_type iptype)
 				{
 		    		IPACMERR("Routing rule addition failed!\n");
 		    		free(rt_rule);
+					rt_rule = NULL;
 		    		return IPACM_FAILURE;
 				}
 				wan_route_rule_v6_hdl[tx_index] = rt_rule_entry->rt_rule_hdl;
@@ -2332,6 +2368,8 @@ int IPACM_Wan::handle_route_add_evt(ipa_ip_type iptype)
 			if(m_header.GetHeaderHandle(&hdr) == false)
 			{
 				IPACMERR("Failed to get QMAP header.\n");
+				free(rt_rule);
+				rt_rule = NULL;
 				return IPACM_FAILURE;
 			}
 			rt_rule_entry->rule.hdr_hdl = hdr.hdl;
@@ -2345,6 +2383,7 @@ int IPACM_Wan::handle_route_add_evt(ipa_ip_type iptype)
 			{
 				IPACMERR("Construct dummy ethernet_header failed!\n");
 				free(rt_rule);
+				rt_rule = NULL;
 				return IPACM_FAILURE;
 			}
 			rt_rule_entry->rule.hdr_proc_ctx_hdl = hdr_proc_hdl_dummy_v6;
@@ -2370,6 +2409,7 @@ int IPACM_Wan::handle_route_add_evt(ipa_ip_type iptype)
 			{
 				IPACMERR("Routing rule addition failed!\n");
 				free(rt_rule);
+				rt_rule = NULL;
 				return IPACM_FAILURE;
 			}
 			wan_route_rule_v6_hdl_a5 = rt_rule_entry->rt_rule_hdl;
@@ -2396,6 +2436,7 @@ int IPACM_Wan::handle_route_add_evt(ipa_ip_type iptype)
 	{
 		IPACMERR("Unable to allocate memory\n");
 		free(rt_rule);
+		rt_rule = NULL;
 		return IPACM_FAILURE;
 	}
 	memset(wanup_data, 0, sizeof(ipacm_event_iface_up));
@@ -2553,6 +2594,7 @@ int IPACM_Wan::handle_route_add_evt(ipa_ip_type iptype)
 	if(rt_rule != NULL)
 	{
 		free(rt_rule);
+		rt_rule = NULL;
 	}
 	return IPACM_SUCCESS;
 }
@@ -4590,8 +4632,8 @@ int IPACM_Wan::query_ext_prop()
 		if (ret < 0)
 		{
 			IPACMERR("ioctl IPA_IOC_QUERY_INTF_EXT_PROPS failed\n");
-			/* ext_prop memory will free when iface-down*/
 			free(ext_prop);
+			ext_prop = NULL;
 			close(fd);
 			return ret;
 		}
@@ -5885,26 +5927,32 @@ fail:
 	if (tx_prop != NULL)
 	{
 		free(tx_prop);
+		tx_prop = NULL;
 	}
 	if (rx_prop != NULL)
 	{
 		free(rx_prop);
+		rx_prop = NULL;
 	}
 	if (iface_query != NULL)
 	{
 		free(iface_query);
+		iface_query = NULL;
 	}
 	if (wan_route_rule_v4_hdl != NULL)
 	{
 		free(wan_route_rule_v4_hdl);
+		wan_route_rule_v4_hdl = NULL;
 	}
 	if (wan_route_rule_v6_hdl != NULL)
 	{
 		free(wan_route_rule_v6_hdl);
+		wan_route_rule_v6_hdl = NULL;
 	}
 	if (wan_client != NULL)
 	{
 		free(wan_client);
+		wan_client = NULL;
 	}
 	close(m_fd_ipa);
 	return res;
@@ -6568,30 +6616,37 @@ fail:
 	if (tx_prop != NULL)
 	{
 		free(tx_prop);
+		tx_prop = NULL;
 	}
 	if (rx_prop != NULL)
 	{
 		free(rx_prop);
+		rx_prop = NULL;
 	}
 	if (ext_prop != NULL)
 	{
 		free(ext_prop);
+		ext_prop = NULL;
 	}
 	if (iface_query != NULL)
 	{
 		free(iface_query);
+		iface_query = NULL;
 	}
 	if (wan_route_rule_v4_hdl != NULL)
 	{
 		free(wan_route_rule_v4_hdl);
+		wan_route_rule_v4_hdl = NULL;
 	}
 	if (wan_route_rule_v6_hdl != NULL)
 	{
 		free(wan_route_rule_v6_hdl);
+		wan_route_rule_v6_hdl = NULL;
 	}
 	if (wan_client != NULL)
 	{
 		free(wan_client);
+		wan_client = NULL;
 	}
 	close(m_fd_ipa);
 	return res;
@@ -7544,6 +7599,7 @@ int IPACM_Wan::handle_wan_client_route_rule(uint8_t *mac_addr, ipa_ip_type iptyp
 				{
 					IPACMERR("Routing rule addition failed!\n");
 					free(rt_rule);
+					rt_rule = NULL;
 					return IPACM_FAILURE;
 				}
 
@@ -7594,6 +7650,7 @@ int IPACM_Wan::handle_wan_client_route_rule(uint8_t *mac_addr, ipa_ip_type iptyp
 					{
 						IPACMERR("Routing rule addition failed!\n");
 						free(rt_rule);
+						rt_rule = NULL;
 						return IPACM_FAILURE;
 					}
 
@@ -7625,6 +7682,7 @@ int IPACM_Wan::handle_wan_client_route_rule(uint8_t *mac_addr, ipa_ip_type iptyp
 					{
 						IPACMERR("Routing rule addition failed!\n");
 						free(rt_rule);
+						rt_rule = NULL;
 						return IPACM_FAILURE;
 					}
 
@@ -7637,6 +7695,7 @@ int IPACM_Wan::handle_wan_client_route_rule(uint8_t *mac_addr, ipa_ip_type iptyp
 		} /* end of for loop */
 
 		free(rt_rule);
+		rt_rule = NULL;
 
 		if (iptype == IPA_IP_v4)
 		{
@@ -7747,6 +7806,7 @@ void IPACM_Wan::handle_wlan_SCC_MCC_switch(bool isSCCMode, ipa_ip_type iptype)
 			{
 				IPACMERR("Routing rule modify failed!\n");
 				free(rt_rule);
+				rt_rule = NULL;
 				return;
 			}
 
@@ -7754,6 +7814,7 @@ void IPACM_Wan::handle_wlan_SCC_MCC_switch(bool isSCCMode, ipa_ip_type iptype)
 		}
 
 		free(rt_rule);
+		rt_rule = NULL;
 	}
 
 	return;
@@ -7855,6 +7916,7 @@ void IPACM_Wan::handle_wan_client_SCC_MCC_switch(bool isSCCMode, ipa_ip_type ipt
 				{
 					IPACMERR("Routing rule modify failed!\n");
 					free(rt_rule);
+					rt_rule = NULL;
 					return;
 				}
 			}
@@ -7931,6 +7993,7 @@ void IPACM_Wan::handle_wan_client_SCC_MCC_switch(bool isSCCMode, ipa_ip_type ipt
 					{
 						IPACMERR("Routing rule Modify failed!\n");
 						free(rt_rule);
+						rt_rule = NULL;
 						return;
 					}
 				}
@@ -7940,6 +8003,7 @@ void IPACM_Wan::handle_wan_client_SCC_MCC_switch(bool isSCCMode, ipa_ip_type ipt
 	}
 
 	free(rt_rule);
+	rt_rule = NULL;
 	return;
 }
 

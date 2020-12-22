@@ -221,7 +221,7 @@ void IPACM_LanToLan::handle_iface_up(ipacm_event_eth_bridge *data)
 #ifdef FEATURE_VLAN_MPDN
 	bool IsVlan = (IPACM_Iface::ipacmcfg->ipacm_mpdn_enable &&
 		IPACM_Iface::ipacmcfg->iface_in_vlan_mode(data->p_iface->dev_name));
-	uint8_t Ids[IPA_MAX_NUM_OFFLOAD_VLANS];
+	uint16_t Ids[IPA_MAX_NUM_OFFLOAD_VLANS];
 #endif
 
 	IPACMDBG_H("Interface name: %s IP type: %d\n", data->p_iface->dev_name, data->iptype);
@@ -1008,7 +1008,7 @@ void IPACM_LanToLan_Iface::add_l2tp_udp_client_rules_new_mapping(peer_iface_info
 #endif
 
 #ifdef FEATURE_VLAN_MPDN
-void IPACM_LanToLan_Iface::add_all_inter_interface_client_flt_rule_one_vlan_id(ipa_ip_type iptype, uint8_t vlan_id)
+void IPACM_LanToLan_Iface::add_all_inter_interface_client_flt_rule_one_vlan_id(ipa_ip_type iptype, uint16_t vlan_id)
 {
 	list<peer_iface_info>::iterator it_iface;
 	list<client_info>::iterator it_client;
@@ -1027,7 +1027,7 @@ void IPACM_LanToLan_Iface::add_all_inter_interface_client_flt_rule_one_vlan_id(i
 	}
 }
 
-void IPACM_LanToLan_Iface::del_all_inter_interface_client_flt_rule_one_vlan_id(uint8_t vlan_id)
+void IPACM_LanToLan_Iface::del_all_inter_interface_client_flt_rule_one_vlan_id(uint16_t vlan_id)
 {
 	list<peer_iface_info>::iterator it_iface;
 	list<client_info>::iterator it_client;
@@ -1047,7 +1047,7 @@ void IPACM_LanToLan_Iface::del_all_inter_interface_client_flt_rule_one_vlan_id(u
 }
 #endif
 
-void IPACM_LanToLan_Iface::add_all_inter_interface_client_flt_rule(ipa_ip_type iptype, uint8_t *Ids)
+void IPACM_LanToLan_Iface::add_all_inter_interface_client_flt_rule(ipa_ip_type iptype, uint16_t *Ids)
 {
 	list<peer_iface_info>::iterator it_iface;
 	list<client_info>::iterator it_client;
@@ -1171,7 +1171,7 @@ void IPACM_LanToLan_Iface::add_client_flt_rule(peer_iface_info *peer, client_inf
 			IPACMDBG_H("flt rule is already present for other iptype (not %d), continue\n", iptype);
 		}
 
-		uint8_t Ids[IPA_MAX_NUM_OFFLOAD_VLANS];
+		uint16_t Ids[IPA_MAX_NUM_OFFLOAD_VLANS];
 
 		if(IPACM_Iface::ipacmcfg->get_iface_vlan_ids(get_iface_pointer()->dev_name, Ids))
 		{
@@ -1582,7 +1582,7 @@ void IPACM_LanToLan_Iface::handle_down_event()
 }
 
 #ifdef FEATURE_VLAN_MPDN
-void IPACM_LanToLan_Iface::handle_vlan_id_add(uint8_t vlan_id)
+void IPACM_LanToLan_Iface::handle_vlan_id_add(uint16_t vlan_id)
 {
 	list<peer_iface_info>::iterator it_peer_info;
 
@@ -1595,7 +1595,7 @@ void IPACM_LanToLan_Iface::handle_vlan_id_add(uint8_t vlan_id)
 		add_all_inter_interface_client_flt_rule_one_vlan_id(IPA_IP_v6, vlan_id);
 }
 
-void IPACM_LanToLan_Iface::handle_vlan_id_del(uint8_t vlan_id)
+void IPACM_LanToLan_Iface::handle_vlan_id_del(uint16_t vlan_id)
 {
 	list<client_info>::iterator it_client;
 	int size = 0, count = 0;
@@ -1885,7 +1885,7 @@ void IPACM_LanToLan_Iface::handle_new_iface_up(char rt_tbl_name_for_flt[][IPA_RE
 	return;
 }
 
-void IPACM_LanToLan_Iface::handle_client_add(uint8_t *mac, bool is_l2tp_client, l2tp_vlan_mapping_info *mapping_info, uint8_t vlan_id)
+void IPACM_LanToLan_Iface::handle_client_add(uint8_t *mac, bool is_l2tp_client, l2tp_vlan_mapping_info *mapping_info, uint16_t vlan_id)
 {
 	list<client_info>::iterator it_client;
 	list<peer_iface_info>::iterator it_peer_info;
@@ -1981,7 +1981,7 @@ void IPACM_LanToLan_Iface::handle_client_add(uint8_t *mac, bool is_l2tp_client, 
 	return;
 }
 
-void IPACM_LanToLan_Iface::handle_client_del(uint8_t *mac, uint8_t vlan_id)
+void IPACM_LanToLan_Iface::handle_client_del(uint8_t *mac, uint16_t vlan_id)
 {
 	list<client_info>::iterator it_client;
 	list<peer_iface_info>::iterator it_peer_info;

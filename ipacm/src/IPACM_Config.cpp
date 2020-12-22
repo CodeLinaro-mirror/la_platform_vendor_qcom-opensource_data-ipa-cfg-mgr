@@ -1360,7 +1360,7 @@ int IPACM_Config::get_bridge_vlan_mapping(ipa_ioc_bridge_vlan_mapping_info *data
 	return ret;
 }
 
-bool IPACM_Config::is_lan2lan_sw_path(uint8_t vlan_id)
+bool IPACM_Config::is_lan2lan_sw_path(uint16_t vlan_id)
 {
 	list<bridge_vlan_mapping_info>::iterator it_mapping;
 	bool ret = false;
@@ -1885,7 +1885,7 @@ bool IPACM_Config::iface_in_vlan_mode(const char *phys_iface_name)
 	return false;
 }
 
-int IPACM_Config::get_iface_vlan_ids(char *phys_iface_name, uint8_t *Ids)
+int IPACM_Config::get_iface_vlan_ids(char *phys_iface_name, uint16_t *Ids)
 {
 	list<vlan_iface_info>::iterator it_vlan;
 	int cnt = 0;
@@ -1925,7 +1925,7 @@ int IPACM_Config::get_iface_vlan_ids(char *phys_iface_name, uint8_t *Ids)
 	return IPACM_SUCCESS;
 }
 
-int IPACM_Config::get_vlan_id(char *iface_name, uint8_t *vlan_id)
+int IPACM_Config::get_vlan_id(char *iface_name, uint16_t *vlan_id)
 {
 	list<vlan_iface_info>::iterator it_vlan;
 	int ret = IPACM_FAILURE;

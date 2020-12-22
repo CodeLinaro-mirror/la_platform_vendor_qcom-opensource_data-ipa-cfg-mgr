@@ -121,7 +121,7 @@ public:
 #ifdef FEATURE_IPACM_UL_FIREWALL
 	int num_firewall_v6_ul_pdn;
 #endif
-	uint8_t associated_VID;
+	uint16_t associated_VID;
 #endif
 	static uint16_t mtu_default_wan;
 	uint16_t mtu_size;
@@ -623,7 +623,7 @@ private:
 	int handle_route_add_evt(ipa_ip_type iptype);
 
 #ifdef FEATURE_VLAN_MPDN
-	int handle_route_add_vlan_pdn_evt(ipa_ip_type iptype, uint8_t vlan_id);
+	int handle_route_add_vlan_pdn_evt(ipa_ip_type iptype, uint16_t vlan_id);
 #endif
 
 	/* construct complete STA ethernet header */

@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2013-2018, The Linux Foundation. All rights reserved.
+Copyright (c) 2013-2018, 2021 The Linux Foundation. All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are
@@ -117,7 +117,7 @@ typedef struct _ipa_eth_client
 	uint32_t ul_first_pass_flt_rule_hdl;
 #endif
 #ifdef FEATURE_VLAN_MPDN
-	uint8_t vlan_id;
+	uint16_t vlan_id;
 #endif
 	eth_client_rt_hdl eth_rt_hdl[0]; /* depends on number of tx properties */
 }ipa_eth_client;
@@ -960,7 +960,7 @@ private:
 		return (ipa_eth_client *)ret;
 	}
 
-	inline int get_eth_client_index(uint8_t *mac_addr, uint8_t vlan_id = 0)
+	inline int get_eth_client_index(uint8_t *mac_addr, uint16_t vlan_id = 0)
 	{
 		int cnt;
 		int num_eth_client_tmp = num_eth_client;
@@ -1072,13 +1072,13 @@ private:
 	/* handle eth client initial, construct full headers (tx property) */
 	int handle_eth_hdr_init(uint8_t *mac_addr,
 		ipacm_bridge *bridge = NULL,
-		uint8_t vlan_id = 0, bool isVlan = false);
+		uint16_t vlan_id = 0, bool isVlan = false);
 
 	/* handle eth client ip-address */
 	int handle_eth_client_ipaddr(ipacm_event_data_all *data);
 
 	/* handle eth client routing rule*/
-	int handle_eth_client_route_rule(uint8_t *mac_addr, ipa_ip_type iptype, uint8_t vlan_id = 0);
+	int handle_eth_client_route_rule(uint8_t *mac_addr, ipa_ip_type iptype, uint16_t vlan_id = 0);
 
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
 	/* handle eth client routing rule with rule id*/
@@ -1086,7 +1086,7 @@ private:
 #endif
 
 	/*handle eth client del mode*/
-	int handle_eth_client_down_evt(uint8_t *mac_addr, uint8_t vlan_id = 0);
+	int handle_eth_client_down_evt(uint8_t *mac_addr, uint16_t vlan_id = 0);
 
 	/* handle odu client initial, construct full headers (tx property) */
 	int handle_odu_hdr_init(uint8_t *mac_addr);
@@ -1121,7 +1121,7 @@ private:
 #endif
 #ifdef FEATURE_VLAN_MPDN
 	int handle_vlan_neighbor(ipacm_event_data_all *data);
-	bool is_vlan_IF(uint8_t vlan_id);
+	bool is_vlan_IF(uint16_t vlan_id);
 	int handle_vlan_pdn_up(ipacm_event_vlan_pdn *data);
 	int handle_vlan_pdn_down(ipacm_event_vlan_pdn *data);
 	int handle_vlan_phys_if_down();

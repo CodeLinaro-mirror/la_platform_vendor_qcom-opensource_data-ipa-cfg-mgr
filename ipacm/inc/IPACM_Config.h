@@ -237,13 +237,13 @@ public:
 	void add_bridge_vlan_mapping(ipa_ioc_bridge_vlan_mapping_info *data);
 	void del_bridge_vlan_mapping(ipa_ioc_bridge_vlan_mapping_info *data);
 	int get_bridge_vlan_mapping(ipa_ioc_bridge_vlan_mapping_info *data);
-	bool is_lan2lan_sw_path(uint8_t vlan_id);
+	bool is_lan2lan_sw_path(uint16_t vlan_id);
 	void add_vlan_bridge(ipacm_event_data_all * data_all);
 	ipacm_bridge *get_vlan_bridge(char *name);
 	bool is_added_vlan_iface(char *iface_name);
 	bool iface_in_vlan_mode(const char * phys_iface_name);
-	int get_iface_vlan_ids(char *phys_iface_name, uint8_t *Ids);
-	int get_vlan_id(char *iface_name, uint8_t *vlan_id);
+	int get_iface_vlan_ids(char *phys_iface_name, uint16_t *Ids);
+	int get_vlan_id(char *iface_name, uint16_t *vlan_id);
 	void get_vlan_mode_ifaces();
 #endif
 

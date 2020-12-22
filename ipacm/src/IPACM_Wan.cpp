@@ -252,7 +252,7 @@ IPACM_Wan::~IPACM_Wan()
 
 #ifdef FEATURE_VLAN_MPDN
 
-int IPACM_Wan::GetMuxByVid(uint8_t vlan_id, uint8_t *mux_id, ipa_ip_type iptype)
+int IPACM_Wan::GetMuxByVid(uint16_t vlan_id, uint8_t *mux_id, ipa_ip_type iptype)
 {
 	for(int i = 0; i < IPA_MAX_NUM_SW_PDNS; i++)
 	{
@@ -1521,7 +1521,7 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 }
 
 #ifdef FEATURE_VLAN_MPDN
-int IPACM_Wan::handle_route_add_vlan_pdn_evt(ipa_ip_type iptype, uint8_t vlan_id)
+int IPACM_Wan::handle_route_add_vlan_pdn_evt(ipa_ip_type iptype, uint16_t vlan_id)
 {
 	struct ipa_ioc_add_rt_rule *rt_rule = NULL;
 	struct ipa_rt_rule_add *rt_rule_entry;

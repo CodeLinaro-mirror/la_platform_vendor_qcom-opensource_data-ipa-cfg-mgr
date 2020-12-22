@@ -268,7 +268,7 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 										/* for VLAN interfaces make sure bridge is with correct VID */
 										if(IPACM_Iface::ipacmcfg->iface_in_vlan_mode(neighbor_client[i].iface_name))
 										{
-											uint8_t vlan_id;
+											uint16_t vlan_id;
 											if(IPACM_Iface::ipacmcfg->get_vlan_id(neighbor_client[i].iface_name, &vlan_id))
 											{
 												IPACMERR("failed to get iface vlan ID, skipping\n");
@@ -659,7 +659,7 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 										/* for VLAN interfaces make sure bridge is with correct VID */
 										if(IPACM_Iface::ipacmcfg->iface_in_vlan_mode(neighbor_client[i].iface_name))
 										{
-											uint8_t vlan_id;
+											uint16_t vlan_id;
 											if(IPACM_Iface::ipacmcfg->get_vlan_id(neighbor_client[i].iface_name, &vlan_id))
 											{
 												IPACMERR("failed to get iface vlan ID, skipping\n");
@@ -798,7 +798,7 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 										/* for VLAN interfaces make sure bridge is with correct VID */
 										if(IPACM_Iface::ipacmcfg->iface_in_vlan_mode(data->iface_name))
 										{
-											uint8_t vlan_id;
+											uint16_t vlan_id;
 											if(IPACM_Iface::ipacmcfg->get_vlan_id(data->iface_name, &vlan_id))
 											{
 												IPACMERR("failed to get iface vlan ID, skipping\n");

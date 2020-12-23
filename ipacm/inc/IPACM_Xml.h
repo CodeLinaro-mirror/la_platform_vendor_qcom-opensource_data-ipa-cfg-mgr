@@ -158,6 +158,8 @@ if (!(a)) {                                                 \
 
 #define IPV6NextHeaderProtocol_TAG           "IPV6NextHeaderProtocol"
 
+#define IPV6NatEnabledfw_TAG                 "IPV6NatEnabledfw"
+
 #define TCPSource_TAG                        "TCPSource"
 #define TCPSourcePort_TAG                    "TCPSourcePort"
 #define TCPSourceRange_TAG                   "TCPSourceRange"
@@ -265,6 +267,9 @@ typedef struct
 	firewall_ip_version_enum  ip_vsn;
 #ifdef FEATURE_IPACM_UL_FIREWALL
 	IPACM_msgr_firewall_direction firewall_direction;
+#endif
+#ifdef FEATURE_IPV6_NAT
+	bool IPV6NatEnabledfw;
 #endif
 } IPACM_extd_firewall_entry_conf_t;
 

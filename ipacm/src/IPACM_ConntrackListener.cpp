@@ -35,6 +35,8 @@
 #include "IPACM_Iface.h"
 #include "IPACM_Wan.h"
 
+void ParseCTV6Message(struct nf_conntrack *ct);
+
 IPACM_ConntrackListener::IPACM_ConntrackListener() :
 	WanUp_v6(false),
 	ipv6ct_inst(Ipv6ct::GetInstance()),
@@ -162,13 +164,22 @@ void IPACM_ConntrackListener::event_callback(ipa_cm_event_id evt,
 #else
 	case IPA_PROCESS_CT_MESSAGE_V6:
 	{
-		if (IsIpv6CTEnabled())
-		{
-			IPACMDBG_H("Received IPA_PROCESS_CT_MESSAGE_V6 event\n");
-			const ipacm_ct_evt_data* evt_data = static_cast<const ipacm_ct_evt_data*>(data);
-			Ipv6ctEntry entry;
-			CreateIpv6ctEntryFromCtEventData(evt_data, entry);
+		const ipacm_ct_evt_data* evt_data = static_cast<const ipacm_ct_evt_data*>(data);
+		IPACMDBG_H("Received IPA_PROCESS_CT_MESSAGE_V6 event\n");
+#ifdef FEATURE_IPV6_NAT
+		if(IPACM_Iface::ipacmcfg->ipv6_nat_enable) {
+			Ipv6NatEntry entry;
+
+			IPACMDBG_H("nat enabled\n");
+			CreateIpv6NatEntryFromCtEventData(evt_data, entry);
 			ProcessCTMessage_v6(evt_data, entry);
+		} else
+#endif
+			if (IsIpv6CTEnabled()) {
+				Ipv6ctEntry entry;
+
+				CreateIpv6ctEntryFromCtEventData(evt_data, entry);
+				ProcessCTMessage_v6(evt_data, entry);
 		}
 #ifdef CT_OPT
 			ProcessCTV6Message(data);
@@ -284,7 +295,19 @@ void IPACM_ConntrackListener::event_callback(ipa_cm_event_id evt,
 
 	/* modify TCP/UDP filters to ignore local WLAN or LAN IPv6 connections */
 	case IPA_HANDLE_LAN_WLAN_UP_V6:
-		IPACM_ConntrackClient::UpdateFilters_v6(static_cast<ipacm_event_iface_up*>(data));
+#ifdef FEATURE_IPV6_NAT
+		if(pConfig == NULL)
+		{
+			pConfig = IPACM_Config::GetInstance();
+			if(pConfig == NULL)
+			{
+				IPACMERR("Unable to get Config instance\n");
+				break;
+			}
+		}
+		if(!pConfig->ipv6_nat_enable)
+#endif
+			IPACM_ConntrackClient::UpdateFilters_v6(static_cast<ipacm_event_iface_up*>(data));
 		break;
 
 	 case IPA_NEIGH_CLIENT_IP_ADDR_ADD_EVENT:
@@ -1054,7 +1077,7 @@ void IPACM_ConntrackListener::TriggerWANUp_v6(const ipacm_event_iface_up* evt_da
 
 	memcpy(wan_ifname, evt_data->ifname, sizeof(wan_ifname));
 
-	if (!ipv6ct_inst)
+	if(!ipv6ct_inst)
 		ipv6ct_inst = Ipv6ct::GetInstance();
 
 	ipv6ct_inst->AddTable(wan_ipaddr_v6);
@@ -1240,6 +1263,8 @@ void IPACM_ConntrackListener::TriggerWANDown_v6(const IpAddress& wan_addr)
 	}
 	wan_addr.DebugDump("Deleting the table with");
 #endif
+	/* delete entries one by one to insure all uc activation entries gets removed */
+	ipv6ct_inst->DelEntriesOnWanDown();
 	ipv6ct_inst->DeleteTable(wan_addr);
 	IPACMDBG_H("return\n");
 }
@@ -1302,18 +1327,31 @@ void ParseCTV6Message(struct nf_conntrack *ct)
 {
 	 uint32_t status, timeout;
 	 struct nfct_attr_grp_ipv6 orig_params;
+	 struct nfct_attr_grp_ipv6 repl_params;
 	 uint8_t l4proto, tcp_flags, tcp_state;
 
 	 IPACMDBG("Printing conntrack parameters\n");
 
 	 nfct_get_attr_grp(ct, ATTR_GRP_ORIG_IPV6, (void *)&orig_params);
+#ifdef FEATURE_IPV6_NAT
+	 nfct_get_attr_grp(ct, ATTR_GRP_REPL_IPV6, (void *)&repl_params);
+#endif
 	 IPACMDBG("Orig src_v6_addr: 0x%08x%08x%08x%08x\n", orig_params.src[0], orig_params.src[1],
                 	orig_params.src[2], orig_params.src[3]);
 	IPACMDBG("Orig dst_v6_addr: 0x%08x%08x%08x%08x\n", orig_params.dst[0], orig_params.dst[1],
                 	orig_params.dst[2], orig_params.dst[3]);
-
+#ifdef FEATURE_IPV6_NAT
+	IPACMDBG("Repl src_v6_addr: 0x%08x%08x%08x%08x\n", repl_params.src[0], repl_params.src[1],
+		repl_params.src[2], repl_params.src[3]);
+	IPACMDBG("Repl dst_v6_addr: 0x%08x%08x%08x%08x\n", repl_params.dst[0], repl_params.dst[1],
+		repl_params.dst[2], repl_params.dst[3]);
+#endif
 	 IPACMDBG("ATTR_PORT_SRC = ATTR_ORIG_PORT_SRC: 0x%x\n", nfct_get_attr_u16(ct, ATTR_ORIG_PORT_SRC));
 	 IPACMDBG("ATTR_PORT_DST = ATTR_ORIG_PORT_DST: 0x%x\n", nfct_get_attr_u16(ct, ATTR_ORIG_PORT_DST));
+#ifdef FEATURE_IPV6_NAT
+	 IPACMDBG("ATTR_PORT_SRC = ATTR_REPL_PORT_SRC: 0x%x\n", nfct_get_attr_u16(ct, ATTR_REPL_PORT_SRC));
+	 IPACMDBG("ATTR_PORT_DST = ATTR_REPL_PORT_DST: 0x%x\n", nfct_get_attr_u16(ct, ATTR_REPL_PORT_DST));
+#endif
 
 	 IPACMDBG("ATTR_MARK: 0x%x\n", nfct_get_attr_u32(ct, ATTR_MARK));
 	 IPACMDBG("ATTR_USE: 0x%x\n", nfct_get_attr_u32(ct, ATTR_USE));
@@ -1470,6 +1508,8 @@ void IPACM_ConntrackListener::ProcessCTMessage_v6(const ipacm_ct_evt_data* evt_d
 	/* Process message and generate ioctl call to kernel thread */
 	nfct_snprintf(buf, sizeof(buf), evt_data->ct, evt_data->type, NFCT_O_PLAIN, NFCT_OF_TIME);
 	IPACMDBG("%s\n", buf);
+
+	ParseCTV6Message(evt_data->ct);
 #endif
 
 	if (entry.Valid())
@@ -2681,7 +2721,192 @@ void IPACM_ConntrackListener::HandleSTAClientDelEvt_v6(const IpAddress& ip)
 
 	IPACMDBG_H("Successfully deleted STA client\n");
 }
+#ifdef FEATURE_IPV6_NAT
+void IPACM_ConntrackListener::CreateIpv6NatEntryFromCtEventData(const ipacm_ct_evt_data* evt_data,
+	Ipv6NatEntry& entry) const
+{
+	struct nfct_attr_grp_ipv6 orig_params;
+	struct nfct_attr_grp_ipv6 repl_params;
+	uint16_t srcPort, dstPort;
+	uint16_t replSrcPort, replDstPort;
 
+	IPACMDBG_H("\n");
+
+	nfct_get_attr_grp(evt_data->ct, ATTR_GRP_ORIG_IPV6, (void *)&orig_params);
+	nfct_get_attr_grp(evt_data->ct, ATTR_GRP_REPL_IPV6, (void *)&repl_params);
+	Ipv6IpAddress srcAddr(orig_params.src, true), dstAddr(orig_params.dst, true);
+	Ipv6IpAddress replSrcAddr(repl_params.src, true), replDstAddr(repl_params.dst, true);
+
+	srcPort = nfct_get_attr_u16(evt_data->ct, ATTR_ORIG_PORT_SRC);
+	dstPort = nfct_get_attr_u16(evt_data->ct, ATTR_ORIG_PORT_DST);
+	replSrcPort = nfct_get_attr_u16(evt_data->ct, ATTR_REPL_PORT_SRC);
+	if(!replSrcPort)
+	{
+		IPACMDBG("Received 0 replSrcPort\n");
+		goto bail;
+	}
+	replDstPort = nfct_get_attr_u16(evt_data->ct, ATTR_REPL_PORT_DST);
+	if(!replDstPort)
+	{
+		IPACMDBG("Received 0 replDstPort\n");
+		goto bail;
+	}
+
+	entry.m_protocol = nfct_get_attr_u8(evt_data->ct, ATTR_ORIG_L4PROTO);
+	if(entry.m_protocol == IPPROTO_UDP)
+	{
+		IPACMDBG("Received UDP packet\n");
+	}
+	else if(entry.m_protocol == IPPROTO_TCP)
+	{
+		IPACMDBG("Received TCP packet\n");
+	}
+	else
+	{
+		IPACMDBG("Received unexpected protocol %d conntrack message\n", entry.m_protocol);
+		goto bail;
+	}
+
+	if(!replDstAddr.IsGlobalAddr() && !dstAddr.IsGlobalAddr())
+	{
+		IPACMDBG("addresses aren't global, bail\n");
+		goto bail;
+	}
+
+	/* E2E case */
+	if(nat_iface_ipv6_addr.Find(srcAddr) != NULL)
+	{
+		IPACMDBG("found src addr in nat iface list - OUTBOUND\n");
+		entry.m_direction = NatEntryBase::DirectionOutbound;
+	}
+	else if(nat_iface_ipv6_addr.Find(replSrcAddr) != NULL)
+	{
+		IPACMDBG("found replSrcAddr addr in nat iface list - INBOUND\n");
+		entry.m_direction = NatEntryBase::DirectionInbound;
+	}
+	/*
+	 * embedded case
+	 * for mpdn case we need to revisit this and go over all offloaded PDNs
+	 */
+	else if((srcAddr == wan_ipaddr_v6) || (replSrcAddr == wan_ipaddr_v6))
+	{
+		if(isStaMode)
+		{
+			IPACMDBG("Don't install dummy rules in STA mode\n");
+			goto bail;
+		}
+		IPACMDBG(" Embedded - setting to dummy\n");
+		entry.m_isDummy = true;
+		/*
+		* for IPv6CT direction shall be installed as allow all
+		*/
+		if (srcAddr == wan_ipaddr_v6)
+			entry.m_direction = NatEntryBase::DirectionOutbound;
+		else
+			entry.m_direction = NatEntryBase::DirectionInbound;
+	}
+	/* nonnat iface case, need to create dummy nat rule with public ip  */
+	else if((nonnat_iface_ipv6_addr.Find(srcAddr) != NULL) ||
+		(nonnat_iface_ipv6_addr.Find(replSrcAddr) != NULL))
+	{
+		if(isStaMode)
+		{
+			IPACMDBG("Don't install dummy rules in STA mode\n");
+			goto bail;
+		}
+
+		IPACMDBG("nonnat - setting to dummy\n");
+		entry.m_isDummy = true;
+
+		/*
+		* for IPv6CT direction shall be installed as allow all
+		* override private ip with public ip
+		*/
+		if(nonnat_iface_ipv6_addr.Find(srcAddr))
+		{
+			IPACMDBG("outbound nonnat - override private with public ip\n");
+			entry.m_direction = NatEntryBase::DirectionOutbound;
+			srcAddr = replDstAddr;
+			srcPort = replDstPort;
+		}
+		else
+		{
+			IPACMDBG("inbound nonnat - override private with public ip\n");
+			entry.m_direction = NatEntryBase::DirectionInbound;
+			replSrcAddr = dstAddr;
+			replSrcPort = dstPort;
+		}
+	}
+	/* we probably didn't get the neigh event and this is going to Temp */
+	else
+	{
+		/*
+		 * last try to identify the direction by finding the NATed address
+		 * since Only the private address is NATed
+		 */
+		if((dstAddr == replSrcAddr) & (srcAddr != replDstAddr))
+		{
+			IPACMDBG_H("identified OUTBOUND NAT by addresses\n");
+			entry.m_direction = NatEntryBase::DirectionOutbound;
+		}
+		else if((srcAddr == replDstAddr) && (dstAddr != replSrcAddr))
+		{
+			IPACMDBG_H("identified INBOUND NAT by addresses\n");
+			entry.m_direction = NatEntryBase::DirectionInbound;
+		}
+		else
+		{
+			IPACMDBG("Neither source Nor destination NAT. entry invalid\n");
+			goto bail;
+		}
+	}
+
+	/* need to fill the fields as if it is an outbound connection */
+	if(entry.m_direction == NatEntryBase::DirectionOutbound)
+	{
+		srcAddr.DebugDump("srcAddr (private ip):");
+		replDstAddr.DebugDump("replDstAddr (public ip):");
+		dstAddr.DebugDump("dstAddr (target ip):");
+		replSrcAddr.DebugDump("replSrcAddr (target ip):");
+
+		entry.m_srcAddr = srcAddr;
+		entry.m_public_address = replDstAddr;
+		entry.m_srcPort = ntohs(srcPort);
+		entry.m_publicPort = ntohs(replDstPort);
+		entry.m_dstAddr = dstAddr;
+		entry.m_dstPort = ntohs(dstPort);
+	}
+	else if(entry.m_direction == NatEntryBase::DirectionInbound)
+	{
+		srcAddr.DebugDump("srcAddr (target ip):");
+		replDstAddr.DebugDump("replDstAddr (target ip):");
+		dstAddr.DebugDump("dstAddr (public ip):");
+		replSrcAddr.DebugDump("replSrcAddr (private ip):");
+
+		entry.m_srcAddr = replSrcAddr;
+		entry.m_public_address = dstAddr;
+		entry.m_srcPort = ntohs(replSrcPort);
+		entry.m_publicPort = ntohs(dstPort);
+		entry.m_dstAddr = srcAddr;
+		entry.m_dstPort = ntohs(srcPort);
+	}
+	else
+	{
+		IPACMERR("Bad direction %d\n", entry.m_direction);
+		goto bail;
+	}
+
+	IPACMDBG_H("return\n");
+	return;
+
+bail:
+	srcAddr.DebugDump("srcAddr");
+	replDstAddr.DebugDump("replDstAddr");
+	dstAddr.DebugDump("dstAddr");
+	replSrcAddr.DebugDump("replSrcAddr");
+	entry.Clear();
+}
+#endif
 void IPACM_ConntrackListener::CreateIpv6ctEntryFromCtEventData(const ipacm_ct_evt_data* evt_data,
 	Ipv6ctEntry& entry) const
 {
@@ -2724,6 +2949,7 @@ void IPACM_ConntrackListener::CreateIpv6ctEntryFromCtEventData(const ipacm_ct_ev
 			goto bail;
 		}
 
+		IPACMDBG("setting to dummy\n");
 		entry.m_isDummy = true;
 		entry.m_direction = NatEntryBase::DirectionOutbound;
 	}
@@ -2735,6 +2961,7 @@ void IPACM_ConntrackListener::CreateIpv6ctEntryFromCtEventData(const ipacm_ct_ev
 			goto bail;
 		}
 
+		IPACMDBG("setting to dummy\n");
 		entry.m_isDummy = true;
 		entry.m_direction = NatEntryBase::DirectionInbound;
 	}

@@ -41,9 +41,6 @@
 #include <unistd.h>
 #include <linux/msm_ipa.h>
 
-#define MAX_DMA_ENTRIES_FOR_ADD 4
-#define MAX_DMA_ENTRIES_FOR_DEL 3
-
 #define IPA_NAT_DEBUG_FILE_PATH "/sys/kernel/debug/ipa/ip4_nat"
 #define IPA_NAT_TABLE_NAME "IPA NAT table"
 #define IPA_NAT_INDEX_TABLE_NAME "IPA NAT index table"

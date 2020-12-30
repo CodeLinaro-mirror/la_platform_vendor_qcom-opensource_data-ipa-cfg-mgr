@@ -36,6 +36,7 @@
 #include <unistd.h>
 
 #define IPA_IPV6CT_DEBUG_FILE_PATH "/sys/kernel/debug/ipa/ipv6ct"
+#define IPA_UC_ACT_DEBUG_FILE_PATH "/sys/kernel/debug/ipa/uc_act_table"
 #define IPA_IPV6CT_TABLE_NAME "IPA IPv6CT table"
 
 static int ipa_ipv6ct_create_table(ipa_ipv6ct_table* ipv6ct_table, uint16_t number_of_entries, uint8_t table_index);
@@ -252,7 +253,8 @@ int ipa_ipv6ct_add_rule(uint32_t table_handle, const ipa_ipv6ct_rule* user_rule,
 	}
 
 	cmd = (struct ipa_ioc_nat_dma_cmd *)calloc(1,
-		sizeof(struct ipa_ioc_nat_dma_cmd) + sizeof(struct ipa_ioc_nat_dma_one));
+		sizeof(struct ipa_ioc_nat_dma_cmd) +
+		(MAX_DMA_ENTRIES_FOR_ADD * sizeof(struct ipa_ioc_nat_dma_one)));
 	if (cmd == NULL)
 	{
 		IPAERR("unable to allocate memory for Talbe DMA command\n");
@@ -355,7 +357,8 @@ int ipa_ipv6ct_del_rule(uint32_t table_handle, uint32_t rule_handle)
 	}
 
 	cmd = (struct ipa_ioc_nat_dma_cmd *)calloc(1,
-		sizeof(struct ipa_ioc_nat_dma_cmd) + sizeof(struct ipa_ioc_nat_dma_one));
+		sizeof(struct ipa_ioc_nat_dma_cmd) +
+		(MAX_DMA_ENTRIES_FOR_DEL * sizeof(struct ipa_ioc_nat_dma_one)));
 	if (cmd == NULL)
 	{
 		IPAERR("unable to allocate memory for Talbe DMA command\n");
@@ -857,9 +860,52 @@ void ipa_ipv6ct_dump_table(uint32_t table_handle)
 	/* Prevents interleaving with later kernel printouts. Flush doesn't help. */
 	sleep(1);
 	ipa_read_debug_info(IPA_IPV6CT_DEBUG_FILE_PATH);
+	ipa_read_debug_info(IPA_UC_ACT_DEBUG_FILE_PATH);
 	sleep(1);
 
 unlock:
 	if (pthread_mutex_unlock(&ipv6ct_mutex))
 		IPAERR("unable to unlock the ipv6ct mutex\n");
+}
+
+/**
+ * ipa_ipv6ct_add_uc_act_entry() - add uc activation entry
+ * @u: [in] structure specifying the uC activation entry
+ *
+ * Returns:	0  On Success, negative on failure
+ */
+int ipa_ipv6ct_add_uc_act_entry(union ipa_ioc_uc_activation_entry *u)
+{
+	IPADBG("\n");
+
+	if(ioctl(ipv6ct.ipa_desc->fd, IPA_IOC_ADD_UC_ACT_ENTRY, u))
+	{
+		IPAERR("ioctl (IPA_IOC_ADD_UC_ACT_ENTRY) on fd %d has failed\n",
+			ipv6ct.ipa_desc->fd);
+		return -EIO;
+	}
+	IPADBG("posted IPA_IOC_ADD_UC_ACT_ENTRY to kernel successfully, index %d\n",
+		u->ipv6_nat.index);
+	return 0;
+}
+
+/**
+ * ipa_ipv6ct_del_uc_act_entry() - del uc activation entry
+ * @index: [in] index of the uc activation entry to be removed
+ *
+ * Returns:	0  On Success, negative on failure
+ */
+int ipa_ipv6ct_del_uc_act_entry(uint16_t index)
+{
+	IPADBG("\n");
+
+	if(ioctl(ipv6ct.ipa_desc->fd, IPA_IOC_DEL_UC_ACT_ENTRY, index))
+	{
+		IPAERR("ioctl (IPA_IOC_DEL_UC_ACT_ENTRY) on fd %d has failed\n",
+			ipv6ct.ipa_desc->fd);
+		return -EIO;
+	}
+	IPADBG("posted IPA_IOC_DEL_UC_ACT_ENTRY to kernel successfully, index %d\n",
+		index);
+	return 0;
 }

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2018-2019 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2013, 2018-2020 The Linux Foundation. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -42,6 +42,9 @@
 #ifndef TRUE
 #define TRUE 1
 #endif
+
+#define MAX_DMA_ENTRIES_FOR_ADD 4
+#define MAX_DMA_ENTRIES_FOR_DEL 3
 
 #if !defined(MSM_IPA_TESTS) && !defined(FEATURE_IPA_ANDROID)
 #ifdef USE_GLIB

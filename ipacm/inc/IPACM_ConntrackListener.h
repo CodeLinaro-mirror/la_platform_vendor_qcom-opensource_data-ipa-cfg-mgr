@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013 - 2019 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2013 - 2020 The Linux Foundation. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -97,7 +97,7 @@ private:
 	bool WanUp_v6;
 	bool is_acct_enabled;
 	NatApp *nat_inst;
-	NatBase* ipv6ct_inst;
+	NatBase *ipv6ct_inst;
 
 	int NatIfaceCnt;
 	int StaClntCnt;
@@ -129,6 +129,9 @@ private:
 		enum nf_conntrack_msg_type, u_int8_t);
 	void ProcessTCPorUDPMsg_v6(const ipacm_ct_evt_data* evt_data, const NatEntryBase& entry);
 	void CreateIpv6ctEntryFromCtEventData(const ipacm_ct_evt_data* evt_data, Ipv6ctEntry& entry) const;
+#ifdef FEATURE_IPV6_NAT
+	void CreateIpv6NatEntryFromCtEventData(const ipacm_ct_evt_data* evt_data, Ipv6NatEntry& entry) const;
+#endif
 #ifdef FEATURE_VLAN_MPDN
 	void HandleVlanUp(void *);
 	void HandleVlanDown(void *);

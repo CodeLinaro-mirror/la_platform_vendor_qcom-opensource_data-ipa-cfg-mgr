@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2018-2019 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2013, 2018-2020 The Linux Foundation. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -1487,7 +1487,7 @@ static int IPACM_firewall_xml_parse_tree(const char *xml_file, xmlNode* xml_node
 						}
 						else
 						{
-							memcpy(config->net_dev, content, sizeof(config->net_dev));
+							strlcpy(config->net_dev, content, sizeof(config->net_dev));
 							IPACMDBG_H("NetDev is %s\n", config->net_dev);
 						}
 					}

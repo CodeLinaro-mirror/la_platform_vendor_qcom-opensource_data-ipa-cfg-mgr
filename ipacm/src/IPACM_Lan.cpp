@@ -6977,7 +6977,11 @@ int IPACM_Lan::config_dft_firewall_rules_ul_ex(IPACM_firewall_conf_t* firewall_c
 	{
 		if (firewall_conf->extd_firewall_entries[i].ip_vsn == 6 &&
 				firewall_conf->extd_firewall_entries[i].firewall_direction
-				== IPACM_MSGR_UL_FIREWALL)
+				== IPACM_MSGR_UL_FIREWALL
+#ifdef FEATURE_IPV6_NAT
+	&& !firewall_conf->extd_firewall_entries[i].IPV6NatEnabledfw
+#endif
+		)
 		{
 			v6_ul_wl_rules++;
 			if (firewall_conf->extd_firewall_entries[i].attrib.u.v6.next_hdr ==
@@ -7087,6 +7091,11 @@ int IPACM_Lan::config_dft_firewall_rules_ul_ex(IPACM_firewall_conf_t* firewall_c
 						firewall_conf->extd_firewall_entries[j].firewall_direction
 						== IPACM_MSGR_UL_FIREWALL)
 				{
+#ifdef FEATURE_IPV6_NAT
+					// in ipv6_nat_enable=false case, ignore the firewall rules if it's specific to v6nat
+					if(firewall_conf->extd_firewall_entries[j].IPV6NatEnabledfw)
+						continue;
+#endif
 					memset(&flt_rule_entry_fw, 0, sizeof(struct ipa_flt_rule_add));
 					flt_rule_entry_fw.at_rear = 1;
 					flt_rule_entry_fw.flt_rule_hdl = -1;
@@ -7340,6 +7349,11 @@ int IPACM_Lan::config_dft_firewall_rules_ul_ex(IPACM_firewall_conf_t* firewall_c
 			firewall_conf->extd_firewall_entries[i].firewall_direction
 			== IPACM_MSGR_UL_FIREWALL)
 		{
+#ifdef FEATURE_IPV6_NAT
+			// in ipv6_nat_enable=false case, ignore the firewall rules if it's specific to v6nat
+			if(firewall_conf->extd_firewall_entries[i].IPV6NatEnabledfw)
+				continue;
+#endif
 			memset(&flt_rule_entry, 0, sizeof(struct ipa_flt_rule_add));
 			flt_rule_entry.at_rear = true;
 			flt_rule_entry.flt_rule_hdl = -1;
@@ -7652,6 +7666,12 @@ int IPACM_Lan::config_dft_firewall_rules_ul(IPACM_firewall_conf_t* firewall_conf
 			firewall_conf->extd_firewall_entries[i].firewall_direction ==
 			IPACM_MSGR_UL_FIREWALL)
 		{
+
+#ifdef FEATURE_IPV6_NAT
+			// in ipv6_nat_enable=false case, ignore the firewall rules if it's specific to v6nat
+			if(firewall_conf->extd_firewall_entries[i].IPV6NatEnabledfw)
+				continue;
+#endif
 			memset(&flt_rule_entry, 0, sizeof(struct ipa_flt_rule_add));
 			flt_rule_entry.at_rear = false;
 			flt_rule_entry.flt_rule_hdl = -1;

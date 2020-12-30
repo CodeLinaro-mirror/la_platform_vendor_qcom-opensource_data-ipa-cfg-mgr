@@ -3463,7 +3463,12 @@ int IPACM_Wlan::config_dft_firewall_rules_ul_ex(IPACM_firewall_conf_t* firewall_
 	for (i = 0; i < firewall_conf->num_extd_firewall_entries; i++)
 		if (firewall_conf->extd_firewall_entries[i].ip_vsn == 6 &&
 				firewall_conf->extd_firewall_entries[i].firewall_direction
-				== IPACM_MSGR_UL_FIREWALL)
+				== IPACM_MSGR_UL_FIREWALL
+#ifdef FEATURE_IPV6_NAT
+			// IPV6 NAT FW rule, valid only when ipv6 NAT enabled (and then we don't install FW rules)
+			&& !firewall_conf->extd_firewall_entries[i].IPV6NatEnabledfw
+#endif
+			)
 			v6_ul_wl_rules++;
 
 	IPACMDBG_H("v6_ul_wl_rules %d\n", v6_ul_wl_rules);
@@ -3566,6 +3571,11 @@ int IPACM_Wlan::config_dft_firewall_rules_ul_ex(IPACM_firewall_conf_t* firewall_
 						firewall_conf->extd_firewall_entries[j].firewall_direction
 						== IPACM_MSGR_UL_FIREWALL)
 				{
+#ifdef FEATURE_IPV6_NAT
+					// IPV6 NAT FW rule, valid only when ipv6 NAT enabled (and then we don't install FW rules)
+					if(firewall_conf->extd_firewall_entries[i].IPV6NatEnabledfw)
+						continue;
+#endif
 					memset(&flt_rule_entry_fw, 0, sizeof(struct ipa_flt_rule_add));
 					flt_rule_entry_fw.at_rear = 1;
 					flt_rule_entry_fw.flt_rule_hdl = -1;

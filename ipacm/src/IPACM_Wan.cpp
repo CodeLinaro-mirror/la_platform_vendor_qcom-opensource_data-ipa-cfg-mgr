@@ -2585,6 +2585,11 @@ bool IPACM_Wan::check_dft_firewall_rules_attr_mask(IPACM_firewall_conf_t *firewa
 			!= IPACM_MSGR_UL_FIREWALL)
 #endif //n FEATURE_IPACM_UL_FIREWALL
 		{
+#ifdef FEATURE_IPV6_NAT
+			// in ipv6_nat_enable=false case, ignore the firewall rules if it's specific to v6nat
+			if(firewall_config->extd_firewall_entries[i].IPV6NatEnabledfw)
+				continue;
+#endif
 			if (firewall_config->extd_firewall_entries[i].attrib.attrib_mask & attrib_mask)
 			{
 				IPACMDBG_H("IHL based attribute mask is found: install IPv6 frag firewall rule \n");
@@ -2615,6 +2620,11 @@ bool IPACM_Wan::check_dft_firewall_rules_attr_mask_ul(IPACM_firewall_conf_t *fir
 			firewall_config->extd_firewall_entries[i].firewall_direction
 			== IPACM_MSGR_UL_FIREWALL)
 		{
+#ifdef FEATURE_IPV6_NAT
+			// in ipv6_nat_enable=false case, ignore the firewall rules if it's specific to v6nat
+			if(firewall_config->extd_firewall_entries[i].IPV6NatEnabledfw)
+				continue;
+#endif
 			if (firewall_config->extd_firewall_entries[i].attrib.attrib_mask & attrib_mask)
 			{
 				IPACMDBG_H("IHL based attribute mask is found: install IPv6 frag firewall rule \n");
@@ -2669,6 +2679,11 @@ int IPACM_Wan::config_dft_firewall_rules(ipa_ip_type iptype)
 				firewall_config.extd_firewall_entries[i].firewall_direction
 				== IPACM_MSGR_UL_FIREWALL)
 			{
+#ifdef FEATURE_IPV6_NAT
+				// in ipv6_nat_enable=false case, ignore the firewall rules if it's specific to v6nat
+				if(firewall_config.extd_firewall_entries[i].IPV6NatEnabledfw)
+					continue;
+#endif
 				rule_v6_ul++;
 			}
 			else if (firewall_config.extd_firewall_entries[i].ip_vsn == 6 &&
@@ -2679,6 +2694,11 @@ int IPACM_Wan::config_dft_firewall_rules(ipa_ip_type iptype)
 #endif
 				)
 			{
+#ifdef FEATURE_IPV6_NAT
+				// in ipv6_nat_enable=false case, ignore the firewall rules if it's specific to v6nat
+				if(firewall_config.extd_firewall_entries[i].IPV6NatEnabledfw)
+					continue;
+#endif
 				rule_v6++;
 			}
 #else //FEATURE_IPACM_UL_FIREWALL
@@ -2688,6 +2708,11 @@ int IPACM_Wan::config_dft_firewall_rules(ipa_ip_type iptype)
 			}
 			else
 			{
+#ifdef FEATURE_IPV6_NAT
+				// in ipv6_nat_enable=false case, ignore the firewall rules if it's specific to v6nat
+				if(firewall_config.extd_firewall_entries[i].IPV6NatEnabledfw)
+					continue;
+#endif
 				rule_v6++;
 			}
 #endif //n FEATURE_IPACM_UL_FIREWALL
@@ -3220,6 +3245,12 @@ int IPACM_Wan::config_dft_firewall_rules(ipa_ip_type iptype)
 						IPACM_MSGR_UL_FIREWALL)
 #endif //n FEATURE_IPACM_UL_FIREWALL
 					{
+#ifdef FEATURE_IPV6_NAT
+						// in ipv6_nat_enable=false case, ignore the firewall rules if it's specific to v6nat
+						if(firewall_config.extd_firewall_entries[i].IPV6NatEnabledfw)
+							continue;
+#endif
+
 						memset(&flt_rule_entry, 0, sizeof(struct ipa_flt_rule_add));
 
 						flt_rule_entry.at_rear = true;
@@ -3808,6 +3839,11 @@ int IPACM_Wan::read_firewall_filter_rules_ul(void)
 			num_mpdn_firewall_v6_ul[j] = 0;
 			for(int i = 0; i < curr_conf->num_extd_firewall_entries; i++)
 			{
+#ifdef FEATURE_IPV6_NAT
+				// in ipv6_nat_enable=false case, ignore the firewall rules if it's specific to v6nat
+				if(curr_conf->extd_firewall_entries[i].IPV6NatEnabledfw)
+					continue;
+#endif
 				if(curr_conf->extd_firewall_entries[i].ip_vsn == 6 &&
 					curr_conf->extd_firewall_entries[i].firewall_direction ==
 					IPACM_MSGR_UL_FIREWALL)
@@ -3863,6 +3899,11 @@ int IPACM_Wan::read_firewall_filter_rules_ul(void)
 			firewall_config_ul.extd_firewall_entries[i].firewall_direction ==
 			IPACM_MSGR_UL_FIREWALL)
 		{
+#ifdef FEATURE_IPV6_NAT
+			// in ipv6_nat_enable=false case, ignore the firewall rules if it's specific to v6nat
+			if(firewall_config_ul.extd_firewall_entries[i].IPV6NatEnabledfw)
+				continue;
+#endif
 			total_num_firewall_v6_ul++;
 		}
 
@@ -8678,6 +8719,12 @@ int IPACM_Wan::add_firewall_rules_ex(const IPACM_firewall_conf_t& firewall_confi
 			{
 				continue;
 			}
+
+#ifdef FEATURE_IPV6_NAT
+			// in ipv6_nat_enable=false case, ignore the firewall rules if it's specific to v6nat
+			if(firewall_config.extd_firewall_entries[i].IPV6NatEnabledfw)
+				continue;
+#endif
 
 			num_firewall = &num_firewall_v6;
 			num_flt_rule = &num_v6_flt_rule;

@@ -554,8 +554,18 @@ int IPACM_Config::Init(void)
 	}
 	else
 	{
-		ipa_ipv6ct_max_entries = 0;
-		IPACMDBG_H("IPv6CT is disabled\n");
+#ifdef FEATURE_IPV6_NAT
+		if(cfg->ipv6_nat_enable)
+		{
+			ipa_ipv6ct_max_entries = (cfg->ipv6ct_max_entries > 0) ? cfg->ipv6ct_max_entries : DEFAULT_IPV6CT_MAX_ENTRIES;
+			IPACMDBG_H("IPv6CT enabled due to ipv6nat\n");
+		}
+		else
+#endif
+		{
+			ipa_ipv6ct_max_entries = 0;
+			IPACMDBG_H("IPv6CT is disabled\n");
+		}
 	}
 
 	/* Find ODU is either router mode or bridge mode*/

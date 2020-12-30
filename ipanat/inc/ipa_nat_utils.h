@@ -43,6 +43,9 @@
 #define TRUE 1
 #endif
 
+#define MAX_DMA_ENTRIES_FOR_ADD 4
+#define MAX_DMA_ENTRIES_FOR_DEL 3
+
 #if !defined(MSM_IPA_TESTS) && !defined(FEATURE_IPA_ANDROID)
 #ifdef USE_GLIB
 #include <glib.h>

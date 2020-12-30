@@ -1488,7 +1488,7 @@ static int IPACM_firewall_xml_parse_tree(const char *xml_file, xmlNode* xml_node
 						}
 						else
 						{
-							memcpy(config->net_dev, content, sizeof(config->net_dev));
+							strlcpy(config->net_dev, content, sizeof(config->net_dev));
 							IPACMDBG_H("NetDev is %s\n", config->net_dev);
 						}
 					}

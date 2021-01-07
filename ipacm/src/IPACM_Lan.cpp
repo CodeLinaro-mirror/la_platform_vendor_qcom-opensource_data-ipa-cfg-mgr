@@ -1226,14 +1226,14 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 #ifdef FEATURE_SOCKSv5
 	case IPA_HANDLE_SOCKSv5_READY:
 		{
-			IPACMDBG_H("Received IPA_HANDLE_SOCKSv5_READY\n");
+			IPACMDBG_H("Received IPA_HANDLE_SOCKSv5_READY %d\n", IPA_HANDLE_SOCKSv5_READY);
 			ipacm_event_connection *data_evt_conn = (ipacm_event_connection *)param;
 			add_socksv5_flt_rule(data_evt_conn);
 		}
 		break;
 
 	case IPA_HANDLE_SOCKSv5_DOWN:
-		IPACMDBG_H("Received IPA_HANDLE_SOCKSv5_DOWN\n");
+		IPACMDBG_H("Received IPA_HANDLE_SOCKSv5_DOWN, %d\n", IPA_HANDLE_SOCKSv5_DOWN);
 		del_socksv5_flt_rule();
 		break;
 #endif
@@ -1982,16 +1982,6 @@ int IPACM_Lan::add_socksv5_flt_rule(ipacm_event_connection *data_event_conn)
 	flt_rule_entry.rule.attrib.u.v6.dst_addr_mask[1] = 0xFFFFFFFF;
 	flt_rule_entry.rule.attrib.u.v6.dst_addr_mask[2] = 0xFFFFFFFF;
 	flt_rule_entry.rule.attrib.u.v6.dst_addr_mask[3] = 0xFFFFFFFF;
-
-	flt_rule_entry.rule.attrib.attrib_mask |= IPA_FLT_SRC_ADDR;
-	flt_rule_entry.rule.attrib.u.v6.src_addr[0] = data_event_conn->src_ipv6_addr[0];
-	flt_rule_entry.rule.attrib.u.v6.src_addr[1] = data_event_conn->src_ipv6_addr[1];
-	flt_rule_entry.rule.attrib.u.v6.src_addr[2] = data_event_conn->src_ipv6_addr[2];
-	flt_rule_entry.rule.attrib.u.v6.src_addr[3] = data_event_conn->src_ipv6_addr[3];
-	flt_rule_entry.rule.attrib.u.v6.src_addr_mask[0] = 0xFFFFFFFF;
-	flt_rule_entry.rule.attrib.u.v6.src_addr_mask[1] = 0xFFFFFFFF;
-	flt_rule_entry.rule.attrib.u.v6.src_addr_mask[2] = 0xFFFFFFFF;
-	flt_rule_entry.rule.attrib.u.v6.src_addr_mask[3] = 0xFFFFFFFF;
 
 	flt_rule_entry.rule.attrib.attrib_mask |= IPA_FLT_NEXT_HDR;
 	flt_rule_entry.rule.attrib.u.v6.next_hdr = (uint8_t)IPACM_FIREWALL_IPPROTO_TCP;
@@ -3393,7 +3383,12 @@ int IPACM_Lan::handle_wan_up(ipa_ip_type ip_type)
 #endif
 			if (IPACM_Iface::ipacmcfg->IsIpv6CTEnabled() && !IPACM_Wan::isWan_Bridge_Mode())
 		{
+#ifndef FEATURE_SOCKSv5
+			/* for v6nat, need to revisit all v6ct related logic*/
 			flt_rule_entry.rule.action = IPA_PASS_TO_SRC_NAT;
+#else
+			flt_rule_entry.rule.action = IPA_PASS_TO_ROUTING;
+#endif
 		}
 		else
 		{
@@ -6557,7 +6552,7 @@ int IPACM_Lan::handle_uplink_filter_rule(ipacm_ext_prop *prop, ipa_ip_type iptyp
 	}
 	else if(iptype == IPA_IP_v6)
 	{
-#ifdef FEATURE_IPV6_NAT
+#if defined(FEATURE_IPV6_NAT) && !defined(FEATURE_SOCKSv5)
 		/* for v6 nat, second pass should go directly to RT block */
 		if(IPACM_Iface::ipacmcfg->ipv6_nat_enable)
 			flt_rule_entry.rule.action = IPA_PASS_TO_ROUTING;
@@ -6994,9 +6989,12 @@ bool IPACM_Lan::replicate_flt_rule(ipa_flt_rule_add *replicate_rule,
 	replicate_rule->rule.hashable = q6_rule->rule.hashable;
 	replicate_rule->rule.rule_id = q6_rule->rule.rule_id;
 	replicate_rule->rule.rt_tbl_hdl = q6_rule->rule.rt_tbl_hdl;
+#ifndef FEATURE_SOCKSv5
 	replicate_rule->rule.action = IPACM_Iface::ipacmcfg->IsIpv6CTEnabled()?
 		IPA_PASS_TO_SRC_NAT : IPA_PASS_TO_ROUTING;
-
+#else
+	replicate_rule->rule.action = IPA_PASS_TO_ROUTING;
+#endif
 exit:
 	return ret;
 }
@@ -7789,8 +7787,12 @@ int IPACM_Lan::config_dft_firewall_rules_ul(IPACM_firewall_conf_t* firewall_conf
 
 			if(firewall_conf->rule_action_accept == true)
 			{
+#ifndef FEATURE_SOCKSv5
 				flt_rule_entry.rule.action =
 					IPACM_Iface::ipacmcfg->IsIpv6CTEnabled() ? IPA_PASS_TO_SRC_NAT : IPA_PASS_TO_ROUTING;
+#else
+				flt_rule_entry.rule.action = IPA_PASS_TO_ROUTING;
+#endif
 			}
 			else
 			{
@@ -8264,7 +8266,7 @@ int IPACM_Lan::install_uplink_filter_rule_per_client_v2
 	}
 	else if(iptype == IPA_IP_v6)
 	{
-#ifdef FEATURE_IPV6_NAT
+#if defined(FEATURE_IPV6_NAT) && !defined(FEATURE_SOCKSv5)
 		/* for v6 nat, second pass should go directly to RT block */
 		if(IPACM_Iface::ipacmcfg->ipv6_nat_enable)
 			flt_rule_entry.rule.action = IPA_PASS_TO_ROUTING;
@@ -8519,7 +8521,7 @@ int IPACM_Lan::install_uplink_filter_rule_per_client
 	}
 	else if(iptype == IPA_IP_v6)
 	{
-#ifdef FEATURE_IPV6_NAT
+#if defined(FEATURE_IPV6_NAT) && !defined(FEATURE_SOCKSv5)
 		/* for v6 nat, second pass should go directly to RT block */
 		if(IPACM_Iface::ipacmcfg->ipv6_nat_enable)
 			flt_rule_entry.rule.action = IPA_PASS_TO_ROUTING;

@@ -804,7 +804,6 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 			return;
 		}
 		IPACMDBG_H("Backhaul is sta mode?%d\n", data_wan->is_sta);
-#ifndef FEATURE_SOCKSv5
 #ifdef FEATURE_VLAN_MPDN
 		/* VLAN IFACES don't care about default route */
 		if((IPACM_Iface::ipacmcfg->iface_in_vlan_mode(dev_name)) &&
@@ -820,7 +819,6 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 			}
 			return;
 		}
-#endif
 #endif
 		if(ip_type == IPA_IP_v4 || ip_type == IPA_IP_MAX)
 		{
@@ -1115,18 +1113,10 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 				{
 					IPACM_Iface::ipacmcfg->handle_vlan_client_info(data);
 					IPACMDBG_H("ipacm_socksv5_enable %d\n", IPACM_Iface::ipacmcfg->ipacm_socksv5_enable);
-					if (IPACM_Iface::ipacmcfg->ipacm_socksv5_enable == TRUE)
-					{
-						IPACMDBG_H("construct socksv5 DL rt-rule\n");
-						handle_vlan_neighbor(data);
-					}
 				}
-				else if((IPACM_Iface::ipacmcfg->ipacm_mpdn_enable == TRUE) ||
-					(IPACM_Iface::ipacmcfg->ipacm_socksv5_enable == TRUE))
-				{
-					IPACMDBG_H("construct end2end DL rt-rule for clients\n");
-					handle_vlan_neighbor(data);
-				}
+
+				IPACMDBG_H("construct DL rt-rule for socksv5 MPDN clients\n");
+				handle_vlan_neighbor(data);
 			}
 #endif
 			eth_index = get_eth_client_index(data->mac_addr);
@@ -1234,9 +1224,9 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 		break;
 
 #ifdef FEATURE_SOCKSv5
-	case IPA_HANDLE_SOCKSv5_UP:
+	case IPA_HANDLE_SOCKSv5_READY:
 		{
-			IPACMDBG_H("Received IPA_HANDLE_SOCKSv5_UP\n");
+			IPACMDBG_H("Received IPA_HANDLE_SOCKSv5_READY\n");
 			ipacm_event_connection *data_evt_conn = (ipacm_event_connection *)param;
 			add_socksv5_flt_rule(data_evt_conn);
 		}
@@ -2043,6 +2033,7 @@ int IPACM_Lan::del_socksv5_flt_rule(void)
 			return IPACM_FAILURE;
 		}
 	}
+	socksv5_flt_hdl_v6 = 0;
 	return IPACM_SUCCESS;
 }
 #endif
@@ -2179,53 +2170,55 @@ int IPACM_Lan::handle_vlan_neighbor(ipacm_event_data_all *data)
 
 	IPACMDBG_H("VLAN IF %s got client, vlan id %d \n", data->iface_name, vlan_id);
 	data_vlan = (ipacm_event_new_neigh_vlan *)data;
-#ifndef FEATURE_SOCKSv5
-	if(data_vlan->data_all.iptype == IPA_IP_v6)
-	{
-		if(IPACM_Wan::is_global_ipv6_addr(data_vlan->data_all.ipv6_addr))
+	if(IPACM_Iface::ipacmcfg->ipacm_mpdn_enable) {
+		if(data_vlan->data_all.iptype == IPA_IP_v6)
 		{
-			if (!IPACM_Wan::isWan_active_with_prefix(data_vlan->data_all.ipv6_addr))
+			if(IPACM_Wan::is_global_ipv6_addr(data_vlan->data_all.ipv6_addr))
 			{
-				if (neigh_cache.size() < 2*IPA_MAX_NUM_HW_PATH_CLIENTS)
+				if (!IPACM_Wan::isWan_active_with_prefix(data_vlan->data_all.ipv6_addr))
 				{
-					for (it = neigh_cache.begin(); it != neigh_cache.end(); ++it)
+					if (neigh_cache.size() < 2*IPA_MAX_NUM_HW_PATH_CLIENTS)
 					{
-						if ((it->ipv6_addr[0] == data->ipv6_addr[0]) && (it->ipv6_addr[1] == data->ipv6_addr[1])
-							&& (it->ipv6_addr[2] == data->ipv6_addr[2])  && (it->ipv6_addr[3] == data->ipv6_addr[3]))
+						for (it = neigh_cache.begin(); it != neigh_cache.end(); ++it)
 						{
-							IPACMDBG_H("Already cached client v6 addr : 0x%08x:%08x:%08x:%08x mac 0x%x%x%x%x%x%x\n",
+							if ((it->ipv6_addr[0] == data->ipv6_addr[0]) && (it->ipv6_addr[1] == data->ipv6_addr[1])
+								&& (it->ipv6_addr[2] == data->ipv6_addr[2])  && (it->ipv6_addr[3] == data->ipv6_addr[3]))
+							{
+								IPACMDBG_H("Already cached client v6 addr : 0x%08x:%08x:%08x:%08x mac 0x%x%x%x%x%x%x\n",
+									data_all.ipv6_addr[0], data_all.ipv6_addr[1], data_all.ipv6_addr[2], data_all.ipv6_addr[3],
+									data_all.mac_addr[0], data_all.mac_addr[1], data_all.mac_addr[2], data_all.mac_addr[3], data_all.mac_addr[4], data_all.mac_addr[5]);
+								break;
+							}
+						}
+						if (it == neigh_cache.end())
+						{
+							memcpy(&data_all, data, sizeof(ipacm_event_data_all));
+							neigh_cache.push_back(data_all);
+							IPACMDBG_H("Caching v6 addr : 0x%08x:%08x:%08x:%08x mac 0x%x%x%x%x%x%x\n",
 								data_all.ipv6_addr[0], data_all.ipv6_addr[1], data_all.ipv6_addr[2], data_all.ipv6_addr[3],
 								data_all.mac_addr[0], data_all.mac_addr[1], data_all.mac_addr[2], data_all.mac_addr[3], data_all.mac_addr[4], data_all.mac_addr[5]);
-							break;
 						}
 					}
-					if (it == neigh_cache.end())
-					{
-						memcpy(&data_all, data, sizeof(ipacm_event_data_all));
-						neigh_cache.push_back(data_all);
-						IPACMDBG_H("Caching v6 addr : 0x%08x:%08x:%08x:%08x mac 0x%x%x%x%x%x%x\n",
-							data_all.ipv6_addr[0], data_all.ipv6_addr[1], data_all.ipv6_addr[2], data_all.ipv6_addr[3],
-							data_all.mac_addr[0], data_all.mac_addr[1], data_all.mac_addr[2], data_all.mac_addr[3], data_all.mac_addr[4], data_all.mac_addr[5]);
-					}
+					return IPACM_FAILURE;
 				}
-				return IPACM_FAILURE;
+				/* add ipv6 prefix */
+				new_prefix = IPACM_Iface::ipacmcfg->add_vlan_ipv6_prefix(data_vlan->data_all.ipv6_addr, ipa_if_num);
 			}
-			/* add ipv6 prefix */
-			new_prefix = IPACM_Iface::ipacmcfg->add_vlan_ipv6_prefix(data_vlan->data_all.ipv6_addr, ipa_if_num);
+
+		}
+		else if(data_vlan->data_all.iptype == IPA_IP_v4)
+		{
+			add_vlan_private_subnet(data_vlan->bridge);
 		}
 
+		/* first construc ETH full header */
+		handle_eth_hdr_init(data->mac_addr, data_vlan->bridge, vlan_id, true);
 	}
-	else if(data_vlan->data_all.iptype == IPA_IP_v4)
+	else
 	{
-		add_vlan_private_subnet(data_vlan->bridge);
+		/* first construc ETH full header */
+		handle_eth_hdr_init(data->mac_addr, NULL, vlan_id, true);
 	}
-
-	/* first construc ETH full header */
-	handle_eth_hdr_init(data->mac_addr, data_vlan->bridge, vlan_id, true);
-#else
-	/* first construc ETH full header */
-	handle_eth_hdr_init(data->mac_addr, NULL, vlan_id, true);
-#endif
 
 	IPACMDBG_H("construct ETH header and route rules \n");
 	/* Associate with IP and construct RT-rule */
@@ -2233,49 +2226,49 @@ int IPACM_Lan::handle_vlan_neighbor(ipacm_event_data_all *data)
 	{
 		return IPACM_FAILURE;
 	}
-	
+
 	handle_eth_client_route_rule(data->mac_addr, data->iptype, vlan_id);
-#ifndef FEATURE_SOCKSv5
 
-	/* Add NAT rules after ipv4 RT rules are set */
-	HandleNeighIpAddrAddEvt(data);
+	if(IPACM_Iface::ipacmcfg->ipacm_mpdn_enable) {
+		/* Add NAT rules after ipv4 RT rules are set */
+		HandleNeighIpAddrAddEvt(data);
 
-	/*
-	 * if this is the first time we have this global ipv6 prefix (or this
-	 * is the default pdn prefix) we can notify WAN that it is a v6 vlan pdn
-	 */
-	if(new_prefix ||
-		((IPACM_Wan::backhaul_ipv6_prefix[0] || IPACM_Wan::backhaul_ipv6_prefix[1]) &&
-			(IPACM_Wan::backhaul_ipv6_prefix[0] == data_vlan->data_all.ipv6_addr[0]) &&
-			(IPACM_Wan::backhaul_ipv6_prefix[1] == data_vlan->data_all.ipv6_addr[1])))
-	{
-		ipacm_cmd_q_data evt_data;
-		ipacm_event_route_vlan *data;
-
-		IPACMDBG_H("generating IPA_ROUTE_ADD_VLAN_PDN_EVENT, new_prefix %d\n", new_prefix);
-		IPACMDBG_H("prefixes 0x[%X][%X], 0x[%X][%X]\n",
-			IPACM_Wan::backhaul_ipv6_prefix[0],
-			IPACM_Wan::backhaul_ipv6_prefix[1],
-			data_vlan->data_all.ipv6_addr[0],
-			data_vlan->data_all.ipv6_addr[1])
-
-		evt_data.event = IPA_ROUTE_ADD_VLAN_PDN_EVENT;
-		data = (ipacm_event_route_vlan *)malloc(sizeof(ipacm_event_route_vlan));
-		if(!data)
+		/*
+		 * if this is the first time we have this global ipv6 prefix (or this
+		 * is the default pdn prefix) we can notify WAN that it is a v6 vlan pdn
+		 */
+		if(new_prefix ||
+			((IPACM_Wan::backhaul_ipv6_prefix[0] || IPACM_Wan::backhaul_ipv6_prefix[1]) &&
+				(IPACM_Wan::backhaul_ipv6_prefix[0] == data_vlan->data_all.ipv6_addr[0]) &&
+				(IPACM_Wan::backhaul_ipv6_prefix[1] == data_vlan->data_all.ipv6_addr[1])))
 		{
-			IPACMERR("couldn't allocate memory for new vlan pdn event\n");
-			return IPACM_FAILURE;
-		}
-		data->iptype = IPA_IP_v6;
-		data->VlanID = vlan_id;
-		data->wan_ipv6_prefix[0] = data_vlan->data_all.ipv6_addr[0];
-		data->wan_ipv6_prefix[1] = data_vlan->data_all.ipv6_addr[1];
-		evt_data.evt_data = data;
-		IPACM_EvtDispatcher::PostEvt(&evt_data);
-	}
+			ipacm_cmd_q_data evt_data;
+			ipacm_event_route_vlan *data;
 
-	eth_bridge_post_event(IPA_ETH_BRIDGE_CLIENT_ADD, IPA_IP_MAX, data->mac_addr, NULL, data->iface_name, vlan_id);
-#endif
+			IPACMDBG_H("generating IPA_ROUTE_ADD_VLAN_PDN_EVENT, new_prefix %d\n", new_prefix);
+			IPACMDBG_H("prefixes 0x[%X][%X], 0x[%X][%X]\n",
+				IPACM_Wan::backhaul_ipv6_prefix[0],
+				IPACM_Wan::backhaul_ipv6_prefix[1],
+				data_vlan->data_all.ipv6_addr[0],
+				data_vlan->data_all.ipv6_addr[1])
+
+			evt_data.event = IPA_ROUTE_ADD_VLAN_PDN_EVENT;
+			data = (ipacm_event_route_vlan *)malloc(sizeof(ipacm_event_route_vlan));
+			if(!data)
+			{
+				IPACMERR("couldn't allocate memory for new vlan pdn event\n");
+				return IPACM_FAILURE;
+			}
+			data->iptype = IPA_IP_v6;
+			data->VlanID = vlan_id;
+			data->wan_ipv6_prefix[0] = data_vlan->data_all.ipv6_addr[0];
+			data->wan_ipv6_prefix[1] = data_vlan->data_all.ipv6_addr[1];
+			evt_data.evt_data = data;
+			IPACM_EvtDispatcher::PostEvt(&evt_data);
+		}
+
+		eth_bridge_post_event(IPA_ETH_BRIDGE_CLIENT_ADD, IPA_IP_MAX, data->mac_addr, NULL, data->iface_name, vlan_id);
+	}
 
 	return IPACM_SUCCESS;
 }
@@ -2769,7 +2762,7 @@ int IPACM_Lan::handle_wan_down(bool is_sta_mode)
 		IPACMERR("Rx prop is NULL, return\n");
 		return IPACM_SUCCESS;
 	}
-	
+
 	if(is_sta_mode == false)
 	{
 		if(del_ul_flt_rules(IPA_IP_v4))
@@ -2879,18 +2872,18 @@ int IPACM_Lan::handle_addr_evt(ipacm_event_data_addr *data)
 	}
 	else
 	{
-	    /* check if see that v6-addr already or not*/
-	    for(num_ipv6_addr=0;num_ipv6_addr<num_dft_rt_v6;num_ipv6_addr++)
-	    {
-            if((ipv6_addr[num_ipv6_addr][0] == data->ipv6_addr[0]) &&
-	           (ipv6_addr[num_ipv6_addr][1] == data->ipv6_addr[1]) &&
-	           (ipv6_addr[num_ipv6_addr][2] == data->ipv6_addr[2]) &&
-	           (ipv6_addr[num_ipv6_addr][3] == data->ipv6_addr[3]))
-            {
-				return IPACM_FAILURE;
-				break;
-	        }
-	    }
+		/* check if see that v6-addr already or not*/
+		for(num_ipv6_addr=0;num_ipv6_addr<num_dft_rt_v6;num_ipv6_addr++)
+		{
+			if((ipv6_addr[num_ipv6_addr][0] == data->ipv6_addr[0]) &&
+			   (ipv6_addr[num_ipv6_addr][1] == data->ipv6_addr[1]) &&
+			   (ipv6_addr[num_ipv6_addr][2] == data->ipv6_addr[2]) &&
+			   (ipv6_addr[num_ipv6_addr][3] == data->ipv6_addr[3]))
+			{
+					return IPACM_FAILURE;
+					break;
+			}
+		}
 
 		rt_rule = (struct ipa_ioc_add_rt_rule *)
 			 calloc(1, sizeof(struct ipa_ioc_add_rt_rule) +
@@ -2957,8 +2950,8 @@ int IPACM_Lan::handle_addr_evt(ipacm_event_data_addr *data)
 		dft_rt_rule_hdl[MAX_DEFAULT_v4_ROUTE_RULES + 2*num_dft_rt_v6+1] = rt_rule_entry->rt_rule_hdl;
 
 		IPACMDBG_H("ipv6 wan iface rt-rule hdl=0x%x hdl=0x%x, num_dft_rt_v6: %d \n",
-		          dft_rt_rule_hdl[MAX_DEFAULT_v4_ROUTE_RULES + 2*num_dft_rt_v6],
-		          dft_rt_rule_hdl[MAX_DEFAULT_v4_ROUTE_RULES + 2*num_dft_rt_v6+1],num_dft_rt_v6);
+			dft_rt_rule_hdl[MAX_DEFAULT_v4_ROUTE_RULES + 2*num_dft_rt_v6],
+			dft_rt_rule_hdl[MAX_DEFAULT_v4_ROUTE_RULES + 2*num_dft_rt_v6+1],num_dft_rt_v6);
 
 		if (num_dft_rt_v6 == 0)
 		{
@@ -3062,7 +3055,7 @@ int IPACM_Lan::handle_private_subnet(ipa_ip_type iptype)
 #ifdef FEATURE_IPA_V3
 			flt_rule_entry.rule.hashable = true;
 #endif
-                        /* Support private subnet feature including guest-AP can't talk to primary AP etc */
+			 /* Support private subnet feature including guest-AP can't talk to primary AP etc */
 			flt_rule_entry.rule.rt_tbl_hdl = IPACM_Iface::ipacmcfg->rt_tbl_default_v4.hdl;
 			IPACMDBG_H(" private filter rule use table: %s\n",IPACM_Iface::ipacmcfg->rt_tbl_default_v4.name);
 
@@ -3686,15 +3679,18 @@ int IPACM_Lan::handle_eth_hdr_init(uint8_t *mac_addr, ipacm_bridge *bridge, uint
 	/* add header to IPA */
 	if(tx_prop != NULL)
 	{
-#ifndef FEATURE_SOCKSv5
-#ifdef FEATURE_VLAN_MPDN
-		if(isVlan && !bridge)
+
+		if(IPACM_Iface::ipacmcfg->ipacm_mpdn_enable)
 		{
-			IPACMERR("vlan with NULL bridge\n");
-			return IPACM_FAILURE;
+#ifdef FEATURE_VLAN_MPDN
+			if(isVlan && !bridge)
+			{
+				IPACMERR("vlan with NULL bridge\n");
+				return IPACM_FAILURE;
+			}
+#endif
 		}
-#endif
-#endif
+
 		len = sizeof(struct ipa_ioc_add_hdr) + (1 * sizeof(struct ipa_hdr_add));
 		pHeaderDescriptor = (struct ipa_ioc_add_hdr *)calloc(1, len);
 		if (pHeaderDescriptor == NULL)
@@ -3794,8 +3790,7 @@ int IPACM_Lan::handle_eth_hdr_init(uint8_t *mac_addr, ipacm_bridge *bridge, uint
 				else
 #endif
 
-#ifndef FEATURE_SOCKSv5
-				if(IPACM_Iface::ipacmcfg->ipa_bridge_enable)
+				if((IPACM_Iface::ipacmcfg->ipa_bridge_enable) && (IPACM_Iface::ipacmcfg->ipacm_mpdn_enable))
 				{
 					memcpy(&pHeaderDescriptor->hdr[0].hdr[sCopyHeader.eth2_ofst + IPA_MAC_ADDR_SIZE],
 						IPACM_Iface::ipacmcfg->bridge_mac,
@@ -3808,7 +3803,7 @@ int IPACM_Lan::handle_eth_hdr_init(uint8_t *mac_addr, ipacm_bridge *bridge, uint
 						IPACM_Iface::ipacmcfg->bridge_mac[4],
 						IPACM_Iface::ipacmcfg->bridge_mac[5]);
 				}
-#endif
+
 				pHeaderDescriptor->commit = true;
 				pHeaderDescriptor->num_hdrs = 1;
 
@@ -3952,22 +3947,24 @@ int IPACM_Lan::handle_eth_hdr_init(uint8_t *mac_addr, ipacm_bridge *bridge, uint
 				/* non VLAN case */
 				else
 #endif
-#ifndef FEATURE_SOCKSv5
-				/* replace src mac to bridge mac_addr if any  */
-				if (IPACM_Iface::ipacmcfg->ipa_bridge_enable)
+				if (IPACM_Iface::ipacmcfg->ipacm_mpdn_enable)
 				{
-					memcpy(&pHeaderDescriptor->hdr[0].hdr[sCopyHeader.eth2_ofst+IPA_MAC_ADDR_SIZE],
-							IPACM_Iface::ipacmcfg->bridge_mac,
-							IPA_MAC_ADDR_SIZE);
-					IPACMDBG_H("device is in bridge mode (XML), MAC 0x[%X][%X][%X][%X][%X][%X]\n",
-						IPACM_Iface::ipacmcfg->bridge_mac[0],
-						IPACM_Iface::ipacmcfg->bridge_mac[1],
-						IPACM_Iface::ipacmcfg->bridge_mac[2],
-						IPACM_Iface::ipacmcfg->bridge_mac[3],
-						IPACM_Iface::ipacmcfg->bridge_mac[4],
-						IPACM_Iface::ipacmcfg->bridge_mac[5]);
+					/* replace src mac to bridge mac_addr if any  */
+					if (IPACM_Iface::ipacmcfg->ipa_bridge_enable)
+					{
+						memcpy(&pHeaderDescriptor->hdr[0].hdr[sCopyHeader.eth2_ofst+IPA_MAC_ADDR_SIZE],
+								IPACM_Iface::ipacmcfg->bridge_mac,
+								IPA_MAC_ADDR_SIZE);
+						IPACMDBG_H("device is in bridge mode (XML), MAC 0x[%X][%X][%X][%X][%X][%X]\n",
+							IPACM_Iface::ipacmcfg->bridge_mac[0],
+							IPACM_Iface::ipacmcfg->bridge_mac[1],
+							IPACM_Iface::ipacmcfg->bridge_mac[2],
+							IPACM_Iface::ipacmcfg->bridge_mac[3],
+							IPACM_Iface::ipacmcfg->bridge_mac[4],
+							IPACM_Iface::ipacmcfg->bridge_mac[5]);
+					}
 				}
-#endif
+
 				pHeaderDescriptor->commit = true;
 				pHeaderDescriptor->num_hdrs = 1;
 
@@ -4272,7 +4269,8 @@ int IPACM_Lan::handle_eth_client_ipaddr(ipacm_event_data_all *data)
 				(data->ipv6_addr[2] != 0) || (data->ipv6_addr[3] || 0)) /* check if all 0 not valid ipv6 address */
 		{
 			IPACMDBG_H("ipv6 address: 0x%x:%x:%x:%x\n", data->ipv6_addr[0], data->ipv6_addr[1], data->ipv6_addr[2], data->ipv6_addr[3]);
-#ifndef FEATURE_SOCKSv5
+			if(IPACM_Iface::ipacmcfg->ipacm_mpdn_enable)
+			{
 #ifdef FEATURE_IPV6_NAT
 				if(IPACM_Iface::ipacmcfg->ipv6_nat_enable && is_unique_local_ipv6_addr(data->ipv6_addr))
 				{
@@ -4281,38 +4279,38 @@ int IPACM_Lan::handle_eth_client_ipaddr(ipacm_event_data_all *data)
 #endif
 				if( ((data->ipv6_addr[0] & ipv6_link_local_prefix_mask) != (ipv6_link_local_prefix & ipv6_link_local_prefix_mask)) &&
 #ifdef FEATURE_VLAN_MPDN
-				/* returns true if a VLAN PDN or default PDN should be offloaded */
-				IPACM_Iface::ipacmcfg->is_offload_ipv6_prefix(data->ipv6_addr) != true)
+					/* returns true if a VLAN PDN or default PDN should be offloaded */
+					IPACM_Iface::ipacmcfg->is_offload_ipv6_prefix(data->ipv6_addr) != true)
 #else
-				memcmp(ipv6_prefix, data->ipv6_addr, sizeof(ipv6_prefix)) != 0)
+					memcmp(ipv6_prefix, data->ipv6_addr, sizeof(ipv6_prefix)) != 0)
 #endif
-			{
-				if (neigh_cache.size() < 2*IPA_MAX_NUM_HW_PATH_CLIENTS)
 				{
-					for (it = neigh_cache.begin(); it != neigh_cache.end(); ++it)
+					if (neigh_cache.size() < 2*IPA_MAX_NUM_HW_PATH_CLIENTS)
 					{
-						if ((it->ipv6_addr[0] == data->ipv6_addr[0]) && (it->ipv6_addr[1] == data->ipv6_addr[1])
-							&& (it->ipv6_addr[2] == data->ipv6_addr[2])  && (it->ipv6_addr[3] == data->ipv6_addr[3]))
+						for (it = neigh_cache.begin(); it != neigh_cache.end(); ++it)
 						{
-							IPACMDBG_H("Already cached client v6 addr : 0x%08x:%08x:%08x:%08x mac 0x%x%x%x%x%x%x\n",
+							if ((it->ipv6_addr[0] == data->ipv6_addr[0]) && (it->ipv6_addr[1] == data->ipv6_addr[1])
+								&& (it->ipv6_addr[2] == data->ipv6_addr[2])  && (it->ipv6_addr[3] == data->ipv6_addr[3]))
+							{
+								IPACMDBG_H("Already cached client v6 addr : 0x%08x:%08x:%08x:%08x mac 0x%x%x%x%x%x%x\n",
+									data_all.ipv6_addr[0], data_all.ipv6_addr[1], data_all.ipv6_addr[2], data_all.ipv6_addr[3],
+									data_all.mac_addr[0], data_all.mac_addr[1], data_all.mac_addr[2], data_all.mac_addr[3], data_all.mac_addr[4], data_all.mac_addr[5]);
+								break;
+							}
+						}
+						if (it == neigh_cache.end())
+						{
+							memcpy(&data_all, data, sizeof(ipacm_event_data_all));
+							neigh_cache.push_back(data_all);
+							IPACMDBG_H("Caching v6 addr : 0x%08x:%08x:%08x:%08x mac 0x%x%x%x%x%x%x\n",
 								data_all.ipv6_addr[0], data_all.ipv6_addr[1], data_all.ipv6_addr[2], data_all.ipv6_addr[3],
 								data_all.mac_addr[0], data_all.mac_addr[1], data_all.mac_addr[2], data_all.mac_addr[3], data_all.mac_addr[4], data_all.mac_addr[5]);
-							break;
 						}
 					}
-					if (it == neigh_cache.end())
-					{
-						memcpy(&data_all, data, sizeof(ipacm_event_data_all));
-						neigh_cache.push_back(data_all);
-						IPACMDBG_H("Caching v6 addr : 0x%08x:%08x:%08x:%08x mac 0x%x%x%x%x%x%x\n",
-							data_all.ipv6_addr[0], data_all.ipv6_addr[1], data_all.ipv6_addr[2], data_all.ipv6_addr[3],
-							data_all.mac_addr[0], data_all.mac_addr[1], data_all.mac_addr[2], data_all.mac_addr[3], data_all.mac_addr[4], data_all.mac_addr[5]);
-					}
+					IPACMDBG_H("This global IPv6 address is not with correct prefix, ignore.\n");
+					return IPACM_FAILURE;
 				}
-				IPACMDBG_H("This global IPv6 address is not with correct prefix, ignore.\n");
-				return IPACM_FAILURE;
 			}
-#endif
 			if(get_client_memptr(eth_client, clnt_indx)->ipv6_set < IPV6_NUM_ADDR)
 			{
 				for(v6_num=0;v6_num < get_client_memptr(eth_client, clnt_indx)->ipv6_set;v6_num++)
@@ -5928,6 +5926,10 @@ int IPACM_Lan::handle_down_evt()
 			}
 			IPACMERR("ODU ipv6 header delete success\n");
 		}
+#ifdef FEATURE_SOCKSv5
+		/* clean up socksv5 v6-rules*/
+		del_socksv5_flt_rule();
+#endif
 	}
 
 #ifdef FEATURE_L2TP
@@ -8943,7 +8945,6 @@ int IPACM_Lan::handle_wan_down_v6(bool is_sta_mode, bool is_support_mpdn)
 		IPACMERR("Rx prop is NULL, return\n");
 		return IPACM_SUCCESS;
 	}
-
 #ifdef FEATURE_VLAN_MPDN
 	/* prefixes list updated, install rules accordingly */
 	if (is_support_mpdn == true)
@@ -13105,13 +13106,16 @@ void IPACM_Lan::HandleNeighIpAddrAddEvt(ipacm_event_data_all *data)
 	case IPA_IP_v4:
 		CtList->HandleNeighIpAddrAddEvt(data);
 		break;
-#ifndef FEATURE_SOCKSv5
+
 	case IPA_IP_v6:
 	{
-		CtList->HandleNeighIpAddrAddEvt_v6(Ipv6IpAddress(data->ipv6_addr, false), data->if_index);
-		break;
+		if(IPACM_Iface::ipacmcfg->ipacm_mpdn_enable)
+		{
+			CtList->HandleNeighIpAddrAddEvt_v6(Ipv6IpAddress(data->ipv6_addr, false), data->if_index);
+			break;
+		}
 	}
-#endif
+
 	default:
 		IPACMERR("Not supported IP type %d", data->iptype);
 	}
@@ -13125,9 +13129,12 @@ void IPACM_Lan::HandleNeighIpAddrDelEvt(bool ipv4_set, uint32_t ipv4_addr,
 		CtList->HandleNeighIpAddrDelEvt(ipv4_addr);
 	}
 
-	for (int i = 0; i < ipv6_set; ++i)
+	if(IPACM_Iface::ipacmcfg->ipacm_mpdn_enable)
 	{
-		CtList->HandleNeighIpAddrDelEvt_v6(Ipv6IpAddress(ipv6_addr[i], false));
+		for (int i = 0; i < ipv6_set; ++i)
+		{
+			CtList->HandleNeighIpAddrDelEvt_v6(Ipv6IpAddress(ipv6_addr[i], false));
+		}
 	}
 }
 

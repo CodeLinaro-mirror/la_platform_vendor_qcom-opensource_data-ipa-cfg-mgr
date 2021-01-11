@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013-2020 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2013-2021 The Linux Foundation. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -285,6 +285,19 @@ IPACM_Lan::IPACM_Lan(int iface_index) : IPACM_Iface(iface_index)
 
 IPACM_Lan::~IPACM_Lan()
 {
+	/* free the client details*/
+	if(eth_client != NULL)
+	{
+		free(eth_client);
+	}
+	if(odu_route_rule_v4_hdl != NULL)
+	{
+		free(odu_route_rule_v4_hdl);
+	}
+	if(odu_route_rule_v6_hdl != NULL)
+	{
+		free(odu_route_rule_v6_hdl);
+	}
 	IPACM_EvtDispatcher::deregistr(this);
 	IPACM_IfaceManager::deregistr(this);
 	return;
@@ -435,14 +448,17 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 			if(rx_prop != NULL)
 			{
 				free(rx_prop);
+				rx_prop = NULL;
 			}
 			if(tx_prop != NULL)
 			{
 				free(tx_prop);
+				tx_prop = NULL;
 			}
 			if(iface_query != NULL)
 			{
 				free(iface_query);
+				iface_query = NULL;
 			}
 #endif
 			delete this;
@@ -2185,6 +2201,43 @@ int IPACM_Lan::handle_vlan_neighbor(ipacm_event_data_all *data)
 
 	/* Add NAT rules after ipv4 RT rules are set */
 	HandleNeighIpAddrAddEvt(data);
+
+	/* Special handling for VLAN clients in IP passthrough mode.
+	 * simillar to IPA_HANDLE_WAN_VLAN_PDN_UP.
+	 */
+	if ((data->iptype == IPA_IP_v4) &&
+		IPACM_Iface::ipacmcfg->is_ip_pass_enabled(device_type,
+				data->mac_addr, vlan_id))
+	{
+		/* Check if VLAN PDN is already up and add UL rules. */
+		uint8_t mux_id = 0;
+		if(!(IPACM_Wan::GetMuxByVid(vlan_id, &mux_id, IPA_IP_v4)))
+		{
+			ipacm_event_vlan_pdn vlan_data;
+			/* create event data and call the handler */
+			vlan_data.iptype = IPA_IP_v4;
+			vlan_data.mux_id = mux_id;
+
+			if(handle_vlan_pdn_up(&vlan_data))
+			{
+				IPACMERR("failed handling v4 VLAN up for VID %d, dev %s\n",
+					vlan_id,
+					dev_name);
+			}
+			else
+			{
+				IPACMDBG_H("handled v4 vlan pdn up for VID %d, dev %s\n",
+					vlan_id,
+					dev_name);
+			}
+		}
+		else
+		{
+			IPACMERR("VLAN PDN not up for VID %d, dev %s\n",
+				vlan_id,
+				dev_name);
+		}
+	}
 
 	/*
 	 * if this is the first time we have this global ipv6 prefix (or this
@@ -6256,10 +6309,12 @@ fail:
 	if (odu_route_rule_v4_hdl != NULL)
 	{
 		free(odu_route_rule_v4_hdl);
+		odu_route_rule_v4_hdl = NULL;
 	}
 	if (odu_route_rule_v6_hdl != NULL)
 	{
 		free(odu_route_rule_v6_hdl);
+		odu_route_rule_v6_hdl = NULL;
 	}
 	if (rx_prop != NULL)
 	{
@@ -6273,21 +6328,25 @@ fail:
 		}
 #ifndef FEATURE_ETH_BRIDGE_LE
 		free(rx_prop);
+		rx_prop = NULL;
 #endif
 	}
 
 	if (eth_client != NULL)
 	{
 		free(eth_client);
+		eth_client = NULL;
 	}
 #ifndef FEATURE_ETH_BRIDGE_LE
 	if (tx_prop != NULL)
 	{
 		free(tx_prop);
+		tx_prop = NULL;
 	}
 	if (iface_query != NULL)
 	{
 		free(iface_query);
+		iface_query = NULL;
 	}
 #endif
 	is_active = false;

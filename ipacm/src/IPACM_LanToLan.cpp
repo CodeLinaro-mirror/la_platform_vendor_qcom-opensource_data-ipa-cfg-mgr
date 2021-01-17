@@ -1595,10 +1595,12 @@ void IPACM_LanToLan_Iface::handle_vlan_id_del(uint16_t vlan_id)
 	list<client_info>::iterator it_client;
 
 	IPACMDBG_H("iface %s got vlan id %d del, looking for clients to remove\n",
-		get_iface_pointer()->dev_name, vlan_id);
+			get_iface_pointer()->dev_name, vlan_id);
 
 	/* go over all clients and remove those with the removed vlan id */
-	for(it_client = m_client_info.begin(); it_client != m_client_info.end(); it_client++)
+	IPACMDBG_H("There are %d m_client_info in total.\n", m_client_info.size());
+	it_client = m_client_info.begin();
+	while (it_client != m_client_info.end())
 	{
 		if(it_client->vlan_id == vlan_id)
 		{
@@ -1606,7 +1608,12 @@ void IPACM_LanToLan_Iface::handle_vlan_id_del(uint16_t vlan_id)
 				it_client->mac_addr[0], it_client->mac_addr[1], it_client->mac_addr[2],
 				it_client->mac_addr[3], it_client->mac_addr[4], it_client->mac_addr[5],
 				vlan_id);
-			handle_client_del(it_client->mac_addr, vlan_id);
+			it_client = handle_client_del(it_client->mac_addr, vlan_id);
+		}
+		else
+		{
+			IPACMDBG_H("skipping client with vlan id %d\n", it_client->vlan_id);
+			++it_client;
 		}
 	}
 
@@ -1964,7 +1971,7 @@ void IPACM_LanToLan_Iface::handle_client_add(uint8_t *mac, bool is_l2tp_client, 
 	return;
 }
 
-void IPACM_LanToLan_Iface::handle_client_del(uint8_t *mac, uint16_t vlan_id)
+list<client_info>::iterator IPACM_LanToLan_Iface::handle_client_del(uint8_t *mac, uint16_t vlan_id)
 {
 	list<client_info>::iterator it_client;
 	list<peer_iface_info>::iterator it_peer_info;
@@ -1974,7 +1981,7 @@ void IPACM_LanToLan_Iface::handle_client_del(uint8_t *mac, uint16_t vlan_id)
 	if((vlan_id && !m_is_vlan) || (!vlan_id && m_is_vlan))
 	{
 		IPACMDBG_H("vlan client (%d) and vlan mode(%d) mismatch, return\n", vlan_id, m_is_vlan);
-		return;
+		return m_client_info.end();
 	}
 #endif
 
@@ -2037,15 +2044,15 @@ void IPACM_LanToLan_Iface::handle_client_del(uint8_t *mac, uint16_t vlan_id)
 			del_client_rt_rule(&m_intra_interface_info, &(*it_client));
 		}
 
-		/* erase the client from client info list */
-		m_client_info.erase(it_client);
+		/* erase the client from client info list, return the next element in the list */
+		return m_client_info.erase(it_client);
 	}
 	else
 	{
 		IPACMDBG_H("The client is not found.\n");
 	}
 
-	return;
+	return m_client_info.end();
 }
 
 void IPACM_LanToLan_Iface::add_hdr_proc_ctx(ipa_hdr_l2_type peer_l2_type)

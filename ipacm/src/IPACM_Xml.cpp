@@ -492,6 +492,18 @@ static int ipacm_cfg_xml_parse_tree
 							config->qos_config.vlan_dscp_map[config->qos_config.num_mappings -1].dscp = dscp;
 					}
 				}
+				else if (IPACM_util_icmp_string((char*)xml_node->name, VLAN_NAME_TAG) == 0)
+				{
+					content = IPACM_read_content_element(xml_node);
+					if (content)
+					{
+						str_size = strlen(content);
+						memset(content_buf, 0, sizeof(content_buf));
+						strlcpy(content_buf, content, MAX_XML_STR_LEN);
+						strlcpy(config->qos_config.vlan_dscp_map[config->qos_config.num_mappings -1].iface_name, content_buf, IPA_IFACE_NAME_LEN);
+						IPACMDBG_H("Name %s\n", config->qos_config.vlan_dscp_map[config->qos_config.num_mappings -1].iface_name);
+					}
+				}
 #endif
 			}
 			break;

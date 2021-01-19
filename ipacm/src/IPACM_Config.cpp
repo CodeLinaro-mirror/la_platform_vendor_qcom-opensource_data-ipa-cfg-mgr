@@ -299,8 +299,11 @@ int IPACM_Config::Init(void)
 	{
 		qos_config.vlan_dscp_map[i].vlan_id = cfg->qos_config.vlan_dscp_map[i].vlan_id;
 		qos_config.vlan_dscp_map[i].dscp = cfg->qos_config.vlan_dscp_map[i].dscp;
-		IPACMDBG_H("IPACM_Config::ipacm_qos[%d] vlanid = %d, dscp=%d\n",
-			i, qos_config.vlan_dscp_map[i].vlan_id, qos_config.vlan_dscp_map[i].dscp);
+		strlcpy(qos_config.vlan_dscp_map[i].iface_name,
+			cfg->qos_config.vlan_dscp_map[i].iface_name, IPA_IFACE_NAME_LEN);
+		IPACMDBG_H("IPACM_Config::ipacm_qos[%d] vlanid = %d, dscp=%d, name=%s\n",
+			i, qos_config.vlan_dscp_map[i].vlan_id, qos_config.vlan_dscp_map[i].dscp,
+			qos_config.vlan_dscp_map[i].iface_name);
 	}
 #endif
 	ipa_nat_max_entries = cfg->nat_max_entries;
@@ -965,7 +968,15 @@ bool IPACM_Config::iface_in_vlan_mode(const char *phys_iface_name)
 		IPACMDBG("eth vlan mode %d\n", vlan_devices[IPA_VLAN_IF_ETH]);
 		return vlan_devices[IPA_VLAN_IF_ETH];
 	}
-	IPACMDBG("iface did not match any known ifaces\n");
+	for (int i = 0 ; i < IPA_MAX_QOS_ENTRIES; ++i)
+	{
+		if (strncmp(qos_config.vlan_dscp_map[i].iface_name, phys_iface_name, IPA_IFACE_NAME_LEN) == 0)
+		{
+			IPACMDBG("Intf %s is vlan intf\n",phys_iface_name);
+			return true;
+		}
+	}
+	IPACMDBG("iface %s did not match any known ifaces\n",phys_iface_name);
 	return false;
 }
 #endif

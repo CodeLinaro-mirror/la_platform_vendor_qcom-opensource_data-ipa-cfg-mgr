@@ -183,20 +183,24 @@
 		</IPACMNAT>
 		<IPACMQoS>
 			<Mapping>
-				<VLANID>0</VLANID>
-				<DSCP>0</DSCP>
+				<VLANID>44</VLANID>
+				<DSCP>50</DSCP>
+				<VlanName>VETH0_44</VlanName>
 			</Mapping>
 			<Mapping>
-				<VLANID>0</VLANID>
-				<DSCP>0</DSCP>
+				<VLANID>45</VLANID>
+				<DSCP>57</DSCP>
+				<VlanName>VETH0_45</VlanName>
 			</Mapping>
 			<Mapping>
-				<VLANID>0</VLANID>
-				<DSCP>0</DSCP>
+				<VLANID>46</VLANID>
+				<DSCP>62</DSCP>
+				<VlanName>VETH0_46</VlanName>
 			</Mapping>
 			<Mapping>
-				<VLANID>0</VLANID>
-				<DSCP>0</DSCP>
+				<VLANID>43</VLANID>
+				<DSCP>42</DSCP>
+				<VlanName>VETH0_43</VlanName>
 			</Mapping>
 		</IPACMQoS>
 	</IPACM>

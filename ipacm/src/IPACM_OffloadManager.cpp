@@ -617,8 +617,11 @@ RET IPACM_OffloadManager::setQuota(const char * upstream_name /* upstream */, ui
 	if ((fd = open(DEVICE_NAME, O_RDWR)) < 0)
 	{
 		IPACMERR("Failed opening %s.\n", DEVICE_NAME);
-		if (IPACM_Iface::ipacmcfg->isVlanBackhaulSupported() && strstr(upstream_name,VETH_NETDEV))
+		if (IPACM_Iface::ipacmcfg->isVlanBackhaulSupported() &&
+			(IPACM_Iface::ipacmcfg->iface_in_vlan_mode(upstream_name))) {
+			IPACMDBG("Intf %s is vlan intf\n",upstream_name);
 			return SUCCESS;
+		}
 		return FAIL_HARDWARE;
 	}
 
@@ -661,7 +664,9 @@ RET IPACM_OffloadManager::getStats(const char * upstream_name /* upstream */,
 
 	if ((fd = open(DEVICE_NAME, O_RDWR)) < 0) {
 		IPACMERR("Failed opening %s.\n", DEVICE_NAME);
-		if (IPACM_Iface::ipacmcfg->isVlanBackhaulSupported() && strstr(upstream_name,VETH_NETDEV)) {
+		if (IPACM_Iface::ipacmcfg->isVlanBackhaulSupported() &&
+			(IPACM_Iface::ipacmcfg->iface_in_vlan_mode(upstream_name))) {
+			IPACMDBG("Intf %s is vlan intf\n",upstream_name);
 			//stub out getStats for APQ platform
 			IPACMDBG_H("upstream %s reset %d ignored on APQ platform\n", upstream_name, reset);
 			offload_stats.tx = 1;
@@ -783,7 +788,9 @@ int IPACM_OffloadManager::resetTetherStats(const char * upstream_name /* upstrea
 
 	if ((fd = open(DEVICE_NAME, O_RDWR)) < 0) {
 		IPACMERR("Failed opening %s.\n", DEVICE_NAME);
-		if (IPACM_Iface::ipacmcfg->isVlanBackhaulSupported() && strstr(upstream_name,VETH_NETDEV))
+		if (IPACM_Iface::ipacmcfg->isVlanBackhaulSupported() &&
+			(IPACM_Iface::ipacmcfg->iface_in_vlan_mode(upstream_name)))
+			IPACMDBG("Intf %s is vlan intf\n",upstream_name);
 			return IPACM_SUCCESS;
 		return FAIL_HARDWARE;
 	}

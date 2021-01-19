@@ -187,7 +187,7 @@ if (!(a)) {                                                 \
 #define QoS_Mapping_TAG            "Mapping"
 #define QoS_DSCP_TAG               "DSCP"
 #define QoS_VLANID_TAG             "VLANID"
-
+#define VLAN_NAME_TAG              "VlanName"
 /*---------------------------------------------------------------------------
       IP protocol numbers - use in dss_socket() to identify protocols.
       Also contains the extension header types for IPv6.
@@ -284,6 +284,7 @@ typedef struct
 {
 	uint16_t vlan_id;
 	uint8_t dscp;
+	char iface_name[IPA_IFACE_NAME_LEN];
 }ipacm_vlan_dscp_mapping_t;
 
 typedef struct

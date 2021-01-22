@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2013, 2018-2019, The Linux Foundation. All rights reserved.
+Copyright (c) 2013, 2018-2020, The Linux Foundation. All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are
@@ -385,6 +385,9 @@ private:
 	uint32_t firewall_hdl_v4[IPACM_MAX_FIREWALL_ENTRIES];
 	uint32_t firewall_hdl_v6[IPACM_MAX_FIREWALL_ENTRIES];
 	uint32_t dft_wan_fl_hdl[IPA_NUM_DEFAULT_WAN_FILTER_RULES];
+#ifdef FEATURE_IPV6_NAT
+	uint32_t ipv6_ula_prefix_hdl;
+#endif
 	uint32_t ipv6_dest_flt_rule_hdl[MAX_DEFAULT_v6_ROUTE_RULES];
 	int num_ipv6_dest_flt_rule;
 	uint32_t ODU_fl_hdl[IPA_NUM_DEFAULT_WAN_FILTER_RULES];
@@ -641,6 +644,10 @@ private:
 	/* configure the initial firewall filter rules */
 	int config_dft_embms_rules(ipa_ioc_add_flt_rule *pFilteringTable_v4, ipa_ioc_add_flt_rule *pFilteringTable_v6);
 
+#ifdef FEATURE_SOCKSv5
+	/* configure the socksv5 dl rules */
+	int config_socksv5_rules(ipa_ioc_add_flt_rule *pFilteringTable_v6);
+#endif
 	int handle_route_del_evt(ipa_ip_type iptype);
 
 	int del_dft_firewall_rules(ipa_ip_type iptype);
@@ -686,7 +693,7 @@ private:
 	int add_dft_filtering_rule(struct ipa_flt_rule_add* rules, int rule_offset, ipa_ip_type iptype);
 #endif
 
-	int install_wan_filtering_rule(bool is_sw_routing);
+	int install_wan_filtering_rule(bool is_sw_routing, bool is_socksv5_en = false);
 
 	void change_to_network_order(ipa_ip_type iptype, ipa_rule_attrib* attrib);
 
@@ -717,6 +724,18 @@ private:
 	
 	int add_catchup_all_filtering_rule_each_pdn(const IPACM_firewall_conf_t& firewall_config, ipa_ip_type iptype,
 		const struct ipa_rule_attrib& rx_prop_attrib, struct ipa_flt_rule_add& flt_rule_add, int fltr_rule_number);
+
+#ifdef FEATURE_IPV6_NAT
+#ifdef FEATURE_VLAN_MPDN
+	int add_ipv6_nat_ula_prefix_flt_rule_ex(const struct ipa_rule_attrib& rx_prop_attrib,
+		ipacm_pdn_flt_rule* rules, int fltr_rule_number);
+#else
+	int add_ipv6_nat_ula_prefix_flt_rule_ex(const struct ipa_rule_attrib& rx_prop_attrib,
+	struct ipa_flt_rule_add *rules, int fltr_rule_number);
+#endif
+
+	int add_ipv6_nat_ula_prefix_flt_rule(ipa_ioc_add_flt_rule *m_pFilteringTable);
+#endif // FEATURE_IPV6_NAT
 	int add_ipv6_frag_filtering_rule_ex(const struct ipa_rule_attrib& rx_prop_attrib,
 		struct ipa_flt_rule_add& flt_rule_add, int fltr_rule_number);
 #ifndef FEATURE_VLAN_MPDN

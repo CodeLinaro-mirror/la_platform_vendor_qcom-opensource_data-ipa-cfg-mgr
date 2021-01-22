@@ -1448,6 +1448,11 @@ Ipv6IpAddress::Ipv6IpAddress() : IpAddress(IPA_IP_v6), m_msb(0), m_lsb(0)
 	IPACMDBG_H("\n");
 }
 
+Ipv6IpAddress::~Ipv6IpAddress()
+{
+	DebugDump("destroying ");
+}
+
 Ipv6IpAddress::Ipv6IpAddress(const uint32_t* addr, bool inputNetworkEndianness) :
 	IpAddress(IPA_IP_v6),
 	m_msb(Convert2x32to64(addr, inputNetworkEndianness)),
@@ -1458,7 +1463,6 @@ Ipv6IpAddress::Ipv6IpAddress(const uint32_t* addr, bool inputNetworkEndianness) 
 
 bool Ipv6IpAddress::Compare(const IpAddress& other) const
 {
-	IPACMDBG_H("\n");
 	if (other.GetType() != IPA_IP_v6)
 	{
 		IPACMERR("Wrong IP type\n");
@@ -1467,7 +1471,6 @@ bool Ipv6IpAddress::Compare(const IpAddress& other) const
 
 	const Ipv6IpAddress& ip = static_cast<const Ipv6IpAddress&>(other);
 	bool ret = m_lsb == ip.m_lsb && m_msb == ip.m_msb;
-	IPACMDBG_H("return\n");
 	return ret;
 }
 
@@ -1511,7 +1514,6 @@ void Ipv6IpAddress::Clear()
 
 bool Ipv6IpAddress::Valid() const
 {
-	IPACMDBG_H("\n");
 	return m_lsb != 0 || m_msb != 0;
 }
 
@@ -1554,7 +1556,12 @@ uint64_t Ipv6IpAddress::Convert2x32to64(const uint32_t* pair32, bool inputNetwor
 	IPACMDBG_H("return\n");
 	return static_cast<uint64_t>(msb) << 32 | lsb;
 }
-
+#ifdef FEATURE_IPV6_NAT
+uint64_t Ipv6IpAddress::Get64EndianSwaped(uint64_t Addr) const
+{
+	return (((uint64_t)htonl((Addr)& 0xFFFFFFFF) << 32) | htonl((Addr) >> 32));
+}
+#endif
 void Ipv6IpAddress::Convert64to2x32(uint64_t in, uint32_t* pair32, bool outputNetworkEndianness)
 {
 	IPACMDBG_H("\n");
@@ -1567,7 +1574,30 @@ void Ipv6IpAddress::Convert64to2x32(uint64_t in, uint32_t* pair32, bool outputNe
 	}
 	IPACMDBG_H("return\n");
 }
+#ifdef FEATURE_IPV6_NAT
+bool Ipv6IpAddress::IsGlobalAddr() const
+{
+	uint64_t ipv6_link_local_prefix, ipv6_link_local_prefix_mask, ipv6_ula_prefix, ipv6_ula_mask;
+	ipv6_link_local_prefix = 0xFE80000000000000;
+	ipv6_link_local_prefix_mask = 0xFFC0000000000000;
+	ipv6_ula_prefix = 0xFD00000000000000;
+	ipv6_ula_mask = 0xFF00000000000000;
 
+	if((m_msb & ipv6_link_local_prefix_mask) == (ipv6_link_local_prefix & ipv6_link_local_prefix_mask))
+	{
+		IPACMDBG_H("This IPv6 address is link local.\n");
+		return false;
+	}
+
+	if((m_msb & ipv6_ula_mask) == (ipv6_ula_prefix & ipv6_ula_mask))
+	{
+		IPACMDBG_H("This IPv6 address is unique local.\n");
+		return false;
+	}
+
+	return true;
+}
+#endif
 NatEntryBase::NatEntryBase(ipa_ip_type type) :
 	m_type(type),
 	m_timestamp(0),
@@ -1575,7 +1605,10 @@ NatEntryBase::NatEntryBase(ipa_ip_type type) :
 	m_ruleHandle(0),
 	m_protocol(0),
 	m_enabled(false),
-	m_isDummy(false)
+	m_isDummy(false),
+	m_uc_activation_index(0),
+	m_ucp(0),
+	m_s(0)
 {
 	IPACMDBG_H("%d \n", type);
 }
@@ -1587,19 +1620,22 @@ NatEntryBase::~NatEntryBase()
 
 bool NatEntryBase::Compare(const NatEntryBase& other) const
 {
-	IPACMDBG_H("\n");
 	return m_protocol == other.m_protocol;
 }
 
 void NatEntryBase::Copy(const NatEntryBase& other)
 {
-	IPACMDBG_H("\n");
+	IPACMDBG_H("NatEntryBase\n");
 	m_timestamp = other.m_timestamp;
 	m_direction = other.m_direction;
 	m_ruleHandle = other.m_ruleHandle;
 	m_protocol = other.m_protocol;
 	m_enabled = other.m_enabled;
 	m_isDummy = other.m_isDummy;
+	m_uc_activation_index = other.m_uc_activation_index;
+	m_ucp = other.m_ucp;
+	m_s = other.m_s;
+	IPACMDBG_H("copied uc activation data: idx %d, ucp:%d s: %d", m_uc_activation_index, m_ucp, m_s);
 	IPACMDBG_H("return\n");
 }
 
@@ -1612,6 +1648,9 @@ void NatEntryBase::Clear()
 	m_protocol = 0;
 	m_enabled = false;
 	m_isDummy = false;
+	m_uc_activation_index = 0;
+	m_ucp = false;
+	m_s = false;
 	IPACMDBG_H("return\n");
 }
 
@@ -1710,7 +1749,7 @@ bool Ipv6ctEntry::Compare(const NatEntryBase& other) const
 
 void Ipv6ctEntry::Copy(const NatEntryBase& other)
 {
-	IPACMDBG_H("\n");
+	IPACMDBG_H("Ipv6ctEntry\n");
 	if (other.m_type != IPA_IP_v6)
 	{
 		IPACMERR("Wrong IP type\n");
@@ -1724,6 +1763,7 @@ void Ipv6ctEntry::Copy(const NatEntryBase& other)
 	m_dstAddr = entry.m_dstAddr;
 	m_dstPort = entry.m_dstPort;
 	m_srcPort = entry.m_srcPort;
+	m_isDummy = entry.m_isDummy;
 	IPACMDBG_H("return\n");
 }
 
@@ -1741,7 +1781,6 @@ void Ipv6ctEntry::Clear()
 
 bool Ipv6ctEntry::Valid() const
 {
-	IPACMDBG_H("\n");
 	return m_dstPort && m_srcPort && m_srcAddr.Valid() && m_dstAddr.Valid();
 }
 
@@ -1770,6 +1809,98 @@ const IpAddress& Ipv6ctEntry::GetTargetIp() const
 	return m_dstAddr;
 }
 
+const uint16_t& Ipv6ctEntry::GetSrcPort() const
+{
+	return m_srcPort;
+}
+
+const uint16_t& Ipv6ctEntry::GetDstPort() const
+{
+	return m_dstPort;
+}
+#ifdef FEATURE_IPV6_NAT
+Ipv6NatEntry:: Ipv6NatEntry() : Ipv6ctEntry(), m_publicPort(0)
+{
+	IPACMDBG_H("\n");
+}
+
+bool Ipv6NatEntry::Compare(const NatEntryBase& other) const
+{
+	if(other.m_type != IPA_IP_v6)
+	{
+		IPACMERR("Wrong IP type\n");
+		return false;
+	}
+
+	const Ipv6NatEntry& entry = static_cast<const Ipv6NatEntry&>(other);
+	return (NatEntryBase::Compare(other) &&
+		m_srcAddr == entry.m_srcAddr &&
+		m_public_address == entry.m_public_address &&
+		m_dstAddr == entry.m_dstAddr &&
+		m_dstPort == entry.m_dstPort &&
+		m_srcPort == entry.m_srcPort &&
+		m_publicPort == entry.m_publicPort);
+}
+
+void Ipv6NatEntry::Copy(const NatEntryBase& other)
+{
+	IPACMDBG_H("Ipv6NatEntry\n");
+	if(other.m_type != IPA_IP_v6)
+	{
+		IPACMERR("Wrong IP type\n");
+		return;
+	}
+
+	Ipv6ctEntry::Copy(other);
+
+	const Ipv6NatEntry& entry = static_cast<const Ipv6NatEntry&>(other);
+	m_public_address = entry.m_public_address;
+	m_publicPort = entry.m_publicPort;
+	IPACMDBG_H("return\n");
+}
+
+bool Ipv6NatEntry::Valid() const
+{
+	return m_dstPort && m_srcPort && m_publicPort &&
+		m_srcAddr.Valid() && m_public_address.Valid() &&
+		m_dstAddr.Valid();
+}
+
+void Ipv6NatEntry::Clear()
+{
+	IPACMDBG_H("\n");
+	Ipv6ctEntry::Clear();
+	m_public_address.Clear();
+	m_publicPort = 0;
+	IPACMDBG_H("return\n");
+}
+
+void Ipv6NatEntry::DebugDump(const char* msg_prefix) const
+{
+	NatEntryBase::DebugDump(msg_prefix);
+	m_srcAddr.DebugDump("private");
+	m_public_address.DebugDump("public");
+	m_dstAddr.DebugDump("Destination");
+	IPACMDBG_H("Private port %d\n", m_srcPort);
+	IPACMDBG_H("Public port %d\n", m_publicPort);
+	IPACMDBG_H("Destination port %d\n", m_dstPort);
+}
+
+void Ipv6NatEntry::InvertDirection()
+{
+	IPACMERR("we shouldn't get here for IPv6 NAT\n");
+}
+
+const IpAddress& Ipv6NatEntry::GetPublicIp() const
+{
+	return m_public_address;
+}
+
+const uint16_t& Ipv6NatEntry::GetPublicPort() const
+{
+	return m_publicPort;
+}
+#endif
 CollectionBase::CollectionBase(int max_entries) : m_maxEntries(max_entries)
 {
 	IPACMDBG_H("max_entries %d\n", max_entries);
@@ -1904,23 +2035,33 @@ void Ipv6ctConntrackTimestampUtil::SetConnectionDetails(const NatEntryBase& entr
 
 	uint16_t src_port, dst_port;
 	struct nfct_attr_grp_ipv6 attr_grp;
-	const Ipv6ctEntry& ipv6_entry = static_cast<const Ipv6ctEntry&>(entry);
 
-	switch (ipv6_entry.m_direction)
+	switch (entry.m_direction)
 	{
 	case NatEntryBase::DirectionOutbound:
-		ipv6_entry.m_srcAddr.ToArray(attr_grp.src, true);
-		src_port = ipv6_entry.m_srcPort;
+		static_cast<const Ipv6IpAddress&>(entry.GetClientIp()).ToArray(attr_grp.src, true);
+		src_port = entry.GetSrcPort();
 
-		ipv6_entry.m_dstAddr.ToArray(attr_grp.dst, true);
-		dst_port = ipv6_entry.m_dstPort;
+		static_cast<const Ipv6IpAddress&>(entry.GetTargetIp()).ToArray(attr_grp.dst, true);
+		dst_port = entry.GetDstPort();
 		break;
 	case NatEntryBase::DirectionInbound:
-		ipv6_entry.m_srcAddr.ToArray(attr_grp.dst, true);
-		src_port = ipv6_entry.m_dstPort;
+#ifdef FEATURE_IPV6_NAT
+		if(entry.GetClientIp() != entry.GetPublicIp())
+		{
+			IPACMDBG_H("IPv6 NAT case, use public addresses\n");
+			static_cast<const Ipv6IpAddress&>(entry.GetPublicIp()).ToArray(attr_grp.dst, true);
+			dst_port = entry.GetPublicPort();
+		}
+		else
+#endif
+		{
+			static_cast<const Ipv6IpAddress&>(entry.GetClientIp()).ToArray(attr_grp.dst, true);
+			dst_port = entry.GetSrcPort();
+		}
 
-		ipv6_entry.m_dstAddr.ToArray(attr_grp.src, true);
-		dst_port = ipv6_entry.m_srcPort;
+		static_cast<const Ipv6IpAddress&>(entry.GetTargetIp()).ToArray(attr_grp.src, true);
+		src_port = entry.GetDstPort();
 		break;
 	default:
 		IPACMERR("Unknown direction in an offloaded connection\n");
@@ -1983,13 +2124,29 @@ int NatProxyBase::AddEntry(NatEntryBase& entry)
 		return -EINVAL;
 	}
 
-	uint32_t entry_handle;
-	int ret = DoAddEntry(entry, entry_handle);
+	uint32_t entry_handle = 0, additional_handle = 0;
+	int uc_act_handle;
+	int ret = DoAddEntry(entry, entry_handle, additional_handle, uc_act_handle);
 	if (!ret)
 	{
 		entry.m_ruleHandle = entry_handle;
 		entry.m_timestamp = 0;
 		entry.m_enabled = true;
+#ifdef FEATURE_IPV6_NAT
+		if(entry.GetClientIp() != entry.GetPublicIp())
+		{
+			Ipv6NatEntry &ipv6nat = static_cast<Ipv6NatEntry&>(entry);
+
+			ipv6nat.m_inboundRuleHandle = additional_handle;
+		}
+
+		if(uc_act_handle >= 0)
+		{
+			entry.m_uc_activation_index = (uint16_t)uc_act_handle;
+			entry.m_ucp = true;
+			entry.m_s = true;
+		}
+#endif
 	}
 	IPACMDBG_H("return\n");
 	return ret;
@@ -2025,9 +2182,57 @@ int Ipv6ctProxy::DoDeleteTable()
 	IPACMDBG_H("return\n");
 	return ret;
 }
-
-int Ipv6ctProxy::DoAddEntry(const NatEntryBase& entry, uint32_t& entry_handle)
+#ifdef FEATURE_IPV6_NAT
+int Ipv6ctProxy::AddIpv6NatUcAct(uint16_t privatePort, Ipv6IpAddress privateIp,
+	uint16_t publicPort, Ipv6IpAddress PublicIp)
 {
+	union ipa_ioc_uc_activation_entry u;
+	int handle = 0;
+
+	u.ipv6_nat.cmd_id = IPA_IPv6_NAT_COM_ID;
+	u.ipv6_nat.private_address_lsb = privateIp.GetLsbNetOrder();
+	u.ipv6_nat.private_address_msb = privateIp.GetMsbNetOrder();
+	u.ipv6_nat.public_address_lsb = PublicIp.GetLsbNetOrder();
+	u.ipv6_nat.public_address_msb = PublicIp.GetMsbNetOrder();
+	u.ipv6_nat.private_port = htons(privatePort);
+	u.ipv6_nat.public_port = htons(publicPort);
+	if(ipa_ipv6ct_add_uc_act_entry(&u)) {
+		IPACMERR("failed adding IPv6 NAT uc activation entry\n");
+		handle = -1;
+		return handle;
+	}
+	IPACMDBG_H("added uc activation entries with paramters: priv_lsb 0x%llX, priv_msb 0x%llX, pub_lsb 0x%llX, pub_msb 0x%llX, priv_port %u pub_port %u\n",
+		u.ipv6_nat.private_address_lsb, u.ipv6_nat.private_address_msb, u.ipv6_nat.public_address_lsb, u.ipv6_nat.public_address_msb,
+		u.ipv6_nat.private_port, u.ipv6_nat.public_port);
+	IPACMDBG_H("uc activation index %d\n", u.ipv6_nat.index);
+	handle = u.ipv6_nat.index;
+
+	return handle;
+}
+
+void Ipv6ctProxy::DelIpv6NatUcAct(uint16_t handle)
+{
+
+	IPACMDBG_H("handle %d\n", handle);
+
+	if(ipa_ipv6ct_del_uc_act_entry(handle))
+	{
+		IPACMERR("failed deleting uc activation entry %d\n", handle);
+	}
+	else
+	{
+		IPACMDBG_H("deleted entry in %d", handle);
+	}
+	IPACMDBG_H("return\n");
+}
+#endif
+
+int Ipv6ctProxy::DoAddEntry(const NatEntryBase& entry, uint32_t& entry_handle,
+	uint32_t& additional_entry_handle, int& uc_act_handle)
+{
+	int ret;
+	ipa_ipv6ct_rule rule;
+
 	IPACMDBG_H("\n");
 	if (entry.m_type != IPA_IP_v6)
 	{
@@ -2035,28 +2240,132 @@ int Ipv6ctProxy::DoAddEntry(const NatEntryBase& entry, uint32_t& entry_handle)
 		return -EINVAL;
 	}
 
-	ipa_ipv6ct_rule rule;
-	const Ipv6ctEntry& ipv6ct_entry = static_cast<const Ipv6ctEntry&>(entry);
-	rule.src_ipv6_lsb = ipv6ct_entry.m_srcAddr.GetLsb();
-	rule.src_ipv6_msb = ipv6ct_entry.m_srcAddr.GetMsb();
-	rule.dest_ipv6_lsb = ipv6ct_entry.m_dstAddr.GetLsb();
-	rule.dest_ipv6_msb = ipv6ct_entry.m_dstAddr.GetMsb();
-	rule.direction_settings = IPA_IPV6CT_DIRECTION_ALLOW_ALL;
-	rule.src_port = ipv6ct_entry.m_srcPort;
-	rule.dest_port = ipv6ct_entry.m_dstPort;
-	rule.protocol = ipv6ct_entry.m_protocol;
-	if (IPACM_Iface::ipacmcfg->GetIPAVer() >= IPA_HW_v4_5) {
-		rule.ucp = ipv6ct_entry.m_ucp;
-		rule.uc_activation_index = ipv6ct_entry.m_uc_activation_index;
-		rule.s = ipv6ct_entry.m_s;
+	uc_act_handle = -1;
+
+	/* IPV6CT case or dummy ipv6 nat*/
+#ifdef FEATURE_IPV6_NAT
+	if((IPACM_Iface::ipacmcfg->GetIPAVer() < IPA_HW_v4_5) ||
+		(entry.GetPublicIp() == entry.GetClientIp()) || entry.m_isDummy)
+#endif
+	{
+		IPACMDBG_H("IPv6CT case\n");
+		IPACMDBG_H("ver %d\n", IPACM_Iface::ipacmcfg->GetIPAVer());
+		IPACMDBG_H("is dummy = %d\n", entry.m_isDummy);
+#ifdef FEATURE_IPV6_NAT
+		entry.GetPublicIp().DebugDump("public ip");
+#endif
+		entry.GetClientIp().DebugDump("client ip");
+		entry.GetTargetIp().DebugDump("target ip");
+
+		// using the base class entry reference since object might be ipv6ct or dummy ipv6nat
+		rule.src_ipv6_lsb = ((Ipv6IpAddress &)entry.GetClientIp()).GetLsb();
+		rule.src_ipv6_msb = ((Ipv6IpAddress &)entry.GetClientIp()).GetMsb();
+		rule.dest_ipv6_lsb = ((Ipv6IpAddress &)entry.GetTargetIp()).GetLsb();
+		rule.dest_ipv6_msb = ((Ipv6IpAddress &)entry.GetTargetIp()).GetMsb();
+		rule.direction_settings = IPA_IPV6CT_DIRECTION_ALLOW_ALL;
+		rule.src_port = entry.GetSrcPort();
+		rule.dest_port = entry.GetDstPort();
+		rule.protocol = entry.m_protocol;
+		if(IPACM_Iface::ipacmcfg->GetIPAVer() >= IPA_HW_v4_5) {
+			rule.ucp = entry.m_ucp;
+			rule.uc_activation_index = entry.m_uc_activation_index;
+			rule.s = entry.m_s;
+			IPACMDBG_H("ucp: en %d, idx %d, s %d\n", entry.m_ucp, entry.m_uc_activation_index, entry.m_s);
+		}
+
+		ret = ipa_ipv6ct_add_rule(m_tableHandle, &rule, &entry_handle);
+
+		IPACMDBG("added ipv6CT entry, src_lsb 0x%llX, src_msb 0x%llX, src_port %u, dst_lsb 0x%llX, dst_msb 0x%llX, dst_port %u, dir %d, prot %d, handle %d\n",
+			rule.src_ipv6_lsb, rule.src_ipv6_msb, rule.src_port, rule.dest_ipv6_lsb, rule.dest_ipv6_msb, rule.dest_port, rule.direction_settings, rule.protocol, entry_handle);
 	}
-	int ret = ipa_ipv6ct_add_rule(m_tableHandle, &rule, &entry_handle);
+#ifdef FEATURE_IPV6_NAT
+	/* IPv6 NAT case - add OUTBOUND and INBOUND rules*/
+	else
+	{
+		const Ipv6NatEntry& ipv6nat_entry = static_cast<const Ipv6NatEntry&>(entry);
+		IPACMDBG_H("IPv6 NAT case\n");
+		IPACMDBG_H("ver %d\n", IPACM_Iface::ipacmcfg->GetIPAVer());
+		IPACMDBG_H("is dummy = %d\n", entry.m_isDummy);
+		entry.GetPublicIp().DebugDump("public ip");
+		entry.GetClientIp().DebugDump("client ip");
+		entry.GetTargetIp().DebugDump("target ip");
+		IPACMDBG_H("direction %d\n", entry.m_direction);
+
+		/* first add uc activation rule, it shall be pointed by both IPv6ct rules*/
+		uc_act_handle = AddIpv6NatUcAct(ipv6nat_entry.m_srcPort, ipv6nat_entry.m_srcAddr,
+			ipv6nat_entry.m_publicPort, ipv6nat_entry.m_public_address);
+
+		if (uc_act_handle < 0) {
+			IPACMERR("failed adding IPv6 NAT uc activation entry\n");
+			entry.DebugDump("failed IPv6NAT connection details: ");
+			return IPACM_FAILURE;
+		}
+
+		/* ucp params applies for both inbound and outbound */
+		rule.ucp = true;
+		rule.uc_activation_index = (uint16_t)uc_act_handle;
+		rule.s = true;
+
+		/* OUTBOUND rule*/
+		rule.src_ipv6_lsb = ipv6nat_entry.m_srcAddr.GetLsb();
+		rule.src_ipv6_msb = ipv6nat_entry.m_srcAddr.GetMsb();
+		rule.dest_ipv6_lsb = ipv6nat_entry.m_dstAddr.GetLsb();
+		rule.dest_ipv6_msb = ipv6nat_entry.m_dstAddr.GetMsb();
+		rule.direction_settings = IPA_IPV6CT_DIRECTION_ALLOW_OUT;
+		rule.src_port = ipv6nat_entry.m_srcPort;
+		rule.dest_port = ipv6nat_entry.m_dstPort;
+		rule.protocol = ipv6nat_entry.m_protocol;
+
+		ret = ipa_ipv6ct_add_rule(m_tableHandle, &rule, &entry_handle);
+		if(ret)
+		{
+			IPACMERR("failed adding outbound rule, bail\n");
+			goto clean_ucp;
+		}
+
+		IPACMDBG("added OUTBOUND IPv6 NAT entry, src_lsb 0x%llX, src_msb 0x%llX, src_port %u, dst_lsb 0x%llX, dst_msb 0x%llX, dst_port %u, dir %d, prot %d, handle %d\n",
+			rule.src_ipv6_lsb, rule.src_ipv6_msb, rule.src_port,
+			rule.dest_ipv6_lsb, rule.dest_ipv6_msb, rule.dest_port,
+			rule.direction_settings, rule.protocol, entry_handle);
+
+		/* INBOUND rule - src and dst are filled as outbound connection, use public address */
+		rule.src_ipv6_lsb = ipv6nat_entry.m_public_address.GetLsb();
+		rule.src_ipv6_msb = ipv6nat_entry.m_public_address.GetMsb();
+		rule.dest_ipv6_lsb = ipv6nat_entry.m_dstAddr.GetLsb();
+		rule.dest_ipv6_msb = ipv6nat_entry.m_dstAddr.GetMsb();
+		rule.direction_settings = IPA_IPV6CT_DIRECTION_ALLOW_IN;
+		rule.src_port = ipv6nat_entry.m_publicPort;
+		rule.dest_port = ipv6nat_entry.m_dstPort;
+		rule.protocol = ipv6nat_entry.m_protocol;
+
+		ret = ipa_ipv6ct_add_rule(m_tableHandle, &rule, &additional_entry_handle);
+		if(ret)
+		{
+			IPACMERR("failed adding outbound rule, bail\n");
+			goto inbound_fail;
+		}
+
+		IPACMDBG("added INBOUND IPv6 NAT entry, src_lsb 0x%llX, src_msb 0x%llX, src_port %u, dst_lsb 0x%llX, dst_msb 0x%llX, dst_port %u, dir %d, prot %d, handle %d\n",
+			rule.src_ipv6_lsb, rule.src_ipv6_msb, rule.src_port,
+			rule.dest_ipv6_lsb, rule.dest_ipv6_msb, rule.dest_port,
+			rule.direction_settings, rule.protocol, additional_entry_handle);
+	}
+#endif
 	IPACMDBG_H("return\n");
 	return ret;
+#ifdef FEATURE_IPV6_NAT
+inbound_fail:
+	ipa_ipv6ct_del_rule(m_tableHandle, entry_handle);
+clean_ucp:
+	DelIpv6NatUcAct(rule.uc_activation_index);
+	return ret;
+#endif
 }
 
 int Ipv6ctProxy::DoDelEntry(const NatEntryBase& entry)
 {
+	int ret;
+
 	IPACMDBG_H("\n");
 	if (entry.m_type != IPA_IP_v6)
 	{
@@ -2064,7 +2373,37 @@ int Ipv6ctProxy::DoDelEntry(const NatEntryBase& entry)
 		return -EINVAL;
 	}
 
-	int ret = ipa_ipv6ct_del_rule(m_tableHandle, entry.m_ruleHandle);
+	ret = ipa_ipv6ct_del_rule(m_tableHandle, entry.m_ruleHandle);
+	if(ret)
+	{
+		IPACMERR("failed deleting ipv6ct rule\n");
+	}
+#ifdef FEATURE_IPV6_NAT
+	if((IPACM_Iface::ipacmcfg->GetIPAVer() >= IPA_HW_v4_5))
+	{
+		if(entry.GetClientIp() != entry.GetPublicIp())
+		{
+			const Ipv6NatEntry &ipv6nat = static_cast<const Ipv6NatEntry&>(entry);
+
+			IPACMDBG_H("this is ipv6 nat entry, delete inbound rule\n");
+
+			ret = ipa_ipv6ct_del_rule(m_tableHandle, ipv6nat.m_inboundRuleHandle);
+			if(ret)
+			{
+				IPACMERR("failed deleting inbound ipv6 nat rule\n");
+			}
+			DelIpv6NatUcAct(entry.m_uc_activation_index);
+		} else
+
+		// using the base class entry reference since object might be ipv6ct or dummy ipv6nat
+		if(entry.m_ucp)
+		{
+			ret = ipa_ipv6ct_del_uc_act_entry(entry.m_uc_activation_index);
+			if(ret)
+				IPACMERR("failed deleting uc activation entry %d\n", entry.m_uc_activation_index);
+		}
+	}
+#endif
 	IPACMDBG_H("return\n");
 	return ret;
 }
@@ -2079,6 +2418,32 @@ int Ipv6ctProxy::QueryTimestamp(const NatEntryBase& entry, uint32_t& time_stamp)
 	}
 
 	int ret = ipa_ipv6ct_query_timestamp(m_tableHandle, entry.m_ruleHandle, &time_stamp);
+#ifdef FEATURE_IPV6_NAT
+	if(ret)
+	{
+		IPACMERR("query failed, return\n");
+		return ret;
+	}
+	// since IPv6 NAT entry is actually two IPv6ct entries we need to take the latest of them
+	if(entry.GetPublicIp() != entry.GetClientIp())
+	{
+		uint32_t additional_timestamp;
+		const Ipv6NatEntry &ipv6nat = static_cast<const Ipv6NatEntry&>(entry);
+
+		IPACMDBG_H("ipv6 nat entry, check inbound handle\n");
+		ret = ipa_ipv6ct_query_timestamp(m_tableHandle, ipv6nat.m_inboundRuleHandle, &additional_timestamp);
+		if(ret)
+		{
+			IPACMERR(" inbound query failed, return\n");
+			return ret;
+		}
+		if(additional_timestamp > time_stamp)
+		{
+			IPACMDBG_H("inbound handle (%u) later than outbound handle (%u), update\n", additional_timestamp, time_stamp);
+			time_stamp = additional_timestamp;
+		}
+	}
+#endif
 	IPACMDBG_H("return\n");
 	return ret;
 }
@@ -2129,6 +2494,13 @@ ConntrackTimestampUtil& Ipv6ctObjectsGenerator::GetConntrackTimestampUtil() cons
 	IPACMDBG_H("\n");
 	return *new Ipv6ctConntrackTimestampUtil;
 }
+#ifdef FEATURE_IPV6_NAT
+NatEntriesCollectionBase& Ipv6NatObjectsGenerator::GetEntriesCollection(int max_entries) const
+{
+	IPACMDBG_H("\n");
+	return *new Ipv6NatEntriesCollection(max_entries);
+}
+#endif
 
 NatBase::NatBase(ipa_ip_type type, int max_entries, const NatObjectsGeneratorBase& objectsGenerator)
 	:
@@ -2240,7 +2612,7 @@ int NatBase::AddEntry(const NatEntryBase& entry)
 	}
 
 	NatEntryBase* new_entry = m_cache.GetFirstEmpty();
-	if (new_entry == NULL)
+	if(new_entry == NULL)
 	{
 		IPACMERR("Error: Unable to add, reached maximum rules\n");
 		return -EPERM;
@@ -2248,13 +2620,13 @@ int NatBase::AddEntry(const NatEntryBase& entry)
 
 	*new_entry = entry;
 
-	if (m_pwrSaveIfs.Find(new_entry->GetClientIp()) != NULL || m_pwrSaveIfs.Find(new_entry->GetTargetIp()) != NULL)
+	if(m_pwrSaveIfs.Find(new_entry->GetClientIp()) != NULL || m_pwrSaveIfs.Find(new_entry->GetTargetIp()) != NULL)
 	{
 		IPACMDBG_H("Device is Power Save mode: Don't send to HW but successfully cached\n");
 	}
 	else
 	{
-		if (m_proxy.AddEntry(*new_entry))
+		if(m_proxy.AddEntry(*new_entry))
 		{
 			IPACMERR("unable to add the rule\n");
 			new_entry->Clear();
@@ -2419,6 +2791,7 @@ void NatBase::FlushTempEntries(const IpAddress& clientIp, bool isAdd, bool isDum
 		{
 			if (isDummy)
 			{
+				IPACMDBG("setting to dummy\n");
 				curr.m_isDummy = true;
 			}
 
@@ -2428,7 +2801,7 @@ void NatBase::FlushTempEntries(const IpAddress& clientIp, bool isAdd, bool isDum
 				IPACMERR("unable to add temp entry: %d\n", ret);
 				continue;
 			}
-			IPACMDBG_H("Successfully flushed the entrty\n");
+			IPACMDBG_H("Successfully flushed the entry\n");
 		}
 
 		curr.Clear();
@@ -2449,7 +2822,6 @@ void NatBase::UpdateTcpUdpTimeStamps(bool& isTcpUdpTimeoutUpToDate)
 		{
 			continue;
 		}
-
 		if (m_proxy.QueryTimestamp(curr, timestamp))
 		{
 			IPACMERR("unable to retrieve timeout for rule handle: %d\n", curr.m_ruleHandle);
@@ -2663,6 +3035,35 @@ int NatBase::DelEntriesOnSTAClntDiscon(const IpAddress& client_lan_ip)
 	return 0;
 }
 
+void NatBase::DelEntriesOnWanDown()
+{
+	IPACMDBG_H("\n");
+
+	int tmp = m_curCnt;
+	for(int cnt = 0; cnt < m_maxEntries; ++cnt)
+	{
+		NatEntryBase& curr = m_cache[cnt];
+
+		if(!curr.m_enabled)
+		{
+			continue;
+		}
+
+		curr.DebugDump("Going to disable following entry upon Wan Down\n");
+
+		if(m_proxy.DelEntry(curr))
+		{
+			IPACMERR("unable to delete the rule\n");
+			continue;
+		}
+
+		curr.Clear();
+		--m_curCnt;
+	}
+
+	IPACMDBG_H("Deleted %d entries\n", (tmp - m_curCnt));
+}
+
 void NatBase::Reset()
 {
 	IPACMDBG_H("\n");
@@ -2675,19 +3076,23 @@ void NatBase::Reset()
 
 Ipv6ct* Ipv6ct::m_instance = NULL;
 
-Ipv6ct* Ipv6ct::GetInstance()
+NatBase* Ipv6ct::GetInstance()
 {
 	IPACMDBG_H("\n");
-	if (m_instance != NULL)
-	{
-		return m_instance;
-	}
 
 	IPACM_Config *pConfig = IPACM_Config::GetInstance();
 	if (pConfig == NULL)
 	{
 		IPACMERR("Unable to get Config instance\n");
 		return NULL;
+	}
+#ifdef FEATURE_IPV6_NAT
+	if(pConfig->ipv6_nat_enable)
+		return Ipv6Nat::GetInstance();
+#endif
+	if(m_instance != NULL)
+	{
+		return m_instance;
 	}
 
 	if (!pConfig->IsIpv6CTEnabled())
@@ -2706,3 +3111,37 @@ Ipv6ct::Ipv6ct(int max_entries) : NatBase(IPA_IP_v6, max_entries, Ipv6ctObjectsG
 	IPACMDBG_H("\n");
 }
 
+#ifdef FEATURE_IPV6_NAT
+Ipv6Nat* Ipv6Nat::m_instance = NULL;
+
+Ipv6Nat* Ipv6Nat::GetInstance()
+{
+	IPACMDBG_H("\n");
+	if(m_instance != NULL)
+	{
+		return m_instance;
+	}
+
+	IPACM_Config *pConfig = IPACM_Config::GetInstance();
+	if(pConfig == NULL)
+	{
+		IPACMERR("Unable to get Config instance\n");
+		return NULL;
+	}
+
+	if(!pConfig->ipv6_nat_enable)
+	{
+		IPACMDBG_H("IPv6 Nat tracking is disabled\n");
+		return NULL;
+	}
+
+	m_instance = new Ipv6Nat(pConfig->GetIpv6CTMaxEntries());
+	IPACMDBG_H("return\n");
+	return m_instance;
+}
+
+Ipv6Nat::Ipv6Nat(int max_entries) : NatBase(IPA_IP_v6, max_entries, Ipv6NatObjectsGenerator())
+{
+	IPACMDBG_H("\n");
+}
+#endif

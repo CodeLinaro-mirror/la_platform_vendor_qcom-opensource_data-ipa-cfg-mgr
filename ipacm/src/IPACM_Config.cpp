@@ -203,10 +203,18 @@ IPACM_Config::IPACM_Config()
 	memset(bridge_mac, 0, IPA_MAC_ADDR_SIZE*sizeof(uint8_t));
 #if defined(FEATURE_SOCKSv5) && defined (IPA_SOCKV5_EVENT_MAX)
 	socksv5_v4_pdn = 0;
+	socksv5_v6_pdn = 0;
+	total_pdn_ipv6_in_use = 0;
+	memset(socksv5_client_v6_addr, 0, 4*sizeof(uint32_t));
+	memset(pdn_ipv4, 0, IPA_MAX_NUM_HW_PDNS*sizeof(int));
+	memset(pdn_ipv6, 0, IPA_MAX_NUM_HW_PDNS*4*sizeof(int));
+	memset(pdn_ipv6_in_use, 0, IPA_MAX_NUM_HW_PDNS*sizeof(int));
 #endif //defined(FEATURE_SOCKSv5) && defined (IPA_SOCKV5_ADD)
 #ifdef FEATURE_VLAN_MPDN
 	num_ipv6_prefixes = 0;
+	num_no_offload_ipv6_prefix = 0;
 	memset(ipa_ipv6_prefixes, 0, sizeof(ipa_ipv6_prefixes));
+	memset(ipa_no_offload_ipv6_prefixes, 0, sizeof(ipa_no_offload_ipv6_prefixes));
 	memset(vlan_bridges, 0, IPA_MAX_NUM_BRIDGES * sizeof(vlan_bridges[0]));
 	memset(vlan_devices, 0, IPA_VLAN_IF_MAX * sizeof(vlan_devices[0]));
 	memset(ip_pass_mpdn_table, 0, sizeof(ip_pass_mpdn_table));
@@ -548,8 +556,18 @@ int IPACM_Config::Init(void)
 	}
 	else
 	{
-		ipa_ipv6ct_max_entries = 0;
-		IPACMDBG_H("IPv6CT is disabled\n");
+#ifdef FEATURE_IPV6_NAT
+		if(cfg->ipv6_nat_enable)
+		{
+			ipa_ipv6ct_max_entries = (cfg->ipv6ct_max_entries > 0) ? cfg->ipv6ct_max_entries : DEFAULT_IPV6CT_MAX_ENTRIES;
+			IPACMDBG_H("IPv6CT enabled due to ipv6nat\n");
+		}
+		else
+#endif
+		{
+			ipa_ipv6ct_max_entries = 0;
+			IPACMDBG_H("IPv6CT is disabled\n");
+		}
 	}
 
 	/* Find ODU is either router mode or bridge mode*/
@@ -2121,12 +2139,27 @@ void IPACM_Config::ip_pass_config_update(ipa_ioc_pdn_config *pdn_config)
 }
 
 #if defined(FEATURE_SOCKSv5) && defined (IPA_SOCKV5_EVENT_MAX)
+void IPACM_Config::update_socksv5_client_v6_addr(uint32_t* ipv6_addr)
+{
+	IPACM_Iface::ipacmcfg->socksv5_client_v6_addr[0] = ipv6_addr[0];
+	IPACM_Iface::ipacmcfg->socksv5_client_v6_addr[1] = ipv6_addr[1];
+	IPACM_Iface::ipacmcfg->socksv5_client_v6_addr[2] = ipv6_addr[2];
+	IPACM_Iface::ipacmcfg->socksv5_client_v6_addr[3] = ipv6_addr[3];
+	IPACMDBG_H("socksv5_client_v6_addr addr:0x%x:%x:%x:%x\n",
+		IPACM_Iface::ipacmcfg->socksv5_client_v6_addr[0],
+		IPACM_Iface::ipacmcfg->socksv5_client_v6_addr[1],
+		IPACM_Iface::ipacmcfg->socksv5_client_v6_addr[2],
+		IPACM_Iface::ipacmcfg->socksv5_client_v6_addr[3]);
+	return ;
+}
+
 void IPACM_Config::add_socksv5_conn(ipa_socksv5_msg *add_socksv5_info)
 {
 	list<socksv5_conn_info>::iterator it_mapping;
 	socksv5_conn_info new_mapping;
 	int i = 0;
 	bool SendVlanPDNUpEvent = true;
+	int pdn_ipv6_in_use_temp = 0;
 
 	if(pthread_mutex_lock(&socksv5_lock) != 0)
 	{
@@ -2212,7 +2245,6 @@ void IPACM_Config::add_socksv5_conn(ipa_socksv5_msg *add_socksv5_info)
 		}
 		else
 		{
-			/* no need SendVlanPDNUp for ipv6 */
 			if ((add_socksv5_info->dl_in.ipv6_src[0] == it_mapping->conn_info.dl_in.ipv6_src[0]) &&
 				(add_socksv5_info->dl_in.ipv6_src[1] == it_mapping->conn_info.dl_in.ipv6_src[1]) &&
 				(add_socksv5_info->dl_in.ipv6_src[2] == it_mapping->conn_info.dl_in.ipv6_src[2]) &&
@@ -2238,9 +2270,29 @@ void IPACM_Config::add_socksv5_conn(ipa_socksv5_msg *add_socksv5_info)
 		{
 			if (add_socksv5_info->dl_in.ipv4_dst == pdn_ipv4[i])
 			{
-				IPACMERR(" PDN enry %d already add for 0x%X \n",
+				IPACMERR(" PDN enry %d already added for 0x%X \n",
 				i, add_socksv5_info->dl_in.ipv4_dst);
 				SendVlanPDNUpEvent = false;
+				break;
+			}
+		}
+	}
+	else if (add_socksv5_info->dl_in.ip_type == IPA_IP_v6)
+	{
+		for (i=0; i < socksv5_v6_pdn; i++)
+		{
+			if ((add_socksv5_info->dl_in.ipv6_dst[0] == pdn_ipv6[i][0])
+				&& (add_socksv5_info->dl_in.ipv6_dst[1] == pdn_ipv6[i][1]))
+			{
+				IPACMERR(" PDN enry %d already add for prefix:0x%X:0x%X \n",
+				i, add_socksv5_info->dl_in.ipv6_dst[0],
+				add_socksv5_info->dl_in.ipv6_dst[1]);
+				SendVlanPDNUpEvent = false;
+				/* update the ipv6 */
+				pdn_ipv6[i][2] = add_socksv5_info->dl_in.ipv6_dst[2];
+				pdn_ipv6[i][3] = add_socksv5_info->dl_in.ipv6_dst[3];
+				/* increase v6 in_use ref count */
+				pdn_ipv6_in_use[i]++;
 				break;
 			}
 		}
@@ -2248,20 +2300,47 @@ void IPACM_Config::add_socksv5_conn(ipa_socksv5_msg *add_socksv5_info)
 
 	if (SendVlanPDNUpEvent == true)
 	{
-		/* check if reaching max */
-		if (socksv5_v4_pdn < IPA_MAX_NUM_HW_PDNS)
+		/* check if reaching max, or cache it */
+		if (add_socksv5_info->dl_in.ip_type == IPA_IP_v4)
 		{
-			pdn_ipv4[i] = add_socksv5_info->dl_in.ipv4_dst;
-			post_socksv5_add_vlan_evt(add_socksv5_info->dl_in.ipv4_dst);
-			IPACMDBG_H(" ADD 0x%X to PDN entry %d, total %d\n",
-			add_socksv5_info->dl_in.ipv4_dst, i, socksv5_v4_pdn+1);
-			socksv5_v4_pdn++;
+			if (socksv5_v4_pdn < IPA_MAX_NUM_HW_PDNS)
+			{
+				pdn_ipv4[socksv5_v4_pdn] = add_socksv5_info->dl_in.ipv4_dst;
+				post_socksv5_add_vlan_evt(IPA_IP_v4, add_socksv5_info->dl_in.ipv4_dst, NULL);
+				IPACMDBG_H(" ADD 0x%X to PDN entry %d, total %d\n",
+				add_socksv5_info->dl_in.ipv4_dst, socksv5_v4_pdn, socksv5_v4_pdn+1);
+				socksv5_v4_pdn++;
+			}
+			else
+			{
+				IPACMERR("This connection exceed max pdn support %d \n",
+					IPA_MAX_NUM_HW_PDNS);
+					goto fail;
+			}
 		}
-		else
+		else if (add_socksv5_info->dl_in.ip_type == IPA_IP_v6)
 		{
-			IPACMERR("This connection exceed max pdn support %d \n",
-				IPA_MAX_NUM_HW_PDNS);
-				goto fail;
+			if (socksv5_v6_pdn < IPA_MAX_NUM_HW_PDNS)
+			{
+				pdn_ipv6[socksv5_v6_pdn][0] = add_socksv5_info->dl_in.ipv6_dst[0];
+				pdn_ipv6[socksv5_v6_pdn][1] = add_socksv5_info->dl_in.ipv6_dst[1];
+				pdn_ipv6[socksv5_v6_pdn][2] = add_socksv5_info->dl_in.ipv6_dst[2];
+				pdn_ipv6[socksv5_v6_pdn][3] = add_socksv5_info->dl_in.ipv6_dst[3];
+				post_socksv5_add_vlan_evt(IPA_IP_v6, NULL, add_socksv5_info->dl_in.ipv6_dst);
+				IPACMDBG_H(" ADD 0x%X:%X to PDN entry %d, total %d\n",
+				add_socksv5_info->dl_in.ipv6_dst[0],
+				add_socksv5_info->dl_in.ipv6_dst[1],
+				socksv5_v6_pdn, socksv5_v6_pdn+1);
+				/* start to use this ipv6 */
+				pdn_ipv6_in_use[socksv5_v6_pdn] = 1;
+				socksv5_v6_pdn++;
+			}
+			else
+			{
+				IPACMERR("This connection exceed max pdn support %d \n",
+					IPA_MAX_NUM_HW_PDNS);
+					goto fail;
+			}
 		}
 	}
 
@@ -2277,6 +2356,25 @@ void IPACM_Config::add_socksv5_conn(ipa_socksv5_msg *add_socksv5_info)
 	/* push event for v6-ct to add the entry */
 	post_socksv5_evt(add_socksv5_info, true);
 
+	/* update the total_pdn_ipv6_in_use */
+	for (i=0; i < socksv5_v6_pdn; i++)
+	{
+		if (pdn_ipv6_in_use[i] > 0)
+		{
+			pdn_ipv6_in_use_temp ++;
+			IPACMDBG_H(" pdn_ipv6_in_use entry %d, ref %d, total\n", i, pdn_ipv6_in_use[i], pdn_ipv6_in_use_temp);
+		}
+	}
+
+	/* if pdn_ipv6_in_use_temp != total_pdn_ipv6_in_use */
+	if (pdn_ipv6_in_use_temp > total_pdn_ipv6_in_use)
+	{
+		IPACMDBG_H(" have new ipv6-socksv5: old %d, new %d\n",total_pdn_ipv6_in_use, pdn_ipv6_in_use_temp);
+		total_pdn_ipv6_in_use = pdn_ipv6_in_use_temp;
+		/* send v6-update event */
+		post_socksv5_v6_evt();
+	}
+
 fail:
 	pthread_mutex_unlock(&socksv5_lock);
 	return;
@@ -2286,6 +2384,8 @@ fail:
 void IPACM_Config::del_socksv5_conn(uint32_t *socksv5_handle)
 {
 	list<socksv5_conn_info>::iterator it_mapping;
+	int i = 0;
+	int pdn_ipv6_in_use_temp = 0;
 
 	/* print the info */
 	IPACMDBG_H("deleting the socksv5 conn handle %d\n",
@@ -2305,11 +2405,56 @@ void IPACM_Config::del_socksv5_conn(uint32_t *socksv5_handle)
 			IPACMDBG_H("Found the handle matched (%d)\n",
 				it_mapping->conn_info.handle);
 
+			/* decrease v6 in_use ref count */
+			if (it_mapping->conn_info.dl_in.ip_type == IPA_IP_v6)
+			{
+				for (i=0; i < socksv5_v6_pdn; i++)
+				{
+					if ((it_mapping->conn_info.dl_in.ipv6_dst[0] == pdn_ipv6[i][0])
+						&& (it_mapping->conn_info.dl_in.ipv6_dst[1] == pdn_ipv6[i][1]))
+					{
+						IPACMERR(" PDN enry %d found for prefix:0x%X:0x%X \n",
+						i, it_mapping->conn_info.dl_in.ipv6_dst[0],
+						it_mapping->conn_info.dl_in.ipv6_dst[1]);
+						if (pdn_ipv6_in_use[i] > 0)
+						{
+							pdn_ipv6_in_use[i]--;
+							IPACMDBG_H("update pdn_ipv6_in_use, entry %d, number %d \n",
+								i, pdn_ipv6_in_use[i]);
+						}
+						else
+						{
+							IPACMERR("Potential negative pdn_ipv6_in_use, entry %d, number %d \n",
+								i, pdn_ipv6_in_use[i]);
+						}
+						break;
+					}
+				}
+			}
+
 			/* push event for v6-ct to delete the entry */
 			post_socksv5_evt(&(it_mapping->conn_info), false);
 			socksv5_conn.erase(it_mapping);
 			break;
 		}
+	}
+
+	/* update the total_pdn_ipv6_in_use */
+	for (i=0; i < socksv5_v6_pdn; i++)
+	{
+		if (pdn_ipv6_in_use[i] > 0)
+		{
+			pdn_ipv6_in_use_temp ++;
+			IPACMDBG_H(" pdn_ipv6_in_use entry %d, ref %d, total\n", i, pdn_ipv6_in_use[i], pdn_ipv6_in_use_temp);
+		}
+	}
+	/* if pdn_ipv6_in_use_temp != total_pdn_ipv6_in_use */
+	if (pdn_ipv6_in_use_temp < total_pdn_ipv6_in_use)
+	{
+		IPACMDBG_H(" have new ipv6-socksv5: old %d, new %d\n",total_pdn_ipv6_in_use, pdn_ipv6_in_use_temp);
+		total_pdn_ipv6_in_use = pdn_ipv6_in_use_temp;
+		/* send v6-update event */
+		post_socksv5_v6_evt();
 	}
 
 	if (it_mapping == socksv5_conn.end())

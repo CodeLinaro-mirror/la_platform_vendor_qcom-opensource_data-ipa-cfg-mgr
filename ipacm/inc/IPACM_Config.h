@@ -158,6 +158,8 @@ public:
 #ifdef FEATURE_VLAN_MPDN
 	int num_ipv6_prefixes;
 	uint32_t ipa_ipv6_prefixes[IPA_MAX_IPV6_PREFIX_FLT_RULE + IPA_MAX_MTU_ENTRIES][2];
+	int num_no_offload_ipv6_prefix;
+	uint32_t ipa_no_offload_ipv6_prefixes[IPA_MAX_IPV6_NO_OFFLOAD_PREFIX_FLT_RULE + IPA_MAX_MTU_ENTRIES][2];
 #endif
 
 	/* Store the non nat iface names */
@@ -310,10 +312,17 @@ public:
 	std::list<socksv5_conn_info> socksv5_conn;
 	std::list<rmnet_mux_id_info> mux_id_mapping;
 
+	void update_socksv5_client_v6_addr(uint32_t* ipv6_addr);
 	void add_socksv5_conn(ipa_socksv5_msg *add_socksv5_info);
 	void del_socksv5_conn(uint32_t *socksv5_handle);
 	int socksv5_v4_pdn;
+	int socksv5_v6_pdn;
+	uint32_t socksv5_client_v6_addr[4];
 	int pdn_ipv4[IPA_MAX_NUM_HW_PDNS];
+	uint32_t pdn_ipv6[IPA_MAX_NUM_HW_PDNS][4];
+	int pdn_ipv6_in_use[IPA_MAX_NUM_HW_PDNS];
+	/* less impact on v6-embedded traffic */
+	int total_pdn_ipv6_in_use;
 	void add_mux_id_mapping(rmnet_mux_id_info *add_muxd_info);
 	void del_mux_id_mapping(rmnet_mux_id_info *del_muxd_info);
 	int query_mux_id(rmnet_mux_id_info *muxd_info);
@@ -635,10 +644,64 @@ public:
 #endif /* defined(FEATURE_IPA_ANDROID)*/
 
 #ifdef FEATURE_VLAN_MPDN
+	inline void SendPrefixChangeEvent(int ipa_if_num)
+	{
+		ipacm_event_data_fid *data_fid;
+		ipacm_cmd_q_data evt_data;
+		data_fid = (ipacm_event_data_fid *)malloc(sizeof(ipacm_event_data_fid));
+		if(data_fid == NULL)
+		{
+			IPACMERR("unable to allocate memory for event data_fid\n");
+			return ;
+		}
+		data_fid->if_index = ipa_if_num;
+		evt_data.event = IPA_PREFIX_CHANGE_EVENT;
+		evt_data.evt_data = data_fid;
+		/* Insert IPA_PREFIX_CHANGE_EVENT to command queue */
+		IPACMDBG("posting IPA_PREFIX_CHANGE_EVENT\n");
+		IPACM_EvtDispatcher::PostEvt(&evt_data);
+	}
+
+	/* do not offload this pdn until we get route add\ new vlan neighbor */
+	inline bool add_no_offload_ipv6_prefix(uint32_t *prefix)
+	{
+		/* prefix shouldn't be present in offload list - this is a bug */
+		for(int i = 0; i < num_ipv6_prefixes; i++)
+		{
+			if((prefix[0] == ipa_ipv6_prefixes[i][0]) && (prefix[1] == ipa_ipv6_prefixes[i][1]))
+			{
+				IPACMERR("prefix 0x[%X][%X] already exists in offload list\n", prefix[0], prefix[1]);
+				return false;
+			}
+		}
+		if (num_no_offload_ipv6_prefix < IPA_MAX_IPV6_NO_OFFLOAD_PREFIX_FLT_RULE )
+		{
+			ipa_no_offload_ipv6_prefixes[num_no_offload_ipv6_prefix][0] = prefix[0];
+			ipa_no_offload_ipv6_prefixes[num_no_offload_ipv6_prefix][1] = prefix[1];
+			num_no_offload_ipv6_prefix++;
+		}
+		else
+		{
+			IPACMERR("Reached maximum No offload PDN, unable to add pdn into list:prefix 0x[%X][%X]\n",
+				prefix[0], prefix[1]);
+			return false;
+		}
+
+		IPACMDBG("added no offload v6 prefix 0x[%X][%X]\n", prefix[0], prefix[1]);
+
+		/* tell all LAN interfaces that we have a change in v6 prefixes */
+		SendPrefixChangeEvent(-1);
+		return true;
+	}
+
 	/* add to prefixes list if needed and notify LAN objects to modify rules*/
 	inline bool add_vlan_ipv6_prefix(uint32_t *prefix, int ipa_if_num)
 	{
-		for(int i = 0; i < num_ipv6_prefixes; i++)
+		int i = 0;
+		int no_offload_temp = num_no_offload_ipv6_prefix;
+
+		/* check for duplication */
+		for(i = 0; i < num_ipv6_prefixes; i++)
 		{
 			if((prefix[0] == ipa_ipv6_prefixes[i][0]) && (prefix[1] == ipa_ipv6_prefixes[i][1]))
 			{
@@ -653,36 +716,42 @@ public:
 			return false;
 		}
 
+		/* remove from no offload list */
+		for(i = 0; i < num_no_offload_ipv6_prefix; i++)
+		{
+			if((prefix[0] == ipa_no_offload_ipv6_prefixes[i][0]) && (prefix[1] == ipa_no_offload_ipv6_prefixes[i][1]))
+			{
+				for(; i < (num_no_offload_ipv6_prefix - 1); i++)
+				{
+					ipa_no_offload_ipv6_prefixes[i][0] = ipa_no_offload_ipv6_prefixes[i + 1][0];
+					ipa_no_offload_ipv6_prefixes[i][1] = ipa_no_offload_ipv6_prefixes[i + 1][1];
+				}
+				num_no_offload_ipv6_prefix--;
+				IPACMDBG_H("removed prefix 0x[%X][%X] from no offload list\n", prefix[1], prefix[2]);
+				break;
+			}
+		}
+
+		if(no_offload_temp == num_no_offload_ipv6_prefix)
+		{
+			IPACMERR("could not find prefix 0x[%X][%X] in no offload list\n", prefix[0], prefix[1]);
+		}
 		ipa_ipv6_prefixes[num_ipv6_prefixes][0] = prefix[0];
 		ipa_ipv6_prefixes[num_ipv6_prefixes][1] = prefix[1];
 		num_ipv6_prefixes++;
 
 		IPACMDBG("added v6 prefix 0x[%X][%X]\n", prefix[0], prefix[1]);
 
-		/* tell other LAN interfaces that we have a new private subnet */
-		ipacm_event_data_fid *data_fid;
-		ipacm_cmd_q_data evt_data;
-
-		data_fid = (ipacm_event_data_fid *)malloc(sizeof(ipacm_event_data_fid));
-		if(data_fid == NULL)
-		{
-			IPACMERR("unable to allocate memory for event data_fid\n");
-			return false;
-		}
-		data_fid->if_index = ipa_if_num;
-		evt_data.event = IPA_PREFIX_CHANGE_EVENT;
-		evt_data.evt_data = data_fid;
-
-		/* Insert IPA_PREFIX_CHANGE_EVENT to command queue */
-		IPACMDBG("posting IPA_PREFIX_CHANGE_EVENT\n");
-		IPACM_EvtDispatcher::PostEvt(&evt_data);
+		/* tell other LAN interfaces that we have a change in v6 prefixes */
+		SendPrefixChangeEvent(ipa_if_num);
 		return true;
 	}
 
 	/* remove from prefixes list if needed and notify LAN objects to modify rules*/
 	inline int del_vlan_ipv6_prefix(uint32_t* prefix, int ipa_if_num)
 	{
-		for(int i = 0; i < num_ipv6_prefixes; i++)
+		int i = 0;
+		for(i = 0; i < num_ipv6_prefixes; i++)
 		{
 			if((prefix[0] == ipa_ipv6_prefixes[i][0]) && (prefix[1] == ipa_ipv6_prefixes[i][1]))
 			{
@@ -694,25 +763,29 @@ public:
 				}
 				num_ipv6_prefixes--;
 
-				/* tell other LAN interfaces that we have a new private subnet */
-				ipacm_event_data_fid *data_fid;
-				ipacm_cmd_q_data evt_data;
-				data_fid = (ipacm_event_data_fid *)malloc(sizeof(ipacm_event_data_fid));
-				if(data_fid == NULL)
-				{
-					IPACMERR("unable to allocate memory for event data_fid\n");
-					return IPACM_FAILURE;
-				}
-				data_fid->if_index = ipa_if_num;
-				evt_data.event = IPA_PREFIX_CHANGE_EVENT;
-				evt_data.evt_data = data_fid;
-
-				/* Insert IPA_PREFIX_CHANGE_EVENT to command queue */
-				IPACM_EvtDispatcher::PostEvt(&evt_data);
+				/* tell other LAN interfaces that we have a change in v6 prefixes */
+				SendPrefixChangeEvent(ipa_if_num);
 				return IPACM_SUCCESS;
 			}
 		}
-		IPACMERR("couldn't find prefix 0x[%X][%X]\n", prefix[0], prefix[1]);
+		/* remove from no offload list */
+		for(i = 0; i < num_no_offload_ipv6_prefix; i++)
+		{
+			if((prefix[0] == ipa_no_offload_ipv6_prefixes[i][0]) && (prefix[1] == ipa_no_offload_ipv6_prefixes[i][1]))
+			{
+				for(; i < (num_no_offload_ipv6_prefix - 1); i++)
+				{
+					ipa_no_offload_ipv6_prefixes[i][0] = ipa_no_offload_ipv6_prefixes[i + 1][0];
+					ipa_no_offload_ipv6_prefixes[i][1] = ipa_no_offload_ipv6_prefixes[i + 1][1];
+				}
+				num_no_offload_ipv6_prefix--;
+				IPACMDBG_H("removed prefix 0x[%X][%X] from no offload list\n", prefix[1], prefix[2]);
+				/* tell other LAN interfaces that we have a change in v6 prefixes */
+				SendPrefixChangeEvent(ipa_if_num);
+				return IPACM_SUCCESS;
+			}
+		}
+		IPACMERR("couldn't find prefix 0x[%X][%X] in either no offload nor offload list\n", prefix[0], prefix[1]);
 		return IPACM_FAILURE;
 	}
 
@@ -737,6 +810,19 @@ public:
 #endif
 
 #if defined(FEATURE_SOCKSv5) && defined (IPA_SOCKV5_EVENT_MAX)
+	/* post IPA_UPDATE_SOCKSv5_v6_CONN msg */
+	inline int post_socksv5_v6_evt(void)
+	{
+		/* tell wan we have v6 pdn-update */
+		ipacm_cmd_q_data evt_data;
+
+		evt_data.event = IPA_UPDATE_SOCKSv5_v6_CONN;
+		evt_data.evt_data = NULL;
+		IPACMDBG("posting IPA_UPDATE_SOCKSv5_v6_CONN\n");
+		IPACM_EvtDispatcher::PostEvt(&evt_data);
+		return IPACM_SUCCESS;
+	}
+
 	/* post IPA_ADD_SOCKSv5_CONN msg */
 	inline int post_socksv5_evt(ipa_socksv5_msg *socksv5_info, bool is_add)
 	{
@@ -769,7 +855,7 @@ public:
 	}
 
 	/* post IPA_ROUTE_ADD_VLAN_PDN_EVENT msg */
-	inline int post_socksv5_add_vlan_evt(uint32_t public_ip)
+	inline int post_socksv5_add_vlan_evt(ipa_ip_type iptype, uint32_t public_ip, uint32_t *prefix)
 	{
 		ipacm_cmd_q_data evt_data;
 		ipacm_event_route_vlan *vlan_data;
@@ -781,8 +867,25 @@ public:
 			IPACMERR("unable to allocate memory for event data_socksv5\n");
 			return IPACM_FAILURE;
 		}
-		vlan_data->iptype = IPA_IP_v4;
-		vlan_data->wan_ipv4_addr = public_ip;
+
+		if (iptype == IPA_IP_v4)
+		{
+			vlan_data->iptype = IPA_IP_v4;
+			vlan_data->wan_ipv4_addr = public_ip;
+		}
+		else if (iptype == IPA_IP_v6)
+		{
+			vlan_data->iptype = IPA_IP_v6;
+			vlan_data->wan_ipv6_prefix[0] = prefix[0];
+			vlan_data->wan_ipv6_prefix[1] = prefix[1];
+		}
+		else
+		{
+			IPACMERR("wrong ip-type %d\n", vlan_data->iptype);
+			free(vlan_data);
+			return IPACM_FAILURE;
+		}
+
 		evt_data.evt_data = vlan_data;
 		IPACMDBG("sending IPA_ROUTE_ADD_VLAN_PDN_EVENT vlan id %d, iptype %d,\n",
 						vlan_data->VlanID,

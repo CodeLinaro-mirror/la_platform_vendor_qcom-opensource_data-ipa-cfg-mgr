@@ -133,10 +133,8 @@ extern "C"
 #ifdef FEATURE_VLAN_MPDN
 #define IPA_MAX_PRIVATE_SUBNET_ENTRIES IPA_MAX_NUM_OFFLOAD_VLANS
 #define IPA_MAX_MTU_ENTRIES IPA_MAX_NUM_HW_PDNS
-#define IPA_MAX_IPV6_PREFIX_FLT_RULE IPA_MAX_NUM_HW_PDNS
 #else
 #define IPA_MAX_PRIVATE_SUBNET_ENTRIES 3
-#define IPA_MAX_IPV6_PREFIX_FLT_RULE  1
 #define IPA_MAX_MTU_ENTRIES 1
 #endif
 #define DEFAULT_MTU_SIZE 1500
@@ -146,6 +144,15 @@ extern "C"
 #define IPA_MAX_ACTIVE_WLAN_IFACE 4
 #define IPA_MAX_NAT_IFACE (IPA_MAX_ACTIVE_LAN_IFACE*IPA_MAX_NUM_OFFLOAD_VLANS+ \
 	IPA_MAX_ACTIVE_LAN_IFACE + IPA_MAX_ACTIVE_WLAN_IFACE + IPA_MAX_NUM_SW_PDNS)
+#ifdef FEATURE_VLAN_MPDN
+/* support default PDN+3 VLAN PDNs */
+/* all PDNs can be non_offload PDNs, but only 4 can be offloaded */
+#define IPA_MAX_IPV6_PREFIX_FLT_RULE IPA_MAX_NUM_HW_PDNS
+#define IPA_MAX_IPV6_NO_OFFLOAD_PREFIX_FLT_RULE IPA_MAX_NUM_SW_PDNS
+#else
+/* support only default PDN */
+#define IPA_MAX_IPV6_PREFIX_FLT_RULE 1
+#endif
 
 /*===========================================================================
 										 GLOBAL DEFINITIONS AND DECLARATIONS
@@ -230,9 +237,11 @@ typedef enum
 #endif
 #ifdef FEATURE_SOCKSv5
 	IPA_HANDLE_SOCKSv5_UP,                    /* ipacm_event_connection */
+	IPA_HANDLE_SOCKSv5_READY,                 /* ipacm_event_connection */
 	IPA_HANDLE_SOCKSv5_DOWN,                  /* NULL */
-	IPA_ADD_SOCKSv5_CONN,              	      /* ipa_socksv5_msg */
+	IPA_ADD_SOCKSv5_CONN,                     /* ipa_socksv5_msg */
 	IPA_DEL_SOCKSv5_CONN,                     /* ipa_socksv5_msg */
+	IPA_UPDATE_SOCKSv5_v6_CONN,               /* NULL */
 #endif
 	IPA_MAC_ADD_DEL_FLT_EVENT,                /* NULL */
 	IPA_IP_PASS_UPDATE_EVENT,			  /* ipacm_ip_pass_pdn_info */

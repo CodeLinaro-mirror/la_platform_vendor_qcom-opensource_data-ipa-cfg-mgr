@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2018-2019 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2013, 2018-2020 The Linux Foundation. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -1157,6 +1157,24 @@ static int IPACM_firewall_xml_parse_tree(const char *xml_file, xmlNode* xml_node
 								 config->extd_firewall_entries[config->num_extd_firewall_entries - 1].attrib.u.v6.next_hdr);
 					}
 				}
+#ifdef FEATURE_IPV6_NAT
+				else if(0 == IPACM_util_icmp_string((char*)xml_node->name, IPV6NatEnabledfw_TAG))
+				{
+					int val = 0;
+
+					content = IPACM_read_content_element(xml_node);
+					if(content)
+					{
+						str_size = strlen(content);
+						memset(content_buf, 0, sizeof(content_buf));
+						memcpy(content_buf, (void *)content, str_size);
+						val = atoi(content_buf);
+					}
+
+					config->extd_firewall_entries[config->num_extd_firewall_entries - 1].IPV6NatEnabledfw = val ? true : false;
+					IPACMDBG_H("this is %s IPV6 nat rule\n", val ? "an" : "not an");
+				}
+#endif
 				else if (0 == IPACM_util_icmp_string((char*)xml_node->name, TCPSource_TAG))
 				{
 					/* go to child */
@@ -1487,7 +1505,7 @@ static int IPACM_firewall_xml_parse_tree(const char *xml_file, xmlNode* xml_node
 						}
 						else
 						{
-							memcpy(config->net_dev, content, sizeof(config->net_dev));
+							strlcpy(config->net_dev, content, sizeof(config->net_dev));
 							IPACMDBG_H("NetDev is %s\n", config->net_dev);
 						}
 					}

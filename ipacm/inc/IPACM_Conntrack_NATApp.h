@@ -99,6 +99,7 @@ class Ipv6IpAddress : public IpAddress
 public:
 
 	Ipv6IpAddress();
+	~Ipv6IpAddress();
 	Ipv6IpAddress(const uint32_t* addr, bool inputNetworkEndianness);
 
 	virtual bool Compare(const IpAddress& other) const;
@@ -111,11 +112,25 @@ public:
 	bool IsSameSubnet(uint32_t* prefix) const;
 	void CreateFromArray(const uint32_t* addr, bool inputNetworkEndianness);
 	void ToArray(uint32_t* addr, bool outputNetworkEndianness) const;
+#ifdef FEATURE_IPV6_NAT
+	bool IsGlobalAddr() const;
+#endif
 
 	uint64_t GetMsb() const
 	{
 		return m_msb;
 	}
+#ifdef FEATURE_IPV6_NAT
+	uint64_t GetMsbNetOrder() const
+	{
+		return Get64EndianSwaped(m_msb);
+	}
+
+	uint64_t GetLsbNetOrder() const
+	{
+		return Get64EndianSwaped(m_lsb);
+	}
+#endif
 
 	uint64_t GetLsb() const
 	{
@@ -126,6 +141,9 @@ private:
 
 	static uint64_t Convert2x32to64(const uint32_t* pair32, bool inputNetworkEndianness);
 	static void Convert64to2x32(uint64_t in, uint32_t* pair32, bool outputNetworkEndianness);
+#ifdef FEATURE_IPV6_NAT
+	uint64_t Get64EndianSwaped(uint64_t Addr) const;
+#endif
 
 	uint64_t m_msb;
 	uint64_t m_lsb;
@@ -148,7 +166,13 @@ struct NatEntryBase
 	virtual bool Valid() const = 0;
 	virtual void DebugDump(const char* msg_prefix) const;
 	virtual const IpAddress& GetClientIp() const = 0;
+#ifdef FEATURE_IPV6_NAT
+	virtual const IpAddress& GetPublicIp() const = 0;
+	virtual const uint16_t& GetPublicPort() const = 0;
+#endif
 	virtual const IpAddress& GetTargetIp() const = 0;
+	virtual const uint16_t& GetSrcPort() const = 0;
+	virtual const uint16_t& GetDstPort() const = 0;
 
 	bool UpdateDirection(const IpAddress& clientIp, bool isStaClientIp);
 
@@ -181,6 +205,10 @@ struct NatEntryBase
 	 */
 	bool m_isDummy;
 
+	bool m_ucp;
+	bool m_s;
+	uint16_t m_uc_activation_index;
+
 protected:
 
 	explicit NatEntryBase(ipa_ip_type type);
@@ -201,7 +229,13 @@ struct Ipv6ctEntry : public NatEntryBase
 	virtual bool Valid() const;
 	virtual void DebugDump(const char* msg_prefix) const;
 	virtual const IpAddress& GetClientIp() const;
+#ifdef FEATURE_IPV6_NAT
+	virtual const IpAddress& GetPublicIp() const { return GetClientIp(); }
+	virtual const uint16_t& GetPublicPort() const { return GetSrcPort(); };
+#endif
 	virtual const IpAddress& GetTargetIp() const;
+	virtual const uint16_t& GetSrcPort() const;
+	virtual const uint16_t& GetDstPort() const;
 
 	Ipv6IpAddress m_srcAddr;
 	Ipv6IpAddress m_dstAddr;
@@ -209,15 +243,32 @@ struct Ipv6ctEntry : public NatEntryBase
 	uint16_t m_dstPort;
 	uint16_t m_srcPort;
 
-	bool m_ucp;
-	bool m_s;
-	uint16_t m_uc_activation_index;
+private:
+
+	virtual void InvertDirection();
+};
+#ifdef FEATURE_IPV6_NAT
+struct Ipv6NatEntry : public Ipv6ctEntry
+{
+	Ipv6NatEntry();
+	virtual bool Compare(const NatEntryBase& other) const;
+	virtual void Copy(const NatEntryBase& other);
+	virtual void Clear();
+	virtual bool Valid() const;
+	virtual void DebugDump(const char* msg_prefix) const;
+	virtual const IpAddress& GetPublicIp() const;
+	virtual const uint16_t& GetPublicPort() const;
+
+	Ipv6IpAddress m_public_address;
+	uint16_t m_publicPort;
+
+	uint32_t m_inboundRuleHandle;
 
 private:
 
 	virtual void InvertDirection();
 };
-
+#endif
 typedef struct _nat_table_entry
 {
 	uint32_t private_ip;
@@ -282,7 +333,7 @@ public:
 		for (int i = 0; i < m_maxEntries; ++i)
 		{
 			EntryBaseClass& curr = Get(i);
-			if (curr == other)
+			if (curr.Valid() && curr == other)
 			{
 				IPACMDBG_H("return matched entry with index %d\n", i);
 				return &curr;
@@ -295,11 +346,11 @@ public:
 
 	const EntryBaseClass* Find(const EntryBaseClass& other) const
 	{
-		IPACMDBG_H("\n");
+		IPACMDBG_H("m_maxEntries %d\n", m_maxEntries);
 		for (int i = 0; i < m_maxEntries; ++i)
 		{
 			const EntryBaseClass& curr = Get(i);
-			if (curr == other)
+			if (curr.Valid() && curr == other)
 			{
 				IPACMDBG_H("return matched entry with index %d\n", i);
 				return &curr;
@@ -312,7 +363,7 @@ public:
 
 	EntryBaseClass* GetFirstEmpty()
 	{
-		IPACMDBG_H("\n");
+		IPACMDBG_H("m_maxEntries %d\n",m_maxEntries);
 		for (int i = 0; i < m_maxEntries; ++i)
 		{
 			EntryBaseClass& curr = Get(i);
@@ -353,7 +404,6 @@ public:
 		GenericCollectionBase<EntryBaseClass>(max_entries),
 		m_arr(new Entry[max_entries])
 	{
-		memset(m_arr, 0, sizeof(Entry) * max_entries);
 	}
 
 	~GenericCollection()
@@ -380,6 +430,9 @@ typedef GenericCollection<Ipv6IpAddress, IpAddress> Ipv6IpAddressesCollection;
 
 typedef GenericCollectionBase<NatEntryBase> NatEntriesCollectionBase;
 typedef GenericCollection<Ipv6ctEntry, NatEntryBase> Ipv6ctEntriesCollection;
+#ifdef FEATURE_IPV6_NAT
+typedef GenericCollection<Ipv6NatEntry, NatEntryBase> Ipv6NatEntriesCollection;
+#endif
 
 class ConntrackTimestampUtil
 {
@@ -447,7 +500,8 @@ private:
 
 	virtual int DoAddTable(uint16_t number_of_entries, uint32_t& table_handle) = 0;
 	virtual int DoDeleteTable() = 0;
-	virtual int DoAddEntry(const NatEntryBase& entry, uint32_t& entry_handle) = 0;
+	virtual int DoAddEntry(const NatEntryBase& entry, uint32_t& entry_handle,
+		uint32_t& additional_entry_handle, int& uc_act_handle) = 0;
 	virtual int DoDelEntry(const NatEntryBase& entry) = 0;
 };
 
@@ -462,8 +516,14 @@ private:
 
 	virtual int DoAddTable(uint16_t number_of_entries, uint32_t& table_handle);
 	virtual int DoDeleteTable();
-	virtual int DoAddEntry(const NatEntryBase& entry, uint32_t& entry_handle);
+	virtual int DoAddEntry(const NatEntryBase& entry, uint32_t& entry_handle,
+		uint32_t& additional_entry_handle, int& uc_act_handle);
 	virtual int DoDelEntry(const NatEntryBase& entry);
+#ifdef FEATURE_IPV6_NAT
+	virtual int AddIpv6NatUcAct(uint16_t privatePort, Ipv6IpAddress privateIp,
+		uint16_t publicPort, Ipv6IpAddress PublicIp);
+	virtual void DelIpv6NatUcAct(uint16_t handle);
+#endif
 };
 
 class NatObjectsGeneratorBase
@@ -497,7 +557,13 @@ public:
 	virtual IpAddress& GetIpAddress() const;
 	virtual ConntrackTimestampUtil& GetConntrackTimestampUtil() const;
 };
-
+#ifdef FEATURE_IPV6_NAT
+class Ipv6NatObjectsGenerator : public Ipv6ctObjectsGenerator
+{
+public:
+	virtual NatEntriesCollectionBase& GetEntriesCollection(int max_entries) const;
+};
+#endif
 class NatBase
 {
 public:
@@ -525,6 +591,7 @@ public:
 	int ResetPwrSaveIf(const IpAddress& client_lan_ip);
 	int DelEntriesOnClntDiscon(const IpAddress& client_lan_ip);
 	int DelEntriesOnSTAClntDiscon(const IpAddress& client_lan_ip);
+	void DelEntriesOnWanDown();
 
 #ifdef FEATURE_SOCKSv5
 	std::list<Ipv6ctEntry> socksv5_v6_conn;
@@ -558,7 +625,7 @@ class Ipv6ct : public NatBase
 {
 public:
 
-	static Ipv6ct* GetInstance();
+	static NatBase* GetInstance();
 
 private:
 
@@ -566,7 +633,19 @@ private:
 
 	static Ipv6ct* m_instance;
 };
+#ifdef FEATURE_IPV6_NAT
+class Ipv6Nat : public NatBase
+{
+public:
 
+	static Ipv6Nat* GetInstance();
+private:
+
+	explicit Ipv6Nat(int max_entries);
+
+	static Ipv6Nat* m_instance;
+};
+#endif
 class NatApp
 {
 private:

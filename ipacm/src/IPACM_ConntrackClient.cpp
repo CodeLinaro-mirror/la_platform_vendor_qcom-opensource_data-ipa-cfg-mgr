@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013-2018 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2013-2020 The Linux Foundation. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -105,14 +105,20 @@ int IPACM_ConntrackClient::IPAConntrackEventCB
 
 	/* Retrieve ip type */
 	ip_type = nfct_get_attr_u8(ct, ATTR_REPL_L3PROTO);
+	IPACMDBG("iptype: %d\n", ip_type);
 
 #ifndef CT_OPT
 	if(AF_INET6 == ip_type)
 	{
 		config_instance = IPACM_Config::GetInstance();
 		if((config_instance == NULL) ||
-			!config_instance->IsIpv6CTEnabled())
+			 (!config_instance->IsIpv6CTEnabled()
+#ifdef FEATURE_IPV6_NAT
+				 && !config_instance->ipv6_nat_enable
+#endif
+				 ))
 		{
+			IPACMDBG("ip type AF_INET6 %d, IPv6CT %d, ipv6 NAT %d\n", ip_type, config_instance->IsIpv6CTEnabled(), config_instance->ipv6_nat_enable);
 			IPACMDBG("Ignoring ipv6(%d) connections\n", ip_type);
 			goto IGNORE;
 		}
@@ -134,6 +140,7 @@ int IPACM_ConntrackClient::IPAConntrackEventCB
 
 	if(AF_INET6 == ip_type)
 	{
+		IPACMDBG_H("sending IPA_PROCESS_CT_MESSAGE_V6\n");
 		evt_data.event = IPA_PROCESS_CT_MESSAGE_V6;
 	}
 
@@ -363,10 +370,18 @@ int IPACM_ConntrackClient::IPA_Conntrack_Filters_Ignore_Local_Addrs
    multicast addresses */
 void IPACM_ConntrackClient::IPA_Conntrack_Filters_Ignore_Ipv6_Addresses(struct nfct_filter *filter)
 {
+#ifdef FEATURE_IPV6_NAT
+	IPACM_Config *config_instance = NULL;
+
+	config_instance = IPACM_Config::GetInstance();
+
+	if(config_instance && config_instance->ipv6_nat_enable)
+		return;
+#endif
 	const struct nfct_filter_ipv6 filter_ipv6_private_network_addresses =
 	{
-		{0xfc000000, 0x0, 0x0, 0x0},
-		{0xfe000000, 0x0, 0x0, 0x0},
+		{0xfc000000, 0x0, 0x0, 0x0 },
+		{0xfe000000, 0x0, 0x0, 0x0 },
 	};
 	IPA_Conntrack_Filters_Ipv6_Add_Src_Dst_Attr(filter, filter_ipv6_private_network_addresses);
 
@@ -509,7 +524,7 @@ void* IPACM_ConntrackClient::UDPConnTimeoutUpdate(void *ptr)
 
 	uint32_t natsCount = 0;
 	NatBase* nats[] = {NULL, NULL};
-	Ipv6ct* ipv6ct = Ipv6ct::GetInstance();
+	NatBase* ipv6ct = Ipv6ct::GetInstance();
 	if (ipv6ct != NULL)
 	{
 		nats[natsCount++] = ipv6ct;

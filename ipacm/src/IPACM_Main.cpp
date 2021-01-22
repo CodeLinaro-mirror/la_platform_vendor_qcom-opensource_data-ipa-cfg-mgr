@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013-2019 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2013-2020 The Linux Foundation. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -55,7 +55,7 @@
 #include <fcntl.h>
 #include <sys/inotify.h>
 #include <stdlib.h>
-#include <signal.h>
+#include <execinfo.h>
 #include "linux/ipa_qmi_service_v01.h"
 
 #include "IPACM_CmdQueue.h"
@@ -73,7 +73,9 @@
 #ifndef FEATURE_IPA_ANDROID
 #include "IPACM_LanToLan.h"
 #endif
-
+#if defined(FEATURE_SOCKSv5) && defined(FEATURE_IPV6_NAT)
+#error SOCKSv5 and IPV6_NAT cannot work without run time modifications
+#endif
 #define IPA_DRIVER  "/dev/ipa"
 
 #define IPACM_FIREWALL_FILE_NAME    "mobileap_firewall.xml"
@@ -824,23 +826,26 @@ void* ipa_driver_msg_notifier(void *param)
 			if (IPACM_Iface::ipacmcfg->socksv5_conn.size() == 0)
 			{
 				IPACMDBG_H("socksv5_conn size %d \n", IPACM_Iface::ipacmcfg->socksv5_conn.size());
-				IPACMDBG("src_ipv6 addr:0x%x:%x:%x:%x\n",
+				IPACMDBG_H("src_ipv6 addr:0x%x:%x:%x:%x\n",
 					add_socksv5_info.ul_in.ipv6_src[0],
 					add_socksv5_info.ul_in.ipv6_src[1],
 					add_socksv5_info.ul_in.ipv6_src[2],
 					add_socksv5_info.ul_in.ipv6_src[3]);
-				IPACMDBG("dst_ipv6 addr:0x%x:%x:%x:%x\n",
+				IPACMDBG_H("dst_ipv6 addr:0x%x:%x:%x:%x\n",
 					add_socksv5_info.ul_in.ipv6_dst[0],
 					add_socksv5_info.ul_in.ipv6_dst[1],
 					add_socksv5_info.ul_in.ipv6_dst[2],
 					add_socksv5_info.ul_in.ipv6_dst[3]);
+				/* update client ipv6 */
+				IPACM_Iface::ipacmcfg->update_socksv5_client_v6_addr(add_socksv5_info.ul_in.ipv6_src);
+				IPACMDBG_H("socksv5_conn size %d \n", IPACM_Iface::ipacmcfg->socksv5_conn.size());
 
 				data_event_conn = (ipacm_event_connection *)malloc(sizeof(ipacm_event_connection));
 				if(data_event_conn == NULL)
 				{
 					IPACMERR("unable to allocate memory for event_wlan data_event_conn\n");
 				return NULL;
-				}//sky
+				}
 				data_event_conn->iptype = add_socksv5_info.ul_in.ip_type;
 				data_event_conn->src_ipv6_addr[0] = add_socksv5_info.ul_in.ipv6_src[0];
 				data_event_conn->src_ipv6_addr[1] = add_socksv5_info.ul_in.ipv6_src[1];
@@ -867,6 +872,7 @@ void* ipa_driver_msg_notifier(void *param)
 
 			if (IPACM_Iface::ipacmcfg->socksv5_conn.size() == 0)
 			{
+				IPACM_Iface::ipacmcfg->ipacm_socksv5_enable = false;
 				evt_data.event = IPA_HANDLE_SOCKSv5_DOWN;
 				evt_data.evt_data = NULL;
 				break;
@@ -973,39 +979,125 @@ void* ipa_driver_msg_notifier(void *param)
 	return NULL;
 }
 
-void IPACM_Sig_Handler(int sig)
-{
-	int cnt;
-	ipacm_cmd_q_data evt_data;
+void RegisterForSignals(bool default_handler);
 
-	printf("Received Signal: %d\n", sig);
+#define MAX_IPACM_TRACE_STACK 20
+
+static void IPACM_Signals_handler(int sig, siginfo_t *info, void *extra)
+{
+	ipacm_cmd_q_data evt_data;
+	ucontext_t *p;
+	int addr;
+	void *array[MAX_IPACM_TRACE_STACK];
+	int size, i;
+	char **messages;
+
+	IPACMERR("Received Signal: %d %s\n", sig, strsignal(sig));
 	memset(&evt_data, 0, sizeof(evt_data));
 
 	switch(sig)
 	{
-		case SIGUSR1:
-			IPACMDBG_H("Received SW_ROUTING_ENABLE request \n");
-			evt_data.event = IPA_SW_ROUTING_ENABLE;
-			IPACM_Iface::ipacmcfg->ipa_sw_rt_enable = true;
-			break;
+	case SIGUSR1:
+		IPACMDBG_H("Received SW_ROUTING_ENABLE request \n");
+		evt_data.event = IPA_SW_ROUTING_ENABLE;
+		IPACM_Iface::ipacmcfg->ipa_sw_rt_enable = true;
+		break;
+	case SIGUSR2:
+		IPACMDBG_H("Received SW_ROUTING_DISABLE request \n");
+		evt_data.event = IPA_SW_ROUTING_DISABLE;
+		IPACM_Iface::ipacmcfg->ipa_sw_rt_enable = false;
+		break;
+	case SIGFPE:
+	case SIGSEGV:
+	case SIGILL:
+	case SIGBUS:
+	case SIGABRT:
+	case SIGTERM:
+		p = (ucontext_t *)extra;
+		IPACMERR("siginfo address=%x\n", info->si_addr);
+		IPACMERR("arm_pc address = 0x%X\n", p->uc_mcontext.arm_pc);
+		IPACMERR("cpsr = 0x%X\n", p->uc_mcontext.arm_cpsr);
+		IPACMERR("fault address = 0x%X\n", p->uc_mcontext.fault_address);
+		IPACMERR("arm_sp address = 0x%X\n", p->uc_mcontext.arm_sp);
+		IPACMERR("arm_lr address = 0x%X\n", p->uc_mcontext.arm_lr);
+		IPACMERR("arm_r0  address = 0x%X\n", p->uc_mcontext.arm_r0);
+		size = backtrace(array, MAX_IPACM_TRACE_STACK);
 
-		case SIGUSR2:
-			IPACMDBG_H("Received SW_ROUTING_DISABLE request \n");
-			evt_data.event = IPA_SW_ROUTING_DISABLE;
-			IPACM_Iface::ipacmcfg->ipa_sw_rt_enable = false;
-			break;
+		messages = backtrace_symbols(array, size);
+
+		/* skip first stack frame (points here) */
+		IPACMERR("crash stack:\n")
+		for(i = 1; i < size && messages != NULL; ++i)
+		{
+			IPACMERR("[bt]: (%d) %s\n", i, messages[i])
+		}
+		IPACMERR("return to default signal handler\n");
+
+		/* make sure buffer is printed to stodut before we crash */
+		fflush(stdout);
+
+		free(messages);
+
+		/* got regular kill <PID>, kill -9 <PID> generates SIGKILL that cannot be handled by a signal handler */
+		if(sig == SIGTERM)
+		{
+			IPACMERR("IPACM gracefully requested to quit by PID %d, complying\n", info->si_pid);
+			exit(-1);
+		}
+
+		/* restore to default signal handler so core dump is generated from original fault point */
+		RegisterForSignals(true);
+		return;
+		break;
+	default:
+		IPACMERR("unknown signal %d\n", sig);
+		/* restore to default signal handler so core dump is generated from original fault point */
+		RegisterForSignals(true);
+		return;
 	}
+
 	/* finish command queue */
 	IPACMDBG_H("Posting event:%d\n", evt_data.event);
 	IPACM_EvtDispatcher::PostEvt(&evt_data);
 	return;
 }
 
-void RegisterForSignals(void)
+void RegisterForSignals(bool default_handler)
 {
+	struct sigaction action = {};
 
-	signal(SIGUSR1, IPACM_Sig_Handler);
-	signal(SIGUSR2, IPACM_Sig_Handler);
+	printf("register signal handlers\n");
+
+	action.sa_flags = SA_SIGINFO;
+	if(default_handler)
+		action.sa_handler = SIG_DFL;
+	else
+		action.sa_sigaction = IPACM_Signals_handler;
+
+	if(sigaction(SIGFPE, &action, NULL) == -1) {
+		printf("couldn't register for SIGFPE\n");
+	}
+	if(sigaction(SIGSEGV, &action, NULL) == -1) {
+		printf("couldn't register for SIGSEGV\n");
+	}
+	if(sigaction(SIGILL, &action, NULL) == -1) {
+		printf("couldn't register for SIGILL\n");
+	}
+	if(sigaction(SIGBUS, &action, NULL) == -1) {
+		printf("couldn't register for SIGBUS\n");
+	}
+	if(sigaction(SIGTERM, &action, NULL) == -1) {
+		printf("couldn't register for SIGTERM\n");
+	}
+	if(sigaction(SIGABRT, &action, NULL) == -1) {
+		printf("couldn't register for SIGABRT\n");
+	}
+	if(sigaction(SIGUSR1, &action, NULL) == -1) {
+		printf("couldn't register for SIGUSR1\n");
+	}
+	if(sigaction(SIGUSR2, &action, NULL) == -1) {
+		printf("couldn't register for SIGUSR2\n");
+	}
 }
 
 
@@ -1036,7 +1128,7 @@ int main(int argc, char **argv)
 	IPACMDBG_H("ipa_cmdq_successful\n");
 
 
-	RegisterForSignals();
+	RegisterForSignals(false);
 
 	if (IPACM_SUCCESS == cmd_queue_thread)
 	{

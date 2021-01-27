@@ -161,6 +161,28 @@ typedef struct ipa_lan_client_idx
 }ipa_lan_client_idx;
 #endif
 
+typedef struct rule_id_hdl_map
+{
+	uint32_t flt_hdl;
+	uint16_t rule_id;
+}rule_id_hdl_map;
+
+typedef struct pdn_context
+{
+	int pdn_mux_id;
+	uint32_t wan_mpdn_ul_xlat_fl_rule_hdl_v4[MAX_WAN_UL_FILTER_RULES];
+	uint32_t num_wan_mpdn_ul_xlat_fl_rule_v4;
+}pdn_context;
+
+typedef struct _xlat_context
+{
+	rule_id_hdl_map ul_rule_id_hdl_map[MAX_WAN_UL_FILTER_RULES];
+
+	/* PDN's for which UL filter installed */
+	pdn_context active_pdn_list[IPA_MAX_NUM_HW_PDNS];
+	uint32_t active_pdn_count;
+}xlat_context;
+
 /* lan iface */
 class IPACM_Lan : public IPACM_Iface
 {
@@ -239,6 +261,10 @@ public:
 	/* install UL filter rule from Q6 */
 #ifdef FEATURE_VLAN_MPDN
 	virtual int handle_uplink_filter_rule(ipacm_ext_prop *prop, ipa_ip_type iptype, uint8_t pdn_mux_id, bool notif_only, bool is_xlat = false);
+
+	virtual int handle_mpdn_ul_xlat_filter_rule(ipacm_ext_prop *prop, ipa_ip_type iptype, int pdn_mux_id, uint16_t vlan_id);
+
+	virtual int delete_mdpn_ul_xlat_filter_rule(int mux_id);
 #else
 	virtual int handle_uplink_filter_rule(ipacm_ext_prop* prop, ipa_ip_type iptype, uint8_t xlat_mux_id);
 #endif
@@ -925,6 +951,50 @@ protected:
 	uint32_t l2tp_udp_dflt_flt_rule_hdl[NUM_L2TP_UDP_DFLT_RULES];
 #endif
 	int post_lan_up_event(const ipacm_event_data_addr* data) const;
+
+	xlat_context xlat_ctx;
+
+	inline void add_pdn_xlat_ctx(int pdn_mux_id)
+	{
+		for (int i = 0; i < IPA_MAX_NUM_HW_PDNS ; ++i)
+		{
+			if (xlat_ctx.active_pdn_list[i].pdn_mux_id == 0)
+			{
+				xlat_ctx.active_pdn_list[i].pdn_mux_id = pdn_mux_id;
+				xlat_ctx.active_pdn_count++;
+				IPACMDBG_H("Adding pdn to xlat ctx mux id %d total active xlat pdn:%d\n",
+					pdn_mux_id, xlat_ctx.active_pdn_count);
+				return;
+			}
+		}
+		IPACMDBG_H("Max number of pdns reached, can't add pdn to ctx!\n");
+	}
+
+	inline void remove_pdn_xlat_ctx(int pdn_mux_id)
+	{
+		for (int i = 0; i < IPA_MAX_NUM_HW_PDNS ; ++i)
+		{
+			if (xlat_ctx.active_pdn_list[i].pdn_mux_id == pdn_mux_id)
+			{
+				xlat_ctx.active_pdn_list[i].pdn_mux_id = 0;
+				xlat_ctx.active_pdn_count--;
+				IPACMDBG_H("Removing pdn from xlat ctx mux id %d total active xlat pdn:%d\n",
+					pdn_mux_id, xlat_ctx.active_pdn_count);
+				return;
+			}
+		}
+		IPACMDBG_H("Pdn not found in ctx!\n");
+	}
+
+	inline int get_pdn_xlat_ctx(int pdn_mux_id)
+	{
+		for (int i = 0; i < IPA_MAX_NUM_HW_PDNS ; ++i)
+		{
+			if (xlat_ctx.active_pdn_list[i].pdn_mux_id == pdn_mux_id)
+				return i;
+		}
+		return IPACM_FAILURE;
+	}
 
 private:
 

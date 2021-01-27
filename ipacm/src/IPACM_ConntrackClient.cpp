@@ -110,8 +110,16 @@ int IPACM_ConntrackClient::IPAConntrackEventCB
 	if(AF_INET6 == ip_type)
 	{
 		config_instance = IPACM_Config::GetInstance();
-		if((config_instance == NULL) ||
-			!config_instance->IsIpv6CTEnabled())
+		if (config_instance == NULL)
+		{
+			IPACMERR("Config instance creation failed");
+			goto IGNORE;
+		}
+		if (!config_instance->IsIpv6CTEnabled()
+#ifdef FEATURE_IPV6_NAT
+				 && !config_instance->ipv6_nat_enable
+#endif
+			)
 		{
 			IPACMDBG("Ignoring ipv6(%d) connections\n", ip_type);
 			goto IGNORE;

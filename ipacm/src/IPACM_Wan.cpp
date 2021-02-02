@@ -443,6 +443,8 @@ int IPACM_Wan::handle_addr_evt(ipacm_event_data_addr *data)
 		{
 			if(m_is_sta_mode == Q6_WAN)
 			{
+				num_ipv6_modem_pdn++;
+				IPACMDBG_H("Now the number of modem ipv6 pdn is %d.\n", num_ipv6_modem_pdn);
 				init_fl_rule_ex(data->iptype);
 			}
 			else
@@ -532,9 +534,6 @@ int IPACM_Wan::handle_addr_evt(ipacm_event_data_addr *data)
 				IPACMDBG_H("index %d prefix: 0x%08x%08x\n", modem_ipv6_pdn_index,
 				ipv6_to_iface[modem_ipv6_pdn_index].ipv6_prefix[0],
 				ipv6_to_iface[modem_ipv6_pdn_index].ipv6_prefix[1]);
-
-				num_ipv6_modem_pdn++;
-				IPACMDBG_H("Now the number of modem ipv6 pdn is %d.\n", num_ipv6_modem_pdn);
 			}
 #endif
 		}
@@ -4156,6 +4155,7 @@ int IPACM_Wan::init_fl_rule_ex(ipa_ip_type iptype)
 #else
 			add_dft_filtering_rule(flt_rule_v4, IPACM_Wan::num_v4_flt_rule, IPA_IP_v4);
 #endif
+			install_wan_filtering_rule(false);
 		}
 	}
 	else if(iptype == IPA_IP_v6)
@@ -4169,6 +4169,7 @@ int IPACM_Wan::init_fl_rule_ex(ipa_ip_type iptype)
 #else
 			add_dft_filtering_rule(flt_rule_v6, IPACM_Wan::num_v6_flt_rule, IPA_IP_v6);
 #endif
+			install_wan_filtering_rule(false);
 		}
 	}
 	else
@@ -4177,7 +4178,6 @@ int IPACM_Wan::init_fl_rule_ex(ipa_ip_type iptype)
 		res = IPACM_FAILURE;
 		goto fail;
 	}
-	install_wan_filtering_rule(false);
 
 fail:
 	return res;

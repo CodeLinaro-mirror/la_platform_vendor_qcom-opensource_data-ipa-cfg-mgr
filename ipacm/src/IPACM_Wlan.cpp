@@ -1351,7 +1351,7 @@ int IPACM_Wlan::handle_wlan_client_init_ex(ipacm_event_data_wlan_ex *data)
 	struct wan_ioctl_lan_client_info *client_info;
 	int cnt_idx;
 #endif
-	int max_clients = IPA_MAX_NUM_WIFI_CLIENTS;
+	int max_clients = IPACM_Iface::ipacmcfg->ipa_max_num_wifi_clients;
 
 	/* start of adding header */
 	IPACMDBG_H("Wifi client number for this iface: %d & total number of wlan clients: %d\n",
@@ -2919,10 +2919,11 @@ int IPACM_Wlan::handle_wlan_client_pwrsave(uint8_t *mac_addr)
 /*handle wifi client del mode*/
 int IPACM_Wlan::handle_wlan_client_down_evt(uint8_t *mac_addr)
 {
-	int clt_indx;
+	int clt_indx, i;
 	uint32_t tx_index;
 	int num_wifi_client_tmp = num_wifi_client;
 	int num_v6;
+	eth_client_ipv6 v6_addr[IPV6_NUM_ADDR];
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
 	struct wan_ioctl_lan_client_info *client_info;
 #endif
@@ -2937,12 +2938,18 @@ int IPACM_Wlan::handle_wlan_client_down_evt(uint8_t *mac_addr)
 		return IPACM_SUCCESS;
 	}
 
+	/* change to eth_client_ipv6 structure */
+	for (i=0; i < IPV6_NUM_ADDR; i++)
+	{
+		memcpy(v6_addr[i].addr, get_client_memptr(wlan_client, clt_indx)->v6_addr[i], sizeof(v6_addr[0].addr));
+	}
+
 	/* First reset NAT/IPv6CT rules and then route rules */
 	HandleNeighIpAddrDelEvt(
 		get_client_memptr(wlan_client, clt_indx)->ipv4_set,
 		get_client_memptr(wlan_client, clt_indx)->v4_addr,
 		get_client_memptr(wlan_client, clt_indx)->ipv6_set,
-		get_client_memptr(wlan_client, clt_indx)->v6_addr);
+		v6_addr);
 
 	if (delete_default_qos_rtrules(clt_indx, IPA_IP_v4))
 	{
@@ -3147,10 +3154,11 @@ int IPACM_Wlan::handle_wlan_client_down_evt(uint8_t *mac_addr)
 /*handle wlan iface down event*/
 int IPACM_Wlan::handle_down_evt()
 {
-	int res = IPACM_SUCCESS, i, num_private_subnet_fl_rule;
+	int res = IPACM_SUCCESS, i, j, num_private_subnet_fl_rule;
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
 	struct wan_ioctl_lan_client_info *client_info;
 #endif
+	eth_client_ipv6 v6_addr[IPV6_NUM_ADDR];
 
 	IPACMDBG_H("WLAN ip-type: %d \n", ip_type);
 
@@ -3331,12 +3339,18 @@ fail:
 	IPACMDBG_H("left %d wifi clients need to be deleted \n ", num_wifi_client);
 	for (i = 0; i < num_wifi_client; i++)
 	{
+		/* change to eth_client_ipv6 structure */
+		for (j = 0; j < IPV6_NUM_ADDR; j++)
+		{
+			memcpy(v6_addr[j].addr, get_client_memptr(wlan_client, i)->v6_addr[j], sizeof(v6_addr[0].addr));
+		}
+
 		/* First reset NAT/IPv6CT rules and then route rules */
 		HandleNeighIpAddrDelEvt(
 			get_client_memptr(wlan_client, i)->ipv4_set,
 			get_client_memptr(wlan_client, i)->v4_addr,
 			get_client_memptr(wlan_client, i)->ipv6_set,
-			get_client_memptr(wlan_client, i)->v6_addr);
+			v6_addr);
 
 		if (delete_default_qos_rtrules(i, IPA_IP_v4))
 		{

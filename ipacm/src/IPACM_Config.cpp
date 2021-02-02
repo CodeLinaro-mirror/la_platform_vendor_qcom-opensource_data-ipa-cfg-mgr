@@ -183,6 +183,10 @@ IPACM_Config::IPACM_Config()
 	ipacm_l2tp_enable = 0;
 	ipacm_mpdn_enable = TRUE;   /* default setting as mpdn enable/l2tp disable */
 	ipacm_socksv5_enable = false;
+	ipa_max_num_wifi_clients = 0;
+	ipa_max_num_eth_clients = 0;
+	ipa_eth_num_ipv6_addr = 3;
+	ipacm_client_number_set = false;
 
 	memset(&rt_tbl_default_v4, 0, sizeof(rt_tbl_default_v4));
 	memset(&rt_tbl_lan_v4, 0, sizeof(rt_tbl_lan_v4));
@@ -405,6 +409,7 @@ int IPACM_Config::Init(void)
 	/* Read IPACM Config file */
 	char	IPACM_config_file[IPA_MAX_FILE_LEN];
 	IPACM_conf_t	*cfg;
+	int v6_pool = 0;
 
 	cfg = (IPACM_conf_t *)malloc(sizeof(IPACM_conf_t));
 	if(cfg == NULL)
@@ -614,6 +619,45 @@ skip_fnr_alloc:
 
 	ipa_num_wlan_guest_ap = cfg->num_wlan_guest_ap;
 	IPACMDBG_H("ipa_num_wlan_guest_ap %d\n",ipa_num_wlan_guest_ap);
+
+	/* ipa clients number set check */
+	if (!ipacm_client_number_set)
+	{
+		/* Read the configuration only once. */
+		ipacm_client_number_set = true;
+		IPACMDBG_H("ipacm_client_number_set %d. \n", ipacm_client_number_set);
+		if ((cfg->max_wifi_clients >= 0) && (cfg->max_wifi_clients < IPA_MAX_NUM_WIFI_CLIENTS))
+		{
+			ipa_max_num_wifi_clients = cfg->max_wifi_clients;
+			v6_pool = 3 * (IPA_MAX_NUM_WIFI_CLIENTS - cfg->max_wifi_clients);
+			IPACMDBG_H("v6_pool %d, num: %d\n", v6_pool, IPA_MAX_NUM_WIFI_CLIENTS - cfg->max_wifi_clients);
+		}
+		else
+		{
+			ipa_max_num_wifi_clients = IPA_MAX_NUM_WIFI_CLIENTS;
+			IPACMDBG_H("Input Wifi Max-clients replaced from %d to %d\n",
+			cfg->max_wifi_clients,
+			ipa_max_num_wifi_clients);
+		}
+		IPACMDBG_H("Wifi Maximum clients %d\n", ipa_max_num_wifi_clients);
+
+		/* eth_client number >=1 */
+		if ((cfg->max_eth_clients > 0) && (cfg->max_eth_clients <= IPA_MAX_NUM_ETH_CLIENTS))
+		{
+			ipa_max_num_eth_clients = cfg->max_eth_clients;
+			v6_pool += 3 * IPA_MAX_NUM_ETH_CLIENTS;
+			ipa_eth_num_ipv6_addr = v6_pool / cfg->max_eth_clients;
+			IPACMDBG_H("updated v6_pool %d, ipa_max_num_eth_clients %d\n", v6_pool, ipa_max_num_eth_clients);
+		}
+		else
+		{
+			IPACMDBG_H("Input ETH Max-clients replaced from %d to %d\n",
+			cfg->max_eth_clients,
+			ipa_max_num_eth_clients);
+			ipa_max_num_eth_clients = IPA_MAX_NUM_ETH_CLIENTS;
+		}
+		IPACMDBG_H("ETH Maximum clients %d, v6-rule %d\n", ipa_max_num_eth_clients, ipa_eth_num_ipv6_addr);
+	}
 
 	/* Allocate more non-nat entries if the monitored iface dun have Tx/Rx properties */
 

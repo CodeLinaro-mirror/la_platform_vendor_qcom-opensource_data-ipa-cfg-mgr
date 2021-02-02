@@ -236,6 +236,12 @@ public:
 	/* Indicates whether socksv5 is enabled or not. */
 	bool ipacm_socksv5_enable;
 
+	/* Indicated how many clients offload support */
+	int ipa_max_num_wifi_clients;
+	int ipa_max_num_eth_clients;
+	int ipa_eth_num_ipv6_addr;
+	bool ipacm_client_number_set;
+
 #ifdef FEATURE_VLAN_MPDN
 	bool vlan_firewall_change_handle;
 

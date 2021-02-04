@@ -474,7 +474,8 @@ static int ipacm_cfg_xml_parse_tree
 						memcpy(content_buf, (void *)content, str_size);
 						vlanid= atoi(content_buf);
 						IPACMDBG_H("VLAN ID %d\n",vlanid);
-						if (config->qos_config.num_mappings <= IPA_MAX_QOS_ENTRIES)
+						if (config->qos_config.num_mappings <= IPA_MAX_QOS_ENTRIES &&
+							config->qos_config.num_mappings > 0)
 							config->qos_config.vlan_dscp_map[config->qos_config.num_mappings -1].vlan_id = vlanid;
 					}
 				}
@@ -488,7 +489,8 @@ static int ipacm_cfg_xml_parse_tree
 						memcpy(content_buf, (void *)content, str_size);
 						dscp= atoi(content_buf);
 						IPACMDBG_H("DSCP %d\n",dscp);
-						if (config->qos_config.num_mappings <= IPA_MAX_QOS_ENTRIES)
+						if (config->qos_config.num_mappings <= IPA_MAX_QOS_ENTRIES &&
+							config->qos_config.num_mappings > 0)
 							config->qos_config.vlan_dscp_map[config->qos_config.num_mappings -1].dscp = dscp;
 					}
 				}
@@ -500,8 +502,12 @@ static int ipacm_cfg_xml_parse_tree
 						str_size = strlen(content);
 						memset(content_buf, 0, sizeof(content_buf));
 						strlcpy(content_buf, content, MAX_XML_STR_LEN);
-						strlcpy(config->qos_config.vlan_dscp_map[config->qos_config.num_mappings -1].iface_name, content_buf, IPA_IFACE_NAME_LEN);
-						IPACMDBG_H("Name %s\n", config->qos_config.vlan_dscp_map[config->qos_config.num_mappings -1].iface_name);
+						if (config->qos_config.num_mappings <= IPA_MAX_QOS_ENTRIES &&
+							config->qos_config.num_mappings > 0) {
+							strlcpy(config->qos_config.vlan_dscp_map[config->qos_config.num_mappings -1].iface_name,
+								content_buf, IPA_IFACE_NAME_LEN);
+							IPACMDBG_H("Name %s\n", config->qos_config.vlan_dscp_map[config->qos_config.num_mappings -1].iface_name);
+						}
 					}
 				}
 #endif

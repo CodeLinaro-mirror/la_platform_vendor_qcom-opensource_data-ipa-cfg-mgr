@@ -150,6 +150,8 @@ IPACM_Wan::IPACM_Wan(int iface_index,
 	hdr_proc_ctx_sta_v4_set = false;
 	hdr_proc_ctx_sta_v6_set = false;
 	vlan_wan_ctx.netdev_in_vlan_mode = false;
+	vlan_wan_ctx.upstream_if_index = -1;
+	vlan_wan_ctx.wan_v4_addr = 0;
 #endif
 
 	if(iface_query != NULL)
@@ -179,13 +181,15 @@ IPACM_Wan::IPACM_Wan(int iface_index,
 #ifdef FEATURE_VLAN_BACKHAUL
 			if (is_sta_mode == ETH_WAN)
 			{
+				if (tx_prop == NULL) {
+					IPACMDBG_H("tx prop NULL\n");
+					return;
+				}
 				IPACMDBG_H("Header type registered : %d \n", tx_prop->tx[0].hdr_l2_type);
 				if (tx_prop->tx[0].hdr_l2_type == IPA_HDR_L2_802_1Q) {
 					IPACM_Iface::ipacmcfg->set_iface_vlan_mode(IPA_VLAN_IF_ETH, true);
 					vlan_wan_ctx.netdev_in_vlan_mode = true;
 				}
-				vlan_wan_ctx.upstream_if_index = -1;
-				vlan_wan_ctx.wan_v4_addr = 0;
 			}
 #endif
 			IPACMDBG_H("The new WAN interface is [WLAN(1)/ ECM(2)] STA : %d \n",m_is_sta_mode);
@@ -1391,6 +1395,7 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 				if (!vlan_iface)
 				{
 					IPACMDBG_H("Recieved if index %d not a valid vlan wan iface\n",data->if_index);
+					return;
 				}
 				vlan_upstream = true;
 
@@ -8347,9 +8352,9 @@ int IPACM_Wan::handle_vlan_wan_iface_addr_evt(ipacm_event_data_addr *data)
 			{
 				IPACM_Iface::ipacmcfg->increaseFltRuleCount(rx_prop->rx[0].src_pipe, IPA_IP_v6, 1);
 				vlan_iface->ipv6_dest_flt_rule_hdl[vlan_iface->num_ipv6_dest_flt_rule] = flt_rule->rules[0].flt_rule_hdl;
-				vlan_iface->num_ipv6_dest_flt_rule++;
 				IPACMDBG_H("Vlan wan ifaceIPv6 dest filter rule %d HDL:0x%x\n",
 					vlan_iface->num_ipv6_dest_flt_rule, vlan_iface->ipv6_dest_flt_rule_hdl[vlan_iface->num_ipv6_dest_flt_rule]);
+				vlan_iface->num_ipv6_dest_flt_rule++;
 				free(flt_rule);
 				flt_rule = NULL;
 			}

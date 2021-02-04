@@ -963,7 +963,12 @@ void IPACM_Config::set_iface_vlan_mode(enum ipa_vlan_ifaces dev, bool state)
 
 bool IPACM_Config::iface_in_vlan_mode(const char *phys_iface_name)
 {
-	if(phys_iface_name && strstr(phys_iface_name, VETH_NETDEV))
+	if (phys_iface_name == NULL) {
+		IPACMDBG_H("Invalid input\n");
+		return false;
+	}
+
+	if(strstr(phys_iface_name, VETH_NETDEV))
 	{
 		IPACMDBG("eth vlan mode %d\n", vlan_devices[IPA_VLAN_IF_ETH]);
 		return vlan_devices[IPA_VLAN_IF_ETH];

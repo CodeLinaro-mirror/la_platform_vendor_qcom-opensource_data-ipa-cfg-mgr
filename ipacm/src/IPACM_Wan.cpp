@@ -2395,6 +2395,20 @@ int IPACM_Wan::handle_route_add_evt(ipa_ip_type iptype, bool add_only)
 					IPACMERR("Failed to send WAN_IOC_NOTIFY_WAN_STATE as up %d\n ", wan_state.up);
 				}
 				close(fd_wwan_ioctl);
+
+				/* Store the Offload state. */
+				FILE *fp = NULL;
+				fp = fopen(IPA_OFFLOAD_TETHER_STATE_FILE_NAME, "w");
+				if (fp == NULL)
+				{
+					IPACMERR("Failed to write offload state to %s, error is %d - %s\n",
+						IPA_OFFLOAD_TETHER_STATE_FILE_NAME, errno, strerror(errno));
+				}
+				else
+				{
+					fprintf(fp, "UPSTREAM=%s,STATE=UP", dev_name);
+					fclose(fp);
+				}
 			}
 			ipa_pm_q6_check++;
 			IPACMDBG_H("update ipa_pm_q6_check to %d\n", ipa_pm_q6_check);
@@ -4834,6 +4848,7 @@ int IPACM_Wan::handle_route_del_evt(ipa_ip_type iptype, bool delete_only)
 	int fd_wwan_ioctl;
 	memset(&wan_state, 0, sizeof(wan_state));
 #endif
+	int ret = IPACM_SUCCESS;
 
 	IPACMDBG_H("got handle_route_del_evt for STA-mode with ip-family:%d \n", iptype);
 
@@ -4974,24 +4989,19 @@ int IPACM_Wan::handle_route_del_evt(ipa_ip_type iptype, bool delete_only)
 			if(delete_offload_frag_rule())
 			{
 				IPACMERR("Failed to delete DL frag rule \n");
-				return IPACM_FAILURE;
+				ret = IPACM_FAILURE;
 			}
-			/* Delete MHI icmpv6 exception rule */
-			if(delete_icmpv6_exception_rule())
-			{
-				IPACMERR("Failed to delete icmpv6 rule \n");
-				return IPACM_FAILURE;
-			}
+
 			/* Delete tcp_fin_rst rule */
 			if(delete_tcp_fin_rst_exception_rule())
 			{
 				IPACMERR("Failed to delete tcp_fin_rst rule \n");
-				return IPACM_FAILURE;
+				ret = IPACM_FAILURE;
 			}
+			return ret;
 		}
 		else
 		{
-
 			wandown_data->backhaul_type = m_is_sta_mode;
 			memcpy(wandown_data->ipv6_prefix, ipv6_prefix, sizeof(wandown_data->ipv6_prefix));
 			evt_data.event = IPA_HANDLE_WAN_DOWN_V6;
@@ -5010,6 +5020,13 @@ int IPACM_Wan::handle_route_del_evt(ipa_ip_type iptype, bool delete_only)
 			{
 				memset(IPACM_Wan::wan_up_dev_name, 0, sizeof(IPACM_Wan::wan_up_dev_name));
 			}
+			/* Delete MHI icmpv6 exception rule */
+			if(delete_icmpv6_exception_rule())
+			{
+				IPACMERR("Failed to delete icmpv6 rule \n");
+				return IPACM_FAILURE;
+			}
+
 		}
 	}
 	else
@@ -5070,6 +5087,20 @@ int IPACM_Wan::handle_route_del_evt_ex(ipa_ip_type iptype)
 					IPACMERR("Failed to send WAN_IOC_NOTIFY_WAN_STATE as up %d\n ", wan_state.up);
 				}
 				close(fd_wwan_ioctl);
+
+				/* Store the Offload state. */
+				FILE *fp = NULL;
+				fp = fopen(IPA_OFFLOAD_TETHER_STATE_FILE_NAME, "w");
+				if (fp == NULL)
+				{
+					IPACMERR("Failed to write offload state to %s, error is %d - %s\n",
+						IPA_OFFLOAD_TETHER_STATE_FILE_NAME, errno, strerror(errno));
+				}
+				else
+				{
+					fprintf(fp, "UPSTREAM=%s,STATE=DOWN", dev_name);
+					fclose(fp);
+				}
 			}
 			if (ipa_pm_q6_check > 0)
 				ipa_pm_q6_check--;

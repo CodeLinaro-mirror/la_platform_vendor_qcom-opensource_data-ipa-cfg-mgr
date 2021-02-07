@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013-2020 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2013-2021 The Linux Foundation. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -1510,12 +1510,12 @@ int IPACM_Lan::handle_eth_mac_flt_event()
 /* add_mac_flt_ul_rule add UL rule for mac based filtering on top */
 int IPACM_Lan::add_mac_flt_blacklist_rule(uint8_t *mac_addr, ipa_ip_type iptype, uint32_t *flt_rule_hdl)
 {
-		IPACMDBG_H(" mac_flt_add_rule \n");
+	IPACMDBG_H(" mac_flt_add_rule \n");
 
 	int len =0;
 	struct ipa_ioc_add_flt_rule_v2 *pFilteringTable_v2 = NULL;
 	struct ipa_flt_rule_add_v2 flt_rule_entry_v2;
-	uint8_t mac_a[6];
+	uint8_t mac_a[6] = {0};
 	std::array<uint8_t, 6> mac = {0};
 	std::map<std::array<uint8_t, 6>, mac_flt_type * >::iterator it;
 
@@ -1524,7 +1524,13 @@ int IPACM_Lan::add_mac_flt_blacklist_rule(uint8_t *mac_addr, ipa_ip_type iptype,
 
 	if (rx_prop == NULL)
 	{
-		IPACMERR("Rx properties not registered\n");
+		IPACMDBG_H("No rx properties registered\n");
+		return IPACM_FAILURE;
+	}
+
+	if(rx_prop->num_rx_props <= 0)
+	{
+		IPACMDBG_H("No RX property.\n");
 		return IPACM_FAILURE;
 	}
 
@@ -2112,8 +2118,8 @@ int IPACM_Lan::handle_vlan_neighbor(ipacm_event_data_all *data)
 							&& (it->ipv6_addr[2] == data->ipv6_addr[2])  && (it->ipv6_addr[3] == data->ipv6_addr[3]))
 						{
 							IPACMDBG_H("Already cached client v6 addr : 0x%08x:%08x:%08x:%08x mac 0x%x%x%x%x%x%x\n",
-								data_all.ipv6_addr[0], data_all.ipv6_addr[1], data_all.ipv6_addr[2], data_all.ipv6_addr[3],
-								data_all.mac_addr[0], data_all.mac_addr[1], data_all.mac_addr[2], data_all.mac_addr[3], data_all.mac_addr[4], data_all.mac_addr[5]);
+								data->ipv6_addr[0], data->ipv6_addr[1], data->ipv6_addr[2], data->ipv6_addr[3],
+								data->mac_addr[0], data->mac_addr[1], data->mac_addr[2], data->mac_addr[3], data->mac_addr[4], data->mac_addr[5]);
 							break;
 						}
 					}
@@ -4148,8 +4154,8 @@ int IPACM_Lan::handle_eth_client_ipaddr(ipacm_event_data_all *data)
 							&& (it->ipv6_addr[2] == data->ipv6_addr[2])  && (it->ipv6_addr[3] == data->ipv6_addr[3]))
 						{
 							IPACMDBG_H("Already cached client v6 addr : 0x%08x:%08x:%08x:%08x mac 0x%x%x%x%x%x%x\n",
-								data_all.ipv6_addr[0], data_all.ipv6_addr[1], data_all.ipv6_addr[2], data_all.ipv6_addr[3],
-								data_all.mac_addr[0], data_all.mac_addr[1], data_all.mac_addr[2], data_all.mac_addr[3], data_all.mac_addr[4], data_all.mac_addr[5]);
+								data->ipv6_addr[0], data->ipv6_addr[1], data->ipv6_addr[2], data->ipv6_addr[3],
+								data->mac_addr[0], data->mac_addr[1], data->mac_addr[2], data->mac_addr[3], data->mac_addr[4], data->mac_addr[5]);
 							break;
 						}
 					}

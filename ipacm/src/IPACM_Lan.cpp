@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013-2019,2020 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2013-2021 The Linux Foundation. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -13009,7 +13009,7 @@ int IPACM_Lan::handle_mpdn_ul_xlat_filter_rule(ipacm_ext_prop * prop,
 {
 	int len = 0, fd, ret = IPACM_SUCCESS;
 	ipa_flt_rule_add flt_rule_entry;
-	ipa_ioc_add_flt_rule_after *pFilteringTable;
+	ipa_ioc_add_flt_rule_after *pFilteringTable = NULL;
 	ipa_fltr_installed_notif_req_msg_v01 flt_index;
 	int i, cnt, entry_idx = 0, prev =0, curr =0, pos, idx_q6 = 0;
 	uint16_t value = 0, mask = 0;

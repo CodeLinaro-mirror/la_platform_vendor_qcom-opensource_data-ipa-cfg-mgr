@@ -1127,6 +1127,7 @@ int IPACM_Config::SetExtProp(ipa_ioc_query_intf_ext_props *prop)
 	}
 
 	num = prop->num_ext_props;
+	ext_prop_v4.num_v4_xlat_props = 0;
 	for(i=0; i<num; i++)
 	{
 		if(prop->ext[i].ip == IPA_IP_v4)
@@ -1138,6 +1139,8 @@ int IPACM_Config::SetExtProp(ipa_ioc_query_intf_ext_props *prop)
 			}
 			memcpy(&ext_prop_v4.prop[ext_prop_v4.num_ext_props], &prop->ext[i], sizeof(struct ipa_ioc_ext_intf_prop));
 			ext_prop_v4.num_ext_props++;
+			if (prop->ext[i].is_xlat_rule)
+				ext_prop_v4.num_v4_xlat_props++;
 		}
 		else if(prop->ext[i].ip == IPA_IP_v6)
 		{
@@ -1863,7 +1866,7 @@ bool IPACM_Config::iface_in_vlan_mode(const char *phys_iface_name)
 	return false;
 }
 
-int IPACM_Config::get_iface_vlan_ids(char *phys_iface_name, uint8_t *Ids)
+int IPACM_Config::get_iface_vlan_ids(char *phys_iface_name, uint16_t *Ids)
 {
 	list<vlan_iface_info>::iterator it_vlan;
 	int cnt = 0;
@@ -1903,7 +1906,7 @@ int IPACM_Config::get_iface_vlan_ids(char *phys_iface_name, uint8_t *Ids)
 	return IPACM_SUCCESS;
 }
 
-int IPACM_Config::get_vlan_id(char *iface_name, uint8_t *vlan_id)
+int IPACM_Config::get_vlan_id(char *iface_name, uint16_t *vlan_id)
 {
 	list<vlan_iface_info>::iterator it_vlan;
 	int ret = IPACM_FAILURE;

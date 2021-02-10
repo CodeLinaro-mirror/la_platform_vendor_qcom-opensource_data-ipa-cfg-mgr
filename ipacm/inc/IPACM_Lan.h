@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2013-2019, The Linux Foundation. All rights reserved.
+Copyright (c) 2013-2019, 2021 The Linux Foundation. All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are
@@ -135,7 +135,7 @@ typedef struct _ipa_eth_client
 #endif
 
 #ifdef FEATURE_VLAN_MPDN
-	uint8_t vlan_id;
+	uint16_t vlan_id;
 #endif
 	bool gre_nat_set;
 	eth_client_rt_hdl eth_rt_hdl[0]; /* depends on number of tx properties */
@@ -165,6 +165,28 @@ typedef struct ipa_lan_client_idx
 	int ipa_if_num;
 }ipa_lan_client_idx;
 #endif
+
+typedef struct rule_id_hdl_map
+{
+	uint32_t flt_hdl;
+	uint16_t rule_id;
+}rule_id_hdl_map;
+
+typedef struct pdn_context
+{
+	int pdn_mux_id;
+	uint32_t wan_mpdn_ul_xlat_fl_rule_hdl_v4[MAX_WAN_UL_FILTER_RULES];
+	uint32_t num_wan_mpdn_ul_xlat_fl_rule_v4;
+}pdn_context;
+
+typedef struct _xlat_context
+{
+	rule_id_hdl_map ul_rule_id_hdl_map[MAX_WAN_UL_FILTER_RULES];
+
+	/* PDN's for which UL filter installed */
+	pdn_context active_pdn_list[IPA_MAX_NUM_HW_PDNS];
+	uint32_t active_pdn_count;
+}xlat_context;
 
 /* lan iface */
 class IPACM_Lan : public IPACM_Iface
@@ -244,6 +266,10 @@ public:
 	/* install UL filter rule from Q6 */
 #ifdef FEATURE_VLAN_MPDN
 	virtual int handle_uplink_filter_rule(ipacm_ext_prop *prop, ipa_ip_type iptype, uint8_t pdn_mux_id, bool notif_only, bool is_xlat = false);
+
+	virtual int handle_mpdn_ul_xlat_filter_rule(ipacm_ext_prop *prop, ipa_ip_type iptype, int pdn_mux_id, uint16_t vlan_id);
+
+	virtual int delete_mdpn_ul_xlat_filter_rule(int mux_id);
 #else
 	virtual int handle_uplink_filter_rule(ipacm_ext_prop* prop, ipa_ip_type iptype, uint8_t xlat_mux_id);
 #endif
@@ -382,7 +408,7 @@ public:
 		ipa_hdr_l2_type peer_l2_hdr_type, ipa_ip_type iptype, uint32_t *rt_rule_hdl, int rt_rule_count);
 
 	/* add filtering rule and return handle to lan2lan controller */
-	int eth_bridge_add_flt_rule(uint8_t *mac, uint32_t rt_tbl_hdl, ipa_ip_type iptype, uint32_t *flt_rule_hdl, uint8_t vlan_id = 0);
+	int eth_bridge_add_flt_rule(uint8_t *mac, uint32_t rt_tbl_hdl, ipa_ip_type iptype, uint32_t *flt_rule_hdl, uint16_t vlan_id = 0);
 
 	/* delete filtering rule */
 	int eth_bridge_del_flt_rule(uint32_t flt_rule_hdl, ipa_ip_type iptype);
@@ -490,7 +516,7 @@ protected:
 #endif
 	/* mac address has to be provided for client related events */
 	void eth_bridge_post_event(ipa_cm_event_id evt, ipa_ip_type iptype, uint8_t *mac,
-		uint32_t *ipv6_addr, char *iface_name, uint8_t VlanID = 0);
+		uint32_t *ipv6_addr, char *iface_name, uint16_t VlanID = 0);
 
 #if defined(FEATURE_L2TP) || defined(FEATURE_VLAN_MPDN)
 	/* check if the event is associated with vlan interface */
@@ -930,6 +956,50 @@ protected:
 #endif
 	int post_lan_up_event(const ipacm_event_data_addr* data) const;
 
+	xlat_context xlat_ctx;
+
+	inline void add_pdn_xlat_ctx(int pdn_mux_id)
+	{
+		for (int i = 0; i < IPA_MAX_NUM_HW_PDNS ; ++i)
+		{
+			if (xlat_ctx.active_pdn_list[i].pdn_mux_id == 0)
+			{
+				xlat_ctx.active_pdn_list[i].pdn_mux_id = pdn_mux_id;
+				xlat_ctx.active_pdn_count++;
+				IPACMDBG_H("Adding pdn to xlat ctx mux id %d total active xlat pdn:%d\n",
+					pdn_mux_id, xlat_ctx.active_pdn_count);
+				return;
+			}
+		}
+		IPACMDBG_H("Max number of pdns reached, can't add pdn to ctx!\n");
+	}
+
+	inline void remove_pdn_xlat_ctx(int pdn_mux_id)
+	{
+		for (int i = 0; i < IPA_MAX_NUM_HW_PDNS ; ++i)
+		{
+			if (xlat_ctx.active_pdn_list[i].pdn_mux_id == pdn_mux_id)
+			{
+				xlat_ctx.active_pdn_list[i].pdn_mux_id = 0;
+				xlat_ctx.active_pdn_count--;
+				IPACMDBG_H("Removing pdn from xlat ctx mux id %d total active xlat pdn:%d\n",
+					pdn_mux_id, xlat_ctx.active_pdn_count);
+				return;
+			}
+		}
+		IPACMDBG_H("Pdn not found in ctx!\n");
+	}
+
+	inline int get_pdn_xlat_ctx(int pdn_mux_id)
+	{
+		for (int i = 0; i < IPA_MAX_NUM_HW_PDNS ; ++i)
+		{
+			if (xlat_ctx.active_pdn_list[i].pdn_mux_id == pdn_mux_id)
+				return i;
+		}
+		return IPACM_FAILURE;
+	}
+
 private:
 
 	/* get hdr proc ctx type given source and destination l2 hdr type */
@@ -1089,7 +1159,7 @@ private:
 		return (ipa_eth_client *)ret;
 	}
 
-	inline int get_eth_client_index(uint8_t *mac_addr, uint8_t vlan_id = 0)
+	inline int get_eth_client_index(uint8_t *mac_addr, uint16_t vlan_id = 0)
 	{
 		int cnt;
 		int num_eth_client_tmp = num_eth_client;
@@ -1201,13 +1271,13 @@ private:
 	/* handle eth client initial, construct full headers (tx property) */
 	int handle_eth_hdr_init(uint8_t *mac_addr,
 		ipacm_bridge *bridge = NULL,
-		uint8_t vlan_id = 0, bool isVlan = false);
+		uint16_t vlan_id = 0, bool isVlan = false);
 
 	/* handle eth client ip-address */
 	int handle_eth_client_ipaddr(ipacm_event_data_all *data);
 
 	/* handle eth client routing rule*/
-	int handle_eth_client_route_rule(uint8_t *mac_addr, ipa_ip_type iptype, uint8_t vlan_id = 0);
+	int handle_eth_client_route_rule(uint8_t *mac_addr, ipa_ip_type iptype, uint16_t vlan_id = 0);
 
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
 	/* handle eth client routing rule with rule id*/
@@ -1218,7 +1288,7 @@ private:
 #endif
 
 	/*handle eth client del mode*/
-	int handle_eth_client_down_evt(uint8_t *mac_addr, uint8_t vlan_id = 0, ipacm_event_data_all *data = NULL);
+	int handle_eth_client_down_evt(uint8_t *mac_addr, uint16_t vlan_id = 0, ipacm_event_data_all *data = NULL);
 
 	/* handle odu client initial, construct full headers (tx property) */
 	int handle_odu_hdr_init(uint8_t *mac_addr);
@@ -1253,7 +1323,7 @@ private:
 #endif
 #ifdef FEATURE_VLAN_MPDN
 	int handle_vlan_neighbor(ipacm_event_data_all *data);
-	bool is_vlan_IF(uint8_t vlan_id);
+	bool is_vlan_IF(uint16_t vlan_id);
 	int handle_vlan_pdn_up(ipacm_event_vlan_pdn *data, bool set_mux = true);
 	int handle_vlan_pdn_down(ipacm_event_vlan_pdn *data);
 	int handle_vlan_phys_if_down();

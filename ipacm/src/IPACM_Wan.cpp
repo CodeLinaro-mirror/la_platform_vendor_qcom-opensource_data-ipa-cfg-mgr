@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013-2020, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2013-2021, The Linux Foundation. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -247,6 +247,23 @@ IPACM_Wan::IPACM_Wan(int iface_index,
 
 IPACM_Wan::~IPACM_Wan()
 {
+	if (wan_route_rule_v4_hdl != NULL)
+	{
+		free(wan_route_rule_v4_hdl);
+	}
+	if (wan_route_rule_v6_hdl != NULL)
+	{
+		free(wan_route_rule_v6_hdl);
+	}
+	if (wan_client != NULL)
+	{
+		free(wan_client);
+	}
+	if (ext_prop != NULL)
+	{
+		free(ext_prop);
+	}
+
 	IPACM_EvtDispatcher::deregistr(this);
 	IPACM_IfaceManager::deregistr(this);
 	return;
@@ -254,7 +271,7 @@ IPACM_Wan::~IPACM_Wan()
 
 #ifdef FEATURE_VLAN_MPDN
 
-int IPACM_Wan::GetMuxByVid(uint8_t vlan_id, uint8_t *mux_id, ipa_ip_type iptype)
+int IPACM_Wan::GetMuxByVid(uint16_t vlan_id, uint8_t *mux_id, ipa_ip_type iptype)
 {
 	for(int i = 0; i < IPA_MAX_NUM_SW_PDNS; i++)
 	{
@@ -283,6 +300,20 @@ int IPACM_Wan::GetMuxByVid(uint8_t vlan_id, uint8_t *mux_id, ipa_ip_type iptype)
 	}
 	IPACMERR("couldn't find MUX for VID %d\n", vlan_id);
 	return IPACM_FAILURE;
+}
+
+bool IPACM_Wan::is_xlat_by_vid(uint16_t vlan_id)
+{
+	for(int i = 0; i < IPA_MAX_NUM_SW_PDNS; i++)
+	{
+		if(IPACM_Wan::ipv4_to_iface[i].ipv4_addr)
+		{
+			if(IPACM_Wan::ipv4_to_iface[i].pIface->associated_VID == vlan_id)
+				return IPACM_Wan::ipv4_to_iface[i].is_xlat;
+		}
+	}
+	IPACMERR("couldn't find MUX xlat info for VID %d\n", vlan_id);
+	return false;
 }
 #endif
 /* handle new_address event */
@@ -742,7 +773,7 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 			if ((ipa_interface_index == ipa_if_num) && (m_is_sta_mode == Q6_WAN))
 			{
 				is_xlat = true;
-				IPACMDBG_H("WAN-LTE (%s) link up, iface: %d is_xlat: \n",
+				IPACMDBG_H("WAN-LTE (%s) link up, iface: %d is_xlat: %d \n",
 						IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].iface_name,data->if_index, is_xlat);
 			}
 			break;
@@ -1307,6 +1338,13 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 						IPACMERR("v4 vlan wan is already up for %s, ignoring\n", dev_name);
 						return;
 					}
+
+#ifdef FEATURE_SOCKSv5
+					/* socksv5 case*/
+					if (!IPACM_Iface::ipacmcfg->ipacm_mpdn_enable)
+						handle_route_add_vlan_pdn_evt(IPA_IP_v4, data->VlanID);
+#endif //FEATURE_SOCKSv5
+
 					if((modem_ipv6_pdn_index >= 0) && ipv6_to_iface[modem_ipv6_pdn_index].wan_up_vlan_v6 && (data->VlanID != associated_VID))
 					{
 						IPACMERR("inconsistency on new v4 VID (%d) and exisiting v6 VID (%d) ignoring\n", data->VlanID, associated_VID);
@@ -1326,6 +1364,13 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 						IPACMERR("v6 vlan wan is already up for %s, ignoring\n", dev_name);
 						return;
 					}
+
+#ifdef FEATURE_SOCKSv5
+					/* socksv5 case*/
+					if (!IPACM_Iface::ipacmcfg->ipacm_mpdn_enable)
+						handle_route_add_vlan_pdn_evt(IPA_IP_v6, data->VlanID);
+#endif //FEATURE_SOCKSv5
+
 					if((modem_ipv4_pdn_index >= 0) && ipv4_to_iface[modem_ipv4_pdn_index].wan_up_vlan && (data->VlanID != associated_VID))
 					{
 						IPACMERR("inconsistency on new v6 VID (%d) and exisiting v4 VID (%d) ignoring\n", data->VlanID, associated_VID);
@@ -1659,7 +1704,7 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 }
 
 #ifdef FEATURE_VLAN_MPDN
-int IPACM_Wan::handle_route_add_vlan_pdn_evt(ipa_ip_type iptype, uint8_t vlan_id)
+int IPACM_Wan::handle_route_add_vlan_pdn_evt(ipa_ip_type iptype, uint16_t vlan_id)
 {
 	struct ipa_ioc_add_rt_rule *rt_rule = NULL;
 	struct ipa_rt_rule_add *rt_rule_entry;
@@ -1809,6 +1854,13 @@ int IPACM_Wan::handle_route_add_vlan_pdn_evt(ipa_ip_type iptype, uint8_t vlan_id
 			ip_pass_pdn_info.pdn_ip_addr : 0;
 		wanup_vlan_data->ip_pass_skip_nat = (ip_pass_pdn_info.enable) ? ip_pass_pdn_info.skip_nat : 0;
 
+		/* send xlat configuration for installing uplink rules */
+		if (is_xlat)
+		{
+			wanup_vlan_data->is_xlat = true;
+			ipv4_to_iface[modem_ipv4_pdn_index].is_xlat=true;
+			IPACMDBG_H("xlat config enabled\n");
+		}
 		IPACMDBG_H("Posting IPA_HANDLE_WAN_VLAN_PDN_UP with below information:\n");
 		IPACMDBG_H("iptype IPA_IP_v4, VlanID %d, mux_id %d, if num %d\n", vlan_id, ext_prop->ext[0].mux_id, ipa_if_num);
 
@@ -4393,6 +4445,7 @@ int IPACM_Wan::query_ext_prop()
 			IPACMERR("ioctl IPA_IOC_QUERY_INTF_EXT_PROPS failed\n");
 			/* ext_prop memory will free when iface-down*/
 			free(ext_prop);
+			ext_prop = NULL;
 			close(fd);
 			return ret;
 		}
@@ -5684,26 +5737,32 @@ fail:
 	if (tx_prop != NULL)
 	{
 		free(tx_prop);
+		tx_prop = NULL;
 	}
 	if (rx_prop != NULL)
 	{
 		free(rx_prop);
+		rx_prop = NULL;
 	}
 	if (iface_query != NULL)
 	{
 		free(iface_query);
+		iface_query = NULL;
 	}
 	if (wan_route_rule_v4_hdl != NULL)
 	{
 		free(wan_route_rule_v4_hdl);
+		wan_route_rule_v4_hdl = NULL;
 	}
 	if (wan_route_rule_v6_hdl != NULL)
 	{
 		free(wan_route_rule_v6_hdl);
+		wan_route_rule_v6_hdl = NULL;
 	}
 	if (wan_client != NULL)
 	{
 		free(wan_client);
+		wan_client = NULL;
 	}
 	close(m_fd_ipa);
 	return res;
@@ -5756,6 +5815,7 @@ int IPACM_Wan::handle_down_evt_ex()
 			ipacm_event_vlan_pdn *vlandown_data;
 
 			ipv4_to_iface[modem_ipv4_pdn_index].wan_up_vlan = false;
+			ipv4_to_iface[modem_ipv4_pdn_index].is_xlat = false;
 
 			vlandown_data = (ipacm_event_vlan_pdn *)malloc(sizeof(ipacm_event_vlan_pdn));
 			if(vlandown_data == NULL)
@@ -6345,30 +6405,37 @@ fail:
 	if (tx_prop != NULL)
 	{
 		free(tx_prop);
+		tx_prop = NULL;
 	}
 	if (rx_prop != NULL)
 	{
 		free(rx_prop);
+		rx_prop = NULL;
 	}
 	if (ext_prop != NULL)
 	{
 		free(ext_prop);
+		ext_prop = NULL;
 	}
 	if (iface_query != NULL)
 	{
 		free(iface_query);
+		iface_query = NULL;
 	}
 	if (wan_route_rule_v4_hdl != NULL)
 	{
 		free(wan_route_rule_v4_hdl);
+		wan_route_rule_v4_hdl = NULL;
 	}
 	if (wan_route_rule_v6_hdl != NULL)
 	{
 		free(wan_route_rule_v6_hdl);
+		wan_route_rule_v6_hdl = NULL;
 	}
 	if (wan_client != NULL)
 	{
 		free(wan_client);
+		wan_client = NULL;
 	}
 	close(m_fd_ipa);
 	return res;

@@ -2732,8 +2732,12 @@ void IPACM_Config::clear_whitelist_mac_add(uint8_t * mac_addr)
 
 	memcpy(mac_a,mac_addr,IPA_MAC_ADDR_SIZE);
 	std::copy(std::begin(mac_a), std::end(mac_a), std::begin(mac));
-
-	IPACM_Iface::ipacmcfg->mac_flt_lists.erase(mac);
+	if(mac_flt_lists.at(mac) != NULL)
+	{
+		free(mac_flt_lists.at(mac));
+		mac_flt_lists.at(mac) = NULL;
+	}
+	mac_flt_lists.erase(mac);
 	IPACMDBG_H("Cleared macaddr from map %02x:%02x:%02x:%02x:%02x:%02x\n",
 						 mac_a[0], mac_a[1], mac_a[2],
 						 mac_a[3], mac_a[4], mac_a[5]);

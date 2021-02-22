@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013-2020, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2013-2021, The Linux Foundation. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -1026,7 +1026,7 @@ void IPACM_Wlan::event_callback(ipa_cm_event_id event, void *param)
 int IPACM_Wlan::handle_wlan_mac_flt_event()
 {
 	IPACMDBG_H("handle_wlan_mac_flt_event\n ");
-	uint8_t mac_addr[6];
+	uint8_t mac_addr[6] ={0};
 	int wlan_index;
 	ipacm_event_data_all data;
 
@@ -1237,7 +1237,7 @@ return IPACM_SUCCESS;
 void IPACM_Wlan::delete_wlan_mac_flt_rules()
 {
 
-	uint8_t mac_addr[6];
+	uint8_t mac_addr[6]={0};
 	int wlan_index;
 
 	/* copy current list to avoid concurrency issues*/

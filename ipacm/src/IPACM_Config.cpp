@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013-2020, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2013-2021, The Linux Foundation. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -295,7 +295,7 @@ int IPACM_Config::ipacm_reset_hw_fnr_counters(const uint8_t start_id, const uint
 	/* Create a query with required params */
 	query->start_id = start_id;
 	query->end_id = end_id;
-	query->reset = true;
+	query->reset = false;
 	query->stats_size = sizeof(struct ipa_flt_rt_stats);
 	num_counters = end_id - start_id + 1;
 
@@ -2589,7 +2589,7 @@ void IPACM_Config::mac_flt_info(ipa_ioc_mac_client_list_type *mac_flt_data)
 	std::list<std::array<uint8_t, 6>> mac_list;
 	std::list<std::array<uint8_t, 6>>::iterator it_mac_list;
 	std::array<uint8_t, 6> mac = {0};
-	uint8_t mac_addr[6];
+	uint8_t mac_addr[6]= {0};
 
 	if(pthread_mutex_lock(&mac_flt_info_lock) != 0)
 	{

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013-2020 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2013-2021 The Linux Foundation. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -111,12 +111,16 @@ int IPACM_ConntrackClient::IPAConntrackEventCB
 	if(AF_INET6 == ip_type)
 	{
 		config_instance = IPACM_Config::GetInstance();
-		if((config_instance == NULL) ||
-			 (!config_instance->IsIpv6CTEnabled()
+		if(config_instance == NULL)
+		{
+			IPACMDBG("unable to retrieve config instance\n");
+			goto IGNORE;
+		}
+		if(!config_instance->IsIpv6CTEnabled()
 #ifdef FEATURE_IPV6_NAT
-				 && !config_instance->ipv6_nat_enable
+			&& !config_instance->ipv6_nat_enable
 #endif
-				 ))
+			)
 		{
 			IPACMDBG("ip type AF_INET6 %d, IPv6CT %d, ipv6 NAT %d\n", ip_type, config_instance->IsIpv6CTEnabled(), config_instance->ipv6_nat_enable);
 			IPACMDBG("Ignoring ipv6(%d) connections\n", ip_type);

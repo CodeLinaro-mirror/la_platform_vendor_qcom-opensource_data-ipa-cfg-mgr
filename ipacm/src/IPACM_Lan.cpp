@@ -1724,8 +1724,8 @@ int IPACM_Lan::handle_vlan_neighbor(ipacm_event_data_all *data)
 								&& (it->ipv6_addr[2] == data->ipv6_addr[2])  && (it->ipv6_addr[3] == data->ipv6_addr[3]))
 							{
 								IPACMDBG_H("Already cached client v6 addr : 0x%08x:%08x:%08x:%08x mac 0x%x%x%x%x%x%x\n",
-									data_all.ipv6_addr[0], data_all.ipv6_addr[1], data_all.ipv6_addr[2], data_all.ipv6_addr[3],
-									data_all.mac_addr[0], data_all.mac_addr[1], data_all.mac_addr[2], data_all.mac_addr[3], data_all.mac_addr[4], data_all.mac_addr[5]);
+									data->ipv6_addr[0], data->ipv6_addr[1], data->ipv6_addr[2], data->ipv6_addr[3],
+									data->mac_addr[0], data->mac_addr[1], data->mac_addr[2], data->mac_addr[3], data->mac_addr[4], data->mac_addr[5]);
 								break;
 							}
 						}
@@ -3946,8 +3946,8 @@ int IPACM_Lan::handle_eth_client_ipaddr(ipacm_event_data_all *data)
 								&& (it->ipv6_addr[2] == data->ipv6_addr[2])  && (it->ipv6_addr[3] == data->ipv6_addr[3]))
 							{
 								IPACMDBG_H("Already cached client v6 addr : 0x%08x:%08x:%08x:%08x mac 0x%x%x%x%x%x%x\n",
-									data_all.ipv6_addr[0], data_all.ipv6_addr[1], data_all.ipv6_addr[2], data_all.ipv6_addr[3],
-									data_all.mac_addr[0], data_all.mac_addr[1], data_all.mac_addr[2], data_all.mac_addr[3], data_all.mac_addr[4], data_all.mac_addr[5]);
+									data->ipv6_addr[0], data->ipv6_addr[1], data->ipv6_addr[2], data->ipv6_addr[3],
+									data->mac_addr[0], data->mac_addr[1], data->mac_addr[2], data->mac_addr[3], data->mac_addr[4], data->mac_addr[5]);
 								break;
 							}
 						}

@@ -1004,6 +1004,7 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 	case IPA_NEIGH_CLIENT_IP_ADDR_ADD_EVENT:
 		{
 			int eth_index;
+			tether_client_info client_info;
 #if defined(FEATURE_IPACM_PER_CLIENT_STATS) && defined(IPA_HW_FNR_STATS)
 			int retval;
 #endif //IPA_HW_FNR_STATS
@@ -1049,6 +1050,15 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 					return;
 				}
 #endif
+				/* if ipv4, add to tether-client-lists */
+				if (data->iptype == IPA_IP_v4)
+				{
+					memset(&client_info, 0, sizeof(tether_client_info));
+					client_info.v4_addr = data->ipv4_addr;
+					memcpy(client_info.iface, data->iface_name, IPA_IFACE_NAME_LEN);
+					IPACM_Iface::ipacmcfg->update_client_info(data->mac_addr, &client_info, true);
+				}
+
 				/* first construc ETH full header */
 				handle_eth_hdr_init(data->mac_addr);
 				IPACMDBG_H("construct ETH header and route rules \n");

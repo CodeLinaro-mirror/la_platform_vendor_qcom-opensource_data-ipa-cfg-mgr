@@ -796,10 +796,20 @@ void IPACM_Wlan::event_callback(ipa_cm_event_id event, void *param)
 	case IPA_NEIGH_CLIENT_IP_ADDR_ADD_EVENT:
 		{
 			ipacm_event_data_all *data = (ipacm_event_data_all *)param;
+			tether_client_info client_info;
 			ipa_interface_index = iface_ipa_index_query(data->if_index);
 			if (ipa_interface_index == ipa_if_num)
 			{
 				IPACMDBG_H("Received IPA_NEIGH_CLIENT_IP_ADDR_ADD_EVENT\n");
+				/* if ipv4, add to tether-client-lists */
+				if (data->iptype == IPA_IP_v4)
+				{
+					memset(&client_info, 0, sizeof(tether_client_info));
+					client_info.v4_addr = data->ipv4_addr;
+					memcpy(client_info.iface, data->iface_name, IPA_IFACE_NAME_LEN);
+					IPACM_Iface::ipacmcfg->update_client_info(data->mac_addr, &client_info, true);
+				}
+
 				if (handle_wlan_client_ipaddr(data) == IPACM_FAILURE)
 				{
 					return;

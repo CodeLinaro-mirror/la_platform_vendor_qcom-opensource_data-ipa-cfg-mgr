@@ -109,6 +109,12 @@ extern "C"
 #define IPACM_L2TP_DISABLE 0
 #define IPACM_L2TP 1
 #define IPACM_L2TP_E2E 2
+
+
+#define IPACM_FLT_DISABLE 0
+#define IPACM_MAC_FLT 1
+#define IPACM_SW_FLT 2
+
 /*---------------------------------------------------------------------------
 										Return values indicating error status
 ---------------------------------------------------------------------------*/

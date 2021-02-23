@@ -115,6 +115,7 @@ int	IPACM_Wan::ipa_if_num_tether_v6[IPA_MAX_IFACE_ENTRIES];
 #ifdef FEATURE_VLAN_MPDN
 ipacm_ipv4_wan_iface IPACM_Wan::ipv4_to_iface[IPA_MAX_NUM_SW_PDNS];
 ipacm_ipv6_wan_iface IPACM_Wan::ipv6_to_iface[IPA_MAX_NUM_SW_PDNS];
+uint8_t IPACM_Wan::num_offloaded_pdns = 0;
 #endif
 
 uint16_t IPACM_Wan::mtu_default_wan = DEFAULT_MTU_SIZE;
@@ -995,6 +996,44 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 						evt_data.evt_data = (void *)wanup_data;
 						IPACM_EvtDispatcher::PostEvt(&evt_data);
 					}
+#ifdef FEATURE_VLAN_MPDN
+					else
+					{
+						if((IPACM_Iface::ipacmcfg->ipacm_mpdn_enable) && (associated_VID != 0))
+						{
+							IPACMDBG_H("PDN already associated with VLAN ID via V6 address (0x[%X][%X]), add V4 vlan pdn\n",
+								ipv6_prefix[0], ipv6_prefix[1]);
+
+							/* in case of ip passthrough we receive a link local address and shouldn't add a vlan v4 pdn */
+							if (is_link_local_ipv4_addr(data->ipv4_addr)) {
+								IPACMDBG_H("ipv4 address is link local, don't add v4 vlan pdn\n");
+								break;
+							}
+
+							/* generate IPA_ROUTE_ADD_VLAN_PDN_EVENT for v4 PDN as v6 PDN already has associated vlan*/
+							ipacm_cmd_q_data evt_data;
+							ipacm_event_route_vlan *vlan_data;
+
+							evt_data.event = IPA_ROUTE_ADD_VLAN_PDN_EVENT;
+							vlan_data = (ipacm_event_route_vlan *)malloc(sizeof(ipacm_event_route_vlan));
+							if(!vlan_data)
+							{
+								IPACMERR("couldn't allocate memory for new vlan pdn event\n");
+								return;
+							}
+							vlan_data->iptype = IPA_IP_v4;
+							vlan_data->VlanID = associated_VID;
+							vlan_data->wan_ipv4_addr = data->ipv4_addr;
+							evt_data.evt_data = vlan_data;
+							IPACMDBG_H("sending IPA_ROUTE_ADD_VLAN_PDN_EVENT vlan id %d, iptype %d,\n",
+								vlan_data->VlanID,
+								vlan_data->iptype);
+							IPACMDBG_H("pdn ip 0x%X\n", data->ipv4_addr);
+
+							IPACM_EvtDispatcher::PostEvt(&evt_data);
+						}
+					}
+#endif
 				}
 			}
 		}
@@ -1330,6 +1369,8 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 
 			if(data->iptype == IPA_IP_v4)
 			{
+				bool new_pdn = true;
+
 				if(data->wan_ipv4_addr == wan_v4_addr)
 				{
 					IPACMDBG_H("received v4 IPA_ROUTE_ADD_VLAN_PDN_EVENT for VID %d, wan %s, %d\n", data->VlanID, dev_name, ipa_if_num);
@@ -1339,17 +1380,32 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 						return;
 					}
 
+					if((modem_ipv6_pdn_index >= 0) && ipv6_to_iface[modem_ipv6_pdn_index].wan_up_vlan_v6)
+					{
+						IPACMDBG("iface already has v6 vlan association, not new\n");
+						new_pdn = false;
+						if(data->VlanID != associated_VID)
+						{
+							IPACMERR("inconsistency on new v4 VID (%d) and exisiting v6 VID (%d) ignoring\n", data->VlanID, associated_VID);
+							return;
+						}
+					}
+
+					if (new_pdn)
+					{
+						if(num_offloaded_pdns >= IPA_MAX_NUM_HW_PDNS) {
+							IPACMERR("number of offloaded PDNs %d can't add more than %d, ignoring\n", num_offloaded_pdns, IPA_MAX_NUM_HW_PDNS);
+							return;
+						}
+
+						num_offloaded_pdns++;
+						IPACMDBG_H("this is a new PDN, num of offloaded PDN increased to %d\n", num_offloaded_pdns);
+					}
 #ifdef FEATURE_SOCKSv5
 					/* socksv5 case*/
 					if (!IPACM_Iface::ipacmcfg->ipacm_mpdn_enable)
 						handle_route_add_vlan_pdn_evt(IPA_IP_v4, data->VlanID);
 #endif //FEATURE_SOCKSv5
-
-					if((modem_ipv6_pdn_index >= 0) && ipv6_to_iface[modem_ipv6_pdn_index].wan_up_vlan_v6 && (data->VlanID != associated_VID))
-					{
-						IPACMERR("inconsistency on new v4 VID (%d) and exisiting v6 VID (%d) ignoring\n", data->VlanID, associated_VID);
-						return;
-					}
 					handle_route_add_vlan_pdn_evt(IPA_IP_v4, data->VlanID);
 				}
 			}
@@ -1358,6 +1414,8 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 				if((data->wan_ipv6_prefix[0] == ipv6_prefix[0]) &&
 					(data->wan_ipv6_prefix[1] == ipv6_prefix[1]))
 				{
+					bool new_pdn = true;
+
 					IPACMDBG_H("received v6 IPA_ROUTE_ADD_VLAN_PDN_EVENT for VID %d, wan %s, %d\n", data->VlanID, dev_name, ipa_if_num);
 					if(ipv6_to_iface[modem_ipv6_pdn_index].wan_up_vlan_v6)
 					{
@@ -1365,17 +1423,32 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 						return;
 					}
 
+					if((modem_ipv4_pdn_index >= 0) && ipv4_to_iface[modem_ipv4_pdn_index].wan_up_vlan)
+					{
+						IPACMDBG("iface already has v4 vlan association, not new\n");
+						new_pdn = false;
+						if(data->VlanID != associated_VID)
+						{
+							IPACMERR("inconsistency on new v6 VID (%d) and exisiting v4 VID (%d) ignoring\n", data->VlanID, associated_VID);
+							return;
+						}
+					}
+
+					if(new_pdn)
+					{
+						if(num_offloaded_pdns >= IPA_MAX_NUM_HW_PDNS) {
+							IPACMERR("number of offloaded PDNs %d can't add more than %d, ignoring\n", num_offloaded_pdns, IPA_MAX_NUM_HW_PDNS);
+							return;
+						}
+
+						num_offloaded_pdns++;
+						IPACMDBG_H("this is a new PDN, num of offloaded PDN increased to %d\n", num_offloaded_pdns);
+					}
 #ifdef FEATURE_SOCKSv5
 					/* socksv5 case*/
 					if (!IPACM_Iface::ipacmcfg->ipacm_mpdn_enable)
 						handle_route_add_vlan_pdn_evt(IPA_IP_v6, data->VlanID);
 #endif //FEATURE_SOCKSv5
-
-					if((modem_ipv4_pdn_index >= 0) && ipv4_to_iface[modem_ipv4_pdn_index].wan_up_vlan && (data->VlanID != associated_VID))
-					{
-						IPACMERR("inconsistency on new v6 VID (%d) and exisiting v4 VID (%d) ignoring\n", data->VlanID, associated_VID);
-						return;
-					}
 					handle_route_add_vlan_pdn_evt(IPA_IP_v6, data->VlanID);
 				}
 			}
@@ -1816,9 +1889,12 @@ int IPACM_Wan::handle_route_add_vlan_pdn_evt(ipa_ip_type iptype, uint16_t vlan_i
 		wanup_vlan_data->iptype = IPA_IP_v6;
 		wanup_vlan_data->VlanID = vlan_id;
 		wanup_vlan_data->mux_id = ext_prop->ext[0].mux_id;
+		/* in case v4 address is valid, the ConntrackListener shall add the v4 PDN as well*/
+		wanup_vlan_data->ipv4_addr = is_link_local_ipv4_addr(wan_v4_addr) ? 0 : wan_v4_addr;
 
 		IPACMDBG_H("Posting IPA_HANDLE_WAN_VLAN_PDN_UP (v6) with below information:\n");
-		IPACMDBG_H("iptype IPA_IP_v6, VlanID %d, mux_id %d, if num %d\n", vlan_id, ext_prop->ext[0].mux_id, ipa_if_num);
+		IPACMDBG_H("iptype IPA_IP_v6, VlanID %d, mux_id %d, if num %d, v4 address 0x%X is %s valid\n",
+			vlan_id, ext_prop->ext[0].mux_id, ipa_if_num, wan_v4_addr, wanup_vlan_data->ipv4_addr ? "" : " not");
 
 		evt_data.event = IPA_HANDLE_WAN_VLAN_PDN_UP;
 		evt_data.evt_data = (void *)wanup_vlan_data;
@@ -5818,6 +5894,9 @@ int IPACM_Wan::handle_down_evt_ex()
 			ipv4_to_iface[modem_ipv4_pdn_index].wan_up_vlan = false;
 			ipv4_to_iface[modem_ipv4_pdn_index].is_xlat = false;
 
+			num_offloaded_pdns--;
+			IPACMDBG("now num offloaded PDNs is %d\n", num_offloaded_pdns);
+
 			vlandown_data = (ipacm_event_vlan_pdn *)malloc(sizeof(ipacm_event_vlan_pdn));
 			if(vlandown_data == NULL)
 			{
@@ -5986,6 +6065,8 @@ int IPACM_Wan::handle_down_evt_ex()
 			ipacm_event_vlan_pdn *vlandown_data;
 
 			ipv6_to_iface[modem_ipv6_pdn_index].wan_up_vlan_v6 = false;
+			num_offloaded_pdns--;
+			IPACMDBG("now num offloaded PDNs is %d\n", num_offloaded_pdns);
 
 			if(!isVlanWanUP_V6())
 			{
@@ -6185,6 +6266,9 @@ int IPACM_Wan::handle_down_evt_ex()
 				vlandown_data->iptype = IPA_IP_v6;
 				ipv6_to_iface[modem_ipv6_pdn_index].wan_up_vlan_v6 = false;
 			}
+
+			num_offloaded_pdns--;
+			IPACMDBG("now num offloaded PDNs is %d\n", num_offloaded_pdns);
 
 			vlandown_data->VlanID = associated_VID;
 			vlandown_data->mux_id = ext_prop->ext[0].mux_id;
@@ -6840,6 +6924,22 @@ void IPACM_Wan::change_to_network_order(ipa_ip_type iptype, ipa_rule_attrib* att
 	}
 
 	return;
+}
+
+bool IPACM_Wan::is_link_local_ipv4_addr(uint32_t ipv4_addr)
+{
+	uint32_t link_local_prefix = 0xA9FE0000;
+	uint32_t link_local_prefix_mask = 0xFFFF0000;
+
+	IPACMDBG_H("checking ipv4 address 0x%X\n", ipv4_addr);
+
+	if((ipv4_addr & link_local_prefix_mask) == link_local_prefix) {
+		IPACMDBG_H("this address is link local\n");
+		return true;
+	}
+
+	IPACMDBG_H("this address is not link local\n");
+	return false;
 }
 
 bool IPACM_Wan::is_global_ipv6_addr(uint32_t* ipv6_addr)

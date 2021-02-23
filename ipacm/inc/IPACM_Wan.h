@@ -372,9 +372,11 @@ public:
 #endif
 
 	static bool is_global_ipv6_addr(uint32_t* ipv6_addr);
+	static bool is_link_local_ipv4_addr(uint32_t ipv4_addr);
 #ifdef FEATURE_VLAN_MPDN
 	static ipacm_ipv4_wan_iface ipv4_to_iface[IPA_MAX_NUM_SW_PDNS];
 	static ipacm_ipv6_wan_iface ipv6_to_iface[IPA_MAX_NUM_SW_PDNS];
+	static uint8_t num_offloaded_pdns;
 	static int GetMuxByVid(uint16_t vlan_id, uint8_t *mux_id, ipa_ip_type iptype);
 	static bool is_xlat_by_vid(uint16_t vlan_id);
 #endif

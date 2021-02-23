@@ -133,6 +133,11 @@ typedef struct {
 	uint32_t mac_v6_flt_rule_hdl;
 } mac_flt_type;
 
+typedef struct {
+	char iface[IPA_IFACE_NAME_LEN];
+	uint32_t v4_addr;
+} tether_client_info;
+
 /* iface */
 class IPACM_Config
 {
@@ -243,6 +248,8 @@ public:
 	int ipa_max_num_eth_clients;
 	int ipa_eth_num_ipv6_addr;
 	bool ipacm_client_number_set;
+	/* Indicates whether sw-filtering is enabled or not. */
+	int ipacm_flt_enable;
 
 #ifdef FEATURE_VLAN_MPDN
 	bool vlan_firewall_change_handle;
@@ -272,6 +279,14 @@ public:
 	void update_mac_flt_lists(uint8_t *mac_addr, mac_flt_type *mac_flt_value);
 	/* To return the instance */
 	static IPACM_Config* GetInstance();
+
+	/* save client info */
+	std::map<std::array<uint8_t, 6>, tether_client_info *> client_lists;
+#ifdef IPA_IOC_SET_SW_FLT
+	struct ipa_sw_flt_list_type sw_flt_list;
+	void sw_flt_info(ipa_sw_flt_list_type *sw_flt);
+	void update_client_info(uint8_t *mac_addr, tether_client_info *client_info, bool is_add);
+#endif
 
 #if defined(FEATURE_L2TP) || defined(FEATURE_VLAN_MPDN)
 	pthread_mutex_t vlan_l2tp_lock;

@@ -1223,9 +1223,13 @@ private:
 
 		if(iptype == IPA_IP_v4)
 		{
-		    for(tx_index = 0; tx_index < iface_query->num_tx_props; tx_index++)
-		    {
-		        if((tx_prop->tx[tx_index].ip == IPA_IP_v4) && (get_client_memptr(eth_client, clt_indx)->route_rule_set_v4==true)) /* for ipv4 */
+#ifdef IPA_IOC_SET_SW_FLT
+			/* clean-up the tether-client-list */
+			IPACM_Iface::ipacmcfg->update_client_info(get_client_memptr(eth_client, clt_indx)->mac, NULL, false);
+#endif
+			for(tx_index = 0; tx_index < iface_query->num_tx_props; tx_index++)
+			{
+				if((tx_prop->tx[tx_index].ip == IPA_IP_v4) && (get_client_memptr(eth_client, clt_indx)->route_rule_set_v4==true)) /* for ipv4 */
 				{
 					IPACMDBG_H("Delete client index %d ipv4 RT-rules for tx:%d\n",clt_indx,tx_index);
 					rt_hdl = get_client_memptr(eth_client, clt_indx)->eth_rt_hdl[tx_index].eth_rt_rule_hdl_v4;
@@ -1235,13 +1239,13 @@ private:
 						return IPACM_FAILURE;
 					}
 				}
-		    } /* end of for loop */
+			} /* end of for loop */
 
-		     /* clean the ipv4 RT rules for eth-client:clt_indx */
-		     if(get_client_memptr(eth_client, clt_indx)->route_rule_set_v4==true) /* for ipv4 */
-		     {
+			/* clean the ipv4 RT rules for eth-client:clt_indx */
+			if(get_client_memptr(eth_client, clt_indx)->route_rule_set_v4==true) /* for ipv4 */
+			{
 				get_client_memptr(eth_client, clt_indx)->route_rule_set_v4 = false;
-		     }
+			}
 		}
 
 		if(iptype == IPA_IP_v6)
@@ -1255,26 +1259,25 @@ private:
 						IPACMDBG_H("Delete client index %d ipv6 RT-rules for %d-st ipv6 for tx:%d\n", clt_indx,num_v6,tx_index);
 						rt_hdl = get_client_memptr(eth_client, clt_indx)->eth_rt_hdl[tx_index].eth_rt_rule_hdl_v6[num_v6];
 						if(m_routing.DeleteRoutingHdl(rt_hdl, IPA_IP_v6) == false)
-							{
-								return IPACM_FAILURE;
-							}
-
-							rt_hdl = get_client_memptr(eth_client, clt_indx)->eth_rt_hdl[tx_index].eth_rt_rule_hdl_v6_wan[num_v6];
-							if(m_routing.DeleteRoutingHdl(rt_hdl, IPA_IP_v6) == false)
-							{
-								return IPACM_FAILURE;
-							}
+						{
+							return IPACM_FAILURE;
 						}
-                    }
-		    } /* end of for loop */
 
-		    /* clean the ipv6 RT rules for eth-client:clt_indx */
-		    if(get_client_memptr(eth_client, clt_indx)->route_rule_set_v6 != 0) /* for ipv6 */
-		    {
-		        get_client_memptr(eth_client, clt_indx)->route_rule_set_v6 = 0;
-            }
+						rt_hdl = get_client_memptr(eth_client, clt_indx)->eth_rt_hdl[tx_index].eth_rt_rule_hdl_v6_wan[num_v6];
+						if(m_routing.DeleteRoutingHdl(rt_hdl, IPA_IP_v6) == false)
+						{
+							return IPACM_FAILURE;
+						}
+					}
+				}
+			} /* end of for loop */
+
+			/* clean the ipv6 RT rules for eth-client:clt_indx */
+			if(get_client_memptr(eth_client, clt_indx)->route_rule_set_v6 != 0) /* for ipv6 */
+			{
+				get_client_memptr(eth_client, clt_indx)->route_rule_set_v6 = 0;
+			}
 		}
-
 		return IPACM_SUCCESS;
 	}
 

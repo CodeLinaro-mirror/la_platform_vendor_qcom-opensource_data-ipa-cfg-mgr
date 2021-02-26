@@ -867,8 +867,6 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 				if(m_is_sta_mode == Q6_WAN)
 				{
 						IPACMDBG_H("Received IPA_LINK_DOWN_EVENT\n");
-						handle_down_evt_ex();
-						IPACMDBG_H("IPA_WAN_Q6 (%s):ipa_index (%d) instance close \n", IPACM_Iface::ipacmcfg->iface_table[ipa_if_num].iface_name, ipa_if_num);
 #if defined(FEATURE_SOCKSv5) && defined (IPA_SOCKV5_EVENT_MAX)
 						info.ipv4_addr = wan_v4_addr;
 						info.mux_id = ext_prop->ext[0].mux_id;;
@@ -876,6 +874,8 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 						/* add qmuxd mapping*/
 						IPACM_Iface::ipacmcfg->del_mux_id_mapping(&info);
 #endif //defined(FEATURE_SOCKSv5) && defined (IPA_SOCKV5_EVENT_MAX)
+						handle_down_evt_ex();
+						IPACMDBG_H("IPA_WAN_Q6 (%s):ipa_index (%d) instance close \n", IPACM_Iface::ipacmcfg->iface_table[ipa_if_num].iface_name, ipa_if_num);
 						IPACM_Iface::ipacmcfg->DelNatIfaces(dev_name); // delete NAT-iface
 						delete this;
 						return;

@@ -1170,14 +1170,19 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 				}
 #endif
 #ifdef IPA_IOC_SET_SW_FLT
-				/* if ipv4, add to tether-client-lists */
+				/* add to tether-client-lists */
+				memset(&client_info, 0, sizeof(tether_client_info));
 				if (data->iptype == IPA_IP_v4)
 				{
-					memset(&client_info, 0, sizeof(tether_client_info));
 					client_info.v4_addr = data->ipv4_addr;
-					memcpy(client_info.iface, data->iface_name, IPA_IFACE_NAME_LEN);
-					IPACM_Iface::ipacmcfg->update_client_info(data->mac_addr, &client_info, true);
 				}
+				else if (data->iptype == IPA_IP_v6)
+				{
+					client_info.v4_addr = 0;
+				}
+				IPACMDBG_H(" iface name %s  dev %s\n", data->iface_name, dev_name);
+				memcpy(client_info.iface, dev_name, IPA_IFACE_NAME_LEN);
+				IPACM_Iface::ipacmcfg->update_client_info(data->mac_addr, &client_info, true);
 #endif
 				/* first construc ETH full header */
 				handle_eth_hdr_init(data->mac_addr);

@@ -2973,6 +2973,8 @@ void IPACM_Config::update_client_info(uint8_t *mac_addr, tether_client_info *cli
 	uint8_t mac_a[6];
 	std::array<uint8_t, 6> mac = {0};
 	int i;
+	bool update_need = false;
+	ipacm_cmd_q_data evt_data;
 
 	if(pthread_mutex_lock(&mac_flt_info_lock) != 0)
 	{
@@ -2980,107 +2982,129 @@ void IPACM_Config::update_client_info(uint8_t *mac_addr, tether_client_info *cli
 		return ;
 	}
 
+	IPACMDBG_H(" updating client info \n");
 	memcpy(mac_a,mac_addr,IPA_MAC_ADDR_SIZE);
 	std::copy(std::begin(mac_a), std::end(mac_a), std::begin(mac));
 
 	if (is_add)
 	{
+		IPACMDBG_H(" Adding client mac %02x:%02x:%02x:%02x:%02x:%02x ip4 0x%X, iface %s\n",
+			 mac_a[0], mac_a[1], mac_a[2],
+			 mac_a[3], mac_a[4], mac_a[5],
+			 client_info->v4_addr,
+			 client_info->iface);
+
 		/* check client already in the list or not */
 		if(IPACM_Iface::ipacmcfg->client_lists.count(mac) == 0)
 		{
 			tether_client_info *temp = (tether_client_info *)malloc(sizeof(tether_client_info));
 			if(temp == NULL)
 			{
-				IPACMERR("Failed to allocate memmory \n")
-				pthread_mutex_unlock(&mac_flt_info_lock);
-				return;
+				IPACMERR("Failed to allocate memmory \n");
+					pthread_mutex_unlock(&mac_flt_info_lock);
+					return;
 			}
 			memset(temp, 0, sizeof(tether_client_info));
 			temp->v4_addr = client_info->v4_addr;
 			memcpy(temp->iface, client_info->iface, IPA_IFACE_NAME_LEN);
 			IPACM_Iface::ipacmcfg->client_lists.insert(std::make_pair(mac, temp));
-
-			/* check if client matched the iface SW-flt request */
-			if (sw_flt_list.iface_enable)
-			{
-				for(i = 0; i < sw_flt_list.num_of_iface && sw_flt_list.num_of_iface <=IPA_MAX_NUM_IFACE_FLT; i++)
-				{
-					if(strncmp(client_info->iface, sw_flt_list.iface[i], sizeof(sw_flt_list.iface[i])) == 0)
-					{
-						/* if client matched the iface_sw_flt, create a node of mac_flt_type
-						   having is_blacklist state as true and insert it into map if not already
-						   present */
-						if(IPACM_Iface::ipacmcfg->mac_flt_lists.count(mac) == 0)
-						{
-							mac_flt_type *temp2 = (mac_flt_type *)malloc(sizeof(mac_flt_type));
-							if(temp2 == NULL)
-							{
-								IPACMDBG_H("Failed to allocate memmory \n")
-								pthread_mutex_unlock(&mac_flt_info_lock);
-								return;
-							}
-							memset(temp2, 0, sizeof(mac_flt_type));
-							temp2->is_blacklist = true;
-							IPACM_Iface::ipacmcfg->mac_flt_lists.insert(std::make_pair(mac, temp2));
-						}
-						break;
-					}
-				}
-			}
-
-			/* check if client matched the ipv4 seg SW-flt request */
-			if (sw_flt_list.ipv4_segs_enable)
-			{
-				for(i = 0; i < sw_flt_list.num_of_ipv4_segs && sw_flt_list.num_of_ipv4_segs <= IPA_MAX_NUM_IPv4_SEGS_FLT; i++)
-				{
-					/* check client ipv4 in the ipv4_segs range */
-					if ((sw_flt_list.ipv4_segs[i][0] <= client_info->v4_addr) && (client_info->v4_addr <=sw_flt_list.ipv4_segs[i][1]))
-					{
-						IPACMDBG_H("client ipv4 0x%X inside range :0x%X to:0x%X\n",
-							client_info->v4_addr, sw_flt_list.ipv4_segs[i][0], sw_flt_list.ipv4_segs[i][1]);
-
-						/* if client ipv4 matched the ipv4_seg_sw_flt, create a node of mac_flt_type
-						   having is_blacklist state as true and insert it into map if not already
-						   present */
-						if(IPACM_Iface::ipacmcfg->mac_flt_lists.count(mac) == 0)
-						{
-							mac_flt_type *temp2 = (mac_flt_type *)malloc(sizeof(mac_flt_type));
-							if(temp2 == NULL)
-							{
-								IPACMDBG_H("Failed to allocate memmory \n")
-								pthread_mutex_unlock(&mac_flt_info_lock);
-								return;
-							}
-							memset(temp2, 0, sizeof(mac_flt_type));
-							temp2->is_blacklist = true;
-							IPACM_Iface::ipacmcfg->mac_flt_lists.insert(std::make_pair(mac, temp2));
-						}
-						break;
-					}
-				}
-			}
 		}
 		else
 		{
 			/*updating all values except flt state as it might change in new list */
-			client_lists.at(mac)->v4_addr  = client_info->v4_addr;
-			memcpy(client_lists.at(mac)->iface, client_info->iface, IPA_IFACE_NAME_LEN);
+			if (IPACM_Iface::ipacmcfg->client_lists.at(mac)->v4_addr == 0)
+			{
+				client_lists.at(mac)->v4_addr  = client_info->v4_addr;
+				IPACMDBG_H(" Update client ip4 to 0x%X\n",
+				client_lists.at(mac)->v4_addr);
+				update_need = true;
+			}
+		}
+
+		/* check if client matched the iface SW-flt request */
+		if (sw_flt_list.iface_enable)
+		{
+			for(i = 0; i < sw_flt_list.num_of_iface && sw_flt_list.num_of_iface <=IPA_MAX_NUM_IFACE_FLT; i++)
+			{
+				if(strncmp(client_info->iface, sw_flt_list.iface[i], sizeof(sw_flt_list.iface[i])) == 0)
+				{
+					/* if client matched the iface_sw_flt, create a node of mac_flt_type
+					   having is_blacklist state as true and insert it into map if not already
+					   present */
+					if(IPACM_Iface::ipacmcfg->mac_flt_lists.count(mac) == 0)
+					{
+						mac_flt_type *temp2 = (mac_flt_type *)malloc(sizeof(mac_flt_type));
+						if(temp2 == NULL)
+						{
+							IPACMDBG_H("Failed to allocate memmory \n")
+							pthread_mutex_unlock(&mac_flt_info_lock);
+							return;
+						}
+						memset(temp2, 0, sizeof(mac_flt_type));
+						temp2->is_blacklist = true;
+						IPACM_Iface::ipacmcfg->mac_flt_lists.insert(std::make_pair(mac, temp2));
+					}
+					break;
+				}
+			}
+		}
+
+		/* check if client matched the ipv4 seg SW-flt request */
+		if (sw_flt_list.ipv4_segs_enable)
+		{
+			for(i = 0; i < sw_flt_list.num_of_ipv4_segs && sw_flt_list.num_of_ipv4_segs <= IPA_MAX_NUM_IPv4_SEGS_FLT; i++)
+			{
+				/* check client ipv4 in the ipv4_segs range */
+				if ((sw_flt_list.ipv4_segs[i][0] <= client_info->v4_addr) && (client_info->v4_addr <=sw_flt_list.ipv4_segs[i][1]))
+				{
+					IPACMDBG_H("client ipv4 0x%X inside range :0x%X to:0x%X\n",
+						client_info->v4_addr, sw_flt_list.ipv4_segs[i][0], sw_flt_list.ipv4_segs[i][1]);
+
+					/* if client ipv4 matched the ipv4_seg_sw_flt, create a node of mac_flt_type
+					   having is_blacklist state as true and insert it into map if not already
+					   present */
+					if(IPACM_Iface::ipacmcfg->mac_flt_lists.count(mac) == 0)
+					{
+						mac_flt_type *temp2 = (mac_flt_type *)malloc(sizeof(mac_flt_type));
+						if(temp2 == NULL)
+						{
+							IPACMDBG_H("Failed to allocate memmory \n")
+							pthread_mutex_unlock(&mac_flt_info_lock);
+							return;
+						}
+						memset(temp2, 0, sizeof(mac_flt_type));
+						temp2->is_blacklist = true;
+						IPACM_Iface::ipacmcfg->mac_flt_lists.insert(std::make_pair(mac, temp2));
+					}
+					break;
+				}
+			}
+		}
+
+		/* Special handling for v6 already offload */
+		if (update_need == true)
+		{
+			evt_data.event = IPA_MAC_ADD_DEL_FLT_EVENT;
+			evt_data.evt_data = NULL;
+			/* finish command queue */
+			IPACMDBG_H("Posting IPA_MAC_ADD_DEL_FLT_EVENT event!\n", evt_data.event);
+			IPACM_EvtDispatcher::PostEvt(&evt_data);
 		}
 	}
 	else
 	{
-		/* erase client in the list */
-		IPACMDBG_H("Cleared client mac %02x:%02x:%02x:%02x:%02x:%02x ip4 0x%X, iface %s\n",
-						 mac_a[0], mac_a[1], mac_a[2],
-						 mac_a[3], mac_a[4], mac_a[5],
-						 client_lists.at(mac)->v4_addr,
-						 client_lists.at(mac)->iface);
-		if(client_lists.at(mac))
+		if(IPACM_Iface::ipacmcfg->client_lists.count(mac) > 0)
 		{
+			/* erase client in the list */
+			IPACMDBG_H("Cleared client mac %02x:%02x:%02x:%02x:%02x:%02x ip4 0x%X, iface %s\n",
+					 mac_a[0], mac_a[1], mac_a[2],
+					 mac_a[3], mac_a[4], mac_a[5],
+					 client_lists.at(mac)->v4_addr,
+					 client_lists.at(mac)->iface);
 			free(client_lists.at(mac));
 			client_lists.at(mac) = NULL;
+			IPACM_Iface::ipacmcfg->client_lists.erase(mac);
 		}
-		IPACM_Iface::ipacmcfg->client_lists.erase(mac);
 	}
 	pthread_mutex_unlock(&mac_flt_info_lock);
 	return;

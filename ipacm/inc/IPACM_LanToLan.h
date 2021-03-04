@@ -138,7 +138,7 @@ public:
 
 	void handle_client_add(uint8_t *mac, bool is_l2tp_client, l2tp_vlan_mapping_info *mapping_info, uint16_t vlan_id = 0);
 
-	void handle_client_del(uint8_t *mac, uint16_t vlan_id);
+	list<client_info>::iterator handle_client_del(uint8_t *mac, uint16_t vlan_id);
 
 	void print_data_structure_info();
 

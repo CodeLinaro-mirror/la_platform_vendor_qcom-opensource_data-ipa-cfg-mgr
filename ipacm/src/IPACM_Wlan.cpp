@@ -180,7 +180,13 @@ void IPACM_Wlan::event_callback(ipa_cm_event_id event, void *param)
 				IPACM_Iface::ipacmcfg->DelNatIfaces(dev_name); // delete NAT-iface
 				IPACM_Wlan::total_num_wifi_clients = (IPACM_Wlan::total_num_wifi_clients) - \
                                                                      (num_wifi_client);
-				return;
+			}
+			/* reset netlink_interface_index when instance closed*/
+			if (ipa_interface_index != INVALID_IFACE) {
+				IPACMDBG_H("Reset iface table entry for interface linux(%d) to ipa(%d) \n",
+					IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].netlink_interface_index,
+					ipa_interface_index);
+				IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].netlink_interface_index = 0;
 			}
 		}
 		break;

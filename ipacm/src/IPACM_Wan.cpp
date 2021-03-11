@@ -565,7 +565,13 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 					IPACMDBG_H("IPA_WAN_STA (%s):ipa_index (%d) instance close \n", IPACM_Iface::ipacmcfg->iface_table[ipa_if_num].iface_name, ipa_if_num);
 					IPACM_Iface::ipacmcfg->DelNatIfaces(dev_name); // delete NAT-iface
 					delete this;
-					return;
+				}
+				/* reset netlink_interface_index when instance closed*/
+				if (ipa_interface_index != INVALID_IFACE) {
+					IPACMDBG_H("Reset iface table entry for interface linux(%d) to ipa(%d) \n",
+						IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].netlink_interface_index,
+						ipa_interface_index);
+					IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].netlink_interface_index = 0;
 				}
 			}
 		}
@@ -691,7 +697,6 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 						IPACMDBG_H("IPA_WAN_Q6 (%s):ipa_index (%d) instance close \n", IPACM_Iface::ipacmcfg->iface_table[ipa_if_num].iface_name, ipa_if_num);
 						IPACM_Iface::ipacmcfg->DelNatIfaces(dev_name); // delete NAT-iface
 						delete this;
-						return;
 				}
 				else if (m_is_sta_mode == ECM_WAN)
 				{
@@ -701,9 +706,16 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 					IPACMDBG_H("IPA_WAN_CRADLE (%s):ipa_index (%d) instance close \n", IPACM_Iface::ipacmcfg->iface_table[ipa_if_num].iface_name, ipa_if_num);
 					IPACM_Iface::ipacmcfg->DelNatIfaces(dev_name); // delete NAT-iface
 					delete this;
-					return;
 				}
 			}
+			/* reset netlink_interface_index when instance closed*/
+			if (ipa_interface_index != INVALID_IFACE) {
+				IPACMDBG_H("Reset iface table entry for interface linux(%d) to ipa(%d) \n",
+					IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].netlink_interface_index,
+					ipa_interface_index);
+				IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].netlink_interface_index = 0;
+			}
+
 		}
 		break;
 

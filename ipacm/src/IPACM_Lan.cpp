@@ -235,7 +235,13 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 				IPACMDBG_H("Received IPA_LINK_DOWN_EVENT\n");
 				handle_down_evt();
 				IPACM_Iface::ipacmcfg->DelNatIfaces(dev_name); // delete NAT-iface
-				return;
+			}
+			/* reset netlink_interface_index when instance closed*/
+			if (ipa_interface_index != INVALID_IFACE) {
+				IPACMDBG_H("Reset iface table entry for interface linux(%d) to ipa(%d) \n",
+					IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].netlink_interface_index,
+					ipa_interface_index);
+				IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].netlink_interface_index = 0;
 			}
 		}
 		break;

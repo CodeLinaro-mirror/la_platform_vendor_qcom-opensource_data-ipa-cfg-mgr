@@ -1219,8 +1219,6 @@ private:
 
 		if(iptype == IPA_IP_v4)
 		{
-			/* clean-up the tether-client-list */
-			IPACM_Iface::ipacmcfg->update_client_info(get_client_memptr(eth_client, clt_indx)->mac, NULL, false);
 
 		    for(tx_index = 0; tx_index < iface_query->num_tx_props; tx_index++)
 		    {

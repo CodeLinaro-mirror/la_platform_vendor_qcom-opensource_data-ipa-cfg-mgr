@@ -131,6 +131,7 @@ typedef struct {
 	bool mac_v6_rt_del_flt_set;
 	uint32_t mac_v4_flt_rule_hdl;
 	uint32_t mac_v6_flt_rule_hdl;
+	bool mac_sw_enabled;
 } mac_flt_type;
 
 typedef struct {

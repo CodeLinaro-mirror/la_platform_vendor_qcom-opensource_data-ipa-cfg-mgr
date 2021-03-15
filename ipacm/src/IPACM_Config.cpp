@@ -2688,6 +2688,7 @@ void IPACM_Config::sw_flt_info(ipa_sw_flt_list_type *sw_flt)
 				}
 				memset(temp, 0, sizeof(mac_flt_type));
 				temp->is_blacklist = true;
+				temp->mac_sw_enabled = true;
 				IPACM_Iface::ipacmcfg->mac_flt_lists.insert(std::make_pair(mac, temp));
 			}
 		}
@@ -2907,6 +2908,7 @@ void IPACM_Config::clear_whitelist_mac_add(uint8_t * mac_addr)
 	uint8_t mac_a[6];
 	std::array<uint8_t, 6> mac = {0};
 
+	IPACMDBG_H("clear from mac_flt_list! \n")
 	if(pthread_mutex_lock(&mac_flt_info_lock) != 0)
 	{
 		IPACMERR("Unable to lock the mutex\n");
@@ -2915,16 +2917,23 @@ void IPACM_Config::clear_whitelist_mac_add(uint8_t * mac_addr)
 
 	memcpy(mac_a,mac_addr,IPA_MAC_ADDR_SIZE);
 	std::copy(std::begin(mac_a), std::end(mac_a), std::begin(mac));
-	if(mac_flt_lists.at(mac) != NULL)
-	{
-		free(mac_flt_lists.at(mac));
-		mac_flt_lists.at(mac) = NULL;
-	}
-	mac_flt_lists.erase(mac);
-	IPACMDBG_H("Cleared macaddr from map %02x:%02x:%02x:%02x:%02x:%02x\n",
+	if(mac_flt_lists.count(mac) > 0 ) {
+		if(mac_flt_lists.at(mac) != NULL)
+		{
+			free(mac_flt_lists.at(mac));
+			mac_flt_lists.at(mac) = NULL;
+		}
+		mac_flt_lists.erase(mac);
+		IPACMDBG_H("Cleared macaddr from map %02x:%02x:%02x:%02x:%02x:%02x\n",
 						 mac_a[0], mac_a[1], mac_a[2],
 						 mac_a[3], mac_a[4], mac_a[5]);
-	pthread_mutex_unlock(&mac_flt_info_lock);
+		pthread_mutex_unlock(&mac_flt_info_lock);
+	}
+	else
+	{
+		pthread_mutex_unlock(&mac_flt_info_lock);
+		IPACMDBG_H(" Client not in mac flt list \n");
+	}
 	return;
 }
 
@@ -2946,7 +2955,8 @@ std::map<std::array<uint8_t, 6>, mac_flt_type *> IPACM_Config::get_mac_flt_lists
 /* upadte global config list with current state of mac addr */
 void IPACM_Config::update_mac_flt_lists(uint8_t * mac_addr , mac_flt_type *mac_flt_value)
 {
-	uint8_t mac_a[6];
+	IPACMDBG_H("update mac flt list \n");
+	uint8_t mac_a[6] = {0};
 	std::array<uint8_t, 6> mac = {0};
 
 	if(pthread_mutex_lock(&mac_flt_info_lock) != 0)
@@ -2958,11 +2968,12 @@ void IPACM_Config::update_mac_flt_lists(uint8_t * mac_addr , mac_flt_type *mac_f
 	memcpy(mac_a,mac_addr,IPA_MAC_ADDR_SIZE);
 	std::copy(std::begin(mac_a), std::end(mac_a), std::begin(mac));
 	/*updating all values except flt state as it might change in new list */
-	mac_flt_lists.at(mac)->mac_v4_rt_del_flt_set  = mac_flt_value->mac_v4_rt_del_flt_set;
-	mac_flt_lists.at(mac)->mac_v6_rt_del_flt_set  = mac_flt_value->mac_v6_rt_del_flt_set;
-	mac_flt_lists.at(mac)->mac_v4_flt_rule_hdl = mac_flt_value->mac_v4_flt_rule_hdl;
-	mac_flt_lists.at(mac)->mac_v6_flt_rule_hdl = mac_flt_value->mac_v6_flt_rule_hdl;
-
+	if(mac_flt_lists.count(mac) > 0 ) {
+		mac_flt_lists.at(mac)->mac_v4_rt_del_flt_set  = mac_flt_value->mac_v4_rt_del_flt_set;
+		mac_flt_lists.at(mac)->mac_v6_rt_del_flt_set  = mac_flt_value->mac_v6_rt_del_flt_set;
+		mac_flt_lists.at(mac)->mac_v4_flt_rule_hdl = mac_flt_value->mac_v4_flt_rule_hdl;
+		mac_flt_lists.at(mac)->mac_v6_flt_rule_hdl = mac_flt_value->mac_v6_flt_rule_hdl;
+	}
 	pthread_mutex_unlock(&mac_flt_info_lock);
 	return;
 }
@@ -3104,6 +3115,19 @@ void IPACM_Config::update_client_info(uint8_t *mac_addr, tether_client_info *cli
 			free(client_lists.at(mac));
 			client_lists.at(mac) = NULL;
 			IPACM_Iface::ipacmcfg->client_lists.erase(mac);
+		}
+		/* Not delete client if it's in mac-flt list */
+		if(sw_flt_list.mac_enable && IPACM_Iface::ipacmcfg->mac_flt_lists.count(mac) > 0
+						&& IPACM_Iface::ipacmcfg->mac_flt_lists.at(mac)->mac_sw_enabled)
+		{
+			IPACMDBG_H("Don't remove the client from mac list as mac based flt is enabled for this client\n");
+		}
+		else
+		{
+			IPACMDBG_H("remove client from the mac list!\n");
+			pthread_mutex_unlock(&mac_flt_info_lock);
+			IPACM_Iface::ipacmcfg->clear_whitelist_mac_add(mac_addr);
+			return;
 		}
 	}
 	pthread_mutex_unlock(&mac_flt_info_lock);

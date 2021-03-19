@@ -117,7 +117,8 @@ ipacm_ipv4_wan_iface IPACM_Wan::ipv4_to_iface[IPA_MAX_NUM_SW_PDNS];
 ipacm_ipv6_wan_iface IPACM_Wan::ipv6_to_iface[IPA_MAX_NUM_SW_PDNS];
 #endif
 
-uint16_t IPACM_Wan::mtu_default_wan = DEFAULT_MTU_SIZE;
+uint16_t IPACM_Wan::mtu_default_wan_v4 = DEFAULT_MTU_SIZE;
+uint16_t IPACM_Wan::mtu_default_wan_v6 = DEFAULT_MTU_SIZE;
 
 #define MOBILE_FIREWALL_FILE "/etc/data/mobileap_firewall.xml"
 
@@ -164,9 +165,14 @@ IPACM_Wan::IPACM_Wan(int iface_index,
 	memset(wan_v6_addr_gw, 0, sizeof(wan_v6_addr_gw));
 	ext_prop = NULL;
 	is_ipv6_frag_firewall_flt_rule_installed = false;
-	mtu_size = DEFAULT_MTU_SIZE;
-	memset(&ip_pass_pdn_info, 0 ,sizeof(ip_pass_pdn_info));
 
+	mtu_v4 = DEFAULT_MTU_SIZE;
+	mtu_v4_set = false;
+	mtu_v6 = DEFAULT_MTU_SIZE;
+	mtu_v6_set = false;
+	memset(&ip_pass_pdn_info, 0 ,sizeof(ip_pass_pdn_info));
+	/* Used to store route handle of previous wan ip incase of passthrough enbaled. */
+	ipps_dft_v4_rt_rule_hdl = 0;
 #ifdef FEATURE_IPACM_UL_FIREWALL
 #ifdef FEATURE_VLAN_MPDN
 	num_firewall_v6_ul_pdn = 0;
@@ -181,6 +187,53 @@ IPACM_Wan::IPACM_Wan(int iface_index,
 	is_xlat = false;
 	hdr_hdl_dummy_v6 = 0;
 	hdr_proc_hdl_dummy_v6 = 0;
+
+#ifdef IPA_MTU_EVENT_MAX
+	/* Query WAN MTU to handle IPACM restart scenarios. */
+	if(is_sta_mode == Q6_WAN)
+	{
+		int fd_wwan_ioctl;
+		ipa_mtu_info *mtu_info = (ipa_mtu_info *)malloc(sizeof(ipa_mtu_info));
+		if (mtu_info)
+		{
+			memset(mtu_info, 0, sizeof(ipa_mtu_info));
+			memcpy(mtu_info->if_name, dev_name, IPA_IFACE_NAME_LEN);
+			fd_wwan_ioctl = open(WWAN_QMI_IOCTL_DEVICE_NAME, O_RDWR);
+			if(fd_wwan_ioctl < 0)
+			{
+				IPACMERR("Failed to open %s.\n",WWAN_QMI_IOCTL_DEVICE_NAME);
+			}
+			else
+			{
+				IPACMDBG_H("send WAN_IOC_GET_WAN_MTU for %s\n", mtu_info->if_name);
+				if(ioctl(fd_wwan_ioctl, WAN_IOC_GET_WAN_MTU, mtu_info))
+				{
+					IPACMERR("Failed to send WAN_IOC_GET_WAN_MTU\n ");
+				}
+				else
+				{
+					/* Updated MTU values.*/
+					if (mtu_info->mtu_v4)
+					{
+						mtu_v4 = mtu_info->mtu_v4;
+						mtu_v4_set = true;
+						IPACMDBG_H("Updated v4 mtu=[%d] for (%s)\n",
+							mtu_v4, mtu_info->if_name);
+					}
+					if (mtu_info->mtu_v6)
+					{
+						mtu_v6 = mtu_info->mtu_v6;
+						mtu_v6_set = true;
+						IPACMDBG_H("Updated v6 mtu=[%d] for (%s)\n",
+							mtu_v6, mtu_info->if_name);
+					}
+				}
+				close(fd_wwan_ioctl);
+			}
+			free(mtu_info);
+		}
+	}
+#endif
 
 	modem_ipv6_pdn_index = -1;
 	modem_ipv4_pdn_index = -1;
@@ -253,7 +306,7 @@ IPACM_Wan::~IPACM_Wan()
 
 #ifdef FEATURE_VLAN_MPDN
 
-int IPACM_Wan::GetMuxByVid(uint8_t vlan_id, uint8_t *mux_id, ipa_ip_type iptype)
+int IPACM_Wan::GetMuxByVid(uint16_t vlan_id, uint8_t *mux_id, ipa_ip_type iptype)
 {
 	for(int i = 0; i < IPA_MAX_NUM_SW_PDNS; i++)
 	{
@@ -282,6 +335,20 @@ int IPACM_Wan::GetMuxByVid(uint8_t vlan_id, uint8_t *mux_id, ipa_ip_type iptype)
 	}
 	IPACMERR("couldn't find MUX for VID %d\n", vlan_id);
 	return IPACM_FAILURE;
+}
+
+bool IPACM_Wan::is_xlat_by_vid(uint16_t vlan_id)
+{
+	for(int i = 0; i < IPA_MAX_NUM_SW_PDNS; i++)
+	{
+		if(IPACM_Wan::ipv4_to_iface[i].ipv4_addr)
+		{
+			if(IPACM_Wan::ipv4_to_iface[i].pIface->associated_VID == vlan_id)
+				return IPACM_Wan::ipv4_to_iface[i].is_xlat;
+		}
+	}
+	IPACMERR("couldn't find MUX xlat info for VID %d\n", vlan_id);
+	return false;
 }
 #endif
 /* handle new_address event */
@@ -548,6 +615,31 @@ int IPACM_Wan::handle_addr_evt(ipacm_event_data_addr *data)
 						res = IPACM_FAILURE;
 						goto fail;
 					}
+					if( ipps_dft_v4_rt_rule_hdl != 0)
+					{
+						IPACMDBG_H("Delete previous stored ippt wan ip route rule. \n");
+						if (m_routing.DeleteRoutingHdl(ipps_dft_v4_rt_rule_hdl,
+									 IPA_IP_v4) == false)
+						{
+							IPACMERR("Routing old RT rule deletion failed!\n");
+							res = IPACM_FAILURE;
+							goto fail;
+						}
+						ipps_dft_v4_rt_rule_hdl = 0;
+					}
+				}
+				else
+				{
+					/* Need to store previous rt hdl of route rule for WAN Ip as we don't delete it as in IP Passthrough mode
+					   it may lead to stall as NAT entry is still pointing to default route entry .
+					   But when passthrough is disabled we need to clear previous rt rule as we go ahead and create one.*/
+
+					if( ipps_dft_v4_rt_rule_hdl == 0)
+					{
+						IPACMDBG_H("In Passthrough mode, not deleting v4 route rule, storing it to clear later on \n");
+						ipps_dft_v4_rt_rule_hdl = dft_rt_rule_hdl[0];
+					}
+					IPACMDBG_H("ipv4 wan iface v4-rt-rule hdll=0x%x\n", ipps_dft_v4_rt_rule_hdl);
 				}
 #if defined(FEATURE_SOCKSv5) && defined (IPA_SOCKV5_EVENT_MAX)
 				if(m_is_sta_mode == Q6_WAN)
@@ -716,7 +808,7 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 			if ((ipa_interface_index == ipa_if_num) && (m_is_sta_mode == Q6_WAN))
 			{
 				is_xlat = true;
-				IPACMDBG_H("WAN-LTE (%s) link up, iface: %d is_xlat: \n",
+				IPACMDBG_H("WAN-LTE (%s) link up, iface: %d is_xlat: %d \n",
 						IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].iface_name,data->if_index, is_xlat);
 			}
 			break;
@@ -1099,11 +1191,6 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 		{
 			ipacm_event_data_addr *data = (ipacm_event_data_addr *)param;
 			ipa_interface_index = iface_ipa_index_query(data->if_index);
-
-			/* query and save the interface mtu size*/
-			// Note: This should be put in handle_route_add but not
-			// working for the case where v4 mtu is 1500 and then v6 mtu is brought up with < 1500
-			query_mtu_size();
 
 			if (ipa_interface_index == ipa_if_num)
 			{
@@ -1550,53 +1637,53 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 		}
 		break;
 
-		case IPA_WLAN_SWITCH_TO_SCC:
-			if(IPACM_Wan::backhaul_is_sta_mode == true)
+	case IPA_WLAN_SWITCH_TO_SCC:
+		if(IPACM_Wan::backhaul_is_sta_mode == true)
+		{
+			IPACMDBG_H("Received IPA_WLAN_SWITCH_TO_SCC\n");
+			if(ip_type == IPA_IP_MAX)
 			{
-				IPACMDBG_H("Received IPA_WLAN_SWITCH_TO_SCC\n");
-				if(ip_type == IPA_IP_MAX)
-				{
-					handle_wlan_SCC_MCC_switch(true, IPA_IP_v4);
-					handle_wlan_SCC_MCC_switch(true, IPA_IP_v6);
-					handle_wan_client_SCC_MCC_switch(true, IPA_IP_v4);
-					handle_wan_client_SCC_MCC_switch(true, IPA_IP_v6);
-				}
-				else
-				{
-					handle_wlan_SCC_MCC_switch(true, ip_type);
-					handle_wan_client_SCC_MCC_switch(true, ip_type);
-				}
+				handle_wlan_SCC_MCC_switch(true, IPA_IP_v4);
+				handle_wlan_SCC_MCC_switch(true, IPA_IP_v6);
+				handle_wan_client_SCC_MCC_switch(true, IPA_IP_v4);
+				handle_wan_client_SCC_MCC_switch(true, IPA_IP_v6);
 			}
-			break;
+			else
+			{
+				handle_wlan_SCC_MCC_switch(true, ip_type);
+				handle_wan_client_SCC_MCC_switch(true, ip_type);
+			}
+		}
+		break;
 
-		case IPA_WLAN_SWITCH_TO_MCC:
-			/* check if alt_dst_pipe set or not */
-			for (cnt = 0; cnt < tx_prop->num_tx_props; cnt++)
+	case IPA_WLAN_SWITCH_TO_MCC:
+		/* check if alt_dst_pipe set or not */
+		for (cnt = 0; cnt < tx_prop->num_tx_props; cnt++)
+		{
+			if (tx_prop->tx[cnt].alt_dst_pipe == 0)
 			{
-				if (tx_prop->tx[cnt].alt_dst_pipe == 0)
-				{
-					IPACMERR("Tx(%d): wrong tx property: alt_dst_pipe: 0. \n", cnt);
-					return;
-				}
+				IPACMERR("Tx(%d): wrong tx property: alt_dst_pipe: 0. \n", cnt);
+				return;
 			}
+		}
 
-			if(IPACM_Wan::backhaul_is_sta_mode == true)
+		if(IPACM_Wan::backhaul_is_sta_mode == true)
+		{
+			IPACMDBG_H("Received IPA_WLAN_SWITCH_TO_MCC\n");
+			if(ip_type == IPA_IP_MAX)
 			{
-				IPACMDBG_H("Received IPA_WLAN_SWITCH_TO_MCC\n");
-				if(ip_type == IPA_IP_MAX)
-				{
-					handle_wlan_SCC_MCC_switch(false, IPA_IP_v4);
-					handle_wlan_SCC_MCC_switch(false, IPA_IP_v6);
-					handle_wan_client_SCC_MCC_switch(false, IPA_IP_v4);
-					handle_wan_client_SCC_MCC_switch(false, IPA_IP_v6);
-				}
-				else
-				{
-					handle_wlan_SCC_MCC_switch(false, ip_type);
-					handle_wan_client_SCC_MCC_switch(false, ip_type);
-				}
+				handle_wlan_SCC_MCC_switch(false, IPA_IP_v4);
+				handle_wlan_SCC_MCC_switch(false, IPA_IP_v6);
+				handle_wan_client_SCC_MCC_switch(false, IPA_IP_v4);
+				handle_wan_client_SCC_MCC_switch(false, IPA_IP_v6);
 			}
-			break;
+			else
+			{
+				handle_wlan_SCC_MCC_switch(false, ip_type);
+				handle_wan_client_SCC_MCC_switch(false, ip_type);
+			}
+		}
+		break;
 #ifdef FEATURE_L2TP
 	case IPA_ADD_L2TP_CLIENT:
 		if(active_v4)
@@ -1640,6 +1727,66 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 		}
 		break;
 #endif
+#ifdef IPA_MTU_EVENT_MAX
+	case IPA_MTU_SET:
+	{
+		ipacm_event_mtu_info *data = (ipacm_event_mtu_info *)param;
+		ipa_mtu_info *mtu_info = &(data->mtu_info);
+		ipa_interface_index = iface_ipa_index_query(data->if_index);
+
+		if (ipa_interface_index == ipa_if_num)
+		{
+			IPACMDBG_H("Received IPA_MTU_SET for interface (%d)\n",
+				ipa_interface_index);
+			if (mtu_info->ip_type == IPA_IP_v4 || mtu_info->ip_type == IPA_IP_MAX)
+			{
+				/* Update v4_mtu. */
+				mtu_v4 = mtu_info->mtu_v4;
+				mtu_v4_set = true;
+
+				if (active_v4)
+				{
+					/* upstream interface. update default MTU. */
+					mtu_default_wan_v4 = mtu_v4;
+				}
+				IPACMDBG_H("Updated v4 mtu=[%d] for (%s), upstream_mtu=[%d]\n",
+					mtu_v4, mtu_info->if_name, mtu_default_wan_v4);
+			}
+			if (mtu_info->ip_type == IPA_IP_v6 || mtu_info->ip_type == IPA_IP_MAX)
+			{
+				/* Update v6_mtu. */
+				mtu_v6 = mtu_info->mtu_v6;
+				mtu_v6_set = true;
+				if (active_v6)
+				{
+					/* upstream interface. update default MTU. */
+					mtu_default_wan_v6 = mtu_v6;
+				}
+				IPACMDBG_H("Updated v6 mtu=[%d] for (%s), upstream_mtu=[%d]\n",
+					mtu_v6, mtu_info->if_name, mtu_default_wan_v6);
+			}
+
+			if (active_v4 || active_v6)
+			{
+				ipacm_event_mtu_info *mtu_event;
+				ipacm_cmd_q_data evt_data;
+				mtu_event = (ipacm_event_mtu_info *)malloc(sizeof(*mtu_event));
+				if(mtu_event == NULL)
+				{
+					IPACMERR("Failed to allocate memory.\n");
+					return;
+				}
+				memcpy(&mtu_event->mtu_info, mtu_info, sizeof(ipa_mtu_info));
+				evt_data.event = IPA_MTU_UPDATE;
+				evt_data.evt_data = mtu_event;
+				/* finish command queue */
+				IPACMDBG_H("Posting IPA_MTU_UPDATE event\n");
+				IPACM_EvtDispatcher::PostEvt(&evt_data);
+			}
+		}
+	}
+	break;
+#endif
 	default:
 		break;
 	}
@@ -1648,7 +1795,7 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 }
 
 #ifdef FEATURE_VLAN_MPDN
-int IPACM_Wan::handle_route_add_vlan_pdn_evt(ipa_ip_type iptype, uint8_t vlan_id)
+int IPACM_Wan::handle_route_add_vlan_pdn_evt(ipa_ip_type iptype, uint16_t vlan_id)
 {
 	struct ipa_ioc_add_rt_rule *rt_rule = NULL;
 	struct ipa_rt_rule_add *rt_rule_entry;
@@ -1798,6 +1945,13 @@ int IPACM_Wan::handle_route_add_vlan_pdn_evt(ipa_ip_type iptype, uint8_t vlan_id
 			ip_pass_pdn_info.pdn_ip_addr : 0;
 		wanup_vlan_data->ip_pass_skip_nat = (ip_pass_pdn_info.enable) ? ip_pass_pdn_info.skip_nat : 0;
 
+		/* send xlat configuration for installing uplink rules */
+		if (is_xlat)
+		{
+			wanup_vlan_data->is_xlat = true;
+			ipv4_to_iface[modem_ipv4_pdn_index].is_xlat=true;
+			IPACMDBG_H("xlat config enabled\n");
+		}
 		IPACMDBG_H("Posting IPA_HANDLE_WAN_VLAN_PDN_UP with below information:\n");
 		IPACMDBG_H("iptype IPA_IP_v4, VlanID %d, mux_id %d, if num %d\n", vlan_id, ext_prop->ext[0].mux_id, ipa_if_num);
 
@@ -1904,7 +2058,6 @@ IPACM_firewall_conf_t* IPACM_Wan::get_curr_pdn_firewall_config(IPACM_firewall_t 
 /* wan default route/filter rule configuration */
 int IPACM_Wan::handle_route_add_evt(ipa_ip_type iptype)
 {
-
 	/* add default WAN route */
 	struct ipa_ioc_add_rt_rule *rt_rule = NULL;
 	struct ipa_rt_rule_add *rt_rule_entry;
@@ -1944,7 +2097,16 @@ int IPACM_Wan::handle_route_add_evt(ipa_ip_type iptype)
 	}
 	IPACMDBG_H("backhaul_is_wan_bridge ?: %d \n", IPACM_Wan::backhaul_is_wan_bridge);
 
-	if (m_is_sta_mode !=Q6_WAN)
+	/* query MTU size of the interface if MTU is not set via ioctl. */
+	if (!mtu_v4_set && !mtu_v6_set)
+	{
+		if(query_mtu_size())
+		{
+			IPACMERR("Failed to query mtu");
+		}
+	}
+
+	if (m_is_sta_mode != Q6_WAN)
 	{
 		IPACM_Wan::backhaul_is_sta_mode	= true;
 		if((iptype==IPA_IP_v4) && (header_set_v4 != true))
@@ -2206,11 +2368,6 @@ int IPACM_Wan::handle_route_add_evt(ipa_ip_type iptype)
 #endif
 	}
 
-	/* set mtu_default_wan to current default wan instance */
-	mtu_default_wan = mtu_size;
-
-	IPACMDBG_H("replace the mtu_default_wan to %d\n", mtu_default_wan);
-
 	ipacm_event_iface_up *wanup_data;
 	wanup_data = (ipacm_event_iface_up *)malloc(sizeof(ipacm_event_iface_up));
 	if (wanup_data == NULL)
@@ -2223,6 +2380,10 @@ int IPACM_Wan::handle_route_add_evt(ipa_ip_type iptype)
 
 	if (iptype == IPA_IP_v4)
 	{
+		/* set mtu_default_wan to current default wan instance */
+		mtu_default_wan_v4 = mtu_v4;
+		IPACMDBG_H("replace the mtu_wan to %d\n", mtu_default_wan_v4);
+
 		IPACM_Wan::wan_up = true;
 		active_v4 = true;
 		memcpy(IPACM_Wan::wan_up_dev_name,
@@ -2283,6 +2444,10 @@ int IPACM_Wan::handle_route_add_evt(ipa_ip_type iptype)
 	}
 	else
 	{
+		/* set mtu_default_wan to current default wan instance */
+		mtu_default_wan_v6 = mtu_v6;
+		IPACMDBG_H("replace the mtu_wan to %d\n", mtu_default_wan_v6);
+
 		memcpy(backhaul_ipv6_prefix, ipv6_prefix, sizeof(backhaul_ipv6_prefix));
 		IPACMDBG_H("Setup backhaul ipv6 prefix to be 0x%08x%08x.\n", backhaul_ipv6_prefix[0], backhaul_ipv6_prefix[1]);
 
@@ -5206,7 +5371,6 @@ int IPACM_Wan::handle_route_del_evt(ipa_ip_type iptype)
 			IPACM_EvtDispatcher::PostEvt(&evt_data);
 			IPACMDBG_H("setup wan_up/active_v4= false \n");
 			IPACM_Wan::wan_up = false;
-			mtu_size = DEFAULT_MTU_SIZE;
 			active_v4 = false;
 			if(IPACM_Wan::wan_up_v6)
 			{
@@ -5238,7 +5402,6 @@ int IPACM_Wan::handle_route_del_evt(ipa_ip_type iptype)
 			IPACM_EvtDispatcher::PostEvt(&evt_data);
 			IPACMDBG_H("setup wan_up_v6/active_v6= false \n");
 			IPACM_Wan::wan_up_v6 = false;
-			mtu_size = DEFAULT_MTU_SIZE;
 			active_v6 = false;
 			if(IPACM_Wan::wan_up)
 			{
@@ -5369,7 +5532,6 @@ int IPACM_Wan::handle_route_del_evt_ex(ipa_ip_type iptype)
 
 			IPACMDBG_H("setup wan_up/active_v4= false \n");
 			IPACM_Wan::wan_up = false;
-			mtu_size = DEFAULT_MTU_SIZE;
 			active_v4 = false;
 			if(IPACM_Wan::wan_up_v6)
 			{
@@ -5403,7 +5565,6 @@ int IPACM_Wan::handle_route_del_evt_ex(ipa_ip_type iptype)
 
 			IPACMDBG_H("setup wan_up_v6/active_v6= false \n");
 			IPACM_Wan::wan_up_v6 = false;
-			mtu_size = DEFAULT_MTU_SIZE;
 			active_v6 = false;
 			if(IPACM_Wan::wan_up)
 			{
@@ -5736,6 +5897,18 @@ int IPACM_Wan::handle_down_evt()
 			res = IPACM_FAILURE;
 			goto fail;
 		}
+
+		if( ipps_dft_v4_rt_rule_hdl != 0)
+		{
+			IPACMDBG_H("Delete previous stored ippt wan ip route rule. \n")
+			if (m_routing.DeleteRoutingHdl(ipps_dft_v4_rt_rule_hdl,
+				 IPA_IP_v4) == false)
+			{
+				IPACMERR("Routing old RT rule deletion failed!\n");
+				res = IPACM_FAILURE;
+				goto fail;
+			}
+		}
 	}
 
 	/* delete default v6 RT rule */
@@ -5939,6 +6112,14 @@ int IPACM_Wan::handle_down_evt_ex()
 		goto fail;
 	}
 
+#ifndef IPA_MTU_EVENT_MAX
+	/* reset the mtu size */
+	mtu_v4 = DEFAULT_MTU_SIZE;
+	mtu_v4_set = false;
+	mtu_v6 = DEFAULT_MTU_SIZE;
+	mtu_v6_set = false;
+#endif
+
 	if(ip_type == IPA_IP_v4)
 	{
 		num_ipv4_modem_pdn--;
@@ -5950,6 +6131,7 @@ int IPACM_Wan::handle_down_evt_ex()
 			ipacm_event_vlan_pdn *vlandown_data;
 
 			ipv4_to_iface[modem_ipv4_pdn_index].wan_up_vlan = false;
+			ipv4_to_iface[modem_ipv4_pdn_index].is_xlat = false;
 
 			vlandown_data = (ipacm_event_vlan_pdn *)malloc(sizeof(ipacm_event_vlan_pdn));
 			if(vlandown_data == NULL)
@@ -6087,6 +6269,18 @@ int IPACM_Wan::handle_down_evt_ex()
 			IPACMERR("Routing rule deletion failed!\n");
 			res = IPACM_FAILURE;
 			goto fail;
+		}
+
+		if( ipps_dft_v4_rt_rule_hdl != 0)
+		{
+			IPACMDBG_H("Delete previous stored ippt wan ip route rule. \n");
+			if (m_routing.DeleteRoutingHdl(ipps_dft_v4_rt_rule_hdl,
+				 IPA_IP_v4) == false)
+			{
+				IPACMERR("Routing old RT rule deletion failed!\n");
+				res = IPACM_FAILURE;
+				goto fail;
+			}
 		}
 	}
 	else if(ip_type == IPA_IP_v6)
@@ -6492,6 +6686,18 @@ int IPACM_Wan::handle_down_evt_ex()
 			IPACMERR("Routing rule deletion failed!\n");
 			res = IPACM_FAILURE;
 			goto fail;
+		}
+		if( ipps_dft_v4_rt_rule_hdl != 0)
+		{
+
+			IPACMDBG_H("Delete previous stored ippt wan ip route rule. \n");
+			if (m_routing.DeleteRoutingHdl(ipps_dft_v4_rt_rule_hdl,
+				 IPA_IP_v4) == false)
+			{
+				IPACMERR("Routing old RT rule deletion failed!\n");
+				res = IPACM_FAILURE;
+				goto fail;
+			}
 		}
 
 		for (i = 0; i < 2*num_dft_rt_v6; i++)
@@ -8970,10 +9176,12 @@ int IPACM_Wan::query_mtu_size()
 		return IPACM_FAILURE;
 	}
 	IPACMDBG_H("mtu=[%d]\n", if_mtu.ifr_mtu);
-	if (if_mtu.ifr_mtu < DEFAULT_MTU_SIZE) {
-		mtu_size = if_mtu.ifr_mtu;
-		IPACMDBG_H("replaced mtu=[%d] for (%s)\n", mtu_size, dev_name);
+	if (if_mtu.ifr_mtu <= DEFAULT_MTU_SIZE) {
+		mtu_v4 = mtu_v6 = if_mtu.ifr_mtu;
+	}else {
+		mtu_v4 = mtu_v6 = DEFAULT_MTU_SIZE;
 	}
+	IPACMDBG_H("Updated mtu=[%d] for (%s)\n", mtu_v4, dev_name);
 
 	close(fd);
 	return IPACM_SUCCESS;

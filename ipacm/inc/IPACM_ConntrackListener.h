@@ -69,7 +69,7 @@ typedef struct __nat_client_info
 	uint32_t nat_iface_ipv4_addr;
 #ifdef FEATURE_VLAN_MPDN
 	bool is_vlan_client;
-	uint8_t vlan_id;
+	uint16_t vlan_id;
 #endif
 }nat_client_info;
 
@@ -77,7 +77,7 @@ typedef struct __nat_client_info
 typedef struct _nat_pdn_entry
 {
 	uint32_t public_ip;
-	uint8_t vlan_id;
+	uint16_t vlan_id;
 	uint8_t ip_pass_enable;
 	uint32_t ip_pass_dummy_ip;
 	uint8_t ip_pass_skip_nat;
@@ -189,7 +189,7 @@ public:
 	void ReadNfConntrackAcct();
 	void HandleIPPassPDNInfoUpdate(void *in_param);
 #ifdef FEATURE_VLAN_MPDN
-	bool IsVlanIPv4(uint32_t ipv4_address, uint8_t *VlanId);
+	bool IsVlanIPv4(uint32_t ipv4_address, uint16_t *VlanId);
 #endif
 };
 

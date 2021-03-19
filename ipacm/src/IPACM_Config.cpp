@@ -124,6 +124,10 @@ const char *ipacm_event_name[] = {
 	__stringify(IPA_ETH_BRIDGE_DEL_VLAN_ID),               /* ipacm_event_eth_bridge*/
 #endif
 	__stringify(IPA_LAN_DELETE_SELF),                      /* ipacm_event_data_fid */
+#ifdef IPA_MTU_EVENT_MAX
+	__stringify(IPA_MTU_SET),                              /* ipa_mtu_info */
+	__stringify(IPA_MTU_UPDATE),                           /* ipacm_event_mtu_info */
+#endif
 #ifdef FEATURE_L2TP
 	__stringify(IPA_ADD_L2TP_CLIENT),                      /* ipacm_event_data_all */
 	__stringify(IPA_DEL_L2TP_CLIENT),                      /* ipacm_event_data_all */
@@ -1143,6 +1147,7 @@ int IPACM_Config::SetExtProp(ipa_ioc_query_intf_ext_props *prop)
 	}
 
 	num = prop->num_ext_props;
+	ext_prop_v4.num_v4_xlat_props = 0;
 	for(i=0; i<num; i++)
 	{
 		if(prop->ext[i].ip == IPA_IP_v4)
@@ -1154,6 +1159,8 @@ int IPACM_Config::SetExtProp(ipa_ioc_query_intf_ext_props *prop)
 			}
 			memcpy(&ext_prop_v4.prop[ext_prop_v4.num_ext_props], &prop->ext[i], sizeof(struct ipa_ioc_ext_intf_prop));
 			ext_prop_v4.num_ext_props++;
+			if (prop->ext[i].is_xlat_rule)
+				ext_prop_v4.num_v4_xlat_props++;
 		}
 		else if(prop->ext[i].ip == IPA_IP_v6)
 		{
@@ -1879,7 +1886,7 @@ bool IPACM_Config::iface_in_vlan_mode(const char *phys_iface_name)
 	return false;
 }
 
-int IPACM_Config::get_iface_vlan_ids(char *phys_iface_name, uint8_t *Ids)
+int IPACM_Config::get_iface_vlan_ids(char *phys_iface_name, uint16_t *Ids)
 {
 	list<vlan_iface_info>::iterator it_vlan;
 	int cnt = 0;
@@ -1919,7 +1926,7 @@ int IPACM_Config::get_iface_vlan_ids(char *phys_iface_name, uint8_t *Ids)
 	return IPACM_SUCCESS;
 }
 
-int IPACM_Config::get_vlan_id(char *iface_name, uint8_t *vlan_id)
+int IPACM_Config::get_vlan_id(char *iface_name, uint16_t *vlan_id)
 {
 	list<vlan_iface_info>::iterator it_vlan;
 	int ret = IPACM_FAILURE;

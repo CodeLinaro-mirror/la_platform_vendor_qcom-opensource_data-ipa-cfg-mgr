@@ -270,7 +270,7 @@ IPACM_Wan::~IPACM_Wan()
 
 #ifdef FEATURE_VLAN_MPDN
 
-int IPACM_Wan::GetMuxByVid(uint8_t vlan_id, uint8_t *mux_id, ipa_ip_type iptype)
+int IPACM_Wan::GetMuxByVid(uint16_t vlan_id, uint8_t *mux_id, ipa_ip_type iptype)
 {
 	for(int i = 0; i < IPA_MAX_NUM_SW_PDNS; i++)
 	{
@@ -299,6 +299,20 @@ int IPACM_Wan::GetMuxByVid(uint8_t vlan_id, uint8_t *mux_id, ipa_ip_type iptype)
 	}
 	IPACMERR("couldn't find MUX for VID %d\n", vlan_id);
 	return IPACM_FAILURE;
+}
+
+bool IPACM_Wan::is_xlat_by_vid(uint16_t vlan_id)
+{
+	for(int i = 0; i < IPA_MAX_NUM_SW_PDNS; i++)
+	{
+		if(IPACM_Wan::ipv4_to_iface[i].ipv4_addr)
+		{
+			if(IPACM_Wan::ipv4_to_iface[i].pIface->associated_VID == vlan_id)
+				return IPACM_Wan::ipv4_to_iface[i].is_xlat;
+		}
+	}
+	IPACMERR("couldn't find MUX xlat info for VID %d\n", vlan_id);
+	return false;
 }
 #endif
 /* handle new_address event */
@@ -429,6 +443,8 @@ int IPACM_Wan::handle_addr_evt(ipacm_event_data_addr *data)
 		{
 			if(m_is_sta_mode == Q6_WAN)
 			{
+				num_ipv6_modem_pdn++;
+				IPACMDBG_H("Now the number of modem ipv6 pdn is %d.\n", num_ipv6_modem_pdn);
 				init_fl_rule_ex(data->iptype);
 			}
 			else
@@ -518,9 +534,6 @@ int IPACM_Wan::handle_addr_evt(ipacm_event_data_addr *data)
 				IPACMDBG_H("index %d prefix: 0x%08x%08x\n", modem_ipv6_pdn_index,
 				ipv6_to_iface[modem_ipv6_pdn_index].ipv6_prefix[0],
 				ipv6_to_iface[modem_ipv6_pdn_index].ipv6_prefix[1]);
-
-				num_ipv6_modem_pdn++;
-				IPACMDBG_H("Now the number of modem ipv6 pdn is %d.\n", num_ipv6_modem_pdn);
 			}
 #endif
 		}
@@ -732,7 +745,7 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 			if ((ipa_interface_index == ipa_if_num) && (m_is_sta_mode == Q6_WAN))
 			{
 				is_xlat = true;
-				IPACMDBG_H("WAN-LTE (%s) link up, iface: %d is_xlat: \n",
+				IPACMDBG_H("WAN-LTE (%s) link up, iface: %d is_xlat: %d \n",
 						IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].iface_name,data->if_index, is_xlat);
 			}
 			break;
@@ -1649,7 +1662,7 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 }
 
 #ifdef FEATURE_VLAN_MPDN
-int IPACM_Wan::handle_route_add_vlan_pdn_evt(ipa_ip_type iptype, uint8_t vlan_id)
+int IPACM_Wan::handle_route_add_vlan_pdn_evt(ipa_ip_type iptype, uint16_t vlan_id)
 {
 	struct ipa_ioc_add_rt_rule *rt_rule = NULL;
 	struct ipa_rt_rule_add *rt_rule_entry;
@@ -1799,6 +1812,13 @@ int IPACM_Wan::handle_route_add_vlan_pdn_evt(ipa_ip_type iptype, uint8_t vlan_id
 			ip_pass_pdn_info.pdn_ip_addr : 0;
 		wanup_vlan_data->ip_pass_skip_nat = (ip_pass_pdn_info.enable) ? ip_pass_pdn_info.skip_nat : 0;
 
+		/* send xlat configuration for installing uplink rules */
+		if (is_xlat)
+		{
+			wanup_vlan_data->is_xlat = true;
+			ipv4_to_iface[modem_ipv4_pdn_index].is_xlat=true;
+			IPACMDBG_H("xlat config enabled\n");
+		}
 		IPACMDBG_H("Posting IPA_HANDLE_WAN_VLAN_PDN_UP with below information:\n");
 		IPACMDBG_H("iptype IPA_IP_v4, VlanID %d, mux_id %d, if num %d\n", vlan_id, ext_prop->ext[0].mux_id, ipa_if_num);
 
@@ -4135,6 +4155,7 @@ int IPACM_Wan::init_fl_rule_ex(ipa_ip_type iptype)
 #else
 			add_dft_filtering_rule(flt_rule_v4, IPACM_Wan::num_v4_flt_rule, IPA_IP_v4);
 #endif
+			install_wan_filtering_rule(false);
 		}
 	}
 	else if(iptype == IPA_IP_v6)
@@ -4148,6 +4169,7 @@ int IPACM_Wan::init_fl_rule_ex(ipa_ip_type iptype)
 #else
 			add_dft_filtering_rule(flt_rule_v6, IPACM_Wan::num_v6_flt_rule, IPA_IP_v6);
 #endif
+			install_wan_filtering_rule(false);
 		}
 	}
 	else
@@ -4156,7 +4178,6 @@ int IPACM_Wan::init_fl_rule_ex(ipa_ip_type iptype)
 		res = IPACM_FAILURE;
 		goto fail;
 	}
-	install_wan_filtering_rule(false);
 
 fail:
 	return res;
@@ -5741,6 +5762,7 @@ int IPACM_Wan::handle_down_evt_ex()
 			ipacm_event_vlan_pdn *vlandown_data;
 
 			ipv4_to_iface[modem_ipv4_pdn_index].wan_up_vlan = false;
+			ipv4_to_iface[modem_ipv4_pdn_index].is_xlat = false;
 
 			vlandown_data = (ipacm_event_vlan_pdn *)malloc(sizeof(ipacm_event_vlan_pdn));
 			if(vlandown_data == NULL)

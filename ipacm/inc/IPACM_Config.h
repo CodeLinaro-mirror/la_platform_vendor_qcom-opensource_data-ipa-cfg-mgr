@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013-2020 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2013-2021 The Linux Foundation. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -77,6 +77,7 @@ typedef struct _ipa_rm_client
 typedef struct
 {
 	uint8_t num_ext_props;
+	uint8_t num_v4_xlat_props;
 	ipa_ioc_ext_intf_prop prop[MAX_NUM_EXT_PROPS];
 } ipacm_ext_prop;
 
@@ -299,8 +300,8 @@ public:
 	ipacm_bridge *get_vlan_bridge(char *name);
 	bool is_added_vlan_iface(char *iface_name);
 	bool iface_in_vlan_mode(const char * phys_iface_name);
-	int get_iface_vlan_ids(char *phys_iface_name, uint8_t *Ids);
-	int get_vlan_id(char *iface_name, uint8_t *vlan_id);
+	int get_iface_vlan_ids(char *phys_iface_name, uint16_t *Ids);
+	int get_vlan_id(char *iface_name, uint16_t *vlan_id);
 	void get_vlan_mode_ifaces();
 #endif
 

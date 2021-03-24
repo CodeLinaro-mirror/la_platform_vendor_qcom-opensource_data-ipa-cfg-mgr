@@ -215,6 +215,10 @@ if (!(a)) {                                                 \
 #define GREEnabled_TAG                       "GREEnabled"
 #define GRE_Server_TAG                       "GREServer"
 
+#define IPACMCLIENT_TAG                      "IPACMCLIENT"
+#define MaxWlanClients_TAG                   "MaxWlanClients"
+#define MaxEthClients_TAG                    "MaxEthClients"
+
 /*---------------------------------------------------------------------------
       IP protocol numbers - use in dss_socket() to identify protocols.
       Also contains the extension header types for IPv6.
@@ -345,6 +349,8 @@ typedef struct  _IPACM_conf_t
 	bool ipacm_mpdn_enable;
 	bool ipacm_socksv5_enable;
 	ipacm_gre_conf_t gre_conf;
+	int max_wifi_clients;
+	int max_eth_clients;
 } IPACM_conf_t;
 
 /* This function read IPACM XML configuration*/

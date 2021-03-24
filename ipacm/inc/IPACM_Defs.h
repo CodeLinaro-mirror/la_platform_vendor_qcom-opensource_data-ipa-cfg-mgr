@@ -109,6 +109,12 @@ extern "C"
 #define IPACM_L2TP_DISABLE 0
 #define IPACM_L2TP 1
 #define IPACM_L2TP_E2E 2
+
+
+#define IPACM_FLT_DISABLE 0
+#define IPACM_MAC_FLT 1
+#define IPACM_SW_FLT 2
+
 /*---------------------------------------------------------------------------
 										Return values indicating error status
 ---------------------------------------------------------------------------*/
@@ -121,8 +127,7 @@ extern "C"
 
 #define IPA_MAX_NUM_WIFI_CLIENTS  32
 #define IPA_MAX_NUM_WAN_CLIENTS  10
-#define IPA_MAX_NUM_VLAN_CLIENTS 32
-#define IPA_MAX_NUM_ETH_CLIENTS  15
+#define IPA_MAX_NUM_ETH_CLIENTS  32
 #define IPA_MAX_NUM_AMPDU_RULE  15
 #define IPA_MAC_ADDR_SIZE  6
 #define IPA_IPV6_ADDR_SIZE_IN_WORDS 4

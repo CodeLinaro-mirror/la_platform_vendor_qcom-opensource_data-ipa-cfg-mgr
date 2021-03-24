@@ -242,32 +242,35 @@ private:
 
 		if(iptype == IPA_IP_v4)
 		{
-		     for(tx_index = 0; tx_index < iface_query->num_tx_props; tx_index++)
-		     {
-		        if((tx_prop->tx[tx_index].ip == IPA_IP_v4) && (get_client_memptr(wlan_client, clt_indx)->route_rule_set_v4==true)) /* for ipv4 */
+#ifdef IPA_IOC_SET_SW_FLT
+			/* clean-up the tether-client-list */
+			IPACM_Iface::ipacmcfg->update_client_info(get_client_memptr(wlan_client, clt_indx)->mac, NULL, false);
+#endif
+			for(tx_index = 0; tx_index < iface_query->num_tx_props; tx_index++)
 			{
-				IPACMDBG_H("Delete client index %d ipv4 Qos rules for tx:%d \n",clt_indx,tx_index);
-				rt_hdl = get_client_memptr(wlan_client, clt_indx)->wifi_rt_hdl[tx_index].wifi_rt_rule_hdl_v4;
-
-				if(m_routing.DeleteRoutingHdl(rt_hdl, IPA_IP_v4) == false)
+				if((tx_prop->tx[tx_index].ip == IPA_IP_v4) && (get_client_memptr(wlan_client, clt_indx)->route_rule_set_v4==true)) /* for ipv4 */
 				{
-					return IPACM_FAILURE;
-				}
-			}
-		     } /* end of for loop */
+					IPACMDBG_H("Delete client index %d ipv4 Qos rules for tx:%d \n",clt_indx,tx_index);
+					rt_hdl = get_client_memptr(wlan_client, clt_indx)->wifi_rt_hdl[tx_index].wifi_rt_rule_hdl_v4;
 
-		     /* clean the 4 Qos ipv4 RT rules for client:clt_indx */
-		     if(get_client_memptr(wlan_client, clt_indx)->route_rule_set_v4==true) /* for ipv4 */
-		     {
+					if(m_routing.DeleteRoutingHdl(rt_hdl, IPA_IP_v4) == false)
+					{
+						return IPACM_FAILURE;
+					}
+				}
+			}/* end of for loop */
+
+			/* clean the 4 Qos ipv4 RT rules for client:clt_indx */
+			if(get_client_memptr(wlan_client, clt_indx)->route_rule_set_v4==true) /* for ipv4 */
+			{
 				get_client_memptr(wlan_client, clt_indx)->route_rule_set_v4 = false;
-		     }
+			}
 		}
 
 		if(iptype == IPA_IP_v6)
 		{
-		    for(tx_index = 0; tx_index < iface_query->num_tx_props; tx_index++)
-		    {
-
+			for(tx_index = 0; tx_index < iface_query->num_tx_props; tx_index++)
+			{
 				if((tx_prop->tx[tx_index].ip == IPA_IP_v6) && (get_client_memptr(wlan_client, clt_indx)->route_rule_set_v6 != 0)) /* for ipv6 */
 				{
 					for(num_v6 =0;num_v6 < get_client_memptr(wlan_client, clt_indx)->route_rule_set_v6;num_v6++)
@@ -285,15 +288,14 @@ private:
 							return IPACM_FAILURE;
 						}
 					}
-
 				}
 			} /* end of for loop */
 
-		    /* clean the 4 Qos ipv6 RT rules for client:clt_indx */
-		    if(get_client_memptr(wlan_client, clt_indx)->route_rule_set_v6 != 0) /* for ipv6 */
-		    {
-		                 get_client_memptr(wlan_client, clt_indx)->route_rule_set_v6 = 0;
-                    }
+			/* clean the 4 Qos ipv6 RT rules for client:clt_indx */
+			if(get_client_memptr(wlan_client, clt_indx)->route_rule_set_v6 != 0) /* for ipv6 */
+			{
+				get_client_memptr(wlan_client, clt_indx)->route_rule_set_v6 = 0;
+			}
 		}
 
 		return IPACM_SUCCESS;

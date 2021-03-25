@@ -1388,6 +1388,37 @@ bool IPACM_Config::is_lan2lan_sw_path(uint16_t vlan_id)
 	pthread_mutex_unlock(&vlan_l2tp_lock);
 	return ret;
 }
+
+uint16_t IPACM_Config::get_bridge_vlan_mapping_from_subnet(uint32_t ipv4_subnet)
+{
+	list<bridge_vlan_mapping_info>::iterator it_mapping;
+	int ret = IPACM_FAILURE;
+	uint16_t VlanID;
+
+	if(pthread_mutex_lock(&vlan_l2tp_lock) != 0)
+	{
+		IPACMERR("Unable to lock the mutex\n");
+		return IPACM_FAILURE;
+	}
+
+	for(it_mapping = m_bridge_vlan_mapping.begin(); it_mapping != m_bridge_vlan_mapping.end(); it_mapping++)
+	{
+		if(ipv4_subnet == (it_mapping->bridge_ipv4 & it_mapping->subnet_mask))
+		{
+			IPACMDBG_H("Found the bridge mapping for subnet 0x%X (vid = %d)\n",
+				ipv4_subnet,
+				it_mapping->bridge_associated_VID);
+			VlanID = it_mapping->bridge_associated_VID;
+			pthread_mutex_unlock(&vlan_l2tp_lock);
+			return VlanID;
+		}
+	}
+
+	pthread_mutex_unlock(&vlan_l2tp_lock);
+	IPACMERR("Could not find subnet 0x%X\n", ipv4_subnet);
+
+	return 0;
+}
 #endif
 
 #if defined(FEATURE_L2TP) || defined(FEATURE_VLAN_MPDN)

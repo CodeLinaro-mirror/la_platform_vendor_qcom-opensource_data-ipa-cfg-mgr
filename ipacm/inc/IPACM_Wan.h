@@ -155,6 +155,7 @@ public:
 #endif //FEATURE_IPACM_UL_FIREWALL
 #ifdef FEATURE_VLAN_MPDN
 	static int GetV6PrefixByVid(int vid, uint32_t *v6_prefix);
+	static int GetV6MTUByPrefix(uint16_t *mtu, uint32_t *v6_prefix);
 	static IPACM_firewall_conf_t* get_curr_pdn_firewall_config(IPACM_firewall_t &firewall_configs, const char* dev_name);
 #endif
 	static bool isWanUP(int ipa_if_num_tether)
@@ -375,6 +376,7 @@ public:
 	static ipacm_ipv6_wan_iface ipv6_to_iface[IPA_MAX_NUM_SW_PDNS];
 	static uint8_t num_offloaded_pdns;
 	static int GetMuxByVid(uint16_t vlan_id, uint8_t *mux_id, ipa_ip_type iptype);
+	static int GetMTUByVid(uint16_t *mtu, uint16_t vlan_id, ipa_ip_type iptype);
 	static bool is_xlat_by_vid(uint16_t vlan_id);
 #endif
 private:

@@ -254,8 +254,11 @@ typedef enum
 	IPA_UPDATE_SOCKSv5_v6_CONN,               /* NULL */
 #endif
 	IPA_MAC_ADD_DEL_FLT_EVENT,                /* NULL */
-	IPA_IP_PASS_UPDATE_EVENT,			  /* ipacm_ip_pass_pdn_info */
-	IPA_HANDLE_IP_PASS_PDN_INFO_UPDATE_EVENT,	  /* Handle ip pass pdn info update.*/
+	IPA_IP_PASS_UPDATE_EVENT,                 /* ipacm_ip_pass_pdn_info */
+	IPA_HANDLE_IP_PASS_PDN_INFO_UPDATE_EVENT, /* Handle ip pass pdn info update.*/
+#ifdef IPA_IOCTL_SET_PKT_THRESHOLD
+	IPA_PKT_THRESHOLD_UPDATE_EVENT,           /* ipa_set_pkt_threshold */
+#endif
 	IPACM_EVENT_MAX
 } ipa_cm_event_id;
 

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013 - 2020 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2013 - 2021 The Linux Foundation. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -155,6 +155,9 @@ private:
 	void HandleNonNatIPAddr_v6(const IpAddress& ip, int if_index, bool AddOp);
 	uint32_t GetPacketThreshhold(void);
 	bool IsIpv6PrivateSubnet(const IpAddress& ip);
+#ifdef IPA_IOCTL_SET_PKT_THRESHOLD
+	void update_pkt_threshold(void *in_param);
+#endif
 
 #ifdef CT_OPT
 	void ProcessCTV6Message(void *);

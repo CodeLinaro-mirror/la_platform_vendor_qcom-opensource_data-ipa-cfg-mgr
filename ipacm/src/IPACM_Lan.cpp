@@ -2308,7 +2308,17 @@ int IPACM_Lan::handle_vlan_neighbor(ipacm_event_data_all *data)
 				IPACMERR("couldn't allocate memory for new vlan pdn event\n");
 				return IPACM_FAILURE;
 			}
-			data->iptype = IPA_IP_v6;
+			memset(data, 0, sizeof(ipacm_event_route_vlan));
+
+			uint32_t ip4_addr;
+			if(get_eth_client_ip4_addr(data_vlan->data_all.mac_addr, ip4_addr, vlan_id) == IPACM_SUCCESS) {
+				IPACMDBG_H("ipv4 address 0x%X is valid, generate IPA_ROUTE_ADD_VLAN_PDN_EVENT v4 as well\n", ip4_addr);
+				data->iptype = IPA_IP_MAX;
+			}
+			else {
+				data->iptype = IPA_IP_v6;
+				IPACMDBG_H("ipv4 address is not valid, don't generate IPA_ROUTE_ADD_VLAN_PDN_EVENT v4\n");
+			}
 			data->VlanID = vlan_id;
 			data->wan_ipv6_prefix[0] = data_vlan->data_all.ipv6_addr[0];
 			data->wan_ipv6_prefix[1] = data_vlan->data_all.ipv6_addr[1];

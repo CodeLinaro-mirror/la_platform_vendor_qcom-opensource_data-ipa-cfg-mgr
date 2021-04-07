@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013-2020 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2013-2021 The Linux Foundation. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -1413,7 +1413,7 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 int IPACM_Lan::handle_eth_mac_flt_event()
 {
 	IPACMDBG_H("handle_eth_mac_flt_event\n ");
-	uint8_t mac_addr[6];
+	uint8_t mac_addr[6] = {0};
 	int eth_index;
 	ipacm_event_data_all data;
 	/* work on copy list to avoid concurrency issues*/
@@ -1510,17 +1510,29 @@ int IPACM_Lan::handle_eth_mac_flt_event()
 /* add_mac_flt_ul_rule add UL rule for mac based filtering on top */
 int IPACM_Lan::add_mac_flt_blacklist_rule(uint8_t *mac_addr, ipa_ip_type iptype, uint32_t *flt_rule_hdl)
 {
-		IPACMDBG_H(" mac_flt_add_rule \n");
+	IPACMDBG_H(" mac_flt_add_rule \n");
 
 	int len =0;
 	struct ipa_ioc_add_flt_rule_v2 *pFilteringTable_v2 = NULL;
 	struct ipa_flt_rule_add_v2 flt_rule_entry_v2;
-	uint8_t mac_a[6];
+	uint8_t mac_a[6] = {0};
 	std::array<uint8_t, 6> mac = {0};
 	std::map<std::array<uint8_t, 6>, mac_flt_type * >::iterator it;
 
 	memcpy(mac_a,mac_addr,IPA_MAC_ADDR_SIZE);
 	std::copy(std::begin(mac_a), std::end(mac_a), std::begin(mac));
+
+	if (rx_prop == NULL)
+	{
+		IPACMDBG_H("No rx properties registered\n");
+		return IPACM_FAILURE;
+	}
+
+	if(rx_prop->num_rx_props <= 0)
+	{
+		IPACMDBG_H("No RX property.\n");
+		return IPACM_FAILURE;
+	}
 
 	len = sizeof(struct ipa_ioc_add_flt_rule_v2);
 	pFilteringTable_v2 = (struct ipa_ioc_add_flt_rule_v2*)malloc(len);
@@ -1698,7 +1710,7 @@ int IPACM_Lan::del_mac_flt_blacklist_rule(uint32_t flt_rule_hdl, ipa_ip_type ipt
 /* del all mac rules for wan client */
 void IPACM_Lan::delete_eth_mac_flt_rules()
 {
-	uint8_t mac_addr[6];
+	uint8_t mac_addr[6] = {0};
 	int eth_index;
 	/* copy current list to avoid concurrency issues*/
 	std::map<std::array<uint8_t, 6>, mac_flt_type *> mac_flt_lists = IPACM_Iface::ipacmcfg->get_mac_flt_lists();
@@ -2077,7 +2089,7 @@ int IPACM_Lan::handle_vlan_neighbor(ipacm_event_data_all *data)
 	std::list <ipacm_event_data_all>::iterator it;
 
 	IPACMDBG_H("\n");
-
+	memset(&data_all, 0, sizeof(ipacm_event_data_all));
 	if (IPACM_Iface::ipacmcfg->get_vlan_id(data->iface_name, &vlan_id))
 	{
 		if(!IPACM_Iface::ipacmcfg->is_added_vlan_iface(data->iface_name))
@@ -2106,8 +2118,8 @@ int IPACM_Lan::handle_vlan_neighbor(ipacm_event_data_all *data)
 							&& (it->ipv6_addr[2] == data->ipv6_addr[2])  && (it->ipv6_addr[3] == data->ipv6_addr[3]))
 						{
 							IPACMDBG_H("Already cached client v6 addr : 0x%08x:%08x:%08x:%08x mac 0x%x%x%x%x%x%x\n",
-								data_all.ipv6_addr[0], data_all.ipv6_addr[1], data_all.ipv6_addr[2], data_all.ipv6_addr[3],
-								data_all.mac_addr[0], data_all.mac_addr[1], data_all.mac_addr[2], data_all.mac_addr[3], data_all.mac_addr[4], data_all.mac_addr[5]);
+								data->ipv6_addr[0], data->ipv6_addr[1], data->ipv6_addr[2], data->ipv6_addr[3],
+								data->mac_addr[0], data->mac_addr[1], data->mac_addr[2], data->mac_addr[3], data->mac_addr[4], data->mac_addr[5]);
 							break;
 						}
 					}
@@ -4033,6 +4045,7 @@ int IPACM_Lan::handle_eth_client_ipaddr(ipacm_event_data_all *data)
 	uint8_t vlan_id = 0;
 	ipacm_event_data_all data_all;
 	std::list <ipacm_event_data_all>::iterator it;
+	memset(&data_all, 0, sizeof(ipacm_event_data_all));
 
 	IPACMDBG_H("number of eth clients: %d\n", num_eth_client);
 	IPACMDBG_H("event MAC %02x:%02x:%02x:%02x:%02x:%02x\n",
@@ -4141,8 +4154,8 @@ int IPACM_Lan::handle_eth_client_ipaddr(ipacm_event_data_all *data)
 							&& (it->ipv6_addr[2] == data->ipv6_addr[2])  && (it->ipv6_addr[3] == data->ipv6_addr[3]))
 						{
 							IPACMDBG_H("Already cached client v6 addr : 0x%08x:%08x:%08x:%08x mac 0x%x%x%x%x%x%x\n",
-								data_all.ipv6_addr[0], data_all.ipv6_addr[1], data_all.ipv6_addr[2], data_all.ipv6_addr[3],
-								data_all.mac_addr[0], data_all.mac_addr[1], data_all.mac_addr[2], data_all.mac_addr[3], data_all.mac_addr[4], data_all.mac_addr[5]);
+								data->ipv6_addr[0], data->ipv6_addr[1], data->ipv6_addr[2], data->ipv6_addr[3],
+								data->mac_addr[0], data->mac_addr[1], data->mac_addr[2], data->mac_addr[3], data->mac_addr[4], data->mac_addr[5]);
 							break;
 						}
 					}

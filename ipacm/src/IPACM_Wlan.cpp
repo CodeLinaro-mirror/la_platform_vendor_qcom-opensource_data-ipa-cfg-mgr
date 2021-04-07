@@ -168,7 +168,7 @@ void IPACM_Wlan::event_callback(ipa_cm_event_id event, void *param)
 	}
 
 	int ipa_interface_index;
-	int wlan_index, cnt;
+	int wlan_index = 0, cnt;
 	ipacm_ext_prop* ext_prop;
 	ipacm_event_iface_up* data_wan;
 	ipacm_event_iface_up_tehter* data_wan_tether;
@@ -1018,7 +1018,7 @@ void IPACM_Wlan::event_callback(ipa_cm_event_id event, void *param)
 int IPACM_Wlan::handle_wlan_mac_flt_event()
 {
 	IPACMDBG_H("handle_wlan_mac_flt_event\n ");
-	uint8_t mac_addr[6];
+	uint8_t mac_addr[6] = {0};
 	int wlan_index;
 	ipacm_event_data_all data;
 
@@ -1229,7 +1229,7 @@ return IPACM_SUCCESS;
 void IPACM_Wlan::delete_wlan_mac_flt_rules()
 {
 
-	uint8_t mac_addr[6];
+	uint8_t mac_addr[6] = {0};
 	int wlan_index;
 
 	/* copy current list to avoid concurrency issues*/

@@ -5841,6 +5841,11 @@ int IPACM_Lan::handle_eth_client_down_evt(uint8_t *mac_addr, uint16_t vlan_id, i
 		get_client_memptr(eth_client, clt_indx)->ipv6_header_set = false;
 	}
 
+#ifdef IPA_IOC_SET_SW_FLT
+	/* clean-up the tether-client-list */
+	IPACM_Iface::ipacmcfg->update_client_info(get_client_memptr(eth_client, clt_indx)->mac, NULL, false);
+#endif
+
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
 	if (get_client_memptr(eth_client, clt_indx)->ipv4_ul_rules_set == true)
 	{

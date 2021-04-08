@@ -242,10 +242,6 @@ private:
 
 		if(iptype == IPA_IP_v4)
 		{
-#ifdef IPA_IOC_SET_SW_FLT
-			/* clean-up the tether-client-list */
-			IPACM_Iface::ipacmcfg->update_client_info(get_client_memptr(wlan_client, clt_indx)->mac, NULL, false);
-#endif
 			for(tx_index = 0; tx_index < iface_query->num_tx_props; tx_index++)
 			{
 				if((tx_prop->tx[tx_index].ip == IPA_IP_v4) && (get_client_memptr(wlan_client, clt_indx)->route_rule_set_v4==true)) /* for ipv4 */

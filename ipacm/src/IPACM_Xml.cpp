@@ -179,7 +179,7 @@ static int ipacm_cfg_xml_parse_tree
 #endif
 						IPACM_util_icmp_string((char*)xml_node->name, IPACM_L2TP_TAG) == 0 ||
 						IPACM_util_icmp_string((char*)xml_node->name, IPACM_MPDN_TAG) == 0 ||
-
+						IPACM_util_icmp_string((char*)xml_node->name, IPACMCLIENT_TAG) == 0 ||
 						IPACM_util_icmp_string((char*)xml_node->name, IPACM_SOCKSv5_TAG) == 0 ||
 						IPACM_util_icmp_string((char*)xml_node->name, GRE_TAG) == 0)
 				{
@@ -481,6 +481,30 @@ static int ipacm_cfg_xml_parse_tree
 						memcpy(content_buf, (void *)content, str_size);
 						config->nat_max_entries = atoi(content_buf);
 						IPACMDBG_H("Nat Table Max Entries %d\n", config->nat_max_entries);
+					}
+				}
+				else if (IPACM_util_icmp_string((char*)xml_node->name, MaxWlanClients_TAG) == 0)
+				{
+					content = IPACM_read_content_element(xml_node);
+					if (content)
+					{
+						str_size = strlen(content);
+						memset(content_buf, 0, sizeof(content_buf));
+						memcpy(content_buf, (void *)content, str_size);
+						config->max_wifi_clients = atoi(content_buf);
+						IPACMDBG_H("Max wifi clients %d\n", config->max_wifi_clients);
+					}
+				}
+				else if (IPACM_util_icmp_string((char*)xml_node->name, MaxEthClients_TAG) == 0)
+				{
+					content = IPACM_read_content_element(xml_node);
+					if (content)
+					{
+						str_size = strlen(content);
+						memset(content_buf, 0, sizeof(content_buf));
+						memcpy(content_buf, (void *)content, str_size);
+						config->max_eth_clients = atoi(content_buf);
+						IPACMDBG_H("Max eth clients %d\n", config->max_eth_clients);
 					}
 				}
 				else if (IPACM_util_icmp_string((char*)xml_node->name, NAT_TableType_TAG) == 0)

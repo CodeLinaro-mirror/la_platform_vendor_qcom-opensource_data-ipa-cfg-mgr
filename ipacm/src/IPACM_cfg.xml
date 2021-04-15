@@ -212,5 +212,9 @@
 		<IPACMMPDN>
 			<IPACMMPDNEnabled>1</IPACMMPDNEnabled>
 		</IPACMMPDN>
+		<IPACMCLIENT>
+			<MaxWlanClients>32</MaxWlanClients>
+			<MaxEthClients>32</MaxEthClients>
+		</IPACMCLIENT>
 	</IPACM>
 </system>

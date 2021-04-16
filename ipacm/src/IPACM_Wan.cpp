@@ -8190,7 +8190,7 @@ int IPACM_Wan::handle_vlan_wan_iface_addr_evt(ipacm_event_data_addr *data)
 		goto fail;
 	}
 
-	if (data->iptype == IPA_IP_v6)
+	if ((data->iptype == IPA_IP_v6) && (vlan_iface->num_dft_rt_v6 < MAX_DEFAULT_v6_ROUTE_RULES))
 	{
 		for(num_ipv6_addr=0;num_ipv6_addr<vlan_iface->num_dft_rt_v6;num_ipv6_addr++)
 		{
@@ -8207,8 +8207,8 @@ int IPACM_Wan::handle_vlan_wan_iface_addr_evt(ipacm_event_data_addr *data)
 
 		if (is_global_ipv6_addr(data->ipv6_addr) && (rx_prop != NULL || tx_prop != NULL))
 		{
-				IPACMDBG_H(" Has rx/tx properties registered for iface %s, add for NATTING for ip-family %d \n", dev_name, IPA_IP_v6);
-				IPACM_Iface::ipacmcfg->AddNatIfaces(dev_name, IPA_IP_v6);
+			IPACMDBG_H("Add %s iface in NAT ctx for ip-family %d \n", vlan_iface->name, IPA_IP_v6);
+			IPACM_Iface::ipacmcfg->AddNatIfaces(vlan_iface->name, IPA_IP_v6);
 		}
 
 		rt_rule = (struct ipa_ioc_add_rt_rule *)
@@ -8361,7 +8361,7 @@ int IPACM_Wan::handle_vlan_wan_iface_addr_evt(ipacm_event_data_addr *data)
 		}
 		vlan_iface->num_dft_rt_v6++;
 	}
-	else
+	else if(data->iptype == IPA_IP_v4)
 	{
 		if(vlan_iface->v4_addr_set)
 		{
@@ -8391,7 +8391,7 @@ int IPACM_Wan::handle_vlan_wan_iface_addr_evt(ipacm_event_data_addr *data)
 			/* Add Natting iface to IPACM_Config if there is  Rx/Tx property */
 			if (rx_prop != NULL || tx_prop != NULL)
 			{
-				IPACMDBG_H(" Has rx/tx properties registered for iface %s, add for NATTING for ip-family %d \n", dev_name, IPA_IP_v4);
+				IPACMDBG_H("Add %s iface in NAT ctx for ip-family %d \n", vlan_iface->name, IPA_IP_v4);
 				IPACM_Iface::ipacmcfg->AddNatIfaces(vlan_iface->name, IPA_IP_v4);
 			}
 		}

@@ -117,6 +117,7 @@ IPACM_Lan::IPACM_Lan(int iface_index) : IPACM_Iface(iface_index)
 	modem_ul_v4_set = false;
 	modem_ul_v6_set = false;
 	memset(ipv6_prefix, 0, sizeof(ipv6_prefix));
+	memset(&xlat_ctx, 0, sizeof(xlat_context));
 
 #ifdef FEATURE_VLAN_MPDN
 	dummy_prefix_installed = false;
@@ -280,7 +281,6 @@ IPACM_Lan::IPACM_Lan(int iface_index) : IPACM_Iface(iface_index)
 		install_l2tp_ul_hdr_proc_ctx();
 	}
 #endif
-	memset(&xlat_ctx, 0, sizeof(xlat_context));
 
 	return;
 }

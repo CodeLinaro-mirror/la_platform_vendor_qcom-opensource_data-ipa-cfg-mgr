@@ -264,6 +264,11 @@ void* ipa_driver_msg_notifier(void *param)
 #ifdef IPA_IOC_SET_MAC_FLT
 	ipa_ioc_mac_client_list_type *event_mac_flt = NULL;
 #endif
+
+#ifdef IPA_IOC_SET_SW_FLT
+	ipa_sw_flt_list_type *sw_flt = NULL;
+#endif
+
 #ifdef FEATURE_SOCKSv5
 	ipa_socksv5_msg add_socksv5_info;
 	uint32_t del_socksv5_info;
@@ -947,22 +952,55 @@ void* ipa_driver_msg_notifier(void *param)
 
 #ifdef IPA_IOC_SET_MAC_FLT
 		case IPA_MAC_FLT_EVENT:
-			event_mac_flt = (ipa_ioc_mac_client_list_type *)(buffer + sizeof(struct ipa_msg_meta));
-			IPACMDBG_H("Received IPA_MAC_FLT_EVENT having flt state %d\n", event_mac_flt->flt_state);
+			if (IPACM_Iface::ipacmcfg->ipacm_flt_enable != IPACM_SW_FLT)
+			{
+				event_mac_flt = (ipa_ioc_mac_client_list_type *)(buffer + sizeof(struct ipa_msg_meta));
+				IPACMDBG_H("Received IPA_MAC_FLT_EVENT having flt state %d\n", event_mac_flt->flt_state);
 
-			IPACM_Iface::ipacmcfg->mac_flt_info(event_mac_flt);
-			IPACMDBG_H("map updated with current input \n");
-		        data_fid = (ipacm_event_data_fid *)malloc(sizeof(ipacm_event_data_fid));
-                        if(data_fid == NULL)
-                        {
-                                IPACMERR("unable to allocate memory for mac_flt_event\n");
-                                return NULL;
-                        }
-			evt_data.event = IPA_MAC_ADD_DEL_FLT_EVENT;
-			evt_data.evt_data = NULL;
+				IPACM_Iface::ipacmcfg->mac_flt_info(event_mac_flt);
+				IPACMDBG_H("map updated with current input \n");
+					data_fid = (ipacm_event_data_fid *)malloc(sizeof(ipacm_event_data_fid));
+							if(data_fid == NULL)
+							{
+									IPACMERR("unable to allocate memory for mac_flt_event\n");
+									return NULL;
+							}
+				evt_data.event = IPA_MAC_ADD_DEL_FLT_EVENT;
+				evt_data.evt_data = NULL;
+				IPACM_Iface::ipacmcfg->ipacm_flt_enable = IPACM_MAC_FLT;
+			}
+			else{
+				IPACMDBG_H("Ignored IPA_MAC_FLT_EVENT in sw_flt mode %d\n", IPACM_Iface::ipacmcfg->ipacm_flt_enable);
+			}
 			break;
 #endif
+#ifdef IPA_IOC_SET_SW_FLT
+		case IPA_SW_FLT_EVENT:
+			if (IPACM_Iface::ipacmcfg->ipacm_flt_enable != IPACM_MAC_FLT)
+			{
+				sw_flt = (ipa_sw_flt_list_type *)(buffer + sizeof(struct ipa_msg_meta));
+				IPACMDBG_H("Received IPA_SW_FLT_EVENT mac_enable %d ipv4_segs_enable %d iface_enable %d\n",
+				sw_flt->mac_enable,
+				sw_flt->ipv4_segs_enable,
+				sw_flt->iface_enable);
 
+				IPACM_Iface::ipacmcfg->sw_flt_info(sw_flt);
+				IPACMDBG_H("map updated with current input \n");
+					data_fid = (ipacm_event_data_fid *)malloc(sizeof(ipacm_event_data_fid));
+							if(data_fid == NULL)
+							{
+									IPACMERR("unable to allocate memory for mac_flt_event\n");
+									return NULL;
+							}
+				evt_data.event = IPA_MAC_ADD_DEL_FLT_EVENT;
+				evt_data.evt_data = NULL;
+				IPACM_Iface::ipacmcfg->ipacm_flt_enable = IPACM_SW_FLT;
+			}
+			else{
+				IPACMDBG_H("Ignored IPA_MAC_FLT_EVENT in mac_flt mode %d\n", IPACM_Iface::ipacmcfg->ipacm_flt_enable);
+			}
+			break;
+#endif
 #ifdef IPA_MTU_EVENT_MAX
 		case IPA_SET_MTU:
 			mtu_event = (ipacm_event_mtu_info *)malloc(sizeof(*mtu_event));
@@ -988,7 +1026,6 @@ void* ipa_driver_msg_notifier(void *param)
 			evt_data.evt_data = mtu_event;
 			break;
 #endif
-
 		default:
 			IPACMDBG_H("Unhandled message type: %d\n", event_hdr.msg_type);
 			continue;

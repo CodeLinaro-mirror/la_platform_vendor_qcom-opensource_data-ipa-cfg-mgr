@@ -242,8 +242,9 @@ private:
 
 		if(iptype == IPA_IP_v4)
 		{
-		     for(tx_index = 0; tx_index < iface_query->num_tx_props; tx_index++)
-		     {
+
+		    for(tx_index = 0; tx_index < iface_query->num_tx_props; tx_index++)
+		    {
 		        if((tx_prop->tx[tx_index].ip == IPA_IP_v4) && (get_client_memptr(wlan_client, clt_indx)->route_rule_set_v4==true)) /* for ipv4 */
 			{
 				IPACMDBG_H("Delete client index %d ipv4 Qos rules for tx:%d \n",clt_indx,tx_index);

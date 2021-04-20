@@ -796,10 +796,25 @@ void IPACM_Wlan::event_callback(ipa_cm_event_id event, void *param)
 	case IPA_NEIGH_CLIENT_IP_ADDR_ADD_EVENT:
 		{
 			ipacm_event_data_all *data = (ipacm_event_data_all *)param;
+			tether_client_info client_info;
 			ipa_interface_index = iface_ipa_index_query(data->if_index);
 			if (ipa_interface_index == ipa_if_num)
 			{
 				IPACMDBG_H("Received IPA_NEIGH_CLIENT_IP_ADDR_ADD_EVENT\n");
+				/* add to tether-client-lists */
+				memset(&client_info, 0, sizeof(tether_client_info));
+				if (data->iptype == IPA_IP_v4)
+				{
+					client_info.v4_addr = data->ipv4_addr;
+				}
+				else if  (data->iptype == IPA_IP_v6)
+				{
+					client_info.v4_addr = 0;
+				}
+				IPACMDBG_H(" iface name %s  dev %s\n", data->iface_name, dev_name);
+				memcpy(client_info.iface, dev_name, IPA_IFACE_NAME_LEN);
+				if(get_wlan_client_index(data->mac_addr) != IPACM_INVALID_INDEX)
+					IPACM_Iface::ipacmcfg->update_client_info(data->mac_addr, &client_info, true);
 				if (handle_wlan_client_ipaddr(data) == IPACM_FAILURE)
 				{
 					return;
@@ -1298,6 +1313,7 @@ int IPACM_Wlan::handle_wlan_mac_flt_conn_disc(uint8_t *mac_addr, bool conn_state
 	{
 		if(conn_state)
 		{
+			IPACMDBG_H("Client connected \n");
 			/* install UL rules*/
 			if(get_client_memptr(wlan_client, wlan_index)->ipv4_set && !it->second->mac_v4_rt_del_flt_set)
 			{
@@ -1320,6 +1336,7 @@ int IPACM_Wlan::handle_wlan_mac_flt_conn_disc(uint8_t *mac_addr, bool conn_state
 		}
 		else
 		{
+			IPACMDBG_H("Client disconnected \n");
 			/*del UL rules*/
 			if(it->second->mac_v4_rt_del_flt_set)
 			{
@@ -2995,6 +3012,11 @@ int IPACM_Wlan::handle_wlan_client_down_evt(uint8_t *mac_addr)
 	}
 		get_client_memptr(wlan_client, clt_indx)->ipv6_header_set = false;
 	}
+
+#ifdef IPA_IOC_SET_SW_FLT
+	/* clean-up the tether-client-list */
+	IPACM_Iface::ipacmcfg->update_client_info(get_client_memptr(wlan_client, clt_indx)->mac, NULL, false);
+#endif
 
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
 	if (get_client_memptr(wlan_client, clt_indx)->ipv4_ul_rules_set == true)

@@ -160,6 +160,8 @@ extern "C"
 #define IPA_MAX_NAT_IFACE (IPA_MAX_ACTIVE_LAN_IFACE*IPA_MAX_NUM_OFFLOAD_VLANS+ \
 	IPA_MAX_ACTIVE_LAN_IFACE + IPA_MAX_ACTIVE_WLAN_IFACE + IPA_MAX_NUM_SW_PDNS)
 
+#define IPA_DUMMY_PREFIX 0xFFFFFFFF
+
 /*===========================================================================
 										 GLOBAL DEFINITIONS AND DECLARATIONS
 ===========================================================================*/

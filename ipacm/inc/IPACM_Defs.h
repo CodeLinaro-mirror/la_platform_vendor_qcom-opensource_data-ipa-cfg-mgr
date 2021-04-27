@@ -164,6 +164,8 @@ extern "C"
 #define IPA_MAX_IPV6_PREFIX_FLT_RULE 1
 #endif
 
+#define IPA_DUMMY_PREFIX 0xFFFFFFFF
+
 /*
  * The following macros allow callers to print the raw bytes making up
  * an address.  No assumptions are made about endianess.

@@ -1448,30 +1448,7 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 				IPACMDBG_H("LAN stats functionality is not enabled, ignore IPA_LAN_CLIENT_CONNECT_EVENT.\n");
 				return;
 			}
-			ipa_interface_index = iface_ipa_index_query(data->if_index);
-			if (ipa_interface_index == ipa_if_num)
-			{
-				IPACMDBG_H("Received IPA_LAN_CLIENT_CONNECT_EVENT\n");
-				/* Check if we can add this to the active list. */
-				/* Active List:- Clients for which index is less than IPA_MAX_NUM_HW_PATH_CLIENTS. */
-				if (get_free_active_lan_stats_index(data->mac_addr) == -1)
-				{
-					IPACMDBG_H("Failed to reserve active lan_stats index, try inactive list. \n");
-					/* Try to get the inactive index which can be used later. */
-					if (get_free_inactive_lan_stats_index(data->mac_addr) == -1)
-					{
-						IPACMDBG_H("Failed to reserve inactive lan_stats index, return\n");
-					}
-					return;
-				}
-				/* Check if the client is inactive list and remove it*/
-				if (reset_inactive_lan_stats_index(data->mac_addr) == -1)
-				{
-					IPACMDBG_H("Failed to reset inactive lan_stats index, return\n");
-				}
-				/* Check if the client is already initialized and add filter/routing rules. */
-				IPACM_Lan::handle_lan_client_connect(data->mac_addr);
-			}
+			IPACM_Lan::handle_stats_client_connect(data->if_index, data->mac_addr);
 		}
 		break;
 	/* QCMAP sends this event whenever a client is disconnected. */
@@ -4275,6 +4252,13 @@ int IPACM_Lan::handle_eth_hdr_init(uint8_t *mac_addr, ipacm_bridge *bridge, uint
 		get_client_memptr(eth_client, num_eth_client)->gre_nat_set = false;
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
 		IPACMDBG_H ("Is ODU client? %s\n", is_odu?"Yes":"No");
+		/* to handle scenario if stats event received from QCMAP first and later ECM connect is received */
+		if (IPACM_Iface::ipacmcfg->ipacm_lan_stats_enable == true &&
+			get_lan_stats_index(get_client_memptr(eth_client, num_eth_client)->mac) == -1 &&
+			IPACM_Iface::ipacmcfg->client_in_stats_cache(mac_addr) == true)
+		{
+			handle_stats_client_connect(IPACM_Iface::ipacmcfg->iface_table[ipa_if_num].netlink_interface_index, mac_addr);
+		}
 		get_client_memptr(eth_client, num_eth_client)->ipv4_ul_rules_set = false;
 		get_client_memptr(eth_client, num_eth_client)->ipv4_ul_rules_set = false;
 		get_client_memptr(eth_client, num_eth_client)->lan_stats_idx = get_lan_stats_index(get_client_memptr(eth_client, num_eth_client)->mac);
@@ -4806,6 +4790,36 @@ int IPACM_Lan::handle_eth_client_route_rule(uint8_t *mac_addr, ipa_ip_type iptyp
 }
 
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
+void IPACM_Lan::handle_stats_client_connect(int if_index, uint8_t *mac_addr)
+{
+	int ipa_interface_index = -1;
+
+	ipa_interface_index = iface_ipa_index_query(if_index);
+	if (ipa_interface_index == ipa_if_num)
+	{
+		IPACMDBG_H("Received IPA_LAN_CLIENT_CONNECT_EVENT\n");
+		/* Check if we can add this to the active list. */
+		/* Active List:- Clients for which index is less than IPA_MAX_NUM_HW_PATH_CLIENTS. */
+		if (get_free_active_lan_stats_index(mac_addr) == -1)
+		{
+			IPACMDBG_H("Failed to reserve active lan_stats index, try inactive list. \n");
+			/* Try to get the inactive index which can be used later. */
+			if (get_free_inactive_lan_stats_index(mac_addr) == -1)
+			{
+				IPACMDBG_H("Failed to reserve inactive lan_stats index, return\n");
+			}
+			return;
+		}
+		/* Check if the client is inactive list and remove it*/
+		if (reset_inactive_lan_stats_index(mac_addr) == -1)
+		{
+			IPACMDBG_H("Failed to reset inactive lan_stats index, return\n");
+		}
+		/* Check if the client is already initialized and add filter/routing rules. */
+		IPACM_Lan::handle_lan_client_connect(mac_addr);
+	}
+
+}
 int IPACM_Lan::handle_lan_client_connect(uint8_t *mac_addr)
 {
 	int eth_index, res = IPACM_SUCCESS;

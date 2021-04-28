@@ -333,6 +333,7 @@ public:
 #endif
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
 
+	void handle_stats_client_connect(int if_index, uint8_t *mac_addr );
 	/* handle lan client connect event. */
 	virtual int handle_lan_client_connect(uint8_t *mac_addr);
 

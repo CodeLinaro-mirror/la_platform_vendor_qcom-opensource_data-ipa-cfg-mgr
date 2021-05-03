@@ -25,6 +25,41 @@ BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
 WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
 OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
 IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+Changes from Qualcomm Innovation Center are provided under the following
+license:
+* Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+* 
+*  Redistribution and use in source and binary forms, with or without
+*  modification, are permitted (subject to the limitations in the
+*  disclaimer below) provided that the following conditions are met:
+* 
+*      * Redistributions of source code must retain the above copyright
+*        notice, this list of conditions and the following disclaimer.
+* 
+*      * Redistributions in binary form must reproduce the above
+*        copyright notice, this list of conditions and the following
+*        disclaimer in the documentation and/or other materials provided
+*        with the distribution.
+* 
+*      * Neither the name of Qualcomm Innovation Center, Inc. nor the names of its
+*        contributors may be used to endorse or promote products derived
+*        from this software without specific prior written permission.
+* 
+*  NO EXPRESS OR IMPLIED LICENSES TO ANY PARTY'S PATENT RIGHTS ARE
+*  GRANTED BY THIS LICENSE. THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT
+*  HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED
+*  WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
+*  MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
+*  IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR
+*  ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+*  DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE
+*  GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+*  INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER
+*  IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
+*  OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
+*  IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE
+
 */
 /*!
 	@file
@@ -74,6 +109,7 @@ extern "C"
 #define IPA_ODU_HDR_NAME_v4  "IPACM_ODU_v4"
 #define IPA_ODU_HDR_NAME_v6  "IPACM_ODU_v6"
 #define IPA_IF_SOCKSv5_NAME  "IPACM_SOCKSv5"
+#define IPA_EOGRE_HDR_NAME   "IPACM_EoGRE_v%d"
 
 #define IPA_MAX_IFACE_ENTRIES 30 /* current: 15 rmnet + 4 wlan + bridge+ eth+ rndis + ecm.*/
 #define IPA_MAX_ALG_ENTRIES 20
@@ -159,11 +195,51 @@ extern "C"
 #define IPA_MAX_IPV6_PREFIX_FLT_RULE 1
 #endif
 
+
 #define IPA_DUMMY_PREFIX 0xFFFFFFFF
 
 /*===========================================================================
 										 GLOBAL DEFINITIONS AND DECLARATIONS
 ===========================================================================*/
+
+/*
+ * The following macros allow callers to print the raw bytes making up
+ * an address.  No assumptions are made about endianess.
+ */
+#define IPACM_LOG_V4_ADDR(prefix, ip_addr)								\
+	IPACMDBG_H("%s IPV4 Address %d.%d.%d.%d\n",							\
+			   (prefix) ? prefix : "",									\
+			   ((uint8_t*) ip_addr)[0],  ((uint8_t*) ip_addr)[1],		\
+			   ((uint8_t*) ip_addr)[2],  ((uint8_t*) ip_addr)[3]);
+
+#define IPACM_LOG_V6_ADDR(prefix, ip_addr)								\
+	IPACMDBG_H("%s IPV6 Address %02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x\n", \
+			   (prefix) ? prefix : "",									\
+			   ((uint8_t*) ip_addr)[0],  ((uint8_t*) ip_addr)[1],		\
+			   ((uint8_t*) ip_addr)[2],  ((uint8_t*) ip_addr)[3],		\
+			   ((uint8_t*) ip_addr)[4],  ((uint8_t*) ip_addr)[5],		\
+			   ((uint8_t*) ip_addr)[6],  ((uint8_t*) ip_addr)[7],		\
+			   ((uint8_t*) ip_addr)[8],  ((uint8_t*) ip_addr)[9],		\
+			   ((uint8_t*) ip_addr)[10], ((uint8_t*) ip_addr)[11],		\
+			   ((uint8_t*) ip_addr)[12], ((uint8_t*) ip_addr)[13],		\
+			   ((uint8_t*) ip_addr)[14], ((uint8_t*) ip_addr)[15]);
+
+#define IPACM_LOG_IP_ADDR(prefix, iptype, ip_addr)	\
+	if ( iptype == IPA_IP_v4 )						\
+	{												\
+		IPACM_LOG_V4_ADDR(prefix, ip_addr);			\
+	}												\
+	else											\
+	{												\
+		IPACM_LOG_V6_ADDR(prefix, ip_addr);			\
+	}
+
+/*
+ *===========================================================================
+ * GLOBAL DEFINITIONS AND DECLARATIONS
+ *===========================================================================
+ */
+
 typedef enum
 {
 	IPA_CFG_CHANGE_EVENT,                 /* NULL */
@@ -249,12 +325,18 @@ typedef enum
 #ifdef FEATURE_SOCKSv5
 	IPA_HANDLE_SOCKSv5_UP,                    /* ipacm_event_connection */
 	IPA_HANDLE_SOCKSv5_DOWN,                  /* NULL */
-	IPA_ADD_SOCKSv5_CONN,              	      /* ipa_socksv5_msg */
+	IPA_ADD_SOCKSv5_CONN,                     /* ipa_socksv5_msg */
 	IPA_DEL_SOCKSv5_CONN,                     /* ipa_socksv5_msg */
 #endif
 	IPA_MAC_ADD_DEL_FLT_EVENT,                /* NULL */
-	IPA_IP_PASS_UPDATE_EVENT,			  /* ipacm_ip_pass_pdn_info */
-	IPA_HANDLE_IP_PASS_PDN_INFO_UPDATE_EVENT,	  /* Handle ip pass pdn info update.*/
+	IPA_IP_PASS_UPDATE_EVENT,                 /* ipacm_ip_pass_pdn_info */
+	IPA_HANDLE_IP_PASS_PDN_INFO_UPDATE_EVENT, /* ipacm_event_vlan_pdn */
+
+#ifdef FEATURE_EoGRE
+	IPA_HANDLE_EoGRE_UP,                      /* ipa_ipgre_info */
+	IPA_HANDLE_EoGRE_DOWN,                    /* ipa_ipgre_info */
+#endif
+
 	IPACM_EVENT_MAX
 } ipa_cm_event_id;
 

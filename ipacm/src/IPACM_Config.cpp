@@ -2632,7 +2632,7 @@ void IPACM_Config::sw_flt_info(ipa_sw_flt_list_type *sw_flt)
 	std::list<std::array<uint8_t, 6>> mac_list;
 	std::list<std::array<uint8_t, 6>>::iterator it_mac_list;
 	std::array<uint8_t, 6> mac = {0};
-	uint8_t mac_addr[6];
+	uint8_t mac_addr[6] = {0};
 
 	if(pthread_mutex_lock(&mac_flt_info_lock) != 0)
 	{
@@ -2875,7 +2875,7 @@ UPDATE:
 /* mac_addr_in_blacklist checks whether a particular mac addr is blacklisted or not */
 bool IPACM_Config::mac_addr_in_blacklist(uint8_t *mac_addr)
 {
-	uint8_t mac_a[6];
+	uint8_t mac_a[6] = {0};
 	std::map<std::array<uint8_t, 6>, mac_flt_type * >::iterator it;
 	std::array<uint8_t, 6> mac = {0};
 
@@ -2905,7 +2905,7 @@ bool IPACM_Config::mac_addr_in_blacklist(uint8_t *mac_addr)
    blacklisted mac addrs*/
 void IPACM_Config::clear_whitelist_mac_add(uint8_t * mac_addr)
 {
-	uint8_t mac_a[6];
+	uint8_t mac_a[6] = {0};
 	std::array<uint8_t, 6> mac = {0};
 
 	IPACMDBG_H("clear from mac_flt_list! \n")
@@ -2981,7 +2981,7 @@ void IPACM_Config::update_mac_flt_lists(uint8_t * mac_addr , mac_flt_type *mac_f
 /* support add/update/delete tether client info */
 void IPACM_Config::update_client_info(uint8_t *mac_addr, tether_client_info *client_info, bool is_add)
 {
-	uint8_t mac_a[6];
+	uint8_t mac_a[6] = {0};
 	std::array<uint8_t, 6> mac = {0};
 	int i;
 	bool update_need = false;

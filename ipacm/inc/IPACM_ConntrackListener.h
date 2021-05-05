@@ -158,6 +158,7 @@ private:
 #ifdef IPA_IOCTL_SET_PKT_THRESHOLD
 	void update_pkt_threshold(void *in_param);
 #endif
+	void HandleNatTableMove(void *in_param);
 
 #ifdef CT_OPT
 	void ProcessCTV6Message(void *);

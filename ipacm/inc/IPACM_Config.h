@@ -262,6 +262,10 @@ public:
 	struct ipa_ioc_get_rt_tbl rt_tbl_wan_dl;
 	struct ipa_ioc_get_rt_tbl rt_tbl_odu_v4, rt_tbl_odu_v6;
 
+
+	/* Indicates current number of client ipv6 */
+	int ipa_num_clients_ipv6;
+
 	bool isMCC_Mode;
 	pthread_mutex_t mac_flt_info_lock;
 	/* map to store whitelisted and blacklisted unique mac adrrs */

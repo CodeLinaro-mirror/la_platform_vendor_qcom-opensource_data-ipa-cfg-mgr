@@ -182,6 +182,7 @@ IPACM_Config::IPACM_Config()
 	ipa_nat_iface_entries = 0;
 	ipa_sw_rt_enable = false;
 	ipa_bridge_enable = false;
+	ipa_num_clients_ipv6 = 0;
 	isMCC_Mode = false;
 	ipa_max_valid_rm_entry = 0;
 	ipacm_l2tp_enable = 0;

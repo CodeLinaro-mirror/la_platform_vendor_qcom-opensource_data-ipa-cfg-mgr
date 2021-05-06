@@ -62,8 +62,6 @@ IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 typedef struct _wan_client_rt_hdl
 {
 	uint32_t wan_rt_rule_hdl_v4;
-	uint32_t wan_rt_rule_hdl_v6[IPV6_NUM_ADDR];
-	uint32_t wan_rt_rule_hdl_v6_wan[IPV6_NUM_ADDR];
 }wan_client_rt_hdl;
 
 typedef struct _ipa_wan_client
@@ -71,7 +69,6 @@ typedef struct _ipa_wan_client
 	ipacm_event_data_wlan_ex* p_hdr_info;
 	uint8_t mac[IPA_MAC_ADDR_SIZE];
 	uint32_t v4_addr;
-	uint32_t v6_addr[IPV6_NUM_ADDR][4];
 	uint32_t hdr_hdl_v4;
 	uint32_t hdr_hdl_v6;
 	bool route_rule_set_v4;
@@ -463,9 +460,10 @@ private:
 		int cnt;
 		int num_wan_client_tmp = num_wan_client;
 
-		IPACMDBG_H("Passed MAC %02x:%02x:%02x:%02x:%02x:%02x\n",
+		IPACMDBG_H("Passed MAC %02x:%02x:%02x:%02x:%02x:%02x, left client: %d\n",
 						 mac_addr[0], mac_addr[1], mac_addr[2],
-						 mac_addr[3], mac_addr[4], mac_addr[5]);
+						 mac_addr[3], mac_addr[4], mac_addr[5],
+						 num_wan_client);
 
 		for(cnt = 0; cnt < num_wan_client_tmp; cnt++)
 		{
@@ -533,18 +531,17 @@ private:
 		{
 			if (get_client_memptr(wan_client, cnt)->ipv6_set)
 			{
-			    for(v6_num=0;v6_num < get_client_memptr(wan_client, cnt)->ipv6_set;v6_num++)
+				for (auto it = rt_hdl_v6_list[cnt].begin(); it != rt_hdl_v6_list[cnt].end();++it)
 	            {
+					IPACMDBG_H("stored IPv6 0x%08x.0x%08x.0x%08x.0x%08x\n", it->first[0],
+						it->first[1],
+						it->first[2],
+						it->first[3]);
 
-					IPACMDBG_H("stored IPv6 0x%08x.0x%08x.0x%08x.0x%08x\n", get_client_memptr(wan_client, cnt)->v6_addr[v6_num][0],
-						get_client_memptr(wan_client, cnt)->v6_addr[v6_num][1],
-						get_client_memptr(wan_client, cnt)->v6_addr[v6_num][2],
-						get_client_memptr(wan_client, cnt)->v6_addr[v6_num][3]);
-
-					if(ipv6_addr[0] == get_client_memptr(wan_client, cnt)->v6_addr[v6_num][0] &&
-					   ipv6_addr[1] == get_client_memptr(wan_client, cnt)->v6_addr[v6_num][1] &&
-					   ipv6_addr[2]== get_client_memptr(wan_client, cnt)->v6_addr[v6_num][2] &&
-					   ipv6_addr[3] == get_client_memptr(wan_client, cnt)->v6_addr[v6_num][3])
+					if(ipv6_addr[0] == it->first[0] &&
+					   ipv6_addr[1] == it->first[1] &&
+					   ipv6_addr[2]== it->first[2] &&
+					   ipv6_addr[3] == it->first[3])
 					{
 						IPACMDBG_H("Matched client index: %d\n", cnt);
 						IPACMDBG_H("The MAC is %02x:%02x:%02x:%02x:%02x:%02x\n",
@@ -596,37 +593,43 @@ private:
 
 		if(iptype == IPA_IP_v6)
 		{
-		    for(tx_index = 0; tx_index < iface_query->num_tx_props; tx_index++)
-		    {
-
-				if((tx_prop->tx[tx_index].ip == IPA_IP_v6) && (get_client_memptr(wan_client, clt_indx)->route_rule_set_v6 != 0)) /* for ipv6 */
+			IPACMDBG_H("Current %d client has %d ipv6 route_set %d,ipa_num_clients_ipv6:%d\n",
+				clt_indx, get_client_memptr(wan_client, clt_indx)->ipv6_set,
+				get_client_memptr(wan_client, clt_indx)->route_rule_set_v6,
+					IPACM_Iface::ipacmcfg->ipa_num_clients_ipv6);
+			for (auto it = rt_hdl_v6_list[clt_indx].begin(); it != rt_hdl_v6_list[clt_indx].end();++it)
+			{
+				if(it->second->route_rule_set_v6 == true)
 				{
-					for(num_v6 =0;num_v6 < get_client_memptr(wan_client, clt_indx)->route_rule_set_v6;num_v6++)
+					IPACMDBG_H("v6 addr : 0x%08x:%08x:%08x:%08x\n",
+						it->first[0], it->first[1], it->first[2], it->first[3]);
+
+					for(tx_index = 0; tx_index < iface_query->num_tx_props; tx_index++)
 					{
-						IPACMDBG_H("Delete client index %d ipv6 Qos rules for %d-st ipv6 for tx:%d\n", clt_indx,num_v6,tx_index);
-						rt_hdl = get_client_memptr(wan_client, clt_indx)->wan_rt_hdl[tx_index].wan_rt_rule_hdl_v6[num_v6];
-						if(m_routing.DeleteRoutingHdl(rt_hdl, IPA_IP_v6) == false)
+						if(tx_prop->tx[tx_index].ip == IPA_IP_v6) /* for ipv6 */
 						{
-							return IPACM_FAILURE;
+							IPACMDBG_H("Delete client index %d ipv6 Qos rules for %d-st ipv6 for tx:%d\n", clt_indx,num_v6,tx_index);
+							rt_hdl = it->second->hdl_v6[tx_index].rt_rule_hdl_v6;
+							if(m_routing.DeleteRoutingHdl(rt_hdl, IPA_IP_v6) == false)
+							{
+								return IPACM_FAILURE;
+							}
+							rt_hdl = it->second->hdl_v6[tx_index].rt_rule_hdl_v6_wan;
+							if(m_routing.DeleteRoutingHdl(rt_hdl, IPA_IP_v6) == false)
+							{
+								return IPACM_FAILURE;
+							}
 						}
-
-						rt_hdl = get_client_memptr(wan_client, clt_indx)->wan_rt_hdl[tx_index].wan_rt_rule_hdl_v6_wan[num_v6];
-						if(m_routing.DeleteRoutingHdl(rt_hdl, IPA_IP_v6) == false)
-						{
-							return IPACM_FAILURE;
-						}
-					}
-
-				}
+					} /* end of tx loop */
+					it->second->route_rule_set_v6 = false;
+					get_client_memptr(wan_client, clt_indx)->route_rule_set_v6 = 0;
+				} /* end of for loop */
 			} /* end of for loop */
-
-		    /* clean the 4 Qos ipv6 RT rules for client:clt_indx */
-		    if(get_client_memptr(wan_client, clt_indx)->route_rule_set_v6 != 0) /* for ipv6 */
-		    {
-		                 get_client_memptr(wan_client, clt_indx)->route_rule_set_v6 = 0;
-                    }
+			IPACMDBG_H("Current clnt-index:%d ipv6_set= %d, route_rule_set_v6= %d, update ipa_num_clients_ipv6:%d\n",
+				clt_indx, get_client_memptr(wan_client, clt_indx)->ipv6_set,
+				get_client_memptr(wan_client, clt_indx)->route_rule_set_v6,
+				IPACM_Iface::ipacmcfg->ipa_num_clients_ipv6);
 		}
-
 		return IPACM_SUCCESS;
 	}
 
@@ -737,7 +740,7 @@ private:
 	/* construct dummy ethernet header */
 	int add_dummy_rx_hdr();
 
-	void HandleSTAClientDelEvt(const ipa_wan_client* client);
+	void HandleSTAClientDelEvt(const ipa_wan_client* client, int index);
 	
 	int add_catchup_all_filtering_rule_each_pdn(const IPACM_firewall_conf_t& firewall_config, ipa_ip_type iptype,
 		const struct ipa_rule_attrib& rx_prop_attrib, struct ipa_flt_rule_add& flt_rule_add, int fltr_rule_number);

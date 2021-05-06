@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2013-2020, The Linux Foundation. All rights reserved.
+Copyright (c) 2013-2021, The Linux Foundation. All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are
@@ -87,15 +87,12 @@ struct ipa_lan_rt_rule
 typedef struct _eth_client_rt_hdl
 {
 	uint32_t eth_rt_rule_hdl_v4;
-	uint32_t eth_rt_rule_hdl_v6[IPV6_NUM_ADDR];
-	uint32_t eth_rt_rule_hdl_v6_wan[IPV6_NUM_ADDR];
 }eth_client_rt_hdl;
 
 typedef struct _ipa_eth_client
 {
 	uint8_t mac[IPA_MAC_ADDR_SIZE];
 	uint32_t v4_addr;
-	uint32_t v6_addr[IPV6_NUM_ADDR][4];
 	uint32_t hdr_hdl_v4;
 	uint32_t hdr_hdl_v6;
 	bool route_rule_set_v4;
@@ -563,8 +560,7 @@ protected:
 	int add_tcp_syn_flt_rule_l2tp(ipa_ip_type inner_ip_type);
 
 	void HandleNeighIpAddrAddEvt(ipacm_event_data_all *data);
-	void HandleNeighIpAddrDelEvt(bool ipv4_set, uint32_t ipv4_addr,
-		int ipv6_set, const uint32_t ipv6_addr[IPV6_NUM_ADDR][IPA_IPV6_ADDR_SIZE_IN_WORDS]);
+	virtual void HandleNeighIpAddrDelEvt(int clt_indx);
 
 	int add_mac_flt_blacklist_rule(uint8_t *mac_addr, ipa_ip_type iptype, uint32_t *flt_rule_hdl);
 	int del_mac_flt_blacklist_rule(uint32_t flt_rule_hdl, ipa_ip_type iptype);
@@ -1170,9 +1166,10 @@ private:
 		int cnt;
 		int num_eth_client_tmp = num_eth_client;
 
-		IPACMDBG_H("Passed MAC %02x:%02x:%02x:%02x:%02x:%02x\n",
+		IPACMDBG_H("Passed MAC %02x:%02x:%02x:%02x:%02x:%02x, left client: %d\n",
 						 mac_addr[0], mac_addr[1], mac_addr[2],
-						 mac_addr[3], mac_addr[4], mac_addr[5]);
+						 mac_addr[3], mac_addr[4], mac_addr[5],
+						 num_eth_client);
 
 		for(cnt = 0; cnt < num_eth_client_tmp; cnt++)
 		{
@@ -1243,7 +1240,6 @@ private:
 
 		if(iptype == IPA_IP_v4)
 		{
-
 		    for(tx_index = 0; tx_index < iface_query->num_tx_props; tx_index++)
 		    {
 		        if((tx_prop->tx[tx_index].ip == IPA_IP_v4) && (get_client_memptr(eth_client, clt_indx)->route_rule_set_v4==true)) /* for ipv4 */
@@ -1263,40 +1259,47 @@ private:
 		     {
 				get_client_memptr(eth_client, clt_indx)->route_rule_set_v4 = false;
 		     }
-
 		}
 
 		if(iptype == IPA_IP_v6)
 		{
-			for(tx_index = 0; tx_index < iface_query->num_tx_props; tx_index++)
+			IPACMDBG_H("Current %d client has %d ipv6 route_set %d,ipa_num_clients_ipv6:%d\n",
+				clt_indx, get_client_memptr(eth_client, clt_indx)->ipv6_set,
+				get_client_memptr(eth_client, clt_indx)->route_rule_set_v6,
+					IPACM_Iface::ipacmcfg->ipa_num_clients_ipv6);
+			for (auto it = rt_hdl_v6_list[clt_indx].begin(); it != rt_hdl_v6_list[clt_indx].end();++it)
 			{
-				if((tx_prop->tx[tx_index].ip == IPA_IP_v6) && (get_client_memptr(eth_client, clt_indx)->route_rule_set_v6 != 0)) /* for ipv6 */
+				if(it->second->route_rule_set_v6 == true)
 				{
-					for(num_v6 =0;num_v6 < get_client_memptr(eth_client, clt_indx)->route_rule_set_v6;num_v6++)
+					IPACMDBG_H("v6 addr : 0x%08x:%08x:%08x:%08x\n",
+						it->first[0], it->first[1], it->first[2], it->first[3]);
+
+					for(tx_index = 0; tx_index < iface_query->num_tx_props; tx_index++)
 					{
-						IPACMDBG_H("Delete client index %d ipv6 RT-rules for %d-st ipv6 for tx:%d\n", clt_indx,num_v6,tx_index);
-						rt_hdl = get_client_memptr(eth_client, clt_indx)->eth_rt_hdl[tx_index].eth_rt_rule_hdl_v6[num_v6];
-						if(m_routing.DeleteRoutingHdl(rt_hdl, IPA_IP_v6) == false)
+						if(tx_prop->tx[tx_index].ip == IPA_IP_v6) /* for ipv6 */
+						{
+							IPACMDBG_H("Delete client index %d ipv6 RT-rules for %d-st ipv6 for tx:%d\n", clt_indx,num_v6,tx_index);
+							rt_hdl = it->second->hdl_v6[tx_index].rt_rule_hdl_v6;
+							if(m_routing.DeleteRoutingHdl(rt_hdl, IPA_IP_v6) == false)
 							{
 								return IPACM_FAILURE;
 							}
-
-							rt_hdl = get_client_memptr(eth_client, clt_indx)->eth_rt_hdl[tx_index].eth_rt_rule_hdl_v6_wan[num_v6];
+							rt_hdl = it->second->hdl_v6[tx_index].rt_rule_hdl_v6_wan;
 							if(m_routing.DeleteRoutingHdl(rt_hdl, IPA_IP_v6) == false)
 							{
 								return IPACM_FAILURE;
 							}
 						}
-                    }
-		    } /* end of for loop */
-
-		    /* clean the ipv6 RT rules for eth-client:clt_indx */
-		    if(get_client_memptr(eth_client, clt_indx)->route_rule_set_v6 != 0) /* for ipv6 */
-		    {
-		        get_client_memptr(eth_client, clt_indx)->route_rule_set_v6 = 0;
-            }
+					} /* end of tx loop */
+					it->second->route_rule_set_v6 = false;
+					get_client_memptr(eth_client, clt_indx)->route_rule_set_v6 = 0;
+				} /* end of route_rule_set_v6 */
+			} /* end of for loop */
+			IPACMDBG_H("Current clnt-index:%d ipv6_set= %d, route_rule_set_v6= %d, update ipa_num_clients_ipv6:%d\n",
+				clt_indx, get_client_memptr(eth_client, clt_indx)->ipv6_set,
+				get_client_memptr(eth_client, clt_indx)->route_rule_set_v6,
+				IPACM_Iface::ipacmcfg->ipa_num_clients_ipv6);
 		}
-
 		return IPACM_SUCCESS;
 	}
 

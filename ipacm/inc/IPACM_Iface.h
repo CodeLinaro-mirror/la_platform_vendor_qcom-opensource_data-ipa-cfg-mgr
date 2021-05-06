@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013-2016, 2018, 2020 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2013-2016, 2018, 2020-2021 The Linux Foundation. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -69,6 +69,19 @@
 #define MAX_SOFTWAREROUTING_FILTERTING_RULES 2
 #define INVALID_IFACE -1
 
+
+/* Support client v6 handles */
+typedef struct _client_rt_hdl_v6
+{
+	uint32_t rt_rule_hdl_v6;
+	uint32_t rt_rule_hdl_v6_wan;
+}client_rt_hdl_v6;
+
+typedef struct {
+	bool route_rule_set_v6;
+	client_rt_hdl_v6 hdl_v6[0];
+} v6_hdl_type;
+
 /* iface */
 class IPACM_Iface :public IPACM_Listener
 {
@@ -106,6 +119,9 @@ public:
 	uint32_t dft_v6fl_rule_hdl[IPV6_DEFAULT_FILTERTING_RULES + IPV6_DEFAULT_LAN_FILTERTING_RULES];
 	/* create additional set of v6 RT-rules in Wanv6RT table*/
 	uint32_t dft_rt_rule_hdl[MAX_DEFAULT_v4_ROUTE_RULES+2*MAX_DEFAULT_v6_ROUTE_RULES];
+
+	/* save client ipv6 address info and rt handles */
+	std::map<std::array<uint32_t, 4>, v6_hdl_type *> rt_hdl_v6_list[IPA_MAX_NUM_VLAN_CLIENTS];
 
 	ipa_ioc_query_intf *iface_query;
 	ipa_ioc_query_intf_tx_props *tx_prop;

@@ -384,6 +384,27 @@ public:
 	static bool is_xlat_by_vid(uint16_t vlan_id);
 	static int get_vid_index_for_iface_v6(ipacm_ipv6_wan_iface iface, uint16_t vlan_id);
 #endif
+
+#ifdef FEATURE_EoGRE
+	void eogre_up();
+
+	void eogre_down();
+
+	int eogre_v4_work(
+		bool eogre_enable );
+
+	int eogre_v6_work(
+		bool eogre_enable );
+
+	int eogre_notify_wan_state(
+		bool eogre_enable );
+#endif
+
+	static int GetMuxByAddr(
+		enum ipa_ip_type iptype,
+		void*            addr,
+		uint8_t&         mux_id );
+
 private:
 
 	bool is_ipv6_frag_firewall_flt_rule_installed;
@@ -720,8 +741,6 @@ private:
 #endif
 
 	int install_wan_filtering_rule(bool is_sw_routing, bool is_socksv5_en = false);
-
-	void change_to_network_order(ipa_ip_type iptype, ipa_rule_attrib* attrib);
 
 	void handle_wlan_SCC_MCC_switch(bool, ipa_ip_type);
 

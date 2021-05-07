@@ -148,6 +148,10 @@ const char *ipacm_event_name[] = {
 	__stringify(IPA_IP_PASS_UPDATE_EVENT),          /* ipacm_ip_pass_pdn_info */
 	__stringify(IPA_HANDLE_IP_PASS_PDN_INFO_UPDATE_EVENT),         /* Handle PDN info update.*/
 	__stringify(IPA_MOVE_NAT_TBL_EVENT),                   /* ipacm_event_move_nat */
+#ifdef FEATURE_EoGRE
+	__stringify(IPA_HANDLE_EoGRE_UP),                      /* Handle eogre enable event. */
+	__stringify(IPA_HANDLE_EoGRE_DOWN),                    /* Handle eogre disable event. */
+#endif
 	__stringify(IPACM_EVENT_MAX)
 };
 
@@ -236,6 +240,10 @@ IPACM_Config::IPACM_Config()
 	pthread_mutex_init(&nat_iface_lock, NULL);
 	IPACMDBG_H(" create IPACM_Config constructor\n");
 	pthread_mutex_init(&mac_flt_info_lock, NULL);
+#ifdef FEATURE_EoGRE
+	memset(&eogre_info, 0, sizeof(eogre_info));
+	eogre_enabled = false;
+#endif
 	return;
 }
 

@@ -2438,7 +2438,17 @@ int IPACM_Lan::handle_vlan_neighbor(ipacm_event_data_all *data)
 			IPACMERR("couldn't allocate memory for new vlan pdn event\n");
 			return IPACM_FAILURE;
 		}
-		data->iptype = IPA_IP_v6;
+		memset(data, 0, sizeof(ipacm_event_route_vlan));
+
+		uint32_t ip4_addr;
+		if(get_eth_client_ip4_addr(data_vlan->data_all.mac_addr, ip4_addr, vlan_id) == IPACM_SUCCESS) {
+			IPACMDBG_H("ipv4 address 0x%X is valid, generate IPA_ROUTE_ADD_VLAN_PDN_EVENT v4 as well\n", ip4_addr);
+			data->iptype = IPA_IP_MAX;
+		}
+		else {
+			data->iptype = IPA_IP_v6;
+			IPACMDBG_H("ipv4 address is not valid, don't generate IPA_ROUTE_ADD_VLAN_PDN_EVENT v4\n");
+		}
 		data->VlanID = vlan_id;
 		data->wan_ipv6_prefix[0] = data_vlan->data_all.ipv6_addr[0];
 		data->wan_ipv6_prefix[1] = data_vlan->data_all.ipv6_addr[1];
@@ -2516,11 +2526,15 @@ int IPACM_Lan::check_vlan_PDNUp(enum ipa_ip_type iptype)
 				}
 
 				/* create event data and call the handler */
+				memset(&vlan_data, 0, sizeof(vlan_data));
 				vlan_data.iptype = iptype;
 				vlan_data.mux_id = mux_id;
+				vlan_data.VlanID = Ids[i];
 				if (IPACM_Wan::is_xlat_by_vid(Ids[i]))
 					vlan_data.is_xlat = true;
 
+				IPACMDBG_H("Push ipv4 handle_vlan_pdn_up mux:%d, VlanID:%d is_xlat: %d\n",
+					vlan_data.mux_id, vlan_data.VlanID, vlan_data.is_xlat);
 				if(handle_vlan_pdn_up(&vlan_data))
 				{
 					IPACMERR("failed handling v4 VLAN up for VID %d, dev %s\n",
@@ -2569,8 +2583,15 @@ int IPACM_Lan::check_vlan_PDNUp(enum ipa_ip_type iptype)
 				modify_ipv6_prefix_flt_rule();
 
 				/* create event data and call the handler */
+				memset(&vlan_data, 0, sizeof(vlan_data));
 				vlan_data.iptype = iptype;
 				vlan_data.mux_id = mux_id;
+				vlan_data.VlanID = Ids[i];
+				if (IPACM_Wan::is_xlat_by_vid(Ids[i]))
+					vlan_data.is_xlat = true;
+
+				IPACMDBG_H("Push ipv6 handle_vlan_pdn_up mux:%d, VlanID:%d is_xlat: %d\n",
+					vlan_data.mux_id, vlan_data.VlanID, vlan_data.is_xlat);
 
 				if(handle_vlan_pdn_up(&vlan_data))
 				{
@@ -13402,7 +13423,7 @@ int IPACM_Lan::handle_mpdn_ul_xlat_filter_rule(ipacm_ext_prop * prop,
 	uint16_t value = 0, mask = 0;
 	int xlat_pdn_ctx_id;
 
-	IPACMDBG_H("Set modem UL flt rules for xlat mode in MPDN config\n");
+	IPACMDBG_H("Set modem UL flt rules for xlat mode in MPDN config with vlan: %d\n", vlan_id);
 
 	if (iptype != IPA_IP_v4 || !modem_ul_v4_set)
 	{

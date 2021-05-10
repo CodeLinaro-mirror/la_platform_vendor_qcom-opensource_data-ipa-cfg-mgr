@@ -121,6 +121,7 @@ if (!(a)) {                                                 \
 #define MobileAPFirewallCfg_TAG              "MobileAPFirewallCfg"
 #define FirewallEnabled_TAG                  "FirewallEnabled"
 #define FirewallPktsAllowed_TAG              "FirewallPktsAllowed"
+#define DefaultNetDev                        "DefaultNetDev"
 
 #define UNKNOWN_NetDev_TAG                   "UNKNOWN"
 

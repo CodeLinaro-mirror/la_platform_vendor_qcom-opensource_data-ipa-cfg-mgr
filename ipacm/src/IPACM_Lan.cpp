@@ -1718,7 +1718,6 @@ int IPACM_Lan::handle_eth_mac_flt_event()
 		else
 		{
 			IPACMERR("eth client not found/attached \n");
-			return IPACM_FAILURE;
 		}
 	}
 	return IPACM_SUCCESS;

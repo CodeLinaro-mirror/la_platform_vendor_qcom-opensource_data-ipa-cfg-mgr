@@ -113,6 +113,7 @@ typedef struct ul_firewall {
 	bool ul_catch_installed;
 	bool ul_frag_installed;
 	uint32_t ul_frag_handle;
+	uint32_t num_ul_firewall_rules;
 } ul_firewall_t;
 #endif
 

@@ -3915,7 +3915,8 @@ int IPACM_Lan::delete_uplink_filter_rule_ul(ipa_ip_type iptype, ul_firewall_t *u
 		IPACMDBG_H("Frag deleted successfully\n");
 	}
 
-	num_of_rules = IPACM_Wan::num_firewall_v6_ul;
+	num_of_rules = ul_firewall->num_ul_firewall_rules;
+	IPACMDBG_H("No of Firewall filter rule to delete %d\n",num_of_rules);
 
 	if (true == ul_firewall->ul_catch_installed)
 		num_of_rules++;
@@ -4530,6 +4531,7 @@ int IPACM_Lan::config_dft_firewall_rules_ul(struct ipa_flt_rule_add *rules, ipa_
 	IPACMDBG_H ("Configured and installed (%d == %d) UL firewall rules on pipe (%d)\n ",
 		IPACM_Wan::num_firewall_v6_ul, rule_v6_ul, (int)m_pFilteringTable->ep);
 	IPACMDBG_H ("Firewall Status (%d)\n", IPACM_Wan::firewall_config_ul.firewall_enable);
+	ul_firewall->num_ul_firewall_rules = rule_v6_ul;
 	if(m_pFilteringTable != NULL)
 	{
 		free(m_pFilteringTable);

@@ -2795,7 +2795,16 @@ UPDATE:
 				IPACMDBG_H("Previous  MAC addr to be whitelisted %02x:%02x:%02x:%02x:%02x:%02x\n",
 						 mac_addr[0], mac_addr[1], mac_addr[2],
 						 mac_addr[3], mac_addr[4], mac_addr[5]);
-				it->second->is_blacklist = false;
+				if(it->second->current_blocked == false) {
+					IPACMDBG_H("remove this client from the mac list as whitelisted\n");
+					free(IPACM_Iface::ipacmcfg->mac_flt_lists.at(it->first));
+					IPACM_Iface::ipacmcfg->mac_flt_lists.at(it->first) = NULL;
+					IPACM_Iface::ipacmcfg->mac_flt_lists.erase(it->first);
+				}
+				else
+				{
+					it->second->is_blacklist = false;
+				}
 			}
 	}
 	mac_list.clear();
@@ -2865,7 +2874,16 @@ UPDATE:
 				IPACMDBG_H("Previous  MAC addr to be whitelisted %02x:%02x:%02x:%02x:%02x:%02x\n",
 						 mac_addr[0], mac_addr[1], mac_addr[2],
 						 mac_addr[3], mac_addr[4], mac_addr[5]);
-				it->second->is_blacklist = false;
+				if(it->second->current_blocked == false) {
+					IPACMDBG_H("remove this client from the mac list as whitelisted\n");
+					free(IPACM_Iface::ipacmcfg->mac_flt_lists.at(it->first));
+					IPACM_Iface::ipacmcfg->mac_flt_lists.at(it->first) = NULL;
+					IPACM_Iface::ipacmcfg->mac_flt_lists.erase(it->first);
+				}
+				else
+				{
+					it->second->is_blacklist = false;
+				}
 			}
 	}
 	mac_list.clear();

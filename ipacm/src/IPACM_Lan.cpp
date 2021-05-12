@@ -1648,6 +1648,7 @@ int IPACM_Lan::handle_eth_mac_flt_event()
 					}
 					it->second->mac_v6_rt_del_flt_set = true;
 				}
+				it->second->current_blocked = true;
 				/* remove from lan2lan offload module */
 				eth_bridge_post_event(IPA_ETH_BRIDGE_CLIENT_DEL, IPA_IP_MAX, mac_addr, NULL, dev_name);
 				/* In case of client blackklisted, update config mac list with copy mac flt list value */
@@ -1947,6 +1948,7 @@ int IPACM_Lan::handle_eth_mac_flt_conn_disc(uint8_t *mac_addr, bool eth_client_c
 				}
 				it->second->mac_v6_rt_del_flt_set = true;
 			}
+			it->second->current_blocked = true;
 		}
 		else
 		{
@@ -1968,6 +1970,7 @@ int IPACM_Lan::handle_eth_mac_flt_conn_disc(uint8_t *mac_addr, bool eth_client_c
 				}
 				it->second->mac_v6_rt_del_flt_set = false;
 			}
+			it->second->current_blocked = false;
 		}
 		/* In case of client blackklisted, update config mac list with copy mac flt list value */
 		IPACM_Iface::ipacmcfg->update_mac_flt_lists(mac_addr, it->second);

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013-2020, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2013-2021, The Linux Foundation. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -646,6 +646,24 @@ skip_fnr_alloc:
 		goto fail;
 	}
 	pthread_mutex_unlock(&nat_iface_lock);
+
+	/* clear lists */
+#if defined(FEATURE_L2TP) || defined(FEATURE_VLAN_MPDN)
+	m_vlan_iface.clear();
+#ifdef FEATURE_L2TP
+	m_l2tp_vlan_mapping.clear();
+	l2tp_client.clear();
+#endif //#ifdef FEATURE_L2TP
+#endif //defined(FEATURE_L2TP) || defined(FEATURE_VLAN_MPDN)
+
+#ifdef FEATURE_VLAN_MPDN
+	m_bridge_vlan_mapping.clear();
+#endif
+
+#if defined(FEATURE_SOCKSv5) && defined(IPA_SOCKV5_EVENT_MAX)
+	socksv5_conn.clear();
+	mux_id_mapping.clear();
+#endif
 
 	/* Construct the routing table ictol name in iface static member*/
 	rt_tbl_default_v4.ip = IPA_IP_v4;

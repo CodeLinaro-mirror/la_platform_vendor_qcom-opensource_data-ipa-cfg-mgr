@@ -277,7 +277,9 @@ void* ipa_driver_msg_notifier(void *param)
 	ipacm_event_mtu_info *mtu_event = NULL;
 	ipa_mtu_info *mtu_info;
 #endif
-
+#ifdef IPA_IOCTL_SET_PKT_THRESHOLD
+	ipa_set_pkt_threshold *pkt_th = NULL, *pkt_th_info = NULL;
+#endif
 	fd = open(IPA_DRIVER, O_RDWR);
 	if (fd < 0)
 	{
@@ -1026,6 +1028,23 @@ void* ipa_driver_msg_notifier(void *param)
 			evt_data.evt_data = mtu_event;
 			break;
 #endif
+#ifdef IPA_IOCTL_SET_PKT_THRESHOLD
+		case IPA_PKT_THRESHOLD_EVENT:
+			pkt_th = (ipa_set_pkt_threshold *)(buffer + sizeof(struct ipa_msg_meta));
+			IPACMDBG_H("Received IPA_PKT_THRESHOLD_EVENT enable %d threshold %d\n",
+				pkt_th->pkt_threshold_enable, pkt_th->pkt_threshold);
+			pkt_th_info = (ipa_set_pkt_threshold *)malloc(sizeof(ipa_set_pkt_threshold));
+			if(pkt_th_info == NULL)
+			{
+				IPACMERR("Failed to allocate memory.\n");
+				return NULL;
+			}
+			memcpy(pkt_th_info, pkt_th, sizeof(struct ipa_set_pkt_threshold));
+			evt_data.event = IPA_PKT_THRESHOLD_UPDATE_EVENT;
+			evt_data.evt_data = pkt_th_info;
+			break;
+#endif
+
 		default:
 			IPACMDBG_H("Unhandled message type: %d\n", event_hdr.msg_type);
 			continue;

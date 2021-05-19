@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013-2020 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2013-2021 The Linux Foundation. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -96,6 +96,9 @@ IPACM_ConntrackListener::IPACM_ConntrackListener() :
 	 IPACM_EvtDispatcher::registr(IPA_NEIGH_CLIENT_IP_ADDR_ADD_EVENT, this);
 	 IPACM_EvtDispatcher::registr(IPA_NEIGH_CLIENT_IP_ADDR_DEL_EVENT, this);
 	 IPACM_EvtDispatcher::registr(IPA_HANDLE_IP_PASS_PDN_INFO_UPDATE_EVENT, this);
+#ifdef IPA_IOCTL_SET_PKT_THRESHOLD
+	 IPACM_EvtDispatcher::registr(IPA_PKT_THRESHOLD_UPDATE_EVENT, this);
+#endif
 
 #ifdef CT_OPT
 	 p_lan2lan = IPACM_LanToLan::getLan2LanInstance();
@@ -216,6 +219,12 @@ void IPACM_ConntrackListener::event_callback(ipa_cm_event_id evt,
 			IPACMDBG_H("Received IPA_HANDLE_IP_PASS_PDN_INFO_UPDATE_EVENT event\n");
 			HandleIPPassPDNInfoUpdate(data);
 			break;
+#ifdef IPA_IOCTL_SET_PKT_THRESHOLD
+	 case IPA_PKT_THRESHOLD_UPDATE_EVENT:
+			IPACMDBG_H("Received IPA_PKT_THRESHOLD_UPDATE_EVENT event\n");
+			update_pkt_threshold(data);
+			break;
+#endif
 
 	 case IPA_HANDLE_WAN_DOWN:
 			IPACMDBG_H("Received IPA_HANDLE_WAN_DOWN event\n");
@@ -1882,6 +1891,7 @@ int IPACM_ConntrackListener::AddORDeleteNatEntry(const nat_entry_bundle *input, 
 	if (IPPROTO_TCP == input->rule->protocol)
 	{
 		tcp_state = nfct_get_attr_u8(input->ct, ATTR_TCP_STATE);
+
 		if ((TCP_CONNTRACK_ESTABLISHED == tcp_state) &&
                     (((pkt_threshld != 0) && (pkt_count >= pkt_threshld)) ||
                     (pkt_threshld == 0)))
@@ -1934,10 +1944,9 @@ int IPACM_ConntrackListener::AddORDeleteNatEntry(const nat_entry_bundle *input, 
 		}
 		else
 		{
-			IPACMDBG("Ignore tcp state: %d and type: %d\n",
-					 tcp_state, input->type);
+			IPACMDBG("Ignore tcp state: %d and type: %d count %d\n",
+					 tcp_state, input->type, pkt_count);
 		}
-
 	}
 	else if (IPPROTO_UDP == input->rule->protocol)
 	{
@@ -2011,6 +2020,7 @@ void IPACM_ConntrackListener::AddORDeleteNatEntry_v6(const ipacm_ct_evt_data* ev
 	if (IPPROTO_TCP == entry.m_protocol)
 	{
 		uint8_t tcp_state = nfct_get_attr_u8(evt_data->ct, ATTR_TCP_STATE);
+
 		if (TCP_CONNTRACK_ESTABLISHED == tcp_state && pkt_count >= pkt_threshld)
 		{
 			IPACMDBG_H("TCP state TCP_CONNTRACK_ESTABLISHED(%d)\n", tcp_state);
@@ -2040,7 +2050,6 @@ void IPACM_ConntrackListener::AddORDeleteNatEntry_v6(const ipacm_ct_evt_data* ev
 			IPACMDBG_H("Ignore tcp state: %d and type: %d\n",
 				tcp_state, evt_data->type);
 		}
-
 	}
 	else if (IPPROTO_UDP == entry.m_protocol)
 	{
@@ -3055,3 +3064,28 @@ bool IPACM_ConntrackListener::IsIpv6PrivateSubnet(const IpAddress& ip)
 	return ret;
 }
 
+#ifdef IPA_IOCTL_SET_PKT_THRESHOLD
+void IPACM_ConntrackListener::update_pkt_threshold(void *in_param)
+{
+	ipa_set_pkt_threshold *set_pkt_threshold = (ipa_set_pkt_threshold *)in_param;
+	if (!set_pkt_threshold)
+	{
+		IPACMERR("Input set_pkt_threshold is NULL\n");
+		return;
+	}
+	IPACMDBG_H(" pkt_threshold enable %d threshold %d\n",
+		set_pkt_threshold->pkt_threshold_enable, set_pkt_threshold->pkt_threshold);
+
+	if(set_pkt_threshold->pkt_threshold_enable)
+	{
+		pkt_threshld = set_pkt_threshold->pkt_threshold;
+	}
+	else
+	{
+		pkt_threshld = 0;
+	}
+	IPACMDBG_H("Update pkt_threshld to %d\n", pkt_threshld);
+
+	return ;
+}
+#endif

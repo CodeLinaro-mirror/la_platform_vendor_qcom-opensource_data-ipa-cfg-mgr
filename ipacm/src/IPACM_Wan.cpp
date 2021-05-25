@@ -315,10 +315,13 @@ int IPACM_Wan::GetMuxByVid(uint16_t vlan_id, uint8_t *mux_id, ipa_ip_type iptype
 		{
 			if(IPACM_Wan::ipv4_to_iface[i].ipv4_addr)
 			{
-				if(IPACM_Wan::ipv4_to_iface[i].pIface->associated_VID == vlan_id)
+				for(int j = 0; j <  ipv4_to_iface[i].VID_cnt; j++)
 				{
-					*mux_id = IPACM_Wan::ipv4_to_iface[i].pIface->ext_prop->ext[0].mux_id;
-					return IPACM_SUCCESS;
+					if(IPACM_Wan::ipv4_to_iface[i].associated_VIDs[j] == vlan_id)
+					{
+						*mux_id = IPACM_Wan::ipv4_to_iface[i].pIface->ext_prop->ext[0].mux_id;
+						return IPACM_SUCCESS;
+					}
 				}
 			}
 		}
@@ -326,10 +329,13 @@ int IPACM_Wan::GetMuxByVid(uint16_t vlan_id, uint8_t *mux_id, ipa_ip_type iptype
 		{
 			if(IPACM_Wan::ipv6_to_iface[i].ipv6_prefix[0] || IPACM_Wan::ipv6_to_iface[i].ipv6_prefix[1])
 			{
-				if(IPACM_Wan::ipv6_to_iface[i].pIface->associated_VID == vlan_id)
+				for(int j = 0; j < ipv6_to_iface[i].VID_cnt; j++)
 				{
-					*mux_id = IPACM_Wan::ipv6_to_iface[i].pIface->ext_prop->ext[0].mux_id;
-					return IPACM_SUCCESS;
+					if(IPACM_Wan::ipv6_to_iface[i].associated_VIDs[j] == vlan_id)
+					{
+						*mux_id = IPACM_Wan::ipv6_to_iface[i].pIface->ext_prop->ext[0].mux_id;
+						return IPACM_SUCCESS;
+					}
 				}
 			}
 		}
@@ -346,10 +352,13 @@ int IPACM_Wan::GetMTUByVid(uint16_t *mtu, uint16_t vlan_id, ipa_ip_type iptype)
 		{
 			if(IPACM_Wan::ipv4_to_iface[i].ipv4_addr)
 			{
-				if(IPACM_Wan::ipv4_to_iface[i].pIface->associated_VID == vlan_id)
+				for(int j = 0; j < ipv4_to_iface[i].VID_cnt; j++)
 				{
-					*mtu = IPACM_Wan::ipv4_to_iface[i].pIface->mtu_v4;
-					return IPACM_SUCCESS;
+					if(IPACM_Wan::ipv4_to_iface[i].associated_VIDs[j] == vlan_id)
+					{
+						*mtu = IPACM_Wan::ipv4_to_iface[i].pIface->mtu_v4;
+						return IPACM_SUCCESS;
+					}
 				}
 			}
 		}
@@ -357,10 +366,13 @@ int IPACM_Wan::GetMTUByVid(uint16_t *mtu, uint16_t vlan_id, ipa_ip_type iptype)
 		{
 			if(IPACM_Wan::ipv6_to_iface[i].ipv6_prefix[0] || IPACM_Wan::ipv6_to_iface[i].ipv6_prefix[1])
 			{
-				if(IPACM_Wan::ipv6_to_iface[i].pIface->associated_VID == vlan_id)
+				for(int j = 0; j < ipv6_to_iface[i].VID_cnt; j++)
 				{
-					*mtu = IPACM_Wan::ipv6_to_iface[i].pIface->mtu_v6;
-					return IPACM_SUCCESS;
+					if(IPACM_Wan::ipv6_to_iface[i].associated_VIDs[j] == vlan_id)
+					{
+						*mtu = IPACM_Wan::ipv6_to_iface[i].pIface->mtu_v6;
+						return IPACM_SUCCESS;
+					}
 				}
 			}
 		}
@@ -376,13 +388,29 @@ bool IPACM_Wan::is_xlat_by_vid(uint16_t vlan_id)
 	{
 		if(IPACM_Wan::ipv4_to_iface[i].ipv4_addr)
 		{
-			if(IPACM_Wan::ipv4_to_iface[i].pIface->associated_VID == vlan_id)
-				return IPACM_Wan::ipv4_to_iface[i].is_xlat;
+			for(int j = 0; j < ipv4_to_iface[i].VID_cnt; j++)
+			{
+				if(IPACM_Wan::ipv4_to_iface[i].associated_VIDs[j] == vlan_id)
+					return IPACM_Wan::ipv4_to_iface[i].is_xlat;
+			}
 		}
 	}
 	IPACMERR("couldn't find MUX xlat info for VID %d\n", vlan_id);
 	return false;
 }
+
+int IPACM_Wan::get_vid_index_for_iface_v6(ipacm_ipv6_wan_iface iface, uint16_t vlan_id)
+{
+	for(int i = 0; i < iface.VID_cnt;i++)
+	{
+		iface.associated_VIDs[i] == vlan_id;
+		return i;
+	}
+
+	IPACMDBG("couldn't find VID %d\n in VID array", vlan_id);
+	return IPACM_FAILURE;
+}
+
 #endif
 /* handle new_address event */
 int IPACM_Wan::handle_addr_evt(ipacm_event_data_addr *data)
@@ -794,7 +822,7 @@ int IPACM_Wan::handle_addr_evt(ipacm_event_data_addr *data)
 		wan_v4_addr = data->ipv4_addr;
 		wan_v4_addr_set = true;
 
-		IPACMDBG_H("Receved wan ipv4-addr:0x%x\n",wan_v4_addr);
+		IPACMDBG_H("Received wan ipv4-addr:0x%x\n",wan_v4_addr);
 	}
 
 	IPACMDBG_H("number of default route rules %d\n", num_dft_rt_v6);
@@ -1854,7 +1882,22 @@ int IPACM_Wan::check_vlan_pdn(ipa_ip_type iptype, ipacm_event_route_vlan *data)
 			IPACMDBG_H("received v6 IPA_ROUTE_ADD_VLAN_PDN_EVENT for VID %d, wan %s, %d\n", data->VlanID, dev_name, ipa_if_num);
 			if(ipv6_to_iface[modem_ipv6_pdn_index].wan_up_vlan_v6)
 			{
-				IPACMERR("v6 vlan wan is already up for %s, ignoring\n", dev_name);
+				IPACMERR("v6 vlan wan is already up for %s\n", dev_name);
+				/* need to update MTU since it might have changed */
+				ipacm_event_mtu_info *mtu_event;
+				ipacm_cmd_q_data evt_data;
+				mtu_event = (ipacm_event_mtu_info *)malloc(sizeof(*mtu_event));
+				if(mtu_event == NULL)
+				{
+					IPACMERR("Failed to allocate memory.\n");
+					return IPACM_FAILURE;
+				}
+				mtu_event->mtu_info.ip_type = IPA_IP_v6;
+				evt_data.event = IPA_MTU_UPDATE;
+				evt_data.evt_data = mtu_event;
+				/* finish command queue */
+				IPACMDBG_H("Posting IPA_MTU_UPDATE event\n");
+				IPACM_EvtDispatcher::PostEvt(&evt_data);
 				return IPACM_FAILURE;
 			}
 
@@ -1862,9 +1905,16 @@ int IPACM_Wan::check_vlan_pdn(ipa_ip_type iptype, ipacm_event_route_vlan *data)
 			{
 				IPACMDBG("iface already has v4 vlan association, not new\n");
 				new_pdn = false;
-				if(data->VlanID != associated_VID)
+				int i;
+				for(i = 0; i < ipv4_to_iface[modem_ipv4_pdn_index].VID_cnt; i++)
 				{
-					IPACMERR("inconsistency on new v6 VID (%d) and exisiting v4 VID (%d) ignoring\n", data->VlanID, associated_VID);
+					if(IPACM_Wan::ipv4_to_iface[modem_ipv4_pdn_index].associated_VIDs[i] == data->VlanID )
+						break;
+				}
+
+				if (i == ipv4_to_iface[modem_ipv4_pdn_index].VID_cnt)
+				{
+					IPACMERR("inconsistency on new v6 VID (%d) with current v4 VIDs\n",data->VlanID);
 					return IPACM_FAILURE;
 				}
 			}
@@ -1896,7 +1946,22 @@ int IPACM_Wan::check_vlan_pdn(ipa_ip_type iptype, ipacm_event_route_vlan *data)
 			IPACMDBG_H("received v4 IPA_ROUTE_ADD_VLAN_PDN_EVENT for VID %d, wan %s, %d\n", data->VlanID, dev_name, ipa_if_num);
 			if(ipv4_to_iface[modem_ipv4_pdn_index].wan_up_vlan)
 			{
-				IPACMERR("v4 vlan wan is already up for %s, ignoring\n", dev_name);
+				IPACMERR("v4 vlan wan is already up for %s\n", dev_name);
+				/* need to update MTU since it might have changed */
+				ipacm_event_mtu_info *mtu_event;
+				ipacm_cmd_q_data evt_data;
+				mtu_event = (ipacm_event_mtu_info *)malloc(sizeof(*mtu_event));
+				if(mtu_event == NULL)
+				{
+					IPACMERR("Failed to allocate memory.\n");
+					return IPACM_FAILURE;
+				}
+				mtu_event->mtu_info.ip_type = IPA_IP_v4;
+				evt_data.event = IPA_MTU_UPDATE;
+				evt_data.evt_data = mtu_event;
+				/* finish command queue */
+				IPACMDBG_H("Posting IPA_MTU_UPDATE event\n");
+				IPACM_EvtDispatcher::PostEvt(&evt_data);
 				return IPACM_FAILURE;
 			}
 
@@ -1904,9 +1969,17 @@ int IPACM_Wan::check_vlan_pdn(ipa_ip_type iptype, ipacm_event_route_vlan *data)
 			{
 				IPACMDBG("iface already has v6 vlan association, not new\n");
 				new_pdn = false;
-				if(data->VlanID != associated_VID)
+				int i;
+				for(i = 0; i < ipv6_to_iface[modem_ipv6_pdn_index].VID_cnt; i++)
 				{
-					IPACMERR("inconsistency on new v4 VID (%d) and exisiting v6 VID (%d) ignoring\n", data->VlanID, associated_VID);
+					if(IPACM_Wan::ipv6_to_iface[modem_ipv6_pdn_index].associated_VIDs[i] == data->VlanID )
+						break;
+				}
+
+				if (i == ipv6_to_iface[modem_ipv6_pdn_index].VID_cnt)
+				{
+					IPACMERR("inconsistency on new v4 VID (%d) with current v6 VIDs\n",
+								data->VlanID);
 					return IPACM_FAILURE;
 				}
 			}
@@ -2026,6 +2099,11 @@ int IPACM_Wan::handle_route_add_vlan_pdn_evt(ipa_ip_type iptype, uint16_t vlan_i
 		}
 
 		ipv6_to_iface[modem_ipv6_pdn_index].wan_up_vlan_v6 = true;
+		if (ipv6_to_iface[modem_ipv6_pdn_index].VID_cnt < IPA_MAX_NUM_SW_PDNS)
+		{
+			ipv6_to_iface[modem_ipv6_pdn_index].associated_VIDs[ipv6_to_iface[modem_ipv6_pdn_index].VID_cnt] = vlan_id;
+			ipv6_to_iface[modem_ipv6_pdn_index].VID_cnt++;
+		}
 		/*config_wan_firewall_rule traverses all active wan IF and configures them*/
 		config_wan_firewall_rule(IPA_IP_v6);
 		install_wan_filtering_rule(false);
@@ -2055,13 +2133,18 @@ int IPACM_Wan::handle_route_add_vlan_pdn_evt(ipa_ip_type iptype, uint16_t vlan_i
 	}
 	else
 	{
-		if(wan_up || isVlanWanUP())
+		if(!(wan_up || isVlanWanUP()))
 		{
 			IPACMDBG_H("a v4 PDN is already up, minimal configuration is needed\n");
 			FullConfig = true;
 		}
 
 		ipv4_to_iface[modem_ipv4_pdn_index].wan_up_vlan = true;
+		if (ipv4_to_iface[modem_ipv4_pdn_index].VID_cnt < IPA_MAX_NUM_SW_PDNS)
+		{
+			ipv4_to_iface[modem_ipv4_pdn_index].associated_VIDs[ipv4_to_iface[modem_ipv4_pdn_index].VID_cnt] = vlan_id;
+			ipv4_to_iface[modem_ipv4_pdn_index].VID_cnt++;
+		}
 		config_wan_firewall_rule(IPA_IP_v4);
 		install_wan_filtering_rule(false);
 
@@ -4064,7 +4147,7 @@ int IPACM_Wan::config_dft_firewall_rules_ex(struct ipa_flt_rule_add *rules, int 
 			++pos;
 		}
 		if(offloaded_pdns_count_v4)
-			num_rules = IPACM_Wan::num_v4_flt_rule - original_num_rules - 1;
+			num_rules = IPACM_Wan::num_v4_flt_rule - original_num_rules;
 		else
 			num_rules = 0;
 #else
@@ -4075,7 +4158,7 @@ int IPACM_Wan::config_dft_firewall_rules_ex(struct ipa_flt_rule_add *rules, int 
 		}
 		++pos;
 		if(wan_up)
-			num_rules = IPACM_Wan::num_v4_flt_rule - original_num_rules - 1;
+			num_rules = IPACM_Wan::num_v4_flt_rule - original_num_rules;
 		else
 			num_rules = 0;
 #endif
@@ -4143,7 +4226,7 @@ int IPACM_Wan::config_dft_firewall_rules_ex(struct ipa_flt_rule_add *rules, int 
 		}
 
 		if(offloaded_pdns_count_v6)
-			num_rules = IPACM_Wan::num_v6_flt_rule - original_num_rules - 1;
+			num_rules = IPACM_Wan::num_v6_flt_rule - original_num_rules;
 		else
 			num_rules = 0;
 #else
@@ -4154,7 +4237,7 @@ int IPACM_Wan::config_dft_firewall_rules_ex(struct ipa_flt_rule_add *rules, int 
 		}
 		++pos;
 		if(wan_up_v6)
-			num_rules = IPACM_Wan::num_v6_flt_rule - original_num_rules - 1;
+			num_rules = IPACM_Wan::num_v6_flt_rule - original_num_rules;
 		else
 			num_rules = 0;
 #endif
@@ -4307,12 +4390,12 @@ int IPACM_Wan::set_pdn_num_fw_rules_by_vid(int vid, int num_fw_rules)
 		if(ipv6_to_iface[i].pIface &&
 			(ipv6_to_iface[i].wan_up_vlan_v6 || isDefaultGatewayIfaceUp_v6(ipv6_to_iface[i].pIface)))
 		{
-			if((ipv6_to_iface[i].pIface->associated_VID == vid) ||
+			if(get_vid_index_for_iface_v6(ipv6_to_iface[i], vid) != IPACM_FAILURE ||
 				(isDefaultGatewayIfaceUp_v6(ipv6_to_iface[i].pIface) && !vid))
 			{
 				IPACMDBG_H("found dev %s, vid %d, num_ul_fw_rules %d update to %d\n",
 					ipv6_to_iface[i].pIface->dev_name,
-					ipv6_to_iface[i].pIface->associated_VID,
+					vid,
 					ipv6_to_iface[i].pIface->num_firewall_v6_ul_pdn,
 					num_fw_rules);
 				int orig_num = IPACM_Wan::num_firewall_v6_ul;
@@ -4335,6 +4418,10 @@ int IPACM_Wan::set_pdn_num_fw_rules_by_vid(int vid, int num_fw_rules)
 	IPACMERR("couldn't find match for vid %d\n", vid);
 	return IPACM_FAILURE;
 }
+
+
+
+
 int IPACM_Wan::get_pdn_num_fw_rules_by_vid(int vid, int *num_fw_rules)
 {
 #ifdef FEATURE_VLAN_MPDN
@@ -4343,12 +4430,12 @@ int IPACM_Wan::get_pdn_num_fw_rules_by_vid(int vid, int *num_fw_rules)
 		if(ipv6_to_iface[i].pIface &&
 			(ipv6_to_iface[i].wan_up_vlan_v6 || isDefaultGatewayIfaceUp_v6(ipv6_to_iface[i].pIface)))
 		{
-			if((ipv6_to_iface[i].pIface->associated_VID == vid) ||
+			if(get_vid_index_for_iface_v6(ipv6_to_iface[i], vid) != IPACM_FAILURE ||
 				(isDefaultGatewayIfaceUp_v6(ipv6_to_iface[i].pIface) && !vid))
 			{
 				IPACMDBG_H("found dev %s, vid %d, num_ul_fw_rules %d\n",
 					ipv6_to_iface[i].pIface->dev_name,
-					ipv6_to_iface[i].pIface->associated_VID,
+					vid,
 					ipv6_to_iface[i].pIface->num_firewall_v6_ul_pdn);
 				*num_fw_rules = ipv6_to_iface[i].pIface->num_firewall_v6_ul_pdn;
 				return IPACM_SUCCESS;
@@ -4380,16 +4467,19 @@ int IPACM_Wan::GetV6PrefixByVid(int vid, uint32_t *v6_prefix)
 	{
 		if(ipv6_to_iface[i].pIface && ipv6_to_iface[i].wan_up_vlan_v6)
 		{
-			if((ipv6_to_iface[i].pIface->associated_VID == vid))
+			for(int j = 0; j < ipv6_to_iface[i].VID_cnt; j++)
 			{
-				IPACMDBG_H("found dev %s, vid %d, v6_prefix 0x[%X][%X]\n",
-					ipv6_to_iface[i].pIface->dev_name,
-					ipv6_to_iface[i].pIface->associated_VID,
-					ipv6_to_iface[i].pIface->ipv6_prefix[0],
-					ipv6_to_iface[i].pIface->ipv6_prefix[1]);
-				v6_prefix[0] = ipv6_to_iface[i].pIface->ipv6_prefix[0];
-				v6_prefix[1] = ipv6_to_iface[i].pIface->ipv6_prefix[1];
-				return IPACM_SUCCESS;
+				if((ipv6_to_iface[i].associated_VIDs[j] == vid))
+				{
+					IPACMDBG_H("found dev %s, vid %d, v6_prefix 0x[%X][%X]\n",
+						ipv6_to_iface[i].pIface->dev_name,
+						ipv6_to_iface[i].associated_VIDs[j],
+						ipv6_to_iface[i].pIface->ipv6_prefix[0],
+						ipv6_to_iface[i].pIface->ipv6_prefix[1]);
+					v6_prefix[0] = ipv6_to_iface[i].pIface->ipv6_prefix[0];
+					v6_prefix[1] = ipv6_to_iface[i].pIface->ipv6_prefix[1];
+					return IPACM_SUCCESS;
+				}
 			}
 		}
 	}
@@ -4468,8 +4558,8 @@ IPACM_firewall_conf_t* IPACM_Wan::get_default_profile_firewall_conf_ul(int *defa
 				IPACMDBG("found %s dev in index %d, VID %d\n",
 					firewall_mpdn_config_ul.pdns[idx].net_dev,
 					i,
-					ipv6_to_iface[i].pIface->associated_VID);
-				*default_vid = ipv6_to_iface[i].pIface->associated_VID;
+					ipv6_to_iface[i].associated_VIDs[0]);
+				*default_vid = ipv6_to_iface[i].associated_VIDs[0];
 			}
 		}
 	}
@@ -4490,12 +4580,12 @@ IPACM_firewall_conf_t* IPACM_Wan::get_firewall_conf_by_vid_ul(int vid)
 		if(ipv6_to_iface[i].pIface &&
 			(ipv6_to_iface[i].wan_up_vlan_v6 || isDefaultGatewayIfaceUp_v6(ipv6_to_iface[i].pIface)))
 		{
-			if(vid == ipv6_to_iface[i].pIface->associated_VID)
+			if(get_vid_index_for_iface_v6(ipv6_to_iface[i], vid) != IPACM_FAILURE)
 			{
 				IPACMDBG("found %s dev in index %d, VID %d\n",
 					ipv6_to_iface[i].pIface->dev_name,
 					i,
-					ipv6_to_iface[i].pIface->associated_VID);
+					vid);
 				for(int j = 0; j < num_pdns; j++)
 				{
 					if(!strcmp(firewall_mpdn_config_ul.pdns[j].net_dev,
@@ -6517,11 +6607,11 @@ int IPACM_Wan::handle_down_evt_ex()
 			memset(vlandown_data, 0, sizeof(ipacm_event_vlan_pdn));
 
 			vlandown_data->iptype = IPA_IP_v6;
-			vlandown_data->VlanID = associated_VID;
+			vlandown_data->VlanID = ipv6_to_iface[modem_ipv6_pdn_index].associated_VIDs[0];
 			vlandown_data->mux_id = ext_prop->ext[0].mux_id;
 
 			IPACMDBG_H("Posting IPA_HANDLE_WAN_VLAN_PDN_DOWN (v6) with below information:\n");
-			IPACMDBG_H("iptype IPA_IP_v6, VlanID %d, mux_id %d, if num %d\n", associated_VID, ext_prop->ext[0].mux_id, ipa_if_num);
+			IPACMDBG_H("iptype IPA_IP_v6, VlanID %d, mux_id %d, if num %d\n", vlandown_data->VlanID, ext_prop->ext[0].mux_id, ipa_if_num);
 
 			evt_data.event = IPA_HANDLE_WAN_VLAN_PDN_DOWN;
 			evt_data.evt_data = (void *)vlandown_data;
@@ -6677,19 +6767,31 @@ int IPACM_Wan::handle_down_evt_ex()
 			{
 				vlandown_data->iptype = IPA_IP_MAX;
 				vlandown_data->ipv4_addr = (public_wan_v4_addr_set) ? public_wan_v4_addr : wan_v4_addr;
+				vlandown_data->VlanID = ipv6_to_iface[modem_ipv6_pdn_index].associated_VIDs[0];
 				ipv4_to_iface[modem_ipv4_pdn_index].wan_up_vlan = false;
+				memset(ipv4_to_iface[modem_ipv4_pdn_index].associated_VIDs, 0, sizeof(ipv4_to_iface[modem_ipv4_pdn_index].associated_VIDs));
+				ipv4_to_iface[modem_ipv4_pdn_index].VID_cnt = 0;
 				ipv6_to_iface[modem_ipv6_pdn_index].wan_up_vlan_v6 = false;
+				memset(ipv6_to_iface[modem_ipv6_pdn_index].associated_VIDs, 0, sizeof(ipv6_to_iface[modem_ipv6_pdn_index].associated_VIDs));
+				ipv6_to_iface[modem_ipv6_pdn_index].VID_cnt = 0;
+
 			}
 			else if(ipv4_to_iface[modem_ipv4_pdn_index].wan_up_vlan)
 			{
 				vlandown_data->iptype = IPA_IP_v4;
+				vlandown_data->VlanID = associated_VID;
 				vlandown_data->ipv4_addr = (public_wan_v4_addr_set) ? public_wan_v4_addr : wan_v4_addr;
 				ipv4_to_iface[modem_ipv4_pdn_index].wan_up_vlan = false;
+				memset(ipv4_to_iface[modem_ipv4_pdn_index].associated_VIDs, 0, sizeof(ipv4_to_iface[modem_ipv4_pdn_index].associated_VIDs));
+				ipv4_to_iface[modem_ipv4_pdn_index].VID_cnt = 0;
 			}
 			else
 			{
 				vlandown_data->iptype = IPA_IP_v6;
+				vlandown_data->VlanID = ipv6_to_iface[modem_ipv6_pdn_index].associated_VIDs[0];
 				ipv6_to_iface[modem_ipv6_pdn_index].wan_up_vlan_v6 = false;
+				memset(ipv6_to_iface[modem_ipv6_pdn_index].associated_VIDs, 0, sizeof(ipv6_to_iface[modem_ipv6_pdn_index].associated_VIDs));
+				ipv6_to_iface[modem_ipv6_pdn_index].VID_cnt = 0;
 			}
 
 			num_offloaded_pdns--;
@@ -6698,8 +6800,8 @@ int IPACM_Wan::handle_down_evt_ex()
 			vlandown_data->VlanID = associated_VID;
 			vlandown_data->mux_id = ext_prop->ext[0].mux_id;
 
-			IPACMDBG_H("Posting IPA_HANDLE_WAN_VLAN_PDN_DOWN (v6) with below information:\n");
-			IPACMDBG_H("iptype IPA_IP_v6, VlanID %d, mux_id %d, if num %d\n", associated_VID, ext_prop->ext[0].mux_id, ipa_if_num);
+			IPACMDBG_H("Posting IPA_HANDLE_WAN_VLAN_PDN_DOWN with below information:\n");
+			IPACMDBG_H("iptype %d, VlanID %d, mux_id %d, if num %d\n", vlandown_data->iptype, vlandown_data->VlanID, ext_prop->ext[0].mux_id, ipa_if_num);
 
 			evt_data.event = IPA_HANDLE_WAN_VLAN_PDN_DOWN;
 			evt_data.evt_data = (void *)vlandown_data;

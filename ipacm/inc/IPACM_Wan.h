@@ -88,6 +88,8 @@ typedef struct
 	uint32_t ipv4_addr;
 	bool wan_up_vlan;
 	bool is_xlat;
+	uint8_t associated_VIDs[IPA_MAX_NUM_SW_PDNS];
+	uint8_t VID_cnt = 0;
 	IPACM_Wan *pIface;
 }ipacm_ipv4_wan_iface;
 
@@ -95,6 +97,8 @@ typedef struct
 {
 	uint32_t ipv6_prefix[2];
 	bool wan_up_vlan_v6;
+	uint8_t associated_VIDs[IPA_MAX_NUM_SW_PDNS];
+	uint8_t VID_cnt = 0;
 	IPACM_Wan *pIface;
 }ipacm_ipv6_wan_iface;
 
@@ -378,6 +382,7 @@ public:
 	static int GetMuxByVid(uint16_t vlan_id, uint8_t *mux_id, ipa_ip_type iptype);
 	static int GetMTUByVid( uint16_t *mtu, uint16_t vlan_id, ipa_ip_type iptype);
 	static bool is_xlat_by_vid(uint16_t vlan_id);
+	static int get_vid_index_for_iface_v6(ipacm_ipv6_wan_iface iface, uint16_t vlan_id);
 #endif
 private:
 

@@ -48,7 +48,8 @@ IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "IPACM_Listener.h"
 #include "IPACM_Iface.h"
 
-#define IPA_MAX_NUM_NEIGHBOR_CLIENTS  100
+/* Support 32 softap + 32 vlan eth + 32 usb vlan + 10 wifi-backhaul */
+#define IPA_MAX_NUM_NEIGHBOR_CLIENTS  150
 
 struct ipa_neighbor_client
 {

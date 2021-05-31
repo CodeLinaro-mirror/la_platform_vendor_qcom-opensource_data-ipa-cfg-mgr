@@ -147,6 +147,7 @@ const char *ipacm_event_name[] = {
 	__stringify(IPA_MAC_ADD_DEL_FLT_EVENT),                /* ipacm_event_data_mac */
 	__stringify(IPA_IP_PASS_UPDATE_EVENT),          /* ipacm_ip_pass_pdn_info */
 	__stringify(IPA_HANDLE_IP_PASS_PDN_INFO_UPDATE_EVENT),         /* Handle PDN info update.*/
+	__stringify(IPA_MOVE_NAT_TBL_EVENT),                   /* ipacm_event_move_nat */
 	__stringify(IPACM_EVENT_MAX)
 };
 

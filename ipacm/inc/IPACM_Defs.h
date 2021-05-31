@@ -44,6 +44,7 @@ IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <fcntl.h>
 #include <linux/msm_ipa.h>
 #include "IPACM_Log.h"
+#include "linux/ipa_qmi_service_v01.h"
 
 #ifdef USE_GLIB
 #include <glib.h>
@@ -261,6 +262,7 @@ typedef enum
 #ifdef IPA_IOCTL_SET_PKT_THRESHOLD
 	IPA_PKT_THRESHOLD_UPDATE_EVENT,           /* ipa_set_pkt_threshold */
 #endif
+	IPA_MOVE_NAT_TBL_EVENT,                   /* ipacm_event_move_nat */
 	IPACM_EVENT_MAX
 } ipa_cm_event_id;
 
@@ -459,6 +461,11 @@ typedef struct
 	uint8_t ip_pass_skip_nat;
 	bool is_xlat;
 }ipacm_event_vlan_pdn;
+
+typedef struct
+{
+	ipa_move_nat_type_enum_v01 nat_move_direction;
+}ipacm_event_move_nat;
 
 typedef enum
 {

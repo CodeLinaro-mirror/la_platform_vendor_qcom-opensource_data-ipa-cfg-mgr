@@ -13425,7 +13425,7 @@ void IPACM_Lan::HandleNeighIpAddrAddEvt(ipacm_event_data_all *data)
 
 void IPACM_Lan::HandleNeighIpAddrDelEvt(int clt_indx)
 {
-	uint32_t ipv6_temp[4];
+	uint32_t ipv6_temp[4] = {0};
 
 	if (get_client_memptr(eth_client, clt_indx)->ipv4_set)
 	{

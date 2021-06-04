@@ -718,7 +718,7 @@ void IPACM_Wlan::event_callback(ipa_cm_event_id event, void *param)
 		{
 			ipacm_event_data_mac *data = (ipacm_event_data_mac *)param;
 			ipa_interface_index = iface_ipa_index_query(data->if_index);
-			uint32_t ipv6_temp[4];
+			uint32_t ipv6_temp[4] = {0};
 			if (ipa_interface_index == ipa_if_num)
 			{
 				IPACMDBG_H("Received IPA_WLAN_CLIENT_RECOVER_EVENT\n");
@@ -2958,7 +2958,7 @@ int IPACM_Wlan::handle_wlan_client_pwrsave(uint8_t *mac_addr)
 {
 	int clt_indx;
 	IPACMDBG_H("wlan->handle_wlan_client_pwrsave();\n");
-	uint32_t ipv6_temp[4];
+	uint32_t ipv6_temp[4] = {0};
 
 	clt_indx = get_wlan_client_index(mac_addr);
 	if (clt_indx == IPACM_INVALID_INDEX)
@@ -3851,7 +3851,7 @@ void IPACM_Wlan::eth_bridge_handle_wlan_mode_switch()
 
 void IPACM_Wlan::HandleNeighIpAddrDelEvt(int clt_indx)
 {
-	uint32_t ipv6_temp[4];
+	uint32_t ipv6_temp[4] = {0};
 	if (get_client_memptr(wlan_client, clt_indx)->ipv4_set)
 	{
 		CtList->HandleNeighIpAddrDelEvt(get_client_memptr(wlan_client, clt_indx)->v4_addr);

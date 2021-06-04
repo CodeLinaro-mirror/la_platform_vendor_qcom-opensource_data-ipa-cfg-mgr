@@ -8873,7 +8873,7 @@ void IPACM_Wan::install_l2tp_flt_rule(ipa_flt_rule_add* rules, int rule_offset, 
 
 void IPACM_Wan::HandleSTAClientDelEvt(const ipa_wan_client* client, int index)
 {
-	uint32_t ipv6_temp[4];
+	uint32_t ipv6_temp[4] = {0};
 
 	if (client->ipv4_set == true)
 	{

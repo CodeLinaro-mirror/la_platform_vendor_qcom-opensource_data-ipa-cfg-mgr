@@ -980,8 +980,12 @@ void IPACM_ConntrackListener::TriggerWANUp(void *in_param)
 		  * if backhaul changed, we can safely remove previous pdn to
 		  * make sure we have space in pdn table
 		  */
-		 if(wanup_data->is_sta != isStaMode)
-			nat_inst->RemovePdn(wan_ipaddr);
+		 if(wanup_data->is_sta != isStaMode) {
+			if (IPACM_Iface::ipacmcfg->GetIPAVer() >= IPA_HW_v4_0)
+				nat_inst->RemovePdn(wan_ipaddr);
+			else
+				nat_inst->DeleteTable(wan_ipaddr);
+		}
 	 }
 #endif
 
@@ -999,7 +1003,10 @@ void IPACM_ConntrackListener::TriggerWANUp(void *in_param)
 	   else
 	   	 mux_id = wanup_data->mux_id;
 #ifdef FEATURE_VLAN_MPDN
-		 nat_inst->AddPdn(wanup_data->ipv4_addr, mux_id, isStaMode, (ip_pass_enable_default_pdn && !ip_pass_skip_nat_default_pdn));
+		if (IPACM_Iface::ipacmcfg->GetIPAVer() >= IPA_HW_v4_0)
+			nat_inst->AddPdn(wanup_data->ipv4_addr, mux_id, isStaMode, (ip_pass_enable_default_pdn && !ip_pass_skip_nat_default_pdn));
+		else
+			nat_inst->AddTable(wanup_data->ipv4_addr, mux_id, isStaMode);
 #else
 		 nat_inst->AddTable(wanup_data->ipv4_addr, mux_id, isStaMode);
 #endif
@@ -1141,8 +1148,10 @@ void IPACM_ConntrackListener::HandleVlanDown(void *in_param)
 	{
 		/* VLAN PDN down is triggered only on LINK_DOWN, we can safely remove the PDN */
 		IPACMDBG_H("removing PDN ipv4 address 0x%X\n", vlanup_data->ipv4_addr);
-		nat_inst->RemovePdn(vlanup_data->ipv4_addr);
-
+		if (IPACM_Iface::ipacmcfg->GetIPAVer() >= IPA_HW_v4_0)
+			nat_inst->RemovePdn(vlanup_data->ipv4_addr);
+		else
+			nat_inst->DeleteTable(vlanup_data->ipv4_addr);
 		for(int i = 0; i < IPA_MAX_NUM_HW_PDNS; i++)
 		{
 			if(vlan_pdns[i].public_ip == vlanup_data->ipv4_addr)
@@ -1194,7 +1203,10 @@ void IPACM_ConntrackListener::TriggerWANDown(uint32_t wan_addr)
 	if(nat_inst != NULL)
 	{
 #ifdef FEATURE_VLAN_MPDN
-		nat_inst->RemovePdn(wan_addr);
+		if(IPACM_Iface::ipacmcfg->GetIPAVer() >= IPA_HW_v4_0)
+			nat_inst->RemovePdn(wan_addr);
+		else
+			nat_inst->DeleteTable(wan_addr);
 #else
 		nat_inst->DeleteTable(wan_addr);
 #endif

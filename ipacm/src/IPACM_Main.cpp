@@ -735,12 +735,20 @@ void* ipa_driver_msg_notifier(void *param)
 #endif
 #ifdef FEATURE_VLAN_MPDN
 		case ADD_BRIDGE_VLAN_MAPPING:
+			if (IPACM_Iface::ipacmcfg->GetIPAVer() == IPA_HW_v3_0) {
+				IPACMDBG_H("Not supported VLAN IOCTL\n");
+				continue;
+			}
 			ipa_ioc_bridge_vlan_mapping_info add_bridge_vlan_info;
 
 			memcpy(&add_bridge_vlan_info, buffer + sizeof(struct ipa_msg_meta), sizeof(add_bridge_vlan_info));
 			IPACM_Iface::ipacmcfg->add_bridge_vlan_mapping(&add_bridge_vlan_info);
 			continue;
 		case DEL_BRIDGE_VLAN_MAPPING:
+			if (IPACM_Iface::ipacmcfg->GetIPAVer() == IPA_HW_v3_0) {
+				IPACMDBG_H("Not supported VLAN IOCTL\n");
+				continue;
+			}
 			ipa_ioc_bridge_vlan_mapping_info del_bridge_vlan_info;
 
 			memcpy(&del_bridge_vlan_info, buffer + sizeof(struct ipa_msg_meta), sizeof(del_bridge_vlan_info));
@@ -749,11 +757,19 @@ void* ipa_driver_msg_notifier(void *param)
 #endif
 #if defined(FEATURE_L2TP) || defined (FEATURE_VLAN_MPDN)
 		case ADD_VLAN_IFACE:
+			if (IPACM_Iface::ipacmcfg->GetIPAVer() == IPA_HW_v3_0) {
+				IPACMDBG_H("Not supported VLAN IOCTL\n");
+				continue;
+			}
 			memcpy(&vlan_info, buffer + sizeof(struct ipa_msg_meta), sizeof(vlan_info));
 			IPACM_Iface::ipacmcfg->add_vlan_iface(&vlan_info);
 			continue;
 
 		case DEL_VLAN_IFACE:
+			if (IPACM_Iface::ipacmcfg->GetIPAVer() == IPA_HW_v3_0) {
+				IPACMDBG_H("Not supported VLAN IOCTL\n");
+				continue;
+			}
 			memcpy(&vlan_info, buffer + sizeof(struct ipa_msg_meta), sizeof(vlan_info));
 			IPACM_Iface::ipacmcfg->del_vlan_iface(&vlan_info);
 			continue;

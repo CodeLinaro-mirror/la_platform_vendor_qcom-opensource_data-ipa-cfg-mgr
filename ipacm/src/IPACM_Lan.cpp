@@ -7828,7 +7828,8 @@ void IPACM_Lan::configure_v6_ul_firewall(void)
 #ifdef IPA_V6_UL_WL_FIREWALL_HANDLE
 	/* Delete Q6 UL rules */
 #ifdef FEATURE_VLAN_MPDN
-	if((IPACM_Iface::ipacmcfg->iface_in_vlan_mode(dev_name)) &&
+	if((IPACM_Iface::ipacmcfg->GetIPAVer() != IPA_HW_v3_0) &&
+		(IPACM_Iface::ipacmcfg->iface_in_vlan_mode(dev_name)) &&
 				(IPACM_Iface::ipacmcfg->ipacm_mpdn_enable == TRUE))
 	{
 		if(is_any_mux_up(IPA_IP_v6))
@@ -7851,12 +7852,15 @@ void IPACM_Lan::configure_v6_ul_firewall(void)
 	else
 #endif
 	{
-		IPACMDBG_H(" delete all modem ul rules (v6) to handle new frewall config\n");
-		if(del_ul_flt_rules(IPA_IP_v6))
-			return;
+		if (IPACM_Iface::ipacmcfg->GetIPAVer() != IPA_HW_v3_0)
+		{
+			IPACMDBG_H(" delete all modem ul rules (v6) to handle new frewall config\n");
+			if(del_ul_flt_rules(IPA_IP_v6))
+				return;
 
-		if(notify_flt_removed(IPACM_Iface::ipacmcfg->GetQmapId()))
-			return;
+			if(notify_flt_removed(IPACM_Iface::ipacmcfg->GetQmapId()))
+				return;
+		}
 	}
 
 #endif

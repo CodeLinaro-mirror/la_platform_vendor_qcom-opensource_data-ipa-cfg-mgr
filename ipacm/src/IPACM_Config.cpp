@@ -158,6 +158,7 @@ IPACM_Config::IPACM_Config()
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
 	ipacm_lan_stats_enable = false;
 	ipacm_lan_stats_enable_set = false;
+	pthread_mutex_init(&stats_client_info_lock, NULL);
 #ifdef IPA_HW_FNR_STATS
 	memset(&fnr_counters, 0, sizeof(fnr_counters));
 	memset(cnt_idx, 0, sizeof(cnt_idx));
@@ -2693,7 +2694,16 @@ UPDATE:
 				IPACMDBG_H("Previous  MAC addr to be whitelisted %02x:%02x:%02x:%02x:%02x:%02x\n",
 						 mac_addr[0], mac_addr[1], mac_addr[2],
 						 mac_addr[3], mac_addr[4], mac_addr[5]);
-				it->second->is_blacklist = false;
+				if(it->second->current_blocked == false) {
+					IPACMDBG_H("remove this client from the mac list as whitelisted\n");
+					free(IPACM_Iface::ipacmcfg->mac_flt_lists.at(it->first));
+					IPACM_Iface::ipacmcfg->mac_flt_lists.at(it->first) = NULL;
+					IPACM_Iface::ipacmcfg->mac_flt_lists.erase(it->first);
+				}
+				else
+				{
+					it->second->is_blacklist = false;
+				}
 			}
 	}
 	mac_list.clear();
@@ -2763,7 +2773,16 @@ UPDATE:
 				IPACMDBG_H("Previous  MAC addr to be whitelisted %02x:%02x:%02x:%02x:%02x:%02x\n",
 						 mac_addr[0], mac_addr[1], mac_addr[2],
 						 mac_addr[3], mac_addr[4], mac_addr[5]);
-				it->second->is_blacklist = false;
+				if(it->second->current_blocked == false) {
+					IPACMDBG_H("remove this client from the mac list as whitelisted\n");
+					free(IPACM_Iface::ipacmcfg->mac_flt_lists.at(it->first));
+					IPACM_Iface::ipacmcfg->mac_flt_lists.at(it->first) = NULL;
+					IPACM_Iface::ipacmcfg->mac_flt_lists.erase(it->first);
+				}
+				else
+				{
+					it->second->is_blacklist = false;
+				}
 			}
 	}
 	mac_list.clear();
@@ -3032,5 +3051,59 @@ void IPACM_Config::update_client_info(uint8_t *mac_addr, tether_client_info *cli
 	}
 	pthread_mutex_unlock(&mac_flt_info_lock);
 	return;
+}
+#endif
+
+#ifdef FEATURE_IPACM_PER_CLIENT_STATS
+void IPACM_Config::stats_client_info(uint8_t *mac_addr, bool is_add)
+{
+	uint8_t mac_a[6] = {0};
+	std::array<uint8_t, 6> mac = {0};
+
+	if(pthread_mutex_lock(&stats_client_info_lock) != 0)
+	{
+		IPACMERR("Unable to lock the mutex\n");
+		return ;
+	}
+	memcpy(mac_a,mac_addr,IPA_MAC_ADDR_SIZE);
+	std::copy(std::begin(mac_a), std::end(mac_a), std::begin(mac));
+
+	if(is_add) {
+		mac_addrs_stats_cache.insert(mac);
+	}
+	else
+	{
+		if (mac_addrs_stats_cache.count(mac))
+			mac_addrs_stats_cache.erase(mac);
+	}
+	pthread_mutex_unlock(&stats_client_info_lock);
+	return;
+}
+
+bool IPACM_Config::client_in_stats_cache(uint8_t *mac_addr)
+{
+	bool is_enable = false;
+	uint8_t mac_a[6] = {0};
+	std::array<uint8_t, 6> mac = {0};
+
+	if(pthread_mutex_lock(&stats_client_info_lock) != 0)
+	{
+		IPACMERR("Unable to lock the mutex\n");
+		return is_enable;
+	}
+	memcpy(mac_a,mac_addr,IPA_MAC_ADDR_SIZE);
+	std::copy(std::begin(mac_a), std::end(mac_a), std::begin(mac));
+
+	if (mac_addrs_stats_cache.count(mac))
+	{
+		is_enable = true;
+		mac_addrs_stats_cache.erase(mac);
+	}
+	else
+	{
+		is_enable = false;
+	}
+	pthread_mutex_unlock(&stats_client_info_lock);
+	return is_enable;
 }
 #endif

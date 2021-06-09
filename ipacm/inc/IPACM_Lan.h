@@ -1237,7 +1237,7 @@ private:
 	{
 		uint32_t tx_index;
 		uint32_t rt_hdl;
-		int num_v6;
+		int num_v6 = 0;
 
 		if(iptype == IPA_IP_v4)
 		{
@@ -1270,6 +1270,7 @@ private:
 					IPACM_Iface::ipacmcfg->ipa_num_clients_ipv6);
 			for (auto it = rt_hdl_v6_list[clt_indx].begin(); it != rt_hdl_v6_list[clt_indx].end();++it)
 			{
+				num_v6 ++;
 				if(it->second->route_rule_set_v6 == true)
 				{
 					IPACMDBG_H("v6 addr : 0x%08x:%08x:%08x:%08x\n",

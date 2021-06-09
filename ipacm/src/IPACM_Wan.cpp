@@ -61,6 +61,7 @@ int IPACM_Wan::num_v6_flt_rule = 0;
 
 #ifdef FEATURE_IPACM_UL_FIREWALL
 int IPACM_Wan::num_firewall_v6_ul = 0;
+int IPACM_Wan::num_firewall_v6_ul_sent_to_q6 = 0;
 #endif //FEATURE_IPACM_UL_FIREWALL
 
 struct ipa_flt_rule_add IPACM_Wan::flt_rule_v4[IPA_MAX_FLT_RULE];

@@ -73,14 +73,17 @@ IPACM_Wlan::IPACM_Wlan(int iface_index) : IPACM_Lan(iface_index), ipv6ct_inst(Ip
 		if (tx_prop != NULL)
 		{
 			free(tx_prop);
+			tx_prop = NULL;
 		}
 		if (rx_prop != NULL)
 		{
 			free(rx_prop);
+			rx_prop = NULL;
 		}
 		if (iface_query != NULL)
 		{
 			free(iface_query);
+			iface_query = NULL;
 		}
 		delete this;
 		return;
@@ -153,6 +156,10 @@ IPACM_Wlan::IPACM_Wlan(int iface_index) : IPACM_Lan(iface_index), ipv6ct_inst(Ip
 
 IPACM_Wlan::~IPACM_Wlan()
 {
+	if(wlan_client != NULL)
+	{
+		free(wlan_client);
+	}
 	IPACM_EvtDispatcher::deregistr(this);
 	IPACM_IfaceManager::deregistr(this);
 	IPACM_Wlan::num_wlan_ap_iface--;
@@ -231,14 +238,17 @@ void IPACM_Wlan::event_callback(ipa_cm_event_id event, void *param)
 			if(rx_prop != NULL)
 			{
 				free(rx_prop);
+				rx_prop = NULL;
 			}
 			if(tx_prop != NULL)
 			{
 				free(tx_prop);
+				tx_prop = NULL;
 			}
 			if(iface_query != NULL)
 			{
 				free(iface_query);
+				iface_query = NULL;
 			}
 #endif
 			delete this;
@@ -3547,6 +3557,7 @@ fail:
 		}
 #ifndef FEATURE_ETH_BRIDGE_LE
 		free(rx_prop);
+		rx_prop = NULL;
 #endif
 	}
 
@@ -3560,16 +3571,19 @@ fail:
 	if(wlan_client != NULL)
 	{
 		free(wlan_client);
+		wlan_client = NULL;
 	}
 #ifndef FEATURE_ETH_BRIDGE_LE
 	if (tx_prop != NULL)
 	{
 		free(tx_prop);
+		tx_prop = NULL;
 	}
 
 	if (iface_query != NULL)
 	{
 		free(iface_query);
+		iface_query = NULL;
 	}
 #endif
 

@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2013, 2018, 2020 The Linux Foundation. All rights reserved.
+* Copyright (c) 2013, 2018, 2020, 2021 The Linux Foundation. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without
 * modification, are permitted provided that the following conditions are
@@ -1079,5 +1079,11 @@ void IPACM_Iface::delete_iface(void)
 {
 	IPACMDBG_H("netdev (%s):ipa_index (%d) instance close \n",
 			IPACM_Iface::ipacmcfg->iface_table[ipa_if_num].iface_name, ipa_if_num);
+	if(this->iface_query != NULL)
+		free(this->iface_query);
+	if(this->rx_prop != NULL)
+		free(this->rx_prop);
+	if(this->tx_prop != NULL)
+		free(this->tx_prop);
 	delete this;
 }

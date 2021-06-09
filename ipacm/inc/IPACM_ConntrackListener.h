@@ -118,6 +118,9 @@ private:
 #ifdef CT_OPT
 	IPACM_LanToLan *p_lan2lan;
 #endif
+#ifdef IPA_IOC_SET_IPPT_SW_FLT
+	ipa_ippt_sw_flt_list_type ippt_sw_flt_list;
+#endif
 
 	void ProcessCTMessage(void *);
 	void ProcessCTMessage_v6(const ipacm_ct_evt_data* evt_data, const NatEntryBase& entry);
@@ -157,6 +160,9 @@ private:
 	bool IsIpv6PrivateSubnet(const IpAddress& ip);
 #ifdef IPA_IOCTL_SET_PKT_THRESHOLD
 	void update_pkt_threshold(void *in_param);
+#endif
+#ifdef IPA_IOC_SET_IPPT_SW_FLT
+	void update_ippt_sw_flt_list(void *in_param);
 #endif
 	void HandleNatTableMove(void *in_param);
 

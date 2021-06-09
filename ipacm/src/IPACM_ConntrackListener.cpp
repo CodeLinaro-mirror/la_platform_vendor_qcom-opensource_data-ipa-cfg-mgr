@@ -99,6 +99,9 @@ IPACM_ConntrackListener::IPACM_ConntrackListener() :
 #ifdef IPA_IOCTL_SET_PKT_THRESHOLD
 	 IPACM_EvtDispatcher::registr(IPA_PKT_THRESHOLD_UPDATE_EVENT, this);
 #endif
+#ifdef IPA_IOC_SET_IPPT_SW_FLT
+	 IPACM_EvtDispatcher::registr(IPA_IPPT_SW_FLT_LIST_UPDATE_EVENT, this);
+#endif
 	 IPACM_EvtDispatcher::registr(IPA_MOVE_NAT_TBL_EVENT, this);
 
 #ifdef CT_OPT
@@ -108,6 +111,9 @@ IPACM_ConntrackListener::IPACM_ConntrackListener() :
 	is_acct_enabled = false;
 	ReadNfConntrackAcct();
 	pkt_threshld = 0;
+#ifdef IPA_IOC_SET_IPPT_SW_FLT
+	memset(&ippt_sw_flt_list, 0, sizeof(ipa_ippt_sw_flt_list_type));
+#endif
 
 	if (is_acct_enabled)
 		pkt_threshld = GetPacketThreshhold();
@@ -227,7 +233,12 @@ void IPACM_ConntrackListener::event_callback(ipa_cm_event_id evt,
 			update_pkt_threshold(data);
 			break;
 #endif
-
+#ifdef IPA_IOC_SET_IPPT_SW_FLT
+	 case IPA_IPPT_SW_FLT_LIST_UPDATE_EVENT:
+			IPACMDBG_H("Received IPA_IPPT_SW_FLT_LIST_UPDATE_EVENT event\n");
+			update_ippt_sw_flt_list(data);
+			break;
+#endif
 	 case IPA_HANDLE_WAN_DOWN:
 			IPACMDBG_H("Received IPA_HANDLE_WAN_DOWN event\n");
 			wan_data = (ipacm_event_iface_up *)data;
@@ -1770,7 +1781,7 @@ bool IPACM_ConntrackListener::AddIface(
 				 * If we add dummy NAT entries, all packets will be forwarded to passthrough
 				 * client because of destination route.
 				 */
-				IPACMDBG("Do not add dummy NAT entries for ALG packets in passthrough mode.\n");
+				IPACMDBG("Do not add dummy NAT entries for ALG packets in passthrough NAT enable mode.\n");
 				return false;
 			}
 		}
@@ -2344,7 +2355,7 @@ void IPACM_ConntrackListener::ProcessTCPorUDPMsg(
 #endif
 
  	 memset(&rule, 0, sizeof(rule));
-	 IPACMDBG("Received type:%d with proto:%d\n", type, l4proto);
+	 IPACMDBG_H("Received type:%d with proto:%d\n", type, l4proto);
 	 status = nfct_get_attr_u32(ct, ATTR_STATUS);
 
 	 /* Retrieve Protocol */
@@ -2459,11 +2470,11 @@ void IPACM_ConntrackListener::ProcessTCPorUDPMsg(
 	 }
 	 else
 	 {
-		 IPACMDBG("Neither Destination nor Source nat flag Set\n");
+		 IPACMDBG_H("Neither Destination nor Source nat flag Set\n");
 
 		if(orig_src_ip == wan_ipaddr)
 		{
-			IPACMDBG("orig src ip:0x%x equal to wan ip\n",orig_src_ip);
+			IPACMDBG_H("orig src ip:0x%x equal to wan ip\n",orig_src_ip);
 			status = IPS_SRC_NAT;
 #ifdef FEATURE_VLAN_MPDN
 			public_ip = wan_ipaddr;
@@ -2471,7 +2482,7 @@ void IPACM_ConntrackListener::ProcessTCPorUDPMsg(
 		}
 		else if(orig_dst_ip == wan_ipaddr)
 		{
-			IPACMDBG("orig Dst IP:0x%x equal to wan ip\n",orig_dst_ip);
+			IPACMDBG_H("orig Dst IP:0x%x equal to wan ip\n",orig_dst_ip);
 			status = IPS_DST_NAT;
 #ifdef FEATURE_VLAN_MPDN
 			public_ip = wan_ipaddr;
@@ -2492,8 +2503,10 @@ void IPACM_ConntrackListener::ProcessTCPorUDPMsg(
 					public_ip = orig_src_ip;
 					embedded_vlan = true;
 					/* In case of IP Passthrough enabled, connection can belong to tethered client. */
-					if (vlan_pdns[i].ip_pass_enable)
+					if (vlan_pdns[i].ip_pass_enable) {
 						nat_entry.isVlan = IsVlanIPv4(orig_src_ip, &VlanID);
+						ip_pass_enable = vlan_pdns[i].ip_pass_enable;
+					}
 					if (nat_entry.isVlan)
 						nat_entry.IsVlanUp = true;
 					break;
@@ -2505,8 +2518,10 @@ void IPACM_ConntrackListener::ProcessTCPorUDPMsg(
 					public_ip = orig_dst_ip;
 					embedded_vlan = true;
 					/* In case of IP Passthrough enabled, connection can belong to tethered client. */
-					if (vlan_pdns[i].ip_pass_enable)
+					if (vlan_pdns[i].ip_pass_enable) {
 						nat_entry.isVlan = IsVlanIPv4(orig_dst_ip, &VlanID);
+						ip_pass_enable = vlan_pdns[i].ip_pass_enable;
+					}
 					if (nat_entry.isVlan)
 						nat_entry.IsVlanUp = true;
 
@@ -2529,6 +2544,7 @@ void IPACM_ConntrackListener::ProcessTCPorUDPMsg(
 
 	 if(IPS_DST_NAT == status || IPS_SRC_NAT == status)
 	 {
+		 IPACMDBG_H("status %d ip_pass_enable %d, vlan: %d\n", status, ip_pass_enable, VlanID);
 		 PopulateTCPorUDPEntry(ct, status, &rule);
 #ifdef FEATURE_VLAN_MPDN
 		 rule.public_ip = public_ip;
@@ -2538,7 +2554,7 @@ void IPACM_ConntrackListener::ProcessTCPorUDPMsg(
 	 }
 	 else
 	 {
-		 IPACMDBG("Neither source Nor destination nat\n");
+		 IPACMDBG_H("Neither source Nor destination nat\n");
 		 goto IGNORE;
 	 }
 
@@ -2559,16 +2575,64 @@ void IPACM_ConntrackListener::ProcessTCPorUDPMsg(
 	 {
 		 if (isStaMode)
 		 {
-			 IPACMDBG("In STA mode, ignore connections destinated to STA interface\n");
+			 IPACMERR("In STA mode, ignore connections destinated to STA interface\n");
 			 goto IGNORE;
 		 }
 
-		 IPACMDBG("For embedded connections add dummy nat rule\n");
-		 IPACMDBG("Change private port %d to %d\n",
+		 IPACMDBG_H("For embedded connections add dummy nat rule\n");
+		 IPACMDBG_H("Change private port %d to %d\n",
 				  rule.private_port, rule.public_port);
 		 rule.private_port = rule.public_port;
 	 }
+#ifdef IPA_IOC_SET_IPPT_SW_FLT
+/* Special handling for Passthrough IP SW-flt */
+	if (ip_pass_enable)
+	{
+		IPACMDBG_H("IPPT ENABLE %d\n", ip_pass_enable);
+		/* applied to bith nat/skip nat mode */
+		if (ippt_sw_flt_list.ipv4_enable)
+		{
+			/* check ipv4 ippt-sw-flt */
+			for (int cnt = 0; cnt < ippt_sw_flt_list.num_of_ipv4; cnt++)
+			{
+				if (ippt_sw_flt_list.ipv4[cnt] != 0)
+				{
+					if (rule.private_ip == ippt_sw_flt_list.ipv4[cnt] ||
+						rule.target_ip == ippt_sw_flt_list.ipv4[cnt])
+					{
+						IPACMDBG_H("matched ippt_sw_flt ipv4, idx %d, not add dummy NAT\n", cnt);
+						iptodot("AddIface(): Nat entry match with ip addr",
+							ippt_sw_flt_list.ipv4[cnt]);
+						goto IGNORE;
+					}
+				}
+			}
+		}
+		else
+			IPACMDBG_H("ippt_sw_flt ipv4 not enabled %d,\n", ippt_sw_flt_list.ipv4_enable);
 
+		/* applied to bith nat/skip nat mode */
+		if (ippt_sw_flt_list.port_enable)
+		{
+			/* check port ippt-sw-flt */
+			for (int cnt = 0; cnt < ippt_sw_flt_list.num_of_port; cnt++)
+			{
+				if (ippt_sw_flt_list.port[cnt] != 0)
+				{
+					if (rule.private_port == ippt_sw_flt_list.port[cnt] ||
+						rule.target_port == ippt_sw_flt_list.port[cnt])
+					{
+						IPACMDBG_H("matched ippt_sw_flt port %d, idx %d, not add dummy NAT\n",
+							ippt_sw_flt_list.port[cnt], cnt);
+						goto IGNORE;
+					}
+				}
+			}
+		}
+		else
+			IPACMDBG_H("ippt_sw_flt port not enabled %d,\n", ippt_sw_flt_list.port_enable);
+	}
+#endif
 	 CheckSTAClient(&rule, &nat_entry.isTempEntry);
 	 nat_entry.rule = &rule;
 #ifdef FEATURE_VLAN_MPDN
@@ -3101,6 +3165,56 @@ void IPACM_ConntrackListener::update_pkt_threshold(void *in_param)
 		pkt_threshld = 0;
 	}
 	IPACMDBG_H("Update pkt_threshld to %d\n", pkt_threshld);
+
+	return ;
+}
+#endif
+
+#ifdef IPA_IOC_SET_IPPT_SW_FLT
+void IPACM_ConntrackListener::update_ippt_sw_flt_list(void *in_param)
+{
+	int i = 0;
+
+	ipa_ippt_sw_flt_list_type *set_ippt_sw_flt_list = (ipa_ippt_sw_flt_list_type *)in_param;
+	if (!set_ippt_sw_flt_list)
+	{
+		IPACMERR("Input set_ippt_sw_flt_list is NULL\n");
+		return;
+	}
+
+	memcpy(&ippt_sw_flt_list, set_ippt_sw_flt_list, sizeof(ippt_sw_flt_list));
+
+	IPACMDBG_H(" ippt_sw_flt ipv4 enable %d num %d\n",
+		set_ippt_sw_flt_list->ipv4_enable, set_ippt_sw_flt_list->num_of_ipv4);
+
+	/* clean up existing nat entry */
+	for (i = 0; i < ippt_sw_flt_list.num_of_ipv4; i++)
+	{
+		if (ippt_sw_flt_list.ipv4[i] != 0)
+		{
+			/* change from host order to network order */
+			ippt_sw_flt_list.ipv4[i] = htonl(ippt_sw_flt_list.ipv4[i]);
+			IPACMDBG_H(" %d-st ipv4:0x%x\n",
+				i+1, ippt_sw_flt_list.ipv4[i]);
+			nat_inst->FlushTempEntries(ippt_sw_flt_list.ipv4[i], false);
+			nat_inst->DelEntriesOnClntDiscon(ippt_sw_flt_list.ipv4[i]);
+		}
+	}
+
+	IPACMDBG_H(" ippt_sw_flt port enable %d num %d\n",
+		set_ippt_sw_flt_list->port_enable, set_ippt_sw_flt_list->num_of_port);
+
+	/* clean up existing nat entry */
+	for (i = 0; i < ippt_sw_flt_list.num_of_port; i++)
+	{
+		if (ippt_sw_flt_list.port[i] != 0)
+		{
+			IPACMDBG_H(" %d-st port:%d\n",
+				i+1, ippt_sw_flt_list.port[i]);
+			nat_inst->DeleteEntry_port(ippt_sw_flt_list.port[i]);
+			nat_inst->DeleteTempEntry_port(ippt_sw_flt_list.port[i]);
+		}
+	}
 
 	return ;
 }

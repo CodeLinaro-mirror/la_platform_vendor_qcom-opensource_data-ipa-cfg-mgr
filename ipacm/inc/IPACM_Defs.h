@@ -299,6 +299,9 @@ typedef enum
 #ifdef IPA_IOCTL_SET_PKT_THRESHOLD
 	IPA_PKT_THRESHOLD_UPDATE_EVENT,           /* ipa_set_pkt_threshold */
 #endif
+#ifdef IPA_IOC_SET_IPPT_SW_FLT
+	IPA_IPPT_SW_FLT_LIST_UPDATE_EVENT,        /* ipa_ippt_sw_flt_list_type */
+#endif
 	IPA_MOVE_NAT_TBL_EVENT,                   /* ipacm_event_move_nat */
 
 #ifdef FEATURE_EoGRE

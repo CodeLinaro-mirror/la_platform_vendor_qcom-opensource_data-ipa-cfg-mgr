@@ -109,6 +109,26 @@ typedef struct
 	uint16_t vlan_id;
 } ipacm_ip_pass_mpdn_info;
 
+/* used to store the PDN info for IP collision */
+typedef struct
+{
+	bool valid_entry;
+
+	/* Store interface name */
+	char dev_name[IPA_RESOURCE_NAME_MAX];
+
+	/* Flag indicating default pdn. */
+	uint8_t is_default_pdn;
+
+	/* PDN IP Address assigned in IP Collision mode. */
+	uint32_t ip_collision_pdn_ip_addr;
+
+	/* Store vlan ID */
+	uint16_t vlan_id;
+} ipacm_ip_collision_mpdn_info;
+
+
+
 #if defined(FEATURE_IPACM_PER_CLIENT_STATS) && defined(IPA_HW_FNR_STATS)
 /* Used to keep track of free and used
  * h/w counter indices
@@ -200,9 +220,9 @@ public:
 	bool ipacm_odu_enable;
 
 	bool ipacm_odu_embms_enable;
-
 	/* Table containing ip_passthrough mpdn info */
 	ipacm_ip_pass_mpdn_info ip_pass_mpdn_table[MAX_NUM_IP_PASS_MPDN];
+	ipacm_ip_collision_mpdn_info ip_collision_mpdn_table[MAX_NUM_IP_PASS_MPDN];
 
 	pthread_mutex_t ip_pass_mpdn_lock;
 
@@ -403,6 +423,30 @@ public:
 		return indx;
 	}
 
+	inline int get_free_ip_collision_pdn_index(char *dev_name)
+	{
+		int indx;
+
+		/* Check if the entry already exists for this iface. */
+		for (indx=0; indx < MAX_NUM_IP_PASS_MPDN; indx++)
+		{
+			if (ip_collision_mpdn_table[indx].valid_entry &&
+				strncmp(dev_name,
+						ip_pass_mpdn_table[indx].dev_name,
+						sizeof(ip_pass_mpdn_table[indx].dev_name)) == 0)
+			{
+				IPACMDBG("Interface (%s) is already present in IP Collision table\n", dev_name);
+				return MAX_NUM_IP_PASS_MPDN;
+			}
+		}
+
+		for (indx=0; indx < MAX_NUM_IP_PASS_MPDN; indx++)
+			if (!ip_collision_mpdn_table[indx].valid_entry)
+				return indx;
+
+		return indx;
+	}
+
 	inline int get_ip_pass_pdn_index(ipa_ioc_pdn_config *pdn_config)
 	{
 		int indx;
@@ -415,6 +459,21 @@ public:
 				(ip_pass_mpdn_table[indx].ip_pass_dev_type ==
 					pdn_config->u.passthrough_cfg.device_type) &&
 				ip_pass_mpdn_table[indx].vlan_id == pdn_config->u.passthrough_cfg.vlan_id)
+				return indx;
+		}
+		return indx;
+	}
+
+	inline int get_ip_collision_pdn_index(ipa_ioc_pdn_config *pdn_config)
+	{
+		int indx;
+		uint32_t ip_addr = htonl(pdn_config->u.collison_cfg.pdn_ip_addr);
+
+		for (indx=0; indx < MAX_NUM_IP_PASS_MPDN; indx++)
+		{
+			if (ip_collision_mpdn_table[indx].valid_entry &&
+				(ip_collision_mpdn_table[indx].ip_collision_pdn_ip_addr == ip_addr) &&
+				(ip_collision_mpdn_table[indx].vlan_id == pdn_config->u.collison_cfg.vlan_id))
 				return indx;
 		}
 		return indx;
@@ -474,7 +533,35 @@ public:
 		return ret;
 	}
 
+	inline bool is_ip_collision_enabled(uint32_t ip_addr)
+	{
+		int indx;
+		bool ret = false;
+		if(pthread_mutex_lock(&ip_pass_mpdn_lock) != 0)
+		{
+			IPACMERR("Unable to lock the mutex\n");
+			return ret;
+		}
+		IPACMDBG_H("ip_addr: 0x%x \n", ip_addr);
+		for (indx = 0; indx < MAX_NUM_IP_PASS_MPDN; indx++)
+		{
+			if (ip_collision_mpdn_table[indx].valid_entry)
+			{
+				if (ip_collision_mpdn_table[indx].ip_collision_pdn_ip_addr == ip_addr)
+				{
+					ret = true;
+					break;
+				}
+			}
+		}
+
+		pthread_mutex_unlock(&ip_pass_mpdn_lock);
+		return ret;
+	}
+
 	void ip_pass_config_update(ipa_ioc_pdn_config *pdn_config);
+
+	void ip_collision_config_update(ipa_ioc_pdn_config *pdn_config);
 
 	const char* getEventName(ipa_cm_event_id event_id);
 

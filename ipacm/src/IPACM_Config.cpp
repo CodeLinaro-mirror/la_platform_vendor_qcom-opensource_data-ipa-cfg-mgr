@@ -145,6 +145,7 @@ const char *ipacm_event_name[] = {
 	__stringify(IPA_DEL_SOCKSv5_CONN),                     /* ipa_socksv5_msg */
 #endif
 	__stringify(IPA_MAC_ADD_DEL_FLT_EVENT),                /* ipacm_event_data_mac */
+	__stringify(IPA_IP_COLLISION_UPDATE_EVENT),          /* ipacm_ip_collision_pdn_info */
 	__stringify(IPA_IP_PASS_UPDATE_EVENT),          /* ipacm_ip_pass_pdn_info */
 	__stringify(IPA_HANDLE_IP_PASS_PDN_INFO_UPDATE_EVENT),         /* Handle PDN info update.*/
 	__stringify(IPA_MOVE_NAT_TBL_EVENT),                   /* ipacm_event_move_nat */
@@ -2187,6 +2188,51 @@ void IPACM_Config::ip_pass_config_update(ipa_ioc_pdn_config *pdn_config)
 			IPACMERR("IP Passthrough PDN not found\n");
 	}
 
+	pthread_mutex_unlock(&ip_pass_mpdn_lock);
+}
+
+void IPACM_Config::ip_collision_config_update(ipa_ioc_pdn_config *pdn_config)
+{
+	int indx;
+
+	if(pthread_mutex_lock(&ip_pass_mpdn_lock) != 0)
+	{
+		IPACMERR("Unable to lock the mutex\n");
+		return;
+	}
+	if (pdn_config->enable)
+	{
+		indx = get_free_ip_collision_pdn_index(pdn_config->dev_name);
+		if (indx < MAX_NUM_IP_PASS_MPDN)
+		{
+			IPACMDBG_H("Enable IP Collision: table index %d, default_pdn: %d\n", indx, pdn_config->default_pdn);
+			strlcpy(ip_collision_mpdn_table[indx].dev_name,
+			pdn_config->dev_name, IPA_RESOURCE_NAME_MAX);
+			ip_collision_mpdn_table[indx].is_default_pdn = pdn_config->default_pdn;
+			ip_collision_mpdn_table[indx].ip_collision_pdn_ip_addr =
+				htonl(pdn_config->u.collison_cfg.pdn_ip_addr);
+			ip_collision_mpdn_table[indx].vlan_id = pdn_config->u.collison_cfg.vlan_id;
+			ip_collision_mpdn_table[indx].valid_entry = true;
+		}
+		else
+			IPACMERR("IP Collision supports only 15 PDNs\n");
+	}
+	else
+	{
+	   indx = get_ip_collision_pdn_index(pdn_config);
+		if (indx < MAX_NUM_IP_PASS_MPDN)
+		{
+			/* Reset the configuration */
+			IPACMDBG("Disable IP collision config: table index: %d PDN IP: 0x%x Vlan ID: %u\n",
+			indx, htonl(pdn_config->u.passthrough_cfg.pdn_ip_addr), pdn_config->u.collison_cfg.vlan_id);
+			ip_collision_mpdn_table[indx].is_default_pdn = 0;
+			ip_collision_mpdn_table[indx].ip_collision_pdn_ip_addr = 0;
+			ip_collision_mpdn_table[indx].vlan_id = 0;
+			ip_collision_mpdn_table[indx].valid_entry = false;
+		}
+		else
+			IPACMERR("IP Collision PDN not found\n");
+	}
 	pthread_mutex_unlock(&ip_pass_mpdn_lock);
 }
 

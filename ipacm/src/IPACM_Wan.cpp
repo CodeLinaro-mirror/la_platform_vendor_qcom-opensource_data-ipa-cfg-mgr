@@ -172,6 +172,7 @@ IPACM_Wan::IPACM_Wan(int iface_index,
 	mtu_v6 = DEFAULT_MTU_SIZE;
 	mtu_v6_set = false;
 	memset(&ip_pass_pdn_info, 0 ,sizeof(ip_pass_pdn_info));
+	memset(&ip_collision_pdn_info, 0 ,sizeof(ip_collision_pdn_info));
 	/* Used to store route handle of previous wan ip incase of passthrough enbaled. */
 	ipps_dft_v4_rt_rule_hdl = 0;
 #ifdef FEATURE_IPACM_UL_FIREWALL
@@ -690,10 +691,10 @@ int IPACM_Wan::handle_addr_evt(ipacm_event_data_addr *data)
 			else
 			{
 				IPACMDBG_H(" device (%s) ipv4 addr is changed\n", dev_name);
-				/*Don't remove route for WAN IP in IP Passthrough mode
+				/*Don't remove route for WAN IP in IP Passthrough or Collision mode
 				it may lead to stall as NAT entry is still pointing to
 				default route entry*/
-				if (!ip_pass_pdn_info.enable)
+				if (!ip_pass_pdn_info.enable && !ip_collision_pdn_info.enable)
 				{
 					/* Delete default v4 RT rule */
 					IPACMDBG_H("Delete default v4 routing rules\n");
@@ -834,7 +835,8 @@ int IPACM_Wan::handle_addr_evt(ipacm_event_data_addr *data)
 
 		/* Store the public ip address when in passthrough mode which will be used when wan is down. */
 		if ((m_is_sta_mode == Q6_WAN) &&
-			ip_pass_pdn_info.enable)
+			((ip_pass_pdn_info.enable)||
+			(ip_collision_pdn_info.enable)))
 		{
 			curr_wan_ip = data->ipv4_addr;
 			public_wan_v4_addr = wan_v4_addr;
@@ -995,9 +997,9 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 				delete this;
 				return;
 			}
-			else if (ip_pass_pdn_info.enable)
+			else if (ip_pass_pdn_info.enable || ip_collision_pdn_info.enable)
 			{
-				/* In Passthrough mode, config will be updated after WAN is up.
+				/* In Passthrough or Collision mode, config will be updated after WAN is up.
 				 * restore the WAN netdev index.
 				 */
 				if(IPACM_Iface::ipa_get_if_index(dev_name, &(if_index)))
@@ -1486,7 +1488,31 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 			}
 			break;
 		}
+	case IPA_IP_COLLISION_UPDATE_EVENT:
+		{
+			ipacm_event_ip_collision_pdn_info *data = (ipacm_event_ip_collision_pdn_info *)param;
+			ipa_interface_index = iface_ipa_index_query(data->if_index);
+			if (ipa_interface_index == ipa_if_num)
+			{
+				IPACMDBG_H("received v4 IPA_IP_COLLISION_UPDATE_EVENT for wan %s, %s ,%d\n", dev_name, data->dev_name, ipa_if_num);
+				ip_collision_pdn_info.enable = data->enable;
+				strlcpy(ip_collision_pdn_info.dev_name, data->dev_name, IPA_RESOURCE_NAME_MAX);
 
+				if (ip_collision_pdn_info.enable)
+				{
+					ip_collision_pdn_info.pdn_ip_addr = data->pdn_ip_addr;
+					ip_collision_pdn_info.VlanID = data->VlanID;
+				}
+				else
+				{
+					IPACMDBG_H("IP Collision disabled, reset config\n");
+					ip_collision_pdn_info.pdn_ip_addr = 0;
+					ip_collision_pdn_info.VlanID = 0;
+				}
+				IPACMDBG_H("IP Collision enabled: IP 0x%x, VlanId: %d\n",ip_collision_pdn_info.pdn_ip_addr, ip_collision_pdn_info.VlanID);
+			}
+		}
+		break;
 #ifdef FEATURE_VLAN_MPDN
 	case IPA_ROUTE_ADD_VLAN_PDN_EVENT:
 		{

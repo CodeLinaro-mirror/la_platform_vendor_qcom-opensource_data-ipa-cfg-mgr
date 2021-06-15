@@ -252,6 +252,7 @@ void* ipa_driver_msg_notifier(void *param)
 	ipa_get_apn_data_stats_resp_msg_v01 *data_network_stats = NULL;
 	ipacm_event_connection *data_event_conn = NULL;
 	ipacm_event_ip_pass_pdn_info *ip_pass_pdn_data;
+	ipacm_event_ip_collision_pdn_info *ip_collision_pdn_data;
 
 #if defined(FEATURE_L2TP) || defined(FEATURE_VLAN_MPDN)
 	ipa_ioc_vlan_iface_info vlan_info;
@@ -958,6 +959,29 @@ void* ipa_driver_msg_notifier(void *param)
 			ip_pass_pdn_data->enable = pdn_info->enable;
 			evt_data.evt_data = ip_pass_pdn_data;
 			ipa_get_if_index(pdn_info->dev_name, &(ip_pass_pdn_data->if_index));
+			break;
+
+		case IPA_PDN_IP_COLLISION_MODE_CONFIG:
+			pdn_info = (ipa_ioc_pdn_config *)(buffer + sizeof(struct ipa_msg_meta));
+			IPACMDBG_H("Received IPA_PDN_IP_COLLISION_MODE_CONFIG name: %s, default_pdn: %d, type: %d, enable: %d and PDN IP: 0x%x!\n",
+				pdn_info->dev_name, pdn_info->default_pdn, pdn_info->pdn_cfg_type, pdn_info->enable, htonl(pdn_info->u.collison_cfg.pdn_ip_addr));
+
+			evt_data.event = IPA_IP_COLLISION_UPDATE_EVENT;
+			ip_collision_pdn_data = (ipacm_event_ip_collision_pdn_info *)malloc(sizeof(ipacm_event_ip_collision_pdn_info));
+			/* Update IP Collision config. */
+			IPACM_Iface::ipacmcfg->ip_collision_config_update(pdn_info);
+			if(!ip_collision_pdn_data)
+			{
+				IPACMERR("unable to allocate memory for pdn_config\n");
+				return NULL;
+			}
+
+			ip_collision_pdn_data->enable = pdn_info->enable;
+			ip_collision_pdn_data->pdn_ip_addr = htonl(pdn_info->u.collison_cfg.pdn_ip_addr);
+			ip_collision_pdn_data->VlanID = pdn_info->u.collison_cfg.vlan_id;
+			strlcpy(ip_collision_pdn_data->dev_name, pdn_info->dev_name, IPA_RESOURCE_NAME_MAX);
+			evt_data.evt_data = ip_collision_pdn_data;
+			ipa_get_if_index(pdn_info->dev_name, &(ip_collision_pdn_data->if_index));
 			break;
 
 #ifdef IPA_IOC_SET_MAC_FLT

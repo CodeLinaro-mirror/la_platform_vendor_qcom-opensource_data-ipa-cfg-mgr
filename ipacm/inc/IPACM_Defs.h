@@ -295,6 +295,7 @@ typedef enum
 	IPA_UPDATE_SOCKSv5_v6_CONN,               /* NULL */
 #endif
 	IPA_MAC_ADD_DEL_FLT_EVENT,                /* NULL */
+	IPA_IP_COLLISION_UPDATE_EVENT,            /* ipacm_ip_collision_pdn_info */
 	IPA_IP_PASS_UPDATE_EVENT,                 /* ipacm_ip_pass_pdn_info */
 	IPA_HANDLE_IP_PASS_PDN_INFO_UPDATE_EVENT, /* Handle ip pass pdn info update.*/
 #ifdef IPA_IOCTL_SET_PKT_THRESHOLD
@@ -496,6 +497,16 @@ typedef struct
 	uint8_t skip_nat;
 	int if_index;
 }ipacm_event_ip_pass_pdn_info;
+
+typedef struct
+{
+	uint8_t enable;
+	uint32_t pdn_ip_addr;
+	uint16_t VlanID;
+	int if_index;
+	char dev_name[IPA_RESOURCE_NAME_MAX];
+}ipacm_event_ip_collision_pdn_info;
+
 
 typedef struct
 {

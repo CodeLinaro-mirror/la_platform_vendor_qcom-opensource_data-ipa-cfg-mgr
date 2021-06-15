@@ -84,6 +84,20 @@ typedef struct
 	ipa_ioc_ext_intf_prop prop[MAX_NUM_EXT_PROPS];
 } ipacm_ext_prop;
 
+#define MAX_NUM_IP_COLLISION_MPDN 15
+
+/* used to store the PDN info for IP collision */
+typedef struct
+{
+	bool valid_entry;
+
+	/* Store interface name */
+	char dev_name[IPA_RESOURCE_NAME_MAX];
+
+	/* Store vlan ID */
+	uint16_t vlan_id;
+} ipacm_ip_collision_mpdn_info;
+
 #if defined(FEATURE_IPACM_PER_CLIENT_STATS) && defined(IPA_HW_FNR_STATS)
 /* Used to keep track of free and used
  * h/w counter indices
@@ -157,6 +171,9 @@ public:
 	bool ipacm_odu_embms_enable;
 
 	bool ipacm_ip_passthrough_mode;
+
+	ipacm_ip_collision_mpdn_info ip_collision_mpdn_table[MAX_NUM_IP_COLLISION_MPDN];
+	pthread_mutex_t ip_collision_lock;
 
 	/* Store ippassthrough mac */
 	uint8_t ipacm_ip_passthrough_mac[IPA_MAC_ADDR_SIZE];
@@ -313,6 +330,78 @@ public:
 	int ipacm_reset_hw_fnr_counters(const uint8_t start_id, const uint8_t end_id);
 	void alloc_fnr_counter(void);
 #endif
+
+	inline int get_free_ip_collision_pdn_index(char *dev_name, uint16_t vid)
+	{
+		int indx;
+
+		/* Check if the entry already exists for this iface. */
+		for (indx=0; indx < MAX_NUM_IP_COLLISION_MPDN; indx++)
+		{
+			if (ip_collision_mpdn_table[indx].valid_entry)
+			{
+				if((strncmp(dev_name, ip_collision_mpdn_table[indx].dev_name,
+				    sizeof(ip_collision_mpdn_table[indx].dev_name)) == 0) &&
+				   (ip_collision_mpdn_table[indx].vlan_id == vid))
+				{
+					IPACMDBG("Interface (%s) is already present in IP Collision table\n", dev_name);
+					return MAX_NUM_IP_COLLISION_MPDN;
+				}
+			}
+		}
+
+		for (indx=0; indx < MAX_NUM_IP_COLLISION_MPDN; indx++)
+			if (!ip_collision_mpdn_table[indx].valid_entry)
+				return indx;
+
+	}
+
+	inline int get_ip_collision_pdn_index(ipa_ioc_pdn_config *pdn_config)
+	{
+		int indx;
+
+		for (indx=0; indx < MAX_NUM_IP_COLLISION_MPDN; indx++)
+		{
+			if (ip_collision_mpdn_table[indx].valid_entry)
+			{
+				if((strncmp(pdn_config->dev_name, ip_collision_mpdn_table[indx].dev_name,
+				    sizeof(ip_collision_mpdn_table[indx].dev_name)) == 0) &&
+				   (ip_collision_mpdn_table[indx].vlan_id == pdn_config->u.collison_cfg.vlan_id))
+					return indx;
+			}
+		}
+		return -1;
+	}
+
+	inline bool is_ip_collision_enabled(char* dev_name)
+	{
+		bool ret = false;
+		if(pthread_mutex_lock(&ip_collision_lock) != 0)
+		{
+			IPACMERR("Unable to lock the mutex\n");
+			return ret;
+		}
+		IPACMDBG_H("dev_name: %s \n", dev_name);
+		for (int indx = 0; indx < MAX_NUM_IP_COLLISION_MPDN; indx++)
+		{
+			if (ip_collision_mpdn_table[indx].valid_entry)
+			{
+				if (strncmp(dev_name, ip_collision_mpdn_table[indx].dev_name,
+					sizeof(ip_collision_mpdn_table[indx].dev_name)) == 0)
+				{
+					ret = true;
+					break;
+				}
+			}
+		}
+
+		pthread_mutex_unlock(&ip_collision_lock);
+		return ret;
+	}
+
+	int ipa_get_if_idx_by_vid(uint16_t vlan_id);
+	void update_private_subnet_collision(bool collision_enabled, uint16_t vlan_id);
+	void ip_collision_config_update(ipa_ioc_pdn_config *pdn_config);
 
 	const char* getEventName(ipa_cm_event_id event_id);
 

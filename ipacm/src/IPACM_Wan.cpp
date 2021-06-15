@@ -176,6 +176,7 @@ IPACM_Wan::IPACM_Wan(int iface_index,
 	is_ipv6_frag_firewall_flt_rule_installed = false;
 	mtu_size = DEFAULT_MTU_SIZE;
 
+	memset(&ip_collision_pdn_info, 0 ,sizeof(ip_collision_pdn_info));
 #ifdef FEATURE_IPACM_UL_FIREWALL
 #ifdef FEATURE_VLAN_MPDN
 	num_firewall_v6_ul_pdn = 0;
@@ -658,13 +659,33 @@ int IPACM_Wan::handle_addr_evt(ipacm_event_data_addr *data)
 			else
 			{
 				IPACMDBG_H(" device (%s) ipv4 addr is changed\n", dev_name);
-				/* Delete default v4 RT rule */
-				IPACMDBG_H("Delete default v4 routing rules\n");
-				if (m_routing.DeleteRoutingHdl(dft_rt_rule_hdl[0], IPA_IP_v4) == false)
+				/*Don't remove route for WAN IP in Collision mode
+				it may lead to stall as NAT entry is still pointing to
+				default route entry*/
+				if (!ip_collision_pdn_info.enable)
 				{
-					IPACMERR("Routing old RT rule deletion failed!\n");
-					res = IPACM_FAILURE;
-					goto fail;
+					/* Delete default v4 RT rule */
+					IPACMDBG_H("Delete default v4 routing rules\n");
+					if (m_routing.DeleteRoutingHdl(dft_rt_rule_hdl[0], IPA_IP_v4) == false)
+					{
+						IPACMERR("Routing old RT rule deletion failed!\n");
+						res = IPACM_FAILURE;
+						goto fail;
+					}
+				}
+				else
+				{
+					/* In IPPT or IP Collision mode don't replace the wan-ip RT rule to dummy ipv4 */
+					/* Store the public ip address when in passthrough mode which will be used when wan is down.*/
+					if (m_is_sta_mode == Q6_WAN)
+					{
+						curr_wan_ip = data->ipv4_addr;
+						public_wan_v4_addr = wan_v4_addr;
+						public_wan_v4_addr_set = true;
+						IPACMDBG_H("Received wan ipv4-addr:0x%x\n",data->ipv4_addr);
+						IPACMDBG_H("In Collision mode, Storing previous wan ipv4-addr:0x%x\n",public_wan_v4_addr);
+						return IPACM_SUCCESS;
+					}
 				}
 #if defined(FEATURE_SOCKSv5) && defined (IPA_SOCKV5_EVENT_MAX)
 				if(m_is_sta_mode == Q6_WAN)
@@ -769,8 +790,9 @@ int IPACM_Wan::handle_addr_evt(ipacm_event_data_addr *data)
 		}
 
 		/* Store the public ip address when in passthrough mode which will be used when wan is down. */
-		if ((m_is_sta_mode == Q6_WAN) && (is_default_gateway == true) &&
-			data->ipv4_addr == inet_network(IPACM_IPPASSTHROUGH_WAN_IP))
+		if ((m_is_sta_mode == Q6_WAN) && (is_default_gateway == true &&
+			data->ipv4_addr == inet_network(IPACM_IPPASSTHROUGH_WAN_IP)) ||
+			(ip_collision_pdn_info.enable))
 		{
 			curr_wan_ip = data->ipv4_addr;
 			public_wan_v4_addr = wan_v4_addr;
@@ -932,9 +954,9 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 				delete this;
 				return;
 			}
-			else if (IPACM_Iface::ipacmcfg->ipacm_ip_passthrough_mode)
+			else if (IPACM_Iface::ipacmcfg->ipacm_ip_passthrough_mode || ip_collision_pdn_info.enable)
 			{
-				/* In Passthrough mode, config will be updated after WAN is up.
+				/* In Passthrough or Collision mode, config will be updated after WAN is up.
 				 * restore the WAN netdev index.
 				 */
 				if(IPACM_Iface::ipa_get_if_index(dev_name, &(if_index)))
@@ -1352,6 +1374,34 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 		}
 		break;
 
+	case IPA_IP_COLLISION_UPDATE_EVENT:
+		{
+			ipacm_event_ip_collision_pdn_info *data = (ipacm_event_ip_collision_pdn_info *)param;
+			IPACMDBG_H("received v4 IPA_IP_COLLISION_UPDATE_EVENT at wan interface %s\n", dev_name);
+			ipa_interface_index = iface_ipa_index_query(data->if_index);
+			if (ipa_interface_index == ipa_if_num)
+			{
+				IPACMDBG_H("received v4 IPA_IP_COLLISION_UPDATE_EVENT for wan %s, %s ,%d\n", dev_name, data->dev_name, ipa_if_num);
+				ip_collision_pdn_info.enable = data->enable;
+				strlcpy(ip_collision_pdn_info.dev_name, data->dev_name, IPA_RESOURCE_NAME_MAX);
+
+				if (ip_collision_pdn_info.enable)
+				{
+					ip_collision_pdn_info.VlanID = data->VlanID;
+					ip_collision_pdn_info.if_index = data->if_index;
+					IPACMDBG_H("IP Collision enabled: Interface: %d, VlanId: %d\n",
+							ip_collision_pdn_info.if_index,
+							ip_collision_pdn_info.VlanID);
+				}
+				else
+				{
+					IPACMDBG_H("IP Collision disabled, reset config\n");
+					ip_collision_pdn_info.VlanID = 0;
+					ip_collision_pdn_info.if_index = 0;
+				}
+			}
+		}
+		break;
 #ifdef FEATURE_VLAN_MPDN
 	case IPA_ROUTE_ADD_VLAN_PDN_EVENT:
 		{

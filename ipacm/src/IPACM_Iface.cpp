@@ -451,8 +451,15 @@ void IPACM_Iface::iface_addr_query
 						{
 							IPACMDBG_H("current_ip4_addr: (0x%x)\n", (*curr_ip4_addr));
 							IPACMDBG_H("iface ip4 address: (0x%x)\n", ntohl(iface_ipv4.s_addr));
+							
+							/* This is to handle race condition in collision case.
+							 * RTM_NEWADDR for collision IP is received before WAN
+							 * interface is created. While handling this NEWADDR, the
+							 * interface already has the dummy address.*/
 
-							*curr_ip4_addr = ntohl(iface_ipv4.s_addr);
+							if(!IPACM_Iface::ipacmcfg->is_ip_collision_enabled(ifa->ifa_name))
+								*curr_ip4_addr = ntohl(iface_ipv4.s_addr);
+							freeifaddrs(myaddrs);
 							return;
 						}
 						else

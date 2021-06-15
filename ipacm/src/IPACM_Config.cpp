@@ -150,7 +150,8 @@ const char *ipacm_event_name[] = {
 	__stringify(IPA_DEL_SOCKSv5_CONN),                     /* ipa_socksv5_msg */
 #endif
 	__stringify(IPA_MSG_FILTER_NAT_EVENT),                 /* ipacm_event_data_sw_allow/sw_allow_data */
-	__stringify(IPACM_EVENT_MAX),
+	__stringify(IPA_IP_COLLISION_UPDATE_EVENT),            /* ipacm_ip_collision_pdn_info */
+	__stringify(IPACM_EVENT_MAX)
 };
 
 IPACM_Config::IPACM_Config()
@@ -2208,6 +2209,120 @@ int IPACM_Config::get_vlan_l2tp_mapping(char *client_iface, l2tp_vlan_mapping_in
 	return IPACM_FAILURE;
 }
 #endif
+
+int IPACM_Config::ipa_get_if_idx_by_vid (uint16_t vlan_id)
+{
+	list<vlan_iface_info>::iterator it_vlan;
+	int if_index = 0;
+
+	for(it_vlan = m_vlan_iface.begin(); it_vlan != m_vlan_iface.end(); it_vlan++)
+	{
+		if(it_vlan->vlan_id == vlan_id)
+		{
+			if(IPACM_Iface::ipa_get_if_index(it_vlan->vlan_iface_name, &(if_index)))
+			{
+				IPACMDBG_H("Error getting interface index\n");
+				return -1;
+			}
+			break;
+		}
+	}
+	IPACMDBG_H("Found interface index as %d for vid %d\n", if_index, vlan_id);
+	return if_index;
+}
+
+void IPACM_Config::update_private_subnet_collision (bool collision_enabled, uint16_t vlan_id)
+{
+	uint16_t vid;
+	int if_index;
+	ipacm_event_data_fid *data_fid;
+	ipacm_cmd_q_data evt_data;
+
+	if(collision_enabled)
+	{
+		for(int i = 0; i < ipa_num_private_subnet; i++)
+		{
+			vid = get_bridge_vlan_mapping_from_subnet(private_subnet_table[i].subnet_addr);
+			if(vlan_id == vid)
+			{
+				IPACMDBG_H("IP collision enabled for subnet: 0x%x VLAN ID: %d\n",
+						private_subnet_table[i].subnet_addr, vlan_id);
+				private_subnet_table[i].isCollisionSubnet = true;
+			}
+		}
+	}
+	else
+	{
+		for(int i = 0; i < ipa_num_private_subnet; i++)
+		{
+			vid = get_bridge_vlan_mapping_from_subnet(private_subnet_table[i].subnet_addr);
+			if(vlan_id == vid)
+			{
+				IPACMDBG_H("IP collision disabled for subnet:0x%x VLAN ID: %d\n",
+						private_subnet_table[i].subnet_addr, vlan_id);
+				private_subnet_table[i].isCollisionSubnet = false;
+			}
+		}
+	}
+
+	data_fid = (ipacm_event_data_fid *)malloc(sizeof(ipacm_event_data_fid));
+	memset(data_fid, 0, (sizeof(ipacm_event_data_fid)));
+	if(vlan_id != 0)
+	{
+		if_index = ipa_get_if_idx_by_vid(vlan_id);
+		if(if_index != -1)
+			data_fid->if_index = if_index;
+	}
+	evt_data.event = IPA_PRIVATE_SUBNET_CHANGE_EVENT;
+	evt_data.evt_data = data_fid;
+	IPACMDBG_H("Posting IPA_PRIVATE_SUBNET_CHANGE_EVENT with if_index: %d\n", if_index);
+	IPACM_EvtDispatcher::PostEvt(&evt_data);
+	return;
+}
+
+void IPACM_Config::ip_collision_config_update(ipa_ioc_pdn_config *pdn_config)
+{
+	int indx;
+
+	if(pthread_mutex_lock(&ip_collision_lock) != 0)
+	{
+		IPACMERR("Unable to lock the mutex\n");
+		return;
+	}
+	if (pdn_config->enable)
+	{
+		indx = get_free_ip_collision_pdn_index(pdn_config->dev_name, pdn_config->u.collison_cfg.vlan_id);
+		if (indx < MAX_NUM_IP_COLLISION_MPDN)
+		{
+			IPACMDBG_H("Enable IP Collision: table index %d, vlan: %d\n",
+					indx, pdn_config->u.collison_cfg.vlan_id);
+			strlcpy(ip_collision_mpdn_table[indx].dev_name,
+				pdn_config->dev_name, IPA_RESOURCE_NAME_MAX);
+			ip_collision_mpdn_table[indx].vlan_id = pdn_config->u.collison_cfg.vlan_id;
+			ip_collision_mpdn_table[indx].valid_entry = true;
+		}
+		else
+			IPACMERR("IP Collision supports only 15 PDNs\n");
+	}
+	else
+	{
+		indx = get_ip_collision_pdn_index(pdn_config);
+		if ((indx != -1) && (indx < MAX_NUM_IP_COLLISION_MPDN))
+		{
+			/* Reset the configuration */
+			IPACMDBG_H("Disable IP Collision: table index %d, VLAN: %d\n",
+					indx, pdn_config->u.collison_cfg.vlan_id);
+			memset(ip_collision_mpdn_table[indx].dev_name, 0,
+				IPA_RESOURCE_NAME_MAX);
+			ip_collision_mpdn_table[indx].vlan_id = 0;
+			ip_collision_mpdn_table[indx].valid_entry = false;
+		}
+		else
+			IPACMERR("IP Collision PDN not found\n");
+	}
+	pthread_mutex_unlock(&ip_collision_lock);
+	return;
+}
 
 #if defined(FEATURE_SOCKSv5) && defined (IPA_SOCKV5_EVENT_MAX)
 void IPACM_Config::update_socksv5_client_v6_addr(uint32_t* ipv6_addr)

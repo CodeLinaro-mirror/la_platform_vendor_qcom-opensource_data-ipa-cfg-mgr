@@ -216,6 +216,7 @@ typedef enum
 	IPA_LAN_CLIENT_UPDATE_EVENT,              /* ipacm_event_data_mac */
 #endif
 	IPA_MSG_FILTER_NAT_EVENT,                 /* ipacm_event_data_sw_allow/sw_allow_data */
+	IPA_IP_COLLISION_UPDATE_EVENT,            /* ipacm_ip_collision_pdn_info */
 	IPA_EXTERNAL_EVENT_MAX,
 
 	IPA_HANDLE_WAN_UP,                        /* ipacm_event_iface_up  */
@@ -319,6 +320,7 @@ typedef struct
 {
 	uint32_t subnet_addr;
 	uint32_t subnet_mask;
+	bool isCollisionSubnet;
 } ipa_private_subnet;
 
 
@@ -435,6 +437,15 @@ typedef struct
 	uint32_t wan_ipv4_addr;
 	uint32_t wan_ipv6_prefix[2];
 }ipacm_event_route_vlan;
+
+typedef struct
+{
+	uint8_t enable;
+	uint16_t VlanID;
+	int if_index;
+	char dev_name[IPA_RESOURCE_NAME_MAX];
+}ipacm_event_ip_collision_pdn_info;
+
 
 typedef struct
 {

@@ -99,6 +99,7 @@ IPACM_ConntrackListener::IPACM_ConntrackListener() :
 #ifdef IPA_IOCTL_SET_PKT_THRESHOLD
 	 IPACM_EvtDispatcher::registr(IPA_PKT_THRESHOLD_UPDATE_EVENT, this);
 #endif
+	 IPACM_EvtDispatcher::registr(IPA_MOVE_NAT_TBL_EVENT, this);
 
 #ifdef CT_OPT
 	 p_lan2lan = IPACM_LanToLan::getLan2LanInstance();
@@ -126,6 +127,7 @@ void IPACM_ConntrackListener::event_callback(ipa_cm_event_id evt,
 	const ipacm_event_iface_up *wan_data = NULL;
 	ipacm_event_connection *data_evt_conn = NULL;
 	ipacm_event_iface_up wan_data_local;
+	memset(&wan_data_local, 0, sizeof(wan_data_local));
 #ifdef FEATURE_SOCKSv5
 	ipa_socksv5_msg *socksv5_info = NULL;
 #endif
@@ -330,7 +332,10 @@ void IPACM_ConntrackListener::event_callback(ipa_cm_event_id evt,
 		 IPACMDBG("Received IPA_NEIGH_CLIENT_IP_ADDR_DEL_EVENT event\n");
 		 HandleNonNatIPAddr(data, false);
 		 break;
-
+	 case IPA_MOVE_NAT_TBL_EVENT:
+		 IPACMDBG_H("Received IPA_MOVE_NAT_TBL_EVENT event\n");
+		 HandleNatTableMove(data);
+		 break;
 	 default:
 			IPACMDBG("Ignore cmd %d\n", evt);
 			break;
@@ -937,7 +942,7 @@ void IPACM_ConntrackListener::HandleNeighIpAddrDelEvt_v6(const IpAddress& ip)
 void IPACM_ConntrackListener::HandleVlanUp(void *in_param)
 {
 	ipacm_event_vlan_pdn *vlanup_data = (ipacm_event_vlan_pdn *)in_param;
-	IPACMDBG_H("Recevied below information during VLAN PDN up,\n");
+	IPACMDBG_H("Received below information during VLAN PDN up,\n");
 	IPACMDBG_H("IPType: %d, vlan_id:%d, mux id %d\n",
 		vlanup_data->iptype,
 		vlanup_data->VlanID,
@@ -1677,6 +1682,7 @@ void IPACM_ConntrackListener::PostRouteAddVlanPdn(uint32_t public_ip)
 		IPACMERR("couldn't allocate memory for new vlan pdn event\n");
 		return;
 	}
+	memset(vlan_data, 0, sizeof(ipacm_event_route_vlan));
 	vlan_data->iptype = IPA_IP_v4;
 	vlan_data->wan_ipv4_addr = public_ip;
 	evt_data.evt_data = vlan_data;
@@ -1902,7 +1908,7 @@ int IPACM_ConntrackListener::AddORDeleteNatEntry(const nat_entry_bundle *input, 
 			{
 				if(!input->IsVlanUp)
 				{
-					IPACMDBG_H("Detected VLAN WAN UP\n");
+					IPACMDBG_H("Send VLAN WAN UP event\n");
 					*sendVlanEvent = true;
 					IPACMDBG_H("vlan Wan is not up, cache connections\n");
 					nat_inst->CacheEntry(input->rule);
@@ -1961,7 +1967,7 @@ int IPACM_ConntrackListener::AddORDeleteNatEntry(const nat_entry_bundle *input, 
 			{
 				if(!input->IsVlanUp)
 				{
-					IPACMDBG_H("Detected VLAN WAN UP\n");
+					IPACMDBG_H("Send VLAN WAN UP event\n");
 					*sendVlanEvent = true;
 					IPACMDBG_H("vlan Wan is not up, cache connections\n");
 					nat_inst->CacheEntry(input->rule);
@@ -3089,3 +3095,38 @@ void IPACM_ConntrackListener::update_pkt_threshold(void *in_param)
 	return ;
 }
 #endif
+
+void IPACM_ConntrackListener::HandleNatTableMove(void *in_param)
+{
+	int ret;
+	int fd_wwan_ioctl;
+	ipacm_event_move_nat *data_nat = (ipacm_event_move_nat *)in_param;
+
+	IPACMDBG_H("handling nat table move request\n");
+
+	fd_wwan_ioctl = open(WWAN_QMI_IOCTL_DEVICE_NAME, O_RDWR);
+	if(fd_wwan_ioctl < 0)
+	{
+		IPACMERR("Failed to open %s.\n", WWAN_QMI_IOCTL_DEVICE_NAME);
+		return;
+	}
+
+	if(data_nat->nat_move_direction == QMI_IPA_MOVE_NAT_TO_DDR_V01) {
+		ret = nat_inst->MoveTable(true);
+	}
+	else {
+		ret = nat_inst->MoveTable(false);
+	}
+
+	IPACMDBG_H("sending indication to Q6 about transition %s\n",
+		ret ? "failure" : "success");
+
+	ret = ioctl(fd_wwan_ioctl, WAN_IOC_NOTIFY_NAT_MOVE_RES, ret);
+	if(ret != 0)
+	{
+		IPACMERR("Failed sending NAT TABLR MOVE indication with ret %d\n ", ret);
+	}
+
+	close(fd_wwan_ioctl);
+}
+

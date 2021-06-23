@@ -50,6 +50,7 @@
 #include <list>
 #endif
 #include <map>
+#include <set>
 #include<algorithm>
 
 typedef struct
@@ -132,6 +133,7 @@ typedef struct {
 	uint32_t mac_v4_flt_rule_hdl;
 	uint32_t mac_v6_flt_rule_hdl;
 	bool mac_sw_enabled;
+	bool current_blocked;
 } mac_flt_type;
 
 typedef struct {
@@ -247,6 +249,11 @@ public:
 	/* Indicates whether l2tp is enabled or not. */
 	int ipacm_flt_enable;
 
+#ifdef FEATURE_EoGRE
+	ipa_ipgre_info eogre_info;
+	bool           eogre_enabled;
+#endif
+
 #ifdef FEATURE_VLAN_MPDN
 	bool vlan_firewall_change_handle;
 
@@ -261,6 +268,10 @@ public:
 	struct ipa_ioc_get_rt_tbl rt_tbl_lan_v4, rt_tbl_wan_v4, rt_tbl_default_v4, rt_tbl_v6, rt_tbl_wan_v6;
 	struct ipa_ioc_get_rt_tbl rt_tbl_wan_dl;
 	struct ipa_ioc_get_rt_tbl rt_tbl_odu_v4, rt_tbl_odu_v6;
+
+
+	/* Indicates current number of client ipv6 */
+	int ipa_num_clients_ipv6;
 
 	bool isMCC_Mode;
 	pthread_mutex_t mac_flt_info_lock;
@@ -284,6 +295,13 @@ public:
 	void update_client_info(uint8_t *mac_addr, tether_client_info *client_info, bool is_add);
 #endif
 
+#ifdef FEATURE_IPACM_PER_CLIENT_STATS
+	/* list to capture mac addrs of clients for which stats are enabled */
+	std::set<std::array<uint8_t, 6>> mac_addrs_stats_cache;
+	void stats_client_info(uint8_t *mac_addr, bool is_add);
+	bool client_in_stats_cache(uint8_t *mac_addr);
+	pthread_mutex_t stats_client_info_lock;
+#endif
 #if defined(FEATURE_L2TP) || defined(FEATURE_VLAN_MPDN)
 	pthread_mutex_t vlan_l2tp_lock;
 	std::list<vlan_iface_info> m_vlan_iface;
@@ -886,6 +904,7 @@ public:
 			IPACMERR("unable to allocate memory for event data_socksv5\n");
 			return IPACM_FAILURE;
 		}
+		memset(vlan_data, 0, sizeof(ipacm_event_route_vlan));
 
 		if (iptype == IPA_IP_v4)
 		{

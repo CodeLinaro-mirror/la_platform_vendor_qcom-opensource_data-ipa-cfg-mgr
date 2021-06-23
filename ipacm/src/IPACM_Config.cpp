@@ -147,6 +147,11 @@ const char *ipacm_event_name[] = {
 	__stringify(IPA_MAC_ADD_DEL_FLT_EVENT),                /* ipacm_event_data_mac */
 	__stringify(IPA_IP_PASS_UPDATE_EVENT),          /* ipacm_ip_pass_pdn_info */
 	__stringify(IPA_HANDLE_IP_PASS_PDN_INFO_UPDATE_EVENT),         /* Handle PDN info update.*/
+	__stringify(IPA_MOVE_NAT_TBL_EVENT),                   /* ipacm_event_move_nat */
+#ifdef FEATURE_EoGRE
+	__stringify(IPA_HANDLE_EoGRE_UP),                      /* Handle eogre enable event. */
+	__stringify(IPA_HANDLE_EoGRE_DOWN),                    /* Handle eogre disable event. */
+#endif
 	__stringify(IPACM_EVENT_MAX)
 };
 
@@ -162,6 +167,7 @@ IPACM_Config::IPACM_Config()
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
 	ipacm_lan_stats_enable = false;
 	ipacm_lan_stats_enable_set = false;
+	pthread_mutex_init(&stats_client_info_lock, NULL);
 #ifdef IPA_HW_FNR_STATS
 	memset(&fnr_counters, 0, sizeof(fnr_counters));
 	memset(cnt_idx, 0, sizeof(cnt_idx));
@@ -182,6 +188,7 @@ IPACM_Config::IPACM_Config()
 	ipa_nat_iface_entries = 0;
 	ipa_sw_rt_enable = false;
 	ipa_bridge_enable = false;
+	ipa_num_clients_ipv6 = 0;
 	isMCC_Mode = false;
 	ipa_max_valid_rm_entry = 0;
 	ipacm_l2tp_enable = 0;
@@ -233,6 +240,10 @@ IPACM_Config::IPACM_Config()
 	pthread_mutex_init(&nat_iface_lock, NULL);
 	IPACMDBG_H(" create IPACM_Config constructor\n");
 	pthread_mutex_init(&mac_flt_info_lock, NULL);
+#ifdef FEATURE_EoGRE
+	memset(&eogre_info, 0, sizeof(eogre_info));
+	eogre_enabled = false;
+#endif
 	return;
 }
 
@@ -2794,7 +2805,16 @@ UPDATE:
 				IPACMDBG_H("Previous  MAC addr to be whitelisted %02x:%02x:%02x:%02x:%02x:%02x\n",
 						 mac_addr[0], mac_addr[1], mac_addr[2],
 						 mac_addr[3], mac_addr[4], mac_addr[5]);
-				it->second->is_blacklist = false;
+				if(it->second->current_blocked == false) {
+					IPACMDBG_H("remove this client from the mac list as whitelisted\n");
+					free(IPACM_Iface::ipacmcfg->mac_flt_lists.at(it->first));
+					IPACM_Iface::ipacmcfg->mac_flt_lists.at(it->first) = NULL;
+					IPACM_Iface::ipacmcfg->mac_flt_lists.erase(it->first);
+				}
+				else
+				{
+					it->second->is_blacklist = false;
+				}
 			}
 	}
 	mac_list.clear();
@@ -2864,7 +2884,16 @@ UPDATE:
 				IPACMDBG_H("Previous  MAC addr to be whitelisted %02x:%02x:%02x:%02x:%02x:%02x\n",
 						 mac_addr[0], mac_addr[1], mac_addr[2],
 						 mac_addr[3], mac_addr[4], mac_addr[5]);
-				it->second->is_blacklist = false;
+				if(it->second->current_blocked == false) {
+					IPACMDBG_H("remove this client from the mac list as whitelisted\n");
+					free(IPACM_Iface::ipacmcfg->mac_flt_lists.at(it->first));
+					IPACM_Iface::ipacmcfg->mac_flt_lists.at(it->first) = NULL;
+					IPACM_Iface::ipacmcfg->mac_flt_lists.erase(it->first);
+				}
+				else
+				{
+					it->second->is_blacklist = false;
+				}
 			}
 	}
 	mac_list.clear();
@@ -3133,3 +3162,57 @@ void IPACM_Config::update_client_info(uint8_t *mac_addr, tether_client_info *cli
 	pthread_mutex_unlock(&mac_flt_info_lock);
 	return;
 }
+
+#ifdef FEATURE_IPACM_PER_CLIENT_STATS
+void IPACM_Config::stats_client_info(uint8_t *mac_addr, bool is_add)
+{
+	uint8_t mac_a[6] = {0};
+	std::array<uint8_t, 6> mac = {0};
+
+	if(pthread_mutex_lock(&stats_client_info_lock) != 0)
+	{
+		IPACMERR("Unable to lock the mutex\n");
+		return ;
+	}
+	memcpy(mac_a,mac_addr,IPA_MAC_ADDR_SIZE);
+	std::copy(std::begin(mac_a), std::end(mac_a), std::begin(mac));
+
+	if(is_add) {
+		mac_addrs_stats_cache.insert(mac);
+	}
+	else
+	{
+		if (mac_addrs_stats_cache.count(mac))
+			mac_addrs_stats_cache.erase(mac);
+	}
+	pthread_mutex_unlock(&stats_client_info_lock);
+	return;
+}
+
+bool IPACM_Config::client_in_stats_cache(uint8_t *mac_addr)
+{
+	bool is_enable = false;
+	uint8_t mac_a[6] = {0};
+	std::array<uint8_t, 6> mac = {0};
+
+	if(pthread_mutex_lock(&stats_client_info_lock) != 0)
+	{
+		IPACMERR("Unable to lock the mutex\n");
+		return is_enable;
+	}
+	memcpy(mac_a,mac_addr,IPA_MAC_ADDR_SIZE);
+	std::copy(std::begin(mac_a), std::end(mac_a), std::begin(mac));
+
+	if (mac_addrs_stats_cache.count(mac))
+	{
+		is_enable = true;
+		mac_addrs_stats_cache.erase(mac);
+	}
+	else
+	{
+		is_enable = false;
+	}
+	pthread_mutex_unlock(&stats_client_info_lock);
+	return is_enable;
+}
+#endif

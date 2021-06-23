@@ -4,8 +4,8 @@
 AC_PREREQ([2.65])
 AC_INIT(data-ipa, 1.0.0)
 AM_INIT_AUTOMAKE(data-ipa, 1.0.0)
-AC_OUTPUT(Makefile ipanat/src/Makefile ipacm/src/Makefile)
-AC_CONFIG_SRCDIR([ipanat/src/ipa_nat_drv.c])
+AC_OUTPUT(Makefile ipacm/src/Makefile)
+AC_CONFIG_SRCDIR([ipacm/src/IPACM_Main.cpp])
 AC_CONFIG_HEADERS([config.h])
 AC_CONFIG_MACRO_DIR([m4])
 
@@ -25,6 +25,11 @@ AC_ARG_WITH(sanitized-headers,
          [Specify the location of the sanitized Linux headers]),
       [CPPFLAGS="$CPPFLAGS -idirafter $withval"])
 AM_CONDITIONAL(KERNELMODULES, [test -n -eq 0])
+
+AC_ARG_WITH(ipanat-headers,
+      AS_HELP_STRING([--with-ipanat-headers=DIR],
+         [Specify the location of the ipanat headers]),
+      [CPPFLAGS="$CPPFLAGS -idirafter $withval"])
 
 AC_ARG_WITH([glib],
       AC_HELP_STRING([--with-glib],
@@ -70,8 +75,8 @@ fi
 
 if test "x$TARGET" = "xsdxlemur"; then
     echo "\n UL firewall feature enabled\n"
-    CPPFLAGS="${CPPFLAGS} -DFEATURE_IPACM_UL_FIREWALL -DFEATURE_IPACM_PER_CLIENT_STATS -DFEATURE_VLAN_MPDN"
-    CFLAGS="${CFLAGS} -DFEATURE_IPACM_UL_FIREWALL -DFEATURE_IPACM_PER_CLIENT_STATS -DFEATURE_VLAN_MPDN"
+    CPPFLAGS="${CPPFLAGS} -DFEATURE_IPACM_UL_FIREWALL -DFEATURE_IPACM_PER_CLIENT_STATS -DFEATURE_VLAN_MPDN -DFEATURE_EoGRE"
+    CFLAGS="${CFLAGS} -DFEATURE_IPACM_UL_FIREWALL -DFEATURE_IPACM_PER_CLIENT_STATS -DFEATURE_VLAN_MPDN -DFEATURE_EoGRE"
 fi
 AM_CONDITIONAL(NO_L2TP, test "x$TARGET" = "xsdx20" || test "x$TARGET" = "xsdxpoorwills" || test "x$TARGET" = "xsdxprairie" || test "x$TARGET" = "xsdxlemur")
 

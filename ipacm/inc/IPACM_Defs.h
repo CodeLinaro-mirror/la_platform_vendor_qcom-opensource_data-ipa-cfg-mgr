@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2013-2019, The Linux Foundation. All rights reserved.
+Copyright (c) 2013-2021, The Linux Foundation. All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are
@@ -44,6 +44,7 @@ IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <fcntl.h>
 #include <linux/msm_ipa.h>
 #include "IPACM_Log.h"
+#include "linux/ipa_qmi_service_v01.h"
 
 #ifdef USE_GLIB
 #include <glib.h>
@@ -74,6 +75,7 @@ extern "C"
 #define IPA_ODU_HDR_NAME_v4  "IPACM_ODU_v4"
 #define IPA_ODU_HDR_NAME_v6  "IPACM_ODU_v6"
 #define IPA_IF_SOCKSv5_NAME  "IPACM_SOCKSv5"
+#define IPA_EOGRE_HDR_NAME   "IPACM_EoGRE_v%d"
 
 #define IPA_MAX_IFACE_ENTRIES 30 /* current: 15 rmnet + 4 wlan + bridge+ eth+ rndis + ecm.*/
 #define IPA_MAX_ALG_ENTRIES 20
@@ -128,7 +130,9 @@ extern "C"
 #define IPA_MAX_NUM_WIFI_CLIENTS  32
 #define IPA_MAX_NUM_WAN_CLIENTS  10
 #define IPA_MAX_NUM_VLAN_CLIENTS 32
-#define IPA_MAX_NUM_ETH_CLIENTS  15
+#define IPA_MAX_NUM_ETH_CLIENTS  32
+#define IPA_MAX_TOTAL_NUM_CLIENTS (IPA_MAX_NUM_WIFI_CLIENTS + IPA_MAX_NUM_WAN_CLIENTS + IPA_MAX_NUM_VLAN_CLIENTS + IPA_MAX_NUM_ETH_CLIENTS)
+#define IPA_MAX_NUM_CLIENTS_IPV6  (IPA_MAX_TOTAL_NUM_CLIENTS * 3)
 #define IPA_MAX_NUM_AMPDU_RULE  15
 #define IPA_MAC_ADDR_SIZE  6
 #define IPA_IPV6_ADDR_SIZE_IN_WORDS 4
@@ -160,9 +164,43 @@ extern "C"
 #define IPA_MAX_IPV6_PREFIX_FLT_RULE 1
 #endif
 
-/*===========================================================================
-										 GLOBAL DEFINITIONS AND DECLARATIONS
-===========================================================================*/
+/*
+ * The following macros allow callers to print the raw bytes making up
+ * an address.  No assumptions are made about endianess.
+ */
+#define IPACM_LOG_V4_ADDR(prefix, ip_addr)								\
+	IPACMDBG_H("%s IPV4 Address %d.%d.%d.%d\n",							\
+			   (prefix) ? prefix : "",									\
+			   ((uint8_t*) ip_addr)[0],  ((uint8_t*) ip_addr)[1],		\
+			   ((uint8_t*) ip_addr)[2],  ((uint8_t*) ip_addr)[3]);
+
+#define IPACM_LOG_V6_ADDR(prefix, ip_addr)								\
+	IPACMDBG_H("%s IPV6 Address %02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x\n", \
+			   (prefix) ? prefix : "",									\
+			   ((uint8_t*) ip_addr)[0],  ((uint8_t*) ip_addr)[1],		\
+			   ((uint8_t*) ip_addr)[2],  ((uint8_t*) ip_addr)[3],		\
+			   ((uint8_t*) ip_addr)[4],  ((uint8_t*) ip_addr)[5],		\
+			   ((uint8_t*) ip_addr)[6],  ((uint8_t*) ip_addr)[7],		\
+			   ((uint8_t*) ip_addr)[8],  ((uint8_t*) ip_addr)[9],		\
+			   ((uint8_t*) ip_addr)[10], ((uint8_t*) ip_addr)[11],		\
+			   ((uint8_t*) ip_addr)[12], ((uint8_t*) ip_addr)[13],		\
+			   ((uint8_t*) ip_addr)[14], ((uint8_t*) ip_addr)[15]);
+
+#define IPACM_LOG_IP_ADDR(prefix, iptype, ip_addr)	\
+	if ( iptype == IPA_IP_v4 )						\
+	{												\
+		IPACM_LOG_V4_ADDR(prefix, ip_addr);			\
+	}												\
+	else											\
+	{												\
+		IPACM_LOG_V6_ADDR(prefix, ip_addr);			\
+	}
+
+/*
+ *===========================================================================
+ * GLOBAL DEFINITIONS AND DECLARATIONS
+ *===========================================================================
+ */
 typedef enum
 {
 	IPA_CFG_CHANGE_EVENT,                 /* NULL */
@@ -259,6 +297,13 @@ typedef enum
 #ifdef IPA_IOCTL_SET_PKT_THRESHOLD
 	IPA_PKT_THRESHOLD_UPDATE_EVENT,           /* ipa_set_pkt_threshold */
 #endif
+	IPA_MOVE_NAT_TBL_EVENT,                   /* ipacm_event_move_nat */
+
+#ifdef FEATURE_EoGRE
+	IPA_HANDLE_EoGRE_UP,                      /* ipa_ipgre_info */
+	IPA_HANDLE_EoGRE_DOWN,                    /* ipa_ipgre_info */
+#endif
+
 	IPACM_EVENT_MAX
 } ipa_cm_event_id;
 
@@ -457,6 +502,11 @@ typedef struct
 	uint8_t ip_pass_skip_nat;
 	bool is_xlat;
 }ipacm_event_vlan_pdn;
+
+typedef struct
+{
+	ipa_move_nat_type_enum_v01 nat_move_direction;
+}ipacm_event_move_nat;
 
 typedef enum
 {

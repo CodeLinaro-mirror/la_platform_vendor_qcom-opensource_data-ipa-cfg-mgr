@@ -143,14 +143,16 @@ bool IPACM_LanToLan::has_l2tp_iface()
 void IPACM_LanToLan::event_callback(ipa_cm_event_id event, void* param)
 {
 	ipacm_event_eth_bridge *eth_bridge_data;
+	const char* eventName;
 	ipa_ioc_vlan_iface_info *vlan_iface_data;
 
 #ifdef FEATURE_L2TP
 	ipa_ioc_l2tp_vlan_mapping_info *l2tp_vlan_mapping_data;
 #endif
 	ipacm_event_data_all *vlan_data;
-
-	IPACMDBG_H("Get %s event.\n", IPACM_Iface::ipacmcfg->getEventName(event));
+	eventName = IPACM_Iface::ipacmcfg->getEventName(event);
+	if (eventName != NULL)
+		IPACMDBG_H("Get %s event.\n", eventName);
 
 	switch(event)
 	{

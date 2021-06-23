@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2013-2020, The Linux Foundation. All rights reserved.
+Copyright (c) 2013-2021, The Linux Foundation. All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are
@@ -261,12 +261,13 @@ int NatApp::AddPdn(uint32_t pub_ip, uint8_t mux_id, bool is_sta, bool ip_pass)
 				curCnt--;
 				continue;
 			}
+			IPACMDBG("cache entry %d rule handle %d\n", cnt, cache[cnt].rule_hdl);
 			cache[cnt].enabled = true;
 
 			IPACMDBG("new pdn added below rule successfully\n");
 			iptodot("Private IP", nat_rule.private_ip);
 			iptodot("Target IP", nat_rule.target_ip);
-			IPACMDBG("Private Port:%d \t Target Port: %d\t", nat_rule.private_port, nat_rule.target_port);
+			IPACMDBG("Private Port:%d \t Target Port: %d\n", nat_rule.private_port, nat_rule.target_port);
 			IPACMDBG("Public Port:%d\n", nat_rule.public_port);
 			IPACMDBG("protocol: %d\n", nat_rule.protocol);
 			IPACMDBG("pdn index: %d\n", nat_rule.pdn_index);
@@ -349,12 +350,13 @@ int NatApp::AddTable(uint32_t pub_ip, uint8_t mux_id, bool is_sta)
 					curCnt--;
 					continue;
 				}
+				IPACMDBG("cache entry %d rule handle %d\n", cnt, cache[cnt].rule_hdl);
 				cache[cnt].enabled = true;
 
 				IPACMDBG("On wan-iface reset added below rule successfully\n");
 				iptodot("Private IP", nat_rule.private_ip);
 				iptodot("Target IP", nat_rule.target_ip);
-				IPACMDBG("Private Port:%d \t Target Port: %d\t", nat_rule.private_port, nat_rule.target_port);
+				IPACMDBG("Private Port:%d \t Target Port: %d\n", nat_rule.private_port, nat_rule.target_port);
 				IPACMDBG("Public Port:%d\n", nat_rule.public_port);
 				IPACMDBG("protocol: %d\n", nat_rule.protocol);
 			}
@@ -465,6 +467,21 @@ int NatApp::DeleteTable(uint32_t pub_ip)
 	pub_ip_addr_pre = pub_ip_addr;
 	Reset();
 	return 0;
+}
+
+int NatApp::MoveTable(bool to_ddr)
+{
+	int ret;
+
+	if (to_ddr) {
+		IPACMDBG_H("direction TO_DDR - move and lock table at DDR\n");
+		ret = ipa_nat_switch_to(IPA_NAT_MEM_IN_DDR, true);
+	} else {
+		IPACMDBG_H("direction TO_SRAM - allow table transition to SRAM\n");
+		ret = ipa_nat_switch_to(IPA_NAT_MEM_IN_DDR, false);
+	}
+
+	return ret;
 }
 
 /* Check for duplicate entries */
@@ -989,7 +1006,7 @@ int NatApp::ResetPwrSaveIf(uint32_t client_lan_ip)
 			IPACMDBG("On power reset added below rule successfully\n");
 			iptodot("Private IP", nat_rule.private_ip);
 			iptodot("Target IP", nat_rule.target_ip);
-			IPACMDBG("Private Port:%d \t Target Port: %d\t", nat_rule.private_port, nat_rule.target_port);
+			IPACMDBG("Private Port:%d \t Target Port: %d\n", nat_rule.private_port, nat_rule.target_port);
 			IPACMDBG("Public Port:%d\n", nat_rule.public_port);
 			IPACMDBG("protocol: %d\n", nat_rule.protocol);
 

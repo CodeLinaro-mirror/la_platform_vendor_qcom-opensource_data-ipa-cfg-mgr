@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2013-2020, The Linux Foundation. All rights reserved.
+Copyright (c) 2013-2021, The Linux Foundation. All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are
@@ -87,15 +87,12 @@ struct ipa_lan_rt_rule
 typedef struct _eth_client_rt_hdl
 {
 	uint32_t eth_rt_rule_hdl_v4;
-	uint32_t eth_rt_rule_hdl_v6[IPV6_NUM_ADDR];
-	uint32_t eth_rt_rule_hdl_v6_wan[IPV6_NUM_ADDR];
 }eth_client_rt_hdl;
 
 typedef struct _ipa_eth_client
 {
 	uint8_t mac[IPA_MAC_ADDR_SIZE];
 	uint32_t v4_addr;
-	uint32_t v6_addr[IPV6_NUM_ADDR][4];
 	uint32_t hdr_hdl_v4;
 	uint32_t hdr_hdl_v6;
 	bool route_rule_set_v4;
@@ -188,6 +185,54 @@ typedef struct _xlat_context
 	uint32_t active_pdn_count;
 }xlat_context;
 
+#ifdef FEATURE_EoGRE
+/*
+ * Structure for maintaining state associated with eogre route
+ * contexts and rules...
+ */
+typedef struct eogre_route_data_s
+{
+	uint32_t header_hdl;
+	uint32_t proc_ctx_eogre_add_hdl;
+	uint32_t proc_ctx_eogre_rmv_hdl;
+	uint32_t rt_eogre_add_hdl;
+	uint32_t rt_eogre_rmv_hdl;
+	uint32_t rt_tbl_hdl;
+	uint32_t flt_eogre_1st_pass_hdl;
+} eogre_route_data_t;
+
+/*
+ * An IP v4 plus GRE header..
+ */
+typedef struct v4_gre_hdr_s
+{
+	uint32_t words[6]; /* extra (ie. last) uint32_t for gre header */
+} v4_gre_hdr_t;
+
+/*
+ * Where things reside in the struct above...
+ */
+#define IPV4_SRC_ADDR_IDX  3
+#define IPV4_DST_ADDR_IDX  4
+#define IPV4_GRE_PROT_IDX  5
+
+/*
+ * An IP v6 plus GRE header.
+ */
+typedef struct v6_gre_hdr_s
+{
+	uint32_t words[13]; /* extra (ie. last) uint32_t for gre header */
+} v6_gre_hdr_t;
+
+/*
+ * Where things reside in the struct above...
+ */
+#define IPV6_SRC_ADDR_IDX  2
+#define IPV6_DST_ADDR_IDX  6
+#define IPV6_GRE_PROT_IDX 12
+
+#endif /* #ifdef FEATURE_EoGRE */
+
 /* lan iface */
 class IPACM_Lan : public IPACM_Iface
 {
@@ -263,6 +308,65 @@ public:
 
 	static bool odu_up;
 
+#ifdef FEATURE_EoGRE
+	/*
+	 * The following is for keeping eogre route rule state...
+	 *
+	 * We're using two below (one for v4, one for v6) because there
+	 * may be a mismatch between the tunnel iptype (ie. the one
+	 * specified in the eogre enable) and the Vlan Ethernet packet's
+	 * IP payload type. In other words:
+	 *
+	 *   The tunnel may be v4, while the Vlan Ethernet packet's IP
+	 *   type is v6; or
+	 *
+	 *   The tunnel may be v6, while the Vlan Ethernet packet's IP
+	 *   type is v4...
+	 */
+	eogre_route_data_t eogre_route_data[IPA_IP_MAX];
+
+	void eogre_up();
+
+	void eogre_down();
+
+	int eogre_do_rt_work(
+		ipa_ipgre_info& ipgre_info );
+
+	void eogre_route_data_init(
+		enum ipa_ip_type iptype );
+
+	uint32_t eogre_get_rt_tbl_hdl(
+		enum ipa_ip_type iptype );
+
+	int eogre_make_hdr_for_add_ctx(
+		ipa_ipgre_info& ipgre_info );
+
+	int eogre_make_hdr_add_ctx(
+		ipa_ipgre_info& ipgre_info,
+		uint32_t        hdr_2use = 0 );
+
+	int eogre_make_hdr_rem_ctx(
+		ipa_ipgre_info& ipgre_info );
+
+	int eogre_make_header_add_rt_rule(
+		ipa_ipgre_info& ipgre_info,
+		uint32_t        ctx_2use = 0 );
+
+	int eogre_make_header_rem_rt_rule(
+		ipa_ipgre_info& ipgre_info );
+
+	void eogre_clear_route_data(
+		enum ipa_ip_type             iptype,
+		ipa_ioc_query_intf_rx_props* rx_prop = 0 );
+
+	int eogre_add_catchup_rule(
+		enum ipa_ip_type iptype );
+
+	int update_complementary_table(
+		ipa_flt_rule_add& flt_rule_entry,
+		ipa_ip_type       iptype );
+#endif
+
 	/* install UL filter rule from Q6 */
 #ifdef FEATURE_VLAN_MPDN
 	virtual int handle_uplink_filter_rule(ipacm_ext_prop *prop, ipa_ip_type iptype, uint8_t pdn_mux_id, bool notif_only, bool is_xlat = false);
@@ -327,12 +431,13 @@ public:
 
 	/* Delete UL firewall filter rules from LAN prod pipe */
 	virtual int delete_uplink_filter_rule_ul(ul_firewall_t *ul_firewall);
-	
+
 	/* delete UL firewall rules, to be sent to Q6 side*/
 	virtual int disable_dft_firewall_rules_ul_ex(int vid);
 #endif
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
 
+	void handle_stats_client_connect(int if_index, uint8_t *mac_addr );
 	/* handle lan client connect event. */
 	virtual int handle_lan_client_connect(uint8_t *mac_addr);
 
@@ -563,8 +668,7 @@ protected:
 	int add_tcp_syn_flt_rule_l2tp(ipa_ip_type inner_ip_type);
 
 	void HandleNeighIpAddrAddEvt(ipacm_event_data_all *data);
-	void HandleNeighIpAddrDelEvt(bool ipv4_set, uint32_t ipv4_addr,
-		int ipv6_set, const uint32_t ipv6_addr[IPV6_NUM_ADDR][IPA_IPV6_ADDR_SIZE_IN_WORDS]);
+	virtual void HandleNeighIpAddrDelEvt(int clt_indx);
 
 	int add_mac_flt_blacklist_rule(uint8_t *mac_addr, ipa_ip_type iptype, uint32_t *flt_rule_hdl);
 	int del_mac_flt_blacklist_rule(uint32_t flt_rule_hdl, ipa_ip_type iptype);
@@ -1044,6 +1148,7 @@ private:
 	bool ipv6_header_set;
 
 	bool is_l2tp_iface;
+
 #ifdef FEATURE_L2TP
 	uint32_t l2tp_ul_dummy_hdr_hdl; /* 4-byte dummy header */
 
@@ -1170,9 +1275,10 @@ private:
 		int cnt;
 		int num_eth_client_tmp = num_eth_client;
 
-		IPACMDBG_H("Passed MAC %02x:%02x:%02x:%02x:%02x:%02x\n",
+		IPACMDBG_H("Passed MAC %02x:%02x:%02x:%02x:%02x:%02x, left client: %d\n",
 						 mac_addr[0], mac_addr[1], mac_addr[2],
-						 mac_addr[3], mac_addr[4], mac_addr[5]);
+						 mac_addr[3], mac_addr[4], mac_addr[5],
+						 num_eth_client);
 
 		for(cnt = 0; cnt < num_eth_client_tmp; cnt++)
 		{
@@ -1239,11 +1345,10 @@ private:
 	{
 		uint32_t tx_index;
 		uint32_t rt_hdl;
-		int num_v6;
+		int num_v6 = 0;
 
 		if(iptype == IPA_IP_v4)
 		{
-
 		    for(tx_index = 0; tx_index < iface_query->num_tx_props; tx_index++)
 		    {
 		        if((tx_prop->tx[tx_index].ip == IPA_IP_v4) && (get_client_memptr(eth_client, clt_indx)->route_rule_set_v4==true)) /* for ipv4 */
@@ -1263,40 +1368,48 @@ private:
 		     {
 				get_client_memptr(eth_client, clt_indx)->route_rule_set_v4 = false;
 		     }
-
 		}
 
 		if(iptype == IPA_IP_v6)
 		{
-			for(tx_index = 0; tx_index < iface_query->num_tx_props; tx_index++)
+			IPACMDBG_H("Current %d client has %d ipv6 route_set %d,ipa_num_clients_ipv6:%d\n",
+				clt_indx, get_client_memptr(eth_client, clt_indx)->ipv6_set,
+				get_client_memptr(eth_client, clt_indx)->route_rule_set_v6,
+					IPACM_Iface::ipacmcfg->ipa_num_clients_ipv6);
+			for (auto it = rt_hdl_v6_list[clt_indx].begin(); it != rt_hdl_v6_list[clt_indx].end();++it)
 			{
-				if((tx_prop->tx[tx_index].ip == IPA_IP_v6) && (get_client_memptr(eth_client, clt_indx)->route_rule_set_v6 != 0)) /* for ipv6 */
+				num_v6 ++;
+				if(it->second->route_rule_set_v6 == true)
 				{
-					for(num_v6 =0;num_v6 < get_client_memptr(eth_client, clt_indx)->route_rule_set_v6;num_v6++)
+					IPACMDBG_H("v6 addr : 0x%08x:%08x:%08x:%08x\n",
+						it->first[0], it->first[1], it->first[2], it->first[3]);
+
+					for(tx_index = 0; tx_index < iface_query->num_tx_props; tx_index++)
 					{
-						IPACMDBG_H("Delete client index %d ipv6 RT-rules for %d-st ipv6 for tx:%d\n", clt_indx,num_v6,tx_index);
-						rt_hdl = get_client_memptr(eth_client, clt_indx)->eth_rt_hdl[tx_index].eth_rt_rule_hdl_v6[num_v6];
-						if(m_routing.DeleteRoutingHdl(rt_hdl, IPA_IP_v6) == false)
+						if(tx_prop->tx[tx_index].ip == IPA_IP_v6) /* for ipv6 */
+						{
+							IPACMDBG_H("Delete client index %d ipv6 RT-rules for %d-st ipv6 for tx:%d\n", clt_indx,num_v6,tx_index);
+							rt_hdl = it->second->hdl_v6[tx_index].rt_rule_hdl_v6;
+							if(m_routing.DeleteRoutingHdl(rt_hdl, IPA_IP_v6) == false)
 							{
 								return IPACM_FAILURE;
 							}
-
-							rt_hdl = get_client_memptr(eth_client, clt_indx)->eth_rt_hdl[tx_index].eth_rt_rule_hdl_v6_wan[num_v6];
+							rt_hdl = it->second->hdl_v6[tx_index].rt_rule_hdl_v6_wan;
 							if(m_routing.DeleteRoutingHdl(rt_hdl, IPA_IP_v6) == false)
 							{
 								return IPACM_FAILURE;
 							}
 						}
-                    }
-		    } /* end of for loop */
-
-		    /* clean the ipv6 RT rules for eth-client:clt_indx */
-		    if(get_client_memptr(eth_client, clt_indx)->route_rule_set_v6 != 0) /* for ipv6 */
-		    {
-		        get_client_memptr(eth_client, clt_indx)->route_rule_set_v6 = 0;
-            }
+					} /* end of tx loop */
+					it->second->route_rule_set_v6 = false;
+					get_client_memptr(eth_client, clt_indx)->route_rule_set_v6 = 0;
+				} /* end of route_rule_set_v6 */
+			} /* end of for loop */
+			IPACMDBG_H("Current clnt-index:%d ipv6_set= %d, route_rule_set_v6= %d, update ipa_num_clients_ipv6:%d\n",
+				clt_indx, get_client_memptr(eth_client, clt_indx)->ipv6_set,
+				get_client_memptr(eth_client, clt_indx)->route_rule_set_v6,
+				IPACM_Iface::ipacmcfg->ipa_num_clients_ipv6);
 		}
-
 		return IPACM_SUCCESS;
 	}
 
@@ -1337,9 +1450,6 @@ private:
 	/*handle reset usb-client rt-rules */
 	int handle_lan_client_reset_rt(ipa_ip_type iptype);
 
-#ifdef FEATURE_IPACM_UL_FIREWALL
-	void change_to_network_order(ipa_ip_type iptype, ipa_rule_attrib* attrib);
-#endif
 #ifdef FEATURE_L2TP
 	/* install l2tp dl rules */
 	int install_l2tp_dl_rules(ipacm_event_data_all *data, int index);
@@ -1369,6 +1479,7 @@ private:
 	void delete_eth_mac_flt_rules();
 	int handle_eth_client_mac_flt_route_rule(ipa_ip_type iptype, int clt_index, bool is_blacklist);
 	int handle_eth_mac_flt_conn_disc(uint8_t * mac_addr, bool con_state_flag);
+
 };
 
 #endif /* IPACM_LAN_H */

@@ -3549,6 +3549,9 @@ int IPACM_Wan::config_dft_firewall_rules_ex(struct ipa_flt_rule_add *rules, int 
 #endif
 	int num_rules = 0, original_num_rules = 0, res, pos = rule_offset;
 
+	/* WA to handle timing issue when QCMAP updates firewall.xml late than IPACM access the profile */
+	IPACMDBG_H("WA to sleep for 1s\n");
+	sleep(1);
 	IPACMDBG_H("ip-family: %d; \n", iptype);
 
 	if (rx_prop == NULL)

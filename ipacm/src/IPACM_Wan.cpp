@@ -5447,6 +5447,7 @@ int IPACM_Wan::handle_route_del_evt_ex(ipa_ip_type iptype)
 			else
 			{
 				wandown_data->is_sta = false;
+				wandown_data->mux_id = ext_prop->ext[0].mux_id;
 			}
 			evt_data.event = IPA_HANDLE_WAN_DOWN;
 			evt_data.evt_data = (void *)wandown_data;
@@ -5477,6 +5478,7 @@ int IPACM_Wan::handle_route_del_evt_ex(ipa_ip_type iptype)
 			else
 			{
 				wandown_data->is_sta = false;
+				wandown_data->mux_id = ext_prop->ext[0].mux_id;
 			}
 			memcpy(wandown_data->ipv6_prefix, ipv6_prefix, sizeof(wandown_data->ipv6_prefix));
 #ifdef FEATURE_VLAN_MPDN

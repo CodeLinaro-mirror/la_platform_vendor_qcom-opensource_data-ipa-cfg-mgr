@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013-2019,2020 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2013-2021, The Linux Foundation. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -833,7 +833,7 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 #endif
 		if(ip_type == IPA_IP_v4 || ip_type == IPA_IP_MAX)
 		{
-			handle_wan_down(data_wan->is_sta);
+			handle_wan_down(data_wan->is_sta, data_wan->mux_id);
 		}
 		break;
 
@@ -2118,7 +2118,7 @@ int IPACM_Lan::notify_flt_removed(uint8_t mux_id)
 }
 
 /* delete filter rule for wan_down event for IPv4*/
-int IPACM_Lan::handle_wan_down(bool is_sta_mode)
+int IPACM_Lan::handle_wan_down(bool is_sta_mode, uint8_t mux_id)
 {
 	if (rx_prop == NULL)
 	{
@@ -2128,10 +2128,11 @@ int IPACM_Lan::handle_wan_down(bool is_sta_mode)
 	
 	if(is_sta_mode == false)
 	{
+		IPACMDBG_H("Wan_down for mux_id: %d\n", mux_id);
 		if(del_ul_flt_rules(IPA_IP_v4))
 			return IPACM_FAILURE;
 
-		if(notify_flt_removed(IPACM_Iface::ipacmcfg->GetQmapId()))
+		if(notify_flt_removed(mux_id))
 			return IPACM_FAILURE;
 	}
 	else

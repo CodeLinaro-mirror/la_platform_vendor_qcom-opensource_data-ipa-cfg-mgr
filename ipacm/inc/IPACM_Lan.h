@@ -217,7 +217,7 @@ public:
 	virtual int notify_flt_removed(uint8_t mux_id);
 
 	/* delete filter rule for wan_down event*/
-	virtual int handle_wan_down(bool is_sta_mode);
+	virtual int handle_wan_down(bool is_sta_mode, uint8_t mux_id = 0);
 
 	/* delete filter rule for wan_down event*/
 	virtual int handle_wan_down_v6(bool is_sta_mode);

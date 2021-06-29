@@ -706,72 +706,11 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 #ifdef FEATURE_EoGRE
 					if ( IPACM_Iface::ipacmcfg->eogre_enabled )
 					{
-						ipa_ip_type other =
-							( IPACM_Iface::ipacmcfg->eogre_info.iptype == IPA_IP_v4 ) ?
-							IPA_IP_v6 : IPA_IP_v4;
-
-						uint32_t hdr =
-							eogre_route_data[IPACM_Iface::ipacmcfg->eogre_info.iptype].header_hdl;
-
-						ipa_ipgre_info copy = IPACM_Iface::ipacmcfg->eogre_info;
-
-						copy.iptype = other;
-
-						IPACMDBG_H("eogre is enabled, need to check/add eogre rules.\n");
-
-						if ( IPACM_Iface::ipacmcfg->eogre_info.iptype == data->iptype &&
-							 ! eogre_route_data[data->iptype].flt_eogre_1st_pass_hdl )
-						{
-							eogre_up();
-						}
-
-						/*
-						 * This is the case for v4 tunneling and v6
-						 * addr is added last. Need to add
-						 * complimentary rules since above call won't
-						 * add it.  But for the v6 tunneling case, we
-						 * need to not call this since the original
-						 * rules havent been created so we check if
-						 * hdr was already created.  The complimentary
-						 * rules will be added by eogre_up in this
-						 * case
-						 */
-						else if ( data->iptype == other &&
-								  ! eogre_route_data[other].flt_eogre_1st_pass_hdl &&
-								  hdr )
-						{
-							/*
-							 * Add complementary ctx/rt
-							 */
-							if ( eogre_make_hdr_add_ctx(copy, hdr)   != 0 ||
-								 eogre_make_header_add_rt_rule(copy) != 0 )
-							{
-								IPACMERR("failed above.\n");
-								return;
-							}
-
-							/*
-							 * Add complementary flt rule
-							 */
-							ipa_flt_rule_add flt_rule_entry;
-
-							memset(&flt_rule_entry, 0, sizeof(flt_rule_entry));
-
-							flt_rule_entry.at_rear                  = true;
-							flt_rule_entry.flt_rule_hdl             = -1;
-							flt_rule_entry.status                   = -1;
-
-							flt_rule_entry.rule.retain_hdr          = 1;
-							flt_rule_entry.rule.to_uc               = 1;
-							flt_rule_entry.rule.action              = IPA_PASS_TO_ROUTING;
-							flt_rule_entry.rule.rt_tbl_hdl          = eogre_get_rt_tbl_hdl(other);
-							flt_rule_entry.rule.attrib.attrib_mask |= IPA_FLT_DST_ADDR;
-
-#ifdef FEATURE_IPA_V3
-							flt_rule_entry.rule.hashable = true;
-#endif
-							update_complementary_table(flt_rule_entry, other);
-						}
+						IPACMDBG_H(
+							"A previous eogre enable needs to be undone, then redone. "
+							"Need to call eogre_down followed by an eogre_up\n");
+						eogre_down();
+						eogre_up();
 					}
 #endif
 					IPACMDBG_H("Finish handling IPA_ADDR_ADD_EVENT for ip-family(%d)\n", data->iptype);
@@ -14118,6 +14057,8 @@ void IPACM_Lan::eogre_up()
 		IPACMERR("eogre_add_catchup_rule failed\n");
 		return;
 	}
+
+	eogre_mod_ula_rule(0xFFFFFFFF);
 }
 
 void IPACM_Lan::eogre_down()
@@ -14145,6 +14086,8 @@ void IPACM_Lan::eogre_down()
 	del_ul_flt_rules(iptype);
 
 	IPACM_Iface::ipacmcfg->SetQmapId(0xFF);
+
+	eogre_mod_ula_rule(0xFF000000);
 }
 
 int IPACM_Lan::eogre_do_rt_work(
@@ -14770,7 +14713,7 @@ int IPACM_Lan::eogre_make_header_add_rt_rule(
 		IPACM_Iface::ipacmcfg->rt_tbl_v6.name);
 
 	rt_rule_entry->at_rear                 = true;
-	rt_rule_entry->rule.dst                = IPA_CLIENT_APPS_LAN_CONS;
+	rt_rule_entry->rule.dst                = IPA_CLIENT_DUMMY_CONS;
 	rt_rule_entry->rule.attrib.attrib_mask = IPA_FLT_DST_ADDR;
 	rt_rule_entry->rule.hdr_proc_ctx_hdl   = ctx_2use;
 
@@ -14848,7 +14791,7 @@ int IPACM_Lan::eogre_make_header_rem_rt_rule(
 		IPACM_Iface::ipacmcfg->rt_tbl_wan_v6.name);
 
 	rt_rule_entry->at_rear                 = false;
-	rt_rule_entry->rule.dst                = IPA_CLIENT_ETHERNET_CONS;
+	rt_rule_entry->rule.dst                = tx_prop->tx[0].dst_pipe;
 	rt_rule_entry->rule.attrib.attrib_mask = IPA_FLT_SRC_ADDR | IPA_FLT_DST_ADDR;
 	rt_rule_entry->rule.hdr_proc_ctx_hdl   =
 		eogre_route_data[iptype].proc_ctx_eogre_rmv_hdl;

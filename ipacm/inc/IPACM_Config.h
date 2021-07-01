@@ -509,6 +509,17 @@ public:
 						ret = true;
 						break;
 				}
+
+				/* Special case for IPACM_CLIENT_DEVICE_TYPE_USB with mac is NULL. */
+				if ((ip_pass_mpdn_table[indx].ip_pass_dev_type == dev_type) &&
+					(dev_type == IPACM_CLIENT_DEVICE_TYPE_USB) &&
+					(memcmp(ip_pass_mpdn_table[indx].ip_pass_mac, null_mac, IPA_MAC_ADDR_SIZE) == 0) &&
+					((ip_pass_mpdn_table[indx].vlan_id == vlan_id) ||
+					(ip_pass_mpdn_table[indx].is_default_pdn && vlan_id == 0)))
+				{
+						ret = true;
+						break;
+				}
 			}
 		}
 

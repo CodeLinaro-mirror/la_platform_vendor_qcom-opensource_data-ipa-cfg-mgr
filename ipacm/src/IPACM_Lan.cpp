@@ -2340,6 +2340,47 @@ int IPACM_Lan::handle_vlan_neighbor(ipacm_event_data_all *data)
 		HandleNeighIpAddrAddEvt(data);
 #endif
 
+		/* Special handling for VLAN clients in IP passthrough mode.
+		 * simillar to IPA_HANDLE_WAN_VLAN_PDN_UP.
+		 */
+		if ((data->iptype == IPA_IP_v4) &&
+			IPACM_Iface::ipacmcfg->is_ip_pass_enabled(device_type,
+					data->mac_addr, vlan_id))
+		{
+			/* Special handling for IPACM_CLIENT_DEVICE_TYPE_USB*/
+			if ((device_type != IPACM_CLIENT_DEVICE_TYPE_USB) ||
+				(!IPACM_Iface::ipacmcfg->isPrivateSubnet(data->ipv4_addr)))
+			{
+				/* Check if VLAN PDN is already up and add UL rules. */
+				uint8_t mux_id = 0;
+				if(!(IPACM_Wan::GetMuxByVid(vlan_id, &mux_id, IPA_IP_v4)))
+				{
+					ipacm_event_vlan_pdn vlan_data;
+					/* create event data and call the handler */
+					vlan_data.iptype = IPA_IP_v4;
+					vlan_data.mux_id = mux_id;
+	
+					if(handle_vlan_pdn_up(&vlan_data))
+					{
+						IPACMERR("failed handling v4 VLAN up for VID %d, dev %s\n",
+							vlan_id,
+							dev_name);
+					}
+					else
+					{
+						IPACMDBG_H("handled v4 vlan pdn up for VID %d, dev %s\n",
+							vlan_id,
+							dev_name);
+					}
+				}
+				else
+				{
+					IPACMERR("VLAN PDN not up for VID %d, dev %s\n",
+						vlan_id,
+						dev_name);
+				}
+			}
+		}
 #ifdef IPA_L2TP_TUNNEL_UDP
 		if(!IPACM_Iface::ipacmcfg->check_l2tp_iface(data->iface_name) ||
 				IPACM_Iface::ipacmcfg->ipacm_l2tp_enable == IPACM_L2TP)
@@ -4734,18 +4775,21 @@ int IPACM_Lan::handle_eth_client_ipaddr(ipacm_event_data_all *data)
 	IPACMDBG_H("Ip-type received %d\n", data->iptype);
 	if (data->iptype == IPA_IP_v4)
 	{
-		IPACMDBG_H("ipv4 address: 0x%x\n", data->ipv4_addr);
+		IPACMDBG_H("ipv4 address: 0x%x, vlan-id: %d, device_type %d\n", data->ipv4_addr, vlan_id, device_type);
 		if (data->ipv4_addr != 0) /* not 0.0.0.0 */
 		{
 			if (IPACM_Iface::ipacmcfg->is_ip_pass_enabled(device_type,
 				data->mac_addr, vlan_id))
 			{
-
 				/* check if the ip is in private subnet and ignore. */
 				if (IPACM_Iface::ipacmcfg->isPrivateSubnet(data->ipv4_addr))
 				{
-					IPACMDBG_H("Client is in IP passthrough mode, but got private IP: 0x%x\n", data->ipv4_addr);
-					return IPACM_FAILURE;
+					/* Special handling for USB for IPPT NAT-enable */
+					if(device_type != IPACM_CLIENT_DEVICE_TYPE_USB)
+					{
+						IPACMDBG_H("Client is in IP passthrough mode, but got private IP: 0x%x\n", data->ipv4_addr);
+						return IPACM_FAILURE;
+					}
 				}
 			}
 			else

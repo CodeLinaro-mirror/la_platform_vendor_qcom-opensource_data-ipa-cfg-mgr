@@ -171,6 +171,7 @@ public:
 	static int num_v6_flt_rule;
 #ifdef FEATURE_IPACM_UL_FIREWALL
 	static int num_firewall_v6_ul;
+	static int num_firewall_v6_ul_sent_to_q6;
 #endif
 
 	ipacm_wan_iface_type m_is_sta_mode;

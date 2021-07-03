@@ -3915,7 +3915,8 @@ int IPACM_Lan::delete_uplink_filter_rule_ul(ipa_ip_type iptype, ul_firewall_t *u
 		IPACMDBG_H("Frag deleted successfully\n");
 	}
 
-	num_of_rules = IPACM_Wan::num_firewall_v6_ul;
+	num_of_rules = ul_firewall->num_ul_firewall_rules;
+	IPACMDBG_H("No of Firewall filter rule to delete %d\n",num_of_rules);
 
 	if (true == ul_firewall->ul_catch_installed)
 		num_of_rules++;
@@ -3948,7 +3949,7 @@ int IPACM_Lan::delete_uplink_filter_rule_ul(ipa_ip_type iptype, ul_firewall_t *u
 int IPACM_Lan::install_wan_firewall_rule_ul(bool enable, ipa_ip_type iptype)
 {
 	int len, res = IPACM_SUCCESS;
-	uint8_t mux_id, num_of_ul_rules = IPACM_Wan::num_firewall_v6_ul;
+	uint8_t mux_id, num_of_ul_rules = IPACM_Wan::num_firewall_v6_ul_sent_to_q6;
 	ipa_ioc_add_flt_rule *pFilteringTable_v6 = NULL;
 	mux_id = IPACM_Iface::ipacmcfg->GetQmapId();
 	if (rx_prop == NULL)
@@ -4231,6 +4232,7 @@ int IPACM_Lan::config_dft_firewall_rules_ul_ex(struct ipa_flt_rule_add *rules, i
 				}
 			}
 		} /* end of firewall ipv6 filter rule add for loop*/
+		IPACM_Wan::num_firewall_v6_ul_sent_to_q6 = rule_v6_ul;
 		IPACM_Lan::install_wan_firewall_rule_ul(true, iptype);
 	}
 	IPACMDBG_H ("Configured (%d == %d) UL firewall rules to be sent to Q6\n ", IPACM_Wan::num_firewall_v6_ul, rule_v6_ul);
@@ -4530,6 +4532,7 @@ int IPACM_Lan::config_dft_firewall_rules_ul(struct ipa_flt_rule_add *rules, ipa_
 	IPACMDBG_H ("Configured and installed (%d == %d) UL firewall rules on pipe (%d)\n ",
 		IPACM_Wan::num_firewall_v6_ul, rule_v6_ul, (int)m_pFilteringTable->ep);
 	IPACMDBG_H ("Firewall Status (%d)\n", IPACM_Wan::firewall_config_ul.firewall_enable);
+	ul_firewall->num_ul_firewall_rules = rule_v6_ul;
 	if(m_pFilteringTable != NULL)
 	{
 		free(m_pFilteringTable);

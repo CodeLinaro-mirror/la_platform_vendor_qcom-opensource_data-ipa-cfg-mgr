@@ -396,7 +396,7 @@ typedef struct
 typedef struct
 {
 	enum ipa_ip_type iptype;
-	uint8_t VlanID;
+	uint16_t VlanID;
 	int mux_id;
 	int ipv4_addr;
 }ipacm_event_vlan_pdn;
@@ -418,7 +418,7 @@ typedef struct _ipacm_ifacemgr_data
 struct vlan_iface_info
 {
 	char vlan_iface_name[IPA_RESOURCE_NAME_MAX];
-	uint8_t vlan_id;
+	uint16_t vlan_id;
 	uint32_t vlan_iface_ipv6_addr[4];
 	uint8_t vlan_client_mac[6];
 	uint32_t vlan_client_ipv6_addr[4];
@@ -431,7 +431,7 @@ struct l2tp_vlan_mapping_info
 	uint8_t l2tp_session_id;
 	/* the following are mdm vlan iface info (name, vlan id, ipv6 addr) */
 	char vlan_iface_name[IPA_RESOURCE_NAME_MAX];
-	uint8_t vlan_id;
+	uint16_t vlan_id;
 	uint32_t vlan_iface_ipv6_addr[4];
 	/* the following are MIB3 vlan client info (mac, ipv6 addr) */
 	uint8_t vlan_client_mac[6];

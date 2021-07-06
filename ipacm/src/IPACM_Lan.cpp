@@ -928,7 +928,7 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 				if(ipa_interface_index == ipa_if_num)
 #endif
 				{
-					uint8_t vlan_id = 0;
+					uint16_t vlan_id = 0;
 
 					if (data->iptype == IPA_IP_v6)
 					{
@@ -1301,7 +1301,7 @@ int IPACM_Lan::del_ul_flt_rules(enum ipa_ip_type iptype)
 int IPACM_Lan::handle_vlan_neighbor(ipacm_event_data_all *data)
 {
 	ipacm_event_new_neigh_vlan *data_vlan;
-	uint8_t vlan_id = 0;
+	uint16_t vlan_id = 0;
 	bool new_prefix = false;
 
 	if (IPACM_Iface::ipacmcfg->get_vlan_id(data->iface_name, &vlan_id))
@@ -1381,10 +1381,10 @@ int IPACM_Lan::handle_vlan_neighbor(ipacm_event_data_all *data)
 	return IPACM_SUCCESS;
 }
 
-bool IPACM_Lan::is_vlan_IF(uint8_t vlan_id)
+bool IPACM_Lan::is_vlan_IF(uint16_t vlan_id)
 {
 	char vlan_iface_name[IPA_RESOURCE_NAME_MAX];
-	char vlan_suffix[5];
+	char vlan_suffix[6];
 
 	/* concatenate the vlan id to the IF name and check iface exists */
 	snprintf(vlan_suffix, sizeof(vlan_suffix), ".%d", vlan_id);
@@ -1412,7 +1412,7 @@ int IPACM_Lan::check_vlan_PDNUp(enum ipa_ip_type iptype)
 {
 	int i = 0;
 	ipacm_event_vlan_pdn vlan_data;
-	uint8_t Ids[IPA_MAX_NUM_HW_PDNS];
+	uint16_t Ids[IPA_MAX_NUM_HW_PDNS];
 
 	if(IPACM_Iface::ipacmcfg->get_iface_vlan_ids(dev_name, Ids))
 	{
@@ -1667,7 +1667,7 @@ int IPACM_Lan::handle_del_ipv6_addr(ipacm_event_data_all *data)
 	uint32_t tx_index;
 	uint32_t rt_hdl;
 	int num_v6 =0, clnt_indx;
-	uint8_t vlan_id = 0;
+	uint16_t vlan_id = 0;
 
 #ifdef FEATURE_VLAN_MPDN
 	if(is_vlan_event(data->iface_name))
@@ -2459,7 +2459,7 @@ int IPACM_Lan::handle_wan_up_ex(ipacm_ext_prop *ext_prop, ipa_ip_type iptype, ui
 }
 
 /* handle ETH client initial, construct full headers (tx property) */
-int IPACM_Lan::handle_eth_hdr_init(uint8_t *mac_addr, ipacm_bridge *bridge, uint8_t vlan_id, bool isVlan)
+int IPACM_Lan::handle_eth_hdr_init(uint8_t *mac_addr, ipacm_bridge *bridge, uint16_t vlan_id, bool isVlan)
 {
 
 #define ETH_IFACE_INDEX_LEN 2
@@ -2971,7 +2971,7 @@ int IPACM_Lan::handle_eth_client_ipaddr(ipacm_event_data_all *data)
 	int v6_num;
 	uint32_t ipv6_link_local_prefix = 0xFE800000;
 	uint32_t ipv6_link_local_prefix_mask = 0xFFC00000;
-	uint8_t vlan_id = 0;
+	uint16_t vlan_id = 0;
 
 	IPACMDBG_H("number of eth clients: %d\n", num_eth_client);
 	IPACMDBG_H("event MAC %02x:%02x:%02x:%02x:%02x:%02x\n",
@@ -3122,7 +3122,7 @@ int IPACM_Lan::handle_eth_client_ipaddr(ipacm_event_data_all *data)
 }
 
 /*handle eth client routing rule*/
-int IPACM_Lan::handle_eth_client_route_rule(uint8_t *mac_addr, ipa_ip_type iptype, uint8_t vlan_id)
+int IPACM_Lan::handle_eth_client_route_rule(uint8_t *mac_addr, ipa_ip_type iptype, uint16_t vlan_id)
 {
 	struct ipa_ioc_add_rt_rule *rt_rule;
 	struct ipa_rt_rule_add *rt_rule_entry;
@@ -4040,7 +4040,7 @@ int IPACM_Lan::handle_odu_route_del()
 }
 
 /*handle eth client del mode*/
-int IPACM_Lan::handle_eth_client_down_evt(uint8_t *mac_addr, uint8_t vlan_id)
+int IPACM_Lan::handle_eth_client_down_evt(uint8_t *mac_addr, uint16_t vlan_id)
 {
 	int clt_indx;
 	uint32_t tx_index;
@@ -5864,7 +5864,7 @@ void IPACM_Lan::configure_v6_ul_firewall(void)
 		}
 	}
 #ifdef FEATURE_VLAN_MPDN
-	uint8_t Ids[IPA_MAX_NUM_HW_PDNS];
+	uint16_t Ids[IPA_MAX_NUM_HW_PDNS];
 
 	if(IPACM_Iface::ipacmcfg->get_iface_vlan_ids(dev_name, Ids))
 	{

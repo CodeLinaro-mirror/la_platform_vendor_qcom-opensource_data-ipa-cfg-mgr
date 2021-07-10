@@ -2700,10 +2700,14 @@ int IPACM_Lan::handle_addr_evt(ipacm_event_data_addr *data)
 		/* initial fragment/multicast/broadcast/filter rule. Fragment has set_rear = false, will be above icmp rule */
 		init_fl_rule(data->iptype);
 
-		add_tcp_syn_flt_rule(data->iptype);
-
-
-		/* populate the flt rule offset for eth bridge(offset = icmp)  */
+#ifdef FEATURE_L2TP
+		if((IPACM_Iface::ipacmcfg->ipacm_l2tp_enable == IPACM_L2TP) &&
+			ipa_if_cate == WLAN_IF)
+		{
+			add_tcp_syn_flt_rule(data->iptype);
+		}
+#endif
+		/* populate the flt rule offset for eth bridge (offset = icmp) */
 		eth_bridge_flt_rule_offset[data->iptype] = ipv4_icmp_flt_rule_hdl[0];
 		/* populate the flt rule offset for mtu_offset (offset = broadcast rule)*/
 		mtu_flt_rule_offset[data->iptype] = dft_v4fl_rule_hdl[IPV4_DEFAULT_FILTERTING_RULES - 1];
@@ -2983,9 +2987,6 @@ int IPACM_Lan::add_vlan_private_subnet(ipacm_bridge *bridge)
 	IPACM_Iface::ipacmcfg->private_subnet_table[IPACM_Iface::ipacmcfg->ipa_num_private_subnet].subnet_mask = bridge->bridge_netmask;
 	IPACM_Iface::ipacmcfg->private_subnet_table[IPACM_Iface::ipacmcfg->ipa_num_private_subnet].subnet_addr = bridge->bridge_ipv4_addr & bridge->bridge_netmask;
 	IPACM_Iface::ipacmcfg->ipa_num_private_subnet++;
-
-	/* handle private subnet change for this interface first*/
-	modify_private_subnet();
 
 	/* notify other ifaces about this subnet */
 	data_fid = (ipacm_event_data_fid *)malloc(sizeof(ipacm_event_data_fid));
@@ -5975,7 +5976,6 @@ int IPACM_Lan::handle_down_evt()
 			res = IPACM_FAILURE;
 			goto fail;
 		}
-
 
 		if(m_filtering.DeleteFilteringHdls(private_fl_rule_hdl, IPA_IP_v4, num_wan_subnet_rules) == false)
 		{
@@ -9981,6 +9981,7 @@ fail:
 	return res;
 }
 #endif
+
 #ifdef FEATURE_IPV6_NAT
 /* construct 1st pass v6NAT flt-rule to trigger v6ct */
 int IPACM_Lan::add_ipv6_nat_ula_prefix_flt_rule()

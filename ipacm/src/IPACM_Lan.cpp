@@ -2308,6 +2308,43 @@ int IPACM_Lan::handle_vlan_neighbor(ipacm_event_data_all *data)
 		/* Add NAT rules after ipv4 RT rules are set */
 		HandleNeighIpAddrAddEvt(data);
 
+		/* Special handling for VLAN clients in IP passthrough mode.
+		* simillar to IPA_HANDLE_WAN_VLAN_PDN_UP.
+		*/
+		if ((data->iptype == IPA_IP_v4) &&
+			IPACM_Iface::ipacmcfg->is_ip_pass_enabled(device_type,
+					data->mac_addr, vlan_id))
+		{
+			/* Check if VLAN PDN is already up and add UL rules. */
+			uint8_t mux_id = 0;
+			if(!(IPACM_Wan::GetMuxByVid(vlan_id, &mux_id, IPA_IP_v4)))
+			{
+				ipacm_event_vlan_pdn vlan_data;
+				/* create event data and call the handler */
+				vlan_data.iptype = IPA_IP_v4;
+				vlan_data.mux_id = mux_id;
+
+				if(handle_vlan_pdn_up(&vlan_data))
+				{
+					IPACMERR("failed handling v4 VLAN up for VID %d, dev %s\n",
+						vlan_id,
+						dev_name);
+				}
+				else
+				{
+					IPACMDBG_H("handled v4 vlan pdn up for VID %d, dev %s\n",
+						vlan_id,
+						dev_name);
+				}
+			}
+			else
+			{
+				IPACMERR("VLAN PDN not up for VID %d, dev %s\n",
+					vlan_id,
+					dev_name);
+			}
+		}
+
 		/*
 		 * if this is the first time we have this global ipv6 prefix (or this
 		 * is the default pdn prefix) we can notify WAN that it is a v6 vlan pdn

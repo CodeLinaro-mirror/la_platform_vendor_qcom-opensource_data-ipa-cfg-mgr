@@ -6279,8 +6279,7 @@ int IPACM_Wan::handle_down_evt()
 			goto fail;
 		}
 
-		IPACMDBG_H("Delete %d client header\n", num_wan_client);
-
+		IPACMDBG_H("Delete %d out of %d client header\n", i,  num_wan_client);
 
 		if (get_client_memptr(wan_client, i)->ipv4_header_set == true)
 		{
@@ -6302,6 +6301,12 @@ int IPACM_Wan::handle_down_evt()
 			}
 		}
 
+
+		IPACMDBG_H("client %d has %d ipv6 with rt: %d, current total_v6=%d \n", i,
+			get_client_memptr(wan_client, i)->ipv6_set,
+			get_client_memptr(wan_client, i)->route_rule_set_v6,
+			IPACM_Iface::ipacmcfg->ipa_num_clients_ipv6);
+
 		/* clean up the map and release the memory */
 		for (auto it = rt_hdl_v6_list[i].begin(); it != rt_hdl_v6_list[i].end();++it)
 		{
@@ -6314,16 +6319,11 @@ int IPACM_Wan::handle_down_evt()
 				it->second = NULL;
 			}
 		}
-		IPACMDBG_H("client %d has %d ipv6 with rt: %d, current total_v6=%d \n", i,
-			get_client_memptr(wan_client, i)->ipv6_set,
-			get_client_memptr(wan_client, i)->route_rule_set_v6,
-			IPACM_Iface::ipacmcfg->ipa_num_clients_ipv6);
-			IPACM_Iface::ipacmcfg->ipa_num_clients_ipv6 -= get_client_memptr(wan_client, i)->ipv6_set;
-			IPACMDBG_H("update ipa_num_clients_ipv6 = %d\n", IPACM_Iface::ipacmcfg->ipa_num_clients_ipv6);
-			get_client_memptr(wan_client, i)->ipv6_set = 0;
-			/* clear the map */
-			rt_hdl_v6_list[i].clear();
-
+		IPACM_Iface::ipacmcfg->ipa_num_clients_ipv6 -= get_client_memptr(wan_client, i)->ipv6_set;
+		IPACMDBG_H("update ipa_num_clients_ipv6 = %d\n", IPACM_Iface::ipacmcfg->ipa_num_clients_ipv6);
+		get_client_memptr(wan_client, i)->ipv6_set = 0;
+		/* clear the map */
+		rt_hdl_v6_list[i].clear();
 	} /* end of for loop */
 
 	/* free the edm clients cache */
@@ -8296,11 +8296,13 @@ int IPACM_Wan::handle_wan_client_route_rule(uint8_t *mac_addr, ipa_ip_type iptyp
 					}
 
 					it->second->hdl_v6[tx_index].rt_rule_hdl_v6_wan = rt_rule->rules[0].rt_rule_hdl;
-					IPACMDBG_H("tx:%d, rt rule hdl=%x ip-type: %d\n", tx_index,
-							it->second->hdl_v6[tx_index].rt_rule_hdl_v6_wan, iptype);
 					/* mark as route_rule_set_v6 = true*/
 					if (tx_index + 1 == iface_query->num_tx_props)
 						it->second->route_rule_set_v6 = true;
+
+					IPACMDBG_H("tx:%d, rt rule hdl=%x ip-type: %d route_rule_set_v6(map) %d\n", tx_index,
+							it->second->hdl_v6[tx_index].rt_rule_hdl_v6_wan, iptype,
+							it->second->route_rule_set_v6);
 				} /* v6 map loop */
 			} /* ipv6 handling */
 		} /* end of for loop */

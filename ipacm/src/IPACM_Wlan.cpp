@@ -1080,7 +1080,7 @@ int IPACM_Wlan::handle_wlan_mac_flt_event()
 	/* work on copy list to avoid concurrency issues*/
 	std::map<std::array<uint8_t, 6>, mac_flt_type *> mac_flt_lists = IPACM_Iface::ipacmcfg->get_mac_flt_lists();
 
-	for (auto it = mac_flt_lists.begin(); it != mac_flt_lists.end(); ++it)
+	for (auto it = mac_flt_lists.begin(); it != mac_flt_lists.end();)
 	{
 		std::copy(std::begin(it->first), std::end(it->first), std::begin(mac_addr));
 		wlan_index = get_wlan_client_index(mac_addr);
@@ -1164,9 +1164,15 @@ int IPACM_Wlan::handle_wlan_mac_flt_event()
 				eth_bridge_post_event(IPA_ETH_BRIDGE_CLIENT_ADD, IPA_IP_MAX, mac_addr, NULL, NULL);
 				/* remove from original/copy client list as whitelisted client */
 				IPACM_Iface::ipacmcfg->clear_whitelist_mac_add(mac_addr);
-				mac_flt_lists.erase(it->first);
+				auto itr = it;
+				mac_flt_lists.erase(itr->first);
 			}
 		}
+		else
+		{
+			IPACMERR("wlan client not found/attached \n");
+		}
+		++it;
 	}
 	return IPACM_SUCCESS;
 }

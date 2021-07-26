@@ -1757,6 +1757,7 @@ int IPACM_Lan::del_ul_flt_rules(enum ipa_ip_type iptype)
 		if (num_wan_ul_fl_rule_v4 == 0)
 		{
 			IPACMERR("No modem UL rules were installed, return...\n");
+			modem_ul_v4_set = false;
 			return IPACM_SUCCESS;
 		}
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
@@ -1799,6 +1800,7 @@ int IPACM_Lan::del_ul_flt_rules(enum ipa_ip_type iptype)
 		if(num_wan_ul_fl_rule_v6 == 0)
 		{
 			IPACMERR("No modem UL rules were installed, return...\n");
+			modem_ul_v6_set = false;
 			return IPACM_SUCCESS;
 		}
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
@@ -2229,7 +2231,7 @@ int IPACM_Lan::handle_vlan_pdn_up(ipacm_event_vlan_pdn *data, bool set_mux)
 			else
 #endif
 				ret = handle_uplink_filter_rule(IPACM_Iface::ipacmcfg->GetExtProp(IPA_IP_v6), data->iptype, data->mux_id, false);
-			modem_ul_v6_set = true;
+			modem_ul_v6_set = !!num_wan_ul_fl_rule_v6;
 		}
 		/* for the next PDNs only notify modem about new MUX IDs */
 		else
@@ -2273,7 +2275,7 @@ int IPACM_Lan::handle_vlan_pdn_up(ipacm_event_vlan_pdn *data, bool set_mux)
 			else
 #endif
 				ret = handle_uplink_filter_rule(IPACM_Iface::ipacmcfg->GetExtProp(IPA_IP_v4), data->iptype, data->mux_id, false, true);
-			modem_ul_v4_set = true;
+			modem_ul_v4_set = !!num_wan_ul_fl_rule_v4;
 		}
 		/* for the next PDNs only notify modem about new MUX IDs */
 		else

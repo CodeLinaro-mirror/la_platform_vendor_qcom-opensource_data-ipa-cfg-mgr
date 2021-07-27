@@ -718,6 +718,8 @@ public:
 	void FlushAndCacheVlanTempEntries(uint32_t ip_addr, bool *entry_exists, uint32_t *public_ip);
 #endif
 	void FlushTempEntries(uint32_t, bool, bool isDummy = false);
+	void DeleteTempEntry_port(uint16_t);
+	int DeleteEntry_port(uint16_t);
 };
 
 #endif /* IPACM_CONNTRACK_NATAPP_H */

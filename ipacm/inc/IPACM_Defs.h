@@ -164,6 +164,8 @@ extern "C"
 #define IPA_MAX_IPV6_PREFIX_FLT_RULE 1
 #endif
 
+#define IPA_DUMMY_PREFIX 0xFFFFFFFF
+
 /*
  * The following macros allow callers to print the raw bytes making up
  * an address.  No assumptions are made about endianess.
@@ -296,6 +298,9 @@ typedef enum
 	IPA_HANDLE_IP_PASS_PDN_INFO_UPDATE_EVENT, /* Handle ip pass pdn info update.*/
 #ifdef IPA_IOCTL_SET_PKT_THRESHOLD
 	IPA_PKT_THRESHOLD_UPDATE_EVENT,           /* ipa_set_pkt_threshold */
+#endif
+#ifdef IPA_IOC_SET_IPPT_SW_FLT
+	IPA_IPPT_SW_FLT_LIST_UPDATE_EVENT,        /* ipa_ippt_sw_flt_list_type */
 #endif
 	IPA_MOVE_NAT_TBL_EVENT,                   /* ipacm_event_move_nat */
 

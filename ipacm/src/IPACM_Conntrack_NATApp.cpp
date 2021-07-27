@@ -1182,6 +1182,25 @@ void NatApp::FlushTempEntries(uint32_t ip_addr, bool isAdd,
 	return;
 }
 
+void NatApp::DeleteTempEntry_port(uint16_t port)
+{
+	int cnt;
+
+	IPACMDBG_H("Received port:%d\n", port);
+
+	for(cnt=0; cnt<MAX_TEMP_ENTRIES; cnt++)
+	{
+		if(temp[cnt].private_port == port ||
+			 temp[cnt].target_port == port)
+		{
+			IPACMDBG_H("Clean nat temp entry %d\n", cnt);
+			memset(&temp[cnt], 0, sizeof(nat_table_entry));
+		}
+	}
+
+	return;
+}
+
 int NatApp::DelEntriesOnClntDiscon(uint32_t ip_addr)
 {
 	int cnt, tmp = 0;
@@ -1226,6 +1245,44 @@ int NatApp::DelEntriesOnClntDiscon(uint32_t ip_addr)
 	}
 
 	IPACMDBG("Deleted (but cached) %d entries\n", tmp);
+	return 0;
+}
+
+/* Delete the entry from Nat table for port */
+int NatApp::DeleteEntry_port(uint16_t port)
+{
+	int cnt = 0;
+	IPACMDBG_H("Received port: %d\n", port);
+
+	for(; cnt < max_entries; cnt++)
+	{
+		if(cache[cnt].private_port ==  port ||
+			 cache[cnt].target_port == port)
+		{
+			if(cache[cnt].enabled == true)
+			{
+				log_nat(cache[cnt].protocol,cache[cnt].private_ip,cache[cnt].target_ip,cache[cnt].private_port,\
+					cache[cnt].public_port,cache[cnt].target_port,cache[cnt].src_only,cache[cnt].dst_only,"for deletion\n");
+				if(ipa_nat_del_ipv4_rule(nat_table_hdl, cache[cnt].rule_hdl) < 0)
+				{
+					IPACMERR("%s() %d deletion failed\n", __FUNCTION__, __LINE__);
+				}
+				else
+				{
+					IPACMDBG_H("Deleted Nat entry(%d) Successfully\n", cnt);
+				}
+			}
+			else
+			{
+				IPACMDBG_H("Deleted Nat entry(%d) only from cache\n", cnt);
+			}
+
+			memset(&cache[cnt], 0, sizeof(cache[cnt]));
+			curCnt--;
+			break;
+		}
+	}
+
 	return 0;
 }
 

@@ -280,6 +280,9 @@ void* ipa_driver_msg_notifier(void *param)
 #ifdef IPA_IOCTL_SET_PKT_THRESHOLD
 	ipa_set_pkt_threshold *pkt_th = NULL, *pkt_th_info = NULL;
 #endif
+#ifdef IPA_IOC_SET_IPPT_SW_FLT
+	ipa_ippt_sw_flt_list_type *ippt_sw_flt_list = NULL, *ippt_sw_flt_list_info = NULL;
+#endif
 	struct ipa_move_nat_req_msg_v01 *move_nat;
 	ipacm_event_move_nat *move_nat_data;
 	
@@ -1006,6 +1009,26 @@ void* ipa_driver_msg_notifier(void *param)
 			else{
 				IPACMDBG_H("Ignored IPA_MAC_FLT_EVENT in mac_flt mode %d\n", IPACM_Iface::ipacmcfg->ipacm_flt_enable);
 			}
+			break;
+#endif
+#ifdef IPA_IOC_SET_IPPT_SW_FLT
+		case IPA_IPPT_SW_FLT_EVENT:
+			ippt_sw_flt_list = (ipa_ippt_sw_flt_list_type *)(buffer + sizeof(struct ipa_msg_meta));
+			IPACMDBG_H("Received IPA_IPPT_SW_FLT_EVENT ipv4_enable %d(num:%d) port_enable %d(num:%d)\n",
+				ippt_sw_flt_list->ipv4_enable,
+				ippt_sw_flt_list->num_of_ipv4,
+				ippt_sw_flt_list->port_enable,
+				ippt_sw_flt_list->num_of_port);
+
+			ippt_sw_flt_list_info = (ipa_ippt_sw_flt_list_type *)malloc(sizeof(ipa_ippt_sw_flt_list_type));
+			if(ippt_sw_flt_list_info == NULL)
+			{
+				IPACMERR("Failed to allocate memory.\n");
+				return NULL;
+			}
+			memcpy(ippt_sw_flt_list_info, ippt_sw_flt_list, sizeof(struct ipa_ippt_sw_flt_list_type));
+			evt_data.event = IPA_IPPT_SW_FLT_LIST_UPDATE_EVENT;
+			evt_data.evt_data = ippt_sw_flt_list_info;
 			break;
 #endif
 #ifdef IPA_MTU_EVENT_MAX

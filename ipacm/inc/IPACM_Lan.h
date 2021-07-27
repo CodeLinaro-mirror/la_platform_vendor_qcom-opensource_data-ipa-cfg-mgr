@@ -1376,35 +1376,38 @@ private:
 				clt_indx, get_client_memptr(eth_client, clt_indx)->ipv6_set,
 				get_client_memptr(eth_client, clt_indx)->route_rule_set_v6,
 					IPACM_Iface::ipacmcfg->ipa_num_clients_ipv6);
-			for (auto it = rt_hdl_v6_list[clt_indx].begin(); it != rt_hdl_v6_list[clt_indx].end();++it)
+			if (get_client_memptr(eth_client, clt_indx)->route_rule_set_v6 != 0)
 			{
-				num_v6 ++;
-				if(it->second->route_rule_set_v6 == true)
+				for (auto it = rt_hdl_v6_list[clt_indx].begin(); it != rt_hdl_v6_list[clt_indx].end();++it)
 				{
-					IPACMDBG_H("v6 addr : 0x%08x:%08x:%08x:%08x\n",
-						it->first[0], it->first[1], it->first[2], it->first[3]);
-
-					for(tx_index = 0; tx_index < iface_query->num_tx_props; tx_index++)
+					num_v6 ++;
+					if(it->second->route_rule_set_v6 == true)
 					{
-						if(tx_prop->tx[tx_index].ip == IPA_IP_v6) /* for ipv6 */
+						IPACMDBG_H("v6 addr : 0x%08x:%08x:%08x:%08x\n",
+							it->first[0], it->first[1], it->first[2], it->first[3]);
+
+						for(tx_index = 0; tx_index < iface_query->num_tx_props; tx_index++)
 						{
-							IPACMDBG_H("Delete client index %d ipv6 RT-rules for %d-st ipv6 for tx:%d\n", clt_indx,num_v6,tx_index);
-							rt_hdl = it->second->hdl_v6[tx_index].rt_rule_hdl_v6;
-							if(m_routing.DeleteRoutingHdl(rt_hdl, IPA_IP_v6) == false)
+							if(tx_prop->tx[tx_index].ip == IPA_IP_v6) /* for ipv6 */
 							{
-								return IPACM_FAILURE;
+								IPACMDBG_H("Delete client index %d ipv6 RT-rules for %d-st ipv6 for tx:%d\n", clt_indx,num_v6,tx_index);
+								rt_hdl = it->second->hdl_v6[tx_index].rt_rule_hdl_v6;
+								if(m_routing.DeleteRoutingHdl(rt_hdl, IPA_IP_v6) == false)
+								{
+									return IPACM_FAILURE;
+								}
+								rt_hdl = it->second->hdl_v6[tx_index].rt_rule_hdl_v6_wan;
+								if(m_routing.DeleteRoutingHdl(rt_hdl, IPA_IP_v6) == false)
+								{
+									return IPACM_FAILURE;
+								}
 							}
-							rt_hdl = it->second->hdl_v6[tx_index].rt_rule_hdl_v6_wan;
-							if(m_routing.DeleteRoutingHdl(rt_hdl, IPA_IP_v6) == false)
-							{
-								return IPACM_FAILURE;
-							}
-						}
-					} /* end of tx loop */
-					it->second->route_rule_set_v6 = false;
-					get_client_memptr(eth_client, clt_indx)->route_rule_set_v6 = 0;
-				} /* end of route_rule_set_v6 */
-			} /* end of for loop */
+						} /* end of tx loop */
+						it->second->route_rule_set_v6 = false;
+						get_client_memptr(eth_client, clt_indx)->route_rule_set_v6 = 0;
+					} /* end of route_rule_set_v6 */
+				} /* end of for loop */
+			}
 			IPACMDBG_H("Current clnt-index:%d ipv6_set= %d, route_rule_set_v6= %d, update ipa_num_clients_ipv6:%d\n",
 				clt_indx, get_client_memptr(eth_client, clt_indx)->ipv6_set,
 				get_client_memptr(eth_client, clt_indx)->route_rule_set_v6,

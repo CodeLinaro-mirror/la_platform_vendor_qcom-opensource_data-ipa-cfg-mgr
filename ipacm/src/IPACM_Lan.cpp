@@ -5216,13 +5216,14 @@ int IPACM_Lan::handle_eth_client_route_rule_ext_v2(uint8_t *mac_addr, ipa_ip_typ
 					}
 
 					it->second->hdl_v6[tx_index].rt_rule_hdl_v6_wan = ((struct ipa_rt_rule_add_ext_v2 *)rt_rule->rules)[0].rt_rule_hdl;
-					IPACMDBG_H("tx:%d, rt rule id=%x, rt rule hdl=%x ip-type: %d\n", tx_index,
-						rt_rule_entry->rule_id,
-						it->second->hdl_v6[tx_index].rt_rule_hdl_v6_wan, iptype);
-
 					/* mark as route_rule_set_v6 = true*/
 					if (tx_index + 1 == iface_query->num_tx_props)
 						it->second->route_rule_set_v6 = true;
+
+					IPACMDBG_H("tx:%d, rt rule id=%x, rt rule hdl=%x ip-type: %d route_rule_set_v6(map) %d\n", tx_index,
+						rt_rule_entry->rule_id,
+						it->second->hdl_v6[tx_index].rt_rule_hdl_v6_wan, iptype,
+						it->second->route_rule_set_v6);
 
 					/* Add IPv6CT rules after ipv6 RT rules are set */
 					memset(&data, 0, sizeof(data));
@@ -5459,13 +5460,15 @@ int IPACM_Lan::handle_eth_client_route_rule_ext(uint8_t *mac_addr, ipa_ip_type i
 		            }
 
 					it->second->hdl_v6[tx_index].rt_rule_hdl_v6_wan = rt_rule->rules[0].rt_rule_hdl;
-					IPACMDBG_H("tx:%d, rt rule id=%x, rt rule hdl=%x ip-type: %d\n", tx_index,
-						rt_rule_entry->rule_id,
-						it->second->hdl_v6[tx_index].rt_rule_hdl_v6_wan, iptype);
-
 					/* mark as route_rule_set_v6 = true*/
 					if (tx_index + 1 == iface_query->num_tx_props)
 						it->second->route_rule_set_v6 = true;
+
+					IPACMDBG_H("tx:%d, rt rule id=%x, rt rule hdl=%x ip-type: %d route_rule_set_v6(map) %d\n", tx_index,
+						rt_rule_entry->rule_id,
+						it->second->hdl_v6[tx_index].rt_rule_hdl_v6_wan, iptype,
+						it->second->route_rule_set_v6);
+
 
 					/* Add IPv6CT rules after ipv6 RT rules are set */
 					memset(&data, 0, sizeof(data));
@@ -6045,6 +6048,8 @@ int IPACM_Lan::handle_eth_client_down_evt(uint8_t *mac_addr, uint16_t vlan_id, i
 #endif //IPA_HW_FNR_STATS
 #endif
 	}
+	/* Clean up the last entry */
+	rt_hdl_v6_list[num_eth_client_tmp].clear();
 
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
 	get_client_memptr(eth_client, clt_indx)->lan_stats_idx = -1;
@@ -6499,7 +6504,7 @@ fail:
 				res = IPACM_FAILURE;
 			}
 
-			IPACMDBG_H("Delete %d client header\n", num_eth_client);
+			IPACMDBG_H("Delete %d out of %d client header\n", i,  num_eth_client);
 
 			if(get_client_memptr(eth_client, i)->ipv4_header_set == true)
 			{
@@ -6519,25 +6524,35 @@ fail:
 				}
 			}
 
-			/* clean up the map and release the memory */
-			for (auto it = rt_hdl_v6_list[i].begin(); it != rt_hdl_v6_list[i].end();++it)
-			{
-				IPACMDBG_H("v6 addr : 0x%08x:%08x:%08x:%08x\n",
-						it->first[0], it->first[1], it->first[2], it->first[3]);
-				/* clean up the map and release the memory */
-				if(it->second != NULL)
-				{
-					free(it->second);
-					it->second = NULL;
-				}
-			}
 			IPACMDBG_H("client %d has %d ipv6 with rt: %d, current total_v6=%d \n", i,
 				get_client_memptr(eth_client, i)->ipv6_set,
 				get_client_memptr(eth_client, i)->route_rule_set_v6,
 				IPACM_Iface::ipacmcfg->ipa_num_clients_ipv6);
+#ifdef FEATURE_VLAN_MPDN
+			IPACMDBG_H("vlan_id %d\n", get_client_memptr(eth_client, i)->vlan_id);
+#endif
+
+			/* clean up the map and release the memory */
+			if (get_client_memptr(eth_client, i)->ipv6_set != 0)
+			{
+				IPACMDBG_H("ipv6_set %d\n", get_client_memptr(eth_client, i)->ipv6_set);
+				for (auto it = rt_hdl_v6_list[i].begin(); it != rt_hdl_v6_list[i].end();++it)
+				{
+					IPACMDBG_H("v6 addr : 0x%08x:%08x:%08x:%08x\n",
+							it->first[0], it->first[1], it->first[2], it->first[3]);
+					/* clean up the map and release the memory */
+					if(it->second != NULL)
+					{
+						free(it->second);
+						it->second = NULL;
+					}
+				}
+			}
+
 			IPACM_Iface::ipacmcfg->ipa_num_clients_ipv6 -= get_client_memptr(eth_client, i)->ipv6_set;
 			IPACMDBG_H("update ipa_num_clients_ipv6 = %d\n", IPACM_Iface::ipacmcfg->ipa_num_clients_ipv6);
 			get_client_memptr(eth_client, i)->ipv6_set = 0;
+
 			/* clear the map */
 			rt_hdl_v6_list[i].clear();
 

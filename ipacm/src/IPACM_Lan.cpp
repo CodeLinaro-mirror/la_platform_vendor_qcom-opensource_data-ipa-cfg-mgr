@@ -780,7 +780,7 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 							}
 						}
 #endif //FEATURE_SOCKSv5
-						else
+						else if(IPACM_Wan::isVlanWanUP_V6())
 							check_vlan_PDNUp(IPA_IP_v6);
 #endif //FEATURE_VLAN_MPDN
 

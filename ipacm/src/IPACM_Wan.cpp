@@ -1475,6 +1475,12 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 					if (ip_pass_pdn_info.enable &&
 						(ip_pass_pdn_info.VlanID != 0))
 					{
+						/* check if it's xlat call */
+						if (is_xlat)
+						{
+							IPACMDBG_H(" IP Passthrough xlat(%d), hadling v6-route_add_pdn\n", is_xlat);
+							handle_route_add_vlan_pdn_evt(IPA_IP_v6, ip_pass_pdn_info.VlanID);
+						}
 						handle_route_add_vlan_pdn_evt(IPA_IP_v4, ip_pass_pdn_info.VlanID);
 					}
 				}

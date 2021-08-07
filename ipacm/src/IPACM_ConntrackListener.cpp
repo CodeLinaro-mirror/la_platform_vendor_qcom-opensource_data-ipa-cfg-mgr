@@ -644,7 +644,7 @@ void IPACM_ConntrackListener::HandleNeighIpAddrAddEvt_v6(const IpAddress& ip, in
 }
 
 #ifdef FEATURE_VLAN_MPDN
-bool IPACM_ConntrackListener::IsVlanIPv4(uint32_t ipv4_address, uint8_t *VlanId)
+bool IPACM_ConntrackListener::IsVlanIPv4(uint32_t ipv4_address, uint16_t *VlanId)
 {
 	iptodot("checking ipv4_address", ipv4_address);
 
@@ -1818,7 +1818,7 @@ void IPACM_ConntrackListener::ProcessTCPorUDPMsg(
 	 uint32_t public_ip;
 	 uint32_t repl_src_ip, repl_dst_ip;
 	 bool SendVlanEvent = false;
-	 uint8_t VlanID = 0;
+	 uint16_t VlanID = 0;
 	 bool embedded_vlan = false;
 #endif
 	 bool isAdd = false;

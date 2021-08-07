@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2013-2019, The Linux Foundation. All rights reserved.
+Copyright (c) 2013-2021, The Linux Foundation. All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are
@@ -129,10 +129,10 @@ extern "C"
 #define IPA_MAX_NUM_AMPDU_RULE  15
 #define IPA_MAC_ADDR_SIZE  6
 #define IPA_IPV6_ADDR_SIZE_IN_WORDS 4
-#define IPA_MAX_NUM_OFFLOAD_VLANS 14
+#define IPA_MAX_NUM_OFFLOAD_VLANS 15
 #define IPA_MAX_NUM_BRIDGES IPA_MAX_NUM_OFFLOAD_VLANS
 #define IPA_MAX_NUM_SW_PDNS 15
-#define IPA_MAX_NUM_HW_PDNS (IPA_MAX_PDN_NUM - 1) /* currently 7 - 1 = 6 */
+#define IPA_MAX_NUM_HW_PDNS (IPA_MAX_PDN_NUM - 1) /* currently 16 - 1 = 15 */
 #ifdef FEATURE_VLAN_MPDN
 #define IPA_MAX_PRIVATE_SUBNET_ENTRIES IPA_MAX_NUM_OFFLOAD_VLANS
 #define IPA_MAX_MTU_ENTRIES IPA_MAX_NUM_HW_PDNS

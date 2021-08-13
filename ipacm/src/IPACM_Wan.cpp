@@ -1267,92 +1267,34 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 	case IPA_ROUTE_ADD_VLAN_PDN_EVENT:
 		{
 			ipacm_event_route_vlan *data = (ipacm_event_route_vlan *)param;
+			enum ipa_ip_type iptype = data->iptype;
 
-			if(data->iptype == IPA_IP_v4)
+			if(iptype == IPA_IP_v6 || iptype == IPA_IP_MAX)
 			{
-				bool new_pdn = true;
-
-				if(data->wan_ipv4_addr == wan_v4_addr)
+				if(check_vlan_pdn(iptype, data) == IPACM_SUCCESS)
 				{
-					IPACMDBG_H("received v4 IPA_ROUTE_ADD_VLAN_PDN_EVENT for VID %d, wan %s, %d\n", data->VlanID, dev_name, ipa_if_num);
-					if(ipv4_to_iface[modem_ipv4_pdn_index].wan_up_vlan)
+					if(iptype == IPA_IP_MAX)
 					{
-						IPACMERR("v4 vlan wan is already up for %s, ignoring\n", dev_name);
-						return;
-					}
-
-					if((modem_ipv6_pdn_index >= 0) && ipv6_to_iface[modem_ipv6_pdn_index].wan_up_vlan_v6)
-					{
-						IPACMDBG("iface already has v6 vlan association, not new\n");
-						new_pdn = false;
-						if(data->VlanID != associated_VID)
+						IPACMDBG_H("received v4v6 event, handled v6 part\n");
+						if(wan_v4_addr_set) {
+							IPACMDBG_H("wan instance has public v4 address 0x%X add v4 event\n", wan_v4_addr);
+							iptype = IPA_IP_v4;
+							/* IPA_IP_MAX doesn't come with valid ipv4 address as LAN instance doesn't know this info */
+							data->wan_ipv4_addr = wan_v4_addr;
+						}
+						else
 						{
-							IPACMERR("inconsistency on new v4 VID (%d) and exisiting v6 VID (%d) ignoring\n", data->VlanID, associated_VID);
-							return;
+							IPACMDBG_H("wan instance doesn't have public v4 address no need to add v4 event\n");
 						}
 					}
-
-					if (new_pdn)
-					{
-						if(num_offloaded_pdns >= IPA_MAX_NUM_HW_PDNS) {
-							IPACMERR("number of offloaded PDNs %d can't add more than %d, ignoring\n", num_offloaded_pdns, IPA_MAX_NUM_HW_PDNS);
-							return;
-						}
-
-						num_offloaded_pdns++;
-						IPACMDBG_H("this is a new PDN, num of offloaded PDN increased to %d\n", num_offloaded_pdns);
-					}
-#ifdef FEATURE_SOCKSv5
-					/* socksv5 case*/
-					if (!IPACM_Iface::ipacmcfg->ipacm_mpdn_enable)
-						handle_route_add_vlan_pdn_evt(IPA_IP_v4, data->VlanID);
-#endif //FEATURE_SOCKSv5
-					handle_route_add_vlan_pdn_evt(IPA_IP_v4, data->VlanID);
 				}
 			}
-			else
+
+			if(iptype == IPA_IP_v4)
 			{
-				if((data->wan_ipv6_prefix[0] == ipv6_prefix[0]) &&
-					(data->wan_ipv6_prefix[1] == ipv6_prefix[1]))
-				{
-					bool new_pdn = true;
-
-					IPACMDBG_H("received v6 IPA_ROUTE_ADD_VLAN_PDN_EVENT for VID %d, wan %s, %d\n", data->VlanID, dev_name, ipa_if_num);
-					if(ipv6_to_iface[modem_ipv6_pdn_index].wan_up_vlan_v6)
-					{
-						IPACMERR("v6 vlan wan is already up for %s, ignoring\n", dev_name);
-						return;
-					}
-
-					if((modem_ipv4_pdn_index >= 0) && ipv4_to_iface[modem_ipv4_pdn_index].wan_up_vlan)
-					{
-						IPACMDBG("iface already has v4 vlan association, not new\n");
-						new_pdn = false;
-						if(data->VlanID != associated_VID)
-						{
-							IPACMERR("inconsistency on new v6 VID (%d) and exisiting v4 VID (%d) ignoring\n", data->VlanID, associated_VID);
-							return;
-						}
-					}
-
-					if(new_pdn)
-					{
-						if(num_offloaded_pdns >= IPA_MAX_NUM_HW_PDNS) {
-							IPACMERR("number of offloaded PDNs %d can't add more than %d, ignoring\n", num_offloaded_pdns, IPA_MAX_NUM_HW_PDNS);
-							return;
-						}
-
-						num_offloaded_pdns++;
-						IPACMDBG_H("this is a new PDN, num of offloaded PDN increased to %d\n", num_offloaded_pdns);
-					}
-#ifdef FEATURE_SOCKSv5
-					/* socksv5 case*/
-					if (!IPACM_Iface::ipacmcfg->ipacm_mpdn_enable)
-						handle_route_add_vlan_pdn_evt(IPA_IP_v6, data->VlanID);
-#endif //FEATURE_SOCKSv5
-					handle_route_add_vlan_pdn_evt(IPA_IP_v6, data->VlanID);
-				}
+				check_vlan_pdn(iptype, data);
 			}
+
 		}
 		break;
 #endif
@@ -1679,6 +1621,99 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 }
 
 #ifdef FEATURE_VLAN_MPDN
+
+int IPACM_Wan::check_vlan_pdn(ipa_ip_type iptype, ipacm_event_route_vlan *data)
+{
+	int ret = IPACM_FAILURE;
+
+	if (iptype == IPA_IP_v6 || iptype == IPA_IP_MAX)
+	{
+		if((data->wan_ipv6_prefix[0] == ipv6_prefix[0]) &&
+			(data->wan_ipv6_prefix[1] == ipv6_prefix[1]))
+		{
+			bool new_pdn = true;
+
+			IPACMDBG_H("received v6 IPA_ROUTE_ADD_VLAN_PDN_EVENT for VID %d, wan %s, %d\n", data->VlanID, dev_name, ipa_if_num);
+			if(ipv6_to_iface[modem_ipv6_pdn_index].wan_up_vlan_v6)
+			{
+				IPACMERR("v6 vlan wan is already up for %s, ignoring\n", dev_name);
+				return IPACM_FAILURE;
+			}
+
+			if((modem_ipv4_pdn_index >= 0) && ipv4_to_iface[modem_ipv4_pdn_index].wan_up_vlan)
+			{
+				IPACMDBG("iface already has v4 vlan association, not new\n");
+				new_pdn = false;
+				if(data->VlanID != associated_VID)
+				{
+					IPACMERR("inconsistency on new v6 VID (%d) and exisiting v4 VID (%d) ignoring\n", data->VlanID, associated_VID);
+					return IPACM_FAILURE;
+				}
+			}
+
+			if(new_pdn)
+			{
+				if(num_offloaded_pdns >= IPA_MAX_NUM_HW_PDNS) {
+					IPACMERR("number of offloaded PDNs %d can't add more than %d, ignoring\n", num_offloaded_pdns, IPA_MAX_NUM_HW_PDNS);
+					return IPACM_FAILURE;
+				}
+				num_offloaded_pdns++;
+				IPACMDBG_H("this is a new PDN, num of offloaded PDN increased to %d\n", num_offloaded_pdns);
+			}
+#ifdef FEATURE_SOCKSv5
+			/* socksv5 case*/
+			if(!IPACM_Iface::ipacmcfg->ipacm_mpdn_enable)
+				handle_route_add_vlan_pdn_evt(IPA_IP_v6, data->VlanID);
+#endif //FEATURE_SOCKSv5
+			handle_route_add_vlan_pdn_evt(IPA_IP_v6, data->VlanID);
+			ret = IPACM_SUCCESS;
+		}
+	}
+	else
+	{
+		bool new_pdn = true;
+
+		if(data->wan_ipv4_addr == wan_v4_addr)
+		{
+			IPACMDBG_H("received v4 IPA_ROUTE_ADD_VLAN_PDN_EVENT for VID %d, wan %s, %d\n", data->VlanID, dev_name, ipa_if_num);
+			if(ipv4_to_iface[modem_ipv4_pdn_index].wan_up_vlan)
+			{
+				IPACMERR("v4 vlan wan is already up for %s, ignoring\n", dev_name);
+				return IPACM_FAILURE;
+			}
+
+			if((modem_ipv6_pdn_index >= 0) && ipv6_to_iface[modem_ipv6_pdn_index].wan_up_vlan_v6)
+			{
+				IPACMDBG("iface already has v6 vlan association, not new\n");
+				new_pdn = false;
+				if(data->VlanID != associated_VID)
+				{
+					IPACMERR("inconsistency on new v4 VID (%d) and exisiting v6 VID (%d) ignoring\n", data->VlanID, associated_VID);
+					return IPACM_FAILURE;
+				}
+			}
+
+			if(new_pdn)
+			{
+				if(num_offloaded_pdns >= IPA_MAX_NUM_HW_PDNS) {
+					IPACMERR("number of offloaded PDNs %d can't add more than %d, ignoring\n", num_offloaded_pdns, IPA_MAX_NUM_HW_PDNS);
+					return IPACM_FAILURE;
+				}
+				num_offloaded_pdns++;
+				IPACMDBG_H("this is a new PDN, num of offloaded PDN increased to %d\n", num_offloaded_pdns);
+			}
+#ifdef FEATURE_SOCKSv5
+			/* socksv5 case*/
+			if(!IPACM_Iface::ipacmcfg->ipacm_mpdn_enable)
+				handle_route_add_vlan_pdn_evt(IPA_IP_v4, data->VlanID);
+#endif //FEATURE_SOCKSv5
+			handle_route_add_vlan_pdn_evt(IPA_IP_v4, data->VlanID);
+			ret = IPACM_SUCCESS;
+		}
+	}
+
+	return ret;
+}
 int IPACM_Wan::handle_route_add_vlan_pdn_evt(ipa_ip_type iptype, uint16_t vlan_id)
 {
 	struct ipa_ioc_add_rt_rule *rt_rule = NULL;
@@ -1795,8 +1830,8 @@ int IPACM_Wan::handle_route_add_vlan_pdn_evt(ipa_ip_type iptype, uint16_t vlan_i
 		wanup_vlan_data->ipv4_addr = is_link_local_ipv4_addr(wan_v4_addr) ? 0 : wan_v4_addr;
 
 		IPACMDBG_H("Posting IPA_HANDLE_WAN_VLAN_PDN_UP (v6) with below information:\n");
-		IPACMDBG_H("iptype IPA_IP_v6, VlanID %d, mux_id %d, if num %d, v4 address 0x%X is %s valid\n",
-			vlan_id, ext_prop->ext[0].mux_id, ipa_if_num, wan_v4_addr, wanup_vlan_data->ipv4_addr ? "" : " not");
+		IPACMDBG_H("iptype IPA_IP_v6, VlanID %d, mux_id %d, if num %d\n",
+			vlan_id, ext_prop->ext[0].mux_id, ipa_if_num);
 
 		evt_data.event = IPA_HANDLE_WAN_VLAN_PDN_UP;
 		evt_data.evt_data = (void *)wanup_vlan_data;

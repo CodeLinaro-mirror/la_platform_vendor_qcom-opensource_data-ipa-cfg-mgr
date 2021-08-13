@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2018-2019 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2013, 2018-2019, 2021, The Linux Foundation. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -770,6 +770,18 @@ static int IPACM_firewall_xml_parse_tree(const char *xml_file, xmlNode* xml_node
 				}
 				/* go to child */
 				ret_val = IPACM_firewall_xml_parse_tree(xml_file, xml_node->children, firewall_config);
+			}
+			else if(IPACM_util_icmp_string((char*)xml_node->name, DefaultNetDev) == 0)
+			{
+				content = IPACM_read_content_element(xml_node);
+				if(content != NULL)
+				{
+					str_size = strlen(content);
+					memset(content_buf, 0, sizeof(content_buf));
+					memcpy(content_buf, (void *)content, str_size);
+					content_buf[MAX_XML_STR_LEN - 1] = '\0';
+					IPACMDBG_H("DefaultNetDev is %s\n", content_buf);
+				}
 			}
 			else
 			{

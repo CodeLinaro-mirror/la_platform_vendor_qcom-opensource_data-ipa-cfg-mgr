@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2013, 2018-2019,2020, The Linux Foundation. All rights reserved.
+Copyright (c) 2013, 2018-2021, The Linux Foundation. All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are
@@ -628,6 +628,7 @@ private:
 	int handle_route_add_evt(ipa_ip_type iptype);
 
 #ifdef FEATURE_VLAN_MPDN
+	int check_vlan_pdn(ipa_ip_type iptype, ipacm_event_route_vlan *data);
 	int handle_route_add_vlan_pdn_evt(ipa_ip_type iptype, uint16_t vlan_id);
 #endif
 

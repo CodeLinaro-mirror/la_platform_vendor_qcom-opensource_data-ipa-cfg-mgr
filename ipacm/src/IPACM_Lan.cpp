@@ -9927,8 +9927,7 @@ int IPACM_Lan::modify_private_subnet(bool eogre_enabled)
 		if(m_filtering.DeleteFilteringHdls(private_fl_rule_hdl, IPA_IP_v4, num_wan_subnet_rules) == false)
 		{
 			IPACMERR("Error deleting private subnet IPv4 flt rules.\n");
-			res = IPACM_FAILURE;
-			goto fail;
+			return IPACM_FAILURE;
 		}
 		IPACM_Iface::ipacmcfg->decreaseFltRuleCount(rx_prop->rx[0].src_pipe, IPA_IP_v4, num_wan_subnet_rules);
 		num_wan_subnet_rules = 0;
@@ -9952,7 +9951,7 @@ int IPACM_Lan::modify_private_subnet(bool eogre_enabled)
 		/* first subnet is reserved for default PDN */
 		mtu[0] = IPACM_Wan::queryMTU(ipa_if_num, IPA_IP_v4);
 		IPACMDBG_H("defaut PDN mtu = %d\n", mtu[0]);
-		if(mtu[i] < DEFAULT_MTU_SIZE)
+		if(mtu[0] < DEFAULT_MTU_SIZE)
 			mtu_rule_cnt++;
 		else
 			IPACMDBG_H("Mtu size is unchanged. No need to install mtu rule for above subnet\n");
@@ -10191,8 +10190,7 @@ int IPACM_Lan::modify_ipv6_prefix_flt_rule(bool eogre_enabled)
 			num_wan_prefix_rules) == false)
 		{
 			IPACMERR("Error Deleting Filtering, aborting...\n");
-			res = IPACM_FAILURE;
-			goto fail;
+			return IPACM_FAILURE;
 		}
 		IPACM_Iface::ipacmcfg->decreaseFltRuleCount(rx_prop->rx[0].src_pipe, IPA_IP_v6, num_wan_prefix_rules);
 		num_wan_prefix_rules = 0;

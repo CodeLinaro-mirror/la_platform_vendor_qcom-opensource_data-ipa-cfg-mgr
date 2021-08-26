@@ -9905,13 +9905,8 @@ int IPACM_Lan::modify_private_subnet()
 		{
 			memcpy(&flt_rule.rule.attrib, &rx_prop->rx[0].attrib, sizeof(flt_rule.rule.attrib));
 
-			if (!vid[i])
-			{
-				flt_rule.rule.attrib.u.v4.src_addr_mask = IPACM_Iface::ipacmcfg->private_subnet_table[i].subnet_mask;
-				flt_rule.rule.attrib.u.v4.src_addr = IPACM_Iface::ipacmcfg->private_subnet_table[i].subnet_addr;
-				flt_rule.rule.attrib.attrib_mask |= IPA_FLT_SRC_ADDR;
-			}
-			else
+			/* if Vlan enabled, add vlan id as a parameter of the MTU rule*/
+			if(vid[i])
 			{
 				flt_rule.rule.attrib.attrib_mask |= IPA_FLT_VLAN_ID;
 				flt_rule.rule.attrib.vlan_id = vid[i];
@@ -13514,7 +13509,6 @@ void IPACM_Lan::HandleNeighIpAddrDelEvt(int clt_indx)
 
 int IPACM_Lan::construct_mtu_rule(struct ipa_flt_rule *rule, ipa_ip_type iptype, uint16_t mtu)
 {
-	int i, len, num, res = IPACM_SUCCESS;
 	int fd;
 	ipa_ioc_generate_flt_eq flt_eq;
 
@@ -13547,21 +13541,25 @@ int IPACM_Lan::construct_mtu_rule(struct ipa_flt_rule *rule, ipa_ip_type iptype,
 	memcpy(&flt_eq.attrib, &rule->attrib, sizeof(flt_eq.attrib));
 	flt_eq.ip = iptype;
 
-	fd = open(IPA_DEVICE_NAME, O_RDWR);
-	if (fd < 0)
+	if (rule->attrib.attrib_mask)
 	{
-		IPACMERR("Failed opening %s.\n", IPA_DEVICE_NAME);
-		return IPACM_FAILURE;
-	}
+		fd = open(IPA_DEVICE_NAME, O_RDWR);
+		if (fd < 0)
+		{
+			IPACMERR("Failed opening %s.\n", IPA_DEVICE_NAME);
+			return IPACM_FAILURE;
+		}
 
-	if (0 != ioctl(fd, IPA_IOC_GENERATE_FLT_EQ, &flt_eq)) //define and cpy attribute to this struct
-	{
-		IPACMERR("Failed to get eq_attrib\n");
-		res = IPACM_FAILURE;
-		goto fail;
+		if (0 != ioctl(fd, IPA_IOC_GENERATE_FLT_EQ, &flt_eq)) //define and cpy attribute to this struct
+		{
+			IPACMERR("Failed to get eq_attrib\n");
+			close(fd);
+			return IPACM_FAILURE;
+		}
+		close(fd);
+		memcpy(&rule->eq_attrib,
+			&flt_eq.eq_attrib, sizeof(rule->eq_attrib));
 	}
-	memcpy(&rule->eq_attrib,
-		&flt_eq.eq_attrib, sizeof(rule->eq_attrib));
 
 	//add IHL offsets
 	rule->eq_attrib.rule_eq_bitmap |= (1<<10);
@@ -13581,9 +13579,7 @@ int IPACM_Lan::construct_mtu_rule(struct ipa_flt_rule *rule, ipa_ip_type iptype,
 
 	rule->eq_attrib.ihl_offset_range_16[0].range_high = UINT16_MAX; //0xFFFF
 
-fail:
-	close(fd);
-	return res;
+	return IPACM_SUCCESS;
 }
 
 #if defined (FEATURE_IPA_V3) && defined(FEATURE_VLAN_MPDN)

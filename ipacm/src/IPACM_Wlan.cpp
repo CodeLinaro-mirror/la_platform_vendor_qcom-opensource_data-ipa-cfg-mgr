@@ -307,7 +307,6 @@ void IPACM_Wlan::event_callback(ipa_cm_event_id event, void *param)
 					}
 
 #if defined(FEATURE_IPA_ANDROID) || defined(FEATURE_VLAN_MPDN)
-					add_dummy_private_subnet_flt_rule(data->iptype);
 					handle_private_subnet_android(data->iptype);
 #else
 					handle_private_subnet(data->iptype);
@@ -1080,7 +1079,7 @@ int IPACM_Wlan::handle_wlan_mac_flt_event()
 	/* work on copy list to avoid concurrency issues*/
 	std::map<std::array<uint8_t, 6>, mac_flt_type *> mac_flt_lists = IPACM_Iface::ipacmcfg->get_mac_flt_lists();
 
-	for (auto it = mac_flt_lists.begin(); it != mac_flt_lists.end(); ++it)
+	for (auto it = mac_flt_lists.begin(); it != mac_flt_lists.end();)
 	{
 		std::copy(std::begin(it->first), std::end(it->first), std::begin(mac_addr));
 		wlan_index = get_wlan_client_index(mac_addr);
@@ -1164,9 +1163,15 @@ int IPACM_Wlan::handle_wlan_mac_flt_event()
 				eth_bridge_post_event(IPA_ETH_BRIDGE_CLIENT_ADD, IPA_IP_MAX, mac_addr, NULL, NULL);
 				/* remove from original/copy client list as whitelisted client */
 				IPACM_Iface::ipacmcfg->clear_whitelist_mac_add(mac_addr);
-				mac_flt_lists.erase(it->first);
+				auto itr = it;
+				mac_flt_lists.erase(itr->first);
 			}
 		}
+		else
+		{
+			IPACMERR("wlan client not found/attached \n");
+		}
+		++it;
 	}
 	return IPACM_SUCCESS;
 }
@@ -2657,13 +2662,14 @@ int IPACM_Wlan::handle_wlan_client_route_rule_ext(uint8_t *mac_addr, ipa_ip_type
 					}
 
 					it->second->hdl_v6[tx_index].rt_rule_hdl_v6_wan = rt_rule->rules[0].rt_rule_hdl;
-					IPACMDBG_H("tx:%d, rt rule id=%x, rt rule hdl=%x, ip-type: %d\n", tx_index,
-							rt_rule_entry->rule_id,
-							it->second->hdl_v6[tx_index].rt_rule_hdl_v6_wan, iptype);
-
 					/* mark as route_rule_set_v6 = true*/
 					if (tx_index + 1 == iface_query->num_tx_props)
 						it->second->route_rule_set_v6 = true;
+
+					IPACMDBG_H("tx:%d, rt rule id=%x, rt rule hdl=%x, ip-type: %d route_rule_set_v6(map) %d\n", tx_index,
+							rt_rule_entry->rule_id,
+							it->second->hdl_v6[tx_index].rt_rule_hdl_v6_wan, iptype,
+							it->second->route_rule_set_v6);
 
 					/* Add IPv6CT rules after ipv6 RT rules are set */
 					memset(&data, 0, sizeof(data));
@@ -2934,13 +2940,14 @@ int IPACM_Wlan::handle_wlan_client_route_rule_ext_v2(uint8_t *mac_addr, ipa_ip_t
 					}
 
 					it->second->hdl_v6[tx_index].rt_rule_hdl_v6_wan = ((struct ipa_rt_rule_add_ext_v2 *)rt_rule->rules)[0].rt_rule_hdl;
-					IPACMDBG_H("tx:%d, rt rule id=%x rt rule hdl=%x ip-type: %d\n", tx_index,
-							rt_rule_entry->rule_id,
-							it->second->hdl_v6[tx_index].rt_rule_hdl_v6_wan, iptype);
-
 					/* mark as route_rule_set_v6 = true*/
 					if (tx_index + 1 == iface_query->num_tx_props)
 						it->second->route_rule_set_v6 = true;
+
+					IPACMDBG_H("tx:%d, rt rule id=%x rt rule hdl=%x ip-type: %d route_rule_set_v6(map) %d\n", tx_index,
+							rt_rule_entry->rule_id,
+							it->second->hdl_v6[tx_index].rt_rule_hdl_v6_wan, iptype,
+							it->second->route_rule_set_v6);
 
 					/* Add IPv6CT rules after ipv6 RT rules are set */
 					memset(&data, 0, sizeof(data));
@@ -3217,6 +3224,8 @@ int IPACM_Wlan::handle_wlan_client_down_evt(uint8_t *mac_addr)
 #endif //IPA_HW_FNR_STATS
 #endif
 	}
+	/* Clean up the last entry */
+	rt_hdl_v6_list[num_wifi_client_tmp].clear();
 
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
 	get_client_memptr(wlan_client, clt_indx)->lan_stats_idx = -1;
@@ -3438,7 +3447,7 @@ fail:
 			res = IPACM_FAILURE;
 		}
 
-		IPACMDBG_H("Delete %d client header\n", num_wifi_client);
+		IPACMDBG_H("Delete %d out of %d client header\n", i,  num_wifi_client);
 
 		if(get_client_memptr(wlan_client, i)->ipv4_header_set == true)
 		{
@@ -3458,6 +3467,10 @@ fail:
 			}
 		}
 
+		IPACMDBG_H("client %d has %d ipv6 with rt: %d, current total_v6=%d \n", i,
+			get_client_memptr(wlan_client, i)->ipv6_set,
+			get_client_memptr(wlan_client, i)->route_rule_set_v6,
+			IPACM_Iface::ipacmcfg->ipa_num_clients_ipv6);
 		/* clean up the map and release the memory */
 		for (auto it = rt_hdl_v6_list[i].begin(); it != rt_hdl_v6_list[i].end();++it)
 		{
@@ -3470,10 +3483,7 @@ fail:
 				it->second = NULL;
 			}
 		}
-		IPACMDBG_H("client %d has %d ipv6 with rt: %d, current total_v6=%d \n", i,
-			get_client_memptr(wlan_client, i)->ipv6_set,
-			get_client_memptr(wlan_client, i)->route_rule_set_v6,
-			IPACM_Iface::ipacmcfg->ipa_num_clients_ipv6);
+
 		IPACM_Iface::ipacmcfg->ipa_num_clients_ipv6 -= get_client_memptr(wlan_client, i)->ipv6_set;
 		IPACMDBG_H("update ipa_num_clients_ipv6 = %d\n", IPACM_Iface::ipacmcfg->ipa_num_clients_ipv6);
 		get_client_memptr(wlan_client, i)->ipv6_set = 0;

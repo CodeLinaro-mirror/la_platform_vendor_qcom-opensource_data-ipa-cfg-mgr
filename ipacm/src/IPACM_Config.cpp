@@ -2796,11 +2796,12 @@ void IPACM_Config::sw_flt_info(ipa_sw_flt_list_type *sw_flt)
 	   then update is_blacklist as false for all stored mac addrs else update only for
 	   those mac addrs that are not present in current list */
 UPDATE:
-	for (auto it = IPACM_Iface::ipacmcfg->mac_flt_lists.begin(); it != IPACM_Iface::ipacmcfg->mac_flt_lists.end();++it)
+	for (auto it = IPACM_Iface::ipacmcfg->mac_flt_lists.begin(); it != IPACM_Iface::ipacmcfg->mac_flt_lists.end();)
 	{
 		it_mac_list = std::find(mac_list.begin() , mac_list.end() , it->first);
 			if(!(it_mac_list != mac_list.end()))
 			{
+				auto itr = it;
 				std::copy(std::begin(it->first), std::end(it->first), std::begin(mac_addr));
 				IPACMDBG_H("Previous  MAC addr to be whitelisted %02x:%02x:%02x:%02x:%02x:%02x\n",
 						 mac_addr[0], mac_addr[1], mac_addr[2],
@@ -2809,12 +2810,18 @@ UPDATE:
 					IPACMDBG_H("remove this client from the mac list as whitelisted\n");
 					free(IPACM_Iface::ipacmcfg->mac_flt_lists.at(it->first));
 					IPACM_Iface::ipacmcfg->mac_flt_lists.at(it->first) = NULL;
-					IPACM_Iface::ipacmcfg->mac_flt_lists.erase(it->first);
+					++it;
+					IPACM_Iface::ipacmcfg->mac_flt_lists.erase(itr->first);
 				}
 				else
 				{
 					it->second->is_blacklist = false;
+					++it;
 				}
+			}
+			else
+			{
+				++it;
 			}
 	}
 	mac_list.clear();
@@ -2875,7 +2882,7 @@ void IPACM_Config::mac_flt_info(ipa_ioc_mac_client_list_type *mac_flt_data)
 	   then update is_blacklist as false for all stored mac addrs else update only for
 	   those mac addrs that are not present in current list */
 UPDATE:
-	for (auto it = IPACM_Iface::ipacmcfg->mac_flt_lists.begin(); it != IPACM_Iface::ipacmcfg->mac_flt_lists.end();++it)
+	for (auto it = IPACM_Iface::ipacmcfg->mac_flt_lists.begin(); it != IPACM_Iface::ipacmcfg->mac_flt_lists.end();)
 	{
 		it_mac_list = std::find(mac_list.begin() , mac_list.end() , it->first);
 			if(!(it_mac_list != mac_list.end()))
@@ -2886,15 +2893,17 @@ UPDATE:
 						 mac_addr[3], mac_addr[4], mac_addr[5]);
 				if(it->second->current_blocked == false) {
 					IPACMDBG_H("remove this client from the mac list as whitelisted\n");
+					auto itr = it;
 					free(IPACM_Iface::ipacmcfg->mac_flt_lists.at(it->first));
 					IPACM_Iface::ipacmcfg->mac_flt_lists.at(it->first) = NULL;
-					IPACM_Iface::ipacmcfg->mac_flt_lists.erase(it->first);
+					IPACM_Iface::ipacmcfg->mac_flt_lists.erase(itr->first);
 				}
 				else
 				{
 					it->second->is_blacklist = false;
 				}
 			}
+			++it;
 	}
 	mac_list.clear();
 	pthread_mutex_unlock(&mac_flt_info_lock);
@@ -3028,6 +3037,12 @@ void IPACM_Config::update_client_info(uint8_t *mac_addr, tether_client_info *cli
 
 	if (is_add)
 	{
+		if (!(sw_flt_list.iface_enable || sw_flt_list.mac_enable || sw_flt_list.ipv4_segs_enable))
+		{
+			IPACMDBG("None of SW Filtering is enabled \n");
+			pthread_mutex_unlock(&mac_flt_info_lock);
+			return;
+		}
 		IPACMDBG_H(" Adding client mac %02x:%02x:%02x:%02x:%02x:%02x ip4 0x%X, iface %s\n",
 			 mac_a[0], mac_a[1], mac_a[2],
 			 mac_a[3], mac_a[4], mac_a[5],

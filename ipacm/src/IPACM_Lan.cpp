@@ -4245,7 +4245,12 @@ int IPACM_Lan::handle_eth_hdr_init(uint8_t *mac_addr, ipacm_bridge *bridge, uint
 			}
 			else if (ipa_if_cate == ODU_IF)
 			{
-				client_info->device_type = IPACM_CLIENT_DEVICE_TYPE_ETH;
+#ifdef DUAL_NIC_OFFLOAD
+				if (strstr(dev_name, STR_ETH1))
+					client_info->device_type = IPACM_CLIENT_DEVICE_TYPE_ETH1;
+				else
+#endif
+					client_info->device_type = IPACM_CLIENT_DEVICE_TYPE_ETH;
 			}
 			else
 			{
@@ -4855,7 +4860,12 @@ int IPACM_Lan::handle_lan_client_connect(uint8_t *mac_addr)
 		}
 		else if (ipa_if_cate == ODU_IF)
 		{
-			client_info->device_type = IPACM_CLIENT_DEVICE_TYPE_ETH;
+#ifdef DUAL_NIC_OFFLOAD
+			if (strstr(dev_name, STR_ETH1))
+				client_info->device_type = IPACM_CLIENT_DEVICE_TYPE_ETH1;
+			else
+#endif
+				client_info->device_type = IPACM_CLIENT_DEVICE_TYPE_ETH;
 		}
 		else
 		{

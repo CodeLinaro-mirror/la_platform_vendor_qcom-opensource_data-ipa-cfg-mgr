@@ -50,6 +50,7 @@ IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #define MAX_FDB_PARAM_LEN 50
 #define IPA_SYS_CMD_LEN 200
 #define ETH_INTF "eth0"
+#define ETH1_INTF "eth1"
 #define RNDIS_INTF "rndis0"
 #define ECM_INTF "ecm0"
 
@@ -1260,13 +1261,16 @@ void IPACM_Neighbor::post_phys_iface_event(const char *iface_name, int ipa_if_nu
 
 	/* Vlan client */
 	if (IPACM_FAILURE == ipa_if_num) {
-		if (strstr(iface_name,ETH_INTF)) {
+		if (strstr(iface_name, ETH_INTF)) {
 			strlcpy(phys_iface_name, ETH_INTF, IPA_IFACE_NAME_LEN);
 		}
-		else if (strstr(iface_name,RNDIS_INTF)) {
+		else if (strstr(iface_name, ETH1_INTF)) {
+			strlcpy(phys_iface_name, ETH1_INTF, IPA_IFACE_NAME_LEN);
+		}
+		else if (strstr(iface_name, RNDIS_INTF)) {
 			strlcpy(phys_iface_name, RNDIS_INTF, IPA_IFACE_NAME_LEN);
 		}
-		else if (strstr(iface_name,ECM_INTF)) {
+		else if (strstr(iface_name, ECM_INTF)) {
 			strlcpy(phys_iface_name, ECM_INTF, IPA_IFACE_NAME_LEN);
 		}
 		else

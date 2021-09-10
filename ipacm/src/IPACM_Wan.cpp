@@ -1553,7 +1553,7 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 				/* Need to update the IPPassthrough information when passthrough is disabled or
                                  * non VLAN scenario and PDN is up.
 				 */
-				if (!ip_pass_pdn_info.enable || (ip_pass_pdn_info.enable && ((!data->VlanID && active_v4) ||
+				if (!ip_pass_pdn_info.enable || (ip_pass_pdn_info.enable && (active_v4 ||
 					ipv4_to_iface[modem_ipv4_pdn_index].wan_up_vlan)))
 				{
 					pdn_update = (ipacm_event_vlan_pdn *)malloc(sizeof(ipacm_event_vlan_pdn));
@@ -1578,18 +1578,23 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 					evt_data.evt_data = (void *)pdn_update;
 					IPACM_EvtDispatcher::PostEvt(&evt_data);
 				}
-				else
+
+				/* Post the VLAN PDN up event in case of non default PDNs or default pdn with valid vlan-id. */
+				/* We get conntrack events without SRC_NAT and DST_NAT flags, so if
+				 * we don't post the event now in a way it is a deadlock where PDN_NAT event will never be posted.
+				 */
+
+				if (ip_pass_pdn_info.enable &&
+					(ip_pass_pdn_info.VlanID != 0))
 				{
-					/* Post the VLAN PDN up event in case of non default PDNs. */
-					/* We get conntrack events without SRC_NAT and DST_NAT flags, so if
-					 * we don't post the event now in a way it is a deadlock where PDN_NAT event will never be posted.
-					 */
-					IPACMDBG_H("VLAN PDN not up\n");
-					if (ip_pass_pdn_info.enable &&
-						(ip_pass_pdn_info.VlanID != 0))
+					/* check if it's xlat call */
+					if (is_xlat)
 					{
-						handle_route_add_vlan_pdn_evt(IPA_IP_v4, ip_pass_pdn_info.VlanID);
+						IPACMDBG_H(" IP Passthrough xlat(%d), hadling v6-route_add_pdn\n", is_xlat);
+						handle_route_add_vlan_pdn_evt(IPA_IP_v6, ip_pass_pdn_info.VlanID);
 					}
+					handle_route_add_vlan_pdn_evt(IPA_IP_v4, ip_pass_pdn_info.VlanID);
+					num_offloaded_pdns++;
 				}
 			}
 			break;

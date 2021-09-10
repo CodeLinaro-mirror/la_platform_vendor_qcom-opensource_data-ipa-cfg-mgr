@@ -870,7 +870,7 @@ void IPACM_ConntrackListener::HandleIPPassPDNInfoUpdate(void *in_param)
 	{
 		if(pdn_data->ipv4_addr == wan_ipaddr)
 		{
-				IPACMDBG_H("Updating default pdn info\n");
+				IPACMDBG_H("Updating default pdn info, ip_pass_enable_default_pdn %d\n", ip_pass_enable_default_pdn);
 				ip_pass_dummy_ip_default_pdn = pdn_data->ip_pass_dummy_ip;
 				ip_pass_enable_default_pdn = pdn_data->ip_pass_enable;
 				ip_pass_skip_nat_default_pdn = pdn_data->ip_pass_skip_nat;

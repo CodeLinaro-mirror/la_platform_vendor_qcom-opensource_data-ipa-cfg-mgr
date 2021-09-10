@@ -1805,8 +1805,12 @@ void IPACM_Config::get_vlan_mode_ifaces()
 		vlan_devices[i] = vlan_mode.is_vlan_mode;
 	}
 
-	IPACMDBG("modes are EMAC %d, RNDIS %d, ECM %d\n",
+	IPACMDBG("modes are EMAC %d, ETH0 %d, ETH1 %d, RNDIS %d, ECM %d\n",
 		vlan_devices[IPA_VLAN_IF_EMAC],
+#if IPA_ETH_API_VER >= 2
+		vlan_devices[IPA_VLAN_IF_ETH0],
+		vlan_devices[IPA_VLAN_IF_ETH1],
+#endif
 		vlan_devices[IPA_VLAN_IF_RNDIS],
 		vlan_devices[IPA_VLAN_IF_ECM]);
 }
@@ -1965,7 +1969,23 @@ bool IPACM_Config::is_added_vlan_iface(char *iface_name)
 
 bool IPACM_Config::iface_in_vlan_mode(const char *phys_iface_name)
 {
-	if(strstr(phys_iface_name, "eth"))
+
+#if IPA_ETH_API_VER >= 2
+	/* Differentiate Dual NIC mode where interface name is either [eth0|eth1] and legacy while where
+	 * name is always "eth0".
+	 */
+	if (strstr(phys_iface_name, "eth0")) {
+		IPACMDBG("eth0 vlan mode %d\n", vlan_devices[IPA_VLAN_IF_ETH0]);
+		return vlan_devices[IPA_VLAN_IF_ETH0] || vlan_devices[IPA_VLAN_IF_EMAC];
+	}
+
+	if (strstr(phys_iface_name, "eth1")) {
+		IPACMDBG("eth1 vlan mode %d\n", vlan_devices[IPA_VLAN_IF_ETH1]);
+		return vlan_devices[IPA_VLAN_IF_ETH1] || vlan_devices[IPA_VLAN_IF_EMAC];
+	}
+#endif
+
+	if (strstr(phys_iface_name, "eth") || strstr(phys_iface_name, "macsec"))
 	{
 		IPACMDBG("eth vlan mode %d\n", vlan_devices[IPA_VLAN_IF_EMAC]);
 		return vlan_devices[IPA_VLAN_IF_EMAC];

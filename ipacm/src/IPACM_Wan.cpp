@@ -297,9 +297,9 @@ IPACM_Wan::IPACM_Wan(int iface_index,
 	}
 
 #ifdef IPA_IOC_FLT_MEM_PERIPHERAL_SET_PRIO_HIGH
-	if (strstr(dev_name, "eth0"))
+	if (strstr(dev_name, STR_ETH0_IFACE))
 		IPACM_Wan::m_filtering.setFltSramPrioHigh(IPA_CLIENT_ETHERNET_PROD);
-	else if (strstr(dev_name, "eth1"))
+	else if (strstr(dev_name, STR_ETH1_IFACE))
 		IPACM_Wan::m_filtering.setFltSramPrioHigh(IPA_CLIENT_ETHERNET2_PROD);
 #endif
 

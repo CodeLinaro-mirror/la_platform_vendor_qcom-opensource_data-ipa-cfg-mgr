@@ -58,6 +58,15 @@ extern "C"
 #include <libnetfilter_conntrack/libnetfilter_conntrack_tcp.h>
 }
 
+
+#define STR_ETH_IFACE "eth"
+#define STR_ETH0_IFACE "eth0"
+#define STR_ETH1_IFACE "eth1"
+#define STR_RNDIS_IFACE "rndis"
+#define STR_RNDIS0_IFACE "rndis0"
+#define STR_ECM_IFACE "ecm"
+#define STR_ECM0_IFACE "ecm0"
+
 #define IF_NAME_LEN 16
 #define IPA_MAX_FILE_LEN  64
 #define IPA_IFACE_NAME_LEN 16

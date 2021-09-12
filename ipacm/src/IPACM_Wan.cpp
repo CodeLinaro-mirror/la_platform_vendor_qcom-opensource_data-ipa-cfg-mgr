@@ -296,6 +296,13 @@ IPACM_Wan::IPACM_Wan(int iface_index,
 		IPACMDBG(" IPACM->IPACM_Wan(%d)\n", ipa_if_num);
 	}
 
+#ifdef IPA_IOC_FLT_MEM_PERIPHERAL_SET_PRIO_HIGH
+	if (strstr(dev_name, "eth0"))
+		IPACM_Wan::m_filtering.setFltSramPrioHigh(IPA_CLIENT_ETHERNET_PROD);
+	else if (strstr(dev_name, "eth1"))
+		IPACM_Wan::m_filtering.setFltSramPrioHigh(IPA_CLIENT_ETHERNET2_PROD);
+#endif
+
 	return;
 }
 

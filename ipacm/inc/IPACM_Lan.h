@@ -1257,7 +1257,7 @@ private:
 			if(mux[i] == 0)
 			{
 				mux[i] = mux_id;
-				IPACMDBG_H("successfully set mux id %d for dev %s, i = %d, iptype\n", mux_id, dev_name, i, iptype);
+				IPACMDBG_H("successfully set mux id %d for dev %s, i = %d, iptype %d\n", mux_id, dev_name, i, iptype);
 				return IPACM_SUCCESS;
 			}
 		}
@@ -1283,7 +1283,7 @@ private:
 			if(mux[i] == mux_id)
 			{
 				mux[i] = 0;
-				IPACMDBG_H("successfully removed mux id %d for dev %s, i = %d, iptype\n", mux_id, dev_name, i, iptype);
+				IPACMDBG_H("successfully removed mux id %d for dev %s, i = %d, iptype %d\n", mux_id, dev_name, i, iptype);
 				return IPACM_SUCCESS;
 			}
 		}

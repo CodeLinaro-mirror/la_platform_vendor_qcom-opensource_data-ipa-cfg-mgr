@@ -1656,6 +1656,7 @@ void IPACM_ConntrackListener::TriggerWANDown(uint32_t wan_addr)
 		if(wan_addr == wan_ipaddr)
 		{
 			WanUp = false;
+			wan_ipaddr = 0;
 			ip_pass_enable_default_pdn = 0;
 			ip_pass_skip_nat_default_pdn = 0;
 			ip_pass_dummy_ip_default_pdn = 0;
@@ -1665,6 +1666,7 @@ void IPACM_ConntrackListener::TriggerWANDown(uint32_t wan_addr)
 #endif
 	{
 		WanUp = false;
+		wan_ipaddr = 0;
 		ip_pass_enable_default_pdn = 0;
 		ip_pass_skip_nat_default_pdn = 0;
 		ip_pass_dummy_ip_default_pdn = 0;
@@ -2948,7 +2950,12 @@ void IPACM_ConntrackListener::ProcessTCPorUDPMsg(
 			IPACMDBG("orig src ip:0x%x equal to wan ip\n",orig_src_ip);
 			status = IPS_SRC_NAT;
 #ifdef FEATURE_VLAN_MPDN
+			/* For IPPT case, need check if it's vlan on default pdn */
 			public_ip = wan_ipaddr;
+			embedded_vlan = true;
+			nat_entry.isVlan = IsVlanIPv4(orig_src_ip, &VlanID);
+			if (nat_entry.isVlan)
+				nat_entry.IsVlanUp = true;
 #endif
 		}
 		else if(orig_dst_ip == wan_ipaddr)
@@ -2956,7 +2963,12 @@ void IPACM_ConntrackListener::ProcessTCPorUDPMsg(
 			IPACMDBG("orig Dst IP:0x%x equal to wan ip\n",orig_dst_ip);
 			status = IPS_DST_NAT;
 #ifdef FEATURE_VLAN_MPDN
+			/* For IPPT case, need check if it's vlan on default pdn */
 			public_ip = wan_ipaddr;
+			embedded_vlan = true;
+			nat_entry.isVlan = IsVlanIPv4(orig_dst_ip, &VlanID);
+			if (nat_entry.isVlan)
+				nat_entry.IsVlanUp = true;
 #endif
 		}
 		else

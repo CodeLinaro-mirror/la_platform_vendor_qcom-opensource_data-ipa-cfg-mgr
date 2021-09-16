@@ -6584,16 +6584,18 @@ fail:
 			if (get_client_memptr(eth_client, i)->ipv6_set != 0)
 			{
 				IPACMDBG_H("ipv6_set %d\n", get_client_memptr(eth_client, i)->ipv6_set);
-				for (auto it = rt_hdl_v6_list[i].begin(); it != rt_hdl_v6_list[i].end();++it)
+				for (auto it = rt_hdl_v6_list[i].begin(); it != rt_hdl_v6_list[i].end();)
 				{
+					auto itr = it;
 					IPACMDBG_H("v6 addr : 0x%08x:%08x:%08x:%08x\n",
 							it->first[0], it->first[1], it->first[2], it->first[3]);
 					/* clean up the map and release the memory */
 					if(it->second != NULL)
 					{
-						free(it->second);
+						free(itr->second);
 						it->second = NULL;
 					}
+					++it;
 				}
 			}
 
@@ -9644,13 +9646,15 @@ int IPACM_Lan::handle_lan_client_reset_rt(ipa_ip_type iptype)
 		else
 		{
 			/* clean up the map and release the memory */
-			for (auto it = rt_hdl_v6_list[i].begin(); it != rt_hdl_v6_list[i].end();++it)
+			for (auto it = rt_hdl_v6_list[i].begin(); it != rt_hdl_v6_list[i].end();)
 			{
+				auto itr = it;
 				if(it->second != NULL)
 				{
-					free(it->second);
+					free(itr->second);
 					it->second = NULL;
 				}
+				++it;
 			}
 			IPACMDBG_H("client %d has %d ipv6 with rt: %d, current total_v6=%d \n", i,
 				get_client_memptr(eth_client, i)->ipv6_set,

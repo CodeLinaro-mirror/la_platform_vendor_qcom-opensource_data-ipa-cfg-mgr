@@ -2236,6 +2236,7 @@ int IPACM_Lan::handle_vlan_neighbor(ipacm_event_data_all *data)
 	bool new_prefix = false;
 	ipacm_event_data_all data_all;
 	std::list <ipacm_event_data_all>::iterator it;
+	ipacm_bridge *bridge;
 
 	IPACMDBG_H("\n");
 
@@ -2247,6 +2248,14 @@ int IPACM_Lan::handle_vlan_neighbor(ipacm_event_data_all *data)
 			return 0;
 		}
 		IPACMERR("failed getting vlan ID of iface %s \n", data->iface_name);
+		return IPACM_FAILURE;
+	}
+
+	/* get bridge from vlan id */
+	bridge = IPACM_Iface::ipacmcfg->get_vlan_bridge_from_vid(vlan_id);
+	if (!bridge)
+	{
+		IPACMDBG_H("bridge is NULL with vlan (%s) vid (%d), ignoring!\n", data->iface_name, vlan_id);
 		return IPACM_FAILURE;
 	}
 
@@ -2290,11 +2299,11 @@ int IPACM_Lan::handle_vlan_neighbor(ipacm_event_data_all *data)
 		}
 		else if(data_vlan->data_all.iptype == IPA_IP_v4)
 		{
-			add_vlan_private_subnet(data_vlan->bridge);
+			add_vlan_private_subnet(bridge);
 		}
 
 		/* first construc ETH full header */
-		handle_eth_hdr_init(data->mac_addr, data_vlan->bridge, vlan_id, true);
+		handle_eth_hdr_init(data->mac_addr, bridge, vlan_id, true);
 	}
 	else
 	{

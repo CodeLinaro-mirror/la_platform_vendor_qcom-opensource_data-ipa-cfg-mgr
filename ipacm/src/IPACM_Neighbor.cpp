@@ -235,18 +235,15 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 						ipacm_bridge *bridge;
 						if(IPACM_Iface::ipacmcfg->ipacm_mpdn_enable == TRUE)
 						{
+							/* Try to add new bridge. If bridge exists, renew its mac addr to handle bridge down/up cases*/
+							IPACMDBG("trying to add bridge%s\n", data->iface_name);
+							IPACM_Iface::ipacmcfg->add_vlan_bridge(data);
 							bridge = IPACM_Iface::ipacmcfg->get_vlan_bridge(data->iface_name);
 							if(!bridge)
 							{
-								IPACMDBG("couldn't find the bridge %s, trying to add\n", data->iface_name);
-								/* since we know that this is a bridge, let's try to add */
-								IPACM_Iface::ipacmcfg->add_vlan_bridge(data);
-								bridge = IPACM_Iface::ipacmcfg->get_vlan_bridge(data->iface_name);
-								if(!bridge)
-								{
-									IPACMERR("couldn't find or add bridge %s, not sending internal event\n", data->iface_name);
-									return;
-								}
+								/* add_vlan bridge failed */
+								IPACMERR("couldn't add/renew bridge %s, not sending internal event\n", data->iface_name);
+								return;
 							}
 						}
 #endif
@@ -638,18 +635,15 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 						ipacm_bridge *bridge;
 						if(IPACM_Iface::ipacmcfg->ipacm_mpdn_enable == TRUE)
 						{
+							/* Try to add new bridge. If bridge exists, renew its mac addr to handle bridge down/up cases*/
+							IPACMDBG("trying to add bridge%s\n", data->iface_name);
+							IPACM_Iface::ipacmcfg->add_vlan_bridge(data);
 							bridge = IPACM_Iface::ipacmcfg->get_vlan_bridge(data->iface_name);
 							if(!bridge)
 							{
-								IPACMDBG("couldn't find the bridge %s, trying to add\n", data->iface_name);
-								/* since we know that this is a bridge, let's try to add */
-								IPACM_Iface::ipacmcfg->add_vlan_bridge(data);
-								bridge = IPACM_Iface::ipacmcfg->get_vlan_bridge(data->iface_name);
-								if(!bridge)
-								{
-									IPACMERR("couldn't find or add bridge %s, not sending internal event\n", data->iface_name);
-									return;
-								}
+								/* add_vlan bridge failed */
+								IPACMERR("couldn't add/renew bridge %s, not sending internal event\n", data->iface_name);
+								return;
 							}
 						}
 #endif

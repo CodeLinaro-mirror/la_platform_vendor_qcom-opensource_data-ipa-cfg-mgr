@@ -755,8 +755,7 @@ int IPACM_Wan::handle_addr_evt(ipacm_event_data_addr *data)
 
 		/* Store the public ip address when in passthrough mode which will be used when wan is down. */
 		if ((m_is_sta_mode == Q6_WAN) &&
-			ip_pass_pdn_info.enable &&
-			data->ipv4_addr == ip_pass_pdn_info.pdn_ip_addr)
+			ip_pass_pdn_info.enable)
 		{
 			curr_wan_ip = data->ipv4_addr;
 			public_wan_v4_addr = wan_v4_addr;
@@ -768,10 +767,9 @@ int IPACM_Wan::handle_addr_evt(ipacm_event_data_addr *data)
 			IPACMDBG_H("Not in passthrough mode, reset previous wan ipv4-addr:0x%x\n",public_wan_v4_addr);
 			public_wan_v4_addr = 0;
 			public_wan_v4_addr_set = false;
+			wan_v4_addr = data->ipv4_addr;
+			wan_v4_addr_set = true;
 		}
-
-		wan_v4_addr = data->ipv4_addr;
-		wan_v4_addr_set = true;
 
 		IPACMDBG_H("Receved wan ipv4-addr:0x%x\n",wan_v4_addr);
 	}
@@ -1404,6 +1402,7 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 						(ip_pass_pdn_info.VlanID != 0))
 					{
 						handle_route_add_vlan_pdn_evt(IPA_IP_v4, ip_pass_pdn_info.VlanID);
+						num_offloaded_pdns++;
 					}
 				}
 			}
@@ -2010,7 +2009,7 @@ int IPACM_Wan::handle_route_add_vlan_pdn_evt(ipa_ip_type iptype, uint16_t vlan_i
 	{
 		if(wan_up || isVlanWanUP())
 		{
-			IPACMDBG_H("a v4 PDN is already up, minimal configuration is needed\n");
+			IPACMDBG_H("new V4 PDN, need full config\n");
 			FullConfig = true;
 		}
 

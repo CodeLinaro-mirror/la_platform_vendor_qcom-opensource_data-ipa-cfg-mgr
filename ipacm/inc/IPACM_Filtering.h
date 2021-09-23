@@ -80,6 +80,11 @@ public:
 	bool ModifyFilteringRule(struct ipa_ioc_mdfy_flt_rule* ruleTable);
 	ipa_filter_action_enum_v01 GetQmiFilterAction(ipa_flt_action action);
 
+#ifdef IPA_IOC_FLT_MEM_PERIPHERAL_SET_PRIO_HIGH
+	/* sets the SRAM memory priority high for the filterring rules of the specified client */
+	bool setFltSramPrioHigh(const enum ipa_client_type client) const;
+#endif
+
 private:
 	static const char *DEVICE_NAME;
 	int fd; /* File descriptor of the IPA device node /dev/ipa */

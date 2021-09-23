@@ -49,9 +49,6 @@ IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #define MAX_FDB_PARAM_CNT 5
 #define MAX_FDB_PARAM_LEN 50
 #define IPA_SYS_CMD_LEN 200
-#define ETH_INTF "eth0"
-#define RNDIS_INTF "rndis0"
-#define ECM_INTF "ecm0"
 
 #define IPA_TMP_DIR "/tmp/data"
 #define IPA_FDB_TABLE IPA_TMP_DIR"/ipa_fdb_table.txt"
@@ -1260,14 +1257,17 @@ void IPACM_Neighbor::post_phys_iface_event(const char *iface_name, int ipa_if_nu
 
 	/* Vlan client */
 	if (IPACM_FAILURE == ipa_if_num) {
-		if (strstr(iface_name,ETH_INTF)) {
-			strlcpy(phys_iface_name, ETH_INTF, IPA_IFACE_NAME_LEN);
+		if (strstr(iface_name, STR_ETH0_IFACE)) {
+			strlcpy(phys_iface_name, STR_ETH0_IFACE, IPA_IFACE_NAME_LEN);
 		}
-		else if (strstr(iface_name,RNDIS_INTF)) {
-			strlcpy(phys_iface_name, RNDIS_INTF, IPA_IFACE_NAME_LEN);
+		else if (strstr(iface_name, STR_ETH1_IFACE)) {
+			strlcpy(phys_iface_name, STR_ETH1_IFACE, IPA_IFACE_NAME_LEN);
 		}
-		else if (strstr(iface_name,ECM_INTF)) {
-			strlcpy(phys_iface_name, ECM_INTF, IPA_IFACE_NAME_LEN);
+		else if (strstr(iface_name, STR_RNDIS0_IFACE)) {
+			strlcpy(phys_iface_name, STR_RNDIS0_IFACE, IPA_IFACE_NAME_LEN);
+		}
+		else if (strstr(iface_name, STR_ECM0_IFACE)) {
+			strlcpy(phys_iface_name, STR_ECM0_IFACE, IPA_IFACE_NAME_LEN);
 		}
 		else
 			return;

@@ -104,6 +104,10 @@
 			   <Category>ODU</Category>
 			</Iface>
 			<Iface>
+			   <Name>eth1</Name>
+			   <Category>ODU</Category>
+			</Iface>
+			<Iface>
 			   <Name>bridge0</Name>
 			   <Category>VIRTUAL</Category>
 		    </Iface>

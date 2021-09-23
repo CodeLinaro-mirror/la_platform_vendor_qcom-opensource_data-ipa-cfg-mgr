@@ -42,6 +42,7 @@ IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <fcntl.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <errno.h>
 
 #include "IPACM_Filtering.h"
 #include <IPACM_Log.h>
@@ -894,4 +895,17 @@ bool IPACM_Filtering::ModifyFilteringRule(struct ipa_ioc_mdfy_flt_rule* ruleTabl
 	IPACMDBG("Modified filtering rule %p\n", ruleTable);
 	return true;
 }
+
+#ifdef IPA_IOC_FLT_MEM_PERIPHERAL_SET_PRIO_HIGH
+bool IPACM_Filtering::setFltSramPrioHigh(const enum ipa_client_type client) const
+{
+	if (ioctl(fd, IPA_IOC_FLT_MEM_PERIPHERAL_SET_PRIO_HIGH, client)){
+		IPACMERR("%s\nSet filtering rules SRAM priority high IOCTL failed, client: %d\n", strerror(errno), client);
+		return false;
+	}
+	IPACMDBG("Filtering rules SRAM priority set to high, client: %d\n", client);
+
+	return true;
+}
+#endif
 

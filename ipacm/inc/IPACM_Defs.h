@@ -58,6 +58,15 @@ extern "C"
 #include <libnetfilter_conntrack/libnetfilter_conntrack_tcp.h>
 }
 
+
+#define STR_ETH_IFACE "eth"
+#define STR_ETH0_IFACE "eth0"
+#define STR_ETH1_IFACE "eth1"
+#define STR_RNDIS_IFACE "rndis"
+#define STR_RNDIS0_IFACE "rndis0"
+#define STR_ECM_IFACE "ecm"
+#define STR_ECM0_IFACE "ecm0"
+
 #define IF_NAME_LEN 16
 #define IPA_MAX_FILE_LEN  64
 #define IPA_IFACE_NAME_LEN 16
@@ -137,7 +146,8 @@ extern "C"
 #define IPA_MAC_ADDR_SIZE  6
 #define IPA_IPV6_ADDR_SIZE_IN_WORDS 4
 #define IPA_MAX_NUM_OFFLOAD_VLANS 15
-#define IPA_MAX_NUM_BRIDGES IPA_MAX_NUM_OFFLOAD_VLANS
+/* mbb reconstructor to not able to associate vlan to bridge0, need one more */
+#define IPA_MAX_NUM_BRIDGES (IPA_MAX_NUM_OFFLOAD_VLANS + 1)
 #define IPA_MAX_NUM_SW_PDNS 15
 #define IPA_MAX_NUM_HW_PDNS (IPA_MAX_PDN_NUM - 1) /* currently 16 - 1 = 15 */
 #ifdef FEATURE_VLAN_MPDN
@@ -295,6 +305,7 @@ typedef enum
 	IPA_UPDATE_SOCKSv5_v6_CONN,               /* NULL */
 #endif
 	IPA_MAC_ADD_DEL_FLT_EVENT,                /* NULL */
+	IPA_IP_COLLISION_UPDATE_EVENT,            /* ipacm_ip_collision_pdn_info */
 	IPA_IP_PASS_UPDATE_EVENT,                 /* ipacm_ip_pass_pdn_info */
 	IPA_HANDLE_IP_PASS_PDN_INFO_UPDATE_EVENT, /* Handle ip pass pdn info update.*/
 #ifdef IPA_IOCTL_SET_PKT_THRESHOLD
@@ -496,6 +507,16 @@ typedef struct
 	uint8_t skip_nat;
 	int if_index;
 }ipacm_event_ip_pass_pdn_info;
+
+typedef struct
+{
+	uint8_t enable;
+	uint32_t pdn_ip_addr;
+	uint16_t VlanID;
+	int if_index;
+	char dev_name[IPA_RESOURCE_NAME_MAX];
+}ipacm_event_ip_collision_pdn_info;
+
 
 typedef struct
 {

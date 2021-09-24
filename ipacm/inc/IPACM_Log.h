@@ -25,7 +25,40 @@ BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
 WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
 OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
 IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-*/
+* Changes from Qualcomm Innovation Center are provided under the following license:
+ *
+ * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted (subject to the limitations in the
+ * disclaimer below) provided that the following conditions are met:
+ *
+ *   * Redistributions of source code must retain the above copyright
+ *     notice, this list of conditions and the following disclaimer.
+ *
+ *   * Redistributions in binary form must reproduce the above
+ *     copyright notice, this list of conditions and the following
+ *     disclaimer in the documentation and/or other materials provided
+ *     with the distribution.
+ *
+ *   * Neither the name of Qualcomm Innovation Center, Inc. nor the names of its
+ *     contributors may be used to endorse or promote products derived
+ *     from this software without specific prior written permission.
+ *
+ * NO EXPRESS OR IMPLIED LICENSES TO ANY PARTY'S PATENT RIGHTS ARE
+ * GRANTED BY THIS LICENSE. THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT
+ * HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED
+ * WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
+ * MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
+ * IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR
+ * ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+ * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE
+ * GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER
+ * IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
+ * OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
+ * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ */
 /*!
 	@file
 	IPACM_log.h
@@ -53,8 +86,11 @@ extern "C"
 #include <syslog.h>
 #include <sys/utsname.h>
 #include <errno.h>
+#include <time.h>
+#include <sys/time.h>
 
 #define MAX_BUF_LEN 256
+#define TimeStamp_buff_len 30
 
 #ifdef FEATURE_IPA_ANDROID
 #define IPACMLOG_FILE "/dev/socket/ipacm_log_file"
@@ -71,6 +107,7 @@ typedef struct ipacm_log_buffer_s {
 
 #define KERNEL_VERSION_LENGTH 16
 
+
 bool is_kernel_version_newer_than(
 			char *version,
 			const char *cmp_verison);
@@ -79,6 +116,9 @@ void ipacm_log_send( void * user_data);
 
 static char buffer_send[MAX_BUF_LEN];
 static char dmesg_cmd[MAX_BUF_LEN];
+
+static char timestamp_buf[TimeStamp_buff_len];
+char *get_time_string(char *buffer, int TimeStamp_len);
 
 #define IPACMDBG_DMESG(fmt, ...) \
 	do { \
@@ -103,21 +143,21 @@ static char dmesg_cmd[MAX_BUF_LEN];
 		memset(buffer_send, 0, MAX_BUF_LEN); \
 		snprintf(buffer_send,MAX_BUF_LEN,"ERROR: %s:%d %s() " fmt, __FILE__,  __LINE__, __FUNCTION__, ##__VA_ARGS__); \
 		ipacm_log_send (buffer_send); \
-		printf("ERROR: %s:%d %s() " fmt, __FILE__,  __LINE__, __FUNCTION__, ##__VA_ARGS__); \
+		printf("ERROR: %s %s:%d %s() " fmt, get_time_string(timestamp_buf, TimeStamp_buff_len), __FILE__,  __LINE__, __FUNCTION__, ##__VA_ARGS__); \
 	} while (0);
 #define IPACMDBG_H(fmt, ...) \
 	do { \
 		memset(buffer_send, 0, MAX_BUF_LEN); \
 		snprintf(buffer_send,MAX_BUF_LEN,"%s:%d %s() " fmt, __FILE__,  __LINE__, __FUNCTION__, ##__VA_ARGS__); \
 		ipacm_log_send (buffer_send); \
-		printf("%s:%d %s() " fmt, __FILE__,  __LINE__, __FUNCTION__, ##__VA_ARGS__); \
+		printf("%s %s:%d %s() " fmt, get_time_string(timestamp_buf, TimeStamp_buff_len), __FILE__,  __LINE__, __FUNCTION__, ##__VA_ARGS__); \
 	} while (0);
 #else
 #define PERROR(fmt)   perror(fmt)
-#define IPACMERR(fmt, ...)   printf("ERR: %s:%d %s() " fmt, __FILE__,  __LINE__, __FUNCTION__, ##__VA_ARGS__);
-#define IPACMDBG_H(fmt, ...) printf("%s:%d %s() " fmt, __FILE__,  __LINE__, __FUNCTION__, ##__VA_ARGS__);
+#define IPACMERR(fmt, ...)   printf("ERR: %s %s:%d %s() " fmt, get_time_string(timestamp_buf, TimeStamp_buff_len), __FILE__,  __LINE__, __FUNCTION__, ##__VA_ARGS__);
+#define IPACMDBG_H(fmt, ...) printf("%s %s:%d %s() " fmt, get_time_string(timestamp_buf, TimeStamp_buff_len), __FILE__,  __LINE__, __FUNCTION__, ##__VA_ARGS__);
 #endif
-#define IPACMDBG(fmt, ...)	printf("%s:%d %s() " fmt, __FILE__,  __LINE__, __FUNCTION__, ##__VA_ARGS__);
+#define IPACMDBG(fmt, ...)	printf("%s %s:%d %s() " fmt, get_time_string(timestamp_buf, TimeStamp_buff_len), __FILE__,  __LINE__, __FUNCTION__, ##__VA_ARGS__);
 #define IPACMLOG(fmt, ...)  printf(fmt, ##__VA_ARGS__);
 
 inline void get_kernel_version(char *kernel_ver)

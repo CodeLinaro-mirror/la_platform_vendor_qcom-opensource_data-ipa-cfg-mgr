@@ -1,5 +1,5 @@
-/* 
-Copyright (c) 2013,2019, The Linux Foundation. All rights reserved.
+/*
+Copyright (c) 2013,2019, 2021, The Linux Foundation. All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are
@@ -135,4 +135,29 @@ void ipacm_log_send( void * user_data)
 		return;
 	}
 	return;
+}
+
+
+char *get_time_string(char *buffer, int len)
+{
+   struct timeval tv;
+   struct tm *tm;
+   unsigned long long milliseconds = 0;
+   char timestamp_buf[TimeStamp_buff_len];
+
+   if (!buffer || len <= 0)
+     return NULL;
+
+   gettimeofday(&tv, NULL);
+   tm = localtime(&tv.tv_sec);
+
+   if (!tm)
+     return NULL;
+
+   milliseconds = (tv.tv_sec * 1000LL) + (tv.tv_usec / 1000);
+
+   strftime(timestamp_buf, 30, "%H:%M:%S", tm);
+   snprintf(buffer, len, "%s%lld", timestamp_buf, milliseconds);
+
+   return buffer;
 }

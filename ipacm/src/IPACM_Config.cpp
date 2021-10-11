@@ -1759,6 +1759,9 @@ void IPACM_Config::add_vlan_bridge(ipacm_event_data_all *data_all)
 {
 	uint8_t testmac[IPA_MAC_ADDR_SIZE];
 	ipa_ioc_bridge_vlan_mapping_info mapping_info;
+	bool default_bridge = false;
+	struct ifreq ifr;
+	int fd;
 
 	memset(testmac, 0, IPA_MAC_ADDR_SIZE * sizeof(uint8_t));
 	memset(&mapping_info, 0, sizeof(mapping_info));
@@ -1769,8 +1772,71 @@ void IPACM_Config::add_vlan_bridge(ipacm_event_data_all *data_all)
 	{
 		if(strcmp(data_all->iface_name, IPACM_Iface::ipacmcfg->vlan_bridges[i].bridge_name) == 0)
 		{
-			IPACMDBG_H("bridge %s already exist with MAC %02x:%02x:%02x:%02x:%02x:%02x\n ignoring\n",
+			IPACMDBG_H("bridge %s already exist with MAC %02x:%02x:%02x:%02x:%02x:%02x, need to update MAC ADDR\n",
 				data_all->iface_name, IPACM_Iface::ipacmcfg->vlan_bridges[i].bridge_mac[0],
+				IPACM_Iface::ipacmcfg->vlan_bridges[i].bridge_mac[1],
+				IPACM_Iface::ipacmcfg->vlan_bridges[i].bridge_mac[2],
+				IPACM_Iface::ipacmcfg->vlan_bridges[i].bridge_mac[3],
+				IPACM_Iface::ipacmcfg->vlan_bridges[i].bridge_mac[4],
+				IPACM_Iface::ipacmcfg->vlan_bridges[i].bridge_mac[5]);
+			default_bridge = false;
+
+			if(strcmp(ipa_virtual_iface_name, data_all->iface_name) == 0)
+			{
+				default_bridge = true;
+			}
+
+			if(get_bridge_vlan_mapping(&mapping_info))
+			{
+				if(default_bridge)
+				{
+					IPACMDBG_H("default bridge doesn't have vlan mapping\n");
+				}
+				else
+				{
+					/* mapping may arrive later and information will be updated then */
+					IPACMERR("no bridge vlan mapping found for bridge %s, not adding\n", data_all->iface_name);
+					return;
+				}
+			}
+
+
+			fd = socket(AF_INET, SOCK_DGRAM, 0);
+			if (fd < 0) {
+					IPACMERR("get interface name socket create failed\n");
+					return;
+			}
+			memset(&ifr, 0, sizeof(struct ifreq));
+			ifr.ifr_addr.sa_family = AF_INET;
+			strlcpy(ifr.ifr_name, data_all->iface_name, sizeof(ifr.ifr_name));
+			if(ioctl(fd, SIOCGIFHWADDR, &ifr) < 0)
+			{
+				IPACMERR("unable to retrieve (%s) bridge MAC\n", ifr.ifr_name);
+				vlan_bridges[i].bridge_netmask = 0;
+				vlan_bridges[i].bridge_ipv4_addr = 0;
+				vlan_bridges[i].associate_VID = 0;
+				close(fd);
+				return;
+			}
+			memcpy(vlan_bridges[i].bridge_mac,
+				ifr.ifr_hwaddr.sa_data,
+				sizeof(vlan_bridges[i].bridge_mac));
+			IPACMDBG("got bridge MAC using IOCTL\n");
+			if(default_bridge)
+			{
+				memcpy(IPACM_Iface::ipacmcfg->bridge_mac,
+					ifr.ifr_hwaddr.sa_data,
+					sizeof(IPACM_Iface::ipacmcfg->bridge_mac));
+
+				IPACM_Iface::ipacmcfg->ipa_bridge_enable = true;
+
+				IPACMDBG("set default bridge flag dev %s\n",
+					data_all->iface_name);
+			}
+			close(fd);
+			IPACMDBG_H("update bridge %s with MAC %02x:%02x:%02x:%02x:%02x:%02x\n",
+				IPACM_Iface::ipacmcfg->vlan_bridges[i].bridge_name,
+				IPACM_Iface::ipacmcfg->vlan_bridges[i].bridge_mac[0],
 				IPACM_Iface::ipacmcfg->vlan_bridges[i].bridge_mac[1],
 				IPACM_Iface::ipacmcfg->vlan_bridges[i].bridge_mac[2],
 				IPACM_Iface::ipacmcfg->vlan_bridges[i].bridge_mac[3],
@@ -1781,7 +1847,7 @@ void IPACM_Config::add_vlan_bridge(ipacm_event_data_all *data_all)
 		/* no MAC was assigned before i.e. this is the first unused entry*/
 		else if(!memcmp(IPACM_Iface::ipacmcfg->vlan_bridges[i].bridge_mac, testmac, sizeof(uint8_t) * IPA_MAC_ADDR_SIZE))
 		{
-			bool default_bridge = false;
+			default_bridge = false;
 
 			if(strcmp(ipa_virtual_iface_name, data_all->iface_name) == 0)
 			{
@@ -1811,10 +1877,11 @@ void IPACM_Config::add_vlan_bridge(ipacm_event_data_all *data_all)
 				mapping_info.bridge_ipv4,
 				mapping_info.vlan_id);
 
-			struct ifreq ifr;
-			int fd;
-
 			fd = socket(AF_INET, SOCK_DGRAM, 0);
+			if (fd < 0) {
+					IPACMERR("get interface name socket create failed\n");
+					return;
+			}
 			memset(&ifr, 0, sizeof(struct ifreq));
 			ifr.ifr_addr.sa_family = AF_INET;
 			strlcpy(ifr.ifr_name, data_all->iface_name, sizeof(ifr.ifr_name));
@@ -1877,6 +1944,25 @@ ipacm_bridge *IPACM_Config::get_vlan_bridge(char *name)
 	}
 
 	IPACMDBG_H("no bridge %s exists\n", name);
+	return NULL;
+}
+
+
+ipacm_bridge *IPACM_Config::get_vlan_bridge_from_vid(uint16_t vlan_id)
+{
+	for(int i = 0; i < IPA_MAX_NUM_BRIDGES; i++)
+	{
+		if(vlan_id == IPACM_Iface::ipacmcfg->vlan_bridges[i].associate_VID)
+		{
+			IPACMDBG_H("found bridge %s with associate_VID %d\n",
+				IPACM_Iface::ipacmcfg->vlan_bridges[i].bridge_name,
+				IPACM_Iface::ipacmcfg->vlan_bridges[i].associate_VID);
+
+			return &IPACM_Iface::ipacmcfg->vlan_bridges[i];
+		}
+	}
+
+	IPACMDBG_H("no bridge with vlan-id %d exists\n", vlan_id);
 	return NULL;
 }
 

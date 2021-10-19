@@ -727,7 +727,7 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 #endif //FEATURE_IPACM_UL_FIREWALL
 						}
 #ifdef FEATURE_VLAN_MPDN
-						else
+						else if(IPACM_Wan::isVlanWanUP_V6())
 							check_vlan_PDNUp(IPA_IP_v6);
 #endif
 

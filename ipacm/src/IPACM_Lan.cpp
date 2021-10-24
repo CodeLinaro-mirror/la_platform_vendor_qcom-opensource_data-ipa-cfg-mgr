@@ -195,7 +195,14 @@ IPACM_Lan::IPACM_Lan(int iface_index) : IPACM_Iface(iface_index)
 	}
 	else if (ipa_if_cate == ODU_IF || ipa_if_cate == ETH_IF)
 	{
-		device_type = IPACM_CLIENT_DEVICE_TYPE_ETH;
+#ifdef DUAL_NIC_OFFLOAD
+		if (strstr(dev_name, STR_ETH1_IFACE))
+		{
+			device_type = IPACM_CLIENT_DEVICE_TYPE_ETH1;
+		}
+		else
+#endif
+			device_type = IPACM_CLIENT_DEVICE_TYPE_ETH;
 	}
 	else
 		IPACMERR ("Invalid iface category %d\n", ipa_if_cate);
@@ -6041,7 +6048,14 @@ int IPACM_Lan::handle_eth_client_down_evt(uint8_t *mac_addr, uint16_t vlan_id, i
 		}
 		else if (ipa_if_cate == ODU_IF)
 		{
-			client_info->device_type = IPACM_CLIENT_DEVICE_TYPE_ETH;
+#ifdef DUAL_NIC_OFFLOAD
+			if (strstr(dev_name, STR_ETH1_IFACE))
+			{
+				client_info->device_type = IPACM_CLIENT_DEVICE_TYPE_ETH1;
+			}
+			else
+#endif
+				client_info->device_type = IPACM_CLIENT_DEVICE_TYPE_ETH;
 		}
 		memcpy(client_info->mac,
 				get_client_memptr(eth_client, clt_indx)->mac,
@@ -6638,7 +6652,14 @@ fail:
 					}
 					else if (ipa_if_cate == ODU_IF)
 					{
-						client_info->device_type = IPACM_CLIENT_DEVICE_TYPE_ETH;
+#ifdef DUAL_NIC_OFFLOAD
+						if (strstr(dev_name, STR_ETH1_IFACE))
+						{
+							client_info->device_type = IPACM_CLIENT_DEVICE_TYPE_ETH1;
+						}
+						else
+#endif
+							client_info->device_type = IPACM_CLIENT_DEVICE_TYPE_ETH;
 					}
 					memcpy(client_info->mac,
 							get_client_memptr(eth_client, i)->mac,

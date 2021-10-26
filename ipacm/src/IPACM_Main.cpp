@@ -996,6 +996,7 @@ static void IPACM_Signals_handler(int sig, siginfo_t *info, void *extra)
 	case SIGTERM:
 		p = (ucontext_t *)extra;
 		IPACMERR("siginfo address=%x\n", info->si_addr);
+#ifdef config_compat
 		IPACMERR("arm_pc address = 0x%X\n", p->uc_mcontext.arm_pc);
 		IPACMERR("cpsr = 0x%X\n", p->uc_mcontext.arm_cpsr);
 		IPACMERR("fault address = 0x%X\n", p->uc_mcontext.fault_address);
@@ -1003,7 +1004,7 @@ static void IPACM_Signals_handler(int sig, siginfo_t *info, void *extra)
 		IPACMERR("arm_lr address = 0x%X\n", p->uc_mcontext.arm_lr);
 		IPACMERR("arm_r0  address = 0x%X\n", p->uc_mcontext.arm_r0);
 		size = backtrace(array, MAX_IPACM_TRACE_STACK);
-
+#endif
 		messages = backtrace_symbols(array, size);
 
 		/* skip first stack frame (points here) */

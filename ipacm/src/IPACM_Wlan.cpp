@@ -3629,6 +3629,8 @@ int IPACM_Wlan::handle_wlan_client_reset_rt(ipa_ip_type iptype)
 		else
 		{
 			get_client_memptr(wlan_client, i)->ipv6_set = 0;
+			/* clear the map of client */
+			rt_hdl_v6_list[i].clear();
 		}
 	} /* end of for loop */
 	return res;

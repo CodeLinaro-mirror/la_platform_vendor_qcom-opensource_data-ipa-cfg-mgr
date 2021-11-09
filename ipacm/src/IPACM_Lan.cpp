@@ -9672,8 +9672,8 @@ int IPACM_Lan::handle_lan_client_reset_rt(ipa_ip_type iptype)
 			IPACM_Iface::ipacmcfg->ipa_num_clients_ipv6 -= get_client_memptr(eth_client, i)->ipv6_set;
 			IPACMDBG_H("update ipa_num_clients_ipv6 = %d\n", IPACM_Iface::ipacmcfg->ipa_num_clients_ipv6);
 			get_client_memptr(eth_client, i)->ipv6_set = 0;
+			rt_hdl_v6_list[i].clear();
 		}
-		rt_hdl_v6_list[i].clear();
 	} /* end of for loop */
 	return res;
 }

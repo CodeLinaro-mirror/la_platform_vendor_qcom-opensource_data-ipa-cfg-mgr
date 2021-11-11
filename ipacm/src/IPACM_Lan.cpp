@@ -1560,7 +1560,7 @@ int IPACM_Lan::handle_eth_mac_flt_event()
 	/* work on copy list to avoid concurrency issues*/
 	std::map<std::array<uint8_t, 6>, mac_flt_type *> mac_flt_lists = IPACM_Iface::ipacmcfg->get_mac_flt_lists();
 
-	for (auto it = mac_flt_lists.begin(); it != mac_flt_lists.end();)
+	for (auto it = mac_flt_lists.begin(); it != mac_flt_lists.end() && mac_flt_lists.size() > 0;)
 	{
 		std::copy(std::begin(it->first), std::end(it->first), std::begin(mac_addr));
 		eth_index = get_eth_client_index(mac_addr);

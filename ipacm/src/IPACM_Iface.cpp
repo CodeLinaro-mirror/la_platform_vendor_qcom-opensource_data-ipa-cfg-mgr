@@ -585,7 +585,7 @@ int IPACM_Iface::query_iface_property(void)
 			close(fd);
 			return IPACM_FAILURE;
 		}
-		memcpy(tx_prop->name, dev_name, sizeof(tx_prop->name));
+		memcpy(tx_prop->name, dev_name, sizeof(dev_name));
 		tx_prop->num_tx_props = iface_query->num_tx_props;
 
 		if (ioctl(fd, IPA_IOC_QUERY_INTF_TX_PROPS, tx_prop) < 0)
@@ -629,7 +629,7 @@ int IPACM_Iface::query_iface_property(void)
 			return IPACM_FAILURE;
 		}
 		memcpy(rx_prop->name, dev_name,
-				 sizeof(rx_prop->name));
+				 sizeof(dev_name));
 		rx_prop->num_rx_props = iface_query->num_rx_props;
 
 		if (ioctl(fd, IPA_IOC_QUERY_INTF_RX_PROPS, rx_prop) < 0)

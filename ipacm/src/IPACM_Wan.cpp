@@ -7374,7 +7374,7 @@ int IPACM_Wan::handle_wan_hdr_init(uint8_t *mac_addr, bool gw_addr)
 
 	memcpy(get_client_memptr(wan_client, num_wan_client)->mac,
 				 mac_addr,
-				 sizeof(get_client_memptr(wan_client, num_wan_client)->mac));
+				 sizeof(mac_addr));
 
 	IPACMDBG_H("Received Client MAC %02x:%02x:%02x:%02x:%02x:%02x\n",
 					 mac_addr[0], mac_addr[1], mac_addr[2],

@@ -459,6 +459,7 @@ void IPACM_Iface::iface_addr_query
 							IPACMDBG_H("iface ip4 address: (0x%x)\n", ntohl(iface_ipv4.s_addr));
 
 							*curr_ip4_addr = ntohl(iface_ipv4.s_addr);
+							freeifaddrs(myaddrs);
 							return;
 						}
 						else

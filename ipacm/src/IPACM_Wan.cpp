@@ -499,17 +499,7 @@ int IPACM_Wan::handle_addr_evt(ipacm_event_data_addr *data)
 		{
 			if(m_is_sta_mode == Q6_WAN)
 			{
-#ifdef FEATURE_VLAN_MPDN
-				modem_ipv6_pdn_index = getFreePDNIndex_V6();
-				if (modem_ipv6_pdn_index == -1)
-				{
-					IPACMERR("No Free index available.!\n");
-					res = IPACM_FAILURE;
-					goto fail;
-				}
-				num_ipv6_modem_pdn++;
-				IPACMDBG_H("Now the number of modem ipv6 pdn is %d.\n", num_ipv6_modem_pdn);
-#endif
+				/* modem_ipv6_pdn_index only get after above */
 				init_fl_rule_ex(data->iptype);
 			}
 			else

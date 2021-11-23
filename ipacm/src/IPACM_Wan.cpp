@@ -5325,8 +5325,8 @@ int IPACM_Wan::add_dft_filtering_rule(struct ipa_flt_rule_add *rules, int rule_o
 			&flt_rule_entry, sizeof(struct ipa_flt_rule_add));
 #endif
 
-#ifdef FEATURE_IPA_ANDROID
-		IPACMDBG_H("Add TCP ctrl rules\n");
+		/* Always adding tcp syn SW-exception rule for MSS clamping support */
+		IPACMDBG_H("Add TCP sync rules\n");
 		memset(&flt_rule_entry, 0, sizeof(struct ipa_flt_rule_add));
 
 		flt_rule_entry.at_rear = true;
@@ -5349,15 +5349,18 @@ int IPACM_Wan::add_dft_filtering_rule(struct ipa_flt_rule_add *rules, int rule_o
 		flt_rule_entry.rule.eq_attrib.num_ihl_offset_meq_32 = 1;
 		flt_rule_entry.rule.eq_attrib.ihl_offset_meq_32[0].offset = 12;
 
-		/* add TCP FIN rule*/
-		flt_rule_entry.rule.eq_attrib.ihl_offset_meq_32[0].value = (((uint32_t)1)<<TCP_FIN_SHIFT);
-		flt_rule_entry.rule.eq_attrib.ihl_offset_meq_32[0].mask = (((uint32_t)1)<<TCP_FIN_SHIFT);
-		memcpy(&(rules[rule_offset + m_ipv6_default_filterting_rules_count++]),
-			&flt_rule_entry, sizeof(struct ipa_flt_rule_add));
-
 		/* add TCP SYN rule*/
 		flt_rule_entry.rule.eq_attrib.ihl_offset_meq_32[0].value = (((uint32_t)1)<<TCP_SYN_SHIFT);
 		flt_rule_entry.rule.eq_attrib.ihl_offset_meq_32[0].mask = (((uint32_t)1)<<TCP_SYN_SHIFT);
+		memcpy(&(rules[rule_offset + m_ipv6_default_filterting_rules_count++]),
+			&flt_rule_entry, sizeof(struct ipa_flt_rule_add));
+
+#if defined(FEATURE_IPA_ANDROID)
+		IPACMDBG_H("Add TCP other ctrl rules\n");
+
+		/* add TCP FIN rule*/
+		flt_rule_entry.rule.eq_attrib.ihl_offset_meq_32[0].value = (((uint32_t)1)<<TCP_FIN_SHIFT);
+		flt_rule_entry.rule.eq_attrib.ihl_offset_meq_32[0].mask = (((uint32_t)1)<<TCP_FIN_SHIFT);
 		memcpy(&(rules[rule_offset + m_ipv6_default_filterting_rules_count++]),
 			&flt_rule_entry, sizeof(struct ipa_flt_rule_add));
 

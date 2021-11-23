@@ -146,12 +146,13 @@ extern "C"
 #define IPA_MAC_ADDR_SIZE  6
 #define IPA_IPV6_ADDR_SIZE_IN_WORDS 4
 #define IPA_MAX_NUM_OFFLOAD_VLANS 15
-/* mbb reconstructor to not able to associate vlan to bridge0, need one more */
+/* mbb reconstructor not able to associate vlan to bridge0, need one more */
 #define IPA_MAX_NUM_BRIDGES (IPA_MAX_NUM_OFFLOAD_VLANS + 1)
 #define IPA_MAX_NUM_SW_PDNS 15
 #define IPA_MAX_NUM_HW_PDNS (IPA_MAX_PDN_NUM - 1) /* currently 16 - 1 = 15 */
 #ifdef FEATURE_VLAN_MPDN
-#define IPA_MAX_PRIVATE_SUBNET_ENTRIES IPA_MAX_NUM_OFFLOAD_VLANS
+/* mbb reconstructor not able to associate vlan to bridge0, need one more */
+#define IPA_MAX_PRIVATE_SUBNET_ENTRIES (IPA_MAX_NUM_OFFLOAD_VLANS + 1)
 #define IPA_MAX_MTU_ENTRIES IPA_MAX_NUM_HW_PDNS
 #else
 #define IPA_MAX_PRIVATE_SUBNET_ENTRIES 3

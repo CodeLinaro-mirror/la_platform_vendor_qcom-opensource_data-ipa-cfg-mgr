@@ -3849,7 +3849,7 @@ fail:
 int IPACM_Lan::handle_eth_hdr_init(uint8_t *mac_addr, ipacm_bridge *bridge, uint16_t vlan_id, bool isVlan)
 {
 
-#define ETH_IFACE_INDEX_LEN 2
+#define ETH_IFACE_INDEX_LEN 3
 #define VLAN_TPID_SIZE 2
 #define VLAN_VID_MASK 0x0FFF
 

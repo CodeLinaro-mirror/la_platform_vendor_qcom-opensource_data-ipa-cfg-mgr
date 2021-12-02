@@ -103,6 +103,11 @@
 #define IPA_DRIVER_WLAN_META_MSG    (sizeof(struct ipa_msg_meta))
 #define IPA_DRIVER_WLAN_BUF_LEN     (IPA_DRIVER_PIPE_STATS_EVENT_SIZE + IPA_DRIVER_WLAN_META_MSG)
 
+#ifdef FEATURE_IPACM_RESTART
+#define IPA_READY_QCMAP_NOTIFIER_FILE "/var/run/data/monitor/ipacmd.pid"
+#endif
+IPACM_Neighbor *neigh = NULL;
+
 uint32_t ipacm_event_stats[IPACM_EVENT_MAX];
 bool ipacm_logging = true;
 
@@ -239,6 +244,11 @@ void* firewall_monitor(void *param)
 void* ipa_driver_msg_notifier(void *param)
 {
 	int length, fd, cnt;
+
+#ifdef FEATURE_IPACM_RESTART
+	FILE *fp = NULL;
+#endif
+
 	char buffer[IPA_DRIVER_WLAN_BUF_LEN];
 	struct ipa_msg_meta event_hdr;
 	struct ipa_ecm_msg event_ecm;
@@ -564,6 +574,20 @@ void* ipa_driver_msg_notifier(void *param)
 			evt_data.event = IPA_LINK_DOWN_EVENT;
 			evt_data.evt_data = data_fid;
 			break;
+
+#ifdef FEATURE_IPACM_RESTART
+		case IPA_DONE_RESTORE_EVENT:
+			IPACMDBG_H("Received IPA_DONE_RESTORE_EVENT\n");
+			fp = fopen(IPA_READY_QCMAP_NOTIFIER_FILE, "w");
+			if (fp == NULL)
+			{
+				IPACMERR("can't open IPA ready monitor file\n");
+				break;
+			}
+			fputs("IPA event restore done", fp);
+			fclose(fp);
+			break;
+#endif
 		/* Add for 8994 Android case */
 		case WAN_UPSTREAM_ROUTE_ADD:
 			memcpy(&event_wan, buffer + sizeof(struct ipa_msg_meta), sizeof(struct ipa_wan_msg));
@@ -758,6 +782,10 @@ void* ipa_driver_msg_notifier(void *param)
 		case ADD_VLAN_IFACE:
 			memcpy(&vlan_info, buffer + sizeof(struct ipa_msg_meta), sizeof(vlan_info));
 			IPACM_Iface::ipacmcfg->add_vlan_iface(&vlan_info);
+#ifdef IPACM_RESTART_FUNCTIONALITY
+			if (neigh && vlan_info.add_vlan_done == true)
+				neigh->update_neigh_cache();
+#endif
 			continue;
 
 		case DEL_VLAN_IFACE:
@@ -1051,6 +1079,11 @@ void RegisterForSignals(bool default_handler)
 int main(int argc, char **argv)
 {
 	int ret;
+
+#ifdef FEATURE_IPACM_RESTART
+	FILE *fp = NULL;
+#endif
+
 	pthread_t netlink_thread = 0, monitor_thread = 0, ipa_driver_thread = 0;
 	pthread_t cmd_queue_thread = 0;
 
@@ -1060,11 +1093,20 @@ int main(int argc, char **argv)
 	IPACMDBG_H("In main()\n");
 
 #ifdef FEATURE_IPACM_RESTART
+	fp = fopen(IPA_READY_QCMAP_NOTIFIER_FILE, "w");
+	if (fp == NULL)
+	{
+		IPACMERR("can't open ipa ready monitor file\n");
+		return IPACM_FAILURE;
+	}
+	fputs("IPACM started", fp);
+	fclose(fp);
+
 	IPACMDBG_H("RESET IPA-HW rules\n");
 	ipa_reset();
 #endif
+	neigh = new IPACM_Neighbor();
 
-	IPACM_Neighbor *neigh = new IPACM_Neighbor();
 	IPACM_IfaceManager *ifacemgr = new IPACM_IfaceManager();
 
 #ifdef FEATURE_ETH_BRIDGE_LE
@@ -1079,7 +1121,6 @@ int main(int argc, char **argv)
 	CtList = new IPACM_ConntrackListener();
 
 	/* Query bridge FDB to populate neighbor cache and create interfaces if missed any*/
-	neigh->update_neigh_cache();
 
 	IPACMDBG_H("Staring IPA main\n");
 	IPACMDBG_H("ipa_cmdq_successful\n");
@@ -1152,6 +1193,8 @@ int main(int argc, char **argv)
 			IPACMERR("unable to set thread name\n");
 		}
 	}
+
+	neigh->update_neigh_cache();
 
 	/* Create Conntrack listener threads here to support on-demand PDN’s connections before WAN is up */
 	CtList->CreateConnTrackThreads();

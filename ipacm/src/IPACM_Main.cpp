@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013-2019 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2013-2021 The Linux Foundation. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -108,6 +108,11 @@ bool ipacm_logging = true;
 
 void ipa_is_ipacm_running(void);
 int ipa_get_if_index(char *if_name, int *if_index);
+
+#ifdef FEATURE_IPACM_RESTART
+int ipa_reset();
+int ipa_query_driver_event();
+#endif
 
 /* start netlink socket monitor*/
 void* netlink_start(void *param)
@@ -1053,11 +1058,21 @@ int main(int argc, char **argv)
 	ipa_is_ipacm_running();
 
 	IPACMDBG_H("In main()\n");
+
+#ifdef FEATURE_IPACM_RESTART
+	IPACMDBG_H("RESET IPA-HW rules\n");
+	ipa_reset();
+#endif
+
 	IPACM_Neighbor *neigh = new IPACM_Neighbor();
 	IPACM_IfaceManager *ifacemgr = new IPACM_IfaceManager();
 
 #ifdef FEATURE_ETH_BRIDGE_LE
 	IPACM_LanToLan* lan2lan = IPACM_LanToLan::get_instance();
+#endif
+
+#ifdef FEATURE_IPACM_RESTART
+	ipa_query_driver_event();
 #endif
 
 	IPACM_ConntrackClient *cc = IPACM_ConntrackClient::GetInstance();
@@ -1261,3 +1276,46 @@ int ipa_get_if_index
 	close(fd);
 	return IPACM_SUCCESS;
 }
+
+#ifdef FEATURE_IPACM_RESTART
+int ipa_reset()
+{
+	int fd = -1;
+
+	if ((fd = open(IPA_DEVICE_NAME, O_RDWR)) < 0) {
+		IPACMERR("Failed opening %s.\n", IPA_DEVICE_NAME);
+		return IPACM_FAILURE;
+	}
+
+	if (ioctl(fd, IPA_IOC_CLEANUP) < 0) {
+		IPACMERR("IOCTL IPA_IOC_CLEANUP call failed: %s \n", strerror(errno));
+		close(fd);
+		return IPACM_FAILURE;
+	}
+
+	IPACMDBG_H("send IPA_IOC_CLEANUP \n");
+	close(fd);
+	return IPACM_SUCCESS;
+}
+
+int ipa_query_driver_event()
+{
+	int fd = -1;
+
+	if ((fd = open(IPA_DEVICE_NAME, O_RDWR)) < 0) {
+		IPACMERR("Failed opening %s.\n", IPA_DEVICE_NAME);
+		return IPACM_FAILURE;
+	}
+
+	if (ioctl(fd, IPA_IOC_QUERY_CACHED_DRIVER_MSG) < 0) {
+		IPACMERR("IOCTL IPA_IOC_QUERY_CACHED_DRIVER_MSG call failed: %s \n",
+			strerror(errno));
+		close(fd);
+		return IPACM_FAILURE;
+	}
+
+	IPACMDBG_H("send IPA_IOC_QUERY_CACHED_DRIVER_MSG \n");
+	close(fd);
+	return IPACM_SUCCESS;
+}
+#endif

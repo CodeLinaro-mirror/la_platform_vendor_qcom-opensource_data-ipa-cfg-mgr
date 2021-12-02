@@ -1105,8 +1105,12 @@ void IPACM_Neighbor::update_neigh_cache()
 		for (i = 0; i < num_neighbor_client; ++i)
 		{
 			if (memcmp(mac_addr_fdb, neighbor_client[i].mac_addr, sizeof(neighbor_client[i].mac_addr)) == 0) {
-				is_client_cached = true;
-				break;
+				if (strncmp(rdev_name, neighbor_client[i].iface_name,
+					sizeof(neighbor_client[i].iface_name)) == 0)
+				{
+					is_client_cached = true;
+					break;
+				}
 			}
 		}
 

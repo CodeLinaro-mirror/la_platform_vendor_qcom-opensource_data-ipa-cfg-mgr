@@ -296,6 +296,7 @@ typedef struct _nat_table_entry
 	bool dst_only;
 	bool src_only;
 	bool dummy_nat;
+	bool ip_pass_entry;
 
 }nat_table_entry;
 

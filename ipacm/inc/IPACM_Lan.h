@@ -1382,7 +1382,7 @@ private:
 	/* handle eth client initial, construct full headers (tx property) */
 	int handle_eth_hdr_init(uint8_t *mac_addr,
 		ipacm_bridge *bridge = NULL,
-		uint16_t vlan_id = 0, bool isVlan = false);
+		uint16_t vlan_id = 0, bool isVlan = false, uint8_t priority = 0);
 
 	/* handle eth client ip-address */
 	int handle_eth_client_ipaddr(ipacm_event_data_all *data);

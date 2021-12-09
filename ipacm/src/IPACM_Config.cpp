@@ -1472,6 +1472,15 @@ void IPACM_Config::add_vlan_iface(ipa_ioc_vlan_iface_info *data)
 	}
 
 	IPACMDBG_H("Vlan iface: %s vlan id: %d\n", data->name, data->vlan_id);
+
+#ifdef IPACM_RESTART_FUNCTIONALITY
+	IPACMDBG_H("add_vlan_done %d\n", data->add_vlan_done);
+#endif
+
+#ifdef IPA_VLAN_PRIORITY
+	IPACMDBG_H("priority %d\n", data->priority);
+#endif
+
 	for(it_vlan = m_vlan_iface.begin(); it_vlan != m_vlan_iface.end(); it_vlan++)
 	{
 		if(strncmp(it_vlan->vlan_iface_name, data->name, sizeof(it_vlan->vlan_iface_name)) == 0)
@@ -1505,6 +1514,9 @@ void IPACM_Config::add_vlan_iface(ipa_ioc_vlan_iface_info *data)
 	memset(&new_vlan_info, 0 , sizeof(new_vlan_info));
 	strlcpy(new_vlan_info.vlan_iface_name, data->name, sizeof(new_vlan_info.vlan_iface_name));
 	new_vlan_info.vlan_id = data->vlan_id;
+#ifdef IPA_VLAN_PRIORITY
+	new_vlan_info.priority = data->priority;
+#endif
 	m_vlan_iface.push_front(new_vlan_info);
 	pthread_mutex_unlock(&vlan_l2tp_lock);
 #ifdef FEATURE_VLAN_MPDN
@@ -1525,6 +1537,10 @@ void IPACM_Config::add_vlan_iface(ipa_ioc_vlan_iface_info *data)
 			sizeof(evt_data_eth_bridge->iface_name));
 
 		evt_data_eth_bridge->VlanID = data->vlan_id;
+
+//#ifdef IPA_VLAN_PRIORITY
+//		evt_data_eth_bridge->priority = data->priority;
+//#endif
 
 		eth_bridge_evt.evt_data = (void*)evt_data_eth_bridge;
 		eth_bridge_evt.event = IPA_ETH_BRIDGE_ADD_VLAN_ID;
@@ -1589,6 +1605,14 @@ void IPACM_Config::del_vlan_iface(ipa_ioc_vlan_iface_info *data)
 	}
 
 	IPACMDBG_H("Vlan iface: %s vlan id: %d\n", data->name, data->vlan_id);
+
+#ifdef IPACM_RESTART_FUNCTIONALITY
+	IPACMDBG_H("add_vlan_done %d\n", data->add_vlan_done);
+#endif
+
+#ifdef IPA_VLAN_PRIORITY
+	IPACMDBG_H("priority %d\n", data->priority);
+#endif
 	for(it_vlan = m_vlan_iface.begin(); it_vlan != m_vlan_iface.end(); it_vlan++)
 	{
 		if(strncmp(it_vlan->vlan_iface_name, data->name, sizeof(it_vlan->vlan_iface_name)) == 0)
@@ -1645,6 +1669,9 @@ void IPACM_Config::del_vlan_iface(ipa_ioc_vlan_iface_info *data)
 
 		evt_data_eth_bridge->VlanID = data->vlan_id;
 
+//#ifdef IPA_VLAN_PRIORITY
+//		evt_data_eth_bridge->priority = data->priority;
+//#endif
 		eth_bridge_evt.evt_data = (void*)evt_data_eth_bridge;
 		eth_bridge_evt.event = IPA_ETH_BRIDGE_DEL_VLAN_ID;
 
@@ -2003,8 +2030,11 @@ int IPACM_Config::get_iface_vlan_ids(char *phys_iface_name, uint16_t *Ids)
 
 	return IPACM_SUCCESS;
 }
-
-int IPACM_Config::get_vlan_id(char *iface_name, uint16_t *vlan_id)
+#ifdef IPA_VLAN_PRIORITY
+	int IPACM_Config::get_vlan_id(char *iface_name, uint16_t *vlan_id, uint8_t *priority)
+#else
+	int IPACM_Config::get_vlan_id(char *iface_name, uint16_t *vlan_id)
+#endif
 {
 	list<vlan_iface_info>::iterator it_vlan;
 	int ret = IPACM_FAILURE;
@@ -2019,8 +2049,13 @@ int IPACM_Config::get_vlan_id(char *iface_name, uint16_t *vlan_id)
 	{
 		if(strncmp(it_vlan->vlan_iface_name, iface_name, sizeof(it_vlan->vlan_iface_name)) == 0)
 		{
-			IPACMDBG_H("Found vlan iface in vlan list: %s\n", it_vlan->vlan_iface_name);
+			IPACMDBG_H("Found vlan iface in vlan list: %s, vlan-id %d \n", it_vlan->vlan_iface_name, it_vlan->vlan_id);
 			*vlan_id = it_vlan->vlan_id;
+#ifdef IPA_VLAN_PRIORITY
+			IPACMDBG_H("with priority %d \n", it_vlan->priority);
+			if(priority != NULL)
+				*priority = it_vlan->priority;
+#endif
 			ret = IPACM_SUCCESS;
 			break;
 		}

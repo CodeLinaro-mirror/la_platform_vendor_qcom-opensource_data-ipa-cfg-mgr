@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2013-2021 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -255,7 +256,11 @@ public:
 	bool is_added_vlan_iface(char *iface_name);
 	bool iface_in_vlan_mode(const char * phys_iface_name);
 	int get_iface_vlan_ids(char *phys_iface_name, uint16_t *Ids);
+#ifdef IPA_VLAN_PRIORITY
+	int get_vlan_id(char *iface_name, uint16_t *vlan_id, uint8_t *priority = NULL);
+#else
 	int get_vlan_id(char *iface_name, uint16_t *vlan_id);
+#endif
 	void get_vlan_mode_ifaces();
 #endif
 

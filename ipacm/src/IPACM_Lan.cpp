@@ -1767,13 +1767,18 @@ int IPACM_Lan::handle_vlan_neighbor(ipacm_event_data_all *data)
 {
 	ipacm_event_new_neigh_vlan *data_vlan;
 	uint16_t vlan_id = 0;
+	uint8_t priority = 0;
 	bool new_prefix = false;
 	ipacm_event_data_all data_all;
 	std::list <ipacm_event_data_all>::iterator it;
 
 	IPACMDBG_H("\n");
 	memset(&data_all, 0, sizeof(ipacm_event_data_all));
+#ifdef IPA_VLAN_PRIORITY
+	if (IPACM_Iface::ipacmcfg->get_vlan_id(data->iface_name, &vlan_id, &priority))
+#else
 	if (IPACM_Iface::ipacmcfg->get_vlan_id(data->iface_name, &vlan_id))
+#endif
 	{
 		if(!IPACM_Iface::ipacmcfg->is_added_vlan_iface(data->iface_name))
 		{
@@ -1783,8 +1788,11 @@ int IPACM_Lan::handle_vlan_neighbor(ipacm_event_data_all *data)
 		IPACMERR("failed getting vlan ID of iface %s \n", data->iface_name);
 		return IPACM_FAILURE;
 	}
-
+#ifdef IPA_VLAN_PRIORITY
+	IPACMDBG_H("VLAN IF %s got client, vlan id %d priority %d\n", data->iface_name, vlan_id, priority);
+#else
 	IPACMDBG_H("VLAN IF %s got client, vlan id %d \n", data->iface_name, vlan_id);
+#endif
 	data_vlan = (ipacm_event_new_neigh_vlan *)data;
 	if(IPACM_Iface::ipacmcfg->ipacm_mpdn_enable) {
 		if(data_vlan->data_all.iptype == IPA_IP_v6)
@@ -1828,12 +1836,12 @@ int IPACM_Lan::handle_vlan_neighbor(ipacm_event_data_all *data)
 		}
 
 		/* first construc ETH full header */
-		handle_eth_hdr_init(data->mac_addr, data_vlan->bridge, vlan_id, true);
+		handle_eth_hdr_init(data->mac_addr, data_vlan->bridge, vlan_id, true, priority);
 	}
 	else
 	{
 		/* first construc ETH full header */
-		handle_eth_hdr_init(data->mac_addr, NULL, vlan_id, true);
+		handle_eth_hdr_init(data->mac_addr, NULL, vlan_id, true, priority);
 	}
 
 
@@ -3365,12 +3373,13 @@ fail:
 }
 
 /* handle ETH client initial, construct full headers (tx property) */
-int IPACM_Lan::handle_eth_hdr_init(uint8_t *mac_addr, ipacm_bridge *bridge, uint16_t vlan_id, bool isVlan)
+int IPACM_Lan::handle_eth_hdr_init(uint8_t *mac_addr, ipacm_bridge *bridge, uint16_t vlan_id, bool isVlan, uint8_t priority)
 {
 
 #define ETH_IFACE_INDEX_LEN 2
 #define VLAN_TPID_SIZE 2
 #define VLAN_VID_MASK 0x0FFF
+#define VLAN_PRI_MASK 0xE000
 
 	int res = IPACM_SUCCESS, len = 0;
 	char index[ETH_IFACE_INDEX_LEN];
@@ -3435,7 +3444,11 @@ int IPACM_Lan::handle_eth_hdr_init(uint8_t *mac_addr, ipacm_bridge *bridge, uint
 					 get_client_memptr(eth_client, num_eth_client)->mac[4],
 					 get_client_memptr(eth_client, num_eth_client)->mac[5]);
 #ifdef FEATURE_VLAN_MPDN
+#ifdef IPA_VLAN_PRIORITY
+	IPACMDBG_H("isvlan %d, vlan_id %d priority %d\n", isVlan, vlan_id, priority);
+#else
 	IPACMDBG_H("isvlan %d, vlan_id %d\n", isVlan, vlan_id);
+#endif
 #endif
 
 	/* add header to IPA */
@@ -3521,6 +3534,10 @@ int IPACM_Lan::handle_eth_hdr_init(uint8_t *mac_addr, ipacm_bridge *bridge, uint
 							2 * IPA_MAC_ADDR_SIZE +
 							VLAN_TPID_SIZE])));
 					vlan_tci = (vlan_tci & ~VLAN_VID_MASK) | (vlan_id & VLAN_VID_MASK);
+#ifdef IPA_VLAN_PRIORITY
+					/* update priority field */
+					vlan_tci = (vlan_tci & ~VLAN_PRI_MASK) | ((priority <<13) & VLAN_PRI_MASK);
+#endif
 					/* change vlan_tci to HW format */
 					vlan_tci = htons(vlan_tci);
 					memcpy(&pHeaderDescriptor->hdr[0].hdr[sCopyHeader.eth2_ofst +
@@ -3678,6 +3695,10 @@ int IPACM_Lan::handle_eth_hdr_init(uint8_t *mac_addr, ipacm_bridge *bridge, uint
 							2 * IPA_MAC_ADDR_SIZE +
 							VLAN_TPID_SIZE])));
 					vlan_tci = (vlan_tci & ~VLAN_VID_MASK) | (vlan_id & VLAN_VID_MASK);
+#ifdef IPA_VLAN_PRIORITY
+					/* update priority field */
+					vlan_tci = (vlan_tci & ~VLAN_PRI_MASK) | ((priority <<13) & VLAN_PRI_MASK);
+#endif
 					/* change vlan_tci to HW format */
 					vlan_tci = htons(vlan_tci);
 

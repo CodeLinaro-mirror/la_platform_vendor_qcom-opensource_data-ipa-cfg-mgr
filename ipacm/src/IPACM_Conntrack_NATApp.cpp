@@ -691,6 +691,7 @@ int NatApp::AddEntry(const nat_table_entry *rule, bool isVlan)
 			cache[cnt].pdn_index = pdn_index;
 			cache[cnt].public_ip = rule->public_ip;
 #endif
+			cache[cnt].ip_pass_entry = rule->ip_pass_entry;
 			curCnt++;
 		}
 
@@ -832,7 +833,8 @@ void NatApp::UpdateUDPTimeStamp()
 	{
 		ts = 0;
 		if(cache[cnt].enabled == true &&
-		   (cache[cnt].private_ip != cache[cnt].public_ip))
+		   ((cache[cnt].private_ip != cache[cnt].public_ip) ||
+		   		(cache[cnt].ip_pass_entry)))
 		{
 			IPACMDBG("\n");
 			if(ipa_nat_query_timestamp(nat_table_hdl, cache[cnt].rule_hdl, &ts) < 0)
@@ -1411,6 +1413,7 @@ void NatApp::CacheEntry(const nat_table_entry *rule)
 			cache[cnt].pdn_index = rule->pdn_index;
 #endif
 			cache[cnt].dst_nat = rule->dst_nat;
+			cache[cnt].ip_pass_entry = rule->ip_pass_entry;
 			curCnt++;
 		}
 

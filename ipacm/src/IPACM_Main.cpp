@@ -286,7 +286,9 @@ void* ipa_driver_msg_notifier(void *param)
 #endif
 	struct ipa_move_nat_req_msg_v01 *move_nat;
 	ipacm_event_move_nat *move_nat_data;
-	
+	struct ipa_macsec_map *macsec_map = NULL;
+	int CurrentIfaceIndex;
+
 	fd = open(IPA_DRIVER, O_RDWR);
 	if (fd < 0)
 	{
@@ -552,14 +554,22 @@ void* ipa_driver_msg_notifier(void *param)
 
 		case ECM_CONNECT:
 			memcpy(&event_ecm, buffer + sizeof(struct ipa_msg_meta), sizeof(struct ipa_ecm_msg));
-			IPACMDBG_H("Received ECM_CONNECT name: %s\n",event_ecm.name);
+			IPACMDBG_H("Received ECM_CONNECT name: %s, ifindex: %d\n", event_ecm.name, event_ecm.ifindex);
 			data_fid = (ipacm_event_data_fid *)malloc(sizeof(ipacm_event_data_fid));
 			if(data_fid == NULL)
 			{
 				IPACMERR("unable to allocate memory for event_ecm data_fid\n");
 				goto done;
 			}
-			data_fid->if_index = event_ecm.ifindex;
+			if (IPACM_Iface::ipa_get_if_index(event_ecm.name, &CurrentIfaceIndex) == IPACM_SUCCESS)
+			{
+				IPACMDBG_H("Notifing ifindex: %d\n", CurrentIfaceIndex);
+				data_fid->if_index = CurrentIfaceIndex;
+			}
+			else
+			{
+				data_fid->if_index = event_ecm.ifindex;
+			}
 			evt_data.event = IPA_USB_LINK_UP_EVENT;
 			evt_data.evt_data = data_fid;
 			break;
@@ -573,7 +583,15 @@ void* ipa_driver_msg_notifier(void *param)
 				IPACMERR("unable to allocate memory for event_ecm data_fid\n");
 				goto done;
 			}
-			data_fid->if_index = event_ecm.ifindex;
+			if (IPACM_Iface::ipa_get_if_index(event_ecm.name, &CurrentIfaceIndex) == IPACM_SUCCESS)
+			{
+				IPACMDBG_H("Notifing ifindex: %d\n", CurrentIfaceIndex);
+				data_fid->if_index = CurrentIfaceIndex;
+			}
+			else
+			{
+				data_fid->if_index = event_ecm.ifindex;
+			}
 			evt_data.event = IPA_LINK_DOWN_EVENT;
 			evt_data.evt_data = data_fid;
 			break;
@@ -1218,6 +1236,40 @@ void* ipa_driver_msg_notifier(void *param)
 			break;
 #endif
 
+		case IPA_MACSEC_ADD_EVENT:
+		case IPA_MACSEC_DEL_EVENT:
+			IPACMDBG_H("Received an %s (%u)\n",
+				event_hdr.msg_type == IPA_MACSEC_ADD_EVENT ? "IPA_MACSEC_ADD_EVENT" : "IPA_MACSEC_DEL_EVENT");
+
+			macsec_map = (struct ipa_macsec_map *)malloc(sizeof(struct ipa_macsec_map));
+			if (macsec_map == NULL)
+			{
+				IPACMERR("unable to allocate memory for macsec_map\n");
+				goto done;
+			}
+
+			memcpy(macsec_map,
+				buffer + sizeof(struct ipa_msg_meta),
+				sizeof(struct ipa_macsec_map));
+
+			IPACMDBG_H("macsec map: %s - %s\n", macsec_map->macsec_name, macsec_map->phy_name);
+
+			if (event_hdr.msg_type == IPA_MACSEC_ADD_EVENT &&
+			    IPACM_Iface::ipacmcfg->AddMacsecMap(macsec_map) == false ||
+			    event_hdr.msg_type == IPA_MACSEC_DEL_EVENT &&
+			    IPACM_Iface::ipacmcfg->DelMacsecMap(macsec_map) == false)
+			{
+				IPACMERR("Couldn't find the mapping, ignoring this macsec handling\n");
+				free(macsec_map);
+				goto done;
+			}
+
+			evt_data.event = (event_hdr.msg_type == IPA_MACSEC_ADD_EVENT) ?
+				IPA_HANDLE_MACSEC_ADD : IPA_HANDLE_MACSEC_DEL;
+			evt_data.evt_data = macsec_map;
+
+			break;
+
 		default:
 			IPACMDBG_H("Unhandled message type: %d\n", event_hdr.msg_type);
 			continue;
@@ -1359,7 +1411,6 @@ void RegisterForSignals(bool default_handler)
 		printf("couldn't register for SIGUSR2\n");
 	}
 }
-
 
 int main(int argc, char **argv)
 {

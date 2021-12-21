@@ -153,6 +153,8 @@ const char *ipacm_event_name[] = {
 	__stringify(IPA_HANDLE_EoGRE_UP),                      /* Handle eogre enable event. */
 	__stringify(IPA_HANDLE_EoGRE_DOWN),                    /* Handle eogre disable event. */
 #endif
+	__stringify(IPA_HANDLE_MACSEC_ADD),                    /* Handle macsec map add event */
+	__stringify(IPA_HANDLE_MACSEC_DEL),                    /* Handle macsec map delete event */
 	__stringify(IPACM_EVENT_MAX)
 };
 
@@ -498,11 +500,15 @@ int IPACM_Config::Init(void)
 	for (i = 0; i < cfg->iface_config.num_iface_entries; i++)
 	{
 		strlcpy(iface_table[i].iface_name, cfg->iface_config.iface_entries[i].iface_name, sizeof(iface_table[i].iface_name));
+		if (iface_table[i].virtual_iface = cfg->iface_config.iface_entries[i].virtual_iface) {
+			strlcpy(iface_table[i].phy_dev_name, cfg->iface_config.iface_entries[i].phy_dev_name, sizeof(iface_table[i].phy_dev_name));
+		}
 		iface_table[i].if_cat = cfg->iface_config.iface_entries[i].if_cat;
 		iface_table[i].if_mode = cfg->iface_config.iface_entries[i].if_mode;
 		iface_table[i].wlan_mode = cfg->iface_config.iface_entries[i].wlan_mode;
-		IPACMDBG_H("IPACM_Config::iface_table[%d] = %s, cat=%d, mode=%d wlan-mode=%d \n", i, iface_table[i].iface_name,
-				iface_table[i].if_cat, iface_table[i].if_mode, iface_table[i].wlan_mode);
+		IPACMDBG_H("IPACM_Config::iface_table[%d] = %s, phy= %s, cat=%d, mode=%d wlan-mode=%d \n",
+			i, iface_table[i].iface_name, iface_table[i].phy_dev_name,
+			iface_table[i].if_cat, iface_table[i].if_mode, iface_table[i].wlan_mode);
 		/* copy bridge interface name to ipacmcfg */
 		if( iface_table[i].if_cat == VIRTUAL_IF)
 		{
@@ -3383,3 +3389,71 @@ bool IPACM_Config::client_in_stats_cache(uint8_t *mac_addr)
 	return is_enable;
 }
 #endif
+
+/*
+ * Add new macsec map to the config
+ */
+bool IPACM_Config::AddMacsecMap(struct ipa_macsec_map *new_macsec_map)
+{
+	int netlink_index, iface_table_index;
+
+	/* first check if we have macsec iface entry or not */
+	if (IPACM_Iface::ipa_get_if_index(new_macsec_map->macsec_name, &netlink_index) == IPACM_SUCCESS &&
+	    (iface_table_index = IPACM_Iface::iface_ipa_index_query(netlink_index)) != INVALID_IFACE)
+	{
+		IPACMDBG_H("Will modify the existing macsec interface %s with new phy %s\n",
+			new_macsec_map->macsec_name, new_macsec_map->phy_name);
+
+		/* Modify an existing macsec interface macsec interface in the config table*/
+		strlcpy(iface_table[iface_table_index].phy_dev_name, new_macsec_map->phy_name,
+			sizeof(iface_table[iface_table_index].phy_dev_name));
+	}
+	else
+	{
+		IPACMDBG_H("Will add new macsec interface: %s instead of %s\n",
+			new_macsec_map->macsec_name, new_macsec_map->phy_name);
+
+		/* check if physical iface is valid */
+		if (IPACM_Iface::ipa_get_if_index(new_macsec_map->phy_name, &netlink_index) == IPACM_FAILURE ||
+		    (iface_table_index = IPACM_Iface::iface_ipa_index_query(netlink_index)) == INVALID_IFACE)
+		{
+			/* can't find physical nic name, ignoring this macsec handling */
+			IPACMERR("Got wrong physical NIC name: %s\n", new_macsec_map->phy_name);
+			return false;
+		}
+
+		/* Replace a physical interface with macsec interface in the config table */
+		iface_table[iface_table_index].virtual_iface = true;
+		strlcpy(iface_table[iface_table_index].iface_name, new_macsec_map->macsec_name,
+			sizeof(iface_table[iface_table_index].iface_name));
+		strlcpy(iface_table[iface_table_index].phy_dev_name, new_macsec_map->phy_name,
+			sizeof(iface_table[iface_table_index].phy_dev_name));
+	}
+
+	return true;
+}
+
+/*
+ * Delete a macsec map from the config
+ */
+bool IPACM_Config::DelMacsecMap(struct ipa_macsec_map *macsec_map_to_delete)
+{
+	int netlink_index, iface_table_index;
+
+	/* Replace the requested macsec interface with physical interface */
+	if (IPACM_Iface::ipa_get_if_index(macsec_map_to_delete->macsec_name, &netlink_index) == IPACM_SUCCESS &&
+	    (iface_table_index = IPACM_Iface::iface_ipa_index_query(netlink_index)) != INVALID_IFACE)
+	{
+		IPACMDBG_H("Will replace the macsec interface: %s with %s\n",
+			macsec_map_to_delete->macsec_name, macsec_map_to_delete->phy_name);
+		iface_table[iface_table_index].virtual_iface = false;
+		strlcpy(iface_table[iface_table_index].iface_name,
+			iface_table[iface_table_index].phy_dev_name,
+			sizeof(iface_table[iface_table_index].iface_name));
+		iface_table[iface_table_index].phy_dev_name[0] = '\0';
+
+		return true;
+	}
+
+	return false;
+}

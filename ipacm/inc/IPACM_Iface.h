@@ -99,6 +99,11 @@ public:
 	/* IPACM interface name */
 	char dev_name[IF_NAME_LEN];
 
+	bool virtual_iface = false;
+
+	/* IPACM interface physical name (if applicable) */
+	char phy_dev_name[IF_NAME_LEN] = "";
+
 	/* IPACM Device type. */
 	ipacm_per_client_device_type device_type;
 

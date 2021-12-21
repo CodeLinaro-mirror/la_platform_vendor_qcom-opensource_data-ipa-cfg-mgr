@@ -1079,6 +1079,9 @@ public:
 	}
 #endif //defined(FEATURE_SOCKSv5) && defined (IPA_SOCKV5_EVENT_MAX)
 
+	bool AddMacsecMap(struct ipa_macsec_map *new_macsec_map);
+	bool DelMacsecMap(struct ipa_macsec_map *macsec_map_to_delete);
+
 	static const char *DEVICE_NAME_ODU;
 
 private:

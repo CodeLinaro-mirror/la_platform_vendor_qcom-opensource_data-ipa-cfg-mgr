@@ -1,5 +1,6 @@
 /*
 Copyright (c) 2013-2021, The Linux Foundation. All rights reserved.
+Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are
@@ -261,6 +262,9 @@ typedef enum
 	IPA_DEL_SOCKSv5_CONN,                     /* ipa_socksv5_msg */
 	IPA_UPDATE_SOCKSv5_v6_CONN,               /* NULL */
 #endif
+	IPA_HANDLE_MACSEC_ADD,                    /* ipa_macsec_map */
+	IPA_HANDLE_MACSEC_DEL,                    /* ipa_macsec_map */
+
 	IPACM_EVENT_MAX
 } ipa_cm_event_id;
 
@@ -312,6 +316,8 @@ typedef struct
 typedef struct
 {
 	char iface_name[IPA_IFACE_NAME_LEN];
+	bool virtualIface;
+	char physDevName[IPA_IFACE_NAME_LEN];
 	ipacm_iface_type if_cat;
 	ipacm_cradle_iface_mode if_mode;
 	ipacm_wlan_access_mode wlan_mode;

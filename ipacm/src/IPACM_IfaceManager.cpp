@@ -1,5 +1,6 @@
 /*
 Copyright (c) 2013-2016, 2018-2019, The Linux Foundation. All rights reserved.
+Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are
@@ -337,6 +338,8 @@ int IPACM_IfaceManager::create_iface_instance(ipacm_ifacemgr_data *param)
 				IPACM_EvtDispatcher::registr(IPA_LAN_CLIENT_CONNECT_EVENT, ETH);
 				IPACM_EvtDispatcher::registr(IPA_LAN_CLIENT_DISCONNECT_EVENT, ETH);
 #endif
+				IPACM_EvtDispatcher::registr(IPA_HANDLE_MACSEC_ADD, ETH);
+				IPACM_EvtDispatcher::registr(IPA_HANDLE_MACSEC_DEL, ETH);
 				/* only need for vlan supported lan instance */
 				IPACM_EvtDispatcher::registr(IPA_HANDLE_WAN_ADDR_ADD_V6, ETH);
 				/* IPA_LAN_DELETE_SELF should be always last */
@@ -392,6 +395,8 @@ int IPACM_IfaceManager::create_iface_instance(ipacm_ifacemgr_data *param)
 					IPACM_EvtDispatcher::registr(IPA_LAN_CLIENT_CONNECT_EVENT, odu);
 					IPACM_EvtDispatcher::registr(IPA_LAN_CLIENT_DISCONNECT_EVENT, odu);
 #endif
+					IPACM_EvtDispatcher::registr(IPA_HANDLE_MACSEC_ADD, odu);
+					IPACM_EvtDispatcher::registr(IPA_HANDLE_MACSEC_DEL, odu);
 					/* IPA_LAN_DELETE_SELF should be always last */
 					IPACM_EvtDispatcher::registr(IPA_LAN_DELETE_SELF, odu);
 					IPACMDBG_H("ipa_LAN (%s):ipa_index (%d) instance open/registr ok\n", odu->dev_name, odu->ipa_if_num);

@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2013, 2018-2019 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -65,6 +66,8 @@ static int ipacm_cfg_xml_parse_tree
 	 xmlNode* xml_node,
 	 IPACM_conf_t *config
 );
+
+static bool isMacsecCfgValid(IPACM_conf_t *config);
 
 static int IPACM_firewall_xml_parse_tree(const char *xml_file, xmlNode* xml_node, IPACM_firewall_t &firewall_config);
 
@@ -136,6 +139,13 @@ int ipacm_read_cfg_xml(char *xml_file, IPACM_conf_t *config)
 	if (ret_val != IPACM_SUCCESS)
 	{
 		IPACMDBG_H("IPACM_xml_parse: ipacm_cfg_xml_parse_tree returned parse error!\n");
+	}
+
+	if (!isMacsecCfgValid(config)) {
+		IPACMDBG_H("Invalid MACSEC configuration\n");
+		ret_val = IPACM_FAILURE;
+	} else {
+		ret_val = IPACM_SUCCESS;
 	}
 
 	/* Free up the libxml's parse tree */
@@ -319,6 +329,19 @@ static int ipacm_cfg_xml_parse_tree
 						memcpy(content_buf, (void *)content, str_size);
 						strlcpy(config->iface_config.iface_entries[config->iface_config.num_iface_entries - 1].iface_name, content_buf, str_size+1);
 						IPACMDBG_H("Name %s\n", config->iface_config.iface_entries[config->iface_config.num_iface_entries - 1].iface_name);
+					}
+				}
+				else if (IPACM_util_icmp_string((char*)xml_node->name, PHY_TAG) == 0)
+				{
+					content = IPACM_read_content_element(xml_node);
+					if (content)
+					{
+						str_size = strlen(content);
+						memset(content_buf, 0, sizeof(content_buf));
+						memcpy(content_buf, (void *)content, str_size);
+						strlcpy(config->iface_config.iface_entries[config->iface_config.num_iface_entries - 1].physDevName, content_buf, str_size+1);
+						config->iface_config.iface_entries[config->iface_config.num_iface_entries - 1].virtualIface = true;
+						IPACMDBG_H("Phy %s\n", config->iface_config.iface_entries[config->iface_config.num_iface_entries - 1].physDevName);
 					}
 				}
 				else if (IPACM_util_icmp_string((char*)xml_node->name, CATEGORY_TAG) == 0)
@@ -638,6 +661,27 @@ static int ipacm_cfg_xml_parse_tree
 		xml_node = xml_node->next;
 	} /* end while */
 	return ret_val;
+}
+
+/**
+ * MACSEC Interface must have a matching physical interface.
+ *
+ * @param config: The configuration that also contains MACSEC
+ *      	configuration.
+ *
+ * @return bool: true if valid, false otherwise.
+ */
+static bool isMacsecCfgValid(IPACM_conf_t *config) {
+	for (uint8_t i = 0; i < config->iface_config.num_iface_entries; i++) {
+		if (config->iface_config.iface_entries[i].physDevName[0] == 0 &&
+		    strncmp(config->iface_config.iface_entries[i].iface_name, "macsec", sizeof("macsec")) == 0) {
+			IPACMERR("Interface %s has no physical interface in the configuration!\n",
+				config->iface_config.iface_entries[i].iface_name);
+			return false;
+		}
+	}
+
+	return true;
 }
 
 /* This function read QCMAP CM Firewall XML and populate the QCMAP CM Cfg */

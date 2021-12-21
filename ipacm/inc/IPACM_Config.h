@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2013-2021 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -813,6 +814,28 @@ public:
 		return IPACM_SUCCESS;
 	}
 #endif //defined(FEATURE_SOCKSv5) && defined (IPA_SOCKV5_EVENT_MAX)
+	/**
+	 * Insert a new MACSEC map to the configuration table and mark
+	 * this interface as virtual. in case the a MACSEC map is
+	 * already present for the interface provided, the old MACSEC
+	 * map is replaced with the provided MACSEC map.
+	 *
+	 * @param macsecMap: MACSEC map to add to an interface
+	 *      	   configuration.
+	 *
+	 * @return bool: true on success, false otherwise.
+	 */
+	bool insertOrAssignMacsecMap(struct ipa_macsec_map *macsecMap);
+	/**
+	 * Reset the given interface MACSEC configuration and mark it as
+	 * non-virtual interface.
+	 *
+	 * @param macsecMap: MACSEC map of the interface to mark as
+	 *      	   non-virtual.
+	 *
+	 * @return bool
+	 */
+	bool delMacsecMap(struct ipa_macsec_map *macsecMap);
 
 	static const char *DEVICE_NAME_ODU;
 

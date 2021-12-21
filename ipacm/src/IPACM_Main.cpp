@@ -1,6 +1,7 @@
 /*
  * Copyright (c) 2013-2021 The Linux Foundation. All rights reserved.
  * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -265,6 +266,8 @@ void* ipa_driver_msg_notifier(void *param)
 #ifdef IPA_IOCTL_ADD_VLAN_PRIORITY
 	struct ipa_ioc_vlan_priority *vlan_prio_evt;
 #endif
+	struct ipa_macsec_map *macsecMap = NULL;
+	int currentIfaceIndex;
 
 	fd = open(IPA_DRIVER, O_RDWR);
 	if (fd < 0)
@@ -531,14 +534,22 @@ void* ipa_driver_msg_notifier(void *param)
 
 		case ECM_CONNECT:
 			memcpy(&event_ecm, buffer + sizeof(struct ipa_msg_meta), sizeof(struct ipa_ecm_msg));
-			IPACMDBG_H("Received ECM_CONNECT name: %s\n",event_ecm.name);
+			IPACMDBG_H("Received ECM_CONNECT name: %s, ifindex: %d\n", event_ecm.name, event_ecm.ifindex);
 			data_fid = (ipacm_event_data_fid *)malloc(sizeof(ipacm_event_data_fid));
 			if(data_fid == NULL)
 			{
 				IPACMERR("unable to allocate memory for event_ecm data_fid\n");
 				return NULL;
 			}
-			data_fid->if_index = event_ecm.ifindex;
+			if (IPACM_Iface::ipa_get_if_index(event_ecm.name, &currentIfaceIndex) == IPACM_SUCCESS)
+			{
+				IPACMDBG_H("Notifing ifindex: %d\n", currentIfaceIndex);
+				data_fid->if_index = currentIfaceIndex;
+			}
+			else
+			{
+				data_fid->if_index = event_ecm.ifindex;
+			}
 			evt_data.event = IPA_USB_LINK_UP_EVENT;
 			evt_data.evt_data = data_fid;
 			break;
@@ -552,7 +563,15 @@ void* ipa_driver_msg_notifier(void *param)
 				IPACMERR("unable to allocate memory for event_ecm data_fid\n");
 				return NULL;
 			}
-			data_fid->if_index = event_ecm.ifindex;
+			if (IPACM_Iface::ipa_get_if_index(event_ecm.name, &currentIfaceIndex) == IPACM_SUCCESS)
+			{
+				IPACMDBG_H("Notifing ifindex: %d\n", currentIfaceIndex);
+				data_fid->if_index = currentIfaceIndex;
+			}
+			else
+			{
+				data_fid->if_index = event_ecm.ifindex;
+			}
 			evt_data.event = IPA_LINK_DOWN_EVENT;
 			evt_data.evt_data = data_fid;
 			break;
@@ -1174,7 +1193,7 @@ int main(int argc, char **argv)
 
 	neigh->update_neigh_cache();
 
-	/* Create Conntrack listener threads here to support on-demand PDN’s connections before WAN is up */
+	/* Create Conntrack listener threads here to support on-demand PDNs connections before WAN is up */
 	CtList->CreateConnTrackThreads();
 
 	pthread_join(cmd_queue_thread, NULL);

@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2013-2021, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -485,11 +486,15 @@ int IPACM_Config::Init(void)
 	for (i = 0; i < cfg->iface_config.num_iface_entries; i++)
 	{
 		strlcpy(iface_table[i].iface_name, cfg->iface_config.iface_entries[i].iface_name, sizeof(iface_table[i].iface_name));
+		if (iface_table[i].virtualIface = cfg->iface_config.iface_entries[i].virtualIface) {
+			strlcpy(iface_table[i].physDevName, cfg->iface_config.iface_entries[i].physDevName, sizeof(iface_table[i].physDevName));
+		}
 		iface_table[i].if_cat = cfg->iface_config.iface_entries[i].if_cat;
 		iface_table[i].if_mode = cfg->iface_config.iface_entries[i].if_mode;
 		iface_table[i].wlan_mode = cfg->iface_config.iface_entries[i].wlan_mode;
-		IPACMDBG_H("IPACM_Config::iface_table[%d] = %s, cat=%d, mode=%d wlan-mode=%d \n", i, iface_table[i].iface_name,
-				iface_table[i].if_cat, iface_table[i].if_mode, iface_table[i].wlan_mode);
+		IPACMDBG_H("IPACM_Config::iface_table[%d] = %s, phy= %s, cat=%d, mode=%d wlan-mode=%d \n",
+			i, iface_table[i].iface_name, iface_table[i].physDevName,
+			iface_table[i].if_cat, iface_table[i].if_mode, iface_table[i].wlan_mode);
 		/* copy bridge interface name to ipacmcfg */
 		if( iface_table[i].if_cat == VIRTUAL_IF)
 		{
@@ -2863,3 +2868,54 @@ bool IPACM_Config::client_in_stats_cache(uint8_t *mac_addr)
 	return is_enable;
 }
 #endif
+
+bool IPACM_Config::insertOrAssignMacsecMap(struct ipa_macsec_map *macsecMap) {
+	int netlinkIdx, ifaceTableIdx;
+
+	if (!macsecMap)
+		return false;
+	/* first check if we have macsec iface entry or not */
+	if (IPACM_Iface::ipa_get_if_index(macsecMap->macsec_name, &netlinkIdx) == IPACM_SUCCESS &&
+	    (ifaceTableIdx = IPACM_Iface::iface_ipa_index_query(netlinkIdx)) != INVALID_IFACE) {
+		IPACMDBG_H("Will modify the existing macsec interface %s with new phy %s\n", macsecMap->macsec_name, macsecMap->phy_name);
+
+		/* Modify an existing macsec interface macsec interface in the config table*/
+		strlcpy(iface_table[ifaceTableIdx].physDevName, macsecMap->phy_name, sizeof(iface_table[ifaceTableIdx].physDevName));
+	} else {
+		IPACMDBG_H("Will add new macsec interface: %s instead of %s\n", macsecMap->macsec_name, macsecMap->phy_name);
+
+		/* check if physical iface is valid */
+		if (IPACM_Iface::ipa_get_if_index(macsecMap->phy_name, &netlinkIdx) == IPACM_FAILURE ||
+		    (ifaceTableIdx = IPACM_Iface::iface_ipa_index_query(netlinkIdx)) == INVALID_IFACE) {
+			/* can't find physical nic name, ignoring this macsec handling */
+			IPACMERR("Got wrong physical NIC name: %s\n", macsecMap->phy_name);
+			return false;
+		}
+		/* Replace a physical interface with macsec interface in the config table */
+		iface_table[ifaceTableIdx].virtualIface = true;
+		strlcpy(iface_table[ifaceTableIdx].iface_name, macsecMap->macsec_name, sizeof(iface_table[ifaceTableIdx].iface_name));
+		strlcpy(iface_table[ifaceTableIdx].physDevName, macsecMap->phy_name, sizeof(iface_table[ifaceTableIdx].physDevName));
+	}
+
+	return true;
+}
+
+bool IPACM_Config::delMacsecMap(struct ipa_macsec_map *macsecMap) {
+	int netlinkIdx, ifaceTableIdx;
+
+	if (!macsecMap)
+		return false;
+	/* Replace the requested macsec interface with physical interface */
+	if (IPACM_Iface::ipa_get_if_index(macsecMap->macsec_name, &netlinkIdx) == IPACM_SUCCESS &&
+	    (ifaceTableIdx = IPACM_Iface::iface_ipa_index_query(netlinkIdx)) != INVALID_IFACE) {
+		IPACMDBG_H("Will replace the macsec interface: %s with %s\n", macsecMap->macsec_name, macsecMap->phy_name);
+		iface_table[ifaceTableIdx].virtualIface = false;
+		strlcpy(iface_table[ifaceTableIdx].iface_name, iface_table[ifaceTableIdx].physDevName,
+			sizeof(iface_table[ifaceTableIdx].iface_name));
+		iface_table[ifaceTableIdx].physDevName[0] = '\0';
+
+		return true;
+	}
+
+	return false;
+}

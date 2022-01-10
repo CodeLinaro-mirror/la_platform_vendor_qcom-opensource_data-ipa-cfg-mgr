@@ -1,5 +1,6 @@
 /*
 Copyright (c) 2014-2020, The Linux Foundation. All rights reserved.
+Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are
@@ -337,8 +338,7 @@ void IPACM_LanToLan::handle_iface_up(ipacm_event_eth_bridge *data)
 			{
 				if(!it->get_is_vlan())
 				{
-					IPACMDBG_H("iface %s is non VLAN iface - skipping\n", it->get_iface_pointer()->dev_name);
-					continue;
+					IPACMDBG_H("iface %s is non VLAN iface - support offload now\n", it->get_iface_pointer()->dev_name);
 				}
 
 				/* add peer info only when both interfaces support inter-interface communication */
@@ -367,11 +367,9 @@ void IPACM_LanToLan::handle_iface_up(ipacm_event_eth_bridge *data)
 		{
 			for(it = ++m_iface.begin(); it != m_iface.end(); it++)
 			{
-#ifdef FEATURE_VLAN_MPDN
-				/* non VLAN case - currently no support for non vlan <-> vlan offload */
+				/* non vlan <-> vlan offload now */
 				if(it->get_is_vlan())
-					continue;
-#endif
+					IPACMDBG_H("vlan to non VLAN iface - support offload now\n");
 				/* add peer info only when both interfaces support inter-interface communication */
 				if(it->get_m_support_inter_iface_offload())
 				{
@@ -1135,6 +1133,8 @@ void IPACM_LanToLan_Iface::add_client_flt_rule(peer_iface_info *peer, client_inf
 	list<uint32_t> flt_rule_hdls = std::list<uint32_t>();
 	flt_rule_info new_flt_info;
 	ipa_ioc_get_rt_tbl rt_tbl;
+	ipa_ioc_bridge_vlan_mapping_info mapping_info;
+	uint16_t peer_vlan_id = 0;
 
 	if(m_is_l2tp_iface && iptype == IPA_IP_v4)
 	{
@@ -1153,11 +1153,10 @@ void IPACM_LanToLan_Iface::add_client_flt_rule(peer_iface_info *peer, client_inf
 #ifdef FEATURE_VLAN_MPDN
 	if(m_is_vlan)
 	{
+		/* non vlan <-> vlan offload now */
 		if(!client->vlan_id)
-		{
-			IPACMERR("VLAN IFACE and non VLAN client\n");
-			return;
-		}
+			IPACMDBG_H("vlan to non VLAN iface - support offload now\n");
+
 		if(it_flt != peer->flt_rule.end())
 		{
 			if(it_flt->flt_rule_hdl[iptype]) {
@@ -1266,8 +1265,18 @@ void IPACM_LanToLan_Iface::add_client_flt_rule(peer_iface_info *peer, client_inf
 				return;
 			}
 
-			m_p_iface->eth_bridge_add_flt_rule(client->mac_addr, rt_tbl.hdl,
-				iptype, &flt_rule_hdl, client->vlan_id);
+			memset(&mapping_info, 0, sizeof(mapping_info));
+			strlcpy(mapping_info.bridge_name, "bridge0", IF_NAME_LEN);
+			if(!IPACM_Iface::ipacmcfg->get_bridge_vlan_mapping(&mapping_info))
+				peer_vlan_id = mapping_info.vlan_id;
+
+			if(peer_vlan_id != 0 && client->vlan_id == 0)
+				m_p_iface->eth_bridge_add_flt_rule(client->mac_addr, rt_tbl.hdl,
+					iptype, &flt_rule_hdl, peer_vlan_id);
+			else
+				m_p_iface->eth_bridge_add_flt_rule(client->mac_addr, rt_tbl.hdl,
+					iptype, &flt_rule_hdl, client->vlan_id);
+
 			IPACMDBG_H("Installed flt rule for IP type %d: handle %d\n", iptype, flt_rule_hdl);
 		}
 	}
@@ -2083,6 +2092,7 @@ void IPACM_LanToLan_Iface::del_hdr_proc_ctx(ipa_hdr_l2_type peer_l2_type)
 		m_p_iface->eth_bridge_del_hdr_proc_ctx(hdr_proc_ctx_for_inter_interface[peer_l2_type]);
 		IPACMDBG_H("Hdr proc ctx with hdl %d is deleted.\n", hdr_proc_ctx_for_inter_interface[peer_l2_type]);
 	}
+
 	return;
 }
 

@@ -1110,6 +1110,7 @@ private:
 
 	/* get partial header (header template of hdr proc ctx) */
 	int eth_bridge_get_hdr_template_hdl(uint32_t* hdr_hdl);
+	int eth_bridge_get_vlan_hdr_template_hdl(uint32_t* hdr_hdl, uint16_t vlan_id);
 
 
 	/* dynamically allocate lan iface's unicast routing rule structure */
@@ -1139,6 +1140,9 @@ private:
 	bool ipv6_header_set;
 
 	bool is_l2tp_iface;
+
+	uint32_t vlan_hdr_hdl;
+
 #ifdef FEATURE_L2TP
 	uint32_t l2tp_ul_dummy_hdr_hdl; /* 4-byte dummy header */
 

@@ -6648,6 +6648,11 @@ fail:
 		free(rx_prop);
 		rx_prop = NULL;
 	}
+	if (ext_prop != NULL)
+	{
+		free(ext_prop);
+		ext_prop = NULL;
+	}
 	if (iface_query != NULL)
 	{
 		free(iface_query);

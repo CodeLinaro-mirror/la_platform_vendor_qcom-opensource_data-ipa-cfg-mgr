@@ -1204,10 +1204,9 @@ int main(int argc, char **argv)
 	IPACMDBG_H("Reallocation FNR Counter: Done\n");
 #endif
 
+	IPACM_IfaceManager *ifacemgr = new IPACM_IfaceManager();
 
 	neigh = new IPACM_Neighbor();
-
-	IPACM_IfaceManager *ifacemgr = new IPACM_IfaceManager();
 
 #ifdef FEATURE_ETH_BRIDGE_LE
 	IPACM_LanToLan* lan2lan = IPACM_LanToLan::get_instance();

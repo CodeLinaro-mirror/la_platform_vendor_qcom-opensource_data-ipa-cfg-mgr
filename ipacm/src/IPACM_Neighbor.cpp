@@ -69,6 +69,7 @@ IPACM_Neighbor::IPACM_Neighbor()
 	IPACM_EvtDispatcher::registr(IPA_DEL_NEIGH_EVENT, this);
 	IPACM_EvtDispatcher::registr(IPA_ADD_BRIDGE_VLAN_PHY_INTF, this);
 	IPACM_EvtDispatcher::registr(IPA_ADD_BRIDGE_VLAN_BR_INTF, this);
+	IPACM_EvtDispatcher::registr(IPA_USB_LINK_UP_EVENT, this);
 
 	return;
 }
@@ -326,7 +327,59 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 				IPACM_Iface::ipacmcfg->add_bridge_vlan_mapping(&vlan_bridge_data);
 		}
 		break;
+		case IPA_USB_LINK_UP_EVENT:
+		{
+			/* check by netdev interface to post CLIENT_IP_ADDR_ADD for all clients */
+			ipacm_event_data_fid *data = (ipacm_event_data_fid *)param;
+			ipa_interface_index = IPACM_Iface::iface_ipa_index_query(data->if_index);
+			/* check for failure return */
+			if (IPACM_FAILURE == ipa_interface_index) {
+				IPACMERR("IPA_USB_LINK_UP_EVENT: not supported iface id: %d\n", data->if_index);
+				break;
+			}
+			IPACMDBG_H("Received IPA_USB_LINK_UP_EVENT with if_index: %d, ipa_interface_index = %d\n", data->if_index, ipa_interface_index);
+			for (i = 0; i < num_neighbor_client_temp; i++)
+			{
+				/* find the client */
+				/* use previous ipv4 first */
 
+				if (((neighbor_client[i].ipa_if_num == ipa_interface_index) &&
+					(neighbor_client[i].iface_index == data->if_index)) &&
+						neighbor_client[i].v4_addr != 0) /* not 0.0.0.0 */
+				{
+					IPACMDBG_H("Neighbor if_index: %d, ipa_if_index = %d, name = %s, ip4_addr = 0x%x\n", neighbor_client[i].iface_index,
+							neighbor_client[i].ipa_if_num, neighbor_client[i].iface_name, neighbor_client[i].v4_addr);
+					/* check if getting real netdev name yet */
+					if(strcmp(neighbor_client[i].iface_name, IPA_NO_IFACE_NAME) == 0)
+					{
+						IPACMERR("client %d name %s not real\n", i, neighbor_client[i].iface_name);
+						continue;
+					}
+
+					evt_data.event = IPA_NEIGH_CLIENT_IP_ADDR_ADD_EVENT;
+					data_all = (ipacm_event_data_all *)malloc(sizeof(ipacm_event_data_all));
+					if (data_all == NULL)
+					{
+						IPACMERR("Unable to allocate memory\n");
+						return;
+					}
+					memset(data_all,0,sizeof(ipacm_event_data_all));
+					data_all->iptype = IPA_IP_v4;
+					data_all->if_index = neighbor_client[i].iface_index;
+					data_all->ipv4_addr = neighbor_client[i].v4_addr; //use previous ipv4 address
+					memcpy(data_all->mac_addr,
+							neighbor_client[i].mac_addr,
+								sizeof(data_all->mac_addr));
+					memcpy(data_all->iface_name, neighbor_client[i].iface_name,
+                                                                sizeof(data_all->iface_name));
+					evt_data.evt_data = (void *)data_all;
+					IPACM_EvtDispatcher::PostEvt(&evt_data);
+					IPACMDBG_H("Posted event %d, with %s for ipv4 client re-connect\n",
+							evt_data.event, data_all->iface_name);
+				}
+			}
+		}
+		break;
 		default:
 		{
 			if (event == IPA_NEW_NEIGH_EVENT)
@@ -446,7 +499,7 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 												neighbor_client[i].mac_addr[4],
 												neighbor_client[i].mac_addr[5],
 												num_neighbor_client);
-
+								IPACMDBG_H("Neighbor: Iface name:%s, IfaceIndex:%d, ipv4:%x\n", neighbor_client[i].iface_name, neighbor_client[i].iface_index, data->ipv4_addr);
 								data->if_index = neighbor_client[i].iface_index;
 								strlcpy(data->iface_name, neighbor_client[i].iface_name, sizeof(data->iface_name));
 								neighbor_client[i].v4_addr = data->ipv4_addr; // cache client's previous ipv4 address
@@ -1155,7 +1208,7 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 #endif
 								strlcpy(neighbor_client[num_neighbor_client_temp].iface_name, data->iface_name,
 									sizeof(neighbor_client[num_neighbor_client_temp].iface_name));
-								IPACMDBG_H("Iface name:%s\n", data->iface_name);
+								IPACMDBG_H("Iface name:%s, Ifaceindex:%d, Ifacenum: %d\n", data->iface_name, data->if_index, ipa_interface_index);
 								num_neighbor_client++;
 								IPACMDBG_H("Copy client MAC %02x:%02x:%02x:%02x:%02x:%02x, total client: %d\n",
 												neighbor_client[num_neighbor_client_temp].mac_addr[0],

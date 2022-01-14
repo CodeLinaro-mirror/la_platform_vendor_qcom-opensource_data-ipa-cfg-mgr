@@ -343,7 +343,17 @@ public:
 #endif
 	bool mac_addr_in_blacklist(uint8_t *mac_addr);
 	void clear_whitelist_mac_add(uint8_t *mac_addr);
-	std::map<std::array<uint8_t, 6>, mac_flt_type *> get_mac_flt_lists();
+
+	decltype(mac_flt_lists) getMacFltListsCopySafe() {
+		if(pthread_mutex_lock(&mac_flt_info_lock) != 0) {
+			IPACMERR("Unable to lock the mutex\n");
+			return {};
+		}
+		decltype(mac_flt_lists) copyMap(mac_flt_lists);
+		pthread_mutex_unlock(&mac_flt_info_lock);
+		return copyMap;
+	}
+
 	void update_mac_flt_lists(uint8_t *mac_addr, mac_flt_type *mac_flt_value);
 	/* To return the instance */
 	static IPACM_Config* GetInstance();

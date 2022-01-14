@@ -25,6 +25,39 @@
  * WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ * Changes from Qualcomm Innovation Center are provided under the following license:
+ *
+ * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted (subject to the limitations in the
+ * disclaimer below) provided that the following conditions are met:
+ *
+ *     * Redistributions of source code must retain the above copyright
+ *       notice, this list of conditions and the following disclaimer.
+ *
+ *     * Redistributions in binary form must reproduce the above
+ *       copyright notice, this list of conditions and the following
+ *       disclaimer in the documentation and/or other materials provided
+ *       with the distribution.
+ *
+ *     * Neither the name of Qualcomm Innovation Center, Inc. nor the names of its
+ *       contributors may be used to endorse or promote products derived
+ *       from this software without specific prior written permission.
+ *
+ * NO EXPRESS OR IMPLIED LICENSES TO ANY PARTY'S PATENT RIGHTS ARE
+ * GRANTED BY THIS LICENSE. THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT
+ * HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED
+ * WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
+ * MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
+ * IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR
+ * ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+ * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE
+ * GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER
+ * IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
+ * OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
+ * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE
  */
 /*!
 	@file
@@ -1615,9 +1648,10 @@ int IPACM_Lan::handle_eth_mac_flt_event()
 	int eth_index;
 	ipacm_event_data_all data;
 	/* work on copy list to avoid concurrency issues*/
-	std::map<std::array<uint8_t, 6>, mac_flt_type *> mac_flt_lists = IPACM_Iface::ipacmcfg->get_mac_flt_lists();
+	auto macFltListsCopy = IPACM_Iface::ipacmcfg->getMacFltListsCopySafe();
 
-	for (auto it = mac_flt_lists.begin(); it != mac_flt_lists.end() && mac_flt_lists.size() > 0;)
+	auto it = macFltListsCopy.begin();
+	while (it != macFltListsCopy.end())
 	{
 		std::copy(std::begin(it->first), std::end(it->first), std::begin(mac_addr));
 		eth_index = get_eth_client_index(mac_addr);
@@ -1662,6 +1696,7 @@ int IPACM_Lan::handle_eth_mac_flt_event()
 				eth_bridge_post_event(IPA_ETH_BRIDGE_CLIENT_DEL, IPA_IP_MAX, mac_addr, NULL, dev_name);
 				/* In case of client blackklisted, update config mac list with copy mac flt list value */
 				IPACM_Iface::ipacmcfg->update_mac_flt_lists(mac_addr, it->second);
+				it++;
 			}
 			else
 			{
@@ -1699,15 +1734,14 @@ int IPACM_Lan::handle_eth_mac_flt_event()
 				eth_bridge_post_event(IPA_ETH_BRIDGE_CLIENT_ADD, IPA_IP_MAX, mac_addr, NULL, dev_name);
 				/* remove from original/copy client list as whitelisted client */
 				IPACM_Iface::ipacmcfg->clear_whitelist_mac_add(mac_addr);
-				auto itr = it;
-				mac_flt_lists.erase(itr->first);
+				it = macFltListsCopy.erase(it);
 			}
 		}
 		else
 		{
 			IPACMERR("eth client not found/attached \n");
+			it++;
 		}
-		++it;
 	}
 	return IPACM_SUCCESS;
 }
@@ -1918,8 +1952,8 @@ void IPACM_Lan::delete_eth_mac_flt_rules()
 	uint8_t mac_addr[6]= {0};
 	int eth_index;
 	/* copy current list to avoid concurrency issues*/
-	std::map<std::array<uint8_t, 6>, mac_flt_type *> mac_flt_lists = IPACM_Iface::ipacmcfg->get_mac_flt_lists();
-	for (auto it = mac_flt_lists.begin(); it != mac_flt_lists.end(); ++it)
+	auto macFltListsCopy = IPACM_Iface::ipacmcfg->getMacFltListsCopySafe();
+	for (auto it = macFltListsCopy.begin(); it != macFltListsCopy.end(); ++it)
 	{
 		std::copy(std::begin(it->first), std::end(it->first), std::begin(mac_addr));
 		eth_index = get_eth_client_index(mac_addr);
@@ -1937,13 +1971,12 @@ int IPACM_Lan::handle_eth_mac_flt_conn_disc(uint8_t *mac_addr, bool eth_client_c
 
 	uint8_t mac_a[6];
 	std::map<std::array<uint8_t, 6>, mac_flt_type * >::iterator it;
-	std::map<std::array<uint8_t, 6>, mac_flt_type *> mac_flt_lists;
+	auto macFltListsCopy = IPACM_Iface::ipacmcfg->getMacFltListsCopySafe();
 	int eth_index;
 	std::array<uint8_t, 6> mac = {0};
 
 	memcpy(mac_a,mac_addr,IPA_MAC_ADDR_SIZE);
 	std::copy(std::begin(mac_a), std::end(mac_a), std::begin(mac));
-	mac_flt_lists = IPACM_Iface::ipacmcfg->get_mac_flt_lists();
 
 	it = IPACM_Iface::ipacmcfg->mac_flt_lists.find(mac);
 	eth_index = get_eth_client_index(mac_addr);
@@ -6689,18 +6722,13 @@ fail:
 			if (get_client_memptr(eth_client, i)->ipv6_set != 0)
 			{
 				IPACMDBG_H("ipv6_set %d\n", get_client_memptr(eth_client, i)->ipv6_set);
-				for (auto it = rt_hdl_v6_list[i].begin(); it != rt_hdl_v6_list[i].end();)
-				{
-					auto itr = it;
-					IPACMDBG_H("v6 addr : 0x%08x:%08x:%08x:%08x\n",
-							it->first[0], it->first[1], it->first[2], it->first[3]);
-					/* clean up the map and release the memory */
-					if(it->second != NULL)
-					{
-						free(itr->second);
-						it->second = NULL;
+				for (auto &it : rt_hdl_v6_list[i]) {
+					IPACMDBG_H("v6 addr : 0x%08x:%08x:%08x:%08x\n", it.first[0], it.first[1],
+						   it.first[2], it.first[3]);
+					if (it.second){
+						free(it.second);
+						it.second = nullptr;
 					}
-					++it;
 				}
 			}
 
@@ -9782,15 +9810,13 @@ int IPACM_Lan::handle_lan_client_reset_rt(ipa_ip_type iptype)
 		else
 		{
 			/* clean up the map and release the memory */
-			for (auto it = rt_hdl_v6_list[i].begin(); it != rt_hdl_v6_list[i].end();)
-			{
-				auto itr = it;
-				if(it->second != NULL)
-				{
-					free(itr->second);
-					it->second = NULL;
+			for (auto &it : rt_hdl_v6_list[i]) {
+				IPACMDBG_H("v6 addr : 0x%08x:%08x:%08x:%08x\n", it.first[0], it.first[1],
+					   it.first[2], it.first[3]);
+				if (it.second){
+					free(it.second);
+					it.second = nullptr;
 				}
-				++it;
 			}
 			IPACMDBG_H("client %d has %d ipv6 with rt: %d, current total_v6=%d \n", i,
 				get_client_memptr(eth_client, i)->ipv6_set,

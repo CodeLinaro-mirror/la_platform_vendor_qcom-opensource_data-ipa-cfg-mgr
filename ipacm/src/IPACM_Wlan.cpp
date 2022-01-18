@@ -67,9 +67,9 @@ IPACM_Wlan::IPACM_Wlan(int iface_index) : IPACM_Lan(iface_index), ipv6ct_inst(Ip
 #define WLAN_AMPDU_DEFAULT_FILTER_RULES 3
 
 	wlan_ap_index = IPACM_Wlan::num_wlan_ap_iface;
-	if(wlan_ap_index < 0 || wlan_ap_index > 2)
+	if(wlan_ap_index < 0 || wlan_ap_index > 3)
 	{
-		IPACMERR("Wlan_ap_index is not correct: %d, not creating instance.\n", wlan_ap_index);
+		IPACMERR("Wlan_ap_index is not correct: %d, not support %d APs .\n", wlan_ap_index, wlan_ap_index + 1);
 		if (tx_prop != NULL)
 		{
 			free(tx_prop);
@@ -85,7 +85,8 @@ IPACM_Wlan::IPACM_Wlan(int iface_index) : IPACM_Lan(iface_index), ipv6ct_inst(Ip
 			free(iface_query);
 			iface_query = NULL;
 		}
-		delete this;
+
+		/* reset tx_prop & rx_prop and ifaceMGR will delete instance */
 		return;
 	}
 

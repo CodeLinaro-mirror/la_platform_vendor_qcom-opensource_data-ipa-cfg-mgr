@@ -26,39 +26,9 @@
  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * Changes from Qualcomm Innovation Center are provided under the following license:
- *
- * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
- *
- * Redistribution and use in source and binary forms, with or without
- * modification, are permitted (subject to the limitations in the
- * disclaimer below) provided that the following conditions are met:
- *
- *   * Redistributions of source code must retain the above copyright
- *     notice, this list of conditions and the following disclaimer.
- *
- *   * Redistributions in binary form must reproduce the above
- *     copyright notice, this list of conditions and the following
- *     disclaimer in the documentation and/or other materials provided
- *     with the distribution.
- *
- *   * Neither the name of Qualcomm Innovation Center, Inc. nor the names of its
- *     contributors may be used to endorse or promote products derived
- *     from this software without specific prior written permission.
- *
- * NO EXPRESS OR IMPLIED LICENSES TO ANY PARTY'S PATENT RIGHTS ARE
- * GRANTED BY THIS LICENSE. THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT
- * HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED
- * WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
- * MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
- * IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR
- * ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
- * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE
- * GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
- * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER
- * IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
- * OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
- * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ * Changes from Qualcomm Technologies, Inc. are provided under the following license:
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear.
  */
 /*!
 	@file
@@ -3268,7 +3238,7 @@ int IPACM_Lan::handle_wan_up_ex(ipacm_ext_prop *ext_prop, ipa_ip_type iptype, ui
 int IPACM_Lan::handle_eth_hdr_init(uint8_t *mac_addr, ipacm_bridge *bridge, uint16_t vlan_id, bool isVlan)
 {
 
-#define ETH_IFACE_INDEX_LEN 2
+#define ETH_IFACE_INDEX_LEN 10
 #define VLAN_TPID_SIZE 2
 #define VLAN_VID_MASK 0x0FFF
 
@@ -3288,6 +3258,7 @@ int IPACM_Lan::handle_eth_hdr_init(uint8_t *mac_addr, ipacm_bridge *bridge, uint
 	int max_clients = IPA_MAX_NUM_ETH_CLIENTS;
 #endif
 #ifdef FEATURE_VLAN_MPDN
+	uint16_t vlan_tci;
 	if(IPACM_Iface::ipacmcfg->ipacm_mpdn_enable)
 		max_clients = IPA_MAX_NUM_VLAN_CLIENTS;
 	if(isVlan)
@@ -3416,7 +3387,7 @@ int IPACM_Lan::handle_eth_hdr_init(uint8_t *mac_addr, ipacm_bridge *bridge, uint
 				*/
 				if(isVlan)
 				{
-					uint16_t vlan_tci =
+					vlan_tci =
 						(*((uint16_t *)&(pHeaderDescriptor->hdr[0].hdr[sCopyHeader.eth2_ofst +
 							2 * IPA_MAC_ADDR_SIZE +
 							VLAN_TPID_SIZE])));
@@ -3482,13 +3453,26 @@ int IPACM_Lan::handle_eth_hdr_init(uint8_t *mac_addr, ipacm_bridge *bridge, uint
 					goto fail;
 				}
 
-				snprintf(index,sizeof(index), "%d", header_name_count);
+				snprintf(index,sizeof(index), "_%d", header_name_count);
 				if (strlcat(pHeaderDescriptor->hdr[0].name, index, sizeof(pHeaderDescriptor->hdr[0].name)) > IPA_RESOURCE_NAME_MAX)
 				{
 					IPACMERR(" header name construction failed exceed length (%d)\n", strlen(pHeaderDescriptor->hdr[0].name));
 					res = IPACM_FAILURE;
 					goto fail;
 				}
+
+#ifdef FEATURE_VLAN_MPDN
+				if(isVlan)
+				{
+					snprintf(index,sizeof(index), "_%d", vlan_id);
+					if (strlcat(pHeaderDescriptor->hdr[0].name, index, sizeof(pHeaderDescriptor->hdr[0].name)) > IPA_RESOURCE_NAME_MAX)
+					{
+						IPACMERR(" header name construction failed exceed length (%d)\n", strlen(pHeaderDescriptor->hdr[0].name));
+						res = IPACM_FAILURE;
+						goto fail;
+					}
+				}
+#endif
 
 				pHeaderDescriptor->hdr[0].hdr_len = sCopyHeader.hdr_len;
 				hdr_len = sCopyHeader.hdr_len;
@@ -3573,7 +3557,7 @@ int IPACM_Lan::handle_eth_hdr_init(uint8_t *mac_addr, ipacm_bridge *bridge, uint
 				*/
 				if(isVlan)
 				{
-					uint16_t vlan_tci =
+					vlan_tci =
 						(*((uint16_t *)&(pHeaderDescriptor->hdr[0].hdr[sCopyHeader.eth2_ofst +
 							2 * IPA_MAC_ADDR_SIZE +
 							VLAN_TPID_SIZE])));
@@ -3642,13 +3626,26 @@ int IPACM_Lan::handle_eth_hdr_init(uint8_t *mac_addr, ipacm_bridge *bridge, uint
 					res = IPACM_FAILURE;
 					goto fail;
 				}
-				snprintf(index,sizeof(index), "%d", header_name_count);
+				snprintf(index,sizeof(index), "_%d", header_name_count);
 				if (strlcat(pHeaderDescriptor->hdr[0].name, index, sizeof(pHeaderDescriptor->hdr[0].name)) > IPA_RESOURCE_NAME_MAX)
 				{
 					IPACMERR(" header name construction failed exceed length (%d)\n", strlen(pHeaderDescriptor->hdr[0].name));
 					res = IPACM_FAILURE;
 					goto fail;
 				}
+
+#ifdef FEATURE_VLAN_MPDN
+				if(isVlan)
+				{
+					snprintf(index,sizeof(index), "_%d", vlan_id);
+					if (strlcat(pHeaderDescriptor->hdr[0].name, index, sizeof(pHeaderDescriptor->hdr[0].name)) > IPA_RESOURCE_NAME_MAX)
+					{
+						IPACMERR(" header name construction failed exceed length (%d)\n", strlen(pHeaderDescriptor->hdr[0].name));
+						res = IPACM_FAILURE;
+						goto fail;
+					}
+				}
+#endif
 
 				pHeaderDescriptor->hdr[0].hdr_len = sCopyHeader.hdr_len;
 				hdr_len = sCopyHeader.hdr_len;
@@ -3812,6 +3809,7 @@ int IPACM_Lan::handle_eth_hdr_init(uint8_t *mac_addr, ipacm_bridge *bridge, uint
 #endif
 		header_name_count++; //keep increasing header_name_count
 		res = IPACM_SUCCESS;
+		IPACMDBG_H("header_name_count: %d\n", header_name_count);
 		IPACMDBG_H("eth client number: %d\n", num_eth_client);
 	}
 	else

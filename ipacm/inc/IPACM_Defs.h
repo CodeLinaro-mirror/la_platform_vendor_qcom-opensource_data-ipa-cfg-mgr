@@ -130,7 +130,7 @@ extern "C"
 
 
 
-#define ETH_IFACE_INDEX_LEN 2
+#define ETH_IFACE_INDEX_LEN 10
 #define VLAN_TPID_SIZE 2
 #define VLAN_VID_MASK 0x0FFF
 #define VLAN_PRI_MASK 0xE000

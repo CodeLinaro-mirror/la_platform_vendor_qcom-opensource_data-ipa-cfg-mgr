@@ -10085,18 +10085,20 @@ int IPACM_Lan::modify_ipv6_prefix_flt_rule()
 				IPACMERR("Failed to modify MTU filtering rule.\n");
 			memcpy(&(pFilteringTable->rules[mtu_rule_idx + i]), &flt_rule, sizeof(struct ipa_flt_rule_mdfy));
 
-			IPACMDBG_H("Adding MTU rule for v6 prefix 0x[%X][%X]\n",
+			IPACMDBG_H("Adding MTU rule for v6 prefix 0x[%X][%X], entry(%d)\n",
 				flt_rule.rule.attrib.u.v6.src_addr[3],
-				flt_rule.rule.attrib.u.v6.src_addr[2]);
+				flt_rule.rule.attrib.u.v6.src_addr[2],
+				mtu_rule_idx + i);
 		}
 	}
 
-	flt_rule.rule.attrib.attrib_mask &= ~IPA_FLT_DST_ADDR;
+	flt_rule.rule.eq_attrib_type = 0;
+	memcpy(&flt_rule.rule.attrib, &rx_prop->rx[0].attrib, sizeof(flt_rule.rule.attrib));
 	flt_rule.rule.attrib.attrib_mask |= IPA_FLT_SRC_ADDR;
 	/* now install SRC address exception rules for no offload PDNs */
 	for(i = 0; i < (IPACM_Iface::ipacmcfg->num_no_offload_ipv6_prefix); i++)
 	{
-		flt_rule.rule_hdl = ipv6_prefix_flt_rule_hdl[i];
+		flt_rule.rule_hdl = ipv6_prefix_flt_rule_hdl[IPACM_Iface::ipacmcfg->num_ipv6_prefixes + i];
 		flt_rule.rule.attrib.u.v6.src_addr[0] = IPACM_Iface::ipacmcfg->ipa_no_offload_ipv6_prefixes[i][0];
 		flt_rule.rule.attrib.u.v6.src_addr[1] = IPACM_Iface::ipacmcfg->ipa_no_offload_ipv6_prefixes[i][1];
 		flt_rule.rule.attrib.u.v6.src_addr[2] = 0x0;

@@ -341,6 +341,7 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 	ipacm_event_data_all *data_all=NULL;
 	ipacm_cmd_q_data evt_data;
 	int clnt_indx;
+	ipa_macsec_map *map;
 
 	switch (event)
 	{
@@ -1549,7 +1550,38 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 		eogre_down();
 		break;
 #endif
+	case IPA_HANDLE_MACSEC_ADD:
+		IPACMDBG_H("Received and will process an IPA_HANDLE_MACSEC_ADD\n");
+		map = (ipa_macsec_map *)param;
 
+		/*
+		 * Check, whether the mapping change is addressed to this interface,
+		 * and if yes, rename it to the macsec interface.
+		 */
+		if (virtual_iface && strncmp(map->phy_name, phy_dev_name, sizeof(phy_dev_name)) == 0 ||
+		    strncmp(map->phy_name, dev_name, sizeof(dev_name)) == 0)
+		{
+			strlcpy(phy_dev_name, map->phy_name, sizeof(phy_dev_name));
+			strlcpy(dev_name, map->macsec_name, sizeof(dev_name));
+			virtual_iface = true;
+		}
+		break;
+
+	case IPA_HANDLE_MACSEC_DEL:
+		IPACMDBG_H("Received and will process an IPA_HANDLE_MACSEC_DEL\n");
+		map = (ipa_macsec_map *)param;
+
+		/*
+		 * Check, whether the mapping change is addressed to this interface,
+		 * and if yes, rename it to the eth interface.
+		 */
+		if (virtual_iface && strncmp(map->macsec_name, dev_name, sizeof(dev_name)) == 0)
+		{
+			strlcpy(dev_name, phy_dev_name, sizeof(dev_name));
+			virtual_iface = false;
+			phy_dev_name[0] = '\0';
+		}
+		break;
 	default:
 		break;
 	}

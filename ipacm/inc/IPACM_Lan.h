@@ -219,11 +219,11 @@ typedef struct v4_gre_hdr_s
 #define IPV4_GRE_PROT_IDX  5
 
 /*
- * An IP v6 plus GRE header.
+ * An IP v6 + options + GRE header.
  */
 typedef struct v6_gre_hdr_s
 {
-	uint32_t words[13]; /* extra (ie. last) uint32_t for gre header */
+	uint32_t words[13]; /* 10 words for header 2 words for options + 1 word for gre header */
 } v6_gre_hdr_t;
 
 /*

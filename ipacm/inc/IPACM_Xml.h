@@ -84,6 +84,7 @@ if (!(a)) {                                                 \
 #define IPACMIFACECFG_TAG                    "IPACMIface"
 #define IFACE_TAG                            "Iface"
 #define NAME_TAG                             "Name"
+#define PHY_TAG                              "Phy"
 #define CATEGORY_TAG                         "Category"
 #define MODE_TAG                             "Mode"
 #define IPACMPRIVATESUBNETCFG_TAG            "IPACMPrivateSubnet"

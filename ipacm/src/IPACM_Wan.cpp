@@ -121,6 +121,11 @@ uint8_t IPACM_Wan::num_offloaded_pdns = 0;
 uint16_t IPACM_Wan::mtu_default_wan_v4 = DEFAULT_MTU_SIZE;
 uint16_t IPACM_Wan::mtu_default_wan_v6 = DEFAULT_MTU_SIZE;
 
+#ifdef FEATURE_EoGRE
+uint16_t IPACM_Wan::mtu_gre_v4 = DEFAULT_MTU_SIZE;
+uint16_t IPACM_Wan::mtu_gre_v6 = DEFAULT_MTU_SIZE;
+#endif
+
 #define MOBILE_FIREWALL_FILE "/etc/data/mobileap_firewall.xml"
 
 IPACM_Wan::IPACM_Wan(int iface_index,
@@ -173,8 +178,6 @@ IPACM_Wan::IPACM_Wan(int iface_index,
 	mtu_v6_set = false;
 	memset(&ip_pass_pdn_info, 0 ,sizeof(ip_pass_pdn_info));
 	memset(&ip_collision_pdn_info, 0 ,sizeof(ip_collision_pdn_info));
-	/* Used to store route handle of previous wan ip incase of passthrough enbaled. */
-	ipps_dft_v4_rt_rule_hdl = 0;
 #ifdef FEATURE_IPACM_UL_FIREWALL
 #ifdef FEATURE_VLAN_MPDN
 	num_firewall_v6_ul_pdn = 0;
@@ -712,31 +715,20 @@ int IPACM_Wan::handle_addr_evt(ipacm_event_data_addr *data)
 						res = IPACM_FAILURE;
 						goto fail;
 					}
-					if( ipps_dft_v4_rt_rule_hdl != 0)
-					{
-						IPACMDBG_H("Delete previous stored ippt wan ip route rule. \n");
-						if (m_routing.DeleteRoutingHdl(ipps_dft_v4_rt_rule_hdl,
-									 IPA_IP_v4) == false)
-						{
-							IPACMERR("Routing old RT rule deletion failed!\n");
-							res = IPACM_FAILURE;
-							goto fail;
-						}
-						ipps_dft_v4_rt_rule_hdl = 0;
-					}
 				}
 				else
 				{
-					/* Need to store previous rt hdl of route rule for WAN Ip as we don't delete it as in IP Passthrough mode
-					   it may lead to stall as NAT entry is still pointing to default route entry .
-					   But when passthrough is disabled we need to clear previous rt rule as we go ahead and create one.*/
-
-					if( ipps_dft_v4_rt_rule_hdl == 0)
+					/* In IPPT or IP Collision mode don't replace the wan-ip RT rule to dummy ipv4 */
+					/*Store the public ip address when in passthrough mode which will be used when wan is down.*/
+					if (m_is_sta_mode == Q6_WAN)
 					{
-						IPACMDBG_H("In Passthrough mode, not deleting v4 route rule, storing it to clear later on \n");
-						ipps_dft_v4_rt_rule_hdl = dft_rt_rule_hdl[0];
+						curr_wan_ip = data->ipv4_addr;
+						public_wan_v4_addr = wan_v4_addr;
+						public_wan_v4_addr_set = true;
+						IPACMDBG_H("Received wan ipv4-addr:0x%x\n",data->ipv4_addr);
+						IPACMDBG_H("In Passthrough mode, Storing previous wan ipv4-addr:0x%x\n",public_wan_v4_addr);
+						return IPACM_SUCCESS;
 					}
-					IPACMDBG_H("ipv4 wan iface v4-rt-rule hdll=0x%x\n", ipps_dft_v4_rt_rule_hdl);
 				}
 #if defined(FEATURE_SOCKSv5) && defined (IPA_SOCKV5_EVENT_MAX)
 				if(m_is_sta_mode == Q6_WAN)
@@ -1887,6 +1879,7 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 		ipacm_event_mtu_info *data = (ipacm_event_mtu_info *)param;
 		ipa_mtu_info *mtu_info = &(data->mtu_info);
 		ipa_interface_index = iface_ipa_index_query(data->if_index);
+		bool post_mtu_update_event = false;
 
 		if (ipa_interface_index == ipa_if_num)
 		{
@@ -1901,7 +1894,16 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 				{
 					/* upstream interface. update default MTU. */
 					mtu_default_wan_v4 = mtu_v4;
+					post_mtu_update_event = true;
 				}
+
+#ifdef FEATURE_EoGRE
+				/*Always update MTU for GRE since initial MTU set will come before GRE is enabled, post if GRE is enabled */
+				mtu_gre_v4 = mtu_v4;
+				if (IPACM_Iface::ipacmcfg->eogre_enabled)
+					post_mtu_update_event = true;
+#endif
+
 				IPACMDBG_H("Updated v4 mtu=[%d] for (%s), upstream_mtu=[%d]\n",
 					mtu_v4, mtu_info->if_name, mtu_default_wan_v4);
 			}
@@ -1914,12 +1916,20 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 				{
 					/* upstream interface. update default MTU. */
 					mtu_default_wan_v6 = mtu_v6;
+					post_mtu_update_event = true;
 				}
+
+#ifdef FEATURE_EoGRE
+				/*Always update MTU for GRE since initial MTU set will come before GRE is enabled, post if GRE is enabled */
+				mtu_gre_v6 = mtu_v6;
+				if (IPACM_Iface::ipacmcfg->eogre_enabled)
+					post_mtu_update_event = true;
+#endif
 				IPACMDBG_H("Updated v6 mtu=[%d] for (%s), upstream_mtu=[%d]\n",
 					mtu_v6, mtu_info->if_name, mtu_default_wan_v6);
 			}
 
-			if (active_v4 || active_v6)
+			if (post_mtu_update_event)
 			{
 				ipacm_event_mtu_info *mtu_event;
 				ipacm_cmd_q_data evt_data;
@@ -6252,18 +6262,6 @@ int IPACM_Wan::handle_down_evt()
 			res = IPACM_FAILURE;
 			goto fail;
 		}
-
-		if( ipps_dft_v4_rt_rule_hdl != 0)
-		{
-			IPACMDBG_H("Delete previous stored ippt wan ip route rule. \n")
-			if (m_routing.DeleteRoutingHdl(ipps_dft_v4_rt_rule_hdl,
-				 IPA_IP_v4) == false)
-			{
-				IPACMERR("Routing old RT rule deletion failed!\n");
-				res = IPACM_FAILURE;
-				goto fail;
-			}
-		}
 	}
 
 	/* delete default v6 RT rule */
@@ -6518,6 +6516,8 @@ int IPACM_Wan::handle_down_evt_ex()
 
 			ipv4_to_iface[modem_ipv4_pdn_index].wan_up_vlan = false;
 			ipv4_to_iface[modem_ipv4_pdn_index].is_xlat = false;
+			memset(ipv4_to_iface[modem_ipv4_pdn_index].associated_VIDs, 0, sizeof(ipv4_to_iface[modem_ipv4_pdn_index].associated_VIDs));
+			ipv4_to_iface[modem_ipv4_pdn_index].VID_cnt = 0;
 
 			num_offloaded_pdns--;
 			IPACMDBG_H("now num offloaded PDNs is %d\n", num_offloaded_pdns);
@@ -6661,23 +6661,12 @@ int IPACM_Wan::handle_down_evt_ex()
 			install_wan_filtering_rule(false);
 		}
 
+		IPACMDBG_H("Delete dft v4 rt rule\n");
 		if (m_routing.DeleteRoutingHdl(dft_rt_rule_hdl[0], IPA_IP_v4) == false)
 		{
 			IPACMERR("Routing rule deletion failed!\n");
 			res = IPACM_FAILURE;
 			goto fail;
-		}
-
-		if( ipps_dft_v4_rt_rule_hdl != 0)
-		{
-			IPACMDBG_H("Delete previous stored ippt wan ip route rule. \n");
-			if (m_routing.DeleteRoutingHdl(ipps_dft_v4_rt_rule_hdl,
-				 IPA_IP_v4) == false)
-			{
-				IPACMERR("Routing old RT rule deletion failed!\n");
-				res = IPACM_FAILURE;
-				goto fail;
-			}
 		}
 	}
 	if(ip_type == IPA_IP_v6 || xlat_cfg)
@@ -6698,9 +6687,13 @@ int IPACM_Wan::handle_down_evt_ex()
 			ipacm_event_vlan_pdn *vlandown_data;
 
 			ipv6_to_iface[modem_ipv6_pdn_index].wan_up_vlan_v6 = false;
+			memset(ipv6_to_iface[modem_ipv6_pdn_index].associated_VIDs, 0, sizeof(ipv6_to_iface[modem_ipv6_pdn_index].associated_VIDs));
+			ipv6_to_iface[modem_ipv6_pdn_index].VID_cnt = 0;
+
 			/* Xlat cfg offload pdn count is updated during v4 handling */
 			if (!xlat_cfg)
 				num_offloaded_pdns--;
+
 			IPACMDBG_H("now num offloaded PDNs is %d\n", num_offloaded_pdns);
 
 			if(!isVlanWanUP_V6())
@@ -7097,23 +7090,12 @@ int IPACM_Wan::handle_down_evt_ex()
 			install_wan_filtering_rule(false);
 		}
 
+		IPACMDBG_H("Delete dft v4 rt rule\n");
 		if (m_routing.DeleteRoutingHdl(dft_rt_rule_hdl[0], IPA_IP_v4) == false)
 		{
 			IPACMERR("Routing rule deletion failed!\n");
 			res = IPACM_FAILURE;
 			goto fail;
-		}
-		if( ipps_dft_v4_rt_rule_hdl != 0)
-		{
-
-			IPACMDBG_H("Delete previous stored ippt wan ip route rule. \n");
-			if (m_routing.DeleteRoutingHdl(ipps_dft_v4_rt_rule_hdl,
-				 IPA_IP_v4) == false)
-			{
-				IPACMERR("Routing old RT rule deletion failed!\n");
-				res = IPACM_FAILURE;
-				goto fail;
-			}
 		}
 
 		for (i = 0; i < 2*num_dft_rt_v6; i++)

@@ -322,6 +322,9 @@ typedef enum
 	IPA_HANDLE_EoGRE_DOWN,                    /* ipa_ipgre_info */
 #endif
 
+	IPA_HANDLE_MACSEC_ADD,                    /* ipa_macsec_map */
+	IPA_HANDLE_MACSEC_DEL,                    /* ipa_macsec_map */
+
 	IPACM_EVENT_MAX
 } ipa_cm_event_id;
 
@@ -373,6 +376,8 @@ typedef struct
 typedef struct
 {
 	char iface_name[IPA_IFACE_NAME_LEN];
+	bool virtual_iface;
+	char phy_dev_name[IPA_IFACE_NAME_LEN];
 	ipacm_iface_type if_cat;
 	ipacm_cradle_iface_mode if_mode;
 	ipacm_wlan_access_mode wlan_mode;

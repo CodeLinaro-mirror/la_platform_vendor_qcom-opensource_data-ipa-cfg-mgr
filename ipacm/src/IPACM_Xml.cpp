@@ -62,6 +62,8 @@ static int ipacm_cfg_xml_parse_tree
 	 IPACM_conf_t *config
 );
 
+static int ipacm_cfg_validate_parsed_xml(IPACM_conf_t *config);
+
 static int IPACM_firewall_xml_parse_tree(const char *xml_file, xmlNode* xml_node, IPACM_firewall_t &firewall_config);
 
 /*Reads content (stored as child) of the element */
@@ -132,6 +134,14 @@ int ipacm_read_cfg_xml(char *xml_file, IPACM_conf_t *config)
 	if (ret_val != IPACM_SUCCESS)
 	{
 		IPACMDBG_H("IPACM_xml_parse: ipacm_cfg_xml_parse_tree returned parse error!\n");
+	}
+
+	/* Validate the config parsed from the xml tree */
+	ret_val = ipacm_cfg_validate_parsed_xml(config);
+
+	if (ret_val != IPACM_SUCCESS)
+	{
+		IPACMDBG_H("IPACM_xml_parse: ipacm_cfg_validate_parsed_xml returned parse error!\n");
 	}
 
 	/* Free up the libxml's parse tree */
@@ -314,6 +324,19 @@ static int ipacm_cfg_xml_parse_tree
 						memcpy(content_buf, (void *)content, str_size);
 						strlcpy(config->iface_config.iface_entries[config->iface_config.num_iface_entries - 1].iface_name, content_buf, str_size+1);
 						IPACMDBG_H("Name %s\n", config->iface_config.iface_entries[config->iface_config.num_iface_entries - 1].iface_name);
+					}
+				}
+				else if (IPACM_util_icmp_string((char*)xml_node->name, PHY_TAG) == 0)
+				{
+					content = IPACM_read_content_element(xml_node);
+					if (content)
+					{
+						str_size = strlen(content);
+						memset(content_buf, 0, sizeof(content_buf));
+						memcpy(content_buf, (void *)content, str_size);
+						strlcpy(config->iface_config.iface_entries[config->iface_config.num_iface_entries - 1].phy_dev_name, content_buf, str_size+1);
+						config->iface_config.iface_entries[config->iface_config.num_iface_entries - 1].virtual_iface = true;
+						IPACMDBG_H("Phy %s\n", config->iface_config.iface_entries[config->iface_config.num_iface_entries - 1].phy_dev_name);
 					}
 				}
 				else if (IPACM_util_icmp_string((char*)xml_node->name, CATEGORY_TAG) == 0)
@@ -633,6 +656,25 @@ static int ipacm_cfg_xml_parse_tree
 		xml_node = xml_node->next;
 	} /* end while */
 	return ret_val;
+}
+
+
+static int ipacm_cfg_validate_parsed_xml(IPACM_conf_t *config)
+{
+	int i;
+
+	for (i = 0; i < config->iface_config.num_iface_entries; i++)
+	{
+		if (config->iface_config.iface_entries[i].phy_dev_name[0] == 0 &&
+		    strncmp(config->iface_config.iface_entries[i].iface_name, "macsec", sizeof("macsec")) == 0)
+		{
+			IPACMERR("Interface %s has no physical interface in the configuration!\n",
+				 config->iface_config.iface_entries[i].iface_name);
+			return IPACM_FAILURE;
+		}
+	}
+
+	return IPACM_SUCCESS;
 }
 
 /* This function read QCMAP CM Firewall XML and populate the QCMAP CM Cfg */

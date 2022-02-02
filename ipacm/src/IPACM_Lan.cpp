@@ -2989,21 +2989,23 @@ int IPACM_Lan::handle_del_ipv6_addr(ipacm_event_data_all *data)
 
 		if(rt_hdl_v6_list[clnt_indx].count(ipv6) > 0)
 		{
-			IPACMDBG_H("ipv6 addr is found for client:%d, ipa_num_clients_ipv6 = %d\n", clnt_indx, IPACM_Iface::ipacmcfg->ipa_num_clients_ipv6);
-			if (rt_hdl_v6_list[clnt_indx].at(ipv6)->route_rule_set_v6)
+			IPACMDBG_H("ipv6 addr is found for client:%d, ipa_num_clients_ipv6 = %d\n",
+				clnt_indx, IPACM_Iface::ipacmcfg->ipa_num_clients_ipv6);
+			if (rt_hdl_v6_list[clnt_indx].at(ipv6).route_rule_set_v6)
 			{
 				IPACMDBG_H("clean ipv6 rt-rules for client:%d\n", clnt_indx);
 				for(tx_index = 0; tx_index < iface_query->num_tx_props; tx_index++)
 				{
-					if((tx_prop->tx[tx_index].ip == IPA_IP_v6) && (rt_hdl_v6_list[clnt_indx].at(ipv6)->hdl_v6[tx_index].rt_rule_hdl_v6 != 0))
+					if((tx_prop->tx[tx_index].ip == IPA_IP_v6) &&
+						(rt_hdl_v6_list[clnt_indx].at(ipv6).hdl_v6[tx_index].rt_rule_hdl_v6 != 0))
 					{
 						IPACMDBG_H("Delete client index %d ipv6 RT-rules for %d-st ipv6 for tx:%d\n", clnt_indx, num_v6, tx_index);
-						rt_hdl = rt_hdl_v6_list[clnt_indx].at(ipv6)->hdl_v6[tx_index].rt_rule_hdl_v6;
+						rt_hdl = rt_hdl_v6_list[clnt_indx].at(ipv6).hdl_v6[tx_index].rt_rule_hdl_v6;
 						if(m_routing.DeleteRoutingHdl(rt_hdl, IPA_IP_v6) == false)
 						{
 							return IPACM_FAILURE;
 						}
-						rt_hdl = rt_hdl_v6_list[clnt_indx].at(ipv6)->hdl_v6[tx_index].rt_rule_hdl_v6_wan;
+						rt_hdl = rt_hdl_v6_list[clnt_indx].at(ipv6).hdl_v6[tx_index].rt_rule_hdl_v6_wan;
 						if(m_routing.DeleteRoutingHdl(rt_hdl, IPA_IP_v6) == false)
 						{
 							return IPACM_FAILURE;
@@ -3011,12 +3013,6 @@ int IPACM_Lan::handle_del_ipv6_addr(ipacm_event_data_all *data)
 					}
 				} /* tx_index loop */
 			} /* clean ipv6 rt-rules */
-			/* clean up the map and release the memory */
-			if (rt_hdl_v6_list[clnt_indx].at(ipv6) != NULL)
-			{
-				free(rt_hdl_v6_list[clnt_indx].at(ipv6));
-				rt_hdl_v6_list[clnt_indx].at(ipv6) = NULL;
-			}
 			rt_hdl_v6_list[clnt_indx].erase(ipv6);
 			get_client_memptr(eth_client, clnt_indx)->ipv6_set--;
 			get_client_memptr(eth_client, clnt_indx)->route_rule_set_v6--;
@@ -4703,20 +4699,12 @@ int IPACM_Lan::handle_eth_client_ipaddr(ipacm_event_data_all *data)
 				if(rt_hdl_v6_list[clnt_indx].count(ipv6) == 0)
 				{
 					IPACMDBG_H("can't find client\n");
-					size =  sizeof(v6_hdl_type) + (iface_query->num_tx_props * sizeof(client_rt_hdl_v6));
-					v6_hdl_type *temp = (v6_hdl_type *)malloc(size);
-					if(temp == NULL)
-					{
-						IPACMDBG_H("Failed to allocate memmory \n")
-						return IPACM_FAILURE;
-					}
-					memset(temp, 0, size);
 					/*
 					 * The client got new IPv6 address.
 					 * NOTE: The new address doesn't replace the existing one but being added (up to IPA_MAX_NUM_CLIENTS_IPV6),
 					 *       so the previous IPv6 addresses of the client will not be deleted.
 					 */
-					rt_hdl_v6_list[clnt_indx].insert(std::make_pair(ipv6, temp));
+					rt_hdl_v6_list[clnt_indx].insert(std::make_pair(ipv6, handleTypeV6(iface_query->num_tx_props)));
 					/* indicate how many ipv6 client gets */
 					get_client_memptr(eth_client, clnt_indx)->ipv6_set++;
 					IPACM_Iface::ipacmcfg->ipa_num_clients_ipv6++;
@@ -4853,14 +4841,13 @@ int IPACM_Lan::handle_eth_client_route_rule(uint8_t *mac_addr, ipa_ip_type iptyp
 			}
 			else
 			{
-				for (auto it = rt_hdl_v6_list[eth_index].begin(); it != rt_hdl_v6_list[eth_index].end();++it)
+				for (auto it = rt_hdl_v6_list[eth_index].begin(); it != rt_hdl_v6_list[eth_index].end(); ++it)
 				{
-					if (it->second->route_rule_set_v6 == true)
+					if (it->second.route_rule_set_v6 == true)
 					{
 						IPACMDBG("client(%d): v6 addr : 0x%08x:%08x:%08x:%08x, v6_set already (%d)\n",
-						eth_index,
-						it->first[0], it->first[1], it->first[2], it->first[3],
-						it->second->route_rule_set_v6);
+						eth_index, it->first[0], it->first[1], it->first[2], it->first[3],
+						it->second.route_rule_set_v6);
 						continue;
 					}
 
@@ -4897,9 +4884,9 @@ int IPACM_Lan::handle_eth_client_route_rule(uint8_t *mac_addr, ipa_ip_type iptyp
 						return IPACM_FAILURE;
 					}
 
-					it->second->hdl_v6[tx_index].rt_rule_hdl_v6 = rt_rule->rules[0].rt_rule_hdl;
+					it->second.hdl_v6[tx_index].rt_rule_hdl_v6 = rt_rule->rules[0].rt_rule_hdl;
 					IPACMDBG_H("tx:%d, rt rule hdl=%x ip-type: %d\n", tx_index,
-						it->second->hdl_v6[tx_index].rt_rule_hdl_v6, iptype);
+						it->second.hdl_v6[tx_index].rt_rule_hdl_v6, iptype);
 
 					/*Copy same rule to v6 WAN RT TBL*/
 					strlcpy(rt_rule->rt_tbl_name, IPACM_Iface::ipacmcfg->rt_tbl_wan_v6.name, sizeof(rt_rule->rt_tbl_name));
@@ -4929,12 +4916,12 @@ int IPACM_Lan::handle_eth_client_route_rule(uint8_t *mac_addr, ipa_ip_type iptyp
 						return IPACM_FAILURE;
 					}
 
-					it->second->hdl_v6[tx_index].rt_rule_hdl_v6_wan = rt_rule->rules[0].rt_rule_hdl;
+					it->second.hdl_v6[tx_index].rt_rule_hdl_v6_wan = rt_rule->rules[0].rt_rule_hdl;
 					IPACMDBG_H("tx:%d, rt rule hdl=%x ip-type: %d\n", tx_index,
-						it->second->hdl_v6[tx_index].rt_rule_hdl_v6_wan, iptype);
+						it->second.hdl_v6[tx_index].rt_rule_hdl_v6_wan, iptype);
 					/* mark as route_rule_set_v6 = true*/
 					if (tx_index + 1 == iface_query->num_tx_props)
-						it->second->route_rule_set_v6 = true;
+						it->second.route_rule_set_v6 = true;
 				} /* v6 map loop */
 			} /* ipv6 handling */
 		} /* end of tx for loop */
@@ -5329,14 +5316,13 @@ int IPACM_Lan::handle_eth_client_route_rule_ext_v2(uint8_t *mac_addr, ipa_ip_typ
 			    data.ipv4_addr = get_client_memptr(eth_client, eth_index)->v4_addr;
 			    HandleNeighIpAddrAddEvt(&data);
 			} else {
-				for (auto it = rt_hdl_v6_list[eth_index].begin(); it != rt_hdl_v6_list[eth_index].end();++it)
+				for (auto it = rt_hdl_v6_list[eth_index].begin(); it != rt_hdl_v6_list[eth_index].end(); ++it)
 				{
-					if (it->second->route_rule_set_v6 == true)
+					if (it->second.route_rule_set_v6 == true)
 					{
 						IPACMDBG("client(%d): v6 addr : 0x%08x:%08x:%08x:%08x, v6_set (%d)\n",
-						eth_index,
-						it->first[0], it->first[1], it->first[2], it->first[3],
-						it->second->route_rule_set_v6);
+						eth_index, it->first[0], it->first[1], it->first[2], it->first[3],
+						it->second.route_rule_set_v6);
 						continue;
 					}
 
@@ -5374,10 +5360,10 @@ int IPACM_Lan::handle_eth_client_route_rule_ext_v2(uint8_t *mac_addr, ipa_ip_typ
 						return IPACM_FAILURE;
 					}
 
-					it->second->hdl_v6[tx_index].rt_rule_hdl_v6 = ((struct ipa_rt_rule_add_ext_v2 *)rt_rule->rules)[0].rt_rule_hdl;
+					it->second.hdl_v6[tx_index].rt_rule_hdl_v6 = ((struct ipa_rt_rule_add_ext_v2 *)rt_rule->rules)[0].rt_rule_hdl;
 					IPACMDBG_H("tx:%d, rt rule id=%x, rt rule hdl=%x ip-type: %d\n", tx_index,
 						rt_rule_entry->rule_id,
-						it->second->hdl_v6[tx_index].rt_rule_hdl_v6, iptype);
+						it->second.hdl_v6[tx_index].rt_rule_hdl_v6, iptype);
 
 					/*Copy same rule to v6 WAN RT TBL*/
 					strlcpy(rt_rule->rt_tbl_name, IPACM_Iface::ipacmcfg->rt_tbl_wan_v6.name, sizeof(rt_rule->rt_tbl_name));
@@ -5411,15 +5397,15 @@ int IPACM_Lan::handle_eth_client_route_rule_ext_v2(uint8_t *mac_addr, ipa_ip_typ
 						return IPACM_FAILURE;
 					}
 
-					it->second->hdl_v6[tx_index].rt_rule_hdl_v6_wan = ((struct ipa_rt_rule_add_ext_v2 *)rt_rule->rules)[0].rt_rule_hdl;
+					it->second.hdl_v6[tx_index].rt_rule_hdl_v6_wan = ((struct ipa_rt_rule_add_ext_v2 *)rt_rule->rules)[0].rt_rule_hdl;
 					/* mark as route_rule_set_v6 = true*/
 					if (tx_index + 1 == iface_query->num_tx_props)
-						it->second->route_rule_set_v6 = true;
+						it->second.route_rule_set_v6 = true;
 
 					IPACMDBG_H("tx:%d, rt rule id=%x, rt rule hdl=%x ip-type: %d route_rule_set_v6(map) %d\n", tx_index,
 						rt_rule_entry->rule_id,
-						it->second->hdl_v6[tx_index].rt_rule_hdl_v6_wan, iptype,
-						it->second->route_rule_set_v6);
+						it->second.hdl_v6[tx_index].rt_rule_hdl_v6_wan, iptype,
+						it->second.route_rule_set_v6);
 
 					/* Add IPv6CT rules after ipv6 RT rules are set */
 					memset(&data, 0, sizeof(data));
@@ -5577,25 +5563,20 @@ int IPACM_Lan::handle_eth_client_route_rule_ext(uint8_t *mac_addr, ipa_ip_type i
 				data.ipv4_addr = get_client_memptr(eth_client, eth_index)->v4_addr;
 				HandleNeighIpAddrAddEvt(&data);
 			} else {
-				for (auto it = rt_hdl_v6_list[eth_index].begin(); it != rt_hdl_v6_list[eth_index].end();++it)
+				for (auto it = rt_hdl_v6_list[eth_index].begin(); it != rt_hdl_v6_list[eth_index].end(); ++it)
 				{
-					if (it->second->route_rule_set_v6 == true)
+					if (it->second.route_rule_set_v6 == true)
 					{
 						IPACMDBG("client(%d): v6 addr : 0x%08x:%08x:%08x:%08x, v6_set (%d)\n",
-						eth_index,
-						it->first[0], it->first[1], it->first[2], it->first[3],
-						it->second->route_rule_set_v6);
+						eth_index, it->first[0], it->first[1], it->first[2], it->first[3],
+						it->second.route_rule_set_v6);
 						continue;
 					}
 
-                    IPACMDBG_H("client(%d): v6 header handle:(0x%x)\n",
-		  	    			 eth_index,
-		  	    			 get_client_memptr(eth_client, eth_index)->hdr_hdl_v6);
+                    IPACMDBG_H("client(%d): v6 header handle:(0x%x)\n", eth_index, get_client_memptr(eth_client, eth_index)->hdr_hdl_v6);
 
 		            /* v6 LAN_RT_TBL */
-				strlcpy(rt_rule->rt_tbl_name,
-			    					IPACM_Iface::ipacmcfg->rt_tbl_v6.name,
-			    					sizeof(rt_rule->rt_tbl_name));
+				strlcpy(rt_rule->rt_tbl_name, IPACM_Iface::ipacmcfg->rt_tbl_v6.name, sizeof(rt_rule->rt_tbl_name));
 				rt_rule->rt_tbl_name[IPA_RESOURCE_NAME_MAX-1] = '\0';
 		            /* Support QCMAP LAN traffic feature, send to A5 */
 					rt_rule_entry->rule.dst = IPA_CLIENT_APPS_LAN_CONS;
@@ -5621,10 +5602,9 @@ int IPACM_Lan::handle_eth_client_route_rule_ext(uint8_t *mac_addr, ipa_ip_type i
 						return IPACM_FAILURE;
 					}
 
-					it->second->hdl_v6[tx_index].rt_rule_hdl_v6 = rt_rule->rules[0].rt_rule_hdl;
+					it->second.hdl_v6[tx_index].rt_rule_hdl_v6 = rt_rule->rules[0].rt_rule_hdl;
 					IPACMDBG_H("tx:%d, rt rule id=%x, rt rule hdl=%x, ip-type: %d\n", tx_index,
-						rt_rule_entry->rule_id,
-						it->second->hdl_v6[tx_index].rt_rule_hdl_v6, iptype);
+						rt_rule_entry->rule_id, it->second.hdl_v6[tx_index].rt_rule_hdl_v6, iptype);
 
 			        /*Copy same rule to v6 WAN RT TBL*/
 				strlcpy(rt_rule->rt_tbl_name, IPACM_Iface::ipacmcfg->rt_tbl_wan_v6.name, sizeof(rt_rule->rt_tbl_name));
@@ -5655,15 +5635,14 @@ int IPACM_Lan::handle_eth_client_route_rule_ext(uint8_t *mac_addr, ipa_ip_type i
 							return IPACM_FAILURE;
 		            }
 
-					it->second->hdl_v6[tx_index].rt_rule_hdl_v6_wan = rt_rule->rules[0].rt_rule_hdl;
+					it->second.hdl_v6[tx_index].rt_rule_hdl_v6_wan = rt_rule->rules[0].rt_rule_hdl;
 					/* mark as route_rule_set_v6 = true*/
 					if (tx_index + 1 == iface_query->num_tx_props)
-						it->second->route_rule_set_v6 = true;
+						it->second.route_rule_set_v6 = true;
 
 					IPACMDBG_H("tx:%d, rt rule id=%x, rt rule hdl=%x ip-type: %d route_rule_set_v6(map) %d\n", tx_index,
-						rt_rule_entry->rule_id,
-						it->second->hdl_v6[tx_index].rt_rule_hdl_v6_wan, iptype,
-						it->second->route_rule_set_v6);
+						rt_rule_entry->rule_id, it->second.hdl_v6[tx_index].rt_rule_hdl_v6_wan, iptype,
+						it->second.route_rule_set_v6);
 
 
 					/* Add IPv6CT rules after ipv6 RT rules are set */
@@ -6106,16 +6085,6 @@ int IPACM_Lan::handle_eth_client_down_evt(uint8_t *mac_addr, uint16_t vlan_id, i
 		}
 	}
 #endif
-
-	for (auto it = rt_hdl_v6_list[clt_indx].begin(); it != rt_hdl_v6_list[clt_indx].end();++it)
-	{
-		/* clean up the map and release the memory */
-		if(it->second)
-		{
-			free(it->second);
-			it->second = NULL;
-		}
-	}
 
 	IPACMDBG_H("client %d has %d ipv6 with rt: %d, current total_v6=%d \n", clt_indx,
 		get_client_memptr(eth_client, clt_indx)->ipv6_set,
@@ -6725,10 +6694,6 @@ fail:
 				for (auto &it : rt_hdl_v6_list[i]) {
 					IPACMDBG_H("v6 addr : 0x%08x:%08x:%08x:%08x\n", it.first[0], it.first[1],
 						   it.first[2], it.first[3]);
-					if (it.second){
-						free(it.second);
-						it.second = nullptr;
-					}
 				}
 			}
 
@@ -9813,10 +9778,6 @@ int IPACM_Lan::handle_lan_client_reset_rt(ipa_ip_type iptype)
 			for (auto &it : rt_hdl_v6_list[i]) {
 				IPACMDBG_H("v6 addr : 0x%08x:%08x:%08x:%08x\n", it.first[0], it.first[1],
 					   it.first[2], it.first[3]);
-				if (it.second){
-					free(it.second);
-					it.second = nullptr;
-				}
 			}
 			IPACMDBG_H("client %d has %d ipv6 with rt: %d, current total_v6=%d \n", i,
 				get_client_memptr(eth_client, i)->ipv6_set,

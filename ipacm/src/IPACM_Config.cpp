@@ -28,7 +28,7 @@
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  * Changes from Qualcomm Innovation Center are provided under the following license:
- * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2025 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear.
  */
 /*!
@@ -151,6 +151,7 @@ const char *ipacm_event_name[] = {
 	__stringify(IPA_ROUTE_ADD_VLAN_PDN_EVENT),             /* ipacm_event_route_vlan */
 	__stringify(IPA_HANDLE_WAN_VLAN_PDN_UP),               /* ipacm_event_vlan_pdn */
 	__stringify(IPA_HANDLE_WAN_VLAN_PDN_DOWN),             /* ipacm_event_vlan_pdn */
+	__stringify(IPA_NOTIFY_VLAN_UP),                       /* NULL */
 #endif
 #ifdef FEATURE_SOCKSv5
 	__stringify(IPA_HANDLE_SOCKSv5_UP),                    /* ipacm_event_connection */
@@ -1638,6 +1639,7 @@ void IPACM_Config::add_vlan_iface(ipa_vlan_iface_info *data)
 {
 	list<vlan_iface_info>::iterator it_vlan;
 	vlan_iface_info new_vlan_info;
+	ipacm_cmd_q_data evt_data;
 
 	if(pthread_mutex_lock(&vlan_l2tp_lock) != 0)
 	{
@@ -1723,6 +1725,16 @@ void IPACM_Config::add_vlan_iface(ipa_vlan_iface_info *data)
 			IPACM_Iface::ipacmcfg->getEventName(eth_bridge_evt.event));
 		IPACM_EvtDispatcher::PostEvt(&eth_bridge_evt);
 	}
+	/*
+	 * Call IPA_NOTIFY_VLAN_UP which will allow LAN to check if VLAN PDN is up.
+	 * This will handle scenario where add_vlan_iface is received after
+	 * LAN IPA_NEW_ADDR have already been processed.
+	 */
+	evt_data.event = IPA_NOTIFY_VLAN_UP;
+	evt_data.evt_data = NULL;
+	IPACMDBG_H("Posting IPA_NOTIFY_VLAN_UP event!\n", evt_data.event);
+	IPACM_EvtDispatcher::PostEvt(&evt_data);
+
 #endif
 	/* Sending Getneigh to receive missing neighbor in case if missed early */
 	IPACMDBG_H("Query Getneigh for vlan ifaces\n");
@@ -1983,14 +1995,19 @@ void IPACM_Config::get_vlan_mode_ifaces()
 		}
 	}
 
+#if IPA_ETH_API_VER >= 2
 	IPACMDBG("modes are EMAC %d, ETH0 %d, ETH1 %d, RNDIS %d, ECM %d\n",
 		vlan_devices[IPA_VLAN_IF_EMAC],
-#if IPA_ETH_API_VER >= 2
 		vlan_devices[IPA_VLAN_IF_ETH0],
 		vlan_devices[IPA_VLAN_IF_ETH1],
-#endif
 		vlan_devices[IPA_VLAN_IF_RNDIS],
 		vlan_devices[IPA_VLAN_IF_ECM]);
+#else
+	IPACMDBG("modes are EMAC %d, RNDIS %d, ECM %d\n",
+		vlan_devices[IPA_VLAN_IF_EMAC],
+		vlan_devices[IPA_VLAN_IF_RNDIS],
+		vlan_devices[IPA_VLAN_IF_ECM]);
+#endif
 }
 
 void IPACM_Config::add_vlan_bridge(ipacm_event_data_all *data_all)

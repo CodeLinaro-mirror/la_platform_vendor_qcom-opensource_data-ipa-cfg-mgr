@@ -3241,7 +3241,7 @@ int IPACM_Wlan::handle_wlan_client_down_evt(uint8_t *mac_addr)
 #endif
 	}
 	/* Clean up the last entry */
-	rt_hdl_v6_list[num_wifi_client_tmp].clear();
+	rt_hdl_v6_list[num_wifi_client_tmp - 1].clear();
 
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
 	get_client_memptr(wlan_client, clt_indx)->lan_stats_idx = -1;

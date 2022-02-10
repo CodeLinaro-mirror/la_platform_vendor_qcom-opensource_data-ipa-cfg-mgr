@@ -6277,7 +6277,7 @@ int IPACM_Lan::handle_eth_client_down_evt(uint8_t *mac_addr, uint16_t vlan_id, i
 #endif
 	}
 	/* Clean up the last entry */
-	rt_hdl_v6_list[num_eth_client_tmp].clear();
+	rt_hdl_v6_list[num_eth_client_tmp - 1].clear();
 
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
 	get_client_memptr(eth_client, clt_indx)->lan_stats_idx = -1;

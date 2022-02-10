@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2013-2021 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -116,6 +117,8 @@ IPACM_Lan::IPACM_Lan(int iface_index) : IPACM_Iface(iface_index)
 	modem_ul_v4_set = false;
 	modem_ul_v6_set = false;
 	memset(ipv6_prefix, 0, sizeof(ipv6_prefix));
+
+	vlan_hdr_hdl = 0;
 
 #ifdef FEATURE_VLAN_MPDN
 	dummy_prefix_installed = false;
@@ -9931,6 +9934,12 @@ ipa_hdr_proc_type IPACM_Lan::eth_bridge_get_hdr_proc_type(ipa_hdr_l2_type t1,
 			return IPA_HDR_PROC_ETHII_TO_ETHII;
 		if(t2 == IPA_HDR_L2_802_3)
 			return IPA_HDR_PROC_ETHII_TO_802_3;
+		/* support non-vlan -> vlan */
+		if(t2 == IPA_HDR_L2_802_1Q) {
+			generic_params.input_ethhdr_negative_offset = 14;
+			generic_params.output_ethhdr_negative_offset = 18;
+			return IPA_HDR_PROC_ETHII_TO_ETHII_EX;
+		}
 		break;
 	case IPA_HDR_L2_802_3:
 		if(t2 == IPA_HDR_L2_ETHERNET_II)
@@ -9942,6 +9951,12 @@ ipa_hdr_proc_type IPACM_Lan::eth_bridge_get_hdr_proc_type(ipa_hdr_l2_type t1,
 		if(t2 == IPA_HDR_L2_802_1Q) {
 			generic_params.input_ethhdr_negative_offset = 18;
 			generic_params.output_ethhdr_negative_offset = 18;
+			return IPA_HDR_PROC_ETHII_TO_ETHII_EX;
+		}
+		/* support non-vlan -> vlan */
+		if(t2 == IPA_HDR_L2_ETHERNET_II) {
+			generic_params.input_ethhdr_negative_offset = 18;
+			generic_params.output_ethhdr_negative_offset = 14;
 			return IPA_HDR_PROC_ETHII_TO_ETHII_EX;
 		}
 		break;
@@ -9971,6 +9986,67 @@ int IPACM_Lan::eth_bridge_get_hdr_template_hdl(uint32_t* hdr_hdl)
 	}
 
 	*hdr_hdl = hdr.hdl;
+	return IPACM_SUCCESS;
+}
+
+int IPACM_Lan::eth_bridge_get_vlan_hdr_template_hdl(uint32_t* hdr_hdl, uint16_t vlan_id)
+{
+	struct ipa_ioc_copy_hdr sCopyHeader;
+	struct ipa_ioc_add_hdr hdr;
+	uint8_t hdr_len;
+	struct ipa_ioc_add_hdr *pHeaderDescriptor = NULL;
+	int len = 0;
+
+	memset(&hdr, 0, sizeof(hdr));
+	memset(&sCopyHeader, 0, sizeof(sCopyHeader));
+	memcpy(sCopyHeader.name,
+				tx_prop->tx[0].hdr_name,
+				sizeof(sCopyHeader.name));
+
+	IPACMDBG_H("header name: %s\n", sCopyHeader.name);
+	if (m_header.CopyHeader(&sCopyHeader) == false)
+	{
+		PERROR("ioctl copy header failed");
+		return IPACM_FAILURE;
+	}
+
+	IPACMDBG_H("header length: %d, partial: %d\n", sCopyHeader.hdr_len, sCopyHeader.is_partial);
+
+	hdr_len = sCopyHeader.hdr_len;
+	len = sizeof(struct ipa_ioc_add_hdr) + (1 * sizeof(struct ipa_hdr_add));
+		pHeaderDescriptor = (struct ipa_ioc_add_hdr *)calloc(1, len);
+		if (pHeaderDescriptor == NULL)
+	{
+			IPACMERR("calloc failed to allocate pHeaderDescriptor\n");
+			return IPACM_FAILURE;
+	}
+	pHeaderDescriptor->hdr[0].hdr_len = sCopyHeader.hdr_len;
+	memcpy(pHeaderDescriptor->hdr[0].hdr,
+					sCopyHeader.hdr,
+					pHeaderDescriptor->hdr[0].hdr_len);
+	pHeaderDescriptor->num_hdrs = 1;
+	pHeaderDescriptor->hdr[0].type = sCopyHeader.type;
+	pHeaderDescriptor->hdr[0].hdr_hdl = -1;
+	pHeaderDescriptor->hdr[0].is_partial = sCopyHeader.is_partial;
+	pHeaderDescriptor->hdr[0].status = -1;
+	pHeaderDescriptor->hdr[0].hdr[hdr_len - 3] = (uint8_t)vlan_id & 0xFF;
+	pHeaderDescriptor->hdr[0].hdr[hdr_len - 4] = (uint8_t)(vlan_id >> 8) & 0xFF;
+	memset(pHeaderDescriptor->hdr[0].name, 0,
+					 sizeof(pHeaderDescriptor->hdr[0].name));
+	snprintf(pHeaderDescriptor->hdr[0].name, sizeof(pHeaderDescriptor->hdr[0].name),
+		"eth0_ipv4_vlan%d", vlan_id);
+	if(m_header.AddHeader(pHeaderDescriptor) == false ||
+			pHeaderDescriptor->hdr[0].status != 0)
+	{
+		IPACMERR("ioctl IPA_IOC_ADD_HDR failed: %d\n", pHeaderDescriptor->hdr[0].status);
+		free(pHeaderDescriptor);
+		return IPACM_FAILURE;
+	}
+
+	*hdr_hdl = pHeaderDescriptor->hdr[0].hdr_hdl;
+	vlan_hdr_hdl = pHeaderDescriptor->hdr[0].hdr_hdl;
+
+	free(pHeaderDescriptor);
 	return IPACM_SUCCESS;
 }
 
@@ -10275,6 +10351,8 @@ int IPACM_Lan::eth_bridge_add_hdr_proc_ctx(ipa_hdr_l2_type peer_l2_hdr_type, uin
 	int len, res = IPACM_SUCCESS;
 	uint32_t hdr_template;
 	ipa_ioc_add_hdr_proc_ctx* pHeaderProcTable = NULL;
+	ipa_ioc_bridge_vlan_mapping_info mapping_info;
+	uint16_t vlan_id = 0;
 
 	if(tx_prop == NULL)
 	{
@@ -10297,7 +10375,23 @@ int IPACM_Lan::eth_bridge_add_hdr_proc_ctx(ipa_hdr_l2_type peer_l2_hdr_type, uin
 		eth_bridge_get_hdr_proc_type(peer_l2_hdr_type,
 			tx_prop->tx[0].hdr_l2_type,
 			pHeaderProcTable->proc_ctx[0].generic_params);
-	eth_bridge_get_hdr_template_hdl(&hdr_template);
+
+	/* non-vlan -> vlan */
+	if (tx_prop->tx[0].hdr_l2_type == IPA_HDR_L2_802_1Q &&
+		peer_l2_hdr_type == IPA_HDR_L2_ETHERNET_II)
+	{
+		memset(&mapping_info, 0, sizeof(mapping_info));
+
+		strlcpy(mapping_info.bridge_name, "bridge0", IF_NAME_LEN);
+		if(!IPACM_Iface::ipacmcfg->get_bridge_vlan_mapping(&mapping_info))
+			vlan_id = mapping_info.vlan_id;
+
+		eth_bridge_get_vlan_hdr_template_hdl(&hdr_template, vlan_id);
+	}
+	else
+	{
+		eth_bridge_get_hdr_template_hdl(&hdr_template);
+	}
 	pHeaderProcTable->proc_ctx[0].hdr_hdl = hdr_template;
 	if (m_header.AddHeaderProcCtx(pHeaderProcTable) == false)
 	{
@@ -10604,10 +10698,7 @@ int IPACM_Lan::eth_bridge_add_flt_rule(uint8_t *mac, uint32_t rt_tbl_hdl, ipa_ip
 		if(!vlan_id)
 		{
 			IPACMERR("got vlan id 0 for vlan iface %s\n", dev_name);
-			res = IPACM_FAILURE;
-			goto end;
 		}
-
 		flt_rule_entry.rule.attrib.attrib_mask |= IPA_FLT_VLAN_ID;
 		flt_rule_entry.rule.attrib.vlan_id = vlan_id;
 	}
@@ -10660,6 +10751,18 @@ int IPACM_Lan::eth_bridge_del_hdr_proc_ctx(uint32_t hdr_proc_ctx_hdl)
 		IPACMERR("Failed to delete hdr proc ctx.\n");
 		return IPACM_FAILURE;
 	}
+	if (vlan_hdr_hdl != 0)
+	{
+		if(m_header.DeleteHeaderHdl(vlan_hdr_hdl) == false)
+		{
+			IPACMERR("Failed to delete vlan hdr\n");
+			return IPACM_FAILURE;
+		}
+		vlan_hdr_hdl = 0;
+	}
+	else
+		IPACMDBG_H("vlan hdr is invalid!");
+
 	return IPACM_SUCCESS;
 }
 

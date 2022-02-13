@@ -1204,7 +1204,7 @@ int IPACM_ConntrackListener::CreateNatThreads(void)
 		}
 
 		IPACMDBG("created upd conn timeout thread\n");
-		if(pthread_setname_np(udpcto_thread, "udp conn timeout") != 0)
+		if(pthread_setname_np(udpcto_thread, "udp-conn-tout") != 0)
 		{
 			IPACMERR("unable to set thread name\n");
 		}

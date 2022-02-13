@@ -1450,7 +1450,7 @@ int main(int argc, char **argv)
 			return ret;
 		}
 		IPACMDBG_H("created command queue thread\n");
-		if(pthread_setname_np(cmd_queue_thread, "cmd queue process") != 0)
+		if(pthread_setname_np(cmd_queue_thread, "cmd-queue") != 0)
 		{
 			IPACMERR("unable to set thread name\n");
 		}
@@ -1482,7 +1482,7 @@ int main(int argc, char **argv)
 			return ret;
 		}
 		IPACMDBG_H("created firewall monitor thread\n");
-		if(pthread_setname_np(monitor_thread, "firewall cfg process") != 0)
+		if(pthread_setname_np(monitor_thread, "firewall-cfg") != 0)
 		{
 			IPACMERR("unable to set thread name\n");
 		}

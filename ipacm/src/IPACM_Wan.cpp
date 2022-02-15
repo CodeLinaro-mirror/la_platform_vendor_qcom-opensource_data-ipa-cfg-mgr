@@ -86,7 +86,7 @@ char IPACM_Wan::wan_up_dev_name[IF_NAME_LEN];
 bool IPACM_Wan::backhaul_is_sta_mode = false;
 bool IPACM_Wan::is_ext_prop_set = false;
 
-uint32_t IPACM_Wan::wan_route_rule_v6_hdl_a5;
+uint32_t IPACM_Wan::wan_route_rule_v6_hdl_a5 = 0;
 
 int IPACM_Wan::num_ipv4_modem_pdn = 0;
 int IPACM_Wan::num_ipv6_modem_pdn = 0;
@@ -5674,9 +5674,10 @@ int IPACM_Wan::handle_route_del_evt(ipa_ip_type iptype)
 		   	IPACMDBG_H("ip-type %d: default v6 wan RT-rule deleted\n",iptype);
 			if (m_routing.DeleteRoutingHdl(wan_route_rule_v6_hdl_a5, IPA_IP_v6) == false)
 			{
-			IPACMDBG_H("IP-family:%d, Routing rule(hdl:0x%x) deletion failed!\n",IPA_IP_v6,wan_route_rule_v6_hdl_a5);
+				IPACMDBG_H("IP-family:%d, Routing rule(hdl:0x%x) deletion failed!\n",IPA_IP_v6,wan_route_rule_v6_hdl_a5);
 				return IPACM_FAILURE;
 			}
+			wan_route_rule_v6_hdl_a5 = 0;
 		}
 		ipacm_event_iface_up *wandown_data;
 		wandown_data = (ipacm_event_iface_up *)malloc(sizeof(ipacm_event_iface_up));
@@ -5832,6 +5833,7 @@ int IPACM_Wan::handle_route_del_evt_ex(ipa_ip_type iptype)
 					IPACMDBG_H("IP-family:%d, Routing rule(hdl:0x%x) deletion failed!\n",IPA_IP_v6,wan_route_rule_v6_hdl_a5);
 					return IPACM_FAILURE;
 				}
+				wan_route_rule_v6_hdl_a5 = 0;
 			}
 #ifdef FEATURE_VLAN_MPDN
 			else
@@ -6675,6 +6677,7 @@ int IPACM_Wan::handle_down_evt_ex()
 					IPACMDBG_H("IP-family:%d, Routing rule(hdl:0x%x) deletion failed!\n", IPA_IP_v6, wan_route_rule_v6_hdl_a5);
 					return IPACM_FAILURE;
 				}
+				wan_route_rule_v6_hdl_a5 = 0;
 			}
 			else
 			{
@@ -6808,6 +6811,18 @@ int IPACM_Wan::handle_down_evt_ex()
 			memset(IPACM_Wan::flt_rule_v6, 0, IPA_MAX_FLT_RULE * sizeof(struct ipa_flt_rule_add));
 #endif
 			install_wan_filtering_rule(false);
+
+			/* clean the ipv6 wan-route rule hdl for v6_wan_table */
+			if (wan_route_rule_v6_hdl_a5 != 0)
+			{
+				IPACMDBG_H("Delete ipv6 default v6 wan RT-rule 0x%x\n", wan_route_rule_v6_hdl_a5);
+				if (m_routing.DeleteRoutingHdl(wan_route_rule_v6_hdl_a5, IPA_IP_v6) == false)
+				{
+					IPACMDBG_H("IP-family:%d, Routing rule(hdl:0x%x) deletion failed!\n",IPA_IP_v6,wan_route_rule_v6_hdl_a5);
+					return IPACM_FAILURE;
+				}
+				wan_route_rule_v6_hdl_a5 = 0;
+			}
 		}
 
 		for (i = 0; i < 2*num_dft_rt_v6; i++)
@@ -7059,6 +7074,18 @@ int IPACM_Wan::handle_down_evt_ex()
 			memset(IPACM_Wan::flt_rule_v6, 0, IPA_MAX_FLT_RULE * sizeof(struct ipa_flt_rule_add));
 #endif
 			install_wan_filtering_rule(false);
+
+			/* clean the ipv6 wan-route rule hdl for v6_wan_table */
+			if (wan_route_rule_v6_hdl_a5 != 0)
+			{
+				IPACMDBG_H("Delete ipv6 default v6 wan RT-rule 0x%x\n", wan_route_rule_v6_hdl_a5);
+				if (m_routing.DeleteRoutingHdl(wan_route_rule_v6_hdl_a5, IPA_IP_v6) == false)
+				{
+					IPACMDBG_H("IP-family:%d, Routing rule(hdl:0x%x) deletion failed!\n",IPA_IP_v6,wan_route_rule_v6_hdl_a5);
+					return IPACM_FAILURE;
+				}
+				wan_route_rule_v6_hdl_a5 = 0;
+			}
 		}
 
 		IPACMDBG_H("Delete dft v4 rt rule\n");

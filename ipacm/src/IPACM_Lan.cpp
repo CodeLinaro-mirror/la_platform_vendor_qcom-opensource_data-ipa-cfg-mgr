@@ -10221,8 +10221,8 @@ int IPACM_Lan::modify_private_subnet()
 
 			if (construct_mtu_rule(&flt_rule.rule, IPA_IP_v4, mtu[i]))
 				IPACMERR("Failed to modify MTU filtering rule.\n");
-			memcpy(&(pFilteringTable->rules[mtu_rule_idx++]), &flt_rule, sizeof(struct ipa_flt_rule_add));
-			IPACMDBG_H("Succesfully constructed v4 MTU rule for vlan id %d\n", vid[i]);
+			memcpy(&(pFilteringTable->rules[mtu_rule_idx + i]), &flt_rule, sizeof(struct ipa_flt_rule_add));
+			IPACMDBG_H("Succesfully constructed v4 MTU rule for vlan id %d entry(%d)\n", vid[i], mtu_rule_idx + i);
 		}
 	}
 
@@ -10465,12 +10465,16 @@ int IPACM_Lan::modify_ipv6_prefix_flt_rule()
 			}
 			if (construct_mtu_rule(&flt_rule.rule, IPA_IP_v6, mtu[i]))
 				IPACMERR("Failed to modify MTU filtering rule.\n");
-			memcpy(&(pFilteringTable->rules[mtu_rule_idx++]), &flt_rule, sizeof(struct ipa_flt_rule_add));
+			memcpy(&(pFilteringTable->rules[mtu_rule_idx + i]), &flt_rule, sizeof(struct ipa_flt_rule_add));
 
-			IPACMDBG_H("Succesfully constructed v6 MTU rule for vlan id %d\n", vid[i]);
+			IPACMDBG_H("Succesfully constructed v6 MTU rule for vlan id %d entry(%d)\n", vid[i], mtu_rule_idx + i);
 		}
 	}
 
+	/* reset the attrib for no offload prefix rules */
+	flt_rule.rule.eq_attrib_type = 0;
+	memcpy(&flt_rule.rule.attrib, &rx_prop->rx[0].attrib, sizeof(flt_rule.rule.attrib));
+	flt_rule.rule.attrib.attrib_mask |= IPA_FLT_SRC_ADDR;
 	/* now install SRC address exception rules for no offload PDNs */
 	for(i = 0; i < (IPACM_Iface::ipacmcfg->num_no_offload_ipv6_prefix); i++)
 	{

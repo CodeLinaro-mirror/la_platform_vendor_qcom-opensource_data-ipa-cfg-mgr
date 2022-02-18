@@ -1075,7 +1075,6 @@ int IPACM_Wlan::handle_wlan_mac_flt_event()
 	IPACMDBG_H("handle_wlan_mac_flt_event\n ");
 	uint8_t mac_addr[6] ={0};
 	int wlan_index;
-	ipacm_event_data_all data;
 
 	/* work on copy list to avoid concurrency issues*/
 	auto macFltListsCopy = IPACM_Iface::ipacmcfg->getMacFltListsCopySafe();
@@ -1804,7 +1803,6 @@ fail:
 int IPACM_Wlan::handle_wlan_client_ipaddr(ipacm_event_data_all *data)
 {
 	int clnt_indx, size = 0;
-	int v6_num;
 	uint32_t ipv6_link_local_prefix = 0xFE800000;
 	uint32_t ipv6_link_local_prefix_mask = 0xFFC00000;
 	ipacm_event_data_all data_all;
@@ -1970,7 +1968,7 @@ int IPACM_Wlan::handle_wlan_client_route_rule(uint8_t *mac_addr, ipa_ip_type ipt
 	struct ipa_ioc_add_rt_rule *rt_rule;
 	struct ipa_rt_rule_add *rt_rule_entry;
 	uint32_t tx_index;
-	int wlan_index,v6_num;
+	int wlan_index;
 	const int NUM = 1;
 
 	if(tx_prop == NULL)
@@ -2356,7 +2354,7 @@ fail:
 
 int IPACM_Wlan::handle_lan_client_disconnect(uint8_t *mac_addr)
 {
-	int i, ipa_if_num1;
+	int ipa_if_num1;
 	uint8_t mac[IPA_MAC_ADDR_SIZE];
 	ipacm_event_data_mac *data;
 	ipacm_cmd_q_data evt_data;
@@ -2426,7 +2424,7 @@ int IPACM_Wlan::handle_wlan_client_route_rule_ext(uint8_t *mac_addr, ipa_ip_type
 	struct ipa_ioc_add_rt_rule_ext *rt_rule;
 	struct ipa_rt_rule_add_ext *rt_rule_entry;
 	uint32_t tx_index;
-	int wlan_index,v6_num;
+	int wlan_index;
 	const int NUM = 1;
 	ipacm_event_data_all data;
 
@@ -2695,7 +2693,7 @@ int IPACM_Wlan::handle_wlan_client_route_rule_ext_v2(uint8_t *mac_addr, ipa_ip_t
 	struct ipa_ioc_add_rt_rule_ext_v2 *rt_rule;
 	struct ipa_rt_rule_add_ext_v2 *rt_rule_entry;
 	uint32_t tx_index;
-	int wlan_index,v6_num;
+	int wlan_index;
 	const int NUM = 1;
 	ipacm_event_data_all data;
 	uint64_t rules;
@@ -3641,7 +3639,7 @@ void IPACM_Wlan::handle_SCC_MCC_switch(ipa_ip_type iptype)
 	struct ipa_ioc_mdfy_rt_rule *rt_rule = NULL;
 	struct ipa_rt_rule_mdfy *rt_rule_entry;
 	uint32_t tx_index;
-	int wlan_index, v6_num;
+	int wlan_index;
 	const int NUM = 1;
 	int num_wifi_client_tmp = IPACM_Wlan::num_wifi_client;
 	bool isAdded = false;
@@ -3924,8 +3922,6 @@ int IPACM_Wlan::config_dft_firewall_rules_ul_ex(IPACM_firewall_conf_t* firewall_
 	int v6_ul_wl_rules = 0, total_rules = 0;
 	struct ipa_ioc_add_flt_rule *pFilteringTable = NULL;
 	struct ipa_flt_rule_add flt_rule_entry, flt_rule_entry_r, flt_rule_entry_fw, temp_rule;
-	struct ipa_ioc_generate_flt_eq flt_eq;
-	uint8_t xlat_mux_id;
 	struct ipa_ioc_add_flt_rule_v2 *pFilteringTable_v2 = NULL;
 	struct ipa_flt_rule_add_v2 flt_rule_entry_v2;
 
@@ -4312,7 +4308,7 @@ int IPACM_Wlan::disable_dft_firewall_rules_ul_ex_per_wlan_client(int vid)
 void IPACM_Wlan::configure_v6_ul_firewall_wlan()
 {
 	IPACM_firewall_conf_t *firewall_config = NULL;
-	int default_vid = 0, ret;
+	int default_vid = 0;
 
 	if (IPACM_Iface::ipacmcfg->ipv6_nat_enable)
 	{
@@ -5010,7 +5006,6 @@ int IPACM_Wlan::delete_uplink_filter_rule_per_client
 	uint8_t *mac_addr
 )
 {
-	ipa_fltr_installed_notif_req_msg_v01 flt_index;
 	int fd;
 	int clnt_indx;
 

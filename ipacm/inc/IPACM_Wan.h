@@ -1,5 +1,6 @@
 /*
 Copyright (c) 2013, 2018-2019,2020, The Linux Foundation. All rights reserved.
+Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are
@@ -202,7 +203,7 @@ public:
 	{
 		for(int i = 0; i < IPA_MAX_NUM_SW_PDNS; i++)
 		{
-			if(ipv4_to_iface[i].ipv4_addr && ipv4_to_iface[i].wan_up_vlan)
+			if(ipv4_to_iface[i].ipv4_addr && ipv4_to_iface[i].wan_up_vlan && ipv4_to_iface[i].pIface != NULL)
 			{
 				IPACMDBG_H("iface %s is vlan up\n", ipv4_to_iface[i].pIface->dev_name);
 				return true;
@@ -215,7 +216,7 @@ public:
 	{
 		for(int i = 0; i < IPA_MAX_NUM_SW_PDNS; i++)
 		{
-			if(ipv6_to_iface[i].wan_up_vlan_v6)
+			if(ipv6_to_iface[i].wan_up_vlan_v6 && ipv6_to_iface[i].pIface != NULL)
 			{
 				IPACMDBG_H("iface %s is vlan up v6\n", ipv6_to_iface[i].pIface->dev_name);
 				return true;

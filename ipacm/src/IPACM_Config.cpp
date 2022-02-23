@@ -25,6 +25,40 @@
  * WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *
+ * Changes from Qualcomm Innovation Center are provided under the following license:
+ *
+ * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted (subject to the limitations in the
+ * disclaimer below) provided that the following conditions are met:
+ *
+ *     * Redistributions of source code must retain the above copyright
+ *       notice, this list of conditions and the following disclaimer.
+ *
+ *     * Redistributions in binary form must reproduce the above
+ *       copyright notice, this list of conditions and the following
+ *       disclaimer in the documentation and/or other materials provided
+ *       with the distribution.
+ *
+ *     * Neither the name of Qualcomm Innovation Center, Inc. nor the names of its
+ *       contributors may be used to endorse or promote products derived
+ *       from this software without specific prior written permission.
+ *
+ * NO EXPRESS OR IMPLIED LICENSES TO ANY PARTY'S PATENT RIGHTS ARE
+ * GRANTED BY THIS LICENSE. THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT
+ * HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED
+ * WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
+ * MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
+ * IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR
+ * ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+ * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE
+ * GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER
+ * IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
+ * OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
+ * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE
  */
 /*!
 		@file
@@ -137,6 +171,7 @@ const char *ipacm_event_name[] = {
 	__stringify(IPA_ROUTE_ADD_VLAN_PDN_EVENT),             /* ipacm_event_route_vlan */
 	__stringify(IPA_HANDLE_WAN_VLAN_PDN_UP),               /* ipacm_event_vlan_pdn */
 	__stringify(IPA_HANDLE_WAN_VLAN_PDN_DOWN),             /* ipacm_event_vlan_pdn */
+	__stringify(IPA_NOTIFY_VLAN_UP),                       /* NULL */
 #endif
 #ifdef FEATURE_SOCKSv5
 	__stringify(IPA_HANDLE_SOCKSv5_UP),                    /* ipacm_event_connection */
@@ -1443,6 +1478,7 @@ void IPACM_Config::add_vlan_iface(ipa_ioc_vlan_iface_info *data)
 {
 	list<vlan_iface_info>::iterator it_vlan;
 	vlan_iface_info new_vlan_info;
+	ipacm_cmd_q_data evt_data;
 
 	if(pthread_mutex_lock(&vlan_l2tp_lock) != 0)
 	{
@@ -1512,6 +1548,16 @@ void IPACM_Config::add_vlan_iface(ipa_ioc_vlan_iface_info *data)
 			IPACM_Iface::ipacmcfg->getEventName(eth_bridge_evt.event));
 		IPACM_EvtDispatcher::PostEvt(&eth_bridge_evt);
 	}
+	/*
+	 * Call IPA_NOTIFY_VLAN_UP which will allow LAN to check if VLAN PDN is up.
+	 * This will handle scenario where add_vlan_iface is received after
+	 * LAN IPA_NEW_ADDR have already been processed.
+	 */
+	evt_data.event = IPA_NOTIFY_VLAN_UP;
+	evt_data.evt_data = NULL;
+	IPACMDBG_H("Posting IPA_NOTIFY_VLAN_UP event!\n", evt_data.event);
+	IPACM_EvtDispatcher::PostEvt(&evt_data);
+
 #endif
 	return;
 }
@@ -1751,14 +1797,19 @@ void IPACM_Config::get_vlan_mode_ifaces()
 		vlan_devices[i] = vlan_mode.is_vlan_mode;
 	}
 
+#if IPA_ETH_API_VER >= 2
 	IPACMDBG("modes are EMAC %d, ETH0 %d, ETH1 %d, RNDIS %d, ECM %d\n",
 		vlan_devices[IPA_VLAN_IF_EMAC],
-#if IPA_ETH_API_VER >= 2
 		vlan_devices[IPA_VLAN_IF_ETH0],
 		vlan_devices[IPA_VLAN_IF_ETH1],
-#endif
 		vlan_devices[IPA_VLAN_IF_RNDIS],
 		vlan_devices[IPA_VLAN_IF_ECM]);
+#else
+	IPACMDBG("modes are EMAC %d, RNDIS %d, ECM %d\n",
+		vlan_devices[IPA_VLAN_IF_EMAC],
+		vlan_devices[IPA_VLAN_IF_RNDIS],
+		vlan_devices[IPA_VLAN_IF_ECM]);
+#endif
 }
 
 void IPACM_Config::add_vlan_bridge(ipacm_event_data_all *data_all)
@@ -3051,17 +3102,18 @@ UPDATE:
 						 mac_addr[3], mac_addr[4], mac_addr[5]);
 				if(it->second->current_blocked == false) {
 					IPACMDBG_H("remove this client from the mac list as whitelisted\n");
-					auto itr = it;
 					free(IPACM_Iface::ipacmcfg->mac_flt_lists.at(it->first));
 					IPACM_Iface::ipacmcfg->mac_flt_lists.at(it->first) = NULL;
-					IPACM_Iface::ipacmcfg->mac_flt_lists.erase(itr->first);
+					it = IPACM_Iface::ipacmcfg->mac_flt_lists.erase(it);
 				}
 				else
 				{
 					it->second->is_blacklist = false;
+					it++;
 				}
+			} else {
+				it++;
 			}
-			++it;
 	}
 	mac_list.clear();
 	pthread_mutex_unlock(&mac_flt_info_lock);
@@ -3131,21 +3183,6 @@ void IPACM_Config::clear_whitelist_mac_add(uint8_t * mac_addr)
 		IPACMDBG_H(" Client not in mac flt list \n");
 	}
 	return;
-}
-
-/* return copy of current mac flt list to prevent concurrency issues */
-std::map<std::array<uint8_t, 6>, mac_flt_type *> IPACM_Config::get_mac_flt_lists()
-{
-	std::map<std::array<uint8_t, 6>, mac_flt_type *> copy_mac_flt_lists ;
-	if(pthread_mutex_lock(&mac_flt_info_lock) != 0)
-	{
-		IPACMERR("Unable to lock the mutex\n");
-		return copy_mac_flt_lists;
-	}
-	/* clears previous elemenst from copy list and add current mac flt list elements */
-	copy_mac_flt_lists = mac_flt_lists;
-	pthread_mutex_unlock(&mac_flt_info_lock);
-	return copy_mac_flt_lists;
 }
 
 /* upadte global config list with current state of mac addr */

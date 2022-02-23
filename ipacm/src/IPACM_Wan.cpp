@@ -25,6 +25,39 @@
  * WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ * Changes from Qualcomm Innovation Center are provided under the following license:
+ *
+ * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted (subject to the limitations in the
+ * disclaimer below) provided that the following conditions are met:
+ *
+ *     * Redistributions of source code must retain the above copyright
+ *       notice, this list of conditions and the following disclaimer.
+ *
+ *     * Redistributions in binary form must reproduce the above
+ *       copyright notice, this list of conditions and the following
+ *       disclaimer in the documentation and/or other materials provided
+ *       with the distribution.
+ *
+ *     * Neither the name of Qualcomm Innovation Center, Inc. nor the names of its
+ *       contributors may be used to endorse or promote products derived
+ *       from this software without specific prior written permission.
+ *
+ * NO EXPRESS OR IMPLIED LICENSES TO ANY PARTY'S PATENT RIGHTS ARE
+ * GRANTED BY THIS LICENSE. THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT
+ * HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED
+ * WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
+ * MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
+ * IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR
+ * ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+ * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE
+ * GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER
+ * IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
+ * OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
+ * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE
  */
 /*!
 		@file
@@ -6337,14 +6370,7 @@ int IPACM_Wan::handle_down_evt()
 		/* clean up the map and release the memory */
 		for (auto it = rt_hdl_v6_list[i].begin(); it != rt_hdl_v6_list[i].end();++it)
 		{
-			IPACMDBG_H("v6 addr : 0x%08x:%08x:%08x:%08x\n",
-					it->first[0], it->first[1], it->first[2], it->first[3]);
-			/* clean up the map and release the memory */
-			if(it->second != NULL)
-			{
-				free(it->second);
-				it->second = NULL;
-			}
+			IPACMDBG_H("v6 addr : 0x%08x:%08x:%08x:%08x\n", it->first[0], it->first[1], it->first[2], it->first[3]);
 		}
 		IPACM_Iface::ipacmcfg->ipa_num_clients_ipv6 -= get_client_memptr(wan_client, i)->ipv6_set;
 		IPACMDBG_H("update ipa_num_clients_ipv6 = %d\n", IPACM_Iface::ipacmcfg->ipa_num_clients_ipv6);
@@ -6365,34 +6391,22 @@ int IPACM_Wan::handle_down_evt()
 	/* free dft ipv4 filter rule handlers if any */
 	if (ip_type != IPA_IP_v6 && rx_prop != NULL)
 	{
-		if (dft_v4fl_rule_hdl[0] != 0)
+		res = delete_dflt_filter_rules(IPA_IP_v4);
+		if (res == IPACM_FAILURE)
 		{
-			if (m_filtering.DeleteFilteringHdls(dft_v4fl_rule_hdl,
-				IPA_IP_v4,
-				IPV4_DEFAULT_FILTERTING_RULES) == false)
-			{
-				IPACMERR("Error Delete Filtering rules, aborting...\n");
-				res = IPACM_FAILURE;
-				goto fail;
-			}
-			IPACM_Iface::ipacmcfg->decreaseFltRuleCount(rx_prop->rx[0].src_pipe, IPA_IP_v4, IPV4_DEFAULT_FILTERTING_RULES);
-			IPACMDBG_H("finished delete default v4 filtering rules\n ");
+			IPACMERR("delete_dflt_filter_rules failed\n");
+			goto fail;
 		}
 	}
 
 	/* free dft ipv6 filter rule handlers if any */
 	if (ip_type != IPA_IP_v4 && rx_prop != NULL)
 	{
-		if (dft_v6fl_rule_hdl[0] != 0)
+		res = delete_dflt_filter_rules(IPA_IP_v6);
+		if (res == IPACM_FAILURE)
 		{
-			if (!m_filtering.DeleteFilteringHdls(dft_v6fl_rule_hdl, IPA_IP_v6, m_ipv6_default_filterting_rules_count))
-			{
-				IPACMERR("ErrorDeleting Filtering rule, aborting...\n");
-				res = IPACM_FAILURE;
-				goto fail;
-			}
-			IPACM_Iface::ipacmcfg->decreaseFltRuleCount(
-				rx_prop->rx[0].src_pipe, IPA_IP_v6, m_ipv6_default_filterting_rules_count);
+			IPACMERR("delete_dflt_filter_rules failed\n");
+			goto fail;
 		}
 
 		if(num_ipv6_dest_flt_rule > 0 && num_ipv6_dest_flt_rule <= MAX_DEFAULT_v6_ROUTE_RULES)
@@ -8093,21 +8107,12 @@ int IPACM_Wan::handle_wan_client_ipaddr(ipacm_event_data_all *data)
 				/* never see this ipv6, insert to the map*/
 				if(rt_hdl_v6_list[clnt_indx].count(ipv6) == 0)
 				{
-					IPACMDBG_H("can't find client\n");
-					size =  sizeof(v6_hdl_type) + (iface_query->num_tx_props * sizeof(client_rt_hdl_v6));
-					v6_hdl_type *temp = (v6_hdl_type *)malloc(size);
-					if(temp == NULL)
-					{
-						IPACMDBG_H("Failed to allocate memmory \n")
-						return IPACM_FAILURE;
-					}
-					memset(temp, 0, size);
 					/*
 					 * The client got new IPv6 address.
 					 * NOTE: The new address doesn't replace the existing one but being added (up to IPA_MAX_NUM_CLIENTS_IPV6),
 					 *       so the previous IPv6 addresses of the client will not be deleted.
 					 */
-					rt_hdl_v6_list[clnt_indx].insert(std::make_pair(ipv6, temp));
+					rt_hdl_v6_list[clnt_indx].insert(std::make_pair(ipv6, handleTypeV6(iface_query->num_tx_props)));
 					/* indicate how many ipv6 client gets */
 					get_client_memptr(wan_client, clnt_indx)->ipv6_set++;
 					IPACM_Iface::ipacmcfg->ipa_num_clients_ipv6++;
@@ -8247,20 +8252,19 @@ int IPACM_Wan::handle_wan_client_route_rule(uint8_t *mac_addr, ipa_ip_type iptyp
 				IPACMDBG_H("tx:%d, rt rule hdl=%x ip-type: %d\n", tx_index,
 						get_client_memptr(wan_client, wan_index)->wan_rt_hdl[tx_index].wan_rt_rule_hdl_v4, iptype);
 			} else {
-				for (auto it = rt_hdl_v6_list[wan_index].begin(); it != rt_hdl_v6_list[wan_index].end();++it)
+				for (auto it = rt_hdl_v6_list[wan_index].begin(); it != rt_hdl_v6_list[wan_index].end(); ++it)
 				{
-					if (it->second->route_rule_set_v6 == true)
+					if (it->second.route_rule_set_v6 == true)
 					{
 						IPACMDBG("client(%d): v6 addr : 0x%08x:%08x:%08x:%08x, v6_set already (%d)\n",
 						wan_index,
 						it->first[0], it->first[1], it->first[2], it->first[3],
-						it->second->route_rule_set_v6);
+						it->second.route_rule_set_v6);
 						continue;
 					}
 
 					IPACMDBG_H("client-index(%d): v6 header handle:(0x%x), v6 addr : 0x%08x:%08x:%08x:%08x\n",
-						wan_index,
-						get_client_memptr(wan_client, wan_index)->hdr_hdl_v6,
+						wan_index, get_client_memptr(wan_client, wan_index)->hdr_hdl_v6,
 						it->first[0], it->first[1], it->first[2], it->first[3]);
 
 					/* v6 LAN_RT_TBL */
@@ -8300,9 +8304,9 @@ int IPACM_Wan::handle_wan_client_route_rule(uint8_t *mac_addr, ipa_ip_type iptyp
 						return IPACM_FAILURE;
 					}
 
-					it->second->hdl_v6[tx_index].rt_rule_hdl_v6 = rt_rule->rules[0].rt_rule_hdl;
+					it->second.hdl_v6[tx_index].rt_rule_hdl_v6 = rt_rule->rules[0].rt_rule_hdl;
 					IPACMDBG_H("tx:%d, rt rule hdl=%x ip-type: %d\n", tx_index,
-							it->second->hdl_v6[tx_index].rt_rule_hdl_v6, iptype);
+							it->second.hdl_v6[tx_index].rt_rule_hdl_v6, iptype);
 
 					/*Copy same rule to v6 WAN RT TBL*/
 					strlcpy(rt_rule->rt_tbl_name,
@@ -8331,14 +8335,14 @@ int IPACM_Wan::handle_wan_client_route_rule(uint8_t *mac_addr, ipa_ip_type iptyp
 						return IPACM_FAILURE;
 					}
 
-					it->second->hdl_v6[tx_index].rt_rule_hdl_v6_wan = rt_rule->rules[0].rt_rule_hdl;
+					it->second.hdl_v6[tx_index].rt_rule_hdl_v6_wan = rt_rule->rules[0].rt_rule_hdl;
 					/* mark as route_rule_set_v6 = true*/
 					if (tx_index + 1 == iface_query->num_tx_props)
-						it->second->route_rule_set_v6 = true;
+						it->second.route_rule_set_v6 = true;
 
 					IPACMDBG_H("tx:%d, rt rule hdl=%x ip-type: %d route_rule_set_v6(map) %d\n", tx_index,
-							it->second->hdl_v6[tx_index].rt_rule_hdl_v6_wan, iptype,
-							it->second->route_rule_set_v6);
+							it->second.hdl_v6[tx_index].rt_rule_hdl_v6_wan, iptype,
+							it->second.route_rule_set_v6);
 				} /* v6 map loop */
 			} /* ipv6 handling */
 		} /* end of for loop */
@@ -8627,16 +8631,17 @@ void IPACM_Wan::handle_wan_client_SCC_MCC_switch(bool isSCCMode, ipa_ip_type ipt
 					rt_rule_entry->rule.attrib.u.v6.dst_addr_mask[3] = 0xFFFFFFFF;
 
 					IPACMDBG_H("rt rule hdl=%x rt rule hdl_wan=%x\n",
-							it->second->hdl_v6[tx_index].rt_rule_hdl_v6, it->second->hdl_v6[tx_index].rt_rule_hdl_v6_wan);
+						it->second.hdl_v6[tx_index].rt_rule_hdl_v6,
+						it->second.hdl_v6[tx_index].rt_rule_hdl_v6_wan);
 
-					rt_rule_entry->rt_rule_hdl = it->second->hdl_v6[tx_index].rt_rule_hdl_v6;
+					rt_rule_entry->rt_rule_hdl = it->second.hdl_v6[tx_index].rt_rule_hdl_v6;
 					if (false == m_routing.ModifyRoutingRule(rt_rule))
 					{
 						IPACMERR("Routing rule Modify failed!\n");
 						free(rt_rule);
 						return;
 					}
-					rt_rule_entry->rt_rule_hdl = it->second->hdl_v6[tx_index].rt_rule_hdl_v6_wan;
+					rt_rule_entry->rt_rule_hdl = it->second.hdl_v6[tx_index].rt_rule_hdl_v6_wan;
 					if (false == m_routing.ModifyRoutingRule(rt_rule))
 					{
 						IPACMERR("Routing rule modify failed!\n");

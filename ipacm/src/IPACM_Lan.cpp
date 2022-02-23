@@ -309,6 +309,7 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 	ipacm_event_data_all *data_all=NULL;
 	ipacm_cmd_q_data evt_data;
 	int clnt_indx;
+	ipa_ioc_bridge_vlan_mapping_info mapping_info;
 
 	switch (event)
 	{
@@ -581,9 +582,23 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 								{
 									if(IPACM_Iface::ipacmcfg->iface_in_vlan_mode(dev_name))
 									{
-										uint16_t vid[IPA_MAX_NUM_OFFLOAD_VLANS];
-										IPACM_Iface::ipacmcfg->get_iface_vlan_ids(dev_name, vid);
-										handle_wan_up(IPA_IP_v4, vid[0]);
+										uint16_t vlan_id;
+										memset(&mapping_info, 0, sizeof(mapping_info));
+
+										strlcpy(mapping_info.bridge_name, "bridge0", IF_NAME_LEN);
+										if(!IPACM_Iface::ipacmcfg->get_bridge_vlan_mapping(&mapping_info))
+										{
+											vlan_id = mapping_info.vlan_id;
+										}
+										if (vlan_id > 0)
+										{
+											handle_wan_up(IPA_IP_v4, vlan_id);
+										}
+										else
+										{
+											IPACMDBG_H("Recieved invalid vid %d", vlan_id);
+											return;
+										}
 									}
 									else
 									{
@@ -623,9 +638,23 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 								{
 									if(IPACM_Iface::ipacmcfg->iface_in_vlan_mode(dev_name))
 									{
-										uint16_t vid[IPA_MAX_NUM_OFFLOAD_VLANS];
-										IPACM_Iface::ipacmcfg->get_iface_vlan_ids(dev_name, vid);
-										handle_wan_up(IPA_IP_v6, vid[0]);
+										uint16_t vlan_id;
+										memset(&mapping_info, 0, sizeof(mapping_info));
+
+										strlcpy(mapping_info.bridge_name, "bridge0", IF_NAME_LEN);
+										if(!IPACM_Iface::ipacmcfg->get_bridge_vlan_mapping(&mapping_info))
+										{
+											vlan_id = mapping_info.vlan_id;
+										}
+										if (vlan_id > 0)
+										{
+											handle_wan_up(IPA_IP_v6, vlan_id);
+										}
+										else
+										{
+											IPACMDBG_H("Recieved invalid vid %d", vlan_id);
+											return;
+										}
 									}
 									else
 									{
@@ -806,15 +835,24 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 				/* add support for handling default route to WIFI backhaul on vlan case Need to protect with xml entry */
 				if(IPACM_Iface::ipacmcfg->iface_in_vlan_mode(dev_name))
 				{
-					uint16_t vid[IPA_MAX_NUM_OFFLOAD_VLANS];
-					if (IPACM_Iface::ipacmcfg->get_iface_vlan_ids(dev_name, vid))
+					uint16_t vlan_id;
+					memset(&mapping_info, 0, sizeof(mapping_info));
+
+					strlcpy(mapping_info.bridge_name, "bridge0", IF_NAME_LEN);
+					if(!IPACM_Iface::ipacmcfg->get_bridge_vlan_mapping(&mapping_info))
 					{
-						IPACMERR("failed getting vlan ids for iface %s\n", dev_name);
+						vlan_id = mapping_info.vlan_id;
+					}
+					if (vlan_id > 0)
+					{
+						handle_wan_up(IPA_IP_v4, vlan_id);
+					}
+					else
+					{
+						IPACMDBG_H("Recieved invalid vid %d", vlan_id);
 						return;
 					}
-
-					handle_wan_up(IPA_IP_v4, vid[0]);
-					IPACMDBG_H("Recieved vid %d", vid[0]);
+					IPACMDBG_H("Recieved vid %d", vlan_id);
 				}
 				else
 				{
@@ -873,13 +911,23 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 				/* add support for handling default route to WIFI backhaul on vlan case Need to protect with xml entry */
 				if(IPACM_Iface::ipacmcfg->iface_in_vlan_mode(dev_name))
 				{
-					uint16_t vid[IPA_MAX_NUM_OFFLOAD_VLANS];
-					if (IPACM_Iface::ipacmcfg->get_iface_vlan_ids(dev_name, vid))
+					uint16_t vlan_id;
+					memset(&mapping_info, 0, sizeof(mapping_info));
+
+					strlcpy(mapping_info.bridge_name, "bridge0", IF_NAME_LEN);
+					if(!IPACM_Iface::ipacmcfg->get_bridge_vlan_mapping(&mapping_info))
 					{
-						IPACMERR("failed getting vlan ids for iface %s\n", dev_name);
+						vlan_id = mapping_info.vlan_id;
+					}
+					if (vlan_id > 0)
+					{
+						handle_wan_up(IPA_IP_v6, vlan_id);
+					}
+					else
+					{
+						IPACMDBG_H("Recieved invalid vid %d", vlan_id);
 						return;
 					}
-					handle_wan_up(IPA_IP_v6, vid[0]);
 				}
 				else
 				{

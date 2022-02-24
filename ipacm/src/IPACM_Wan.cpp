@@ -25,6 +25,39 @@
  * WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ * Changes from Qualcomm Innovation Center are provided under the following license:
+ *
+ * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted (subject to the limitations in the
+ * disclaimer below) provided that the following conditions are met:
+ *
+ *     * Redistributions of source code must retain the above copyright
+ *       notice, this list of conditions and the following disclaimer.
+ *
+ *     * Redistributions in binary form must reproduce the above
+ *       copyright notice, this list of conditions and the following
+ *       disclaimer in the documentation and/or other materials provided
+ *       with the distribution.
+ *
+ *     * Neither the name of Qualcomm Innovation Center, Inc. nor the names of its
+ *       contributors may be used to endorse or promote products derived
+ *       from this software without specific prior written permission.
+ *
+ * NO EXPRESS OR IMPLIED LICENSES TO ANY PARTY'S PATENT RIGHTS ARE
+ * GRANTED BY THIS LICENSE. THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT
+ * HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED
+ * WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
+ * MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
+ * IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR
+ * ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+ * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE
+ * GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER
+ * IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
+ * OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
+ * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE
  */
 /*!
 		@file
@@ -86,7 +119,7 @@ char IPACM_Wan::wan_up_dev_name[IF_NAME_LEN];
 bool IPACM_Wan::backhaul_is_sta_mode = false;
 bool IPACM_Wan::is_ext_prop_set = false;
 
-uint32_t IPACM_Wan::wan_route_rule_v6_hdl_a5;
+uint32_t IPACM_Wan::wan_route_rule_v6_hdl_a5 = 0;
 
 int IPACM_Wan::num_ipv4_modem_pdn = 0;
 int IPACM_Wan::num_ipv6_modem_pdn = 0;
@@ -120,6 +153,11 @@ uint8_t IPACM_Wan::num_offloaded_pdns = 0;
 
 uint16_t IPACM_Wan::mtu_default_wan_v4 = DEFAULT_MTU_SIZE;
 uint16_t IPACM_Wan::mtu_default_wan_v6 = DEFAULT_MTU_SIZE;
+
+#ifdef FEATURE_EoGRE
+uint16_t IPACM_Wan::mtu_gre_v4 = DEFAULT_MTU_SIZE;
+uint16_t IPACM_Wan::mtu_gre_v6 = DEFAULT_MTU_SIZE;
+#endif
 
 #define MOBILE_FIREWALL_FILE "/etc/data/mobileap_firewall.xml"
 
@@ -173,8 +211,6 @@ IPACM_Wan::IPACM_Wan(int iface_index,
 	mtu_v6_set = false;
 	memset(&ip_pass_pdn_info, 0 ,sizeof(ip_pass_pdn_info));
 	memset(&ip_collision_pdn_info, 0 ,sizeof(ip_collision_pdn_info));
-	/* Used to store route handle of previous wan ip incase of passthrough enbaled. */
-	ipps_dft_v4_rt_rule_hdl = 0;
 #ifdef FEATURE_IPACM_UL_FIREWALL
 #ifdef FEATURE_VLAN_MPDN
 	num_firewall_v6_ul_pdn = 0;
@@ -712,31 +748,20 @@ int IPACM_Wan::handle_addr_evt(ipacm_event_data_addr *data)
 						res = IPACM_FAILURE;
 						goto fail;
 					}
-					if( ipps_dft_v4_rt_rule_hdl != 0)
-					{
-						IPACMDBG_H("Delete previous stored ippt wan ip route rule. \n");
-						if (m_routing.DeleteRoutingHdl(ipps_dft_v4_rt_rule_hdl,
-									 IPA_IP_v4) == false)
-						{
-							IPACMERR("Routing old RT rule deletion failed!\n");
-							res = IPACM_FAILURE;
-							goto fail;
-						}
-						ipps_dft_v4_rt_rule_hdl = 0;
-					}
 				}
 				else
 				{
-					/* Need to store previous rt hdl of route rule for WAN Ip as we don't delete it as in IP Passthrough mode
-					   it may lead to stall as NAT entry is still pointing to default route entry .
-					   But when passthrough is disabled we need to clear previous rt rule as we go ahead and create one.*/
-
-					if( ipps_dft_v4_rt_rule_hdl == 0)
+					/* In IPPT or IP Collision mode don't replace the wan-ip RT rule to dummy ipv4 */
+					/*Store the public ip address when in passthrough mode which will be used when wan is down.*/
+					if (m_is_sta_mode == Q6_WAN)
 					{
-						IPACMDBG_H("In Passthrough mode, not deleting v4 route rule, storing it to clear later on \n");
-						ipps_dft_v4_rt_rule_hdl = dft_rt_rule_hdl[0];
+						curr_wan_ip = data->ipv4_addr;
+						public_wan_v4_addr = wan_v4_addr;
+						public_wan_v4_addr_set = true;
+						IPACMDBG_H("Received wan ipv4-addr:0x%x\n",data->ipv4_addr);
+						IPACMDBG_H("In Passthrough mode, Storing previous wan ipv4-addr:0x%x\n",public_wan_v4_addr);
+						return IPACM_SUCCESS;
 					}
-					IPACMDBG_H("ipv4 wan iface v4-rt-rule hdll=0x%x\n", ipps_dft_v4_rt_rule_hdl);
 				}
 #if defined(FEATURE_SOCKSv5) && defined (IPA_SOCKV5_EVENT_MAX)
 				if(m_is_sta_mode == Q6_WAN)
@@ -1887,6 +1912,7 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 		ipacm_event_mtu_info *data = (ipacm_event_mtu_info *)param;
 		ipa_mtu_info *mtu_info = &(data->mtu_info);
 		ipa_interface_index = iface_ipa_index_query(data->if_index);
+		bool post_mtu_update_event = false;
 
 		if (ipa_interface_index == ipa_if_num)
 		{
@@ -1901,7 +1927,16 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 				{
 					/* upstream interface. update default MTU. */
 					mtu_default_wan_v4 = mtu_v4;
+					post_mtu_update_event = true;
 				}
+
+#ifdef FEATURE_EoGRE
+				/*Always update MTU for GRE since initial MTU set will come before GRE is enabled, post if GRE is enabled */
+				mtu_gre_v4 = mtu_v4;
+				if (IPACM_Iface::ipacmcfg->eogre_enabled)
+					post_mtu_update_event = true;
+#endif
+
 				IPACMDBG_H("Updated v4 mtu=[%d] for (%s), upstream_mtu=[%d]\n",
 					mtu_v4, mtu_info->if_name, mtu_default_wan_v4);
 			}
@@ -1914,12 +1949,20 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 				{
 					/* upstream interface. update default MTU. */
 					mtu_default_wan_v6 = mtu_v6;
+					post_mtu_update_event = true;
 				}
+
+#ifdef FEATURE_EoGRE
+				/*Always update MTU for GRE since initial MTU set will come before GRE is enabled, post if GRE is enabled */
+				mtu_gre_v6 = mtu_v6;
+				if (IPACM_Iface::ipacmcfg->eogre_enabled)
+					post_mtu_update_event = true;
+#endif
 				IPACMDBG_H("Updated v6 mtu=[%d] for (%s), upstream_mtu=[%d]\n",
 					mtu_v6, mtu_info->if_name, mtu_default_wan_v6);
 			}
 
-			if (active_v4 || active_v6)
+			if (post_mtu_update_event)
 			{
 				ipacm_event_mtu_info *mtu_event;
 				ipacm_cmd_q_data evt_data;
@@ -5687,9 +5730,10 @@ int IPACM_Wan::handle_route_del_evt(ipa_ip_type iptype)
 		   	IPACMDBG_H("ip-type %d: default v6 wan RT-rule deleted\n",iptype);
 			if (m_routing.DeleteRoutingHdl(wan_route_rule_v6_hdl_a5, IPA_IP_v6) == false)
 			{
-			IPACMDBG_H("IP-family:%d, Routing rule(hdl:0x%x) deletion failed!\n",IPA_IP_v6,wan_route_rule_v6_hdl_a5);
+				IPACMDBG_H("IP-family:%d, Routing rule(hdl:0x%x) deletion failed!\n",IPA_IP_v6,wan_route_rule_v6_hdl_a5);
 				return IPACM_FAILURE;
 			}
+			wan_route_rule_v6_hdl_a5 = 0;
 		}
 		ipacm_event_iface_up *wandown_data;
 		wandown_data = (ipacm_event_iface_up *)malloc(sizeof(ipacm_event_iface_up));
@@ -5845,6 +5889,7 @@ int IPACM_Wan::handle_route_del_evt_ex(ipa_ip_type iptype)
 					IPACMDBG_H("IP-family:%d, Routing rule(hdl:0x%x) deletion failed!\n",IPA_IP_v6,wan_route_rule_v6_hdl_a5);
 					return IPACM_FAILURE;
 				}
+				wan_route_rule_v6_hdl_a5 = 0;
 			}
 #ifdef FEATURE_VLAN_MPDN
 			else
@@ -6252,18 +6297,6 @@ int IPACM_Wan::handle_down_evt()
 			res = IPACM_FAILURE;
 			goto fail;
 		}
-
-		if( ipps_dft_v4_rt_rule_hdl != 0)
-		{
-			IPACMDBG_H("Delete previous stored ippt wan ip route rule. \n")
-			if (m_routing.DeleteRoutingHdl(ipps_dft_v4_rt_rule_hdl,
-				 IPA_IP_v4) == false)
-			{
-				IPACMERR("Routing old RT rule deletion failed!\n");
-				res = IPACM_FAILURE;
-				goto fail;
-			}
-		}
 	}
 
 	/* delete default v6 RT rule */
@@ -6337,14 +6370,7 @@ int IPACM_Wan::handle_down_evt()
 		/* clean up the map and release the memory */
 		for (auto it = rt_hdl_v6_list[i].begin(); it != rt_hdl_v6_list[i].end();++it)
 		{
-			IPACMDBG_H("v6 addr : 0x%08x:%08x:%08x:%08x\n",
-					it->first[0], it->first[1], it->first[2], it->first[3]);
-			/* clean up the map and release the memory */
-			if(it->second != NULL)
-			{
-				free(it->second);
-				it->second = NULL;
-			}
+			IPACMDBG_H("v6 addr : 0x%08x:%08x:%08x:%08x\n", it->first[0], it->first[1], it->first[2], it->first[3]);
 		}
 		IPACM_Iface::ipacmcfg->ipa_num_clients_ipv6 -= get_client_memptr(wan_client, i)->ipv6_set;
 		IPACMDBG_H("update ipa_num_clients_ipv6 = %d\n", IPACM_Iface::ipacmcfg->ipa_num_clients_ipv6);
@@ -6518,6 +6544,8 @@ int IPACM_Wan::handle_down_evt_ex()
 
 			ipv4_to_iface[modem_ipv4_pdn_index].wan_up_vlan = false;
 			ipv4_to_iface[modem_ipv4_pdn_index].is_xlat = false;
+			memset(ipv4_to_iface[modem_ipv4_pdn_index].associated_VIDs, 0, sizeof(ipv4_to_iface[modem_ipv4_pdn_index].associated_VIDs));
+			ipv4_to_iface[modem_ipv4_pdn_index].VID_cnt = 0;
 
 			num_offloaded_pdns--;
 			IPACMDBG_H("now num offloaded PDNs is %d\n", num_offloaded_pdns);
@@ -6661,23 +6689,12 @@ int IPACM_Wan::handle_down_evt_ex()
 			install_wan_filtering_rule(false);
 		}
 
+		IPACMDBG_H("Delete dft v4 rt rule\n");
 		if (m_routing.DeleteRoutingHdl(dft_rt_rule_hdl[0], IPA_IP_v4) == false)
 		{
 			IPACMERR("Routing rule deletion failed!\n");
 			res = IPACM_FAILURE;
 			goto fail;
-		}
-
-		if( ipps_dft_v4_rt_rule_hdl != 0)
-		{
-			IPACMDBG_H("Delete previous stored ippt wan ip route rule. \n");
-			if (m_routing.DeleteRoutingHdl(ipps_dft_v4_rt_rule_hdl,
-				 IPA_IP_v4) == false)
-			{
-				IPACMERR("Routing old RT rule deletion failed!\n");
-				res = IPACM_FAILURE;
-				goto fail;
-			}
 		}
 	}
 	if(ip_type == IPA_IP_v6 || xlat_cfg)
@@ -6698,9 +6715,13 @@ int IPACM_Wan::handle_down_evt_ex()
 			ipacm_event_vlan_pdn *vlandown_data;
 
 			ipv6_to_iface[modem_ipv6_pdn_index].wan_up_vlan_v6 = false;
+			memset(ipv6_to_iface[modem_ipv6_pdn_index].associated_VIDs, 0, sizeof(ipv6_to_iface[modem_ipv6_pdn_index].associated_VIDs));
+			ipv6_to_iface[modem_ipv6_pdn_index].VID_cnt = 0;
+
 			/* Xlat cfg offload pdn count is updated during v4 handling */
 			if (!xlat_cfg)
 				num_offloaded_pdns--;
+
 			IPACMDBG_H("now num offloaded PDNs is %d\n", num_offloaded_pdns);
 
 			if(!isVlanWanUP_V6())
@@ -6711,6 +6732,7 @@ int IPACM_Wan::handle_down_evt_ex()
 					IPACMDBG_H("IP-family:%d, Routing rule(hdl:0x%x) deletion failed!\n", IPA_IP_v6, wan_route_rule_v6_hdl_a5);
 					return IPACM_FAILURE;
 				}
+				wan_route_rule_v6_hdl_a5 = 0;
 			}
 			else
 			{
@@ -6844,6 +6866,18 @@ int IPACM_Wan::handle_down_evt_ex()
 			memset(IPACM_Wan::flt_rule_v6, 0, IPA_MAX_FLT_RULE * sizeof(struct ipa_flt_rule_add));
 #endif
 			install_wan_filtering_rule(false);
+
+			/* clean the ipv6 wan-route rule hdl for v6_wan_table */
+			if (wan_route_rule_v6_hdl_a5 != 0)
+			{
+				IPACMDBG_H("Delete ipv6 default v6 wan RT-rule 0x%x\n", wan_route_rule_v6_hdl_a5);
+				if (m_routing.DeleteRoutingHdl(wan_route_rule_v6_hdl_a5, IPA_IP_v6) == false)
+				{
+					IPACMDBG_H("IP-family:%d, Routing rule(hdl:0x%x) deletion failed!\n",IPA_IP_v6,wan_route_rule_v6_hdl_a5);
+					return IPACM_FAILURE;
+				}
+				wan_route_rule_v6_hdl_a5 = 0;
+			}
 		}
 
 		for (i = 0; i < 2*num_dft_rt_v6; i++)
@@ -7095,25 +7129,26 @@ int IPACM_Wan::handle_down_evt_ex()
 			memset(IPACM_Wan::flt_rule_v6, 0, IPA_MAX_FLT_RULE * sizeof(struct ipa_flt_rule_add));
 #endif
 			install_wan_filtering_rule(false);
+
+			/* clean the ipv6 wan-route rule hdl for v6_wan_table */
+			if (wan_route_rule_v6_hdl_a5 != 0)
+			{
+				IPACMDBG_H("Delete ipv6 default v6 wan RT-rule 0x%x\n", wan_route_rule_v6_hdl_a5);
+				if (m_routing.DeleteRoutingHdl(wan_route_rule_v6_hdl_a5, IPA_IP_v6) == false)
+				{
+					IPACMDBG_H("IP-family:%d, Routing rule(hdl:0x%x) deletion failed!\n",IPA_IP_v6,wan_route_rule_v6_hdl_a5);
+					return IPACM_FAILURE;
+				}
+				wan_route_rule_v6_hdl_a5 = 0;
+			}
 		}
 
+		IPACMDBG_H("Delete dft v4 rt rule\n");
 		if (m_routing.DeleteRoutingHdl(dft_rt_rule_hdl[0], IPA_IP_v4) == false)
 		{
 			IPACMERR("Routing rule deletion failed!\n");
 			res = IPACM_FAILURE;
 			goto fail;
-		}
-		if( ipps_dft_v4_rt_rule_hdl != 0)
-		{
-
-			IPACMDBG_H("Delete previous stored ippt wan ip route rule. \n");
-			if (m_routing.DeleteRoutingHdl(ipps_dft_v4_rt_rule_hdl,
-				 IPA_IP_v4) == false)
-			{
-				IPACMERR("Routing old RT rule deletion failed!\n");
-				res = IPACM_FAILURE;
-				goto fail;
-			}
 		}
 
 		for (i = 0; i < 2*num_dft_rt_v6; i++)
@@ -8084,21 +8119,12 @@ int IPACM_Wan::handle_wan_client_ipaddr(ipacm_event_data_all *data)
 				/* never see this ipv6, insert to the map*/
 				if(rt_hdl_v6_list[clnt_indx].count(ipv6) == 0)
 				{
-					IPACMDBG_H("can't find client\n");
-					size =  sizeof(v6_hdl_type) + (iface_query->num_tx_props * sizeof(client_rt_hdl_v6));
-					v6_hdl_type *temp = (v6_hdl_type *)malloc(size);
-					if(temp == NULL)
-					{
-						IPACMDBG_H("Failed to allocate memmory \n")
-						return IPACM_FAILURE;
-					}
-					memset(temp, 0, size);
 					/*
 					 * The client got new IPv6 address.
 					 * NOTE: The new address doesn't replace the existing one but being added (up to IPA_MAX_NUM_CLIENTS_IPV6),
 					 *       so the previous IPv6 addresses of the client will not be deleted.
 					 */
-					rt_hdl_v6_list[clnt_indx].insert(std::make_pair(ipv6, temp));
+					rt_hdl_v6_list[clnt_indx].insert(std::make_pair(ipv6, handleTypeV6(iface_query->num_tx_props)));
 					/* indicate how many ipv6 client gets */
 					get_client_memptr(wan_client, clnt_indx)->ipv6_set++;
 					IPACM_Iface::ipacmcfg->ipa_num_clients_ipv6++;
@@ -8238,20 +8264,19 @@ int IPACM_Wan::handle_wan_client_route_rule(uint8_t *mac_addr, ipa_ip_type iptyp
 				IPACMDBG_H("tx:%d, rt rule hdl=%x ip-type: %d\n", tx_index,
 						get_client_memptr(wan_client, wan_index)->wan_rt_hdl[tx_index].wan_rt_rule_hdl_v4, iptype);
 			} else {
-				for (auto it = rt_hdl_v6_list[wan_index].begin(); it != rt_hdl_v6_list[wan_index].end();++it)
+				for (auto it = rt_hdl_v6_list[wan_index].begin(); it != rt_hdl_v6_list[wan_index].end(); ++it)
 				{
-					if (it->second->route_rule_set_v6 == true)
+					if (it->second.route_rule_set_v6 == true)
 					{
 						IPACMDBG("client(%d): v6 addr : 0x%08x:%08x:%08x:%08x, v6_set already (%d)\n",
 						wan_index,
 						it->first[0], it->first[1], it->first[2], it->first[3],
-						it->second->route_rule_set_v6);
+						it->second.route_rule_set_v6);
 						continue;
 					}
 
 					IPACMDBG_H("client-index(%d): v6 header handle:(0x%x), v6 addr : 0x%08x:%08x:%08x:%08x\n",
-						wan_index,
-						get_client_memptr(wan_client, wan_index)->hdr_hdl_v6,
+						wan_index, get_client_memptr(wan_client, wan_index)->hdr_hdl_v6,
 						it->first[0], it->first[1], it->first[2], it->first[3]);
 
 					/* v6 LAN_RT_TBL */
@@ -8291,9 +8316,9 @@ int IPACM_Wan::handle_wan_client_route_rule(uint8_t *mac_addr, ipa_ip_type iptyp
 						return IPACM_FAILURE;
 					}
 
-					it->second->hdl_v6[tx_index].rt_rule_hdl_v6 = rt_rule->rules[0].rt_rule_hdl;
+					it->second.hdl_v6[tx_index].rt_rule_hdl_v6 = rt_rule->rules[0].rt_rule_hdl;
 					IPACMDBG_H("tx:%d, rt rule hdl=%x ip-type: %d\n", tx_index,
-							it->second->hdl_v6[tx_index].rt_rule_hdl_v6, iptype);
+							it->second.hdl_v6[tx_index].rt_rule_hdl_v6, iptype);
 
 					/*Copy same rule to v6 WAN RT TBL*/
 					strlcpy(rt_rule->rt_tbl_name,
@@ -8322,14 +8347,14 @@ int IPACM_Wan::handle_wan_client_route_rule(uint8_t *mac_addr, ipa_ip_type iptyp
 						return IPACM_FAILURE;
 					}
 
-					it->second->hdl_v6[tx_index].rt_rule_hdl_v6_wan = rt_rule->rules[0].rt_rule_hdl;
+					it->second.hdl_v6[tx_index].rt_rule_hdl_v6_wan = rt_rule->rules[0].rt_rule_hdl;
 					/* mark as route_rule_set_v6 = true*/
 					if (tx_index + 1 == iface_query->num_tx_props)
-						it->second->route_rule_set_v6 = true;
+						it->second.route_rule_set_v6 = true;
 
 					IPACMDBG_H("tx:%d, rt rule hdl=%x ip-type: %d route_rule_set_v6(map) %d\n", tx_index,
-							it->second->hdl_v6[tx_index].rt_rule_hdl_v6_wan, iptype,
-							it->second->route_rule_set_v6);
+							it->second.hdl_v6[tx_index].rt_rule_hdl_v6_wan, iptype,
+							it->second.route_rule_set_v6);
 				} /* v6 map loop */
 			} /* ipv6 handling */
 		} /* end of for loop */
@@ -8618,16 +8643,17 @@ void IPACM_Wan::handle_wan_client_SCC_MCC_switch(bool isSCCMode, ipa_ip_type ipt
 					rt_rule_entry->rule.attrib.u.v6.dst_addr_mask[3] = 0xFFFFFFFF;
 
 					IPACMDBG_H("rt rule hdl=%x rt rule hdl_wan=%x\n",
-							it->second->hdl_v6[tx_index].rt_rule_hdl_v6, it->second->hdl_v6[tx_index].rt_rule_hdl_v6_wan);
+						it->second.hdl_v6[tx_index].rt_rule_hdl_v6,
+						it->second.hdl_v6[tx_index].rt_rule_hdl_v6_wan);
 
-					rt_rule_entry->rt_rule_hdl = it->second->hdl_v6[tx_index].rt_rule_hdl_v6;
+					rt_rule_entry->rt_rule_hdl = it->second.hdl_v6[tx_index].rt_rule_hdl_v6;
 					if (false == m_routing.ModifyRoutingRule(rt_rule))
 					{
 						IPACMERR("Routing rule Modify failed!\n");
 						free(rt_rule);
 						return;
 					}
-					rt_rule_entry->rt_rule_hdl = it->second->hdl_v6[tx_index].rt_rule_hdl_v6_wan;
+					rt_rule_entry->rt_rule_hdl = it->second.hdl_v6[tx_index].rt_rule_hdl_v6_wan;
 					if (false == m_routing.ModifyRoutingRule(rt_rule))
 					{
 						IPACMERR("Routing rule modify failed!\n");

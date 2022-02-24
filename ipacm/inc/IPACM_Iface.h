@@ -25,6 +25,40 @@
  * WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *
+ * Changes from Qualcomm Innovation Center are provided under the following license:
+ *
+ * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted (subject to the limitations in the
+ * disclaimer below) provided that the following conditions are met:
+ *
+ *     * Redistributions of source code must retain the above copyright
+ *       notice, this list of conditions and the following disclaimer.
+ *
+ *     * Redistributions in binary form must reproduce the above
+ *       copyright notice, this list of conditions and the following
+ *       disclaimer in the documentation and/or other materials provided
+ *       with the distribution.
+ *
+ *     * Neither the name of Qualcomm Innovation Center, Inc. nor the names of its
+ *       contributors may be used to endorse or promote products derived
+ *       from this software without specific prior written permission.
+ *
+ * NO EXPRESS OR IMPLIED LICENSES TO ANY PARTY'S PATENT RIGHTS ARE
+ * GRANTED BY THIS LICENSE. THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT
+ * HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED
+ * WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
+ * MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
+ * IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR
+ * ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+ * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE
+ * GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER
+ * IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
+ * OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
+ * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE
  */
 /*!
 		@file
@@ -43,6 +77,7 @@
 #include <stdio.h>
 #include <IPACM_CmdQueue.h>
 #include <linux/msm_ipa.h>
+#include <vector>
 #include "IPACM_Routing.h"
 #include "IPACM_Filtering.h"
 #include "IPACM_Header.h"
@@ -52,6 +87,8 @@
 #include "IPACM_Config.h"
 #include "IPACM_Defs.h"
 #include <string.h>
+
+using std::vector;
 
 /* current support 2 ipv6-address*/
 #define MAX_DEFAULT_v4_ROUTE_RULES  1
@@ -71,16 +108,19 @@
 
 
 /* Support client v6 handles */
-typedef struct _client_rt_hdl_v6
-{
+struct client_rt_hdl_v6 {
 	uint32_t rt_rule_hdl_v6;
 	uint32_t rt_rule_hdl_v6_wan;
-}client_rt_hdl_v6;
+};
 
-typedef struct {
-	bool route_rule_set_v6;
-	client_rt_hdl_v6 hdl_v6[0];
-} v6_hdl_type;
+struct handleTypeV6 {
+	bool route_rule_set_v6{false};
+	vector<client_rt_hdl_v6> hdl_v6{};
+
+	handleTypeV6(size_t n) {
+		hdl_v6.resize(n);
+	}
+};
 
 /* iface */
 class IPACM_Iface :public IPACM_Listener
@@ -127,7 +167,7 @@ public:
 	uint32_t dft_rt_rule_hdl[MAX_DEFAULT_v4_ROUTE_RULES+2*MAX_DEFAULT_v6_ROUTE_RULES];
 
 	/* save client ipv6 address info and rt handles */
-	std::map<std::array<uint32_t, 4>, v6_hdl_type *> rt_hdl_v6_list[IPA_MAX_NUM_VLAN_CLIENTS];
+	std::map<std::array<uint32_t, 4>, handleTypeV6> rt_hdl_v6_list[IPA_MAX_NUM_VLAN_CLIENTS];
 
 	ipa_ioc_query_intf *iface_query;
 	ipa_ioc_query_intf_tx_props *tx_prop;
@@ -139,8 +179,7 @@ public:
 
 	IPACM_Iface(int iface_index);
 
-	virtual void event_callback(ipa_cm_event_id event,
-															void *data) = 0;
+	virtual void event_callback(ipa_cm_event_id event, void *data) = 0;
 
 	/* Query ipa_interface_index by given linux interface_index */
 	static int iface_ipa_index_query(int interface_index);

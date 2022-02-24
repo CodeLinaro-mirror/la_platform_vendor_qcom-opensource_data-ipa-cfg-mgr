@@ -25,6 +25,40 @@
  * WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *
+ * Changes from Qualcomm Innovation Center are provided under the following license:
+ *
+ * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted (subject to the limitations in the
+ * disclaimer below) provided that the following conditions are met:
+ *
+ *     * Redistributions of source code must retain the above copyright
+ *       notice, this list of conditions and the following disclaimer.
+ *
+ *     * Redistributions in binary form must reproduce the above
+ *       copyright notice, this list of conditions and the following
+ *       disclaimer in the documentation and/or other materials provided
+ *       with the distribution.
+ *
+ *     * Neither the name of Qualcomm Innovation Center, Inc. nor the names of its
+ *       contributors may be used to endorse or promote products derived
+ *       from this software without specific prior written permission.
+ *
+ * NO EXPRESS OR IMPLIED LICENSES TO ANY PARTY'S PATENT RIGHTS ARE
+ * GRANTED BY THIS LICENSE. THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT
+ * HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED
+ * WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
+ * MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
+ * IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR
+ * ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+ * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE
+ * GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER
+ * IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
+ * OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
+ * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE
  */
 /*!
 	@file
@@ -309,7 +343,17 @@ public:
 #endif
 	bool mac_addr_in_blacklist(uint8_t *mac_addr);
 	void clear_whitelist_mac_add(uint8_t *mac_addr);
-	std::map<std::array<uint8_t, 6>, mac_flt_type *> get_mac_flt_lists();
+
+	decltype(mac_flt_lists) getMacFltListsCopySafe() {
+		if(pthread_mutex_lock(&mac_flt_info_lock) != 0) {
+			IPACMERR("Unable to lock the mutex\n");
+			return {};
+		}
+		decltype(mac_flt_lists) copyMap(mac_flt_lists);
+		pthread_mutex_unlock(&mac_flt_info_lock);
+		return copyMap;
+	}
+
 	void update_mac_flt_lists(uint8_t *mac_addr, mac_flt_type *mac_flt_value);
 	/* To return the instance */
 	static IPACM_Config* GetInstance();
@@ -496,7 +540,11 @@ public:
 		{
 			if (ip_pass_mpdn_table[indx].valid_entry)
 			{
-				if ((ip_pass_mpdn_table[indx].ip_pass_dev_type == dev_type) &&
+				/* QCMAP will always provide dev_type as "IPACM_CLIENT_DEVICE_TYPE_ETH" for eth1 however
+					internally ipacm recognize eth1 as IPACM_CLIENT_DEVICE_TYPE_ETH1 */
+				if (((ip_pass_mpdn_table[indx].ip_pass_dev_type == IPACM_CLIENT_DEVICE_TYPE_ETH &&
+					dev_type == IPACM_CLIENT_DEVICE_TYPE_ETH1) ||
+					(ip_pass_mpdn_table[indx].ip_pass_dev_type == dev_type)) &&
 					(memcmp(ip_pass_mpdn_table[indx].ip_pass_mac, client_mac, IPA_MAC_ADDR_SIZE) == 0) &&
 					(ip_pass_mpdn_table[indx].vlan_id == vlan_id))
 				{

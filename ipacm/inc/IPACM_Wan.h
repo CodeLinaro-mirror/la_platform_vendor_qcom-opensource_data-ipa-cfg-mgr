@@ -25,6 +25,40 @@ BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
 WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
 OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
 IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *
+ * Changes from Qualcomm Innovation Center are provided under the following license:
+ *
+ * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted (subject to the limitations in the
+ * disclaimer below) provided that the following conditions are met:
+ *
+ *     * Redistributions of source code must retain the above copyright
+ *       notice, this list of conditions and the following disclaimer.
+ *
+ *     * Redistributions in binary form must reproduce the above
+ *       copyright notice, this list of conditions and the following
+ *       disclaimer in the documentation and/or other materials provided
+ *       with the distribution.
+ *
+ *     * Neither the name of Qualcomm Innovation Center, Inc. nor the names of its
+ *       contributors may be used to endorse or promote products derived
+ *       from this software without specific prior written permission.
+ *
+ * NO EXPRESS OR IMPLIED LICENSES TO ANY PARTY'S PATENT RIGHTS ARE
+ * GRANTED BY THIS LICENSE. THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT
+ * HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED
+ * WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
+ * MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
+ * IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR
+ * ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+ * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE
+ * GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER
+ * IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
+ * OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
+ * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE
 */
 /*!
 	@file
@@ -129,6 +163,11 @@ public:
 	static uint16_t mtu_default_wan_v4;
 	static uint16_t mtu_default_wan_v6;
 
+#ifdef FEATURE_EoGRE
+	static uint16_t mtu_gre_v4;
+	static uint16_t mtu_gre_v6;
+#endif
+
 	/* IPACM interface name */
 	static char wan_up_dev_name[IF_NAME_LEN];
 	static uint32_t curr_wan_ip;
@@ -186,18 +225,36 @@ public:
 	{
 		if (iptype == IPA_IP_v4)
 		{
+#ifdef FEATURE_EoGRE
+			if (IPACM_Iface::ipacmcfg->eogre_enabled)
+			{
+				IPACMDBG_H("got mtu_gre_v4\n")
+				return mtu_gre_v4;
+			}
+#endif
 			if (isWanUP(ipa_if_num_tether))
 			{
+				IPACMDBG_H("got mtu_default_v4\n")
 				return mtu_default_wan_v4;
 			}
 		}
 		else if (iptype == IPA_IP_v6)
 		{
+#ifdef FEATURE_EoGRE
+			if (IPACM_Iface::ipacmcfg->eogre_enabled)
+			{
+				IPACMDBG_H("got mtu_gre_v6\n")
+				return mtu_gre_v6;
+			}
+#endif
 			if (isWanUP_V6(ipa_if_num_tether))
 			{
+				IPACMDBG_H("got mtu_default_v6\n")
 				return mtu_default_wan_v6;
 			}
 		}
+
+		IPACMDBG_H("No conditions hit. Return default value %d", DEFAULT_MTU_SIZE);
 		return DEFAULT_MTU_SIZE;
 	}
 
@@ -559,7 +616,7 @@ private:
 		{
 			if (get_client_memptr(wan_client, cnt)->ipv6_set)
 			{
-				for (auto it = rt_hdl_v6_list[cnt].begin(); it != rt_hdl_v6_list[cnt].end();++it)
+				for (auto it = rt_hdl_v6_list[cnt].begin(); it != rt_hdl_v6_list[cnt].end(); ++it)
 	            {
 					IPACMDBG_H("stored IPv6 0x%08x.0x%08x.0x%08x.0x%08x\n", it->first[0],
 						it->first[1],
@@ -627,10 +684,10 @@ private:
 					IPACM_Iface::ipacmcfg->ipa_num_clients_ipv6);
 			if (get_client_memptr(wan_client, clt_indx)->route_rule_set_v6 != 0)
 			{
-				for (auto it = rt_hdl_v6_list[clt_indx].begin(); it != rt_hdl_v6_list[clt_indx].end();++it)
+				for (auto it = rt_hdl_v6_list[clt_indx].begin(); it != rt_hdl_v6_list[clt_indx].end(); ++it)
 				{
 					num_v6++;
-					if(it->second->route_rule_set_v6 == true)
+					if(it->second.route_rule_set_v6 == true)
 					{
 						IPACMDBG_H("v6 addr : 0x%08x:%08x:%08x:%08x\n",
 							it->first[0], it->first[1], it->first[2], it->first[3]);
@@ -640,19 +697,19 @@ private:
 							if(tx_prop->tx[tx_index].ip == IPA_IP_v6) /* for ipv6 */
 							{
 								IPACMDBG_H("Delete client index %d ipv6 Qos rules for %d-st ipv6 for tx:%d\n", clt_indx,num_v6,tx_index);
-								rt_hdl = it->second->hdl_v6[tx_index].rt_rule_hdl_v6;
+								rt_hdl = it->second.hdl_v6[tx_index].rt_rule_hdl_v6;
 								if(m_routing.DeleteRoutingHdl(rt_hdl, IPA_IP_v6) == false)
 								{
 									return IPACM_FAILURE;
 								}
-								rt_hdl = it->second->hdl_v6[tx_index].rt_rule_hdl_v6_wan;
+								rt_hdl = it->second.hdl_v6[tx_index].rt_rule_hdl_v6_wan;
 								if(m_routing.DeleteRoutingHdl(rt_hdl, IPA_IP_v6) == false)
 								{
 									return IPACM_FAILURE;
 								}
 							}
 						} /* end of tx loop */
-						it->second->route_rule_set_v6 = false;
+						it->second.route_rule_set_v6 = false;
 						get_client_memptr(wan_client, clt_indx)->route_rule_set_v6 = 0;
 					} /* end of for loop */
 				} /* end of for loop */

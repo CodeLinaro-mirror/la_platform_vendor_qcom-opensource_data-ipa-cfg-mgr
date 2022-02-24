@@ -1174,7 +1174,6 @@ void* ipa_driver_msg_notifier(void *param)
 			else /* ( ! new_contains_nulls ) */
 			{
 				IPACM_Iface::ipacmcfg->eogre_enabled = true;
-				char          buf[64];
 
 				if ( new_ipgre_info.iptype == IPA_IP_v4 )
 				{
@@ -1299,7 +1298,6 @@ static void IPACM_Signals_handler(int sig, siginfo_t *info, void *extra)
 {
 	ipacm_cmd_q_data evt_data;
 	ucontext_t *p;
-	int addr;
 	void *array[MAX_IPACM_TRACE_STACK];
 	int size, i;
 	char **messages;
@@ -1450,7 +1448,7 @@ int main(int argc, char **argv)
 			return ret;
 		}
 		IPACMDBG_H("created command queue thread\n");
-		if(pthread_setname_np(cmd_queue_thread, "cmd queue process") != 0)
+		if(pthread_setname_np(cmd_queue_thread, "cmd-queue") != 0)
 		{
 			IPACMERR("unable to set thread name\n");
 		}
@@ -1482,7 +1480,7 @@ int main(int argc, char **argv)
 			return ret;
 		}
 		IPACMDBG_H("created firewall monitor thread\n");
-		if(pthread_setname_np(monitor_thread, "firewall cfg process") != 0)
+		if(pthread_setname_np(monitor_thread, "firewall-cfg") != 0)
 		{
 			IPACMERR("unable to set thread name\n");
 		}

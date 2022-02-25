@@ -157,7 +157,7 @@ const char *ipacm_event_name[] = {
 #define IPA_DRIVER_WLAN_EVENT_SIZE  (sizeof(struct ipa_wlan_msg_ex)+ IPA_DRIVER_WLAN_EVENT_MAX_OF_ATTRIBS*sizeof(ipa_wlan_hdr_attrib_val))
 #define IPA_DRIVER_WLAN_META_MSG    (sizeof(struct ipa_msg_meta))
 #define IPA_DRIVER_WLAN_BUF_LEN     (IPA_DRIVER_WLAN_EVENT_SIZE + IPA_DRIVER_WLAN_META_MSG)
-
+#define IPA_DRIVER_L2TP_BUF_LEN	92
 uint32_t ipacm_event_stats[IPACM_EVENT_MAX];
 bool ipacm_logging = true;
 
@@ -272,7 +272,7 @@ void* firewall_monitor(void *param)
 void* ipa_driver_msg_notifier(void *param)
 {
 	int length, fd, cnt;
-	char buffer[IPA_DRIVER_WLAN_BUF_LEN];
+	char buffer[IPA_DRIVER_L2TP_BUF_LEN];
 	struct ipa_msg_meta event_hdr;
 	struct ipa_ecm_msg event_ecm;
 	struct ipa_wan_msg event_wan;
@@ -308,7 +308,7 @@ void* ipa_driver_msg_notifier(void *param)
 		data = NULL;
 		data_fid = NULL;
 
-		length = read(fd, buffer, IPA_DRIVER_WLAN_BUF_LEN);
+		length = read(fd, buffer, IPA_DRIVER_L2TP_BUF_LEN);
 		if (length < 0)
 		{
 			PERROR("didn't read IPA_driver correctly");

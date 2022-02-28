@@ -2769,14 +2769,15 @@ int IPACM_Wlan::handle_down_evt()
 #endif
 		IPACMDBG_H("Deleted private subnet v4 filter rules successfully.\n");
 
-		if(m_filtering.DeleteFilteringHdls(&tcp_syn_flt_rule_hdl[IPA_IP_v4], IPA_IP_v4, 1) == false)
+#ifdef FEATURE_L2TP
+		if((IPACM_Iface::ipacmcfg->ipacm_l2tp_enable == IPACM_L2TP) &&
+			m_filtering.DeleteFilteringHdls(&tcp_syn_flt_rule_hdl[IPA_IP_v4], IPA_IP_v4, 1) == false)
 		{
 			IPACMERR("Error deleting tcp syn flt rule, aborting...\n");
 			res = IPACM_FAILURE;
 			goto fail;
 		}
-		IPACM_Iface::ipacmcfg->decreaseFltRuleCount(rx_prop->rx[0].src_pipe, IPA_IP_v4, 1);
-		IPACMDBG_H("Deleted TCP syn v4 filter rules successfully.\n");
+#endif
 	}
 
 	/* Delete v6 filtering rules */
@@ -2803,16 +2804,15 @@ int IPACM_Wlan::handle_down_evt()
 				rx_prop->rx[0].src_pipe, IPA_IP_v6, m_ipv6_default_filterting_rules_count);
 			IPACMDBG_H("Deleted default v6 filter rules successfully.\n");
 		}
-
-		if(m_filtering.DeleteFilteringHdls(&tcp_syn_flt_rule_hdl[IPA_IP_v6], IPA_IP_v6, 1) == false)
+#ifdef FEATURE_L2TP
+		if((IPACM_Iface::ipacmcfg->ipacm_l2tp_enable == IPACM_L2TP) &&
+			m_filtering.DeleteFilteringHdls(&tcp_syn_flt_rule_hdl[IPA_IP_v6], IPA_IP_v6, 1) == false)
 		{
 			IPACMERR("Error deleting tcp syn flt rule, aborting...\n");
 			res = IPACM_FAILURE;
 			goto fail;
 		}
-		IPACM_Iface::ipacmcfg->decreaseFltRuleCount(rx_prop->rx[0].src_pipe, IPA_IP_v6, 1);
-		IPACMDBG_H("Deleted TCP syn v6 filter rules successfully.\n");
-
+#endif
 	}
 	IPACMDBG_H("finished delete filtering rules\n ");
 

@@ -425,40 +425,6 @@ int IPACM_Wan::handle_addr_evt(ipacm_event_data_addr *data)
 				dft_rt_rule_hdl[MAX_DEFAULT_v4_ROUTE_RULES + 2*num_dft_rt_v6],
 				dft_rt_rule_hdl[MAX_DEFAULT_v4_ROUTE_RULES + 2*num_dft_rt_v6+1],num_dft_rt_v6);
 
-		/* store ipv6 prefix if the ipv6 address is not link local */
-		if(is_global_ipv6_addr(data->ipv6_addr))
-		{
-			memcpy(ipv6_prefix, data->ipv6_addr, sizeof(ipv6_prefix));
-			memcpy(m_ipv6_addr, data->ipv6_addr, sizeof(m_ipv6_addr));
-#ifdef FEATURE_VLAN_MPDN
-			if(m_is_sta_mode == Q6_WAN)
-			{
-				if (modem_ipv6_pdn_index == -1) {
-					modem_ipv6_pdn_index = getFreePDNIndex_V6();
-					if (modem_ipv6_pdn_index == -1)
-					{
-						/* add this prefix to no_offload_ipv6_prefix */
-						IPACM_Iface::ipacmcfg->add_no_offload_ipv6_prefix(ipv6_prefix);
-						IPACMERR("No Free index available.!\n");
-						res = IPACM_FAILURE;
-						goto fail;
-					}
-				}
-
-				memcpy(ipv6_to_iface[modem_ipv6_pdn_index].ipv6_prefix, data->ipv6_addr, sizeof(uint32_t) * 2);
-				ipv6_to_iface[modem_ipv6_pdn_index].pIface = this;
-				IPACM_Iface::ipacmcfg->add_no_offload_ipv6_prefix(ipv6_to_iface[modem_ipv6_pdn_index].ipv6_prefix);
-				IPACMDBG_H("index %d prefix: 0x%08x%08x\n", modem_ipv6_pdn_index,
-				ipv6_to_iface[modem_ipv6_pdn_index].ipv6_prefix[0],
-				ipv6_to_iface[modem_ipv6_pdn_index].ipv6_prefix[1]);
-
-				num_ipv6_modem_pdn++;
-				IPACMDBG_H("Now the number of modem ipv6 pdn is %d.\n", num_ipv6_modem_pdn);
-
-			}
-#endif
-		}
-
 		/* add default filtering rules when wan-iface get global v6-prefix */
 		if (num_dft_rt_v6 == 1)
 		{
@@ -543,7 +509,20 @@ int IPACM_Wan::handle_addr_evt(ipacm_event_data_addr *data)
 				}
 			}
 		}
-
+		/* store ipv6 prefix if the ipv6 address is not link local */
+		if(is_global_ipv6_addr(data->ipv6_addr))
+		{
+			memcpy(ipv6_prefix, data->ipv6_addr, sizeof(ipv6_prefix));
+			memcpy(m_ipv6_addr, data->ipv6_addr, sizeof(m_ipv6_addr));
+#ifdef FEATURE_VLAN_MPDN
+			if(m_is_sta_mode == Q6_WAN)
+			{
+				memcpy(ipv6_to_iface[modem_ipv6_pdn_index].ipv6_prefix, data->ipv6_addr, sizeof(uint32_t) * 2);
+				ipv6_to_iface[modem_ipv6_pdn_index].pIface = this;
+				IPACM_Iface::ipacmcfg->add_no_offload_ipv6_prefix(ipv6_to_iface[modem_ipv6_pdn_index].ipv6_prefix);
+			}
+#endif
+		}
 	    num_dft_rt_v6++;
     }
 	else
@@ -4037,7 +4016,7 @@ int IPACM_Wan::init_fl_rule_ex(ipa_ip_type iptype)
 	char *dev_ecm0="ecm0";
 
 	/* ADD corresponding ipa_rm_resource_name of RX-endpoint before adding all IPV4V6 FT-rules */
-	IPACMDBG_H(" dun add producer dependency from %s with registered rx-prop, ip-type: %d\n", dev_name, iptype);
+	IPACMDBG_H(" dun add producer dependency from %s with registered rx-prop\n", dev_name);
 
 	if(iptype == IPA_IP_v4)
 	{
@@ -4054,8 +4033,6 @@ int IPACM_Wan::init_fl_rule_ex(ipa_ip_type iptype)
 	}
 	else if(iptype == IPA_IP_v6)
 	{
-		IPACMDBG_H(" modem_ipv6_pdn_index %d\n", modem_ipv6_pdn_index);
-
 		if(modem_ipv6_pdn_index == 0)	/* install ipv6 default modem DL filtering rules only once */
 		{
 			/* reset the num_v6_flt_rule*/
@@ -4432,8 +4409,6 @@ int IPACM_Wan::add_dft_filtering_rule(struct ipa_flt_rule_add *rules, int rule_o
 	struct ipa_ioc_generate_flt_eq flt_eq;
 	int res = IPACM_SUCCESS;
 
-	IPACMDBG_H("ip-type: %d\n", iptype);
-
 	if(rules == NULL)
 	{
 		IPACMERR("No filtering table available.\n");
@@ -4722,9 +4697,8 @@ int IPACM_Wan::add_dft_filtering_rule(struct ipa_flt_rule_add *rules, int rule_o
 			&flt_rule_entry, sizeof(struct ipa_flt_rule_add));
 #endif
 
-
-		/* Always adding tcp syn SW-exception rule for MSS clamping support */
-		IPACMDBG_H("Add TCP sync rules\n");
+#ifdef FEATURE_IPA_ANDROID
+		IPACMDBG_H("Add TCP ctrl rules\n");
 		memset(&flt_rule_entry, 0, sizeof(struct ipa_flt_rule_add));
 
 		flt_rule_entry.at_rear = true;
@@ -4747,18 +4721,15 @@ int IPACM_Wan::add_dft_filtering_rule(struct ipa_flt_rule_add *rules, int rule_o
 		flt_rule_entry.rule.eq_attrib.num_ihl_offset_meq_32 = 1;
 		flt_rule_entry.rule.eq_attrib.ihl_offset_meq_32[0].offset = 12;
 
-		/* add TCP SYN rule*/
-		flt_rule_entry.rule.eq_attrib.ihl_offset_meq_32[0].value = (((uint32_t)1)<<TCP_SYN_SHIFT);
-		flt_rule_entry.rule.eq_attrib.ihl_offset_meq_32[0].mask = (((uint32_t)1)<<TCP_SYN_SHIFT);
-		memcpy(&(rules[rule_offset + m_ipv6_default_filterting_rules_count++]),
-			&flt_rule_entry, sizeof(struct ipa_flt_rule_add));
-
-#if defined(FEATURE_IPA_ANDROID) || defined(FEATURE_SOCKSv5)
-		IPACMDBG_H("Add TCP other ctrl rules\n");
-
 		/* add TCP FIN rule*/
 		flt_rule_entry.rule.eq_attrib.ihl_offset_meq_32[0].value = (((uint32_t)1)<<TCP_FIN_SHIFT);
 		flt_rule_entry.rule.eq_attrib.ihl_offset_meq_32[0].mask = (((uint32_t)1)<<TCP_FIN_SHIFT);
+		memcpy(&(rules[rule_offset + m_ipv6_default_filterting_rules_count++]),
+			&flt_rule_entry, sizeof(struct ipa_flt_rule_add));
+
+		/* add TCP SYN rule*/
+		flt_rule_entry.rule.eq_attrib.ihl_offset_meq_32[0].value = (((uint32_t)1)<<TCP_SYN_SHIFT);
+		flt_rule_entry.rule.eq_attrib.ihl_offset_meq_32[0].mask = (((uint32_t)1)<<TCP_SYN_SHIFT);
 		memcpy(&(rules[rule_offset + m_ipv6_default_filterting_rules_count++]),
 			&flt_rule_entry, sizeof(struct ipa_flt_rule_add));
 

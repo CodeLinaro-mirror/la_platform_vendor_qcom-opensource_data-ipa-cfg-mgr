@@ -81,8 +81,8 @@ if test "x$TARGET" = "xsa410m"; then
 fi
 
 if test "x$TARGET" = "xauto"; then
-	CPPFLAGS="${CPPFLAGS} -DDATA_CONFIG_DIR_PATH='\"/etc/data\"'"
-	CFLAGS="${CFLAGS} -DDATA_CONFIG_DIR_PATH='\"/etc/data\"'"
+	CPPFLAGS="${CPPFLAGS} -DDATA_CONFIG_DIR_PATH='\"/etc/data\"' -DSYSRW_CONFIG_DIR_PATH='\"/systemrw/data\"'"
+	CFLAGS="${CFLAGS} -DDATA_CONFIG_DIR_PATH='\"/etc/data\"' -DSYSRW_CONFIG_DIR_PATH='\"/systemrw/data\"'"
 fi
 
 AM_CONDITIONAL(NO_L2TP, test "x$TARGET" = "xsdx20" || test "x$TARGET" = "xsdxpoorwills")

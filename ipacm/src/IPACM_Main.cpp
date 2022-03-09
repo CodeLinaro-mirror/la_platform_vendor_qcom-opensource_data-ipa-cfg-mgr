@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2013-2021 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -81,8 +82,8 @@
 #ifndef FEATURE_IPA_ANDROID
 #define IPACM_PID_FILE "/var/run/data/ipa/ipacm.pid"
 #ifdef DATA_CONFIG_DIR_PATH
-#define IPACM_DIR_NAME DATA_CONFIG_DIR_PATH"/ipa"
-#define IPACM_FIREWALL_DIR_NAME DATA_CONFIG_DIR_PATH
+#define IPACM_DIR_NAME SYSRW_CONFIG_DIR_PATH"/ipa"
+#define IPACM_FIREWALL_DIR_NAME SYSRW_CONFIG_DIR_PATH
 #else
 #define IPACM_DIR_NAME     "/systemrw/data/ipa"
 #define IPACM_FIREWALL_DIR_NAME     "/systemrw/data"

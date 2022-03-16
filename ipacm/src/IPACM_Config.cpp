@@ -183,6 +183,12 @@ const char *ipacm_event_name[] = {
 	__stringify(IPA_IP_COLLISION_UPDATE_EVENT),          /* ipacm_ip_collision_pdn_info */
 	__stringify(IPA_IP_PASS_UPDATE_EVENT),          /* ipacm_ip_pass_pdn_info */
 	__stringify(IPA_HANDLE_IP_PASS_PDN_INFO_UPDATE_EVENT),         /* Handle PDN info update.*/
+#ifdef IPA_IOCTL_SET_PKT_THRESHOLD
+	__stringify(IPA_PKT_THRESHOLD_UPDATE_EVENT),           /* ipa_set_pkt_threshold */
+#endif
+#ifdef IPA_IOC_SET_IPPT_SW_FLT
+	__stringify(IPA_IPPT_SW_FLT_LIST_UPDATE_EVENT),        /* ipa_ippt_sw_flt_list_type */
+#endif
 	__stringify(IPA_MOVE_NAT_TBL_EVENT),                   /* ipacm_event_move_nat */
 #ifdef FEATURE_EoGRE
 	__stringify(IPA_HANDLE_EoGRE_UP),                      /* Handle eogre enable event. */

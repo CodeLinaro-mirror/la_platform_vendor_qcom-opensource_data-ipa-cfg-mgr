@@ -1375,16 +1375,28 @@ int IPACM_Wlan::handle_wlan_mac_flt_conn_disc(uint8_t *mac_addr, bool conn_state
 			{
 				if(IPACM_Lan::add_mac_flt_blacklist_rule(mac_addr,IPA_IP_v4, &(it->second->mac_v4_flt_rule_hdl)))
 				{
-					IPACMERR("unbale to add mac flt blacklist v4 UL rule for index: %d\n", wlan_index);
+					IPACMERR("unable to add mac flt blacklist v4 UL rule for index: %d\n", wlan_index);
 					return IPACM_FAILURE;
 				}
+				CtList->HandleNeighIpAddrDelEvt(get_client_memptr(wlan_client, wlan_index)->v4_addr);
+				if(handle_wlan_client_mac_flt_route_rule(IPA_IP_v4, wlan_index, it->second->is_blacklist))
+				{
+					IPACMERR("unable to del v4 rt rule for index: %d\n", wlan_index);
+					return IPACM_FAILURE;
+				}
+
 				it->second->mac_v4_rt_del_flt_set = true;
 			}
 			if (get_client_memptr(wlan_client, wlan_index)->ipv6_set && !it->second->mac_v6_rt_del_flt_set)
 			{
 				if(IPACM_Lan::add_mac_flt_blacklist_rule(mac_addr,IPA_IP_v6, &(it->second->mac_v6_flt_rule_hdl)))
 				{
-					IPACMERR("unbale to add mac flt blacklist v6 UL rule for index: %d\n", wlan_index);
+					IPACMERR("unable to add mac flt blacklist v6 UL rule for index: %d\n", wlan_index);
+					return IPACM_FAILURE;
+				}
+				if(handle_wlan_client_mac_flt_route_rule(IPA_IP_v6, wlan_index, it->second->is_blacklist))
+				{
+					IPACMERR("unable to del v6 rt rule for index: %d\n", wlan_index);
 					return IPACM_FAILURE;
 				}
 				it->second->mac_v6_rt_del_flt_set = true;
@@ -1399,7 +1411,7 @@ int IPACM_Wlan::handle_wlan_mac_flt_conn_disc(uint8_t *mac_addr, bool conn_state
 			{
 				if(IPACM_Lan::del_mac_flt_blacklist_rule(it->second->mac_v4_flt_rule_hdl,  IPA_IP_v4))
 				{
-					IPACMERR("unbale to del mac flt blacklist v4 UL rule for index: %d\n", wlan_index);
+					IPACMERR("unable to del mac flt blacklist v4 UL rule for index: %d\n", wlan_index);
 					return IPACM_FAILURE;
 				}
 				it->second->mac_v4_rt_del_flt_set = false;
@@ -1408,7 +1420,7 @@ int IPACM_Wlan::handle_wlan_mac_flt_conn_disc(uint8_t *mac_addr, bool conn_state
 			{
 				if(IPACM_Lan::del_mac_flt_blacklist_rule(it->second->mac_v6_flt_rule_hdl,  IPA_IP_v6))
 				{
-					IPACMERR("unbale to del mac flt blacklist v6 UL rule for index: %d\n", wlan_index);
+					IPACMERR("unable to del mac flt blacklist v6 UL rule for index: %d\n", wlan_index);
 					return IPACM_FAILURE;
 				}
 				it->second->mac_v6_rt_del_flt_set = false;

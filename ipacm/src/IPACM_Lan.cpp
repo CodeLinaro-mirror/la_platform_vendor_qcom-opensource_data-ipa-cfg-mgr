@@ -4167,7 +4167,7 @@ int IPACM_Lan::handle_eth_hdr_init(uint8_t *mac_addr, ipacm_bridge *bridge, uint
 				memset(pHeaderDescriptor->hdr[0].name, 0,
 								sizeof(pHeaderDescriptor->hdr[0].name));
 
-				snprintf(index,sizeof(index), "_%d", ipa_if_num);
+				snprintf(index,sizeof(index), "%d_", ipa_if_num);
 				strlcpy(pHeaderDescriptor->hdr[0].name, index, sizeof(pHeaderDescriptor->hdr[0].name));
 				pHeaderDescriptor->hdr[0].name[IPA_RESOURCE_NAME_MAX-1] = '\0';
 				if (strlcat(pHeaderDescriptor->hdr[0].name, IPA_ETH_HDR_NAME_v4, sizeof(pHeaderDescriptor->hdr[0].name)) > IPA_RESOURCE_NAME_MAX)
@@ -4246,7 +4246,7 @@ int IPACM_Lan::handle_eth_hdr_init(uint8_t *mac_addr, ipacm_bridge *bridge, uint
 					goto fail;
 				}
 
-				IPACMDBG_H("header length: %d, paritial: %d\n", sCopyHeader.hdr_len, sCopyHeader.is_partial);
+				IPACMDBG_H("header length: %d, partial: %d\n", sCopyHeader.hdr_len, sCopyHeader.is_partial);
 				IPACMDBG_H("header eth2_ofst_valid: %d, eth2_ofst: %d\n", sCopyHeader.is_eth2_ofst_valid, sCopyHeader.eth2_ofst);
 				if (sCopyHeader.hdr_len > IPA_HDR_MAX_SIZE)
 				{
@@ -4341,7 +4341,7 @@ int IPACM_Lan::handle_eth_hdr_init(uint8_t *mac_addr, ipacm_bridge *bridge, uint
 				memset(pHeaderDescriptor->hdr[0].name, 0,
 					 sizeof(pHeaderDescriptor->hdr[0].name));
 
-				snprintf(index,sizeof(index), "_%d", ipa_if_num);
+				snprintf(index,sizeof(index), "%d_", ipa_if_num);
 				strlcpy(pHeaderDescriptor->hdr[0].name, index, sizeof(pHeaderDescriptor->hdr[0].name));
 				pHeaderDescriptor->hdr[0].name[IPA_RESOURCE_NAME_MAX-1] = '\0';
 				if (strlcat(pHeaderDescriptor->hdr[0].name, IPA_ETH_HDR_NAME_v6, sizeof(pHeaderDescriptor->hdr[0].name)) > IPA_RESOURCE_NAME_MAX)
@@ -5701,10 +5701,13 @@ int IPACM_Lan::handle_eth_client_route_rule_ext(uint8_t *mac_addr, ipa_ip_type i
 /* handle odu client initial, construct full headers (tx property) */
 int IPACM_Lan::handle_odu_hdr_init(uint8_t *mac_addr)
 {
+#define ETH_IFACE_INDEX_LEN 10
+
 	int res = IPACM_SUCCESS, len = 0;
 	struct ipa_ioc_copy_hdr sCopyHeader;
 	struct ipa_ioc_add_hdr *pHeaderDescriptor = NULL;
 	uint32_t cnt;
+	char index[ETH_IFACE_INDEX_LEN];
 
 	IPACMDBG("Received Client MAC %02x:%02x:%02x:%02x:%02x:%02x\n",
 					 mac_addr[0], mac_addr[1], mac_addr[2],
@@ -5724,60 +5727,69 @@ int IPACM_Lan::handle_odu_hdr_init(uint8_t *mac_addr)
 		/* copy partial header for v4*/
 		for (cnt=0; cnt<tx_prop->num_tx_props; cnt++)
 		{
-				 if(tx_prop->tx[cnt].ip==IPA_IP_v4)
-				 {
-								IPACMDBG("Got partial v4-header name from %d tx props\n", cnt);
-								memset(&sCopyHeader, 0, sizeof(sCopyHeader));
-								memcpy(sCopyHeader.name,
-											tx_prop->tx[cnt].hdr_name,
-											 sizeof(sCopyHeader.name));
-								IPACMDBG("header name: %s in tx:%d\n", sCopyHeader.name,cnt);
-								if (m_header.CopyHeader(&sCopyHeader) == false)
-								{
-									PERROR("ioctl copy header failed");
-									res = IPACM_FAILURE;
-									goto fail;
-								}
-								IPACMDBG("header length: %d, paritial: %d\n", sCopyHeader.hdr_len, sCopyHeader.is_partial);
-								if (sCopyHeader.hdr_len > IPA_HDR_MAX_SIZE)
-								{
-									IPACMERR("header oversize\n");
-									res = IPACM_FAILURE;
-									goto fail;
-								}
-								else
-								{
-									memcpy(pHeaderDescriptor->hdr[0].hdr,
-												 sCopyHeader.hdr,
-												 sCopyHeader.hdr_len);
-								}
-								/* copy client mac_addr to partial header */
-								if (sCopyHeader.is_eth2_ofst_valid)
-								{
-									memcpy(&pHeaderDescriptor->hdr[0].hdr[sCopyHeader.eth2_ofst],
-											 mac_addr,
-											 IPA_MAC_ADDR_SIZE);
-								}
-								/* replace src mac to bridge mac_addr if any  */
-								if (IPACM_Iface::ipacmcfg->ipa_bridge_enable)
-								{
-									memcpy(&pHeaderDescriptor->hdr[0].hdr[sCopyHeader.eth2_ofst+IPA_MAC_ADDR_SIZE],
-											IPACM_Iface::ipacmcfg->bridge_mac,
-											IPA_MAC_ADDR_SIZE);
-									IPACMDBG_H("device is in bridge mode \n");
-								}
+				if(tx_prop->tx[cnt].ip==IPA_IP_v4 && !ipv4_header_set)
+				{
+					IPACMDBG("Got partial v4-header name from %d tx props\n", cnt);
+					memset(&sCopyHeader, 0, sizeof(sCopyHeader));
+					memcpy(sCopyHeader.name, tx_prop->tx[cnt].hdr_name, sizeof(sCopyHeader.name));
+					IPACMDBG("header name: %s in tx:%d\n", sCopyHeader.name,cnt);
+					if (m_header.CopyHeader(&sCopyHeader) == false)
+					{
+						PERROR("ioctl copy header failed");
+						res = IPACM_FAILURE;
+						goto fail;
+					}
+					IPACMDBG("header length: %d, partial: %d\n", sCopyHeader.hdr_len, sCopyHeader.is_partial);
+					if (sCopyHeader.hdr_len > IPA_HDR_MAX_SIZE)
+					{
+						IPACMERR("header oversize\n");
+						res = IPACM_FAILURE;
+						goto fail;
+					}
+					else
+					{
+						memcpy(pHeaderDescriptor->hdr[0].hdr,
+								sCopyHeader.hdr,
+								sCopyHeader.hdr_len);
+					}
+					/* copy client mac_addr to partial header */
+					if (sCopyHeader.is_eth2_ofst_valid)
+					{
+						memcpy(&pHeaderDescriptor->hdr[0].hdr[sCopyHeader.eth2_ofst],
+								mac_addr,
+								IPA_MAC_ADDR_SIZE);
+					}
+					/* replace src mac to bridge mac_addr if any  */
+					if (IPACM_Iface::ipacmcfg->ipa_bridge_enable)
+					{
+						memcpy(&pHeaderDescriptor->hdr[0].hdr[sCopyHeader.eth2_ofst+IPA_MAC_ADDR_SIZE],
+								IPACM_Iface::ipacmcfg->bridge_mac,
+								IPA_MAC_ADDR_SIZE);
+						IPACMDBG_H("device is in bridge mode \n");
+					}
 
-								pHeaderDescriptor->commit = true;
-								pHeaderDescriptor->num_hdrs = 1;
+					pHeaderDescriptor->commit = true;
+					pHeaderDescriptor->num_hdrs = 1;
 
-								memset(pHeaderDescriptor->hdr[0].name, 0,
-											 sizeof(pHeaderDescriptor->hdr[0].name));
-								strlcpy(pHeaderDescriptor->hdr[0].name, IPA_ODU_HDR_NAME_v4, sizeof(pHeaderDescriptor->hdr[0].name));
-								pHeaderDescriptor->hdr[0].hdr_len = sCopyHeader.hdr_len;
-								pHeaderDescriptor->hdr[0].type = sCopyHeader.type;
-								pHeaderDescriptor->hdr[0].hdr_hdl = -1;
-								pHeaderDescriptor->hdr[0].is_partial = 0;
-								pHeaderDescriptor->hdr[0].status = -1;
+					memset(pHeaderDescriptor->hdr[0].name, 0,
+								 sizeof(pHeaderDescriptor->hdr[0].name));
+
+					pHeaderDescriptor->hdr[0].hdr_len = sCopyHeader.hdr_len;
+					pHeaderDescriptor->hdr[0].type = sCopyHeader.type;
+					pHeaderDescriptor->hdr[0].hdr_hdl = -1;
+					pHeaderDescriptor->hdr[0].is_partial = 0;
+					pHeaderDescriptor->hdr[0].status = -1;
+
+					/* add interface num to the header name */
+					snprintf(index,sizeof(index), "%d_", ipa_if_num);
+					strlcpy(pHeaderDescriptor->hdr[0].name, index, sizeof(pHeaderDescriptor->hdr[0].name));
+					pHeaderDescriptor->hdr[0].name[IPA_RESOURCE_NAME_MAX-1] = '\0';
+					if (strlcat(pHeaderDescriptor->hdr[0].name, IPA_ODU_HDR_NAME_v4, sizeof(pHeaderDescriptor->hdr[0].name)) > IPA_RESOURCE_NAME_MAX)
+					{
+						IPACMERR(" header name construction failed exceed length (%d)\n", strlen(pHeaderDescriptor->hdr[0].name));
+						res = IPACM_FAILURE;
+						goto fail;
+					}
 
 					 if (m_header.AddHeader(pHeaderDescriptor) == false ||
 							pHeaderDescriptor->hdr[0].status != 0)
@@ -5788,26 +5800,24 @@ int IPACM_Lan::handle_odu_hdr_init(uint8_t *mac_addr)
 					 }
 
 					ODU_hdr_hdl_v4 = pHeaderDescriptor->hdr[0].hdr_hdl;
-					ipv4_header_set = true ;
+					ipv4_header_set = true;
 					IPACMDBG(" ODU v4 full header name:%s header handle:(0x%x)\n",
-										 pHeaderDescriptor->hdr[0].name,
-												 ODU_hdr_hdl_v4);
+						pHeaderDescriptor->hdr[0].name,
+						ODU_hdr_hdl_v4);
 					break;
-				 }
+				}
 		}
 
 
 		/* copy partial header for v6*/
 		for (cnt=0; cnt<tx_prop->num_tx_props; cnt++)
 		{
-			if(tx_prop->tx[cnt].ip==IPA_IP_v6)
+			if(tx_prop->tx[cnt].ip==IPA_IP_v6 && !ipv6_header_set)
 			{
 
 				IPACMDBG("Got partial v6-header name from %d tx props\n", cnt);
 				memset(&sCopyHeader, 0, sizeof(sCopyHeader));
-				memcpy(sCopyHeader.name,
-						tx_prop->tx[cnt].hdr_name,
-							sizeof(sCopyHeader.name));
+				memcpy(sCopyHeader.name, tx_prop->tx[cnt].hdr_name, sizeof(sCopyHeader.name));
 
 				IPACMDBG("header name: %s in tx:%d\n", sCopyHeader.name,cnt);
 				if (m_header.CopyHeader(&sCopyHeader) == false)
@@ -5817,7 +5827,7 @@ int IPACM_Lan::handle_odu_hdr_init(uint8_t *mac_addr)
 					goto fail;
 				}
 
-				IPACMDBG("header length: %d, paritial: %d\n", sCopyHeader.hdr_len, sCopyHeader.is_partial);
+				IPACMDBG("header length: %d, partial: %d\n", sCopyHeader.hdr_len, sCopyHeader.is_partial);
 				if (sCopyHeader.hdr_len > IPA_HDR_MAX_SIZE)
 				{
 					IPACMERR("header oversize\n");
@@ -5828,15 +5838,15 @@ int IPACM_Lan::handle_odu_hdr_init(uint8_t *mac_addr)
 				{
 					memcpy(pHeaderDescriptor->hdr[0].hdr,
 							sCopyHeader.hdr,
-								sCopyHeader.hdr_len);
+							sCopyHeader.hdr_len);
 				}
 
 				/* copy client mac_addr to partial header */
 				if (sCopyHeader.is_eth2_ofst_valid)
 				{
 					memcpy(&pHeaderDescriptor->hdr[0].hdr[sCopyHeader.eth2_ofst],
-					 mac_addr,
-					 IPA_MAC_ADDR_SIZE);
+						mac_addr,
+						IPA_MAC_ADDR_SIZE);
 				}
 				/* replace src mac to bridge mac_addr if any  */
 				if (IPACM_Iface::ipacmcfg->ipa_bridge_enable)
@@ -5853,12 +5863,22 @@ int IPACM_Lan::handle_odu_hdr_init(uint8_t *mac_addr)
 				memset(pHeaderDescriptor->hdr[0].name, 0,
 					 sizeof(pHeaderDescriptor->hdr[0].name));
 
-				strlcpy(pHeaderDescriptor->hdr[0].name, IPA_ODU_HDR_NAME_v6, sizeof(pHeaderDescriptor->hdr[0].name));
 				pHeaderDescriptor->hdr[0].hdr_len = sCopyHeader.hdr_len;
 				pHeaderDescriptor->hdr[0].type = sCopyHeader.type;
 				pHeaderDescriptor->hdr[0].hdr_hdl = -1;
 				pHeaderDescriptor->hdr[0].is_partial = 0;
 				pHeaderDescriptor->hdr[0].status = -1;
+
+				/* add interface num to the header name */
+				snprintf(index,sizeof(index), "%d_", ipa_if_num);
+				strlcpy(pHeaderDescriptor->hdr[0].name, index, sizeof(pHeaderDescriptor->hdr[0].name));
+				pHeaderDescriptor->hdr[0].name[IPA_RESOURCE_NAME_MAX-1] = '\0';
+				if (strlcat(pHeaderDescriptor->hdr[0].name, IPA_ODU_HDR_NAME_v6, sizeof(pHeaderDescriptor->hdr[0].name)) > IPA_RESOURCE_NAME_MAX)
+				{
+					IPACMERR(" header name construction failed exceed length (%d)\n", strlen(pHeaderDescriptor->hdr[0].name));
+					res = IPACM_FAILURE;
+					goto fail;
+				}
 
 				if (m_header.AddHeader(pHeaderDescriptor) == false ||
 						pHeaderDescriptor->hdr[0].status != 0)
@@ -5868,10 +5888,10 @@ int IPACM_Lan::handle_odu_hdr_init(uint8_t *mac_addr)
 					goto fail;
 				}
 				ODU_hdr_hdl_v6 = pHeaderDescriptor->hdr[0].hdr_hdl;
-				ipv6_header_set = true ;
-				IPACMDBG(" ODU v4 full header name:%s header handle:(0x%x)\n",
-									 pHeaderDescriptor->hdr[0].name,
-											 ODU_hdr_hdl_v6);
+				ipv6_header_set = true;
+				IPACMDBG(" ODU v6 full header name:%s header handle:(0x%x)\n",
+						pHeaderDescriptor->hdr[0].name,
+						ODU_hdr_hdl_v6);
 				break;
 			}
 		}
@@ -6255,7 +6275,7 @@ int IPACM_Lan::handle_eth_client_down_evt(uint8_t *mac_addr, uint16_t vlan_id, i
 #endif
 	}
 	/* Clean up the last entry */
-	rt_hdl_v6_list[num_eth_client_tmp].clear();
+	rt_hdl_v6_list[num_eth_client_tmp - 1].clear();
 
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
 	get_client_memptr(eth_client, clt_indx)->lan_stats_idx = -1;

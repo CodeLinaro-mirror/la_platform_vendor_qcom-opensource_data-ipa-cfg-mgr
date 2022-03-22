@@ -2012,7 +2012,13 @@ int IPACM_Lan::handle_eth_mac_flt_conn_disc(uint8_t *mac_addr, bool eth_client_c
 			{
 				if(add_mac_flt_blacklist_rule(mac_addr,IPA_IP_v4, &(it->second->mac_v4_flt_rule_hdl)))
 				{
-					IPACMERR("unbale to add mac flt blacklist v4 UL rule for index: %d\n", eth_index);
+					IPACMERR("unable to add mac flt blacklist v4 UL rule for index: %d\n", eth_index);
+					return IPACM_FAILURE;
+				}
+				CtList->HandleNeighIpAddrDelEvt(get_client_memptr(eth_client, eth_index)->v4_addr);
+				if(handle_eth_client_mac_flt_route_rule(IPA_IP_v4, eth_index, it->second->is_blacklist))
+				{
+					IPACMERR("unable to del v4 rt rule for index: %d\n", eth_index);
 					return IPACM_FAILURE;
 				}
 				it->second->mac_v4_rt_del_flt_set = true;
@@ -2021,7 +2027,12 @@ int IPACM_Lan::handle_eth_mac_flt_conn_disc(uint8_t *mac_addr, bool eth_client_c
 			{
 				if(add_mac_flt_blacklist_rule(mac_addr,IPA_IP_v6, &(it->second->mac_v6_flt_rule_hdl)))
 				{
-					IPACMERR("unbale to add mac flt blacklist v6 UL rule for index: %d\n", eth_index);
+					IPACMERR("unable to add mac flt blacklist v6 UL rule for index: %d\n", eth_index);
+					return IPACM_FAILURE;
+				}
+				if(handle_eth_client_mac_flt_route_rule(IPA_IP_v6, eth_index, it->second->is_blacklist))
+				{
+					IPACMERR("unable to del v6 rt rule for index: %d\n", eth_index);
 					return IPACM_FAILURE;
 				}
 				it->second->mac_v6_rt_del_flt_set = true;
@@ -2034,7 +2045,7 @@ int IPACM_Lan::handle_eth_mac_flt_conn_disc(uint8_t *mac_addr, bool eth_client_c
 			{
 				if(del_mac_flt_blacklist_rule(it->second->mac_v4_flt_rule_hdl,  IPA_IP_v4))
 				{
-					IPACMERR("unbale to del mac flt blacklist v4 UL rule for index: %d\n", eth_index);
+					IPACMERR("unable to del mac flt blacklist v4 UL rule for index: %d\n", eth_index);
 					return IPACM_FAILURE;
 				}
 				it->second->mac_v4_rt_del_flt_set = false;
@@ -2043,7 +2054,7 @@ int IPACM_Lan::handle_eth_mac_flt_conn_disc(uint8_t *mac_addr, bool eth_client_c
 			{
 				if(del_mac_flt_blacklist_rule(it->second->mac_v4_flt_rule_hdl,  IPA_IP_v6))
 				{
-					IPACMERR("unbale to del mac flt blacklist v6 UL rule for index: %d\n", eth_index);
+					IPACMERR("unable to del mac flt blacklist v6 UL rule for index: %d\n", eth_index);
 					return IPACM_FAILURE;
 				}
 				it->second->mac_v6_rt_del_flt_set = false;

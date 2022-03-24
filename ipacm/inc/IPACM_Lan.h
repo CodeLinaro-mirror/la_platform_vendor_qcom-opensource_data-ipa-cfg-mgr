@@ -226,7 +226,7 @@ public:
 	/* LAN-iface's callback function */
 	void event_callback(ipa_cm_event_id event, void *data);
 
-	virtual int handle_wan_up(ipa_ip_type ip_type);
+	virtual int handle_wan_up(ipa_ip_type ip_type, uint16_t vlan_id = 0);
 
 	/* configure filter rule for wan_up event*/
 	virtual int handle_wan_up_ex(ipacm_ext_prop* ext_prop, ipa_ip_type iptype, uint8_t xlat_mux_id);

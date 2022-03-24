@@ -2416,11 +2416,17 @@ void IPACM_ConntrackListener::ProcessTCPorUDPMsg(
 		 rule.private_port = rule.public_port;
 	 }
 
+	/* Add support for STA with vlan client */
+	if (isStaMode && nat_entry.isVlan)
+	{
+		nat_entry.IsVlanUp = true;
+	}
+
 	 CheckSTAClient(&rule, &nat_entry.isTempEntry);
 	 nat_entry.rule = &rule;
 #ifdef FEATURE_VLAN_MPDN
 	 AddORDeleteNatEntry(&nat_entry, &SendVlanEvent);
-	 if(SendVlanEvent)
+	 if(VlanID > 0 && SendVlanEvent)
 	 {
 		 ipacm_cmd_q_data evt_data;
 		 ipacm_event_route_vlan *data;

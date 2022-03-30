@@ -84,8 +84,8 @@
 #ifndef FEATURE_IPA_ANDROID
 #define IPACM_PID_FILE "/var/run/data/ipa/ipacm.pid"
 #ifdef DATA_CONFIG_DIR_PATH
-#define IPACM_DIR_NAME DATA_CONFIG_DIR_PATH"/ipa"
-#define IPACM_FIREWALL_DIR_NAME DATA_CONFIG_DIR_PATH
+#define IPACM_DIR_NAME SYSRW_CONFIG_DIR_PATH"/ipa"
+#define IPACM_FIREWALL_DIR_NAME SYSRW_CONFIG_DIR_PATH
 #else
 #define IPACM_DIR_NAME     "/systemrw/data/ipa"
 #define IPACM_FIREWALL_DIR_NAME     "/systemrw/data"

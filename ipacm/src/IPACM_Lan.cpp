@@ -7223,7 +7223,7 @@ int IPACM_Lan::install_l2tp_dl_rules(ipacm_event_data_all *data, int index)
 		IPACMERR("Fail to get vlan-l2tp mapping.\n");
 		return IPACM_FAILURE;
 	}
-
+	IPACMDBG_H("Incoming peer IPv6address:0x%08x%08x%08x%08x\n",info.vlan_client_ipv6_addr[0],info.vlan_client_ipv6_addr[1],info.vlan_client_ipv6_addr[2],info.vlan_client_ipv6_addr[3]);
 	get_client_memptr(eth_client, index)->v4_addr = data->ipv4_addr;
 	is_l2tp_iface = true;
 	memcpy(get_client_memptr(eth_client, index)->mac, data->mac_addr,
@@ -7267,7 +7267,6 @@ int IPACM_Lan::install_l2tp_dl_rules(ipacm_event_data_all *data, int index)
 	memcpy(hdr->hdr + 48, data->mac_addr, 6); /* dst mac */
 	hdr->hdr[60] = 0x08; /* Ether type */
 	hdr->hdr[61] = 0x00;
-
 	if(m_header.AddHeader(hdr_table) == false)
 	{
 		IPACMERR("Failed to add hdr with status: %d\n", hdr_table->hdr[0].status);

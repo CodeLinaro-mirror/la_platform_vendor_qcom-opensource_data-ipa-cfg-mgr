@@ -157,7 +157,7 @@ const char *ipacm_event_name[] = {
 #define IPA_DRIVER_WLAN_EVENT_SIZE  (sizeof(struct ipa_wlan_msg_ex)+ IPA_DRIVER_WLAN_EVENT_MAX_OF_ATTRIBS*sizeof(ipa_wlan_hdr_attrib_val))
 #define IPA_DRIVER_WLAN_META_MSG    (sizeof(struct ipa_msg_meta))
 #define IPA_DRIVER_WLAN_BUF_LEN     (IPA_DRIVER_WLAN_EVENT_SIZE + IPA_DRIVER_WLAN_META_MSG)
-#define IPA_DRIVER_L2TP_BUF_LEN	92
+#define IPA_DRIVER_L2TP_BUF_LEN	96
 uint32_t ipacm_event_stats[IPACM_EVENT_MAX];
 bool ipacm_logging = true;
 

@@ -88,7 +88,13 @@ IPACM_LanToLan_Iface::IPACM_LanToLan_Iface(IPACM_Lan *p_iface)
 			IPACMDBG_H("Interface %s is guest AP.\n", p_iface->dev_name);
 			m_support_inter_iface_offload = false;
 		}
+		max_num_clients = MAX_NUM_WLAN_CLIENT;
 	}
+	else
+	{
+		max_num_clients = MAX_NUM_CLIENT;
+	}
+	IPACMDBG_H("Interface %s, the max number of clients supported %d.\n",p_iface->dev_name, max_num_clients);
 	return;
 }
 
@@ -1908,9 +1914,9 @@ void IPACM_LanToLan_Iface::handle_client_add(uint8_t *mac, bool is_l2tp_client, 
 		}
 	}
 
-	if(m_client_info.size() == MAX_NUM_CLIENT)
+	if(m_client_info.size() == max_num_clients)
 	{
-		IPACMDBG_H("The number of clients has reached maximum %d.\n", MAX_NUM_CLIENT);
+		IPACMDBG_H("The number of clients has reached maximum %d.\n", max_num_clients);
 		return;
 	}
 

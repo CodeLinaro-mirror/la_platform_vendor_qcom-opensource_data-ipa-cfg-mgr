@@ -629,8 +629,8 @@ void IPACM_Wlan::event_callback(ipa_cm_event_id event, void *param)
 					memcpy(data_all->iface_name, it->iface_name, IPA_IFACE_NAME_LEN);
 					evt_data.evt_data = (void *)data_all;
 					IPACM_EvtDispatcher::PostEvt(&evt_data);
-					IPACMDBG_H("Posted event %d, with %s for ipv6 client\n",
-						evt_data.event, data_all->iface_name);
+					IPACMDBG_H("Posted event %s, with %s for ipv6 client\n",
+						IPACM_Iface::ipacmcfg->getEventName(evt_data.event), data_all->iface_name);
 					IPACMDBG_H("v6 addr : 0x%08x:%08x:%08x:%08x MAC %02x:%02x:%02x:%02x:%02x:%02x\n",
 						it->ipv6_addr[0], it->ipv6_addr[1], it->ipv6_addr[2], it->ipv6_addr[3],
 						it->mac_addr[0], it->mac_addr[1], it->mac_addr[2], it->mac_addr[3], it->mac_addr[4], it->mac_addr[5]);
@@ -2449,7 +2449,7 @@ int IPACM_Wlan::handle_lan_client_disconnect(uint8_t *mac_addr)
 		data->if_index = ipa_if_num1;
 		evt_data.event = IPA_LAN_CLIENT_UPDATE_EVENT;
 		evt_data.evt_data = data;
-		IPACMDBG_H("Posting event:%d\n", evt_data.event);
+		IPACMDBG_H("Posting event:%s\n", IPACM_Iface::ipacmcfg->getEventName(evt_data.event));
 		IPACM_EvtDispatcher::PostEvt(&evt_data);
 	}
 	return IPACM_SUCCESS;

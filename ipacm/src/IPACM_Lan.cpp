@@ -990,8 +990,8 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 					memcpy(data_all->iface_name, it->iface_name, IPA_IFACE_NAME_LEN);
 					evt_data.evt_data = (void *)data_all;
 					IPACM_EvtDispatcher::PostEvt(&evt_data);
-					IPACMDBG_H("Posted event %d, with %s for ipv6 client\n",
-						evt_data.event, data_all->iface_name);
+					IPACMDBG_H("Posted event %s, with %s for ipv6 client\n",
+						IPACM_Iface::ipacmcfg->getEventName(evt_data.event), data_all->iface_name);
 					IPACMDBG_H("v6 addr : 0x%08x:%08x:%08x:%08x MAC %02x:%02x:%02x:%02x:%02x:%02x\n",
 						it->ipv6_addr[0], it->ipv6_addr[1], it->ipv6_addr[2], it->ipv6_addr[3],
 						it->mac_addr[0], it->mac_addr[1], it->mac_addr[2], it->mac_addr[3], it->mac_addr[4], it->mac_addr[5]);
@@ -1551,8 +1551,8 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 						memcpy(data_all->iface_name, it->iface_name, IPA_IFACE_NAME_LEN);
 						evt_data.evt_data = (void *)data_all;
 						IPACM_EvtDispatcher::PostEvt(&evt_data);
-						IPACMDBG_H("Posted event %d, with %s for ipv6 client \n",
-							evt_data.event, data_all->iface_name);
+						IPACMDBG_H("Posted event %s, with %s for ipv6 client \n",
+							IPACM_Iface::ipacmcfg->getEventName(evt_data.event), data_all->iface_name);
 						IPACMDBG_H("v6 addr : 0x%08x:%08x:%08x:%08x MAC %02x:%02x:%02x:%02x:%02x:%02x\n",
 							it->ipv6_addr[0], it->ipv6_addr[1], it->ipv6_addr[2], it->ipv6_addr[3],
 							it->mac_addr[0], it->mac_addr[1], it->mac_addr[2], it->mac_addr[3], it->mac_addr[4], it->mac_addr[5]);

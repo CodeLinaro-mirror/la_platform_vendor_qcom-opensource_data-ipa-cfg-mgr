@@ -1782,7 +1782,7 @@ int IPACM_Lan::del_ul_flt_rules(enum ipa_ip_type iptype)
 #endif
 		modem_ul_v6_set = false;
 	}
-
+	IPACMDBG_H("modem_ul_v6_set:%d, modem_ul_v4_set :%d\n",modem_ul_v6_set,modem_ul_v4_set);
 	return IPACM_SUCCESS;
 }
 
@@ -1795,6 +1795,10 @@ int IPACM_Lan::handle_vlan_neighbor(ipacm_event_data_all *data)
 	bool new_prefix = false;
 	ipacm_event_data_all data_all;
 	std::list <ipacm_event_data_all>::iterator it;
+#ifdef FEATURE_IPACM_PER_CLIENT_STATS
+       int eth_index = 0;
+       int retval;
+#endif
 
 	IPACMDBG_H("\n");
 	memset(&data_all, 0, sizeof(ipacm_event_data_all));
@@ -1875,8 +1879,28 @@ int IPACM_Lan::handle_vlan_neighbor(ipacm_event_data_all *data)
 	{
 		return IPACM_FAILURE;
 	}
-	
-	handle_eth_client_route_rule(data->mac_addr, data->iptype, vlan_id);
+#ifdef FEATURE_IPACM_PER_CLIENT_STATS
+#ifdef IPA_HW_FNR_STATS
+	if(IPACM_Iface::ipacmcfg->ipacm_lan_stats_enable == true)
+	{
+		eth_index = get_eth_client_index(data->mac_addr);
+		IPACMDBG_H("hw_fnr_stats_support = %d,index_populated = %d\n",IPACM_Iface::ipacmcfg->hw_fnr_stats_support,get_client_memptr(eth_client,eth_index)->index_populated);
+		if(IPACM_Iface::ipacmcfg->hw_fnr_stats_support == true && get_client_memptr(eth_client,eth_index)->index_populated == true)
+		{
+			IPACMDBG_H("Per Client DL indices = %d\n", get_client_memptr(eth_client, eth_index)->dl_cnt_idx);
+			retval =handle_eth_client_route_rule_ext_v2(data->mac_addr, data->iptype,get_client_memptr(eth_client, eth_index)->dl_cnt_idx);
+			IPACMDBG_H("Route install retval = %d\n", retval);
+		}
+		else
+		{
+			IPACMDBG_H("No Route install with NEIGH as no DL indices\n");
+			return IPACM_SUCCESS;
+		}
+	}
+	else
+#endif
+#endif
+		handle_eth_client_route_rule(data->mac_addr, data->iptype, vlan_id);
 
 	if(IPACM_Iface::ipacmcfg->ipacm_mpdn_enable)
 	{
@@ -2096,6 +2120,20 @@ int IPACM_Lan::handle_vlan_pdn_up(ipacm_event_vlan_pdn *data, bool set_mux)
 		return IPACM_SUCCESS;
 	}
 
+#ifdef FEATURE_IPACM_PER_CLIENT_STATS
+	/* Install filter rules for the client. */
+	if(IPACM_Iface::ipacmcfg->ipacm_lan_stats_enable == true)
+	{
+		IPACMDBG_H("feature enabled, enabling per-client stats\n");
+		if(enable_per_client_stats(&IPACM_Iface::ipacmcfg->ipacm_lan_stats_enable))
+		{
+			IPACMERR("Failed to enable per client stats %d\n", IPACM_Iface::ipacmcfg->ipacm_lan_stats_enable);
+			return IPACM_FAILURE;
+		}
+	}
+#endif
+
+
 	/* check only add static UL filter rule once */
 	if(data->iptype == IPA_IP_v6)
 	{
@@ -2116,13 +2154,28 @@ int IPACM_Lan::handle_vlan_pdn_up(ipacm_event_vlan_pdn *data, bool set_mux)
 		/* for the first PDN install UL filtering rules */
 		if(num_dft_rt_v6 == 1 && modem_ul_v6_set == FALSE)
 		{
-			ret = handle_uplink_filter_rule(IPACM_Iface::ipacmcfg->GetExtProp(IPA_IP_v6), data->iptype, data->mux_id, false);
+#ifdef FEATURE_IPACM_PER_CLIENT_STATS
+			if(IPACM_Iface::ipacmcfg->ipacm_lan_stats_enable == true)
+			{
+				IPACMDBG_H("UL filtering rules will install for %s, will send to modem (mux %d)\n",dev_name, data->mux_id);
+				ret = install_uplink_filter_rule(IPACM_Iface::ipacmcfg->GetExtProp(data->iptype),data->iptype,data->mux_id);
+			}
+			else
+#endif
+				ret = handle_uplink_filter_rule(IPACM_Iface::ipacmcfg->GetExtProp(IPA_IP_v6), data->iptype, data->mux_id, false);
 			modem_ul_v6_set = true;
 		}
 		/* for the next PDNs only notify modem about new MUX IDs */
 		else
 		{
-			ret = handle_uplink_filter_rule(IPACM_Iface::ipacmcfg->GetExtProp(IPA_IP_v6), data->iptype, data->mux_id, true);
+#ifdef FEATURE_IPACM_PER_CLIENT_STATS
+			if(IPACM_Iface::ipacmcfg->ipacm_lan_stats_enable == true)
+			{
+				IPACMDBG_H("UL filtering rules already installed for %s, only sent notification for modem (mux %d)\n",dev_name, data->mux_id);
+			}
+			else
+#endif
+				ret = handle_uplink_filter_rule(IPACM_Iface::ipacmcfg->GetExtProp(IPA_IP_v6), data->iptype, data->mux_id, true);
 		}
 	}
 	else
@@ -2145,13 +2198,28 @@ int IPACM_Lan::handle_vlan_pdn_up(ipacm_event_vlan_pdn *data, bool set_mux)
 		/* for the first PDN install UL filtering rules */
 		if(modem_ul_v4_set == false)
 		{
-			ret = handle_uplink_filter_rule(IPACM_Iface::ipacmcfg->GetExtProp(IPA_IP_v4), data->iptype, data->mux_id, false, true);
+#ifdef FEATURE_IPACM_PER_CLIENT_STATS
+			if(IPACM_Iface::ipacmcfg->ipacm_lan_stats_enable == true)
+			{
+				IPACMDBG_H("UL filtering rules will install for %s, will send to modem (mux %d)\n",dev_name, data->mux_id);
+				ret = install_uplink_filter_rule(IPACM_Iface::ipacmcfg->GetExtProp(data->iptype),data->iptype,data->mux_id);
+			}
+			else
+#endif
+				ret = handle_uplink_filter_rule(IPACM_Iface::ipacmcfg->GetExtProp(IPA_IP_v4), data->iptype, data->mux_id, false, true);
 			modem_ul_v4_set = true;
 		}
 		/* for the next PDNs only notify modem about new MUX IDs */
 		else
 		{
-			ret = handle_uplink_filter_rule(IPACM_Iface::ipacmcfg->GetExtProp(IPA_IP_v4), data->iptype, data->mux_id, true, true);
+#ifdef FEATURE_IPACM_PER_CLIENT_STATS
+			if(IPACM_Iface::ipacmcfg->ipacm_lan_stats_enable == true)
+			{
+				IPACMDBG_H("UL filtering rules already installed for %s, only sent notification for modem (mux %d)\n",dev_name, data->mux_id);
+			}
+			else
+#endif
+				ret = handle_uplink_filter_rule(IPACM_Iface::ipacmcfg->GetExtProp(IPA_IP_v4), data->iptype, data->mux_id, true, true);
 		}
 
 		if (data->is_xlat)
@@ -2179,6 +2247,16 @@ int IPACM_Lan::handle_vlan_pdn_up(ipacm_event_vlan_pdn *data, bool set_mux)
 			return IPACM_FAILURE;
 		}
 	}
+	else
+	{	if(data->iptype == IPA_IP_v6)
+		{
+
+			modem_ul_v6_set = false;
+		}
+		else
+			modem_ul_v4_set = false;
+	}
+	IPACMDBG_H("ret: %d, modem_ul_v4_set: %d, modem_ul_v6_set: %d\n",ret, modem_ul_v4_set,modem_ul_v6_set);
 
 	return ret;
 }
@@ -4439,7 +4517,7 @@ int IPACM_Lan::handle_lan_client_connect(uint8_t *mac_addr)
 
 	if (get_client_memptr(eth_client, eth_index)->lan_stats_idx != -1)
 	{
-		IPACMDBG_H("wlan client already has lan_stats index. \n");
+		IPACMDBG_H("Lan client already has lan_stats index. \n");
 		return IPACM_FAILURE;
 	}
 
@@ -4451,7 +4529,6 @@ int IPACM_Lan::handle_lan_client_connect(uint8_t *mac_addr)
 		IPACMDBG_H("No active index..abort \n");
 		return IPACM_FAILURE;
 	}
-
 	if (IPACM_Iface::ipacmcfg->ipacm_lan_stats_enable == true)
 	{
 		client_info = (struct wan_ioctl_lan_client_info *)malloc(sizeof(struct wan_ioctl_lan_client_info));
@@ -4491,9 +4568,14 @@ int IPACM_Lan::handle_lan_client_connect(uint8_t *mac_addr)
 		{
 			client_info->ul_src_pipe = rx_prop->rx[0].src_pipe;
 		}
+               IPACMDBG_H("client_info->client_idx :%d \n", client_info->client_idx);
+               IPACMDBG_H("client_info->ul_src_pipe :%d \n", client_info->ul_src_pipe);
+               IPACMDBG_H("client_info->hdr_len :%d \n", client_info->hdr_len);
+               IPACMDBG_H("client_info->device_type :%d \n", client_info->device_type);
 #ifdef IPA_HW_FNR_STATS
 		/* Set UL and DL cnt_idx based on version check */
-		if (IPACM_Iface::ipacmcfg->hw_fnr_stats_support && !get_client_memptr(eth_client, eth_index)->index_populated) {
+		if (IPACM_Iface::ipacmcfg->hw_fnr_stats_support && !get_client_memptr(eth_client, eth_index)->index_populated) 
+		{
 			pthread_mutex_lock(&IPACM_Iface::ipacmcfg->cnt_idx_lock);
 			cnt_idx = IPACM_Iface::ipacmcfg->get_free_cnt_idx();
 			pthread_mutex_unlock(&IPACM_Iface::ipacmcfg->cnt_idx_lock);
@@ -4527,8 +4609,8 @@ int IPACM_Lan::handle_lan_client_connect(uint8_t *mac_addr)
 #ifdef IPA_HW_FNR_STATS
 				if (IPACM_Iface::ipacmcfg->hw_fnr_stats_support)
 						install_uplink_filter_rule_per_client_v2(ext_prop, IPA_IP_v4, IPACM_Wan::getXlat_Mux_Id(),
-							get_client_memptr(eth_client, eth_index)->mac,
-							get_client_memptr(eth_client, eth_index)->ul_cnt_idx);
+								get_client_memptr(eth_client, eth_index)->mac,
+								get_client_memptr(eth_client, eth_index)->ul_cnt_idx);
 				else
 #endif //IPA_HW_FNR_STATS
 					install_uplink_filter_rule_per_client(ext_prop, IPA_IP_v4, IPACM_Wan::getXlat_Mux_Id(), get_client_memptr(eth_client, eth_index)->mac);
@@ -4580,7 +4662,6 @@ int IPACM_Lan::handle_lan_client_disconnect(uint8_t *mac_addr)
 	uint8_t mac[IPA_MAC_ADDR_SIZE];
 
 	IPACMDBG_H ("Is ODU client? %s\n", is_odu?"Yes":"No");
-
 	/* Check if the client is in active list and remove it. */
 	if (reset_active_lan_stats_index(get_lan_stats_index(mac_addr), mac_addr) == -1)
 	{
@@ -5539,7 +5620,9 @@ int IPACM_Lan::handle_eth_client_down_evt(uint8_t *mac_addr, uint16_t vlan_id, i
 			client_info->ul_cnt_idx = get_client_memptr(eth_client, clt_indx)->ul_cnt_idx;
 			client_info->dl_cnt_idx = get_client_memptr(eth_client, clt_indx)->dl_cnt_idx;
 			get_client_memptr(eth_client, clt_indx)->ul_cnt_idx = -1;
-			get_client_memptr(eth_client, clt_indx)->dl_cnt_idx = -1;
+			{
+				get_client_memptr(eth_client, clt_indx)->dl_cnt_idx = -1;
+			}
 			get_client_memptr(eth_client, clt_indx)->index_populated = false;
 			pthread_mutex_lock(&IPACM_Iface::ipacmcfg->cnt_idx_lock);
 			if (IPACM_Iface::ipacmcfg->reset_cnt_idx(client_info->ul_cnt_idx, false))
@@ -6116,7 +6199,10 @@ fail:
 						client_info->ul_cnt_idx = get_client_memptr(eth_client, i)->ul_cnt_idx;
 						client_info->dl_cnt_idx = get_client_memptr(eth_client, i)->dl_cnt_idx;
 						get_client_memptr(eth_client, i)->ul_cnt_idx = -1;
-						get_client_memptr(eth_client, i)->dl_cnt_idx = -1;
+						{
+
+							get_client_memptr(eth_client, i)->dl_cnt_idx = -1;
+						}
 						get_client_memptr(eth_client, i)->index_populated = false;
 						pthread_mutex_lock(&IPACM_Iface::ipacmcfg->cnt_idx_lock);
 						if (IPACM_Iface::ipacmcfg->reset_cnt_idx(client_info->ul_cnt_idx, false))
@@ -8217,6 +8303,10 @@ int IPACM_Lan::install_uplink_filter_rule_per_client_v2
 		{
 			offset_meq_128->offset = -8;
 		}
+		else if(rx_prop->rx[0].hdr_l2_type == IPA_HDR_L2_802_1Q)
+		{
+			offset_meq_128->offset = -12;
+		}
 		else
 		{
 			offset_meq_128->offset = -16;
@@ -8559,6 +8649,7 @@ int IPACM_Lan::install_uplink_filter_rule
 #ifdef IPA_HW_FNR_STATS
 	bool hw_fnr_stats_support = IPACM_Iface::ipacmcfg->hw_fnr_stats_support;
 #endif //IPA_HW_FNR_STATS
+	IPACMDBG_H("Number Of Eth Client: (%d) flt rules\n", num_eth_client);
 	for (i = 0; i < num_eth_client; i++)
 		{
 			if (iptype == IPA_IP_v4)

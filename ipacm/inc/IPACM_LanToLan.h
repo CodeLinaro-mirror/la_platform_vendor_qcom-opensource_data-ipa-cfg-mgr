@@ -171,6 +171,9 @@ public:
 	void set_is_vlan(bool is_vlan) { m_is_vlan = is_vlan; }
 	bool get_is_vlan() { return m_is_vlan; };
 #endif
+
+	bool get_m_support_ast_update();
+
 private:
 
 	uint16_t max_num_clients;
@@ -182,6 +185,7 @@ private:
 #ifdef FEATURE_VLAN_MPDN
 	bool m_is_vlan;
 #endif
+	bool m_ast_update;
 	/* reference count of l2 header type of peer interfaces - counts peer interfaces with relevant header type - change on iface up\down */
 	int ref_cnt_peer_l2_hdr_type[IPA_HDR_L2_MAX];
 	uint32_t hdr_proc_ctx_for_inter_interface[IPA_HDR_L2_MAX];

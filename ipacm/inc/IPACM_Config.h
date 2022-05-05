@@ -756,6 +756,21 @@ public:
 
 		return false;
 	}
+
+	inline ipa_private_subnet *getPrivateSubnet(uint32_t ip_addr)
+	{
+		for(int cnt = 0; cnt < ipa_num_private_subnet; cnt++)
+		{
+			if(private_subnet_table[cnt].subnet_addr ==
+				(private_subnet_table[cnt].subnet_mask & ip_addr))
+			{
+				return &private_subnet_table[cnt];
+			}
+		}
+
+		return NULL;
+	}
+
 #ifdef FEATURE_IPA_ANDROID
 	inline bool AddPrivateSubnet(uint32_t ip_addr, int ipa_if_index)
 	{

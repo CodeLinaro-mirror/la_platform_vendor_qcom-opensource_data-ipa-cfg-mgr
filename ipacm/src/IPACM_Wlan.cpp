@@ -95,13 +95,16 @@ ipa_lan_client_idx IPACM_Wlan::active_lan_client_index[IPA_MAX_NUM_HW_PATH_CLIEN
 ipa_lan_client_idx IPACM_Wlan::inactive_lan_client_index[IPA_MAX_NUM_HW_PATH_CLIENTS];
 #endif
 
-IPACM_Wlan::IPACM_Wlan(int iface_index) : IPACM_Lan(iface_index), ipv6ct_inst(Ipv6ct::GetInstance())
+extern char *ipa_l2_hdr_type[];
+
+IPACM_Wlan::IPACM_Wlan(int iface_index, bool ast_update_needed) : IPACM_Lan(iface_index), ipv6ct_inst(Ipv6ct::GetInstance())
 {
 	int i = 0;
 #define WLAN_AMPDU_DEFAULT_FILTER_RULES 3
 
 	wlan_ap_index = IPACM_Wlan::num_wlan_ap_iface;
-	if(wlan_ap_index < 0 || wlan_ap_index > 3)
+	/* In EM config, we support 14 VAPs in total. */
+	if(wlan_ap_index < 0 || wlan_ap_index > 13)
 	{
 		IPACMERR("Wlan_ap_index is not correct: %d, not support %d APs .\n", wlan_ap_index, wlan_ap_index + 1);
 		if (tx_prop != NULL)
@@ -184,6 +187,10 @@ IPACM_Wlan::IPACM_Wlan(int iface_index) : IPACM_Lan(iface_index), ipv6ct_inst(Ip
 	device_type = IPACM_CLIENT_DEVICE_TYPE_WLAN;
 
 	IPACMDBG_H ("Device type %d\n", device_type);
+
+	ast_update = ast_update_needed;
+
+	IPACMDBG_H ("AST update needed %d\n", ast_update);
 
 	return;
 }
@@ -1128,13 +1135,13 @@ int IPACM_Wlan::handle_wlan_mac_flt_event()
 					/* add a new ul flt rule for s/w path, del NAT and route rule for client */
 					if(IPACM_Lan::add_mac_flt_blacklist_rule(mac_addr,IPA_IP_v4, &(it->second->mac_v4_flt_rule_hdl)))
 					{
-						IPACMERR("unbale to add mac flt blacklist v4 UL rule for index: %d\n", wlan_index);
+						IPACMERR("unable to add mac flt blacklist v4 UL rule for index: %d\n", wlan_index);
 						return IPACM_FAILURE;
 					}
 					CtList->HandleNeighIpAddrDelEvt(get_client_memptr(wlan_client, wlan_index)->v4_addr);
 					if(handle_wlan_client_mac_flt_route_rule(IPA_IP_v4, wlan_index, it->second->is_blacklist))
 					{
-						IPACMERR("unbale to del v4 rt rule for index: %d\n", wlan_index);
+						IPACMERR("unable to del v4 rt rule for index: %d\n", wlan_index);
 						return IPACM_FAILURE;
 					}
 					it->second->mac_v4_rt_del_flt_set = true;
@@ -1145,12 +1152,12 @@ int IPACM_Wlan::handle_wlan_mac_flt_event()
 					/* add a new ul flt rule for s/w path & del route rule for client */
 					if(IPACM_Lan::add_mac_flt_blacklist_rule(mac_addr,IPA_IP_v6, &(it->second->mac_v6_flt_rule_hdl)))
 					{
-						IPACMERR("unbale to add mac flt blacklist v6 UL rule for index: %d\n", wlan_index);
+						IPACMERR("unable to add mac flt blacklist v6 UL rule for index: %d\n", wlan_index);
 						return IPACM_FAILURE;
 					}
 					if(handle_wlan_client_mac_flt_route_rule(IPA_IP_v6, wlan_index, it->second->is_blacklist))
 					{
-						IPACMERR("unbale to del v6 rt rule for index: %d\n", wlan_index);
+						IPACMERR("unable to del v6 rt rule for index: %d\n", wlan_index);
 						return IPACM_FAILURE;
 					}
 					it->second->mac_v6_rt_del_flt_set = true;
@@ -1170,12 +1177,12 @@ int IPACM_Wlan::handle_wlan_mac_flt_event()
 					/* del ul flt rule for s/w path & add route/Nat rule for client */
 					if(IPACM_Lan::del_mac_flt_blacklist_rule(it->second->mac_v4_flt_rule_hdl,  IPA_IP_v4))
 					{
-						IPACMERR("unbale to del mac flt blacklist v4 UL rule for index: %d\n", wlan_index);
+						IPACMERR("unable to del mac flt blacklist v4 UL rule for index: %d\n", wlan_index);
 						return IPACM_FAILURE;
 					}
 					if(handle_wlan_client_mac_flt_route_rule(IPA_IP_v4, wlan_index, it->second->is_blacklist))
 					{
-						IPACMERR("unbale to add v4 rt rule for index: %d\n", wlan_index);
+						IPACMERR("unable to add v4 rt rule for index: %d\n", wlan_index);
 						return IPACM_FAILURE;
 					}
 					it->second->mac_v4_rt_del_flt_set = false;
@@ -1185,12 +1192,12 @@ int IPACM_Wlan::handle_wlan_mac_flt_event()
 					/* del ul flt rule for s/w path & add route rule for client */
 					if(IPACM_Lan::del_mac_flt_blacklist_rule(it->second->mac_v6_flt_rule_hdl,  IPA_IP_v6))
 					{
-						IPACMERR("unbale to del mac flt blacklist v6 UL rule for index: %d\n", wlan_index);
+						IPACMERR("unable to del mac flt blacklist v6 UL rule for index: %d\n", wlan_index);
 						return IPACM_FAILURE;
 					}
 					if(handle_wlan_client_mac_flt_route_rule(IPA_IP_v6, wlan_index, it->second->is_blacklist))
 					{
-						IPACMERR("unbale to add v6 rt rule for index: %d\n", wlan_index);
+						IPACMERR("unable to add v6 rt rule for index: %d\n", wlan_index);
 						return IPACM_FAILURE;
 					}
 					it->second->mac_v6_rt_del_flt_set = false;
@@ -1223,7 +1230,7 @@ int IPACM_Wlan::handle_wlan_client_mac_flt_route_rule(ipa_ip_type ip_type, int c
 		{
 			if (delete_default_qos_rtrules(clt_index, IPA_IP_v4))
 			{
-				IPACMERR("unbale to delete v4 default qos route rules for index: %d\n", clt_index);
+				IPACMERR("unable to delete v4 default qos route rules for index: %d\n", clt_index);
 				return IPACM_FAILURE;
 			}
 		}
@@ -1232,7 +1239,7 @@ int IPACM_Wlan::handle_wlan_client_mac_flt_route_rule(ipa_ip_type ip_type, int c
 		{
 			if (delete_default_qos_rtrules(clt_index, IPA_IP_v6))
 			{
-				IPACMERR("unbale to delete v4 default qos route rules for index: %d\n", clt_index);
+				IPACMERR("unable to delete v4 default qos route rules for index: %d\n", clt_index);
 				return IPACM_FAILURE;
 			}
 		}
@@ -1247,7 +1254,7 @@ int IPACM_Wlan::handle_wlan_client_mac_flt_route_rule(ipa_ip_type ip_type, int c
 			{
 				if(handle_wlan_client_route_rule(get_client_memptr(wlan_client, clt_index)->mac, IPA_IP_v4))
 				{
-						IPACMERR("unbale to add v4 route rules for index: %d\n", clt_index);
+						IPACMERR("unable to add v4 route rules for index: %d\n", clt_index);
 						return IPACM_FAILURE;
 				}
 				memset(&data, 0, sizeof(data));
@@ -1264,7 +1271,7 @@ int IPACM_Wlan::handle_wlan_client_mac_flt_route_rule(ipa_ip_type ip_type, int c
 				{
 					if(handle_wlan_client_route_rule_ext_v2(get_client_memptr(wlan_client, clt_index)->mac,IPA_IP_v4))
 					{
-						IPACMERR("unbale to add v4 route rules for index: %d\n", clt_index);
+						IPACMERR("unable to add v4 route rules for index: %d\n", clt_index);
 						return IPACM_FAILURE;
 					}
 				}
@@ -1273,7 +1280,7 @@ int IPACM_Wlan::handle_wlan_client_mac_flt_route_rule(ipa_ip_type ip_type, int c
 				{
 					if(handle_wlan_client_route_rule_ext(get_client_memptr(wlan_client, clt_index)->mac, IPA_IP_v4))
 					{
-						IPACMERR("unbale to add v4 route rules for index: %d\n", clt_index);
+						IPACMERR("unable to add v4 route rules for index: %d\n", clt_index);
 						return IPACM_FAILURE;
 					}
 				}
@@ -1289,7 +1296,7 @@ int IPACM_Wlan::handle_wlan_client_mac_flt_route_rule(ipa_ip_type ip_type, int c
 			{
 				if(handle_wlan_client_route_rule(get_client_memptr(wlan_client, clt_index)->mac, IPA_IP_v6))
 				{
-						IPACMERR("unbale to add v6 route rules for index: %d\n", clt_index);
+						IPACMERR("unable to add v6 route rules for index: %d\n", clt_index);
 						return IPACM_FAILURE;
 				}
 			}
@@ -1301,7 +1308,7 @@ int IPACM_Wlan::handle_wlan_client_mac_flt_route_rule(ipa_ip_type ip_type, int c
 				{
 					if(handle_wlan_client_route_rule_ext_v2(get_client_memptr(wlan_client, clt_index)->mac,IPA_IP_v6))
 					{
-						IPACMERR("unbale to add v6 route rules for index: %d\n", clt_index);
+						IPACMERR("unable to add v6 route rules for index: %d\n", clt_index);
 						return IPACM_FAILURE;
 					}
 				}
@@ -1310,7 +1317,7 @@ int IPACM_Wlan::handle_wlan_client_mac_flt_route_rule(ipa_ip_type ip_type, int c
 				{
 					if(handle_wlan_client_route_rule_ext(get_client_memptr(wlan_client, clt_index)->mac, IPA_IP_v6))
 					{
-						IPACMERR("unbale to add v6 route rules for index: %d\n", clt_index);
+						IPACMERR("unable to add v6 route rules for index: %d\n", clt_index);
 						return IPACM_FAILURE;
 					}
 				}
@@ -1444,6 +1451,7 @@ int IPACM_Wlan::handle_wlan_client_init_ex(ipacm_event_data_wlan_ex *data)
 	int cnt_idx;
 #endif
 	int max_clients = IPA_MAX_NUM_WIFI_CLIENTS;
+	uint16_t ta_peer_id = 0;
 
 	/* start of adding header */
 	IPACMDBG_H("Wifi client number for this iface: %d & total number of wlan clients: %d\n",
@@ -1534,6 +1542,14 @@ int IPACM_Wlan::handle_wlan_client_init_ex(ipacm_event_data_wlan_ex *data)
 						memcpy(&pHeaderDescriptor->hdr[0].hdr[data->attribs[i].offset],
 									&data->attribs[i].u.sta_id, sizeof(data->attribs[i].u.sta_id));
 					}
+#ifdef WLAN_HDR_ATTRIB_TA_PEER_ID
+					else if(data->attribs[i].attrib_type == WLAN_HDR_ATTRIB_TA_PEER_ID)
+					{
+						/* copy ta_peer_id */
+						ta_peer_id =
+							data->attribs[i].u.ta_peer_id;
+					}
+#endif
 					else
 					{
 						IPACMDBG_H("The attribute type is not expected!\n");
@@ -1651,6 +1667,14 @@ int IPACM_Wlan::handle_wlan_client_init_ex(ipacm_event_data_wlan_ex *data)
 						memcpy(&pHeaderDescriptor->hdr[0].hdr[data->attribs[i].offset],
 								&data->attribs[i].u.sta_id, sizeof(data->attribs[i].u.sta_id));
 					}
+#ifdef WLAN_HDR_ATTRIB_TA_PEER_ID
+					else if(data->attribs[i].attrib_type == WLAN_HDR_ATTRIB_TA_PEER_ID)
+					{
+						/* copy ta_peer_id */
+						ta_peer_id =
+							data->attribs[i].u.ta_peer_id;
+					}
+#endif
 					else
 					{
 						IPACMDBG_H("The attribute type is not expected!\n");
@@ -1725,9 +1749,12 @@ int IPACM_Wlan::handle_wlan_client_init_ex(ipacm_event_data_wlan_ex *data)
 		get_client_memptr(wlan_client, num_wifi_client)->index_populated = false;
 #endif //IPA_HW_FNR_STATS
 #endif
+		get_client_memptr(wlan_client, num_wifi_client)->ta_peer_id = ta_peer_id;
+		IPACMDBG_H("ta_peer_id for the client: %d\n", ta_peer_id);
+
 		wlan_index = num_wifi_client;
 		num_wifi_client++;
-#ifdef FEATURE_IPACM_PER_CLIENT_STATS
+#if defined(FEATURE_IPACM_PER_CLIENT_STATS) || defined(IPA_WDI_AST_UPDATE)
 		if (IPACM_Iface::ipacmcfg->ipacm_lan_stats_enable == true &&
 			get_client_memptr(wlan_client, wlan_index)->lan_stats_idx != -1)
 		{
@@ -1797,13 +1824,14 @@ int IPACM_Wlan::handle_wlan_client_init_ex(ipacm_event_data_wlan_ex *data)
 					{
 						ext_prop = IPACM_Iface::ipacmcfg->GetExtProp(IPA_IP_v4);
 						install_uplink_filter_rule_per_client_v2(ext_prop, IPA_IP_v4, IPACM_Wan::getXlat_Mux_Id(), get_client_memptr(wlan_client, wlan_index)->mac,
-							get_client_memptr(wlan_client, wlan_index)->ul_cnt_idx);
+							get_client_memptr(wlan_client, wlan_index)->ul_cnt_idx, NULL, false, get_client_memptr(wlan_client, wlan_index)->ta_peer_id);
 					}
 					else
 #endif //IPA_HW_FNR_STATS
 					{
 						ext_prop = IPACM_Iface::ipacmcfg->GetExtProp(IPA_IP_v4);
-						install_uplink_filter_rule_per_client(ext_prop, IPA_IP_v4, IPACM_Wan::getXlat_Mux_Id(), get_client_memptr(wlan_client, wlan_index)->mac);
+						install_uplink_filter_rule_per_client(ext_prop, IPA_IP_v4, IPACM_Wan::getXlat_Mux_Id(), get_client_memptr(wlan_client, wlan_index)->mac,
+							get_client_memptr(wlan_client, wlan_index)->ta_peer_id);
 					}
 					get_client_memptr(wlan_client, wlan_index)->ipv4_ul_rules_set = true;
 				}
@@ -1817,13 +1845,60 @@ int IPACM_Wlan::handle_wlan_client_init_ex(ipacm_event_data_wlan_ex *data)
 					{
 						ext_prop = IPACM_Iface::ipacmcfg->GetExtProp(IPA_IP_v6);
 						install_uplink_filter_rule_per_client_v2(ext_prop, IPA_IP_v6, 0, get_client_memptr(wlan_client, wlan_index)->mac,
-							get_client_memptr(wlan_client, wlan_index)->ul_cnt_idx);
+							get_client_memptr(wlan_client, wlan_index)->ul_cnt_idx, NULL, false, get_client_memptr(wlan_client, wlan_index)->ta_peer_id);
 					}
 					else
 #endif //IPA_HW_FNR_STATS
 					{
 						ext_prop = IPACM_Iface::ipacmcfg->GetExtProp(IPA_IP_v6);
-						install_uplink_filter_rule_per_client(ext_prop, IPA_IP_v6, 0, get_client_memptr(wlan_client, wlan_index)->mac);
+						install_uplink_filter_rule_per_client(ext_prop, IPA_IP_v6, 0, get_client_memptr(wlan_client, wlan_index)->mac,
+							get_client_memptr(wlan_client, wlan_index)->ta_peer_id);
+					}
+					get_client_memptr(wlan_client, wlan_index)->ipv6_ul_rules_set = true;
+				}
+			}
+		}
+		// AST update is not dependent on per client stats.
+		else if (ast_update_needed())
+		{
+			if (IPACM_Wan::isWanUP(ipa_if_num))
+			{
+				if(IPACM_Wan::backhaul_is_sta_mode == false)
+				{
+#ifdef IPA_HW_FNR_STATS
+					if (IPACM_Iface::ipacmcfg->hw_fnr_stats_support)
+					{
+						ext_prop = IPACM_Iface::ipacmcfg->GetExtProp(IPA_IP_v4);
+						install_uplink_filter_rule_per_client_v2(ext_prop, IPA_IP_v4, IPACM_Wan::getXlat_Mux_Id(), get_client_memptr(wlan_client, wlan_index)->mac,
+							get_client_memptr(wlan_client, wlan_index)->ul_cnt_idx, NULL, false, get_client_memptr(wlan_client, wlan_index)->ta_peer_id);
+					}
+					else
+#endif //IPA_HW_FNR_STATS
+					{
+						ext_prop = IPACM_Iface::ipacmcfg->GetExtProp(IPA_IP_v4);
+						install_uplink_filter_rule_per_client(ext_prop, IPA_IP_v4, IPACM_Wan::getXlat_Mux_Id(), get_client_memptr(wlan_client, wlan_index)->mac,
+							get_client_memptr(wlan_client, wlan_index)->ta_peer_id);
+					}
+					get_client_memptr(wlan_client, wlan_index)->ipv4_ul_rules_set = true;
+				}
+			}
+			if(IPACM_Wan::isWanUP_V6(ipa_if_num))
+			{
+				if(IPACM_Wan::backhaul_is_sta_mode == false)
+				{
+#ifdef IPA_HW_FNR_STATS
+					if (IPACM_Iface::ipacmcfg->hw_fnr_stats_support)
+					{
+						ext_prop = IPACM_Iface::ipacmcfg->GetExtProp(IPA_IP_v6);
+						install_uplink_filter_rule_per_client_v2(ext_prop, IPA_IP_v6, 0, get_client_memptr(wlan_client, wlan_index)->mac,
+							get_client_memptr(wlan_client, wlan_index)->ul_cnt_idx, NULL, false, get_client_memptr(wlan_client, wlan_index)->ta_peer_id);
+					}
+					else
+#endif //IPA_HW_FNR_STATS
+					{
+						ext_prop = IPACM_Iface::ipacmcfg->GetExtProp(IPA_IP_v6);
+						install_uplink_filter_rule_per_client(ext_prop, IPA_IP_v6, 0, get_client_memptr(wlan_client, wlan_index)->mac,
+							get_client_memptr(wlan_client, wlan_index)->ta_peer_id);
 					}
 					get_client_memptr(wlan_client, wlan_index)->ipv6_ul_rules_set = true;
 				}
@@ -1920,11 +1995,15 @@ int IPACM_Wlan::handle_wlan_client_ipaddr(ipacm_event_data_all *data)
 			     delete_default_qos_rtrules(clnt_indx,IPA_IP_v4);
 		         get_client_memptr(wlan_client, clnt_indx)->route_rule_set_v4 = false;
 			     get_client_memptr(wlan_client, clnt_indx)->v4_addr = data->ipv4_addr;
+				 if (ast_update_needed())
+				 	delete_wlan_client_lan2lan_flt_rule(data->mac_addr, IPA_IP_v4);
+				}
 			}
+			if (ast_update_needed())
+				install_wlan_client_lan2lan_flt_rule(data->mac_addr, IPA_IP_v4);
 		}
-	}
-	else
-	{
+		else
+		{
 		    IPACMDBG_H("Invalid client IPv4 address \n");
 		    return IPACM_FAILURE;
 		}
@@ -1987,6 +2066,12 @@ int IPACM_Wlan::handle_wlan_client_ipaddr(ipacm_event_data_all *data)
 					/* indicate how many ipv6 client gets */
 					get_client_memptr(wlan_client, clnt_indx)->ipv6_set++;
 					IPACM_Iface::ipacmcfg->ipa_num_clients_ipv6++;
+					/* Add the LAN2LAN filter only for Global IPv6 address. */
+					if (ast_update_needed() &&
+						((data->ipv6_addr[0] & ipv6_link_local_prefix_mask) !=
+						(ipv6_link_local_prefix & ipv6_link_local_prefix_mask)) &&
+						!get_client_memptr(wlan_client, clnt_indx)->lan2lan_fl_rule_hdl_v6)
+						install_wlan_client_lan2lan_flt_rule(data->mac_addr, IPA_IP_v6);
 				}
 		    }
 		    else
@@ -2343,11 +2428,13 @@ int IPACM_Wlan::handle_lan_client_connect(uint8_t *mac_addr)
 				if (IPACM_Wan::ipacmcfg->hw_fnr_stats_support)
 					install_uplink_filter_rule_per_client_v2(ext_prop, IPA_IP_v4, IPACM_Wan::getXlat_Mux_Id(),
 						get_client_memptr(wlan_client, wlan_index)->mac,
-						get_client_memptr(wlan_client, wlan_index)->ul_cnt_idx);
+						get_client_memptr(wlan_client, wlan_index)->ul_cnt_idx, NULL, false,
+						get_client_memptr(wlan_client, wlan_index)->ta_peer_id);
 				else
 #endif //IPA_HW_FNR_STATS
 					install_uplink_filter_rule_per_client(ext_prop, IPA_IP_v4, IPACM_Wan::getXlat_Mux_Id(),
-						get_client_memptr(wlan_client, wlan_index)->mac);
+						get_client_memptr(wlan_client, wlan_index)->mac,
+						get_client_memptr(wlan_client, wlan_index)->ta_peer_id);
 				get_client_memptr(wlan_client, wlan_index)->ipv4_ul_rules_set = true;
 			}
 		}
@@ -2359,10 +2446,12 @@ int IPACM_Wlan::handle_lan_client_connect(uint8_t *mac_addr)
 #ifdef IPA_HW_FNR_STATS
 				if (IPACM_Wan::ipacmcfg->hw_fnr_stats_support)
 					install_uplink_filter_rule_per_client_v2(ext_prop, IPA_IP_v6, 0, get_client_memptr(wlan_client, wlan_index)->mac,
-							get_client_memptr(wlan_client, wlan_index)->ul_cnt_idx);
+							get_client_memptr(wlan_client, wlan_index)->ul_cnt_idx, NULL, false,
+							get_client_memptr(wlan_client, wlan_index)->ta_peer_id);
 				else
 #endif //IPA_HW_FNR_STATS
-					install_uplink_filter_rule_per_client(ext_prop, IPA_IP_v6, 0, get_client_memptr(wlan_client, wlan_index)->mac);
+					install_uplink_filter_rule_per_client(ext_prop, IPA_IP_v6, 0, get_client_memptr(wlan_client, wlan_index)->mac,
+						get_client_memptr(wlan_client, wlan_index)->ta_peer_id);
 				get_client_memptr(wlan_client, wlan_index)->ipv6_ul_rules_set = true;
 			}
 		}
@@ -3069,15 +3158,30 @@ int IPACM_Wlan::handle_wlan_client_down_evt(uint8_t *mac_addr)
 	/* First reset NAT/IPv6CT rules and then route rules */
 	HandleNeighIpAddrDelEvt(clt_indx);
 
+	if (ast_update_needed())
+	{
+		if (delete_wlan_client_lan2lan_flt_rule(get_client_memptr(wlan_client, clt_indx)->mac, IPA_IP_v4))
+		{
+			IPACMERR("unable to delete v4 lan2lan flt rule for index: %d\n", clt_indx);
+			return IPACM_FAILURE;
+		}
+
+		if (delete_wlan_client_lan2lan_flt_rule(get_client_memptr(wlan_client, clt_indx)->mac, IPA_IP_v6))
+		{
+			IPACMERR("unable to delete v6 lan2lan flt rule for index: %d\n", clt_indx);
+			return IPACM_FAILURE;
+		}
+	}
+
 	if (delete_default_qos_rtrules(clt_indx, IPA_IP_v4))
 	{
-		IPACMERR("unbale to delete v4 default qos route rules for index: %d\n", clt_indx);
+		IPACMERR("unable to delete v4 default qos route rules for index: %d\n", clt_indx);
 		return IPACM_FAILURE;
 	}
 
 	if (delete_default_qos_rtrules(clt_indx, IPA_IP_v6))
 	{
-		IPACMERR("unbale to delete v6 default qos route rules for indexn: %d\n", clt_indx);
+		IPACMERR("unable to delete v6 default qos route rules for indexn: %d\n", clt_indx);
 		return IPACM_FAILURE;
 	}
 
@@ -3107,12 +3211,12 @@ int IPACM_Wlan::handle_wlan_client_down_evt(uint8_t *mac_addr)
 	IPACM_Iface::ipacmcfg->update_client_info(get_client_memptr(wlan_client, clt_indx)->mac, NULL, false);
 #endif
 
-#ifdef FEATURE_IPACM_PER_CLIENT_STATS
+#if defined(FEATURE_IPACM_PER_CLIENT_STATS) || defined(IPA_WDI_AST_UPDATE)
 	if (get_client_memptr(wlan_client, clt_indx)->ipv4_ul_rules_set == true)
 	{
 		if (delete_uplink_filter_rule_per_client(IPA_IP_v4, get_client_memptr(wlan_client, clt_indx)->mac))
 		{
-			IPACMERR("unbale to delete uplink v4 filter rules for index: %d\n", clt_indx);
+			IPACMERR("unable to delete uplink v4 filter rules for index: %d\n", clt_indx);
 			return IPACM_FAILURE;
 		}
 	}
@@ -3121,7 +3225,7 @@ int IPACM_Wlan::handle_wlan_client_down_evt(uint8_t *mac_addr)
 	{
 		if (delete_uplink_filter_rule_per_client(IPA_IP_v6, get_client_memptr(wlan_client, clt_indx)->mac))
 		{
-			IPACMERR("unbale to delete uplink v6 filter rules for index: %d\n", clt_indx);
+			IPACMERR("unable to delete uplink v6 filter rules for index: %d\n", clt_indx);
 			return IPACM_FAILURE;
 		}
 	}
@@ -3158,6 +3262,7 @@ int IPACM_Wlan::handle_wlan_client_down_evt(uint8_t *mac_addr)
 	get_client_memptr(wlan_client, clt_indx)->route_rule_set_v4 = false;
 	get_client_memptr(wlan_client, clt_indx)->route_rule_set_v6 = 0;
 	free(get_client_memptr(wlan_client, clt_indx)->p_hdr_info);
+	get_client_memptr(wlan_client, clt_indx)->ta_peer_id = 0;
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
 	get_client_memptr(wlan_client, clt_indx)->ipv4_ul_rules_set = false;
 	get_client_memptr(wlan_client, clt_indx)->ipv6_ul_rules_set = false;
@@ -3231,6 +3336,11 @@ int IPACM_Wlan::handle_wlan_client_down_evt(uint8_t *mac_addr)
 			get_client_memptr(wlan_client, clt_indx)->wifi_rt_hdl[tx_index].wifi_rt_rule_hdl_v4 =
 				 get_client_memptr(wlan_client, (clt_indx + 1))->wifi_rt_hdl[tx_index].wifi_rt_rule_hdl_v4;
 		}
+		get_client_memptr(wlan_client, clt_indx)->ta_peer_id = get_client_memptr(wlan_client, (clt_indx + 1))->ta_peer_id;
+		get_client_memptr(wlan_client, clt_indx)->lan2lan_fl_rule_hdl_v4 =
+			get_client_memptr(wlan_client, (clt_indx + 1))->lan2lan_fl_rule_hdl_v4;
+		get_client_memptr(wlan_client, clt_indx)->lan2lan_fl_rule_hdl_v6 =
+			get_client_memptr(wlan_client, (clt_indx + 1))->lan2lan_fl_rule_hdl_v6;
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
 		memcpy(get_client_memptr(wlan_client, clt_indx)->wan_ul_fl_rule_hdl_v4,
 			get_client_memptr(wlan_client, clt_indx + 1)->wan_ul_fl_rule_hdl_v4,
@@ -3451,15 +3561,30 @@ fail:
 		/* First reset NAT/IPv6CT rules and then route rules */
 		HandleNeighIpAddrDelEvt(i);
 
+		if (ast_update_needed())
+		{
+			if (delete_wlan_client_lan2lan_flt_rule(get_client_memptr(wlan_client, i)->mac, IPA_IP_v4))
+			{
+				IPACMERR("unable to delete v4 lan2lan flt rule for index: %d\n", i);
+				res = IPACM_FAILURE;
+			}
+
+			if (delete_wlan_client_lan2lan_flt_rule(get_client_memptr(wlan_client, i)->mac, IPA_IP_v6))
+			{
+				IPACMERR("unable to delete v6 lan2lan flt rule for index: %d\n", i);
+				res = IPACM_FAILURE;
+			}
+		}
+
 		if (delete_default_qos_rtrules(i, IPA_IP_v4))
 		{
-			IPACMERR("unbale to delete v4 default qos route rules for index: %d\n", i);
+			IPACMERR("unable to delete v4 default qos route rules for index: %d\n", i);
 			res = IPACM_FAILURE;
 		}
 
 		if (delete_default_qos_rtrules(i, IPA_IP_v6))
 		{
-			IPACMERR("unbale to delete v6 default qos route rules for index: %d\n", i);
+			IPACMERR("unable to delete v6 default qos route rules for index: %d\n", i);
 			res = IPACM_FAILURE;
 		}
 
@@ -3641,6 +3766,8 @@ int IPACM_Wlan::handle_wlan_client_reset_rt(ipa_ip_type iptype)
 			get_client_memptr(wlan_client, i)->ipv6_set = 0;
 			/* clear the map of client */
 			rt_hdl_v6_list[i].clear();
+			if (ast_update_needed())
+				delete_wlan_client_lan2lan_flt_rule(get_client_memptr(wlan_client, i)->mac, IPA_IP_v6);
 		}
 	} /* end of for loop */
 	return res;
@@ -3908,7 +4035,12 @@ bool IPACM_Wlan::is_guest_ap()
 	return m_is_guest_ap;
 }
 
-#ifdef FEATURE_IPACM_PER_CLIENT_STATS
+bool IPACM_Wlan::ast_update_needed()
+{
+	return ast_update;
+}
+
+#if defined(FEATURE_IPACM_PER_CLIENT_STATS) || defined(IPA_WDI_AST_UPDATE)
 #ifdef IPA_V6_UL_WL_FIREWALL_HANDLE
 
 /*
@@ -4438,7 +4570,8 @@ int IPACM_Wlan::install_uplink_filter_rule_per_client
 	ipacm_ext_prop* prop,
 	ipa_ip_type iptype,
 	uint8_t xlat_mux_id,
-	uint8_t *mac_addr
+	uint8_t *mac_addr,
+	uint16_t ta_peer_id
 )
 {
 	ipa_flt_rule_add flt_rule_entry;
@@ -4473,7 +4606,7 @@ int IPACM_Wlan::install_uplink_filter_rule_per_client
 		return IPACM_FAILURE;
 	}
 
-	if (get_client_memptr(wlan_client, clnt_indx)->lan_stats_idx == -1)
+	if (get_client_memptr(wlan_client, clnt_indx)->lan_stats_idx == -1 && !ast_update_needed())
 	{
 		IPACMERR("Invalid LAN Stats idx for wlan client:%d \n", clnt_indx);
 		return IPACM_FAILURE;
@@ -4566,7 +4699,11 @@ int IPACM_Wlan::install_uplink_filter_rule_per_client
 		}
 		num_offset_meq_128 = flt_rule_entry.rule.eq_attrib.num_offset_meq_128;
 		offset_meq_128 = &flt_rule_entry.rule.eq_attrib.offset_meq_128[num_offset_meq_128];
-		if(rx_prop->rx[0].hdr_l2_type == IPA_HDR_L2_ETHERNET_II)
+		if(rx_prop->rx[0].hdr_l2_type == IPA_HDR_L2_ETHERNET_II
+#ifdef IPA_HDR_L2_ETHERNET_II_AST
+			|| rx_prop->rx[0].hdr_l2_type == IPA_HDR_L2_ETHERNET_II_AST
+#endif
+			)
 		{
 			offset_meq_128->offset = -8;
 		}
@@ -4610,10 +4747,14 @@ int IPACM_Wlan::install_uplink_filter_rule_per_client
 		IPACMDBG_H("rule: %d has rule_id %d\n",
 				cnt, prop->prop[cnt].rule_id);
 		flt_rule_entry.rule.hashable = prop->prop[cnt].is_rule_hashable;
-		flt_rule_entry.rule.rule_id = (prop->prop[cnt].rule_id & 0x1F) |
-			(get_client_memptr(wlan_client, clnt_indx)->lan_stats_idx << 5) | 0x200;
-		IPACMDBG_H("Modified rule: %d has rule_id %d\n",
-				cnt, flt_rule_entry.rule.rule_id);
+		flt_rule_entry.rule.rule_id = prop->prop[cnt].rule_id;
+		if (!ast_update_needed())
+		{
+			flt_rule_entry.rule.rule_id = (prop->prop[cnt].rule_id & 0x1F) |
+				(get_client_memptr(wlan_client, clnt_indx)->lan_stats_idx << 5) | 0x200;
+			IPACMDBG_H("Modified rule: %d has rule_id %d\n",
+					cnt, flt_rule_entry.rule.rule_id);
+		}
 		if(rx_prop->rx[0].attrib.attrib_mask & IPA_FLT_META_DATA)	//turn on meta-data equation
 		{
 			flt_rule_entry.rule.eq_attrib.rule_eq_bitmap |= (1<<9);
@@ -4621,6 +4762,12 @@ int IPACM_Wlan::install_uplink_filter_rule_per_client
 			flt_rule_entry.rule.eq_attrib.metadata_meq32.offset = 0;
 			flt_rule_entry.rule.eq_attrib.metadata_meq32.value |= rx_prop->rx[0].attrib.meta_data;
 			flt_rule_entry.rule.eq_attrib.metadata_meq32.mask |= rx_prop->rx[0].attrib.meta_data_mask;
+			/* Match TA peer id */
+			if (ast_update_needed())
+			{
+				flt_rule_entry.rule.eq_attrib.metadata_meq32.value |=  (ta_peer_id & 0XFFF);
+				flt_rule_entry.rule.eq_attrib.metadata_meq32.mask |= 0XFFF;
+			}
 		}
 		memcpy(&pFilteringTable->rules[cnt], &flt_rule_entry, sizeof(flt_rule_entry));
 
@@ -4674,7 +4821,8 @@ int IPACM_Wlan::install_uplink_filter_rule_per_client_v2
 	uint8_t *mac_addr,
 	uint8_t ul_cnt_idx,
 	ipa_ioc_add_flt_rule *fw_q6_rules,
-	bool isFirewall
+	bool isFirewall,
+	uint16_t ta_peer_id
 )
 {
 	struct ipa_flt_rule_add_v2 flt_rule_entry;
@@ -4733,7 +4881,7 @@ int IPACM_Wlan::install_uplink_filter_rule_per_client_v2
 		return IPACM_FAILURE;
 	}
 
-	if (get_client_memptr(wlan_client, clnt_indx)->lan_stats_idx == -1)
+	if (get_client_memptr(wlan_client, clnt_indx)->lan_stats_idx == -1 && !ast_update_needed())
 	{
 		IPACMERR("Invalid LAN Stats idx for wlan client:%d \n", clnt_indx);
 		return IPACM_FAILURE;
@@ -4779,7 +4927,8 @@ int IPACM_Wlan::install_uplink_filter_rule_per_client_v2
 	flt_rule_entry.rule.to_uc = 0;
 	flt_rule_entry.rule.eq_attrib_type = 1;
 	flt_rule_entry.rule.enable_stats = true;
-	flt_rule_entry.rule.cnt_idx = ul_cnt_idx;
+	/* When AST update is needed, we do not need stats per client. */
+	flt_rule_entry.rule.cnt_idx = (ul_cnt_idx != -1) ? ul_cnt_idx : (ast_update_needed()) ? 0 : ul_cnt_idx;
 
 	if(iptype == IPA_IP_v4)
 	{
@@ -4855,7 +5004,12 @@ int IPACM_Wlan::install_uplink_filter_rule_per_client_v2
 		}
 		num_offset_meq_128 = flt_rule_entry.rule.eq_attrib.num_offset_meq_128;
 		offset_meq_128 = &flt_rule_entry.rule.eq_attrib.offset_meq_128[num_offset_meq_128];
-		if(rx_prop->rx[0].hdr_l2_type == IPA_HDR_L2_ETHERNET_II)
+		if(rx_prop->rx[0].hdr_l2_type == IPA_HDR_L2_ETHERNET_II
+#ifdef IPA_HDR_L2_ETHERNET_II_AST
+			|| rx_prop->rx[0].hdr_l2_type == IPA_HDR_L2_ETHERNET_II_AST
+#endif
+			)
+
 		{
 			offset_meq_128->offset = -8;
 		}
@@ -4902,7 +5056,14 @@ int IPACM_Wlan::install_uplink_filter_rule_per_client_v2
 			flt_rule_entry.rule.eq_attrib.metadata_meq32.offset = 0;
 			flt_rule_entry.rule.eq_attrib.metadata_meq32.value |= rx_prop->rx[0].attrib.meta_data;
 			flt_rule_entry.rule.eq_attrib.metadata_meq32.mask |= rx_prop->rx[0].attrib.meta_data_mask;
+			/* Match TA peer id */
+			if (ast_update_needed())
+			{
+				flt_rule_entry.rule.eq_attrib.metadata_meq32.value |=  (ta_peer_id & 0XFFF);
+				flt_rule_entry.rule.eq_attrib.metadata_meq32.mask |= 0XFFF;
+			}
 		}
+
 		memcpy((void *)pFilteringTable->rules + (cnt * sizeof(struct ipa_flt_rule_add_v2)),
 			&flt_rule_entry, sizeof(flt_rule_entry));
 		index++;
@@ -4972,7 +5133,7 @@ int IPACM_Wlan::install_uplink_filter_rule
 				if (hw_fnr_stats_support)
 				{
 					ret = install_uplink_filter_rule_per_client_v2(prop, iptype, xlat_mux_id, get_client_memptr(wlan_client, i)->mac,
-						get_client_memptr(wlan_client, i)->ul_cnt_idx);
+						get_client_memptr(wlan_client, i)->ul_cnt_idx, NULL, false, get_client_memptr(wlan_client, i)->ta_peer_id);
 					IPACMDBG_H("fnr : IPA_IP_v4 xlat_mux_id: %d, modem_ul_v4_set %d, ul cnt idx = %d\n", xlat_mux_id,
 						get_client_memptr(wlan_client, i)->ipv4_ul_rules_set, get_client_memptr(wlan_client, i)->ul_cnt_idx);
 				}
@@ -4980,7 +5141,8 @@ int IPACM_Wlan::install_uplink_filter_rule
 #endif //IPA_HW_FNR_STATS
 				{
 					IPACMDBG_H("IPA_IP_v4 xlat_mux_id: %d, modem_ul_v4_set %d\n", xlat_mux_id, modem_ul_v4_set);
-					ret = install_uplink_filter_rule_per_client(prop, iptype, xlat_mux_id, get_client_memptr(wlan_client, i)->mac);
+					ret = install_uplink_filter_rule_per_client(prop, iptype, xlat_mux_id, get_client_memptr(wlan_client, i)->mac,
+						get_client_memptr(wlan_client, i)->ta_peer_id);
 				}
 			}
 		}
@@ -4992,7 +5154,7 @@ int IPACM_Wlan::install_uplink_filter_rule
 				if (hw_fnr_stats_support)
 				{
 					ret = install_uplink_filter_rule_per_client_v2(prop, iptype, xlat_mux_id, get_client_memptr(wlan_client, i)->mac,
-							get_client_memptr(wlan_client, i)->ul_cnt_idx);
+							get_client_memptr(wlan_client, i)->ul_cnt_idx, NULL, false, get_client_memptr(wlan_client, i)->ta_peer_id);
 					IPACMDBG_H("IPA_IP_v6 num_dft_rt_v6 %d xlat_mux_id: %d modem_ul_v6_set: %d, ul_cnt_idx = %d\n", num_dft_rt_v6, xlat_mux_id,
 						get_client_memptr(wlan_client, i)->ipv6_ul_rules_set, get_client_memptr(wlan_client, i)->ul_cnt_idx);
 				}
@@ -5000,7 +5162,8 @@ int IPACM_Wlan::install_uplink_filter_rule
 #endif //IPA_HW_FNR_STATS
 				{
 					IPACMDBG_H("IPA_IP_v6 num_dft_rt_v6 %d xlat_mux_id: %d modem_ul_v6_set: %d\n", num_dft_rt_v6, xlat_mux_id, modem_ul_v6_set);
-					ret = install_uplink_filter_rule_per_client(prop, iptype, xlat_mux_id, get_client_memptr(wlan_client, i)->mac);
+					ret = install_uplink_filter_rule_per_client(prop, iptype, xlat_mux_id, get_client_memptr(wlan_client, i)->mac,
+						get_client_memptr(wlan_client, i)->ta_peer_id);
 				}
 			}
 		} else {
@@ -5036,7 +5199,7 @@ int IPACM_Wlan::delete_uplink_filter_rule_per_client
 		return IPACM_FAILURE;
 	}
 
-	if (get_client_memptr(wlan_client, clnt_indx)->lan_stats_idx == -1)
+	if (get_client_memptr(wlan_client, clnt_indx)->lan_stats_idx == -1 && !ast_update_needed())
 	{
 		IPACMERR("Invalid LAN Stats idx for ethernet client:%d \n", clnt_indx);
 		return IPACM_FAILURE;
@@ -5130,4 +5293,221 @@ int IPACM_Wlan::delete_uplink_filter_rule
 	return ret;
 }
 #endif
+
+int IPACM_Wlan::install_wlan_client_lan2lan_flt_rule(uint8_t *mac, ipa_ip_type iptype)
+{
+	int len, res = IPACM_SUCCESS, clnt_indx;
+	struct ipa_flt_rule_add flt_rule_entry;
+	struct ipa_ioc_add_flt_rule_after *pFilteringTable = NULL;
+	ipa_ioc_get_rt_tbl rt_tbl;
+	ipa_private_subnet *private_subnet = NULL;
+
+#ifdef FEATURE_IPA_V3
+	if (rx_prop == NULL || tx_prop == NULL)
+	{
+		IPACMDBG_H("No rx or tx properties registered for iface %s\n", dev_name);
+		return IPACM_FAILURE;
+	}
+
+	IPACMDBG_H("Received client MAC 0x%02x%02x%02x%02x%02x%02x.\n", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+
+	clnt_indx = get_wlan_client_index(mac);
+
+	if (clnt_indx == IPACM_INVALID_INDEX)
+	{
+		IPACMERR("wlan client not found/attached \n");
+		return IPACM_FAILURE;
+	}
+
+	if ( ! VALID_IPA_IP_TYPE(iptype) )
+	{
+		IPACMERR("Bad iptype(%u)\n", iptype);
+		return IPACM_FAILURE;
+	}
+
+	IPACMDBG_H("Ip-type received %d\n", iptype);
+
+
+	len = sizeof(struct ipa_ioc_add_flt_rule_after) + sizeof(struct ipa_flt_rule_add);
+	pFilteringTable = (struct ipa_ioc_add_flt_rule_after*)malloc(len);
+	if (!pFilteringTable)
+	{
+		IPACMERR("Failed to allocate ipa_ioc_add_flt_rule_after memory...\n");
+		return IPACM_FAILURE;
+	}
+	memset(pFilteringTable, 0, len);
+
+	rt_tbl.ip = iptype;
+
+	if (iptype == IPA_IP_v4)
+		snprintf(rt_tbl.name, IPA_RESOURCE_NAME_MAX, "eth_v4_lan_to_lan_%s",
+			ipa_l2_hdr_type[rx_prop->rx[0].hdr_l2_type]);
+	else
+		snprintf(rt_tbl.name, IPA_RESOURCE_NAME_MAX, "eth_v6_lan_to_lan_%s",
+			ipa_l2_hdr_type[rx_prop->rx[0].hdr_l2_type]);
+
+	IPACMDBG_H("This flt rule points to rt tbl %s.\n", rt_tbl.name);
+
+	if(IPACM_Iface::m_routing.GetRoutingTable(&rt_tbl) == false)
+	{
+		IPACMERR("Failed to get routing table.\n");
+		res = IPACM_FAILURE;
+		goto end;
+	}
+
+	/* add mac based rule*/
+	pFilteringTable->commit = 1;
+	pFilteringTable->ep = rx_prop->rx[0].src_pipe;
+	pFilteringTable->ip = iptype;
+	pFilteringTable->num_rules = 1;
+	pFilteringTable->add_after_hdl = eth_bridge_flt_rule_offset[iptype];
+
+	memset(&flt_rule_entry, 0, sizeof(flt_rule_entry));
+	flt_rule_entry.at_rear = 1;
+
+	flt_rule_entry.rule.retain_hdr = 0;
+	flt_rule_entry.rule.to_uc = 0;
+	flt_rule_entry.rule.action = IPA_PASS_TO_ROUTING;
+	flt_rule_entry.rule.eq_attrib_type = 0;
+	flt_rule_entry.rule.rt_tbl_hdl = rt_tbl.hdl;
+	flt_rule_entry.rule.hashable = true;
+
+	memcpy(&flt_rule_entry.rule.attrib, &rx_prop->rx[0].attrib, sizeof(flt_rule_entry.rule.attrib));
+	if(rx_prop->rx[0].attrib.attrib_mask & IPA_FLT_META_DATA)	//turn on meta-data equation
+	{
+		/* Match TA peer id */
+		flt_rule_entry.rule.attrib.meta_data |=
+			(get_client_memptr(wlan_client, clnt_indx)->ta_peer_id & 0XFFF);
+		flt_rule_entry.rule.attrib.meta_data_mask |= 0XFFF;
+	}
+
+	switch(tx_prop->tx[0].hdr_l2_type)
+	{
+#ifdef IPA_HDR_L2_ETHERNET_II_AST
+	case IPA_HDR_L2_ETHERNET_II_AST:
+#endif
+	case IPA_HDR_L2_ETHERNET_II:
+		flt_rule_entry.rule.attrib.attrib_mask |= IPA_FLT_MAC_SRC_ADDR_ETHER_II;
+		break;
+	case IPA_HDR_L2_802_3:
+		flt_rule_entry.rule.attrib.attrib_mask |= IPA_FLT_MAC_SRC_ADDR_802_3;
+		break;
+	case IPA_HDR_L2_802_1Q:
+		flt_rule_entry.rule.attrib.attrib_mask |= IPA_FLT_MAC_SRC_ADDR_802_1Q;
+		break;
+	default:
+		IPACMERR("unknown header type\n");
+		res = IPACM_FAILURE;
+		goto end;
+	}
+
+	memcpy(flt_rule_entry.rule.attrib.src_mac_addr, mac, sizeof(flt_rule_entry.rule.attrib.dst_mac_addr));
+	memset(flt_rule_entry.rule.attrib.src_mac_addr_mask, 0xFF, sizeof(flt_rule_entry.rule.attrib.dst_mac_addr_mask));
+	flt_rule_entry.rule.attrib.attrib_mask |= IPA_FLT_DST_ADDR;
+	if (iptype == IPA_IP_v4)
+	{
+		memset(&private_subnet, 0, sizeof (private_subnet));
+		if ((private_subnet = IPACM_Iface::ipacmcfg->getPrivateSubnet(get_client_memptr(wlan_client, clnt_indx)->v4_addr)) == NULL)
+		{
+			IPACMERR("Failed to add client filtering rule for LAN2LAN traffic.\n");
+			res = IPACM_FAILURE;
+			goto end;
+		}
+
+		flt_rule_entry.rule.attrib.u.v4.dst_addr_mask = private_subnet->subnet_mask;
+		flt_rule_entry.rule.attrib.u.v4.dst_addr = private_subnet->subnet_addr;
+	}
+	else
+	{
+		flt_rule_entry.rule.attrib.u.v6.dst_addr[0] = ipv6_prefix[0];
+		flt_rule_entry.rule.attrib.u.v6.dst_addr[1] = ipv6_prefix[1];
+		flt_rule_entry.rule.attrib.u.v6.dst_addr[2] = 0x0;
+		flt_rule_entry.rule.attrib.u.v6.dst_addr[3] = 0x0;
+		flt_rule_entry.rule.attrib.u.v6.dst_addr_mask[0] = 0xFFFFFFFF;
+		flt_rule_entry.rule.attrib.u.v6.dst_addr_mask[1] = 0xFFFFFFFF;
+		flt_rule_entry.rule.attrib.u.v6.dst_addr_mask[2] = 0x0;
+		flt_rule_entry.rule.attrib.u.v6.dst_addr_mask[3] = 0x0;
+	}
+
+	memcpy(&(pFilteringTable->rules[0]), &flt_rule_entry, sizeof(flt_rule_entry));
+	if (false == m_filtering.AddFilteringRuleAfter(pFilteringTable))
+	{
+		IPACMERR("Failed to add client filtering rules.\n");
+		res = IPACM_FAILURE;
+		goto end;
+	}
+	if (iptype == IPA_IP_v4)
+		get_client_memptr(wlan_client, clnt_indx)->lan2lan_fl_rule_hdl_v4 = pFilteringTable->rules[0].flt_rule_hdl;
+	else
+		get_client_memptr(wlan_client, clnt_indx)->lan2lan_fl_rule_hdl_v6 = pFilteringTable->rules[0].flt_rule_hdl;
+
+end:
+	free(pFilteringTable);
+#endif
+	return res;
+}
+
+int IPACM_Wlan::delete_wlan_client_lan2lan_flt_rule(uint8_t *mac, ipa_ip_type iptype)
+{
+	int clnt_indx;
+
+	if ( ! VALID_IPA_IP_TYPE(iptype) )
+	{
+		IPACMERR("Bad iptype(%u)\n", iptype);
+		return IPACM_FAILURE;
+	}
+
+	IPACMDBG_H("Ip-type received %d\n", iptype);
+
+	IPACMDBG_H("Received client MAC 0x%02x%02x%02x%02x%02x%02x.\n", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+
+	clnt_indx = get_wlan_client_index(mac);
+
+	if (clnt_indx == IPACM_INVALID_INDEX)
+	{
+		IPACMERR("wlan client not found/attached \n");
+		return IPACM_FAILURE;
+	}
+
+	if ( iptype == IPA_IP_v4 )
+	{
+		if (get_client_memptr(wlan_client, clnt_indx)->lan2lan_fl_rule_hdl_v4)
+		{
+			IPACMDBG_H("Attempting to delete v4 lan2lan filter rule.\n");
+
+			if(m_filtering.DeleteFilteringHdls(
+				   &get_client_memptr(wlan_client, clnt_indx)->lan2lan_fl_rule_hdl_v4, IPA_IP_v4, 1) == true)
+			{
+				IPACMDBG_H("Deleted v4 lan2lan filter rule successfully.\n");
+				get_client_memptr(wlan_client, clnt_indx)->lan2lan_fl_rule_hdl_v4 = 0;
+			}
+			else
+			{
+				IPACMERR("Error deleting v4 icmp filter rule...\n");
+				return IPACM_FAILURE;
+			}
+		}
+	}
+	else /* iptype == IPA_IP_v6 */
+	{
+		if (get_client_memptr(wlan_client, clnt_indx)->lan2lan_fl_rule_hdl_v6)
+		{
+			IPACMDBG_H("Attempting to delete v6 lan2lan filter rule.\n");
+
+			if(m_filtering.DeleteFilteringHdls(
+				   &get_client_memptr(wlan_client, clnt_indx)->lan2lan_fl_rule_hdl_v6, IPA_IP_v6, 1) == true)
+			{
+				IPACMDBG_H("Deleted v6 lan2lan filter rule successfully.\n");
+				get_client_memptr(wlan_client, clnt_indx)->lan2lan_fl_rule_hdl_v6 = 0;
+			}
+			else
+			{
+				IPACMERR("Error deleting v6 icmp filter rule...\n");
+				return IPACM_FAILURE;
+			}
+		}
+	}
+
+	return IPACM_SUCCESS;
+}
 

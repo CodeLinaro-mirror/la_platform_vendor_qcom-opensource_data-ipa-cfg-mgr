@@ -77,6 +77,7 @@
 #include "IPACM_Netlink.h"
 #include "IPACM_Lan.h"
 #include "IPACM_Wan.h"
+#include "IPACM_Wlan.h"
 #include "IPACM_IfaceManager.h"
 #include "linux/rmnet_ipa_fd_ioctl.h"
 #include "linux/ipa_qmi_service_v01.h"
@@ -3816,6 +3817,7 @@ int IPACM_Lan::handle_wan_up_ex(ipacm_ext_prop *ext_prop, ipa_ip_type iptype, ui
 	struct ipa_ioc_write_qmapid mux;
 	int i=0;
 	bool notif_only = false;
+	bool ast_update = false;
 
 	if(rx_prop != NULL)
 	{
@@ -3840,6 +3842,12 @@ int IPACM_Lan::handle_wan_up_ex(ipacm_ext_prop *ext_prop, ipa_ip_type iptype, ui
 			}
 		}
 		close(fd);
+	}
+
+	/* Chck if AST update is needed for WLAN interfaces. */
+	if ((ipa_if_cate == WLAN_IF))
+	{
+		ast_update = ((IPACM_Wlan *)this)->ast_update_needed();
 	}
 
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
@@ -3883,9 +3891,9 @@ int IPACM_Lan::handle_wan_up_ex(ipacm_ext_prop *ext_prop, ipa_ip_type iptype, ui
 			}
 #ifdef FEATURE_VLAN_MPDN
 			notif_only = false;
-			ret = handle_uplink_filter_rule(ext_prop, iptype, xlat_mux_id, false, true);
+			ret = handle_uplink_filter_rule(ext_prop, iptype, xlat_mux_id, false, true, ast_update);
 #else
-			ret = handle_uplink_filter_rule(ext_prop, iptype, xlat_mux_id);
+			ret = handle_uplink_filter_rule(ext_prop, iptype, xlat_mux_id, ast_update);
 #endif
 			if (num_wan_ul_fl_rule_v6 != 0)
 				modem_ul_v6_set = true;
@@ -3898,7 +3906,7 @@ int IPACM_Lan::handle_wan_up_ex(ipacm_ext_prop *ext_prop, ipa_ip_type iptype, ui
 		else
 		{
 			notif_only = true;
-			ret = handle_uplink_filter_rule(ext_prop, iptype, xlat_mux_id, true, true);
+			ret = handle_uplink_filter_rule(ext_prop, iptype, xlat_mux_id, true, true, ast_update);
 			if (num_wan_ul_fl_rule_v6 == 0) {
 				IPACMERR("Modem UL v6 rules not installed, error: %d \n",ret);
 				goto fail;
@@ -3920,9 +3928,9 @@ int IPACM_Lan::handle_wan_up_ex(ipacm_ext_prop *ext_prop, ipa_ip_type iptype, ui
 #ifdef FEATURE_VLAN_MPDN
 			/* for v4, always install the rules like before */
 			notif_only = false;
-			ret = handle_uplink_filter_rule(ext_prop, iptype, xlat_mux_id, false, true);
+			ret = handle_uplink_filter_rule(ext_prop, iptype, xlat_mux_id, false, true, ast_update);
 #else
-			ret = handle_uplink_filter_rule(ext_prop, iptype, xlat_mux_id);
+			ret = handle_uplink_filter_rule(ext_prop, iptype, xlat_mux_id, ast_update);
 #endif
 			if (num_wan_ul_fl_rule_v4 != 0)
 				modem_ul_v4_set = true;
@@ -3936,7 +3944,7 @@ int IPACM_Lan::handle_wan_up_ex(ipacm_ext_prop *ext_prop, ipa_ip_type iptype, ui
 		{
 			/* for v4, always install the rules like before */
 			notif_only = false;
-			ret = handle_uplink_filter_rule(ext_prop, iptype, xlat_mux_id, true	, true);
+			ret = handle_uplink_filter_rule(ext_prop, iptype, xlat_mux_id, true	, true, ast_update);
 			if (num_wan_ul_fl_rule_v4 == 0) {
 				IPACMERR("Modem UL v4 rules not installed, error: %d \n",ret);
 				goto fail;
@@ -3950,9 +3958,9 @@ int IPACM_Lan::handle_wan_up_ex(ipacm_ext_prop *ext_prop, ipa_ip_type iptype, ui
 			iptype, modem_ul_v4_set, modem_ul_v6_set);
 	}
 
-#ifdef FEATURE_IPACM_PER_CLIENT_STATS
+#if defined(FEATURE_IPACM_PER_CLIENT_STATS) || defined(IPA_WDI_AST_UPDATE)
 	/* Install filter rules for the client. */
-	if (!notif_only && IPACM_Iface::ipacmcfg->ipacm_lan_stats_enable == true)
+	if (!notif_only && (IPACM_Iface::ipacmcfg->ipacm_lan_stats_enable == true || ast_update))
 	{
 		IPACMDBG_H("xlat_mux_id: %d, iptype %d\n", xlat_mux_id, iptype);
 		ret = install_uplink_filter_rule(ext_prop, iptype, xlat_mux_id);
@@ -7030,9 +7038,9 @@ fail:
 
 /* install UL filter rule from Q6 */
 #ifdef FEATURE_VLAN_MPDN
-int IPACM_Lan::handle_uplink_filter_rule(ipacm_ext_prop *prop, ipa_ip_type iptype, uint8_t pdn_mux_id, bool notif_only, bool is_xlat)
+int IPACM_Lan::handle_uplink_filter_rule(ipacm_ext_prop *prop, ipa_ip_type iptype, uint8_t pdn_mux_id, bool notif_only, bool is_xlat, bool ast_update)
 #else
-int IPACM_Lan::handle_uplink_filter_rule(ipacm_ext_prop *prop, ipa_ip_type iptype, uint8_t xlat_mux_id)
+int IPACM_Lan::handle_uplink_filter_rule(ipacm_ext_prop *prop, ipa_ip_type iptype, uint8_t xlat_mux_id, bool ast_update)
 #endif
 {
 	ipa_flt_rule_add flt_rule_entry;
@@ -7442,7 +7450,9 @@ int IPACM_Lan::handle_uplink_filter_rule(ipacm_ext_prop *prop, ipa_ip_type iptyp
 	}
 #endif
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
-	if (IPACM_Iface::ipacmcfg->ipacm_lan_stats_enable == false)
+	if (IPACM_Iface::ipacmcfg->ipacm_lan_stats_enable == false && !ast_update)
+#else
+	if (!ast_update)
 #endif
 	{
 		if(false == m_filtering.AddFilteringRule(pFilteringTable))
@@ -9088,6 +9098,12 @@ int IPACM_Lan::install_uplink_filter_rule_per_client_v2
 		{
 			offset_meq_128->offset = -8;
 		}
+#ifdef IPA_HDR_L2_ETHERNET_II_AST
+		else if (rx_prop->rx[0].hdr_l2_type == IPA_HDR_L2_ETHERNET_II_AST)
+		{
+			offset_meq_128->offset = -8;
+		}
+#endif
 		else
 		{
 			offset_meq_128->offset = -16;
@@ -9319,6 +9335,12 @@ int IPACM_Lan::install_uplink_filter_rule_per_client
 		{
 			offset_meq_128->offset = -8;
 		}
+#ifdef IPA_HDR_L2_ETHERNET_II_AST
+		else if (rx_prop->rx[0].hdr_l2_type == IPA_HDR_L2_ETHERNET_II_AST)
+		{
+			offset_meq_128->offset = -8;
+		}
+#endif
 		else
 		{
 			offset_meq_128->offset = -16;
@@ -10864,6 +10886,10 @@ ipa_hdr_proc_type IPACM_Lan::eth_bridge_get_hdr_proc_type(ipa_hdr_l2_type t1,
 			return IPA_HDR_PROC_ETHII_TO_ETHII;
 		if(t2 == IPA_HDR_L2_802_3)
 			return IPA_HDR_PROC_ETHII_TO_802_3;
+#ifdef IPA_HDR_L2_ETHERNET_II_AST
+		if(t2 == IPA_HDR_L2_ETHERNET_II_AST)
+			return IPA_HDR_PROC_ETHII_TO_ETHII;
+#endif
 		break;
 	case IPA_HDR_L2_802_3:
 		if(t2 == IPA_HDR_L2_ETHERNET_II)
@@ -10878,6 +10904,15 @@ ipa_hdr_proc_type IPACM_Lan::eth_bridge_get_hdr_proc_type(ipa_hdr_l2_type t1,
 			return IPA_HDR_PROC_ETHII_TO_ETHII_EX;
 		}
 		break;
+#ifdef IPA_HDR_L2_ETHERNET_II_AST
+	case IPA_HDR_L2_ETHERNET_II_AST:
+		if(t2 == IPA_HDR_L2_ETHERNET_II || t2 == IPA_HDR_L2_ETHERNET_II_AST) {
+			generic_params.input_ethhdr_negative_offset = 14;
+			generic_params.output_ethhdr_negative_offset = 14;
+			return IPA_HDR_PROC_ETHII_TO_ETHII_EX;
+		}
+		break;
+#endif
 	default:
 		return IPA_HDR_PROC_NONE;
 	}
@@ -11311,6 +11346,9 @@ int IPACM_Lan::eth_bridge_add_rt_rule(uint8_t *mac, char *rt_tbl_name, uint32_t 
 
 			switch(peer_l2_hdr_type)
 			{
+#ifdef IPA_HDR_L2_ETHERNET_II_AST
+			case IPA_HDR_L2_ETHERNET_II_AST:
+#endif
 			case IPA_HDR_L2_ETHERNET_II:
 				rt_rule.rule.attrib.attrib_mask |= IPA_FLT_MAC_DST_ADDR_ETHER_II;
 				break;
@@ -11423,6 +11461,9 @@ int IPACM_Lan::eth_bridge_modify_rt_rule(uint8_t *mac, uint32_t hdr_proc_ctx_hdl
 
 			switch(peer_l2_hdr_type)
 			{
+#ifdef IPA_HDR_L2_ETHERNET_II_AST
+			case IPA_HDR_L2_ETHERNET_II_AST:
+#endif
 			case IPA_HDR_L2_ETHERNET_II:
 				rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_MAC_DST_ADDR_ETHER_II;
 				break;
@@ -11510,6 +11551,9 @@ int IPACM_Lan::eth_bridge_add_flt_rule(uint8_t *mac, uint32_t rt_tbl_hdl, ipa_ip
 	memcpy(&flt_rule_entry.rule.attrib, &rx_prop->rx[0].attrib, sizeof(flt_rule_entry.rule.attrib));
 	switch(tx_prop->tx[0].hdr_l2_type)
 	{
+#ifdef IPA_HDR_L2_ETHERNET_II_AST
+	case IPA_HDR_L2_ETHERNET_II_AST:
+#endif
 	case IPA_HDR_L2_ETHERNET_II:
 		flt_rule_entry.rule.attrib.attrib_mask |= IPA_FLT_MAC_DST_ADDR_ETHER_II;
 		break;

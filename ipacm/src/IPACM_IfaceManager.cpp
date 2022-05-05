@@ -166,6 +166,9 @@ void IPACM_IfaceManager::event_callback(ipa_cm_event_id event, void *param)
 				IPACMDBG_H("WLAN AP (%s) link up, iface: %d: \n", IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].iface_name,evt_data->if_index);
 				ifmgr_data.if_index = evt_data->if_index;
 				ifmgr_data.if_type = Q6_WAN;
+#ifdef IPA_WDI_AST_UPDATE
+				ifmgr_data.ast_update = evt_data->ast_update;
+#endif
 				create_iface_instance(&ifmgr_data);
 			}
 			else
@@ -242,6 +245,12 @@ int IPACM_IfaceManager::create_iface_instance(ipacm_ifacemgr_data *param)
 
 	int ipa_interface_index;
 	ipa_interface_index = IPACM_Iface::iface_ipa_index_query(if_index);
+
+	bool ast_update = false;
+
+#ifdef IPA_WDI_AST_UPDATE
+	ast_update = param->ast_update;
+#endif
 
 	if(ipa_interface_index == INVALID_IFACE)
 	{
@@ -446,7 +455,7 @@ int IPACM_IfaceManager::create_iface_instance(ipacm_ifacemgr_data *param)
 		case WLAN_IF:
 			{
 				IPACMDBG_H("Creating WLan interface\n");
-				IPACM_Wlan *wl = new IPACM_Wlan(ipa_interface_index);
+				IPACM_Wlan *wl = new IPACM_Wlan(ipa_interface_index, ast_update);
 				if (wl->rx_prop == NULL && wl->tx_prop == NULL)
 				{
 					/* reset the AP-iface category to unknown */

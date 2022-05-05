@@ -762,6 +762,21 @@ public:
 
 		return false;
 	}
+
+	inline ipa_private_subnet *getPrivateSubnet(uint32_t ip_addr)
+	{
+		for(int cnt = 0; cnt < ipa_num_private_subnet; cnt++)
+		{
+			if(private_subnet_table[cnt].subnet_addr ==
+				(private_subnet_table[cnt].subnet_mask & ip_addr))
+			{
+				return &private_subnet_table[cnt];
+			}
+		}
+
+		return NULL;
+	}
+
 	inline bool AddPrivateSubnet(uint32_t ip_addr, uint32_t ipv4_addr_mask, int ipa_if_index)
 	{
 		ipacm_cmd_q_data evt_data;

@@ -446,6 +446,9 @@ typedef struct _ipacm_event_data_fid
 
 	char iface_name[IPA_IFACE_NAME_LEN];
 	int if_index;
+#ifdef IPA_WDI_AST_UPDATE
+	bool ast_update;
+#endif
 } ipacm_event_data_fid;
 
 typedef struct
@@ -567,6 +570,9 @@ typedef struct _ipacm_ifacemgr_data
 	int if_index;
 	ipacm_wan_iface_type if_type;
 	uint8_t mac_addr[IPA_MAC_ADDR_SIZE];
+#ifdef IPA_WDI_AST_UPDATE
+	bool ast_update;
+#endif
 }ipacm_ifacemgr_data;
 
 struct ipa_vlan_iface_info

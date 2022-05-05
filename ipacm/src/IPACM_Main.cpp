@@ -353,6 +353,9 @@ void* ipa_driver_msg_notifier(void *param)
 			}
 			ipa_get_if_index(event_wlan->name, &(data_fid->if_index));
 			evt_data.event = IPA_WLAN_AP_LINK_UP_EVENT;
+#ifdef IPA_WDI_AST_UPDATE
+			data_fid->ast_update = event_wlan->ast_update;
+#endif
 			evt_data.evt_data = data_fid;
 			break;
 
@@ -485,6 +488,12 @@ void* ipa_driver_msg_notifier(void *param)
 				{
 					IPACMDBG_H("Wlan client id %d\n",event_ex->attribs[cnt].u.sta_id);
 				}
+#ifdef WLAN_HDR_ATTRIB_TA_PEER_ID
+				else if(event_ex->attribs[cnt].attrib_type == WLAN_HDR_ATTRIB_TA_PEER_ID)
+				{
+					IPACMDBG_H("Wlan ta peer id %d\n",event_ex->attribs[cnt].u.ta_peer_id);
+				}
+#endif
 				else
 				{
 					IPACMDBG_H("Wlan message has unexpected type!\n");

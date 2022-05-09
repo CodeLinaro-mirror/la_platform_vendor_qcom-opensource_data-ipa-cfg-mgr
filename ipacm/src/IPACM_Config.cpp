@@ -1342,11 +1342,19 @@ void IPACM_Config::add_bridge_vlan_mapping(ipa_ioc_bridge_vlan_mapping_info *dat
 
 	for(it_mapping = m_bridge_vlan_mapping.begin(); it_mapping != m_bridge_vlan_mapping.end(); it_mapping++)
 	{
-		if(strncmp(data->bridge_name, it_mapping->bridge_iface_name, sizeof(data->bridge_name)) == 0)
+		 if((strncmp(data->bridge_name, it_mapping->bridge_iface_name, sizeof(data->bridge_name)) == 0) && (data->vlan_id == it_mapping->bridge_associated_VID) && (it_mapping->bridge_ipv4 == data->bridge_ipv4) && (it_mapping->subnet_mask == data->subnet_mask))
 		{
 			IPACMERR("The bridge %s was added before with vlan id %d\n", data->bridge_name,
 				it_mapping->bridge_associated_VID);
 			goto fail;
+		}
+		else if((strncmp(data->bridge_name, it_mapping->bridge_iface_name, sizeof(data->bridge_name)) == 0) && (data->vlan_id == it_mapping->bridge_associated_VID) && ((it_mapping->bridge_ipv4 != data->bridge_ipv4) || (it_mapping->subnet_mask != data->subnet_mask)))
+		{
+			IPACMDBG_H("Deleting the existing entry %s Vlan id: %d subnet: 0x%x\n", data->bridge_name, data->vlan_id, data->bridge_ipv4);
+			pthread_mutex_unlock(&vlan_l2tp_lock);
+			IPACM_Config::del_bridge_vlan_mapping(data);
+			pthread_mutex_lock(&vlan_l2tp_lock);
+			break;
 		}
 	}
 

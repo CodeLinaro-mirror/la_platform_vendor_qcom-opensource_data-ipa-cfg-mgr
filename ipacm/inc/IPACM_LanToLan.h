@@ -54,7 +54,6 @@ IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #define MAX_NUM_IFACE 10
 #ifdef FEATURE_VLAN_MPDN
 #define MAX_NUM_CLIENT 32
-#define MAX_NUM_WLAN_CLIENT 128
 #else
 #define MAX_NUM_CLIENT 16
 #endif
@@ -173,7 +172,6 @@ public:
 #endif
 private:
 
-	uint16_t max_num_clients;
 	IPACM_Lan *m_p_iface;
 	bool m_is_ip_addr_assigned[IPA_IP_MAX];
 	bool m_support_inter_iface_offload;

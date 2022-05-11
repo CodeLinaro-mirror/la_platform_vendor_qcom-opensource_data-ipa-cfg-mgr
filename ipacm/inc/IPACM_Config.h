@@ -835,8 +835,7 @@ public:
 	            /* Special case when mac is NULL. Passthrough will be enabled for first client. */
 				/* Device type will be specified as MAX to support WLAN/USB/ETH clients and
 				 * VLAN id can be 0 in case of WLAN or non VLAN interface. */
-				if (ip_pass_mpdn_table[indx].ip_pass_skip_nat &&
-					(memcmp(ip_pass_mpdn_table[indx].ip_pass_mac, null_mac, IPA_MAC_ADDR_SIZE) == 0) &&
+				if ((memcmp(ip_pass_mpdn_table[indx].ip_pass_mac, null_mac, IPA_MAC_ADDR_SIZE) == 0) &&
 					(ip_pass_mpdn_table[indx].ip_pass_dev_type == IPACM_CLIENT_DEVICE_MAX) &&
 					((ip_pass_mpdn_table[indx].vlan_id == vlan_id) ||
 					(ip_pass_mpdn_table[indx].is_default_pdn && vlan_id == 0)))

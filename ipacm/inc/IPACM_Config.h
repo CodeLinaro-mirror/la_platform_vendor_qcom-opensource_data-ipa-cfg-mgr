@@ -310,6 +310,9 @@ public:
 	/* Indicates whether l2tp is enabled or not. */
 	int ipacm_flt_enable;
 
+	/* Indicates whether public ip support is enabled */
+	bool is_public_ip_support_enabled;
+
 #ifdef FEATURE_EoGRE
 	ipa_ipgre_info eogre_info;
 	bool           eogre_enabled;

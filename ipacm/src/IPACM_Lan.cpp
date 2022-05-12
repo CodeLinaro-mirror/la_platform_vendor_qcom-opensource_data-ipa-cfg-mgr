@@ -7140,12 +7140,13 @@ int IPACM_Lan::handle_uplink_filter_rule(ipacm_ext_prop *prop, ipa_ip_type iptyp
 	{
 		bool wan_odu_bridge = (ipa_if_cate == ODU_IF && IPACM_Wan::isWan_Bridge_Mode());
 
-		if ( wan_odu_bridge || compatible_eogre )
+		if ( wan_odu_bridge || compatible_eogre || IPACM_Iface::ipacmcfg->is_public_ip_support_enabled)
 		{
 			IPACMDBG_H(
-				"%s%s\n",
+				"%s%s%s\n",
 				(wan_odu_bridge)   ? "[WAN, ODU are in bridge mode] " : "",
-				(compatible_eogre) ? "[EoGRE enabled]"                : "");
+				(compatible_eogre) ? "[EoGRE enabled]"                : "",
+				(IPACM_Iface::ipacmcfg->is_public_ip_support_enabled) ? "[Public IP enabled]": "");
 			flt_rule_entry.rule.action = IPA_PASS_TO_ROUTING;
 		}
 		else

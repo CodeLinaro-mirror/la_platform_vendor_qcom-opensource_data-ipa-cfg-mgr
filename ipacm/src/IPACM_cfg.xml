@@ -7,6 +7,9 @@
 	<LANStats>
 		<EnableLANStats>0</EnableLANStats>
 	</LANStats>
+	<PublicIpSupport>
+		<EnablePublicIpSupport>0</EnablePublicIpSupport>
+	</PublicIpSupport>
 	<IPACM>
 		<IPACMIface>
 			<Iface>

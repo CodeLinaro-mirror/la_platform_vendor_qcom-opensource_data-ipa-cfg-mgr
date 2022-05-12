@@ -9256,6 +9256,12 @@ int IPACM_Wan::add_catchup_all_filtering_rule_each_pdn(
 					flt_rule_entry.rule.action = IPA_PASS_TO_ROUTING;
 					rt_tbl_name = ipacmcfg->rt_tbl_wan_dl.name;
 				}
+				else if (IPACM_Iface::ipacmcfg->is_public_ip_support_enabled)
+				{
+					IPACMDBG_H("Public IP enabled mode\n");
+					flt_rule_entry.rule.action = IPA_PASS_TO_ROUTING;
+					rt_tbl_name = ipacmcfg->rt_tbl_lan_v4.name;
+				}
 				else
 				{
 					flt_rule_entry.rule.action = IPA_PASS_TO_DST_NAT;

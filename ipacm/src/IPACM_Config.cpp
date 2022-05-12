@@ -644,6 +644,9 @@ int IPACM_Config::Init(void)
 	IPACMDBG_H("ipacm_odu_mode %d\n", ipacm_odu_router_mode);
 	IPACMDBG_H("ipacm_odu_embms_enable %d\n", ipacm_odu_embms_enable);
 
+	/* Get the Public IP suppport config info from XML */
+	is_public_ip_support_enabled = cfg->public_ip_support_enable;
+	IPACMDBG_H("Public IP support config %d\n", is_public_ip_support_enabled);
 
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
 	if (!ipacm_lan_stats_enable_set)

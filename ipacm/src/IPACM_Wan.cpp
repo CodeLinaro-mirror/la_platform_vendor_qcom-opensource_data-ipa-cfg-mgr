@@ -1020,7 +1020,7 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 				}
 				evt_data.event = IPA_USB_LINK_UP_EVENT;
 				evt_data.evt_data = data_fid;
-				IPACMDBG_H("Posting event:%d\n", evt_data.event);
+				IPACMDBG_H("Posting event:%s\n", IPACM_Iface::ipacmcfg->getEventName(evt_data.event));
 				IPACM_EvtDispatcher::PostEvt(&evt_data);
 
 				/* delete previous instance */

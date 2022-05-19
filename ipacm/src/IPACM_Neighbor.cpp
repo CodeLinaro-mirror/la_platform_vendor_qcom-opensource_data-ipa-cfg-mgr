@@ -76,7 +76,7 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 	ipacm_cmd_q_data evt_data;
 	int num_neighbor_client_temp = num_neighbor_client;
 
-	IPACMDBG("Recieved event %d\n", event);
+	IPACMDBG("Recieved event %s\n", IPACM_Iface::ipacmcfg->getEventName(event));
 
 	switch (event)
 	{
@@ -167,8 +167,8 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 							if (IPACM_FAILURE == ipa_interface_index) {
 								IPACMERR("not supported iface id: %d\n", data_all->if_index);
 							} else {
-								IPACMDBG_H("Posted event %d, with %s for ipv4 client re-connect\n",
-									evt_data.event,
+								IPACMDBG_H("Posted event %s, with %s for ipv4 client re-connect\n",
+									IPACM_Iface::ipacmcfg->getEventName(evt_data.event),
 									data_all->iface_name);
 							}
 						}
@@ -363,12 +363,12 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 #ifndef FEATURE_VLAN_MPDN
 									IPACMERR("not supported iface id: %d\n", data_all->if_index);
 #else
-									IPACMDBG_H("Posted event %d with %s for ipv4\n",
-										evt_data.event, data->iface_name);
+									IPACMDBG_H("Posted event %s with %s for ipv4\n",
+										IPACM_Iface::ipacmcfg->getEventName(evt_data.event), data->iface_name);
 #endif
 								} else {
-									IPACMDBG_H("Posted event %d with %s for ipv4\n",
-										evt_data.event, data->iface_name);
+									IPACMDBG_H("Posted event %s with %s for ipv4\n",
+										IPACM_Iface::ipacmcfg->getEventName(evt_data.event), data->iface_name);
 								}
 								break;
 							}
@@ -612,8 +612,8 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 						memcpy(data_all, data, sizeof(ipacm_event_data_all));
 						evt_data.evt_data = (void *)data_all;
 						IPACM_EvtDispatcher::PostEvt(&evt_data);
-						IPACMDBG_H("Posted event %d with %s for ipv4\n",
-							evt_data.event, data->iface_name);
+						IPACMDBG_H("Posted event %s with %s for ipv4\n",
+							IPACM_Iface::ipacmcfg->getEventName(evt_data.event), data->iface_name);
 					}
 				}
 			}
@@ -745,12 +745,12 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 #if !defined(FEATURE_VLAN_MPDN) && !defined(FEATURE_L2TP)
 									IPACMERR("not supported iface id: %d\n", data_all->if_index);
 #else
-									IPACMDBG_H("Posted event %d, with %s for ipv6\n",
-										evt_data.event, data->iface_name);
+									IPACMDBG_H("Posted event %s, with %s for ipv6\n",
+										IPACM_Iface::ipacmcfg->getEventName(evt_data.event), data->iface_name);
 #endif
 								} else {
-									IPACMDBG_H("Posted event %d with %s for ipv6\n",
-										evt_data.event, data->iface_name);
+									IPACMDBG_H("Posted event %s with %s for ipv6\n",
+										IPACM_Iface::ipacmcfg->getEventName(evt_data.event), data->iface_name);
 								}
 								break;
 							}
@@ -772,8 +772,8 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 						memcpy(data_all, data, sizeof(ipacm_event_data_all));
 						evt_data.evt_data = (void *)data_all;
 						IPACM_EvtDispatcher::PostEvt(&evt_data);
-						IPACMDBG_H("Posted event %d with %s for ipv6 (%d)\n",
-							evt_data.event, data_all->iface_name, data_all->iptype);
+						IPACMDBG_H("Posted event %s with %s for ipv6 (%d)\n",
+							IPACM_Iface::ipacmcfg->getEventName(evt_data.event), data_all->iface_name, data_all->iptype);
 					}
 				}
 				else
@@ -921,8 +921,8 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 									evt_data.evt_data = (void *)data_all;
 #endif
 									IPACM_EvtDispatcher::PostEvt(&evt_data);
-									IPACMDBG_H("Posted event %d with %s for ipv4\n",
-										evt_data.event, data_all->iface_name);
+									IPACMDBG_H("Posted event %s with %s for ipv4\n",
+										IPACM_Iface::ipacmcfg->getEventName(evt_data.event), data_all->iface_name);
 								}
 							}
 							/* delete cache neighbor entry */

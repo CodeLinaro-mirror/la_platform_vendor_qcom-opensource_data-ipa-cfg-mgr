@@ -9371,7 +9371,7 @@ int IPACM_Lan::modify_private_subnet()
 		}
 	}
 #endif
-
+	IPACMDBG_H("Memory allocating for ipa_num_private_subnet = %d mtu_rule_cnt = %d\n", IPACM_Iface::ipacmcfg->ipa_num_private_subnet, mtu_rule_cnt);
 	len = sizeof(struct ipa_ioc_add_flt_rule_after) + (IPACM_Iface::ipacmcfg->ipa_num_private_subnet + mtu_rule_cnt) * sizeof(struct ipa_flt_rule_add);
 	pFilteringTable = (struct ipa_ioc_add_flt_rule_after*)malloc(len);
 	if(!pFilteringTable)
@@ -9655,6 +9655,7 @@ int IPACM_Lan::modify_ipv6_prefix_flt_rule()
 	}
 #endif
 
+        IPACMDBG_H("Memory allocating for num_ipv6_prefixes rules = %d num_no_offload_ipv6_prefix rules = %d mtu_rule_cnt = %d\n", IPACM_Iface::ipacmcfg->num_ipv6_prefixes, IPACM_Iface::ipacmcfg->num_no_offload_ipv6_prefix, mtu_rule_cnt);
 	len = sizeof(struct ipa_ioc_mdfy_flt_rule) + (IPACM_Iface::ipacmcfg->num_ipv6_prefixes + IPACM_Iface::ipacmcfg->num_no_offload_ipv6_prefix + mtu_rule_cnt) * sizeof(struct ipa_flt_rule_mdfy);
 	pFilteringTable = (struct ipa_ioc_mdfy_flt_rule*)malloc(len);
 	if(!pFilteringTable)
@@ -9717,12 +9718,12 @@ int IPACM_Lan::modify_ipv6_prefix_flt_rule()
 			flt_rule.rule.attrib.attrib_mask |= IPA_FLT_SRC_ADDR;
 			if (construct_mtu_rule(&flt_rule.rule, IPA_IP_v6, mtu[i]))
 				IPACMERR("Failed to modify MTU filtering rule.\n");
-			memcpy(&(pFilteringTable->rules[mtu_rule_idx + i]), &flt_rule, sizeof(struct ipa_flt_rule_mdfy));
+			memcpy(&(pFilteringTable->rules[mtu_rule_idx++]), &flt_rule, sizeof(struct ipa_flt_rule_mdfy));
 
 			IPACMDBG_H("Adding MTU rule for v6 prefix 0x[%X][%X], entry(%d)\n",
 				flt_rule.rule.attrib.u.v6.src_addr[3],
 				flt_rule.rule.attrib.u.v6.src_addr[2],
-				mtu_rule_idx + i);
+				mtu_rule_idx);
 		}
 	}
 

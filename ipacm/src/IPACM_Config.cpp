@@ -747,26 +747,6 @@ int IPACM_Config::Init(void)
 		ipacm_lan_stats_enable_set = true;
 		IPACMDBG_H("ipacm_lan_stats_enable %d. \n", ipacm_lan_stats_enable);
 	}
-#ifdef IPA_HW_FNR_STATS
-	if(ipacm_lan_stats_enable && (GetIPAVer(true) >= IPA_HW_v4_5)) {
-		if (hw_fnr_stats_support == true) {
-			IPACMERR("FnR counter allocated already, skip dup allocation\n");
-			goto skip_fnr_alloc;
-		}
-		if (ipacm_alloc_fnr_counters(&fnr_counters, m_fd))
-		{
-			IPACMERR("Failed to allocate fnr counters. Try Realloc"
-				"Again  In main()\n");
-		}
-		else
-		{
-			hw_fnr_stats_support = true;
-			IPACMDBG_H("Allocating fnr counters :  Done (%d)\n",
-				hw_fnr_stats_support);
-		}
-	}
-skip_fnr_alloc:
-#endif //IPA_HW_FNR_STATS
 #endif
 	ipv6_nat_enable = cfg->ipv6_nat_enable;
 	ipacm_l2tp_enable = cfg->ipacm_l2tp_enable;
@@ -4140,3 +4120,21 @@ int IPACM_Config::SetWlanVlanAp(char *event_iface_name) {
 
 	return ret;
 }
+#ifdef IPA_HW_FNR_STATS
+
+void IPACM_Config::alloc_fnr_counter(void)
+{
+	if(ipacm_lan_stats_enable) {
+		if (hw_fnr_stats_support == true) {
+			IPACMERR("FnR counter allocated already, skip dup allocation\n");
+		}
+		if (ipacm_alloc_fnr_counters(&fnr_counters, m_fd))
+		{
+			IPACMERR("Failed to allocate fnr counters.\n");
+		} else {
+			IPACMDBG_H("Allocating fnr counters :  Done\n");
+			hw_fnr_stats_support = true;
+		}
+	}
+}
+#endif

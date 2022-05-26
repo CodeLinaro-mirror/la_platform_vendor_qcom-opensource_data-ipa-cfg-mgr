@@ -401,6 +401,22 @@ void* ipa_driver_msg_notifier(void *param)
 				goto done;
 			}
 			ipa_get_if_index(event_wlan->name, &(data_fid->if_index));
+			IPACMDBG_H("Getting netdev if_index: %d\n",data_fid->if_index);
+			/* Handling case when netdev deregistration happens before receiving STA DISCONNECT from WLAN driver */
+			if(data_fid->if_index == -1)
+			{
+				if(event_wlan->if_index)
+				{
+					IPACMDBG_H("WA to use if_index: %d passed from WLAN\n",event_wlan->if_index);
+					data_fid->if_index = event_wlan->if_index;
+				}
+				else
+				{
+					IPACMERR("Invalid if_index: %d received from WLAN\n",event_wlan->if_index);
+					free(data_fid);
+					goto done;
+				}
+			}
 			evt_data.event = IPA_WLAN_LINK_DOWN_EVENT;
 			evt_data.evt_data = data_fid;
 			break;
@@ -1275,7 +1291,7 @@ void* ipa_driver_msg_notifier(void *param)
 
 		}
 		/* finish command queue */
-		IPACMDBG_H("Posting event:%d\n", evt_data.event);
+		IPACMDBG_H("Posting event:%s\n", IPACM_Iface::ipacmcfg->getEventName(evt_data.event));
 		IPACM_EvtDispatcher::PostEvt(&evt_data);
 		/* push new_neighbor with netdev device internally */
 		if(new_neigh_data != NULL)
@@ -1367,7 +1383,7 @@ static void IPACM_Signals_handler(int sig, siginfo_t *info, void *extra)
 	}
 
 	/* finish command queue */
-	IPACMDBG_H("Posting event:%d\n", evt_data.event);
+	IPACMDBG_H("Posting event:%s\n", IPACM_Iface::ipacmcfg->getEventName(evt_data.event));
 	IPACM_EvtDispatcher::PostEvt(&evt_data);
 	return;
 }

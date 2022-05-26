@@ -408,7 +408,7 @@ int IPACM_ConntrackListener::CheckNatIface(int if_index, bool *NatIface)
 	struct ifreq ifr;
 	*NatIface = false;
 
-	IPACMDBG("Received interface index %d", if_index);
+	IPACMDBG("Received interface index %d\n", if_index);
 
 	if (pConfig == NULL)
 	{
@@ -467,7 +467,7 @@ int IPACM_ConntrackListener::CheckNatIface(int if_index, bool *NatIface)
 					pNatIfaces[i].iface_name,
 					sizeof(pNatIfaces[i].iface_name)) == 0)
 		{
-			IPACMDBG_H("Nat iface (%s), entry (%d), dont cache",
+			IPACMDBG_H("Nat iface (%s), entry (%d), dont cache\n",
 						pNatIfaces[i].iface_name, i);
 			*NatIface = true;
 			return IPACM_SUCCESS;

@@ -77,7 +77,8 @@ typedef struct __nat_client_info
 typedef struct _nat_pdn_entry
 {
 	uint32_t public_ip;
-	uint16_t vlan_id;
+	uint16_t associated_VIDs[IPA_MAX_NUM_SW_PDNS];
+	uint8_t VID_cnt;
 }nat_pdn_entry;
 #endif
 

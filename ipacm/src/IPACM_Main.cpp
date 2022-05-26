@@ -1106,6 +1106,13 @@ int main(int argc, char **argv)
 	IPACMDBG_H("RESET IPA-HW rules\n");
 	ipa_reset();
 #endif
+
+#ifdef IPA_HW_FNR_STATS
+	IPACM_Iface::ipacmcfg->alloc_fnr_counter();
+	IPACMDBG_H("Reallocation FNR Counter: Done\n");
+#endif
+
+
 	neigh = new IPACM_Neighbor();
 
 	IPACM_IfaceManager *ifacemgr = new IPACM_IfaceManager();

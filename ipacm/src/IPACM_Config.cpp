@@ -717,23 +717,6 @@ reread:
 		ipacm_lan_stats_enable_set = true;
 		IPACMDBG_H("ipacm_lan_stats_enable %d. \n", ipacm_lan_stats_enable);
 	}
-#ifdef IPA_HW_FNR_STATS
-	if(ipacm_lan_stats_enable && (GetIPAVer(true) >= IPA_HW_v4_5)) {
-		if (hw_fnr_stats_support == true) {
-			IPACMERR("FnR counter allocated already, skip dup allocation\n");
-			goto skip_fnr_alloc;
-		}
-		if (ipacm_alloc_fnr_counters(&fnr_counters, m_fd))
-		{
-			IPACMERR("Failed to allocate fnr counters.\n");
-			goto fail;
-		} else
-			IPACMDBG_H("Allocating fnr counters :  Done\n");
-
-		hw_fnr_stats_support = true;
-	}
-skip_fnr_alloc:
-#endif //IPA_HW_FNR_STATS
 #endif
 	ipv6_nat_enable = cfg->ipv6_nat_enable;
 	ipacm_l2tp_enable = cfg->ipacm_l2tp_enable;
@@ -4640,3 +4623,21 @@ void IPACM_Config::flush_qos_params_info(ipa_ioc_qos_config *data)
 	IPACMDBG_H("Flushed qos params list size now :%d \n", m_qos_params.size());
 	return;
 }
+#ifdef IPA_HW_FNR_STATS
+
+void IPACM_Config::alloc_fnr_counter(void)
+{
+	if(ipacm_lan_stats_enable) {
+		if (hw_fnr_stats_support == true) {
+			IPACMERR("FnR counter allocated already, skip dup allocation\n");
+		}
+		if (ipacm_alloc_fnr_counters(&fnr_counters, m_fd))
+		{
+			IPACMERR("Failed to allocate fnr counters.\n");
+		} else {
+			IPACMDBG_H("Allocating fnr counters :  Done\n");
+			hw_fnr_stats_support = true;
+		}
+	}
+}
+#endif

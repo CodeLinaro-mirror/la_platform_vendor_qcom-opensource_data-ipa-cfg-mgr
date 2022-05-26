@@ -600,10 +600,10 @@ int IPACM_Config::Init(void)
 		{
 			IPACMERR("Failed to allocate fnr counters.\n");
 			goto fail;
-		} else
+		} else {
 			IPACMDBG_H("Allocating fnr counters :  Done\n");
-
-		hw_fnr_stats_support = true;
+			hw_fnr_stats_support = true;
+		}
 	}
 skip_fnr_alloc:
 #endif //IPA_HW_FNR_STATS
@@ -2624,3 +2624,21 @@ int IPACM_Config::query_mux_id(rmnet_mux_id_info *mux_id_info)
 
 #endif //defined(FEATURE_SOCKSv5) && defined (IPA_SOCKV5_ADD)
 
+#ifdef IPA_HW_FNR_STATS
+
+void IPACM_Config::alloc_fnr_counter(void)
+{
+	if(ipacm_lan_stats_enable && (GetIPAVer(true) >= IPA_HW_v4_5)) {
+		if (hw_fnr_stats_support == true) {
+			IPACMERR("FnR counter allocated already, skip dup allocation\n");
+		}
+		if (ipacm_alloc_fnr_counters(&fnr_counters, m_fd))
+		{
+			IPACMERR("Failed to allocate fnr counters.\n");
+		} else {
+			IPACMDBG_H("Allocating fnr counters :  Done\n");
+			hw_fnr_stats_support = true;
+		}
+	}
+}
+#endif

@@ -293,7 +293,7 @@ int IPACM_Config::ipacm_reset_hw_fnr_counters(const uint8_t start_id, const uint
 	/* Create a query with required params */
 	query->start_id = start_id;
 	query->end_id = end_id;
-	query->reset = true;
+	query->reset = false;
 	query->stats_size = sizeof(struct ipa_flt_rt_stats);
 	num_counters = end_id - start_id + 1;
 

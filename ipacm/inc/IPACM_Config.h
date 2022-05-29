@@ -49,7 +49,9 @@
 #else
 #include <list>
 #endif
-
+#include <set>
+#include <map>
+#include <algorithm>
 typedef struct
 {
   char iface_name[IPA_IFACE_NAME_LEN];
@@ -206,6 +208,14 @@ public:
 
 	/* To return the instance */
 	static IPACM_Config* GetInstance();
+
+#ifdef FEATURE_IPACM_PER_CLIENT_STATS
+	/* list to capture mac addrs of clients for which stats are enabled */
+	std::set<std::array<uint8_t, 6>> mac_addrs_stats_cache;
+	void stats_client_info(uint8_t *mac_addr, bool is_add);
+	bool client_in_stats_cache(uint8_t *mac_addr);
+	pthread_mutex_t stats_client_info_lock;
+#endif
 
 #if defined(FEATURE_L2TP) || defined(FEATURE_VLAN_MPDN)
 	pthread_mutex_t vlan_l2tp_lock;

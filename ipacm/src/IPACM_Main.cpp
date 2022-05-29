@@ -777,6 +777,7 @@ void* ipa_driver_msg_notifier(void *param)
 						 event_lan_client.mac,
 						 sizeof(event_lan_client.mac));
 			ipa_get_if_index(event_lan_client.lanIface, &(data->if_index));
+			IPACM_Iface::ipacmcfg->stats_client_info(data->mac_addr, true);
 			evt_data.event = IPA_LAN_CLIENT_CONNECT_EVENT;
 			evt_data.evt_data = data;
 			break;
@@ -794,6 +795,7 @@ void* ipa_driver_msg_notifier(void *param)
 						 event_lan_client.mac,
 						 sizeof(event_lan_client.mac));
 			ipa_get_if_index(event_lan_client.lanIface, &(data->if_index));
+			IPACM_Iface::ipacmcfg->stats_client_info(data->mac_addr, false);
 			evt_data.event = IPA_LAN_CLIENT_DISCONNECT_EVENT;
 			evt_data.evt_data = data;
 			break;

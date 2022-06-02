@@ -291,6 +291,7 @@ public:
 	int reset_cnt_idx(int index, bool reset_all);
 	int get_free_cnt_idx(void);
 	int ipacm_reset_hw_fnr_counters(const uint8_t start_id, const uint8_t end_id);
+	void alloc_fnr_counter(void);
 #endif
 
 	const char* getEventName(ipa_cm_event_id event_id);

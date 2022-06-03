@@ -44,6 +44,7 @@ IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <IPACM_EvtDispatcher.h>
 #include "IPACM_Defs.h"
 #include "IPACM_Log.h"
+#include "IPACM_Netlink.h"
 
 #define MAX_FDB_ROW_LEN 200
 #define MAX_FDB_PARAM_CNT 5
@@ -69,12 +70,14 @@ IPACM_Neighbor::IPACM_Neighbor()
 void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 {
 	ipacm_event_data_all *data_all = NULL;
+	ipacm_event_new_neigh_vlan *new_neigh_vlan_data = NULL;
 #ifdef FEATURE_VLAN_MPDN
 	ipacm_event_new_neigh_vlan *data_vlan = NULL;
 #endif
 	int i, ipa_interface_index;
 	ipacm_cmd_q_data evt_data;
 	int num_neighbor_client_temp = num_neighbor_client;
+	char iface_name[IPA_IFACE_NAME_LEN] = {0};
 
 	IPACMDBG("Recieved event %s\n", IPACM_Iface::ipacmcfg->getEventName(event));
 
@@ -84,6 +87,20 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 		{
 			ipacm_event_data_wlan_ex *data = (ipacm_event_data_wlan_ex *)param;
 			ipa_interface_index = IPACM_Iface::iface_ipa_index_query(data->if_index);
+
+			ipa_get_if_name(iface_name, data->if_index);
+
+#ifdef FEATURE_VLAN_MPDN
+			if(IPACM_FAILURE != ipa_interface_index && ((IPACM_Iface::ipacmcfg->ipacm_mpdn_enable == TRUE) ||
+				(IPACM_Iface::ipacmcfg->ipacm_emesh_enable == TRUE && IPACM_Iface::ipacmcfg->ipacm_emesh_mode >= 2)))
+			{
+				if(IPACM_Iface::ipacmcfg->iface_in_vlan_mode(iface_name))
+				{
+					IPACMDBG_H("ignoring physical IFACE neighbor event in VLAN mode\n");
+					break;
+				}
+			}
+#endif
 			/* check for failure return */
 			if (IPACM_FAILURE == ipa_interface_index) {
 				IPACMERR("IPA_WLAN_CLIENT_ADD_EVENT_EX: not supported iface id: %d\n", data->if_index);
@@ -92,7 +109,7 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 			uint8_t client_mac_addr[6];
 			memset(client_mac_addr,0,sizeof(client_mac_addr));
 
-			IPACMDBG_H("Received IPA_WLAN_CLIENT_ADD_EVENT\n");
+			IPACMDBG_H("Received IPA_WLAN_CLIENT_ADD_EVENT_EX\n");
 			for(i = 0; i < data->num_of_attribs; i++)
 			{
 				if(data->attribs[i].attrib_type == WLAN_HDR_ATTRIB_MAC_ADDR)
@@ -116,7 +133,7 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 				if (memcmp(neighbor_client[i].mac_addr, client_mac_addr, sizeof(neighbor_client[i].mac_addr)) == 0)
 				{
 					/* check if iface is not bridge interface*/
-					if (strcmp(IPACM_Iface::ipacmcfg->ipa_virtual_iface_name, IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].iface_name) != 0)
+					if (!strstr(IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].iface_name, "bridge"))
 					{
 						/* use previous ipv4 first */
 						if(data->if_index != neighbor_client[i].iface_index)
@@ -144,13 +161,15 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 							}
 
 							evt_data.event = IPA_NEIGH_CLIENT_IP_ADDR_ADD_EVENT;
-							data_all = (ipacm_event_data_all *)malloc(sizeof(ipacm_event_data_all));
+							new_neigh_vlan_data = (ipacm_event_new_neigh_vlan *)malloc(sizeof(ipacm_event_new_neigh_vlan));
+
+							data_all = &new_neigh_vlan_data->data_all;
 							if (data_all == NULL)
 							{
 								IPACMERR("Unable to allocate memory\n");
 								return;
 							}
-							memset(data_all,0,sizeof(ipacm_event_data_all));
+							memset(data_all,0,sizeof(ipacm_event_new_neigh_vlan));
 							data_all->iptype = IPA_IP_v4;
 							data_all->if_index = neighbor_client[i].iface_index;
 							data_all->ipv4_addr = neighbor_client[i].v4_addr; //use previous ipv4 address
@@ -159,7 +178,22 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 												sizeof(data_all->mac_addr));
 							memcpy(data_all->iface_name, neighbor_client[i].iface_name,
 								sizeof(data_all->iface_name));
-							evt_data.evt_data = (void *)data_all;
+
+#ifdef FEATURE_VLAN_MPDN
+							ipacm_bridge *bridge;
+							if (IPACM_Iface::ipacmcfg->ipacm_mpdn_enable == TRUE)
+							{
+								/* Get the bridge interface info */
+								bridge = IPACM_Iface::ipacmcfg->get_vlan_bridge(neighbor_client[i].iface_name);
+								if (!bridge) {
+									/* get_vlan bridge failed */
+									IPACMERR("couldn't get bridge %s, not sending internal event\n", neighbor_client[i].iface_name);
+									return;
+								}
+							}
+							new_neigh_vlan_data->bridge = bridge;
+#endif
+							evt_data.evt_data = (void *)new_neigh_vlan_data;
 							IPACM_EvtDispatcher::PostEvt(&evt_data);
 							/* ask for replaced iface name*/
 							ipa_interface_index = IPACM_Iface::iface_ipa_index_query(data_all->if_index);
@@ -200,7 +234,8 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 			}
 #endif
 #ifdef FEATURE_VLAN_MPDN
-			if(IPACM_FAILURE != ipa_interface_index && (IPACM_Iface::ipacmcfg->ipacm_mpdn_enable == TRUE))
+			if(IPACM_FAILURE != ipa_interface_index && ((IPACM_Iface::ipacmcfg->ipacm_mpdn_enable == TRUE) ||
+				(IPACM_Iface::ipacmcfg->ipacm_emesh_enable == TRUE && IPACM_Iface::ipacmcfg->ipacm_emesh_mode >= 2)))
 			{
 				if(IPACM_Iface::ipacmcfg->iface_in_vlan_mode(data->iface_name))
 				{

@@ -221,6 +221,10 @@ if (!(a)) {                                                 \
 #define GREEnabled_TAG                       "GREEnabled"
 #define GRE_Server_TAG                       "GREServer"
 
+#define IPACM_EASY_MESH                      "IPACMEMESH"
+#define IPACM_Easy_Mesh_Enabled              "IPACMEMESHEnabled"
+#define IPACM_Easy_Mesh_Mode                 "IPACMEMESHMode"
+
 /*---------------------------------------------------------------------------
       IP protocol numbers - use in dss_socket() to identify protocols.
       Also contains the extension header types for IPv6.
@@ -352,6 +356,8 @@ typedef struct  _IPACM_conf_t
 	bool ipv6_nat_enable;
 	int ipacm_l2tp_enable;
 	bool ipacm_mpdn_enable;
+	bool ipacm_emesh_enable;
+	uint32_t ipacm_emesh_mode;
 	bool ipacm_socksv5_enable;
 	ipacm_gre_conf_t gre_conf;
 	bool public_ip_support_enable;

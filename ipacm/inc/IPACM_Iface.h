@@ -135,6 +135,7 @@ public:
 
 	/* IPACM interface category */
 	ipacm_iface_type ipa_if_cate;
+	bool is_if_svap;
 
 	/* IPACM interface name */
 	char dev_name[IF_NAME_LEN];

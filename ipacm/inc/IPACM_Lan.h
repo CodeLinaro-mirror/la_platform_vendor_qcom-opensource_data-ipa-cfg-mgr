@@ -334,6 +334,7 @@ public:
 	/* configure private subnet filter rules*/
 	int modify_private_subnet();
 	virtual int handle_private_subnet(ipa_ip_type iptype);
+	int eth_bridge_get_vlan_hdr_template_hdl(uint32_t *hdr_hdl, uint16_t vlan_id);
 #ifdef FEATURE_VLAN_MPDN
 	int add_vlan_private_subnet(ipacm_bridge *bridge);
 	int modify_ipv6_prefix_flt_rule();
@@ -546,7 +547,7 @@ public:
 	int install_ipv4_icmp_flt_rule();
 
 	/* add header processing context and return handle to lan2lan controller */
-	int eth_bridge_add_hdr_proc_ctx(ipa_hdr_l2_type peer_l2_hdr_type, uint32_t *hdl);
+	int eth_bridge_add_hdr_proc_ctx(ipa_hdr_l2_type peer_l2_hdr_type, uint32_t *hdl, uint16_t vlan_id);
 
 	/* add routing rule and return handle to lan2lan controller */
 	int eth_bridge_add_rt_rule(uint8_t *mac, char *rt_tbl_name, uint32_t hdr_proc_ctx_hdl,

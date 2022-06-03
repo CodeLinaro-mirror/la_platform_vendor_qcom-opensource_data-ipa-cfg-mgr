@@ -460,6 +460,7 @@ void* ipa_driver_msg_notifier(void *param)
 						event_ex->num_of_attribs * sizeof(ipa_wlan_hdr_attrib_val));
 
 			ipa_get_if_index(event_ex->name, &(data_ex->if_index));
+			IPACMDBG_H("Received interface index %d for interface name %s\n",data_ex->if_index, event_ex->name);
 			evt_data.event = IPA_WLAN_CLIENT_ADD_EVENT_EX;
 			evt_data.evt_data = data_ex;
 
@@ -471,6 +472,7 @@ void* ipa_driver_msg_notifier(void *param)
 				goto done;
 			}
 			memset(new_neigh_data, 0, sizeof(ipacm_event_data_all));
+			strlcpy(new_neigh_data->iface_name, event_ex->name, IPA_IFACE_NAME_LEN);
 			new_neigh_data->iptype = IPA_IP_v6;
 			for(cnt = 0; cnt < event_ex->num_of_attribs; cnt++)
 			{
@@ -485,12 +487,12 @@ void* ipa_driver_msg_notifier(void *param)
 				{
 					IPACMDBG_H("Wlan client id %d\n",event_ex->attribs[cnt].u.sta_id);
 				}
-#ifdef WLAN_HDR_ATTRIB_TA_PEER_ID
+	#ifdef WLAN_HDR_ATTRIB_TA_PEER_ID
 				else if(event_ex->attribs[cnt].attrib_type == WLAN_HDR_ATTRIB_TA_PEER_ID)
 				{
 					IPACMDBG_H("Wlan ta peer id %d\n",event_ex->attribs[cnt].u.ta_peer_id);
 				}
-#endif
+	#endif
 				else
 				{
 					IPACMDBG_H("Wlan message has unexpected type!\n");
@@ -499,6 +501,7 @@ void* ipa_driver_msg_notifier(void *param)
 			new_neigh_data->if_index = data_ex->if_index;
 			new_neigh_evt.evt_data = (void*)new_neigh_data;
 			new_neigh_evt.event = IPA_NEW_NEIGH_EVENT;
+
 			free(event_ex);
 			break;
 

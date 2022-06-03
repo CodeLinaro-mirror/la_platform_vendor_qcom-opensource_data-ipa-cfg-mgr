@@ -638,4 +638,12 @@ typedef struct ext_router_prefix_info
 	uint32_t ipv6_mask[4];
 	char pdn_name[IPA_IFACE_NAME_LEN];
 };
+
+typedef struct _svap_vlan_hpc_hdl
+{
+	uint16_t vlan_id;
+	ipa_hdr_l2_type peer_l2_type;
+	uint32_t hpc_hdr_hdl;
+}svap_vlan_hpc_hdl;
+
 #endif /* IPA_CM_DEFS_H */

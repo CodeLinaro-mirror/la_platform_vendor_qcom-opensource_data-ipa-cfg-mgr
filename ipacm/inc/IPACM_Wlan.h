@@ -97,13 +97,18 @@ typedef struct _ipa_wlan_client
 	uint32_t v4_addr;
 	uint32_t hdr_hdl_v4;
 	uint32_t hdr_hdl_v6;
+	uint32_t hpc_hdr_hdl_v4;
+	uint32_t hpc_hdr_hdl_v6;
 	bool route_rule_set_v4;
 	int route_rule_set_v6;
 	bool ipv4_set;
 	int ipv6_set;
 	bool ipv4_header_set;
 	bool ipv6_header_set;
+	bool ipv4_hpc_set;
+	bool ipv6_hpc_set;
 	bool power_save_set;
+	bool is_vlan;
 	int if_index;
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
 	bool ipv4_ul_rules_set;
@@ -147,6 +152,13 @@ public:
 	bool is_guest_ap();
 
 	bool ast_update_needed();
+
+	bool is_svap_iface();
+	int set_svap_iface_mode(bool enable);
+	void update_svap_state();
+	int handle_wlan_vlan_neighbor(ipacm_event_new_neigh_vlan *param);
+	int add_rt_rules_for_ast_update_ifaces();
+
 
 #if defined(FEATURE_IPACM_PER_CLIENT_STATS) || defined(IPA_WDI_AST_UPDATE)
 	/* install UL filter rule from Q6 per client */
@@ -213,9 +225,11 @@ public:
 	/* add filtering rule and return handle to lan2lan controller */
 	int eth_bridge_add_flt_rule(uint8_t *mac, uint32_t rt_tbl_hdl, ipa_ip_type iptype, uint32_t *flt_rule_hdl, uint16_t vlan_id = 0);
 
-	int install_wlan_client_lan2lan_flt_rule(uint8_t *mac, ipa_ip_type iptype);
+	int install_wlan_client_lan2lan_flt_rule(uint8_t *mac, ipa_ip_type iptype, bool is_vlan);
 
 	int delete_wlan_client_lan2lan_flt_rule(uint8_t *mac, ipa_ip_type iptype);
+
+	int add_dummy_routing_rule(char *routingTableName, ipa_ip_type iptype);
 
 private:
 
@@ -240,6 +254,12 @@ private:
 
 	NatApp *Nat_App;
 	NatBase* const ipv6ct_inst;
+
+	bool svap_iface;
+
+	uint32_t svap_dummy_route_rule_v4_hdl;
+
+	uint32_t svap_dummy_route_rule_v6_hdl;
 
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
 	static bool lan_stats_inited;
@@ -578,7 +598,9 @@ private:
 #endif
 
 	/* for handle wifi client initial,copy all partial headers (tx property) */
-	int handle_wlan_client_init_ex(ipacm_event_data_wlan_ex *data);
+	int handle_wlan_client_init_ex(ipacm_event_data_wlan_ex *data, bool delay_init);
+
+	int handle_wlan_vlan_client_init(int client_idx, ipacm_bridge *bridge, uint16_t vlan_id);
 
 	/*handle wifi client */
 	int handle_wlan_client_ipaddr(ipacm_event_data_all *data);

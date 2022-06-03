@@ -216,6 +216,8 @@ int ipa_nl_recv_msg(int fd);
 /* map mask value for ipv6 */
 int mask_v6(int index, uint32_t *mask);
 
+int ipa_get_if_name(char *if_name, int if_index);
+
 #ifdef __cplusplus
 }
 #endif

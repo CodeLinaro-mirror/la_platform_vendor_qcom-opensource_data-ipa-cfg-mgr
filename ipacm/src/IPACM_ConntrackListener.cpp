@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2013-2021 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -847,36 +848,51 @@ void IPACM_ConntrackListener::HandleVlanUp(void *in_param)
 		return;
 	}
 
-	if(nat_inst->AddPdn(vlanup_data->ipv4_addr, vlanup_data->mux_id, false))
+	if(vlanup_data->mux_id == 0)
 	{
-		IPACMERR("failed adding pdn, num_vlan_pdns %d\n", num_vlan_pdns);
+		if(nat_inst->AddPdn(vlanup_data->ipv4_addr, vlanup_data->mux_id, true))
+		{
+			IPACMERR("failed adding pdn, num_vlan_pdns %d\n", num_vlan_pdns);
+		}
+		else
+		{
+			isStaMode = true;
+			IPACMDBG_H("PDN table added successfully for STA\n");
+		}
 	}
 	else
 	{
-		/* Check if pdn is allocated as well as saved in vlan pdn cache*/
-		for(int i = 0; i < IPA_MAX_NUM_HW_PDNS; i++)
+		if(nat_inst->AddPdn(vlanup_data->ipv4_addr, vlanup_data->mux_id, false))
 		{
-			if(vlan_pdns[i].public_ip == vlanup_data->ipv4_addr) {
-				IPACMDBG_H("found existing PDN entry in %d \n", i);
-				return;
-			}
+			IPACMERR("failed adding pdn, num_vlan_pdns %d\n", num_vlan_pdns);
 		}
-
-		for(int i = 0; i < IPA_MAX_NUM_HW_PDNS; i++)
+		else
 		{
-			if(vlan_pdns[i].public_ip == 0)
+			/* Check if pdn is allocated as well as saved in vlan pdn cache*/
+			for(int i = 1; i < IPA_MAX_NUM_HW_PDNS; i++)
 			{
-				IPACMDBG_H("found empty PDN entry in %d num_vlan_pdns %d\n", i, num_vlan_pdns);
-				vlan_pdns[i].public_ip = vlanup_data->ipv4_addr;
-				vlan_pdns[i].vlan_id = vlanup_data->VlanID;
-				num_vlan_pdns++;
-				break;
+				if(vlan_pdns[i].public_ip == vlanup_data->ipv4_addr) {
+					IPACMDBG_H("found existing PDN entry in %d \n", i);
+					return;
+				}
 			}
-		}
-		if(!isNatThreadStart)
-		{
-			IPACMDBG("creating nat threads\n");
-			CreateNatThreads();
+
+			for(int i = 1; i < IPA_MAX_NUM_HW_PDNS; i++)
+			{
+				if(vlan_pdns[i].public_ip == 0)
+				{
+					IPACMDBG_H("found empty PDN entry in %d num_vlan_pdns %d\n", i, num_vlan_pdns);
+					vlan_pdns[i].public_ip = vlanup_data->ipv4_addr;
+					vlan_pdns[i].vlan_id = vlanup_data->VlanID;
+					num_vlan_pdns++;
+					break;
+				}
+			}
+			if(!isNatThreadStart)
+			{
+				IPACMDBG("creating nat threads\n");
+				CreateNatThreads();
+			}
 		}
 	}
 }
@@ -1090,6 +1106,10 @@ void IPACM_ConntrackListener::HandleVlanDown(void *in_param)
 				num_vlan_pdns--;
 				break;
 			}
+		}
+		if(vlanup_data->mux_id == 0)
+		{
+			isStaMode = false;
 		}
 	}
 }
@@ -1678,7 +1698,7 @@ bool IPACM_ConntrackListener::AddIface(
 	return false;
 }
 
-int IPACM_ConntrackListener::AddORDeleteNatEntry(const nat_entry_bundle *input, bool *sendVlanEvent)
+int IPACM_ConntrackListener::AddORDeleteNatEntry(const nat_entry_bundle *input, bool *sendVlanEvent, bool isStaMode)
 {
 	u_int8_t tcp_state;
 	u_int64_t pkt_count = 0;
@@ -1742,7 +1762,7 @@ int IPACM_ConntrackListener::AddORDeleteNatEntry(const nat_entry_bundle *input, 
 				else
 				{
 					IPACMDBG("TCP: adding entry for vlan\n");
-					nat_inst->AddEntry(input->rule);
+					nat_inst->AddEntry(input->rule, isStaMode);
 				}
 			} else
 #endif
@@ -1757,7 +1777,7 @@ int IPACM_ConntrackListener::AddORDeleteNatEntry(const nat_entry_bundle *input, 
 			}
 			else
 			{
-				nat_inst->AddEntry(input->rule);
+				nat_inst->AddEntry(input->rule, isStaMode);
 			}
 		}
 		else if (TCP_CONNTRACK_FIN_WAIT == tcp_state ||
@@ -1802,7 +1822,7 @@ int IPACM_ConntrackListener::AddORDeleteNatEntry(const nat_entry_bundle *input, 
 				else
 				{
 					IPACMDBG("UDP: adding entry for vlan\n");
-					nat_inst->AddEntry(input->rule);
+					nat_inst->AddEntry(input->rule, isStaMode);
 				}
 			}
 			else
@@ -1818,7 +1838,7 @@ int IPACM_ConntrackListener::AddORDeleteNatEntry(const nat_entry_bundle *input, 
 			}
 			else
 			{
-				nat_inst->AddEntry(input->rule);
+				nat_inst->AddEntry(input->rule, isStaMode);
 			}
 		}
 		else if (NFCT_T_DESTROY == input->type)
@@ -2204,69 +2224,107 @@ void IPACM_ConntrackListener::ProcessTCPorUDPMsg(
 		 nat_entry.isVlan = IsVlanIPv4(repl_src_ip, &VlanID);
 		 if(nat_entry.isVlan)
 		 {
-			 int i;
+			int i;
 
-			 nat_entry.IsVlanUp = false;
-			 for(i = 0; i < IPA_MAX_NUM_HW_PDNS; i++)
-			 {
-				 /* check if we already got vlan_pdn_up event for this ip */
-				 if(vlan_pdns[i].public_ip == orig_dst_ip)
-				 {
-					 IPACMDBG_H("DST_NAT: vlan pdn already up for ");
-					 iptodot("ip", orig_dst_ip);
-					 nat_entry.IsVlanUp = true;
-					 break;
-				 }
-			 }
-
-			 if((i >= IPA_MAX_NUM_HW_PDNS) && (num_vlan_pdns >= IPA_MAX_NUM_HW_PDNS) && (!nat_entry.IsVlanUp))
-			 {
-				 iptodot("vlan client ip", repl_src_ip);
-				 iptodot("pdn ip",orig_dst_ip)
-				 IPACMERR("src NAT: can't add more PDN, already got max \n");
-				 return;
-			 }
-			 iptodot("vlan client ip", repl_src_ip);
-			 iptodot("pdn ip", orig_dst_ip);
-			 IPACMDBG_H("IsVlanUp %d\n", nat_entry.IsVlanUp);
+			nat_entry.IsVlanUp = false;
+			/* Add support for STA with vlan client */
+			if (isStaMode)
+			{
+				nat_entry.IsVlanUp = true;
+			}
+			else
+			{
+				for(i = 1; i < IPA_MAX_NUM_HW_PDNS; i++)
+			 	{
+					/* check if we already got vlan_pdn_up event for this ip */
+				 	if(vlan_pdns[i].public_ip == orig_dst_ip)
+				 	{
+						IPACMDBG_H("DST_NAT: vlan pdn already up for ");
+						iptodot("ip", orig_dst_ip);
+						nat_entry.IsVlanUp = true;
+						break;
+				 	}
+			 	}
+				for(i = 1; i < IPA_MAX_NUM_HW_PDNS; i++)
+				{
+					/* remove entry from vlan pdn array for IP having same vlanid */
+					if((vlan_pdns[i].public_ip != orig_dst_ip) &&
+						(vlan_pdns[i].vlan_id == VlanID))
+					{
+						IPACMDBG_H("Remove vlan pdn entry for ");
+						iptodot("ip", vlan_pdns[i].public_ip);
+						vlan_pdns[i].vlan_id = 0;
+						vlan_pdns[i].public_ip = 0;
+					}
+				}
+				if((i >= IPA_MAX_NUM_HW_PDNS) && (num_vlan_pdns >= IPA_MAX_NUM_HW_PDNS) && (!nat_entry.IsVlanUp))
+				{
+					iptodot("vlan client ip", repl_src_ip);
+				 	iptodot("pdn ip",orig_dst_ip)
+				 	IPACMERR("src NAT: can't add more PDN, already got max \n");
+				 	return;
+				}
+			}
+			iptodot("vlan client ip", repl_src_ip);
+			iptodot("pdn ip", orig_dst_ip);
+			IPACMDBG_H("IsVlanUp %d\n", nat_entry.IsVlanUp);
 		 }
 		 public_ip = orig_dst_ip;
 #endif
 	 }
 	 else if(IPS_SRC_NAT & status)
 	 {
-		 status = IPS_SRC_NAT;
+		status = IPS_SRC_NAT;
 #ifdef FEATURE_VLAN_MPDN
-		 nat_entry.isVlan = IsVlanIPv4(orig_src_ip, &VlanID);
-		 if(nat_entry.isVlan)
-		 {
-			 int i = 0;
+		nat_entry.isVlan = IsVlanIPv4(orig_src_ip, &VlanID);
+			if(nat_entry.isVlan)
+		 	{
+				int i = 0;
 
-			nat_entry.IsVlanUp = false;
-			for(int i = 0; i < IPA_MAX_NUM_HW_PDNS; i++)
-			{
-				/* check if we already got vlan_pdn_up event for this ip */
-				if(vlan_pdns[i].public_ip == repl_dst_ip)
+				nat_entry.IsVlanUp = false;
+				if (isStaMode)
 				{
-					IPACMDBG_H("SRC_NAT: vlan pdn already up for ");
-					iptodot("ip", repl_dst_ip);
 					nat_entry.IsVlanUp = true;
-					break;
 				}
-			}
+				else
+				{
+					for(int i = 1; i < IPA_MAX_NUM_HW_PDNS; i++)
+					{
+						/* check if we already got vlan_pdn_up event for this ip */
+						if(vlan_pdns[i].public_ip == repl_dst_ip)
+						{
+							IPACMDBG_H("SRC_NAT: vlan pdn already up for ");
+							iptodot("ip", repl_dst_ip);
+							nat_entry.IsVlanUp = true;
+							break;
+						}
+					}
 
-			if((i >= IPA_MAX_NUM_HW_PDNS) && (num_vlan_pdns >= IPA_MAX_NUM_HW_PDNS) && (!nat_entry.IsVlanUp))
-			{
-				iptodot("vlan client ip", orig_src_ip);
-				iptodot("pdn ip",repl_dst_ip)
-					IPACMERR("dst NAT: can't add more PDN, already got max \n");
-				return;
+					for(i = 1; i < IPA_MAX_NUM_HW_PDNS; i++)
+					{
+						/* remove entry from vlan pdn array for IP having same vlanid */
+						if((vlan_pdns[i].public_ip != repl_dst_ip) &&
+							(vlan_pdns[i].vlan_id == VlanID))
+						{
+							IPACMDBG_H("Remove vlan pdn entry for");
+							iptodot("ip", vlan_pdns[i].public_ip);
+							vlan_pdns[i].vlan_id = 0;
+							vlan_pdns[i].public_ip = 0;
+						}
+					}
+					if((i >= IPA_MAX_NUM_HW_PDNS) && (num_vlan_pdns >= IPA_MAX_NUM_HW_PDNS) && (!nat_entry.IsVlanUp))
+					{
+						iptodot("vlan client ip", orig_src_ip);
+						iptodot("pdn ip",repl_dst_ip)
+						IPACMERR("dst NAT: can't add more PDN, already got max \n");
+						return;
+					}
+		 		}
+				iptodot("vlan client ip ", orig_src_ip);
+				iptodot("pdn ip ", repl_dst_ip)
+				IPACMDBG_H("IsVlanUp %d\n", nat_entry.IsVlanUp);
 			}
-			iptodot("vlan client ip ", orig_src_ip);
-			iptodot("pdn ip ", repl_dst_ip)
-			IPACMDBG_H("IsVlanUp %d\n", nat_entry.IsVlanUp);
-		 }
-		 public_ip = repl_dst_ip;
+		public_ip = repl_dst_ip;
 #endif
 	 }
 	 else
@@ -2294,7 +2352,7 @@ void IPACM_ConntrackListener::ProcessTCPorUDPMsg(
 #ifdef FEATURE_VLAN_MPDN
 			status = 0;
 			/* check if this is an embedded traffic to a secondary PDN */
-			for(int i = 0; i < IPA_MAX_NUM_HW_PDNS; i++)
+			for(int i = 1; i < IPA_MAX_NUM_HW_PDNS; i++)
 			{
 				/* check if we already got vlan_pdn_up event for this ip */
 				if(vlan_pdns[i].public_ip == orig_src_ip)
@@ -2372,8 +2430,8 @@ void IPACM_ConntrackListener::ProcessTCPorUDPMsg(
 	 CheckSTAClient(&rule, &nat_entry.isTempEntry);
 	 nat_entry.rule = &rule;
 #ifdef FEATURE_VLAN_MPDN
-	 AddORDeleteNatEntry(&nat_entry, &SendVlanEvent);
-	 if(SendVlanEvent)
+	 AddORDeleteNatEntry(&nat_entry, &SendVlanEvent, isStaMode);
+	 if(VlanID > 0 && SendVlanEvent)
 	 {
 		 ipacm_cmd_q_data evt_data;
 		 ipacm_event_route_vlan *data;
@@ -2397,7 +2455,7 @@ void IPACM_ConntrackListener::ProcessTCPorUDPMsg(
 		 IPACM_EvtDispatcher::PostEvt(&evt_data);
 	 }
 #else
-	 AddORDeleteNatEntry(&nat_entry, NULL);
+	 AddORDeleteNatEntry(&nat_entry, NULL, isStaMode);
 #endif
 	 return;
 

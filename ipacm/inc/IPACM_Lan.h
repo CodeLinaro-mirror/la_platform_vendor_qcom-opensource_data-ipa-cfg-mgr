@@ -1,5 +1,6 @@
 /*
 Copyright (c) 2013-2021, The Linux Foundation. All rights reserved.
+Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are
@@ -225,7 +226,7 @@ public:
 	/* LAN-iface's callback function */
 	void event_callback(ipa_cm_event_id event, void *data);
 
-	virtual int handle_wan_up(ipa_ip_type ip_type);
+	virtual int handle_wan_up(ipa_ip_type ip_type, uint16_t vid = 0);
 
 	/* configure filter rule for wan_up event*/
 	virtual int handle_wan_up_ex(ipacm_ext_prop* ext_prop, ipa_ip_type iptype, uint8_t xlat_mux_id);

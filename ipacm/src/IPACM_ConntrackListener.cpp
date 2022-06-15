@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2013-2021 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -865,7 +866,7 @@ void IPACM_ConntrackListener::HandleNeighIpAddrDelEvt_v6(const IpAddress& ip)
 void IPACM_ConntrackListener::HandleVlanUp(void *in_param)
 {
 	ipacm_event_vlan_pdn *vlanup_data = (ipacm_event_vlan_pdn *)in_param;
-	IPACMDBG_H("Recevied below information during VLAN PDN up,\n");
+	IPACMDBG_H("Received below information during VLAN PDN up,\n");
 	IPACMDBG_H("IPType: %d, vlan_id:%d, mux id %d\n",
 		vlanup_data->iptype,
 		vlanup_data->VlanID,
@@ -1803,7 +1804,7 @@ int IPACM_ConntrackListener::AddORDeleteNatEntry(const nat_entry_bundle *input, 
 			{
 				if(!input->IsVlanUp)
 				{
-					IPACMDBG_H("Detected VLAN WAN UP\n");
+					IPACMDBG_H("Send VLAN WAN UP event\n");
 					*sendVlanEvent = true;
 					IPACMDBG_H("vlan Wan is not up, cache connections\n");
 					nat_inst->CacheEntry(input->rule);
@@ -1863,7 +1864,7 @@ int IPACM_ConntrackListener::AddORDeleteNatEntry(const nat_entry_bundle *input, 
 			{
 				if(!input->IsVlanUp)
 				{
-					IPACMDBG_H("Detected VLAN WAN UP\n");
+					IPACMDBG_H("Send VLAN WAN UP event\n");
 					*sendVlanEvent = true;
 					IPACMDBG_H("vlan Wan is not up, cache connections\n");
 					nat_inst->CacheEntry(input->rule);

@@ -990,8 +990,8 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 					memcpy(data_all->iface_name, it->iface_name, IPA_IFACE_NAME_LEN);
 					evt_data.evt_data = (void *)data_all;
 					IPACM_EvtDispatcher::PostEvt(&evt_data);
-					IPACMDBG_H("Posted event %d, with %s for ipv6 client\n",
-						evt_data.event, data_all->iface_name);
+					IPACMDBG_H("Posted event %s, with %s for ipv6 client\n",
+						IPACM_Iface::ipacmcfg->getEventName(evt_data.event), data_all->iface_name);
 					IPACMDBG_H("v6 addr : 0x%08x:%08x:%08x:%08x MAC %02x:%02x:%02x:%02x:%02x:%02x\n",
 						it->ipv6_addr[0], it->ipv6_addr[1], it->ipv6_addr[2], it->ipv6_addr[3],
 						it->mac_addr[0], it->mac_addr[1], it->mac_addr[2], it->mac_addr[3], it->mac_addr[4], it->mac_addr[5]);
@@ -1551,8 +1551,8 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 						memcpy(data_all->iface_name, it->iface_name, IPA_IFACE_NAME_LEN);
 						evt_data.evt_data = (void *)data_all;
 						IPACM_EvtDispatcher::PostEvt(&evt_data);
-						IPACMDBG_H("Posted event %d, with %s for ipv6 client \n",
-							evt_data.event, data_all->iface_name);
+						IPACMDBG_H("Posted event %s, with %s for ipv6 client \n",
+							IPACM_Iface::ipacmcfg->getEventName(evt_data.event), data_all->iface_name);
 						IPACMDBG_H("v6 addr : 0x%08x:%08x:%08x:%08x MAC %02x:%02x:%02x:%02x:%02x:%02x\n",
 							it->ipv6_addr[0], it->ipv6_addr[1], it->ipv6_addr[2], it->ipv6_addr[3],
 							it->mac_addr[0], it->mac_addr[1], it->mac_addr[2], it->mac_addr[3], it->mac_addr[4], it->mac_addr[5]);
@@ -3195,17 +3195,13 @@ int IPACM_Lan::handle_addr_evt(ipacm_event_data_addr *data)
 
 		/* ICMP rule is 1st to keep consistent with v6 and to use as offset for L2L rules */
 		install_ipv4_icmp_flt_rule();
+
+		add_tcp_syn_flt_rule(data->iptype);
+
 		/* initial fragment/multicast/broadcast/filter rule. Fragment has set_rear = false, will be above icmp rule */
 		init_fl_rule(data->iptype);
 
-#ifdef FEATURE_L2TP
-		if((IPACM_Iface::ipacmcfg->ipacm_l2tp_enable == IPACM_L2TP) &&
-			ipa_if_cate == WLAN_IF)
-		{
-			add_tcp_syn_flt_rule(data->iptype);
-		}
-#endif
-		/* populate the flt rule offset for eth bridge (offset = icmp) */
+		/* populate the flt rule offset for eth bridge */
 		eth_bridge_flt_rule_offset[data->iptype] = ipv4_icmp_flt_rule_hdl[0];
 		/* populate the flt rule offset for mtu_offset (offset = broadcast rule)*/
 		if (m_ipv4_default_filterting_rules_count)
@@ -3300,14 +3296,13 @@ int IPACM_Lan::handle_addr_evt(ipacm_event_data_addr *data)
 
 		if (num_dft_rt_v6 == 0)
 		{
+			/* Always adding tcp syn SW-exception rule for MSS clamping support */
+			add_tcp_syn_flt_rule(data->iptype);
+
 #ifdef FEATURE_L2TP
 			if (IPACM_Iface::ipacmcfg->ipacm_l2tp_enable == IPACM_L2TP)
 			{
-				if(ipa_if_cate == WLAN_IF)
-				{
-					add_tcp_syn_flt_rule(data->iptype);
-				}
-				else if(ipa_if_cate == ODU_IF)
+				if(ipa_if_cate == ODU_IF)
 				{
 #ifndef IPA_L2TP_TUNNEL_UDP
 					add_tcp_syn_flt_rule_l2tp(IPA_IP_v4);
@@ -6513,7 +6508,7 @@ int IPACM_Lan::handle_down_evt()
 	}
 #endif
 
-	/* delete default filter rules */
+	/* Delete v4 default filtering rules */
 	if (ip_type != IPA_IP_v6 && rx_prop != NULL)
 	{
 		res = delete_icmp_filter_rule(IPA_IP_v4);
@@ -6547,9 +6542,19 @@ int IPACM_Lan::handle_down_evt()
 		IPACM_Iface::ipacmcfg->decreaseFltRuleCount(rx_prop->rx[0].src_pipe, IPA_IP_v4, num_wan_subnet_rules);
 		num_wan_subnet_rules = 0;
 		IPACMDBG_H("Deleted private subnet v4 filter rules successfully.\n");
+
+		if(m_filtering.DeleteFilteringHdls(&tcp_syn_flt_rule_hdl[IPA_IP_v4], IPA_IP_v4, 1) == false)
+		{
+			IPACMERR("Error deleting tcp syn flt rule, aborting...\n");
+			res = IPACM_FAILURE;
+			goto fail;
+		}
+		IPACM_Iface::ipacmcfg->decreaseFltRuleCount(rx_prop->rx[0].src_pipe, IPA_IP_v4, 1);
+		IPACMDBG_H("Deleted TCP syn v4 filter rules successfully.\n");
 	}
 	IPACMDBG_H("Finished delete default iface ipv4 filtering rules \n ");
 
+	/* Delete v6 filtering rules */
 	if (ip_type != IPA_IP_v4 && rx_prop != NULL)
 	{
 		res = delete_icmp_filter_rule(IPA_IP_v6);
@@ -6593,16 +6598,20 @@ int IPACM_Lan::handle_down_evt()
 			goto fail;
 		}
 
+		if(m_filtering.DeleteFilteringHdls(&tcp_syn_flt_rule_hdl[IPA_IP_v6], IPA_IP_v6, 1) == false)
+		{
+			IPACMERR("Error deleting tcp syn flt rule, aborting...\n");
+			res = IPACM_FAILURE;
+			goto fail;
+		}
+
+		IPACM_Iface::ipacmcfg->decreaseFltRuleCount(rx_prop->rx[0].src_pipe, IPA_IP_v6, 1);
+		IPACMDBG_H("Deleted TCP syn v6 filter rules successfully.\n");
+
 #ifdef FEATURE_L2TP
 		if((IPACM_Iface::ipacmcfg->ipacm_l2tp_enable == IPACM_L2TP) &&
 			ipa_if_cate == ODU_IF)
 		{
-			if(m_filtering.DeleteFilteringHdls(tcp_syn_flt_rule_hdl, IPA_IP_v6, IPA_IP_MAX) == false)
-			{
-				IPACMERR("Error Deleting TCP SYN L2TP Filtering Rule, aborting...\n");
-				res = IPACM_FAILURE;
-				goto fail;
-			}
 #ifdef IPA_L2TP_TUNNEL_UDP
 			if(del_l2tp_udp_dflt_flt_rules(l2tp_udp_dflt_flt_rule_hdl) == IPACM_FAILURE)
 			{
@@ -13134,6 +13143,7 @@ int IPACM_Lan::add_tcp_syn_flt_rule(ipa_ip_type iptype)
 	}
 
 	tcp_syn_flt_rule_hdl[iptype] = m_pFilteringTable->rules[0].flt_rule_hdl;
+	IPACM_Iface::ipacmcfg->increaseFltRuleCount(rx_prop->rx[0].src_pipe, iptype, 1);
 	free(m_pFilteringTable);
 	return IPACM_SUCCESS;
 }

@@ -1275,7 +1275,7 @@ void* ipa_driver_msg_notifier(void *param)
 
 		}
 		/* finish command queue */
-		IPACMDBG_H("Posting event:%d\n", evt_data.event);
+		IPACMDBG_H("Posting event:%s\n", IPACM_Iface::ipacmcfg->getEventName(evt_data.event));
 		IPACM_EvtDispatcher::PostEvt(&evt_data);
 		/* push new_neighbor with netdev device internally */
 		if(new_neigh_data != NULL)
@@ -1367,7 +1367,7 @@ static void IPACM_Signals_handler(int sig, siginfo_t *info, void *extra)
 	}
 
 	/* finish command queue */
-	IPACMDBG_H("Posting event:%d\n", evt_data.event);
+	IPACMDBG_H("Posting event:%s\n", IPACM_Iface::ipacmcfg->getEventName(evt_data.event));
 	IPACM_EvtDispatcher::PostEvt(&evt_data);
 	return;
 }

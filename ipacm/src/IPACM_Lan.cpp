@@ -572,11 +572,11 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 								{
 									if(IPACM_Iface::ipacmcfg->iface_in_vlan_mode(dev_name))
 									{
-										uint16_t vlan_id;
+										uint16_t vlan_id = 0;
 										memset(&mapping_info, 0, sizeof(mapping_info));
 
 										strlcpy(mapping_info.bridge_name, "bridge0", IF_NAME_LEN);
-										if(!IPACM_Iface::ipacmcfg->get_bridge_vlan_mapping(&mapping_info))
+										if(!(IPACM_Iface::ipacmcfg->get_bridge_vlan_mapping(&mapping_info)))
 										{
 											vlan_id = mapping_info.vlan_id;
 										}
@@ -653,11 +653,11 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 								{
 									if(IPACM_Iface::ipacmcfg->iface_in_vlan_mode(dev_name))
 									{
-										uint16_t vlan_id;
+										uint16_t vlan_id = 0;
 										memset(&mapping_info, 0, sizeof(mapping_info));
 
 										strlcpy(mapping_info.bridge_name, "bridge0", IF_NAME_LEN);
-										if(!IPACM_Iface::ipacmcfg->get_bridge_vlan_mapping(&mapping_info))
+										if(!(IPACM_Iface::ipacmcfg->get_bridge_vlan_mapping(&mapping_info)))
 										{
 											vlan_id = mapping_info.vlan_id;
 										}
@@ -883,7 +883,7 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 				/* add support for handling default route to WIFI backhaul on vlan case Need to protect with xml entry */
 				if(IPACM_Iface::ipacmcfg->iface_in_vlan_mode(dev_name))
 				{
-					uint16_t vlan_id;
+					uint16_t vlan_id = 0;
 					memset(&mapping_info, 0, sizeof(mapping_info));
 
 					strlcpy(mapping_info.bridge_name, "bridge0", IF_NAME_LEN);
@@ -959,11 +959,11 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 				/* add support for handling default route to WIFI backhaul on vlan case Need to protect with xml entry */
 				if(IPACM_Iface::ipacmcfg->iface_in_vlan_mode(dev_name))
 				{
-					uint16_t vlan_id;
+					uint16_t vlan_id = 0;
 					memset(&mapping_info, 0, sizeof(mapping_info));
 
 					strlcpy(mapping_info.bridge_name, "bridge0", IF_NAME_LEN);
-					if(!IPACM_Iface::ipacmcfg->get_bridge_vlan_mapping(&mapping_info))
+					if(!(IPACM_Iface::ipacmcfg->get_bridge_vlan_mapping(&mapping_info)))
 					{
 						vlan_id = mapping_info.vlan_id;
 					}
@@ -3427,10 +3427,6 @@ fail:
 int IPACM_Lan::handle_eth_hdr_init(uint8_t *mac_addr, ipacm_bridge *bridge, uint16_t vlan_id, bool isVlan)
 {
 
-#define ETH_IFACE_INDEX_LEN 2
-#define VLAN_TPID_SIZE 2
-#define VLAN_VID_MASK 0x0FFF
-
 	int res = IPACM_SUCCESS, len = 0;
 	char index[ETH_IFACE_INDEX_LEN];
 	struct ipa_ioc_copy_hdr sCopyHeader;
@@ -3501,9 +3497,9 @@ int IPACM_Lan::handle_eth_hdr_init(uint8_t *mac_addr, ipacm_bridge *bridge, uint
 	if(tx_prop != NULL)
 	{
 
+#ifdef FEATURE_VLAN_MPDN
 		if(IPACM_Iface::ipacmcfg->ipacm_mpdn_enable)
 		{
-#ifdef FEATURE_VLAN_MPDN
 			if(isVlan && !bridge)
 			{
 				IPACMERR("vlan with NULL bridge\n");
@@ -9914,10 +9910,12 @@ int IPACM_Lan::install_ipv6_prefix_flt_rule(uint32_t* prefix)
 		/* Add an MTU rule with every new private prefix */
 		if (mtu > 0)
 		{
-			if (construct_mtu_rule(&flt_rule_entry.rule, IPA_IP_v6, mtu))
-				IPACMERR("Failed to add MTU filtering rule.\n")
-			else
+			if (construct_mtu_rule(&flt_rule_entry.rule, IPA_IP_v6, mtu)) {
+				IPACMERR("Failed to add MTU filtering rule.\n");
+			}
+			else {
 				memcpy(&(flt_rule->rules[1]), &flt_rule_entry, sizeof(struct ipa_flt_rule_add));
+			}
 		}
 
 		if (m_filtering.AddFilteringRule(flt_rule) == false)
@@ -13328,7 +13326,7 @@ int IPACM_Lan::add_mtu_rule_v4_default_pdn()
 
 	if (construct_mtu_rule(&flt_rule_entry.rule, IPA_IP_v4, mtu))
 	{
-		IPACMERR("Failed to add MTU filtering rule.\n")
+		IPACMERR("Failed to add MTU filtering rule.\n");
 		free(m_pFilteringTable);
 		return IPACM_FAILURE;
 	}

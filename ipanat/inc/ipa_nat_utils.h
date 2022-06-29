@@ -161,6 +161,6 @@ typedef enum
 
 int currTimeAs(
 	TimeAs_t  timeAs,
-	uint64_t* valPtr );
+	__kernel_time64_t* valPtr );
 
 #endif /* IPA_NAT_UTILS_H */

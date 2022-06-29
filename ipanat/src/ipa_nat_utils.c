@@ -32,6 +32,7 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include <pthread.h>
+#include <linux/time_types.h>
 
 #define IPA_MAX_MSG_LEN 4096
 
@@ -168,9 +169,9 @@ void log_nat_message(char *msg)
 
 int currTimeAs(
 	TimeAs_t  timeAs,
-	uint64_t* valPtr )
+	__kernel_time64_t* valPtr )
 {
-	struct timespec timeSpec;
+	struct __kernel_timespec timeSpec;
 
 	int ret = 0;
 
@@ -195,18 +196,18 @@ int currTimeAs(
 	{
 	case TimeAsNanSecs:
 		*valPtr =
-			(uint64_t) (SECS2NanSECS((uint64_t) timeSpec.tv_sec) +
-						((uint64_t) timeSpec.tv_nsec));
+			(__kernel_time64_t) (SECS2NanSECS((__kernel_time64_t) timeSpec.tv_sec) +
+						((__kernel_time64_t) timeSpec.tv_nsec));
 		break;
 	case TimeAsMicSecs:
 		*valPtr =
-			(uint64_t) (SECS2MicSECS((uint64_t) timeSpec.tv_sec) +
-						((uint64_t) timeSpec.tv_nsec / 1000));
+			(__kernel_time64_t) (SECS2MicSECS((__kernel_time64_t) timeSpec.tv_sec) +
+						((__kernel_time64_t) timeSpec.tv_nsec / 1000));
 		break;
 	case TimeAsMilSecs:
 		*valPtr =
-			(uint64_t) (SECS2MilSECS((uint64_t) timeSpec.tv_sec) +
-						((uint64_t) timeSpec.tv_nsec / 1000000));
+			(__kernel_time64_t) (SECS2MilSECS((__kernel_time64_t) timeSpec.tv_sec) +
+						((__kernel_time64_t) timeSpec.tv_nsec / 1000000));
 		break;
 	}
 

@@ -83,6 +83,8 @@
 #include "IPACM_Iface.h"
 #include "IPACM_Conntrack_NATApp.h"
 
+#define __stringify(x...) #x
+
 typedef struct _wlan_client_rt_hdl
 {
 	uint32_t wifi_rt_rule_hdl_v4;
@@ -121,6 +123,11 @@ typedef struct _ipa_wlan_client
 	bool index_populated;
 #endif //IPA_HW_FNR_STATS
 #endif
+	uint16_t ta_peer_id;
+	/* store ipv4 LAN2LAN filter rule handle when ast update is needed. */
+	uint32_t lan2lan_fl_rule_hdl_v4;
+	/* store ipv6 LAN2LAN filter rule handle when ast update is needed. */
+	uint32_t lan2lan_fl_rule_hdl_v6;
 	wlan_client_rt_hdl wifi_rt_hdl[0]; /* depends on number of tx properties */
 }ipa_wlan_client;
 
@@ -130,7 +137,7 @@ class IPACM_Wlan : public IPACM_Lan
 
 public:
 
-	IPACM_Wlan(int iface_index);
+	IPACM_Wlan(int iface_index, bool    ast_update = false);
 	virtual ~IPACM_Wlan(void);
 
 	static int total_num_wifi_clients;
@@ -139,14 +146,17 @@ public:
 
 	bool is_guest_ap();
 
-#ifdef FEATURE_IPACM_PER_CLIENT_STATS
+	bool ast_update_needed();
+
+#if defined(FEATURE_IPACM_PER_CLIENT_STATS) || defined(IPA_WDI_AST_UPDATE)
 	/* install UL filter rule from Q6 per client */
 	int install_uplink_filter_rule_per_client
 	(
 		ipacm_ext_prop* prop,
 		ipa_ip_type iptype,
 		uint8_t xlat_mux_id,
-		uint8_t *mac_addr
+		uint8_t *mac_addr,
+		uint16_t ta_peer_id = 0
 	);
 #ifdef IPA_HW_FNR_STATS
 	int install_uplink_filter_rule_per_client_v2
@@ -157,7 +167,8 @@ public:
 		uint8_t *mac_addr,
 		uint8_t ul_cnt_idx,
 		ipa_ioc_add_flt_rule *fw_q6_rules = NULL,
-		bool isFirewall = false
+		bool isFirewall = false,
+		uint16_t ta_peer_id = 0
 	);
 
 #endif //IPA_HW_FNR_STATS
@@ -199,7 +210,16 @@ public:
 
 #endif
 
+	/* add filtering rule and return handle to lan2lan controller */
+	int eth_bridge_add_flt_rule(uint8_t *mac, uint32_t rt_tbl_hdl, ipa_ip_type iptype, uint32_t *flt_rule_hdl, uint16_t vlan_id = 0);
+
+	int install_wlan_client_lan2lan_flt_rule(uint8_t *mac, ipa_ip_type iptype);
+
+	int delete_wlan_client_lan2lan_flt_rule(uint8_t *mac, ipa_ip_type iptype);
+
 private:
+
+	bool ast_update;
 
 	bool m_is_guest_ap;
 

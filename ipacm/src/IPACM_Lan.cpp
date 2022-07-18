@@ -4664,7 +4664,10 @@ int IPACM_Lan::handle_eth_client_ipaddr(ipacm_event_data_all *data)
 				if (IPACM_Iface::ipacmcfg->isPrivateSubnet(data->ipv4_addr))
 				{
 					/* Special handling for USB for IPPT NAT-enable */
-					if(device_type != IPACM_CLIENT_DEVICE_TYPE_USB)
+					/* In IPPT with collision client IP will be in private subnet
+						so checking if client IP same as PDN IP before IPPT */
+					if(device_type != IPACM_CLIENT_DEVICE_TYPE_USB &&
+						!IPACM_Wan::check_client_ipv4_with_pdn_ipv4(data->ipv4_addr, vlan_id))
 					{
 						IPACMDBG_H("Client is in IP passthrough mode, but got private IP: 0x%x\n", data->ipv4_addr);
 						return IPACM_FAILURE;

@@ -196,6 +196,8 @@ const char *ipacm_event_name[] = {
 #endif
 	__stringify(IPA_HANDLE_MACSEC_ADD),                    /* Handle macsec map add event */
 	__stringify(IPA_HANDLE_MACSEC_DEL),                    /* Handle macsec map delete event */
+	__stringify(IPA_ADD_EXT_ROUTER_RULES),                 /* Handle ext_route add event */
+	__stringify(IPA_DEL_EXT_ROUTER_RULES),                 /* Handle ext_route del event */
 	__stringify(IPACM_EVENT_MAX)
 };
 
@@ -288,6 +290,7 @@ IPACM_Config::IPACM_Config()
 	memset(&eogre_info, 0, sizeof(eogre_info));
 	eogre_enabled = false;
 #endif
+	ext_router_mode = IPA_PREFIX_DISABLED;
 	return;
 }
 
@@ -3502,4 +3505,99 @@ bool IPACM_Config::DelMacsecMap(struct ipa_macsec_map *macsec_map_to_delete)
 	}
 
 	return false;
+}
+
+bool IPACM_Config::add_ext_router_info(ipa_ioc_ext_router_info *data)
+{
+	list<ext_router_prefix_info>::iterator it;
+	struct ext_router_prefix_info info;
+
+	IPACMDBG_H("info - mode:%d, pdn_name:%s\nv6_addr:0x%08x:%08x:%08x:%08x\nv6_mask:0x%08x:%08x:%08x:%08x\n",
+				data->mode, data->pdn_name,
+				data->ipv6_addr[0], data->ipv6_addr[1], data->ipv6_addr[2], data->ipv6_addr[3],
+				data->ipv6_mask[0], data->ipv6_mask[1], data->ipv6_mask[2], data->ipv6_mask[3]);
+
+	for(it = ext_router_prefix.begin(); it != ext_router_prefix.end(); it++)
+	{
+		if(strncmp(it->pdn_name, data->pdn_name, sizeof(it->pdn_name)) == 0)
+		{
+			IPACMERR("The pdn %s already has ext_router ipv6 added\n", it->pdn_name);
+			return false;
+		}
+	}
+
+	memset(&info, 0, sizeof(ext_router_prefix_info));
+	strlcpy(info.pdn_name, data->pdn_name, sizeof(info.pdn_name));
+	info.ipv6_addr[0] = htonl(data->ipv6_addr[0]);
+	info.ipv6_addr[1] = htonl(data->ipv6_addr[1]);
+	info.ipv6_addr[2] = htonl(data->ipv6_addr[2]);
+	info.ipv6_addr[3] = htonl(data->ipv6_addr[3]);
+	info.ipv6_mask[0] = htonl(data->ipv6_mask[0]);
+	info.ipv6_mask[1] = htonl(data->ipv6_mask[1]);
+	info.ipv6_mask[2] = htonl(data->ipv6_mask[2]);
+	info.ipv6_mask[3] = htonl(data->ipv6_mask[3]);
+
+	ext_router_prefix.push_front(info);
+
+	IPACMDBG_H("succesfully added ext router info for pdn %s\n", data->pdn_name);
+
+	return true;
+}
+
+bool IPACM_Config::del_ext_router_info(char* pdn_name)
+{
+	list<ext_router_prefix_info>::iterator it;
+	struct ext_router_prefix_info info;
+
+	for(it = ext_router_prefix.begin(); it != ext_router_prefix.end(); it++)
+	{
+		if(strncmp(it->pdn_name, pdn_name, sizeof(it->pdn_name)) == 0)
+		{
+			IPACMDBG_H("Found pdn %s\n", it->pdn_name)
+			ext_router_prefix.erase(it);
+			return true;
+		}
+	}
+
+	IPACMERR("Cannot find pdn %s\n", it->pdn_name);
+	return false;
+}
+
+bool IPACM_Config::get_ext_router_info(ext_router_prefix_info *data)
+{
+	list<ext_router_prefix_info>::iterator it;
+
+	for(it = ext_router_prefix.begin(); it != ext_router_prefix.end(); it++)
+	{
+		if(strncmp(it->pdn_name, data->pdn_name, sizeof(it->pdn_name)) == 0)
+		{
+			IPACMDBG_H("Found pdn %s\n", data->pdn_name);
+			memcpy(data->ipv6_addr, it->ipv6_addr, sizeof(data->ipv6_addr));
+			memcpy(data->ipv6_mask, it->ipv6_mask, sizeof(data->ipv6_mask));
+			return true;
+		}
+	}
+	IPACMERR("Could not find pdn %s\n", data->pdn_name);
+
+	return false;
+}
+
+/* returns pdn_name if addr prefix matches ext_route_prefix, -1 if not */
+char* IPACM_Config::is_ext_route_ipv6_prefix(uint32_t *addr)
+{
+	list<ext_router_prefix_info>::iterator it;
+
+	for(it = ext_router_prefix.begin(); it != ext_router_prefix.end(); it++)
+	{
+		if (((addr[0] & it->ipv6_mask[0]) == it->ipv6_addr[0]) &&
+			((addr[1] & it->ipv6_mask[1]) == it->ipv6_addr[1]) &&
+			((addr[2] & it->ipv6_mask[2]) == it->ipv6_addr[2]) &&
+			((addr[3] & it->ipv6_mask[3]) == it->ipv6_addr[3]))
+		{
+			IPACMDBG_H("prefix matches ext router prefix for pdn %s\n", it->pdn_name);
+			return it->pdn_name;
+		}
+	}
+	IPACMDBG("no match for [%X][%X]\n", addr[0], addr[1]);
+	return NULL;
 }

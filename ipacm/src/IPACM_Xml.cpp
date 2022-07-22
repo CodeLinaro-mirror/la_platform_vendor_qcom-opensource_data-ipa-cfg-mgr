@@ -191,7 +191,8 @@ static int ipacm_cfg_xml_parse_tree
 						IPACM_util_icmp_string((char*)xml_node->name, IPACM_MPDN_TAG) == 0 ||
 
 						IPACM_util_icmp_string((char*)xml_node->name, IPACM_SOCKSv5_TAG) == 0 ||
-						IPACM_util_icmp_string((char*)xml_node->name, GRE_TAG) == 0)
+						IPACM_util_icmp_string((char*)xml_node->name, GRE_TAG) == 0 ||
+						IPACM_util_icmp_string((char*)xml_node->name, PUBLIC_IP_SUPPORT_TAG) == 0)
 				{
 					if (0 == IPACM_util_icmp_string((char*)xml_node->name, IFACE_TAG))
 					{
@@ -646,6 +647,26 @@ static int ipacm_cfg_xml_parse_tree
 								config->ipacm_mpdn_enable, atoi(content_buf));
 							}
 						}
+				}
+				else if (IPACM_util_icmp_string((char*)xml_node->name, ENABLE_PUBLIC_IP_SUPPORT) == 0)
+				{
+					IPACMDBG_H("inside Public Ip Support-XML\n");
+					content = IPACM_read_content_element(xml_node);
+					if (content)
+					{
+						str_size = strlen(content);
+						memset(content_buf, 0, sizeof(content_buf));
+						memcpy(content_buf, (void *)content, str_size);
+						if (atoi(content_buf))
+						{
+							config->public_ip_support_enable = true;
+						}
+						else
+						{
+							config->public_ip_support_enable = false;
+						}
+						IPACMDBG_H("Public IP support config enable %d buf(%d)\n", config->public_ip_support_enable, atoi(content_buf));
+					}
 				}
 			}
 			break;

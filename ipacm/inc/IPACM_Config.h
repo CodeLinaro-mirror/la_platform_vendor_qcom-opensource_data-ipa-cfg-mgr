@@ -310,6 +310,9 @@ public:
 	/* Indicates whether l2tp is enabled or not. */
 	int ipacm_flt_enable;
 
+	/* Indicates whether public ip support is enabled */
+	bool is_public_ip_support_enabled;
+
 #ifdef FEATURE_EoGRE
 	ipa_ipgre_info eogre_info;
 	bool           eogre_enabled;
@@ -555,8 +558,7 @@ public:
 	            /* Special case when mac is NULL. Passthrough will be enabled for first client. */
 				/* Device type will be specified as MAX to support WLAN/USB/ETH clients and
 				 * VLAN id can be 0 in case of WLAN or non VLAN interface. */
-				if (ip_pass_mpdn_table[indx].ip_pass_skip_nat &&
-					(memcmp(ip_pass_mpdn_table[indx].ip_pass_mac, null_mac, IPA_MAC_ADDR_SIZE) == 0) &&
+				if ((memcmp(ip_pass_mpdn_table[indx].ip_pass_mac, null_mac, IPA_MAC_ADDR_SIZE) == 0) &&
 					(ip_pass_mpdn_table[indx].ip_pass_dev_type == IPACM_CLIENT_DEVICE_MAX) &&
 					((ip_pass_mpdn_table[indx].vlan_id == vlan_id) ||
 					(ip_pass_mpdn_table[indx].is_default_pdn && vlan_id == 0)))
@@ -757,6 +759,21 @@ public:
 
 		return false;
 	}
+
+	inline ipa_private_subnet *getPrivateSubnet(uint32_t ip_addr)
+	{
+		for(int cnt = 0; cnt < ipa_num_private_subnet; cnt++)
+		{
+			if(private_subnet_table[cnt].subnet_addr ==
+				(private_subnet_table[cnt].subnet_mask & ip_addr))
+			{
+				return &private_subnet_table[cnt];
+			}
+		}
+
+		return NULL;
+	}
+
 #ifdef FEATURE_IPA_ANDROID
 	inline bool AddPrivateSubnet(uint32_t ip_addr, int ipa_if_index)
 	{

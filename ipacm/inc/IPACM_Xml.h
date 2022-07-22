@@ -113,6 +113,8 @@ if (!(a)) {                                                 \
 #define DDR_TABLETYPE_TAG                    "DDR"
 #define SRAM_TABLETYPE_TAG                   "SRAM"
 #define HYBRID_TABLETYPE_TAG                 "HYBRID"
+#define PUBLIC_IP_SUPPORT_TAG                "PublicIpSupport"
+#define ENABLE_PUBLIC_IP_SUPPORT             "EnablePublicIpSupport"
 
 /* FIREWALL Config Entries */
 #define DefaultProfile_TAG                   "DefaultProfile"
@@ -352,6 +354,7 @@ typedef struct  _IPACM_conf_t
 	bool ipacm_mpdn_enable;
 	bool ipacm_socksv5_enable;
 	ipacm_gre_conf_t gre_conf;
+	bool public_ip_support_enable;
 } IPACM_conf_t;
 
 /* This function read IPACM XML configuration*/

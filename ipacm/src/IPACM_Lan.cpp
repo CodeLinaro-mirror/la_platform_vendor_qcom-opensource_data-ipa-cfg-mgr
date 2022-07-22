@@ -76,6 +76,7 @@
 #include "IPACM_Netlink.h"
 #include "IPACM_Lan.h"
 #include "IPACM_Wan.h"
+#include "IPACM_Wlan.h"
 #include "IPACM_IfaceManager.h"
 #include "linux/rmnet_ipa_fd_ioctl.h"
 #include "linux/ipa_qmi_service_v01.h"
@@ -3206,17 +3207,13 @@ int IPACM_Lan::handle_addr_evt(ipacm_event_data_addr *data)
 
 		/* ICMP rule is 1st to keep consistent with v6 and to use as offset for L2L rules */
 		install_ipv4_icmp_flt_rule();
+
+		add_tcp_syn_flt_rule(data->iptype);
+
 		/* initial fragment/multicast/broadcast/filter rule. Fragment has set_rear = false, will be above icmp rule */
 		init_fl_rule(data->iptype);
 
-#ifdef FEATURE_L2TP
-		if((IPACM_Iface::ipacmcfg->ipacm_l2tp_enable == IPACM_L2TP) &&
-			ipa_if_cate == WLAN_IF)
-		{
-			add_tcp_syn_flt_rule(data->iptype);
-		}
-#endif
-		/* populate the flt rule offset for eth bridge (offset = icmp) */
+		/* populate the flt rule offset for eth bridge */
 		eth_bridge_flt_rule_offset[data->iptype] = ipv4_icmp_flt_rule_hdl[0];
 		/* populate the flt rule offset for mtu_offset (offset = broadcast rule)*/
 		if (m_ipv4_default_filterting_rules_count)
@@ -3311,14 +3308,13 @@ int IPACM_Lan::handle_addr_evt(ipacm_event_data_addr *data)
 
 		if (num_dft_rt_v6 == 0)
 		{
+			/* Always adding tcp syn SW-exception rule for MSS clamping support */
+			add_tcp_syn_flt_rule(data->iptype);
+
 #ifdef FEATURE_L2TP
 			if (IPACM_Iface::ipacmcfg->ipacm_l2tp_enable == IPACM_L2TP)
 			{
-				if(ipa_if_cate == WLAN_IF)
-				{
-					add_tcp_syn_flt_rule(data->iptype);
-				}
-				else if(ipa_if_cate == ODU_IF)
+				if(ipa_if_cate == ODU_IF)
 				{
 #ifndef IPA_L2TP_TUNNEL_UDP
 					add_tcp_syn_flt_rule_l2tp(IPA_IP_v4);
@@ -3817,6 +3813,7 @@ int IPACM_Lan::handle_wan_up_ex(ipacm_ext_prop *ext_prop, ipa_ip_type iptype, ui
 	struct ipa_ioc_write_qmapid mux;
 	int i=0;
 	bool notif_only = false;
+	bool ast_update = false;
 
 	if(rx_prop != NULL)
 	{
@@ -3841,6 +3838,12 @@ int IPACM_Lan::handle_wan_up_ex(ipacm_ext_prop *ext_prop, ipa_ip_type iptype, ui
 			}
 		}
 		close(fd);
+	}
+
+	/* Chck if AST update is needed for WLAN interfaces. */
+	if ((ipa_if_cate == WLAN_IF))
+	{
+		ast_update = ((IPACM_Wlan *)this)->ast_update_needed();
 	}
 
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
@@ -3884,9 +3887,9 @@ int IPACM_Lan::handle_wan_up_ex(ipacm_ext_prop *ext_prop, ipa_ip_type iptype, ui
 			}
 #ifdef FEATURE_VLAN_MPDN
 			notif_only = false;
-			ret = handle_uplink_filter_rule(ext_prop, iptype, xlat_mux_id, false, true);
+			ret = handle_uplink_filter_rule(ext_prop, iptype, xlat_mux_id, false, true, ast_update);
 #else
-			ret = handle_uplink_filter_rule(ext_prop, iptype, xlat_mux_id);
+			ret = handle_uplink_filter_rule(ext_prop, iptype, xlat_mux_id, ast_update);
 #endif
 			if (num_wan_ul_fl_rule_v6 != 0)
 				modem_ul_v6_set = true;
@@ -3899,7 +3902,7 @@ int IPACM_Lan::handle_wan_up_ex(ipacm_ext_prop *ext_prop, ipa_ip_type iptype, ui
 		else
 		{
 			notif_only = true;
-			ret = handle_uplink_filter_rule(ext_prop, iptype, xlat_mux_id, true, true);
+			ret = handle_uplink_filter_rule(ext_prop, iptype, xlat_mux_id, true, true, ast_update);
 			if (num_wan_ul_fl_rule_v6 == 0) {
 				IPACMERR("Modem UL v6 rules not installed, error: %d \n",ret);
 				goto fail;
@@ -3921,9 +3924,9 @@ int IPACM_Lan::handle_wan_up_ex(ipacm_ext_prop *ext_prop, ipa_ip_type iptype, ui
 #ifdef FEATURE_VLAN_MPDN
 			/* for v4, always install the rules like before */
 			notif_only = false;
-			ret = handle_uplink_filter_rule(ext_prop, iptype, xlat_mux_id, false, true);
+			ret = handle_uplink_filter_rule(ext_prop, iptype, xlat_mux_id, false, true, ast_update);
 #else
-			ret = handle_uplink_filter_rule(ext_prop, iptype, xlat_mux_id);
+			ret = handle_uplink_filter_rule(ext_prop, iptype, xlat_mux_id, ast_update);
 #endif
 			if (num_wan_ul_fl_rule_v4 != 0)
 				modem_ul_v4_set = true;
@@ -3937,7 +3940,7 @@ int IPACM_Lan::handle_wan_up_ex(ipacm_ext_prop *ext_prop, ipa_ip_type iptype, ui
 		{
 			/* for v4, always install the rules like before */
 			notif_only = false;
-			ret = handle_uplink_filter_rule(ext_prop, iptype, xlat_mux_id, true	, true);
+			ret = handle_uplink_filter_rule(ext_prop, iptype, xlat_mux_id, true	, true, ast_update);
 			if (num_wan_ul_fl_rule_v4 == 0) {
 				IPACMERR("Modem UL v4 rules not installed, error: %d \n",ret);
 				goto fail;
@@ -3951,9 +3954,9 @@ int IPACM_Lan::handle_wan_up_ex(ipacm_ext_prop *ext_prop, ipa_ip_type iptype, ui
 			iptype, modem_ul_v4_set, modem_ul_v6_set);
 	}
 
-#ifdef FEATURE_IPACM_PER_CLIENT_STATS
+#if defined(FEATURE_IPACM_PER_CLIENT_STATS) || defined(IPA_WDI_AST_UPDATE)
 	/* Install filter rules for the client. */
-	if (!notif_only && IPACM_Iface::ipacmcfg->ipacm_lan_stats_enable == true)
+	if (!notif_only && (IPACM_Iface::ipacmcfg->ipacm_lan_stats_enable == true || ast_update))
 	{
 		IPACMDBG_H("xlat_mux_id: %d, iptype %d\n", xlat_mux_id, iptype);
 		ret = install_uplink_filter_rule(ext_prop, iptype, xlat_mux_id);
@@ -6524,7 +6527,7 @@ int IPACM_Lan::handle_down_evt()
 	}
 #endif
 
-	/* delete default filter rules */
+	/* Delete v4 default filtering rules */
 	if (ip_type != IPA_IP_v6 && rx_prop != NULL)
 	{
 		res = delete_icmp_filter_rule(IPA_IP_v4);
@@ -6558,9 +6561,19 @@ int IPACM_Lan::handle_down_evt()
 		IPACM_Iface::ipacmcfg->decreaseFltRuleCount(rx_prop->rx[0].src_pipe, IPA_IP_v4, num_wan_subnet_rules);
 		num_wan_subnet_rules = 0;
 		IPACMDBG_H("Deleted private subnet v4 filter rules successfully.\n");
+
+		if(m_filtering.DeleteFilteringHdls(&tcp_syn_flt_rule_hdl[IPA_IP_v4], IPA_IP_v4, 1) == false)
+		{
+			IPACMERR("Error deleting tcp syn flt rule, aborting...\n");
+			res = IPACM_FAILURE;
+			goto fail;
+		}
+		IPACM_Iface::ipacmcfg->decreaseFltRuleCount(rx_prop->rx[0].src_pipe, IPA_IP_v4, 1);
+		IPACMDBG_H("Deleted TCP syn v4 filter rules successfully.\n");
 	}
 	IPACMDBG_H("Finished delete default iface ipv4 filtering rules \n ");
 
+	/* Delete v6 filtering rules */
 	if (ip_type != IPA_IP_v4 && rx_prop != NULL)
 	{
 		res = delete_icmp_filter_rule(IPA_IP_v6);
@@ -6604,16 +6617,20 @@ int IPACM_Lan::handle_down_evt()
 			goto fail;
 		}
 
+		if(m_filtering.DeleteFilteringHdls(&tcp_syn_flt_rule_hdl[IPA_IP_v6], IPA_IP_v6, 1) == false)
+		{
+			IPACMERR("Error deleting tcp syn flt rule, aborting...\n");
+			res = IPACM_FAILURE;
+			goto fail;
+		}
+
+		IPACM_Iface::ipacmcfg->decreaseFltRuleCount(rx_prop->rx[0].src_pipe, IPA_IP_v6, 1);
+		IPACMDBG_H("Deleted TCP syn v6 filter rules successfully.\n");
+
 #ifdef FEATURE_L2TP
 		if((IPACM_Iface::ipacmcfg->ipacm_l2tp_enable == IPACM_L2TP) &&
 			ipa_if_cate == ODU_IF)
 		{
-			if(m_filtering.DeleteFilteringHdls(tcp_syn_flt_rule_hdl, IPA_IP_v6, IPA_IP_MAX) == false)
-			{
-				IPACMERR("Error Deleting TCP SYN L2TP Filtering Rule, aborting...\n");
-				res = IPACM_FAILURE;
-				goto fail;
-			}
 #ifdef IPA_L2TP_TUNNEL_UDP
 			if(del_l2tp_udp_dflt_flt_rules(l2tp_udp_dflt_flt_rule_hdl) == IPACM_FAILURE)
 			{
@@ -6967,9 +6984,9 @@ fail:
 
 /* install UL filter rule from Q6 */
 #ifdef FEATURE_VLAN_MPDN
-int IPACM_Lan::handle_uplink_filter_rule(ipacm_ext_prop *prop, ipa_ip_type iptype, uint8_t pdn_mux_id, bool notif_only, bool is_xlat)
+int IPACM_Lan::handle_uplink_filter_rule(ipacm_ext_prop *prop, ipa_ip_type iptype, uint8_t pdn_mux_id, bool notif_only, bool is_xlat, bool ast_update)
 #else
-int IPACM_Lan::handle_uplink_filter_rule(ipacm_ext_prop *prop, ipa_ip_type iptype, uint8_t xlat_mux_id)
+int IPACM_Lan::handle_uplink_filter_rule(ipacm_ext_prop *prop, ipa_ip_type iptype, uint8_t xlat_mux_id, bool ast_update)
 #endif
 {
 	ipa_flt_rule_add flt_rule_entry;
@@ -7131,12 +7148,13 @@ int IPACM_Lan::handle_uplink_filter_rule(ipacm_ext_prop *prop, ipa_ip_type iptyp
 	{
 		bool wan_odu_bridge = (ipa_if_cate == ODU_IF && IPACM_Wan::isWan_Bridge_Mode());
 
-		if ( wan_odu_bridge || compatible_eogre )
+		if ( wan_odu_bridge || compatible_eogre || IPACM_Iface::ipacmcfg->is_public_ip_support_enabled)
 		{
 			IPACMDBG_H(
-				"%s%s\n",
+				"%s%s%s\n",
 				(wan_odu_bridge)   ? "[WAN, ODU are in bridge mode] " : "",
-				(compatible_eogre) ? "[EoGRE enabled]"                : "");
+				(compatible_eogre) ? "[EoGRE enabled]"                : "",
+				(IPACM_Iface::ipacmcfg->is_public_ip_support_enabled) ? "[Public IP enabled]": "");
 			flt_rule_entry.rule.action = IPA_PASS_TO_ROUTING;
 		}
 		else
@@ -7378,7 +7396,9 @@ int IPACM_Lan::handle_uplink_filter_rule(ipacm_ext_prop *prop, ipa_ip_type iptyp
 	}
 #endif
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
-	if (IPACM_Iface::ipacmcfg->ipacm_lan_stats_enable == false)
+	if (IPACM_Iface::ipacmcfg->ipacm_lan_stats_enable == false && !ast_update)
+#else
+	if (!ast_update)
 #endif
 	{
 		if(false == m_filtering.AddFilteringRule(pFilteringTable))
@@ -9024,6 +9044,12 @@ int IPACM_Lan::install_uplink_filter_rule_per_client_v2
 		{
 			offset_meq_128->offset = -8;
 		}
+#ifdef IPA_HDR_L2_ETHERNET_II_AST
+		else if (rx_prop->rx[0].hdr_l2_type == IPA_HDR_L2_ETHERNET_II_AST)
+		{
+			offset_meq_128->offset = -8;
+		}
+#endif
 		else
 		{
 			offset_meq_128->offset = -16;
@@ -9255,6 +9281,12 @@ int IPACM_Lan::install_uplink_filter_rule_per_client
 		{
 			offset_meq_128->offset = -8;
 		}
+#ifdef IPA_HDR_L2_ETHERNET_II_AST
+		else if (rx_prop->rx[0].hdr_l2_type == IPA_HDR_L2_ETHERNET_II_AST)
+		{
+			offset_meq_128->offset = -8;
+		}
+#endif
 		else
 		{
 			offset_meq_128->offset = -16;
@@ -10800,6 +10832,10 @@ ipa_hdr_proc_type IPACM_Lan::eth_bridge_get_hdr_proc_type(ipa_hdr_l2_type t1,
 			return IPA_HDR_PROC_ETHII_TO_ETHII;
 		if(t2 == IPA_HDR_L2_802_3)
 			return IPA_HDR_PROC_ETHII_TO_802_3;
+#ifdef IPA_HDR_L2_ETHERNET_II_AST
+		if(t2 == IPA_HDR_L2_ETHERNET_II_AST)
+			return IPA_HDR_PROC_ETHII_TO_ETHII;
+#endif
 		break;
 	case IPA_HDR_L2_802_3:
 		if(t2 == IPA_HDR_L2_ETHERNET_II)
@@ -10814,6 +10850,15 @@ ipa_hdr_proc_type IPACM_Lan::eth_bridge_get_hdr_proc_type(ipa_hdr_l2_type t1,
 			return IPA_HDR_PROC_ETHII_TO_ETHII_EX;
 		}
 		break;
+#ifdef IPA_HDR_L2_ETHERNET_II_AST
+	case IPA_HDR_L2_ETHERNET_II_AST:
+		if(t2 == IPA_HDR_L2_ETHERNET_II || t2 == IPA_HDR_L2_ETHERNET_II_AST) {
+			generic_params.input_ethhdr_negative_offset = 14;
+			generic_params.output_ethhdr_negative_offset = 14;
+			return IPA_HDR_PROC_ETHII_TO_ETHII_EX;
+		}
+		break;
+#endif
 	default:
 		return IPA_HDR_PROC_NONE;
 	}
@@ -11247,6 +11292,9 @@ int IPACM_Lan::eth_bridge_add_rt_rule(uint8_t *mac, char *rt_tbl_name, uint32_t 
 
 			switch(peer_l2_hdr_type)
 			{
+#ifdef IPA_HDR_L2_ETHERNET_II_AST
+			case IPA_HDR_L2_ETHERNET_II_AST:
+#endif
 			case IPA_HDR_L2_ETHERNET_II:
 				rt_rule.rule.attrib.attrib_mask |= IPA_FLT_MAC_DST_ADDR_ETHER_II;
 				break;
@@ -11359,6 +11407,9 @@ int IPACM_Lan::eth_bridge_modify_rt_rule(uint8_t *mac, uint32_t hdr_proc_ctx_hdl
 
 			switch(peer_l2_hdr_type)
 			{
+#ifdef IPA_HDR_L2_ETHERNET_II_AST
+			case IPA_HDR_L2_ETHERNET_II_AST:
+#endif
 			case IPA_HDR_L2_ETHERNET_II:
 				rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_MAC_DST_ADDR_ETHER_II;
 				break;
@@ -11446,6 +11497,9 @@ int IPACM_Lan::eth_bridge_add_flt_rule(uint8_t *mac, uint32_t rt_tbl_hdl, ipa_ip
 	memcpy(&flt_rule_entry.rule.attrib, &rx_prop->rx[0].attrib, sizeof(flt_rule_entry.rule.attrib));
 	switch(tx_prop->tx[0].hdr_l2_type)
 	{
+#ifdef IPA_HDR_L2_ETHERNET_II_AST
+	case IPA_HDR_L2_ETHERNET_II_AST:
+#endif
 	case IPA_HDR_L2_ETHERNET_II:
 		flt_rule_entry.rule.attrib.attrib_mask |= IPA_FLT_MAC_DST_ADDR_ETHER_II;
 		break;
@@ -13145,6 +13199,7 @@ int IPACM_Lan::add_tcp_syn_flt_rule(ipa_ip_type iptype)
 	}
 
 	tcp_syn_flt_rule_hdl[iptype] = m_pFilteringTable->rules[0].flt_rule_hdl;
+	IPACM_Iface::ipacmcfg->increaseFltRuleCount(rx_prop->rx[0].src_pipe, iptype, 1);
 	free(m_pFilteringTable);
 	return IPACM_SUCCESS;
 }

@@ -1676,7 +1676,7 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 					it->ipv6_addr[0], it->ipv6_addr[1], it->ipv6_addr[2], it->ipv6_addr[3],
 					it->mac_addr[0], it->mac_addr[1], it->mac_addr[2], it->mac_addr[3], it->mac_addr[4], it->mac_addr[5]);
 				handle_ext_router_add_evt((char*)param, it->mac_addr, 0); //can query vlan id instead of 0 for future vlan support
-				break; //for MVLAN might need to remove the break to handle all the prefixes
+				return; //for MVLAN might need to remove the return to handle all the prefixes
 			}
 		}
 		IPACMDBG_H("Dummy prefix neighbor hasn't been added yet, wait until new neighbor to install ext route rules\n");
@@ -4739,6 +4739,22 @@ int IPACM_Lan::handle_eth_client_ipaddr(ipacm_event_data_all *data)
 					IPACMDBG_H("ipv6 nat enabled - add ULA ip address\n")
 				} else
 #endif
+#ifdef IPA_IOCTL_SET_EXT_ROUTER_MODE
+				/* Need to move this code for VLAN */
+				if(((data->ipv6_addr[0] & ipv6_link_local_prefix_mask) != (ipv6_link_local_prefix & ipv6_link_local_prefix_mask)) &&
+					IPACM_Iface::ipacmcfg->ext_router_mode != IPA_PREFIX_DISABLED)
+				{
+					char* pdn_name = IPACM_Iface::ipacmcfg->is_ext_route_ipv6_prefix(data->ipv6_addr);
+					if (pdn_name != NULL)
+					{
+						if(handle_ext_router_add_evt(pdn_name, data->mac_addr, vlan_id) == IPACM_FAILURE)
+						{
+							IPACMERR("failed to handle handle_ext_router_add_evt\n");
+							return IPACM_FAILURE;
+						}
+					}
+				}
+#endif
 				if( ((data->ipv6_addr[0] & ipv6_link_local_prefix_mask) != (ipv6_link_local_prefix & ipv6_link_local_prefix_mask)) &&
 #ifdef FEATURE_VLAN_MPDN
 					/* returns true if a VLAN PDN or default PDN should be offloaded */
@@ -4747,20 +4763,6 @@ int IPACM_Lan::handle_eth_client_ipaddr(ipacm_event_data_all *data)
 					memcmp(ipv6_prefix, data->ipv6_addr, sizeof(ipv6_prefix)) != 0)
 #endif
 				{
-
-					/* TODO: Do we need to add neighbor to cache? do we need to update neighbor and rt_hdl_v6_list? */
-					if(IPACM_Iface::ipacmcfg->ext_router_mode != IPA_PREFIX_DISABLED)
-					{
-						char* pdn_name = IPACM_Iface::ipacmcfg->is_ext_route_ipv6_prefix(data->ipv6_addr);
-						if (pdn_name != NULL)
-						{
-							if(handle_ext_router_add_evt(pdn_name, data->mac_addr, vlan_id) == IPACM_FAILURE)
-								IPACMERR("failed to handle handle_ext_router_add_evt\n");
-
-							return IPACM_FAILURE;  /* if yes then we can take this out */
-						}
-					}
-
 					if (neigh_cache.size() < 2*IPA_MAX_NUM_HW_PATH_CLIENTS)
 					{
 						for (it = neigh_cache.begin(); it != neigh_cache.end(); ++it)
@@ -6992,10 +6994,17 @@ fail:
 		}
 #endif
 
+#ifdef IPA_IOCTL_SET_EXT_ROUTER_MODE
 	//delete ext_route_rules here if mode is enabled
 	if (IPACM_Iface::ipacmcfg->ext_router_mode != IPA_PREFIX_DISABLED)
+	{
 		if(handle_ext_router_del_evt() == IPACM_FAILURE)
+		{
 			IPACMERR("failed deleting ext route mode rules");
+			return IPACM_FAILURE;
+		}
+	}
+#endif
 
 	neigh_cache.clear();
 	/* check software routing fl rule hdl */

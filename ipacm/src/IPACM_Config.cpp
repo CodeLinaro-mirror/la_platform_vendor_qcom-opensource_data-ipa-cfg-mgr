@@ -3507,6 +3507,7 @@ bool IPACM_Config::DelMacsecMap(struct ipa_macsec_map *macsec_map_to_delete)
 	return false;
 }
 
+#ifdef IPA_IOCTL_SET_EXT_ROUTER_MODE
 bool IPACM_Config::add_ext_router_info(ipa_ioc_ext_router_info *data)
 {
 	list<ext_router_prefix_info>::iterator it;
@@ -3601,3 +3602,4 @@ char* IPACM_Config::is_ext_route_ipv6_prefix(uint32_t *addr)
 	IPACMDBG("no match for [%X][%X]\n", addr[0], addr[1]);
 	return NULL;
 }
+#endif

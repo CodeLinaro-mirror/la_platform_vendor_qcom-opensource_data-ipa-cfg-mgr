@@ -128,7 +128,7 @@
 			   <Category>ODU</Category>
 			</Iface>
 			<Iface>
-			   <Name>bridge0</Name>
+			   <Name>br-lan</Name>
 			   <Category>VIRTUAL</Category>
 		    </Iface>
 		</IPACMIface>

@@ -353,6 +353,9 @@ int IPACM_IfaceManager::create_iface_instance(ipacm_ifacemgr_data *param)
 #endif
 				IPACM_EvtDispatcher::registr(IPA_HANDLE_MACSEC_ADD, ETH);
 				IPACM_EvtDispatcher::registr(IPA_HANDLE_MACSEC_DEL, ETH);
+				/* external router mode only support eth odu now */
+				IPACM_EvtDispatcher::registr(IPA_ADD_EXT_ROUTER_RULES, ETH);
+				IPACM_EvtDispatcher::registr(IPA_DEL_EXT_ROUTER_RULES, ETH);
 				/* only need for vlan supported lan instance */
 				IPACM_EvtDispatcher::registr(IPA_HANDLE_WAN_ADDR_ADD_V6, ETH);
 				/* IPA_LAN_DELETE_SELF should be always last */
@@ -415,6 +418,9 @@ int IPACM_IfaceManager::create_iface_instance(ipacm_ifacemgr_data *param)
 #endif
 					IPACM_EvtDispatcher::registr(IPA_HANDLE_MACSEC_ADD, odu);
 					IPACM_EvtDispatcher::registr(IPA_HANDLE_MACSEC_DEL, odu);
+					/* external router mode only support eth odu now */
+					IPACM_EvtDispatcher::registr(IPA_ADD_EXT_ROUTER_RULES, odu);
+					IPACM_EvtDispatcher::registr(IPA_DEL_EXT_ROUTER_RULES, odu);
 					/* IPA_LAN_DELETE_SELF should be always last */
 					IPACM_EvtDispatcher::registr(IPA_LAN_DELETE_SELF, odu);
 					IPACMDBG_H("ipa_LAN (%s):ipa_index (%d) instance open/registr ok\n", odu->dev_name, odu->ipa_if_num);

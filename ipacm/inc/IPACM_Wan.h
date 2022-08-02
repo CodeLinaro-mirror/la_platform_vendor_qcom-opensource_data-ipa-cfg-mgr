@@ -438,7 +438,9 @@ public:
 	static ipacm_ipv6_wan_iface ipv6_to_iface[IPA_MAX_NUM_SW_PDNS];
 	static uint8_t num_offloaded_pdns;
 	static int GetMuxByVid(uint16_t vlan_id, uint8_t *mux_id, ipa_ip_type iptype);
-	static int GetMTUByVid( uint16_t *mtu, uint16_t vlan_id, ipa_ip_type iptype);
+	static int GetMTUByVid(uint16_t *mtu, uint16_t vlan_id, ipa_ip_type iptype);
+	static int Getv6addrByName(char* pdn_name, uint32_t* ipv6_addr);
+	static uint32_t GetQCMAPhdrByName(char* pdn_name);
 	static bool is_xlat_by_vid(uint16_t vlan_id);
 	static int get_vid_index_for_iface_v6(ipacm_ipv6_wan_iface iface, uint16_t vlan_id);
 	static bool is_xlat_by_ipv4(uint32_t ipv4_addr);

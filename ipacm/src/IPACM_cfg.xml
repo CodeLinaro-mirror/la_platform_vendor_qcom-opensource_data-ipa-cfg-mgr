@@ -113,12 +113,60 @@
 			   <WlanMode>full</WlanMode>
 			</Iface>
 			<Iface>
+			   <Name>ath02</Name>
+			   <Category>UNKNOWN</Category>
+			   <WlanMode>full</WlanMode>
+			</Iface>
+			<Iface>
+			   <Name>ath03</Name>
+			   <Category>UNKNOWN</Category>
+			   <WlanMode>full</WlanMode>
+			</Iface>
+			<Iface>
+			   <Name>ath04</Name>
+			   <Category>UNKNOWN</Category>
+			   <WlanMode>full</WlanMode>
+			</Iface>
+			<Iface>
+			   <Name>ath05</Name>
+			   <Category>UNKNOWN</Category>
+			   <WlanMode>full</WlanMode>
+			</Iface><Iface>
+			   <Name>ath06</Name>
+			   <Category>UNKNOWN</Category>
+			   <WlanMode>full</WlanMode>
+			</Iface>
+			<Iface>
 			   <Name>ath1</Name>
 			   <Category>UNKNOWN</Category>
 			   <WlanMode>full</WlanMode>
 			</Iface>
 			<Iface>
 			   <Name>ath11</Name>
+			   <Category>UNKNOWN</Category>
+			   <WlanMode>full</WlanMode>
+			</Iface>
+			<Iface>
+			   <Name>ath12</Name>
+			   <Category>UNKNOWN</Category>
+			   <WlanMode>full</WlanMode>
+			</Iface>
+			<Iface>
+			   <Name>ath13</Name>
+			   <Category>UNKNOWN</Category>
+			   <WlanMode>full</WlanMode>
+			</Iface>
+			<Iface>
+			   <Name>ath14</Name>
+			   <Category>UNKNOWN</Category>
+			   <WlanMode>full</WlanMode>
+			</Iface>
+			<Iface>
+			   <Name>ath15</Name>
+			   <Category>UNKNOWN</Category>
+			   <WlanMode>full</WlanMode>
+			</Iface><Iface>
+			   <Name>ath16</Name>
 			   <Category>UNKNOWN</Category>
 			   <WlanMode>full</WlanMode>
 			</Iface>

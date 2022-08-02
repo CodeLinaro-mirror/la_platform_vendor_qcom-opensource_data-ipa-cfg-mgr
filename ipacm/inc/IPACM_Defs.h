@@ -86,7 +86,9 @@ extern "C"
 #define IPA_IF_SOCKSv5_NAME  "IPACM_SOCKSv5"
 #define IPA_EOGRE_HDR_NAME   "IPACM_EoGRE_v%d"
 
-#define IPA_MAX_IFACE_ENTRIES 30 /* current: 15 rmnet + 4 wlan + bridge+ eth+ rndis + ecm.*/
+#define IPA_MAX_ACTIVE_WLAN_IFACE 14
+
+#define IPA_MAX_IFACE_ENTRIES (26 + IPA_MAX_ACTIVE_WLAN_IFACE) /* current: 15 rmnet + 14 wlan + bridge+ eth+ rndis + ecm.*/
 #define IPA_MAX_ALG_ENTRIES 20
 #define IPA_MAX_RM_ENTRY 9
 
@@ -163,7 +165,7 @@ extern "C"
 #define IPV6_HEADER_SIZE 40
 
 #define IPA_MAX_ACTIVE_LAN_IFACE 2
-#define IPA_MAX_ACTIVE_WLAN_IFACE 4
+
 #define IPA_MAX_NAT_IFACE (IPA_MAX_ACTIVE_LAN_IFACE*IPA_MAX_NUM_OFFLOAD_VLANS+ \
 	IPA_MAX_ACTIVE_LAN_IFACE + IPA_MAX_ACTIVE_WLAN_IFACE + IPA_MAX_NUM_SW_PDNS)
 #ifdef FEATURE_VLAN_MPDN
@@ -317,15 +319,14 @@ typedef enum
 	IPA_IPPT_SW_FLT_LIST_UPDATE_EVENT,        /* ipa_ippt_sw_flt_list_type */
 #endif
 	IPA_MOVE_NAT_TBL_EVENT,                   /* ipacm_event_move_nat */
-
 #ifdef FEATURE_EoGRE
 	IPA_HANDLE_EoGRE_UP,                      /* ipa_ipgre_info */
 	IPA_HANDLE_EoGRE_DOWN,                    /* ipa_ipgre_info */
 #endif
-
 	IPA_HANDLE_MACSEC_ADD,                    /* ipa_macsec_map */
 	IPA_HANDLE_MACSEC_DEL,                    /* ipa_macsec_map */
-
+	IPA_ADD_EXT_ROUTER_RULES,                 /* char */
+	IPA_DEL_EXT_ROUTER_RULES,                 /* char* */
 	IPACM_EVENT_MAX
 } ipa_cm_event_id;
 
@@ -630,4 +631,11 @@ typedef struct _ipacm_event_mtu_info
 	ipa_mtu_info mtu_info;
 } ipacm_event_mtu_info;
 #endif
+
+typedef struct ext_router_prefix_info
+{
+	uint32_t ipv6_addr[4];
+	uint32_t ipv6_mask[4];
+	char pdn_name[IPA_IFACE_NAME_LEN];
+};
 #endif /* IPA_CM_DEFS_H */

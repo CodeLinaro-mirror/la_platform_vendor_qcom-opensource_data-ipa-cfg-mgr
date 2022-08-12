@@ -1549,9 +1549,9 @@ void IPACM_ConntrackListener::ProcessSocksv5Conn(ipa_socksv5_msg *socksv5_info, 
 
 void IPACM_ConntrackListener::PostRouteAddVlanPdn(uint32_t public_ip)
 {
-	int pdn_idx, vlan_idx;
-	ipacm_cmd_q_data evt_data;
-	ipacm_event_route_vlan *vlan_data;
+	int pdn_idx = 0, vlan_idx = 0;
+	ipacm_cmd_q_data evt_data ;
+	ipacm_event_route_vlan *vlan_data = NULL;
 	ipacm_event_vlan_pdn data;
 	rmnet_mux_id_info info;
 
@@ -1560,18 +1560,11 @@ void IPACM_ConntrackListener::PostRouteAddVlanPdn(uint32_t public_ip)
 		/* check if we already got vlan_pdn_up event for this ip */
 		if(vlan_pdns[pdn_idx].public_ip == public_ip)
 		{
-			for(vlan_idx = 0; vlan_idx < vlan_pdns[pdn_idx].VID_cnt; vlan_idx++)
-			{
-				if(vlan_data->VlanID == vlan_pdns[pdn_idx].associated_VIDs[vlan_idx])
-				{
-					IPACMDBG_H("vlan pdn already up for vlan %d", vlan_data->VlanID);
-					iptodot("ip", public_ip);
-					return;
-				}
-			}
+			IPACMDBG_H("vlan pdn already up for pdn_idx %d", pdn_idx);
+			iptodot("ip", public_ip);
+			return;
 		}
 	}
-
 	if((pdn_idx >= IPA_MAX_NUM_HW_PDNS) && (num_vlan_pdns >= IPA_MAX_NUM_HW_PDNS))
 	{
 		iptodot("pdn ip", public_ip);

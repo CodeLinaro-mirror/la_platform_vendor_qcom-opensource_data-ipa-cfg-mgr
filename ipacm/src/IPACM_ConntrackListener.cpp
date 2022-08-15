@@ -236,7 +236,7 @@ void IPACM_ConntrackListener::event_callback(ipa_cm_event_id evt,
 			wan_data = (ipacm_event_iface_up *)data;
 			if (WanUp)
 			{
-				TriggerWANDown(wan_data->ipv4_addr);
+				TriggerWANDown(wan_data->ipv4_addr, wan_data->is_sta);
 			}
 			break;
 
@@ -987,7 +987,7 @@ void IPACM_ConntrackListener::TriggerWANUp(void *in_param)
 		  * make sure we have space in pdn table
 		  */
 		 if(wanup_data->is_sta != isStaMode)
-			nat_inst->RemovePdn(wan_ipaddr);
+			nat_inst->RemovePdn(wan_ipaddr, wanup_data->is_sta);
 	 }
 #endif
 
@@ -1150,7 +1150,10 @@ void IPACM_ConntrackListener::HandleVlanDown(void *in_param)
 	{
 		/* VLAN PDN down is triggered only on LINK_DOWN, we can safely remove the PDN */
 		IPACMDBG_H("removing PDN ipv4 address 0x%X\n", vlanup_data->ipv4_addr);
-		nat_inst->RemovePdn(vlanup_data->ipv4_addr);
+		if(vlanup_data->mux_id == 0)
+			nat_inst->RemovePdn(vlanup_data->ipv4_addr, true);
+		else
+			nat_inst->RemovePdn(vlanup_data->ipv4_addr, false);
 
 		for(int i = 0; i < IPA_MAX_NUM_HW_PDNS; i++)
 		{
@@ -1170,7 +1173,7 @@ void IPACM_ConntrackListener::HandleVlanDown(void *in_param)
 	}
 }
 #endif
-void IPACM_ConntrackListener::TriggerWANDown(uint32_t wan_addr)
+void IPACM_ConntrackListener::TriggerWANDown(uint32_t wan_addr, bool is_sta)
 {
 #ifdef FEATURE_VLAN_MPDN
 	IPACMDBG_H("Removing default ipv4 pdn with");
@@ -1198,7 +1201,7 @@ void IPACM_ConntrackListener::TriggerWANDown(uint32_t wan_addr)
 	if(nat_inst != NULL)
 	{
 #ifdef FEATURE_VLAN_MPDN
-		nat_inst->RemovePdn(wan_addr);
+		nat_inst->RemovePdn(wan_addr, is_sta);
 #else
 		nat_inst->DeleteTable(wan_addr);
 #endif
@@ -2296,18 +2299,6 @@ void IPACM_ConntrackListener::ProcessTCPorUDPMsg(
 					 break;
 				 }
 			 }
-			 for(i = 0; i < IPA_MAX_NUM_HW_PDNS; i++)
-			 {
-				 /* remove entry from vlan pdn array for IP having same vlanid */
-				 if((vlan_pdns[i].public_ip != orig_dst_ip) &&
-						 (vlan_pdns[i].vlan_id == VlanID))
-				 {
-					 IPACMDBG_H("Remove vlan pdn entry for ");
-					 iptodot("ip", vlan_pdns[i].public_ip);
-					 vlan_pdns[i].vlan_id = 0;
-					 vlan_pdns[i].public_ip = 0;
-				 }
-			 }
 			 if((i >= IPA_MAX_NUM_HW_PDNS) && (num_vlan_pdns >= IPA_MAX_NUM_HW_PDNS) && (!nat_entry.IsVlanUp))
 			 {
 				 iptodot("vlan client ip", repl_src_ip);
@@ -2344,18 +2335,6 @@ void IPACM_ConntrackListener::ProcessTCPorUDPMsg(
 					}
 				}
 
-				for(i = 0; i < IPA_MAX_NUM_HW_PDNS; i++)
-				{
-					/* remove entry from vlan pdn array for IP having same vlanid */
-					if((vlan_pdns[i].public_ip != repl_dst_ip) &&
-							(vlan_pdns[i].vlan_id == VlanID))
-					{
-						IPACMDBG_H("Remove vlan pdn entry for");
-						iptodot("ip", vlan_pdns[i].public_ip);
-						vlan_pdns[i].vlan_id = 0;
-						vlan_pdns[i].public_ip = 0;
-					}
-				}
 				if((i >= IPA_MAX_NUM_HW_PDNS) && (num_vlan_pdns >= IPA_MAX_NUM_HW_PDNS) && (!nat_entry.IsVlanUp))
 				{
 					iptodot("vlan client ip", orig_src_ip);

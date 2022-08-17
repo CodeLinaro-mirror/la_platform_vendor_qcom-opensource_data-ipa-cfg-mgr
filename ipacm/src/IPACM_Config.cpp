@@ -615,11 +615,10 @@ int IPACM_Config::Init(void)
 		pthread_mutex_init(&cnt_idx_lock, NULL);
 		if (ipacm_alloc_fnr_counters(&fnr_counters, m_fd))
 		{
-			IPACMERR("Failed to allocate fnr counters.\n");
-			goto fail;
+			IPACMERR("Failed to allocate fnr counters. Try Realloc Again  In main()\n");
 		} else {
-			IPACMDBG_H("Allocating fnr counters :  Done\n");
 			hw_fnr_stats_support = true;
+			IPACMDBG_H("Allocating fnr counters : Done (%d)\n",hw_fnr_stats_support);
 		}
 	}
 skip_fnr_alloc:
@@ -847,12 +846,11 @@ int IPACM_Config::GetNatIfaces(int nIfaces, NatIfaces *pIfaces)
 int IPACM_Config::AddNatIfaces(char *dev_name)
 {
 	int i;
+
 	/* Check if this iface already in NAT-iface*/
 	for(i = 0; i < ipa_nat_iface_entries; i++)
 	{
-		if(strncmp(dev_name,
-							 pNatIfaces[i].iface_name,
-							 sizeof(pNatIfaces[i].iface_name)) == 0)
+		if(strncmp(dev_name, pNatIfaces[i].iface_name, sizeof(pNatIfaces[i].iface_name)) == 0)
 		{
 			IPACMDBG("Interface (%s) is add to nat iface already\n", dev_name);
 				return 0;

@@ -153,6 +153,8 @@ const char *ipacm_event_name[] = {
 	__stringify(IPA_ADD_BRIDGE_VLAN_PHY_INTF),             /* Handle vlan details add for physical interface.  */
 	__stringify(IPA_ADD_BRIDGE_VLAN_BR_INTF),              /* Handle vlan-bridge details add for bridge interface. */
 	__stringify(IPACM_EVENT_MAX)
+	__stringify(IPA_MSG_FILTER_NAT_EVENT),                 /* IPACM_firewall_t IPACM_firewall_conf_t */
+	__stringify(IPACM_EVENT_MAX),
 };
 
 IPACM_Config::IPACM_Config()

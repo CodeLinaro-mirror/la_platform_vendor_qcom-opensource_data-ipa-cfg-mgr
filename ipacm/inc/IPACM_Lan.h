@@ -289,6 +289,12 @@ public:
 		ul_firewall_t *ul_firewall,
 		int vid);
 
+	/* Configure and install the UL sw-allow rules on the LAN prod pipe */
+	virtual int config_sw_allow_excep_flt_rules_ul(
+		IPACM_firewall_conf_t* firewall_conf,
+		ul_firewall_t *ul_firewall,
+		int vid);
+
 	/* Config WL UL firewall filter rules on LTE BH (FW on Q6 routing table) */
 	virtual int config_dft_firewall_rules_ul_ex(
 		IPACM_firewall_conf_t* firewall_conf,

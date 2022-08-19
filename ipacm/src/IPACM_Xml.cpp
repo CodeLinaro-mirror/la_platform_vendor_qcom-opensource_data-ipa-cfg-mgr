@@ -1638,6 +1638,28 @@ static int IPACM_firewall_xml_parse_tree(const char *xml_file, xmlNode* xml_node
 						IPACMDBG_H("Profile is %d\n", config->profile);
 					}
 				}
+				else if (IPACM_util_icmp_string((char*)xml_node->name, SWAllow_TAG) == 0)
+				{
+					content = IPACM_read_content_element(xml_node);
+					if (content)
+					{
+						str_size = strlen(content);
+						memset(content_buf, 0, sizeof(content_buf));
+						memcpy(content_buf, (void *)content, str_size);
+						if (atoi(content_buf) == 1)
+						{
+							config->SWAllowed = true;
+							config->extd_firewall_entries[config->num_extd_firewall_entries - 1].SWAllowed_ex = true;
+						}
+						else
+						{
+							if(!config->SWAllowed)
+								config->SWAllowed = false;
+							config->extd_firewall_entries[config->num_extd_firewall_entries - 1].SWAllowed_ex = false;
+						}
+						IPACMDBG_H("SW Allowed Enable?:%d\n", config->SWAllowed);
+					}
+				}
 			}
 			break;
 		}

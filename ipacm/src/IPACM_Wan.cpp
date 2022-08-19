@@ -383,8 +383,8 @@ int IPACM_Wan::get_vid_index_for_iface_v6(ipacm_ipv6_wan_iface iface, uint16_t v
 {
 	for(int i = 0; i < iface.VID_cnt;i++)
 	{
-		iface.associated_VIDs[i] == vlan_id;
-		return i;
+		if(iface.associated_VIDs[i] == vlan_id)
+			return i;
 	}
 
 	IPACMDBG("couldn't find VID %d\n in VID array", vlan_id);
@@ -4049,6 +4049,30 @@ int IPACM_Wan::read_firewall_filter_rules_ul(void)
 #endif
 	{
 		IPACMDBG_H("QCMAP Firewall XML read OK \n");
+
+		IPACMDBG_H("Posting IPA_MSG_FILTER_NAT_EVENT\n");
+
+		ipacm_cmd_q_data evt_data;
+
+		memset(&evt_data, 0, sizeof(evt_data));
+
+		evt_data.event = IPA_MSG_FILTER_NAT_EVENT;
+
+#ifdef FEATURE_VLAN_MPDN
+		IPACM_firewall_t *fw_mpdn_config_ul;
+		fw_mpdn_config_ul = (IPACM_firewall_t *)malloc(sizeof(IPACM_firewall_t));
+		memset(fw_mpdn_config_ul, 0, sizeof(IPACM_firewall_t));
+		memcpy(fw_mpdn_config_ul, &firewall_mpdn_config_ul, sizeof(IPACM_firewall_t));
+		evt_data.evt_data = fw_mpdn_config_ul;
+#else
+		IPACM_firewall_conf_t *fw_config_ul;
+		fw_config_ul = (IPACM_firewall_conf_t *)malloc(sizeof(IPACM_firewall_conf_t));
+		memset(fw_config_ul, 0, sizeof(IPACM_firewall_conf_t));
+		memcpy(fw_config_ul, &firewall_config_ul, sizeof(IPACM_firewall_conf_t));
+		evt_data.evt_data = fw_config_ul;
+#endif
+		/* Insert IPA_MSG_FILTER_NAT_EVENT to command queue */
+		IPACM_EvtDispatcher::PostEvt(&evt_data);
 	}
 	else
 	{
@@ -4114,6 +4138,8 @@ int IPACM_Wan::read_firewall_filter_rules_ul(void)
 					break;
 				}
 			}
+			if(curr_conf->SWAllowed)
+				has_firewall_changed = true;
 			num_mpdn_firewall_v6_ul[j] = 0;
 		}
 	}
@@ -8961,17 +8987,30 @@ int IPACM_Wan::add_firewall_rules_ex(const IPACM_firewall_conf_t& firewall_confi
 	const struct ipa_rule_attrib& rx_prop_attrib, struct ipa_flt_rule_add *rules, int rules_size, int& pos)
 #endif
 {
-	if (!firewall_config.firewall_enable)
+	IPACMDBG_H("fw status: %d, swallowed:%d ip-type:%d\n", firewall_config.firewall_enable, firewall_config.SWAllowed, iptype);
+
+	if (!firewall_config.firewall_enable && !firewall_config.SWAllowed)
 	{
 		return IPACM_SUCCESS;
 	}
 
 	for (uint8_t i = 0; i < firewall_config.num_extd_firewall_entries; ++i)
 	{
+		IPACMDBG_H("Sw-allowed for %d\n", firewall_config.extd_firewall_entries[i].SWAllowed_ex);
+		if(!firewall_config.firewall_enable && !firewall_config.extd_firewall_entries[i].SWAllowed_ex)
+			continue;
+
 		struct ipa_flt_rule_add flt_rule_entry;
 		memset(&flt_rule_entry, 0, sizeof(struct ipa_flt_rule_add));
 
-		flt_rule_entry.at_rear = true;
+		if (firewall_config.extd_firewall_entries[i].SWAllowed_ex)
+		{
+			flt_rule_entry.at_rear = false;
+		}
+		else
+		{
+			flt_rule_entry.at_rear = true;
+		}
 		flt_rule_entry.flt_rule_hdl = -1;
 		flt_rule_entry.status = -1;
 
@@ -8999,7 +9038,13 @@ int IPACM_Wan::add_firewall_rules_ex(const IPACM_firewall_conf_t& firewall_confi
 			rule_protocol = &flt_rule_entry.rule.attrib.u.v4.protocol;
 			firewall_config_protocol = &firewall_config.extd_firewall_entries[i].attrib.u.v4.protocol;
 
-			if (firewall_config.rule_action_accept)
+			if (firewall_config.extd_firewall_entries[i].SWAllowed_ex)
+			{
+				IPACMDBG_H("Forming sw-allowed rule v4\n");
+				flt_rule_entry.rule.action = IPA_PASS_TO_EXCEPTION;
+				rt_tbl_name = ipacmcfg->rt_tbl_wan_dl.name;
+			}
+			else if (firewall_config.rule_action_accept)
 			{
 				flt_rule_entry.rule.action = IPA_PASS_TO_DST_NAT;
 				rt_tbl_name = ipacmcfg->rt_tbl_lan_v4.name;
@@ -9033,7 +9078,13 @@ int IPACM_Wan::add_firewall_rules_ex(const IPACM_firewall_conf_t& firewall_confi
 			rule_protocol = &flt_rule_entry.rule.attrib.u.v6.next_hdr;
 			firewall_config_protocol = &firewall_config.extd_firewall_entries[i].attrib.u.v6.next_hdr;
 
-			if (firewall_config.rule_action_accept)
+			if (firewall_config.extd_firewall_entries[i].SWAllowed_ex)
+			{
+				IPACMDBG_H("Forming sw-allowed rule v6\n");
+				flt_rule_entry.rule.action = IPA_PASS_TO_EXCEPTION;
+				rt_tbl_name = ipacmcfg->rt_tbl_wan_dl.name;
+			}
+			else if (firewall_config.rule_action_accept)
 			{
 				flt_rule_entry.rule.action =
 					IPACM_Iface::ipacmcfg->IsIpv6CTEnabled() ? IPA_PASS_TO_DST_NAT : IPA_PASS_TO_ROUTING;

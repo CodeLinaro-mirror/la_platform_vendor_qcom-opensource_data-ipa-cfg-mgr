@@ -26,9 +26,11 @@ WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
 OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
 IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-Changes from Qualcomm Innovation Center are provided under the following license:
-Copyright (c) 2023-2025 Qualcomm Innovation Center, Inc. All rights reserved.
+Changes from Qualcomm Technologies, Inc. are provided under the following license:
+
+Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
 SPDX-License-Identifier: BSD-3-Clause-Clear
+
 */
 #ifndef IPACM_CONNTRACK_NATAPP_H
 #define IPACM_CONNTRACK_NATAPP_H
@@ -217,6 +219,7 @@ struct NatEntryBase
 
 	bool isVlan;
 	bool IsVlanUp;
+	bool sw_allow;
 
 protected:
 
@@ -304,7 +307,7 @@ typedef struct _nat_table_entry
 	bool src_only;
 	bool dummy_nat;
 	bool ip_pass_entry;
-
+	bool sw_allow;
 }nat_table_entry;
 
 #define CHK_TBL_HDL()  if(nat_table_hdl == 0){ return -1; }
@@ -611,6 +614,12 @@ public:
 	int DelEntriesOnClntDiscon(const IpAddress& client_lan_ip);
 	int DelEntriesOnSTAClntDiscon(const IpAddress& client_lan_ip);
 	void DelEntriesOnWanDown();
+	void HandleSWAllowEntries(void);
+	bool ChkSWAllow(const NatEntryBase& rule);
+	void restore_nat_for_sw_flt_entries(IPACM_extd_swallow_entry_conf_t);
+	void firewall_compare(IPACM_swallow_conf_t*, IPACM_swallow_conf_t*);
+	void GetIpAddress_firewall(uint64_t*, uint64_t*, uint64_t*, uint64_t*, ipa_rule_attrib);
+	bool firewall_tuple_match_with_nat(IPACM_extd_swallow_entry_conf_t, const Ipv6ctEntry*);
 
 #ifdef FEATURE_SOCKSv5
 	std::list<Ipv6ctEntry> socksv5_v6_conn;
@@ -640,6 +649,9 @@ private:
 	const char* ct_mem_type;
 
 	IpAddress& m_previousWanAddress;
+	IPACM_swallow_t sw_filter_cfg;
+	IPACM_swallow_t backup_sw_filter_cfg;
+
 };
 
 class Ipv6ct : public NatBase
@@ -697,7 +709,8 @@ private:
 
 	struct nf_conntrack *ct;
 	struct nfct_handle *ct_hdl;
-
+	IPACM_swallow_t sw_filter_cfg;
+	IPACM_swallow_t backup_sw_filter_cfg;
 	NatApp();
 	int Init();
 
@@ -743,6 +756,11 @@ public:
 	void FlushTempEntries(uint32_t, bool, bool isDummy = false);
 	void DeleteTempEntry_port(uint16_t);
 	int DeleteEntry_port(uint16_t);
+	bool ChkSWAllow(const nat_table_entry *);
+	void HandleSWAllowEntries(void);
+	void restore_nat_for_sw_flt_entries(IPACM_extd_swallow_entry_conf_t);
+	void firewall_compare(IPACM_swallow_conf_t*, IPACM_swallow_conf_t*);
+	bool firewall_tuple_match_with_nat(IPACM_extd_swallow_entry_conf_t, const nat_table_entry*);
 };
 
 #endif /* IPACM_CONNTRACK_NATAPP_H */

@@ -26,9 +26,11 @@ WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
 OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
 IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-Changes from Qualcomm Innovation Center are provided under the following license:
-Copyright (c) 2023-2025 Qualcomm Innovation Center, Inc. All rights reserved.
+Changes from Qualcomm Technologies, Inc. are provided under the following license:
+
+Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
 SPDX-License-Identifier: BSD-3-Clause-Clear
+
 */
 /*!
 	@file
@@ -272,6 +274,8 @@ typedef enum
 	IPA_CFG_CHANGE_EVENT,                 /* NULL */
 	IPA_PRIVATE_SUBNET_CHANGE_EVENT,          /* ipacm_event_data_fid */
 	IPA_FIREWALL_CHANGE_EVENT,                /* NULL */
+	IPA_SWALLOW_CHANGE_EVENT,                 /* NULL */
+	IPA_SWALLOW_PDN_UPDATE,                   /* NULL */
 	IPA_LINK_UP_EVENT,                        /* ipacm_event_data_fid */
 	IPA_LINK_DOWN_EVENT,                      /* ipacm_event_data_fid */
 	IPA_USB_LINK_UP_EVENT,                    /* ipacm_event_data_fid */

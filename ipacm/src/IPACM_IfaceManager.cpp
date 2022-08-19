@@ -691,6 +691,7 @@ int IPACM_IfaceManager::create_iface_instance(ipacm_ifacemgr_data *param)
 #ifdef FEATURE_IPv6CT_DISABLED
 					IPACM_EvtDispatcher::registr(IPA_FIREWALL_CHANGE_EVENT, w);
 #endif
+					IPACM_EvtDispatcher::registr(IPA_SWALLOW_PDN_UPDATE, w);
 					IPACM_EvtDispatcher::registr(IPA_NEIGH_CLIENT_IP_ADDR_ADD_EVENT, w);
 					IPACM_EvtDispatcher::registr(IPA_SW_ROUTING_ENABLE, w);
 					IPACM_EvtDispatcher::registr(IPA_SW_ROUTING_DISABLE, w);

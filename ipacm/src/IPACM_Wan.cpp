@@ -27,8 +27,10 @@
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  * Changes from Qualcomm Technologies, Inc. are provided under the following license:
+ *
  * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
+ *
  */
 /*!
 		@file
@@ -656,8 +658,8 @@ int IPACM_Wan::get_vid_index_for_iface_v6(ipacm_ipv6_wan_iface iface, uint16_t v
 {
 	for(int i = 0; i < iface.VID_cnt;i++)
 	{
-		iface.associated_VIDs[i] == vlan_id;
-		return i;
+		if(iface.associated_VIDs[i] == vlan_id)
+			return i;
 	}
 
 	IPACMDBG("couldn't find VID %d\n in VID array", vlan_id);
@@ -814,6 +816,7 @@ int IPACM_Wan::handle_addr_evt(ipacm_event_data_addr *data)
 	int num_ipv6_addr, len;
 	int res = IPACM_SUCCESS;
 	ipacm_cmd_q_data evt_data;
+	IPACM_swallow_t *dummy_cfg;
 	ipacm_event_data_fid *data_fid = NULL;
 #ifdef FEATURE_STATIC_POLICY
 	struct ipa_ioc_pdn_dscp_map_info pdn_dscp_map_info;
@@ -1471,6 +1474,17 @@ int IPACM_Wan::handle_addr_evt(ipacm_event_data_addr *data)
 	evt_data.event = IPA_HANDLE_NEW_NEIGH_EVENT;
 	evt_data.evt_data = data_fid;
 	IPACMDBG_H("Posting IPA_HANDLE_NEW_NEIGH_EVENT event:%d\n", evt_data.event);
+	IPACM_EvtDispatcher::PostEvt(&evt_data);
+
+	set_swallow_pdn_up();
+	memset(&evt_data, 0, sizeof(evt_data));
+	dummy_cfg = (IPACM_swallow_t *)calloc(1, sizeof(IPACM_swallow_t));
+	evt_data.event = IPA_SWALLOW_CHANGE_EVENT;
+	/* Dummy Data Ignored on received side */
+	evt_data.evt_data = (void *)dummy_cfg;
+
+	IPACMDBG("Posting IPA_SWALLOW_CHANGE_EVENT\n");
+	/* Insert IPA_SWALLOW_CHANGE_EVENT to command queue */
 	IPACM_EvtDispatcher::PostEvt(&evt_data);
 fail:
 	if(rt_rule)
@@ -2734,6 +2748,25 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 		else
 		{
 			handle_software_routing_disable();
+		}
+		break;
+
+	case IPA_SWALLOW_PDN_UPDATE:
+		{
+			IPACMDBG_H("Received IPA_SWALLOW_PDN_UPDATE\n");
+			set_swallow_pdn_up();
+
+			ipacm_cmd_q_data evt_data;
+			memset(&evt_data, 0, sizeof(evt_data));
+			IPACM_swallow_t *dummy_cfg = (IPACM_swallow_t *)calloc(1, sizeof(IPACM_swallow_t));
+
+			evt_data.event = IPA_SWALLOW_CHANGE_EVENT;
+			/* Dummy Data Ignored on received side */
+			evt_data.evt_data = (void *)dummy_cfg;
+
+			IPACMDBG("Posting IPA_SWALLOW_CHANGE_EVENT\n");
+			/* Insert IPA_SWALLOW_CHANGE_EVENT to command queue */
+			IPACM_EvtDispatcher::PostEvt(&evt_data);
 		}
 		break;
 
@@ -6266,6 +6299,8 @@ int IPACM_Wan::read_firewall_filter_rules_ul(void)
 					break;
 				}
 			}
+			if(curr_conf->SWAllowed)
+				has_firewall_changed = true;
 			num_mpdn_firewall_v6_ul[j] = 0;
 		}
 	}
@@ -6521,6 +6556,60 @@ IPACM_firewall_conf_t* IPACM_Wan::get_firewall_conf_by_vid_ul(int vid)
 	return NULL;
 }
 #endif //FEATURE_VLAN_MPDN
+
+void IPACM_Wan::set_swallow_pdn_up(void)
+{
+	int num_pdns;
+
+	if(!IPACM_Iface::ipacmcfg->sw_filter_cfg)
+	{
+		IPACMERR("SW Config not updated!\n");
+		return;
+	}
+
+	num_pdns = IPACM_Iface::ipacmcfg->sw_filter_cfg->pdn_count;
+
+	for(int j = 0; j < num_pdns; j++)
+	{
+		for(int i = 0; i < IPA_MAX_NUM_SW_PDNS; i++)
+		{
+			if(ipv6_to_iface[i].pIface)
+			{
+				if(!(strcmp(ipv6_to_iface[i].pIface->dev_name,
+					IPACM_Iface::ipacmcfg->sw_filter_cfg->pdns[j].net_dev)) &&
+					IPACM_Iface::ipacmcfg->sw_filter_cfg->pdns[j].v6_up != TRUE)
+				{
+					IPACM_Iface::ipacmcfg->sw_filter_cfg->pdns[j].v6_up = TRUE;
+					IPACMDBG("found %s dev in index %d updating v6 pdn index %d\n",
+						IPACM_Iface::ipacmcfg->sw_filter_cfg->pdns[j].net_dev, j, ipv6_to_iface[i].pIface->modem_ipv6_pdn_index);
+					memset(&IPACM_Iface::ipacmcfg->sw_filter_cfg->pdns[j].ipv6_prefix, 0, sizeof(uint32_t)*2);
+					memcpy(&IPACM_Iface::ipacmcfg->sw_filter_cfg->pdns[j].ipv6_prefix, &ipv6_to_iface[i].ipv6_prefix, sizeof(uint32_t)*2);
+					IPACMDBG_H("ipv6 prefix: 0x%08x%08x.\n", IPACM_Iface::ipacmcfg->sw_filter_cfg->pdns[j].ipv6_prefix[0], IPACM_Iface::ipacmcfg->sw_filter_cfg->pdns[j].ipv6_prefix[1]);
+
+				}
+			}
+			if(ipv4_to_iface[i].pIface)
+			{
+				if(!strcmp(ipv4_to_iface[i].pIface->dev_name,
+					IPACM_Iface::ipacmcfg->sw_filter_cfg->pdns[j].net_dev) &&
+					IPACM_Iface::ipacmcfg->sw_filter_cfg->pdns[j].v4_up != TRUE)
+				{
+					IPACM_Iface::ipacmcfg->sw_filter_cfg->pdns[j].v4_up = TRUE;
+					IPACMDBG("found %s dev in index %d updating v4 pdn index %d\n",
+						IPACM_Iface::ipacmcfg->sw_filter_cfg->pdns[j].net_dev, j, ipv4_to_iface[i].pIface->modem_ipv4_pdn_index);
+					IPACM_Iface::ipacmcfg->sw_filter_cfg->pdns[j].public_ipv4_addr = ipv4_to_iface[i].ipv4_addr;
+
+				}
+			}
+			if(IPACM_Iface::ipacmcfg->sw_filter_cfg->pdns[j].v6_up == TRUE &&
+				IPACM_Iface::ipacmcfg->sw_filter_cfg->pdns[j].v4_up == TRUE)
+			{
+				break;
+			}
+		}
+	}
+}
+
 
 #endif //FEATURE_IPACM_UL_FIREWALL
 int IPACM_Wan::init_fl_rule_ex(ipa_ip_type iptype)
@@ -12375,17 +12464,30 @@ int IPACM_Wan::add_firewall_rules_ex(const IPACM_firewall_conf_t& firewall_confi
 	const struct ipa_rule_attrib& rx_prop_attrib, struct ipa_flt_rule_add *rules, int rules_size, int& pos)
 #endif
 {
-	if (!firewall_config.firewall_enable)
+	IPACMDBG_H("fw status: %d, swallowed:%d ip-type:%d\n", firewall_config.firewall_enable, firewall_config.SWAllowed, iptype);
+
+	if (!firewall_config.firewall_enable && !firewall_config.SWAllowed)
 	{
 		return IPACM_SUCCESS;
 	}
 
 	for (uint8_t i = 0; i < firewall_config.num_extd_firewall_entries; ++i)
 	{
+		IPACMDBG_H("Sw-allowed for %d\n", firewall_config.extd_firewall_entries[i].SWAllowed_ex);
+		if(!firewall_config.firewall_enable && !firewall_config.extd_firewall_entries[i].SWAllowed_ex)
+			continue;
+
 		struct ipa_flt_rule_add flt_rule_entry;
 		memset(&flt_rule_entry, 0, sizeof(struct ipa_flt_rule_add));
 
-		flt_rule_entry.at_rear = true;
+		if (firewall_config.extd_firewall_entries[i].SWAllowed_ex)
+		{
+			flt_rule_entry.at_rear = false;
+		}
+		else
+		{
+			flt_rule_entry.at_rear = true;
+		}
 		flt_rule_entry.flt_rule_hdl = -1;
 		flt_rule_entry.status = -1;
 
@@ -12413,7 +12515,13 @@ int IPACM_Wan::add_firewall_rules_ex(const IPACM_firewall_conf_t& firewall_confi
 			rule_protocol = &flt_rule_entry.rule.attrib.u.v4.protocol;
 			firewall_config_protocol = &firewall_config.extd_firewall_entries[i].attrib.u.v4.protocol;
 
-			if (firewall_config.rule_action_accept)
+			if (firewall_config.extd_firewall_entries[i].SWAllowed_ex)
+			{
+				IPACMDBG_H("Forming sw-allowed rule v4\n");
+				flt_rule_entry.rule.action = IPA_PASS_TO_EXCEPTION;
+				rt_tbl_name = ipacmcfg->rt_tbl_wan_dl.name;
+			}
+			else if (firewall_config.rule_action_accept)
 			{
 				flt_rule_entry.rule.action = IPA_PASS_TO_DST_NAT;
 				rt_tbl_name = ipacmcfg->rt_tbl_lan_v4.name;
@@ -12447,7 +12555,13 @@ int IPACM_Wan::add_firewall_rules_ex(const IPACM_firewall_conf_t& firewall_confi
 			rule_protocol = &flt_rule_entry.rule.attrib.u.v6.next_hdr;
 			firewall_config_protocol = &firewall_config.extd_firewall_entries[i].attrib.u.v6.next_hdr;
 
-			if (firewall_config.rule_action_accept)
+			if (firewall_config.extd_firewall_entries[i].SWAllowed_ex)
+			{
+				IPACMDBG_H("Forming sw-allowed rule v6\n");
+				flt_rule_entry.rule.action = IPA_PASS_TO_EXCEPTION;
+				rt_tbl_name = ipacmcfg->rt_tbl_wan_dl.name;
+			}
+			else if (firewall_config.rule_action_accept)
 			{
 				flt_rule_entry.rule.action =
 					IPACM_Iface::ipacmcfg->IsIpv6CTEnabled() ? IPA_PASS_TO_DST_NAT : IPA_PASS_TO_ROUTING;

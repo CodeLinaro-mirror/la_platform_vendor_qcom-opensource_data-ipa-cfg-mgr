@@ -145,6 +145,7 @@ const char *ipacm_event_name[] = {
 	__stringify(IPA_ADD_SOCKSv5_CONN),                     /* ipa_socksv5_msg */
 	__stringify(IPA_DEL_SOCKSv5_CONN),                     /* ipa_socksv5_msg */
 #endif
+	__stringify(IPA_MSG_FILTER_NAT_EVENT),                 /* IPACM_firewall_t IPACM_firewall_conf_t */
 	__stringify(IPACM_EVENT_MAX),
 };
 

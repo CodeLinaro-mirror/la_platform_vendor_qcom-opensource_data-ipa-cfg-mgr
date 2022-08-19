@@ -122,6 +122,7 @@ if (!(a)) {                                                 \
 #define FirewallEnabled_TAG                  "FirewallEnabled"
 #define FirewallPktsAllowed_TAG              "FirewallPktsAllowed"
 #define DefaultNetDev                        "DefaultNetDev"
+#define SWAllow_TAG                          "SWAllowed"
 
 #define UNKNOWN_NetDev_TAG                   "UNKNOWN"
 
@@ -272,6 +273,7 @@ typedef struct
 #ifdef FEATURE_IPV6_NAT
 	bool IPV6NatEnabledfw;
 #endif
+	bool SWAllowed_ex;
 } IPACM_extd_firewall_entry_conf_t;
 
 
@@ -291,6 +293,7 @@ typedef struct
 	uint8_t profile;
 	bool rule_action_accept;
 	bool firewall_enable;
+	bool SWAllowed;
 } IPACM_firewall_conf_t;
 
 struct IPACM_firewall_t

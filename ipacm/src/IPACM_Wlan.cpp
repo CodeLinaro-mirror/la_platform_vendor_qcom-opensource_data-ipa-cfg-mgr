@@ -3599,6 +3599,10 @@ int IPACM_Wlan::config_dft_firewall_rules_ul_ex(IPACM_firewall_conf_t* firewall_
 					if(firewall_conf->extd_firewall_entries[i].IPV6NatEnabledfw)
 						continue;
 #endif
+					// if sw-allowed then do not replicate rules here
+					if(firewall_conf->extd_firewall_entries[i].SWAllowed_ex)
+						continue;
+
 					memset(&flt_rule_entry_fw, 0, sizeof(struct ipa_flt_rule_add));
 					flt_rule_entry_fw.at_rear = 1;
 					flt_rule_entry_fw.flt_rule_hdl = -1;
@@ -3820,15 +3824,15 @@ void IPACM_Wlan::configure_v6_ul_firewall_wlan()
 		return;
 	}
 
-	/*Drop rules: First of all clear LAN pipe frag, catch all and FW rules if installed */
-	delete_uplink_filter_rule_ul(&iface_ul_firewall);
-
 	/* now read XML and rebuild FW for all PDNs */
 	if(IPACM_Wan::read_firewall_filter_rules_ul())
 	{
 		IPACMERR("failed configuring UL firewall\n");
 		return;
 	}
+
+	/*Drop rules: First of all clear LAN pipe frag, catch all and FW rules if installed */
+	delete_uplink_filter_rule_ul(&iface_ul_firewall);
 
 #ifdef IPA_V6_UL_WL_FIREWALL_HANDLE
 	/* Delete Q6 UL rules of clients */
@@ -3870,6 +3874,11 @@ void IPACM_Wlan::configure_v6_ul_firewall_wlan()
 		{
 			IPACMDBG_H("default profile firewall is disabled, disable Q6 firewall\n");
 			disable_dft_firewall_rules_ul_ex_per_wlan_client(default_vid);
+		}
+
+		if(firewall_config->SWAllowed)
+		{
+			config_sw_allow_excep_flt_rules_ul(firewall_config, &iface_ul_firewall, default_vid);
 		}
 	}
 #ifdef FEATURE_VLAN_MPDN

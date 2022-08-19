@@ -295,6 +295,7 @@ typedef struct _nat_table_entry
 	bool ucp;
 	bool dst_only;
 	bool src_only;
+	bool sw_allow;
 }nat_table_entry;
 
 #define CHK_TBL_HDL()  if(nat_table_hdl == 0){ return -1; }
@@ -674,6 +675,14 @@ private:
 	struct nf_conntrack *ct;
 	struct nfct_handle *ct_hdl;
 
+#ifdef FEATURE_VLAN_MPDN
+	IPACM_firewall_t fw_mpdn_config_data;
+#else
+	IPACM_firewall_conf_t fw_config_data;
+#endif
+
+	bool fw_config_valid;
+
 	NatApp();
 	int Init();
 
@@ -714,6 +723,19 @@ public:
 	void FlushAndCacheVlanTempEntries(uint32_t ip_addr, bool *entry_exists, uint32_t *public_ip);
 #endif
 	void FlushTempEntries(uint32_t, bool, bool isDummy = false);
+
+	/*
+	 * Method: HandleSwAllowEntries: Add/Delete NAT Entry
+	 * for software allowed tuple.
+	 *
+	 * Params:
+	 * @data: Firewall config data received from firewall
+	 * config file
+	 * @update: Flag to update local firewall config structure
+	 *
+	 * Return: Void
+	 */
+	void HandleSwAllowEntries(void *, bool);
 };
 
 #endif /* IPACM_CONNTRACK_NATAPP_H */

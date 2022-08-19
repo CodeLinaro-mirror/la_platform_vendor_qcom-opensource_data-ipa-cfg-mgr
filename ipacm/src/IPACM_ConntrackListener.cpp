@@ -91,6 +91,7 @@ IPACM_ConntrackListener::IPACM_ConntrackListener() :
 	 IPACM_EvtDispatcher::registr(IPA_HANDLE_LAN_WLAN_UP_V6, this);
 	 IPACM_EvtDispatcher::registr(IPA_NEIGH_CLIENT_IP_ADDR_ADD_EVENT, this);
 	 IPACM_EvtDispatcher::registr(IPA_NEIGH_CLIENT_IP_ADDR_DEL_EVENT, this);
+	 IPACM_EvtDispatcher::registr(IPA_MSG_FILTER_NAT_EVENT, this);
 
 #ifdef CT_OPT
 	 p_lan2lan = IPACM_LanToLan::getLan2LanInstance();
@@ -311,6 +312,11 @@ void IPACM_ConntrackListener::event_callback(ipa_cm_event_id evt,
 	 case IPA_NEIGH_CLIENT_IP_ADDR_DEL_EVENT:
 		 IPACMDBG("Received IPA_NEIGH_CLIENT_IP_ADDR_DEL_EVENT event\n");
 		 HandleNonNatIPAddr(data, false);
+		 break;
+
+	 case IPA_MSG_FILTER_NAT_EVENT:
+		 IPACMDBG("Received IPA_MSG_FILTER_NAT_EVENT event\n");
+		 nat_inst->HandleSwAllowEntries(data, true);
 		 break;
 
 	 default:
@@ -2454,6 +2460,7 @@ void IPACM_ConntrackListener::ProcessTCPorUDPMsg(
 	 nat_entry.rule = &rule;
 #ifdef FEATURE_VLAN_MPDN
 	 AddORDeleteNatEntry(&nat_entry, &SendVlanEvent);
+	 nat_inst->HandleSwAllowEntries(NULL, false);
 	 if(VlanID > 0 && SendVlanEvent)
 	 {
 		 ipacm_cmd_q_data evt_data;
@@ -2484,6 +2491,7 @@ void IPACM_ConntrackListener::ProcessTCPorUDPMsg(
 	 }
 #else
 	 AddORDeleteNatEntry(&nat_entry, NULL);
+	 nat_inst->HandleSwAllowEntries(NULL, false);
 #endif
 	 return;
 

@@ -190,6 +190,8 @@ static int ipacm_cfg_xml_parse_tree
 						IPACM_util_icmp_string((char*)xml_node->name, IPACM_L2TP_TAG) == 0 ||
 						IPACM_util_icmp_string((char*)xml_node->name, IPACM_MPDN_TAG) == 0 ||
 
+						IPACM_util_icmp_string((char*)xml_node->name, IPACM_EASY_MESH) == 0 ||
+
 						IPACM_util_icmp_string((char*)xml_node->name, IPACM_SOCKSv5_TAG) == 0 ||
 						IPACM_util_icmp_string((char*)xml_node->name, GRE_TAG) == 0 ||
 						IPACM_util_icmp_string((char*)xml_node->name, PUBLIC_IP_SUPPORT_TAG) == 0)
@@ -666,6 +668,52 @@ static int ipacm_cfg_xml_parse_tree
 							config->public_ip_support_enable = false;
 						}
 						IPACMDBG_H("Public IP support config enable %d buf(%d)\n", config->public_ip_support_enable, atoi(content_buf));
+					}
+				}
+				else if (IPACM_util_icmp_string((char*)xml_node->name, IPACM_Easy_Mesh_Enabled) == 0)
+				{
+					IPACMDBG_H("inside enable Easy Mesh\n");
+					content = IPACM_read_content_element(xml_node);
+					if (content == NULL)
+					{
+						IPACMERR("Failed to read the content of the tag %s\n", IPACM_Easy_Mesh_Enabled);
+					}
+					else
+					{
+						str_size = strlen(content);
+						memset(content_buf, 0, sizeof(content_buf));
+						memcpy(content_buf, (void *)content, str_size);
+						if (atoi(content_buf))
+						{
+							config->ipacm_emesh_enable = true;
+							IPACMDBG_H("IPACM Easy mesh enable %d buf(%d)\n",
+							config->ipacm_emesh_enable, atoi(content_buf));
+						}
+						else
+						{
+							config->ipacm_emesh_enable = false;
+							IPACMDBG_H("IPACM Easy mesh disable %d buf(%d)\n",
+							config->ipacm_emesh_enable, atoi(content_buf));
+						}
+					}
+				}
+				else if (IPACM_util_icmp_string((char*)xml_node->name, IPACM_Easy_Mesh_Mode) == 0)
+				{
+					IPACMDBG_H("inside enable Easy Mesh Mode type\n");
+					content = IPACM_read_content_element(xml_node);
+					if (content == NULL)
+					{
+						IPACMERR("Failed to read the content of the tag %s\n", IPACM_Easy_Mesh_Mode);
+					}
+					else
+					{
+						str_size = strlen(content);
+						memset(content_buf, 0, sizeof(content_buf));
+						memcpy(content_buf, (void *)content, str_size);
+
+						config->ipacm_emesh_mode = atoi(content_buf);
+						IPACMDBG_H("IPACM Easy mesh mode %d buf(%d)\n",
+								   config->ipacm_emesh_mode, atoi(content_buf));
 					}
 				}
 			}

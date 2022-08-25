@@ -859,6 +859,7 @@ void NatApp::UpdateUDPTimeStamp()
 	uint32_t ts;
 	bool read_to = false;
 	bool keep_awake;
+	uint32_t redirect;
 
 	keep_awake = ( max_entries && SRAM_IN_USE() && ipa_nat_is_sram_supported() );
 
@@ -876,13 +877,20 @@ void NatApp::UpdateUDPTimeStamp()
 	for(cnt = 0; cnt < max_entries; cnt++)
 	{
 		ts = 0;
+		redirect = 0;
 		if(cache[cnt].enabled == true &&
 		   (cache[cnt].private_ip != cache[cnt].public_ip))
 		{
 			IPACMDBG("\n");
-			if(ipa_nat_query_timestamp(nat_table_hdl, cache[cnt].rule_hdl, &ts) < 0)
+			if(ipa_nat_query_timestamp_redirect(nat_table_hdl, cache[cnt].rule_hdl, &ts, &redirect) < 0)
 			{
 				IPACMERR("unable to retrieve timeout for rule handle: %d\n", cache[cnt].rule_hdl);
+				continue;
+			}
+
+			if(redirect)
+			{
+				IPACMDBG("Got RST/FIN req for connection, NAT entry redirect flag is %d\n", redirect);
 				continue;
 			}
 

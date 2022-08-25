@@ -1,33 +1,9 @@
 /*
  * Copyright (c) 2019-2020 The Linux Foundation. All rights reserved.
  *
- * Redistribution and use in source and binary forms, with or without
- * modification, are permitted provided that the following conditions are
- * met:
- *  * Redistributions of source code must retain the above copyright
- *    notice, this list of conditions and the following disclaimer.
- *  * Redistributions in binary form must reproduce the above
- *    copyright notice, this list of conditions and the following
- *    disclaimer in the documentation and/or other materials provided
- *    with the distribution.
- *  * Neither the name of The Linux Foundation nor the names of its
- *    contributors may be used to endorse or promote products derived
- *    from this software without specific prior written permission.
- *
- * THIS SOFTWARE IS PROVIDED "AS IS" AND ANY EXPRESS OR IMPLIED
- * WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
- * MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NON-INFRINGEMENT
- * ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS
- * BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
- * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
- * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR
- * BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
- * WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
- * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
- * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- * Changes from Qualcomm Innovation Center, Inc. are provided under the following license:
- * Copyright (c) 2024 Qualcomm Innovation Center, Inc. All rights reserved.
- * SPDX-License-Identifier: BSD-3-Clause-Clear.
+ * Changes from Qualcomm Technologies, Inc. are provided under the following license:
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 #include <errno.h>
 #include <pthread.h>
@@ -363,15 +339,17 @@ int ipa_nati_del_ipv4_rule(
 	return ret;
 }
 
-int ipa_nati_query_timestamp(
+int ipa_nati_query_timestamp_redirect(
 	uint32_t  tbl_hdl,
 	uint32_t  rule_hdl,
-	uint32_t* time_stamp)
+	uint32_t* time_stamp,
+	uint32_t* redirect)
 {
 	arb_t* args[] = {
 		(arb_t*) tbl_hdl,
 		(arb_t*) rule_hdl,
 		(arb_t*) time_stamp,
+		(arb_t*) redirect,
 	};
 
 	int ret;
@@ -2135,15 +2113,16 @@ static int _smGetTmStmp(
 	uint32_t  tbl_hdl    = (uint32_t)  args[0];
 	uint32_t  rule_hdl   = (uint32_t)  args[1];
 	uint32_t* time_stamp = (uint32_t*) args[2];
+	uint32_t* redirect = (uint32_t*) args[3];
 
 	int ret;
 
 	IPADBG("In\n");
 
-	IPADBG("tbl_hdl(0x%08X) rule_hdl(%u) time_stamp_ptr(%p)\n",
-		   tbl_hdl, rule_hdl, time_stamp);
+	IPADBG("tbl_hdl(0x%08X) rule_hdl(%u) time_stamp_ptr(%p) redirect(%p)\n",
+		   tbl_hdl, rule_hdl, time_stamp, redirect);
 
-	ret = ipa_NATI_query_timestamp(tbl_hdl, rule_hdl, time_stamp);
+	ret = ipa_NATI_query_timestamp_redirect(tbl_hdl, rule_hdl, time_stamp, redirect);
 
 	if ( ret == 0 )
 	{
@@ -2185,6 +2164,7 @@ static int _smGetTmStmpHybrid(
 	uint32_t  tbl_hdl       = (uint32_t)  args[0];
 	uint32_t  orig_rule_hdl = (uint32_t)  args[1];
 	uint32_t* time_stamp    = (uint32_t*) args[2];
+	uint32_t* redirect      = (uint32_t*) args[3];
 
 	uint32_t  new_rule_hdl;
 
@@ -2206,6 +2186,7 @@ static int _smGetTmStmpHybrid(
 			         nati_obj_ptr->ddr_tbl_hdl,
 			(arb_t*) new_rule_hdl,
 			(arb_t*) time_stamp,
+			(arb_t*) redirect,
 		};
 
 		ret = _smGetTmStmp(nati_obj_ptr, trigger, new_args);

@@ -500,8 +500,8 @@ int IPACM_Wan::get_vid_index_for_iface_v6(ipacm_ipv6_wan_iface iface, uint16_t v
 {
 	for(int i = 0; i < iface.VID_cnt;i++)
 	{
-		iface.associated_VIDs[i] == vlan_id;
-		return i;
+		if (iface.associated_VIDs[i] == vlan_id)
+			return i;
 	}
 
 	IPACMDBG("couldn't find VID %d\n in VID array", vlan_id);

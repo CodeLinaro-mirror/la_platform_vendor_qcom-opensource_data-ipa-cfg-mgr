@@ -611,8 +611,11 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 							}
 						}
 #endif //FEATURE_SOCKSv5
-						else
+						if (IPACM_Iface::ipacmcfg->iface_in_vlan_mode(dev_name))
+						{
+							IPACMDBG_H("Checking for V4 VLAN PDN\n");
 							check_vlan_PDNUp(IPA_IP_v4);
+						}
 
 #endif //FEATURE_VLAN_MPDN
 						/* add support for handling default route to WIFI backhaul on vlan case Need to protect with xml entry */
@@ -686,11 +689,11 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 							}
 						}
 #endif //FEATURE_SOCKSv5
-						else
-                                                {
-							IPACMDBG_H("WAN v6 is not UP\n");
+						if(IPACM_Iface::ipacmcfg->iface_in_vlan_mode(dev_name))
+						{
+							IPACMDBG_H("Checking for V6 VLAN PDN\n");
 							check_vlan_PDNUp(IPA_IP_v6);
-                                                }
+						}
 #endif //FEATURE_VLAN_MPDN
 
 						/* Post event to NAT */

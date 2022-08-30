@@ -144,6 +144,7 @@ const char *ipacm_event_name[] = {
 	__stringify(IPA_ADD_SOCKSv5_CONN),                     /* ipa_socksv5_msg */
 	__stringify(IPA_DEL_SOCKSv5_CONN),                     /* ipa_socksv5_msg */
 #endif
+	__stringify(IPA_WLAN_GW_ADDR_ADD_EVENT),		/* ipacm_event_data_addr */
 	__stringify(IPACM_EVENT_MAX),
 };
 

@@ -911,7 +911,8 @@ void IPACM_ConntrackListener::HandleVlanUp(void *in_param)
 			{
 				IPACMDBG_H("found empty PDN entry in 0 index num_vlan_pdns %d\n", num_vlan_pdns);
 				vlan_pdns[0].public_ip = vlanup_data->ipv4_addr;
-				vlan_pdns[0].vlan_id = vlanup_data->VlanID;
+				vlan_pdns[0].associated_VIDs[vlan_pdns[0].VID_cnt] = vlanup_data->VlanID;
+				vlan_pdns[0].VID_cnt++;
 				num_vlan_pdns++;
 			}
 			IPACMDBG_H("PDN table added successfully for STA\n");

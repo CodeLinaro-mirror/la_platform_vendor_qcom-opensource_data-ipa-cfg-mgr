@@ -1233,6 +1233,7 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 			}
 		}
 		break;
+
 	/* QCMAP sends this event whenever a client is disconnected. */
 	case IPA_LAN_CLIENT_DISCONNECT_EVENT:
 		{
@@ -1263,6 +1264,7 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 				IPACMDBG_H("matching if index, ignoring\n", ipa_if_num);
 		}
 		break;
+
 	case IPA_HANDLE_WAN_VLAN_PDN_UP:
 		{
 			ipacm_event_vlan_pdn *data = (ipacm_event_vlan_pdn *)param;
@@ -1281,7 +1283,8 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 					configure_v6_ul_firewall();
 #endif
 				}
-				if(is_mux_up(data->mux_id, data->iptype))
+
+				if(is_mux_up(data->mux_id, data->iptype, data->VlanID))
 				{
 					set_mux = false;
 				}
@@ -1289,6 +1292,7 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 			}
 		}
 		break;
+
 	case IPA_HANDLE_WAN_VLAN_PDN_DOWN:
 		{
 			ipacm_event_vlan_pdn *data = (ipacm_event_vlan_pdn *)param;

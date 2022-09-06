@@ -246,6 +246,7 @@ typedef enum
 	IPA_ADD_SOCKSv5_CONN,              	      /* ipa_socksv5_msg */
 	IPA_DEL_SOCKSv5_CONN,                     /* ipa_socksv5_msg */
 #endif
+	IPA_WLAN_GW_ADDR_ADD_EVENT,               /* ipacm_event_data_addr */
 	IPACM_EVENT_MAX
 } ipa_cm_event_id;
 
@@ -381,6 +382,7 @@ typedef struct _ipacm_event_data_addr
 	uint32_t  ipv6_addr[4];
 	uint32_t  ipv6_addr_mask[4];
 	uint32_t  ipv6_addr_gw[4];
+	uint8_t is_default_backhaul_gw;
 } ipacm_event_data_addr;
 
 typedef struct _ipacm_event_data_mac

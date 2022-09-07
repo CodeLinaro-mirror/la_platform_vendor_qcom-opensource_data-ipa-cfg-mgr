@@ -167,7 +167,7 @@ public:
 	uint32_t dft_rt_rule_hdl[MAX_DEFAULT_v4_ROUTE_RULES+2*MAX_DEFAULT_v6_ROUTE_RULES];
 
 	/* save client ipv6 address info and rt handles */
-	std::map<std::array<uint32_t, 4>, handleTypeV6> rt_hdl_v6_list[IPA_MAX_NUM_VLAN_CLIENTS];
+	std::map<std::array<uint32_t, 4>, handleTypeV6> rt_hdl_v6_list[IPA_MAX_NUM_CLIENTS_IPV6];
 
 	ipa_ioc_query_intf *iface_query;
 	ipa_ioc_query_intf_tx_props *tx_prop;

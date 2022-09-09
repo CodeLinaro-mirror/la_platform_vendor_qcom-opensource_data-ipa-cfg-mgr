@@ -11744,7 +11744,7 @@ bool IPACM_Lan::is_vlan_event(char *event_iface_name)
 	strlcpy(if_name, event_iface_name, IPA_IFACE_NAME_LEN);
 	IPACMDBG_H("Self iface %s, event iface %s\n", dev_name, event_iface_name);
 
-	char* char_idx =  strstr(if_name, ".");
+	char* char_idx =  strrchr(if_name, '.');
 
 	if (char_idx) {
 		char_idx[0] = '\0';

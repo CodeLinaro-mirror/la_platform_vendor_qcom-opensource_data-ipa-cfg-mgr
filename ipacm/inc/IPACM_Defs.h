@@ -67,6 +67,8 @@ extern "C"
 #define STR_ECM_IFACE "ecm"
 #define STR_ECM0_IFACE "ecm0"
 
+#define ETH_IFACE_MAX 2
+
 #define IF_NAME_LEN 16
 #define IPA_MAX_FILE_LEN  64
 #define IPA_IFACE_NAME_LEN 16
@@ -385,6 +387,12 @@ typedef struct
 	ipacm_wlan_access_mode wlan_mode;
 	int netlink_interface_index;
 } ipa_ifi_dev_name_t;
+
+typedef struct
+{
+    char phy_name[IPA_IFACE_NAME_LEN];
+    char macsec_name[IPA_IFACE_NAME_LEN];
+} ipa_macsec_map_cache;
 
 typedef struct
 {

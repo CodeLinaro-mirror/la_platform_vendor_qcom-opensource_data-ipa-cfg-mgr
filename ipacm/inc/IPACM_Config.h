@@ -220,6 +220,10 @@ public:
 	/* Store interested interface and their configuration from XML file */
 	ipa_ifi_dev_name_t *iface_table;
 
+	/* Store macsec details */
+	ipa_macsec_map_cache *macsec_cache;
+	int macsec_interface_num;
+
 	/* Store interested ALG port from XML file */
 	ipacm_alg *alg_table;
 

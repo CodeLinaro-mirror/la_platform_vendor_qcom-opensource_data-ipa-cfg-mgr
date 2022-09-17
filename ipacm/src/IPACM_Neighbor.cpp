@@ -25,6 +25,10 @@ BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
 WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
 OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
 IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+Changes from Qualcomm Innovation Center are provided under the following license
+Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+SPDX-License-Identifier: BSD-3-Clause-Clear,
 */
 /*!
 	@file
@@ -40,6 +44,7 @@ IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include <sys/ioctl.h>
 #include <linux/if.h>
+#include <arpa/inet.h>
 #include <IPACM_Neighbor.h>
 #include <IPACM_EvtDispatcher.h>
 #include "IPACM_Defs.h"
@@ -62,9 +67,67 @@ IPACM_Neighbor::IPACM_Neighbor()
 	IPACM_EvtDispatcher::registr(IPA_WLAN_CLIENT_ADD_EVENT_EX, this);
 	IPACM_EvtDispatcher::registr(IPA_NEW_NEIGH_EVENT, this);
 	IPACM_EvtDispatcher::registr(IPA_DEL_NEIGH_EVENT, this);
+	IPACM_EvtDispatcher::registr(IPA_ADD_BRIDGE_VLAN_PHY_INTF, this);
+	IPACM_EvtDispatcher::registr(IPA_ADD_BRIDGE_VLAN_BR_INTF, this);
 
 	return;
 }
+/* Extract interface name, IP adress, subnet with interface index value */
+int IPACM_Neighbor::parse_bridge_info(int index, struct ipa_bridge_vlan_mapping_info *data)
+{
+	int fd;
+        struct ifreq ifrr;
+        struct sockaddr_in *ipaddr;
+
+        fd = socket(AF_INET, SOCK_DGRAM, 0);
+        if (fd < 0)
+        {
+                IPACMERR("unable to open socket");
+                return -1;
+        }
+	IPACMDBG("Interface index %d\n", index);
+        memset(&ifrr, 0, sizeof(struct ifreq));
+        ifrr.ifr_ifindex = index;
+
+	if (ioctl(fd, SIOCGIFNAME, &ifrr) == -1)
+	{
+		IPACMERR("unable to open socket");
+		return -1;
+        }
+
+        strlcpy(data->bridge_name, ifrr.ifr_name, IPA_RESOURCE_NAME_MAX);
+	IPACMDBG("Bridge parse interface name%s\n", data->bridge_name);
+	ifrr.ifr_ifindex = 0;
+
+	if (ioctl(fd, SIOCGIFADDR, &ifrr) == -1)
+	{
+		IPACMERR("unable to open socket");
+		return -1;
+
+	}
+	ipaddr = (struct sockaddr_in *)&ifrr.ifr_addr;
+        data->bridge_ipv4 = ntohl(ipaddr->sin_addr.s_addr);
+
+	IPACMDBG("Bridge parse ipaddr 0x%x\n", data->bridge_ipv4);
+
+        memset(&ifrr, 0, sizeof(struct ifreq));
+        strlcpy(ifrr.ifr_name, data->bridge_name, IFNAMSIZ);
+	ifrr.ifr_addr.sa_family = AF_INET;
+
+	if (ioctl(fd, SIOCGIFNETMASK, &ifrr) == -1)
+	{
+		IPACMERR("unable to open socket");
+		return -1;
+
+	}
+	ipaddr = (struct sockaddr_in *)&ifrr.ifr_netmask;
+	data->subnet_mask = ntohl((unsigned int)ipaddr->sin_addr.s_addr);
+
+	IPACMDBG("Bridge parse subnet 0x%x\n", data->subnet_mask);
+	return 0;
+
+}
+
 
 void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 {
@@ -72,7 +135,7 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 #ifdef FEATURE_VLAN_MPDN
 	ipacm_event_new_neigh_vlan *data_vlan = NULL;
 #endif
-	int i, ipa_interface_index;
+	int i, ret, ipa_interface_index;
 	ipacm_cmd_q_data evt_data;
 	int num_neighbor_client_temp = num_neighbor_client;
 
@@ -176,6 +239,51 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 					break;
 				}
 			}
+		}
+		break;
+		/* Update bridge<->vlan mapping with master interface index
+		   and vlan id value and update status as partially updated entry
+		*/
+		case IPA_ADD_BRIDGE_VLAN_PHY_INTF:
+		{
+				struct vlan_iface_info vlan_data;
+				struct ipa_bridge_vlan_mapping_info add_bridge_vlan_map;
+
+				data_all = (ipacm_event_data_all *)param;
+				ret = IPACM_Iface::ipacmcfg->find_matching_vlan(data_all->if_index, &vlan_data);
+				if(ret == IPACM_FAILURE)
+				{
+					IPACMERR("Vlan entry has not been created for interface index %d\n", data_all->if_index);
+					return;
+				}
+				IPACMDBG("Handling IPA_ADD_BRIDGE_VLAN_PHY_INTF event with vlan-id: %d master-interface-index: %d\n", vlan_data.vlan_id, data_all->master_if_index);
+				add_bridge_vlan_map.vlan_id = vlan_data.vlan_id;
+				add_bridge_vlan_map.master_if_index = data_all->master_if_index;
+				add_bridge_vlan_map.status = 0;
+				IPACM_Iface::ipacmcfg->add_bridge_vlan_mapping(&add_bridge_vlan_map);
+
+		}
+		break;
+		/* Update partial bridge interface<->vlan entry with bridge interface
+		   data.
+		*/
+		case IPA_ADD_BRIDGE_VLAN_BR_INTF:
+		{
+				IPACMDBG("Handling IPA_ADD_BRIDGE_VLAN_BR_INTF event\n");
+				struct ipa_bridge_vlan_mapping_info vlan_bridge_data;
+				int ret = 0;
+				data_all = (ipacm_event_data_all *)param;
+
+				ret = parse_bridge_info(data_all->if_index, &vlan_bridge_data);
+				if(ret == -1)
+				{
+					IPACMERR(" error parsing the bridge info\n");
+					return;
+				}
+				vlan_bridge_data.status = 1;
+				vlan_bridge_data.master_if_index = data_all->if_index;
+				IPACMDBG("Update bridge details in bridge<->vlan mapping list with bridge %s, IP 0x%x subnet 0x%x, status %d\n", vlan_bridge_data.bridge_name, vlan_bridge_data.bridge_ipv4, vlan_bridge_data.subnet_mask, vlan_bridge_data.status);
+				IPACM_Iface::ipacmcfg->add_bridge_vlan_mapping(&vlan_bridge_data);
 		}
 		break;
 

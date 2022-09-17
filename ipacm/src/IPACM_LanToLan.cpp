@@ -27,7 +27,7 @@ OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
 IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
  * Changes from Qualcomm Innovation Center are provided under the following license:
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
 */
 
@@ -155,7 +155,7 @@ void IPACM_LanToLan::event_callback(ipa_cm_event_id event, void* param)
 {
 	ipacm_event_eth_bridge *eth_bridge_data;
 	const char* eventName;
-	ipa_ioc_vlan_iface_info *vlan_iface_data;
+	ipa_vlan_iface_info *vlan_iface_data;
 
 #ifdef FEATURE_L2TP
 	ipa_ioc_l2tp_vlan_mapping_info *l2tp_vlan_mapping_data;

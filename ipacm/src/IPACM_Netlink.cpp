@@ -50,7 +50,7 @@ SPDX-License-Identifier: BSD-3-Clause-Clear
 #include "IPACM_Netlink.h"
 #include "IPACM_EvtDispatcher.h"
 #include "IPACM_Log.h"
-
+#include "IPACM_Iface.h"
 int ipa_get_if_name(char *if_name, int if_index);
 int find_mask(int ip_v4_last, int *mask_value);
 
@@ -429,14 +429,71 @@ static int ipa_nl_decode_rtm_link
 	 ipa_nl_link_info_t      *link_info
 )
 {
-	struct rtattr;
+	struct rtattr *attrib, *nested_attr, *vlan_attr;
+	struct rtattr *vlan_link_info[IFLA_INFO_MAX + 1] = {};
+	struct rtattr *vlan_link_info_data_attrs[IFLA_VLAN_MAX+1] = {};
+	struct ifinfomsg *ifm;
+	int len, nest_len, vlan_len;
+	char *intf_type = NULL;
 	/* NL message header */
 	struct nlmsghdr *nlh = (struct nlmsghdr *)buffer;
 
+	ifm = (struct ifinfomsg *) NLMSG_DATA(nlh);
+	len = nlh->nlmsg_len - NLMSG_LENGTH(sizeof(struct ifinfomsg));
 	/* Extract the header data */
 	link_info->metainfo = *(struct ifinfomsg *)NLMSG_DATA(nlh);
 	buflen -= sizeof(struct nlmsghdr);
 
+	for (attrib = IFLA_RTA(ifm); RTA_OK(attrib, len); attrib = RTA_NEXT(attrib, len)) {
+
+		if (attrib->rta_type == IFLA_IFNAME)
+		{
+			strlcpy(link_info->vlan_name, (strdup((const char *)RTA_DATA(attrib))), IFACE_NAME);
+			IPACMDBG("Extracted vlan interface name %s\n", link_info->vlan_name);
+		}
+
+		if (attrib->rta_type == IFLA_LINKINFO)
+		{
+			nested_attr = (struct rtattr *)RTA_DATA(attrib);
+			nest_len = RTA_PAYLOAD(attrib);
+			while(RTA_OK(nested_attr, nest_len)) {
+				if((nested_attr->rta_type <= IFLA_INFO_MAX) && (!vlan_link_info[nested_attr->rta_type])) {
+					vlan_link_info[nested_attr->rta_type] = nested_attr;
+
+				}
+				nested_attr = RTA_NEXT(nested_attr, nest_len);
+			}
+			if(vlan_link_info [IFLA_INFO_KIND]) {
+
+				intf_type = strdup((char *)RTA_DATA(vlan_link_info[IFLA_INFO_KIND]));
+				if(intf_type) {
+					if (!strcmp(intf_type, "vlan")) {
+						IPACMDBG("Recived NEW_LINK for vlan type interface\n");
+					}
+				}
+			}
+
+			if(intf_type && !strcmp(intf_type, "vlan") && vlan_link_info[IFLA_INFO_DATA]) {
+
+				vlan_attr = (struct rtattr *)RTA_DATA(vlan_link_info[IFLA_INFO_DATA]);
+				vlan_len = RTA_PAYLOAD(vlan_link_info[IFLA_INFO_DATA]);
+
+				while(RTA_OK(vlan_attr, vlan_len))
+				{
+					if((vlan_attr->rta_type <= IFLA_INFO_MAX) &&(!vlan_link_info_data_attrs[vlan_attr->rta_type])) {
+							vlan_link_info_data_attrs[vlan_attr->rta_type] = vlan_attr;
+					}
+					vlan_attr = RTA_NEXT(vlan_attr, vlan_len);
+				}
+				if(vlan_link_info_data_attrs[IFLA_VLAN_ID]) {
+
+					link_info->vlan_id = *(uint16_t *)RTA_DATA(vlan_link_info_data_attrs[IFLA_VLAN_ID]);
+					IPACMDBG("vlan id %d\n", link_info->vlan_id);
+
+				}
+			}
+		}
+	}
 	return IPACM_SUCCESS;
 }
 
@@ -524,7 +581,9 @@ static int ipa_nl_decode_rtm_neigh
 						 RTA_DATA(rtah),
 						 sizeof(neigh_info->attr_info.lladdr_hwaddr.sa_data));
 			break;
-
+		case NDA_MASTER:
+				neigh_info->master_interface_index = *((int *) RTA_DATA(rtah));
+			break;
 		default:
 			break;
 
@@ -629,10 +688,12 @@ static int ipa_nl_decode_nlmsg
 	uint32_t prefix_len = ~0;
 
 	ipacm_cmd_q_data evt_data;
+	ipacm_cmd_q_data vlan_event;
 	ipacm_event_data_all *data_all;
 	ipacm_event_data_fid *data_fid;
 	ipacm_event_data_addr *data_addr;
-
+	ipacm_event_data_all *vlan_data;
+	ipa_vlan_iface_info vlan_info;
 	memset(nullMac, 0, sizeof(nullMac));
 	while(NLMSG_OK(nlh, buflen))
 	{
@@ -683,6 +744,14 @@ static int ipa_nl_decode_nlmsg
 					}
 					data_fid->if_index = msg_ptr->nl_link_info.metainfo.ifi_index;
 					strlcpy(data_fid->iface_name, dev_name, sizeof(data_fid->iface_name));
+					if(msg_ptr->nl_link_info.vlan_id) {
+							strlcpy(vlan_info.name, msg_ptr->nl_link_info.vlan_name, IPA_RESOURCE_NAME_MAX);
+							vlan_info.vlan_id = msg_ptr->nl_link_info.vlan_id;
+							vlan_info.vlan_interface_index = msg_ptr->nl_link_info.metainfo.ifi_index;
+							IPACMDBG("Add vlan<->interface details  with vlan: %d interface: %s interface index %d\n",vlan_info.vlan_id, vlan_info.name, vlan_info.vlan_interface_index);
+							IPACM_Iface::ipacmcfg->add_vlan_iface(&vlan_info);
+					}
+
 					if(msg_ptr->nl_link_info.metainfo.ifi_flags & IFF_UP)
 					{
 						IPACMDBG_H("Interface %s bring up with IP-family: %d \n", dev_name, msg_ptr->nl_link_info.metainfo.ifi_family);
@@ -785,16 +854,13 @@ static int ipa_nl_decode_nlmsg
 				IPACMDBG("RTM_DELLINK, ifi_flags:%d\n", msg_ptr->nl_link_info.metainfo.ifi_flags);
 				IPACMDBG("RTM_DELLINK, ifi_index:%d\n", msg_ptr->nl_link_info.metainfo.ifi_index);
 				IPACMDBG("RTM_DELLINK, family:%d\n", msg_ptr->nl_link_info.metainfo.ifi_family);
-				/* RTM_NEWLINK event with AF_BRIDGE family should be ignored in Android
-				   but this should be processed in case of MDM for Ehernet interface.
-				*/
-#ifdef FEATURE_IPA_ANDROID
 				if (msg_ptr->nl_link_info.metainfo.ifi_family == AF_BRIDGE)
 				{
-					IPACMERR(" ignore this RTM_DELLINK msg \n");
+					IPACMDBG("Deleting the bridge<->vlan mapping entry with intterface index %d\n", msg_ptr->nl_link_info.metainfo.ifi_index);
+					uint16_t vlan_master_interface_index = msg_ptr->nl_link_info.metainfo.ifi_index;
+					IPACM_Iface::ipacmcfg->del_bridge_vlan_mapping(&vlan_master_interface_index);
 					return IPACM_SUCCESS;
 				}
-#endif
 				ret_val = ipa_get_if_name(dev_name, msg_ptr->nl_link_info.metainfo.ifi_index);
 				if(ret_val != IPACM_SUCCESS)
 				{
@@ -803,7 +869,13 @@ static int ipa_nl_decode_nlmsg
 				}
 				else
 				{
-					IPACMDBG("Interface %s bring down \n", dev_name);
+					IPACMDBG("Deleting the vlan-id<->vlan interface :%s vlan-id:%d\n",  msg_ptr->nl_link_info.vlan_name, msg_ptr->nl_link_info.vlan_id);
+					if(msg_ptr->nl_link_info.vlan_id) {
+						strlcpy(vlan_info.name, msg_ptr->nl_link_info.vlan_name, IPA_RESOURCE_NAME_MAX);
+						vlan_info.vlan_id = msg_ptr->nl_link_info.vlan_id;
+						vlan_info.vlan_interface_index = msg_ptr->nl_link_info.metainfo.ifi_index;
+						IPACM_Iface::ipacmcfg->del_vlan_iface(&vlan_info);
+					}
 				}
 				/* post link down to command queue */
 				evt_data.event = IPA_LINK_DOWN_EVENT;
@@ -1441,10 +1513,38 @@ static int ipa_nl_decode_nlmsg
 				return IPACM_FAILURE;
 			}
 			else
-				{
+			{
 				IPACMDBG("\n GOT RTM_NEWNEIGH event (%s) ip %d\n",dev_name,msg_ptr->nl_neigh_info.attr_info.local_addr.ss_family);
 			}
+			IPACMDBG("Neighbour event with interface index %d master interface index %d family %d\n", msg_ptr->nl_neigh_info.metainfo.ndm_ifindex, msg_ptr->nl_neigh_info.master_interface_index, msg_ptr->nl_neigh_info.attr_info.local_addr.ss_family);
 
+			if((msg_ptr->nl_neigh_info.metainfo.ndm_ifindex != 0) && (msg_ptr->nl_neigh_info.master_interface_index == 0) &&
+								(msg_ptr->nl_neigh_info.attr_info.local_addr.ss_family != 0))
+			{
+				vlan_event.event = IPA_ADD_BRIDGE_VLAN_BR_INTF;
+				IPACMDBG("Performing IPA_ADD_BRIDGE_VLAN_BR_INTF with interface index %d and master interface index %d\n", msg_ptr->nl_neigh_info.metainfo.ndm_ifindex, msg_ptr->nl_neigh_info.master_interface_index);
+
+			}
+			else if ((msg_ptr->nl_neigh_info.metainfo.ndm_ifindex != 0) && (msg_ptr->nl_neigh_info.master_interface_index != 0) &&
+								(msg_ptr->nl_neigh_info.master_interface_index != msg_ptr->nl_neigh_info.metainfo.ndm_ifindex))
+			{
+				IPACMDBG("Performing IPA_ADD_BRIDGE_VLAN_PHY_INTF with interface index %d and master interface index %d\n", msg_ptr->nl_neigh_info.metainfo.ndm_ifindex, msg_ptr->nl_neigh_info.master_interface_index);
+				vlan_event.event = IPA_ADD_BRIDGE_VLAN_PHY_INTF;
+
+			}
+			if((vlan_event.event == IPA_ADD_BRIDGE_VLAN_BR_INTF) || (vlan_event.event == IPA_ADD_BRIDGE_VLAN_PHY_INTF))
+			{
+					vlan_data = (ipacm_event_data_all *)malloc(sizeof(ipacm_event_data_all));
+					if(vlan_data == NULL)
+					{
+							IPACMERR("unable to allocate memory for vlan_data\n");
+							return IPACM_FAILURE;
+					}
+					vlan_data->if_index = msg_ptr->nl_neigh_info.metainfo.ndm_ifindex;
+					vlan_data->master_if_index = msg_ptr->nl_neigh_info.master_interface_index;
+					vlan_event.evt_data = (void *)vlan_data;
+					IPACM_EvtDispatcher::PostEvt(&vlan_event);
+			}
 
 			// This check is to  prevent handling of netlink messages with NULL MAC addr
 			if(!(memcmp(msg_ptr->nl_neigh_info.attr_info.lladdr_hwaddr.sa_data,
@@ -1476,7 +1576,7 @@ static int ipa_nl_decode_nlmsg
 		    }
 		    else if (msg_ptr->nl_neigh_info.attr_info.local_addr.ss_family == AF_INET)
 		    {
-   				IPACM_NL_REPORT_ADDR( " ", msg_ptr->nl_neigh_info.attr_info.local_addr);
+				IPACM_NL_REPORT_ADDR( " ", msg_ptr->nl_neigh_info.attr_info.local_addr);
 				IPACM_EVENT_COPY_ADDR_v4( data_all->ipv4_addr, msg_ptr->nl_neigh_info.attr_info.local_addr);
 		    	data_all->ipv4_addr = ntohl(data_all->ipv4_addr);
 		    	data_all->iptype = IPA_IP_v4;
@@ -1513,16 +1613,15 @@ static int ipa_nl_decode_nlmsg
 				evt_data.event = IPA_BRIDGE_LINK_UP_EVENT;
 				IPACMDBG_H("posting IPA_BRIDGE_LINK_UP_EVENT (%s):index:%d \n",
                                  dev_name,
- 		                    data_all->if_index);
+								 data_all->if_index);
 			}
 			else
 		    {
 				/* Posting new_neigh events for all LAN/WAN clients */
 				evt_data.event = IPA_NEW_NEIGH_EVENT;
 				IPACMDBG_H("posting IPA_NEW_NEIGH_EVENT (%s):index:%d ip-family: %d\n",
-                                 dev_name,
- 		                    data_all->if_index,
-		    				 msg_ptr->nl_neigh_info.attr_info.local_addr.ss_family);
+                                 dev_name, data_all->if_index,
+								 msg_ptr->nl_neigh_info.attr_info.local_addr.ss_family);
 			}
 		    evt_data.evt_data = data_all;
 					IPACM_EvtDispatcher::PostEvt(&evt_data);
@@ -1606,8 +1705,8 @@ static int ipa_nl_decode_nlmsg
 
 		    IPACMDBG_H("posting IPA_DEL_NEIGH_EVENT (%s):index:%d ip-family: %d\n",
                                  dev_name,
- 		                    data_all->if_index,
-		    				 msg_ptr->nl_neigh_info.attr_info.local_addr.ss_family);
+							data_all->if_index,
+							msg_ptr->nl_neigh_info.attr_info.local_addr.ss_family);
 				evt_data.evt_data = data_all;
 				IPACM_EvtDispatcher::PostEvt(&evt_data);
 				/* finish command queue */

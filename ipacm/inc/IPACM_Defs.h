@@ -329,7 +329,8 @@ typedef enum
 
 	IPA_HANDLE_MACSEC_ADD,                    /* ipa_macsec_map */
 	IPA_HANDLE_MACSEC_DEL,                    /* ipa_macsec_map */
-
+	IPA_ADD_BRIDGE_VLAN_PHY_INTF,
+	IPA_ADD_BRIDGE_VLAN_BR_INTF,
 	IPACM_EVENT_MAX
 } ipa_cm_event_id;
 
@@ -400,7 +401,8 @@ typedef struct
 typedef struct _ipacm_event_data_all
 {
 	enum ipa_ip_type iptype;
-	int if_index;
+	uint8_t if_index;
+	uint8_t master_if_index;
 	uint32_t  ipv4_addr;
 	uint32_t  ipv6_addr[4];
 	uint8_t mac_addr[IPA_MAC_ADDR_SIZE];
@@ -567,6 +569,17 @@ typedef struct _ipacm_ifacemgr_data
 	uint8_t mac_addr[IPA_MAC_ADDR_SIZE];
 }ipacm_ifacemgr_data;
 
+struct ipa_vlan_iface_info
+{
+	char name[IPA_RESOURCE_NAME_MAX];
+	uint16_t vlan_id;
+#define IPACM_RESTART_FUNCTIONALITY
+	uint8_t add_vlan_done;
+#define IPA_VLAN_PRIORITY
+	uint8_t priority;
+	uint16_t vlan_interface_index;
+};
+
 struct vlan_iface_info
 {
 	char vlan_iface_name[IPA_RESOURCE_NAME_MAX];
@@ -574,6 +587,7 @@ struct vlan_iface_info
 	uint32_t vlan_iface_ipv6_addr[4];
 	uint8_t vlan_client_mac[6];
 	uint32_t vlan_client_ipv6_addr[4];
+	uint16_t vlan_interface_index;
 };
 
 struct l2tp_vlan_mapping_info
@@ -599,12 +613,24 @@ struct l2tp_vlan_mapping_info
 	uint8_t l2tp_client_mac[6];
 };
 
+struct ipa_bridge_vlan_mapping_info {
+	char bridge_name[IPA_RESOURCE_NAME_MAX];
+	uint8_t lan2lan_sw;
+	uint16_t vlan_id;
+	uint32_t bridge_ipv4;
+	uint32_t subnet_mask;
+	uint8_t master_if_index;
+	uint8_t status;
+};
+
 struct bridge_vlan_mapping_info
 {
 	char bridge_iface_name[IPA_RESOURCE_NAME_MAX];
 	uint32_t bridge_associated_VID;
 	uint32_t bridge_ipv4;
 	uint32_t subnet_mask;
+	uint8_t bridge_if_index;
+	uint8_t status;
 };
 
 struct l2tp_client_info

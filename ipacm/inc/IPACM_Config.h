@@ -193,6 +193,7 @@ typedef struct {
 typedef struct {
 	char iface[IPA_IFACE_NAME_LEN];
 	uint32_t v4_addr;
+	bool is_vlan;
 } tether_client_info;
 
 /* struct to keep prefix info
@@ -303,6 +304,10 @@ public:
 
 	/* Indicates whether mpdn is enabled or not. */
 	bool ipacm_mpdn_enable;
+
+	/* Indicates easy mesh enabled state and the mode */
+	bool ipacm_emesh_enable;
+	uint32_t ipacm_emesh_mode;
 
 	/* Indicates whether socksv5 is enabled or not. */
 	bool ipacm_socksv5_enable;
@@ -415,6 +420,7 @@ public:
 	void get_vlan_mode_ifaces();
 #endif
 
+	bool is_svap_related(const char *phy_inf);
 
 #if defined(FEATURE_SOCKSv5) && defined(IPA_SOCKV5_EVENT_MAX)
 	pthread_mutex_t socksv5_lock;

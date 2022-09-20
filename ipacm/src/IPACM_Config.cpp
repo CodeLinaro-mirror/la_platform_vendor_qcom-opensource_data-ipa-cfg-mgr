@@ -675,6 +675,9 @@ skip_fnr_alloc:
 	ipacm_l2tp_enable = cfg->ipacm_l2tp_enable;
 	ipacm_mpdn_enable = cfg->ipacm_mpdn_enable;
 
+	ipacm_emesh_enable = cfg->ipacm_emesh_enable;
+	ipacm_emesh_mode = cfg->ipacm_emesh_mode;
+
 	if (ipacm_mpdn_enable == TRUE && ipacm_l2tp_enable != IPACM_L2TP_DISABLE)
 	{
 		IPACMERR("Not support both VLAN_MPDN and L2TP are enable \n");
@@ -2072,6 +2075,7 @@ bool IPACM_Config::is_added_vlan_iface(char *iface_name)
 bool IPACM_Config::iface_in_vlan_mode(const char *phys_iface_name)
 {
 
+	IPACMDBG_H("iface %s is getting checked if it is vlan\n", phys_iface_name);
 #if IPA_ETH_API_VER >= 2
 	/* Differentiate Dual NIC mode where interface name is either [eth0|eth1] and legacy while where
 	 * name is always "eth0".
@@ -2105,7 +2109,17 @@ bool IPACM_Config::iface_in_vlan_mode(const char *phys_iface_name)
 		return vlan_devices[IPA_VLAN_IF_ECM];
 	}
 
-	IPACMDBG("iface %s did not match any known ifaces\n", phys_iface_name);
+#ifdef IPA_VLAN_IF_WLAN
+	if(strstr(phys_iface_name, "ath"))
+	{
+		IPACMDBG("ath vlan mode %d\n", vlan_devices[IPA_VLAN_IF_WLAN]);
+		return (vlan_devices[IPA_VLAN_IF_WLAN] ||
+					((IPACM_Iface::ipacmcfg->ipacm_emesh_enable && IPACM_Iface::ipacmcfg->ipacm_emesh_mode >= 2) &&
+					is_svap_related(phys_iface_name)));
+	}
+#endif
+
+	IPACMDBG_H("iface %s did not match any known ifaces\n", phys_iface_name);
 	return false;
 }
 
@@ -3271,6 +3285,7 @@ void IPACM_Config::update_client_info(uint8_t *mac_addr, tether_client_info *cli
 			memset(temp, 0, sizeof(tether_client_info));
 			temp->v4_addr = client_info->v4_addr;
 			memcpy(temp->iface, client_info->iface, IPA_IFACE_NAME_LEN);
+			temp->is_vlan = client_info->is_vlan;
 			IPACM_Iface::ipacmcfg->client_lists.insert(std::make_pair(mac, temp));
 		}
 		else
@@ -3283,6 +3298,7 @@ void IPACM_Config::update_client_info(uint8_t *mac_addr, tether_client_info *cli
 				client_lists.at(mac)->v4_addr);
 				update_need = true;
 			}
+			client_lists.at(mac)->is_vlan = client_info->is_vlan;
 		}
 
 		/* check if client matched the iface SW-flt request */
@@ -3507,4 +3523,44 @@ bool IPACM_Config::DelMacsecMap(struct ipa_macsec_map *macsec_map_to_delete)
 	}
 
 	return false;
+}
+
+bool IPACM_Config::is_svap_related(const char* phy_inf) {
+	FILE *fp = NULL;
+	char MapBSSType_row[10] = { 0 }, cmd[200] = { 0 };
+	bool is_svap = false;
+
+	char if_name[IPA_IFACE_NAME_LEN];
+	strlcpy(if_name, phy_inf, IPA_IFACE_NAME_LEN);
+	IPACMDBG_H("dev_name %s\n", phy_inf);
+
+	char* char_idx =  strstr(if_name, ".");
+
+	if (char_idx) {
+		char_idx[0] = '\0';
+		IPACMDBG_H("truncated iface name %s\n", if_name);
+	}
+
+	snprintf(cmd, 200, "cfg80211tool_mesh %s get_MapBSSType| awk -F ':' '{print $2}' > /tmp/data/ipa_vap.txt", if_name);
+	system(cmd);
+
+	fp = fopen("/tmp/data/ipa_vap.txt", "r");
+	if (fp == NULL) {
+		IPACMERR("can't open fdb file\n");
+		return false;
+	}
+
+	if (fgets(MapBSSType_row, 10, fp) == NULL) {
+		IPACMERR("fgets failed\n");
+		goto end;
+	}
+
+	if (72 == atoi(MapBSSType_row)) {
+		is_svap = true;
+	}
+	IPACMDBG_H("get_MapBSSType %d\n", atoi(MapBSSType_row));
+
+end:
+	fclose(fp);
+	return is_svap;
 }

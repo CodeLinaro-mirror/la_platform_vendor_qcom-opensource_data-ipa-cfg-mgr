@@ -11744,7 +11744,7 @@ bool IPACM_Lan::is_vlan_event(char *event_iface_name)
 	strlcpy(if_name, event_iface_name, IPA_IFACE_NAME_LEN);
 	IPACMDBG_H("Self iface %s, event iface %s\n", dev_name, event_iface_name);
 
-	char* char_idx =  strstr(if_name, ".");
+	char* char_idx =  strrchr(if_name, '.');
 
 	if (char_idx) {
 		char_idx[0] = '\0';
@@ -15886,6 +15886,7 @@ int IPACM_Lan::handle_ext_router_del_evt(void)
 		IPACM_Iface::ipacmcfg->decreaseFltRuleCount(rx_prop->rx[0].src_pipe, IPA_IP_v6, 1);
 	}
 	IPACMDBG("Finished handle_ext_router_del_evt\n")
+	return IPACM_SUCCESS;
 }
 
 int IPACM_Lan::eth_bridge_get_vlan_hdr_template_hdl(uint32_t* hdr_hdl, uint16_t vlan_id)

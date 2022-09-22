@@ -3528,6 +3528,7 @@ bool IPACM_Config::add_ext_router_info(ipa_ioc_ext_router_info *data)
 {
 	list<ext_router_prefix_info>::iterator it;
 	struct ext_router_prefix_info info;
+	int i, j;
 
 	IPACMDBG_H("info - mode:%d, pdn_name:%s\nv6_addr:0x%08x:%08x:%08x:%08x\nv6_mask:0x%08x:%08x:%08x:%08x\n",
 				data->mode, data->pdn_name,
@@ -3545,6 +3546,8 @@ bool IPACM_Config::add_ext_router_info(ipa_ioc_ext_router_info *data)
 
 	memset(&info, 0, sizeof(ext_router_prefix_info));
 	strlcpy(info.pdn_name, data->pdn_name, sizeof(info.pdn_name));
+
+	/* for prefix sharing */
 	info.ipv6_addr[0] = htonl(data->ipv6_addr[0]);
 	info.ipv6_addr[1] = htonl(data->ipv6_addr[1]);
 	info.ipv6_addr[2] = htonl(data->ipv6_addr[2]);
@@ -3554,6 +3557,16 @@ bool IPACM_Config::add_ext_router_info(ipa_ioc_ext_router_info *data)
 	info.ipv6_mask[2] = htonl(data->ipv6_mask[2]);
 	info.ipv6_mask[3] = htonl(data->ipv6_mask[3]);
 
+	/* for prefix_delegation */
+	info.num_of_idu_prefix_mapping = data->num_of_idu_prefix_mapping;
+	for (i = 0; i < info.num_of_idu_prefix_mapping; i++)
+	{
+		for (j = 0; j < 4; j ++)
+		{
+			info.idu_wan_ip[i][j] = htonl(data->idu_wan_ip[i][j]);
+			info.idu_client_prefix[i][j] = htonl(data->idu_client_prefix[i][j]);
+		}
+	}
 	ext_router_prefix.push_front(info);
 
 	IPACMDBG_H("succesfully added ext router info for pdn %s\n", data->pdn_name);
@@ -3591,6 +3604,9 @@ bool IPACM_Config::get_ext_router_info(ext_router_prefix_info *data)
 			IPACMDBG_H("Found pdn %s\n", data->pdn_name);
 			memcpy(data->ipv6_addr, it->ipv6_addr, sizeof(data->ipv6_addr));
 			memcpy(data->ipv6_mask, it->ipv6_mask, sizeof(data->ipv6_mask));
+			memcpy(data->idu_wan_ip, it->idu_wan_ip, sizeof(data->idu_wan_ip));
+			memcpy(data->idu_client_prefix, it->idu_client_prefix, sizeof(data->idu_client_prefix));
+			data->num_of_idu_prefix_mapping = it->num_of_idu_prefix_mapping;
 			return true;
 		}
 	}
@@ -3611,12 +3627,37 @@ char* IPACM_Config::is_ext_route_ipv6_prefix(uint32_t *addr)
 			((addr[2] & it->ipv6_mask[2]) == it->ipv6_addr[2]) &&
 			((addr[3] & it->ipv6_mask[3]) == it->ipv6_addr[3]))
 		{
-			IPACMDBG_H("prefix matches ext router prefix for pdn %s\n", it->pdn_name);
+			IPACMDBG_H("prefix [%X][%X] matches ext router prefix for pdn %s\n", addr[0], addr[1], it->pdn_name);
 			return it->pdn_name;
 		}
 	}
 	IPACMDBG("no match for [%X][%X]\n", addr[0], addr[1]);
 	return NULL;
+}
+
+int IPACM_Config::get_mapped_delegated_prefix_idx(uint32_t *addr)
+{
+	list<ext_router_prefix_info>::iterator it;
+	int i;
+
+	for(it = ext_router_prefix.begin(); it != ext_router_prefix.end(); it++)
+	{
+		for(i = 0; i < it->num_of_idu_prefix_mapping; i++)
+		{
+			//todo: can use memcmp but there might be padding bits. is this safer?
+			if ((addr[0] == it->idu_wan_ip[i][0]) && (addr[1] == it->idu_wan_ip[i][1]) &&
+				(addr[2] == it->idu_wan_ip[i][2]) && (addr[3] == it->idu_wan_ip[i][3]))
+			{
+				IPACMDBG("IDU ip:[%X][%X][%X][%X] maps to del prefix %d:[%X][%X]\n",
+					addr[0], addr[1], addr[2], addr[3], i,
+					it->idu_client_prefix[i][0], it->idu_client_prefix[i][1]);
+				return i;
+			}
+		}
+	}
+
+	IPACMDBG("no match for [%X][%X][%X][%X]\n", addr[0], addr[1], addr[2], addr[3]);
+	return IPA_PREFIX_MAPPING_MAX;
 }
 #endif
 

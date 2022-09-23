@@ -15879,6 +15879,8 @@ fail:
 int IPACM_Lan::handle_ext_router_del_evt(void)
 {
 	IPACMDBG("entering handle_ext_router_del_evt\n")
+	int cnt;
+
 	if(ext_router_rmnet_ipv6_hdl)
 	{
 		IPACMDBG("deleting ext_router_rmnet_ipv6_hdl = %d\n", ext_router_rmnet_ipv6_hdl);
@@ -15900,6 +15902,21 @@ int IPACM_Lan::handle_ext_router_del_evt(void)
 		}
 		ext_router_flt_rule_hdl = 0;
 		IPACM_Iface::ipacmcfg->decreaseFltRuleCount(rx_prop->rx[0].src_pipe, IPA_IP_v6, 1);
+	}
+
+	/* delete all ext prefix rt_rule */
+	for(cnt = 0; cnt < num_eth_client; cnt++)
+	{
+		if(get_client_memptr(eth_client, cnt)->ext_router_prefix_rt_hdl)
+		{
+			IPACMDBG("deleting rt_rule_hdl = %d\n", get_client_memptr(eth_client, cnt)->ext_router_prefix_rt_hdl);
+			if(m_routing.DeleteRoutingHdl(get_client_memptr(eth_client, cnt)->ext_router_prefix_rt_hdl, IPA_IP_v6) == false)
+			{
+				IPACMERR("Failed to del ext_route rt_rule\n");
+				return IPACM_FAILURE;
+			}
+			get_client_memptr(eth_client, cnt)->ext_router_prefix_rt_hdl = 0;
+		}
 	}
 	IPACMDBG("Finished handle_ext_router_del_evt\n")
 	return IPACM_SUCCESS;

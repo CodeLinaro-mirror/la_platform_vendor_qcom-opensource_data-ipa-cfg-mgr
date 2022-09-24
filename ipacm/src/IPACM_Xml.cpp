@@ -25,6 +25,40 @@
  * WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *
+ * Changes from Qualcomm Innovation Center are provided under the following license:
+ *
+ * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted (subject to the limitations in the
+ * disclaimer below) provided that the following conditions are met:
+ *
+ *     * Redistributions of source code must retain the above copyright
+ *       notice, this list of conditions and the following disclaimer.
+ *
+ *     * Redistributions in binary form must reproduce the above
+ *       copyright notice, this list of conditions and the following
+ *       disclaimer in the documentation and/or other materials provided
+ *       with the distribution.
+ *
+ *     * Neither the name of Qualcomm Innovation Center, Inc. nor the names of its
+ *       contributors may be used to endorse or promote products derived
+ *       from this software without specific prior written permission.
+ *
+ * NO EXPRESS OR IMPLIED LICENSES TO ANY PARTY'S PATENT RIGHTS ARE
+ * GRANTED BY THIS LICENSE. THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT
+ * HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED
+ * WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
+ * MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
+ * IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR
+ * ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+ * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE
+ * GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER
+ * IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
+ * OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
+ * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE
  */
 /*!
   @file
@@ -194,8 +228,25 @@ static int ipacm_cfg_xml_parse_tree
 
 						IPACM_util_icmp_string((char*)xml_node->name, IPACM_SOCKSv5_TAG) == 0 ||
 						IPACM_util_icmp_string((char*)xml_node->name, GRE_TAG) == 0 ||
+						IPACM_util_icmp_string((char*)xml_node->name, GRE_Server_TAG) == 0 ||
 						IPACM_util_icmp_string((char*)xml_node->name, PUBLIC_IP_SUPPORT_TAG) == 0)
 				{
+					if (IPACM_util_icmp_string((char*)xml_node->name, GRE_Server_TAG) == 0)
+					{
+						content = IPACM_read_content_element(xml_node);
+						if (content)
+						{
+							str_size = strlen(content);
+							memset(content_buf, 0, sizeof(content_buf));
+							memcpy(content_buf, (void *)content, str_size);
+							content_buf[MAX_XML_STR_LEN-1] = '\0';
+							config->gre_conf.gre_server_ipv4[config->gre_conf.num_ipgre_entries]
+								= ntohl(inet_addr(content_buf));
+							IPACMDBG_H("subnet_addr: %s, entry %d\n", content_buf, config->gre_conf.num_ipgre_entries);
+							config->gre_conf.num_ipgre_entries++;
+						}
+					}
+
 					if (0 == IPACM_util_icmp_string((char*)xml_node->name, IFACE_TAG))
 					{
 						/* increase iface entry number */
@@ -236,20 +287,6 @@ static int ipacm_cfg_xml_parse_tree
 							config->gre_conf.gre_enable = false;
 							IPACMDBG_H("GRE enable %d buf(%d)\n", config->gre_conf.gre_enable, atoi(content_buf));
 						}
-					}
-				}
-				else if (IPACM_util_icmp_string((char*)xml_node->name, GRE_Server_TAG) == 0)
-				{
-					content = IPACM_read_content_element(xml_node);
-					if (content)
-					{
-						str_size = strlen(content);
-						memset(content_buf, 0, sizeof(content_buf));
-						memcpy(content_buf, (void *)content, str_size);
-						content_buf[MAX_XML_STR_LEN-1] = '\0';
-						config->gre_conf.gre_server_ipv4
-							 = ntohl(inet_addr(content_buf));
-						IPACMDBG_H("subnet_addr: %s \n", content_buf);
 					}
 				}
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS

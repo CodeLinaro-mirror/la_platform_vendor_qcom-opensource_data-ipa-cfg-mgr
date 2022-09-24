@@ -284,7 +284,9 @@ public:
 
 	bool ipacm_gre_enable;
 
-	uint32_t ipacm_gre_server_ipv4;
+	int ipa_num_ipgre_server;
+
+	uint32_t ipacm_gre_server_ipv4[IPA_MAX_IPGRE_ENTRY];
 
 	int ipa_nat_iface_entries;
 

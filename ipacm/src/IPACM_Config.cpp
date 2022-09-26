@@ -204,6 +204,8 @@ const char *ipacm_event_name[] = {
 IPACM_Config::IPACM_Config()
 {
 	iface_table = NULL;
+	macsec_cache = NULL;
+	macsec_interface_num = 0;
 	alg_table = NULL;
 	pNatIfaces = NULL;
 	memset(&ipa_client_rm_map_tbl, 0, sizeof(ipa_client_rm_map_tbl));
@@ -541,6 +543,8 @@ int IPACM_Config::Init(void)
 		goto fail;
 	}
 
+	IPACMDBG_H("macsec_interface : %d\n",macsec_interface_num);
+
 	for (i = 0; i < cfg->iface_config.num_iface_entries; i++)
 	{
 		strlcpy(iface_table[i].iface_name, cfg->iface_config.iface_entries[i].iface_name, sizeof(iface_table[i].iface_name));
@@ -558,6 +562,23 @@ int IPACM_Config::Init(void)
 		{
 			strlcpy(ipa_virtual_iface_name, iface_table[i].iface_name, sizeof(ipa_virtual_iface_name));
 			IPACMDBG_H("ipa_virtual_iface_name(%s) \n", ipa_virtual_iface_name);
+		}
+
+		if(macsec_interface_num > 0)
+		{
+			for(int j = 0; j < ETH_IFACE_MAX; j++)
+			{
+				if(strcmp(macsec_cache[j].phy_name,iface_table[i].iface_name) == 0)
+				{
+					IPACMDBG_H("cache_macsec_name : %s, macsec_interface_id : %d, cache_phy_name : %s, iface_name : %s\n",
+						macsec_cache[j].macsec_name,j,macsec_cache[j].phy_name,iface_table[i].iface_name);
+					strlcpy(iface_table[i].iface_name, macsec_cache[j].macsec_name,sizeof(iface_table[i].iface_name));
+					strlcpy(iface_table[i].phy_dev_name, macsec_cache[j].phy_name,sizeof(iface_table[i].phy_dev_name));
+					iface_table[i].virtual_iface = true;
+					IPACMDBG_H("macsec_iface_name : %s, macsec_interface_id : %d, macsec_phy_name : %s\n",
+						iface_table[i].iface_name,j,iface_table[i].phy_dev_name);
+				}
+			}
 		}
 	}
 
@@ -3462,6 +3483,17 @@ bool IPACM_Config::AddMacsecMap(struct ipa_macsec_map *new_macsec_map)
 {
 	int netlink_index, iface_table_index;
 
+	if(macsec_cache == NULL)
+	{
+		macsec_cache = (ipa_macsec_map_cache *)calloc(2,sizeof(ipa_macsec_map_cache));
+	}
+
+	if(macsec_cache == NULL)
+	{
+		IPACMERR("Unable to allocate macsec cache memory.\n");
+		return false;
+	}
+
 	/* first check if we have macsec iface entry or not */
 	if (IPACM_Iface::ipa_get_if_index(new_macsec_map->macsec_name, &netlink_index) == IPACM_SUCCESS &&
 	    (iface_table_index = IPACM_Iface::iface_ipa_index_query(netlink_index)) != INVALID_IFACE)
@@ -3493,6 +3525,22 @@ bool IPACM_Config::AddMacsecMap(struct ipa_macsec_map *new_macsec_map)
 			sizeof(iface_table[iface_table_index].iface_name));
 		strlcpy(iface_table[iface_table_index].phy_dev_name, new_macsec_map->phy_name,
 			sizeof(iface_table[iface_table_index].phy_dev_name));
+
+		strlcpy(macsec_cache[macsec_interface_num].phy_name, new_macsec_map->phy_name,
+				sizeof(macsec_cache[macsec_interface_num].phy_name));
+
+		IPACMDBG_H("cache_phy_name : %s, macsec_interface_id : %d, phy_name : %s\n",
+			macsec_cache[macsec_interface_num].phy_name,macsec_interface_num,
+			new_macsec_map->phy_name);
+
+		strlcpy(macsec_cache[macsec_interface_num].macsec_name, new_macsec_map->macsec_name,
+				sizeof(macsec_cache[macsec_interface_num].macsec_name));
+
+		IPACMDBG_H("cache_macsec_name : %s, macsec_interface_id : %d, macsec_name : %s\n",
+			macsec_cache[macsec_interface_num].macsec_name,macsec_interface_num,
+			new_macsec_map->macsec_name);
+
+		macsec_interface_num++;
 	}
 
 	return true;
@@ -3503,7 +3551,7 @@ bool IPACM_Config::AddMacsecMap(struct ipa_macsec_map *new_macsec_map)
  */
 bool IPACM_Config::DelMacsecMap(struct ipa_macsec_map *macsec_map_to_delete)
 {
-	int netlink_index, iface_table_index;
+	int netlink_index, iface_table_index, i;
 
 	/* Replace the requested macsec interface with physical interface */
 	if (IPACM_Iface::ipa_get_if_index(macsec_map_to_delete->macsec_name, &netlink_index) == IPACM_SUCCESS &&
@@ -3517,6 +3565,25 @@ bool IPACM_Config::DelMacsecMap(struct ipa_macsec_map *macsec_map_to_delete)
 			sizeof(iface_table[iface_table_index].iface_name));
 		iface_table[iface_table_index].phy_dev_name[0] = '\0';
 
+		for(i = 0; i < ETH_IFACE_MAX;i++)
+		{
+			if(strcmp(macsec_map_to_delete->macsec_name,macsec_cache[i].macsec_name) == 0)
+			{
+				macsec_cache[macsec_interface_num].macsec_name[0] = '\0';
+				macsec_cache[macsec_interface_num].phy_name[0] = '\0';
+				macsec_interface_num--;
+				break;
+			}
+		}
+
+		IPACMDBG_H("macsec_interface_num : %d, delete_macsec_interface_id : %d, macsec_name : %s\n",
+					macsec_interface_num, i, macsec_map_to_delete->macsec_name);
+
+		if(macsec_interface_num == 0)
+		{
+			free(macsec_cache);
+			macsec_cache = NULL;
+		}
 		return true;
 	}
 

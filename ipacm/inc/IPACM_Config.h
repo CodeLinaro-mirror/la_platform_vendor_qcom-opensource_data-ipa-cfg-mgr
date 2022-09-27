@@ -1164,6 +1164,7 @@ public:
 	bool del_ext_router_info(char* pdn_name);
 	bool get_ext_router_info(struct ext_router_prefix_info *data);
 	char* is_ext_route_ipv6_prefix(uint32_t *addr);
+	int get_mapped_delegated_prefix_idx(uint32_t *addr);
 #endif
 
 	static const char *DEVICE_NAME_ODU;

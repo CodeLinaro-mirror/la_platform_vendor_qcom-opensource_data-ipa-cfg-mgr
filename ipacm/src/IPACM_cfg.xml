@@ -325,5 +325,8 @@
 			<IPACMEMESHEnabled>0</IPACMEMESHEnabled>
 			<IPACMEMESHMode>0</IPACMEMESHMode>
 		</IPACMEMESH>
+		<IPACMVLANMPDN>
+			<IPACMVlanMpdnEnabled>0</IPACMVlanMpdnEnabled>
+		</IPACMVLANMPDN>
 	</IPACM>
 </system>

@@ -259,6 +259,9 @@ if (!(a)) {                                                 \
 #define IPACM_Easy_Mesh_Enabled              "IPACMEMESHEnabled"
 #define IPACM_Easy_Mesh_Mode                 "IPACMEMESHMode"
 
+#define IPACM_WLAN_VLAN_MPDN                 "IPACMVLANMPDN"
+#define IPACM_Wlan_Vlan_Mpdn_Enabled         "IPACMVlanMpdnEnabled"
+
 /*---------------------------------------------------------------------------
       IP protocol numbers - use in dss_socket() to identify protocols.
       Also contains the extension header types for IPv6.
@@ -396,6 +399,7 @@ typedef struct  _IPACM_conf_t
 	bool ipacm_socksv5_enable;
 	ipacm_gre_conf_t gre_conf;
 	bool public_ip_support_enable;
+	bool wlan_vlan_mpdn_enable;
 } IPACM_conf_t;
 
 /* This function read IPACM XML configuration*/

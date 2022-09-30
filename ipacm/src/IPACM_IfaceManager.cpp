@@ -158,7 +158,9 @@ void IPACM_IfaceManager::event_callback(ipa_cm_event_id event, void *param)
 			if(IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].if_cat == UNKNOWN_IF)
 			{
 				IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].if_cat = WLAN_IF;
-				IPACMDBG_H("WLAN AP (%s) link up, iface: %d: \n", IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].iface_name,evt_data->if_index);
+				IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].is_wlan_if_vlan = false;
+				IPACMDBG_H("WLAN AP (%s) link up, iface: %d: ipa_if: %d\n",
+				IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].iface_name,evt_data->if_index, ipa_interface_index);
 				ifmgr_data.if_index = evt_data->if_index;
 				ifmgr_data.if_type = Q6_WAN;
 #ifdef IPA_WDI_AST_UPDATE
@@ -510,6 +512,11 @@ int IPACM_IfaceManager::create_iface_instance(ipacm_ifacemgr_data *param)
 #ifdef IPA_MTU_EVENT_MAX
 				IPACM_EvtDispatcher::registr(IPA_MTU_UPDATE, wl);
 #endif
+				if (IPACM_Iface::ipacmcfg->wlan_vlan_mpdn_enabled == true) {
+					IPACM_EvtDispatcher::registr(IPA_WLAN_SWITCH_VLAN_MODE, wl);
+				}
+				IPACM_EvtDispatcher::registr(IPA_HANDLE_WAN_VLAN_PDN_UP, wl);
+				IPACM_EvtDispatcher::registr(IPA_HANDLE_WAN_VLAN_PDN_DOWN, wl);
 				/* IPA_LAN_DELETE_SELF should be always last */
 				IPACM_EvtDispatcher::registr(IPA_LAN_DELETE_SELF, wl);
 				IPACMDBG_H("ipa_WLAN (%s):ipa_index (%d) instance open/registr ok\n", wl->dev_name, wl->ipa_if_num);

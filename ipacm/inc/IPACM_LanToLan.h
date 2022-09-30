@@ -181,6 +181,8 @@ public:
 	uint32_t del_wlan_svap_hpc_hdl(uint16_t vlan_id, ipa_hdr_l2_type peer_l2_type, uint32_t hpc_hdl);
 	uint32_t is_entry_present_wlan_svap_hpc_hdl(uint16_t vlan_id, ipa_hdr_l2_type peer_l2_type);
 
+	bool is_ap_iface_vlan_enabled();
+
 private:
 
 	uint16_t max_num_clients;
@@ -190,6 +192,7 @@ private:
 	bool m_support_intra_iface_offload;
 	bool m_is_l2tp_iface;
 	bool m_is_svap_iface;
+	bool m_is_vlan_ap;
 #ifdef FEATURE_VLAN_MPDN
 	bool m_is_vlan;
 #endif

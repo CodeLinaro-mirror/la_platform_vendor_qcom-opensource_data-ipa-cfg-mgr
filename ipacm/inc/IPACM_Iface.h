@@ -137,6 +137,9 @@ public:
 	ipacm_iface_type ipa_if_cate;
 	bool is_if_svap;
 
+	/* is wlan iface is vlan or non-vlan */
+	bool is_wlan_if_vlan;
+
 	/* IPACM interface name */
 	char dev_name[IF_NAME_LEN];
 

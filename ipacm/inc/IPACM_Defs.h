@@ -292,6 +292,7 @@ typedef enum
 	IPA_LAN_TO_LAN_DEL_CONNECTION,            /* ipacm_event_connection */
 	IPA_WLAN_SWITCH_TO_SCC,                   /* No Data */
 	IPA_WLAN_SWITCH_TO_MCC,                   /* No Data */
+	IPA_WLAN_SWITCH_VLAN_MODE,                /* ipacm_event_vlan_mode */
 	IPA_CRADLE_WAN_MODE_SWITCH,               /* ipacm_event_cradle_wan_mode */
 	IPA_WAN_XLAT_CONNECT_EVENT,               /* ipacm_event_data_fid */
 	IPA_TETHERING_STATS_UPDATE_EVENT,         /* ipacm_event_data_fid */
@@ -423,6 +424,7 @@ typedef struct
 	ipacm_cradle_iface_mode if_mode;
 	ipacm_wlan_access_mode wlan_mode;
 	int netlink_interface_index;
+	bool is_wlan_if_vlan;
 } ipa_ifi_dev_name_t;
 
 typedef struct
@@ -590,6 +592,12 @@ typedef struct
 {
 	ipa_move_nat_type_enum_v01 nat_move_direction;
 }ipacm_event_move_nat;
+
+typedef struct _ipacm_event_vlan_mode
+{
+	bool wlan_vlan_mpdn_enable;
+	int if_index;
+}ipacm_event_vlan_mode;
 
 typedef enum
 {

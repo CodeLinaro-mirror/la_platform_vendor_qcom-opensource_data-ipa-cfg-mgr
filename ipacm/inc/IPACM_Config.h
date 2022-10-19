@@ -220,6 +220,10 @@ public:
 	/* Store interested interface and their configuration from XML file */
 	ipa_ifi_dev_name_t *iface_table;
 
+	/* Store macsec details */
+	ipa_macsec_map_cache *macsec_cache;
+	int macsec_interface_num;
+
 	/* Store interested ALG port from XML file */
 	ipacm_alg *alg_table;
 
@@ -1160,6 +1164,7 @@ public:
 	bool del_ext_router_info(char* pdn_name);
 	bool get_ext_router_info(struct ext_router_prefix_info *data);
 	char* is_ext_route_ipv6_prefix(uint32_t *addr);
+	int get_mapped_delegated_prefix_idx(uint32_t *addr);
 #endif
 
 	static const char *DEVICE_NAME_ODU;

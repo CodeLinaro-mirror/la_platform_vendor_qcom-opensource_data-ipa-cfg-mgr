@@ -67,6 +67,8 @@ extern "C"
 #define STR_ECM_IFACE "ecm"
 #define STR_ECM0_IFACE "ecm0"
 
+#define ETH_IFACE_MAX 2
+
 #define IF_NAME_LEN 16
 #define IPA_MAX_FILE_LEN  64
 #define IPA_IFACE_NAME_LEN 16
@@ -388,6 +390,12 @@ typedef struct
 
 typedef struct
 {
+    char phy_name[IPA_IFACE_NAME_LEN];
+    char macsec_name[IPA_IFACE_NAME_LEN];
+} ipa_macsec_map_cache;
+
+typedef struct
+{
 	uint32_t subnet_addr;
 	uint32_t subnet_mask;
 } ipa_private_subnet;
@@ -637,6 +645,9 @@ typedef struct ext_router_prefix_info
 	uint32_t ipv6_addr[4];
 	uint32_t ipv6_mask[4];
 	char pdn_name[IPA_IFACE_NAME_LEN];
+	int num_of_idu_prefix_mapping;
+	uint32_t idu_wan_ip[IPA_PREFIX_MAPPING_MAX][4];
+	uint32_t idu_client_prefix[IPA_PREFIX_MAPPING_MAX][4];
 };
 
 typedef struct _svap_vlan_hpc_hdl

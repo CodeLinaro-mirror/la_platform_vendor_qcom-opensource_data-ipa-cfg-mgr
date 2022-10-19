@@ -637,9 +637,6 @@ typedef struct ext_router_prefix_info
 	uint32_t ipv6_addr[4];
 	uint32_t ipv6_mask[4];
 	char pdn_name[IPA_IFACE_NAME_LEN];
-	int num_of_idu_prefix_mapping;
-	uint32_t idu_wan_ip[IPA_PREFIX_MAPPING_MAX][4];
-	uint32_t idu_client_prefix[IPA_PREFIX_MAPPING_MAX][4];
 };
 
 typedef struct _svap_vlan_hpc_hdl

@@ -348,7 +348,7 @@ public:
 
 	int handle_del_ipv6_addr(ipacm_event_data_all *data);
 
-	int handle_ext_router_add_evt(char* pdn_name, uint8_t *mac_addr, uint32_t *idu_v6_addr, uint16_t vid);
+	int handle_ext_router_add_evt(char* pdn_name, uint8_t *mac_addr, uint16_t vid);
 
 	int handle_ext_router_del_evt(void);
 

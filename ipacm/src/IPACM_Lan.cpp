@@ -13517,7 +13517,7 @@ int IPACM_Lan::handle_mpdn_ul_xlat_filter_rule(ipacm_ext_prop * prop,
 				 * private subnet rule -> 512(pdn2)->513(2)->514(1)->512(pdn1)->513(1)->514(1)->515->516...
 				 */
 				if (prev == 0)
-					pFilteringTable->add_after_hdl = private_fl_rule_hdl[IPA_MAX_PRIVATE_SUBNET_ENTRIES + IPA_MAX_MTU_ENTRIES - 1];
+					pFilteringTable->add_after_hdl = private_fl_rule_hdl[num_wan_subnet_rules - 1];
 				else
 					pFilteringTable->add_after_hdl = xlat_ctx.ul_rule_id_hdl_map[prev - 1].flt_hdl;
 
@@ -13564,11 +13564,17 @@ int IPACM_Lan::handle_mpdn_ul_xlat_filter_rule(ipacm_ext_prop * prop,
 	if (pFilteringTable->num_rules != 0)
 	{
 		if (prev == 0)
-			pFilteringTable->add_after_hdl = private_fl_rule_hdl[IPA_MAX_PRIVATE_SUBNET_ENTRIES + IPA_MAX_MTU_ENTRIES - 1];
+			pFilteringTable->add_after_hdl = private_fl_rule_hdl[num_wan_subnet_rules - 1];
 		else
 			pFilteringTable->add_after_hdl = xlat_ctx.ul_rule_id_hdl_map[prev - 1].flt_hdl;
 
 		IPACMDBG("Installing after %d \n", pFilteringTable->add_after_hdl);
+		if (!pFilteringTable->add_after_hdl)
+		{
+			IPACMDBG("Bad add_after_hdl = 0\n");
+			ret = IPACM_FAILURE;
+			goto fail;
+		}
 		if(false == m_filtering.AddFilteringRuleAfter(pFilteringTable))
 		{
 			IPACMERR("Error Adding RuleTable to Filtering, aborting...\n");

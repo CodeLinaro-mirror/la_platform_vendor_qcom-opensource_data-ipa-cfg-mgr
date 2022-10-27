@@ -8006,7 +8006,8 @@ fail:
 	return res;
 }
 
-/* Configure and install UL firewall rules, to be installed on client side */
+/* v6-blk-list: install exception rule
+ * v6-wht-list: new change to also install exception rule */
 int IPACM_Lan::config_sw_allow_excep_flt_rules_ul(IPACM_firewall_conf_t* firewall_conf,
 				ul_firewall_t *ul_firewall, int vid)
 {

@@ -2052,6 +2052,15 @@ int IPACM_Wan::handle_route_add_vlan_pdn_evt(ipa_ip_type iptype, uint16_t vlan_i
 		}
 		memset(wanup_vlan_data, 0, sizeof(ipacm_event_vlan_pdn));
 
+		ipacm_event_data_sw_allow *wan_sw_allow_data;
+		wan_sw_allow_data = (ipacm_event_data_sw_allow *)malloc(sizeof(ipacm_event_data_sw_allow));
+		if(wan_sw_allow_data == NULL)
+		{
+			IPACMERR("Unable to allocate memory\n");
+			return IPACM_FAILURE;
+		}
+		memset(wan_sw_allow_data, 0, sizeof(ipacm_event_data_sw_allow));
+
 		wanup_vlan_data->mux_id = ext_prop->ext[0].mux_id;
 		wanup_vlan_data->iptype = IPA_IP_v4;
 		wanup_vlan_data->VlanID = vlan_id;
@@ -2067,8 +2076,20 @@ int IPACM_Wan::handle_route_add_vlan_pdn_evt(ipa_ip_type iptype, uint16_t vlan_i
 		IPACMDBG_H("Posting IPA_HANDLE_WAN_VLAN_PDN_UP with below information:\n");
 		IPACMDBG_H("iptype IPA_IP_v4, VlanID %d, mux_id %d, if num %d\n", vlan_id, ext_prop->ext[0].mux_id, ipa_if_num);
 
+		wan_sw_allow_data->firewall_config = get_firewall_conf_by_vid_ul(vlan_id);
+		wan_sw_allow_data->pdn_index = modem_ipv4_pdn_index;
+		wan_sw_allow_data->ipv4_addr = ipv4_to_iface[modem_ipv4_pdn_index].ipv4_addr;
+		memcpy(wan_sw_allow_data->dev_name, ipv4_to_iface[modem_ipv4_pdn_index].pIface->dev_name, sizeof(char)*IF_NAME_LEN);
+
 		evt_data.event = IPA_HANDLE_WAN_VLAN_PDN_UP;
 		evt_data.evt_data = (void *)wanup_vlan_data;
+		IPACM_EvtDispatcher::PostEvt(&evt_data);
+
+		memset(&evt_data, 0, sizeof(evt_data));
+		IPACMDBG_H("Posting IPA_MSG_FILTER_NAT_EVENT\n");
+
+		evt_data.event = IPA_MSG_FILTER_NAT_EVENT;
+		evt_data.evt_data = wan_sw_allow_data;
 		IPACM_EvtDispatcher::PostEvt(&evt_data);
 	}
 
@@ -4049,30 +4070,6 @@ int IPACM_Wan::read_firewall_filter_rules_ul(void)
 #endif
 	{
 		IPACMDBG_H("QCMAP Firewall XML read OK \n");
-
-		IPACMDBG_H("Posting IPA_MSG_FILTER_NAT_EVENT\n");
-
-		ipacm_cmd_q_data evt_data;
-
-		memset(&evt_data, 0, sizeof(evt_data));
-
-		evt_data.event = IPA_MSG_FILTER_NAT_EVENT;
-
-#ifdef FEATURE_VLAN_MPDN
-		IPACM_firewall_t *fw_mpdn_config_ul;
-		fw_mpdn_config_ul = (IPACM_firewall_t *)malloc(sizeof(IPACM_firewall_t));
-		memset(fw_mpdn_config_ul, 0, sizeof(IPACM_firewall_t));
-		memcpy(fw_mpdn_config_ul, &firewall_mpdn_config_ul, sizeof(IPACM_firewall_t));
-		evt_data.evt_data = fw_mpdn_config_ul;
-#else
-		IPACM_firewall_conf_t *fw_config_ul;
-		fw_config_ul = (IPACM_firewall_conf_t *)malloc(sizeof(IPACM_firewall_conf_t));
-		memset(fw_config_ul, 0, sizeof(IPACM_firewall_conf_t));
-		memcpy(fw_config_ul, &firewall_config_ul, sizeof(IPACM_firewall_conf_t));
-		evt_data.evt_data = fw_config_ul;
-#endif
-		/* Insert IPA_MSG_FILTER_NAT_EVENT to command queue */
-		IPACM_EvtDispatcher::PostEvt(&evt_data);
 	}
 	else
 	{

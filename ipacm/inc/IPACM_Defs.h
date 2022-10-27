@@ -226,7 +226,7 @@ typedef enum
 	IPA_LAN_CLIENT_DISCONNECT_EVENT,          /* ipacm_event_data_mac */
 	IPA_LAN_CLIENT_UPDATE_EVENT,              /* ipacm_event_data_mac */
 #endif
-	IPA_MSG_FILTER_NAT_EVENT,                 /* IPACM_firewall_t IPACM_firewall_conf_t */
+	IPA_MSG_FILTER_NAT_EVENT,                 /* ipacm_event_data_sw_allow/sw_allow_data */
 	IPA_EXTERNAL_EVENT_MAX,
 
 	IPA_HANDLE_WAN_UP,                        /* ipacm_event_iface_up  */

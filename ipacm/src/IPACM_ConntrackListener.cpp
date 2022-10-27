@@ -93,7 +93,6 @@ IPACM_ConntrackListener::IPACM_ConntrackListener() :
 	 IPACM_EvtDispatcher::registr(IPA_NEIGH_CLIENT_IP_ADDR_ADD_EVENT, this);
 	 IPACM_EvtDispatcher::registr(IPA_NEIGH_CLIENT_IP_ADDR_DEL_EVENT, this);
 	 IPACM_EvtDispatcher::registr(IPA_MSG_FILTER_NAT_EVENT, this);
-
 #ifdef CT_OPT
 	 p_lan2lan = IPACM_LanToLan::getLan2LanInstance();
 #endif

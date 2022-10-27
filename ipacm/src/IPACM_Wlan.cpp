@@ -93,6 +93,10 @@ int IPACM_Wlan::num_wlan_ap_iface = 0;
 #define VLAN_TPID_SIZE 2
 #define VLAN_VID_MASK 0x0FFF
 
+#ifndef IPA_LAN_RX_HDR_NAME
+#define IPA_LAN_RX_HDR_NAME "ipa_lan_hdr"
+#endif
+
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
 bool IPACM_Wlan::lan_stats_inited = false;
 ipa_lan_client_idx IPACM_Wlan::active_lan_client_index[IPA_MAX_NUM_HW_PATH_CLIENTS];
@@ -6218,6 +6222,7 @@ int IPACM_Wlan::add_dummy_routing_rule(char *routingTableName, ipa_ip_type iptyp
 	struct ipa_rt_rule_add *rt_rule_entry;
 	uint32_t tx_index;
 	const int NUM = 1;
+	struct ipa_ioc_get_hdr hdr;
 
 	if(tx_prop == NULL)
 	{
@@ -6242,6 +6247,17 @@ int IPACM_Wlan::add_dummy_routing_rule(char *routingTableName, ipa_ip_type iptyp
 	IPACMDBG_H("WAN table created %s \n", rt_rule->rt_tbl_name);
 	rt_rule_entry = &rt_rule->rules[0];
 	rt_rule_entry->at_rear = true;
+	rt_rule_entry->rule.retain_hdr = 1;
+
+	memset(&hdr, 0, sizeof(hdr));
+	strlcpy(hdr.name, IPA_LAN_RX_HDR_NAME, sizeof(IPA_LAN_RX_HDR_NAME));
+	hdr.name[IPA_RESOURCE_NAME_MAX-1] = '\0';
+	if(m_header.GetHeaderHandle(&hdr) == false)
+	{
+		IPACMERR("Failed to get LAN RX header hdl.\n");
+		return IPACM_FAILURE;
+	}
+	rt_rule_entry->rule.hdr_hdl = hdr.hdl;
 
 	rt_rule_entry->rule.dst = IPA_CLIENT_APPS_LAN_CONS;  //go to A5
 	rt_rule_entry->rule.attrib.attrib_mask = IPA_FLT_DST_ADDR;

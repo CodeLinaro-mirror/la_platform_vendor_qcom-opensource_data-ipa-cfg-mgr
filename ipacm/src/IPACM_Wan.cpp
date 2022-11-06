@@ -487,36 +487,6 @@ int IPACM_Wan::handle_addr_evt(ipacm_event_data_addr *data)
 				dft_rt_rule_hdl[MAX_DEFAULT_v4_ROUTE_RULES + 2*num_dft_rt_v6],
 				dft_rt_rule_hdl[MAX_DEFAULT_v4_ROUTE_RULES + 2*num_dft_rt_v6+1],num_dft_rt_v6);
 
-		/* store ipv6 prefix if the ipv6 address is not link local */
-		if(is_global_ipv6_addr(data->ipv6_addr))
-		{
-			memcpy(ipv6_prefix, data->ipv6_addr, sizeof(ipv6_prefix));
-			memcpy(m_ipv6_addr, data->ipv6_addr, sizeof(m_ipv6_addr));
-#ifdef FEATURE_VLAN_MPDN
-			if(m_is_sta_mode == Q6_WAN)
-			{
-				if (modem_ipv6_pdn_index == -1) {
-					modem_ipv6_pdn_index = getFreePDNIndex_V6();
-					if (modem_ipv6_pdn_index == -1)
-					{
-						/* add this prefix to no_offload_ipv6_prefix */
-						IPACM_Iface::ipacmcfg->add_no_offload_ipv6_prefix(ipv6_prefix);
-						IPACMERR("No Free index available.!\n");
-						res = IPACM_FAILURE;
-						goto fail;
-					}
-				}
-
-				memcpy(ipv6_to_iface[modem_ipv6_pdn_index].ipv6_prefix, data->ipv6_addr, sizeof(uint32_t) * 2);
-				ipv6_to_iface[modem_ipv6_pdn_index].pIface = this;
-				IPACM_Iface::ipacmcfg->add_no_offload_ipv6_prefix(ipv6_to_iface[modem_ipv6_pdn_index].ipv6_prefix);
-				IPACMDBG_H("index %d prefix: 0x%08x%08x\n", modem_ipv6_pdn_index,
-				ipv6_to_iface[modem_ipv6_pdn_index].ipv6_prefix[0],
-				ipv6_to_iface[modem_ipv6_pdn_index].ipv6_prefix[1]);
-
-			}
-#endif
-		}
 
 		/* add default filtering rules when wan-iface get global v6-prefix */
 		if (num_dft_rt_v6 == 1)
@@ -592,6 +562,37 @@ int IPACM_Wan::handle_addr_evt(ipacm_event_data_addr *data)
 					num_ipv6_dest_flt_rule++;
 					free(flt_rule);
 				}
+			}
+		}
+		/* store ipv6 prefix if the ipv6 address is not link local */
+		if(is_global_ipv6_addr(data->ipv6_addr))
+		{
+			memcpy(ipv6_prefix, data->ipv6_addr, sizeof(ipv6_prefix));
+			memcpy(m_ipv6_addr, data->ipv6_addr, sizeof(m_ipv6_addr));
+#ifdef FEATURE_VLAN_MPDN
+			if(m_is_sta_mode == Q6_WAN)
+			{
+				if (modem_ipv6_pdn_index == -1) {
+					modem_ipv6_pdn_index = getFreePDNIndex_V6();
+					if (modem_ipv6_pdn_index == -1)
+					{
+						IPACMERR("No Free index available.!\n");
+						res = IPACM_FAILURE;
+						goto fail;
+					}
+				}
+				memcpy(ipv6_to_iface[modem_ipv6_pdn_index].ipv6_prefix, data->ipv6_addr, sizeof(uint32_t) * 2);
+				ipv6_to_iface[modem_ipv6_pdn_index].pIface = this;
+				IPACMDBG_H("index %d prefix: 0x%08x%08x\n", modem_ipv6_pdn_index,
+				ipv6_to_iface[modem_ipv6_pdn_index].ipv6_prefix[0],
+				ipv6_to_iface[modem_ipv6_pdn_index].ipv6_prefix[1]);
+			}
+#endif
+			/* Check to handle the race-cond, if route_add recevied before handle_addr_evt */
+			IPACMDBG_H("is_xlat :%d, active_v6: %d, wan_v6_addr_gw_set: %d \n", is_xlat, active_v6, wan_v6_addr_gw_set);
+			if(is_xlat && active_v6 && ipv6_to_iface[modem_ipv6_pdn_index].ipv6_prefix[0] && ipv6_to_iface[modem_ipv6_pdn_index].ipv6_prefix[1])
+			{
+				IPACM_Iface::ipacmcfg->add_vlan_ipv6_prefix(ipv6_to_iface[modem_ipv6_pdn_index].ipv6_prefix, ipa_if_num, associated_VID);
 			}
 		}
 	    num_dft_rt_v6++;

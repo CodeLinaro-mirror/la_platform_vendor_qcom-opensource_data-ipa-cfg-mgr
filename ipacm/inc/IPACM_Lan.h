@@ -170,8 +170,6 @@ typedef struct rule_id_hdl_map
 typedef struct pdn_context
 {
 	int pdn_mux_id;
-	uint16_t associated_VIDs[IPA_MAX_NUM_SW_PDNS];
-	uint32_t active_vlan_count;
 	uint32_t wan_mpdn_ul_xlat_fl_rule_hdl_v4[MAX_WAN_UL_FILTER_RULES];
 	uint32_t num_wan_mpdn_ul_xlat_fl_rule_v4;
 }pdn_context;
@@ -956,48 +954,23 @@ protected:
 
 	xlat_context xlat_ctx;
 
-	inline void add_pdn_xlat_ctx(int pdn_mux_id, uint16_t vid)
+	inline void add_pdn_xlat_ctx(int pdn_mux_id)
 	{
-		//check if mux_id was already added but need to add VLAN
-		for (int i = 0; i < IPA_MAX_NUM_HW_PDNS; ++i)
-		{
-			if (xlat_ctx.active_pdn_list[i].pdn_mux_id == pdn_mux_id)
-			{
-				for (int j = 0; j < IPA_MAX_NUM_SW_PDNS; ++j)
-				{
-					if (xlat_ctx.active_pdn_list[i].associated_VIDs[j] == 0) //add to the first empty
-					{
-						xlat_ctx.active_pdn_list[i].associated_VIDs[j] = vid;
-						xlat_ctx.active_pdn_list[i].active_vlan_count++;
-
-						IPACMDBG_H("Updating pdn with vlan id %d to xlat ctx mux id %d total active xlat pdn:%d vlan count %d\n",
-							vid, pdn_mux_id, xlat_ctx.active_pdn_count, xlat_ctx.active_pdn_list[i].active_vlan_count);
-						return;
-					}
-				}
-			}
-		}
-
-		//Mux ID is new, add to the first open spot
-		for (int i = 0; i < IPA_MAX_NUM_HW_PDNS; ++i)
+		for (int i = 0; i < IPA_MAX_NUM_HW_PDNS ; ++i)
 		{
 			if (xlat_ctx.active_pdn_list[i].pdn_mux_id == 0)
 			{
 				xlat_ctx.active_pdn_list[i].pdn_mux_id = pdn_mux_id;
 				xlat_ctx.active_pdn_count++;
-				xlat_ctx.active_pdn_list[i].associated_VIDs[0] = vid;
-				xlat_ctx.active_pdn_list[i].active_vlan_count++;
-				IPACMDBG_H("Adding new pdn with vlan id %d to xlat ctx mux id %d total active xlat pdn:%d\n",
-					vid, pdn_mux_id, xlat_ctx.active_pdn_count);
+				IPACMDBG_H("Adding pdn to xlat ctx mux id %d total active xlat pdn:%d\n",
+					pdn_mux_id, xlat_ctx.active_pdn_count);
 				return;
 			}
 		}
-
-		//neither case passed, which means pdn list is full
 		IPACMDBG_H("Max number of pdns reached, can't add pdn to ctx!\n");
 	}
 
-	inline void remove_pdn_xlat_ctx(int pdn_mux_id) //mike remove all vlans, if we need to remove vlan one by one need to change
+	inline void remove_pdn_xlat_ctx(int pdn_mux_id)
 	{
 		for (int i = 0; i < IPA_MAX_NUM_HW_PDNS ; ++i)
 		{
@@ -1005,8 +978,6 @@ protected:
 			{
 				xlat_ctx.active_pdn_list[i].pdn_mux_id = 0;
 				xlat_ctx.active_pdn_count--;
-				memset(xlat_ctx.active_pdn_list[i].associated_VIDs, 0, IPA_MAX_NUM_SW_PDNS * sizeof(xlat_ctx.active_pdn_list[i].associated_VIDs[0]));
-				xlat_ctx.active_pdn_list[i].active_vlan_count = 0;
 				IPACMDBG_H("Removing pdn from xlat ctx mux id %d total active xlat pdn:%d\n",
 					pdn_mux_id, xlat_ctx.active_pdn_count);
 				return;
@@ -1015,23 +986,13 @@ protected:
 		IPACMDBG_H("Pdn not found in ctx!\n");
 	}
 
-	inline int get_pdn_xlat_ctx(int pdn_mux_id, uint16_t vid)
+	inline int get_pdn_xlat_ctx(int pdn_mux_id)
 	{
 		for (int i = 0; i < IPA_MAX_NUM_HW_PDNS ; ++i)
 		{
 			if (xlat_ctx.active_pdn_list[i].pdn_mux_id == pdn_mux_id)
-			{
-				for (int j = 0; j < xlat_ctx.active_pdn_list[i].active_vlan_count; ++j)
-				{
-					if (vid == 0 || xlat_ctx.active_pdn_list[i].associated_VIDs[j] == vid) //vid == 0 means we care only for the mux id not the vlan
-					{
-						IPACMDBG_H("got xlat ctx %d for mux id %d, vid %d\n", i, pdn_mux_id, vid);
-						return i;
-					}
-				}
-			}
+				return i;
 		}
-		IPACMDBG_H("PDN not found in ctx for mux id %d, vid %d\n", pdn_mux_id, vid);
 		return IPACM_FAILURE;
 	}
 
@@ -1080,22 +1041,14 @@ private:
 #endif
 
 #ifdef FEATURE_VLAN_MPDN
-
-	typedef struct ipacm_mux_struct
-	{
-		uint8_t mux_id = 0;
-		uint16_t associated_VIDs[IPA_MAX_NUM_SW_PDNS] = { };
-		uint8_t VID_cnt = 0;
-	}ipacm_mux_struct;
-
-	ipacm_mux_struct v4_mux_up[IPA_MAX_NUM_HW_PDNS];
+	uint8_t v4_mux_up[IPA_MAX_NUM_HW_PDNS];
 	uint8_t num_v4_mux;
-	ipacm_mux_struct v6_mux_up[IPA_MAX_NUM_HW_PDNS];
+	uint8_t v6_mux_up[IPA_MAX_NUM_HW_PDNS];
 	uint8_t num_v6_mux;
 
-	inline bool is_mux_up(uint8_t mux_id, ipa_ip_type iptype, uint16_t vid)
+	inline bool is_mux_up(uint8_t mux_id, ipa_ip_type iptype)
 	{
-		ipacm_mux_struct *mux = v4_mux_up;
+		uint8_t *mux = v4_mux_up;
 
 		if(mux_id == 0)
 			return false;
@@ -1104,33 +1057,19 @@ private:
 
 		for(int i = 0; i < IPA_MAX_NUM_HW_PDNS; i++)
 		{
-			if(mux[i].mux_id == mux_id)
+			if(mux[i] == mux_id)
 			{
-				//vid = 0 means just check if mux is up
-				if(vid == 0)
-				{
-						IPACMDBG_H("mux id %d is up for dev %s, iptype %d\n", mux_id, dev_name, iptype);
-						return true;
-				}
-
-				//vlan case
-				for(int j = 0; j < mux[i].VID_cnt; j++)
-				{
-					if(mux[i].associated_VIDs[j] == vid)
-					{
-						IPACMDBG_H("mux id %d is up for dev %s, iptype %d, vid %d, VID_cnt = %d\n", mux_id, dev_name, iptype, vid, mux[i].VID_cnt);
-						return true;
-					}
-				}
+				IPACMDBG_H("mux id %d is up for dev %s, iptype %d\n", mux_id, dev_name, iptype);
+				return true;
 			}
 		}
-		IPACMDBG_H("mux id %d is not up for dev %s iptype %d, vid %d\n", mux_id, dev_name, iptype, vid);
+		IPACMDBG_H("mux id %d is not up for dev %s iptype %d\n", mux_id, dev_name, iptype);
 		return false;
 	}
 
-	inline int set_mux_up(uint8_t mux_id, ipa_ip_type iptype, uint16_t vid)
+	inline int set_mux_up(uint8_t mux_id, ipa_ip_type iptype)
 	{
-		ipacm_mux_struct *mux = v4_mux_up;
+		uint8_t *mux = v4_mux_up;
 
 		if(mux_id == 0)
 		{
@@ -1138,7 +1077,7 @@ private:
 			return IPACM_FAILURE;
 		}
 
-		if(is_mux_up(mux_id, iptype, vid))
+		if(is_mux_up(mux_id, iptype))
 		{
 			IPACMERR("mux id %d is already up, not setting it iptype %d\n", mux_id, iptype);
 			return IPACM_FAILURE;
@@ -1147,44 +1086,22 @@ private:
 		if(iptype == IPA_IP_v6)
 			mux = v6_mux_up;
 
-		//check if mux_id was already added but need to add VLAN
 		for(int i = 0; i < IPA_MAX_NUM_HW_PDNS; i++)
 		{
-			if(mux[i].mux_id == mux_id)
+			if(mux[i] == 0)
 			{
-				for(int j = 0; j < mux[i].VID_cnt; j++)
-				{
-					if(mux[i].associated_VIDs[j] == 0)
-					{
-						mux[i].associated_VIDs[j] = vid;
-						mux[i].VID_cnt++;
-						mux[i].mux_id = mux_id;
-						IPACMDBG_H("successfully added vid %d for mux id %d, dev %s, i = %d, j = %d, iptype %d, VID_cnt = %d\n", vid, mux_id, dev_name, i, j, iptype, mux[i].VID_cnt);
-						return IPACM_SUCCESS;
-					}
-				}
-			}
-		}
-
-		//Mux ID is new, add to the first open spot
-		for(int i = 0; i < IPA_MAX_NUM_HW_PDNS; i++)
-		{
-			if(mux[i].mux_id == 0)
-			{
-				mux[i].associated_VIDs[0] = vid;
-				mux[i].VID_cnt++;
-				mux[i].mux_id = mux_id;
-				IPACMDBG_H("successfully added mux id %d with vid %d, dev %s, i = %d, iptype %d, VID_cnt = %d\n", mux_id, vid, dev_name, i, iptype, mux[i].VID_cnt);
+				mux[i] = mux_id;
+				IPACMDBG_H("successfully set mux id %d for dev %s, i = %d, iptype\n", mux_id, dev_name, i, iptype);
 				return IPACM_SUCCESS;
 			}
 		}
-		IPACMERR("exceeded max num mux ids, couldn't set mux %d, iptype %d, vid %d\n", mux_id, iptype, vid);
+		IPACMERR("exceeded max num mux ids, couldn't set mux %d, iptype %d\n", mux_id, iptype);
 		return IPACM_FAILURE;
 	}
 
 	inline int set_mux_down(uint8_t mux_id, ipa_ip_type iptype)
 	{
-		ipacm_mux_struct *mux = v4_mux_up;
+		uint8_t *mux = v4_mux_up;
 
 		if(mux_id == 0)
 		{
@@ -1197,21 +1114,20 @@ private:
 
 		for(int i = 0; i < IPA_MAX_NUM_HW_PDNS; i++)
 		{
-			if(mux[i].mux_id == mux_id)
+			if(mux[i] == mux_id)
 			{
-				memset(&mux[i], 0, sizeof(mux[i]));
-				IPACMDBG_H("successfully removed mux id %d for dev %s, i = %d, iptype %d, VID_cnt = %d\n", mux_id, dev_name, i, iptype, mux[i].VID_cnt);
+				mux[i] = 0;
+				IPACMDBG_H("successfully removed mux id %d for dev %s, i = %d, iptype\n", mux_id, dev_name, i, iptype);
 				return IPACM_SUCCESS;
 			}
 		}
-
 		IPACMERR("could not find mux %d, iptype %d\n", mux_id, iptype);
 		return IPACM_FAILURE;
 	}
 
 	inline bool is_any_mux_up(ipa_ip_type iptype)
 	{
-		ipacm_mux_struct *mux = v4_mux_up;
+		uint8_t *mux = v4_mux_up;
 		bool res = false;
 
 		if(iptype == IPA_IP_v6)
@@ -1219,9 +1135,9 @@ private:
 
 		for(int i = 0; i < IPA_MAX_NUM_HW_PDNS; i++)
 		{
-			if(mux[i].mux_id)
+			if(mux[i])
 			{
-				IPACMDBG("mux id %d up for dev %s, i = %d, iptype %d\n", mux[i].mux_id, dev_name, i, iptype);
+				IPACMDBG("mux id %d up for dev %s, i = %d, iptype %d\n", mux[i], dev_name, i, iptype);
 				res = true;
 			}
 		}

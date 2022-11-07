@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2013 - 2019 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -77,7 +78,8 @@ typedef struct __nat_client_info
 typedef struct _nat_pdn_entry
 {
 	uint32_t public_ip;
-	uint16_t vlan_id;
+	uint16_t associated_VIDs[IPA_MAX_NUM_SW_PDNS];
+	uint8_t VID_cnt;
 }nat_pdn_entry;
 #endif
 

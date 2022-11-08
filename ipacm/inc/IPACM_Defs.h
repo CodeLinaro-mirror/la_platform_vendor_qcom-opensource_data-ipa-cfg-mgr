@@ -515,6 +515,7 @@ struct l2tp_vlan_mapping_info
 	/* the following are MIB3 vlan client info (mac, ipv6 addr) */
 	uint8_t vlan_client_mac[6];
 	uint32_t vlan_client_ipv6_addr[4];
+	uint32_t vlan_client_ipv4_addr;
 	/* the following is MIB3 l2tp client info (mac) */
 	uint8_t l2tp_client_mac[6];
 };

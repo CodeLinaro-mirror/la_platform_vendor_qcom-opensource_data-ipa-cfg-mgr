@@ -97,7 +97,7 @@ IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #endif
 
 /* ndc bandwidth ipatetherstats <ifaceIn> <ifaceOut> */
-/* <in->out_bytes> <in->out_pkts> <out->in_bytes> <out->in_pkts */
+/* <in->out_bytes> <in->out_pkts> <out->in_bytes> <out->in_pkts. */
 
 #define PIPE_STATS "%s %s %lu %lu %lu %lu"
 #ifdef FEATURE_IPA_ANDROID
@@ -220,6 +220,13 @@ typedef struct _xlat_context
 	uint32_t active_pdn_count;
 }xlat_context;
 
+typedef struct _ipacm_vlan_sta_info
+{
+	uint32_t v4_flt_hdl;
+	uint32_t v6_flt_hdl;
+	uint16_t vlan_id;
+}ipacm_vlan_sta_info;
+
 /* lan iface */
 class IPACM_Lan : public IPACM_Iface
 {
@@ -228,8 +235,8 @@ public:
 	IPACM_Lan(int iface_index);
 	~IPACM_Lan();
 
-	/* store lan's wan-up filter rule handlers */
-	uint32_t lan_wan_fl_rule_hdl[IPA_WAN_DEFAULT_FILTER_RULE_HANDLES];
+	/* store lan's wan-up filter rule handlers up to IPA_MAX_NUM_OFFLOAD_VLANS */
+	ipacm_vlan_sta_info vlan_sta_info[IPA_MAX_NUM_OFFLOAD_VLANS];
 
 	/* store private-subnet filter rule handlers */
 	uint32_t private_fl_rule_hdl[IPA_MAX_PRIVATE_SUBNET_ENTRIES + IPA_MAX_MTU_ENTRIES];

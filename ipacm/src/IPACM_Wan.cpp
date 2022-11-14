@@ -1707,16 +1707,9 @@ int IPACM_Wan::check_vlan_pdn(ipa_ip_type iptype, ipacm_event_route_vlan *data, 
 			{
 				IPACMDBG("iface already has v4 vlan association, not new\n");
 				new_pdn = false;
-				int i;
-				for(i = 0; i < ipv4_to_iface[modem_ipv4_pdn_index].VID_cnt; i++)
+				if(data->VlanID != associated_VID)
 				{
-					if(IPACM_Wan::ipv4_to_iface[modem_ipv4_pdn_index].associated_VIDs[i] == data->VlanID )
-						break;
-				}
-
-				if (i == ipv4_to_iface[modem_ipv4_pdn_index].VID_cnt)
-				{
-					IPACMERR("inconsistency on new v6 VID (%d) with current v4 VIDs\n",data->VlanID);
+					IPACMERR("inconsistency on new v6 VID (%d) and exisiting v4 VID (%d) ignoring\n", data->VlanID, associated_VID);
 					return IPACM_FAILURE;
 				}
 			}
@@ -1756,17 +1749,9 @@ int IPACM_Wan::check_vlan_pdn(ipa_ip_type iptype, ipacm_event_route_vlan *data, 
 			{
 				IPACMDBG("iface already has v6 vlan association, not new\n");
 				new_pdn = false;
-				int i;
-				for(i = 0; i < ipv6_to_iface[modem_ipv6_pdn_index].VID_cnt; i++)
+				if(data->VlanID != associated_VID)
 				{
-					if(IPACM_Wan::ipv6_to_iface[modem_ipv6_pdn_index].associated_VIDs[i] == data->VlanID )
-						break;
-				}
-
-				if (i == ipv6_to_iface[modem_ipv6_pdn_index].VID_cnt)
-				{
-					IPACMERR("inconsistency on new v4 VID (%d) with current v6 VIDs\n",
-								data->VlanID);
+					IPACMERR("inconsistency on new v4 VID (%d) and exisiting v6 VID (%d) ignoring\n", data->VlanID, associated_VID);
 					return IPACM_FAILURE;
 				}
 			}

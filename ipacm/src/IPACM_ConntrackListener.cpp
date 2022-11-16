@@ -2484,31 +2484,34 @@ void IPACM_ConntrackListener::ProcessTCPorUDPMsg(
 	AddORDeleteNatEntry(&nat_entry, &SendVlanEvent);
 	if(VlanID > 0 && SendVlanEvent)
 	{
-		 ipacm_cmd_q_data evt_data;
-		 ipacm_event_route_vlan *data;
+		ipacm_cmd_q_data evt_data;
+		ipacm_event_route_vlan *data;
 
-		 evt_data.event = IPA_ROUTE_ADD_VLAN_PDN_EVENT;
-		 data = (ipacm_event_route_vlan *)malloc(sizeof(ipacm_event_route_vlan));
-		 if(!data)
-		 {
-			 IPACMERR("couldn't allocate memory for new vlan pdn event\n");
-			 return;
-		 }
-		 memset(data, 0, sizeof(ipacm_event_route_vlan));
-		 data->iptype = IPA_IP_v4;
-		 data->VlanID = VlanID;
-		 data->wan_ipv4_addr = public_ip;
-		if (IPACM_Wan::is_xlat_by_ipv4(public_ip)){
-			data->iptype = IPA_IP_MAX;
-			data->wan_ipv6_prefix[0]=IPA_DUMMY_PREFIX;
+		evt_data.event = IPA_ROUTE_ADD_VLAN_PDN_EVENT;
+		data = (ipacm_event_route_vlan *)malloc(sizeof(ipacm_event_route_vlan));
+		if(!data)
+		{
+			IPACMERR("couldn't allocate memory for new vlan pdn event\n");
+			return;
 		}
-		 evt_data.evt_data = data;
-		 IPACMDBG_H("sending IPA_ROUTE_ADD_VLAN_PDN_EVENT vlan id %d, iptype %d,\n",
-			 data->VlanID,
-			 data->iptype);
-		 iptodot("pdn ip", public_ip);
+		memset(data, 0, sizeof(ipacm_event_route_vlan));
+		data->iptype = IPA_IP_v4;
+		data->VlanID = VlanID;
+		data->wan_ipv4_addr = public_ip;
+		if(!isStaMode)
+		{
+			if (IPACM_Wan::is_xlat_by_ipv4(public_ip)){
+				data->iptype = IPA_IP_MAX;
+				data->wan_ipv6_prefix[0]=IPA_DUMMY_PREFIX;
+			}
+		}
+		evt_data.evt_data = data;
+		IPACMDBG_H("sending IPA_ROUTE_ADD_VLAN_PDN_EVENT vlan id %d, iptype %d,\n",
+				data->VlanID,
+			 	data->iptype);
+		iptodot("pdn ip", public_ip);
 
-		 IPACM_EvtDispatcher::PostEvt(&evt_data);
+		IPACM_EvtDispatcher::PostEvt(&evt_data);
 	 }
 #else
 	 AddORDeleteNatEntry(&nat_entry, NULL);

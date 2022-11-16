@@ -97,7 +97,7 @@ IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #endif
 
 /* ndc bandwidth ipatetherstats <ifaceIn> <ifaceOut> */
-/* <in->out_bytes> <in->out_pkts> <out->in_bytes> <out->in_pkts. */
+/* <in->out_bytes> <in->out_pkts> <out->in_bytes> <out->in_pkts */
 
 #define PIPE_STATS "%s %s %lu %lu %lu %lu"
 #ifdef FEATURE_IPA_ANDROID
@@ -1134,6 +1134,7 @@ private:
 #endif
 
 #ifdef FEATURE_VLAN_MPDN
+	uint16_t lan_vlan_id[IPA_MAX_NUM_HW_PDNS];
 
 	typedef struct ipacm_mux_struct
 	{

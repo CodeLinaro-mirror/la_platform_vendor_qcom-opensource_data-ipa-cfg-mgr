@@ -198,6 +198,8 @@ public:
 	static int GetV6PrefixByVid(int vid, uint32_t *v6_prefix);
 	static int GetV6MTUByPrefix(uint16_t *mtu, uint32_t *v6_prefix);
 	static IPACM_firewall_conf_t* get_curr_pdn_firewall_config(IPACM_firewall_t &firewall_configs, const char* dev_name);
+	static int get_wlan_v4_index();
+	static int get_wlan_v6_index();
 #endif
 	static bool isWanUP(int ipa_if_num_tether)
 	{
@@ -370,6 +372,8 @@ public:
 #ifdef FEATURE_VLAN_MPDN
 	static struct ipacm_pdn_flt_rule pdn_flt_rule_v4[IPA_MAX_FLT_RULE];
 	static struct ipacm_pdn_flt_rule pdn_flt_rule_v6[IPA_MAX_FLT_RULE];
+	static int wlan_v4_vlan_index;
+	static int wlan_v6_vlan_index;
 #endif
 	static struct ipa_flt_rule_add flt_rule_v4[IPA_MAX_FLT_RULE];
 	static struct ipa_flt_rule_add flt_rule_v6[IPA_MAX_FLT_RULE];

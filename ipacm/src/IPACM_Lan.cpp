@@ -2090,13 +2090,15 @@ int IPACM_Lan::check_vlan_PDNUp(enum ipa_ip_type iptype)
 					IPACMDBG_H("no v4 vlan up PDN for Id %d\n", Ids[i]);
 					continue;
 				}
-
 				/* create event data and call the handler */
 				vlan_data.iptype = iptype;
 				vlan_data.mux_id = mux_id;
-				if (IPACM_Wan::is_xlat_by_vid(Ids[i]))
-					vlan_data.is_xlat = true;
 
+				if(IPACM_Wan::backhaul_is_sta_mode == false)
+				{
+					if (IPACM_Wan::is_xlat_by_vid(Ids[i]))
+					vlan_data.is_xlat = true;
+				}
 				if(handle_vlan_pdn_up(&vlan_data))
 				{
 					IPACMERR("failed handling v4 VLAN up for VID %d, dev %s\n",
@@ -2127,13 +2129,15 @@ int IPACM_Lan::check_vlan_PDNUp(enum ipa_ip_type iptype)
 		for(i = 0; i < IPA_MAX_NUM_OFFLOAD_VLANS; i++)
 		{
 			uint8_t mux_id = 0;
-
 			if(Ids[i] != 0)
 			{
-				if(IPACM_Wan::GetMuxByVid(Ids[i], &mux_id, iptype))
+				if(IPACM_Wan::backhaul_is_sta_mode == false)
 				{
-					IPACMDBG_H("no v6 vlan up PDN for Id %d\n", Ids[i]);
-					continue;
+					if(IPACM_Wan::GetMuxByVid(Ids[i], &mux_id, iptype))
+					{
+						IPACMDBG_H("no v6 vlan up PDN for Id %d\n", Ids[i]);
+						continue;
+					}
 				}
 #ifdef FEATURE_IPACM_UL_FIREWALL
 				if(!firewall_updated)
@@ -2638,7 +2642,7 @@ int IPACM_Lan::handle_wan_down(bool is_sta_mode, uint8_t mux_id)
 		IPACMERR("Rx prop is NULL, return\n");
 		return IPACM_SUCCESS;
 	}
-	
+
 	if(is_sta_mode == false)
 	{
 		IPACMDBG_H("Wan_down for mux_id: %d\n", mux_id);
@@ -2759,10 +2763,11 @@ int IPACM_Lan::handle_addr_evt(ipacm_event_data_addr *data)
 		IPACMDBG_H("ipv4 iface rt-rule hdl1=0x%x\n", dft_rt_rule_hdl[0]);
 		/* ICMP rule is 1st to keep consistent with v6 and to use as offset for L2L rules */
 		install_ipv4_icmp_flt_rule();
+
+		add_tcp_syn_flt_rule(data->iptype);
 		/* initial fragment/multicast/broadcast/filter rule. Fragment has set_rear = false, will be above icmp rule */
 		init_fl_rule(data->iptype);
 
-		add_tcp_syn_flt_rule(data->iptype);
 #ifdef FEATURE_TTL
 		if(IPACM_Iface::ipacmcfg->ipacm_ttl_feature_enable)
 			add_ttl_exception_flt_rule(data->iptype);
@@ -3073,7 +3078,6 @@ int IPACM_Lan::add_vlan_private_subnet(ipacm_bridge *bridge)
 }
 #endif
 
-
 int IPACM_Lan::handle_backhaul_switch_vlan_mode(bool to_sta)
 {
 	int xlat_pdn_ctx_id;
@@ -3104,6 +3108,7 @@ int IPACM_Lan::handle_backhaul_switch_vlan_mode(bool to_sta)
 		{
 			IPACMDBG_H("backhaul switch to STA and VLAN PDN up, delete modem ul rules (v6)\n");
 			del_ul_flt_rules(IPA_IP_v6);
+
 			for(int i = 0; i < IPA_MAX_NUM_HW_PDNS; i++)
 			{
 				if(v6_mux_up[i].mux_id)
@@ -3157,8 +3162,9 @@ int IPACM_Lan::handle_backhaul_switch_vlan_mode(bool to_sta)
 		}
 	}
 
-	return IPACM_SUCCESS;
+return IPACM_SUCCESS;
 }
+
 /* for STA mode wan up:  configure filter rule for wan_up event*/
 int IPACM_Lan::handle_wan_up(ipa_ip_type ip_type, uint16_t vid)
 {
@@ -3261,6 +3267,15 @@ int IPACM_Lan::handle_wan_up(ipa_ip_type ip_type, uint16_t vid)
 		{
 			flt_rule_entry.rule.attrib.attrib_mask |= IPA_FLT_VLAN_ID;
 			flt_rule_entry.rule.attrib.vlan_id = vid;
+			for(i = 0; i < IPA_MAX_NUM_HW_PDNS; i++)
+			{
+				if (!lan_vlan_id[i])
+				{
+					lan_vlan_id[i] = flt_rule_entry.rule.attrib.vlan_id;
+					break;
+				}
+			}
+			IPACMDBG_H("flt_rule_entry.rule.attrib.vlan_id: %d is configured\n", flt_rule_entry.rule.attrib.vlan_id);
 		}
 #endif
 		flt_rule_entry.rule.attrib.u.v4.dst_addr_mask = 0x0;

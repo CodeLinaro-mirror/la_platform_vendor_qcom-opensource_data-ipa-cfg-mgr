@@ -151,6 +151,9 @@ int	IPACM_Wan::ipa_if_num_tether_v6[IPA_MAX_IFACE_ENTRIES];
 ipacm_ipv4_wan_iface IPACM_Wan::ipv4_to_iface[IPA_MAX_NUM_SW_PDNS];
 ipacm_ipv6_wan_iface IPACM_Wan::ipv6_to_iface[IPA_MAX_NUM_SW_PDNS];
 uint8_t IPACM_Wan::num_offloaded_pdns = 0;
+int IPACM_Wan::wlan_v4_vlan_index = -1;
+int IPACM_Wan::wlan_v6_vlan_index = -1;
+
 #endif
 
 uint16_t IPACM_Wan::mtu_default_wan = DEFAULT_MTU_SIZE;
@@ -331,7 +334,7 @@ int IPACM_Wan::GetMuxByVid(uint16_t vlan_id, uint8_t *mux_id, ipa_ip_type iptype
 				for(int j = 0; j <  ipv4_to_iface[i].VID_cnt; j++)
 				{
 					if((IPACM_Wan::ipv4_to_iface[i].pIface->ext_prop) &&
-						(IPACM_Wan::ipv4_to_iface[i].associated_VIDs[j] == vlan_id))
+							(IPACM_Wan::ipv4_to_iface[i].associated_VIDs[j] == vlan_id))
 					{
 						*mux_id = IPACM_Wan::ipv4_to_iface[i].pIface->ext_prop->ext[0].mux_id;
 						return IPACM_SUCCESS;
@@ -430,7 +433,7 @@ bool IPACM_Wan::is_xlat_by_ipv4(uint32_t ipv4_addr)
 		if(IPACM_Wan::ipv4_to_iface[i].ipv4_addr == ipv4_addr)
 			return IPACM_Wan::ipv4_to_iface[i].is_xlat;
 	}
-	IPACMERR("couldn't find MUX xlat info for ipv4 %d\n", ipv4_addr);
+	IPACMERR("couldn't find MUX xlat info for ipv4 0x%x\n", ipv4_addr);
 	return false;
 }
 
@@ -438,8 +441,8 @@ int IPACM_Wan::get_vid_index_for_iface_v6(ipacm_ipv6_wan_iface iface, uint16_t v
 {
 	for(int i = 0; i < iface.VID_cnt;i++)
 	{
-		iface.associated_VIDs[i] == vlan_id;
-		return i;
+		if (iface.associated_VIDs[i] == vlan_id)
+			return i;
 	}
 
 	IPACMDBG("couldn't find VID %d\n in VID array", vlan_id);
@@ -1849,15 +1852,49 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 }
 
 #ifdef FEATURE_VLAN_MPDN
+
+int IPACM_Wan::IPACM_Wan::get_wlan_v4_index()
+{
+	return IPACM_Wan::wlan_v4_vlan_index;
+}
+
+int IPACM_Wan::IPACM_Wan::get_wlan_v6_index()
+{
+	return IPACM_Wan::wlan_v6_vlan_index;
+}
+
 int IPACM_Wan::check_vlan_pdn(ipa_ip_type iptype, ipacm_event_route_vlan *data, bool v4_only_xlat)
 {
 	int pdn_idx, vlan_idx, ret = IPACM_FAILURE;
 	bool new_pdn = true;
+	uint8_t mux_id;
+	ipacm_cmd_q_data evt_data;
+	ipacm_event_vlan_pdn *wan_data;
+	bool is_vlan_wlan_associated = false, is_vlan_modem_associated = false;
+	int modem_vlan_v4_pdn_index = -1;
+	int modem_vlan_v6_pdn_index = -1;
+	int wlan_vlan_v4_pdn_index = -1;
+	int wlan_vlan_v6_pdn_index = -1;
+	int modem_vlan_idx = -1;
+	int wlan_vlan_idx = -1;
+	ipacm_event_vlan_pdn *vlandown_data;
+	ipacm_event_vlan_pdn *wanup_vlan_data;
+
+	memset(&evt_data, 0, sizeof(evt_data));
 
 	IPACMDBG_H("iptype: %d\n", iptype);
 
+	IPACMDBG_H("num_offloaded_pdns: %d\n", num_offloaded_pdns);
+
+	if(data == NULL)
+	{
+		IPACMDBG_H("Received invalid data\n");
+		return IPACM_FAILURE;
+	}
+
 	if (m_is_sta_mode !=Q6_WAN)
 	{
+		IPACMDBG_H("STA backhaul\n");
 		IPACM_Wan::backhaul_is_sta_mode = true;
 		if((iptype==IPA_IP_v4) && (header_set_v4 != true))
 		{
@@ -1873,113 +1910,311 @@ int IPACM_Wan::check_vlan_pdn(ipa_ip_type iptype, ipacm_event_route_vlan *data, 
 		}
 	}
 
+	IPACMDBG_H("Process IPA_ROUTE_ADD_VLAN_PDN_EVENT for iptype: %d\n", iptype);
+
 	if (iptype == IPA_IP_v6 || iptype == IPA_IP_MAX)
 	{
-		if(((data->wan_ipv6_prefix[0] == ipv6_prefix[0]) &&
-			(data->wan_ipv6_prefix[1] == ipv6_prefix[1])) || v4_only_xlat)
+		if((data->wan_ipv6_prefix[0] == ipv6_prefix[0]) &&
+			(data->wan_ipv6_prefix[1] == ipv6_prefix[1]))
 		{
-			IPACMDBG_H("received v6 IPA_ROUTE_ADD_VLAN_PDN_EVENT for VID %d, wan %s, %d\n", data->VlanID, dev_name, ipa_if_num);
+			IPACMDBG_H("received v6 IPA_ROUTE_ADD_VLAN_PDN_EVENT for VID %d, %d\n", data->VlanID, ipa_if_num);
+
+			IPACMDBG_H("num_offloaded_pdns: %d\n", num_offloaded_pdns);
+			IPACMDBG_H("data->wan_ipv6_prefix: 0x%08x%08x\n", data->wan_ipv6_prefix[0], data->wan_ipv6_prefix[1]);
 
 			if (m_is_sta_mode == WLAN_WAN)
 			{
-				/* vlan already associate with STA, abort re-add */
-				if ((wlan_ipv6_pdn_index >= 0) && (ipv6_to_iface[wlan_ipv6_pdn_index].wan_up_vlan_v6))
+				wlan_vlan_v6_pdn_index = IPACM_Wan::get_wlan_v6_index();
+				IPACMDBG_H("wlan_ipv6_pdn_index: %d\n", wlan_vlan_v6_pdn_index);
+
+				if((wlan_vlan_v6_pdn_index >= 0) && ipv6_to_iface[wlan_vlan_v6_pdn_index].VID_cnt > 0)
 				{
-					for(vlan_idx = 0; vlan_idx < ipv6_to_iface[wlan_ipv6_pdn_index].VID_cnt; vlan_idx++)
+					for (vlan_idx = 0; vlan_idx < ipv6_to_iface[wlan_ipv6_pdn_index].VID_cnt; vlan_idx++)
 					{
-						if(IPACM_Wan::ipv6_to_iface[wlan_ipv6_pdn_index].associated_VIDs[vlan_idx] == data->VlanID)
+						if (IPACM_Wan::ipv6_to_iface[wlan_ipv6_pdn_index].associated_VIDs[vlan_idx] == data->VlanID)
 						{
-							/* vlan already associate with STA, abort re-add */
-							IPACMERR("v6 vlan wan is already up for %s vlan %d\n", dev_name, data->VlanID);
-							return IPACM_FAILURE;
+							IPACMDBG_H("VlanID found in associated_VIDs in STA BH\n");
+							is_vlan_wlan_associated = true;
+							wlan_vlan_idx = vlan_idx;
+							break;
 						}
 					}
 				}
 
-				if((wlan_ipv4_pdn_index >= 0) && ipv4_to_iface[wlan_ipv4_pdn_index].wan_up_vlan)
+				for(pdn_idx = 0; pdn_idx < IPA_MAX_NUM_SW_PDNS; pdn_idx++)
 				{
-					IPACMDBG("iface already has v4 vlan association, not new\n");
-					new_pdn = false;
-					
-					for(pdn_idx = 0; pdn_idx < IPA_MAX_NUM_SW_PDNS; pdn_idx++)
+					if((pdn_idx != wlan_vlan_v6_pdn_index) && ipv6_to_iface[pdn_idx].VID_cnt > 0)
 					{
-						if(IPACM_Wan::ipv4_to_iface[pdn_idx].wan_up_vlan)
+						for(vlan_idx = 0; vlan_idx < ipv6_to_iface[pdn_idx].VID_cnt; vlan_idx++)
 						{
-							for(vlan_idx = 0; vlan_idx < ipv4_to_iface[pdn_idx].VID_cnt; vlan_idx++)
+							if(ipv6_to_iface[pdn_idx].associated_VIDs[vlan_idx] == data->VlanID)
 							{
-								if(IPACM_Wan::ipv4_to_iface[pdn_idx].associated_VIDs[vlan_idx] == data->VlanID)
-								{
-									if(pdn_idx != wlan_ipv4_pdn_index)
-									{
-										IPACMERR("VID (%d) already mapped to v4 PDN %d, can't map to v4 PDN %d\n",
-												data->VlanID, pdn_idx, wlan_ipv4_pdn_index);
-										return IPACM_FAILURE;
-									}
-								}
+								IPACMDBG_H("VlanID found in associated_VIDs in LTE BH\n");
+								is_vlan_modem_associated = true;
+								modem_vlan_v6_pdn_index = pdn_idx;
+								modem_vlan_idx = vlan_idx;
+								break;
 							}
 						}
 					}
 				}
-				if(new_pdn && ipv6_to_iface[wlan_ipv6_pdn_index].VID_cnt == 0)
+
+				if(!is_vlan_wlan_associated && is_vlan_modem_associated)
 				{
-					if(num_offloaded_pdns >= IPA_MAX_NUM_HW_PDNS)
+					IPACMDBG_H("BH switch from LTE to STA\n");
+
+					vlandown_data = (ipacm_event_vlan_pdn *)malloc(sizeof(ipacm_event_vlan_pdn));
+					if(vlandown_data == NULL)
 					{
-						IPACMERR("number of offloaded PDNs %d can't add more than %d, ignoring\n", num_offloaded_pdns, IPA_MAX_NUM_HW_PDNS);
+						IPACMERR("Unable to allocate memory\n");
 						return IPACM_FAILURE;
 					}
-					num_offloaded_pdns++;
-					IPACMDBG_H("this is a new PDN, num of offloaded PDN increased to %d\n", num_offloaded_pdns);
-				}
 
+					if(GetMuxByVid(data->VlanID, &mux_id, IPA_IP_v6))
+					{
+						IPACMDBG_H("no v6 vlan up PDN for vlan Id %d\n", data->VlanID);
+						return IPACM_SUCCESS;
+					}
+					memset(vlandown_data, 0, sizeof(ipacm_event_vlan_pdn));
+					vlandown_data->iptype = IPA_IP_v6;
+					vlandown_data->VlanID = data->VlanID;
+					ipv6_to_iface[modem_vlan_v6_pdn_index].associated_VIDs[modem_vlan_idx] = 0;
+					ipv6_to_iface[modem_vlan_v6_pdn_index].VID_cnt--;
+					vlandown_data ->mux_id = mux_id;
+
+					IPACMDBG_H("Posting IPA_HANDLE_WAN_VLAN_PDN_DOWN with below information:\n");
+					IPACMDBG_H("iptype V6, VlanID %d, mux_id %d, if num %d\n", vlandown_data->VlanID, vlandown_data->mux_id, ipa_if_num);
+
+					evt_data.event = IPA_HANDLE_WAN_VLAN_PDN_DOWN;
+					evt_data.evt_data = (void *)vlandown_data;
+
+					IPACM_EvtDispatcher::PostEvt(&evt_data);
+
+					wanup_vlan_data = (ipacm_event_vlan_pdn *)malloc(sizeof(ipacm_event_vlan_pdn));
+
+					if(wanup_vlan_data == NULL)
+					{
+						IPACMERR("Unable to allocate memory\n");
+						return IPACM_FAILURE;
+					}
+					memset(wanup_vlan_data, 0, sizeof(ipacm_event_vlan_pdn));
+
+					if (ipv6_to_iface[wlan_ipv6_pdn_index].VID_cnt < IPA_MAX_NUM_SW_PDNS)
+					{
+						ipv6_to_iface[wlan_ipv6_pdn_index].associated_VIDs[ipv6_to_iface[wlan_ipv6_pdn_index].VID_cnt] = data->VlanID;
+						ipv6_to_iface[wlan_ipv6_pdn_index].VID_cnt++;
+						ipv6_to_iface[wlan_ipv6_pdn_index].pIface = this;
+					}
+
+					wanup_vlan_data->iptype = IPA_IP_v6;
+					wanup_vlan_data->VlanID = data->VlanID;
+					wanup_vlan_data->mux_id = 0;
+
+					associated_VID = data->VlanID;
+
+					IPACMDBG_H("Posting IPA_HANDLE_WAN_VLAN_PDN_UP (v6) with below info:\n");
+					IPACMDBG_H("iptype IPA_IP_v6, VlanID %d, mux_id %d, if num %d\n",
+							wanup_vlan_data->VlanID, wanup_vlan_data->mux_id, ipa_if_num);
+					evt_data.event = IPA_HANDLE_WAN_VLAN_PDN_UP;
+					evt_data.evt_data = (void *)wanup_vlan_data;
+					IPACM_EvtDispatcher::PostEvt(&evt_data);
+				}
+				else
+				{
+					IPACMDBG_H("Not a BH switch\n");
+
+					/* vlan already associate with STA, abort re-add */
+					if(ipv6_to_iface[wlan_ipv6_pdn_index].wan_up_vlan_v6)
+					{
+						for(pdn_idx = 0; pdn_idx < ipv6_to_iface[wlan_ipv6_pdn_index].VID_cnt; pdn_idx++)
+						{
+							if(IPACM_Wan::ipv6_to_iface[wlan_ipv6_pdn_index].associated_VIDs[pdn_idx] == data->VlanID)
+							{
+								/* vlan already associate with STA, abort re-add */
+								IPACMERR("v6 vlan wan is already up for %s, vlan id: %d\n", dev_name, data->VlanID);
+								return IPACM_FAILURE;
+							}
+						}
+					}
+
+					if((wlan_ipv4_pdn_index >= 0) && ipv4_to_iface[wlan_ipv4_pdn_index].wan_up_vlan)
+					{
+						IPACMDBG("iface already has v4 vlan association, not new\n");
+						new_pdn = false;
+
+						if(IPACM_Wan::ipv4_to_iface[wlan_ipv4_pdn_index].wan_up_vlan)
+						{
+							for(vlan_idx = 0; vlan_idx < ipv4_to_iface[wlan_ipv4_pdn_index].VID_cnt; vlan_idx++)
+							{
+								if(IPACM_Wan::ipv4_to_iface[wlan_ipv4_pdn_index].associated_VIDs[vlan_idx] == data->VlanID)
+								{
+									IPACMERR("VID (%d) already mapped to v4 PDN %d, can't map to v4 PDN %d\n",
+											data->VlanID, pdn_idx, wlan_ipv6_pdn_index);
+									return IPACM_FAILURE;
+								}
+							}
+						}
+					}
+
+					if(new_pdn && ipv6_to_iface[wlan_ipv6_pdn_index].VID_cnt == 0)
+					{
+						if(num_offloaded_pdns >= IPA_MAX_NUM_HW_PDNS)
+						{
+							IPACMERR("number of offloaded PDNs %d can't add more than %d, ignoring\n", num_offloaded_pdns, IPA_MAX_NUM_HW_PDNS);
+							return IPACM_FAILURE;
+						}
+						num_offloaded_pdns++;
+						IPACMDBG_H("this is a new PDN, num of offloaded PDN increased to %d\n", num_offloaded_pdns);
+					}
+				}
 			}
 			else
 			{
-				/* vlan already associate with LTE, abort re-add */
-				if ((modem_ipv6_pdn_index != -1) && (ipv6_to_iface[modem_ipv6_pdn_index].wan_up_vlan_v6))
+				IPACMDBG_H("LTE\n");
+				wlan_vlan_v6_pdn_index = IPACM_Wan::get_wlan_v6_index();
+
+				if((wlan_vlan_v6_pdn_index >= 0) && ipv6_to_iface[wlan_vlan_v6_pdn_index].VID_cnt > 0)
 				{
-					for(vlan_idx = 0; vlan_idx < ipv6_to_iface[modem_ipv6_pdn_index].VID_cnt; vlan_idx++)
+					for(vlan_idx = 0; vlan_idx < ipv6_to_iface[wlan_vlan_v6_pdn_index].VID_cnt; vlan_idx++)
 					{
-						if(IPACM_Wan::ipv6_to_iface[modem_ipv6_pdn_index].associated_VIDs[vlan_idx] == data->VlanID)
+						if(IPACM_Wan::ipv6_to_iface[wlan_vlan_v6_pdn_index].associated_VIDs[vlan_idx] == data->VlanID)
 						{
-							/* vlan already associate with STA, abort re-add */
-							IPACMERR("v6 vlan wan is already up for %s vlan %d\n", dev_name, data->VlanID);
-							return IPACM_FAILURE;
+							IPACMDBG_H("VlanID found in associated_VIDs\n");
+							is_vlan_wlan_associated = true;
+							wlan_vlan_idx = vlan_idx;
+							break;
 						}
 					}
 				}
-
-				if((modem_ipv4_pdn_index >= 0) && ipv4_to_iface[modem_ipv4_pdn_index].wan_up_vlan)
+				for(pdn_idx = 0; pdn_idx < IPA_MAX_NUM_SW_PDNS; pdn_idx++)
 				{
-					IPACMDBG("iface already has v4 vlan association, not new\n");
-					new_pdn = false;
-
-					for(pdn_idx = 0; pdn_idx < IPA_MAX_NUM_SW_PDNS; pdn_idx++)
+					if((pdn_idx != wlan_vlan_v6_pdn_index) && ipv6_to_iface[pdn_idx].VID_cnt > 0)
 					{
-						if(IPACM_Wan::ipv4_to_iface[pdn_idx].wan_up_vlan)
+						for(vlan_idx = 0; vlan_idx < ipv6_to_iface[pdn_idx].VID_cnt; vlan_idx++)
 						{
-							for(vlan_idx = 0; vlan_idx < ipv4_to_iface[pdn_idx].VID_cnt; vlan_idx++)
+							if(IPACM_Wan::ipv6_to_iface[pdn_idx].associated_VIDs[vlan_idx] == data->VlanID)
 							{
-								if(IPACM_Wan::ipv4_to_iface[pdn_idx].associated_VIDs[vlan_idx] == data->VlanID )
-								{
-									if (pdn_idx != modem_ipv4_pdn_index)
-									{
-										IPACMERR("VID (%d) already mapped to v4 PDN %d, can't map to v4 PDN %d\n",data->VlanID, pdn_idx, modem_ipv4_pdn_index);
-										return IPACM_FAILURE;
-									}
-								}
+								is_vlan_modem_associated = true;
+								modem_vlan_v6_pdn_index = pdn_idx;
+								modem_vlan_idx = vlan_idx;
+								break;
 							}
 						}
 					}
 				}
 
-				if(new_pdn && ipv6_to_iface[modem_ipv6_pdn_index].VID_cnt == 0)
+				if(is_vlan_wlan_associated && !is_vlan_modem_associated)
 				{
-					if(num_offloaded_pdns >= IPA_MAX_NUM_HW_PDNS) {
-						IPACMERR("number of offloaded PDNs %d can't add more than %d, ignoring\n", num_offloaded_pdns, IPA_MAX_NUM_HW_PDNS);
+					IPACMDBG_H("BH switch from STA to LTE\n");
+
+					vlandown_data = (ipacm_event_vlan_pdn *)malloc(sizeof(ipacm_event_vlan_pdn));
+					if(vlandown_data == NULL)
+					{
+						IPACMERR("Unable to allocate memory\n");
 						return IPACM_FAILURE;
 					}
-					num_offloaded_pdns++;
-					IPACMDBG_H("this is a new PDN, num of offloaded PDN increased to %d\n", num_offloaded_pdns);
+
+					memset(vlandown_data, 0, sizeof(ipacm_event_vlan_pdn));
+					vlandown_data->iptype = IPA_IP_v6;
+					vlandown_data->VlanID = data->VlanID;
+					ipv6_to_iface[wlan_vlan_v6_pdn_index].associated_VIDs[wlan_vlan_idx] = 0;
+					ipv6_to_iface[wlan_vlan_v6_pdn_index].VID_cnt--;
+					vlandown_data ->mux_id = 0;
+
+					IPACMDBG_H("Posting IPA_HANDLE_WAN_VLAN_PDN_DOWN with below information:\n");
+					IPACMDBG_H("iptype V6, VlanID %d, mux_id %d, if num %d\n", vlandown_data->VlanID, vlandown_data->mux_id, ipa_if_num);
+
+					evt_data.event = IPA_HANDLE_WAN_VLAN_PDN_DOWN;
+					evt_data.evt_data = (void *)vlandown_data;
+
+					IPACM_EvtDispatcher::PostEvt(&evt_data);
+
+					wanup_vlan_data = (ipacm_event_vlan_pdn *)malloc(sizeof(ipacm_event_vlan_pdn));
+
+					if(wanup_vlan_data == NULL)
+					{
+						IPACMERR("Unable to allocate memory\n");
+						return IPACM_FAILURE;
+					}
+					memset(wanup_vlan_data, 0, sizeof(ipacm_event_vlan_pdn));
+
+					IPACMDBG_H("modem_ipv6_pdn_index: %d\n");
+
+					if (ipv6_to_iface[modem_ipv6_pdn_index].VID_cnt < IPA_MAX_NUM_SW_PDNS)
+					{
+						ipv6_to_iface[modem_ipv6_pdn_index].associated_VIDs[ipv6_to_iface[modem_ipv6_pdn_index].VID_cnt] = data->VlanID;
+						ipv6_to_iface[modem_ipv6_pdn_index].VID_cnt++;
+						ipv6_to_iface[modem_ipv6_pdn_index].pIface = this;
+					}
+
+					if(GetMuxByVid(data->VlanID, &mux_id, IPA_IP_v6))
+					{
+						IPACMDBG_H("no v6 vlan up PDN for vlan Id %d\n", data->VlanID);
+						return IPACM_SUCCESS;
+					}
+					wanup_vlan_data->iptype = IPA_IP_v6;
+					wanup_vlan_data->VlanID = data->VlanID;
+					wanup_vlan_data->mux_id = mux_id;
+					associated_VID = data->VlanID;
+
+					IPACMDBG_H("Posting IPA_HANDLE_WAN_VLAN_PDN_UP (v6) with below info:\n");
+					IPACMDBG_H("iptype IPA_IP_v6, VlanID %d, mux_id %d, if num %d\n",
+							wanup_vlan_data->VlanID, wanup_vlan_data->mux_id, ipa_if_num);
+					evt_data.event = IPA_HANDLE_WAN_VLAN_PDN_UP;
+					evt_data.evt_data = (void *)wanup_vlan_data;
+					IPACM_EvtDispatcher::PostEvt(&evt_data);
+				}
+				else
+				{
+					IPACMDBG_H("Not a BH switch\n");
+
+					/* vlan already associate with LTE, abort re-add */
+					if ((modem_ipv6_pdn_index != -1) && (ipv6_to_iface[modem_ipv6_pdn_index].wan_up_vlan_v6))
+					{
+						for(pdn_idx = 0; pdn_idx < ipv6_to_iface[modem_ipv6_pdn_index].VID_cnt; pdn_idx++)
+						{
+							if(IPACM_Wan::ipv6_to_iface[modem_ipv6_pdn_index].associated_VIDs[pdn_idx] == data->VlanID)
+							{
+								/* vlan already associate with LTE, abort re-add */
+								IPACMERR("v6 vlan wan is already up for %s vlan %d\n", dev_name, data->VlanID);
+								return IPACM_FAILURE;
+							}
+						}
+					}
+
+					if((modem_ipv4_pdn_index >= 0) && ipv4_to_iface[modem_ipv4_pdn_index].wan_up_vlan)
+					{
+						IPACMDBG("iface already has v4 vlan association, not new\n");
+						new_pdn = false;
+						for(pdn_idx = 0; pdn_idx < IPA_MAX_NUM_SW_PDNS; pdn_idx++)
+						{
+							if(IPACM_Wan::ipv4_to_iface[pdn_idx].wan_up_vlan)
+							{
+								for(vlan_idx = 0; vlan_idx < ipv4_to_iface[pdn_idx].VID_cnt; vlan_idx++)
+								{
+									if(IPACM_Wan::ipv4_to_iface[pdn_idx].associated_VIDs[vlan_idx] == data->VlanID )
+									{
+										if (pdn_idx != modem_ipv4_pdn_index)
+										{
+											IPACMERR("VID (%d) already mapped to v4 PDN %d, can't map to v4 PDN %d\n",data->VlanID, pdn_idx, modem_ipv4_pdn_index);
+											return IPACM_FAILURE;
+										}
+									}
+								}
+							}
+						}
+					}
+
+					if(new_pdn && IPACM_Wan::ipv6_to_iface[modem_ipv6_pdn_index].VID_cnt == 0)
+					{
+						if(num_offloaded_pdns >= IPA_MAX_NUM_HW_PDNS)
+						{
+							IPACMERR("number of offloaded PDNs %d can't add more than %d, ignoring\n", num_offloaded_pdns, IPA_MAX_NUM_HW_PDNS);
+							return IPACM_FAILURE;
+						}
+						num_offloaded_pdns++;
+						IPACMDBG_H("this is a new PDN, num of offloaded PDN increased to %d\n", num_offloaded_pdns);
+					}
 				}
 			}
 #ifdef FEATURE_SOCKSv5
@@ -1993,41 +2228,139 @@ int IPACM_Wan::check_vlan_pdn(ipa_ip_type iptype, ipacm_event_route_vlan *data, 
 	}
 	if (iptype == IPA_IP_v4 || iptype == IPA_IP_MAX)
 	{
-		new_pdn = true;
-
 		if(data->wan_ipv4_addr == wan_v4_addr)
 		{
-			IPACMDBG_H("received v4 IPA_ROUTE_ADD_VLAN_PDN_EVENT for VID %d, wan %s, %d\n", data->VlanID, dev_name, ipa_if_num);
+			new_pdn = true;
+			IPACMDBG_H("received v4 IPA_ROUTE_ADD_VLAN_PDN_EVENT for VID %d, %d\n", data->VlanID, ipa_if_num);
+
+			IPACMDBG_H("num_offloaded_pdns: %d\n", num_offloaded_pdns);
+
 			if (m_is_sta_mode == WLAN_WAN)
 			{
-				/* vlan already associate with STA, abort re-add */
-				for(vlan_idx = 0; vlan_idx < ipv4_to_iface[wlan_ipv4_pdn_index].VID_cnt; vlan_idx++)
+				IPACMDBG_H("STA\n");
+
+				wlan_vlan_v4_pdn_index = IPACM_Wan::get_wlan_v4_index();
+
+				if((wlan_vlan_v4_pdn_index >= 0) && ipv4_to_iface[wlan_vlan_v4_pdn_index].VID_cnt > 0)
 				{
-					if((wlan_ipv4_pdn_index >= 0) && ipv4_to_iface[wlan_ipv4_pdn_index].wan_up_vlan)
+					for(vlan_idx = 0; vlan_idx < ipv4_to_iface[wlan_vlan_v4_pdn_index].VID_cnt; vlan_idx++)
 					{
-						if(IPACM_Wan::ipv4_to_iface[wlan_ipv4_pdn_index].associated_VIDs[vlan_idx] == data->VlanID)
+						if(ipv4_to_iface[wlan_vlan_v4_pdn_index].associated_VIDs[vlan_idx] == data->VlanID)
 						{
-							/* vlan already associate with STA, abort re-add */
-							IPACMERR("v4 vlan wan is already up for %s, vlan id: %d\n", dev_name, data->VlanID);
-							return IPACM_FAILURE;
+							IPACMDBG_H("VlanID found in associated_VIDs in STA BH\n");
+							is_vlan_wlan_associated = true;
+							wlan_vlan_idx = vlan_idx;
+							break;
 						}
 					}
 				}
 
-				if((wlan_ipv6_pdn_index >= 0) && ipv6_to_iface[wlan_ipv6_pdn_index].wan_up_vlan_v6)
+				for(pdn_idx = 0; pdn_idx < IPA_MAX_NUM_SW_PDNS; pdn_idx++)
 				{
-					IPACMDBG("iface already has v6 vlan association, not new\n");
-					new_pdn = false;
-
-					for(pdn_idx = 0; pdn_idx < IPA_MAX_NUM_SW_PDNS; pdn_idx++)
+					if((pdn_idx != wlan_vlan_v4_pdn_index) && ipv4_to_iface[pdn_idx].VID_cnt > 0)
 					{
-						if(IPACM_Wan::ipv6_to_iface[pdn_idx].wan_up_vlan_v6)
+						for(vlan_idx = 0; vlan_idx < ipv4_to_iface[pdn_idx].VID_cnt; vlan_idx++)
 						{
-							for(vlan_idx = 0; vlan_idx < ipv6_to_iface[pdn_idx].VID_cnt; vlan_idx++)
+							if(ipv4_to_iface[pdn_idx].associated_VIDs[vlan_idx] == data->VlanID)
 							{
-								if(IPACM_Wan::ipv6_to_iface[pdn_idx].associated_VIDs[vlan_idx] == data->VlanID)
+								IPACMDBG_H("VlanID found in associated_VIDs in LTE BH\n");
+								is_vlan_modem_associated = true;
+								modem_vlan_v4_pdn_index = pdn_idx;
+								modem_vlan_idx = vlan_idx;
+								break;
+							}
+						}
+					}
+				}
+
+				if(!is_vlan_wlan_associated && is_vlan_modem_associated)
+				{
+					IPACMDBG_H("BH switch LTE to STA\n");
+
+					vlandown_data = (ipacm_event_vlan_pdn *)malloc(sizeof(ipacm_event_vlan_pdn));
+					if(vlandown_data == NULL)
+					{
+						IPACMERR("Unable to allocate memory\n");
+						return IPACM_FAILURE;
+					}
+
+					if(GetMuxByVid(data->VlanID, &mux_id, IPA_IP_v4))
+					{
+						IPACMDBG_H("no v4 vlan up PDN for vlan Id %d\n", data->VlanID);
+						return IPACM_SUCCESS;
+					}
+					memset(vlandown_data, 0, sizeof(ipacm_event_vlan_pdn));
+					vlandown_data->iptype = IPA_IP_v4;
+					vlandown_data->ipv4_addr = ipv4_to_iface[modem_vlan_v4_pdn_index].ipv4_addr;
+					vlandown_data->VlanID = ipv4_to_iface[modem_vlan_v4_pdn_index].associated_VIDs[modem_vlan_idx];
+
+					ipv4_to_iface[modem_vlan_v4_pdn_index].associated_VIDs[modem_vlan_idx] = 0;
+					ipv4_to_iface[modem_vlan_v4_pdn_index].VID_cnt--;
+					vlandown_data ->mux_id = mux_id;
+
+					IPACMDBG_H("Posting IPA_HANDLE_WAN_VLAN_PDN_DOWN with below information:\n");
+					IPACMDBG_H("iptype V4, VlanID %d, mux_id %d, if num %d\n", vlandown_data->VlanID, vlandown_data->mux_id, ipa_if_num);
+
+					evt_data.event = IPA_HANDLE_WAN_VLAN_PDN_DOWN;
+					evt_data.evt_data = (void *)vlandown_data;
+
+					IPACM_EvtDispatcher::PostEvt(&evt_data);
+
+					wanup_vlan_data = (ipacm_event_vlan_pdn *)malloc(sizeof(ipacm_event_vlan_pdn));
+
+					if(wanup_vlan_data == NULL)
+					{
+						IPACMERR("Unable to allocate memory\n");
+						return IPACM_FAILURE;
+					}
+					memset(wanup_vlan_data, 0, sizeof(ipacm_event_vlan_pdn));
+
+					if (ipv4_to_iface[wlan_ipv4_pdn_index].VID_cnt < IPA_MAX_NUM_SW_PDNS)
+					{
+						ipv4_to_iface[wlan_ipv4_pdn_index].associated_VIDs[ipv4_to_iface[wlan_ipv4_pdn_index].VID_cnt] = data->VlanID;
+						ipv4_to_iface[wlan_ipv4_pdn_index].VID_cnt++;
+						ipv4_to_iface[wlan_ipv4_pdn_index].pIface = this;
+					}
+
+					wanup_vlan_data->iptype = IPA_IP_v4;
+					wanup_vlan_data->VlanID = data->VlanID;
+					wanup_vlan_data->mux_id = 0;
+					associated_VID = data->VlanID;
+
+					IPACMDBG_H("Posting IPA_HANDLE_WAN_VLAN_PDN_UP (v4) with below info:\n");
+					IPACMDBG_H("iptype IPA_IP_v4, VlanID %d, mux_id %d, if num %d\n",
+							wanup_vlan_data->VlanID, wanup_vlan_data->mux_id, ipa_if_num);
+					evt_data.event = IPA_HANDLE_WAN_VLAN_PDN_UP;
+					evt_data.evt_data = (void *)wanup_vlan_data;
+					IPACM_EvtDispatcher::PostEvt(&evt_data);
+
+				}
+				else
+				{
+					IPACMDBG_H("Not a BH switch\n");
+
+					/* vlan already associate with STA, abort re-add */
+					if(ipv4_to_iface[wlan_ipv4_pdn_index].wan_up_vlan)
+					{
+						for(pdn_idx = 0; pdn_idx < ipv4_to_iface[wlan_ipv4_pdn_index].VID_cnt; pdn_idx++)
+						{
+							if(IPACM_Wan::ipv4_to_iface[wlan_ipv4_pdn_index].associated_VIDs[pdn_idx] == data->VlanID)
+							{
+								/* vlan already associate with STA, abort re-add */
+								IPACMERR("v4 vlan wan is already up for %s, vlan id: %d\n", dev_name, data->VlanID);
+								return IPACM_FAILURE;
+							}
+						}
+						if((wlan_ipv6_pdn_index >= 0) && ipv6_to_iface[wlan_ipv6_pdn_index].wan_up_vlan_v6)
+						{
+							IPACMDBG("iface already has v6 vlan association, not new\n");
+							new_pdn = false;
+
+							if(IPACM_Wan::ipv6_to_iface[wlan_ipv6_pdn_index].wan_up_vlan_v6)
+							{
+								for(vlan_idx = 0; vlan_idx < ipv6_to_iface[wlan_vlan_v6_pdn_index].VID_cnt; vlan_idx++)
 								{
-									if (pdn_idx != wlan_ipv6_pdn_index)
+									if(IPACM_Wan::ipv6_to_iface[wlan_vlan_v6_pdn_index].associated_VIDs[vlan_idx] == data->VlanID)
 									{
 										IPACMERR("VID (%d) already mapped to v6 PDN %d, can't map to v6 PDN %d\n",
 												data->VlanID, pdn_idx, wlan_ipv6_pdn_index);
@@ -2036,68 +2369,168 @@ int IPACM_Wan::check_vlan_pdn(ipa_ip_type iptype, ipacm_event_route_vlan *data, 
 								}
 							}
 						}
-					}
-				}
-				if(new_pdn && ipv4_to_iface[wlan_ipv4_pdn_index].VID_cnt == 0)
-				{
-					if(num_offloaded_pdns >= IPA_MAX_NUM_HW_PDNS)
-					{
-						IPACMERR("number of offloaded PDNs %d can't add more than %d, ignoring\n", num_offloaded_pdns, IPA_MAX_NUM_HW_PDNS);
-						return IPACM_FAILURE;
-					}
-					num_offloaded_pdns++;
-					IPACMDBG_H("this is a new PDN, num of offloaded PDN increased to %d\n", num_offloaded_pdns);
-				}
-
-			}
-			else
-			{
-				if(ipv4_to_iface[modem_ipv4_pdn_index].wan_up_vlan)
-				{
-					for(vlan_idx = 0; vlan_idx < ipv4_to_iface[modem_ipv4_pdn_index].VID_cnt; vlan_idx++)
-					{
-						if(IPACM_Wan::ipv4_to_iface[modem_ipv4_pdn_index].associated_VIDs[vlan_idx] == data->VlanID)
+						if(new_pdn && ipv4_to_iface[wlan_vlan_v4_pdn_index].VID_cnt == 0)
 						{
-							IPACMERR("v4 vlan wan is already up for %s vlan %d\n", dev_name, data->VlanID);
-							return IPACM_FAILURE;
+							if(num_offloaded_pdns >= IPA_MAX_NUM_HW_PDNS)
+							{
+								IPACMERR("number of offloaded PDNs %d can't add more than %d, ignoring\n", num_offloaded_pdns, IPA_MAX_NUM_HW_PDNS);
+								return IPACM_FAILURE;
+							}
+							num_offloaded_pdns++;
+							IPACMDBG_H("this is a new PDN, num of offloaded PDN increased to %d\n", num_offloaded_pdns);
 						}
 					}
 				}
+			}
+			else
+			{
+				IPACMDBG_H("LTE\n");
 
-				if((modem_ipv6_pdn_index >= 0) && ipv6_to_iface[modem_ipv6_pdn_index].wan_up_vlan_v6)
+				wlan_vlan_v4_pdn_index = IPACM_Wan::get_wlan_v4_index();
+
+				if((wlan_vlan_v4_pdn_index >= 0) && ipv4_to_iface[wlan_vlan_v4_pdn_index].VID_cnt > 0)
 				{
-					IPACMDBG("iface already has v6 vlan association, not new\n");
-					new_pdn = false;
-
-					for(pdn_idx = 0; pdn_idx < IPA_MAX_NUM_SW_PDNS; pdn_idx++)
+					for(vlan_idx = 0; vlan_idx < ipv4_to_iface[wlan_vlan_v4_pdn_index].VID_cnt; vlan_idx++)
 					{
-						if(IPACM_Wan::ipv6_to_iface[pdn_idx].wan_up_vlan_v6)
+						if(IPACM_Wan::ipv4_to_iface[wlan_vlan_v4_pdn_index].associated_VIDs[vlan_idx] == data->VlanID)
 						{
-							for(vlan_idx = 0; vlan_idx < ipv6_to_iface[pdn_idx].VID_cnt; vlan_idx++)
+							IPACMDBG_H("VlanID found in associated_VIDs\n");
+							is_vlan_wlan_associated = true;
+							wlan_vlan_idx = vlan_idx;
+							break;
+						}
+					}
+				}
+				for(pdn_idx = 0; pdn_idx < IPA_MAX_NUM_SW_PDNS; pdn_idx++)
+				{
+					if((pdn_idx != wlan_vlan_v4_pdn_index) && ipv4_to_iface[pdn_idx].VID_cnt > 0)
+					{
+						for(vlan_idx = 0; vlan_idx < ipv4_to_iface[pdn_idx].VID_cnt; vlan_idx++)
+						{
+							if(IPACM_Wan::ipv4_to_iface[pdn_idx].associated_VIDs[vlan_idx] == data->VlanID)
 							{
-								if(IPACM_Wan::ipv6_to_iface[pdn_idx].associated_VIDs[vlan_idx] == data->VlanID )
-								{
-									if (pdn_idx != modem_ipv6_pdn_index)
-									{
-										IPACMERR("VID (%d) already mapped to v6 PDN %d, can't map to v6 PDN %d\n",data->VlanID, pdn_idx, modem_ipv6_pdn_index);
-										return IPACM_FAILURE;
-									}
-								}
+								is_vlan_modem_associated = true;
+								modem_vlan_v4_pdn_index = pdn_idx;
+								modem_vlan_idx = vlan_idx;
+								break;
 							}
 						}
 					}
 				}
 
-				if(new_pdn && ipv4_to_iface[modem_ipv4_pdn_index].VID_cnt == 0)
+				if(is_vlan_wlan_associated && !is_vlan_modem_associated)
 				{
-					if(num_offloaded_pdns >= IPA_MAX_NUM_HW_PDNS) {
-						IPACMERR("number of offloaded PDNs %d can't add more than %d, ignoring\n", num_offloaded_pdns, IPA_MAX_NUM_HW_PDNS);
+					IPACMDBG_H("BH switch from STA to LTE\n");
+
+					vlandown_data = (ipacm_event_vlan_pdn *)malloc(sizeof(ipacm_event_vlan_pdn));
+					if(vlandown_data == NULL)
+					{
+						IPACMERR("Unable to allocate memory\n");
 						return IPACM_FAILURE;
 					}
-					num_offloaded_pdns++;
-					IPACMDBG_H("this is a new PDN, num of offloaded PDN increased to %d\n", num_offloaded_pdns);
+
+					memset(vlandown_data, 0, sizeof(ipacm_event_vlan_pdn));
+					vlandown_data->iptype = IPA_IP_v4;
+					vlandown_data->ipv4_addr = ipv4_to_iface[wlan_vlan_v4_pdn_index].ipv4_addr;
+					vlandown_data->VlanID = ipv4_to_iface[wlan_vlan_v4_pdn_index].associated_VIDs[wlan_vlan_idx];
+					ipv4_to_iface[wlan_vlan_v4_pdn_index].associated_VIDs[wlan_vlan_idx] = 0;
+					ipv4_to_iface[wlan_vlan_v4_pdn_index].VID_cnt--;
+					vlandown_data ->mux_id = 0;
+
+					IPACMDBG_H("Posting IPA_HANDLE_WAN_VLAN_PDN_DOWN with below information:\n");
+					IPACMDBG_H("iptype V4, VlanID %d, mux_id %d, if num %d\n", vlandown_data->VlanID, vlandown_data->mux_id, ipa_if_num);
+
+					evt_data.event = IPA_HANDLE_WAN_VLAN_PDN_DOWN;
+					evt_data.evt_data = (void *)vlandown_data;
+					IPACM_EvtDispatcher::PostEvt(&evt_data);
+
+					wanup_vlan_data = (ipacm_event_vlan_pdn *)malloc(sizeof(ipacm_event_vlan_pdn));
+
+					if(wanup_vlan_data == NULL)
+					{
+						IPACMERR("Unable to allocate memory\n");
+						return IPACM_FAILURE;
+					}
+					memset(wanup_vlan_data, 0, sizeof(ipacm_event_vlan_pdn));
+
+					if (ipv4_to_iface[modem_ipv4_pdn_index].VID_cnt < IPA_MAX_NUM_SW_PDNS)
+					{
+						ipv4_to_iface[modem_ipv4_pdn_index].associated_VIDs[ipv4_to_iface[modem_ipv4_pdn_index].VID_cnt] = data->VlanID;
+						ipv4_to_iface[modem_ipv4_pdn_index].VID_cnt++;
+						ipv4_to_iface[modem_ipv4_pdn_index].pIface = this;
+					}
+
+					if(GetMuxByVid(data->VlanID, &mux_id, IPA_IP_v4))
+					{
+						IPACMDBG_H("no v4 vlan up PDN for vlan Id %d\n", data->VlanID);
+						return IPACM_SUCCESS;
+					}
+					wanup_vlan_data->iptype = IPA_IP_v4;
+					wanup_vlan_data->VlanID = data->VlanID;
+					wanup_vlan_data->mux_id = mux_id;
+					associated_VID = data->VlanID;
+
+					IPACMDBG_H("Posting IPA_HANDLE_WAN_VLAN_PDN_UP (v6) with below info:\n");
+					IPACMDBG_H("iptype IPA_IP_v4, VlanID %d, mux_id %d, if num %d\n",
+							wanup_vlan_data->VlanID, wanup_vlan_data->mux_id, ipa_if_num);
+					evt_data.event = IPA_HANDLE_WAN_VLAN_PDN_UP;
+					evt_data.evt_data = (void *)wanup_vlan_data;
+					IPACM_EvtDispatcher::PostEvt(&evt_data);
+
+				}
+				else
+				{
+					IPACMDBG_H("Not a BH switch\n");
+					IPACMDBG_H("modem_ipv4_pdn_index: %d\n", modem_ipv4_pdn_index);
+
+					if(ipv4_to_iface[modem_ipv4_pdn_index].wan_up_vlan)
+					{
+						for(pdn_idx = 0; pdn_idx < ipv4_to_iface[modem_ipv4_pdn_index].VID_cnt; pdn_idx++)
+						{
+							if(IPACM_Wan::ipv4_to_iface[modem_ipv4_pdn_index].associated_VIDs[pdn_idx] == data->VlanID)
+							{
+								IPACMERR("v4 vlan wan is already up for %s vlan %d\n", dev_name, data->VlanID);
+								return IPACM_FAILURE;
+							}
+						}
+					}
+					IPACMDBG_H("modem_ipv6_pdn_index: %d\n", modem_ipv6_pdn_index);
+					if((modem_ipv6_pdn_index >= 0) && ipv6_to_iface[modem_ipv6_pdn_index].wan_up_vlan_v6)
+					{
+						IPACMDBG("iface already has v6 vlan association, not new\n");
+						new_pdn = false;
+						for(pdn_idx = 0; pdn_idx < IPA_MAX_NUM_SW_PDNS; pdn_idx++)
+						{
+							if(IPACM_Wan::ipv6_to_iface[pdn_idx].wan_up_vlan_v6)
+							{
+								for(vlan_idx = 0; vlan_idx < ipv6_to_iface[pdn_idx].VID_cnt; vlan_idx++)
+								{
+									if(IPACM_Wan::ipv6_to_iface[pdn_idx].associated_VIDs[vlan_idx] == data->VlanID)
+									{
+										if (pdn_idx != modem_ipv6_pdn_index)
+										{
+											IPACMERR("VID (%d) already mapped to v6 PDN %d, can't map to v6 PDN %d\n",data->VlanID, pdn_idx, modem_ipv6_pdn_index);
+											return IPACM_FAILURE;
+										}
+									}
+								}
+							}
+						}
+					}
+
+					if(new_pdn && ipv4_to_iface[modem_ipv4_pdn_index].VID_cnt == 0)
+					{
+						if(num_offloaded_pdns >= IPA_MAX_NUM_HW_PDNS)
+						{
+							IPACMERR("number of offloaded PDNs %d can't add more than %d, ignoring\n", num_offloaded_pdns, IPA_MAX_NUM_HW_PDNS);
+							return IPACM_FAILURE;
+						}
+						num_offloaded_pdns++;
+						IPACMDBG_H("this is a new PDN, num of offloaded PDN increased to %d\n", num_offloaded_pdns);
+					}
 				}
 			}
+
 #ifdef FEATURE_SOCKSv5
 			/* socksv5 case*/
 			if(!IPACM_Iface::ipacmcfg->ipacm_mpdn_enable)
@@ -2216,6 +2649,8 @@ int IPACM_Wan::handle_route_add_vlan_pdn_evt(ipa_ip_type iptype, uint16_t vlan_i
 			{
 				ipv6_to_iface[wlan_ipv6_pdn_index].associated_VIDs[ipv6_to_iface[wlan_ipv6_pdn_index].VID_cnt] = vlan_id;
 				ipv6_to_iface[wlan_ipv6_pdn_index].VID_cnt++;
+				IPACM_Wan::wlan_v6_vlan_index = wlan_ipv6_pdn_index;
+				IPACMDBG_H("IPACM_Wan::wlan_v6_vlan_index: %d\n", IPACM_Wan::wlan_v6_vlan_index);
 			}
 			ipacm_event_vlan_pdn *wanup_vlan_data;
 
@@ -2416,6 +2851,8 @@ int IPACM_Wan::handle_route_add_vlan_pdn_evt(ipa_ip_type iptype, uint16_t vlan_i
 			{
 				ipv4_to_iface[wlan_ipv4_pdn_index].associated_VIDs[ipv4_to_iface[wlan_ipv4_pdn_index].VID_cnt] = vlan_id;
 				ipv4_to_iface[wlan_ipv4_pdn_index].VID_cnt++;
+				IPACM_Wan::wlan_v4_vlan_index = wlan_ipv4_pdn_index;
+				IPACMDBG_H("IPACM_Wan::wlan_v4_vlan_index: %d\n", IPACM_Wan::wlan_v4_vlan_index);
 			}
 			ipacm_event_vlan_pdn *wanup_vlan_data;
 
@@ -6608,8 +7045,8 @@ int IPACM_Wan::handle_down_evt()
 		vlandown_data->iptype = IPA_IP_v4;
 		vlandown_data->VlanID = associated_VID;
 		vlandown_data->ipv4_addr = wan_v4_addr;
-		memset(ipv4_to_iface[modem_ipv4_pdn_index].associated_VIDs, 0, sizeof(ipv4_to_iface[modem_ipv4_pdn_index].associated_VIDs));
-		ipv4_to_iface[modem_ipv4_pdn_index].VID_cnt = 0;
+		memset(ipv4_to_iface[wlan_ipv4_pdn_index].associated_VIDs, 0, sizeof(ipv4_to_iface[wlan_ipv4_pdn_index].associated_VIDs));
+		ipv4_to_iface[wlan_ipv4_pdn_index].VID_cnt = 0;
 		vlandown_data->mux_id = 0;
 
 		IPACMDBG_H("Posting IPA_HANDLE_WAN_VLAN_PDN_DOWN with below information:\n");

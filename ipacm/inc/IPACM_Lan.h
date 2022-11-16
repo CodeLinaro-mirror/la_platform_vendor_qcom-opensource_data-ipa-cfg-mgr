@@ -1133,6 +1133,7 @@ private:
 #endif
 
 #ifdef FEATURE_VLAN_MPDN
+	uint16_t lan_vlan_id[IPA_MAX_NUM_HW_PDNS];
 
 	typedef struct ipacm_mux_struct
 	{

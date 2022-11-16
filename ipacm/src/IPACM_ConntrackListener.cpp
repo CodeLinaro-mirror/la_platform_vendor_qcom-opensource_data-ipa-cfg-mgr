@@ -2535,18 +2535,21 @@ void IPACM_ConntrackListener::ProcessTCPorUDPMsg(
 		data->iptype = IPA_IP_v4;
 		data->VlanID = VlanID;
 		data->wan_ipv4_addr = public_ip;
-		if (IPACM_Wan::is_xlat_by_ipv4(public_ip)){
-			data->iptype = IPA_IP_MAX;
-			data->wan_ipv6_prefix[0]=IPA_DUMMY_PREFIX;
+		if(!isStaMode)
+		{
+			if (IPACM_Wan::is_xlat_by_ipv4(public_ip)){
+				data->iptype = IPA_IP_MAX;
+				data->wan_ipv6_prefix[0]=IPA_DUMMY_PREFIX;
+			}
 		}
 		evt_data.evt_data = data;
 		IPACMDBG_H("sending IPA_ROUTE_ADD_VLAN_PDN_EVENT vlan id %d, iptype %d,\n",
-		data->VlanID,
-		data->iptype);
+				data->VlanID,
+			 	data->iptype);
 		iptodot("pdn ip", public_ip);
 
 		IPACM_EvtDispatcher::PostEvt(&evt_data);
-	}
+	 }
 #else
 	AddORDeleteNatEntry(&nat_entry, NULL);
 #endif

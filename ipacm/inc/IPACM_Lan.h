@@ -74,6 +74,8 @@ IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #ifndef IPACM_LAN_H
 #define IPACM_LAN_H
 
+#include <vector>
+
 #include <stdio.h>
 #include <linux/msm_ipa.h>
 
@@ -226,26 +228,31 @@ typedef struct _xlat_context
 
 #ifdef FEATURE_EoGRE
 /*
- * Structure for maintaining state associated with eogre route
+ * Structure for maintaining state associated with gre route
  * contexts and rules...
  */
-typedef struct eogre_route_data_s
+typedef struct gre_route_data_s
 {
-	uint32_t header_hdl;
-	uint32_t proc_ctx_eogre_add_hdl;
-	uint32_t proc_ctx_eogre_rmv_hdl;
-	uint32_t rt_eogre_add_hdl;
-	uint32_t rt_eogre_rmv_hdl;
+	uint32_t ul_header_hdl;
+	uint32_t dl_header_hdl;
+	uint32_t proc_ctx_gre_add_hdl;
+	uint32_t proc_ctx_gre_rmv_hdl;
+	uint32_t rt_gre_add_hdl;
+	uint32_t rt_gre_rmv_hdl;
 	uint32_t rt_tbl_hdl;
-	uint32_t flt_eogre_1st_pass_hdl;
-} eogre_route_data_t;
+	uint32_t flt_gre_1st_pass_hdl;
+} gre_route_data_t;
 
 /*
- * An IP v4 plus GRE header..
+ * Enough space for:
+ *
+ * -> An IP v4 header (five 32-bit words),
+ * -> A GRE header (one 32-bit word), and
+ * -> An MPLS header (one 32-bit word).
  */
 typedef struct v4_gre_hdr_s
 {
-	uint32_t words[6]; /* extra (ie. last) uint32_t for gre header */
+	uint32_t words[7];
 } v4_gre_hdr_t;
 
 /*
@@ -254,21 +261,28 @@ typedef struct v4_gre_hdr_s
 #define IPV4_SRC_ADDR_IDX  3
 #define IPV4_DST_ADDR_IDX  4
 #define IPV4_GRE_PROT_IDX  5
+#define IPV4_MPLS_PROT_IDX 6
 
 /*
- * An IP v6 + options + GRE header.
+ * Enough space for:
+ *
+ * -> An IP v6 header (ten 32-bit words),
+ * -> An IP v6 extension header (two 32-bit words),
+ * -> A GRE header (one 32-bit word), and
+ * -> An MPLS header (one 32-bit word).
  */
 typedef struct v6_gre_hdr_s
 {
-	uint32_t words[13]; /* 10 words for header 2 words for options + 1 word for gre header */
+	uint32_t words[14];
 } v6_gre_hdr_t;
 
 /*
  * Where things reside in the struct above...
  */
-#define IPV6_SRC_ADDR_IDX  2
-#define IPV6_DST_ADDR_IDX  6
-#define IPV6_GRE_PROT_IDX 12
+#define IPV6_SRC_ADDR_IDX   2
+#define IPV6_DST_ADDR_IDX   6
+#define IPV6_GRE_PROT_IDX  12
+#define IPV6_MPLS_PROT_IDX 13
 
 #endif /* #ifdef FEATURE_EoGRE */
 
@@ -356,11 +370,11 @@ public:
 
 #ifdef FEATURE_EoGRE
 	/*
-	 * The following is for keeping eogre route rule state...
+	 * The following is for keeping gre route rule state...
 	 *
 	 * We're using two below (one for v4, one for v6) because there
 	 * may be a mismatch between the tunnel iptype (ie. the one
-	 * specified in the eogre enable) and the Vlan Ethernet packet's
+	 * specified in the gre enable) and the Vlan Ethernet packet's
 	 * IP payload type. In other words:
 	 *
 	 *   The tunnel may be v4, while the Vlan Ethernet packet's IP
@@ -369,48 +383,72 @@ public:
 	 *   The tunnel may be v6, while the Vlan Ethernet packet's IP
 	 *   type is v4...
 	 */
-	eogre_route_data_t eogre_route_data[IPA_IP_MAX];
+	gre_route_data_t gre_route_data[IPA_IP_MAX];
 
-	void eogre_up();
+	void gre_up();
 
-	void eogre_down();
+	void gre_down();
 
-	int eogre_do_rt_work(
+	int gre_do_rt_work(
 		ipa_ipgre_info& ipgre_info );
 
-	void eogre_route_data_init(
+	void gre_route_data_init(
 		enum ipa_ip_type iptype );
 
-	uint32_t eogre_get_rt_tbl_hdl(
+	uint32_t gre_get_rt_tbl_hdl(
 		enum ipa_ip_type iptype );
 
-	int eogre_make_hdr_for_add_ctx(
+	int gre_make_hdr_for_add_ctx(
 		ipa_ipgre_info& ipgre_info );
 
-	int eogre_make_hdr_add_ctx(
+	int gre_make_hdr_add_ctx(
 		ipa_ipgre_info& ipgre_info,
 		uint32_t        hdr_2use = 0 );
 
-	int eogre_make_hdr_rem_ctx(
+	int gre_make_hdr_for_rmv_ctx(
 		ipa_ipgre_info& ipgre_info );
 
-	int eogre_make_header_add_rt_rule(
+	int gre_make_hdr_rmv_ctx(
+		ipa_ipgre_info& ipgre_info,
+		uint32_t        hdr_2use = 0 );
+
+	int gre_make_header_add_rt_rule(
 		ipa_ipgre_info& ipgre_info,
 		uint32_t        ctx_2use = 0 );
 
-	int eogre_make_header_rem_rt_rule(
+	int gre_make_header_rmv_rt_rule(
 		ipa_ipgre_info& ipgre_info );
 
-	void eogre_clear_route_data(
+	void gre_clear_route_data(
 		enum ipa_ip_type             iptype,
 		ipa_ioc_query_intf_rx_props* rx_prop = 0 );
 
-	int eogre_add_catchup_rule(
+	int gre_add_catchup_rule(
 		enum ipa_ip_type iptype );
 
 	int update_complementary_table(
 		ipa_flt_rule_add& flt_rule_entry,
 		ipa_ip_type       iptype );
+
+#ifdef IPA_FLT_EXT_MPLS_GRE_GENERAL
+	/*
+	 * The following vector used for keeping track of exception
+	 * filter rules...
+	 */
+	vector<RuleHdlContainer> exceptions;
+
+
+	/* add exception rules from exception list for GRE */
+	int gre_add_exceptions(void);
+
+	/* helper function for above function */
+	int gre_add_exception_rule(
+		struct ipa_exception&         except,
+		ipa_ip_type                   iptype,
+		const struct ipa_rule_attrib& rx_prop_attrib,
+		struct ipa_flt_rule_add&      flt_rule_add,
+		int                           fltr_rule_number );
+#endif /* # IPA_FLT_EXT_MPLS_GRE_GENERAL */
 #endif
 
 	/* install UL filter rule from Q6 */
@@ -1621,6 +1659,12 @@ public:
 
 	int delete_icmp_filter_rule(
 		ipa_ip_type iptype);
+
+	static const uint8_t v4_eogre_header[];
+	static const uint8_t v6_eogre_header[];
+	static const uint8_t v4_mpls_header[];
+	static const uint8_t v6_mpls_header[];
+	static const uint8_t sc_tag_header[];
 };
 
 #endif /* IPACM_LAN_H */

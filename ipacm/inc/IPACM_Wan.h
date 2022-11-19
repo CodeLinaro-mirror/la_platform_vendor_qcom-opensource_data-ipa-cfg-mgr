@@ -485,6 +485,14 @@ public:
 
 	int eogre_notify_wan_state(
 		bool eogre_enable );
+#ifdef IPA_FLT_EXT_MPLS_GRE_GENERAL
+	int gre_add_exception_rule(
+		struct ipa_exception&         ex,
+		ipa_ip_type                   iptype,
+		const struct ipa_rule_attrib& rx_prop_attrib,
+		struct ipa_flt_rule_add&      flt_rule_add,
+		int                           fltr_rule_number );
+#endif /* #ifdef IPA_FLT_EXT_MPLS_GRE_GENERAL */
 #endif
 
 	static int GetMuxByAddr(
@@ -856,7 +864,7 @@ private:
 	int add_dummy_rx_hdr();
 
 	void HandleSTAClientDelEvt(const ipa_wan_client* client, int index);
-	
+
 	int add_catchup_all_filtering_rule_each_pdn(const IPACM_firewall_conf_t& firewall_config, ipa_ip_type iptype,
 		const struct ipa_rule_attrib& rx_prop_attrib, struct ipa_flt_rule_add& flt_rule_add, int fltr_rule_number);
 

@@ -241,6 +241,9 @@ if (!(a)) {                                                 \
 #define Static_Policy_TAG                    "PolicyBasedRouting"
 #define Static_Policy_Enabled                "StaticPolicyEnabled"
 
+#define Dual_backhaul_TAG                    "IPACMDUALBACKHAUL"
+#define Dual_backhaul_enable_TAG             "IPACMDUALBHEnabled"
+
 /*---------------------------------------------------------------------------
       IP protocol numbers - use in dss_socket() to identify protocols.
       Also contains the extension header types for IPv6.
@@ -354,6 +357,15 @@ typedef struct
 	uint32_t gre_server_ipv4;
 } ipacm_gre_conf_t;
 
+#ifdef FEATURE_DUAL_BACKHAUL
+typedef struct
+{
+	bool dualbackhaul_enable;
+	uint32_t gateway_ipv4;
+	char net_dev[IPA_IFACE_NAME_LEN];
+} ipacm_dual_backhaul_conf_t;
+#endif
+
 typedef struct  _IPACM_conf_t
 {
 	ipacm_iface_conf_t iface_config;
@@ -378,6 +390,9 @@ typedef struct  _IPACM_conf_t
 	uint32_t ipacm_emesh_mode;
 	bool ipacm_socksv5_enable;
 	ipacm_gre_conf_t gre_conf;
+#ifdef FEATURE_DUAL_BACKHAUL
+	ipacm_dual_backhaul_conf_t dual_backhaul_conf;
+#endif
 	bool public_ip_support_enable;
 	bool wlan_vlan_mpdn_enable;
 	bool static_policy_enable;

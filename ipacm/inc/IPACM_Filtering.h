@@ -25,6 +25,10 @@ BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
 WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
 OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
 IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+Changes from Qualcomm Innovation Center are provided under the following license:
+Copyright (c) 2024 Qualcomm Innovation Center, Inc. All rights reserved.
+SPDX-License-Identifier: BSD-3-Clause-Clear
 */
 
 /*!
@@ -73,6 +77,7 @@ public:
 #else
 	bool AddWanDLFilteringRule(struct ipa_ioc_add_flt_rule const *rule_table_v4, struct ipa_ioc_add_flt_rule const * rule_table_v6, uint8_t mux_id);
 #endif
+	bool Send_Second_backhaul_qmi(uint8_t* src_mac,uint8_t* dst_mac,uint32_t backhaul_ip, uint8_t backhaul_ep);
 #ifdef FEATURE_IPACM_UL_FIREWALL
 	bool AddWanULFilteringRule(struct ipa_ioc_add_flt_rule const * rule_table_v6, uint8_t mux_id, bool is_enable);
 #endif

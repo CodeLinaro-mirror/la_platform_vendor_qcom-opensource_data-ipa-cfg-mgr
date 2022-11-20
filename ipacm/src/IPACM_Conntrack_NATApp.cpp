@@ -33,6 +33,7 @@ SPDX-License-Identifier: BSD-3-Clause-Clear
 #include "IPACM_Conntrack_NATApp.h"
 #include "IPACM_ConntrackClient.h"
 #include "IPACM_Iface.h"
+#include "IPACM_Wan.h"
 
 extern "C"
 {
@@ -47,6 +48,8 @@ extern "C"
 #define HDR_METADATA_MUX_ID_BMASK 0x00FF0000
 #define HDR_METADATA_MUX_ID_SHFT 0x10
 
+#define DUAL_BACKHAUL_PDN_COUNT 2
+
 #undef strcasesame
 #define strcasesame(a, b) (!strcasecmp(a, b))
 
@@ -60,6 +63,8 @@ NatApp *NatApp::pInstance = NULL;
 
 bool NatApp::kernel_ver_updated = false;
 bool NatApp::is_kernel_ver_upgraded = false;
+
+extern int bool_dual_backhaul;
 
 NatApp::NatApp()
 {
@@ -184,21 +189,43 @@ int NatApp::AddPdn(uint32_t pub_ip, uint8_t mux_id, bool is_sta, bool ip_pass)
 		IPACMERR("unable to get pdn count Error:%d\n", ret);
 		return ret;
 	}
+	IPACMDBG_H("AddPDN isSta:%d, pdn_count: %d, ip 0x%X\n", is_sta,pdn_count,pub_ip);
+
 
 	if(!pdn_count)
 	{
 		/* create the NAT table, the PDN will be stored in index 0 */
-		ret = ipa_nat_add_ipv4_tbl(pub_ip, mem_type, max_entries, &nat_table_hdl);
+		if(is_sta)
+		{
+			/* This function stores pub_ip at pdn[0]. 
+			 * We don't want that for non STA PDNs*/
+			ret = ipa_nat_add_ipv4_tbl(pub_ip, mem_type, max_entries, &nat_table_hdl);
+		}
+		else
+		{
+			ret = ipa_nat_add_ipv4_tbl(0, mem_type, max_entries, &nat_table_hdl);
+		}
 		if(ret)
 		{
 			IPACMERR("unable to create nat table Error:%d\n", ret);
 			return ret;
 		}
 		IPACMDBG_H("succeesfully created NAT table for ip 0x%X\n", pub_ip);
+		entry.src_metadata = GenerateMetdata(mux_id);
+		pdn_index = 1;
+#ifdef FEATURE_DUAL_BACKHAUL
+		if(is_sta)
+		{
+			pdn_index = 0;
+			entry.src_metadata = 0;
+			entry.is_sta = true;
+			IPACMDBG_H("attempting second backhaul ADDPDN\n");
+		}
+#endif
 
 		/* modify PDN 0 so it will hold the mux ID in the src metadata field */
-		pdn_index = 0;
 		ret = ipa_nat_modify_pdn(nat_table_hdl, pdn_index, &entry);
+		IPACMDBG_H("modify pdn index %d\n", pdn_index);
 		if(ret)
 		{
 			IPACMERR("unable to modify PDN 0 entry Error:%d\n", ret);
@@ -207,21 +234,43 @@ int NatApp::AddPdn(uint32_t pub_ip, uint8_t mux_id, bool is_sta, bool ip_pass)
 	}
 	else
 	{
-		/* only allocate a PDN if it is a new one */
-		if(ipa_nat_get_pdn_index(pub_ip, &pdn_index) < 0)
+#ifdef FEATURE_DUAL_BACKHAUL
+		if(is_sta)
 		{
+			pdn_index=0;
+			entry.public_ip = pub_ip;
+			entry.src_metadata = 0;
+			entry.is_sta = true;
+			IPACMDBG_H("attempting second backhaul modify ADDPDN\n");
 			ret = ipa_nat_alloc_pdn(&entry, &pdn_index);
-			if(ret)
-			{
-				IPACMERR("couldn't allocate a pdn index\n");
+			if(ret){
+				IPACMERR("unable to modify PDN 0 entry Error:%d\n", ret);
 				return ret;
 			}
-			IPACMDBG_H("successfully allocated index %d for ip 0x%X\n", pdn_index, pub_ip);
 		}
 		else
 		{
-			IPACMDBG_H("pdn already existed with index %d\n", pdn_index);
+#endif
+			/* only allocate a PDN if it is a new one */
+			if(ipa_nat_get_pdn_index(pub_ip, &pdn_index) < 0)
+			{
+				ret = ipa_nat_alloc_pdn(&entry, &pdn_index);
+				if(ret)
+				{
+					IPACMERR("couldn't allocate a pdn index\n");
+					return ret;
+				}
+				IPACMDBG_H("successfully allocated index %d for ip 0x%X\n",
+						pdn_index, pub_ip);
+			}
+			else
+			{
+				IPACMDBG_H("pdn already existed with index %d\n", pdn_index);
+			}
+#ifdef FEATURE_DUAL_BACKHAUL
 		}
+#endif
+
 	}
 
 	/* now traverse cache and add the PDN entries */
@@ -396,6 +445,17 @@ int NatApp::RemovePdn(uint32_t pub_ip)
 	CHK_TBL_HDL();
 
 	ret = ipa_nat_get_pdn_index(pub_ip, &pdn_index);
+#ifdef FEATURE_DUAL_BACKHAUL
+	ret = ipa_nat_get_pdn_count(&pdn_cnt);
+	if(pdn_cnt < DUAL_BACKHAUL_PDN_COUNT && pdn_index == 0 && bool_dual_backhaul == 1)
+	{
+		IPACMDBG_H("only eth is there don't remove any pdn\n");
+		bool_dual_backhaul = 0;
+		return IPACM_FAILURE;
+	}
+#endif
+
+	IPACMDBG_H("RemovePDN  pdn_index:%d, IP: %x\n",pdn_index, pub_ip);
 	if(ret)
 	{
 		IPACMERR("pdn doesn't exist on pdn table\n");
@@ -443,6 +503,8 @@ int NatApp::RemovePdn(uint32_t pub_ip)
 
 		Reset();
 	}
+	IPACMDBG_H("RemovePDN  pdn_index:%d, pdn_count: %d, ip 0x%X\n",pdn_index,pdn_cnt,pub_ip);
+
 
 	return 0;
 }
@@ -650,22 +712,36 @@ int NatApp::AddEntry(const nat_table_entry *rule, bool isVlan)
 		return 0;
 	}
 #ifdef FEATURE_VLAN_MPDN
-	if(ipa_nat_get_pdn_index(rule->public_ip, &pdn_index))
+#ifdef FEATURE_DUAL_BACKHAUL
+	if(IPACM_Wan::second_backhaul_active && rule->public_ip == IPACM_Wan::second_backhaul_ipv4)
 	{
-		if(isVlan)
-		{
-			IPACMDBG_H("vlan iface doesn't have a valid pdn, only moving to cache");
-			iptodot("private ip", rule->private_ip);
-			iptodot("target ip", rule->target_ip);
-			iptodot("public ip", rule->public_ip);
-			cacheOnly = true;
-		}
-		else
-		{
-			IPACMERR("couldn't acquire PDN index for public ip 0x%X\n", rule->public_ip);
-			return IPACM_FAILURE;
-		}
+		pdn_index = 0;
+		IPACMDBG_H("second backhaul addentry\n");
 	}
+	else
+	{
+#endif
+		if(ipa_nat_get_pdn_index(rule->public_ip, &pdn_index))
+		{
+			if(isVlan)
+			{
+				IPACMDBG_H("vlan iface doesn't have a valid pdn, \
+					only moving to cache");
+				iptodot("private ip", rule->private_ip);
+				iptodot("target ip", rule->target_ip);
+				iptodot("public ip", rule->public_ip);
+				cacheOnly = true;
+			}
+			else
+			{
+				IPACMERR("couldn't acquire PDN index for public ip 0x%X\n",
+					rule->public_ip);
+				return IPACM_FAILURE;
+			}
+		}
+#ifdef FEATURE_DUAL_BACKHAUL
+	}
+#endif
 #endif
 
 	if(!ChkForDup(rule))

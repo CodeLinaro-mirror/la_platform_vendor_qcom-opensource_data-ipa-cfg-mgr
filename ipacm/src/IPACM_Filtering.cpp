@@ -25,6 +25,10 @@ BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
 WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
 OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
 IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+Changes from Qualcomm Innovation Center are provided under the following license:
+Copyright (c) 2023-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+SPDX-License-Identifier: BSD-3-Clause-Clear
 */
 /*!
 	@file
@@ -708,7 +712,7 @@ bool IPACM_Filtering::AddWanDLFilteringRule(struct ipa_ioc_add_flt_rule const *r
 				}
 			}
 		}
-
+		IPACMDBG_H("Calling the IOCTL to add %d num rules\n", num_rules);
 		ret = ioctl(fd_wwan_ioctl, WAN_IOC_ADD_FLT_RULE_EX, &qmi_rule_ex_msg);
 		if (ret != 0)
 		{
@@ -716,12 +720,44 @@ bool IPACM_Filtering::AddWanDLFilteringRule(struct ipa_ioc_add_flt_rule const *r
 			close(fd_wwan_ioctl);
 			return false;
 		}
+		IPACMDBG_H("Success adding %d num rules with ret %d \n", num_rules, ret);
 	}
 #endif
 
 	close(fd_wwan_ioctl);
 	return true;
 }
+
+#ifdef FEATURE_DUAL_BACKHAUL
+bool IPACM_Filtering::Send_Second_backhaul_qmi(uint8_t* src_mac,uint8_t* dst_mac,uint32_t backhaul_ip, uint8_t backhaul_ep)
+{
+	int ret = 0, cnt, num_rules = 0, pos = 0;
+	struct ipa_eth_backhaul_info_req_msg_v01 qmi_msg;
+
+	int fd_wwan_ioctl = open(WWAN_QMI_IOCTL_DEVICE_NAME, O_RDWR);
+	if(fd_wwan_ioctl < 0)
+	{
+		IPACMERR("Failed to open %s.\n",WWAN_QMI_IOCTL_DEVICE_NAME);
+		return false;
+	}
+	memset(&qmi_msg, 0, sizeof(qmi_msg));
+	memcpy(qmi_msg.src_mac_addr,src_mac,IPA_MAC_ADDR_SIZE);
+	memcpy(qmi_msg.dst_mac_addr,dst_mac,IPA_MAC_ADDR_SIZE);
+	qmi_msg.ipv4_addr_eth0[0]= backhaul_ip;
+	IPACMERR("qmi_eth_debug %x\n",  qmi_msg.ipv4_addr_eth0[0]);
+	qmi_msg.eth_pipe=backhaul_ep;
+	qmi_msg.enable = true;
+	ret = ioctl(fd_wwan_ioctl,  WAN_IOC_NOTIFY_DUAL_BACKHAUL_INFO, &qmi_msg);
+	if (ret != 0)
+	{
+		IPACMERR("Failed adding second backhaul %p with ret %d\n ", &qmi_msg, ret);
+		close(fd_wwan_ioctl);
+		return false;
+	}
+	close(fd_wwan_ioctl);
+	return true;
+}
+#endif
 
 bool IPACM_Filtering::SendFilteringRuleIndex(struct ipa_fltr_installed_notif_req_msg_v01* table)
 {

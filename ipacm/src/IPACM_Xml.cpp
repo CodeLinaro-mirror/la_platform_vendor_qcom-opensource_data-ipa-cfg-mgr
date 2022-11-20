@@ -198,6 +198,9 @@ static int ipacm_cfg_xml_parse_tree
 
 						IPACM_util_icmp_string((char*)xml_node->name, IPACM_SOCKSv5_TAG) == 0 ||
 						IPACM_util_icmp_string((char*)xml_node->name, GRE_TAG) == 0 ||
+#ifdef FEATURE_DUAL_BACKHAUL
+						IPACM_util_icmp_string((char*)xml_node->name, Dual_backhaul_TAG) == 0 ||
+#endif
 						IPACM_util_icmp_string((char*)xml_node->name, PUBLIC_IP_SUPPORT_TAG) == 0 ||
 						IPACM_util_icmp_string((char*)xml_node->name, IPACM_WLAN_VLAN_MPDN) == 0 ||
 						IPACM_util_icmp_string((char*)xml_node->name, Static_Policy_TAG) == 0)
@@ -216,6 +219,28 @@ static int ipacm_cfg_xml_parse_tree
 					/* go to child */
 					ret_val = ipacm_cfg_xml_parse_tree(xml_node->children, config);
 				}
+#ifdef FEATURE_DUAL_BACKHAUL
+				else if(IPACM_util_icmp_string((char*)xml_node->name, Dual_backhaul_enable_TAG) == 0){
+					IPACMDBG_H("Inside Dual backhaul TAG \n");
+					content = IPACM_read_content_element(xml_node);
+					if (content)
+					{
+						str_size = strlen(content);
+						memset(content_buf, 0, sizeof(content_buf));
+						memcpy(content_buf, (void *)content, str_size);
+						if (atoi(content_buf))
+						{
+							config->dual_backhaul_conf.dualbackhaul_enable = true;
+							IPACMDBG_H("Dual Backhaul enable %d buf(%d)\n", config->dual_backhaul_conf.dualbackhaul_enable, atoi(content_buf));
+						}
+						else
+						{
+							config->dual_backhaul_conf.dualbackhaul_enable = false;
+							IPACMDBG_H("Dual Backhaul enable %d buf(%d)\n", config->dual_backhaul_conf.dualbackhaul_enable, atoi(content_buf));
+						}
+					}
+				}
+#endif
 				else if (IPACM_util_icmp_string((char*)xml_node->name, GREEnabled_TAG) == 0)
 				{
 					IPACMDBG_H("inside GRE TAG \n");

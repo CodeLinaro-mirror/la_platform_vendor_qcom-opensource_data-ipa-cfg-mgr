@@ -27,7 +27,7 @@ OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
 IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 Changes from Qualcomm Innovation Center are provided under the following license:
-Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+Copyright (c) 2023-2024 Qualcomm Innovation Center, Inc. All rights reserved.
 SPDX-License-Identifier: BSD-3-Clause-Clear
 */
 /*!
@@ -824,6 +824,9 @@ static int ipa_nl_decode_nlmsg
 
 				if (IFF_UP & msg_ptr->nl_link_info.metainfo.ifi_change) {
 					IPACMDBG("GOT useful newlink event\n");
+
+					IPACMDBG_H("New Interface %s  with IP-family: %d \n",
+						dev_name, msg_ptr->nl_link_info.metainfo.ifi_family);
 
 					data_fid = (ipacm_event_data_fid *)malloc(sizeof(ipacm_event_data_fid));
 					if (data_fid == NULL) {

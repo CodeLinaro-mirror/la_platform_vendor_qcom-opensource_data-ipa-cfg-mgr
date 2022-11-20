@@ -104,6 +104,11 @@ bool IPACM_Wan::backhaul_is_wan_bridge = false;
 
 uint32_t IPACM_Wan::backhaul_ipv6_prefix[2];
 
+#ifdef FEATURE_DUAL_BACKHAUL
+uint32_t IPACM_Wan::second_backhaul_ipv4=0;
+bool IPACM_Wan::second_backhaul_active=false;
+#endif
+
 #ifdef FEATURE_IPACM_UL_FIREWALL
 #ifdef FEATURE_VLAN_MPDN
 IPACM_firewall_t IPACM_Wan::firewall_mpdn_config_ul;
@@ -138,6 +143,8 @@ uint16_t IPACM_Wan::mtu_gre_v6 = DEFAULT_MTU_SIZE;
 uint32_t IPACM_Wan::ipsec_post_pol_rt_hdls[IPA_IP_MAX][IPA_MAX_FLT_RULE] = { 0 };
 int IPACM_Wan::num_ipsec_post_pol_rt[IPA_IP_MAX] = { 0 };
 #endif
+
+int bool_dual_backhaul = 0;
 
 #define MOBILE_FIREWALL_FILE "/etc/data/mobileap_firewall.xml"
 
@@ -1293,8 +1300,48 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 		}
 		break;
 
+#ifdef FEATURE_DUAL_BACKHAUL
+	case IPA_HANDLE_WAN_DOWN:
+	{
+		ipacm_event_iface_up* data_wan = (ipacm_event_iface_up*)param;
+		IPACMDBG_H("Received IPA_HANDLE_WAN_DOWN isSta: %d, devname: %s\n",
+				data_wan->is_sta,dev_name);
+		if(!data_wan->is_sta)
+		{
+			/*If a non STA WAN instance goes down, bringdown second backhaul*/
+			handle_dual_backhaul_disable();
+		}
+		break;
+	}
+	case IPA_HANDLE_WAN_UP:
+	{
+		ipacm_event_iface_up* data_wan = (ipacm_event_iface_up*)param;
+		IPACMDBG_H("Received IPA_HANDLE_WAN_UP isSta: %d, devname: %s\n",
+				data_wan->is_sta,dev_name);
+		if(!data_wan->is_sta)
+		{
+			/*If a non STA WAN instance comes up, then re-evaluate second backhaul*/
+			handle_dual_backhaul_enable(NULL, false);
+		}
+		break;
+	}
+#endif
+
 	case IPA_CFG_CHANGE_EVENT:
 		{
+#ifdef FEATURE_DUAL_BACKHAUL
+			if(IPACM_Iface::ipacmcfg->second_backhaul_info.enable)
+			{
+				handle_dual_backhaul_enable(NULL, false);
+			}
+			else
+                        {
+				if(IPACM_Wan::second_backhaul_active)
+				{
+					handle_dual_backhaul_disable();
+				}
+			}
+#endif
 			if ( (IPACM_Iface::ipacmcfg->iface_table[ipa_if_num].if_cat == ipa_if_cate) &&
 					(m_is_sta_mode ==ECM_WAN))
 			{
@@ -2109,6 +2156,17 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 				handle_wan_client_route_rule(data->mac_addr, data->iptype);
 				/* Check & construct STA header */
 				handle_sta_header_add_evt();
+#ifdef FEATURE_DUAL_BACKHAUL
+				if (data->iptype == IPA_IP_v4)
+				{
+					IPACM_Iface::ipacmcfg->second_backhaul_info.gateway_ipv4 = 
+									data->ipv4_addr;
+					IPACMDBG_H("DEBUG_FR second_backhaul_info_gateway_ipv4 \
+						0x%x\n", IPACM_Iface::ipacmcfg->
+						second_backhaul_info.gateway_ipv4);
+				}
+				handle_dual_backhaul_enable(data,true);
+#endif
 				return;
 			}
 		}
@@ -3254,6 +3312,7 @@ int IPACM_Wan::handle_route_add_evt(ipa_ip_type iptype)
 
 		IPACM_Wan::wan_up = true;
 		active_v4 = true;
+		IPACMDBG_H("set isWANUP %d\n", IPACM_Wan::wan_up);
 		memcpy(IPACM_Wan::wan_up_dev_name,
 			dev_name,
 				sizeof(IPACM_Wan::wan_up_dev_name));
@@ -6680,6 +6739,9 @@ int IPACM_Wan::handle_down_evt()
 {
 	int res = IPACM_SUCCESS;
 	int i;
+#ifdef FEATURE_DUAL_BACKHAUL
+	bool isSecondBackhaul;
+#endif
 
 	IPACMDBG_H(" wan handle_down_evt \n");
 	if(IPACM_Iface::ipacmcfg->GetIPAVer() >= IPA_HW_None && IPACM_Iface::ipacmcfg->GetIPAVer() < IPA_HW_v4_0)
@@ -6718,7 +6780,19 @@ int IPACM_Wan::handle_down_evt()
 		handle_route_del_evt(IPA_IP_v6);
 		IPACMDBG_H("Delete default v6 routing rules\n");
 	}
+#ifdef FEATURE_DUAL_BACKHAUL
+	isSecondBackhaul=IPACM_Wan::second_backhaul_active &&
+		IPACM_Wan::second_backhaul_ipv4 == wan_v4_addr;
 
+	if(isSecondBackhaul){
+		if (rx_prop != NULL)
+		{
+			del_dft_firewall_rules(IPA_IP_v4);
+		}
+		IPACM_Wan::second_backhaul_active=false;
+		IPACM_Wan::second_backhaul_ipv4=0;
+	}
+#endif
 	/* Delete default v4 RT rule */
 	if (ip_type != IPA_IP_v6)
 	{
@@ -8454,6 +8528,223 @@ bool IPACM_Wan::is_global_ipv6_addr(uint32_t* ipv6_addr)
 	}
 }
 
+#ifdef FEATURE_DUAL_BACKHAUL
+/*evt will be 1 for new_neigh, and 0 for XML CFG chg*/
+int IPACM_Wan::handle_dual_backhaul_enable(ipacm_event_data_all *data, bool evt)
+{
+
+	if((evt && data->iptype != IPA_IP_v4) || !wan_v4_addr_set || !wan_v4_addr)
+	{
+		IPACMDBG_H("check dualback fail\n");
+		return IPACM_FAILURE;
+	}
+	IPACMDBG_H("Second backhaul function entered\n");
+	ipa_dual_backhaul_info backhaul_info  = IPACM_Iface::ipacmcfg->second_backhaul_info;
+	char iface_name[IPA_IFACE_NAME_LEN] = {0};
+	uint32_t cnt;
+	uint32_t backhaul_ip;
+	int clnt_indx;
+	struct ipa_ioc_copy_hdr sCopyHeader;
+	ipacm_cmd_q_data evt_data;
+	/*Check if Dual Backhaul is enabled in XML*/
+	if(!backhaul_info.enable)
+	{
+		IPACMDBG_H("There is no need to enter the function, \
+				Dual backhaul is not enabled\n");
+		return IPACM_FAILURE;
+	}
+	/*Check if this interface is configured as the second backhaul*/
+	if(!strstr(dev_name, STR_ETH_IFACE))
+	{
+		IPACMDBG_H("This is not the interface that is meant to be the \
+				backhaul. IF of this instance: %s\n",dev_name);
+		return IPACM_FAILURE;
+	}
+	/*We need to get the mac address of Gateway router. For this,
+	 * if this function is triggered by new_neigh, then we fetch
+	 * it from the event data itself.
+	 * But if this function was triggered by XML change, then we
+	 * check in cache, and fetch from there.
+	 */
+	if(evt)
+	{
+		if (data->iptype == IPA_IP_v4)
+		{
+			IPACMDBG_H("the IP that has come now: %x\n",data->ipv4_addr);
+			if (data->ipv4_addr != 0 && (backhaul_info.gateway_ipv4 == data->ipv4_addr))
+			{
+				IPACMDBG_H("Gateway IP for Second backhaul available, and found: %x\n",
+					backhaul_info.gateway_ipv4);
+			}
+			else
+			{
+				IPACMDBG_H("Gateway IP for Second backhaul not found: %x, %x\n",
+					backhaul_info.gateway_ipv4, data->ipv4_addr );
+				return IPACM_FAILURE;
+			}
+		}
+		else
+		{
+			IPACMDBG_H("Second IPV6 not supported\n" );
+			return IPACM_FAILURE;
+		}
+
+		/*copy client mac address to dst_mac*/
+		memcpy(backhaul_info.dst_mac,data->mac_addr, IPA_MAC_ADDR_SIZE);
+	}
+	else
+	{
+		/*This means this function has been triggered by XML_CFG_CHANGE event*/
+		/*We have to see if we can find a WAN client in the cache with ipv4=gateway ipv4*/
+		clnt_indx=get_wan_client_index_ipv4(backhaul_info.gateway_ipv4);
+		if (clnt_indx == IPACM_INVALID_INDEX)
+		{
+			IPACMDBG_H("This IP not found in cache. Will wait. %x\n",
+					backhaul_info.gateway_ipv4);
+			return IPACM_FAILURE;
+		}
+		memcpy(backhaul_info.dst_mac,get_client_memptr(wan_client, clnt_indx)->mac, IPA_MAC_ADDR_SIZE);
+	}
+	/*So, by this point, we have filled dst mac with the gateway router's mac, now have to fill src mac*/
+	/*Get src mac from tx_prop, partial header*/
+	for (cnt=0; cnt<tx_prop->num_tx_props; cnt++)
+	{
+		if(tx_prop->tx[cnt].ip==IPA_IP_v4)
+		{
+			IPACMDBG_H("Got partial v4-header name from %d tx props\n", cnt);
+			memset(&sCopyHeader, 0, sizeof(sCopyHeader));
+			memcpy(sCopyHeader.name, tx_prop->tx[cnt].hdr_name,
+					sizeof(sCopyHeader.name));
+
+			IPACMDBG_H("header name: %s in tx:%d\n", sCopyHeader.name,cnt);
+			if (m_header.CopyHeader(&sCopyHeader) == false)
+			{
+				PERROR("ioctl copy header failed");
+				return IPACM_FAILURE;
+			}
+
+			IPACMDBG_H("header length: %d, partial: %d\n",
+					sCopyHeader.hdr_len, sCopyHeader.is_partial);
+			IPACMDBG_H("header eth2_ofst_valid: %d, eth2_ofst: %d\n",
+					sCopyHeader.is_eth2_ofst_valid, sCopyHeader.eth2_ofst);
+			if (sCopyHeader.hdr_len > IPA_HDR_MAX_SIZE)
+			{
+				IPACMERR("header oversize\n");
+				return IPACM_FAILURE;
+			}
+			else
+			{
+				if(sCopyHeader.is_eth2_ofst_valid)
+				memcpy(backhaul_info.src_mac,
+					(sCopyHeader.hdr)+(sCopyHeader.eth2_ofst)+6,
+					IPA_MAC_ADDR_SIZE);
+				else
+				memcpy(backhaul_info.src_mac, (sCopyHeader.hdr)+6,
+					IPA_MAC_ADDR_SIZE);
+			}
+			break;
+		}
+	}
+
+	backhaul_ip=wan_v4_addr;
+	uint8_t backhaul_ep=tx_prop->tx[0].dst_pipe;
+	IPACMDBG_H("Sending QMI to modem for second backhaul netdev:%s, \
+			backhaul_ip:%x, backhaul_ep: %d \n",
+			dev_name,backhaul_ip,backhaul_ep);
+	IPACMDBG_H("SrcMAC %02x:%02x:%02x:%02x:%02x:%02x\n",
+		backhaul_info.src_mac[0], backhaul_info.src_mac[1],backhaul_info.src_mac[2],
+		backhaul_info.src_mac[3], backhaul_info.src_mac[4], backhaul_info.src_mac[5]);
+	IPACMDBG_H("DstMAC %02x:%02x:%02x:%02x:%02x:%02x\n",
+		backhaul_info.dst_mac[0], backhaul_info.dst_mac[1],backhaul_info.dst_mac[2],
+		backhaul_info.dst_mac[3], backhaul_info.dst_mac[4], backhaul_info.dst_mac[5]);
+	/*Send WAN_VLAN_UP to add NAT entry*/
+	ipacm_event_vlan_pdn *wanup_vlan_data;
+	wanup_vlan_data = (ipacm_event_vlan_pdn *)malloc(sizeof(ipacm_event_vlan_pdn));
+	if(wanup_vlan_data == NULL)
+	{
+		IPACMERR("Unable to allocate memory\n");
+		return IPACM_FAILURE;
+	}
+
+	memset(wanup_vlan_data, 0, sizeof(ipacm_event_vlan_pdn));
+	wanup_vlan_data->mux_id = 0;
+        wanup_vlan_data->iptype = IPA_IP_v4;
+        wanup_vlan_data->VlanID = 0;
+        wanup_vlan_data->ipv4_addr = (public_wan_v4_addr_set) ? public_wan_v4_addr : wan_v4_addr;
+        IPACMDBG_H("Posting IPA_HANDLE_WAN_VLAN_PDN_UP with below information:\n");
+        IPACMDBG_H("iptype IPA_IP_v4, VlanID %d, mux_id %d, if num %d\n", 0, 0, ipa_if_num);
+	evt_data.event = IPA_HANDLE_WAN_VLAN_PDN_UP;
+        evt_data.evt_data = (void *)wanup_vlan_data;
+
+        IPACM_EvtDispatcher::PostEvt(&evt_data);
+
+	if(IPACM_Wan::second_backhaul_active==true)
+	{
+		IPACMDBG_H("Already sent QMI\n");
+		return IPACM_SUCCESS;
+	}
+
+	if(false == m_filtering.Send_Second_backhaul_qmi(backhaul_info.src_mac,backhaul_info.dst_mac,backhaul_ip,backhaul_ep))
+	{
+		IPACMDBG_H("Send QMI to modem for second backhaul failed\n");
+		return IPACM_FAILURE;
+	}
+	IPACMDBG_H("Sent QMI to modem for second backhaul Success\n");
+	/*Now, after sending QMI, install DL filter rule on 2nd backhaul(ETH) pipe*/
+	config_dft_firewall_rules(IPA_IP_v4);
+
+	IPACM_Wan::second_backhaul_ipv4=backhaul_ip;
+	IPACM_Wan::second_backhaul_active=true;
+	return IPACM_SUCCESS;
+}
+
+int IPACM_Wan::handle_dual_backhaul_disable()
+{
+	if(IPACM_Wan::second_backhaul_active && IPACM_Wan::second_backhaul_ipv4 == wan_v4_addr)
+	{
+		ipa_dual_backhaul_info backhaul_info  = IPACM_Iface::ipacmcfg->second_backhaul_info;
+		IPACMDBG_H("isWANUp: %d\n", IPACM_Wan::isWanUP(0));
+		if(!strstr(dev_name, STR_ETH_IFACE))
+		{
+			IPACMDBG_H("Wrong WAN interface, ignore WAN_DOWN");
+			return IPACM_FAILURE;
+		}
+		IPACMDBG_H("Disable second backhaul\n");
+		if (rx_prop != NULL)
+		{
+			del_dft_firewall_rules(IPA_IP_v4);
+		}
+		ipacm_cmd_q_data evt_data;
+		ipacm_event_vlan_pdn *vlandown_data;
+		vlandown_data = (ipacm_event_vlan_pdn *)malloc(sizeof(ipacm_event_vlan_pdn));
+		if(vlandown_data == NULL)
+		{
+			IPACMERR("Unable to allocate vlandown_data memory\n");
+			return IPACM_FAILURE;
+		}
+		memset(vlandown_data, 0, sizeof(ipacm_event_vlan_pdn));
+
+		vlandown_data->iptype = IPA_IP_v4;
+		vlandown_data->VlanID = 0;
+		vlandown_data->ipv4_addr = second_backhaul_ipv4;
+		vlandown_data->mux_id = 0;
+
+		IPACMDBG_H("Posting IPA_HANDLE_WAN_VLAN_PDN_DOWN with below information:\n");
+		IPACMDBG_H("iptype IPA_IP_v4, if num %d\n", ipa_if_num);
+
+		IPACM_Wan::second_backhaul_active=false;
+		IPACM_Wan::second_backhaul_ipv4=0;
+
+		evt_data.event = IPA_HANDLE_WAN_VLAN_PDN_DOWN;
+		evt_data.evt_data = (void *)vlandown_data;
+
+		bool_dual_backhaul = 1;
+
+		IPACM_EvtDispatcher::PostEvt(&evt_data);
+	}
+	return IPACM_SUCCESS;
+}
+#endif
 /* handle STA WAN-client */
 /* handle WAN client initial, construct full headers (tx property) */
 int IPACM_Wan::handle_wan_hdr_init(uint8_t *mac_addr, bool gw_addr)

@@ -28,7 +28,7 @@ IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  * Changes from Qualcomm Innovation Center are provided under the following license:
  *
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022, 2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted (subject to the limitations in the
@@ -93,6 +93,8 @@ IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #else
 #define IPA_NETWORK_STATS_FILE_NAME "/tmp/network_stats"
 #endif
+
+extern int bool_dual_backhaul;
 
 typedef struct _wan_client_rt_hdl
 {
@@ -450,6 +452,12 @@ public:
 	ipacm_event_ip_collision_pdn_info ip_collision_pdn_info;
 	static bool is_ext_prop_set;
 	static uint32_t backhaul_ipv6_prefix[2];
+
+#ifdef FEATURE_DUAL_BACKHAUL
+	static uint32_t second_backhaul_ipv4;
+	static bool second_backhaul_active;
+#endif
+
 #ifdef FEATURE_IPACM_UL_FIREWALL
 	static int m_fd_ipa_ul;
 #endif
@@ -779,6 +787,10 @@ private:
 	int handle_wan_hdr_init(uint8_t *mac_addr, bool gw_addr);
 	int handle_wan_client_ipaddr(ipacm_event_data_all *data);
 	int handle_wan_client_route_rule(uint8_t *mac_addr, ipa_ip_type iptype);
+#ifdef FEATURE_DUAL_BACKHAUL
+	int handle_dual_backhaul_enable(ipacm_event_data_all *data, bool evt);
+	int handle_dual_backhaul_disable();
+#endif
 
 	/* handle new_address event */
 	int handle_addr_evt(ipacm_event_data_addr *data);

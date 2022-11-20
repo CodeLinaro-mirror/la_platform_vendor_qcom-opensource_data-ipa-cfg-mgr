@@ -27,7 +27,7 @@ OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
 IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 Changes from Qualcomm Innovation Center are provided under the following license:
-Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+Copyright (c) 2023-2024 Qualcomm Innovation Center, Inc. All rights reserved.
 SPDX-License-Identifier: BSD-3-Clause-Clear
 */
 /*!
@@ -164,8 +164,8 @@ extern "C"
 #define IPA_MAX_NUM_OFFLOAD_VLANS 15
 /* mbb reconstructor not able to associate vlan to bridge0, need one more */
 #define IPA_MAX_NUM_BRIDGES (IPA_MAX_NUM_OFFLOAD_VLANS + 1)
-#define IPA_MAX_NUM_SW_PDNS 15
-#define IPA_MAX_NUM_HW_PDNS (IPA_MAX_PDN_NUM - 1) /* currently 16 - 1 = 15 */
+#define IPA_MAX_NUM_SW_PDNS IPA_MAX_PDN_NUM
+#define IPA_MAX_NUM_HW_PDNS IPA_MAX_PDN_NUM
 #ifdef FEATURE_VLAN_MPDN
 /* mbb reconstructor not able to associate vlan to bridge0, need one more */
 #define IPA_MAX_PRIVATE_SUBNET_ENTRIES (IPA_MAX_NUM_OFFLOAD_VLANS + 1)
@@ -183,8 +183,6 @@ extern "C"
 #define IPA_MAX_NAT_IFACE (IPA_MAX_ACTIVE_LAN_IFACE*IPA_MAX_NUM_OFFLOAD_VLANS+ \
 	IPA_MAX_ACTIVE_LAN_IFACE + IPA_MAX_ACTIVE_WLAN_IFACE + IPA_MAX_NUM_SW_PDNS)
 #ifdef FEATURE_VLAN_MPDN
-/* support default PDN+3 VLAN PDNs */
-/* all PDNs can be non_offload PDNs, but only 4 can be offloaded */
 #define IPA_MAX_IPV6_PREFIX_FLT_RULE IPA_MAX_NUM_HW_PDNS
 #define IPA_MAX_IPV6_NO_OFFLOAD_PREFIX_FLT_RULE IPA_MAX_NUM_SW_PDNS
 #else

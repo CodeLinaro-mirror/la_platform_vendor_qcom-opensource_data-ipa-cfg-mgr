@@ -232,6 +232,18 @@ public:
 };
 #endif
 
+#ifdef FEATURE_DUAL_BACKHAUL
+/* Struct used to store 2nd backhaul details for dual backhaul
+*/
+typedef struct {
+	bool enable;
+	uint32_t gateway_ipv4;
+	char net_dev[IPA_IFACE_NAME_LEN];
+	uint8_t src_mac[6];
+	uint8_t dst_mac[6];
+}ipa_dual_backhaul_info;
+#endif
+
 /* iface */
 class IPACM_Config
 {
@@ -254,6 +266,11 @@ public:
 
 	/* Store private subnet configuration from XML file */
 	ipa_private_subnet private_subnet_table[IPA_MAX_PRIVATE_SUBNET_ENTRIES + IPA_MAX_MTU_ENTRIES];
+
+#ifdef FEATURE_DUAL_BACKHAUL
+	/* Store the second backhaul info. Fetch gateway,enabled, and netdev details from XML file */
+	ipa_dual_backhaul_info second_backhaul_info;
+#endif
 
 #ifdef FEATURE_VLAN_MPDN
 	int num_ipv6_prefixes;

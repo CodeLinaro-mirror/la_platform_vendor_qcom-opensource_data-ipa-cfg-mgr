@@ -305,6 +305,7 @@ IPACM_Config::IPACM_Config()
 	memset(&eogre_info, 0, sizeof(eogre_info));
 	eogre_enabled = false;
 #endif
+	memset(&second_backhaul_info,0,sizeof(second_backhaul_info));
 	ext_router_mode = IPA_PREFIX_DISABLED;
 
 	/* Clear the DSCP PCP mapping data during init */
@@ -744,6 +745,14 @@ skip_fnr_alloc:
 
 	ipa_num_wlan_guest_ap = cfg->num_wlan_guest_ap;
 	IPACMDBG_H("ipa_num_wlan_guest_ap %d\n",ipa_num_wlan_guest_ap);
+
+#ifdef FEATURE_DUAL_BACKHAUL
+	/* Fetch second backhaul details */
+	second_backhaul_info.enable = cfg->dual_backhaul_conf.dualbackhaul_enable;
+	IPACMDBG_H("Second backhaul details enabled: %d, netdev: %s, gwipv4: %x\n",
+		second_backhaul_info.enable, second_backhaul_info.net_dev,
+		second_backhaul_info.gateway_ipv4);
+#endif
 
 	/* Allocate more non-nat entries if the monitored iface dun have Tx/Rx properties */
 

@@ -1766,7 +1766,7 @@ static int _smSwitchFromDdrToSram(
 
 	const char*        mem_type;
 
-	uint64_t           start, stop;
+	__kernel_time64_t           start, stop;
 
 	int stats_ret, ret;
 
@@ -1932,7 +1932,7 @@ static int _smSwitchFromSramToDdr(
 
 	const char*        mem_type;
 
-	uint64_t           start, stop;
+	__kernel_time64_t           start, stop;
 
 	int stats_ret, ret;
 

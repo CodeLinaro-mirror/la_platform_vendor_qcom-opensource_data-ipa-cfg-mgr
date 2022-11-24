@@ -541,7 +541,7 @@ void IPACM_LanToLan::handle_new_iface_up(IPACM_LanToLan_Iface *new_iface, IPACM_
 			IPACMDBG_H("IPv4 lan routing table for rt name: %s\n", lan_rt_tbl_name_for_rt[IPA_IP_v6]);
 
 		/* populate the routing table information */
-			if (new_iface->is_svap_iface() || exist_iface->is_svap_iface()) {
+		if (new_iface->is_svap_iface()) {
 			snprintf(lan_rt_tbl_name_for_flt_svap[IPA_IP_v4], IPA_RESOURCE_NAME_MAX, "eth_v4_lan_to_lan_%s",
 				ipa_l2_hdr_type[new_iface->get_iface_pointer()->tx_prop->tx[2].hdr_l2_type]);
 			IPACMDBG_H("IPv4 LAN routing table for flt name: %s\n", lan_rt_tbl_name_for_flt_svap[IPA_IP_v4]);
@@ -560,39 +560,20 @@ void IPACM_LanToLan::handle_new_iface_up(IPACM_LanToLan_Iface *new_iface, IPACM_
 		}
 
 		/* add new peer info in both new iface and existing iface */
-		if (new_iface->is_svap_iface()) {
-			if (exist_iface->get_m_support_ast_update()) {
-				if (exist_iface->is_svap_iface()) {
-					/* ath02(svap) <--> ath12 (svap)*/
-					exist_iface->handle_new_iface_up(lan_rt_tbl_name_for_flt_svap, lan_rt_tbl_name_for_rt_svap, new_iface);
-					new_iface->handle_new_iface_up(lan_rt_tbl_name_for_rt_svap, lan_rt_tbl_name_for_flt_svap, exist_iface);
-				} else {
-					/* ath1(ast) <--> ath12 (svap) */
-					exist_iface->handle_new_iface_up(lan_rt_tbl_name_for_flt, lan_rt_tbl_name_for_rt_svap, new_iface);
-					new_iface->handle_new_iface_up(lan_rt_tbl_name_for_rt_svap, lan_rt_tbl_name_for_flt, exist_iface);
-				}
-			} else {
-				/* eth1 <--> ath12(svap) */
-				exist_iface->handle_new_iface_up(rt_tbl_name_for_flt, lan_rt_tbl_name_for_rt_svap, new_iface);
-				new_iface->handle_new_iface_up(lan_rt_tbl_name_for_rt_svap, rt_tbl_name_for_flt, exist_iface);
+		if (exist_iface->get_m_support_ast_update()) {
+			if (exist_iface->is_svap_iface())
+			{
+				exist_iface->handle_new_iface_up(lan_rt_tbl_name_for_flt_svap, lan_rt_tbl_name_for_rt_svap, new_iface);
+				new_iface->handle_new_iface_up(lan_rt_tbl_name_for_rt_svap, lan_rt_tbl_name_for_flt_svap, exist_iface);
+			}
+			else{
+				exist_iface->handle_new_iface_up(lan_rt_tbl_name_for_flt, lan_rt_tbl_name_for_rt_svap, new_iface);
+				new_iface->handle_new_iface_up(lan_rt_tbl_name_for_rt_svap, lan_rt_tbl_name_for_flt, exist_iface);
 			}
 		}
 		else {
-			if (exist_iface->get_m_support_ast_update()) {
-				if (exist_iface->is_svap_iface()) {
-					/* ath12(svap) <--> ath1(ast) */
-					exist_iface->handle_new_iface_up(lan_rt_tbl_name_for_rt_svap, lan_rt_tbl_name_for_flt, new_iface);
-					new_iface->handle_new_iface_up(lan_rt_tbl_name_for_flt, lan_rt_tbl_name_for_rt_svap, exist_iface);
-				} else {
-					/* ast <--> ast iface*/
-					exist_iface->handle_new_iface_up(lan_rt_tbl_name_for_flt, lan_rt_tbl_name_for_rt, new_iface);
-					new_iface->handle_new_iface_up(lan_rt_tbl_name_for_flt, lan_rt_tbl_name_for_flt, exist_iface);
-				}
-			} else {
-				/* eth/usb <--> ath1(ast only) */
-				exist_iface->handle_new_iface_up(rt_tbl_name_for_flt, lan_rt_tbl_name_for_rt, new_iface);
-				new_iface->handle_new_iface_up(lan_rt_tbl_name_for_flt, rt_tbl_name_for_flt, exist_iface);
-			}
+			exist_iface->handle_new_iface_up(rt_tbl_name_for_flt, lan_rt_tbl_name_for_rt_svap, new_iface);
+			new_iface->handle_new_iface_up(lan_rt_tbl_name_for_rt_svap, rt_tbl_name_for_flt, exist_iface);
 		}
 	}
 	else if (exist_iface->get_m_support_ast_update())
@@ -637,12 +618,10 @@ void IPACM_LanToLan::handle_new_iface_up(IPACM_LanToLan_Iface *new_iface, IPACM_
 		   of non-AST type, hence default rt rules are used for new iface here */
 		if(exist_iface->is_svap_iface())
 		{
-			/* ath12(svap) <--> eth1 */
 			new_iface->handle_new_iface_up(rt_tbl_name_for_flt, lan_rt_tbl_name_for_rt_svap, exist_iface);
 			exist_iface->handle_new_iface_up(lan_rt_tbl_name_for_flt_svap, rt_tbl_name_for_rt, new_iface);
 		}
 		else{
-			/* ath1(ast) <--> eth1 */
 			new_iface->handle_new_iface_up(rt_tbl_name_for_flt, lan_rt_tbl_name_for_rt, exist_iface);
 			exist_iface->handle_new_iface_up(lan_rt_tbl_name_for_flt, rt_tbl_name_for_rt, new_iface);
 		}
@@ -693,7 +672,7 @@ void IPACM_LanToLan::handle_new_iface_up(IPACM_LanToLan_Iface *new_iface, IPACM_
 			IPACMDBG_H("IPv6 routing table for rt name: %s\n", rt_tbl_name_for_rt[IPA_IP_v6]);
 		}
 
-		/* add new peer info in both new iface and existing iface (eth <--> eth)*/
+		/* add new peer info in both new iface and existing iface */
 		exist_iface->handle_new_iface_up(rt_tbl_name_for_flt, rt_tbl_name_for_rt, new_iface);
 
 		new_iface->handle_new_iface_up(rt_tbl_name_for_rt, rt_tbl_name_for_flt, exist_iface);

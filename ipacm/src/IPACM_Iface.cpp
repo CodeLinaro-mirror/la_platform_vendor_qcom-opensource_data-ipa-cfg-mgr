@@ -797,11 +797,14 @@ int IPACM_Iface::init_fl_rule(
 			sizeof(struct ipa_flt_rule_add));
 		m_ipv4_default_filterting_rules_count++;
 
-		if (eogre_enabled) {
+		if (eogre_enabled)
+		{
 			IPACMDBG_H(
 				"Will install frag, but not mcast "
-				"and bcast rules when eogre enabled\n");
-		} else {
+				"and bcast rules when gre enabled\n");
+		}
+		else
+		{
 			IPACMDBG_H("Installing frag, mcast, and bcast rules\n");
 
 			/* Configuring Multicast Filtering Rule */
@@ -905,10 +908,12 @@ int IPACM_Iface::init_fl_rule(
 #else
 		const char *rule_set_ex = "mcast, fe80::/10, fec0::/10, and fd00::/8";
 #endif
-		if (eogre_enabled) {
-			if (*rule_set) {
+		if (eogre_enabled)
+		{
+			if ( *rule_set )
+			{
 				IPACMDBG_H(
-					"Will install %s but not %s rules when eogre enabled\n",
+					"Will install %s but not %s rules when gre enabled\n",
 					rule_set, rule_set_ex);
 			}
 		} else {

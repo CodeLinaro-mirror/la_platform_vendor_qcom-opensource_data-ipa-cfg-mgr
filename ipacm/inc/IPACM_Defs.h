@@ -86,7 +86,9 @@ extern "C"
 #define IPA_ODU_HDR_NAME_v4  "IPACM_ODU_v4"
 #define IPA_ODU_HDR_NAME_v6  "IPACM_ODU_v6"
 #define IPA_IF_SOCKSv5_NAME  "IPACM_SOCKSv5"
-#define IPA_EOGRE_HDR_NAME   "IPACM_EoGRE_v%d"
+#define IPA_EoGRE_HDR_NAME   "IPACM_EoGRE_v%d"
+#define IPA_MPLSoGRE_HDR_NAME "IPACM_MPLSoGRE_v%d"
+#define IPA_SCTag_HDR_NAME    "IPACM_SCTag_v%d"
 
 #define IPA_MAX_ACTIVE_WLAN_IFACE 14
 
@@ -656,5 +658,4 @@ typedef struct _svap_vlan_hpc_hdl
 	ipa_hdr_l2_type peer_l2_type;
 	uint32_t hpc_hdr_hdl;
 }svap_vlan_hpc_hdl;
-
 #endif /* IPA_CM_DEFS_H */

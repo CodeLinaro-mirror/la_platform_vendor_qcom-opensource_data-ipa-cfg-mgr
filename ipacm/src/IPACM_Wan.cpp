@@ -73,6 +73,8 @@
 #include <string.h>
 #include <fcntl.h>
 #include <sys/ioctl.h>
+#include <iostream>
+#include <set>
 #include <IPACM_Wan.h>
 #include <IPACM_Xml.h>
 #include <IPACM_Log.h>
@@ -4150,6 +4152,14 @@ int IPACM_Wan::config_dft_firewall_rules_ex(struct ipa_flt_rule_add *rules, int 
 #endif
 	int num_rules = 0, original_num_rules = 0, res, pos = rule_offset;
 
+#ifdef FEATURE_EoGRE
+	ipa_ipgre_info ipgre_info = IPACM_Iface::ipacmcfg->eogre_info;
+	bool compatible_gre = ( IPACM_Iface::ipacmcfg->eogre_enabled && iptype == ipgre_info.iptype );
+#ifdef IPA_FLT_EXT_MPLS_GRE_GENERAL
+	bool gre_exceptions = (ipgre_info.num_exceptions) ? true : false;
+#endif
+#endif /* #ifdef FEATURE_EoGRE */
+
 	IPACMDBG_H("ip-family: %d; \n", iptype);
 
 	if (rx_prop == NULL)
@@ -4307,6 +4317,95 @@ int IPACM_Wan::config_dft_firewall_rules_ex(struct ipa_flt_rule_add *rules, int 
 #endif
 #endif //FEATURE_IPACM_UL_FIREWALL
 		}
+#ifdef FEATURE_EoGRE
+#ifdef IPA_FLT_EXT_MPLS_GRE_GENERAL
+		if ( compatible_gre && gre_exceptions )
+		{
+			IPACMDBG_H("Adding requested downlink GRE exception rules\n");
+
+			/*
+			 * The following is to convert the exceptions that have inner ip
+			 * type set to IPA_IP_MAX into one v4 and one v6.  This greatly
+			 * simplifies the logic that follows this conversion...
+			 */
+			uint32_t num_in_excepts = 0;
+
+			struct ipa_exception excepts[ipgre_info.num_exceptions * 2];
+
+			std::set<uint32_t> added; /* Used to ensure eth vals only added once */
+
+			for ( uint8_t i = 0; i < ipgre_info.num_exceptions; i++ )
+			{
+				/*
+				 * Only want to add eths once based on value, hence...
+				 */
+				if ( ipgre_info.exception_list[i].field == FIELD_ETHER_TYPE )
+				{
+					if( added.find(ipgre_info.exception_list[i].value) == added.end() )
+					{
+						/*
+						 * Haven't seen yet, let's add it.
+						 */
+						excepts[num_in_excepts] = ipgre_info.exception_list[i];
+						/*
+						 * Either IP type is fine here, since we're
+						 * only looking at the Eth header and not into
+						 * the innter packet.
+						 */
+						excepts[num_in_excepts].inner_iptype = IPA_IP_v4;
+						num_in_excepts++;
+						/*
+						 * Update our set.
+						 */
+						added.insert(ipgre_info.exception_list[i].value);
+					}
+				}
+				else
+				{
+					if ( ipgre_info.exception_list[i].inner_iptype == IPA_IP_MAX )
+					{
+						excepts[num_in_excepts] = ipgre_info.exception_list[i];
+						excepts[num_in_excepts].inner_iptype = IPA_IP_v4;
+						num_in_excepts++;
+
+						excepts[num_in_excepts] = ipgre_info.exception_list[i];
+						excepts[num_in_excepts].inner_iptype = IPA_IP_v6;
+						num_in_excepts++;
+					}
+					else
+					{
+						excepts[num_in_excepts] = ipgre_info.exception_list[i];
+						num_in_excepts++;
+					}
+				}
+			}
+
+			for ( uint8_t i = 0; i < num_in_excepts; i++ )
+			{
+#ifdef FEATURE_VLAN_MPDN
+				struct ipa_flt_rule_add& flt_rule =	rules[pos].flt_rule;
+#else
+				struct ipa_flt_rule_add& flt_rule = rules[pos];
+#endif
+				res = gre_add_exception_rule(
+					excepts[i],
+					iptype,
+					rx_prop->rx[0].attrib,
+					flt_rule,
+					pos);
+
+				if (res == IPACM_SUCCESS)
+				{
+					++pos;
+				}
+				else
+				{
+					return res;
+				}
+			}
+		}
+#endif /* #ifdef IPA_FLT_EXT_MPLS_GRE_GENERAL */
+#endif /* #ifdef FEATURE_EoGRE */
 #ifdef FEATURE_VLAN_MPDN
 		/* default rule for all PDNs which are up */
 		for (uint32_t i = 0; i < offloaded_pdns_count_v4; ++i)
@@ -4384,6 +4483,95 @@ int IPACM_Wan::config_dft_firewall_rules_ex(struct ipa_flt_rule_add *rules, int 
 			++pos;
 		}
 #endif
+#ifdef FEATURE_EoGRE
+#ifdef IPA_FLT_EXT_MPLS_GRE_GENERAL
+		if ( compatible_gre && gre_exceptions )
+		{
+			IPACMDBG_H("Adding requested downlink GRE exception rules\n");
+
+			/*
+			 * The following is to convert the exceptions that have inner ip
+			 * type set to IPA_IP_MAX into one v4 and one v6.  This greatly
+			 * simplifies the logic that follows this conversion...
+			 */
+			uint32_t num_in_excepts = 0;
+
+			struct ipa_exception excepts[ipgre_info.num_exceptions * 2];
+
+			std::set<uint32_t> added; /* Used to ensure eth vals only added once */
+
+			for ( uint8_t i = 0; i < ipgre_info.num_exceptions; i++ )
+			{
+				if ( ipgre_info.exception_list[i].field == FIELD_ETHER_TYPE )
+				{
+					/*
+					 * Only want to add eths once based on value, hence...
+					 */
+					if( added.find(ipgre_info.exception_list[i].value) == added.end() )
+					{
+						/*
+						 * Haven't seen yet, let's add it.
+						 */
+						excepts[num_in_excepts] = ipgre_info.exception_list[i];
+						/*
+						 * Either IP type is fine here, since we're
+						 * only looking at the Eth header and not into
+						 * the innter packet.
+						 */
+						excepts[num_in_excepts].inner_iptype = IPA_IP_v4;
+						num_in_excepts++;
+						/*
+						 * Update our set.
+						 */
+						added.insert(ipgre_info.exception_list[i].value);
+					}
+				}
+				else
+				{
+					if ( ipgre_info.exception_list[i].inner_iptype == IPA_IP_MAX )
+					{
+						excepts[num_in_excepts] = ipgre_info.exception_list[i];
+						excepts[num_in_excepts].inner_iptype = IPA_IP_v4;
+						num_in_excepts++;
+
+						excepts[num_in_excepts] = ipgre_info.exception_list[i];
+						excepts[num_in_excepts].inner_iptype = IPA_IP_v6;
+						num_in_excepts++;
+					}
+					else
+					{
+						excepts[num_in_excepts] = ipgre_info.exception_list[i];
+						num_in_excepts++;
+					}
+				}
+			}
+
+			for ( uint8_t i = 0; i < num_in_excepts; i++ )
+			{
+#ifdef FEATURE_VLAN_MPDN
+				struct ipa_flt_rule_add& flt_rule =	rules[pos].flt_rule;
+#else
+				struct ipa_flt_rule_add& flt_rule = rules[pos];
+#endif
+				res = gre_add_exception_rule(
+					excepts[i],
+					iptype,
+					rx_prop->rx[1].attrib,
+					flt_rule,
+					pos);
+
+				if (res == IPACM_SUCCESS)
+				{
+					++pos;
+				}
+				else
+				{
+					return res;
+				}
+			}
+		}
+#endif /* #ifdef IPA_FLT_EXT_MPLS_GRE_GENERAL */
+#endif /* #ifdef FEATURE_EoGRE */
 #ifdef FEATURE_VLAN_MPDN
 		/* default rule for all PDNs which are up */
 		for (uint32_t i = 0; i < offloaded_pdns_count_v6; ++i)
@@ -9777,12 +9965,6 @@ int IPACM_Wan::GetMuxByAddr(
 
 	bool found = false;
 
-#if defined(IPV6_EoGRE_TEST)
-	found = true;
-	mux_id = 1;
-	goto done;
-#endif
-
 	for ( int i = 0; i < IPA_MAX_NUM_SW_PDNS && ! found; i++ )
 	{
 		if ( iptype == IPA_IP_v4 )
@@ -10072,5 +10254,171 @@ int IPACM_Wan::eogre_notify_wan_state(
 
 	return IPACM_SUCCESS;
 }
+#ifdef IPA_FLT_EXT_MPLS_GRE_GENERAL
+int IPACM_Wan::gre_add_exception_rule(
+	struct ipa_exception&         except,
+	ipa_ip_type                   iptype,
+	const struct ipa_rule_attrib& rx_prop_attrib,
+	struct ipa_flt_rule_add&      flt_rule_add,
+	int                           fltr_rule_number )
+{
+	int *num_firewall, *num_flt_rule;
+	ipa_ioc_get_rt_tbl_indx rt_tbl_idx;
+
+	if ( ! VALID_IPA_IP_TYPE(iptype) ||
+		 ! VALID_EXCEPTION_TYPE(except.field) ||
+		 ! VALID_IPA_IP_TYPE(except.inner_iptype) )
+	{
+		IPACMERR(
+			"Bad iptype=(%u) and/or exception field=(%u) "
+			"and/or exception inner_iptype=(%u)\n",
+			iptype,
+			except.field,
+			except.inner_iptype);
+		return IPACM_FAILURE;
+	}
+
+	if ( fltr_rule_number >= IPA_MAX_FLT_RULE )
+	{
+		IPACMERR(
+			"Filtering table is full. Number of rules %d allowed %d\n",
+			fltr_rule_number + 1, IPA_MAX_FLT_RULE);
+		return IPACM_FAILURE;
+	}
+
+	memset(&rt_tbl_idx, 0, sizeof(rt_tbl_idx));
+	rt_tbl_idx.ip = iptype;
+	snprintf(
+		rt_tbl_idx.name,
+		sizeof(rt_tbl_idx.name),
+		"%s",
+		IPACM_Iface::ipacmcfg->rt_tbl_wan_dl.name);
+
+	if( ioctl(m_fd_ipa, IPA_IOC_QUERY_RT_TBL_INDEX, &rt_tbl_idx) != 0 )
+	{
+		IPACMERR("Failed to get routing table index from name\n");
+		return IPACM_FAILURE;
+	}
+
+	IPACMDBG_H(
+		"Adding downlink GRE exception rule for iptype=(%u) and "
+		"exception:(field=%u value=0x%x inner_iptype=%u) "
+		"WAN DL routing table %s has index %d\n",
+		iptype,
+		except.field,
+		except.value,
+		except.inner_iptype,
+		IPACM_Iface::ipacmcfg->rt_tbl_wan_dl.name,
+		rt_tbl_idx.idx);
+
+	memset(
+		&flt_rule_add,
+		0,
+		sizeof(struct ipa_flt_rule_add));
+
+	flt_rule_add.at_rear             = true;
+	flt_rule_add.flt_rule_hdl        = -1;
+	flt_rule_add.status              = -1;
+	flt_rule_add.rule.retain_hdr     = 1;
+	flt_rule_add.rule.to_uc          = 0;
+	flt_rule_add.rule.eq_attrib_type = 1;
+#ifdef FEATURE_IPA_V3
+	flt_rule_add.rule.hashable       = true;
+#endif
+	flt_rule_add.rule.action         = IPA_PASS_TO_ROUTING;
+	flt_rule_add.rule.rt_tbl_idx     = rt_tbl_idx.idx;
+
+	ipa_ipgre_info ipgre_info = IPACM_Iface::ipacmcfg->eogre_info;
+
+	struct ipa_rule_attrib  attrib;
+	ipa_ioc_generate_flt_eq flt_eq;
+
+	memset(&attrib, 0, sizeof(attrib));
+	memset(&flt_eq, 0, sizeof(flt_eq));
+
+	memcpy(
+		&attrib,
+		&rx_prop_attrib,
+		sizeof(struct ipa_rule_attrib));
+
+	attrib.attrib_mask |= (IPA_FLT_SRC_ADDR | IPA_FLT_DST_ADDR);
+
+	/*
+	 * For downlink, we need to reverse the addresses.
+	 */
+	if ( iptype == IPA_IP_v4 )
+	{
+		num_firewall = &num_firewall_v4;
+		num_flt_rule = &num_v4_flt_rule;
+
+		attrib.u.v4.dst_addr_mask = 0xFFFFFFFF;
+		attrib.u.v4.src_addr_mask = 0xFFFFFFFF;
+
+		attrib.u.v4.dst_addr = ipgre_info.ipv4_src;
+		attrib.u.v4.src_addr = ipgre_info.ipv4_dst;
+	}
+	else /* iptype == IPA_IP_v6 */
+	{
+		num_firewall = &num_firewall_v6;
+		num_flt_rule = &num_v6_flt_rule;
+
+		memset(
+			&attrib.u.v6.dst_addr_mask,
+			0xFFFFFFFF,
+			sizeof(attrib.u.v6.dst_addr_mask));
+		memset(
+			&attrib.u.v6.src_addr_mask,
+			0xFFFFFFFF,
+			sizeof(attrib.u.v6.src_addr_mask));
+
+		memcpy(
+			&attrib.u.v6.dst_addr,
+			&ipgre_info.ipv6_src,
+			sizeof(attrib.u.v6.dst_addr));
+		memcpy(
+			&attrib.u.v6.src_addr,
+			&ipgre_info.ipv6_dst,
+			sizeof(attrib.u.v6.src_addr));
+	}
+
+	change_to_network_order(iptype, &attrib, FLOW_DOWNLINK);
+
+	attrib.ext_attrib_mask        |= IPA_FLT_EXT_MPLS_GRE_GENERAL;
+	attrib.fld_val_eq.flow         = FLOW_DOWNLINK;
+	attrib.fld_val_eq.inner_iptype = except.inner_iptype;
+	attrib.fld_val_eq.field        = except.field;
+	attrib.fld_val_eq.value        = except.value;
+
+	memset(&flt_eq, 0, sizeof(flt_eq));
+
+	flt_eq.ip = iptype;
+	memcpy(
+		&flt_eq.attrib,
+		&attrib,
+		sizeof(flt_eq.attrib));
+
+	if ( ioctl(m_fd_ipa, IPA_IOC_GENERATE_FLT_EQ, &flt_eq) != 0 )
+	{
+		IPACMERR(
+			"ioctl(IPA_IOC_GENERATE_FLT_EQ) failed: "
+			"errno=(%d) aka:\"%s\"\n",
+			errno,
+			strerror(errno));
+		return IPACM_FAILURE;
+	}
+
+	IPACMDBG("ioctl(IPA_IOC_GENERATE_FLT_EQ) succeeded\n");
+
+	memcpy(
+		&flt_rule_add.rule.eq_attrib,
+		&flt_eq.eq_attrib,
+		sizeof(flt_rule_add.rule.eq_attrib));
+
+	++(*num_firewall);
+	++(*num_flt_rule);
+
+	return IPACM_SUCCESS;
+}
+#endif /* #ifdef IPA_FLT_EXT_MPLS_GRE_GENERAL */
 
 #endif /* #ifdef FEATURE_EoGRE */

@@ -50,7 +50,7 @@ IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #define MAX_FDB_PARAM_LEN 50
 #define IPA_SYS_CMD_LEN 200
 
-#define IPA_TMP_DIR "/tmp/data"
+#define IPA_TMP_DIR "/tmp/data_ipa"
 #define IPA_FDB_TABLE IPA_TMP_DIR"/ipa_fdb_table.txt"
 #define IPA_NO_IFACE_NAME "IFACE_NONE"
 

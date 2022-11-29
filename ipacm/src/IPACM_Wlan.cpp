@@ -2276,7 +2276,7 @@ int IPACM_Wlan::handle_wlan_client_route_rule(uint8_t *mac_addr, ipa_ip_type ipt
 				rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_DST_ADDR;
 
 				if (get_client_memptr(wlan_client, wlan_index)->ipv4_hpc_set)
-					rt_rule_entry->rule.hdr_hdl = get_client_memptr(wlan_client, wlan_index)->hpc_hdr_hdl_v4;
+					rt_rule_entry->rule.hdr_proc_ctx_hdl = get_client_memptr(wlan_client, wlan_index)->hpc_hdr_hdl_v4;
 				else
 					rt_rule_entry->rule.hdr_hdl = get_client_memptr(wlan_client, wlan_index)->hdr_hdl_v4;
 
@@ -2370,7 +2370,7 @@ int IPACM_Wlan::handle_wlan_client_route_rule(uint8_t *mac_addr, ipa_ip_type ipt
 							sizeof(rt_rule_entry->rule.attrib));
 
 					if (get_client_memptr(wlan_client, wlan_index)->ipv6_hpc_set)
-						rt_rule_entry->rule.hdr_hdl = get_client_memptr(wlan_client, wlan_index)->hpc_hdr_hdl_v6;
+						rt_rule_entry->rule.hdr_proc_ctx_hdl = get_client_memptr(wlan_client, wlan_index)->hpc_hdr_hdl_v6;
 					else
 						rt_rule_entry->rule.hdr_hdl = get_client_memptr(wlan_client, wlan_index)->hdr_hdl_v6;
 
@@ -2755,7 +2755,7 @@ int IPACM_Wlan::handle_wlan_client_route_rule_ext(uint8_t *mac_addr, ipa_ip_type
 				rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_DST_ADDR;
 
 				if (get_client_memptr(wlan_client, wlan_index)->ipv4_hpc_set)
-					rt_rule_entry->rule.hdr_hdl = get_client_memptr(wlan_client, wlan_index)->hpc_hdr_hdl_v4;
+					rt_rule_entry->rule.hdr_proc_ctx_hdl = get_client_memptr(wlan_client, wlan_index)->hpc_hdr_hdl_v4;
 				else
 					rt_rule_entry->rule.hdr_hdl = get_client_memptr(wlan_client, wlan_index)->hdr_hdl_v4;
 
@@ -2863,7 +2863,7 @@ int IPACM_Wlan::handle_wlan_client_route_rule_ext(uint8_t *mac_addr, ipa_ip_type
 							sizeof(rt_rule_entry->rule.attrib));
 
 					if (get_client_memptr(wlan_client, wlan_index)->ipv6_hpc_set)
-						rt_rule_entry->rule.hdr_hdl = get_client_memptr(wlan_client, wlan_index)->hpc_hdr_hdl_v6;
+						rt_rule_entry->rule.hdr_proc_ctx_hdl = get_client_memptr(wlan_client, wlan_index)->hpc_hdr_hdl_v6;
 					else
 						rt_rule_entry->rule.hdr_hdl = get_client_memptr(wlan_client, wlan_index)->hdr_hdl_v6;
 
@@ -3046,7 +3046,7 @@ int IPACM_Wlan::handle_wlan_client_route_rule_ext_v2(uint8_t *mac_addr, ipa_ip_t
 				rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_DST_ADDR;
 
 				if (get_client_memptr(wlan_client, wlan_index)->ipv4_hpc_set)
-					rt_rule_entry->rule.hdr_hdl = get_client_memptr(wlan_client, wlan_index)->hpc_hdr_hdl_v4;
+					rt_rule_entry->rule.hdr_proc_ctx_hdl = get_client_memptr(wlan_client, wlan_index)->hpc_hdr_hdl_v4;
 				else
 					rt_rule_entry->rule.hdr_hdl = get_client_memptr(wlan_client, wlan_index)->hdr_hdl_v4;
 
@@ -3157,7 +3157,7 @@ int IPACM_Wlan::handle_wlan_client_route_rule_ext_v2(uint8_t *mac_addr, ipa_ip_t
 							sizeof(rt_rule_entry->rule.attrib));
 
 					if (get_client_memptr(wlan_client, wlan_index)->ipv6_hpc_set)
-						rt_rule_entry->rule.hdr_hdl = get_client_memptr(wlan_client, wlan_index)->hpc_hdr_hdl_v6;
+						rt_rule_entry->rule.hdr_proc_ctx_hdl = get_client_memptr(wlan_client, wlan_index)->hpc_hdr_hdl_v6;
 					else
 						rt_rule_entry->rule.hdr_hdl = get_client_memptr(wlan_client, wlan_index)->hdr_hdl_v6;
 
@@ -5903,7 +5903,7 @@ int IPACM_Wlan::handle_wlan_vlan_client_init(int client_idx, ipacm_bridge *bridg
 					goto end;
 				}
 
-				get_client_memptr(wlan_client, client_idx)->hpc_hdr_hdl_v4 = hdr_proc_ctx_table->proc_ctx[0].hdr_hdl;
+				get_client_memptr(wlan_client, client_idx)->hpc_hdr_hdl_v4 = hdr_proc_ctx_table->proc_ctx[0].proc_ctx_hdl;
 				IPACMDBG_H("client(%d) v4 hpc header handle:(0x%x) Len:%d\n",
 						   client_idx,
 						   get_client_memptr(wlan_client, client_idx)->hpc_hdr_hdl_v4,
@@ -6055,7 +6055,7 @@ int IPACM_Wlan::handle_wlan_vlan_client_init(int client_idx, ipacm_bridge *bridg
 						goto end;
 					}
 
-					get_client_memptr(wlan_client, client_idx)->hpc_hdr_hdl_v6 = hdr_proc_ctx_table->proc_ctx[0].hdr_hdl;
+					get_client_memptr(wlan_client, client_idx)->hpc_hdr_hdl_v6 = hdr_proc_ctx_table->proc_ctx[0].proc_ctx_hdl;
 					IPACMDBG_H("client(%d) v6 hpc header handle:(0x%x) Len:%d\n",
 							   client_idx,
 							   get_client_memptr(wlan_client, client_idx)->hpc_hdr_hdl_v6,

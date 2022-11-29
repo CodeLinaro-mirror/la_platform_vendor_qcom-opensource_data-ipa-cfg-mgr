@@ -213,6 +213,87 @@ public:
 	virtual int handle_software_routing_disable(void);
 	void delete_iface(void);
 
+#ifdef IPA_FLT_EXT_MPLS_GRE_GENERAL
+	static inline void addr2host(
+		enum ipa_ip_type addr_type,
+		void*            addr,
+		ipa_data_flow_type flow = FLOW_DOWNLINK ) {
+		if ( VALID_IPA_IP_TYPE(addr_type) && addr ) {
+			uint32_t* ptr = (uint32_t*) addr;
+
+			if ( addr_type == IPA_IP_v4 ) {
+				ptr[0] = ntohl(ptr[0]);
+			} else {
+				if ( flow == FLOW_UPLINK ) {
+					uint32_t tmp[4];
+					memcpy(tmp, ptr, sizeof(tmp));
+					ptr[0] = tmp[3];
+					ptr[1] = tmp[2];
+					ptr[2] = tmp[1];
+					ptr[3] = tmp[0];
+				} else { /* flow == FLOW_DOWNLINK */
+					ptr[0] = ntohl(ptr[0]);
+					ptr[1] = ntohl(ptr[1]);
+					ptr[2] = ntohl(ptr[2]);
+					ptr[3] = ntohl(ptr[3]);
+				}
+			}
+		}
+	}
+
+	static inline void addr2network(
+		enum ipa_ip_type   addr_type,
+		void*              addr,
+		ipa_data_flow_type flow = FLOW_DOWNLINK ) {
+		if ( VALID_IPA_IP_TYPE(addr_type) && addr ) {
+			uint32_t* ptr = (uint32_t*) addr;
+
+			if ( addr_type == IPA_IP_v4 ) {
+				ptr[0] = htonl(ptr[0]);
+			} else {
+				if ( flow == FLOW_UPLINK ) {
+					/*
+					 * For historical reasons, when v6 addresses are
+					 * used in UL equations, the following is the form
+					 * they need to take.  DL form is after the else.
+					 */
+					uint32_t tmp[4];
+					memcpy(tmp, ptr, sizeof(tmp));
+					ptr[0] = tmp[3];
+					ptr[1] = tmp[2];
+					ptr[2] = tmp[1];
+					ptr[3] = tmp[0];
+				} else { /* flow == FLOW_DOWNLINK */
+					ptr[0] = htonl(ptr[0]);
+					ptr[1] = htonl(ptr[1]);
+					ptr[2] = htonl(ptr[2]);
+					ptr[3] = htonl(ptr[3]);
+				}
+			}
+		}
+	}
+
+	void change_to_network_order(
+		ipa_ip_type      iptype,
+		ipa_rule_attrib* attrib,
+		ipa_data_flow_type flow = FLOW_DOWNLINK ) {
+		if ( ! VALID_IPA_IP_TYPE(iptype) || ! attrib ) {
+			IPACMERR(
+				"Bad iptype(%u) and/or attribute pointer(%p) is NULL.\n",
+				iptype, attrib);
+		}
+		if ( iptype == IPA_IP_v6 ) {
+			addr2network(iptype, attrib->u.v6.src_addr, flow);
+			addr2network(iptype, attrib->u.v6.src_addr_mask, flow);
+			addr2network(iptype, attrib->u.v6.dst_addr, flow);
+			addr2network(iptype, attrib->u.v6.dst_addr_mask, flow);
+		} else {
+			IPACMDBG_H("IP type is not IPv6, do nothing: %d\n", iptype);
+		}
+	}
+
+#else
+
 	static inline void addr2host(
 		enum ipa_ip_type addr_type,
 		void*            addr ) {
@@ -265,8 +346,11 @@ public:
 		}
 	}
 
+#endif /* IPA_FLT_EXT_MPLS_GRE_GENERAL */
+
 	int delete_dflt_filter_rules(
 		ipa_ip_type iptype );
+
 
 protected:
 
@@ -278,4 +362,110 @@ private:
 	static const char *DEVICE_NAME;
 };
 
+#ifdef IPA_FLT_EXT_MPLS_GRE_GENERAL
+/*
+ * A set of definitions for easily managing filter and route handles.
+ */
+typedef enum
+{
+	RULE_TYPE_FILTER = 1,
+	RULE_TYPE_ROUTE  = 2,
+	RULE_TYPE_MAX
+} RuleType_t;
+
+#define VALID_RULE_TYPE(t) \
+	((t) >= RULE_TYPE_FILTER && (t) < RULE_TYPE_MAX)
+
+typedef struct
+{
+	RuleType_t  type;
+	ipa_ip_type iptype;
+	uint32_t    handle;
+	int			pipe_idx;
+} RuleData_t;
+
+class RuleHdlContainer
+{
+private:
+
+	RuleData_t* rule_data;
+
+public:
+
+	RuleHdlContainer() :
+		rule_data{nullptr} {
+	};
+
+	RuleHdlContainer(
+		RuleType_t  t,
+		ipa_ip_type ipt,
+		uint32_t    hdl,
+		int 		pipe ) :
+		rule_data{nullptr} {
+		if ( VALID_RULE_TYPE(t) && VALID_IPA_IP_TYPE(ipt) && hdl >= 0 ) {
+			rule_data = new RuleData_t;
+			if ( rule_data ) {
+				IPACMDBG(
+					"Taking control of \"%s\" hdl=(%u) with iptype=(%u)\n",
+					(t == RULE_TYPE_FILTER) ? "filter" : "route",
+					hdl,
+					ipt);
+				rule_data->type   = t;
+				rule_data->iptype = ipt;
+				rule_data->handle = hdl;
+				rule_data->pipe_idx = pipe;
+			} else {
+				IPACMERR("Alloc of RuleData_t failed\n");
+			}
+		} else {
+			IPACMERR(
+				"Bad arg passed: RuleType_t(%u) and/or ipa_ip_type(%u) and/or rule hdl(%u)\n",
+				t, ipt, hdl);
+		}
+	};
+
+	// Copy Constructor
+	RuleHdlContainer(
+		const RuleHdlContainer& t) :
+		rule_data(t.rule_data) {
+			RuleHdlContainer& nct = const_cast<RuleHdlContainer&>(t);
+			nct.rule_data = nullptr;
+	};
+
+	// Move Constructor
+	RuleHdlContainer(
+		RuleHdlContainer&& t) :
+		rule_data(t.rule_data) {
+			t.rule_data = nullptr;
+	};
+
+	~RuleHdlContainer() {
+		if ( rule_data && VALID_RULE_TYPE(rule_data->type) ) {
+			if ( rule_data->type == RULE_TYPE_FILTER ) {
+				IPACMDBG(
+					"Cleaning up \"filter\" hdl=(%u) with iptype=(%u)\n",
+					rule_data->handle,
+					rule_data->iptype);
+				IPACM_Iface::m_filtering.DeleteFilteringHdls(&(rule_data->handle), rule_data->iptype, 1);
+				IPACM_Iface::ipacmcfg->decreaseFltRuleCount(rule_data->pipe_idx, rule_data->iptype, 1);
+			} else {
+				IPACMDBG(
+					"Cleaning up \"route\" hdl=(%u) with iptype=(%u)\n",
+					rule_data->handle,
+					rule_data->iptype);
+				IPACM_Iface::m_routing.DeleteRoutingHdl(rule_data->handle, rule_data->iptype);
+			}
+			delete rule_data;
+		}
+	};
+
+	uint32_t RuleHandle(void) {
+		if ( rule_data ) {
+			return rule_data->handle;
+		}
+		return 0;
+	}
+};
+
+#endif /* IPA_FLT_EXT_MPLS_GRE_GENERAL */
 #endif /* IPACM_IFACE_H */

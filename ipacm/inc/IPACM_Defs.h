@@ -271,6 +271,10 @@ typedef enum
 #ifdef FEATURE_L2TP
 	IPA_ADD_L2TP_CLIENT,                      /* ipacm_event_data_all */
 	IPA_DEL_L2TP_CLIENT,                      /* ipacm_event_data_all */
+#ifdef IPA_L2TP_TUNNEL_UDP
+	IPA_ROUTE_DEL_L2TP_VLAN_EVENT,            /* ipacm_event_route_vlan */
+	IPA_HANDLE_WAN_L2TP_VLAN_DOWN,            /* ipacm_event_route_vlan */
+#endif
 #endif
 #ifdef FEATURE_VLAN_MPDN
 	IPA_PREFIX_CHANGE_EVENT,                  /* ipacm_event_data_fid */
@@ -517,6 +521,11 @@ struct l2tp_vlan_mapping_info
 	uint32_t vlan_client_ipv6_addr[4];
 	/* the following is MIB3 l2tp client info (mac) */
 	uint8_t l2tp_client_mac[6];
+	/* Add dummy bridge info */
+#ifdef IPA_L2TP_TUNNEL_UDP
+	char l2tp_bridge_iface_name[IPA_RESOURCE_NAME_MAX];
+	uint32_t l2tp_bridge_vlan_id;
+#endif
 };
 
 struct bridge_vlan_mapping_info

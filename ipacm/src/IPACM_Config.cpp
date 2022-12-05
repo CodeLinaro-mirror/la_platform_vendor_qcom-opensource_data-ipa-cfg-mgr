@@ -61,6 +61,10 @@ const char *IPACM_Config::DEVICE_NAME_ODU = "/dev/odu_ipa_bridge";
 #define IPACM_CONFIG_FILE "/etc/data/ipa/IPACM_cfg.xml"
 #endif
 #endif
+#if defined(FEATURE_L2TP)
+#define L2TP_BRIDGE_VLAN_ID_START 4096
+#endif
+
 
 const char *ipacm_event_name[] = {
 	__stringify(IPA_CFG_CHANGE_EVENT),                     /* NULL */
@@ -131,6 +135,10 @@ const char *ipacm_event_name[] = {
 #ifdef FEATURE_L2TP
 	__stringify(IPA_ADD_L2TP_CLIENT),                      /* ipacm_event_data_all */
 	__stringify(IPA_DEL_L2TP_CLIENT),                      /* ipacm_event_data_all */
+#ifdef IPA_L2TP_TUNNEL_UDP
+	__stringify(IPA_ROUTE_DEL_L2TP_VLAN_EVENT),            /* ipacm_event_route_vlan */
+	__stringify(IPA_HANDLE_WAN_L2TP_VLAN_DOWN),            /* ipacm_event_route_vlan */
+#endif
 #endif
 #ifdef FEATURE_VLAN_MPDN
 	__stringify(IPA_PREFIX_CHANGE_EVENT),                  /* ipacm_event_data_fid */
@@ -601,12 +609,13 @@ skip_fnr_alloc:
 	ipacm_l2tp_enable = cfg->ipacm_l2tp_enable;
 	ipacm_mpdn_enable = cfg->ipacm_mpdn_enable;
 
+#ifndef IPA_L2TP_TUNNEL_UDP
 	if (ipacm_mpdn_enable == TRUE && ipacm_l2tp_enable != IPACM_L2TP_DISABLE)
 	{
 		IPACMERR("Not support both VLAN_MPDN and L2TP are enable \n");
 		exit(0);
 	}
-
+#endif
 	ipa_num_wlan_guest_ap = cfg->num_wlan_guest_ap;
 	IPACMDBG_H("ipa_num_wlan_guest_ap %d\n",ipa_num_wlan_guest_ap);
 
@@ -1256,6 +1265,9 @@ void IPACM_Config::add_bridge_vlan_mapping(ipa_ioc_bridge_vlan_mapping_info *dat
 	list<bridge_vlan_mapping_info>::iterator it_mapping;
 	bridge_vlan_mapping_info new_mapping;
 	ipacm_bridge *bridge = NULL;
+#ifdef IPA_L2TP_TUNNEL_UDP
+	list<l2tp_vlan_mapping_info>::iterator it_l2tp_mapping;
+#endif
 
 	if(pthread_mutex_lock(&vlan_l2tp_lock) != 0)
 	{
@@ -1287,9 +1299,22 @@ void IPACM_Config::add_bridge_vlan_mapping(ipa_ioc_bridge_vlan_mapping_info *dat
 	new_mapping.subnet_mask = data->subnet_mask;
 	new_mapping.lan2lan_sw = data->lan2lan_sw;
 
+#ifdef IPA_L2TP_TUNNEL_UDP
+	for(it_l2tp_mapping = m_l2tp_vlan_mapping.begin(); it_l2tp_mapping != m_l2tp_vlan_mapping.end(); it_l2tp_mapping++)
+	{
+		if(strncmp(data->bridge_name, it_l2tp_mapping->l2tp_bridge_iface_name,
+			strlen(data->bridge_name)) == 0)
+		{
+			IPACMDBG_H("Found vlan-l2tp mapping, Adding Bridge info\n");
+			/* updating vlan in the bridge vlan mapping also */
+			new_mapping.bridge_associated_VID = it_l2tp_mapping->l2tp_bridge_vlan_id;
+			data->vlan_id = it_l2tp_mapping->l2tp_bridge_vlan_id;
+		}
+	}
+#endif
+
 	m_bridge_vlan_mapping.push_front(new_mapping);
 	IPACMDBG_H("added bridge %s with VID %d, lan2lan_sw=%d\n", data->bridge_name, data->vlan_id, data->lan2lan_sw);
-
 	pthread_mutex_unlock(&vlan_l2tp_lock);
 
 	bridge = get_vlan_bridge(data->bridge_name);
@@ -1301,6 +1326,7 @@ void IPACM_Config::add_bridge_vlan_mapping(ipa_ioc_bridge_vlan_mapping_info *dat
 		bridge->bridge_ipv4_addr = data->bridge_ipv4;
 		bridge->bridge_netmask = data->subnet_mask;
 	}
+
 	return;
 fail:
 	pthread_mutex_unlock(&vlan_l2tp_lock);
@@ -1462,7 +1488,7 @@ void IPACM_Config::add_vlan_iface(ipa_ioc_vlan_iface_info *data)
 		}
 	}
 #ifdef FEATURE_L2TP
-	if ((ipacm_mpdn_enable == false) && ((ipacm_l2tp_enable == IPACM_L2TP) || (ipacm_l2tp_enable == IPACM_L2TP_E2E)))
+	if ((ipacm_l2tp_enable == IPACM_L2TP) || (ipacm_l2tp_enable == IPACM_L2TP_E2E))
 	{
 		list<l2tp_vlan_mapping_info>::iterator it_mapping;
 		for(it_mapping = m_l2tp_vlan_mapping.begin(); it_mapping != m_l2tp_vlan_mapping.end(); it_mapping++)
@@ -1576,7 +1602,7 @@ void IPACM_Config::del_vlan_iface(ipa_ioc_vlan_iface_info *data)
 	}
 #endif
 #ifdef FEATURE_L2TP
-	if ((ipacm_mpdn_enable == false) && ((ipacm_l2tp_enable == IPACM_L2TP) || (ipacm_l2tp_enable == IPACM_L2TP_E2E)))
+	if ((ipacm_l2tp_enable == IPACM_L2TP) || (ipacm_l2tp_enable == IPACM_L2TP_E2E))
 	{
 		list<l2tp_vlan_mapping_info>::iterator it_mapping;
 		it_mapping = m_l2tp_vlan_mapping.begin();
@@ -1650,7 +1676,7 @@ void IPACM_Config::handle_vlan_iface_info(ipacm_event_data_addr *data)
 				sizeof(it_vlan->vlan_iface_ipv6_addr));
 
 #ifdef FEATURE_L2TP
-			if ((ipacm_mpdn_enable == false) && ((ipacm_l2tp_enable == IPACM_L2TP) || (ipacm_l2tp_enable == IPACM_L2TP_E2E)))
+			if ((ipacm_l2tp_enable == IPACM_L2TP) || (ipacm_l2tp_enable == IPACM_L2TP_E2E))
 			{
 				list<l2tp_vlan_mapping_info>::iterator it_mapping;
 
@@ -1713,7 +1739,7 @@ void IPACM_Config::handle_vlan_client_info(ipacm_event_data_all *data)
 		}
 	}
 #ifdef FEATURE_L2TP
-	if ((ipacm_mpdn_enable == false) && (ipacm_l2tp_enable == IPACM_L2TP) || (ipacm_l2tp_enable == IPACM_L2TP_E2E))
+	if ((ipacm_l2tp_enable == IPACM_L2TP) || (ipacm_l2tp_enable == IPACM_L2TP_E2E))
 	{
 		for(it_mapping = m_l2tp_vlan_mapping.begin(); it_mapping != m_l2tp_vlan_mapping.end(); it_mapping++)
 		{
@@ -1977,6 +2003,9 @@ int IPACM_Config::get_iface_vlan_ids(char *phys_iface_name, uint16_t *Ids)
 int IPACM_Config::get_vlan_id(char *iface_name, uint16_t *vlan_id)
 {
 	list<vlan_iface_info>::iterator it_vlan;
+#ifdef IPA_L2TP_TUNNEL_UDP
+	list<l2tp_vlan_mapping_info>::iterator it_mapping;
+#endif
 	int ret = IPACM_FAILURE;
 
 	if(pthread_mutex_lock(&vlan_l2tp_lock) != 0)
@@ -1995,6 +2024,21 @@ int IPACM_Config::get_vlan_id(char *iface_name, uint16_t *vlan_id)
 			break;
 		}
 	}
+
+#ifdef IPA_L2TP_TUNNEL_UDP
+	for(it_mapping = m_l2tp_vlan_mapping.begin(); it_mapping != m_l2tp_vlan_mapping.end(); it_mapping++)
+	{
+		if(strncmp(it_mapping->l2tp_iface_name, iface_name, sizeof(it_mapping->l2tp_iface_name)) == 0)
+		{
+			IPACMDBG_H("Found l2tp iface in l2tp vlan list: %s, l2tp vlan id: %d\n",
+				it_mapping->l2tp_iface_name, it_mapping->l2tp_bridge_vlan_id);
+			/* setting l2tp bridge vlan id */
+			*vlan_id = it_mapping->l2tp_bridge_vlan_id;
+			ret = IPACM_SUCCESS;
+			break;
+		}
+	}
+#endif
 
 	pthread_mutex_unlock(&vlan_l2tp_lock);
 
@@ -2072,6 +2116,7 @@ void IPACM_Config::add_l2tp_vlan_mapping(ipa_ioc_l2tp_vlan_mapping_info *data)
 void IPACM_Config::del_l2tp_vlan_mapping(ipa_ioc_l2tp_vlan_mapping_info *data)
 {
 	list<l2tp_vlan_mapping_info>::iterator it;
+	uint16_t l2tp_bridge_vlan = 0;
 
 	if(pthread_mutex_lock(&vlan_l2tp_lock) != 0)
 	{
@@ -2090,6 +2135,7 @@ void IPACM_Config::del_l2tp_vlan_mapping(ipa_ioc_l2tp_vlan_mapping_info *data)
 			if(strncmp(data->vlan_iface_name, it->vlan_iface_name,
 				sizeof(data->vlan_iface_name)) == 0)
 			{
+				l2tp_bridge_vlan = it->l2tp_bridge_vlan_id;
 				m_l2tp_vlan_mapping.erase(it);
 				DelNatIfaces(data->l2tp_iface_name);
 				IPACMDBG_H("Del l2tp iface %s to nat ifaces.\n", data->l2tp_iface_name);
@@ -2102,7 +2148,28 @@ void IPACM_Config::del_l2tp_vlan_mapping(ipa_ioc_l2tp_vlan_mapping_info *data)
 		}
 	}
 	pthread_mutex_unlock(&vlan_l2tp_lock);
+	if (IPACM_Iface::ipacmcfg->ipacm_mpdn_enable == TRUE && l2tp_bridge_vlan != 0)
+	{
+		ipacm_event_route_vlan *vlan_data;
+		ipacm_cmd_q_data vlan_down_evt;
 
+		vlan_data = (ipacm_event_route_vlan *)malloc(sizeof(ipacm_event_route_vlan));
+		if(vlan_data == NULL)
+		{
+			IPACMERR("Failed to allocate memory.\n");
+			return;
+		}
+		memset(vlan_data, 0, sizeof(ipacm_event_route_vlan));
+
+		vlan_data->VlanID = l2tp_bridge_vlan;
+
+		vlan_down_evt.evt_data = vlan_data;
+		vlan_down_evt.event = IPA_ROUTE_DEL_L2TP_VLAN_EVENT;
+
+		IPACMDBG_H("Posting event %s with vlan_id: %d\n",
+			IPACM_Iface::ipacmcfg->getEventName(vlan_down_evt.event), vlan_data->VlanID);
+		IPACM_EvtDispatcher::PostEvt(&vlan_down_evt);
+	}
 	return;
 }
 
@@ -2133,6 +2200,151 @@ int IPACM_Config::get_vlan_l2tp_mapping(char *client_iface, l2tp_vlan_mapping_in
 	pthread_mutex_unlock(&vlan_l2tp_lock);
 	return IPACM_FAILURE;
 }
+
+/* check if client iface is l2tp iface */
+bool IPACM_Config::check_l2tp_iface(const char *client_iface)
+{
+	list<l2tp_vlan_mapping_info>::iterator it_mapping;
+
+	if(pthread_mutex_lock(&vlan_l2tp_lock) != 0)
+	{
+		IPACMERR("Unable to lock the mutex\n");
+		return IPACM_FAILURE;
+	}
+
+	IPACMDBG_H("Incoming client iface name: %s\n", client_iface);
+
+	for(it_mapping = m_l2tp_vlan_mapping.begin(); it_mapping != m_l2tp_vlan_mapping.end(); it_mapping++)
+	{
+		if(strncmp(client_iface, it_mapping->l2tp_iface_name,
+			strlen(client_iface)) == 0)
+		{
+			IPACMDBG_H("Matched l2tp iface.\n");
+			pthread_mutex_unlock(&vlan_l2tp_lock);
+			return true;
+		}
+	}
+
+	pthread_mutex_unlock(&vlan_l2tp_lock);
+	return false;
+}
+
+#ifdef IPA_L2TP_TUNNEL_UDP
+/* add l2tp bridge dummy vlan mapping*/
+void IPACM_Config::add_l2tp_dummy_bridge_vlan_mapping(const char *bridge_iface, const char* l2tp_client_iface, int bridge_if_index)
+{
+	list<l2tp_vlan_mapping_info>::iterator it_mapping;
+	ipa_ioc_bridge_vlan_mapping_info bridge_vlan_mapping_info;
+
+	if(pthread_mutex_lock(&vlan_l2tp_lock) != 0)
+	{
+		IPACMERR("Unable to lock the mutex\n");
+		return;
+	}
+
+	memset(&bridge_vlan_mapping_info, 0, sizeof(bridge_vlan_mapping_info));
+	strlcpy(bridge_vlan_mapping_info.bridge_name, bridge_iface, IF_NAME_LEN);
+
+	for(it_mapping = m_l2tp_vlan_mapping.begin(); it_mapping != m_l2tp_vlan_mapping.end(); it_mapping++)
+	{
+		if(strncmp(l2tp_client_iface, it_mapping->l2tp_iface_name,
+			strlen(l2tp_client_iface)) == 0)
+		{
+			IPACMDBG_H("Found vlan-l2tp mapping for iface %s, checking bridge vlan info\n",
+				l2tp_client_iface);
+			pthread_mutex_unlock(&vlan_l2tp_lock);
+			if(get_bridge_vlan_mapping(&bridge_vlan_mapping_info))
+			{
+				if(pthread_mutex_lock(&vlan_l2tp_lock) != 0)
+				{
+					IPACMERR("Unable to lock the mutex\n");
+					return;
+				}
+				IPACMDBG_H("The bridge %s and vlan mapping not added\n", bridge_iface);
+				strlcpy(it_mapping->l2tp_bridge_iface_name, bridge_iface, IF_NAME_LEN);
+				/* We are getting vlan info also from QCMAP but recalculating dummy vlan again to not depend on QCMAP for future */
+				/* Each l2tp session have seperate bridge */
+				it_mapping->l2tp_bridge_vlan_id = L2TP_BRIDGE_VLAN_ID_START + bridge_if_index;
+				IPACMDBG_H("Assigned l2tp iface %s, vlan id %d\n", it_mapping->l2tp_iface_name,
+					it_mapping->l2tp_bridge_vlan_id);
+				break;
+			}
+			if(pthread_mutex_lock(&vlan_l2tp_lock) != 0)
+			{
+				IPACMERR("Unable to lock the mutex\n");
+				return;
+			}
+			strlcpy(it_mapping->l2tp_bridge_iface_name, bridge_iface, IF_NAME_LEN);
+			/* We are getting vlan info also from QCMAP but recalculating dummy vlan again to not depend on QCMAP for future */
+			/* Each l2tp session have seperate bridge */
+			it_mapping->l2tp_bridge_vlan_id = L2TP_BRIDGE_VLAN_ID_START + bridge_if_index;
+			IPACMDBG_H("Assigned l2tp iface %s, vlan id %d\n", it_mapping->l2tp_iface_name,
+				it_mapping->l2tp_bridge_vlan_id);
+			break;
+		}
+	}
+
+	pthread_mutex_unlock(&vlan_l2tp_lock);
+	return;
+
+}
+
+/* check if vlan id is l2tp bridge dummy vlan id */
+bool IPACM_Config::check_l2tp_bridge_vlan_id(uint32_t vlan_id)
+{
+	list<l2tp_vlan_mapping_info>::iterator it_mapping;
+
+	if(pthread_mutex_lock(&vlan_l2tp_lock) != 0)
+	{
+		IPACMERR("Unable to lock the mutex\n");
+		return IPACM_FAILURE;
+	}
+
+	for(it_mapping = m_l2tp_vlan_mapping.begin(); it_mapping != m_l2tp_vlan_mapping.end(); it_mapping++)
+	{
+		if(it_mapping->l2tp_bridge_vlan_id == vlan_id)
+		{
+			IPACMDBG_H("Matched l2tp bridge vlan id %d with l2tp iface %s.\n",it_mapping->l2tp_bridge_vlan_id,
+				it_mapping->l2tp_iface_name);
+			pthread_mutex_unlock(&vlan_l2tp_lock);
+			return true;
+		}
+	}
+
+	pthread_mutex_unlock(&vlan_l2tp_lock);
+	return false;
+}
+
+/* get l2tp vlan mapping info using dummy vlan id */
+int IPACM_Config::get_l2tp_mapping_by_bridge_vlan_id(uint32_t vlan_id, l2tp_vlan_mapping_info& info)
+{
+	list<l2tp_vlan_mapping_info>::iterator it_mapping;
+
+	if(pthread_mutex_lock(&vlan_l2tp_lock) != 0)
+	{
+		IPACMERR("Unable to lock the mutex\n");
+		return IPACM_FAILURE;
+	}
+
+	IPACMDBG_H("Incoming client vlan id: %d\n", vlan_id);
+
+	for(it_mapping = m_l2tp_vlan_mapping.begin(); it_mapping != m_l2tp_vlan_mapping.end(); it_mapping++)
+	{
+		if(vlan_id == it_mapping->l2tp_bridge_vlan_id)
+		{
+			IPACMDBG_H("Found vlan-l2tp mapping for l2tp bridge vlan id %d with l2tp iface %s.\n",
+				vlan_id, it_mapping->l2tp_iface_name);
+			info = *it_mapping;
+			pthread_mutex_unlock(&vlan_l2tp_lock);
+			return IPACM_SUCCESS;
+		}
+	}
+
+	pthread_mutex_unlock(&vlan_l2tp_lock);
+	return IPACM_FAILURE;
+}
+
+#endif
 #endif
 
 #if defined(FEATURE_SOCKSv5) && defined (IPA_SOCKV5_EVENT_MAX)

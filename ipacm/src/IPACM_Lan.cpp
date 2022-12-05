@@ -5100,7 +5100,15 @@ int IPACM_Lan::handle_eth_client_route_rule(uint8_t *mac_addr, ipa_ip_type iptyp
 				{
 					rt_rule_entry->rule.hashable = true;
 				}
-
+#if defined IPA_FLTRT_TTL_UPDATE && defined IPA_TTL_UPDATE_OFFLOAD
+				if (IPACM_Iface::ipacmcfg->ttlHwSupport()) {
+					if (iptype == IPA_IP_v6)
+						rt_rule_entry->rule.ttl_update =
+							IPACM_Wan::is_global_ipv6_addr(rt_rule_entry->rule.attrib.u.v6.dst_addr);
+					else
+						rt_rule_entry->rule.ttl_update = true;
+				}
+#endif
 				if (false == m_routing.AddRoutingRule(rt_rule))
 				{
 					IPACMERR("Routing rule addition failed!\n");
@@ -5183,6 +5191,15 @@ int IPACM_Lan::handle_eth_client_route_rule(uint8_t *mac_addr, ipa_ip_type iptyp
 					rt_rule_entry->rule.attrib.u.v6.dst_addr_mask[3] = 0xFFFFFFFF;
 #ifdef FEATURE_IPA_V3
 					rt_rule_entry->rule.hashable = true;
+#endif
+#if defined IPA_FLTRT_TTL_UPDATE && defined IPA_TTL_UPDATE_OFFLOAD
+					if (IPACM_Iface::ipacmcfg->ttlHwSupport()) {
+						if (iptype == IPA_IP_v6)
+							rt_rule_entry->rule.ttl_update =
+								IPACM_Wan::is_global_ipv6_addr(rt_rule_entry->rule.attrib.u.v6.dst_addr);
+						else
+							rt_rule_entry->rule.ttl_update = true;
+					}
 #endif
 					if (false == m_routing.AddRoutingRule(rt_rule))
 					{
@@ -5568,6 +5585,15 @@ int IPACM_Lan::handle_eth_client_route_rule_ext_v2(uint8_t *mac_addr, ipa_ip_typ
 				rt_rule_entry->rule.cnt_idx = dl_cnt_idx;
 				rt_rule_entry->rule.hashable = true;
 				rt_rule_entry->rule_id = 0;
+#if defined IPA_FLTRT_TTL_UPDATE && defined IPA_TTL_UPDATE_OFFLOAD
+				if (IPACM_Iface::ipacmcfg->ttlHwSupport()) {
+					if (iptype == IPA_IP_v6)
+						rt_rule_entry->rule.ttl_update =
+							IPACM_Wan::is_global_ipv6_addr(rt_rule_entry->rule.attrib.u.v6.dst_addr);
+					else
+						rt_rule_entry->rule.ttl_update = true;
+				}
+#endif
 				IPACMDBG_H("Add v4 route rule table %s\n", rt_rule->rt_tbl_name);
 			    if (false == m_routing.AddRoutingRuleExt_v2(rt_rule))
 				{
@@ -5662,6 +5688,15 @@ int IPACM_Lan::handle_eth_client_route_rule_ext_v2(uint8_t *mac_addr, ipa_ip_typ
 					rt_rule_entry->rule.cnt_idx = dl_cnt_idx;
 #ifdef FEATURE_IPA_V3
 					rt_rule_entry->rule.hashable = true;
+#endif
+#if defined IPA_FLTRT_TTL_UPDATE && defined IPA_TTL_UPDATE_OFFLOAD
+					if (IPACM_Iface::ipacmcfg->ttlHwSupport()) {
+						if (iptype == IPA_IP_v6)
+							rt_rule_entry->rule.ttl_update =
+								IPACM_Wan::is_global_ipv6_addr(rt_rule_entry->rule.attrib.u.v6.dst_addr);
+						else
+							rt_rule_entry->rule.ttl_update = true;
+					}
 #endif
 					rt_rule_entry->rule_id = 0;
 					if (false == m_routing.AddRoutingRuleExt_v2(rt_rule))
@@ -5817,6 +5852,15 @@ int IPACM_Lan::handle_eth_client_route_rule_ext(uint8_t *mac_addr, ipa_ip_type i
 
 				rt_rule_entry->rule_id = 0;
 				rt_rule_entry->rule_id = (get_client_memptr(eth_client, eth_index)->lan_stats_idx) | 0x200;
+#if defined IPA_FLTRT_TTL_UPDATE && defined IPA_TTL_UPDATE_OFFLOAD
+				if (IPACM_Iface::ipacmcfg->ttlHwSupport()) {
+					if (iptype == IPA_IP_v6)
+						rt_rule_entry->rule.ttl_update =
+							IPACM_Wan::is_global_ipv6_addr(rt_rule_entry->rule.attrib.u.v6.dst_addr);
+					else
+						rt_rule_entry->rule.ttl_update = true;
+				}
+#endif
 			    if (false == m_routing.AddRoutingRuleExt(rt_rule))
 				{
 					IPACMERR("Routing rule addition failed!\n");
@@ -5903,6 +5947,15 @@ int IPACM_Lan::handle_eth_client_route_rule_ext(uint8_t *mac_addr, ipa_ip_type i
 					rt_rule_entry->rule.hashable = true;
 #endif
 					rt_rule_entry->rule_id = get_client_memptr(eth_client, eth_index)->lan_stats_idx | 0x200;
+#if defined IPA_FLTRT_TTL_UPDATE && defined IPA_TTL_UPDATE_OFFLOAD
+					if (IPACM_Iface::ipacmcfg->ttlHwSupport()) {
+						if (iptype == IPA_IP_v6)
+							rt_rule_entry->rule.ttl_update =
+								IPACM_Wan::is_global_ipv6_addr(rt_rule_entry->rule.attrib.u.v6.dst_addr);
+						else
+							rt_rule_entry->rule.ttl_update = true;
+					}
+#endif
 		            if (false == m_routing.AddRoutingRuleExt(rt_rule))
 		            {
 							IPACMERR("Routing rule addition failed!\n");
@@ -9454,8 +9507,19 @@ int IPACM_Lan::install_uplink_filter_rule_per_client_v2
 			flt_rule_entry.rule.eq_attrib.metadata_meq32.value |= rx_prop->rx[0].attrib.meta_data;
 			flt_rule_entry.rule.eq_attrib.metadata_meq32.mask |= rx_prop->rx[0].attrib.meta_data_mask;
 		}
+#if defined IPA_FLTRT_TTL_UPDATE && defined IPA_TTL_UPDATE_OFFLOAD
+		if (IPACM_Iface::ipacmcfg->ttlHwSupport()) {
+			if (iptype == IPA_IP_v6)
+				flt_rule_entry.rule.ttl_update = IPACM_Wan::is_global_ipv6_addr(flt_rule_entry.rule.attrib.u.v6.dst_addr);
+			else
+				flt_rule_entry.rule.ttl_update = true;
+		}
+#endif
 		memcpy((void *)pFilteringTable->rules + (index * sizeof(struct ipa_flt_rule_add_v2)),
 			&flt_rule_entry, sizeof(flt_rule_entry));
+#if defined IPA_FLTRT_TTL_UPDATE && defined IPA_TTL_UPDATE_OFFLOAD
+		flt_rule_entry.rule.ttl_update = false;
+#endif
 		index++;
 
 		//for IPv6CT enabled and XLAT, add a duplicate rule above that will let XLAT packets go to routing instead of NAT
@@ -9756,6 +9820,14 @@ int IPACM_Lan::install_uplink_filter_rule_per_client
 			flt_rule_entry.rule.eq_attrib.metadata_meq32.value |= rx_prop->rx[0].attrib.meta_data;
 			flt_rule_entry.rule.eq_attrib.metadata_meq32.mask |= rx_prop->rx[0].attrib.meta_data_mask;
 		}
+#if defined IPA_FLTRT_TTL_UPDATE && defined IPA_TTL_UPDATE_OFFLOAD
+		if (IPACM_Iface::ipacmcfg->ttlHwSupport()) {
+			if (iptype == IPA_IP_v6)
+				flt_rule_entry.rule.ttl_update = IPACM_Wan::is_global_ipv6_addr(flt_rule_entry.rule.attrib.u.v6.dst_addr);
+			else
+				flt_rule_entry.rule.ttl_update = true;
+		}
+#endif
 		memcpy(&pFilteringTable->rules[index], &flt_rule_entry, sizeof(flt_rule_entry));
 
 		IPACMDBG_H("Modem UL filtering rule %d has rule_id %d\n", index, prop->prop[cnt].rule_id);

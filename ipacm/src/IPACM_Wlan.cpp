@@ -2705,7 +2705,15 @@ int IPACM_Wlan::handle_wlan_client_route_rule(uint8_t *mac_addr, ipa_ip_type ipt
 				{
 					rt_rule_entry->rule.hashable = true;
 				}
-
+#if defined IPA_FLTRT_TTL_UPDATE && defined IPA_TTL_UPDATE_OFFLOAD
+				if (IPACM_Iface::ipacmcfg->ttlHwSupport()) {
+					if (iptype == IPA_IP_v6)
+						rt_rule_entry->rule.ttl_update =
+							IPACM_Wan::is_global_ipv6_addr(rt_rule_entry->rule.attrib.u.v6.dst_addr);
+					else
+						rt_rule_entry->rule.ttl_update = true;
+				}
+#endif
 				if (false == m_routing.AddRoutingRule(rt_rule))
 				{
 					IPACMERR("Routing rule addition failed!\n");
@@ -2803,6 +2811,14 @@ int IPACM_Wlan::handle_wlan_client_route_rule(uint8_t *mac_addr, ipa_ip_type ipt
 					rt_rule_entry->rule.attrib.u.v6.dst_addr_mask[3] = 0xFFFFFFFF;
 #ifdef FEATURE_IPA_V3
 					rt_rule_entry->rule.hashable = true;
+#endif
+#if defined IPA_FLTRT_TTL_UPDATE && defined IPA_TTL_UPDATE_OFFLOAD
+					if (IPACM_Iface::ipacmcfg->ttlHwSupport()) {
+						if (iptype == IPA_IP_v6)
+							rt_rule_entry->rule.ttl_update = IPACM_Wan::is_global_ipv6_addr(rt_rule_entry->rule.attrib.u.v6.dst_addr);
+						else
+							rt_rule_entry->rule.ttl_update = true;
+					}
 #endif
 					if (false == m_routing.AddRoutingRule(rt_rule))
 					{
@@ -3191,6 +3207,15 @@ int IPACM_Wlan::handle_wlan_client_route_rule_ext(uint8_t *mac_addr, ipa_ip_type
 				if (get_client_memptr(wlan_client, wlan_index)->lan_stats_idx != -1) {
 					rt_rule_entry->rule_id = get_client_memptr(wlan_client, wlan_index)->lan_stats_idx | 0x200;
 				}
+#if defined IPA_FLTRT_TTL_UPDATE && defined IPA_TTL_UPDATE_OFFLOAD
+				if (IPACM_Iface::ipacmcfg->ttlHwSupport()) {
+					if (iptype == IPA_IP_v6)
+						rt_rule_entry->rule.ttl_update =
+							IPACM_Wan::is_global_ipv6_addr(rt_rule_entry->rule.attrib.u.v6.dst_addr);
+					else
+						rt_rule_entry->rule.ttl_update = true;
+				}
+#endif
 				if (false == m_routing.AddRoutingRuleExt(rt_rule))
 				{
 					IPACMERR("Routing rule addition failed!\n");
@@ -3303,6 +3328,15 @@ int IPACM_Wlan::handle_wlan_client_route_rule_ext(uint8_t *mac_addr, ipa_ip_type
 					if (get_client_memptr(wlan_client, wlan_index)->lan_stats_idx != -1) {
 						rt_rule_entry->rule_id = get_client_memptr(wlan_client, wlan_index)->lan_stats_idx | 0x200;
 					}
+#if defined IPA_FLTRT_TTL_UPDATE && defined IPA_TTL_UPDATE_OFFLOAD
+					if (IPACM_Iface::ipacmcfg->ttlHwSupport()) {
+						if (iptype == IPA_IP_v6)
+							rt_rule_entry->rule.ttl_update =
+								IPACM_Wan::is_global_ipv6_addr(rt_rule_entry->rule.attrib.u.v6.dst_addr);
+						else
+							rt_rule_entry->rule.ttl_update = true;
+					}
+#endif
 					if (false == m_routing.AddRoutingRuleExt(rt_rule))
 					{
 						IPACMERR("Routing rule addition failed!\n");
@@ -5395,6 +5429,14 @@ int IPACM_Wlan::install_uplink_filter_rule_per_client
 		ret = IPACM_FAILURE;
 		goto fail;
 	}
+#if defined IPA_FLTRT_TTL_UPDATE && defined IPA_TTL_UPDATE_OFFLOAD
+	if (IPACM_Iface::ipacmcfg->ttlHwSupport()) {
+		if (iptype == IPA_IP_v6)
+			flt_rule_entry.rule.ttl_update = IPACM_Wan::is_global_ipv6_addr(flt_rule_entry.rule.attrib.u.v6.dst_addr);
+		else
+			flt_rule_entry.rule.ttl_update = true;
+	}
+#endif
 
 	action_cache = flt_rule_entry.rule.action;
 
@@ -5703,7 +5745,14 @@ int IPACM_Wlan::install_uplink_filter_rule_per_client_v2
 	flt_rule_entry.rule.enable_stats = true;
 	/* When AST update is needed, we do not need stats per client. */
 	flt_rule_entry.rule.cnt_idx = (ul_cnt_idx != -1) ? ul_cnt_idx : (ast_update_needed()) ? 0 : ul_cnt_idx;
-
+#if defined IPA_FLTRT_TTL_UPDATE && defined IPA_TTL_UPDATE_OFFLOAD
+	if (IPACM_Iface::ipacmcfg->ttlHwSupport()) {
+		if (iptype == IPA_IP_v6)
+			flt_rule_entry.rule.ttl_update = IPACM_Wan::is_global_ipv6_addr(flt_rule_entry.rule.attrib.u.v6.dst_addr);
+		else
+			flt_rule_entry.rule.ttl_update = true;
+	}
+#endif
 	if(iptype == IPA_IP_v4)
 	{
 		if (ipa_if_cate == ODU_IF && IPACM_Wan::isWan_Bridge_Mode())

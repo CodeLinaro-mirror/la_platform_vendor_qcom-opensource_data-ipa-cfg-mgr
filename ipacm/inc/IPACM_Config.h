@@ -321,6 +321,20 @@ public:
 	void del_l2tp_vlan_mapping(ipa_ioc_l2tp_vlan_mapping_info *data);
 
 	int get_vlan_l2tp_mapping(char *client_iface, l2tp_vlan_mapping_info& info);
+
+	/* check if client iface is l2tp iface */
+	bool check_l2tp_iface(const char *client_iface);
+
+#ifdef IPA_L2TP_TUNNEL_UDP
+	/* add l2tp bridge dummy vlan mapping*/
+	void add_l2tp_dummy_bridge_vlan_mapping(const char *bridge_iface, const char* l2tp_client_iface, int bridge_if_index);
+
+	/* check if vlan id is l2tp bridge dummy vlan id */
+	bool check_l2tp_bridge_vlan_id(uint32_t vlan_id);
+
+	/* get l2tp vlan mapping info using dummy vlan id */
+	int get_l2tp_mapping_by_bridge_vlan_id(uint32_t vlan_id, l2tp_vlan_mapping_info& info);
+#endif //#ifdef IPA_L2TP_TUNNEL_UDP
 #endif //#ifdef FEATURE_L2TP
 #endif //defined(FEATURE_L2TP) || defined(FEATURE_VLAN_MPDN)
 

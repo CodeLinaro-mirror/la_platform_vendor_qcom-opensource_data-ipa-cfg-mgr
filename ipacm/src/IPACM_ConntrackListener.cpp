@@ -129,6 +129,10 @@ IPACM_ConntrackListener::IPACM_ConntrackListener() :
 	 IPACM_EvtDispatcher::registr(IPA_NEIGH_CLIENT_IP_ADDR_ADD_EVENT, this);
 	 IPACM_EvtDispatcher::registr(IPA_NEIGH_CLIENT_IP_ADDR_DEL_EVENT, this);
 	 IPACM_EvtDispatcher::registr(IPA_SWALLOW_CHANGE_EVENT, this);
+#ifdef IPA_L2TP_TUNNEL_UDP
+	 IPACM_EvtDispatcher::registr(IPA_HANDLE_WAN_L2TP_VLAN_DOWN, this);
+#endif
+
 #ifdef CT_OPT
 	 p_lan2lan = IPACM_LanToLan::getLan2LanInstance();
 #endif
@@ -391,6 +395,12 @@ void IPACM_ConntrackListener::event_callback(ipa_cm_event_id evt,
 		 ipv6ct_inst->HandleSWAllowEntries();
 		 break;
 
+#ifdef IPA_L2TP_TUNNEL_UDP
+	 case IPA_HANDLE_WAN_L2TP_VLAN_DOWN:
+		 IPACMDBG("Received IPA_HANDLE_WAN_L2TP_VLAN_DOWN event\n");
+		 Handlel2tpVlanDown(data);
+		 break;
+#endif
 	 default:
 			IPACMDBG("Ignore cmd %d\n", evt);
 			break;
@@ -1041,6 +1051,30 @@ void IPACM_ConntrackListener::HandleNeighIpAddrDelEvt_v6(const Ipv6IpAddress& ip
 	IPACMDBG_H("Successfully deleted NAT interface\n");
 }
 
+#ifdef IPA_L2TP_TUNNEL_UDP
+void IPACM_ConntrackListener::Handlel2tpVlanDown(void *in_param)
+{
+	ipacm_event_route_vlan *vlandown_data = (ipacm_event_route_vlan *)in_param;
+	uint16_t vlan_id = vlandown_data->VlanID;
+
+	for(int i = 0; i < IPA_MAX_NUM_HW_PDNS; i++)
+	{
+		if(vlan_pdns[i].public_ip != 0)
+		{
+			for(int j = 0; j < vlan_pdns[i].VID_cnt; j ++)
+			{
+				if (vlan_id == vlan_pdns[i].associated_VIDs[j])
+				{
+					vlan_pdns[i].associated_VIDs[j] = 0;
+					vlan_pdns[i].VID_cnt--;
+					break;
+				}
+			}
+		}
+	}
+	IPACMDBG_H("Successfully removed entry for vlan id %d\n", vlan_id);
+}
+#endif
 #ifdef FEATURE_VLAN_MPDN
 
 void IPACM_ConntrackListener::HandleVlanUpV6(void *in_param)

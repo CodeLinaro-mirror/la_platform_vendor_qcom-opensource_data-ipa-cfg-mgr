@@ -538,6 +538,10 @@ public:
 
 	enum ipa_hw_type GetIPAVer(bool get = false);
 
+	bool ttlHwSupport() {
+		return GetIPAVer() >= IPA_HW_v6_0;
+	}
+
 	int ResetClkVote(void);
 
 	int ReadSwAllow(void);

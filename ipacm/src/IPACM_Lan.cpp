@@ -90,6 +90,7 @@
 #include <iostream>
 #include <vector>
 #include <cctype>
+#include "utilities/uapi_helper.h"
 
 
 using std::string;
@@ -4946,7 +4947,8 @@ int IPACM_Lan::handle_eth_client_route_rule(uint8_t *mac_addr, ipa_ip_type iptyp
 				{
 					rt_rule_entry.rule.hashable = true;
 				}
-
+				UapiHelper::ruleTtlUpdateSet(rt_rule_entry.rule);
+				IPACMDBG_H("ttl_update = %u", rt_rule_entry.rule.ttl_update);
 				rulesPtr[0] = rt_rule_entry;
 				if (!m_routing.addRules(&rt_rule))
 				{
@@ -5040,6 +5042,8 @@ int IPACM_Lan::handle_eth_client_route_rule(uint8_t *mac_addr, ipa_ip_type iptyp
 #ifdef FEATURE_IPA_V3
 					rt_rule_entry.rule.hashable = true;
 #endif
+					UapiHelper::ruleTtlUpdateSet(rt_rule_entry.rule);
+					IPACMDBG_H("ttl_update = %u", rt_rule_entry.rule.ttl_update);
 					rulesPtr[0] = rt_rule_entry;
 					if (!m_routing.addRules(&rt_rule))
 					{
@@ -5427,6 +5431,8 @@ int IPACM_Lan::handle_eth_client_route_rule_ext_v2(uint8_t *mac_addr, ipa_ip_typ
 					rt_rule_entry->rule.cnt_idx = dl_cnt_idx;
 					rt_rule_entry->rule.hashable = true;
 					rt_rule_entry->rule_id = 0;
+					UapiHelper::ruleTtlUpdateSet(rt_rule_entry->rule);
+					IPACMDBG_H("ttl_update = %u", rt_rule_entry->rule.ttl_update);
 					IPACMDBG_H("Add v4 route rule table %s\n", rt_rule->rt_tbl_name);
 					if (false == m_routing.AddRoutingRuleExt_v2(rt_rule))
 					{
@@ -5516,6 +5522,8 @@ int IPACM_Lan::handle_eth_client_route_rule_ext_v2(uint8_t *mac_addr, ipa_ip_typ
 						rt_rule_entry->rule.cnt_idx = dl_cnt_idx;
 						rt_rule_entry->rule.hashable = true;
 						rt_rule_entry->rule_id = 0;
+						UapiHelper::ruleTtlUpdateSet(rt_rule_entry->rule);
+						IPACMDBG_H("ttl_update = %u", rt_rule_entry->rule.ttl_update);
 						if (false == m_routing.AddRoutingRuleExt_v2(rt_rule))
 						{
 							IPACMERR("Routing rule addition failed!\n");
@@ -5660,6 +5668,8 @@ int IPACM_Lan::handle_eth_client_route_rule_ext(uint8_t *mac_addr, ipa_ip_type i
 
 				rt_rule_entry.rule_id = 0;
 				rt_rule_entry.rule_id = (get_client_memptr(eth_client, eth_index)->lan_stats_idx) | 0x200;
+				UapiHelper::ruleTtlUpdateSet(rt_rule_entry.rule);
+				IPACMDBG_H("ttl_update = %u", rt_rule_entry.rule.ttl_update);
 				rulesPtr[0] = rt_rule_entry;
 				if (!m_routing.AddRoutingRuleExt_v2(&rt_rule)) {
 					IPACMERR("Routing rule addition failed!\n");
@@ -5742,6 +5752,8 @@ int IPACM_Lan::handle_eth_client_route_rule_ext(uint8_t *mac_addr, ipa_ip_type i
 					rt_rule_entry.rule.hashable = true;
 #endif
 					rt_rule_entry.rule_id = get_client_memptr(eth_client, eth_index)->lan_stats_idx | 0x200;
+					UapiHelper::ruleTtlUpdateSet(rt_rule_entry.rule);
+					IPACMDBG_H("ttl_update = %u", rt_rule_entry.rule.ttl_update);
 					rulesPtr[0] = rt_rule_entry;
 					if (!m_routing.AddRoutingRuleExt_v2(&rt_rule)) {
 						IPACMERR("Routing rule addition failed!\n");
@@ -7291,6 +7303,8 @@ int IPACM_Lan::handle_uplink_filter_rule(ipacm_ext_prop *prop, ipa_ip_type iptyp
 			IPACMDBG_H("Restore rule index %d to act: %d, rt_tbl_idx: %d \n",
 					   cnt, flt_rule_entry.rule.action,
 					   flt_rule_entry.rule.rt_tbl_idx);
+			UapiHelper::ruleTtlUpdateSet(flt_rule_entry.rule);
+			IPACMDBG_H("ttl_update = %u", flt_rule_entry.rule.ttl_update);
 		}
 
 #ifndef FEATURE_VLAN_MPDN
@@ -9347,6 +9361,8 @@ int IPACM_Lan::install_uplink_filter_rule_per_client_v2
 			flt_rule_entry.rule.eq_attrib.metadata_meq32.value |= rx_prop->rx[0].attrib.meta_data;
 			flt_rule_entry.rule.eq_attrib.metadata_meq32.mask |= rx_prop->rx[0].attrib.meta_data_mask;
 		}
+		UapiHelper::ruleTtlUpdateSet(flt_rule_entry.rule);
+		IPACMDBG_H("ttl_update = %u", flt_rule_entry.rule.ttl_update);
 		memcpy((void *)pFilteringTable->rules + (index * sizeof(struct ipa_flt_rule_add_v2)),
 			&flt_rule_entry, sizeof(flt_rule_entry));
 		index++;
@@ -9640,6 +9656,8 @@ int IPACM_Lan::install_uplink_filter_rule_per_client
 			flt_rule_entry.rule.eq_attrib.metadata_meq32.value |= rx_prop->rx[0].attrib.meta_data;
 			flt_rule_entry.rule.eq_attrib.metadata_meq32.mask |= rx_prop->rx[0].attrib.meta_data_mask;
 		}
+		UapiHelper::ruleTtlUpdateSet(flt_rule_entry.rule);
+		IPACMDBG_H("ttl_update = %u", flt_rule_entry.rule.ttl_update);
 		rulesPtr[index] = flt_rule_entry;
 
 		IPACMDBG_H("Modem UL filtering rule %d has rule_id %d\n", index, prop->prop[cnt].rule_id);

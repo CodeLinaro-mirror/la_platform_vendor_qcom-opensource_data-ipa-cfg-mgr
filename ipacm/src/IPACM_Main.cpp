@@ -587,7 +587,7 @@ void* ipa_driver_msg_notifier(void *param)
 			}
 			fputs("IPA event restore done", fp);
 			fclose(fp);
-			break;
+			continue;
 #endif
 		/* Add for 8994 Android case */
 		case WAN_UPSTREAM_ROUTE_ADD:

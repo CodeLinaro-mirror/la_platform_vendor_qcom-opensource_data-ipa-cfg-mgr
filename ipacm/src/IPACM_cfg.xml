@@ -186,6 +186,8 @@
 		<GREFlag>
 			<GREEnabled>0</GREEnabled>
 			 <GREServer>172.20.98.78</GREServer>
+			 <GREServer>172.20.98.77</GREServer>
+			 <GREServer>172.20.98.76</GREServer>
 		</GREFlag>
 		<IPACMPrivateSubnet>
 			<Subnet>
@@ -296,5 +298,8 @@
 			<IPACMEMESHEnabled>0</IPACMEMESHEnabled>
 			<IPACMEMESHMode>0</IPACMEMESHMode>
 		</IPACMEMESH>
+		<IPACMVLANMPDN>
+			<IPACMVlanMpdnEnabled>0</IPACMVlanMpdnEnabled>
+		</IPACMVLANMPDN>
 	</IPACM>
 </system>

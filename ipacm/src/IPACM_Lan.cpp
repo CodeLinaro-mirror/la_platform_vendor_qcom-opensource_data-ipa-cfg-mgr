@@ -14684,11 +14684,59 @@ int IPACM_Lan::handle_mpdn_ul_xlat_filter_rule(ipacm_ext_prop * prop,
 			flt_index.rule_id_ex[idx_q6] = prop->prop[cnt].rule_id;
 
 			value = vlan_id;
-			flt_rule_entry.rule.eq_attrib.rule_eq_bitmap |= (1<<9);
-			flt_rule_entry.rule.eq_attrib.metadata_meq32_present = 1;
-			flt_rule_entry.rule.eq_attrib.metadata_meq32.offset = 0;
-			flt_rule_entry.rule.eq_attrib.metadata_meq32.value = (value & 0xFFF)<<16;
-			flt_rule_entry.rule.eq_attrib.metadata_meq32.mask = 0x0FFF0000;
+			if (ipa_if_cate == WLAN_IF && is_wlan_if_vlan && vlan_id)
+			{
+				flt_rule_entry.rule.attrib.attrib_mask |= IPA_FLT_VLAN_ID;
+				flt_rule_entry.rule.attrib.vlan_id = vlan_id;
+				/* Construct eq */
+				int fd;
+				ipa_ioc_generate_flt_eq flt_eq;
+
+				/* generate eq */
+				memset(&flt_eq, 0, sizeof(flt_eq));
+				memcpy(&flt_eq.attrib, &flt_rule_entry.rule.attrib, sizeof(flt_eq.attrib));
+				flt_eq.ip = iptype;
+
+				if (flt_rule_entry.rule.attrib.attrib_mask) {
+					fd = open(IPA_DEVICE_NAME, O_RDWR);
+					if (fd < 0) {
+						IPACMERR("Failed opening %s.\n", IPA_DEVICE_NAME);
+						return IPACM_FAILURE;
+					}
+
+					if (0 != ioctl(fd, IPA_IOC_GENERATE_FLT_EQ, &flt_eq)) { //define and cpy attribute to this struct
+						IPACMERR("Failed to get eq_attrib\n");
+						close(fd);
+						return IPACM_FAILURE;
+					}
+					close(fd);
+
+					/* Disable the Q6 based rules */
+					flt_rule_entry.rule.eq_attrib.metadata_meq32_present = 0;
+					/* zero the meta compare bit, flip all bits, this will set only 9th bit to zero */
+					flt_rule_entry.rule.eq_attrib.rule_eq_bitmap &=  ~(1 << 9);
+
+					/* copy the vlan id based meta data equation attributes */
+					flt_rule_entry.rule.eq_attrib.rule_eq_bitmap |= (1 << 5);
+					flt_rule_entry.rule.eq_attrib.num_offset_meq_32 = 1;
+					flt_rule_entry.rule.eq_attrib.offset_meq_32[0].offset = flt_eq.eq_attrib.offset_meq_32[0].offset;
+					flt_rule_entry.rule.eq_attrib.offset_meq_32[0].value = flt_eq.eq_attrib.offset_meq_32[0].value;
+					flt_rule_entry.rule.eq_attrib.offset_meq_32[0].mask = flt_eq.eq_attrib.offset_meq_32[0].mask;
+
+					IPACMDBG_H("Wlan with Vlan:%d filter bitmap: 0x%x, offset: 0x%x, mask: 0x%x, value: 0x%x\n",
+							   vlan_id, flt_eq.eq_attrib.rule_eq_bitmap, flt_eq.eq_attrib.offset_meq_32[0].offset,
+							   flt_eq.eq_attrib.offset_meq_32[0].mask, flt_eq.eq_attrib.offset_meq_32[0].value);
+
+				}
+			}
+			else
+			{
+				flt_rule_entry.rule.eq_attrib.rule_eq_bitmap |= (1 << 9);
+				flt_rule_entry.rule.eq_attrib.metadata_meq32_present = 1;
+				flt_rule_entry.rule.eq_attrib.metadata_meq32.offset = 0;
+				flt_rule_entry.rule.eq_attrib.metadata_meq32.value = (value & 0xFFF) << 16;
+				flt_rule_entry.rule.eq_attrib.metadata_meq32.mask = 0x0FFF0000;
+			}
 
 			/* start with prev = curr = 0
 			 * find smallest q6 rule id greater than current xlat filter's rule id,

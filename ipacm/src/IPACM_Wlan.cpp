@@ -1650,7 +1650,7 @@ int IPACM_Wlan::handle_wlan_mac_flt_conn_disc(uint8_t *mac_addr, bool conn_state
 }
 
 /* handle wifi client initial,copy all partial headers (tx property) */
-int IPACM_Wlan::handle_wlan_client_init_ex(ipacm_event_data_wlan_ex *data, bool delay_init)
+int IPACM_Wlan::handle_wlan_client_init_ex(ipacm_event_data_wlan_ex *data, bool delay_init, uint16_t vlan_id)
 {
 
 #define WLAN_IFACE_INDEX_LEN 10
@@ -1993,7 +1993,18 @@ int IPACM_Wlan::handle_wlan_client_init_ex(ipacm_event_data_wlan_ex *data, bool 
 #endif
 		get_client_memptr(wlan_client, num_wifi_client)->ta_peer_id = ta_peer_id;
 		IPACMDBG_H("ta_peer_id for the client: %d\n", ta_peer_id);
-
+		if (vlan_id)
+		{
+			get_client_memptr(wlan_client, num_wifi_client)->vlan_id = vlan_id;
+			get_client_memptr(wlan_client, num_wifi_client)->is_vlan = true;
+			IPACMDBG_H("Wlan client at index %d is a VLAN client with vlan id: %d\n",
+				num_wifi_client, vlan_id);
+		}
+		else
+		{
+			get_client_memptr(wlan_client, num_wifi_client)->vlan_id = 0;
+			get_client_memptr(wlan_client, num_wifi_client)->is_vlan = false;
+		}
 		wlan_index = num_wifi_client;
 		num_wifi_client++;
 #if defined(FEATURE_IPACM_PER_CLIENT_STATS) || defined(IPA_WDI_AST_UPDATE)
@@ -6502,8 +6513,21 @@ int IPACM_Wlan::handle_wlan_vlan_neighbor(ipacm_event_new_neigh_vlan *param) {
 	}
 
 
-	if (IPACM_SUCCESS != IPACM_Iface::ipacmcfg->get_vlan_id(data->iface_name, &vlan_id)) {
+	if (IPACM_SUCCESS != IPACM_Iface::ipacmcfg->get_vlan_id(data->iface_name, &vlan_id))
+	{
 		IPACMERR("failed getting vlan ID of iface %s \n", data->iface_name);
+		return IPACM_FAILURE;
+	}
+
+	memset(&client_info, 0, sizeof(tether_client_info));
+	if (new_neigh_data->bridge)
+	{
+		bridge = new_neigh_data->bridge;
+		client_info.is_vlan = true;
+	}
+	else {
+		IPACMDBG_H("Bridge info not available for Vlan Client..exit\n");
+		return IPACM_FAILURE;
 	}
 
 	wlan_index = get_wlan_client_index(data->mac_addr, vlan_id);
@@ -6512,7 +6536,7 @@ int IPACM_Wlan::handle_wlan_vlan_neighbor(ipacm_event_new_neigh_vlan *param) {
 		/* Initialize WLAN client based on Primary client. */
 		handle_wlan_client_init_ex(
 				get_primary_client_memptr(wlan_primary_client, wlan_primary_index)->p_hdr_info,
-				true);
+				true, vlan_id);
 
 		wlan_index = get_wlan_client_index(data->mac_addr, vlan_id);
 		if (wlan_index == IPACM_INVALID_INDEX)
@@ -6521,21 +6545,6 @@ int IPACM_Wlan::handle_wlan_vlan_neighbor(ipacm_event_new_neigh_vlan *param) {
 			return IPACM_FAILURE;
 		}
 		get_primary_client_memptr(wlan_primary_client, wlan_primary_index)->num_vlan_clients++;
-	}
-
-	memset(&client_info, 0, sizeof(tether_client_info));
-	if (new_neigh_data->bridge)
-	{
-		bridge = new_neigh_data->bridge;
-		get_client_memptr(wlan_client, wlan_index)->is_vlan = true;
-		client_info.is_vlan = true;
-
-		get_client_memptr(wlan_client, wlan_index)->vlan_id = vlan_id;
-		IPACMDBG_H("Wlan client at index %d is a VLAN client with vlan id: %d\n", wlan_index, vlan_id);
-	}
-	else {
-		IPACMDBG_H("Bridge info not available for Vlan Client..exit\n");
-		return IPACM_FAILURE;
 	}
 
 	if (data->iptype == IPA_IP_v4) {

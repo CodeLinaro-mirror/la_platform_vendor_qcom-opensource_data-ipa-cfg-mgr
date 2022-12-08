@@ -60,7 +60,7 @@
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE
  *
  * Changes from Qualcomm Innovation Center are provided under the following license:
- * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2023-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 /*!
@@ -2148,6 +2148,45 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 		eogre_down();
 		break;
 #endif
+
+	case IPA_IPACM_DISABLE:
+			if(m_is_sta_mode == WLAN_WAN)
+			{
+				IPACMDBG_H("Received IPA_IPACM_DISABLE\n");
+				handle_down_evt();
+				/* reset the STA-iface category to unknown */
+				IPACM_Iface::ipacmcfg->iface_table[ipa_if_num].if_cat = UNKNOWN_IF;
+				IPACMDBG_H("IPA_WAN_STA (%s):ipa_index (%d) instance close \n", IPACM_Iface::ipacmcfg->iface_table[ipa_if_num].iface_name, ipa_if_num);
+				IPACM_Iface::ipacmcfg->DelNatIfaces(dev_name); // delete NAT-iface
+				delete this;
+				return;
+			}
+			else if(m_is_sta_mode == Q6_WAN)
+			{
+				IPACMDBG_H("Received IPA_IPACM_DISABLE\n");
+				handle_down_evt_ex();
+				IPACMDBG_H("IPA_WAN_Q6 (%s):ipa_index (%d) instance close \n", IPACM_Iface::ipacmcfg->iface_table[ipa_if_num].iface_name, ipa_if_num);
+#if defined(FEATURE_SOCKSv5) && defined (IPA_SOCKV5_EVENT_MAX)
+				info.ipv4_addr = wan_v4_addr;
+				info.mux_id = ext_prop->ext[0].mux_id;;
+				memcpy(info.iface_name, dev_name, sizeof(dev_name));
+				/* add qmuxd mapping*/
+				IPACM_Iface::ipacmcfg->del_mux_id_mapping(&info);
+#endif //defined(FEATURE_SOCKSv5) && defined (IPA_SOCKV5_EVENT_MAX)
+				IPACM_Iface::ipacmcfg->DelNatIfaces(dev_name); // delete NAT-iface
+				delete this;
+				return;
+			}
+			else if (m_is_sta_mode == ECM_WAN)
+			{
+				IPACMDBG_H("Received IPA_IPACM_DISABLE(wan_mode:%d)\n", m_is_sta_mode);
+				/* delete previous instance */
+				handle_down_evt();
+				IPACMDBG_H("IPA_WAN_CRADLE (%s):ipa_index (%d) instance close \n", IPACM_Iface::ipacmcfg->iface_table[ipa_if_num].iface_name, ipa_if_num);
+				IPACM_Iface::ipacmcfg->DelNatIfaces(dev_name); // delete NAT-iface
+				delete this;
+				return;
+			}
 
 	default:
 		break;

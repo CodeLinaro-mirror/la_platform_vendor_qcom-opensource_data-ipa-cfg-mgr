@@ -28,7 +28,7 @@
  *
  * Changes from Qualcomm Innovation Center are provided under the following license:
  *
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted (subject to the limitations in the
@@ -197,6 +197,7 @@ const char *ipacm_event_name[] = {
 	__stringify(IPA_HANDLE_MACSEC_DEL),                    /* Handle macsec map delete event */
 	__stringify(IPA_ADD_BRIDGE_VLAN_PHY_INTF),             /* Handle vlan details add for physical interface.  */
 	__stringify(IPA_ADD_BRIDGE_VLAN_BR_INTF),              /* Handle vlan-bridge details add for bridge interface. */
+	__stringify(IPA_IPACM_DISABLE),                       /* handle ipacm_disable event */
 	__stringify(IPACM_EVENT_MAX)
 };
 

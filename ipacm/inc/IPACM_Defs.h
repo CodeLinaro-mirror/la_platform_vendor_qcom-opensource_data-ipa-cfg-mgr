@@ -92,6 +92,9 @@ extern "C"
 #define IPA_ODU_HDR_NAME_v6  "IPACM_ODU_v6"
 #define IPA_IF_SOCKSv5_NAME  "IPACM_SOCKSv5"
 #define IPA_EoGRE_HDR_NAME   "IPACM_EoGRE_v%d"
+#define IPA_GRE_HDR_NAME   "IPACM_GRE_v%d"
+#define IPA_GRE_C_HDR_NAME   "IPACM_GRE_C_v%d"
+
 
 #define IPA_MAX_ACTIVE_WLAN_IFACE 72 // 64 wlan (4x16 band support) + 8 extra rdkb supported ifaces
 
@@ -396,6 +399,10 @@ typedef enum
 	IPA_WAN_HANDLE_EoGRE_DOWN,
 #endif
 	IPA_DSCP_PCP_CONFIG_CHANGE_EVENT,         /* ipacm_event_change_dscp_pcp */
+#ifdef FEATURE_PMIPV6
+	IPA_HANDLE_GRE_UP,                      /* ipa_ipgre_info */
+	IPA_HANDLE_GRE_DOWN,                    /* ipa_ipgre_info */
+#endif
 	IPA_HANDLE_MACSEC_ADD,                    /* ipa_macsec_map */
 	IPA_HANDLE_MACSEC_DEL,                    /* ipa_macsec_map */
 	IPA_ADD_BRIDGE_VLAN_PHY_INTF,

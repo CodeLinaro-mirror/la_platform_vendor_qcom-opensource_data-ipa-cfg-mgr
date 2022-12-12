@@ -298,6 +298,10 @@ if (!(a)) {                                                 \
 #define IPACM_MAPE_TAG                     "IPACMMAPE"
 #define IPACM_MAPE_ENABLE_TAG              "IPACMMAPEEnable"
 #define IPACM_MAPE_IFACE_TAG               "MAPEPhyIface"
+// Tunnel Config entries
+#define PMIPv6_Enabled_TAG                   "PMIPV6Enable"
+#define PMIPv6_TAG                           "PMIPV6"
+
 
 /*---------------------------------------------------------------------------
       IP protocol numbers - use in dss_socket() to identify protocols.
@@ -356,7 +360,10 @@ typedef struct
 	bool SWAllowed_ex;
 } IPACM_extd_firewall_entry_conf_t;
 
-
+typedef struct
+{
+	uint8_t pmipv6_enable;
+}IPACM_tunnel_conf_t;
 /*---------------------------------------------------------------------------
            Extended FireWall configuration.
 ---------------------------------------------------------------------------*/
@@ -538,5 +545,6 @@ int IPACM_read_firewall_xml
 	IPACM_firewall_t &firewall_config            /* Mobile AP firewall config data */
 );
 int IPACM_read_firewall_xml(const char *xml_file, IPACM_firewall_conf_t &default_pdn_firewall_config);
+int IPACM_read_tunnel_xml(const char *xml_file, IPACM_tunnel_conf_t* tunnel_cfg);
 
 #endif //IPACM_XML

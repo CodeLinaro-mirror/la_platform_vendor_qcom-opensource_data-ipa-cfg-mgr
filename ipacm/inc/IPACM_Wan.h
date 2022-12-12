@@ -181,6 +181,7 @@ typedef struct pppoe_hdr_s
 	uint16_t words[4];
 } pppoe_hdr_t;
 
+
 /*
  *  * Where things reside in the struct above...
  *   */
@@ -191,6 +192,60 @@ typedef struct pppoe_hdr_s
 #define PPPOE_PROTOCOL_V6_TYPE	0x0057
 #define PPPOE_SESSION_ETH_TYPE	0x8864
 #endif
+
+typedef struct ipgre_route_data_s
+{
+	uint32_t ul_header_hdl;
+	uint32_t ul_header_hdl_c; /* Complementary hdr handle. For v4 tunnel and v6 data, and v6 tunnel and v4 data */
+	uint32_t dl_header_hdl;
+	uint32_t proc_ctx_gre_add_hdl;
+	uint32_t proc_ctx_gre_rmv_hdl;
+	uint32_t rt_gre_add_hdl;
+	uint32_t rt_gre_rmv_hdl;
+	uint32_t rt_tbl_hdl;
+} ipgre_route_data_t;
+/*
+ * Enough space for:
+ *
+ * -> An IP v4 header (five 32-bit words),
+ * -> A GRE header (one 32-bit word), and
+ * -> An MPLS header (one 32-bit word).
+ */
+typedef struct v4_ipgre_hdr_s
+{
+	uint32_t words[7];
+} v4_ipgre_hdr_t;
+
+
+/*
+ * Where things reside in the struct above...
+ */
+#define IPV4_SRC_ADDR_IDX  3
+#define IPV4_DST_ADDR_IDX  4
+#define IPV4_GRE_PROT_IDX  5
+#define IPV4_MPLS_PROT_IDX 6
+
+/*
+ * Enough space for:
+ *
+ * -> An IP v6 header (ten 32-bit words),
+ * -> An IP v6 extension header (two 32-bit words),
+ * -> A GRE header (one 32-bit word), and
+ * -> An MPLS header (one 32-bit word).
+ */
+typedef struct v6_ipgre_hdr_s
+{
+	uint32_t words[14];
+} v6_ipgre_hdr_t;
+
+/*
+ * Where things reside in the struct above...
+ */
+#define IPV6_SRC_ADDR_IDX   2
+#define IPV6_DST_ADDR_IDX   6
+#define IPV6_GRE_PROT_IDX  12
+#define IPV6_GRE_PMIP_PROT_IDX  10
+
 /* wan iface */
 class IPACM_Wan : public IPACM_Iface
 {
@@ -212,9 +267,59 @@ public:
 	static uint16_t mtu_default_wan_v4;
 	static uint16_t mtu_default_wan_v6;
 
-#ifdef FEATURE_EoGRE
+#if defined(FEATURE_EoGRE) || defined(FEATURE_PMIPV6)
 	static uint16_t mtu_gre_v4;
 	static uint16_t mtu_gre_v6;
+#endif
+#ifdef FEATURE_PMIPV6
+	/*
+	 * The following is for keeping gre route rule state...
+	 *
+	 * We're using two below (one for v4, one for v6) because there
+	 * may be a mismatch between the tunnel iptype (ie. the one
+	 * specified in the gre enable) and the Vlan Ethernet packet's
+	 * IP payload type. In other words:
+	 *
+	 *   The tunnel may be v4, while the Vlan Ethernet packet's IP
+	 *   type is v6; or
+	 *
+	 *   The tunnel may be v6, while the Vlan Ethernet packet's IP
+	 *   type is v4...
+	 */
+	static ipgre_route_data_t ipgre_route_data[IPA_IP_MAX];
+
+	int ipgre_do_rt_work(
+		ipa_ipgre_info& ipgre_info);
+
+	void ipgre_route_data_init(
+		enum ipa_ip_type iptype );
+
+	static uint32_t ipgre_get_rt_tbl_hdl(
+		enum ipa_ip_type iptype);
+
+	int ipgre_make_hdr_for_add_ctx(
+		ipa_ipgre_info& ipgre_info);
+
+	int ipgre_make_hdr_add_ctx(
+		ipa_ipgre_info& ipgre_info,
+		uint32_t        hdr_2use = 0);
+
+	int ipgre_make_hdr_for_rmv_ctx(
+		ipa_ipgre_info& ipgre_info);
+
+	int ipgre_make_hdr_rmv_ctx(
+		ipa_ipgre_info& ipgre_info,
+		uint32_t        hdr_2use = 0);
+
+	int ipgre_make_header_add_rt_rule(
+		ipa_ipgre_info& ipgre_info,
+		uint32_t        ctx_2use = 0);
+
+	int ipgre_make_header_rmv_rt_rule(
+		ipa_ipgre_info& ipgre_info);
+
+	void ipgre_clear_route_data(
+		enum ipa_ip_type             iptype);
 #endif
 
 	/* IPACM interface name */
@@ -307,6 +412,13 @@ public:
 				return mtu_gre_v4;
 			}
 #endif
+#ifdef FEATURE_PMIPV6
+			if (IPACM_Iface::ipacmcfg->pmip_details.pmipv6_enabled)
+			{
+				IPACMDBG_H("got mtu_gre_v4\n")
+				return mtu_gre_v4;
+			}
+#endif
 			if (isWanUP(ipa_if_num_tether))
 			{
 				IPACMDBG_H("got mtu_default_v4\n")
@@ -317,6 +429,13 @@ public:
 		{
 #ifdef FEATURE_EoGRE
 			if (IPACM_Iface::ipacmcfg->eogre_enabled)
+			{
+				IPACMDBG_H("got mtu_gre_v6\n")
+				return mtu_gre_v6;
+			}
+#endif
+#ifdef FEATURE_PMIPV6
+			if (IPACM_Iface::ipacmcfg->pmip_details.pmipv6_enabled)
 			{
 				IPACMDBG_H("got mtu_gre_v6\n")
 				return mtu_gre_v6;
@@ -586,7 +705,24 @@ public:
 	int eogre_notify_wan_state(
 		bool eogre_enable );
 #endif
+#ifdef FEATURE_PMIPV6
+	void gre_up();
 
+	void gre_down();
+
+	int gre_v4_work(
+		bool gre_enable );
+
+	int gre_v6_work(
+		bool gre_enable );
+
+	int gre_notify_wan_state(
+		bool gre_enable );
+#endif
+	static const uint8_t v4_gre_header[];
+	static const uint8_t v6_gre_header[];
+	static const uint8_t v4_ipogre_header[];
+	static const uint8_t v6_ipogre_header[];
 	static int GetMuxByAddr(
 		enum ipa_ip_type iptype,
 		void*            addr,
@@ -951,10 +1087,10 @@ private:
 	/* configure the initial firewall filter rules */
 #ifdef FEATURE_VLAN_MPDN
 	int config_dft_firewall_rules_ex(struct ipacm_pdn_flt_rule* rules, int rule_offset,
-		ipa_ip_type iptype);
+		ipa_ip_type iptype, bool isPmipv6=false);
 #else
 	int config_dft_firewall_rules_ex(struct ipa_flt_rule_add* rules, int rule_offset,
-		ipa_ip_type iptype);
+		ipa_ip_type iptype, bool isPmipv6=false);
 #endif
 	/* init filtering rule in wan dl filtering table */
 	int init_fl_rule_ex(ipa_ip_type iptype);
@@ -971,7 +1107,7 @@ private:
 
 	ipa_ioc_query_intf_ext_props *ext_prop;
 
-	int config_wan_firewall_rule(ipa_ip_type iptype);
+	int config_wan_firewall_rule(ipa_ip_type iptype,bool isPmipv6=false);
 
 	int del_wan_firewall_rule(ipa_ip_type iptype);
 
@@ -1008,8 +1144,8 @@ private:
 
 	void HandleSTAClientDelEvt(const ipa_wan_client* client, int index);
 
-	int add_catchup_all_filtering_rule_each_pdn( ipa_ip_type iptype,
-		const struct ipa_rule_attrib& rx_prop_attrib, struct ipa_flt_rule_add& flt_rule_add, int fltr_rule_number);
+	int add_catchup_all_filtering_rule_each_pdn(ipa_ip_type iptype,
+		const struct ipa_rule_attrib& rx_prop_attrib, struct ipa_flt_rule_add& flt_rule_add, int fltr_rule_number, bool isPmipv6 = false);
 
 #ifdef FEATURE_IPV6_NAT
 #ifdef FEATURE_VLAN_MPDN

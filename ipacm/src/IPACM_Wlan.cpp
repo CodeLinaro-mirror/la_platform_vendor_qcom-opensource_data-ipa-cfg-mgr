@@ -564,6 +564,16 @@ void IPACM_Wlan::event_callback(ipa_cm_event_id event, void *param)
 						handle_software_routing_enable();
 					}
 				}
+#ifdef FEATURE_PMIPV6
+					if ( IPACM_Iface::ipacmcfg->pmip_details.pmipv6_enabled )
+					{
+						IPACMDBG_H(
+							"A previous gre enable needs to be undone, then redone. "
+							"Need to call gre_down followed by an gre_up\n");
+						gre_down(true);
+						gre_up(true); //this is where its getting reset. He is calling this for every new IPA_ADD because instance is not ipv4 right away
+					}
+#endif
 			}
 		}
 		break;

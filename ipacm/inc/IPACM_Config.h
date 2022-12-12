@@ -594,6 +594,17 @@ public:
 	char eogre_tunnel_name[IPA_IFACE_NAME_LEN];
 	bool v6options_enabled;
 #endif
+	ipa_ipgre_info ipgre_info;
+	typedef struct pmipv6_status
+	{
+		char tunnel_name[IPA_IFACE_NAME_LEN];
+		bool pmipv6_enabled;
+		bool pmipv6_up;
+		bool pmipv6_tunnel_setup;
+		bool pmipv6_gre_event_posted;
+		bool pmipv6_up_wan;
+	}pmipv6_status;
+	pmipv6_status pmip_details;
 
 	bool eth_pdu_enabled;
 
@@ -608,7 +619,7 @@ public:
 	int flt_rule_count_v6[IPA_CLIENT_MAX];
 
 	/* IPACM routing table name for v4/v6 */
-	struct ipa_ioc_get_rt_tbl rt_tbl_lan_v4, rt_tbl_wan_v4, rt_tbl_default_v4, rt_tbl_v6, rt_tbl_wan_v6;
+	struct ipa_ioc_get_rt_tbl rt_tbl_lan_v4, rt_tbl_wan_v4, rt_tbl_default_v4, rt_tbl_v6, rt_tbl_wan_v6, rt_tbl_lan_v6;
 	struct ipa_ioc_get_rt_tbl rt_tbl_wan_dl, rt_tbl_default_v6;
 	struct ipa_ioc_get_rt_tbl rt_tbl_odu_v4, rt_tbl_odu_v6;
 	struct ipa_ioc_get_rt_tbl rt_tbl_inter_l2l_v4, rt_tbl_inter_l2l_v6;
@@ -1193,7 +1204,7 @@ public:
 	{
 		return qmap_id;
 	}
-
+	int Load_tunnel_xml_details();
 	int SetExtProp(ipa_ioc_query_intf_ext_props *prop);
 
 	ipacm_ext_prop* GetExtProp(ipa_ip_type ip_type);

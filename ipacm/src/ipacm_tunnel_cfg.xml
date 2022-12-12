@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<system xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="ipacm_tunnel_cfg.xml">
+	<PMIPV6>
+    <PMIPV6Enable>0</PMIPV6Enable>
+    </PMIPV6>
+</system>

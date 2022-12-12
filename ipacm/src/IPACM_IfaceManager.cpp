@@ -30,6 +30,10 @@ Changes from Qualcomm Innovation Center are provided under the following license
 Copyright (c) 2023-2025 Qualcomm Innovation Center, Inc. All rights reserved.
 SPDX-License-Identifier: BSD-3-Clause-Clear
 */
+/*Changes from Qualcomm Innovation Center are provided under the following license:
+
+Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+SPDX-License-Identifier: BSD-3-Clause-Clear*/
 /*!
 	@file
 	IPACM_IfaceManager.cpp
@@ -319,6 +323,10 @@ int IPACM_IfaceManager::create_iface_instance(ipacm_ifacemgr_data *param)
 				IPACM_EvtDispatcher::registr(IPA_SW_ROUTING_ENABLE, lan);
 				IPACM_EvtDispatcher::registr(IPA_SW_ROUTING_DISABLE, lan);
 				IPACM_EvtDispatcher::registr(IPA_MAC_ADD_DEL_FLT_EVENT, lan);
+#ifdef FEATURE_PMIPV6
+				IPACM_EvtDispatcher::registr(IPA_HANDLE_GRE_UP, lan);
+				IPACM_EvtDispatcher::registr(IPA_HANDLE_GRE_DOWN, lan);
+#endif
 #ifdef FEATURE_IPA_ANDROID
 				IPACM_EvtDispatcher::registr(IPA_HANDLE_WAN_UP_TETHER, lan);
 				IPACM_EvtDispatcher::registr(IPA_HANDLE_WAN_UP_V6_TETHER, lan);
@@ -445,6 +453,10 @@ int IPACM_IfaceManager::create_iface_instance(ipacm_ifacemgr_data *param)
 #ifdef FEATURE_EoGRE
 					IPACM_EvtDispatcher::registr(IPA_HANDLE_EoGRE_UP, odu);
 					IPACM_EvtDispatcher::registr(IPA_HANDLE_EoGRE_DOWN, odu);
+#endif
+#ifdef FEATURE_PMIPV6
+					IPACM_EvtDispatcher::registr(IPA_HANDLE_GRE_UP, odu);
+					IPACM_EvtDispatcher::registr(IPA_HANDLE_GRE_DOWN, odu);
 #endif
 					IPACM_EvtDispatcher::registr(IPA_ADDR_ADD_EVENT, odu);
 					/*lan2lan ipa offload with static IP*/
@@ -595,6 +607,10 @@ int IPACM_IfaceManager::create_iface_instance(ipacm_ifacemgr_data *param)
 #ifdef IPA_MTU_EVENT_MAX
 				IPACM_EvtDispatcher::registr(IPA_MTU_UPDATE, wl);
 #endif
+#ifdef FEATURE_PMIPV6
+				IPACM_EvtDispatcher::registr(IPA_HANDLE_GRE_UP, wl);
+				IPACM_EvtDispatcher::registr(IPA_HANDLE_GRE_DOWN, wl);
+#endif
 				if (IPACM_Iface::ipacmcfg->wlan_vlan_mpdn_enabled == true) {
 					IPACM_EvtDispatcher::registr(IPA_WLAN_SWITCH_VLAN_MODE, wl);
 				}
@@ -663,9 +679,14 @@ int IPACM_IfaceManager::create_iface_instance(ipacm_ifacemgr_data *param)
 					IPACM_EvtDispatcher::registr(IPA_WAN_HANDLE_EoGRE_UP, w);
 					IPACM_EvtDispatcher::registr(IPA_WAN_HANDLE_EoGRE_DOWN, w);
 #endif
+
 #ifdef FEATURE_DUAL_BACKHAUL
 					IPACM_EvtDispatcher::registr(IPA_HANDLE_WAN_DOWN, w);
 					IPACM_EvtDispatcher::registr(IPA_HANDLE_WAN_UP, w);
+#endif
+#ifdef FEATURE_PMIPV6
+					IPACM_EvtDispatcher::registr(IPA_HANDLE_GRE_UP, w);
+					IPACM_EvtDispatcher::registr(IPA_HANDLE_GRE_DOWN, w);
 #endif
 					IPACM_EvtDispatcher::registr(IPA_ADDR_ADD_EVENT, w);
 #ifdef FEATURE_IPA_ANDROID

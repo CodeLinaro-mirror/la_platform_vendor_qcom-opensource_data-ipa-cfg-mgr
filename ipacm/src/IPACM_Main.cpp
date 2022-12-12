@@ -30,6 +30,10 @@
  * Copyright (c) 2023-2025 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
+/*Changes from Qualcomm Innovation Center are provided under the following license:
+
+Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+SPDX-License-Identifier: BSD-3-Clause-Clear*/
 /*!
 	@file
 	IPACM_Main.cpp
@@ -85,6 +89,7 @@
 #define IPACM_CFG_FILE_NAME    "IPACM_cfg.xml"
 #define IPACM_CFG_EXT_FILE_NAME    "IPACM_cfg_ext.xml"
 #define IPACM_CFG_EXT_FILE "/etc/data/ipa/IPACM_cfg_ext.xml"
+#define IPACM_TUNNEL_CFG_FILE_NAME "ipacm_tunnel_cfg.xml"
 #ifndef FEATURE_IPA_ANDROID
 #define IPACM_PID_FILE "/var/run/data/ipa/ipacm.pid"
 #define IPACM_DIR_NAME     "/etc/data/ipa"
@@ -227,6 +232,21 @@ void* firewall_monitor(void *param)
 					{
 						IPACMERR("Easy Mesh is not supported or has lower mode \n");
 					}
+				}
+				else if(!strncmp(event->name, IPACM_TUNNEL_CFG_FILE_NAME, event->len))
+				{
+					IPACMDBG_H("File \"%s\" was 0x%x\n", event->name, event->mask);
+					IPACMDBG_H("The interested file %s .\n", IPACM_TUNNEL_CFG_FILE_NAME);
+
+					IPACM_Config* config = IPACM_Config::GetInstance();
+					if(config-> Load_tunnel_xml_details()==IPACM_FAILURE){
+						IPACMDBG_H("Could not load file\n");
+					}
+					IPACMDBG_H("PMIPv6 enable info loaded\n");
+					// pmipv6_enabled
+					// evt_data.event = IPA_TUNNEL_CFG_CHANGE_EVENT;
+					// evt_data.evt_data = NULL;
+					//IPACM_EvtDispatcher::PostEvt(&evt_data);
 				}
 			}
 			IPACMDBG_H("Received monitoring event %s.\n", event->name);

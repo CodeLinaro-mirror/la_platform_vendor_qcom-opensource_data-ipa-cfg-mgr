@@ -1136,6 +1136,78 @@ int IPACM_read_firewall_xml(const char *xml_file, IPACM_firewall_conf_t &default
 	memcpy(&default_pdn_firewall_config, &firewall_config.pdns[pdn_index], sizeof(default_pdn_firewall_config));
 	return IPACM_SUCCESS;
 }
+static int IPACM_tunnel_xml_parse_tree(const char *xml_file, xmlNode* xml_node, IPACM_tunnel_conf_t* tunnel_cfg){
+	int32_t ret_val = IPACM_SUCCESS;
+	char *content;
+	int str_size;
+	char content_buf[MAX_XML_STR_LEN];
+	if (NULL == xml_node)
+			return IPACM_SUCCESS;
+	while ( xml_node != NULL &&
+					ret_val == IPACM_SUCCESS)
+		{
+			switch (xml_node->type)
+			{
+				case XML_ELEMENT_NODE:
+					if(IPACM_util_icmp_string((char*)xml_node->name, PMIPv6_TAG) == 0){
+						ret_val = IPACM_tunnel_xml_parse_tree(xml_file,xml_node->children, tunnel_cfg);
+					}
+					else if (IPACM_util_icmp_string((char*)xml_node->name, PMIPv6_Enabled_TAG) == 0)
+					{
+						content = IPACM_read_content_element(xml_node);
+						if (content != NULL)
+						{
+							memset(content_buf, 0, sizeof(content_buf));
+							memcpy(content_buf, (void *)content, strlen(content));
+							tunnel_cfg->pmipv6_enable = atoi(content_buf);
+							IPACMDBG_H("PMIPv6 is %d\n", tunnel_cfg->pmipv6_enable);
+						}
+					}
+					break;
+				default:
+					IPACMDBG_H("Case not handled\n");
+					break;
+
+			}
+			xml_node = xml_node->next;
+		}
+	return ret_val;
+}
+
+int IPACM_read_tunnel_xml(const char *xml_file, IPACM_tunnel_conf_t* tunnel_cfg){
+	xmlDocPtr doc = NULL;
+	xmlNode* root = NULL;
+	int ret_val = IPACM_SUCCESS;
+
+	memset(tunnel_cfg, 0, sizeof(IPACM_tunnel_conf_t));
+
+	/* invoke the XML parser and obtain the parse tree */
+	doc = xmlReadFile(xml_file, "UTF-8", XML_PARSE_NOBLANKS);
+	if (doc == NULL) {
+		IPACMDBG_H("IPACM_xml_parse: libxml returned parse error\n");
+		return IPACM_FAILURE;
+	}
+	/*get the root of the tree*/
+	root = xmlDocGetRootElement(doc);
+	if (root == NULL || IPACM_util_icmp_string((char*)root->name, system_TAG) != 0)
+	{
+		IPACMERR("The XML %s is not valid. Please start from %s tag", xml_file, system_TAG);
+		ret_val = IPACM_FAILURE;
+		return IPACM_FAILURE;
+	}
+
+	ret_val = IPACM_tunnel_xml_parse_tree(xml_file, root->children, tunnel_cfg);
+	if (ret_val != IPACM_SUCCESS)
+	{
+		IPACMERR("IPACM_xml_parse: ipacm_tunnel_xml_parse_tree returned parse error!\n");
+		memset(tunnel_cfg, 0, sizeof(IPACM_tunnel_conf_t));
+		return IPACM_FAILURE;
+	}
+
+	return IPACM_SUCCESS;
+}
+
+
 
 /* This function traverses the firewall xml tree */
 static int IPACM_firewall_xml_parse_tree(const char *xml_file, xmlNode* xml_node, IPACM_firewall_t &firewall_config)

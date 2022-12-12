@@ -86,6 +86,12 @@
 #include <sys/ioctl.h>
 #include <fcntl.h>
 
+#define GRE_PROTOCOL_TYPE_v6 0x86DD
+#define GRE_PROTOCOL_TYPE_v4 0x0800
+#define GRE_PROTOCOL_TYPE_v6_WITH_KEY 0x200086DD
+#define GRE_PROTOCOL_TYPE_v4_WITH_KEY 0x20000800
+
+
 const uint8_t IPACM_Lan::v4_eogre_header[] = {
 	0x45, 0x00, 0x00, 0x00,
 	0x00, 0x00, 0x40, 0x00,
@@ -175,6 +181,7 @@ IPACM_Lan::IPACM_Lan(int iface_index) : IPACM_Iface(iface_index)
 	int i, m_fd_odu, ret = IPACM_SUCCESS;
 	eth_client_len = 0;
 	is_l2tp_iface = false;
+	pmipv6_greup=false;
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
 	int max_clients = (IPACM_Iface::ipacmcfg->ipacm_lan_stats_enable) ? IPA_MAX_NUM_HW_PATH_CLIENTS:
 		IPA_MAX_NUM_ETH_CLIENTS;
@@ -395,7 +402,7 @@ IPACM_Lan::IPACM_Lan(int iface_index) : IPACM_Iface(iface_index)
 	}
 #endif
 
-#ifdef FEATURE_EoGRE
+#if defined(FEATURE_EoGRE) || defined(FEATURE_PMIPV6)
 	gre_route_data_init(IPA_IP_v4);
 	gre_route_data_init(IPA_IP_v6);
 #endif
@@ -847,6 +854,16 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 						gre_up(); //this is where its getting reset. He is calling this for every new IPA_ADD because instance is not ipv4 right away
 					}
 #endif
+#ifdef FEATURE_PMIPV6
+					if ( IPACM_Iface::ipacmcfg->pmip_details.pmipv6_enabled )
+					{
+						IPACMDBG_H(
+							"A previous gre enable needs to be undone, then redone. "
+							"Need to call gre_down followed by an gre_up\n");
+						gre_down(true);
+						gre_up(true);
+					}
+#endif
 					IPACMDBG_H("Finish handling IPA_ADDR_ADD_EVENT for ip-family(%d)\n", data->iptype);
 
 					/* checking if SW-RT_enable */
@@ -1125,7 +1142,6 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 					get_client_memptr(eth_client, clnt_indx)->gre_nat_set = false;
 			}
 		}
-
 		break;
 
 	case IPA_HANDLE_WAN_DOWN_V6:
@@ -1707,6 +1723,18 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 	case IPA_HANDLE_EoGRE_DOWN:
 		IPACMDBG_H("Received and will process an IPA_HANDLE_EoGRE_DOWN\n");
 		gre_down();
+		break;
+#endif
+#ifdef FEATURE_PMIPV6
+	case IPA_HANDLE_GRE_UP:
+		IPACMDBG_H("Received and will process an IPA_HANDLE_GRE_UP\n");
+		gre_down(true);/*Ensures clean base*/
+		gre_up(true);
+		break;
+
+	case IPA_HANDLE_GRE_DOWN:
+		IPACMDBG_H("Received and will process an IPA_HANDLE_GRE_DOWN\n");
+		gre_down(true);
 		break;
 #endif
 	case IPA_HANDLE_MACSEC_ADD:
@@ -3256,6 +3284,10 @@ int IPACM_Lan::handle_wan_down(bool is_sta_mode)
 
 	if(is_sta_mode == false)
 	{
+		if(IPACM_Iface::ipacmcfg->pmip_details.pmipv6_enabled)/*Delete GRE Filter rules on WAN_DOWN*/
+		{
+			gre_down(true);
+		}
 		if(del_ul_flt_rules(IPA_IP_v4))
 			return IPACM_FAILURE;
 
@@ -4119,6 +4151,12 @@ int IPACM_Lan::handle_wan_up_ex(ipacm_ext_prop *ext_prop, ipa_ip_type iptype, ui
 		ret = IPACM_SUCCESS;
 	}
 #endif
+if(IPACM_Iface::ipacmcfg->pmip_details.pmipv6_enabled)
+{
+	/*Add gre rules on WAN UP*/
+	gre_down(true);
+	gre_up(true);
+}
 fail:
 	return ret;
 }
@@ -4875,9 +4913,9 @@ int IPACM_Lan::handle_eth_client_ipaddr(ipacm_event_data_all *data)
 				if( ((data->ipv6_addr[0] & ipv6_link_local_prefix_mask) != (ipv6_link_local_prefix & ipv6_link_local_prefix_mask)) &&
 #ifdef FEATURE_VLAN_MPDN
 					/* returns true if a VLAN PDN or default PDN should be offloaded */
-					IPACM_Iface::ipacmcfg->is_offload_ipv6_prefix(data->ipv6_addr) != true)
+					((IPACM_Iface::ipacmcfg->is_offload_ipv6_prefix(data->ipv6_addr) != true) && (!IPACM_Iface::ipacmcfg->pmip_details.pmipv6_enabled)))
 #else
-					memcmp(ipv6_prefix, data->ipv6_addr, sizeof(ipv6_prefix)) != 0)
+					((memcmp(ipv6_prefix, data->ipv6_addr, sizeof(ipv6_prefix)) != 0) && (!IPACM_Iface::ipacmcfg->pmip_details.pmipv6_enabled)))
 #endif
 				{
 					if (neigh_cache.size() < 2*IPA_MAX_NUM_HW_PATH_CLIENTS)
@@ -6601,6 +6639,13 @@ int IPACM_Lan::handle_down_evt()
 /* Link down event */
 	struct wan_ioctl_lan_client_info *client_info;
 #endif
+#ifdef FEATURE_PMIPV6
+	if(IPACM_Iface::ipacmcfg->pmip_details.pmipv6_enabled)
+	{
+		IPACMDBG_H("gre is enabled, need to clean up gre rules.\n");
+		gre_down(true);
+	}
+#endif
 	list<l2tp_client_info>::iterator it;
 	ipacm_cmd_q_data evt_data;
 	ipacm_event_data_all *data_all;
@@ -6711,7 +6756,6 @@ int IPACM_Lan::handle_down_evt()
 		gre_down();
 	}
 #endif
-
 	if ((ipa_if_cate == WLAN_IF) && (is_if_svap || is_wlan_if_vlan) && (rx_prop && rx_prop->num_rx_props > 2)) {
 		idx = 2;
 		IPACMDBG_H("Interface is WLAN Svap or vlan, delete rules on Rx pipe at idx %d \n", idx);
@@ -6910,13 +6954,13 @@ fail:
 
 			if (delete_eth_rtrules(i, IPA_IP_v4))
 			{
-				IPACMERR("unbale to delete ecm-client v4 route rules for index %d\n", i);
+				IPACMERR("unable to delete ecm-client v4 route rules for index %d\n", i);
 				res = IPACM_FAILURE;
 			}
 
 			if (delete_eth_rtrules(i, IPA_IP_v6))
 			{
-				IPACMERR("unbale to delete ecm-client v6 route rules for index %d\n", i);
+				IPACMERR("unable to delete ecm-client v6 route rules for index %d\n", i);
 				res = IPACM_FAILURE;
 			}
 
@@ -7186,9 +7230,9 @@ fail:
 
 /* install UL filter rule from Q6 */
 #ifdef FEATURE_VLAN_MPDN
-int IPACM_Lan::handle_uplink_filter_rule(ipacm_ext_prop *prop, ipa_ip_type iptype, uint8_t pdn_mux_id, bool notif_only, bool is_xlat, bool ast_update)
+int IPACM_Lan::handle_uplink_filter_rule(ipacm_ext_prop *prop, ipa_ip_type iptype, uint8_t pdn_mux_id, bool notif_only, bool is_xlat, bool ast_update, bool isPmipv6)
 #else
-int IPACM_Lan::handle_uplink_filter_rule(ipacm_ext_prop *prop, ipa_ip_type iptype, uint8_t xlat_mux_id, bool ast_update)
+int IPACM_Lan::handle_uplink_filter_rule(ipacm_ext_prop *prop, ipa_ip_type iptype, uint8_t xlat_mux_id, bool ast_update, bool isPmipv6)
 #endif
 {
 	ipa_flt_rule_add flt_rule_entry;
@@ -7201,7 +7245,7 @@ int IPACM_Lan::handle_uplink_filter_rule(ipacm_ext_prop *prop, ipa_ip_type iptyp
 	bool is_dev_in_vlan_mode=false;
 	enum ipa_flt_action action_cache;
 
-	IPACMDBG_H("Set modem UL flt rules for iptype(%d)\n", iptype);
+	IPACMDBG_H("Set modem UL flt rules for iptype(%d), ispmipv6 %d \n", iptype, isPmipv6);
 
 	if ( ! VALID_IPA_IP_TYPE(iptype) )
 	{
@@ -7234,15 +7278,27 @@ int IPACM_Lan::handle_uplink_filter_rule(ipacm_ext_prop *prop, ipa_ip_type iptyp
 		return IPACM_SUCCESS;
 	}
 
-#ifdef FEATURE_EoGRE
-	ipa_ipgre_info ipgre_info = IPACM_Iface::ipacmcfg->eogre_info;
+#if defined(FEATURE_EoGRE) || defined(FEATURE_PMIPV6)
+
+	ipa_ipgre_info ipgre_info;
+	bool compatible_gre;
+	if(isPmipv6)
+	{
+		ipgre_info= IPACM_Iface::ipacmcfg->ipgre_info;
+		compatible_gre=( IPACM_Iface::ipacmcfg->pmip_details.pmipv6_enabled && iptype == ipgre_info.iptype );
+	}
+	else
+	{
+		ipgre_info= IPACM_Iface::ipacmcfg->eogre_info;
+		compatible_gre=( IPACM_Iface::ipacmcfg->eogre_enabled && iptype == ipgre_info.iptype );
+	}
+	IPACMDBG_H("pmipv6enabled %d, iptype %d, xml_iptype %d, compatible_gre %d\n",IPACM_Iface::ipacmcfg->pmip_details.pmipv6_enabled,iptype, ipgre_info.iptype, compatible_gre);
 	/*
 	 * If we're doing gre and the iptype in the gre matches what's
 	 * been passed to this function, we've got relevant gre work to
 	 * do...
 	 */
-	bool compatible_gre =
-		( IPACM_Iface::ipacmcfg->eogre_enabled && iptype == ipgre_info.iptype );
+
 #else
 	bool compatible_gre = false;
 #endif /* #ifdef FEATURE_EoGRE */
@@ -7270,7 +7326,7 @@ int IPACM_Lan::handle_uplink_filter_rule(ipacm_ext_prop *prop, ipa_ip_type iptyp
 #endif
 		total_rules = prop->num_ext_props;
 
-#ifdef FEATURE_EoGRE
+#if defined(FEATURE_EoGRE) || defined(FEATURE_PMIPV6)
 	if (compatible_gre)
 	{
 		IPACMDBG_H("gre is enabled, dont need XLAT rules\n");
@@ -7315,6 +7371,11 @@ int IPACM_Lan::handle_uplink_filter_rule(ipacm_ext_prop *prop, ipa_ip_type iptyp
 #ifndef FEATURE_IPA_V3
 	IPACMDBG_H("flt_index: src pipe: %d, num of rules: %d, ebd pipe: %d, mux id: %d\n",
 		flt_index.source_pipe_index, flt_index.filter_index_list_len, flt_index.embedded_pipe_index, flt_index.embedded_call_mux_id);
+	if(flt_index.embedded_call_mux_id == 0xFF)
+	{
+		IPACMDBG_H("Invalid Mux ID %x, returning\n",flt_index.embedded_call_mux_id);
+		return IPACM_FAILURE;
+	}
 #else /* defined (FEATURE_IPA_V3) */
 	IPACMDBG_H("flt_index: src pipe: %d, num of rules: %d, ebd pipe: %d, mux id: %d\n",
 		flt_index.source_pipe_index, flt_index.rule_id_len, flt_index.embedded_pipe_index, flt_index.embedded_call_mux_id);
@@ -7471,7 +7532,7 @@ int IPACM_Lan::handle_uplink_filter_rule(ipacm_ext_prop *prop, ipa_ip_type iptyp
 		}
 #endif
 
-#ifdef FEATURE_EoGRE
+#if defined(FEATURE_EoGRE) || defined(FEATURE_PMIPV6) /* This rule is exactly same for PMIPV6 and EOGRE */
 		if ( compatible_gre )
 		{
 			ipa_ioc_generate_flt_eq flt_eq;
@@ -7573,7 +7634,6 @@ int IPACM_Lan::handle_uplink_filter_rule(ipacm_ext_prop *prop, ipa_ip_type iptyp
 					flt_rule_entry.rule.eq_attrib.num_offset_meq_128++;
 				}
 			}
-
 			IPACMDBG_H("The 2nd pass gre equation added to rule.\n");
 		}
 #endif /* #ifdef FEATURE_EoGRE */
@@ -9947,6 +10007,10 @@ int IPACM_Lan::handle_wan_down_v6(bool is_sta_mode, bool is_support_mpdn)
 #endif
 	if(is_sta_mode == false)
 	{
+		if(IPACM_Iface::ipacmcfg->pmip_details.pmipv6_enabled)/*Delete GRE Filter rules on WAN_DOWN*/
+		{
+			gre_down(true);
+		}
 		if(del_ul_flt_rules(IPA_IP_v6))
 			return IPACM_FAILURE;
 
@@ -10398,7 +10462,8 @@ int IPACM_Lan::modify_private_subnet()
 		mtu_rule_cnt++;
 	}
 
-#ifdef FEATURE_EoGRE
+#if defined(FEATURE_EoGRE) || defined(FEATURE_PMIPV6)
+	IPACMDBG("pmipv6 = %d\n", IPACM_Iface::ipacmcfg->pmip_details.pmipv6_enabled);
 	/* if in GRE mode, also query MTU since WanUP flag is false but WAN is up */
 	if(IPACM_Iface::ipacmcfg->eogre_enabled)
 	{
@@ -10428,6 +10493,33 @@ int IPACM_Lan::modify_private_subnet()
 		}
 		mtu_rule_cnt++;
 		IPACMDBG_H("total %d MTU rules are needed\n", mtu_rule_cnt);
+	}
+	if(IPACM_Iface::ipacmcfg->pmip_details.pmipv6_enabled){ /* PMIPV6 for single PDN use case currently */
+		/* re-calculate the ipv4 mtu based on GRE tunnel type*/
+		if(IPACM_Iface::ipacmcfg->ipgre_info.iptype == IPA_IP_v4)
+			/* mtu_v4_new = mtu_v4 - 20(ipv4) - 8 (gre with key) */
+			mtu[0] = IPACM_Wan::queryMTU(ipa_if_num, IPA_IP_v4) - 28 ;
+		else if (IPACM_Iface::ipacmcfg->ipgre_info.iptype == IPA_IP_v6)
+			/* mtu_v4_new = mtu_v6 - 40(ipv6) - 8 (gre with key) */
+			mtu[0] = IPACM_Wan::queryMTU(ipa_if_num, IPA_IP_v6) - 48;
+		else
+			IPACMERR("invalid iptype = %d\n", IPACM_Iface::ipacmcfg->ipgre_info.iptype);
+
+		IPACMDBG("GRE v4 PDN mtu = %d\n", mtu[0]);
+		IPACMDBG("num_wan_ul_fl_rule_v4= %d\n", num_wan_ul_fl_rule_v4);
+		IPACMDBG("v4 GRE MTU rule will be installed after v4 default rules\n");
+		//add the MTU rule after the 2nd pass rules but before the 1st pass rule
+		if (num_wan_ul_fl_rule_v4)
+		{
+			IPACMDBG("v4 GRE MTU rule will be installed after v4 modem UL rules\n");
+			mtu_flt_rule_offset[IPA_IP_v4] = wan_ul_fl_rule_hdl_v4[num_wan_ul_fl_rule_v4 - 1];
+		}
+		else
+		{
+			IPACMDBG("v4 GRE MTU rule will be installed after v4 default rules\n");
+			mtu_flt_rule_offset[IPA_IP_v4] = dft_v4fl_rule_hdl[m_ipv4_default_filterting_rules_count - 1];
+		}
+		mtu_rule_cnt++;
 	}
 #endif
 
@@ -10495,7 +10587,7 @@ int IPACM_Lan::modify_private_subnet()
 	flt_rule.rule.eq_attrib_type = 0;
 	flt_rule.rule.rt_tbl_hdl = IPACM_Iface::ipacmcfg->rt_tbl_default_v4.hdl;
 	IPACMDBG_H("Private filter rule use table: %s, hdl: %d\n",IPACM_Iface::ipacmcfg->rt_tbl_default_v4.name,IPACM_Iface::ipacmcfg->rt_tbl_default_v4.hdl);
-
+	IPACMDBG_H("num privatesubnet:%d",IPACM_Iface::ipacmcfg->ipa_num_private_subnet);
 	for(i = 0; i < (IPACM_Iface::ipacmcfg->ipa_num_private_subnet); i++)
 	{
 		/* add private subnet rule for ipv4 */
@@ -10532,9 +10624,16 @@ int IPACM_Lan::modify_private_subnet()
 		}
 	}
 
-#ifdef FEATURE_EoGRE
+#if defined(FEATURE_EoGRE) || defined(FEATURE_PMIPV6)
 	//Case where gre is enabled for opposite iptype. Need to install MTU rule with no subnets
 	if(IPACM_Iface::ipacmcfg->ipa_num_private_subnet == 0 && IPACM_Iface::ipacmcfg->eogre_enabled && IPACM_Iface::ipacmcfg->eogre_info.iptype == IPA_IP_v6)
+	{
+		if (construct_mtu_rule(&flt_rule.rule, IPA_IP_v4, mtu[0]))
+			IPACMERR("Failed to modify MTU filtering rule.\n");
+		memcpy(&(pFilteringTable->rules[mtu_rule_idx++]), &flt_rule, sizeof(struct ipa_flt_rule_add));
+		IPACMDBG_H("Succesfully constructed GRE v4 MTU rule\n");
+	}
+	if(IPACM_Iface::ipacmcfg->ipa_num_private_subnet == 0 && IPACM_Iface::ipacmcfg->pmip_details.pmipv6_enabled && IPACM_Iface::ipacmcfg->ipgre_info.iptype == IPA_IP_v6)
 	{
 		if (construct_mtu_rule(&flt_rule.rule, IPA_IP_v4, mtu[0]))
 			IPACMERR("Failed to modify MTU filtering rule.\n");
@@ -10635,8 +10734,8 @@ int IPACM_Lan::modify_ipv6_prefix_flt_rule()
 
 	if (IPACM_Iface::ipacmcfg->num_ipv6_prefixes == 0 && IPACM_Iface::ipacmcfg->num_no_offload_ipv6_prefix == 0 )
 	{
-#ifdef FEATURE_EoGRE
-		if(IPACM_Iface::ipacmcfg->eogre_enabled)
+#if defined(FEATURE_EoGRE) || defined(FEATURE_PMIPV6)
+		if(IPACM_Iface::ipacmcfg->eogre_enabled || IPACM_Iface::ipacmcfg->pmip_details.pmipv6_enabled)
 		{
 			IPACMDBG("GRE is enabled, need to configure v6 MTU \n");
 		}
@@ -10671,7 +10770,7 @@ int IPACM_Lan::modify_ipv6_prefix_flt_rule()
 		}
 	}
 
-#ifdef FEATURE_EoGRE
+#if defined(FEATURE_EoGRE) || defined(FEATURE_PMIPV6)
 	/* if in GRE mode, also query MTU since WANup_v6 flag is false but WANv6 is up*/
 	if(IPACM_Iface::ipacmcfg->eogre_enabled)
 	{
@@ -10704,6 +10803,37 @@ int IPACM_Lan::modify_ipv6_prefix_flt_rule()
 
 		mtu_rule_cnt++;
 		IPACMDBG_H("total %d MTU rules are needed\n", mtu_rule_cnt);
+	}
+	if(IPACM_Iface::ipacmcfg->pmip_details.pmipv6_enabled)/* For single PDN usecase currently */
+	{
+		/* re-calculate the ipv6 mtu based on GRE tunnel type*/
+		if(IPACM_Iface::ipacmcfg->ipgre_info.iptype == IPA_IP_v4)
+			/* mtu_v6_new = mtu_v4 - 8(gre with key)*/
+			mtu[0] = IPACM_Wan::queryMTU(ipa_if_num, IPA_IP_v4) - 8;
+		else if (IPACM_Iface::ipacmcfg->ipgre_info.iptype == IPA_IP_v6)
+			/* mtu_v6_new = mtu_v6 - 8 (gre with key) */
+			mtu[0] = IPACM_Wan::queryMTU(ipa_if_num, IPA_IP_v6) - 8;
+		else
+			IPACMERR("invalid iptype = %d\n", IPACM_Iface::ipacmcfg->ipgre_info.iptype);
+
+		IPACMDBG("GRE v6 PDN mtu = %d\n", mtu[0]);
+		IPACMDBG("num_wan_ul_fl_rule_v6= %d\n", num_wan_ul_fl_rule_v6);
+
+		//add the MTU rule after the 2nd pass rules but before the 1st pass rule
+		IPACMDBG("v6 GRE MTU rule will be installed after v6 default rules\n");
+		//add the MTU rule after the 2nd pass rules but before the 1st pass rule
+		if (num_wan_ul_fl_rule_v6)
+		{
+			IPACMDBG("v6 GRE MTU rule will be installed after v6 modem UL rules\n");
+			mtu_flt_rule_offset[IPA_IP_v6] = wan_ul_fl_rule_hdl_v6[num_wan_ul_fl_rule_v6 - 1];
+		}
+		else
+		{
+			IPACMDBG("v6 GRE MTU rule will be installed after v6 default rules\n");
+			mtu_flt_rule_offset[IPA_IP_v6] = dft_v6fl_rule_hdl[m_ipv6_default_filterting_rules_count - 1];
+		}
+
+		mtu_rule_cnt++;
 	}
 #endif
 	IPACMDBG_H("Memory allocating for num_ipv6_prefixes rules = %d num_no_offload_ipv6_prefix rules = %d mtu_rule_cnt = %d\n", IPACM_Iface::ipacmcfg->num_ipv6_prefixes, IPACM_Iface::ipacmcfg->num_no_offload_ipv6_prefix, mtu_rule_cnt);
@@ -10803,9 +10933,20 @@ int IPACM_Lan::modify_ipv6_prefix_flt_rule()
 		flt_rule.rule.attrib.attrib_mask |= IPA_FLT_SRC_ADDR;
 	}
 
-#ifdef FEATURE_EoGRE
+#if defined(FEATURE_EoGRE) || defined(FEATURE_PMIPV6)
 	//Case where gre is enabled for opposite iptype. Need to install MTU rule with no prefixes
 	if(IPACM_Iface::ipacmcfg->num_ipv6_prefixes == 0 && IPACM_Iface::ipacmcfg->eogre_enabled && IPACM_Iface::ipacmcfg->eogre_info.iptype == IPA_IP_v4)
+	{
+		memcpy(
+			&flt_rule.rule.attrib,
+			&rx_prop->rx[idx].attrib,
+			sizeof(flt_rule.rule.attrib));
+		if (construct_mtu_rule(&flt_rule.rule, IPA_IP_v6, mtu[0]))
+			IPACMERR("Failed to modify MTU filtering rule.\n");
+		memcpy(&(pFilteringTable->rules[mtu_rule_idx++]), &flt_rule, sizeof(struct ipa_flt_rule_add));
+		IPACMDBG_H("Succesfully constructed GRE v6 MTU rule\n");
+	}
+	if(IPACM_Iface::ipacmcfg->num_ipv6_prefixes == 0 && IPACM_Iface::ipacmcfg->pmip_details.pmipv6_enabled && IPACM_Iface::ipacmcfg->ipgre_info.iptype == IPA_IP_v4)
 	{
 		memcpy(
 			&flt_rule.rule.attrib,
@@ -14771,11 +14912,32 @@ int IPACM_Lan::delete_icmp_filter_rule(
 	return IPACM_SUCCESS;
 }
 
-#ifdef FEATURE_EoGRE
+#if defined(FEATURE_EoGRE) || defined(FEATURE_PMIPV6)
 
-void IPACM_Lan::gre_up()
+void IPACM_Lan::gre_up(bool isPmipv6)/*Reusing Gre function for PMIP, with isPmipv6 parameter */
 {
-	ipa_ipgre_info ipgre_info = IPACM_Iface::ipacmcfg->eogre_info;
+	if(isPmipv6)
+	{
+		if(!IPACM_Iface::ipacmcfg->pmip_details.pmipv6_up_wan){
+			IPACMDBG_H("Wan instance has not yet added the Routing rules. Will have to wait for that.\n");
+			return;
+		}
+	}
+	if(IPACM_Iface::ipacmcfg->pmip_details.pmipv6_tunnel_setup == false)
+	{
+		IPACMDBG_H("Tunnel info is not yet loaded. Let's wait for tunnel\n");
+		return;
+	}
+	ipa_ipgre_info ipgre_info;
+	if(isPmipv6)
+	{
+		ipgre_info = IPACM_Iface::ipacmcfg->ipgre_info;
+		pmipv6_greup=true;
+	}
+	else
+	{
+		ipgre_info = IPACM_Iface::ipacmcfg->eogre_info;
+	}
 	ipa_ip_type    iptype     = ipgre_info.iptype;
 	int            ret, fd;
 
@@ -14874,67 +15036,68 @@ void IPACM_Lan::gre_up()
 	}
 
 	/*
-	 * Create gre specific route rules...
-	 */
-	IPACMDBG_H(
-		"Adding gre specific route rules for iptype(%d)\n",
-		iptype);
-
-	if ( gre_do_rt_work(ipgre_info) != IPACM_SUCCESS )
-	{
-		IPACMERR("gre_do_rt_work failed\n");
-		return;
-	}
-
-	/*
 	 * In an attempt to get symmetric message flow for exception
 	 * rules, the following will ensure some rules are deleted to aid
 	 * in this effort.
 	 */
-	if ( IPACM_Iface::ip_type == IPA_IP_v4 || IPACM_Iface::ip_type == IPA_IP_MAX )
+	if(!isPmipv6) /* We shouldn't delete default rules for PMIPV6 */
 	{
 		/*
-		 * Will delete all exception rules.
-		 */
-		if ( delete_dflt_filter_rules(IPA_IP_v4) == IPACM_FAILURE )
+		* Create gre specific route rules...
+		*/
+		IPACMDBG_H(
+			"Adding gre specific route rules for iptype(%d)\n",
+			iptype);
+
+		if ( gre_do_rt_work(ipgre_info) != IPACM_SUCCESS )
 		{
-			IPACMERR("delete_dflt_filter_rules failed\n");
+			IPACMERR("gre_do_rt_work failed\n");
 			return;
 		}
-		/*
-		 * The following will install only the frag rule given gre
-		 * state.
-		 */
-		if ( init_fl_rule(IPA_IP_v4, true) == IPACM_FAILURE )
+		if ( IPACM_Iface::ip_type == IPA_IP_v4 || IPACM_Iface::ip_type == IPA_IP_MAX )
 		{
-			IPACMERR("init_fl_rule failed\n");
-			return;
+			/*
+			* Will delete all exception rules.
+			*/
+			if ( delete_dflt_filter_rules(IPA_IP_v4) == IPACM_FAILURE )
+			{
+				IPACMERR("delete_dflt_filter_rules failed\n");
+				return;
+			}
+			/*
+			* The following will install only the frag rule given gre
+			* state.
+			*/
+			if ( init_fl_rule(IPA_IP_v4, true) == IPACM_FAILURE )
+			{
+				IPACMERR("init_fl_rule failed\n");
+				return;
+			}
+		}
+
+		if ( IPACM_Iface::ip_type == IPA_IP_v6 || IPACM_Iface::ip_type == IPA_IP_MAX )
+		{
+			/*
+			* Intentionally leaving icmp..
+			*
+			* But, will delete all exception rules.
+			*/
+			if ( delete_dflt_filter_rules(IPA_IP_v6) == IPACM_FAILURE )
+			{
+				IPACMERR("delete_dflt_filter_rules failed\n");
+				return;
+			}
+			/*
+			* The following will install only the frag rule given gre
+			* state.
+			*/
+			if ( init_fl_rule(IPA_IP_v6, true) == IPACM_FAILURE )
+			{
+				IPACMERR("init_fl_rule failed\n");
+				return;
+			}
 		}
 	}
-
-	if ( IPACM_Iface::ip_type == IPA_IP_v6 || IPACM_Iface::ip_type == IPA_IP_MAX )
-	{
-		/*
-		 * Intentionally leaving icmp..
-		 *
-		 * But, will delete all exception rules.
-		 */
-		if ( delete_dflt_filter_rules(IPA_IP_v6) == IPACM_FAILURE )
-		{
-			IPACMERR("delete_dflt_filter_rules failed\n");
-			return;
-		}
-		/*
-		 * The following will install only the frag rule given gre
-		 * state.
-		 */
-		if ( init_fl_rule(IPA_IP_v6, true) == IPACM_FAILURE )
-		{
-			IPACMERR("init_fl_rule failed\n");
-			return;
-		}
-	}
-
 	/*
 	 * Since we're doing gre, we need to embellish existing
 	 * rules to support gre. The following does this...
@@ -14943,18 +15106,23 @@ void IPACM_Lan::gre_up()
 		"Embellishing existing filter rules for GRE iptype(%d)\n",
 		iptype);
 
+if(isPmipv6){/*PMIPV6 needs to take care of WAN up before GRE UP scenario */
+	if(IPACM_Wan::isWanUP(ipa_if_num)){
+		del_ul_flt_rules(iptype);
+	}
+}
 #ifdef FEATURE_VLAN_MPDN
 	ret = handle_uplink_filter_rule(
 		IPACM_Iface::ipacmcfg->GetExtProp(iptype),
 		iptype,
 		IPACM_Iface::ipacmcfg->GetQmapId(),
 		false,
-		false);
+		false, false,isPmipv6);
 #else
 	ret = handle_uplink_filter_rule(
 		IPACM_Iface::ipacmcfg->GetExtProp(iptype),
 		iptype,
-		IPACM_Iface::ipacmcfg->GetQmapId());
+		IPACM_Iface::ipacmcfg->GetQmapId(), false, isPmipv6);
 #endif
 	if (ret)
 	{
@@ -14972,17 +15140,15 @@ void IPACM_Lan::gre_up()
 		}
 	}
 #endif
-
 	/*
 	 * Need to add the one final rule, which is the gre catch all
 	 * rule...
 	 */
-	if ( gre_add_catchup_rule(iptype) != 0 )
+	if ( gre_add_catchup_rule(iptype,isPmipv6) != 0 )
 	{
 		IPACMERR("gre_add_catchup_rule failed\n");
 		return;
 	}
-
 	//need to add mtu rules when gre is enabled
 	modify_private_subnet();
 #ifdef FEATURE_VLAN_MPDN
@@ -14995,9 +15161,19 @@ void IPACM_Lan::gre_up()
 	IPACMDBG("Finished handling gre_up\n");
 }
 
-void IPACM_Lan::gre_down()
+void IPACM_Lan::gre_down(bool isPmipv6)
 {
 	ipa_ipgre_info ipgre_info = IPACM_Iface::ipacmcfg->eogre_info;
+	if(isPmipv6)
+	{
+		if(pmipv6_greup == false)
+		{
+			IPACMDBG_H("gre in this instance has not been up yet\n");
+			return;
+		}
+		pmipv6_greup=false;
+		ipgre_info = IPACM_Iface::ipacmcfg->ipgre_info;
+	}
 	ipa_ip_type    iptype     = ipgre_info.iptype;
 	int            res;
 
@@ -15015,108 +15191,153 @@ void IPACM_Lan::gre_down()
 	IPACMDBG_H(
 		"Clearing filter rules for gre iptype(%d)\n",
 		iptype);
-
-	del_ul_flt_rules(iptype);
-
-	if ( IPACM_Iface::ip_type == IPA_IP_v4 || IPACM_Iface::ip_type == IPA_IP_MAX )
+	if(isPmipv6 && IPACM_Wan::isWanUP(ipa_if_num))
 	{
-		/*
-		 * Will delete any installed exception rules.
-		 */
-		if ( delete_dflt_filter_rules(IPA_IP_v4) == IPACM_FAILURE )
-		{
-			IPACMERR("delete_dflt_filter_rules failed\n");
-			return;
-		}
-		/*
-		 * Will reinstall the exception rules.
-		 */
-		if ( init_fl_rule(IPA_IP_v4, false) == IPACM_FAILURE )
-		{
-			IPACMERR("init_fl_rule failed\n");
-			return;
-		}
+		del_ul_flt_rules(iptype);/*Delete the UL rules updated by GRE, and reinsert them normally*/
+#ifdef FEATURE_VLAN_MPDN
+		res = handle_uplink_filter_rule(
+		IPACM_Iface::ipacmcfg->GetExtProp(iptype),
+		iptype,
+		IPACM_Iface::ipacmcfg->GetQmapId(),
+		false,
+		false, false,false);
+#else
+		res = handle_uplink_filter_rule(
+		IPACM_Iface::ipacmcfg->GetExtProp(iptype),
+		iptype,
+		IPACM_Iface::ipacmcfg->GetQmapId(), false, false);
+#endif
 	}
-
-	if ( IPACM_Iface::ip_type == IPA_IP_v6 || IPACM_Iface::ip_type == IPA_IP_MAX )
+	if(!isPmipv6)
 	{
-		/*
-		 * Will delete any installed exception rules.
-		 */
-		if ( delete_dflt_filter_rules(IPA_IP_v6) == IPACM_FAILURE )
+		del_ul_flt_rules(iptype);
+		if ( IPACM_Iface::ip_type == IPA_IP_v4 || IPACM_Iface::ip_type == IPA_IP_MAX )
 		{
-			IPACMERR("delete_dflt_filter_rules failed\n");
-			return;
+			/*
+			* Will delete any installed exception rules.
+			*/
+			if ( delete_dflt_filter_rules(IPA_IP_v4) == IPACM_FAILURE )
+			{
+				IPACMERR("delete_dflt_filter_rules failed\n");
+				return;
+			}
+			/*
+			* The icmp rule was removed on gre_up; needs to be added
+			* back now.
+			*/
+			res = install_ipv4_icmp_flt_rule();
+			if ( res == IPACM_FAILURE )
+			{
+				IPACMERR("install_ipv4_icmp_flt_rule failed\n");
+				return;
+			}
+			/*
+			* Will reinstall the exception rules.
+			*/
+			if ( init_fl_rule(IPA_IP_v4, false) == IPACM_FAILURE )
+			{
+				IPACMERR("init_fl_rule failed\n");
+				return;
+			}
 		}
-		/*
-		 * Will reinstall the exception rules.
-		 */
-		if ( init_fl_rule(IPA_IP_v6, false) == IPACM_FAILURE )
+
+		if ( IPACM_Iface::ip_type == IPA_IP_v6 || IPACM_Iface::ip_type == IPA_IP_MAX )
 		{
-			IPACMERR("init_fl_rule failed\n");
-			return;
+			/*
+			* Will delete any installed exception rules.
+			*/
+			if ( delete_dflt_filter_rules(IPA_IP_v6) == IPACM_FAILURE )
+			{
+				IPACMERR("delete_dflt_filter_rules failed\n");
+				return;
+			}
+			/*
+			* Will reinstall the exception rules.
+			*/
+			if ( init_fl_rule(IPA_IP_v6, false) == IPACM_FAILURE )
+			{
+				IPACMERR("init_fl_rule failed\n");
+				return;
+			}
 		}
-	}
 
 #ifdef IPA_FLT_EXT_MPLS_GRE_GENERAL
-	/*
-	 * Delete any exception rules that were sent in from an external
-	 * app, should any exist.
-	 */
-	if ( exceptions.size() )
-	{
-		IPACMDBG_H(
-			"Clearing requested uplink GRE exception rules\n");
-		exceptions.clear();
-	}
+		/*
+		* Delete any exception rules that were sent in from an external
+		* app, should any exist.
+		*/
+		if ( exceptions.size() )
+		{
+			IPACMDBG_H(
+				"Clearing requested uplink GRE exception rules\n");
+			exceptions.clear();
+		}
 #endif
 
-	/*
-	 * Below we'll do two things:
-	 *
-	 *  1) Populate the flt rule offset for eth bridge (offset = icmp)
-	 *
-	 *  2) Populate the flt rule offset for mtu_offset (offset = broadcast rule)
-	 */
-	if ( iptype == IPA_IP_v4 )
-	{
-		eth_bridge_flt_rule_offset[iptype] =
-			ipv4_icmp_flt_rule_hdl[0];
-
-		if (m_ipv4_default_filterting_rules_count)
+		/*
+		* Below we'll do two things:
+		*
+		*  1) Populate the flt rule offset for eth bridge (offset = icmp)
+		*
+		*  2) Populate the flt rule offset for mtu_offset (offset = broadcast rule)
+		*/
+		if ( iptype == IPA_IP_v4 )
 		{
-			mtu_flt_rule_offset[iptype] =
-				dft_v4fl_rule_hdl[m_ipv4_default_filterting_rules_count - 1];
-		}
-		IPACMDBG(
-			"Prepping for modify_private_subnet(): "
-			"eth_bridge_flt_rule_offset[v4]=%u, "
-			"m_ipv4_default_filterting_rules_count=%u "
-			"mtu_flt_rule_offset[v4]=%u\n",
-			eth_bridge_flt_rule_offset[iptype],
-			m_ipv4_default_filterting_rules_count,
-			mtu_flt_rule_offset[iptype]);
-	}
-	else
-	{
-		eth_bridge_flt_rule_offset[iptype] =
-			ipv6_icmp_flt_rule_hdl[0];
+			eth_bridge_flt_rule_offset[iptype] =
+				ipv4_icmp_flt_rule_hdl[0];
 
-		if (m_ipv6_default_filterting_rules_count)
+			if (m_ipv4_default_filterting_rules_count)
+			{
+				mtu_flt_rule_offset[iptype] =
+					dft_v4fl_rule_hdl[m_ipv4_default_filterting_rules_count - 1];
+			}
+			IPACMDBG(
+				"Prepping for modify_private_subnet(): "
+				"eth_bridge_flt_rule_offset[v4]=%u, "
+				"m_ipv4_default_filterting_rules_count=%u "
+				"mtu_flt_rule_offset[v4]=%u\n",
+				eth_bridge_flt_rule_offset[iptype],
+				m_ipv4_default_filterting_rules_count,
+				mtu_flt_rule_offset[iptype]);
+		}
+		else
 		{
-			mtu_flt_rule_offset[iptype] =
-				dft_v6fl_rule_hdl[m_ipv6_default_filterting_rules_count - 1];
-		}
-		IPACMDBG(
-			"Prepping for modify_private_subnet(): "
-			"eth_bridge_flt_rule_offset[v6]=%u, "
-			"m_ipv6_default_filterting_rules_count=%u "
-			"mtu_flt_rule_offset[v6]=%u\n",
-			eth_bridge_flt_rule_offset[iptype],
-			m_ipv6_default_filterting_rules_count,
-			mtu_flt_rule_offset[iptype]);
-	}
+			eth_bridge_flt_rule_offset[iptype] =
+				ipv6_icmp_flt_rule_hdl[0];
 
+			if (m_ipv6_default_filterting_rules_count)
+			{
+				mtu_flt_rule_offset[iptype] =
+					dft_v6fl_rule_hdl[m_ipv6_default_filterting_rules_count - 1];
+			}
+			IPACMDBG(
+				"Prepping for modify_private_subnet(): "
+				"eth_bridge_flt_rule_offset[v6]=%u, "
+				"m_ipv6_default_filterting_rules_count=%u "
+				"mtu_flt_rule_offset[v6]=%u\n",
+				eth_bridge_flt_rule_offset[iptype],
+				m_ipv6_default_filterting_rules_count,
+				mtu_flt_rule_offset[iptype]);
+		}
+	}
+	if(isPmipv6){
+		if ( iptype == IPA_IP_v4 )
+		{
+			if (m_ipv4_default_filterting_rules_count)
+			{
+				mtu_flt_rule_offset[iptype] =
+					dft_v4fl_rule_hdl[m_ipv4_default_filterting_rules_count - 1];
+			}
+		}
+		else
+		{
+			if (m_ipv6_default_filterting_rules_count)
+			{
+				mtu_flt_rule_offset[iptype] =
+					dft_v6fl_rule_hdl[m_ipv6_default_filterting_rules_count - 1];
+			}
+		}
+	}
 	IPACM_Iface::ipacmcfg->SetQmapId(0xFF);
 
 	//need to clean mtu rules when gre is disabled
@@ -15201,7 +15422,7 @@ int IPACM_Lan::gre_do_rt_work(
 }
 
 int IPACM_Lan::gre_add_catchup_rule(
-	enum ipa_ip_type iptype )
+	enum ipa_ip_type iptype, bool isPmipv6 )
 {
 	if ( ! VALID_IPA_IP_TYPE(iptype) )
 	{
@@ -15238,11 +15459,17 @@ int IPACM_Lan::gre_add_catchup_rule(
 	flt_rule_entry.flt_rule_hdl             = -1;
 	flt_rule_entry.status                   = -1;
 
-	flt_rule_entry.rule.retain_hdr          = 1;
 	flt_rule_entry.rule.to_uc               = 1;
 	flt_rule_entry.rule.action              = IPA_PASS_TO_ROUTING;
-	flt_rule_entry.rule.rt_tbl_hdl          = gre_get_rt_tbl_hdl(iptype);
+	flt_rule_entry.rule.rt_tbl_hdl          = gre_get_rt_tbl_hdl(iptype,isPmipv6);
 	flt_rule_entry.rule.attrib.attrib_mask |= IPA_FLT_DST_ADDR;
+
+	if(isPmipv6){
+		flt_rule_entry.rule.retain_hdr          = 0;
+	}
+	else{
+		flt_rule_entry.rule.retain_hdr          = 1;
+	}
 
 #ifdef FEATURE_IPA_V3
 	flt_rule_entry.rule.hashable = true;
@@ -15269,7 +15496,7 @@ int IPACM_Lan::gre_add_catchup_rule(
 		 */
 		ipa_ip_type other = (iptype == IPA_IP_v4) ? IPA_IP_v6 : IPA_IP_v4;
 
-		int ret = update_complementary_table(flt_rule_entry, other);
+		int ret = update_complementary_table(flt_rule_entry, other, isPmipv6);
 
 		if ( ret != IPACM_SUCCESS )
 		{
@@ -15297,7 +15524,7 @@ int IPACM_Lan::gre_add_catchup_rule(
 
 int IPACM_Lan::update_complementary_table(
 	ipa_flt_rule_add& flt_rule_entry,
-	ipa_ip_type       iptype )
+	ipa_ip_type       iptype, bool isPmipv6 )
 {
 	if ( rx_prop != NULL )
 	{
@@ -15341,7 +15568,7 @@ int IPACM_Lan::update_complementary_table(
 			&flt_rule_entry,
 			sizeof(ipa_flt_rule_add));
 
-		flt_rule->rules[0].rule.rt_tbl_hdl = gre_get_rt_tbl_hdl(iptype);
+		flt_rule->rules[0].rule.rt_tbl_hdl = gre_get_rt_tbl_hdl(iptype,isPmipv6);
 
 		if ( m_filtering.AddFilteringRule(flt_rule) == true )
 		{
@@ -15383,14 +15610,16 @@ void IPACM_Lan::gre_route_data_init(
 }
 
 uint32_t IPACM_Lan::gre_get_rt_tbl_hdl(
-	enum ipa_ip_type iptype )
+	enum ipa_ip_type iptype, bool isPmipv6 )
 {
 	if ( ! VALID_IPA_IP_TYPE(iptype) )
 	{
 		IPACMERR("Invalid IP type passed to function\n");
 		return 0;
 	}
-
+	if(isPmipv6){
+		return IPACM_Wan::ipgre_get_rt_tbl_hdl(iptype);
+	}
 	if ( gre_route_data[iptype].rt_tbl_hdl == 0 )
 	{
 		struct ipa_ioc_get_rt_tbl routing_table;

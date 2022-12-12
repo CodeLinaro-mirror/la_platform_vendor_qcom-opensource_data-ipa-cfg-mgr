@@ -478,6 +478,16 @@ void IPACM_Wlan::event_callback(ipa_cm_event_id event, void *param)
 						handle_software_routing_enable();
 					}
 				}
+#ifdef FEATURE_PMIPV6
+					if ( IPACM_Iface::ipacmcfg->pmip_details.pmipv6_enabled )
+					{
+						IPACMDBG_H(
+							"A previous gre enable needs to be undone, then redone. "
+							"Need to call gre_down followed by an gre_up\n");
+						gre_down(true);
+						gre_up(true); //this is where its getting reset. He is calling this for every new IPA_ADD because instance is not ipv4 right away
+					}
+#endif
 			}
 		}
 		break;
@@ -1429,7 +1439,18 @@ end:
 		}
 	}
 	break;
+#ifdef FEATURE_PMIPV6
+	case IPA_HANDLE_GRE_UP:
+		IPACMDBG_H("Received and will process an IPA_HANDLE_GRE_UP\n");
+		gre_down(true);
+		gre_up(true);
+		break;
 
+	case IPA_HANDLE_GRE_DOWN:
+		IPACMDBG_H("Received and will process an IPA_HANDLE_GRE_DOWN\n");
+		gre_down(true);
+		break;
+#endif
 	default:
 		break;
 	}
@@ -2495,9 +2516,9 @@ int IPACM_Wlan::handle_wlan_client_ipaddr(ipacm_event_data_all *data)
 			if( (data->ipv6_addr[0] & ipv6_link_local_prefix_mask) != (ipv6_link_local_prefix & ipv6_link_local_prefix_mask) &&
 #ifdef FEATURE_VLAN_MPDN
 				/* returns true if a VLAN PDN or default PDN should be offloaded */
-				IPACM_Iface::ipacmcfg->is_offload_ipv6_prefix(data->ipv6_addr) != true)
+				((IPACM_Iface::ipacmcfg->is_offload_ipv6_prefix(data->ipv6_addr) != true) && (!IPACM_Iface::ipacmcfg->pmip_details.pmipv6_enabled)))
 #else
-				memcmp(ipv6_prefix, data->ipv6_addr, sizeof(ipv6_prefix)) != 0)
+				((memcmp(ipv6_prefix, data->ipv6_addr, sizeof(ipv6_prefix)) != 0) && (!IPACM_Iface::ipacmcfg->pmip_details.pmipv6_enabled)))
 #endif
 			{
 				if (neigh_cache.size() < 2*IPA_MAX_NUM_WIFI_CLIENTS)
@@ -4048,6 +4069,13 @@ int IPACM_Wlan::handle_down_evt()
 	}
 	IPACMDBG_H("finished deleting wan filtering rules\n ");
 
+#ifdef FEATURE_PMIPV6
+	if(IPACM_Iface::ipacmcfg->pmip_details.pmipv6_enabled)
+	{
+		IPACMDBG_H("gre is enabled, need to clean up gre rules.\n");
+		gre_down(true);
+	}
+#endif
 	/* Delete v4 filtering rules */
 	if (ip_type != IPA_IP_v6 && rx_prop != NULL)
 	{

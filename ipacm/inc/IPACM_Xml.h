@@ -28,7 +28,7 @@
  *
  * Changes from Qualcomm Innovation Center are provided under the following license:
  *
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted (subject to the limitations in the
@@ -269,6 +269,9 @@ if (!(a)) {                                                 \
 
 #define IPACM_WLAN_VLAN_MPDN                 "IPACMVLANMPDN"
 #define IPACM_Wlan_Vlan_Mpdn_Enabled         "IPACMVlanMpdnEnabled"
+// Tunnel Config entries
+#define PMIPv6_Enabled_TAG                   "PMIPV6Enable"
+#define PMIPv6_TAG                           "PMIPV6"
 
 /*---------------------------------------------------------------------------
       IP protocol numbers - use in dss_socket() to identify protocols.
@@ -326,7 +329,10 @@ typedef struct
 #endif
 } IPACM_extd_firewall_entry_conf_t;
 
-
+typedef struct
+{
+	uint8_t pmipv6_enable;
+}IPACM_tunnel_conf_t;
 /*---------------------------------------------------------------------------
            Extended FireWall configuration.
 ---------------------------------------------------------------------------*/
@@ -437,5 +443,6 @@ int IPACM_read_firewall_xml
 	IPACM_firewall_t &firewall_config            /* Mobile AP firewall config data */
 );
 int IPACM_read_firewall_xml(const char *xml_file, IPACM_firewall_conf_t &default_pdn_firewall_config);
+int IPACM_read_tunnel_xml(const char *xml_file, IPACM_tunnel_conf_t* tunnel_cfg);
 
 #endif //IPACM_XML

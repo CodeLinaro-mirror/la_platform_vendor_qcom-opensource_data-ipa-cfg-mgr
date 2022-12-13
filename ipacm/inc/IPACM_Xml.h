@@ -25,6 +25,9 @@
  * WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ * Changes from Qualcomm Innovation Center are provided under the following license:
+ * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear.
  */
 /*!
   @file
@@ -218,6 +221,15 @@ if (!(a)) {                                                 \
 #define IPACM_MPDN_Enable_TAG                "IPACMMPDNEnabled"
 #define IPACM_SOCKSv5_TAG                    "IPACMSOCKSv5"
 #define IPACM_SOCKSv5_Enable_TAG             "IPACMSOCKSv5Enabled"
+
+/* VLAN MPDN config file */
+#define IPACM_VLAN_IFACE                    "IPACMVLANIFACES"
+#define IPACM_VLAN_IFACE_ENTRY              "VlanIfaceEntry"
+#define IPACM_VLAN_NAME                     "VlanName"
+#define IPACM_VLAN_ID                       "VlanId"
+#define IPACM_VLAN_OFFLOAD_PATH             "VlanOffloadPath"
+#define IPACM_VLAN_PCP_VALUE                "VlanPcp"
+
 /*---------------------------------------------------------------------------
       IP protocol numbers - use in dss_socket() to identify protocols.
       Also contains the extension header types for IPv6.
@@ -324,6 +336,20 @@ typedef struct
 	ipacm_alg alg_entries[IPA_MAX_ALG_ENTRIES];
 } ipacm_alg_conf_t;
 
+/* VLAN config structures */
+typedef struct _IPACM_vlan_if
+{
+        uint16_t vlan_id;
+        uint8_t off_path;
+        uint8_t vlan_pcp;
+}IPACM_vlan_if_t;
+
+typedef struct _IPACM_vlan_conf
+{
+        uint8_t num_vlan_if;
+        IPACM_vlan_if_t vlan_if_cfg[IPA_MAX_IFACE_ENTRIES];
+}IPACM_vlan_conf_t;
+
 typedef struct  _IPACM_conf_t
 {
 	ipacm_iface_conf_t iface_config;
@@ -346,10 +372,18 @@ typedef struct  _IPACM_conf_t
 	int ipacm_l2tp_enable;
 	bool ipacm_mpdn_enable;
 	bool ipacm_socksv5_enable;
+        IPACM_vlan_conf_t vlan_cfg;
 } IPACM_conf_t;
 
 /* This function read IPACM XML configuration*/
 int ipacm_read_cfg_xml
+(
+	char *xml_file,                              /* Filename and path     */
+	IPACM_conf_t *config                         /* Mobile AP config data */
+);
+
+/* This function read IPACM VLAN XML configuration*/
+int ipacm_read_vlan_cfg_xml
 (
 	char *xml_file,                              /* Filename and path     */
 	IPACM_conf_t *config                         /* Mobile AP config data */

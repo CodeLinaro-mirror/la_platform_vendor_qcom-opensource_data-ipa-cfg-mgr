@@ -25,6 +25,10 @@
  * WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *
+ * Changes from Qualcomm Innovation Center are provided under the following license:
+ * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear.
  */
 /*!
   @file
@@ -60,6 +64,12 @@ static int ipacm_cfg_xml_parse_tree
 (
 	 xmlNode* xml_node,
 	 IPACM_conf_t *config
+);
+
+static int ipacm_vlan_cfg_xml_parse_tree
+(
+        xmlNode* xml_node,
+        IPACM_conf_t *config
 );
 
 static int IPACM_firewall_xml_parse_tree(const char *xml_file, xmlNode* xml_node, IPACM_firewall_t &firewall_config);
@@ -138,6 +148,117 @@ int ipacm_read_cfg_xml(char *xml_file, IPACM_conf_t *config)
 	xmlFreeDoc(doc);
 
 	return ret_val;
+}
+
+/* This function read IPACM VLAN XML and populate the IPACM VLAN Cfg */
+int ipacm_read_vlan_cfg_xml(char *xml_file, IPACM_conf_t *config)
+{
+        xmlDocPtr doc = NULL;
+        xmlNode* root = NULL;
+        int ret_val = IPACM_SUCCESS;
+
+        /* Invoke the XML parser and obtain the parse tree */
+        doc = xmlReadFile(xml_file, "UTF-8", XML_PARSE_NOBLANKS);
+        if (doc == NULL)
+        {
+                IPACMDBG_H("IPACM_xml_parse: libxml returned parse error!\n");
+                return IPACM_FAILURE;
+        }
+
+        /*Get the root of the tree*/
+        root = xmlDocGetRootElement(doc);
+
+        memset(config, 0, sizeof(IPACM_conf_t));
+
+        /* parse the xml tree returned by libxml */
+        ret_val = ipacm_vlan_cfg_xml_parse_tree(root, config);
+
+        if (ret_val != IPACM_SUCCESS)
+        {
+                IPACMDBG_H("IPACM_xml_parse: ipacm_cfg_xml_parse_tree returned parse error!\n");
+        }
+
+        /* Free up the libxml's parse tree */
+        xmlFreeDoc(doc);
+
+        return ret_val;
+}
+
+/* This function traverses the xml tree*/
+static int ipacm_vlan_cfg_xml_parse_tree
+(
+        xmlNode* xml_node,
+        IPACM_conf_t *cfg
+)
+{
+        int32_t ret_val = IPACM_SUCCESS;
+        char* content = NULL;
+
+        if (NULL == xml_node)
+            return ret_val;
+        while (xml_node != NULL &&
+                ret_val == IPACM_SUCCESS)
+        {
+                switch (xml_node->type)
+                {
+                case XML_ELEMENT_NODE:
+                        {
+                                if (IPACM_util_icmp_string((char*)xml_node->name, IPACM_VLAN_IFACE) == 0 ||
+                                                IPACM_util_icmp_string((char*)xml_node->name, IPACM_VLAN_IFACE_ENTRY) == 0)
+                                {
+                                        if (0 == IPACM_util_icmp_string((char*)xml_node->name, IPACM_VLAN_IFACE_ENTRY))
+                                        {
+                                                /* increase iface entry number */
+                                                cfg->vlan_cfg.num_vlan_if++;
+                                        }
+                                        /* go to child */
+                                        ret_val = ipacm_vlan_cfg_xml_parse_tree(xml_node->children, cfg);
+                                }
+                                else if (IPACM_util_icmp_string((char*)xml_node->name, IPACM_VLAN_ID) == 0)
+                                {
+                                        IPACMDBG_H("inside VLAN ID\n");
+                                        content = IPACM_read_content_element(xml_node);
+                                        if (content)
+                                        {
+                                                cfg->vlan_cfg.vlan_if_cfg[cfg->vlan_cfg.num_vlan_if - 1].vlan_id =
+                                                                                                                atoi(content);
+                                                IPACMDBG_H("VLAN ID :%d\n",
+                                                cfg->vlan_cfg.vlan_if_cfg[cfg->vlan_cfg.num_vlan_if - 1].vlan_id);
+                                        }
+                                }
+                                else if (IPACM_util_icmp_string((char*)xml_node->name, IPACM_VLAN_OFFLOAD_PATH) == 0)
+                                {
+                                        IPACMDBG_H("inside VLAN OFFLOAD PATH\n");
+                                        content = IPACM_read_content_element(xml_node);
+                                        if (content)
+                                        {
+                                                cfg->vlan_cfg.vlan_if_cfg[cfg->vlan_cfg.num_vlan_if - 1].off_path =
+                                                                                                            atoi(content);
+                                                IPACMDBG_H("VLAN offload path :%d\n",
+                                                cfg->vlan_cfg.vlan_if_cfg[cfg->vlan_cfg.num_vlan_if - 1].off_path);
+                                        }
+                                }
+                                else if (IPACM_util_icmp_string((char*)xml_node->name, IPACM_VLAN_PCP_VALUE) == 0)
+                                {
+                                        IPACMDBG_H("inside VLAN PCP value\n");
+                                        content = IPACM_read_content_element(xml_node);
+                                        if (content)
+                                        {
+                                                cfg->vlan_cfg.vlan_if_cfg[cfg->vlan_cfg.num_vlan_if - 1].vlan_pcp =
+                                                                                                            atoi(content);
+                                                IPACMDBG_H("VLAN PCP :%d\n",
+                                                                            cfg->vlan_cfg.vlan_if_cfg[cfg->vlan_cfg.num_vlan_if - 1].vlan_pcp);
+                                        }
+                                }
+                        } // Node case
+                        break;
+                default:
+                        break;
+            }// switch
+            /* go to sibling */
+            xml_node = xml_node->next;
+        }
+        return ret_val;
 }
 
 /* This function traverses the xml tree*/

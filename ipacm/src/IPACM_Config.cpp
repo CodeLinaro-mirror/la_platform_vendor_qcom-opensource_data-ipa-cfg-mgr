@@ -1,6 +1,5 @@
 /*
  * Copyright (c) 2013-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -26,6 +25,10 @@
  * WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *
+ * Changes from Qualcomm Innovation Center are provided under the following license:
+ * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear.
  */
 /*!
 		@file
@@ -62,6 +65,7 @@ const char *IPACM_Config::DEVICE_NAME_ODU = "/dev/odu_ipa_bridge";
 #define IPACM_CONFIG_FILE "/etc/data/ipa/IPACM_cfg.xml"
 #endif
 #endif
+#define IPACM_VLAN_CFG_FILE "/etc/data/ipa/IPACM_vlan_cfg.xml"
 
 const char *ipacm_event_name[] = {
 	__stringify(IPA_CFG_CHANGE_EVENT),                     /* NULL */
@@ -768,6 +772,20 @@ skip_fnr_alloc:
 	IPACMDBG_H(" depend MAP-6 rm index %d to rm index: %d \n", IPA_RM_RESOURCE_ETHERNET_PROD, IPA_RM_RESOURCE_Q6_CONS);
 	IPACMDBG_H(" depend MAP-7 rm index %d to rm index: %d \n", IPA_RM_RESOURCE_ETHERNET_PROD, IPA_RM_RESOURCE_USB_CONS);
 	IPACMDBG_H(" depend MAP-8 rm index %d to rm index: %d \n", IPA_RM_RESOURCE_WLAN_PROD, IPA_RM_RESOURCE_ETHERNET_CONS);
+
+        strlcpy(IPACM_config_file, IPACM_VLAN_CFG_FILE, sizeof(IPACM_config_file));
+
+        IPACMDBG_H("\n IPACM VLAN XML file is %s \n", IPACM_config_file);
+        if (IPACM_SUCCESS == ipacm_read_vlan_cfg_xml(IPACM_config_file, cfg))
+        {
+                IPACMDBG_H("\n IPACM XML read OK \n");
+        }
+        else
+        {
+                IPACMERR("\n IPACM XML read failed \n");
+                ret = IPACM_FAILURE;
+                goto fail;
+        }
 
 fail:
 	if (cfg != NULL)

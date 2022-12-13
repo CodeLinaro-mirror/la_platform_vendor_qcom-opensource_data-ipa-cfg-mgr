@@ -1,0 +1,16 @@
+<!-- Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved. -->
+<!-- SPDX-License-Identifier: BSD-3-Clause-Clear. -->
+<?xml version="1.0" encoding="UTF-8"?>
+<system xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="ipacm_vlan_cfg.xsd">
+<IPACMVLANIFACES>
+	<VlanIfaceEntry>
+		<VlanId>10></VlanId>
+		<VlanOffloadPath>2</VlanOffloadPath>
+		<VlanPcp>0</VlanPcp>
+	</VlanIfaceEntry>
+	<VlanIfaceEntry>
+		<VlanId>11></VlanId>
+		<VlanOffloadPath>2</VlanOffloadPath>
+		<VlanPcp>1</VlanPcp>
+	</VlanIfaceEntry>
+</IPACMVLANIFACES>

@@ -255,6 +255,13 @@ int IPACM_IfaceManager::create_iface_instance(ipacm_ifacemgr_data *param)
 			return IPACM_SUCCESS;
 	}
 
+	/* check if in ETH-pdu mode then disable all instance creation */
+	if (IPACM_Iface::ipacmcfg->eth_pdu_enabled)
+	{
+		IPACMDBG_H("ETH PDU enabled, don't need to  construct iface\n");
+		return IPACM_SUCCESS;
+	}
+
 	/* check if duplicate instance*/
 	if(SearchInstance(ipa_interface_index) == IPA_INSTANCE_NOT_FOUND)
 	{
@@ -316,6 +323,7 @@ int IPACM_IfaceManager::create_iface_instance(ipacm_ifacemgr_data *param)
 				IPACM_EvtDispatcher::registr(IPA_MTU_UPDATE, lan);
 #endif
 				IPACM_EvtDispatcher::registr(IPA_LINK_DOWN_EVENT, lan);
+				IPACM_EvtDispatcher::registr(IPA_IPACM_DISABLE, lan);
 				/* IPA_LAN_DELETE_SELF should be always last */
 				IPACM_EvtDispatcher::registr(IPA_LAN_DELETE_SELF, lan);
 				IPACMDBG_H("ipa_LAN (%s):ipa_index (%d) instance open/registr ok\n", lan->dev_name, lan->ipa_if_num);
@@ -360,6 +368,7 @@ int IPACM_IfaceManager::create_iface_instance(ipacm_ifacemgr_data *param)
 				IPACM_EvtDispatcher::registr(IPA_DEL_EXT_ROUTER_RULES, ETH);
 				/* only need for vlan supported lan instance */
 				IPACM_EvtDispatcher::registr(IPA_HANDLE_WAN_ADDR_ADD_V6, ETH);
+				IPACM_EvtDispatcher::registr(IPA_IPACM_DISABLE, ETH);
 				/* IPA_LAN_DELETE_SELF should be always last */
 				IPACM_EvtDispatcher::registr(IPA_LAN_DELETE_SELF, ETH);
 				IPACMDBG_H("ipa_LAN (%s):ipa_index (%d) instance open/registr ok\n", ETH->dev_name, ETH->ipa_if_num);
@@ -423,6 +432,7 @@ int IPACM_IfaceManager::create_iface_instance(ipacm_ifacemgr_data *param)
 					/* external router mode only support eth odu now */
 					IPACM_EvtDispatcher::registr(IPA_ADD_EXT_ROUTER_RULES, odu);
 					IPACM_EvtDispatcher::registr(IPA_DEL_EXT_ROUTER_RULES, odu);
+					IPACM_EvtDispatcher::registr(IPA_IPACM_DISABLE, odu);
 					/* IPA_LAN_DELETE_SELF should be always last */
 					IPACM_EvtDispatcher::registr(IPA_LAN_DELETE_SELF, odu);
 					IPACMDBG_H("ipa_LAN (%s):ipa_index (%d) instance open/registr ok\n", odu->dev_name, odu->ipa_if_num);
@@ -445,6 +455,7 @@ int IPACM_IfaceManager::create_iface_instance(ipacm_ifacemgr_data *param)
 					IPACM_EvtDispatcher::registr(IPA_SW_ROUTING_ENABLE, odu);
 					IPACM_EvtDispatcher::registr(IPA_SW_ROUTING_DISABLE, odu);
 					IPACM_EvtDispatcher::registr(IPA_LINK_DOWN_EVENT, odu);
+					IPACM_EvtDispatcher::registr(IPA_IPACM_DISABLE, odu);
 					/* IPA_LAN_DELETE_SELF should be always last */
 					IPACM_EvtDispatcher::registr(IPA_LAN_DELETE_SELF, odu);
 					IPACMDBG_H("ipa_LAN (%s):ipa_index (%d) instance open/registr ok\n", odu->dev_name, odu->ipa_if_num);
@@ -517,6 +528,7 @@ int IPACM_IfaceManager::create_iface_instance(ipacm_ifacemgr_data *param)
 				}
 				IPACM_EvtDispatcher::registr(IPA_HANDLE_WAN_VLAN_PDN_UP, wl);
 				IPACM_EvtDispatcher::registr(IPA_HANDLE_WAN_VLAN_PDN_DOWN, wl);
+				IPACM_EvtDispatcher::registr(IPA_IPACM_DISABLE, wl);
 				/* IPA_LAN_DELETE_SELF should be always last */
 				IPACM_EvtDispatcher::registr(IPA_LAN_DELETE_SELF, wl);
 				IPACMDBG_H("ipa_WLAN (%s):ipa_index (%d) instance open/registr ok\n", wl->dev_name, wl->ipa_if_num);
@@ -581,6 +593,7 @@ int IPACM_IfaceManager::create_iface_instance(ipacm_ifacemgr_data *param)
 					IPACM_EvtDispatcher::registr(IPA_WAN_XLAT_CONNECT_EVENT, w);
 					IPACM_EvtDispatcher::registr(IPA_IP_PASS_UPDATE_EVENT, w);
 					IPACM_EvtDispatcher::registr(IPA_IP_COLLISION_UPDATE_EVENT, w);
+					IPACM_EvtDispatcher::registr(IPA_IPACM_DISABLE, w);
 #ifdef FEATURE_L2TP
 					if (IPACM_Iface::ipacmcfg->ipacm_l2tp_enable == IPACM_L2TP_E2E)
 					{

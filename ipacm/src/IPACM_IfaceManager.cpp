@@ -531,6 +531,7 @@ int IPACM_IfaceManager::create_iface_instance(ipacm_ifacemgr_data *param)
 				if (IPACM_Iface::ipacmcfg->wlan_vlan_mpdn_enabled == true) {
 					IPACM_EvtDispatcher::registr(IPA_WLAN_SWITCH_VLAN_MODE, wl);
 				}
+				IPACM_EvtDispatcher::registr(IPA_NEIGH_CLIENT_IP_ADDR_DEL_EVENT, wl);
 				IPACM_EvtDispatcher::registr(IPA_HANDLE_WAN_VLAN_PDN_UP, wl);
 				IPACM_EvtDispatcher::registr(IPA_HANDLE_WAN_VLAN_PDN_DOWN, wl);
 				IPACM_EvtDispatcher::registr(IPA_IPACM_DISABLE, wl);

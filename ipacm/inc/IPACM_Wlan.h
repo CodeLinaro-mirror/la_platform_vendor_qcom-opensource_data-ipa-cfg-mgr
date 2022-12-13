@@ -170,6 +170,7 @@ public:
 	int add_rt_rules_for_ast_update_ifaces();
 
 	bool is_vlan_iface();
+	int handle_wlan_del_ipv6_addr(ipacm_event_data_all *data);
 
 
 #if defined(FEATURE_IPACM_PER_CLIENT_STATS) || defined(IPA_WDI_AST_UPDATE)

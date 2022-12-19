@@ -3486,6 +3486,7 @@ int IPACM_Lan::handle_private_subnet(ipa_ip_type iptype)
 		for (i = 0; i < IPACM_Iface::ipacmcfg->ipa_num_private_subnet; i++)
 		{
 			private_fl_rule_hdl[i] = m_pFilteringTable->rules[i].flt_rule_hdl;
+			IPACMDBG("Adding filter hdl:(0x%x)\n", private_fl_rule_hdl[i]);
 		}
 		free(m_pFilteringTable);
 	}
@@ -9902,6 +9903,7 @@ int IPACM_Lan::modify_private_subnet(bool eogre_enabled)
 			return IPACM_FAILURE;
 		}
 		IPACM_Iface::ipacmcfg->decreaseFltRuleCount(rx_prop->rx[0].src_pipe, IPA_IP_v4, num_wan_subnet_rules);
+		memset(private_fl_rule_hdl, 0, (IPA_MAX_PRIVATE_SUBNET_ENTRIES + IPA_MAX_MTU_ENTRIES) * sizeof(uint32_t));
 		num_wan_subnet_rules = 0;
 	}
 
@@ -10089,7 +10091,10 @@ int IPACM_Lan::modify_private_subnet(bool eogre_enabled)
 
 	/* save the rule hdls */
 	for (i = 0; i < num_wan_subnet_rules; i++)
+	{
 		private_fl_rule_hdl[i] = pFilteringTable->rules[i].flt_rule_hdl;
+		IPACMDBG("Adding filter hdl:(0x%x)\n", private_fl_rule_hdl[i]);
+	}
 
 fail:
 	if(pFilteringTable != NULL)

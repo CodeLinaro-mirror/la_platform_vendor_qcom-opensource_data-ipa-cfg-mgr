@@ -7065,17 +7065,17 @@ int IPACM_Wlan::handle_wlan_vlan_neighbor(ipacm_event_new_neigh_vlan *param) {
 	if (IPACM_Iface::ipacmcfg->ipacm_lan_stats_enable == false)
 #endif
 	{
-		handle_wlan_client_route_rule(data->mac_addr, data->iptype);
+		handle_wlan_client_route_rule(data->mac_addr, data->iptype, vlan_id);
 	}
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
 	else
 	{
 #ifdef IPA_HW_FNR_STATS
 	if (IPACM_Iface::ipacmcfg->hw_fnr_stats_support)
-		handle_wlan_client_route_rule_ext_v2(data->mac_addr, data->iptype);
+		handle_wlan_client_route_rule_ext_v2(data->mac_addr, data->iptype, vlan_id);
 	else
 #endif //IPA_HW_FNR_STATS
-		handle_wlan_client_route_rule_ext(data->mac_addr, data->iptype);
+		handle_wlan_client_route_rule_ext(data->mac_addr, data->iptype, vlan_id);
 	}
 #endif
 

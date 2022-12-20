@@ -4751,7 +4751,7 @@ fail:
 /*handle eth client */
 int IPACM_Lan::handle_eth_client_ipaddr(ipacm_event_data_all *data)
 {
-	int clnt_indx, size = 0, i = 0;
+	int clnt_indx, size = 0, i = 0, j = 0;
 	int v6_num;
 	uint32_t ipv6_link_local_prefix = 0xFE800000;
 	uint32_t ipv6_link_local_prefix_mask = 0xFFC00000;
@@ -4852,6 +4852,14 @@ int IPACM_Lan::handle_eth_client_ipaddr(ipacm_event_data_all *data)
 							for (i = 0; i < IPACM_Iface::ipacmcfg->ipa_num_ipgre_server; i++)
 							{
 								CtList->HandleGREIpAddrEvt(data->ipv4_addr, IPACM_Iface::ipacmcfg->ipacm_gre_server_ipv4[i], true);
+							}
+							/* For IPGRE subnet */
+							for (i = 0; i < IPACM_Iface::ipacmcfg->ipa_num_ipgre_server_subnet; i++)
+							{
+								for (j = 1; j < 256; j++)
+								{
+									CtList->HandleGREIpAddrEvt(data->ipv4_addr, IPACM_Iface::ipacmcfg->ipacm_gre_server_ipv4_subnet[i] + j, true);
+								}
 							}
 							get_client_memptr(eth_client, clnt_indx)->gre_nat_set = true;
 						}
@@ -14472,7 +14480,7 @@ void IPACM_Lan::HandleNeighIpAddrAddEvt(ipacm_event_data_all *data)
 void IPACM_Lan::HandleNeighIpAddrDelEvt(int clt_indx)
 {
 	uint32_t ipv6_temp[4] = {0};
-	int i = 0;
+	int i = 0, j = 0;
 
 	/* Special handling to clean up static IPGRE NAT rules */
 	if (IPACM_Iface::ipacmcfg->ipacm_gre_enable == true &&
@@ -14483,6 +14491,14 @@ void IPACM_Lan::HandleNeighIpAddrDelEvt(int clt_indx)
 		for (i = 0; i < IPACM_Iface::ipacmcfg->ipa_num_ipgre_server; i++)
 		{
 			CtList->HandleGREIpAddrEvt(get_client_memptr(eth_client, clt_indx)->v4_addr, IPACM_Iface::ipacmcfg->ipacm_gre_server_ipv4[i], false);
+		}
+		/* For IPGRE subnet */
+		for (i = 0; i < IPACM_Iface::ipacmcfg->ipa_num_ipgre_server_subnet; i++)
+		{
+			for (j = 1; j < 256; j++)
+			{
+				CtList->HandleGREIpAddrEvt(get_client_memptr(eth_client, clt_indx)->v4_addr, IPACM_Iface::ipacmcfg->ipacm_gre_server_ipv4_subnet[i] + j, false);
+			}
 		}
 		get_client_memptr(eth_client, clt_indx)->gre_nat_set = false;
 	}

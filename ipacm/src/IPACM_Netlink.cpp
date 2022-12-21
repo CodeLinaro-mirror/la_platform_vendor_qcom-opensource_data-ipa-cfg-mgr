@@ -903,8 +903,9 @@ static int ipa_nl_decode_nlmsg
 			/* take care of route add default route & uniroute */
 			if((msg_ptr->nl_route_info.metainfo.rtm_type == RTN_UNICAST) &&
 				 ((msg_ptr->nl_route_info.metainfo.rtm_protocol == RTPROT_BOOT) ||
-				  (msg_ptr->nl_route_info.metainfo.rtm_protocol == RTPROT_RA)) &&
-				 (msg_ptr->nl_route_info.metainfo.rtm_scope == RT_SCOPE_UNIVERSE) &&
+				  (msg_ptr->nl_route_info.metainfo.rtm_protocol == RTPROT_RA) ||
+				  (msg_ptr->nl_route_info.metainfo.rtm_protocol == RTPROT_STATIC))&&
+				 (msg_ptr->nl_route_info.metainfo.rtm_scope == RT_SCOPE_UNIVERSE)&&
 				 (msg_ptr->nl_route_info.metainfo.rtm_table == RT_TABLE_MAIN))
 			{
 				IPACMDBG("\n GOT RTM_NEWROUTE event\n");
@@ -1047,7 +1048,8 @@ static int ipa_nl_decode_nlmsg
 			/* ipv6 routing table */
 			if((AF_INET6 == msg_ptr->nl_route_info.metainfo.rtm_family) &&
 				 (msg_ptr->nl_route_info.metainfo.rtm_type == RTN_UNICAST) &&
-				 (msg_ptr->nl_route_info.metainfo.rtm_protocol == RTPROT_KERNEL) &&
+				 ((msg_ptr->nl_route_info.metainfo.rtm_protocol == RTPROT_KERNEL) ||
+				  (msg_ptr->nl_route_info.metainfo.rtm_protocol == RTPROT_STATIC))&&
 				 (msg_ptr->nl_route_info.metainfo.rtm_table == RT_TABLE_MAIN))
 			{
 				IPACMDBG("\n GOT valid v6-RTM_NEWROUTE event\n");
@@ -1169,7 +1171,8 @@ static int ipa_nl_decode_nlmsg
 			/* take care of route delete of default route & uniroute */
 			if((msg_ptr->nl_route_info.metainfo.rtm_type == RTN_UNICAST) &&
 				 ((msg_ptr->nl_route_info.metainfo.rtm_protocol == RTPROT_BOOT) ||
-				  (msg_ptr->nl_route_info.metainfo.rtm_protocol == RTPROT_RA)) &&
+				  (msg_ptr->nl_route_info.metainfo.rtm_protocol == RTPROT_RA) ||
+				  (msg_ptr->nl_route_info.metainfo.rtm_protocol == RTPROT_STATIC))&&
 				 (msg_ptr->nl_route_info.metainfo.rtm_scope == 0) &&
 				 (msg_ptr->nl_route_info.metainfo.rtm_table == RT_TABLE_MAIN))
 			{
@@ -1288,7 +1291,8 @@ static int ipa_nl_decode_nlmsg
 			/* ipv6 routing table */
 			if((AF_INET6 == msg_ptr->nl_route_info.metainfo.rtm_family) &&
 				 (msg_ptr->nl_route_info.metainfo.rtm_type == RTN_UNICAST) &&
-				 (msg_ptr->nl_route_info.metainfo.rtm_protocol == RTPROT_KERNEL) &&
+				 ((msg_ptr->nl_route_info.metainfo.rtm_protocol == RTPROT_KERNEL) ||
+				  (msg_ptr->nl_route_info.metainfo.rtm_protocol == RTPROT_STATIC))&&
 				 (msg_ptr->nl_route_info.metainfo.rtm_table == RT_TABLE_MAIN))
 			{
 				IPACMDBG("\n GOT valid v6-RTM_DELROUTE event\n");

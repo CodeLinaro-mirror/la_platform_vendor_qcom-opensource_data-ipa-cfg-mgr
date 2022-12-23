@@ -397,7 +397,7 @@ void IPACM_LanToLan::handle_iface_up(ipacm_event_eth_bridge *data)
 			{
 #ifdef FEATURE_VLAN_MPDN
 				/* non VLAN case - currently no support for non vlan <-> vlan offload */
-				if(it->get_is_vlan())
+				if(it->get_is_vlan() && !it->is_svap_iface())
 					continue;
 #endif
 				/* add peer info only when both interfaces support inter-interface communication */

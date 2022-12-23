@@ -896,6 +896,64 @@ fail:
 	return res;
 }
 
+/* handle del_address event */
+int IPACM_Wan::handle_addr_del_evt(ipacm_event_data_addr *data)
+{
+	uint32_t num_ipv6_addr, num_v6_value;
+	int res = IPACM_SUCCESS;
+	int i = 0;
+
+	if (tx_prop == NULL || rx_prop == NULL)
+	{
+		IPACMDBG_H("Either tx or rx property is NULL, return.\n");
+		return IPACM_SUCCESS;
+	}
+
+	if (data->iptype == IPA_IP_v6)
+	{
+		num_v6_value = num_dft_rt_v6;
+		/* Check the address deleted. */
+		for (num_ipv6_addr=0; num_ipv6_addr<num_v6_value; num_ipv6_addr++)
+		{
+			if((ipv6_addr[num_ipv6_addr][0] == data->ipv6_addr[0]) &&
+			(ipv6_addr[num_ipv6_addr][1] == data->ipv6_addr[1]) &&
+			(ipv6_addr[num_ipv6_addr][2] == data->ipv6_addr[2]) &&
+			(ipv6_addr[num_ipv6_addr][3] == data->ipv6_addr[3]))
+			{
+				IPACMDBG_H("find matched ipv6 address, index:%d \n", num_ipv6_addr);
+				for (i = 0; i < MAX_DEFAULT_v6_ROUTE_RULES; i++)
+				{
+					if (m_routing.DeleteRoutingHdl(dft_rt_rule_hdl[MAX_DEFAULT_v4_ROUTE_RULES+2*num_ipv6_addr+i], IPA_IP_v6) == false)
+					{
+						IPACMERR("Routing rule deletion failed!\n");
+						res = IPACM_FAILURE;
+						goto fail;
+					}
+				}
+#ifdef FEATURE_VLAN_MPDN
+				if ((data->ipv6_addr[0] == ipv6_prefix[0]) && (data->ipv6_addr[1] == ipv6_prefix[1]))
+				{
+					IPACMDBG_H("Del vlan ipv6_prefix:0x%x%x\n", ipv6_prefix[0], ipv6_prefix[1]);
+					if (is_xlat)
+						IPACM_Iface::ipacmcfg->del_vlan_ipv6_prefix(ipv6_prefix, -1, true);
+					else
+						IPACM_Iface::ipacmcfg->del_vlan_ipv6_prefix(ipv6_prefix, -1);
+				}
+#endif
+				if (num_dft_rt_v6 > 0)
+					num_dft_rt_v6--;
+				IPACMDBG_H("v6 num: %d\n",num_dft_rt_v6);
+			}
+		}
+	}
+	else
+	{
+		IPACMDBG_H("IPv4 addr del evt is not handled.\n");
+	}
+fail:
+	return res;
+}
+
 void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 {
 	int if_index = 0;
@@ -1195,6 +1253,29 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 					}
 #endif
 				}
+			}
+		}
+		break;
+
+	case IPA_ADDR_DEL_EVENT:
+		{
+			ipacm_event_data_addr *data = (ipacm_event_data_addr *)param;
+			ipa_interface_index = iface_ipa_index_query(data->if_index);
+
+			if ( (data->iptype == IPA_IP_v4 && data->ipv4_addr == 0) ||
+				(data->iptype == IPA_IP_v6 &&
+				data->ipv6_addr[0] == 0 && data->ipv6_addr[1] == 0 &&
+				data->ipv6_addr[2] == 0 && data->ipv6_addr[3] == 0) )
+			{
+				IPACMDBG_H("Invalid address, ignore IPA_ADDR_DEL_EVENT event\n");
+				return;
+			}
+
+			if (ipa_interface_index == ipa_if_num)
+			{
+				IPACMDBG_H("Get IPA_ADDR_DEL_EVENT: IF ip type %d, incoming ip type %d\n", ip_type, data->iptype);
+				IPACMDBG_H("v6 num: %d\n",num_dft_rt_v6);
+				handle_addr_del_evt(data);
 			}
 		}
 		break;

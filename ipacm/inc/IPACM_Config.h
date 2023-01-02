@@ -1,6 +1,5 @@
 /*
  * Copyright (c) 2013-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -26,6 +25,10 @@
  * WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *
+ * Changes from Qualcomm Innovation Center are provided under the following license:
+ * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear.
  */
 /*!
 	@file
@@ -171,6 +174,12 @@ public:
 	pthread_mutex_t cnt_idx_lock;
 	bool hw_fnr_stats_support;
 #endif //IPA_HW_FNR_STATS
+#endif
+
+#ifdef FEATURE_TTL
+	bool ipacm_ttl_feature_enable;
+	struct ipa_ttl_vlan_ids ipacm_ttlvlanids;
+	bool ttl_vlan_enable;
 #endif
 
 	bool ipv6_nat_enable;

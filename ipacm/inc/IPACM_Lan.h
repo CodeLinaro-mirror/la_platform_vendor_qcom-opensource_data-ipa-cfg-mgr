@@ -1,6 +1,5 @@
 /*
 Copyright (c) 2013-2019,2020, The Linux Foundation. All rights reserved.
-Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are
@@ -26,6 +25,10 @@ BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
 WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
 OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
 IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+* Changes from Qualcomm Innovation Center are provided under the following license:
+* Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+* SPDX-License-Identifier: BSD-3-Clause-Clear.
 */
 /*!
 	@file
@@ -562,7 +565,9 @@ protected:
 
 	/* add tcp syn flt rule for l2tp interface*/
 	int add_tcp_syn_flt_rule_l2tp(ipa_ip_type inner_ip_type);
-
+#ifdef FEATURE_TTL
+	int add_ttl_exception_flt_rule(ipa_ip_type iptype);
+#endif
 	void HandleNeighIpAddrAddEvt(ipacm_event_data_all *data);
 	void HandleNeighIpAddrDelEvt(bool ipv4_set, uint32_t ipv4_addr,
 		int ipv6_set, const uint32_t ipv6_addr[IPV6_NUM_ADDR][IPA_IPV6_ADDR_SIZE_IN_WORDS]);
@@ -955,6 +960,9 @@ protected:
 	uint32_t tcp_syn_flt_rule_hdl[IPA_IP_MAX];
 #ifdef IPA_L2TP_TUNNEL_UDP
 	uint32_t l2tp_udp_dflt_flt_rule_hdl[NUM_L2TP_UDP_DFLT_RULES];
+#endif
+#ifdef FEATURE_TTL
+	uint32_t ttl_flt_rule_hdl[IPA_IP_MAX];
 #endif
 	int post_lan_up_event(const ipacm_event_data_addr* data) const;
 

@@ -212,5 +212,24 @@
 		<IPACMMPDN>
 			<IPACMMPDNEnabled>1</IPACMMPDNEnabled>
 		</IPACMMPDN>
+		<IPACMTTL>
+			<IPACMTTLEnable>0</IPACMTTLEnable>
+			<IPACMTTLVLANEnable>1</IPACMTTLVLANEnable>
+			<IPACMTTLVlanArray>
+				<vlan>0</vlan>
+				<vlan>1</vlan>
+				<vlan>2</vlan>
+				<vlan>3</vlan>
+				<vlan>4</vlan>
+				<vlan>5</vlan>
+				<vlan>6</vlan>
+				<vlan>7</vlan>
+				<vlan>8</vlan>
+				<vlan>9</vlan>
+				<vlan>10</vlan>
+				<vlan>11</vlan>
+				<vlan>1024</vlan>
+			</IPACMTTLVlanArray>
+		</IPACMTTL>
 	</IPACM>
 </system>

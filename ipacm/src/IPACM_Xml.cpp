@@ -1,6 +1,5 @@
 /*
  * Copyright (c) 2013, 2018-2019 The Linux Foundation. All rights reserved.
- * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -28,7 +27,7 @@
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  * Changes from Qualcomm Innovation Center are provided under the following license:
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 /*!
@@ -190,6 +189,9 @@ static int ipacm_cfg_xml_parse_tree
 						IPACM_util_icmp_string((char*)xml_node->name, IPACM_IPV6NAT_TAG) == 0 ||
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
 						IPACM_util_icmp_string((char*)xml_node->name, LAN_Stats_TAG) == 0 ||
+#endif
+#ifdef FEATURE_TTL
+						IPACM_util_icmp_string((char*)xml_node->name, IPACM_TTL_TAG) == 0 ||
 #endif
 						IPACM_util_icmp_string((char*)xml_node->name, IPACM_L2TP_TAG) == 0 ||
 						IPACM_util_icmp_string((char*)xml_node->name, IPACM_MPDN_TAG) == 0 ||
@@ -623,6 +625,88 @@ static int ipacm_cfg_xml_parse_tree
 							memset(content_buf, 0, sizeof(content_buf));
 							memcpy(content_buf, (void *)content, str_size);
 							config->ipacm_l2tp_enable = atoi(content_buf);
+						}
+				}
+				else if (IPACM_util_icmp_string((char*)xml_node->name, IPACM_TTL_Enable_TAG) == 0)
+				{
+						IPACMDBG_H("inside enable TTL\n");
+						content = IPACM_read_content_element(xml_node);
+						if (content == NULL)
+						{
+							IPACMERR("Failed to read the content of the tag %s\n", IPACM_TTL_Enable_TAG);
+						}
+						else
+						{
+							str_size = strlen(content);
+							memset(content_buf, 0, sizeof(content_buf));
+							memcpy(content_buf, (void *)content, str_size);
+							if (atoi(content_buf))
+							{
+								config->ttl_enable = true;
+							}
+							else
+							{
+								config->ttl_enable = false;
+							}
+							IPACMDBG_H("TTL feature enable %d buf(%d)\n",
+							config->ttl_enable, atoi(content_buf));
+						}
+				}
+				else if (IPACM_util_icmp_string((char*)xml_node->name, IPACM_TTL_VLAN_Enable_TAG) == 0)
+				{
+						IPACMDBG_H("inside enable TTL VLAN id's\n");
+						content = IPACM_read_content_element(xml_node);
+						if (content == NULL)
+						{
+							IPACMERR("Failed to read the content of the tag %s\n", IPACM_TTL_VLAN_Enable_TAG);
+						}
+						else
+						{
+							str_size = strlen(content);
+							memset(content_buf, 0, sizeof(content_buf));
+							memcpy(content_buf, (void *)content, str_size);
+							if (atoi(content_buf))
+							{
+								config->ttl_vlan = true;
+							}
+							else
+							{
+								config->ttl_vlan = false;
+							}
+							IPACMDBG_H("TTL VLAN feature enable %d buf(%d)\n",
+							config->ttl_vlan, atoi(content_buf));
+						}
+				}
+
+				else if (IPACM_util_icmp_string((char*)xml_node->name, IPACM_TTL_VLAN_ARRAY_TAG) == 0)
+				{
+
+						IPACMDBG_H("inside TTL vlan id's array\n");
+					  xmlNode* child_ptr;
+					  int ioctl_file_fd = -1, i;
+					  config->ttlvlanids.num_vlanids = 0;
+						memset(config->ttlvlanids.vlans, 0, sizeof(uint16_t)*IPA_TTL_MAX_VLAN);
+						for (child_ptr  = xml_node->children; child_ptr != NULL;
+							child_ptr  = child_ptr->next)
+						{
+							content = NULL;
+							if (child_ptr->type == XML_ELEMENT_NODE)
+							{
+									content = IPACM_read_content_element(child_ptr);
+									if(content == NULL)
+									{
+											IPACMDBG("content is null for  %s\n",child_ptr->name);
+											continue;
+									}
+									str_size = strlen(content);
+									memset(content_buf, 0, sizeof(content_buf));
+									memcpy(content_buf, (void *)content, str_size);
+									config->ttlvlanids.vlans[config->ttlvlanids.num_vlanids++] = atoi(content_buf);
+							}
+						}
+						for(i =0; i<config->ttlvlanids.num_vlanids; i++)
+						{
+							IPACMDBG("ttl vlan id is :%d\n",config->ttlvlanids.vlans[i]);
 						}
 				}
 				else if (IPACM_util_icmp_string((char*)xml_node->name, IPACM_MPDN_Enable_TAG) == 0)

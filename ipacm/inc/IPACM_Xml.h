@@ -1,6 +1,5 @@
 /*
  * Copyright (c) 2013, 2018-2019, The Linux Foundation. All rights reserved.
- * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -26,6 +25,10 @@
  * WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *
+ * Changes from Qualcomm Innovation Center are provided under the following license:
+ * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear.
  */
 /*!
   @file
@@ -216,6 +219,13 @@ if (!(a)) {                                                 \
 #define IPACM_L2TP_TAG                       "IPACML2TP"
 #define IPACM_L2TP_Enable_TAG                "IPACML2TPEnabled"
 
+#ifdef FEATURE_TTL
+#define IPACM_TTL_Enable_TAG                 "IPACMTTLEnable"
+#define IPACM_TTL_TAG                        "IPACMTTL"
+#define IPACM_TTL_VLAN_ARRAY_TAG             "IPACMTTLVlanArray"
+#define IPACM_TTL_VLAN_Enable_TAG            "IPACMTTLVLANEnable"
+#endif
+
 #define IPACM_MPDN_TAG                       "IPACMMPDN"
 #define IPACM_MPDN_Enable_TAG                "IPACMMPDNEnabled"
 #define IPACM_SOCKSv5_TAG                    "IPACMSOCKSv5"
@@ -348,6 +358,11 @@ typedef struct  _IPACM_conf_t
 	int ipacm_l2tp_enable;
 	bool ipacm_mpdn_enable;
 	bool ipacm_socksv5_enable;
+#ifdef FEATURE_TTL
+	bool ttl_enable;
+	bool ttl_vlan;
+	struct ipa_ttl_vlan_ids ttlvlanids;
+#endif
 } IPACM_conf_t;
 
 /* This function read IPACM XML configuration*/

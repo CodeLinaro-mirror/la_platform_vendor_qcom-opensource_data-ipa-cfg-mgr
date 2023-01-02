@@ -1,6 +1,5 @@
 /*
  * Copyright (c) 2013-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -26,6 +25,10 @@
  * WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *
+ * Changes from Qualcomm Innovation Center are provided under the following license:
+ * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear.
  */
 /*!
 		@file
@@ -589,7 +592,19 @@ int IPACM_Config::Init(void)
 	IPACMDBG_H("ipacm_ip_passthrough_mode %d. \n", ipacm_ip_passthrough_mode);
 
 	memcpy(ipacm_ip_passthrough_mac, cfg->ip_passthrough_mac.ether_addr_octet, IPA_MAC_ADDR_SIZE);
-
+#ifdef FEATURE_TTL
+	ipacm_ttl_feature_enable = cfg->ttl_enable;
+	IPACMDBG_H("ipacm_ttl_enable %d. \n", ipacm_ttl_feature_enable);
+	ttl_vlan_enable = cfg->ttl_vlan;
+	IPACMDBG_H("ttl_Vlan_enable %d. \n", ttl_vlan_enable);
+	ipacm_ttlvlanids.num_vlanids = 0;
+	memset(ipacm_ttlvlanids.vlans, 0, sizeof(uint16_t)*IPA_TTL_MAX_VLAN);
+	ipacm_ttlvlanids.num_vlanids = cfg->ttlvlanids.num_vlanids;
+	for(int i = 0; i<ipacm_ttlvlanids.num_vlanids;i++)
+	{
+		ipacm_ttlvlanids.vlans[i] = cfg->ttlvlanids.vlans[i];
+	}
+#endif
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
 	if (!ipacm_lan_stats_enable_set)
 	{

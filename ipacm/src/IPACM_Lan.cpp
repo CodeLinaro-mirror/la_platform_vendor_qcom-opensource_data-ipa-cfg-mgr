@@ -26,7 +26,41 @@
  * WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- */
+
+ * Changes from Qualcomm Innovation Center are provided under the following license:
+ *
+ * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted (subject to the limitations in the
+ * disclaimer below) provided that the following conditions are met:
+ *
+ *     * Redistributions of source code must retain the above copyright
+ *       notice, this list of conditions and the following disclaimer.
+ *
+ *     * Redistributions in binary form must reproduce the above
+ *       copyright notice, this list of conditions and the following
+ *       disclaimer in the documentation and/or other materials provided
+ *       with the distribution.
+ *
+ *     * Neither the name of Qualcomm Innovation Center, Inc. nor the names of its
+ *       contributors may be used to endorse or promote products derived
+ *       from this software without specific prior written permission.
+ *
+ * NO EXPRESS OR IMPLIED LICENSES TO ANY PARTY'S PATENT RIGHTS ARE
+ * GRANTED BY THIS LICENSE. THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT
+ * HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED
+ * WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
+ * MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
+ * IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR
+ * ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+ * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE
+ * GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER
+ * IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
+ * OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
+ * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE
+*/
 /*!
 	@file
 	IPACM_Lan.cpp
@@ -58,6 +92,10 @@ bool IPACM_Lan::odu_up = false;
 bool IPACM_Lan::lan_stats_inited = false;
 ipa_lan_client_idx IPACM_Lan::active_lan_client_index_odu[IPA_MAX_NUM_HW_PATH_CLIENTS];
 ipa_lan_client_idx IPACM_Lan::inactive_lan_client_index_odu[IPA_MAX_NUM_HW_PATH_CLIENTS];
+#endif
+
+#ifdef FEATURE_TTL
+bool notify_ttl = false;
 #endif
 
 /* for default single pdn use-case: 1 prefix+1 mtu*/
@@ -137,7 +175,9 @@ IPACM_Lan::IPACM_Lan(int iface_index) : IPACM_Iface(iface_index)
 	memset(l2tp_udp_dflt_flt_rule_hdl, 0, sizeof(l2tp_udp_dflt_flt_rule_hdl));
 #endif
 #endif
-
+#ifdef FEATURE_TTL
+	memset(ttl_flt_rule_hdl, 0, sizeof(ttl_flt_rule_hdl));
+#endif
 #ifdef FEATURE_SOCKSv5
         socksv5_flt_hdl_v6 = 0;
 #endif
@@ -2684,8 +2724,10 @@ int IPACM_Lan::handle_addr_evt(ipacm_event_data_addr *data)
 		init_fl_rule(data->iptype);
 
 		add_tcp_syn_flt_rule(data->iptype);
-
-
+#ifdef FEATURE_TTL
+		if(IPACM_Iface::ipacmcfg->ipacm_ttl_feature_enable)
+			add_ttl_exception_flt_rule(data->iptype);
+#endif
 		/* populate the flt rule offset for eth bridge(offset = icmp)  */
 		eth_bridge_flt_rule_offset[data->iptype] = ipv4_icmp_flt_rule_hdl[0];
 		/* populate the flt rule offset for mtu_offset (offset = broadcast rule)*/
@@ -2793,7 +2835,10 @@ int IPACM_Lan::handle_addr_evt(ipacm_event_data_addr *data)
 			}
 #endif
 			install_ipv6_icmp_flt_rule();
-
+#ifdef FEATURE_TTL
+			if(IPACM_Iface::ipacmcfg->ipacm_ttl_feature_enable)
+				add_ttl_exception_flt_rule(data->iptype);
+#endif
 			/* populate the flt rule offset for eth bridge */
 			eth_bridge_flt_rule_offset[data->iptype] = ipv6_icmp_flt_rule_hdl[0];
 #ifdef FEATURE_L2TP
@@ -5974,6 +6019,19 @@ int IPACM_Lan::handle_down_evt()
 		}
 		IPACM_Iface::ipacmcfg->decreaseFltRuleCount(rx_prop->rx[0].src_pipe, IPA_IP_v4, num_wan_subnet_rules);
 		IPACMDBG_H("Deleted private subnet v4 filter rules successfully.\n");
+#ifdef FEATURE_TTL
+		if(IPACM_Iface::ipacmcfg->ipacm_ttl_feature_enable)
+		{
+			if(m_filtering.DeleteFilteringHdls(&ttl_flt_rule_hdl[IPA_IP_v4], IPA_IP_v4, 1) == false)
+			{
+				IPACMERR("Error deleting ttl exception flt rule, aborting...\n");
+				res = IPACM_FAILURE;
+				goto fail;
+			}
+			IPACM_Iface::ipacmcfg->decreaseFltRuleCount(rx_prop->rx[0].src_pipe, IPA_IP_v4, 1);
+			IPACMDBG_H("Deleted ttl exception v4 filter rule successfully.\n");
+		}
+#endif
 	}
 	IPACMDBG_H("Finished delete default iface ipv4 filtering rules \n ");
 
@@ -6035,7 +6093,19 @@ int IPACM_Lan::handle_down_evt()
 
 		IPACM_Iface::ipacmcfg->decreaseFltRuleCount(rx_prop->rx[0].src_pipe, IPA_IP_v6, 1);
 		IPACMDBG_H("Deleted TCP syn v6 filter rules successfully.\n");
-
+#ifdef FEATURE_TTL
+		if(IPACM_Iface::ipacmcfg->ipacm_ttl_feature_enable)
+		{
+			if(m_filtering.DeleteFilteringHdls(&ttl_flt_rule_hdl[IPA_IP_v6], IPA_IP_v6, 1) == false)
+			{
+				IPACMERR("Error deleting ttl exception flt rule, aborting...\n");
+				res = IPACM_FAILURE;
+				goto fail;
+			}
+			IPACM_Iface::ipacmcfg->decreaseFltRuleCount(rx_prop->rx[0].src_pipe, IPA_IP_v6, 1);
+			IPACMDBG_H("Deleted ttl exception v6 filter rule successfully.\n");
+		}
+#endif
 #ifdef FEATURE_L2TP
 		if((IPACM_Iface::ipacmcfg->ipacm_l2tp_enable == IPACM_L2TP) &&
 			ipa_if_cate == ODU_IF)
@@ -6369,6 +6439,64 @@ fail:
 	return res;
 }
 
+#ifdef FEATURE_TTL
+/* add ttl flt rule */
+int IPACM_Lan::add_ttl_exception_flt_rule(ipa_ip_type iptype)
+{
+	int len;
+	struct ipa_flt_rule_add flt_rule_entry;
+	ipa_ioc_add_flt_rule *m_pFilteringTable;
+
+	if(rx_prop == NULL)
+	{
+		IPACMDBG_H("No rx properties registered for iface %s\n", dev_name);
+		return IPACM_SUCCESS;
+	}
+
+	len = sizeof(struct ipa_ioc_add_flt_rule) + sizeof(struct ipa_flt_rule_add);
+	m_pFilteringTable = (struct ipa_ioc_add_flt_rule *)malloc(len);
+	if(!m_pFilteringTable)
+	{
+		PERROR("Not enough memory.\n");
+		return IPACM_FAILURE;
+	}
+	memset(m_pFilteringTable, 0, len);
+
+	m_pFilteringTable->commit = 1;
+	m_pFilteringTable->ep = rx_prop->rx[0].src_pipe;
+	m_pFilteringTable->global = false;
+	m_pFilteringTable->ip = iptype;
+	m_pFilteringTable->num_rules = 1;
+
+	memset(&flt_rule_entry, 0, sizeof(flt_rule_entry));
+	flt_rule_entry.at_rear = true;
+	flt_rule_entry.rule.retain_hdr = 1;
+	flt_rule_entry.flt_rule_hdl = -1;
+	flt_rule_entry.status = -1;
+	flt_rule_entry.rule.action = IPA_PASS_TO_EXCEPTION;
+
+	memcpy(&flt_rule_entry.rule.attrib, &rx_prop->rx[0].attrib,
+		sizeof(flt_rule_entry.rule.attrib));
+	flt_rule_entry.rule.attrib.ext_attrib_mask |= IPA_FLT_EXT_TTL_FIELD;
+	flt_rule_entry.rule.attrib.ttl_value = 0x1;
+
+
+	memcpy(&(m_pFilteringTable->rules[0]), &flt_rule_entry, sizeof(flt_rule_entry));
+
+	if(false == m_filtering.AddFilteringRule(m_pFilteringTable))
+	{
+		IPACMERR("Error Adding RuleTable(0) to Filtering, aborting...\n");
+		free(m_pFilteringTable);
+		return IPACM_FAILURE;
+	}
+
+	ttl_flt_rule_hdl[iptype] = m_pFilteringTable->rules[0].flt_rule_hdl;
+	IPACM_Iface::ipacmcfg->increaseFltRuleCount(rx_prop->rx[0].src_pipe, iptype, 1);
+	free(m_pFilteringTable);
+	return IPACM_SUCCESS;
+}
+#endif
+
 /* install UL filter rule from Q6 */
 #ifdef FEATURE_VLAN_MPDN
 int IPACM_Lan::handle_uplink_filter_rule(ipacm_ext_prop *prop, ipa_ip_type iptype, uint8_t pdn_mux_id, bool notif_only, bool is_xlat)
@@ -6584,6 +6712,51 @@ int IPACM_Lan::handle_uplink_filter_rule(ipacm_ext_prop *prop, ipa_ip_type iptyp
 			flt_rule_entry.rule.eq_attrib.metadata_meq32.mask |= rx_prop->rx[0].attrib.meta_data_mask;
 		}
 #endif
+#ifdef FEATURE_TTL
+		if(IPACM_Iface::ipacmcfg->ipacm_ttl_feature_enable)
+		{
+			if(prop->prop[cnt].action == IPA_TTL_PASS)
+			{
+				flt_rule_entry.rule.action = IPA_PASS_TO_ROUTING;
+				flt_rule_entry.rule.retain_hdr = 1;
+				flt_rule_entry.rule.set_metadata = false;
+				IPACMDBG("TTL rule index %d to act: %d, rt_tbl_idx: %d to %d  rethdr = %d \n",
+			 		prop->prop[cnt].rule_id, flt_rule_entry.rule.action,
+					prop->prop[cnt].rt_tbl_idx,
+			 		flt_rule_entry.rule.rt_tbl_idx, flt_rule_entry.rule.retain_hdr);
+				flt_rule_entry.rule.hashable = 1;
+				if(!notify_ttl && IPACM_Iface::ipacmcfg->ttl_vlan_enable)
+				{
+					if(ioctl(fd, IPA_IOC_TTL_VLAN_MAPPING, &IPACM_Iface::ipacmcfg->ipacm_ttlvlanids))
+					{
+						IPACMERR("failed to send the IOCTL to driver\n");
+					}
+			 		else
+			 		{
+			 			IPACMDBG("TTL VLAN ID's sent to driver\n");
+			 			notify_ttl = true;
+		 			}
+				}
+			}
+			else
+			{
+				/* checking mac ethertype value so rule need to be non hashable checking
+				ethertype value as 0xFFFF updated by uC in 1st pass */
+				flt_rule_entry.rule.hashable = 0;
+				flt_rule_entry.rule.eq_attrib.rule_eq_bitmap |= 0x20<<flt_rule_entry.rule.eq_attrib.num_offset_meq_32;
+				flt_rule_entry.rule.eq_attrib.offset_meq_32[flt_rule_entry.rule.eq_attrib.num_offset_meq_32].offset = -2;
+				flt_rule_entry.rule.eq_attrib.offset_meq_32[flt_rule_entry.rule.eq_attrib.num_offset_meq_32].mask = 0xFFFF0000;
+				flt_rule_entry.rule.eq_attrib.offset_meq_32[flt_rule_entry.rule.eq_attrib.num_offset_meq_32].value = 0xFFFF0000;
+				flt_rule_entry.rule.eq_attrib.num_offset_meq_32 ++;
+
+			}
+		}
+		else
+		{
+			IPACMDBG("TTL feature is not enabled\n");
+		}
+#endif
+
 		memcpy(&pFilteringTable->rules[i], &flt_rule_entry, sizeof(flt_rule_entry));
 
 		IPACMDBG_H("Modem UL filtering rule %d has index %d installed at %d\n", cnt, index, i);
@@ -8544,6 +8717,50 @@ int IPACM_Lan::install_uplink_filter_rule_per_client_v2
 			flt_rule_entry.rule.eq_attrib.metadata_meq32.value |= rx_prop->rx[0].attrib.meta_data;
 			flt_rule_entry.rule.eq_attrib.metadata_meq32.mask |= rx_prop->rx[0].attrib.meta_data_mask;
 		}
+#ifdef FEATURE_TTL
+		if(IPACM_Iface::ipacmcfg->ipacm_ttl_feature_enable)
+		{
+			if(prop->prop[cnt].action == IPA_TTL_PASS)
+			{
+				flt_rule_entry.rule.action = IPA_PASS_TO_ROUTING;
+				flt_rule_entry.rule.retain_hdr = 1;
+				flt_rule_entry.rule.set_metadata = false;
+				IPACMDBG("TTL rule index %d to act: %d, rt_tbl_idx: %d to %d  rethdr = %d \n",
+			 		prop->prop[cnt].rule_id, flt_rule_entry.rule.action,
+					prop->prop[cnt].rt_tbl_idx,
+			 		flt_rule_entry.rule.rt_tbl_idx, flt_rule_entry.rule.retain_hdr);
+				flt_rule_entry.rule.hashable = 1;
+				if(!notify_ttl && IPACM_Iface::ipacmcfg->ttl_vlan_enable)
+				{
+					if(ioctl(fd, IPA_IOC_TTL_VLAN_MAPPING, &IPACM_Iface::ipacmcfg->ipacm_ttlvlanids))
+					{
+						IPACMERR("failed to send the IOCTL to driver\n");
+					}
+			 		else
+			 		{
+			 			IPACMDBG("TTL VLAN ID's sent to driver\n");
+			 			notify_ttl = true;
+		 			}
+				}
+			}
+			else
+			{
+				/* checking mac ethertype value so rule need to be non hashable checking
+				ethertype value as 0xFFFF updated by uC in 1st pass */
+				flt_rule_entry.rule.hashable = 0;
+				flt_rule_entry.rule.eq_attrib.rule_eq_bitmap |= 0x20<<flt_rule_entry.rule.eq_attrib.num_offset_meq_32;
+				flt_rule_entry.rule.eq_attrib.offset_meq_32[flt_rule_entry.rule.eq_attrib.num_offset_meq_32].offset = -2;
+				flt_rule_entry.rule.eq_attrib.offset_meq_32[flt_rule_entry.rule.eq_attrib.num_offset_meq_32].mask = 0xFFFF0000;
+				flt_rule_entry.rule.eq_attrib.offset_meq_32[flt_rule_entry.rule.eq_attrib.num_offset_meq_32].value = 0xFFFF0000;
+				flt_rule_entry.rule.eq_attrib.num_offset_meq_32 ++;
+
+			}
+		}
+		else
+		{
+			IPACMDBG("TTL feature is not enabled\n");
+		}
+#endif
 		memcpy((void *)pFilteringTable->rules + (cnt * sizeof(struct ipa_flt_rule_add_v2)),
 			&flt_rule_entry, sizeof(flt_rule_entry));
 		index++;
@@ -8785,6 +9002,50 @@ int IPACM_Lan::install_uplink_filter_rule_per_client
 			flt_rule_entry.rule.eq_attrib.metadata_meq32.value |= rx_prop->rx[0].attrib.meta_data;
 			flt_rule_entry.rule.eq_attrib.metadata_meq32.mask |= rx_prop->rx[0].attrib.meta_data_mask;
 		}
+#ifdef FEATURE_TTL
+		if(IPACM_Iface::ipacmcfg->ipacm_ttl_feature_enable)
+		{
+			if(prop->prop[cnt].action == IPA_TTL_PASS)
+			{
+				flt_rule_entry.rule.action = IPA_PASS_TO_ROUTING;
+				flt_rule_entry.rule.retain_hdr = 1;
+				flt_rule_entry.rule.set_metadata = false;
+				IPACMDBG("TTL rule index %d to act: %d, rt_tbl_idx: %d to %d  rethdr = %d \n",
+			 		prop->prop[cnt].rule_id, flt_rule_entry.rule.action,
+					prop->prop[cnt].rt_tbl_idx,
+			 		flt_rule_entry.rule.rt_tbl_idx, flt_rule_entry.rule.retain_hdr);
+				flt_rule_entry.rule.hashable = 1;
+				if(!notify_ttl && IPACM_Iface::ipacmcfg->ttl_vlan_enable)
+				{
+					if(ioctl(fd, IPA_IOC_TTL_VLAN_MAPPING, &IPACM_Iface::ipacmcfg->ipacm_ttlvlanids))
+					{
+						IPACMERR("failed to send the IOCTL to driver\n");
+					}
+			 		else
+			 		{
+			 			IPACMDBG("TTL VLAN ID's sent to driver\n");
+			 			notify_ttl = true;
+		 			}
+				}
+			}
+			else
+			{
+				/* checking mac ethertype value so rule need to be non hashable checking
+				ethertype value as 0xFFFF updated by uC in 1st pass */
+				flt_rule_entry.rule.hashable = 0;
+				flt_rule_entry.rule.eq_attrib.rule_eq_bitmap |= 0x20<<flt_rule_entry.rule.eq_attrib.num_offset_meq_32;
+				flt_rule_entry.rule.eq_attrib.offset_meq_32[flt_rule_entry.rule.eq_attrib.num_offset_meq_32].offset = -2;
+				flt_rule_entry.rule.eq_attrib.offset_meq_32[flt_rule_entry.rule.eq_attrib.num_offset_meq_32].mask = 0xFFFF0000;
+				flt_rule_entry.rule.eq_attrib.offset_meq_32[flt_rule_entry.rule.eq_attrib.num_offset_meq_32].value = 0xFFFF0000;
+				flt_rule_entry.rule.eq_attrib.num_offset_meq_32 ++;
+
+			}
+		}
+		else
+		{
+			IPACMDBG("TTL feature is not enabled\n");
+		}
+#endif
 		memcpy(&pFilteringTable->rules[cnt], &flt_rule_entry, sizeof(flt_rule_entry));
 
 		IPACMDBG_H("Modem UL filtering rule %d has rule_id %d\n", cnt, prop->prop[cnt].rule_id);
@@ -13743,6 +14004,19 @@ int IPACM_Lan::handle_mpdn_ul_xlat_filter_rule(ipacm_ext_prop * prop,
 				prev = curr;
 			}
 
+#ifdef FEATURE_TTL
+			if(IPACM_Iface::ipacmcfg->ipacm_ttl_feature_enable)
+			{
+				/* checking mac ethertype value so rule need to be non hashable checking
+				ethertype value as 0xFFFF updated by uC in 1st pass */
+				flt_rule_entry.rule.hashable = 0;
+				flt_rule_entry.rule.eq_attrib.rule_eq_bitmap |= 0x20<<flt_rule_entry.rule.eq_attrib.num_offset_meq_32;
+				flt_rule_entry.rule.eq_attrib.offset_meq_32[flt_rule_entry.rule.eq_attrib.num_offset_meq_32].offset = -2;
+				flt_rule_entry.rule.eq_attrib.offset_meq_32[flt_rule_entry.rule.eq_attrib.num_offset_meq_32].mask = 0xFFFF0000;
+				flt_rule_entry.rule.eq_attrib.offset_meq_32[flt_rule_entry.rule.eq_attrib.num_offset_meq_32].value = 0xFFFF0000;
+				flt_rule_entry.rule.eq_attrib.num_offset_meq_32 ++;
+			}
+#endif
 			memcpy(&pFilteringTable->rules[entry_idx], &flt_rule_entry, sizeof(flt_rule_entry));
 			pFilteringTable->num_rules++;
 			IPACMDBG_H("xlat meta-data is modified for rule: %d index %d metadata : 0x%x rule_id %d\n",

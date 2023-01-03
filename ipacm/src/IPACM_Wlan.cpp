@@ -7478,6 +7478,12 @@ end:
 		wlan_client = NULL;
 	}
 
+	if(wlan_primary_client != NULL)
+	{
+		free(wlan_primary_client);
+		wlan_primary_client = NULL;
+	}
+
 	is_active = false;
 	post_del_self_evt();
 

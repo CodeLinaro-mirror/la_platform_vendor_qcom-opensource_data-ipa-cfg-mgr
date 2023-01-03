@@ -692,7 +692,7 @@ private:
 #endif
 
 	/* for handle wifi client initial,copy all partial headers (tx property) */
-	int handle_wlan_client_init_ex(ipacm_event_data_wlan_ex *data, bool delay_init, uint16_t vlan_id = 0);
+	int handle_wlan_client_init_ex(ipacm_event_data_wlan_ex *data, bool delay_init);
 
 	/* for handle primary wifi client, copy wifi data. */
 	int handle_wlan_primary_client_init_ex(ipacm_event_data_wlan_ex *data);

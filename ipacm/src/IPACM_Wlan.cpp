@@ -234,6 +234,10 @@ IPACM_Wlan::~IPACM_Wlan()
 	{
 		free(wlan_client);
 	}
+	if(wlan_primary_client != NULL)
+	{
+		free(wlan_primary_client);
+	}
 	IPACM_EvtDispatcher::deregistr(this);
 	IPACM_IfaceManager::deregistr(this);
 	IPACM_Wlan::num_wlan_ap_iface--;
@@ -4353,6 +4357,12 @@ fail:
 	{
 		free(wlan_client);
 		wlan_client = NULL;
+	}
+
+	if(wlan_primary_client != NULL)
+	{
+		free(wlan_primary_client);
+		wlan_primary_client = NULL;
 	}
 #ifndef FEATURE_ETH_BRIDGE_LE
 	if (tx_prop != NULL)

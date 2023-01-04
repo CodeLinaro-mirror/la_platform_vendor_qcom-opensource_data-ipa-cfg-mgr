@@ -254,12 +254,17 @@ void IPACM_Wlan::event_callback(ipa_cm_event_id event, void *param)
 
 	switch (event)
 	{
-
+	/* support eth pdu ipacm disable */
+	case IPA_IPACM_DISABLE:
+		IPACMDBG_H("Received IPA_IPACM_DISABLE, treat as IPA_WLAN_LINK_DOWN_EVENT\n");
 	case IPA_WLAN_LINK_DOWN_EVENT:
 		{
-			ipacm_event_data_fid *data = (ipacm_event_data_fid *)param;
-			ipa_interface_index = iface_ipa_index_query(data->if_index);
-			if (ipa_interface_index == ipa_if_num)
+			if (event != IPA_IPACM_DISABLE)
+			{
+				ipacm_event_data_fid *data = (ipacm_event_data_fid *)param;
+				ipa_interface_index = iface_ipa_index_query(data->if_index);
+			}
+			if (ipa_interface_index == ipa_if_num || event == IPA_IPACM_DISABLE)
 			{
 				IPACMDBG_H("Received IPA_WLAN_LINK_DOWN_EVENT\n");
 				handle_down_evt();
@@ -1034,6 +1039,11 @@ void IPACM_Wlan::event_callback(ipa_cm_event_id event, void *param)
 						is_vlan_event(data->iface_name) && is_vlan_iface())
 			{
 				uint16_t vlan_id = 0;
+				if (data->iptype == IPA_IP_v6)
+				{
+					handle_wlan_del_ipv6_addr(data);
+					return;
+				}
 
 				IPACMDBG_H("handling vlan WLAN client del v4 ip address for iface %s\n",
 					data->iface_name);
@@ -1650,7 +1660,7 @@ int IPACM_Wlan::handle_wlan_mac_flt_conn_disc(uint8_t *mac_addr, bool conn_state
 }
 
 /* handle wifi client initial,copy all partial headers (tx property) */
-int IPACM_Wlan::handle_wlan_client_init_ex(ipacm_event_data_wlan_ex *data, bool delay_init)
+int IPACM_Wlan::handle_wlan_client_init_ex(ipacm_event_data_wlan_ex *data, bool delay_init, uint16_t vlan_id)
 {
 
 #define WLAN_IFACE_INDEX_LEN 10
@@ -1993,7 +2003,18 @@ int IPACM_Wlan::handle_wlan_client_init_ex(ipacm_event_data_wlan_ex *data, bool 
 #endif
 		get_client_memptr(wlan_client, num_wifi_client)->ta_peer_id = ta_peer_id;
 		IPACMDBG_H("ta_peer_id for the client: %d\n", ta_peer_id);
-
+		if (vlan_id)
+		{
+			get_client_memptr(wlan_client, num_wifi_client)->vlan_id = vlan_id;
+			get_client_memptr(wlan_client, num_wifi_client)->is_vlan = true;
+			IPACMDBG_H("Wlan client at index %d is a VLAN client with vlan id: %d\n",
+				num_wifi_client, vlan_id);
+		}
+		else
+		{
+			get_client_memptr(wlan_client, num_wifi_client)->vlan_id = 0;
+			get_client_memptr(wlan_client, num_wifi_client)->is_vlan = false;
+		}
 		wlan_index = num_wifi_client;
 		num_wifi_client++;
 #if defined(FEATURE_IPACM_PER_CLIENT_STATS) || defined(IPA_WDI_AST_UPDATE)
@@ -6502,8 +6523,21 @@ int IPACM_Wlan::handle_wlan_vlan_neighbor(ipacm_event_new_neigh_vlan *param) {
 	}
 
 
-	if (IPACM_SUCCESS != IPACM_Iface::ipacmcfg->get_vlan_id(data->iface_name, &vlan_id)) {
+	if (IPACM_SUCCESS != IPACM_Iface::ipacmcfg->get_vlan_id(data->iface_name, &vlan_id))
+	{
 		IPACMERR("failed getting vlan ID of iface %s \n", data->iface_name);
+		return IPACM_FAILURE;
+	}
+
+	memset(&client_info, 0, sizeof(tether_client_info));
+	if (new_neigh_data->bridge)
+	{
+		bridge = new_neigh_data->bridge;
+		client_info.is_vlan = true;
+	}
+	else {
+		IPACMDBG_H("Bridge info not available for Vlan Client..exit\n");
+		return IPACM_FAILURE;
 	}
 
 	wlan_index = get_wlan_client_index(data->mac_addr, vlan_id);
@@ -6512,7 +6546,7 @@ int IPACM_Wlan::handle_wlan_vlan_neighbor(ipacm_event_new_neigh_vlan *param) {
 		/* Initialize WLAN client based on Primary client. */
 		handle_wlan_client_init_ex(
 				get_primary_client_memptr(wlan_primary_client, wlan_primary_index)->p_hdr_info,
-				true);
+				true, vlan_id);
 
 		wlan_index = get_wlan_client_index(data->mac_addr, vlan_id);
 		if (wlan_index == IPACM_INVALID_INDEX)
@@ -6521,21 +6555,6 @@ int IPACM_Wlan::handle_wlan_vlan_neighbor(ipacm_event_new_neigh_vlan *param) {
 			return IPACM_FAILURE;
 		}
 		get_primary_client_memptr(wlan_primary_client, wlan_primary_index)->num_vlan_clients++;
-	}
-
-	memset(&client_info, 0, sizeof(tether_client_info));
-	if (new_neigh_data->bridge)
-	{
-		bridge = new_neigh_data->bridge;
-		get_client_memptr(wlan_client, wlan_index)->is_vlan = true;
-		client_info.is_vlan = true;
-
-		get_client_memptr(wlan_client, wlan_index)->vlan_id = vlan_id;
-		IPACMDBG_H("Wlan client at index %d is a VLAN client with vlan id: %d\n", wlan_index, vlan_id);
-	}
-	else {
-		IPACMDBG_H("Bridge info not available for Vlan Client..exit\n");
-		return IPACM_FAILURE;
 	}
 
 	if (data->iptype == IPA_IP_v4) {
@@ -7046,5 +7065,93 @@ int IPACM_Wlan::handle_refresh_filtering_rules(bool wlan_vlan_mpdn_enable)
 	}
 	fail:
 	return res;
+}
+
+int IPACM_Wlan::handle_wlan_del_ipv6_addr(ipacm_event_data_all *data)
+{
+	uint32_t tx_index;
+	uint32_t rt_hdl;
+	int num_v6 =0, clnt_indx;
+	uint16_t vlan_id = 0;
+	std::list <ipacm_event_data_all>::iterator it;
+	std::array<uint32_t, 4> ipv6 = {0};
+
+#ifdef FEATURE_VLAN_MPDN
+	if(is_vlan_event(data->iface_name))
+	{
+		IPACMDBG_H("handling vlan WLAN client del v6 ip address for iface %s\n", data->iface_name);
+		if(IPACM_Iface::ipacmcfg->get_vlan_id(data->iface_name, &vlan_id))
+		{
+			IPACMERR("failed getting vlan id for iface %s\n", data->iface_name);
+			return IPACM_FAILURE;
+		}
+	}
+#endif
+
+	clnt_indx = get_wlan_client_index(data->mac_addr, vlan_id);
+	if (clnt_indx == IPACM_INVALID_INDEX)
+	{
+		IPACMERR("wlan client not found/attached with MAC %02x:%02x:%02x:%02x:%02x:%02x\n",
+			data->mac_addr[0], data->mac_addr[1], data->mac_addr[2], data->mac_addr[3], data->mac_addr[4], data->mac_addr[5]);
+		return IPACM_FAILURE;
+	}
+
+	if(data->iptype == IPA_IP_v6)
+	{
+		if ((data->ipv6_addr[0] == 0) && (data->ipv6_addr[1] == 0) &&
+			(data->ipv6_addr[2] == 0) || (data->ipv6_addr[3] == 0))
+		{
+			IPACMDBG_H("Received invalid IPv6 address\n");
+		}
+
+		IPACMDBG_H("ipv6 address got: 0x%x:%x:%x:%x\n",
+			data->ipv6_addr[0], data->ipv6_addr[1], data->ipv6_addr[2], data->ipv6_addr[3]);
+		for (it = neigh_cache.begin(); it != neigh_cache.end(); ++it)
+		{
+			if ((it->ipv6_addr[0] == data->ipv6_addr[0]) && (it->ipv6_addr[1] == data->ipv6_addr[1])
+				&& (it->ipv6_addr[2] == data->ipv6_addr[2]) && (it->ipv6_addr[3] == data->ipv6_addr[3]))
+			{
+				neigh_cache.erase(it);
+				break;
+			}
+		}
+
+		/* remove the mapping from the client list */
+		std::copy(std::begin(data->ipv6_addr), std::end(data->ipv6_addr), std::begin(ipv6));
+
+		if(rt_hdl_v6_list[clnt_indx].count(ipv6) > 0)
+		{
+			IPACMDBG_H("ipv6 addr is found for client:%d, ipa_num_clients_ipv6 = %d\n",
+				clnt_indx, IPACM_Iface::ipacmcfg->ipa_num_clients_ipv6);
+			if (rt_hdl_v6_list[clnt_indx].at(ipv6).route_rule_set_v6)
+			{
+				IPACMDBG_H("clean ipv6 rt-rules for client:%d\n", clnt_indx);
+				for(tx_index = 0; tx_index < iface_query->num_tx_props; tx_index++)
+				{
+					if((tx_prop->tx[tx_index].ip == IPA_IP_v6) &&
+						(rt_hdl_v6_list[clnt_indx].at(ipv6).hdl_v6[tx_index].rt_rule_hdl_v6 != 0))
+					{
+						IPACMDBG_H("Delete client index %d ipv6 RT-rules for %d-st ipv6 for tx:%d\n", clnt_indx, num_v6, tx_index);
+						rt_hdl = rt_hdl_v6_list[clnt_indx].at(ipv6).hdl_v6[tx_index].rt_rule_hdl_v6;
+						if(m_routing.DeleteRoutingHdl(rt_hdl, IPA_IP_v6) == false)
+						{
+							return IPACM_FAILURE;
+						}
+						rt_hdl = rt_hdl_v6_list[clnt_indx].at(ipv6).hdl_v6[tx_index].rt_rule_hdl_v6_wan;
+						if(m_routing.DeleteRoutingHdl(rt_hdl, IPA_IP_v6) == false)
+						{
+							return IPACM_FAILURE;
+						}
+					}
+				} /* tx_index loop */
+			} /* clean ipv6 rt-rules */
+			rt_hdl_v6_list[clnt_indx].erase(ipv6);
+			get_client_memptr(wlan_client, clnt_indx)->ipv6_set--;
+			get_client_memptr(wlan_client, clnt_indx)->route_rule_set_v6--;
+			IPACM_Iface::ipacmcfg->ipa_num_clients_ipv6--;
+			IPACMDBG_H("update ipa_num_clients_ipv6 = %d\n", IPACM_Iface::ipacmcfg->ipa_num_clients_ipv6);
+		} /* found ipv6 on this client */
+	}
+	return IPACM_SUCCESS;
 }
 

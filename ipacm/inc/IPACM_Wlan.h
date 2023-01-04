@@ -170,6 +170,7 @@ public:
 	int add_rt_rules_for_ast_update_ifaces();
 
 	bool is_vlan_iface();
+	int handle_wlan_del_ipv6_addr(ipacm_event_data_all *data);
 
 
 #if defined(FEATURE_IPACM_PER_CLIENT_STATS) || defined(IPA_WDI_AST_UPDATE)
@@ -692,7 +693,7 @@ private:
 #endif
 
 	/* for handle wifi client initial,copy all partial headers (tx property) */
-	int handle_wlan_client_init_ex(ipacm_event_data_wlan_ex *data, bool delay_init);
+	int handle_wlan_client_init_ex(ipacm_event_data_wlan_ex *data, bool delay_init, uint16_t vlan_id = 0);
 
 	/* for handle primary wifi client, copy wifi data. */
 	int handle_wlan_primary_client_init_ex(ipacm_event_data_wlan_ex *data);

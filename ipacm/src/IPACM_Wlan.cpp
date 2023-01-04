@@ -412,7 +412,7 @@ void IPACM_Wlan::event_callback(ipa_cm_event_id event, void *param)
 							if(data->iptype == IPA_IP_v6)
 							{
 								memcpy(ipv6_prefix, IPACM_Wan::backhaul_ipv6_prefix, sizeof(ipv6_prefix));
-								install_ipv6_prefix_flt_rule(IPACM_Wan::backhaul_ipv6_prefix);
+								modify_ipv6_prefix_flt_rule();
 #ifdef FEATURE_IPACM_UL_FIREWALL
 #ifdef IPA_V6_UL_WL_FIREWALL_HANDLE
 								configure_v6_ul_firewall_wlan();

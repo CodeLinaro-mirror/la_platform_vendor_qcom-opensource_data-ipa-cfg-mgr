@@ -55,7 +55,8 @@ LOCAL_PRELINK_MODULE := false
 include $(BUILD_SHARED_LIBRARY)
 
 etcdir = ${sysconfdir}/data/ipa
-etc_SCRIPTS = IPACM_cfg.xml
+etc_SCRIPTS = IPACM_cfg.xml \
+		IPACM_cfg_ext.xml
 
 init_ddir = ${sysconfdir}/init.d
 init_d_SCRIPTS = start_ipacm_le

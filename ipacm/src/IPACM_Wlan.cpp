@@ -3710,6 +3710,8 @@ int IPACM_Wlan::handle_wlan_client_down_evt(uint8_t *mac_addr, uint16_t vlan_id)
 	get_client_memptr(wlan_client, clt_indx)->route_rule_set_v6 = 0;
 	free(get_client_memptr(wlan_client, clt_indx)->p_hdr_info);
 	get_client_memptr(wlan_client, clt_indx)->ta_peer_id = 0;
+	get_client_memptr(wlan_client, clt_indx)->vlan_id = 0;
+	get_client_memptr(wlan_client, clt_indx)->is_vlan = 0;
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
 	get_client_memptr(wlan_client, clt_indx)->ipv4_ul_rules_set = false;
 	get_client_memptr(wlan_client, clt_indx)->ipv6_ul_rules_set = false;
@@ -3799,6 +3801,8 @@ int IPACM_Wlan::handle_wlan_client_down_evt(uint8_t *mac_addr, uint16_t vlan_id)
 				 get_client_memptr(wlan_client, (clt_indx + 1))->wifi_rt_hdl[tx_index].wifi_rt_rule_hdl_v4;
 		}
 		get_client_memptr(wlan_client, clt_indx)->ta_peer_id = get_client_memptr(wlan_client, (clt_indx + 1))->ta_peer_id;
+		get_client_memptr(wlan_client, clt_indx)->vlan_id = get_client_memptr(wlan_client, (clt_indx + 1))->vlan_id;
+		get_client_memptr(wlan_client, clt_indx)->is_vlan = get_client_memptr(wlan_client, (clt_indx + 1))->is_vlan;
 		get_client_memptr(wlan_client, clt_indx)->lan2lan_fl_rule_hdl_v4 =
 			get_client_memptr(wlan_client, (clt_indx + 1))->lan2lan_fl_rule_hdl_v4;
 		get_client_memptr(wlan_client, clt_indx)->lan2lan_fl_rule_hdl_v6 =

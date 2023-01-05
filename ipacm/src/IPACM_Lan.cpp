@@ -878,7 +878,7 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 		if((IPACM_Iface::ipacmcfg->iface_in_vlan_mode(dev_name)) &&
 			(IPACM_Iface::ipacmcfg->ipacm_mpdn_enable == TRUE))
 		{
-			IPACMDBG_H("IF %s is vlan IF, ignoring IPA_HANDLE_WAN_DOWN", dev_name);
+			IPACMDBG_H("IF %s is vlan IF, ignoring IPA_HANDLE_WAN_DOWN\n", dev_name);
 			return;
 		}
 #endif
@@ -2074,7 +2074,7 @@ int IPACM_Lan::handle_vlan_pdn_down(ipacm_event_vlan_pdn *data)
 	{
 		if(data->mux_id == 0)
 		{
-			if(handle_wan_down(true, data->mux_id))
+			if(handle_wan_down(true, data->mux_id, data->VlanID))
 			{
 				IPACMERR("STA flt v4 rule deletion failed\n");
 				return IPACM_FAILURE;
@@ -2117,7 +2117,7 @@ int IPACM_Lan::handle_vlan_pdn_down(ipacm_event_vlan_pdn *data)
 	{
 		if(data->mux_id == 0)
 		{
-			if(handle_wan_down_v6(true, false))
+			if(handle_wan_down_v6(true, false, data->VlanID))
 			{
 				IPACMERR("STA flt v6 rule deletion failed\n");
 				return IPACM_FAILURE;
@@ -2157,12 +2157,12 @@ int IPACM_Lan::handle_vlan_pdn_down(ipacm_event_vlan_pdn *data)
 
 		if(data->mux_id == 0)
 		{
-			if(handle_wan_down(true, data->mux_id))
+			if(handle_wan_down(true, data->mux_id, data->VlanID))
 			{
 				IPACMERR("STA flt v4 rule deletion failed\n");
 				return IPACM_FAILURE;
 			}
-			if(handle_wan_down_v6(true, false))
+			if(handle_wan_down_v6(true, false, data->VlanID))
 			{
 				IPACMERR("STA flt v6 rule deletion failed\n");
 				return IPACM_FAILURE;
@@ -2379,7 +2379,7 @@ int IPACM_Lan::notify_flt_removed(uint8_t mux_id)
 }
 
 /* delete filter rule for wan_down event for IPv4*/
-int IPACM_Lan::handle_wan_down(bool is_sta_mode, uint8_t mux_id)
+int IPACM_Lan::handle_wan_down(bool is_sta_mode, uint8_t mux_id, uint16_t vlan_id)
 {
 	int i = 0;
 
@@ -2400,17 +2400,36 @@ int IPACM_Lan::handle_wan_down(bool is_sta_mode, uint8_t mux_id)
 	}
 	else
 	{
-		/* currently support only all vlans switch to STA or LTE, not partial vlans */
 		for(i = 0; i < IPA_MAX_NUM_OFFLOAD_VLANS; i++)
 		{
-			if (m_filtering.DeleteFilteringHdls(&vlan_sta_info[i].v4_flt_hdl, IPA_IP_v4, 1) == false)
+			if (vlan_id == 0)
 			{
-				IPACMERR("Error Adding RuleTable(1) to Filtering, aborting...\n");
-				return IPACM_FAILURE;
+				IPACMDBG_H("Delete all flt rules\n");
+					if (m_filtering.DeleteFilteringHdls(&vlan_sta_info[i].v4_flt_hdl, IPA_IP_v4, 1) == false)
+					{
+						IPACMERR("Error Adding RuleTable(1) to Filtering, aborting...\n");
+						return IPACM_FAILURE;
+					}
+					IPACM_Iface::ipacmcfg->decreaseFltRuleCount(rx_prop->rx[0].src_pipe, IPA_IP_v4, 1);
+					vlan_sta_info[i].v4_flt_hdl = 0;
+					vlan_sta_info[i].vlan_id = 0;
 			}
-			IPACM_Iface::ipacmcfg->decreaseFltRuleCount(rx_prop->rx[0].src_pipe, IPA_IP_v4, 1);
-			vlan_sta_info[i].v4_flt_hdl = 0;
-			vlan_sta_info[i].vlan_id = 0;
+			else
+			{
+				if (vlan_sta_info[i].vlan_id == vlan_id)
+				{
+					IPACMDBG_H("Delete flt rule for vlan id: %d\n", vlan_id);
+					if (m_filtering.DeleteFilteringHdls(&vlan_sta_info[i].v4_flt_hdl, IPA_IP_v4, 1) == false)
+					{
+						IPACMERR("Error Adding RuleTable(1) to Filtering, aborting...\n");
+						return IPACM_FAILURE;
+					}
+					IPACM_Iface::ipacmcfg->decreaseFltRuleCount(rx_prop->rx[0].src_pipe, IPA_IP_v4, 1);
+					vlan_sta_info[i].v4_flt_hdl = 0;
+					vlan_sta_info[i].vlan_id = 0;
+					break;
+				}
+			}
 		}
 	}
 
@@ -8679,7 +8698,7 @@ int IPACM_Lan::enable_per_client_stats(bool *status)
 	return ret;
 }
 #endif
-int IPACM_Lan::handle_wan_down_v6(bool is_sta_mode, bool is_support_mpdn)
+int IPACM_Lan::handle_wan_down_v6(bool is_sta_mode, bool is_support_mpdn, uint16_t vlan_id)
 {
 	int i = 0;
 
@@ -8710,20 +8729,39 @@ int IPACM_Lan::handle_wan_down_v6(bool is_sta_mode, bool is_support_mpdn)
 	}
 	else
 	{
-		/* currently support only all vlans switch to STA or LTE, not partial vlans */
 		IPACMDBG_H("Deletion of STA BH v6 rule\n");
 		for(i = 0; (m_ipv6_default_filterting_rules_count + i) < IPA_MAX_NUM_OFFLOAD_VLANS; i++)
 		{
 			if(dft_v6fl_rule_hdl[m_ipv6_default_filterting_rules_count + i])
 			{
-				if (!m_filtering.DeleteFilteringHdls(&dft_v6fl_rule_hdl[m_ipv6_default_filterting_rules_count + i], IPA_IP_v6, 1))
+				if (vlan_id == 0)
 				{
-					IPACMERR("Error Deleting last default flt rule, aborting...\n");
-					return IPACM_FAILURE;
+					IPACMDBG_H("Delete all flt rules\n");
+					if (!m_filtering.DeleteFilteringHdls(&dft_v6fl_rule_hdl[m_ipv6_default_filterting_rules_count + i], IPA_IP_v6, 1))
+					{
+						IPACMERR("Error Deleting last default flt rule, aborting...\n");
+						return IPACM_FAILURE;
+					}
+					IPACM_Iface::ipacmcfg->decreaseFltRuleCount(rx_prop->rx[0].src_pipe, IPA_IP_v6, 1);
+					vlan_sta_info[i].v6_flt_hdl = 0;
+					vlan_sta_info[i].vlan_id = 0;
 				}
-				IPACM_Iface::ipacmcfg->decreaseFltRuleCount(rx_prop->rx[0].src_pipe, IPA_IP_v6, 1);
-				vlan_sta_info[i].v6_flt_hdl = 0;
-				vlan_sta_info[i].vlan_id = 0;
+				else
+				{
+					if(vlan_sta_info[i].vlan_id == vlan_id)
+					{
+						IPACMDBG_H("Delete vlan_id %d flt rule\n", vlan_id);
+						if (!m_filtering.DeleteFilteringHdls(&dft_v6fl_rule_hdl[m_ipv6_default_filterting_rules_count + i], IPA_IP_v6, 1))
+						{
+							IPACMERR("Error Deleting last default flt rule, aborting...\n");
+							return IPACM_FAILURE;
+						}
+						IPACM_Iface::ipacmcfg->decreaseFltRuleCount(rx_prop->rx[0].src_pipe, IPA_IP_v6, 1);
+						vlan_sta_info[i].v6_flt_hdl = 0;
+						vlan_sta_info[i].vlan_id = 0;
+						break;
+					}
+				}
 			}
 		}
 		IPACMDBG_H("STA BH v6 rules has been deleted successfully.\n");

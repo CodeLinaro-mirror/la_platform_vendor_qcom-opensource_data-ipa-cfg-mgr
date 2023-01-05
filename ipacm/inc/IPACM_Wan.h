@@ -678,6 +678,7 @@ private:
 	int handle_route_add_evt(ipa_ip_type iptype);
 
 #ifdef FEATURE_VLAN_MPDN
+	int vlan_pdn_backhaul_switch_check(ipa_ip_type iptype, ipacm_event_route_vlan *data, bool is_bachaul_switch_fail);
 	int check_vlan_pdn(ipa_ip_type iptype, ipacm_event_route_vlan *data, bool xlat_cfg = false);
 	int handle_route_add_vlan_pdn_evt(ipa_ip_type iptype, uint16_t vlan_id);
 #endif

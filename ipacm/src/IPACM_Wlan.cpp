@@ -6796,10 +6796,10 @@ int IPACM_Wlan::handle_wlan_vlan_neighbor(ipacm_event_new_neigh_vlan *param) {
 		handle_wlan_mac_flt_conn_disc(data->mac_addr, true);
 	}
 
-	if(IPACM_Iface::ipacmcfg->wlan_vlan_mpdn_enabled) {
-		/* Add NAT rules after ipv4 RT rules are set */
-		HandleNeighIpAddrAddEvt(data);
+	/* Add NAT rules after ipv4 RT rules are set */
+	HandleNeighIpAddrAddEvt(data);
 
+	if(IPACM_Iface::ipacmcfg->wlan_vlan_mpdn_enabled) {
 		/* Special handling for VLAN clients in IP passthrough mode.
 		 * simillar to IPA_HANDLE_WAN_VLAN_PDN_UP.
 		 */

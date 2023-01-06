@@ -2052,10 +2052,23 @@ int IPACM_Wlan::handle_wlan_client_init_ex(ipacm_event_data_wlan_ex *data, bool 
 		}
 
 		/* initialize wifi client*/
+		if (delay_init)
+		{
+			get_client_memptr(wlan_client, num_wifi_client)->v4_addr = 0;
+			get_client_memptr(wlan_client, num_wifi_client)->hdr_hdl_v4 = 0;
+			get_client_memptr(wlan_client, num_wifi_client)->hdr_hdl_v6 = 0;
+			get_client_memptr(wlan_client, num_wifi_client)->ipv4_header_set = false;
+			get_client_memptr(wlan_client, num_wifi_client)->ipv6_header_set = false;
+		}
 		get_client_memptr(wlan_client, num_wifi_client)->route_rule_set_v4 = false;
 		get_client_memptr(wlan_client, num_wifi_client)->route_rule_set_v6 = 0;
 		get_client_memptr(wlan_client, num_wifi_client)->ipv4_set = false;
 		get_client_memptr(wlan_client, num_wifi_client)->ipv6_set = 0;
+		get_client_memptr(wlan_client, num_wifi_client)->hpc_hdr_hdl_v4 = 0;
+		get_client_memptr(wlan_client, num_wifi_client)->hpc_hdr_hdl_v6 = 0;
+		get_client_memptr(wlan_client, num_wifi_client)->ipv4_hpc_set = false;
+		get_client_memptr(wlan_client, num_wifi_client)->ipv6_hpc_set = false;
+
 		get_client_memptr(wlan_client, num_wifi_client)->power_save_set=false;
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
 		get_client_memptr(wlan_client, num_wifi_client)->ipv4_ul_rules_set = false;
@@ -3775,6 +3788,8 @@ int IPACM_Wlan::handle_wlan_client_down_evt(uint8_t *mac_addr, uint16_t vlan_id)
 	get_client_memptr(wlan_client, clt_indx)->ipv6_set = 0;
 	get_client_memptr(wlan_client, clt_indx)->ipv4_header_set = false;
 	get_client_memptr(wlan_client, clt_indx)->ipv6_header_set = false;
+	get_client_memptr(wlan_client, clt_indx)->ipv4_hpc_set = false;
+	get_client_memptr(wlan_client, clt_indx)->ipv6_hpc_set = false;
 	get_client_memptr(wlan_client, clt_indx)->route_rule_set_v4 = false;
 	get_client_memptr(wlan_client, clt_indx)->route_rule_set_v6 = 0;
 	free(get_client_memptr(wlan_client, clt_indx)->p_hdr_info);

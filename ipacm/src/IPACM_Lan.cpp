@@ -25,6 +25,7 @@
  * WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *
  * Changes from Qualcomm Innovation Center are provided under the following license:
  *
  * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
@@ -11527,8 +11528,18 @@ int IPACM_Lan::eth_bridge_add_hdr_proc_ctx(ipa_hdr_l2_type peer_l2_hdr_type, uin
 			t2_hdr,
 			pHeaderProcTable->proc_ctx[0].generic_params);
 
-	if (vlan_id)
+	if (vlan_id) {
+		/*
+		 * Add header proc context with output dscp_pcp_update irrespective of
+		 * DSCP PCP update needed or not for easy mesh R3
+		 */
+		if (ipa_if_cate == WLAN_IF && ((IPACM_Wlan *)this)->is_svap_iface() &&
+			(IPACM_Iface::ipacmcfg->ipacm_emesh_mode >= 3))
+		{
+			pHeaderProcTable->proc_ctx[0].generic_params.output_dscp_pcp_update = 1;
+		}
 		eth_bridge_get_vlan_hdr_template_hdl(&hdr_template, vlan_id);
+	}
 	else
 		eth_bridge_get_hdr_template_hdl(&hdr_template);
 
@@ -16572,7 +16583,7 @@ int IPACM_Lan::eth_bridge_get_vlan_hdr_template_hdl(uint32_t* hdr_hdl, uint16_t 
 	memset(pHeaderDescriptor->hdr[0].name, 0,
 					 sizeof(pHeaderDescriptor->hdr[0].name));
 	snprintf(pHeaderDescriptor->hdr[0].name, sizeof(pHeaderDescriptor->hdr[0].name),
-		"ath12_ipv4_vlan%d", vlan_id);
+		"%s%d", sCopyHeader.name, vlan_id);
 	if(m_header.AddHeader(pHeaderDescriptor) == false ||
 			pHeaderDescriptor->hdr[0].status != 0)
 	{

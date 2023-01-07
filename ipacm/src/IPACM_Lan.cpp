@@ -14828,6 +14828,29 @@ void IPACM_Lan::gre_up()
 
 	IPACMDBG_H("The gre backhaul is using muxid(%u)\n", muxid);
 
+	IPACMDBG_H("Query rmnet_dataX muxid\n");
+	/* Always query mux-id again on MPLS EoGRE scenario */
+	if (ipgre_info.iptype == IPA_IP_v4)
+	{
+		ret = IPACM_Wan::GetMuxByAddr(IPA_IP_v4, &ipgre_info.ipv4_src, muxid);
+	}
+	else
+	{
+		ret = IPACM_Wan::GetMuxByAddr(IPA_IP_v6, &ipgre_info.ipv6_src, muxid);
+	}
+
+	if (ret == IPACM_SUCCESS)
+	{
+		IPACM_Iface::ipacmcfg->SetQmapId(muxid);
+		IPACMDBG_H("Override muxid(%u)\n", muxid);
+	}
+	else
+	{
+		IPACMERR("GetMuxByAddr did not succeed.\n");
+		return;
+	}
+
+	IPACMDBG_H("new: The gre backhaul is using muxid(%u)\n", muxid);
 	if ( rx_prop != NULL )
 	{
 		/*

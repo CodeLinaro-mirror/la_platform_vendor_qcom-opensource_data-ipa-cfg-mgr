@@ -758,11 +758,13 @@ public:
 
 	inline void SetQmapId(uint8_t id)
 	{
+		IPACMDBG_H("set QmapID: %d\n", id);
 		qmap_id = id;
 	}
 
 	inline uint8_t GetQmapId()
 	{
+		IPACMDBG_H("get QmapID: %d\n", qmap_id);
 		return qmap_id;
 	}
 

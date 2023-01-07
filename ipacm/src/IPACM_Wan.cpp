@@ -10104,6 +10104,7 @@ int IPACM_Wan::GetMuxByAddr(
 			{
 				mux_id = IPACM_Wan::ipv4_to_iface[i].pIface->ext_prop->ext[0].mux_id;
 				found = true;
+				IPACMDBG_H("found matching ipv4 QmapID: %d\n", mux_id);
 			}
 		}
 		else /* IPA_IP_v6 */
@@ -10126,6 +10127,7 @@ int IPACM_Wan::GetMuxByAddr(
 				{
 					mux_id = IPACM_Wan::ipv6_to_iface[i].pIface->ext_prop->ext[0].mux_id;
 					found = true;
+					IPACMDBG_H("found matching ipv6 QmapID: %d\n", mux_id);
 				}
 			}
 		}

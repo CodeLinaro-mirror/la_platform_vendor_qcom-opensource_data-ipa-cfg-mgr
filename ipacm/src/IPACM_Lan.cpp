@@ -10506,15 +10506,25 @@ int IPACM_Lan::modify_private_subnet()
 
 	flt_rule.rule.retain_hdr = 1;
 	flt_rule.rule.to_uc = 0;
-	flt_rule.rule.action = IPA_PASS_TO_ROUTING;
+
+	/* add private subnet rule for ipv4 */
+	if(IPACM_Iface::ipacmcfg->eogre_enabled)
+		flt_rule.rule.action = IPA_PASS_TO_EXCEPTION;
+	else
+		flt_rule.rule.action = IPA_PASS_TO_ROUTING;
+
 	flt_rule.rule.eq_attrib_type = 0;
 	flt_rule.rule.rt_tbl_hdl = IPACM_Iface::ipacmcfg->rt_tbl_default_v4.hdl;
-	IPACMDBG_H("Private filter rule use table: %s\n", IPACM_Iface::ipacmcfg->rt_tbl_default_v4.name);
+	IPACMDBG_H("Private filter rule use table: %s, hdl: %d\n",IPACM_Iface::ipacmcfg->rt_tbl_default_v4.name,IPACM_Iface::ipacmcfg->rt_tbl_default_v4.hdl);
 
 	for(i = 0; i < (IPACM_Iface::ipacmcfg->ipa_num_private_subnet); i++)
 	{
 		/* add private subnet rule for ipv4 */
-		flt_rule.rule.action = IPA_PASS_TO_ROUTING;
+		if(IPACM_Iface::ipacmcfg->eogre_enabled)
+			flt_rule.rule.action = IPA_PASS_TO_EXCEPTION;
+		else
+			flt_rule.rule.action = IPA_PASS_TO_ROUTING;
+
 		flt_rule.rule.eq_attrib_type = 0;
 		memcpy(&flt_rule.rule.attrib, &rx_prop->rx[idx].attrib, sizeof(flt_rule.rule.attrib));
 		flt_rule.rule.attrib.attrib_mask |= IPA_FLT_DST_ADDR;

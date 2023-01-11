@@ -6451,14 +6451,7 @@ int IPACM_Wan::handle_down_evt()
 			IPACMDBG_H("Route Del event for v6 failed\n");
 		}
 		ipv4_to_iface[wlan_ipv4_pdn_index].wan_up_vlan = false;
-		ipv4_to_iface[wlan_ipv4_pdn_index].ipv4_addr = 0;
-		ipv4_to_iface[wlan_ipv4_pdn_index].pIface = NULL;
 
-		ipv6_to_iface[wlan_ipv6_pdn_index].pIface = NULL;
-		memset(&ipv6_to_iface[wlan_ipv6_pdn_index].ipv6_prefix, 0, sizeof(uint32_t) * 2);
-		ipv6_to_iface[wlan_ipv6_pdn_index].wan_up_vlan_v6 = false;
-		wlan_ipv4_pdn_index = -1;
-		wlan_ipv6_pdn_index = -1;
 		wan_v4_is_default_gw = true;
 		wan_v6_is_default_gw = true;
 		num_offloaded_pdns--;
@@ -6500,10 +6493,7 @@ int IPACM_Wan::handle_down_evt()
 		}
 
 		ipv6_to_iface[wlan_ipv6_pdn_index].wan_up_vlan_v6 = false;
-		ipv6_to_iface[wlan_ipv6_pdn_index].pIface = NULL;
-		memset(&ipv6_to_iface[wlan_ipv6_pdn_index].ipv6_prefix, 0, sizeof(uint32_t) * 2);
 
-		wlan_ipv6_pdn_index = -1;
 		wan_v6_is_default_gw = true;
 		if (wlan_ipv4_pdn_index == -1)
 		{
@@ -6547,9 +6537,6 @@ int IPACM_Wan::handle_down_evt()
 		}
 
 		ipv4_to_iface[wlan_ipv4_pdn_index].wan_up_vlan = false;
-		ipv4_to_iface[wlan_ipv4_pdn_index].ipv4_addr = 0;
-		ipv4_to_iface[wlan_ipv4_pdn_index].pIface = NULL;
-		wlan_ipv4_pdn_index = -1;
 		wan_v4_is_default_gw = true;
 		if (wlan_ipv6_pdn_index == -1)
 		{
@@ -6586,8 +6573,8 @@ int IPACM_Wan::handle_down_evt()
 	/* make sure default routing rules and firewall rules are deleted*/
 	if (active_v4)
 	{
-	   	if (rx_prop != NULL)
-	    {
+		if (rx_prop != NULL)
+		{
 			del_dft_firewall_rules(IPA_IP_v4);
 		}
 		handle_route_del_evt(IPA_IP_v4);
@@ -6596,8 +6583,8 @@ int IPACM_Wan::handle_down_evt()
 
 	if (active_v6)
 	{
-	   	if (rx_prop != NULL)
-	    {
+		if (rx_prop != NULL)
+		{
 			del_dft_firewall_rules(IPA_IP_v6);
 		}
 		handle_route_del_evt(IPA_IP_v6);
@@ -6614,6 +6601,9 @@ int IPACM_Wan::handle_down_evt()
 			res = IPACM_FAILURE;
 			goto fail;
 		}
+		ipv4_to_iface[wlan_ipv4_pdn_index].ipv4_addr = 0;
+		ipv4_to_iface[wlan_ipv4_pdn_index].pIface = NULL;
+		wlan_ipv4_pdn_index = -1;
 	}
 
 	/* delete default v6 RT rule */
@@ -6632,6 +6622,9 @@ int IPACM_Wan::handle_down_evt()
 		}
 
 		IPACMDBG_H("finished delete default v6 RT rules\n ");
+		ipv6_to_iface[wlan_ipv6_pdn_index].pIface = NULL;
+		memset(&ipv6_to_iface[wlan_ipv6_pdn_index].ipv6_prefix, 0, sizeof(uint32_t) * 2);
+		wlan_ipv6_pdn_index = -1;
 	}
 
 

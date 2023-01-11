@@ -926,7 +926,7 @@ void IPACM_ConntrackListener::HandleVlanUp(void *in_param)
 		else
 		{
 			isStaMode = true;
-			IPACMDBG_H("PDN table added successfully for STA\n");
+			IPACMDBG_H("PDN table added successfully for STA, isStaMode: %d\n", isStaMode);
 		}
 	}
 	else
@@ -1836,6 +1836,7 @@ int IPACM_ConntrackListener::AddORDeleteNatEntry(const nat_entry_bundle *input, 
 	IPACMDBG("Protocol: %d, destination nat flag: %d\n",
 			 input->rule->protocol, input->rule->dst_nat);
 #ifdef FEATURE_VLAN_MPDN
+	IPACMDBG("sendVlanEvent %d, isStaMode %d\n", *sendVlanEvent, isStaMode);
 	IPACMDBG("isVlan %d, IsVlanUp %d\n", input->isVlan, input->IsVlanUp);
 #endif
 
@@ -1868,7 +1869,7 @@ int IPACM_ConntrackListener::AddORDeleteNatEntry(const nat_entry_bundle *input, 
 				else
 				{
 					IPACMDBG("TCP: adding entry for vlan\n");
-					nat_inst->AddEntry(input->rule, isStaMode);
+					nat_inst->AddEntry(input->rule,*sendVlanEvent, isStaMode);
 				}
 			} else
 #endif
@@ -1883,7 +1884,7 @@ int IPACM_ConntrackListener::AddORDeleteNatEntry(const nat_entry_bundle *input, 
 			}
 			else
 			{
-				nat_inst->AddEntry(input->rule, isStaMode);
+				nat_inst->AddEntry(input->rule,*sendVlanEvent, isStaMode);
 			}
 		}
 		else if (TCP_CONNTRACK_FIN_WAIT == tcp_state ||
@@ -1928,7 +1929,7 @@ int IPACM_ConntrackListener::AddORDeleteNatEntry(const nat_entry_bundle *input, 
 				else
 				{
 					IPACMDBG("UDP: adding entry for vlan\n");
-					nat_inst->AddEntry(input->rule, isStaMode);
+					nat_inst->AddEntry(input->rule,*sendVlanEvent, isStaMode);
 				}
 			}
 			else
@@ -1944,7 +1945,7 @@ int IPACM_ConntrackListener::AddORDeleteNatEntry(const nat_entry_bundle *input, 
 			}
 			else
 			{
-				nat_inst->AddEntry(input->rule, isStaMode);
+				nat_inst->AddEntry(input->rule,*sendVlanEvent, isStaMode);
 			}
 		}
 		else if (NFCT_T_DESTROY == input->type)

@@ -446,6 +446,8 @@ private:
 	bool public_wan_v4_addr_set;
 	bool wan_v4_addr_gw_set;
 	bool wan_v6_addr_gw_set;
+	bool wan_v4_is_default_gw;
+	bool wan_v6_is_default_gw;
 	bool active_v4;
 	bool active_v6;
 	bool header_set_v4;

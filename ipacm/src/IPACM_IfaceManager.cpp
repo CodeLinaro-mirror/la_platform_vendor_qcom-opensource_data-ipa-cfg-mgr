@@ -530,6 +530,7 @@ int IPACM_IfaceManager::create_iface_instance(ipacm_ifacemgr_data *param)
 #else/* defined(FEATURE_IPA_ANDROID) */
 					IPACM_EvtDispatcher::registr(IPA_ROUTE_ADD_EVENT, w);
 					IPACM_EvtDispatcher::registr(IPA_ROUTE_DEL_EVENT, w);
+					IPACM_EvtDispatcher::registr(IPA_WLAN_GW_ADDR_ADD_EVENT, w);
 #endif /* not defined(FEATURE_IPA_ANDROID)*/
 #ifdef FEATURE_VLAN_MPDN
 					IPACM_EvtDispatcher::registr(IPA_ROUTE_ADD_VLAN_PDN_EVENT, w);

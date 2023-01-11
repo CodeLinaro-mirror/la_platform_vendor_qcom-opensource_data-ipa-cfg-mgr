@@ -190,6 +190,8 @@ IPACM_Wan::IPACM_Wan(int iface_index,
 	wan_v4_addr_set = false;
 	wan_v4_addr_gw_set = false;
 	wan_v6_addr_gw_set = false;
+	wan_v4_is_default_gw = true;
+	wan_v6_is_default_gw = true;
 	active_v4 = false;
 	active_v6 = false;
 	header_set_v4 = false;
@@ -1413,6 +1415,47 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 						handle_route_del_evt(IPA_IP_v6);
 					}
 				}
+			}
+		}
+		break;
+
+		case IPA_WLAN_GW_ADDR_ADD_EVENT:
+		{
+			ipacm_event_data_addr *data = (ipacm_event_data_addr *)param;
+			ipa_interface_index = iface_ipa_index_query(data->if_index);
+
+			if (ipa_interface_index == ipa_if_num)
+			{
+				IPACMDBG_H("Received IPA_WLAN_GW_ADDR_ADD_EVENT\n");
+				IPACMDBG_H("ipv4 addr 0x%x\n", data->ipv4_addr_gw);
+				if(m_is_sta_mode == WLAN_WAN && !data->is_default_backhaul_gw)
+				{
+					IPACMDBG_H("GW info for WLAN Iface\n");
+
+					if ((data->iptype == IPA_IP_v4 || data->iptype == IPA_IP_MAX) && data->ipv4_addr_gw != 0)
+					{
+						IPACMDBG_H("ipv4 addr 0x%x\n", data->ipv4_addr_gw);
+						wan_v4_is_default_gw = false;
+						wan_v4_addr_gw = data->ipv4_addr_gw;
+						wan_v4_addr_gw_set = true;
+						IPACMDBG_H("adding header, dev (%s) ip-type(%d), default gw (%x)\n", dev_name,data->iptype, wan_v4_addr_gw);
+					}
+					if ((data->iptype == IPA_IP_v6 || data->iptype == IPA_IP_MAX) &&
+						(data->ipv6_addr_gw[0] != 0) && (data->ipv6_addr_gw[1] != 0) && (data->ipv6_addr_gw[2] != 0) && (data->ipv6_addr_gw[3] != 0))
+					{
+
+						IPACMDBG_H(" IPV6 gateway: %08x:%08x:%08x:%08x \n",
+							data->ipv6_addr_gw[0], data->ipv6_addr_gw[1], data->ipv6_addr_gw[2], data->ipv6_addr_gw[3]);
+						wan_v6_addr_gw[0] = data->ipv6_addr_gw[0];
+						wan_v6_addr_gw[1] = data->ipv6_addr_gw[1];
+						wan_v6_addr_gw[2] = data->ipv6_addr_gw[2];
+						wan_v6_addr_gw[3] = data->ipv6_addr_gw[3];
+						wan_v6_addr_gw_set = true;
+						wan_v6_is_default_gw = false;
+					}
+				}
+				/* Check & construct STA header */
+				handle_sta_header_add_evt();
 			}
 		}
 		break;
@@ -3158,65 +3201,14 @@ int IPACM_Wan::handle_sta_header_add_evt()
 				return IPACM_FAILURE;
 			}
 	}
-	else if(m_is_sta_mode == Q6_WAN)
+	else
 	{
 			IPACMDBG_H(" currently can't find matched wan-client's MAC-addr, waiting for header construction\n");
 			return IPACM_SUCCESS;
 	}
 
-	//Currently assuming GW IP address end with 1. Get index of the Gateway.
-	int cnt;
-	int num_wan_client_tmp = num_wan_client;
-	index = IPACM_INVALID_INDEX;
-
-	for(cnt = 0; cnt < num_wan_client_tmp; cnt++)
-	{
-		if((get_client_memptr(wan_client, cnt)->v4_addr & 0xFF) == 1)
-		{
-			IPACMDBG_H("Matched client index: %d\n", cnt);
-			IPACMDBG_H("The MAC is %02x:%02x:%02x:%02x:%02x:%02x\n",
-					get_client_memptr(wan_client, cnt)->mac[0],
-					get_client_memptr(wan_client, cnt)->mac[1],
-					get_client_memptr(wan_client, cnt)->mac[2],
-					get_client_memptr(wan_client, cnt)->mac[3],
-					get_client_memptr(wan_client, cnt)->mac[4],
-					get_client_memptr(wan_client, cnt)->mac[5]);
-			IPACMDBG_H("header set ipv4(%d) ipv6(%d)\n",
-					get_client_memptr(wan_client, cnt)->ipv4_header_set,
-					get_client_memptr(wan_client, cnt)->ipv6_header_set);
-			index = cnt;
-			break;
-		}
-	}
-	if (index == IPACM_INVALID_INDEX)
-	{
-		IPACMERR("STA gw address not matched \n");
-		return IPACM_FAILURE;
-	}
-
-	if(get_client_memptr(wan_client, index)->ipv4_header_set)
-	{
-		hdr_hdl_sta_v4 = get_client_memptr(wan_client, index)->hdr_hdl_v4;
-		header_set_v4 = true;
-		IPACMDBG_H("add full ipv4 header hdl: (%x)\n", get_client_memptr(wan_client, index)->hdr_hdl_v4);
-		// store external_ap's MAC
-		memcpy(ext_router_mac_addr, get_client_memptr(wan_client, index)->mac, sizeof(ext_router_mac_addr));
-	}
-	else
-	{
-		IPACMERR(" wan-client got ipv4 however didn't construct complete ipv4 header \n");
-		return IPACM_FAILURE;
-	}
-
-	if(get_client_memptr(wan_client, index)->ipv6_header_set)
-	{
-		hdr_hdl_sta_v6 = get_client_memptr(wan_client, index)->hdr_hdl_v6;
-		header_set_v6 = true;
-		IPACMDBG_H("add full ipv6 header hdl: (%x)\n", get_client_memptr(wan_client, index)->hdr_hdl_v6);
-	}
-
 	/* see if default routes are setup before constructing full header */
-	if(header_partial_default_wan_v4 == true && wan_v4_addr_gw_set)
+	if(header_partial_default_wan_v4 == true && wan_v4_is_default_gw)
 	{
 	   handle_route_add_evt(IPA_IP_v4);
 	}
@@ -3271,7 +3263,7 @@ int IPACM_Wan::handle_sta_header_add_evt()
 
 	/* see if default routes are setup before constructing full header */
 
-	if(header_partial_default_wan_v6 == true && wan_v6_addr_gw_set)
+	if(header_partial_default_wan_v6 == true && wan_v6_is_default_gw)
 	{
 	   handle_route_add_evt(IPA_IP_v6);
 	}
@@ -6473,6 +6465,8 @@ int IPACM_Wan::handle_down_evt()
 		ipv6_to_iface[wlan_ipv6_pdn_index].wan_up_vlan_v6 = false;
 		wlan_ipv4_pdn_index = -1;
 		wlan_ipv6_pdn_index = -1;
+		wan_v4_is_default_gw = true;
+		wan_v6_is_default_gw = true;
 
 		vlandown_data = (ipacm_event_vlan_pdn *)malloc(sizeof(ipacm_event_vlan_pdn));
 		if(vlandown_data == NULL)
@@ -6515,6 +6509,7 @@ int IPACM_Wan::handle_down_evt()
 		memset(&ipv6_to_iface[wlan_ipv6_pdn_index].ipv6_prefix, 0, sizeof(uint32_t) * 2);
 
 		wlan_ipv6_pdn_index = -1;
+		wan_v6_is_default_gw = true;
 
 		vlandown_data = (ipacm_event_vlan_pdn *)malloc(sizeof(ipacm_event_vlan_pdn));
 		if(vlandown_data == NULL)
@@ -6556,6 +6551,7 @@ int IPACM_Wan::handle_down_evt()
 		ipv4_to_iface[wlan_ipv4_pdn_index].ipv4_addr = 0;
 		ipv4_to_iface[wlan_ipv4_pdn_index].pIface = NULL;
 		wlan_ipv4_pdn_index = -1;
+		wan_v4_is_default_gw = true;
 
 		vlandown_data = (ipacm_event_vlan_pdn *)malloc(sizeof(ipacm_event_vlan_pdn));
 		if(vlandown_data == NULL)

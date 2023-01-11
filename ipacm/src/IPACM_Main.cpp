@@ -307,6 +307,7 @@ void* ipa_driver_msg_notifier(void *param)
 	ipa_get_data_stats_resp_msg_v01 *data_tethering_stats = NULL;
 	ipa_get_apn_data_stats_resp_msg_v01 *data_network_stats = NULL;
 	ipacm_event_connection *data_event_conn = NULL;
+	ipacm_event_data_addr *data_addr = NULL;
 
 #if defined(FEATURE_L2TP) || defined(FEATURE_VLAN_MPDN)
 	ipa_ioc_vlan_iface_info vlan_info;
@@ -1026,6 +1027,29 @@ void* ipa_driver_msg_notifier(void *param)
 				IPA_HANDLE_MACSEC_ADD : IPA_HANDLE_MACSEC_DEL;
 			evt_data.evt_data = macsecMap;
 
+			break;
+
+		case IPA_SET_GW_IP_ADDR_EVENT:
+			struct ipa_ioc_set_gw_ip gw_info;
+			IPACMDBG_H("Received IPA_SET_GW_IP_ADDR_EVENT\n");
+			memcpy(&gw_info, buffer + sizeof(struct ipa_msg_meta), sizeof(ipa_ioc_set_gw_ip));
+			data_addr = (ipacm_event_data_addr *)malloc(sizeof(ipacm_event_data_addr));
+			if(data_addr == NULL)
+			{
+				IPACMERR("unable to allocate memory for addr evt\n");
+				return NULL;
+			}
+			ipa_get_if_index(gw_info.dev_name, &(data_addr->if_index));
+			data_addr->iptype = gw_info.ip;
+			data_addr->is_default_backhaul_gw = gw_info.is_default_backhaul_gw;
+			data_addr->ipv4_addr_gw = ntohl(gw_info.gw_ipv4);
+			data_addr->ipv6_addr_gw[0] = ntohl(gw_info.gw_ipv6[0]);
+			data_addr->ipv6_addr_gw[1] = ntohl(gw_info.gw_ipv6[1]);
+			data_addr->ipv6_addr_gw[2] = ntohl(gw_info.gw_ipv6[2]);
+			data_addr->ipv6_addr_gw[3] = ntohl(gw_info.gw_ipv6[3]);
+			IPACMDBG_H("Posting IPA_WLAN_GW_ADDR_ADD_EVENT event\n");
+			evt_data.event = IPA_WLAN_GW_ADDR_ADD_EVENT;
+			evt_data.evt_data = data_addr;
 			break;
 
 		default:

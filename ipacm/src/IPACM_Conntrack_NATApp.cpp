@@ -625,6 +625,7 @@ int NatApp::AddEntry(const nat_table_entry *rule, bool isVlan, bool isStaMode)
 		return 0;
 	}
 #ifdef FEATURE_VLAN_MPDN
+	IPACMDBG("isStaMode : %d \n",isStaMode);
 	if(isStaMode)
 		pdn_index = 0;
 	else

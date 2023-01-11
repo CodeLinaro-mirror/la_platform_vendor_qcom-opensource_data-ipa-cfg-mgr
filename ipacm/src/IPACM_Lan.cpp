@@ -1434,7 +1434,7 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 #ifdef FEATURE_IPACM_UL_FIREWALL
 				if(data->iptype == IPA_IP_v6)
 				{
-					// vlan pdn is down, disable its Q6 UL firewall and reconfigure
+					// vlan pdn is down, disable its Q6 UL firewall and reconfigure.
 					disable_dft_firewall_rules_ul_ex(data->VlanID);
 #ifdef FEATURE_IPv6CT_DISABLED
 					configure_v6_ul_firewall();
@@ -2044,7 +2044,7 @@ int IPACM_Lan::check_vlan_PDNUp(enum ipa_ip_type iptype)
 	{
 		for(i = 0; i < IPA_MAX_NUM_OFFLOAD_VLANS; i++)
 		{
-			uint8_t mux_id;
+			uint8_t mux_id = 0;
 
 			if(Ids[i] != 0)
 			{
@@ -2089,7 +2089,7 @@ int IPACM_Lan::check_vlan_PDNUp(enum ipa_ip_type iptype)
 #endif
 		for(i = 0; i < IPA_MAX_NUM_OFFLOAD_VLANS; i++)
 		{
-			uint8_t mux_id;
+			uint8_t mux_id = 0;
 
 			if(Ids[i] != 0)
 			{
@@ -7010,7 +7010,7 @@ int IPACM_Lan::delete_uplink_filter_rule_ul(ul_firewall_t *ul_firewall)
 int IPACM_Lan::install_wan_firewall_rule_ul(bool enable, int vid, int num_of_ul_rules)
 {
 	int len, res = IPACM_SUCCESS;
-	uint8_t mux_id;
+	uint8_t mux_id = 0;
 	ipa_ioc_add_flt_rule *pFilteringTable_v6 = NULL;
 
 	mux_id = IPACM_Iface::ipacmcfg->GetQmapId();

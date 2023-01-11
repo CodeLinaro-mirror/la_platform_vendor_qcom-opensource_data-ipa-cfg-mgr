@@ -164,6 +164,7 @@ const char *ipacm_event_name[] = {
 	__stringify(IPA_ADD_BRIDGE_VLAN_BR_INTF),              /* Handle vlan-bridge details add for bridge interface. */
 	__stringify(IPA_HANDLE_MACSEC_ADD),                    /* ipa_macsec_map. */
 	__stringify(IPA_HANDLE_MACSEC_DEL),                    /* ipa_macsec_map. */
+	__stringify(IPA_WLAN_GW_ADDR_ADD_EVENT),		/* ipacm_event_data_addr */
 	__stringify(IPACM_EVENT_MAX)
 };
 

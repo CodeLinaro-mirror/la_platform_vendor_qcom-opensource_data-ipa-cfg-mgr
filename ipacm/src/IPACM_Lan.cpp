@@ -2084,7 +2084,7 @@ int IPACM_Lan::check_vlan_PDNUp(enum ipa_ip_type iptype)
 	{
 		for(i = 0; i < IPA_MAX_NUM_OFFLOAD_VLANS; i++)
 		{
-			uint8_t mux_id;
+			uint8_t mux_id = 0;
 
 			if(Ids[i] != 0)
 			{
@@ -2133,7 +2133,7 @@ int IPACM_Lan::check_vlan_PDNUp(enum ipa_ip_type iptype)
 #endif
 		for(i = 0; i < IPA_MAX_NUM_OFFLOAD_VLANS; i++)
 		{
-			uint8_t mux_id;
+			uint8_t mux_id = 0;
 
 			if(Ids[i] != 0)
 			{
@@ -7105,7 +7105,7 @@ int IPACM_Lan::delete_uplink_filter_rule_ul(ul_firewall_t *ul_firewall)
 int IPACM_Lan::install_wan_firewall_rule_ul(bool enable, int vid, int num_of_ul_rules)
 {
 	int len, res = IPACM_SUCCESS;
-	uint8_t mux_id;
+	uint8_t mux_id = 0;
 	ipa_ioc_add_flt_rule *pFilteringTable_v6 = NULL;
 
 	mux_id = IPACM_Iface::ipacmcfg->GetQmapId();

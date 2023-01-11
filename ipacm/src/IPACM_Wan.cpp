@@ -4118,7 +4118,11 @@ int IPACM_Wan::config_dft_firewall_rules_ex(struct ipa_flt_rule_add *rules, int 
 			{
 				return res;
 			}
-			rules[pos].mux_id = curr_interface->ext_prop->ext[0].mux_id;
+			IPACMDBG_H("m_is_sta_mode %d\n", m_is_sta_mode);
+			if(m_is_sta_mode == WLAN_WAN)
+				rules[pos].mux_id = 0;
+			else
+				rules[pos].mux_id = curr_interface->ext_prop->ext[0].mux_id;
 			++pos;
 		}
 		if(offloaded_pdns_count_v4)

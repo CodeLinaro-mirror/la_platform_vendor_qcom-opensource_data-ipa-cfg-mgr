@@ -3465,16 +3465,16 @@ void IPACM_ConntrackListener::CreateIpv6ctEntryFromCtEventData(const ipacm_ct_ev
 	if (entry.m_direction == NatEntryBase::DirectionOutbound || entry.m_direction == NatEntryBase::DirectionUnknown)
 	{
 		entry.m_srcAddr = srcAddr;
-		entry.m_srcPort = srcPort;
+		entry.m_srcPort = ntohs(srcPort);
 		entry.m_dstAddr = dstAddr;
-		entry.m_dstPort = dstPort;
+		entry.m_dstPort = ntohs(dstPort);
 	}
 	else if (entry.m_direction == NatEntryBase::DirectionInbound)
 	{
 		entry.m_srcAddr = dstAddr;
-		entry.m_srcPort = dstPort;
+		entry.m_srcPort = ntohs(dstPort);
 		entry.m_dstAddr = srcAddr;
-		entry.m_dstPort = srcPort;
+		entry.m_dstPort = ntohs(srcPort);
 	}
 	else
 	{

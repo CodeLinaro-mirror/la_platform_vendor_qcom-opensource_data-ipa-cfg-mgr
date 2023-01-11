@@ -1966,18 +1966,6 @@ int IPACM_Wan::check_vlan_pdn(ipa_ip_type iptype, ipacm_event_route_vlan *data, 
 		if(data->wan_ipv4_addr == wan_v4_addr)
 		{
 			IPACMDBG_H("received v4 IPA_ROUTE_ADD_VLAN_PDN_EVENT for VID %d, wan %s, %d\n", data->VlanID, dev_name, ipa_if_num);
-			if(ipv4_to_iface[modem_ipv4_pdn_index].wan_up_vlan)
-			{
-				for(pdn_idx = 0; pdn_idx < ipv4_to_iface[modem_ipv4_pdn_index].VID_cnt; pdn_idx++)
-				{
-					if(IPACM_Wan::ipv4_to_iface[modem_ipv4_pdn_index].associated_VIDs[pdn_idx] == data->VlanID)
-					{
-						IPACMERR("v4 vlan wan is already up for %s vlan %d\n", dev_name, data->VlanID);
-						return IPACM_FAILURE;
-					}
-				}
-			}
-
 			if (m_is_sta_mode == WLAN_WAN)
 			{
 				if(ipv4_to_iface[wlan_ipv4_pdn_index].wan_up_vlan)

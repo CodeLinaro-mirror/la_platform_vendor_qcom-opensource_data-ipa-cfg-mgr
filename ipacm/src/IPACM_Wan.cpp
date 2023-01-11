@@ -6478,6 +6478,7 @@ int IPACM_Wan::handle_down_evt()
 		wlan_ipv6_pdn_index = -1;
 		wan_v4_is_default_gw = true;
 		wan_v6_is_default_gw = true;
+		num_offloaded_pdns--;
 
 		vlandown_data = (ipacm_event_vlan_pdn *)malloc(sizeof(ipacm_event_vlan_pdn));
 		if(vlandown_data == NULL)
@@ -6521,6 +6522,10 @@ int IPACM_Wan::handle_down_evt()
 
 		wlan_ipv6_pdn_index = -1;
 		wan_v6_is_default_gw = true;
+		if (wlan_ipv4_pdn_index == -1)
+		{
+			num_offloaded_pdns--;
+		}
 
 		vlandown_data = (ipacm_event_vlan_pdn *)malloc(sizeof(ipacm_event_vlan_pdn));
 		if(vlandown_data == NULL)
@@ -6563,6 +6568,10 @@ int IPACM_Wan::handle_down_evt()
 		ipv4_to_iface[wlan_ipv4_pdn_index].pIface = NULL;
 		wlan_ipv4_pdn_index = -1;
 		wan_v4_is_default_gw = true;
+		if (wlan_ipv6_pdn_index == -1)
+		{
+			num_offloaded_pdns--;
+		}
 
 		vlandown_data = (ipacm_event_vlan_pdn *)malloc(sizeof(ipacm_event_vlan_pdn));
 		if(vlandown_data == NULL)

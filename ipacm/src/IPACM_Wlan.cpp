@@ -3886,16 +3886,6 @@ int IPACM_Wlan::handle_wlan_client_down_evt(uint8_t *mac_addr, uint16_t vlan_id)
 		for (tx_index = 0; tx_index < iface_query->num_tx_props; tx_index++)
 		{
 			/* skip to the next tx index if the client type and hdr_l2_type are not matching */
-#ifdef IPA_HDR_L2_802_1Q_AST
-			if ((get_client_memptr(wlan_client, clt_indx)->is_vlan &&
-					(tx_prop->tx[tx_index].hdr_l2_type != IPA_HDR_L2_802_1Q_AST && tx_prop->tx[tx_index].hdr_l2_type != IPA_HDR_L2_802_1Q)) ||
-					(!get_client_memptr(wlan_client, clt_indx)->is_vlan &&
-					(tx_prop->tx[tx_index].hdr_l2_type == IPA_HDR_L2_802_1Q_AST || tx_prop->tx[tx_index].hdr_l2_type == IPA_HDR_L2_802_1Q)))
-			{
-				continue;
-			}
-#endif
-
 			get_client_memptr(wlan_client, clt_indx)->wifi_rt_hdl[tx_index].wifi_rt_rule_hdl_v4 =
 				 get_client_memptr(wlan_client, (clt_indx + 1))->wifi_rt_hdl[tx_index].wifi_rt_rule_hdl_v4;
 		}

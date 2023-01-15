@@ -679,12 +679,12 @@ void IPACM_LanToLan::handle_new_iface_up(IPACM_LanToLan_Iface *new_iface, IPACM_
 		if(exist_iface->is_svap_iface() || exist_iface->is_ap_iface_vlan_enabled())
 		{
 			/* ath12(svap) <--> eth1 */
-			new_iface->handle_new_iface_up(rt_tbl_name_for_flt, lan_rt_tbl_name_for_rt_svap, exist_iface);
+			new_iface->handle_new_iface_up(rt_tbl_name_for_rt, lan_rt_tbl_name_for_flt_svap, exist_iface);
 			exist_iface->handle_new_iface_up(lan_rt_tbl_name_for_flt_svap, rt_tbl_name_for_rt, new_iface);
 		}
 		else{
 			/* ath1(ast) <--> eth1 */
-			new_iface->handle_new_iface_up(rt_tbl_name_for_flt, lan_rt_tbl_name_for_rt, exist_iface);
+			new_iface->handle_new_iface_up(rt_tbl_name_for_rt, lan_rt_tbl_name_for_flt, exist_iface);
 			exist_iface->handle_new_iface_up(lan_rt_tbl_name_for_flt, rt_tbl_name_for_rt, new_iface);
 		}
 	}else

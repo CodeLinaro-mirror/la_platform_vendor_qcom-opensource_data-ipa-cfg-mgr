@@ -852,13 +852,28 @@ void IPACM_Wlan::event_callback(ipa_cm_event_id event, void *param)
 	case IPA_WLAN_CLIENT_DEL_EVENT:
 		{
 			ipacm_event_data_mac *data = (ipacm_event_data_mac *)param;
+			int clnt_indx;
 			ipa_interface_index = iface_ipa_index_query(data->if_index);
 			if (ipa_interface_index == ipa_if_num)
 			{
 				IPACMDBG_H("Received IPA_WLAN_CLIENT_DEL_EVENT\n");
 				if (!is_vlan_iface())
 				{
-					eth_bridge_post_event(IPA_ETH_BRIDGE_CLIENT_DEL, IPA_IP_MAX, data->mac_addr, NULL, NULL);
+					if (is_svap_iface())
+					{
+						clnt_indx = get_wlan_client_index(data->mac_addr);
+						if (clnt_indx == IPACM_INVALID_INDEX)
+						{
+							IPACMERR("wlan client not found/attached \n");
+							return;
+						}
+						eth_bridge_post_event(IPA_ETH_BRIDGE_CLIENT_DEL, IPA_IP_MAX, data->mac_addr, NULL, NULL,
+							get_client_memptr(wlan_client, clnt_indx)->vlan_id);
+					}
+					else
+					{
+						eth_bridge_post_event(IPA_ETH_BRIDGE_CLIENT_DEL, IPA_IP_MAX, data->mac_addr, NULL, NULL);
+					}
 					/* clear wlan mac flt rules */
 					if(IPACM_Iface::ipacmcfg->mac_addr_in_blacklist(data->mac_addr))
 						 handle_wlan_mac_flt_conn_disc(data->mac_addr, false);

@@ -1,6 +1,7 @@
 /*
 Copyright (c) 2013-2020, The Linux Foundation. All rights reserved.
 Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are
@@ -86,7 +87,7 @@ extern "C"
 	( strcasesame(mem_type, "HYBRID" ) || \
 	  strcasesame(mem_type, "SRAM" ) )
 
-/* NatApp class Implementation */
+/* NatApp class Implementation. */
 NatApp *NatApp::pInstance = NULL;
 
 bool NatApp::kernel_ver_updated = false;
@@ -206,6 +207,7 @@ int NatApp::AddPdn(uint32_t pub_ip, uint8_t mux_id, bool is_sta)
 
 	entry.dst_metadata = 0;
 	entry.public_ip = 0;
+	entry.is_sta = false;
 
 	ret = ipa_nat_get_pdn_count(&pdn_count);
 	if(ret)

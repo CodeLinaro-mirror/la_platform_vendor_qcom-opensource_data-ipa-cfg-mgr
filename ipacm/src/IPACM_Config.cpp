@@ -49,6 +49,7 @@
 IPACM_Config *IPACM_Config::pInstance = NULL;
 const char *IPACM_Config::DEVICE_NAME = "/dev/ipa";
 const char *IPACM_Config::DEVICE_NAME_ODU = "/dev/odu_ipa_bridge";
+uint8_t peer_addr_updated = 0;
 
 #define __stringify(x...) #x
 
@@ -1745,10 +1746,19 @@ void IPACM_Config::handle_vlan_client_info(ipacm_event_data_all *data)
 		{
 			if(strncmp(it_mapping->vlan_iface_name, data->iface_name, sizeof(it_mapping->vlan_iface_name)) == 0)
 			{
-				IPACMDBG_H("Found vlan iface in l2tp mapping list: %s, l2tp iface: %s\n", it_mapping->vlan_iface_name,
-					it_mapping->l2tp_iface_name);
-				memcpy(it_mapping->vlan_client_mac, data->mac_addr, sizeof(it_mapping->vlan_client_mac));
-				memcpy(it_mapping->vlan_client_ipv6_addr, data->ipv6_addr, sizeof(it_mapping->vlan_client_ipv6_addr));
+				IPACMDBG_H("Found vlan iface in l2tp mapping list: %s, l2tp iface: %s, peer_addr_updated: %d\n",
+					it_mapping->vlan_iface_name, it_mapping->l2tp_iface_name, peer_addr_updated);
+				if(!peer_addr_updated)
+				{
+					memcpy(it_mapping->vlan_client_mac, data->mac_addr, sizeof(it_mapping->vlan_client_mac));
+					memcpy(it_mapping->vlan_client_ipv6_addr, data->ipv6_addr, sizeof(it_mapping->vlan_client_ipv6_addr));
+				}
+				else
+				{
+					IPACMDBG_H("Already QCMAP has updated the IP address for l2tp iface: %s, (Copy vlan MAC)Ignore.\n",
+						it_mapping->l2tp_iface_name);
+					memcpy(it_mapping->vlan_client_mac, data->mac_addr, sizeof(it_mapping->vlan_client_mac));
+				}
 			}
 		}
 	}
@@ -2073,7 +2083,9 @@ void IPACM_Config::add_l2tp_vlan_mapping(ipa_ioc_l2tp_vlan_mapping_info *data)
 	}
 
 	AddNatIfaces(data->l2tp_iface_name);
-	IPACMDBG_H("Add l2tp iface %s to nat ifaces.\n", data->l2tp_iface_name);
+	IPACMDBG_H("Add l2tp iface %s to nat ifaces, iptype: %d \n", data->l2tp_iface_name, data->iptype);
+	IPACMDBG_H("is_peer_addr_updated : %d\n", data->is_peer_addr_updated);
+	peer_addr_updated = data->is_peer_addr_updated;
 
 	memset(&new_mapping, 0, sizeof(new_mapping));
 	strlcpy(new_mapping.l2tp_iface_name, data->l2tp_iface_name,
@@ -2102,8 +2114,32 @@ void IPACM_Config::add_l2tp_vlan_mapping(ipa_ioc_l2tp_vlan_mapping_info *data)
 				sizeof(new_mapping.vlan_iface_ipv6_addr));
 			memcpy(new_mapping.vlan_client_mac, it_vlan->vlan_client_mac,
 				sizeof(new_mapping.vlan_client_mac));
-			memcpy(new_mapping.vlan_client_ipv6_addr, it_vlan->vlan_client_ipv6_addr,
-				sizeof(new_mapping.vlan_client_ipv6_addr));
+#ifdef IPA_PEER_ADDR_ENABLED
+			if(data->is_peer_addr_updated == IPA_PEER_ADDR_ENABLED)
+			{
+				if(data->iptype == IPA_IP_v4)
+				{
+					memcpy(&new_mapping.vlan_client_ipv4_addr, &data->addr.peer_ipv4_addr,
+						sizeof(new_mapping.vlan_client_ipv4_addr));
+				}
+				if(data->iptype == IPA_IP_v6)
+				{
+					new_mapping.vlan_client_ipv6_addr[0] = ntohl(data->addr.peer_ipv6_addr[0]);
+					new_mapping.vlan_client_ipv6_addr[1] = ntohl(data->addr.peer_ipv6_addr[1]);
+					new_mapping.vlan_client_ipv6_addr[2] = ntohl(data->addr.peer_ipv6_addr[2]);
+					new_mapping.vlan_client_ipv6_addr[3] = ntohl(data->addr.peer_ipv6_addr[3]);
+					IPACMDBG_H("Incoming IPv6 address:0x%08x%08x%08x%08x\n",
+						new_mapping.vlan_client_ipv6_addr[0],new_mapping.vlan_client_ipv6_addr[1],
+						new_mapping.vlan_client_ipv6_addr[2],new_mapping.vlan_client_ipv6_addr[3]);
+				}
+			}
+			else
+#endif
+			{
+				IPACMDBG_H("Peer Addr not updated by QCmap\n");
+				memcpy(new_mapping.vlan_client_ipv6_addr, it_vlan->vlan_client_ipv6_addr,
+					sizeof(new_mapping.vlan_client_ipv6_addr));
+			}
 			break;
 		}
 	}
@@ -2124,8 +2160,9 @@ void IPACM_Config::del_l2tp_vlan_mapping(ipa_ioc_l2tp_vlan_mapping_info *data)
 		return;
 	}
 
-	IPACMDBG_H("L2tp iface: %s session id: %d vlan iface: %s \n",
-		data->l2tp_iface_name, data->l2tp_session_id, data->vlan_iface_name);
+	IPACMDBG_H("L2tp iface: %s session id: %d vlan iface: %s peer_addr_updated: %d \n",
+		data->l2tp_iface_name, data->l2tp_session_id, data->vlan_iface_name, peer_addr_updated);
+	peer_addr_updated = 0;
 	for(it = m_l2tp_vlan_mapping.begin(); it != m_l2tp_vlan_mapping.end(); it++)
 	{
 		if(strncmp(data->l2tp_iface_name, it->l2tp_iface_name,

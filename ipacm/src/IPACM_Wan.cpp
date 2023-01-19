@@ -1795,6 +1795,23 @@ int IPACM_Wan::check_vlan_pdn(ipa_ip_type iptype, ipacm_event_route_vlan *data, 
 
 	IPACMDBG_H("iptype: %d\n", iptype);
 
+	if (m_is_sta_mode !=Q6_WAN)
+	{
+		IPACM_Wan::backhaul_is_sta_mode = true;
+		if((iptype==IPA_IP_v4) && (header_set_v4 != true))
+		{
+			header_partial_default_wan_v4 = true;
+			IPACMDBG_H("STA ipv4-header haven't constructed \n");
+			return IPACM_SUCCESS;
+		}
+		else if((iptype==IPA_IP_v6) && (header_set_v6 != true))
+		{
+			header_partial_default_wan_v6 = true;
+			IPACMDBG_H("STA ipv6-header haven't constructed \n");
+			return IPACM_SUCCESS;
+		}
+	}
+
 	if (iptype == IPA_IP_v6 || iptype == IPA_IP_MAX)
 	{
 		if(((data->wan_ipv6_prefix[0] == ipv6_prefix[0]) &&
@@ -2051,7 +2068,12 @@ int IPACM_Wan::handle_route_add_vlan_pdn_evt(ipa_ip_type iptype, uint16_t vlan_i
 		if(m_is_sta_mode == WLAN_WAN)
 		{
 			IPACMDBG_H(" WAN instance is in STA mode \n");
-
+			if((iptype==IPA_IP_v6) && (header_set_v6 != true))
+			{
+				header_partial_default_wan_v6 = true;
+				IPACMDBG_H("STA ipv6-header haven't constructed \n");
+				return IPACM_SUCCESS;
+			}
 			strlcpy(rt_rule->rt_tbl_name, IPACM_Iface::ipacmcfg->rt_tbl_v6.name, sizeof(rt_rule->rt_tbl_name));
 			IPACMDBG_H(" WAN table created %s \n", rt_rule->rt_tbl_name);
 
@@ -2245,7 +2267,16 @@ int IPACM_Wan::handle_route_add_vlan_pdn_evt(ipa_ip_type iptype, uint16_t vlan_i
 	{
 		if(m_is_sta_mode == WLAN_WAN)
 		{
-			IPACMDBG_H(" WAN instance is in STA mode \n");
+			IPACMDBG_H(" WAN instance is in STA mode header_set_v4 %d \n", header_set_v4);
+			//Construct STA header 1st
+			IPACM_Wan::backhaul_is_sta_mode	= true;
+
+			if((iptype==IPA_IP_v4) && (header_set_v4 != true))
+			{
+				header_partial_default_wan_v4 = true;
+				IPACMDBG_H("STA ipv4-header haven't constructed \n");
+				return IPACM_SUCCESS;
+			}
 
 			for (tx_index = 0; tx_index < iface_query->num_tx_props; tx_index++)
 			{
@@ -3102,8 +3133,10 @@ int IPACM_Wan::handle_sta_header_add_evt()
 	if(wan_v4_addr_gw_set)
 	{
 		index = get_wan_client_index_ipv4(wan_v4_addr_gw);
-		if (index != IPACM_INVALID_INDEX)
-		{
+	}
+
+	if (index != IPACM_INVALID_INDEX)
+	{
 			IPACMDBG_H("Matched client index: %d\n", index);
 			IPACMDBG_H("Received Client MAC %02x:%02x:%02x:%02x:%02x:%02x\n",
 					 get_client_memptr(wan_client, index)->mac[0],
@@ -3138,12 +3171,61 @@ int IPACM_Wan::handle_sta_header_add_evt()
 				IPACMERR(" wan-client got ipv6 however didn't construct complete ipv6 header \n");
 				return IPACM_FAILURE;
 			}
-		}
-		else
-		{
+	}
+	else
+	{
 			IPACMDBG_H(" currently can't find matched wan-client's MAC-addr, waiting for header construction\n");
 			return IPACM_SUCCESS;
+	}
+
+	//Currently assuming only 1 external AP connected with router. Get client index of external AP.
+	int cnt;
+	int num_wan_client_tmp = num_wan_client;
+	index = IPACM_INVALID_INDEX;
+
+	for(cnt = 0; cnt < num_wan_client_tmp; cnt++)
+	{
+		if(get_client_memptr(wan_client, cnt)->v4_addr & 0xFF == 1)
+		{
+			IPACMDBG_H("Matched client index: %d\n", cnt);
+			IPACMDBG_H("The MAC is %02x:%02x:%02x:%02x:%02x:%02x\n",
+					get_client_memptr(wan_client, cnt)->mac[0],
+					get_client_memptr(wan_client, cnt)->mac[1],
+					get_client_memptr(wan_client, cnt)->mac[2],
+					get_client_memptr(wan_client, cnt)->mac[3],
+					get_client_memptr(wan_client, cnt)->mac[4],
+					get_client_memptr(wan_client, cnt)->mac[5]);
+			IPACMDBG_H("header set ipv4(%d) ipv6(%d)\n",
+					get_client_memptr(wan_client, cnt)->ipv4_header_set,
+					get_client_memptr(wan_client, cnt)->ipv6_header_set);
+			index = cnt;
 		}
+	}
+	if (index == IPACM_INVALID_INDEX)
+	{
+		IPACMERR("STA gw address not matched \n");
+		return IPACM_FAILURE;
+	}
+
+	if(get_client_memptr(wan_client, index)->ipv4_header_set)
+	{
+		hdr_hdl_sta_v4 = get_client_memptr(wan_client, index)->hdr_hdl_v4;
+		header_set_v4 = true;
+		IPACMDBG_H("add full ipv4 header hdl: (%x)\n", get_client_memptr(wan_client, index)->hdr_hdl_v4);
+		// store external_ap's MAC
+		memcpy(ext_router_mac_addr, get_client_memptr(wan_client, index)->mac, sizeof(ext_router_mac_addr));
+	}
+	else
+	{
+		IPACMERR(" wan-client got ipv4 however didn't construct complete ipv4 header \n");
+		return IPACM_FAILURE;
+	}
+
+	if(get_client_memptr(wan_client, index)->ipv6_header_set)
+	{
+		hdr_hdl_sta_v6 = get_client_memptr(wan_client, index)->hdr_hdl_v6;
+		header_set_v6 = true;
+		IPACMDBG_H("add full ipv6 header hdl: (%x)\n", get_client_memptr(wan_client, index)->hdr_hdl_v6);
 	}
 
 	/* see if default routes are setup before constructing full header */

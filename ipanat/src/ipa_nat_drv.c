@@ -310,6 +310,15 @@ int ipa_nat_get_pdn_count(
 
 	return 0;
 }
+void ipa_nat_increase_pdn_cnt(void)
+{
+	ipa_nati_increase_pdn_cnt();
+}
+
+void ipa_nat_decrease_pdn_cnt(void)
+{
+	ipa_nati_decrease_pdn_cnt();
+}
 
 /**
 * ipa_nat_dealloc_pdn() - deallocate a PDN entry

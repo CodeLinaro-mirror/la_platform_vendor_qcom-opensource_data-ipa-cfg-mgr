@@ -169,7 +169,7 @@ private:
 #endif
 	void TriggerWANUp(void *);
 	void TriggerWANUp_v6(const ipacm_event_iface_up* evt_data);
-	void TriggerWANDown(uint32_t);
+	void TriggerWANDown(uint32_t, bool isStaMode);
 	void TriggerWANDown_v6(const IpAddress& wan_addr);
 	int  CreateNatThreads(void);
 	bool AddIface(nat_table_entry *, bool *);

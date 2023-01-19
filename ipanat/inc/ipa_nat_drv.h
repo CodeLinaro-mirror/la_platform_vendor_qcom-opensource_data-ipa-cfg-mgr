@@ -233,6 +233,18 @@ int ipa_nat_alloc_pdn(ipa_nat_pdn_entry *pdn_info,
 int ipa_nat_get_pdn_count(uint8_t *pdn_cnt);
 
 /**
+* ipa_nat_increase_pdn_cnt() - increament pdn count
+*
+**/
+void ipa_nat_increase_pdn_cnt(void);
+
+/**
+* ipa_nat_decrease_pdn_cnt() - increament pdn count
+*
+**/
+void ipa_nat_decrease_pdn_cnt(void);
+
+/**
 * ipa_nat_dealloc_pdn() - deallocate a PDN entry
 * @pdn_index : [in] pdn index to be deallocated
 *

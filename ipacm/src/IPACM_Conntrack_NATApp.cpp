@@ -221,7 +221,12 @@ int NatApp::AddPdn(uint32_t pub_ip, uint8_t mux_id, bool is_sta)
 	{
 		/* create the NAT table, the PDN will be stored in index 0 */
 		ret = ipa_nat_add_ipv4_tbl(entry.public_ip, mem_type, max_entries, &nat_table_hdl);
-
+		if(ret)
+		{
+			IPACMERR("unable to create nat table Error:%d\n", ret);
+			return ret;
+		}
+		IPACMDBG_H("succeesfully created NAT table for ip 0x%X\n", pub_ip);
 		entry.public_ip = pub_ip;
 		if(!is_sta)
 		{
@@ -234,13 +239,8 @@ int NatApp::AddPdn(uint32_t pub_ip, uint8_t mux_id, bool is_sta)
 			/* Modify PDN 0 so it will hold the mux ID in the src metadata field */
 			pdn_index = 0;
 			entry.src_metadata = 0;
+			entry.is_sta = true;
 		}
-		if(ret)
-		{
-			IPACMERR("unable to create nat table Error:%d\n", ret);
-			return ret;
-		}
-		IPACMDBG_H("succeesfully created NAT table for ip 0x%X\n", pub_ip);
 
 		ret = ipa_nat_modify_pdn(nat_table_hdl, pdn_index, &entry);
 		if(ret)
@@ -255,7 +255,10 @@ int NatApp::AddPdn(uint32_t pub_ip, uint8_t mux_id, bool is_sta)
 		{
 			pdn_index = 0;
 			entry.public_ip = pub_ip;
-			ret = ipa_nat_modify_pdn(nat_table_hdl, pdn_index, &entry);
+			entry.src_metadata = 0;
+			entry.is_sta = true;
+			ret = ipa_nat_alloc_pdn(&entry, pdn_index);
+
 			if(ret)
 			{
 				IPACMERR("Unable to modify PDN 0 entry Error: %d\n", ret);
@@ -444,17 +447,19 @@ int NatApp::RemovePdn(uint32_t pub_ip)
 	int ret;
 	uint8_t pdn_index;
 	uint8_t pdn_cnt;
+	ipa_nat_pdn_entry entry;
 	IPACMDBG_H("%s() %d\n", __FUNCTION__, __LINE__);
 
 	CHK_TBL_HDL();
 
+	IPACMDBG_H("Remove PDN IP: 0x%x\n", pub_ip);
 	ret = ipa_nat_get_pdn_index(pub_ip, &pdn_index);
 	if(ret)
 	{
 		IPACMERR("pdn doesn't exist on pdn table\n");
 		return IPACM_FAILURE;
 	}
-
+	IPACMDBG_H("pdn ip found at pdn_index:%d\n",pdn_index);
 	/* remove all PDN entries */
 	for(int cnt = 0; cnt < max_entries; cnt++)
 	{
@@ -469,7 +474,6 @@ int NatApp::RemovePdn(uint32_t pub_ip)
 			memset(&cache[cnt], 0, sizeof(cache[cnt]));
 		}
 	}
-
 	ret = ipa_nat_dealloc_pdn(pdn_index);
 	if(ret)
 	{
@@ -757,7 +761,7 @@ void NatApp::HandleSWAllowEntries(void)
 }
 
 /* Add new entry to the nat table on new connection */
-int NatApp::AddEntry(const nat_table_entry *rule, bool isVlan, bool isStaMode)
+int NatApp::AddEntry(const nat_table_entry *rule, bool isVlan)
 {
 	int cnt = 0;
 	ipa_nat_ipv4_rule nat_rule;
@@ -782,27 +786,20 @@ int NatApp::AddEntry(const nat_table_entry *rule, bool isVlan, bool isStaMode)
 		return 0;
 	}
 #ifdef FEATURE_VLAN_MPDN
-	if(isStaMode)
+	if(ipa_nat_get_pdn_index(rule->public_ip, &pdn_index))
 	{
-		pdn_index = 0;
-	}
-	else
-	{
-		if(ipa_nat_get_pdn_index(rule->public_ip, &pdn_index))
+		if(isVlan)
 		{
-			if(isVlan)
-			{
-				IPACMDBG_H("vlan iface doesn't have a valid pdn, only moving to cache");
-				iptodot("private ip", rule->private_ip);
-				iptodot("target ip", rule->target_ip);
-				iptodot("public ip", rule->public_ip);
-				cacheOnly = true;
-			}
-			else
-			{
-				IPACMERR("couldn't acquire PDN index for public ip 0x%X\n", rule->public_ip);
-				return IPACM_FAILURE;
-			}
+			IPACMDBG_H("vlan iface doesn't have a valid pdn, only moving to cache");
+			iptodot("private ip", rule->private_ip);
+			iptodot("target ip", rule->target_ip);
+			iptodot("public ip", rule->public_ip);
+			cacheOnly = true;
+		}
+		else
+		{
+			IPACMERR("couldn't acquire PDN index for public ip 0x%X\n", rule->public_ip);
+			return IPACM_FAILURE;
 		}
 	}
 #endif

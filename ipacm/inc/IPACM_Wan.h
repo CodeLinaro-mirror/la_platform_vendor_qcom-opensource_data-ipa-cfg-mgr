@@ -654,7 +654,7 @@ private:
 					}
 
 				}
-			} /* end of for loop */
+			} /* end of for loop. */
 
 		    /* clean the 4 Qos ipv6 RT rules for client:clt_indx */
 		    if(get_client_memptr(wan_client, clt_indx)->route_rule_set_v6 != 0) /* for ipv6 */
@@ -701,9 +701,9 @@ private:
 	/* configure the socksv5 dl rules */
 	int config_socksv5_rules(ipa_ioc_add_flt_rule *pFilteringTable_v6);
 #endif
-	int handle_route_del_evt(ipa_ip_type iptype);
+	int handle_route_del_evt(ipa_ip_type iptype, bool wan_up_vlan = false);
 
-	int del_dft_firewall_rules(ipa_ip_type iptype);
+	int del_dft_firewall_rules(ipa_ip_type iptype, bool wan_up_vlan = false);
 
 	int handle_down_evt();
 

@@ -220,7 +220,12 @@ int NatApp::AddPdn(uint32_t pub_ip, uint8_t mux_id, bool is_sta)
 	{
 		/* create the NAT table, the PDN will be stored in index 0 */
 		ret = ipa_nat_add_ipv4_tbl(entry.public_ip, mem_type, max_entries, &nat_table_hdl);
-
+		if(ret)
+		{
+			IPACMERR("unable to create nat table Error:%d\n", ret);
+			return ret;
+		}
+		IPACMDBG_H("succeesfully created NAT table for ip 0x%X\n", pub_ip);
 		entry.public_ip = pub_ip;
 		if(!is_sta)
 		{
@@ -234,12 +239,6 @@ int NatApp::AddPdn(uint32_t pub_ip, uint8_t mux_id, bool is_sta)
 			pdn_index = 0;
 			entry.src_metadata = 0;
 		}
-		if(ret)
-		{
-			IPACMERR("unable to create nat table Error:%d\n", ret);
-			return ret;
-		}
-		IPACMDBG_H("succeesfully created NAT table for ip 0x%X\n", pub_ip);
 
 		ret = ipa_nat_modify_pdn(nat_table_hdl, pdn_index, &entry);
 		if(ret)
@@ -255,11 +254,13 @@ int NatApp::AddPdn(uint32_t pub_ip, uint8_t mux_id, bool is_sta)
 			pdn_index = 0;
 			entry.public_ip = pub_ip;
 			ret = ipa_nat_modify_pdn(nat_table_hdl, pdn_index, &entry);
+
 			if(ret)
 			{
 				IPACMERR("unable to modify PDN 0 entry Error:%d\n", ret);
 				return ret;
 			}
+			ipa_nat_increase_pdn_cnt();
 		}
 		else
 		{
@@ -438,22 +439,31 @@ void NatApp::Reset()
 }
 
 #ifdef FEATURE_VLAN_MPDN
-int NatApp::RemovePdn(uint32_t pub_ip)
+int NatApp::RemovePdn(uint32_t pub_ip, bool is_sta)
 {
 	int ret;
 	uint8_t pdn_index;
 	uint8_t pdn_cnt;
+	ipa_nat_pdn_entry entry;
 	IPACMDBG_H("%s() %d\n", __FUNCTION__, __LINE__);
 
 	CHK_TBL_HDL();
 
-	ret = ipa_nat_get_pdn_index(pub_ip, &pdn_index);
-	if(ret)
-	{
-		IPACMERR("pdn doesn't exist on pdn table\n");
-		return IPACM_FAILURE;
-	}
+	IPACMDBG_H("is_sta: %d\n", is_sta);
 
+	if(is_sta)
+	{
+		pdn_index = 0;
+	}
+	else
+	{
+		ret = ipa_nat_get_pdn_index(pub_ip, &pdn_index);
+		if(ret)
+		{
+			IPACMERR("pdn doesn't exist on pdn table\n");
+			return IPACM_FAILURE;
+		}
+	}
 	/* remove all PDN entries */
 	for(int cnt = 0; cnt < max_entries; cnt++)
 	{
@@ -468,12 +478,29 @@ int NatApp::RemovePdn(uint32_t pub_ip)
 			memset(&cache[cnt], 0, sizeof(cache[cnt]));
 		}
 	}
-
-	ret = ipa_nat_dealloc_pdn(pdn_index);
-	if(ret)
+	if(is_sta)
 	{
-		IPACMERR(" couldn't deallocate PDN in index %d\n",pdn_index);
-		return IPACM_FAILURE;
+		entry.public_ip = 0;
+		entry.src_metadata = 0;
+		entry.dst_metadata = 0;
+
+		ret = ipa_nat_modify_pdn(nat_table_hdl, pdn_index, &entry);
+		if(ret)
+		{
+			IPACMERR("unable to modify PDN %d entry Error:%d\n", pdn_index, ret);
+			return ret;
+		}
+		IPACMDBG_H("Calling ipa_nat_decrease_pdn_cnt\n");
+		ipa_nat_decrease_pdn_cnt();
+	}
+	else
+	{
+		ret = ipa_nat_dealloc_pdn(pdn_index);
+		if(ret)
+		{
+			IPACMERR(" couldn't deallocate PDN in index %d\n",pdn_index);
+			return IPACM_FAILURE;
+		}
 	}
 
 	ret = ipa_nat_get_pdn_count(&pdn_cnt);

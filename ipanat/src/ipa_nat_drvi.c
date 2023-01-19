@@ -1281,6 +1281,18 @@ int ipa_nati_get_pdn_cnt(void)
 	return num_pdns;
 }
 
+void ipa_nati_increase_pdn_cnt(void)
+{
+	num_pdns++;
+	IPAERR("num_pdns: %d\n", num_pdns);
+}
+
+void ipa_nati_decrease_pdn_cnt(void)
+{
+	num_pdns--;
+	IPAERR("num_pdns: %d\n", num_pdns);
+}
+
 int ipa_nati_dealloc_pdn(
 	uint8_t pdn_index)
 {

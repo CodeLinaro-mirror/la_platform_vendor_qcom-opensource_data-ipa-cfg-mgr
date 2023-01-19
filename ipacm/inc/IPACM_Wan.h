@@ -699,9 +699,9 @@ private:
 	/* configure the socksv5 dl rules */
 	int config_socksv5_rules(ipa_ioc_add_flt_rule *pFilteringTable_v6);
 #endif
-	int handle_route_del_evt(ipa_ip_type iptype);
+	int handle_route_del_evt(ipa_ip_type iptype, bool wan_up_vlan = false);
 
-	int del_dft_firewall_rules(ipa_ip_type iptype);
+	int del_dft_firewall_rules(ipa_ip_type iptype, bool wan_up_vlan = false);
 
 	int handle_down_evt();
 

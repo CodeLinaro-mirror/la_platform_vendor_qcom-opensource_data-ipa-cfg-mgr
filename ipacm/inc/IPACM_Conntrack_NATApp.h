@@ -723,7 +723,7 @@ public:
 
 #ifdef FEATURE_VLAN_MPDN
 	int AddPdn(uint32_t pub_ip, uint8_t mux_id, bool is_sta);
-	int RemovePdn(uint32_t pub_ip);
+	int RemovePdn(uint32_t pub_ip, bool is_sta);
 #endif
 	bool isAlgPort(uint8_t, uint16_t);
 

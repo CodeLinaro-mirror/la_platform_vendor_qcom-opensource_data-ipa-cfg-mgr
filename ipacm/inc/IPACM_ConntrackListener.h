@@ -129,6 +129,7 @@ private:
 	NatApp *nat_inst;
 	NatBase *ipv6ct_inst;
 
+	uint32_t sta_wan_ip;
 	int NatIfaceCnt;
 	int StaClntCnt;
 	int StaClntCnt_v6;

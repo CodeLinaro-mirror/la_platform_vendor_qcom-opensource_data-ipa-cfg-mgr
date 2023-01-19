@@ -88,7 +88,6 @@ IPACM_ConntrackListener::IPACM_ConntrackListener() :
 	 WanUp = false;
 	 nat_inst = NatApp::GetInstance();
 
-	 sta_wan_ip = 0;
 	 NatIfaceCnt = 0;
 	 StaClntCnt = 0;
 	 pNatIfaces = NULL;
@@ -250,7 +249,7 @@ void IPACM_ConntrackListener::event_callback(ipa_cm_event_id evt,
 			wan_data = (ipacm_event_iface_up *)data;
 			if (WanUp)
 			{
-				TriggerWANDown(wan_data->ipv4_addr, wan_data->is_sta);
+				TriggerWANDown(wan_data->ipv4_addr);
 			}
 			break;
 
@@ -922,7 +921,6 @@ void IPACM_ConntrackListener::HandleVlanUp(void *in_param)
 
 	if(vlanup_data->mux_id == 0)
 	{
-		sta_wan_ip = vlanup_data->ipv4_addr;
 
 		if(nat_inst->AddPdn(vlanup_data->ipv4_addr, vlanup_data->mux_id, true))
 		{
@@ -942,8 +940,7 @@ void IPACM_ConntrackListener::HandleVlanUp(void *in_param)
 				vlan_pdns[0].VID_cnt++;
 				num_vlan_pdns++;
 			}
-			isStaMode = true;
-			IPACMDBG_H("PDN table added successfully for STA, isStaMode: %d\n", isStaMode);
+			IPACMDBG_H("PDN table added successfully for STA\n");
 			if(!isNatThreadStart)
 			{
 				IPACMDBG("creating nat threads\n");
@@ -1037,7 +1034,7 @@ void IPACM_ConntrackListener::TriggerWANUp(void *in_param)
 		  * make sure we have space in pdn table
 		  */
 		 if(wanup_data->is_sta != isStaMode)
-			nat_inst->RemovePdn(wan_ipaddr, wanup_data->is_sta);
+			nat_inst->RemovePdn(wan_ipaddr);
 	 }
 #endif
 
@@ -1200,10 +1197,7 @@ void IPACM_ConntrackListener::HandleVlanDown(void *in_param)
 	{
 		/* VLAN PDN down is triggered only on LINK_DOWN, we can safely remove the PDN */
 		IPACMDBG_H("removing PDN ipv4 address 0x%X\n", vlanup_data->ipv4_addr);
-		if(vlanup_data->mux_id == 0)
-			nat_inst->RemovePdn(vlanup_data->ipv4_addr, true);
-		else
-			nat_inst->RemovePdn(vlanup_data->ipv4_addr, false);
+		nat_inst->RemovePdn(vlanup_data->ipv4_addr);
 
 		for(int i = 0; i < IPA_MAX_NUM_HW_PDNS; i++)
 		{
@@ -1217,14 +1211,10 @@ void IPACM_ConntrackListener::HandleVlanDown(void *in_param)
 				break;
 			}
 		}
-		if(vlanup_data->mux_id == 0)
-		{
-			isStaMode = false;
-		}
 	}
 }
 #endif
-void IPACM_ConntrackListener::TriggerWANDown(uint32_t wan_addr, bool is_sta)
+void IPACM_ConntrackListener::TriggerWANDown(uint32_t wan_addr)
 {
 #ifdef FEATURE_VLAN_MPDN
 	IPACMDBG_H("Removing default ipv4 pdn with");
@@ -1252,7 +1242,7 @@ void IPACM_ConntrackListener::TriggerWANDown(uint32_t wan_addr, bool is_sta)
 	if(nat_inst != NULL)
 	{
 #ifdef FEATURE_VLAN_MPDN
-		nat_inst->RemovePdn(wan_addr, is_sta);
+		nat_inst->RemovePdn(wan_addr);
 #else
 		nat_inst->DeleteTable(wan_addr);
 #endif
@@ -1825,7 +1815,7 @@ bool IPACM_ConntrackListener::AddIface(
 	return false;
 }
 
-int IPACM_ConntrackListener::AddORDeleteNatEntry(const nat_entry_bundle *input, bool *sendVlanEvent, bool isStaMode)
+int IPACM_ConntrackListener::AddORDeleteNatEntry(const nat_entry_bundle *input, bool *sendVlanEvent)
 {
 	u_int8_t tcp_state;
 	u_int64_t pkt_count = 0;
@@ -1857,7 +1847,6 @@ int IPACM_ConntrackListener::AddORDeleteNatEntry(const nat_entry_bundle *input, 
 	IPACMDBG("Protocol: %d, destination nat flag: %d\n",
 			 input->rule->protocol, input->rule->dst_nat);
 #ifdef FEATURE_VLAN_MPDN
-	IPACMDBG("sendVlanEvent %d, isStaMode %d\n", *sendVlanEvent, isStaMode);
 	IPACMDBG("isVlan %d, IsVlanUp %d\n", input->isVlan, input->IsVlanUp);
 #endif
 
@@ -1890,7 +1879,7 @@ int IPACM_ConntrackListener::AddORDeleteNatEntry(const nat_entry_bundle *input, 
 				else
 				{
 					IPACMDBG("TCP: adding entry for vlan\n");
-					nat_inst->AddEntry(input->rule,*sendVlanEvent, isStaMode);
+					nat_inst->AddEntry(input->rule);
 				}
 			} else
 #endif
@@ -1905,7 +1894,7 @@ int IPACM_ConntrackListener::AddORDeleteNatEntry(const nat_entry_bundle *input, 
 			}
 			else
 			{
-				nat_inst->AddEntry(input->rule,*sendVlanEvent, isStaMode);
+				nat_inst->AddEntry(input->rule);
 			}
 		}
 		else if (TCP_CONNTRACK_FIN_WAIT == tcp_state ||
@@ -1950,7 +1939,7 @@ int IPACM_ConntrackListener::AddORDeleteNatEntry(const nat_entry_bundle *input, 
 				else
 				{
 					IPACMDBG("UDP: adding entry for vlan\n");
-					nat_inst->AddEntry(input->rule,*sendVlanEvent, isStaMode);
+					nat_inst->AddEntry(input->rule);
 				}
 			}
 			else
@@ -1966,7 +1955,7 @@ int IPACM_ConntrackListener::AddORDeleteNatEntry(const nat_entry_bundle *input, 
 			}
 			else
 			{
-				nat_inst->AddEntry(input->rule,*sendVlanEvent, isStaMode);
+				nat_inst->AddEntry(input->rule);
 			}
 		}
 		else if (NFCT_T_DESTROY == input->type)
@@ -2529,16 +2518,7 @@ void IPACM_ConntrackListener::ProcessTCPorUDPMsg(
 	CheckSTAClient(&rule, &nat_entry.isTempEntry);
 	nat_entry.rule = &rule;
 #ifdef FEATURE_VLAN_MPDN
-	if(sta_wan_ip == public_ip)
-	{
-		IPACMDBG_H("STA public ip matched\n");
-		AddORDeleteNatEntry(&nat_entry, &SendVlanEvent, true);
-	}
-	else
-	{
-		IPACMDBG_H("LTE public ip\n");
-		AddORDeleteNatEntry(&nat_entry, &SendVlanEvent, false);
-	}
+	AddORDeleteNatEntry(&nat_entry, &SendVlanEvent);
 	if(VlanID > 0 && SendVlanEvent)
 	{
 		ipacm_cmd_q_data evt_data;
@@ -2568,7 +2548,7 @@ void IPACM_ConntrackListener::ProcessTCPorUDPMsg(
 		IPACM_EvtDispatcher::PostEvt(&evt_data);
 	}
 #else
-	AddORDeleteNatEntry(&nat_entry, NULL, isStaMode);
+	AddORDeleteNatEntry(&nat_entry, NULL);
 #endif
 	return;
 

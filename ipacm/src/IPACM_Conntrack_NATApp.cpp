@@ -238,6 +238,7 @@ int NatApp::AddPdn(uint32_t pub_ip, uint8_t mux_id, bool is_sta)
 			/* modify PDN 0 so it will hold the mux ID in the src metadata field */
 			pdn_index = 0;
 			entry.src_metadata = 0;
+			entry.is_sta = true;
 		}
 
 		ret = ipa_nat_modify_pdn(nat_table_hdl, pdn_index, &entry);
@@ -253,14 +254,15 @@ int NatApp::AddPdn(uint32_t pub_ip, uint8_t mux_id, bool is_sta)
 		{
 			pdn_index = 0;
 			entry.public_ip = pub_ip;
-			ret = ipa_nat_modify_pdn(nat_table_hdl, pdn_index, &entry);
+			entry.src_metadata = 0;
+			entry.is_sta = true;
+			ret = ipa_nat_alloc_pdn(&entry, &pdn_index);
 
 			if(ret)
 			{
 				IPACMERR("unable to modify PDN 0 entry Error:%d\n", ret);
 				return ret;
 			}
-			ipa_nat_increase_pdn_cnt();
 		}
 		else
 		{
@@ -439,7 +441,7 @@ void NatApp::Reset()
 }
 
 #ifdef FEATURE_VLAN_MPDN
-int NatApp::RemovePdn(uint32_t pub_ip, bool is_sta)
+int NatApp::RemovePdn(uint32_t pub_ip)
 {
 	int ret;
 	uint8_t pdn_index;
@@ -449,21 +451,16 @@ int NatApp::RemovePdn(uint32_t pub_ip, bool is_sta)
 
 	CHK_TBL_HDL();
 
-	IPACMDBG_H("is_sta: %d\n", is_sta);
+	IPACMDBG_H("Remove PDN IP: 0x%x\n", pub_ip);
 
-	if(is_sta)
+	ret = ipa_nat_get_pdn_index(pub_ip, &pdn_index);
+	if(ret)
 	{
-		pdn_index = 0;
+		IPACMERR("pdn doesn't exist on pdn table\n");
+		return IPACM_FAILURE;
 	}
-	else
-	{
-		ret = ipa_nat_get_pdn_index(pub_ip, &pdn_index);
-		if(ret)
-		{
-			IPACMERR("pdn doesn't exist on pdn table\n");
-			return IPACM_FAILURE;
-		}
-	}
+	IPACMDBG_H("pdn ip found at pdn_index:%d\n",pdn_index);
+
 	/* remove all PDN entries */
 	for(int cnt = 0; cnt < max_entries; cnt++)
 	{
@@ -478,29 +475,12 @@ int NatApp::RemovePdn(uint32_t pub_ip, bool is_sta)
 			memset(&cache[cnt], 0, sizeof(cache[cnt]));
 		}
 	}
-	if(is_sta)
-	{
-		entry.public_ip = 0;
-		entry.src_metadata = 0;
-		entry.dst_metadata = 0;
 
-		ret = ipa_nat_modify_pdn(nat_table_hdl, pdn_index, &entry);
-		if(ret)
-		{
-			IPACMERR("unable to modify PDN %d entry Error:%d\n", pdn_index, ret);
-			return ret;
-		}
-		IPACMDBG_H("Calling ipa_nat_decrease_pdn_cnt\n");
-		ipa_nat_decrease_pdn_cnt();
-	}
-	else
+	ret = ipa_nat_dealloc_pdn(pdn_index);
+	if(ret)
 	{
-		ret = ipa_nat_dealloc_pdn(pdn_index);
-		if(ret)
-		{
-			IPACMERR(" couldn't deallocate PDN in index %d\n",pdn_index);
-			return IPACM_FAILURE;
-		}
+		IPACMERR(" couldn't deallocate PDN in index %d\n",pdn_index);
+		return IPACM_FAILURE;
 	}
 
 	ret = ipa_nat_get_pdn_count(&pdn_cnt);
@@ -627,7 +607,7 @@ int NatApp::DeleteEntry(const nat_table_entry *rule)
 }
 
 /* Add new entry to the nat table on new connection */
-int NatApp::AddEntry(const nat_table_entry *rule, bool isVlan, bool isStaMode)
+int NatApp::AddEntry(const nat_table_entry *rule, bool isVlan)
 {
 	int cnt = 0;
 	ipa_nat_ipv4_rule nat_rule;
@@ -652,26 +632,20 @@ int NatApp::AddEntry(const nat_table_entry *rule, bool isVlan, bool isStaMode)
 		return 0;
 	}
 #ifdef FEATURE_VLAN_MPDN
-	IPACMDBG("isStaMode : %d \n",isStaMode);
-	if(isStaMode)
-		pdn_index = 0;
-	else
+	if(ipa_nat_get_pdn_index(rule->public_ip, &pdn_index))
 	{
-		if(ipa_nat_get_pdn_index(rule->public_ip, &pdn_index))
+		if(isVlan)
 		{
-			if(isVlan)
-			{
-				IPACMDBG_H("vlan iface doesn't have a valid pdn, only moving to cache");
-				iptodot("private ip", rule->private_ip);
-				iptodot("target ip", rule->target_ip);
-				iptodot("public ip", rule->public_ip);
-				cacheOnly = true;
-			}
-			else
-			{
-				IPACMERR("couldn't acquire PDN index for public ip 0x%X\n", rule->public_ip);
-				return IPACM_FAILURE;
-			}
+			IPACMDBG_H("vlan iface doesn't have a valid pdn, only moving to cache");
+			iptodot("private ip", rule->private_ip);
+			iptodot("target ip", rule->target_ip);
+			iptodot("public ip", rule->public_ip);
+			cacheOnly = true;
+		}
+		else
+		{
+			IPACMERR("couldn't acquire PDN index for public ip 0x%X\n", rule->public_ip);
+			return IPACM_FAILURE;
 		}
 	}
 #endif

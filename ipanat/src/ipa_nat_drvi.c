@@ -1201,7 +1201,7 @@ int ipa_nati_get_pdn_index(
 {
 	int i = 0;
 
-	for(i = 1; i < (IPA_MAX_PDN_NUM - 1); i++) {
+	for(i = 0; i < (IPA_MAX_PDN_NUM - 1); i++) {
 		if(pdns[i].public_ip == public_ip) {
 			IPADBG("ip 0x%X matches PDN index %d\n", public_ip, i);
 			*pdn_index = i;
@@ -1231,7 +1231,7 @@ int ipa_nati_alloc_pdn(
 		return -EIO;
 	}
 
-	for(i = 1; i < (IPA_MAX_PDN_NUM - 1); i++) {
+	for(i = 0; i < (IPA_MAX_PDN_NUM - 1); i++) {
 		if(pdns[i].public_ip == pdn_info->public_ip)
 		{
 			IPADBG("found the same pdn in index %d\n", i);
@@ -1245,8 +1245,8 @@ int ipa_nati_alloc_pdn(
 			}
 			return 0;
 		}
-
-		if(!memcmp((pdns + i), &zero_test, sizeof(ipa_nat_pdn_entry)))
+		/* 0th PDN is reserved for STA*/
+		if(!memcmp((pdns + i), &zero_test, sizeof(ipa_nat_pdn_entry)) && (i != 0))
 		{
 			IPADBG("found an empty pdn in index %d\n", i);
 			break;
@@ -1259,8 +1259,11 @@ int ipa_nati_alloc_pdn(
 			   num_pdns);
 		return -EIO;
 	}
+	if(pdn_info->is_sta == true)
+		pdn_data.pdn_index = 0;
+	else
+		pdn_data.pdn_index = i;
 
-	pdn_data.pdn_index    = i;
 	pdn_data.public_ip    = pdn_info->public_ip;
 	pdn_data.src_metadata = pdn_info->src_metadata;
 	pdn_data.dst_metadata = pdn_info->dst_metadata;
@@ -1269,7 +1272,10 @@ int ipa_nati_alloc_pdn(
 	if(!ret)
 	{
 		num_pdns++;
-		*pdn_index = i;
+		if(pdn_info->is_sta == true)
+			*pdn_index = 0;
+		else
+			*pdn_index = i;
 		IPADBG("modify num_pdns (%d)\n", num_pdns);
 	}
 
@@ -1279,18 +1285,6 @@ int ipa_nati_alloc_pdn(
 int ipa_nati_get_pdn_cnt(void)
 {
 	return num_pdns;
-}
-
-void ipa_nati_increase_pdn_cnt(void)
-{
-	num_pdns++;
-	IPAERR("num_pdns: %d\n", num_pdns);
-}
-
-void ipa_nati_decrease_pdn_cnt(void)
-{
-	num_pdns--;
-	IPAERR("num_pdns: %d\n", num_pdns);
 }
 
 int ipa_nati_dealloc_pdn(

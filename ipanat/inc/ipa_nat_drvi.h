@@ -299,10 +299,6 @@ int ipa_nati_alloc_pdn(ipa_nat_pdn_entry *pdn_info, uint8_t *pdn_index);
 
 int ipa_nati_get_pdn_cnt(void);
 
-void ipa_nati_increase_pdn_cnt(void);
-
-void ipa_nati_decrease_pdn_cnt(void);
-
 int ipa_nati_dealloc_pdn(uint8_t pdn_index);
 
 int ipa_nati_add_ipv4_rule(uint32_t tbl_hdl,

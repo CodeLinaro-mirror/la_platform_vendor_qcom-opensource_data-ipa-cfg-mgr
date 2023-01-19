@@ -113,6 +113,7 @@ typedef struct {
 	uint32_t public_ip;
 	uint32_t src_metadata;
 	uint32_t dst_metadata;
+	bool is_sta;
 } ipa_nat_pdn_entry;
 
 /**
@@ -231,18 +232,6 @@ int ipa_nat_alloc_pdn(ipa_nat_pdn_entry *pdn_info,
 * Returns:	0  On Success, negative on failure
 */
 int ipa_nat_get_pdn_count(uint8_t *pdn_cnt);
-
-/**
-* ipa_nat_increase_pdn_cnt() - increament pdn count
-*
-**/
-void ipa_nat_increase_pdn_cnt(void);
-
-/**
-* ipa_nat_decrease_pdn_cnt() - increament pdn count
-*
-**/
-void ipa_nat_decrease_pdn_cnt(void);
 
 /**
 * ipa_nat_dealloc_pdn() - deallocate a PDN entry

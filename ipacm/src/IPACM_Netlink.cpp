@@ -1027,7 +1027,8 @@ static int ipa_nl_decode_nlmsg
 				 ((msg_ptr->nl_route_info.metainfo.rtm_protocol == RTPROT_BOOT) ||
 				  (msg_ptr->nl_route_info.metainfo.rtm_protocol == RTPROT_RA) ||
 				  (msg_ptr->nl_route_info.metainfo.rtm_protocol == RTPROT_STATIC))&&
-				 (msg_ptr->nl_route_info.metainfo.rtm_scope == RT_SCOPE_UNIVERSE)&&
+				 ((msg_ptr->nl_route_info.metainfo.rtm_scope == RT_SCOPE_UNIVERSE)||
+				 (msg_ptr->nl_route_info.metainfo.rtm_scope == RT_SCOPE_LINK))&&
 				 (msg_ptr->nl_route_info.metainfo.rtm_table == RT_TABLE_MAIN))
 			{
 				IPACMDBG("\n GOT RTM_NEWROUTE event\n");

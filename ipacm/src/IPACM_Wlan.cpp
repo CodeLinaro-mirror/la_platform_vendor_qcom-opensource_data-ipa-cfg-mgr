@@ -1870,19 +1870,25 @@ int IPACM_Wlan::handle_wlan_client_ipaddr(ipacm_event_data_all *data)
 			if (IPACM_Iface::ipacmcfg->is_ip_pass_enabled(device_type, data->mac_addr, 0))
 			{
 
-				/* check if the ip is in private subnet and ignore. */
-				if (IPACM_Iface::ipacmcfg->isPrivateSubnet(data->ipv4_addr))
+				if (check_neigh_ipv4(data) == IPACM_SUCCESS)
 				{
-					IPACMDBG_H("Client is in IP passthrough mode, but got private IP: 0x%x\n", data->ipv4_addr);
+					IPACMDBG_H("Client is in IP passthrough mode, got IP: 0x%x\n", data->ipv4_addr);
+				}
+				else
+				{
+					IPACMERR("IP address %x mismatch for client but current one is different", data->ipv4_addr);
 					return IPACM_FAILURE;
 				}
 			}
 			else
 			{
-				/* Check if the IP is not in private subnet and ignore. */
-				if (!IPACM_Iface::ipacmcfg->isPrivateSubnet(data->ipv4_addr))
+				if (check_neigh_ipv4(data) == IPACM_SUCCESS)
 				{
-					IPACMDBG_H("Client is not in IP passthrough mode, but got public IP: 0x%x\n", data->ipv4_addr);
+					IPACMDBG_H("Client is not in IP passthrough mode, got IP: 0x%x\n", data->ipv4_addr);
+				}
+				else
+				{
+					IPACMERR("Client is not in IP passthrough mode, but got wrong IP: 0x%x\n", data->ipv4_addr);
 					return IPACM_FAILURE;
 				}
 			}

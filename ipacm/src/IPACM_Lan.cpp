@@ -73,6 +73,7 @@
 #include <string.h>
 #include <fcntl.h>
 #include <sys/ioctl.h>
+#include <arpa/inet.h>
 #include "IPACM_Netlink.h"
 #include "IPACM_Lan.h"
 #include "IPACM_Wan.h"
@@ -94,6 +95,15 @@ ipa_lan_client_idx IPACM_Lan::inactive_lan_client_index_odu[IPA_MAX_NUM_HW_PATH_
 
 /* for default single pdn use-case: 1 prefix+1 mtu*/
 #define IPv6_PREFIX_DEFAULT_PDN_RULE_NUM 2
+
+#define MAX_IPNS_ROW_LEN 200
+#define IPA_SYS_CMD_LEN 200
+#define IPA_TMP_DIR "/tmp/data_ipa"
+#define MAX_IPNS_ROW_LEN 200
+#define MAX_IPNS_PARAM_CNT 5
+#define MAX_IPNS_PARAM_LEN 50
+
+#define IPA_NS_TABLE IPA_TMP_DIR"/ipa_ns_table.txt"
 
 IPACM_Lan::IPACM_Lan(int iface_index) : IPACM_Iface(iface_index)
 {
@@ -2449,7 +2459,7 @@ int IPACM_Lan::handle_vlan_neighbor(ipacm_event_data_all *data)
 		{
 			/* Special handling for IPACM_CLIENT_DEVICE_TYPE_USB*/
 			if ((device_type != IPACM_CLIENT_DEVICE_TYPE_USB) ||
-				(!IPACM_Iface::ipacmcfg->isPrivateSubnet(data->ipv4_addr)))
+			!IPACM_Wan::check_client_ipv4_with_pdn_ipv4(data->ipv4_addr, vlan_id))
 			{
 				/* Check if VLAN PDN is already up and add UL rules. */
 				uint8_t mux_id = 0;
@@ -4550,6 +4560,62 @@ fail:
 	return res;
 }
 
+/* Check neighbor client IPv4 address with ip n s output*/
+int IPACM_Lan::check_neigh_ipv4(ipacm_event_data_all *data)
+{
+	FILE *fp = NULL;
+	char *tok = NULL, *ptr = NULL;
+	char *params[MAX_IPNS_PARAM_CNT] = { NULL };
+	char ip[IPA_IFACE_NAME_LEN], ipns_row[MAX_IPNS_ROW_LEN] = {0}, cmd[IPA_SYS_CMD_LEN] = {0};
+	int i;
+
+	snprintf(cmd, IPA_SYS_CMD_LEN, "ip n s | grep %02x:%02x:%02x:%02x:%02x:%02x > %s\n",data->mac_addr[0],
+				data->mac_addr[1], data->mac_addr[2], data->mac_addr[3], data->mac_addr[4], data->mac_addr[5],IPA_NS_TABLE);
+
+	system(cmd);
+
+	fp = fopen(IPA_NS_TABLE, "r");
+	if (fp == NULL)
+	{
+		IPACMERR("can't open ns file\n");
+		return IPACM_FAILURE;
+	}
+
+	while (fgets(ipns_row, MAX_IPNS_ROW_LEN, fp) != NULL)
+	{
+		if (strstr(ipns_row,"::")) {
+			continue;
+		}
+
+		/*parse the ip n s entry*/
+		tok = strtok_r(ipns_row, " ", &ptr);
+		for (i = 0; (tok != NULL) && i < MAX_IPNS_PARAM_CNT; ++i )
+		{
+			params[i] = tok;
+			tok = strtok_r(NULL, " ", &ptr);
+		}
+
+		for(i = 0; i < MAX_IPNS_PARAM_CNT; ++i)
+		{
+			if (strstr(params[i],"."))
+			{
+				strlcpy(ip, params[i], MAX_IPNS_PARAM_LEN);
+				IPACMDBG("IP Passthrough IP : %s\n",ip);
+				if(data->ipv4_addr == ntohl(inet_addr(ip)))
+				{
+					IPACMDBG_H("IP Passthrough client IP %s - 0x%x matches\n",
+								ip,ntohl(inet_addr(ip)));
+					fclose(fp);
+					return IPACM_SUCCESS;
+				}
+			}
+		}
+	}
+
+	fclose(fp);
+	return IPACM_FAILURE;
+}
+
 /*handle eth client */
 int IPACM_Lan::handle_eth_client_ipaddr(ipacm_event_data_all *data)
 {
@@ -4606,23 +4672,31 @@ int IPACM_Lan::handle_eth_client_ipaddr(ipacm_event_data_all *data)
 			if (IPACM_Iface::ipacmcfg->is_ip_pass_enabled(device_type,
 				data->mac_addr, vlan_id))
 			{
-				/* check if the ip is in private subnet and ignore. */
-				if (IPACM_Iface::ipacmcfg->isPrivateSubnet(data->ipv4_addr))
+				if (check_neigh_ipv4(data) == IPACM_SUCCESS)
 				{
 					/* Special handling for USB for IPPT NAT-enable */
-					if(device_type != IPACM_CLIENT_DEVICE_TYPE_USB)
+					/* In IPPT with collision client IP will be in private subnet
+					   so checking if client IP same as PDN IP before IPPT */
+					if(device_type != IPACM_CLIENT_DEVICE_TYPE_USB &&
+						!IPACM_Wan::check_client_ipv4_with_pdn_ipv4(data->ipv4_addr, vlan_id))
 					{
-						IPACMDBG_H("Client is in IP passthrough mode, but got private IP: 0x%x\n", data->ipv4_addr);
+						IPACMDBG_H("Client is in IP passthrough mode, but IP is mismatched with WAN IP: 0x%x\n",
+							data->ipv4_addr);
 						return IPACM_FAILURE;
 					}
+				}
+				else
+				{
+					IPACMDBG_H("IP address %x mismatch for client but current one is different", data->ipv4_addr);
+					return IPACM_FAILURE;
 				}
 			}
 			else
 			{
-				/* Check if the IP is not in private subnet and ignore. */
-				if (!IPACM_Iface::ipacmcfg->isPrivateSubnet(data->ipv4_addr))
+				/* Check if the received address is a valid one. */
+				if (check_neigh_ipv4(data) == IPACM_FAILURE)
 				{
-					IPACMDBG_H("Client is not in IP passthrough mode, but got public IP: 0x%x\n", data->ipv4_addr);
+					IPACMDBG_H("Client is not in IP passthrough mode, but got IP: 0x%x\n", data->ipv4_addr);
 					return IPACM_FAILURE;
 				}
 			}

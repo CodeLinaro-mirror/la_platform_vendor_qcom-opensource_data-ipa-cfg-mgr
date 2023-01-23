@@ -90,7 +90,6 @@ const char *IPACM_Config::DEVICE_NAME_ODU = "/dev/odu_ipa_bridge";
 #define IPACM_CONFIG_FILE "/etc/IPACM_cfg.xml"
 #else
 #define IPACM_CONFIG_FILE "/etc/data/ipa/IPACM_cfg.xml"
-#define IPACM_CONFIG_EXT_FILE "/etc/data/ipa/IPACM_cfg_ext.xml"
 #endif
 
 const char *ipacm_event_name[] = {
@@ -177,11 +176,9 @@ const char *ipacm_event_name[] = {
 #endif
 #ifdef FEATURE_SOCKSv5
 	__stringify(IPA_HANDLE_SOCKSv5_UP),                    /* ipacm_event_connection */
-	__stringify(IPA_HANDLE_SOCKSv5_READY),                 /* ipacm_event_connection */
 	__stringify(IPA_HANDLE_SOCKSv5_DOWN),                  /* NULL */
 	__stringify(IPA_ADD_SOCKSv5_CONN),                     /* ipa_socksv5_msg */
 	__stringify(IPA_DEL_SOCKSv5_CONN),                     /* ipa_socksv5_msg */
-	__stringify(IPA_UPDATE_SOCKSv5_CONN),                  /* NULL */
 #endif
 	__stringify(IPA_MAC_ADD_DEL_FLT_EVENT),                /* ipacm_event_data_mac */
 	__stringify(IPA_IP_COLLISION_UPDATE_EVENT),          /* ipacm_ip_collision_pdn_info */
@@ -198,7 +195,6 @@ const char *ipacm_event_name[] = {
 	__stringify(IPA_HANDLE_EoGRE_UP),                      /* Handle eogre enable event. */
 	__stringify(IPA_HANDLE_EoGRE_DOWN),                    /* Handle eogre disable event. */
 #endif
-	__stringify(IPA_DSCP_PCP_CONFIG_CHANGE_EVENT),         /* NULL */
 	__stringify(IPA_HANDLE_MACSEC_ADD),                    /* Handle macsec map add event */
 	__stringify(IPA_HANDLE_MACSEC_DEL),                    /* Handle macsec map delete event */
 	__stringify(IPA_ADD_EXT_ROUTER_RULES),                 /* Handle ext_route add event */
@@ -299,24 +295,6 @@ IPACM_Config::IPACM_Config()
 	eogre_enabled = false;
 #endif
 	ext_router_mode = IPA_PREFIX_DISABLED;
-
-	/* Clear the DSCP PCP mapping data during init */
-	memset(&dscp_pcp_config, 0,
-			sizeof(IPACM_dscp_pcp_conf_t));
-	memset(&dscp_pcp_config_cache, 0,
-			sizeof(IPACM_dscp_pcp_conf_t));
-
-	strlcpy(IPACM_config_ext_file, IPACM_CONFIG_EXT_FILE, sizeof(IPACM_config_ext_file));
-	IPACMDBG_H("\n IPACM CFG EXT XML file is %s \n", IPACM_config_ext_file);
-	if (IPACM_SUCCESS == IPACM_read_cfg_ext_xml(IPACM_config_ext_file, &dscp_pcp_config))
-	{
-		IPACMDBG_H("\n IPACM XML EXT read OK \n");
-	}
-	else
-	{
-		IPACMERR("Config EXT (DSCP-PCP) XML read failed\n");
-	}
-
 	return;
 }
 

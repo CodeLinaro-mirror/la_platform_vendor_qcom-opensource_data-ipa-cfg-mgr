@@ -6781,23 +6781,20 @@ int IPACM_Wlan::handle_wlan_vlan_neighbor(ipacm_event_new_neigh_vlan *param) {
 
 	IPACMDBG_H(" iface name %s  dev %s\n", data->iface_name, dev_name);
 
-	if (is_vlan_iface())
-	{
-		/* Check if Primary client is associated. */
-		wlan_primary_index = get_wlan_primary_client_index(data->mac_addr);
-		if (IPACM_INVALID_INDEX == wlan_primary_index)
-		{
-			IPACMERR("Cannot find wlan index for client MAC %02x:%02x:%02x:%02x:%02x:%02x \n",
-					 data->mac_addr[0], data->mac_addr[1], data->mac_addr[2],
-					 data->mac_addr[3], data->mac_addr[4], data->mac_addr[5]);
-			return -1;
-		}
+	/* Check if Primary client is associated. */
+	wlan_primary_index = get_wlan_primary_client_index(data->mac_addr);
+	if (IPACM_INVALID_INDEX == wlan_primary_index) {
+		IPACMERR("Cannot find wlan index for client MAC %02x:%02x:%02x:%02x:%02x:%02x \n",
+				 data->mac_addr[0], data->mac_addr[1], data->mac_addr[2],
+				 data->mac_addr[3], data->mac_addr[4], data->mac_addr[5]);
+		return -1;
 	}
+
 
 	if (IPACM_SUCCESS != IPACM_Iface::ipacmcfg->get_vlan_id(data->iface_name, &vlan_id))
 	{
-			IPACMERR("failed getting vlan ID of iface %s \n", data->iface_name);
-			return IPACM_FAILURE;
+		IPACMERR("failed getting vlan ID of iface %s \n", data->iface_name);
+		return IPACM_FAILURE;
 	}
 
 	memset(&client_info, 0, sizeof(tether_client_info));
@@ -6806,15 +6803,13 @@ int IPACM_Wlan::handle_wlan_vlan_neighbor(ipacm_event_new_neigh_vlan *param) {
 		bridge = new_neigh_data->bridge;
 		client_info.is_vlan = true;
 	}
-	else
-	{
+	else {
 		IPACMDBG_H("Bridge info not available for Vlan Client..exit\n");
 		return IPACM_FAILURE;
 	}
 
 	wlan_index = get_wlan_client_index(data->mac_addr, vlan_id);
-
-	if (is_vlan_iface() && wlan_index == IPACM_INVALID_INDEX)
+	if (wlan_index == IPACM_INVALID_INDEX)
 	{
 		/* Initialize WLAN client based on Primary client. */
 		handle_wlan_client_init_ex(
@@ -6830,23 +6825,7 @@ int IPACM_Wlan::handle_wlan_vlan_neighbor(ipacm_event_new_neigh_vlan *param) {
 		get_primary_client_memptr(wlan_primary_client, wlan_primary_index)->num_vlan_clients++;
 	}
 
-	if (is_svap_iface() && wlan_index == IPACM_INVALID_INDEX)
-	{
-		wlan_index = get_wlan_client_index(data->mac_addr);
-		if (IPACM_INVALID_INDEX == wlan_index)
-		{
-			IPACMERR("Cannot find wlan index for client MAC %02x:%02x:%02x:%02x:%02x:%02x \n",
-					 data->mac_addr[0], data->mac_addr[1], data->mac_addr[2],
-					 data->mac_addr[3], data->mac_addr[4], data->mac_addr[5]);
-
-			return -1;
-		}
-		get_client_memptr(wlan_client, wlan_index)->vlan_id = vlan_id;
-		get_client_memptr(wlan_client, wlan_index)->is_vlan = true;
-	}
-
-	if (data->iptype == IPA_IP_v4)
-	{
+	if (data->iptype == IPA_IP_v4) {
 		client_info.v4_addr = data->ipv4_addr;
 	} else if  (data->iptype == IPA_IP_v6) {
 		client_info.v4_addr = 0;

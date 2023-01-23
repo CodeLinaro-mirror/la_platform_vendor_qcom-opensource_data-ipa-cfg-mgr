@@ -998,7 +998,7 @@ static void IPACM_Signals_handler(int sig, siginfo_t *info, void *extra)
 	ucontext_t *p;
 	int addr;
 	void *array[MAX_IPACM_TRACE_STACK];
-	int size, i;
+	int size = 0, i;
 	char **messages;
 
 	IPACMERR("Received Signal: %d %s\n", sig, strsignal(sig));
@@ -1035,10 +1035,10 @@ static void IPACM_Signals_handler(int sig, siginfo_t *info, void *extra)
 		messages = backtrace_symbols(array, size);
 
 		/* skip first stack frame (points here) */
-		IPACMERR("crash stack:\n")
+		IPACMERR("crash stack:\n");
 		for(i = 1; i < size && messages != NULL; ++i)
 		{
-			IPACMERR("[bt]: (%d) %s\n", i, messages[i])
+			IPACMERR("[bt]: (%d) %s\n", i, messages[i]);
 		}
 		IPACMERR("return to default signal handler\n");
 

@@ -1069,7 +1069,7 @@ static void IPACM_Signals_handler(int sig, siginfo_t *info, void *extra)
 	ucontext_t *p;
 	int addr;
 	void *array[MAX_IPACM_TRACE_STACK];
-	int size, i;
+	int size = 0, i;
 	char **messages;
 	void* res = NULL;
 

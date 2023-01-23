@@ -2698,7 +2698,7 @@ void IPACM_LanToLan_Iface::print_data_structure_info()
 			IPACMDBG_H("Ref_cnt of peer l2 type with index %d is %d.\n", i, ref_cnt_peer_l2_hdr_type[i]);
 			if(ref_cnt_peer_l2_hdr_type[i] > 0)
 			{
-				IPACMDBG_H("Hdr proc ctx for peer l2 type %s: %d\n", ipa_l2_hdr_type[i], hdr_proc_ctx_for_inter_interface[i]);
+				IPACMDBG_H("Hdr proc ctx for peer l2 type index %d: %d\n", i, hdr_proc_ctx_for_inter_interface[i]);
 			}
 		}
 	}
@@ -2733,8 +2733,7 @@ void IPACM_LanToLan_Iface::print_data_structure_info()
 			{
 				if(ref_cnt_peer_l2_hdr_type[j] > 0)
 				{
-					IPACMDBG_H("Printing routing rule info for inter-interface communication for peer l2 type %s.\n",
-						ipa_l2_hdr_type[j]);
+					IPACMDBG_H("Printing routing rule info for inter-interface communication for peer l2 type index %d.\n",j);
 					IPACMDBG_H("Number of IPv4 routing rules is %d, handles:\n", it_client->inter_iface_rt_rule_hdl[j].num_hdl[IPA_IP_v4]);
 					for(k = 0; k < it_client->inter_iface_rt_rule_hdl[j].num_hdl[IPA_IP_v4]; k++)
 					{
@@ -3008,7 +3007,7 @@ void IPACM_LanToLan_Iface::handle_l2tp_enable()
 		{
 			if(flag[i] == true)
 			{
-				IPACMDBG_H("Add rt rule for peer l2 type %s\n", ipa_l2_hdr_type[i]);
+				IPACMDBG_H("Add rt rule for peer l2 type index %d\n",i);
 				for(it_client = m_client_info.begin(); it_client != m_client_info.end(); it_client++)
 				{
 #ifdef IPA_L2TP_TUNNEL_UDP
@@ -3055,7 +3054,7 @@ void IPACM_LanToLan_Iface::handle_l2tp_disable()
 		{
 			if(flag[i] == true)
 			{
-				IPACMDBG_H("Delete rt rule for peer l2 type %s\n", ipa_l2_hdr_type[i]);
+				IPACMDBG_H("Delete rt rule for peer l2 type index %d\n", i);
 				for(it_client = m_client_info.begin(); it_client != m_client_info.end(); it_client++)
 				{
 					m_p_iface->del_l2tp_rt_rule(IPA_IP_v6, it_client->l2tp_rt_rule_hdl[i].num_rt_hdl[IPA_IP_v6],

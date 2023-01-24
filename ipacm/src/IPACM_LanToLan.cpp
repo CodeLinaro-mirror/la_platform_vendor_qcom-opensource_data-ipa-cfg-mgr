@@ -432,7 +432,7 @@ void IPACM_LanToLan::handle_iface_up(ipacm_event_eth_bridge *data)
 			{
 #ifdef FEATURE_VLAN_MPDN
 				/* non VLAN case - currently no support for non vlan <-> vlan offload */
-				if(it->get_is_vlan())
+				if(it->get_is_vlan() && !it->is_svap_iface())
 					continue;
 #endif
 				/* add peer info only when both interfaces support inter-interface communication */
@@ -679,12 +679,12 @@ void IPACM_LanToLan::handle_new_iface_up(IPACM_LanToLan_Iface *new_iface, IPACM_
 		if(exist_iface->is_svap_iface() || exist_iface->is_ap_iface_vlan_enabled())
 		{
 			/* ath12(svap) <--> eth1 */
-			new_iface->handle_new_iface_up(rt_tbl_name_for_flt, lan_rt_tbl_name_for_rt_svap, exist_iface);
+			new_iface->handle_new_iface_up(rt_tbl_name_for_rt, lan_rt_tbl_name_for_flt_svap, exist_iface);
 			exist_iface->handle_new_iface_up(lan_rt_tbl_name_for_flt_svap, rt_tbl_name_for_rt, new_iface);
 		}
 		else{
 			/* ath1(ast) <--> eth1 */
-			new_iface->handle_new_iface_up(rt_tbl_name_for_flt, lan_rt_tbl_name_for_rt, exist_iface);
+			new_iface->handle_new_iface_up(rt_tbl_name_for_rt, lan_rt_tbl_name_for_flt, exist_iface);
 			exist_iface->handle_new_iface_up(lan_rt_tbl_name_for_flt, rt_tbl_name_for_rt, new_iface);
 		}
 	}else
@@ -2446,7 +2446,7 @@ void IPACM_LanToLan_Iface::del_hdr_proc_ctx_vlan(ipa_hdr_l2_type peer_l2_type, u
 	if(hpc_hdl)
 	{
 		m_p_iface->eth_bridge_del_hdr_proc_ctx(hpc_hdl);
-		IPACMDBG_H("Hdr proc ctx with hdl %d is deleted.\n", hdr_proc_ctx_for_inter_interface[peer_l2_type]);
+		IPACMDBG_H("Hdr proc ctx with hdl %d is deleted.\n", hpc_hdl);
 		del_wlan_svap_hpc_hdl(vlan_id, peer_l2_type, hpc_hdl);
 	}
 	return;

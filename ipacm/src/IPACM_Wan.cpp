@@ -756,7 +756,7 @@ int IPACM_Wan::handle_addr_evt(ipacm_event_data_addr *data)
 		/* add qmuxd mapping*/
 		rmnet_mux_id_info info;
 		info.ipv4_addr = data->ipv4_addr;
-		info.mux_id = ext_prop->ext[0].mux_id;;
+		info.mux_id = ext_prop->ext[0].mux_id;
 		memcpy(info.iface_name, dev_name, sizeof(dev_name));
 		IPACM_Iface::ipacmcfg->add_mux_id_mapping(&info);
 	}
@@ -807,12 +807,12 @@ int IPACM_Wan::handle_addr_evt(ipacm_event_data_addr *data)
 					rmnet_mux_id_info info;
 					/* clean old mapping */
 					info.ipv4_addr = wan_v4_addr;
-					info.mux_id = ext_prop->ext[0].mux_id;;
+					info.mux_id = ext_prop->ext[0].mux_id;
 					memcpy(info.iface_name, dev_name, sizeof(dev_name));
 					IPACM_Iface::ipacmcfg->del_mux_id_mapping(&info);
 					/* add qmuxd mapping*/
 					info.ipv4_addr = data->ipv4_addr;
-					info.mux_id = ext_prop->ext[0].mux_id;;
+					info.mux_id = ext_prop->ext[0].mux_id;
 					IPACM_Iface::ipacmcfg->add_mux_id_mapping(&info);
 				}
 #endif // defined(FEATURE_SOCKSv5) && defined (IPA_SOCKV5_EVENT_MAX)
@@ -1110,7 +1110,7 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 						IPACMDBG_H("IPA_WAN_Q6 (%s):ipa_index (%d) instance close \n", IPACM_Iface::ipacmcfg->iface_table[ipa_if_num].iface_name, ipa_if_num);
 #if defined(FEATURE_SOCKSv5) && defined (IPA_SOCKV5_EVENT_MAX)
 						info.ipv4_addr = wan_v4_addr;
-						info.mux_id = ext_prop->ext[0].mux_id;;
+						info.mux_id = ext_prop->ext[0].mux_id;
 						memcpy(info.iface_name, dev_name, sizeof(dev_name));
 						/* add qmuxd mapping*/
 						IPACM_Iface::ipacmcfg->del_mux_id_mapping(&info);
@@ -2053,7 +2053,7 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 				IPACMDBG_H("IPA_WAN_Q6 (%s):ipa_index (%d) instance close \n", IPACM_Iface::ipacmcfg->iface_table[ipa_if_num].iface_name, ipa_if_num);
 #if defined(FEATURE_SOCKSv5) && defined (IPA_SOCKV5_EVENT_MAX)
 				info.ipv4_addr = wan_v4_addr;
-				info.mux_id = ext_prop->ext[0].mux_id;;
+				info.mux_id = ext_prop->ext[0].mux_id;
 				memcpy(info.iface_name, dev_name, sizeof(dev_name));
 				/* add qmuxd mapping*/
 				IPACM_Iface::ipacmcfg->del_mux_id_mapping(&info);
@@ -4258,7 +4258,7 @@ int IPACM_Wan::config_dft_firewall_rules_ex(struct ipa_flt_rule_add *rules, int 
 				}
 				else
 				{
-					IPACMERR("couldn't find pdn %s firewall config\n", ipv4_to_iface[i].pIface->dev_name);
+					IPACMERR("couldn't find v4 pdn %s firewall config\n", ipv4_to_iface[i].pIface->dev_name);
 				}
 			}
 		}
@@ -4287,6 +4287,10 @@ int IPACM_Wan::config_dft_firewall_rules_ex(struct ipa_flt_rule_add *rules, int 
 					&offloaded_pdns_v6[offloaded_pdns_count_v6++];
 				curr->first = curr_pdn_firewall_config;
 				curr->second = &ipv6_to_iface[i];
+			}
+			else
+			{
+				IPACMERR("couldn't find v6 pdn %s firewall config\n", ipv6_to_iface[i].pIface->dev_name);
 			}
 		}
 	}
@@ -8550,7 +8554,7 @@ int IPACM_Wan::handle_wan_client_route_rule(uint8_t *mac_addr, ipa_ip_type iptyp
 						rt_rule_entry->rule.dst = tx_prop->tx[tx_index].dst_pipe;
 					}
 					memset(&rt_rule_entry->rule.attrib, 0, sizeof(rt_rule_entry->rule.attrib));
-					rt_rule_entry->rule.hdr_hdl = get_client_memptr(wan_client, wan_index)->hdr_hdl_v6;;
+					rt_rule_entry->rule.hdr_hdl = get_client_memptr(wan_client, wan_index)->hdr_hdl_v6;
 					rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_DST_ADDR;
 					rt_rule_entry->rule.attrib.u.v6.dst_addr[0] = it->first[0];
 					rt_rule_entry->rule.attrib.u.v6.dst_addr[1] = it->first[1];
@@ -10327,28 +10331,29 @@ int IPACM_Wan::gre_add_exception_rule(
 
 	memset(&rt_tbl_idx, 0, sizeof(rt_tbl_idx));
 	rt_tbl_idx.ip = iptype;
-	snprintf(
-		rt_tbl_idx.name,
-		sizeof(rt_tbl_idx.name),
-		"%s",
-		IPACM_Iface::ipacmcfg->rt_tbl_wan_dl.name);
+	if (iptype == IPA_IP_v4)
+	{
+		snprintf(
+			rt_tbl_idx.name,
+			sizeof(rt_tbl_idx.name),
+			"%s",
+			IPACM_Iface::ipacmcfg->rt_tbl_wan_dl.name);
+	}
+	else
+	{
+		snprintf(
+			rt_tbl_idx.name,
+			sizeof(rt_tbl_idx.name),
+			"%s",
+			IPACM_Iface::ipacmcfg->rt_tbl_wan_v6.name);
+	}
+
 
 	if( ioctl(m_fd_ipa, IPA_IOC_QUERY_RT_TBL_INDEX, &rt_tbl_idx) != 0 )
 	{
 		IPACMERR("Failed to get routing table index from name\n");
 		return IPACM_FAILURE;
 	}
-
-	IPACMDBG_H(
-		"Adding downlink GRE exception rule for iptype=(%u) and "
-		"exception:(field=%u value=0x%x inner_iptype=%u) "
-		"WAN DL routing table %s has index %d\n",
-		iptype,
-		except.field,
-		except.value,
-		except.inner_iptype,
-		IPACM_Iface::ipacmcfg->rt_tbl_wan_dl.name,
-		rt_tbl_idx.idx);
 
 	memset(
 		&flt_rule_add,
@@ -10422,6 +10427,16 @@ int IPACM_Wan::gre_add_exception_rule(
 
 	change_to_network_order(iptype, &attrib, FLOW_DOWNLINK);
 
+	/* need to swap src and dst for DL because field is based on UL perspective */
+	if (except.field == FIELD_UDP_DST_PORT)
+		except.field = FIELD_UDP_SRC_PORT;
+	else if(except.field == FIELD_UDP_SRC_PORT)
+		except.field = FIELD_UDP_DST_PORT;
+	else if(except.field == FIELD_TCP_SRC_PORT)
+		except.field = FIELD_TCP_DST_PORT;
+	else if(except.field == FIELD_TCP_SRC_PORT)
+		except.field = FIELD_TCP_DST_PORT;
+
 	attrib.ext_attrib_mask        |= IPA_FLT_EXT_MPLS_GRE_GENERAL;
 	attrib.fld_val_eq.flow         = FLOW_DOWNLINK;
 	attrib.fld_val_eq.inner_iptype = except.inner_iptype;
@@ -10435,6 +10450,17 @@ int IPACM_Wan::gre_add_exception_rule(
 		&flt_eq.attrib,
 		&attrib,
 		sizeof(flt_eq.attrib));
+
+	IPACMDBG(
+		"Adding downlink GRE exception rule for iptype=(%u) and "
+		"exception:(field=%u value=0x%x inner_iptype=%u) "
+		"WAN DL routing table %s has index %d\n",
+		iptype,
+		except.field,
+		except.value,
+		except.inner_iptype,
+		rt_tbl_idx.name,
+		rt_tbl_idx.idx);
 
 	if ( ioctl(m_fd_ipa, IPA_IOC_GENERATE_FLT_EQ, &flt_eq) != 0 )
 	{

@@ -25,6 +25,7 @@
  * WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *
  * Changes from Qualcomm Innovation Center are provided under the following license:
  *
  * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
@@ -10505,15 +10506,25 @@ int IPACM_Lan::modify_private_subnet()
 
 	flt_rule.rule.retain_hdr = 1;
 	flt_rule.rule.to_uc = 0;
-	flt_rule.rule.action = IPA_PASS_TO_ROUTING;
+
+	/* add private subnet rule for ipv4 */
+	if(IPACM_Iface::ipacmcfg->eogre_enabled)
+		flt_rule.rule.action = IPA_PASS_TO_EXCEPTION;
+	else
+		flt_rule.rule.action = IPA_PASS_TO_ROUTING;
+
 	flt_rule.rule.eq_attrib_type = 0;
 	flt_rule.rule.rt_tbl_hdl = IPACM_Iface::ipacmcfg->rt_tbl_default_v4.hdl;
-	IPACMDBG_H("Private filter rule use table: %s\n", IPACM_Iface::ipacmcfg->rt_tbl_default_v4.name);
+	IPACMDBG_H("Private filter rule use table: %s, hdl: %d\n",IPACM_Iface::ipacmcfg->rt_tbl_default_v4.name,IPACM_Iface::ipacmcfg->rt_tbl_default_v4.hdl);
 
 	for(i = 0; i < (IPACM_Iface::ipacmcfg->ipa_num_private_subnet); i++)
 	{
 		/* add private subnet rule for ipv4 */
-		flt_rule.rule.action = IPA_PASS_TO_ROUTING;
+		if(IPACM_Iface::ipacmcfg->eogre_enabled)
+			flt_rule.rule.action = IPA_PASS_TO_EXCEPTION;
+		else
+			flt_rule.rule.action = IPA_PASS_TO_ROUTING;
+
 		flt_rule.rule.eq_attrib_type = 0;
 		memcpy(&flt_rule.rule.attrib, &rx_prop->rx[idx].attrib, sizeof(flt_rule.rule.attrib));
 		flt_rule.rule.attrib.attrib_mask |= IPA_FLT_DST_ADDR;
@@ -10622,13 +10633,6 @@ int IPACM_Lan::modify_ipv6_prefix_flt_rule()
 		return IPACM_FAILURE;
 	}
 
-	/* not supported for wlan vlan for now */
-	if (ipa_if_cate == WLAN_IF && !is_wlan_if_vlan)
-	{
-		IPACMERR("not supported for wlan vlan\n");
-		return IPACM_SUCCESS;
-	}
-
 	if (dft_v6fl_rule_hdl[0] == 0)
 	{
 		IPACMERR("install v6 default rules first.Prefix + MTU rule will be installed later\n");
@@ -10675,11 +10679,7 @@ int IPACM_Lan::modify_ipv6_prefix_flt_rule()
 		{
 			for(i = 0; i < IPACM_Iface::ipacmcfg->num_ipv6_prefixes; i++)
 			{
-				vid[i] = IPACM_Iface::ipacmcfg->ipa_ipv6_prefixes[i].vlan_id;
-				if (!vid[i])
-					mtu[i] = DEFAULT_MTU_SIZE;
-				else
-					IPACM_Wan::GetV6MTUByPrefix(&mtu[i], IPACM_Iface::ipacmcfg->ipa_ipv6_prefixes[i].addr); //might be able to get MTU by vid now
+				IPACM_Wan::GetV6MTUByPrefix(&mtu[i], IPACM_Iface::ipacmcfg->ipa_ipv6_prefixes[i].addr); //might be able to get MTU by vid now
 				IPACMDBG_H("mtu = %d for prefix %d\n", mtu[i], i);
 
 				if(mtu[i] < DEFAULT_MTU_SIZE)
@@ -10776,7 +10776,11 @@ int IPACM_Lan::modify_ipv6_prefix_flt_rule()
 		/* add corresponding MTU rule for ipv6 */
 		if (mtu[i] > 0 && mtu[i] < DEFAULT_MTU_SIZE)
 		{
-			memcpy(&flt_rule.rule.attrib, &rx_prop->rx[idx].attrib, sizeof(flt_rule.rule.attrib));
+			if (ipa_if_cate == WLAN_IF)
+				memset(&flt_rule.rule.attrib, 0, sizeof(flt_rule.rule.attrib));
+			else
+				memcpy(&flt_rule.rule.attrib, &rx_prop->rx[idx].attrib, sizeof(flt_rule.rule.attrib));
+
 
 			/* if Vlan enabled, add vlan id as a parameter of the MTU rule*/
 			if (vid[i])
@@ -11534,8 +11538,18 @@ int IPACM_Lan::eth_bridge_add_hdr_proc_ctx(ipa_hdr_l2_type peer_l2_hdr_type, uin
 			t2_hdr,
 			pHeaderProcTable->proc_ctx[0].generic_params);
 
-	if (vlan_id)
+	if (vlan_id) {
+		/*
+		 * Add header proc context with output dscp_pcp_update irrespective of
+		 * DSCP PCP update needed or not for easy mesh R3
+		 */
+		if (ipa_if_cate == WLAN_IF && ((IPACM_Wlan *)this)->is_svap_iface() &&
+			(IPACM_Iface::ipacmcfg->ipacm_emesh_mode >= 3))
+		{
+			pHeaderProcTable->proc_ctx[0].generic_params.output_dscp_pcp_update = 1;
+		}
 		eth_bridge_get_vlan_hdr_template_hdl(&hdr_template, vlan_id);
+	}
 	else
 		eth_bridge_get_hdr_template_hdl(&hdr_template);
 
@@ -16579,7 +16593,7 @@ int IPACM_Lan::eth_bridge_get_vlan_hdr_template_hdl(uint32_t* hdr_hdl, uint16_t 
 	memset(pHeaderDescriptor->hdr[0].name, 0,
 					 sizeof(pHeaderDescriptor->hdr[0].name));
 	snprintf(pHeaderDescriptor->hdr[0].name, sizeof(pHeaderDescriptor->hdr[0].name),
-		"ath12_ipv4_vlan%d", vlan_id);
+		"%s%d", sCopyHeader.name, vlan_id);
 	if(m_header.AddHeader(pHeaderDescriptor) == false ||
 			pHeaderDescriptor->hdr[0].status != 0)
 	{

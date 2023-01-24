@@ -164,6 +164,8 @@ public:
 	bool ast_update_needed();
 
 	bool is_svap_iface();
+	void add_dscp_pcp_mapping();
+	void handle_hpc_rt_rules_for_easymesh_R3(struct ipa_ioc_add_hdr_proc_ctx *hdr_proc_ctx_table, struct ipa_hdr_proc_ctx_add *hdr_proc_ctx, int clt_idx);
 	int set_svap_iface_mode(bool enable);
 	void update_svap_state();
 	int handle_wlan_vlan_neighbor(ipacm_event_new_neigh_vlan *param);
@@ -413,16 +415,25 @@ private:
 
 		    for(tx_index = 0; tx_index < iface_query->num_tx_props; tx_index++)
 		    {
-		        if((tx_prop->tx[tx_index].ip == IPA_IP_v4) && (get_client_memptr(wlan_client, clt_indx)->route_rule_set_v4==true)) /* for ipv4 */
+#ifdef IPA_HDR_L2_802_1Q_AST
+			/* skip to the next tx index if the client type and hdr_l2_type are not matching */
+			if ((get_client_memptr(wlan_client, clt_indx)->is_vlan &&
+					(tx_prop->tx[tx_index].hdr_l2_type != IPA_HDR_L2_802_1Q_AST && tx_prop->tx[tx_index].hdr_l2_type != IPA_HDR_L2_802_1Q)) ||
+					(!get_client_memptr(wlan_client, clt_indx)->is_vlan &&
+					(tx_prop->tx[tx_index].hdr_l2_type == IPA_HDR_L2_802_1Q_AST || tx_prop->tx[tx_index].hdr_l2_type == IPA_HDR_L2_802_1Q)))
 			{
-				IPACMDBG_H("Delete client index %d ipv4 Qos rules for tx:%d \n",clt_indx,tx_index);
-				rt_hdl = get_client_memptr(wlan_client, clt_indx)->wifi_rt_hdl[tx_index].wifi_rt_rule_hdl_v4;
-
-				if(m_routing.DeleteRoutingHdl(rt_hdl, IPA_IP_v4) == false)
-				{
-					return IPACM_FAILURE;
-				}
+				continue;
 			}
+#endif
+				if ((tx_prop->tx[tx_index].ip == IPA_IP_v4) && (get_client_memptr(wlan_client, clt_indx)->route_rule_set_v4 == true))
+				{ /* for ipv4 */
+					IPACMDBG_H("Delete client index %d ipv4 Qos rules for tx:%d \n", clt_indx, tx_index);
+					rt_hdl = get_client_memptr(wlan_client, clt_indx)->wifi_rt_hdl[tx_index].wifi_rt_rule_hdl_v4;
+
+					if (m_routing.DeleteRoutingHdl(rt_hdl, IPA_IP_v4) == false) {
+						return IPACM_FAILURE;
+					}
+				}
 		     } /* end of for loop */
 
 		     /* clean the 4 Qos ipv4 RT rules for client:clt_indx */
@@ -452,6 +463,16 @@ private:
 						{
 							if(tx_prop->tx[tx_index].ip == IPA_IP_v6) /* for ipv6 */
 							{
+#ifdef IPA_HDR_L2_802_1Q_AST
+								/* skip to the next tx index if the client type and hdr_l2_type are not matching */
+								if ((get_client_memptr(wlan_client, clt_indx)->is_vlan &&
+									(tx_prop->tx[tx_index].hdr_l2_type != IPA_HDR_L2_802_1Q_AST && tx_prop->tx[tx_index].hdr_l2_type != IPA_HDR_L2_802_1Q)) ||
+									(!get_client_memptr(wlan_client, clt_indx)->is_vlan &&
+									 (tx_prop->tx[tx_index].hdr_l2_type == IPA_HDR_L2_802_1Q_AST || tx_prop->tx[tx_index].hdr_l2_type == IPA_HDR_L2_802_1Q)))
+								{
+									continue;
+								}
+#endif
 								IPACMDBG_H("Delete client index %d ipv6 Qos rules for %d-st ipv6 for tx:%d\n", clt_indx,num_v6,tx_index);
 								rt_hdl = it->second.hdl_v6[tx_index].rt_rule_hdl_v6;
 								if(m_routing.DeleteRoutingHdl(rt_hdl, IPA_IP_v6) == false)

@@ -237,14 +237,6 @@ public:
 	uint32_t ipa_no_offload_ipv6_prefixes[IPA_MAX_IPV6_NO_OFFLOAD_PREFIX_FLT_RULE + IPA_MAX_MTU_ENTRIES][2];
 #endif
 
-	/* Store DSCP<->PCP mapping configuration. */
-	IPACM_dscp_pcp_conf_t dscp_pcp_config;
-
-	/* Store DSCP<->PCP mapping cache configuration. */
-	IPACM_dscp_pcp_conf_t dscp_pcp_config_cache;
-
-	char    IPACM_config_ext_file[IPA_MAX_FILE_LEN];
-
 	/* Store the non nat iface names */
 	NatIfaces *pNatIfaces;
 

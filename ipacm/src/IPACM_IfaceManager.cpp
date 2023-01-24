@@ -564,7 +564,6 @@ int IPACM_IfaceManager::create_iface_instance(ipacm_ifacemgr_data *param)
 				IPACM_EvtDispatcher::registr(IPA_HANDLE_WAN_VLAN_PDN_UP, wl);
 				IPACM_EvtDispatcher::registr(IPA_HANDLE_WAN_VLAN_PDN_DOWN, wl);
 				IPACM_EvtDispatcher::registr(IPA_IPACM_DISABLE, wl);
-				IPACM_EvtDispatcher::registr(IPA_DSCP_PCP_CONFIG_CHANGE_EVENT, wl);
 				/* IPA_LAN_DELETE_SELF should be always last */
 				IPACM_EvtDispatcher::registr(IPA_LAN_DELETE_SELF, wl);
 				IPACMDBG_H("ipa_WLAN (%s):ipa_index (%d) instance open/registr ok\n", wl->dev_name, wl->ipa_if_num);

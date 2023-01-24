@@ -25,40 +25,6 @@
  * WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- *
- * Changes from Qualcomm Innovation Center are provided under the following license:
- *
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
- *
- * Redistribution and use in source and binary forms, with or without
- * modification, are permitted (subject to the limitations in the
- * disclaimer below) provided that the following conditions are met:
- *
- *     * Redistributions of source code must retain the above copyright
- *       notice, this list of conditions and the following disclaimer.
- *
- *     * Redistributions in binary form must reproduce the above
- *       copyright notice, this list of conditions and the following
- *       disclaimer in the documentation and/or other materials provided
- *       with the distribution.
- *
- *     * Neither the name of Qualcomm Innovation Center, Inc. nor the names of its
- *       contributors may be used to endorse or promote products derived
- *       from this software without specific prior written permission.
- *
- * NO EXPRESS OR IMPLIED LICENSES TO ANY PARTY'S PATENT RIGHTS ARE
- * GRANTED BY THIS LICENSE. THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT
- * HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED
- * WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
- * MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
- * IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR
- * ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
- * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE
- * GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
- * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER
- * IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
- * OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
- * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE
  */
 /*!
 	@file
@@ -114,8 +80,6 @@
 
 #define IPACM_FIREWALL_FILE_NAME    "mobileap_firewall.xml"
 #define IPACM_CFG_FILE_NAME    "IPACM_cfg.xml"
-#define IPACM_CFG_EXT_FILE_NAME    "IPACM_cfg_ext.xml"
-#define IPACM_CFG_EXT_FILE "/etc/data/ipa/IPACM_cfg_ext.xml"
 #ifndef FEATURE_IPA_ANDROID
 #define IPACM_PID_FILE "/var/run/data/ipa/ipacm.pid"
 #define IPACM_DIR_NAME     "/systemrw/data/ipa"
@@ -248,48 +212,6 @@ void* firewall_monitor(void *param)
 
 					/* Insert IPA_FIREWALL_CHANGE_EVENT to command queue */
 					IPACM_EvtDispatcher::PostEvt(&evt_data);
-				}
-				else if (!strncmp(event->name, IPACM_CFG_EXT_FILE_NAME, event->len)) // IPACM_configuration change
-				{
-					if ((IPACM_Iface::ipacmcfg->ipacm_emesh_enable == TRUE) && (IPACM_Iface::ipacmcfg->ipacm_emesh_mode >= 3))
-					{
-						char IPACM_config_ext_file[IPA_MAX_FILE_LEN];
-						IPACMDBG_H("File \"%s\" was 0x%x\n", event->name, event->mask);
-						IPACMDBG_H("The interested file %s .\n", IPACM_CFG_EXT_FILE_NAME);
-
-						strlcpy(IPACM_config_ext_file, IPACM_CFG_EXT_FILE, sizeof(IPACM_config_ext_file));
-						if (IPACM_SUCCESS == IPACM_read_cfg_ext_xml(IPACM_config_ext_file,
-							&IPACM_Iface::ipacmcfg->dscp_pcp_config))
-						{
-							IPACMDBG_H("Config EXT (DSCP-PCP) XML read OK \n");
-
-							if((memcmp(&(IPACM_Iface::ipacmcfg->dscp_pcp_config), &(IPACM_Iface::ipacmcfg->dscp_pcp_config_cache),
-								sizeof(IPACM_Iface::ipacmcfg->dscp_pcp_config)) == 0))
-							{
-								IPACMDBG_H("Ignore Config file change as there is no change in the config\n");
-							}
-							else
-							{
-								IPACM_Iface::ipacmcfg->dscp_pcp_config_cache.add = IPACM_Iface::ipacmcfg->dscp_pcp_config.add;
-								memcpy(IPACM_Iface::ipacmcfg->dscp_pcp_config_cache.dscp_pcp_map, IPACM_Iface::ipacmcfg->dscp_pcp_config.dscp_pcp_map,
-									sizeof(IPACM_Iface::ipacmcfg->dscp_pcp_config.dscp_pcp_map));
-
-								evt_data.event = IPA_DSCP_PCP_CONFIG_CHANGE_EVENT;
-								evt_data.evt_data = NULL;
-
-								/* Insert IPA_DSCP_PCP_CONFIG_CHANGE_EVENT to command queue */
-								IPACM_EvtDispatcher::PostEvt(&evt_data);
-							}
-						}
-						else
-						{
-							IPACMERR("Config EXT (DSCP-PCP) XML read failed and not updating uc \n");
-						}
-					}
-					else
-					{
-						IPACMERR("Easy Mesh is not supported or has lower mode \n");
-					}
 				}
 			}
 			IPACMDBG_H("Received monitoring event %s.\n", event->name);

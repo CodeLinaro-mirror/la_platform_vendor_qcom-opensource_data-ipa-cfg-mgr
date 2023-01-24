@@ -160,14 +160,6 @@ if (!(a)) {                                                 \
 #define FirewallPktsAllowed_TAG              "FirewallPktsAllowed"
 #define DefaultNetDev                        "DefaultNetDev"
 
-/* Config Ext DSCP PCP entries */
-#define IPACMDSCPPCPCfg_TAG                  "IPACMDSCPPCPConfig"
-#define IPACMDSCPPCPEnabled_TAG              "IPACMDSCPPCPEnable"
-#define IPACMDSCPPCPMapping_TAG              "IPACMDSCPPCPMapping"
-#define DSCPPCPMapping_TAG                   "DSCPPCPMapping"
-#define DSCP_TAG                             "DSCP"
-#define PCP_TAG                              "PCP"
-
 #define UNKNOWN_NetDev_TAG                   "UNKNOWN"
 
 #ifdef FEATURE_IPACM_UL_FIREWALL
@@ -409,19 +401,6 @@ typedef struct  _IPACM_conf_t
 	bool public_ip_support_enable;
 	bool wlan_vlan_mpdn_enable;
 } IPACM_conf_t;
-
-typedef struct _IPACM_conf_ext_t
-{
-	uint32_t add;
-	uint8_t dscp_pcp_map[IPA_UC_MAX_DSCP_VAL];
-} IPACM_dscp_pcp_conf_t;
-
-/* This function reads IPACM CFG EXT XML configuration*/
-int IPACM_read_cfg_ext_xml
-(
-	char *xml_file,                              /* Filename and path     */
-	IPACM_dscp_pcp_conf_t *config                         /* Mobile AP config data */
-);
 
 /* This function read IPACM XML configuration*/
 int ipacm_read_cfg_xml

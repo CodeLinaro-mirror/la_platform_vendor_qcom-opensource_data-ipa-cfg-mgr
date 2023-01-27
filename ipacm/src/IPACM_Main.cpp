@@ -1144,7 +1144,7 @@ int main(int argc, char **argv)
 		ret = pthread_create(&cmd_queue_thread, NULL, MessageQueue::Process, NULL);
 		if (IPACM_SUCCESS != ret)
 		{
-			IPACMERR("unable to command queue thread\n");
+			IPACMERR("unable to create command queue thread\n");
 			return ret;
 		}
 		IPACMDBG_H("created command queue thread\n");

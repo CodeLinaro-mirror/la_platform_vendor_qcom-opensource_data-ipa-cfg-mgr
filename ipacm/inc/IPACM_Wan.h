@@ -735,7 +735,7 @@ private:
 
 	void HandleSTAClientDelEvt(const ipa_wan_client* client);
 	
-	int add_catchup_all_filtering_rule_each_pdn(const IPACM_firewall_conf_t& firewall_config, ipa_ip_type iptype,
+	int add_catchup_all_filtering_rule_each_pdn( ipa_ip_type iptype,
 		const struct ipa_rule_attrib& rx_prop_attrib, struct ipa_flt_rule_add& flt_rule_add, int fltr_rule_number);
 
 #ifdef FEATURE_IPV6_NAT

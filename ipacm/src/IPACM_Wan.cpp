@@ -604,8 +604,7 @@ int IPACM_Wan::handle_addr_evt(ipacm_event_data_addr *data)
 			{
 				if(wlan_ipv6_pdn_index == -1)
 				{
-					wlan_ipv6_pdn_index = 0;
-					/*wlan_ipv6_pdn_index = getFreePDNIndex_V6();
+					wlan_ipv6_pdn_index = getFreePDNIndex_V6();
 					if(wlan_ipv6_pdn_index == -1)
 					{
 						//add this prefix to no_offload_ipv6_prefix
@@ -613,7 +612,7 @@ int IPACM_Wan::handle_addr_evt(ipacm_event_data_addr *data)
 						IPACMERR("No Free index available!\n");
 						res = IPACM_FAILURE;
 						goto fail;
-					}*/
+					}
 				}
 				memcpy(ipv6_to_iface[wlan_ipv6_pdn_index].ipv6_prefix, data->ipv6_addr, sizeof(uint32_t) * 2);
 				ipv6_to_iface[wlan_ipv6_pdn_index].pIface = this;
@@ -875,12 +874,20 @@ int IPACM_Wan::handle_addr_evt(ipacm_event_data_addr *data)
 				if (is_xlat)
 					IPACM_Wan::ipv4_to_iface[modem_ipv4_pdn_index].is_xlat = true;
 			}
-			if(m_is_sta_mode == WLAN_WAN && wlan_ipv4_pdn_index == -1)
+			if (m_is_sta_mode == WLAN_WAN)
 			{
-				wlan_ipv4_pdn_index = 0;
+				wlan_ipv4_pdn_index = getFreePDNIndex_V4();
+
+				if (wlan_ipv4_pdn_index == -1)
+				{
+					IPACMERR("No Free index available.!\n");
+					res = IPACM_FAILURE;
+					goto fail;
+				}
 				ipv4_to_iface[wlan_ipv4_pdn_index].ipv4_addr = data->ipv4_addr;
 				ipv4_to_iface[wlan_ipv4_pdn_index].pIface = this;
 				IPACMDBG_H("Wlan ipv4 pdn is %d.\n", wlan_ipv4_pdn_index);
+
 				init_fl_rule(data->iptype);
 			}
 		}
@@ -980,7 +987,7 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 					}
 					else
 					{
-						IPACMDBG_H("No cradle mode switch, return.\n");
+						IPACMDBG_H("No cradle mode switch, return\n");
 						return;
 					}
 					/* post wan mode change event to LAN/WLAN */

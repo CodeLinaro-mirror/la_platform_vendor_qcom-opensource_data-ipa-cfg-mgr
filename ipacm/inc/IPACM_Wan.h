@@ -268,7 +268,7 @@ public:
 
 	static int getFreePDNIndex_V4()
 	{
-		for(int i = 1; i < IPA_MAX_NUM_SW_PDNS; i++)
+		for(int i = 0; i < IPA_MAX_NUM_SW_PDNS; i++)
 		{
 			if(!ipv4_to_iface[i].pIface)
 			{
@@ -281,7 +281,7 @@ public:
 
 	static int getFreePDNIndex_V6()
 	{
-		for(int i = 1; i < IPA_MAX_NUM_SW_PDNS; i++)
+		for(int i = 0; i < IPA_MAX_NUM_SW_PDNS; i++)
 		{
 			if(!ipv6_to_iface[i].pIface)
 			{

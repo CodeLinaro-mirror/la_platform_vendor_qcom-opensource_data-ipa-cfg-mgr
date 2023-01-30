@@ -7251,6 +7251,14 @@ int IPACM_Wlan::handle_refresh_filtering_rules(bool wlan_vlan_mpdn_enable)
 
 	IPACMDBG_H("Disabling/Enabling VLAN, vlan:%d, use pipe idx:%d\n",vlan_enabled_ap, idx);
 
+	/* Check if the rx properties for 2nd pipe are registered since vlan rules could only be
+	   installed on the 2nd pipe rx[2], rx[3] */
+	if (rx_prop->num_rx_props < 4)
+	{
+		IPACMERR("WLAN registered %d rx/tx properties, expected 4.. exit\n", rx_prop->num_rx_props);
+		goto fail;
+	}
+
 	/* first post IFACE_DOWN event */
 	eth_bridge_post_event(IPA_ETH_BRIDGE_IFACE_DOWN, IPA_IP_MAX, NULL, NULL, NULL);
 

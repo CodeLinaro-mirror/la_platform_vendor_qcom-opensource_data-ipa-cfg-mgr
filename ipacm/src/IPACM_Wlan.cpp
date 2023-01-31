@@ -28,8 +28,7 @@
  *
  * Changes from Qualcomm Innovation Center are provided under the following license:
  *
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
- * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted (subject to the limitations in the
@@ -5355,7 +5354,7 @@ int IPACM_Wlan::install_uplink_filter_rule_per_client
 
 			/* NAT block will set the proper MUX ID in the metadata according to the relevant PDN */
 			if (IPACM_Iface::ipacmcfg->GetIPAVer() >= IPA_HW_v4_0)
-				flt_rule_entry.rule.set_metadata = true;
+				flt_rule_entry.rule.set_metadata = false;
 		}
 	}
 	else if(iptype == IPA_IP_v6)
@@ -5381,8 +5380,8 @@ int IPACM_Wlan::install_uplink_filter_rule_per_client
 	for(cnt=0; prop->num_ext_props && index < total_rules; cnt++)
 	{
 		memcpy(&flt_rule_entry.rule.eq_attrib,
-					 &prop->prop[cnt].eq_attrib,
-					 sizeof(prop->prop[cnt].eq_attrib));
+				&prop->prop[cnt].eq_attrib,
+				sizeof(prop->prop[cnt].eq_attrib));
 		/* Check if we can add the MAC address rule. */
 		if (flt_rule_entry.rule.eq_attrib.num_offset_meq_128 == IPA_IPFLTR_NUM_MEQ_128_EQNS)
 		{
@@ -5396,7 +5395,7 @@ int IPACM_Wlan::install_uplink_filter_rule_per_client
 #ifdef IPA_HDR_L2_ETHERNET_II_AST
 			|| rx_prop->rx[idx].hdr_l2_type == IPA_HDR_L2_ETHERNET_II_AST
 #endif
-			)
+		  )
 		{
 			offset_meq_128->offset = -8;
 		}
@@ -5426,7 +5425,6 @@ int IPACM_Wlan::install_uplink_filter_rule_per_client
 			flt_rule_entry.rule.eq_attrib.rule_eq_bitmap |= (1<<4);
 
 		flt_rule_entry.rule.eq_attrib.num_offset_meq_128++;
-
 		flt_rule_entry.rule.rt_tbl_idx = prop->prop[cnt].rt_tbl_idx;
 
 		/* Handle XLAT configuration */

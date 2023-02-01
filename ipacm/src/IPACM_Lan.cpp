@@ -10384,13 +10384,6 @@ int IPACM_Lan::modify_ipv6_prefix_flt_rule()
 		return IPACM_FAILURE;
 	}
 
-	/* not supported for wlan vlan for now */
-	if (ipa_if_cate == WLAN_IF)
-	{
-		IPACMERR("not supported for wlan vlan\n");
-		return IPACM_SUCCESS;
-	}
-
 	if (dft_v6fl_rule_hdl[0] == 0)
 	{
 		IPACMERR("install v6 default rules first.Prefix + MTU rule will be installed later\n");
@@ -10437,11 +10430,7 @@ int IPACM_Lan::modify_ipv6_prefix_flt_rule()
 		{
 			for(i = 0; i < IPACM_Iface::ipacmcfg->num_ipv6_prefixes; i++)
 			{
-				vid[i] = IPACM_Iface::ipacmcfg->ipa_ipv6_prefixes[i].vlan_id;
-				if (!vid[i])
-					mtu[i] = DEFAULT_MTU_SIZE;
-				else
-					IPACM_Wan::GetV6MTUByPrefix(&mtu[i], IPACM_Iface::ipacmcfg->ipa_ipv6_prefixes[i].addr); //might be able to get MTU by vid now
+				IPACM_Wan::GetV6MTUByPrefix(&mtu[i], IPACM_Iface::ipacmcfg->ipa_ipv6_prefixes[i].addr); //might be able to get MTU by vid now
 				IPACMDBG_H("mtu = %d for prefix %d\n", mtu[i], i);
 
 				if(mtu[i] < DEFAULT_MTU_SIZE)
@@ -10538,7 +10527,10 @@ int IPACM_Lan::modify_ipv6_prefix_flt_rule()
 		/* add corresponding MTU rule for ipv6 */
 		if (mtu[i] > 0 && mtu[i] < DEFAULT_MTU_SIZE)
 		{
-			memcpy(&flt_rule.rule.attrib, &rx_prop->rx[0].attrib, sizeof(flt_rule.rule.attrib));
+			if (ipa_if_cate == WLAN_IF)
+				memset(&flt_rule.rule.attrib, 0, sizeof(flt_rule.rule.attrib));
+			else
+				memcpy(&flt_rule.rule.attrib, &rx_prop->rx[0].attrib, sizeof(flt_rule.rule.attrib));
 
 			/* if Vlan enabled, add vlan id as a parameter of the MTU rule*/
 			if (vid[i])

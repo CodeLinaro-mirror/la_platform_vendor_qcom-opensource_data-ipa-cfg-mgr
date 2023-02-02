@@ -784,7 +784,6 @@ static int IPACM_firewall_xml_parse_tree(const char *xml_file, xmlNode* xml_node
 	int str_size;
 	char content_buf[MAX_XML_STR_LEN];
 	struct in6_addr ip6_addr;
-	uint8_t temp_profile;
 
 	if (NULL == xml_node)
 		return IPACM_SUCCESS;
@@ -811,7 +810,12 @@ static int IPACM_firewall_xml_parse_tree(const char *xml_file, xmlNode* xml_node
 			else if (IPACM_util_icmp_string((char*)xml_node->name, MobileAPFirewallCfg_TAG) == 0)
 			{
 				IPACMDBG_H("MobileAPFirewallCfg_TAG\n");
-				firewall_config.pdn_count++;
+				if (++firewall_config.pdn_count > IPA_MAX_NUM_SW_PDNS)
+				{
+					IPACMERR("The XML %s is not valid. The number of %s tags should be at most %d\n",
+							xml_file, MobileAPFirewallCfg_TAG, IPA_MAX_NUM_SW_PDNS);
+					return IPACM_FAILURE;
+				}
 				/* go to child */
 				ret_val = IPACM_firewall_xml_parse_tree(xml_file, xml_node->children, firewall_config);
 			}
@@ -836,7 +840,7 @@ static int IPACM_firewall_xml_parse_tree(const char *xml_file, xmlNode* xml_node
 					return IPACM_FAILURE;
 				}
 
-				IPACM_firewall_conf_t* config;
+				IPACM_firewall_conf_t* config = &firewall_config.pdns[firewall_config.pdn_count - 1];
 
 				if (0 == IPACM_util_icmp_string((char*)xml_node->name, Firewall_TAG) ||
 					0 == IPACM_util_icmp_string((char*)xml_node->name, FirewallEnabled_TAG)  ||
@@ -1550,7 +1554,12 @@ static int IPACM_firewall_xml_parse_tree(const char *xml_file, xmlNode* xml_node
 					if (content != NULL)
 					{
 						str_size = strlen(content);
-						if (content[0] == '0')
+						if (str_size >= IPA_IFACE_NAME_LEN)
+						{
+							IPACMERR("The length of NetDev tag content is bigger than %d in %s",
+									IPA_IFACE_NAME_LEN, xml_file);
+						}
+						else if (content[0] == '0')
 						{
 							IPACMDBG_H("NetDev is %s\n", config->net_dev);
 							memset(&firewall_config.pdns[firewall_config.pdn_count - 1], 0, sizeof(IPACM_firewall_conf_t));
@@ -1559,25 +1568,8 @@ static int IPACM_firewall_xml_parse_tree(const char *xml_file, xmlNode* xml_node
 						}
 						else
 						{
-							if (firewall_config.pdn_count > IPA_MAX_NUM_SW_PDNS)
-							{
-								IPACMERR("The XML %s is not valid. The number of %s tags should be at most %d\n",
-									xml_file, MobileAPFirewallCfg_TAG, IPA_MAX_NUM_SW_PDNS);
-								return IPACM_FAILURE;
-							}
-							config = &firewall_config.pdns[firewall_config.pdn_count - 1];
-							config->profile = temp_profile;
-
-							if (str_size >= IPA_IFACE_NAME_LEN)
-							{
-								IPACMERR("The length of NetDev tag content is bigger than %d in %s",
-									IPA_IFACE_NAME_LEN, xml_file);
-							}
-							else
-							{
-								strlcpy(config->net_dev, content, sizeof(config->net_dev));
-								IPACMDBG_H("NetDev is %s\n", config->net_dev);
-							}
+							strlcpy(config->net_dev, content, sizeof(config->net_dev));
+							IPACMDBG_H("NetDev is %s\n", config->net_dev);
 						}
 					}
 				}
@@ -1588,7 +1580,7 @@ static int IPACM_firewall_xml_parse_tree(const char *xml_file, xmlNode* xml_node
 					{
 						memset(content_buf, 0, sizeof(content_buf));
 						memcpy(content_buf, (void *)content, strlen(content));
-						temp_profile = atoi(content_buf);
+						config->profile = atoi(content_buf);
 						IPACMDBG_H("Profile is %d\n", config->profile);
 					}
 				}

@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2013-2021 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -213,8 +214,18 @@ void IPACM_ConntrackListener::event_callback(ipa_cm_event_id evt,
 			break;
 #ifdef FEATURE_VLAN_MPDN
 	 case IPA_HANDLE_WAN_VLAN_PDN_UP:
-			IPACMDBG_H("Received IPA_HANDLE_WAN_VLAN_PDN_UP event\n");
-			HandleVlanUp(data);
+	 		{
+				const ipacm_event_vlan_pdn* vlanup = static_cast<const ipacm_event_vlan_pdn*>(data);
+				IPACMDBG_H("Received IPA_HANDLE_WAN_VLAN_PDN_UP event\n");
+				if(vlanup->iptype == IPA_IP_v4)
+		 		{
+					HandleVlanUp(data);
+		 		}
+				else if(vlanup->iptype == IPA_IP_v6)
+				{
+					HandleVlanUpV6(data);
+				}
+	 		}
 			break;
 
 	 case IPA_HANDLE_WAN_VLAN_PDN_DOWN:
@@ -961,6 +972,93 @@ void IPACM_ConntrackListener::HandleNeighIpAddrDelEvt_v6(const IpAddress& ip)
 }
 
 #ifdef FEATURE_VLAN_MPDN
+void IPACM_ConntrackListener::HandleVlanUpV6(void *in_param)
+{
+	ipacm_event_vlan_pdn *vlanup_data;
+
+	if(in_param == NULL)
+	{
+		IPACMERR("In Parameters Invalid!\n");
+		return;
+	}
+	vlanup_data = (ipacm_event_vlan_pdn *)in_param;
+	IPACMDBG_H("Received below information during VLAN PDN up,\n");
+	IPACMDBG_H("IPType: %d, vlan_id:%d, mux id %d\n",
+		vlanup_data->iptype,
+		vlanup_data->VlanID,
+		vlanup_data->mux_id);
+
+	if(ipv6ct_inst == NULL)
+	{
+		IPACMERR(" no ipv6ct_inst\n");
+		return;
+	}
+
+	/* we exceeded max num pdns */
+	if(num_v6_vlan_pdns >= IPA_MAX_NUM_HW_PDNS)
+	{
+		IPACMERR("MAX PDN Exceeded!\n");
+		return;
+	}
+
+	IPACMDBG_H("ipv6 prefix for new PDN 0x%08x:%08x\n", vlanup_data->ipv6_prefix[0], vlanup_data->ipv6_prefix[1]);
+
+	if(!vlanup_data->ipv6_prefix[0] && !vlanup_data->ipv6_prefix[1])
+	{
+		IPACMERR("ipv6 address is invalid, iptype %d\n", vlanup_data->iptype);
+		return;
+	}
+
+	if(ipv6ct_inst->AddTable(vlanup_data->ipv6_prefix))
+	{
+		IPACMERR("failed adding CT table");
+	}
+	else
+	{
+		/* Create VLAN PDN cache */
+		for(int i = 0; i < IPA_MAX_NUM_HW_PDNS; i++)
+		{
+			if((v6_vlan_pdns[i].ipv6_prefix[0] == vlanup_data->ipv6_prefix[0]) &&
+				(v6_vlan_pdns[i].ipv6_prefix[1] == vlanup_data->ipv6_prefix[1]))
+			{
+				for(int j = 0; j < v6_vlan_pdns[i].VID_cnt; j ++)
+				{
+					if (vlanup_data->VlanID == vlan_pdns[i].associated_VIDs[j])
+					{
+						IPACMDBG_H("found existing PDN entry in %d, with vlan %d\n", i, vlanup_data->VlanID);
+						return;
+					}
+				}
+				IPACMDBG_H("found existing PDN entry in %d, but got new VLAN id. Adding vlan %d to the entry\n", i, vlanup_data->VlanID);
+				vlan_pdns[i].associated_VIDs[vlan_pdns[i].VID_cnt] = vlanup_data->VlanID;
+				vlan_pdns[i].VID_cnt++;
+				return;
+			}
+		}
+
+		for(int i = 0; i < IPA_MAX_NUM_HW_PDNS; i++)
+		{
+			if((v6_vlan_pdns[i].ipv6_prefix[0] == 0) && (v6_vlan_pdns[i].ipv6_prefix[0] == 0))
+			{
+				IPACMDBG_H("found empty PDN entry in %d num_vlan_pdns %d\n", i, num_v6_vlan_pdns);
+				v6_vlan_pdns[i].ipv6_prefix[0] = vlanup_data->ipv6_prefix[0];
+				v6_vlan_pdns[i].ipv6_prefix[1] = vlanup_data->ipv6_prefix[1];
+				vlan_pdns[i].associated_VIDs[vlan_pdns[i].VID_cnt] = vlanup_data->VlanID;
+				vlan_pdns[i].VID_cnt++;
+				num_v6_vlan_pdns++;
+				break;
+			}
+		}
+
+		/* Create NAT thread if not already created */
+		if(!isNatThreadStart)
+		{
+			IPACMDBG("creating nat threads\n");
+			CreateNatThreads();
+		}
+	}
+}
+
 void IPACM_ConntrackListener::HandleVlanUp(void *in_param)
 {
 	ipacm_event_vlan_pdn *vlanup_data = (ipacm_event_vlan_pdn *)in_param;
@@ -1133,7 +1231,7 @@ void IPACM_ConntrackListener::TriggerWANUp_v6(const ipacm_event_iface_up* evt_da
 	if(!ipv6ct_inst)
 		ipv6ct_inst = Ipv6ct::GetInstance();
 
-	ipv6ct_inst->AddTable(wan_ipaddr_v6);
+	ipv6ct_inst->AddTable(evt_data->ipv6_prefix);
 
 /* need QCMAP changes to remove below feature flag and use run time flag instead*/
 #ifndef FEATURE_SOCKSv5
@@ -1555,7 +1653,7 @@ void IPACM_ConntrackListener::ProcessCTMessage(void *param)
 	 return;
 }
 
-void IPACM_ConntrackListener::ProcessCTMessage_v6(const ipacm_ct_evt_data* evt_data, const NatEntryBase& entry)
+void IPACM_ConntrackListener::ProcessCTMessage_v6(const ipacm_ct_evt_data* evt_data, NatEntryBase& entry)
 {
 	IPACMDBG_H("\n");
 #ifdef IPACM_DEBUG
@@ -2073,18 +2171,41 @@ void IPACM_ConntrackListener::AddORDeleteNatEntry_v6(const ipacm_ct_evt_data* ev
 		if (TCP_CONNTRACK_ESTABLISHED == tcp_state && pkt_count >= pkt_threshld)
 		{
 			IPACMDBG_H("TCP state TCP_CONNTRACK_ESTABLISHED(%d)\n", tcp_state);
-			if (!WanUp_v6)
+
+#ifdef FEATURE_VLAN_MPDN
+			/* Handle VLAN Scenarios */
+			if(entry.isVlan)
 			{
-				IPACMDBG_H("Wan is not up, cache connections\n");
-				ipv6ct_inst->CacheEntry(entry);
-			}
-			else if (isTempEntry)
+				if (!entry.IsVlanUp)
+				{
+					IPACMDBG_H("Wan is not up, cache connections\n");
+					ipv6ct_inst->CacheEntry(entry);
+				}
+				else if (isTempEntry)
+				{
+					ipv6ct_inst->AddTempEntry(entry);
+				}
+				else
+				{
+					ipv6ct_inst->AddEntry(entry);
+				}
+			} else
+#endif
+			/* Non Vlan Scenario */
 			{
-				ipv6ct_inst->AddTempEntry(entry);
-			}
-			else
-			{
-				ipv6ct_inst->AddEntry(entry);
+				if (!WanUp_v6)
+				{
+					IPACMDBG_H("Wan is not up, cache connections\n");
+					ipv6ct_inst->CacheEntry(entry);
+				}
+				else if (isTempEntry)
+				{
+					ipv6ct_inst->AddTempEntry(entry);
+				}
+				else
+				{
+					ipv6ct_inst->AddEntry(entry);
+				}
 			}
 		}
 		else if (TCP_CONNTRACK_FIN_WAIT == tcp_state || evt_data->type == NFCT_T_DESTROY)
@@ -2108,18 +2229,38 @@ void IPACM_ConntrackListener::AddORDeleteNatEntry_v6(const ipacm_ct_evt_data* ev
 			&& (NFCT_T_UPDATE == evt_data->type)))
 		{
 			IPACMDBG_H("New UDP connection at time %ld\n", time(NULL));
-			if (!WanUp_v6)
+#ifdef FEATURE_VLAN_MPDN
+			if(entry.isVlan)
 			{
-				IPACMDBG_H("Wan is not up, cache connections\n");
-				ipv6ct_inst->CacheEntry(entry);
-			}
-			else if (isTempEntry)
+				if (!entry.IsVlanUp)
+				{
+					IPACMDBG_H("Wan is not up, cache connections\n");
+					ipv6ct_inst->CacheEntry(entry);
+				}
+				else if (isTempEntry)
+				{
+					ipv6ct_inst->AddTempEntry(entry);
+				}
+				else
+				{
+					ipv6ct_inst->AddEntry(entry);
+				}
+			} else
+#endif
 			{
-				ipv6ct_inst->AddTempEntry(entry);
-			}
-			else
-			{
-				ipv6ct_inst->AddEntry(entry);
+				if (!WanUp_v6)
+				{
+					IPACMDBG_H("Wan is not up, cache connections\n");
+					ipv6ct_inst->CacheEntry(entry);
+				}
+				else if (isTempEntry)
+				{
+					ipv6ct_inst->AddTempEntry(entry);
+				}
+				else
+				{
+					ipv6ct_inst->AddEntry(entry);
+				}
 			}
 		}
 		else if (NFCT_T_DESTROY == evt_data->type)
@@ -2733,7 +2874,7 @@ IGNORE:
 	return;
 }
 
-void IPACM_ConntrackListener::ProcessTCPorUDPMsg_v6(const ipacm_ct_evt_data* evt_data, const NatEntryBase& entry)
+void IPACM_ConntrackListener::ProcessTCPorUDPMsg_v6(const ipacm_ct_evt_data* evt_data, NatEntryBase& entry)
 {
 	IPACMDBG_H("Received conntrack event with type: %d\n", evt_data->type);
 	entry.DebugDump("with");
@@ -2751,6 +2892,26 @@ void IPACM_ConntrackListener::ProcessTCPorUDPMsg_v6(const ipacm_ct_evt_data* evt
 	else
 	{
 		CheckSTAClient_v6(entry, isTempEntry);
+	}
+
+	uint64_t src_ipv6_msb;
+
+	if (entry.m_direction == NatEntryBase::DirectionUnknown || entry.m_direction == NatEntryBase::DirectionOutbound)
+	{
+		src_ipv6_msb = ((Ipv6IpAddress &)entry.GetClientIp()).GetMsb();
+	}
+	else if (entry.m_direction == NatEntryBase::DirectionInbound)
+	{
+		src_ipv6_msb = ((Ipv6IpAddress &)entry.GetTargetIp()).GetMsb();
+	}
+
+	for(int i = 0; i < IPA_MAX_NUM_HW_PDNS; i++)
+	{
+		if(((src_ipv6_msb >> 32) == v6_vlan_pdns[i].ipv6_prefix[0]) && ((src_ipv6_msb & 0x00000000FFFFFFFF) == v6_vlan_pdns[i].ipv6_prefix[1]))
+		{
+			entry.isVlan = true;
+			entry.IsVlanUp = true;
+		}
 	}
 
 	AddORDeleteNatEntry_v6(evt_data, entry, isTempEntry);

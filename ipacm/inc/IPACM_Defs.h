@@ -454,6 +454,7 @@ typedef struct
 	uint16_t VlanID;
 	int mux_id;
 	int ipv4_addr;
+	uint32_t ipv6_prefix[2];
 	bool is_xlat;
 }ipacm_event_vlan_pdn;
 

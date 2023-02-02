@@ -80,6 +80,14 @@ typedef struct _nat_pdn_entry
 	uint16_t associated_VIDs[IPA_MAX_NUM_SW_PDNS];
 	uint8_t VID_cnt;
 }nat_pdn_entry;
+
+typedef struct _ct_pdn_entry
+{
+	uint32_t ipv6_prefix[2];
+	uint16_t associated_VIDs[IPA_MAX_NUM_SW_PDNS];
+	uint8_t VID_cnt;
+}ct_pdn_entry;
+
 #endif
 
 class IPACM_ConntrackListener : public IPACM_Listener
@@ -104,6 +112,8 @@ private:
 #ifdef FEATURE_VLAN_MPDN
 	nat_pdn_entry vlan_pdns[IPA_MAX_NUM_HW_PDNS];
 	int num_vlan_pdns;
+	ct_pdn_entry v6_vlan_pdns[IPA_MAX_NUM_HW_PDNS];
+	int num_v6_vlan_pdns;
 #endif
 	uint32_t nonnat_iface_ipv4_addr[MAX_IFACE_ADDRESS];
 	IpAddressesCollectionBase& nonnat_iface_ipv6_addr;
@@ -115,7 +125,7 @@ private:
 #endif
 
 	void ProcessCTMessage(void *);
-	void ProcessCTMessage_v6(const ipacm_ct_evt_data* evt_data, const NatEntryBase& entry);
+	void ProcessCTMessage_v6(const ipacm_ct_evt_data* evt_data, NatEntryBase& entry);
 #if defined(FEATURE_SOCKSv5) && defined (IPA_SOCKV5_EVENT_MAX)
 	void ProcessSocksv5Conn(ipa_socksv5_msg *socksv5_info, bool is_add);
 	void PostRouteAddVlanPdn(uint32_t public_ip);
@@ -123,7 +133,7 @@ private:
 #endif //defined(FEATURE_SOCKSv5) && defined (IPA_SOCKV5_EVENT_MAX)
 	void ProcessTCPorUDPMsg(struct nf_conntrack *,
 		enum nf_conntrack_msg_type, u_int8_t);
-	void ProcessTCPorUDPMsg_v6(const ipacm_ct_evt_data* evt_data, const NatEntryBase& entry);
+	void ProcessTCPorUDPMsg_v6(const ipacm_ct_evt_data* evt_data, NatEntryBase& entry);
 	void CreateIpv6ctEntryFromCtEventData(const ipacm_ct_evt_data* evt_data, Ipv6ctEntry& entry) const;
 #ifdef FEATURE_IPV6_NAT
 	void CreateIpv6NatEntryFromCtEventData(const ipacm_ct_evt_data* evt_data, Ipv6NatEntry& entry) const;
@@ -131,6 +141,7 @@ private:
 #ifdef FEATURE_VLAN_MPDN
 	void HandleVlanUp(void *);
 	void HandleVlanDown(void *);
+	void HandleVlanUpV6(void *);
 #endif
 	void TriggerWANUp(void *);
 	void TriggerWANUp_v6(const ipacm_event_iface_up* evt_data);

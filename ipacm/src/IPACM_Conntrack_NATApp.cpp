@@ -2031,6 +2031,7 @@ void Ipv6ctConntrackTimestampUtil::SetConnectionDetails(const NatEntryBase& entr
 
 NatProxyBase::NatProxyBase() : m_tableHandle(0)
 {
+	table_created = false;
 	IPACMDBG_H("\n");
 }
 
@@ -2043,10 +2044,18 @@ int NatProxyBase::AddTable(uint16_t number_of_entries)
 {
 	IPACMDBG_H("\n");
 	uint32_t table_handle;
+
+	if(table_created)
+	{
+		IPACMDBG_H("Table already created return\n");
+		return 0;
+	}
+
 	int ret = DoAddTable(number_of_entries, table_handle);
 	if (!ret)
 	{
 		m_tableHandle = table_handle;
+		table_created = true;
 	}
 	IPACMDBG_H("return\n");
 	return ret;
@@ -2063,6 +2072,7 @@ int NatProxyBase::DeleteTable()
 
 	int ret = DoDeleteTable();
 	m_tableHandle = 0;
+	table_created = false;
 	IPACMDBG_H("return\n");
 	return ret;
 }
@@ -2481,7 +2491,7 @@ NatBase::~NatBase()
 	IPACMDBG_H("return\n");
 }
 
-int NatBase::AddTable(const IpAddress& wan_ip)
+int NatBase::AddTable(const uint32_t v6_prefix[2])
 {
 	IPACMDBG_H("\n");
 	int ret = m_proxy.AddTable(m_maxEntries);
@@ -2492,13 +2502,24 @@ int NatBase::AddTable(const IpAddress& wan_ip)
 	}
 #ifndef FEATURE_SOCKSv5
 	/* Add back the cached NAT-entry */
-	if (wan_ip == m_previousWanAddress)
+	IPACMDBG_H("Restore the cache to ipa NAT-table\n");
+	for (int cnt = 0; cnt < m_maxEntries; ++cnt)
 	{
-		IPACMDBG_H("Restore the cache to ipa NAT-table\n");
-		for (int cnt = 0; cnt < m_maxEntries; ++cnt)
+		NatEntryBase& entry = m_cache[cnt];
+		if (entry.Valid())
 		{
-			NatEntryBase& entry = m_cache[cnt];
-			if (entry.Valid())
+			uint64_t src_ipv6_msb;
+
+			if (entry.m_direction == NatEntryBase::DirectionOutbound || entry.m_direction == NatEntryBase::DirectionUnknown)
+			{
+				src_ipv6_msb = ((Ipv6IpAddress &)entry.GetClientIp()).GetMsb();
+			}
+			else if (entry.m_direction == NatEntryBase::DirectionInbound)
+			{
+				src_ipv6_msb = ((Ipv6IpAddress &)entry.GetTargetIp()).GetMsb();
+			}
+
+			if(((src_ipv6_msb >> 32) == v6_prefix[0]) && ((src_ipv6_msb & 0x00000000FFFFFFFF) == v6_prefix[1]))
 			{
 				if (m_proxy.AddEntry(entry))
 				{

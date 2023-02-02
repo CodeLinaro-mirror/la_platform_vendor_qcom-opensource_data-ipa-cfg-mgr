@@ -1973,6 +1973,7 @@ int IPACM_Wan::handle_route_add_vlan_pdn_evt(ipa_ip_type iptype, uint16_t vlan_i
 		wanup_vlan_data->iptype = IPA_IP_v6;
 		wanup_vlan_data->VlanID = vlan_id;
 		wanup_vlan_data->mux_id = ext_prop->ext[0].mux_id;
+		memcpy(wanup_vlan_data->ipv6_prefix, ipv6_prefix, sizeof(ipv6_prefix));
 
 		IPACMDBG_H("Posting IPA_HANDLE_WAN_VLAN_PDN_UP (v6) with below information:\n");
 		IPACMDBG_H("iptype IPA_IP_v6, VlanID %d, mux_id %d, if num %d\n",

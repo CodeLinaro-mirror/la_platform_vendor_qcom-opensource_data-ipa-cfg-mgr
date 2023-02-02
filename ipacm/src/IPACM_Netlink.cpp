@@ -917,7 +917,7 @@ static int ipa_nl_decode_nlmsg
 						return IPACM_FAILURE;
 					}
 
-					IPACM_NL_REPORT_ADDR( "route add -host", msg_ptr->nl_route_info.attr_info.dst_addr );
+					IPACM_NL_REPORT_ADDR( "route add -host\n", msg_ptr->nl_route_info.attr_info.dst_addr );
 					IPACM_NL_REPORT_ADDR( "gw", msg_ptr->nl_route_info.attr_info.gateway_addr );
 					IPACMDBG("dev %s\n",dev_name );
 					/* insert to command queue */
@@ -1261,7 +1261,7 @@ static int ipa_nl_decode_nlmsg
 					}
 					else
 					{
-						IPACM_NL_REPORT_ADDR( "route del default gw", msg_ptr->nl_route_info.attr_info.gateway_addr);
+						IPACM_NL_REPORT_ADDR( "route del default gw\n", msg_ptr->nl_route_info.attr_info.gateway_addr);
 						IPACMDBG("dev %s\n", dev_name);
 
 						IPACM_EVENT_COPY_ADDR_v4( data_addr->ipv4_addr, msg_ptr->nl_route_info.attr_info.dst_addr);

@@ -1,5 +1,6 @@
 /*
 Copyright (c) 2013-2021, The Linux Foundation. All rights reserved.
+Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are
@@ -549,6 +550,7 @@ typedef struct
 	uint16_t VlanID;
 	int mux_id;
 	int ipv4_addr;
+	uint32_t ipv6_prefix[2];
 	uint8_t ip_pass_enable;
 	uint32_t ip_pass_dummy_ip;
 	uint8_t ip_pass_skip_nat;

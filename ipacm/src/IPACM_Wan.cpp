@@ -277,7 +277,7 @@ IPACM_Wan::IPACM_Wan(int iface_index,
 			/* Add corresponding ipa_rm_resource_name of TX-endpoint up before IPV6 RT-rule set */
 			if(tx_prop != NULL)
 			{
-				IPACMDBG_H("dev %s add producer dependency\n", dev_name);
+				IPACMDBG_H("dev %s add producer dependency \n", dev_name);
 				IPACMDBG_H("depend Got pipe %d rm index : %d \n", tx_prop->tx[0].dst_pipe, IPACM_Iface::ipacmcfg->ipa_client_rm_map_tbl[tx_prop->tx[0].dst_pipe]);
 				IPACM_Iface::ipacmcfg->AddRmDepend(IPACM_Iface::ipacmcfg->ipa_client_rm_map_tbl[tx_prop->tx[0].dst_pipe],false);
 			}
@@ -352,7 +352,8 @@ int IPACM_Wan::GetMuxByVid(uint16_t vlan_id, uint8_t *mux_id, ipa_ip_type iptype
 			{
 				for(int j = 0; j < ipv6_to_iface[i].VID_cnt; j++)
 				{
-					if(IPACM_Wan::ipv6_to_iface[i].associated_VIDs[j] == vlan_id)
+					if((IPACM_Wan::ipv4_to_iface[i].pIface->ext_prop) &&
+							(IPACM_Wan::ipv6_to_iface[i].associated_VIDs[j] == vlan_id))
 					{
 						*mux_id = IPACM_Wan::ipv6_to_iface[i].pIface->ext_prop->ext[0].mux_id;
 						return IPACM_SUCCESS;

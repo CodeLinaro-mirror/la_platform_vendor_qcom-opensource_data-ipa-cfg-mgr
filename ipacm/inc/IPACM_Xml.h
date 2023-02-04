@@ -25,6 +25,10 @@
  * WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *
+ * Changes from Qualcomm Innovation Center are provided under the following license:
+ * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 /*!
   @file
@@ -87,10 +91,6 @@ if (!(a)) {                                                 \
 #define PHY_TAG                              "Phy"
 #define CATEGORY_TAG                         "Category"
 #define MODE_TAG                             "Mode"
-#define IPACMPRIVATESUBNETCFG_TAG            "IPACMPrivateSubnet"
-#define SUBNET_TAG                           "Subnet"
-#define SUBNETADDRESS_TAG                    "SubnetAddress"
-#define SUBNETMASK_TAG                       "SubnetMask"
 #define WANIF_TAG                            "WAN"
 #define LANIF_TAG                            "LAN"
 #define WLANIF_TAG                           "WLAN"

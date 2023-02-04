@@ -28,7 +28,7 @@
  *
  * Changes from Qualcomm Innovation Center are provided under the following license:
  *
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted (subject to the limitations in the
@@ -760,8 +760,7 @@ public:
 
 		return false;
 	}
-#ifdef FEATURE_IPA_ANDROID
-	inline bool AddPrivateSubnet(uint32_t ip_addr, int ipa_if_index)
+	inline bool AddPrivateSubnet(uint32_t ip_addr, uint32_t ipv4_addr_mask, int ipa_if_index)
 	{
 		ipacm_cmd_q_data evt_data;
 		ipacm_event_data_fid *data_fid;
@@ -779,7 +778,8 @@ public:
 		{
 			IPACMDBG("Add IPACM private subnet_addr as: 0x%x in entry(%d) \n", ip_addr, ipa_num_private_subnet);
 			private_subnet_table[ipa_num_private_subnet].subnet_addr = ip_addr;
-			private_subnet_table[ipa_num_private_subnet].subnet_mask = (subnet_mask >> 8) << 8;
+			private_subnet_table[ipa_num_private_subnet].subnet_mask = ipv4_addr_mask;
+			private_subnet_table[ipa_num_private_subnet].if_index = ipa_if_index;
 			ipa_num_private_subnet++;
 
 			/* IPACM private subnet set changes */
@@ -813,6 +813,8 @@ public:
 				for(; cnt < ipa_num_private_subnet - 1; cnt++)
 				{
 					private_subnet_table[cnt].subnet_addr = private_subnet_table[cnt + 1].subnet_addr;
+					private_subnet_table[cnt].subnet_mask = private_subnet_table[cnt + 1].subnet_mask;
+					private_subnet_table[cnt].if_index = private_subnet_table[cnt + 1].if_index;
 				}
 				ipa_num_private_subnet = ipa_num_private_subnet - 1;
 
@@ -835,7 +837,42 @@ public:
 		IPACMDBG("can't find private subnet_addr as: 0x%x \n", ip_addr);
 		return false;
 	}
-#endif /* defined(FEATURE_IPA_ANDROID)*/
+	inline bool DelPrivateSubnetByIfIndex(int ipa_if_index)
+	{
+		ipacm_cmd_q_data evt_data;
+		ipacm_event_data_fid *data_fid;
+		for(int cnt = 0; cnt < ipa_num_private_subnet; cnt++)
+		{
+			if(private_subnet_table[cnt].if_index == ipa_if_index)
+			{
+				IPACMDBG("Found private subnet_addr as: 0x%x in entry(%d) \n", private_subnet_table[cnt].subnet_addr, cnt);
+				for(; cnt < ipa_num_private_subnet - 1; cnt++)
+				{
+					private_subnet_table[cnt].subnet_addr = private_subnet_table[cnt + 1].subnet_addr;
+					private_subnet_table[cnt].subnet_mask = private_subnet_table[cnt + 1].subnet_mask;
+					private_subnet_table[cnt].if_index = private_subnet_table[cnt + 1].if_index;
+				}
+				ipa_num_private_subnet = ipa_num_private_subnet - 1;
+
+				/* IPACM private subnet set changes */
+				data_fid = (ipacm_event_data_fid *)malloc(sizeof(ipacm_event_data_fid));
+				if(data_fid == NULL)
+				{
+					IPACMERR("unable to allocate memory for event data_fid\n");
+					return IPACM_FAILURE;
+				}
+				data_fid->if_index = ipa_if_index; // already ipa index, not fid index
+				evt_data.event = IPA_PRIVATE_SUBNET_CHANGE_EVENT;
+				evt_data.evt_data = data_fid;
+
+				/* Insert IPA_PRIVATE_SUBNET_CHANGE_EVENT to command queue */
+				IPACM_EvtDispatcher::PostEvt(&evt_data);
+				return true;
+			}
+		}
+		IPACMDBG("can't find entry %d \n", ipa_if_index);
+		return false;
+	}
 
 #ifdef FEATURE_VLAN_MPDN
 	inline void SendPrefixChangeEvent(int ipa_if_num)

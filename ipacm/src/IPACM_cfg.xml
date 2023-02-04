@@ -139,12 +139,6 @@
 			<GREEnabled>0</GREEnabled>
 			 <GREServer>172.20.98.78</GREServer>
 		</GREFlag>
-		<IPACMPrivateSubnet>
-			<Subnet>
-  			   <SubnetAddress>192.168.224.0</SubnetAddress>
-  			   <SubnetMask>255.255.254.0</SubnetMask>
-		    </Subnet>		
-		</IPACMPrivateSubnet>
 		<IPACMALG>
 			<ALG>
   			   <Protocol>TCP</Protocol>

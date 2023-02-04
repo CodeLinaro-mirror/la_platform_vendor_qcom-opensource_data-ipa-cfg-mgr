@@ -29,7 +29,8 @@ ipacm_SOURCES =	IPACM_Main.cpp \
 		IPACM_Neighbor.cpp \
 		IPACM_Netlink.cpp \
 		IPACM_Xml.cpp \
-		IPACM_LanToLan.cpp
+		IPACM_LanToLan.cpp \
+		IPACM_Bridge.cpp
 
 bin_PROGRAMS  =  ipacm
 

@@ -1,0 +1,72 @@
+/*
+@file    IPACM_Bridge.cpp
+@brief   This file implements bridge related functionalities
+
+DESCRIPTION
+Implementation of handling various events on bridge interfaces
+
+Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+SPDX-License-Identifier: BSD-3-Clause-Clear
+*/
+
+
+#include <IPACM_Bridge.h>
+#include "IPACM_IfaceManager.h"
+
+IPACM_Bridge::IPACM_Bridge()
+{
+		IPACMDBG("Initailizing IPACM_Bridge class object\n");
+}
+
+
+void IPACM_Bridge::event_callback(ipa_cm_event_id event, void *param)
+{
+
+		/*maintaining initial two members of ipacm_event_data_addr and ipacm_event_data_fid structure as same.
+		to get the interface name details. */
+		ipacm_event_data_addr *data = (ipacm_event_data_addr *)param;
+		int ipa_if_num = data->if_index;
+		if(strncmp(data->iface_name, IPACM_Iface::ipacmcfg->ipa_virtual_iface_name, strlen(data->iface_name)) != 0)
+		{
+			IPACMDBG("Non-bridge interface %s event,ignoring\n", data->iface_name);
+			return;
+		}
+		if((data->ipv4_addr == 0) && (event != IPA_LINK_DOWN_EVENT))
+		{
+			IPACMDBG("Got NULL IPv4 address\n");
+			return;
+		}
+		switch(event) {
+				case IPA_ADDR_ADD_EVENT:
+						IPACMDBG("Handling IPA_ADDR_ADD_EVENT for %s\n",data->iface_name);
+						if(IPACM_Iface::ipacmcfg->AddPrivateSubnet(data->ipv4_addr, data->ipv4_addr_mask, ipa_if_num) == false)
+						{
+								IPACMERR("Can't Add IPACM private subnet_addr as: 0x%x \n", data->ipv4_addr);
+						}
+						break;
+				case IPA_ADDR_DEL_EVENT:
+						IPACMDBG("Handling IPA_ADDR_DEL_EVENT %s\n", data->iface_name);
+						if(IPACM_Iface::ipacmcfg->DelPrivateSubnet(data->ipv4_addr, ipa_if_num) == false)
+						{
+								IPACMERR("Can't Delete IPACM private subnet_addr as: 0x%x \n", data->ipv4_addr);
+						}
+						break;
+				case IPA_LINK_DOWN_EVENT:
+						IPACMDBG("Handling IPA_LINK_DOWN_EVENT %s\n", data->iface_name);
+						IPACMDBG("Deleting the bridge instance\n");
+						if(IPACM_Iface::ipacmcfg->DelPrivateSubnetByIfIndex(ipa_if_num) == false)
+						{
+								IPACMERR("Failed to delete IPACM private subnet with interface index as: 0x%x \n", ipa_if_num);
+								IPACMERR("Still proceeding to delete the object\n");
+						}
+						IPACM_EvtDispatcher::deregistr(this);
+						IPACM_IfaceManager::deregistr(this);
+						delete this;
+						break;
+				default:
+						IPACMDBG("Ignore cmd %d\n", event);
+						break;
+		}
+		return;
+
+}

@@ -25,6 +25,10 @@
 * WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
 * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
 * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+*
+* Changes from Qualcomm Innovation Center are provided under the following license:
+* Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+* SPDX-License-Identifier: BSD-3-Clause-Clear
 */
 /*!
   @file
@@ -442,6 +446,7 @@ void IPACM_Iface::iface_addr_query
 				case AF_INET:
 				{
 					struct sockaddr_in *s4 = (struct sockaddr_in *)ifa->ifa_addr;
+					struct sockaddr_in *net_mask = (struct sockaddr_in *)ifa->ifa_netmask;
 					IPACMDBG_H("ipv4 address %s\n",inet_ntoa(s4->sin_addr));
 					iface_ipv4 = s4->sin_addr;
 
@@ -477,11 +482,14 @@ void IPACM_Iface::iface_addr_query
 						data_addr->if_index = interface_index;
 						data_addr->ipv4_addr = 	iface_ipv4.s_addr;
 						data_addr->ipv4_addr = ntohl(data_addr->ipv4_addr);
+						data_addr->ipv4_addr = (data_addr->ipv4_addr & ntohl(net_mask->sin_addr.s_addr));
+						data_addr->ipv4_addr_mask = ntohl(net_mask->sin_addr.s_addr);
 						strlcpy(data_addr->iface_name, ifr.ifr_name, sizeof(data_addr->iface_name));
-						IPACMDBG_H("Posting IPA_ADDR_ADD_EVENT with if index:%d, if name:%s, ipv4 addr:0x%x\n",
+						IPACMDBG_H("Posting IPA_ADDR_ADD_EVENT with if index:%d, if name:%s, ipv4 addr:0x%x subnet: 0x%x\n",
 							data_addr->if_index,
 							data_addr->iface_name,
-							data_addr->ipv4_addr);
+							data_addr->ipv4_addr,
+							data_addr->ipv4_addr_mask);
 
 						evt_data.event = IPA_ADDR_ADD_EVENT;
 						evt_data.evt_data = data_addr;

@@ -9758,9 +9758,9 @@ int IPACM_Lan::install_l2tp_inner_private_subnet_flt_rule()
 
 int IPACM_Lan::modify_private_subnet()
 {
-	int i, len, res = IPACM_SUCCESS;
+	int i = 0, len, res = IPACM_SUCCESS;
 	struct ipa_flt_rule_add flt_rule;
-	struct ipa_ioc_add_flt_rule_after* pFilteringTable;
+	struct ipa_ioc_add_flt_rule_after* pFilteringTable = NULL;
 	int mtu_rule_cnt = 0;
 	uint16_t mtu[IPA_MAX_MTU_ENTRIES] = { };
 	uint16_t vid[IPA_MAX_MTU_ENTRIES] = { };

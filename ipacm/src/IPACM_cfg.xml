@@ -192,90 +192,90 @@
 		</GREFlag>
 		<IPACMPrivateSubnet>
 			<Subnet>
-  			   <SubnetAddress>192.168.225.0</SubnetAddress>
-  			   <SubnetMask>255.255.255.0</SubnetMask>
-		    </Subnet>		
+				<SubnetAddress>192.168.225.0</SubnetAddress>
+				<SubnetMask>255.255.255.0</SubnetMask>
+		    </Subnet>
 		</IPACMPrivateSubnet>
 		<IPACMALG>
 			<ALG>
-  			   <Protocol>TCP</Protocol>
-  			   <Port>21</Port>
-			   <Description>FTP</Description>
+				<Protocol>TCP</Protocol>
+				<Port>21</Port> 
+				<Description>FTP</Description>
 		    </ALG>
 			<ALG>
-  			   <Protocol>TCP</Protocol>
-  			   <Port>554</Port>
-			   <Description>RTSP</Description>
+				<Protocol>TCP</Protocol>
+				<Port>554</Port>
+				<Description>RTSP</Description>
 		    </ALG>
 			<ALG>
-  			   <Protocol>TCP</Protocol>
-  			   <Port>5060</Port>
-			   <Description>SIP</Description>
+				<Protocol>TCP</Protocol>
+				<Port>5060</Port>
+				<Description>SIP</Description>
 		    </ALG>
 			<ALG>
-  			   <Protocol>UDP</Protocol>
-  			   <Port>5060</Port>
-			   <Description>SIP</Description>
+				<Protocol>UDP</Protocol>
+				<Port>5060</Port>
+				<Description>SIP</Description>
 		    </ALG>
 			<ALG>
-  			   <Protocol>TCP</Protocol>
-  			   <Port>1723</Port>
-			   <Description>PPTP</Description>
+				<Protocol>TCP</Protocol>
+				<Port>1723</Port>
+				<Description>PPTP</Description>
 		    </ALG>
 			<ALG>
-  			   <Protocol>UDP</Protocol>
-  			   <Port>69</Port>
-			   <Description>TFTP</Description>
+				<Protocol>UDP</Protocol>
+				<Port>69</Port>
+				<Description>TFTP</Description>
 		    </ALG>
 			<ALG>
-  			   <Protocol>UDP</Protocol>
-  			   <Port>53</Port>
-			   <Description>DNS</Description>
+				<Protocol>UDP</Protocol>
+				<Port>53</Port>
+				<Description>DNS</Description>
 		    </ALG>
 			<ALG>
-  			   <Protocol>TCP</Protocol>
-  			   <Port>53</Port>
-			   <Description>DNS</Description>
+				<Protocol>TCP</Protocol>
+				<Port>53</Port>
+				<Description>DNS</Description>
 		    </ALG>
 			<ALG>
-  			   <Protocol>UDP</Protocol>
-  			   <Port>10080</Port>
-			   <Description>AMANDA</Description>
+				<Protocol>UDP</Protocol>
+				<Port>10080</Port>
+				<Description>AMANDA</Description>
 		    </ALG>
 			<ALG>
-  			   <Protocol>UDP</Protocol>
-  			   <Port>1719</Port>
-			   <Description>H323</Description>
+				<Protocol>UDP</Protocol>
+				<Port>1719</Port>
+				<Description>H323</Description>
 		    </ALG>
 			<ALG>
-  			   <Protocol>TCP</Protocol>
-  			   <Port>1720</Port>
-			   <Description>H323</Description>
+				<Protocol>TCP</Protocol>
+				<Port>1720</Port>
+				<Description>H323</Description>
 		    </ALG>
 			<ALG>
-  			   <Protocol>TCP</Protocol>
-  			   <Port>6667</Port>
-			   <Description>IRC</Description>
+				<Protocol>TCP</Protocol>
+				<Port>6667</Port>
+				<Description>IRC</Description>
 		    </ALG>
 			<ALG>
-  			   <Protocol>UDP</Protocol>
-  			   <Port>137</Port>
-			   <Description>NETBIOS_NS</Description>
+				<Protocol>UDP</Protocol>
+				<Port>137</Port>
+				<Description>NETBIOS_NS</Description>
 		    </ALG>
 			<ALG>
-			   <Protocol>UDP</Protocol>
-			   <Port>138</Port>
-			   <Description>NETBIOS_NS</Description>
+				<Protocol>UDP</Protocol>
+				<Port>138</Port>
+				<Description>NETBIOS_NS</Description>
 		    </ALG>
 			<ALG>
-  			   <Protocol>TCP</Protocol>
-  			   <Port>6566</Port>
-			   <Description>SANE</Description>
+				<Protocol>TCP</Protocol>
+				<Port>6566</Port>
+				<Description>SANE</Description>
 		    </ALG>
 			<ALG>
-			   <Protocol>UDP</Protocol>
-			   <Port>67</Port>
-			   <Description>DHCP</Description>
+				<Protocol>UDP</Protocol>
+				<Port>67</Port>
+				<Description>DHCP</Description>
 		    </ALG>
 		</IPACMALG>
 		<IPACMNAT>
@@ -302,5 +302,8 @@
 		<IPACMVLANMPDN>
 			<IPACMVlanMpdnEnabled>0</IPACMVlanMpdnEnabled>
 		</IPACMVLANMPDN>
+		<IPACMLog>
+                        <IPACMfilevar>0</IPACMfilevar>
+                </IPACMLog>
 	</IPACM>
 </system>

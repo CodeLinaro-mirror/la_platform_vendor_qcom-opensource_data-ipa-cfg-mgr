@@ -141,7 +141,7 @@
 		</GREFlag>
 		<IPACMPrivateSubnet>
 			<Subnet>
-  			   <SubnetAddress>192.168.2.0</SubnetAddress>
+  			   <SubnetAddress>192.168.224.0</SubnetAddress>
   			   <SubnetMask>255.255.254.0</SubnetMask>
 		    </Subnet>		
 		</IPACMPrivateSubnet>

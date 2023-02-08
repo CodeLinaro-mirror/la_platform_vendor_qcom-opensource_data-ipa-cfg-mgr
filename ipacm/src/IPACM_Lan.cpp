@@ -6874,7 +6874,7 @@ int IPACM_Lan::handle_uplink_filter_rule(ipacm_ext_prop *prop, ipa_ip_type iptyp
 
 			/* NAT block will set the proper MUX ID in the metadata according to the relevant PDN */
 			if ((IPACM_Iface::ipacmcfg->GetIPAVer() >= IPA_HW_v4_0) &&
-				(ipa_if_cate != WLAN_IF))
+				((ipa_if_cate != WLAN_IF) && (ipa_if_cate != ODU_IF)))
 				flt_rule_entry.rule.set_metadata = true;
 		}
 	}

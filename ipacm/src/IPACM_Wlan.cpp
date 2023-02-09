@@ -1532,6 +1532,7 @@ handle_stats:
 			if (handle_refresh_filtering_rules(data->wlan_vlan_mpdn_enable)) {
 				IPACMERR("failed to handle IPA_WLAN_SWITCH_VLAN_MODE \n");
 			}
+			modify_private_subnet();
 		}
 	}
 	break;
@@ -6976,7 +6977,7 @@ int IPACM_Wlan::handle_down_evt()
 
 	if ((is_if_svap || is_wlan_if_vlan) && (rx_prop && rx_prop->num_rx_props > 2)) {
 		idx = 2;
-		IPACMDBG_H("Interface is WLAN Svap or vlan, install rules on Rx pipe at idx %d \n", idx);
+		IPACMDBG_H("Interface is WLAN Svap or vlan, delete rules on Rx pipe at idx %d \n", idx);
 	}
 
 	for(wlan_pipe_index=0;wlan_pipe_index<MAX_SUPPORTED_WLAN_PIPES;wlan_pipe_index++){
@@ -10622,6 +10623,7 @@ int IPACM_Wlan::handle_refresh_filtering_rules(bool wlan_vlan_mpdn_enable)
 		}
 		IPACM_Iface::ipacmcfg->decreaseFltRuleCount(rx_prop->rx[idx].src_pipe, IPA_IP_v4, num_wan_subnet_rules[0]);
 		num_wan_subnet_rules[0] = 0;
+		memset(private_fl_rule_hdl, 0, (IPA_MAX_PRIVATE_SUBNET_ENTRIES + IPA_MAX_MTU_ENTRIES) * sizeof(uint32_t));
 #else
 		num_private_subnet_fl_rule = IPACM_Iface::ipacmcfg->ipa_num_private_subnet > (IPA_MAX_PRIVATE_SUBNET_ENTRIES + IPA_MAX_MTU_ENTRIES) ?
 			(IPA_MAX_PRIVATE_SUBNET_ENTRIES + IPA_MAX_MTU_ENTRIES) : IPACM_Iface::ipacmcfg->ipa_num_private_subnet;
@@ -10631,6 +10633,7 @@ int IPACM_Wlan::handle_refresh_filtering_rules(bool wlan_vlan_mpdn_enable)
 			goto fail;
 		}
 		IPACM_Iface::ipacmcfg->decreaseFltRuleCount(rx_prop->rx[idx].src_pipe, IPA_IP_v4, num_private_subnet_fl_rule);
+		memset(private_fl_rule_hdl, 0, (IPA_MAX_PRIVATE_SUBNET_ENTRIES + IPA_MAX_MTU_ENTRIES) * sizeof(uint32_t));
 #endif
 		IPACMDBG_H("Deleted private subnet v4 filter rules successfully.\n");
 
@@ -10688,9 +10691,6 @@ int IPACM_Wlan::handle_refresh_filtering_rules(bool wlan_vlan_mpdn_enable)
 		mtu_flt_rule_offset[0][IPA_IP_v4] =
 			dft_v4fl_rule_hdl[0][m_ipv4_default_filterting_rules_count[0] - 1];
 	}
-
-	/* Always adding tcp syn SW-exception rule for MSS clamping support */
-	add_tcp_syn_flt_rule(IPA_IP_v4);
 
 #ifdef FEATURE_L2TP
 	if (IPACM_Iface::ipacmcfg->ipacm_l2tp_enable == IPACM_L2TP) {

@@ -854,7 +854,11 @@ static int ipa_nl_decode_nlmsg
 				IPACMDBG("RTM_DELLINK, ifi_flags:%d\n", msg_ptr->nl_link_info.metainfo.ifi_flags);
 				IPACMDBG("RTM_DELLINK, ifi_index:%d\n", msg_ptr->nl_link_info.metainfo.ifi_index);
 				IPACMDBG("RTM_DELLINK, family:%d\n", msg_ptr->nl_link_info.metainfo.ifi_family);
-				if (msg_ptr->nl_link_info.metainfo.ifi_family == AF_BRIDGE)
+				/* RTM_NEWLINK event with AF_BRIDGE family should be ignored in Android
+				 *    but this should be processed in case of MDM for Ehernet interface.
+				 */
+
+				if (msg_ptr->nl_link_info.metainfo.ifi_family == AF_BRIDGE || msg_ptr->nl_link_info.metainfo.ifi_family == AF_UNSPEC)
 				{
 					IPACMDBG("Deleting the bridge<->vlan mapping entry with intterface index %d\n", msg_ptr->nl_link_info.metainfo.ifi_index);
 					uint16_t vlan_master_interface_index = msg_ptr->nl_link_info.metainfo.ifi_index;
@@ -867,15 +871,12 @@ static int ipa_nl_decode_nlmsg
 					IPACMERR("Error while getting interface name with index %d, continue as the interface might have already been down.\n",
 						msg_ptr->nl_link_info.metainfo.ifi_index);
 				}
-				else
-				{
-					IPACMDBG("Deleting the vlan-id<->vlan interface :%s vlan-id:%d\n",  msg_ptr->nl_link_info.vlan_name, msg_ptr->nl_link_info.vlan_id);
-					if(msg_ptr->nl_link_info.vlan_id) {
-						strlcpy(vlan_info.name, msg_ptr->nl_link_info.vlan_name, IPA_RESOURCE_NAME_MAX);
-						vlan_info.vlan_id = msg_ptr->nl_link_info.vlan_id;
-						vlan_info.vlan_interface_index = msg_ptr->nl_link_info.metainfo.ifi_index;
-						IPACM_Iface::ipacmcfg->del_vlan_iface(&vlan_info);
-					}
+				IPACMDBG("Deleting the vlan-id<->vlan interface :%s vlan-id:%d\n",  msg_ptr->nl_link_info.vlan_name, msg_ptr->nl_link_info.vlan_id);
+				if(msg_ptr->nl_link_info.vlan_id) {
+					strlcpy(vlan_info.name, msg_ptr->nl_link_info.vlan_name, IPA_RESOURCE_NAME_MAX);
+					vlan_info.vlan_id = msg_ptr->nl_link_info.vlan_id;
+					vlan_info.vlan_interface_index = msg_ptr->nl_link_info.metainfo.ifi_index;
+					IPACM_Iface::ipacmcfg->del_vlan_iface(&vlan_info);
 				}
 				/* post link down to command queue */
 				evt_data.event = IPA_LINK_DOWN_EVENT;
@@ -1792,7 +1793,7 @@ int ipa_get_if_name
 
 	if((fd = socket(AF_INET, SOCK_DGRAM, 0)) < 0)
 	{
-		IPACMERR("get interface name socket create failed \n");
+		IPACMERR("get interface name socket create failed: %d \n", errno);
 		return IPACM_FAILURE;
 	}
 

@@ -1286,7 +1286,6 @@ void IPACM_Config::add_bridge_vlan_mapping(ipa_bridge_vlan_mapping_info *data)
 				{
 					IPACMDBG_H("bridge %s already added, update data\n",
 						data->bridge_name);
-					bridge->associate_VID = data->vlan_id;
 					bridge->bridge_ipv4_addr = data->bridge_ipv4;
 					bridge->bridge_netmask = data->subnet_mask;
 				}
@@ -1315,6 +1314,13 @@ void IPACM_Config::add_bridge_vlan_mapping(ipa_bridge_vlan_mapping_info *data)
 		new_mapping.bridge_if_index = data->master_if_index;
 		new_mapping.status == 0;
 		m_bridge_vlan_mapping.push_front(new_mapping);
+		bridge = get_vlan_bridge(data->bridge_name);
+		if(bridge)
+		{
+			IPACMDBG_H("bridge %s already added, update data\n",
+				data->bridge_name);
+			bridge->associate_VID = data->vlan_id;
+		}
 
 	}
 

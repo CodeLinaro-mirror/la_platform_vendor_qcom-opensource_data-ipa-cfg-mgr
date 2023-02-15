@@ -81,6 +81,7 @@ public:
 
 	void update_neigh_cache();
 	int parse_bridge_info(int index, struct ipa_bridge_vlan_mapping_info *data);
+        int parse_bridge_name(int index, struct ipa_bridge_vlan_mapping_info *data);
 private:
 
 	int num_neighbor_client;

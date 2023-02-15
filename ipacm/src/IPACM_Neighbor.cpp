@@ -92,6 +92,7 @@ int IPACM_Neighbor::parse_bridge_info(int index, struct ipa_bridge_vlan_mapping_
 	if (ioctl(fd, SIOCGIFNAME, &ifrr) == -1)
 	{
 		IPACMERR("unable to open socket");
+		close(fd);
 		return -1;
         }
 
@@ -102,6 +103,7 @@ int IPACM_Neighbor::parse_bridge_info(int index, struct ipa_bridge_vlan_mapping_
 	if (ioctl(fd, SIOCGIFADDR, &ifrr) == -1)
 	{
 		IPACMERR("unable to open socket");
+		close(fd);
 		return -1;
 
 	}
@@ -117,6 +119,7 @@ int IPACM_Neighbor::parse_bridge_info(int index, struct ipa_bridge_vlan_mapping_
 	if (ioctl(fd, SIOCGIFNETMASK, &ifrr) == -1)
 	{
 		IPACMERR("unable to open socket");
+		close(fd);
 		return -1;
 
 	}
@@ -124,10 +127,40 @@ int IPACM_Neighbor::parse_bridge_info(int index, struct ipa_bridge_vlan_mapping_
 	data->subnet_mask = ntohl((unsigned int)ipaddr->sin_addr.s_addr);
 
 	IPACMDBG("Bridge parse subnet 0x%x\n", data->subnet_mask);
+	close(fd);
 	return 0;
 
 }
 
+int IPACM_Neighbor::parse_bridge_name(int index, struct ipa_bridge_vlan_mapping_info *data)
+{
+	int fd;
+        struct ifreq ifrr;
+        struct sockaddr_in *ipaddr;
+
+        fd = socket(AF_INET, SOCK_DGRAM, 0);
+        if (fd < 0)
+        {
+                IPACMERR("unable to open socket");
+                return -1;
+        }
+	IPACMDBG("Interface index %d\n", index);
+        memset(&ifrr, 0, sizeof(struct ifreq));
+        ifrr.ifr_ifindex = index;
+
+	if (ioctl(fd, SIOCGIFNAME, &ifrr) == -1)
+	{
+		IPACMERR("unable to open socket");
+		close(fd);
+		return -1;
+        }
+
+        strlcpy(data->bridge_name, ifrr.ifr_name, IPA_RESOURCE_NAME_MAX);
+	IPACMDBG("Bridge parse interface name%s\n", data->bridge_name);
+	close(fd);
+	return 0;
+
+}
 
 void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 {
@@ -254,6 +287,13 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 				if(ret == IPACM_FAILURE)
 				{
 					IPACMERR("Vlan entry has not been created for interface index %d\n", data_all->if_index);
+					return;
+				}
+
+				ret = parse_bridge_name(data_all->master_if_index, &add_bridge_vlan_map);
+				if(ret == IPACM_FAILURE)
+				{
+					IPACMERR("Error parsing the bridge name\n");
 					return;
 				}
 				IPACMDBG("Handling IPA_ADD_BRIDGE_VLAN_PHY_INTF event with vlan-id: %d master-interface-index: %d\n", vlan_data.vlan_id, data_all->master_if_index);

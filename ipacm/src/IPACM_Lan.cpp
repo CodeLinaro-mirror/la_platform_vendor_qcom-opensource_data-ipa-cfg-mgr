@@ -568,7 +568,7 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 
 				if ((ipa_if_cate == WLAN_IF) && (is_if_svap || is_wlan_if_vlan) && (rx_prop->num_rx_props > 2)) {
 					idx = 2;
-					IPACMDBG_H("Interface is WLAN Svap or vlan, install rules on Rx1 pipe at idx %d \n", idx);
+					IPACMDBG_H("Interface is WLAN Svap or vlan, delete rules on Rx pipe at idx %d \n", idx);
 				}
 
 				if(IPACM_Iface::ipacmcfg->getFltRuleCount(rx_prop->rx[idx].src_pipe, IPA_IP_v4) != 0)
@@ -1913,7 +1913,7 @@ int IPACM_Lan::add_mac_flt_blacklist_rule(uint8_t *mac_addr, ipa_ip_type iptype,
 
 	if ((ipa_if_cate == WLAN_IF) && (is_if_svap || is_wlan_if_vlan) && (rx_prop->num_rx_props > 2)) {
 		idx = 2;
-		IPACMDBG_H("Interface is WLAN Svap or vlan, install rules on Rx1 pipe at idx %d \n", idx);
+		IPACMDBG_H("Interface is WLAN Svap or vlan, install rules on Rx pipe at idx %d \n", idx);
 	}
 
 	len = sizeof(struct ipa_ioc_add_flt_rule_v2);
@@ -2376,7 +2376,7 @@ int IPACM_Lan::del_ul_flt_rules(enum ipa_ip_type iptype)
 
 	if ((ipa_if_cate == WLAN_IF) && (is_if_svap || is_wlan_if_vlan) && (rx_prop->num_rx_props > 2)) {
 		idx = 2;
-		IPACMDBG_H("Interface is WLAN Svap or vlan, install rules on Rx1 pipe at idx %d \n", idx);
+		IPACMDBG_H("Interface is WLAN Svap or vlan, delete rules on Rx pipe at idx %d \n", idx);
 	}
 
 	if(iptype == IPA_IP_v4)
@@ -3208,7 +3208,7 @@ int IPACM_Lan::notify_flt_removed(uint8_t mux_id)
 
 	if ((ipa_if_cate == WLAN_IF) && (is_if_svap || is_wlan_if_vlan) && (rx_prop->num_rx_props > 2)) {
 		idx = 2;
-		IPACMDBG_H("Interface is WLAN Svap or vlan, install rules on Rx1 pipe at idx %d \n", idx);
+		IPACMDBG_H("Interface is WLAN Svap or vlan, install rules on Rx pipe at idx %d \n", idx);
 	}
 
 	memset(&flt_index, 0, sizeof(flt_index));
@@ -3251,7 +3251,7 @@ int IPACM_Lan::handle_wan_down(bool is_sta_mode)
 
 	if ((ipa_if_cate == WLAN_IF) && (is_if_svap || is_wlan_if_vlan) && (rx_prop->num_rx_props > 2)) {
 		idx = 2;
-		IPACMDBG_H("Interface is WLAN Svap or vlan, install rules on Rx1 pipe at idx %d \n", idx);
+		IPACMDBG_H("Interface is WLAN Svap or vlan, delete rules on Rx pipe at idx %d \n", idx);
 	}
 
 	if(is_sta_mode == false)
@@ -3519,7 +3519,7 @@ int IPACM_Lan::handle_private_subnet(ipa_ip_type iptype)
 
 	if ((ipa_if_cate == WLAN_IF) && (is_if_svap || is_wlan_if_vlan) && (rx_prop->num_rx_props > 2)) {
 		idx = 2;
-		IPACMDBG_H("Interface is WLAN Svap or vlan, install rules on Rx1 pipe at idx %d \n", idx);
+		IPACMDBG_H("Interface is WLAN Svap or vlan, install rules on Rx pipe at idx %d \n", idx);
 	}
 
 	if (iptype == IPA_IP_v4)
@@ -3768,7 +3768,7 @@ int IPACM_Lan::handle_wan_up(ipa_ip_type ip_type)
 
 	if ((ipa_if_cate == WLAN_IF) && (is_if_svap || is_wlan_if_vlan) && (rx_prop->num_rx_props > 2)) {
 		idx = 2;
-		IPACMDBG_H("Interface is WLAN Svap or vlan, install rules on Rx1 pipe at idx %d \n", idx);
+		IPACMDBG_H("Interface is WLAN Svap or vlan, install rules on Rx pipe at idx %d \n", idx);
 	}
 
 	if(ip_type == IPA_IP_v4)
@@ -6714,7 +6714,7 @@ int IPACM_Lan::handle_down_evt()
 
 	if ((ipa_if_cate == WLAN_IF) && (is_if_svap || is_wlan_if_vlan) && (rx_prop && rx_prop->num_rx_props > 2)) {
 		idx = 2;
-		IPACMDBG_H("Interface is WLAN Svap or vlan, install rules on Rx1 pipe at idx %d \n", idx);
+		IPACMDBG_H("Interface is WLAN Svap or vlan, delete rules on Rx pipe at idx %d \n", idx);
 	}
 
 	/* Delete v4 default filtering rules */
@@ -7685,7 +7685,7 @@ int IPACM_Lan::delete_uplink_filter_rule_ul(ul_firewall_t *ul_firewall)
 
 	if ((ipa_if_cate == WLAN_IF) && (is_if_svap || is_wlan_if_vlan) && (rx_prop && rx_prop->num_rx_props > 2)) {
 		idx = 2;
-		IPACMDBG_H("Interface is WLAN Svap or vlan, install rules on Rx1 pipe at idx %d \n", idx);
+		IPACMDBG_H("Interface is WLAN Svap or vlan, delete rules on Rx pipe at idx %d \n", idx);
 	}
 
 	IPACMDBG_H("Deleting UL firewall rules for pipe (%d)\n", rx_prop->rx[idx].src_pipe);
@@ -7772,7 +7772,7 @@ int IPACM_Lan::install_wan_firewall_rule_ul(bool enable, int vid, int num_of_ul_
 
 	if ((ipa_if_cate == WLAN_IF) && (is_if_svap || is_wlan_if_vlan) && (rx_prop && rx_prop->num_rx_props > 2)) {
 		idx = 2;
-		IPACMDBG_H("Interface is WLAN Svap or vlan, install rules on Rx1 pipe at idx %d \n", idx);
+		IPACMDBG_H("Interface is WLAN Svap or vlan, install rules on Rx pipe at idx %d \n", idx);
 	}
 
 #ifdef FEATURE_VLAN_MPDN
@@ -7837,7 +7837,7 @@ int IPACM_Lan::config_wan_frag_firewall_rule_ul_ex(ul_firewall_t *ul_firewall, i
 
 	if ((ipa_if_cate == WLAN_IF) && (is_if_svap || is_wlan_if_vlan) && (rx_prop && rx_prop->num_rx_props > 2)) {
 		idx = 2;
-		IPACMDBG_H("Interface is WLAN Svap or vlan, install rules on Rx1 pipe at idx %d \n", idx);
+		IPACMDBG_H("Interface is WLAN Svap or vlan, install rules on Rx pipe at idx %d \n", idx);
 	}
 
 	if (ipacmcfg->IsIpv6CTEnabled())
@@ -7987,7 +7987,7 @@ int IPACM_Lan::config_dft_firewall_rules_ul_ex(IPACM_firewall_conf_t* firewall_c
 
 	if ((ipa_if_cate == WLAN_IF) && (is_if_svap || is_wlan_if_vlan) && (rx_prop && rx_prop->num_rx_props > 2)) {
 		idx = 2;
-		IPACMDBG_H("Interface is WLAN Svap or vlan, install rules on Rx1 pipe at idx %d \n", idx);
+		IPACMDBG_H("Interface is WLAN Svap or vlan, install rules on Rx pipe at idx %d \n", idx);
 	}
 
 	/* 1. Delete: Already expected to be taken care */
@@ -8403,7 +8403,7 @@ int IPACM_Lan::config_dft_firewall_rules_ul_ex(IPACM_firewall_conf_t* firewall_c
 
 	if ((ipa_if_cate == WLAN_IF) && (is_if_svap || is_wlan_if_vlan) && (rx_prop && rx_prop->num_rx_props > 2)) {
 		idx = 2;
-		IPACMDBG_H("Interface is WLAN Svap or vlan, install rules on Rx1 pipe at idx %d \n", idx);
+		IPACMDBG_H("Interface is WLAN Svap or vlan, install rules on Rx pipe at idx %d \n", idx);
 	}
 
 	if(IPACM_Wan::get_pdn_num_fw_rules_by_vid(vid, &orig_num_q6_rules))
@@ -8632,7 +8632,7 @@ int IPACM_Lan::config_dft_firewall_rules_ul(IPACM_firewall_conf_t* firewall_conf
 
 	if ((ipa_if_cate == WLAN_IF) && (is_if_svap || is_wlan_if_vlan) && (rx_prop && rx_prop->num_rx_props > 2)) {
 		idx = 2;
-		IPACMDBG_H("Interface is WLAN Svap or vlan, install rules on Rx1 pipe at idx %d \n", idx);
+		IPACMDBG_H("Interface is WLAN Svap or vlan, install rules on Rx pipe at idx %d \n", idx);
 	}
 
 	IPACMDBG_H("num rules %d, pdn dev_name %s, accept %d\n",
@@ -9928,7 +9928,7 @@ int IPACM_Lan::handle_wan_down_v6(bool is_sta_mode, bool is_support_mpdn)
 
 	if ((ipa_if_cate == WLAN_IF) && (is_if_svap || is_wlan_if_vlan) && (rx_prop->num_rx_props > 2)) {
 		idx = 2;
-		IPACMDBG_H("Interface is WLAN Svap or vlan, install rules on Rx1 pipe at idx %d \n", idx);
+		IPACMDBG_H("Interface is WLAN Svap or vlan, delete rules on Rx pipe at idx %d \n", idx);
 	}
 
 #ifdef FEATURE_VLAN_MPDN
@@ -10225,7 +10225,7 @@ int IPACM_Lan::install_ipv6_icmp_flt_rule()
 
 		if ((ipa_if_cate == WLAN_IF) && (is_if_svap || is_wlan_if_vlan) && (rx_prop->num_rx_props > 2)) {
 			idx = 2;
-			IPACMDBG_H("Interface is WLAN Svap or vlan, install rules on Rx1 pipe at idx %d \n", idx);
+			IPACMDBG_H("Interface is WLAN Svap or vlan, install rules on Rx pipe at idx %d \n", idx);
 		}
 
 #ifdef FEATURE_EoGRE
@@ -10954,7 +10954,7 @@ void IPACM_Lan::delete_ipv6_nat_ula_prefix_flt_rule()
 	int idx = 0;
 	if ((ipa_if_cate == WLAN_IF) && (is_if_svap || is_wlan_if_vlan) && (rx_prop && rx_prop->num_rx_props > 2)) {
 		idx = 2;
-		IPACMDBG_H("Interface is WLAN Svap or vlan, install rules on Rx pipe at idx %d \n", idx);
+		IPACMDBG_H("Interface is WLAN Svap or vlan, delete rules on Rx pipe at idx %d \n", idx);
 	}
 
 	if(m_filtering.DeleteFilteringHdls(&ipv6_nat_ula_prefix_flt_rule_hdl, IPA_IP_v6, 1) == false)
@@ -11080,7 +11080,7 @@ void IPACM_Lan::delete_ipv6_prefix_flt_rule()
 
 	if ((ipa_if_cate == WLAN_IF) && (is_if_svap || is_wlan_if_vlan) && (rx_prop && rx_prop->num_rx_props > 2)) {
 		idx = 2;
-		IPACMDBG_H("Interface is WLAN Svap or vlan, install rules on Rx pipe at idx %d \n", idx);
+		IPACMDBG_H("Interface is WLAN Svap or vlan, delete rules on Rx pipe at idx %d \n", idx);
 	}
 
 	if(m_filtering.DeleteFilteringHdls(&ipv6_prefix_flt_rule_hdl[0], IPA_IP_v6, IPv6_PREFIX_DEFAULT_PDN_RULE_NUM) == false)
@@ -13541,7 +13541,7 @@ int IPACM_Lan::add_tcp_syn_flt_rule(ipa_ip_type iptype)
 
 	if ((ipa_if_cate == WLAN_IF) && (is_if_svap || is_wlan_if_vlan) && (rx_prop->num_rx_props > 2)) {
 		idx = 2;
-		IPACMDBG_H("Interface is WLAN Svap or vlan, install rules on Rx1 pipe at idx %d \n", idx);
+		IPACMDBG_H("Interface is WLAN Svap or vlan, install rules on Rx pipe at idx %d \n", idx);
 	}
 
 	len = sizeof(struct ipa_ioc_add_flt_rule) + sizeof(struct ipa_flt_rule_add);
@@ -14690,7 +14690,7 @@ int IPACM_Lan::delete_mdpn_ul_xlat_filter_rule(int mux_id)
 
 	if ((ipa_if_cate == WLAN_IF) && (is_if_svap || is_wlan_if_vlan) && (rx_prop && rx_prop->num_rx_props > 2)) {
 		idx = 2;
-		IPACMDBG_H("Interface is WLAN Svap or vlan, install rules on Rx pipe at idx %d \n", idx);
+		IPACMDBG_H("Interface is WLAN Svap or vlan, delete rules on Rx pipe at idx %d \n", idx);
 	}
 
 	if (xlat_ctx.active_pdn_list[xlat_pdn_ctx_id].num_wan_mpdn_ul_xlat_fl_rule_v4 == 0)
@@ -14732,7 +14732,7 @@ int IPACM_Lan::delete_icmp_filter_rule(
 
 	if ((ipa_if_cate == WLAN_IF) && (is_if_svap || is_wlan_if_vlan) && (rx_prop && rx_prop->num_rx_props > 2)) {
 		idx = 2;
-		IPACMDBG_H("Interface is WLAN Svap or vlan, install rules on Rx pipe at idx %d \n", idx);
+		IPACMDBG_H("Interface is WLAN Svap or vlan, delete rules on Rx pipe at idx %d \n", idx);
 	}
 
 	if ( iptype == IPA_IP_v4 )
@@ -16524,7 +16524,7 @@ int IPACM_Lan::handle_ext_router_del_evt(void)
 
 	if ((ipa_if_cate == WLAN_IF) && (is_if_svap || is_wlan_if_vlan) && (rx_prop && rx_prop->num_rx_props > 2)) {
 		idx = 2;
-		IPACMDBG_H("Interface is WLAN Svap or vlan, install rules on Rx pipe at idx %d \n", idx);
+		IPACMDBG_H("Interface is WLAN Svap or vlan, delete rules on Rx pipe at idx %d \n", idx);
 	}
 
 	if(ext_router_rmnet_ipv6_hdl)

@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2013, 2018-2019 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -25,6 +26,10 @@
  * WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *
+ * Changes from Qualcomm Innovation Center are provided under the following license:
+ * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 /*!
   @file
@@ -61,6 +66,8 @@ static int ipacm_cfg_xml_parse_tree
 	 xmlNode* xml_node,
 	 IPACM_conf_t *config
 );
+
+static bool isMacsecCfgValid(IPACM_conf_t *config);
 
 static int IPACM_firewall_xml_parse_tree(const char *xml_file, xmlNode* xml_node, IPACM_firewall_t &firewall_config);
 
@@ -132,6 +139,13 @@ int ipacm_read_cfg_xml(char *xml_file, IPACM_conf_t *config)
 	if (ret_val != IPACM_SUCCESS)
 	{
 		IPACMDBG_H("IPACM_xml_parse: ipacm_cfg_xml_parse_tree returned parse error!\n");
+	}
+
+	if (!isMacsecCfgValid(config)) {
+		IPACMDBG_H("Invalid MACSEC configuration\n");
+		ret_val = IPACM_FAILURE;
+	} else {
+		ret_val = IPACM_SUCCESS;
 	}
 
 	/* Free up the libxml's parse tree */
@@ -315,6 +329,19 @@ static int ipacm_cfg_xml_parse_tree
 						memcpy(content_buf, (void *)content, str_size);
 						strlcpy(config->iface_config.iface_entries[config->iface_config.num_iface_entries - 1].iface_name, content_buf, str_size+1);
 						IPACMDBG_H("Name %s\n", config->iface_config.iface_entries[config->iface_config.num_iface_entries - 1].iface_name);
+					}
+				}
+				else if (IPACM_util_icmp_string((char*)xml_node->name, PHY_TAG) == 0)
+				{
+					content = IPACM_read_content_element(xml_node);
+					if (content)
+					{
+						str_size = strlen(content);
+						memset(content_buf, 0, sizeof(content_buf));
+						memcpy(content_buf, (void *)content, str_size);
+						strlcpy(config->iface_config.iface_entries[config->iface_config.num_iface_entries - 1].physDevName, content_buf, str_size+1);
+						config->iface_config.iface_entries[config->iface_config.num_iface_entries - 1].virtualIface = true;
+						IPACMDBG_H("Phy %s\n", config->iface_config.iface_entries[config->iface_config.num_iface_entries - 1].physDevName);
 					}
 				}
 				else if (IPACM_util_icmp_string((char*)xml_node->name, CATEGORY_TAG) == 0)
@@ -636,6 +663,27 @@ static int ipacm_cfg_xml_parse_tree
 	return ret_val;
 }
 
+/**
+ * MACSEC Interface must have a matching physical interface.
+ *
+ * @param config: The configuration that also contains MACSEC
+ *      	configuration.
+ *
+ * @return bool: true if valid, false otherwise.
+ */
+static bool isMacsecCfgValid(IPACM_conf_t *config) {
+	for (uint8_t i = 0; i < config->iface_config.num_iface_entries; i++) {
+		if (config->iface_config.iface_entries[i].physDevName[0] == 0 &&
+		    strncmp(config->iface_config.iface_entries[i].iface_name, "macsec", sizeof("macsec")) == 0) {
+			IPACMERR("Interface %s has no physical interface in the configuration!\n",
+				config->iface_config.iface_entries[i].iface_name);
+			return false;
+		}
+	}
+
+	return true;
+}
+
 /* This function read QCMAP CM Firewall XML and populate the QCMAP CM Cfg */
 int IPACM_read_firewall_xml(const char *xml_file, IPACM_firewall_t &firewall_config)
 {
@@ -765,7 +813,7 @@ static int IPACM_firewall_xml_parse_tree(const char *xml_file, xmlNode* xml_node
 				if (++firewall_config.pdn_count > IPA_MAX_NUM_SW_PDNS)
 				{
 					IPACMERR("The XML %s is not valid. The number of %s tags should be at most %d\n",
-						xml_file, MobileAPFirewallCfg_TAG, IPA_MAX_NUM_SW_PDNS);
+							xml_file, MobileAPFirewallCfg_TAG, IPA_MAX_NUM_SW_PDNS);
 					return IPACM_FAILURE;
 				}
 				/* go to child */
@@ -1509,12 +1557,14 @@ static int IPACM_firewall_xml_parse_tree(const char *xml_file, xmlNode* xml_node
 						if (str_size >= IPA_IFACE_NAME_LEN)
 						{
 							IPACMERR("The length of NetDev tag content is bigger than %d in %s",
-								IPA_IFACE_NAME_LEN, xml_file);
+									IPA_IFACE_NAME_LEN, xml_file);
 						}
 						else if (content[0] == '0')
 						{
-							strlcpy(config->net_dev, UNKNOWN_NetDev_TAG, sizeof(config->net_dev));
 							IPACMDBG_H("NetDev is %s\n", config->net_dev);
+							memset(&firewall_config.pdns[firewall_config.pdn_count - 1], 0, sizeof(IPACM_firewall_conf_t));
+							firewall_config.pdn_count--;
+							return ret_val;
 						}
 						else
 						{
@@ -1544,4 +1594,5 @@ static int IPACM_firewall_xml_parse_tree(const char *xml_file, xmlNode* xml_node
 		xml_node = xml_node->next;
 	} /* end while */
 	return ret_val;
+
 }

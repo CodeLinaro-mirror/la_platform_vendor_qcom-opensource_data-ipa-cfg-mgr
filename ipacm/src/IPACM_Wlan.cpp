@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2013-2021, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -302,7 +303,6 @@ void IPACM_Wlan::event_callback(ipa_cm_event_id event, void *param)
 					}
 
 #if defined(FEATURE_IPA_ANDROID) || defined(FEATURE_VLAN_MPDN)
-					add_dummy_private_subnet_flt_rule(data->iptype);
 					handle_private_subnet_android(data->iptype);
 #else
 					handle_private_subnet(data->iptype);
@@ -3475,6 +3475,7 @@ int IPACM_Wlan::config_dft_firewall_rules_ul_ex(IPACM_firewall_conf_t* firewall_
 
 	/* Calc v6 UL WL rule*/
 	for (i = 0; i < firewall_conf->num_extd_firewall_entries; i++)
+	{
 		if (firewall_conf->extd_firewall_entries[i].ip_vsn == 6 &&
 				firewall_conf->extd_firewall_entries[i].firewall_direction
 				== IPACM_MSGR_UL_FIREWALL
@@ -3483,8 +3484,15 @@ int IPACM_Wlan::config_dft_firewall_rules_ul_ex(IPACM_firewall_conf_t* firewall_
 			&& !firewall_conf->extd_firewall_entries[i].IPV6NatEnabledfw
 #endif
 			)
+		{
 			v6_ul_wl_rules++;
-
+			if (firewall_conf->extd_firewall_entries[i].attrib.u.v6.next_hdr ==
+					IPACM_FIREWALL_IPPROTO_TCP_UDP)
+			{
+				v6_ul_wl_rules++; //rule should be installed for TCP and UDP both
+			}
+		}
+	}
 	IPACMDBG_H("v6_ul_wl_rules %d\n", v6_ul_wl_rules);
 
 	if ((v6_ul_wl_rules == 0) || (replicate_rules == 0))

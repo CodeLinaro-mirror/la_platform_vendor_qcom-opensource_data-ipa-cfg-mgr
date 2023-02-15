@@ -1,31 +1,32 @@
 /*
-* Copyright (c) 2013, 2018, 2020, 2021 The Linux Foundation. All rights reserved.
-*
-* Redistribution and use in source and binary forms, with or without
-* modification, are permitted provided that the following conditions are
-* met:
-*  * Redistributions of source code must retain the above copyright
-*    notice, this list of conditions and the following disclaimer.
-*  * Redistributions in binary form must reproduce the above
-*    copyright notice, this list of conditions and the following
-*    disclaimer in the documentation and/or other materials provided
-*    with the distribution.
-*  * Neither the name of The Linux Foundation nor the names of its
-*    contributors may be used to endorse or promote products derived
-*    from this software without specific prior written permission.
-*
-* THIS SOFTWARE IS PROVIDED "AS IS" AND ANY EXPRESS OR IMPLIED
-* WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
-* MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NON-INFRINGEMENT
-* ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS
-* BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
-* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR
-* BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
-* WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
-* OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
-* IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-*/
+ * Copyright (c) 2013, 2018, 2020, 2021 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions are
+ * met:
+ *  * Redistributions of source code must retain the above copyright
+ *    notice, this list of conditions and the following disclaimer.
+ *  * Redistributions in binary form must reproduce the above
+ *    copyright notice, this list of conditions and the following
+ *    disclaimer in the documentation and/or other materials provided
+ *    with the distribution.
+ *  * Neither the name of The Linux Foundation nor the names of its
+ *    contributors may be used to endorse or promote products derived
+ *    from this software without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED "AS IS" AND ANY EXPRESS OR IMPLIED
+ * WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
+ * MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NON-INFRINGEMENT
+ * ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS
+ * BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR
+ * BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
+ * WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
+ * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
+ * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ */
 /*!
   @file
   IPACM_Iface.cpp
@@ -71,9 +72,17 @@ IPACM_Iface::IPACM_Iface(int iface_index) : m_ipv6_default_filterting_rules_coun
 	tx_prop = NULL;
 	rx_prop = NULL;
 
-	memcpy(dev_name,
-				 IPACM_Iface::ipacmcfg->iface_table[iface_index].iface_name,
-				 sizeof(IPACM_Iface::ipacmcfg->iface_table[iface_index].iface_name));
+	memcpy(dev_name, IPACM_Iface::ipacmcfg->iface_table[iface_index].iface_name,
+		sizeof(IPACM_Iface::ipacmcfg->iface_table[iface_index].iface_name));
+
+	if (virtualIface = IPACM_Iface::ipacmcfg->iface_table[iface_index].virtualIface)
+	{
+		memcpy(physDevName, IPACM_Iface::ipacmcfg->iface_table[iface_index].physDevName,
+			sizeof(IPACM_Iface::ipacmcfg->iface_table[iface_index].physDevName));
+	}
+
+	IPACMDBG_H("dev_name: %s virtualIface: %s physDevName: %s \n",
+		   dev_name, (virtualIface) ? "true" : "false", physDevName);
 
 	memset(dft_v4fl_rule_hdl, 0, sizeof(dft_v4fl_rule_hdl));
 	memset(dft_v6fl_rule_hdl, 0, sizeof(dft_v6fl_rule_hdl));
@@ -547,6 +556,8 @@ int IPACM_Iface::query_iface_property(void)
 {
 	int res = IPACM_SUCCESS, fd = 0;
 	uint32_t cnt=0;
+	char *queriedName;
+	size_t queriedNameSize;
 
 	fd = open(DEVICE_NAME, O_RDWR);
 	IPACMDBG("iface query-property \n");
@@ -564,9 +575,21 @@ int IPACM_Iface::query_iface_property(void)
 		close(fd);
 		return IPACM_FAILURE;
 	}
-	IPACMDBG_H("iface name %s\n", dev_name);
-	memcpy(iface_query->name, dev_name, sizeof(dev_name));
 
+	IPACMDBG_H("iface name %s\n", dev_name);
+	if(virtualIface)
+	{
+		IPACMDBG_H("phy name %s\n", physDevName);
+		queriedName = physDevName;
+		queriedNameSize = sizeof(physDevName);
+	}
+	else
+	{
+		queriedName = dev_name;
+		queriedNameSize = sizeof(dev_name);
+	}
+
+	memcpy(iface_query->name, queriedName, queriedNameSize);
 	if (ioctl(fd, IPA_IOC_QUERY_INTF, iface_query) < 0)
 	{
 		PERROR("ioctl IPA_IOC_QUERY_INTF failed\n");
@@ -585,7 +608,7 @@ int IPACM_Iface::query_iface_property(void)
 			close(fd);
 			return IPACM_FAILURE;
 		}
-		memcpy(tx_prop->name, dev_name, sizeof(tx_prop->name));
+		memcpy(tx_prop->name, queriedName, queriedNameSize);
 		tx_prop->num_tx_props = iface_query->num_tx_props;
 
 		if (ioctl(fd, IPA_IOC_QUERY_INTF_TX_PROPS, tx_prop) < 0)
@@ -628,8 +651,7 @@ int IPACM_Iface::query_iface_property(void)
 			close(fd);
 			return IPACM_FAILURE;
 		}
-		memcpy(rx_prop->name, dev_name,
-				 sizeof(rx_prop->name));
+		memcpy(rx_prop->name, queriedName, queriedNameSize);
 		rx_prop->num_rx_props = iface_query->num_rx_props;
 
 		if (ioctl(fd, IPA_IOC_QUERY_INTF_RX_PROPS, rx_prop) < 0)

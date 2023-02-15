@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2013, 2018-2019, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -84,6 +85,7 @@ if (!(a)) {                                                 \
 #define IPACMIFACECFG_TAG                    "IPACMIface"
 #define IFACE_TAG                            "Iface"
 #define NAME_TAG                             "Name"
+#define PHY_TAG                              "Phy"
 #define CATEGORY_TAG                         "Category"
 #define MODE_TAG                             "Mode"
 #define IPACMPRIVATESUBNETCFG_TAG            "IPACMPrivateSubnet"

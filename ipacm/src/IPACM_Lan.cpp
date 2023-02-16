@@ -10146,22 +10146,6 @@ int IPACM_Lan::install_ipv4_icmp_flt_rule()
 			idx = 2;
 			IPACMDBG_H("Interface is WLAN Svap or vlan, install rules on Rx pipe at idx %d \n", idx);
 		}
-
-#ifdef FEATURE_EoGRE
-		bool eogre_enabled = IPACM_Iface::ipacmcfg->eogre_enabled;
-#else
-		bool eogre_enabled = false;
-#endif
-		/*
-		 * Don't configure icmp when gre enabled:
-		 */
-
-		if ( eogre_enabled )
-		{
-			IPACMDBG_H("Won't install icmp rule when gre enabled\n");
-			return ret;
-		}
-
 		static const int NUM_RULES = 1;
 
 		char buf1[sizeof(struct ipa_ioc_add_flt_rule_v2)];
@@ -15042,16 +15026,6 @@ void IPACM_Lan::gre_down()
 		if ( delete_dflt_filter_rules(IPA_IP_v4) == IPACM_FAILURE )
 		{
 			IPACMERR("delete_dflt_filter_rules failed\n");
-			return;
-		}
-		/*
-		 * The icmp rule was removed on gre_up; needs to be added
-		 * back now.
-		 */
-		res = install_ipv4_icmp_flt_rule();
-		if ( res == IPACM_FAILURE )
-		{
-			IPACMERR("install_ipv4_icmp_flt_rule failed\n");
 			return;
 		}
 		/*

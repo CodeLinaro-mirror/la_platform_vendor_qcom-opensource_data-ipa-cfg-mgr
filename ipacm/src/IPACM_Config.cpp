@@ -159,6 +159,7 @@ IPACM_Config::IPACM_Config()
 	iface_table = NULL;
 	alg_table = NULL;
 	pNatIfaces = NULL;
+	vlan_config = NULL;
 	memset(&ipa_client_rm_map_tbl, 0, sizeof(ipa_client_rm_map_tbl));
 	memset(&ipa_rm_tbl, 0, sizeof(ipa_rm_tbl));
 	ipa_rm_a2_check=0;
@@ -763,6 +764,23 @@ skip_fnr_alloc:
                 ret = IPACM_FAILURE;
                 goto fail;
         }
+
+	if (vlan_config != NULL)
+	{
+		free(vlan_config);
+		vlan_config = NULL;
+		IPACMDBG_H("RESET IPACM_Config::vlan_config\n");
+	}
+	vlan_config = (IPACM_vlan_conf_t *)malloc(sizeof(IPACM_vlan_conf_t));
+
+	if(vlan_config == NULL)
+	{
+		IPACMERR("Unable to allocate vlan_config memory.\n");
+		ret = IPACM_FAILURE;
+		goto fail;
+	}
+
+	memcpy(vlan_config, &(cfg->vlan_cfg), sizeof(IPACM_vlan_conf_t));
 
 fail:
 	if (cfg != NULL)

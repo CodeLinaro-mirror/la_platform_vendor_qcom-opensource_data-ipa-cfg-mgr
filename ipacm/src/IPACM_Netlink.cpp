@@ -671,6 +671,25 @@ static int ipa_nl_decode_rtm_route
 	return IPACM_SUCCESS;
 }
 
+/* Get vlan priority */
+static bool ipa_nl_get_vlan_priority
+(
+	 ipa_vlan_iface_info   *vlan_info
+	 )
+{
+	for(int i = 0; i < IPACM_Iface::ipacmcfg->vlan_config->num_vlan_if; i++)
+	{
+		if ((strcmp(IPACM_Iface::ipacmcfg->vlan_config->vlan_if_cfg[i].name, vlan_info->name) == 0) &&
+							IPACM_Iface::ipacmcfg->vlan_config->vlan_if_cfg[i].vlan_id == vlan_info->vlan_id)
+		{
+			vlan_info->priority = IPACM_Iface::ipacmcfg->vlan_config->vlan_if_cfg[i].priority;
+			IPACMDBG("Found Vlan ID %d, Priority %d\n", vlan_info->vlan_id, vlan_info->priority);
+			return true;
+		}
+	}
+	return false;
+}
+
 /* decode the ipa nl-message */
 static int ipa_nl_decode_nlmsg
 (
@@ -702,6 +721,7 @@ static int ipa_nl_decode_nlmsg
 		switch(nlh->nlmsg_type)
 		{
 		case RTM_NEWLINK:
+		{
 			msg_ptr->type = nlh->nlmsg_type;
 			msg_ptr->link_event = true;
 			if(IPACM_SUCCESS != ipa_nl_decode_rtm_link(buffer, buflen, &(msg_ptr->nl_link_info)))
@@ -745,10 +765,13 @@ static int ipa_nl_decode_nlmsg
 					data_fid->if_index = msg_ptr->nl_link_info.metainfo.ifi_index;
 					strlcpy(data_fid->iface_name, dev_name, sizeof(data_fid->iface_name));
 					if(msg_ptr->nl_link_info.vlan_id) {
+							memset(&vlan_info, 0, sizeof(ipa_vlan_iface_info));
 							strlcpy(vlan_info.name, msg_ptr->nl_link_info.vlan_name, IPA_RESOURCE_NAME_MAX);
 							vlan_info.vlan_id = msg_ptr->nl_link_info.vlan_id;
 							vlan_info.vlan_interface_index = msg_ptr->nl_link_info.metainfo.ifi_index;
-							IPACMDBG("Add vlan<->interface details  with vlan: %d interface: %s interface index %d\n",vlan_info.vlan_id, vlan_info.name, vlan_info.vlan_interface_index);
+							ipa_nl_get_vlan_priority(&vlan_info);
+							IPACMDBG("Add vlan<->interface details with vlan: %d interface: %s interface index %d priority %d\n",
+												vlan_info.vlan_id, vlan_info.name, vlan_info.vlan_interface_index, vlan_info.priority);
 							IPACM_Iface::ipacmcfg->add_vlan_iface(&vlan_info);
 					}
 
@@ -835,7 +858,8 @@ static int ipa_nl_decode_nlmsg
 					IPACM_EvtDispatcher::PostEvt(&evt_data);
 				}
 			}
-			break;
+		}
+		break;
 
 		case RTM_DELLINK:
 			IPACMDBG("\n GOT dellink event\n");

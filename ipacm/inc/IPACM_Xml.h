@@ -332,18 +332,10 @@ typedef struct
 	ipacm_alg alg_entries[IPA_MAX_ALG_ENTRIES];
 } ipacm_alg_conf_t;
 
-/* VLAN config structures */
-typedef struct _IPACM_vlan_if
-{
-        uint16_t vlan_id;
-        uint8_t off_path;
-        uint8_t vlan_pcp;
-}IPACM_vlan_if_t;
-
 typedef struct _IPACM_vlan_conf
 {
         uint8_t num_vlan_if;
-        IPACM_vlan_if_t vlan_if_cfg[IPA_MAX_IFACE_ENTRIES];
+        ipa_vlan_iface_info vlan_if_cfg[IPA_MAX_IFACE_ENTRIES];
 }IPACM_vlan_conf_t;
 
 typedef struct  _IPACM_conf_t
@@ -368,7 +360,7 @@ typedef struct  _IPACM_conf_t
 	int ipacm_l2tp_enable;
 	bool ipacm_mpdn_enable;
 	bool ipacm_socksv5_enable;
-        IPACM_vlan_conf_t vlan_cfg;
+	IPACM_vlan_conf_t vlan_cfg;
 } IPACM_conf_t;
 
 /* This function read IPACM XML configuration*/

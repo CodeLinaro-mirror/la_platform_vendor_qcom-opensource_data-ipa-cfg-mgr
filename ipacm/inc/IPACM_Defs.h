@@ -480,6 +480,7 @@ struct ipa_vlan_iface_info
 #define IPA_VLAN_PRIORITY
 		uint8_t priority;
 		uint16_t vlan_interface_index;
+		uint8_t off_path;
 };
 
 struct vlan_iface_info

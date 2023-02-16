@@ -157,6 +157,9 @@ public:
 	/* Store private subnet configuration from XML file */
 	ipa_private_subnet private_subnet_table[IPA_MAX_PRIVATE_SUBNET_ENTRIES + IPA_MAX_MTU_ENTRIES];
 
+        /* Store intereseted vlan configuration from XML file */
+        IPACM_vlan_conf_t *vlan_config;
+
 #ifdef FEATURE_VLAN_MPDN
 	int num_ipv6_prefixes;
 	struct ipa_prefix_info ipa_ipv6_prefixes[IPA_MAX_IPV6_PREFIX_FLT_RULE + IPA_MAX_MTU_ENTRIES];

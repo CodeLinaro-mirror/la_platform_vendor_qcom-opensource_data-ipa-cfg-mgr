@@ -232,8 +232,8 @@ static int ipacm_vlan_cfg_xml_parse_tree
 							str_size = strlen(content);
 							memset(content_buf, 0, sizeof(content_buf));
 							memcpy(content_buf, (void *)content, str_size);
-							strlcpy(cfg->vlan_cfg.vlan_if_cfg[cfg->vlan_cfg.num_vlan_if - 1].vlan_name, content_buf, str_size + 1);
-							IPACMDBG_H("VLAN Name :%s\n",cfg->vlan_cfg.vlan_if_cfg[cfg->vlan_cfg.num_vlan_if - 1].vlan_name);
+							strlcpy(cfg->vlan_cfg.vlan_if_cfg[cfg->vlan_cfg.num_vlan_if - 1].name, content_buf, str_size + 1);
+							IPACMDBG_H("VLAN Name :%s\n",cfg->vlan_cfg.vlan_if_cfg[cfg->vlan_cfg.num_vlan_if - 1].name);
 						}
 					}
 					else if (IPACM_util_icmp_string((char*)xml_node->name, IPACM_VLAN_ID) == 0)
@@ -264,9 +264,9 @@ static int ipacm_vlan_cfg_xml_parse_tree
 						content = IPACM_read_content_element(xml_node);
 						if (content)
 						{
-							cfg->vlan_cfg.vlan_if_cfg[cfg->vlan_cfg.num_vlan_if - 1].vlan_pcp = atoi(content);
+							cfg->vlan_cfg.vlan_if_cfg[cfg->vlan_cfg.num_vlan_if - 1].priority = atoi(content);
 							IPACMDBG_H("VLAN PCP :%d\n",
-											cfg->vlan_cfg.vlan_if_cfg[cfg->vlan_cfg.num_vlan_if - 1].vlan_pcp);
+											cfg->vlan_cfg.vlan_if_cfg[cfg->vlan_cfg.num_vlan_if - 1].priority);
 						}
 					}
 				} // Node case

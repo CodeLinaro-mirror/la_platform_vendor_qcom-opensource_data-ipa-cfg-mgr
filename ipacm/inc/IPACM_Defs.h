@@ -202,6 +202,7 @@ extern "C"
 #define DEFAULT_MTU_SIZE 1500
 #define IPA_L2TP_UDP_DEFAULT_MTU_SIZE 1422 /* 1500 - (IPv6(40) + UDP (8) + L2TP (16) + ETH (14)). */
 #define IPV6_HEADER_SIZE 40
+#define IPV4_HEADER_SIZE 20
 
 #define IPA_MAX_ACTIVE_LAN_IFACE 2
 
@@ -267,7 +268,7 @@ typedef enum
 	IPA_BRIDGE_LINK_UP_EVENT,                 /* ipacm_event_data_all */
 	IPA_WAN_EMBMS_LINK_UP_EVENT,              /* ipacm_event_data_mac */
 	IPA_ADDR_ADD_EVENT,                       /* ipacm_event_data_addr */
-	IPA_ADDR_DEL_EVENT,                       /* no use */
+	IPA_ADDR_DEL_EVENT,                       /* ipacm_event_data_addr */
 	IPA_ROUTE_ADD_EVENT,                      /* ipacm_event_data_addr */
 	IPA_ROUTE_DEL_EVENT,                      /* ipacm_event_data_addr */
 	IPA_WAN_UPSTREAM_ROUTE_ADD_EVENT,         /* ipacm_event_data_fid */

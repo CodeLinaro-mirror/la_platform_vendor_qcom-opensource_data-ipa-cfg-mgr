@@ -28,7 +28,7 @@
  *
  * Changes from Qualcomm Innovation Center are provided under the following license:
  *
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted (subject to the limitations in the
@@ -10390,6 +10390,7 @@ int IPACM_Lan::modify_private_subnet()
 		}
 		IPACM_Iface::ipacmcfg->decreaseFltRuleCount(rx_prop->rx[idx].src_pipe, IPA_IP_v4, num_wan_subnet_rules);
 		num_wan_subnet_rules = 0;
+		memset(private_fl_rule_hdl, 0, (IPA_MAX_PRIVATE_SUBNET_ENTRIES + IPA_MAX_MTU_ENTRIES) * sizeof(uint32_t));
 	}
 
 	if (IPACM_Iface::ipacmcfg->ipa_num_private_subnet == 0)
@@ -10410,23 +10411,20 @@ int IPACM_Lan::modify_private_subnet()
 		/* first subnet is reserved for default PDN */
 		mtu[0] = IPACM_Wan::queryMTU(ipa_if_num, IPA_IP_v4);
 		IPACMDBG_H("defaut PDN mtu = %d\n", mtu[0]);
-		if(mtu[0] < DEFAULT_MTU_SIZE)
-			mtu_rule_cnt++;
-		else
-			IPACMDBG_H("Mtu size is unchanged. No need to install mtu rule for above subnet\n");
+		mtu_rule_cnt++;
 	}
 
 #ifdef FEATURE_EoGRE
 	/* if in GRE mode, also query MTU since WanUP flag is false but WAN is up */
 	if(IPACM_Iface::ipacmcfg->eogre_enabled)
 	{
-		/* re-calculate the ipv4 mtu based on GRE tunnel type*/
-		if(IPACM_Iface::ipacmcfg->eogre_info.iptype == IPA_IP_v4)
-			/* mtu_v4_new = mtu_v4 - 20(ipv4) - 4(gre) - 18(eth + VLAN) */
-			mtu[0] = IPACM_Wan::queryMTU(ipa_if_num, IPA_IP_v4) - sizeof(v4_gre_hdr_t) - 18;
-		else if (IPACM_Iface::ipacmcfg->eogre_info.iptype == IPA_IP_v6)
-			/* mtu_v4_new = mtu_v6 - 40(ipv6) - 8(opt) - 4(gre) - 18(eth + VLAN) */
-			mtu[0] = IPACM_Wan::queryMTU(ipa_if_num, IPA_IP_v6) - sizeof(v6_gre_hdr_t) - 18;
+		/* re-calculate the ipv4 mtu based on GRE tunnel type */
+		if(IPACM_Iface::ipacmcfg->eogre_info.iptype == IPA_IP_v4) /* v4 + v4 */
+			/* mtu_v4_new = mtu_v4 - 4(gre) - 4(MPLS) - 14(eth) - 20(inner ipv4) */
+			mtu[0] = IPACM_Wan::queryMTU(ipa_if_num, IPA_IP_v4) - 22 - IPV4_HEADER_SIZE;
+		else if (IPACM_Iface::ipacmcfg->eogre_info.iptype == IPA_IP_v6) /* v6 + v4 */
+			/* mtu_v4_new = mtu_v6 - 8(options) - 4(gre) - 4(MPLS) -14(eth) - 20(inner ipv4) */
+			mtu[0] = IPACM_Wan::queryMTU(ipa_if_num, IPA_IP_v6) - 30 - IPV4_HEADER_SIZE ;
 		else
 			IPACMERR("invalid iptype = %d\n", IPACM_Iface::ipacmcfg->eogre_info.iptype);
 
@@ -10445,6 +10443,7 @@ int IPACM_Lan::modify_private_subnet()
 			mtu_flt_rule_offset[IPA_IP_v4] = dft_v4fl_rule_hdl[m_ipv4_default_filterting_rules_count - 1];
 		}
 		mtu_rule_cnt++;
+		IPACMDBG_H("total %d MTU rules are needed\n", mtu_rule_cnt);
 	}
 #endif
 
@@ -10460,16 +10459,12 @@ int IPACM_Lan::modify_private_subnet()
 					IPACM_Iface::ipacmcfg->private_subnet_table[i].subnet_addr);
 
 				if (!vid[i])
-
 					mtu[i] = DEFAULT_MTU_SIZE;
 				else
 					IPACM_Wan::GetMTUByVid(&mtu[i], vid[i], IPA_IP_v4);
 
 				IPACMDBG_H("mtu = %d for subnet %d\n", mtu[i], i);
-				if(mtu[i] < DEFAULT_MTU_SIZE)
-					mtu_rule_cnt++;
-				else
-					IPACMDBG_H("Mtu size is unchanged. No need to install mtu rule for above subnet\n");
+				mtu_rule_cnt++;
 			}
 			IPACMDBG_H("total %d MTU rules are needed\n", mtu_rule_cnt);
 		}
@@ -10534,7 +10529,7 @@ int IPACM_Lan::modify_private_subnet()
 		IPACMDBG_H(" IPACM private subnet_addr as: 0x%x entry(%d)\n", flt_rule.rule.attrib.u.v4.dst_addr, i);
 
 		/* add corresponding MTU rule for ipv4 */
-		if (mtu[i] > 0 && mtu[i] < DEFAULT_MTU_SIZE)
+		if (mtu[i] > 0)
 		{
 			memcpy(&flt_rule.rule.attrib, &rx_prop->rx[idx].attrib, sizeof(flt_rule.rule.attrib));
 
@@ -10673,20 +10668,20 @@ int IPACM_Lan::modify_ipv6_prefix_flt_rule()
 	}
 
 	/* for MPDN case, need to query VLAN and mtus */
-	if(IPACM_Iface::ipacmcfg->ipacm_mpdn_enable)
+	if(IPACM_Iface::ipacmcfg->ipacm_mpdn_enable )
 	{
-		if( IPACM_Wan::isWanUP_V6(ipa_if_num) || (IPACM_Iface::ipacmcfg->iface_in_vlan_mode(dev_name) && IPACM_Wan::isVlanWanUP_V6()))
+		if((IPACM_Wan::isWanUP_V6(ipa_if_num) && !IPACM_Iface::ipacmcfg->iface_in_vlan_mode(dev_name))
+			|| (IPACM_Iface::ipacmcfg->iface_in_vlan_mode(dev_name) && IPACM_Wan::isVlanWanUP_V6()))
 		{
 			for(i = 0; i < IPACM_Iface::ipacmcfg->num_ipv6_prefixes; i++)
 			{
-				IPACM_Wan::GetV6MTUByPrefix(&mtu[i], IPACM_Iface::ipacmcfg->ipa_ipv6_prefixes[i].addr); //might be able to get MTU by vid now
-				IPACMDBG_H("mtu = %d for prefix %d\n", mtu[i], i);
-
-				if(mtu[i] < DEFAULT_MTU_SIZE)
-					mtu_rule_cnt++;
+				vid[i] = IPACM_Iface::ipacmcfg->ipa_ipv6_prefixes[i].vlan_id;
+				if (!vid[i])
+					mtu[i] = DEFAULT_MTU_SIZE;
 				else
-					IPACMDBG_H("Mtu size is unchanged. No need to install mtu rule for above prefix\n");
-
+					IPACM_Wan::GetV6MTUByPrefix(&mtu[i], IPACM_Iface::ipacmcfg->ipa_ipv6_prefixes[i].addr); //might be able to get MTU by vid now
+				IPACMDBG_H("mtu = %d for prefix %d\n", mtu[i], i);
+				mtu_rule_cnt++;
 			}
 			IPACMDBG_H("total %d MTU rules are needed\n", mtu_rule_cnt);
 		}
@@ -10696,13 +10691,15 @@ int IPACM_Lan::modify_ipv6_prefix_flt_rule()
 	/* if in GRE mode, also query MTU since WANup_v6 flag is false but WANv6 is up*/
 	if(IPACM_Iface::ipacmcfg->eogre_enabled)
 	{
-		/* re-calculate the ipv6 mtu based on GRE tunnel type*/
-		if(IPACM_Iface::ipacmcfg->eogre_info.iptype == IPA_IP_v4)
-			/* mtu_v6_new = mtu_v4 - 4(gre) - 18(eth + vlan)*/
-			mtu[0] = IPACM_Wan::queryMTU(ipa_if_num, IPA_IP_v4) - 22;
-		else if (IPACM_Iface::ipacmcfg->eogre_info.iptype == IPA_IP_v6)
-			/* mtu_v6_new = mtu_v6 - 8(opt) - 4(gre)- 18(eth + vlan) */
-			mtu[0] = IPACM_Wan::queryMTU(ipa_if_num, IPA_IP_v6) - 30;
+		/* re-calculate the ipv6 mtu based on GRE tunnel type */
+		/* Note: Ipv6 gre outer header have 8 byte options */
+		if(IPACM_Iface::ipacmcfg->eogre_info.iptype == IPA_IP_v4) /* v4 + v6  */
+			/* mtu_v6_new = mtu_v4 - 4(gre) - 4(MPLS) - 14(eth) - 40(inner ipv6) */
+			mtu[0] = IPACM_Wan::queryMTU(ipa_if_num, IPA_IP_v4) - 22 - IPV6_HEADER_SIZE;
+
+		else if (IPACM_Iface::ipacmcfg->eogre_info.iptype == IPA_IP_v6) /* v6 + v6 */
+			/* mtu_v6_new = mtu_v6 - 8(options) - 4(gre) - 4(MPLS) - 14(eth) - 40(inner ipv6)*/
+			mtu[0] = IPACM_Wan::queryMTU(ipa_if_num, IPA_IP_v6) - 30 - IPV6_HEADER_SIZE;
 		else
 			IPACMERR("invalid iptype = %d\n", IPACM_Iface::ipacmcfg->eogre_info.iptype);
 
@@ -10722,6 +10719,7 @@ int IPACM_Lan::modify_ipv6_prefix_flt_rule()
 		}
 
 		mtu_rule_cnt++;
+		IPACMDBG_H("total %d MTU rules are needed\n", mtu_rule_cnt);
 	}
 #endif
 	IPACMDBG_H("Memory allocating for num_ipv6_prefixes rules = %d num_no_offload_ipv6_prefix rules = %d mtu_rule_cnt = %d\n", IPACM_Iface::ipacmcfg->num_ipv6_prefixes, IPACM_Iface::ipacmcfg->num_no_offload_ipv6_prefix, mtu_rule_cnt);
@@ -10774,7 +10772,7 @@ int IPACM_Lan::modify_ipv6_prefix_flt_rule()
 			flt_rule.rule.attrib.u.v6.dst_addr[1], i);
 
 		/* add corresponding MTU rule for ipv6 */
-		if (mtu[i] > 0 && mtu[i] < DEFAULT_MTU_SIZE)
+		if (mtu[i] > 0)
 		{
 			if (ipa_if_cate == WLAN_IF)
 				memset(&flt_rule.rule.attrib, 0, sizeof(flt_rule.rule.attrib));
@@ -14424,9 +14422,8 @@ int IPACM_Lan::construct_mtu_rule(struct ipa_flt_rule *rule, ipa_ip_type iptype,
 	else
 	{
 		rule->eq_attrib.ihl_offset_range_16[0].offset = 0x84;
-		//v6 uses payload length which doesnt include v6 header //but MTU also uses playload length not max packet size so dont need to add this?
-		//rule->eq_attrib.ihl_offset_range_16[0].range_low = mtu + 1 - IPV6_HEADER_SIZE;
-		rule->eq_attrib.ihl_offset_range_16[0].range_low = mtu + 1;
+		//v6 uses payload length which doesnt include v6 header so need to add for MTU
+		rule->eq_attrib.ihl_offset_range_16[0].range_low = mtu + 1 - IPV6_HEADER_SIZE;
 	}
 
 
@@ -14831,6 +14828,29 @@ void IPACM_Lan::gre_up()
 
 	IPACMDBG_H("The gre backhaul is using muxid(%u)\n", muxid);
 
+	IPACMDBG_H("Query rmnet_dataX muxid\n");
+	/* Always query mux-id again on MPLS EoGRE scenario */
+	if (ipgre_info.iptype == IPA_IP_v4)
+	{
+		ret = IPACM_Wan::GetMuxByAddr(IPA_IP_v4, &ipgre_info.ipv4_src, muxid);
+	}
+	else
+	{
+		ret = IPACM_Wan::GetMuxByAddr(IPA_IP_v6, &ipgre_info.ipv6_src, muxid);
+	}
+
+	if (ret == IPACM_SUCCESS)
+	{
+		IPACM_Iface::ipacmcfg->SetQmapId(muxid);
+		IPACMDBG_H("Override muxid(%u)\n", muxid);
+	}
+	else
+	{
+		IPACMERR("GetMuxByAddr did not succeed.\n");
+		return;
+	}
+
+	IPACMDBG_H("new: The gre backhaul is using muxid(%u)\n", muxid);
 	if ( rx_prop != NULL )
 	{
 		/*

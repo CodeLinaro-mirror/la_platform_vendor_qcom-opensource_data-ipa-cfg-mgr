@@ -1395,6 +1395,7 @@ void IPACM_Config::del_bridge_vlan_mapping(uint16_t *data)
 	if(m_bridge_vlan_mapping.empty()) {
 
 		IPACMERR("Bridge vlan mapping list is empty\n");
+                pthread_mutex_unlock(&vlan_l2tp_lock);
 		return;
 	}
 

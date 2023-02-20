@@ -25,6 +25,10 @@ BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
 WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
 OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
 IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+Changes from Qualcomm Innovation Center are provided under the following license:
+Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+SPDX-License-Identifier: BSD-3-Clause-Clear
 */
 /*!
 	@file
@@ -622,6 +626,7 @@ static int ipa_nl_decode_nlmsg
 
 	uint32_t if_ipv4_addr =0, if_ipipv4_addr_mask =0, temp =0, if_ipv4_addr_gw =0;
 	uint8_t nullMac[IPA_MAC_ADDR_SIZE];
+	uint32_t prefix_len = ~0;
 
 	ipacm_cmd_q_data evt_data;
 	ipacm_event_data_all *data_all;
@@ -677,7 +682,7 @@ static int ipa_nl_decode_nlmsg
 						return IPACM_FAILURE;
 					}
 					data_fid->if_index = msg_ptr->nl_link_info.metainfo.ifi_index;
-
+					strlcpy(data_fid->iface_name, dev_name, sizeof(data_fid->iface_name));
 					if(msg_ptr->nl_link_info.metainfo.ifi_flags & IFF_UP)
 					{
 						IPACMDBG_H("Interface %s bring up with IP-family: %d \n", dev_name, msg_ptr->nl_link_info.metainfo.ifi_family);
@@ -740,7 +745,6 @@ static int ipa_nl_decode_nlmsg
 						IPACMERR("unable to allocate memory for event data_fid\n");
 						return IPACM_FAILURE;
 					}
-					data_fid->if_index = msg_ptr->nl_link_info.metainfo.ifi_index;
 
 					ret_val = ipa_get_if_name(dev_name, msg_ptr->nl_link_info.metainfo.ifi_index);
 					if(ret_val != IPACM_SUCCESS)
@@ -750,6 +754,8 @@ static int ipa_nl_decode_nlmsg
 					}
 					IPACMDBG_H("Got a usb link_down event (Interface %s) \n", dev_name);
 
+					data_fid->if_index = msg_ptr->nl_link_info.metainfo.ifi_index;
+					strlcpy(data_fid->iface_name, dev_name, sizeof(data_fid->iface_name));
 					/*--------------------------------------------------------------------------
 						Post LAN iface (ECM) link down event
 					---------------------------------------------------------------------------*/
@@ -809,6 +815,7 @@ static int ipa_nl_decode_nlmsg
 				}
 
 				data_fid->if_index = msg_ptr->nl_link_info.metainfo.ifi_index;
+				strlcpy(data_fid->iface_name, dev_name, sizeof(data_fid->iface_name));
 
 				IPACMDBG_H("posting IPA_LINK_DOWN_EVENT with if idnex:%d\n",
 								 data_fid->if_index);
@@ -840,7 +847,7 @@ static int ipa_nl_decode_nlmsg
 					IPACMERR("unable to allocate memory for event data_addr\n");
 					return IPACM_FAILURE;
 				}
-
+				memset(data_addr, 0, sizeof(ipacm_event_data_addr));
 				if(AF_INET6 == msg_ptr->nl_addr_info.attr_info.prefix_addr.ss_family)
 				{
 					data_addr->iptype = IPA_IP_v6;
@@ -854,9 +861,13 @@ static int ipa_nl_decode_nlmsg
 				else
 				{
 					data_addr->iptype = IPA_IP_v4;
+					prefix_len = ~0;
 					IPACM_NL_REPORT_ADDR( "IFA_ADDRESS:", msg_ptr->nl_addr_info.attr_info.prefix_addr );
 					IPACM_EVENT_COPY_ADDR_v4( data_addr->ipv4_addr, msg_ptr->nl_addr_info.attr_info.prefix_addr);
 					data_addr->ipv4_addr = ntohl(data_addr->ipv4_addr);
+					prefix_len = ((prefix_len >> (IPV4_SIZE - msg_ptr->nl_addr_info.metainfo.ifa_prefixlen)) << (IPV4_SIZE - msg_ptr->nl_addr_info.metainfo.ifa_prefixlen));
+					data_addr->ipv4_addr = (data_addr->ipv4_addr & prefix_len);
+					data_addr->ipv4_addr_mask = prefix_len;
 
 				}
 
@@ -883,6 +894,44 @@ static int ipa_nl_decode_nlmsg
 			}
 			break;
 
+		case RTM_DELADDR:
+			IPACMDBG("\n GOT RTM_DELADDR event\n");
+			if(IPACM_SUCCESS != ipa_nl_decode_rtm_addr(buffer, buflen, &(msg_ptr->nl_addr_info)))
+			{
+				IPACMERR("Failed to decode rtm addr message\n");
+				return IPACM_FAILURE;
+			}
+			else
+			{
+
+				data_addr = (ipacm_event_data_addr *)malloc(sizeof(ipacm_event_data_addr));
+				if(data_addr == NULL)
+				{
+					IPACMERR("unable to allocate memory for event data_addr\n");
+					return IPACM_FAILURE;
+				}
+				memset(data_addr, 0, sizeof(ipacm_event_data_addr));
+				if(AF_INET == msg_ptr->nl_addr_info.attr_info.prefix_addr.ss_family)
+				{
+					data_addr->iptype = IPA_IP_v4;
+					prefix_len = ~0;
+					IPACM_NL_REPORT_ADDR( "IFA_ADDRESS:", msg_ptr->nl_addr_info.attr_info.prefix_addr );
+					IPACM_EVENT_COPY_ADDR_v4( data_addr->ipv4_addr, msg_ptr->nl_addr_info.attr_info.prefix_addr);
+					data_addr->ipv4_addr = ntohl(data_addr->ipv4_addr);
+					prefix_len = ((prefix_len >> (IPV4_SIZE - msg_ptr->nl_addr_info.metainfo.ifa_prefixlen)) << (IPV4_SIZE - msg_ptr->nl_addr_info.metainfo.ifa_prefixlen));
+					data_addr->ipv4_addr = (data_addr->ipv4_addr & prefix_len);
+					data_addr->ipv4_addr_mask = prefix_len;
+					data_addr->if_index = msg_ptr->nl_addr_info.metainfo.ifa_index;
+					strlcpy(data_addr->iface_name, dev_name, sizeof(data_addr->iface_name));
+					evt_data.event = IPA_ADDR_DEL_EVENT;
+					IPACMDBG("Posting IPA_ADDR_DEL_EVENT with if index:%d, ipv4 addr:0x%x\n",
+						data_addr->if_index,
+						data_addr->ipv4_addr);
+					evt_data.evt_data = data_addr;
+					IPACM_EvtDispatcher::PostEvt(&evt_data);
+				}
+			}
+			break;
 		case RTM_NEWROUTE:
 
 			if(IPACM_SUCCESS != ipa_nl_decode_rtm_route(buffer, buflen, &(msg_ptr->nl_route_info)))

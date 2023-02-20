@@ -26,6 +26,40 @@
  * WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *
+ * Changes from Qualcomm Innovation Center are provided under the following license:
+ *
+ * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted (subject to the limitations in the
+ * disclaimer below) provided that the following conditions are met:
+ *
+ *     * Redistributions of source code must retain the above copyright
+ *       notice, this list of conditions and the following disclaimer.
+ *
+ *     * Redistributions in binary form must reproduce the above
+ *       copyright notice, this list of conditions and the following
+ *       disclaimer in the documentation and/or other materials provided
+ *       with the distribution.
+ *
+ *     * Neither the name of Qualcomm Innovation Center, Inc. nor the names of its
+ *       contributors may be used to endorse or promote products derived
+ *       from this software without specific prior written permission.
+ *
+ * NO EXPRESS OR IMPLIED LICENSES TO ANY PARTY'S PATENT RIGHTS ARE
+ * GRANTED BY THIS LICENSE. THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT
+ * HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED
+ * WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
+ * MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
+ * IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR
+ * ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+ * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE
+ * GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER
+ * IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
+ * OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
+ * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE
  */
 /*!
 	@file
@@ -449,8 +483,7 @@ public:
 
 		return false;
 	}
-#ifdef FEATURE_IPA_ANDROID
-	inline bool AddPrivateSubnet(uint32_t ip_addr, int ipa_if_index)
+	inline bool AddPrivateSubnet(uint32_t ip_addr, uint32_t ipv4_addr_mask, int ipa_if_index)
 	{
 		ipacm_cmd_q_data evt_data;
 		ipacm_event_data_fid *data_fid;
@@ -468,7 +501,8 @@ public:
 		{
 			IPACMDBG("Add IPACM private subnet_addr as: 0x%x in entry(%d) \n", ip_addr, ipa_num_private_subnet);
 			private_subnet_table[ipa_num_private_subnet].subnet_addr = ip_addr;
-			private_subnet_table[ipa_num_private_subnet].subnet_mask = (subnet_mask >> 8) << 8;
+			private_subnet_table[ipa_num_private_subnet].subnet_mask = ipv4_addr_mask;
+			private_subnet_table[ipa_num_private_subnet].if_index = ipa_if_index;
 			ipa_num_private_subnet++;
 
 			/* IPACM private subnet set changes */
@@ -502,6 +536,8 @@ public:
 				for(; cnt < ipa_num_private_subnet - 1; cnt++)
 				{
 					private_subnet_table[cnt].subnet_addr = private_subnet_table[cnt + 1].subnet_addr;
+					private_subnet_table[cnt].subnet_mask = private_subnet_table[cnt + 1].subnet_mask;
+					private_subnet_table[cnt].if_index = private_subnet_table[cnt + 1].if_index;
 				}
 				ipa_num_private_subnet = ipa_num_private_subnet - 1;
 
@@ -524,7 +560,42 @@ public:
 		IPACMDBG("can't find private subnet_addr as: 0x%x \n", ip_addr);
 		return false;
 	}
-#endif /* defined(FEATURE_IPA_ANDROID)*/
+	inline bool DelPrivateSubnetByIfIndex(int ipa_if_index)
+	{
+		ipacm_cmd_q_data evt_data;
+		ipacm_event_data_fid *data_fid;
+		for(int cnt = 0; cnt < ipa_num_private_subnet; cnt++)
+		{
+			if(private_subnet_table[cnt].if_index == ipa_if_index)
+			{
+				IPACMDBG("Found private subnet_addr as: 0x%x in entry(%d) \n", private_subnet_table[cnt].subnet_addr, cnt);
+				for(; cnt < ipa_num_private_subnet - 1; cnt++)
+				{
+					private_subnet_table[cnt].subnet_addr = private_subnet_table[cnt + 1].subnet_addr;
+					private_subnet_table[cnt].subnet_mask = private_subnet_table[cnt + 1].subnet_mask;
+					private_subnet_table[cnt].if_index = private_subnet_table[cnt + 1].if_index;
+				}
+				ipa_num_private_subnet = ipa_num_private_subnet - 1;
+
+				/* IPACM private subnet set changes */
+				data_fid = (ipacm_event_data_fid *)malloc(sizeof(ipacm_event_data_fid));
+				if(data_fid == NULL)
+				{
+					IPACMERR("unable to allocate memory for event data_fid\n");
+					return IPACM_FAILURE;
+				}
+				data_fid->if_index = ipa_if_index; // already ipa index, not fid index
+				evt_data.event = IPA_PRIVATE_SUBNET_CHANGE_EVENT;
+				evt_data.evt_data = data_fid;
+
+				/* Insert IPA_PRIVATE_SUBNET_CHANGE_EVENT to command queue */
+				IPACM_EvtDispatcher::PostEvt(&evt_data);
+				return true;
+			}
+		}
+		IPACMDBG("can't find entry %d \n", ipa_if_index);
+		return false;
+	}
 
 #ifdef FEATURE_VLAN_MPDN
 	inline void SendPrefixChangeEvent(int ipa_if_num)

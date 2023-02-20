@@ -26,6 +26,10 @@ BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
 WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
 OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
 IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+Changes from Qualcomm Innovation Center are provided under the following license:
+Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+SPDX-License-Identifier: BSD-3-Clause-Clear
 */
 /*!
 	@file
@@ -316,6 +320,7 @@ typedef struct
 {
 	uint32_t subnet_addr;
 	uint32_t subnet_mask;
+	uint8_t if_index;
 } ipa_private_subnet;
 
 
@@ -363,6 +368,8 @@ typedef struct
 
 typedef struct _ipacm_event_data_fid
 {
+
+	char iface_name[IPA_IFACE_NAME_LEN];
 	int if_index;
 } ipacm_event_data_fid;
 
@@ -378,12 +385,16 @@ typedef struct _ipacm_event_data_iptype
 	enum ipa_ip_type iptype;
 } ipacm_event_data_iptype;
 
-
+/*Below structure first two members should be alligned
+  with _ipacm_event_data_fid, As similar structure is
+  first two members are used in Bridge.cpp event callback.
+  */
 typedef struct _ipacm_event_data_addr
 {
-	enum ipa_ip_type iptype;
+
 	char iface_name[IPA_IFACE_NAME_LEN];
 	int if_index;
+	enum ipa_ip_type iptype;
 	uint32_t  ipv4_addr_gw;
 	uint32_t  ipv4_addr;
 	uint32_t  ipv4_addr_mask;

@@ -425,7 +425,6 @@ int IPACM_Config::Init(void)
 		return IPACM_FAILURE;
 	}
 	uint32_t subnet_addr;
-	uint32_t subnet_mask;
 	int i, ret = IPACM_SUCCESS;
 	struct in_addr in_addr_print;
 
@@ -496,30 +495,6 @@ int IPACM_Config::Init(void)
 		}
 	}
 
-	/* Construct IPACM Private_Subnet table */
-	memset(&private_subnet_table, 0, sizeof(private_subnet_table));
-	ipa_num_private_subnet = cfg->private_subnet_config.num_subnet_entries;
-
-	for (i = 0; i < cfg->private_subnet_config.num_subnet_entries; i++)
-	{
-		memcpy(&private_subnet_table[i].subnet_addr,
-					 &cfg->private_subnet_config.private_subnet_entries[i].subnet_addr,
-					 sizeof(cfg->private_subnet_config.private_subnet_entries[i].subnet_addr));
-
-		memcpy(&private_subnet_table[i].subnet_mask,
-					 &cfg->private_subnet_config.private_subnet_entries[i].subnet_mask,
-					 sizeof(cfg->private_subnet_config.private_subnet_entries[i].subnet_mask));
-
-		subnet_addr = htonl(private_subnet_table[i].subnet_addr);
-		memcpy(&in_addr_print,&subnet_addr,sizeof(in_addr_print));
-		IPACMDBG_H("%dst::private_subnet_table= %s \n ", i,
-						 inet_ntoa(in_addr_print));
-
-		subnet_mask =  htonl(private_subnet_table[i].subnet_mask);
-		memcpy(&in_addr_print,&subnet_mask,sizeof(in_addr_print));
-		IPACMDBG_H("%dst::private_subnet_table= %s \n ", i,
-						 inet_ntoa(in_addr_print));
-	}
 
 	/* Construct IPACM ALG table */
 	ipa_num_alg_ports = cfg->alg_config.num_alg_entries;

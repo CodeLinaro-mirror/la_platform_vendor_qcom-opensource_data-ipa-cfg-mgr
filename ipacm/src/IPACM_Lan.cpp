@@ -2050,7 +2050,7 @@ int IPACM_Lan::check_vlan_PDNUp(enum ipa_ip_type iptype)
 	}
 	else if(iptype == IPA_IP_v6)
 	{
-#ifdef FEATURE_IPACM_UL_FIREWALL
+#ifdef FEATURE_IPv6CT_DISABLED
 		bool firewall_updated = false;
 #endif
 		for(i = 0; i < IPA_MAX_NUM_OFFLOAD_VLANS; i++)
@@ -2064,8 +2064,8 @@ int IPACM_Lan::check_vlan_PDNUp(enum ipa_ip_type iptype)
 					IPACMDBG_H("no v6 vlan up PDN for Id %d\n", Ids[i]);
 					continue;
 				}
-#ifdef FEATURE_IPACM_UL_FIREWALL
-				if(!firewall_updated)
+#ifdef FEATURE_IPv6CT_DISABLED
+                                if(!firewall_updated)
 				{
 					configure_v6_ul_firewall();
 					firewall_updated = true;

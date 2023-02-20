@@ -149,7 +149,9 @@ const char *ipacm_event_name[] = {
 	__stringify(IPA_ADD_SOCKSv5_CONN),                     /* ipa_socksv5_msg */
 	__stringify(IPA_DEL_SOCKSv5_CONN),                     /* ipa_socksv5_msg */
 #endif
-	__stringify(IPACM_EVENT_MAX),
+	__stringify(IPA_ADD_BRIDGE_VLAN_PHY_INTF),             /* Handle vlan details add for physical interface.  */
+	__stringify(IPA_ADD_BRIDGE_VLAN_BR_INTF),              /* Handle vlan-bridge details add for bridge interface. */
+	__stringify(IPACM_EVENT_MAX)
 };
 
 IPACM_Config::IPACM_Config()
@@ -1252,10 +1254,9 @@ int IPACM_Config::ResetClkVote(void)
 }
 
 #ifdef FEATURE_VLAN_MPDN
-void IPACM_Config::add_bridge_vlan_mapping(ipa_ioc_bridge_vlan_mapping_info *data)
+void IPACM_Config::add_bridge_vlan_mapping(ipa_bridge_vlan_mapping_info *data)
 {
 	list<bridge_vlan_mapping_info>::iterator it_mapping;
-	bridge_vlan_mapping_info new_mapping;
 	ipacm_bridge *bridge = NULL;
 
 	if(pthread_mutex_lock(&vlan_l2tp_lock) != 0)
@@ -1264,58 +1265,72 @@ void IPACM_Config::add_bridge_vlan_mapping(ipa_ioc_bridge_vlan_mapping_info *dat
 		return;
 	}
 
-	IPACMDBG_H("trying to add bridge %s -> VID %d mapping, subnet 0x%X & 0x%X\n",
-		data->bridge_name,
-		data->vlan_id,
-		data->bridge_ipv4,
-		data->subnet_mask);
+	IPACMDBG_H("Trying to add bridge vlan mapping status:%d\n", data->status);
 
 	for(it_mapping = m_bridge_vlan_mapping.begin(); it_mapping != m_bridge_vlan_mapping.end(); it_mapping++)
 	{
-		if(strncmp(data->bridge_name, it_mapping->bridge_iface_name, sizeof(data->bridge_name)) == 0)
+		if(it_mapping->bridge_if_index == data->master_if_index)
 		{
-			IPACMERR("The bridge %s was added before with vlan id %d\n", data->bridge_name,
+			if((data->status == 1) && (it_mapping->status != 1))
+			{
+				strlcpy(it_mapping->bridge_iface_name, data->bridge_name,
+					sizeof(it_mapping->bridge_iface_name));
+				it_mapping->bridge_ipv4 = data->bridge_ipv4;
+				it_mapping->subnet_mask = data->subnet_mask;
+				it_mapping->status = 1;
+				IPACMDBG("Bridge %s entry updated with vlan id %d IP: 0x%x subnet: 0x%x\n", it_mapping->bridge_iface_name, it_mapping->bridge_associated_VID, it_mapping->bridge_ipv4, it_mapping->subnet_mask);
+
+
+				bridge = get_vlan_bridge(data->bridge_name);
+				if(bridge)
+				{
+					IPACMDBG_H("bridge %s already added, update data\n",
+						data->bridge_name);
+					bridge->associate_VID = data->vlan_id;
+					bridge->bridge_ipv4_addr = data->bridge_ipv4;
+					bridge->bridge_netmask = data->subnet_mask;
+				}
+				goto bail;
+			
+			}
+
+			IPACMDBG("The bridge %s was added before with vlan id: %d\n", data->bridge_name,
 				it_mapping->bridge_associated_VID);
-			goto fail;
+			goto bail;
 		}
 	}
 
-	memset(&new_mapping, 0, sizeof(new_mapping));
-	strlcpy(new_mapping.bridge_iface_name, data->bridge_name,
-		sizeof(new_mapping.bridge_iface_name));
-	new_mapping.bridge_associated_VID = data->vlan_id;
-	new_mapping.bridge_ipv4 = data->bridge_ipv4;
-	new_mapping.subnet_mask = data->subnet_mask;
-	new_mapping.lan2lan_sw = data->lan2lan_sw;
-
-	m_bridge_vlan_mapping.push_front(new_mapping);
-	IPACMDBG_H("added bridge %s with VID %d, lan2lan_sw=%d\n", data->bridge_name, data->vlan_id, data->lan2lan_sw);
-
-	pthread_mutex_unlock(&vlan_l2tp_lock);
-
-	bridge = get_vlan_bridge(data->bridge_name);
-	if(bridge)
+	if (data->status == 1)
 	{
-		IPACMDBG_H("bridge %s already added, update data\n",
-			data->bridge_name);
-		bridge->associate_VID = data->vlan_id;
-		bridge->bridge_ipv4_addr = data->bridge_ipv4;
-		bridge->bridge_netmask = data->subnet_mask;
+		IPACMERR("No partial entry with vlan got added, Discarding the bridge data update\n");
+		goto bail;
 	}
-	return;
-fail:
+
+	if(data->status == 0)
+	{
+
+		bridge_vlan_mapping_info new_mapping;
+		memset(&new_mapping, 0, sizeof(new_mapping));
+		new_mapping.bridge_associated_VID = data->vlan_id;
+		new_mapping.bridge_if_index = data->master_if_index;
+		new_mapping.status == 0;
+		m_bridge_vlan_mapping.push_front(new_mapping);
+
+	}
+
+	IPACMDBG_H("added partial Entry with master interface index %d, VID %d\n", data->master_if_index, data->vlan_id);
+
+bail:
 	pthread_mutex_unlock(&vlan_l2tp_lock);
 	return;
 }
 
-void IPACM_Config::del_bridge_vlan_mapping(ipa_ioc_bridge_vlan_mapping_info *data)
+void IPACM_Config::del_bridge_vlan_mapping(uint16_t *data)
 {
 	list<bridge_vlan_mapping_info>::iterator it_mapping;
 	ipacm_bridge *bridge = NULL;
 
-	IPACMDBG_H("deleting bridge vlan mapping (%s)->(%d)\n",
-		data->bridge_name,
-		data->vlan_id);
+	IPACMDBG_H("Deleting bridge vlan mapping with interface index %d\n",*data);
 
 	if(pthread_mutex_lock(&vlan_l2tp_lock) != 0)
 	{
@@ -1323,31 +1338,38 @@ void IPACM_Config::del_bridge_vlan_mapping(ipa_ioc_bridge_vlan_mapping_info *dat
 		return;
 	}
 
+	if(m_bridge_vlan_mapping.empty()) {
+
+		IPACMERR("Bridge vlan mapping list is empty\n");
+		return;
+	}
+
 	for(it_mapping = m_bridge_vlan_mapping.begin(); it_mapping != m_bridge_vlan_mapping.end(); it_mapping++)
 	{
-		if(strncmp(data->bridge_name, it_mapping->bridge_iface_name, sizeof(data->bridge_name)) == 0)
+		if(*data == it_mapping->bridge_if_index)
 		{
 			IPACMDBG_H("Found the bridge mapping (%s->%d)\n",
-				data->bridge_name,
+				it_mapping->bridge_iface_name,
 				it_mapping->bridge_associated_VID);
 			m_bridge_vlan_mapping.erase(it_mapping);
 
-			bridge = get_vlan_bridge(data->bridge_name);
+			bridge = get_vlan_bridge(it_mapping->bridge_iface_name);
 			if(bridge)
 			{
 				IPACMDBG_H("bridge %s - remove vlan id\n",
-					data->bridge_name);
+					it_mapping->bridge_iface_name);
 				bridge->associate_VID = 0;
 			}
 			break;
 		}
 	}
 
+	IPACMDBG("Bridge-vlan mapping entry deleted\n");
 	pthread_mutex_unlock(&vlan_l2tp_lock);
 	return;
 }
 
-int IPACM_Config::get_bridge_vlan_mapping(ipa_ioc_bridge_vlan_mapping_info *data)
+int IPACM_Config::get_bridge_vlan_mapping(ipa_bridge_vlan_mapping_info *data)
 {
 	list<bridge_vlan_mapping_info>::iterator it_mapping;
 	int ret = IPACM_FAILURE;
@@ -1440,8 +1462,44 @@ uint16_t IPACM_Config::get_bridge_vlan_mapping_from_subnet(uint32_t ipv4_subnet)
 }
 #endif
 
+
+
+int IPACM_Config::find_matching_vlan(uint16_t interface_index, struct vlan_iface_info *vlan_data)
+{
+	list<vlan_iface_info>::iterator it_vlan;
+
+	IPACMDBG("Extract vlan-id for interface index %d\n", interface_index);
+
+	if(pthread_mutex_lock(&vlan_l2tp_lock) != 0)
+	{
+		IPACMERR("Unable to lock the mutex\n");
+		return IPACM_FAILURE;
+	}
+	if(m_vlan_iface.empty()) {
+			IPACMERR("No vlan entry added\n");
+			pthread_mutex_unlock(&vlan_l2tp_lock);
+			return IPACM_FAILURE;
+	}
+
+	for(it_vlan = m_vlan_iface.begin(); it_vlan != m_vlan_iface.end(); it_vlan++)
+	{
+		if(it_vlan->vlan_interface_index == interface_index)
+		{
+			strlcpy(vlan_data->vlan_iface_name, it_vlan->vlan_iface_name, IPA_RESOURCE_NAME_MAX);
+			vlan_data->vlan_id = it_vlan->vlan_id;
+			IPACMDBG("Found vlan-id: %d for interface index: %d\n", it_vlan->vlan_id, interface_index);
+			pthread_mutex_unlock(&vlan_l2tp_lock);
+			return IPACM_SUCCESS;
+
+		}
+	}
+	IPACMDBG("No matching vlan interface found for interface index: %d\n", interface_index);
+	pthread_mutex_unlock(&vlan_l2tp_lock);
+	return IPACM_FAILURE;
+}
+
 #if defined(FEATURE_L2TP) || defined(FEATURE_VLAN_MPDN)
-void IPACM_Config::add_vlan_iface(ipa_ioc_vlan_iface_info *data)
+void IPACM_Config::add_vlan_iface(ipa_vlan_iface_info *data)
 {
 	list<vlan_iface_info>::iterator it_vlan;
 	vlan_iface_info new_vlan_info;
@@ -1452,8 +1510,6 @@ void IPACM_Config::add_vlan_iface(ipa_ioc_vlan_iface_info *data)
 		return;
 	}
 
-	IPACMDBG_H("Vlan iface: %s vlan id: %d\n", data->name, data->vlan_id);
-
 #ifdef IPACM_RESTART_FUNCTIONALITY
 	IPACMDBG_H("add_vlan_done %d\n", data->add_vlan_done);
 #endif
@@ -1462,9 +1518,10 @@ void IPACM_Config::add_vlan_iface(ipa_ioc_vlan_iface_info *data)
 	IPACMDBG_H("priority %d\n", data->priority);
 #endif
 
+	IPACMDBG_H("Vlan iface: %s vlan id: %d vlan if index %d\n", data->name, data->vlan_id, data->vlan_interface_index);
 	for(it_vlan = m_vlan_iface.begin(); it_vlan != m_vlan_iface.end(); it_vlan++)
 	{
-		if(strncmp(it_vlan->vlan_iface_name, data->name, sizeof(it_vlan->vlan_iface_name)) == 0)
+		if(it_vlan->vlan_interface_index == data->vlan_interface_index)
 		{
 			IPACMERR("The vlan iface was added before with id %d\n", it_vlan->vlan_id);
 			pthread_mutex_unlock(&vlan_l2tp_lock);
@@ -1498,6 +1555,7 @@ void IPACM_Config::add_vlan_iface(ipa_ioc_vlan_iface_info *data)
 #ifdef IPA_VLAN_PRIORITY
 	new_vlan_info.priority = data->priority;
 #endif
+	new_vlan_info.vlan_interface_index = data->vlan_interface_index;
 	m_vlan_iface.push_front(new_vlan_info);
 	pthread_mutex_unlock(&vlan_l2tp_lock);
 #ifdef FEATURE_VLAN_MPDN
@@ -1565,7 +1623,7 @@ void IPACM_Config::restore_vlan_nat_ifaces(const char *phys_iface_name)
 	return;
 }
 
-void IPACM_Config::del_vlan_iface(ipa_ioc_vlan_iface_info *data)
+void IPACM_Config::del_vlan_iface(ipa_vlan_iface_info *data)
 {
 	list<vlan_iface_info>::iterator it_vlan;
 
@@ -1586,7 +1644,7 @@ void IPACM_Config::del_vlan_iface(ipa_ioc_vlan_iface_info *data)
 #endif
 	for(it_vlan = m_vlan_iface.begin(); it_vlan != m_vlan_iface.end(); it_vlan++)
 	{
-		if(strncmp(it_vlan->vlan_iface_name, data->name, sizeof(it_vlan->vlan_iface_name)) == 0)
+		if(it_vlan->vlan_interface_index == data->vlan_interface_index)
 		{
 			IPACMDBG_H("Found the vlan interface\n");
 			m_vlan_iface.erase(it_vlan);
@@ -1670,9 +1728,9 @@ void IPACM_Config::handle_vlan_iface_info(ipacm_event_data_addr *data)
 
 	for(it_vlan = m_vlan_iface.begin(); it_vlan != m_vlan_iface.end(); it_vlan++)
 	{
-		if(strncmp(it_vlan->vlan_iface_name, data->iface_name,
-			sizeof(it_vlan->vlan_iface_name)) == 0)
+		if(it_vlan->vlan_interface_index == data->if_index)
 		{
+
 			IPACMDBG_H("Found vlan iface: %s\n", it_vlan->vlan_iface_name);
 			memcpy(it_vlan->vlan_iface_ipv6_addr, data->ipv6_addr,
 				sizeof(it_vlan->vlan_iface_ipv6_addr));
@@ -1725,7 +1783,7 @@ void IPACM_Config::handle_vlan_client_info(ipacm_event_data_all *data)
 
 	for(it_vlan = m_vlan_iface.begin(); it_vlan != m_vlan_iface.end(); it_vlan++)
 	{
-		if(strncmp(it_vlan->vlan_iface_name, data->iface_name, sizeof(it_vlan->vlan_iface_name)) == 0)
+		if(it_vlan->vlan_interface_index == data->if_index)
 		{
 			IPACMDBG_H("Found vlan iface in vlan list: %s\n", it_vlan->vlan_iface_name);
 			if(it_vlan->vlan_client_ipv6_addr[0] > 0 || it_vlan->vlan_client_ipv6_addr[1] > 0 ||
@@ -1793,7 +1851,7 @@ void IPACM_Config::get_vlan_mode_ifaces()
 void IPACM_Config::add_vlan_bridge(ipacm_event_data_all *data_all)
 {
 	uint8_t testmac[IPA_MAC_ADDR_SIZE];
-	ipa_ioc_bridge_vlan_mapping_info mapping_info;
+	ipa_bridge_vlan_mapping_info mapping_info;
 
 	memset(testmac, 0, IPA_MAC_ADDR_SIZE);
 	memset(&mapping_info, 0, sizeof(mapping_info));

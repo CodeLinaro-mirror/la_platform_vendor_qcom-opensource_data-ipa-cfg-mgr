@@ -26,6 +26,10 @@ BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
 WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
 OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
 IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+ * Changes from Qualcomm Innovation Center are provided under the following license:
+ * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
 */
 /*!
 	@file
@@ -145,7 +149,7 @@ void IPACM_LanToLan::event_callback(ipa_cm_event_id event, void* param)
 {
 	ipacm_event_eth_bridge *eth_bridge_data;
 	const char* eventName;
-	ipa_ioc_vlan_iface_info *vlan_iface_data;
+	ipa_vlan_iface_info *vlan_iface_data;
 
 #ifdef FEATURE_L2TP
 	ipa_ioc_l2tp_vlan_mapping_info *l2tp_vlan_mapping_data;
@@ -1133,7 +1137,7 @@ void IPACM_LanToLan_Iface::add_client_flt_rule(peer_iface_info *peer, client_inf
 	list<uint32_t> flt_rule_hdls = std::list<uint32_t>();
 	flt_rule_info new_flt_info;
 	ipa_ioc_get_rt_tbl rt_tbl;
-	ipa_ioc_bridge_vlan_mapping_info mapping_info;
+	ipa_bridge_vlan_mapping_info mapping_info;
 	uint16_t peer_vlan_id = 0;
 
 	if(m_is_l2tp_iface && iptype == IPA_IP_v4)

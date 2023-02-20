@@ -266,15 +266,17 @@ public:
 	pthread_mutex_t vlan_l2tp_lock;
 	std::list<vlan_iface_info> m_vlan_iface;
 
-	void add_vlan_iface(ipa_ioc_vlan_iface_info *data);
+	void add_vlan_iface(ipa_vlan_iface_info *data);
 
-	void del_vlan_iface(ipa_ioc_vlan_iface_info *data);
+	void del_vlan_iface(ipa_vlan_iface_info *data);
 
 	void restore_vlan_nat_ifaces(const char *phys_iface_name);
 
 	void handle_vlan_iface_info(ipacm_event_data_addr *data);
 
 	void handle_vlan_client_info(ipacm_event_data_all *data);
+
+	int find_matching_vlan(uint16_t interface_index, struct vlan_iface_info *vlan_data);
 
 #ifdef FEATURE_L2TP
 	std::list<l2tp_vlan_mapping_info> m_l2tp_vlan_mapping;
@@ -290,9 +292,9 @@ public:
 
 #ifdef FEATURE_VLAN_MPDN
 	std::list<bridge_vlan_mapping_info> m_bridge_vlan_mapping;
-	void add_bridge_vlan_mapping(ipa_ioc_bridge_vlan_mapping_info *data);
-	void del_bridge_vlan_mapping(ipa_ioc_bridge_vlan_mapping_info *data);
-	int get_bridge_vlan_mapping(ipa_ioc_bridge_vlan_mapping_info *data);
+	void add_bridge_vlan_mapping(ipa_bridge_vlan_mapping_info *data);
+	void del_bridge_vlan_mapping(uint16_t *data);
+	int get_bridge_vlan_mapping(ipa_bridge_vlan_mapping_info *data);
 	bool is_lan2lan_sw_path(uint16_t vlan_id);
 	uint16_t get_bridge_vlan_mapping_from_subnet(uint32_t ipv4_subnet);
 	void add_vlan_bridge(ipacm_event_data_all * data_all);

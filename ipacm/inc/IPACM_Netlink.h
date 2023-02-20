@@ -65,6 +65,7 @@ extern "C"
 #define MAX_NUM_OF_FD 10
 #define IPA_NL_MSG_MAX_LEN (2048)
 #define IPV4_SIZE 32
+#define IFACE_NAME 32
 /*--------------------------------------------------------------------------- 
 	 Type representing enumeration of NetLink event indication messages
 ---------------------------------------------------------------------------*/
@@ -143,6 +144,9 @@ typedef struct ipa_nl_proto_info_s {
 typedef struct
 {
 	struct ifinfomsg  metainfo;                   /* from header */
+	char vlan_name[IFACE_NAME];
+	uint8_t vlan_id;
+	uint8_t interface_index;
 } ipa_nl_link_info_t;
 
 
@@ -170,6 +174,7 @@ typedef struct ipa_nl_neigh_info_s {
 		struct sockaddr_storage     local_addr;
 		struct  sockaddr            lladdr_hwaddr;
 	} attr_info;
+	uint16_t master_interface_index;
 } ipa_nl_neigh_info_t;
 
 

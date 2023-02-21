@@ -122,7 +122,7 @@ typedef struct
 	uint32_t ipv4_addr;
 	bool wan_up_vlan;
 	bool is_xlat;
-	uint8_t associated_VIDs[IPA_MAX_NUM_SW_PDNS];
+	uint16_t associated_VIDs[IPA_MAX_NUM_SW_PDNS];
 	uint8_t VID_cnt = 0;
 	IPACM_Wan *pIface;
 }ipacm_ipv4_wan_iface;
@@ -131,7 +131,7 @@ typedef struct
 {
 	uint32_t ipv6_prefix[2];
 	bool wan_up_vlan_v6;
-	uint8_t associated_VIDs[IPA_MAX_NUM_SW_PDNS];
+	uint16_t associated_VIDs[IPA_MAX_NUM_SW_PDNS];
 	uint8_t VID_cnt = 0;
 	IPACM_Wan *pIface;
 }ipacm_ipv6_wan_iface;
@@ -384,7 +384,7 @@ public:
 		return xlat_mux_id;
 	}
 
-	static bool check_client_ipv4_with_pdn_ipv4(uint32_t client_ip, uint8_t vlan_id)
+	static bool check_client_ipv4_with_pdn_ipv4(uint32_t client_ip, uint16_t vlan_id)
 	{
 		for(int i = 0; i < IPA_MAX_NUM_SW_PDNS; i++)
 		{

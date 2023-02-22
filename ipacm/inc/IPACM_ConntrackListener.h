@@ -73,6 +73,15 @@ typedef struct __nat_client_info
 #endif
 }nat_client_info;
 
+typedef struct __nat_client_v6_info
+{
+	uint32_t nat_iface_ipv6_addr[4];
+#ifdef FEATURE_VLAN_MPDN
+	bool is_vlan_client;
+	uint16_t vlan_id;
+#endif
+}nat_client_v6_info;
+
 #ifdef FEATURE_VLAN_MPDN
 typedef struct _nat_pdn_entry
 {
@@ -108,6 +117,7 @@ private:
 	uint32_t pkt_threshld;
 	NatIfaces *pNatIfaces;
 	nat_client_info nat_clients[MAX_IFACE_ADDRESS];
+	nat_client_v6_info nat_clients_v6[MAX_IFACE_ADDRESS];
 	IpAddressesCollectionBase& nat_iface_ipv6_addr;
 #ifdef FEATURE_VLAN_MPDN
 	nat_pdn_entry vlan_pdns[IPA_MAX_NUM_HW_PDNS];
@@ -142,11 +152,12 @@ private:
 	void HandleVlanUp(void *);
 	void HandleVlanDown(void *);
 	void HandleVlanUpV6(void *);
+        void HandleVlanDownV6(void *);
 #endif
 	void TriggerWANUp(void *);
 	void TriggerWANUp_v6(const ipacm_event_iface_up* evt_data);
 	void TriggerWANDown(uint32_t);
-	void TriggerWANDown_v6(const IpAddress& wan_addr);
+	void TriggerWANDown_v6(const uint32_t* ipv6_addr);
 	int  CreateNatThreads(void);
 	bool AddIface(nat_table_entry *, bool *);
 	int AddORDeleteNatEntry(const nat_entry_bundle *, bool *sendVlanEvent);
@@ -183,9 +194,9 @@ public:
 	int  CreateConnTrackThreads(void);
 
 	void HandleNeighIpAddrAddEvt(ipacm_event_data_all *);
-	void HandleNeighIpAddrAddEvt_v6(const IpAddress& ip, int if_index);
+	void HandleNeighIpAddrAddEvt_v6(ipacm_event_data_all *);
 	void HandleNeighIpAddrDelEvt(uint32_t);
-	void HandleNeighIpAddrDelEvt_v6(const IpAddress& ip);
+	void HandleNeighIpAddrDelEvt_v6(const Ipv6IpAddress& ip);
 	void HandleSTAClientAddEvt(uint32_t);
 	void HandleSTAClientAddEvt_v6(const IpAddress& ip);
 	void HandleSTAClientDelEvt(uint32_t);

@@ -2229,9 +2229,9 @@ int IPACM_Wlan::handle_wlan_client_route_rule_ext(uint8_t *mac_addr, ipa_ip_type
 					memset(&data, 0, sizeof(data));
 					data.if_index = IPACM_Iface::ipacmcfg->iface_table[ipa_if_num].netlink_interface_index;
 					data.iptype = IPA_IP_v6;
-					memcpy(data.ipv6_addr,
+                                        memcpy(data.ipv6_addr,
 						get_client_memptr(wlan_client, wlan_index)->v6_addr[v6_num], sizeof(data.ipv6_addr));
-					CtList->HandleNeighIpAddrAddEvt_v6(Ipv6IpAddress(data.ipv6_addr, false), data.if_index);
+                                       CtList->HandleNeighIpAddrAddEvt_v6(&data);
 				}
 				get_client_memptr(wlan_client, wlan_index)->route_rule_set_v6 = get_client_memptr(wlan_client, wlan_index)->ipv6_set;
 			}
@@ -2497,7 +2497,7 @@ int IPACM_Wlan::handle_wlan_client_route_rule_ext_v2(uint8_t *mac_addr, ipa_ip_t
 					data.iptype = IPA_IP_v6;
 					memcpy(data.ipv6_addr,
 						get_client_memptr(wlan_client, wlan_index)->v6_addr[v6_num], sizeof(data.ipv6_addr));
-					CtList->HandleNeighIpAddrAddEvt_v6(Ipv6IpAddress(data.ipv6_addr, false), data.if_index);
+					CtList->HandleNeighIpAddrAddEvt_v6(&data);
 				}
 				get_client_memptr(wlan_client, wlan_index)->route_rule_set_v6 = get_client_memptr(wlan_client, wlan_index)->ipv6_set;
 			}

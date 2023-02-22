@@ -25,6 +25,10 @@ BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
 WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
 OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
 IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+Changes from Qualcomm Innovation Center are provided under the following license:
+Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+SPDX-License-Identifier: BSD-3-Clause-Clear
 */
 /*!
 	@file
@@ -48,6 +52,7 @@ IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <IPACM_Wan.h>
 #include <IPACM_Iface.h>
 #include <IPACM_Log.h>
+#include <IPACM_Bridge.h>
 
 iface_instances *IPACM_IfaceManager::head = NULL;
 
@@ -161,6 +166,9 @@ void IPACM_IfaceManager::event_callback(ipa_cm_event_id event, void *param)
 				IPACMDBG_H("WLAN AP (%s) link up, iface: %d: \n", IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].iface_name,evt_data->if_index);
 				ifmgr_data.if_index = evt_data->if_index;
 				ifmgr_data.if_type = Q6_WAN;
+#ifdef IPA_WDI_AST_UPDATE
+				ifmgr_data.ast_update = evt_data->ast_update;
+#endif
 				create_iface_instance(&ifmgr_data);
 			}
 			else
@@ -237,6 +245,12 @@ int IPACM_IfaceManager::create_iface_instance(ipacm_ifacemgr_data *param)
 
 	int ipa_interface_index;
 	ipa_interface_index = IPACM_Iface::iface_ipa_index_query(if_index);
+
+	bool ast_update = false;
+
+#ifdef IPA_WDI_AST_UPDATE
+	ast_update = param->ast_update;
+#endif
 
 	if(ipa_interface_index == INVALID_IFACE)
 	{
@@ -441,7 +455,7 @@ int IPACM_IfaceManager::create_iface_instance(ipacm_ifacemgr_data *param)
 		case WLAN_IF:
 			{
 				IPACMDBG_H("Creating WLan interface\n");
-				IPACM_Wlan *wl = new IPACM_Wlan(ipa_interface_index);
+				IPACM_Wlan *wl = new IPACM_Wlan(ipa_interface_index, ast_update);
 				if (wl->rx_prop == NULL && wl->tx_prop == NULL)
 				{
 					/* reset the AP-iface category to unknown */
@@ -612,6 +626,17 @@ int IPACM_IfaceManager::create_iface_instance(ipacm_ifacemgr_data *param)
 				IPACM_EvtDispatcher::registr(IPA_LINK_DOWN_EVENT, embms);
 				IPACMDBG("ipa_WAN (%s):ipa_index (%d) instance open/registr ok\n", embms->dev_name, embms->ipa_if_num);
 				registr(ipa_interface_index, embms);
+			}
+			break;
+		case VIRTUAL_IF:
+			{
+					IPACMDBG("Creating br-lan interface bridge instance\n");
+					IPACM_Bridge *br_lan = new IPACM_Bridge();
+					IPACM_EvtDispatcher::registr(IPA_ADDR_ADD_EVENT, br_lan);
+					IPACM_EvtDispatcher::registr(IPA_ADDR_DEL_EVENT, br_lan);
+					IPACM_EvtDispatcher::registr(IPA_LINK_DOWN_EVENT, br_lan);
+					registr(ipa_interface_index, br_lan);
+					IPACM_Iface::iface_addr_query(if_index);
 			}
 			break;
 

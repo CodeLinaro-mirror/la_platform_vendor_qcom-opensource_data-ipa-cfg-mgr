@@ -25,6 +25,10 @@
  * WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *
+ * Changes from Qualcomm Innovation Center are provided under the following license:
+ * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 /*!
   @file
@@ -177,9 +181,6 @@ static int ipacm_cfg_xml_parse_tree
 						IPACM_util_icmp_string((char*)xml_node->name, IPACMCFG_TAG) == 0 ||
 						IPACM_util_icmp_string((char*)xml_node->name, IPACMIFACECFG_TAG) == 0 ||
 						IPACM_util_icmp_string((char*)xml_node->name, IFACE_TAG) == 0 ||
-						IPACM_util_icmp_string((char*)xml_node->name, IPACMPRIVATESUBNETCFG_TAG) == 0 ||
-						IPACM_util_icmp_string((char*)xml_node->name, SUBNET_TAG) == 0 ||
-						IPACM_util_icmp_string((char*)xml_node->name, IPACMALG_TAG) == 0 ||
 						IPACM_util_icmp_string((char*)xml_node->name, ALG_TAG) == 0 ||
 						IPACM_util_icmp_string((char*)xml_node->name, IPACMNat_TAG) == 0 ||
 						IPACM_util_icmp_string((char*)xml_node->name, IPACM_IPV6CT_TAG) == 0 ||
@@ -191,18 +192,13 @@ static int ipacm_cfg_xml_parse_tree
 						IPACM_util_icmp_string((char*)xml_node->name, IPACM_MPDN_TAG) == 0 ||
 
 						IPACM_util_icmp_string((char*)xml_node->name, IPACM_SOCKSv5_TAG) == 0 ||
-						IPACM_util_icmp_string((char*)xml_node->name, GRE_TAG) == 0)
+						IPACM_util_icmp_string((char*)xml_node->name, GRE_TAG) == 0 ||
+						IPACM_util_icmp_string((char*)xml_node->name, PUBLIC_IP_SUPPORT_TAG) == 0)
 				{
 					if (0 == IPACM_util_icmp_string((char*)xml_node->name, IFACE_TAG))
 					{
 						/* increase iface entry number */
 						config->iface_config.num_iface_entries++;
-					}
-
-					if (0 == IPACM_util_icmp_string((char*)xml_node->name, SUBNET_TAG))
-					{
-						/* increase iface entry number */
-						config->private_subnet_config.num_subnet_entries++;
 					}
 
 					if (0 == IPACM_util_icmp_string((char*)xml_node->name, ALG_TAG))
@@ -429,34 +425,6 @@ static int ipacm_cfg_xml_parse_tree
 						}
 					}
 				}
-				else if (IPACM_util_icmp_string((char*)xml_node->name, SUBNETADDRESS_TAG) == 0)
-				{
-					content = IPACM_read_content_element(xml_node);
-					if (content)
-					{
-						str_size = strlen(content);
-						memset(content_buf, 0, sizeof(content_buf));
-						memcpy(content_buf, (void *)content, str_size);
-						content_buf[MAX_XML_STR_LEN-1] = '\0';
-						config->private_subnet_config.private_subnet_entries[config->private_subnet_config.num_subnet_entries - 1].subnet_addr
-							 = ntohl(inet_addr(content_buf));
-						IPACMDBG_H("subnet_addr: %s \n", content_buf);
-					}
-				}
-				else if (IPACM_util_icmp_string((char*)xml_node->name, SUBNETMASK_TAG) == 0)
-				{
-					content = IPACM_read_content_element(xml_node);
-					if (content)
-					{
-						str_size = strlen(content);
-						memset(content_buf, 0, sizeof(content_buf));
-						memcpy(content_buf, (void *)content, str_size);
-						content_buf[MAX_XML_STR_LEN-1] = '\0';
-						config->private_subnet_config.private_subnet_entries[config->private_subnet_config.num_subnet_entries - 1].subnet_mask
-							 = ntohl(inet_addr(content_buf));
-						IPACMDBG_H("subnet_mask: %s \n", content_buf);
-					}
-				}
 				else if (IPACM_util_icmp_string((char*)xml_node->name, Protocol_TAG) == 0)
 				{
 					content = IPACM_read_content_element(xml_node);
@@ -646,6 +614,26 @@ static int ipacm_cfg_xml_parse_tree
 								config->ipacm_mpdn_enable, atoi(content_buf));
 							}
 						}
+				}
+				else if (IPACM_util_icmp_string((char*)xml_node->name, ENABLE_PUBLIC_IP_SUPPORT) == 0)
+				{
+					IPACMDBG_H("inside Public Ip Support-XML\n");
+					content = IPACM_read_content_element(xml_node);
+					if (content)
+					{
+						str_size = strlen(content);
+						memset(content_buf, 0, sizeof(content_buf));
+						memcpy(content_buf, (void *)content, str_size);
+						if (atoi(content_buf))
+						{
+							config->public_ip_support_enable = true;
+						}
+						else
+						{
+							config->public_ip_support_enable = false;
+						}
+						IPACMDBG_H("Public IP support config enable %d buf(%d)\n", config->public_ip_support_enable, atoi(content_buf));
+					}
 				}
 			}
 			break;

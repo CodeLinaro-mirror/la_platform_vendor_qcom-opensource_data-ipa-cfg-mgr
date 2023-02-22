@@ -344,6 +344,8 @@ public:
 
 	int handle_del_ipv6_addr(ipacm_event_data_all *data);
 
+	int check_neigh_ipv4(ipacm_event_data_all *data);
+
 	static bool odu_up;
 
 #ifdef FEATURE_EoGRE
@@ -407,13 +409,13 @@ public:
 
 	/* install UL filter rule from Q6 */
 #ifdef FEATURE_VLAN_MPDN
-	virtual int handle_uplink_filter_rule(ipacm_ext_prop *prop, ipa_ip_type iptype, uint8_t pdn_mux_id, bool notif_only, bool is_xlat = false);
+	virtual int handle_uplink_filter_rule(ipacm_ext_prop *prop, ipa_ip_type iptype, uint8_t pdn_mux_id, bool notif_only, bool is_xlat = false, bool ast_update = false);
 
 	virtual int handle_mpdn_ul_xlat_filter_rule(ipacm_ext_prop *prop, ipa_ip_type iptype, int pdn_mux_id, uint16_t vlan_id);
 
 	virtual int delete_mdpn_ul_xlat_filter_rule(int mux_id);
 #else
-	virtual int handle_uplink_filter_rule(ipacm_ext_prop* prop, ipa_ip_type iptype, uint8_t xlat_mux_id);
+	virtual int handle_uplink_filter_rule(ipacm_ext_prop* prop, ipa_ip_type iptype, uint8_t xlat_mux_id, bool ast_update = false);
 #endif
 
 	virtual int del_ul_flt_rules(enum ipa_ip_type iptype);

@@ -54,6 +54,7 @@ IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #define MAX_NUM_IFACE 10
 #ifdef FEATURE_VLAN_MPDN
 #define MAX_NUM_CLIENT 32
+#define MAX_NUM_WLAN_CLIENT 128
 #else
 #define MAX_NUM_CLIENT 16
 #endif
@@ -170,8 +171,12 @@ public:
 	void set_is_vlan(bool is_vlan) { m_is_vlan = is_vlan; }
 	bool get_is_vlan() { return m_is_vlan; };
 #endif
+
+	bool get_m_support_ast_update();
+
 private:
 
+	uint16_t max_num_clients;
 	IPACM_Lan *m_p_iface;
 	bool m_is_ip_addr_assigned[IPA_IP_MAX];
 	bool m_support_inter_iface_offload;
@@ -180,6 +185,7 @@ private:
 #ifdef FEATURE_VLAN_MPDN
 	bool m_is_vlan;
 #endif
+	bool m_ast_update;
 	/* reference count of l2 header type of peer interfaces - counts peer interfaces with relevant header type - change on iface up\down */
 	int ref_cnt_peer_l2_hdr_type[IPA_HDR_L2_MAX];
 	uint32_t hdr_proc_ctx_for_inter_interface[IPA_HDR_L2_MAX];

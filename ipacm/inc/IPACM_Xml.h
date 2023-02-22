@@ -25,6 +25,10 @@
  * WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *
+ * Changes from Qualcomm Innovation Center are provided under the following license:
+ * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 /*!
   @file
@@ -87,10 +91,6 @@ if (!(a)) {                                                 \
 #define PHY_TAG                              "Phy"
 #define CATEGORY_TAG                         "Category"
 #define MODE_TAG                             "Mode"
-#define IPACMPRIVATESUBNETCFG_TAG            "IPACMPrivateSubnet"
-#define SUBNET_TAG                           "Subnet"
-#define SUBNETADDRESS_TAG                    "SubnetAddress"
-#define SUBNETMASK_TAG                       "SubnetMask"
 #define WANIF_TAG                            "WAN"
 #define LANIF_TAG                            "LAN"
 #define WLANIF_TAG                           "WLAN"
@@ -113,6 +113,8 @@ if (!(a)) {                                                 \
 #define DDR_TABLETYPE_TAG                    "DDR"
 #define SRAM_TABLETYPE_TAG                   "SRAM"
 #define HYBRID_TABLETYPE_TAG                 "HYBRID"
+#define PUBLIC_IP_SUPPORT_TAG                "PublicIpSupport"
+#define ENABLE_PUBLIC_IP_SUPPORT             "EnablePublicIpSupport"
 
 /* FIREWALL Config Entries */
 #define DefaultProfile_TAG                   "DefaultProfile"
@@ -352,6 +354,7 @@ typedef struct  _IPACM_conf_t
 	bool ipacm_mpdn_enable;
 	bool ipacm_socksv5_enable;
 	ipacm_gre_conf_t gre_conf;
+	bool public_ip_support_enable;
 } IPACM_conf_t;
 
 /* This function read IPACM XML configuration*/

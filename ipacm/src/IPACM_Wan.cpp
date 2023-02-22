@@ -4106,11 +4106,9 @@ int IPACM_Wan::get_v6_pdn_firewall_configs(
 #ifdef FEATURE_VLAN_MPDN
 int IPACM_Wan::config_dft_firewall_rules_ex(struct ipacm_pdn_flt_rule* rules, int rule_offset, ipa_ip_type iptype)
 {
-	IPACM_firewall_t firewall_config;
 #else
 int IPACM_Wan::config_dft_firewall_rules_ex(struct ipa_flt_rule_add *rules, int rule_offset, ipa_ip_type iptype)
 {
-	IPACM_firewall_conf_t firewall_config;
 #endif
 	int num_rules = 0, original_num_rules = 0, res, pos = rule_offset;
 
@@ -4128,19 +4126,9 @@ int IPACM_Wan::config_dft_firewall_rules_ex(struct ipa_flt_rule_add *rules, int 
 		return IPACM_FAILURE;
 	}
 
-	IPACMDBG_H("Firewall XML file is %s\n", MOBILE_FIREWALL_FILE);
-	if (IPACM_read_firewall_xml(MOBILE_FIREWALL_FILE, firewall_config) == IPACM_SUCCESS)
-	{
-		IPACMDBG_H("QCMAP Firewall XML read OK \n");
-	}
-	else
-	{
-		IPACMERR("QCMAP Firewall XML read failed, no such file, use default configuration \n");
-	}
-
 #ifdef FEATURE_VLAN_MPDN
 	uint32_t offloaded_pdns_count_v4 = 0;
-	std::pair<IPACM_firewall_conf_t*, ipacm_ipv4_wan_iface*> offloaded_pdns_v4[IPA_MAX_NUM_HW_PDNS];
+	ipacm_ipv4_wan_iface* offloaded_pdns_v4[IPA_MAX_NUM_HW_PDNS];
 	for (uint32_t i = 0;
 		(i < IPA_MAX_NUM_SW_PDNS) && (offloaded_pdns_count_v4 < IPA_MAX_NUM_HW_PDNS);
 		++i)
@@ -4153,35 +4141,13 @@ int IPACM_Wan::config_dft_firewall_rules_ex(struct ipa_flt_rule_add *rules, int 
 				isDefaultGatewayIfaceUp(ipv4_to_iface[i].pIface),
 				ipv4_to_iface[i].wan_up_vlan);
 
-			IPACM_firewall_conf_t* curr_pdn_firewall_config =
-				get_curr_pdn_firewall_config(firewall_config, ipv4_to_iface[i].pIface->dev_name);
-			IPACMDBG_H("ipacm_socksv5_enable %d\n", IPACM_Iface::ipacmcfg->ipacm_socksv5_enable)
-			if (IPACM_Iface::ipacmcfg->ipacm_socksv5_enable == TRUE)
-			{
-				std::pair<IPACM_firewall_conf_t*, ipacm_ipv4_wan_iface*>* curr =
-					&offloaded_pdns_v4[offloaded_pdns_count_v4++];
-				curr->second = &ipv4_to_iface[i];
-			}
-			else
-			{
-				if (curr_pdn_firewall_config != NULL)
-				{
-					std::pair<IPACM_firewall_conf_t*, ipacm_ipv4_wan_iface*>* curr =
-						&offloaded_pdns_v4[offloaded_pdns_count_v4++];
-					curr->first = curr_pdn_firewall_config;
-					curr->second = &ipv4_to_iface[i];
-				}
-				else
-				{
-					IPACMERR("couldn't find pdn %s firewall config\n", ipv4_to_iface[i].pIface->dev_name);
-				}
-			}
+			offloaded_pdns_v4[offloaded_pdns_count_v4++]=&ipv4_to_iface[i];
 		}
 	}
-	IPACMDBG_H("found %d v4 pdns in firewall file\n", offloaded_pdns_count_v4);
+	IPACMDBG_H("found %d v4 pdns\n", offloaded_pdns_count_v4);
 
 	uint32_t offloaded_pdns_count_v6 = 0;
-	std::pair<IPACM_firewall_conf_t*, ipacm_ipv6_wan_iface*> offloaded_pdns_v6[IPA_MAX_NUM_HW_PDNS];
+	ipacm_ipv6_wan_iface* offloaded_pdns_v6[IPA_MAX_NUM_HW_PDNS];
 	for (uint32_t i = 0;
 		(i < IPA_MAX_NUM_SW_PDNS) && (offloaded_pdns_count_v6 < IPA_MAX_NUM_HW_PDNS);
 		++i)
@@ -4194,90 +4160,24 @@ int IPACM_Wan::config_dft_firewall_rules_ex(struct ipa_flt_rule_add *rules, int 
 				isDefaultGatewayIfaceUp_v6(ipv6_to_iface[i].pIface),
 				ipv6_to_iface[i].wan_up_vlan_v6);
 
-			IPACM_firewall_conf_t* curr_pdn_firewall_config =
-				get_curr_pdn_firewall_config(firewall_config, ipv6_to_iface[i].pIface->dev_name);
-			if (curr_pdn_firewall_config != NULL)
-			{
-				std::pair<IPACM_firewall_conf_t*, ipacm_ipv6_wan_iface*>* curr =
-					&offloaded_pdns_v6[offloaded_pdns_count_v6++];
-				curr->first = curr_pdn_firewall_config;
-				curr->second = &ipv6_to_iface[i];
-			}
+			offloaded_pdns_v6[offloaded_pdns_count_v6++]=&ipv6_to_iface[i];
 		}
 	}
-	IPACMDBG_H("found %d v6 pdns in firewall file\n", offloaded_pdns_count_v6);
+	IPACMDBG_H("found %d v6 pdns\n", offloaded_pdns_count_v6);
 #endif
-
-	/* add IPv6 frag rule when firewall is enabled*/
-	if (iptype == IPA_IP_v6 && !ipacmcfg->IsIpv6CTEnabled())
-	{
-#ifdef FEATURE_VLAN_MPDN
-		for (uint32_t i = 0; i < offloaded_pdns_count_v6; ++i)
-		{
-			IPACM_firewall_conf_t *curr_firewall_config = offloaded_pdns_v6[i].first;
-			if (curr_firewall_config->firewall_enable && check_dft_firewall_rules_attr_mask(curr_firewall_config))
-			{
-				IPACM_Wan* curr_interface = offloaded_pdns_v6[i].second->pIface;
-				IPACMDBG_H("adding frag rule for iface %s\n", curr_interface->dev_name);
-				res = add_ipv6_frag_filtering_rule_ex(curr_interface->rx_prop->rx[0].attrib, rules[pos].flt_rule, pos);
-				if (res != IPACM_SUCCESS)
-				{
-					return res;
-				}
-				rules[pos].mux_id = curr_interface->ext_prop->ext[0].mux_id;
-				++pos;
-			}
-		}
-#else
-		if (firewall_config.firewall_enable && check_dft_firewall_rules_attr_mask(&firewall_config))
-		{
-			res = add_ipv6_frag_filtering_rule_ex(rx_prop->rx[0].attrib, rules[pos], pos);
-			if (res != IPACM_SUCCESS)
-			{
-				return res;
-			}
-			++pos;
-		}
-#endif
-	}
 
 	if (iptype == IPA_IP_v4)
 	{
 		original_num_rules = IPACM_Wan::num_v4_flt_rule;
 		IPACM_Wan::num_firewall_v4 = 0;
-/* only install ipv4 DL firewall on modem endpoint when UL_FIREWALL FR not there */
-		if (IPACM_Iface::ipacmcfg->ipacm_socksv5_enable != TRUE)
-		{
-#ifndef FEATURE_IPACM_UL_FIREWALL
-#ifdef FEATURE_VLAN_MPDN
-			/* firewall rules for all PDNs which are up */
-			for (uint32_t i = 0; i < offloaded_pdns_count_v4; ++i)
-			{
-				IPACM_Wan* curr_interface = offloaded_pdns_v4[i].second->pIface;
-				IPACMDBG_H("adding firewall rules for iface %s\n", curr_interface->dev_name);
-				res = add_firewall_rules_ex(*offloaded_pdns_v4[i].first, iptype, curr_interface->ext_prop->ext[0].mux_id,
-					curr_interface->rx_prop->rx[0].attrib, rules, IPA_MAX_FLT_RULE - offloaded_pdns_count_v4, pos);
-				if (res != IPACM_SUCCESS)
-				{
-					return res;
-				}
-			}
-#else
-			res = add_firewall_rules_ex(firewall_config, iptype, rx_prop->rx[0].attrib, rules, IPA_MAX_FLT_RULE - 1, pos);
-			if (res != IPACM_SUCCESS)
-			{
-				return res;
-			}
-#endif
-#endif //FEATURE_IPACM_UL_FIREWALL
-		}
+
 #ifdef FEATURE_VLAN_MPDN
 		/* default rule for all PDNs which are up */
 		for (uint32_t i = 0; i < offloaded_pdns_count_v4; ++i)
 		{
-			IPACM_Wan* curr_interface = offloaded_pdns_v4[i].second->pIface;
+			IPACM_Wan* curr_interface = offloaded_pdns_v4[i]->pIface;
 			IPACMDBG_H("adding default rule for iface %s\n", curr_interface->dev_name);
-			res = add_catchup_all_filtering_rule_each_pdn(*offloaded_pdns_v4[i].first, iptype,
+			res = add_catchup_all_filtering_rule_each_pdn(iptype,
 				curr_interface->rx_prop->rx[0].attrib, rules[pos].flt_rule, pos);
 			if (res != IPACM_SUCCESS)
 			{
@@ -4291,7 +4191,7 @@ int IPACM_Wan::config_dft_firewall_rules_ex(struct ipa_flt_rule_add *rules, int 
 		else
 			num_rules = 0;
 #else
-		res = add_catchup_all_filtering_rule_each_pdn(firewall_config, iptype, rx_prop->rx[0].attrib, rules[pos], pos);
+		res = add_catchup_all_filtering_rule_each_pdn(iptype, rx_prop->rx[0].attrib, rules[pos], pos);
 		if (res != IPACM_SUCCESS)
 		{
 			return res;
@@ -4308,26 +4208,6 @@ int IPACM_Wan::config_dft_firewall_rules_ex(struct ipa_flt_rule_add *rules, int 
 		original_num_rules = IPACM_Wan::num_v6_flt_rule;
 		IPACM_Wan::num_firewall_v6 = 0;
 
-#ifdef FEATURE_VLAN_MPDN
-		/* firewall rules for all PDNs which are up */
-		for(uint32_t i = 0; i < offloaded_pdns_count_v6; ++i)
-		{
-			IPACM_Wan* curr_interface = offloaded_pdns_v6[i].second->pIface;
-			IPACMDBG_H("adding firewall rules for iface %s ip-type %d\n", curr_interface->dev_name, iptype);
-			res = add_firewall_rules_ex(*offloaded_pdns_v6[i].first, iptype, curr_interface->ext_prop->ext[0].mux_id,
-				curr_interface->rx_prop->rx[0].attrib, rules, IPA_MAX_FLT_RULE - offloaded_pdns_count_v6, pos);
-			if(res != IPACM_SUCCESS)
-			{
-				return res;
-			}
-		}
-#else
-		res = add_firewall_rules_ex(firewall_config, iptype, rx_prop->rx[0].attrib, rules, IPA_MAX_FLT_RULE - 1, pos);
-		if(res != IPACM_SUCCESS)
-		{
-			return res;
-		}
-#endif
 #ifdef FEATURE_IPV6_NAT
 		if(IPACM_Iface::ipacmcfg->ipv6_nat_enable && wan_up_v6)
 		{
@@ -4352,10 +4232,10 @@ int IPACM_Wan::config_dft_firewall_rules_ex(struct ipa_flt_rule_add *rules, int 
 		/* default rule for all PDNs which are up */
 		for (uint32_t i = 0; i < offloaded_pdns_count_v6; ++i)
 		{
-			IPACM_Wan* curr_interface = offloaded_pdns_v6[i].second->pIface;
+			IPACM_Wan* curr_interface = offloaded_pdns_v6[i]->pIface;
 			IPACMDBG_H("adding default rule for iface %s ip-type %d\n", curr_interface->dev_name, iptype);
 			/* for ipv6 nat case this shall be the 2nd pass catch all rule to send to v6 LAN RT table*/
-			res = add_catchup_all_filtering_rule_each_pdn(*offloaded_pdns_v6[i].first, iptype,
+			res = add_catchup_all_filtering_rule_each_pdn(iptype,
 				curr_interface->rx_prop->rx[0].attrib, rules[pos].flt_rule, pos);
 			if (res != IPACM_SUCCESS)
 			{
@@ -4370,7 +4250,7 @@ int IPACM_Wan::config_dft_firewall_rules_ex(struct ipa_flt_rule_add *rules, int 
 		else
 			num_rules = 0;
 #else
-		res = add_catchup_all_filtering_rule_each_pdn(firewall_config, iptype, rx_prop->rx[1].attrib, rules[pos], pos);
+		res = add_catchup_all_filtering_rule_each_pdn(iptype, rx_prop->rx[1].attrib, rules[pos], pos);
 		if (res != IPACM_SUCCESS)
 		{
 			return res;
@@ -9163,7 +9043,6 @@ int IPACM_Wan::add_ipv6_nat_ula_prefix_flt_rule_ex(
 #endif // FEATURE_IPV6_NAT
 
 int IPACM_Wan::add_catchup_all_filtering_rule_each_pdn(
-	const IPACM_firewall_conf_t&  firewall_config,
 	ipa_ip_type                   iptype,
 	const struct ipa_rule_attrib& rx_prop_attrib,
 	struct ipa_flt_rule_add&      flt_rule_add,
@@ -9231,37 +9110,24 @@ int IPACM_Wan::add_catchup_all_filtering_rule_each_pdn(
 			flt_rule_entry.rule.attrib.u.v4.dst_addr_mask = 0x00000000;
 			flt_rule_entry.rule.attrib.u.v4.dst_addr = 0x00000000;
 
-#if !defined FEATURE_IPACM_UL_FIREWALL
-			/* firewall disable, all traffic are allowed */
-			if (firewall_config.firewall_enable)
-			{
-				/* default action for v4 is go DST_NAT unless user set to exception*/
-				if (firewall_config.rule_action_accept)
-				{
-					flt_rule_entry.rule.action = IPA_PASS_TO_ROUTING;
-					rt_tbl_name = ipacmcfg->rt_tbl_wan_dl.name;
-				}
-				else
-				{
-					flt_rule_entry.rule.action = IPA_PASS_TO_DST_NAT;
-					rt_tbl_name = ipacmcfg->rt_tbl_lan_v4.name;
-				}
-			}
-			else
-#endif //FEATURE_IPACM_UL_FIREWALL
-			{
+
 				if (isWan_Bridge_Mode())
 				{
 					IPACMDBG_H("ODU is in bridge mode. \n");
 					flt_rule_entry.rule.action = IPA_PASS_TO_ROUTING;
 					rt_tbl_name = ipacmcfg->rt_tbl_wan_dl.name;
 				}
+				else if (IPACM_Iface::ipacmcfg->is_public_ip_support_enabled)
+				{
+					IPACMDBG_H("Public IP enabled mode\n");
+					flt_rule_entry.rule.action = IPA_PASS_TO_ROUTING;
+					rt_tbl_name = ipacmcfg->rt_tbl_lan_v4.name;
+				}
 				else
 				{
 					flt_rule_entry.rule.action = IPA_PASS_TO_DST_NAT;
 					rt_tbl_name = ipacmcfg->rt_tbl_lan_v4.name;
 				}
-			}
 		}
 #ifdef FEATURE_EoGRE
 		else /* ( compatible_eogre ) */
@@ -9305,23 +9171,7 @@ int IPACM_Wan::add_catchup_all_filtering_rule_each_pdn(
 			else
 #endif
 			{
-				if (firewall_config.firewall_enable)
-				{
-					if (firewall_config.rule_action_accept)
-					{
-						flt_rule_entry.rule.action = IPA_PASS_TO_ROUTING;
-						rt_tbl_name = ipacmcfg->rt_tbl_wan_dl.name;
-					}
-					else
-					{
-						flt_rule_entry.rule.action = IPACM_Iface::ipacmcfg->IsIpv6CTEnabled() ?
-							IPA_PASS_TO_DST_NAT : IPA_PASS_TO_ROUTING;
-						rt_tbl_name = ipacmcfg->rt_tbl_wan_v6.name;
-					}
-				}
-				/* firewall disable, all traffic are allowed */
-				else
-				{
+
 #ifndef FEATURE_SOCKSv5
 					flt_rule_entry.rule.action = IPACM_Iface::ipacmcfg->IsIpv6CTEnabled() ?
 						IPA_PASS_TO_DST_NAT : IPA_PASS_TO_ROUTING;
@@ -9330,7 +9180,6 @@ int IPACM_Wan::add_catchup_all_filtering_rule_each_pdn(
 					flt_rule_entry.rule.action = IPA_PASS_TO_ROUTING;
 #endif
 					rt_tbl_name = ipacmcfg->rt_tbl_wan_v6.name;
-				}
 			}
 		}
 #ifdef FEATURE_EoGRE

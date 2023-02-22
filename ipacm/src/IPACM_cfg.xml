@@ -7,6 +7,9 @@
 	<LANStats>
 		<EnableLANStats>0</EnableLANStats>
 	</LANStats>
+	<PublicIpSupport>
+		<EnablePublicIpSupport>0</EnablePublicIpSupport>
+	</PublicIpSupport>
 	<IPACM>
 		<IPACMIface>
 			<Iface>
@@ -136,12 +139,6 @@
 			<GREEnabled>0</GREEnabled>
 			 <GREServer>172.20.98.78</GREServer>
 		</GREFlag>
-		<IPACMPrivateSubnet>
-			<Subnet>
-  			   <SubnetAddress>192.168.2.0</SubnetAddress>
-  			   <SubnetMask>255.255.254.0</SubnetMask>
-		    </Subnet>		
-		</IPACMPrivateSubnet>
 		<IPACMALG>
 			<ALG>
   			   <Protocol>TCP</Protocol>
@@ -225,11 +222,11 @@
 		    </ALG>
 		</IPACMALG>
 		<IPACMNAT>
-			<MaxNatEntries>500</MaxNatEntries>
+			<MaxNatEntries>4000</MaxNatEntries>
 			<NatTableType>HYBRID</NatTableType>
 		</IPACMNAT>
 		<IPACMIPV6CT>
-			<IPv6CTEnabled>0</IPv6CTEnabled>
+			<IPv6CTEnabled>1</IPv6CTEnabled>
 			<MaxIpv6CTEntries>500</MaxIpv6CTEntries>
 		</IPACMIPV6CT>
 		<IPACMIPV6NAT>

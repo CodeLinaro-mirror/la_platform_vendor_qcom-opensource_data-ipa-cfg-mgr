@@ -25,6 +25,10 @@ BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
 WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
 OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
 IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+Changes from Qualcomm Innovation Center are provided under the following license:
+Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+SPDX-License-Identifier: BSD-3-Clause-Clear
 */
 /*!
 	@file
@@ -48,6 +52,7 @@ IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <IPACM_Wan.h>
 #include <IPACM_Iface.h>
 #include <IPACM_Log.h>
+#include <IPACM_Bridge.h>
 
 iface_instances *IPACM_IfaceManager::head = NULL;
 
@@ -580,6 +585,17 @@ int IPACM_IfaceManager::create_iface_instance(ipacm_ifacemgr_data *param)
 				IPACM_EvtDispatcher::registr(IPA_LINK_DOWN_EVENT, embms);
 				IPACMDBG("ipa_WAN (%s):ipa_index (%d) instance open/registr ok\n", embms->dev_name, embms->ipa_if_num);
 				registr(ipa_interface_index, embms);
+			}
+			break;
+		case VIRTUAL_IF:
+			{
+					IPACMDBG("Creating br-lan interface bridge instance\n");
+					IPACM_Bridge *br_lan = new IPACM_Bridge();
+					IPACM_EvtDispatcher::registr(IPA_ADDR_ADD_EVENT, br_lan);
+					IPACM_EvtDispatcher::registr(IPA_ADDR_DEL_EVENT, br_lan);
+					IPACM_EvtDispatcher::registr(IPA_LINK_DOWN_EVENT, br_lan);
+					registr(ipa_interface_index, br_lan);
+					IPACM_Iface::iface_addr_query(if_index);
 			}
 			break;
 

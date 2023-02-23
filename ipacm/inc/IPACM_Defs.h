@@ -26,6 +26,10 @@ BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
 WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
 OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
 IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+Changes from Qualcomm Innovation Center are provided under the following license:
+Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+SPDX-License-Identifier: BSD-3-Clause-Clear
 */
 /*!
 	@file
@@ -255,6 +259,8 @@ typedef enum
 	IPA_DEL_SOCKSv5_CONN,                     /* ipa_socksv5_msg */
 	IPA_UPDATE_SOCKSv5_v6_CONN,               /* NULL */
 #endif
+	IPA_ADD_BRIDGE_VLAN_PHY_INTF,
+	IPA_ADD_BRIDGE_VLAN_BR_INTF,
 	IPACM_EVENT_MAX
 } ipa_cm_event_id;
 
@@ -316,13 +322,15 @@ typedef struct
 {
 	uint32_t subnet_addr;
 	uint32_t subnet_mask;
+	uint8_t if_index;
 } ipa_private_subnet;
 
 
 typedef struct _ipacm_event_data_all
 {
 	enum ipa_ip_type iptype;
-	int if_index;
+	uint8_t if_index;
+	uint8_t master_if_index;
 	uint32_t  ipv4_addr;
 	uint32_t  ipv6_addr[4];
 	uint8_t mac_addr[IPA_MAC_ADDR_SIZE];
@@ -363,6 +371,8 @@ typedef struct
 
 typedef struct _ipacm_event_data_fid
 {
+
+	char iface_name[IPA_IFACE_NAME_LEN];
 	int if_index;
 } ipacm_event_data_fid;
 
@@ -378,12 +388,16 @@ typedef struct _ipacm_event_data_iptype
 	enum ipa_ip_type iptype;
 } ipacm_event_data_iptype;
 
-
+/*Below structure first two members should be alligned
+  with _ipacm_event_data_fid, As similar structure is
+  first two members are used in Bridge.cpp event callback.
+  */
 typedef struct _ipacm_event_data_addr
 {
-	enum ipa_ip_type iptype;
+
 	char iface_name[IPA_IFACE_NAME_LEN];
 	int if_index;
+	enum ipa_ip_type iptype;
 	uint32_t  ipv4_addr_gw;
 	uint32_t  ipv4_addr;
 	uint32_t  ipv4_addr_mask;
@@ -391,6 +405,7 @@ typedef struct _ipacm_event_data_addr
 	uint32_t  ipv6_addr_mask[4];
 	uint32_t  ipv6_addr_gw[4];
 } ipacm_event_data_addr;
+
 
 typedef struct _ipacm_event_data_mac
 {
@@ -456,6 +471,17 @@ typedef struct _ipacm_ifacemgr_data
 	uint8_t mac_addr[IPA_MAC_ADDR_SIZE];
 }ipacm_ifacemgr_data;
 
+struct ipa_vlan_iface_info
+{
+		char name[IPA_RESOURCE_NAME_MAX];
+		uint16_t vlan_id;
+#define IPACM_RESTART_FUNCTIONALITY
+		uint8_t add_vlan_done;
+#define IPA_VLAN_PRIORITY
+		uint8_t priority;
+		uint16_t vlan_interface_index;
+};
+
 struct vlan_iface_info
 {
 	char vlan_iface_name[IPA_RESOURCE_NAME_MAX];
@@ -466,6 +492,7 @@ struct vlan_iface_info
 #ifdef IPA_VLAN_PRIORITY
 	uint8_t priority;
 #endif
+	uint16_t vlan_interface_index;
 };
 
 struct l2tp_vlan_mapping_info
@@ -491,6 +518,16 @@ struct l2tp_vlan_mapping_info
 	uint8_t l2tp_client_mac[6];
 };
 
+struct ipa_bridge_vlan_mapping_info {
+		char bridge_name[IPA_RESOURCE_NAME_MAX];
+		uint8_t lan2lan_sw;
+		uint16_t vlan_id;
+		uint32_t bridge_ipv4;
+		uint32_t subnet_mask;
+		uint8_t master_if_index;
+		uint8_t status;
+};
+
 struct bridge_vlan_mapping_info
 {
 	char bridge_iface_name[IPA_RESOURCE_NAME_MAX];
@@ -498,6 +535,8 @@ struct bridge_vlan_mapping_info
 	uint32_t bridge_ipv4;
 	uint32_t subnet_mask;
 	uint8_t lan2lan_sw;
+	uint8_t bridge_if_index;
+	uint8_t status;
 };
 
 struct l2tp_client_info

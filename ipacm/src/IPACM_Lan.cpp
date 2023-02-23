@@ -309,7 +309,7 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 	ipacm_event_data_all *data_all=NULL;
 	ipacm_cmd_q_data evt_data;
 	int clnt_indx;
-	ipa_ioc_bridge_vlan_mapping_info mapping_info;
+	ipa_bridge_vlan_mapping_info mapping_info;
 
 	switch (event)
 	{
@@ -10437,7 +10437,7 @@ int IPACM_Lan::eth_bridge_add_hdr_proc_ctx(ipa_hdr_l2_type peer_l2_hdr_type, uin
 	int len, res = IPACM_SUCCESS;
 	uint32_t hdr_template;
 	ipa_ioc_add_hdr_proc_ctx* pHeaderProcTable = NULL;
-	ipa_ioc_bridge_vlan_mapping_info mapping_info;
+	ipa_bridge_vlan_mapping_info mapping_info;
 	uint16_t vlan_id = 0;
 
 	if(tx_prop == NULL)

@@ -26,6 +26,10 @@
  * WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *
+ * Changes from Qualcomm Innovation Center are provided under the following license
+ * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 /*!
 	@file
@@ -275,7 +279,7 @@ void* ipa_driver_msg_notifier(void *param)
 	ipacm_event_connection *data_event_conn = NULL;
 
 #if defined(FEATURE_L2TP) || defined(FEATURE_VLAN_MPDN)
-	ipa_ioc_vlan_iface_info vlan_info;
+	ipa_vlan_iface_info vlan_info;
 	ipa_ioc_l2tp_vlan_mapping_info mapping;
 #endif
 	ipacm_cmd_q_data new_neigh_evt;
@@ -769,34 +773,6 @@ void* ipa_driver_msg_notifier(void *param)
 			evt_data.evt_data = data;
 			break;
 #endif
-#ifdef FEATURE_VLAN_MPDN
-		case ADD_BRIDGE_VLAN_MAPPING:
-			ipa_ioc_bridge_vlan_mapping_info add_bridge_vlan_info;
-
-			memcpy(&add_bridge_vlan_info, buffer + sizeof(struct ipa_msg_meta), sizeof(add_bridge_vlan_info));
-			IPACM_Iface::ipacmcfg->add_bridge_vlan_mapping(&add_bridge_vlan_info);
-			continue;
-		case DEL_BRIDGE_VLAN_MAPPING:
-			ipa_ioc_bridge_vlan_mapping_info del_bridge_vlan_info;
-
-			memcpy(&del_bridge_vlan_info, buffer + sizeof(struct ipa_msg_meta), sizeof(del_bridge_vlan_info));
-			IPACM_Iface::ipacmcfg->del_bridge_vlan_mapping(&del_bridge_vlan_info);
-			continue;
-#endif
-#if defined(FEATURE_L2TP) || defined (FEATURE_VLAN_MPDN)
-		case ADD_VLAN_IFACE:
-			memcpy(&vlan_info, buffer + sizeof(struct ipa_msg_meta), sizeof(vlan_info));
-			IPACM_Iface::ipacmcfg->add_vlan_iface(&vlan_info);
-#ifdef IPACM_RESTART_FUNCTIONALITY
-			if (neigh && vlan_info.add_vlan_done == true)
-				neigh->update_neigh_cache();
-#endif
-			continue;
-
-		case DEL_VLAN_IFACE:
-			memcpy(&vlan_info, buffer + sizeof(struct ipa_msg_meta), sizeof(vlan_info));
-			IPACM_Iface::ipacmcfg->del_vlan_iface(&vlan_info);
-			continue;
 #ifdef FEATURE_L2TP
 		case ADD_L2TP_VLAN_MAPPING:
 			memcpy(&mapping, buffer + sizeof(struct ipa_msg_meta), sizeof(mapping));
@@ -808,7 +784,6 @@ void* ipa_driver_msg_notifier(void *param)
 			IPACM_Iface::ipacmcfg->del_l2tp_vlan_mapping(&mapping);
 			continue;
 #endif //#ifdef FEATURE_L2TP
-#endif //defined(FEATURE_L2TP) || defined (FEATURE_VLAN_MPDN)
 #if defined(FEATURE_SOCKSv5) && defined(IPA_SOCKV5_EVENT_MAX)
 		case IPA_SOCKV5_ADD:
 			/* enable socksv5 */

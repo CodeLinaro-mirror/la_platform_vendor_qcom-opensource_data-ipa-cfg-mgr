@@ -287,6 +287,8 @@ int IPACM_IfaceManager::create_iface_instance(ipacm_ifacemgr_data *param)
 	ast_update = param->ast_update;
 #endif
 
+	ipa_ip_type iptype;
+
 	if(ipa_interface_index == INVALID_IFACE)
 	{
 			IPACMDBG_H("Unhandled interface received, fid: %d\n",if_index);
@@ -487,7 +489,11 @@ int IPACM_IfaceManager::create_iface_instance(ipacm_ifacemgr_data *param)
 					IPACMDBG_H("ipa_LAN (%s):ipa_index (%d) instance open/registr ok\n", odu->dev_name, odu->ipa_if_num);
 					registr(ipa_interface_index, odu);
 					/* solve the new_addr comes earlier issue */
-					IPACM_Iface::iface_addr_query(if_index);
+					iptype = IPACM_Iface::iface_addr_query(if_index);
+					if (iptype != IPACM_IP_NULL)
+					{
+						odu->config_ip_type(iptype);
+					}
 				}
 				else
 				{
@@ -510,7 +516,11 @@ int IPACM_IfaceManager::create_iface_instance(ipacm_ifacemgr_data *param)
 					IPACMDBG_H("ipa_LAN (%s):ipa_index (%d) instance open/registr ok\n", odu->dev_name, odu->ipa_if_num);
 					registr(ipa_interface_index, odu);
 					/* solve the new_addr comes earlier issue */
-					IPACM_Iface::iface_addr_query(if_index);
+					iptype = IPACM_Iface::iface_addr_query(if_index);
+					if (iptype != IPACM_IP_NULL)
+					{
+						odu->config_ip_type(iptype);
+					}
 				}
 			}
 			break;

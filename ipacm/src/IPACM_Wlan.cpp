@@ -2712,7 +2712,7 @@ int IPACM_Wlan::handle_wlan_client_route_rule_ext(uint8_t *mac_addr, ipa_ip_type
 					data.ipv6_addr[1] = it->first[1];
 					data.ipv6_addr[2] = it->first[2];
 					data.ipv6_addr[3] = it->first[3];
-					CtList->HandleNeighIpAddrAddEvt_v6(Ipv6IpAddress(data.ipv6_addr, false), data.if_index);
+					CtList->HandleNeighIpAddrAddEvt_v6(&data);
 				}
 			}/* end of for loop */
 		} /* end of txx loop */
@@ -2989,7 +2989,7 @@ int IPACM_Wlan::handle_wlan_client_route_rule_ext_v2(uint8_t *mac_addr, ipa_ip_t
 					data.ipv6_addr[1] = it->first[1];
 					data.ipv6_addr[2] = it->first[2];
 					data.ipv6_addr[3] = it->first[3];
-					CtList->HandleNeighIpAddrAddEvt_v6(Ipv6IpAddress(data.ipv6_addr, false), data.if_index);
+					CtList->HandleNeighIpAddrAddEvt_v6(&data);
 				}
 				IPACMDBG_H("rt rule entry enable stats = %d, dl cnt index = %u\n", rt_rule_entry->rule.enable_stats, rt_rule_entry->rule.cnt_idx);
 			}/* end of for loop */

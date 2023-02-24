@@ -13870,7 +13870,7 @@ void IPACM_Lan::HandleNeighIpAddrAddEvt(ipacm_event_data_all *data)
 	{
 		if(IPACM_Iface::ipacmcfg->ipacm_mpdn_enable)
 		{
-			CtList->HandleNeighIpAddrAddEvt_v6(Ipv6IpAddress(data->ipv6_addr, false), data->if_index);
+			CtList->HandleNeighIpAddrAddEvt_v6(data);
 			break;
 		}
 	}

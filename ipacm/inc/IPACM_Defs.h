@@ -709,5 +709,6 @@ typedef struct _svap_vlan_hpc_hdl
 	uint16_t vlan_id;
 	ipa_hdr_l2_type peer_l2_type;
 	uint32_t hpc_hdr_hdl;
+	uint32_t template_hdr_hdl;
 }svap_vlan_hpc_hdl;
 #endif /* IPA_CM_DEFS_H */

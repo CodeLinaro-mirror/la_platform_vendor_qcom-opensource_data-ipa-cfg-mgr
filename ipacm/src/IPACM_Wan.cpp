@@ -5501,7 +5501,11 @@ int IPACM_Wan::config_wan_firewall_rule(ipa_ip_type iptype,bool isPmipv6)
 
 	if(iptype == IPA_IP_v4)
 	{
-		IPACM_Wan::num_v4_flt_rule = IPA_V2_NUM_DEFAULT_WAN_FILTER_RULE_IPV4;
+		/* if eogre is enabled, we dont install broadcast/multicast */
+		if (IPACM_Iface::ipacmcfg->eogre_enabled)
+			IPACM_Wan::num_v4_flt_rule = 0;
+		else
+			IPACM_Wan::num_v4_flt_rule = IPA_V2_NUM_DEFAULT_WAN_FILTER_RULE_IPV4;
 #ifdef FEATURE_VLAN_MPDN
 		if(IPACM_FAILURE == add_icmp_alg_rules(pdn_flt_rule_v4, IPACM_Wan::num_v4_flt_rule, IPA_IP_v4))
 #else
@@ -5512,7 +5516,7 @@ int IPACM_Wan::config_wan_firewall_rule(ipa_ip_type iptype,bool isPmipv6)
 			res = IPACM_FAILURE;
 			goto fail;
 		}
-		IPACMDBG_H("Succeded in constructing ICMP/ALG rules for ip type %d\n", iptype);
+		IPACMDBG_H("Succeded in constructing ICMP/ALG rules for ip type %d, total rules: %d\n", iptype, IPACM_Wan::num_v4_flt_rule);
 
 #ifdef FEATURE_VLAN_MPDN
 		if(IPACM_FAILURE == config_dft_firewall_rules_ex(pdn_flt_rule_v4, IPACM_Wan::num_v4_flt_rule, IPA_IP_v4, isPmipv6))
@@ -5536,11 +5540,19 @@ int IPACM_Wan::config_wan_firewall_rule(ipa_ip_type iptype,bool isPmipv6)
 	}
 	else if(iptype == IPA_IP_v6)
 	{
+		/* if eogre is enabled, we dont install broadcast/multicast */
+		if (IPACM_Iface::ipacmcfg->eogre_enabled)
+		{
+			IPACM_Wan::num_v6_flt_rule = 0;
+		}
+		else
+		{
 #ifdef FEATURE_VLAN_MPDN
 		IPACM_Wan::num_v6_flt_rule = IPACM_Wan::ipv6_mpdn_default_filterting_rules_count;
 #else
 		IPACM_Wan::num_v6_flt_rule = m_ipv6_default_filterting_rules_count;
 #endif
+		}
 #ifdef FEATURE_L2TP
 		if(active_v4 && (IPACM_Iface::ipacmcfg->ipacm_l2tp_enable == IPACM_L2TP_E2E))
 		{
@@ -5557,7 +5569,7 @@ int IPACM_Wan::config_wan_firewall_rule(ipa_ip_type iptype,bool isPmipv6)
 			res = IPACM_FAILURE;
 			goto fail;
 		}
-		IPACMDBG_H("Succeded in constructing ICMP/ALG rules for ip type %d\n", iptype);
+		IPACMDBG_H("Succeded in constructing ICMP/ALG rules for ip type %d, total rules: %d\n", iptype, IPACM_Wan::num_v6_flt_rule);
 
 #ifdef FEATURE_VLAN_MPDN
 		if(IPACM_FAILURE == config_dft_firewall_rules_ex(pdn_flt_rule_v6, IPACM_Wan::num_v6_flt_rule, IPA_IP_v6,isPmipv6))
@@ -10572,7 +10584,8 @@ int IPACM_Wan::gre_add_exception_rule(
 	flt_rule_add.rule.to_uc          = 0;
 	flt_rule_add.rule.eq_attrib_type = 1;
 #ifdef FEATURE_IPA_V3
-	flt_rule_add.rule.hashable       = true;
+	/* false so that UDP/TCP traffic with same hash will hit offload rule */
+	flt_rule_add.rule.hashable       = false;
 #endif
 	flt_rule_add.rule.action         = IPA_PASS_TO_ROUTING;
 	flt_rule_add.rule.rt_tbl_idx     = rt_tbl_idx.idx;

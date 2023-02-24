@@ -507,6 +507,7 @@ static int populate_gre_details(struct ifinfomsg* ifi, int len, int type){
 
 				ipgre_info.ipv4_src=ntohl(saddr);
 				ipgre_info.ipv4_dst=ntohl(daddr);
+				pConfig->pmip_details.pmip_gre_key= *(__u32 *)RTA_DATA(greinfo[IFLA_GRE_IKEY]);
 				IPACMDBG("GRE info, src addr: %x, dst addr %x, link %d\n", ipgre_info.ipv4_src,ipgre_info.ipv4_dst,link);
 			}
 			else{
@@ -520,8 +521,7 @@ static int populate_gre_details(struct ifinfomsg* ifi, int len, int type){
 
 				IPACM_Iface::addr2host(IPA_IP_v6, &ipgre_info.ipv6_src);
 				IPACM_Iface::addr2host(IPA_IP_v6, &ipgre_info.ipv6_dst);
-
-
+				pConfig->pmip_details.pmip_gre_key= *(__u32 *)RTA_DATA(greinfo[IFLA_GRE_IKEY]);
 
 				IPACMDBG_H("GRE info v6: src addr:0x%x:%x:%x:%x, dst addr:0x%x:%x:%x:%x \n",
 							saddr6.s6_addr32[0],saddr6.s6_addr32[1],saddr6.s6_addr32[2],saddr6.s6_addr32[3],daddr6.s6_addr32[0],daddr6.s6_addr32[1],daddr6.s6_addr32[2],daddr6.s6_addr32[3]);

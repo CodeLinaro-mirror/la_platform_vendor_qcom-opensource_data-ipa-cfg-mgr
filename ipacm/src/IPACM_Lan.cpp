@@ -15333,8 +15333,10 @@ void IPACM_Lan::gre_down(bool isPmipv6)
 				m_ipv6_default_filterting_rules_count,
 				mtu_flt_rule_offset[iptype]);
 		}
+		IPACM_Iface::ipacmcfg->SetQmapId(0xFF);
 	}
-	if(isPmipv6){
+	if(isPmipv6)
+	{
 		if ( iptype == IPA_IP_v4 )
 		{
 			if (m_ipv4_default_filterting_rules_count)
@@ -15352,8 +15354,6 @@ void IPACM_Lan::gre_down(bool isPmipv6)
 			}
 		}
 	}
-	IPACM_Iface::ipacmcfg->SetQmapId(0xFF);
-
 	//need to clean mtu rules when gre is disabled
 	modify_private_subnet();
 #ifdef FEATURE_VLAN_MPDN

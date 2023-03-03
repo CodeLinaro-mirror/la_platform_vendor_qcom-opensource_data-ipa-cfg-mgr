@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2013-2021 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -49,7 +50,9 @@
 #else
 #include <list>
 #endif
-
+#include <set>
+#include <map>
+#include <algorithm>
 typedef struct
 {
   char iface_name[IPA_IFACE_NAME_LEN];
@@ -217,6 +220,14 @@ public:
 	/* To return the instance */
 	static IPACM_Config* GetInstance();
 
+#ifdef FEATURE_IPACM_PER_CLIENT_STATS
+	/* list to capture mac addrs of clients for which stats are enabled */
+	std::set<std::array<uint8_t, 6>> mac_addrs_stats_cache;
+	void stats_client_info(uint8_t *mac_addr, bool is_add);
+	bool client_in_stats_cache(uint8_t *mac_addr);
+	pthread_mutex_t stats_client_info_lock;
+#endif
+
 #if defined(FEATURE_L2TP) || defined(FEATURE_VLAN_MPDN)
 	pthread_mutex_t vlan_l2tp_lock;
 	std::list<vlan_iface_info> m_vlan_iface;
@@ -255,7 +266,11 @@ public:
 	bool is_added_vlan_iface(char *iface_name);
 	bool iface_in_vlan_mode(const char * phys_iface_name);
 	int get_iface_vlan_ids(char *phys_iface_name, uint16_t *Ids);
+#ifdef IPA_VLAN_PRIORITY
+	int get_vlan_id(char *iface_name, uint16_t *vlan_id, uint8_t *priority = NULL);
+#else
 	int get_vlan_id(char *iface_name, uint16_t *vlan_id);
+#endif
 	void get_vlan_mode_ifaces();
 #endif
 
@@ -803,6 +818,28 @@ public:
 		return IPACM_SUCCESS;
 	}
 #endif //defined(FEATURE_SOCKSv5) && defined (IPA_SOCKV5_EVENT_MAX)
+	/**
+	 * Insert a new MACSEC map to the configuration table and mark
+	 * this interface as virtual. in case the a MACSEC map is
+	 * already present for the interface provided, the old MACSEC
+	 * map is replaced with the provided MACSEC map.
+	 *
+	 * @param macsecMap: MACSEC map to add to an interface
+	 *      	   configuration.
+	 *
+	 * @return bool: true on success, false otherwise.
+	 */
+	bool insertOrAssignMacsecMap(struct ipa_macsec_map *macsecMap);
+	/**
+	 * Reset the given interface MACSEC configuration and mark it as
+	 * non-virtual interface.
+	 *
+	 * @param macsecMap: MACSEC map of the interface to mark as
+	 *      	   non-virtual.
+	 *
+	 * @return bool
+	 */
+	bool delMacsecMap(struct ipa_macsec_map *macsecMap);
 
 	static const char *DEVICE_NAME_ODU;
 

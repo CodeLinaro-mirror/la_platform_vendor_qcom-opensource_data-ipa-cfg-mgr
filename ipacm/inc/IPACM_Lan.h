@@ -207,6 +207,8 @@ public:
 	int num_wan_ul_fl_rule_v4;
 	/* Number of Q6 UL IPv6 rules. */
 	int num_wan_ul_fl_rule_v6;
+	/* Number of UL subnet IPv4 rules. */
+	int num_wan_subnet_rules;
 
 	/* Header length. */
 	uint8_t hdr_len;
@@ -330,7 +332,7 @@ public:
 	virtual int disable_dft_firewall_rules_ul_ex(int vid);
 #endif
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
-
+	void handle_stats_client_connect(int if_index, uint8_t *mac_addr );
 	/* handle lan client connect event. */
 	virtual int handle_lan_client_connect(uint8_t *mac_addr);
 
@@ -506,6 +508,7 @@ protected:
 	int each_client_rt_rule_count[IPA_IP_MAX];
 
 	uint32_t eth_bridge_flt_rule_offset[IPA_IP_MAX];
+	uint32_t mtu_flt_rule_offset[IPA_IP_MAX];
 
 #ifdef FEATURE_L2TP
 #ifdef IPA_L2TP_TUNNEL_UDP
@@ -527,7 +530,6 @@ protected:
 	/* check if the IPv6 address is unique local address */
 	bool is_unique_local_ipv6_addr(uint32_t *ipv6_addr);
 
-	virtual int add_dummy_private_subnet_flt_rule(ipa_ip_type iptype);
 
 	int handle_private_subnet_android(ipa_ip_type iptype);
 
@@ -1380,7 +1382,7 @@ private:
 	/* handle eth client initial, construct full headers (tx property) */
 	int handle_eth_hdr_init(uint8_t *mac_addr,
 		ipacm_bridge *bridge = NULL,
-		uint16_t vlan_id = 0, bool isVlan = false);
+		uint16_t vlan_id = 0, bool isVlan = false, uint8_t priority = 0);
 
 	/* handle eth client ip-address */
 	int handle_eth_client_ipaddr(ipacm_event_data_all *data);

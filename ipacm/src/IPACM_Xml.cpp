@@ -191,74 +191,93 @@ static int ipacm_vlan_cfg_xml_parse_tree
         IPACM_conf_t *cfg
 )
 {
-        int32_t ret_val = IPACM_SUCCESS;
-        char* content = NULL;
+	int32_t ret_val = IPACM_SUCCESS;
+	char* content = NULL;
+	int str_size;
+	char content_buf[MAX_XML_STR_LEN];
 
-        if (NULL == xml_node)
-            return ret_val;
-        while (xml_node != NULL &&
-                ret_val == IPACM_SUCCESS)
-        {
-                switch (xml_node->type)
-                {
-                case XML_ELEMENT_NODE:
-                        {
-                                if (IPACM_util_icmp_string((char*)xml_node->name, IPACM_VLAN_IFACE) == 0 ||
-                                                IPACM_util_icmp_string((char*)xml_node->name, IPACM_VLAN_IFACE_ENTRY) == 0)
-                                {
-                                        if (0 == IPACM_util_icmp_string((char*)xml_node->name, IPACM_VLAN_IFACE_ENTRY))
-                                        {
-                                                /* increase iface entry number */
-                                                cfg->vlan_cfg.num_vlan_if++;
-                                        }
-                                        /* go to child */
-                                        ret_val = ipacm_vlan_cfg_xml_parse_tree(xml_node->children, cfg);
-                                }
-                                else if (IPACM_util_icmp_string((char*)xml_node->name, IPACM_VLAN_ID) == 0)
-                                {
-                                        IPACMDBG_H("inside VLAN ID\n");
-                                        content = IPACM_read_content_element(xml_node);
-                                        if (content)
-                                        {
-                                                cfg->vlan_cfg.vlan_if_cfg[cfg->vlan_cfg.num_vlan_if - 1].vlan_id =
-                                                                                                                atoi(content);
-                                                IPACMDBG_H("VLAN ID :%d\n",
-                                                cfg->vlan_cfg.vlan_if_cfg[cfg->vlan_cfg.num_vlan_if - 1].vlan_id);
-                                        }
-                                }
-                                else if (IPACM_util_icmp_string((char*)xml_node->name, IPACM_VLAN_OFFLOAD_PATH) == 0)
-                                {
-                                        IPACMDBG_H("inside VLAN OFFLOAD PATH\n");
-                                        content = IPACM_read_content_element(xml_node);
-                                        if (content)
-                                        {
-                                                cfg->vlan_cfg.vlan_if_cfg[cfg->vlan_cfg.num_vlan_if - 1].off_path =
-                                                                                                            atoi(content);
-                                                IPACMDBG_H("VLAN offload path :%d\n",
-                                                cfg->vlan_cfg.vlan_if_cfg[cfg->vlan_cfg.num_vlan_if - 1].off_path);
-                                        }
-                                }
-                                else if (IPACM_util_icmp_string((char*)xml_node->name, IPACM_VLAN_PCP_VALUE) == 0)
-                                {
-                                        IPACMDBG_H("inside VLAN PCP value\n");
-                                        content = IPACM_read_content_element(xml_node);
-                                        if (content)
-                                        {
-                                                cfg->vlan_cfg.vlan_if_cfg[cfg->vlan_cfg.num_vlan_if - 1].vlan_pcp =
-                                                                                                            atoi(content);
-                                                IPACMDBG_H("VLAN PCP :%d\n",
-                                                                            cfg->vlan_cfg.vlan_if_cfg[cfg->vlan_cfg.num_vlan_if - 1].vlan_pcp);
-                                        }
-                                }
-                        } // Node case
-                        break;
-                default:
-                        break;
-            }// switch
-            /* go to sibling */
-            xml_node = xml_node->next;
-        }
-        return ret_val;
+	if (NULL == xml_node)
+	{
+		IPACMERR("Xml Node ref NULL\n");
+		return IPACM_FAILURE;
+	}
+
+	while (xml_node != NULL &&
+			ret_val == IPACM_SUCCESS)
+	{
+		switch (xml_node->type)
+		{
+			case XML_ELEMENT_NODE:
+				{
+					if (IPACM_util_icmp_string((char*)xml_node->name, IPACM_VLAN_IFACE) == 0 ||
+							IPACM_util_icmp_string((char*)xml_node->name, system_TAG) == 0 ||
+							IPACM_util_icmp_string((char*)xml_node->name, IPACM_VLAN_IFACE_ENTRY) == 0)
+					{
+						IPACMDBG_H("inside VLAN IFACE Entry System\n");
+						if (0 == IPACM_util_icmp_string((char*)xml_node->name, IPACM_VLAN_IFACE_ENTRY))
+						{
+							/* increase iface entry number */
+							cfg->vlan_cfg.num_vlan_if++;
+							IPACMDBG_H("Vlan Ifaces Cnt %d\n", cfg->vlan_cfg.num_vlan_if);
+						}
+						/* go to child */
+						ret_val = ipacm_vlan_cfg_xml_parse_tree(xml_node->children, cfg);
+					}
+					else if (IPACM_util_icmp_string((char*)xml_node->name, IPACM_VLAN_NAME) == 0)
+					{
+						IPACMDBG_H("inside VLAN Name\n");
+						content = IPACM_read_content_element(xml_node);
+						if (content)
+						{
+							str_size = strlen(content);
+							memset(content_buf, 0, sizeof(content_buf));
+							memcpy(content_buf, (void *)content, str_size);
+							strlcpy(cfg->vlan_cfg.vlan_if_cfg[cfg->vlan_cfg.num_vlan_if - 1].vlan_name, content_buf, str_size + 1);
+							IPACMDBG_H("VLAN Name :%s\n",cfg->vlan_cfg.vlan_if_cfg[cfg->vlan_cfg.num_vlan_if - 1].vlan_name);
+						}
+					}
+					else if (IPACM_util_icmp_string((char*)xml_node->name, IPACM_VLAN_ID) == 0)
+					{
+						IPACMDBG_H("inside VLAN ID\n");
+						content = IPACM_read_content_element(xml_node);
+						if (content)
+						{
+							cfg->vlan_cfg.vlan_if_cfg[cfg->vlan_cfg.num_vlan_if - 1].vlan_id = atoi(content);
+							IPACMDBG_H("VLAN ID :%d\n",
+										cfg->vlan_cfg.vlan_if_cfg[cfg->vlan_cfg.num_vlan_if - 1].vlan_id);
+						}
+					}
+					else if (IPACM_util_icmp_string((char*)xml_node->name, IPACM_VLAN_OFFLOAD_PATH) == 0)
+					{
+						IPACMDBG_H("inside VLAN OFFLOAD PATH\n");
+						content = IPACM_read_content_element(xml_node);
+						if (content)
+						{
+							cfg->vlan_cfg.vlan_if_cfg[cfg->vlan_cfg.num_vlan_if - 1].off_path = atoi(content);
+							IPACMDBG_H("VLAN offload path :%d\n",
+							cfg->vlan_cfg.vlan_if_cfg[cfg->vlan_cfg.num_vlan_if - 1].off_path);
+						}
+					}
+					else if (IPACM_util_icmp_string((char*)xml_node->name, IPACM_VLAN_PCP_VALUE) == 0)
+					{
+						IPACMDBG_H("inside VLAN PCP value\n");
+						content = IPACM_read_content_element(xml_node);
+						if (content)
+						{
+							cfg->vlan_cfg.vlan_if_cfg[cfg->vlan_cfg.num_vlan_if - 1].vlan_pcp = atoi(content);
+							IPACMDBG_H("VLAN PCP :%d\n",
+											cfg->vlan_cfg.vlan_if_cfg[cfg->vlan_cfg.num_vlan_if - 1].vlan_pcp);
+						}
+					}
+				} // Node case
+				break;
+			default:
+				break;
+		}// switch
+		/* go to sibling */
+		xml_node = xml_node->next;
+	}
+	return ret_val;
 }
 
 /* This function traverses the xml tree*/

@@ -448,8 +448,8 @@ static int ipa_nl_decode_rtm_link
 
 		if (attrib->rta_type == IFLA_IFNAME)
 		{
-			strlcpy(link_info->vlan_name, (strdup((const char *)RTA_DATA(attrib))), IFACE_NAME);
-			IPACMDBG("Extracted vlan interface name %s\n", link_info->vlan_name);
+			strlcpy(link_info->vlan_info.name, (strdup((const char *)RTA_DATA(attrib))), IFACE_NAME);
+			IPACMDBG("Extracted vlan interface name %s\n", link_info->vlan_info.name);
 		}
 
 		if (attrib->rta_type == IFLA_LINKINFO)
@@ -468,7 +468,9 @@ static int ipa_nl_decode_rtm_link
 				intf_type = strdup((char *)RTA_DATA(vlan_link_info[IFLA_INFO_KIND]));
 				if(intf_type) {
 					if (!strcmp(intf_type, "vlan")) {
-						IPACMDBG("Recived NEW_LINK for vlan type interface\n");
+						link_info->vlan_info.vlan_interface_index = link_info->metainfo.ifi_index;
+						IPACMDBG("Recived NEW_LINK for vlan type interface with interface index %d\n",
+									link_info->vlan_info.vlan_interface_index);
 					}
 				}
 			}
@@ -487,8 +489,8 @@ static int ipa_nl_decode_rtm_link
 				}
 				if(vlan_link_info_data_attrs[IFLA_VLAN_ID]) {
 
-					link_info->vlan_id = *(uint16_t *)RTA_DATA(vlan_link_info_data_attrs[IFLA_VLAN_ID]);
-					IPACMDBG("vlan id %d\n", link_info->vlan_id);
+					link_info->vlan_info.vlan_id = *(uint16_t *)RTA_DATA(vlan_link_info_data_attrs[IFLA_VLAN_ID]);
+					IPACMDBG("vlan id %d\n", link_info->vlan_info.vlan_id);
 
 				}
 			}
@@ -711,7 +713,6 @@ static int ipa_nl_decode_nlmsg
 	ipacm_event_data_fid *data_fid;
 	ipacm_event_data_addr *data_addr;
 	ipacm_event_data_all *vlan_data;
-	ipa_vlan_iface_info vlan_info;
 	memset(nullMac, 0, sizeof(nullMac));
 	while(NLMSG_OK(nlh, buflen))
 	{
@@ -763,15 +764,10 @@ static int ipa_nl_decode_nlmsg
 					}
 					data_fid->if_index = msg_ptr->nl_link_info.metainfo.ifi_index;
 					strlcpy(data_fid->iface_name, dev_name, sizeof(data_fid->iface_name));
-					if(msg_ptr->nl_link_info.vlan_id) {
-							memset(&vlan_info, 0, sizeof(ipa_vlan_iface_info));
-							strlcpy(vlan_info.name, msg_ptr->nl_link_info.vlan_name, IPA_RESOURCE_NAME_MAX);
-							vlan_info.vlan_id = msg_ptr->nl_link_info.vlan_id;
-							vlan_info.vlan_interface_index = msg_ptr->nl_link_info.metainfo.ifi_index;
-							ipa_nl_get_vlan_priority(&vlan_info);
-							IPACMDBG("Add vlan<->interface details with vlan: %d interface: %s interface index %d priority %d\n",
-												vlan_info.vlan_id, vlan_info.name, vlan_info.vlan_interface_index, vlan_info.priority);
-							IPACM_Iface::ipacmcfg->add_vlan_iface(&vlan_info);
+
+					if(msg_ptr->nl_link_info.vlan_info.vlan_id && msg_ptr->nl_link_info.vlan_info.name != NULL)
+					{
+						IPACM_Iface::ipacmcfg->add_vlan_iface(&msg_ptr->nl_link_info.vlan_info);
 					}
 
 					if(msg_ptr->nl_link_info.metainfo.ifi_flags & IFF_UP)
@@ -819,6 +815,13 @@ static int ipa_nl_decode_nlmsg
 					}
 					IPACMDBG("Got a usb link_up event (Interface %s, %d) \n", dev_name, msg_ptr->nl_link_info.metainfo.ifi_index);
 
+					strlcpy(data_fid->iface_name, dev_name, sizeof(data_fid->iface_name));
+
+					if(msg_ptr->nl_link_info.vlan_info.vlan_id && msg_ptr->nl_link_info.vlan_info.name != NULL)
+					{
+						IPACM_Iface::ipacmcfg->add_vlan_iface(&msg_ptr->nl_link_info.vlan_info);
+					}
+
                     /*--------------------------------------------------------------------------
                        Post LAN iface (ECM) link up event
                      ---------------------------------------------------------------------------*/
@@ -844,6 +847,19 @@ static int ipa_nl_decode_nlmsg
 						return IPACM_FAILURE;
 					}
 					IPACMDBG_H("Got a usb link_down event (Interface %s) \n", dev_name);
+
+					if (msg_ptr->nl_link_info.metainfo.ifi_family == AF_BRIDGE || msg_ptr->nl_link_info.metainfo.ifi_family == AF_UNSPEC)
+					{
+						IPACMDBG("Deleting the bridge<->vlan mapping entry with intterface index %d\n", msg_ptr->nl_link_info.metainfo.ifi_index);
+						uint16_t vlan_master_interface_index = msg_ptr->nl_link_info.metainfo.ifi_index;
+						IPACM_Iface::ipacmcfg->del_bridge_vlan_mapping(&vlan_master_interface_index);
+						return IPACM_SUCCESS;
+					}
+
+					if(msg_ptr->nl_link_info.vlan_info.vlan_id && msg_ptr->nl_link_info.vlan_info.name != NULL)
+					{
+						IPACM_Iface::ipacmcfg->del_vlan_iface(&msg_ptr->nl_link_info.vlan_info);
+					}
 
 					data_fid->if_index = msg_ptr->nl_link_info.metainfo.ifi_index;
 					strlcpy(data_fid->iface_name, dev_name, sizeof(data_fid->iface_name));
@@ -894,12 +910,10 @@ static int ipa_nl_decode_nlmsg
 					IPACMERR("Error while getting interface name with index %d, continue as the interface might have already been down.\n",
 						msg_ptr->nl_link_info.metainfo.ifi_index);
 				}
-				IPACMDBG("Deleting the vlan-id<->vlan interface :%s vlan-id:%d\n",  msg_ptr->nl_link_info.vlan_name, msg_ptr->nl_link_info.vlan_id);
-				if(msg_ptr->nl_link_info.vlan_id) {
-					strlcpy(vlan_info.name, msg_ptr->nl_link_info.vlan_name, IPA_RESOURCE_NAME_MAX);
-					vlan_info.vlan_id = msg_ptr->nl_link_info.vlan_id;
-					vlan_info.vlan_interface_index = msg_ptr->nl_link_info.metainfo.ifi_index;
-					IPACM_Iface::ipacmcfg->del_vlan_iface(&vlan_info);
+
+				if(msg_ptr->nl_link_info.vlan_info.vlan_id && msg_ptr->nl_link_info.vlan_info.name != NULL)
+				{
+					IPACM_Iface::ipacmcfg->del_vlan_iface(&msg_ptr->nl_link_info.vlan_info);
 				}
 				/* post link down to command queue */
 				evt_data.event = IPA_LINK_DOWN_EVENT;

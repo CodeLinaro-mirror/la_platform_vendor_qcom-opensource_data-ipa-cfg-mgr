@@ -16,6 +16,7 @@ SPDX-License-Identifier: BSD-3-Clause-Clear
 IPACM_Bridge::IPACM_Bridge()
 {
 		IPACMDBG("Initailizing IPACM_Bridge class object\n");
+		bridge_ipv4_addr = 0;
 }
 
 
@@ -39,21 +40,36 @@ void IPACM_Bridge::event_callback(ipa_cm_event_id event, void *param)
 		switch(event) {
 				case IPA_ADDR_ADD_EVENT:
 						IPACMDBG("Handling IPA_ADDR_ADD_EVENT for %s\n",data->iface_name);
-						if(IPACM_Iface::ipacmcfg->AddPrivateSubnet(data->ipv4_addr, data->ipv4_addr_mask, ipa_if_num) == false)
+						if(bridge_ipv4_addr == 0)
 						{
+							if(IPACM_Iface::ipacmcfg->AddPrivateSubnet(data->ipv4_addr, data->ipv4_addr_mask, ipa_if_num) == true)
+							{
+								bridge_ipv4_addr = data->ipv4_addr;
+								IPACMDBG_H("Resetting IPACM bridge private subnet_addr as: 0x%x \n", bridge_ipv4_addr);
+							}
+							else
+							{
 								IPACMERR("Can't Add IPACM private subnet_addr as: 0x%x \n", data->ipv4_addr);
+							}
 						}
 						break;
 				case IPA_ADDR_DEL_EVENT:
 						IPACMDBG("Handling IPA_ADDR_DEL_EVENT %s\n", data->iface_name);
-						if(IPACM_Iface::ipacmcfg->DelPrivateSubnet(data->ipv4_addr, ipa_if_num) == false)
-						{
+							if(IPACM_Iface::ipacmcfg->DelPrivateSubnet(data->ipv4_addr, ipa_if_num) == true)
+							{
+								bridge_ipv4_addr = 0;
+								IPACMDBG_H("Resetting IPACM bridge private subnet_addr as: 0x%x \n", bridge_ipv4_addr);
+							}
+							else
+							{
 								IPACMERR("Can't Delete IPACM private subnet_addr as: 0x%x \n", data->ipv4_addr);
-						}
+							}
 						break;
 				case IPA_LINK_DOWN_EVENT:
 						IPACMDBG("Handling IPA_LINK_DOWN_EVENT %s\n", data->iface_name);
-						IPACMDBG("Deleting the bridge instance\n");
+						bridge_ipv4_addr = 0;
+						IPACMDBG("Deleting the bridge instance and resetting IPACM bridge private subnet_addr as: 0x%x \n",
+									bridge_ipv4_addr);
 						if(IPACM_Iface::ipacmcfg->DelPrivateSubnetByIfIndex(ipa_if_num) == false)
 						{
 								IPACMERR("Failed to delete IPACM private subnet with interface index as: 0x%x \n", ipa_if_num);

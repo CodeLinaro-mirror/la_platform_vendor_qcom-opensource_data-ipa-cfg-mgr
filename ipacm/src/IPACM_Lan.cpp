@@ -3207,17 +3207,13 @@ int IPACM_Lan::handle_addr_evt(ipacm_event_data_addr *data)
 
 		/* ICMP rule is 1st to keep consistent with v6 and to use as offset for L2L rules */
 		install_ipv4_icmp_flt_rule();
+
+		add_tcp_syn_flt_rule(data->iptype);
+
 		/* initial fragment/multicast/broadcast/filter rule. Fragment has set_rear = false, will be above icmp rule */
 		init_fl_rule(data->iptype);
 
-#ifdef FEATURE_L2TP
-		if((IPACM_Iface::ipacmcfg->ipacm_l2tp_enable == IPACM_L2TP) &&
-			ipa_if_cate == WLAN_IF)
-		{
-			add_tcp_syn_flt_rule(data->iptype);
-		}
-#endif
-		/* populate the flt rule offset for eth bridge (offset = icmp) */
+		/* populate the flt rule offset for eth bridge */
 		eth_bridge_flt_rule_offset[data->iptype] = ipv4_icmp_flt_rule_hdl[0];
 		/* populate the flt rule offset for mtu_offset (offset = broadcast rule)*/
 		if (m_ipv4_default_filterting_rules_count)
@@ -3312,14 +3308,13 @@ int IPACM_Lan::handle_addr_evt(ipacm_event_data_addr *data)
 
 		if (num_dft_rt_v6 == 0)
 		{
+			/* Always adding tcp syn SW-exception rule for MSS clamping support */
+			add_tcp_syn_flt_rule(data->iptype);
+
 #ifdef FEATURE_L2TP
 			if (IPACM_Iface::ipacmcfg->ipacm_l2tp_enable == IPACM_L2TP)
 			{
-				if(ipa_if_cate == WLAN_IF)
-				{
-					add_tcp_syn_flt_rule(data->iptype);
-				}
-				else if(ipa_if_cate == ODU_IF)
+				if(ipa_if_cate == ODU_IF)
 				{
 #ifndef IPA_L2TP_TUNNEL_UDP
 					add_tcp_syn_flt_rule_l2tp(IPA_IP_v4);
@@ -6532,7 +6527,7 @@ int IPACM_Lan::handle_down_evt()
 	}
 #endif
 
-	/* delete default filter rules */
+	/* Delete v4 default filtering rules */
 	if (ip_type != IPA_IP_v6 && rx_prop != NULL)
 	{
 		res = delete_icmp_filter_rule(IPA_IP_v4);
@@ -6566,9 +6561,19 @@ int IPACM_Lan::handle_down_evt()
 		IPACM_Iface::ipacmcfg->decreaseFltRuleCount(rx_prop->rx[0].src_pipe, IPA_IP_v4, num_wan_subnet_rules);
 		num_wan_subnet_rules = 0;
 		IPACMDBG_H("Deleted private subnet v4 filter rules successfully.\n");
+
+		if(m_filtering.DeleteFilteringHdls(&tcp_syn_flt_rule_hdl[IPA_IP_v4], IPA_IP_v4, 1) == false)
+		{
+			IPACMERR("Error deleting tcp syn flt rule, aborting...\n");
+			res = IPACM_FAILURE;
+			goto fail;
+		}
+		IPACM_Iface::ipacmcfg->decreaseFltRuleCount(rx_prop->rx[0].src_pipe, IPA_IP_v4, 1);
+		IPACMDBG_H("Deleted TCP syn v4 filter rules successfully.\n");
 	}
 	IPACMDBG_H("Finished delete default iface ipv4 filtering rules \n ");
 
+	/* Delete v6 filtering rules */
 	if (ip_type != IPA_IP_v4 && rx_prop != NULL)
 	{
 		res = delete_icmp_filter_rule(IPA_IP_v6);
@@ -6612,16 +6617,20 @@ int IPACM_Lan::handle_down_evt()
 			goto fail;
 		}
 
+		if(m_filtering.DeleteFilteringHdls(&tcp_syn_flt_rule_hdl[IPA_IP_v6], IPA_IP_v6, 1) == false)
+		{
+			IPACMERR("Error deleting tcp syn flt rule, aborting...\n");
+			res = IPACM_FAILURE;
+			goto fail;
+		}
+
+		IPACM_Iface::ipacmcfg->decreaseFltRuleCount(rx_prop->rx[0].src_pipe, IPA_IP_v6, 1);
+		IPACMDBG_H("Deleted TCP syn v6 filter rules successfully.\n");
+
 #ifdef FEATURE_L2TP
 		if((IPACM_Iface::ipacmcfg->ipacm_l2tp_enable == IPACM_L2TP) &&
 			ipa_if_cate == ODU_IF)
 		{
-			if(m_filtering.DeleteFilteringHdls(tcp_syn_flt_rule_hdl, IPA_IP_v6, IPA_IP_MAX) == false)
-			{
-				IPACMERR("Error Deleting TCP SYN L2TP Filtering Rule, aborting...\n");
-				res = IPACM_FAILURE;
-				goto fail;
-			}
 #ifdef IPA_L2TP_TUNNEL_UDP
 			if(del_l2tp_udp_dflt_flt_rules(l2tp_udp_dflt_flt_rule_hdl) == IPACM_FAILURE)
 			{
@@ -6769,6 +6778,28 @@ fail:
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
 			if (get_client_memptr(eth_client, i)->lan_stats_idx != -1)
 			{
+				IPACMDBG_H("Clearing the Q6 UL flt rules as IPA_LINK_DOWN\n");
+				if (IPACM_Iface::ipacmcfg->ipacm_lan_stats_enable == true)
+				{
+					if (get_client_memptr(eth_client, i)->ipv4_ul_rules_set == true)
+					{
+						if (delete_uplink_filter_rule_per_client(IPA_IP_v4, get_client_memptr(eth_client, i)->mac))
+						{
+							IPACMERR("unbale to delete uplink v4 filter rules for index:%d\n", i);
+							return IPACM_FAILURE;
+						}
+					}
+
+					if (get_client_memptr(eth_client, i)->ipv6_ul_rules_set == true)
+					{
+						if (delete_uplink_filter_rule_per_client(IPA_IP_v6, get_client_memptr(eth_client, i)->mac))
+						{
+							IPACMERR("unbale to delete uplink v6 filter rules for index:%d\n", i);
+							return IPACM_FAILURE;
+						}
+					}
+				}
+
 				/* Clear the lan client info. */
 				client_info = (struct wan_ioctl_lan_client_info *)malloc(sizeof(struct wan_ioctl_lan_client_info));
 				if (client_info == NULL)
@@ -6909,12 +6940,12 @@ fail:
 #endif
 
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
-		/* Reset the lan stats indices belonging to this object. */
-		if (IPACM_Iface::ipacmcfg->ipacm_lan_stats_enable)
-		{
-			IPACMDBG_H("Resetting lan stats indices. \n");
-			reset_lan_stats_index();
-		}
+	/* Reset the lan stats indices belonging to this object. */
+	if (IPACM_Iface::ipacmcfg->ipacm_lan_stats_enable)
+	{
+		IPACMDBG_H("Resetting lan stats indices. \n");
+		reset_lan_stats_index();
+	}
 #endif
 
 	neigh_cache.clear();
@@ -9107,6 +9138,7 @@ int IPACM_Lan::install_uplink_filter_rule_per_client_v2
 					((struct ipa_flt_rule_add_v2 *)pFilteringTable->rules)[i].flt_rule_hdl;
 			}
 			get_client_memptr(eth_client, clnt_indx)->ipv4_ul_rules_set = true;
+			num_wan_ul_fl_rule_v4 = pFilteringTable->num_rules;
 		}
 		else if(iptype == IPA_IP_v6)
 		{
@@ -9116,6 +9148,7 @@ int IPACM_Lan::install_uplink_filter_rule_per_client_v2
 					((struct ipa_flt_rule_add_v2 *)pFilteringTable->rules)[i].flt_rule_hdl;
 			}
 			get_client_memptr(eth_client, clnt_indx)->ipv6_ul_rules_set = true;
+			num_wan_ul_fl_rule_v6 = pFilteringTable->num_rules;
 		}
 		else
 		{
@@ -10351,13 +10384,6 @@ int IPACM_Lan::modify_ipv6_prefix_flt_rule()
 		return IPACM_FAILURE;
 	}
 
-	/* not supported for wlan vlan for now */
-	if (ipa_if_cate == WLAN_IF)
-	{
-		IPACMERR("not supported for wlan vlan\n");
-		return IPACM_SUCCESS;
-	}
-
 	if (dft_v6fl_rule_hdl[0] == 0)
 	{
 		IPACMERR("install v6 default rules first.Prefix + MTU rule will be installed later\n");
@@ -10404,11 +10430,7 @@ int IPACM_Lan::modify_ipv6_prefix_flt_rule()
 		{
 			for(i = 0; i < IPACM_Iface::ipacmcfg->num_ipv6_prefixes; i++)
 			{
-				vid[i] = IPACM_Iface::ipacmcfg->ipa_ipv6_prefixes[i].vlan_id;
-				if (!vid[i])
-					mtu[i] = DEFAULT_MTU_SIZE;
-				else
-					IPACM_Wan::GetV6MTUByPrefix(&mtu[i], IPACM_Iface::ipacmcfg->ipa_ipv6_prefixes[i].addr); //might be able to get MTU by vid now
+				IPACM_Wan::GetV6MTUByPrefix(&mtu[i], IPACM_Iface::ipacmcfg->ipa_ipv6_prefixes[i].addr); //might be able to get MTU by vid now
 				IPACMDBG_H("mtu = %d for prefix %d\n", mtu[i], i);
 
 				if(mtu[i] < DEFAULT_MTU_SIZE)
@@ -10505,7 +10527,10 @@ int IPACM_Lan::modify_ipv6_prefix_flt_rule()
 		/* add corresponding MTU rule for ipv6 */
 		if (mtu[i] > 0 && mtu[i] < DEFAULT_MTU_SIZE)
 		{
-			memcpy(&flt_rule.rule.attrib, &rx_prop->rx[0].attrib, sizeof(flt_rule.rule.attrib));
+			if (ipa_if_cate == WLAN_IF)
+				memset(&flt_rule.rule.attrib, 0, sizeof(flt_rule.rule.attrib));
+			else
+				memcpy(&flt_rule.rule.attrib, &rx_prop->rx[0].attrib, sizeof(flt_rule.rule.attrib));
 
 			/* if Vlan enabled, add vlan id as a parameter of the MTU rule*/
 			if (vid[i])
@@ -13267,6 +13292,7 @@ int IPACM_Lan::add_tcp_syn_flt_rule(ipa_ip_type iptype)
 	}
 
 	tcp_syn_flt_rule_hdl[iptype] = m_pFilteringTable->rules[0].flt_rule_hdl;
+	IPACM_Iface::ipacmcfg->increaseFltRuleCount(rx_prop->rx[0].src_pipe, iptype, 1);
 	free(m_pFilteringTable);
 	return IPACM_SUCCESS;
 }

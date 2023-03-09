@@ -28,7 +28,7 @@
  *
  * Changes from Qualcomm Innovation Center are provided under the following license:
  *
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted (subject to the limitations in the
@@ -396,7 +396,7 @@ void IPACM_Wlan::event_callback(ipa_cm_event_id event, void *param)
 						if(data->iptype == IPA_IP_v6)
 						{
 							memcpy(ipv6_prefix, IPACM_Wan::backhaul_ipv6_prefix, sizeof(ipv6_prefix));
-							install_ipv6_prefix_flt_rule(IPACM_Wan::backhaul_ipv6_prefix);
+							modify_ipv6_prefix_flt_rule();
 #ifdef FEATURE_IPACM_UL_FIREWALL
 #ifdef IPA_V6_UL_WL_FIREWALL_HANDLE
 							configure_v6_ul_firewall_wlan();
@@ -3615,15 +3615,14 @@ int IPACM_Wlan::handle_down_evt()
 #endif
 		IPACMDBG_H("Deleted private subnet v4 filter rules successfully.\n");
 
-#ifdef FEATURE_L2TP
-		if((IPACM_Iface::ipacmcfg->ipacm_l2tp_enable == IPACM_L2TP) &&
-			m_filtering.DeleteFilteringHdls(&tcp_syn_flt_rule_hdl[IPA_IP_v4], IPA_IP_v4, 1) == false)
+		if(m_filtering.DeleteFilteringHdls(&tcp_syn_flt_rule_hdl[IPA_IP_v4], IPA_IP_v4, 1) == false)
 		{
 			IPACMERR("Error deleting tcp syn flt rule, aborting...\n");
 			res = IPACM_FAILURE;
 			goto fail;
 		}
-#endif
+		IPACM_Iface::ipacmcfg->decreaseFltRuleCount(rx_prop->rx[0].src_pipe, IPA_IP_v4, 1);
+		IPACMDBG_H("Deleted TCP syn v4 filter rules successfully.\n");
 	}
 
 	/* Delete v6 filtering rules */
@@ -3644,15 +3643,15 @@ int IPACM_Wlan::handle_down_evt()
 			goto fail;
 		}
 
-#ifdef FEATURE_L2TP
-		if((IPACM_Iface::ipacmcfg->ipacm_l2tp_enable == IPACM_L2TP) &&
-			m_filtering.DeleteFilteringHdls(&tcp_syn_flt_rule_hdl[IPA_IP_v6], IPA_IP_v6, 1) == false)
+		if(m_filtering.DeleteFilteringHdls(&tcp_syn_flt_rule_hdl[IPA_IP_v6], IPA_IP_v6, 1) == false)
 		{
 			IPACMERR("Error deleting tcp syn flt rule, aborting...\n");
 			res = IPACM_FAILURE;
 			goto fail;
 		}
-#endif
+		IPACM_Iface::ipacmcfg->decreaseFltRuleCount(rx_prop->rx[0].src_pipe, IPA_IP_v6, 1);
+		IPACMDBG_H("Deleted TCP syn v6 filter rules successfully.\n");
+
 	}
 	IPACMDBG_H("finished delete filtering rules\n ");
 
@@ -4856,7 +4855,7 @@ int IPACM_Wlan::install_uplink_filter_rule_per_client
 
 			/* NAT block will set the proper MUX ID in the metadata according to the relevant PDN */
 			if (IPACM_Iface::ipacmcfg->GetIPAVer() >= IPA_HW_v4_0)
-				flt_rule_entry.rule.set_metadata = true;
+				flt_rule_entry.rule.set_metadata = false;
 		}
 	}
 	else if(iptype == IPA_IP_v6)
@@ -4880,8 +4879,8 @@ int IPACM_Wlan::install_uplink_filter_rule_per_client
 	for(cnt=0; cnt<prop->num_ext_props; cnt++)
 	{
 		memcpy(&flt_rule_entry.rule.eq_attrib,
-					 &prop->prop[cnt].eq_attrib,
-					 sizeof(prop->prop[cnt].eq_attrib));
+				&prop->prop[cnt].eq_attrib,
+				sizeof(prop->prop[cnt].eq_attrib));
 		/* Check if we can add the MAC address rule. */
 		if (flt_rule_entry.rule.eq_attrib.num_offset_meq_128 == IPA_IPFLTR_NUM_MEQ_128_EQNS)
 		{
@@ -4893,9 +4892,9 @@ int IPACM_Wlan::install_uplink_filter_rule_per_client
 		offset_meq_128 = &flt_rule_entry.rule.eq_attrib.offset_meq_128[num_offset_meq_128];
 		if(rx_prop->rx[0].hdr_l2_type == IPA_HDR_L2_ETHERNET_II
 #ifdef IPA_HDR_L2_ETHERNET_II_AST
-			|| rx_prop->rx[0].hdr_l2_type == IPA_HDR_L2_ETHERNET_II_AST
+				|| rx_prop->rx[0].hdr_l2_type == IPA_HDR_L2_ETHERNET_II_AST
 #endif
-			)
+		  )
 		{
 			offset_meq_128->offset = -8;
 		}
@@ -4921,7 +4920,6 @@ int IPACM_Wlan::install_uplink_filter_rule_per_client
 			flt_rule_entry.rule.eq_attrib.rule_eq_bitmap |= (1<<4);
 
 		flt_rule_entry.rule.eq_attrib.num_offset_meq_128++;
-
 		flt_rule_entry.rule.rt_tbl_idx = prop->prop[cnt].rt_tbl_idx;
 
 		/* Handle XLAT configuration */

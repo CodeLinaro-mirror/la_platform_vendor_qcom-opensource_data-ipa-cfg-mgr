@@ -286,7 +286,7 @@ int IPACM_IfaceManager::create_iface_instance(ipacm_ifacemgr_data *param)
 				IPACM_EvtDispatcher::registr(IPA_HANDLE_WAN_DOWN_V6, lan);
 				/* only need for vlan supported lan instance */
 				IPACM_EvtDispatcher::registr(IPA_HANDLE_WAN_ADDR_ADD_V6, lan);
-#ifdef FEATURE_IPACM_UL_FIREWALL
+#ifdef FEATURE_IPv6CT_DISABLED
 				IPACM_EvtDispatcher::registr(IPA_FIREWALL_CHANGE_EVENT, lan);			// register for Firewall change event
 #endif //FEATURE_IPACM_UL_FIREWALL
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
@@ -340,7 +340,7 @@ int IPACM_IfaceManager::create_iface_instance(ipacm_ifacemgr_data *param)
 				IPACM_EvtDispatcher::registr(IPA_CRADLE_WAN_MODE_SWITCH, ETH);
 				IPACM_EvtDispatcher::registr(IPA_LINK_DOWN_EVENT, ETH);
 				IPACM_EvtDispatcher::registr(IPA_MAC_ADD_DEL_FLT_EVENT, ETH);
-#ifdef FEATURE_IPACM_UL_FIREWALL
+#ifdef FEATURE_IPv6CT_DISABLED
 				IPACM_EvtDispatcher::registr(IPA_FIREWALL_CHANGE_EVENT, ETH);			// register for Firewall change event
 #endif //FEATURE_IPACM_UL_FIREWALL
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
@@ -402,7 +402,7 @@ int IPACM_IfaceManager::create_iface_instance(ipacm_ifacemgr_data *param)
 						IPACM_EvtDispatcher::registr(IPA_HANDLE_SOCKSv5_READY, odu);
 						IPACM_EvtDispatcher::registr(IPA_HANDLE_SOCKSv5_DOWN, odu);
 #endif
-#ifdef FEATURE_IPACM_UL_FIREWALL
+#ifdef FEATURE_IPv6CT_DISABLED
 					IPACM_EvtDispatcher::registr(IPA_FIREWALL_CHANGE_EVENT, odu);			// register for Firewall change event
 #endif //FEATURE_IPACM_UL_FIREWALL
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
@@ -456,7 +456,7 @@ int IPACM_IfaceManager::create_iface_instance(ipacm_ifacemgr_data *param)
 					return IPACM_FAILURE;
 				}
 				IPACM_EvtDispatcher::registr(IPA_ADDR_ADD_EVENT, wl);
-#ifdef FEATURE_IPACM_UL_FIREWALL
+#ifdef FEATURE_IPv6CT_DISABLED
 				IPACM_EvtDispatcher::registr(IPA_FIREWALL_CHANGE_EVENT, wl);			// register for Firewall change event
 #endif //FEATURE_IPACM_UL_FIREWALL
 				IPACM_EvtDispatcher::registr(IPA_ROUTE_DEL_EVENT, wl);
@@ -556,7 +556,9 @@ int IPACM_IfaceManager::create_iface_instance(ipacm_ifacemgr_data *param)
 #ifdef FEATURE_VLAN_MPDN
 					IPACM_EvtDispatcher::registr(IPA_ROUTE_ADD_VLAN_PDN_EVENT, w);
 #endif
+#ifdef FEATURE_IPv6CT_DISABLED
 					IPACM_EvtDispatcher::registr(IPA_FIREWALL_CHANGE_EVENT, w);
+#endif
 					IPACM_EvtDispatcher::registr(IPA_NEIGH_CLIENT_IP_ADDR_ADD_EVENT, w);
 					IPACM_EvtDispatcher::registr(IPA_SW_ROUTING_ENABLE, w);
 					IPACM_EvtDispatcher::registr(IPA_SW_ROUTING_DISABLE, w);

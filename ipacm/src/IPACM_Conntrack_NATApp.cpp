@@ -171,8 +171,7 @@ int NatApp::AddPdn(uint32_t pub_ip, uint8_t mux_id, bool is_sta)
 	IPACMDBG_H("%s() %d\n", __FUNCTION__, __LINE__);
 
 	entry.dst_metadata = 0;
-	entry.src_metadata = GenerateMetdata(mux_id);
-	entry.public_ip = pub_ip;
+	entry.public_ip = 0;
 
 	ret = ipa_nat_get_pdn_count(&pdn_count);
 	if(ret)
@@ -180,11 +179,27 @@ int NatApp::AddPdn(uint32_t pub_ip, uint8_t mux_id, bool is_sta)
 		IPACMERR("unable to get pdn count Error:%d\n", ret);
 		return ret;
 	}
+	IPACMDBG_H("is_sta: %d, pdn_count: %d \n",is_sta, pdn_count);
+	IPACMDBG_H("ipv4 address PDN 0x%X\n", pub_ip);
 
 	if(!pdn_count)
 	{
 		/* create the NAT table, the PDN will be stored in index 0 */
-		ret = ipa_nat_add_ipv4_tbl(pub_ip, mem_type, max_entries, &nat_table_hdl);
+		ret = ipa_nat_add_ipv4_tbl(entry.public_ip, mem_type, max_entries, &nat_table_hdl);
+
+		entry.public_ip = pub_ip;
+		if(!is_sta)
+		{
+			entry.src_metadata = GenerateMetdata(mux_id);
+			/* modify PDN 1 so it will hold the mux ID in the src metadata field */
+			pdn_index = 1;
+		}
+		else
+		{
+			/* modify PDN 0 so it will hold the mux ID in the src metadata field */
+			pdn_index = 0;
+			entry.src_metadata = 0;
+		}
 		if(ret)
 		{
 			IPACMERR("unable to create nat table Error:%d\n", ret);
@@ -192,31 +207,45 @@ int NatApp::AddPdn(uint32_t pub_ip, uint8_t mux_id, bool is_sta)
 		}
 		IPACMDBG_H("succeesfully created NAT table for ip 0x%X\n", pub_ip);
 
-		/* modify PDN 0 so it will hold the mux ID in the src metadata field */
-		pdn_index = 0;
 		ret = ipa_nat_modify_pdn(nat_table_hdl, pdn_index, &entry);
 		if(ret)
 		{
-			IPACMERR("unable to modify PDN 0 entry Error:%d\n", ret);
+			IPACMERR("unable to modify PDN %d entry Error:%d\n", pdn_index, ret);
 			return ret;
 		}
 	}
 	else
 	{
-		/* only allocate a PDN if it is a new one */
-		if(ipa_nat_get_pdn_index(pub_ip, &pdn_index) < 0)
+		if(is_sta)
 		{
-			ret = ipa_nat_alloc_pdn(&entry, &pdn_index);
+			pdn_index = 0;
+			entry.public_ip = pub_ip;
+			ret = ipa_nat_modify_pdn(nat_table_hdl, pdn_index, &entry);
 			if(ret)
 			{
-				IPACMERR("couldn't allocate a pdn index\n");
+				IPACMERR("unable to modify PDN 0 entry Error:%d\n", ret);
 				return ret;
 			}
-			IPACMDBG_H("successfully allocated index %d for ip 0x%X\n", pdn_index, pub_ip);
 		}
 		else
 		{
-			IPACMDBG_H("pdn already existed with index %d\n", pdn_index);
+			entry.public_ip = pub_ip;
+			entry.src_metadata = GenerateMetdata(mux_id);
+			/* only allocate a PDN if it is a new one */
+			if(ipa_nat_get_pdn_index(pub_ip, &pdn_index) < 0)
+			{
+				ret = ipa_nat_alloc_pdn(&entry, &pdn_index);
+				if(ret)
+				{
+					IPACMERR("couldn't allocate a pdn index\n");
+					return ret;
+				}
+				IPACMDBG_H("successfully allocated index %d for ip 0x%X\n", pdn_index, pub_ip);
+			}
+			else
+			{
+				IPACMDBG_H("pdn already existed with index %d\n", pdn_index);
+			}
 		}
 	}
 
@@ -537,7 +566,7 @@ int NatApp::DeleteEntry(const nat_table_entry *rule)
 }
 
 /* Add new entry to the nat table on new connection */
-int NatApp::AddEntry(const nat_table_entry *rule, bool isVlan)
+int NatApp::AddEntry(const nat_table_entry *rule, bool isVlan, bool isStaMode)
 {
 	int cnt = 0;
 	ipa_nat_ipv4_rule nat_rule;
@@ -562,20 +591,25 @@ int NatApp::AddEntry(const nat_table_entry *rule, bool isVlan)
 		return 0;
 	}
 #ifdef FEATURE_VLAN_MPDN
-	if(ipa_nat_get_pdn_index(rule->public_ip, &pdn_index))
+	if(isStaMode)
+		pdn_index = 0;
+	else
 	{
-		if(isVlan)
+		if(ipa_nat_get_pdn_index(rule->public_ip, &pdn_index))
 		{
-			IPACMDBG_H("vlan iface doesn't have a valid pdn, only moving to cache");
-			iptodot("private ip", rule->private_ip);
-			iptodot("target ip", rule->target_ip);
-			iptodot("public ip", rule->public_ip);
-			cacheOnly = true;
-		}
-		else
-		{
-			IPACMERR("couldn't acquire PDN index for public ip 0x%X\n", rule->public_ip);
-			return IPACM_FAILURE;
+			if(isVlan)
+			{
+				IPACMDBG_H("vlan iface doesn't have a valid pdn, only moving to cache");
+				iptodot("private ip", rule->private_ip);
+				iptodot("target ip", rule->target_ip);
+				iptodot("public ip", rule->public_ip);
+				cacheOnly = true;
+			}
+			else
+			{
+				IPACMERR("couldn't acquire PDN index for public ip 0x%X\n", rule->public_ip);
+				return IPACM_FAILURE;
+			}
 		}
 	}
 #endif
@@ -811,7 +845,7 @@ void NatApp::UpdateUDPTimeStamp()
 			IPACMDBG("\n");
 			if(ipa_nat_query_timestamp(nat_table_hdl, cache[cnt].rule_hdl, &ts) < 0)
 			{
-				IPACMERR("unable to retrieve timeout for rule hanle: %d\n", cache[cnt].rule_hdl);
+				IPACMERR("unable to retrieve timeout for rule handle: %d\n", cache[cnt].rule_hdl);
 				continue;
 			}
 

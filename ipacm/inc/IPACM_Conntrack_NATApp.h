@@ -1,5 +1,6 @@
 /*
 Copyright (c) 2013-2020, The Linux Foundation. All rights reserved.
+Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are
@@ -695,7 +696,7 @@ public:
 	int AddTable(uint32_t, uint8_t mux_id, bool is_sta);
 	int DeleteTable(uint32_t);
 
-	int AddEntry(const nat_table_entry *, bool isVlan = false);
+	int AddEntry(const nat_table_entry *, bool isVlan = false, bool isStaMode = false);
 	int DeleteEntry(const nat_table_entry *);
 
 	void UpdateUDPTimeStamp();

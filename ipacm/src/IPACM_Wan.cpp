@@ -2041,12 +2041,19 @@ int IPACM_Wan::handle_route_add_vlan_pdn_evt(ipa_ip_type iptype, uint16_t vlan_i
 		evt_data.evt_data = (void *)wanup_vlan_data;
 		IPACM_EvtDispatcher::PostEvt(&evt_data);
 
-		memset(&evt_data, 0, sizeof(evt_data));
-		IPACMDBG_H("Posting IPA_MSG_FILTER_NAT_EVENT\n");
+		if(wan_sw_allow_data->firewall_config != NULL)
+		{
+			memset(&evt_data, 0, sizeof(evt_data));
+			IPACMDBG_H("Posting IPA_MSG_FILTER_NAT_EVENT\n");
 
-		evt_data.event = IPA_MSG_FILTER_NAT_EVENT;
-		evt_data.evt_data = wan_sw_allow_data;
-		IPACM_EvtDispatcher::PostEvt(&evt_data);
+			evt_data.event = IPA_MSG_FILTER_NAT_EVENT;
+			evt_data.evt_data = wan_sw_allow_data;
+			IPACM_EvtDispatcher::PostEvt(&evt_data);
+		}
+		else
+		{
+			free(wan_sw_allow_data);
+		}
 	}
 
 	associated_VID = vlan_id;

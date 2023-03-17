@@ -160,7 +160,7 @@ private:
 	void TriggerWANDown_v6(const uint32_t* ipv6_addr);
 	int  CreateNatThreads(void);
 	bool AddIface(nat_table_entry *, bool *);
-	int AddORDeleteNatEntry(const nat_entry_bundle *, bool *sendVlanEvent);
+	int AddORDeleteNatEntry(const nat_entry_bundle *, bool *sendVlanEvent, bool isStaMode = false);
 	void AddORDeleteNatEntry_v6(const ipacm_ct_evt_data* evt_data, const NatEntryBase& entry, bool isTempEntry);
 	void PopulateTCPorUDPEntry(struct nf_conntrack *, uint32_t, nat_table_entry *);
 	void CheckSTAClient(const nat_table_entry *rule, bool *isTempEntry);

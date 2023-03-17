@@ -163,7 +163,7 @@ void* firewall_monitor(void *param)
 		PERROR("inotify_init");
 	}
 
-	IPACMDBG_H("Waiting for nofications in dirs %s with mask: 0x%x\n", IPACM_DIR_NAME,
+	IPACMDBG_H("Waiting for notifications in dirs %s with mask: 0x%x\n", IPACM_DIR_NAME,
 		mask);
 
 	wd = inotify_add_watch(inotify_fd,
@@ -318,7 +318,7 @@ void* ipa_driver_msg_notifier(void *param)
 
 	while (1)
 	{
-		IPACMDBG_H("Waiting for nofications from IPA driver \n");
+		IPACMDBG_H("Waiting for notifications from IPA driver \n");
 		memset(buffer, 0, sizeof(buffer));
 		memset(&evt_data, 0, sizeof(evt_data));
 		memset(&new_neigh_evt, 0, sizeof(ipacm_cmd_q_data));

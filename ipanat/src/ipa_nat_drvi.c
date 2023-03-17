@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2013-2020 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -1166,7 +1167,7 @@ int ipa_nati_get_pdn_index(
 {
 	int i = 0;
 
-	for(i = 0; i < (IPA_MAX_PDN_NUM - 1); i++) {
+	for(i = 1; i < (IPA_MAX_PDN_NUM - 1); i++) {
 		if(pdns[i].public_ip == public_ip) {
 			IPADBG("ip 0x%X matches PDN index %d\n", public_ip, i);
 			*pdn_index = i;
@@ -1196,7 +1197,7 @@ int ipa_nati_alloc_pdn(
 		return -EIO;
 	}
 
-	for(i = 0; i < (IPA_MAX_PDN_NUM - 1); i++) {
+	for(i = 1; i < (IPA_MAX_PDN_NUM - 1); i++) {
 		if(pdns[i].public_ip == pdn_info->public_ip)
 		{
 			IPADBG("found the same pdn in index %d\n", i);

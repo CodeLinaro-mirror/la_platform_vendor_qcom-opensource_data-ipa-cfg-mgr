@@ -293,10 +293,10 @@ int IPACM_Wan::GetMuxByVid(uint16_t vlan_id, uint8_t *mux_id, ipa_ip_type iptype
 	{
 		if(iptype == IPA_IP_v4)
 		{
-			if ((!(IPACM_Wan::ipv4_to_iface[i].pIface)) || (!(IPACM_Wan::ipv4_to_iface[i].pIface->ext_prop)))
+			if (!(IPACM_Wan::ipv4_to_iface[i].pIface))
 			{
 				IPACMERR("couldn't find MUX for VID %d\n", vlan_id);
-				return IPACM_FAILURE;
+				continue;
 			}
 			if(IPACM_Wan::ipv4_to_iface[i].ipv4_addr)
 			{
@@ -313,10 +313,10 @@ int IPACM_Wan::GetMuxByVid(uint16_t vlan_id, uint8_t *mux_id, ipa_ip_type iptype
 		}
 		else
 		{
-			if((!(IPACM_Wan::ipv6_to_iface[i].pIface)) || (!(IPACM_Wan::ipv6_to_iface[i].pIface->ext_prop)))
+			if(!(IPACM_Wan::ipv6_to_iface[i].pIface))
 			{
 				IPACMERR("couldn't find MUX for VID %d\n", vlan_id);
-				return IPACM_FAILURE;
+				continue;
 			}
 			if(IPACM_Wan::ipv6_to_iface[i].ipv6_prefix[0] || IPACM_Wan::ipv6_to_iface[i].ipv6_prefix[1])
 			{

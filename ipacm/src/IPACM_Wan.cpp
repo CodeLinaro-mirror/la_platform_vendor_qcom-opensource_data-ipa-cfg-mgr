@@ -320,10 +320,10 @@ int IPACM_Wan::GetMuxByVid(uint16_t vlan_id, uint8_t *mux_id, ipa_ip_type iptype
 	{
 		if(iptype == IPA_IP_v4)
 		{
-			if ((!(IPACM_Wan::ipv4_to_iface[i].pIface)) || (!(IPACM_Wan::ipv4_to_iface[i].pIface->ext_prop)))
+			if (!(IPACM_Wan::ipv4_to_iface[i].pIface))
 			{
 				IPACMERR("couldn't find MUX for VID %d\n", vlan_id);
-				return IPACM_FAILURE;
+				continue;
 			}
 			if(IPACM_Wan::ipv4_to_iface[i].ipv4_addr)
 			{
@@ -340,10 +340,10 @@ int IPACM_Wan::GetMuxByVid(uint16_t vlan_id, uint8_t *mux_id, ipa_ip_type iptype
 		}
 		else
 		{
-			if((!(IPACM_Wan::ipv6_to_iface[i].pIface)) || (!(IPACM_Wan::ipv6_to_iface[i].pIface->ext_prop)))
+			if(!(IPACM_Wan::ipv6_to_iface[i].pIface))
 			{
 				IPACMERR("couldn't find MUX for VID %d\n", vlan_id);
-				return IPACM_FAILURE;
+				continue;
 			}
 			if(IPACM_Wan::ipv6_to_iface[i].ipv6_prefix[0] || IPACM_Wan::ipv6_to_iface[i].ipv6_prefix[1])
 			{
@@ -629,7 +629,7 @@ int IPACM_Wan::handle_addr_evt(ipacm_event_data_addr *data)
 			{
 				IPACM_Iface::ipacmcfg->add_vlan_ipv6_prefix(ipv6_to_iface[modem_ipv6_pdn_index].ipv6_prefix, ipa_if_num, associated_VID);
 
-				//need to post handle_wan_up_v6 to enable conntrack for XLAT mode
+				//need to post handle_wan_up_v6 to enable conntrack for XLAT mode.
 				ipacm_cmd_q_data evt_data;
 				ipacm_event_iface_up *wanup_data;
 
@@ -4894,7 +4894,7 @@ int IPACM_Wan::init_fl_rule_ex(ipa_ip_type iptype)
 
 	if(iptype == IPA_IP_v4)
 	{
-		if(modem_ipv4_pdn_index == 0)	/* install ipv4 default modem DL filtering rules only once */
+		if(modem_ipv4_pdn_index == 1)	/* install ipv4 default modem DL filtering rules only once */
 		{
 			/* reset the num_v4_flt_rule*/
 			IPACM_Wan::num_v4_flt_rule = 0;
@@ -4909,7 +4909,7 @@ int IPACM_Wan::init_fl_rule_ex(ipa_ip_type iptype)
 	{
 		IPACMDBG_H(" modem_ipv6_pdn_index %d\n", modem_ipv6_pdn_index);
 
-		if(modem_ipv6_pdn_index == 0)	/* install ipv6 default modem DL filtering rules only once */
+		if(modem_ipv6_pdn_index == 1)	/* install ipv6 default modem DL filtering rules only once */
 		{
 			/* reset the num_v6_flt_rule*/
 			IPACM_Wan::num_v6_flt_rule = 0;

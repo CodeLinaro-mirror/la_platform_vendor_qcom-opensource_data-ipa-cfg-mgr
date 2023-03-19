@@ -873,7 +873,17 @@ void IPACM_ConntrackListener::HandleVlanUp(void *in_param)
 		else
 		{
 			if(vlan_pdns[0].public_ip == vlanup_data->ipv4_addr) {
-				IPACMDBG_H("found existing PDN entry in 0 \n");
+				for(int i = 0; i < vlan_pdns[0].VID_cnt; i++)
+				{
+					if (vlanup_data->VlanID == vlan_pdns[0].associated_VIDs[i])
+					{
+						IPACMDBG_H("found existing PDN entry in 0, with vlan %d\n", vlanup_data->VlanID);
+						return;
+					}
+				}
+				IPACMDBG_H("found existing PDN entry in 0, but got new VLAN id. Adding vlan %d to the entry\n", vlanup_data->VlanID);
+				vlan_pdns[0].associated_VIDs[vlan_pdns[0].VID_cnt] = vlanup_data->VlanID;
+				vlan_pdns[0].VID_cnt++;
 				return;
 			}
 			if(vlan_pdns[0].public_ip == 0)

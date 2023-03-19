@@ -2203,7 +2203,7 @@ int IPACM_Lan::handle_vlan_pdn_up(ipacm_event_vlan_pdn *data, bool set_mux)
 				else
 #endif
 					ret = handle_uplink_filter_rule(IPACM_Iface::ipacmcfg->GetExtProp(IPA_IP_v6), data->iptype, data->mux_id, false);
-				modem_ul_v6_set = true;
+				modem_ul_v6_set = !!num_wan_ul_fl_rule_v6;
 			}
 			/* for the next PDNs only notify modem about new MUX IDs */
 			else
@@ -2257,7 +2257,7 @@ int IPACM_Lan::handle_vlan_pdn_up(ipacm_event_vlan_pdn *data, bool set_mux)
 				else
 #endif
 					ret = handle_uplink_filter_rule(IPACM_Iface::ipacmcfg->GetExtProp(IPA_IP_v4), data->iptype, data->mux_id, false, true);
-				modem_ul_v4_set = true;
+				modem_ul_v4_set = !!num_wan_ul_fl_rule_v4;
 			}
 			/* for the next PDNs only notify modem about new MUX IDs */
 			else
@@ -2280,6 +2280,7 @@ int IPACM_Lan::handle_vlan_pdn_up(ipacm_event_vlan_pdn *data, bool set_mux)
 					if (handle_mpdn_ul_xlat_filter_rule(IPACM_Iface::ipacmcfg->GetExtProp(IPA_IP_v4),
 								data->iptype, data->mux_id, data->VlanID))
 					{
+						remove_pdn_xlat_ctx(data->mux_id);
 						IPACMDBG_H("Failed to install xlat rules\n");
 						return IPACM_FAILURE;
 					}
@@ -3203,13 +3204,13 @@ int IPACM_Lan::handle_wan_up(ipa_ip_type ip_type, uint16_t vlan_id)
 		if (IPACM_Wan::isWanUP_V6(ipa_if_num) || IPACM_Wan::isVlanWanUP_V6())
 			modify_ipv6_prefix_flt_rule();
 
-		if (vid > 0)
+		if (vlan_id > 0)
 		{
 			for(i = 0; i < IPA_MAX_NUM_OFFLOAD_VLANS; i++)
 			{
-				if(vlan_sta_info[i].v4_flt_hdl && vlan_sta_info[i].vlan_id == vid)
+				if(vlan_sta_info[i].v4_flt_hdl && vlan_sta_info[i].vlan_id == vlan_id)
 				{
-					IPACMDBG_H("flt rule for vlan id : %d already installed\n", vid);
+					IPACMDBG_H("flt rule for vlan id : %d already installed\n", vlan_id);
 					return IPACM_SUCCESS;
 				}
 			}
@@ -3312,8 +3313,8 @@ int IPACM_Lan::handle_wan_up(ipa_ip_type ip_type, uint16_t vlan_id)
 			{
 				vlan_sta_info[i].v4_flt_hdl = m_pFilteringTable->rules[0].flt_rule_hdl;
 #ifdef FEATURE_VLAN_MPDN
-				if (vid > 0)
-					vlan_sta_info[i].vlan_id = vid;
+				if (vlan_id > 0)
+					vlan_sta_info[i].vlan_id = vlan_id;
 #endif
 				break;
 			}
@@ -3332,13 +3333,13 @@ int IPACM_Lan::handle_wan_up(ipa_ip_type ip_type, uint16_t vlan_id)
 		if (IPACM_Wan::isWanUP(ipa_if_num) || IPACM_Wan::isVlanWanUP())
 			modify_private_subnet();
 
-		if (vid > 0)
+		if (vlan_id > 0)
 		{
 			for(i = 0; i < IPA_MAX_NUM_OFFLOAD_VLANS; i++)
 			{
-				if(vlan_sta_info[i].v6_flt_hdl && vlan_sta_info[i].vlan_id == vid)
+				if(vlan_sta_info[i].v6_flt_hdl && vlan_sta_info[i].vlan_id == vlan_id)
 				{
-					IPACMDBG_H("flt rule for vlan id : %d already installed\n", vid);
+					IPACMDBG_H("flt rule for vlan id : %d already installed\n", vlan_id);
 					return IPACM_SUCCESS;
 				}
 			}
@@ -3457,7 +3458,7 @@ int IPACM_Lan::handle_wan_up(ipa_ip_type ip_type, uint16_t vlan_id)
 				if(!vlan_sta_info[i].v4_flt_hdl && !vlan_sta_info[i].v6_flt_hdl)
 				{
 					vlan_sta_info[i].v6_flt_hdl = m_pFilteringTable->rules[0].flt_rule_hdl;
-					vlan_sta_info[i].vlan_id = vid;
+					vlan_sta_info[i].vlan_id = vlan_id;
 				}
 				break;
 			}

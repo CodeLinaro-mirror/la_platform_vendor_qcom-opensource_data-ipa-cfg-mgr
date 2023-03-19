@@ -1164,7 +1164,17 @@ void IPACM_ConntrackListener::HandleVlanUp(void *in_param)
 		else
 		{
 			if(vlan_pdns[0].public_ip == vlanup_data->ipv4_addr) {
-				IPACMDBG_H("found existing PDN entry in 0 \n");
+				for(int i = 0; i < vlan_pdns[0].VID_cnt; i++)
+				{
+					if (vlanup_data->VlanID == vlan_pdns[0].associated_VIDs[i])
+					{
+						IPACMDBG_H("found existing PDN entry in 0, with vlan %d\n", vlanup_data->VlanID);
+						return;
+					}
+				}
+				IPACMDBG_H("found existing PDN entry in 0, but got new VLAN id. Adding vlan %d to the entry\n", vlanup_data->VlanID);
+				vlan_pdns[0].associated_VIDs[vlan_pdns[0].VID_cnt] = vlanup_data->VlanID;
+				vlan_pdns[0].VID_cnt++;
 				return;
 			}
 			if(vlan_pdns[0].public_ip == 0)
@@ -1308,7 +1318,7 @@ void IPACM_ConntrackListener::TriggerWANUp_v6(const ipacm_event_iface_up* evt_da
 		IPACMDBG("Ignoring\n");
 		return;
 	}
-/* need QCMAP changes to remove below feature flag and use run time flag instead*/
+/* need QCMAP changes to remove below feature flag and use run time flag instead. */
 #ifndef FEATURE_SOCKSv5
 	if (!wan_ipaddr_v6.Valid())
 	{
@@ -1489,7 +1499,7 @@ void IPACM_ConntrackListener::HandleVlanDownV6(void *in_param)
 }
 #endif
 
-void IPACM_ConntrackListener::TriggerWANDown(uint32_t wan_addr, bool is_sta)
+void IPACM_ConntrackListener::TriggerWANDown(uint32_t wan_addr)
 {
 #ifdef FEATURE_VLAN_MPDN
 	IPACMDBG_H("Removing default ipv4 pdn with");
@@ -2092,7 +2102,7 @@ bool IPACM_ConntrackListener::AddIface(
 	return false;
 }
 
-int IPACM_ConntrackListener::AddORDeleteNatEntry(const nat_entry_bundle *input, bool *sendVlanEvent, bool isStaMode)
+int IPACM_ConntrackListener::AddORDeleteNatEntry(const nat_entry_bundle *input, bool *sendVlanEvent)
 {
 	u_int8_t tcp_state;
 	u_int64_t pkt_count = 0;
@@ -2683,7 +2693,7 @@ void IPACM_ConntrackListener::ProcessTCPorUDPMsg(
 			if((i >= IPA_MAX_NUM_HW_PDNS) && (num_vlan_pdns >= IPA_MAX_NUM_HW_PDNS) && (!nat_entry.IsVlanUp))
 			{
 				iptodot("vlan client ip", repl_src_ip);
-				iptodot("pdn ip",orig_dst_ip)
+				iptodot("pdn ip",orig_dst_ip);
 				IPACMERR("src NAT: can't add more PDN, already got max \n");
 				return;
 			}

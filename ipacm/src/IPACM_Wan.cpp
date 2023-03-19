@@ -1984,9 +1984,14 @@ int IPACM_Wan::check_vlan_pdn(ipa_ip_type iptype, ipacm_event_route_vlan *data, 
 	if (iptype == IPA_IP_v6 || iptype == IPA_IP_MAX)
 	{
 		if((data->wan_ipv6_prefix[0] == ipv6_prefix[0]) &&
-			(data->wan_ipv6_prefix[1] == ipv6_prefix[1]))
+			(data->wan_ipv6_prefix[1] == ipv6_prefix[1]) || v4_only_xlat)
 		{
 			IPACMDBG_H("received v6 IPA_ROUTE_ADD_VLAN_PDN_EVENT for VID %d, %d\n", data->VlanID, ipa_if_num);
+
+			IPACMDBG_H("received v6 IPA_ROUTE_ADD_VLAN_PDN_EVENT for VID %d, wan %s, %d with prefix %x:%x\n",
+					data->VlanID, dev_name, ipa_if_num,
+					IPACM_Wan::ipv6_to_iface[modem_ipv6_pdn_index].ipv6_prefix[0],
+					IPACM_Wan::ipv6_to_iface[modem_ipv6_pdn_index].ipv6_prefix[1]);
 
 			IPACMDBG_H("num_offloaded_pdns: %d\n", num_offloaded_pdns);
 			IPACMDBG_H("data->wan_ipv6_prefix: 0x%08x%08x\n", data->wan_ipv6_prefix[0], data->wan_ipv6_prefix[1]);
@@ -4849,7 +4854,7 @@ int IPACM_Wan::config_dft_firewall_rules_ex(struct ipa_flt_rule_add *rules, int 
 		/* default rule for all PDNs which are up */
 		for (uint32_t i = 0; i < offloaded_pdns_count_v4; ++i)
 		{
-			IPACM_Wan* curr_interface = offloaded_pdns_v4[i].second->pIface;
+			IPACM_Wan* curr_interface = offloaded_pdns_v4[i]->pIface;
 			if(!curr_interface)
 			{
 				IPACMDBG_H("curr_interface is NULL\n");

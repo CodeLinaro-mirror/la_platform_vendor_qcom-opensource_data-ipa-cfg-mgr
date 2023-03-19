@@ -253,13 +253,13 @@ int NatApp::AddPdn(uint32_t pub_ip, uint8_t mux_id, bool is_sta)
 	}
 	else
 	{
-		if(!is_sta)
+		if(is_sta)
 		{
 			pdn_index = 0;
 			entry.public_ip = pub_ip;
 			entry.src_metadata = 0;
 			entry.is_sta = true;
-			ret = ipa_nat_alloc_pdn(&entry, pdn_index);
+			ret = ipa_nat_alloc_pdn(&entry, &pdn_index);
 
 			if(ret)
 			{

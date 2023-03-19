@@ -191,7 +191,7 @@ private:
 	void TriggerWANUp(void *);
 	void TriggerWANUp_v6(const ipacm_event_iface_up* evt_data);
 	void TriggerWANDown(uint32_t);
-	void TriggerWANDown_v6(const IpAddress& wan_addr);
+	void TriggerWANDown_v6(const uint32_t* wan_addr);
 	int  CreateNatThreads(void);
 	bool AddIface(nat_table_entry *, bool *);
 	int AddORDeleteNatEntry(const nat_entry_bundle *, bool *sendVlanEvent);

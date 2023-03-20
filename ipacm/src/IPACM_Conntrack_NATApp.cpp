@@ -767,6 +767,11 @@ void NatApp::HandleSwAllowEntries(void *data, bool update)
 
 		IPACMDBG_H("Updating FW Config\n");
 		sw_allow_data *sw_allow_fw_cfg = (sw_allow_data *)data;
+		if(!(sw_allow_fw_cfg->firewall_config))
+		{
+			IPACMERR("Invalid firewall config data passed\n");
+			return;
+		}
 #ifdef FEATURE_VLAN_MPDN
 		memcpy(&fw_mpdn_config_data.pdns[sw_allow_fw_cfg->pdn_index], sw_allow_fw_cfg->firewall_config, sizeof(IPACM_firewall_conf_t));
 

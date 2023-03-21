@@ -9775,6 +9775,16 @@ int IPACM_Lan::modify_private_subnet()
 		/* first subnet is reserved for default PDN */
 		mtu[0] = IPACM_Wan::queryMTU(ipa_if_num, IPA_IP_v4);
 		IPACMDBG_H("defaut PDN mtu = %d\n", mtu[0]);
+
+		/*
+		 * for XLAT scenarios, need to -20 to account for
+		 * the v4->v6 translation that will add 20 bytes
+		 */
+		if(IPACM_Wan::is_xlat_by_vid(0))
+		{
+			mtu[0] = mtu[0] - IPV4_HEADER_SIZE;
+		}
+
 		if(mtu[i] < DEFAULT_MTU_SIZE)
 			mtu_rule_cnt++;
 		else
@@ -9796,7 +9806,17 @@ int IPACM_Lan::modify_private_subnet()
 
 					mtu[i] = DEFAULT_MTU_SIZE;
 				else
+				{
 					IPACM_Wan::GetMTUByVid(&mtu[i], vid[i], IPA_IP_v4);
+					/*
+					 * for XLAT scenarios, need to -20 to account for
+					 * the v4->v6 translation that will add 20 bytes
+					 */
+					if(IPACM_Wan::is_xlat_by_vid(i))
+					{
+						mtu[i] = mtu[i] - IPV4_HEADER_SIZE;
+					}
+				}
 
 				IPACMDBG_H("mtu = %d for subnet %d\n", mtu[i], i);
 				if(mtu[i] < DEFAULT_MTU_SIZE)

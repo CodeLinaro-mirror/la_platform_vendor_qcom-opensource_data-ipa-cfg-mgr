@@ -357,6 +357,11 @@ bool IPACM_Wan::is_xlat_by_vid(uint16_t vlan_id)
 	{
 		if(IPACM_Wan::ipv4_to_iface[i].ipv4_addr)
 		{
+			/* handling default PDN with no vlan case */
+			if(vlan_id == 0 && ipv4_to_iface[i].pIface->is_default_gateway)
+			{
+				return IPACM_Wan::ipv4_to_iface[i].is_xlat;
+			}
 			for(int j = 0; j < ipv4_to_iface[i].VID_cnt; j++)
 			{
 				if(IPACM_Wan::ipv4_to_iface[i].associated_VIDs[j] == vlan_id)

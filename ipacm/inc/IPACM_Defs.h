@@ -159,6 +159,7 @@ extern "C"
 #endif
 #define DEFAULT_MTU_SIZE 1500
 #define IPA_L2TP_UDP_DEFAULT_MTU_SIZE 1422 /* 1500 - (IPv6(40) + UDP (8) + L2TP (16) + ETH (14)). */
+#define IPV4_HEADER_SIZE 20
 #define IPV6_HEADER_SIZE 40
 
 #ifdef FEATURE_VLAN_MPDN

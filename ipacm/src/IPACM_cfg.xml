@@ -213,7 +213,7 @@
 			<IPACMMPDNEnabled>1</IPACMMPDNEnabled>
 		</IPACMMPDN>
 		<IPACMTTL>
-			<IPACMTTLEnable>1</IPACMTTLEnable>
+			<IPACMTTLEnable>0</IPACMTTLEnable>
 			<IPACMTTLVLANEnable>1</IPACMTTLVLANEnable>
 			<IPACMTTLVlanArray>
 				<vlan>0</vlan>

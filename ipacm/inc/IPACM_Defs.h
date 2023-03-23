@@ -28,7 +28,7 @@
  *
  * Changes from Qualcomm Innovation Center are provided under the following license:
  *
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted (subject to the limitations in the
@@ -121,6 +121,8 @@ extern "C"
 #define IPA_ODU_HDR_NAME_v6  "IPACM_ODU_v6"
 #define IPA_IF_SOCKSv5_NAME  "IPACM_SOCKSv5"
 #define IPA_EoGRE_HDR_NAME   "IPACM_EoGRE_v%d"
+#define IPA_GRE_HDR_NAME   "IPACM_GRE_v%d"
+#define IPA_GRE_C_HDR_NAME   "IPACM_GRE_C_v%d"
 #define IPA_MPLSoGRE_HDR_NAME "IPACM_MPLSoGRE_v%d"
 #define IPA_SCTag_HDR_NAME    "IPACM_SCTag_v%d"
 
@@ -365,6 +367,10 @@ typedef enum
 	IPA_HANDLE_EoGRE_DOWN,                    /* ipa_ipgre_info */
 #endif
 	IPA_DSCP_PCP_CONFIG_CHANGE_EVENT,         /* ipacm_event_change_dscp_pcp */
+#ifdef FEATURE_PMIPV6
+	IPA_HANDLE_GRE_UP,                      /* ipa_ipgre_info */
+	IPA_HANDLE_GRE_DOWN,                    /* ipa_ipgre_info */
+#endif
 	IPA_HANDLE_MACSEC_ADD,                    /* ipa_macsec_map */
 	IPA_HANDLE_MACSEC_DEL,                    /* ipa_macsec_map */
 	IPA_ADD_EXT_ROUTER_RULES,                 /* char */
@@ -703,5 +709,6 @@ typedef struct _svap_vlan_hpc_hdl
 	uint16_t vlan_id;
 	ipa_hdr_l2_type peer_l2_type;
 	uint32_t hpc_hdr_hdl;
+	uint32_t template_hdr_hdl;
 }svap_vlan_hpc_hdl;
 #endif /* IPA_CM_DEFS_H */

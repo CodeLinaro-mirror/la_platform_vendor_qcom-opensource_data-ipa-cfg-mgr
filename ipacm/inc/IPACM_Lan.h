@@ -28,7 +28,7 @@ IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  * Changes from Qualcomm Innovation Center are provided under the following license:
  *
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted (subject to the limitations in the
@@ -226,7 +226,7 @@ typedef struct _xlat_context
 	uint32_t active_pdn_count;
 }xlat_context;
 
-#ifdef FEATURE_EoGRE
+#if defined(FEATURE_EoGRE) || defined(FEATURE_PMIPV6)
 /*
  * Structure for maintaining state associated with gre route
  * contexts and rules...
@@ -283,6 +283,7 @@ typedef struct v6_gre_hdr_s
 #define IPV6_DST_ADDR_IDX   6
 #define IPV6_GRE_PROT_IDX  12
 #define IPV6_MPLS_PROT_IDX 13
+#define IPV6_GRE_PMIP_PROT_IDX  10
 
 #endif /* #ifdef FEATURE_EoGRE */
 
@@ -314,7 +315,6 @@ public:
 
 	/* Header length. */
 	uint8_t hdr_len;
-
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
 	/* Clients which take HW path. */
 	ipa_lan_client_idx active_lan_client_index[IPA_MAX_NUM_HW_PATH_CLIENTS];
@@ -368,7 +368,7 @@ public:
 
 	static bool odu_up;
 
-#ifdef FEATURE_EoGRE
+#if defined(FEATURE_EoGRE) || defined(FEATURE_PMIPV6)
 	/*
 	 * The following is for keeping gre route rule state...
 	 *
@@ -385,50 +385,50 @@ public:
 	 */
 	gre_route_data_t gre_route_data[IPA_IP_MAX];
 
-	void gre_up();
+	void gre_up(bool isPmipv6=false);
 
-	void gre_down();
+	void gre_down(bool isPmipv6=false);
 
 	int gre_do_rt_work(
-		ipa_ipgre_info& ipgre_info );
+		ipa_ipgre_info& ipgre_info);
 
 	void gre_route_data_init(
 		enum ipa_ip_type iptype );
 
 	uint32_t gre_get_rt_tbl_hdl(
-		enum ipa_ip_type iptype );
+		enum ipa_ip_type iptype,bool isPmipv6=false);
 
 	int gre_make_hdr_for_add_ctx(
-		ipa_ipgre_info& ipgre_info );
+		ipa_ipgre_info& ipgre_info);
 
 	int gre_make_hdr_add_ctx(
 		ipa_ipgre_info& ipgre_info,
-		uint32_t        hdr_2use = 0 );
+		uint32_t        hdr_2use = 0);
 
 	int gre_make_hdr_for_rmv_ctx(
-		ipa_ipgre_info& ipgre_info );
+		ipa_ipgre_info& ipgre_info);
 
 	int gre_make_hdr_rmv_ctx(
 		ipa_ipgre_info& ipgre_info,
-		uint32_t        hdr_2use = 0 );
+		uint32_t        hdr_2use = 0);
 
 	int gre_make_header_add_rt_rule(
 		ipa_ipgre_info& ipgre_info,
-		uint32_t        ctx_2use = 0 );
+		uint32_t        ctx_2use = 0);
 
 	int gre_make_header_rmv_rt_rule(
-		ipa_ipgre_info& ipgre_info );
+		ipa_ipgre_info& ipgre_info);
 
 	void gre_clear_route_data(
 		enum ipa_ip_type             iptype,
 		ipa_ioc_query_intf_rx_props* rx_prop = 0 );
 
 	int gre_add_catchup_rule(
-		enum ipa_ip_type iptype );
+		enum ipa_ip_type iptype, bool isPmipv6=false );
 
 	int update_complementary_table(
 		ipa_flt_rule_add& flt_rule_entry,
-		ipa_ip_type       iptype );
+		ipa_ip_type       iptype, bool isPmipv6=false);
 
 #ifdef IPA_FLT_EXT_MPLS_GRE_GENERAL
 	/*
@@ -453,13 +453,13 @@ public:
 
 	/* install UL filter rule from Q6 */
 #ifdef FEATURE_VLAN_MPDN
-	virtual int handle_uplink_filter_rule(ipacm_ext_prop *prop, ipa_ip_type iptype, uint8_t pdn_mux_id, bool notif_only, bool is_xlat = false, bool ast_update = false);
+	virtual int handle_uplink_filter_rule(ipacm_ext_prop *prop, ipa_ip_type iptype, uint8_t pdn_mux_id, bool notif_only, bool is_xlat = false, bool ast_update = false, bool isPmipv6 = false);
 
 	virtual int handle_mpdn_ul_xlat_filter_rule(ipacm_ext_prop *prop, ipa_ip_type iptype, int pdn_mux_id, uint16_t vlan_id);
 
 	virtual int delete_mdpn_ul_xlat_filter_rule(int mux_id);
 #else
-	virtual int handle_uplink_filter_rule(ipacm_ext_prop* prop, ipa_ip_type iptype, uint8_t xlat_mux_id, bool ast_update = false);
+	virtual int handle_uplink_filter_rule(ipacm_ext_prop* prop, ipa_ip_type iptype, uint8_t xlat_mux_id, bool ast_update = false, bool isPmipv6=false);
 #endif
 
 	virtual int del_ul_flt_rules(enum ipa_ip_type iptype);
@@ -585,7 +585,7 @@ public:
 	int install_ipv4_icmp_flt_rule();
 
 	/* add header processing context and return handle to lan2lan controller */
-	int eth_bridge_add_hdr_proc_ctx(ipa_hdr_l2_type peer_l2_hdr_type, uint32_t *hdl, uint16_t vlan_id);
+	int eth_bridge_add_hdr_proc_ctx(ipa_hdr_l2_type peer_l2_hdr_type, uint32_t *hdl, uint16_t vlan_id = 0, uint32_t *hdr_hdl = NULL);
 
 	/* add routing rule and return handle to lan2lan controller */
 	int eth_bridge_add_rt_rule(uint8_t *mac, char *rt_tbl_name, uint32_t hdr_proc_ctx_hdl,
@@ -605,7 +605,7 @@ public:
 	int eth_bridge_del_rt_rule(uint32_t rt_rule_hdl, ipa_ip_type iptype);
 
 	/* delete header processing context */
-	int eth_bridge_del_hdr_proc_ctx(uint32_t hdr_proc_ctx_hdl);
+	int eth_bridge_del_hdr_proc_ctx(uint32_t hdr_proc_ctx_hdl, uint32_t hdr_hdl = 0);
 
 #ifdef FEATURE_L2TP
 	/* add l2tp rt rule for l2tp client */
@@ -1276,6 +1276,8 @@ private:
 
 	bool is_l2tp_iface;
 
+	bool pmipv6_greup;
+
 #ifdef FEATURE_L2TP
 	uint32_t l2tp_ul_dummy_hdr_hdl; /* 4-byte dummy header */
 
@@ -1489,7 +1491,7 @@ private:
 		return IPACM_INVALID_INDEX;
 	}
 
-	inline int get_eth_client_ip4_addr(uint8_t *mac_addr, uint32_t &ip_addr, uint8_t vlan_id = 0)
+	inline int get_eth_client_ip4_addr(uint8_t *mac_addr, uint32_t &ip_addr, uint16_t vlan_id = 0)
 	{
 		int clnt_indx;
 

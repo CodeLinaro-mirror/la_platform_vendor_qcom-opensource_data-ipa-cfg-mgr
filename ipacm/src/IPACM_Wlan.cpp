@@ -478,6 +478,16 @@ void IPACM_Wlan::event_callback(ipa_cm_event_id event, void *param)
 						handle_software_routing_enable();
 					}
 				}
+#ifdef FEATURE_PMIPV6
+					if ( IPACM_Iface::ipacmcfg->pmip_details.pmipv6_enabled )
+					{
+						IPACMDBG_H(
+							"A previous gre enable needs to be undone, then redone. "
+							"Need to call gre_down followed by an gre_up\n");
+						gre_down(true);
+						gre_up(true); //this is where its getting reset. He is calling this for every new IPA_ADD because instance is not ipv4 right away
+					}
+#endif
 			}
 		}
 		break;
@@ -757,6 +767,16 @@ void IPACM_Wlan::event_callback(ipa_cm_event_id event, void *param)
 			return;
 		}
 		IPACMDBG_H("Backhaul is sta mode?%d\n", data_wan->is_sta);
+#ifdef FEATURE_VLAN_MPDN
+		/* VLAN IFACES don't care about default route */
+		if(IPACM_Iface::ipacmcfg->iface_in_vlan_mode(dev_name) &&
+			(IPACM_Iface::ipacmcfg->wlan_vlan_mpdn_enabled == TRUE ||
+			IPACM_Wan::isVlanWanUP()))
+		{
+			IPACMDBG_H("IF %s is vlan IF, ignoring IPA_HANDLE_WAN_DOWN\n", dev_name);
+			return;
+		}
+#endif
 		if (rx_prop != NULL)
 		{
 			if(ip_type == IPA_IP_v4 || ip_type == IPA_IP_MAX)
@@ -1371,6 +1391,7 @@ end:
 			if (handle_refresh_filtering_rules(data->wlan_vlan_mpdn_enable)) {
 				IPACMERR("failed to handle IPA_WLAN_SWITCH_VLAN_MODE \n");
 			}
+			modify_private_subnet();
 		}
 	}
 	break;
@@ -1418,7 +1439,18 @@ end:
 		}
 	}
 	break;
+#ifdef FEATURE_PMIPV6
+	case IPA_HANDLE_GRE_UP:
+		IPACMDBG_H("Received and will process an IPA_HANDLE_GRE_UP\n");
+		gre_down(true);
+		gre_up(true);
+		break;
 
+	case IPA_HANDLE_GRE_DOWN:
+		IPACMDBG_H("Received and will process an IPA_HANDLE_GRE_DOWN\n");
+		gre_down(true);
+		break;
+#endif
 	default:
 		break;
 	}
@@ -2484,9 +2516,9 @@ int IPACM_Wlan::handle_wlan_client_ipaddr(ipacm_event_data_all *data)
 			if( (data->ipv6_addr[0] & ipv6_link_local_prefix_mask) != (ipv6_link_local_prefix & ipv6_link_local_prefix_mask) &&
 #ifdef FEATURE_VLAN_MPDN
 				/* returns true if a VLAN PDN or default PDN should be offloaded */
-				IPACM_Iface::ipacmcfg->is_offload_ipv6_prefix(data->ipv6_addr) != true)
+				((IPACM_Iface::ipacmcfg->is_offload_ipv6_prefix(data->ipv6_addr) != true) && (!IPACM_Iface::ipacmcfg->pmip_details.pmipv6_enabled)))
 #else
-				memcmp(ipv6_prefix, data->ipv6_addr, sizeof(ipv6_prefix)) != 0)
+				((memcmp(ipv6_prefix, data->ipv6_addr, sizeof(ipv6_prefix)) != 0) && (!IPACM_Iface::ipacmcfg->pmip_details.pmipv6_enabled)))
 #endif
 			{
 				if (neigh_cache.size() < 2*IPA_MAX_NUM_WIFI_CLIENTS)
@@ -4020,7 +4052,7 @@ int IPACM_Wlan::handle_down_evt()
 
 	if ((is_if_svap || is_wlan_if_vlan) && (rx_prop && rx_prop->num_rx_props > 2)) {
 		idx = 2;
-		IPACMDBG_H("Interface is WLAN Svap or vlan, install rules on Rx pipe at idx %d \n", idx);
+		IPACMDBG_H("Interface is WLAN Svap or vlan, delete rules on Rx pipe at idx %d \n", idx);
 	}
 
 	/* delete wan filter rule */
@@ -4037,6 +4069,13 @@ int IPACM_Wlan::handle_down_evt()
 	}
 	IPACMDBG_H("finished deleting wan filtering rules\n ");
 
+#ifdef FEATURE_PMIPV6
+	if(IPACM_Iface::ipacmcfg->pmip_details.pmipv6_enabled)
+	{
+		IPACMDBG_H("gre is enabled, need to clean up gre rules.\n");
+		gre_down(true);
+	}
+#endif
 	/* Delete v4 filtering rules */
 	if (ip_type != IPA_IP_v6 && rx_prop != NULL)
 	{
@@ -4056,7 +4095,7 @@ int IPACM_Wlan::handle_down_evt()
 		}
 
 		/* delete private-ipv4 filter rules */
-#if defined(FEATURE_IPA_ANDROID) || defined(FEATURE_VLAN_MPDN)
+#if defined(FEATURE_IPA_ANDROID)
 		if(m_filtering.DeleteFilteringHdls(private_fl_rule_hdl, IPA_IP_v4, IPA_MAX_PRIVATE_SUBNET_ENTRIES + IPA_MAX_MTU_ENTRIES) == false)
 		{
 			IPACMERR("Error deleting private subnet IPv4 flt rules.\n");
@@ -7287,6 +7326,7 @@ int IPACM_Wlan::handle_refresh_filtering_rules(bool wlan_vlan_mpdn_enable)
 		}
 		IPACM_Iface::ipacmcfg->decreaseFltRuleCount(rx_prop->rx[idx].src_pipe, IPA_IP_v4, num_wan_subnet_rules);
 		num_wan_subnet_rules = 0;
+		memset(private_fl_rule_hdl, 0, (IPA_MAX_PRIVATE_SUBNET_ENTRIES + IPA_MAX_MTU_ENTRIES) * sizeof(uint32_t));
 #else
 		num_private_subnet_fl_rule = IPACM_Iface::ipacmcfg->ipa_num_private_subnet > (IPA_MAX_PRIVATE_SUBNET_ENTRIES + IPA_MAX_MTU_ENTRIES) ?
 			(IPA_MAX_PRIVATE_SUBNET_ENTRIES + IPA_MAX_MTU_ENTRIES) : IPACM_Iface::ipacmcfg->ipa_num_private_subnet;
@@ -7296,6 +7336,7 @@ int IPACM_Wlan::handle_refresh_filtering_rules(bool wlan_vlan_mpdn_enable)
 			goto fail;
 		}
 		IPACM_Iface::ipacmcfg->decreaseFltRuleCount(rx_prop->rx[idx].src_pipe, IPA_IP_v4, num_private_subnet_fl_rule);
+		memset(private_fl_rule_hdl, 0, (IPA_MAX_PRIVATE_SUBNET_ENTRIES + IPA_MAX_MTU_ENTRIES) * sizeof(uint32_t));
 #endif
 		IPACMDBG_H("Deleted private subnet v4 filter rules successfully.\n");
 
@@ -7306,6 +7347,10 @@ int IPACM_Wlan::handle_refresh_filtering_rules(bool wlan_vlan_mpdn_enable)
 		}
 		IPACM_Iface::ipacmcfg->decreaseFltRuleCount(rx_prop->rx[idx].src_pipe, IPA_IP_v4, 1);
 		IPACMDBG_H("Deleted TCP syn v4 filter rules successfully.\n");
+
+		/* Delete the modem UL rules on Non-vlan pipe
+		   Will be installed later on Vlan pipe using HANDLE_VLAN_PDN_UP event */
+		handle_wan_down(false);
 	}
 
 	/* Delete v6 filtering rules */
@@ -7353,9 +7398,6 @@ int IPACM_Wlan::handle_refresh_filtering_rules(bool wlan_vlan_mpdn_enable)
 		mtu_flt_rule_offset[IPA_IP_v4] =
 			dft_v4fl_rule_hdl[m_ipv4_default_filterting_rules_count - 1];
 	}
-
-	/* Always adding tcp syn SW-exception rule for MSS clamping support */
-	add_tcp_syn_flt_rule(IPA_IP_v4);
 
 #ifdef FEATURE_L2TP
 	if (IPACM_Iface::ipacmcfg->ipacm_l2tp_enable == IPACM_L2TP) {

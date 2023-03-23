@@ -28,7 +28,7 @@
  *
  * Changes from Qualcomm Innovation Center are provided under the following license:
  *
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted (subject to the limitations in the
@@ -91,6 +91,7 @@ const char *IPACM_Config::DEVICE_NAME_ODU = "/dev/odu_ipa_bridge";
 #else
 #define IPACM_CONFIG_FILE "/etc/data/ipa/IPACM_cfg.xml"
 #define IPACM_CONFIG_EXT_FILE "/etc/data/ipa/IPACM_cfg_ext.xml"
+#define IPACM_TUNNEL_CONFIG_FILE "/etc/data/ipa/ipacm_tunnel_cfg.xml"
 #endif
 
 const char *ipacm_event_name[] = {
@@ -199,6 +200,10 @@ const char *ipacm_event_name[] = {
 	__stringify(IPA_HANDLE_EoGRE_DOWN),                    /* Handle eogre disable event. */
 #endif
 	__stringify(IPA_DSCP_PCP_CONFIG_CHANGE_EVENT),         /* NULL */
+#ifdef FEATURE_PMIPV6
+	__stringify(IPA_HANDLE_GRE_UP),                      /* Handle gre enable event. */
+	__stringify(IPA_HANDLE_GRE_DOWN),                    /* Handle gre disable event. */
+#endif
 	__stringify(IPA_HANDLE_MACSEC_ADD),                    /* Handle macsec map add event */
 	__stringify(IPA_HANDLE_MACSEC_DEL),                    /* Handle macsec map delete event */
 	__stringify(IPA_ADD_EXT_ROUTER_RULES),                 /* Handle ext_route add event */
@@ -297,6 +302,10 @@ IPACM_Config::IPACM_Config()
 #ifdef FEATURE_EoGRE
 	memset(&eogre_info, 0, sizeof(eogre_info));
 	eogre_enabled = false;
+#endif
+#ifdef FEATURE_PMIPV6
+	memset(&ipgre_info, 0, sizeof(ipgre_info));
+	memset(&pmip_details, 0, sizeof(pmip_details));
 #endif
 	ext_router_mode = IPA_PREFIX_DISABLED;
 
@@ -567,6 +576,9 @@ int IPACM_Config::Init(void)
 		goto fail;
 	}
 
+	if(pInstance-> Load_tunnel_xml_details()==IPACM_FAILURE){
+		IPACMDBG_H("Could not load file\n");
+	}
 	IPACMDBG_H("macsec_interface : %d\n",macsec_interface_num);
 
 	for (i = 0; i < cfg->iface_config.num_iface_entries; i++)
@@ -916,6 +928,35 @@ IPACM_Config* IPACM_Config::GetInstance()
 	}
 
 	return pInstance;
+}
+
+int IPACM_Config::Load_tunnel_xml_details(){
+	IPACM_tunnel_conf_t tunnel_cfg;
+	IPACMDBG("Loading Tunnel details\n");
+	if(IPACM_read_tunnel_xml(IPACM_TUNNEL_CONFIG_FILE,&tunnel_cfg) == IPACM_FAILURE){
+		IPACMERR("Could not read tunnel xml\n");
+		return IPACM_FAILURE;
+	}
+	#ifdef FEATURE_PMIPV6
+	ipacm_cmd_q_data evt_data;
+	if(pInstance->pmip_details.pmipv6_enabled != tunnel_cfg.pmipv6_enable && tunnel_cfg.pmipv6_enable && pInstance->pmip_details.pmipv6_tunnel_setup){
+		/* This means, GRE tunnel for PMIP is UP, but GRE UP event hasn't been posted because in the XML file, the pmipv6_enable was 0 */
+		evt_data.event    = IPA_HANDLE_GRE_UP;
+		evt_data.evt_data = 0;
+		IPACMDBG_H("Posting usb IPA_HANDLE_GRE_UP \n");
+		IPACM_EvtDispatcher::PostEvt(&evt_data);
+	}
+	else if(pInstance->pmip_details.pmipv6_enabled != tunnel_cfg.pmipv6_enable  && !tunnel_cfg.pmipv6_enable && pInstance->pmip_details.pmipv6_up){
+		/* If PMIPv6 tunnel is up, then we will being it down when pmipv6 enabled is set to 0 in the XML */
+		evt_data.event    = IPA_HANDLE_GRE_DOWN;
+		evt_data.evt_data = 0;
+		IPACMDBG_H("Posting usb IPA_HANDLE_GRE_DOWN\n");
+		IPACM_EvtDispatcher::PostEvt(&evt_data);
+	}
+	pInstance->pmip_details.pmipv6_enabled=tunnel_cfg.pmipv6_enable;
+	IPACMDBG("pmipv6 enabled: %d %d\n",pInstance->pmip_details.pmipv6_enabled, tunnel_cfg.pmipv6_enable);
+	#endif
+	return IPACM_SUCCESS;
 }
 
 int IPACM_Config::GetAlgPorts(int nPorts, ipacm_alg *pAlgPorts)

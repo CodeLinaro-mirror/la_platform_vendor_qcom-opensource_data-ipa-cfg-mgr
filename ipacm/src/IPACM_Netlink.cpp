@@ -679,8 +679,7 @@ static bool ipa_nl_get_vlan_priority
 {
 	for(int i = 0; i < IPACM_Iface::ipacmcfg->vlan_config->num_vlan_if; i++)
 	{
-		if ((strcmp(IPACM_Iface::ipacmcfg->vlan_config->vlan_if_cfg[i].name, vlan_info->name) == 0) &&
-							IPACM_Iface::ipacmcfg->vlan_config->vlan_if_cfg[i].vlan_id == vlan_info->vlan_id)
+		if ((strcmp(IPACM_Iface::ipacmcfg->vlan_config->vlan_if_cfg[i].name, vlan_info->name) == 0))
 		{
 			vlan_info->priority = IPACM_Iface::ipacmcfg->vlan_config->vlan_if_cfg[i].priority;
 			IPACMDBG("Found Vlan ID %d, Priority %d\n", vlan_info->vlan_id, vlan_info->priority);

@@ -290,6 +290,9 @@ void* ipa_driver_msg_notifier(void *param)
 	ipa_socksv5_msg add_socksv5_info;
 	uint32_t del_socksv5_info;
 #endif
+#ifdef IPA_IOCTL_ADD_VLAN_PRIORITY
+	struct ipa_ioc_vlan_priority *vlan_prio_evt;
+#endif
 
 	fd = open(IPA_DRIVER, O_RDWR);
 	if (fd < 0)
@@ -917,6 +920,16 @@ void* ipa_driver_msg_notifier(void *param)
 			evt_data.event = IPA_LINK_DOWN_EVENT;
 			evt_data.evt_data = data_fid;
 			break;
+
+#ifdef IPA_IOCTL_ADD_VLAN_PRIORITY
+		case IPA_VLAN_PRIORITY_UPDATE_EVENT:
+			vlan_prio_evt = (struct ipa_ioc_vlan_priority *)(buffer + sizeof(struct ipa_msg_meta));
+			if(IPACM_Iface::ipacmcfg->update_vlan_priority(vlan_prio_evt)) {
+				IPACMERR("Update vlan prirority failed\n");
+			}
+			IPACMDBG_H("Updated vlan priority successfully!\n");
+			continue;
+#endif
 
 		default:
 			IPACMDBG_H("Unhandled message type: %d\n", event_hdr.msg_type);

@@ -6504,7 +6504,7 @@ int IPACM_Lan::add_ttl_exception_flt_rule(ipa_ip_type iptype)
 	memcpy(&flt_rule_entry.rule.attrib, &rx_prop->rx[0].attrib,
 		sizeof(flt_rule_entry.rule.attrib));
 	flt_rule_entry.rule.attrib.ext_attrib_mask |= IPA_FLT_EXT_TTL_FIELD;
-	flt_rule_entry.rule.attrib.ttl_value = 0x1;
+	flt_rule_entry.rule.attrib.ttl_value = 0x0;
 
 
 	memcpy(&(m_pFilteringTable->rules[0]), &flt_rule_entry, sizeof(flt_rule_entry));
@@ -6776,10 +6776,6 @@ int IPACM_Lan::handle_uplink_filter_rule(ipacm_ext_prop *prop, ipa_ip_type iptyp
 				flt_rule_entry.rule.eq_attrib.num_offset_meq_32 ++;
 
 			}
-		}
-		else
-		{
-			IPACMDBG("TTL feature is not enabled\n");
 		}
 #endif
 
@@ -8782,10 +8778,6 @@ int IPACM_Lan::install_uplink_filter_rule_per_client_v2
 
 			}
 		}
-		else
-		{
-			IPACMDBG("TTL feature is not enabled\n");
-		}
 #endif
 		memcpy((void *)pFilteringTable->rules + (cnt * sizeof(struct ipa_flt_rule_add_v2)),
 			&flt_rule_entry, sizeof(flt_rule_entry));
@@ -9066,10 +9058,6 @@ int IPACM_Lan::install_uplink_filter_rule_per_client
 				flt_rule_entry.rule.eq_attrib.num_offset_meq_32 ++;
 
 			}
-		}
-		else
-		{
-			IPACMDBG("TTL feature is not enabled\n");
 		}
 #endif
 		memcpy(&pFilteringTable->rules[cnt], &flt_rule_entry, sizeof(flt_rule_entry));

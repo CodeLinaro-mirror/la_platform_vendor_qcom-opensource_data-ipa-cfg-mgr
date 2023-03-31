@@ -2012,7 +2012,13 @@ int IPACM_Lan::handle_eth_mac_flt_conn_disc(uint8_t *mac_addr, bool eth_client_c
 			{
 				if(add_mac_flt_blacklist_rule(mac_addr,IPA_IP_v4, &(it->second->mac_v4_flt_rule_hdl)))
 				{
-					IPACMERR("unbale to add mac flt blacklist v4 UL rule for index: %d\n", eth_index);
+					IPACMERR("unable to add mac flt blacklist v4 UL rule for index: %d\n", eth_index);
+					return IPACM_FAILURE;
+				}
+				CtList->HandleNeighIpAddrDelEvt(get_client_memptr(eth_client, eth_index)->v4_addr);
+				if(handle_eth_client_mac_flt_route_rule(IPA_IP_v4, eth_index, it->second->is_blacklist))
+				{
+					IPACMERR("unable to del v4 rt rule for index: %d\n", eth_index);
 					return IPACM_FAILURE;
 				}
 				it->second->mac_v4_rt_del_flt_set = true;
@@ -2021,7 +2027,12 @@ int IPACM_Lan::handle_eth_mac_flt_conn_disc(uint8_t *mac_addr, bool eth_client_c
 			{
 				if(add_mac_flt_blacklist_rule(mac_addr,IPA_IP_v6, &(it->second->mac_v6_flt_rule_hdl)))
 				{
-					IPACMERR("unbale to add mac flt blacklist v6 UL rule for index: %d\n", eth_index);
+					IPACMERR("unable to add mac flt blacklist v6 UL rule for index: %d\n", eth_index);
+					return IPACM_FAILURE;
+				}
+				if(handle_eth_client_mac_flt_route_rule(IPA_IP_v6, eth_index, it->second->is_blacklist))
+				{
+					IPACMERR("unable to del v6 rt rule for index: %d\n", eth_index);
 					return IPACM_FAILURE;
 				}
 				it->second->mac_v6_rt_del_flt_set = true;
@@ -2034,7 +2045,7 @@ int IPACM_Lan::handle_eth_mac_flt_conn_disc(uint8_t *mac_addr, bool eth_client_c
 			{
 				if(del_mac_flt_blacklist_rule(it->second->mac_v4_flt_rule_hdl,  IPA_IP_v4))
 				{
-					IPACMERR("unbale to del mac flt blacklist v4 UL rule for index: %d\n", eth_index);
+					IPACMERR("unable to del mac flt blacklist v4 UL rule for index: %d\n", eth_index);
 					return IPACM_FAILURE;
 				}
 				it->second->mac_v4_rt_del_flt_set = false;
@@ -2043,7 +2054,7 @@ int IPACM_Lan::handle_eth_mac_flt_conn_disc(uint8_t *mac_addr, bool eth_client_c
 			{
 				if(del_mac_flt_blacklist_rule(it->second->mac_v4_flt_rule_hdl,  IPA_IP_v6))
 				{
-					IPACMERR("unbale to del mac flt blacklist v6 UL rule for index: %d\n", eth_index);
+					IPACMERR("unable to del mac flt blacklist v6 UL rule for index: %d\n", eth_index);
 					return IPACM_FAILURE;
 				}
 				it->second->mac_v6_rt_del_flt_set = false;
@@ -2653,7 +2664,7 @@ int IPACM_Lan::check_vlan_PDNUp(enum ipa_ip_type iptype)
 	}
 	else if(iptype == IPA_IP_v6)
 	{
-#ifdef FEATURE_IPACM_UL_FIREWALL
+#ifdef FEATURE_IPv6CT_DISABLED
 		bool firewall_updated = false;
 #endif
 		for(i = 0; i < IPA_MAX_NUM_OFFLOAD_VLANS; i++)
@@ -2667,7 +2678,7 @@ int IPACM_Lan::check_vlan_PDNUp(enum ipa_ip_type iptype)
 					IPACMDBG_H("no v6 vlan up PDN for Id %d\n", Ids[i]);
 					continue;
 				}
-#ifdef FEATURE_IPACM_UL_FIREWALL
+#ifdef FEATURE_IPv6CT_DISABLED
 				if(!firewall_updated)
 				{
 					configure_v6_ul_firewall();
@@ -10167,7 +10178,7 @@ int IPACM_Lan::modify_private_subnet()
 		}
 	}
 #endif
-
+	IPACMDBG_H("Memory allocating for ipa_num_private_subnet = %d mtu_rule_cnt = %d\n", IPACM_Iface::ipacmcfg->ipa_num_private_subnet, mtu_rule_cnt);
 	len = sizeof(struct ipa_ioc_add_flt_rule_after) + (IPACM_Iface::ipacmcfg->ipa_num_private_subnet + mtu_rule_cnt) * sizeof(struct ipa_flt_rule_add);
 	pFilteringTable = (struct ipa_ioc_add_flt_rule_after*)malloc(len);
 	if(!pFilteringTable)
@@ -10228,8 +10239,9 @@ int IPACM_Lan::modify_private_subnet()
 
 			if (construct_mtu_rule(&flt_rule.rule, IPA_IP_v4, mtu[i]))
 				IPACMERR("Failed to modify MTU filtering rule.\n");
-			memcpy(&(pFilteringTable->rules[mtu_rule_idx + i]), &flt_rule, sizeof(struct ipa_flt_rule_add));
-			IPACMDBG_H("Succesfully constructed v4 MTU rule for vlan id %d entry(%d)\n", vid[i], mtu_rule_idx + i);
+			memcpy(&(pFilteringTable->rules[mtu_rule_idx]), &flt_rule, sizeof(struct ipa_flt_rule_add));
+			IPACMDBG_H("Succesfully constructed v4 MTU rule for vlan id %d entry(%d)\n", vid[i], mtu_rule_idx);
+			mtu_rule_idx++;
 		}
 	}
 
@@ -10410,7 +10422,7 @@ int IPACM_Lan::modify_ipv6_prefix_flt_rule()
 		mtu_rule_cnt++;
 	}
 #endif
-
+	IPACMDBG_H("Memory allocating for num_ipv6_prefixes rules = %d num_no_offload_ipv6_prefix rules = %d mtu_rule_cnt = %d\n", IPACM_Iface::ipacmcfg->num_ipv6_prefixes, IPACM_Iface::ipacmcfg->num_no_offload_ipv6_prefix, mtu_rule_cnt);
 	len = sizeof(struct ipa_ioc_add_flt_rule_after) + (IPACM_Iface::ipacmcfg->num_ipv6_prefixes + IPACM_Iface::ipacmcfg->num_no_offload_ipv6_prefix + mtu_rule_cnt) * sizeof(struct ipa_flt_rule_add);
 	pFilteringTable = (struct ipa_ioc_add_flt_rule_after*)malloc(len);
 	if(!pFilteringTable)
@@ -10472,9 +10484,10 @@ int IPACM_Lan::modify_ipv6_prefix_flt_rule()
 			}
 			if (construct_mtu_rule(&flt_rule.rule, IPA_IP_v6, mtu[i]))
 				IPACMERR("Failed to modify MTU filtering rule.\n");
-			memcpy(&(pFilteringTable->rules[mtu_rule_idx + i]), &flt_rule, sizeof(struct ipa_flt_rule_add));
+			memcpy(&(pFilteringTable->rules[mtu_rule_idx]), &flt_rule, sizeof(struct ipa_flt_rule_add));
 
-			IPACMDBG_H("Succesfully constructed v6 MTU rule for vlan id %d entry(%d)\n", vid[i], mtu_rule_idx + i);
+			IPACMDBG_H("Succesfully constructed v6 MTU rule for vlan id %d entry(%d)\n", vid[i], mtu_rule_idx);
+			mtu_rule_idx++;
 		}
 	}
 
@@ -13857,7 +13870,7 @@ void IPACM_Lan::HandleNeighIpAddrAddEvt(ipacm_event_data_all *data)
 	{
 		if(IPACM_Iface::ipacmcfg->ipacm_mpdn_enable)
 		{
-			CtList->HandleNeighIpAddrAddEvt_v6(Ipv6IpAddress(data->ipv6_addr, false), data->if_index);
+			CtList->HandleNeighIpAddrAddEvt_v6(data);
 			break;
 		}
 	}

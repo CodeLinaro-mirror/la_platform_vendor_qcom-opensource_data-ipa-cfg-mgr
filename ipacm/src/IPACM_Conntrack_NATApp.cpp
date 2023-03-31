@@ -1,5 +1,6 @@
 /*
 Copyright (c) 2013-2021, The Linux Foundation. All rights reserved.
+Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are
@@ -2156,6 +2157,7 @@ void Ipv6ctConntrackTimestampUtil::SetConnectionDetails(const NatEntryBase& entr
 
 NatProxyBase::NatProxyBase() : m_tableHandle(0)
 {
+	table_created = false;
 	IPACMDBG_H("\n");
 }
 
@@ -2168,10 +2170,18 @@ int NatProxyBase::AddTable(uint16_t number_of_entries)
 {
 	IPACMDBG_H("\n");
 	uint32_t table_handle;
+
+	if(table_created)
+	{
+		IPACMDBG_H("Table already created return\n");
+		return 0;
+	}
+
 	int ret = DoAddTable(number_of_entries, table_handle);
 	if (!ret)
 	{
 		m_tableHandle = table_handle;
+		table_created = true;
 	}
 	IPACMDBG_H("return\n");
 	return ret;
@@ -2188,6 +2198,7 @@ int NatProxyBase::DeleteTable()
 
 	int ret = DoDeleteTable();
 	m_tableHandle = 0;
+	table_created = false;
 	IPACMDBG_H("return\n");
 	return ret;
 }
@@ -2606,7 +2617,7 @@ NatBase::~NatBase()
 	IPACMDBG_H("return\n");
 }
 
-int NatBase::AddTable(const IpAddress& wan_ip)
+int NatBase::AddTable(const uint32_t v6_prefix[2])
 {
 	IPACMDBG_H("\n");
 	int ret = m_proxy.AddTable(m_maxEntries);
@@ -2617,13 +2628,24 @@ int NatBase::AddTable(const IpAddress& wan_ip)
 	}
 #ifndef FEATURE_SOCKSv5
 	/* Add back the cached NAT-entry */
-	if (wan_ip == m_previousWanAddress)
+	IPACMDBG_H("Restore the cache to ipa NAT-table\n");
+	for (int cnt = 0; cnt < m_maxEntries; ++cnt)
 	{
-		IPACMDBG_H("Restore the cache to ipa NAT-table\n");
-		for (int cnt = 0; cnt < m_maxEntries; ++cnt)
+		NatEntryBase& entry = m_cache[cnt];
+		if (entry.Valid())
 		{
-			NatEntryBase& entry = m_cache[cnt];
-			if (entry.Valid())
+			uint64_t src_ipv6_msb;
+
+			if (entry.m_direction == NatEntryBase::DirectionOutbound || entry.m_direction == NatEntryBase::DirectionUnknown)
+			{
+				src_ipv6_msb = ((Ipv6IpAddress &)entry.GetClientIp()).GetMsb();
+			}
+			else if (entry.m_direction == NatEntryBase::DirectionInbound)
+			{
+				src_ipv6_msb = ((Ipv6IpAddress &)entry.GetTargetIp()).GetMsb();
+			}
+
+			if(ipv6prefixmatch(src_ipv6_msb, v6_prefix))
 			{
 				if (m_proxy.AddEntry(entry))
 				{
@@ -2642,18 +2664,53 @@ int NatBase::AddTable(const IpAddress& wan_ip)
 	return 0;
 }
 
-int NatBase::DeleteTable(const IpAddress& wan_addr)
+int NatBase::DeleteTable(const uint32_t v6_prefix[2],int num_v6_vlan_pdns)
 {
 	IPACMDBG_H("\n");
-	int ret = m_proxy.DeleteTable();
-	if (ret)
+
+	for (int cnt = 0; cnt < m_maxEntries; ++cnt)
 	{
-		IPACMERR("unable to delete the table Error: %d\n", ret);;
-		return ret;
+		NatEntryBase& entry = m_cache[cnt];
+		if (entry.Valid())
+		{
+			uint64_t src_ipv6_msb;
+
+			if (entry.m_direction == NatEntryBase::DirectionOutbound || entry.m_direction == NatEntryBase::DirectionUnknown)
+			{
+				src_ipv6_msb = ((Ipv6IpAddress &)entry.GetClientIp()).GetMsb();
+			}
+			else if (entry.m_direction == NatEntryBase::DirectionInbound)
+			{
+				src_ipv6_msb = ((Ipv6IpAddress &)entry.GetTargetIp()).GetMsb();
+			}
+
+			if(ipv6prefixmatch(src_ipv6_msb, v6_prefix))
+			{
+				if (m_proxy.DelEntry(entry))
+				{
+					IPACMERR("unable to delete the rule delete from cache\n");
+					entry.Clear();
+					--m_curCnt;
+					continue;
+				}
+
+				entry.DebugDump("On wan-iface reset added below rule successfully\n");
+			}
+		}
 	}
 
-	m_previousWanAddress = wan_addr;
-	Reset();
+	if(num_v6_vlan_pdns == 0)
+	{
+		int ret = m_proxy.DeleteTable();
+		if (ret)
+		{
+			IPACMERR("unable to delete the table Error: %d\n", ret);;
+			return ret;
+		}
+ 
+		Reset();
+	}
+
 	IPACMDBG_H("return\n");
 	return 0;
 }
@@ -2878,6 +2935,62 @@ void NatBase::FlushTempEntries(const IpAddress& clientIp, bool isAdd, bool isDum
 				IPACMERR("unable to add temp entry: %d\n", ret);
 				continue;
 			}
+			IPACMDBG_H("Successfully flushed the entry\n");
+		}
+
+		curr.Clear();
+	}
+	IPACMDBG_H("return\n");
+}
+
+void NatBase::FlushAndCacheVlanTempEntries_v6(uint32_t* ipv6_addr, bool isAdd, bool isDummy, bool isStaClientIp)
+{
+	IPACMDBG_H("\n");
+	const IpAddress& clientIp = Ipv6IpAddress(ipv6_addr, false);
+	clientIp.DebugDump("Flush temp entries for");
+
+	int valid = 0;
+
+	for (int cnt = 0; cnt < MAX_TEMP_ENTRIES; ++cnt)
+	{
+		NatEntryBase& curr = m_temp[cnt];
+		if (!curr.UpdateDirection(clientIp, isStaClientIp))
+		{
+			continue;
+		}
+		curr.DebugDump((isAdd) ? "Add temp entry to cache" : "Delete temp entry");
+
+		uint64_t src_ipv6_msb;
+
+		if (curr.m_direction == NatEntryBase::DirectionOutbound || curr.m_direction == NatEntryBase::DirectionUnknown)
+		{
+			src_ipv6_msb = ((Ipv6IpAddress &)curr.GetClientIp()).GetMsb();
+		}
+		else if (curr.m_direction == NatEntryBase::DirectionInbound)
+		{
+			src_ipv6_msb = ((Ipv6IpAddress &)curr.GetTargetIp()).GetMsb();
+		}
+
+		if(((src_ipv6_msb >> 32) == ipv6_addr[0]) && ((src_ipv6_msb & 0x00000000FFFFFFFF) == ipv6_addr[1]))
+		{
+			valid = 1;
+		}
+
+		if (isAdd && valid)
+		{
+			if (isDummy)
+			{
+				IPACMDBG("setting to dummy\n");
+				curr.m_isDummy = true;
+			}
+
+			int ret = AddEntry(curr);
+			if (ret)
+			{
+				IPACMERR("unable to add temp entry: %d\n", ret);
+				continue;
+			}
+
 			IPACMDBG_H("Successfully flushed the entry\n");
 		}
 

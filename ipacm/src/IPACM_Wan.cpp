@@ -1806,8 +1806,13 @@ void IPACM_Wan::remove_l2tp_brige_vlan_pdn(uint16_t vlan_id)
 					if(IPACM_Wan::ipv4_to_iface[pdn_idx].VID_cnt == 0)
 					{
 						ipv4_to_iface[pdn_idx].wan_up_vlan = false;
+						if(ipv6_to_iface[pdn_idx].wan_up_vlan_v6 == false)
+						{
+							num_offloaded_pdns--;
+						}
 					}
-					IPACMDBG("Now PDN: %d, v4 vid count is %d\n", pdn_idx, IPACM_Wan::ipv4_to_iface[pdn_idx].VID_cnt);
+					IPACMDBG("Now PDN: %d, v4 vid count is %d, num_offload_pdn: %d\n", pdn_idx,
+								IPACM_Wan::ipv4_to_iface[pdn_idx].VID_cnt, num_offloaded_pdns);
 					break;
 				}
 			}
@@ -1826,8 +1831,13 @@ void IPACM_Wan::remove_l2tp_brige_vlan_pdn(uint16_t vlan_id)
 					if(IPACM_Wan::ipv6_to_iface[pdn_idx].VID_cnt == 0)
 					{
 						ipv6_to_iface[pdn_idx].wan_up_vlan_v6 = false;
+						if(ipv4_to_iface[pdn_idx].wan_up_vlan == false)
+						{
+							num_offloaded_pdns--;
+						}
 					}
-					IPACMDBG("Now PDN: %d, v6 vid count is %d\n", pdn_idx, IPACM_Wan::ipv6_to_iface[pdn_idx].VID_cnt);
+					IPACMDBG("Now PDN: %d, v6 vid count is %d, num_offload_pdn: %d\n", pdn_idx,
+								IPACM_Wan::ipv6_to_iface[pdn_idx].VID_cnt, num_offloaded_pdns);
 					break;
 				}
 			}
@@ -1970,6 +1980,12 @@ int IPACM_Wan::check_vlan_pdn(ipa_ip_type iptype, ipacm_event_route_vlan *data, 
 			{
 				/* remove l2tp vlan from the PDN */
 				remove_l2tp_brige_vlan_pdn(data->VlanID);
+				if(((modem_ipv4_pdn_index >= 0) && ipv4_to_iface[modem_ipv4_pdn_index].wan_up_vlan == false) &&
+					((modem_ipv6_pdn_index >= 0) && ipv6_to_iface[modem_ipv6_pdn_index].wan_up_vlan_v6 == false))
+				{
+					num_offloaded_pdns++;
+					IPACMDBG_H("num of offloaded PDN: %d\n", num_offloaded_pdns);
+				}
 			}
 #endif
 			handle_route_add_vlan_pdn_evt(IPA_IP_v6, data->VlanID);
@@ -2038,6 +2054,12 @@ int IPACM_Wan::check_vlan_pdn(ipa_ip_type iptype, ipacm_event_route_vlan *data, 
 				check_l2tp_brige_vlan_pdn_up(data))
 			{
 				remove_l2tp_brige_vlan_pdn(data->VlanID);
+				if(((modem_ipv4_pdn_index >= 0) && ipv4_to_iface[modem_ipv4_pdn_index].wan_up_vlan == false) &&
+					((modem_ipv6_pdn_index >= 0) && ipv6_to_iface[modem_ipv6_pdn_index].wan_up_vlan_v6 == false))
+				{
+					num_offloaded_pdns++;
+					IPACMDBG_H("num of offloaded PDN: %d\n", num_offloaded_pdns);
+				}
 			}
 #endif
 			handle_route_add_vlan_pdn_evt(IPA_IP_v4, data->VlanID);
@@ -8920,13 +8942,14 @@ int IPACM_Wan::handle_l2tp_client_mtu_rule(const struct ipa_rule_attrib& rx_prop
 	if (iptype == IPA_IP_v4)
 	{
 		flt_rule_entry.rule.eq_attrib.ihl_offset_range_16[0].offset = 0x82;
-		/* ipv4 header total length value includes header length also, therefore add 20 byte to mtu for ipv4 */
-		flt_rule_entry.rule.eq_attrib.ihl_offset_range_16[0].range_low = mtu + 21;
+		/* ipv4 header total length value includes header length also */
+		flt_rule_entry.rule.eq_attrib.ihl_offset_range_16[0].range_low = mtu + 1;
 	}
 	else
 	{
 		flt_rule_entry.rule.eq_attrib.ihl_offset_range_16[0].offset = 0x84;
-		flt_rule_entry.rule.eq_attrib.ihl_offset_range_16[0].range_low = mtu + 1;
+		/* ipv6 header payload not include header length */
+		flt_rule_entry.rule.eq_attrib.ihl_offset_range_16[0].range_low = mtu + 1 - 40;
 	}
 	flt_rule_entry.rule.eq_attrib.ihl_offset_range_16[0].range_high = UINT16_MAX; //0xFFFF
 	memcpy(&flt_rule_add, &flt_rule_entry, sizeof(struct ipa_flt_rule_add));

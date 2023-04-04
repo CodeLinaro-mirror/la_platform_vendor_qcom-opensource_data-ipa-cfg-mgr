@@ -169,6 +169,9 @@ typedef struct _ipa_eth_client
 	uint16_t vlan_id;
 #endif
 	bool gre_nat_set;
+#ifdef IPA_IOCTL_SET_EXT_ROUTER_MODE
+	uint32_t ext_router_prefix_rt_hdl;
+#endif
 	eth_client_rt_hdl eth_rt_hdl[0]; /* depends on number of tx properties */
 }ipa_eth_client;
 
@@ -346,6 +349,10 @@ public:
 	int handle_del_ipv6_addr(ipacm_event_data_all *data);
 
 	int check_neigh_ipv4(ipacm_event_data_all *data);
+
+	int handle_ext_router_add_evt(char* pdn_name, uint8_t *mac_addr, uint16_t vid);
+
+	int handle_ext_router_del_evt(void);
 
 	static bool odu_up;
 
@@ -1103,6 +1110,14 @@ protected:
 	uint32_t l2tp_udp_dflt_flt_rule_hdl[NUM_L2TP_UDP_DFLT_RULES];
 #endif
 #endif
+
+#ifdef IPA_IOCTL_SET_EXT_ROUTER_MODE
+	/*Ext router mode hdls*/
+	uint32_t ext_router_rmnet_ipv6_hdl;
+	uint32_t ext_router_flt_rule_hdl;
+	char ext_router_pdn_name[IPA_IFACE_NAME_LEN];
+#endif
+
 	int post_lan_up_event(const ipacm_event_data_addr* data) const;
 
 	xlat_context xlat_ctx;

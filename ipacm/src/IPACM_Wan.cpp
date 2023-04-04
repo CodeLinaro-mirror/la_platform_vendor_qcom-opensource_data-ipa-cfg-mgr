@@ -447,6 +447,42 @@ int IPACM_Wan::GetMTUByVid(uint16_t *mtu, uint16_t vlan_id, ipa_ip_type iptype)
 	return IPACM_FAILURE;
 }
 
+int IPACM_Wan::Getv6addrByName(char* pdn_name, uint32_t* ipv6_addr)
+{
+	for(int i = 0; i < IPA_MAX_NUM_SW_PDNS; i++)
+	{
+		if(strncmp(pdn_name, ipv6_to_iface[i].pIface->dev_name, sizeof(pdn_name)) == 0)
+		{
+			memcpy(ipv6_addr, ipv6_to_iface[i].pIface->m_ipv6_addr, sizeof(ipv6_to_iface[i].pIface->m_ipv6_addr));
+			return IPACM_SUCCESS;
+		}
+	}
+	IPACMERR("couldn't find PDN for name %s\n", pdn_name);
+	return IPACM_FAILURE;
+}
+
+uint32_t IPACM_Wan::GetQCMAPhdrByName(char* pdn_name)
+{
+	struct ipa_ioc_get_hdr hdr;
+
+	for(int i = 0; i < IPA_MAX_NUM_SW_PDNS; i++)
+	{
+		if(strncmp(pdn_name, ipv6_to_iface[i].pIface->dev_name, sizeof(pdn_name)) == 0)
+		{
+			strlcpy(hdr.name, ipv6_to_iface[i].pIface->tx_prop->tx[0].hdr_name, sizeof(hdr.name));
+			hdr.name[IPA_RESOURCE_NAME_MAX-1] = '\0';
+			if(m_header.GetHeaderHandle(&hdr) == false)
+			{
+				IPACMERR("Failed to get QMAP header.\n");
+				return 0;
+			}
+			return hdr.hdl;
+		}
+	}
+	IPACMERR("couldn't find PDN for name %s\n", pdn_name);
+	return 0;
+}
+
 bool IPACM_Wan::is_xlat_by_vid(uint16_t vlan_id)
 {
 	for(int i = 0; i < IPA_MAX_NUM_SW_PDNS; i++)
@@ -891,7 +927,7 @@ int IPACM_Wan::handle_addr_evt(ipacm_event_data_addr *data)
 		IPACMDBG_H("Received wan ipv4-addr:0x%x\n",wan_v4_addr);
 	}
 
-	IPACMDBG_H("number of default route rules %d\n", num_dft_rt_v6);
+	IPACMDBG_H("number of v6 default route rules %d\n", num_dft_rt_v6);
 
 fail:
 	free(rt_rule);

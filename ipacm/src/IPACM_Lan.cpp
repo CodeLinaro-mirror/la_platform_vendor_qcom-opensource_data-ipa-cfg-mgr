@@ -177,6 +177,7 @@ IPACM_Lan::IPACM_Lan(int iface_index) : IPACM_Iface(iface_index)
 #ifdef FEATURE_L2TP
 	l2tp_ul_dummy_hdr_hdl = 0;
 	l2tp_ul_hdr_proc_ctx_hdl = 0;
+	memset(l2tp_inner_private_subnet_flt_rule_hdl, 0 , sizeof(l2tp_inner_private_subnet_flt_rule_hdl));
 #ifdef IPA_L2TP_TUNNEL_UDP
 	l2tp_udp_dflt_flt_tule_offset = 0;
 	memset(tcp_syn_flt_rule_hdl, 0, sizeof(tcp_syn_flt_rule_hdl));
@@ -6395,7 +6396,7 @@ int IPACM_Lan::handle_down_evt()
 
 #ifdef FEATURE_L2TP
 		if((IPACM_Iface::ipacmcfg->ipacm_l2tp_enable == IPACM_L2TP_E2E) &&
-			ipa_if_cate == ODU_IF)
+			ipa_if_cate == ODU_IF && IPACM_Iface::ipacmcfg->ipacm_mpdn_enable == false)
 		{
 			if (m_filtering.DeleteFilteringHdls(l2tp_inner_private_subnet_flt_rule_hdl, IPA_IP_v6,
 				IPACM_Iface::ipacmcfg->ipa_num_private_subnet) == false)
@@ -6431,7 +6432,8 @@ int IPACM_Lan::handle_down_evt()
 		IPACMDBG_H("Deleted TCP syn v6 filter rules successfully.\n");
 
 #ifdef FEATURE_L2TP
-		if((IPACM_Iface::ipacmcfg->ipacm_l2tp_enable == IPACM_L2TP) &&
+		if((IPACM_Iface::ipacmcfg->ipacm_l2tp_enable == IPACM_L2TP ||
+			IPACM_Iface::ipacmcfg->ipacm_l2tp_enable == IPACM_L2TP_E2E) &&
 			ipa_if_cate == ODU_IF)
 		{
 #ifdef IPA_L2TP_TUNNEL_UDP

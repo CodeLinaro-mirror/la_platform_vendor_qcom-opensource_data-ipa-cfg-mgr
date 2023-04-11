@@ -86,11 +86,6 @@
 #include <sys/ioctl.h>
 #include <fcntl.h>
 
-#define GRE_PROTOCOL_TYPE_v6 0x86DD
-#define GRE_PROTOCOL_TYPE_v4 0x0800
-#define GRE_PROTOCOL_TYPE_v6_WITH_KEY 0x200086DD
-#define GRE_PROTOCOL_TYPE_v4_WITH_KEY 0x20000800
-
 
 const uint8_t IPACM_Lan::v4_eogre_header[] = {
 	0x45, 0x00, 0x00, 0x00,
@@ -7373,8 +7368,7 @@ int IPACM_Lan::handle_uplink_filter_rule(ipacm_ext_prop *prop, ipa_ip_type iptyp
 		flt_index.source_pipe_index, flt_index.filter_index_list_len, flt_index.embedded_pipe_index, flt_index.embedded_call_mux_id);
 	if(flt_index.embedded_call_mux_id == 0xFF)
 	{
-		IPACMDBG_H("Invalid Mux ID %x, returning\n",flt_index.embedded_call_mux_id);
-		return IPACM_FAILURE;
+		IPACMDBG_H("Warning: Invalid Mux ID %x\n",flt_index.embedded_call_mux_id);
 	}
 #else /* defined (FEATURE_IPA_V3) */
 	IPACMDBG_H("flt_index: src pipe: %d, num of rules: %d, ebd pipe: %d, mux id: %d\n",
@@ -14980,15 +14974,16 @@ void IPACM_Lan::gre_up(bool isPmipv6)/*Reusing Gre function for PMIP, with isPmi
 {
 	if(isPmipv6)
 	{
-		if(!IPACM_Iface::ipacmcfg->pmip_details.pmipv6_up_wan){
+		if(!IPACM_Iface::ipacmcfg->pmip_details.pmipv6_up_wan)
+		{
 			IPACMDBG_H("Wan instance has not yet added the Routing rules. Will have to wait for that.\n");
 			return;
 		}
-	}
-	if(IPACM_Iface::ipacmcfg->pmip_details.pmipv6_tunnel_setup == false)
-	{
-		IPACMDBG_H("Tunnel info is not yet loaded. Let's wait for tunnel\n");
-		return;
+		if(IPACM_Iface::ipacmcfg->pmip_details.pmipv6_tunnel_setup == false)
+		{
+			IPACMDBG_H("Tunnel info is not yet loaded. Let's wait for tunnel\n");
+			return;
+		}
 	}
 	ipa_ipgre_info ipgre_info;
 	if(isPmipv6)

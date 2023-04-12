@@ -677,10 +677,6 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 								}
 							  }
 						  }
-#ifdef FEATURE_IPACM_UL_FIREWALL
-						else
-							IPACMDBG_H("WAN v6 is not UP\n");
-#endif //FEATURE_IPACM_UL_FIREWALL
 #ifdef FEATURE_VLAN_MPDN
 #ifdef FEATURE_SOCKSv5
 						/* handle socksv5 MPDN logic */
@@ -711,7 +707,10 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 						}
 #endif //FEATURE_SOCKSv5
 						else
+                                                {
+							IPACMDBG_H("WAN v6 is not UP\n");
 							check_vlan_PDNUp(IPA_IP_v6);
+                                                }
 #endif //FEATURE_VLAN_MPDN
 
 						/* Post event to NAT */

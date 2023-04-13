@@ -26,7 +26,7 @@
  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * ​​​​​Changes from Qualcomm Innovation Center are provided under the following license:
+ * Changes from Qualcomm Innovation Center are provided under the following license:
  * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear.
  */
@@ -181,6 +181,7 @@ public:
 	struct ipa_ttl_vlan_ids ipacm_ttlvlanids;
 	bool ttl_vlan_enable;
 #endif
+	bool ipacm_MsgFlt_enable;
 
 	bool ipv6_nat_enable;
 	int ipa_nat_iface_entries;

@@ -184,6 +184,7 @@ static int ipacm_cfg_xml_parse_tree
 #ifdef FEATURE_TTL
 						IPACM_util_icmp_string((char*)xml_node->name, IPACM_TTL_TAG) == 0 ||
 #endif
+						IPACM_util_icmp_string((char*)xml_node->name, IPACM_MSGFLT_TAG) == 0 ||
 						IPACM_util_icmp_string((char*)xml_node->name, IPACM_L2TP_TAG) == 0 ||
 						IPACM_util_icmp_string((char*)xml_node->name, IPACM_MPDN_TAG) == 0 ||
 						IPACM_util_icmp_string((char*)xml_node->name, IPACM_SOCKSv5_TAG) == 0 ||
@@ -686,6 +687,32 @@ static int ipacm_cfg_xml_parse_tree
 						IPACMDBG("ttl vlan id is :%d\n",config->ttlvlanids.vlans[i]);
 					}
 				}
+				else if (IPACM_util_icmp_string((char*)xml_node->name, IPACM_MSGFLT_Enable_TAG) == 0)
+				{
+					IPACMDBG_H("inside enable message filtering feature enable\n");
+					content = IPACM_read_content_element(xml_node);
+					if (content == NULL)
+					{
+						IPACMERR("Failed to read the content of the tag %s\n", IPACM_MSGFLT_Enable_TAG);
+					}
+					else
+					{
+						str_size = strlen(content);
+						memset(content_buf, 0, sizeof(content_buf));
+						memcpy(content_buf, (void *)content, str_size);
+						if (atoi(content_buf))
+						{
+							config->msgFlt_enable = true;
+						}
+						else
+						{
+							config->msgFlt_enable = false;
+						}
+						IPACMDBG_H("msgflt feature enable %d buf(%d)\n",
+						config->msgFlt_enable, atoi(content_buf));
+					}
+				}
+
 				else if (IPACM_util_icmp_string((char*)xml_node->name, IPACM_MPDN_Enable_TAG) == 0)
 				{
 						IPACMDBG_H("inside enable MPDN\n");

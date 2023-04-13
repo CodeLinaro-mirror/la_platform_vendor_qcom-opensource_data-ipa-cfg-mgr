@@ -26,7 +26,7 @@
  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * ​​​​​Changes from Qualcomm Innovation Center are provided under the following license:
+ * Changes from Qualcomm Innovation Center are provided under the following license:
  * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear.
  */
@@ -600,6 +600,8 @@ int IPACM_Config::Init(void)
 		ipacm_ttlvlanids.vlans[i] = cfg->ttlvlanids.vlans[i];
 	}
 #endif
+	ipacm_MsgFlt_enable = cfg->msgFlt_enable;
+	IPACMDBG_H("ipacm_msgflt_feature_enable %d\n", ipacm_MsgFlt_enable);
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
 	if (!ipacm_lan_stats_enable_set)
 	{

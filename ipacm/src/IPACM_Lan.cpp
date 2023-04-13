@@ -26,7 +26,7 @@
  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * ​​​​​Changes from Qualcomm Innovation Center are provided under the following license:
+ * Changes from Qualcomm Innovation Center are provided under the following license:
  * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear.
  */
@@ -7394,9 +7394,11 @@ int IPACM_Lan::config_dft_firewall_rules_ul_ex(IPACM_firewall_conf_t* firewall_c
 						continue;
 #endif
 					// if sw-allowed then do not add rule here
-					if(firewall_conf->extd_firewall_entries[j].SWAllowed_ex)
-						continue;
-
+					if(IPACM_Iface::ipacmcfg->ipacm_MsgFlt_enable)
+					{
+						if(firewall_conf->extd_firewall_entries[j].SWAllowed_ex)
+							continue;
+					}
 					memset(&flt_rule_entry_fw, 0, sizeof(struct ipa_flt_rule_add));
 					flt_rule_entry_fw.at_rear = 1;
 					flt_rule_entry_fw.flt_rule_hdl = -1;
@@ -7973,9 +7975,11 @@ int IPACM_Lan::config_dft_firewall_rules_ul(IPACM_firewall_conf_t* firewall_conf
 				continue;
 #endif
 			// if sw-allowed then do not add rules here
-			if(firewall_conf->extd_firewall_entries[i].SWAllowed_ex)
-				continue;
-
+			if(IPACM_Iface::ipacmcfg->ipacm_MsgFlt_enable)
+			{
+				if(firewall_conf->extd_firewall_entries[i].SWAllowed_ex)
+					continue;
+			}
 			memset(&flt_rule_entry, 0, sizeof(struct ipa_flt_rule_add));
 			flt_rule_entry.at_rear = false;
 			flt_rule_entry.flt_rule_hdl = -1;
@@ -8450,10 +8454,13 @@ void IPACM_Lan::configure_v6_ul_firewall(void)
 			disable_dft_firewall_rules_ul_ex(default_vid);
 		}
 
-		if(firewall_config->SWAllowed)
+		if(IPACM_Iface::ipacmcfg->ipacm_MsgFlt_enable)
 		{
-			IPACMDBG_H("default profile SWAllowed enabled\n");
-			config_sw_allow_excep_flt_rules_ul(firewall_config, &iface_ul_firewall, default_vid);
+			if(firewall_config->SWAllowed)
+			{
+				IPACMDBG_H("default profile SWAllowed enabled\n");
+				config_sw_allow_excep_flt_rules_ul(firewall_config, &iface_ul_firewall, default_vid);
+			}
 		}
 	}
 #ifdef FEATURE_VLAN_MPDN

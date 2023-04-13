@@ -1,6 +1,5 @@
 /*
 Copyright (c) 2013-2020, The Linux Foundation. All rights reserved.
-Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are
@@ -26,6 +25,10 @@ BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
 WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
 OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
 IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+* Changes from Qualcomm Innovation Center are provided under the following license:
+* Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+* SPDX-License-Identifier: BSD-3-Clause-Clear.
 */
 #include "IPACM_Conntrack_NATApp.h"
 #include "IPACM_ConntrackClient.h"
@@ -528,11 +531,13 @@ int NatApp::DeleteEntry(const nat_table_entry *rule)
 			{
 				IPACMDBG_H("Deleted Nat entry(%d) only from cache\n", cnt);
 			}
-
-			if(!cache[cnt].sw_allow)
+			if(IPACM_Iface::ipacmcfg->ipacm_MsgFlt_enable)
 			{
-				memset(&cache[cnt], 0, sizeof(cache[cnt]));
-				curCnt--;
+				if(!cache[cnt].sw_allow)
+				{
+					memset(&cache[cnt], 0, sizeof(cache[cnt]));
+					curCnt--;
+				}
 			}
 			break;
 		}
@@ -851,22 +856,25 @@ int NatApp::AddEntry(const nat_table_entry *rule, bool isVlan)
 	}
 #endif
 
-	if(!ChkForDup(rule) || rule->sw_allow)
+	if(!ChkForDup(rule) || (rule->sw_allow && IPACM_Iface::ipacmcfg->ipacm_MsgFlt_enable))
 	{
 		for(; cnt < max_entries; cnt++)
 		{
-			if(rule->sw_allow)
+			if(IPACM_Iface::ipacmcfg->ipacm_MsgFlt_enable)
 			{
-				if(cache[cnt].private_ip == rule->private_ip &&
-					cache[cnt].target_ip == rule->target_ip &&
-					cache[cnt].private_port ==	rule->private_port	&&
-					cache[cnt].target_port == rule->target_port &&
-					cache[cnt].protocol == rule->protocol  &&
-					cache[cnt].dst_only == rule->dst_only  &&
-					cache[cnt].src_only == rule->src_only)
+				if(rule->sw_allow)
 				{
-					IPACMDBG_H("found same cache entry %d\n", cnt);
-					break;
+					if(cache[cnt].private_ip == rule->private_ip &&
+						cache[cnt].target_ip == rule->target_ip &&
+						cache[cnt].private_port ==	rule->private_port	&&
+						cache[cnt].target_port == rule->target_port &&
+						cache[cnt].protocol == rule->protocol  &&
+						cache[cnt].dst_only == rule->dst_only  &&
+						cache[cnt].src_only == rule->src_only)
+					{
+						IPACMDBG_H("found same cache entry %d\n", cnt);
+						break;
+					}
 				}
 			}
 			else
@@ -960,10 +968,12 @@ int NatApp::AddEntry(const nat_table_entry *rule, bool isVlan)
 			cache[cnt].pdn_index = pdn_index;
 			cache[cnt].public_ip = rule->public_ip;
 #endif
-		if(!rule->sw_allow)
-			curCnt++;
+		if(IPACM_Iface::ipacmcfg->ipacm_MsgFlt_enable)
+		{
+			if(!rule->sw_allow)
+				curCnt++;
 		}
-
+		}
 	}
 	else
 	{

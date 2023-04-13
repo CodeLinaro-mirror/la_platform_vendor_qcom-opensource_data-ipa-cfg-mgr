@@ -26,7 +26,7 @@
  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * ​Changes from Qualcomm Innovation Center are provided under the following license:
+ * Changes from Qualcomm Innovation Center are provided under the following license:
  * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear.
  */
@@ -226,6 +226,9 @@ if (!(a)) {                                                 \
 #define IPACM_TTL_VLAN_Enable_TAG            "IPACMTTLVLANEnable"
 #endif
 
+#define IPACM_MSGFLT_Enable_TAG                 "IPACMMSGFLTEnable"
+#define IPACM_MSGFLT_TAG                        "IPACMMSGFLT"
+
 #define IPACM_MPDN_TAG                       "IPACMMPDN"
 #define IPACM_MPDN_Enable_TAG                "IPACMMPDNEnabled"
 #define IPACM_SOCKSv5_TAG                    "IPACMSOCKSv5"
@@ -365,6 +368,7 @@ typedef struct  _IPACM_conf_t
 	bool ttl_vlan;
 	struct ipa_ttl_vlan_ids ttlvlanids;
 #endif
+	bool msgFlt_enable;
 } IPACM_conf_t;
 
 /* This function read IPACM XML configuration*/

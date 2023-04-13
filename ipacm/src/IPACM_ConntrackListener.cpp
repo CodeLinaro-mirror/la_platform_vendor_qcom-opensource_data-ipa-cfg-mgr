@@ -1,6 +1,5 @@
 /*
  * Copyright (c) 2013-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -26,6 +25,10 @@
  * WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *
+ * Changes from Qualcomm Innovation Center are provided under the following license:
+ * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear.
  */
 #include <sys/ioctl.h>
 #include <net/if.h>
@@ -91,7 +94,10 @@ IPACM_ConntrackListener::IPACM_ConntrackListener() :
 	 IPACM_EvtDispatcher::registr(IPA_HANDLE_LAN_WLAN_UP_V6, this);
 	 IPACM_EvtDispatcher::registr(IPA_NEIGH_CLIENT_IP_ADDR_ADD_EVENT, this);
 	 IPACM_EvtDispatcher::registr(IPA_NEIGH_CLIENT_IP_ADDR_DEL_EVENT, this);
-	 IPACM_EvtDispatcher::registr(IPA_MSG_FILTER_NAT_EVENT, this);
+	if (IPACM_Iface::ipacmcfg->ipacm_MsgFlt_enable)
+	{
+		IPACM_EvtDispatcher::registr(IPA_MSG_FILTER_NAT_EVENT, this);
+	}
 #ifdef CT_OPT
 	 p_lan2lan = IPACM_LanToLan::getLan2LanInstance();
 #endif
@@ -314,8 +320,11 @@ void IPACM_ConntrackListener::event_callback(ipa_cm_event_id evt,
 		 break;
 
 	 case IPA_MSG_FILTER_NAT_EVENT:
-		 IPACMDBG("Received IPA_MSG_FILTER_NAT_EVENT event\n");
-		 nat_inst->HandleSwAllowEntries(data, true);
+		if(IPACM_Iface::ipacmcfg->ipacm_MsgFlt_enable)
+		{
+			IPACMDBG("Received IPA_MSG_FILTER_NAT_EVENT event\n");
+			nat_inst->HandleSwAllowEntries(data, true);
+		}
 		 break;
 
 	 default:
@@ -2459,7 +2468,8 @@ void IPACM_ConntrackListener::ProcessTCPorUDPMsg(
 	 nat_entry.rule = &rule;
 #ifdef FEATURE_VLAN_MPDN
 	 AddORDeleteNatEntry(&nat_entry, &SendVlanEvent);
-	 nat_inst->HandleSwAllowEntries(NULL, false);
+	 if(IPACM_Iface::ipacmcfg->ipacm_MsgFlt_enable)
+		 nat_inst->HandleSwAllowEntries(NULL, false);
 	 if(VlanID > 0 && SendVlanEvent)
 	 {
 		 ipacm_cmd_q_data evt_data;
@@ -2490,7 +2500,8 @@ void IPACM_ConntrackListener::ProcessTCPorUDPMsg(
 	 }
 #else
 	 AddORDeleteNatEntry(&nat_entry, NULL);
-	 nat_inst->HandleSwAllowEntries(NULL, false);
+	 if(IPACM_Iface::ipacmcfg->ipacm_MsgFlt_enable)
+		 nat_inst->HandleSwAllowEntries(NULL, false);
 #endif
 	 return;
 

@@ -112,17 +112,6 @@ struct ipacm_pdn_flt_rule
 	uint8_t mux_id;
 };
 
-/* Firewall and interface details
- * sent as part of event IPA_MSG_FILTER_NAT_EVENT
- */
-typedef struct _ipacm_event_data_sw_allow
-{
-	IPACM_firewall_conf_t *firewall_config;
-	uint32_t ipv4_addr;
-	char dev_name[IF_NAME_LEN];
-	int pdn_index;
-}ipacm_event_data_sw_allow;
-
 /* wan iface */
 class IPACM_Wan : public IPACM_Iface
 {
@@ -162,6 +151,8 @@ public:
 		IPACM_firewall_t &firewall_configs);
 
 	static IPACM_firewall_conf_t* get_firewall_conf_by_vid_ul(int vid);
+
+	void set_swallow_pdn_index(void);
 #endif //FEATURE_VLAN_MPDN
 	static IPACM_firewall_conf_t* get_default_profile_firewall_conf_ul(int *default_vid);
 

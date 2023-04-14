@@ -123,6 +123,17 @@ if (!(a)) {                                                 \
 #define DefaultNetDev                        "DefaultNetDev"
 #define SWAllow_TAG                          "SWAllowed"
 
+/* SWALLOW Config Entries */
+#define IpaPdnCfg_TAG                        "IpaPdnCfg"
+#define Connection_TAG                       "Connection"
+
+#define Protocol_TAG                         "Protocol"
+#define Direction_TAG                        "Direction"
+#define SourceAddress_TAG                    "SourceAddress"
+#define DestinationAddress_TAG               "DestinationAddress"
+#define SourcePort_TAG                       "SourcePort"
+#define DestinationPort_TAG                  "DestinationPort"
+
 #define UNKNOWN_NetDev_TAG                   "UNKNOWN"
 
 #ifdef FEATURE_IPACM_UL_FIREWALL
@@ -311,6 +322,35 @@ struct IPACM_firewall_t
 	uint8_t default_profile;
 };
 
+/*---------------------------------------------------------------------------
+           Extended SwAllow Entry Configuration.
+---------------------------------------------------------------------------*/
+typedef struct
+{
+	struct ipa_rule_attrib attrib;
+	firewall_ip_version_enum  ip_vsn;
+	uint8_t protocol;
+#ifdef FEATURE_IPACM_UL_FIREWALL
+	IPACM_msgr_firewall_direction direction;
+#endif
+} IPACM_extd_swallow_entry_conf_t;
+
+typedef struct
+{
+	char net_dev[IPA_IFACE_NAME_LEN];
+	IPACM_extd_swallow_entry_conf_t extd_swallow_entries[IPACM_MAX_FIREWALL_ENTRIES];
+	uint8_t num_extd_swallow_entries;
+	int pdn_index_v4;
+	int pdn_index_v6;
+	uint8_t profile;
+} IPACM_swallow_conf_t;
+
+struct IPACM_swallow_t
+{
+	IPACM_swallow_conf_t pdns[IPA_MAX_NUM_SW_PDNS];
+	uint8_t pdn_count;
+};
+
 typedef struct
 {
 	uint8_t num_iface_entries;
@@ -378,6 +418,13 @@ int ipacm_read_vlan_cfg_xml
 (
 	char *xml_file,                              /* Filename and path     */
 	IPACM_conf_t *config                         /* Mobile AP config data */
+);
+
+/* This function read IPACM SWAllow XML and populate the Cfg */
+int IPACM_read_swallow_xml
+(
+	const char *xml_file,                        /* Filename and path */
+	IPACM_swallow_t *swallow_config            /* Mobile AP firewall config data */
 );
 
 /* This function reads QCMAP Firewall XML and store in IPACM Firewall structure */

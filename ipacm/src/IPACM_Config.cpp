@@ -67,11 +67,19 @@ const char *IPACM_Config::DEVICE_NAME_ODU = "/dev/odu_ipa_bridge";
 #endif
 #endif
 #define IPACM_VLAN_CFG_FILE "/etc/data/ipa/IPACM_vlan_cfg.xml"
+#ifdef DATA_CONFIG_DIR_PATH
+#define IPACM_SWALLOW_FILE DATA_CONFIG_DIR_PATH"/ipa/ipa_filter_cfg.xml"
+#else
+#define IPACM_SWALLOW_FILE "/etc/data/ipa/ipa_filter_cfg.xml"
+#endif
+
 
 const char *ipacm_event_name[] = {
 	__stringify(IPA_CFG_CHANGE_EVENT),                     /* NULL */
 	__stringify(IPA_PRIVATE_SUBNET_CHANGE_EVENT),          /* ipacm_event_data_fid */
 	__stringify(IPA_FIREWALL_CHANGE_EVENT),                /* NULL */
+	__stringify(IPA_SWALLOW_CHANGE_EVENT),                 /* NULL */
+	__stringify(IPA_SWALLOW_PDN_UPDATE),                   /* NULL */
 	__stringify(IPA_LINK_UP_EVENT),                        /* ipacm_event_data_fid */
 	__stringify(IPA_LINK_DOWN_EVENT),                      /* ipacm_event_data_fid */
 	__stringify(IPA_USB_LINK_UP_EVENT),                    /* ipacm_event_data_fid */
@@ -153,8 +161,6 @@ const char *ipacm_event_name[] = {
 	__stringify(IPA_ADD_BRIDGE_VLAN_PHY_INTF),             /* Handle vlan details add for physical interface.  */
 	__stringify(IPA_ADD_BRIDGE_VLAN_BR_INTF),              /* Handle vlan-bridge details add for bridge interface. */
 	__stringify(IPACM_EVENT_MAX)
-	__stringify(IPA_MSG_FILTER_NAT_EVENT),                 /* ipacm_event_data_sw_allow/sw_allow_data */
-	__stringify(IPACM_EVENT_MAX),
 };
 
 IPACM_Config::IPACM_Config()
@@ -163,6 +169,7 @@ IPACM_Config::IPACM_Config()
 	alg_table = NULL;
 	pNatIfaces = NULL;
 	vlan_config = NULL;
+	sw_filter_cfg = NULL;
 	memset(&ipa_client_rm_map_tbl, 0, sizeof(ipa_client_rm_map_tbl));
 	memset(&ipa_rm_tbl, 0, sizeof(ipa_rm_tbl));
 	ipa_rm_a2_check=0;
@@ -416,6 +423,65 @@ bail:
 }
 
 #endif //IPA_HW_FNR_STATS
+
+int IPACM_Config::ReadSwAllow(void)
+{
+	/* Read IPACM Config file */
+	char IPACM_swallow_file[IPA_MAX_FILE_LEN];
+	IPACM_swallow_t *cfg;
+	ipacm_cmd_q_data evt_data;
+
+	cfg = (IPACM_swallow_t *)calloc(1, sizeof(IPACM_swallow_t));
+
+	if(cfg == NULL)
+	{
+		IPACMERR("Could not allocate cfg\n");
+		return IPACM_FAILURE;
+	}
+
+	strlcpy(IPACM_swallow_file, IPACM_SWALLOW_FILE, sizeof(IPACM_swallow_file));
+
+	IPACMDBG_H("\n IPACM XML file is %s \n", IPACM_swallow_file);
+	if (IPACM_SUCCESS == IPACM_read_swallow_xml(IPACM_swallow_file, cfg))
+	{
+		IPACMDBG_H("\n IPACM XML read OK \n");
+
+		if(sw_filter_cfg == NULL)
+			sw_filter_cfg = (IPACM_swallow_t *)calloc(1, sizeof(IPACM_swallow_t));
+
+		if(sw_filter_cfg == NULL)
+		{
+			IPACMERR("Could not allocate swallow cfg\n");
+			free(cfg);
+			return IPACM_FAILURE;
+		}
+
+		memset(sw_filter_cfg, 0, sizeof(IPACM_swallow_t));
+		memcpy(sw_filter_cfg, cfg, sizeof(IPACM_swallow_t));
+		sw_allow_flag = FALSE;
+		free(cfg);
+
+		/* Fetch PDN index for the sw allow pdns */
+		evt_data.event = IPA_SWALLOW_PDN_UPDATE;
+		evt_data.evt_data = NULL;
+
+		/* Insert IPA_SWALLOW_PDN_UPDATE to command queue */
+		IPACM_EvtDispatcher::PostEvt(&evt_data);
+
+		return IPACM_SUCCESS;
+	}
+	else
+	{
+		IPACMERR("\n IPACM XML read failed \n");
+		if(sw_filter_cfg)
+		{
+			free(sw_filter_cfg);
+			sw_filter_cfg = NULL;
+		}
+		free(cfg);
+		return IPACM_FAILURE;
+	}
+}
 
 int IPACM_Config::Init(void)
 {

@@ -84,6 +84,7 @@
 #endif
 #define IPA_DRIVER  "/dev/ipa"
 
+#define IPACM_SWALLOW_FILE_NAME     "ipa_filter_cfg.xml"
 #define IPACM_CFG_FILE_NAME    "IPACM_cfg.xml"
 #ifndef FEATURE_IPA_ANDROID
 #define IPACM_PID_FILE "/var/run/data/ipa/ipacm.pid"
@@ -154,6 +155,7 @@ void* firewall_monitor(void *param)
 	char buffer[INOTIFY_BUF_LEN];
 	int inotify_fd;
 	ipacm_cmd_q_data evt_data;
+	IPACM_Config* config;
 	uint32_t mask = IN_MODIFY | IN_MOVE;
 
 	inotify_fd = inotify_init();
@@ -168,6 +170,29 @@ void* firewall_monitor(void *param)
 	wd = inotify_add_watch(inotify_fd,
 												 IPACM_DIR_NAME,
 												 mask);
+
+	/* Read and store the data on boot up */
+	config = IPACM_Config::GetInstance();
+
+	if(config != NULL)
+	{
+		if(config->ReadSwAllow() == IPACM_SUCCESS)
+		{
+			IPACM_swallow_t *dummy_cfg = (IPACM_swallow_t *)malloc(sizeof(IPACM_swallow_t));
+
+			evt_data.event = IPA_SWALLOW_CHANGE_EVENT;
+			/* Dummy Data Ignored on received side */
+			evt_data.evt_data = (void *)dummy_cfg;
+
+			IPACMDBG("Posting IPA_SWALLOW_CHANGE_EVENT\n");
+			/* Insert IPA_SWALLOW_CHANGE_EVENT to command queue */
+			IPACM_EvtDispatcher::PostEvt(&evt_data);
+		}
+	}
+	else
+	{
+		IPACMERR("config is not  initialized\n");
+	}
 
 	while (1)
 	{
@@ -195,6 +220,22 @@ void* firewall_monitor(void *param)
 				if (event->mask & IN_ISDIR)
 				{
 					IPACMDBG_H("The directory %s was 0x%x\n", event->name, event->mask);
+				}
+				else if (!strncmp(event->name, IPACM_SWALLOW_FILE_NAME, event->len)) // swallow rule change
+				{
+					IPACMDBG_H("File \"%s\" was 0x%x\n", event->name, event->mask);
+					IPACMDBG_H("The interested file %s .\n", IPACM_SWALLOW_FILE_NAME);
+
+					config = IPACM_Config::GetInstance();
+
+					if(config != NULL)
+					{
+						config->ReadSwAllow();
+					}
+					else
+					{
+						IPACMERR("config is not  initialized\n");
+					}
 				}
 				else if (!strncmp(event->name, IPACM_CFG_FILE_NAME, event->len)) // IPACM_configuration change
 				{

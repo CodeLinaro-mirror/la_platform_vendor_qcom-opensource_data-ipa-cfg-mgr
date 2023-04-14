@@ -186,6 +186,8 @@ typedef enum
 	IPA_CFG_CHANGE_EVENT,                 /* NULL */
 	IPA_PRIVATE_SUBNET_CHANGE_EVENT,          /* ipacm_event_data_fid */
 	IPA_FIREWALL_CHANGE_EVENT,                /* NULL */
+	IPA_SWALLOW_CHANGE_EVENT,                 /* NULL */
+	IPA_SWALLOW_PDN_UPDATE,                   /* NULL */
 	IPA_LINK_UP_EVENT,                        /* ipacm_event_data_fid */
 	IPA_LINK_DOWN_EVENT,                      /* ipacm_event_data_fid */
 	IPA_USB_LINK_UP_EVENT,                    /* ipacm_event_data_fid */
@@ -226,7 +228,6 @@ typedef enum
 	IPA_LAN_CLIENT_DISCONNECT_EVENT,          /* ipacm_event_data_mac */
 	IPA_LAN_CLIENT_UPDATE_EVENT,              /* ipacm_event_data_mac */
 #endif
-	IPA_MSG_FILTER_NAT_EVENT,                 /* ipacm_event_data_sw_allow/sw_allow_data */
 	IPA_EXTERNAL_EVENT_MAX,
 
 	IPA_HANDLE_WAN_UP,                        /* ipacm_event_iface_up  */

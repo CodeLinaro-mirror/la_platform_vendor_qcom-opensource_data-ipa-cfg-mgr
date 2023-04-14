@@ -1589,6 +1589,30 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 		}
 		break;
 
+	case IPA_SWALLOW_PDN_UPDATE:
+		{
+			if(!IPACM_Iface::ipacmcfg->sw_allow_flag)
+			{
+				IPACM_Iface::ipacmcfg->sw_allow_flag = TRUE;
+
+				IPACMDBG_H("Received IPA_SWALLOW_PDN_UPDATE\n");
+				set_swallow_pdn_index();
+
+				ipacm_cmd_q_data evt_data;
+				memset(&evt_data, 0, sizeof(evt_data));
+				IPACM_swallow_t *dummy_cfg = (IPACM_swallow_t *)calloc(1, sizeof(IPACM_swallow_t));
+
+				evt_data.event = IPA_SWALLOW_CHANGE_EVENT;
+				/* Dummy Data Ignored on received side */
+				evt_data.evt_data = (void *)dummy_cfg;
+
+				IPACMDBG("Posting IPA_SWALLOW_CHANGE_EVENT\n");
+				/* Insert IPA_SWALLOW_CHANGE_EVENT to command queue */
+				IPACM_EvtDispatcher::PostEvt(&evt_data);
+			}
+		}
+		break;
+
 	case IPA_FIREWALL_CHANGE_EVENT:
 		IPACMDBG_H("Received IPA_FIREWALL_CHANGE_EVENT\n");
 
@@ -2052,15 +2076,6 @@ int IPACM_Wan::handle_route_add_vlan_pdn_evt(ipa_ip_type iptype, uint16_t vlan_i
 		}
 		memset(wanup_vlan_data, 0, sizeof(ipacm_event_vlan_pdn));
 
-		ipacm_event_data_sw_allow *wan_sw_allow_data;
-		wan_sw_allow_data = (ipacm_event_data_sw_allow *)malloc(sizeof(ipacm_event_data_sw_allow));
-		if(wan_sw_allow_data == NULL)
-		{
-			IPACMERR("Unable to allocate memory\n");
-			return IPACM_FAILURE;
-		}
-		memset(wan_sw_allow_data, 0, sizeof(ipacm_event_data_sw_allow));
-
 		wanup_vlan_data->mux_id = ext_prop->ext[0].mux_id;
 		wanup_vlan_data->iptype = IPA_IP_v4;
 		wanup_vlan_data->VlanID = vlan_id;
@@ -2076,29 +2091,10 @@ int IPACM_Wan::handle_route_add_vlan_pdn_evt(ipa_ip_type iptype, uint16_t vlan_i
 		IPACMDBG_H("Posting IPA_HANDLE_WAN_VLAN_PDN_UP with below information:\n");
 		IPACMDBG_H("iptype IPA_IP_v4, VlanID %d, mux_id %d, if num %d\n", vlan_id, ext_prop->ext[0].mux_id, ipa_if_num);
 
-		wan_sw_allow_data->firewall_config = get_firewall_conf_by_vid_ul(vlan_id);
-		wan_sw_allow_data->pdn_index = modem_ipv4_pdn_index;
-		wan_sw_allow_data->ipv4_addr = ipv4_to_iface[modem_ipv4_pdn_index].ipv4_addr;
-		memcpy(wan_sw_allow_data->dev_name, ipv4_to_iface[modem_ipv4_pdn_index].pIface->dev_name, sizeof(char)*IF_NAME_LEN);
 
 		evt_data.event = IPA_HANDLE_WAN_VLAN_PDN_UP;
 		evt_data.evt_data = (void *)wanup_vlan_data;
 		IPACM_EvtDispatcher::PostEvt(&evt_data);
-
-		if(wan_sw_allow_data->firewall_config != NULL)
-		{
-			memset(&evt_data, 0, sizeof(evt_data));
-			IPACMDBG_H("Posting IPA_MSG_FILTER_NAT_EVENT\n");
-
-			evt_data.event = IPA_MSG_FILTER_NAT_EVENT;
-			evt_data.evt_data = wan_sw_allow_data;
-			IPACM_EvtDispatcher::PostEvt(&evt_data);
-		}
-		else
-		{
-			IPACMDBG_H("No Firewall Config Data Found for PDN!\n");
-			free(wan_sw_allow_data);
-		}
 	}
 
 	associated_VID = vlan_id;
@@ -4400,6 +4396,47 @@ IPACM_firewall_conf_t* IPACM_Wan::get_firewall_conf_by_vid_ul(int vid)
 	return NULL;
 }
 #endif //FEATURE_VLAN_MPDN
+
+void IPACM_Wan::set_swallow_pdn_index(void)
+{
+	int num_pdns;
+
+	if(!IPACM_Iface::ipacmcfg->sw_filter_cfg)
+	{
+		IPACMERR("SW Config not updated!\n");
+		return;
+	}
+
+	num_pdns = IPACM_Iface::ipacmcfg->sw_filter_cfg->pdn_count;
+
+	for(int j = 0; j < num_pdns; j++)
+	{
+		for(int i = 0; i < IPA_MAX_NUM_SW_PDNS; i++)
+		{
+			if(ipv6_to_iface[i].pIface)
+			{
+				if(!strcmp(ipv6_to_iface[i].pIface->dev_name,
+					IPACM_Iface::ipacmcfg->sw_filter_cfg->pdns[j].net_dev))
+				{
+					IPACMDBG("found %s dev in index %d updating v6 pdn index %d\n",
+						IPACM_Iface::ipacmcfg->sw_filter_cfg->pdns[j].net_dev, j, ipv6_to_iface[i].pIface->modem_ipv6_pdn_index);
+					IPACM_Iface::ipacmcfg->sw_filter_cfg->pdns[j].pdn_index_v6 = ipv6_to_iface[i].pIface->modem_ipv6_pdn_index;
+				}
+			}
+			if(ipv4_to_iface[i].pIface)
+			{
+				if(!strcmp(ipv4_to_iface[i].pIface->dev_name,
+					IPACM_Iface::ipacmcfg->sw_filter_cfg->pdns[j].net_dev))
+				{
+					IPACMDBG("found %s dev in index %d updating v4 pdn index %d\n",
+						IPACM_Iface::ipacmcfg->sw_filter_cfg->pdns[j].net_dev, j, ipv4_to_iface[i].pIface->modem_ipv4_pdn_index);
+					IPACM_Iface::ipacmcfg->sw_filter_cfg->pdns[j].pdn_index_v4 = ipv4_to_iface[i].pIface->modem_ipv4_pdn_index;
+				}
+			}
+		}
+	}
+}
+
 
 #endif //FEATURE_IPACM_UL_FIREWALL
 int IPACM_Wan::init_fl_rule_ex(ipa_ip_type iptype)

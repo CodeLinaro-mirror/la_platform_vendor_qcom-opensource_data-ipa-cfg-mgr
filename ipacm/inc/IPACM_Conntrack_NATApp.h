@@ -302,7 +302,6 @@ typedef struct _nat_table_entry
 	bool ucp;
 	bool dst_only;
 	bool src_only;
-	bool sw_allow;
 }nat_table_entry;
 
 #define CHK_TBL_HDL()  if(nat_table_hdl == 0){ return -1; }
@@ -601,6 +600,8 @@ public:
 	int DelEntriesOnClntDiscon(const IpAddress& client_lan_ip);
 	int DelEntriesOnSTAClntDiscon(const IpAddress& client_lan_ip);
 	void DelEntriesOnWanDown();
+	void HandleSWAllowEntries(void);
+	bool ChkSWAllow(const NatEntryBase& rule);
 
 #ifdef FEATURE_SOCKSv5
 	std::list<Ipv6ctEntry> socksv5_v6_conn;
@@ -656,17 +657,6 @@ private:
 };
 #endif
 
-/* Firewall and interface details
- * received as part of event IPA_MSG_FILTER_NAT_EVENT
- */
-typedef struct
-{
-	IPACM_firewall_conf_t *firewall_config;
-	uint32_t ipv4_addr;
-	char dev_name[IF_NAME_LEN];
-	int pdn_index;
-}sw_allow_data;
-
 class NatApp
 {
 private:
@@ -696,22 +686,6 @@ private:
 
 	struct nf_conntrack *ct;
 	struct nfct_handle *ct_hdl;
-
-	typedef struct
-	{
-		uint32_t ipv4_addr;
-		bool wan_up_vlan;
-		char dev_name[IF_NAME_LEN];
-	}ipacm_v4_wan_info;
-
-#ifdef FEATURE_VLAN_MPDN
-	IPACM_firewall_t fw_mpdn_config_data;
-	ipacm_v4_wan_info ipv4_wan[IPA_MAX_NUM_SW_PDNS];
-#else
-	IPACM_firewall_conf_t fw_config_data;
-#endif
-
-	bool fw_config_valid;
 
 	NatApp();
 	int Init();
@@ -753,60 +727,8 @@ public:
 	void FlushAndCacheVlanTempEntries(uint32_t ip_addr, bool *entry_exists, uint32_t *public_ip);
 #endif
 	void FlushTempEntries(uint32_t, bool, bool isDummy = false);
-
-	/*
-	* Method: FirewallNatTupleCompare: compare firewall tuples
-	* against nat cache
-	*
-	* Params:
-	* @fw_mpdn_config_data: Firewall config data stored locally
-	* after reading from firewall config file.
-	* @firewall_pdn_index: Get PDN index of matched firewall tuple.
-	* @firewall_entry_index: Get index of matched firewall tuple
-	* from fw_mpdn_config_data.
-	* @nat_index: Nat index from cache to compare against.
-	* @pdn_index: WAN PDN index to compare against, from
-	* the fw_mpdn_config_data.
-	*
-	* Return: bool
-	* @true: If firewall tuple match against NAT cache.
-	* @false: If firewall tuple does not match against
-	* NAT cache.
-	*/
-	void FirewallNatTupleCompare(IPACM_firewall_conf_t, int);
-
-	/*
-	* Method: handle_conntrack: Add/Delete NAT entries
-	* for software allowed tuple.
-	*
-	* Params:
-	* @fw_mpdn_config_data: Firewall config data received from firewall
-	* config file.
-	* @firewall_pdn_index: PDN index of matched firewall tuple.
-	* @firewall_entry_index: Index of matched firewall tuple
-	* from fw_mpdn_config_data.
-	* @nat_index: Nat index from cache to Add/Delete.
-	* @pdn_index: WAN PDN index of the firewall tuple from
-	* the fw_mpdn_config_data.
-	*
-	* Return: Void
-	*
- 	*/
-	void handle_conntrack(IPACM_firewall_conf_t, int, int);
-
-	/*
-	* Method: HandleSwAllowEntries: Handle SW Allow Tuples
-	*
-	* Params:
-	* @data: Firewall config data received from firewall
-	* config file.
-	* @update: Flag to update local firewall config structure.
-	* @filter_iface: Flag to update local WAN iface structureWAN iface structure.
-	*
-	* Return: Void
-	*
-	*/
-	void HandleSwAllowEntries(void *, bool);
+	bool ChkSWAllow(const nat_table_entry *);
+	void HandleSWAllowEntries(void);
 };
 
 #endif /* IPACM_CONNTRACK_NATAPP_H */

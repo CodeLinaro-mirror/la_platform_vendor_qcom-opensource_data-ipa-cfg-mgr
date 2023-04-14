@@ -6511,14 +6511,20 @@ int IPACM_Lan::handle_uplink_filter_rule(ipacm_ext_prop *prop, ipa_ip_type iptyp
 	else if(iptype == IPA_IP_v6)
 	{
 #ifndef FEATURE_SOCKSv5
+
+		IPACMDBG_H("Feature SOCKv5 not defined\n");
 #ifdef FEATURE_IPV6_NAT
 		/* for v6 nat, second pass should go directly to RT block */
 		if(IPACM_Iface::ipacmcfg->ipv6_nat_enable)
 			flt_rule_entry.rule.action = IPA_PASS_TO_ROUTING;
 		else
 #endif
+                {
 			flt_rule_entry.rule.action = IPACM_Iface::ipacmcfg->IsIpv6CTEnabled()?
 				IPA_PASS_TO_SRC_NAT : IPA_PASS_TO_ROUTING;
+
+		        IPACMDBG_H("IPV6CT Filter action:%d\n",flt_rule_entry.rule.action);
+                }
 #else
 		flt_rule_entry.rule.action = IPA_PASS_TO_ROUTING;
 #endif
@@ -6529,6 +6535,9 @@ int IPACM_Lan::handle_uplink_filter_rule(ipacm_ext_prop *prop, ipa_ip_type iptyp
 		ret = IPACM_FAILURE;
 		goto fail;
 	}
+
+
+	IPACMDBG_H("Filter action set to :%d\n",flt_rule_entry.rule.action);
 
 	index = IPACM_Iface::ipacmcfg->getFltRuleCount(rx_prop->rx[0].src_pipe, iptype);
 

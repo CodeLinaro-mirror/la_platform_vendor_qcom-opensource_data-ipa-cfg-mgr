@@ -157,8 +157,11 @@ void IPACM_ConntrackListener::event_callback(ipa_cm_event_id evt,
 		}
 		break;
 	}
-#else
-	case IPA_PROCESS_CT_MESSAGE_V6:
+
+#endif
+
+#ifndef FEATURE_SOCKSv5
+        case IPA_PROCESS_CT_MESSAGE_V6:
 	{
 		const ipacm_ct_evt_data* evt_data = static_cast<const ipacm_ct_evt_data*>(data);
 		IPACMDBG_H("Received IPA_PROCESS_CT_MESSAGE_V6 event\n");
@@ -166,14 +169,14 @@ void IPACM_ConntrackListener::event_callback(ipa_cm_event_id evt,
 		if(IPACM_Iface::ipacmcfg->ipv6_nat_enable) {
 			Ipv6NatEntry entry;
 
-			IPACMDBG_H("nat enabled\n");
+			IPACMDBG_H("IPV6 nat enabled\n");
 			CreateIpv6NatEntryFromCtEventData(evt_data, entry);
 			ProcessCTMessage_v6(evt_data, entry);
 		} else
 #endif
 			if (IsIpv6CTEnabled()) {
 				Ipv6ctEntry entry;
-
+                                IPACMDBG_H("IPV6 CT event is Enabled\n");
 				CreateIpv6ctEntryFromCtEventData(evt_data, entry);
 				ProcessCTMessage_v6(evt_data, entry);
 		}
@@ -182,7 +185,8 @@ void IPACM_ConntrackListener::event_callback(ipa_cm_event_id evt,
 #endif
 		break;
 	}
-#endif //defined(FEATURE_SOCKSv5) && defined (IPA_SOCKV5_EVENT_MAX)
+#endif // FEATURE_SOCKSv5
+
 	 case IPA_HANDLE_WAN_UP:
 			IPACMDBG_H("Received IPA_HANDLE_WAN_UP event\n");
 #ifdef FEATURE_VLAN_MPDN

@@ -8910,9 +8910,9 @@ fail:
 
 int IPACM_Lan::modify_private_subnet()
 {
-	int i, len, res = IPACM_SUCCESS;
+	int i = 0, len, res = IPACM_SUCCESS;
 	struct ipa_flt_rule_mdfy flt_rule;
-	struct ipa_ioc_mdfy_flt_rule* pFilteringTable;
+	struct ipa_ioc_mdfy_flt_rule* pFilteringTable = NULL;
 	int mtu_rule_cnt = 0;
 	uint16_t mtu[IPA_MAX_PRIVATE_SUBNET_ENTRIES + IPA_MAX_MTU_ENTRIES] = { };
 	int mtu_rule_idx = IPACM_Iface::ipacmcfg->ipa_num_private_subnet;

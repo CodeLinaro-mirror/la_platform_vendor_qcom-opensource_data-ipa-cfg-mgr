@@ -1,6 +1,5 @@
 /*
  * Copyright (c) 2013-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -59,6 +58,10 @@
  * IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
  * OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE
+ *
+ * Changes from Qualcomm Innovation Center are provided under the following license:
+ * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 /*!
 		@file
@@ -442,6 +445,42 @@ int IPACM_Wan::GetMTUByVid(uint16_t *mtu, uint16_t vlan_id, ipa_ip_type iptype)
 	IPACMERR("couldn't find MTU for VID %d for ip_type %d, using default size:%d \n", vlan_id, iptype, DEFAULT_MTU_SIZE);
 	*mtu = DEFAULT_MTU_SIZE;
 	return IPACM_FAILURE;
+}
+
+int IPACM_Wan::Getv6addrByName(char* pdn_name, uint32_t* ipv6_addr)
+{
+	for(int i = 0; i < IPA_MAX_NUM_SW_PDNS; i++)
+	{
+		if(strncmp(pdn_name, ipv6_to_iface[i].pIface->dev_name, sizeof(pdn_name)) == 0)
+		{
+			memcpy(ipv6_addr, ipv6_to_iface[i].pIface->m_ipv6_addr, sizeof(ipv6_to_iface[i].pIface->m_ipv6_addr));
+			return IPACM_SUCCESS;
+		}
+	}
+	IPACMERR("couldn't find PDN for name %s\n", pdn_name);
+	return IPACM_FAILURE;
+}
+
+uint32_t IPACM_Wan::GetQCMAPhdrByName(char* pdn_name)
+{
+	struct ipa_ioc_get_hdr hdr;
+
+	for(int i = 0; i < IPA_MAX_NUM_SW_PDNS; i++)
+	{
+		if(strncmp(pdn_name, ipv6_to_iface[i].pIface->dev_name, sizeof(pdn_name)) == 0)
+		{
+			strlcpy(hdr.name, ipv6_to_iface[i].pIface->tx_prop->tx[0].hdr_name, sizeof(hdr.name));
+			hdr.name[IPA_RESOURCE_NAME_MAX-1] = '\0';
+			if(m_header.GetHeaderHandle(&hdr) == false)
+			{
+				IPACMERR("Failed to get QMAP header.\n");
+				return 0;
+			}
+			return hdr.hdl;
+		}
+	}
+	IPACMERR("couldn't find PDN for name %s\n", pdn_name);
+	return 0;
 }
 
 bool IPACM_Wan::is_xlat_by_vid(uint16_t vlan_id)
@@ -888,7 +927,7 @@ int IPACM_Wan::handle_addr_evt(ipacm_event_data_addr *data)
 		IPACMDBG_H("Received wan ipv4-addr:0x%x\n",wan_v4_addr);
 	}
 
-	IPACMDBG_H("number of default route rules %d\n", num_dft_rt_v6);
+	IPACMDBG_H("number of v6 default route rules %d\n", num_dft_rt_v6);
 
 fail:
 	free(rt_rule);
@@ -5325,8 +5364,8 @@ int IPACM_Wan::add_dft_filtering_rule(struct ipa_flt_rule_add *rules, int rule_o
 			&flt_rule_entry, sizeof(struct ipa_flt_rule_add));
 #endif
 
-#ifdef FEATURE_IPA_ANDROID
-		IPACMDBG_H("Add TCP ctrl rules\n");
+		/* Always adding tcp syn SW-exception rule for MSS clamping support */
+		IPACMDBG_H("Add TCP sync rules\n");
 		memset(&flt_rule_entry, 0, sizeof(struct ipa_flt_rule_add));
 
 		flt_rule_entry.at_rear = true;
@@ -5349,15 +5388,18 @@ int IPACM_Wan::add_dft_filtering_rule(struct ipa_flt_rule_add *rules, int rule_o
 		flt_rule_entry.rule.eq_attrib.num_ihl_offset_meq_32 = 1;
 		flt_rule_entry.rule.eq_attrib.ihl_offset_meq_32[0].offset = 12;
 
-		/* add TCP FIN rule*/
-		flt_rule_entry.rule.eq_attrib.ihl_offset_meq_32[0].value = (((uint32_t)1)<<TCP_FIN_SHIFT);
-		flt_rule_entry.rule.eq_attrib.ihl_offset_meq_32[0].mask = (((uint32_t)1)<<TCP_FIN_SHIFT);
-		memcpy(&(rules[rule_offset + m_ipv6_default_filterting_rules_count++]),
-			&flt_rule_entry, sizeof(struct ipa_flt_rule_add));
-
 		/* add TCP SYN rule*/
 		flt_rule_entry.rule.eq_attrib.ihl_offset_meq_32[0].value = (((uint32_t)1)<<TCP_SYN_SHIFT);
 		flt_rule_entry.rule.eq_attrib.ihl_offset_meq_32[0].mask = (((uint32_t)1)<<TCP_SYN_SHIFT);
+		memcpy(&(rules[rule_offset + m_ipv6_default_filterting_rules_count++]),
+			&flt_rule_entry, sizeof(struct ipa_flt_rule_add));
+
+#if defined(FEATURE_IPA_ANDROID)
+		IPACMDBG_H("Add TCP other ctrl rules\n");
+
+		/* add TCP FIN rule*/
+		flt_rule_entry.rule.eq_attrib.ihl_offset_meq_32[0].value = (((uint32_t)1)<<TCP_FIN_SHIFT);
+		flt_rule_entry.rule.eq_attrib.ihl_offset_meq_32[0].mask = (((uint32_t)1)<<TCP_FIN_SHIFT);
 		memcpy(&(rules[rule_offset + m_ipv6_default_filterting_rules_count++]),
 			&flt_rule_entry, sizeof(struct ipa_flt_rule_add));
 

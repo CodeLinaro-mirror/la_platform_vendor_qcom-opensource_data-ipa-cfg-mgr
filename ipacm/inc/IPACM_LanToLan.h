@@ -51,13 +51,15 @@ IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #endif /* ndefined(FEATURE_IPA_ANDROID)*/
 
 #define MAX_NUM_CACHED_CLIENT_ADD_EVENT 10
-#define MAX_NUM_IFACE 10
+#define MAX_NUM_IFACE 20
 #ifdef FEATURE_VLAN_MPDN
 #define MAX_NUM_CLIENT 32
 #define MAX_NUM_WLAN_CLIENT 128
 #else
 #define MAX_NUM_CLIENT 16
 #endif
+
+#define MAX_SVAP_VLAN 5
 struct rt_rule_info
 {
 	int num_hdl[IPA_IP_MAX];	/* one client may need more than one routing rules on the same routing table depending on tx_prop */
@@ -167,12 +169,17 @@ public:
 
 	void handle_l2tp_disable();
 #endif
+	bool get_m_support_ast_update();
 #ifdef FEATURE_VLAN_MPDN
 	void set_is_vlan(bool is_vlan) { m_is_vlan = is_vlan; }
 	bool get_is_vlan() { return m_is_vlan; };
 #endif
+	bool is_svap_iface();
+	void set_svap_iface(bool enable);
 
-	bool get_m_support_ast_update();
+	uint32_t add_wlan_svap_hpc_hdl(uint16_t vlan_id, ipa_hdr_l2_type peer_l2_type, uint32_t hpc_hdl);
+	uint32_t del_wlan_svap_hpc_hdl(uint16_t vlan_id, ipa_hdr_l2_type peer_l2_type, uint32_t hpc_hdl);
+	uint32_t is_entry_present_wlan_svap_hpc_hdl(uint16_t vlan_id, ipa_hdr_l2_type peer_l2_type);
 
 private:
 
@@ -182,6 +189,7 @@ private:
 	bool m_support_inter_iface_offload;
 	bool m_support_intra_iface_offload;
 	bool m_is_l2tp_iface;
+	bool m_is_svap_iface;
 #ifdef FEATURE_VLAN_MPDN
 	bool m_is_vlan;
 #endif
@@ -197,6 +205,9 @@ private:
 
 	/* The following members are for intra-interface communication*/
 	peer_iface_info m_intra_interface_info;
+
+	svap_vlan_hpc_hdl wlan_svap_hpc_hdls[MAX_SVAP_VLAN];
+	int num_of_wlan_svap_hpc_hdls;
 
 	void add_one_client_flt_rule(IPACM_LanToLan_Iface *peer_iface, client_info *client);
 
@@ -221,6 +232,10 @@ private:
 	void add_hdr_proc_ctx(ipa_hdr_l2_type peer_l2_type);
 
 	void del_hdr_proc_ctx(ipa_hdr_l2_type peer_l2_type);
+
+	void add_hdr_proc_ctx_vlan(ipa_hdr_l2_type peer_l2_type, uint16_t vlan_id);
+
+	void del_hdr_proc_ctx_vlan(ipa_hdr_l2_type peer_l2_type, uint16_t vlan_id);
 
 	void print_peer_info(peer_iface_info *peer_info);
 

@@ -193,6 +193,7 @@ typedef struct {
 typedef struct {
 	char iface[IPA_IFACE_NAME_LEN];
 	uint32_t v4_addr;
+	bool is_vlan;
 } tether_client_info;
 
 /* struct to keep prefix info
@@ -303,6 +304,10 @@ public:
 
 	/* Indicates whether mpdn is enabled or not. */
 	bool ipacm_mpdn_enable;
+
+	/* Indicates easy mesh enabled state and the mode */
+	bool ipacm_emesh_enable;
+	uint32_t ipacm_emesh_mode;
 
 	/* Indicates whether socksv5 is enabled or not. */
 	bool ipacm_socksv5_enable;
@@ -420,6 +425,7 @@ public:
 	void get_vlan_mode_ifaces();
 #endif
 
+	bool is_svap_related(const char *phy_inf);
 
 #if defined(FEATURE_SOCKSv5) && defined(IPA_SOCKV5_EVENT_MAX)
 	pthread_mutex_t socksv5_lock;
@@ -1186,6 +1192,13 @@ public:
 
 	bool AddMacsecMap(struct ipa_macsec_map *new_macsec_map);
 	bool DelMacsecMap(struct ipa_macsec_map *macsec_map_to_delete);
+
+	enum ipa_ext_router_mode ext_router_mode;
+	std::list<ext_router_prefix_info> ext_router_prefix;
+	bool add_ext_router_info(struct ipa_ioc_ext_router_info *data);
+	bool del_ext_router_info(char* pdn_name);
+	bool get_ext_router_info(struct ext_router_prefix_info *data);
+	char* is_ext_route_ipv6_prefix(uint32_t *addr);
 
 	static const char *DEVICE_NAME_ODU;
 

@@ -198,6 +198,8 @@ const char *ipacm_event_name[] = {
 	__stringify(IPA_HANDLE_MACSEC_DEL),                    /* Handle macsec map delete event */
 	__stringify(IPA_ADD_BRIDGE_VLAN_PHY_INTF),             /* Handle vlan details add for physical interface.  */
 	__stringify(IPA_ADD_BRIDGE_VLAN_BR_INTF),              /* Handle vlan-bridge details add for bridge interface. */
+	__stringify(IPA_ADD_EXT_ROUTER_RULES),                 /* Handle ext_route add event */
+	__stringify(IPA_DEL_EXT_ROUTER_RULES),                 /* Handle ext_route del event */
 	__stringify(IPACM_EVENT_MAX)
 };
 
@@ -290,6 +292,7 @@ IPACM_Config::IPACM_Config()
 	memset(&eogre_info, 0, sizeof(eogre_info));
 	eogre_enabled = false;
 #endif
+	ext_router_mode = IPA_PREFIX_DISABLED;
 	return;
 }
 
@@ -655,9 +658,13 @@ skip_fnr_alloc:
 	ipacm_l2tp_enable = cfg->ipacm_l2tp_enable;
 	ipacm_mpdn_enable = cfg->ipacm_mpdn_enable;
 
+	ipacm_emesh_enable = cfg->ipacm_emesh_enable;
+	ipacm_emesh_mode = cfg->ipacm_emesh_mode;
+
 	if (ipacm_mpdn_enable == TRUE && ipacm_l2tp_enable != IPACM_L2TP_DISABLE)
 	{
 		IPACMERR("Not support both VLAN_MPDN and L2TP are enable \n");
+		close(m_fd);
 		exit(0);
 	}
 
@@ -815,7 +822,7 @@ fail:
 		free(cfg);
 		cfg = NULL;
 	}
-
+	close(m_fd);
 	return ret;
 }
 
@@ -2109,6 +2116,7 @@ bool IPACM_Config::is_added_vlan_iface(char *iface_name)
 bool IPACM_Config::iface_in_vlan_mode(const char *phys_iface_name)
 {
 
+	IPACMDBG_H("iface %s is getting checked if it is vlan\n", phys_iface_name);
 #if IPA_ETH_API_VER >= 2
 	/* Differentiate Dual NIC mode where interface name is either [eth0|eth1] and legacy while where
 	 * name is always "eth0".
@@ -2142,7 +2150,17 @@ bool IPACM_Config::iface_in_vlan_mode(const char *phys_iface_name)
 		return vlan_devices[IPA_VLAN_IF_ECM];
 	}
 
-	IPACMDBG("iface %s did not match any known ifaces\n", phys_iface_name);
+#ifdef IPA_VLAN_IF_WLAN
+	if(strstr(phys_iface_name, "ath"))
+	{
+		IPACMDBG("ath vlan mode %d\n", vlan_devices[IPA_VLAN_IF_WLAN]);
+		return (vlan_devices[IPA_VLAN_IF_WLAN] ||
+					((IPACM_Iface::ipacmcfg->ipacm_emesh_enable && IPACM_Iface::ipacmcfg->ipacm_emesh_mode >= 2) &&
+					is_svap_related(phys_iface_name)));
+	}
+#endif
+
+	IPACMDBG_H("iface %s did not match any known ifaces\n", phys_iface_name);
 	return false;
 }
 
@@ -3308,6 +3326,7 @@ void IPACM_Config::update_client_info(uint8_t *mac_addr, tether_client_info *cli
 			memset(temp, 0, sizeof(tether_client_info));
 			temp->v4_addr = client_info->v4_addr;
 			memcpy(temp->iface, client_info->iface, IPA_IFACE_NAME_LEN);
+			temp->is_vlan = client_info->is_vlan;
 			IPACM_Iface::ipacmcfg->client_lists.insert(std::make_pair(mac, temp));
 		}
 		else
@@ -3320,6 +3339,7 @@ void IPACM_Config::update_client_info(uint8_t *mac_addr, tether_client_info *cli
 				client_lists.at(mac)->v4_addr);
 				update_need = true;
 			}
+			client_lists.at(mac)->is_vlan = client_info->is_vlan;
 		}
 
 		/* check if client matched the iface SW-flt request */
@@ -3544,4 +3564,139 @@ bool IPACM_Config::DelMacsecMap(struct ipa_macsec_map *macsec_map_to_delete)
 	}
 
 	return false;
+}
+
+bool IPACM_Config::is_svap_related(const char* phy_inf) {
+	FILE *fp = NULL;
+	char MapBSSType_row[10] = { 0 }, cmd[200] = { 0 };
+	bool is_svap = false;
+
+	char if_name[IPA_IFACE_NAME_LEN];
+	strlcpy(if_name, phy_inf, IPA_IFACE_NAME_LEN);
+	IPACMDBG_H("dev_name %s\n", phy_inf);
+
+	char* char_idx =  strstr(if_name, ".");
+
+	if (char_idx) {
+		char_idx[0] = '\0';
+		IPACMDBG_H("truncated iface name %s\n", if_name);
+	}
+
+	snprintf(cmd, 200, "cfg80211tool_mesh %s get_MapBSSType| awk -F ':' '{print $2}' > /tmp/data/ipa_vap.txt", if_name);
+	system(cmd);
+
+	fp = fopen("/tmp/data/ipa_vap.txt", "r");
+	if (fp == NULL) {
+		IPACMERR("can't open fdb file\n");
+		return false;
+	}
+
+	if (fgets(MapBSSType_row, 10, fp) == NULL) {
+		IPACMERR("fgets failed\n");
+		goto end;
+	}
+
+	if (72 == atoi(MapBSSType_row)) {
+		is_svap = true;
+	}
+	IPACMDBG_H("get_MapBSSType %d\n", atoi(MapBSSType_row));
+
+end:
+	fclose(fp);
+	return is_svap;
+}
+
+bool IPACM_Config::add_ext_router_info(ipa_ioc_ext_router_info *data)
+{
+	list<ext_router_prefix_info>::iterator it;
+	struct ext_router_prefix_info info;
+
+	IPACMDBG_H("info - mode:%d, pdn_name:%s\nv6_addr:0x%08x:%08x:%08x:%08x\nv6_mask:0x%08x:%08x:%08x:%08x\n",
+				data->mode, data->pdn_name,
+				data->ipv6_addr[0], data->ipv6_addr[1], data->ipv6_addr[2], data->ipv6_addr[3],
+				data->ipv6_mask[0], data->ipv6_mask[1], data->ipv6_mask[2], data->ipv6_mask[3]);
+
+	for(it = ext_router_prefix.begin(); it != ext_router_prefix.end(); it++)
+	{
+		if(strncmp(it->pdn_name, data->pdn_name, sizeof(it->pdn_name)) == 0)
+		{
+			IPACMERR("The pdn %s already has ext_router ipv6 added\n", it->pdn_name);
+			return false;
+		}
+	}
+
+	memset(&info, 0, sizeof(ext_router_prefix_info));
+	strlcpy(info.pdn_name, data->pdn_name, sizeof(info.pdn_name));
+	info.ipv6_addr[0] = htonl(data->ipv6_addr[0]);
+	info.ipv6_addr[1] = htonl(data->ipv6_addr[1]);
+	info.ipv6_addr[2] = htonl(data->ipv6_addr[2]);
+	info.ipv6_addr[3] = htonl(data->ipv6_addr[3]);
+	info.ipv6_mask[0] = htonl(data->ipv6_mask[0]);
+	info.ipv6_mask[1] = htonl(data->ipv6_mask[1]);
+	info.ipv6_mask[2] = htonl(data->ipv6_mask[2]);
+	info.ipv6_mask[3] = htonl(data->ipv6_mask[3]);
+
+	ext_router_prefix.push_front(info);
+
+	IPACMDBG_H("succesfully added ext router info for pdn %s\n", data->pdn_name);
+
+	return true;
+}
+
+bool IPACM_Config::del_ext_router_info(char* pdn_name)
+{
+	list<ext_router_prefix_info>::iterator it;
+	struct ext_router_prefix_info info;
+
+	for(it = ext_router_prefix.begin(); it != ext_router_prefix.end(); it++)
+	{
+		if(strncmp(it->pdn_name, pdn_name, sizeof(it->pdn_name)) == 0)
+		{
+			IPACMDBG_H("Found pdn %s\n", it->pdn_name)
+			ext_router_prefix.erase(it);
+			return true;
+		}
+	}
+
+	IPACMERR("Cannot find pdn %s\n", it->pdn_name);
+	return false;
+}
+
+bool IPACM_Config::get_ext_router_info(ext_router_prefix_info *data)
+{
+	list<ext_router_prefix_info>::iterator it;
+
+	for(it = ext_router_prefix.begin(); it != ext_router_prefix.end(); it++)
+	{
+		if(strncmp(it->pdn_name, data->pdn_name, sizeof(it->pdn_name)) == 0)
+		{
+			IPACMDBG_H("Found pdn %s\n", data->pdn_name);
+			memcpy(data->ipv6_addr, it->ipv6_addr, sizeof(data->ipv6_addr));
+			memcpy(data->ipv6_mask, it->ipv6_mask, sizeof(data->ipv6_mask));
+			return true;
+		}
+	}
+	IPACMERR("Could not find pdn %s\n", data->pdn_name);
+
+	return false;
+}
+
+/* returns pdn_name if addr prefix matches ext_route_prefix, -1 if not */
+char* IPACM_Config::is_ext_route_ipv6_prefix(uint32_t *addr)
+{
+	list<ext_router_prefix_info>::iterator it;
+
+	for(it = ext_router_prefix.begin(); it != ext_router_prefix.end(); it++)
+	{
+		if (((addr[0] & it->ipv6_mask[0]) == it->ipv6_addr[0]) &&
+			((addr[1] & it->ipv6_mask[1]) == it->ipv6_addr[1]) &&
+			((addr[2] & it->ipv6_mask[2]) == it->ipv6_addr[2]) &&
+			((addr[3] & it->ipv6_mask[3]) == it->ipv6_addr[3]))
+		{
+			IPACMDBG_H("prefix matches ext router prefix for pdn %s\n", it->pdn_name);
+			return it->pdn_name;
+		}
+	}
+	IPACMDBG("no match for [%X][%X]\n", addr[0], addr[1]);
+	return NULL;
 }

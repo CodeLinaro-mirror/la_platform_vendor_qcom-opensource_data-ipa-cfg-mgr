@@ -169,6 +169,9 @@ typedef struct _ipa_eth_client
 	uint16_t vlan_id;
 #endif
 	bool gre_nat_set;
+#ifdef IPA_IOCTL_SET_EXT_ROUTER_MODE
+	uint32_t ext_router_prefix_rt_hdl;
+#endif
 	eth_client_rt_hdl eth_rt_hdl[0]; /* depends on number of tx properties */
 }ipa_eth_client;
 
@@ -331,6 +334,7 @@ public:
 	/* configure private subnet filter rules*/
 	int modify_private_subnet();
 	virtual int handle_private_subnet(ipa_ip_type iptype);
+	int eth_bridge_get_vlan_hdr_template_hdl(uint32_t *hdr_hdl, uint16_t vlan_id);
 #ifdef FEATURE_VLAN_MPDN
 	int add_vlan_private_subnet(ipacm_bridge *bridge);
 	int modify_ipv6_prefix_flt_rule();
@@ -345,6 +349,10 @@ public:
 	int handle_del_ipv6_addr(ipacm_event_data_all *data);
 
 	int check_neigh_ipv4(ipacm_event_data_all *data);
+
+	int handle_ext_router_add_evt(char* pdn_name, uint8_t *mac_addr, uint16_t vid);
+
+	int handle_ext_router_del_evt(void);
 
 	static bool odu_up;
 
@@ -541,7 +549,7 @@ public:
 	int install_ipv4_icmp_flt_rule();
 
 	/* add header processing context and return handle to lan2lan controller */
-	int eth_bridge_add_hdr_proc_ctx(ipa_hdr_l2_type peer_l2_hdr_type, uint32_t *hdl);
+	int eth_bridge_add_hdr_proc_ctx(ipa_hdr_l2_type peer_l2_hdr_type, uint32_t *hdl, uint16_t vlan_id);
 
 	/* add routing rule and return handle to lan2lan controller */
 	int eth_bridge_add_rt_rule(uint8_t *mac, char *rt_tbl_name, uint32_t hdr_proc_ctx_hdl,
@@ -1102,6 +1110,14 @@ protected:
 	uint32_t l2tp_udp_dflt_flt_rule_hdl[NUM_L2TP_UDP_DFLT_RULES];
 #endif
 #endif
+
+#ifdef IPA_IOCTL_SET_EXT_ROUTER_MODE
+	/*Ext router mode hdls*/
+	uint32_t ext_router_rmnet_ipv6_hdl;
+	uint32_t ext_router_flt_rule_hdl;
+	char ext_router_pdn_name[IPA_IFACE_NAME_LEN];
+#endif
+
 	int post_lan_up_event(const ipacm_event_data_addr* data) const;
 
 	xlat_context xlat_ctx;

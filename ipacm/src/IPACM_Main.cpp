@@ -86,7 +86,7 @@
 #define IPACM_CFG_FILE_NAME    "IPACM_cfg.xml"
 #ifndef FEATURE_IPA_ANDROID
 #define IPACM_PID_FILE "/var/run/data/ipa/ipacm.pid"
-#define IPACM_DIR_NAME     "/systemrw/data/ipa"
+#define IPACM_DIR_NAME     "/etc/data/ipa"
 #else
 #define IPACM_PID_FILE "/data/misc/ipa/ipacm.pid"
 #define IPACM_DIR_NAME     "/data/misc/ipa/"
@@ -291,6 +291,7 @@ void* ipa_driver_msg_notifier(void *param)
 	struct ipa_move_nat_req_msg_v01 *move_nat;
 	ipacm_event_move_nat *move_nat_data;
 	struct ipa_macsec_map *macsec_map = NULL;
+	char* pdn_name = NULL;
 	int CurrentIfaceIndex;
 
 	fd = open(IPA_DRIVER, O_RDWR);
@@ -463,6 +464,7 @@ void* ipa_driver_msg_notifier(void *param)
 						event_ex->num_of_attribs * sizeof(ipa_wlan_hdr_attrib_val));
 
 			ipa_get_if_index(event_ex->name, &(data_ex->if_index));
+			IPACMDBG_H("Received interface index %d for interface name %s\n",data_ex->if_index, event_ex->name);
 			evt_data.event = IPA_WLAN_CLIENT_ADD_EVENT_EX;
 			evt_data.evt_data = data_ex;
 
@@ -474,6 +476,7 @@ void* ipa_driver_msg_notifier(void *param)
 				goto done;
 			}
 			memset(new_neigh_data, 0, sizeof(ipacm_event_data_all));
+			strlcpy(new_neigh_data->iface_name, event_ex->name, IPA_IFACE_NAME_LEN);
 			new_neigh_data->iptype = IPA_IP_v6;
 			for(cnt = 0; cnt < event_ex->num_of_attribs; cnt++)
 			{
@@ -488,12 +491,12 @@ void* ipa_driver_msg_notifier(void *param)
 				{
 					IPACMDBG_H("Wlan client id %d\n",event_ex->attribs[cnt].u.sta_id);
 				}
-#ifdef WLAN_HDR_ATTRIB_TA_PEER_ID
+	#ifdef WLAN_HDR_ATTRIB_TA_PEER_ID
 				else if(event_ex->attribs[cnt].attrib_type == WLAN_HDR_ATTRIB_TA_PEER_ID)
 				{
 					IPACMDBG_H("Wlan ta peer id %d\n",event_ex->attribs[cnt].u.ta_peer_id);
 				}
-#endif
+	#endif
 				else
 				{
 					IPACMDBG_H("Wlan message has unexpected type!\n");
@@ -502,6 +505,7 @@ void* ipa_driver_msg_notifier(void *param)
 			new_neigh_data->if_index = data_ex->if_index;
 			new_neigh_evt.evt_data = (void*)new_neigh_data;
 			new_neigh_evt.event = IPA_NEW_NEIGH_EVENT;
+
 			free(event_ex);
 			break;
 
@@ -1251,10 +1255,76 @@ void* ipa_driver_msg_notifier(void *param)
 
 			break;
 
+#ifdef IPA_IOCTL_SET_EXT_ROUTER_MODE
+		case IPA_SET_EXT_ROUTER_MODE_EVENT:
+			IPACMDBG_H("Received IPA_SET_EXT_ROUTER_MODE_EVENT\n");
+
+			ipa_ioc_ext_router_info ext_router_info;
+			memcpy(&ext_router_info, buffer + sizeof(struct ipa_msg_meta),
+				sizeof(struct ipa_ioc_ext_router_info));
+
+			IPACMDBG_H("got ext_router_info - mode:%d, pdn_name:%s\nv6_addr:0x%08x:%08x:%08x:%08x\nv6_mask:0x%08x:%08x:%08x:%08x\n",
+				ext_router_info.mode, ext_router_info.pdn_name,
+				ext_router_info.ipv6_addr[0], ext_router_info.ipv6_addr[1], ext_router_info.ipv6_addr[2], ext_router_info.ipv6_addr[3],
+				ext_router_info.ipv6_mask[0], ext_router_info.ipv6_mask[1], ext_router_info.ipv6_mask[2], ext_router_info.ipv6_mask[3]);
+
+			if (IPACM_Iface::ipacmcfg->ext_router_mode == IPA_PREFIX_DISABLED && ext_router_info.mode == IPA_PREFIX_DISABLED )
+			{
+				IPACMERR("IPACM is already in ext_router disabled mode\n");
+				break;
+			}
+			else if (IPACM_Iface::ipacmcfg->ext_router_mode == IPA_PREFIX_SHARING && ext_router_info.mode == IPA_PREFIX_DELEGATION ||
+				IPACM_Iface::ipacmcfg->ext_router_mode == IPA_PREFIX_DELEGATION && ext_router_info.mode == IPA_PREFIX_SHARING)
+			{
+				IPACMERR("IPACM cannot toggle between modes without disabling first\n");
+				break;
+			}
+			else
+			{
+				/* update the mode */
+				IPACM_Iface::ipacmcfg->ext_router_mode = ext_router_info.mode;
+			}
+
+			pdn_name = (char*) malloc(IPA_IFACE_NAME_LEN * sizeof(*pdn_name));
+			if (pdn_name == NULL)
+			{
+				IPACMERR("unable to allocate memory for pdn_name\n");
+				goto done;
+			}
+			strlcpy(pdn_name, ext_router_info.pdn_name, IPA_RESOURCE_NAME_MAX);
+
+			/* cache the info */
+			if (ext_router_info.mode != IPA_PREFIX_DISABLED)
+			{
+				if(IPACM_Iface::ipacmcfg->add_ext_router_info(&ext_router_info) == false)
+				{
+					IPACMERR("failed to add ext_router_info for pdn_name:%s\n", pdn_name);
+					free(pdn_name);
+					goto done;
+				}
+				/* prep the event to add the rules if neighbor entry has been added already*/
+				evt_data.event = IPA_ADD_EXT_ROUTER_RULES;
+
+			}
+			else /* disable case */
+			{
+				/*delete the cached info*/
+				if(IPACM_Iface::ipacmcfg->del_ext_router_info(pdn_name) == false) //might need to move this to LAN so we can delete rules first then remove cache
+				{
+					IPACMERR("failed to del ext_router_info for pdn_name:%s\n", pdn_name);
+					free(pdn_name);
+					goto done;
+				}
+				/* prep the event to delete the rules */
+				evt_data.event = IPA_DEL_EXT_ROUTER_RULES;
+			}
+			evt_data.evt_data = pdn_name;
+			break;
+#endif
+
 		default:
 			IPACMDBG_H("Unhandled message type: %d\n", event_hdr.msg_type);
 			continue;
-
 		}
 		/* finish command queue */
 		IPACMDBG_H("Posting event:%d\n", evt_data.event);

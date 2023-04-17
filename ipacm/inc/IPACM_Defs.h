@@ -1,6 +1,5 @@
 /*
 Copyright (c) 2013-2021, The Linux Foundation. All rights reserved.
-Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are
@@ -324,16 +323,16 @@ typedef enum
 	IPA_IPPT_SW_FLT_LIST_UPDATE_EVENT,        /* ipa_ippt_sw_flt_list_type */
 #endif
 	IPA_MOVE_NAT_TBL_EVENT,                   /* ipacm_event_move_nat */
-
 #ifdef FEATURE_EoGRE
 	IPA_HANDLE_EoGRE_UP,                      /* ipa_ipgre_info */
 	IPA_HANDLE_EoGRE_DOWN,                    /* ipa_ipgre_info */
 #endif
-
 	IPA_HANDLE_MACSEC_ADD,                    /* ipa_macsec_map */
 	IPA_HANDLE_MACSEC_DEL,                    /* ipa_macsec_map */
 	IPA_ADD_BRIDGE_VLAN_PHY_INTF,
 	IPA_ADD_BRIDGE_VLAN_BR_INTF,
+	IPA_ADD_EXT_ROUTER_RULES,                 /* char */
+	IPA_DEL_EXT_ROUTER_RULES,                 /* char* */
 	IPACM_EVENT_MAX
 } ipa_cm_event_id;
 
@@ -671,4 +670,18 @@ typedef struct _ipacm_event_mtu_info
 	ipa_mtu_info mtu_info;
 } ipacm_event_mtu_info;
 #endif
+
+typedef struct _svap_vlan_hpc_hdl
+{
+	uint16_t vlan_id;
+	ipa_hdr_l2_type peer_l2_type;
+	uint32_t hpc_hdr_hdl;
+}svap_vlan_hpc_hdl;
+
+typedef struct ext_router_prefix_info
+{
+	uint32_t ipv6_addr[4];
+	uint32_t ipv6_mask[4];
+	char pdn_name[IPA_IFACE_NAME_LEN];
+};
 #endif /* IPA_CM_DEFS_H */

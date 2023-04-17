@@ -182,6 +182,13 @@ IPACM_Lan::IPACM_Lan(int iface_index) : IPACM_Iface(iface_index)
         socksv5_flt_hdl_v6 = 0;
 #endif
 
+#ifdef IPA_IOCTL_SET_EXT_ROUTER_MODE
+        /* support one router case. Need to extend for multi router*/
+	ext_router_rmnet_ipv6_hdl = 0;
+	ext_router_flt_rule_hdl = 0;
+	memset(ext_router_pdn_name, 0, sizeof(ext_router_pdn_name));
+#endif
+
 	/* support eth multiple clients */
 	if(iface_query != NULL)
 	{
@@ -386,6 +393,7 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 	ipacm_cmd_q_data evt_data;
 	int clnt_indx;
 	ipa_macsec_map *map;
+	ipa_ioc_ext_router_info *info;
 
 	switch (event)
 	{
@@ -1190,13 +1198,17 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 						eth_index = get_eth_client_index(data->mac_addr);
 						retval = handle_eth_client_route_rule_ext_v2(data->mac_addr, data->iptype,
 							get_client_memptr(eth_client, eth_index)->dl_cnt_idx);
+						HandleNeighIpAddrAddEvt(data);
 						IPACMDBG_H("Route install retval = %d\n", retval);
 					}
 					else
 #endif //IPA_HW_FNR_STATS
 					{
 						if(IPACM_Iface::ipacmcfg->mac_addr_in_blacklist(data->mac_addr) == false)
+						{
 							handle_eth_client_route_rule_ext(data->mac_addr, data->iptype);
+							HandleNeighIpAddrAddEvt(data);
+						}
 					}
 				}
 #endif
@@ -1441,7 +1453,7 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 		{
 			ipacm_event_data_fid *data = (ipacm_event_data_fid *)param;
 
-			IPACMDBG_H("Received IPA_LAN_CLIENT_CONNECT_EVENT\n");
+			IPACMDBG_H("Received IPA_PREFIX_CHANGE_EVENT\n");
 			if(ipa_if_num != data->if_index)
 				modify_ipv6_prefix_flt_rule();
 			else
@@ -1666,6 +1678,36 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 			phy_dev_name[0] = '\0';
 		}
 		break;
+
+	case IPA_ADD_EXT_ROUTER_RULES:
+		IPACMDBG_H("Received and will process IPA_ADD_EXT_ROUTER_RULES\n");
+
+		for (it = neigh_cache.begin(); it != neigh_cache.end(); ++it)
+		{
+			if (IPACM_Iface::ipacmcfg->is_ext_route_ipv6_prefix(it->ipv6_addr))
+			{
+				IPACMDBG_H("Found cached client v6 addr : 0x%08x:%08x:%08x:%08x MAC %02x:%02x:%02x:%02x:%02x:%02x\n",
+					it->ipv6_addr[0], it->ipv6_addr[1], it->ipv6_addr[2], it->ipv6_addr[3],
+					it->mac_addr[0], it->mac_addr[1], it->mac_addr[2], it->mac_addr[3], it->mac_addr[4], it->mac_addr[5]);
+				handle_ext_router_add_evt((char*)param, it->mac_addr, 0); //can query vlan id instead of 0 for future vlan support
+				break; //for MVLAN might need to remove the break to handle all the prefixes
+			}
+		}
+		IPACMDBG_H("Dummy prefix neighbor hasn't been added yet, wait until new neighbor to install ext route rules\n");
+		break;
+
+	case IPA_DEL_EXT_ROUTER_RULES:
+		IPACMDBG_H("Received and will process IPA_DEL_EXT_ROUTER_RULES\n");
+
+		if(strncmp(ext_router_pdn_name, (char*)param, sizeof(ext_router_pdn_name)) == 0)
+		{
+			IPACMDBG_H("Deleting ext route rules for lan client %s, pdn %s\n", dev_name, param);
+
+			if(handle_ext_router_del_evt() == IPACM_FAILURE)
+				IPACMERR("failed deleting ext route mode rules");
+		}
+		break;
+
 	default:
 		break;
 	}
@@ -2456,6 +2498,8 @@ int IPACM_Lan::handle_vlan_neighbor(ipacm_event_data_all *data)
 		return IPACM_FAILURE;
 	}
 
+	/* TODO for VLAN: Need to return success above and handle the ext router info here */
+
 	handle_eth_client_route_rule(data->mac_addr, data->iptype, vlan_id);
 
 	if(IPACM_Iface::ipacmcfg->ipacm_mpdn_enable) {
@@ -3217,17 +3261,13 @@ int IPACM_Lan::handle_addr_evt(ipacm_event_data_addr *data)
 
 		/* ICMP rule is 1st to keep consistent with v6 and to use as offset for L2L rules */
 		install_ipv4_icmp_flt_rule();
+
+		add_tcp_syn_flt_rule(data->iptype);
+
 		/* initial fragment/multicast/broadcast/filter rule. Fragment has set_rear = false, will be above icmp rule */
 		init_fl_rule(data->iptype);
 
-#ifdef FEATURE_L2TP
-		if((IPACM_Iface::ipacmcfg->ipacm_l2tp_enable == IPACM_L2TP) &&
-			ipa_if_cate == WLAN_IF)
-		{
-			add_tcp_syn_flt_rule(data->iptype);
-		}
-#endif
-		/* populate the flt rule offset for eth bridge (offset = icmp) */
+		/* populate the flt rule offset for eth bridge */
 		eth_bridge_flt_rule_offset[data->iptype] = ipv4_icmp_flt_rule_hdl[0];
 		/* populate the flt rule offset for mtu_offset (offset = broadcast rule)*/
 		if (m_ipv4_default_filterting_rules_count)
@@ -3322,14 +3362,13 @@ int IPACM_Lan::handle_addr_evt(ipacm_event_data_addr *data)
 
 		if (num_dft_rt_v6 == 0)
 		{
+			/* Always adding tcp syn SW-exception rule for MSS clamping support */
+			add_tcp_syn_flt_rule(data->iptype);
+
 #ifdef FEATURE_L2TP
 			if (IPACM_Iface::ipacmcfg->ipacm_l2tp_enable == IPACM_L2TP)
 			{
-				if(ipa_if_cate == WLAN_IF)
-				{
-					add_tcp_syn_flt_rule(data->iptype);
-				}
-				else if(ipa_if_cate == ODU_IF)
+				if(ipa_if_cate == ODU_IF)
 				{
 #ifndef IPA_L2TP_TUNNEL_UDP
 					add_tcp_syn_flt_rule_l2tp(IPA_IP_v4);
@@ -4786,6 +4825,20 @@ int IPACM_Lan::handle_eth_client_ipaddr(ipacm_event_data_all *data)
 					memcmp(ipv6_prefix, data->ipv6_addr, sizeof(ipv6_prefix)) != 0)
 #endif
 				{
+
+					/* TODO: Do we need to add neighbor to cache? do we need to update neighbor and rt_hdl_v6_list? */
+					if(IPACM_Iface::ipacmcfg->ext_router_mode != IPA_PREFIX_DISABLED)
+					{
+						char* pdn_name = IPACM_Iface::ipacmcfg->is_ext_route_ipv6_prefix(data->ipv6_addr);
+						if (pdn_name != NULL)
+						{
+							if(handle_ext_router_add_evt(pdn_name, data->mac_addr, vlan_id) == IPACM_FAILURE)
+								IPACMERR("failed to handle handle_ext_router_add_evt\n");
+
+							return IPACM_FAILURE;  /* if yes then we can take this out */
+						}
+					}
+
 					if (neigh_cache.size() < 2*IPA_MAX_NUM_HW_PATH_CLIENTS)
 					{
 						for (it = neigh_cache.begin(); it != neigh_cache.end(); ++it)
@@ -6187,6 +6240,18 @@ int IPACM_Lan::handle_eth_client_down_evt(uint8_t *mac_addr, uint16_t vlan_id, i
 		return IPACM_FAILURE;
 	}
 
+	//delete ext route rules if set
+	if(get_client_memptr(eth_client, clt_indx)->ext_router_prefix_rt_hdl)
+	{
+		IPACMDBG("deleting rt_rule_hdl = %d\n", get_client_memptr(eth_client, clt_indx)->ext_router_prefix_rt_hdl);
+		if(m_routing.DeleteRoutingHdl(get_client_memptr(eth_client, clt_indx)->ext_router_prefix_rt_hdl, IPA_IP_v6) == false)
+		{
+			IPACMERR("Failed to del ext_route rt_rule\n");
+			return IPACM_FAILURE;
+		}
+		get_client_memptr(eth_client, clt_indx)->ext_router_prefix_rt_hdl = 0; //do we need or will it be cleared automatically?
+	}
+
 	/* Delete eth client header */
 	if(get_client_memptr(eth_client, clt_indx)->ipv4_header_set == true)
 	{
@@ -6606,7 +6671,7 @@ int IPACM_Lan::handle_down_evt()
 	}
 #endif
 
-	/* delete default filter rules */
+	/* Delete v4 default filtering rules */
 	if (ip_type != IPA_IP_v6 && rx_prop != NULL)
 	{
 		res = delete_icmp_filter_rule(IPA_IP_v4);
@@ -6640,9 +6705,19 @@ int IPACM_Lan::handle_down_evt()
 		IPACM_Iface::ipacmcfg->decreaseFltRuleCount(rx_prop->rx[0].src_pipe, IPA_IP_v4, num_wan_subnet_rules);
 		num_wan_subnet_rules = 0;
 		IPACMDBG_H("Deleted private subnet v4 filter rules successfully.\n");
+
+		if(m_filtering.DeleteFilteringHdls(&tcp_syn_flt_rule_hdl[IPA_IP_v4], IPA_IP_v4, 1) == false)
+		{
+			IPACMERR("Error deleting tcp syn flt rule, aborting...\n");
+			res = IPACM_FAILURE;
+			goto fail;
+		}
+		IPACM_Iface::ipacmcfg->decreaseFltRuleCount(rx_prop->rx[0].src_pipe, IPA_IP_v4, 1);
+		IPACMDBG_H("Deleted TCP syn v4 filter rules successfully.\n");
 	}
 	IPACMDBG_H("Finished delete default iface ipv4 filtering rules \n ");
 
+	/* Delete v6 filtering rules */
 	if (ip_type != IPA_IP_v4 && rx_prop != NULL)
 	{
 		res = delete_icmp_filter_rule(IPA_IP_v6);
@@ -6686,16 +6761,20 @@ int IPACM_Lan::handle_down_evt()
 			goto fail;
 		}
 
+		if(m_filtering.DeleteFilteringHdls(&tcp_syn_flt_rule_hdl[IPA_IP_v6], IPA_IP_v6, 1) == false)
+		{
+			IPACMERR("Error deleting tcp syn flt rule, aborting...\n");
+			res = IPACM_FAILURE;
+			goto fail;
+		}
+
+		IPACM_Iface::ipacmcfg->decreaseFltRuleCount(rx_prop->rx[0].src_pipe, IPA_IP_v6, 1);
+		IPACMDBG_H("Deleted TCP syn v6 filter rules successfully.\n");
+
 #ifdef FEATURE_L2TP
 		if((IPACM_Iface::ipacmcfg->ipacm_l2tp_enable == IPACM_L2TP) &&
 			ipa_if_cate == ODU_IF)
 		{
-			if(m_filtering.DeleteFilteringHdls(tcp_syn_flt_rule_hdl, IPA_IP_v6, IPA_IP_MAX) == false)
-			{
-				IPACMERR("Error Deleting TCP SYN L2TP Filtering Rule, aborting...\n");
-				res = IPACM_FAILURE;
-				goto fail;
-			}
 #ifdef IPA_L2TP_TUNNEL_UDP
 			if(del_l2tp_udp_dflt_flt_rules(l2tp_udp_dflt_flt_rule_hdl) == IPACM_FAILURE)
 			{
@@ -6990,6 +7069,11 @@ fail:
 			reset_lan_stats_index();
 		}
 #endif
+
+	//delete ext_route_rules here if mode is enabled
+	if (IPACM_Iface::ipacmcfg->ext_router_mode != IPA_PREFIX_DISABLED)
+		if(handle_ext_router_del_evt() == IPACM_FAILURE)
+			IPACMERR("failed deleting ext route mode rules");
 
 	neigh_cache.clear();
 	/* check software routing fl rule hdl */
@@ -9949,10 +10033,15 @@ int IPACM_Lan::install_ipv4_icmp_flt_rule()
 	int ret = IPACM_SUCCESS;
 	struct ipa_ioc_add_flt_rule_v2 *flt_rule;
 	struct ipa_flt_rule_add_v2 *flt_rule_entry;
+	int idx = 0;
 
-	if(rx_prop != NULL)
-	{
-		IPACMDBG_H("Will attempt add v4 icmp filter rule\n");
+	if ((ipa_if_cate == WLAN_IF) && is_if_svap && (rx_prop->num_rx_props > 2)) {
+		idx = 2;
+		IPACMDBG_H("Interface is WLAN Svap, install rules on Rx pipe at idx %d \n", idx);
+	}
+
+	if (rx_prop != NULL) {
+		IPACMDBG_H("Will attempt to add v4 icmp filter rule for prop idx %d\n", idx);
 
 #ifdef FEATURE_EoGRE
 		bool eogre_enabled = IPACM_Iface::ipacmcfg->eogre_enabled;
@@ -9962,29 +10051,28 @@ int IPACM_Lan::install_ipv4_icmp_flt_rule()
 		/*
 		 * Don't configure icmp when eogre enabled:
 		 */
-		if ( eogre_enabled )
-		{
+		if (eogre_enabled) {
 			IPACMDBG_H("Won't install icmp rule when eogre enabled\n");
 			return ret;
 		}
 
 		static const int NUM_RULES = 1;
 
-		char buf1[ sizeof(struct ipa_ioc_add_flt_rule_v2) ];
+		char buf1[sizeof(struct ipa_ioc_add_flt_rule_v2)];
 
-		flt_rule = (struct ipa_ioc_add_flt_rule_v2 *) buf1;
+		flt_rule = (struct ipa_ioc_add_flt_rule_v2 *)buf1;
 
-		char buf2[ NUM_RULES * sizeof(struct ipa_flt_rule_add_v2) ];
+		char buf2[NUM_RULES * sizeof(struct ipa_flt_rule_add_v2)];
 
-		flt_rule_entry = (struct ipa_flt_rule_add_v2 *) buf2;
+		flt_rule_entry = (struct ipa_flt_rule_add_v2 *)buf2;
 
 		memset(buf1, 0, sizeof(buf1));
 		memset(buf2, 0, sizeof(buf2));
 
-		flt_rule->rules = (uint64_t) flt_rule_entry;
+		flt_rule->rules = (uint64_t)flt_rule_entry;
 
 		flt_rule->commit = 1;
-		flt_rule->ep = rx_prop->rx[0].src_pipe;
+		flt_rule->ep = rx_prop->rx[idx].src_pipe;
 		flt_rule->global = false;
 		flt_rule->ip = IPA_IP_v4;
 		flt_rule->num_rules = NUM_RULES;
@@ -10001,19 +10089,16 @@ int IPACM_Lan::install_ipv4_icmp_flt_rule()
 		flt_rule_entry->rule.hashable = true;
 #endif
 		flt_rule_entry->rule.close_aggr_irq_mod = true;
-		memcpy(&flt_rule_entry->rule.attrib, &rx_prop->rx[0].attrib, sizeof(flt_rule_entry->rule.attrib));
+		memcpy(&flt_rule_entry->rule.attrib, &rx_prop->rx[idx].attrib, sizeof(flt_rule_entry->rule.attrib));
 
 		flt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_PROTOCOL;
 		flt_rule_entry->rule.attrib.u.v4.protocol = (uint8_t)IPACM_FIREWALL_IPPROTO_ICMP;
 
-		if (m_filtering.AddFilteringRule_v2(flt_rule) == false)
-		{
+		if (m_filtering.AddFilteringRule_v2(flt_rule) == false) {
 			IPACMERR("Error Adding Filtering rule, aborting...\n");
 			ret = IPACM_FAILURE;
-		}
-		else
-		{
-			IPACM_Iface::ipacmcfg->increaseFltRuleCount(rx_prop->rx[0].src_pipe, IPA_IP_v4, NUM_RULES);
+		} else {
+			IPACM_Iface::ipacmcfg->increaseFltRuleCount(rx_prop->rx[idx].src_pipe, IPA_IP_v4, NUM_RULES);
 			ipv4_icmp_flt_rule_hdl[0] = flt_rule_entry->flt_rule_hdl;
 			IPACMDBG_H("IPv4 icmp filter rule HDL:0x%x\n", ipv4_icmp_flt_rule_hdl[0]);
 		}
@@ -10027,10 +10112,15 @@ int IPACM_Lan::install_ipv6_icmp_flt_rule()
 	int ret = IPACM_SUCCESS;
 	struct ipa_ioc_add_flt_rule_v2 *flt_rule;
 	struct ipa_flt_rule_add_v2 *flt_rule_entry;
+	int idx = 0;
 
-	if(rx_prop != NULL)
-	{
-		IPACMDBG_H("Will attempt to add v6 icmp filter rule\n");
+	if ((ipa_if_cate == WLAN_IF) && is_if_svap && (rx_prop->num_rx_props > 2)) {
+		idx = 2;
+		IPACMDBG_H("Interface is WLAN Svap, install rules on Rx1 pipe at idx %d \n", idx);
+	}
+
+	if (rx_prop != NULL) {
+		IPACMDBG_H("Will attempt to add v6 icmp filter rule for prop idx %d\n", idx);
 
 #ifdef FEATURE_EoGRE
 		bool eogre_enabled = IPACM_Iface::ipacmcfg->eogre_enabled;
@@ -10040,29 +10130,28 @@ int IPACM_Lan::install_ipv6_icmp_flt_rule()
 		/*
 		 * Don't configure icmp when eogre enabled:
 		 */
-		if ( eogre_enabled )
-		{
+		if (eogre_enabled) {
 			IPACMDBG_H("Won't install icmp rule when eogre enabled\n");
 			return ret;
 		}
 
 		static const int NUM_RULES = 1;
 
-		char buf1[ sizeof(struct ipa_ioc_add_flt_rule_v2) ];
+		char buf1[sizeof(struct ipa_ioc_add_flt_rule_v2)];
 
-		flt_rule = (struct ipa_ioc_add_flt_rule_v2 *) buf1;
+		flt_rule = (struct ipa_ioc_add_flt_rule_v2 *)buf1;
 
-		char buf2[ NUM_RULES * sizeof(struct ipa_flt_rule_add_v2) ];
+		char buf2[NUM_RULES * sizeof(struct ipa_flt_rule_add_v2)];
 
-		flt_rule_entry = (struct ipa_flt_rule_add_v2 *) buf2;
+		flt_rule_entry = (struct ipa_flt_rule_add_v2 *)buf2;
 
 		memset(buf1, 0, sizeof(buf1));
 		memset(buf2, 0, sizeof(buf2));
 
-		flt_rule->rules = (uint64_t) flt_rule_entry;
+		flt_rule->rules = (uint64_t)flt_rule_entry;
 
 		flt_rule->commit = 1;
-		flt_rule->ep = rx_prop->rx[0].src_pipe;
+		flt_rule->ep = rx_prop->rx[idx].src_pipe;
 		flt_rule->global = false;
 		flt_rule->ip = IPA_IP_v6;
 		flt_rule->num_rules = NUM_RULES;
@@ -10079,19 +10168,16 @@ int IPACM_Lan::install_ipv6_icmp_flt_rule()
 		flt_rule_entry->rule.hashable = false;
 #endif
 		flt_rule_entry->rule.close_aggr_irq_mod = true;
-		memcpy(&flt_rule_entry->rule.attrib, &rx_prop->rx[0].attrib, sizeof(flt_rule_entry->rule.attrib));
+		memcpy(&flt_rule_entry->rule.attrib, &rx_prop->rx[idx].attrib, sizeof(flt_rule_entry->rule.attrib));
 
 		flt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_NEXT_HDR;
 		flt_rule_entry->rule.attrib.u.v6.next_hdr = (uint8_t)IPACM_FIREWALL_IPPROTO_ICMP6;
 
-		if (m_filtering.AddFilteringRule_v2(flt_rule) == false)
-		{
+		if (m_filtering.AddFilteringRule_v2(flt_rule) == false) {
 			IPACMERR("Error Adding Filtering rule, aborting...\n");
 			ret = IPACM_FAILURE;
-		}
-		else
-		{
-			IPACM_Iface::ipacmcfg->increaseFltRuleCount(rx_prop->rx[0].src_pipe, IPA_IP_v6, NUM_RULES);
+		} else {
+			IPACM_Iface::ipacmcfg->increaseFltRuleCount(rx_prop->rx[idx].src_pipe, IPA_IP_v6, NUM_RULES);
 			ipv6_icmp_flt_rule_hdl[0] = flt_rule_entry->flt_rule_hdl;
 			IPACMDBG_H("IPv6 icmp filter rule HDL:0x%x\n", ipv6_icmp_flt_rule_hdl[0]);
 		}
@@ -10174,11 +10260,17 @@ int IPACM_Lan::modify_private_subnet()
 	uint16_t mtu[IPA_MAX_MTU_ENTRIES] = { };
 	uint16_t vid[IPA_MAX_MTU_ENTRIES] = { };
 	int mtu_rule_idx = IPACM_Iface::ipacmcfg->ipa_num_private_subnet;
+	int idx = 0;
 
 	if(ip_type == IPA_IP_v6)
 	{
 		IPACMERR("inconsistent iptype. iptype = %d\n", ip_type);
 		return IPACM_FAILURE;
+	}
+
+	if ((ipa_if_cate == WLAN_IF) && is_if_svap && (rx_prop->num_rx_props > 2)) {
+		idx = 2;
+		IPACMDBG_H("Interface is WLAN Svap, install rules on Rx pipe at idx %d \n", idx);
 	}
 
 	if(num_wan_subnet_rules > 0)
@@ -10188,7 +10280,7 @@ int IPACM_Lan::modify_private_subnet()
 			IPACMERR("Error deleting private subnet IPv4 flt rules.\n");
 			return IPACM_FAILURE;
 		}
-		IPACM_Iface::ipacmcfg->decreaseFltRuleCount(rx_prop->rx[0].src_pipe, IPA_IP_v4, num_wan_subnet_rules);
+		IPACM_Iface::ipacmcfg->decreaseFltRuleCount(rx_prop->rx[idx].src_pipe, IPA_IP_v4, num_wan_subnet_rules);
 		num_wan_subnet_rules = 0;
 	}
 
@@ -10288,8 +10380,9 @@ int IPACM_Lan::modify_private_subnet()
 	pFilteringTable->commit = 1;
 	pFilteringTable->ip = IPA_IP_v4;
 	pFilteringTable->num_rules = num_wan_subnet_rules = (uint8_t)IPACM_Iface::ipacmcfg->ipa_num_private_subnet + mtu_rule_cnt;
-	pFilteringTable->ep = rx_prop->rx[0].src_pipe;
+	pFilteringTable->ep = rx_prop->rx[idx].src_pipe;
 	pFilteringTable->add_after_hdl = mtu_flt_rule_offset[IPA_IP_v4];
+	IPACMDBG_H("pFilteringTable->add_after_hdl 0x%x\n", pFilteringTable->add_after_hdl);
 
 	/* Make LAN-traffic always go A5, use default IPA-RT table */
 	if(false == m_routing.GetRoutingTable(&IPACM_Iface::ipacmcfg->rt_tbl_default_v4))
@@ -10315,7 +10408,7 @@ int IPACM_Lan::modify_private_subnet()
 		/* add private subnet rule for ipv4 */
 		flt_rule.rule.action = IPA_PASS_TO_ROUTING;
 		flt_rule.rule.eq_attrib_type = 0;
-		memcpy(&flt_rule.rule.attrib, &rx_prop->rx[0].attrib, sizeof(flt_rule.rule.attrib));
+		memcpy(&flt_rule.rule.attrib, &rx_prop->rx[idx].attrib, sizeof(flt_rule.rule.attrib));
 		flt_rule.rule.attrib.attrib_mask |= IPA_FLT_DST_ADDR;
 		flt_rule.rule.attrib.u.v4.dst_addr_mask = IPACM_Iface::ipacmcfg->private_subnet_table[i].subnet_mask;
 		flt_rule.rule.attrib.u.v4.dst_addr = IPACM_Iface::ipacmcfg->private_subnet_table[i].subnet_addr;
@@ -10325,7 +10418,7 @@ int IPACM_Lan::modify_private_subnet()
 		/* add corresponding MTU rule for ipv4 */
 		if (mtu[i] > 0 && mtu[i] < DEFAULT_MTU_SIZE)
 		{
-			memcpy(&flt_rule.rule.attrib, &rx_prop->rx[0].attrib, sizeof(flt_rule.rule.attrib));
+			memcpy(&flt_rule.rule.attrib, &rx_prop->rx[idx].attrib, sizeof(flt_rule.rule.attrib));
 
 			/* if Vlan enabled, add vlan id as a parameter of the MTU rule*/
 			if(vid[i])
@@ -10359,7 +10452,7 @@ int IPACM_Lan::modify_private_subnet()
 		res = IPACM_FAILURE;
 		goto fail;
 	}
-	IPACM_Iface::ipacmcfg->increaseFltRuleCount(rx_prop->rx[0].src_pipe, IPA_IP_v4, num_wan_subnet_rules);
+	IPACM_Iface::ipacmcfg->increaseFltRuleCount(rx_prop->rx[idx].src_pipe, IPA_IP_v4, num_wan_subnet_rules);
 
 	/* save the rule hdls */
 	for (i = 0; i < num_wan_subnet_rules; i++)
@@ -10579,6 +10672,7 @@ int IPACM_Lan::modify_ipv6_prefix_flt_rule()
 				flt_rule.rule.attrib.attrib_mask |= IPA_FLT_VLAN_ID;
 				flt_rule.rule.attrib.vlan_id = vid[i];
 			}
+
 			if (construct_mtu_rule(&flt_rule.rule, IPA_IP_v6, mtu[i]))
 				IPACMERR("Failed to modify MTU filtering rule.\n");
 			memcpy(&(pFilteringTable->rules[mtu_rule_idx]), &flt_rule, sizeof(struct ipa_flt_rule_add));
@@ -10902,6 +10996,11 @@ ipa_hdr_proc_type IPACM_Lan::eth_bridge_get_hdr_proc_type(ipa_hdr_l2_type t1,
 #ifdef IPA_HDR_L2_ETHERNET_II_AST
 		if(t2 == IPA_HDR_L2_ETHERNET_II_AST)
 			return IPA_HDR_PROC_ETHII_TO_ETHII;
+		if (t2 == IPA_HDR_L2_802_1Q_AST) {
+			generic_params.input_ethhdr_negative_offset = 14;
+			generic_params.output_ethhdr_negative_offset = 18;
+			return IPA_HDR_PROC_ETHII_TO_ETHII_EX;
+		}
 #endif
 		break;
 	case IPA_HDR_L2_802_3:
@@ -10910,17 +11009,29 @@ ipa_hdr_proc_type IPACM_Lan::eth_bridge_get_hdr_proc_type(ipa_hdr_l2_type t1,
 		if(t2 == IPA_HDR_L2_802_3)
 			return IPA_HDR_PROC_802_3_TO_802_3;
 		break;
+#ifdef IPA_HDR_L2_ETHERNET_II_AST
 	case IPA_HDR_L2_802_1Q:
-		if(t2 == IPA_HDR_L2_802_1Q) {
+		if(t2 == IPA_HDR_L2_802_1Q || t2 == IPA_HDR_L2_802_1Q_AST) {
 			generic_params.input_ethhdr_negative_offset = 18;
 			generic_params.output_ethhdr_negative_offset = 18;
 			return IPA_HDR_PROC_ETHII_TO_ETHII_EX;
 		}
 		break;
-#ifdef IPA_HDR_L2_ETHERNET_II_AST
 	case IPA_HDR_L2_ETHERNET_II_AST:
 		if(t2 == IPA_HDR_L2_ETHERNET_II || t2 == IPA_HDR_L2_ETHERNET_II_AST) {
 			generic_params.input_ethhdr_negative_offset = 14;
+			generic_params.output_ethhdr_negative_offset = 14;
+			return IPA_HDR_PROC_ETHII_TO_ETHII_EX;
+		}
+		else if(t2 == IPA_HDR_L2_802_1Q_AST){
+			generic_params.input_ethhdr_negative_offset = 14;
+			generic_params.output_ethhdr_negative_offset = 18;
+			return IPA_HDR_PROC_ETHII_TO_ETHII_EX;
+		}
+		break;
+	case IPA_HDR_L2_802_1Q_AST:
+		if (t2 == IPA_HDR_L2_ETHERNET_II || t2 == IPA_HDR_L2_ETHERNET_II_AST) {
+			generic_params.input_ethhdr_negative_offset = 18;
 			generic_params.output_ethhdr_negative_offset = 14;
 			return IPA_HDR_PROC_ETHII_TO_ETHII_EX;
 		}
@@ -11246,11 +11357,19 @@ void IPACM_Lan::eth_bridge_post_event(ipa_cm_event_id evt, ipa_ip_type iptype, u
 }
 
 /* add header processing context and return handle to lan2lan controller */
-int IPACM_Lan::eth_bridge_add_hdr_proc_ctx(ipa_hdr_l2_type peer_l2_hdr_type, uint32_t *hdl)
+int IPACM_Lan::eth_bridge_add_hdr_proc_ctx(ipa_hdr_l2_type peer_l2_hdr_type, uint32_t *hdl, uint16_t vlan_id)
 {
 	int len, res = IPACM_SUCCESS;
 	uint32_t hdr_template;
 	ipa_ioc_add_hdr_proc_ctx* pHeaderProcTable = NULL;
+	ipa_hdr_l2_type t2_hdr;
+
+	if (ipa_if_cate == WLAN_IF && ((IPACM_Wlan *)this)->is_svap_iface()) {
+		t2_hdr = tx_prop->tx[2].hdr_l2_type;
+	}
+	else {
+		t2_hdr = tx_prop->tx[0].hdr_l2_type;
+	}
 
 	if(tx_prop == NULL)
 	{
@@ -11271,9 +11390,14 @@ int IPACM_Lan::eth_bridge_add_hdr_proc_ctx(ipa_hdr_l2_type peer_l2_hdr_type, uin
 	pHeaderProcTable->num_proc_ctxs = 1;
 	pHeaderProcTable->proc_ctx[0].type =
 		eth_bridge_get_hdr_proc_type(peer_l2_hdr_type,
-			tx_prop->tx[0].hdr_l2_type,
+			t2_hdr,
 			pHeaderProcTable->proc_ctx[0].generic_params);
-	eth_bridge_get_hdr_template_hdl(&hdr_template);
+
+	if (vlan_id)
+		eth_bridge_get_vlan_hdr_template_hdl(&hdr_template, vlan_id);
+	else
+		eth_bridge_get_hdr_template_hdl(&hdr_template);
+
 	pHeaderProcTable->proc_ctx[0].hdr_hdl = hdr_template;
 	if (m_header.AddHeaderProcCtx(pHeaderProcTable) == false)
 	{
@@ -11316,9 +11440,11 @@ int IPACM_Lan::eth_bridge_add_rt_rule(uint8_t *mac, char *rt_tbl_name, uint32_t 
 
 	rt_rule_table->commit = 1;
 	rt_rule_table->ip = iptype;
-	rt_rule_table->num_rules = num_rt_rule;
 	strlcpy(rt_rule_table->rt_tbl_name, rt_tbl_name, sizeof(rt_rule_table->rt_tbl_name));
 	rt_rule_table->rt_tbl_name[IPA_RESOURCE_NAME_MAX-1] = 0;
+
+
+	IPACMDBG_H("Installing rt table rule %s\n", rt_tbl_name);
 
 	memset(&rt_rule, 0, sizeof(ipa_rt_rule_add));
 	rt_rule.at_rear = false;
@@ -11335,6 +11461,14 @@ int IPACM_Lan::eth_bridge_add_rt_rule(uint8_t *mac, char *rt_tbl_name, uint32_t 
 	{
 		if(tx_prop->tx[i].ip == iptype)
 		{
+			if (IPACM_Iface::ipacmcfg->ipacm_emesh_enable && IPACM_Iface::ipacmcfg->ipacm_emesh_mode >= 2) {
+				if (is_if_svap) {
+					if (i < IPA_IP_v4_VLAN) continue;
+				} else {
+					if (i >= IPA_IP_v4_VLAN) continue;
+				}
+			}
+
 			if(position >= num_rt_rule || position >= MAX_NUM_PROP)
 			{
 				IPACMERR("Number of routing rules already exceeds limit.\n");
@@ -11368,6 +11502,9 @@ int IPACM_Lan::eth_bridge_add_rt_rule(uint8_t *mac, char *rt_tbl_name, uint32_t 
 			case IPA_HDR_L2_802_3:
 				rt_rule.rule.attrib.attrib_mask |= IPA_FLT_MAC_DST_ADDR_802_3;
 				break;
+#ifdef IPA_HDR_L2_802_1Q_AST
+			case IPA_HDR_L2_802_1Q_AST:
+#endif
 			case IPA_HDR_L2_802_1Q:
 				rt_rule.rule.attrib.attrib_mask |= IPA_FLT_MAC_DST_ADDR_802_1Q;
 				break;
@@ -11383,6 +11520,7 @@ int IPACM_Lan::eth_bridge_add_rt_rule(uint8_t *mac, char *rt_tbl_name, uint32_t 
 			position++;
 		}
 	}
+	rt_rule_table->num_rules = position;
 	if(false == m_routing.AddRoutingRule(rt_rule_table))
 	{
 		IPACMERR("Routing rule addition failed!\n");
@@ -11483,6 +11621,9 @@ int IPACM_Lan::eth_bridge_modify_rt_rule(uint8_t *mac, uint32_t hdr_proc_ctx_hdl
 			case IPA_HDR_L2_802_3:
 				rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_MAC_DST_ADDR_802_3;
 				break;
+#ifdef IPA_HDR_L2_802_1Q_AST
+			case IPA_HDR_L2_802_1Q_AST:
+#endif
 			case IPA_HDR_L2_802_1Q:
 				rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_MAC_DST_ADDR_802_1Q;
 				break;
@@ -11573,6 +11714,9 @@ int IPACM_Lan::eth_bridge_add_flt_rule(uint8_t *mac, uint32_t rt_tbl_hdl, ipa_ip
 	case IPA_HDR_L2_802_3:
 		flt_rule_entry.rule.attrib.attrib_mask |= IPA_FLT_MAC_DST_ADDR_802_3;
 		break;
+#ifdef IPA_HDR_L2_802_1Q_AST
+	case IPA_HDR_L2_802_1Q_AST:
+#endif
 	case IPA_HDR_L2_802_1Q:
 		flt_rule_entry.rule.attrib.attrib_mask |= IPA_FLT_MAC_DST_ADDR_802_1Q;
 		break;
@@ -11654,18 +11798,35 @@ int IPACM_Lan::eth_bridge_del_hdr_proc_ctx(uint32_t hdr_proc_ctx_hdl)
 /* check if the event is associated with vlan interface */
 bool IPACM_Lan::is_vlan_event(char *event_iface_name)
 {
-	int self_name_len, event_iface_name_len;
+	int self_name_len, event_iface_name_len, if_name_len;
+	char if_name[IPA_IFACE_NAME_LEN];
+
 	if(event_iface_name == NULL)
 	{
 		IPACMERR("Invalid input\n");
 		return false;
 	}
 
+	strlcpy(if_name, event_iface_name, IPA_IFACE_NAME_LEN);
 	IPACMDBG_H("Self iface %s, event iface %s\n", dev_name, event_iface_name);
+
+	char* char_idx =  strstr(if_name, ".");
+
+	if (char_idx) {
+		char_idx[0] = '\0';
+		IPACMDBG_H("truncated iface name %s\n", if_name);
+	}
+	else {
+		return false;
+	}
+
 	self_name_len = strlen(dev_name);
 	event_iface_name_len = strlen(event_iface_name);
+	if_name_len = strlen(if_name);
 
-	if(event_iface_name_len > self_name_len && strncmp(dev_name, event_iface_name, self_name_len) == 0)
+	if(event_iface_name_len > self_name_len &&
+	   if_name_len == self_name_len &&
+	   strncmp(dev_name, if_name, self_name_len) == 0)
 	{
 		IPACMDBG_H("This is vlan event.\n");
 		return true;
@@ -13266,6 +13427,7 @@ int IPACM_Lan::add_tcp_syn_flt_rule(ipa_ip_type iptype)
 	}
 
 	tcp_syn_flt_rule_hdl[iptype] = m_pFilteringTable->rules[0].flt_rule_hdl;
+	IPACM_Iface::ipacmcfg->increaseFltRuleCount(rx_prop->rx[0].src_pipe, iptype, 1);
 	free(m_pFilteringTable);
 	return IPACM_SUCCESS;
 }
@@ -15561,3 +15723,295 @@ void IPACM_Lan::eogre_clear_route_data(
 }
 
 #endif /* #ifdef FEATURE_EoGRE */
+
+int IPACM_Lan::eth_bridge_get_vlan_hdr_template_hdl(uint32_t* hdr_hdl, uint16_t vlan_id)
+{
+	struct ipa_ioc_copy_hdr sCopyHeader;
+	struct ipa_ioc_add_hdr hdr;
+	uint8_t hdr_len;
+	struct ipa_ioc_add_hdr *pHeaderDescriptor = NULL;
+	int len = 0;
+
+	memset(&hdr, 0, sizeof(hdr));
+	memset(&sCopyHeader, 0, sizeof(sCopyHeader));
+	memcpy(sCopyHeader.name,
+				tx_prop->tx[2].hdr_name,
+				sizeof(sCopyHeader.name));
+
+	IPACMDBG_H("header name: %s\n", sCopyHeader.name);
+	if (m_header.CopyHeader(&sCopyHeader) == false)
+	{
+		PERROR("ioctl copy header failed");
+		return IPACM_FAILURE;
+	}
+
+	IPACMDBG_H("header length: %d, partial: %d\n", sCopyHeader.hdr_len, sCopyHeader.is_partial);
+
+	hdr_len = sCopyHeader.hdr_len;
+	len = sizeof(struct ipa_ioc_add_hdr) + (1 * sizeof(struct ipa_hdr_add));
+		pHeaderDescriptor = (struct ipa_ioc_add_hdr *)calloc(1, len);
+		if (pHeaderDescriptor == NULL)
+	{
+			IPACMERR("calloc failed to allocate pHeaderDescriptor\n");
+			return IPACM_FAILURE;
+	}
+	pHeaderDescriptor->hdr[0].hdr_len = sCopyHeader.hdr_len;
+	memcpy(pHeaderDescriptor->hdr[0].hdr,
+					sCopyHeader.hdr,
+					pHeaderDescriptor->hdr[0].hdr_len);
+	pHeaderDescriptor->num_hdrs = 1;
+	pHeaderDescriptor->hdr[0].type = sCopyHeader.type;
+	pHeaderDescriptor->hdr[0].hdr_hdl = -1;
+	pHeaderDescriptor->hdr[0].is_partial = sCopyHeader.is_partial;
+	pHeaderDescriptor->hdr[0].status = -1;
+	pHeaderDescriptor->hdr[0].hdr[hdr_len - 3] = (uint8_t)vlan_id & 0xFF;
+	pHeaderDescriptor->hdr[0].hdr[hdr_len - 4] = (uint8_t)(vlan_id >> 8) & 0xFF;
+	memset(pHeaderDescriptor->hdr[0].name, 0,
+					 sizeof(pHeaderDescriptor->hdr[0].name));
+	snprintf(pHeaderDescriptor->hdr[0].name, sizeof(pHeaderDescriptor->hdr[0].name),
+		"ath12_ipv4_vlan%d", vlan_id);
+	if(m_header.AddHeader(pHeaderDescriptor) == false ||
+			pHeaderDescriptor->hdr[0].status != 0)
+	{
+		IPACMERR("ioctl IPA_IOC_ADD_HDR failed: %d\n", pHeaderDescriptor->hdr[0].status);
+		free(pHeaderDescriptor);
+		return IPACM_FAILURE;
+	}
+
+	*hdr_hdl = pHeaderDescriptor->hdr[0].hdr_hdl;
+
+	free(pHeaderDescriptor);
+	return IPACM_SUCCESS;
+}
+
+/* handle ext_route new_address event*/
+int IPACM_Lan::handle_ext_router_add_evt(char* pdn_name, uint8_t *mac_addr, uint16_t vid = 0)
+{
+	struct ipa_ioc_add_rt_rule *rt_rule;
+	struct ipa_rt_rule_add *rt_rule_entry;
+	struct ext_router_prefix_info info;
+	int eth_idx, res = IPACM_SUCCESS;
+	const int NUM_RULES = 1;
+	struct ipa_ioc_get_hdr hdr;
+	struct ipa_flt_rule_add flt_rule;
+	struct ipa_ioc_add_flt_rule_after* pFilteringTable = NULL;
+	int len;
+	uint32_t wan_ipv6_addr[4];
+	memset(&hdr, 0, sizeof(hdr));
+
+	strlcpy(info.pdn_name, pdn_name, sizeof(info.pdn_name));
+	if(IPACM_Iface::ipacmcfg->get_ext_router_info(&info) == IPACM_FAILURE)
+	{
+		IPACMERR("failed to get ext_router_info\n");
+		return IPACM_FAILURE;
+	}
+
+	eth_idx = get_eth_client_index(mac_addr, vid); //if non vlan, it will use 0
+	if(eth_idx == IPACM_INVALID_INDEX)
+	{
+		IPACMDBG_H("Eth client not attached\n");
+		res = IPACM_FAILURE;
+		goto fail;
+	}
+
+	if (get_client_memptr(eth_client, eth_idx)->ext_router_prefix_rt_hdl  != 0)
+	{
+		IPACMDBG_H("External router rules already installed\n");
+		return IPACM_SUCCESS;
+	}
+
+	IPACMDBG_H("set route/filter rule for v6_external router\n");
+	rt_rule = (struct ipa_ioc_add_rt_rule *)
+		 calloc(1, sizeof(struct ipa_ioc_add_rt_rule) + NUM_RULES * sizeof(struct ipa_rt_rule_add));
+	if (!rt_rule)
+	{
+		IPACMERR("Error Locate ipa_ioc_add_rt_rule memory...\n");
+		return IPACM_FAILURE;
+	}
+
+	rt_rule->commit = 1;
+	rt_rule->num_rules = NUM_RULES;
+	rt_rule->ip = IPA_IP_v6;
+	strlcpy(rt_rule->rt_tbl_name, IPACM_Iface::ipacmcfg->rt_tbl_wan_v6.name, sizeof(rt_rule->rt_tbl_name));
+	rt_rule_entry = &rt_rule->rules[0];
+	rt_rule_entry->at_rear = false;
+	rt_rule_entry->rule.dst = tx_prop->tx[0].dst_pipe;  //go to eth pipe. need to support dual nic somehow
+	rt_rule_entry->rule.attrib.attrib_mask = IPA_FLT_DST_ADDR;
+
+	rt_rule_entry->rule.hdr_hdl = get_client_memptr(eth_client, eth_idx)->hdr_hdl_v6;
+
+	if (IPACM_Iface::ipacmcfg->ext_router_mode == IPA_PREFIX_SHARING)
+	{
+		//need to query PDN v6 addr from pdn_name
+		if (IPACM_Wan::Getv6addrByName(pdn_name, wan_ipv6_addr) == IPACM_FAILURE)
+		{
+			IPACMDBG_H("Failed to get v6 addr\n");
+			res = IPACM_FAILURE;
+			goto fail;
+		}
+		rt_rule_entry->rule.attrib.u.v6.dst_addr[0] = wan_ipv6_addr[0] & info.ipv6_mask[0];
+		rt_rule_entry->rule.attrib.u.v6.dst_addr[1] = wan_ipv6_addr[1] & info.ipv6_mask[1];
+		rt_rule_entry->rule.attrib.u.v6.dst_addr[2] = wan_ipv6_addr[2] & info.ipv6_mask[2];
+		rt_rule_entry->rule.attrib.u.v6.dst_addr[3] = wan_ipv6_addr[3] & info.ipv6_mask[3];
+	}
+	else if (IPACM_Iface::ipacmcfg->ext_router_mode == IPA_PREFIX_DELEGATION)
+	{
+		rt_rule_entry->rule.attrib.u.v6.dst_addr[0] = info.ipv6_addr[0];
+		rt_rule_entry->rule.attrib.u.v6.dst_addr[1] = info.ipv6_addr[1];
+		rt_rule_entry->rule.attrib.u.v6.dst_addr[2] = info.ipv6_addr[2];
+		rt_rule_entry->rule.attrib.u.v6.dst_addr[3] = info.ipv6_addr[3];
+	}
+
+	rt_rule_entry->rule.attrib.u.v6.dst_addr_mask[0] = info.ipv6_mask[0];
+	rt_rule_entry->rule.attrib.u.v6.dst_addr_mask[1] = info.ipv6_mask[1];
+	rt_rule_entry->rule.attrib.u.v6.dst_addr_mask[2] = info.ipv6_mask[2];
+	rt_rule_entry->rule.attrib.u.v6.dst_addr_mask[3] = info.ipv6_mask[3];
+
+#ifdef FEATURE_IPA_V3
+	rt_rule_entry->rule.hashable = true;
+#endif
+	if (false == m_routing.AddRoutingRule(rt_rule))
+	{
+		IPACMERR("Routing rule addition failed!\n");
+		res = IPACM_FAILURE;
+		goto fail;
+	}
+	else if (rt_rule_entry->status)
+	{
+		IPACMERR("ext rt rule adding failed. Result=%d\n", rt_rule_entry->status);
+		res = rt_rule_entry->status;
+		goto fail;
+	}
+	get_client_memptr(eth_client, eth_idx)->ext_router_prefix_rt_hdl =  rt_rule_entry->rt_rule_hdl;
+
+	//if in prefix sharing mode, need to add 1 more rt and flt exception rule
+	if (IPACM_Iface::ipacmcfg->ext_router_mode == IPA_PREFIX_SHARING)
+	{
+		uint32_t hdl = IPACM_Wan::GetQCMAPhdrByName(pdn_name);
+		if (hdl == 0)
+		{
+			res = IPACM_FAILURE;
+			goto fail;
+		}
+		rt_rule_entry->rule.hdr_hdl = hdl;
+		rt_rule_entry->rule.dst = IPA_CLIENT_APPS_WAN_CONS;
+		rt_rule_entry->rule.attrib.attrib_mask = IPA_FLT_DST_ADDR;
+		rt_rule_entry->rule.attrib.u.v6.dst_addr[0] = wan_ipv6_addr[0];
+		rt_rule_entry->rule.attrib.u.v6.dst_addr[1] = wan_ipv6_addr[1];
+		rt_rule_entry->rule.attrib.u.v6.dst_addr[2] = wan_ipv6_addr[2];
+		rt_rule_entry->rule.attrib.u.v6.dst_addr[3] = wan_ipv6_addr[3];
+		rt_rule_entry->rule.attrib.u.v6.dst_addr_mask[0] = 0xFFFFFFFF;
+		rt_rule_entry->rule.attrib.u.v6.dst_addr_mask[1] = 0xFFFFFFFF;
+		rt_rule_entry->rule.attrib.u.v6.dst_addr_mask[2] = 0xFFFFFFFF;
+		rt_rule_entry->rule.attrib.u.v6.dst_addr_mask[3] = 0xFFFFFFFF;
+	#ifdef FEATURE_IPA_V3
+		rt_rule_entry->rule.hashable = true;
+	#endif
+		if (false == m_routing.AddRoutingRule(rt_rule))
+		{
+			IPACMERR("Routing rule addition failed!\n");
+			res = IPACM_FAILURE;
+			goto fail;
+		}
+		else if (rt_rule_entry->status)
+		{
+			IPACMERR("ext rt rule adding failed. Result=%d\n", rt_rule_entry->status);
+			res = rt_rule_entry->status;
+			goto fail;
+		}
+		ext_router_rmnet_ipv6_hdl = rt_rule_entry->rt_rule_hdl;
+
+		//construct flt rule
+		len = sizeof(struct ipa_ioc_add_flt_rule_after) + sizeof(struct ipa_flt_rule_add);
+		pFilteringTable = (struct ipa_ioc_add_flt_rule_after*)malloc(len);
+		if(!pFilteringTable)
+		{
+			IPACMERR("Failed to allocate ipa_ioc_add_flt_rule_after memory...\n");
+			res = IPACM_FAILURE;
+			goto fail;
+		}
+		memset(pFilteringTable, 0, len);
+
+		pFilteringTable->commit = 1;
+		pFilteringTable->ip = IPA_IP_v6;
+		pFilteringTable->num_rules = 1;
+		pFilteringTable->ep = rx_prop->rx[0].src_pipe;
+		pFilteringTable->add_after_hdl = mtu_flt_rule_offset[IPA_IP_v6];
+
+		memset(&flt_rule, 0, sizeof(struct ipa_flt_rule_add));
+		flt_rule.status = -1;
+		flt_rule.at_rear = 1;
+		flt_rule.rule.retain_hdr = 1;
+		flt_rule.rule.to_uc = 0;
+		flt_rule.rule.action = IPA_PASS_TO_EXCEPTION;
+		flt_rule.rule.eq_attrib_type = 0;
+
+		memcpy(&flt_rule.rule.attrib, &rx_prop->rx[0].attrib, sizeof(flt_rule.rule.attrib));
+		flt_rule.rule.attrib.attrib_mask |= IPA_FLT_SRC_ADDR;
+		flt_rule.rule.attrib.u.v6.src_addr[0] = info.ipv6_addr[0];
+		flt_rule.rule.attrib.u.v6.src_addr[1] = info.ipv6_addr[1];
+		flt_rule.rule.attrib.u.v6.src_addr[2] = info.ipv6_addr[2];
+		flt_rule.rule.attrib.u.v6.src_addr[3] = info.ipv6_addr[3];
+		flt_rule.rule.attrib.u.v6.src_addr_mask[0] = info.ipv6_mask[0];
+		flt_rule.rule.attrib.u.v6.src_addr_mask[1] = info.ipv6_mask[1];
+		flt_rule.rule.attrib.u.v6.src_addr_mask[2] = info.ipv6_mask[2];
+		flt_rule.rule.attrib.u.v6.src_addr_mask[3] = info.ipv6_mask[3];
+		memcpy(&(pFilteringTable->rules[0]), &flt_rule, sizeof(struct ipa_flt_rule_add));
+		IPACMDBG_H("IPACM v6 prefix as: 0x[%X][%X]\n",
+			flt_rule.rule.attrib.u.v6.src_addr[0],
+			flt_rule.rule.attrib.u.v6.src_addr[1]);
+
+		if(false == m_filtering.AddFilteringRuleAfter(pFilteringTable))
+		{
+			IPACMERR("Failed to add prefix filtering rules.\n");
+			res = IPACM_FAILURE;
+			goto fail;
+		}
+		IPACM_Iface::ipacmcfg->increaseFltRuleCount(rx_prop->rx[0].src_pipe, IPA_IP_v6, 1);
+		ext_router_flt_rule_hdl = pFilteringTable->rules[0].flt_rule_hdl;
+	}
+
+	//copy pdn name when everything is succesful
+	strlcpy(ext_router_pdn_name, pdn_name, sizeof(ext_router_pdn_name));
+
+	IPACMDBG_H("finished handle_ext_router_add_evt for pdn:%s\n",ext_router_pdn_name);
+fail:
+	if(pFilteringTable != NULL)
+		free(pFilteringTable);
+
+	if(rt_rule != NULL)
+		free(rt_rule);
+
+	return res;
+}
+
+/* handle ext_route delete event*/
+int IPACM_Lan::handle_ext_router_del_evt(void)
+{
+	IPACMDBG("entering handle_ext_router_del_evt\n")
+	if(ext_router_rmnet_ipv6_hdl)
+	{
+		IPACMDBG("deleting ext_router_rmnet_ipv6_hdl = %d\n", ext_router_rmnet_ipv6_hdl);
+		if(m_routing.DeleteRoutingHdl(ext_router_rmnet_ipv6_hdl, IPA_IP_v6) == false)
+		{
+			IPACMERR("Failed to del ext_router_rmnet_ipv6 rt rule\n");
+			return IPACM_FAILURE;
+		}
+		ext_router_rmnet_ipv6_hdl = 0;
+	}
+
+	if(ext_router_flt_rule_hdl)
+	{
+		IPACMDBG("deleting flt_rule_hdl = %d\n", ext_router_flt_rule_hdl);
+		if(m_filtering.DeleteFilteringHdls(&ext_router_flt_rule_hdl, IPA_IP_v6, 1) == false)
+		{
+			IPACMERR("Failed to del ext_router_flt_rule.\n");
+			return IPACM_FAILURE;
+		}
+		ext_router_flt_rule_hdl = 0;
+		IPACM_Iface::ipacmcfg->decreaseFltRuleCount(rx_prop->rx[0].src_pipe, IPA_IP_v6, 1);
+	}
+	IPACMDBG("Finished handle_ext_router_del_evt\n")
+
+	return IPACM_SUCCESS;
+}

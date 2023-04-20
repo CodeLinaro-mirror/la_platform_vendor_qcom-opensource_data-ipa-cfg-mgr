@@ -231,8 +231,8 @@
 				<vlan>1024</vlan>
 			</IPACMTTLVlanArray>
 		</IPACMTTL>
-	<IPACMMSGFLT>
-			<IPACMMSGFLTEnable>0/IPACMMSGFLTEnable>
+		<IPACMMSGFLT>
+			<IPACMMSGFLTEnable>0</IPACMMSGFLTEnable>
 		</IPACMMSGFLT>
 	</IPACM>
 </system>

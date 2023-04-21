@@ -25,6 +25,10 @@ BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
 WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
 OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
 IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+Changes from Qualcomm Innovation Center are provided under the following license:
+Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+SPDX-License-Identifier: BSD-3-Clause-Clear.
 */
 /*!
 	@file
@@ -224,7 +228,6 @@ public:
 	ipa_lan_client_idx active_lan_client_index[IPA_MAX_NUM_HW_PATH_CLIENTS];
 	/* Clients which take SW path. This will be used as a place holder to move clients back to HW path. */
 	ipa_lan_client_idx inactive_lan_client_index[IPA_MAX_NUM_HW_PATH_CLIENTS];
-	bool is_odu;
 #endif
 #ifdef FEATURE_VLAN_MPDN
 	bool dummy_prefix_installed;
@@ -232,7 +235,7 @@ public:
 #endif
 
 	std::list <ipacm_event_data_all> neigh_cache;
-
+	bool is_odu;
 	/* LAN-iface's callback function */
 	void event_callback(ipa_cm_event_id event, void *data);
 

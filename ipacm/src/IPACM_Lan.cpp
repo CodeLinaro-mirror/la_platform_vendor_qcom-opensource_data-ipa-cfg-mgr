@@ -25,6 +25,10 @@
  * WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *
+ * Changes from Qualcomm Innovation Center are provided under the following license:
+ * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear.
  */
 /*!
 	@file
@@ -76,10 +80,10 @@ IPACM_Lan::IPACM_Lan(int iface_index) : IPACM_Iface(iface_index)
 	eth_client_len = 0;
 	is_l2tp_iface = false;
 	bool eth_client_internal_mem_failure = false;
+	is_odu = false;
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
 	max_eth_clients = (IPACM_Iface::ipacmcfg->ipacm_lan_stats_enable) ? IPA_MAX_NUM_HW_PATH_CLIENTS:
 		(ipa_if_cate == ODU_IF) ? IPACM_Iface::ipacmcfg->ipa_max_num_eth_clients:IPA_MAX_NUM_ETH_CLIENTS;
-	is_odu = false;
 #else
 	if(ipa_if_cate == ODU_IF)
 		max_eth_clients = IPACM_Iface::ipacmcfg->ipa_max_num_eth_clients;
@@ -252,15 +256,15 @@ IPACM_Lan::IPACM_Lan(int iface_index) : IPACM_Iface(iface_index)
 			}
 		}
 	}
-#ifdef FEATURE_IPACM_PER_CLIENT_STATS
-	if (rx_prop)
-	{
-		if (rx_prop->rx[0].src_pipe == IPA_CLIENT_ODU_PROD)
-			is_odu = true;
-		else
-			is_odu = false;
-	}
+if (rx_prop)
+{
+	if (rx_prop->rx[0].src_pipe == IPA_CLIENT_ODU_PROD)
+		is_odu = true;
+	else
+		is_odu = false;
+}
 
+#ifdef FEATURE_IPACM_PER_CLIENT_STATS
 	/* Update the device type. */
 	if (ipa_if_cate == LAN_IF)
 	{
@@ -6874,7 +6878,7 @@ int IPACM_Lan::handle_uplink_filter_rule(ipacm_ext_prop *prop, ipa_ip_type iptyp
 
 			/* NAT block will set the proper MUX ID in the metadata according to the relevant PDN */
 			if ((IPACM_Iface::ipacmcfg->GetIPAVer() >= IPA_HW_v4_0) &&
-				((ipa_if_cate != WLAN_IF) && (ipa_if_cate != ODU_IF)))
+				((ipa_if_cate != WLAN_IF) && (!is_odu)))
 				flt_rule_entry.rule.set_metadata = true;
 		}
 	}

@@ -612,8 +612,6 @@ int IPACM_Wan::handle_addr_evt(ipacm_event_data_addr *data)
 		{
 			if(m_is_sta_mode == Q6_WAN)
 			{
-				num_ipv6_modem_pdn++;
-				IPACMDBG_H("Now the number of modem ipv6 pdn is %d.\n", num_ipv6_modem_pdn);
 				init_fl_rule_ex(data->iptype);
 			}
 			else
@@ -706,6 +704,9 @@ int IPACM_Wan::handle_addr_evt(ipacm_event_data_addr *data)
 				ipv6_to_iface[modem_ipv6_pdn_index].ipv6_prefix[1]);
 
 				IPACM_Iface::ipacmcfg->add_no_offload_ipv6_prefix(ipv6_to_iface[modem_ipv6_pdn_index].ipv6_prefix);
+
+				num_ipv6_modem_pdn++;
+				IPACMDBG_H("Now the number of modem ipv6 pdn is %d.\n", num_ipv6_modem_pdn);
 			}
 #endif
 		}

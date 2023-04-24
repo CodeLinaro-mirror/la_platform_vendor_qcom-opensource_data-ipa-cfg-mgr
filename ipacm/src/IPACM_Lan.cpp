@@ -86,11 +86,6 @@
 #include <sys/ioctl.h>
 #include <fcntl.h>
 
-#define GRE_PROTOCOL_TYPE_v6 0x86DD
-#define GRE_PROTOCOL_TYPE_v4 0x0800
-#define GRE_PROTOCOL_TYPE_v6_WITH_KEY 0x200086DD
-#define GRE_PROTOCOL_TYPE_v4_WITH_KEY 0x20000800
-
 
 const uint8_t IPACM_Lan::v4_eogre_header[] = {
 	0x45, 0x00, 0x00, 0x00,
@@ -7373,8 +7368,7 @@ int IPACM_Lan::handle_uplink_filter_rule(ipacm_ext_prop *prop, ipa_ip_type iptyp
 		flt_index.source_pipe_index, flt_index.filter_index_list_len, flt_index.embedded_pipe_index, flt_index.embedded_call_mux_id);
 	if(flt_index.embedded_call_mux_id == 0xFF)
 	{
-		IPACMDBG_H("Invalid Mux ID %x, returning\n",flt_index.embedded_call_mux_id);
-		return IPACM_FAILURE;
+		IPACMDBG_H("Warning: Invalid Mux ID %x\n",flt_index.embedded_call_mux_id);
 	}
 #else /* defined (FEATURE_IPA_V3) */
 	IPACMDBG_H("flt_index: src pipe: %d, num of rules: %d, ebd pipe: %d, mux id: %d\n",
@@ -14684,11 +14678,59 @@ int IPACM_Lan::handle_mpdn_ul_xlat_filter_rule(ipacm_ext_prop * prop,
 			flt_index.rule_id_ex[idx_q6] = prop->prop[cnt].rule_id;
 
 			value = vlan_id;
-			flt_rule_entry.rule.eq_attrib.rule_eq_bitmap |= (1<<9);
-			flt_rule_entry.rule.eq_attrib.metadata_meq32_present = 1;
-			flt_rule_entry.rule.eq_attrib.metadata_meq32.offset = 0;
-			flt_rule_entry.rule.eq_attrib.metadata_meq32.value = (value & 0xFFF)<<16;
-			flt_rule_entry.rule.eq_attrib.metadata_meq32.mask = 0x0FFF0000;
+			if (ipa_if_cate == WLAN_IF && is_wlan_if_vlan && vlan_id)
+			{
+				flt_rule_entry.rule.attrib.attrib_mask |= IPA_FLT_VLAN_ID;
+				flt_rule_entry.rule.attrib.vlan_id = vlan_id;
+				/* Construct eq */
+				int fd;
+				ipa_ioc_generate_flt_eq flt_eq;
+
+				/* generate eq */
+				memset(&flt_eq, 0, sizeof(flt_eq));
+				memcpy(&flt_eq.attrib, &flt_rule_entry.rule.attrib, sizeof(flt_eq.attrib));
+				flt_eq.ip = iptype;
+
+				if (flt_rule_entry.rule.attrib.attrib_mask) {
+					fd = open(IPA_DEVICE_NAME, O_RDWR);
+					if (fd < 0) {
+						IPACMERR("Failed opening %s.\n", IPA_DEVICE_NAME);
+						return IPACM_FAILURE;
+					}
+
+					if (0 != ioctl(fd, IPA_IOC_GENERATE_FLT_EQ, &flt_eq)) { //define and cpy attribute to this struct
+						IPACMERR("Failed to get eq_attrib\n");
+						close(fd);
+						return IPACM_FAILURE;
+					}
+					close(fd);
+
+					/* Disable the Q6 based rules */
+					flt_rule_entry.rule.eq_attrib.metadata_meq32_present = 0;
+					/* zero the meta compare bit, flip all bits, this will set only 9th bit to zero */
+					flt_rule_entry.rule.eq_attrib.rule_eq_bitmap &=  ~(1 << 9);
+
+					/* copy the vlan id based meta data equation attributes */
+					flt_rule_entry.rule.eq_attrib.rule_eq_bitmap |= (1 << 5);
+					flt_rule_entry.rule.eq_attrib.num_offset_meq_32 = 1;
+					flt_rule_entry.rule.eq_attrib.offset_meq_32[0].offset = flt_eq.eq_attrib.offset_meq_32[0].offset;
+					flt_rule_entry.rule.eq_attrib.offset_meq_32[0].value = flt_eq.eq_attrib.offset_meq_32[0].value;
+					flt_rule_entry.rule.eq_attrib.offset_meq_32[0].mask = flt_eq.eq_attrib.offset_meq_32[0].mask;
+
+					IPACMDBG_H("Wlan with Vlan:%d filter bitmap: 0x%x, offset: 0x%x, mask: 0x%x, value: 0x%x\n",
+							   vlan_id, flt_eq.eq_attrib.rule_eq_bitmap, flt_eq.eq_attrib.offset_meq_32[0].offset,
+							   flt_eq.eq_attrib.offset_meq_32[0].mask, flt_eq.eq_attrib.offset_meq_32[0].value);
+
+				}
+			}
+			else
+			{
+				flt_rule_entry.rule.eq_attrib.rule_eq_bitmap |= (1 << 9);
+				flt_rule_entry.rule.eq_attrib.metadata_meq32_present = 1;
+				flt_rule_entry.rule.eq_attrib.metadata_meq32.offset = 0;
+				flt_rule_entry.rule.eq_attrib.metadata_meq32.value = (value & 0xFFF) << 16;
+				flt_rule_entry.rule.eq_attrib.metadata_meq32.mask = 0x0FFF0000;
+			}
 
 			/* start with prev = curr = 0
 			 * find smallest q6 rule id greater than current xlat filter's rule id,
@@ -14932,15 +14974,16 @@ void IPACM_Lan::gre_up(bool isPmipv6)/*Reusing Gre function for PMIP, with isPmi
 {
 	if(isPmipv6)
 	{
-		if(!IPACM_Iface::ipacmcfg->pmip_details.pmipv6_up_wan){
+		if(!IPACM_Iface::ipacmcfg->pmip_details.pmipv6_up_wan)
+		{
 			IPACMDBG_H("Wan instance has not yet added the Routing rules. Will have to wait for that.\n");
 			return;
 		}
-	}
-	if(IPACM_Iface::ipacmcfg->pmip_details.pmipv6_tunnel_setup == false)
-	{
-		IPACMDBG_H("Tunnel info is not yet loaded. Let's wait for tunnel\n");
-		return;
+		if(IPACM_Iface::ipacmcfg->pmip_details.pmipv6_tunnel_setup == false)
+		{
+			IPACMDBG_H("Tunnel info is not yet loaded. Let's wait for tunnel\n");
+			return;
+		}
 	}
 	ipa_ipgre_info ipgre_info;
 	if(isPmipv6)
@@ -15333,8 +15376,10 @@ void IPACM_Lan::gre_down(bool isPmipv6)
 				m_ipv6_default_filterting_rules_count,
 				mtu_flt_rule_offset[iptype]);
 		}
+		IPACM_Iface::ipacmcfg->SetQmapId(0xFF);
 	}
-	if(isPmipv6){
+	if(isPmipv6)
+	{
 		if ( iptype == IPA_IP_v4 )
 		{
 			if (m_ipv4_default_filterting_rules_count)
@@ -15352,8 +15397,6 @@ void IPACM_Lan::gre_down(bool isPmipv6)
 			}
 		}
 	}
-	IPACM_Iface::ipacmcfg->SetQmapId(0xFF);
-
 	//need to clean mtu rules when gre is disabled
 	modify_private_subnet();
 #ifdef FEATURE_VLAN_MPDN

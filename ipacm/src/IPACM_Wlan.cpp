@@ -4191,11 +4191,17 @@ int IPACM_Wlan::handle_down_evt()
 	if (m_routing.DeleteRoutingHdl(svap_dummy_route_rule_v4_hdl, IPA_IP_v4)
 		== false) {
 		IPACMERR("svap_dummy_route_rule_v4_hdl deletion failed!\n");
+	} else {
+		IPACMDBG_H("svap_dummy_route_rule_v4_hdl deletd = 0x%x\n", svap_dummy_route_rule_v4_hdl);
+		svap_dummy_route_rule_v4_hdl = 0;
 	}
 
 	if (m_routing.DeleteRoutingHdl(svap_dummy_route_rule_v6_hdl, IPA_IP_v6)
 		== false) {
 		IPACMERR("svap_dummy_route_rule_v6_hdl deletion failed!\n");
+	} else {
+		IPACMDBG_H("svap_dummy_route_rule_v6_hdl deletd = 0x%x\n", svap_dummy_route_rule_v6_hdl);
+		svap_dummy_route_rule_v6_hdl = 0;
 	}
 
 
@@ -7247,18 +7253,22 @@ int IPACM_Wlan::add_rt_rules_for_ast_update_ifaces()
 	snprintf(rt_tbl.name, IPA_RESOURCE_NAME_MAX, "eth_v4_lan_to_lan_%s",
 				ipa_l2_hdr_type[tx_prop->tx[0].hdr_l2_type]);
 	rt_tbl.ip = IPA_IP_v4;
-	if (IPACM_Iface::m_routing.GetRoutingTable(&rt_tbl) == false) {
+	if (IPACM_Iface::m_routing.GetRoutingTable(&rt_tbl) == false || svap_dummy_route_rule_v4_hdl == 0) {
 		IPACMDBG_H("Installing v4 dummy rt lan_table: %s \n", rt_tbl.name);
 		add_dummy_routing_rule(rt_tbl.name, IPA_IP_v4);
+	} else {
+		IPACMDBG_H("v4 dummy rt lan_table: %s  already installed\n", rt_tbl.name);
 	}
 
 	memset(&rt_tbl, 0, sizeof(ipa_ioc_get_rt_tbl));
 	snprintf(rt_tbl.name, IPA_RESOURCE_NAME_MAX, "eth_v6_lan_to_lan_%s",
 				ipa_l2_hdr_type[tx_prop->tx[0].hdr_l2_type]);
 	rt_tbl.ip = IPA_IP_v6;
-	if (IPACM_Iface::m_routing.GetRoutingTable(&rt_tbl) == false) {
+	if (IPACM_Iface::m_routing.GetRoutingTable(&rt_tbl) == false || svap_dummy_route_rule_v6_hdl == 0) {
 		IPACMDBG_H("Installing v6 dummy rt lan_table: %s \n", rt_tbl.name);
 		add_dummy_routing_rule(rt_tbl.name, IPA_IP_v6);
+	} else {
+		IPACMDBG_H("v6 dummy rt lan_table: %s  already installed\n", rt_tbl.name);
 	}
 
 	if (is_svap_iface()) {
@@ -7266,19 +7276,24 @@ int IPACM_Wlan::add_rt_rules_for_ast_update_ifaces()
 		snprintf(rt_tbl.name, IPA_RESOURCE_NAME_MAX, "eth_v4_lan_to_lan_%s",
 				 ipa_l2_hdr_type[tx_prop->tx[2].hdr_l2_type]);
 		rt_tbl.ip = IPA_IP_v4;
-		if (IPACM_Iface::m_routing.GetRoutingTable(&rt_tbl) == false) {
+		if (IPACM_Iface::m_routing.GetRoutingTable(&rt_tbl) == false || svap_dummy_route_rule_v4_hdl == 0) {
 			IPACMDBG_H("Installing v4 dummy rt lan_table: %s \n", rt_tbl.name);
 			add_dummy_routing_rule(rt_tbl.name, IPA_IP_v4);
+		} else {
+			IPACMDBG_H("v4 dummy rt lan_table: %s  already installed\n", rt_tbl.name);
 		}
 
 		memset(&rt_tbl, 0, sizeof(ipa_ioc_get_rt_tbl));
 		snprintf(rt_tbl.name, IPA_RESOURCE_NAME_MAX, "eth_v6_lan_to_lan_%s",
 				 ipa_l2_hdr_type[tx_prop->tx[2].hdr_l2_type]);
 		rt_tbl.ip = IPA_IP_v6;
-		if (IPACM_Iface::m_routing.GetRoutingTable(&rt_tbl) == false) {
+		if (IPACM_Iface::m_routing.GetRoutingTable(&rt_tbl) == false || svap_dummy_route_rule_v6_hdl == 0) {
 			IPACMDBG_H("Installing v6 dummy rt lan_table: %s \n", rt_tbl.name);
 			add_dummy_routing_rule(rt_tbl.name, IPA_IP_v6);
+		} else {
+			IPACMDBG_H("v6 dummy rt lan_table: %s  already installed\n", rt_tbl.name);
 		}
+
 	}
 
 	return IPACM_SUCCESS;

@@ -348,6 +348,7 @@ public:
 		bool pmipv6_tunnel_setup;
 		bool pmipv6_gre_event_posted;
 		bool pmipv6_up_wan;
+		uint32_t pmip_gre_key;
 	}pmipv6_status;
 	pmipv6_status pmip_details;
 

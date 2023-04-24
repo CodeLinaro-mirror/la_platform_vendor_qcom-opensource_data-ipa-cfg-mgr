@@ -11087,6 +11087,7 @@ int IPACM_Wan::ipgre_make_hdr_for_add_ctx(
 		v4_ipgre_hdr_t* hdr = (v4_ipgre_hdr_t*) hdr_data_buf;
 		memcpy(hdr_data_buf, v4_gre_header, sizeof(v4_gre_header));
 		hdr->words[IPV4_GRE_PROT_IDX] = htonl(GRE_PROTOCOL_TYPE_v4_WITH_KEY);
+		hdr->words[IPV4_GRE_PROT_IDX+1] = IPACM_Iface::ipacmcfg->pmip_details.pmip_gre_key;
 		hdr_data_len = sizeof(v4_gre_header);
 		hdr->words[IPV4_SRC_ADDR_IDX] = ipgre_info.ipv4_src;
 		hdr->words[IPV4_DST_ADDR_IDX] = ipgre_info.ipv4_dst;
@@ -11107,6 +11108,7 @@ int IPACM_Wan::ipgre_make_hdr_for_add_ctx(
 		v6_ipgre_hdr_t* hdr = (v6_ipgre_hdr_t*) hdr_data_buf;
 		memcpy(hdr_data_buf, v6_gre_header, sizeof(v6_gre_header));
 		hdr->words[IPV6_GRE_PMIP_PROT_IDX] = htonl(GRE_PROTOCOL_TYPE_v6_WITH_KEY);
+		hdr->words[IPV6_GRE_PMIP_PROT_IDX+1] = IPACM_Iface::ipacmcfg->pmip_details.pmip_gre_key;
 		hdr_data_len = sizeof(v6_gre_header);
 		memcpy(&(hdr->words[IPV6_SRC_ADDR_IDX]),
 			   &ipgre_info.ipv6_src,

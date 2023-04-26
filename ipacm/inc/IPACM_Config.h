@@ -1193,12 +1193,15 @@ public:
 	bool AddMacsecMap(struct ipa_macsec_map *new_macsec_map);
 	bool DelMacsecMap(struct ipa_macsec_map *macsec_map_to_delete);
 
+#ifdef IPA_IOCTL_SET_EXT_ROUTER_MODE
 	enum ipa_ext_router_mode ext_router_mode;
 	std::list<ext_router_prefix_info> ext_router_prefix;
 	bool add_ext_router_info(struct ipa_ioc_ext_router_info *data);
 	bool del_ext_router_info(char* pdn_name);
 	bool get_ext_router_info(struct ext_router_prefix_info *data);
 	char* is_ext_route_ipv6_prefix(uint32_t *addr);
+	int get_mapped_delegated_prefix_idx(uint32_t *addr);
+#endif
 
 	static const char *DEVICE_NAME_ODU;
 

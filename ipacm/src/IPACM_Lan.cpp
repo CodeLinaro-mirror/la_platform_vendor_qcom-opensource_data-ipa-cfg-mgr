@@ -1689,8 +1689,8 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 				IPACMDBG_H("Found cached client v6 addr : 0x%08x:%08x:%08x:%08x MAC %02x:%02x:%02x:%02x:%02x:%02x\n",
 					it->ipv6_addr[0], it->ipv6_addr[1], it->ipv6_addr[2], it->ipv6_addr[3],
 					it->mac_addr[0], it->mac_addr[1], it->mac_addr[2], it->mac_addr[3], it->mac_addr[4], it->mac_addr[5]);
-				handle_ext_router_add_evt((char*)param, it->mac_addr, 0); //can query vlan id instead of 0 for future vlan support
-				break; //for MVLAN might need to remove the break to handle all the prefixes
+				handle_ext_router_add_evt((char*)param, it->mac_addr, it->ipv6_addr, 0); //can query vlan id instead of 0 for future vlan support
+				return; //for MVLAN might need to remove the return to handle all the prefixes
 			}
 		}
 		IPACMDBG_H("Dummy prefix neighbor hasn't been added yet, wait until new neighbor to install ext route rules\n");
@@ -4817,6 +4817,22 @@ int IPACM_Lan::handle_eth_client_ipaddr(ipacm_event_data_all *data)
 					IPACMDBG_H("ipv6 nat enabled - add ULA ip address\n")
 				} else
 #endif
+#ifdef IPA_IOCTL_SET_EXT_ROUTER_MODE
+				/* Need to move this code for VLAN */
+				if(((data->ipv6_addr[0] & ipv6_link_local_prefix_mask) != (ipv6_link_local_prefix & ipv6_link_local_prefix_mask)) &&
+					IPACM_Iface::ipacmcfg->ext_router_mode != IPA_PREFIX_DISABLED)
+				{
+					char* pdn_name = IPACM_Iface::ipacmcfg->is_ext_route_ipv6_prefix(data->ipv6_addr);
+					if (pdn_name != NULL)
+					{
+						if(handle_ext_router_add_evt(pdn_name, data->mac_addr, data->ipv6_addr, vlan_id) == IPACM_FAILURE)
+						{
+							IPACMERR("failed to handle handle_ext_router_add_evt\n");
+							return IPACM_FAILURE;
+						}
+					}
+				}
+#endif
 				if( ((data->ipv6_addr[0] & ipv6_link_local_prefix_mask) != (ipv6_link_local_prefix & ipv6_link_local_prefix_mask)) &&
 #ifdef FEATURE_VLAN_MPDN
 					/* returns true if a VLAN PDN or default PDN should be offloaded */
@@ -4832,7 +4848,7 @@ int IPACM_Lan::handle_eth_client_ipaddr(ipacm_event_data_all *data)
 						char* pdn_name = IPACM_Iface::ipacmcfg->is_ext_route_ipv6_prefix(data->ipv6_addr);
 						if (pdn_name != NULL)
 						{
-							if(handle_ext_router_add_evt(pdn_name, data->mac_addr, vlan_id) == IPACM_FAILURE)
+							if(handle_ext_router_add_evt(pdn_name, data->mac_addr, data->ipv6_addr, vlan_id) == IPACM_FAILURE)
 								IPACMERR("failed to handle handle_ext_router_add_evt\n");
 
 							return IPACM_FAILURE;  /* if yes then we can take this out */
@@ -15948,7 +15964,7 @@ int IPACM_Lan::eth_bridge_get_vlan_hdr_template_hdl(uint32_t* hdr_hdl, uint16_t 
 }
 
 /* handle ext_route new_address event*/
-int IPACM_Lan::handle_ext_router_add_evt(char* pdn_name, uint8_t *mac_addr, uint16_t vid = 0)
+int IPACM_Lan::handle_ext_router_add_evt(char* pdn_name, uint8_t *mac_addr, uint32_t *idu_v6_addr, uint16_t vid = 0)
 {
 	struct ipa_ioc_add_rt_rule *rt_rule;
 	struct ipa_rt_rule_add *rt_rule_entry;
@@ -15972,14 +15988,14 @@ int IPACM_Lan::handle_ext_router_add_evt(char* pdn_name, uint8_t *mac_addr, uint
 	eth_idx = get_eth_client_index(mac_addr, vid); //if non vlan, it will use 0
 	if(eth_idx == IPACM_INVALID_INDEX)
 	{
-		IPACMDBG_H("Eth client not attached\n");
+		IPACMERR("Eth client not attached\n");
 		res = IPACM_FAILURE;
 		goto fail;
 	}
 
 	if (get_client_memptr(eth_client, eth_idx)->ext_router_prefix_rt_hdl  != 0)
 	{
-		IPACMDBG_H("External router rules already installed\n");
+		IPACMDBG("External router rules already installed\n");
 		return IPACM_SUCCESS;
 	}
 
@@ -15998,17 +16014,17 @@ int IPACM_Lan::handle_ext_router_add_evt(char* pdn_name, uint8_t *mac_addr, uint
 	strlcpy(rt_rule->rt_tbl_name, IPACM_Iface::ipacmcfg->rt_tbl_wan_v6.name, sizeof(rt_rule->rt_tbl_name));
 	rt_rule_entry = &rt_rule->rules[0];
 	rt_rule_entry->at_rear = false;
-	rt_rule_entry->rule.dst = tx_prop->tx[0].dst_pipe;  //go to eth pipe. need to support dual nic somehow
+	rt_rule_entry->rule.dst = tx_prop->tx[0].dst_pipe;
 	rt_rule_entry->rule.attrib.attrib_mask = IPA_FLT_DST_ADDR;
 
 	rt_rule_entry->rule.hdr_hdl = get_client_memptr(eth_client, eth_idx)->hdr_hdl_v6;
 
 	if (IPACM_Iface::ipacmcfg->ext_router_mode == IPA_PREFIX_SHARING)
 	{
-		//need to query PDN v6 addr from pdn_name
+		//For prefix sharing, need to query PDN v6 addr from pdn_name for prefix sharing since we dont want IDU dummy prefix
 		if (IPACM_Wan::Getv6addrByName(pdn_name, wan_ipv6_addr) == IPACM_FAILURE)
 		{
-			IPACMDBG_H("Failed to get v6 addr\n");
+			IPACMERR("Failed to get v6 addr\n");
 			res = IPACM_FAILURE;
 			goto fail;
 		}
@@ -16016,19 +16032,36 @@ int IPACM_Lan::handle_ext_router_add_evt(char* pdn_name, uint8_t *mac_addr, uint
 		rt_rule_entry->rule.attrib.u.v6.dst_addr[1] = wan_ipv6_addr[1] & info.ipv6_mask[1];
 		rt_rule_entry->rule.attrib.u.v6.dst_addr[2] = wan_ipv6_addr[2] & info.ipv6_mask[2];
 		rt_rule_entry->rule.attrib.u.v6.dst_addr[3] = wan_ipv6_addr[3] & info.ipv6_mask[3];
+
+		rt_rule_entry->rule.attrib.u.v6.dst_addr_mask[0] = info.ipv6_mask[0];
+		rt_rule_entry->rule.attrib.u.v6.dst_addr_mask[1] = info.ipv6_mask[1];
+		rt_rule_entry->rule.attrib.u.v6.dst_addr_mask[2] = info.ipv6_mask[2];
+		rt_rule_entry->rule.attrib.u.v6.dst_addr_mask[3] = info.ipv6_mask[3];
 	}
 	else if (IPACM_Iface::ipacmcfg->ext_router_mode == IPA_PREFIX_DELEGATION)
 	{
-		rt_rule_entry->rule.attrib.u.v6.dst_addr[0] = info.ipv6_addr[0];
-		rt_rule_entry->rule.attrib.u.v6.dst_addr[1] = info.ipv6_addr[1];
-		rt_rule_entry->rule.attrib.u.v6.dst_addr[2] = info.ipv6_addr[2];
-		rt_rule_entry->rule.attrib.u.v6.dst_addr[3] = info.ipv6_addr[3];
+		//for prefix delegation the client needs to find the prefix mapped to the idu prefix
+		int del_prefix_idx = IPACM_Iface::ipacmcfg->get_mapped_delegated_prefix_idx(idu_v6_addr);
+		if (del_prefix_idx == IPA_PREFIX_MAPPING_MAX)
+		{
+			IPACMERR("Failed to get mapped_prefix\n");
+			res = IPACM_FAILURE;
+			goto fail;
+		}
+
+		rt_rule_entry->rule.attrib.u.v6.dst_addr[0] = info.idu_client_prefix[del_prefix_idx][0];
+		rt_rule_entry->rule.attrib.u.v6.dst_addr[1] = info.idu_client_prefix[del_prefix_idx][1];
+		rt_rule_entry->rule.attrib.u.v6.dst_addr[2] = info.idu_client_prefix[del_prefix_idx][2];
+		rt_rule_entry->rule.attrib.u.v6.dst_addr[3] = info.idu_client_prefix[del_prefix_idx][3];
+
+		//NOTE: per current MBB design for dhcpv6, all IDUS will have clients with 64 bit netmask.
+		//If this changes, will need another parameter to take the client netmasks and use those values here
+		rt_rule_entry->rule.attrib.u.v6.dst_addr_mask[0] = 0xFFFFFFFF;
+		rt_rule_entry->rule.attrib.u.v6.dst_addr_mask[1] = 0xFFFFFFFF;
+		rt_rule_entry->rule.attrib.u.v6.dst_addr_mask[2] = 0;
+		rt_rule_entry->rule.attrib.u.v6.dst_addr_mask[3] = 0;
 	}
 
-	rt_rule_entry->rule.attrib.u.v6.dst_addr_mask[0] = info.ipv6_mask[0];
-	rt_rule_entry->rule.attrib.u.v6.dst_addr_mask[1] = info.ipv6_mask[1];
-	rt_rule_entry->rule.attrib.u.v6.dst_addr_mask[2] = info.ipv6_mask[2];
-	rt_rule_entry->rule.attrib.u.v6.dst_addr_mask[3] = info.ipv6_mask[3];
 
 #ifdef FEATURE_IPA_V3
 	rt_rule_entry->rule.hashable = true;
@@ -16047,7 +16080,7 @@ int IPACM_Lan::handle_ext_router_add_evt(char* pdn_name, uint8_t *mac_addr, uint
 	}
 	get_client_memptr(eth_client, eth_idx)->ext_router_prefix_rt_hdl =  rt_rule_entry->rt_rule_hdl;
 
-	//if in prefix sharing mode, need to add 1 more rt and flt exception rule
+	/* if in prefix sharing mode, need to add 1 more rt and flt exception rule as per design*/
 	if (IPACM_Iface::ipacmcfg->ext_router_mode == IPA_PREFIX_SHARING)
 	{
 		uint32_t hdl = IPACM_Wan::GetQCMAPhdrByName(pdn_name);
@@ -16134,7 +16167,7 @@ int IPACM_Lan::handle_ext_router_add_evt(char* pdn_name, uint8_t *mac_addr, uint
 		ext_router_flt_rule_hdl = pFilteringTable->rules[0].flt_rule_hdl;
 	}
 
-	//copy pdn name when everything is succesful
+	/* copy pdn name when everything is succesful. this will be used as a key */
 	strlcpy(ext_router_pdn_name, pdn_name, sizeof(ext_router_pdn_name));
 
 	IPACMDBG_H("finished handle_ext_router_add_evt for pdn:%s\n",ext_router_pdn_name);
@@ -16175,6 +16208,5 @@ int IPACM_Lan::handle_ext_router_del_evt(void)
 		IPACM_Iface::ipacmcfg->decreaseFltRuleCount(rx_prop->rx[0].src_pipe, IPA_IP_v6, 1);
 	}
 	IPACMDBG("Finished handle_ext_router_del_evt\n")
-
 	return IPACM_SUCCESS;
 }

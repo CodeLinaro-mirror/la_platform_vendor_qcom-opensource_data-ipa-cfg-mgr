@@ -352,6 +352,7 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 			}
 		}
 		break;
+#ifdef FEATURE_IPv6CT_DISABLED
 #ifdef FEATURE_IPACM_UL_FIREWALL
 	case IPA_FIREWALL_CHANGE_EVENT:
 		IPACMDBG_H("Received IPA_FIREWALL_CHANGE_EVENT\n");
@@ -366,6 +367,7 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 			IPACMERR("IP type is not valid.\n");
 		}
 		break;
+#endif
 #endif
 	case IPA_PRIVATE_SUBNET_CHANGE_EVENT:
 		{
@@ -628,10 +630,12 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 						/* add support for handling default route to WIFI backhaul on vlan case Need to protect with xml entry */
 						if(IPACM_Wan::isWanUP_V6(ipa_if_num)) /* Modem v6 call is UP?*/
 						{
+#ifdef FEATURE_IPv6CT_DISABLED
 #ifdef FEATURE_IPACM_UL_FIREWALL
 							if(data->iptype == IPA_IP_v6)
 								configure_v6_ul_firewall();
 #endif //FEATURE_IPACM_UL_FIREWALL
+#endif
 							if((data->iptype == IPA_IP_v6 || data->iptype == IPA_IP_MAX) && num_dft_rt_v6 == 1)
 							{
 								memcpy(ipv6_prefix, IPACM_Wan::backhaul_ipv6_prefix, sizeof(ipv6_prefix));
@@ -684,10 +688,12 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 						{
 							if(IPACM_Wan::isWanUP_V6(ipa_if_num) ||  IPACM_Wan::isVlanWanUP_V6()) /* Modem v6 call is UP?*/
 							{
+#ifdef FEATURE_IPv6CT_DISABLED
 #ifdef FEATURE_IPACM_UL_FIREWALL
 								if(data->iptype == IPA_IP_v6)
 									configure_v6_ul_firewall();
 #endif //FEATURE_IPACM_UL_FIREWALL
+#endif
 								if((data->iptype == IPA_IP_v6 || data->iptype == IPA_IP_MAX) && num_dft_rt_v6 == 1)
 								{
 									memcpy(ipv6_prefix, IPACM_Wan::backhaul_ipv6_prefix, sizeof(ipv6_prefix));
@@ -935,9 +941,11 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 #endif
 		if(ip_type == IPA_IP_v6 || ip_type == IPA_IP_MAX)
 		{
+#ifdef FEATURE_IPv6CT_DISABLED
 #ifdef FEATURE_IPACM_UL_FIREWALL
 			configure_v6_ul_firewall();
 #endif //FEATURE_IPACM_UL_FIREWALL
+#endif
 			memcpy(ipv6_prefix, data_wan->ipv6_prefix, sizeof(ipv6_prefix));
 #ifdef FEATURE_VLAN_MPDN
 			modify_ipv6_prefix_flt_rule();
@@ -1084,7 +1092,9 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 #ifdef FEATURE_UL_FIREWALL
 			// pdn is down, disable its Q6 UL firewall and reconfigure for all others
 			disable_dft_firewall_rules_ul_ex(0);
+#ifdef FEATURE_IPv6CT_DISABLED
 			configure_v6_ul_firewall();
+#endif
 #endif
 			handle_wan_down_v6(data_wan->is_sta);
 		}
@@ -1414,8 +1424,10 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 				{
 					/* new prefix was added - update flt rules */
 					modify_ipv6_prefix_flt_rule();
+#ifdef FEATURE_IPv6CT_DISABLED
 #ifdef FEATURE_IPACM_UL_FIREWALL
 					configure_v6_ul_firewall();
+#endif
 #endif
 				}
 				handle_vlan_pdn_up(data);
@@ -1436,7 +1448,9 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 				{
 					// vlan pdn is down, disable its Q6 UL firewall and reconfigure
 					disable_dft_firewall_rules_ul_ex(data->VlanID);
+#ifdef FEATURE_IPv6CT_DISABLED
 					configure_v6_ul_firewall();
+#endif
 				}
 #endif
 				handle_vlan_pdn_down(data);

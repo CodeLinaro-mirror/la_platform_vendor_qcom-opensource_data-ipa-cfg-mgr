@@ -756,7 +756,7 @@ void IPACM_LanToLan_Iface::add_client_rt_rule_for_new_iface()
 	peer_iface_info &peer = m_peer_iface_info.front();
 
 	peer_l2_type = peer.peer->get_iface_pointer()->tx_prop->tx[0].hdr_l2_type;
-	if(ref_cnt_peer_l2_hdr_type[peer_l2_type] == 1)
+	if((peer_l2_type < IPA_HDR_L2_MAX) && ref_cnt_peer_l2_hdr_type[peer_l2_type] == 1)
 	{
 		for(it = m_client_info.begin(); it != m_client_info.end(); it++)
 		{
@@ -792,6 +792,12 @@ void IPACM_LanToLan_Iface::add_client_rt_rule(peer_iface_info *peer_info, client
 #endif
 
 	peer_l2_hdr_type = peer_info->peer->get_iface_pointer()->tx_prop->tx[0].hdr_l2_type;
+
+	if (peer_l2_hdr_type >= IPA_HDR_L2_MAX)
+	{
+		IPACMDBG_H("Invalid peer_l2_hdr_type: %d\n", peer_l2_hdr_type);
+		return;
+	}
 
 	/* if the peer info is not for intra interface communication */
 	if(peer_info->peer != this)
@@ -863,7 +869,7 @@ void IPACM_LanToLan_Iface::add_client_rt_rule(peer_iface_info *peer_info, client
 
 		client->inter_iface_rt_rule_hdl[peer_l2_hdr_type].num_hdl[IPA_IP_v4] = num_rt_rule;
 		IPACMDBG_H("Number of IPv4 routing rule is %d.\n", num_rt_rule);
-		for(i=0; i<num_rt_rule; i++)
+		for(i=0; i < num_rt_rule; i++)
 		{
 			IPACMDBG_H("Routing rule %d handle %d\n", i, rt_rule_hdl[i]);
 			client->inter_iface_rt_rule_hdl[peer_l2_hdr_type].rule_hdl[IPA_IP_v4][i] = rt_rule_hdl[i];
@@ -916,6 +922,13 @@ void IPACM_LanToLan_Iface::add_l2tp_client_rt_rule(peer_iface_info *peer, client
 	l2tp_vlan_mapping_info *mapping_info;
 
 	peer_l2_hdr_type = peer->peer->get_iface_pointer()->tx_prop->tx[0].hdr_l2_type;
+
+	if (peer_l2_hdr_type >= IPA_HDR_L2_MAX)
+	{
+		IPACMDBG_H("Invalid peer_l2_hdr_type: %d\n", peer_l2_hdr_type);
+		return;
+	}
+
 	mapping_info = client->mapping_info;
 	if(client->is_l2tp_client)
 	{
@@ -1430,6 +1443,13 @@ void IPACM_LanToLan_Iface::del_client_rt_rule(peer_iface_info *peer, client_info
 #endif
 
 	peer_l2_hdr_type = peer->peer->get_iface_pointer()->tx_prop->tx[0].hdr_l2_type;
+
+	if (peer_l2_hdr_type >= IPA_HDR_L2_MAX)
+	{
+		IPACMDBG_H("Invalid peer_l2_hdr_type: %d\n", peer_l2_hdr_type);
+		return;
+	}
+
 	/* if the peer info is not for intra interface communication */
 	if(peer->peer != this)
 	{
@@ -1749,6 +1769,13 @@ void IPACM_LanToLan_Iface::clear_all_rt_rule_for_one_peer_iface(peer_iface_info 
 	ipa_hdr_l2_type peer_l2_type;
 
 	peer_l2_type = peer->peer->get_iface_pointer()->tx_prop->tx[0].hdr_l2_type;
+
+	if (peer_l2_type >= IPA_HDR_L2_MAX)
+	{
+		IPACMDBG_H("Invalid peer_l2_hdr_type: %d\n", peer_l2_type);
+		return;
+	}
+
 	if(ref_cnt_peer_l2_hdr_type[peer_l2_type] == 0)
 	{
 		for(it = m_client_info.begin(); it != m_client_info.end(); it++)
@@ -1784,6 +1811,12 @@ void IPACM_LanToLan_Iface::handle_wlan_scc_mcc_switch()
 		for(it_peer_info = m_peer_iface_info.begin(); it_peer_info != m_peer_iface_info.end(); it_peer_info++)
 		{
 			peer_l2_hdr_type = it_peer_info->peer->get_iface_pointer()->tx_prop->tx[0].hdr_l2_type;
+			if (peer_l2_hdr_type >= IPA_HDR_L2_MAX)
+			{
+				IPACMDBG_H("Invalid peer_l2_hdr_type: %d\n", peer_l2_hdr_type);
+				return;
+			}
+
 			if(flag[peer_l2_hdr_type] == false)
 			{
 				flag[peer_l2_hdr_type] = true;
@@ -2409,6 +2442,12 @@ void IPACM_LanToLan_Iface::handle_l2tp_enable()
 			if(it_peer_info->peer->is_l2tp_iface())
 			{
 				peer_l2_hdr_type = it_peer_info->peer->get_iface_pointer()->tx_prop->tx[0].hdr_l2_type;
+				if (peer_l2_hdr_type >= IPA_HDR_L2_MAX)
+				{
+					IPACMDBG_H("Invalid peer_l2_hdr_type: %d\n", peer_l2_hdr_type);
+					return;
+				}
+
 				flag[peer_l2_hdr_type] = true;
 			}
 		}
@@ -2451,6 +2490,12 @@ void IPACM_LanToLan_Iface::handle_l2tp_disable()
 		for(it_peer_info = m_peer_iface_info.begin(); it_peer_info != m_peer_iface_info.end(); it_peer_info++)
 		{
 			peer_l2_hdr_type = it_peer_info->peer->get_iface_pointer()->tx_prop->tx[0].hdr_l2_type;
+			if (peer_l2_hdr_type >= IPA_HDR_L2_MAX)
+			{
+				IPACMDBG_H("Invalid peer_l2_hdr_type: %d\n", peer_l2_hdr_type); 
+				return;
+			}
+
 			flag[peer_l2_hdr_type] = true;
 		}
 

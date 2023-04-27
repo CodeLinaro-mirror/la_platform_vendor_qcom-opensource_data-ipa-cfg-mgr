@@ -87,6 +87,7 @@ IPACM_Lan::IPACM_Lan(int iface_index) : IPACM_Iface(iface_index)
 	if(IPACM_Iface::ipacmcfg->ipacm_mpdn_enable)
 		max_clients = IPA_MAX_NUM_VLAN_CLIENTS;
 #endif
+	memset(&xlat_ctx, 0, sizeof(xlat_context));
 
 	Nat_App = NatApp::GetInstance();
 	if (Nat_App == NULL)
@@ -267,7 +268,6 @@ IPACM_Lan::IPACM_Lan(int iface_index) : IPACM_Iface(iface_index)
 		install_l2tp_ul_hdr_proc_ctx();
 	}
 #endif
-	memset(&xlat_ctx, 0, sizeof(xlat_context));
 
 	return;
 }
@@ -2110,7 +2110,7 @@ int IPACM_Lan::check_vlan_PDNUp(enum ipa_ip_type iptype)
 
 int IPACM_Lan::handle_vlan_pdn_up(ipacm_event_vlan_pdn *data, bool set_mux)
 {
-	int ret;
+	int ret = IPACM_SUCCESS;
 
 	if(is_vlan_offload_disabled)
 	{
@@ -9327,9 +9327,9 @@ int IPACM_Lan::install_l2tp_inner_private_subnet_flt_rule()
 
 int IPACM_Lan::modify_private_subnet()
 {
-	int i, len, res = IPACM_SUCCESS;
+	int i = 0, len, res = IPACM_SUCCESS;
 	struct ipa_flt_rule_add flt_rule;
-	struct ipa_ioc_add_flt_rule_after* pFilteringTable;
+	struct ipa_ioc_add_flt_rule_after* pFilteringTable = NULL;
 	int mtu_rule_cnt = 0;
 	uint16_t mtu[IPA_MAX_MTU_ENTRIES] = { };
 	uint16_t vid[IPA_MAX_MTU_ENTRIES] = { };

@@ -785,7 +785,8 @@ int IPACM_Wan::handle_addr_evt(ipacm_event_data_addr *data)
 	IPACMDBG_H("number of default route rules %d\n", num_dft_rt_v6);
 
 fail:
-	free(rt_rule);
+	if(rt_rule)
+		free(rt_rule);
 
 	return res;
 }

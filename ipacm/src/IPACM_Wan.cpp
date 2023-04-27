@@ -2054,8 +2054,6 @@ int IPACM_Wan::handle_route_add_vlan_pdn_evt(ipa_ip_type iptype, uint16_t vlan_i
 		IPACM_EvtDispatcher::PostEvt(&evt_data);
 		if(IPACM_Iface::ipacmcfg->ipacm_MsgFlt_enable)
 		{
-			IPACM_EvtDispatcher::PostEvt(&evt_data);
-
 			if(wan_sw_allow_data->firewall_config != NULL)
 			{
 				memset(&evt_data, 0, sizeof(evt_data));

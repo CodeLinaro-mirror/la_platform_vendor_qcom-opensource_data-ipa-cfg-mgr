@@ -539,6 +539,11 @@ int NatApp::DeleteEntry(const nat_table_entry *rule)
 					curCnt--;
 				}
 			}
+			else
+			{
+				memset(&cache[cnt], 0, sizeof(cache[cnt]));
+				curCnt--;
+			}
 			break;
 		}
 	}
@@ -968,11 +973,15 @@ int NatApp::AddEntry(const nat_table_entry *rule, bool isVlan)
 			cache[cnt].pdn_index = pdn_index;
 			cache[cnt].public_ip = rule->public_ip;
 #endif
-		if(IPACM_Iface::ipacmcfg->ipacm_MsgFlt_enable)
-		{
-			if(!rule->sw_allow)
+			if(IPACM_Iface::ipacmcfg->ipacm_MsgFlt_enable)
+			{
+				if(!rule->sw_allow)
+					curCnt++;
+			}
+			else
+			{
 				curCnt++;
-		}
+			}
 		}
 	}
 	else

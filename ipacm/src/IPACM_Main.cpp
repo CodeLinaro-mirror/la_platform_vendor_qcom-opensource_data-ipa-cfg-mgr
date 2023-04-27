@@ -82,7 +82,6 @@
 #endif
 #define IPA_DRIVER  "/dev/ipa"
 
-#define IPACM_FIREWALL_FILE_NAME    "mobileap_firewall.xml"
 #define IPACM_CFG_FILE_NAME    "IPACM_cfg.xml"
 #ifndef FEATURE_IPA_ANDROID
 #define IPACM_PID_FILE "/var/run/data/ipa/ipacm.pid"
@@ -91,7 +90,6 @@
 #define IPACM_PID_FILE "/data/misc/ipa/ipacm.pid"
 #define IPACM_DIR_NAME     "/data/misc/ipa/"
 #endif
-#define IPACM_FIREWALL_DIR_NAME     "/systemrw/data"
 #define IPACM_NAME "ipacm"
 
 #define INOTIFY_EVENT_SIZE  (sizeof(struct inotify_event))
@@ -146,14 +144,11 @@ void* firewall_monitor(void *param)
 		PERROR("inotify_init");
 	}
 
-	IPACMDBG_H("Waiting for nofications in dirs %s:%s with mask: 0x%x\n", IPACM_DIR_NAME,
-		IPACM_FIREWALL_DIR_NAME, mask);
+	IPACMDBG_H("Waiting for nofications in dirs %s with mask: 0x%x\n", IPACM_DIR_NAME,
+		mask);
 
 	wd = inotify_add_watch(inotify_fd,
 												 IPACM_DIR_NAME,
-												 mask);
-	wd1 = inotify_add_watch(inotify_fd,
-												 IPACM_FIREWALL_DIR_NAME,
 												 mask);
 
 	while (1)
@@ -182,29 +177,6 @@ void* firewall_monitor(void *param)
 				if (event->mask & IN_ISDIR)
 				{
 					IPACMDBG_H("The directory %s was 0x%x\n", event->name, event->mask);
-				}
-				else if (!strncmp(event->name, IPACM_FIREWALL_FILE_NAME, event->len)) // firewall_rule change
-				{
-					IPACMDBG_H("File \"%s\" was 0x%x\n", event->name, event->mask);
-					IPACMDBG_H("The interested file %s .\n", IPACM_FIREWALL_FILE_NAME);
-
-#ifdef FEATURE_VLAN_MPDN
-					IPACM_Config* config = IPACM_Config::GetInstance();
-					if (config == NULL)
-					{
-						IPACMERR("Unable to get Config instance\n");
-					}
-					else
-					{
-						config->vlan_firewall_change_handle = true;
-					}
-#endif
-
-					evt_data.event = IPA_FIREWALL_CHANGE_EVENT;
-					evt_data.evt_data = NULL;
-
-					/* Insert IPA_FIREWALL_CHANGE_EVENT to command queue */
-					IPACM_EvtDispatcher::PostEvt(&evt_data);
 				}
 				else if (!strncmp(event->name, IPACM_CFG_FILE_NAME, event->len)) // IPACM_configuration change
 				{

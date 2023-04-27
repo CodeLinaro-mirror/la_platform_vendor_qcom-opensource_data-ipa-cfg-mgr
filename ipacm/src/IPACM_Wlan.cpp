@@ -324,10 +324,12 @@ void IPACM_Wlan::event_callback(ipa_cm_event_id event, void *param)
 		if(ip_type != IPA_IP_v4)
 		{
 			IPACMDBG_H ("iface_ul_firewall Addr = (0x%x)\n", &iface_ul_firewall);
+#ifdef FEATURE_IPv6CT_DISABLED
 #ifdef IPA_V6_UL_WL_FIREWALL_HANDLE
 			configure_v6_ul_firewall_wlan();
 #else
 			configure_v6_ul_firewall();
+#endif
 #endif
 		}
 		else
@@ -388,15 +390,18 @@ void IPACM_Wlan::event_callback(ipa_cm_event_id event, void *param)
 							}
 						}
 					}
+#ifdef FEATURE_IPv6CT_DISABLED
 #ifdef FEATURE_IPACM_UL_FIREWALL
 					IPACM_Wan::read_firewall_filter_rules_ul();
 #endif //FEATURE_IPACM_UL_FIREWALL
+#endif
 					if(IPACM_Wan::isWanUP_V6(ipa_if_num)) /* Modem v6 call is UP?*/
 					{
 						if(data->iptype == IPA_IP_v6)
 						{
 							memcpy(ipv6_prefix, IPACM_Wan::backhaul_ipv6_prefix, sizeof(ipv6_prefix));
 							install_ipv6_prefix_flt_rule(IPACM_Wan::backhaul_ipv6_prefix);
+#ifdef FEATURE_IPv6CT_DISABLED
 #ifdef FEATURE_IPACM_UL_FIREWALL
 #ifdef IPA_V6_UL_WL_FIREWALL_HANDLE
 							configure_v6_ul_firewall_wlan();
@@ -404,6 +409,7 @@ void IPACM_Wlan::event_callback(ipa_cm_event_id event, void *param)
 							configure_v6_ul_firewall();
 #endif
 #endif //FEATURE_IPACM_UL_FIREWALL
+#endif
 						}
 						if((data->iptype == IPA_IP_v6 || data->iptype == IPA_IP_MAX) && num_dft_rt_v6 == 1)
 						{
@@ -611,6 +617,7 @@ void IPACM_Wlan::event_callback(ipa_cm_event_id event, void *param)
 		{
 			memcpy(ipv6_prefix, data_wan->ipv6_prefix, sizeof(ipv6_prefix));
 			install_ipv6_prefix_flt_rule(data_wan->ipv6_prefix);
+#ifdef FEATURE_IPv6CT_DISABLED
 #ifdef FEATURE_IPACM_UL_FIREWALL
 			IPACM_Wan::read_firewall_filter_rules_ul();
 			if(IPACM_Wan::isWanUP_V6(ipa_if_num))
@@ -624,6 +631,7 @@ void IPACM_Wlan::event_callback(ipa_cm_event_id event, void *param)
 			else
 				IPACMDBG_H("WAN v6 is not UP\n");
 #endif //FEATURE_IPACM_UL_FIREWALL
+#endif
 			if(data_wan->is_sta == false)
 			{
 				ext_prop = IPACM_Iface::ipacmcfg->GetExtProp(IPA_IP_v6);
@@ -714,10 +722,12 @@ void IPACM_Wlan::event_callback(ipa_cm_event_id event, void *param)
 #ifdef FEATURE_UL_FIREWALL
 				// pdn is down, disable its Q6 UL firewall and reconfigure for all others
 				disable_dft_firewall_rules_ul_ex(0);
+#ifdef FEATURE_IPv6CT_DISABLED
 #ifdef IPA_V6_UL_WL_FIREWALL_HANDLE
 				configure_v6_ul_firewall_wlan();
 #else
 				configure_v6_ul_firewall();
+#endif
 #endif
 #endif
 				handle_wan_down_v6(data_wan->is_sta, false);

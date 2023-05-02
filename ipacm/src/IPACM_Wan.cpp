@@ -4651,6 +4651,12 @@ int IPACM_Wan::config_dft_firewall_rules_ex(struct ipa_flt_rule_add *rules, int 
 		for (uint32_t i = 0; i < offloaded_pdns_count_v4; ++i)
 		{
 			IPACM_Wan* curr_interface = offloaded_pdns_v4[i].second->pIface;
+			if(isPmipv6)
+			{
+				//Add DL Frag rule, if PMIPV6
+				insert_frag_rule_dl(iptype, curr_interface->rx_prop->rx[0].attrib,rules[pos].flt_rule, pos);
+				++pos;
+			}
 			IPACMDBG_H("adding default rule for iface %s\n", curr_interface->dev_name);
 			res = add_catchup_all_filtering_rule_each_pdn(*offloaded_pdns_v4[i].first, iptype,
 				curr_interface->rx_prop->rx[0].attrib, rules[pos].flt_rule, pos,isPmipv6);
@@ -4674,6 +4680,12 @@ int IPACM_Wan::config_dft_firewall_rules_ex(struct ipa_flt_rule_add *rules, int 
 		else
 			num_rules = 0;
 #else
+		if(isPmipv6)
+		{
+			//Add DL Frag rule, if PMIPV6
+			insert_frag_rule_dl(iptype, rx_prop->rx[0].attrib,rules[pos].flt_rule, pos);
+			++pos;
+		}
 		res = add_catchup_all_filtering_rule_each_pdn(firewall_config, iptype, rx_prop->rx[0].attrib, rules[pos], pos,isPmipv6);
 		if (res != IPACM_SUCCESS)
 		{
@@ -4825,6 +4837,12 @@ int IPACM_Wan::config_dft_firewall_rules_ex(struct ipa_flt_rule_add *rules, int 
 		for (uint32_t i = 0; i < offloaded_pdns_count_v6; ++i)
 		{
 			IPACM_Wan* curr_interface = offloaded_pdns_v6[i].second->pIface;
+			if(isPmipv6)
+			{
+				//Add DL Frag rule, if PMIPV6
+				insert_frag_rule_dl(iptype, curr_interface->rx_prop->rx[0].attrib,rules[pos].flt_rule, pos);
+				++pos;
+			}
 			IPACMDBG_H("adding default rule for iface %s ip-type %d\n", curr_interface->dev_name, iptype);
 			/* for ipv6 nat case this shall be the 2nd pass catch all rule to send to v6 LAN RT table*/
 			res = add_catchup_all_filtering_rule_each_pdn(*offloaded_pdns_v6[i].first, iptype,
@@ -4850,6 +4868,12 @@ int IPACM_Wan::config_dft_firewall_rules_ex(struct ipa_flt_rule_add *rules, int 
 		else
 			num_rules = 0;
 #else
+		if(isPmipv6)
+		{
+			//Add DL Frag rule, if PMIPV6
+			insert_frag_rule_dl(iptype, curr_interface->rx_prop->rx[0].attrib,rules[pos].flt_rule, pos);
+			++pos;
+		}
 		res = add_catchup_all_filtering_rule_each_pdn(firewall_config, iptype, rx_prop->rx[1].attrib, rules[pos], pos, isPmipv6);
 		if (res != IPACM_SUCCESS)
 		{
@@ -9804,6 +9828,7 @@ flt_rule_entry.rule.attrib.u.v4.dst_addr_mask = 0x00000000;
 			if(isPmipv6 || doing_ipgre)
 			{
 				flt_rule_entry.rule.action = IPA_PASS_TO_ROUTING;
+				rt_tbl_name = ipacmcfg->rt_tbl_lan_v4.name;
 			}
 		}
 #endif /* #ifdef FEATURE_EoGRE */
@@ -10855,6 +10880,81 @@ void IPACM_Wan::gre_down()
 	IPACMDBG_H(
 		"Success with the disable for iptype(%d)\n",
 		iptype);
+}
+
+int IPACM_Wan::insert_frag_rule_dl(ipa_ip_type iptype, const struct ipa_rule_attrib& rx_prop_attrib,
+	struct ipa_flt_rule_add&      flt_rule_add,
+	int                           fltr_rule_number)
+{
+	if(!IPACM_Iface::ipacmcfg->pmip_details.pmipv6_enabled)
+	{
+		IPACMDBG_H("PMIPV6 is not enabled. Returning\n");
+		return IPACM_FAILURE;
+	}
+	IPACMDBG_H("Trying to add DL frag rule%x\n");
+	if ( ! VALID_IPA_IP_TYPE(iptype) )
+	{
+		IPACMERR("Invalid IP type passed to function\n");
+		return IPACM_FAILURE;
+	}
+
+	/* Check for "out of boundary" failure before adding a rule */
+	if (fltr_rule_number >= IPA_MAX_FLT_RULE)
+	{
+		IPACMERR(
+			"Filtering table is full. Number of rules %d allowed %d\n",
+			fltr_rule_number + 1, IPA_MAX_FLT_RULE);
+		return IPACM_FAILURE;
+	}
+
+	struct ipa_flt_rule_add flt_rule_entry;
+	memset(&flt_rule_entry, 0, sizeof(struct ipa_flt_rule_add));
+
+	flt_rule_entry.at_rear = true;
+	flt_rule_entry.flt_rule_hdl = -1;
+	flt_rule_entry.status = -1;
+
+	flt_rule_entry.rule.retain_hdr = 1;
+	flt_rule_entry.rule.to_uc = 0;
+	flt_rule_entry.rule.eq_attrib_type = 1;
+#ifdef FEATURE_IPA_V3
+	flt_rule_entry.rule.hashable = false;
+#endif
+	memcpy(
+		&flt_rule_entry.rule.attrib,
+		&rx_prop_attrib,
+		sizeof(struct ipa_rule_attrib));
+	flt_rule_entry.rule.attrib.attrib_mask &= ~((uint32_t)IPA_FLT_META_DATA);
+	//TODO: This will be called for all PDNs. Have to rethink this, incase we have to support PMIPV6 with MPDN.
+	flt_rule_entry.rule.attrib.attrib_mask |= IPA_FLT_FRAGMENT;
+	flt_rule_entry.rule.action = IPA_PASS_TO_EXCEPTION;
+
+	change_to_network_order(iptype, &flt_rule_entry.rule.attrib);
+
+	ipa_ioc_generate_flt_eq flt_eq;
+	memset(&flt_eq, 0, sizeof(flt_eq));
+	memcpy(&flt_eq.attrib, &flt_rule_entry.rule.attrib, sizeof(flt_eq.attrib));
+	flt_eq.ip = iptype;
+	if (ioctl(m_fd_ipa, IPA_IOC_GENERATE_FLT_EQ, &flt_eq))
+	{
+		IPACMERR("Failed to get eq_attrib\n");
+		return IPACM_FAILURE;
+	}
+
+	memcpy(&flt_rule_entry.rule.eq_attrib, &flt_eq.eq_attrib, sizeof(flt_rule_entry.rule.eq_attrib));
+	memcpy(&flt_rule_add, &flt_rule_entry, sizeof(struct ipa_flt_rule_add));
+	IPACMDBG_H("Filter rule attrib mask: 0x%x\n", flt_rule_add.rule.attrib.attrib_mask);
+	IPACMDBG_H("Frag rule copied%x\n");
+
+	if(iptype==IPA_IP_v4)
+	{
+		++IPACM_Wan::num_v4_flt_rule;
+	}
+	else
+	{
+		++IPACM_Wan::num_v6_flt_rule;
+	}
+	return IPACM_SUCCESS;
 }
 
 int IPACM_Wan::gre_v4_work(

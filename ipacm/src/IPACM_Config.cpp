@@ -28,7 +28,7 @@
  *
  * Changes from Qualcomm Innovation Center are provided under the following license:
  *
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted (subject to the limitations in the
@@ -644,6 +644,11 @@ reread:
 	{
 		ipa_ipv6ct_max_entries = (cfg->ipv6ct_max_entries > 0) ? cfg->ipv6ct_max_entries : DEFAULT_IPV6CT_MAX_ENTRIES;
 		IPACMDBG_H("IPv6CT Maximum Entries %d\n", ipa_ipv6ct_max_entries);
+
+		ipa_ct_memtype =
+			(cfg->ct_table_memtype) ?
+			cfg->ct_table_memtype   : DEFAULT_CT_MEMTYPE;
+		IPACMDBG_H("Ct Mem Type %s\n", ipa_ct_memtype);
 	}
 	else
 	{

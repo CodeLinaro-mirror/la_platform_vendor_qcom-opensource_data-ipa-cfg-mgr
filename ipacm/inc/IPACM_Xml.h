@@ -27,7 +27,7 @@
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  * Changes from Qualcomm Innovation Center are provided under the following license:
- * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2023-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 /*!
@@ -209,6 +209,7 @@ if (!(a)) {                                                 \
 #define IPACM_IPV6CT_TAG                     "IPACMIPV6CT"
 #define IPV6CT_ENABLED_TAG                   "IPv6CTEnabled"
 #define IPV6CT_MAX_ENTRIES_TAG               "MaxIpv6CTEntries"
+#define CT_TableType_TAG                     "CTTableType"
 
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
 #define LAN_Stats_TAG                        "LANStats"
@@ -362,6 +363,7 @@ typedef struct  _IPACM_conf_t
 	const char* nat_table_memtype;
 	int ipv6ct_max_entries;
 	bool ipv6ct_enable;
+	const char* ct_table_memtype;
 	bool odu_enable;
 	bool router_mode_enable;
 	bool odu_embms_enable;

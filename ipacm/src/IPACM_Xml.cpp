@@ -27,7 +27,7 @@
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  * Changes from Qualcomm Innovation Center are provided under the following license:
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear.
  */
 /*!
@@ -925,6 +925,31 @@ static int ipacm_cfg_xml_parse_tree
 							IPACMDBG_H("IPv6CT Table Max Entries %d\n", config->ipv6ct_max_entries);
 						}
 					}
+				}
+				else if (IPACM_util_icmp_string((char*)xml_node->name, CT_TableType_TAG) == 0)
+				{
+					config->ct_table_memtype = DDR_TABLETYPE_TAG;
+					content = IPACM_read_content_element(xml_node);
+					if (content)
+					{
+						str_size = strlen(content);
+						memset(content_buf, 0, sizeof(content_buf));
+						memcpy(content_buf, (void *)content, str_size);
+						content_buf[MAX_XML_STR_LEN-1] = '\0';
+						if (0 == strncasecmp(content_buf, DDR_TABLETYPE_TAG, str_size))
+						{
+							config->ct_table_memtype = DDR_TABLETYPE_TAG;
+						}
+						else if (0 == strncasecmp(content_buf, SRAM_TABLETYPE_TAG, str_size))
+						{
+							config->ct_table_memtype = SRAM_TABLETYPE_TAG;
+						}
+						else if (0 == strncasecmp(content_buf, HYBRID_TABLETYPE_TAG, str_size))
+						{
+							config->ct_table_memtype = HYBRID_TABLETYPE_TAG;
+						}
+					}
+					IPACMDBG_H("CT Table location %s\n", config->ct_table_memtype);
 				}
 				else if (IPACM_util_icmp_string((char*)xml_node->name, IPACM_IPV6NAT_Enable_TAG) == 0)
 				{

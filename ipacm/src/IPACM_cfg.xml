@@ -201,7 +201,8 @@
 		</IPACMNAT>
 		<IPACMIPV6CT>
 			<IPv6CTEnabled>1</IPv6CTEnabled>
-			<MaxIpv6CTEntries>500</MaxIpv6CTEntries>
+			<CTTableType>HYBRID</CTTableType>
+			<MaxIpv6CTEntries>4000</MaxIpv6CTEntries>
 		</IPACMIPV6CT>
 		<IPACMIPV6NAT>
 			<IPV6NATEnabled>0</IPV6NATEnabled>

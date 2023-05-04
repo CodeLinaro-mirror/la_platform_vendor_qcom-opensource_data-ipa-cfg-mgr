@@ -30,7 +30,7 @@
  *
  * Changes from Qualcomm Innovation Center are provided under the following license:
  *
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted (subject to the limitations in the
@@ -200,6 +200,7 @@ public:
 	const char* ipa_nat_memtype;
 	int ipa_nat_max_entries;
 	int ipa_ipv6ct_max_entries;
+	const char* ipa_ct_memtype;
 
 	bool ipacm_odu_router_mode;
 
@@ -451,6 +452,11 @@ public:
 	inline const char* GetNatMemType(void)
 	{
 		return ipa_nat_memtype;
+	}
+
+	inline const char* GetCTMemType(void)
+	{
+		return ipa_ct_memtype;
 	}
 
 	inline int GetIpv6CTMaxEntries(void)
@@ -1053,6 +1059,7 @@ private:
 
 	static const int DEFAULT_IPV6CT_MAX_ENTRIES = 500;
 	const char* DEFAULT_NAT_MEMTYPE = "DDR";
+	const char* DEFAULT_CT_MEMTYPE = "DDR";
 
 	enum ipa_hw_type ver;
 	static IPACM_Config *pInstance;

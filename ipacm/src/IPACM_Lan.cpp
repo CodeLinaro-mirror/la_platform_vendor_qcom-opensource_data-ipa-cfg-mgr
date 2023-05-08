@@ -9985,7 +9985,10 @@ int IPACM_Lan::modify_private_subnet(bool eogre_enabled)
 			IPACMDBG("v4 GRE MTU rule will be installed after v4 default rules\n");
 			mtu_flt_rule_offset[IPA_IP_v4] = dft_v4fl_rule_hdl[m_ipv4_default_filterting_rules_count - 1];
 		}
-		mtu_rule_cnt++;
+
+		//this should always hit as GRE is always in VLAN mode so will never hit the inc above. (added for safety)
+		if(!mtu_rule_cnt)
+			mtu_rule_cnt++;
 	}
 #endif
 
@@ -14338,15 +14341,18 @@ void IPACM_Lan::eogre_down()
 	 *  1) Populate the flt rule offset for eth bridge (offset = icmp)
 	 *
 	 *  2) Populate the flt rule offset for mtu_offset (offset = broadcast rule)
+	 *
+	 * IPACM needs to clean up both based on Iface type, not tunnel type
+		*     since rules are installed based on iface type.
 	 */
-	if ( iptype == IPA_IP_v4 )
+	if ( IPACM_Iface::ip_type == IPA_IP_v4 || IPACM_Iface::ip_type == IPA_IP_MAX)
 	{
 		eth_bridge_flt_rule_offset[iptype] =
 			ipv4_icmp_flt_rule_hdl[0];
 
 		if (m_ipv4_default_filterting_rules_count)
 		{
-			mtu_flt_rule_offset[iptype] =
+			mtu_flt_rule_offset[IPA_IP_v4] =
 				dft_v4fl_rule_hdl[m_ipv4_default_filterting_rules_count - 1];
 		}
 		IPACMDBG(
@@ -14358,18 +14364,18 @@ void IPACM_Lan::eogre_down()
 			m_ipv4_default_filterting_rules_count,
 			mtu_flt_rule_offset[iptype]);
 	}
-	else
+	if ( IPACM_Iface::ip_type == IPA_IP_v6 || IPACM_Iface::ip_type == IPA_IP_MAX )
 	{
 		eth_bridge_flt_rule_offset[iptype] =
 			ipv6_icmp_flt_rule_hdl[0];
 
 		if (m_ipv6_default_filterting_rules_count)
 		{
-			mtu_flt_rule_offset[iptype] =
+			mtu_flt_rule_offset[IPA_IP_v6] =
 				dft_v6fl_rule_hdl[m_ipv6_default_filterting_rules_count - 1];
 		}
 		IPACMDBG(
-			"Prepping for modify_private_subnet(): "
+			"Prepping for modify_ipv6_prefix_flt_rule(): "
 			"eth_bridge_flt_rule_offset[v6]=%u, "
 			"m_ipv6_default_filterting_rules_count=%u "
 			"mtu_flt_rule_offset[v6]=%u\n",
@@ -14379,7 +14385,7 @@ void IPACM_Lan::eogre_down()
 	}
 
 	IPACM_Iface::ipacmcfg->SetQmapId(0xFF);
-	
+
 	//need to clean mtu rules when eogre is disabled
 	modify_private_subnet();
 #ifdef FEATURE_VLAN_MPDN

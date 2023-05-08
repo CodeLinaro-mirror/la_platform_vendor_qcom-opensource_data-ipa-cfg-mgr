@@ -501,33 +501,31 @@ bool IPACM_Filtering::DeleteFilteringHdls
 
 	    if (flt_rule_hdls[cnt] == 0)
 	    {
-		   IPACMERR("invalid filter handle passed, ignoring it: %d\n", cnt)
+			IPACMERR("invalid filter handle passed, ignoring it: %d\n", cnt)
 	    }
-            else
+	    else
 	    {
+			flt_rule->hdl[0].status = -1;
+			flt_rule->hdl[0].hdl = flt_rule_hdls[cnt];
+			IPACMDBG("Deleting filter hdl:(0x%x) with ip type: %d\n", flt_rule_hdls[cnt], ip);
 
-		   flt_rule->hdl[0].status = -1;
-		   flt_rule->hdl[0].hdl = flt_rule_hdls[cnt];
-		   IPACMDBG("Deleting filter hdl:(0x%x) with ip type: %d\n", flt_rule_hdls[cnt], ip);
-
-	           if (DeleteFilteringRule(flt_rule) == false)
-	           {
-		        PERROR("Filter rule deletion failed!\n");
-		        res = false;
-		        goto fail;
-	           }
-		   else
-	           {
-
-		        if (flt_rule->hdl[0].status != 0)
-		        {
-			     IPACMERR("Filter rule hdl 0x%x deletion failed with error:%d\n",
-		        					 flt_rule->hdl[0].hdl, flt_rule->hdl[0].status);
-			     res = false;
-			     goto fail;
-		        }
-		   }
-	    }
+			if (DeleteFilteringRule(flt_rule) == false)
+			{
+				PERROR("Filter rule deletion failed!\n");
+				res = false;
+				goto fail;
+			}
+			else
+			{
+				if (flt_rule->hdl[0].status != 0)
+				{
+					IPACMERR("Filter rule hdl 0x%x deletion failed with error:%d\n",
+						flt_rule->hdl[0].hdl, flt_rule->hdl[0].status);
+					res = false;
+					goto fail;
+				}
+			}
+		}
 	}
 
 fail:

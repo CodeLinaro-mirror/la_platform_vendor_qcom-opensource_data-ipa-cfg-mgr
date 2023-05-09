@@ -295,6 +295,7 @@ IPACM_Lan::IPACM_Lan(int iface_index) : IPACM_Iface(iface_index)
 	}
 #endif
 	memset(&xlat_ctx, 0, sizeof(xlat_context));
+	xlat_ctx.active_pdn_count = 0;
 
 	return;
 }

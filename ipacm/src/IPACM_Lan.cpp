@@ -10463,11 +10463,11 @@ int IPACM_Lan::modify_private_subnet()
 	{
 		/* re-calculate the ipv4 mtu based on GRE tunnel type */
 		if(IPACM_Iface::ipacmcfg->eogre_info.iptype == IPA_IP_v4) /* v4 + v4 */
-			/* mtu_v4_new = mtu_v4 - 4(gre) - 4(MPLS) - 14(eth) - 20(inner ipv4) */
+			/* mtu_v4_new = mtu_v4 - 4(gre) - 4(MPLS) - 14(eth) - 20(outer ipv4) */
 			mtu[0] = IPACM_Wan::queryMTU(ipa_if_num, IPA_IP_v4) - 22 - IPV4_HEADER_SIZE;
 		else if (IPACM_Iface::ipacmcfg->eogre_info.iptype == IPA_IP_v6) /* v6 + v4 */
-			/* mtu_v4_new = mtu_v6 - 8(options) - 4(gre) - 4(MPLS) -14(eth) - 20(inner ipv4) */
-			mtu[0] = IPACM_Wan::queryMTU(ipa_if_num, IPA_IP_v6) - 30 - IPV4_HEADER_SIZE ;
+			/* mtu_v4_new = mtu_v6 - 8(options) - 4(gre) - 4(MPLS) -14(eth) - 40(outer ipv6) */
+			mtu[0] = IPACM_Wan::queryMTU(ipa_if_num, IPA_IP_v6) - 30 - IPV6_HEADER_SIZE;
 		else
 			IPACMERR("invalid iptype = %d\n", IPACM_Iface::ipacmcfg->eogre_info.iptype);
 
@@ -10774,11 +10774,11 @@ int IPACM_Lan::modify_ipv6_prefix_flt_rule()
 		/* re-calculate the ipv6 mtu based on GRE tunnel type */
 		/* Note: Ipv6 gre outer header have 8 byte options */
 		if(IPACM_Iface::ipacmcfg->eogre_info.iptype == IPA_IP_v4) /* v4 + v6  */
-			/* mtu_v6_new = mtu_v4 - 4(gre) - 4(MPLS) - 14(eth) - 40(inner ipv6) */
-			mtu[0] = IPACM_Wan::queryMTU(ipa_if_num, IPA_IP_v4) - 22 - IPV6_HEADER_SIZE;
+			/* mtu_v6_new = mtu_v4 - 4(gre) - 4(MPLS) - 14(eth) - 20(outer ipv4) */
+			mtu[0] = IPACM_Wan::queryMTU(ipa_if_num, IPA_IP_v4) - 22 - IPV4_HEADER_SIZE;
 
 		else if (IPACM_Iface::ipacmcfg->eogre_info.iptype == IPA_IP_v6) /* v6 + v6 */
-			/* mtu_v6_new = mtu_v6 - 8(options) - 4(gre) - 4(MPLS) - 14(eth) - 40(inner ipv6)*/
+			/* mtu_v6_new = mtu_v6 - 8(options) - 4(gre) - 4(MPLS) - 14(eth) - 40(outeripv6)*/
 			mtu[0] = IPACM_Wan::queryMTU(ipa_if_num, IPA_IP_v6) - 30 - IPV6_HEADER_SIZE;
 		else
 			IPACMERR("invalid iptype = %d\n", IPACM_Iface::ipacmcfg->eogre_info.iptype);
@@ -14559,6 +14559,7 @@ int IPACM_Lan::construct_mtu_rule(struct ipa_flt_rule *rule, ipa_ip_type iptype,
 	{
 		rule->eq_attrib.ihl_offset_range_16[0].offset = 0x84;
 		//v6 uses payload length which doesnt include v6 header so need to add for MTU
+		//Mike Note: I think this only applicable for GRE
 		rule->eq_attrib.ihl_offset_range_16[0].range_low = mtu + 1 - IPV6_HEADER_SIZE;
 	}
 

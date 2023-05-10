@@ -127,6 +127,7 @@ const char *ipacm_event_name[] = {
 	__stringify(IPA_LAN_TO_LAN_DEL_CONNECTION),            /* ipacm_event_connection */
 	__stringify(IPA_WLAN_SWITCH_TO_SCC),                   /* No Data */
 	__stringify(IPA_WLAN_SWITCH_TO_MCC),                   /* No Data */
+	__stringify(IPA_WLAN_SWITCH_VLAN_MODE),                /* ipacm_event_vlan_mode */
 	__stringify(IPA_CRADLE_WAN_MODE_SWITCH),               /* ipacm_event_cradle_wan_mode */
 	__stringify(IPA_WAN_XLAT_CONNECT_EVENT),               /* ipacm_event_data_fid */
 	__stringify(IPA_TETHERING_STATS_UPDATE_EVENT),         /* ipacm_event_data_fid */
@@ -627,6 +628,10 @@ int IPACM_Config::Init(void)
 	/* Get the Public IP suppport config info from XML */
 	is_public_ip_support_enabled = cfg->public_ip_support_enable;
 	IPACMDBG_H("Public IP support config %d\n", is_public_ip_support_enabled);
+
+	/* Get the VLAN MPDN suppport config info from XML */
+	wlan_vlan_mpdn_enabled = cfg->wlan_vlan_mpdn_enable;
+	IPACMDBG_H("VLAN MPDN support config %d\n", wlan_vlan_mpdn_enabled);
 
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
 	if (!ipacm_lan_stats_enable_set)
@@ -1574,7 +1579,13 @@ void IPACM_Config::add_vlan_iface(ipa_vlan_iface_info *data)
 		IPACMDBG_H("Add VLAN iface %s to nat ifaces.\n", data->name);
 	}
 #endif
-	memset(&new_vlan_info, 0 , sizeof(new_vlan_info));
+
+	if (IPACM_Iface::ipacmcfg->wlan_vlan_mpdn_enabled == TRUE) {
+		SwitchAPVlanMode(data->name, true);
+		IPACMDBG_H("Switch AP %s to VLAN Mode\n", data->name);
+	}
+
+	memset(&new_vlan_info, 0, sizeof(new_vlan_info));
 	strlcpy(new_vlan_info.vlan_iface_name, data->name, sizeof(new_vlan_info.vlan_iface_name));
 	new_vlan_info.vlan_id = data->vlan_id;
 	new_vlan_info.vlan_interface_index = data->vlan_interface_index;
@@ -1671,6 +1682,12 @@ void IPACM_Config::del_vlan_iface(ipa_vlan_iface_info *data)
 			break;
 		}
 	}
+
+	if (IPACM_Iface::ipacmcfg->wlan_vlan_mpdn_enabled == TRUE) {
+		SwitchAPVlanMode(data->name, false);
+		IPACMDBG_H("Switch AP %s to Non-VLAN Mode\n", data->name);
+	}
+
 #ifdef FEATURE_VLAN_MPDN
 	if (IPACM_Iface::ipacmcfg->ipacm_mpdn_enable == TRUE)
 	{
@@ -2156,7 +2173,8 @@ bool IPACM_Config::iface_in_vlan_mode(const char *phys_iface_name)
 		IPACMDBG("ath vlan mode %d\n", vlan_devices[IPA_VLAN_IF_WLAN]);
 		return (vlan_devices[IPA_VLAN_IF_WLAN] ||
 					((IPACM_Iface::ipacmcfg->ipacm_emesh_enable && IPACM_Iface::ipacmcfg->ipacm_emesh_mode >= 2) &&
-					is_svap_related(phys_iface_name)));
+					is_svap_related(phys_iface_name)) ||
+					IsWlanIfVlan(phys_iface_name));
 	}
 #endif
 
@@ -3744,3 +3762,147 @@ int IPACM_Config::get_mapped_delegated_prefix_idx(uint32_t *addr)
 	return IPA_PREFIX_MAPPING_MAX;
 }
 #endif
+
+int IPACM_Config::SwitchAPVlanMode(char *event_iface_name, bool vlan_mpdn) {
+	int ipa_interface_index, if_index;
+	int ret = IPACM_FAILURE;
+	ipacm_cmd_q_data evt_data;
+	ipacm_event_vlan_mode *data = NULL;
+	char if_name[IPA_IFACE_NAME_LEN];
+
+	if (event_iface_name == NULL) {
+		IPACMERR("Invalid input\n");
+		return IPACM_FAILURE;
+	}
+
+	/* extract the parent if_name from the vlan iface */
+	strlcpy(if_name, event_iface_name, IPA_IFACE_NAME_LEN);
+	IPACMDBG_H("iface %s, event iface %s\n", if_name, event_iface_name);
+
+	char *char_idx =  strrchr(if_name, '.');
+	if (char_idx) {
+		char_idx[0] = '\0';
+		IPACMDBG_H("truncated iface name %s\n", if_name);
+	} else return IPACM_FAILURE;
+
+	/* check if the AP iface already exists or not*/
+	ret = IPACM_Iface::ipa_get_if_index(if_name, &(if_index));
+	if (ret != IPACM_SUCCESS) {
+		IPACMERR("Error while getting interface index for %s device", if_name);
+		return IPACM_FAILURE;
+	}
+
+	/* Map the interface index. */
+	ipa_interface_index = IPACM_Iface::iface_ipa_index_query(if_index);
+	IPACMDBG_H("if_cat:%d, if_vlan: %d\n",
+			   IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].if_cat,
+			   IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].is_wlan_if_vlan);
+	if (IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].if_cat == WLAN_IF &&
+		!IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].is_wlan_if_vlan) {
+		IPACMDBG_H("AP interface already exists, change it to VLAN mode %s\n", if_name);
+
+		/* Function to bring lan2lan connection down and restart */
+		data = (ipacm_event_vlan_mode *)malloc(sizeof(ipacm_event_vlan_mode));
+		if (data == NULL) {
+			IPACMERR("Unable to allocate memory\n");
+			return IPACM_FAILURE;
+		}
+		data->wlan_vlan_mpdn_enable = vlan_mpdn;
+		data->if_index = if_index;
+		evt_data.event = IPA_WLAN_SWITCH_VLAN_MODE;
+		evt_data.evt_data = data;
+
+		/* finish command queue */
+		IPACMDBG_H("Posting event:%s\n", IPACM_Iface::ipacmcfg->getEventName(evt_data.event));
+		IPACM_EvtDispatcher::PostEvt(&evt_data);
+
+		IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].is_wlan_if_vlan = vlan_mpdn;
+	} else {
+		IPACMDBG_H("AP interface doesn't exists, exiting switch mode %s\n", if_name);
+	}
+
+	return ret;
+}
+
+bool IPACM_Config::IsWlanIfVlan(const char *event_iface_name) {
+	int ipa_interface_index, if_index;
+	int ret = IPACM_FAILURE;
+	bool res = false;
+	char if_name[IPA_IFACE_NAME_LEN];
+
+	if (event_iface_name == NULL) {
+		IPACMERR("Invalid input\n");
+		return IPACM_FAILURE;
+	}
+
+	/* extract the parent if_name from the vlan iface */
+	strlcpy(if_name, event_iface_name, IPA_IFACE_NAME_LEN);
+	IPACMDBG_H("iface %s, event iface %s\n", if_name, event_iface_name);
+
+	char *char_idx =  strrchr(if_name, '.');
+	if (char_idx) {
+		char_idx[0] = '\0';
+		IPACMDBG_H("truncated iface name %s\n", if_name);
+	}
+
+	/* check if the AP iface already exists or not*/
+	ret = IPACM_Iface::ipa_get_if_index(if_name, &(if_index));
+	if (ret != IPACM_SUCCESS) {
+		IPACMERR("Error while getting interface index for %s device", if_name);
+		return IPACM_FAILURE;
+	}
+
+	/* Map the interface index. */
+	ipa_interface_index = IPACM_Iface::iface_ipa_index_query(if_index);
+
+	if (IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].if_cat == WLAN_IF) {
+		res = IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].is_wlan_if_vlan;
+		IPACMDBG_H("AP is WLAN AP, vlan enabled %d\n", res);
+	} else {
+		IPACMDBG_H("AP %s interface is not WLAN AP, exiting\n", if_name);
+	}
+
+	return res;
+}
+
+int IPACM_Config::SetWlanVlanAp(char *event_iface_name) {
+	int ipa_interface_index, if_index;
+	int ret = IPACM_FAILURE;
+	char if_name[IPA_IFACE_NAME_LEN];
+
+	if (event_iface_name == NULL) {
+		IPACMERR("Invalid input\n");
+		return IPACM_FAILURE;
+	}
+
+	/* extract the parent if_name from the vlan iface */
+	strlcpy(if_name, event_iface_name, IPA_IFACE_NAME_LEN);
+	IPACMDBG_H("iface %s, event iface %s\n", if_name, event_iface_name);
+
+	char *char_idx =  strrchr(if_name, '.');
+	if (char_idx) {
+		char_idx[0] = '\0';
+		IPACMDBG_H("truncated iface name %s\n", if_name);
+	}
+
+	/* check if the AP iface already exists or not*/
+	ret = IPACM_Iface::ipa_get_if_index(if_name, &(if_index));
+	if (ret != IPACM_SUCCESS) {
+		IPACMERR("Error while getting interface index for %s device", if_name);
+		return IPACM_FAILURE;
+	}
+
+	/* Map the interface index. */
+	ipa_interface_index = IPACM_Iface::iface_ipa_index_query(if_index);
+
+	IPACMDBG_H("Debug logs, if_cat:%d\n", IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].if_cat);
+	if (IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].if_cat == WLAN_IF) {
+		IPACMDBG_H("VLAN AP interface already exists, change it to VLAN mode %s\n", if_name);
+
+		IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].is_wlan_if_vlan = true;
+	} else {
+		IPACMDBG_H("AP interface doesn't exists, exiting switch mode %s\n", if_name);
+	}
+
+	return ret;
+}

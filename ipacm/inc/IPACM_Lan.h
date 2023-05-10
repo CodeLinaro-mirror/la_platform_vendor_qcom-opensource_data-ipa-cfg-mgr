@@ -1604,11 +1604,7 @@ private:
 #endif
 #ifdef FEATURE_VLAN_MPDN
 	int handle_vlan_neighbor(ipacm_event_data_all *data);
-	bool is_vlan_IF(uint16_t vlan_id);
-	int handle_vlan_pdn_up(ipacm_event_vlan_pdn *data, bool set_mux = true);
-	int handle_vlan_pdn_down(ipacm_event_vlan_pdn *data);
 	int handle_vlan_phys_if_down();
-	int check_vlan_PDNUp(enum ipa_ip_type iptype);
 #endif
 
 	int construct_mtu_rule(struct ipa_flt_rule *rule, enum ipa_ip_type iptype, uint16_t mtu);
@@ -1620,7 +1616,12 @@ private:
 	int handle_eth_mac_flt_conn_disc(uint8_t * mac_addr, bool con_state_flag);
 
 public:
-
+#ifdef FEATURE_VLAN_MPDN
+	int check_vlan_PDNUp(enum ipa_ip_type iptype);
+	bool is_vlan_IF(uint16_t vlan_id);
+	int handle_vlan_pdn_up(ipacm_event_vlan_pdn *data, bool set_mux = true);
+	int handle_vlan_pdn_down(ipacm_event_vlan_pdn *data);
+#endif
 	int delete_icmp_filter_rule(
 		ipa_ip_type iptype);
 };

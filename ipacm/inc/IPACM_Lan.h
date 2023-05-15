@@ -1,6 +1,5 @@
 /*
  * Copyright (c) 2013-2021, The Linux Foundation. All rights reserved.
-
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
  * met:
@@ -28,7 +27,7 @@
  *
  * Changes from Qualcomm Innovation Center are provided under the following license:
  *
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted (subject to the limitations in the
@@ -356,12 +355,12 @@ public:
 
 	/* Delete UL firewall filter rules from LAN prod pipe */
 	virtual int delete_uplink_filter_rule_ul(ul_firewall_t *ul_firewall);
-	
+
 	/* delete UL firewall rules, to be sent to Q6 side*/
 	virtual int disable_dft_firewall_rules_ul_ex(int vid);
 #endif
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
-
+	void handle_stats_client_connect(int if_index, uint8_t *mac_addr );
 	/* handle lan client connect event. */
 	virtual int handle_lan_client_connect(uint8_t *mac_addr);
 
@@ -1379,6 +1378,7 @@ private:
 #endif
 
 	int construct_mtu_rule(struct ipa_flt_rule *rule, enum ipa_ip_type iptype, uint16_t mtu);
+	int add_mtu_rule_v4_default_pdn();
 };
 
 #endif /* IPACM_LAN_H */

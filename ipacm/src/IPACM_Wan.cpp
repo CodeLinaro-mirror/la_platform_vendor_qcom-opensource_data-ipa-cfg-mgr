@@ -28,7 +28,7 @@
  *
  * Changes from Qualcomm Innovation Center are provided under the following license:
  *
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted (subject to the limitations in the
@@ -323,6 +323,38 @@ int IPACM_Wan::GetMuxByVid(uint16_t vlan_id, uint8_t *mux_id, ipa_ip_type iptype
 	return IPACM_FAILURE;
 }
 
+int IPACM_Wan::GetMTUByVid(uint16_t *mtu, uint16_t vlan_id, ipa_ip_type iptype)
+{
+	for(int i = 0; i < IPA_MAX_NUM_SW_PDNS; i++)
+	{
+		if(iptype == IPA_IP_v4)
+		{
+			if(IPACM_Wan::ipv4_to_iface[i].ipv4_addr)
+			{
+				if(IPACM_Wan::ipv4_to_iface[i].pIface->associated_VID == vlan_id)
+				{
+					*mtu = IPACM_Wan::ipv4_to_iface[i].pIface->mtu_size;
+					return IPACM_SUCCESS;
+				}
+			}
+		}
+		else
+		{
+			if(IPACM_Wan::ipv6_to_iface[i].ipv6_prefix[0] || IPACM_Wan::ipv6_to_iface[i].ipv6_prefix[1])
+			{
+				if(IPACM_Wan::ipv6_to_iface[i].pIface->associated_VID == vlan_id)
+				{
+					*mtu = IPACM_Wan::ipv6_to_iface[i].pIface->mtu_size;
+					return IPACM_SUCCESS;
+				}
+			}
+		}
+	}
+	IPACMERR("couldn't find MTU for VID %d for ip_type %d\n", vlan_id, iptype);
+	*mtu = DEFAULT_MTU_SIZE;
+	return IPACM_FAILURE;
+}
+
 bool IPACM_Wan::is_xlat_by_vid(uint16_t vlan_id)
 {
 	for(int i = 0; i < IPA_MAX_NUM_SW_PDNS; i++)
@@ -340,7 +372,7 @@ bool IPACM_Wan::is_xlat_by_vid(uint16_t vlan_id)
 /* handle new_address event */
 int IPACM_Wan::handle_addr_evt(ipacm_event_data_addr *data)
 {
-	struct ipa_ioc_add_rt_rule *rt_rule;
+	struct ipa_ioc_add_rt_rule *rt_rule = NULL;
 	struct ipa_rt_rule_add *rt_rule_entry;
 	struct ipa_ioc_add_flt_rule *flt_rule;
 	struct ipa_flt_rule_add flt_rule_entry;
@@ -499,17 +531,7 @@ int IPACM_Wan::handle_addr_evt(ipacm_event_data_addr *data)
 		{
 			if(m_is_sta_mode == Q6_WAN)
 			{
-#ifdef FEATURE_VLAN_MPDN
-				modem_ipv6_pdn_index = getFreePDNIndex_V6();
-				if (modem_ipv6_pdn_index == -1)
-				{
-					IPACMERR("No Free index available.!\n");
-					res = IPACM_FAILURE;
-					goto fail;
-				}
-				num_ipv6_modem_pdn++;
-				IPACMDBG_H("Now the number of modem ipv6 pdn is %d.\n", num_ipv6_modem_pdn);
-#endif
+				/* modem_ipv6_pdn_index only get after above */
 				init_fl_rule_ex(data->iptype);
 			}
 			else
@@ -738,7 +760,10 @@ int IPACM_Wan::handle_addr_evt(ipacm_event_data_addr *data)
 	IPACMDBG_H("number of default route rules %d\n", num_dft_rt_v6);
 
 fail:
-	free(rt_rule);
+	if(rt_rule != NULL)
+	{
+		free(rt_rule);
+	}
 
 	return res;
 }
@@ -1905,6 +1930,9 @@ int IPACM_Wan::handle_route_add_vlan_pdn_evt(ipa_ip_type iptype, uint16_t vlan_i
 
 	associated_VID = vlan_id;
 
+	/* query the mtu size */
+	query_mtu_size();
+
 	if(FullConfig)
 	{
 		/* Add corresponding ipa_rm_resource_name of TX-endpoint up before IPV6 RT-rule set */
@@ -2322,6 +2350,7 @@ int IPACM_Wan::handle_route_add_evt(ipa_ip_type iptype)
 	{
 		IPACM_Wan::wan_up = true;
 		active_v4 = true;
+
 		memcpy(IPACM_Wan::wan_up_dev_name,
 			dev_name,
 				sizeof(IPACM_Wan::wan_up_dev_name));
@@ -4116,6 +4145,31 @@ int IPACM_Wan::GetV6PrefixByVid(int vid, uint32_t *v6_prefix)
 	IPACMERR("couldn't find match for vid %d\n", vid);
 	return IPACM_FAILURE;
 }
+
+int IPACM_Wan::GetV6MTUByPrefix(uint16_t *mtu, uint32_t *v6_prefix)
+{
+	for(int i = 0; i < IPA_MAX_NUM_SW_PDNS; i++)
+	{
+		if(IPACM_Wan::ipv6_to_iface[i].ipv6_prefix[0] || IPACM_Wan::ipv6_to_iface[i].ipv6_prefix[1])
+		{
+			if(IPACM_Wan::ipv6_to_iface[i].ipv6_prefix[0] == v6_prefix[0]
+				&& IPACM_Wan::ipv6_to_iface[i].ipv6_prefix[1] == v6_prefix[1])
+			{
+				IPACMDBG_H("IPACM v6 prefix as: 0x[%X][%X] entry(%d)\n",
+					IPACM_Wan::ipv6_to_iface[i].ipv6_prefix[0],
+					IPACM_Wan::ipv6_to_iface[i].ipv6_prefix[1], i);
+				if(IPACM_Wan::ipv6_to_iface[i].wan_up_vlan_v6 || IPACM_Wan::ipv6_to_iface[i].pIface->active_v6)
+					*mtu = IPACM_Wan::ipv6_to_iface[i].pIface->mtu_size;
+				else
+					*mtu = DEFAULT_MTU_SIZE;
+				return IPACM_SUCCESS;
+			}
+		}
+	}
+	IPACMERR("couldn't find MTU for v6_prefix 0x[%X][%X]\n", v6_prefix[0],  v6_prefix[1]);
+	*mtu = DEFAULT_MTU_SIZE;
+	return IPACM_FAILURE;
+}
 #endif //FEATURE_VLAN_MPDN
 
 IPACM_firewall_conf_t* IPACM_Wan::get_default_profile_firewall_conf_ul(int *default_vid)
@@ -5829,7 +5883,7 @@ int IPACM_Wan::handle_down_evt_ex()
 	if(ip_type == IPA_IP_v4)
 	{
 		num_ipv4_modem_pdn--;
-		IPACMDBG_H("Now the number of ipv4 modem pdn is %d.\n", num_ipv4_modem_pdn);
+		IPACMDBG_H("Now the number of modem ipv4 pdn is %d.\n", num_ipv4_modem_pdn);
 #ifdef FEATURE_VLAN_MPDN
 		if(ipv4_to_iface[modem_ipv4_pdn_index].wan_up_vlan)
 		{
@@ -5986,7 +6040,7 @@ int IPACM_Wan::handle_down_evt_ex()
 		{
 			num_ipv6_modem_pdn--;
 		}
-		IPACMDBG_H("Now the number of ipv6 modem pdn is %d.\n", num_ipv6_modem_pdn);
+		IPACMDBG_H("Now the number of modem ipv6 pdn is %d.\n", num_ipv6_modem_pdn);
 		/* only when default gw goes down we post WAN_DOWN event*/
 
 #ifdef FEATURE_VLAN_MPDN
@@ -6157,10 +6211,10 @@ int IPACM_Wan::handle_down_evt_ex()
 	else
 	{
 		num_ipv4_modem_pdn--;
-		IPACMDBG_H("Now the number of ipv4 modem pdn is %d.\n", num_ipv4_modem_pdn);
+		IPACMDBG_H("Now the number of modem ipv4 pdn is %d.\n", num_ipv4_modem_pdn);
 		if (num_dft_rt_v6 > 1)
 			num_ipv6_modem_pdn--;
-		IPACMDBG_H("Now the number of ipv6 modem pdn is %d.\n", num_ipv6_modem_pdn);
+		IPACMDBG_H("Now the number of modem ipv6 pdn is %d.\n", num_ipv6_modem_pdn);
 
 #ifdef FEATURE_VLAN_MPDN
 		IPACM_Iface::ipacmcfg->del_vlan_ipv6_prefix(ipv6_prefix, -1);

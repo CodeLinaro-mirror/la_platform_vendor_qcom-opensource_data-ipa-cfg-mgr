@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013-2020, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2013-2021, The Linux Foundation. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -24,6 +24,40 @@
  * BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
  * WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
+ * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+ * Changes from Qualcomm Innovation Center are provided under the following license:
+ *
+ * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted (subject to the limitations in the
+ * disclaimer below) provided that the following conditions are met:
+ *
+ *   * Redistributions of source code must retain the above copyright
+ *     notice, this list of conditions and the following disclaimer.
+ *
+ *   * Redistributions in binary form must reproduce the above
+ *     copyright notice, this list of conditions and the following
+ *     disclaimer in the documentation and/or other materials provided
+ *     with the distribution.
+ *
+ *   * Neither the name of Qualcomm Innovation Center, Inc. nor the names of its
+ *     contributors may be used to endorse or promote products derived
+ *     from this software without specific prior written permission.
+ *
+ * NO EXPRESS OR IMPLIED LICENSES TO ANY PARTY'S PATENT RIGHTS ARE
+ * GRANTED BY THIS LICENSE. THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT
+ * HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED
+ * WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
+ * MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
+ * IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR
+ * ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+ * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE
+ * GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER
+ * IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
+ * OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 /*!
@@ -137,6 +171,7 @@ const char *ipacm_event_name[] = {
 	__stringify(IPA_ROUTE_ADD_VLAN_PDN_EVENT),             /* ipacm_event_route_vlan */
 	__stringify(IPA_HANDLE_WAN_VLAN_PDN_UP),               /* ipacm_event_vlan_pdn */
 	__stringify(IPA_HANDLE_WAN_VLAN_PDN_DOWN),             /* ipacm_event_vlan_pdn */
+	__stringify(IPA_NOTIFY_VLAN_UP),                       /* NULL */
 #endif
 #ifdef FEATURE_SOCKSv5
 	__stringify(IPA_HANDLE_SOCKSv5_UP),                    /* ipacm_event_connection */
@@ -159,6 +194,7 @@ IPACM_Config::IPACM_Config()
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
 	ipacm_lan_stats_enable = false;
 	ipacm_lan_stats_enable_set = false;
+	pthread_mutex_init(&stats_client_info_lock, NULL);
 #ifdef IPA_HW_FNR_STATS
 	memset(&fnr_counters, 0, sizeof(fnr_counters));
 	memset(cnt_idx, 0, sizeof(cnt_idx));
@@ -285,7 +321,7 @@ int IPACM_Config::ipacm_reset_hw_fnr_counters(const uint8_t start_id, const uint
 	/* Create a query with required params */
 	query->start_id = start_id;
 	query->end_id = end_id;
-	query->reset = true;
+	query->reset = false;
 	query->stats_size = sizeof(struct ipa_flt_rt_stats);
 	num_counters = end_id - start_id + 1;
 
@@ -580,11 +616,10 @@ int IPACM_Config::Init(void)
 		pthread_mutex_init(&cnt_idx_lock, NULL);
 		if (ipacm_alloc_fnr_counters(&fnr_counters, m_fd))
 		{
-			IPACMERR("Failed to allocate fnr counters.\n");
-			goto fail;
+			IPACMERR("Failed to allocate fnr counters. Try Realloc Again  In main()\n");
 		} else {
-			IPACMDBG_H("Allocating fnr counters :  Done\n");
 			hw_fnr_stats_support = true;
+			IPACMDBG_H("Allocating fnr counters : Done (%d)\n",hw_fnr_stats_support);
 		}
 	}
 skip_fnr_alloc:
@@ -597,6 +632,7 @@ skip_fnr_alloc:
 	if (ipacm_mpdn_enable == TRUE && ipacm_l2tp_enable != IPACM_L2TP_DISABLE)
 	{
 		IPACMERR("Not support both VLAN_MPDN and L2TP are enable \n");
+		close(m_fd);
 		exit(0);
 	}
 
@@ -620,6 +656,24 @@ skip_fnr_alloc:
 		free(alg_table);
 		goto fail;
 	}
+
+	/* clear lists */
+#if defined(FEATURE_L2TP) || defined(FEATURE_VLAN_MPDN)
+	m_vlan_iface.clear();
+#ifdef FEATURE_L2TP
+	m_l2tp_vlan_mapping.clear();
+	l2tp_client.clear();
+#endif //#ifdef FEATURE_L2TP
+#endif //defined(FEATURE_L2TP) || defined(FEATURE_VLAN_MPDN)
+
+#ifdef FEATURE_VLAN_MPDN
+	m_bridge_vlan_mapping.clear();
+#endif
+
+#if defined(FEATURE_SOCKSv5) && defined(IPA_SOCKV5_EVENT_MAX)
+	socksv5_conn.clear();
+	mux_id_mapping.clear();
+#endif
 
 	/* Construct the routing table ictol name in iface static member*/
 	rt_tbl_default_v4.ip = IPA_IP_v4;
@@ -730,7 +784,7 @@ fail:
 		free(cfg);
 		cfg = NULL;
 	}
-
+	close(m_fd);
 	return ret;
 }
 
@@ -793,12 +847,11 @@ int IPACM_Config::GetNatIfaces(int nIfaces, NatIfaces *pIfaces)
 int IPACM_Config::AddNatIfaces(char *dev_name)
 {
 	int i;
+
 	/* Check if this iface already in NAT-iface*/
 	for(i = 0; i < ipa_nat_iface_entries; i++)
 	{
-		if(strncmp(dev_name,
-							 pNatIfaces[i].iface_name,
-							 sizeof(pNatIfaces[i].iface_name)) == 0)
+		if(strncmp(dev_name, pNatIfaces[i].iface_name, sizeof(pNatIfaces[i].iface_name)) == 0)
 		{
 			IPACMDBG("Interface (%s) is add to nat iface already\n", dev_name);
 				return 0;
@@ -1346,6 +1399,37 @@ bool IPACM_Config::is_lan2lan_sw_path(uint16_t vlan_id)
 	pthread_mutex_unlock(&vlan_l2tp_lock);
 	return ret;
 }
+
+uint16_t IPACM_Config::get_bridge_vlan_mapping_from_subnet(uint32_t ipv4_subnet)
+{
+	list<bridge_vlan_mapping_info>::iterator it_mapping;
+	int ret = IPACM_FAILURE;
+	uint16_t VlanID;
+
+	if(pthread_mutex_lock(&vlan_l2tp_lock) != 0)
+	{
+		IPACMERR("Unable to lock the mutex\n");
+		return IPACM_FAILURE;
+	}
+
+	for(it_mapping = m_bridge_vlan_mapping.begin(); it_mapping != m_bridge_vlan_mapping.end(); it_mapping++)
+	{
+		if(ipv4_subnet == (it_mapping->bridge_ipv4 & it_mapping->subnet_mask))
+		{
+			IPACMDBG_H("Found the bridge mapping for subnet 0x%X (vid = %d)\n",
+				ipv4_subnet,
+				it_mapping->bridge_associated_VID);
+			VlanID = it_mapping->bridge_associated_VID;
+			pthread_mutex_unlock(&vlan_l2tp_lock);
+			return VlanID;
+		}
+	}
+
+	pthread_mutex_unlock(&vlan_l2tp_lock);
+	IPACMERR("Could not find subnet 0x%X\n", ipv4_subnet);
+
+	return 0;
+}
 #endif
 
 #if defined(FEATURE_L2TP) || defined(FEATURE_VLAN_MPDN)
@@ -1353,6 +1437,7 @@ void IPACM_Config::add_vlan_iface(ipa_ioc_vlan_iface_info *data)
 {
 	list<vlan_iface_info>::iterator it_vlan;
 	vlan_iface_info new_vlan_info;
+	ipacm_cmd_q_data evt_data;
 
 	if(pthread_mutex_lock(&vlan_l2tp_lock) != 0)
 	{
@@ -1422,6 +1507,16 @@ void IPACM_Config::add_vlan_iface(ipa_ioc_vlan_iface_info *data)
 			IPACM_Iface::ipacmcfg->getEventName(eth_bridge_evt.event));
 		IPACM_EvtDispatcher::PostEvt(&eth_bridge_evt);
 	}
+	/*
+	 * Call IPA_NOTIFY_VLAN_UP which will allow LAN to check if VLAN PDN is up.
+	 * This will handle scenario where add_vlan_iface is received after
+	 * LAN IPA_NEW_ADDR have already been processed.
+	 */
+	evt_data.event = IPA_NOTIFY_VLAN_UP;
+	evt_data.evt_data = NULL;
+	IPACMDBG_H("Posting IPA_NOTIFY_VLAN_UP event!\n", evt_data.event);
+	IPACM_EvtDispatcher::PostEvt(&evt_data);
+
 #endif
 	return;
 }
@@ -2376,5 +2471,59 @@ void IPACM_Config::alloc_fnr_counter(void)
 			hw_fnr_stats_support = true;
 		}
 	}
+}
+#endif
+
+#ifdef FEATURE_IPACM_PER_CLIENT_STATS
+void IPACM_Config::stats_client_info(uint8_t *mac_addr, bool is_add)
+{
+	uint8_t mac_a[6] = {0};
+	std::array<uint8_t, 6> mac = {0};
+
+	if(pthread_mutex_lock(&stats_client_info_lock) != 0)
+	{
+		IPACMERR("Unable to lock the mutex\n");
+		return ;
+	}
+	memcpy(mac_a,mac_addr,IPA_MAC_ADDR_SIZE);
+	std::copy(std::begin(mac_a), std::end(mac_a), std::begin(mac));
+
+	if(is_add) {
+		mac_addrs_stats_cache.insert(mac);
+	}
+	else
+	{
+		if (mac_addrs_stats_cache.count(mac))
+			mac_addrs_stats_cache.erase(mac);
+	}
+	pthread_mutex_unlock(&stats_client_info_lock);
+	return;
+}
+
+bool IPACM_Config::client_in_stats_cache(uint8_t *mac_addr)
+{
+	bool is_enable = false;
+	uint8_t mac_a[6] = {0};
+	std::array<uint8_t, 6> mac = {0};
+
+	if(pthread_mutex_lock(&stats_client_info_lock) != 0)
+	{
+		IPACMERR("Unable to lock the mutex\n");
+		return is_enable;
+	}
+	memcpy(mac_a,mac_addr,IPA_MAC_ADDR_SIZE);
+	std::copy(std::begin(mac_a), std::end(mac_a), std::begin(mac));
+
+	if (mac_addrs_stats_cache.count(mac))
+	{
+		is_enable = true;
+		mac_addrs_stats_cache.erase(mac);
+	}
+	else
+	{
+		is_enable = false;
+	}
+	pthread_mutex_unlock(&stats_client_info_lock);
+	return is_enable;
 }
 #endif

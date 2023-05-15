@@ -500,6 +500,48 @@ int IPACM_Wan::GetMTUByVid(uint16_t *mtu, uint16_t vlan_id, ipa_ip_type iptype)
 	return IPACM_FAILURE;
 }
 
+#ifdef FEATURE_EoGRE
+uint16_t IPACM_Wan::GetGREMTU(ipa_ip_type iptype)
+{
+	ipa_ipgre_info ipgre_info = IPACM_Iface::ipacmcfg->eogre_info;
+
+	for(int i = 0; i < IPA_MAX_NUM_SW_PDNS; i++)
+	{
+		if(iptype == IPA_IP_v4)
+		{
+			if(IPACM_Wan::ipv4_to_iface[i].pIface->wan_v4_addr == ipgre_info.ipv4_src)
+			{
+				IPACMDBG_H("Found GRE v4 MTU of %d ", IPACM_Wan::ipv4_to_iface[i].pIface->mtu_v4);
+				IPACM_LOG_IP_ADDR("for:", IPA_IP_v4, &ipgre_info.ipv4_src);
+				return IPACM_Wan::ipv4_to_iface[i].pIface->mtu_v4;
+			}
+		}
+		else
+		{
+			if (memcmp(ipgre_info.ipv6_src,
+				IPACM_Wan::ipv6_to_iface[i].pIface->m_ipv6_addr,
+				sizeof(ipgre_info.ipv6_src)) == 0)
+			{
+				IPACMDBG_H("Found GRE v6 MTU of %d\n", IPACM_Wan::ipv6_to_iface[i].pIface->mtu_v6);
+				IPACM_LOG_IP_ADDR("for:", IPA_IP_v6, &ipgre_info.ipv6_src);
+				return IPACM_Wan::ipv6_to_iface[i].pIface->mtu_v6;
+			}
+		}
+	}
+
+	if (iptype == IPA_IP_v4)
+	{
+		IPACM_LOG_IP_ADDR("couldn't find MTU for GRE:", IPA_IP_v4, &ipgre_info.ipv4_src);
+	}
+	else
+	{
+		IPACM_LOG_IP_ADDR("couldn't find MTU for GRE:", IPA_IP_v6, &ipgre_info.ipv6_src);
+	}
+
+	return DEFAULT_MTU_SIZE;
+}
+#endif
+
 int IPACM_Wan::Getv6addrByName(char* pdn_name, uint32_t* ipv6_addr)
 {
 	for(int i = 0; i < IPA_MAX_NUM_SW_PDNS; i++)

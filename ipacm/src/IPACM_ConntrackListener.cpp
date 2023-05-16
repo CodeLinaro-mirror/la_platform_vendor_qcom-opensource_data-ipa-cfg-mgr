@@ -324,7 +324,7 @@ void IPACM_ConntrackListener::event_callback(ipa_cm_event_id evt,
 		if(IPACM_Iface::ipacmcfg->ipacm_MsgFlt_enable)
 		{
 			IPACMDBG("Received IPA_MSG_FILTER_NAT_EVENT event\n");
-			nat_inst->HandleSwAllowEntries(data, true);
+			nat_inst->HandleSwAllowEntries(data);
 		}
 		 break;
 
@@ -2469,8 +2469,6 @@ void IPACM_ConntrackListener::ProcessTCPorUDPMsg(
 	 nat_entry.rule = &rule;
 #ifdef FEATURE_VLAN_MPDN
 	 AddORDeleteNatEntry(&nat_entry, &SendVlanEvent);
-	 if(IPACM_Iface::ipacmcfg->ipacm_MsgFlt_enable)
-		 nat_inst->HandleSwAllowEntries(NULL, false);
 	 if(VlanID > 0 && SendVlanEvent)
 	 {
 		 ipacm_cmd_q_data evt_data;
@@ -2501,8 +2499,6 @@ void IPACM_ConntrackListener::ProcessTCPorUDPMsg(
 	 }
 #else
 	 AddORDeleteNatEntry(&nat_entry, NULL);
-	 if(IPACM_Iface::ipacmcfg->ipacm_MsgFlt_enable)
-		 nat_inst->HandleSwAllowEntries(NULL, false);
 #endif
 	 return;
 

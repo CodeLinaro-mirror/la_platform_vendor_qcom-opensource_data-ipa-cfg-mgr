@@ -1563,18 +1563,75 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 			if (ipacmcfg->vlan_firewall_change_handle)
 			{
 				ipacmcfg->vlan_firewall_change_handle = false;
+				del_wan_firewall_rule(IPA_IP_v4);
+				config_wan_firewall_rule(IPA_IP_v4);
+				del_wan_firewall_rule(IPA_IP_v6);
+				config_wan_firewall_rule(IPA_IP_v6);
+				install_wan_filtering_rule(false);
 			}
-			else
+			if(IPACM_Iface::ipacmcfg->ipacm_MsgFlt_enable)
 			{
-				break;
+				char pdnname[IF_NAME_LEN];
+				for(int i = 0; i < IPA_MAX_NUM_SW_PDNS; i++)
+				{
+					if(ipv4_to_iface[i].pIface && ipv4_to_iface[i].pIface->dev_name && (!strcmp(ipv4_to_iface[i].pIface->dev_name, IPACM_Iface::ipacmcfg->iface_table[ipa_if_num].iface_name)))
+					{
+						memset(pdnname, 0, IF_NAME_LEN);
+						memcpy(pdnname, ipv4_to_iface[i].pIface->dev_name , sizeof(char)*IF_NAME_LEN);
+						ipacm_event_data_sw_allow *wan_sw_allow_data;
+						ipacm_cmd_q_data evt_data;
+						wan_sw_allow_data = (ipacm_event_data_sw_allow *)malloc(sizeof(ipacm_event_data_sw_allow));
+						if(wan_sw_allow_data == NULL)
+						{
+							IPACMERR("Unable to allocate memory\n");
+							break;
+						}
+						IPACM_firewall_t firewall_mpdn_config;
+						if(IPACM_read_firewall_xml(MOBILE_FIREWALL_FILE, firewall_mpdn_config) == IPACM_SUCCESS)
+						{
+							IPACMDBG_H("QCMAP Firewall XML read OK \n");
+						}
+						else
+						{
+							IPACMERR("QCMAP Firewall XML read failed, no such file, use default configuration \n");
+							break;
+						}
+						memset(wan_sw_allow_data, 0, sizeof(ipacm_event_data_sw_allow));
+						wan_sw_allow_data->firewall_config = NULL;
+						int num_pdns = firewall_mpdn_config.pdn_count;
+						for(int j = 0; j < num_pdns; j++)
+						{
+							if(!strcmp(firewall_mpdn_config.pdns[j].net_dev, pdnname))
+							{
+								IPACMDBG("found %s dev in index %d\n",firewall_mpdn_config.pdns[j].net_dev, j);
+								wan_sw_allow_data->firewall_config = &firewall_mpdn_config.pdns[j];
+								break;
+							}
+						}
+						if(wan_sw_allow_data->firewall_config == NULL)
+						{
+							IPACMERR("firewall entry is null\n");
+
+							free(wan_sw_allow_data);
+						}
+						else
+						{
+							IPACMERR("firewall entry is valid\n");
+							wan_sw_allow_data->pdn_index = i;
+							if(ipv4_to_iface[i].ipv4_addr)
+								wan_sw_allow_data->ipv4_addr = ipv4_to_iface[i].ipv4_addr;
+							memcpy(wan_sw_allow_data->dev_name, pdnname, sizeof(char)*IF_NAME_LEN);
+							IPACMDBG_H("Posting IPA_MSG_FILTER_NAT_EVENT for %s \n", pdnname);
+							evt_data.event = IPA_MSG_FILTER_NAT_EVENT;
+							evt_data.evt_data = wan_sw_allow_data;
+							IPACM_EvtDispatcher::PostEvt(&evt_data);
+							break;
+						}
+					}
+				}
 			}
+			break;
 
-			del_wan_firewall_rule(IPA_IP_v4);
-			config_wan_firewall_rule(IPA_IP_v4);
-
-			del_wan_firewall_rule(IPA_IP_v6);
-			config_wan_firewall_rule(IPA_IP_v6);
-			install_wan_filtering_rule(false);
 #else
 			if (is_default_gateway == false)
 			{
@@ -2016,17 +2073,6 @@ int IPACM_Wan::handle_route_add_vlan_pdn_evt(ipa_ip_type iptype, uint16_t vlan_i
 		}
 		memset(wanup_vlan_data, 0, sizeof(ipacm_event_vlan_pdn));
 
-		ipacm_event_data_sw_allow *wan_sw_allow_data;
-		if(IPACM_Iface::ipacmcfg->ipacm_MsgFlt_enable)
-		{
-			wan_sw_allow_data = (ipacm_event_data_sw_allow *)malloc(sizeof(ipacm_event_data_sw_allow));
-			if(wan_sw_allow_data == NULL)
-			{
-				IPACMERR("Unable to allocate memory\n");
-				return IPACM_FAILURE;
-			}
-			memset(wan_sw_allow_data, 0, sizeof(ipacm_event_data_sw_allow));
-		}
 		wanup_vlan_data->mux_id = ext_prop->ext[0].mux_id;
 		wanup_vlan_data->iptype = IPA_IP_v4;
 		wanup_vlan_data->VlanID = vlan_id;
@@ -2041,33 +2087,9 @@ int IPACM_Wan::handle_route_add_vlan_pdn_evt(ipa_ip_type iptype, uint16_t vlan_i
 		}
 		IPACMDBG_H("Posting IPA_HANDLE_WAN_VLAN_PDN_UP with below information:\n");
 		IPACMDBG_H("iptype IPA_IP_v4, VlanID %d, mux_id %d, if num %d\n", vlan_id, ext_prop->ext[0].mux_id, ipa_if_num);
-		if(IPACM_Iface::ipacmcfg->ipacm_MsgFlt_enable)
-		{
-			wan_sw_allow_data->firewall_config = get_firewall_conf_by_vid_ul(vlan_id);
-			wan_sw_allow_data->pdn_index = modem_ipv4_pdn_index;
-			wan_sw_allow_data->ipv4_addr = ipv4_to_iface[modem_ipv4_pdn_index].ipv4_addr;
-			memcpy(wan_sw_allow_data->dev_name, ipv4_to_iface[modem_ipv4_pdn_index].pIface->dev_name, sizeof(char)*IF_NAME_LEN);
-		}
-
 		evt_data.event = IPA_HANDLE_WAN_VLAN_PDN_UP;
 		evt_data.evt_data = (void *)wanup_vlan_data;
 		IPACM_EvtDispatcher::PostEvt(&evt_data);
-		if(IPACM_Iface::ipacmcfg->ipacm_MsgFlt_enable)
-		{
-			if(wan_sw_allow_data->firewall_config != NULL)
-			{
-				memset(&evt_data, 0, sizeof(evt_data));
-				IPACMDBG_H("Posting IPA_MSG_FILTER_NAT_EVENT\n");
-
-				evt_data.event = IPA_MSG_FILTER_NAT_EVENT;
-				evt_data.evt_data = wan_sw_allow_data;
-				IPACM_EvtDispatcher::PostEvt(&evt_data);
-			}
-			else
-			{
-				free(wan_sw_allow_data);
-			}
-		}
 	}
 
 	associated_VID = vlan_id;
@@ -5530,6 +5552,26 @@ int IPACM_Wan::handle_route_del_evt(ipa_ip_type iptype)
 			{
 				memset(IPACM_Wan::wan_up_dev_name, 0, sizeof(IPACM_Wan::wan_up_dev_name));
 			}
+			if(IPACM_Iface::ipacmcfg->ipacm_MsgFlt_enable)
+			{
+				ipacm_event_data_sw_allow *wan_sw_allow_data;
+				int i;
+				wan_sw_allow_data = (ipacm_event_data_sw_allow *)malloc(sizeof(ipacm_event_data_sw_allow));
+				if(wan_sw_allow_data == NULL)
+				{
+					IPACMERR("Unable to allocate memory\n");
+					return IPACM_FAILURE;
+				}
+				memset(wan_sw_allow_data, 0, sizeof(ipacm_event_data_sw_allow));
+				wan_sw_allow_data->pdn_index = modem_ipv4_pdn_index;
+				wan_sw_allow_data->ipv4_addr = -1;
+				memset(&evt_data, 0, sizeof(evt_data));
+				IPACMDBG_H("Posting IPA_MSG_FILTER_NAT_EVENT for iface %s\n", dev_name);
+				evt_data.event = IPA_MSG_FILTER_NAT_EVENT;
+				evt_data.evt_data = wan_sw_allow_data;
+				IPACM_EvtDispatcher::PostEvt(&evt_data);
+			}
+
 		}
 		else
 		{
@@ -6297,7 +6339,25 @@ int IPACM_Wan::handle_down_evt_ex()
 			vlandown_data->VlanID = associated_VID;
 			vlandown_data->ipv4_addr = wan_v4_addr;
 			vlandown_data->mux_id = ext_prop->ext[0].mux_id;
-
+			if(IPACM_Iface::ipacmcfg->ipacm_MsgFlt_enable)
+			{
+				ipacm_event_data_sw_allow *wan_sw_allow_data;
+				int i;
+				wan_sw_allow_data = (ipacm_event_data_sw_allow *)malloc(sizeof(ipacm_event_data_sw_allow));
+				if(wan_sw_allow_data == NULL)
+				{
+					IPACMERR("Unable to allocate memory\n");
+					return IPACM_FAILURE;
+				}
+				memset(wan_sw_allow_data, 0, sizeof(ipacm_event_data_sw_allow));
+				wan_sw_allow_data->pdn_index = modem_ipv4_pdn_index;
+				wan_sw_allow_data->ipv4_addr = -1;
+				memset(&evt_data, 0, sizeof(evt_data));
+				IPACMDBG_H("Posting IPA_MSG_FILTER_NAT_EVENT for vid %d\n", associated_VID);
+				evt_data.event = IPA_MSG_FILTER_NAT_EVENT;
+				evt_data.evt_data = wan_sw_allow_data;
+				IPACM_EvtDispatcher::PostEvt(&evt_data);
+			}
 			IPACMDBG_H("Posting IPA_HANDLE_WAN_VLAN_PDN_DOWN with below information:\n");
 			IPACMDBG_H("iptype IPA_IP_v4, VlanID %d, mux_id %d, if num %d\n", associated_VID, ext_prop->ext[0].mux_id, ipa_if_num);
 
@@ -9126,6 +9186,7 @@ int IPACM_Wan::add_firewall_rules_ex(const IPACM_firewall_conf_t& firewall_confi
 	const struct ipa_rule_attrib& rx_prop_attrib, struct ipa_flt_rule_add *rules, int rules_size, int& pos)
 #endif
 {
+	int i, j, cnt = pos;
 	IPACMDBG_H("fw status: %d, swallowed:%d ip-type:%d\n", firewall_config.firewall_enable, firewall_config.SWAllowed, iptype);
 
 	if (!firewall_config.firewall_enable && !firewall_config.SWAllowed && IPACM_Iface::ipacmcfg->ipacm_MsgFlt_enable)
@@ -9143,12 +9204,9 @@ int IPACM_Wan::add_firewall_rules_ex(const IPACM_firewall_conf_t& firewall_confi
 		}
 		struct ipa_flt_rule_add flt_rule_entry;
 		memset(&flt_rule_entry, 0, sizeof(struct ipa_flt_rule_add));
-		if(IPACM_Iface::ipacmcfg->ipacm_MsgFlt_enable)
+		if (firewall_config.extd_firewall_entries[i].SWAllowed_ex && IPACM_Iface::ipacmcfg->ipacm_MsgFlt_enable)
 		{
-			if (firewall_config.extd_firewall_entries[i].SWAllowed_ex)
-			{
-				flt_rule_entry.at_rear = false;
-			}
+			flt_rule_entry.at_rear = false;
 		}
 		else
 		{
@@ -9181,16 +9239,13 @@ int IPACM_Wan::add_firewall_rules_ex(const IPACM_firewall_conf_t& firewall_confi
 			rule_protocol = &flt_rule_entry.rule.attrib.u.v4.protocol;
 			firewall_config_protocol = &firewall_config.extd_firewall_entries[i].attrib.u.v4.protocol;
 
-			if(IPACM_Iface::ipacmcfg->ipacm_MsgFlt_enable)
+			if (firewall_config.extd_firewall_entries[i].SWAllowed_ex && IPACM_Iface::ipacmcfg->ipacm_MsgFlt_enable)
 			{
-				if (firewall_config.extd_firewall_entries[i].SWAllowed_ex)
-				{
-					IPACMDBG_H("Forming sw-allowed rule v4\n");
-					flt_rule_entry.rule.action = IPA_PASS_TO_EXCEPTION;
-					rt_tbl_name = ipacmcfg->rt_tbl_wan_dl.name;
-				}
+				IPACMDBG_H("Forming sw-allowed rule v4\n");
+				flt_rule_entry.rule.action = IPA_PASS_TO_EXCEPTION;
+				rt_tbl_name = ipacmcfg->rt_tbl_wan_dl.name;
 			}
-			if (firewall_config.rule_action_accept)
+			else if (firewall_config.rule_action_accept)
 			{
 				flt_rule_entry.rule.action = IPA_PASS_TO_DST_NAT;
 				rt_tbl_name = ipacmcfg->rt_tbl_lan_v4.name;
@@ -9224,16 +9279,13 @@ int IPACM_Wan::add_firewall_rules_ex(const IPACM_firewall_conf_t& firewall_confi
 			rule_protocol = &flt_rule_entry.rule.attrib.u.v6.next_hdr;
 			firewall_config_protocol = &firewall_config.extd_firewall_entries[i].attrib.u.v6.next_hdr;
 
-			if(IPACM_Iface::ipacmcfg->ipacm_MsgFlt_enable)
+			if (firewall_config.extd_firewall_entries[i].SWAllowed_ex && IPACM_Iface::ipacmcfg->ipacm_MsgFlt_enable)
 			{
-				if (firewall_config.extd_firewall_entries[i].SWAllowed_ex)
-				{
-					IPACMDBG_H("Forming sw-allowed rule v6\n");
-					flt_rule_entry.rule.action = IPA_PASS_TO_EXCEPTION;
-					rt_tbl_name = ipacmcfg->rt_tbl_wan_dl.name;
-				}
+				IPACMDBG_H("Forming sw-allowed rule v6\n");
+				flt_rule_entry.rule.action = IPA_PASS_TO_EXCEPTION;
+				rt_tbl_name = ipacmcfg->rt_tbl_wan_dl.name;
 			}
-			if (firewall_config.rule_action_accept)
+			else if (firewall_config.rule_action_accept)
 			{
 				flt_rule_entry.rule.action =
 					IPACM_Iface::ipacmcfg->IsIpv6CTEnabled() ? IPA_PASS_TO_DST_NAT : IPA_PASS_TO_ROUTING;
@@ -9367,6 +9419,57 @@ int IPACM_Wan::add_firewall_rules_ex(const IPACM_firewall_conf_t& firewall_confi
 			++(*num_flt_rule);
 		}
 	} /* end of firewall filter rule add for loop*/
+
+	/* sorting the DL filter rules to at rear false first */
+	if(IPACM_Iface::ipacmcfg->ipacm_MsgFlt_enable)
+	{
+		struct ipa_flt_rule_add flt_rule_entry;
+#ifdef FEATURE_VLAN_MPDN
+		for(i = 0; i<(pos-cnt); i++)
+		{
+			if(rules[cnt+i].flt_rule.at_rear == false)
+			{
+				continue;
+			}
+			else
+			{
+				for(j = i+1; j<(pos-cnt); j++)
+				{
+					if(rules[cnt+j].flt_rule.at_rear == false)
+					{
+						memset(&flt_rule_entry, 0, sizeof(struct ipa_flt_rule_add));
+						memcpy(&flt_rule_entry, &(rules[cnt+i].flt_rule), sizeof(struct ipa_flt_rule_add));
+						memcpy(&(rules[cnt+i].flt_rule), &(rules[cnt+j].flt_rule), sizeof(struct ipa_flt_rule_add));
+						memcpy(&(rules[cnt+j].flt_rule), &flt_rule_entry, sizeof(struct ipa_flt_rule_add));
+						break;
+					}
+				}
+			}
+		}
+#else
+		for(i = 0; i<(pos-cnt); i++)
+		{
+			if(rules[cnt+i].flt_rule.at_rear == false)
+			{
+				continue;
+			}
+			else
+			{
+				for(j = i+1; j<(pos-cnt); j++)
+				{
+					if(rules[cnt+j].flt_rule.at_rear == false)
+					{
+						memset(&flt_rule_entry, 0, sizeof(struct ipa_flt_rule_add));
+						memcpy(&flt_rule_entry, &(rules[cnt+i]), sizeof(struct ipa_flt_rule_add));
+						memcpy(&(rules[cnt+i]), &(rules[cnt+j]), sizeof(struct ipa_flt_rule_add));
+						memcpy(&(rules[cnt+j]), &flt_rule_entry, sizeof(struct ipa_flt_rule_add));
+						break;
+					}
+				}
+			}
+		}
+#endif
+	}
 	return IPACM_SUCCESS;
 }
 

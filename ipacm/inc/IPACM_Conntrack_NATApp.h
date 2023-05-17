@@ -53,6 +53,9 @@ extern "C"
 
 #endif
 
+#define ipv6prefixmatch(X,Y) \
+	((((X >> 32) == *Y) && ((X & 0x00000000FFFFFFFF) == *(Y+1))) ? 1 : 0)
+
 class IpAddress
 {
 public:
@@ -208,6 +211,9 @@ struct NatEntryBase
 	bool m_ucp;
 	bool m_s;
 	uint16_t m_uc_activation_index;
+
+	bool isVlan;
+	bool IsVlanUp;
 
 protected:
 
@@ -491,6 +497,8 @@ protected:
 
 	uint32_t m_tableHandle;
 
+	bool table_created;
+
 private:
 
 	NatProxyBase(const NatProxyBase&);
@@ -573,8 +581,8 @@ public:
 		return m_type;
 	}
 
-	int AddTable(const IpAddress& wan_ip);
-	int DeleteTable(const IpAddress& wan_addr);
+	int AddTable(const uint32_t v6_prefix[2]);
+	int DeleteTable(const uint32_t v6_prefix[2], int num_v6_vlan_pdns);
 
 	int AddEntry(const NatEntryBase& entry);
 	void DeleteEntry(const NatEntryBase& entry);
@@ -582,6 +590,7 @@ public:
 	void AddTempEntry(const NatEntryBase& entry);
 	void DeleteTempEntry(const NatEntryBase& entry);
 	void FlushTempEntries(const IpAddress& clientIp, bool isAdd, bool isDummy, bool isStaClientIp);
+	void FlushAndCacheVlanTempEntries_v6(uint32_t* ipv6_addr, bool isAdd, bool isDummy, bool isStaClientIp);
 
 	void UpdateTcpUdpTimeStamps(bool& isTcpUdpTimeoutUpToDate);
 

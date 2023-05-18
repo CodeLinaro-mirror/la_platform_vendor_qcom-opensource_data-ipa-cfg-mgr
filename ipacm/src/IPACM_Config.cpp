@@ -597,6 +597,7 @@ skip_fnr_alloc:
 	if (ipacm_mpdn_enable == TRUE && ipacm_l2tp_enable != IPACM_L2TP_DISABLE)
 	{
 		IPACMERR("Not support both VLAN_MPDN and L2TP are enable \n");
+		close(m_fd);
 		exit(0);
 	}
 
@@ -785,7 +786,7 @@ fail:
 		free(cfg);
 		cfg = NULL;
 	}
-
+	close(m_fd);
 	return ret;
 }
 

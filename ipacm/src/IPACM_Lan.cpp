@@ -1162,7 +1162,7 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 #endif
 				{
 					handle_eth_client_route_rule(data->mac_addr, data->iptype);
-
+					IPACM_Iface::ipacmcfg->AddNatIfaces(data->iface_name);
 					/* Add NAT rules after RT rules are set */
 					HandleNeighIpAddrAddEvt(data);
 				}

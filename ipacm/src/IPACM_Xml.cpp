@@ -307,6 +307,7 @@ static int ipacm_cfg_xml_parse_tree
 						IPACM_util_icmp_string((char*)xml_node->name, IPACMCFG_TAG) == 0 ||
 						IPACM_util_icmp_string((char*)xml_node->name, IPACMIFACECFG_TAG) == 0 ||
 						IPACM_util_icmp_string((char*)xml_node->name, IFACE_TAG) == 0 ||
+						IPACM_util_icmp_string((char*)xml_node->name, IPACMALG_TAG) == 0 ||
 						IPACM_util_icmp_string((char*)xml_node->name, ALG_TAG) == 0 ||
 						IPACM_util_icmp_string((char*)xml_node->name, IPACMNat_TAG) == 0 ||
 						IPACM_util_icmp_string((char*)xml_node->name, IPACM_IPV6CT_TAG) == 0 ||

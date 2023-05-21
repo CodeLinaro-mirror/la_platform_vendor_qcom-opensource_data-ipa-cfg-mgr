@@ -1174,11 +1174,15 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 						eth_index = get_eth_client_index(data->mac_addr);
 						retval = handle_eth_client_route_rule_ext_v2(data->mac_addr, data->iptype,
 							get_client_memptr(eth_client, eth_index)->dl_cnt_idx);
+						HandleNeighIpAddrAddEvt(data);
 						IPACMDBG_H("Route install retval = %d\n", retval);
 					}
 					else
 #endif //IPA_HW_FNR_STATS
+					{
 						handle_eth_client_route_rule_ext(data->mac_addr, data->iptype);
+						HandleNeighIpAddrAddEvt(data);
+					}
 				}
 #endif
 				eth_bridge_post_event(IPA_ETH_BRIDGE_CLIENT_ADD, IPA_IP_MAX, data->mac_addr, NULL, data->iface_name);

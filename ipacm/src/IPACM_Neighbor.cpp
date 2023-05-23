@@ -172,6 +172,9 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 	int i, ret, ipa_interface_index;
 	ipacm_cmd_q_data evt_data;
 	int num_neighbor_client_temp = num_neighbor_client;
+	char iface_name[IPA_IFACE_NAME_LEN] = {0};
+	int bridge_index;
+	int skip_nat_set = 0;
 
 	IPACMDBG("Recieved event %d\n", event);
 
@@ -446,6 +449,42 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 								IPACMERR("couldn't add/renew bridge %s, not sending internal event\n", data->iface_name);
 								return;
 							}
+
+						/*	This is to avoid installing IPA private subnet Filter rules in case of
+								IPPT without NAT scenario to avoid packets taking SW path because we
+								are installing private subnet rules with public IP assigned to bridge
+								since bridge has no longer the private IP assigned. */
+
+						for (int i = 0; i < MAX_NUM_IP_PASS_MPDN; i++)
+						{
+							if(IPACM_Iface::ipacmcfg->ip_pass_mpdn_table[i].valid_entry == true &&
+								IPACM_Iface::ipacmcfg->ip_pass_mpdn_table[i].ip_pass_skip_nat == 1)
+							{
+								skip_nat_set = 1;
+								break;
+							}
+						}
+						if(skip_nat_set)
+						{
+							if (IPACM_Iface::ipa_get_if_index(bridge->bridge_name, &bridge_index) == IPACM_SUCCESS)
+							{
+								if(IPACM_Iface::ipacmcfg->DelPrivateSubnetByIfIndex(bridge_index) == true)
+								{
+									IPACMDBG_H("Deleted IPACM bridge private subnet_addr for %s\n", bridge->bridge_name);
+								}
+								else
+								{
+									IPACMERR("Can't Delete IPACM private subnet_addr for %s\n", bridge->bridge_name);
+								}
+							}
+							else
+							{
+								IPACMERR("get interface index failed for %s\n", bridge->bridge_name);
+							}
+
+						}
+						skip_nat_set = 0;
+
 						}
 #endif
 						/* search if seen this client or not*/

@@ -2143,6 +2143,24 @@ ipacm_bridge *IPACM_Config::get_vlan_bridge(char *name)
 	return NULL;
 }
 
+ipacm_bridge *IPACM_Config::get_vlan_bridge_from_vid(uint16_t vlan_id)
+{
+	for(int i = 0; i < IPA_MAX_NUM_BRIDGES; i++)
+	{
+		if(vlan_id == IPACM_Iface::ipacmcfg->vlan_bridges[i].associate_VID)
+		{
+			IPACMDBG_H("found bridge %s with associate_VID %d\n",
+					IPACM_Iface::ipacmcfg->vlan_bridges[i].bridge_name,
+					IPACM_Iface::ipacmcfg->vlan_bridges[i].associate_VID);
+
+			return &IPACM_Iface::ipacmcfg->vlan_bridges[i];
+		}
+	}
+
+	IPACMDBG_H("no bridge with vlan-id %d exists\n", vlan_id);
+	return NULL;
+}
+
 bool IPACM_Config::is_added_vlan_iface(char *iface_name)
 {
 	list<vlan_iface_info>::iterator it_vlan;
@@ -3593,6 +3611,8 @@ bool IPACM_Config::delMacsecMap(struct ipa_macsec_map *macsecMap) {
 void IPACM_Config::ip_pass_config_update(ipa_ioc_pdn_config *pdn_config)
 {
 	int indx;
+	int bridge_index;
+	ipacm_bridge *bridge = NULL;
 
 	if(pthread_mutex_lock(&ip_pass_mpdn_lock) != 0)
 	{
@@ -3619,6 +3639,39 @@ void IPACM_Config::ip_pass_config_update(ipa_ioc_pdn_config *pdn_config)
 			strlcpy(ip_pass_mpdn_table[indx].dev_name,
 					pdn_config->dev_name, IPA_RESOURCE_NAME_MAX);
 			ip_pass_mpdn_table[indx].is_default_pdn = pdn_config->default_pdn;
+
+			/* This is to avoid installing IPA private subnet Filter rules in case of
+			 * IPPT without NAT scenario to avoid packets taking SW path because we
+			 * are installing private subnet rules with public IP assigned to bridge
+			 * since bridge has no longer the private IP assigned.*/
+
+			if(pdn_config->u.passthrough_cfg.skip_nat)
+			{
+				bridge = IPACM_Iface::ipacmcfg->get_vlan_bridge_from_vid(pdn_config->u.passthrough_cfg.vlan_id);
+				if (!bridge)
+				{
+					IPACMDBG_H("bridge is NULL with vid (%d), ignoring!\n",
+							pdn_config->u.passthrough_cfg.vlan_id);
+				}
+				else
+				{
+					if (IPACM_Iface::ipa_get_if_index(bridge->bridge_name, &bridge_index) == IPACM_SUCCESS)
+					{
+						if(IPACM_Iface::ipacmcfg->DelPrivateSubnetByIfIndex(bridge_index) == true)
+						{
+							IPACMDBG_H("Deleted IPACM bridge private subnet_addr for %s\n", bridge->bridge_name);
+						}
+						else
+						{
+							IPACMERR("Can't Delete IPACM private subnet_addr for %s\n", bridge->bridge_name);
+						}
+					}
+					else
+					{
+						IPACMERR("get interface index failed for %s\n", bridge->bridge_name);
+					}
+				}
+			}
 		}
 		else
 			IPACMERR("IP Passthrough supports only 15 PDNs\n");

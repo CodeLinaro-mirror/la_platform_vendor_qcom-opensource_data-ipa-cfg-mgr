@@ -334,6 +334,7 @@ typedef enum
 	IPA_ADD_BRIDGE_VLAN_BR_INTF,
 	IPA_ADD_EXT_ROUTER_RULES,                 /* char */
 	IPA_DEL_EXT_ROUTER_RULES,                 /* char* */
+	IPA_IPACM_DISABLE,                        /* void */
 	IPACM_EVENT_MAX
 } ipa_cm_event_id;
 

@@ -326,6 +326,8 @@ public:
 	bool           eogre_enabled;
 #endif
 
+	bool eth_pdu_enabled;
+
 #ifdef FEATURE_VLAN_MPDN
 	bool vlan_firewall_change_handle;
 

@@ -201,6 +201,7 @@ const char *ipacm_event_name[] = {
 	__stringify(IPA_ADD_BRIDGE_VLAN_BR_INTF),              /* Handle vlan-bridge details add for bridge interface. */
 	__stringify(IPA_ADD_EXT_ROUTER_RULES),                 /* Handle ext_route add event */
 	__stringify(IPA_DEL_EXT_ROUTER_RULES),                 /* Handle ext_route del event */
+	__stringify(IPA_IPACM_DISABLE),                       /* handle ipacm_disable event */
 	__stringify(IPACM_EVENT_MAX)
 };
 

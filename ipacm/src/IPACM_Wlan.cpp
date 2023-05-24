@@ -254,12 +254,17 @@ void IPACM_Wlan::event_callback(ipa_cm_event_id event, void *param)
 
 	switch (event)
 	{
-
+	/* support eth pdu ipacm disable */
+	case IPA_IPACM_DISABLE:
+		IPACMDBG_H("Received IPA_IPACM_DISABLE, treat as IPA_WLAN_LINK_DOWN_EVENT\n");
 	case IPA_WLAN_LINK_DOWN_EVENT:
 		{
-			ipacm_event_data_fid *data = (ipacm_event_data_fid *)param;
-			ipa_interface_index = iface_ipa_index_query(data->if_index);
-			if (ipa_interface_index == ipa_if_num)
+			if (event != IPA_IPACM_DISABLE)
+			{
+				ipacm_event_data_fid *data = (ipacm_event_data_fid *)param;
+				ipa_interface_index = iface_ipa_index_query(data->if_index);
+			}
+			if (ipa_interface_index == ipa_if_num || event == IPA_IPACM_DISABLE)
 			{
 				IPACMDBG_H("Received IPA_WLAN_LINK_DOWN_EVENT\n");
 				handle_down_evt();

@@ -51,6 +51,9 @@
 #include "IPACM_ConntrackListener.h"
 #include <sys/ioctl.h>
 #include <fcntl.h>
+#include <memory>
+#include <cstdio>
+#include <iostream>
 
 bool IPACM_Lan::odu_up = false;
 
@@ -11051,22 +11054,23 @@ int IPACM_Lan::eth_bridge_del_hdr_proc_ctx(uint32_t hdr_proc_ctx_hdl)
 /* check if the event is associated with vlan interface */
 bool IPACM_Lan::is_vlan_event(char *event_iface_name)
 {
-	int self_name_len, event_iface_name_len;
-	if(event_iface_name == NULL)
-	{
-		IPACMERR("Invalid input\n");
+	std::unique_ptr<FILE, decltype(&pclose)> pipe(popen("ip -d link show", "r"), pclose);
+	char buffer[256] = {};
+
+	if (!pipe) {
+		IPACMERR("Failed to run ip command\n");
 		return false;
 	}
+	while (fgets(buffer, sizeof(buffer), pipe.get()) != nullptr) {
+		char *ifName = nullptr;
 
-	IPACMDBG_H("Self iface %s, event iface %s\n", dev_name, event_iface_name);
-	self_name_len = strlen(dev_name);
-	event_iface_name_len = strlen(event_iface_name);
-
-	if(event_iface_name_len > self_name_len && strncmp(dev_name, event_iface_name, self_name_len) == 0)
-	{
-		IPACMDBG_H("This is vlan event.\n");
-		return true;
+		ifName = strstr(buffer, event_iface_name);
+		if (ifName && strstr(buffer, "vlan")) {
+			IPACMDBG_H("interface %s is a vlan interface\n", ifName);
+			return true;
+		}
 	}
+
 	return false;
 }
 #ifdef FEATURE_L2TP

@@ -9055,6 +9055,11 @@ int IPACM_Lan::install_uplink_filter_rule_per_client_v2
 		install_total_rules = total_rules + v6_xlat_ul_rules;
 		IPACMDBG_H("Need %d additional XLAT rules %d total_rules and %d rules_to_install\n", v6_xlat_ul_rules, total_rules, install_total_rules);
 	}
+	else
+	{
+		install_total_rules = total_rules;
+		IPACMDBG_H("Need %d additional XLAT rules %d total_rules and %d rules_to_install\n", v6_xlat_ul_rules, total_rules, install_total_rules);
+	}
 	clnt_indx = get_eth_client_index(mac_addr);
 
 	if (clnt_indx == IPACM_INVALID_INDEX)

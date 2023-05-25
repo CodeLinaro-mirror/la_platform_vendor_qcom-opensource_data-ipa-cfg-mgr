@@ -10566,6 +10566,7 @@ int IPACM_Wan::gre_add_exception_rule(
 {
 	int *num_firewall, *num_flt_rule;
 	ipa_ioc_get_rt_tbl_indx rt_tbl_idx;
+	uint8_t mux_id;
 
 	if ( ! VALID_IPA_IP_TYPE(iptype) ||
 		 ! VALID_EXCEPTION_TYPE(except.field) ||
@@ -10645,7 +10646,13 @@ int IPACM_Wan::gre_add_exception_rule(
 		&rx_prop_attrib,
 		sizeof(struct ipa_rule_attrib));
 
+	/* Add SRC ADDR and DST ADDR for the GRE tunnel */
 	attrib.attrib_mask |= (IPA_FLT_SRC_ADDR | IPA_FLT_DST_ADDR);
+
+	/*Update the Metadata to use GRE PDN mux ID */
+	IPACM_Wan::GetMuxByAddr(IPA_IP_v4, &ipgre_info.ipv4_src, mux_id);
+	IPACMDBG("MPLS GRE PDN is using mux id %d\n", mux_id);
+	attrib.meta_data = (mux_id & 0xFF) << 24;
 
 	/*
 	 * For downlink, we need to reverse the addresses.
@@ -10713,12 +10720,13 @@ int IPACM_Wan::gre_add_exception_rule(
 
 	IPACMDBG(
 		"Adding downlink GRE exception rule for iptype=(%u) and "
-		"exception:(field=%u value=0x%x inner_iptype=%u) "
+		"exception:(field=%u value=0x%x inner_iptype=%u) mux id:%d "
 		"WAN DL routing table %s has index %d\n",
 		iptype,
 		except.field,
 		except.value,
 		except.inner_iptype,
+		mux_id,
 		rt_tbl_idx.name,
 		rt_tbl_idx.idx);
 

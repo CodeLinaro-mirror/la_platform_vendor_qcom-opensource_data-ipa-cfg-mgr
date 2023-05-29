@@ -6351,6 +6351,7 @@ int IPACM_Lan::handle_uplink_filter_rule(ipacm_ext_prop *prop, ipa_ip_type iptyp
 	int i, index;
 	uint32_t value = 0, total_rules = 0, v6_xlat_ul_rules = 0;
 	bool is_dev_in_vlan_mode=false;
+	enum ipa_flt_action action_cache;
 
 	IPACMDBG_H("Set modem UL flt rules\n");
 
@@ -6520,12 +6521,35 @@ int IPACM_Lan::handle_uplink_filter_rule(ipacm_ext_prop *prop, ipa_ip_type iptyp
 
 	index = IPACM_Iface::ipacmcfg->getFltRuleCount(rx_prop->rx[0].src_pipe, iptype);
 
-	for(cnt=0, i = 0; cnt<prop->num_ext_props && i < total_rules; cnt++)
+	/* cache the flt action */
+	action_cache = flt_rule_entry.rule.action;
+	for( cnt=i=0; cnt < prop->num_ext_props && i < total_rules; cnt++ )
 	{
 		memcpy(&flt_rule_entry.rule.eq_attrib,
-					 &prop->prop[cnt].eq_attrib,
-					 sizeof(prop->prop[cnt].eq_attrib));
-		flt_rule_entry.rule.rt_tbl_idx = prop->prop[cnt].rt_tbl_idx;
+			   &prop->prop[cnt].eq_attrib,
+			   sizeof(prop->prop[cnt].eq_attrib));
+
+		/* Populate the flt rule action from ext_prop */
+		if (prop->prop[cnt].action == IPA_PASS_TO_EXCEPTION)
+		{
+			/* Override the rule action if Q6 can't handle it, go A7 exception */
+			flt_rule_entry.rule.action = prop->prop[cnt].action;
+			flt_rule_entry.rule.rt_tbl_idx = 0;
+			IPACMDBG_H("Override rule index %d to act: %d, rt_tbl_idx: %d to %d\n",
+					   cnt, flt_rule_entry.rule.action,
+					   prop->prop[cnt].rt_tbl_idx,
+					   flt_rule_entry.rule.rt_tbl_idx);
+		}
+		else
+		{
+			/* restore the rule action */
+			flt_rule_entry.rule.action = action_cache;
+			flt_rule_entry.rule.rt_tbl_idx = prop->prop[cnt].rt_tbl_idx;
+			IPACMDBG_H("Restore rule index %d to act: %d, rt_tbl_idx: %d \n",
+					   cnt, flt_rule_entry.rule.action,
+					   flt_rule_entry.rule.rt_tbl_idx);
+		}
+
 #ifndef FEATURE_VLAN_MPDN
 		/* Handle XLAT configuration */
 		if ((iptype == IPA_IP_v4) && prop->prop[cnt].is_xlat_rule && (xlat_mux_id != 0))

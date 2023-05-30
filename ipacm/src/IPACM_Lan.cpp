@@ -5946,7 +5946,7 @@ int IPACM_Lan::handle_eth_client_route_rule_ext(uint8_t *mac_addr, ipa_ip_type i
 				}
 
 				rt_rule_entry->rule_id = 0;
-				rt_rule_entry->rule_id = (get_client_memptr(eth_client, eth_index)->lan_stats_idx) | 0x200;
+				rt_rule_entry->rule_id = (get_client_memptr(eth_client, eth_index)->lan_stats_idx) | 0x300;
 #if defined IPA_FLTRT_TTL_UPDATE && defined IPA_TTL_UPDATE_OFFLOAD
 				if (IPACM_Iface::ipacmcfg->ttlHwSupport()) {
 					if (iptype == IPA_IP_v6)
@@ -6041,7 +6041,7 @@ int IPACM_Lan::handle_eth_client_route_rule_ext(uint8_t *mac_addr, ipa_ip_type i
 #ifdef FEATURE_IPA_V3
 					rt_rule_entry->rule.hashable = true;
 #endif
-					rt_rule_entry->rule_id = get_client_memptr(eth_client, eth_index)->lan_stats_idx | 0x200;
+					rt_rule_entry->rule_id = get_client_memptr(eth_client, eth_index)->lan_stats_idx | 0x300;
 #if defined IPA_FLTRT_TTL_UPDATE && defined IPA_TTL_UPDATE_OFFLOAD
 					if (IPACM_Iface::ipacmcfg->ttlHwSupport()) {
 						if (iptype == IPA_IP_v6)

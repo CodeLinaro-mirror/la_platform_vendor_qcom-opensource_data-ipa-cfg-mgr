@@ -144,8 +144,7 @@ typedef struct ipa_nl_proto_info_s {
 typedef struct
 {
 	struct ifinfomsg  metainfo;                   /* from header */
-	char vlan_name[IFACE_NAME];
-	uint8_t vlan_id;
+	struct ipa_vlan_iface_info vlan_info;
 	uint8_t interface_index;
 } ipa_nl_link_info_t;
 

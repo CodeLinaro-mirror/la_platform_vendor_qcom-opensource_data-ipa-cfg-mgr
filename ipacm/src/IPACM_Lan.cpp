@@ -1199,13 +1199,17 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 						eth_index = get_eth_client_index(data->mac_addr);
 						retval = handle_eth_client_route_rule_ext_v2(data->mac_addr, data->iptype,
 							get_client_memptr(eth_client, eth_index)->dl_cnt_idx);
+						HandleNeighIpAddrAddEvt(data);
 						IPACMDBG_H("Route install retval = %d\n", retval);
 					}
 					else
 #endif //IPA_HW_FNR_STATS
 					{
 						if(IPACM_Iface::ipacmcfg->mac_addr_in_blacklist(data->mac_addr) == false)
+						{
 							handle_eth_client_route_rule_ext(data->mac_addr, data->iptype);
+							HandleNeighIpAddrAddEvt(data);
+						}
 					}
 				}
 #endif

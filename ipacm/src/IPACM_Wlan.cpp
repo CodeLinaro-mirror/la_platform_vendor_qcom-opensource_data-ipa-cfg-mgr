@@ -891,12 +891,18 @@ void IPACM_Wlan::event_callback(ipa_cm_event_id event, void *param)
 #ifdef IPA_HW_FNR_STATS
 					if (IPACM_Iface::ipacmcfg->hw_fnr_stats_support &&
 							IPACM_Iface::ipacmcfg->mac_addr_in_blacklist(data->mac_addr) == false)
+					{
 						handle_wlan_client_route_rule_ext_v2(data->mac_addr, data->iptype);
+						HandleNeighIpAddrAddEvt(data);
+					}
 					else
 #endif //IPA_HW_FNR_STATS
 					{
 						if(IPACM_Iface::ipacmcfg->mac_addr_in_blacklist(data->mac_addr) == false)
+						{
 							handle_wlan_client_route_rule_ext(data->mac_addr, data->iptype);
+							HandleNeighIpAddrAddEvt(data);
+						}
 					}
 				}
 #endif

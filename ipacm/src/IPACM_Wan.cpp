@@ -89,6 +89,10 @@
 #include "linux/ipa_qmi_service_v01.h"
 #include <IPACM_Netlink.h>
 
+#define META_IS_IPSEC 0x10
+#define META_SA_MASK  0xF
+#define META_SA_SHIFT 0
+
 bool IPACM_Wan::wan_up = false;
 bool IPACM_Wan::wan_up_v6 = false;
 uint8_t IPACM_Wan::xlat_mux_id = 0;
@@ -531,8 +535,11 @@ int IPACM_Wan::handle_addr_evt(ipacm_event_data_addr *data)
 	struct ipa_ioc_add_flt_rule *flt_rule;
 	struct ipa_flt_rule_add flt_rule_entry;
 	struct ipa_ioc_get_hdr hdr;
-
+#ifdef FEATURE_IPA_IPSEC
+	const int NUM_RULES = (m_is_sta_mode == Q6_WAN) ? 2 : 1;
+#else
 	const int NUM_RULES = 1;
+#endif
 	int num_ipv6_addr, len;
 	int res = IPACM_SUCCESS;
 
@@ -574,8 +581,6 @@ int IPACM_Wan::handle_addr_evt(ipacm_event_data_addr *data)
 		rt_rule->num_rules = NUM_RULES;
 		rt_rule->ip = data->iptype;
 		strlcpy(rt_rule->rt_tbl_name, IPACM_Iface::ipacmcfg->rt_tbl_v6.name, sizeof(rt_rule->rt_tbl_name));
-
-		rt_rule_entry = &rt_rule->rules[0];
 		if(m_is_sta_mode == Q6_WAN)
 		{
 			strlcpy(hdr.name, tx_prop->tx[0].hdr_name, sizeof(hdr.name));
@@ -585,11 +590,33 @@ int IPACM_Wan::handle_addr_evt(ipacm_event_data_addr *data)
 				IPACMERR("Failed to get QMAP header.\n");
 				return IPACM_FAILURE;
 			}
-			rt_rule_entry->rule.hdr_hdl = hdr.hdl;
 		}
+#ifdef FEATURE_IPA_IPSEC
+		if (m_is_sta_mode == Q6_WAN && NUM_RULES > 1) {
+			rt_rule_entry = &rt_rule->rules[1];
+			rt_rule_entry->rule.hdr_hdl = hdr.hdl;
+			rt_rule_entry->rule.dst = IPA_CLIENT_IPSEC_APPS_WAN_CONS;
+			rt_rule_entry->at_rear = false;
+			rt_rule_entry->rule.attrib.attrib_mask =
+				IPA_FLT_DST_ADDR | IPA_FLT_META_DATA;
+			rt_rule_entry->rule.attrib.u.v6.dst_addr[0] = data->ipv6_addr[0];
+			rt_rule_entry->rule.attrib.u.v6.dst_addr[1] = data->ipv6_addr[1];
+			rt_rule_entry->rule.attrib.u.v6.dst_addr[2] = data->ipv6_addr[2];
+			rt_rule_entry->rule.attrib.u.v6.dst_addr[3] = data->ipv6_addr[3];
+			rt_rule_entry->rule.attrib.u.v6.dst_addr_mask[0] = 0xFFFFFFFF;
+			rt_rule_entry->rule.attrib.u.v6.dst_addr_mask[1] = 0xFFFFFFFF;
+			rt_rule_entry->rule.attrib.u.v6.dst_addr_mask[2] = 0xFFFFFFFF;
+			rt_rule_entry->rule.attrib.u.v6.dst_addr_mask[3] = 0xFFFFFFFF;
+			rt_rule_entry->rule.attrib.meta_data = META_IS_IPSEC;
+			rt_rule_entry->rule.attrib.meta_data_mask = META_IS_IPSEC;
+			rt_rule_entry->rule.hashable = true;
+		}
+#endif
+		rt_rule_entry = &rt_rule->rules[0];
 		rt_rule_entry->at_rear = false;
 		if(m_is_sta_mode == Q6_WAN)
 		{
+			rt_rule_entry->rule.hdr_hdl = hdr.hdl;
 			rt_rule_entry->rule.dst = IPA_CLIENT_APPS_WAN_CONS;
 		}
 		else
@@ -612,6 +639,7 @@ int IPACM_Wan::handle_addr_evt(ipacm_event_data_addr *data)
 #ifdef FEATURE_IPA_V3
 		rt_rule_entry->rule.hashable = true;
 #endif
+
 		if (false == m_routing.AddRoutingRule(rt_rule))
 		{
 			IPACMERR("Routing rule addition failed!\n");
@@ -865,7 +893,7 @@ int IPACM_Wan::handle_addr_evt(ipacm_event_data_addr *data)
 
 		rt_rule = (struct ipa_ioc_add_rt_rule *)
 			 calloc(1, sizeof(struct ipa_ioc_add_rt_rule) +
-							NUM_RULES * sizeof(struct ipa_rt_rule_add));
+				 NUM_RULES * sizeof(struct ipa_rt_rule_add));
 
 		if (!rt_rule)
 		{
@@ -876,7 +904,6 @@ int IPACM_Wan::handle_addr_evt(ipacm_event_data_addr *data)
 		rt_rule->commit = 1;
 		rt_rule->num_rules = NUM_RULES;
 		rt_rule->ip = data->iptype;
-		rt_rule_entry = &rt_rule->rules[0];
 		if(m_is_sta_mode == Q6_WAN)
 		{
 			strlcpy(hdr.name, tx_prop->tx[0].hdr_name, sizeof(hdr.name));
@@ -886,6 +913,25 @@ int IPACM_Wan::handle_addr_evt(ipacm_event_data_addr *data)
 				IPACMERR("Failed to get QMAP header.\n");
 				return IPACM_FAILURE;
 			}
+		}
+#ifdef FEATURE_IPA_IPSEC
+		if (m_is_sta_mode == Q6_WAN && NUM_RULES > 1) {
+			rt_rule_entry = &rt_rule->rules[1];
+			rt_rule_entry->rule.hdr_hdl = hdr.hdl;
+			rt_rule_entry->rule.dst = IPA_CLIENT_IPSEC_APPS_WAN_CONS;
+			rt_rule_entry->at_rear = false;
+			rt_rule_entry->rule.hashable = true;
+
+			rt_rule_entry->rule.attrib.attrib_mask = IPA_FLT_DST_ADDR | IPA_FLT_META_DATA;
+			rt_rule_entry->rule.attrib.u.v4.dst_addr      = data->ipv4_addr;
+			rt_rule_entry->rule.attrib.u.v4.dst_addr_mask = 0xFFFFFFFF;
+			rt_rule_entry->rule.attrib.meta_data = META_IS_IPSEC;
+			rt_rule_entry->rule.attrib.meta_data_mask = META_IS_IPSEC;
+		}
+#endif
+		rt_rule_entry = &rt_rule->rules[0];
+		if(m_is_sta_mode == Q6_WAN)
+		{
 			rt_rule_entry->rule.hdr_hdl = hdr.hdl;
 			rt_rule_entry->rule.dst = IPA_CLIENT_APPS_WAN_CONS;
 		}
@@ -902,6 +948,7 @@ int IPACM_Wan::handle_addr_evt(ipacm_event_data_addr *data)
 #ifdef FEATURE_IPA_V3
 		rt_rule_entry->rule.hashable = true;
 #endif
+
 		if (false == m_routing.AddRoutingRule(rt_rule))
 		{
 			IPACMERR("Routing rule addition failed!\n");
@@ -7352,6 +7399,135 @@ fail:
 	return res;
 }
 
+#ifdef FEATURE_IPA_IPSEC
+int IPACM_Wan::installWanPostIpsecRt(
+	struct ipa_ioc_add_flt_rule *rule_table_v4,
+	struct ipa_ioc_add_flt_rule *rule_table_v6)
+{
+	int i, num_rules, res = IPACM_SUCCESS;
+	struct ipa_ioc_add_rt_rule *rt_rule;
+	struct ipa_rt_rule_add *rt_rule_entry;
+	struct ipa_ioc_del_rt_rule *del_rt;
+	struct ipa_rt_rule_del *del_rt_rule;
+	struct ipa_ioc_add_flt_rule *flt_tbl;
+	struct ipa_ioc_get_hdr hdr;
+
+	/* Nothing to be done, if there are no TX props. */
+	if (iface_query == NULL || iface_query->num_tx_props == 0 || tx_prop == NULL) {
+		IPACMDBG_H("No TX props yet\n");
+		return IPACM_SUCCESS;
+	}
+
+	strlcpy(hdr.name, tx_prop->tx[0].hdr_name, sizeof(hdr.name));
+	hdr.name[IPA_RESOURCE_NAME_MAX-1] = '\0';
+	if(m_header.GetHeaderHandle(&hdr) == false)
+	{
+		IPACMERR("Failed to get QMAP header.\n");
+		res = IPACM_FAILURE;
+		goto end;
+	}
+
+	num_rules = std::max(IPACM_Wan::num_v4_flt_rule, IPACM_Wan::num_v6_flt_rule);
+	rt_rule = (struct ipa_ioc_add_rt_rule *)
+		calloc(1, sizeof(struct ipa_ioc_add_rt_rule) +
+			num_rules * sizeof(struct ipa_rt_rule_add));
+	num_rules = std::max(num_ipsec_post_pol_rt[IPA_IP_v4], num_ipsec_post_pol_rt[IPA_IP_v6]);
+	del_rt = (struct ipa_ioc_del_rt_rule *)
+		calloc(1, sizeof(struct ipa_ioc_del_rt_rule) +
+			num_rules * sizeof(struct ipa_rt_rule_del));
+	if (!rt_rule || !del_rt)
+	{
+		IPACMERR("Error allocating ipa_ioc_add_rt_rule/ipa_ioc_del_rt_rule memory.\n");
+		res = IPACM_FAILURE;
+		goto end;
+	}
+
+	rt_rule->commit = 1;
+
+	for (const auto iptype:{ipa_ip_type::IPA_IP_v4, ipa_ip_type::IPA_IP_v6}) {
+
+		/* Clean old rules */
+		del_rt->commit = 1;
+		del_rt->ip = iptype;
+		del_rt->num_hdls = num_ipsec_post_pol_rt[iptype];
+		for (i = 0; i < del_rt->num_hdls; i++) {
+			del_rt->hdl[i].hdl = ipsec_post_pol_rt[iptype][i];
+			del_rt->hdl[i].status = -1;
+		}
+		if (false == m_routing.DeleteRoutingRule(del_rt)) {
+			res = IPACM_FAILURE;
+			goto end;
+		}
+
+		switch (iptype) {
+		case IPA_IP_v4:
+			rt_rule->ip = iptype;
+			rt_rule->num_rules = IPACM_Wan::num_v4_flt_rule;
+			strlcpy(rt_rule->rt_tbl_name, IPACM_Iface::ipacmcfg->rt_tbl_lan_v4.name,
+				sizeof(rt_rule->rt_tbl_name));
+			flt_tbl = rule_table_v4;
+			break;
+		case IPA_IP_v6:
+			rt_rule->ip = iptype;
+			rt_rule->num_rules = IPACM_Wan::num_v6_flt_rule;
+			strlcpy(rt_rule->rt_tbl_name, IPACM_Iface::ipacmcfg->rt_tbl_v6.name,
+				sizeof(rt_rule->rt_tbl_name));
+			flt_tbl = rule_table_v6;
+			break;
+		default:
+			IPACMERR("Invalid IP type: %d\n", iptype);
+			res =  IPACM_FAILURE;
+			goto end;
+		}
+
+		IPACMDBG_H("rt_tbl_name = %s num_rules = %d\n",
+			rt_rule->rt_tbl_name, rt_rule->num_rules);
+
+		for (i = 0; i < rt_rule->num_rules; i++) {
+			rt_rule_entry = &rt_rule->rules[i];
+			rt_rule_entry->rule.hdr_hdl = hdr.hdl;
+			rt_rule_entry->rule.dst = IPA_CLIENT_IPSEC_APPS_WAN_CONS;
+			rt_rule_entry->at_rear = false;
+			rt_rule_entry->rule.hashable = true;
+
+			memcpy(&rt_rule_entry->rule.attrib, &flt_tbl->rules[i].rule.attrib,
+				sizeof(rt_rule_entry->rule.attrib));
+
+			rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_META_DATA;
+			rt_rule_entry->rule.attrib.meta_data = META_IS_IPSEC;
+			rt_rule_entry->rule.attrib.meta_data_mask = META_IS_IPSEC;
+			IPACMDBG_H("pdn_flt_rule[%d]: attrib_mask = 0x%X\n",
+				i, rt_rule_entry->rule.attrib.attrib_mask);
+		}
+
+		if (false == m_routing.AddRoutingRule(rt_rule))
+		{
+			IPACMERR("Routing rule addition failed!\n");
+			res = IPACM_FAILURE;
+			goto end;
+		}
+		else if (rt_rule_entry->status)
+		{
+			IPACMERR("rt rule adding failed. Result=%d\n", rt_rule_entry->status);
+			res = rt_rule_entry->status;
+			goto end;
+		}
+
+		for (i = 0; i < rt_rule->num_rules; i++)
+			ipsec_post_pol_rt[iptype][i] = rt_rule->rules[i].rt_rule_hdl;
+	}
+
+	num_ipsec_post_pol_rt[IPA_IP_v4] = IPACM_Wan::num_v4_flt_rule;
+	num_ipsec_post_pol_rt[IPA_IP_v6] = IPACM_Wan::num_v6_flt_rule;
+end:
+	if (del_rt)
+		free(del_rt);
+	if (rt_rule)
+		free(rt_rule);
+	return IPACM_SUCCESS;
+}
+#endif
+
 int IPACM_Wan::install_wan_filtering_rule(bool is_sw_routing, bool is_socksv5_en)
 {
 	int len, res = IPACM_SUCCESS;
@@ -7825,6 +8001,12 @@ int IPACM_Wan::install_wan_filtering_rule(bool is_sw_routing, bool is_socksv5_en
 #endif
 			}
 		}
+#ifdef FEATURE_IPA_IPSEC
+		IPACMDBG_H("Calling install_wan_post_ipsec_rt\n");
+		if (installWanPostIpsecRt(pFilteringTable_v4, pFilteringTable_v6))
+			IPACMERR("install_wan_post_ipsec_rt failed\n");
+#endif
+
 	}
 
 #ifdef FEATURE_VLAN_MPDN

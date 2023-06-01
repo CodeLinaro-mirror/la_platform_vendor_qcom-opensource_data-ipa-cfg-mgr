@@ -11146,22 +11146,21 @@ int IPACM_Lan::eth_bridge_del_hdr_proc_ctx(uint32_t hdr_proc_ctx_hdl)
 /* check if the event is associated with vlan interface */
 bool IPACM_Lan::is_vlan_event(char *event_iface_name)
 {
-	std::unique_ptr<FILE, decltype(&pclose)> pipe(popen("ip -d link show", "r"), pclose);
-	char buffer[256] = {};
+	auto commandStr = std::string("ls /proc/net/vlan/ | grep -x ") + std::string(event_iface_name);
+	std::unique_ptr<FILE, decltype(&pclose)> pipe(popen(commandStr.c_str(), "r"), pclose);
+	char buffer[64] = {};
 
+	IPACMDBG("commandStr: %s\n", commandStr.c_str());
 	if (!pipe) {
-		IPACMERR("Failed to run ip command\n");
+		IPACMERR("command = %s\n", commandStr.c_str());
 		return false;
 	}
-	while (fgets(buffer, sizeof(buffer), pipe.get()) != nullptr) {
-		char *ifName = nullptr;
-
-		ifName = strstr(buffer, event_iface_name);
-		if (ifName && strstr(buffer, "vlan")) {
-			IPACMDBG_H("interface %s is a vlan interface\n", ifName);
-			return true;
-		}
+	if (fgets(buffer, sizeof(buffer), pipe.get()) != nullptr) {
+		IPACMDBG("buffer contents: %s\n", buffer);
+		IPACMDBG("return vlaue = %d\n", buffer[0] != '\0');
+		return buffer[0] != '\0';
 	}
+	IPACMDBG("fgets failed\n");
 
 	return false;
 }

@@ -207,7 +207,7 @@ IPACM_Wan::IPACM_Wan(int iface_index,
 	wan_route_rule_v6_hdl = NULL;
 	wan_client = NULL;
 	wan_client_len = 0;
-	is_default_gateway = true;
+	is_default_gateway = false;
 
 	if(iface_query != NULL)
 	{
@@ -1304,6 +1304,26 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 				return;
 			}
 
+#ifdef IPA_FLT_EXT_MPLS_GRE_GENERAL
+			/* In mpls GRE mode, other non-offload wan instance no need exception filter rules handling */
+			ipa_ipgre_info ipgre_info = IPACM_Iface::ipacmcfg->eogre_info;
+
+			if (IPACM_Iface::ipacmcfg->eogre_enabled)
+			{
+				if (data->iptype == IPA_IP_v4 && ipgre_info.ipv4_src != data->ipv4_addr)
+				{
+					IPACMDBG_H("non GRE v4 PDN, ignore IPA_ADDR_ADD_EVENT event for %s\n", dev_name);
+					return;
+				}
+				else if (data->iptype == IPA_IP_v6 &&
+					memcmp(ipgre_info.ipv6_src, data->ipv6_addr, sizeof(ipgre_info.ipv6_src)) != 0)
+				{
+					IPACMDBG_H("non GRE v6 PDN, ignore IPA_ADDR_ADD_EVENT event for %s\n", dev_name);
+					return;
+				}
+			}
+#endif
+
 			if (ipa_interface_index == ipa_if_num)
 			{
 				IPACMDBG_H("Get IPA_ADDR_ADD_EVENT: IF ip type %d, incoming ip type %d\n", ip_type, data->iptype);
@@ -2202,14 +2222,60 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 
 #ifdef FEATURE_EoGRE
 	case IPA_HANDLE_EoGRE_UP:
-		IPACMDBG_H("Received and will process an IPA_HANDLE_EoGRE_UP\n");
-		eogre_up();
+	{
+		ipa_ipgre_info ipgre_info = IPACM_Iface::ipacmcfg->eogre_info;
+
+		if (ipgre_info.iptype == IPA_IP_v4 &&
+			ipgre_info.ipv4_src == wan_v4_addr)
+		{
+			IPACMDBG_H("Received and will process an IPA_HANDLE_EoGRE_UP for v4 tunnel\n");
+			eogre_up();
+		}
+		else if (ipgre_info.iptype == IPA_IP_v6 &&
+			memcmp(ipgre_info.ipv6_src, m_ipv6_addr, sizeof(ipgre_info.ipv6_src)) == 0)
+		{
+			IPACMDBG_H("Received and will process an IPA_HANDLE_EoGRE_UP for v6 tunnel\n");
+			eogre_up();
+		}
+		else
+		{
+			if (is_default_gateway && wan_up)
+			{
+				IPACMDBG_H("EoGRE PDN is up, Cleanup v4 default gateway PDN\n");
+				del_wan_firewall_rule(IPA_IP_v4);
+				install_wan_filtering_rule(false);
+				handle_route_del_evt_ex(IPA_IP_v4);
+			}
+
+			if (is_default_gateway && wan_up_v6)
+			{
+				IPACMDBG_H("EoGRE PDN is up, Cleanup v6 default gateway PDN\n");
+				del_wan_firewall_rule(IPA_IP_v6);
+				install_wan_filtering_rule(false);
+				handle_route_del_evt_ex(IPA_IP_v6);
+			}
+		}
 		break;
+	}
 
 	case IPA_HANDLE_EoGRE_DOWN:
-		IPACMDBG_H("Received and will process an IPA_HANDLE_EoGRE_DOWN\n");
-		eogre_down();
+	{
+		ipa_ipgre_info ipgre_info = IPACM_Iface::ipacmcfg->eogre_info;
+
+		if (ipgre_info.iptype == IPA_IP_v4 &&
+			ipgre_info.ipv4_src == wan_v4_addr)
+		{
+			IPACMDBG_H("Received and will process an IPA_HANDLE_EoGRE_DOWN for v4 tunnel\n");
+			eogre_down();
+		}
+		else if (ipgre_info.iptype == IPA_IP_v6 &&
+			memcmp(ipgre_info.ipv6_src, m_ipv6_addr, sizeof(ipgre_info.ipv6_src)) == 0)
+		{
+			IPACMDBG_H("Received and will process an IPA_HANDLE_EoGRE_DOWN for v6 tunnel\n");
+			eogre_down();
+		}
 		break;
+	}
 #endif
 #ifdef FEATURE_PMIPV6
 	case IPA_HANDLE_GRE_UP:
@@ -7038,7 +7104,10 @@ int IPACM_Wan::handle_down_evt_ex()
 	mtu_v6 = DEFAULT_MTU_SIZE;
 	mtu_v6_set = false;
 #endif
-	gre_down();
+#ifdef FEATURE_PMIPV6
+	if (IPACM_Iface::ipacmcfg->pmip_details.pmipv6_enabled)
+		gre_down();
+#endif
 	if(ip_type == IPA_IP_v4)
 	{
 		num_ipv4_modem_pdn--;
@@ -7322,6 +7391,25 @@ int IPACM_Wan::handle_down_evt_ex()
 		else
 		{
 			IPACMDBG_H("not deleting rm depend for default rt, a v6 VLAN PDN is still up, iptype %d\n", ip_type);
+		}
+#endif
+#ifdef IPA_FLT_EXT_MPLS_GRE_GENERAL
+		/* Clean the EoGRE rules if GRE PDN goes down */
+		ipa_ipgre_info ipgre_info = IPACM_Iface::ipacmcfg->eogre_info;
+
+		if (IPACM_Iface::ipacmcfg->eogre_enabled)
+		{
+			if (ipgre_info.iptype == IPA_IP_v4 && ipgre_info.ipv4_src == wan_v4_addr)
+			{
+				IPACMDBG_H("v4 GRE PDN down, cleaning up v4 GRE rules\n");
+				eogre_down();
+			}
+			else if (ipgre_info.iptype == IPA_IP_v6 &&
+				memcmp(ipgre_info.ipv6_src, m_ipv6_addr, sizeof(ipgre_info.ipv6_src)) == 0)
+			{
+				IPACMDBG_H("v6 GRE PDN down, cleaning up v6 GRE rules\n");
+				eogre_down();
+			}
 		}
 #endif
 		if(is_default_gateway == true)

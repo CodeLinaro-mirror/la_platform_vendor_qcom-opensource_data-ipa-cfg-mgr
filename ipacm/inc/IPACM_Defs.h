@@ -271,6 +271,8 @@ typedef enum
 #endif
 	IPA_ADD_BRIDGE_VLAN_PHY_INTF,
 	IPA_ADD_BRIDGE_VLAN_BR_INTF,
+	IPA_HANDLE_MACSEC_ADD,                    /* ipa_macsec_map */
+	IPA_HANDLE_MACSEC_DEL,                    /* ipa_macsec_map */
 	IPACM_EVENT_MAX
 } ipa_cm_event_id;
 

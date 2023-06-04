@@ -313,6 +313,7 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 	ipacm_cmd_q_data evt_data;
 	int clnt_indx;
 	ipa_bridge_vlan_mapping_info mapping_info;
+	ipa_macsec_map *macsecMap;
 
 	switch (event)
 	{
@@ -1477,7 +1478,33 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 			}
 		}
 		break;
-
+		case IPA_HANDLE_MACSEC_ADD:
+			IPACMDBG_H("Received and will process an IPA_HANDLE_MACSEC_ADD\n");
+			macsecMap = (ipa_macsec_map *)param;
+			/*
+			 * Check, whether the mapping change is addressed to this interface,
+			 * and if yes, rename it to the macsec interface.
+			 */
+			if (virtualIface && strncmp(macsecMap->phy_name, physDevName, sizeof(physDevName)) == 0 ||
+				strncmp(macsecMap->phy_name, dev_name, sizeof(dev_name)) == 0) {
+				strlcpy(physDevName, macsecMap->phy_name, sizeof(physDevName));
+				strlcpy(dev_name, macsecMap->macsec_name, sizeof(dev_name));
+				virtualIface = true;
+			}
+			break;
+		case IPA_HANDLE_MACSEC_DEL:
+			IPACMDBG_H("Received and will process an IPA_HANDLE_MACSEC_DEL\n");
+			macsecMap = (ipa_macsec_map *)param;
+			/*
+			 * Check, whether the mapping change is addressed to this interface,
+			 * and if yes, rename it to the eth interface.
+			 */
+			if (virtualIface && strncmp(macsecMap->macsec_name, dev_name, sizeof(dev_name)) == 0) {
+				strlcpy(dev_name, physDevName, sizeof(dev_name));
+				virtualIface = false;
+				physDevName[0] = '\0';
+			}
+			break;
 	default:
 		break;
 	}

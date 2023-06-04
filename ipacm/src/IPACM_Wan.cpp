@@ -479,7 +479,7 @@ int IPACM_Wan::handle_addr_evt(ipacm_event_data_addr *data)
 		ipv6_addr[num_dft_rt_v6][2] = data->ipv6_addr[2];
 		ipv6_addr[num_dft_rt_v6][3] = data->ipv6_addr[3];
 #ifdef FEATURE_IPA_V3
-		rt_rule_entry->rule.hashable = false;
+		rt_rule_entry->rule.hashable = true;
 #endif
 		if (false == m_routing.AddRoutingRule(rt_rule))
 		{
@@ -755,7 +755,7 @@ int IPACM_Wan::handle_addr_evt(ipacm_event_data_addr *data)
 		rt_rule_entry->rule.attrib.u.v4.dst_addr      = data->ipv4_addr;
 		rt_rule_entry->rule.attrib.u.v4.dst_addr_mask = 0xFFFFFFFF;
 #ifdef FEATURE_IPA_V3
-		rt_rule_entry->rule.hashable = false;
+		rt_rule_entry->rule.hashable = true;
 #endif
 		if (false == m_routing.AddRoutingRule(rt_rule))
 		{

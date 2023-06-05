@@ -223,6 +223,13 @@ static int IPACM_swallow_xml_parse_tree(const char *xml_file, xmlNode* xml_node,
 					return IPACM_FAILURE;
 				}
 
+				if (swallow_config->pdn_count > IPA_MAX_NUM_SW_PDNS)
+				{
+					IPACMERR("The pdn count is %d should be at most %d\n",
+						swallow_config->pdn_count, IPA_MAX_NUM_SW_PDNS);
+					return IPACM_FAILURE;
+				}
+
 				IPACM_swallow_conf_t* config = &swallow_config->pdns[swallow_config->pdn_count - 1];
 
 				if (0 == IPACM_util_icmp_string((char*)xml_node->name, Connection_TAG))

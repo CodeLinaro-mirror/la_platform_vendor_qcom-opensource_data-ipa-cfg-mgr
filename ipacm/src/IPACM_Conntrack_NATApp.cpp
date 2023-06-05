@@ -2703,7 +2703,7 @@ int NatBase::DeleteTable(const uint32_t v6_prefix[2],int num_v6_vlan_pdns)
 		NatEntryBase& entry = m_cache[cnt];
 		if (entry.Valid())
 		{
-			uint64_t src_ipv6_msb;
+			uint64_t src_ipv6_msb = 0;
 
 			if (entry.m_direction == NatEntryBase::DirectionOutbound || entry.m_direction == NatEntryBase::DirectionUnknown)
 			{
@@ -2714,7 +2714,7 @@ int NatBase::DeleteTable(const uint32_t v6_prefix[2],int num_v6_vlan_pdns)
 				src_ipv6_msb = ((Ipv6IpAddress &)entry.GetTargetIp()).GetMsb();
 			}
 
-			if(ipv6prefixmatch(src_ipv6_msb, v6_prefix))
+			if(src_ipv6_msb && ipv6prefixmatch(src_ipv6_msb, v6_prefix))
 			{
 				if (m_proxy.DelEntry(entry))
 				{
@@ -2996,7 +2996,7 @@ void NatBase::FlushAndCacheVlanTempEntries_v6(uint32_t* ipv6_addr, bool isAdd, b
 		}
 		curr.DebugDump((isAdd) ? "Add temp entry to cache" : "Delete temp entry");
 
-		uint64_t src_ipv6_msb;
+		uint64_t src_ipv6_msb = 0;
 
 		if (curr.m_direction == NatEntryBase::DirectionOutbound || curr.m_direction == NatEntryBase::DirectionUnknown)
 		{

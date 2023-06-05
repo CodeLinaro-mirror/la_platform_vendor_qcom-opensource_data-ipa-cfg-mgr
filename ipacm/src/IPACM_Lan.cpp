@@ -8750,7 +8750,7 @@ int IPACM_Lan::install_uplink_filter_rule_per_client
 	int clnt_indx;
 	uint8_t num_offset_meq_128 = 0;
 	struct ipa_ipfltr_mask_eq_128 *offset_meq_128 = NULL;
-	int total_rules, v6_xlat_ul_rules;
+	int total_rules, v6_xlat_ul_rules = 0;
 	enum ipa_flt_action action_cache;
 
 	IPACMDBG_H("Set modem UL flt rules\n");

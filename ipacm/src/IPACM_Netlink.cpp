@@ -887,14 +887,6 @@ static int ipa_nl_decode_nlmsg
 					}
 					IPACMDBG_H("Got a usb link_down event (Interface %s) \n", dev_name);
 
-					if (msg_ptr->nl_link_info.metainfo.ifi_family == AF_BRIDGE ||
-						msg_ptr->nl_link_info.metainfo.ifi_family == AF_UNSPEC) {
-						IPACMDBG("Deleting the bridge<->vlan mapping entry with intterface index %d\n",
-							msg_ptr->nl_link_info.metainfo.ifi_index);
-						uint16_t vlan_master_interface_index = msg_ptr->nl_link_info.metainfo.ifi_index;
-						IPACM_Iface::ipacmcfg->del_bridge_vlan_mapping(&vlan_master_interface_index);
-						return IPACM_SUCCESS;
-					}
 
 					if (msg_ptr->nl_link_info.link_type == IPA_LINK_TYPE_VLAN)
 						IPACM_Iface::ipacmcfg->del_vlan_iface(&vlan_info);
@@ -911,6 +903,14 @@ static int ipa_nl_decode_nlmsg
 							evt_data.evt_data = macsec_map_data;
 							IPACM_EvtDispatcher::PostEvt(&evt_data);
 						}
+					}
+					if (msg_ptr->nl_link_info.metainfo.ifi_family == AF_BRIDGE ||
+						msg_ptr->nl_link_info.metainfo.ifi_family == AF_UNSPEC) {
+						IPACMDBG("Deleting the bridge<->vlan mapping entry with intterface index %d\n",
+							msg_ptr->nl_link_info.metainfo.ifi_index);
+						uint16_t vlan_master_interface_index = msg_ptr->nl_link_info.metainfo.ifi_index;
+						IPACM_Iface::ipacmcfg->del_bridge_vlan_mapping(&vlan_master_interface_index);
+						return IPACM_SUCCESS;
 					}
 
 					data_fid->if_index = msg_ptr->nl_link_info.metainfo.ifi_index;
@@ -944,17 +944,6 @@ static int ipa_nl_decode_nlmsg
 				IPACMDBG("RTM_DELLINK, ifi_flags:%d\n", msg_ptr->nl_link_info.metainfo.ifi_flags);
 				IPACMDBG("RTM_DELLINK, ifi_index:%d\n", msg_ptr->nl_link_info.metainfo.ifi_index);
 				IPACMDBG("RTM_DELLINK, family:%d\n", msg_ptr->nl_link_info.metainfo.ifi_family);
-				/* RTM_NEWLINK event with AF_BRIDGE family should be ignored in Android
-				 *    but this should be processed in case of MDM for Ehernet interface.
-				 */
-
-				if (msg_ptr->nl_link_info.metainfo.ifi_family == AF_BRIDGE || msg_ptr->nl_link_info.metainfo.ifi_family == AF_UNSPEC)
-				{
-					IPACMDBG("Deleting the bridge<->vlan mapping entry with intterface index %d\n", msg_ptr->nl_link_info.metainfo.ifi_index);
-					uint16_t vlan_master_interface_index = msg_ptr->nl_link_info.metainfo.ifi_index;
-					IPACM_Iface::ipacmcfg->del_bridge_vlan_mapping(&vlan_master_interface_index);
-					return IPACM_SUCCESS;
-				}
 				ret_val = ipa_get_if_name(dev_name, msg_ptr->nl_link_info.metainfo.ifi_index);
 				if(ret_val != IPACM_SUCCESS)
 				{
@@ -993,6 +982,18 @@ static int ipa_nl_decode_nlmsg
 						evt_data.evt_data = macsec_map_data;
 						IPACM_EvtDispatcher::PostEvt(&evt_data);
 					}
+				}
+
+				/* RTM_NEWLINK event with AF_BRIDGE family should be ignored in Android
+				 *    but this should be processed in case of MDM for Ehernet interface.
+				 */
+
+				if (msg_ptr->nl_link_info.metainfo.ifi_family == AF_BRIDGE || msg_ptr->nl_link_info.metainfo.ifi_family == AF_UNSPEC)
+				{
+					IPACMDBG("Deleting the bridge<->vlan mapping entry with intterface index %d\n", msg_ptr->nl_link_info.metainfo.ifi_index);
+					uint16_t vlan_master_interface_index = msg_ptr->nl_link_info.metainfo.ifi_index;
+					IPACM_Iface::ipacmcfg->del_bridge_vlan_mapping(&vlan_master_interface_index);
+					return IPACM_SUCCESS;
 				}
 
 				/* post link down to command queue */

@@ -154,9 +154,11 @@ const char *ipacm_event_name[] = {
 #endif
 #ifdef FEATURE_SOCKSv5
 	__stringify(IPA_HANDLE_SOCKSv5_UP),                    /* ipacm_event_connection */
+	__stringify(IPA_HANDLE_SOCKSv5_READY),                 /* ipacm_event_connection */
 	__stringify(IPA_HANDLE_SOCKSv5_DOWN),                  /* NULL */
 	__stringify(IPA_ADD_SOCKSv5_CONN),                     /* ipa_socksv5_msg */
 	__stringify(IPA_DEL_SOCKSv5_CONN),                     /* ipa_socksv5_msg */
+	__stringify(IPA_UPDATE_SOCKSv5_v6_CONN),               /* NULL */
 #endif
 	__stringify(IPA_ADD_BRIDGE_VLAN_PHY_INTF),             /* Handle vlan details add for physical interface.  */
 	__stringify(IPA_ADD_BRIDGE_VLAN_BR_INTF),              /* Handle vlan-bridge details add for bridge interface. */

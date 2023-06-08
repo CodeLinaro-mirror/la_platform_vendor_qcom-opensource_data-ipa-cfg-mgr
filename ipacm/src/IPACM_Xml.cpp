@@ -181,6 +181,7 @@ static int ipacm_cfg_xml_parse_tree
 						IPACM_util_icmp_string((char*)xml_node->name, IPACMCFG_TAG) == 0 ||
 						IPACM_util_icmp_string((char*)xml_node->name, IPACMIFACECFG_TAG) == 0 ||
 						IPACM_util_icmp_string((char*)xml_node->name, IFACE_TAG) == 0 ||
+						IPACM_util_icmp_string((char*)xml_node->name, IPACMALG_TAG) == 0 ||
 						IPACM_util_icmp_string((char*)xml_node->name, ALG_TAG) == 0 ||
 						IPACM_util_icmp_string((char*)xml_node->name, IPACMNat_TAG) == 0 ||
 						IPACM_util_icmp_string((char*)xml_node->name, IPACM_IPV6CT_TAG) == 0 ||
@@ -195,7 +196,8 @@ static int ipacm_cfg_xml_parse_tree
 
 						IPACM_util_icmp_string((char*)xml_node->name, IPACM_SOCKSv5_TAG) == 0 ||
 						IPACM_util_icmp_string((char*)xml_node->name, GRE_TAG) == 0 ||
-						IPACM_util_icmp_string((char*)xml_node->name, PUBLIC_IP_SUPPORT_TAG) == 0)
+						IPACM_util_icmp_string((char*)xml_node->name, PUBLIC_IP_SUPPORT_TAG) == 0 ||
+						IPACM_util_icmp_string((char*)xml_node->name, IPACM_WLAN_VLAN_MPDN) == 0)
 				{
 					if (0 == IPACM_util_icmp_string((char*)xml_node->name, IFACE_TAG))
 					{
@@ -683,6 +685,26 @@ static int ipacm_cfg_xml_parse_tree
 								   config->ipacm_emesh_mode, atoi(content_buf));
 					}
 				}
+				else if (IPACM_util_icmp_string((char*)xml_node->name, IPACM_Wlan_Vlan_Mpdn_Enabled) == 0)
+				{
+					IPACMDBG_H("inside enable Vlan Mpdn-XML\n");
+					content = IPACM_read_content_element(xml_node);
+					if (content)
+					{
+						str_size = strlen(content);
+						memset(content_buf, 0, sizeof(content_buf));
+						memcpy(content_buf, (void *)content, str_size);
+						if (atoi(content_buf))
+						{
+							config->wlan_vlan_mpdn_enable = true;
+						}
+						else
+						{
+							config->wlan_vlan_mpdn_enable = false;
+						}
+						IPACMDBG_H("VLAN Mpdn for WLAN enable %d buf(%d)\n", config->wlan_vlan_mpdn_enable, atoi(content_buf));
+					}
+				}
 			}
 			break;
 		default:
@@ -1025,12 +1047,9 @@ static int IPACM_firewall_xml_parse_tree(const char *xml_file, xmlNode* xml_node
 						memset(content_buf, 0, sizeof(content_buf));
 						memcpy(content_buf, (void *)content, str_size);
 						content_buf[MAX_XML_STR_LEN-1] = '\0';
-						if (content_buf > 0)
-						{
-							config->extd_firewall_entries[config->num_extd_firewall_entries - 1].attrib.u.v4.dst_addr_mask
-								 = ntohl(inet_addr(content_buf));
-							IPACMDBG_H("IPv4 destination subnet mask is: %s \n", content_buf);
-						}
+						config->extd_firewall_entries[config->num_extd_firewall_entries - 1].attrib.u.v4.dst_addr_mask
+							= ntohl(inet_addr(content_buf));
+						IPACMDBG_H("IPv4 destination subnet mask is: %s \n", content_buf);
 					}
 				}
 				else if (0 == IPACM_util_icmp_string((char*)xml_node->name, IPV4TypeOfService_TAG))

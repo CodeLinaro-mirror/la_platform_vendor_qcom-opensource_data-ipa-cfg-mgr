@@ -73,6 +73,7 @@ IPACM_Iface::IPACM_Iface(int iface_index) :
 	ipa_if_num = iface_index;
 	ipa_if_cate = IPACM_Iface::ipacmcfg->iface_table[iface_index].if_cat;
 	is_if_svap = false;
+	is_wlan_if_vlan = false;
 
 	iface_query = NULL;
 	tx_prop = NULL;
@@ -106,7 +107,7 @@ IPACM_Iface::IPACM_Iface(int iface_index) :
 int IPACM_Iface::handle_software_routing_enable(void)
 {
 
-	int res = IPACM_SUCCESS;
+	int res = IPACM_SUCCESS, idx = 0;
 	struct ipa_flt_rule_add flt_rule_entry;
 	ipa_ioc_add_flt_rule *m_pFilteringTable;
 
@@ -124,6 +125,11 @@ int IPACM_Iface::handle_software_routing_enable(void)
 		return IPACM_SUCCESS;
 	}
 
+	if ((ipa_if_cate == WLAN_IF) && (is_if_svap || is_wlan_if_vlan) && (rx_prop->num_rx_props > 2)) {
+		idx = 2;
+		IPACMDBG_H("Interface is WLAN Svap or vlan, install rules on Rx1 pipe at idx %d \n", idx);
+	}
+
 	m_pFilteringTable = (struct ipa_ioc_add_flt_rule *)
 		 calloc(1,
 						sizeof(struct ipa_ioc_add_flt_rule) +
@@ -136,7 +142,7 @@ int IPACM_Iface::handle_software_routing_enable(void)
 	}
 
 	m_pFilteringTable->commit = 1;
-	m_pFilteringTable->ep = rx_prop->rx[0].src_pipe;
+	m_pFilteringTable->ep = rx_prop->rx[idx].src_pipe;
 	m_pFilteringTable->global = false;
 	m_pFilteringTable->num_rules = (uint8_t)1;
 
@@ -152,7 +158,7 @@ int IPACM_Iface::handle_software_routing_enable(void)
 	flt_rule_entry.rule.hashable = true;
 #endif
 	memcpy(&flt_rule_entry.rule.attrib,
-				 &rx_prop->rx[0].attrib,
+				 &rx_prop->rx[idx].attrib,
 				 sizeof(flt_rule_entry.rule.attrib));
 
 	memcpy(&(m_pFilteringTable->rules[0]), &flt_rule_entry, sizeof(struct ipa_flt_rule_add));
@@ -175,7 +181,7 @@ int IPACM_Iface::handle_software_routing_enable(void)
 			goto fail;
 		}
 
-		IPACM_Iface::ipacmcfg->increaseFltRuleCount(rx_prop->rx[0].src_pipe, IPA_IP_v4, 1);
+		IPACM_Iface::ipacmcfg->increaseFltRuleCount(rx_prop->rx[idx].src_pipe, IPA_IP_v4, 1);
 		IPACMDBG("soft-routing flt rule hdl0=0x%x\n", m_pFilteringTable->rules[0].flt_rule_hdl);
 		/* copy filter hdls */
 		software_routing_fl_rule_hdl[0] = m_pFilteringTable->rules[0].flt_rule_hdl;
@@ -196,7 +202,7 @@ int IPACM_Iface::handle_software_routing_enable(void)
 			goto fail;
 		}
 
-		IPACM_Iface::ipacmcfg->increaseFltRuleCount(rx_prop->rx[0].src_pipe, IPA_IP_v6, 1);
+		IPACM_Iface::ipacmcfg->increaseFltRuleCount(rx_prop->rx[idx].src_pipe, IPA_IP_v6, 1);
 		IPACMDBG("soft-routing flt rule hdl0=0x%x\n", m_pFilteringTable->rules[0].flt_rule_hdl);
 		/* copy filter hdls */
 		software_routing_fl_rule_hdl[1] = m_pFilteringTable->rules[0].flt_rule_hdl;
@@ -251,7 +257,7 @@ fail:
 /* software routing disable */
 int IPACM_Iface::handle_software_routing_disable(void)
 {
-	int res = IPACM_SUCCESS;
+	int res = IPACM_SUCCESS, idx = 0;
 	ipa_ip_type ip;
 	uint32_t flt_hdl;
 
@@ -259,6 +265,11 @@ int IPACM_Iface::handle_software_routing_disable(void)
 	{
 		IPACMDBG("No rx properties registered for iface %s\n", dev_name);
 		return IPACM_SUCCESS;
+	}
+
+	if ((ipa_if_cate == WLAN_IF) && (is_if_svap || is_wlan_if_vlan) && (rx_prop->num_rx_props > 2)) {
+		idx = 2;
+		IPACMDBG_H("Interface is WLAN Svap or vlan, install rules on Rx1 pipe at idx %d \n", idx);
 	}
 
 	if (softwarerouting_act == false)
@@ -277,7 +288,7 @@ int IPACM_Iface::handle_software_routing_disable(void)
 			res = IPACM_FAILURE;
 			goto fail;
 		}
-		IPACM_Iface::ipacmcfg->decreaseFltRuleCount(rx_prop->rx[0].src_pipe, IPA_IP_v4, 1);
+		IPACM_Iface::ipacmcfg->decreaseFltRuleCount(rx_prop->rx[idx].src_pipe, IPA_IP_v4, 1);
 
 		/* ipv6 case */
 		if (m_filtering.DeleteFilteringHdls(&software_routing_fl_rule_hdl[1],
@@ -287,7 +298,7 @@ int IPACM_Iface::handle_software_routing_disable(void)
 			res = IPACM_FAILURE;
 			goto fail;
 		}
-		IPACM_Iface::ipacmcfg->decreaseFltRuleCount(rx_prop->rx[0].src_pipe, IPA_IP_v6, 1);
+		IPACM_Iface::ipacmcfg->decreaseFltRuleCount(rx_prop->rx[idx].src_pipe, IPA_IP_v6, 1);
 		softwarerouting_act = false;
 #if 0
 	}
@@ -351,7 +362,7 @@ int IPACM_Iface::iface_ipa_index_query
 		if (interface_index == IPACM_Iface::ipacmcfg->iface_table[i].netlink_interface_index)
 		{
 			link = i;
-			IPACMDBG("Interface (%s) found: linux(%d) ipa(%d) \n",
+			IPACMDBG_H("Interface (%s) found: linux(%d) ipa(%d) \n",
 							 IPACM_Iface::ipacmcfg->iface_table[i].iface_name,
 							 IPACM_Iface::ipacmcfg->iface_table[i].netlink_interface_index,
 							 link);
@@ -708,11 +719,6 @@ int IPACM_Iface::init_fl_rule(
 	const char *dev_ecm0="ecm0";
 	int idx = 0;
 
-	if ((ipa_if_cate == WLAN_IF) && is_if_svap && (rx_prop->num_rx_props > 2)) {
-		idx = 2;
-		IPACMDBG_H("Interface is WLAN Svap, install rules on Rx1 pipe at idx %d \n", idx);
-	}
-
 	len = (iptype == IPA_IP_v4) ?
 		IPV4_DEFAULT_FILTERTING_RULES :
 		IPV6_DEFAULT_FILTERTING_RULES;
@@ -765,6 +771,11 @@ int IPACM_Iface::init_fl_rule(
 	{
 		IPACMDBG_H("No rx properties registered for iface %s\n", dev_name);
 		return IPACM_SUCCESS;
+	}
+
+	if ((ipa_if_cate == WLAN_IF) && (is_if_svap || is_wlan_if_vlan) && (rx_prop->num_rx_props > 2)) {
+		idx = 2;
+		IPACMDBG_H("Interface is WLAN Svap or vlan, install rules on Rx1 pipe at idx %d \n", idx);
 	}
 
 		/* construct ipa_ioc_add_flt_rule with default filter rules */
@@ -1184,10 +1195,17 @@ void IPACM_Iface::delete_iface(void)
 int IPACM_Iface::delete_dflt_filter_rules(
 	ipa_ip_type iptype )
 {
+	int idx = 0;
+
 	if ( ! VALID_IPA_IP_TYPE(iptype) )
 	{
 		IPACMERR("Bad iptype(%u)\n", iptype);
 		return IPACM_FAILURE;
+	}
+
+	if ((ipa_if_cate == WLAN_IF) && (is_if_svap || is_wlan_if_vlan) && (rx_prop->num_rx_props > 2)) {
+		idx = 2;
+		IPACMDBG_H("Interface is WLAN Svap or vlan, install rules on Rx1 pipe at idx %d \n", idx);
 	}
 
 	if ( iptype == IPA_IP_v4 )
@@ -1205,7 +1223,7 @@ int IPACM_Iface::delete_dflt_filter_rules(
 			{
 				IPACMDBG_H("Deleted default v4 filter rules successfully.\n");
 				IPACM_Iface::ipacmcfg->decreaseFltRuleCount(
-					rx_prop->rx[0].src_pipe,
+					rx_prop->rx[idx].src_pipe,
 					IPA_IP_v4,
 					m_ipv4_default_filterting_rules_count);
 				memset(
@@ -1236,7 +1254,7 @@ int IPACM_Iface::delete_dflt_filter_rules(
 			{
 				IPACMDBG_H("Deleted default v6 filter rules successfully.\n");
 				IPACM_Iface::ipacmcfg->decreaseFltRuleCount(
-					rx_prop->rx[0].src_pipe,
+					rx_prop->rx[idx].src_pipe,
 					IPA_IP_v6,
 					m_ipv6_default_filterting_rules_count);
 				memset(

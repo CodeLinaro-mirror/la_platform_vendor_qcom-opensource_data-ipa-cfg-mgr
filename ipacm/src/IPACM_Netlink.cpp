@@ -445,28 +445,21 @@ static int ipa_nl_decode_rtm_link
 	buflen -= sizeof(struct nlmsghdr);
 
 	for (attrib = IFLA_RTA(ifm); RTA_OK(attrib, len); attrib = RTA_NEXT(attrib, len)) {
-
-		if (attrib->rta_type == IFLA_IFNAME)
-		{
+		if (attrib->rta_type == IFLA_IFNAME) {
 			strlcpy(link_info->vlan_info.name, (strdup((const char *)RTA_DATA(attrib))), IFACE_NAME);
 			IPACMDBG("Extracted vlan interface name %s\n", link_info->vlan_info.name);
 		}
-
-		if (attrib->rta_type == IFLA_LINKINFO)
-		{
+		if (attrib->rta_type == IFLA_LINKINFO) {
 			nested_attr = (struct rtattr *)RTA_DATA(attrib);
 			nest_len = RTA_PAYLOAD(attrib);
-			while(RTA_OK(nested_attr, nest_len)) {
-				if((nested_attr->rta_type <= IFLA_INFO_MAX) && (!vlan_link_info[nested_attr->rta_type])) {
+			while (RTA_OK(nested_attr, nest_len)) {
+				if ((nested_attr->rta_type <= IFLA_INFO_MAX) && (!vlan_link_info[nested_attr->rta_type]))
 					vlan_link_info[nested_attr->rta_type] = nested_attr;
-
-				}
 				nested_attr = RTA_NEXT(nested_attr, nest_len);
 			}
-			if(vlan_link_info [IFLA_INFO_KIND]) {
-
+			if (vlan_link_info [IFLA_INFO_KIND]) {
 				intf_type = strdup((char *)RTA_DATA(vlan_link_info[IFLA_INFO_KIND]));
-				if(intf_type) {
+				if (intf_type) {
 					if (!strcmp(intf_type, "vlan")) {
 						link_info->vlan_info.vlan_interface_index = link_info->metainfo.ifi_index;
 						IPACMDBG("Recived NEW_LINK for vlan type interface with interface index %d\n",
@@ -474,21 +467,15 @@ static int ipa_nl_decode_rtm_link
 					}
 				}
 			}
-
-			if(intf_type && !strcmp(intf_type, "vlan") && vlan_link_info[IFLA_INFO_DATA]) {
-
+			if (intf_type && !strcmp(intf_type, "vlan") && vlan_link_info[IFLA_INFO_DATA]) {
 				vlan_attr = (struct rtattr *)RTA_DATA(vlan_link_info[IFLA_INFO_DATA]);
 				vlan_len = RTA_PAYLOAD(vlan_link_info[IFLA_INFO_DATA]);
-
-				while(RTA_OK(vlan_attr, vlan_len))
-				{
-					if((vlan_attr->rta_type <= IFLA_INFO_MAX) &&(!vlan_link_info_data_attrs[vlan_attr->rta_type])) {
-							vlan_link_info_data_attrs[vlan_attr->rta_type] = vlan_attr;
-					}
+				while (RTA_OK(vlan_attr, vlan_len)) {
+					if ((vlan_attr->rta_type <= IFLA_INFO_MAX) &&(!vlan_link_info_data_attrs[vlan_attr->rta_type]))
+						vlan_link_info_data_attrs[vlan_attr->rta_type] = vlan_attr;
 					vlan_attr = RTA_NEXT(vlan_attr, vlan_len);
 				}
-				if(vlan_link_info_data_attrs[IFLA_VLAN_ID]) {
-
+				if (vlan_link_info_data_attrs[IFLA_VLAN_ID]) {
 					link_info->vlan_info.vlan_id = *(uint16_t *)RTA_DATA(vlan_link_info_data_attrs[IFLA_VLAN_ID]);
 					IPACMDBG("vlan id %d\n", link_info->vlan_info.vlan_id);
 
@@ -496,6 +483,7 @@ static int ipa_nl_decode_rtm_link
 			}
 		}
 	}
+
 	return IPACM_SUCCESS;
 }
 
@@ -705,67 +693,59 @@ static int ipa_nl_decode_nlmsg
 		case RTM_NEWLINK:
 			msg_ptr->type = nlh->nlmsg_type;
 			msg_ptr->link_event = true;
-			if(IPACM_SUCCESS != ipa_nl_decode_rtm_link(buffer, buflen, &(msg_ptr->nl_link_info)))
-			{
+			if (IPACM_SUCCESS != ipa_nl_decode_rtm_link(buffer, buflen, &(msg_ptr->nl_link_info))) {
 				IPACMERR("Failed to decode rtm link message\n");
 				return IPACM_FAILURE;
-			}
-			else
-			{
+			} else {
 				IPACMDBG("Got RTM_NEWLINK with below values\n");
 				IPACMDBG("RTM_NEWLINK, ifi_change:%d\n", msg_ptr->nl_link_info.metainfo.ifi_change);
 				IPACMDBG("RTM_NEWLINK, ifi_flags:%d\n", msg_ptr->nl_link_info.metainfo.ifi_flags);
 				IPACMDBG("RTM_NEWLINK, ifi_index:%d\n", msg_ptr->nl_link_info.metainfo.ifi_index);
 				IPACMDBG("RTM_NEWLINK, family:%d\n", msg_ptr->nl_link_info.metainfo.ifi_family);
-				/* RTM_NEWLINK event with AF_BRIDGE family should be ignored in Android
-				   but this should be processed in case of MDM for Ehernet interface.
-				*/
+				/**
+				 * RTM_NEWLINK event with AF_BRIDGE family should be ignored in
+				 * Android but this should be processed in case of MDM for
+				 * Ehernet interface.
+				 */
 #ifdef FEATURE_IPA_ANDROID
-				if (msg_ptr->nl_link_info.metainfo.ifi_family == AF_BRIDGE)
-				{
+				if (msg_ptr->nl_link_info.metainfo.ifi_family == AF_BRIDGE) {
 					IPACMERR(" ignore this RTM_NEWLINK msg \n");
 					return IPACM_SUCCESS;
 				}
 #endif
-				if(IFF_UP & msg_ptr->nl_link_info.metainfo.ifi_change)
-				{
+				if (IFF_UP & msg_ptr->nl_link_info.metainfo.ifi_change) {
 					IPACMDBG("GOT useful newlink event\n");
 					ret_val = ipa_get_if_name(dev_name, msg_ptr->nl_link_info.metainfo.ifi_index);
-					if(ret_val != IPACM_SUCCESS)
-					{
+					if (ret_val != IPACM_SUCCESS) {
 						IPACMERR("Error while getting interface name\n");
 						return IPACM_FAILURE;
 					}
 
 					data_fid = (ipacm_event_data_fid *)malloc(sizeof(ipacm_event_data_fid));
-					if(data_fid == NULL)
-					{
+					if (data_fid == NULL) {
 						IPACMERR("unable to allocate memory for event data_fid\n");
 						return IPACM_FAILURE;
 					}
 					data_fid->if_index = msg_ptr->nl_link_info.metainfo.ifi_index;
 					strlcpy(data_fid->iface_name, dev_name, sizeof(data_fid->iface_name));
 
-					if(msg_ptr->nl_link_info.vlan_info.vlan_id && msg_ptr->nl_link_info.vlan_info.name != NULL)
-					{
+					if (msg_ptr->nl_link_info.vlan_info.vlan_id && msg_ptr->nl_link_info.vlan_info.name != NULL)
 						IPACM_Iface::ipacmcfg->add_vlan_iface(&msg_ptr->nl_link_info.vlan_info);
-					}
 
-					if(msg_ptr->nl_link_info.metainfo.ifi_flags & IFF_UP)
-					{
-						IPACMDBG_H("Interface %s bring up with IP-family: %d \n", dev_name, msg_ptr->nl_link_info.metainfo.ifi_family);
+					if (msg_ptr->nl_link_info.metainfo.ifi_flags & IFF_UP) {
+						IPACMDBG_H("Interface %s bring up with IP-family: %d \n", dev_name,
+							msg_ptr->nl_link_info.metainfo.ifi_family);
 						/* post link up to command queue */
 						evt_data.event = IPA_LINK_UP_EVENT;
 						IPACMDBG_H("Posting IPA_LINK_UP_EVENT with if index: %d\n",
-										 msg_ptr->nl_link_info.metainfo.ifi_index);
-					}
-					else
-					{
-						IPACMDBG_H("Interface %s bring down with IP-family: %d \n", dev_name, msg_ptr->nl_link_info.metainfo.ifi_family);
+							msg_ptr->nl_link_info.metainfo.ifi_index);
+					} else {
+						IPACMDBG_H("Interface %s bring down with IP-family: %d \n", dev_name,
+							msg_ptr->nl_link_info.metainfo.ifi_family);
 						/* post link down to command queue */
 						evt_data.event = IPA_LINK_DOWN_EVENT;
 						IPACMDBG_H("Posting IPA_LINK_DOWN_EVENT with if index: %d\n",
-										 data_fid->if_index);
+							data_fid->if_index);
 					}
 					evt_data.evt_data = data_fid;
 					IPACM_EvtDispatcher::PostEvt(&evt_data);
@@ -776,71 +756,57 @@ static int ipa_nl_decode_nlmsg
                    Check if the interface is running.If its a RTM_NEWLINK and the interface
                     is running then it means that its a link up event
                 ---------------------------------------------------------------------------*/
-                if((msg_ptr->nl_link_info.metainfo.ifi_flags & IFF_RUNNING) &&
-                   (msg_ptr->nl_link_info.metainfo.ifi_flags & IFF_LOWER_UP))
-                {
-
+				if ((msg_ptr->nl_link_info.metainfo.ifi_flags & IFF_RUNNING) &&
+				   (msg_ptr->nl_link_info.metainfo.ifi_flags & IFF_LOWER_UP)) {
 					data_fid = (ipacm_event_data_fid *)malloc(sizeof(ipacm_event_data_fid));
-					if(data_fid == NULL)
-					{
+					if (data_fid == NULL) {
 						IPACMERR("unable to allocate memory for event data_fid\n");
 						return IPACM_FAILURE;
 					}
 					data_fid->if_index = msg_ptr->nl_link_info.metainfo.ifi_index;
 
 				        ret_val = ipa_get_if_name(dev_name, msg_ptr->nl_link_info.metainfo.ifi_index);
-					if(ret_val != IPACM_SUCCESS)
-					{
+					if (ret_val != IPACM_SUCCESS) {
 						IPACMERR("Error while getting interface name\n");
 						return IPACM_FAILURE;
 					}
-					IPACMDBG("Got a usb link_up event (Interface %s, %d) \n", dev_name, msg_ptr->nl_link_info.metainfo.ifi_index);
-
+					IPACMDBG("Got a usb link_up event (Interface %s, %d) \n", dev_name,
+						msg_ptr->nl_link_info.metainfo.ifi_index);
 					strlcpy(data_fid->iface_name, dev_name, sizeof(data_fid->iface_name));
-
-					if(msg_ptr->nl_link_info.vlan_info.vlan_id && msg_ptr->nl_link_info.vlan_info.name != NULL)
-					{
+					if (msg_ptr->nl_link_info.vlan_info.vlan_id && msg_ptr->nl_link_info.vlan_info.name != NULL)
 						IPACM_Iface::ipacmcfg->add_vlan_iface(&msg_ptr->nl_link_info.vlan_info);
-					}
-
                     /*--------------------------------------------------------------------------
                        Post LAN iface (ECM) link up event
                      ---------------------------------------------------------------------------*/
-                    evt_data.event = IPA_USB_LINK_UP_EVENT;
+					evt_data.event = IPA_USB_LINK_UP_EVENT;
 					evt_data.evt_data = data_fid;
-					IPACMDBG_H("Posting usb IPA_LINK_UP_EVENT with if index: %d\n",
-										 data_fid->if_index);
+					IPACMDBG_H("Posting usb IPA_LINK_UP_EVENT with if index: %d\n", data_fid->if_index);
 					IPACM_EvtDispatcher::PostEvt(&evt_data);
-                }
-                else if (!(msg_ptr->nl_link_info.metainfo.ifi_flags & IFF_LOWER_UP))
-				{
+				} else if (!(msg_ptr->nl_link_info.metainfo.ifi_flags & IFF_LOWER_UP)) {
 					data_fid = (ipacm_event_data_fid *)malloc(sizeof(ipacm_event_data_fid));
-					if(data_fid == NULL)
-					{
+					if (data_fid == NULL) {
 						IPACMERR("unable to allocate memory for event data_fid\n");
 						return IPACM_FAILURE;
 					}
 
 					ret_val = ipa_get_if_name(dev_name, msg_ptr->nl_link_info.metainfo.ifi_index);
-					if(ret_val != IPACM_SUCCESS)
-					{
+					if (ret_val != IPACM_SUCCESS) {
 						IPACMERR("Error while getting interface name\n");
 						return IPACM_FAILURE;
 					}
 					IPACMDBG_H("Got a usb link_down event (Interface %s) \n", dev_name);
 
-					if (msg_ptr->nl_link_info.metainfo.ifi_family == AF_BRIDGE || msg_ptr->nl_link_info.metainfo.ifi_family == AF_UNSPEC)
-					{
-						IPACMDBG("Deleting the bridge<->vlan mapping entry with intterface index %d\n", msg_ptr->nl_link_info.metainfo.ifi_index);
+					if (msg_ptr->nl_link_info.metainfo.ifi_family == AF_BRIDGE ||
+					    msg_ptr->nl_link_info.metainfo.ifi_family == AF_UNSPEC) {
+						IPACMDBG("Deleting the bridge<->vlan mapping entry with intterface index %d\n",
+							msg_ptr->nl_link_info.metainfo.ifi_index);
 						uint16_t vlan_master_interface_index = msg_ptr->nl_link_info.metainfo.ifi_index;
 						IPACM_Iface::ipacmcfg->del_bridge_vlan_mapping(&vlan_master_interface_index);
 						return IPACM_SUCCESS;
 					}
 
-					if(msg_ptr->nl_link_info.vlan_info.vlan_id && msg_ptr->nl_link_info.vlan_info.name != NULL)
-					{
+					if (msg_ptr->nl_link_info.vlan_info.vlan_id && msg_ptr->nl_link_info.vlan_info.name != NULL)
 						IPACM_Iface::ipacmcfg->del_vlan_iface(&msg_ptr->nl_link_info.vlan_info);
-					}
 
 					data_fid->if_index = msg_ptr->nl_link_info.metainfo.ifi_index;
 					strlcpy(data_fid->iface_name, dev_name, sizeof(data_fid->iface_name));
@@ -849,8 +815,7 @@ static int ipa_nl_decode_nlmsg
 					---------------------------------------------------------------------------*/
 					evt_data.event = IPA_LINK_DOWN_EVENT;
 					evt_data.evt_data = data_fid;
-					IPACMDBG_H("Posting usb IPA_LINK_DOWN_EVENT with if index: %d\n",
-										 data_fid->if_index);
+					IPACMDBG_H("Posting usb IPA_LINK_DOWN_EVENT with if index: %d\n", data_fid->if_index);
 					IPACM_EvtDispatcher::PostEvt(&evt_data);
 				}
 			}
@@ -1049,7 +1014,7 @@ static int ipa_nl_decode_nlmsg
 			{
 				IPACMDBG("\n GOT RTM_NEWROUTE event\n");
 
-				if(msg_ptr->nl_route_info.attr_info.param_mask & IPA_RTA_PARAM_DST)
+				if(AF_INET == msg_ptr->nl_route_info.metainfo.rtm_family && msg_ptr->nl_route_info.attr_info.param_mask & IPA_RTA_PARAM_DST)
 				{
 					ret_val = ipa_get_if_name(dev_name, msg_ptr->nl_route_info.attr_info.oif_index);
 					if(ret_val != IPACM_SUCCESS)

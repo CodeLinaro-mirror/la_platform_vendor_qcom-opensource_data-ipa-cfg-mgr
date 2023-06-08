@@ -318,6 +318,9 @@ public:
 	/* Indicates whether public ip support is enabled */
 	bool is_public_ip_support_enabled;
 
+	/* Indicates whether vlan mpdn for WLAN is enabled */
+	bool wlan_vlan_mpdn_enabled;
+
 #ifdef FEATURE_EoGRE
 	ipa_ipgre_info eogre_info;
 	bool           eogre_enabled;
@@ -733,6 +736,13 @@ public:
 
 	int DelNatIfaces(char *dev_name);
 
+	/* To change the WLAN AP from Non-vlan to vlan and vice-a-versa */
+	int SwitchAPVlanMode(char *dev_name, bool vlan_mpdn);
+
+	bool IsWlanIfVlan(const char *dev_name);
+
+	int SetWlanVlanAp(char *event_iface_name);
+
 	inline void SetQmapId(uint8_t id)
 	{
 		qmap_id = id;
@@ -979,7 +989,7 @@ public:
 					ipa_no_offload_ipv6_prefixes[i][1] = ipa_no_offload_ipv6_prefixes[i + 1][1];
 				}
 				num_no_offload_ipv6_prefix--;
-				IPACMDBG_H("removed prefix 0x[%X][%X] from no offload list\n", prefix[1], prefix[2]);
+				IPACMDBG_H("removed prefix 0x[%X][%X] from no offload list\n", prefix[0], prefix[1]);
 				break;
 			}
 		}
@@ -1193,12 +1203,15 @@ public:
 	bool AddMacsecMap(struct ipa_macsec_map *new_macsec_map);
 	bool DelMacsecMap(struct ipa_macsec_map *macsec_map_to_delete);
 
+#ifdef IPA_IOCTL_SET_EXT_ROUTER_MODE
 	enum ipa_ext_router_mode ext_router_mode;
 	std::list<ext_router_prefix_info> ext_router_prefix;
 	bool add_ext_router_info(struct ipa_ioc_ext_router_info *data);
 	bool del_ext_router_info(char* pdn_name);
 	bool get_ext_router_info(struct ext_router_prefix_info *data);
 	char* is_ext_route_ipv6_prefix(uint32_t *addr);
+	int get_mapped_delegated_prefix_idx(uint32_t *addr);
+#endif
 
 	static const char *DEVICE_NAME_ODU;
 

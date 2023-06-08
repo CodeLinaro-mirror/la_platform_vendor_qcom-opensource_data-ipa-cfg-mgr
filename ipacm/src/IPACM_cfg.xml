@@ -171,6 +171,41 @@
 			   <WlanMode>full</WlanMode>
 			</Iface>
 			<Iface>
+			   <Name>ath2</Name>
+			   <Category>UNKNOWN</Category>
+			   <WlanMode>full</WlanMode>
+			</Iface>
+			<Iface>
+			   <Name>ath21</Name>
+			   <Category>UNKNOWN</Category>
+			   <WlanMode>full</WlanMode>
+			</Iface>
+			<Iface>
+			   <Name>ath22</Name>
+			   <Category>UNKNOWN</Category>
+			   <WlanMode>full</WlanMode>
+			</Iface>
+			<Iface>
+			   <Name>ath23</Name>
+			   <Category>UNKNOWN</Category>
+			   <WlanMode>full</WlanMode>
+			</Iface>
+			<Iface>
+			   <Name>ath24</Name>
+			   <Category>UNKNOWN</Category>
+			   <WlanMode>full</WlanMode>
+			</Iface>
+			<Iface>
+			   <Name>ath25</Name>
+			   <Category>UNKNOWN</Category>
+			   <WlanMode>full</WlanMode>
+			</Iface>
+			<Iface>
+			   <Name>ath26</Name>
+			   <Category>UNKNOWN</Category>
+			   <WlanMode>full</WlanMode>
+			</Iface>
+			<Iface>
 			   <Name>eth0</Name>
 			   <Category>ODU</Category>
 			</Iface>
@@ -290,5 +325,8 @@
 			<IPACMEMESHEnabled>0</IPACMEMESHEnabled>
 			<IPACMEMESHMode>0</IPACMEMESHMode>
 		</IPACMEMESH>
+		<IPACMVLANMPDN>
+			<IPACMVlanMpdnEnabled>0</IPACMVlanMpdnEnabled>
+		</IPACMVLANMPDN>
 	</IPACM>
 </system>

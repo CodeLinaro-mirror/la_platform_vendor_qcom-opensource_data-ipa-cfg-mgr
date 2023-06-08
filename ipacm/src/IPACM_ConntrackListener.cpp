@@ -30,6 +30,7 @@
  * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
+
 #include <sys/ioctl.h>
 #include <net/if.h>
 
@@ -2094,10 +2095,15 @@ bool IPACM_ConntrackListener::AddIface(
 
 		IPACMDBG("Install dummy NAT rule for ALG port DL flow public_ip=%u public_port=%u\n",
 			rule->public_ip, rule->public_port);
-		rule->private_ip = rule->public_ip;
-		rule->private_port = rule->public_port;
-		rule->dummy_nat = true;
-		return true;
+		/* Ignoring Dummy NAT entry for ALG traffic */
+		if (IPACM_Iface::ipacmcfg->GetIPAVer() >= IPA_HW_v5_5) {
+			return false;
+		} else {
+			rule->private_ip = rule->public_ip;
+			rule->private_port = rule->public_port;
+			rule->dummy_nat = true;
+			return true;
+		}
 	}
 
 	/* check whether nat iface or not */
@@ -2132,10 +2138,15 @@ bool IPACM_ConntrackListener::AddIface(
 					iptodot("AddIface(): Non Nat entry match with ip addr",
 							nonnat_iface_ipv4_addr[cnt]);
 
-					rule->private_ip = rule->public_ip;
-					rule->private_port = rule->public_port;
-					rule->dummy_nat = true;
-					return true;
+					/* Ignoring Dummy NAT entry for non nat ifaces */
+					if (IPACM_Iface::ipacmcfg->GetIPAVer() >= IPA_HW_v5_5) {
+						return false;
+					} else {
+						rule->private_ip = rule->public_ip;
+						rule->private_port = rule->public_port;
+						rule->dummy_nat = true;
+						return true;
+					}
 				}
 			}
 		}
@@ -2937,6 +2948,10 @@ void IPACM_ConntrackListener::ProcessTCPorUDPMsg(
 			 IPACMERR("In STA mode, ignore connections destinated to STA interface\n");
 			 goto IGNORE;
 		 }
+
+		 /* Suppressing NAT entry for Q6 WAN connections when IP Pass not enabled. */
+		 if (!ip_pass_enable && IPACM_Iface::ipacmcfg->GetIPAVer() >= IPA_HW_v5_5)
+			  goto IGNORE;
 
 		 IPACMDBG_H("For embedded connections add dummy nat rule\n");
 		 IPACMDBG_H("Change private port %d to %d\n",

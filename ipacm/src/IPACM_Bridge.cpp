@@ -27,6 +27,7 @@ void IPACM_Bridge::event_callback(ipa_cm_event_id event, void *param)
 		to get the interface name details. */
 		ipacm_event_data_addr *data = (ipacm_event_data_addr *)param;
 		int ipa_if_num = data->if_index;
+		int skip_nat_set = 0;
 		if(strncmp(data->iface_name, IPACM_Iface::ipacmcfg->ipa_virtual_iface_name, strlen(data->iface_name)) != 0)
 		{
 			IPACMDBG("Non-bridge interface %s event,ignoring\n", data->iface_name);
@@ -39,22 +40,40 @@ void IPACM_Bridge::event_callback(ipa_cm_event_id event, void *param)
 		}
 		switch(event) {
 				case IPA_ADDR_ADD_EVENT:
-						IPACMDBG("Handling IPA_ADDR_ADD_EVENT for %s\n",data->iface_name);
+						IPACMDBG_H("Handling IPA_ADDR_ADD_EVENT for %s and bridge_ipv4_addr 0x%x\n",data->iface_name, bridge_ipv4_addr);
 						if(bridge_ipv4_addr == 0)
 						{
-							if(IPACM_Iface::ipacmcfg->AddPrivateSubnet(data->ipv4_addr, data->ipv4_addr_mask, ipa_if_num) == true)
+							/*	This is to avoid installing IPA private subnet Filter rules in case of
+								IPPT without NAT scenario to avoid packets taking SW path because we
+								are installing private subnet rules with public IP assigned to bridge
+								since bridge has no longer the private IP assigned. */
+
+							for (int i = 0; i < MAX_NUM_IP_PASS_MPDN; i++)
 							{
-								bridge_ipv4_addr = data->ipv4_addr;
-								IPACMDBG_H("Resetting IPACM bridge private subnet_addr as: 0x%x \n", bridge_ipv4_addr);
+								if(IPACM_Iface::ipacmcfg->ip_pass_mpdn_table[i].valid_entry == true &&
+									IPACM_Iface::ipacmcfg->ip_pass_mpdn_table[i].ip_pass_skip_nat == 1)
+								{
+									skip_nat_set = 1;
+									break;
+								}
 							}
-							else
+							if(!skip_nat_set)
 							{
-								IPACMERR("Can't Add IPACM private subnet_addr as: 0x%x \n", data->ipv4_addr);
+								if(IPACM_Iface::ipacmcfg->AddPrivateSubnet(data->ipv4_addr, data->ipv4_addr_mask, ipa_if_num) == true)
+								{
+									bridge_ipv4_addr = data->ipv4_addr;
+									IPACMDBG_H("Resetting IPACM bridge private subnet_addr as: 0x%x \n", bridge_ipv4_addr);
+								}
+								else
+								{
+									IPACMERR("Can't Add IPACM private subnet_addr as: 0x%x \n", data->ipv4_addr);
+								}
 							}
 						}
+						skip_nat_set = 0;
 						break;
 				case IPA_ADDR_DEL_EVENT:
-						IPACMDBG("Handling IPA_ADDR_DEL_EVENT %s\n", data->iface_name);
+						IPACMDBG_H("Handling IPA_ADDR_DEL_EVENT %s\n", data->iface_name);
 							if(IPACM_Iface::ipacmcfg->DelPrivateSubnet(data->ipv4_addr, ipa_if_num) == true)
 							{
 								bridge_ipv4_addr = 0;
@@ -66,9 +85,9 @@ void IPACM_Bridge::event_callback(ipa_cm_event_id event, void *param)
 							}
 						break;
 				case IPA_LINK_DOWN_EVENT:
-						IPACMDBG("Handling IPA_LINK_DOWN_EVENT %s\n", data->iface_name);
+						IPACMDBG_H("Handling IPA_LINK_DOWN_EVENT %s\n", data->iface_name);
 						bridge_ipv4_addr = 0;
-						IPACMDBG("Deleting the bridge instance and resetting IPACM bridge private subnet_addr as: 0x%x \n",
+						IPACMDBG_H("Deleting the bridge instance and resetting IPACM bridge private subnet_addr as: 0x%x \n",
 									bridge_ipv4_addr);
 						if(IPACM_Iface::ipacmcfg->DelPrivateSubnetByIfIndex(ipa_if_num) == false)
 						{

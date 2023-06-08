@@ -90,9 +90,9 @@ extern "C"
 #define IPA_IF_SOCKSv5_NAME  "IPACM_SOCKSv5"
 #define IPA_EOGRE_HDR_NAME   "IPACM_EoGRE_v%d"
 
-#define IPA_MAX_ACTIVE_WLAN_IFACE 14
+#define IPA_MAX_ACTIVE_WLAN_IFACE 21
 
-#define IPA_MAX_IFACE_ENTRIES (26 + IPA_MAX_ACTIVE_WLAN_IFACE) /* current: 15 rmnet + 14 wlan + bridge+ eth+ rndis + ecm.*/
+#define IPA_MAX_IFACE_ENTRIES (26 + IPA_MAX_ACTIVE_WLAN_IFACE) /* current: 15 rmnet + 21 wlan + bridge+ eth+ rndis + ecm.*/
 #define IPA_MAX_ALG_ENTRIES 20
 #define IPA_MAX_RM_ENTRY 9
 
@@ -257,6 +257,7 @@ typedef enum
 	IPA_LAN_TO_LAN_DEL_CONNECTION,            /* ipacm_event_connection */
 	IPA_WLAN_SWITCH_TO_SCC,                   /* No Data */
 	IPA_WLAN_SWITCH_TO_MCC,                   /* No Data */
+	IPA_WLAN_SWITCH_VLAN_MODE,                /* ipacm_event_vlan_mode */
 	IPA_CRADLE_WAN_MODE_SWITCH,               /* ipacm_event_cradle_wan_mode */
 	IPA_WAN_XLAT_CONNECT_EVENT,               /* ipacm_event_data_fid */
 	IPA_TETHERING_STATS_UPDATE_EVENT,         /* ipacm_event_data_fid */
@@ -390,6 +391,7 @@ typedef struct
 	ipacm_cradle_iface_mode if_mode;
 	ipacm_wlan_access_mode wlan_mode;
 	int netlink_interface_index;
+	bool is_wlan_if_vlan;
 } ipa_ifi_dev_name_t;
 
 typedef struct
@@ -561,6 +563,12 @@ typedef struct
 	ipa_move_nat_type_enum_v01 nat_move_direction;
 }ipacm_event_move_nat;
 
+typedef struct _ipacm_event_vlan_mode
+{
+	bool wlan_vlan_mpdn_enable;
+	int if_index;
+}ipacm_event_vlan_mode;
+
 typedef enum
 {
 	Q6_WAN = 0,
@@ -683,5 +691,9 @@ typedef struct ext_router_prefix_info
 	uint32_t ipv6_addr[4];
 	uint32_t ipv6_mask[4];
 	char pdn_name[IPA_IFACE_NAME_LEN];
+	int num_of_idu_prefix_mapping;
+	uint32_t idu_wan_ip[IPA_PREFIX_MAPPING_MAX][4];
+	uint32_t idu_client_prefix[IPA_PREFIX_MAPPING_MAX][4];
 };
+
 #endif /* IPA_CM_DEFS_H */

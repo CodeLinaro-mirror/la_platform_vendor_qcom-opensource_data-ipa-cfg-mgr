@@ -109,6 +109,8 @@ typedef struct _ipa_wlan_client
 	bool ipv6_hpc_set;
 	bool power_save_set;
 	bool is_vlan;
+	/* default vlan support in wlan */
+	uint16_t vlan_id;
 	int if_index;
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
 	bool ipv4_ul_rules_set;
@@ -136,6 +138,14 @@ typedef struct _ipa_wlan_client
 	wlan_client_rt_hdl wifi_rt_hdl[0]; /* depends on number of tx properties */
 }ipa_wlan_client;
 
+typedef struct _ipa_wlan_primary_client
+{
+	uint8_t mac[IPA_MAC_ADDR_SIZE];
+	ipacm_event_data_wlan_ex* p_hdr_info;
+	uint32_t num_vlan_clients;
+}ipa_wlan_primary_client;
+
+
 /* wlan iface */
 class IPACM_Wlan : public IPACM_Lan
 {
@@ -158,6 +168,8 @@ public:
 	void update_svap_state();
 	int handle_wlan_vlan_neighbor(ipacm_event_new_neigh_vlan *param);
 	int add_rt_rules_for_ast_update_ifaces();
+
+	bool is_vlan_iface();
 
 
 #if defined(FEATURE_IPACM_PER_CLIENT_STATS) || defined(IPA_WDI_AST_UPDATE)
@@ -191,7 +203,7 @@ public:
 	void configure_v6_ul_firewall_wlan();
 #endif //IPA_V6_UL_WL_FIREWALL_HANDLE
 
-	int handle_wlan_client_route_rule_ext_v2(uint8_t *mac_addr, ipa_ip_type iptype);
+	int handle_wlan_client_route_rule_ext_v2(uint8_t *mac_addr, ipa_ip_type iptype, uint16_t vlan_id = 0);
 
 	/* install UL filter rule from Q6 for all clients */
 	int install_uplink_filter_rule
@@ -245,8 +257,11 @@ private:
 
 	ipa_wlan_client *wlan_client;
 
+	ipa_wlan_primary_client *wlan_primary_client;
+
 	int header_name_count;
 	int num_wifi_client;
+	int num_wifi_primary_client;
 
 	int wlan_ap_index;
 
@@ -260,6 +275,8 @@ private:
 	uint32_t svap_dummy_route_rule_v4_hdl;
 
 	uint32_t svap_dummy_route_rule_v6_hdl;
+
+	bool vlan_enabled_ap;
 
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
 	static bool lan_stats_inited;
@@ -275,7 +292,7 @@ private:
 		return (ipa_wlan_client *)ret;
 	}
 
-	inline int get_wlan_client_index(uint8_t *mac_addr)
+	inline int get_wlan_client_index(uint8_t *mac_addr, uint16_t vlan_id = 0)
 	{
 		int cnt;
 		int num_wifi_client_tmp = num_wifi_client;
@@ -298,6 +315,83 @@ private:
 			if(memcmp(get_client_memptr(wlan_client, cnt)->mac,
 								mac_addr,
 								sizeof(get_client_memptr(wlan_client, cnt)->mac)) == 0)
+			{
+#ifdef FEATURE_VLAN_MPDN
+				if(vlan_id)
+				{
+					IPACMDBG("VLAN IF MAC match, looking for vlan ID %d, current %d\n", vlan_id,
+						get_client_memptr(wlan_client, cnt)->vlan_id);
+					if(get_client_memptr(wlan_client, cnt)->vlan_id == vlan_id)
+					{
+						IPACMDBG_H("Matched client index: %d for vid %d\n", cnt, vlan_id);
+						return cnt;
+					}
+				}
+				else
+#endif
+				{
+					IPACMDBG_H("Matched client index: %d\n", cnt);
+					return cnt;
+				}
+			}
+		}
+
+		return IPACM_INVALID_INDEX;
+	}
+
+	inline int get_wlan_client_ip4_addr(uint8_t *mac_addr, uint32_t &ip_addr, uint8_t vlan_id = 0)
+	{
+		int clnt_indx;
+
+		clnt_indx = get_wlan_client_index(mac_addr, vlan_id);
+		if(clnt_indx == IPACM_INVALID_INDEX)
+		{
+			IPACMERR("eth client not found/attached \n");
+			return IPACM_FAILURE;
+		}
+
+		if (get_client_memptr(wlan_client, clnt_indx)->ipv4_set)
+		{
+			ip_addr = get_client_memptr(wlan_client, clnt_indx)->v4_addr;
+			IPACMDBG_H("ip addr is 0x%X\n", ip_addr);
+			return IPACM_SUCCESS;
+		}
+		else
+		{
+			IPACMDBG_H("ipv4 address not set\n");
+			return IPACM_FAILURE;
+		}
+	}
+
+	inline ipa_wlan_primary_client* get_primary_client_memptr(ipa_wlan_primary_client *param, int cnt)
+	{
+	    char *ret = ((char *)param) + (sizeof(ipa_wlan_primary_client) * cnt);
+		return (ipa_wlan_primary_client *)ret;
+	}
+
+	inline int get_wlan_primary_client_index(uint8_t *mac_addr)
+	{
+		int cnt;
+		int num_wifi_client_tmp = num_wifi_primary_client;
+
+		IPACMDBG_H("Passed MAC %02x:%02x:%02x:%02x:%02x:%02x, left client: %d\n",
+						 mac_addr[0], mac_addr[1], mac_addr[2],
+						 mac_addr[3], mac_addr[4], mac_addr[5],
+						 num_wifi_primary_client);
+
+		for(cnt = 0; cnt < num_wifi_client_tmp; cnt++)
+		{
+			IPACMDBG_H("stored MAC %02x:%02x:%02x:%02x:%02x:%02x\n",
+							 get_primary_client_memptr(wlan_primary_client, cnt)->mac[0],
+							 get_primary_client_memptr(wlan_primary_client, cnt)->mac[1],
+							 get_primary_client_memptr(wlan_primary_client, cnt)->mac[2],
+							 get_primary_client_memptr(wlan_primary_client, cnt)->mac[3],
+							 get_primary_client_memptr(wlan_primary_client, cnt)->mac[4],
+							 get_primary_client_memptr(wlan_primary_client, cnt)->mac[5]);
+
+			if(memcmp(get_primary_client_memptr(wlan_primary_client, cnt)->mac,
+								mac_addr,
+								sizeof(get_primary_client_memptr(wlan_primary_client, cnt)->mac)) == 0)
 			{
 				IPACMDBG_H("Matched client index: %d\n", cnt);
 				return cnt;
@@ -598,7 +692,11 @@ private:
 #endif
 
 	/* for handle wifi client initial,copy all partial headers (tx property) */
-	int handle_wlan_client_init_ex(ipacm_event_data_wlan_ex *data, bool delay_init);
+	int handle_wlan_client_init_ex(ipacm_event_data_wlan_ex *data, bool delay_init, uint16_t vlan_id = 0);
+
+	/* for handle primary wifi client, copy wifi data. */
+	int handle_wlan_primary_client_init_ex(ipacm_event_data_wlan_ex *data);
+
 
 	int handle_wlan_vlan_client_init(int client_idx, ipacm_bridge *bridge, uint16_t vlan_id);
 
@@ -606,18 +704,21 @@ private:
 	int handle_wlan_client_ipaddr(ipacm_event_data_all *data);
 
 	/*handle wifi client routing rule*/
-	int handle_wlan_client_route_rule(uint8_t *mac_addr, ipa_ip_type iptype);
+	int handle_wlan_client_route_rule(uint8_t *mac_addr, ipa_ip_type iptype, uint16_t vlan_id = 0);
 
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
 	/*handle wifi client routing rule with rule id*/
-	int handle_wlan_client_route_rule_ext(uint8_t *mac_addr, ipa_ip_type iptype);
+	int handle_wlan_client_route_rule_ext(uint8_t *mac_addr, ipa_ip_type iptype, uint16_t vlan_id = 0);
 #endif
 
 	/*handle wifi client power-save mode*/
 	int handle_wlan_client_pwrsave(uint8_t *mac_addr);
 
 	/*handle wifi client del mode*/
-	int handle_wlan_client_down_evt(uint8_t *mac_addr);
+	int handle_wlan_client_down_evt(uint8_t *mac_addr, uint16_t vlan_id = 0);
+
+	/*handle primary wifi client del mode*/
+	int handle_wlan_primary_client_down_evt(uint8_t *mac_addr);
 
 	/*handle wlan iface down event*/
 	int handle_down_evt();
@@ -636,6 +737,8 @@ private:
 	int handle_wlan_client_mac_flt_route_rule(ipa_ip_type iptype, int clt_index, bool is_blacklist);
 	int handle_wlan_mac_flt_conn_disc(uint8_t * mac_addr, bool con_state_flag);
 
+	/* refresh default filtering rules */
+	int handle_refresh_filtering_rules(bool wlan_vlan_mpdn_enable = false);
 };
 
 

@@ -619,8 +619,6 @@ int IPACM_Wan::handle_addr_evt(ipacm_event_data_addr *data)
 		{
 			if(m_is_sta_mode == Q6_WAN)
 			{
-				num_ipv6_modem_pdn++;
-				IPACMDBG_H("Now the number of modem ipv6 pdn is %d.\n", num_ipv6_modem_pdn);
 				init_fl_rule_ex(data->iptype);
 			}
 			else
@@ -709,12 +707,57 @@ int IPACM_Wan::handle_addr_evt(ipacm_event_data_addr *data)
 				memcpy(ipv6_to_iface[modem_ipv6_pdn_index].ipv6_prefix, data->ipv6_addr, sizeof(uint32_t) * 2);
 				ipv6_to_iface[modem_ipv6_pdn_index].pIface = this;
 				IPACMDBG_H("index %d prefix: 0x%08x%08x\n", modem_ipv6_pdn_index,
-				ipv6_to_iface[modem_ipv6_pdn_index].ipv6_prefix[0],
-				ipv6_to_iface[modem_ipv6_pdn_index].ipv6_prefix[1]);
+						ipv6_to_iface[modem_ipv6_pdn_index].ipv6_prefix[0],
+						ipv6_to_iface[modem_ipv6_pdn_index].ipv6_prefix[1]);
 
 				IPACM_Iface::ipacmcfg->add_no_offload_ipv6_prefix(ipv6_to_iface[modem_ipv6_pdn_index].ipv6_prefix);
+
+				num_ipv6_modem_pdn++;
+				IPACMDBG_H("Now the number of modem ipv6 pdn is %d.\n", num_ipv6_modem_pdn);
 			}
 #endif
+			/* Check to handle the race-cond, if route_add recevied before handle_addr_evt */
+			IPACMDBG_H("is_xlat :%d, active_v6: %d, wan_v6_addr_gw_set: %d \n", is_xlat, active_v6, wan_v6_addr_gw_set);
+			if(is_xlat && active_v6 && ipv6_to_iface[modem_ipv6_pdn_index].ipv6_prefix[0] && ipv6_to_iface[modem_ipv6_pdn_index].ipv6_prefix[1])
+			{
+				IPACM_Iface::ipacmcfg->add_vlan_ipv6_prefix(ipv6_to_iface[modem_ipv6_pdn_index].ipv6_prefix, ipa_if_num, associated_VID);
+
+				//need to post handle_wan_up_v6 to enable conntrack for XLAT mode
+				ipacm_cmd_q_data evt_data;
+				ipacm_event_iface_up *wanup_data;
+
+				memset(&evt_data, 0, sizeof(evt_data));
+				wanup_data = (ipacm_event_iface_up *)malloc(sizeof(ipacm_event_iface_up));
+				if (wanup_data == NULL)
+				{
+					IPACMERR("Unable to allocate memory\n");
+					free(rt_rule);
+					return IPACM_FAILURE;
+				}
+				memset(wanup_data, 0, sizeof(ipacm_event_iface_up));
+
+				memcpy(wanup_data->ifname, dev_name, sizeof(wanup_data->ifname));
+				if (m_is_sta_mode!=Q6_WAN)
+				{
+					wanup_data->is_sta = true;
+				}
+				else
+				{
+					wanup_data->is_sta = false;
+				}
+
+				memcpy(wanup_data->ipv6_prefix, ipv6_prefix, sizeof(wanup_data->ipv6_prefix));
+				memcpy(wanup_data->ipv6_addr, m_ipv6_addr, sizeof(wanup_data->ipv6_addr));
+
+				IPACMDBG_H("Posting IPA_HANDLE_WAN_UP_V6 with below information:\n");
+				IPACMDBG_H("if_name:%s, is sta mode: %d\n", wanup_data->ifname, wanup_data->is_sta);
+				IPACMDBG_H("ipv6 prefix: 0x%08x%08x.\n", ipv6_prefix[0], ipv6_prefix[1]);
+				IPACMDBG_H("ipv6 addr: 0x%08x%08x%08x%08x\n", m_ipv6_addr[0], m_ipv6_addr[1], m_ipv6_addr[2], m_ipv6_addr[3]);
+				memset(&evt_data, 0, sizeof(evt_data));
+				evt_data.event = IPA_HANDLE_WAN_UP_V6;
+				evt_data.evt_data = (void *)wanup_data;
+				IPACM_EvtDispatcher::PostEvt(&evt_data);
+			}
 		}
 	    num_dft_rt_v6++;
     }
@@ -2149,6 +2192,7 @@ int IPACM_Wan::handle_route_add_vlan_pdn_evt(ipa_ip_type iptype, uint16_t vlan_i
 	const int NUM = 1;
 	ipacm_cmd_q_data evt_data;
 	bool FullConfig = false;
+	ipacm_event_vlan_pdn *pdn_update = NULL;
 
 	/* copy header from tx-property, see if partial or not */
 	/* assume all tx-property uses the same header name for v4 or v6*/
@@ -2328,6 +2372,37 @@ int IPACM_Wan::handle_route_add_vlan_pdn_evt(ipa_ip_type iptype, uint16_t vlan_i
 		evt_data.event = IPA_HANDLE_WAN_VLAN_PDN_UP;
 		evt_data.evt_data = (void *)wanup_vlan_data;
 		IPACM_EvtDispatcher::PostEvt(&evt_data);
+
+		/* This is to handle out-of-order events from Netlink like route events
+                   and IPA CLI command received from QCMAP to configure IPPT since
+                   we have received RTM_DELROUTE from kernel before to Passthrough
+                   configuration sent from QCMAP and we were not posting below event to
+                   Conntrack as active_v4 was false. */
+
+		if (ip_pass_pdn_info.enable)
+		{
+			pdn_update = (ipacm_event_vlan_pdn *)malloc(sizeof(ipacm_event_vlan_pdn));
+			if(pdn_update == NULL)
+			{
+				IPACMERR("Unable to allocate memory\n");
+				return IPACM_FAILURE;
+			}
+			memset(pdn_update, 0, sizeof(ipacm_event_vlan_pdn));
+			pdn_update->ipv4_addr = wan_v4_addr;
+			pdn_update->ip_pass_enable = ip_pass_pdn_info.enable;
+			pdn_update->ip_pass_dummy_ip = (ip_pass_pdn_info.enable) ?
+				ip_pass_pdn_info.pdn_ip_addr : 0;
+			pdn_update->ip_pass_skip_nat = (ip_pass_pdn_info.enable) ? ip_pass_pdn_info.skip_nat : 0;
+			IPACMDBG_H("Posting IPA_HANDLE_IP_PASS_PDN_INFO_UPDATE_EVENT\n");
+			IPACMDBG_H("IP Passthrough enabled:%d WAN IP: 0x%x, Dummy IP 0x%x, Skip NAT: %d\n",
+				pdn_update->ip_pass_enable,
+				pdn_update->ipv4_addr,
+				pdn_update->ip_pass_dummy_ip,
+				pdn_update->ip_pass_skip_nat);
+			evt_data.event = IPA_HANDLE_IP_PASS_PDN_INFO_UPDATE_EVENT;
+			evt_data.evt_data = (void *)pdn_update;
+			IPACM_EvtDispatcher::PostEvt(&evt_data);
+		}
 	}
 
 	associated_VID = vlan_id;
@@ -2437,6 +2512,7 @@ int IPACM_Wan::handle_route_add_evt(ipa_ip_type iptype)
 	ipacm_cmd_q_data evt_data;
 	struct ipa_ioc_copy_hdr sCopyHeader; /* checking if partial header*/
 	struct ipa_ioc_get_hdr hdr;
+	ipacm_event_vlan_pdn *pdn_update = NULL;
 #ifdef FEATURE_VLAN_MPDN
 	bool FullConfig = true;
 #endif
@@ -2795,7 +2871,7 @@ int IPACM_Wan::handle_route_add_evt(ipa_ip_type iptype)
 			IPACM_Wan::xlat_mux_id = ext_prop->ext[0].mux_id;
 			wanup_data->xlat_mux_id = IPACM_Wan::xlat_mux_id;
 			IPACMDBG_H("Set xlat configuraiton with below information:\n");
-			IPACMDBG_H("xlat_enabled:  xlat_mux_id: %d \n",
+			IPACMDBG_H("xlat_enabled: %d, xlat_mux_id: %d\n",
 					is_xlat, xlat_mux_id);
 		}
 		else
@@ -2811,6 +2887,37 @@ int IPACM_Wan::handle_route_add_evt(ipa_ip_type iptype)
 		evt_data.event = IPA_HANDLE_WAN_UP;
 		evt_data.evt_data = (void *)wanup_data;
 		IPACM_EvtDispatcher::PostEvt(&evt_data);
+
+		/* This is to handle out-of-order events from Netlink like route events
+                   and IPA CLI command received from QCMAP to configure IPPT since
+                   we have received RTM_DELROUTE from kernel before to Passthrough
+                   configuration sent from QCMAP and we were not posting below event to
+                   Conntrack as active_v4 was false. */
+
+		if (ip_pass_pdn_info.enable)
+		{
+			pdn_update = (ipacm_event_vlan_pdn *)malloc(sizeof(ipacm_event_vlan_pdn));
+			if(pdn_update == NULL)
+			{
+				IPACMERR("Unable to allocate memory\n");
+				return IPACM_FAILURE;
+			}
+			memset(pdn_update, 0, sizeof(ipacm_event_vlan_pdn));
+			pdn_update->ipv4_addr = wan_v4_addr;
+			pdn_update->ip_pass_enable = ip_pass_pdn_info.enable;
+			pdn_update->ip_pass_dummy_ip = (ip_pass_pdn_info.enable) ?
+				ip_pass_pdn_info.pdn_ip_addr : 0;
+			pdn_update->ip_pass_skip_nat = (ip_pass_pdn_info.enable) ? ip_pass_pdn_info.skip_nat : 0;
+			IPACMDBG_H("Posting IPA_HANDLE_IP_PASS_PDN_INFO_UPDATE_EVENT\n");
+			IPACMDBG_H("IP Passthrough enabled:%d WAN IP: 0x%x, Dummy IP 0x%x, Skip NAT: %d\n",
+				pdn_update->ip_pass_enable,
+				pdn_update->ipv4_addr,
+				pdn_update->ip_pass_dummy_ip,
+				pdn_update->ip_pass_skip_nat);
+			evt_data.event = IPA_HANDLE_IP_PASS_PDN_INFO_UPDATE_EVENT;
+			evt_data.evt_data = (void *)pdn_update;
+			IPACM_EvtDispatcher::PostEvt(&evt_data);
+		}
 	}
 	else
 	{

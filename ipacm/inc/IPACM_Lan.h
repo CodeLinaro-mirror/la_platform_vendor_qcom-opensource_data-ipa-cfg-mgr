@@ -344,6 +344,8 @@ public:
 
 	int handle_del_ipv6_addr(ipacm_event_data_all *data);
 
+	int check_neigh_ipv4(ipacm_event_data_all *data);
+
 	static bool odu_up;
 
 #ifdef FEATURE_EoGRE

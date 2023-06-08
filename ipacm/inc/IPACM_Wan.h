@@ -384,6 +384,32 @@ public:
 		return xlat_mux_id;
 	}
 
+	static bool check_client_ipv4_with_pdn_ipv4(uint32_t client_ip, uint8_t vlan_id)
+	{
+		for(int i = 0; i < IPA_MAX_NUM_SW_PDNS; i++)
+		{
+			if(IPACM_Wan::ipv4_to_iface[i].ipv4_addr &&
+					ipv4_to_iface[i].ipv4_addr == client_ip)
+			{
+				if(vlan_id == 0 && ipv4_to_iface[i].pIface->is_default_gateway)
+				{
+					return true;
+				}
+				else
+				{
+					for(int j = 0; j < ipv4_to_iface[i].VID_cnt; j++)
+					{
+						if(IPACM_Wan::ipv4_to_iface[i].associated_VIDs[j] == vlan_id)
+						{
+							return true;
+						}
+					}
+				}
+			}
+		}
+		return false;
+	}
+
 	void event_callback(ipa_cm_event_id event, void *data);
 
 #ifdef FEATURE_VLAN_MPDN

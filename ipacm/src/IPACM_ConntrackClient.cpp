@@ -59,6 +59,8 @@ IPACM_ConntrackClient::IPACM_ConntrackClient()
 	udp_hdl = NULL;
 	tcp_filter = NULL;
 	udp_filter = NULL;
+	gre_hdl =NULL;
+	gre_filter = NULL;
 }
 
 IPACM_ConntrackClient* IPACM_ConntrackClient::GetInstance()
@@ -84,6 +86,15 @@ IPACM_ConntrackClient* IPACM_ConntrackClient::GetInstance()
 			return NULL;
 		}
 		IPACMDBG("Created TCP filter\n");
+
+		pInstance->gre_filter = nfct_filter_create();
+		if(pInstance->gre_filter == NULL)
+		{
+			IPACMERR("unable to create TCP filter\n");
+			delete pInstance;
+			return NULL;
+		}
+		IPACMDBG("Created gre filter\n");
 	}
 
 	return pInstance;
@@ -486,6 +497,37 @@ int IPACM_ConntrackClient::IPA_Conntrack_TCP_Filter_Init(void)
 	return 0;
 }
 
+/* Initialize GRE Filter */
+int IPACM_ConntrackClient::IPA_Conntrack_GRE_Filter_Init(void)
+{
+	int ret = 0;
+	IPACM_ConntrackClient *pClient;
+
+	IPACMDBG("\n");
+
+	pClient = IPACM_ConntrackClient::GetInstance();
+	if(pClient == NULL)
+	{
+		IPACMERR("unable to get conntrack client instance\n");
+		return -1;
+	}
+
+	ret = nfct_filter_set_logic(pClient->gre_filter,
+															NFCT_FILTER_L4PROTO,
+															NFCT_FILTER_LOGIC_POSITIVE);
+	if(ret == -1)
+	{
+		IPACMERR("Unable to set filter logic\n");
+		return -1;
+	}
+
+	/* set protocol filters as tcp and udp and gre */
+	nfct_filter_add_attr_u32(pClient->gre_filter, NFCT_FILTER_L4PROTO, IPPROTO_GRE);
+
+	IPA_Conntrack_Filters_Ignore_Ipv6_Addresses(pClient->gre_filter);
+
+	return 0;
+}
 
 /* Initialize UDP Filter */
 int IPACM_ConntrackClient::IPA_Conntrack_UDP_Filter_Init(void)
@@ -685,6 +727,121 @@ ctcatch:
 	return NULL;
 }
 
+/* Thread to initialize GRE Conntrack Filters*/
+void* IPACM_ConntrackClient::GRERegisterWithConnTrack(void *)
+{
+	int ret;
+	IPACM_ConntrackClient *pClient;
+	unsigned subscrips = 0;
+	int buf_size = 2097152, recbuff=0, res;
+	socklen_t optlen;
+
+	IPACMDBG("\n");
+
+	pClient = IPACM_ConntrackClient::GetInstance();
+	if(pClient == NULL)
+	{
+		IPACMERR("unable to get conntrack client instance\n");
+		return NULL;
+	}
+
+	subscrips = (NF_NETLINK_CONNTRACK_UPDATE | NF_NETLINK_CONNTRACK_DESTROY | NF_NETLINK_CONNTRACK_NEW);
+
+	pClient->gre_hdl = nfct_open(CONNTRACK, subscrips);
+
+	if(pClient->gre_hdl == NULL)
+	{
+		PERROR("nfct_open\n");
+		return NULL;
+	}
+
+	/* Initialize the filter */
+	ret = IPA_Conntrack_GRE_Filter_Init();
+	if(ret == -1)
+	{
+		IPACMERR("Unable to initliaze GRE Filter\n");
+		return NULL;
+	}
+
+	/* Attach the filter to net filter handler */
+	ret = nfct_filter_attach(nfct_fd(pClient->gre_hdl), pClient->gre_filter);
+	if(ret == -1)
+	{
+		IPACMDBG("unable to attach GRE filter\n");
+		return NULL;
+	}
+
+	/* Register callback with netfilter handler */
+	IPACMDBG_H("gre handle:%pK, fd:%d\n", pClient->gre_hdl, nfct_fd(pClient->gre_hdl));
+#ifndef CT_OPT
+	nfct_callback_register(pClient->gre_hdl,
+			(nf_conntrack_msg_type)	(NFCT_T_UPDATE | NFCT_T_DESTROY | NFCT_T_NEW),
+						IPAConntrackEventCB, NULL);
+#else
+	nfct_callback_register(pClient->gre_hdl, (nf_conntrack_msg_type) NFCT_T_ALL, IPAConntrackEventCB, NULL);
+#endif
+
+	optlen = sizeof(recbuff);
+	res = getsockopt(nfct_fd(pClient->gre_hdl), SOL_SOCKET, SO_RCVBUF, &recbuff, &optlen);
+
+	if(res == -1)
+	{
+		IPACMDBG("Error getsockopt (%d)(%s)\n", ret, strerror(errno));
+	}
+	else
+	{
+		IPACMDBG("original receive buffer size = %d\n", recbuff);
+	}
+
+	IPACMDBG("set the receive buffer to %d\n", buf_size);
+
+	if (setsockopt(nfct_fd(pClient->gre_hdl), SOL_SOCKET, SO_RCVBUFFORCE, &buf_size, sizeof(int)) == -1)
+		IPACMERR("Error setting socket opts (%d)(%s)\n", ret, strerror(errno));
+
+	res = getsockopt(nfct_fd(pClient->gre_hdl), SOL_SOCKET, SO_RCVBUF, &recbuff, &optlen);
+
+	if(res == -1)
+	{
+		IPACMDBG("Error getsockopt (%d)(%s)\n", ret, strerror(errno));
+	}
+	else
+	{
+		IPACMDBG("new receive buffer size = %d\n", recbuff);
+	}
+
+	/* Block to catch events from net filter connection track */
+	/* nfct_catch() receives conntrack events from kernel-space, by default it
+			 blocks waiting for events. */
+	IPACMDBG("Waiting for events\n");
+
+ctcatch:
+	ret = nfct_catch(pClient->gre_hdl);
+	if((ret == -1) && (errno != ENOMSG) && (errno != ENOBUFS))
+	{
+		IPACMERR("(%d)(%d)(%s)\n", ret, errno, strerror(errno));
+		return NULL;
+	}
+	else
+	{
+		IPACMDBG("ctcatch ret:%d, errno:%d\n", ret, errno);
+		goto ctcatch;
+	}
+
+	IPACMDBG("Exit from tcp thread\n");
+
+	/* destroy the filter.. this will not detach the filter */
+	nfct_filter_destroy(pClient->gre_filter);
+	pClient->gre_filter = NULL;
+
+	/* de-register the callback */
+	nfct_callback_unregister(pClient->gre_hdl);
+	/* close the handle */
+	nfct_close(pClient->gre_hdl);
+	pClient->gre_hdl = NULL;
+
+	pthread_exit(NULL);
+	return NULL;
+}
 /* Thread to initialize UDP Conntrack Filters*/
 void* IPACM_ConntrackClient::UDPRegisterWithConnTrack(void *)
 {

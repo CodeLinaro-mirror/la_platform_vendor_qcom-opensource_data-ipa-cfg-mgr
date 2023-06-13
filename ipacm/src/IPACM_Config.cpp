@@ -698,7 +698,9 @@ skip_fnr_alloc:
 
 	/* Construct IPACM GRE info */
 	ipacm_gre_enable = cfg->gre_conf.gre_enable;
+	ipacm_gre_autolearn = cfg->gre_conf.gre_autolearn;
 	IPACMDBG_H("ipacm_gre_enable %d. \n", ipacm_gre_enable);
+	IPACMDBG_H("ipacm_gre_autolearn %d. \n", ipacm_gre_autolearn);
 	memset(&ipacm_gre_server_ipv4, 0, sizeof(ipacm_gre_server_ipv4));
 
 	memcpy(&ipacm_gre_server_ipv4,

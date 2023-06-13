@@ -237,6 +237,28 @@ static int ipacm_cfg_xml_parse_tree
 						}
 					}
 				}
+				else if (IPACM_util_icmp_string((char*)xml_node->name, GREAutolearn_TAG) == 0)
+				{
+					IPACMDBG_H("inside GREAutolearn TAG \n");
+
+					content = IPACM_read_content_element(xml_node);
+					if (content)
+					{
+						str_size = strlen(content);
+						memset(content_buf, 0, sizeof(content_buf));
+						memcpy(content_buf, (void *)content, str_size);
+						if (atoi(content_buf))
+						{
+							config->gre_conf.gre_autolearn = true;
+							IPACMDBG_H("GRE Autolearn %d buf(%d)\n", config->gre_conf.gre_autolearn, atoi(content_buf));
+						}
+						else
+						{
+							config->gre_conf.gre_autolearn = false;
+							IPACMDBG_H("GRE Autolearn %d buf(%d)\n", config->gre_conf.gre_autolearn, atoi(content_buf));
+						}
+					}
+				}
 				else if (IPACM_util_icmp_string((char*)xml_node->name, GRE_Server_TAG) == 0)
 				{
 					content = IPACM_read_content_element(xml_node);
@@ -247,7 +269,7 @@ static int ipacm_cfg_xml_parse_tree
 						memcpy(content_buf, (void *)content, str_size);
 						content_buf[MAX_XML_STR_LEN-1] = '\0';
 						config->gre_conf.gre_server_ipv4
-							 = ntohl(inet_addr(content_buf));
+							= ntohl(inet_addr(content_buf));
 						IPACMDBG_H("subnet_addr: %s \n", content_buf);
 					}
 				}

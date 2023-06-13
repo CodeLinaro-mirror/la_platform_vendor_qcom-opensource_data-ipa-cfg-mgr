@@ -68,6 +68,18 @@ typedef struct _nat_entry_bundle
 #endif
 }nat_entry_bundle;
 
+//Struct containing all parameters that are required to be updated in the multiple functions that process a conntrack event
+typedef struct _process_conntrack_bundle
+{
+	uint32_t status;
+	uint32_t public_ip;
+	uint16_t VlanID;
+	bool embedded_vlan;
+	uint8_t ip_pass_enable;
+	uint32_t ip_pass_dummy_ip;
+	uint8_t ip_pass_skip_nat;
+}process_conntrack_bundle;
+
 typedef struct __nat_client_info
 {
 	uint32_t nat_iface_ipv4_addr;
@@ -156,6 +168,13 @@ private:
 #endif //defined(FEATURE_SOCKSv5) && defined (IPA_SOCKV5_EVENT_MAX)
 	void ProcessTCPorUDPMsg(struct nf_conntrack *,
 		enum nf_conntrack_msg_type, u_int8_t);
+	void ProcessGREMsg(struct nf_conntrack *ct,enum nf_conntrack_msg_type type,
+        u_int8_t l4proto);
+	int DetermineSrcorDstNAT(struct nf_conntrack *ct,enum nf_conntrack_msg_type type,
+	u_int8_t l4proto, nat_entry_bundle* nat_entry, process_conntrack_bundle *params);
+	int DetermineTempEntry( struct nf_conntrack *ct,
+	 enum nf_conntrack_msg_type type,
+	 u_int8_t l4proto, nat_entry_bundle* nat_entry,nat_table_entry *rule, process_conntrack_bundle *params);
 	void ProcessTCPorUDPMsg_v6(const ipacm_ct_evt_data* evt_data, NatEntryBase& entry);
 	void CreateIpv6ctEntryFromCtEventData(const ipacm_ct_evt_data* evt_data, Ipv6ctEntry& entry) const;
 #ifdef FEATURE_IPV6_NAT
@@ -174,6 +193,8 @@ private:
 	int  CreateNatThreads(void);
 	bool AddIface(nat_table_entry *, bool *, bool IsVlanUp,
   		 uint8_t ip_pass_enable, uint32_t ip_pass_dummy_ip, uint8_t ip_pass_skip_nat);
+	int ProcessAndAddNatEntry(const nat_entry_bundle *input, bool *sendVlanEvent);
+	void ProcessAndAddNatEntry_v6(const ipacm_ct_evt_data* evt_data,const NatEntryBase& entry, bool isTempEntry);
 	int AddORDeleteNatEntry(const nat_entry_bundle *, bool *sendVlanEvent);
 	void AddORDeleteNatEntry_v6(const ipacm_ct_evt_data* evt_data, const NatEntryBase& entry, bool isTempEntry);
 	void PopulateTCPorUDPEntry(struct nf_conntrack *, uint32_t, nat_table_entry *);

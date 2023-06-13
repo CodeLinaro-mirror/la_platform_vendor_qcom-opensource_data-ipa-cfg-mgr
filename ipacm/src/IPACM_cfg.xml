@@ -219,6 +219,7 @@
 		    </Iface>
 		</IPACMIface>
 		<GREFlag>
+			<GREAutolearn>1</GREAutolearn>
 			<GREEnabled>0</GREEnabled>
 			 <GREServer>172.20.98.78</GREServer>
 		</GREFlag>

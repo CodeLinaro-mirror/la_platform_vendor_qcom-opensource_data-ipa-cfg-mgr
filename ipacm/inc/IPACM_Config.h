@@ -287,6 +287,7 @@ public:
 	bool ipv6_nat_enable;
 
 	bool ipacm_gre_enable;
+	bool ipacm_gre_autolearn;
 
 	uint32_t ipacm_gre_server_ipv4;
 

@@ -66,8 +66,10 @@ private:
 
    struct nfct_handle *tcp_hdl;
    struct nfct_handle *udp_hdl;
+   struct nfct_handle *gre_hdl;
    struct nfct_filter *tcp_filter;
    struct nfct_filter *udp_filter;
+   struct nfct_filter *gre_filter;
    static int IPA_Conntrack_Filters_Ignore_Local_Addrs(struct nfct_filter *filter);
    static int IPA_Conntrack_Filters_Ignore_Bridge_Addrs(struct nfct_filter *filter);
    static int IPA_Conntrack_Filters_Ignore_Local_Iface(struct nfct_filter *, ipacm_event_iface_up *);
@@ -85,8 +87,10 @@ public:
 
    static int IPA_Conntrack_UDP_Filter_Init(void);
    static int IPA_Conntrack_TCP_Filter_Init(void);
+   static int IPA_Conntrack_GRE_Filter_Init(void);
    static void* TCPRegisterWithConnTrack(void *);
    static void* UDPRegisterWithConnTrack(void *);
+   static void* GRERegisterWithConnTrack(void *);
    static void* UDPConnTimeoutUpdate(void *);
 
    static void UpdateUDPFilters(void *, bool);

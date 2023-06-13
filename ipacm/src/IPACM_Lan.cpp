@@ -4852,15 +4852,22 @@ int IPACM_Lan::handle_eth_client_ipaddr(ipacm_event_data_all *data)
 					/* INSTALL GRE NAT rules */
 					if (IPACM_Iface::ipacmcfg->ipacm_gre_enable == true)
 					{
-						IPACMDBG_H(" check route_rule_set_v4 %d isWanUP %d gre_nat_set %d\n",
+						if(IPACM_Iface::ipacmcfg->ipacm_gre_autolearn == true)
+						{
+							IPACMDBG_H("Will not add gre NAT from XML, because GRE Autolearn is enabled\n");
+						}
+						else
+						{
+							IPACMDBG_H(" check route_rule_set_v4 %d isWanUP %d gre_nat_set %d\n",
 							get_client_memptr(eth_client, clnt_indx)->route_rule_set_v4, IPACM_Wan::isWanUP(ipa_if_num),
 							get_client_memptr(eth_client, clnt_indx)->gre_nat_set);
-						if (get_client_memptr(eth_client, clnt_indx)->route_rule_set_v4 == true &&
-							IPACM_Wan::isWanUP(ipa_if_num) == true && get_client_memptr(eth_client, clnt_indx)->gre_nat_set == false)
-						{
-							IPACMDBG_H(" setup GRE ipv4 NAT for client:%d ip:0x%x\n", clnt_indx, data->ipv4_addr);
-							CtList->HandleGREIpAddrAddEvt(data->ipv4_addr, IPACM_Iface::ipacmcfg->ipacm_gre_server_ipv4);
-							get_client_memptr(eth_client, clnt_indx)->gre_nat_set = true;
+							if (get_client_memptr(eth_client, clnt_indx)->route_rule_set_v4 == true &&
+								IPACM_Wan::isWanUP(ipa_if_num) == true && get_client_memptr(eth_client, clnt_indx)->gre_nat_set == false)
+							{
+								IPACMDBG_H(" setup GRE ipv4 NAT for client:%d ip:0x%x\n", clnt_indx, data->ipv4_addr);
+								CtList->HandleGREIpAddrAddEvt(data->ipv4_addr, IPACM_Iface::ipacmcfg->ipacm_gre_server_ipv4);
+								get_client_memptr(eth_client, clnt_indx)->gre_nat_set = true;
+							}
 						}
 					}
 					return IPACM_FAILURE;

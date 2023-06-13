@@ -5532,6 +5532,7 @@ int IPACM_Wlan::install_uplink_filter_rule_per_client
 				get_client_memptr(wlan_client, clnt_indx)->wan_ul_fl_rule_hdl_v4[i] = pFilteringTable->rules[i].flt_rule_hdl;
 			}
 			get_client_memptr(wlan_client, clnt_indx)->ipv4_ul_rules_set = true;
+			num_wan_ul_fl_rule_v4 = pFilteringTable->num_rules;
 		}
 		else if(iptype == IPA_IP_v6)
 		{
@@ -5540,6 +5541,7 @@ int IPACM_Wlan::install_uplink_filter_rule_per_client
 				get_client_memptr(wlan_client, clnt_indx)->wan_ul_fl_rule_hdl_v6[i] = pFilteringTable->rules[i].flt_rule_hdl;
 			}
 			get_client_memptr(wlan_client, clnt_indx)->ipv6_ul_rules_set = true;
+			num_wan_ul_fl_rule_v6 = pFilteringTable->num_rules;
 		}
 		else
 		{

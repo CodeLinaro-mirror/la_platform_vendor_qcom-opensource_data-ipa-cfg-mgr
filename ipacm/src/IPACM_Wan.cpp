@@ -509,7 +509,7 @@ uint16_t IPACM_Wan::GetGREMTU(ipa_ip_type iptype)
 	{
 		if(iptype == IPA_IP_v4)
 		{
-			if(IPACM_Wan::ipv4_to_iface[i].pIface && IPACM_Wan::ipv4_to_iface[i].pIface->wan_v4_addr == ipgre_info.ipv4_src)
+			if(IPACM_Wan::ipv4_to_iface[i].pIface->wan_v4_addr == ipgre_info.ipv4_src)
 			{
 				IPACMDBG_H("Found GRE v4 MTU of %d ", IPACM_Wan::ipv4_to_iface[i].pIface->mtu_v4);
 				IPACM_LOG_IP_ADDR("for:", IPA_IP_v4, &ipgre_info.ipv4_src);
@@ -518,7 +518,7 @@ uint16_t IPACM_Wan::GetGREMTU(ipa_ip_type iptype)
 		}
 		else
 		{
-			if (IPACM_Wan::ipv6_to_iface[i].pIface && memcmp(ipgre_info.ipv6_src,
+			if (memcmp(ipgre_info.ipv6_src,
 				IPACM_Wan::ipv6_to_iface[i].pIface->m_ipv6_addr,
 				sizeof(ipgre_info.ipv6_src)) == 0)
 			{

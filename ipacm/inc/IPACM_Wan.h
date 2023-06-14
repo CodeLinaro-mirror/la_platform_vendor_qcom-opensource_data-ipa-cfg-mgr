@@ -593,8 +593,6 @@ public:
 #endif
 
 #ifdef FEATURE_EoGRE
-	static uint16_t GetGREMTU(ipa_ip_type iptype);
-
 	void eogre_up();
 
 	void eogre_down();

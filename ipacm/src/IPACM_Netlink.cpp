@@ -851,7 +851,6 @@ static int ipa_nl_decode_nlmsg
 								//post GRE UP event
 								}
 					}
-					return IPACM_SUCCESS; // No need to further process this event.
 				}
 
 #endif
@@ -992,7 +991,6 @@ static int ipa_nl_decode_nlmsg
 						ifi2 = (struct ifinfomsg*) NLMSG_DATA(nlh);
 						tunnel_delete(ifi2, nlh->nlmsg_len,msg_ptr->nl_link_info.metainfo.ifi_type);
 						IPACMDBG("Tunnel Delete Done\n");
-						return IPACM_SUCCESS; //No need to further process this event
 				}
 #endif
 #ifdef FEATURE_IPA_ANDROID

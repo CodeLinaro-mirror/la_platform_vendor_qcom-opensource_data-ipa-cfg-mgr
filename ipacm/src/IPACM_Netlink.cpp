@@ -741,7 +741,7 @@ static int ipa_nl_decode_nlmsg
 	ipacm_event_data_addr *data_addr;
 	ipacm_event_data_all *vlan_data;
 	struct ipa_vlan_iface_info vlan_info;
-	struct ipa_macsec_map macsec_map;
+	struct ipa_macsec_map macsec_map, *macsec_map_data;
 	memset(nullMac, 0, sizeof(nullMac));
 	memset(&vlan_info, 0, sizeof(vlan_info));
 	memset(&macsec_map, 0, sizeof(macsec_map));
@@ -793,6 +793,17 @@ static int ipa_nl_decode_nlmsg
 					if (get_macsec_lower_interface_name(&macsec_map, master_dev_name) != IPACM_SUCCESS)
 						return IPACM_FAILURE;
 					strlcpy(macsec_map.phy_name, master_dev_name, sizeof(macsec_map.phy_name));
+					if (IPACM_Iface::ipacmcfg->insertOrAssignMacsecMap(&macsec_map)) {
+						evt_data.event = IPA_HANDLE_MACSEC_ADD;
+						macsec_map_data = static_cast<decltype(macsec_map_data)>(malloc(sizeof(*macsec_map_data)));
+						if (!macsec_map_data) {
+							IPACMERR("malloc failed\n");
+							return IPACM_FAILURE;
+						}
+						memcpy(macsec_map_data, &macsec_map, sizeof(macsec_map));
+						evt_data.evt_data = macsec_map_data;
+						IPACM_EvtDispatcher::PostEvt(&evt_data);
+					}
 				}
 
 				if (IFF_UP & msg_ptr->nl_link_info.metainfo.ifi_change) {
@@ -819,8 +830,6 @@ static int ipa_nl_decode_nlmsg
 					if (msg_ptr->nl_link_info.metainfo.ifi_flags & IFF_UP) {
 						IPACMDBG_H("Interface %s bring up with IP-family: %d \n", dev_name,
 							msg_ptr->nl_link_info.metainfo.ifi_family);
-						if (msg_ptr->nl_link_info.link_type == IPA_LINK_TYPE_MACSEC)
-							IPACM_Iface::ipacmcfg->insertOrAssignMacsecMap(&macsec_map);
 						/* post link up to command queue */
 						evt_data.event = IPA_LINK_UP_EVENT;
 						IPACMDBG_H("Posting IPA_LINK_UP_EVENT with if index: %d\n",
@@ -856,8 +865,6 @@ static int ipa_nl_decode_nlmsg
 					strlcpy(data_fid->iface_name, dev_name, sizeof(data_fid->iface_name));
 					if (msg_ptr->nl_link_info.link_type == IPA_LINK_TYPE_VLAN)
 						IPACM_Iface::ipacmcfg->add_vlan_iface(&vlan_info);
-					if (msg_ptr->nl_link_info.link_type == IPA_LINK_TYPE_MACSEC)
-						IPACM_Iface::ipacmcfg->insertOrAssignMacsecMap(&macsec_map);
                     /*--------------------------------------------------------------------------
                        Post LAN iface (ECM) link up event
                      ---------------------------------------------------------------------------*/
@@ -891,8 +898,20 @@ static int ipa_nl_decode_nlmsg
 
 					if (msg_ptr->nl_link_info.link_type == IPA_LINK_TYPE_VLAN)
 						IPACM_Iface::ipacmcfg->del_vlan_iface(&vlan_info);
-					if (msg_ptr->nl_link_info.link_type == IPA_LINK_TYPE_MACSEC)
-						IPACM_Iface::ipacmcfg->delMacsecMap(&macsec_map);
+					if (msg_ptr->nl_link_info.link_type == IPA_LINK_TYPE_MACSEC) {
+						if (IPACM_Iface::ipacmcfg->delMacsecMap(&macsec_map)) {
+							evt_data.event = IPA_HANDLE_MACSEC_DEL;
+							macsec_map_data = static_cast<decltype(macsec_map_data)>
+								(malloc(sizeof(*macsec_map_data)));
+							if (!macsec_map_data) {
+								IPACMERR("malloc failed\n");
+								return IPACM_FAILURE;
+							}
+							memcpy(macsec_map_data, &macsec_map, sizeof(macsec_map));
+							evt_data.evt_data = macsec_map_data;
+							IPACM_EvtDispatcher::PostEvt(&evt_data);
+						}
+					}
 
 					data_fid->if_index = msg_ptr->nl_link_info.metainfo.ifi_index;
 					strlcpy(data_fid->iface_name, dev_name, sizeof(data_fid->iface_name));
@@ -961,8 +980,20 @@ static int ipa_nl_decode_nlmsg
 
 				if(msg_ptr->nl_link_info.link_type == IPA_LINK_TYPE_VLAN)
 					IPACM_Iface::ipacmcfg->del_vlan_iface(&vlan_info);
-				if (msg_ptr->nl_link_info.link_type == IPA_LINK_TYPE_MACSEC)
-					IPACM_Iface::ipacmcfg->delMacsecMap(&macsec_map);
+				if (msg_ptr->nl_link_info.link_type == IPA_LINK_TYPE_MACSEC) {
+					if (IPACM_Iface::ipacmcfg->delMacsecMap(&macsec_map)) {
+						evt_data.event = IPA_HANDLE_MACSEC_DEL;
+						macsec_map_data = static_cast<decltype(macsec_map_data)>
+							(malloc(sizeof(*macsec_map_data)));
+						if (!macsec_map_data) {
+							IPACMERR("malloc failed\n");
+							return IPACM_FAILURE;
+						}
+						memcpy(macsec_map_data, &macsec_map, sizeof(macsec_map));
+						evt_data.evt_data = macsec_map_data;
+						IPACM_EvtDispatcher::PostEvt(&evt_data);
+					}
+				}
 
 				/* post link down to command queue */
 				evt_data.event = IPA_LINK_DOWN_EVENT;

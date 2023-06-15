@@ -2956,6 +2956,18 @@ void IPACM_ConntrackListener::ProcessTCPorUDPMsg(
 			nat_entry.isVlan = IsVlanIPv4(orig_src_ip, &VlanID);
 			if (nat_entry.isVlan)
 				nat_entry.IsVlanUp = true;
+			for(i = 0; i < IPA_MAX_NUM_HW_PDNS; i++)
+			{
+				if(orig_src_ip == vlan_pdns[i].public_ip)
+				{
+					if (vlan_pdns[i].ip_pass_enable)
+					{
+						ip_pass_enable = vlan_pdns[i].ip_pass_enable;
+						IPACMDBG_H("ip_pass_enable %d\n",ip_pass_enable);
+						break;
+					}
+				}
+			}
 #endif
 		}
 		else if(orig_dst_ip == wan_ipaddr)
@@ -2969,6 +2981,18 @@ void IPACM_ConntrackListener::ProcessTCPorUDPMsg(
 			nat_entry.isVlan = IsVlanIPv4(orig_dst_ip, &VlanID);
 			if (nat_entry.isVlan)
 				nat_entry.IsVlanUp = true;
+			for(i = 0; i < IPA_MAX_NUM_HW_PDNS; i++)
+			{
+				if(orig_dst_ip == vlan_pdns[i].public_ip)
+				{
+					if (vlan_pdns[i].ip_pass_enable)
+					{
+						ip_pass_enable = vlan_pdns[i].ip_pass_enable;
+						IPACMDBG_H("ip_pass_enable %d\n",ip_pass_enable);
+						break;
+					}
+				}
+			}
 #endif
 		}
 		else

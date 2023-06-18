@@ -130,7 +130,6 @@ const char *ipacm_event_name[] = {
 	__stringify(IPA_WLAN_SWITCH_TO_MCC),                   /* No Data */
 	__stringify(IPA_WLAN_SWITCH_VLAN_MODE),                /* ipacm_event_vlan_mode */
 	__stringify(IPA_CRADLE_WAN_MODE_SWITCH),               /* ipacm_event_cradle_wan_mode */
-	__stringify(IPA_WAN_XLAT_CONNECT_EVENT),               /* ipacm_event_data_fid */
 	__stringify(IPA_TETHERING_STATS_UPDATE_EVENT),         /* ipacm_event_data_fid */
 	__stringify(IPA_NETWORK_STATS_UPDATE_EVENT),           /* ipacm_event_data_fid */
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS

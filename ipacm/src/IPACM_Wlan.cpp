@@ -1008,7 +1008,7 @@ int IPACM_Wlan::handle_wlan_client_init_ex(ipacm_event_data_wlan_ex *data)
 
 #define WLAN_IFACE_INDEX_LEN 2
 
-	int res = IPACM_SUCCESS, len = 0, i, evt_size;
+	int res = IPACM_SUCCESS, len = 0, i, evt_size, sta_id_size = 0;
 	char index[WLAN_IFACE_INDEX_LEN];
 	struct ipa_ioc_copy_hdr sCopyHeader;
 	struct ipa_ioc_add_hdr *pHeaderDescriptor = NULL;
@@ -1091,7 +1091,7 @@ int IPACM_Wlan::handle_wlan_client_init_ex(ipacm_event_data_wlan_ex *data)
 								IPA_MAC_ADDR_SIZE);
 
 						/* copy client mac_addr to partial header */
-						if (data->attribs[i].offset < IPA_HDR_MAX_SIZE)
+						if (data->attribs[i].offset < (IPA_HDR_MAX_SIZE - IPA_MAC_ADDR_SIZE))
 						{
 							memcpy(&pHeaderDescriptor->hdr[0].hdr[data->attribs[i].offset],
 									 get_client_memptr(wlan_client, num_wifi_client)->mac,
@@ -1109,11 +1109,12 @@ int IPACM_Wlan::handle_wlan_client_init_ex(ipacm_event_data_wlan_ex *data)
 					}
 					else if(data->attribs[i].attrib_type == WLAN_HDR_ATTRIB_STA_ID)
 					{
+						sta_id_size = sizeof(data->attribs[i].u.sta_id);
 						/* copy client id to header */
-						if (data->attribs[i].offset < IPA_HDR_MAX_SIZE)
+						if (data->attribs[i].offset < (IPA_HDR_MAX_SIZE - sta_id_size))
 						{
 							memcpy(&pHeaderDescriptor->hdr[0].hdr[data->attribs[i].offset],
-									&data->attribs[i].u.sta_id, sizeof(data->attribs[i].u.sta_id));
+									&data->attribs[i].u.sta_id, sta_id_size);
 						}
 					}
 					else
@@ -1214,7 +1215,7 @@ int IPACM_Wlan::handle_wlan_client_init_ex(ipacm_event_data_wlan_ex *data)
 								IPA_MAC_ADDR_SIZE);
 
 						/* copy client mac_addr to partial header */
-						if (data->attribs[i].offset < IPA_HDR_MAX_SIZE)
+						if (data->attribs[i].offset < (IPA_HDR_MAX_SIZE - IPA_MAC_ADDR_SIZE))
 						{
 							memcpy(&pHeaderDescriptor->hdr[0].hdr[data->attribs[i].offset],
 								get_client_memptr(wlan_client, num_wifi_client)->mac,
@@ -1232,11 +1233,12 @@ int IPACM_Wlan::handle_wlan_client_init_ex(ipacm_event_data_wlan_ex *data)
 					}
 					else if (data->attribs[i].attrib_type == WLAN_HDR_ATTRIB_STA_ID)
 					{
+						sta_id_size = sizeof(data->attribs[i].u.sta_id);
 						/* copy client id to header */
-						if (data->attribs[i].offset < IPA_HDR_MAX_SIZE)
+						if (data->attribs[i].offset < (IPA_HDR_MAX_SIZE - sta_id_size))
 						{
 							memcpy(&pHeaderDescriptor->hdr[0].hdr[data->attribs[i].offset],
-								&data->attribs[i].u.sta_id, sizeof(data->attribs[i].u.sta_id));
+								&data->attribs[i].u.sta_id, sta_id_size);
 						}
 					}
 					else
@@ -3627,6 +3629,10 @@ int IPACM_Wlan::config_dft_firewall_rules_ul_ex(IPACM_firewall_conf_t* firewall_
 					if(firewall_conf->extd_firewall_entries[i].IPV6NatEnabledfw)
 						continue;
 #endif
+					// if sw-allowed then do not replicate rules here
+					if(firewall_conf->extd_firewall_entries[i].SWAllowed_ex)
+						continue;
+
 					memset(&flt_rule_entry_fw, 0, sizeof(struct ipa_flt_rule_add));
 					flt_rule_entry_fw.at_rear = 1;
 					flt_rule_entry_fw.flt_rule_hdl = -1;
@@ -3848,15 +3854,15 @@ void IPACM_Wlan::configure_v6_ul_firewall_wlan()
 		return;
 	}
 
-	/*Drop rules: First of all clear LAN pipe frag, catch all and FW rules if installed */
-	delete_uplink_filter_rule_ul(&iface_ul_firewall);
-
 	/* now read XML and rebuild FW for all PDNs */
 	if(IPACM_Wan::read_firewall_filter_rules_ul())
 	{
 		IPACMERR("failed configuring UL firewall\n");
 		return;
 	}
+
+	/*Drop rules: First of all clear LAN pipe frag, catch all and FW rules if installed */
+	delete_uplink_filter_rule_ul(&iface_ul_firewall);
 
 #ifdef IPA_V6_UL_WL_FIREWALL_HANDLE
 	/* Delete Q6 UL rules of clients */
@@ -3898,6 +3904,11 @@ void IPACM_Wlan::configure_v6_ul_firewall_wlan()
 		{
 			IPACMDBG_H("default profile firewall is disabled, disable Q6 firewall\n");
 			disable_dft_firewall_rules_ul_ex_per_wlan_client(default_vid);
+		}
+
+		if(firewall_config->SWAllowed)
+		{
+			config_sw_allow_excep_flt_rules_ul(firewall_config, &iface_ul_firewall, default_vid);
 		}
 	}
 #ifdef FEATURE_VLAN_MPDN
@@ -3963,7 +3974,7 @@ int IPACM_Wlan::install_uplink_filter_rule_per_client
 	int clnt_indx;
 	uint8_t num_offset_meq_128;
 	struct ipa_ipfltr_mask_eq_128 *offset_meq_128 = NULL;
-	int total_rules, v6_xlat_ul_rules;
+	int total_rules, v6_xlat_ul_rules = 0;
 	enum ipa_flt_action action_cache;
 
 	IPACMDBG_H("Set modem UL flt rules\n");

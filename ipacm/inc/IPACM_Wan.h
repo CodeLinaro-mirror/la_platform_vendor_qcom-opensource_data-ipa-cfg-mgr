@@ -151,6 +151,8 @@ public:
 		IPACM_firewall_t &firewall_configs);
 
 	static IPACM_firewall_conf_t* get_firewall_conf_by_vid_ul(int vid);
+
+	void set_swallow_pdn_index(void);
 #endif //FEATURE_VLAN_MPDN
 	static IPACM_firewall_conf_t* get_default_profile_firewall_conf_ul(int *default_vid);
 

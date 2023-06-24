@@ -1,5 +1,6 @@
 /*
 Copyright (c) 2013-2020, The Linux Foundation. All rights reserved.
+Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are
@@ -599,6 +600,8 @@ public:
 	int DelEntriesOnClntDiscon(const IpAddress& client_lan_ip);
 	int DelEntriesOnSTAClntDiscon(const IpAddress& client_lan_ip);
 	void DelEntriesOnWanDown();
+	void HandleSWAllowEntries(void);
+	bool ChkSWAllow(const NatEntryBase& rule);
 
 #ifdef FEATURE_SOCKSv5
 	std::list<Ipv6ctEntry> socksv5_v6_conn;
@@ -653,6 +656,7 @@ private:
 	static Ipv6Nat* m_instance;
 };
 #endif
+
 class NatApp
 {
 private:
@@ -723,6 +727,8 @@ public:
 	void FlushAndCacheVlanTempEntries(uint32_t ip_addr, bool *entry_exists, uint32_t *public_ip);
 #endif
 	void FlushTempEntries(uint32_t, bool, bool isDummy = false);
+	bool ChkSWAllow(const nat_table_entry *);
+	void HandleSWAllowEntries(void);
 };
 
 #endif /* IPACM_CONNTRACK_NATAPP_H */

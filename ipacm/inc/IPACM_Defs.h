@@ -1,6 +1,7 @@
 /*
 Copyright (c) 2013-2021, The Linux Foundation. All rights reserved.
 Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are
@@ -185,6 +186,8 @@ typedef enum
 	IPA_CFG_CHANGE_EVENT,                 /* NULL */
 	IPA_PRIVATE_SUBNET_CHANGE_EVENT,          /* ipacm_event_data_fid */
 	IPA_FIREWALL_CHANGE_EVENT,                /* NULL */
+	IPA_SWALLOW_CHANGE_EVENT,                 /* NULL */
+	IPA_SWALLOW_PDN_UPDATE,                   /* NULL */
 	IPA_LINK_UP_EVENT,                        /* ipacm_event_data_fid */
 	IPA_LINK_DOWN_EVENT,                      /* ipacm_event_data_fid */
 	IPA_USB_LINK_UP_EVENT,                    /* ipacm_event_data_fid */
@@ -268,6 +271,8 @@ typedef enum
 #endif
 	IPA_ADD_BRIDGE_VLAN_PHY_INTF,
 	IPA_ADD_BRIDGE_VLAN_BR_INTF,
+	IPA_HANDLE_MACSEC_ADD,                    /* ipa_macsec_map */
+	IPA_HANDLE_MACSEC_DEL,                    /* ipa_macsec_map */
 	IPACM_EVENT_MAX
 } ipa_cm_event_id;
 
@@ -319,6 +324,8 @@ typedef struct
 typedef struct
 {
 	char iface_name[IPA_IFACE_NAME_LEN];
+	bool virtualIface;
+	char physDevName[IPA_IFACE_NAME_LEN];
 	ipacm_iface_type if_cat;
 	ipacm_cradle_iface_mode if_mode;
 	ipacm_wlan_access_mode wlan_mode;

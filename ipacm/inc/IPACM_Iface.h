@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2013-2016, 2018, 2020 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -85,6 +86,11 @@ public:
 
 	/* IPACM interface name */
 	char dev_name[IF_NAME_LEN];
+
+	bool virtualIface = false;
+
+	/* IPACM interface physical name (if applicable) */
+	char physDevName[IF_NAME_LEN] = "";
 
 	/* IPACM interface iptype v4, v6 or both */
 	ipa_ip_type ip_type;

@@ -1,5 +1,6 @@
 /*
 * Copyright (c) 2013, 2018, 2020, 2021 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without
 * modification, are permitted provided that the following conditions are
@@ -75,9 +76,17 @@ IPACM_Iface::IPACM_Iface(int iface_index) : m_ipv6_default_filterting_rules_coun
 	tx_prop = NULL;
 	rx_prop = NULL;
 
-	memcpy(dev_name,
-				 IPACM_Iface::ipacmcfg->iface_table[iface_index].iface_name,
-				 sizeof(IPACM_Iface::ipacmcfg->iface_table[iface_index].iface_name));
+	memcpy(dev_name, IPACM_Iface::ipacmcfg->iface_table[iface_index].iface_name,
+		sizeof(IPACM_Iface::ipacmcfg->iface_table[iface_index].iface_name));
+
+	if (virtualIface = IPACM_Iface::ipacmcfg->iface_table[iface_index].virtualIface)
+	{
+		memcpy(physDevName, IPACM_Iface::ipacmcfg->iface_table[iface_index].physDevName,
+			sizeof(IPACM_Iface::ipacmcfg->iface_table[iface_index].physDevName));
+	}
+
+	IPACMDBG_H("dev_name: %s virtualIface: %s physDevName: %s \n",
+		   dev_name, (virtualIface) ? "true" : "false", physDevName);
 
 	memset(dft_v4fl_rule_hdl, 0, sizeof(dft_v4fl_rule_hdl));
 	memset(dft_v6fl_rule_hdl, 0, sizeof(dft_v6fl_rule_hdl));
@@ -557,6 +566,8 @@ int IPACM_Iface::query_iface_property(void)
 {
 	int res = IPACM_SUCCESS, fd = 0;
 	uint32_t cnt=0;
+	char *queriedName;
+	size_t queriedNameSize;
 
 	fd = open(DEVICE_NAME, O_RDWR);
 	IPACMDBG("iface query-property \n");
@@ -575,8 +586,19 @@ int IPACM_Iface::query_iface_property(void)
 		return IPACM_FAILURE;
 	}
 	IPACMDBG_H("iface name %s\n", dev_name);
-	memcpy(iface_query->name, dev_name, sizeof(dev_name));
+	if(virtualIface)
+	{
+		IPACMDBG_H("phy name %s\n", physDevName);
+		queriedName = physDevName;
+		queriedNameSize = sizeof(physDevName);
+	}
+	else
+	{
+		queriedName = dev_name;
+		queriedNameSize = sizeof(dev_name);
+	}
 
+	memcpy(iface_query->name, queriedName, queriedNameSize);
 	if (ioctl(fd, IPA_IOC_QUERY_INTF, iface_query) < 0)
 	{
 		PERROR("ioctl IPA_IOC_QUERY_INTF failed\n");
@@ -595,7 +617,7 @@ int IPACM_Iface::query_iface_property(void)
 			close(fd);
 			return IPACM_FAILURE;
 		}
-		memcpy(tx_prop->name, dev_name, sizeof(tx_prop->name));
+		memcpy(tx_prop->name, queriedName, queriedNameSize);
 		tx_prop->num_tx_props = iface_query->num_tx_props;
 
 		if (ioctl(fd, IPA_IOC_QUERY_INTF_TX_PROPS, tx_prop) < 0)
@@ -638,8 +660,7 @@ int IPACM_Iface::query_iface_property(void)
 			close(fd);
 			return IPACM_FAILURE;
 		}
-		memcpy(rx_prop->name, dev_name,
-				 sizeof(rx_prop->name));
+		memcpy(rx_prop->name, queriedName, queriedNameSize);
 		rx_prop->num_rx_props = iface_query->num_rx_props;
 
 		if (ioctl(fd, IPA_IOC_QUERY_INTF_RX_PROPS, rx_prop) < 0)

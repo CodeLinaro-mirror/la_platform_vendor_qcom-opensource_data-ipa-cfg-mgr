@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2013-2021, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -66,11 +67,19 @@ const char *IPACM_Config::DEVICE_NAME_ODU = "/dev/odu_ipa_bridge";
 #endif
 #endif
 #define IPACM_VLAN_CFG_FILE "/etc/data/ipa/IPACM_vlan_cfg.xml"
+#ifdef DATA_CONFIG_DIR_PATH
+#define IPACM_SWALLOW_FILE DATA_CONFIG_DIR_PATH"/ipa/ipa_filter_cfg.xml"
+#else
+#define IPACM_SWALLOW_FILE "/etc/data/ipa/ipa_filter_cfg.xml"
+#endif
+
 
 const char *ipacm_event_name[] = {
 	__stringify(IPA_CFG_CHANGE_EVENT),                     /* NULL */
 	__stringify(IPA_PRIVATE_SUBNET_CHANGE_EVENT),          /* ipacm_event_data_fid */
 	__stringify(IPA_FIREWALL_CHANGE_EVENT),                /* NULL */
+	__stringify(IPA_SWALLOW_CHANGE_EVENT),                 /* NULL */
+	__stringify(IPA_SWALLOW_PDN_UPDATE),                   /* NULL */
 	__stringify(IPA_LINK_UP_EVENT),                        /* ipacm_event_data_fid */
 	__stringify(IPA_LINK_DOWN_EVENT),                      /* ipacm_event_data_fid */
 	__stringify(IPA_USB_LINK_UP_EVENT),                    /* ipacm_event_data_fid */
@@ -145,12 +154,16 @@ const char *ipacm_event_name[] = {
 #endif
 #ifdef FEATURE_SOCKSv5
 	__stringify(IPA_HANDLE_SOCKSv5_UP),                    /* ipacm_event_connection */
+	__stringify(IPA_HANDLE_SOCKSv5_READY),                 /* ipacm_event_connection */
 	__stringify(IPA_HANDLE_SOCKSv5_DOWN),                  /* NULL */
 	__stringify(IPA_ADD_SOCKSv5_CONN),                     /* ipa_socksv5_msg */
 	__stringify(IPA_DEL_SOCKSv5_CONN),                     /* ipa_socksv5_msg */
+	__stringify(IPA_UPDATE_SOCKSv5_v6_CONN),               /* NULL */
 #endif
 	__stringify(IPA_ADD_BRIDGE_VLAN_PHY_INTF),             /* Handle vlan details add for physical interface.  */
 	__stringify(IPA_ADD_BRIDGE_VLAN_BR_INTF),              /* Handle vlan-bridge details add for bridge interface. */
+	__stringify(IPA_HANDLE_MACSEC_ADD),                    /* ipa_macsec_map. */
+	__stringify(IPA_HANDLE_MACSEC_DEL),                    /* ipa_macsec_map. */
 	__stringify(IPACM_EVENT_MAX)
 };
 
@@ -160,6 +173,7 @@ IPACM_Config::IPACM_Config()
 	alg_table = NULL;
 	pNatIfaces = NULL;
 	vlan_config = NULL;
+	sw_filter_cfg = NULL;
 	memset(&ipa_client_rm_map_tbl, 0, sizeof(ipa_client_rm_map_tbl));
 	memset(&ipa_rm_tbl, 0, sizeof(ipa_rm_tbl));
 	ipa_rm_a2_check=0;
@@ -414,6 +428,65 @@ bail:
 
 #endif //IPA_HW_FNR_STATS
 
+int IPACM_Config::ReadSwAllow(void)
+{
+	/* Read IPACM Config file */
+	char IPACM_swallow_file[IPA_MAX_FILE_LEN];
+	IPACM_swallow_t *cfg;
+	ipacm_cmd_q_data evt_data;
+
+	cfg = (IPACM_swallow_t *)calloc(1, sizeof(IPACM_swallow_t));
+
+	if(cfg == NULL)
+	{
+		IPACMERR("Could not allocate cfg\n");
+		return IPACM_FAILURE;
+	}
+
+	strlcpy(IPACM_swallow_file, IPACM_SWALLOW_FILE, sizeof(IPACM_swallow_file));
+
+	IPACMDBG_H("\n IPACM XML file is %s \n", IPACM_swallow_file);
+	if (IPACM_SUCCESS == IPACM_read_swallow_xml(IPACM_swallow_file, cfg))
+	{
+		IPACMDBG_H("\n IPACM XML read OK \n");
+
+		if(sw_filter_cfg == NULL)
+			sw_filter_cfg = (IPACM_swallow_t *)calloc(1, sizeof(IPACM_swallow_t));
+
+		if(sw_filter_cfg == NULL)
+		{
+			IPACMERR("Could not allocate swallow cfg\n");
+			free(cfg);
+			return IPACM_FAILURE;
+		}
+
+		memset(sw_filter_cfg, 0, sizeof(IPACM_swallow_t));
+		memcpy(sw_filter_cfg, cfg, sizeof(IPACM_swallow_t));
+		sw_allow_flag = FALSE;
+		free(cfg);
+
+		/* Fetch PDN index for the sw allow pdns */
+		evt_data.event = IPA_SWALLOW_PDN_UPDATE;
+		evt_data.evt_data = NULL;
+
+		/* Insert IPA_SWALLOW_PDN_UPDATE to command queue */
+		IPACM_EvtDispatcher::PostEvt(&evt_data);
+
+		return IPACM_SUCCESS;
+	}
+	else
+	{
+		IPACMERR("\n IPACM XML read failed \n");
+		if(sw_filter_cfg)
+		{
+			free(sw_filter_cfg);
+			sw_filter_cfg = NULL;
+		}
+		free(cfg);
+		return IPACM_FAILURE;
+	}
+}
+
 int IPACM_Config::Init(void)
 {
 	static bool already_reset = false;
@@ -485,11 +558,15 @@ int IPACM_Config::Init(void)
 	for (i = 0; i < cfg->iface_config.num_iface_entries; i++)
 	{
 		strlcpy(iface_table[i].iface_name, cfg->iface_config.iface_entries[i].iface_name, sizeof(iface_table[i].iface_name));
+		if (iface_table[i].virtualIface = cfg->iface_config.iface_entries[i].virtualIface) {
+			strlcpy(iface_table[i].physDevName, cfg->iface_config.iface_entries[i].physDevName, sizeof(iface_table[i].physDevName));
+		}
 		iface_table[i].if_cat = cfg->iface_config.iface_entries[i].if_cat;
 		iface_table[i].if_mode = cfg->iface_config.iface_entries[i].if_mode;
 		iface_table[i].wlan_mode = cfg->iface_config.iface_entries[i].wlan_mode;
-		IPACMDBG_H("IPACM_Config::iface_table[%d] = %s, cat=%d, mode=%d wlan-mode=%d \n", i, iface_table[i].iface_name,
-				iface_table[i].if_cat, iface_table[i].if_mode, iface_table[i].wlan_mode);
+		IPACMDBG_H("IPACM_Config::iface_table[%d] = %s, phy= %s, cat=%d, mode=%d wlan-mode=%d \n",
+			i, iface_table[i].iface_name, iface_table[i].physDevName,
+			iface_table[i].if_cat, iface_table[i].if_mode, iface_table[i].wlan_mode);
 		/* copy bridge interface name to ipacmcfg */
 		if( iface_table[i].if_cat == VIRTUAL_IF)
 		{
@@ -2002,6 +2079,12 @@ bool IPACM_Config::is_added_vlan_iface(char *iface_name)
 	list<vlan_iface_info>::iterator it_vlan;
 	bool ret = false;
 
+	if (!iface_in_vlan_mode(iface_name))
+	{
+		IPACMDBG_H("Iface not in VLAN mode: %s\n", iface_name);
+		return false;
+	}
+
 	if(pthread_mutex_lock(&vlan_l2tp_lock) != 0)
 	{
 		IPACMERR("Unable to lock the mutex\n");
@@ -2863,3 +2946,54 @@ bool IPACM_Config::client_in_stats_cache(uint8_t *mac_addr)
 	return is_enable;
 }
 #endif
+
+bool IPACM_Config::insertOrAssignMacsecMap(struct ipa_macsec_map *macsecMap) {
+	int netlinkIdx, ifaceTableIdx;
+
+	if (!macsecMap)
+		return false;
+	/* first check if we have macsec iface entry or not */
+	if (IPACM_Iface::ipa_get_if_index(macsecMap->macsec_name, &netlinkIdx) == IPACM_SUCCESS &&
+	    (ifaceTableIdx = IPACM_Iface::iface_ipa_index_query(netlinkIdx)) != INVALID_IFACE) {
+		IPACMDBG_H("Will modify the existing macsec interface %s with new phy %s\n", macsecMap->macsec_name, macsecMap->phy_name);
+
+		/* Modify an existing macsec interface macsec interface in the config table*/
+		strlcpy(iface_table[ifaceTableIdx].physDevName, macsecMap->phy_name, sizeof(iface_table[ifaceTableIdx].physDevName));
+	} else {
+		IPACMDBG_H("Will add new macsec interface: %s instead of %s\n", macsecMap->macsec_name, macsecMap->phy_name);
+
+		/* check if physical iface is valid */
+		if (IPACM_Iface::ipa_get_if_index(macsecMap->phy_name, &netlinkIdx) == IPACM_FAILURE ||
+		    (ifaceTableIdx = IPACM_Iface::iface_ipa_index_query(netlinkIdx)) == INVALID_IFACE) {
+			/* can't find physical nic name, ignoring this macsec handling */
+			IPACMERR("Got wrong physical NIC name: %s\n", macsecMap->phy_name);
+			return false;
+		}
+		/* Replace a physical interface with macsec interface in the config table */
+		iface_table[ifaceTableIdx].virtualIface = true;
+		strlcpy(iface_table[ifaceTableIdx].iface_name, macsecMap->macsec_name, sizeof(iface_table[ifaceTableIdx].iface_name));
+		strlcpy(iface_table[ifaceTableIdx].physDevName, macsecMap->phy_name, sizeof(iface_table[ifaceTableIdx].physDevName));
+	}
+
+	return true;
+}
+
+bool IPACM_Config::delMacsecMap(struct ipa_macsec_map *macsecMap) {
+	int netlinkIdx, ifaceTableIdx;
+
+	if (!macsecMap)
+		return false;
+	/* Replace the requested macsec interface with physical interface */
+	if (IPACM_Iface::ipa_get_if_index(macsecMap->macsec_name, &netlinkIdx) == IPACM_SUCCESS &&
+	    (ifaceTableIdx = IPACM_Iface::iface_ipa_index_query(netlinkIdx)) != INVALID_IFACE) {
+		IPACMDBG_H("Will replace the macsec interface: %s with %s\n", macsecMap->macsec_name, macsecMap->phy_name);
+		iface_table[ifaceTableIdx].virtualIface = false;
+		strlcpy(iface_table[ifaceTableIdx].iface_name, iface_table[ifaceTableIdx].physDevName,
+			sizeof(iface_table[ifaceTableIdx].iface_name));
+		iface_table[ifaceTableIdx].physDevName[0] = '\0';
+
+		return true;
+	}
+
+	return false;
+}

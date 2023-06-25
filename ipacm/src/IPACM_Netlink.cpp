@@ -560,6 +560,37 @@ static int ipa_nl_decode_rtm_addr
 	return IPACM_SUCCESS;
 }
 
+static void logNeighborState(const uint16_t state, const int interfaceIndex) {
+	std::string stateStr;
+	char interfaceName[IF_NAME_LEN] = {0};
+
+
+	ipa_get_if_name(interfaceName, interfaceIndex);
+	stateStr += "interface index: " + std::to_string(interfaceIndex) + ", interface name: " + string(interfaceName) +
+		", neighbor state:";
+
+	if (state & NUD_INCOMPLETE)
+		stateStr += " NUD_INCOMPLETE";
+	if (state & NUD_REACHABLE)
+		stateStr += " NUD_REACHABLE";
+	if (state & NUD_STALE)
+		stateStr += " NUD_STALE";
+	if (state & NUD_DELAY)
+		stateStr += " NUD_DELAY";
+	if (state & NUD_PROBE)
+		stateStr += " NUD_PROBE";
+	if (state & NUD_FAILED)
+		stateStr += " NUD_FAILED";
+	if (state & NUD_NOARP)
+		stateStr += " NUD_NOARP";
+	if (state & NUD_PERMANENT)
+		stateStr += " NUD_PERMANENT";
+	if (state == NUD_NONE)
+		stateStr += " NUD_NONE";
+
+	IPACMDBG("%s\n", stateStr.c_str());
+}
+
 /* Decode kernel neighbor message parameters from Netlink attribute TLVs. */
 static int ipa_nl_decode_rtm_neigh
 (
@@ -579,6 +610,7 @@ static int ipa_nl_decode_rtm_neigh
 	memset(&neigh_info->attr_info, 0, sizeof(neigh_info->attr_info));
 	/* Extract the available attributes */
 	neigh_info->attr_info.param_mask = IPA_NLA_PARAM_NONE;
+	logNeighborState(neigh_info->metainfo.ndm_state, neigh_info->metainfo.ndm_ifindex);
 
 	rtah = NDA_RTA(NLMSG_DATA(nlh));
 

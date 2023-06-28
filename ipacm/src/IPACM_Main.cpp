@@ -25,8 +25,12 @@
  * WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *
+ * Changes from Qualcomm Technologies, Inc. are provided under the following license:
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
-/*!
+ /*!
 	@file
 	IPACM_Main.cpp
 
@@ -111,7 +115,6 @@
 IPACM_Neighbor *neigh = NULL;
 
 uint32_t ipacm_event_stats[IPACM_EVENT_MAX];
-bool ipacm_logging = true;
 
 void ipa_is_ipacm_running(void);
 int ipa_get_if_index(char *if_name, int *if_index);
@@ -1095,7 +1098,6 @@ int main(int argc, char **argv)
 
 	/* check if ipacm is already running or not */
 	ipa_is_ipacm_running();
-
 	IPACMDBG_H("In main()\n");
 
 #ifdef FEATURE_IPACM_RESTART
@@ -1202,7 +1204,7 @@ int main(int argc, char **argv)
 
 	neigh->update_neigh_cache();
 
-	/* Create Conntrack listener threads here to support on-demand PDN’s connections before WAN is up */
+	/* Create Conntrack listener threads here to support on-demand PDNï¿½s connections before WAN is up */
 	CtList->CreateConnTrackThreads();
 
 	pthread_join(cmd_queue_thread, NULL);

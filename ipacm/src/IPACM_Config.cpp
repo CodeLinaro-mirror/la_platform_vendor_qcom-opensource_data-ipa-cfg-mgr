@@ -25,6 +25,10 @@
  * WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *
+ * Changes from Qualcomm Technologies, Inc. are provided under the following license:
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 /*!
 		@file
@@ -456,6 +460,10 @@ int IPACM_Config::Init(void)
 		ret = IPACM_FAILURE;
 		goto fail;
 	}
+
+        max_file_size = cfg->max_file_size;
+
+        log_init();
 
 	/* Construct IPACM Iface table */
 	ipa_num_ipa_interfaces = cfg->iface_config.num_iface_entries;

@@ -1,6 +1,8 @@
 /*
  * Copyright (c) 2013-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ *
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -26,10 +28,6 @@
  * WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- *
- * Changes from Qualcomm Innovation Center are provided under the following license:
- * Copyright (c) 2022-2025 Qualcomm Innovation Center, Inc. All rights reserved.
- * SPDX-License-Identifier: BSD-3-Clause-Clear.
  */
 /*!
 		@file
@@ -395,7 +393,7 @@ int IPACM_Config::reset_cnt_idx(int index, bool reset_all)
 	return IPACM_SUCCESS;
 }
 
-int IPACM_Config::ipacm_alloc_fnr_counters(struct ipa_ioc_flt_rt_counter_alloc *fnr_counters, const int fd)
+int IPACM_Config::ipacm_alloc_fnr_counters(struct ipa_ioc_flt_rt_counter_alloc *fnr_counters)
 {
 	int i, ret = 0;
 	int nfd = open(DEVICE_NAME, O_RDWR);
@@ -742,7 +740,7 @@ int IPACM_Config::Init(void)
 			IPACMERR("FnR counter allocated already, skip dup allocation\n");
 			goto skip_fnr_alloc;
 		}
-		if (ipacm_alloc_fnr_counters(&fnr_counters, m_fd))
+		if (ipacm_alloc_fnr_counters(&fnr_counters))
 		{
 			IPACMERR("Failed to allocate fnr counters. Try Realloc Again  In main()\n");
 		} else {
@@ -1402,19 +1400,27 @@ const char* IPACM_Config::getEventName(ipa_cm_event_id event_id)
 
 enum ipa_hw_type IPACM_Config::GetIPAVer(bool get)
 {
-	int ret;
+	int ret, fd;
 
 	if(ver != IPA_HW_None)
 		return ver;
 
-	ret = ioctl(m_fd, IPA_IOC_GET_HW_VERSION, &ver);
+	fd = open(DEVICE_NAME, O_RDWR);
+
+	if (fd < 0) {
+		IPACMERR("fnr: Failed to open /dev/ipa\n");
+		return IPA_HW_None;
+	}
+	ret = ioctl(fd, IPA_IOC_GET_HW_VERSION, &ver);
 	if(ret != 0)
 	{
 		IPACMERR("Failed to get IPA version with error %d.\n", ret);
 		ver = IPA_HW_None;
+		close(fd);
 		return IPA_HW_None;
 	}
 	IPACMDBG_H("IPA version is %d.\n", ver);
+	close(fd);
 	return ver;
 }
 
@@ -3478,7 +3484,7 @@ void IPACM_Config::alloc_fnr_counter(void)
 		if (hw_fnr_stats_support == true) {
 			IPACMERR("FnR counter allocated already, skip dup allocation\n");
 		}
-		if (ipacm_alloc_fnr_counters(&fnr_counters, m_fd))
+		if (ipacm_alloc_fnr_counters(&fnr_counters))
 		{
 			IPACMERR("Failed to allocate fnr counters.\n");
 		} else {

@@ -239,6 +239,8 @@ if (!(a)) {                                                 \
 
 #define IPACM_WLAN_VLAN_MPDN                 "IPACMVLANMPDN"
 #define IPACM_Wlan_Vlan_Mpdn_Enabled         "IPACMVlanMpdnEnabled"
+#define IPACMLOG_TAG                         "IPACMLog"
+#define IPACMFILEVAR_TAG                     "IPACMfilevar"
 
 #define Static_Policy_TAG                    "PolicyBasedRouting"
 #define Static_Policy_Enabled                "StaticPolicyEnabled"
@@ -407,6 +409,7 @@ typedef struct  _IPACM_conf_t
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
 	bool lan_stats_enable;
 #endif
+	int max_file_size;
 	bool ipv6_nat_enable;
 	int ipacm_l2tp_enable;
 	bool ipacm_mpdn_enable;

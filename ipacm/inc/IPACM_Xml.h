@@ -216,6 +216,9 @@ if (!(a)) {                                                 \
 #define IPACM_MPDN_Enable_TAG                "IPACMMPDNEnabled"
 #define IPACM_SOCKSv5_TAG                    "IPACMSOCKSv5"
 #define IPACM_SOCKSv5_Enable_TAG             "IPACMSOCKSv5Enabled"
+#define IPACMLOG_TAG                         "IPACMLog"
+#define IPACMFILEVAR_TAG                     "IPACMfilevar"
+
 /*---------------------------------------------------------------------------
       IP protocol numbers - use in dss_socket() to identify protocols.
       Also contains the extension header types for IPv6.
@@ -337,6 +340,7 @@ typedef struct  _IPACM_conf_t
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
 	bool lan_stats_enable;
 #endif
+	int max_file_size;
 	bool ipv6_nat_enable;
 	int ipacm_l2tp_enable;
 	bool ipacm_mpdn_enable;

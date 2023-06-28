@@ -196,7 +196,8 @@ static int ipacm_cfg_xml_parse_tree
 						IPACM_util_icmp_string((char*)xml_node->name, IPACM_L2TP_TAG) == 0 ||
 						IPACM_util_icmp_string((char*)xml_node->name, IPACM_MPDN_TAG) == 0 ||
 						IPACM_util_icmp_string((char*)xml_node->name, IPACM_SOCKSv5_TAG) == 0 ||
-						IPACM_util_icmp_string((char*)xml_node->name, IP_PassthroughFlag_TAG) == 0)
+						IPACM_util_icmp_string((char*)xml_node->name, IP_PassthroughFlag_TAG) == 0 ||
+						IPACM_util_icmp_string((char*)xml_node->name, IPACMLOG_TAG) == 0)
 				{
 					if (0 == IPACM_util_icmp_string((char*)xml_node->name, IFACE_TAG))
 					{
@@ -677,7 +678,6 @@ static int ipacm_cfg_xml_parse_tree
 							config->ttl_vlan, atoi(content_buf));
 						}
 				}
-
 				else if (IPACM_util_icmp_string((char*)xml_node->name, IPACM_TTL_VLAN_ARRAY_TAG) == 0)
 				{
 
@@ -707,6 +707,21 @@ static int ipacm_cfg_xml_parse_tree
 						for(i =0; i<config->ttlvlanids.num_vlanids; i++)
 						{
 							IPACMDBG("ttl vlan id is :%d\n",config->ttlvlanids.vlans[i]);
+						}
+                                }
+				else if (0 == IPACM_util_icmp_string((char*)xml_node->name, IPACMFILEVAR_TAG))
+				{		IPACMDBG_H("inside ipacm_logging \n");
+						content = IPACM_read_content_element(xml_node);
+						if (content)
+						{
+							str_size = strlen(content);
+							memset(content_buf, 0, sizeof(content_buf));
+							memcpy(content_buf, (void *)content, str_size);
+							if(atoi(content_buf)!=0)
+							{
+								config->max_file_size = atoi(content_buf);
+								IPACMDBG_H("max_filesz %d \n",config->max_file_size);
+							}
 						}
 				}
 				else if (IPACM_util_icmp_string((char*)xml_node->name, IPACM_MPDN_Enable_TAG) == 0)

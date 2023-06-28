@@ -465,6 +465,10 @@ int IPACM_Config::Init(void)
 		goto fail;
 	}
 
+        max_file_size = cfg->max_file_size;
+
+        log_init();
+
 	/* Construct IPACM Iface table */
 	ipa_num_ipa_interfaces = cfg->iface_config.num_iface_entries;
 	if (iface_table != NULL)

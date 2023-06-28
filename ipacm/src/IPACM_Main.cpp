@@ -30,7 +30,7 @@
  * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  * SPDX-License-Identifier: BSD-3-Clause-Clear.
  */
-/*!
+ /*!
 	@file
 	IPACM_Main.cpp
 
@@ -115,7 +115,6 @@
 IPACM_Neighbor *neigh = NULL;
 
 uint32_t ipacm_event_stats[IPACM_EVENT_MAX];
-bool ipacm_logging = true;
 
 void ipa_is_ipacm_running(void);
 int ipa_get_if_index(char *if_name, int *if_index);
@@ -1167,7 +1166,6 @@ int main(int argc, char **argv)
 
 	/* check if ipacm is already running or not */
 	ipa_is_ipacm_running();
-
 	IPACMDBG_H("In main()\n");
 
 #ifdef FEATURE_IPACM_RESTART

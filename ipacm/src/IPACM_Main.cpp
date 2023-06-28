@@ -108,7 +108,6 @@
 #endif
 
 uint32_t ipacm_event_stats[IPACM_EVENT_MAX];
-bool ipacm_logging = true;
 
 void ipa_is_ipacm_running(void);
 int ipa_get_if_index(char *if_name, int *if_index);
@@ -1695,7 +1694,6 @@ int main(int argc, char **argv)
 	pthread_t netlinks_query_thread = 0;
 	/* check if ipacm is already running or not */
 	ipa_is_ipacm_running();
-
 	IPACMDBG_H("In main()\n");
 	IPACMERR("debug deleting ipacm.pid file\n");
 	char cmd[200] = {0};

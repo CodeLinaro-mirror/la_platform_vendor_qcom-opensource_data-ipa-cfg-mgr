@@ -594,6 +594,10 @@ reread:
 		}
 	}
 
+        max_file_size = cfg->max_file_size;
+
+        log_init(max_file_size);
+
 	/* Construct IPACM Iface table */
 	ipa_num_ipa_interfaces = cfg->iface_config.num_iface_entries;
 	if (iface_table != NULL)

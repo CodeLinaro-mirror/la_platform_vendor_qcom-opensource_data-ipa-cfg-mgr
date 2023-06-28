@@ -208,7 +208,11 @@ const char *ipacm_event_name[] = {
 	__stringify(IPA_IPACM_DISABLE),                       /* handle ipacm_disable event */
 	__stringify(IPA_LAN_CLIENT_ADD_EVENT),                /* ipa lan2lan offload for static ip */
 	__stringify(IPA_LAN_CLIENT_DEL_EVENT),                /* ipa lan2lan offload for static ip */
-	__stringify(IPACM_EVENT_MAX)
+#ifdef FEATURE_IPA_IPSEC
+	__stringify(IPA_HANDLE_IPSEC_UL_FLT_ADD),              /* Handle IPsec UL policy flt add */
+	__stringify(IPA_HANDLE_IPSEC_UL_FLT_DEL),              /* Handle IPsec UL policy flt delete */
+#endif	
+	__stringify(IPACM_EVENT_MAX),
 };
 
 IPACM_Config::IPACM_Config()
@@ -3645,6 +3649,36 @@ bool IPACM_Config::DelMacsecMap(struct ipa_macsec_map *macsec_map_to_delete)
 
 	return false;
 }
+
+#ifdef FEATURE_IPA_IPSEC
+bool operator==(const ipa_ioc_ipsec_ul_flt_attr &uf1, const ipa_ioc_ipsec_ul_flt_attr &uf2)
+{
+	if (memcmp(&uf1, &uf2, sizeof(ipa_ioc_ipsec_ul_flt_attr)) == 0)
+	{
+		return true;
+	}
+	else
+	{
+		return false;
+	}
+}
+
+bool IPACM_Config::AddIpsecUlFlt(struct ipa_ioc_ipsec_ul_flt_attr uf)
+{
+	ipsecUlFlt.insert(uf);
+	IPACMDBG_H("Added an UL rule. Now the number of IPsec UL rules is %ld\n", ipsecUlFlt.size());
+
+	return true;
+}
+
+bool IPACM_Config::DelIpsecUlFlt(struct ipa_ioc_ipsec_ul_flt_attr uf)
+{
+	ipsecUlFlt.erase(uf);
+	IPACMDBG_H("Deleted an UL rule. Now the number of IPsec UL rules is %ld\n", ipsecUlFlt.size());
+
+	return true;
+}
+#endif
 
 bool IPACM_Config::is_svap_related(const char* phy_inf) {
 	FILE *fp = NULL;

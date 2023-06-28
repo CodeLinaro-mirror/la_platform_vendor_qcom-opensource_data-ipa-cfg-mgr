@@ -354,6 +354,13 @@ public:
 
 	int handle_ext_router_del_evt(void);
 
+#ifdef FEATURE_IPA_IPSEC
+	int handleIpsecUlFltAddEvt(struct ipa_ioc_ipsec_ul_flt_attr *uf);
+	int handleIpsecUlFltDelEvt(struct ipa_ioc_ipsec_ul_flt_attr *uf);
+	int handleIpsecUlFltAddAll(enum ipa_ip_type ip);
+	int handleIpsecUlFltDelAll(enum ipa_ip_type ip);
+#endif
+
 	static bool odu_up;
 
 #ifdef FEATURE_EoGRE
@@ -1116,6 +1123,11 @@ protected:
 	uint32_t ext_router_rmnet_ipv6_hdl;
 	uint32_t ext_router_flt_rule_hdl;
 	char ext_router_pdn_name[IPA_IFACE_NAME_LEN];
+#endif
+
+#ifdef FEATURE_IPA_IPSEC
+	/* IPsec UL flt rule handles */
+	std::list <IpsecUlFltHdl> ipsecUlFltHdlList[IPA_IP_MAX];
 #endif
 
 	int post_lan_up_event(const ipacm_event_data_addr* data) const;

@@ -30,7 +30,7 @@
  *
  * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
  * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
- * 
+ *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted (subject to the limitations in the
  * disclaimer below) provided that the following conditions are met:
@@ -395,6 +395,9 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 	int clnt_indx;
 	ipa_macsec_map *map;
 	ipa_ioc_ext_router_info *info;
+#ifdef FEATURE_IPA_IPSEC
+	struct ipa_ioc_ipsec_ul_flt_attr *uf;
+#endif
 	int idx = 0;
 
 	switch (event)
@@ -1772,6 +1775,26 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 				IPACMERR("failed deleting ext route mode rules");
 		}
 		break;
+
+#ifdef FEATURE_IPA_IPSEC
+	case IPA_HANDLE_IPSEC_UL_FLT_ADD:
+		IPACMDBG_H("Received and will process IPA_HANDLE_IPSEC_UL_FLT_ADD\n");
+		uf = (ipa_ioc_ipsec_ul_flt_attr *)param;
+
+		if(handleIpsecUlFltAddEvt(uf) == IPACM_FAILURE)
+			IPACMERR("failed adding IPsec UL filtering rule\n");
+
+		break;
+
+	case IPA_HANDLE_IPSEC_UL_FLT_DEL:
+		IPACMDBG_H("Received and will process IPA_HANDLE_IPSEC_UL_FLT_DEL\n");
+		uf = (ipa_ioc_ipsec_ul_flt_attr *)param;
+
+		if(handleIpsecUlFltDelEvt(uf) == IPACM_FAILURE)
+			IPACMERR("failed deleting IPsec UL filtering rule\n");
+
+		break;
+#endif
 
 	default:
 		break;
@@ -3294,7 +3317,11 @@ int IPACM_Lan::handle_wan_down(bool is_sta_mode)
 	/* clean MTU rules if needed */
 	modify_private_subnet();
 
+#ifdef FEATURE_IPA_IPSEC
+	return handleIpsecUlFltDelAll(IPA_IP_v4);
+#else
 	return IPACM_SUCCESS;
+#endif
 }
 
 /* handle new_address event*/
@@ -4131,6 +4158,8 @@ int IPACM_Lan::handle_wan_up_ex(ipacm_ext_prop *ext_prop, ipa_ip_type iptype, ui
 	{
 		IPACMDBG_H("xlat_mux_id: %d, iptype %d\n", xlat_mux_id, iptype);
 		ret = install_uplink_filter_rule(ext_prop, iptype, xlat_mux_id);
+		if (ret != IPACM_SUCCESS)
+			goto fail;
 	}
 	else if (notif_only == true)
 	{
@@ -4139,6 +4168,12 @@ int IPACM_Lan::handle_wan_up_ex(ipacm_ext_prop *ext_prop, ipa_ip_type iptype, ui
 		ret = IPACM_SUCCESS;
 	}
 #endif
+
+#ifdef FEATURE_IPA_IPSEC
+	/* Install cached IPsec UL filtering rules */
+	ret = handleIpsecUlFltAddAll(iptype);
+#endif
+
 fail:
 	return ret;
 }
@@ -10295,7 +10330,11 @@ int IPACM_Lan::handle_wan_down_v6(bool is_sta_mode, bool is_support_mpdn)
 		dft_v6fl_rule_hdl[m_ipv6_default_filterting_rules_count] = 0;
 	}
 
+#ifdef FEATURE_IPA_IPSEC
+	return handleIpsecUlFltDelAll(IPA_IP_v6);
+#else
 	return IPACM_SUCCESS;
+#endif
 }
 
 int IPACM_Lan::reset_to_dummy_flt_rule(ipa_ip_type iptype, uint32_t rule_hdl)
@@ -16643,3 +16682,285 @@ int IPACM_Lan::handle_ext_router_del_evt(void)
 	IPACMDBG("Finished handle_ext_router_del_evt\n")
 	return IPACM_SUCCESS;
 }
+
+#ifdef FEATURE_IPA_IPSEC
+/* handle IPsec UL flt add event*/
+int IPACM_Lan::handleIpsecUlFltAddEvt(struct ipa_ioc_ipsec_ul_flt_attr *uf)
+{
+	int res = IPACM_SUCCESS;
+	struct ipa_flt_rule_add *pFltRule;
+	struct ipa_ioc_add_flt_rule_after* pFilteringTable = NULL;
+	struct ipa_ioc_get_rt_tbl rtTblHdl;
+	int len, idx = 0;
+
+	memset(&rtTblHdl, 0, sizeof(rtTblHdl));
+	rtTblHdl.ip = uf->ip;
+	snprintf(rtTblHdl.name, sizeof(rtTblHdl.name),
+		(uf->ip == IPA_IP_v4) ? "IPSEC_ENCAP_v4" : "IPSEC_ENCAP_v6");
+	rtTblHdl.name[IPA_RESOURCE_NAME_MAX-1] = '\0';
+	if(m_routing.GetRoutingTable(&rtTblHdl) == false)
+	{
+		IPACMERR("Failed to get routing table handle from name\n");
+		return IPACM_FAILURE;
+	}
+	IPACMDBG_H("Routing table %s has handle %d\n", rtTblHdl.name, rtTblHdl.hdl);
+
+	if ((ipa_if_cate == WLAN_IF) && (is_if_svap || is_wlan_if_vlan) && (rx_prop->num_rx_props > 2))
+	{
+		idx = 2;
+		IPACMDBG_H("Interface is WLAN Svap or vlan, install rule on Rx1 pipe at idx %d \n", idx);
+	}
+
+	len = sizeof(struct ipa_ioc_add_flt_rule_after) + sizeof(struct ipa_flt_rule_add);
+	pFilteringTable = (struct ipa_ioc_add_flt_rule_after*)malloc(len);
+	if(!pFilteringTable)
+	{
+		IPACMERR("Failed to allocate ipa_ioc_add_flt_rule_after memory...\n");
+		res = IPACM_FAILURE;
+		goto fail;
+	}
+	memset(pFilteringTable, 0, len);
+
+	pFilteringTable->commit = 1;
+	pFilteringTable->ip = uf->ip;
+	pFilteringTable->num_rules = 1;
+	pFilteringTable->ep = rx_prop->rx[idx].src_pipe;
+	pFilteringTable->add_after_hdl = mtu_flt_rule_offset[uf->ip];
+
+	pFltRule = &(pFilteringTable->rules[0]);
+	pFltRule->status = -1;
+	pFltRule->rule.action = IPA_PASS_TO_ROUTING;
+	pFltRule->rule.hashable = true;
+	pFltRule->rule.rt_tbl_hdl = rtTblHdl.hdl;
+
+	memcpy(&pFltRule->rule.attrib, &uf->attr, sizeof(uf->attr));
+
+	if(false == m_filtering.AddFilteringRuleAfter(pFilteringTable))
+	{
+		IPACMERR("Failed to add IPsec UL filtering rule\n");
+		res = IPACM_FAILURE;
+		goto fail;
+	}
+	IPACM_Iface::ipacmcfg->increaseFltRuleCount(rx_prop->rx[idx].src_pipe, uf->ip, 1);
+
+	ipsecUlFltHdlList[uf->ip].push_back({uf->attr, pFltRule->flt_rule_hdl});
+
+	IPACMDBG_H("finished handle_ipsec_ul_flt_add_evt. ipsec_ul_flt_hdl_list contains %d entries.\n",
+		ipsecUlFltHdlList[uf->ip].size());
+fail:
+	if(pFilteringTable != NULL)
+		free(pFilteringTable);
+
+	return res;
+}
+
+/* handle IPsec UL flt del event*/
+int IPACM_Lan::handleIpsecUlFltDelEvt(struct ipa_ioc_ipsec_ul_flt_attr *uf)
+{
+	int res = IPACM_SUCCESS;
+	struct ipa_ioc_del_flt_rule* pFltRule = NULL;
+	int len, idx = 0;
+	uint32_t hdl = ~0x0;
+
+	for (const auto& UlFltHdl: ipsecUlFltHdlList[uf->ip])
+	{
+		if (UlFltHdl.attr == uf->attr)
+		{
+			hdl = UlFltHdl.hdl;
+		}
+	}
+
+	if (hdl == ~0x0)
+	{
+		IPACMDBG_H("No rule to delete found\n");
+		return IPACM_SUCCESS;
+	}
+
+	if ((ipa_if_cate == WLAN_IF) && (is_if_svap || is_wlan_if_vlan) && (rx_prop->num_rx_props > 2))
+	{
+		idx = 2;
+		IPACMDBG_H("Interface is WLAN Svap or vlan, remove rule from Rx1 pipe at idx %d \n", idx);
+	}
+
+	len = sizeof(struct ipa_ioc_del_flt_rule) + sizeof(struct ipa_flt_rule_del);
+	pFltRule = (struct ipa_ioc_del_flt_rule *)malloc(len);
+	if(!pFltRule)
+	{
+		IPACMERR("Failed to allocate ipa_ioc_del_flt_rule memory...\n");
+		res = IPACM_FAILURE;
+		goto fail;
+	}
+	memset(pFltRule, 0, len);
+
+	pFltRule->commit = 1;
+	pFltRule->ip = uf->ip;
+	pFltRule->num_hdls = 1;
+	pFltRule->hdl[0].hdl = hdl;
+	pFltRule->hdl[0].status = -1;
+
+	if(false == m_filtering.DeleteFilteringRule(pFltRule))
+	{
+		IPACMERR("Failed to delete IPsec UL filtering rule\n");
+		res = IPACM_FAILURE;
+		goto fail;
+	}
+	IPACM_Iface::ipacmcfg->decreaseFltRuleCount(rx_prop->rx[idx].src_pipe, uf->ip, 1);
+
+	ipsecUlFltHdlList[uf->ip].remove({uf->attr, hdl});
+
+	IPACMDBG_H("finished handle_ipsec_ul_flt_del_evt. ipsec_ul_flt_hdl_list contains %d entries.\n",
+		ipsecUlFltHdlList[uf->ip].size());
+fail:
+	if(pFltRule != NULL)
+		free(pFltRule);
+
+	return res;
+}
+
+/* handle IPsec UL flt add all from config*/
+int IPACM_Lan::handleIpsecUlFltAddAll(enum ipa_ip_type ip)
+{
+	int res = IPACM_SUCCESS;
+	struct ipa_flt_rule_add *pFltRule;
+	struct ipa_ioc_add_flt_rule_after* pFilteringTable = NULL;
+	struct ipa_ioc_get_rt_tbl rtTblHdl;
+	int len, idx = 0;
+
+	if (IPACM_Iface::ipacmcfg->ipsecUlFlt.size() == 0)
+	{
+		IPACMERR("Nothing to add\n");
+		return IPACM_SUCCESS;
+	}
+
+	memset(&rtTblHdl, 0, sizeof(rtTblHdl));
+	rtTblHdl.ip = ip;
+	snprintf(rtTblHdl.name, sizeof(rtTblHdl.name),
+		(ip == IPA_IP_v4) ? "IPSEC_ENCAP_v4" : "IPSEC_ENCAP_v6");
+	rtTblHdl.name[IPA_RESOURCE_NAME_MAX-1] = '\0';
+	if(m_routing.GetRoutingTable(&rtTblHdl) == false)
+	{
+		IPACMERR("Failed to get routing table handle from name\n");
+		return IPACM_FAILURE;
+	}
+	IPACMDBG_H("Routing table %s has handle %d\n", rtTblHdl.name, rtTblHdl.hdl);
+
+	if ((ipa_if_cate == WLAN_IF) && (is_if_svap || is_wlan_if_vlan) && (rx_prop->num_rx_props > 2))
+	{
+		idx = 2;
+		IPACMDBG_H("Interface is WLAN Svap or vlan, install rule on Rx1 pipe at idx %d \n", idx);
+	}
+
+	len = sizeof(struct ipa_ioc_add_flt_rule_after) +
+		sizeof(struct ipa_flt_rule_add) * IPACM_Iface::ipacmcfg->ipsecUlFlt.size();
+	pFilteringTable = (struct ipa_ioc_add_flt_rule_after*)malloc(len);
+	if(!pFilteringTable)
+	{
+		IPACMERR("Failed to allocate ipa_ioc_add_flt_rule_after memory...\n");
+		res = IPACM_FAILURE;
+		goto fail;
+	}
+	memset(pFilteringTable, 0, len);
+
+	pFilteringTable->commit = 1;
+	pFilteringTable->ip = ip;
+	pFilteringTable->num_rules = 0;
+	pFilteringTable->ep = rx_prop->rx[idx].src_pipe;
+	pFilteringTable->add_after_hdl = mtu_flt_rule_offset[ip];
+
+	for (const auto& UlFlt: IPACM_Iface::ipacmcfg->ipsecUlFlt)
+	{
+		if (UlFlt.ip == ip)
+		{
+			pFltRule = &(pFilteringTable->rules[pFilteringTable->num_rules++]);
+			pFltRule->status = -1;
+			pFltRule->rule.action = IPA_PASS_TO_ROUTING;
+			pFltRule->rule.hashable = true;
+			pFltRule->rule.rt_tbl_hdl = rtTblHdl.hdl;
+
+			memcpy(&pFltRule->rule.attrib, &UlFlt.attr, sizeof(UlFlt.attr));
+		}
+	}
+
+	if(false == m_filtering.AddFilteringRuleAfter(pFilteringTable))
+	{
+		IPACMERR("Failed to add %d IPsec UL filtering rules\n", pFilteringTable->num_rules);
+		res = IPACM_FAILURE;
+		goto fail;
+	}
+	IPACM_Iface::ipacmcfg->increaseFltRuleCount(rx_prop->rx[idx].src_pipe, ip, pFilteringTable->num_rules);
+
+	for (auto i = 0; i < pFilteringTable->num_rules; i++)
+	{
+		pFltRule = &(pFilteringTable->rules[i]);
+		ipsecUlFltHdlList[ip].push_back({pFltRule->rule.attrib, pFltRule->flt_rule_hdl });
+	}
+
+	IPACMDBG_H("finished handle_ipsec_ul_flt_add_all. ipsec_ul_flt_hdl_list contains %d entries.\n",
+		ipsecUlFltHdlList[ip].size());
+fail:
+	if(pFilteringTable != NULL)
+		free(pFilteringTable);
+
+	return res;
+}
+
+/* handle IPsec UL flt delete all */
+int IPACM_Lan::handleIpsecUlFltDelAll(enum ipa_ip_type ip)
+{
+	int res = IPACM_SUCCESS;
+	struct ipa_ioc_del_flt_rule* pFltRule = NULL;
+	int len, idx = 0;
+
+	if (ipsecUlFltHdlList[ip].size() == 0)
+	{
+		IPACMERR("Nothing to delete\n");
+		return IPACM_SUCCESS;
+	}
+
+	if ((ipa_if_cate == WLAN_IF) && (is_if_svap || is_wlan_if_vlan) && (rx_prop->num_rx_props > 2))
+	{
+		idx = 2;
+		IPACMDBG_H("Interface is WLAN Svap or vlan, install rule on Rx1 pipe at idx %d \n", idx);
+	}
+
+	len = sizeof(struct ipa_ioc_del_flt_rule) +
+		sizeof(struct ipa_flt_rule_del) * ipsecUlFltHdlList[ip].size();
+	pFltRule = (struct ipa_ioc_del_flt_rule *)malloc(len);
+	if(!pFltRule)
+	{
+		IPACMERR("Failed to allocate ipa_ioc_del_flt_rule memory...\n");
+		res = IPACM_FAILURE;
+		goto fail;
+	}
+	memset(pFltRule, 0, len);
+
+	pFltRule->commit = 1;
+	pFltRule->ip = ip;
+	pFltRule->num_hdls = 0;
+
+	for (const auto& UlFltHdl: ipsecUlFltHdlList[ip])
+	{
+		pFltRule->hdl[pFltRule->num_hdls].hdl = UlFltHdl.hdl;
+		pFltRule->hdl[pFltRule->num_hdls++].status = -1;
+	}
+
+	if(false == m_filtering.DeleteFilteringRule(pFltRule))
+	{
+		IPACMERR("Failed to delete %d IPsec UL filtering rules\n", pFltRule->num_hdls);
+		res = IPACM_FAILURE;
+		goto fail;
+	}
+	IPACM_Iface::ipacmcfg->decreaseFltRuleCount(rx_prop->rx[idx].src_pipe, ip, pFltRule->num_hdls);
+
+	ipsecUlFltHdlList[ip].clear();
+
+	IPACMDBG_H("finished handle_ipsec_ul_flt_del_all. ipsec_ul_flt_hdl_list contains %d entries.\n",
+		ipsecUlFltHdlList[ip].size());
+fail:
+	if(pFltRule != NULL)
+		free(pFltRule);
+
+	return res;
+}
+#endif
+

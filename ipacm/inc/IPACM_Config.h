@@ -85,6 +85,7 @@
 #endif
 #include <map>
 #include <set>
+#include <unordered_set>
 #include<algorithm>
 
 typedef struct
@@ -202,6 +203,29 @@ struct ipa_prefix_info {
 	uint32_t addr[2];
 	uint16_t vlan_id;
 };
+
+#ifdef FEATURE_IPA_IPSEC
+struct IpsecUlFltHash {
+public:
+	size_t operator()(const ipa_ioc_ipsec_ul_flt_attr uf) const
+	{
+		return 	std::hash<uint32_t>()(uf.ip) ^
+			std::hash<uint32_t>()(uf.attr.spi) ^
+			std::hash<uint32_t>()((uint32_t)uf.attr.src_port |
+					      ((uint32_t)uf.attr.dst_port << 16)) ^
+			std::hash<uint32_t>()((uint32_t)uf.attr.u.v4.protocol |
+					      ((uint32_t)uf.attr.u.v6.next_hdr << 8)) ^
+			std::hash<uint32_t>()(uf.attr.u.v6.src_addr[0]) ^
+			std::hash<uint32_t>()(uf.attr.u.v6.src_addr[1]) ^
+			std::hash<uint32_t>()(uf.attr.u.v6.src_addr[2]) ^
+			std::hash<uint32_t>()(uf.attr.u.v6.src_addr[3]) ^
+			std::hash<uint32_t>()(uf.attr.u.v6.dst_addr[0]) ^
+			std::hash<uint32_t>()(uf.attr.u.v6.dst_addr[1]) ^
+			std::hash<uint32_t>()(uf.attr.u.v6.dst_addr[2]) ^
+			std::hash<uint32_t>()(uf.attr.u.v6.dst_addr[3]);
+	}
+};
+#endif
 
 /* iface */
 class IPACM_Config
@@ -461,6 +485,10 @@ public:
 	void del_mux_id_mapping(rmnet_mux_id_info *del_muxd_info);
 	int query_mux_id(rmnet_mux_id_info *muxd_info);
 #endif //defined(FEATURE_SOCKSv5) && defined (IPA_SOCKV5_EVENT_MAX)
+
+#ifdef FEATURE_IPA_IPSEC
+	std::unordered_set<ipa_ioc_ipsec_ul_flt_attr,IpsecUlFltHash> ipsecUlFlt;
+#endif
 
 #if defined(FEATURE_IPACM_PER_CLIENT_STATS) && defined(IPA_HW_FNR_STATS)
 	int ipacm_alloc_fnr_counters(struct ipa_ioc_flt_rt_counter_alloc *fnr_counters, const int fd);
@@ -1226,6 +1254,10 @@ public:
 	bool get_ext_router_info(struct ext_router_prefix_info *data);
 	char* is_ext_route_ipv6_prefix(uint32_t *addr);
 	int get_mapped_delegated_prefix_idx(uint32_t *addr);
+#endif
+#ifdef FEATURE_IPA_IPSEC
+	bool AddIpsecUlFlt(struct ipa_ioc_ipsec_ul_flt_attr uf);
+	bool DelIpsecUlFlt(struct ipa_ioc_ipsec_ul_flt_attr uf);
 #endif
 
 	static const char *DEVICE_NAME_ODU;

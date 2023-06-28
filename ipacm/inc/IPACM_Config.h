@@ -371,7 +371,7 @@ public:
 #endif //defined(FEATURE_SOCKSv5) && defined (IPA_SOCKV5_EVENT_MAX)
 
 #if defined(FEATURE_IPACM_PER_CLIENT_STATS) && defined(IPA_HW_FNR_STATS)
-	int ipacm_alloc_fnr_counters(struct ipa_ioc_flt_rt_counter_alloc *fnr_counters, const int fd);
+	int ipacm_alloc_fnr_counters(struct ipa_ioc_flt_rt_counter_alloc *fnr_counters);
 	int reset_cnt_idx(int index, bool reset_all);
 	int get_free_cnt_idx(void);
 	int ipacm_reset_hw_fnr_counters(const uint8_t start_id, const uint8_t end_id);

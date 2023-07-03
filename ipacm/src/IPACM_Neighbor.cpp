@@ -255,11 +255,10 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 			for (i = 0; i < num_neighbor_client_temp; i++)
 			{
 				/* find the client */
-				/* use previous ipv4 first */
+				/* Post IPA_LAN_CLIENT_ADD_EVENT to Handle race Condition in RTM_NEWNEIGH on physical iface and ECM_CONNECT */
 
-				if (((neighbor_client[i].ipa_if_num == ipa_interface_index) &&
-					(neighbor_client[i].iface_index == data->if_index)) &&
-						neighbor_client[i].v4_addr != 0) /* not 0.0.0.0 */
+				if ((neighbor_client[i].ipa_if_num == ipa_interface_index) &&
+						(neighbor_client[i].iface_index == data->if_index))
 				{
 					IPACMDBG_H("Neighbor if_index: %d, ipa_if_index = %d, name = %s, ip4_addr = 0x%x\n", neighbor_client[i].iface_index,
 							neighbor_client[i].ipa_if_num, neighbor_client[i].iface_name, neighbor_client[i].v4_addr);
@@ -270,7 +269,7 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 						continue;
 					}
 
-					evt_data.event = IPA_NEIGH_CLIENT_IP_ADDR_ADD_EVENT;
+					evt_data.event = IPA_LAN_CLIENT_ADD_EVENT;
 					data_all = (ipacm_event_data_all *)malloc(sizeof(ipacm_event_data_all));
 					if (data_all == NULL)
 					{
@@ -280,16 +279,47 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 					memset(data_all,0,sizeof(ipacm_event_data_all));
 					data_all->iptype = IPA_IP_v4;
 					data_all->if_index = neighbor_client[i].iface_index;
-					data_all->ipv4_addr = neighbor_client[i].v4_addr; //use previous ipv4 address
-					memcpy(data_all->mac_addr,
-							neighbor_client[i].mac_addr,
-								sizeof(data_all->mac_addr));
-					memcpy(data_all->iface_name, neighbor_client[i].iface_name,
-                                                                sizeof(data_all->iface_name));
+					data_all->ipv4_addr = neighbor_client[i].v4_addr; /* use previous ipv4 address, i.e: 0.0.0.0 */
+					memcpy(data_all->mac_addr, neighbor_client[i].mac_addr, sizeof(data_all->mac_addr));
+					memcpy(data_all->iface_name, neighbor_client[i].iface_name, sizeof(data_all->iface_name));
 					evt_data.evt_data = (void *)data_all;
 					IPACM_EvtDispatcher::PostEvt(&evt_data);
-					IPACMDBG_H("Posted event %d, with %s for ipv4 client re-connect\n",
-							evt_data.event, data_all->iface_name);
+					IPACMDBG_H("Posted event %d, with %s for Static ECM Client\n",evt_data.event, data_all->iface_name);
+
+					/* use previous ipv4 first */
+
+					if (neighbor_client[i].v4_addr != 0) /* not 0.0.0.0 */
+					{
+						IPACMDBG_H("Neighbor if_index: %d, ipa_if_index = %d, name = %s, ip4_addr = 0x%x\n", neighbor_client[i].iface_index,
+								neighbor_client[i].ipa_if_num, neighbor_client[i].iface_name, neighbor_client[i].v4_addr);
+						/* check if getting real netdev name yet */
+						if(strcmp(neighbor_client[i].iface_name, IPA_NO_IFACE_NAME) == 0)
+						{
+							IPACMERR("client %d name %s not real\n", i, neighbor_client[i].iface_name);
+							continue;
+						}
+
+						evt_data.event = IPA_NEIGH_CLIENT_IP_ADDR_ADD_EVENT;
+						data_all = (ipacm_event_data_all *)malloc(sizeof(ipacm_event_data_all));
+						if (data_all == NULL)
+						{
+							IPACMERR("Unable to allocate memory\n");
+							return;
+						}
+						memset(data_all,0,sizeof(ipacm_event_data_all));
+						data_all->iptype = IPA_IP_v4;
+						data_all->if_index = neighbor_client[i].iface_index;
+						data_all->ipv4_addr = neighbor_client[i].v4_addr; //use previous ipv4 address
+						memcpy(data_all->mac_addr,
+								neighbor_client[i].mac_addr,
+								sizeof(data_all->mac_addr));
+						memcpy(data_all->iface_name, neighbor_client[i].iface_name,
+								sizeof(data_all->iface_name));
+						evt_data.evt_data = (void *)data_all;
+						IPACM_EvtDispatcher::PostEvt(&evt_data);
+						IPACMDBG_H("Posted event %d, with %s for ipv4 client re-connect\n",
+								evt_data.event, data_all->iface_name);
+					}
 				}
 			}
 		}
@@ -324,6 +354,7 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 				}
 			}
 #endif
+			IPACMDBG("Got Neighbor event with ip_type: %d: iface_name: %s \n", data->iptype, data->iface_name);
 			if (data->iptype == IPA_IP_v4)
 			{
 				if (data->ipv4_addr != 0) /* not 0.0.0.0 */
@@ -715,6 +746,26 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 
 									num_neighbor_client--;
 									IPACMDBG_H(" total number of left cased clients: %d\n", num_neighbor_client);
+									//IPA_LAN_CLIENT_DEL_EVENT
+									//IPV4
+									/* check if getting real netdev name yet */
+
+									if(strcmp(data->iface_name, IPA_NO_IFACE_NAME) == 0)
+									{
+										IPACMERR("client %d name %s not real\n", i, data->iface_name);
+										return;
+									}
+									evt_data.event = IPA_LAN_CLIENT_DEL_EVENT;
+									data_all = (ipacm_event_data_all *)malloc(sizeof(ipacm_event_data_all));
+									if (data_all == NULL)
+									{
+										IPACMERR("Unable to allocate memory\n");
+										return;
+									}
+									memcpy(data_all, data, sizeof(ipacm_event_data_all));
+									evt_data.evt_data = (void *)data_all;
+									IPACM_EvtDispatcher::PostEvt(&evt_data);
+									IPACMDBG_H("Posted event %s with %s for ipv4\n",IPACM_Iface::ipacmcfg->getEventName(evt_data.event), data->iface_name);
 									break;
 								}
 							}
@@ -1092,6 +1143,26 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 #endif
 								num_neighbor_client--;
 								IPACMDBG_H(" total number of left cased clients: %d\n", num_neighbor_client);
+
+								//IPA_LAN_CLIENT_DEL_EVENT
+								//IPV6
+								/* check if getting real netdev name yet */
+								if(strcmp(data->iface_name, IPA_NO_IFACE_NAME) == 0)
+								{
+									IPACMERR("client %d name %s not real\n", i, data->iface_name);
+									return;
+								}
+								evt_data.event = IPA_LAN_CLIENT_DEL_EVENT;
+								data_all = (ipacm_event_data_all *)malloc(sizeof(ipacm_event_data_all));
+								if (data_all == NULL)
+								{
+									IPACMERR("Unable to allocate memory\n");
+									return;
+								}
+								memcpy(data_all, data, sizeof(ipacm_event_data_all));
+								evt_data.evt_data = (void *)data_all;
+								IPACM_EvtDispatcher::PostEvt(&evt_data);
+								IPACMDBG_H("Posted event %s with %s for ipv6\n",IPACM_Iface::ipacmcfg->getEventName(evt_data.event), data->iface_name);
 							}
 							break;
 						}
@@ -1146,6 +1217,26 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 												neighbor_client[num_neighbor_client_temp].mac_addr[4],
 												neighbor_client[num_neighbor_client_temp].mac_addr[5],
 												num_neighbor_client);
+								/* IPA_LAN_CLIENT_ADD_EVENT received with ip type 0*/
+								{
+									/* check if getting real netdev name yet */
+									if(strcmp(data->iface_name, IPA_NO_IFACE_NAME) == 0)
+									{
+										IPACMERR("client %d name %s not real\n", i, data->iface_name);
+										return;
+									}
+									evt_data.event = IPA_LAN_CLIENT_ADD_EVENT;
+									data_all = (ipacm_event_data_all *)malloc(sizeof(ipacm_event_data_all));
+									if (data_all == NULL)
+									{
+										IPACMERR("Unable to allocate memory\n");
+										return;
+									}
+									memcpy(data_all, data, sizeof(ipacm_event_data_all));
+									evt_data.evt_data = (void *)data_all;
+									IPACM_EvtDispatcher::PostEvt(&evt_data);
+									IPACMDBG_H("Posted event %s with %s for ipv6 \n",IPACM_Iface::ipacmcfg->getEventName(evt_data.event), data->iface_name);
+								}
 								return;
 							}
 							else

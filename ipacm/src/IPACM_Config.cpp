@@ -151,6 +151,8 @@ const char *ipacm_event_name[] = {
 	__stringify(IPA_DEL_SOCKSv5_CONN),                     /* ipa_socksv5_msg */
 #endif
 	__stringify(IPA_WLAN_GW_ADDR_ADD_EVENT),		/* ipacm_event_data_addr */
+	__stringify(IPA_LAN_CLIENT_ADD_EVENT),                /* ipa lan2lan offload for static ip */
+	__stringify(IPA_LAN_CLIENT_DEL_EVENT),                /* ipa lan2lan offload for static ip */
 	__stringify(IPACM_EVENT_MAX),
 };
 

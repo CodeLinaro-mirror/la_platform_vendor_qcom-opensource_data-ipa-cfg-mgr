@@ -1155,6 +1155,48 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 		break;
 #endif
 
+	case IPA_LAN_CLIENT_ADD_EVENT:
+		{
+			ipacm_event_data_all *data = (ipacm_event_data_all *)param;
+			IPACMDBG_H("Received IPA_LAN_CLIENT_ADD_EVENT event \n");
+			ipa_interface_index = iface_ipa_index_query(data->if_index);
+			IPACMDBG_H("check iface %s category: %d\n", dev_name, ipa_if_cate);
+			if(ipa_interface_index == ipa_if_num)
+				{
+					/* first construc ETH full header */
+					if (handle_eth_hdr_init(data->mac_addr) == IPACM_FAILURE)
+					{
+						IPACMERR("Failed to create header and No event IPA_ETH_BRIDGE_CLIENT_ADD posted.\n");
+						return;
+					}
+					IPACMDBG_H("construct ETH header and route rules \n");
+					IPACMDBG_H("Posting IPA_ETH_BRIDGE_CLIENT_ADD for Static IP MaC:0x%x iface_name: %s\n",data->mac_addr,data->iface_name);
+					eth_bridge_post_event(IPA_ETH_BRIDGE_CLIENT_ADD, IPA_IP_MAX, data->mac_addr, NULL, data->iface_name);
+					IPACMDBG_H("Handled IPA_LAN_CLIENT_ADD_EVENT event \n");
+				}
+		}
+		break;
+
+	case IPA_LAN_CLIENT_DEL_EVENT:
+		{
+			ipacm_event_data_all *data = (ipacm_event_data_all *)param;
+			uint16_t vlan_id = 0;
+			IPACM_Iface::ipacmcfg->get_vlan_id(data->iface_name, &vlan_id);
+			ipa_interface_index = iface_ipa_index_query(data->if_index);
+			IPACMDBG_H("Received IPA_LAN_CLIENT_DEL_EVENT event \n");
+			IPACMDBG_H("check iface %s category: %d\n", dev_name, ipa_if_cate);
+			if(ipa_interface_index == ipa_if_num)
+			{
+				IPACMDBG_H("LAN iface delete client \n");
+				handle_eth_client_down_evt(data->mac_addr, vlan_id, data);
+				IPACMDBG_H("Posting IPA_ETH_BRIDGE_CLIENT_DEL for Static IP MaC:0x%x iface_name: %s\n",data->mac_addr,data->iface_name);
+				eth_bridge_post_event(IPA_ETH_BRIDGE_CLIENT_DEL, data->iptype, data->mac_addr, NULL, data->iface_name, vlan_id);
+				IPACMDBG_H("Handled IPA_LAN_CLIENT_DEL_EVENT event ip-type:%d, vlan_id:%d \n",data->iptype,vlan_id);
+			}
+		}
+		break;
+
+
 	case IPA_NEIGH_CLIENT_IP_ADDR_ADD_EVENT:
 		{
 #if defined(FEATURE_IPACM_PER_CLIENT_STATS) && defined(IPA_HW_FNR_STATS)
@@ -1211,9 +1253,6 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 				}
 				else
 				{
-					/* first construct ETH full header */
-					handle_eth_hdr_init(data->mac_addr);
-					IPACMDBG_H("construct ETH header and route rules \n");
 					/* Associate with IP and construct RT-rule */
 					if (handle_eth_client_ipaddr(data) == IPACM_FAILURE)
 					{
@@ -1244,7 +1283,6 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 							handle_eth_client_route_rule_ext(data->mac_addr, data->iptype);
 					}
 #endif
-					eth_bridge_post_event(IPA_ETH_BRIDGE_CLIENT_ADD, IPA_IP_MAX, data->mac_addr, NULL, data->iface_name);
 				}
 			}
 #ifdef FEATURE_L2TP
@@ -1334,9 +1372,6 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 						}
 					}
 #endif
-					IPACMDBG_H("LAN iface delete client \n");
-					handle_eth_client_down_evt(data->mac_addr, vlan_id, data);
-					eth_bridge_post_event(IPA_ETH_BRIDGE_CLIENT_DEL, IPA_IP_MAX, data->mac_addr, NULL, data->iface_name, vlan_id);
 				}
 #ifdef FEATURE_L2TP
 				else

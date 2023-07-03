@@ -269,8 +269,9 @@ typedef enum
 #endif
 	IPA_HANDLE_MACSEC_ADD,                    /* ipa_macsec_map */
 	IPA_HANDLE_MACSEC_DEL,                    /* ipa_macsec_map */
-
 	IPA_WLAN_GW_ADDR_ADD_EVENT,               /* ipacm_event_data_addr */
+	IPA_LAN_CLIENT_ADD_EVENT,		  /* Add MAC based rule for lan2lan offload with static-ip */
+	IPA_LAN_CLIENT_DEL_EVENT,		  /* Del MAC based rule for lan2lan offload with static-ip */
 	IPACM_EVENT_MAX
 } ipa_cm_event_id;
 

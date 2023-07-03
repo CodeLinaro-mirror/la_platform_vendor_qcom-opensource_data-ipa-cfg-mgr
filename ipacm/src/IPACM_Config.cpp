@@ -206,6 +206,8 @@ const char *ipacm_event_name[] = {
 	__stringify(IPA_ADD_EXT_ROUTER_RULES),                 /* Handle ext_route add event */
 	__stringify(IPA_DEL_EXT_ROUTER_RULES),                 /* Handle ext_route del event */
 	__stringify(IPA_IPACM_DISABLE),                       /* handle ipacm_disable event */
+	__stringify(IPA_LAN_CLIENT_ADD_EVENT),                /* ipa lan2lan offload for static ip */
+	__stringify(IPA_LAN_CLIENT_DEL_EVENT),                /* ipa lan2lan offload for static ip */
 	__stringify(IPACM_EVENT_MAX)
 };
 

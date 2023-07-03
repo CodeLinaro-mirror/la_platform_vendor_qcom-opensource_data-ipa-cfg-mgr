@@ -285,6 +285,9 @@ int IPACM_IfaceManager::create_iface_instance(ipacm_ifacemgr_data *param)
 					return IPACM_FAILURE;
 				}
 				IPACM_EvtDispatcher::registr(IPA_ADDR_ADD_EVENT, lan);
+				/*lan2lan ipa offload with static IP*/
+				IPACM_EvtDispatcher::registr(IPA_LAN_CLIENT_ADD_EVENT, lan);
+				IPACM_EvtDispatcher::registr(IPA_LAN_CLIENT_DEL_EVENT, lan);
 				//IPACM_EvtDispatcher::registr(IPA_ROUTE_ADD_EVENT, lan);
 				//IPACM_EvtDispatcher::registr(IPA_ROUTE_DEL_EVENT, lan);
 				IPACM_EvtDispatcher::registr(IPA_NEIGH_CLIENT_IP_ADDR_ADD_EVENT, lan);
@@ -349,6 +352,9 @@ int IPACM_IfaceManager::create_iface_instance(ipacm_ifacemgr_data *param)
 					return IPACM_FAILURE;
 				}
 				IPACM_EvtDispatcher::registr(IPA_ADDR_ADD_EVENT, ETH);
+				/*lan2lan ipa offload with static IP*/
+				IPACM_EvtDispatcher::registr(IPA_LAN_CLIENT_ADD_EVENT, ETH);
+				IPACM_EvtDispatcher::registr(IPA_LAN_CLIENT_DEL_EVENT, ETH);
 				IPACM_EvtDispatcher::registr(IPA_NEIGH_CLIENT_IP_ADDR_ADD_EVENT, ETH);
 				IPACM_EvtDispatcher::registr(IPA_SW_ROUTING_ENABLE, ETH);
 				IPACM_EvtDispatcher::registr(IPA_SW_ROUTING_DISABLE, ETH);
@@ -400,6 +406,9 @@ int IPACM_IfaceManager::create_iface_instance(ipacm_ifacemgr_data *param)
 					IPACM_EvtDispatcher::registr(IPA_HANDLE_EoGRE_DOWN, odu);
 #endif
 					IPACM_EvtDispatcher::registr(IPA_ADDR_ADD_EVENT, odu);
+					/*lan2lan ipa offload with static IP*/
+					IPACM_EvtDispatcher::registr(IPA_LAN_CLIENT_ADD_EVENT, odu);
+					IPACM_EvtDispatcher::registr(IPA_LAN_CLIENT_DEL_EVENT, odu);
 					IPACM_EvtDispatcher::registr(IPA_NEIGH_CLIENT_IP_ADDR_ADD_EVENT, odu);
 					IPACM_EvtDispatcher::registr(IPA_NEIGH_CLIENT_IP_ADDR_DEL_EVENT, odu);
 					IPACM_EvtDispatcher::registr(IPA_SW_ROUTING_ENABLE, odu);
@@ -456,6 +465,9 @@ int IPACM_IfaceManager::create_iface_instance(ipacm_ifacemgr_data *param)
 						return IPACM_FAILURE;
 					}
 					IPACM_EvtDispatcher::registr(IPA_ADDR_ADD_EVENT, odu);
+					/*lan2lan ipa offload with static IP*/
+					IPACM_EvtDispatcher::registr(IPA_LAN_CLIENT_ADD_EVENT, odu);
+					IPACM_EvtDispatcher::registr(IPA_LAN_CLIENT_DEL_EVENT, odu);
 					IPACM_EvtDispatcher::registr(IPA_NEIGH_CLIENT_IP_ADDR_ADD_EVENT, odu);
 					IPACM_EvtDispatcher::registr(IPA_SW_ROUTING_ENABLE, odu);
 					IPACM_EvtDispatcher::registr(IPA_SW_ROUTING_DISABLE, odu);

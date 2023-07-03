@@ -1128,6 +1128,57 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 		break;
 #endif
 
+	case IPA_LAN_CLIENT_ADD_EVENT:
+		{
+			ipacm_event_data_all *data = (ipacm_event_data_all *)param;
+			IPACMDBG_H("Received IPA_LAN_CLIENT_ADD_EVENT event \n");
+			ipa_interface_index = iface_ipa_index_query(data->if_index);
+			IPACMDBG_H("check iface %s category: %d\n", dev_name, ipa_if_cate);
+			if(ipa_interface_index == ipa_if_num)
+				{
+					/* first construc ETH full header */
+					if (handle_eth_hdr_init(data->mac_addr) == IPACM_FAILURE)
+					{
+						IPACMERR("Failed to create header and No event IPA_ETH_BRIDGE_CLIENT_ADD posted.\n");
+						return;
+					}
+					IPACMDBG_H("construct ETH header and route rules \n");
+					if(IPACM_Iface::ipacmcfg->mac_addr_in_blacklist(data->mac_addr) == false){
+						IPACMDBG_H("Posting IPA_ETH_BRIDGE_CLIENT_ADD for Static IP MaC:0x%x iface_name: %s\n",data->mac_addr,data->iface_name);
+						eth_bridge_post_event(IPA_ETH_BRIDGE_CLIENT_ADD, IPA_IP_MAX, data->mac_addr, NULL, data->iface_name);
+					}
+					else
+						IPACMDBG_H("Client is blacklisted for mac based filtering, avoid adding to lan2lan offload \n");
+
+					IPACMDBG_H("Handled IPA_LAN_CLIENT_ADD_EVENT event \n");
+				}
+		}
+		break;
+
+	case IPA_LAN_CLIENT_DEL_EVENT:
+		{
+			ipacm_event_data_all *data = (ipacm_event_data_all *)param;
+			uint16_t vlan_id = 0;
+			IPACM_Iface::ipacmcfg->get_vlan_id(data->iface_name, &vlan_id);
+			ipa_interface_index = iface_ipa_index_query(data->if_index);
+			IPACMDBG_H("Received IPA_LAN_CLIENT_DEL_EVENT event \n");
+			IPACMDBG_H("check iface %s category: %d\n", dev_name, ipa_if_cate);
+			if(ipa_interface_index == ipa_if_num)
+			{
+				/* clear mac flt rules for client if any */
+				if(IPACM_Iface::ipacmcfg->mac_addr_in_blacklist(data->mac_addr))
+					handle_eth_mac_flt_conn_disc(data->mac_addr, false);
+
+				IPACMDBG_H("LAN iface delete client \n");
+				handle_eth_client_down_evt(data->mac_addr, vlan_id, data);
+				IPACMDBG_H("Posting IPA_ETH_BRIDGE_CLIENT_DEL for Static IP MaC:0x%x iface_name: %s\n",data->mac_addr,data->iface_name);
+				eth_bridge_post_event(IPA_ETH_BRIDGE_CLIENT_DEL, data->iptype, data->mac_addr, NULL, data->iface_name, vlan_id);
+				IPACMDBG_H("Handled IPA_LAN_CLIENT_DEL_EVENT event ip-type:%d, vlan_id:%d \n",data->iptype,vlan_id);
+			}
+		}
+		break;
+
+
 	case IPA_NEIGH_CLIENT_IP_ADDR_ADD_EVENT:
 		{
 			int eth_index;
@@ -1191,9 +1242,6 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 				memcpy(client_info.iface, dev_name, IPA_IFACE_NAME_LEN);
 				IPACM_Iface::ipacmcfg->update_client_info(data->mac_addr, &client_info, true);
 
-				/* first construc ETH full header */
-				handle_eth_hdr_init(data->mac_addr);
-				IPACMDBG_H("construct ETH header and route rules \n");
 				/* Associate with IP and construct RT-rule */
 				if (handle_eth_client_ipaddr(data) == IPACM_FAILURE)
 				{
@@ -1235,10 +1283,6 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 					}
 				}
 #endif
-				if(IPACM_Iface::ipacmcfg->mac_addr_in_blacklist(data->mac_addr) == false)
-					eth_bridge_post_event(IPA_ETH_BRIDGE_CLIENT_ADD, IPA_IP_MAX, data->mac_addr, NULL, data->iface_name);
-				else
-						IPACMDBG_H("Client is blacklisted for mac based filtering, avoid adding to lan2lan offload \n");
 			}
 #ifdef FEATURE_L2TP
 			if((IPACM_Iface::ipacmcfg->ipacm_l2tp_enable == IPACM_L2TP_E2E ||
@@ -1339,12 +1383,6 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 						}
 					}
 #endif
-					/* clear mac flt rules for client if any */
-					if(IPACM_Iface::ipacmcfg->mac_addr_in_blacklist(data->mac_addr))
-					 	handle_eth_mac_flt_conn_disc(data->mac_addr, false);
-					IPACMDBG_H("LAN iface delete client \n");
-					handle_eth_client_down_evt(data->mac_addr, vlan_id, data);
-					eth_bridge_post_event(IPA_ETH_BRIDGE_CLIENT_DEL, IPA_IP_MAX, data->mac_addr, NULL, data->iface_name, vlan_id);
 				}
 #ifdef FEATURE_L2TP
 				else

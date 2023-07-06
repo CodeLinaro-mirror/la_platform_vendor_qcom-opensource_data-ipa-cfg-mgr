@@ -1935,7 +1935,10 @@ void IPACM_Config::get_vlan_mode_ifaces()
 			IPACMERR("failed reading vlan mode for %d, error %d\n", i ,retval);
 			vlan_devices[i] = 0;
 		}
-		vlan_devices[i] = vlan_mode.is_vlan_mode;
+		else
+		{
+			vlan_devices[i] = vlan_mode.is_vlan_mode;
+		}
 	}
 
 	IPACMDBG("modes are EMAC %d, ETH0 %d, ETH1 %d, RNDIS %d, ECM %d\n",

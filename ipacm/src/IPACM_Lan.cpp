@@ -11176,12 +11176,24 @@ bool IPACM_Lan::is_vlan_event(char *event_iface_name)
 	auto commandStr = std::string("ls /proc/net/vlan/ | grep -x ") + std::string(event_iface_name);
 	std::unique_ptr<FILE, decltype(&pclose)> pipe(popen(commandStr.c_str(), "r"), pclose);
 	char buffer[64] = {};
+	int self_name_len, event_iface_name_len;
 
 	IPACMDBG("commandStr: %s\n", commandStr.c_str());
 	if (!pipe) {
 		IPACMERR("command = %s\n", commandStr.c_str());
 		return false;
 	}
+
+	IPACMDBG_H("Self iface %s, event iface %s\n", dev_name, event_iface_name);
+        self_name_len = strlen(dev_name);
+        event_iface_name_len = strlen(event_iface_name);
+
+        if(event_iface_name_len < self_name_len || strncmp(dev_name, event_iface_name, self_name_len) != 0)
+        {
+		IPACMERR("Mismatched interface names\n");
+                return false;
+        }
+
 	if (fgets(buffer, sizeof(buffer), pipe.get()) != nullptr) {
 		IPACMDBG("buffer contents: %s\n", buffer);
 		IPACMDBG("return vlaue = %d\n", buffer[0] != '\0');

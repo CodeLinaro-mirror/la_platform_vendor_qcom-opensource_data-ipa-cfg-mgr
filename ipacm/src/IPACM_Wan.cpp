@@ -1469,7 +1469,7 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 			{
 				IPACMDBG_H("Received IPA_WLAN_GW_ADDR_ADD_EVENT\n");
 				IPACMDBG_H("ipv4 addr 0x%x\n", data->ipv4_addr_gw);
-				if(m_is_sta_mode == WLAN_WAN && !data->is_default_backhaul_gw)
+				if(m_is_sta_mode == WLAN_WAN)
 				{
 					IPACMDBG_H("GW info for WLAN Iface\n");
 
@@ -1494,9 +1494,9 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 						wan_v6_addr_gw_set = true;
 						wan_v6_is_default_gw = false;
 					}
+					/* Check & construct STA header */
+					handle_sta_header_add_evt();
 				}
-				/* Check & construct STA header */
-				handle_sta_header_add_evt();
 			}
 		}
 		break;

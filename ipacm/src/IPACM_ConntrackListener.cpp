@@ -877,7 +877,7 @@ void IPACM_ConntrackListener::HandleNeighIpAddrAddEvt_v6(ipacm_event_data_all *d
 		for (i = 0; i < MAX_IFACE_ADDRESS; i++)
 		{
 
-			IPACMDBG("Received IPv6 address: 0x%08x%08x%08x%08x current IPv6 address: 0x%08x%08x%08x%08x i: %d\n",i,
+			IPACMDBG_H("Received IPv6 address: 0x%08x%08x%08x%08x current IPv6 address: 0x%08x%08x%08x%08x i: %d\n",
 				data->ipv6_addr[0], data->ipv6_addr[1], data->ipv6_addr[2], data->ipv6_addr[3],nat_clients_v6[i].nat_iface_ipv6_addr[0],
 				nat_clients_v6[i].nat_iface_ipv6_addr[1],nat_clients_v6[i].nat_iface_ipv6_addr[2],nat_clients_v6[i].nat_iface_ipv6_addr[3],i);
 
@@ -920,7 +920,7 @@ void IPACM_ConntrackListener::HandleNeighIpAddrAddEvt_v6(ipacm_event_data_all *d
 			}
 		}
 
-		IPACMDBG_H("Received IPv6 address: 0x%08x%08x%08x%08x current IPv6 address: 0x%08x%08x%08x%08x i: %d\n",i,
+		IPACMDBG_H("Received IPv6 address: 0x%08x%08x%08x%08x current IPv6 address: 0x%08x%08x%08x%08x i: %d\n",
 			data->ipv6_addr[0], data->ipv6_addr[1], data->ipv6_addr[2], data->ipv6_addr[3],nat_clients_v6[i].nat_iface_ipv6_addr[0],
 			nat_clients_v6[i].nat_iface_ipv6_addr[1],nat_clients_v6[i].nat_iface_ipv6_addr[2],nat_clients_v6[i].nat_iface_ipv6_addr[3],i);
 
@@ -3473,6 +3473,11 @@ void IPACM_ConntrackListener::CreateIpv6ctEntryFromCtEventData(const ipacm_ct_ev
 	else if (nat_iface_ipv6_addr.Find(dstAddr) != NULL)
 	{
 		entry.m_direction = NatEntryBase::DirectionInbound;
+	}
+	else if(IPACM_Iface::ipacmcfg->GetIPAVer() >= IPA_HW_v5_5)
+	{
+		IPACMDBG_H("bail dummy CT entries\n");
+		goto bail;
 	}
 	else if (srcAddr == wan_ipaddr_v6 || nonnat_iface_ipv6_addr.Find(srcAddr) != NULL)
 	{

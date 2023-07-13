@@ -681,16 +681,24 @@ static bool ipa_nl_get_vlan_priority
 	 ipa_vlan_iface_info   *vlan_info
 	 )
 {
-	for(int i = 0; i < IPACM_Iface::ipacmcfg->vlan_config->num_vlan_if; i++)
-	{
-		if ((strcmp(IPACM_Iface::ipacmcfg->vlan_config->vlan_if_cfg[i].name, vlan_info->name) == 0))
-		{
-			vlan_info->priority = IPACM_Iface::ipacmcfg->vlan_config->vlan_if_cfg[i].priority;
-			IPACMDBG("Found Vlan ID %d, Priority %d\n", vlan_info->vlan_id, vlan_info->priority);
-			return true;
-		}
+	char cmd[200] = {0};
+	FILE *fp = NULL;
+	uint32_t priority;
+
+	snprintf(cmd, 200, "ip -d -o link show dev %s | grep \"egress-qos-map\" | sed -n \"s/^.*egress-qos-map { [0-9]:\\s*\\(\\S*\\).*$/\\1/p\" > /tmp/pcp.txt", vlan_info->name);
+	system(cmd);
+	fp = fopen("/tmp/pcp.txt", "r");
+	if (!fp) {
+		IPACMERR("can't open /tmp/pcp.txt\n");
+		return IPACM_FAILURE;
 	}
-	return false;
+
+	fscanf(fp, "%d", &priority);
+	vlan_info->priority = (uint8_t)priority;
+	IPACMDBG("Vlan ID %d, Priority %d\n", vlan_info->vlan_id, vlan_info->priority);
+	fclose(fp);
+	remove("/tmp/pcp.txt");
+	return IPACM_SUCCESS;
 }
 
 static int get_macsec_lower_interface_name(struct ipa_macsec_map *macsecMap, char *lowerInterfaceName)

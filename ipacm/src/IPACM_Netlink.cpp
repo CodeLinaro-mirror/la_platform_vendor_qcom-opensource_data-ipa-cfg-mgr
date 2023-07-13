@@ -786,6 +786,7 @@ static int ipa_nl_decode_nlmsg
 					strlcpy(vlan_info.name, msg_ptr->nl_link_info.name, sizeof(vlan_info.name));
 					vlan_info.vlan_id = msg_ptr->nl_link_info.vlan_id;
 					vlan_info.vlan_interface_index = msg_ptr->nl_link_info.metainfo.ifi_index;
+					ipa_nl_get_vlan_priority(&vlan_info);
 				}
 
 				if (msg_ptr->nl_link_info.link_type == IPA_LINK_TYPE_MACSEC) {
@@ -817,11 +818,6 @@ static int ipa_nl_decode_nlmsg
 					data_fid->if_index = msg_ptr->nl_link_info.metainfo.ifi_index;
 					strlcpy(data_fid->iface_name, dev_name, sizeof(data_fid->iface_name));
 					if(msg_ptr->nl_link_info.vlan_id) {
-							memset(&vlan_info, 0, sizeof(ipa_vlan_iface_info));
-							strlcpy(vlan_info.name, msg_ptr->nl_link_info.name, IPA_RESOURCE_NAME_MAX);
-							vlan_info.vlan_id = msg_ptr->nl_link_info.vlan_id;
-							vlan_info.vlan_interface_index = msg_ptr->nl_link_info.metainfo.ifi_index;
-							ipa_nl_get_vlan_priority(&vlan_info);
 							IPACMDBG("Add vlan<->interface details with vlan: %d interface: %s interface index %d priority %d\n",
 												vlan_info.vlan_id, vlan_info.name, vlan_info.vlan_interface_index, vlan_info.priority);
 							IPACM_Iface::ipacmcfg->add_vlan_iface(&vlan_info);
@@ -955,6 +951,7 @@ static int ipa_nl_decode_nlmsg
 					strlcpy(vlan_info.name, msg_ptr->nl_link_info.name, sizeof(vlan_info.name));
 					vlan_info.vlan_id = msg_ptr->nl_link_info.vlan_id;
 					vlan_info.vlan_interface_index = msg_ptr->nl_link_info.metainfo.ifi_index;
+					ipa_nl_get_vlan_priority(&vlan_info);
 				}
 
 				if (msg_ptr->nl_link_info.link_type == IPA_LINK_TYPE_MACSEC) {

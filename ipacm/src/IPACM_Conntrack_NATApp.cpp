@@ -2664,7 +2664,7 @@ int NatBase::AddTable(const uint32_t v6_prefix[2])
 		NatEntryBase& entry = m_cache[cnt];
 		if (entry.Valid())
 		{
-			uint64_t src_ipv6_msb;
+			uint64_t src_ipv6_msb = 0;
 
 			if (entry.m_direction == NatEntryBase::DirectionOutbound || entry.m_direction == NatEntryBase::DirectionUnknown)
 			{

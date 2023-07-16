@@ -681,16 +681,24 @@ static bool ipa_nl_get_vlan_priority
 	 ipa_vlan_iface_info   *vlan_info
 	 )
 {
-	for(int i = 0; i < IPACM_Iface::ipacmcfg->vlan_config->num_vlan_if; i++)
-	{
-		if ((strcmp(IPACM_Iface::ipacmcfg->vlan_config->vlan_if_cfg[i].name, vlan_info->name) == 0))
-		{
-			vlan_info->priority = IPACM_Iface::ipacmcfg->vlan_config->vlan_if_cfg[i].priority;
-			IPACMDBG("Found Vlan ID %d, Priority %d\n", vlan_info->vlan_id, vlan_info->priority);
-			return true;
-		}
+	char cmd[200] = {0};
+	FILE *fp = NULL;
+	uint32_t priority;
+
+	snprintf(cmd, 200, "ip -d -o link show dev %s | grep \"egress-qos-map\" | sed -n \"s/^.*egress-qos-map { [0-9]:\\s*\\(\\S*\\).*$/\\1/p\" > /tmp/pcp.txt", vlan_info->name);
+	system(cmd);
+	fp = fopen("/tmp/pcp.txt", "r");
+	if (!fp) {
+		IPACMERR("can't open /tmp/pcp.txt\n");
+		return IPACM_FAILURE;
 	}
-	return false;
+
+	fscanf(fp, "%d", &priority);
+	vlan_info->priority = (uint8_t)priority;
+	IPACMDBG("Vlan ID %d, Priority %d\n", vlan_info->vlan_id, vlan_info->priority);
+	fclose(fp);
+	remove("/tmp/pcp.txt");
+	return IPACM_SUCCESS;
 }
 
 static int get_macsec_lower_interface_name(struct ipa_macsec_map *macsecMap, char *lowerInterfaceName)
@@ -786,6 +794,7 @@ static int ipa_nl_decode_nlmsg
 					strlcpy(vlan_info.name, msg_ptr->nl_link_info.name, sizeof(vlan_info.name));
 					vlan_info.vlan_id = msg_ptr->nl_link_info.vlan_id;
 					vlan_info.vlan_interface_index = msg_ptr->nl_link_info.metainfo.ifi_index;
+					ipa_nl_get_vlan_priority(&vlan_info);
 				}
 
 				if (msg_ptr->nl_link_info.link_type == IPA_LINK_TYPE_MACSEC) {
@@ -817,11 +826,6 @@ static int ipa_nl_decode_nlmsg
 					data_fid->if_index = msg_ptr->nl_link_info.metainfo.ifi_index;
 					strlcpy(data_fid->iface_name, dev_name, sizeof(data_fid->iface_name));
 					if(msg_ptr->nl_link_info.vlan_id) {
-							memset(&vlan_info, 0, sizeof(ipa_vlan_iface_info));
-							strlcpy(vlan_info.name, msg_ptr->nl_link_info.name, IPA_RESOURCE_NAME_MAX);
-							vlan_info.vlan_id = msg_ptr->nl_link_info.vlan_id;
-							vlan_info.vlan_interface_index = msg_ptr->nl_link_info.metainfo.ifi_index;
-							ipa_nl_get_vlan_priority(&vlan_info);
 							IPACMDBG("Add vlan<->interface details with vlan: %d interface: %s interface index %d priority %d\n",
 												vlan_info.vlan_id, vlan_info.name, vlan_info.vlan_interface_index, vlan_info.priority);
 							IPACM_Iface::ipacmcfg->add_vlan_iface(&vlan_info);
@@ -955,6 +959,7 @@ static int ipa_nl_decode_nlmsg
 					strlcpy(vlan_info.name, msg_ptr->nl_link_info.name, sizeof(vlan_info.name));
 					vlan_info.vlan_id = msg_ptr->nl_link_info.vlan_id;
 					vlan_info.vlan_interface_index = msg_ptr->nl_link_info.metainfo.ifi_index;
+					ipa_nl_get_vlan_priority(&vlan_info);
 				}
 
 				if (msg_ptr->nl_link_info.link_type == IPA_LINK_TYPE_MACSEC) {

@@ -237,6 +237,12 @@ void IPACM_ConntrackListener::event_callback(ipa_cm_event_id evt,
 					IPACMDBG_H("Received IPA_HANDLE_WAN_VLAN_PDN_DOWN event for IPv6\n");
 					HandleVlanDownV6(data);
 				}
+				else if(vlandown->iptype == IPA_IP_MAX)
+				{
+					IPACMDBG_H("Received IPA_HANDLE_WAN_VLAN_PDN_DOWN event for IPV4 and IPv6\n");
+					HandleVlanDown(data);
+					HandleVlanDownV6(data);
+				}
 			}
 			break;
 #endif

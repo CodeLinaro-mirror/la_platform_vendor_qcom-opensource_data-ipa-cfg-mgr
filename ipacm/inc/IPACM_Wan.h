@@ -152,7 +152,6 @@ public:
 	static bool wan_up;
 	static bool wan_up_v6;
 	static uint8_t xlat_mux_id;
-	uint32_t ipps_dft_v4_rt_rule_hdl;
 #ifdef FEATURE_VLAN_MPDN
 #ifdef FEATURE_IPACM_UL_FIREWALL
 	int num_firewall_v6_ul_pdn;

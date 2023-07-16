@@ -3338,7 +3338,7 @@ int IPACM_Lan::handle_addr_evt(ipacm_event_data_addr *data)
 		/* populate the flt rule offset for eth bridge */
 		eth_bridge_flt_rule_offset[data->iptype] = ipv4_icmp_flt_rule_hdl[0];
 		/* populate the flt rule offset for mtu_offset (offset = broadcast rule)*/
-		if (m_ipv4_default_filterting_rules_count)
+		if (m_ipv4_default_filterting_rules_count && m_ipv4_default_filterting_rules_count <= IPV4_DEFAULT_FILTERTING_RULES)
 		{
 			mtu_flt_rule_offset[data->iptype] =
 				dft_v4fl_rule_hdl[m_ipv4_default_filterting_rules_count - 1];
@@ -3463,7 +3463,7 @@ int IPACM_Lan::handle_addr_evt(ipacm_event_data_addr *data)
 			init_fl_rule(data->iptype);
 
 			/* populate the mtu_rule_offset */
-			if (m_ipv6_default_filterting_rules_count)
+			if (m_ipv6_default_filterting_rules_count && m_ipv6_default_filterting_rules_count <= (IPV6_DEFAULT_FILTERTING_RULES + IPV6_DEFAULT_LAN_FILTERTING_RULES))
 			{
 				mtu_flt_rule_offset[data->iptype] =
 					dft_v6fl_rule_hdl[m_ipv6_default_filterting_rules_count - 1];
@@ -4736,7 +4736,7 @@ int IPACM_Lan::check_neigh_ipv4(ipacm_event_data_all *data)
 		{
 			if (strstr(params[i],"."))
 			{
-				strlcpy(ip, params[i], MAX_IPNS_PARAM_LEN);
+				strlcpy(ip, params[i], IPA_IFACE_NAME_LEN);
 				IPACMDBG("IP Passthrough IP : %s\n",ip);
 				if(data->ipv4_addr == ntohl(inet_addr(ip)))
 				{
@@ -9625,7 +9625,7 @@ int IPACM_Lan::install_uplink_filter_rule_per_client
 	int clnt_indx;
 	uint8_t num_offset_meq_128 = 0;
 	struct ipa_ipfltr_mask_eq_128 *offset_meq_128 = NULL;
-	int total_rules, v6_xlat_ul_rules;
+	int total_rules, v6_xlat_ul_rules = 0;
 	enum ipa_flt_action action_cache;
 
 	IPACMDBG_H("Set modem UL flt rules\n");
@@ -10657,6 +10657,11 @@ int IPACM_Lan::modify_private_subnet()
 		idx = 2;
 		IPACMDBG_H("Interface is WLAN Svap or vlan, install rules on Rx pipe at idx %d \n", idx);
 	}
+	if(rx_prop == NULL)
+	{
+		IPACMERR("no rx props\n");
+		return IPACM_FAILURE;
+	}
 
 	if(num_wan_subnet_rules > 0)
 	{
@@ -11367,6 +11372,11 @@ void IPACM_Lan::delete_ipv6_prefix_flt_rule()
 	{
 		IPACMERR("Failed to delete ipv6 prefix flt rule.\n");
 		return;
+	}
+	if(rx_prop == NULL)
+	{
+		IPACMERR("no rx props\n");
+		return ;
 	}
 	IPACM_Iface::ipacmcfg->decreaseFltRuleCount(rx_prop->rx[idx].src_pipe, IPA_IP_v6, IPv6_PREFIX_DEFAULT_PDN_RULE_NUM);
 	return;
@@ -14754,6 +14764,11 @@ int IPACM_Lan::handle_mpdn_ul_xlat_filter_rule(ipacm_ext_prop * prop,
 	IPACMDBG_H("Number of - xlat rules : %d \n", prop->num_v4_xlat_props);
 
 	memset(&flt_index, 0, sizeof(flt_index));
+	if(rx_prop == NULL)
+	{
+		IPACMERR("no rx props\n");
+		return IPACM_FAILURE;
+	}
 	flt_index.source_pipe_index = ioctl(fd, IPA_IOC_QUERY_EP_MAPPING, rx_prop->rx[idx].src_pipe);
 	flt_index.install_status = IPA_QMI_RESULT_SUCCESS_V01;
 	flt_index.rule_id_ex_valid = 1;
@@ -14973,6 +14988,11 @@ int IPACM_Lan::delete_mdpn_ul_xlat_filter_rule(int mux_id)
 			goto fail;
 		}
 		IPACMDBG_H("Deleted xlat mpdn rules for pdn mux : %d\n", mux_id);
+
+		if(rx_prop == NULL){
+			IPACMERR("no rx props\n");
+			return IPACM_FAILURE;
+		}
 		IPACM_Iface::ipacmcfg->decreaseFltRuleCount(rx_prop->rx[idx].src_pipe, IPA_IP_v4,
 				xlat_ctx.active_pdn_list[xlat_pdn_ctx_id].num_wan_mpdn_ul_xlat_fl_rule_v4);
 		memset(xlat_ctx.active_pdn_list[xlat_pdn_ctx_id].wan_mpdn_ul_xlat_fl_rule_hdl_v4,
@@ -14999,6 +15019,11 @@ int IPACM_Lan::delete_icmp_filter_rule(
 	if ((ipa_if_cate == WLAN_IF) && (is_if_svap || is_wlan_if_vlan) && (rx_prop && rx_prop->num_rx_props > 2)) {
 		idx = 2;
 		IPACMDBG_H("Interface is WLAN Svap or vlan, install rules on Rx pipe at idx %d \n", idx);
+	}
+
+	if(rx_prop == NULL){
+		IPACMERR("no rx props\n");
+		return IPACM_FAILURE;
 	}
 
 	if ( iptype == IPA_IP_v4 )
@@ -16246,7 +16271,7 @@ int IPACM_Lan::eth_bridge_get_vlan_hdr_template_hdl(uint32_t* hdr_hdl, uint16_t 
 /* handle ext_route new_address event*/
 int IPACM_Lan::handle_ext_router_add_evt(char* pdn_name, uint8_t *mac_addr, uint32_t *idu_v6_addr, uint16_t vid = 0)
 {
-	struct ipa_ioc_add_rt_rule *rt_rule;
+	struct ipa_ioc_add_rt_rule *rt_rule = NULL;
 	struct ipa_rt_rule_add *rt_rule_entry;
 	struct ext_router_prefix_info info;
 	int eth_idx, res = IPACM_SUCCESS;
@@ -16408,6 +16433,11 @@ int IPACM_Lan::handle_ext_router_add_evt(char* pdn_name, uint8_t *mac_addr, uint
 		if(!pFilteringTable)
 		{
 			IPACMERR("Failed to allocate ipa_ioc_add_flt_rule_after memory...\n");
+			res = IPACM_FAILURE;
+			goto fail;
+		}
+		if(rx_prop == NULL){
+			IPACMERR("no rx props\n");
 			res = IPACM_FAILURE;
 			goto fail;
 		}

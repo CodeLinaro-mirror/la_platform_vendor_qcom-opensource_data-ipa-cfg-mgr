@@ -125,6 +125,7 @@ inline void get_kernel_version(char *kernel_ver)
 	struct utsname utsname;
 	int ret;
 	memset(kernel_ver, 0, KERNEL_VERSION_LENGTH);
+	memset(&utsname, 0, sizeof(utsname));
 	ret = uname(&utsname);
 	if (ret)
 	{

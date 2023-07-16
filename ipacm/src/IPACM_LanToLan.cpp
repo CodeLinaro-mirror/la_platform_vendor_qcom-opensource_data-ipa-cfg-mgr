@@ -988,11 +988,11 @@ void IPACM_LanToLan_Iface::add_client_rt_rule_for_new_iface()
 		peer_l2_type = peer.peer->get_iface_pointer()->tx_prop->tx[0].hdr_l2_type;
 	}
 
-	IPACMDBG_H("peer_iface %s MAC: has hdr_type: %d with ref count: %d\n",
+	if((peer_l2_type < IPA_HDR_L2_MAX) && ref_cnt_peer_l2_hdr_type[peer_l2_type] == 1)
+	{
+		IPACMDBG_H("peer_iface %s MAC: has hdr_type: %d with ref count: %d\n",
 			   peer.peer->get_iface_pointer()->dev_name, peer_l2_type, ref_cnt_peer_l2_hdr_type[peer_l2_type]);
 
-	if(ref_cnt_peer_l2_hdr_type[peer_l2_type] == 1)
-	{
 		for(it = m_client_info.begin(); it != m_client_info.end(); it++)
 		{
 #ifdef FEATURE_L2TP
@@ -1031,6 +1031,12 @@ void IPACM_LanToLan_Iface::add_client_rt_rule(peer_iface_info *peer_info, client
 	}
 	else {
 		peer_l2_hdr_type = peer_info->peer->get_iface_pointer()->tx_prop->tx[0].hdr_l2_type;
+	}
+
+	if(peer_l2_hdr_type >= IPA_HDR_L2_MAX)
+	{
+		IPACMDBG_H("Invalid peer_l2_hdr_type: %d\n", peer_l2_hdr_type);
+		return;
 	}
 
 	/* if the peer info is not for intra interface communication */
@@ -1103,7 +1109,7 @@ void IPACM_LanToLan_Iface::add_client_rt_rule(peer_iface_info *peer_info, client
 
 		IPACMDBG_H("peer iface %s doesn't have rt rule for mac 0x[%X][%X][%X][%X][%X][%X], adding now\n",
 			peer_info->peer->get_iface_pointer()->dev_name,
-			client->mac_addr[0], client->mac_addr[1], client->mac_addr[2], client->mac_addr[3], client->mac_addr[4], client->mac_addr[5])
+			client->mac_addr[0], client->mac_addr[1], client->mac_addr[2], client->mac_addr[3], client->mac_addr[4], client->mac_addr[5]);
 
 		if (is_svap_iface() || is_ap_iface_vlan_enabled()) {
 			m_p_iface->eth_bridge_add_rt_rule(client->mac_addr, peer_info->rt_tbl_name_for_rt[IPA_IP_v4], is_entry_present_wlan_svap_hpc_hdl(client->vlan_id, peer_l2_hdr_type),
@@ -1681,6 +1687,12 @@ void IPACM_LanToLan_Iface::del_client_rt_rule(peer_iface_info *peer, client_info
 #endif
 
 	peer_l2_hdr_type = peer->peer->get_iface_pointer()->tx_prop->tx[0].hdr_l2_type;
+	if (peer_l2_hdr_type >= IPA_HDR_L2_MAX)
+	{
+		IPACMDBG_H("Invalid peer_l2_hdr_type: %d\n", peer_l2_hdr_type);
+		return;
+	}
+
 	/* if the peer info is not for intra interface communication */
 	if(peer->peer != this)
 	{
@@ -2006,6 +2018,12 @@ void IPACM_LanToLan_Iface::clear_all_rt_rule_for_one_peer_iface(peer_iface_info 
 	ipa_hdr_l2_type peer_l2_type;
 
 	peer_l2_type = peer->peer->get_iface_pointer()->tx_prop->tx[0].hdr_l2_type;
+	if (peer_l2_type >= IPA_HDR_L2_MAX)
+	{
+		IPACMDBG_H("Invalid peer_l2_type: %d\n", peer_l2_type);
+		return;
+	}
+
 	if(ref_cnt_peer_l2_hdr_type[peer_l2_type] == 0)
 	{
 		for(it = m_client_info.begin(); it != m_client_info.end(); it++)
@@ -2041,6 +2059,12 @@ void IPACM_LanToLan_Iface::handle_wlan_scc_mcc_switch()
 		for(it_peer_info = m_peer_iface_info.begin(); it_peer_info != m_peer_iface_info.end(); it_peer_info++)
 		{
 			peer_l2_hdr_type = it_peer_info->peer->get_iface_pointer()->tx_prop->tx[0].hdr_l2_type;
+			if(peer_l2_hdr_type >= IPA_HDR_L2_MAX)
+			{
+				IPACMDBG_H("Invalid peer_l2_hdr_type: %d\n", peer_l2_hdr_type);
+				return;
+			}
+
 			if(flag[peer_l2_hdr_type] == false)
 			{
 				flag[peer_l2_hdr_type] = true;
@@ -2235,6 +2259,12 @@ void IPACM_LanToLan_Iface::handle_client_add(uint8_t *mac, bool is_l2tp_client, 
 				l2_hdr_type = it_peer_info->peer->get_iface_pointer()->rx_prop->rx[2].hdr_l2_type;
 			else
 				l2_hdr_type = it_peer_info->peer->get_iface_pointer()->rx_prop->rx[0].hdr_l2_type;
+
+			if(l2_hdr_type >= IPA_HDR_L2_MAX)
+			{
+				IPACMDBG_H("Invalid l2_hdr_type: %d\n", l2_hdr_type);
+				return;
+			}
 
 			/* make sure add routing rule only once for each peer l2 header type */
 			if(flag[l2_hdr_type] == false)

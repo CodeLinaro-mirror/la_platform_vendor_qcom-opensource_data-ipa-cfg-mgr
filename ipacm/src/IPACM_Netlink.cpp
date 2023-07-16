@@ -445,8 +445,9 @@ static int ipa_nl_decode_rtm_link
 	buflen -= sizeof(struct nlmsghdr);
 
 	for (attrib = IFLA_RTA(ifm); RTA_OK(attrib, len); attrib = RTA_NEXT(attrib, len)) {
-		if (attrib->rta_type == IFLA_IFNAME) {
-			strlcpy(link_info->vlan_info.name, (strdup((const char *)RTA_DATA(attrib))), IFACE_NAME);
+		const char * rta_data = strdup((const char *)RTA_DATA(attrib));
+		if (attrib->rta_type == IFLA_IFNAME && rta_data) {
+			strlcpy(link_info->vlan_info.name, rta_data, IFACE_NAME);
 			IPACMDBG("Extracted vlan interface name %s\n", link_info->vlan_info.name);
 		}
 		if (attrib->rta_type == IFLA_LINKINFO) {

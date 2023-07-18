@@ -360,6 +360,7 @@ typedef enum
 	IPA_HANDLE_IPSEC_UL_FLT_DEL,              /* ipa_ioc_ipsec_ul_flt_attr */
 	IPA_IPSEC_LAN_CLIENT_ROUTE_ADD_EVENT,     /* ipa_ip_type */
 #endif
+	IPA_CLEAN_NEIGHBOR_CACHE,                 /* ipacm_event_data_all */
 	IPACM_EVENT_MAX
 } ipa_cm_event_id;
 
@@ -627,6 +628,7 @@ struct ipa_vlan_iface_info
 struct vlan_iface_info
 {
 	char vlan_iface_name[IPA_RESOURCE_NAME_MAX];
+	char lower_iface_name[IPA_RESOURCE_NAME_MAX];
 	uint16_t vlan_id;
 	uint32_t vlan_iface_ipv6_addr[4];
 	uint8_t vlan_client_mac[6];

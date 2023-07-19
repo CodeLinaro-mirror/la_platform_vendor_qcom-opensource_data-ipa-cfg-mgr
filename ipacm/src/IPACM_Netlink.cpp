@@ -683,7 +683,7 @@ static bool ipa_nl_get_vlan_priority
 {
 	char cmd[200] = {0};
 	FILE *fp = NULL;
-	uint32_t priority;
+	uint32_t priority = 0;
 
 	snprintf(cmd, 200, "ip -d -o link show dev %s | grep \"egress-qos-map\" | sed -n \"s/^.*egress-qos-map { [0-9]:\\s*\\(\\S*\\).*$/\\1/p\" > /tmp/pcp.txt", vlan_info->name);
 	system(cmd);
@@ -693,8 +693,11 @@ static bool ipa_nl_get_vlan_priority
 		return IPACM_FAILURE;
 	}
 
-	fscanf(fp, "%d", &priority);
-	vlan_info->priority = (uint8_t)priority;
+	if(fscanf(fp, "%d", &priority) > 0)
+	{
+		if(!(priority < 0 || priority > 7))
+			vlan_info->priority = (uint8_t)priority;
+	}
 	IPACMDBG("Vlan ID %d, Priority %d\n", vlan_info->vlan_id, vlan_info->priority);
 	fclose(fp);
 	remove("/tmp/pcp.txt");

@@ -568,7 +568,20 @@ protected:
 		uint32_t *ipv6_addr, char *iface_name, uint16_t VlanID = 0);
 
 #if defined(FEATURE_L2TP) || defined(FEATURE_VLAN_MPDN)
-	/* check if the event is associated with vlan interface */
+	/**
+	 * Determine if the interface name is a vlan interface and
+	 * related to event of this instance. Interface name is
+	 * considered a vlan interface name for this matter if its
+	 * structure is: [a-z,0-9]+(\.[a-z,0-9]*)*\.[0-9]*
+	 * vlan interface name is relevant if it's a substring of this
+	 * instance dev_name.
+	 *
+	 * @param event_iface_name the name of the interface associated
+	 *      		   with the event.
+	 *
+	 * @return bool true if event_iface_name is a vlan interface and
+	 *         is related to this instance.
+	 */
 	bool is_vlan_event(char *event_iface_name);
 #ifdef FEATURE_L2TP
 	/* check if the event is associated with l2tp interface */

@@ -83,6 +83,8 @@
 #define IPA_DRIVER  "/dev/ipa"
 
 #define IPACM_CFG_FILE_NAME    "IPACM_cfg.xml"
+#define IPACM_CFG_EXT_FILE_NAME    "IPACM_cfg_ext.xml"
+#define IPACM_CFG_EXT_FILE "/etc/data/ipa/IPACM_cfg_ext.xml"
 #ifndef FEATURE_IPA_ANDROID
 #define IPACM_PID_FILE "/var/run/data/ipa/ipacm.pid"
 #define IPACM_DIR_NAME     "/etc/data/ipa"
@@ -188,6 +190,48 @@ void* firewall_monitor(void *param)
 
 					/* Insert IPA_FIREWALL_CHANGE_EVENT to command queue */
 					IPACM_EvtDispatcher::PostEvt(&evt_data);
+				}
+				else if (!strncmp(event->name, IPACM_CFG_EXT_FILE_NAME, event->len)) // IPACM_configuration change
+				{
+					if ((IPACM_Iface::ipacmcfg->ipacm_emesh_enable == TRUE) && (IPACM_Iface::ipacmcfg->ipacm_emesh_mode >= 3))
+					{
+						char IPACM_config_ext_file[IPA_MAX_FILE_LEN];
+						IPACMDBG_H("File \"%s\" was 0x%x\n", event->name, event->mask);
+						IPACMDBG_H("The interested file %s .\n", IPACM_CFG_EXT_FILE_NAME);
+
+						strlcpy(IPACM_config_ext_file, IPACM_CFG_EXT_FILE, sizeof(IPACM_config_ext_file));
+						if (IPACM_SUCCESS == IPACM_read_cfg_ext_xml(IPACM_config_ext_file,
+							&IPACM_Iface::ipacmcfg->dscp_pcp_config))
+						{
+							IPACMDBG_H("Config EXT (DSCP-PCP) XML read OK \n");
+
+							if((memcmp(&(IPACM_Iface::ipacmcfg->dscp_pcp_config), &(IPACM_Iface::ipacmcfg->dscp_pcp_config_cache),
+								sizeof(IPACM_Iface::ipacmcfg->dscp_pcp_config)) == 0))
+							{
+								IPACMDBG_H("Ignore Config file change as there is no change in the config\n");
+							}
+							else
+							{
+								IPACM_Iface::ipacmcfg->dscp_pcp_config_cache.add = IPACM_Iface::ipacmcfg->dscp_pcp_config.add;
+								memcpy(IPACM_Iface::ipacmcfg->dscp_pcp_config_cache.dscp_pcp_map, IPACM_Iface::ipacmcfg->dscp_pcp_config.dscp_pcp_map,
+									sizeof(IPACM_Iface::ipacmcfg->dscp_pcp_config.dscp_pcp_map));
+
+								evt_data.event = IPA_DSCP_PCP_CONFIG_CHANGE_EVENT;
+								evt_data.evt_data = NULL;
+
+								/* Insert IPA_DSCP_PCP_CONFIG_CHANGE_EVENT to command queue */
+								IPACM_EvtDispatcher::PostEvt(&evt_data);
+							}
+						}
+						else
+						{
+							IPACMERR("Config EXT (DSCP-PCP) XML read failed and not updating uc \n");
+						}
+					}
+					else
+					{
+						IPACMERR("Easy Mesh is not supported or has lower mode \n");
+					}
 				}
 			}
 			IPACMDBG_H("Received monitoring event %s.\n", event->name);
@@ -1293,6 +1337,18 @@ void* ipa_driver_msg_notifier(void *param)
 			evt_data.evt_data = pdn_name;
 			break;
 #endif
+		case IPA_ENABLE_ETH_PDU_MODE_EVENT:
+			IPACMDBG_H("Received IPA_ENABLE_ETH_PDU_MODE_EVENT\n");
+
+			if (IPACM_Iface::ipacmcfg->eth_pdu_enabled)
+			{
+				IPACMERR("eth pdu already enabled\n");
+				break;
+			}
+
+			IPACM_Iface::ipacmcfg->eth_pdu_enabled = true;
+			evt_data.event    = IPA_IPACM_DISABLE;
+			break;
 
 		default:
 			IPACMDBG_H("Unhandled message type: %d\n", event_hdr.msg_type);

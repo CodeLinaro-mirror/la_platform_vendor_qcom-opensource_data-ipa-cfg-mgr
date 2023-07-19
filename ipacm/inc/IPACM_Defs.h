@@ -328,12 +328,14 @@ typedef enum
 	IPA_HANDLE_EoGRE_UP,                      /* ipa_ipgre_info */
 	IPA_HANDLE_EoGRE_DOWN,                    /* ipa_ipgre_info */
 #endif
+	IPA_DSCP_PCP_CONFIG_CHANGE_EVENT,         /* ipacm_event_change_dscp_pcp */
 	IPA_HANDLE_MACSEC_ADD,                    /* ipa_macsec_map */
 	IPA_HANDLE_MACSEC_DEL,                    /* ipa_macsec_map */
 	IPA_ADD_BRIDGE_VLAN_PHY_INTF,
 	IPA_ADD_BRIDGE_VLAN_BR_INTF,
 	IPA_ADD_EXT_ROUTER_RULES,                 /* char */
 	IPA_DEL_EXT_ROUTER_RULES,                 /* char* */
+	IPA_IPACM_DISABLE,                        /* void */
 	IPACM_EVENT_MAX
 } ipa_cm_event_id;
 

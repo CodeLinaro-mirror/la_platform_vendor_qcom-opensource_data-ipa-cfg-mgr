@@ -70,6 +70,8 @@ static int ipacm_cfg_validate_parsed_xml(IPACM_conf_t *config);
 
 static int IPACM_firewall_xml_parse_tree(const char *xml_file, xmlNode* xml_node, IPACM_firewall_t &firewall_config);
 
+static int IPACM_cfg_ext_xml_parse_tree(xmlNode* xml_node, IPACM_dscp_pcp_conf_t *config);
+
 /*Reads content (stored as child) of the element */
 static char* IPACM_read_content_element
 (
@@ -1639,5 +1641,146 @@ static int IPACM_firewall_xml_parse_tree(const char *xml_file, xmlNode* xml_node
 		/* go to sibling */
 		xml_node = xml_node->next;
 	} /* end while */
+	return ret_val;
+}
+
+/* This function traverses the cfg ext xml tree */
+static int IPACM_cfg_ext_xml_parse_tree
+(
+	 xmlNode* xml_node,
+	 IPACM_dscp_pcp_conf_t *config,
+	 int* map_index
+)
+{
+	int32_t ret_val = IPACM_SUCCESS;
+	char *content;
+	int str_size;
+	char content_buf[MAX_XML_STR_LEN];
+	int pcp_value;
+
+	IPACM_ASSERT(config != NULL);
+
+	if (NULL == xml_node)
+		return ret_val;
+
+	while ( xml_node != NULL )
+	{
+		switch (xml_node->type)
+		{
+
+		case XML_ELEMENT_NODE:
+			{
+				if (0 == IPACM_util_icmp_string((char*)xml_node->name, system_TAG) ||
+						0 == IPACM_util_icmp_string((char*)xml_node->name, IPACMDSCPPCPCfg_TAG) ||
+						0 == IPACM_util_icmp_string((char*)xml_node->name, IPACMDSCPPCPEnabled_TAG) ||
+						0 == IPACM_util_icmp_string((char*)xml_node->name, IPACMDSCPPCPMapping_TAG)  ||
+						0 == IPACM_util_icmp_string((char*)xml_node->name, DSCPPCPMapping_TAG))
+				{
+					if (0 == IPACM_util_icmp_string((char*)xml_node->name, IPACMDSCPPCPEnabled_TAG))
+					{
+						content = IPACM_read_content_element(xml_node);
+						if (content)
+						{
+							str_size = strlen(content);
+							memset(content_buf, 0, sizeof(content_buf));
+							memcpy(content_buf, (void *)content, str_size);
+							if (atoi(content_buf)==1)
+							{
+								config->add = 1;
+							}
+							else
+							{
+								config->add = 0;
+							}
+							IPACMDBG_H("DSCP PCP mapping %s\n",(config->add == 1)?"added":"removed");
+						}
+					}
+
+					if (0 == IPACM_util_icmp_string((char*)xml_node->name, DSCPPCPMapping_TAG))
+					{
+						*map_index = *map_index + 1;
+					}
+
+					/* go to child */
+					ret_val = IPACM_cfg_ext_xml_parse_tree(xml_node->children, config, map_index);
+				}
+				else if (0 == IPACM_util_icmp_string((char*)xml_node->name, DSCP_TAG))
+				{
+					/* Get DSCP value and compare with index to error out */
+					content = IPACM_read_content_element(xml_node);
+					if (content)
+					{
+						str_size = strlen(content);
+						memset(content_buf, 0, sizeof(content_buf));
+						memcpy(content_buf, (void *)content, str_size);
+						if ( atoi(content_buf) != (int)(*map_index - 1) )
+						{
+							IPACMERR("DSCP value wrongly added, index = %d\n",(*map_index - 1));
+							return IPACM_FAILURE;
+						}
+					}
+				}
+				else if (0 == IPACM_util_icmp_string((char*)xml_node->name, PCP_TAG))
+				{
+					/* Get the 8 bit PCP value and varify if value is between 0 to 7 */
+					content = IPACM_read_content_element(xml_node);
+					if (content)
+					{
+						str_size = strlen(content);
+						memset(content_buf, 0, sizeof(content_buf));
+						memcpy(content_buf, (void *)content, str_size);
+						pcp_value = atoi(content_buf);
+						if ((pcp_value > -1) && (pcp_value < 8) && (*map_index >= 1))
+						{
+							config->dscp_pcp_map[*map_index - 1] = (uint8_t) pcp_value;
+						}
+						else
+						{
+							IPACMERR("PCP value wrongly added, index = %d\n",(*map_index - 1));
+							return IPACM_FAILURE;
+						}
+					}
+				}
+			}
+		}
+		/* go to sibling */
+		xml_node = xml_node->next;
+	}
+	return ret_val;
+}
+
+
+/* This function read Config ext XML and populate the DSCP PCP Cfg */
+int IPACM_read_cfg_ext_xml(char *xml_file, IPACM_dscp_pcp_conf_t *config)
+{
+	xmlDocPtr doc = NULL;
+	xmlNode* root = NULL;
+	int ret_val;
+	int map_index;
+
+	IPACM_ASSERT(xml_file != NULL);
+	IPACM_ASSERT(config != NULL);
+
+	/* invoke the XML parser and obtain the parse tree */
+	doc = xmlReadFile(xml_file, "UTF-8", XML_PARSE_NOBLANKS);
+	if (doc == NULL) {
+		IPACMDBG_H("IPACM_xml_parse: libxml returned parse error\n");
+		return IPACM_FAILURE;
+	}
+	/*get the root of the tree*/
+	root = xmlDocGetRootElement(doc);
+
+	/* parse the xml tree returned by libxml*/
+	map_index = 0;
+	ret_val = IPACM_cfg_ext_xml_parse_tree(root, config, &map_index);
+
+	if (ret_val != IPACM_SUCCESS)
+	{
+		IPACMDBG_H("IPACM_xml_parse: IPACM_cfg_ext_xml_parse_tree returned parse error!\n");
+	}
+
+	/* free the tree */
+	xmlFreeDoc(doc);
+
 	return ret_val;
 }

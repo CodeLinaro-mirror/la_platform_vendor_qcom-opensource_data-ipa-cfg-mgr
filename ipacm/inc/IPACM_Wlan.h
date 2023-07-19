@@ -164,12 +164,15 @@ public:
 	bool ast_update_needed();
 
 	bool is_svap_iface();
+	void add_dscp_pcp_mapping();
+	void handle_hpc_rt_rules_for_easymesh_R3(struct ipa_ioc_add_hdr_proc_ctx *hdr_proc_ctx_table, struct ipa_hdr_proc_ctx_add *hdr_proc_ctx, int clt_idx);
 	int set_svap_iface_mode(bool enable);
 	void update_svap_state();
 	int handle_wlan_vlan_neighbor(ipacm_event_new_neigh_vlan *param);
 	int add_rt_rules_for_ast_update_ifaces();
 
 	bool is_vlan_iface();
+	int handle_wlan_del_ipv6_addr(ipacm_event_data_all *data);
 
 
 #if defined(FEATURE_IPACM_PER_CLIENT_STATS) || defined(IPA_WDI_AST_UPDATE)

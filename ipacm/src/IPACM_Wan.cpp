@@ -2401,6 +2401,14 @@ void IPACM_Wan::post_wan_vlan_pdn_event(ipa_ip_type iptype, int pdn_idx, int vla
 			{
 				if(ext_prop != NULL)
 					vlan_data->mux_id = ext_prop->ext[0].mux_id;
+				if (is_xlat)
+				{
+					ipv6_to_iface[pdn_idx].ipv6_prefix[0] = IPA_DUMMY_PREFIX;
+					ipv6_to_iface[pdn_idx].ipv6_prefix[1] = IPA_DUMMY_PREFIX;
+					IPACMDBG_H("XLAT case, new VLAN PDN prefix is 0x%08x%08x.\n",
+							ipv6_to_iface[pdn_idx].ipv6_prefix[0],
+							ipv6_to_iface[pdn_idx].ipv6_prefix[1]);
+				}
 			}
 
 			IPACMDBG_H("Posting IPA_HANDLE_WAN_VLAN_PDN_UP (V6) with below info:\n");

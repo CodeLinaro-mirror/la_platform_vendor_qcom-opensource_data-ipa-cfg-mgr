@@ -15555,8 +15555,23 @@ int IPACM_Lan::handle_mpdn_ul_xlat_filter_rule(ipacm_ext_prop * prop,
 				 * private subnet rule -> 512(pdn2)->513(2)->514(1)->512(pdn1)->513(1)->514(1)->515->516...
 				 */
 				if (prev == 0)
+				{
 					/* add the XLAT rule after the dynamic subnet/MTU rules */
 					pFilteringTable->add_after_hdl = private_fl_rule_hdl[num_wan_subnet_rules - 1];
+					if (!pFilteringTable->add_after_hdl)
+					{
+						for (int j = 0; j < MAX_NUM_IP_PASS_MPDN; j++)
+						{
+							if(IPACM_Iface::ipacmcfg->ip_pass_mpdn_table[j].valid_entry == true &&
+									IPACM_Iface::ipacmcfg->ip_pass_mpdn_table[j].ip_pass_skip_nat == 1)
+							{
+								pFilteringTable->add_after_hdl = dft_v4fl_rule_hdl[IPV4_DEFAULT_FILTERTING_RULES - 1];
+								IPACMDBG_H("Add after handle 0x%x j %d\n", pFilteringTable->add_after_hdl, j);
+								break;
+							}
+						}
+					}
+				}
 				else
 					pFilteringTable->add_after_hdl = xlat_ctx.ul_rule_id_hdl_map[prev - 1].flt_hdl;
 
@@ -15611,7 +15626,22 @@ int IPACM_Lan::handle_mpdn_ul_xlat_filter_rule(ipacm_ext_prop * prop,
 	{
 		if (prev == 0)
 			/* add the XLAT rule after the dynamic subnet/MTU rules */
+		{
 			pFilteringTable->add_after_hdl = private_fl_rule_hdl[num_wan_subnet_rules - 1];
+			if (!pFilteringTable->add_after_hdl)
+			{
+				for (int j = 0; j < MAX_NUM_IP_PASS_MPDN; j++)
+				{
+					if(IPACM_Iface::ipacmcfg->ip_pass_mpdn_table[j].valid_entry == true &&
+							IPACM_Iface::ipacmcfg->ip_pass_mpdn_table[j].ip_pass_skip_nat == 1)
+					{
+						pFilteringTable->add_after_hdl = dft_v4fl_rule_hdl[IPV4_DEFAULT_FILTERTING_RULES - 1];
+						IPACMDBG("Add after handle 0x%x j %d\n", pFilteringTable->add_after_hdl, j);
+						break;
+					}
+				}
+			}
+		}
 		else
 			pFilteringTable->add_after_hdl = xlat_ctx.ul_rule_id_hdl_map[prev - 1].flt_hdl;
 

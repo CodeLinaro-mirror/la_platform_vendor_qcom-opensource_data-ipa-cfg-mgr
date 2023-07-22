@@ -7050,6 +7050,12 @@ int IPACM_Lan::handle_uplink_filter_rule(ipacm_ext_prop *prop, ipa_ip_type iptyp
 
 	for(cnt=0, i = 0; cnt<prop->num_ext_props && i < total_rules; cnt++)
 	{
+		 if(!IPACM_Iface::ipacmcfg->ipacm_ttl_feature_enable && prop->prop[cnt].action == IPA_TTL_PASS)
+		{
+			pFilteringTable->num_rules = pFilteringTable->num_rules -1;
+			continue;
+		}
+
 		memcpy(&flt_rule_entry.rule.eq_attrib,
 					 &prop->prop[cnt].eq_attrib,
 					 sizeof(prop->prop[cnt].eq_attrib));
@@ -7706,6 +7712,11 @@ int IPACM_Lan::config_dft_firewall_rules_ul_ex(IPACM_firewall_conf_t* firewall_c
 	/* Traverse all q6_v6_ul_rules */
 	for (i = 0; i < q6_v6_ul_rules; i++)
 	{
+		if(!IPACM_Iface::ipacmcfg->ipacm_ttl_feature_enable && ext_prop->prop[i].action == IPA_TTL_PASS)
+		{
+			IPACMERR("TTL feature is not enabled, So TTL catall rule is skipping\n");
+			continue;
+		}
 		memcpy(&flt_rule_entry.rule.eq_attrib,
 				&ext_prop->prop[i].eq_attrib,
 				sizeof(ext_prop->prop[i].eq_attrib));
@@ -7721,6 +7732,46 @@ int IPACM_Lan::config_dft_firewall_rules_ul_ex(IPACM_firewall_conf_t* firewall_c
 			flt_rule_entry.rule.eq_attrib.metadata_meq32.value |= rx_prop->rx[0].attrib.meta_data;
 			flt_rule_entry.rule.eq_attrib.metadata_meq32.mask |= rx_prop->rx[0].attrib.meta_data_mask;
 		}
+#ifdef FEATURE_TTL
+		if(IPACM_Iface::ipacmcfg->ipacm_ttl_feature_enable)
+		{
+			if(ext_prop->prop[i].action == IPA_TTL_PASS)
+			{
+				flt_rule_entry.rule.action = IPA_PASS_TO_ROUTING;
+				flt_rule_entry.rule.retain_hdr = 1;
+				flt_rule_entry.rule.set_metadata = false;
+				IPACMDBG("TTL rule index %d to act: %d, rt_tbl_idx: %d to %d  rethdr = %d \n",
+			 		ext_prop->prop[i].rule_id, flt_rule_entry.rule.action,
+					ext_prop->prop[i].rt_tbl_idx,
+			 		flt_rule_entry.rule.rt_tbl_idx, flt_rule_entry.rule.retain_hdr);
+				flt_rule_entry.rule.hashable = 1;
+				if(!notify_ttl && IPACM_Iface::ipacmcfg->ttl_vlan_enable)
+				{
+					if(ioctl(fd, IPA_IOC_TTL_VLAN_MAPPING, &IPACM_Iface::ipacmcfg->ipacm_ttlvlanids))
+					{
+						IPACMERR("failed to send the IOCTL to driver\n");
+					}
+			 		else
+			 		{
+			 			IPACMDBG("TTL VLAN ID's sent to driver\n");
+			 			notify_ttl = true;
+		 			}
+				}
+			}
+			else
+			{
+				/* checking mac ethertype value so rule need to be non hashable checking
+				ethertype value as 0xFFFF updated by uC in 1st pass */
+				flt_rule_entry.rule.hashable = 0;
+				flt_rule_entry.rule.eq_attrib.rule_eq_bitmap |= 0x20<<flt_rule_entry.rule.eq_attrib.num_offset_meq_32;
+				flt_rule_entry.rule.eq_attrib.offset_meq_32[flt_rule_entry.rule.eq_attrib.num_offset_meq_32].offset = -2;
+				flt_rule_entry.rule.eq_attrib.offset_meq_32[flt_rule_entry.rule.eq_attrib.num_offset_meq_32].mask = 0xFFFF0000;
+				flt_rule_entry.rule.eq_attrib.offset_meq_32[flt_rule_entry.rule.eq_attrib.num_offset_meq_32].value = 0xFFFF0000;
+				flt_rule_entry.rule.eq_attrib.num_offset_meq_32 ++;
+
+			}
+		}
+#endif
 		/* Is this rule needed replication w.r.t v6 UL WL rule ?*/
 		if (ext_prop->prop[i].replicate_needed == true)
 		{
@@ -8829,6 +8880,12 @@ int IPACM_Lan::install_uplink_filter_rule_per_client_v2
 
 	for(cnt=0; cnt < total_rules ; cnt++)
 	{
+		if(!IPACM_Iface::ipacmcfg->ipacm_ttl_feature_enable && prop->prop[cnt].action == IPA_TTL_PASS)
+		{
+			pFilteringTable->num_rules = pFilteringTable->num_rules -1;
+			continue;
+		}
+
 		if (isFirewall)
 		{
 			memcpy(&flt_rule_entry.rule.eq_attrib,
@@ -9128,6 +9185,12 @@ int IPACM_Lan::install_uplink_filter_rule_per_client
 
 	for(cnt=0; cnt<prop->num_ext_props; cnt++)
 	{
+		if(!IPACM_Iface::ipacmcfg->ipacm_ttl_feature_enable && prop->prop[cnt].action == IPA_TTL_PASS)
+		{
+			pFilteringTable->num_rules = pFilteringTable->num_rules -1;
+			continue;
+		}
+
 		memcpy(&flt_rule_entry.rule.eq_attrib,
 					 &prop->prop[cnt].eq_attrib,
 					 sizeof(prop->prop[cnt].eq_attrib));
@@ -14169,6 +14232,11 @@ int IPACM_Lan::handle_mpdn_ul_xlat_filter_rule(ipacm_ext_prop * prop,
 
 	for(cnt=0; cnt < prop->num_ext_props; cnt++)
 	{
+		if(!IPACM_Iface::ipacmcfg->ipacm_ttl_feature_enable && prop->prop[cnt].action == IPA_TTL_PASS)
+		{
+			continue;
+		}
+
 		if (prop->prop[cnt].is_xlat_rule)
 		{
 			memcpy(&flt_rule_entry.rule.eq_attrib,

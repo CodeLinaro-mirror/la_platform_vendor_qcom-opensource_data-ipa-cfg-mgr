@@ -1414,10 +1414,13 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 				{
 					/* handling xlat pdn case */
 					IPACMDBG_H("Received event for v4 & v6, handled v6 part\n");
-					if (modem_ipv6_pdn_index != -1){
-						memcpy(data->wan_ipv6_prefix, ipv6_to_iface[modem_ipv6_pdn_index].ipv6_prefix, 2*sizeof(uint32_t));
-						IPACM_Iface::ipacmcfg->add_vlan_ipv6_prefix(ipv6_to_iface[modem_ipv6_pdn_index].ipv6_prefix, ipa_if_num, data->VlanID);
-						check_vlan_pdn(IPA_IP_v6, data);
+					if (modem_ipv6_pdn_index != -1 && (IPACM_Wan::ipv6_to_iface[modem_ipv6_pdn_index].ipv6_prefix[0] ||
+						IPACM_Wan::ipv6_to_iface[modem_ipv6_pdn_index].ipv6_prefix[1])){
+							IPACMDBG_H("currently v6 prefix for pdn is %x:%x\n", IPACM_Wan::ipv6_to_iface[modem_ipv6_pdn_index].ipv6_prefix[0],
+							IPACM_Wan::ipv6_to_iface[modem_ipv6_pdn_index].ipv6_prefix[1]);
+							memcpy(data->wan_ipv6_prefix, ipv6_to_iface[modem_ipv6_pdn_index].ipv6_prefix, 2*sizeof(uint32_t));
+							IPACM_Iface::ipacmcfg->add_vlan_ipv6_prefix(ipv6_to_iface[modem_ipv6_pdn_index].ipv6_prefix, ipa_if_num, data->VlanID);
+							check_vlan_pdn(IPA_IP_v6, data);
 					} else if (is_xlat){
 						IPACMDBG_H("wan instance doesnt have global v6 address but is_xlat : %d\n",is_xlat);
 						prefix[0] = IPA_DUMMY_PREFIX;
@@ -1792,7 +1795,8 @@ int IPACM_Wan::check_vlan_pdn(ipa_ip_type iptype, ipacm_event_route_vlan *data, 
 		if(((data->wan_ipv6_prefix[0] == ipv6_prefix[0]) &&
 			(data->wan_ipv6_prefix[1] == ipv6_prefix[1])) || v4_only_xlat)
 		{
-			IPACMDBG_H("received v6 IPA_ROUTE_ADD_VLAN_PDN_EVENT for VID %d, wan %s, %d\n", data->VlanID, dev_name, ipa_if_num);
+			IPACMDBG_H("received v6 IPA_ROUTE_ADD_VLAN_PDN_EVENT for VID %d, wan %s, %d with prefix %x:%x\n", data->VlanID, dev_name, ipa_if_num,
+			IPACM_Wan::ipv6_to_iface[modem_ipv6_pdn_index].ipv6_prefix[0], IPACM_Wan::ipv6_to_iface[modem_ipv6_pdn_index].ipv6_prefix[1]);
 			if ((modem_ipv6_pdn_index != -1) && (ipv6_to_iface[modem_ipv6_pdn_index].wan_up_vlan_v6))
 			{
 				for(pdn_idx = 0; pdn_idx < ipv6_to_iface[modem_ipv6_pdn_index].VID_cnt; pdn_idx++)

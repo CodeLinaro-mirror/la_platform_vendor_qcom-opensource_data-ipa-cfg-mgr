@@ -15283,6 +15283,16 @@ void IPACM_Lan::gre_down(bool isPmipv6)
 				return;
 			}
 			/*
+			* The icmp rule was removed on gre_up; needs to be added
+			* back now.
+			*/
+			res = install_ipv4_icmp_flt_rule();
+			if ( res == IPACM_FAILURE )
+			{
+				IPACMERR("install_ipv4_icmp_flt_rule failed\n");
+				return;
+			}
+			/*
 			* Will reinstall the exception rules.
 			*/
 			if ( init_fl_rule(IPA_IP_v4, false) == IPACM_FAILURE )

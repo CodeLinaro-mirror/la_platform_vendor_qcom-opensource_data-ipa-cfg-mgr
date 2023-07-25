@@ -3596,67 +3596,50 @@ bool IPACM_Config::client_in_stats_cache(uint8_t *mac_addr)
 }
 #endif
 
-/*
- * Add new macsec map to the config
- */
-bool IPACM_Config::AddMacsecMap(struct ipa_macsec_map *new_macsec_map)
-{
-	int netlink_index, iface_table_index;
+bool IPACM_Config::insertOrAssignMacsecMap(struct ipa_macsec_map *macsecMap) {
+	int netlinkIdx, ifaceTableIdx;
 
+	if (!macsecMap)
+		return false;
 	/* first check if we have macsec iface entry or not */
-	if (IPACM_Iface::ipa_get_if_index(new_macsec_map->macsec_name, &netlink_index) == IPACM_SUCCESS &&
-	    (iface_table_index = IPACM_Iface::iface_ipa_index_query(netlink_index)) != INVALID_IFACE)
-	{
-		IPACMDBG_H("Will modify the existing macsec interface %s with new phy %s\n",
-			new_macsec_map->macsec_name, new_macsec_map->phy_name);
+	if (IPACM_Iface::ipa_get_if_index(macsecMap->macsec_name, &netlinkIdx) == IPACM_SUCCESS &&
+	    (ifaceTableIdx = IPACM_Iface::iface_ipa_index_query(netlinkIdx)) != INVALID_IFACE) {
+		IPACMDBG_H("Will modify the existing macsec interface %s with new phy %s\n", macsecMap->macsec_name, macsecMap->phy_name);
 
 		/* Modify an existing macsec interface macsec interface in the config table*/
-		strlcpy(iface_table[iface_table_index].phy_dev_name, new_macsec_map->phy_name,
-			sizeof(iface_table[iface_table_index].phy_dev_name));
-	}
-	else
-	{
-		IPACMDBG_H("Will add new macsec interface: %s instead of %s\n",
-			new_macsec_map->macsec_name, new_macsec_map->phy_name);
+		strlcpy(iface_table[ifaceTableIdx].phy_dev_name, macsecMap->phy_name, sizeof(iface_table[ifaceTableIdx].phy_dev_name));
+	} else {
+		IPACMDBG_H("Will add new macsec interface: %s instead of %s\n", macsecMap->macsec_name, macsecMap->phy_name);
 
 		/* check if physical iface is valid */
-		if (IPACM_Iface::ipa_get_if_index(new_macsec_map->phy_name, &netlink_index) == IPACM_FAILURE ||
-		    (iface_table_index = IPACM_Iface::iface_ipa_index_query(netlink_index)) == INVALID_IFACE)
-		{
+		if (IPACM_Iface::ipa_get_if_index(macsecMap->phy_name, &netlinkIdx) == IPACM_FAILURE ||
+		    (ifaceTableIdx = IPACM_Iface::iface_ipa_index_query(netlinkIdx)) == INVALID_IFACE) {
 			/* can't find physical nic name, ignoring this macsec handling */
-			IPACMERR("Got wrong physical NIC name: %s\n", new_macsec_map->phy_name);
+			IPACMERR("Got wrong physical NIC name: %s\n", macsecMap->phy_name);
 			return false;
 		}
-
 		/* Replace a physical interface with macsec interface in the config table */
-		iface_table[iface_table_index].virtual_iface = true;
-		strlcpy(iface_table[iface_table_index].iface_name, new_macsec_map->macsec_name,
-			sizeof(iface_table[iface_table_index].iface_name));
-		strlcpy(iface_table[iface_table_index].phy_dev_name, new_macsec_map->phy_name,
-			sizeof(iface_table[iface_table_index].phy_dev_name));
+		iface_table[ifaceTableIdx].virtual_iface = true;
+		strlcpy(iface_table[ifaceTableIdx].iface_name, macsecMap->macsec_name, sizeof(iface_table[ifaceTableIdx].iface_name));
+		strlcpy(iface_table[ifaceTableIdx].phy_dev_name, macsecMap->phy_name, sizeof(iface_table[ifaceTableIdx].phy_dev_name));
 	}
 
 	return true;
 }
 
-/*
- * Delete a macsec map from the config
- */
-bool IPACM_Config::DelMacsecMap(struct ipa_macsec_map *macsec_map_to_delete)
-{
-	int netlink_index, iface_table_index;
+bool IPACM_Config::delMacsecMap(struct ipa_macsec_map *macsecMap) {
+	int netlinkIdx, ifaceTableIdx;
 
+	if (!macsecMap)
+		return false;
 	/* Replace the requested macsec interface with physical interface */
-	if (IPACM_Iface::ipa_get_if_index(macsec_map_to_delete->macsec_name, &netlink_index) == IPACM_SUCCESS &&
-	    (iface_table_index = IPACM_Iface::iface_ipa_index_query(netlink_index)) != INVALID_IFACE)
-	{
-		IPACMDBG_H("Will replace the macsec interface: %s with %s\n",
-			macsec_map_to_delete->macsec_name, macsec_map_to_delete->phy_name);
-		iface_table[iface_table_index].virtual_iface = false;
-		strlcpy(iface_table[iface_table_index].iface_name,
-			iface_table[iface_table_index].phy_dev_name,
-			sizeof(iface_table[iface_table_index].iface_name));
-		iface_table[iface_table_index].phy_dev_name[0] = '\0';
+	if (IPACM_Iface::ipa_get_if_index(macsecMap->macsec_name, &netlinkIdx) == IPACM_SUCCESS &&
+	    (ifaceTableIdx = IPACM_Iface::iface_ipa_index_query(netlinkIdx)) != INVALID_IFACE) {
+		IPACMDBG_H("Will replace the macsec interface: %s with %s\n", macsecMap->macsec_name, macsecMap->phy_name);
+		iface_table[ifaceTableIdx].virtual_iface = false;
+		strlcpy(iface_table[ifaceTableIdx].iface_name, iface_table[ifaceTableIdx].phy_dev_name,
+			sizeof(iface_table[ifaceTableIdx].iface_name));
+		iface_table[ifaceTableIdx].phy_dev_name[0] = '\0';
 
 		return true;
 	}

@@ -1242,9 +1242,28 @@ public:
 		return IPACM_SUCCESS;
 	}
 #endif //defined(FEATURE_SOCKSv5) && defined (IPA_SOCKV5_EVENT_MAX)
-
-	bool AddMacsecMap(struct ipa_macsec_map *new_macsec_map);
-	bool DelMacsecMap(struct ipa_macsec_map *macsec_map_to_delete);
+	/**
+	 * Insert a new MACSEC map to the configuration table and mark
+	 * this interface as virtual. in case the a MACSEC map is
+	 * already present for the interface provided, the old MACSEC
+	 * map is replaced with the provided MACSEC map.
+	 *
+	 * @param macsecMap: MACSEC map to add to an interface
+	 *      	   configuration.
+	 *
+	 * @return bool: true on success, false otherwise.
+	 */
+	bool insertOrAssignMacsecMap(struct ipa_macsec_map *macsecMap);
+	/**
+	 * Reset the given interface MACSEC configuration and mark it as
+	 * non-virtual interface.
+	 *
+	 * @param macsecMap: MACSEC map of the interface to mark as
+	 *      	   non-virtual.
+	 *
+	 * @return bool
+	 */
+	bool delMacsecMap(struct ipa_macsec_map *macsecMap);
 
 #ifdef IPA_IOCTL_SET_EXT_ROUTER_MODE
 	enum ipa_ext_router_mode ext_router_mode;

@@ -110,6 +110,13 @@ typedef enum
 	IPA_LINK_DOWN
 } ipa_nl_state_e;
 
+typedef enum
+{
+	IPA_LINK_TYPE_NORMAL = 0,
+	IPA_LINK_TYPE_VLAN,
+	IPA_LINK_TYPE_MACSEC,
+} ipa_nl_type_e;
+
 typedef struct
 {
 	int sk_fd;
@@ -145,6 +152,10 @@ typedef struct
 {
 	struct ifinfomsg  metainfo;                   /* from header */
 	struct ipa_vlan_iface_info vlan_info;
+	ipa_nl_type_e link_type;
+	char name[IPA_RESOURCE_NAME_MAX];
+	uint16_t vlan_id;
+	uint16_t master_interface_index;
 } ipa_nl_link_info_t;
 
 

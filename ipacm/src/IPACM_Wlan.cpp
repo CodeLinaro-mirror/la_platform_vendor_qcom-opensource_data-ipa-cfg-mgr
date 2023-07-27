@@ -2556,6 +2556,11 @@ int IPACM_Wlan::handle_wlan_client_ipaddr(ipacm_event_data_all *data)
 
 						install_wlan_client_lan2lan_flt_rule(data->mac_addr, IPA_IP_v6, get_client_memptr(wlan_client, clnt_indx)->is_vlan);
 				}
+				else
+				{
+					IPACMDBG_H("Already got ipv6 addr 0x%08x:%08x:%08x:%08x for client:%d\n", data->ipv6_addr[0], data->ipv6_addr[1], data->ipv6_addr[2], data->ipv6_addr[3], clnt_indx);
+					return IPACM_FAILURE;
+				}
 		    }
 		    else
 		    {

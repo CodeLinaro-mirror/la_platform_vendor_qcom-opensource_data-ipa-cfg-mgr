@@ -1301,7 +1301,7 @@ void* ipa_driver_msg_notifier(void *param)
 				IPACM_Iface::ipacmcfg->ext_router_mode = ext_router_info.mode;
 			}
 
-			pdn_name = (char*) malloc(IPA_IFACE_NAME_LEN * sizeof(*pdn_name));
+			pdn_name = (char*) malloc(IPA_RESOURCE_NAME_MAX * sizeof(*pdn_name));
 			if (pdn_name == NULL)
 			{
 				IPACMERR("unable to allocate memory for pdn_name\n");

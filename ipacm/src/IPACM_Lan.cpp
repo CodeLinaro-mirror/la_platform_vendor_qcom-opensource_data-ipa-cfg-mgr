@@ -3518,6 +3518,7 @@ int IPACM_Lan::handle_eth_hdr_init(uint8_t *mac_addr, ipacm_bridge *bridge, uint
 	int max_clients = IPA_MAX_NUM_ETH_CLIENTS;
 #endif
 #ifdef FEATURE_VLAN_MPDN
+	uint16_t vlan_tci;
 	if(IPACM_Iface::ipacmcfg->ipacm_mpdn_enable)
 		max_clients = IPA_MAX_NUM_VLAN_CLIENTS;
 	if(isVlan)
@@ -3650,7 +3651,7 @@ int IPACM_Lan::handle_eth_hdr_init(uint8_t *mac_addr, ipacm_bridge *bridge, uint
 				*/
 				if(isVlan)
 				{
-					uint16_t vlan_tci =
+					vlan_tci =
 						(*((uint16_t *)&(pHeaderDescriptor->hdr[0].hdr[sCopyHeader.eth2_ofst +
 							2 * IPA_MAC_ADDR_SIZE +
 							VLAN_TPID_SIZE])));
@@ -3720,13 +3721,26 @@ int IPACM_Lan::handle_eth_hdr_init(uint8_t *mac_addr, ipacm_bridge *bridge, uint
 					goto fail;
 				}
 
-				snprintf(index,sizeof(index), "%d", header_name_count);
+				snprintf(index,sizeof(index), "_%d", header_name_count);
 				if (strlcat(pHeaderDescriptor->hdr[0].name, index, sizeof(pHeaderDescriptor->hdr[0].name)) > IPA_RESOURCE_NAME_MAX)
 				{
 					IPACMERR(" header name construction failed exceed length (%d)\n", strlen(pHeaderDescriptor->hdr[0].name));
 					res = IPACM_FAILURE;
 					goto fail;
 				}
+
+#ifdef FEATURE_VLAN_MPDN
+				if(isVlan)
+				{
+					snprintf(index,sizeof(index), "_%d", vlan_id);
+					if (strlcat(pHeaderDescriptor->hdr[0].name, index, sizeof(pHeaderDescriptor->hdr[0].name)) > IPA_RESOURCE_NAME_MAX)
+					{
+						IPACMERR(" header name construction failed exceed length (%d)\n", strlen(pHeaderDescriptor->hdr[0].name));
+						res = IPACM_FAILURE;
+						goto fail;
+					}
+				}
+#endif
 
 				pHeaderDescriptor->hdr[0].hdr_len = sCopyHeader.hdr_len;
 				hdr_len = sCopyHeader.hdr_len;
@@ -3811,7 +3825,7 @@ int IPACM_Lan::handle_eth_hdr_init(uint8_t *mac_addr, ipacm_bridge *bridge, uint
 				*/
 				if(isVlan)
 				{
-					uint16_t vlan_tci =
+					vlan_tci =
 						(*((uint16_t *)&(pHeaderDescriptor->hdr[0].hdr[sCopyHeader.eth2_ofst +
 							2 * IPA_MAC_ADDR_SIZE +
 							VLAN_TPID_SIZE])));
@@ -3884,13 +3898,26 @@ int IPACM_Lan::handle_eth_hdr_init(uint8_t *mac_addr, ipacm_bridge *bridge, uint
 					res = IPACM_FAILURE;
 					goto fail;
 				}
-				snprintf(index,sizeof(index), "%d", header_name_count);
+				snprintf(index,sizeof(index), "_%d", header_name_count);
 				if (strlcat(pHeaderDescriptor->hdr[0].name, index, sizeof(pHeaderDescriptor->hdr[0].name)) > IPA_RESOURCE_NAME_MAX)
 				{
 					IPACMERR(" header name construction failed exceed length (%d)\n", strlen(pHeaderDescriptor->hdr[0].name));
 					res = IPACM_FAILURE;
 					goto fail;
 				}
+
+#ifdef FEATURE_VLAN_MPDN
+				if(isVlan)
+				{
+					snprintf(index,sizeof(index), "_%d", vlan_id);
+					if (strlcat(pHeaderDescriptor->hdr[0].name, index, sizeof(pHeaderDescriptor->hdr[0].name)) > IPA_RESOURCE_NAME_MAX)
+					{
+						IPACMERR(" header name construction failed exceed length (%d)\n", strlen(pHeaderDescriptor->hdr[0].name));
+						res = IPACM_FAILURE;
+						goto fail;
+					}
+				}
+#endif
 
 				pHeaderDescriptor->hdr[0].hdr_len = sCopyHeader.hdr_len;
 				hdr_len = sCopyHeader.hdr_len;
@@ -4054,6 +4081,7 @@ int IPACM_Lan::handle_eth_hdr_init(uint8_t *mac_addr, ipacm_bridge *bridge, uint
 #endif
 		header_name_count++; //keep increasing header_name_count
 		res = IPACM_SUCCESS;
+		IPACMDBG_H("header_name_count: %d\n", header_name_count);
 		IPACMDBG_H("eth client number: %d\n", num_eth_client);
 	}
 	else

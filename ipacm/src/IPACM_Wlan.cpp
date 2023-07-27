@@ -5378,7 +5378,7 @@ int IPACM_Wlan::install_uplink_filter_rule_per_client
 
 			/* NAT block will set the proper MUX ID in the metadata according to the relevant PDN */
 			if (IPACM_Iface::ipacmcfg->GetIPAVer() >= IPA_HW_v4_0)
-				flt_rule_entry.rule.set_metadata = true;
+				flt_rule_entry.rule.set_metadata = false;
 		}
 	}
 	else if(iptype == IPA_IP_v6)
@@ -5402,8 +5402,8 @@ int IPACM_Wlan::install_uplink_filter_rule_per_client
 	for(cnt=0; cnt<prop->num_ext_props; cnt++)
 	{
 		memcpy(&flt_rule_entry.rule.eq_attrib,
-					 &prop->prop[cnt].eq_attrib,
-					 sizeof(prop->prop[cnt].eq_attrib));
+				&prop->prop[cnt].eq_attrib,
+				sizeof(prop->prop[cnt].eq_attrib));
 		/* Check if we can add the MAC address rule. */
 		if (flt_rule_entry.rule.eq_attrib.num_offset_meq_128 == IPA_IPFLTR_NUM_MEQ_128_EQNS)
 		{
@@ -5417,7 +5417,7 @@ int IPACM_Wlan::install_uplink_filter_rule_per_client
 #ifdef IPA_HDR_L2_ETHERNET_II_AST
 			|| rx_prop->rx[idx].hdr_l2_type == IPA_HDR_L2_ETHERNET_II_AST
 #endif
-			)
+		  )
 		{
 			offset_meq_128->offset = -8;
 		}
@@ -5447,7 +5447,6 @@ int IPACM_Wlan::install_uplink_filter_rule_per_client
 			flt_rule_entry.rule.eq_attrib.rule_eq_bitmap |= (1<<4);
 
 		flt_rule_entry.rule.eq_attrib.num_offset_meq_128++;
-
 		flt_rule_entry.rule.rt_tbl_idx = prop->prop[cnt].rt_tbl_idx;
 
 		/* Handle XLAT configuration */
@@ -5508,6 +5507,7 @@ int IPACM_Wlan::install_uplink_filter_rule_per_client
 				get_client_memptr(wlan_client, clnt_indx)->wan_ul_fl_rule_hdl_v4[i] = pFilteringTable->rules[i].flt_rule_hdl;
 			}
 			get_client_memptr(wlan_client, clnt_indx)->ipv4_ul_rules_set = true;
+			num_wan_ul_fl_rule_v4 = pFilteringTable->num_rules;
 		}
 		else if(iptype == IPA_IP_v6)
 		{
@@ -5516,6 +5516,7 @@ int IPACM_Wlan::install_uplink_filter_rule_per_client
 				get_client_memptr(wlan_client, clnt_indx)->wan_ul_fl_rule_hdl_v6[i] = pFilteringTable->rules[i].flt_rule_hdl;
 			}
 			get_client_memptr(wlan_client, clnt_indx)->ipv6_ul_rules_set = true;
+			num_wan_ul_fl_rule_v6 = pFilteringTable->num_rules;
 		}
 		else
 		{

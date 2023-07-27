@@ -7258,25 +7258,6 @@ int IPACM_Wan::handle_down_evt_ex()
 			IPACMDBG_H("not deleting rm depend for default rt, a v6 VLAN PDN is still up, iptype %d\n", ip_type);
 		}
 #endif
-#ifdef IPA_FLT_EXT_MPLS_GRE_GENERAL
-		/* Clean the EoGRE rules if GRE PDN goes down */
-		ipa_ipgre_info ipgre_info = IPACM_Iface::ipacmcfg->eogre_info;
-
-		if (IPACM_Iface::ipacmcfg->eogre_enabled)
-		{
-			if (ipgre_info.iptype == IPA_IP_v4 && ipgre_info.ipv4_src == wan_v4_addr)
-			{
-				IPACMDBG_H("v4 GRE PDN down, cleaning up v4 GRE rules\n");
-				eogre_down();
-			}
-			else if (ipgre_info.iptype == IPA_IP_v6 &&
-				memcmp(ipgre_info.ipv6_src, m_ipv6_addr, sizeof(ipgre_info.ipv6_src)) == 0)
-			{
-				IPACMDBG_H("v6 GRE PDN down, cleaning up v6 GRE rules\n");
-				eogre_down();
-			}
-		}
-#endif
 		if(is_default_gateway == true)
 		{
 			IPACM_Wan::wan_up_v6 = false;

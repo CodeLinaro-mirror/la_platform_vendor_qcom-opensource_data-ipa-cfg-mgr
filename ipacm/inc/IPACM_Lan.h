@@ -255,6 +255,8 @@ typedef struct v4_gre_hdr_s
 	uint32_t words[7];
 } v4_gre_hdr_t;
 
+#define EoGRE_V4_HEADER_LEN 24 /* ipv4 hdr len 20bytes + 4 bytes GRE hdr */
+
 /*
  * Where things reside in the struct above...
  */
@@ -275,6 +277,8 @@ typedef struct v6_gre_hdr_s
 {
 	uint32_t words[14];
 } v6_gre_hdr_t;
+
+#define EoGRE_V6_HEADER_LEN 52 /* 40bytes (v6 hdr)+ 8bytes (v6 ext hdr) + 4bytes (GRE hdr) */
 
 /*
  * Where things reside in the struct above...

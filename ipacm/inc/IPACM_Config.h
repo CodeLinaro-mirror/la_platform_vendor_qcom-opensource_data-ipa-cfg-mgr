@@ -296,6 +296,10 @@ public:
 
 	uint32_t ipacm_gre_server_ipv4[IPA_MAX_IPGRE_ENTRY];
 
+	int ipa_num_ipgre_server_subnet;
+
+	uint32_t ipacm_gre_server_ipv4_subnet[IPA_MAX_IPGRE_SUBNET_ENTRY];
+
 	int ipa_nat_iface_entries;
 
 	/* Store the total number of wlan guest ap configured */

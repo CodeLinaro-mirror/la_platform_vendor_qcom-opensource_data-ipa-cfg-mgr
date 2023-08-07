@@ -145,7 +145,6 @@ typedef struct
 {
 	struct ifinfomsg  metainfo;                   /* from header */
 	struct ipa_vlan_iface_info vlan_info;
-	uint8_t interface_index;
 } ipa_nl_link_info_t;
 
 

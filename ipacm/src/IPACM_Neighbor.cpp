@@ -25,6 +25,40 @@ BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
 WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
 OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
 IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+Changes from Qualcomm Innovation Center are provided under the following license:
+
+Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted (subject to the limitations in the
+disclaimer below) provided that the following conditions are met:
+
+     * Redistributions of source code must retain the above copyright
+       notice, this list of conditions and the following disclaimer.
+
+     * Redistributions in binary form must reproduce the above
+       copyright notice, this list of conditions and the following
+       disclaimer in the documentation and/or other materials provided
+       with the distribution.
+
+     * Neither the name of Qualcomm Innovation Center, Inc. nor the names of its
+       contributors may be used to endorse or promote products derived
+       from this software without specific prior written permission.
+
+NO EXPRESS OR IMPLIED LICENSES TO ANY PARTY'S PATENT RIGHTS ARE
+GRANTED BY THIS LICENSE. THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT
+HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED
+WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
+MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
+IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR
+ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE
+GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER
+IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
+OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
+IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 /*!
 	@file
@@ -65,6 +99,7 @@ IPACM_Neighbor::IPACM_Neighbor()
 	IPACM_EvtDispatcher::registr(IPA_WLAN_CLIENT_ADD_EVENT_EX, this);
 	IPACM_EvtDispatcher::registr(IPA_NEW_NEIGH_EVENT, this);
 	IPACM_EvtDispatcher::registr(IPA_DEL_NEIGH_EVENT, this);
+	IPACM_EvtDispatcher::registr(IPA_LINK_DOWN_EVENT, this);
 
 	return;
 }
@@ -75,8 +110,9 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 #ifdef FEATURE_VLAN_MPDN
 	ipacm_event_new_neigh_vlan *data_vlan = NULL;
 #endif
-	int i, ipa_interface_index;
+	int i, ipa_interface_index, j;
 	ipacm_cmd_q_data evt_data;
+	bool move_elements;
 	int num_neighbor_client_temp = num_neighbor_client;
 
 	IPACMDBG("Recieved event %d\n", event);
@@ -172,6 +208,83 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 					break;
 				}
 			}
+		}
+		break;
+
+		case IPA_LINK_DOWN_EVENT:
+		{
+			ipacm_event_data_fid *data = (ipacm_event_data_fid *)param;
+			IPACMDBG_H("Received IPA_LINK_DOWN_EVENT at Neighbour if_index :%d \n",data->if_index);
+			move_elements = false;
+			for (i = 0; i < num_neighbor_client_temp; i++)
+			{
+				/* find the client MAC */
+				if (neighbor_client[i].iface_index == data->if_index)
+				{
+					IPACMDBG_H("Neighbor if_index: %d, ipa_if_index = %d, name =  %s, ip4_addr = 0x%x\n",
+					neighbor_client[i].iface_index,neighbor_client[i].ipa_if_num, neighbor_client[i].iface_name,
+					neighbor_client[i].v4_addr);
+					IPACMDBG_H("Clean %d-st Cached client-MAC %02x:%02x:%02x:%02x:%02x:%02x\n, total client: %d\n",
+					i,
+					neighbor_client[i].mac_addr[0],
+					neighbor_client[i].mac_addr[1],
+					neighbor_client[i].mac_addr[2],
+					neighbor_client[i].mac_addr[3],
+					neighbor_client[i].mac_addr[4],
+					neighbor_client[i].mac_addr[5],
+					num_neighbor_client);
+
+					memset(neighbor_client[i].mac_addr, 0, sizeof(neighbor_client[i].mac_addr));
+					neighbor_client[i].iface_index = 0;
+					neighbor_client[i].v4_addr = 0;
+					neighbor_client[i].ipa_if_num = 0;
+					memset(neighbor_client[i].iface_name, 0, sizeof(neighbor_client[i].iface_name));
+#ifdef FEATURE_VLAN_MPDN
+					if(IPACM_Iface::ipacmcfg->ipacm_mpdn_enable == TRUE)
+					neighbor_client[i].bridge = NULL;
+#endif
+					move_elements = true;
+				}
+			}
+
+			j = 0;
+			if (move_elements)
+			{
+				for (i = 0; i < num_neighbor_client_temp; i++)
+				{
+					if ((neighbor_client[i].iface_index != 0) && (j < i))
+					{
+						memcpy(neighbor_client[j].mac_addr,
+								neighbor_client[i].mac_addr,
+									sizeof(neighbor_client[i].mac_addr));
+#ifdef FEATURE_VLAN_MPDN
+						if(IPACM_Iface::ipacmcfg->ipacm_mpdn_enable == TRUE)
+							neighbor_client[j].bridge = neighbor_client[i].bridge;
+#endif
+						neighbor_client[j].iface_index = neighbor_client[i].iface_index;
+						neighbor_client[j].v4_addr = neighbor_client[i].v4_addr;
+						neighbor_client[j].ipa_if_num = neighbor_client[i].ipa_if_num;
+						strlcpy(neighbor_client[j].iface_name, neighbor_client[i].iface_name,
+							sizeof(neighbor_client[i].iface_name));
+						memset(neighbor_client[i].mac_addr, 0, sizeof(neighbor_client[i].mac_addr));
+						neighbor_client[i].iface_index = 0;
+						neighbor_client[i].v4_addr = 0;
+						neighbor_client[i].ipa_if_num = 0;
+						memset(neighbor_client[i].iface_name, 0, sizeof(neighbor_client[i].iface_name));
+#ifdef FEATURE_VLAN_MPDN
+						neighbor_client[i].bridge = NULL;
+#endif
+						j++;
+					}
+					else if (neighbor_client[i].iface_index != 0)
+					{
+						j++;
+					}
+				}
+
+				num_neighbor_client = j;
+			}
+				IPACMDBG_H(" total number of left cased clients: %d\n", num_neighbor_client);
 		}
 		break;
 

@@ -7366,7 +7366,7 @@ int IPACM_Lan::handle_uplink_filter_rule(ipacm_ext_prop *prop, ipa_ip_type iptyp
 #ifndef FEATURE_IPA_V3
 	IPACMDBG_H("flt_index: src pipe: %d, num of rules: %d, ebd pipe: %d, mux id: %d\n",
 		flt_index.source_pipe_index, flt_index.filter_index_list_len, flt_index.embedded_pipe_index, flt_index.embedded_call_mux_id);
-	if(flt_index.embedded_call_mux_id == 0xFF)
+	if(flt_index.embedded_call_mux_id == 255)
 	{
 		IPACMDBG_H("Warning: Invalid Mux ID %x\n",flt_index.embedded_call_mux_id);
 	}
@@ -10516,7 +10516,10 @@ int IPACM_Lan::modify_private_subnet()
 			IPACMDBG("v4 GRE MTU rule will be installed after v4 default rules\n");
 			mtu_flt_rule_offset[IPA_IP_v4] = dft_v4fl_rule_hdl[m_ipv4_default_filterting_rules_count - 1];
 		}
-		mtu_rule_cnt++;
+		if(!mtu_rule_cnt)
+		{
+			mtu_rule_cnt++;
+		}
 	}
 #endif
 
@@ -10798,7 +10801,10 @@ int IPACM_Lan::modify_ipv6_prefix_flt_rule()
 			mtu_flt_rule_offset[IPA_IP_v6] = dft_v6fl_rule_hdl[m_ipv6_default_filterting_rules_count - 1];
 		}
 
-		mtu_rule_cnt++;
+		if(!mtu_rule_cnt)
+		{
+			mtu_rule_cnt++;
+		}
 		IPACMDBG_H("total %d MTU rules are needed\n", mtu_rule_cnt);
 	}
 	if(IPACM_Iface::ipacmcfg->pmip_details.pmipv6_enabled)/* For single PDN usecase currently */
@@ -10830,7 +10836,10 @@ int IPACM_Lan::modify_ipv6_prefix_flt_rule()
 			mtu_flt_rule_offset[IPA_IP_v6] = dft_v6fl_rule_hdl[m_ipv6_default_filterting_rules_count - 1];
 		}
 
-		mtu_rule_cnt++;
+		if(!mtu_rule_cnt)
+		{
+			mtu_rule_cnt++;
+		}
 	}
 #endif
 	IPACMDBG_H("Memory allocating for num_ipv6_prefixes rules = %d num_no_offload_ipv6_prefix rules = %d mtu_rule_cnt = %d\n", IPACM_Iface::ipacmcfg->num_ipv6_prefixes, IPACM_Iface::ipacmcfg->num_no_offload_ipv6_prefix, mtu_rule_cnt);
@@ -15280,16 +15289,6 @@ void IPACM_Lan::gre_down(bool isPmipv6)
 			if ( delete_dflt_filter_rules(IPA_IP_v4) == IPACM_FAILURE )
 			{
 				IPACMERR("delete_dflt_filter_rules failed\n");
-				return;
-			}
-			/*
-			* The icmp rule was removed on gre_up; needs to be added
-			* back now.
-			*/
-			res = install_ipv4_icmp_flt_rule();
-			if ( res == IPACM_FAILURE )
-			{
-				IPACMERR("install_ipv4_icmp_flt_rule failed\n");
 				return;
 			}
 			/*

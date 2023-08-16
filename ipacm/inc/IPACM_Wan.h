@@ -614,6 +614,9 @@ public:
 		int                           fltr_rule_number );
 #endif /* #ifdef IPA_FLT_EXT_MPLS_GRE_GENERAL */
 #endif
+	int insert_frag_rule_dl(ipa_ip_type iptype, const struct ipa_rule_attrib& rx_prop_attrib,
+	struct ipa_flt_rule_add&      flt_rule_add,
+	int                           fltr_rule_number);
 #ifdef FEATURE_PMIPV6
 	void gre_up();
 

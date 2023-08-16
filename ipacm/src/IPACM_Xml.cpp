@@ -952,7 +952,7 @@ int IPACM_read_tunnel_xml(const char *xml_file, IPACM_tunnel_conf_t* tunnel_cfg)
 	{
 		IPACMERR("The XML %s is not valid. Please start from %s tag", xml_file, system_TAG);
 		ret_val = IPACM_FAILURE;
-		return IPACM_FAILURE;
+		goto bail;
 	}
 
 	ret_val = IPACM_tunnel_xml_parse_tree(xml_file, root->children, tunnel_cfg);
@@ -960,10 +960,15 @@ int IPACM_read_tunnel_xml(const char *xml_file, IPACM_tunnel_conf_t* tunnel_cfg)
 	{
 		IPACMERR("IPACM_xml_parse: ipacm_tunnel_xml_parse_tree returned parse error!\n");
 		memset(tunnel_cfg, 0, sizeof(IPACM_tunnel_conf_t));
-		return IPACM_FAILURE;
+		ret_val = IPACM_FAILURE;
+		goto bail;
 	}
 
-	return IPACM_SUCCESS;
+bail:
+	/* free the tree */
+	xmlFreeDoc(doc);
+
+	return ret_val;
 }
 
 

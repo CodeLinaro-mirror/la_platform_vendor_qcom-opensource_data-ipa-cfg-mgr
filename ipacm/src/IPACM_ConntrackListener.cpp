@@ -3621,7 +3621,7 @@ void IPACM_ConntrackListener::ProcessGREMsg(
 	{
 		pConfig = IPACM_Config::GetInstance();
 	}
-	if(!pConfig->ipacm_gre_autolearn)
+	if(!pConfig || !pConfig->ipacm_gre_autolearn)
 	{
 		return;
 	}

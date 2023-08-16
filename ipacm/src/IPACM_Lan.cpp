@@ -16544,7 +16544,11 @@ int IPACM_Lan::handle_ext_router_del_evt(void)
 	IPACMDBG("entering handle_ext_router_del_evt\n")
 	int cnt, idx = 0;
 
-	if ((ipa_if_cate == WLAN_IF) && (is_if_svap || is_wlan_if_vlan) && (rx_prop && rx_prop->num_rx_props > 2)) {
+	if(rx_prop == NULL){
+		IPACMERR("no rx props\n");
+		return IPACM_FAILURE;
+	}
+	if ((ipa_if_cate == WLAN_IF) && (is_if_svap || is_wlan_if_vlan) && (rx_prop->num_rx_props > 2)) {
 		idx = 2;
 		IPACMDBG_H("Interface is WLAN Svap or vlan, install rules on Rx pipe at idx %d \n", idx);
 	}

@@ -93,8 +93,9 @@ extern "C"
 #define IPA_RTA_PARAM_CACHEINFO   (0x0020)
 #define IPA_RTA_PARAM_PRIORITY    (0x0080)
 #define IPA_RTA_PARAM_METRICS     (0x0100)
+#define IPA_RTA_PARAM_TABLE       (0x0200)
 
-
+#define WLAN_RT_TABLE_ID 4094
 /*--------------------------------------------------------------------------- 
 	 Type representing function callback registered with a socket listener 
 	 thread for reading from a socket on receipt of an incoming message
@@ -203,6 +204,7 @@ typedef struct ipa_nl_route_info_s {
 		__u32		oif_index;                      /* Link index  */
 		__u32       priority;
 		__u32       metrics;
+		__u32       table_id;
 		ipa_nl_proto_info_t        proto_info;
 	} attr_info;
 } ipa_nl_route_info_t;

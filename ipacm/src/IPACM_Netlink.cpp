@@ -1224,56 +1224,58 @@ static int ipa_nl_decode_nlmsg
 							return IPACM_FAILURE;
 						}
 
-						if(msg_ptr->nl_route_info.attr_info.param_mask & IPA_RTA_PARAM_PRIORITY)
+						if(msg_ptr->nl_route_info.attr_info.param_mask & IPA_RTA_PARAM_GATEWAY)
 						{
-							IPACMDBG_H("ip -6 route add default dev %s metric %d\n",
-											 dev_name,
-											 msg_ptr->nl_route_info.attr_info.priority);
+							if(msg_ptr->nl_route_info.attr_info.param_mask & IPA_RTA_PARAM_PRIORITY)
+							{
+								IPACMDBG_H("ip -6 route add default dev %s metric %d\n",
+												 dev_name,
+												 msg_ptr->nl_route_info.attr_info.priority);
+							}
+							else
+							{
+								IPACMDBG_H("ip -6 route add default dev %s\n", dev_name);
+							}
+
+							IPACM_EVENT_COPY_ADDR_v6( data_addr->ipv6_addr, msg_ptr->nl_route_info.attr_info.dst_addr);
+							data_addr->ipv6_addr[0] = ntohl(data_addr->ipv6_addr[0]);
+							data_addr->ipv6_addr[1] = ntohl(data_addr->ipv6_addr[1]);
+							data_addr->ipv6_addr[2] = ntohl(data_addr->ipv6_addr[2]);
+							data_addr->ipv6_addr[3] = ntohl(data_addr->ipv6_addr[3]);
+
+							IPACM_EVENT_COPY_ADDR_v6( data_addr->ipv6_addr_mask, msg_ptr->nl_route_info.attr_info.dst_addr);
+							data_addr->ipv6_addr_mask[0] = ntohl(data_addr->ipv6_addr_mask[0]);
+							data_addr->ipv6_addr_mask[1] = ntohl(data_addr->ipv6_addr_mask[1]);
+							data_addr->ipv6_addr_mask[2] = ntohl(data_addr->ipv6_addr_mask[2]);
+							data_addr->ipv6_addr_mask[3] = ntohl(data_addr->ipv6_addr_mask[3]);
+
+							IPACM_EVENT_COPY_ADDR_v6( data_addr->ipv6_addr_gw, msg_ptr->nl_route_info.attr_info.gateway_addr);
+							data_addr->ipv6_addr_gw[0] = ntohl(data_addr->ipv6_addr_gw[0]);
+							data_addr->ipv6_addr_gw[1] = ntohl(data_addr->ipv6_addr_gw[1]);
+							data_addr->ipv6_addr_gw[2] = ntohl(data_addr->ipv6_addr_gw[2]);
+							data_addr->ipv6_addr_gw[3] = ntohl(data_addr->ipv6_addr_gw[3]);
+							IPACM_NL_REPORT_ADDR( " ", msg_ptr->nl_route_info.attr_info.gateway_addr);
+
+							data_addr->if_index = msg_ptr->nl_route_info.attr_info.oif_index;
+							data_addr->iptype = IPA_IP_v6;
+
+							if(msg_ptr->nl_route_info.metainfo.rtm_table == RT_TABLE_MAIN)
+							{
+								evt_data.event = IPA_ROUTE_ADD_EVENT;
+								IPACMDBG("Posting IPA_ROUTE_ADD_EVENT with if index:%d, ipv6 address\n",
+											 data_addr->if_index);
+							}
+							else if(msg_ptr->nl_route_info.metainfo.rtm_table == RT_TABLE_COMPAT &&
+									msg_ptr->nl_route_info.attr_info.table_id == WLAN_RT_TABLE_ID)
+							{
+								evt_data.event = IPA_WLAN_GW_ADDR_ADD_EVENT;
+								IPACMDBG("Posting IPA_WLAN_GW_ADDR_ADD_EVENT with if index:%d, ipv6 address\n",
+											data_addr->if_index);
+							}
+							evt_data.evt_data = data_addr;
+							IPACM_EvtDispatcher::PostEvt(&evt_data);
+							/* finish command queue */
 						}
-						else
-						{
-							IPACMDBG_H("ip -6 route add default dev %s\n", dev_name);
-						}
-
-						IPACM_EVENT_COPY_ADDR_v6( data_addr->ipv6_addr, msg_ptr->nl_route_info.attr_info.dst_addr);
-						data_addr->ipv6_addr[0] = ntohl(data_addr->ipv6_addr[0]);
-						data_addr->ipv6_addr[1] = ntohl(data_addr->ipv6_addr[1]);
-						data_addr->ipv6_addr[2] = ntohl(data_addr->ipv6_addr[2]);
-						data_addr->ipv6_addr[3] = ntohl(data_addr->ipv6_addr[3]);
-
-						IPACM_EVENT_COPY_ADDR_v6( data_addr->ipv6_addr_mask, msg_ptr->nl_route_info.attr_info.dst_addr);
-						data_addr->ipv6_addr_mask[0] = ntohl(data_addr->ipv6_addr_mask[0]);
-						data_addr->ipv6_addr_mask[1] = ntohl(data_addr->ipv6_addr_mask[1]);
-						data_addr->ipv6_addr_mask[2] = ntohl(data_addr->ipv6_addr_mask[2]);
-						data_addr->ipv6_addr_mask[3] = ntohl(data_addr->ipv6_addr_mask[3]);
-
-						IPACM_EVENT_COPY_ADDR_v6( data_addr->ipv6_addr_gw, msg_ptr->nl_route_info.attr_info.gateway_addr);
-						data_addr->ipv6_addr_gw[0] = ntohl(data_addr->ipv6_addr_gw[0]);
-						data_addr->ipv6_addr_gw[1] = ntohl(data_addr->ipv6_addr_gw[1]);
-						data_addr->ipv6_addr_gw[2] = ntohl(data_addr->ipv6_addr_gw[2]);
-						data_addr->ipv6_addr_gw[3] = ntohl(data_addr->ipv6_addr_gw[3]);
-						IPACM_NL_REPORT_ADDR( " ", msg_ptr->nl_route_info.attr_info.gateway_addr);
-
-						data_addr->if_index = msg_ptr->nl_route_info.attr_info.oif_index;
-						data_addr->iptype = IPA_IP_v6;
-
-						if(msg_ptr->nl_route_info.metainfo.rtm_table == RT_TABLE_MAIN)
-						{
-							evt_data.event = IPA_ROUTE_ADD_EVENT;
-							IPACMDBG("Posting IPA_ROUTE_ADD_EVENT with if index:%d, ipv6 address\n",
-										 data_addr->if_index);
-						}
-						else if(msg_ptr->nl_route_info.metainfo.rtm_table == RT_TABLE_COMPAT &&
-								msg_ptr->nl_route_info.attr_info.table_id == WLAN_RT_TABLE_ID)
-						{
-							evt_data.event = IPA_WLAN_GW_ADDR_ADD_EVENT;
-							IPACMDBG("Posting IPA_WLAN_GW_ADDR_ADD_EVENT with if index:%d, ipv6 address\n",
-										data_addr->if_index);
-						}
-						evt_data.evt_data = data_addr;
-						IPACM_EvtDispatcher::PostEvt(&evt_data);
-						/* finish command queue */
-
 					}
 					else
 					{

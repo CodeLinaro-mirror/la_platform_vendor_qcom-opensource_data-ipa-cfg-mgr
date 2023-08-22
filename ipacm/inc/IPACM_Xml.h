@@ -227,6 +227,7 @@ if (!(a)) {                                                 \
 #define IPACM_SOCKSv5_Enable_TAG             "IPACMSOCKSv5Enabled"
 #define GRE_TAG                              "GREFlag"
 #define GREEnabled_TAG                       "GREEnabled"
+#define GREAutolearn_TAG                       "GREAutolearn"
 #define GRE_Server_TAG                       "GREServer"
 
 #define IPACM_EASY_MESH                      "IPACMEMESH"
@@ -345,6 +346,7 @@ typedef struct
 typedef struct
 {
 	bool gre_enable;
+	bool gre_autolearn;
 	uint32_t gre_server_ipv4;
 } ipacm_gre_conf_t;
 

@@ -920,14 +920,13 @@ void IPACM_ConntrackListener::HandleNeighIpAddrAddEvt_v6(ipacm_event_data_all *d
 			}
 		}
 
-		IPACMDBG_H("Received IPv6 address: 0x%08x%08x%08x%08x current IPv6 address: 0x%08x%08x%08x%08x i: %d\n",
-			data->ipv6_addr[0], data->ipv6_addr[1], data->ipv6_addr[2], data->ipv6_addr[3],nat_clients_v6[i].nat_iface_ipv6_addr[0],
-			nat_clients_v6[i].nat_iface_ipv6_addr[1],nat_clients_v6[i].nat_iface_ipv6_addr[2],nat_clients_v6[i].nat_iface_ipv6_addr[3],i);
-
 		/* Add the cached temp entries to NAT table */
 		if(i != MAX_IFACE_ADDRESS)
 		{
 #ifdef FEATURE_VLAN_MPDN
+			IPACMDBG_H("Received IPv6 address: 0x%08x%08x%08x%08x current IPv6 address: 0x%08x%08x%08x%08x i: %d\n",
+			data->ipv6_addr[0], data->ipv6_addr[1], data->ipv6_addr[2], data->ipv6_addr[3],nat_clients_v6[i].nat_iface_ipv6_addr[0],
+			nat_clients_v6[i].nat_iface_ipv6_addr[1],nat_clients_v6[i].nat_iface_ipv6_addr[2],nat_clients_v6[i].nat_iface_ipv6_addr[3],i);
 
 			IPACMDBG_H("client %d is_vlan_client %d\n", i, nat_clients_v6[i].is_vlan_client);
 			if (nat_clients_v6[i].is_vlan_client)
@@ -1373,7 +1372,7 @@ void IPACM_ConntrackListener::TriggerWANUp_v6(const ipacm_event_iface_up* evt_da
 int IPACM_ConntrackListener::CreateConnTrackThreads(void)
 {
 	int ret;
-	pthread_t tcp_thread = 0, udp_thread = 0;
+	pthread_t tcp_thread = 0, udp_thread = 0, gre_thread=0;
 
 	if(isCTReg == false)
 	{
@@ -1401,6 +1400,20 @@ int IPACM_ConntrackListener::CreateConnTrackThreads(void)
 
 		IPACMDBG("created UDP conntrack event listner thread\n");
 		if(pthread_setname_np(udp_thread, "udp ct listener") != 0)
+		{
+			IPACMERR("unable to set thread name\n");
+		}
+
+		ret = pthread_create(&gre_thread, NULL, IPACM_ConntrackClient::GRERegisterWithConnTrack, NULL);
+		if(0 != ret)
+		{
+			IPACMERR("unable to create GRE conntrack event listner thread\n");
+			PERROR("unable to create GRE conntrack\n");
+			goto error;
+		}
+
+		IPACMDBG("created GRE conntrack event listner thread\n");
+		if(pthread_setname_np(gre_thread, "gre ct listener") != 0)
 		{
 			IPACMERR("unable to set thread name\n");
 		}
@@ -1817,6 +1830,9 @@ void IPACM_ConntrackListener::ProcessCTMessage(void *param)
 			ProcessTCPorUDPMsg(evt_data->ct, evt_data->type, l4proto);
 	 }
 
+	 if(IPPROTO_GRE == l4proto){
+		 ProcessGREMsg(evt_data->ct, evt_data->type, l4proto);
+	 }
 	 /* Cleanup item that was allocated during the original CT callback */
 	 nfct_destroy(evt_data->ct);
 	 return;
@@ -2175,7 +2191,53 @@ bool IPACM_ConntrackListener::AddIface(
 
 	return false;
 }
-
+int IPACM_ConntrackListener::ProcessAndAddNatEntry(const nat_entry_bundle *input, bool *sendVlanEvent)
+{
+	int ret = 0;
+#ifdef FEATURE_VLAN_MPDN
+			if(input->isVlan)
+			{
+				if(!input->IsVlanUp)
+				{
+					IPACMDBG_H("Send VLAN WAN UP event\n");
+					*sendVlanEvent = true;
+					IPACMDBG_H("vlan Wan is not up, cache connections\n");
+					nat_inst->CacheEntry(input->rule);
+					ret = IPACM_SUCCESS;
+				}
+				else if(input->isTempEntry)
+				{
+					IPACMDBG("UDP: adding temp for vlan\n");
+					nat_inst->AddTempEntry(input->rule);
+					ret = IPACM_SUCCESS;
+				}
+				else
+				{
+					IPACMDBG("UDP: adding entry for vlan\n");
+					ret = nat_inst->AddEntry(input->rule);
+				}
+				return ret;
+			}
+			else
+#endif
+			if (!WanUp)
+			{
+				IPACMDBG("Wan is not up, cache connections\n");
+				nat_inst->CacheEntry(input->rule);
+				ret = IPACM_SUCCESS;
+			}
+			else if (input->isTempEntry)
+			{
+				IPACMDBG("Adding temp entry\n");
+				nat_inst->AddTempEntry(input->rule);
+				ret = IPACM_SUCCESS;
+			}
+			else
+			{
+				ret = nat_inst->AddEntry(input->rule);
+			}
+			return ret;
+}
 int IPACM_ConntrackListener::AddORDeleteNatEntry(const nat_entry_bundle *input, bool *sendVlanEvent)
 {
 	u_int8_t tcp_state;
@@ -2331,8 +2393,95 @@ int IPACM_ConntrackListener::AddORDeleteNatEntry(const nat_entry_bundle *input, 
 				pkt_count, input->type);
 		}
 	}
+	else if(IPPROTO_GRE == input->rule->protocol)
+	{
+		int ret = 0;
+		if(input->rule->private_port > 0 ||  input->rule->target_port > 0)
+		{
+			IPACMERR("Not Adding GRE NAT entry, ports are non zero, and we only support plain GRE: %d\n", ret);
+			return IPACM_FAILURE;
+		}
+		//NEW or Update
+		if (((NFCT_T_NEW == input->type || NFCT_T_UPDATE == input->type)
+			&& (pkt_threshld == 0)) ||
+			((pkt_threshld != 0) && (pkt_count >= pkt_threshld)
+			&& (NFCT_T_UPDATE == input->type)))
+		{
+			//Add NAT entry
+			//First check if a GRE entry for the same Server exists
+			if(!nat_inst->ChkForDupGRE(input->rule))
+			{
+				//No entry exists yet, so add entry
+				ret = ProcessAndAddNatEntry(input,sendVlanEvent);
+				if(ret)
+				{
+					IPACMERR("unable to add GRE entry: %d\n", ret);
+					return IPACM_FAILURE;
+				}
+			}
+			else
+			{
+				//If Conn type is new or update, and entry already exists, then we won't be adding a new entry
+				IPACMERR("GRE NAT Entry for this server already present, so we won't accept this NAT: %d\n",input->rule->target_ip);
+			}
+		}
+		else if (NFCT_T_DESTROY == input->type)
+		{
+			//Delete GRE Entry
+			nat_inst->DeleteTempEntry(input->rule);
+			ret = nat_inst->DeleteEntryGRE(input->rule);
+			if(ret)
+			{
+				IPACMERR("unable to del GRE entry: %d\n", ret);
+				return IPACM_FAILURE;
+			}
+		}
+		else
+		{
+			IPACMDBG("Ignore gre, count: %d and type: %d\n",
+				pkt_count, input->type);
+		}
+	}
 
 	return IPACM_SUCCESS;
+}
+
+void IPACM_ConntrackListener::ProcessAndAddNatEntry_v6(const ipacm_ct_evt_data* evt_data,
+	const NatEntryBase& entry, bool isTempEntry)
+{
+	#ifdef FEATURE_VLAN_MPDN
+			if(entry.isVlan)
+			{
+				if (!entry.IsVlanUp)
+				{
+					IPACMDBG_H("Wan is not up, cache connections\n");
+					ipv6ct_inst->CacheEntry(entry);
+				}
+				else if (isTempEntry)
+				{
+					ipv6ct_inst->AddTempEntry(entry);
+				}
+				else
+				{
+					ipv6ct_inst->AddEntry(entry);
+				}
+			} else
+#endif
+			{
+				if (!WanUp_v6)
+				{
+					IPACMDBG_H("Wan is not up, cache connections\n");
+					ipv6ct_inst->CacheEntry(entry);
+				}
+				else if (isTempEntry)
+				{
+					ipv6ct_inst->AddTempEntry(entry);
+				}
+				else
+				{
+					ipv6ct_inst->AddEntry(entry);
+				}
+			}
 }
 
 void IPACM_ConntrackListener::AddORDeleteNatEntry_v6(const ipacm_ct_evt_data* evt_data,
@@ -2441,6 +2590,23 @@ void IPACM_ConntrackListener::AddORDeleteNatEntry_v6(const ipacm_ct_evt_data* ev
 					ipv6ct_inst->AddEntry(entry);
 				}
 			}
+		}
+		else if (NFCT_T_DESTROY == evt_data->type)
+		{
+			IPACMDBG_H("UDP connection close at time %ld\n", time(NULL));
+			ipv6ct_inst->DeleteEntry(entry);
+			ipv6ct_inst->DeleteTempEntry(entry);
+		}
+	}
+	else if (IPPROTO_GRE == entry.m_protocol)
+	{
+		if (((NFCT_T_NEW == evt_data->type || NFCT_T_UPDATE == evt_data->type)
+			&& (pkt_threshld == 0)) ||
+			((pkt_threshld != 0) && (pkt_count >= pkt_threshld)
+			&& (NFCT_T_UPDATE == evt_data->type)))
+		{
+			IPACMDBG_H("New GRE connection at time %ld\n", time(NULL));
+			ProcessAndAddNatEntry_v6(evt_data, entry,isTempEntry);
 		}
 		else if (NFCT_T_DESTROY == evt_data->type)
 		{
@@ -2669,6 +2835,327 @@ void IPACM_ConntrackListener::CheckSTAClient_v6(const NatEntryBase& entry, bool&
 	entry.GetTargetIp().DebugDump("Not matching with STA Clnt Ip Addrs");
 	isTempEntry = true;
 	IPACMDBG_H("return\n");
+}
+
+int IPACM_ConntrackListener::DetermineTempEntry( struct nf_conntrack *ct,
+	 enum nf_conntrack_msg_type type,
+	 u_int8_t l4proto, nat_entry_bundle* nat_entry,nat_table_entry *rule, process_conntrack_bundle *params)
+{
+	 bool isAdd = false;
+    IPACMDBG_H("Determining temp entry for GRE connection\n");
+	if ((rule->private_ip != wan_ipaddr)
+#ifdef FEATURE_VLAN_MPDN
+		&& (!params->embedded_vlan)
+#endif
+		 )
+	 {
+		 isAdd = AddIface(rule, &nat_entry->isTempEntry, nat_entry->IsVlanUp,
+		 	params->ip_pass_enable, params->ip_pass_dummy_ip, params->ip_pass_skip_nat);
+		 if (!isAdd)
+		 {
+			 IPACMERR("isAdd is false. Ignoring\n");
+			 goto IGNORE;
+		 }
+	 }
+	 else
+	 {
+		 if (isStaMode)
+		 {
+			 IPACMERR("In STA mode, ignore connections destinated to STA interface\n");
+			 goto IGNORE;
+		 }
+
+		 /* Suppressing NAT entry for Q6 WAN connections when IP Pass not enabled. */
+		 if (!params->ip_pass_enable && IPACM_Iface::ipacmcfg->GetIPAVer() >= IPA_HW_v5_5)
+			  goto IGNORE;
+
+		 IPACMDBG_H("For embedded connections add dummy nat rule\n");
+		 IPACMDBG_H("Change private port %d to %d\n",
+				  rule->private_port, rule->public_port);
+		 rule->private_port = rule->public_port;
+		if (params->ip_pass_enable)
+			rule->ip_pass_entry = true;
+	 }
+#ifdef IPA_IOC_SET_IPPT_SW_FLT
+/* Special handling for Passthrough IP SW-flt */
+	if (params->ip_pass_enable)
+	{
+		IPACMDBG_H("IPPT ENABLE %d\n", params->ip_pass_enable);
+		/* applied to bith nat/skip nat mode */
+		if (ippt_sw_flt_list.ipv4_enable)
+		{
+			/* check ipv4 ippt-sw-flt */
+			for (int cnt = 0; cnt < ippt_sw_flt_list.num_of_ipv4; cnt++)
+			{
+				if (ippt_sw_flt_list.ipv4[cnt] != 0)
+				{
+					if (rule->private_ip == ippt_sw_flt_list.ipv4[cnt] ||
+						rule->target_ip == ippt_sw_flt_list.ipv4[cnt])
+					{
+						IPACMDBG_H("matched ippt_sw_flt ipv4, idx %d, not add dummy NAT\n", cnt);
+						iptodot("AddIface(): Nat entry match with ip addr",
+							ippt_sw_flt_list.ipv4[cnt]);
+						goto IGNORE;
+					}
+				}
+			}
+		}
+		else
+			IPACMDBG_H("ippt_sw_flt ipv4 not enabled %d,\n", ippt_sw_flt_list.ipv4_enable);
+
+		/* applied to bith nat/skip nat mode */
+		if (ippt_sw_flt_list.port_enable)
+		{
+			/* check port ippt-sw-flt */
+			for (int cnt = 0; cnt < ippt_sw_flt_list.num_of_port; cnt++)
+			{
+				if (ippt_sw_flt_list.port[cnt] != 0)
+				{
+					if (rule->private_port == ippt_sw_flt_list.port[cnt] ||
+						rule->target_port == ippt_sw_flt_list.port[cnt])
+					{
+						IPACMDBG_H("matched ippt_sw_flt port %d, idx %d, not add dummy NAT\n",
+							ippt_sw_flt_list.port[cnt], cnt);
+						goto IGNORE;
+					}
+				}
+			}
+		}
+		else
+			IPACMDBG_H("ippt_sw_flt port not enabled %d,\n", ippt_sw_flt_list.port_enable);
+	}
+#endif
+	 CheckSTAClient(rule, &nat_entry->isTempEntry);
+	 return IPACM_SUCCESS;
+
+	 IGNORE:
+	 IPACMERR("Unable to add NAT entry\n");
+	 return IPACM_FAILURE;
+
+}
+
+int IPACM_ConntrackListener::DetermineSrcorDstNAT(
+	 struct nf_conntrack *ct,
+	 enum nf_conntrack_msg_type type,
+	 u_int8_t l4proto, nat_entry_bundle* nat_entry, process_conntrack_bundle *params)
+{
+	uint32_t orig_src_ip, orig_dst_ip;
+#ifdef FEATURE_VLAN_MPDN
+	uint32_t repl_src_ip, repl_dst_ip;
+#endif
+	nat_entry->isTempEntry = false;
+	nat_entry->ct = ct;
+	nat_entry->type = type;
+#ifdef FEATURE_VLAN_MPDN
+	 nat_entry->isVlan = false;
+	 nat_entry->IsVlanUp = false;
+	 int i, vlan_idx = 0;
+#endif
+
+	 IPACMDBG_H("Received type:%d with proto:%d\n", type, l4proto);
+	 params->status = nfct_get_attr_u32(ct, ATTR_STATUS);
+
+	 orig_src_ip = nfct_get_attr_u32(ct, ATTR_ORIG_IPV4_SRC);
+	 orig_src_ip = ntohl(orig_src_ip);
+	 if(orig_src_ip == 0)
+	 {
+		 IPACMERR("unable to retrieve orig src ip address\n");
+		 return IPACM_FAILURE;
+	 }
+
+	 orig_dst_ip = nfct_get_attr_u32(ct, ATTR_ORIG_IPV4_DST);
+	 orig_dst_ip = ntohl(orig_dst_ip);
+	 if(orig_dst_ip == 0)
+	 {
+		 IPACMERR("unable to retrieve orig dst ip address\n");
+		 return IPACM_FAILURE;
+	 }
+#ifdef FEATURE_VLAN_MPDN
+	 repl_src_ip = nfct_get_attr_u32(ct, ATTR_REPL_IPV4_SRC);
+	 repl_src_ip = ntohl(repl_src_ip);
+	 if(repl_src_ip == 0)
+	 {
+		 IPACMERR("unable to retrieve repl src ip address\n");
+		 return IPACM_FAILURE;
+	 }
+
+	 repl_dst_ip = nfct_get_attr_u32(ct, ATTR_REPL_IPV4_DST);
+	 repl_dst_ip = ntohl(repl_dst_ip);
+	 if(repl_dst_ip == 0)
+	 {
+		 IPACMERR("unable to retrieve repl dst ip address\n");
+		 return IPACM_FAILURE;
+	 }
+#endif
+
+	 if(IPS_DST_NAT & params->status)
+	 {
+		 params->status = IPS_DST_NAT;
+#ifdef FEATURE_VLAN_MPDN
+		 nat_entry->isVlan = IsVlanIPv4(repl_src_ip, &params->VlanID);
+		 if(nat_entry->isVlan)
+		 {
+			 nat_entry->IsVlanUp = false;
+			 for(i = 0; i < IPA_MAX_NUM_HW_PDNS; i++)
+			 {
+				 /* check if we already got vlan_pdn_up event for this ip */
+				 if(vlan_pdns[i].public_ip == orig_dst_ip)
+				 {
+					for(vlan_idx = 0; vlan_idx < vlan_pdns[i].VID_cnt; vlan_idx++)
+					{
+						if(params->VlanID == vlan_pdns[i].associated_VIDs[vlan_idx])
+						{
+							IPACMDBG_H("DST_NAT: vlan pdn already up for ");
+							iptodot("ip", orig_dst_ip);
+							nat_entry->IsVlanUp = true;
+							params->ip_pass_enable = vlan_pdns[i].ip_pass_enable;
+							params->ip_pass_dummy_ip = vlan_pdns[i].ip_pass_dummy_ip;
+							params->ip_pass_skip_nat = vlan_pdns[i].ip_pass_skip_nat;
+							break;
+						}
+					}
+				 }
+			 }
+
+			 if((i >= IPA_MAX_NUM_HW_PDNS) && (num_vlan_pdns >= IPA_MAX_NUM_HW_PDNS) && (!nat_entry->IsVlanUp))
+			 {
+				 iptodot("vlan client ip", repl_src_ip);
+				 iptodot("pdn ip",orig_dst_ip)
+				 IPACMERR("src NAT: can't add more PDN, already got max \n");
+				 return IPACM_FAILURE;
+			 }
+			 iptodot("vlan client ip", repl_src_ip);
+			 iptodot("pdn ip", orig_dst_ip);
+			 IPACMDBG_H("IsVlanUp %d\n", nat_entry->IsVlanUp);
+		 }
+		 params->public_ip = orig_dst_ip;
+#endif
+	 }
+	 else if(IPS_SRC_NAT & params->status)
+	 {
+		 params->status = IPS_SRC_NAT;
+#ifdef FEATURE_VLAN_MPDN
+		 nat_entry->isVlan = IsVlanIPv4(orig_src_ip, &params->VlanID);
+		 if(nat_entry->isVlan)
+		 {
+			nat_entry->IsVlanUp = false;
+			for(i = 0; i < IPA_MAX_NUM_HW_PDNS; i++)
+			{
+				/* check if we already got vlan_pdn_up event for this ip */
+				if(vlan_pdns[i].public_ip == repl_dst_ip)
+				{
+					for(vlan_idx = 0; vlan_idx < vlan_pdns[i].VID_cnt; vlan_idx++)
+					{
+						if(params->VlanID == vlan_pdns[i].associated_VIDs[vlan_idx])
+						{
+							IPACMDBG_H("SRC_NAT: vlan pdn already up for ");
+							iptodot("ip", repl_dst_ip);
+							nat_entry->IsVlanUp = true;
+							params->ip_pass_enable = vlan_pdns[i].ip_pass_enable;
+							params->ip_pass_dummy_ip = vlan_pdns[i].ip_pass_dummy_ip;
+							params->ip_pass_skip_nat = vlan_pdns[i].ip_pass_skip_nat;
+							break;
+						}
+					}
+				}
+			}
+
+			if((i >= IPA_MAX_NUM_HW_PDNS) && (num_vlan_pdns >= IPA_MAX_NUM_HW_PDNS) && (!nat_entry->IsVlanUp))
+			{
+				iptodot("vlan client ip", orig_src_ip);
+				iptodot("pdn ip",repl_dst_ip)
+					IPACMERR("dst NAT: can't add more PDN, already got max \n");
+				return IPACM_FAILURE;
+			}
+			iptodot("vlan client ip ", orig_src_ip);
+			iptodot("pdn ip ", repl_dst_ip)
+			IPACMDBG_H("IsVlanUp %d\n", nat_entry->IsVlanUp);
+		 }
+		 params->public_ip = repl_dst_ip;
+#endif
+	 }
+	 else
+	 {
+		 IPACMDBG_H("Neither Destination nor Source nat flag Set\n");
+
+		if(orig_src_ip == wan_ipaddr)
+		{
+			IPACMDBG_H("orig src ip:0x%x equal to wan ip\n",orig_src_ip);
+			params->status = IPS_SRC_NAT;
+#ifdef FEATURE_VLAN_MPDN
+			/* For IPPT case, need check if it's vlan on default pdn */
+			params->public_ip = wan_ipaddr;
+			params->embedded_vlan = true;
+			nat_entry->isVlan = IsVlanIPv4(orig_src_ip, &params->VlanID);
+			if (nat_entry->isVlan)
+				nat_entry->IsVlanUp = true;
+#endif
+		}
+		else if(orig_dst_ip == wan_ipaddr)
+		{
+			IPACMDBG_H("orig Dst IP:0x%x equal to wan ip\n",orig_dst_ip);
+			params->status = IPS_DST_NAT;
+#ifdef FEATURE_VLAN_MPDN
+			/* For IPPT case, need check if it's vlan on default pdn */
+			params->public_ip = wan_ipaddr;
+			params->embedded_vlan = true;
+			nat_entry->isVlan = IsVlanIPv4(orig_dst_ip, &params->VlanID);
+			if (nat_entry->isVlan)
+				nat_entry->IsVlanUp = true;
+#endif
+		}
+		else
+		{
+#ifdef FEATURE_VLAN_MPDN
+			params->status = 0;
+			/* check if this is an embedded traffic to a secondary PDN */
+			for(i = 0; i < IPA_MAX_NUM_HW_PDNS; i++)
+			{
+				/* check if we already got vlan_pdn_up event for this ip */
+				if(vlan_pdns[i].public_ip == orig_src_ip)
+				{
+					IPACMDBG_H("orig src ip:0x%x equal to vlan wan ip\n", orig_src_ip);
+					params->status = IPS_SRC_NAT;
+					params->public_ip = orig_src_ip;
+					params->embedded_vlan = true;
+					/* In case of IP Passthrough enabled, connection can belong to tethered client. */
+					if (vlan_pdns[i].ip_pass_enable) {
+						nat_entry->isVlan = IsVlanIPv4(orig_src_ip, &params->VlanID);
+						params->ip_pass_enable = vlan_pdns[i].ip_pass_enable;
+					}
+					if (nat_entry->isVlan)
+						nat_entry->IsVlanUp = true;
+					params->ip_pass_enable = vlan_pdns[i].ip_pass_enable;
+					break;
+				}
+				else if(vlan_pdns[i].public_ip == orig_dst_ip)
+				{
+					IPACMDBG_H("orig Dst IP:0x%x equal to wan ip\n", orig_dst_ip);
+					params->status = IPS_DST_NAT;
+					params->public_ip = orig_dst_ip;
+					params->embedded_vlan = true;
+					/* In case of IP Passthrough enabled, connection can belong to tethered client. */
+					if (vlan_pdns[i].ip_pass_enable) {
+						nat_entry->isVlan = IsVlanIPv4(orig_dst_ip, &params->VlanID);
+						params->ip_pass_enable = vlan_pdns[i].ip_pass_enable;
+					}
+					if (nat_entry->isVlan)
+						nat_entry->IsVlanUp = true;
+					params->ip_pass_enable = vlan_pdns[i].ip_pass_enable;
+					break;
+				}
+			}
+			if (!params->status)
+#endif
+			{
+				IPACMDBG_H("Neither orig src ip:0x%x Nor orig Dst IP:0x%x equal to wan ip:0x%x\n",
+					orig_src_ip, orig_dst_ip, wan_ipaddr);
+
+				return IPACM_FAILURE;
+			}
+		}
+	 }
+	 return IPACM_SUCCESS;
 }
 
 /* conntrack send in host order and ipa expects in host order */
@@ -3101,7 +3588,7 @@ void IPACM_ConntrackListener::ProcessTCPorUDPMsg_v6(const ipacm_ct_evt_data* evt
 		CheckSTAClient_v6(entry, isTempEntry);
 	}
 
-	uint64_t src_ipv6_msb;
+	uint64_t src_ipv6_msb = 0;
 
 	if (entry.m_direction == NatEntryBase::DirectionUnknown || entry.m_direction == NatEntryBase::DirectionOutbound)
 	{
@@ -3123,6 +3610,101 @@ void IPACM_ConntrackListener::ProcessTCPorUDPMsg_v6(const ipacm_ct_evt_data* evt
 
 	AddORDeleteNatEntry_v6(evt_data, entry, isTempEntry);
 	IPACMDBG_H("return\n");
+}
+
+void IPACM_ConntrackListener::ProcessGREMsg(
+	 struct nf_conntrack *ct,
+	 enum nf_conntrack_msg_type type,
+	 u_int8_t l4proto)
+{
+	if (pConfig == NULL)
+	{
+		pConfig = IPACM_Config::GetInstance();
+	}
+	if(!pConfig->ipacm_gre_autolearn)
+	{
+		return;
+	}
+	IPACMDBG_H("GRE Autolearn enabled. Processing GRE event\n");
+	nat_entry_bundle nat_entry;
+	nat_entry.isTempEntry = false;
+	nat_entry.ct = ct;
+	nat_entry.type = type;
+	int ret = 0;
+	nat_table_entry rule;
+	process_conntrack_bundle params;
+
+	memset(&params,0,sizeof(params));
+	memset(&rule, 0, sizeof(rule));
+
+	params.ip_pass_enable = ip_pass_enable_default_pdn;
+	params.ip_pass_dummy_ip = ip_pass_dummy_ip_default_pdn;
+	params.ip_pass_skip_nat = ip_pass_skip_nat_default_pdn;
+	/* Retrieve Protocol */
+	rule.protocol = nfct_get_attr_u8(ct, ATTR_REPL_L4PROTO);
+
+	if(DetermineSrcorDstNAT(ct,type,l4proto,&nat_entry,&params) == IPACM_FAILURE)
+	{
+		IPACMERR("Unable to determine whether Src or Dst NAT, So not adding the NAT entry\n");
+		return;
+	}
+	IPACMDBG_H("status %d\n", params.status);
+	if(IPS_DST_NAT == params.status || IPS_SRC_NAT == params.status)
+	{
+		PopulateTCPorUDPEntry(ct, params.status, &rule);
+#ifdef FEATURE_VLAN_MPDN
+		rule.public_ip = params.public_ip;
+#else
+		rule.public_ip = wan_ipaddr;
+#endif
+	}
+	else
+	{
+		IPACMDBG_H("Neither source Nor destination nat\n");
+		return;
+	}
+	if(DetermineTempEntry(ct,type,l4proto,&nat_entry,&rule, &params) == IPACM_FAILURE)
+	{
+		IPACMERR("Unable to add NAT entry\n");
+		return;
+	}
+	nat_entry.rule = &rule;
+	bool SendVlanEvent = false;
+
+	#ifdef FEATURE_VLAN_MPDN
+	 AddORDeleteNatEntry(&nat_entry, &SendVlanEvent);
+	 if(SendVlanEvent)
+	 {
+		 ipacm_cmd_q_data evt_data;
+		 ipacm_event_route_vlan *data;
+
+		 evt_data.event = IPA_ROUTE_ADD_VLAN_PDN_EVENT;
+		 data = (ipacm_event_route_vlan *)malloc(sizeof(ipacm_event_route_vlan));
+		 if(!data)
+		 {
+			 IPACMERR("couldn't allocate memory for new vlan pdn event\n");
+			 return;
+		 }
+		 memset(data, 0, sizeof(ipacm_event_route_vlan));
+		 data->iptype = IPA_IP_v4;
+		 data->VlanID = params.VlanID;
+		 data->wan_ipv4_addr = params.public_ip;
+		if (IPACM_Wan::is_xlat_by_ipv4(params.public_ip)){
+			data->iptype = IPA_IP_MAX;
+			data->wan_ipv6_prefix[0]=IPA_DUMMY_PREFIX;
+		}
+		 evt_data.evt_data = data;
+		 IPACMDBG_H("sending IPA_ROUTE_ADD_VLAN_PDN_EVENT vlan id %d, iptype %d,\n",
+			 data->VlanID,
+			 data->iptype);
+		 iptodot("pdn ip", params.public_ip);
+
+		 IPACM_EvtDispatcher::PostEvt(&evt_data);
+	 }
+#else
+	 AddORDeleteNatEntry(&nat_entry, NULL);
+#endif
+	 return;
 }
 
 void IPACM_ConntrackListener::HandleSTAClientAddEvt(uint32_t clnt_ip_addr)
@@ -3294,6 +3876,10 @@ void IPACM_ConntrackListener::CreateIpv6NatEntryFromCtEventData(const ipacm_ct_e
 	{
 		IPACMDBG("Received TCP packet\n");
 	}
+	else if(entry.m_protocol == IPPROTO_GRE)
+	{
+		IPACMDBG("Received GRE packet\n");
+	}
 	else
 	{
 		IPACMDBG("Received unexpected protocol %d conntrack message\n", entry.m_protocol);
@@ -3459,6 +4045,10 @@ void IPACM_ConntrackListener::CreateIpv6ctEntryFromCtEventData(const ipacm_ct_ev
 	else if (entry.m_protocol == IPPROTO_TCP)
 	{
 		IPACMDBG("Received TCP packet\n");
+	}
+	else if (entry.m_protocol == IPPROTO_GRE)
+	{
+		IPACMDBG("Received GRE packet\n");
 	}
 	else
 	{

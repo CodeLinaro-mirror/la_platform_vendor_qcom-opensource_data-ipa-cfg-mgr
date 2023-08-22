@@ -49,11 +49,13 @@ extern "C"
 
 #define IPACM_TCP_FULL_FILE_NAME  "/proc/sys/net/ipv4/netfilter/ip_conntrack_tcp_timeout_established"
 #define IPACM_UDP_FULL_FILE_NAME   "/proc/sys/net/ipv4/netfilter/ip_conntrack_udp_timeout_stream"
+#define IPACM_GRE_FULL_FILE_NAME   "/proc/sys/net/ipv4/netfilter/ip_conntrack_gre_timeout_stream"
 
 #ifndef FEATURE_IPA_ANDROID
 
 #define IPACM_TCP_FULL_FILE_NAME_NEW  "/proc/sys/net/netfilter/nf_conntrack_tcp_timeout_established"
 #define IPACM_UDP_FULL_FILE_NAME_NEW  "/proc/sys/net/netfilter/nf_conntrack_udp_timeout_stream"
+#define IPACM_GRE_FULL_FILE_NAME_NEW  "/proc/sys/net/netfilter/nf_conntrack_gre_timeout_stream"
 
 #endif
 
@@ -479,6 +481,7 @@ private:
 
 	static uint32_t tcp_timeout;
 	static uint32_t udp_timeout;
+	static uint32_t gre_timeout;
 };
 
 class Ipv6ctConntrackTimestampUtil : public ConntrackTimestampUtil
@@ -684,6 +687,7 @@ private:
 
 	uint32_t tcp_timeout;
 	uint32_t udp_timeout;
+	uint32_t gre_timeout;
 
 	static bool kernel_ver_updated;
 	static bool is_kernel_ver_upgraded;
@@ -709,6 +713,7 @@ public:
 	int AddPdn(uint32_t pub_ip, uint8_t mux_id, bool is_sta, bool ip_pass);
 	int RemovePdn(uint32_t pub_ip);
 #endif
+	bool ChkForDupGRE(const nat_table_entry *);
 	bool isAlgPort(uint8_t, uint16_t);
 
 	int AddTable(uint32_t, uint8_t mux_id, bool is_sta);
@@ -717,7 +722,7 @@ public:
 
 	int AddEntry(const nat_table_entry *, bool isVlan = false);
 	int DeleteEntry(const nat_table_entry *);
-
+	int DeleteEntryGRE(const nat_table_entry *);
 	void UpdateUDPTimeStamp();
 
 	int UpdatePwrSaveIf(uint32_t);

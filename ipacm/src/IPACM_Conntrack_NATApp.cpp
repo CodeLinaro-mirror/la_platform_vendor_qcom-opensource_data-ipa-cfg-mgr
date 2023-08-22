@@ -513,6 +513,70 @@ bool NatApp::ChkForDup(const nat_table_entry *rule)
 	return false;
 }
 
+/* Check for duplicate entries */
+bool NatApp::ChkForDupGRE(const nat_table_entry *rule)
+{
+	int cnt = 0;
+	IPACMDBG("%s() %d\n", __FUNCTION__, __LINE__);
+
+	for(; cnt < max_entries; cnt++)
+	{
+		//one GRE connection per server is supported
+		if(cache[cnt].protocol == IPPROTO_GRE &&
+		   cache[cnt].target_ip == rule->target_ip)
+		{
+			log_nat(rule->protocol,rule->private_ip,rule->target_ip,rule->private_port,\
+			rule->public_port,rule->target_port,rule->src_only,rule->dst_only,"Duplicate Rule\n");
+			return true;
+		}
+	}
+
+	return false;
+}
+
+/* Delete the entry from Nat table on connection close */
+int NatApp::DeleteEntryGRE(const nat_table_entry *rule)
+{
+	int cnt = 0;
+	IPACMDBG("%s() %d\n", __FUNCTION__, __LINE__);
+
+	log_nat(rule->protocol,rule->private_ip,rule->target_ip,rule->private_port,\
+	rule->public_port,rule->target_port,rule->src_only,rule->dst_only,"for deletion\n");
+
+
+	for(; cnt < max_entries; cnt++)
+	{
+		if(cache[cnt].protocol == IPPROTO_GRE &&
+		   cache[cnt].target_ip == rule->target_ip)
+		{
+
+			if(cache[cnt].enabled == true)
+			{
+				log_nat(cache[cnt].protocol,cache[cnt].private_ip,cache[cnt].target_ip,cache[cnt].private_port,\
+					cache[cnt].public_port,cache[cnt].target_port,cache[cnt].src_only,cache[cnt].dst_only,"for deletion\n");
+				if(ipa_nat_del_ipv4_rule(nat_table_hdl, cache[cnt].rule_hdl) < 0)
+				{
+					IPACMERR("%s() %d deletion failed\n", __FUNCTION__, __LINE__);
+				}
+				else
+				{
+					IPACMDBG_H("Deleted Nat entry(%d) Successfully\n", cnt);
+				}
+			}
+			else
+			{
+				IPACMDBG_H("Deleted Nat entry(%d) only from cache\n", cnt);
+			}
+
+			memset(&cache[cnt], 0, sizeof(cache[cnt]));
+			curCnt--;
+			break;
+		}
+	}
+
+	return 0;
+}
+
 /* Delete the entry from Nat table on connection close */
 int NatApp::DeleteEntry(const nat_table_entry *rule)
 {
@@ -626,12 +690,21 @@ int NatApp::AddEntry(const nat_table_entry *rule, bool isVlan)
 		else
 		{
 			memset(&nat_rule, 0, sizeof(nat_rule));
-			nat_rule.private_ip = rule->private_ip;
-			nat_rule.target_ip = rule->target_ip;
-			nat_rule.target_port = rule->target_port;
-			nat_rule.private_port = rule->private_port;
-			nat_rule.public_port = rule->public_port;
-			nat_rule.protocol = rule->protocol;
+			if(rule->protocol == IPPROTO_GRE)
+			{
+				nat_rule.private_ip = rule->private_ip;
+				nat_rule.target_ip = rule->target_ip;
+				nat_rule.protocol = rule->protocol;
+			}
+			else
+			{
+				nat_rule.private_ip = rule->private_ip;
+				nat_rule.target_ip = rule->target_ip;
+				nat_rule.target_port = rule->target_port;
+				nat_rule.private_port = rule->private_port;
+				nat_rule.public_port = rule->public_port;
+				nat_rule.protocol = rule->protocol;
+			}
 
 		if(IPACM_Iface::ipacmcfg->GetIPAVer() >= IPA_HW_v4_5) {
 			nat_rule.uc_activation_index = rule->uc_activation_index;
@@ -752,6 +825,11 @@ void NatApp::UpdateCTUdpTs(nat_table_entry *rule, uint32_t new_ts)
 		nfct_set_attr_u8(ct, ATTR_L4PROTO, rule->protocol);
 		nfct_set_attr_u32(ct, ATTR_TIMEOUT, udp_timeout);
 	}
+	else if(rule->protocol == IPPROTO_GRE)
+	{
+		nfct_set_attr_u8(ct, ATTR_L4PROTO, rule->protocol);
+		nfct_set_attr_u32(ct, ATTR_TIMEOUT, gre_timeout);
+	}
 	else
 	{
 		nfct_set_attr_u8(ct, ATTR_L4PROTO, rule->protocol);
@@ -791,12 +869,6 @@ void NatApp::UpdateCTUdpTs(nat_table_entry *rule, uint32_t new_ts)
 	IPACMDBG("updating %d connection with time: %d\n",
 					 rule->protocol, nfct_get_attr_u32(ct, ATTR_TIMEOUT));
 
-	/* not update timeout for GRE static NAT entry */
-	if(rule->protocol == IPPROTO_GRE)
-	{
-		IPACMERR("not update timeout for GRE static NAT entry for entry");
-		return;
-	}
 
 	ret = nfct_query(ct_hdl, NFCT_Q_UPDATE, ct);
 	if(ret == -1)
@@ -1436,14 +1508,18 @@ void NatApp::Read_TcpUdp_Timeout(void) {
 #ifdef FEATURE_IPA_ANDROID
 	tcp_timeout = 432000;
 	udp_timeout = 180;
+	gre_timeout = 180;
 	IPACMDBG_H("udp timeout value: %d\n", udp_timeout);
 	IPACMDBG_H("tcp timeout value: %d\n", tcp_timeout);
+	IPACMDBG_H("gre timeout value: %d\n", gre_timeout);
 #else
 	tcp_timeout = 3600;
 	udp_timeout = 60;
+	gre_timeout = 30;
 	IPACMDBG_H("udp timeout value: %d\n", udp_timeout);
 	IPACMDBG_H("tcp timeout value: %d\n", tcp_timeout);
-	FILE *udp_fd = NULL, *tcp_fd = NULL;
+	IPACMDBG_H("gre timeout value: %d\n", gre_timeout);
+	FILE *udp_fd = NULL, *tcp_fd = NULL, *gre_fd=NULL;
 	char kernel_ver[KERNEL_VERSION_LENGTH];
 
 	if (kernel_ver_updated == false) {
@@ -1503,12 +1579,36 @@ void NatApp::Read_TcpUdp_Timeout(void) {
 	}
 	IPACMDBG_H("tcp timeout value: %d\n", tcp_timeout);
 
+
+	if (is_kernel_ver_upgraded) {
+		/* Read UDP timeout value */
+		gre_fd = fopen(IPACM_GRE_FULL_FILE_NAME_NEW, "r");
+		if (gre_fd == NULL) {
+			IPACMERR("unable to open %s\n", IPACM_GRE_FULL_FILE_NAME_NEW);
+			goto fail;
+		}
+	} else {
+		/* Read UDP timeout value */
+		gre_fd = fopen(IPACM_GRE_FULL_FILE_NAME, "r");
+		if (gre_fd == NULL) {
+			IPACMERR("unable to open %s\n", IPACM_GRE_FULL_FILE_NAME);
+			goto fail;
+		}
+	}
+	if (fscanf(gre_fd, "%d", &gre_timeout) != 1) {
+		IPACMERR("Error reading gre timeout\n");
+	}
+	IPACMDBG_H("gre timeout value: %d\n", gre_timeout);
+
 fail:
 	if (udp_fd) {
 		fclose(udp_fd);
 	}
 	if (tcp_fd) {
 		fclose(tcp_fd);
+	}
+	if (gre_fd) {
+		fclose(gre_fd);
 	}
 #endif //FEATURE_IPA_ANDROID
 	return;
@@ -1862,7 +1962,8 @@ void Ipv6ctEntry::Clear()
 
 bool Ipv6ctEntry::Valid() const
 {
-	return m_dstPort && m_srcPort && m_srcAddr.Valid() && m_dstAddr.Valid();
+	//Only if the protocol is GRE, the ports are allowed to be zero
+	return ((m_dstPort && m_srcPort) || IPPROTO_GRE == m_protocol)  && m_srcAddr.Valid() && m_dstAddr.Valid();
 }
 
 void Ipv6ctEntry::DebugDump(const char* msg_prefix) const
@@ -1994,6 +2095,8 @@ CollectionBase::~CollectionBase()
 
 uint32_t ConntrackTimestampUtil::tcp_timeout = 432000;
 uint32_t ConntrackTimestampUtil::udp_timeout = 180;
+uint32_t ConntrackTimestampUtil::gre_timeout = 180;
+
 struct nf_conntrack* ConntrackTimestampUtil::ct = NULL;
 struct nfct_handle* ConntrackTimestampUtil::ct_hdl = NULL;
 
@@ -2044,7 +2147,7 @@ void ConntrackTimestampUtil::ReadTcpUdpTimeout()
 {
 	IPACMDBG_H("\n");
 
-	FILE *udp_fd = NULL, *tcp_fd = NULL;
+	FILE *udp_fd = NULL, *tcp_fd = NULL, *gre_fd = NULL;
 
 	/* Read UDP timeout value */
 	udp_fd = fopen(IPACM_UDP_FULL_FILE_NAME_NEW, "r");
@@ -2074,6 +2177,21 @@ void ConntrackTimestampUtil::ReadTcpUdpTimeout()
 	}
 	IPACMDBG_H("tcp timeout value: %d\n", tcp_timeout);
 
+
+	/* Read UDP timeout value */
+	gre_fd = fopen(IPACM_GRE_FULL_FILE_NAME_NEW, "r");
+	if (gre_fd == NULL)
+	{
+		IPACMERR("unable to open %s\n", IPACM_GRE_FULL_FILE_NAME_NEW);
+		goto bail;
+	}
+
+	if (fscanf(gre_fd, "%d", &gre_timeout) != 1)
+	{
+		IPACMERR("Error reading udp timeout\n");
+	}
+	IPACMDBG_H("udp timeout value: %d\n", gre_timeout);
+
 bail:
 	if (udp_fd != NULL)
 	{
@@ -2082,6 +2200,10 @@ bail:
 	if (tcp_fd != NULL)
 	{
 		fclose(tcp_fd);
+	}
+	if (gre_fd != NULL)
+	{
+		fclose(gre_fd);
 	}
 
 	IPACMDBG_H("return\n");
@@ -2093,9 +2215,16 @@ int ConntrackTimestampUtil::UpdateConntrackTimeStamp(const NatEntryBase& entry)
 	IPACMDBG_H("\n");
 
 	entry.DebugDump("Going to update timestamp for following entry");
-
+	uint32_t timeout=0;
+	if(entry.m_protocol == IPPROTO_UDP)
+		timeout= udp_timeout;
+	else if(entry.m_protocol == IPPROTO_GRE)
+		timeout = gre_timeout;
+	else
+		timeout = tcp_timeout;
+	
 	nfct_set_attr_u8(ct, ATTR_L4PROTO, entry.m_protocol);
-	nfct_set_attr_u32(ct, ATTR_TIMEOUT, (entry.m_protocol == IPPROTO_UDP) ? udp_timeout : tcp_timeout);
+	nfct_set_attr_u32(ct, ATTR_TIMEOUT,timeout);
 
 	SetConnectionDetails(entry);
 
@@ -2637,7 +2766,7 @@ int NatBase::AddTable(const uint32_t v6_prefix[2])
 		NatEntryBase& entry = m_cache[cnt];
 		if (entry.Valid())
 		{
-			uint64_t src_ipv6_msb;
+			uint64_t src_ipv6_msb = 0;
 
 			if (entry.m_direction == NatEntryBase::DirectionOutbound || entry.m_direction == NatEntryBase::DirectionUnknown)
 			{
@@ -2676,7 +2805,7 @@ int NatBase::DeleteTable(const uint32_t v6_prefix[2],int num_v6_vlan_pdns)
 		NatEntryBase& entry = m_cache[cnt];
 		if (entry.Valid())
 		{
-			uint64_t src_ipv6_msb;
+			uint64_t src_ipv6_msb = 0;
 
 			if (entry.m_direction == NatEntryBase::DirectionOutbound || entry.m_direction == NatEntryBase::DirectionUnknown)
 			{
@@ -2963,7 +3092,7 @@ void NatBase::FlushAndCacheVlanTempEntries_v6(uint32_t* ipv6_addr, bool isAdd, b
 		}
 		curr.DebugDump((isAdd) ? "Add temp entry to cache" : "Delete temp entry");
 
-		uint64_t src_ipv6_msb;
+		uint64_t src_ipv6_msb = 0;
 
 		if (curr.m_direction == NatEntryBase::DirectionOutbound || curr.m_direction == NatEntryBase::DirectionUnknown)
 		{

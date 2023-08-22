@@ -139,9 +139,11 @@ IPACM_Wlan::IPACM_Wlan(int iface_index, bool ast_update_needed) : IPACM_Lan(ifac
 	num_wifi_primary_client = 0;
 	header_name_count = 0;
 	wlan_client = NULL;
+	wlan_primary_client = NULL;
 	wlan_client_len = 0;
 	svap_iface = false;
 	vlan_enabled_ap = false;
+	svap_dummy_route_rule_v4_hdl = 0;
 
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
 		if (lan_stats_inited == false)
@@ -2555,6 +2557,11 @@ int IPACM_Wlan::handle_wlan_client_ipaddr(ipacm_event_data_all *data)
 						!get_client_memptr(wlan_client, clnt_indx)->lan2lan_fl_rule_hdl_v6)
 
 						install_wlan_client_lan2lan_flt_rule(data->mac_addr, IPA_IP_v6, get_client_memptr(wlan_client, clnt_indx)->is_vlan);
+				}
+				else
+				{
+					IPACMDBG_H("Already got ipv6 addr 0x%08x:%08x:%08x:%08x for client:%d\n", data->ipv6_addr[0], data->ipv6_addr[1], data->ipv6_addr[2], data->ipv6_addr[3], clnt_indx);
+					return IPACM_FAILURE;
 				}
 		    }
 		    else
@@ -5307,7 +5314,7 @@ int IPACM_Wlan::install_uplink_filter_rule_per_client
 	int clnt_indx;
 	uint8_t num_offset_meq_128;
 	struct ipa_ipfltr_mask_eq_128 *offset_meq_128 = NULL;
-	int total_rules, v6_xlat_ul_rules;
+	int total_rules, v6_xlat_ul_rules = 0;
 	enum ipa_flt_action action_cache;
 
 	IPACMDBG_H("Set modem UL flt rules\n");
@@ -7539,7 +7546,7 @@ int IPACM_Wlan::handle_refresh_filtering_rules(bool wlan_vlan_mpdn_enable)
 	/* populate the flt rule offset for eth bridge */
 	eth_bridge_flt_rule_offset[IPA_IP_v4] = ipv4_icmp_flt_rule_hdl[0];
 	/* populate the flt rule offset for mtu_offset (offset = broadcast rule)*/
-	if (m_ipv4_default_filterting_rules_count) {
+	if (m_ipv4_default_filterting_rules_count > 0 && m_ipv4_default_filterting_rules_count <= IPV4_DEFAULT_FILTERTING_RULES) {
 		mtu_flt_rule_offset[IPA_IP_v4] =
 			dft_v4fl_rule_hdl[m_ipv4_default_filterting_rules_count - 1];
 	}
@@ -7581,7 +7588,7 @@ int IPACM_Wlan::handle_refresh_filtering_rules(bool wlan_vlan_mpdn_enable)
 	init_fl_rule(IPA_IP_v6);
 
 	/* populate the mtu_rule_offset */
-	if (m_ipv6_default_filterting_rules_count) {
+	if (m_ipv6_default_filterting_rules_count > 0 && m_ipv6_default_filterting_rules_count <= (IPV6_DEFAULT_FILTERTING_RULES + IPV6_DEFAULT_LAN_FILTERTING_RULES)) {
 		mtu_flt_rule_offset[IPA_IP_v6] =
 			dft_v6fl_rule_hdl[m_ipv6_default_filterting_rules_count - 1];
 	}

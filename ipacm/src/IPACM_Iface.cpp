@@ -1226,10 +1226,12 @@ int IPACM_Iface::delete_dflt_filter_rules(
 					rx_prop->rx[idx].src_pipe,
 					IPA_IP_v4,
 					m_ipv4_default_filterting_rules_count);
+				if(m_ipv4_default_filterting_rules_count < IPV4_DEFAULT_FILTERTING_RULES){
 				memset(
 					dft_v4fl_rule_hdl,
 					0,
 					m_ipv4_default_filterting_rules_count * sizeof(uint32_t));
+				}
 				m_ipv4_default_filterting_rules_count = 0;
 			}
 			else

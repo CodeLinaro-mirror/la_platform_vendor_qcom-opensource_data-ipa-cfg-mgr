@@ -11552,7 +11552,6 @@ ipa_hdr_proc_type IPACM_Lan::eth_bridge_get_hdr_proc_type(ipa_hdr_l2_type t1,
 		if(t2 == IPA_HDR_L2_802_3)
 			return IPA_HDR_PROC_802_3_TO_802_3;
 		break;
-#ifdef IPA_HDR_L2_ETHERNET_II_AST
 	case IPA_HDR_L2_802_1Q:
 		if(t2 == IPA_HDR_L2_802_1Q || t2 == IPA_HDR_L2_802_1Q_AST) {
 			generic_params.input_ethhdr_negative_offset = 18;
@@ -11579,7 +11578,6 @@ ipa_hdr_proc_type IPACM_Lan::eth_bridge_get_hdr_proc_type(ipa_hdr_l2_type t1,
 			return IPA_HDR_PROC_ETHII_TO_ETHII_EX;
 		}
 		break;
-#endif
 	default:
 		return IPA_HDR_PROC_NONE;
 	}

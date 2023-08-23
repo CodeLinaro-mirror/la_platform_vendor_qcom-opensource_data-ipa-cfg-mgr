@@ -928,6 +928,26 @@ int IPACM_Config::GetNatIfaces(int nIfaces, NatIfaces *pIfaces)
 	return 0;
 }
 
+void IPACM_Config::update_repeater_iface(char *str) {
+
+
+	char *first, *second;
+	first = strstr(str,"sta");
+	if (first == NULL) {
+		IPACMDBG("Non wds-ext non-vlan interface\n");
+		return;
+	}
+	second = strstr(first, ".");
+	if(second == NULL) {
+		IPACMDBG("wds-ext non-vlan interface\n");
+		first = first-1;
+		*first = '\0';
+		return;
+	}
+	IPACMDBG("wds-ext vlan interface\n");
+	strlcpy((first-1), second, sizeof(second));
+	return;
+}
 
 int IPACM_Config::AddNatIfaces(char *dev_name)
 {

@@ -177,7 +177,8 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 	char iface_name[IPA_IFACE_NAME_LEN] = {0};
 	int bridge_index;
 	int skip_nat_set = 0;
-
+	char *char_idx = NULL;
+	char wds_ext_iface[IPA_IFACE_NAME_LEN] = {0};
 	IPACMDBG("Recieved event %d\n", event);
 
 	switch (event)
@@ -232,8 +233,10 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 				if (memcmp(neighbor_client[i].mac_addr, client_mac_addr, sizeof(neighbor_client[i].mac_addr)) == 0)
 				{
 					/* check if iface is not bridge interface*/
-					if (!strstr(IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].iface_name, "bridge"))
+					if (!strstr(IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].iface_name, "br-lan"))
 					{
+
+
 						/* use previous ipv4 first */
 						if(data->if_index != neighbor_client[i].iface_index)
 						{
@@ -306,7 +309,6 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 							}
 						}
 					}
-					break;
 				}
 			}
 		}
@@ -448,6 +450,8 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 		break;
 		default:
 		{
+
+			ipacm_event_data_all *data = (ipacm_event_data_all *)param;
 			if (event == IPA_NEW_NEIGH_EVENT)
 			{
 				IPACMDBG_H("Received IPA_NEW_NEIGH_EVENT\n");
@@ -456,8 +460,17 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 			{
 				IPACMDBG_H("Received IPA_DEL_NEIGH_EVENT\n");
 			}
+			strlcpy(wds_ext_iface, data->iface_name, strlen(data->iface_name));
+			char_idx = strstr(wds_ext_iface,".sta");
 
-			ipacm_event_data_all *data = (ipacm_event_data_all *)param;
+			if (char_idx && !IPACM_Iface::ipacmcfg->iface_in_vlan_mode(data->iface_name))
+			{
+				char_idx[0] = '\0';
+				strlcpy(data->iface_name, wds_ext_iface, strlen(wds_ext_iface));
+				IPACMDBG_H("Truncated interface name to handle wds-ext non vlan scenario %s\n", wds_ext_iface);
+				IPACM_Iface::ipa_get_if_index(data->iface_name, (int *)&data->if_index);
+			}
+
 			ipa_interface_index = IPACM_Iface::iface_ipa_index_query(data->if_index);
 #if !defined(FEATURE_L2TP) && !defined(FEATURE_VLAN_MPDN)
 			/* check for failure return */

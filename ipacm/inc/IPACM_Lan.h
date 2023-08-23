@@ -26,13 +26,47 @@ BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
 WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
 OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
 IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-*/
+*
+ * Changes from Qualcomm Innovation Center are provided under the following license:
+ *
+ * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted (subject to the limitations in the
+ * disclaimer below) provided that the following conditions are met:
+ *
+ *   * Redistributions of source code must retain the above copyright
+ *     notice, this list of conditions and the following disclaimer.
+ *
+ *   * Redistributions in binary form must reproduce the above
+ *     copyright notice, this list of conditions and the following
+ *     disclaimer in the documentation and/or other materials provided
+ *     with the distribution.
+ *
+ *   * Neither the name of Qualcomm Innovation Center, Inc. nor the names of its
+ *     contributors may be used to endorse or promote products derived
+ *     from this software without specific prior written permission.
+ *
+ * NO EXPRESS OR IMPLIED LICENSES TO ANY PARTY'S PATENT RIGHTS ARE
+ * GRANTED BY THIS LICENSE. THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT
+ * HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED
+ * WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
+ * MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
+ * IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR
+ * ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+ * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE
+ * GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER
+ * IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
+ * OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
+ * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ */
 /*!
 	@file
 	IPACM_Lan.h
 
 	@brief
-	This file implements the LAN iface definitions
+	This file implements the LAN iface definitions.
 
 	@Author
 	Skylar Chang
@@ -186,6 +220,13 @@ typedef struct _xlat_context
 	uint32_t active_pdn_count;
 }xlat_context;
 
+typedef struct _ipacm_vlan_sta_info
+{
+	uint32_t v4_flt_hdl;
+	uint32_t v6_flt_hdl;
+	uint16_t vlan_id;
+}ipacm_vlan_sta_info;
+
 /* lan iface */
 class IPACM_Lan : public IPACM_Iface
 {
@@ -194,8 +235,8 @@ public:
 	IPACM_Lan(int iface_index);
 	~IPACM_Lan();
 
-	/* store lan's wan-up filter rule handlers */
-	uint32_t lan_wan_fl_rule_hdl[IPA_WAN_DEFAULT_FILTER_RULE_HANDLES];
+	/* store lan's wan-up filter rule handlers up to IPA_MAX_NUM_OFFLOAD_VLANS */
+	ipacm_vlan_sta_info vlan_sta_info[IPA_MAX_NUM_OFFLOAD_VLANS];
 
 	/* store private-subnet filter rule handlers */
 	uint32_t private_fl_rule_hdl[IPA_MAX_PRIVATE_SUBNET_ENTRIES + IPA_MAX_MTU_ENTRIES];
@@ -1093,6 +1134,7 @@ private:
 #endif
 
 #ifdef FEATURE_VLAN_MPDN
+	uint16_t lan_vlan_id[IPA_MAX_NUM_HW_PDNS];
 
 	typedef struct ipacm_mux_struct
 	{

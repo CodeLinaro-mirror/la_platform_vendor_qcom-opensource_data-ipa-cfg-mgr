@@ -26,6 +26,40 @@
  * WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *
+ * Changes from Qualcomm Innovation Center are provided under the following license:
+ *
+ * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted (subject to the limitations in the
+ * disclaimer below) provided that the following conditions are met:
+ *
+ *   * Redistributions of source code must retain the above copyright
+ *     notice, this list of conditions and the following disclaimer.
+ *
+ *   * Redistributions in binary form must reproduce the above
+ *     copyright notice, this list of conditions and the following
+ *     disclaimer in the documentation and/or other materials provided
+ *     with the distribution.
+ *
+ *   * Neither the name of Qualcomm Innovation Center, Inc. nor the names of its
+ *     contributors may be used to endorse or promote products derived
+ *     from this software without specific prior written permission.
+ *
+ * NO EXPRESS OR IMPLIED LICENSES TO ANY PARTY'S PATENT RIGHTS ARE
+ * GRANTED BY THIS LICENSE. THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT
+ * HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED
+ * WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
+ * MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
+ * IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR
+ * ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+ * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE
+ * GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER
+ * IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
+ * OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
+ * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 #include <sys/ioctl.h>
 #include <net/if.h>
@@ -61,6 +95,7 @@ IPACM_ConntrackListener::IPACM_ConntrackListener() :
 	 isStaMode = false;
 	 memset(nat_clients, 0, sizeof(nat_clients));
 	 memset(nat_clients_v6, 0, sizeof(nat_clients_v6));
+	 isStaMode = false;
 #ifdef FEATURE_VLAN_MPDN
 	 memset(vlan_pdns, 0, sizeof(vlan_pdns));
 	 num_vlan_pdns = 0;
@@ -1086,7 +1121,7 @@ void IPACM_ConntrackListener::HandleVlanUpV6(void *in_param)
 			}
 		}
 
-		/* Create NAT thread if not already created */
+		/* Create NAT thread if not already created. */
 		if(!isNatThreadStart)
 		{
 			IPACMDBG("creating nat threads\n");
@@ -1120,48 +1155,89 @@ void IPACM_ConntrackListener::HandleVlanUp(void *in_param)
 		return;
 	}
 
-	if(nat_inst->AddPdn(vlanup_data->ipv4_addr, vlanup_data->mux_id, false))
+	if(vlanup_data->mux_id == 0)
 	{
-		IPACMERR("failed adding pdn, num_vlan_pdns %d\n", num_vlan_pdns);
-	}
-	else
-	{
-		/* Check if pdn is allocated as well as saved in vlan pdn cache*/
-		for(int i = 0; i < IPA_MAX_NUM_HW_PDNS; i++)
+		if(nat_inst->AddPdn(vlanup_data->ipv4_addr, vlanup_data->mux_id, true))
 		{
-			if(vlan_pdns[i].public_ip == vlanup_data->ipv4_addr)
-			{
-				for(int j = 0; j < vlan_pdns[i].VID_cnt; j ++)
+			IPACMERR("failed adding pdn, num_vlan_pdns %d\n", num_vlan_pdns);
+		}
+		else
+		{
+			if(vlan_pdns[0].public_ip == vlanup_data->ipv4_addr) {
+				for(int i = 0; i < vlan_pdns[0].VID_cnt; i++)
 				{
-					if (vlanup_data->VlanID == vlan_pdns[i].associated_VIDs[j])
+					if (vlanup_data->VlanID == vlan_pdns[0].associated_VIDs[i])
 					{
-						IPACMDBG_H("found existing PDN entry in %d, with vlan %d\n", i, vlanup_data->VlanID);
+						IPACMDBG_H("found existing PDN entry in 0, with vlan %d\n", vlanup_data->VlanID);
 						return;
 					}
 				}
-				IPACMDBG_H("found existing PDN entry in %d, but got new VLAN id. Adding vlan %d to the entry\n", i, vlanup_data->VlanID);
-				vlan_pdns[i].associated_VIDs[vlan_pdns[i].VID_cnt] = vlanup_data->VlanID;
-				vlan_pdns[i].VID_cnt++;
+				IPACMDBG_H("found existing PDN entry in 0, but got new VLAN id. Adding vlan %d to the entry\n", vlanup_data->VlanID);
+				vlan_pdns[0].associated_VIDs[vlan_pdns[0].VID_cnt] = vlanup_data->VlanID;
+				vlan_pdns[0].VID_cnt++;
 				return;
 			}
-		}
-
-		for(int i = 0; i < IPA_MAX_NUM_HW_PDNS; i++)
-		{
-			if(vlan_pdns[i].public_ip == 0)
+			if(vlan_pdns[0].public_ip == 0)
 			{
-				IPACMDBG_H("found empty PDN entry in %d num_vlan_pdns %d\n", i, num_vlan_pdns);
-				vlan_pdns[i].public_ip = vlanup_data->ipv4_addr;
-				vlan_pdns[i].associated_VIDs[vlan_pdns[i].VID_cnt] = vlanup_data->VlanID;
-				vlan_pdns[i].VID_cnt++;
+				IPACMDBG_H("found empty PDN entry in 0 index num_vlan_pdns %d\n", num_vlan_pdns);
+				vlan_pdns[0].public_ip = vlanup_data->ipv4_addr;
+				vlan_pdns[0].associated_VIDs[vlan_pdns[0].VID_cnt] = vlanup_data->VlanID;
+				vlan_pdns[0].VID_cnt++;
 				num_vlan_pdns++;
-				break;
+			}
+			IPACMDBG_H("PDN table added successfully for STA\n");
+			if(!isNatThreadStart)
+			{
+				IPACMDBG("creating nat threads\n");
+				CreateNatThreads();
 			}
 		}
-		if(!isNatThreadStart)
+	}
+	else
+	{
+		if(nat_inst->AddPdn(vlanup_data->ipv4_addr, vlanup_data->mux_id, false))
 		{
-			IPACMDBG("creating nat threads\n");
-			CreateNatThreads();
+			IPACMERR("failed adding pdn, num_vlan_pdns %d\n", num_vlan_pdns);
+		}
+		else
+		{
+			/* Check if pdn is allocated as well as saved in vlan pdn cache*/
+			for(int i = 1; i < IPA_MAX_NUM_HW_PDNS; i++)
+			{
+				if(vlan_pdns[i].public_ip == vlanup_data->ipv4_addr)
+				{
+					for(int j = 0; j < vlan_pdns[i].VID_cnt; j ++)
+					{
+						if (vlanup_data->VlanID == vlan_pdns[i].associated_VIDs[j])
+						{
+							IPACMDBG_H("found existing PDN entry in %d, with vlan %d\n", i, vlanup_data->VlanID);
+							return;
+						}
+					}
+					IPACMDBG_H("found existing PDN entry in %d, but got new VLAN id. Adding vlan %d to the entry\n", i, vlanup_data->VlanID);
+					vlan_pdns[i].associated_VIDs[vlan_pdns[i].VID_cnt] = vlanup_data->VlanID;
+					vlan_pdns[i].VID_cnt++;
+					return;
+				}
+			}
+
+			for(int i = 1; i < IPA_MAX_NUM_HW_PDNS; i++)
+			{
+				if(vlan_pdns[i].public_ip == 0)
+				{
+					IPACMDBG_H("found empty PDN entry in %d num_vlan_pdns %d\n", i, num_vlan_pdns);
+					vlan_pdns[i].public_ip = vlanup_data->ipv4_addr;
+					vlan_pdns[i].associated_VIDs[vlan_pdns[i].VID_cnt] = vlanup_data->VlanID;
+					vlan_pdns[i].VID_cnt++;
+					num_vlan_pdns++;
+					break;
+				}
+			}
+			if(!isNatThreadStart)
+			{
+				IPACMDBG("creating nat threads\n");
+				CreateNatThreads();
+			}
 		}
 	}
 }
@@ -1221,7 +1297,10 @@ void IPACM_ConntrackListener::TriggerWANUp(void *in_param)
 	   else
 	   	 mux_id = wanup_data->mux_id;
 #ifdef FEATURE_VLAN_MPDN
-		 nat_inst->AddPdn(wanup_data->ipv4_addr, mux_id, isStaMode);
+	   if(wanup_data->is_sta)
+		   nat_inst->AddPdn(wanup_data->ipv4_addr, mux_id, true);
+	   else
+		   nat_inst->AddPdn(wanup_data->ipv4_addr, mux_id, false);
 #else
 		 nat_inst->AddTable(wanup_data->ipv4_addr, mux_id, isStaMode);
 #endif
@@ -1239,7 +1318,7 @@ void IPACM_ConntrackListener::TriggerWANUp_v6(const ipacm_event_iface_up* evt_da
 		IPACMDBG("Ignoring\n");
 		return;
 	}
-/* need QCMAP changes to remove below feature flag and use run time flag instead*/
+/* need QCMAP changes to remove below feature flag and use run time flag instead. */
 #ifndef FEATURE_SOCKSv5
 	if (!wan_ipaddr_v6.Valid())
 	{
@@ -2593,12 +2672,12 @@ void IPACM_ConntrackListener::ProcessTCPorUDPMsg(
 		 nat_entry.isVlan = IsVlanIPv4(repl_src_ip, &VlanID);
 		 if(nat_entry.isVlan)
 		 {
-			 nat_entry.IsVlanUp = false;
-			 for(i = 0; i < IPA_MAX_NUM_HW_PDNS; i++)
-			 {
-				 /* check if we already got vlan_pdn_up event for this ip */
-				 if(vlan_pdns[i].public_ip == orig_dst_ip)
-				 {
+			nat_entry.IsVlanUp = false;
+			for(i = 0; i < IPA_MAX_NUM_HW_PDNS; i++)
+			{
+				/* check if we already got vlan_pdn_up event for this ip */
+				if(vlan_pdns[i].public_ip == orig_dst_ip)
+				{
 					for(vlan_idx = 0; vlan_idx < vlan_pdns[i].VID_cnt; vlan_idx++)
 					{
 						if(VlanID == vlan_pdns[i].associated_VIDs[vlan_idx])
@@ -2609,29 +2688,28 @@ void IPACM_ConntrackListener::ProcessTCPorUDPMsg(
 							break;
 						}
 					}
-				 }
-			 }
-
-			 if((i >= IPA_MAX_NUM_HW_PDNS) && (num_vlan_pdns >= IPA_MAX_NUM_HW_PDNS) && (!nat_entry.IsVlanUp))
-			 {
-				 iptodot("vlan client ip", repl_src_ip);
-				 iptodot("pdn ip",orig_dst_ip);
-				 IPACMERR("src NAT: can't add more PDN, already got max \n");
-				 return;
-			 }
-			 iptodot("vlan client ip", repl_src_ip);
-			 iptodot("pdn ip", orig_dst_ip);
-			 IPACMDBG_H("IsVlanUp %d\n", nat_entry.IsVlanUp);
+				}
+			}
+			if((i >= IPA_MAX_NUM_HW_PDNS) && (num_vlan_pdns >= IPA_MAX_NUM_HW_PDNS) && (!nat_entry.IsVlanUp))
+			{
+				iptodot("vlan client ip", repl_src_ip);
+				iptodot("pdn ip",orig_dst_ip);
+				IPACMERR("src NAT: can't add more PDN, already got max \n");
+				return;
+			}
+			iptodot("vlan client ip", repl_src_ip);
+			iptodot("pdn ip", orig_dst_ip);
+			IPACMDBG_H("IsVlanUp %d\n", nat_entry.IsVlanUp);
 		 }
 		 public_ip = orig_dst_ip;
 #endif
 	 }
 	 else if(IPS_SRC_NAT & status)
 	 {
-		 status = IPS_SRC_NAT;
+		status = IPS_SRC_NAT;
 #ifdef FEATURE_VLAN_MPDN
-		 nat_entry.isVlan = IsVlanIPv4(orig_src_ip, &VlanID);
-		 if(nat_entry.isVlan)
+		nat_entry.isVlan = IsVlanIPv4(orig_src_ip, &VlanID);
+		if(nat_entry.isVlan)
 		 {
 			nat_entry.IsVlanUp = false;
 			for(i = 0; i < IPA_MAX_NUM_HW_PDNS; i++)
@@ -2655,15 +2733,15 @@ void IPACM_ConntrackListener::ProcessTCPorUDPMsg(
 			if((i >= IPA_MAX_NUM_HW_PDNS) && (num_vlan_pdns >= IPA_MAX_NUM_HW_PDNS) && (!nat_entry.IsVlanUp))
 			{
 				iptodot("vlan client ip", orig_src_ip);
-				iptodot("pdn ip",repl_dst_ip);
+				iptodot("pdn ip",repl_dst_ip)
 				IPACMERR("dst NAT: can't add more PDN, already got max \n");
 				return;
 			}
 			iptodot("vlan client ip ", orig_src_ip);
-			iptodot("pdn ip ", repl_dst_ip);
+			iptodot("pdn ip ", repl_dst_ip)
 			IPACMDBG_H("IsVlanUp %d\n", nat_entry.IsVlanUp);
-		 }
-		 public_ip = repl_dst_ip;
+		}
+		public_ip = repl_dst_ip;
 #endif
 	 }
 	 else
@@ -2691,7 +2769,7 @@ void IPACM_ConntrackListener::ProcessTCPorUDPMsg(
 #ifdef FEATURE_VLAN_MPDN
 			status = 0;
 			/* check if this is an embedded traffic to a secondary PDN */
-			for(i = 0; i < IPA_MAX_NUM_HW_PDNS; i++)
+			for(i = 1; i < IPA_MAX_NUM_HW_PDNS; i++)
 			{
 				/* check if we already got vlan_pdn_up event for this ip */
 				if(vlan_pdns[i].public_ip == orig_src_ip)
@@ -2775,35 +2853,38 @@ void IPACM_ConntrackListener::ProcessTCPorUDPMsg(
 	 CheckSTAClient(&rule, &nat_entry.isTempEntry);
 	 nat_entry.rule = &rule;
 #ifdef FEATURE_VLAN_MPDN
-	 AddORDeleteNatEntry(&nat_entry, &SendVlanEvent);
-	 if(VlanID > 0 && SendVlanEvent)
-	 {
-		 ipacm_cmd_q_data evt_data;
-		 ipacm_event_route_vlan *data;
+	AddORDeleteNatEntry(&nat_entry, &SendVlanEvent);
+	if(VlanID > 0 && SendVlanEvent)
+	{
+		ipacm_cmd_q_data evt_data;
+		ipacm_event_route_vlan *data;
 
-		 evt_data.event = IPA_ROUTE_ADD_VLAN_PDN_EVENT;
-		 data = (ipacm_event_route_vlan *)malloc(sizeof(ipacm_event_route_vlan));
-		 if(!data)
-		 {
-			 IPACMERR("couldn't allocate memory for new vlan pdn event\n");
-			 return;
-		 }
-		 memset(data, 0, sizeof(ipacm_event_route_vlan));
-		 data->iptype = IPA_IP_v4;
-		 data->VlanID = VlanID;
-		 data->wan_ipv4_addr = public_ip;
-		if (IPACM_Wan::is_xlat_by_ipv4(public_ip)){
-			data->iptype = IPA_IP_MAX;
-			data->wan_ipv6_prefix[0]=IPA_DUMMY_PREFIX;
+		evt_data.event = IPA_ROUTE_ADD_VLAN_PDN_EVENT;
+		data = (ipacm_event_route_vlan *)malloc(sizeof(ipacm_event_route_vlan));
+		if(!data)
+		{
+			IPACMERR("couldn't allocate memory for new vlan pdn event\n");
+			return;
 		}
-		 evt_data.evt_data = data;
-		 IPACMDBG_H("sending IPA_ROUTE_ADD_VLAN_PDN_EVENT vlan id %d, iptype %d,\n",
-			 data->VlanID,
-			 data->iptype);
-		 iptodot("pdn ip", public_ip);
+		memset(data, 0, sizeof(ipacm_event_route_vlan));
+		data->iptype = IPA_IP_v4;
+		data->VlanID = VlanID;
+		data->wan_ipv4_addr = public_ip;
+		if(!isStaMode)
+		{
+			if (IPACM_Wan::is_xlat_by_ipv4(public_ip)){
+				data->iptype = IPA_IP_MAX;
+				data->wan_ipv6_prefix[0]=IPA_DUMMY_PREFIX;
+			}
+		}
+		evt_data.evt_data = data;
+		IPACMDBG_H("sending IPA_ROUTE_ADD_VLAN_PDN_EVENT vlan id %d, iptype %d,\n",
+				data->VlanID,
+			 	data->iptype);
+		iptodot("pdn ip", public_ip);
 
-		 IPACM_EvtDispatcher::PostEvt(&evt_data);
-	 }
+		IPACM_EvtDispatcher::PostEvt(&evt_data);
+	}
 #else
 	 AddORDeleteNatEntry(&nat_entry, NULL);
 #endif

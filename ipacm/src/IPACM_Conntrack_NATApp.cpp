@@ -1,6 +1,7 @@
 /*
 Copyright (c) 2013-2020, The Linux Foundation. All rights reserved.
 Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are
@@ -26,7 +27,41 @@ BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
 WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
 OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
 IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-*/
+*
+ * Changes from Qualcomm Innovation Center are provided under the following license:
+ *
+ * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted (subject to the limitations in the
+ * disclaimer below) provided that the following conditions are met:
+ *
+ *   * Redistributions of source code must retain the above copyright
+ *     notice, this list of conditions and the following disclaimer.
+ *
+ *   * Redistributions in binary form must reproduce the above
+ *     copyright notice, this list of conditions and the following
+ *     disclaimer in the documentation and/or other materials provided
+ *     with the distribution.
+ *
+ *   * Neither the name of Qualcomm Innovation Center, Inc. nor the names of its
+ *     contributors may be used to endorse or promote products derived
+ *     from this software without specific prior written permission.
+ *
+ * NO EXPRESS OR IMPLIED LICENSES TO ANY PARTY'S PATENT RIGHTS ARE
+ * GRANTED BY THIS LICENSE. THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT
+ * HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED
+ * WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
+ * MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
+ * IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR
+ * ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+ * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE
+ * GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER
+ * IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
+ * OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
+ * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ */
 #include "IPACM_Conntrack_NATApp.h"
 #include "IPACM_ConntrackClient.h"
 #include "IPACM_Iface.h"
@@ -52,7 +87,7 @@ extern "C"
 	( strcasesame(mem_type, "HYBRID" ) || \
 	  strcasesame(mem_type, "SRAM" ) )
 
-/* NatApp class Implementation */
+/* NatApp class Implementation. */
 NatApp *NatApp::pInstance = NULL;
 
 bool NatApp::kernel_ver_updated = false;
@@ -171,8 +206,8 @@ int NatApp::AddPdn(uint32_t pub_ip, uint8_t mux_id, bool is_sta)
 	IPACMDBG_H("%s() %d\n", __FUNCTION__, __LINE__);
 
 	entry.dst_metadata = 0;
-	entry.src_metadata = GenerateMetdata(mux_id);
-	entry.public_ip = pub_ip;
+	entry.public_ip = 0;
+	entry.is_sta = false;
 
 	ret = ipa_nat_get_pdn_count(&pdn_count);
 	if(ret)
@@ -181,42 +216,76 @@ int NatApp::AddPdn(uint32_t pub_ip, uint8_t mux_id, bool is_sta)
 		return ret;
 	}
 
+	IPACMDBG_H("is_sta: %d, pdn_count: %d\n", is_sta, pdn_count);
+	IPACMDBG_H("ipv4 address PDN 0x%X\n", pub_ip);
+
 	if(!pdn_count)
 	{
 		/* create the NAT table, the PDN will be stored in index 0 */
-		ret = ipa_nat_add_ipv4_tbl(pub_ip, mem_type, max_entries, &nat_table_hdl);
+		ret = ipa_nat_add_ipv4_tbl(entry.public_ip, mem_type, max_entries, &nat_table_hdl);
 		if(ret)
 		{
 			IPACMERR("unable to create nat table Error:%d\n", ret);
 			return ret;
 		}
 		IPACMDBG_H("succeesfully created NAT table for ip 0x%X\n", pub_ip);
+		entry.public_ip = pub_ip;
+		if(!is_sta)
+		{
+			entry.src_metadata = GenerateMetdata(mux_id);
+			/* Modify PDN 1 so it will hold the mux ID in the src metadata field */
+			pdn_index = 1;
+		}
+		else
+		{
+			/* Modify PDN 0 so it will hold the mux ID in the src metadata field */
+			pdn_index = 0;
+			entry.src_metadata = 0;
+			entry.is_sta = true;
+		}
 
-		/* modify PDN 0 so it will hold the mux ID in the src metadata field */
-		pdn_index = 0;
 		ret = ipa_nat_modify_pdn(nat_table_hdl, pdn_index, &entry);
 		if(ret)
 		{
-			IPACMERR("unable to modify PDN 0 entry Error:%d\n", ret);
+			IPACMERR("unable to modify PDN %d entry Error:%d\n", pdn_index, ret);
 			return ret;
 		}
 	}
 	else
 	{
-		/* only allocate a PDN if it is a new one */
-		if(ipa_nat_get_pdn_index(pub_ip, &pdn_index) < 0)
+		if(is_sta)
 		{
+			pdn_index = 0;
+			entry.public_ip = pub_ip;
+			entry.src_metadata = 0;
+			entry.is_sta = true;
 			ret = ipa_nat_alloc_pdn(&entry, &pdn_index);
+
 			if(ret)
 			{
-				IPACMERR("couldn't allocate a pdn index\n");
+				IPACMERR("Unable to modify PDN 0 entry Error: %d\n", ret);
 				return ret;
 			}
-			IPACMDBG_H("successfully allocated index %d for ip 0x%X\n", pdn_index, pub_ip);
 		}
 		else
 		{
-			IPACMDBG_H("pdn already existed with index %d\n", pdn_index);
+			entry.public_ip = pub_ip;
+			entry.src_metadata = GenerateMetdata(mux_id);
+			/* only allocate a PDN if it is a new one */
+			if(ipa_nat_get_pdn_index(pub_ip, &pdn_index) < 0)
+			{
+				ret = ipa_nat_alloc_pdn(&entry, &pdn_index);
+				if(ret)
+				{
+					IPACMERR("couldn't allocate a pdn index\n");
+					return ret;
+				}
+				IPACMDBG_H("successfully allocated index %d for ip 0x%X\n", pdn_index, pub_ip);
+			}
+			else
+			{
+				IPACMDBG_H("pdn already exists with index %d\n", pdn_index);
+			}
 		}
 	}
 
@@ -380,17 +449,19 @@ int NatApp::RemovePdn(uint32_t pub_ip)
 	int ret;
 	uint8_t pdn_index;
 	uint8_t pdn_cnt;
+	ipa_nat_pdn_entry entry;
 	IPACMDBG_H("%s() %d\n", __FUNCTION__, __LINE__);
 
 	CHK_TBL_HDL();
 
+	IPACMDBG_H("Remove PDN IP: 0x%x\n", pub_ip);
 	ret = ipa_nat_get_pdn_index(pub_ip, &pdn_index);
 	if(ret)
 	{
 		IPACMERR("pdn doesn't exist on pdn table\n");
 		return IPACM_FAILURE;
 	}
-
+	IPACMDBG_H("pdn ip found at pdn_index:%d\n",pdn_index);
 	/* remove all PDN entries */
 	for(int cnt = 0; cnt < max_entries; cnt++)
 	{
@@ -405,7 +476,6 @@ int NatApp::RemovePdn(uint32_t pub_ip)
 			memset(&cache[cnt], 0, sizeof(cache[cnt]));
 		}
 	}
-
 	ret = ipa_nat_dealloc_pdn(pdn_index);
 	if(ret)
 	{
@@ -967,7 +1037,7 @@ void NatApp::UpdateUDPTimeStamp()
 			IPACMDBG("\n");
 			if(ipa_nat_query_timestamp(nat_table_hdl, cache[cnt].rule_hdl, &ts) < 0)
 			{
-				IPACMERR("unable to retrieve timeout for rule hanle: %d\n", cache[cnt].rule_hdl);
+				IPACMERR("unable to retrieve timeout for rule handle: %d\n", cache[cnt].rule_hdl);
 				continue;
 			}
 

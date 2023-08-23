@@ -26,7 +26,41 @@ BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
 WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
 OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
 IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-*/
+*
+ * Changes from Qualcomm Innovation Center are provided under the following license:
+ *
+ * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted (subject to the limitations in the
+ * disclaimer below) provided that the following conditions are met:
+ *
+ *   * Redistributions of source code must retain the above copyright
+ *     notice, this list of conditions and the following disclaimer.
+ *
+ *   * Redistributions in binary form must reproduce the above
+ *     copyright notice, this list of conditions and the following
+ *     disclaimer in the documentation and/or other materials provided
+ *     with the distribution.
+ *
+ *   * Neither the name of Qualcomm Innovation Center, Inc. nor the names of its
+ *     contributors may be used to endorse or promote products derived
+ *     from this software without specific prior written permission.
+ *
+ * NO EXPRESS OR IMPLIED LICENSES TO ANY PARTY'S PATENT RIGHTS ARE
+ * GRANTED BY THIS LICENSE. THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT
+ * HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED
+ * WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
+ * MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
+ * IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR
+ * ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+ * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE
+ * GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER
+ * IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
+ * OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
+ * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ */
 /*!
 	@file
 	IPACM_Wan.cpp
@@ -164,6 +198,8 @@ public:
 	static int GetV6PrefixByVid(int vid, uint32_t *v6_prefix);
 	static int GetV6MTUByPrefix(uint16_t *mtu, uint32_t *v6_prefix);
 	static IPACM_firewall_conf_t* get_curr_pdn_firewall_config(IPACM_firewall_t &firewall_configs, const char* dev_name);
+	static int get_wlan_v4_index();
+	static int get_wlan_v6_index();
 #endif
 	static bool isWanUP(int ipa_if_num_tether)
 	{
@@ -336,6 +372,8 @@ public:
 #ifdef FEATURE_VLAN_MPDN
 	static struct ipacm_pdn_flt_rule pdn_flt_rule_v4[IPA_MAX_FLT_RULE];
 	static struct ipacm_pdn_flt_rule pdn_flt_rule_v6[IPA_MAX_FLT_RULE];
+	static int wlan_v4_vlan_index;
+	static int wlan_v6_vlan_index;
 #endif
 	static struct ipa_flt_rule_add flt_rule_v4[IPA_MAX_FLT_RULE];
 	static struct ipa_flt_rule_add flt_rule_v6[IPA_MAX_FLT_RULE];
@@ -414,6 +452,8 @@ private:
 	bool public_wan_v4_addr_set;
 	bool wan_v4_addr_gw_set;
 	bool wan_v6_addr_gw_set;
+	bool wan_v4_is_default_gw;
+	bool wan_v6_is_default_gw;
 	bool active_v4;
 	bool active_v6;
 	bool header_set_v4;
@@ -432,6 +472,10 @@ private:
 	int modem_ipv4_pdn_index;
 
 	int modem_ipv6_pdn_index;
+
+	int wlan_ipv4_pdn_index;
+
+	int wlan_ipv6_pdn_index;
 
 	bool is_default_gateway;
 
@@ -616,7 +660,7 @@ private:
 					}
 
 				}
-			} /* end of for loop */
+			} /* end of for loop. */
 
 		    /* clean the 4 Qos ipv6 RT rules for client:clt_indx */
 		    if(get_client_memptr(wan_client, clt_indx)->route_rule_set_v6 != 0) /* for ipv6 */
@@ -663,9 +707,9 @@ private:
 	/* configure the socksv5 dl rules */
 	int config_socksv5_rules(ipa_ioc_add_flt_rule *pFilteringTable_v6);
 #endif
-	int handle_route_del_evt(ipa_ip_type iptype);
+	int handle_route_del_evt(ipa_ip_type iptype, bool wan_up_vlan = false);
 
-	int del_dft_firewall_rules(ipa_ip_type iptype);
+	int del_dft_firewall_rules(ipa_ip_type iptype, bool wan_up_vlan = false);
 
 	int handle_down_evt();
 

@@ -608,6 +608,7 @@ static int ipa_nl_decode_rtm_route
 	 ipa_nl_route_info_t   *route_info
 	 )
 {
+	IPACMDBG("Handling new param route netlink\n");
 	struct nlmsghdr *nlh = (struct nlmsghdr *)buffer;  /* NL message header */
 	struct rtattr *rtah = NULL;
 
@@ -661,6 +662,15 @@ static int ipa_nl_decode_rtm_route
 						 RTA_DATA(rtah),
 						 sizeof(route_info->attr_info.priority));
 			route_info->attr_info.param_mask |= IPA_RTA_PARAM_PRIORITY;
+			break;
+
+		case RTA_TABLE:
+			IPACMDBG("Handling RTA TABLE from netlink\n");
+			memcpy(&route_info->attr_info.table_id,
+                                                 RTA_DATA(rtah),
+                                                 sizeof(route_info->attr_info.table_id));
+			route_info->attr_info.param_mask |= IPA_RTA_PARAM_TABLE;
+			IPACMDBG("Table id is %d\n",route_info->attr_info.table_id);
 			break;
 
 		default:
@@ -1152,7 +1162,8 @@ static int ipa_nl_decode_nlmsg
 				 ((msg_ptr->nl_route_info.metainfo.rtm_protocol == RTPROT_BOOT) ||
 				  (msg_ptr->nl_route_info.metainfo.rtm_protocol == RTPROT_RA)) &&
 				 (msg_ptr->nl_route_info.metainfo.rtm_scope == RT_SCOPE_UNIVERSE) &&
-				 (msg_ptr->nl_route_info.metainfo.rtm_table == RT_TABLE_MAIN))
+				 ((msg_ptr->nl_route_info.metainfo.rtm_table == RT_TABLE_MAIN) ||
+					(msg_ptr->nl_route_info.metainfo.rtm_table == RT_TABLE_COMPAT)))
 			{
 				IPACMDBG("\n GOT RTM_NEWROUTE event\n");
 
@@ -1165,7 +1176,7 @@ static int ipa_nl_decode_nlmsg
 						return IPACM_FAILURE;
 					}
 
-					IPACM_NL_REPORT_ADDR( "route add -host", msg_ptr->nl_route_info.attr_info.dst_addr );
+					IPACM_NL_REPORT_ADDR( "route add -host\n", msg_ptr->nl_route_info.attr_info.dst_addr );
 					IPACM_NL_REPORT_ADDR( "gw", msg_ptr->nl_route_info.attr_info.gateway_addr );
 					IPACMDBG("dev %s\n",dev_name );
 					/* insert to command queue */
@@ -1243,12 +1254,22 @@ static int ipa_nl_decode_nlmsg
 						data_addr->ipv6_addr_gw[3] = ntohl(data_addr->ipv6_addr_gw[3]);
 						IPACM_NL_REPORT_ADDR( " ", msg_ptr->nl_route_info.attr_info.gateway_addr);
 
-						evt_data.event = IPA_ROUTE_ADD_EVENT;
 						data_addr->if_index = msg_ptr->nl_route_info.attr_info.oif_index;
 						data_addr->iptype = IPA_IP_v6;
 
-						IPACMDBG("Posting IPA_ROUTE_ADD_EVENT with if index:%d, ipv6 address\n",
+						if(msg_ptr->nl_route_info.metainfo.rtm_table == RT_TABLE_MAIN)
+						{
+							evt_data.event = IPA_ROUTE_ADD_EVENT;
+							IPACMDBG("Posting IPA_ROUTE_ADD_EVENT with if index:%d, ipv6 address\n",
 										 data_addr->if_index);
+						}
+						else if(msg_ptr->nl_route_info.metainfo.rtm_table == RT_TABLE_COMPAT &&
+								msg_ptr->nl_route_info.attr_info.table_id == WLAN_RT_TABLE_ID)
+						{
+							evt_data.event = IPA_WLAN_GW_ADDR_ADD_EVENT;
+							IPACMDBG("Posting IPA_WLAN_GW_ADDR_ADD_EVENT with if index:%d, ipv6 address\n",
+										data_addr->if_index);
+						}
 						evt_data.evt_data = data_addr;
 						IPACM_EvtDispatcher::PostEvt(&evt_data);
 						/* finish command queue */
@@ -1272,18 +1293,31 @@ static int ipa_nl_decode_nlmsg
 						IPACM_EVENT_COPY_ADDR_v4( if_ipipv4_addr_mask, msg_ptr->nl_route_info.attr_info.dst_addr);
 						IPACM_EVENT_COPY_ADDR_v4( if_ipv4_addr_gw, msg_ptr->nl_route_info.attr_info.gateway_addr);
 
-						evt_data.event = IPA_ROUTE_ADD_EVENT;
 						data_addr->if_index = msg_ptr->nl_route_info.attr_info.oif_index;
 						data_addr->iptype = IPA_IP_v4;
 						data_addr->ipv4_addr = ntohl(if_ipv4_addr);
 						data_addr->ipv4_addr_gw = ntohl(if_ipv4_addr_gw);
 						data_addr->ipv4_addr_mask = ntohl(if_ipipv4_addr_mask);
 
-            IPACMDBG_H("Posting IPA_ROUTE_ADD_EVENT with if index:%d, ipv4 addr:0x%x, mask: 0x%x and gw: 0x%x\n",
+						if(msg_ptr->nl_route_info.metainfo.rtm_table == RT_TABLE_MAIN)
+						{
+							evt_data.event = IPA_ROUTE_ADD_EVENT;
+							IPACMDBG_H("Posting IPA_ROUTE_ADD_EVENT with if index:%d, ipv4 addr:0x%x, mask: 0x%x and gw: 0x%x\n",
 										 data_addr->if_index,
 										 data_addr->ipv4_addr,
 										 data_addr->ipv4_addr_mask,
 										 data_addr->ipv4_addr_gw);
+						}
+						else if(msg_ptr->nl_route_info.metainfo.rtm_table == RT_TABLE_COMPAT &&
+								msg_ptr->nl_route_info.attr_info.table_id == WLAN_RT_TABLE_ID)
+						{
+							evt_data.event = IPA_WLAN_GW_ADDR_ADD_EVENT;
+							IPACMDBG_H("Posting IPA_WLAN_GW_ADDR_ADD_EVENT with if index:%d, ipv4 addr:0x%x, mask: 0x%x and gw: 0x%x\n",
+										data_addr->if_index,
+										data_addr->ipv4_addr,
+										data_addr->ipv4_addr_mask,
+										data_addr->ipv4_addr_gw);
+						}
 						evt_data.evt_data = data_addr;
 						IPACM_EvtDispatcher::PostEvt(&evt_data);
 						/* finish command queue */
@@ -1509,7 +1543,7 @@ static int ipa_nl_decode_nlmsg
 					}
 					else
 					{
-						IPACM_NL_REPORT_ADDR( "route del default gw", msg_ptr->nl_route_info.attr_info.gateway_addr);
+						IPACM_NL_REPORT_ADDR( "route del default gw\n", msg_ptr->nl_route_info.attr_info.gateway_addr);
 						IPACMDBG("dev %s\n", dev_name);
 
 						IPACM_EVENT_COPY_ADDR_v4( data_addr->ipv4_addr, msg_ptr->nl_route_info.attr_info.dst_addr);

@@ -902,6 +902,13 @@ private:
 
 	/* MTU helper functions */
 	int query_mtu_size();
+
+#ifdef FEATURE_IPA_IPSEC
+	int del_ipsec_wan_dl_rt_rules(enum ipa_ip_type iptype);
+
+	int add_ipsec_wan_dl_rt_rules(ipacm_event_data_addr *data,
+	uint32_t tx_prop_hdr_hdl);
+#endif
 };
 
 #endif /* IPACM_WAN_H */

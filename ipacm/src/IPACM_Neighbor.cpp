@@ -756,7 +756,8 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 
 				if ((data->ipv6_addr[0]) || (data->ipv6_addr[1]) || (data->ipv6_addr[2]) || (data->ipv6_addr[3]))
 				{
-					IPACMDBG("Got New_Neighbor event with ipv6 address \n");
+					IPACMDBG("Got New_Neighbor event with ipv6 addr [0x%x:%x:%x:%x] \n",
+                                                data->ipv6_addr[0], data->ipv6_addr[1], data->ipv6_addr[2], data->ipv6_addr[3]);
 					/* check if iface is bridge interface*/
 #ifdef FEATURE_VLAN_MPDN
 					/* VLAN clients don't have to be on bridge0 */
@@ -909,7 +910,7 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 				}
 				else
 				{
-					IPACMDBG(" Got Neighbor event with no ipv6/ipv4 address \n");
+					IPACMDBG("[0x%x] Got Neighbor event with no ipv6/ipv4 address \n",data);
 					/*no ipv6 in data search if seen this client or not*/
 					for (i = 0; i < num_neighbor_client_temp; i++)
 					{

@@ -163,6 +163,7 @@ ipa_lan_client_idx IPACM_Lan::inactive_lan_client_index_odu[IPA_MAX_NUM_HW_PATH_
 /* for default single pdn use-case: 1 prefix+1 mtu*/
 #define IPv6_PREFIX_DEFAULT_PDN_RULE_NUM 2
 
+
 IPACM_Lan::IPACM_Lan(int iface_index) : IPACM_Iface(iface_index)
 {
 	num_eth_client = 0;
@@ -4751,7 +4752,7 @@ fail:
 /*handle eth client */
 int IPACM_Lan::handle_eth_client_ipaddr(ipacm_event_data_all *data)
 {
-	int clnt_indx, size = 0, i = 0;
+	int clnt_indx, size = 0, i = 0, j = 0;
 	int v6_num;
 	uint32_t ipv6_link_local_prefix = 0xFE800000;
 	uint32_t ipv6_link_local_prefix_mask = 0xFFC00000;
@@ -4852,6 +4853,14 @@ int IPACM_Lan::handle_eth_client_ipaddr(ipacm_event_data_all *data)
 							for (i = 0; i < IPACM_Iface::ipacmcfg->ipa_num_ipgre_server; i++)
 							{
 								CtList->HandleGREIpAddrEvt(data->ipv4_addr, IPACM_Iface::ipacmcfg->ipacm_gre_server_ipv4[i], true);
+							}
+							/* For IPGRE subnet */
+							for (i = 0; i < IPACM_Iface::ipacmcfg->ipa_num_ipgre_server_subnet; i++)
+							{
+								for (j = 1; j < 256; j++)
+								{
+									CtList->HandleGREIpAddrEvt(data->ipv4_addr, IPACM_Iface::ipacmcfg->ipacm_gre_server_ipv4_subnet[i] + j, true);
+								}
 							}
 							get_client_memptr(eth_client, clnt_indx)->gre_nat_set = true;
 						}
@@ -14472,7 +14481,7 @@ void IPACM_Lan::HandleNeighIpAddrAddEvt(ipacm_event_data_all *data)
 void IPACM_Lan::HandleNeighIpAddrDelEvt(int clt_indx)
 {
 	uint32_t ipv6_temp[4] = {0};
-	int i = 0;
+	int i = 0, j = 0;
 
 	/* Special handling to clean up static IPGRE NAT rules */
 	if (IPACM_Iface::ipacmcfg->ipacm_gre_enable == true &&
@@ -14483,6 +14492,14 @@ void IPACM_Lan::HandleNeighIpAddrDelEvt(int clt_indx)
 		for (i = 0; i < IPACM_Iface::ipacmcfg->ipa_num_ipgre_server; i++)
 		{
 			CtList->HandleGREIpAddrEvt(get_client_memptr(eth_client, clt_indx)->v4_addr, IPACM_Iface::ipacmcfg->ipacm_gre_server_ipv4[i], false);
+		}
+		/* For IPGRE subnet */
+		for (i = 0; i < IPACM_Iface::ipacmcfg->ipa_num_ipgre_server_subnet; i++)
+		{
+			for (j = 1; j < 256; j++)
+			{
+				CtList->HandleGREIpAddrEvt(get_client_memptr(eth_client, clt_indx)->v4_addr, IPACM_Iface::ipacmcfg->ipacm_gre_server_ipv4_subnet[i] + j, false);
+			}
 		}
 		get_client_memptr(eth_client, clt_indx)->gre_nat_set = false;
 	}
@@ -15772,8 +15789,15 @@ int IPACM_Lan::gre_make_hdr_for_add_ctx(
 			"The dst addr added to gre header template:",
 			iptype,
 			&(hdr->words[IPV4_DST_ADDR_IDX]));
-
-		hdr_data_len = sizeof(v4_gre_hdr_t);
+		if ( ipgre_info.gre_protocol )
+		{
+			hdr_data_len = EoGRE_V4_HEADER_LEN;
+		}
+		else
+		{
+			hdr_data_len = sizeof(v4_gre_hdr_t);
+		}
+		IPACMDBG_H("Sending to uC, v4 header length : %d\n",hdr_data_len);
 	}
 	else
 	{
@@ -15814,7 +15838,15 @@ int IPACM_Lan::gre_make_hdr_for_add_ctx(
 			iptype,
 			&(hdr->words[IPV6_DST_ADDR_IDX]));
 
-		hdr_data_len = sizeof(v6_gre_hdr_t);
+		if ( ipgre_info.gre_protocol )
+		{
+			hdr_data_len = EoGRE_V6_HEADER_LEN;
+		}
+		else
+		{
+			hdr_data_len = sizeof(v6_gre_hdr_t);
+		}
+		IPACMDBG_H("Sending to uC, v6 header length : %d\n",hdr_data_len);
 	}
 
 	/*
@@ -16050,9 +16082,19 @@ int IPACM_Lan::gre_make_hdr_rmv_ctx(
 	procCtx->proc_ctx_hdl = -1; // return value
 	procCtx->status       = -1; // Return parameter
 	procCtx->type         = IPA_HDR_PROC_EoGRE_HEADER_REMOVE;
-	procCtx->eogre_params.hdr_remove_param.hdr_len_remove =
-		( iptype == IPA_IP_v4 ) ? sizeof(v4_gre_hdr_t) : sizeof(v6_gre_hdr_t);
 
+	if ( ipgre_info.gre_protocol )
+	{
+		procCtx->eogre_params.hdr_remove_param.hdr_len_remove =
+			( iptype == IPA_IP_v4 ) ? EoGRE_V4_HEADER_LEN : EoGRE_V6_HEADER_LEN;
+	}
+	else
+	{
+		procCtx->eogre_params.hdr_remove_param.hdr_len_remove =
+			( iptype == IPA_IP_v4 ) ? sizeof(v4_gre_hdr_t) : sizeof(v6_gre_hdr_t);
+	}
+
+	IPACMDBG_H("Sending to uC, Remove header length : %d\n",procCtx->eogre_params.hdr_remove_param.hdr_len_remove);
 #ifdef IPA_FLT_EXT_MPLS_GRE_GENERAL
 	procCtx->eogre_params.hdr_remove_param.outer_ip_version =
 		IPACM_Iface::ipacmcfg->eogre_info.iptype;

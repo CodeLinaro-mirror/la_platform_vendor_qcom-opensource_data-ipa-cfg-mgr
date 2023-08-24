@@ -188,6 +188,7 @@
 			 <GREServer>172.20.98.78</GREServer>
 			 <GREServer>172.20.98.77</GREServer>
 			 <GREServer>172.20.98.76</GREServer>
+			 <GREServerSubnet>172.20.97.1</GREServerSubnet>
 		</GREFlag>
 		<IPACMPrivateSubnet>
 			<Subnet>

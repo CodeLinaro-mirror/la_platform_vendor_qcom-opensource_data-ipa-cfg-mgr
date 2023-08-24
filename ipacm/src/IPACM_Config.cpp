@@ -755,9 +755,11 @@ skip_fnr_alloc:
 	/* Construct IPACM GRE info */
 	ipacm_gre_enable = cfg->gre_conf.gre_enable;
 	ipa_num_ipgre_server = cfg->gre_conf.num_ipgre_entries;
+	ipa_num_ipgre_server_subnet = cfg->gre_conf.num_ipgre_subnet_entries;
 
-	IPACMDBG_H("ipacm_gre_enable %d with %d entry\n", ipacm_gre_enable, ipa_num_ipgre_server);
+	IPACMDBG_H("ipacm_gre_enable %d with %d entry %d subnets\n", ipacm_gre_enable, ipa_num_ipgre_server, ipa_num_ipgre_server_subnet);
 	memset(ipacm_gre_server_ipv4, 0, IPA_MAX_IPGRE_ENTRY*sizeof(uint32_t));
+	memset(ipacm_gre_server_ipv4_subnet, 0, IPA_MAX_IPGRE_SUBNET_ENTRY*sizeof(uint32_t));
 
 	for (i = 0; i < cfg->gre_conf.num_ipgre_entries; i++)
 	{
@@ -765,6 +767,15 @@ skip_fnr_alloc:
 		subnet_addr = htonl(ipacm_gre_server_ipv4[i]);
 		memcpy(&in_addr_print,&subnet_addr,sizeof(in_addr_print));
 		IPACMDBG_H("index %d: GRE_SERVER_IPv4= %s \n",
+						i, inet_ntoa(in_addr_print));
+	}
+
+	for (i = 0; i < cfg->gre_conf.num_ipgre_subnet_entries; i++)
+	{
+		ipacm_gre_server_ipv4_subnet[i] = (cfg->gre_conf.gre_server_ipv4_subnet[i] >> 8) << 8;
+		subnet_addr = htonl(ipacm_gre_server_ipv4_subnet[i]);
+		memcpy(&in_addr_print,&subnet_addr,sizeof(in_addr_print));
+		IPACMDBG_H("index %d: GRE_SERVER_IPv4_SUBNET= %s \n",
 						i, inet_ntoa(in_addr_print));
 	}
 

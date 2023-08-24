@@ -230,9 +230,12 @@ static int ipacm_cfg_xml_parse_tree
 
 						IPACM_util_icmp_string((char*)xml_node->name, IPACM_SOCKSv5_TAG) == 0 ||
 						IPACM_util_icmp_string((char*)xml_node->name, GRE_TAG) == 0 ||
+						IPACM_util_icmp_string((char*)xml_node->name, GRE_Server_TAG) == 0 ||
+						IPACM_util_icmp_string((char*)xml_node->name, GRE_Server_Subnet_TAG) == 0 ||
 						IPACM_util_icmp_string((char*)xml_node->name, PUBLIC_IP_SUPPORT_TAG) == 0 ||
 						IPACM_util_icmp_string((char*)xml_node->name, IPACM_WLAN_VLAN_MPDN) == 0)
 				{
+					/* IP GRE SERVER IPv4 */
 					if (IPACM_util_icmp_string((char*)xml_node->name, GRE_Server_TAG) == 0)
 					{
 						content = IPACM_read_content_element(xml_node);
@@ -242,10 +245,40 @@ static int ipacm_cfg_xml_parse_tree
 							memset(content_buf, 0, sizeof(content_buf));
 							memcpy(content_buf, (void *)content, str_size);
 							content_buf[MAX_XML_STR_LEN-1] = '\0';
-							config->gre_conf.gre_server_ipv4[config->gre_conf.num_ipgre_entries]
+							if (config->gre_conf.num_ipgre_entries < IPA_MAX_IPGRE_ENTRY)
+							{
+								config->gre_conf.gre_server_ipv4[config->gre_conf.num_ipgre_entries]
 								= ntohl(inet_addr(content_buf));
-							IPACMDBG_H("subnet_addr: %s, entry %d\n", content_buf, config->gre_conf.num_ipgre_entries);
-							config->gre_conf.num_ipgre_entries++;
+								IPACMDBG_H("gre_server_addr: %s, entry %d\n", content_buf, config->gre_conf.num_ipgre_entries);
+								config->gre_conf.num_ipgre_entries++;
+							}
+							else
+							{
+								IPACMERR("IGNORE gre_server_addr: %s! reach max %d entry!\n", content_buf, IPA_MAX_IPGRE_ENTRY);
+							}
+						}
+					}
+					/* IP GRE SERVER subnet */
+					if (IPACM_util_icmp_string((char*)xml_node->name, GRE_Server_Subnet_TAG) == 0)
+					{
+						content = IPACM_read_content_element(xml_node);
+						if (content)
+						{
+							str_size = strlen(content);
+							memset(content_buf, 0, sizeof(content_buf));
+							memcpy(content_buf, (void *)content, str_size);
+							content_buf[MAX_XML_STR_LEN-1] = '\0';
+							if (config->gre_conf.num_ipgre_subnet_entries < IPA_MAX_IPGRE_SUBNET_ENTRY)
+							{
+								config->gre_conf.gre_server_ipv4_subnet[config->gre_conf.num_ipgre_subnet_entries]
+								= ntohl(inet_addr(content_buf));
+								IPACMDBG_H("gre_server_subnet: %s, entry %d\n", content_buf, config->gre_conf.num_ipgre_subnet_entries);
+								config->gre_conf.num_ipgre_subnet_entries++;
+							}
+							else
+							{
+								IPACMERR("IGNORE gre_server_subnet: %s! reach max %d entry!\n", content_buf, IPA_MAX_IPGRE_SUBNET_ENTRY);
+							}
 						}
 					}
 

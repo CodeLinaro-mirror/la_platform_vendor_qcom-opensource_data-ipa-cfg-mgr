@@ -262,6 +262,7 @@ if (!(a)) {                                                 \
 #define GRE_TAG                              "GREFlag"
 #define GREEnabled_TAG                       "GREEnabled"
 #define GRE_Server_TAG                       "GREServer"
+#define GRE_Server_Subnet_TAG                "GREServerSubnet"
 
 #define IPACM_EASY_MESH                      "IPACMEMESH"
 #define IPACM_Easy_Mesh_Enabled              "IPACMEMESHEnabled"
@@ -386,7 +387,9 @@ typedef struct
 {
 	bool gre_enable;
 	uint8_t num_ipgre_entries;
+	uint8_t num_ipgre_subnet_entries;
 	uint32_t gre_server_ipv4[IPA_MAX_IPGRE_ENTRY];
+	uint32_t gre_server_ipv4_subnet[IPA_MAX_IPGRE_SUBNET_ENTRY];
 } ipacm_gre_conf_t;
 
 typedef struct  _IPACM_conf_t

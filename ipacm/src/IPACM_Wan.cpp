@@ -11023,7 +11023,19 @@ int IPACM_Wan::insert_frag_rule_dl(ipa_ip_type iptype, const struct ipa_rule_att
 	flt_rule_entry.rule.attrib.attrib_mask &= ~((uint32_t)IPA_FLT_META_DATA);
 	//TODO: This will be called for all PDNs. Have to rethink this, incase we have to support PMIPV6 with MPDN.
 	flt_rule_entry.rule.attrib.attrib_mask |= IPA_FLT_FRAGMENT;
-	flt_rule_entry.rule.action = IPA_PASS_TO_EXCEPTION;
+	flt_rule_entry.rule.action = IPA_PASS_TO_ROUTING;
+	ipa_ioc_get_rt_tbl_indx rt_tbl_idx;
+	memset(&rt_tbl_idx, 0, sizeof(rt_tbl_idx));
+	rt_tbl_idx.ip = iptype;
+	strlcpy(rt_tbl_idx.name, IPACM_Iface::ipacmcfg->rt_tbl_wan_dl.name, IPA_RESOURCE_NAME_MAX);
+	rt_tbl_idx.name[IPA_RESOURCE_NAME_MAX - 1] = '\0';
+	if (ioctl(m_fd_ipa, IPA_IOC_QUERY_RT_TBL_INDEX, &rt_tbl_idx))
+	{
+		IPACMERR("Failed to get routing table index from name\n");
+		return IPACM_FAILURE;
+	}
+	flt_rule_entry.rule.rt_tbl_idx = rt_tbl_idx.idx;
+
 
 	change_to_network_order(iptype, &flt_rule_entry.rule.attrib);
 

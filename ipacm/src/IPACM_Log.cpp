@@ -233,7 +233,7 @@ int log_init() {
         config = IPACM_Config::GetInstance();
         dump_file = IPACM_LOG_COLLECTION_FILE;
 
-        if(max_filesize != config->max_file_size)
+        if(config && max_filesize != config->max_file_size)
         {
             if(log_init_done)
             {

@@ -314,7 +314,12 @@ void IPACM_Wlan::event_callback(ipa_cm_event_id event, void *param)
 #else
 					handle_private_subnet(data->iptype);
 #endif
-
+					if(data->iptype == IPA_IP_v6)
+					{
+						add_dummy_ipv6_prefix_flt_rule();
+						/* if there are any v6 calls up, update rules */
+						modify_ipv6_prefix_flt_rule();
+					}
 					if(IPACM_Wan::isWanUP(ipa_if_num) &&
 						!IPACM_Iface::ipacmcfg->is_added_vlan_iface(dev_name))
 					{

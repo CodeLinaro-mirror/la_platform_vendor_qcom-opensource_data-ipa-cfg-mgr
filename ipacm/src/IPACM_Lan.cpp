@@ -3383,7 +3383,7 @@ int IPACM_Lan::handle_wan_up(ipa_ip_type ip_type, uint16_t vid)
 	}
 	else if(ip_type == IPA_IP_v6)
 	{
-		ipa_ioc_add_flt_rule *m_pFilteringTable;
+		ipa_ioc_add_flt_rule_after *m_pFilteringTable;
 #ifdef FEATURE_VLAN_MPDN
 		/* add ipv6_mtu rule */
 		modify_ipv6_prefix_flt_rule();
@@ -3415,8 +3415,8 @@ int IPACM_Lan::handle_wan_up(ipa_ip_type ip_type, uint16_t vid)
 			return IPACM_SUCCESS;
 		}
 		/* add default v6 filter rule */
-		m_pFilteringTable = (struct ipa_ioc_add_flt_rule *)
-			 calloc(1, sizeof(struct ipa_ioc_add_flt_rule) +
+		m_pFilteringTable = (struct ipa_ioc_add_flt_rule_after *)
+			 calloc(1, sizeof(struct ipa_ioc_add_flt_rule_after) +
 					1 * sizeof(struct ipa_flt_rule_add));
 
 		if (!m_pFilteringTable)
@@ -3427,9 +3427,9 @@ int IPACM_Lan::handle_wan_up(ipa_ip_type ip_type, uint16_t vid)
 
 		m_pFilteringTable->commit = 1;
 		m_pFilteringTable->ep = rx_prop->rx[0].src_pipe;
-		m_pFilteringTable->global = false;
 		m_pFilteringTable->ip = IPA_IP_v6;
 		m_pFilteringTable->num_rules = (uint8_t)1;
+		m_pFilteringTable->add_after_hdl = ipv6_prefix_flt_rule_hdl[IPA_MAX_IPV6_NO_OFFLOAD_PREFIX_FLT_RULE + IPA_MAX_MTU_ENTRIES - 1];
 
 		if (false == m_routing.GetRoutingTable(&IPACM_Iface::ipacmcfg->rt_tbl_v6))
 		{
@@ -3469,11 +3469,6 @@ int IPACM_Lan::handle_wan_up(ipa_ip_type ip_type, uint16_t vid)
 			flt_rule_entry.rule.attrib.vlan_id = vid;
 		}
 #endif
-		if (vid > 0)
-		{
-			flt_rule_entry.rule.attrib.attrib_mask |= IPA_FLT_VLAN_ID;
-			flt_rule_entry.rule.attrib.vlan_id = vid;
-		}
 		flt_rule_entry.rule.attrib.u.v6.dst_addr_mask[0] = 0x00000000;
 		flt_rule_entry.rule.attrib.u.v6.dst_addr_mask[1] = 0x00000000;
 		flt_rule_entry.rule.attrib.u.v6.dst_addr_mask[2] = 0x00000000;
@@ -3484,7 +3479,7 @@ int IPACM_Lan::handle_wan_up(ipa_ip_type ip_type, uint16_t vid)
 		flt_rule_entry.rule.attrib.u.v6.dst_addr[3] = 0X00000000;
 
 		memcpy(&(m_pFilteringTable->rules[0]), &flt_rule_entry, sizeof(struct ipa_flt_rule_add));
-		if (false == m_filtering.AddFilteringRule(m_pFilteringTable))
+		if (false == m_filtering.AddFilteringRuleAfter(m_pFilteringTable))
 		{
 			IPACM_SYSLOG("Error Adding Filtering rule, aborting...\n");
 			free(m_pFilteringTable);

@@ -3826,15 +3826,17 @@ fail:
 /*handle eth client */
 int IPACM_Lan::handle_eth_client_ipaddr(ipacm_event_data_all *data)
 {
-	int clnt_indx;
-	int v6_num;
+	int clnt_indx = 0;
+	int v6_num = 0;
+        int add = 0;
+        ipacm_event_data_all  *tmp_evt = NULL;
 	uint32_t ipv6_link_local_prefix = 0xFE800000;
 	uint32_t ipv6_link_local_prefix_mask = 0xFFC00000;
 	uint16_t vlan_id = 0;
 	ipacm_event_data_all data_all;
 	std::list <ipacm_event_data_all>::iterator it;
 
-	IPACMDBG_H("number of eth clients: %d\n", num_eth_client);
+	IPACMDBG_H("number of eth clients: %d\n",num_eth_client);
 	IPACMDBG_H("event MAC %02x:%02x:%02x:%02x:%02x:%02x\n",
 					 data->mac_addr[0],
 					 data->mac_addr[1],
@@ -3979,39 +3981,115 @@ int IPACM_Lan::handle_eth_client_ipaddr(ipacm_event_data_all *data)
 					return IPACM_FAILURE;
 				}
 			}
+                        
 			if(get_client_memptr(eth_client, clnt_indx)->ipv6_set < IPV6_NUM_ADDR)
-			{
-				for(v6_num=0;v6_num < get_client_memptr(eth_client, clnt_indx)->ipv6_set;v6_num++)
-				{
-					if( data->ipv6_addr[0] == get_client_memptr(eth_client, clnt_indx)->v6_addr[v6_num][0] &&
-					data->ipv6_addr[1] == get_client_memptr(eth_client, clnt_indx)->v6_addr[v6_num][1] &&
-					data->ipv6_addr[2]== get_client_memptr(eth_client, clnt_indx)->v6_addr[v6_num][2] &&
-					data->ipv6_addr[3] == get_client_memptr(eth_client, clnt_indx)->v6_addr[v6_num][3])
-					{
-						IPACMDBG_H("Already see this ipv6 addr at position: %d for client:%d\n", v6_num, clnt_indx);
-						return IPACM_FAILURE; /* not setup the RT rules*/
-					}
-				}
+                        {
+                                for(v6_num=0;v6_num < get_client_memptr(eth_client, clnt_indx)->ipv6_set;v6_num++)
+                                {
+                                        if( data->ipv6_addr[0] == get_client_memptr(eth_client, clnt_indx)->v6_addr[v6_num][0] &&
+                                                data->ipv6_addr[1] == get_client_memptr(eth_client, clnt_indx)->v6_addr[v6_num][1] &&
+                                                data->ipv6_addr[2]== get_client_memptr(eth_client, clnt_indx)->v6_addr[v6_num][2] &&
+                                                data->ipv6_addr[3] == get_client_memptr(eth_client, clnt_indx)->v6_addr[v6_num][3])
+                                        {
+                                                IPACMDBG_H("Already see this ipv6 addr at position: %d for client:%d\n", v6_num, clnt_indx);
+                                                return IPACM_FAILURE; /* not setup the RT rules*/
+                                        }
+                                }
+                                
+                                /*
+                                 * The client got new IPv6 address.
+                                 * NOTE: The new address doesn't replace the existing one but being added (up to IPV6_NUM_ADDR),
+                                 * so the previous IPv6 addresses of the client will not be deleted.
+                                 */
+                                
+                                get_client_memptr(eth_client, clnt_indx)->v6_addr[get_client_memptr(eth_client, clnt_indx)->ipv6_set][0] = data->ipv6_addr[0];
+                                get_client_memptr(eth_client, clnt_indx)->v6_addr[get_client_memptr(eth_client, clnt_indx)->ipv6_set][1] = data->ipv6_addr[1];
+                                get_client_memptr(eth_client, clnt_indx)->v6_addr[get_client_memptr(eth_client, clnt_indx)->ipv6_set][2] = data->ipv6_addr[2];
+                                get_client_memptr(eth_client, clnt_indx)->v6_addr[get_client_memptr(eth_client, clnt_indx)->ipv6_set][3] = data->ipv6_addr[3];
+                                get_client_memptr(eth_client, clnt_indx)->ipv6_set++;
+                        }
+                        else 
+                        {
+								uint32_t client_prifix[2];
+                                IPACMDBG_H("Already got %d ipv6 addr for client:%d\n", IPV6_NUM_ADDR, clnt_indx);
+                                /* If LL is input then ignore */
+                                if((data->ipv6_addr[0] & ipv6_link_local_prefix_mask) == (ipv6_link_local_prefix & ipv6_link_local_prefix_mask))
+                                {
+                                        IPACMDBG_H("Link Local address [ 0x%x:%x:%x:%x ] no need to overwrite\n",data->ipv6_addr[0]
+                                                ,data->ipv6_addr[1], data->ipv6_addr[2], data->ipv6_addr[3]);
+                                        return IPACM_FAILURE;
+                                }
+                                
+                                tmp_evt = (ipacm_event_data_all *)malloc(sizeof(ipacm_event_data_all));
+                                if(NULL == tmp_evt)
+                                {
+                                        IPACMERR("unable to allocate memory\n");
+                                        return IPACM_FAILURE;
+                                }
+                                
+                                for(v6_num=0; v6_num < get_client_memptr(eth_client, clnt_indx)->ipv6_set; v6_num++)
+                                {       
+                                            /* Ignore if Link local address picked from client array
+                                             * If LL addr added once it is not required to update
+                                             */
+										memset(&client_prifix,0,sizeof(client_prifix));
+										client_prifix[0] = get_client_memptr(eth_client, clnt_indx)->v6_addr[v6_num][0];
+										client_prifix[1] = get_client_memptr(eth_client, clnt_indx)->v6_addr[v6_num][1]; 
+                                        if(((get_client_memptr(eth_client, clnt_indx)->v6_addr[v6_num][0] & ipv6_link_local_prefix_mask) 
+                                                    == (ipv6_link_local_prefix & ipv6_link_local_prefix_mask))|| !IPACM_Wan::isWan_active_with_prefix(client_prifix))
+                                                continue;
 
-				/*
-				 * The client got new IPv6 address.
-				 * NOTE: The new address doesn't replace the existing one but being added (up to IPV6_NUM_ADDR),
-				 *       so the previous IPv6 addresses of the client will not be deleted.
-				 */
-				get_client_memptr(eth_client, clnt_indx)->v6_addr[get_client_memptr(eth_client, clnt_indx)->ipv6_set][0] = data->ipv6_addr[0];
-				get_client_memptr(eth_client, clnt_indx)->v6_addr[get_client_memptr(eth_client, clnt_indx)->ipv6_set][1] = data->ipv6_addr[1];
-				get_client_memptr(eth_client, clnt_indx)->v6_addr[get_client_memptr(eth_client, clnt_indx)->ipv6_set][2] = data->ipv6_addr[2];
-				get_client_memptr(eth_client, clnt_indx)->v6_addr[get_client_memptr(eth_client, clnt_indx)->ipv6_set][3] = data->ipv6_addr[3];
-				get_client_memptr(eth_client, clnt_indx)->ipv6_set++;
-			}
-			else
-			{
-				IPACMDBG_H("Already got %d ipv6 addr for client:%d\n", IPV6_NUM_ADDR, clnt_indx);
-					return IPACM_FAILURE; /* not setup the RT rules*/
-			}
-		}
-	}
+                                                /* Prefix not match then neighbor got new V6 assigned */
+                                        if((data->ipv6_addr[0] != get_client_memptr(eth_client, clnt_indx)->v6_addr[v6_num][0]) ||
+					     (data->ipv6_addr[1] != get_client_memptr(eth_client, clnt_indx)->v6_addr[v6_num][1]))
+	                                {
+                                                memcpy(tmp_evt, data, sizeof(ipacm_event_data_all));
+                                                tmp_evt->ipv6_addr[0] = get_client_memptr(eth_client, clnt_indx)->v6_addr[v6_num][0];
+                                                tmp_evt->ipv6_addr[1] = get_client_memptr(eth_client, clnt_indx)->v6_addr[v6_num][1];
+                                                tmp_evt->ipv6_addr[2] = get_client_memptr(eth_client, clnt_indx)->v6_addr[v6_num][2];
+                                                tmp_evt->ipv6_addr[3] = get_client_memptr(eth_client, clnt_indx)->v6_addr[v6_num][3];
+                                                IPACMDBG_H("Got new prefix del old prefix entry [0x%x:%x:%x:%x] at idx %d\n", 
+                                                            tmp_evt->ipv6_addr[0], tmp_evt->ipv6_addr[1],
+                                                            tmp_evt->ipv6_addr[2], tmp_evt->ipv6_addr[3], v6_num);
+                                                
+                                                CtList->HandleNeighIpAddrDelEvt_v6(Ipv6IpAddress(tmp_evt->ipv6_addr, false));
+                                                                                                               
+                                                /* This will delete the current IPV6 address, RT routes and copy indices up */
+                                                handle_del_ipv6_addr(tmp_evt);
+                                                add = 1;
+                                        }
+                                } //for loop
+                                        
+                                if(tmp_evt!= NULL)
+                                        free(tmp_evt);
+                               
+                                if(add)
+                                {
+                                        if(get_client_memptr(eth_client, clnt_indx)->ipv6_set < IPV6_NUM_ADDR)
+                                        {
+                                                IPACMDBG_H("Adding new ipv6 addr [0x%x:%x:%x:%x] at pos: %d for client:%d\n",data->ipv6_addr[0], data->ipv6_addr[1],
+                                                        data->ipv6_addr[2], data->ipv6_addr[3], get_client_memptr(eth_client, clnt_indx)->ipv6_set, clnt_indx);
+                                                get_client_memptr(eth_client, clnt_indx)->v6_addr[get_client_memptr(eth_client, clnt_indx)->ipv6_set][0] = data->ipv6_addr[0];
+                                                get_client_memptr(eth_client, clnt_indx)->v6_addr[get_client_memptr(eth_client, clnt_indx)->ipv6_set][1] = data->ipv6_addr[1];
+                                                get_client_memptr(eth_client, clnt_indx)->v6_addr[get_client_memptr(eth_client, clnt_indx)->ipv6_set][2] = data->ipv6_addr[2];
+                                                get_client_memptr(eth_client, clnt_indx)->v6_addr[get_client_memptr(eth_client, clnt_indx)->ipv6_set][3] = data->ipv6_addr[3];
+                                                get_client_memptr(eth_client, clnt_indx)->ipv6_set++;
+                                        }
+                                        else
+                                        {
+                                                IPACMDBG_H("Could not add ipv6 addr for client:%d list full:%d\n", clnt_indx, IPV6_NUM_ADDR);
+                                                return IPACM_FAILURE;
+                                        }
+                                }
+                                else
+                                {
+                                        IPACMDBG_H("Already got %d ipv6 addr with same prefix for client:%d\n", IPV6_NUM_ADDR, clnt_indx);
+                                        return IPACM_FAILURE;
+                                }
 
+                        } //else end
+                }
+        }
 	return IPACM_SUCCESS;
 }
 

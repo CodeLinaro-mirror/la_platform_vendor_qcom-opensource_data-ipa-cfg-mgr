@@ -898,22 +898,18 @@ int IPACM_Iface::init_fl_rule(
 
 		const char* rule_set = "";
 
-		/* always add ipv6 frag exception rule except for WLAN-backhaul */
-		if (ipa_if_cate != WAN_IF)
-		{
-			rule_set = "frag, ";
+		rule_set = "frag, ";
 #ifdef FEATURE_IPA_V3
-			flt_rule_entry.at_rear = false;
-			flt_rule_entry.rule.hashable = false;
+		flt_rule_entry.at_rear = false;
+		flt_rule_entry.rule.hashable = false;
 #endif
-			memcpy(&flt_rule_entry.rule.attrib, &rx_prop->rx[0].attrib, sizeof(flt_rule_entry.rule.attrib));
-			flt_rule_entry.rule.attrib.attrib_mask |= IPA_FLT_FRAGMENT;
-			memcpy(
-				&(m_pFilteringTable->rules[m_ipv6_default_filterting_rules_count]),
-				&flt_rule_entry,
-				sizeof(struct ipa_flt_rule_add));
-			m_ipv6_default_filterting_rules_count++;
-		}
+		memcpy(&flt_rule_entry.rule.attrib, &rx_prop->rx[0].attrib, sizeof(flt_rule_entry.rule.attrib));
+		flt_rule_entry.rule.attrib.attrib_mask |= IPA_FLT_FRAGMENT;
+		memcpy(
+			&(m_pFilteringTable->rules[m_ipv6_default_filterting_rules_count]),
+			&flt_rule_entry,
+			sizeof(struct ipa_flt_rule_add));
+		m_ipv6_default_filterting_rules_count++;
 
 #if defined(FEATURE_IPA_ANDROID) || defined(FEATURE_SOCKSv5)
 		const char* rule_set_ex = "mcast, fe80::/10, fec0::/10, fd00::/8, and TCP ctrl";

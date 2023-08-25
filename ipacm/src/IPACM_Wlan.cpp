@@ -4125,7 +4125,7 @@ int IPACM_Wlan::handle_down_evt()
 
 		/* delete private-ipv4 filter rules */
 #if defined(FEATURE_IPA_ANDROID) || defined(FEATURE_VLAN_MPDN)
-		if(m_filtering.DeleteFilteringHdls(private_fl_rule_hdl, IPA_IP_v4, IPA_MAX_PRIVATE_SUBNET_ENTRIES + IPA_MAX_MTU_ENTRIES) == false)
+		if(m_filtering.DeleteFilteringHdls(private_fl_rule_hdl[0], IPA_IP_v4, IPA_MAX_PRIVATE_SUBNET_ENTRIES + IPA_MAX_MTU_ENTRIES) == false)
 		{
 			IPACMERR("Error deleting private subnet IPv4 flt rules.\n");
 			res = IPACM_FAILURE;
@@ -4145,7 +4145,7 @@ int IPACM_Wlan::handle_down_evt()
 #endif
 		IPACMDBG_H("Deleted private subnet v4 filter rules successfully.\n");
 
-		if(m_filtering.DeleteFilteringHdls(&tcp_syn_flt_rule_hdl[IPA_IP_v4], IPA_IP_v4, 1) == false)
+		if(m_filtering.DeleteFilteringHdls(&tcp_syn_flt_rule_hdl[0][IPA_IP_v4], IPA_IP_v4, 1) == false)
 		{
 			IPACMERR("Error deleting tcp syn flt rule, aborting...\n");
 			res = IPACM_FAILURE;
@@ -4173,7 +4173,7 @@ int IPACM_Wlan::handle_down_evt()
 			goto fail;
 		}
 
-		if(m_filtering.DeleteFilteringHdls(&tcp_syn_flt_rule_hdl[IPA_IP_v6], IPA_IP_v6, 1) == false)
+		if(m_filtering.DeleteFilteringHdls(&tcp_syn_flt_rule_hdl[0][IPA_IP_v6], IPA_IP_v6, 1) == false)
 		{
 			IPACMERR("Error deleting tcp syn flt rule, aborting...\n");
 			res = IPACM_FAILURE;
@@ -4882,7 +4882,7 @@ int IPACM_Wlan::config_dft_firewall_rules_ul_ex(IPACM_firewall_conf_t* firewall_
 		 * Take all in exception path
 		 * Will be dropped in linux kernel
 		 */
-		modem_ul_v6_set = true;
+		modem_ul_v6_set[0] = true;
 		ret = IPACM_SUCCESS;
 		goto close_fd;
 	}
@@ -5132,7 +5132,7 @@ int IPACM_Wlan::config_dft_firewall_rules_ul_ex(IPACM_firewall_conf_t* firewall_
 	}
 #endif
 	/*All rules installation */
-	num_wan_ul_fl_rule_v6 = pFilteringTable->num_rules;
+	num_wan_ul_fl_rule_v6[0] = pFilteringTable->num_rules;
 	for (wlan_idx = 0; wlan_idx < num_wifi_client; wlan_idx++)
 	{
 		install_uplink_filter_rule_per_client_v2(ext_prop, IPA_IP_v6, IPACM_Wan::getXlat_Mux_Id(),
@@ -5594,7 +5594,7 @@ int IPACM_Wlan::install_uplink_filter_rule_per_client
 				get_client_memptr(wlan_client, clnt_indx)->wan_ul_fl_rule_hdl_v4[i] = pFilteringTable->rules[i].flt_rule_hdl;
 			}
 			get_client_memptr(wlan_client, clnt_indx)->ipv4_ul_rules_set = true;
-			num_wan_ul_fl_rule_v4 = pFilteringTable->num_rules;
+			num_wan_ul_fl_rule_v4[0] = pFilteringTable->num_rules;
 		}
 		else if(iptype == IPA_IP_v6)
 		{
@@ -5603,7 +5603,7 @@ int IPACM_Wlan::install_uplink_filter_rule_per_client
 				get_client_memptr(wlan_client, clnt_indx)->wan_ul_fl_rule_hdl_v6[i] = pFilteringTable->rules[i].flt_rule_hdl;
 			}
 			get_client_memptr(wlan_client, clnt_indx)->ipv6_ul_rules_set = true;
-			num_wan_ul_fl_rule_v6 = pFilteringTable->num_rules;
+			num_wan_ul_fl_rule_v6[0] = pFilteringTable->num_rules;
 		}
 		else
 		{
@@ -6084,11 +6084,11 @@ int IPACM_Wlan::delete_uplink_filter_rule_per_client
 	}
 
 #ifndef IPA_V6_UL_WL_FIREWALL_HANDLE
-	if (((iptype == IPA_IP_v4) && num_wan_ul_fl_rule_v4 > MAX_WAN_UL_FILTER_RULES) ||
-		((iptype == IPA_IP_v6) && num_wan_ul_fl_rule_v6 > MAX_WAN_UL_FILTER_RULES))
+	if (((iptype == IPA_IP_v4) && num_wan_ul_fl_rule_v4[0] > MAX_WAN_UL_FILTER_RULES) ||
+		((iptype == IPA_IP_v6) && num_wan_ul_fl_rule_v6[0] > MAX_WAN_UL_FILTER_RULES))
 #else
-	if (((iptype == IPA_IP_v4) && num_wan_ul_fl_rule_v4 > MAX_WAN_UL_FILTER_RULES) ||
-		((iptype == IPA_IP_v6) && num_wan_ul_fl_rule_v6 > IPACM_MAX_V6_UL_WL_FIREWALL_ENTRIES))
+	if (((iptype == IPA_IP_v4) && num_wan_ul_fl_rule_v4[0] > MAX_WAN_UL_FILTER_RULES) ||
+		((iptype == IPA_IP_v6) && num_wan_ul_fl_rule_v6[0] > IPACM_MAX_V6_UL_WL_FIREWALL_ENTRIES))
 #endif
 	{
 		IPACMERR("number of wan_ul_fl_rule_v4 (%d)/wan_ul_fl_rule_v6 (%d) > MAX_WAN_UL_FILTER_RULES (%d), aborting...\n",
@@ -6105,7 +6105,7 @@ int IPACM_Wlan::delete_uplink_filter_rule_per_client
 	{
 		IPACMDBG_H("Del (%d) num of v4 UL rules for cliend idx:%d\n", num_wan_ul_fl_rule_v4, clnt_indx);
 		if (m_filtering.DeleteFilteringHdls(get_client_memptr(wlan_client, clnt_indx)->wan_ul_fl_rule_hdl_v4,
-				iptype, num_wan_ul_fl_rule_v4) == false)
+				iptype, num_wan_ul_fl_rule_v4[0]) == false)
 		{
 			IPACMERR("Error Deleting RuleTable(1) to Filtering, aborting...\n");
 			close(fd);
@@ -6119,7 +6119,7 @@ int IPACM_Wlan::delete_uplink_filter_rule_per_client
 	{
 		IPACMDBG_H("Del (%d) num of v6 UL rules for cliend idx:%d\n", num_wan_ul_fl_rule_v6, clnt_indx);
 		if (m_filtering.DeleteFilteringHdls(get_client_memptr(wlan_client, clnt_indx)->wan_ul_fl_rule_hdl_v6,
-				iptype, num_wan_ul_fl_rule_v6) == false)
+				iptype, num_wan_ul_fl_rule_v6[0]) == false)
 		{
 			IPACMERR("Error Deleting RuleTable(1) to Filtering, aborting...\n");
 			close(fd);
@@ -6255,7 +6255,7 @@ int IPACM_Wlan::install_wlan_client_lan2lan_flt_rule(uint8_t *mac, ipa_ip_type i
 	pFilteringTable->ip = iptype;
 	pFilteringTable->num_rules = 1;
 
-	pFilteringTable->add_after_hdl = eth_bridge_flt_rule_offset[iptype];
+	pFilteringTable->add_after_hdl = eth_bridge_flt_rule_offset[0][iptype];
 	IPACMDBG_H("pFilteringTable->add_after_hdl 0x%x.\n", pFilteringTable->add_after_hdl);
 
 	memset(&flt_rule_entry, 0, sizeof(flt_rule_entry));
@@ -7477,13 +7477,13 @@ int IPACM_Wlan::handle_refresh_filtering_rules(bool wlan_vlan_mpdn_enable)
 
 		/* delete private-ipv4 filter rules */
 #if defined(FEATURE_IPA_ANDROID) || defined(FEATURE_VLAN_MPDN)
-		if (m_filtering.DeleteFilteringHdls(private_fl_rule_hdl, IPA_IP_v4, num_wan_subnet_rules) == false) {
+		if (m_filtering.DeleteFilteringHdls(private_fl_rule_hdl[0], IPA_IP_v4, num_wan_subnet_rules[0]) == false) {
 			IPACMERR("Error deleting private subnet IPv4 flt rules.\n");
 			res = IPACM_FAILURE;
 			goto fail;
 		}
-		IPACM_Iface::ipacmcfg->decreaseFltRuleCount(rx_prop->rx[idx].src_pipe, IPA_IP_v4, num_wan_subnet_rules);
-		num_wan_subnet_rules = 0;
+		IPACM_Iface::ipacmcfg->decreaseFltRuleCount(rx_prop->rx[idx].src_pipe, IPA_IP_v4, num_wan_subnet_rules[0]);
+		num_wan_subnet_rules[0] = 0;
 #else
 		num_private_subnet_fl_rule = IPACM_Iface::ipacmcfg->ipa_num_private_subnet > (IPA_MAX_PRIVATE_SUBNET_ENTRIES + IPA_MAX_MTU_ENTRIES) ?
 			(IPA_MAX_PRIVATE_SUBNET_ENTRIES + IPA_MAX_MTU_ENTRIES) : IPACM_Iface::ipacmcfg->ipa_num_private_subnet;
@@ -7496,7 +7496,7 @@ int IPACM_Wlan::handle_refresh_filtering_rules(bool wlan_vlan_mpdn_enable)
 #endif
 		IPACMDBG_H("Deleted private subnet v4 filter rules successfully.\n");
 
-		if (m_filtering.DeleteFilteringHdls(&tcp_syn_flt_rule_hdl[IPA_IP_v4], IPA_IP_v4, 1) == false) {
+		if (m_filtering.DeleteFilteringHdls(&tcp_syn_flt_rule_hdl[0][IPA_IP_v4], IPA_IP_v4, 1) == false) {
 			IPACMERR("Error deleting tcp syn flt rule, aborting...\n");
 			res = IPACM_FAILURE;
 			goto fail;
@@ -7520,7 +7520,7 @@ int IPACM_Wlan::handle_refresh_filtering_rules(bool wlan_vlan_mpdn_enable)
 			goto fail;
 		}
 
-		if (m_filtering.DeleteFilteringHdls(&tcp_syn_flt_rule_hdl[IPA_IP_v6], IPA_IP_v6, 1) == false) {
+		if (m_filtering.DeleteFilteringHdls(&tcp_syn_flt_rule_hdl[0][IPA_IP_v6], IPA_IP_v6, 1) == false) {
 			IPACMERR("Error deleting tcp syn flt rule, aborting...\n");
 			res = IPACM_FAILURE;
 			goto fail;
@@ -7544,11 +7544,11 @@ int IPACM_Wlan::handle_refresh_filtering_rules(bool wlan_vlan_mpdn_enable)
 	init_fl_rule(IPA_IP_v4);
 
 	/* populate the flt rule offset for eth bridge */
-	eth_bridge_flt_rule_offset[IPA_IP_v4] = ipv4_icmp_flt_rule_hdl[0];
+	eth_bridge_flt_rule_offset[0][IPA_IP_v4] = ipv4_icmp_flt_rule_hdl[0][0];
 	/* populate the flt rule offset for mtu_offset (offset = broadcast rule)*/
-	if (m_ipv4_default_filterting_rules_count > 0 && m_ipv4_default_filterting_rules_count <= IPV4_DEFAULT_FILTERTING_RULES) {
-		mtu_flt_rule_offset[IPA_IP_v4] =
-			dft_v4fl_rule_hdl[m_ipv4_default_filterting_rules_count - 1];
+	if (m_ipv4_default_filterting_rules_count[0] > 0 && m_ipv4_default_filterting_rules_count[0] <= IPV4_DEFAULT_FILTERTING_RULES) {
+		mtu_flt_rule_offset[0][IPA_IP_v4] =
+			dft_v4fl_rule_hdl[0][m_ipv4_default_filterting_rules_count[0] - 1];
 	}
 
 	/* Always adding tcp syn SW-exception rule for MSS clamping support */
@@ -7567,7 +7567,7 @@ int IPACM_Wlan::handle_refresh_filtering_rules(bool wlan_vlan_mpdn_enable)
 	install_ipv6_icmp_flt_rule();
 
 	/* populate the flt rule offset for eth bridge */
-	eth_bridge_flt_rule_offset[IPA_IP_v6] = ipv6_icmp_flt_rule_hdl[0];
+	eth_bridge_flt_rule_offset[0][IPA_IP_v6] = ipv6_icmp_flt_rule_hdl[0][0];
 #ifdef FEATURE_L2TP
 	if (IPACM_Iface::ipacmcfg->ipacm_l2tp_enable == IPACM_L2TP) {
 #ifdef IPA_L2TP_TUNNEL_UDP
@@ -7588,9 +7588,9 @@ int IPACM_Wlan::handle_refresh_filtering_rules(bool wlan_vlan_mpdn_enable)
 	init_fl_rule(IPA_IP_v6);
 
 	/* populate the mtu_rule_offset */
-	if (m_ipv6_default_filterting_rules_count > 0 && m_ipv6_default_filterting_rules_count <= (IPV6_DEFAULT_FILTERTING_RULES + IPV6_DEFAULT_LAN_FILTERTING_RULES)) {
-		mtu_flt_rule_offset[IPA_IP_v6] =
-			dft_v6fl_rule_hdl[m_ipv6_default_filterting_rules_count - 1];
+	if (m_ipv6_default_filterting_rules_count[0] > 0 && m_ipv6_default_filterting_rules_count[0] <= (IPV6_DEFAULT_FILTERTING_RULES + IPV6_DEFAULT_LAN_FILTERTING_RULES)) {
+		mtu_flt_rule_offset[0][IPA_IP_v6] =
+			dft_v6fl_rule_hdl[0][m_ipv6_default_filterting_rules_count[0] - 1];
 	}
 	fail:
 	return res;

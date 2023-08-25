@@ -785,8 +785,11 @@ public:
 	int SwitchAPVlanMode(char *dev_name, bool vlan_mpdn);
 
 	bool IsWlanIfVlan(const char *dev_name);
-
 	int SetWlanVlanAp(char *event_iface_name);
+
+	/* Special Inteface handles both vlan and non-vlan clients*/
+	bool IsSpclIface(const char *dev_name);
+	int SetSpclIface(char *event_iface_name);
 
 	inline void SetQmapId(uint8_t id)
 	{

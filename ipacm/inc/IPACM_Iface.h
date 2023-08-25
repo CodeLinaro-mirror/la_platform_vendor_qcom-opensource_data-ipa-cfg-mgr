@@ -28,7 +28,7 @@
  *
  * Changes from Qualcomm Innovation Center are provided under the following license:
  *
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted (subject to the limitations in the
@@ -169,13 +169,15 @@ public:
 	/* IPACM number of default route rules for ipv6*/
 	int num_dft_rt_v6;
 
-	uint32_t dft_v4fl_rule_hdl[IPV4_DEFAULT_FILTERTING_RULES];
-	uint32_t dft_v6fl_rule_hdl[IPV6_DEFAULT_FILTERTING_RULES + IPV6_DEFAULT_LAN_FILTERTING_RULES];
+	uint32_t dft_v4fl_rule_hdl[IPA_MAX_NUM_PROPS][IPV4_DEFAULT_FILTERTING_RULES];
+	uint32_t dft_v6fl_rule_hdl[IPA_MAX_NUM_PROPS][IPV6_DEFAULT_FILTERTING_RULES + IPV6_DEFAULT_LAN_FILTERTING_RULES];
 	/* create additional set of v6 RT-rules in Wanv6RT table*/
+
 	uint32_t dft_rt_rule_hdl[MAX_DEFAULT_v4_ROUTE_RULES + (2 * MAX_DEFAULT_v6_ROUTE_RULES)];
 #ifdef FEATURE_IPA_IPSEC
 	uint32_t dft_ipsec_rt_rule_hdl[MAX_DEFAULT_IPSEC_v4_ROUTE_RULES + MAX_DEFAULT_IPSEC_v6_ROUTE_RULES];
 #endif
+
 	/* save client ipv6 address info and rt handles */
 	std::map<std::array<uint32_t, 4>, handleTypeV6> rt_hdl_v6_list[IPA_MAX_NUM_CLIENTS_IPV6];
 
@@ -280,8 +282,8 @@ public:
 
 protected:
 
-	uint8_t m_ipv4_default_filterting_rules_count;
-	uint8_t m_ipv6_default_filterting_rules_count;
+	uint8_t m_ipv4_default_filterting_rules_count[IPA_MAX_NUM_PROPS];
+	uint8_t m_ipv6_default_filterting_rules_count[IPA_MAX_NUM_PROPS];
 
 private:
 

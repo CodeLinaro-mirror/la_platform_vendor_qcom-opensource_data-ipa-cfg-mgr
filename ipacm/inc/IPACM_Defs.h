@@ -192,6 +192,7 @@ extern "C"
 #endif
 
 #define IPA_DUMMY_PREFIX 0xFFFFFFFF
+#define IPA_MAX_NUM_PROPS 2
 
 /*
  * The following macros allow callers to print the raw bytes making up
@@ -408,6 +409,7 @@ typedef struct
 	ipacm_wlan_access_mode wlan_mode;
 	int netlink_interface_index;
 	bool is_wlan_if_vlan;
+	bool is_spcl_if;
 } ipa_ifi_dev_name_t;
 
 typedef struct

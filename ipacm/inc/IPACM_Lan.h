@@ -28,7 +28,7 @@ IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  * Changes from Qualcomm Innovation Center are provided under the following license:
  *
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted (subject to the limitations in the
@@ -129,12 +129,16 @@ typedef struct _ipa_eth_client
 	uint32_t v4_addr;
 	uint32_t hdr_hdl_v4;
 	uint32_t hdr_hdl_v6;
+	uint32_t hpc_hdr_hdl_v4;
+	uint32_t hpc_hdr_hdl_v6;
 	bool route_rule_set_v4;
 	int route_rule_set_v6;
 	bool ipv4_set;
 	int ipv6_set;
 	bool ipv4_header_set;
 	bool ipv6_header_set;
+	bool ipv4_hpc_set;
+	bool ipv6_hpc_set;
 	int if_index;
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
 	bool ipv4_ul_rules_set;
@@ -177,14 +181,14 @@ typedef struct _ipa_eth_client
 
 #ifdef FEATURE_IPACM_UL_FIREWALL
 typedef struct ul_firewall {
-	uint32_t ul_firewall_handle[IPACM_MAX_FIREWALL_ENTRIES];
-	int num_ul_firewall_installed;
+	uint32_t ul_firewall_handle[IPA_MAX_NUM_PROPS][IPACM_MAX_FIREWALL_ENTRIES];
+	int num_ul_firewall_installed[IPA_MAX_NUM_PROPS];
 #ifdef FEATURE_VLAN_MPDN
-	int num_ul_frag_installed;
-	uint32_t ul_frag_handle[IPA_MAX_NUM_HW_PDNS];
+	int num_ul_frag_installed[IPA_MAX_NUM_PROPS];
+	uint32_t ul_frag_handle[IPA_MAX_NUM_PROPS][IPA_MAX_NUM_HW_PDNS];
 #else
-	bool ul_frag_installed;
-	uint32_t ul_frag_handle;
+	bool ul_frag_installed[IPA_MAX_NUM_PROPS];
+	uint32_t ul_frag_handle[IPA_MAX_NUM_PROPS];
 #endif
 } ul_firewall_t;
 #endif
@@ -281,22 +285,22 @@ public:
 	~IPACM_Lan();
 
 	/* store lan's wan-up filter rule handlers */
-	uint32_t lan_wan_fl_rule_hdl[IPA_WAN_DEFAULT_FILTER_RULE_HANDLES];
+	uint32_t lan_wan_fl_rule_hdl[IPA_MAX_NUM_PROPS][IPA_WAN_DEFAULT_FILTER_RULE_HANDLES];
 
 	/* store private-subnet filter rule handlers */
-	uint32_t private_fl_rule_hdl[IPA_MAX_PRIVATE_SUBNET_ENTRIES + IPA_MAX_MTU_ENTRIES];
+	uint32_t private_fl_rule_hdl[IPA_MAX_NUM_PROPS][IPA_MAX_PRIVATE_SUBNET_ENTRIES + IPA_MAX_MTU_ENTRIES];
 
 #ifdef FEATURE_IPACM_UL_FIREWALL
 	ul_firewall_t iface_ul_firewall;
 #endif
 	/* Number of Q6 UL IPv4 rules. */
-	int num_wan_ul_fl_rule_v4;
+	int num_wan_ul_fl_rule_v4[IPA_MAX_NUM_PROPS];
 	/* Number of Q6 UL IPv6 rules. */
-	int num_wan_ul_fl_rule_v6;
+	int num_wan_ul_fl_rule_v6[IPA_MAX_NUM_PROPS];
 	/* Number of UL subnet IPv4 rules. */
-	int num_wan_subnet_rules;
+	int num_wan_subnet_rules[IPA_MAX_NUM_PROPS];
 	/* Number of UL prefix IPv6 rules. */
-	int num_wan_prefix_rules;
+	int num_wan_prefix_rules[IPA_MAX_NUM_PROPS];
 
 	/* Header length. */
 	uint8_t hdr_len;
@@ -311,6 +315,9 @@ public:
 #ifdef FEATURE_VLAN_MPDN
 	bool is_vlan_offload_disabled;
 #endif
+
+	/* To determine if an interface is special interface */
+	bool sIface;
 
 	std::list <ipacm_event_data_all> neigh_cache;
 
@@ -567,7 +574,7 @@ public:
 		ipa_hdr_l2_type peer_l2_hdr_type, ipa_ip_type iptype, uint32_t *rt_rule_hdl, int rt_rule_count);
 
 	/* add filtering rule and return handle to lan2lan controller */
-	int eth_bridge_add_flt_rule(uint8_t *mac, uint32_t rt_tbl_hdl, ipa_ip_type iptype, uint32_t *flt_rule_hdl, uint16_t vlan_id = 0);
+	int eth_bridge_add_flt_rule(uint8_t *mac, uint32_t rt_tbl_hdl, ipa_ip_type iptype, uint32_t *flt_rule_hdl, uint16_t vlan_id = 0, uint16_t pipe_idx = 0);
 
 	/* delete filtering rule */
 	int eth_bridge_del_flt_rule(uint32_t flt_rule_hdl, ipa_ip_type iptype);
@@ -666,8 +673,8 @@ protected:
 
 	int each_client_rt_rule_count[IPA_IP_MAX];
 
-	uint32_t eth_bridge_flt_rule_offset[IPA_IP_MAX];
-	uint32_t mtu_flt_rule_offset[IPA_IP_MAX];
+	uint32_t eth_bridge_flt_rule_offset[IPA_MAX_NUM_PROPS][IPA_IP_MAX];
+	uint32_t mtu_flt_rule_offset[IPA_MAX_NUM_PROPS][IPA_IP_MAX];
 
 #ifdef FEATURE_L2TP
 #ifdef IPA_L2TP_TUNNEL_UDP
@@ -1089,27 +1096,27 @@ protected:
 #endif
 
 	/* store ipv4 UL filter rule handlers from Q6*/
-	uint32_t wan_ul_fl_rule_hdl_v4[MAX_WAN_UL_FILTER_RULES];
+	uint32_t wan_ul_fl_rule_hdl_v4[IPA_MAX_NUM_PROPS][MAX_WAN_UL_FILTER_RULES];
 
 	/* store ipv6 UL filter rule handlers from Q6*/
 #ifndef IPA_V6_UL_WL_FIREWALL_HANDLE
-	uint32_t wan_ul_fl_rule_hdl_v6[MAX_WAN_UL_FILTER_RULES];
+	uint32_t wan_ul_fl_rule_hdl_v6[IPA_MAX_NUM_PROPS][MAX_WAN_UL_FILTER_RULES];
 #else
-	uint32_t wan_ul_fl_rule_hdl_v6[IPACM_MAX_V6_UL_WL_FIREWALL_ENTRIES];
+	uint32_t wan_ul_fl_rule_hdl_v6[IPA_MAX_NUM_PROPS][IPACM_MAX_V6_UL_WL_FIREWALL_ENTRIES];
 #endif
 
-	uint32_t ipv4_icmp_flt_rule_hdl[NUM_IPV4_ICMP_FLT_RULE];
+	uint32_t ipv4_icmp_flt_rule_hdl[IPA_MAX_NUM_PROPS][NUM_IPV4_ICMP_FLT_RULE];
 #ifdef FEATURE_VLAN_MPDN
-	uint32_t ipv6_prefix_flt_rule_hdl[IPA_MAX_IPV6_NO_OFFLOAD_PREFIX_FLT_RULE + IPA_MAX_MTU_ENTRIES];
+	uint32_t ipv6_prefix_flt_rule_hdl[IPA_MAX_NUM_PROPS][IPA_MAX_IPV6_NO_OFFLOAD_PREFIX_FLT_RULE + IPA_MAX_MTU_ENTRIES];
 #else
-	uint32_t ipv6_prefix_flt_rule_hdl[IPA_MAX_IPV6_PREFIX_FLT_RULE + IPA_MAX_MTU_ENTRIES];
+	uint32_t ipv6_prefix_flt_rule_hdl[IPA_MAX_NUM_PROPS][IPA_MAX_IPV6_PREFIX_FLT_RULE + IPA_MAX_MTU_ENTRIES];
 #endif
 #ifdef FEATURE_IPV6_NAT
 	uint32_t ipv6_nat_ula_prefix_flt_rule_hdl;
 #endif
-	uint32_t ipv6_icmp_flt_rule_hdl[NUM_IPV6_ICMP_FLT_RULE];
+	uint32_t ipv6_icmp_flt_rule_hdl[IPA_MAX_NUM_PROPS][NUM_IPV6_ICMP_FLT_RULE];
 #ifdef FEATURE_L2TP
-	uint32_t l2tp_inner_private_subnet_flt_rule_hdl[IPA_MAX_PRIVATE_SUBNET_ENTRIES];
+	uint32_t l2tp_inner_private_subnet_flt_rule_hdl[IPA_MAX_NUM_PROPS][IPA_MAX_PRIVATE_SUBNET_ENTRIES];
 #endif
 
 #ifdef FEATURE_SOCKSv5
@@ -1117,14 +1124,14 @@ protected:
 #endif
 
 	bool is_active;
-	bool modem_ul_v4_set;
-	bool modem_ul_v6_set;
+	bool modem_ul_v4_set[IPA_MAX_NUM_PROPS];
+	bool modem_ul_v6_set[IPA_MAX_NUM_PROPS];
 
 	uint32_t if_ipv4_subnet;
 
 	uint32_t ipv6_prefix[2];
 
-	uint32_t tcp_syn_flt_rule_hdl[IPA_IP_MAX];
+	uint32_t tcp_syn_flt_rule_hdl[IPA_MAX_NUM_PROPS][IPA_IP_MAX];
 #if defined(FEATURE_L2TP)
 #ifdef IPA_L2TP_TUNNEL_UDP
 	uint32_t l2tp_udp_dflt_flt_rule_hdl[NUM_L2TP_UDP_DFLT_RULES];

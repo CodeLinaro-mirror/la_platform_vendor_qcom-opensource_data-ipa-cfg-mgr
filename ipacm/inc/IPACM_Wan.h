@@ -756,6 +756,9 @@ private:
 	/* handle new_address event */
 	int handle_addr_evt(ipacm_event_data_addr *data);
 
+	/* handle del_address event */
+	int handle_addr_del_evt(ipacm_event_data_addr *data);
+
 	/* wan default route/filter rule configuration */
 	int handle_route_add_evt(ipa_ip_type iptype);
 

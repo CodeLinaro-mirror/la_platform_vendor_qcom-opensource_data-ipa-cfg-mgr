@@ -92,7 +92,7 @@ extern "C"
 
 #define IPA_MAX_ACTIVE_WLAN_IFACE 21
 
-#define IPA_MAX_IFACE_ENTRIES (41 + IPA_MAX_ACTIVE_WLAN_IFACE) /* current: 15 rmnet + 21 wlan + bridge+ eth+ rndis + ecm + 15 rmnet for RDKB. */
+#define IPA_MAX_IFACE_ENTRIES (48 + IPA_MAX_ACTIVE_WLAN_IFACE) /* current: 15 rmnet + 21 wlan + bridge+ eth+ rndis + ecm + 15 rmnet for RDKB + 7mld. */
 #define IPA_MAX_ALG_ENTRIES 20
 #define IPA_MAX_RM_ENTRY 9
 

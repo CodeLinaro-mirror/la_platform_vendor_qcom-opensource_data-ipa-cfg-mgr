@@ -277,7 +277,35 @@
 			<Iface>
 			   <Name>br-lan</Name>
 			   <Category>VIRTUAL</Category>
-		    </Iface>
+			</Iface>
+			<Iface>
+			   <Name>mld0</Name>
+			   <Category>UNKNOWN</Category>
+			</Iface>
+			<Iface>
+			   <Name>mld1</Name>
+			   <Category>UNKNOWN</Category>
+			</Iface>
+			<Iface>
+			   <Name>mld2</Name>
+			   <Category>UNKNOWN</Category>
+			</Iface>
+			<Iface>
+			   <Name>mld3</Name>
+			   <Category>UNKNOWN</Category>
+			</Iface>
+			<Iface>
+			   <Name>mld4</Name>
+			   <Category>UNKNOWN</Category>
+			</Iface>
+			<Iface>
+			   <Name>mld5</Name>
+			   <Category>UNKNOWN</Category>
+			</Iface>
+			<Iface>
+			   <Name>mld6</Name>
+			   <Category>UNKNOWN</Category>
+			</Iface>
 		</IPACMIface>
 		<GREFlag>
 			<GREAutolearn>1</GREAutolearn>

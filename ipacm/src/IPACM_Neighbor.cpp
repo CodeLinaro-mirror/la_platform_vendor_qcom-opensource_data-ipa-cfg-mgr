@@ -59,6 +59,7 @@ SPDX-License-Identifier: BSD-3-Clause-Clear,
 #define IPA_TMP_DIR "/tmp/data_ipa"
 #define IPA_FDB_TABLE IPA_TMP_DIR"/ipa_fdb_table.txt"
 #define IPA_NO_IFACE_NAME "IFACE_NONE"
+#define MLD_IFACE_NAME "mld"
 
 IPACM_Neighbor::IPACM_Neighbor()
 {
@@ -633,6 +634,12 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 								else
 									/* not to clean-up the client mac cache on bridge0 delneigh */
 									evt_data.event = IPA_NEIGH_CLIENT_IP_ADDR_DEL_EVENT;
+								/* donot post event with mld it will be taken care in ath interface */
+								if (strncmp(data->iface_name, MLD_IFACE_NAME, strlen(MLD_IFACE_NAME)) == 0)
+								{
+									IPACMERR("MLD interface dont post IPA_NEIGH_CLIENT_IP_ADDR_ADD_EVENT\n");
+									break;
+								}
 #ifdef FEATURE_VLAN_MPDN
 								if(IPACM_Iface::ipacmcfg->ipacm_mpdn_enable == TRUE)
 								{
@@ -704,9 +711,13 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 								memcpy(neighbor_client[num_neighbor_client_temp].mac_addr,
 											data->mac_addr,
 											sizeof(data->mac_addr));
-								neighbor_client[num_neighbor_client_temp].iface_index = data->if_index;
-								/* cache the network interface client associated */
-								neighbor_client[num_neighbor_client_temp].ipa_if_num = ipa_interface_index;
+								if (strncmp(data->iface_name, MLD_IFACE_NAME, strlen(MLD_IFACE_NAME)) != 0) {
+									neighbor_client[num_neighbor_client_temp].iface_index = data->if_index;
+									/* cache the network interface client associated */
+									neighbor_client[num_neighbor_client_temp].ipa_if_num = ipa_interface_index;
+								} else {
+									IPACMDBG_H("MLD interface dont update if index\n");
+								}
 								neighbor_client[num_neighbor_client_temp].v4_addr = data->ipv4_addr;
 #ifdef FEATURE_VLAN_MPDN
 								if (IPACM_Iface::ipacmcfg->ipacm_mpdn_enable == TRUE)
@@ -735,9 +746,13 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 								memcpy(neighbor_client[circular_index].mac_addr,
 											data->mac_addr,
 											sizeof(data->mac_addr));
-								neighbor_client[circular_index].iface_index = data->if_index;
-								/* cache the network interface client associated */
-								neighbor_client[circular_index].ipa_if_num = ipa_interface_index;
+								if (strncmp(data->iface_name, MLD_IFACE_NAME, strlen(MLD_IFACE_NAME)) != 0) {
+									neighbor_client[circular_index].iface_index = data->if_index;
+									/* cache the network interface client associated */
+									neighbor_client[circular_index].ipa_if_num = ipa_interface_index;
+								} else {
+									IPACMDBG_H("MLD interface dont update if index and name\n ");
+								}
 								neighbor_client[circular_index].v4_addr = data->ipv4_addr;
 #ifdef FEATURE_VLAN_MPDN
 								if(IPACM_Iface::ipacmcfg->ipacm_mpdn_enable == TRUE)
@@ -782,10 +797,15 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 								if (memcmp(neighbor_client[i].mac_addr, data->mac_addr, sizeof(neighbor_client[i].mac_addr)) == 0)
 								{
 									/* update the network interface client associated */
-									neighbor_client[i].iface_index = data->if_index;
-									neighbor_client[i].ipa_if_num = ipa_interface_index;
+									if (strncmp(data->iface_name, MLD_IFACE_NAME, strlen(MLD_IFACE_NAME)) != 0)
+									{
+										neighbor_client[i].iface_index = data->if_index;
+										neighbor_client[i].ipa_if_num = ipa_interface_index;
+										strlcpy(neighbor_client[i].iface_name, data->iface_name, sizeof(neighbor_client[i].iface_name));
+									} else {
+										IPACMDBG_H("MLD interface dont update if index and if name in neigh table");
+									}
 									neighbor_client[i].v4_addr = data->ipv4_addr; // cache client's previous ipv4 address
-									strlcpy(neighbor_client[i].iface_name, data->iface_name, sizeof(neighbor_client[i].iface_name));
 									IPACMDBG_H("update cache %d-entry, with %s iface, ipv4 address: 0x%x\n",
 										i, data->iface_name, data->ipv4_addr);
 									break;
@@ -858,6 +878,14 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 								/* find the client */
 								if (memcmp(neighbor_client[i].mac_addr, data->mac_addr, sizeof(neighbor_client[i].mac_addr)) == 0)
 								{
+									if (strncmp(data->iface_name, MLD_IFACE_NAME, strlen(MLD_IFACE_NAME)) == 0)
+									{
+										/*we would have received a client connect so neibhour table will have correct ath interface*/
+										data->if_index = neighbor_client[i].iface_index;
+										strlcpy(data->iface_name,neighbor_client[i].iface_name,sizeof(neighbor_client[i].iface_name));
+										IPACMDBG_H("MLD interface updating from neigh if index :%d if name:%s",neighbor_client[i].iface_index,
+										neighbor_client[i].iface_name);
+									}
 #ifdef FEATURE_VLAN_MPDN
 									if(IPACM_Iface::ipacmcfg->ipacm_mpdn_enable == TRUE)
 									{
@@ -918,6 +946,12 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 									{
 										IPACMERR("client %d name %s not real\n", i, data->iface_name);
 										return;
+									}
+									/* donot post event with mld */
+									if (strncmp(data->iface_name, MLD_IFACE_NAME, strlen(MLD_IFACE_NAME)) == 0)
+									{
+										IPACMERR("MLD interface dont post event IPA_NEIGH_CLIENT_IP_ADDR_DEL_EVENT");
+										break;
 									}
 									evt_data.event = IPA_LAN_CLIENT_DEL_EVENT;
 									data_all = (ipacm_event_data_all *)malloc(sizeof(ipacm_event_data_all));
@@ -1040,6 +1074,12 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 									evt_data.event = IPA_NEIGH_CLIENT_IP_ADDR_ADD_EVENT;
 								else
 									evt_data.event = IPA_NEIGH_CLIENT_IP_ADDR_DEL_EVENT;
+								/* donot post event with mld it will be taken care in ath interface */
+								if (strncmp(data->iface_name, MLD_IFACE_NAME, strlen(MLD_IFACE_NAME)) == 0)
+								{
+									IPACMERR("MLD interface dont post event IPA_NEIGH_CLIENT_IP_ADDR_EVENT");
+									break;
+								}
 #ifdef FEATURE_VLAN_MPDN
 								if(IPACM_Iface::ipacmcfg->ipacm_mpdn_enable == TRUE)
 								{
@@ -1091,7 +1131,7 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 									IPACMDBG_H("Posted event %d with %s for ipv6\n",
 										evt_data.event, data->iface_name);
 								}
-								break;
+							break;
 							}
 						}
 					}
@@ -1102,6 +1142,12 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 							evt_data.event = IPA_NEIGH_CLIENT_IP_ADDR_ADD_EVENT;
 						else
 							evt_data.event = IPA_NEIGH_CLIENT_IP_ADDR_DEL_EVENT;
+						/* donot post event with mld*/
+						if (strncmp(data->iface_name, MLD_IFACE_NAME, strlen(MLD_IFACE_NAME)) == 0)
+						{
+							IPACMERR("MLD interface dont post event IPA_NEIGH_CLIENT_IP_ADDR_EVENT\n");
+							break;
+						}
 						data_all = (ipacm_event_data_all *)malloc(sizeof(ipacm_event_data_all));
 						if (data_all == NULL)
 						{
@@ -1180,19 +1226,29 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 #endif
 								/* use previous ipv4 first */
 								if(data->if_index != neighbor_client[i].iface_index)
-								{
-									IPACMDBG_H("update new kernel iface index \n");
-									neighbor_client[i].iface_index = data->if_index;
-									strlcpy(neighbor_client[i].iface_name, data->iface_name, sizeof(neighbor_client[i].iface_name));
+								{	/* no need to update new kernel intex in case of mld */
+									if (strncmp(data->iface_name, MLD_IFACE_NAME, strlen(MLD_IFACE_NAME)) != 0)
+									{
+										IPACMDBG_H("update new kernel iface index \n");
+										neighbor_client[i].iface_index = data->if_index;
+										strlcpy(neighbor_client[i].iface_name, data->iface_name, sizeof(neighbor_client[i].iface_name));
+									} else {
+										IPACMDBG_H("MLD interface donot update if index and if name\n");
+									}
 								}
 
 								/* check if client associated with previous network interface */
 								if(ipa_interface_index != neighbor_client[i].ipa_if_num)
 								{
-									/* replacing the updated iface */
-									IPACMDBG_H("client associate to different AP %s\n", data->iface_name);
-									neighbor_client[i].ipa_if_num = ipa_interface_index;
-									strlcpy(neighbor_client[i].iface_name, data->iface_name, sizeof(neighbor_client[i].iface_name));
+									if (strncmp(data->iface_name, MLD_IFACE_NAME, strlen(MLD_IFACE_NAME)) != 0)
+									{
+										/* replacing the updated iface */
+										IPACMDBG_H("client associate to different AP %s\n", data->iface_name);
+										neighbor_client[i].ipa_if_num = ipa_interface_index;
+										strlcpy(neighbor_client[i].iface_name, data->iface_name, sizeof(neighbor_client[i].iface_name));
+									} else {
+										IPACMDBG_H("MLD interface donot update if index and if name\n");
+									}
 								}
 
 								if (neighbor_client[i].v4_addr != 0) /* not 0.0.0.0 */

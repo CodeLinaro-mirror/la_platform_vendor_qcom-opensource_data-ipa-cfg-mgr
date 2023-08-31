@@ -25,6 +25,10 @@ BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
 WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
 OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
 IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+Changes from Qualcomm Technologies, Inc. are provided under the following license:
+Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+SPDX-License-Identifier: BSD-3-Clause-Clear
 */
 /*!
 	@file
@@ -710,12 +714,12 @@ static int ipa_nl_decode_nlmsg
 
 				/* Add IPACM support for ECM plug-in/plug_out */
 				/*--------------------------------------------------------------------------
-                   Check if the interface is running.If its a RTM_NEWLINK and the interface
-                    is running then it means that its a link up event
-                ---------------------------------------------------------------------------*/
-                if((msg_ptr->nl_link_info.metainfo.ifi_flags & IFF_RUNNING) &&
-                   (msg_ptr->nl_link_info.metainfo.ifi_flags & IFF_LOWER_UP))
-                {
+				Check if the interface is running.If its a RTM_NEWLINK and the interface
+				is running then it means that its a link up event
+				---------------------------------------------------------------------------*/
+				if((msg_ptr->nl_link_info.metainfo.ifi_flags & IFF_RUNNING) &&
+					(msg_ptr->nl_link_info.metainfo.ifi_flags & IFF_LOWER_UP))
+ 				{
 
 					data_fid = (ipacm_event_data_fid *)malloc(sizeof(ipacm_event_data_fid));
 					if(data_fid == NULL)
@@ -729,20 +733,21 @@ static int ipa_nl_decode_nlmsg
 					if(ret_val != IPACM_SUCCESS)
 					{
 						IPACMERR("Error while getting interface name\n");
+						free(data_fid);
 						goto fail;
 					}
 					IPACMDBG("Got a usb link_up event (Interface %s, %d) \n", dev_name, msg_ptr->nl_link_info.metainfo.ifi_index);
 
-                    /*--------------------------------------------------------------------------
-                       Post LAN iface (ECM) link up event
-                     ---------------------------------------------------------------------------*/
-                    evt_data.event = IPA_USB_LINK_UP_EVENT;
+					/*--------------------------------------------------------------------------
+						Post LAN iface (ECM) link up event
+					 ---------------------------------------------------------------------------*/
+					evt_data.event = IPA_USB_LINK_UP_EVENT;
 					evt_data.evt_data = data_fid;
 					IPACMDBG_H("Posting usb IPA_LINK_UP_EVENT with if index: %d\n",
 										 data_fid->if_index);
 					IPACM_EvtDispatcher::PostEvt(&evt_data);
-                }
-                else if (!(msg_ptr->nl_link_info.metainfo.ifi_flags & IFF_LOWER_UP))
+				}
+				else if (!(msg_ptr->nl_link_info.metainfo.ifi_flags & IFF_LOWER_UP))
 				{
 					data_fid = (ipacm_event_data_fid *)malloc(sizeof(ipacm_event_data_fid));
 					if(data_fid == NULL)
@@ -756,6 +761,7 @@ static int ipa_nl_decode_nlmsg
 					if(ret_val != IPACM_SUCCESS)
 					{
 						IPACMERR("Error while getting interface name\n");
+						free(data_fid);
 						goto fail;
 					}
 					IPACMDBG_H("Got a usb link_down event (Interface %s) \n", dev_name);
@@ -851,6 +857,7 @@ static int ipa_nl_decode_nlmsg
 					IPACMERR("unable to allocate memory for event data_addr\n");
 					goto fail;
 				}
+				memset(data_addr, 0, sizeof(ipacm_event_data_addr));
 
 				if(AF_INET6 == msg_ptr->nl_addr_info.attr_info.prefix_addr.ss_family)
 				{
@@ -876,18 +883,23 @@ static int ipa_nl_decode_nlmsg
 				strlcpy(data_addr->iface_name, dev_name, sizeof(data_addr->iface_name));
 				if(AF_INET6 == msg_ptr->nl_addr_info.attr_info.prefix_addr.ss_family)
 				{
-				    IPACMDBG("Posting IPA_ADDR_ADD_EVENT with if index:%d, ipv6 addr:0x%x:%x:%x:%x\n",
+					IPACMDBG("Posting IPA_ADDR_ADD_EVENT with if index:%d, ipv6 addr:0x%x:%x:%x:%x\n",
 								 data_addr->if_index,
 								 data_addr->ipv6_addr[0],
 								 data_addr->ipv6_addr[1],
 								 data_addr->ipv6_addr[2],
 								 data_addr->ipv6_addr[3]);
-                }
-				else
+				}
+				else if(AF_INET == msg_ptr->nl_addr_info.attr_info.prefix_addr.ss_family)
 				{
-				IPACMDBG("Posting IPA_ADDR_ADD_EVENT with if index:%d, ipv4 addr:0x%x\n",
+					IPACMDBG("Posting IPA_ADDR_ADD_EVENT with if index:%d, ipv4 addr:0x%x\n",
 								 data_addr->if_index,
 								 data_addr->ipv4_addr);
+				}
+				else
+				{
+					free(data_addr);
+					return IPACM_FAILURE;
 				}
 				evt_data.evt_data = data_addr;
 				IPACM_EvtDispatcher::PostEvt(&evt_data);

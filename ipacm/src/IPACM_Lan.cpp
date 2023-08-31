@@ -3226,7 +3226,7 @@ int IPACM_Lan::handle_wan_up(ipa_ip_type ip_type, uint16_t vid)
 		m_pFilteringTable->ep = rx_prop->rx[0].src_pipe;
 		m_pFilteringTable->ip = IPA_IP_v4;
 		m_pFilteringTable->num_rules = (uint8_t)1;
-		m_pFilteringTable->add_after_hdl = private_fl_rule_hdl[IPA_MAX_PRIVATE_SUBNET_ENTRIES + IPA_MAX_MTU_ENTRIES - 1];
+		m_pFilteringTable->add_after_hdl = private_fl_rule_hdl[num_wan_subnet_rules - 1];
 
 		IPACMDBG_H("Retrieving routing handle for table: %s\n",
 						 IPACM_Iface::ipacmcfg->rt_tbl_wan_v4.name);

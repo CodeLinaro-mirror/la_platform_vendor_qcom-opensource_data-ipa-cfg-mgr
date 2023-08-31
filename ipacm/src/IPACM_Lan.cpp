@@ -6013,6 +6013,14 @@ int IPACM_Lan::handle_eth_client_down_evt(uint8_t *mac_addr, uint16_t vlan_id, i
 int IPACM_Lan::handle_vlan_phys_if_down()
 {
 	int xlat_pdn_ctx_id;
+        int i = 0;
+
+	if (rx_prop == NULL)
+	{
+		IPACMERR("Rx prop is NULL, return\n");
+		return IPACM_SUCCESS;
+	}
+
 #ifdef FEATURE_SOCKSv5
 	/* socksv5 case */
 	if (IPACM_Iface::ipacmcfg->ipacm_mpdn_enable == false)
@@ -6088,7 +6096,44 @@ int IPACM_Lan::handle_vlan_phys_if_down()
 		}
 	}
 
-	return IPACM_SUCCESS;
+		/* currently support only all vlans switch to STA or LTE, not partial vlans */
+	for(i = 0; i < IPA_MAX_NUM_OFFLOAD_VLANS; i++)
+        {
+                if((vlan_sta_info[i].vlan_id != 0) && (vlan_sta_info[i].v4_flt_hdl != 0))
+                {
+                        IPACMDBG_H("Deleting filter rule for vlan_id %d during iface down\n",vlan_sta_info[i].vlan_id);
+                        if (m_filtering.DeleteFilteringHdls(&vlan_sta_info[i].v4_flt_hdl, IPA_IP_v4, 1) == false)
+                        {
+                                IPACMERR("Error Adding RuleTable(1) to Filtering, aborting...\n");
+                                return IPACM_FAILURE;
+                        }
+                        IPACM_Iface::ipacmcfg->decreaseFltRuleCount(rx_prop->rx[0].src_pipe, IPA_IP_v4, 1);
+                        vlan_sta_info[i].v4_flt_hdl = 0;
+                        vlan_sta_info[i].vlan_id = 0;
+                }
+        }
+
+	IPACMDBG_H("Complete deletion of STA BH IPV4\n");
+
+        for(i = 0; (m_ipv6_default_filterting_rules_count + i) < IPA_MAX_NUM_OFFLOAD_VLANS; i++)
+        {
+                if(dft_v6fl_rule_hdl[m_ipv6_default_filterting_rules_count + i])
+                {
+                        if (!m_filtering.DeleteFilteringHdls(&dft_v6fl_rule_hdl[m_ipv6_default_filterting_rules_count + i], IPA_IP_v6, 1))
+                        {
+                                IPACMERR("Error Deleting last default flt rule, aborting...\n");
+                                return IPACM_FAILURE;
+                        }
+                        IPACM_Iface::ipacmcfg->decreaseFltRuleCount(rx_prop->rx[0].src_pipe, IPA_IP_v6, 1);
+                        dft_v6fl_rule_hdl[m_ipv6_default_filterting_rules_count + i] = 0;
+                        vlan_sta_info[i].v6_flt_hdl = 0;
+                        vlan_sta_info[i].vlan_id = 0;
+                }
+        }
+
+	IPACMDBG_H("Complete deletion of STA BH IPV6\n");
+
+        return IPACM_SUCCESS;
 }
 #endif
 

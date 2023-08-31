@@ -1342,8 +1342,8 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 				}
 				else
 				{
-					IPACMERR("In passthrough mode, Error while mapping interface index for %s device, index, int_index",
-						dev_name, ipa_if_num, ipa_interface_index);
+					IPACMERR("In passthrough mode, Error while mapping interface index for %s device, ipa_if_num:%d,"
+						 "ipa_interface_index:%d", dev_name, ipa_if_num, ipa_interface_index);
 				}
 			}
 		}
@@ -3315,7 +3315,7 @@ int IPACM_Wan::handle_route_add_evt(ipa_ip_type iptype)
 #ifdef FEATURE_VLAN_MPDN
 	else
 	{
-		IPACMDBG_H("don't AddRmDepend, vlan PDN already up, iptype\n", iptype);
+		IPACMDBG_H("don't AddRmDepend, vlan PDN already up, iptype:%d\n", iptype);
 	}
 #endif
 	if(rt_rule != NULL)
@@ -5071,10 +5071,6 @@ IPACM_firewall_conf_t* IPACM_Wan::get_firewall_conf_by_vid_ul(int vid)
 int IPACM_Wan::init_fl_rule_ex(ipa_ip_type iptype)
 {
 	int res = IPACM_SUCCESS;
-
-	char *dev_wlan0="wlan0";
-	char *dev_wlan1="wlan1";
-	char *dev_ecm0="ecm0";
 
 	/* ADD corresponding ipa_rm_resource_name of RX-endpoint before adding all IPV4V6 FT-rules */
 	IPACMDBG_H(" dun add producer dependency from %s with registered rx-prop\n", dev_name);
@@ -8372,7 +8368,7 @@ int IPACM_Wan::handle_wan_hdr_init(uint8_t *mac_addr, bool gw_addr)
 								pHeaderDescriptor->hdr[0].name[IPA_RESOURCE_NAME_MAX-1] = '\0';
 								if (strlcat(pHeaderDescriptor->hdr[0].name, IPA_WAN_PARTIAL_HDR_NAME_v4, sizeof(pHeaderDescriptor->hdr[0].name)) > IPA_RESOURCE_NAME_MAX)
 								{
-									IPACMERR(" header name construction failed exceed length (%d)\n", strlen(pHeaderDescriptor->hdr[0].name));
+									IPACMERR(" header name construction failed exceed length (%zu)\n", strlen(pHeaderDescriptor->hdr[0].name));
 									res = IPACM_FAILURE;
 									goto fail;
 								}
@@ -8380,7 +8376,7 @@ int IPACM_Wan::handle_wan_hdr_init(uint8_t *mac_addr, bool gw_addr)
 								snprintf(index,sizeof(index), "%d", header_name_count);
 								if (strlcat(pHeaderDescriptor->hdr[0].name, index, sizeof(pHeaderDescriptor->hdr[0].name)) > IPA_RESOURCE_NAME_MAX)
 								{
-									IPACMERR(" header name construction failed exceed length (%d)\n", strlen(pHeaderDescriptor->hdr[0].name));
+									IPACMERR(" header name construction failed exceed length (%zu)\n", strlen(pHeaderDescriptor->hdr[0].name));
 									res = IPACM_FAILURE;
 									goto fail;
 								}
@@ -8469,14 +8465,14 @@ int IPACM_Wan::handle_wan_hdr_init(uint8_t *mac_addr, bool gw_addr)
 				pHeaderDescriptor->hdr[0].name[IPA_RESOURCE_NAME_MAX-1] = '\0';
 				if (strlcat(pHeaderDescriptor->hdr[0].name, IPA_WAN_PARTIAL_HDR_NAME_v6, sizeof(pHeaderDescriptor->hdr[0].name)) > IPA_RESOURCE_NAME_MAX)
 				{
-					IPACMERR(" header name construction failed exceed length (%d)\n", strlen(pHeaderDescriptor->hdr[0].name));
+					IPACMERR(" header name construction failed exceed length (%zu)\n", strlen(pHeaderDescriptor->hdr[0].name));
 					res = IPACM_FAILURE;
 					goto fail;
 				}
 				snprintf(index,sizeof(index), "%d", header_name_count);
 				if (strlcat(pHeaderDescriptor->hdr[0].name, index, sizeof(pHeaderDescriptor->hdr[0].name)) > IPA_RESOURCE_NAME_MAX)
 				{
-					IPACMERR(" header name construction failed exceed length (%d)\n", strlen(pHeaderDescriptor->hdr[0].name));
+					IPACMERR(" header name construction failed exceed length (%zu)\n", strlen(pHeaderDescriptor->hdr[0].name));
 					res = IPACM_FAILURE;
 					goto fail;
 				}
@@ -8600,9 +8596,8 @@ int IPACM_Wan::handle_wan_client_ipaddr(ipacm_event_data_all *data)
 			{
 				IPACMDBG_H("eth client:%d, current ipv6:%d, v6_route_set:%d, total_client_ipv6: %d, limit %d\n",
 					clnt_indx, get_client_memptr(wan_client, clnt_indx)->ipv6_set,
-					clnt_indx, get_client_memptr(wan_client, clnt_indx)->route_rule_set_v6,
-					IPACM_Iface::ipacmcfg->ipa_num_clients_ipv6,
-					IPA_MAX_NUM_CLIENTS_IPV6);
+					get_client_memptr(wan_client, clnt_indx)->route_rule_set_v6,
+					IPACM_Iface::ipacmcfg->ipa_num_clients_ipv6, IPA_MAX_NUM_CLIENTS_IPV6);
 				std::copy(std::begin(data->ipv6_addr), std::end(data->ipv6_addr), std::begin(ipv6));
 
 				/* never see this ipv6, insert to the map*/
@@ -9171,7 +9166,7 @@ int IPACM_Wan::handle_network_stats_update(ipa_get_apn_data_stats_resp_msg_v01 *
 	{
 		if(data->apn_data_stats_list[apn_index].mux_id == ext_prop->ext[0].mux_id)
 		{
-			IPACMDBG_H("Received IPA_TETHERING_STATS_UPDATE_NETWORK_STATS, MUX ID %d TX (P%lu/B%lu) RX (P%lu/B%lu)\n",
+			IPACMDBG_H("Received IPA_TETHERING_STATS_UPDATE_NETWORK_STATS, MUX ID %u TX (P%llu/B%llu) RX (P%llu/B%llu)\n",
 				data->apn_data_stats_list[apn_index].mux_id,
 					data->apn_data_stats_list[apn_index].num_ul_packets,
 						data->apn_data_stats_list[apn_index].num_ul_bytes,
@@ -9286,7 +9281,7 @@ int IPACM_Wan::add_dummy_rx_hdr()
 
 	if (strlcat(ipv6_hdr->name, IPA_DUMMY_ETH_HDR_NAME_v6, sizeof(ipv6_hdr->name)) > IPA_RESOURCE_NAME_MAX)
 	{
-		IPACMERR(" header name construction failed exceed length (%d)\n", strlen(ipv6_hdr->name));
+		IPACMERR(" header name construction failed exceed length (%zu)\n", strlen(ipv6_hdr->name));
 		return IPACM_FAILURE;
 	}
 

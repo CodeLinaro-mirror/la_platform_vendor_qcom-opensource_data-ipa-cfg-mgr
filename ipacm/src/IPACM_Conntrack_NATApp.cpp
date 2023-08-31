@@ -1700,7 +1700,7 @@ bool Ipv6IpAddress::Valid() const
 
 void Ipv6IpAddress::DebugDump(const char* msg_prefix) const
 {
-	IPACMDBG_H("%s IPv6 address 0x%llx%llx\n", msg_prefix, m_msb, m_lsb);
+	IPACMDBG_H("%s IPv6 address 0x%llu%llu\n", msg_prefix, m_msb, m_lsb);
 }
 
 bool Ipv6IpAddress::IsSameSubnet(uint32_t* prefix) const

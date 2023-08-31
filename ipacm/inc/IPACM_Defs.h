@@ -703,7 +703,7 @@ typedef struct _svap_vlan_hpc_hdl
 	uint32_t hpc_hdr_hdl;
 }svap_vlan_hpc_hdl;
 
-typedef struct ext_router_prefix_info
+struct ext_router_prefix_info
 {
 	uint32_t ipv6_addr[4];
 	uint32_t ipv6_mask[4];

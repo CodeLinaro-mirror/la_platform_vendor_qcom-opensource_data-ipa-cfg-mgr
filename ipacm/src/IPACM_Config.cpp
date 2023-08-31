@@ -340,16 +340,16 @@ static void dump_fnr_counters(const struct ipa_ioc_flt_rt_counter_alloc *fnr)
 {
 	if (!fnr)
 		return;
-	IPACMERR("hw hdl = %d, 0x%x\n"
-		 "hw_num_counters = %u\n"
-	 	 "hw_start_id = %u\n, hw_allow_less = %u\n",
-		 fnr->hdl, fnr->hw_counter.num_counters, fnr->hw_counter.allow_less,
-		 fnr->hw_counter.start_id);
-	IPACMERR("sw hdl = %d, 0x%x\n"
-		 "sw_num_counters = %u\n"
-	 	 "sw_start_id = %u\n, sw_allow_less = %u\n",
-		 fnr->hdl, fnr->sw_counter.num_counters, fnr->sw_counter.allow_less,
-		 fnr->sw_counter.start_id);
+	IPACMERR("hw hdl = %d\n"
+		"hw_num_counters = %hhu\n"
+		"hw_start_id = %hhu\n, hw_allow_less = %hhu\n",
+		fnr->hdl, fnr->hw_counter.num_counters, fnr->hw_counter.allow_less,
+		fnr->hw_counter.start_id);
+	IPACMERR("sw hdl = %d\n"
+		"sw_num_counters = %hhu\n"
+		"sw_start_id = %hhu\n, sw_allow_less = %hhu\n",
+		fnr->hdl, fnr->sw_counter.num_counters, fnr->sw_counter.allow_less,
+		fnr->sw_counter.start_id);
 }
 
 int IPACM_Config::get_free_cnt_idx(void)
@@ -408,7 +408,7 @@ int IPACM_Config::ipacm_reset_hw_fnr_counters(const uint8_t start_id, const uint
 	{
 		ret = ipacm_fnr_v2_ioctl(fd, IPA_IOC_FNR_COUNTER_QUERY, query);
 		if (ret < 0)
-			IPACMERR("IOCTL %d failed\n", IPA_IOC_FNR_COUNTER_QUERY);
+			IPACMERR("IOCTL %lu failed\n", IPA_IOC_FNR_COUNTER_QUERY);
 	}
 
 	free(query);
@@ -465,7 +465,7 @@ int IPACM_Config::ipacm_alloc_fnr_counters(struct ipa_ioc_flt_rt_counter_alloc *
 	ret = ipacm_fnr_v2_ioctl(nfd, IPA_IOC_FNR_COUNTER_ALLOC, fnr_counters);
 	if (ret < 0)
 	{
-		IPACMERR("Failed to execute ioctl %d\n", IPA_IOC_FNR_COUNTER_ALLOC);
+		IPACMERR("Failed to execute ioctl %lu\n", IPA_IOC_FNR_COUNTER_ALLOC);
 		goto bail;
 	}
 
@@ -1672,7 +1672,7 @@ void IPACM_Config::add_vlan_iface(ipa_vlan_iface_info *data)
 	 */
 	evt_data.event = IPA_NOTIFY_VLAN_UP;
 	evt_data.evt_data = NULL;
-	IPACMDBG_H("Posting IPA_NOTIFY_VLAN_UP event!\n", evt_data.event);
+	IPACMDBG_H("Posting %s\n", IPACM_Iface::ipacmcfg->getEventName(evt_data.event));
 	IPACM_EvtDispatcher::PostEvt(&evt_data);
 
 #endif

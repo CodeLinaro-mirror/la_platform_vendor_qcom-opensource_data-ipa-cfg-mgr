@@ -1119,7 +1119,7 @@ int IPACM_Iface::ipa_get_if_index
 
 	if(strlen(if_name) >= sizeof(ifr.ifr_name))
 	{
-		IPACMERR("interface name overflows: len %d\n", strlen(if_name));
+		IPACMERR("interface name overflows: len %zu\n", strlen(if_name));
 		close(fd);
 		return IPACM_FAILURE;
 	}

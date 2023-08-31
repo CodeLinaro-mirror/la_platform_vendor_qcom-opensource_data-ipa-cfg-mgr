@@ -1064,11 +1064,9 @@ public:
 				/* Update the vlan id if prefix already saved but vlan id not associated
 				 * e.g Wlan for default pdn reserves a slot with vlan id 0, then eth vlan
 				 * for default pdn associates with vlan id */
-				IPACMDBG_H("Updating vlan id %d for prefix 0x[%X][%X] \n",
-					ipa_ipv6_prefixes[i].vlan_id, ipa_ipv6_prefixes[i].addr[0], ipa_ipv6_prefixes[i].addr[1]);
+				IPACMDBG_H("Updating vlan id %d for prefix 0x[%X][%X] \n", vlan_id, prefix[0], prefix[1]);
 				ipa_ipv6_prefixes[i].vlan_id = vlan_id;
 				updated_reserved_slot =true;
-				IPACMDBG_H("Updated vlan id %d v6 prefix 0x[%X][%X] for vlan id %d\n",ipa_ipv6_prefixes[i].vlan_id, prefix[0], prefix[1]);
 			}
 		}
 

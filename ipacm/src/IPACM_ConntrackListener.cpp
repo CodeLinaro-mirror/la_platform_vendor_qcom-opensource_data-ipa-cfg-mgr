@@ -2338,8 +2338,7 @@ int IPACM_ConntrackListener::AddORDeleteNatEntry(const nat_entry_bundle *input, 
 		}
 		else
 		{
-			IPACMDBG("Ignore tcp state: %d and type: %d count %d\n",
-					 tcp_state, input->type, pkt_count);
+			IPACMDBG("Ignore tcp state: %hhu and type: %d count %llu\n", tcp_state, input->type, pkt_count);
 		}
 	}
 	else if (IPPROTO_UDP == input->rule->protocol)
@@ -2395,8 +2394,7 @@ int IPACM_ConntrackListener::AddORDeleteNatEntry(const nat_entry_bundle *input, 
 		}
 		else
 		{
-			IPACMDBG("Ignore udp, count: %d and type: %d\n",
-				pkt_count, input->type);
+			IPACMDBG("Ignore udp, count: %llu and type: %d\n", pkt_count, input->type);
 		}
 	}
 	else if(IPPROTO_GRE == input->rule->protocol)
@@ -2444,8 +2442,7 @@ int IPACM_ConntrackListener::AddORDeleteNatEntry(const nat_entry_bundle *input, 
 		}
 		else
 		{
-			IPACMDBG("Ignore gre, count: %d and type: %d\n",
-				pkt_count, input->type);
+			IPACMDBG("Ignore gre, count: %lu and type: %d\n", pkt_count, input->type);
 		}
 	}
 

@@ -201,8 +201,7 @@ int IPACM_ConntrackClient::IPA_Conntrack_Filters_Ignore_Bridge_Addrs
 
 	if(strlen(IPACM_Iface::ipacmcfg->ipa_virtual_iface_name) >= sizeof(ifr.ifr_name))
 	{
-		IPACMERR("interface name overflows: len %d\n",
-			strlen(IPACM_Iface::ipacmcfg->ipa_virtual_iface_name));
+		IPACMERR("interface name overflows: len %zu\n", strlen(IPACM_Iface::ipacmcfg->ipa_virtual_iface_name));
 		close(fd);
 		return -1;
 	}

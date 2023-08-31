@@ -868,7 +868,7 @@ void* ipa_driver_msg_notifier(void *param)
 
 			if (IPACM_Iface::ipacmcfg->socksv5_conn.size() == 0)
 			{
-				IPACMDBG_H("socksv5_conn size %d \n", IPACM_Iface::ipacmcfg->socksv5_conn.size());
+				IPACMDBG_H("socksv5_conn size %zu \n", IPACM_Iface::ipacmcfg->socksv5_conn.size());
 				IPACMDBG_H("src_ipv6 addr:0x%x:%x:%x:%x\n",
 					add_socksv5_info.ul_in.ipv6_src[0],
 					add_socksv5_info.ul_in.ipv6_src[1],
@@ -881,7 +881,7 @@ void* ipa_driver_msg_notifier(void *param)
 					add_socksv5_info.ul_in.ipv6_dst[3]);
 				/* update client ipv6 */
 				IPACM_Iface::ipacmcfg->update_socksv5_client_v6_addr(add_socksv5_info.ul_in.ipv6_src);
-				IPACMDBG_H("socksv5_conn size %d \n", IPACM_Iface::ipacmcfg->socksv5_conn.size());
+				IPACMDBG_H("socksv5_conn size %zu \n", IPACM_Iface::ipacmcfg->socksv5_conn.size());
 
 				data_event_conn = (ipacm_event_connection *)malloc(sizeof(ipacm_event_connection));
 				if(data_event_conn == NULL)
@@ -904,7 +904,7 @@ void* ipa_driver_msg_notifier(void *param)
 				IPACMDBG_H("Posting IPA_HANDLE_SOCKSv5_UP event:%d\n", evt_data.event);
 				IPACM_EvtDispatcher::PostEvt(&evt_data);
 			}
-				IPACMDBG_H("socksv5_conn size %d \n", IPACM_Iface::ipacmcfg->socksv5_conn.size());
+				IPACMDBG_H("socksv5_conn size %zu \n", IPACM_Iface::ipacmcfg->socksv5_conn.size());
 				IPACM_Iface::ipacmcfg->add_socksv5_conn(&add_socksv5_info);
 			continue;
 
@@ -922,7 +922,7 @@ void* ipa_driver_msg_notifier(void *param)
 			}
 			else
 			{
-				IPACMDBG_H("socksv5_conn size %d \n", IPACM_Iface::ipacmcfg->socksv5_conn.size());
+				IPACMDBG_H("socksv5_conn size %zu \n", IPACM_Iface::ipacmcfg->socksv5_conn.size());
 				continue;
 			}
 #endif //defined(FEATURE_SOCKSv5) && defined(IPA_SOCKV5_EVENT_MAX)
@@ -1242,7 +1242,7 @@ void* ipa_driver_msg_notifier(void *param)
 
 		case IPA_MACSEC_ADD_EVENT:
 		case IPA_MACSEC_DEL_EVENT:
-			IPACMDBG_H("Received an %s (%u)\n",
+			IPACMDBG_H("Received an %s\n",
 				event_hdr.msg_type == IPA_MACSEC_ADD_EVENT ? "IPA_MACSEC_ADD_EVENT" : "IPA_MACSEC_DEL_EVENT");
 
 			macsec_map = (struct ipa_macsec_map *)malloc(sizeof(struct ipa_macsec_map));

@@ -3100,13 +3100,9 @@ int IPACM_Lan::handle_addr_evt(ipacm_event_data_addr *data)
 		/* initial multicast/broadcast/fragment filter rule */
 
 		init_fl_rule(data->iptype);
-#ifdef FEATURE_L2TP
-		if((IPACM_Iface::ipacmcfg->ipacm_l2tp_enable == IPACM_L2TP) &&
-			ipa_if_cate == WLAN_IF)
-		{
-			add_tcp_syn_flt_rule(data->iptype);
-		}
-#endif
+
+		add_tcp_syn_flt_rule(data->iptype);
+
 		install_ipv4_icmp_flt_rule();
 
 		/* populate the flt rule offset for eth bridge */
@@ -3198,14 +3194,13 @@ int IPACM_Lan::handle_addr_evt(ipacm_event_data_addr *data)
 
 		if (num_dft_rt_v6 == 0)
 		{
+			/* Always adding tcp syn SW-exception rule for MSS clamping support */
+			add_tcp_syn_flt_rule(data->iptype);
+
 #ifdef FEATURE_L2TP
 			if (IPACM_Iface::ipacmcfg->ipacm_l2tp_enable == IPACM_L2TP)
 			{
-				if(ipa_if_cate == WLAN_IF)
-				{
-					add_tcp_syn_flt_rule(data->iptype);
-				}
-				else if(ipa_if_cate == ODU_IF)
+				if(ipa_if_cate == ODU_IF)
 				{
 #ifndef IPA_L2TP_TUNNEL_UDP
 					add_tcp_syn_flt_rule_l2tp(IPA_IP_v4);
@@ -6270,7 +6265,7 @@ int IPACM_Lan::handle_down_evt()
 		}
 	}
 
-	/* delete default filter rules */
+	/* Delete v4 filtering rules */
 	if (ip_type != IPA_IP_v6 && rx_prop != NULL)
 	{
 		if(m_filtering.DeleteFilteringHdls(ipv4_icmp_flt_rule_hdl, IPA_IP_v4, NUM_IPV4_ICMP_FLT_RULE) == false)
@@ -6332,9 +6327,19 @@ int IPACM_Lan::handle_down_evt()
 		IPACM_Iface::ipacmcfg->decreaseFltRuleCount(rx_prop->rx[0].src_pipe, IPA_IP_v4, IPACM_Iface::ipacmcfg->ipa_num_private_subnet);
 #endif
 		IPACMDBG_H("Deleted private subnet v4 filter rules successfully.\n");
+
+		if(m_filtering.DeleteFilteringHdls(&tcp_syn_flt_rule_hdl[IPA_IP_v4], IPA_IP_v4, 1) == false)
+		{
+			IPACMERR("Error deleting tcp syn flt rule, aborting...\n");
+			res = IPACM_FAILURE;
+			goto fail;
+		}
+		IPACM_Iface::ipacmcfg->decreaseFltRuleCount(rx_prop->rx[0].src_pipe, IPA_IP_v4, 1);
+		IPACMDBG_H("Deleted TCP syn v4 filter rules successfully.\n");
 	}
 	IPACMDBG_H("Finished delete default iface ipv4 filtering rules \n ");
 
+	/* Delete v6 filtering rules */
 	if (ip_type != IPA_IP_v4 && rx_prop != NULL)
 	{
 		if(m_filtering.DeleteFilteringHdls(ipv6_icmp_flt_rule_hdl, IPA_IP_v6, NUM_IPV6_ICMP_FLT_RULE) == false)
@@ -6382,16 +6387,21 @@ int IPACM_Lan::handle_down_evt()
 			IPACM_Iface::ipacmcfg->decreaseFltRuleCount(
 				rx_prop->rx[0].src_pipe, IPA_IP_v6, m_ipv6_default_filterting_rules_count);
 		}
+
+		if(m_filtering.DeleteFilteringHdls(&tcp_syn_flt_rule_hdl[IPA_IP_v6], IPA_IP_v6, 1) == false)
+		{
+			IPACMERR("Error deleting tcp syn flt rule, aborting...\n");
+			res = IPACM_FAILURE;
+			goto fail;
+		}
+
+		IPACM_Iface::ipacmcfg->decreaseFltRuleCount(rx_prop->rx[0].src_pipe, IPA_IP_v6, 1);
+		IPACMDBG_H("Deleted TCP syn v6 filter rules successfully.\n");
+
 #ifdef FEATURE_L2TP
 		if((IPACM_Iface::ipacmcfg->ipacm_l2tp_enable == IPACM_L2TP) &&
 			ipa_if_cate == ODU_IF)
 		{
-			if(m_filtering.DeleteFilteringHdls(tcp_syn_flt_rule_hdl, IPA_IP_v6, IPA_IP_MAX) == false)
-			{
-				IPACMERR("Error Deleting TCP SYN L2TP Filtering Rule, aborting...\n");
-				res = IPACM_FAILURE;
-				goto fail;
-			}
 #ifdef IPA_L2TP_TUNNEL_UDP
 			if(del_l2tp_udp_dflt_flt_rules(l2tp_udp_dflt_flt_rule_hdl) == IPACM_FAILURE)
 			{
@@ -12634,6 +12644,7 @@ int IPACM_Lan::add_tcp_syn_flt_rule(ipa_ip_type iptype)
 	}
 
 	tcp_syn_flt_rule_hdl[iptype] = m_pFilteringTable->rules[0].flt_rule_hdl;
+	IPACM_Iface::ipacmcfg->increaseFltRuleCount(rx_prop->rx[0].src_pipe, iptype, 1);
 	free(m_pFilteringTable);
 	return IPACM_SUCCESS;
 }

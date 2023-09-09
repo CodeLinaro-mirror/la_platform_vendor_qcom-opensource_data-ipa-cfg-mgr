@@ -7841,7 +7841,7 @@ int IPACM_Wan::handle_down_evt_ex()
 			/* if there are still secondary PDNs up we need to reconfigure firewall */
 			if(isVlanWanUP_V6())
 			{
-				config_wan_firewall_rule(IPA_IP_v4);
+				config_wan_firewall_rule(IPA_IP_v6);
 			}
 #endif
 			handle_route_del_evt_ex(IPA_IP_v6);

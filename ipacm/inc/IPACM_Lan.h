@@ -1186,7 +1186,6 @@ private:
 	inline int set_mux_up(uint8_t mux_id, ipa_ip_type iptype, uint16_t vid)
 	{
 		ipacm_mux_struct *mux = v4_mux_up;
-		int j = 0;
 
 		if(mux_id == 0)
 		{
@@ -1208,7 +1207,7 @@ private:
 		{
 			if(mux[i].mux_id == mux_id)
 			{
-				for(j = 0; j < IPA_MAX_NUM_SW_PDNS; j++)
+				for(int j = 0; j < IPA_MAX_NUM_SW_PDNS; j++)
 				{
 					if(mux[i].associated_VIDs[j] == 0)
 					{
@@ -1219,11 +1218,8 @@ private:
 						return IPACM_SUCCESS;
 					}
 				}
-				if (j == IPA_MAX_NUM_SW_PDNS-1)
-				{
-					IPACMERR("maximum allowed number of vlans are associated to the mux %d\n", mux_id);
-					return IPACM_FAILURE;
-				}
+				IPACMERR("maximum allowed number of vlans are associated to the mux %d\n", mux_id);
+				return IPACM_FAILURE;
 			}
 		}
 

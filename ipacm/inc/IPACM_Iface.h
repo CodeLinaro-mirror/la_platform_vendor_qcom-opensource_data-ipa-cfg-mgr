@@ -95,6 +95,11 @@ using std::vector;
 #define MAX_DEFAULT_v6_ROUTE_RULES  2
 #define IPV4_DEFAULT_FILTERTING_RULES 3
 
+#ifdef FEATURE_IPA_IPSEC
+#define MAX_DEFAULT_IPSEC_v4_ROUTE_RULES 1
+#define MAX_DEFAULT_IPSEC_v6_ROUTE_RULES 1
+#endif
+
 #if defined(FEATURE_IPA_ANDROID) || defined(FEATURE_SOCKSv5)
 #define IPV6_DEFAULT_FILTERTING_RULES 8
 #else
@@ -167,8 +172,10 @@ public:
 	uint32_t dft_v4fl_rule_hdl[IPV4_DEFAULT_FILTERTING_RULES];
 	uint32_t dft_v6fl_rule_hdl[IPV6_DEFAULT_FILTERTING_RULES + IPV6_DEFAULT_LAN_FILTERTING_RULES];
 	/* create additional set of v6 RT-rules in Wanv6RT table*/
-	uint32_t dft_rt_rule_hdl[MAX_DEFAULT_v4_ROUTE_RULES+2*MAX_DEFAULT_v6_ROUTE_RULES];
-
+	uint32_t dft_rt_rule_hdl[MAX_DEFAULT_v4_ROUTE_RULES + (2 * MAX_DEFAULT_v6_ROUTE_RULES)];
+#ifdef FEATURE_IPA_IPSEC
+	uint32_t dft_ipsec_rt_rule_hdl[MAX_DEFAULT_IPSEC_v4_ROUTE_RULES + MAX_DEFAULT_IPSEC_v6_ROUTE_RULES];
+#endif
 	/* save client ipv6 address info and rt handles */
 	std::map<std::array<uint32_t, 4>, handleTypeV6> rt_hdl_v6_list[IPA_MAX_NUM_CLIENTS_IPV6];
 

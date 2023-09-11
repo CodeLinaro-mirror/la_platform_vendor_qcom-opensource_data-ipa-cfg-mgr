@@ -2223,6 +2223,7 @@ int IPACM_Wan::handle_route_add_vlan_pdn_evt(ipa_ip_type iptype, uint16_t vlan_i
 	const int NUM = 1;
 	ipacm_cmd_q_data evt_data;
 	bool FullConfig = false;
+	ipacm_event_vlan_pdn *pdn_update = NULL;
 
 	/* copy header from tx-property, see if partial or not */
 	/* assume all tx-property uses the same header name for v4 or v6*/
@@ -2408,6 +2409,37 @@ int IPACM_Wan::handle_route_add_vlan_pdn_evt(ipa_ip_type iptype, uint16_t vlan_i
 		evt_data.event = IPA_HANDLE_WAN_VLAN_PDN_UP;
 		evt_data.evt_data = (void *)wanup_vlan_data;
 		IPACM_EvtDispatcher::PostEvt(&evt_data);
+
+		/* This is to handle out-of-order events from Netlink like route events
+                   and IPA CLI command received from QCMAP to configure IPPT since
+                   we have received RTM_DELROUTE from kernel before to Passthrough
+                   configuration sent from QCMAP and we were not posting below event to
+                   Conntrack as active_v4 was false. */
+
+		if (ip_pass_pdn_info.enable)
+		{
+			pdn_update = (ipacm_event_vlan_pdn *)malloc(sizeof(ipacm_event_vlan_pdn));
+			if(pdn_update == NULL)
+			{
+				IPACMERR("Unable to allocate memory\n");
+				return IPACM_FAILURE;
+			}
+			memset(pdn_update, 0, sizeof(ipacm_event_vlan_pdn));
+			pdn_update->ipv4_addr = wan_v4_addr;
+			pdn_update->ip_pass_enable = ip_pass_pdn_info.enable;
+			pdn_update->ip_pass_dummy_ip = (ip_pass_pdn_info.enable) ?
+				ip_pass_pdn_info.pdn_ip_addr : 0;
+			pdn_update->ip_pass_skip_nat = (ip_pass_pdn_info.enable) ? ip_pass_pdn_info.skip_nat : 0;
+			IPACMDBG_H("Posting IPA_HANDLE_IP_PASS_PDN_INFO_UPDATE_EVENT\n");
+			IPACMDBG_H("IP Passthrough enabled:%d WAN IP: 0x%x, Dummy IP 0x%x, Skip NAT: %d\n",
+				pdn_update->ip_pass_enable,
+				pdn_update->ipv4_addr,
+				pdn_update->ip_pass_dummy_ip,
+				pdn_update->ip_pass_skip_nat);
+			evt_data.event = IPA_HANDLE_IP_PASS_PDN_INFO_UPDATE_EVENT;
+			evt_data.evt_data = (void *)pdn_update;
+			IPACM_EvtDispatcher::PostEvt(&evt_data);
+		}
 	}
 
 	associated_VID = vlan_id;
@@ -2517,6 +2549,7 @@ int IPACM_Wan::handle_route_add_evt(ipa_ip_type iptype)
 	ipacm_cmd_q_data evt_data;
 	struct ipa_ioc_copy_hdr sCopyHeader; /* checking if partial header*/
 	struct ipa_ioc_get_hdr hdr;
+	ipacm_event_vlan_pdn *pdn_update = NULL;
 #ifdef FEATURE_VLAN_MPDN
 	bool FullConfig = true;
 #endif
@@ -2891,6 +2924,37 @@ int IPACM_Wan::handle_route_add_evt(ipa_ip_type iptype)
 		evt_data.event = IPA_HANDLE_WAN_UP;
 		evt_data.evt_data = (void *)wanup_data;
 		IPACM_EvtDispatcher::PostEvt(&evt_data);
+
+		/* This is to handle out-of-order events from Netlink like route events
+                   and IPA CLI command received from QCMAP to configure IPPT since
+                   we have received RTM_DELROUTE from kernel before to Passthrough
+                   configuration sent from QCMAP and we were not posting below event to
+                   Conntrack as active_v4 was false. */
+
+		if (ip_pass_pdn_info.enable)
+		{
+			pdn_update = (ipacm_event_vlan_pdn *)malloc(sizeof(ipacm_event_vlan_pdn));
+			if(pdn_update == NULL)
+			{
+				IPACMERR("Unable to allocate memory\n");
+				return IPACM_FAILURE;
+			}
+			memset(pdn_update, 0, sizeof(ipacm_event_vlan_pdn));
+			pdn_update->ipv4_addr = wan_v4_addr;
+			pdn_update->ip_pass_enable = ip_pass_pdn_info.enable;
+			pdn_update->ip_pass_dummy_ip = (ip_pass_pdn_info.enable) ?
+				ip_pass_pdn_info.pdn_ip_addr : 0;
+			pdn_update->ip_pass_skip_nat = (ip_pass_pdn_info.enable) ? ip_pass_pdn_info.skip_nat : 0;
+			IPACMDBG_H("Posting IPA_HANDLE_IP_PASS_PDN_INFO_UPDATE_EVENT\n");
+			IPACMDBG_H("IP Passthrough enabled:%d WAN IP: 0x%x, Dummy IP 0x%x, Skip NAT: %d\n",
+				pdn_update->ip_pass_enable,
+				pdn_update->ipv4_addr,
+				pdn_update->ip_pass_dummy_ip,
+				pdn_update->ip_pass_skip_nat);
+			evt_data.event = IPA_HANDLE_IP_PASS_PDN_INFO_UPDATE_EVENT;
+			evt_data.evt_data = (void *)pdn_update;
+			IPACM_EvtDispatcher::PostEvt(&evt_data);
+		}
 	}
 	else
 	{

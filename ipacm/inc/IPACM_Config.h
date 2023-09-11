@@ -955,7 +955,7 @@ public:
 					ipa_no_offload_ipv6_prefixes[i][1] = ipa_no_offload_ipv6_prefixes[i + 1][1];
 				}
 				num_no_offload_ipv6_prefix--;
-				IPACMDBG_H("removed prefix 0x[%X][%X] from no offload list\n", prefix[1], prefix[2]);
+				IPACMDBG_H("removed prefix 0x[%X][%X] from no offload list\n", prefix[0], prefix[1]);
 				break;
 			}
 		}

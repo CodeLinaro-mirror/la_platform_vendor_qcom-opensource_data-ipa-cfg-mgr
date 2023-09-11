@@ -10468,10 +10468,22 @@ int IPACM_Lan::modify_ipv6_prefix_flt_rule()
 #endif
 	}
 
+	/* for single PDN case, only add MTU rule for first prefix */
+	if(IPACM_Wan::isWanUP_V6(ipa_if_num) && !IPACM_Iface::ipacmcfg->iface_in_vlan_mode(dev_name))
+	{
+		/* first prefix is reserved for default PDN */
+		mtu[0] = IPACM_Wan::queryMTU(ipa_if_num, IPA_IP_v6);
+		IPACMDBG_H("defaut PDN mtu = %d\n", mtu[0]);
+		if(mtu[0] < DEFAULT_MTU_SIZE)
+			mtu_rule_cnt++;
+		else
+			IPACMDBG_H("Mtu size is unchanged. No need to install mtu rule for above prefix\n");
+	}
+
 	/* for MPDN case, need to query VLAN and mtus */
 	if(IPACM_Iface::ipacmcfg->ipacm_mpdn_enable)
 	{
-		if( IPACM_Wan::isWanUP_V6(ipa_if_num) || (IPACM_Iface::ipacmcfg->iface_in_vlan_mode(dev_name) && IPACM_Wan::isVlanWanUP_V6()))
+		if(IPACM_Iface::ipacmcfg->iface_in_vlan_mode(dev_name) && IPACM_Wan::isVlanWanUP_V6())
 		{
 			for(i = 0; i < IPACM_Iface::ipacmcfg->num_ipv6_prefixes; i++)
 			{

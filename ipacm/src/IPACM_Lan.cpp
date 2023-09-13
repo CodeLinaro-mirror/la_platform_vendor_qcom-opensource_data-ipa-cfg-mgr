@@ -2085,6 +2085,7 @@ int IPACM_Lan::check_vlan_PDNUp(enum ipa_ip_type iptype)
 
 			if(Ids[i] != 0)
 			{
+				/* In STA Mode this will return error and continue */
 				if(IPACM_Wan::GetMuxByVid(Ids[i], &mux_id, iptype))
 				{
 					IPACMDBG_H("no v4 vlan up PDN for Id %d\n", Ids[i]);
@@ -2131,13 +2132,11 @@ int IPACM_Lan::check_vlan_PDNUp(enum ipa_ip_type iptype)
 			uint8_t mux_id = 0;
 			if(Ids[i] != 0)
 			{
-				if(IPACM_Wan::backhaul_is_sta_mode == false)
+				/* In STA Mode this will return error and continue */
+				if(IPACM_Wan::GetMuxByVid(Ids[i], &mux_id, iptype))
 				{
-					if(IPACM_Wan::GetMuxByVid(Ids[i], &mux_id, iptype))
-					{
-						IPACMDBG_H("no v6 vlan up PDN for Id %d\n", Ids[i]);
-						continue;
-					}
+					IPACMDBG_H("no v6 vlan up PDN for Id %d\n", Ids[i]);
+					continue;
 				}
 #ifdef FEATURE_IPACM_UL_FIREWALL
 				if(!firewall_updated)

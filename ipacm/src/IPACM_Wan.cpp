@@ -1399,6 +1399,11 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 				IPACMDBG_H("ipv4 addr 0x%x\n", data->ipv4_addr);
 				IPACMDBG_H("ipv4 addr mask 0x%x\n", data->ipv4_addr_mask);
 
+				if(m_is_sta_mode == WLAN_WAN)
+					IPACM_Wan::backhaul_is_sta_mode = true;
+				else
+					IPACM_Wan::backhaul_is_sta_mode = false;
+
 				/* The special below condition is to handle default gateway */
 				if ((data->iptype == IPA_IP_v4) && (!data->ipv4_addr) && (!data->ipv4_addr_mask) && (active_v4 == false)
 					&& (ip_type == IPA_IP_v4 || ip_type == IPA_IP_MAX))
@@ -1578,6 +1583,12 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 			if (ipa_interface_index == ipa_if_num)
 			{
 				IPACMDBG_H("Received IPA_ROUTE_DEL_EVENT\n");
+
+				if(m_is_sta_mode == WLAN_WAN)
+					IPACM_Wan::backhaul_is_sta_mode = false;
+				else
+					IPACM_Wan::backhaul_is_sta_mode = true;
+
 				if ((data->iptype == IPA_IP_v4) && (!data->ipv4_addr) && (!data->ipv4_addr_mask) && (active_v4 == true))
 				{
 					IPACMDBG_H("get del default v4 route (dst:0.0.0.0)\n");
@@ -1964,7 +1975,6 @@ int IPACM_Wan::check_vlan_pdn(ipa_ip_type iptype, ipacm_event_route_vlan *data, 
 	if (m_is_sta_mode !=Q6_WAN)
 	{
 		IPACMDBG_H("STA backhaul\n");
-		IPACM_Wan::backhaul_is_sta_mode = true;
 		if((iptype==IPA_IP_v4) && (header_set_v4 != true))
 		{
 			header_partial_default_wan_v4 = true;
@@ -2862,7 +2872,6 @@ int IPACM_Wan::handle_route_add_vlan_pdn_evt(ipa_ip_type iptype, uint16_t vlan_i
 		{
 			IPACMDBG_H(" WAN instance is in STA mode header_set_v4 %d \n", header_set_v4);
 			//Construct STA header 1st
-			IPACM_Wan::backhaul_is_sta_mode	= true;
 
 			if((iptype==IPA_IP_v4) && (header_set_v4 != true))
 			{
@@ -3145,7 +3154,6 @@ int IPACM_Wan::handle_route_add_evt(ipa_ip_type iptype)
 
 	if (m_is_sta_mode !=Q6_WAN)
 	{
-		IPACM_Wan::backhaul_is_sta_mode	= true;
 		if((iptype==IPA_IP_v4) && (header_set_v4 != true))
 		{
 			header_partial_default_wan_v4 = true;
@@ -3161,7 +3169,6 @@ int IPACM_Wan::handle_route_add_evt(ipa_ip_type iptype)
 	}
 	else
 	{
-		IPACM_Wan::backhaul_is_sta_mode	= false;
 		IPACMDBG_H("reset backhaul to LTE \n");
 
 		if (iface_query != NULL && iface_query->num_ext_props > 0)

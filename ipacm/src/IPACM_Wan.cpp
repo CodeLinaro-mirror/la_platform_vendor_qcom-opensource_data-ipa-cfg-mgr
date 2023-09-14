@@ -2045,7 +2045,7 @@ int IPACM_Wan::check_vlan_pdn(ipa_ip_type iptype, ipacm_event_route_vlan *data, 
 
 				if(!is_vlan_wlan_associated && is_vlan_modem_associated)
 				{
-					IPACMDBG_H("BH switch from LTE to STA\n");
+					IPACMDBG_H("Backhaul switch from LTE to STA - V6\n");
 
 					vlandown_data = (ipacm_event_vlan_pdn *)malloc(sizeof(ipacm_event_vlan_pdn));
 					if(vlandown_data == NULL)
@@ -2189,7 +2189,7 @@ int IPACM_Wan::check_vlan_pdn(ipa_ip_type iptype, ipacm_event_route_vlan *data, 
 
 				if(is_vlan_wlan_associated && !is_vlan_modem_associated)
 				{
-					IPACMDBG_H("BH switch from STA to LTE\n");
+					IPACMDBG_H("Backhaul switch from STA to LTE - V6\n");
 
 					vlandown_data = (ipacm_event_vlan_pdn *)malloc(sizeof(ipacm_event_vlan_pdn));
 					if(vlandown_data == NULL)
@@ -2359,7 +2359,7 @@ int IPACM_Wan::check_vlan_pdn(ipa_ip_type iptype, ipacm_event_route_vlan *data, 
 
 				if(!is_vlan_wlan_associated && is_vlan_modem_associated)
 				{
-					IPACMDBG_H("BH switch LTE to STA\n");
+					IPACMDBG_H("Backhaul switch LTE to STA - V4\n");
 
 					vlandown_data = (ipacm_event_vlan_pdn *)malloc(sizeof(ipacm_event_vlan_pdn));
 					if(vlandown_data == NULL)
@@ -2504,7 +2504,7 @@ int IPACM_Wan::check_vlan_pdn(ipa_ip_type iptype, ipacm_event_route_vlan *data, 
 
 				if(is_vlan_wlan_associated && !is_vlan_modem_associated)
 				{
-					IPACMDBG_H("BH switch from STA to LTE\n");
+					IPACMDBG_H("Backhaul switch from STA to LTE - V4\n");
 
 					vlandown_data = (ipacm_event_vlan_pdn *)malloc(sizeof(ipacm_event_vlan_pdn));
 					if(vlandown_data == NULL)

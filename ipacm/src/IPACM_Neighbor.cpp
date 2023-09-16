@@ -492,7 +492,7 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 					/* check if iface is bridge interface*/
 #ifdef FEATURE_VLAN_MPDN
 					/* VLAN clients don't have to be on bridge0 */
-					if (((IPACM_Iface::ipacmcfg->ipacm_mpdn_enable == TRUE) && strstr(data->iface_name, "br-lan")) ||
+					if (((IPACM_Iface::ipacmcfg->ipacm_mpdn_enable == TRUE) && strstr(data->iface_name, BRIDGE_IFACE_NAME)) ||
 						(((IPACM_Iface::ipacmcfg->ipacm_l2tp_enable == IPACM_L2TP) ||
 						(IPACM_Iface::ipacmcfg->ipacm_l2tp_enable == IPACM_L2TP_E2E)) &&
 						(strcmp(IPACM_Iface::ipacmcfg->ipa_virtual_iface_name, data->iface_name) == 0)))
@@ -951,7 +951,7 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 					/* check if iface is bridge interface*/
 #ifdef FEATURE_VLAN_MPDN
 					/* VLAN clients don't have to be on bridge0 */
-					if (strstr(data->iface_name, "br-lan"))
+					if (strstr(data->iface_name, BRIDGE_IFACE_NAME))
 #else
 					if (strcmp(IPACM_Iface::ipacmcfg->ipa_virtual_iface_name, data->iface_name) == 0)
 #endif
@@ -1123,7 +1123,7 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 							/* check if iface is not bridge interface*/
 #ifdef FEATURE_VLAN_MPDN
 							/* VLAN clients don't have to be on bridge0 */
-							if (((IPACM_Iface::ipacmcfg->ipacm_mpdn_enable == TRUE) && !strstr(data->iface_name, "br-lan")) ||
+							if (((IPACM_Iface::ipacmcfg->ipacm_mpdn_enable == TRUE) && !strstr(data->iface_name, BRIDGE_IFACE_NAME)) ||
 								(((IPACM_Iface::ipacmcfg->ipacm_l2tp_enable == IPACM_L2TP) ||
 								(IPACM_Iface::ipacmcfg->ipacm_l2tp_enable == IPACM_L2TP_E2E)) &&
 								(strcmp(IPACM_Iface::ipacmcfg->ipa_virtual_iface_name, data->iface_name) != 0)))
@@ -1318,7 +1318,7 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 						/* check if iface is not bridge interface*/
 #ifdef FEATURE_VLAN_MPDN
 						/* VLAN clients don't have to be on bridge0 */
-						if (((IPACM_Iface::ipacmcfg->ipacm_mpdn_enable == TRUE) && !strstr(data->iface_name, "br-lan")) ||
+						if (((IPACM_Iface::ipacmcfg->ipacm_mpdn_enable == TRUE) && !strstr(data->iface_name, BRIDGE_IFACE_NAME)) ||
 							(((IPACM_Iface::ipacmcfg->ipacm_l2tp_enable == IPACM_L2TP) ||
 							(IPACM_Iface::ipacmcfg->ipacm_l2tp_enable == IPACM_L2TP_E2E)) &&
 							(strcmp(IPACM_Iface::ipacmcfg->ipa_virtual_iface_name, data->iface_name) != 0)))
@@ -1428,13 +1428,14 @@ void IPACM_Neighbor::update_neigh_cache()
 	char *tok = NULL, *ptr = NULL;
 	char *params[MAX_FDB_PARAM_CNT] = { NULL };
 	char rdev_name[IPA_IFACE_NAME_LEN] = {0}, mac[MAX_FDB_PARAM_LEN] = {0};
-	char fdb_row[MAX_FDB_ROW_LEN] = {0}, cmd[IPA_SYS_CMD_LEN] = {0};
+	char fdb_row[MAX_FDB_ROW_LEN] = {0}, cmd[IPA_SYS_CMD_LEN] = {0}, cmd_fdb_row[MAX_FDB_ROW_LEN] = {0};
 	uint8_t mac_addr_fdb[IPA_MAC_ADDR_SIZE] = {0};
 	int tmp_var[IPA_MAC_ADDR_SIZE];
 	int query_ifindex, query_ipa_if_num, j, i;
 	bool is_phy_iface = false, is_client_cached = false, parse_error = false;;
 
-	snprintf(cmd, IPA_SYS_CMD_LEN, "bridge fdb show | grep \"master br-lan\" > %s",IPA_FDB_TABLE);
+
+	snprintf(cmd, IPA_SYS_CMD_LEN, "bridge fdb show | grep \"master %s\" > %s",BRIDGE_IFACE_NAME,IPA_FDB_TABLE);
 	system(cmd);
 
 	fp = fopen(IPA_FDB_TABLE, "r");
@@ -1446,7 +1447,8 @@ void IPACM_Neighbor::update_neigh_cache()
 
 	while (fgets(fdb_row, MAX_FDB_ROW_LEN, fp) != NULL)
 	{
-		if (strstr(fdb_row,"dev br-lan")) {
+		snprintf(cmd_fdb_row, MAX_FDB_ROW_LEN, "dev %s", BRIDGE_IFACE_NAME);
+		if (strstr(fdb_row,cmd_fdb_row)) {
 			continue;
 		}
 		else if (strstr(fdb_row,"permanent")) {

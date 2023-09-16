@@ -10142,6 +10142,7 @@ int IPACM_Wan::query_mtu_size()
 {
 	int fd;
 	struct ifreq if_mtu;
+	char iface_name[IPA_IFACE_NAME_LEN] = {0};
 
 	fd = socket(AF_INET, SOCK_DGRAM, 0);
 	if ( fd < 0 ) {
@@ -10150,8 +10151,25 @@ int IPACM_Wan::query_mtu_size()
 	}
 
 	strlcpy(if_mtu.ifr_name, dev_name, IFNAMSIZ);
-	IPACMDBG_H("device name: %s\n", dev_name);
+
+	if (strstr(dev_name, RMNET_IFACE_NAME))
+	{
+		for (int i = 0; i < IPACM_Iface::ipacmcfg->ipa_num_ipa_interfaces; i++)
+		{
+			if (strncmp(dev_name, IPACM_Iface::ipacmcfg->iface_table[i].iface_name, IPA_IFACE_NAME_LEN) == 0)
+			{
+				IPACMDBG_H("Interface (%s) found: linux(%d)\n",
+							 	IPACM_Iface::ipacmcfg->iface_table[i].iface_name,
+							 	IPACM_Iface::ipacmcfg->iface_table[i].netlink_interface_index);
+				ipa_get_if_name(iface_name, IPACM_Iface::ipacmcfg->iface_table[i].netlink_interface_index);
+				strlcpy(if_mtu.ifr_name, iface_name, IFNAMSIZ);
+				break;
+			}
+		}
+	}
+
 	if_mtu.ifr_name[IFNAMSIZ - 1] = '\0';
+	IPACMDBG_H("device name: %s\n", if_mtu.ifr_name);
 
 	if ( ioctl(fd, SIOCGIFMTU, &if_mtu) < 0 ) {
 		IPACMERR("ioctl failed to get mtu\n");

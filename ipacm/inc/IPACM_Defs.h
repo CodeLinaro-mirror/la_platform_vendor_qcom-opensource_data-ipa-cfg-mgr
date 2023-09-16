@@ -92,7 +92,7 @@ extern "C"
 
 #define IPA_MAX_ACTIVE_WLAN_IFACE 21
 
-#define IPA_MAX_IFACE_ENTRIES (26 + IPA_MAX_ACTIVE_WLAN_IFACE) /* current: 15 rmnet + 21 wlan + bridge+ eth+ rndis + ecm.*/
+#define IPA_MAX_IFACE_ENTRIES (41 + IPA_MAX_ACTIVE_WLAN_IFACE) /* current: 15 rmnet + 21 wlan + bridge+ eth+ rndis + ecm + 15 rmnet for RDKB. */
 #define IPA_MAX_ALG_ENTRIES 20
 #define IPA_MAX_RM_ENTRY 9
 
@@ -111,6 +111,15 @@ extern "C"
 #define WWAN_QMI_IOCTL_DEVICE_NAME "/dev/wwan_ioctl"
 #define IPA_DEVICE_NAME "/dev/ipa"
 #define MAX_NUM_PROP 2
+
+#ifdef FEATURE_RDKB
+#define DEFAULT_BRIDGE_IFACE_NAME "brlan0"
+#define BRIDGE_IFACE_NAME         "brlan"
+#define RMNET_IFACE_NAME          "qmapmux"
+#else
+#define BRIDGE_IFACE_NAME         "br-lan"
+#define RMNET_IFACE_NAME          "rmnet_data"
+#endif
 
 #ifndef FEATURE_IPA_V3
 #define IPA_MAX_FLT_RULE 50

@@ -45,6 +45,7 @@ SPDX-License-Identifier: BSD-3-Clause-Clear
 #include <unistd.h>
 #include <sys/ioctl.h>
 #include <netinet/in.h>
+#include <net/if.h>
 #include "IPACM_CmdQueue.h"
 #include "IPACM_Defs.h"
 #include "IPACM_Netlink.h"
@@ -116,6 +117,9 @@ int find_mask(int ip_v4_last, int *mask_value);
                     (unsigned char)(ip_addr >> 16) ,                        \
                     (unsigned char)(ip_addr >> 24));
 
+/*sockfd global*/
+int *p_sk_fd = NULL;
+
 /* Opens a netlink socket*/
 static int ipa_nl_open_socket
 (
@@ -124,7 +128,6 @@ static int ipa_nl_open_socket
 	 unsigned int grps
 	 )
 {
-	int *p_sk_fd;
 	int buf_size = 6669999, sendbuff=0, res;
 	struct sockaddr_nl *p_sk_addr_loc;
 	socklen_t optlen;
@@ -1874,6 +1877,25 @@ int ipa_nl_listener_init
 		IPACMERR("Failed to start NL listener\n");
 	}
 
+	return IPACM_SUCCESS;
+}
+
+int ipa_nl_send_getroute(ipa_ip_type ip_type)
+{
+	nl_request_t nl_request;
+	nl_request.nlh.nlmsg_type = RTM_GETROUTE;
+	nl_request.nlh.nlmsg_flags = NLM_F_REQUEST | NLM_F_DUMP;
+	nl_request.nlh.nlmsg_len = sizeof(nl_request);
+	nl_request.nlh.nlmsg_seq = time(NULL);
+	nl_request.nlh.nlmsg_pid = getpid();
+	if(ip_type == IPA_IP_v6){
+		nl_request.rtm.rtm_family = AF_INET6;
+	}
+	else{
+		nl_request.rtm.rtm_family = AF_INET;
+	}
+
+	ssize_t sent = send(*p_sk_fd, &nl_request, sizeof(nl_request), 0);
 	return IPACM_SUCCESS;
 }
 

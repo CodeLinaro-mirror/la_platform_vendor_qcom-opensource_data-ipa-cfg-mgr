@@ -1524,7 +1524,7 @@ int IPACM_Wlan::handle_wlan_client_init_ex(ipacm_event_data_wlan_ex *data)
 
 				for(i = 0; i < data->num_of_attribs; i++)
 				{
-					if(data->attribs[i].attrib_type == WLAN_HDR_ATTRIB_MAC_ADDR)
+					if((data->attribs[i].offset < (IPA_HDR_MAX_SIZE - IPA_MAC_ADDR_SIZE)) && data->attribs[i].attrib_type == WLAN_HDR_ATTRIB_MAC_ADDR)
 					{
 						memcpy(get_client_memptr(wlan_client, num_wifi_client)->mac,
 								data->attribs[i].u.mac_addr,
@@ -1535,7 +1535,7 @@ int IPACM_Wlan::handle_wlan_client_init_ex(ipacm_event_data_wlan_ex *data)
 									 get_client_memptr(wlan_client, num_wifi_client)->mac,
 									 IPA_MAC_ADDR_SIZE);
 						/* replace src mac to bridge mac_addr if any  */
-						if (IPACM_Iface::ipacmcfg->ipa_bridge_enable)
+						if ((data->attribs[i].offset < (IPA_HDR_MAX_SIZE - 2*IPA_MAC_ADDR_SIZE)) && IPACM_Iface::ipacmcfg->ipa_bridge_enable)
 						{
 							memcpy(&pHeaderDescriptor->hdr[0].hdr[data->attribs[i].offset+IPA_MAC_ADDR_SIZE],
 									 IPACM_Iface::ipacmcfg->bridge_mac,
@@ -1544,7 +1544,7 @@ int IPACM_Wlan::handle_wlan_client_init_ex(ipacm_event_data_wlan_ex *data)
 						}
 
 					}
-					else if(data->attribs[i].attrib_type == WLAN_HDR_ATTRIB_STA_ID)
+					else if((data->attribs[i].offset < (IPA_HDR_MAX_SIZE - sizeof(data->attribs[i].u.sta_id))) && data->attribs[i].attrib_type == WLAN_HDR_ATTRIB_STA_ID)
 					{
 						/* copy client id to header */
 						memcpy(&pHeaderDescriptor->hdr[0].hdr[data->attribs[i].offset],
@@ -1641,7 +1641,7 @@ int IPACM_Wlan::handle_wlan_client_init_ex(ipacm_event_data_wlan_ex *data)
 
 				for(i = 0; i < data->num_of_attribs; i++)
 				{
-					if(data->attribs[i].attrib_type == WLAN_HDR_ATTRIB_MAC_ADDR)
+					if((data->attribs[i].offset < (IPA_HDR_MAX_SIZE - IPA_MAC_ADDR_SIZE)) && data->attribs[i].attrib_type == WLAN_HDR_ATTRIB_MAC_ADDR)
 					{
 						memcpy(get_client_memptr(wlan_client, num_wifi_client)->mac,
 								data->attribs[i].u.mac_addr,
@@ -1653,7 +1653,7 @@ int IPACM_Wlan::handle_wlan_client_init_ex(ipacm_event_data_wlan_ex *data)
 								IPA_MAC_ADDR_SIZE);
 
 						/* replace src mac to bridge mac_addr if any  */
-						if (IPACM_Iface::ipacmcfg->ipa_bridge_enable)
+						if ((data->attribs[i].offset < (IPA_HDR_MAX_SIZE - 2*IPA_MAC_ADDR_SIZE)) && IPACM_Iface::ipacmcfg->ipa_bridge_enable)
 						{
 							memcpy(&pHeaderDescriptor->hdr[0].hdr[data->attribs[i].offset+IPA_MAC_ADDR_SIZE],
 									 IPACM_Iface::ipacmcfg->bridge_mac,
@@ -1661,7 +1661,7 @@ int IPACM_Wlan::handle_wlan_client_init_ex(ipacm_event_data_wlan_ex *data)
 							IPACMDBG_H("device is in bridge mode \n");
 						}
 					}
-					else if (data->attribs[i].attrib_type == WLAN_HDR_ATTRIB_STA_ID)
+					else if ((data->attribs[i].offset < (IPA_HDR_MAX_SIZE - sizeof(data->attribs[i].u.sta_id))) && data->attribs[i].attrib_type == WLAN_HDR_ATTRIB_STA_ID)
 					{
 						/* copy client id to header */
 						memcpy(&pHeaderDescriptor->hdr[0].hdr[data->attribs[i].offset],
@@ -4476,7 +4476,7 @@ int IPACM_Wlan::install_uplink_filter_rule_per_client
 	int clnt_indx;
 	uint8_t num_offset_meq_128;
 	struct ipa_ipfltr_mask_eq_128 *offset_meq_128 = NULL;
-	int total_rules, v6_xlat_ul_rules;
+	int total_rules, v6_xlat_ul_rules = 0;
 	enum ipa_flt_action action_cache;
 
 	IPACMDBG_H("Set modem UL flt rules\n");

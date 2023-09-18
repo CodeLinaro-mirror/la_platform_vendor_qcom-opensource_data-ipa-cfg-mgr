@@ -1316,6 +1316,9 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 						}
 					}
 #endif
+					/*to handle if we have missed new route events before
+                                        creation of interface*/
+					ipa_nl_send_getroute(data->iptype);
 				}
 			}
 		}

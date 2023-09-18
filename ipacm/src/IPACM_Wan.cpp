@@ -1205,6 +1205,9 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 						evt_data.evt_data = (void *)wanup_data;
 						IPACM_EvtDispatcher::PostEvt(&evt_data);
 					}
+					/*to handle if we have missed new route events before
+                                        creation of interface*/
+					ipa_nl_send_getroute(data->iptype);
 				}
 			}
 		}

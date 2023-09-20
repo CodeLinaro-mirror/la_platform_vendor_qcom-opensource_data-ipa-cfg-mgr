@@ -271,8 +271,9 @@ bool IPACM_Filtering::AddFilteringRule_v2(struct ipa_ioc_add_flt_rule_v2 const *
 	IPACMDBG_H("commit value: %d\n", ruleTable->commit);
 	for (int cnt=0; cnt<ruleTable->num_rules; cnt++)
 	{
-		IPACMDBG("Filter rule:%d attrib mask: 0x%x\n", cnt,
-				((struct ipa_flt_rule_add_v2  *)ruleTable->rules)[cnt].rule.attrib.attrib_mask);
+		IPACMDBG("Filter rule:%d attrib mask: 0x%x Handle: %d\n", cnt,
+				((struct ipa_flt_rule_add_v2  *)ruleTable->rules)[cnt].rule.attrib.attrib_mask,
+				((struct ipa_flt_rule_add_v2 *)ruleTable->rules)[cnt].flt_rule_hdl);
 	}
 
 	retval = ioctl(fd, IPA_IOC_ADD_FLT_RULE_V2, ruleTable);
@@ -349,6 +350,7 @@ bool IPACM_Filtering::AddFilteringRule(struct ipa_ioc_add_flt_rule const *ruleTa
 			IPACMERR("Adding Filter rule:%d failed with status:%d\n",
 							 cnt, ruleTable->rules[cnt].status);
 		}
+		IPACMDBG("Added filter rule hdl %d\n", ruleTable->rules[cnt].flt_rule_hdl);
 	}
 
 	IPACMDBG("Added Filtering rule %p\n", ruleTable);
@@ -375,6 +377,7 @@ bool IPACM_Filtering::AddFilteringRuleAfter(struct ipa_ioc_add_flt_rule_after co
 			IPACMERR("Adding Filter rule:%d failed with status:%d\n",
 							 cnt, ruleTable->rules[cnt].status);
 		}
+		IPACMDBG("Added filter rule hdl %d\n", ruleTable->rules[cnt].flt_rule_hdl);
 	}
 
 	if (retval != 0)
@@ -462,32 +465,32 @@ bool IPACM_Filtering::DeleteFilteringHdls
 
 	    if (flt_rule_hdls[cnt] == 0)
 	    {
-		   IPACMERR("invalid filter handle passed, ignoring it: %d\n", cnt)
+		IPACMERR("invalid filter handle passed, ignoring it: %d\n", cnt)
 	    }
             else
 	    {
 
-		   flt_rule->hdl[0].status = -1;
-		   flt_rule->hdl[0].hdl = flt_rule_hdls[cnt];
-		   IPACMDBG("Deleting filter hdl:(0x%x) with ip type: %d\n", flt_rule_hdls[cnt], ip);
+		flt_rule->hdl[0].status = -1;
+		flt_rule->hdl[0].hdl = flt_rule_hdls[cnt];
+		IPACMDBG("Deleting filter hdl:(0x%x) with ip type: %d\n", flt_rule_hdls[cnt], ip);
 
-	           if (DeleteFilteringRule(flt_rule) == false)
-	           {
-		        PERROR("Filter rule deletion failed!\n");
-		        res = false;
-		        goto fail;
-	           }
-		   else
-	           {
-
-		        if (flt_rule->hdl[0].status != 0)
-		        {
-			     IPACMERR("Filter rule hdl 0x%x deletion failed with error:%d\n",
-		        					 flt_rule->hdl[0].hdl, flt_rule->hdl[0].status);
-			     res = false;
-			     goto fail;
-		        }
-		   }
+		if (DeleteFilteringRule(flt_rule) == false)
+		{
+			PERROR("Filter rule deletion failed!\n");
+			res = false;
+			goto fail;
+		}
+		else
+		{
+			if (flt_rule->hdl[0].status != 0)
+			{
+				IPACMERR("Filter rule hdl 0x%x deletion failed with error:%d\n",
+					flt_rule->hdl[0].hdl, flt_rule->hdl[0].status);
+				res = false;
+				goto fail;
+			}
+			flt_rule_hdls[cnt] = 0;
+		}
 	    }
 	}
 

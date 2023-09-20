@@ -2923,7 +2923,7 @@ void IPACM_ConntrackListener::ProcessTCPorUDPMsg_v6(const ipacm_ct_evt_data* evt
 	}
 	else if (entry.m_direction == NatEntryBase::DirectionInbound)
 	{
-		src_ipv6_msb = ((Ipv6IpAddress &)entry.GetTargetIp()).GetMsb();
+		src_ipv6_msb = ((Ipv6IpAddress &)entry.GetClientIp()).GetMsb();
 	}
 
 	for(int i = 0; i < IPA_MAX_NUM_HW_PDNS; i++)
@@ -2934,6 +2934,8 @@ void IPACM_ConntrackListener::ProcessTCPorUDPMsg_v6(const ipacm_ct_evt_data* evt
 			entry.IsVlanUp = true;
 		}
 	}
+
+	IPACMDBG_H("Entry temp:%d isvlan:%d isvlanup:%d\n", isTempEntry, entry.isVlan, entry.IsVlanUp);
 
 	AddORDeleteNatEntry_v6(evt_data, entry, isTempEntry);
 	IPACMDBG_H("return\n");

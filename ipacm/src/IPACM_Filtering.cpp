@@ -489,7 +489,6 @@ bool IPACM_Filtering::DeleteFilteringHdls
 				res = false;
 				goto fail;
 			}
-			flt_rule_hdls[cnt] = 0;
 		}
 	    }
 	}

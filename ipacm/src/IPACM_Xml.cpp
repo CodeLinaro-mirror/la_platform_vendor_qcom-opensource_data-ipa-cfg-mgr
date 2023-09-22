@@ -211,6 +211,7 @@ static int IPACM_swallow_xml_parse_tree(const char *xml_file, xmlNode* xml_node,
 						xml_file, IpaPdnCfg_TAG, IPA_MAX_NUM_SW_PDNS);
 					return IPACM_FAILURE;
 				}
+				IPACMDBG_H("PDN Count %d\n", swallow_config->pdn_count);
 				/* go to child */
 				ret_val = IPACM_swallow_xml_parse_tree(xml_file, xml_node->children, swallow_config);
 			}
@@ -236,6 +237,8 @@ static int IPACM_swallow_xml_parse_tree(const char *xml_file, xmlNode* xml_node,
 				{
 					/* increase swallow entry num */
 					config->num_extd_swallow_entries++;
+					IPACMDBG_H("Connection_TAG Num entries for PDN %d are %d\n",
+							swallow_config->pdn_count, config->num_extd_swallow_entries);
 
 					/* go to child */
 					ret_val = IPACM_swallow_xml_parse_tree(xml_file, xml_node->children, swallow_config);
@@ -274,11 +277,13 @@ static int IPACM_swallow_xml_parse_tree(const char *xml_file, xmlNode* xml_node,
 						{
 							config->extd_swallow_entries[config->num_extd_swallow_entries - 1].direction
 							= IPACM_MSGR_UL_FIREWALL;  /* Its UL*/
+							IPACMDBG_H("UL Connection\n");
 						}
 						else if (0 == IPACM_util_icmp_string((char*)content_buf, DL_TAG))
 						{
 							config->extd_swallow_entries[config->num_extd_swallow_entries - 1].direction
 							= IPACM_MSGR_DL_FIREWALL;  /* Its DL*/
+							IPACMDBG_H("DL Connection\n");
 						}
 					}
 				}
@@ -379,6 +384,8 @@ static int IPACM_swallow_xml_parse_tree(const char *xml_file, xmlNode* xml_node,
 						memcpy(content_buf, (void *)content, str_size);
 						config->extd_swallow_entries[config->num_extd_swallow_entries - 1].attrib.src_port
 							 = atoi(content_buf);
+						IPACMDBG_H("Source Port %d\n",
+								config->extd_swallow_entries[config->num_extd_swallow_entries - 1].attrib.src_port);
 					}
 				}
 				else if (0 == IPACM_util_icmp_string((char*)xml_node->name, DestinationPort_TAG))
@@ -391,6 +398,8 @@ static int IPACM_swallow_xml_parse_tree(const char *xml_file, xmlNode* xml_node,
 						memcpy(content_buf, (void *)content, str_size);
 						config->extd_swallow_entries[config->num_extd_swallow_entries - 1].attrib.dst_port
 							 = atoi(content_buf);
+						IPACMDBG_H("Destination Port %d\n",
+								config->extd_swallow_entries[config->num_extd_swallow_entries - 1].attrib.src_port);
 					}
 				}
 				else if (IPACM_util_icmp_string((char*)xml_node->name, NetDev_TAG) == 0)

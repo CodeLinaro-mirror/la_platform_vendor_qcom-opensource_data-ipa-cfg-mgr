@@ -564,7 +564,6 @@ bool NatApp::ChkSWAllow(const nat_table_entry *rule)
 	int i, j;
 	IPACM_extd_swallow_entry_conf_t entry;
 	IPACM_swallow_t sw_filter_cfg;
-	uint8_t pdn_index = 0;
 	IPACMDBG("Entry\n");
 
 	if(!IPACM_Iface::ipacmcfg->sw_filter_cfg || !IPACM_Iface::ipacmcfg->sw_allow_flag)
@@ -575,63 +574,51 @@ bool NatApp::ChkSWAllow(const nat_table_entry *rule)
 
 	memcpy(&sw_filter_cfg, IPACM_Iface::ipacmcfg->sw_filter_cfg, sizeof(IPACM_swallow_t));
 
-	/* Get PDN Index for the rule */
-	if(ipa_nat_get_pdn_index(rule->public_ip, &pdn_index))
-	{
-		IPACMERR("Rule PDN index not found!\n");
-		return false;
-	}
-
 	for(i = 0; i < sw_filter_cfg.pdn_count;i++)
 	{
 		/* PDN Not yet up */
 		if(sw_filter_cfg.pdns[i].pdn_index_v4 == -1)
 			continue;
 
-		if(sw_filter_cfg.pdns[i].pdn_index_v4 == pdn_index)
+		for(j = 0; j < sw_filter_cfg.pdns[i].num_extd_swallow_entries;j++)
 		{
-			for(j = 0; j < sw_filter_cfg.pdns[i].num_extd_swallow_entries;j++)
+			entry = sw_filter_cfg.pdns[i].extd_swallow_entries[j];
+
+			/* Check if entry is v4 */
+			if(entry.ip_vsn != IP_V4)
+				continue;
+
+			/* Check if rule protocol matches with entry protocol */
+			if(!(((entry.protocol &  IPPROTO_UDP) == rule->protocol) ||
+			((entry.protocol &	IPPROTO_TCP) == rule->protocol)))
+				continue;
+
+			/* UL */
+			if(!rule->dst_nat && (entry.direction == IPACM_MSGR_UL_FIREWALL))
 			{
-				entry = sw_filter_cfg.pdns[i].extd_swallow_entries[j];
-
-				/* Check if entry is v4 */
-				if(entry.ip_vsn != IP_V4)
-					continue;
-
-				/* Check if rule protocol matches with entry protocol */
-				if(!(((entry.protocol &  IPPROTO_UDP) == rule->protocol) ||
-				((entry.protocol &	IPPROTO_TCP) == rule->protocol)))
-					continue;
-
-				/* UL */
-				if(!rule->dst_nat && (entry.direction == IPACM_MSGR_UL_FIREWALL))
+				if(entry.attrib.u.v4.src_addr == rule->private_ip &&
+					 entry.attrib.u.v4.dst_addr == rule->target_ip &&
+					 entry.attrib.src_port ==  rule->private_port  &&
+					 entry.attrib.dst_port == rule->target_port)
 				{
-					if(entry.attrib.u.v4.src_addr == rule->private_ip &&
-						 entry.attrib.u.v4.dst_addr == rule->target_ip &&
-						 entry.attrib.src_port ==  rule->private_port  &&
-						 entry.attrib.dst_port == rule->target_port)
-					{
-						log_nat(rule->protocol,rule->private_ip,rule->target_ip,rule->private_port,\
-						rule->public_port,rule->target_port,rule->src_only,rule->dst_only,"SW Allow UL V4 Rule - Do not add\n");
-						return true;
-					}
-				}
-				/* DL */
-				else if(rule->dst_nat && (entry.direction == IPACM_MSGR_DL_FIREWALL))
-				{
-					if(entry.attrib.u.v4.src_addr == rule->target_ip &&
-						 entry.attrib.u.v4.dst_addr == rule->private_ip &&
-						 entry.attrib.src_port ==  rule->target_port  &&
-						 entry.attrib.dst_port == rule->private_port)
-					{
-						log_nat(rule->protocol,rule->private_ip,rule->target_ip,rule->private_port,\
-						rule->public_port,rule->target_port,rule->src_only,rule->dst_only,"SW Allow DL V4 Rule - Do not add\n");
-						return true;
-					}
+					log_nat(rule->protocol,rule->private_ip,rule->target_ip,rule->private_port,\
+					rule->public_port,rule->target_port,rule->src_only,rule->dst_only,"SW Allow UL V4 Rule - Do not add\n");
+					return true;
 				}
 			}
-			/* No rules found for that PDN */
-			return false;
+			/* DL */
+			else if(rule->dst_nat && (entry.direction == IPACM_MSGR_DL_FIREWALL))
+			{
+				if(entry.attrib.u.v4.src_addr == rule->target_ip &&
+					 entry.attrib.u.v4.dst_addr == rule->private_ip &&
+					 entry.attrib.src_port ==  rule->target_port  &&
+					 entry.attrib.dst_port == rule->private_port)
+				{
+					log_nat(rule->protocol,rule->private_ip,rule->target_ip,rule->private_port,\
+					rule->public_port,rule->target_port,rule->src_only,rule->dst_only,"SW Allow DL V4 Rule - Do not add\n");
+					return true;
+				}
+			}
 		}
 	}
 	IPACMDBG("Exit\n");
@@ -719,10 +706,6 @@ void NatApp::HandleSWAllowEntries(void)
 
 			for(cnt = 0; cnt < max_entries; cnt++)
 			{
-				/* Check if cache entry is enabled or pdn index does not match */
-				if(!cache[cnt].enabled || entry.pdn_index_v4 != cache[cnt].pdn_index)
-					continue;
-
 				/* Check if cache protocol matches with entry protocol */
 				if(!(((entry.extd_swallow_entries[j].protocol &  IPPROTO_UDP) == cache[cnt].protocol) ||
 				((entry.extd_swallow_entries[j].protocol &	IPPROTO_TCP) == cache[cnt].protocol)))

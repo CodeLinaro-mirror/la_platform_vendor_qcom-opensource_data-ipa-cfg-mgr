@@ -587,6 +587,9 @@ int IPACM_Config::Init(void)
 		/* copy bridge interface name to ipacmcfg */
 		if( iface_table[i].if_cat == VIRTUAL_IF)
 		{
+#ifdef FEATURE_RDKB
+			strlcpy(iface_table[i].iface_name, DEFAULT_BRIDGE_IFACE_NAME, sizeof(iface_table[i].iface_name));
+#endif
 			strlcpy(ipa_virtual_iface_name, iface_table[i].iface_name, sizeof(ipa_virtual_iface_name));
 			IPACMDBG_H("ipa_virtual_iface_name(%s) \n", ipa_virtual_iface_name);
 		}

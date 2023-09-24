@@ -348,7 +348,7 @@ int IPACM_Iface::iface_ipa_index_query
 	int link = INVALID_IFACE;
 	int i = 0;
 	struct ifreq ifr;
-
+	int str_idx = strlen(RMNET_IFACE_NAME); // points to X in qmapmuxX.Y in RDKB environment
 
 	if(IPACM_Iface::ipacmcfg->iface_table == NULL)
 	{
@@ -392,6 +392,15 @@ int IPACM_Iface::iface_ipa_index_query
 	close(fd);
 
 	IPACMDBG_H("Received interface name %s\n", ifr.ifr_name);
+
+#ifdef FEATURE_RDKB
+	if (strstr(ifr.ifr_name, RMNET_IFACE_NAME) && str_idx < strlen(ifr.ifr_name))
+	{
+		ifr.ifr_name[str_idx] = 'X';
+		IPACMDBG_H("Modified interface name %s\n", ifr.ifr_name);
+	}
+#endif
+
 	for (i = 0; i < IPACM_Iface::ipacmcfg->ipa_num_ipa_interfaces; i++)
 	{
 		if (strncmp(ifr.ifr_name,

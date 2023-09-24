@@ -29,7 +29,7 @@
 			<Iface>
 			   <Name>rmnet_data1</Name>
 			   <Category>WAN</Category>
-			</Iface>			
+			</Iface>
 			<Iface>
 			   <Name>rmnet_data2</Name>
 			   <Category>WAN</Category>
@@ -83,10 +83,71 @@
 			   <Category>WAN</Category>
 			</Iface>
 			<Iface>
+			   <Name>qmapmuxX.0</Name>
+			   <Category>WAN</Category>
+			   <Mode>ROUTER</Mode>
+			</Iface>
+			<Iface>
+			   <Name>qmapmuxX.1</Name>
+			   <Category>WAN</Category>
+			</Iface>
+			<Iface>
+			   <Name>qmapmuxX.2</Name>
+			   <Category>WAN</Category>
+			</Iface>
+			<Iface>
+			   <Name>qmapmuxX.3</Name>
+			   <Category>WAN</Category>
+			</Iface>
+			<Iface>
+			   <Name>qmapmuxX.4</Name>
+			   <Category>WAN</Category>
+			</Iface>
+			<Iface>
+			   <Name>qmapmuxX.5</Name>
+			   <Category>WAN</Category>
+			</Iface>
+			<Iface>
+			   <Name>qmapmuxX.6</Name>
+			   <Category>WAN</Category>
+			</Iface>
+			<Iface>
+			   <Name>qmapmuxX.7</Name>
+			   <Category>WAN</Category>
+			</Iface>
+			<Iface>
+			   <Name>qmapmuxX.8</Name>
+			   <Category>WAN</Category>
+			</Iface>
+			<Iface>
+			   <Name>qmapmuxX.9</Name>
+			   <Category>WAN</Category>
+			</Iface>
+			<Iface>
+			   <Name>qmapmuxX.10</Name>
+			   <Category>WAN</Category>
+			</Iface>
+			<Iface>
+			   <Name>qmapmuxX.11</Name>
+			   <Category>WAN</Category>
+			</Iface>
+			<Iface>
+			   <Name>qmapmuxX.12</Name>
+			   <Category>WAN</Category>
+			</Iface>
+			<Iface>
+			   <Name>qmapmuxX.13</Name>
+			   <Category>WAN</Category>
+			</Iface>
+			<Iface>
+			   <Name>qmapmuxX.14</Name>
+			   <Category>WAN</Category>
+			</Iface>
+			<Iface>
 			   <Name>wlan0</Name>
 			   <Category>UNKNOWN</Category>
 			   <WlanMode>full</WlanMode>
-			</Iface>			
+			</Iface>
 			<Iface>
 			   <Name>wlan1</Name>
 			   <Category>UNKNOWN</Category>

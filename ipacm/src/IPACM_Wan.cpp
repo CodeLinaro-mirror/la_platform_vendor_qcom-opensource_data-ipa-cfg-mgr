@@ -3913,6 +3913,7 @@ int IPACM_Wan::config_dft_firewall_rules(ipa_ip_type iptype)
 		return IPACM_SUCCESS;
 	}
 #endif
+#ifdef FEATURE_FIREWALL_DISABLE
 	/* default firewall is disable and the rule action is drop */
 	IPACM_firewall_conf_t firewall_config;
 	IPACMDBG_H("Firewall XML file is %s\n", MOBILE_FIREWALL_FILE);
@@ -3982,6 +3983,7 @@ int IPACM_Wan::config_dft_firewall_rules(ipa_ip_type iptype)
 	{
 		IPACMERR("QCMAP Firewall XML read failed, no such file, use default configuration \n");
 	}
+#endif
 
 	/* construct ipa_ioc_add_flt_rule with N firewall rules */
 	ipa_ioc_add_flt_rule *m_pFilteringTable = NULL;
@@ -3993,6 +3995,7 @@ int IPACM_Wan::config_dft_firewall_rules(ipa_ip_type iptype)
 		return IPACM_FAILURE;
 	}
 
+#ifdef FEATURE_FIREWALL_DISABLE
 	if (iptype == IPA_IP_v6 && !ipacmcfg->IsIpv6CTEnabled() && firewall_config.firewall_enable &&
 		check_dft_firewall_rules_attr_mask(&firewall_config))
 	{
@@ -4028,6 +4031,7 @@ int IPACM_Wan::config_dft_firewall_rules(ipa_ip_type iptype)
 			IPACMDBG_H("Installed IPv6 frag firewall rule, handle %d.\n", ipv6_frag_firewall_flt_rule_hdl);
 		}
 	}
+#endif
 
 	if (iptype == IPA_IP_v4)
 	{
@@ -4053,6 +4057,7 @@ int IPACM_Wan::config_dft_firewall_rules(ipa_ip_type iptype)
 			flt_rule_entry.flt_rule_hdl = -1;
 			flt_rule_entry.status = -1;
 
+#ifdef FEATURE_FIREWALL_DISABLE
 #ifndef FEATURE_IPACM_UL_FIREWALL
 
 			/* firewall disable, all traffic are allowed */
@@ -4079,6 +4084,7 @@ int IPACM_Wan::config_dft_firewall_rules(ipa_ip_type iptype)
 			}
 			else
 #endif //FEATURE_IPACM_UL_FIREWALL
+#endif
 			{
 				flt_rule_entry.at_rear = true;
 				if(IPACM_Iface::ipacmcfg->iface_table[ipa_if_num].if_mode == ROUTER)
@@ -4139,6 +4145,7 @@ int IPACM_Wan::config_dft_firewall_rules(ipa_ip_type iptype)
 			}
 			IPACMDBG_H("Routing handle for wan routing table:0x%x\n", IPACM_Iface::ipacmcfg->rt_tbl_lan_v4.hdl);
 
+#ifdef FEATURE_FIREWALL_DISABLE
             if(firewall_config.firewall_enable == true)
             {
 			rule_v4 = 0;
@@ -4261,12 +4268,14 @@ int IPACM_Wan::config_dft_firewall_rules(ipa_ip_type iptype)
 			} /* end of firewall ipv4 filter rule add for loop*/
             }
 
+#endif
 			/* configure default filter rule */
 			memset(&flt_rule_entry, 0, sizeof(struct ipa_flt_rule_add));
 
 			flt_rule_entry.flt_rule_hdl = -1;
 			flt_rule_entry.status = -1;
 
+#ifdef FEATURE_FIREWALL_DISABLE
 			/* firewall disable, all traffic are allowed */
             if(firewall_config.firewall_enable == true)
 			{
@@ -4290,6 +4299,7 @@ int IPACM_Wan::config_dft_firewall_rules(ipa_ip_type iptype)
 				}
 		    }
 			else
+#endif
 			{
 			    flt_rule_entry.at_rear = true;
 				if(IPACM_Iface::ipacmcfg->iface_table[ipa_if_num].if_mode == ROUTER)
@@ -4405,6 +4415,7 @@ int IPACM_Wan::config_dft_firewall_rules(ipa_ip_type iptype)
 			/* firewall disable, all traffic are allowed */
 			else
 #endif
+#ifdef FEATURE_FIREWALL_DISABLE
 				if (firewall_config.firewall_enable == true)
 			{
 				if (firewall_config.rule_action_accept == true)
@@ -4425,6 +4436,7 @@ int IPACM_Wan::config_dft_firewall_rules(ipa_ip_type iptype)
 				}
 			}
 			else
+#endif
 			{
 				if (IPACM_Iface::ipacmcfg->IsIpv6CTEnabled() &&
 					IPACM_Iface::ipacmcfg->iface_table[ipa_if_num].if_mode == ROUTER)
@@ -4485,7 +4497,7 @@ int IPACM_Wan::config_dft_firewall_rules(ipa_ip_type iptype)
 				free(m_pFilteringTable);
 				return IPACM_FAILURE;
 			}
-
+#ifdef FEATURE_FIREWALL_DISABLE
 			if (firewall_config.firewall_enable == true)
 			{
 				rule_v6 = 0;
@@ -4602,6 +4614,7 @@ int IPACM_Wan::config_dft_firewall_rules(ipa_ip_type iptype)
 				} /* end of firewall ipv6 filter rule add for loop*/
 			}
 
+#endif
 			/* Construct ICMP rule */
 			memset(&flt_rule_entry, 0, sizeof(struct ipa_flt_rule_add));
 			flt_rule_entry.at_rear = true;
@@ -4642,6 +4655,7 @@ int IPACM_Wan::config_dft_firewall_rules(ipa_ip_type iptype)
 			flt_rule_entry.status = -1;
 			flt_rule_entry.rule.rt_tbl_hdl = IPACM_Iface::ipacmcfg->rt_tbl_wan_v6.hdl;
 
+#ifdef FEATURE_FIREWALL_DISABLE
 			/* firewall disable, all traffic are allowed */
 			if (firewall_config.firewall_enable == true)
 			{
@@ -4665,6 +4679,7 @@ int IPACM_Wan::config_dft_firewall_rules(ipa_ip_type iptype)
 				}
 			}
 			else
+#endif
 			{
 				flt_rule_entry.at_rear = true;
 				if (IPACM_Iface::ipacmcfg->IsIpv6CTEnabled() &&

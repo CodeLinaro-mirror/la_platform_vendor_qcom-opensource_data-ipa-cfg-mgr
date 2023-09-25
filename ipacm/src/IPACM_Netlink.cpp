@@ -437,6 +437,7 @@ static int ipa_nl_decode_rtm_link
 	char *intf_type = NULL;
 	/* NL message header */
 	struct nlmsghdr *nlh = (struct nlmsghdr *)buffer;
+	char *rta_data = NULL;
 
 	ifm = (struct ifinfomsg *) NLMSG_DATA(nlh);
 	len = nlh->nlmsg_len - NLMSG_LENGTH(sizeof(struct ifinfomsg));
@@ -445,7 +446,7 @@ static int ipa_nl_decode_rtm_link
 	buflen -= sizeof(struct nlmsghdr);
 
 	for (attrib = IFLA_RTA(ifm); RTA_OK(attrib, len); attrib = RTA_NEXT(attrib, len)) {
-		const char * rta_data = strdup((const char *)RTA_DATA(attrib));
+		rta_data = strdup((const char *)RTA_DATA(attrib));
 		if (attrib->rta_type == IFLA_IFNAME && rta_data) {
 			strlcpy(link_info->vlan_info.name, rta_data, IFACE_NAME);
 			IPACMDBG("Extracted vlan interface name %s\n", link_info->vlan_info.name);
@@ -482,6 +483,14 @@ static int ipa_nl_decode_rtm_link
 
 				}
 			}
+			if(intf_type != NULL)
+			{
+				free(intf_type);
+			}
+		}
+		if(rta_data != NULL)
+		{
+			free(rta_data);
 		}
 	}
 
@@ -793,6 +802,7 @@ static int ipa_nl_decode_nlmsg
 					ret_val = ipa_get_if_name(dev_name, msg_ptr->nl_link_info.metainfo.ifi_index);
 					if (ret_val != IPACM_SUCCESS) {
 						IPACMERR("Error while getting interface name\n");
+						free(data_fid);
 						return IPACM_FAILURE;
 					}
 					IPACMDBG_H("Got a usb link_down event (Interface %s) \n", dev_name);
@@ -803,6 +813,7 @@ static int ipa_nl_decode_nlmsg
 							msg_ptr->nl_link_info.metainfo.ifi_index);
 						uint16_t vlan_master_interface_index = msg_ptr->nl_link_info.metainfo.ifi_index;
 						IPACM_Iface::ipacmcfg->del_bridge_vlan_mapping(&vlan_master_interface_index);
+						free(data_fid);
 						return IPACM_SUCCESS;
 					}
 
@@ -885,7 +896,16 @@ static int ipa_nl_decode_nlmsg
 			break;
 
 		case RTM_NEWADDR:
-			IPACMDBG("\n GOT RTM_NEWADDR event\n");
+		case RTM_DELADDR:
+			if(nlh->nlmsg_type == RTM_NEWADDR)
+			{
+				IPACMDBG("\n GOT RTM_NEWADDR event\n");
+			}
+			else
+			{
+				IPACMDBG("\n GOT RTM_DELADDR event\n");
+			}
+
 			if(IPACM_SUCCESS != ipa_nl_decode_rtm_addr(buffer, buflen, &(msg_ptr->nl_addr_info)))
 			{
 				IPACMERR("Failed to decode rtm addr message\n");
@@ -930,68 +950,63 @@ static int ipa_nl_decode_nlmsg
 					data_addr->ipv4_addr_mask = prefix_len;
 
 				}
-
-				evt_data.event = IPA_ADDR_ADD_EVENT;
+				if(nlh->nlmsg_type == RTM_NEWADDR)
+				{
+					evt_data.event = IPA_ADDR_ADD_EVENT;
+				}
+				else
+				{
+					evt_data.event = IPA_ADDR_DEL_EVENT;
+				}
 				data_addr->if_index = msg_ptr->nl_addr_info.metainfo.ifa_index;
 				strlcpy(data_addr->iface_name, dev_name, sizeof(data_addr->iface_name));
 				if(AF_INET6 == msg_ptr->nl_addr_info.attr_info.prefix_addr.ss_family)
 				{
-				    IPACMDBG("Posting IPA_ADDR_ADD_EVENT with if index:%d, ipv6 addr:0x%x:%x:%x:%x\n",
+					if(nlh->nlmsg_type == RTM_NEWADDR)
+					{
+						IPACMDBG("Posting IPA_ADDR_ADD_EVENT with if index:%d, ipv6 addr:0x%x:%x:%x:%x\n",
 								 data_addr->if_index,
 								 data_addr->ipv6_addr[0],
 								 data_addr->ipv6_addr[1],
 								 data_addr->ipv6_addr[2],
 								 data_addr->ipv6_addr[3]);
-                }
-				else
-				{
-				IPACMDBG("Posting IPA_ADDR_ADD_EVENT with if index:%d, ipv4 addr:0x%x\n",
+					}
+					else
+					{
+						IPACMDBG("Posting IPA_ADDR_DEL_EVENT with if index:%d, ipv6 addr:0x%x:%x:%x:%x\n",
 								 data_addr->if_index,
-								 data_addr->ipv4_addr);
-				}
-				evt_data.evt_data = data_addr;
-				IPACM_EvtDispatcher::PostEvt(&evt_data);
-			}
-			break;
-
-		case RTM_DELADDR:
-			IPACMDBG("\n GOT RTM_DELADDR event\n");
-			if(IPACM_SUCCESS != ipa_nl_decode_rtm_addr(buffer, buflen, &(msg_ptr->nl_addr_info)))
-			{
-				IPACMERR("Failed to decode rtm addr message\n");
-				return IPACM_FAILURE;
-			}
-			else
-			{
-
-				data_addr = (ipacm_event_data_addr *)malloc(sizeof(ipacm_event_data_addr));
-				if(data_addr == NULL)
-				{
-					IPACMERR("unable to allocate memory for event data_addr\n");
-					return IPACM_FAILURE;
-				}
-				memset(data_addr, 0, sizeof(ipacm_event_data_addr));
-				if(AF_INET == msg_ptr->nl_addr_info.attr_info.prefix_addr.ss_family)
-				{
-					data_addr->iptype = IPA_IP_v4;
-					prefix_len = ~0;
-					IPACM_NL_REPORT_ADDR( "IFA_ADDRESS:", msg_ptr->nl_addr_info.attr_info.prefix_addr );
-					IPACM_EVENT_COPY_ADDR_v4( data_addr->ipv4_addr, msg_ptr->nl_addr_info.attr_info.prefix_addr);
-					data_addr->ipv4_addr = ntohl(data_addr->ipv4_addr);
-					prefix_len = ((prefix_len >> (IPV4_SIZE - msg_ptr->nl_addr_info.metainfo.ifa_prefixlen)) << (IPV4_SIZE - msg_ptr->nl_addr_info.metainfo.ifa_prefixlen));
-					data_addr->ipv4_addr = (data_addr->ipv4_addr & prefix_len);
-					data_addr->ipv4_addr_mask = prefix_len;
-					data_addr->if_index = msg_ptr->nl_addr_info.metainfo.ifa_index;
-					strlcpy(data_addr->iface_name, dev_name, sizeof(data_addr->iface_name));
-					evt_data.event = IPA_ADDR_DEL_EVENT;
-					IPACMDBG("Posting IPA_ADDR_DEL_EVENT with if index:%d, ipv4 addr:0x%x\n",
-						data_addr->if_index,
-						data_addr->ipv4_addr);
+								 data_addr->ipv6_addr[0],
+								 data_addr->ipv6_addr[1],
+								 data_addr->ipv6_addr[2],
+								 data_addr->ipv6_addr[3]);
+					}
 					evt_data.evt_data = data_addr;
 					IPACM_EvtDispatcher::PostEvt(&evt_data);
 				}
+				else if(AF_INET == msg_ptr->nl_addr_info.attr_info.prefix_addr.ss_family)
+				{
+					if(nlh->nlmsg_type == RTM_NEWADDR)
+					{
+						IPACMDBG("Posting IPA_ADDR_ADD_EVENT with if index:%d, ipv4 addr:0x%x\n",
+								 data_addr->if_index,
+								 data_addr->ipv4_addr);
+					}
+					else
+					{
+						IPACMDBG("Posting IPA_ADDR_DEL_EVENT with if index:%d, ipv4 addr:0x%x\n",
+								 data_addr->if_index,
+								 data_addr->ipv4_addr);
+					}
+					evt_data.evt_data = data_addr;
+					IPACM_EvtDispatcher::PostEvt(&evt_data);
+				}
+				else
+				{
+					free(data_addr);
+				}
 			}
 			break;
+
 		case RTM_NEWROUTE:
 
 			if(IPACM_SUCCESS != ipa_nl_decode_rtm_route(buffer, buflen, &(msg_ptr->nl_route_info)))
@@ -1277,6 +1292,15 @@ static int ipa_nl_decode_nlmsg
 				IPACMERR("Failed to decode rtm route message\n");
 				return IPACM_FAILURE;
 			}
+
+			IPACMDBG("In case RTM_DELROUTE\n");
+			IPACMDBG("rtm_type: %d\n", msg_ptr->nl_route_info.metainfo.rtm_type);
+			IPACMDBG("protocol: %d\n", msg_ptr->nl_route_info.metainfo.rtm_protocol);
+			IPACMDBG("rtm_scope: %d\n", msg_ptr->nl_route_info.metainfo.rtm_scope);
+			IPACMDBG("rtm_table: %d\n", msg_ptr->nl_route_info.metainfo.rtm_table);
+			IPACMDBG("rtm_family: %d\n", msg_ptr->nl_route_info.metainfo.rtm_family);
+			IPACMDBG("param_mask: 0x%x\n", msg_ptr->nl_route_info.attr_info.param_mask);
+
 			/* take care of route delete of default route & uniroute */
 			if((msg_ptr->nl_route_info.metainfo.rtm_type == RTN_UNICAST) &&
 				 ((msg_ptr->nl_route_info.metainfo.rtm_protocol == RTPROT_BOOT) ||

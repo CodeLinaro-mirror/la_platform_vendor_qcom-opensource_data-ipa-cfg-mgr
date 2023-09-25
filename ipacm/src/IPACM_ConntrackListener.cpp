@@ -252,8 +252,14 @@ void IPACM_ConntrackListener::event_callback(ipa_cm_event_id evt,
 					IPACMDBG_H("Received IPA_HANDLE_WAN_VLAN_PDN_DOWN event for IPv6\n");
 					HandleVlanDownV6(data);
 				}
-				break;
+				else if(vlandown->iptype == IPA_IP_MAX)
+				{
+					IPACMDBG_H("Received IPA_HANDLE_WAN_VLAN_PDN_DOWN event for IPV4 and IPv6\n");
+					HandleVlanDown(data);
+					HandleVlanDownV6(data);
+				}
 			}
+			break;
 #endif
 
 	 case IPA_HANDLE_IP_PASS_PDN_INFO_UPDATE_EVENT:
@@ -3596,7 +3602,7 @@ void IPACM_ConntrackListener::ProcessTCPorUDPMsg_v6(const ipacm_ct_evt_data* evt
 	}
 	else if (entry.m_direction == NatEntryBase::DirectionInbound)
 	{
-		src_ipv6_msb = ((Ipv6IpAddress &)entry.GetTargetIp()).GetMsb();
+		src_ipv6_msb = ((Ipv6IpAddress &)entry.GetClientIp()).GetMsb();
 	}
 
 	for(int i = 0; i < IPA_MAX_NUM_HW_PDNS; i++)
@@ -3607,6 +3613,8 @@ void IPACM_ConntrackListener::ProcessTCPorUDPMsg_v6(const ipacm_ct_evt_data* evt
 			entry.IsVlanUp = true;
 		}
 	}
+
+	IPACMDBG_H("Entry temp:%d isvlan:%d isvlanup:%d\n", isTempEntry, entry.isVlan, entry.IsVlanUp);
 
 	AddORDeleteNatEntry_v6(evt_data, entry, isTempEntry);
 	IPACMDBG_H("return\n");
@@ -3621,7 +3629,7 @@ void IPACM_ConntrackListener::ProcessGREMsg(
 	{
 		pConfig = IPACM_Config::GetInstance();
 	}
-	if(!pConfig->ipacm_gre_autolearn)
+	if(!pConfig || !pConfig->ipacm_gre_autolearn)
 	{
 		return;
 	}

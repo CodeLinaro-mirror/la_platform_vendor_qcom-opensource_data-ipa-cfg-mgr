@@ -285,6 +285,9 @@ int IPACM_IfaceManager::create_iface_instance(ipacm_ifacemgr_data *param)
 					return IPACM_FAILURE;
 				}
 				IPACM_EvtDispatcher::registr(IPA_ADDR_ADD_EVENT, lan);
+				/*lan2lan ipa offload with static IP*/
+				IPACM_EvtDispatcher::registr(IPA_LAN_CLIENT_ADD_EVENT, lan);
+				IPACM_EvtDispatcher::registr(IPA_LAN_CLIENT_DEL_EVENT, lan);
 				//IPACM_EvtDispatcher::registr(IPA_ROUTE_ADD_EVENT, lan);
 				//IPACM_EvtDispatcher::registr(IPA_ROUTE_DEL_EVENT, lan);
 				IPACM_EvtDispatcher::registr(IPA_NEIGH_CLIENT_IP_ADDR_ADD_EVENT, lan);
@@ -329,6 +332,10 @@ int IPACM_IfaceManager::create_iface_instance(ipacm_ifacemgr_data *param)
 #endif
 				IPACM_EvtDispatcher::registr(IPA_LINK_DOWN_EVENT, lan);
 				IPACM_EvtDispatcher::registr(IPA_IPACM_DISABLE, lan);
+#ifdef FEATURE_IPA_IPSEC
+				IPACM_EvtDispatcher::registr(IPA_HANDLE_IPSEC_UL_FLT_ADD, lan);
+				IPACM_EvtDispatcher::registr(IPA_HANDLE_IPSEC_UL_FLT_DEL, lan);
+#endif
 				/* IPA_LAN_DELETE_SELF should be always last */
 				IPACM_EvtDispatcher::registr(IPA_LAN_DELETE_SELF, lan);
 				IPACMDBG_H("ipa_LAN (%s):ipa_index (%d) instance open/registr ok\n", lan->dev_name, lan->ipa_if_num);
@@ -349,6 +356,9 @@ int IPACM_IfaceManager::create_iface_instance(ipacm_ifacemgr_data *param)
 					return IPACM_FAILURE;
 				}
 				IPACM_EvtDispatcher::registr(IPA_ADDR_ADD_EVENT, ETH);
+				/*lan2lan ipa offload with static IP*/
+				IPACM_EvtDispatcher::registr(IPA_LAN_CLIENT_ADD_EVENT, ETH);
+				IPACM_EvtDispatcher::registr(IPA_LAN_CLIENT_DEL_EVENT, ETH);
 				IPACM_EvtDispatcher::registr(IPA_NEIGH_CLIENT_IP_ADDR_ADD_EVENT, ETH);
 				IPACM_EvtDispatcher::registr(IPA_SW_ROUTING_ENABLE, ETH);
 				IPACM_EvtDispatcher::registr(IPA_SW_ROUTING_DISABLE, ETH);
@@ -374,6 +384,10 @@ int IPACM_IfaceManager::create_iface_instance(ipacm_ifacemgr_data *param)
 				/* only need for vlan supported lan instance */
 				IPACM_EvtDispatcher::registr(IPA_HANDLE_WAN_ADDR_ADD_V6, ETH);
 				IPACM_EvtDispatcher::registr(IPA_IPACM_DISABLE, ETH);
+#ifdef FEATURE_IPA_IPSEC
+				IPACM_EvtDispatcher::registr(IPA_HANDLE_IPSEC_UL_FLT_ADD, ETH);
+				IPACM_EvtDispatcher::registr(IPA_HANDLE_IPSEC_UL_FLT_DEL, ETH);
+#endif
 				/* IPA_LAN_DELETE_SELF should be always last */
 				IPACM_EvtDispatcher::registr(IPA_LAN_DELETE_SELF, ETH);
 				IPACMDBG_H("ipa_LAN (%s):ipa_index (%d) instance open/registr ok\n", ETH->dev_name, ETH->ipa_if_num);
@@ -400,6 +414,9 @@ int IPACM_IfaceManager::create_iface_instance(ipacm_ifacemgr_data *param)
 					IPACM_EvtDispatcher::registr(IPA_HANDLE_EoGRE_DOWN, odu);
 #endif
 					IPACM_EvtDispatcher::registr(IPA_ADDR_ADD_EVENT, odu);
+					/*lan2lan ipa offload with static IP*/
+					IPACM_EvtDispatcher::registr(IPA_LAN_CLIENT_ADD_EVENT, odu);
+					IPACM_EvtDispatcher::registr(IPA_LAN_CLIENT_DEL_EVENT, odu);
 					IPACM_EvtDispatcher::registr(IPA_NEIGH_CLIENT_IP_ADDR_ADD_EVENT, odu);
 					IPACM_EvtDispatcher::registr(IPA_NEIGH_CLIENT_IP_ADDR_DEL_EVENT, odu);
 					IPACM_EvtDispatcher::registr(IPA_SW_ROUTING_ENABLE, odu);
@@ -438,6 +455,10 @@ int IPACM_IfaceManager::create_iface_instance(ipacm_ifacemgr_data *param)
 					IPACM_EvtDispatcher::registr(IPA_ADD_EXT_ROUTER_RULES, odu);
 					IPACM_EvtDispatcher::registr(IPA_DEL_EXT_ROUTER_RULES, odu);
 					IPACM_EvtDispatcher::registr(IPA_IPACM_DISABLE, odu);
+#ifdef FEATURE_IPA_IPSEC
+					IPACM_EvtDispatcher::registr(IPA_HANDLE_IPSEC_UL_FLT_ADD, odu);
+					IPACM_EvtDispatcher::registr(IPA_HANDLE_IPSEC_UL_FLT_DEL, odu);
+#endif
 					/* IPA_LAN_DELETE_SELF should be always last */
 					IPACM_EvtDispatcher::registr(IPA_LAN_DELETE_SELF, odu);
 					IPACMDBG_H("ipa_LAN (%s):ipa_index (%d) instance open/registr ok\n", odu->dev_name, odu->ipa_if_num);
@@ -456,6 +477,9 @@ int IPACM_IfaceManager::create_iface_instance(ipacm_ifacemgr_data *param)
 						return IPACM_FAILURE;
 					}
 					IPACM_EvtDispatcher::registr(IPA_ADDR_ADD_EVENT, odu);
+					/*lan2lan ipa offload with static IP*/
+					IPACM_EvtDispatcher::registr(IPA_LAN_CLIENT_ADD_EVENT, odu);
+					IPACM_EvtDispatcher::registr(IPA_LAN_CLIENT_DEL_EVENT, odu);
 					IPACM_EvtDispatcher::registr(IPA_NEIGH_CLIENT_IP_ADDR_ADD_EVENT, odu);
 					IPACM_EvtDispatcher::registr(IPA_SW_ROUTING_ENABLE, odu);
 					IPACM_EvtDispatcher::registr(IPA_SW_ROUTING_DISABLE, odu);
@@ -536,6 +560,10 @@ int IPACM_IfaceManager::create_iface_instance(ipacm_ifacemgr_data *param)
 				IPACM_EvtDispatcher::registr(IPA_HANDLE_WAN_VLAN_PDN_DOWN, wl);
 				IPACM_EvtDispatcher::registr(IPA_IPACM_DISABLE, wl);
 				IPACM_EvtDispatcher::registr(IPA_DSCP_PCP_CONFIG_CHANGE_EVENT, wl);
+#ifdef FEATURE_IPA_IPSEC
+				IPACM_EvtDispatcher::registr(IPA_HANDLE_IPSEC_UL_FLT_ADD, wl);
+				IPACM_EvtDispatcher::registr(IPA_HANDLE_IPSEC_UL_FLT_DEL, wl);
+#endif
 				/* IPA_LAN_DELETE_SELF should be always last */
 				IPACM_EvtDispatcher::registr(IPA_LAN_DELETE_SELF, wl);
 				IPACMDBG_H("ipa_WLAN (%s):ipa_index (%d) instance open/registr ok\n", wl->dev_name, wl->ipa_if_num);
@@ -586,6 +614,10 @@ int IPACM_IfaceManager::create_iface_instance(ipacm_ifacemgr_data *param)
 						IPACM_EvtDispatcher::registr(IPA_NETWORK_STATS_UPDATE_EVENT, w);
 					}
 #else/* defined(FEATURE_IPA_ANDROID) */
+					if(is_sta_mode == Q6_WAN)
+					{
+						IPACM_EvtDispatcher::registr(IPA_ADDR_DEL_EVENT, w);
+					}
 					IPACM_EvtDispatcher::registr(IPA_ROUTE_ADD_EVENT, w);
 					IPACM_EvtDispatcher::registr(IPA_ROUTE_DEL_EVENT, w);
 #endif /* not defined(FEATURE_IPA_ANDROID)*/

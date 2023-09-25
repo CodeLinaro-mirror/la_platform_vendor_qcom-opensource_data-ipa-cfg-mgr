@@ -430,7 +430,10 @@ public:
 #ifdef FEATURE_IPACM_UL_FIREWALL
 	static int num_firewall_v6_ul;
 #endif
-
+#ifdef FEATURE_IPA_IPSEC
+	uint32_t ipsec_post_pol_rt[2][IPA_MAX_FLT_RULE];
+	int num_ipsec_post_pol_rt[2];
+#endif
 	ipacm_wan_iface_type m_is_sta_mode;
 	static bool backhaul_is_sta_mode;
 	ipacm_event_ip_pass_pdn_info ip_pass_pdn_info;
@@ -756,6 +759,9 @@ private:
 	/* handle new_address event */
 	int handle_addr_evt(ipacm_event_data_addr *data);
 
+	/* handle del_address event */
+	int handle_addr_del_evt(ipacm_event_data_addr *data);
+
 	/* wan default route/filter rule configuration */
 	int handle_route_add_evt(ipa_ip_type iptype);
 
@@ -831,6 +837,20 @@ private:
 
 	int install_wan_filtering_rule(bool is_sw_routing, bool is_socksv5_en = false);
 
+#ifdef FEATURE_IPA_IPSEC
+	/*
+	 * The FLT rules that we send to Q6 via QMI are being skipped by IPsec packets.
+	 * Therefore we have to add these rules after IPsec DL policying. Since the policying is done
+	 * In 3rd round filtering table, the copied rules have to go to the DL routing table.
+	 * This method translates all QMI IPv4 and IPv6 rules into routing rules and installs them.
+	 *
+	 * @param rule_table_v4: IPv4 filtering table to translate from
+	 * @param rule_table_v6: IPv6 filtering table to translate from
+	 */
+	int installWanPostIpsecRt(struct ipa_ioc_add_flt_rule *rule_table_v4,
+		struct ipa_ioc_add_flt_rule *rule_table_v6);
+#endif
+
 	void handle_wlan_SCC_MCC_switch(bool, ipa_ip_type);
 
 	void handle_wan_client_SCC_MCC_switch(bool, ipa_ip_type);
@@ -855,7 +875,7 @@ private:
 	int add_dummy_rx_hdr();
 
 	void HandleSTAClientDelEvt(const ipa_wan_client* client, int index);
-	
+
 	int add_catchup_all_filtering_rule_each_pdn( ipa_ip_type iptype,
 		const struct ipa_rule_attrib& rx_prop_attrib, struct ipa_flt_rule_add& flt_rule_add, int fltr_rule_number);
 
@@ -882,6 +902,13 @@ private:
 
 	/* MTU helper functions */
 	int query_mtu_size();
+
+#ifdef FEATURE_IPA_IPSEC
+	int del_ipsec_wan_dl_rt_rules(enum ipa_ip_type iptype);
+
+	int add_ipsec_wan_dl_rt_rules(ipacm_event_data_addr *data,
+	uint32_t tx_prop_hdr_hdl);
+#endif
 };
 
 #endif /* IPACM_WAN_H */

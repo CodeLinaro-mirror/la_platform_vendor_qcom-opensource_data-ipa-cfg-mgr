@@ -73,9 +73,9 @@
 */
 #include <IPACM_Config.h>
 #include <IPACM_Log.h>
+#include <IPACM_Netlink.h>
 #include <IPACM_Iface.h>
 #include <sys/ioctl.h>
-#include <net/if.h>
 #include <fcntl.h>
 #include <string.h>
 #include <errno.h>
@@ -206,7 +206,13 @@ const char *ipacm_event_name[] = {
 	__stringify(IPA_ADD_EXT_ROUTER_RULES),                 /* Handle ext_route add event */
 	__stringify(IPA_DEL_EXT_ROUTER_RULES),                 /* Handle ext_route del event */
 	__stringify(IPA_IPACM_DISABLE),                       /* handle ipacm_disable event */
-	__stringify(IPACM_EVENT_MAX)
+	__stringify(IPA_LAN_CLIENT_ADD_EVENT),                /* ipa lan2lan offload for static ip */
+	__stringify(IPA_LAN_CLIENT_DEL_EVENT),                /* ipa lan2lan offload for static ip */
+#ifdef FEATURE_IPA_IPSEC
+	__stringify(IPA_HANDLE_IPSEC_UL_FLT_ADD),              /* Handle IPsec UL policy flt add */
+	__stringify(IPA_HANDLE_IPSEC_UL_FLT_DEL),              /* Handle IPsec UL policy flt delete */
+#endif	
+	__stringify(IPACM_EVENT_MAX),
 };
 
 IPACM_Config::IPACM_Config()
@@ -1343,6 +1349,8 @@ void IPACM_Config::add_bridge_vlan_mapping(ipa_bridge_vlan_mapping_info *data)
 {
 	list<bridge_vlan_mapping_info>::iterator it_mapping;
 	ipacm_bridge *bridge = NULL;
+	char iface_name[IPA_IFACE_NAME_LEN] = {0};
+	int ret = IPACM_FAILURE;
 
 	if(pthread_mutex_lock(&vlan_l2tp_lock) != 0)
 	{
@@ -1398,6 +1406,14 @@ void IPACM_Config::add_bridge_vlan_mapping(ipa_bridge_vlan_mapping_info *data)
 		new_mapping.bridge_associated_VID = data->vlan_id;
 		new_mapping.bridge_if_index = data->master_if_index;
 		new_mapping.status == 0;
+
+		ret = ipa_get_if_name(iface_name, data->master_if_index);
+		if(ret == IPACM_SUCCESS)
+		{
+			strlcpy(new_mapping.bridge_iface_name, iface_name,
+				sizeof(new_mapping.bridge_iface_name));
+		}
+
 		m_bridge_vlan_mapping.push_front(new_mapping);
 		bridge = get_vlan_bridge(data->bridge_name);
 		if(bridge)
@@ -1420,6 +1436,8 @@ void IPACM_Config::del_bridge_vlan_mapping(uint16_t *data)
 {
 	list<bridge_vlan_mapping_info>::iterator it_mapping;
 	ipacm_bridge *bridge = NULL;
+	int ret = IPACM_FAILURE;
+	char iface_name[IPA_IFACE_NAME_LEN] = {0};
 
 	IPACMDBG_H("Deleting bridge vlan mapping with interface index %d\n",*data);
 
@@ -1445,7 +1463,9 @@ void IPACM_Config::del_bridge_vlan_mapping(uint16_t *data)
 				it_mapping->bridge_associated_VID);
 			m_bridge_vlan_mapping.erase(it_mapping);
 
-			bridge = get_vlan_bridge(it_mapping->bridge_iface_name);
+			ret = ipa_get_if_name(iface_name, it_mapping->bridge_if_index);
+
+			bridge = get_vlan_bridge(iface_name);
 			if(bridge)
 			{
 				IPACMDBG_H("bridge %s - remove vlan id\n",
@@ -3643,6 +3663,36 @@ bool IPACM_Config::DelMacsecMap(struct ipa_macsec_map *macsec_map_to_delete)
 
 	return false;
 }
+
+#ifdef FEATURE_IPA_IPSEC
+bool operator==(const ipa_ioc_ipsec_ul_flt_attr &uf1, const ipa_ioc_ipsec_ul_flt_attr &uf2)
+{
+	if (memcmp(&uf1, &uf2, sizeof(ipa_ioc_ipsec_ul_flt_attr)) == 0)
+	{
+		return true;
+	}
+	else
+	{
+		return false;
+	}
+}
+
+bool IPACM_Config::AddIpsecUlFlt(struct ipa_ioc_ipsec_ul_flt_attr uf)
+{
+	ipsecUlFlt.insert(uf);
+	IPACMDBG_H("Added an UL rule. Now the number of IPsec UL rules is %ld\n", ipsecUlFlt.size());
+
+	return true;
+}
+
+bool IPACM_Config::DelIpsecUlFlt(struct ipa_ioc_ipsec_ul_flt_attr uf)
+{
+	ipsecUlFlt.erase(uf);
+	IPACMDBG_H("Deleted an UL rule. Now the number of IPsec UL rules is %ld\n", ipsecUlFlt.size());
+
+	return true;
+}
+#endif
 
 bool IPACM_Config::is_svap_related(const char* phy_inf) {
 	FILE *fp = NULL;

@@ -232,7 +232,7 @@ typedef enum
 	IPA_BRIDGE_LINK_UP_EVENT,                 /* ipacm_event_data_all */
 	IPA_WAN_EMBMS_LINK_UP_EVENT,              /* ipacm_event_data_mac */
 	IPA_ADDR_ADD_EVENT,                       /* ipacm_event_data_addr */
-	IPA_ADDR_DEL_EVENT,                       /* no use */
+	IPA_ADDR_DEL_EVENT,                       /* ipacm_event_data_addr */
 	IPA_ROUTE_ADD_EVENT,                      /* ipacm_event_data_addr */
 	IPA_ROUTE_DEL_EVENT,                      /* ipacm_event_data_addr */
 	IPA_WAN_UPSTREAM_ROUTE_ADD_EVENT,         /* ipacm_event_data_fid */
@@ -336,6 +336,12 @@ typedef enum
 	IPA_ADD_EXT_ROUTER_RULES,                 /* char */
 	IPA_DEL_EXT_ROUTER_RULES,                 /* char* */
 	IPA_IPACM_DISABLE,                        /* void */
+	IPA_LAN_CLIENT_ADD_EVENT,		 /* Add MAC based rule for lan2lan offload with static-ip */
+	IPA_LAN_CLIENT_DEL_EVENT,		 /* Del MAC based rule for lan2lan offload with static-ip */
+#ifdef FEATURE_IPA_IPSEC
+	IPA_HANDLE_IPSEC_UL_FLT_ADD,              /* ipa_ioc_ipsec_ul_flt_attr */
+	IPA_HANDLE_IPSEC_UL_FLT_DEL,              /* ipa_ioc_ipsec_ul_flt_attr */
+#endif
 	IPACM_EVENT_MAX
 } ipa_cm_event_id;
 
@@ -697,5 +703,27 @@ typedef struct ext_router_prefix_info
 	uint32_t idu_wan_ip[IPA_PREFIX_MAPPING_MAX][4];
 	uint32_t idu_client_prefix[IPA_PREFIX_MAPPING_MAX][4];
 };
+
+inline bool operator==(const ipa_rule_attrib &a1, const ipa_rule_attrib &a2)
+{
+	if (memcmp(&a1, &a2, sizeof(ipa_rule_attrib)) == 0)
+		return true;
+	else
+		return false;
+}
+
+#ifdef FEATURE_IPA_IPSEC
+struct IpsecUlFltHdl
+{
+public:
+	struct ipa_rule_attrib attr;
+	uint32_t hdl;
+
+	inline bool operator==(const IpsecUlFltHdl &ufh)
+	{
+		return hdl == ufh.hdl && attr == ufh.attr;
+	}
+};
+#endif
 
 #endif /* IPA_CM_DEFS_H */

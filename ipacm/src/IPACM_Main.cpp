@@ -309,6 +309,9 @@ void* ipa_driver_msg_notifier(void *param)
 	struct ipa_macsec_map *macsec_map = NULL;
 	char* pdn_name = NULL;
 	int CurrentIfaceIndex;
+#ifdef FEATURE_IPA_IPSEC
+	struct ipa_ioc_ipsec_ul_flt_attr *ipsec_ul_flt;
+#endif
 
 	fd = open(IPA_DRIVER, O_RDWR);
 	if (fd < 0)
@@ -1349,6 +1352,40 @@ void* ipa_driver_msg_notifier(void *param)
 			IPACM_Iface::ipacmcfg->eth_pdu_enabled = true;
 			evt_data.event    = IPA_IPACM_DISABLE;
 			break;
+
+#ifdef FEATURE_IPA_IPSEC
+		case IPA_IPSEC_UL_FLT_ADD_EVENT:
+			IPACMDBG_H("Received an IPA_IPSEC_UL_FLT_ADD_EVENT (%u)\n", event_hdr.msg_type);
+
+			ipsec_ul_flt = (ipa_ioc_ipsec_ul_flt_attr *)malloc(sizeof(struct ipa_ioc_ipsec_ul_flt_attr));
+			if(ipsec_ul_flt == NULL )
+			{
+				IPACMERR("Unable to allocate memory\n");
+				goto done;
+			}
+			memcpy(ipsec_ul_flt, buffer + sizeof(struct ipa_msg_meta), sizeof(struct ipa_ioc_ipsec_ul_flt_attr));
+
+			IPACM_Iface::ipacmcfg->AddIpsecUlFlt(*ipsec_ul_flt);
+			evt_data.event = IPA_HANDLE_IPSEC_UL_FLT_ADD;
+			evt_data.evt_data = ipsec_ul_flt;
+			break;
+
+		case IPA_IPSEC_UL_FLT_DEL_EVENT:
+			IPACMDBG_H("Received an IPA_IPSEC_UL_FLT_DEL_EVENT (%u)\n", event_hdr.msg_type);
+
+			ipsec_ul_flt = (ipa_ioc_ipsec_ul_flt_attr *)malloc(sizeof(struct ipa_ioc_ipsec_ul_flt_attr));
+			if(ipsec_ul_flt == NULL )
+			{
+				IPACMERR("Unable to allocate memory\n");
+				goto done;
+			}
+			memcpy(ipsec_ul_flt, buffer + sizeof(struct ipa_msg_meta), sizeof(struct ipa_ioc_ipsec_ul_flt_attr));
+
+			IPACM_Iface::ipacmcfg->DelIpsecUlFlt(*ipsec_ul_flt);
+			evt_data.event = IPA_HANDLE_IPSEC_UL_FLT_DEL;
+			evt_data.evt_data = ipsec_ul_flt;
+			break;
+#endif
 
 		default:
 			IPACMDBG_H("Unhandled message type: %d\n", event_hdr.msg_type);

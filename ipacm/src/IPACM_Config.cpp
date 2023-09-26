@@ -26,8 +26,8 @@
  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * Changes from Qualcomm Innovation Center are provided under the following license:
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Changes from Qualcomm Technologies, Inc. are provided under the following license:
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  * SPDX-License-Identifier: BSD-3-Clause-Clear.
  */
 /*!
@@ -1955,6 +1955,11 @@ bool IPACM_Config::is_added_vlan_iface(char *iface_name)
 {
 	list<vlan_iface_info>::iterator it_vlan;
 	bool ret = false;
+	if (!iface_in_vlan_mode(iface_name))
+	{
+		IPACMDBG_H("Iface not in VLAN mode: %s\n", iface_name);
+		return false;
+	}
 
 	if(pthread_mutex_lock(&vlan_l2tp_lock) != 0)
 	{

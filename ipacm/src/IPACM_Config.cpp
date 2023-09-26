@@ -1924,6 +1924,11 @@ bool IPACM_Config::is_added_vlan_iface(char *iface_name)
 {
 	list<vlan_iface_info>::iterator it_vlan;
 	bool ret = false;
+	if (!iface_in_vlan_mode(iface_name))
+	{
+		IPACMDBG_H("Iface not in VLAN mode: %s\n", iface_name);
+		return false;
+	}
 
 	if(pthread_mutex_lock(&vlan_l2tp_lock) != 0)
 	{

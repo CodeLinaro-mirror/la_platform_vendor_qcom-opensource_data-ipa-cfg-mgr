@@ -6794,7 +6794,7 @@ int IPACM_Lan::handle_uplink_filter_rule(ipacm_ext_prop *prop, ipa_ip_type iptyp
 		total_rules = prop->num_ext_props;
 
 	/*for IPv6CT enabled mode, duplicate the pass to NAT modem UL rules and change to pass to route for XLAT packets */
-	if (is_xlat && iptype == IPA_IP_v6 && IPACM_Iface::ipacmcfg->IsIpv6CTEnabled())
+	if (iptype == IPA_IP_v6 && IPACM_Iface::ipacmcfg->IsIpv6CTEnabled())
 	{
 		IPACMDBG("IPv6CT is enabled, need pass to route modem UL rules for XLAT packets\n");
 		for(i = 0; i < total_rules; i++)
@@ -7012,7 +7012,7 @@ int IPACM_Lan::handle_uplink_filter_rule(ipacm_ext_prop *prop, ipa_ip_type iptyp
 		i++;
 
 		//for IPv6CT enabled and XLAT, add a duplicate rule above that will let XLAT packets go to routing instead of NAT
-		if (is_xlat && iptype == IPA_IP_v6 && IPACM_Iface::ipacmcfg->IsIpv6CTEnabled() &&
+		if (iptype == IPA_IP_v6 && IPACM_Iface::ipacmcfg->IsIpv6CTEnabled() &&
 			flt_rule_entry.rule.action!= IPA_PASS_TO_EXCEPTION)
 		{
 			//duplicate the old rule to new index

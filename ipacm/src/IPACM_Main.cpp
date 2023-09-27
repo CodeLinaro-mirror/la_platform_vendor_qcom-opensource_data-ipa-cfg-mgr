@@ -1259,9 +1259,9 @@ void* ipa_driver_msg_notifier(void *param)
 			IPACMDBG_H("macsec map: %s - %s\n", macsec_map->macsec_name, macsec_map->phy_name);
 
 			if (event_hdr.msg_type == IPA_MACSEC_ADD_EVENT &&
-			    IPACM_Iface::ipacmcfg->AddMacsecMap(macsec_map) == false ||
+			    IPACM_Iface::ipacmcfg->insertOrAssignMacsecMap(macsec_map) == false ||
 			    event_hdr.msg_type == IPA_MACSEC_DEL_EVENT &&
-			    IPACM_Iface::ipacmcfg->DelMacsecMap(macsec_map) == false)
+			    IPACM_Iface::ipacmcfg->delMacsecMap(macsec_map) == false)
 			{
 				IPACMERR("Couldn't find the mapping, ignoring this macsec handling\n");
 				free(macsec_map);

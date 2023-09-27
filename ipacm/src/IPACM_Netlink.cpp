@@ -430,7 +430,7 @@ static int ipa_nl_decode_rtm_link
 )
 {
 	struct rtattr *attrib, *nested_attr, *vlan_attr;
-	struct rtattr *vlan_link_info[IFLA_INFO_MAX + 1] = {};
+	struct rtattr *device_link_info[IFLA_INFO_MAX + 1] = {};
 	struct rtattr *vlan_link_info_data_attrs[IFLA_VLAN_MAX+1] = {};
 	struct ifinfomsg *ifm;
 	int len, nest_len, vlan_len;
@@ -450,36 +450,44 @@ static int ipa_nl_decode_rtm_link
 		if (attrib->rta_type == IFLA_IFNAME && rta_data) {
 			strlcpy(link_info->vlan_info.name, rta_data, IFACE_NAME);
 			IPACMDBG("Extracted vlan interface name %s\n", link_info->vlan_info.name);
+			/* This is the interface name. in case of macsec/vlan/vlan-macsec it can be macsec0, vlan0, macsec100.0 */
+			strlcpy(link_info->name, (strdup((const char *)RTA_DATA(attrib))), IFACE_NAME);
+			IPACMDBG("Extracted interface name %s\n", link_info->name);
 		}
 		if (attrib->rta_type == IFLA_LINKINFO) {
 			nested_attr = (struct rtattr *)RTA_DATA(attrib);
 			nest_len = RTA_PAYLOAD(attrib);
 			while (RTA_OK(nested_attr, nest_len)) {
-				if ((nested_attr->rta_type <= IFLA_INFO_MAX) && (!vlan_link_info[nested_attr->rta_type]))
-					vlan_link_info[nested_attr->rta_type] = nested_attr;
+				if ((nested_attr->rta_type <= IFLA_INFO_MAX) && (!device_link_info[nested_attr->rta_type]))
+					device_link_info[nested_attr->rta_type] = nested_attr;
 				nested_attr = RTA_NEXT(nested_attr, nest_len);
 			}
-			if (vlan_link_info [IFLA_INFO_KIND]) {
-				intf_type = strdup((char *)RTA_DATA(vlan_link_info[IFLA_INFO_KIND]));
+			if (device_link_info [IFLA_INFO_KIND]) {
+				intf_type = strdup((char *)RTA_DATA(device_link_info[IFLA_INFO_KIND]));
 				if (intf_type) {
 					if (!strcmp(intf_type, "vlan")) {
+						link_info->link_type = IPA_LINK_TYPE_VLAN;
 						link_info->vlan_info.vlan_interface_index = link_info->metainfo.ifi_index;
 						IPACMDBG("Recived NEW_LINK for vlan type interface with interface index %d\n",
-									link_info->vlan_info.vlan_interface_index);
+									link_info->metainfo.ifi_index);
+					} else if (strcmp(intf_type, "macsec") == 0) {
+						link_info->link_type = IPA_LINK_TYPE_MACSEC;
+						IPACMDBG("Recived NEW_LINK for macsec type interface with interface index %d\n",
+									link_info->metainfo.ifi_index);
 					}
 				}
 			}
-			if (intf_type && !strcmp(intf_type, "vlan") && vlan_link_info[IFLA_INFO_DATA]) {
-				vlan_attr = (struct rtattr *)RTA_DATA(vlan_link_info[IFLA_INFO_DATA]);
-				vlan_len = RTA_PAYLOAD(vlan_link_info[IFLA_INFO_DATA]);
+			if (intf_type && !strcmp(intf_type, "vlan") && device_link_info[IFLA_INFO_DATA]) {
+				vlan_attr = (struct rtattr *)RTA_DATA(device_link_info[IFLA_INFO_DATA]);
+				vlan_len = RTA_PAYLOAD(device_link_info[IFLA_INFO_DATA]);
 				while (RTA_OK(vlan_attr, vlan_len)) {
 					if ((vlan_attr->rta_type <= IFLA_INFO_MAX) &&(!vlan_link_info_data_attrs[vlan_attr->rta_type]))
 						vlan_link_info_data_attrs[vlan_attr->rta_type] = vlan_attr;
 					vlan_attr = RTA_NEXT(vlan_attr, vlan_len);
 				}
 				if (vlan_link_info_data_attrs[IFLA_VLAN_ID]) {
-					link_info->vlan_info.vlan_id = *(uint16_t *)RTA_DATA(vlan_link_info_data_attrs[IFLA_VLAN_ID]);
-					IPACMDBG("vlan id %d\n", link_info->vlan_info.vlan_id);
+					link_info->vlan_id = *(uint16_t *)RTA_DATA(vlan_link_info_data_attrs[IFLA_VLAN_ID]);
+					IPACMDBG("vlan id %d\n", link_info->vlan_id);
 
 				}
 			}
@@ -492,8 +500,14 @@ static int ipa_nl_decode_rtm_link
 		{
 			free(rta_data);
 		}
+		if (attrib->rta_type == IFLA_MASTER) {
+			memcpy(&link_info->master_interface_index,
+						 RTA_DATA(attrib),
+						 sizeof(link_info->master_interface_index));
+			IPACMDBG("Extracted master interface index %d\n",
+					link_info->metainfo.ifi_index);
+		}
 	}
-
 	return IPACM_SUCCESS;
 }
 
@@ -671,6 +685,27 @@ static int ipa_nl_decode_rtm_route
 	return IPACM_SUCCESS;
 }
 
+static int get_macsec_lower_interface_name(struct ipa_macsec_map *macsecMap, char *lowerInterfaceName) {
+	char cmd[200] = {0};
+	FILE *fp = NULL;
+
+	snprintf(cmd, 200, "ls /sys/devices/virtual/net/%s | grep lower | cut -d'_' -f2 > /tmp/macsec_name.txt", macsecMap->macsec_name);
+	system(cmd);
+	fp = fopen("/tmp/macsec_name.txt", "r");
+	if (!fp) {
+		IPACMERR("can't open /tmp/macsec_name.txt\n");
+		return IPACM_FAILURE;
+	}
+	if (!fgets(lowerInterfaceName, IF_NAME_LEN, fp)) {
+		IPACMERR("fgets failed\n");
+		fclose(fp);
+		return IPACM_FAILURE;
+	}
+	fclose(fp);
+	lowerInterfaceName[strcspn(lowerInterfaceName, "\r\n")] = 0;
+	return IPACM_SUCCESS;
+}
+
 /* decode the ipa nl-message */
 static int ipa_nl_decode_nlmsg
 (
@@ -680,6 +715,7 @@ static int ipa_nl_decode_nlmsg
 	 )
 {
 	char dev_name[IF_NAME_LEN]={0};
+	char master_dev_name[IF_NAME_LEN]={0};
 	int ret_val, mask_value, mask_index, mask_value_v6;
 	struct nlmsghdr *nlh = (struct nlmsghdr *)buffer;
 
@@ -693,7 +729,11 @@ static int ipa_nl_decode_nlmsg
 	ipacm_event_data_fid *data_fid;
 	ipacm_event_data_addr *data_addr;
 	ipacm_event_data_all *vlan_data;
+	struct ipa_vlan_iface_info vlan_info;
+	struct ipa_macsec_map macsec_map, *macsec_map_data;
 	memset(nullMac, 0, sizeof(nullMac));
+	memset(&vlan_info, 0, sizeof(vlan_info));
+	memset(&macsec_map, 0, sizeof(macsec_map));
 	while(NLMSG_OK(nlh, buflen))
 	{
 		memset(dev_name,0,IF_NAME_LEN);
@@ -723,13 +763,39 @@ static int ipa_nl_decode_nlmsg
 					return IPACM_SUCCESS;
 				}
 #endif
+
+				ret_val = ipa_get_if_name(dev_name, msg_ptr->nl_link_info.metainfo.ifi_index);
+				if (ret_val != IPACM_SUCCESS) {
+					IPACMERR("Error while getting interface name\n");
+					return IPACM_FAILURE;
+				}
+
+				if (msg_ptr->nl_link_info.link_type == IPA_LINK_TYPE_VLAN) {
+					strlcpy(vlan_info.name, msg_ptr->nl_link_info.name, sizeof(vlan_info.name));
+					vlan_info.vlan_id = msg_ptr->nl_link_info.vlan_id;
+					vlan_info.vlan_interface_index = msg_ptr->nl_link_info.metainfo.ifi_index;
+				}
+
+				if (msg_ptr->nl_link_info.link_type == IPA_LINK_TYPE_MACSEC) {
+					strlcpy(macsec_map.macsec_name, msg_ptr->nl_link_info.name, sizeof(macsec_map.macsec_name));
+					if (get_macsec_lower_interface_name(&macsec_map, master_dev_name) != IPACM_SUCCESS)
+						return IPACM_FAILURE;
+					strlcpy(macsec_map.phy_name, master_dev_name, sizeof(macsec_map.phy_name));
+					if (IPACM_Iface::ipacmcfg->insertOrAssignMacsecMap(&macsec_map)) {
+						evt_data.event = IPA_HANDLE_MACSEC_ADD;
+						macsec_map_data = static_cast<decltype(macsec_map_data)>(malloc(sizeof(*macsec_map_data)));
+						if (!macsec_map_data) {
+							IPACMERR("malloc failed\n");
+							return IPACM_FAILURE;
+						}
+						memcpy(macsec_map_data, &macsec_map, sizeof(macsec_map));
+						evt_data.evt_data = macsec_map_data;
+						IPACM_EvtDispatcher::PostEvt(&evt_data);
+					}
+				}
+
 				if (IFF_UP & msg_ptr->nl_link_info.metainfo.ifi_change) {
 					IPACMDBG("GOT useful newlink event\n");
-					ret_val = ipa_get_if_name(dev_name, msg_ptr->nl_link_info.metainfo.ifi_index);
-					if (ret_val != IPACM_SUCCESS) {
-						IPACMERR("Error while getting interface name\n");
-						return IPACM_FAILURE;
-					}
 
 					data_fid = (ipacm_event_data_fid *)malloc(sizeof(ipacm_event_data_fid));
 					if (data_fid == NULL) {
@@ -738,9 +804,15 @@ static int ipa_nl_decode_nlmsg
 					}
 					data_fid->if_index = msg_ptr->nl_link_info.metainfo.ifi_index;
 					strlcpy(data_fid->iface_name, dev_name, sizeof(data_fid->iface_name));
-
-					if (msg_ptr->nl_link_info.vlan_info.vlan_id && msg_ptr->nl_link_info.vlan_info.name != NULL)
-						IPACM_Iface::ipacmcfg->add_vlan_iface(&msg_ptr->nl_link_info.vlan_info);
+					if (msg_ptr->nl_link_info.vlan_id) {
+						memset(&vlan_info, 0, sizeof(ipa_vlan_iface_info));
+						strlcpy(vlan_info.name, msg_ptr->nl_link_info.name, IPA_RESOURCE_NAME_MAX);
+						vlan_info.vlan_id = msg_ptr->nl_link_info.vlan_id;
+						vlan_info.vlan_interface_index = msg_ptr->nl_link_info.metainfo.ifi_index;
+						IPACMDBG("Add vlan<->interface details with vlan: %d interface: %s interface index %d priority %d\n",
+							vlan_info.vlan_id, vlan_info.name, vlan_info.vlan_interface_index, vlan_info.priority);
+						IPACM_Iface::ipacmcfg->add_vlan_iface(&vlan_info);
+					}
 
 					if (msg_ptr->nl_link_info.metainfo.ifi_flags & IFF_UP) {
 						IPACMDBG_H("Interface %s bring up with IP-family: %d \n", dev_name,
@@ -775,16 +847,11 @@ static int ipa_nl_decode_nlmsg
 					}
 					data_fid->if_index = msg_ptr->nl_link_info.metainfo.ifi_index;
 
-				        ret_val = ipa_get_if_name(dev_name, msg_ptr->nl_link_info.metainfo.ifi_index);
-					if (ret_val != IPACM_SUCCESS) {
-						IPACMERR("Error while getting interface name\n");
-						return IPACM_FAILURE;
-					}
 					IPACMDBG("Got a usb link_up event (Interface %s, %d) \n", dev_name,
 						msg_ptr->nl_link_info.metainfo.ifi_index);
 					strlcpy(data_fid->iface_name, dev_name, sizeof(data_fid->iface_name));
-					if (msg_ptr->nl_link_info.vlan_info.vlan_id && msg_ptr->nl_link_info.vlan_info.name != NULL)
-						IPACM_Iface::ipacmcfg->add_vlan_iface(&msg_ptr->nl_link_info.vlan_info);
+					if (msg_ptr->nl_link_info.link_type == IPA_LINK_TYPE_VLAN)
+						IPACM_Iface::ipacmcfg->add_vlan_iface(&vlan_info);
                     /*--------------------------------------------------------------------------
                        Post LAN iface (ECM) link up event
                      ---------------------------------------------------------------------------*/
@@ -817,8 +884,22 @@ static int ipa_nl_decode_nlmsg
 						return IPACM_SUCCESS;
 					}
 
-					if (msg_ptr->nl_link_info.vlan_info.vlan_id && msg_ptr->nl_link_info.vlan_info.name != NULL)
-						IPACM_Iface::ipacmcfg->del_vlan_iface(&msg_ptr->nl_link_info.vlan_info);
+					if (msg_ptr->nl_link_info.link_type == IPA_LINK_TYPE_VLAN)
+						IPACM_Iface::ipacmcfg->del_vlan_iface(&vlan_info);
+					if (msg_ptr->nl_link_info.link_type == IPA_LINK_TYPE_MACSEC) {
+						if (IPACM_Iface::ipacmcfg->delMacsecMap(&macsec_map)) {
+							evt_data.event = IPA_HANDLE_MACSEC_DEL;
+							macsec_map_data = static_cast<decltype(macsec_map_data)>
+								(malloc(sizeof(*macsec_map_data)));
+							if (!macsec_map_data) {
+								IPACMERR("malloc failed\n");
+								return IPACM_FAILURE;
+							}
+							memcpy(macsec_map_data, &macsec_map, sizeof(macsec_map));
+							evt_data.evt_data = macsec_map_data;
+							IPACM_EvtDispatcher::PostEvt(&evt_data);
+						}
+					}
 
 					data_fid->if_index = msg_ptr->nl_link_info.metainfo.ifi_index;
 					strlcpy(data_fid->iface_name, dev_name, sizeof(data_fid->iface_name));
@@ -850,19 +931,6 @@ static int ipa_nl_decode_nlmsg
 				IPACMDBG("RTM_DELLINK, ifi_flags:%d\n", msg_ptr->nl_link_info.metainfo.ifi_flags);
 				IPACMDBG("RTM_DELLINK, ifi_index:%d\n", msg_ptr->nl_link_info.metainfo.ifi_index);
 				IPACMDBG("RTM_DELLINK, family:%d\n", msg_ptr->nl_link_info.metainfo.ifi_family);
-
-				ret_val = ipa_get_if_name(dev_name, msg_ptr->nl_link_info.metainfo.ifi_index);
-				if(ret_val != IPACM_SUCCESS)
-				{
-					IPACMERR("Error while getting interface name with index %d, continue as the interface might have already been down.\n",
-						msg_ptr->nl_link_info.metainfo.ifi_index);
-				}
-
-				if(msg_ptr->nl_link_info.vlan_info.vlan_id && msg_ptr->nl_link_info.vlan_info.name != NULL)
-				{
-					IPACM_Iface::ipacmcfg->del_vlan_iface(&msg_ptr->nl_link_info.vlan_info);
-				}
-
 				/* RTM_NEWLINK event with AF_BRIDGE family should be ignored in Android
 				 *    but this should be processed in case of MDM for Ehernet interface.
 				 */
@@ -873,6 +941,45 @@ static int ipa_nl_decode_nlmsg
 					uint16_t vlan_master_interface_index = msg_ptr->nl_link_info.metainfo.ifi_index;
 					IPACM_Iface::ipacmcfg->del_bridge_vlan_mapping(&vlan_master_interface_index);
 					return IPACM_SUCCESS;
+				}
+				ret_val = ipa_get_if_name(dev_name, msg_ptr->nl_link_info.metainfo.ifi_index);
+				if(ret_val != IPACM_SUCCESS)
+				{
+					IPACMERR("Error while getting interface name with index %d, continue as the interface might have already been down.\n",
+						msg_ptr->nl_link_info.metainfo.ifi_index);
+				}
+
+				if (msg_ptr->nl_link_info.link_type == IPA_LINK_TYPE_VLAN) {
+					strlcpy(vlan_info.name, msg_ptr->nl_link_info.name, sizeof(vlan_info.name));
+					vlan_info.vlan_id = msg_ptr->nl_link_info.vlan_id;
+					vlan_info.vlan_interface_index = msg_ptr->nl_link_info.metainfo.ifi_index;
+				}
+
+				if (msg_ptr->nl_link_info.link_type == IPA_LINK_TYPE_MACSEC) {
+					strlcpy(macsec_map.macsec_name, msg_ptr->nl_link_info.name, sizeof(macsec_map.macsec_name));
+					ret_val = ipa_get_if_name(master_dev_name, msg_ptr->nl_link_info.master_interface_index);
+					if (ret_val != IPACM_SUCCESS) {
+						IPACMERR("Error while getting master interface name\n");
+						return IPACM_FAILURE;
+					}
+					strlcpy(macsec_map.phy_name, msg_ptr->nl_link_info.name, sizeof(macsec_map.phy_name));
+				}
+
+				if(msg_ptr->nl_link_info.link_type == IPA_LINK_TYPE_VLAN)
+					IPACM_Iface::ipacmcfg->del_vlan_iface(&vlan_info);
+				if (msg_ptr->nl_link_info.link_type == IPA_LINK_TYPE_MACSEC) {
+					if (IPACM_Iface::ipacmcfg->delMacsecMap(&macsec_map)) {
+						evt_data.event = IPA_HANDLE_MACSEC_DEL;
+						macsec_map_data = static_cast<decltype(macsec_map_data)>
+							(malloc(sizeof(*macsec_map_data)));
+						if (!macsec_map_data) {
+							IPACMERR("malloc failed\n");
+							return IPACM_FAILURE;
+						}
+						memcpy(macsec_map_data, &macsec_map, sizeof(macsec_map));
+						evt_data.evt_data = macsec_map_data;
+						IPACM_EvtDispatcher::PostEvt(&evt_data);
+					}
 				}
 
 				/* post link down to command queue */

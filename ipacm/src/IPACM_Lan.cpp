@@ -1268,6 +1268,7 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 					if(IPACM_Iface::ipacmcfg->mac_addr_in_blacklist(data->mac_addr) == false)
 					{
 						handle_eth_client_route_rule(data->mac_addr, data->iptype);
+					IPACM_Iface::ipacmcfg->AddNatIfaces(data->iface_name);
 						/* Add NAT rules after RT rules are set */
 						HandleNeighIpAddrAddEvt(data);
 					}

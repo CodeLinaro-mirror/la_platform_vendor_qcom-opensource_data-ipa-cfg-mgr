@@ -10763,7 +10763,14 @@ int IPACM_Wan::gre_add_exception_rule(
 	attrib.attrib_mask |= (IPA_FLT_SRC_ADDR | IPA_FLT_DST_ADDR);
 
 	/*Update the Metadata to use GRE PDN mux ID */
-	IPACM_Wan::GetMuxByAddr(IPA_IP_v4, &ipgre_info.ipv4_src, mux_id);
+	if (iptype == IPA_IP_v4)
+	{
+		IPACM_Wan::GetMuxByAddr(IPA_IP_v4, &ipgre_info.ipv4_src, mux_id);
+	}
+	else
+	{
+		IPACM_Wan::GetMuxByAddr(IPA_IP_v6, &ipgre_info.ipv6_src, mux_id);
+	}
 	IPACMDBG("MPLS GRE PDN is using mux id %d\n", mux_id);
 	attrib.meta_data = (mux_id & 0xFF) << 24;
 

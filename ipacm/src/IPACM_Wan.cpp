@@ -2064,6 +2064,7 @@ int IPACM_Wan::check_vlan_pdn(ipa_ip_type iptype, ipacm_event_route_vlan *data, 
 				{
 					IPACMDBG_H("Backhaul switch from LTE to STA - V6\n");
 
+					/* Post vlan down here. handle_route_add_vlan_pdn_evt takes care of vlan up */
 					vlandown_data = (ipacm_event_vlan_pdn *)malloc(sizeof(ipacm_event_vlan_pdn));
 					if(vlandown_data == NULL)
 					{
@@ -2079,45 +2080,18 @@ int IPACM_Wan::check_vlan_pdn(ipa_ip_type iptype, ipacm_event_route_vlan *data, 
 					memset(vlandown_data, 0, sizeof(ipacm_event_vlan_pdn));
 					vlandown_data->iptype = IPA_IP_v6;
 					vlandown_data->VlanID = data->VlanID;
-					ipv6_to_iface[modem_vlan_v6_pdn_index].associated_VIDs[modem_vlan_idx] = 0;
-					ipv6_to_iface[modem_vlan_v6_pdn_index].VID_cnt--;
 					vlandown_data ->mux_id = mux_id;
 
-					IPACMDBG_H("Posting IPA_HANDLE_WAN_VLAN_PDN_DOWN with below information:\n");
+					ipv6_to_iface[modem_vlan_v6_pdn_index].wan_up_vlan_v6 = false;
+					ipv6_to_iface[modem_vlan_v6_pdn_index].VID_cnt--;
+					ipv6_to_iface[modem_vlan_v6_pdn_index].associated_VIDs[modem_vlan_idx] = 0;
+
+					IPACMDBG_H("Posting IPA_HANDLE_WAN_VLAN_PDN_DOWN (V6) with below information:\n");
 					IPACMDBG_H("iptype V6, VlanID %d, mux_id %d, if num %d\n", vlandown_data->VlanID, vlandown_data->mux_id, ipa_if_num);
 
 					evt_data.event = IPA_HANDLE_WAN_VLAN_PDN_DOWN;
 					evt_data.evt_data = (void *)vlandown_data;
 
-					IPACM_EvtDispatcher::PostEvt(&evt_data);
-
-					wanup_vlan_data = (ipacm_event_vlan_pdn *)malloc(sizeof(ipacm_event_vlan_pdn));
-
-					if(wanup_vlan_data == NULL)
-					{
-						IPACMERR("Unable to allocate memory\n");
-						return IPACM_FAILURE;
-					}
-					memset(wanup_vlan_data, 0, sizeof(ipacm_event_vlan_pdn));
-
-					if (ipv6_to_iface[wlan_ipv6_pdn_index].VID_cnt < IPA_MAX_NUM_SW_PDNS)
-					{
-						ipv6_to_iface[wlan_ipv6_pdn_index].associated_VIDs[ipv6_to_iface[wlan_ipv6_pdn_index].VID_cnt] = data->VlanID;
-						ipv6_to_iface[wlan_ipv6_pdn_index].VID_cnt++;
-						ipv6_to_iface[wlan_ipv6_pdn_index].pIface = this;
-					}
-
-					wanup_vlan_data->iptype = IPA_IP_v6;
-					wanup_vlan_data->VlanID = data->VlanID;
-					wanup_vlan_data->mux_id = 0;
-
-					associated_VID = data->VlanID;
-
-					IPACMDBG_H("Posting IPA_HANDLE_WAN_VLAN_PDN_UP (v6) with below info:\n");
-					IPACMDBG_H("iptype IPA_IP_v6, VlanID %d, mux_id %d, if num %d\n",
-							wanup_vlan_data->VlanID, wanup_vlan_data->mux_id, ipa_if_num);
-					evt_data.event = IPA_HANDLE_WAN_VLAN_PDN_UP;
-					evt_data.evt_data = (void *)wanup_vlan_data;
 					IPACM_EvtDispatcher::PostEvt(&evt_data);
 				}
 				else
@@ -2190,6 +2164,7 @@ int IPACM_Wan::check_vlan_pdn(ipa_ip_type iptype, ipacm_event_route_vlan *data, 
 				{
 					IPACMDBG_H("Backhaul switch from STA to LTE - V6\n");
 
+					/* Post vlan down here. handle_route_add_vlan_pdn_evt takes care of vlan up */
 					vlandown_data = (ipacm_event_vlan_pdn *)malloc(sizeof(ipacm_event_vlan_pdn));
 					if(vlandown_data == NULL)
 					{
@@ -2200,51 +2175,18 @@ int IPACM_Wan::check_vlan_pdn(ipa_ip_type iptype, ipacm_event_route_vlan *data, 
 					memset(vlandown_data, 0, sizeof(ipacm_event_vlan_pdn));
 					vlandown_data->iptype = IPA_IP_v6;
 					vlandown_data->VlanID = data->VlanID;
-					ipv6_to_iface[wlan_vlan_v6_pdn_index].associated_VIDs[wlan_vlan_idx] = 0;
-					ipv6_to_iface[wlan_vlan_v6_pdn_index].VID_cnt--;
 					vlandown_data ->mux_id = 0;
 
-					IPACMDBG_H("Posting IPA_HANDLE_WAN_VLAN_PDN_DOWN with below information:\n");
+					ipv6_to_iface[wlan_vlan_v6_pdn_index].wan_up_vlan_v6 = false;
+					ipv6_to_iface[wlan_vlan_v6_pdn_index].VID_cnt--;
+					ipv6_to_iface[wlan_vlan_v6_pdn_index].associated_VIDs[wlan_vlan_idx] = 0;
+
+					IPACMDBG_H("Posting IPA_HANDLE_WAN_VLAN_PDN_DOWN (V6) with below information:\n");
 					IPACMDBG_H("iptype V6, VlanID %d, mux_id %d, if num %d\n", vlandown_data->VlanID, vlandown_data->mux_id, ipa_if_num);
 
 					evt_data.event = IPA_HANDLE_WAN_VLAN_PDN_DOWN;
 					evt_data.evt_data = (void *)vlandown_data;
 
-					IPACM_EvtDispatcher::PostEvt(&evt_data);
-
-					wanup_vlan_data = (ipacm_event_vlan_pdn *)malloc(sizeof(ipacm_event_vlan_pdn));
-
-					if(wanup_vlan_data == NULL)
-					{
-						IPACMERR("Unable to allocate memory\n");
-						return IPACM_FAILURE;
-					}
-					memset(wanup_vlan_data, 0, sizeof(ipacm_event_vlan_pdn));
-
-					IPACMDBG_H("modem_ipv6_pdn_index: %d\n");
-
-					if (ipv6_to_iface[modem_ipv6_pdn_index].VID_cnt < IPA_MAX_NUM_SW_PDNS)
-					{
-						ipv6_to_iface[modem_ipv6_pdn_index].associated_VIDs[ipv6_to_iface[modem_ipv6_pdn_index].VID_cnt] = data->VlanID;
-						ipv6_to_iface[modem_ipv6_pdn_index].VID_cnt++;
-						ipv6_to_iface[modem_ipv6_pdn_index].pIface = this;
-					}
-
-					if(GetMuxByVid(data->VlanID, &mux_id, IPA_IP_v6))
-					{
-						IPACMDBG_H("no v6 vlan up PDN for vlan Id %d\n", data->VlanID);
-						return IPACM_SUCCESS;
-					}
-					wanup_vlan_data->iptype = IPA_IP_v6;
-					wanup_vlan_data->VlanID = data->VlanID;
-					wanup_vlan_data->mux_id = mux_id;
-					associated_VID = data->VlanID;
-
-					IPACMDBG_H("Posting IPA_HANDLE_WAN_VLAN_PDN_UP (v6) with below info:\n");
-					IPACMDBG_H("iptype IPA_IP_v6, VlanID %d, mux_id %d, if num %d\n",
-							wanup_vlan_data->VlanID, wanup_vlan_data->mux_id, ipa_if_num);
-					evt_data.event = IPA_HANDLE_WAN_VLAN_PDN_UP;
-					evt_data.evt_data = (void *)wanup_vlan_data;
 					IPACM_EvtDispatcher::PostEvt(&evt_data);
 				}
 				else
@@ -2358,8 +2300,9 @@ int IPACM_Wan::check_vlan_pdn(ipa_ip_type iptype, ipacm_event_route_vlan *data, 
 
 				if(!is_vlan_wlan_associated && is_vlan_modem_associated)
 				{
-					IPACMDBG_H("Backhaul switch LTE to STA - V4\n");
+					IPACMDBG_H("Backhaul switch from LTE to STA - V4\n");
 
+					/* Post vlan down here. handle_route_add_vlan_pdn_evt takes care of vlan up */
 					vlandown_data = (ipacm_event_vlan_pdn *)malloc(sizeof(ipacm_event_vlan_pdn));
 					if(vlandown_data == NULL)
 					{
@@ -2375,46 +2318,19 @@ int IPACM_Wan::check_vlan_pdn(ipa_ip_type iptype, ipacm_event_route_vlan *data, 
 					memset(vlandown_data, 0, sizeof(ipacm_event_vlan_pdn));
 					vlandown_data->iptype = IPA_IP_v4;
 					vlandown_data->ipv4_addr = ipv4_to_iface[modem_vlan_v4_pdn_index].ipv4_addr;
-					vlandown_data->VlanID = ipv4_to_iface[modem_vlan_v4_pdn_index].associated_VIDs[modem_vlan_idx];
-
-					ipv4_to_iface[modem_vlan_v4_pdn_index].associated_VIDs[modem_vlan_idx] = 0;
-					ipv4_to_iface[modem_vlan_v4_pdn_index].VID_cnt--;
+					vlandown_data->VlanID = data->VlanID;
 					vlandown_data ->mux_id = mux_id;
 
-					IPACMDBG_H("Posting IPA_HANDLE_WAN_VLAN_PDN_DOWN with below information:\n");
+					ipv4_to_iface[modem_vlan_v4_pdn_index].wan_up_vlan = false;
+					ipv4_to_iface[modem_vlan_v4_pdn_index].VID_cnt--;
+					ipv4_to_iface[modem_vlan_v4_pdn_index].associated_VIDs[modem_vlan_idx] = 0;
+
+					IPACMDBG_H("Posting IPA_HANDLE_WAN_VLAN_PDN_DOWN (V4) with below information:\n");
 					IPACMDBG_H("iptype V4, VlanID %d, mux_id %d, if num %d\n", vlandown_data->VlanID, vlandown_data->mux_id, ipa_if_num);
 
 					evt_data.event = IPA_HANDLE_WAN_VLAN_PDN_DOWN;
 					evt_data.evt_data = (void *)vlandown_data;
 
-					IPACM_EvtDispatcher::PostEvt(&evt_data);
-
-					wanup_vlan_data = (ipacm_event_vlan_pdn *)malloc(sizeof(ipacm_event_vlan_pdn));
-
-					if(wanup_vlan_data == NULL)
-					{
-						IPACMERR("Unable to allocate memory\n");
-						return IPACM_FAILURE;
-					}
-					memset(wanup_vlan_data, 0, sizeof(ipacm_event_vlan_pdn));
-
-					if (ipv4_to_iface[wlan_ipv4_pdn_index].VID_cnt < IPA_MAX_NUM_SW_PDNS)
-					{
-						ipv4_to_iface[wlan_ipv4_pdn_index].associated_VIDs[ipv4_to_iface[wlan_ipv4_pdn_index].VID_cnt] = data->VlanID;
-						ipv4_to_iface[wlan_ipv4_pdn_index].VID_cnt++;
-						ipv4_to_iface[wlan_ipv4_pdn_index].pIface = this;
-					}
-
-					wanup_vlan_data->iptype = IPA_IP_v4;
-					wanup_vlan_data->VlanID = data->VlanID;
-					wanup_vlan_data->mux_id = 0;
-					associated_VID = data->VlanID;
-
-					IPACMDBG_H("Posting IPA_HANDLE_WAN_VLAN_PDN_UP (v4) with below info:\n");
-					IPACMDBG_H("iptype IPA_IP_v4, VlanID %d, mux_id %d, if num %d\n",
-							wanup_vlan_data->VlanID, wanup_vlan_data->mux_id, ipa_if_num);
-					evt_data.event = IPA_HANDLE_WAN_VLAN_PDN_UP;
-					evt_data.evt_data = (void *)wanup_vlan_data;
 					IPACM_EvtDispatcher::PostEvt(&evt_data);
 
 				}
@@ -2489,6 +2405,7 @@ int IPACM_Wan::check_vlan_pdn(ipa_ip_type iptype, ipacm_event_route_vlan *data, 
 				{
 					IPACMDBG_H("Backhaul switch from STA to LTE - V4\n");
 
+					/* Post vlan down here. handle_route_add_vlan_pdn_evt takes care of vlan up */
 					vlandown_data = (ipacm_event_vlan_pdn *)malloc(sizeof(ipacm_event_vlan_pdn));
 					if(vlandown_data == NULL)
 					{
@@ -2499,51 +2416,19 @@ int IPACM_Wan::check_vlan_pdn(ipa_ip_type iptype, ipacm_event_route_vlan *data, 
 					memset(vlandown_data, 0, sizeof(ipacm_event_vlan_pdn));
 					vlandown_data->iptype = IPA_IP_v4;
 					vlandown_data->ipv4_addr = ipv4_to_iface[wlan_vlan_v4_pdn_index].ipv4_addr;
-					vlandown_data->VlanID = ipv4_to_iface[wlan_vlan_v4_pdn_index].associated_VIDs[wlan_vlan_idx];
-					ipv4_to_iface[wlan_vlan_v4_pdn_index].associated_VIDs[wlan_vlan_idx] = 0;
-					ipv4_to_iface[wlan_vlan_v4_pdn_index].VID_cnt--;
+					vlandown_data->VlanID = data->VlanID;
 					vlandown_data ->mux_id = 0;
 
-					IPACMDBG_H("Posting IPA_HANDLE_WAN_VLAN_PDN_DOWN with below information:\n");
+					ipv4_to_iface[wlan_vlan_v4_pdn_index].wan_up_vlan = false;
+					ipv4_to_iface[wlan_vlan_v4_pdn_index].VID_cnt--;
+					ipv4_to_iface[wlan_vlan_v4_pdn_index].associated_VIDs[wlan_vlan_idx] = 0;
+
+					IPACMDBG_H("Posting IPA_HANDLE_WAN_VLAN_PDN_DOWN (V4) with below information:\n");
 					IPACMDBG_H("iptype V4, VlanID %d, mux_id %d, if num %d\n", vlandown_data->VlanID, vlandown_data->mux_id, ipa_if_num);
 
 					evt_data.event = IPA_HANDLE_WAN_VLAN_PDN_DOWN;
 					evt_data.evt_data = (void *)vlandown_data;
 					IPACM_EvtDispatcher::PostEvt(&evt_data);
-
-					wanup_vlan_data = (ipacm_event_vlan_pdn *)malloc(sizeof(ipacm_event_vlan_pdn));
-
-					if(wanup_vlan_data == NULL)
-					{
-						IPACMERR("Unable to allocate memory\n");
-						return IPACM_FAILURE;
-					}
-					memset(wanup_vlan_data, 0, sizeof(ipacm_event_vlan_pdn));
-
-					if (ipv4_to_iface[modem_ipv4_pdn_index].VID_cnt < IPA_MAX_NUM_SW_PDNS)
-					{
-						ipv4_to_iface[modem_ipv4_pdn_index].associated_VIDs[ipv4_to_iface[modem_ipv4_pdn_index].VID_cnt] = data->VlanID;
-						ipv4_to_iface[modem_ipv4_pdn_index].VID_cnt++;
-						ipv4_to_iface[modem_ipv4_pdn_index].pIface = this;
-					}
-
-					if(GetMuxByVid(data->VlanID, &mux_id, IPA_IP_v4))
-					{
-						IPACMDBG_H("no v4 vlan up PDN for vlan Id %d\n", data->VlanID);
-						return IPACM_SUCCESS;
-					}
-					wanup_vlan_data->iptype = IPA_IP_v4;
-					wanup_vlan_data->VlanID = data->VlanID;
-					wanup_vlan_data->mux_id = mux_id;
-					associated_VID = data->VlanID;
-
-					IPACMDBG_H("Posting IPA_HANDLE_WAN_VLAN_PDN_UP (v6) with below info:\n");
-					IPACMDBG_H("iptype IPA_IP_v4, VlanID %d, mux_id %d, if num %d\n",
-							wanup_vlan_data->VlanID, wanup_vlan_data->mux_id, ipa_if_num);
-					evt_data.event = IPA_HANDLE_WAN_VLAN_PDN_UP;
-					evt_data.evt_data = (void *)wanup_vlan_data;
-					IPACM_EvtDispatcher::PostEvt(&evt_data);
-
 				}
 				else
 				{
@@ -2716,6 +2601,7 @@ int IPACM_Wan::handle_route_add_vlan_pdn_evt(ipa_ip_type iptype, uint16_t vlan_i
 			{
 				ipv6_to_iface[wlan_ipv6_pdn_index].associated_VIDs[ipv6_to_iface[wlan_ipv6_pdn_index].VID_cnt] = vlan_id;
 				ipv6_to_iface[wlan_ipv6_pdn_index].VID_cnt++;
+				ipv6_to_iface[wlan_ipv6_pdn_index].pIface = this;
 				IPACM_Wan::wlan_v6_vlan_index = wlan_ipv6_pdn_index;
 				IPACMDBG_H("IPACM_Wan::wlan_v6_vlan_index: %d\n", IPACM_Wan::wlan_v6_vlan_index);
 			}
@@ -2735,7 +2621,7 @@ int IPACM_Wan::handle_route_add_vlan_pdn_evt(ipa_ip_type iptype, uint16_t vlan_i
 			wanup_vlan_data->mux_id = 0;
 			associated_VID = vlan_id;
 
-			IPACMDBG_H("Posting IPA_HANDLE_WAN_VLAN_PDN_UP (v6) with below info:\n");
+			IPACMDBG_H("Posting IPA_HANDLE_WAN_VLAN_PDN_UP (V6) with below info:\n");
 			IPACMDBG_H("iptype IPA_IP_v6, VlanID %d, mux_id %d, if num %d\n",
 					vlan_id, wanup_vlan_data->mux_id, ipa_if_num);
 			evt_data.event = IPA_HANDLE_WAN_VLAN_PDN_UP;
@@ -2812,6 +2698,7 @@ int IPACM_Wan::handle_route_add_vlan_pdn_evt(ipa_ip_type iptype, uint16_t vlan_i
 			{
 				ipv6_to_iface[modem_ipv6_pdn_index].associated_VIDs[ipv6_to_iface[modem_ipv6_pdn_index].VID_cnt] = vlan_id;
 				ipv6_to_iface[modem_ipv6_pdn_index].VID_cnt++;
+				ipv6_to_iface[modem_ipv6_pdn_index].pIface = this;
 			}
 			/*config_wan_firewall_rule traverses all active wan IF and configures them*/
 			config_wan_firewall_rule(IPA_IP_v6);
@@ -2834,7 +2721,7 @@ int IPACM_Wan::handle_route_add_vlan_pdn_evt(ipa_ip_type iptype, uint16_t vlan_i
 				wanup_vlan_data->mux_id = ext_prop->ext[0].mux_id;
 			memcpy(wanup_vlan_data->ipv6_prefix, ipv6_prefix, sizeof(ipv6_prefix));
 
-			IPACMDBG_H("Posting IPA_HANDLE_WAN_VLAN_PDN_UP (v6) with below information:\n");
+			IPACMDBG_H("Posting IPA_HANDLE_WAN_VLAN_PDN_UP (V6) with below information:\n");
 			if(ext_prop == NULL)
 			{
 				IPACMDBG_H("iptype IPA_IP_V6, VlanID %d, if num %d\n", vlan_id, ipa_if_num);
@@ -2915,6 +2802,7 @@ int IPACM_Wan::handle_route_add_vlan_pdn_evt(ipa_ip_type iptype, uint16_t vlan_i
 			{
 				ipv4_to_iface[wlan_ipv4_pdn_index].associated_VIDs[ipv4_to_iface[wlan_ipv4_pdn_index].VID_cnt] = vlan_id;
 				ipv4_to_iface[wlan_ipv4_pdn_index].VID_cnt++;
+				ipv4_to_iface[wlan_ipv4_pdn_index].pIface = this;
 				IPACM_Wan::wlan_v4_vlan_index = wlan_ipv4_pdn_index;
 				IPACMDBG_H("IPACM_Wan::wlan_v4_vlan_index: %d\n", IPACM_Wan::wlan_v4_vlan_index);
 			}
@@ -2932,7 +2820,7 @@ int IPACM_Wan::handle_route_add_vlan_pdn_evt(ipa_ip_type iptype, uint16_t vlan_i
 			wanup_vlan_data->iptype = IPA_IP_v4;
 			wanup_vlan_data->VlanID = vlan_id;
 			wanup_vlan_data->ipv4_addr = wan_v4_addr;
-			IPACMDBG_H("Posting IPA_HANDLE_WAN_VLAN_PDN_UP with below information:\n");
+			IPACMDBG_H("Posting IPA_HANDLE_WAN_VLAN_PDN_UP (V4) with below information:\n");
 			IPACMDBG_H("iptype IPA_IP_v4, VlanID %d, mux_id %d, if num %d\n", vlan_id, wanup_vlan_data->mux_id, ipa_if_num);
 			evt_data.event = IPA_HANDLE_WAN_VLAN_PDN_UP;
 			evt_data.evt_data = (void *)wanup_vlan_data;
@@ -2952,6 +2840,7 @@ int IPACM_Wan::handle_route_add_vlan_pdn_evt(ipa_ip_type iptype, uint16_t vlan_i
 			{
 				ipv4_to_iface[modem_ipv4_pdn_index].associated_VIDs[ipv4_to_iface[modem_ipv4_pdn_index].VID_cnt] = vlan_id;
 				ipv4_to_iface[modem_ipv4_pdn_index].VID_cnt++;
+				ipv4_to_iface[modem_ipv4_pdn_index].pIface = this;
 			}
 			config_wan_firewall_rule(IPA_IP_v4);
 			install_wan_filtering_rule(false);
@@ -2978,7 +2867,7 @@ int IPACM_Wan::handle_route_add_vlan_pdn_evt(ipa_ip_type iptype, uint16_t vlan_i
 				ipv4_to_iface[modem_ipv4_pdn_index].is_xlat=true;
 				IPACMDBG_H("xlat config enabled\n");
 			}
-			IPACMDBG_H("Posting IPA_HANDLE_WAN_VLAN_PDN_UP with below information:\n");
+			IPACMDBG_H("Posting IPA_HANDLE_WAN_VLAN_PDN_UP (V4) with below information:\n");
 			if(ext_prop == NULL)
 			{
 				IPACMDBG_H("iptype IPA_IP_V4, VlanID %d, if num %d\n", vlan_id, ipa_if_num);
@@ -6953,9 +6842,7 @@ int IPACM_Wan::handle_down_evt()
 
 		wan_v6_is_default_gw = true;
 		if (wlan_ipv4_pdn_index == -1)
-		{
 			num_offloaded_pdns--;
-		}
 
 		vlandown_data = (ipacm_event_vlan_pdn *)malloc(sizeof(ipacm_event_vlan_pdn));
 		if(vlandown_data == NULL)
@@ -6998,9 +6885,7 @@ int IPACM_Wan::handle_down_evt()
 		ipv4_to_iface[wlan_ipv4_pdn_index].wan_up_vlan = false;
 		wan_v4_is_default_gw = true;
 		if (wlan_ipv6_pdn_index == -1)
-		{
 			num_offloaded_pdns--;
-		}
 
 		vlandown_data = (ipacm_event_vlan_pdn *)malloc(sizeof(ipacm_event_vlan_pdn));
 		if(vlandown_data == NULL)
@@ -7293,8 +7178,8 @@ int IPACM_Wan::handle_down_evt_ex()
 			ipv4_to_iface[modem_ipv4_pdn_index].is_xlat = false;
 			memset(ipv4_to_iface[modem_ipv4_pdn_index].associated_VIDs, 0, sizeof(ipv4_to_iface[modem_ipv4_pdn_index].associated_VIDs));
 			ipv4_to_iface[modem_ipv4_pdn_index].VID_cnt = 0;
-
 			num_offloaded_pdns--;
+
 			IPACMDBG_H("now num offloaded PDNs is %d\n", num_offloaded_pdns);
 
 			vlandown_data = (ipacm_event_vlan_pdn *)malloc(sizeof(ipacm_event_vlan_pdn));

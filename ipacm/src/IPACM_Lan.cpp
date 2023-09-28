@@ -2384,7 +2384,7 @@ int IPACM_Lan::handle_vlan_pdn_down(ipacm_event_vlan_pdn *data)
 	{
 		if(data->mux_id == 0)
 		{
-			if(handle_wan_down_v6(true, false))
+			if(handle_wan_down_v6(true))
 			{
 				IPACMERR("STA flt v6 rule deletion failed\n");
 				return IPACM_FAILURE;
@@ -2436,7 +2436,7 @@ int IPACM_Lan::handle_vlan_pdn_down(ipacm_event_vlan_pdn *data)
 				IPACMERR("STA flt v4 rule deletion failed\n");
 				return IPACM_FAILURE;
 			}
-			if(handle_wan_down_v6(true, false))
+			if(handle_wan_down_v6(true))
 			{
 				IPACMERR("STA flt v6 rule deletion failed\n");
 				return IPACM_FAILURE;

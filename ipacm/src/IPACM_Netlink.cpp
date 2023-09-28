@@ -918,6 +918,9 @@ static int ipa_nl_decode_nlmsg
 					if (msg_ptr->nl_link_info.link_type == IPA_LINK_TYPE_VLAN)
 						IPACM_Iface::ipacmcfg->del_vlan_iface(&vlan_info);
 					if (msg_ptr->nl_link_info.link_type == IPA_LINK_TYPE_MACSEC) {
+						if (!IPACM_Iface::ipacmcfg->getMacsecMapping(msg_ptr->nl_link_info.metainfo.ifi_index,
+							&macsec_map))
+							IPACMERR("getMacsecMapping failed\n");
 						if (IPACM_Iface::ipacmcfg->delMacsecMap(&macsec_map)) {
 							evt_data.event = IPA_HANDLE_MACSEC_DEL;
 							macsec_map_data = static_cast<decltype(macsec_map_data)>
@@ -989,6 +992,9 @@ static int ipa_nl_decode_nlmsg
 				if(msg_ptr->nl_link_info.link_type == IPA_LINK_TYPE_VLAN)
 					IPACM_Iface::ipacmcfg->del_vlan_iface(&vlan_info);
 				if (msg_ptr->nl_link_info.link_type == IPA_LINK_TYPE_MACSEC) {
+					if (!IPACM_Iface::ipacmcfg->getMacsecMapping(msg_ptr->nl_link_info.metainfo.ifi_index,
+						&macsec_map))
+						IPACMERR("getMacsecMapping failed\n");
 					if (IPACM_Iface::ipacmcfg->delMacsecMap(&macsec_map)) {
 						evt_data.event = IPA_HANDLE_MACSEC_DEL;
 						macsec_map_data = static_cast<decltype(macsec_map_data)>

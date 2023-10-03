@@ -3706,10 +3706,10 @@ bool IPACM_Config::is_svap_related(const char* phy_inf) {
 		IPACMDBG_H("truncated iface name %s\n", if_name);
 	}
 
-	snprintf(cmd, 200, "cfg80211tool_mesh %s get_MapBSSType| awk -F ':' '{print $2}' > /tmp/data/ipa_vap.txt", if_name);
+	snprintf(cmd, 200, "cfg80211tool_mesh %s get_MapBSSType| awk -F ':' '{print $2}' > /tmp/data_ipa/ipa_vap.txt", if_name);
 	system(cmd);
 
-	fp = fopen("/tmp/data/ipa_vap.txt", "r");
+	fp = fopen("/tmp/data_ipa/ipa_vap.txt", "r");
 	if (fp == NULL) {
 		IPACMERR("can't open fdb file\n");
 		return false;

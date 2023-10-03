@@ -1288,7 +1288,7 @@ void IPACM_LanToLan_Iface::add_all_inter_interface_client_flt_rule_one_vlan_id(i
 		/* look for specific client with this vlan id */
 		for(it_client = it_iface->peer->m_client_info.begin(); it_client != it_iface->peer->m_client_info.end(); it_client++)
 		{
-			if (vlan_id == it_client->vlan_id)
+			if ((vlan_id == it_client->vlan_id) || ((IPACM_Iface::ipacmcfg->ipacm_emesh_mode >= 2) && (it_iface->peer->get_m_support_inter_iface_offload())))
 				add_client_flt_rule(&(*it_iface), &(*it_client), iptype);
 		}
 	}
@@ -1421,11 +1421,6 @@ void IPACM_LanToLan_Iface::add_client_flt_rule(peer_iface_info *peer, client_inf
 #ifdef FEATURE_VLAN_MPDN
 	if(m_is_vlan)
 	{
-		if(!client->vlan_id)
-		{
-			IPACMERR("VLAN IFACE and non VLAN client\n");
-			return;
-		}
 		if(it_flt != peer->flt_rule.end())
 		{
 			if(it_flt->flt_rule_hdl[iptype]) {
@@ -1448,18 +1443,22 @@ void IPACM_LanToLan_Iface::add_client_flt_rule(peer_iface_info *peer, client_inf
 		}
 
 		int i;
-		for(i = 0; i < IPA_MAX_NUM_OFFLOAD_VLANS; i++)
+		/* To avoid the vlan id 0 validations.*/
+		if (client->vlan_id != 0)
 		{
-			if(Ids[i] == client->vlan_id)
+			for(i = 0; i < IPA_MAX_NUM_OFFLOAD_VLANS; i++)
 			{
-				IPACMDBG_H("found vlan Id %d for dev %s, adding vlan client flt rule\n", Ids[i], get_iface_pointer()->dev_name);
-				break;
+				if(Ids[i] == client->vlan_id)
+				{
+					IPACMDBG_H("found vlan Id %d for dev %s, adding vlan client flt rule\n", Ids[i], get_iface_pointer()->dev_name);
+					break;
+				}
 			}
-		}
-		if(i >= IPA_MAX_NUM_OFFLOAD_VLANS)
-		{
-			IPACMDBG_H("client vlan Id %d doesn't match with iface %s VLAN ID list\n", client->vlan_id, get_iface_pointer()->dev_name);
-			return;
+			if(i >= IPA_MAX_NUM_OFFLOAD_VLANS)
+			{
+				IPACMDBG_H("client vlan Id %d doesn't match with iface %s VLAN ID list\n", client->vlan_id, get_iface_pointer()->dev_name);
+				return;
+			}
 		}
 	}
 #endif //FEATURE_VLAN_MPDN

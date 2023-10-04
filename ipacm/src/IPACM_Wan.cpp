@@ -594,7 +594,7 @@ int IPACM_Wan::add_ipsec_wan_dl_rt_rules(ipacm_event_data_addr *data,
 	rt_rule->num_rules = NUM_RULES;
 	rt_rule->ip = data->iptype;
 	if (data->iptype == IPA_IP_v6)
-		strlcpy(rt_rule->rt_tbl_name, IPACM_Iface::ipacmcfg->rt_tbl_v6.name, sizeof(rt_rule->rt_tbl_name));
+		strlcpy(rt_rule->rt_tbl_name, IPACM_Iface::ipacmcfg->rt_tbl_wan_v6.name, sizeof(rt_rule->rt_tbl_name));
 	else
 		strlcpy(rt_rule->rt_tbl_name, IPACM_Iface::ipacmcfg->rt_tbl_lan_v4.name, sizeof(rt_rule->rt_tbl_name));
 
@@ -7633,7 +7633,7 @@ int IPACM_Wan::installWanPostIpsecRt(
 		case IPA_IP_v6:
 			rt_rule->ip = iptype;
 			rt_rule->num_rules = IPACM_Wan::num_v6_flt_rule;
-			strlcpy(rt_rule->rt_tbl_name, IPACM_Iface::ipacmcfg->rt_tbl_v6.name,
+			strlcpy(rt_rule->rt_tbl_name, IPACM_Iface::ipacmcfg->rt_tbl_wan_v6.name,
 				sizeof(rt_rule->rt_tbl_name));
 			flt_tbl = rule_table_v6;
 			break;

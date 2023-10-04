@@ -674,8 +674,11 @@ public:
 	inline int del_vlan_ipv6_prefix(uint32_t* prefix, int ipa_if_num, bool reserve_slot = false)
 	{
 		int i = 0;
+		IPACMDBG_H("prefix %d", num_ipv6_prefixes);
+		
 		for(i = 0; i < num_ipv6_prefixes; i++)
 		{
+			IPACMERR("prefix 0x[%X][%X] and check prefix 0x[%X][%X] \n", prefix[0], prefix[1], ipa_ipv6_prefixes[i].addr[0], ipa_ipv6_prefixes[i].addr[1]);
 			if((prefix[0] == ipa_ipv6_prefixes[i].addr[0]) && (prefix[1] == ipa_ipv6_prefixes[i].addr[1]))
 			{
 				if (reserve_slot) {

@@ -543,7 +543,7 @@ protected:
 
 	int handle_private_subnet_android(ipa_ip_type iptype);
 
-	int reset_to_dummy_flt_rule(ipa_ip_type iptype, uint32_t rule_hdl);
+	int reset_to_dummy_flt_rule(ipa_ip_type iptype, uint32_t *rule_hdl, uint32_t num_rules);
 
 	virtual int install_ipv6_prefix_flt_rule(uint32_t* prefix);
 

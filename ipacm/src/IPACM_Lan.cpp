@@ -9291,14 +9291,19 @@ int IPACM_Lan::handle_wan_down_v6(bool is_sta_mode, bool is_support_mpdn)
 	return IPACM_SUCCESS;
 }
 
-int IPACM_Lan::reset_to_dummy_flt_rule(ipa_ip_type iptype, uint32_t rule_hdl)
+int IPACM_Lan::reset_to_dummy_flt_rule(ipa_ip_type iptype, uint32_t *rule_hdl, uint32_t num_rules)
 {
-	int len, res = IPACM_SUCCESS;
+	int len, res = IPACM_SUCCESS, i;
 	struct ipa_flt_rule_mdfy flt_rule;
 	struct ipa_ioc_mdfy_flt_rule* pFilteringTable;
 
-	IPACMDBG_H("Reset flt rule to dummy, IP type: %d, hdl: %d\n", iptype, rule_hdl);
-	len = sizeof(struct ipa_ioc_mdfy_flt_rule) + sizeof(struct ipa_flt_rule_mdfy);
+	if (rule_hdl == NULL) {
+		IPACMERR("Invalid input rule handle list.\n");
+		return IPACM_FAILURE;
+	}
+
+	IPACMDBG_H("Reset flt rule to dummy, IP type: %d, count %d\n", iptype, num_rules);
+	len = sizeof(struct ipa_ioc_mdfy_flt_rule) + num_rules*sizeof(struct ipa_flt_rule_mdfy);
 	pFilteringTable = (struct ipa_ioc_mdfy_flt_rule*)malloc(len);
 
 	if (pFilteringTable == NULL)
@@ -9310,11 +9315,10 @@ int IPACM_Lan::reset_to_dummy_flt_rule(ipa_ip_type iptype, uint32_t rule_hdl)
 
 	pFilteringTable->commit = 1;
 	pFilteringTable->ip = iptype;
-	pFilteringTable->num_rules = 1;
+	pFilteringTable->num_rules = num_rules;
 
 	memset(&flt_rule, 0, sizeof(struct ipa_flt_rule_mdfy));
 	flt_rule.status = -1;
-	flt_rule.rule_hdl = rule_hdl;
 
 	flt_rule.rule.retain_hdr = 0;
 	flt_rule.rule.action = IPA_PASS_TO_EXCEPTION;
@@ -9328,19 +9332,6 @@ int IPACM_Lan::reset_to_dummy_flt_rule(ipa_ip_type iptype, uint32_t rule_hdl)
 		flt_rule.rule.attrib.u.v4.dst_addr_mask = ~0;
 		flt_rule.rule.attrib.u.v4.src_addr = ~0;
 		flt_rule.rule.attrib.u.v4.src_addr_mask = ~0;
-
-		memcpy(&(pFilteringTable->rules[0]), &flt_rule, sizeof(struct ipa_flt_rule_mdfy));
-		if (false == m_filtering.ModifyFilteringRule(pFilteringTable))
-		{
-			IPACMERR("Error modifying filtering rule.\n");
-			res = IPACM_FAILURE;
-			goto fail;
-		}
-		else
-		{
-			IPACMDBG_H("Flt rule reset to dummy, hdl: 0x%x, status: %d\n", pFilteringTable->rules[0].rule_hdl,
-						pFilteringTable->rules[0].status);
-		}
 	}
 	else if(iptype == IPA_IP_v6)
 	{
@@ -9363,26 +9354,32 @@ int IPACM_Lan::reset_to_dummy_flt_rule(ipa_ip_type iptype, uint32_t rule_hdl)
 		flt_rule.rule.attrib.u.v6.dst_addr_mask[1] = ~0;
 		flt_rule.rule.attrib.u.v6.dst_addr_mask[2] = ~0;
 		flt_rule.rule.attrib.u.v6.dst_addr_mask[3] = ~0;
-
-
-		memcpy(&(pFilteringTable->rules[0]), &flt_rule, sizeof(struct ipa_flt_rule_mdfy));
-		if (false == m_filtering.ModifyFilteringRule(pFilteringTable))
-		{
-			IPACMERR("Error modifying filtering rule.\n");
-			res = IPACM_FAILURE;
-			goto fail;
-		}
-		else
-		{
-			IPACMDBG_H("Flt rule reset to dummy, hdl: 0x%x, status: %d\n", pFilteringTable->rules[0].rule_hdl,
-						pFilteringTable->rules[0].status);
-		}
 	}
 	else
 	{
 		IPACMERR("IP type is not expected.\n");
 		res = IPACM_FAILURE;
 		goto fail;
+	}
+
+	for (i = 0; i < num_rules; ++i) {
+		flt_rule.rule_hdl = rule_hdl[i];
+		memcpy(&(pFilteringTable->rules[i]), &flt_rule, sizeof(struct ipa_flt_rule_mdfy));
+		IPACMDBG("Reset flt rule to dummy, IP type: %d, hdl: %d\n", iptype, rule_hdl[i]);
+	}
+
+	if (false == m_filtering.ModifyFilteringRule(pFilteringTable))
+	{
+		IPACMERR("Error modifying filtering rule.\n");
+		res = IPACM_FAILURE;
+		goto fail;
+	}
+	else
+	{
+		for (i = 0; i < num_rules; ++i) {
+			IPACMDBG_H("Flt rule reset to dummy, hdl: 0x%x, status: %d\n", pFilteringTable->rules[i].rule_hdl,
+					pFilteringTable->rules[i].status);
+		}
 	}
 
 fail:
@@ -9724,10 +9721,8 @@ int IPACM_Lan::modify_private_subnet()
 	uint16_t mtu[IPA_MAX_PRIVATE_SUBNET_ENTRIES + IPA_MAX_MTU_ENTRIES] = { };
 	int mtu_rule_idx = IPACM_Iface::ipacmcfg->ipa_num_private_subnet;
 
-	for(i = 0; i < IPA_MAX_PRIVATE_SUBNET_ENTRIES + IPA_MAX_MTU_ENTRIES; i++)
-	{
-		reset_to_dummy_flt_rule(IPA_IP_v4, private_fl_rule_hdl[i]);
-	}
+	reset_to_dummy_flt_rule(IPA_IP_v4, private_fl_rule_hdl,
+		IPA_MAX_PRIVATE_SUBNET_ENTRIES + IPA_MAX_MTU_ENTRIES);
 
 	if (IPACM_Iface::ipacmcfg->ipa_num_private_subnet == 0)
 	{
@@ -10000,10 +9995,8 @@ int IPACM_Lan::modify_ipv6_prefix_flt_rule()
 	IPACMDBG_H("modifying offload prefixes, num %d\n", IPACM_Iface::ipacmcfg->num_ipv6_prefixes);
 	IPACMDBG_H("modifying no offload prefixes, num %d\n", IPACM_Iface::ipacmcfg->num_no_offload_ipv6_prefix);
 
-	for(i = 0; i < IPA_MAX_IPV6_NO_OFFLOAD_PREFIX_FLT_RULE + IPA_MAX_MTU_ENTRIES; i++)
-	{
-		reset_to_dummy_flt_rule(IPA_IP_v6, ipv6_prefix_flt_rule_hdl[i]);
-	}
+	reset_to_dummy_flt_rule(IPA_IP_v6, ipv6_prefix_flt_rule_hdl,
+		IPA_MAX_IPV6_NO_OFFLOAD_PREFIX_FLT_RULE + IPA_MAX_MTU_ENTRIES);
 
 	if (IPACM_Iface::ipacmcfg->num_ipv6_prefixes == 0)
 	{

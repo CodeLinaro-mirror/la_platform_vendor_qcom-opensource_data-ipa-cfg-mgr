@@ -2026,17 +2026,11 @@ int IPACM_Wan::check_vlan_pdn(ipa_ip_type iptype, ipacm_event_route_vlan *data, 
 					IPACMDBG_H("Not a BH switch\n");
 
 					/* vlan already associate with STA, abort re-add */
-					if(ipv6_to_iface[wlan_ipv6_pdn_index].wan_up_vlan_v6)
+					if(is_vlan_wlan_associated)
 					{
-						for(pdn_idx = 0; pdn_idx < ipv6_to_iface[wlan_ipv6_pdn_index].VID_cnt; pdn_idx++)
-						{
-							if(IPACM_Wan::ipv6_to_iface[wlan_ipv6_pdn_index].associated_VIDs[pdn_idx] == data->VlanID)
-							{
-								/* vlan already associate with STA, abort re-add */
-								IPACMERR("v6 vlan wan is already up for %s, vlan id: %d\n", dev_name, data->VlanID);
-								return IPACM_FAILURE;
-							}
-						}
+						/* vlan already associate with STA, abort re-add */
+						IPACMERR("v6 vlan wan is already up for %s, vlan id: %d\n", dev_name, data->VlanID);
+						return IPACM_FAILURE;
 					}
 
 					if((wlan_ipv4_pdn_index >= 0) && ipv4_to_iface[wlan_ipv4_pdn_index].wan_up_vlan)
@@ -2044,18 +2038,6 @@ int IPACM_Wan::check_vlan_pdn(ipa_ip_type iptype, ipacm_event_route_vlan *data, 
 						IPACMDBG("iface already has v4 vlan association, not new\n");
 						new_pdn = false;
 
-						if(IPACM_Wan::ipv4_to_iface[wlan_ipv4_pdn_index].wan_up_vlan)
-						{
-							for(vlan_idx = 0; vlan_idx < ipv4_to_iface[wlan_ipv4_pdn_index].VID_cnt; vlan_idx++)
-							{
-								if(IPACM_Wan::ipv4_to_iface[wlan_ipv4_pdn_index].associated_VIDs[vlan_idx] == data->VlanID)
-								{
-									IPACMERR("VID (%d) already mapped to v4 PDN %d, can't map to v4 PDN %d\n",
-											data->VlanID, pdn_idx, wlan_ipv6_pdn_index);
-									return IPACM_FAILURE;
-								}
-							}
-						}
 					}
 
 					if(new_pdn && ipv6_to_iface[wlan_ipv6_pdn_index].VID_cnt == 0)
@@ -2342,45 +2324,29 @@ int IPACM_Wan::check_vlan_pdn(ipa_ip_type iptype, ipacm_event_route_vlan *data, 
 					IPACMDBG_H("Not a BH switch\n");
 
 					/* vlan already associate with STA, abort re-add */
-					if(ipv4_to_iface[wlan_ipv4_pdn_index].wan_up_vlan)
+					if(is_vlan_wlan_associated)
 					{
-						for(pdn_idx = 0; pdn_idx < ipv4_to_iface[wlan_ipv4_pdn_index].VID_cnt; pdn_idx++)
-						{
-							if(IPACM_Wan::ipv4_to_iface[wlan_ipv4_pdn_index].associated_VIDs[pdn_idx] == data->VlanID)
-							{
-								/* vlan already associate with STA, abort re-add */
-								IPACMERR("v4 vlan wan is already up for %s, vlan id: %d\n", dev_name, data->VlanID);
-								return IPACM_FAILURE;
-							}
-						}
-						if((wlan_ipv6_pdn_index >= 0) && ipv6_to_iface[wlan_ipv6_pdn_index].wan_up_vlan_v6)
-						{
-							IPACMDBG("iface already has v6 vlan association, not new\n");
-							new_pdn = false;
+						/* vlan already associate with STA, abort re-add */
+						IPACMERR("v4 vlan wan is already up for %s, vlan id: %d\n", dev_name, data->VlanID);
+						return IPACM_FAILURE;
+					}
 
-							if(IPACM_Wan::ipv6_to_iface[wlan_ipv6_pdn_index].wan_up_vlan_v6)
-							{
-								for(vlan_idx = 0; vlan_idx < ipv6_to_iface[wlan_vlan_v6_pdn_index].VID_cnt; vlan_idx++)
-								{
-									if(IPACM_Wan::ipv6_to_iface[wlan_vlan_v6_pdn_index].associated_VIDs[vlan_idx] == data->VlanID)
-									{
-										IPACMERR("VID (%d) already mapped to v6 PDN %d, can't map to v6 PDN %d\n",
-												data->VlanID, pdn_idx, wlan_ipv6_pdn_index);
-										return IPACM_FAILURE;
-									}
-								}
-							}
-						}
-						if(new_pdn && ipv4_to_iface[wlan_vlan_v4_pdn_index].VID_cnt == 0)
+					if((wlan_ipv6_pdn_index >= 0) && ipv6_to_iface[wlan_ipv6_pdn_index].wan_up_vlan_v6)
+					{
+						IPACMDBG("iface already has v6 vlan association, not new\n");
+						new_pdn = false;
+
+					}
+
+					if(new_pdn && ipv4_to_iface[wlan_vlan_v4_pdn_index].VID_cnt == 0)
+					{
+						if(num_offloaded_pdns >= IPA_MAX_NUM_HW_PDNS)
 						{
-							if(num_offloaded_pdns >= IPA_MAX_NUM_HW_PDNS)
-							{
-								IPACMERR("number of offloaded PDNs %d can't add more than %d, ignoring\n", num_offloaded_pdns, IPA_MAX_NUM_HW_PDNS);
-								return IPACM_FAILURE;
-							}
-							num_offloaded_pdns++;
-							IPACMDBG_H("this is a new PDN, num of offloaded PDN increased to %d\n", num_offloaded_pdns);
+							IPACMERR("number of offloaded PDNs %d can't add more than %d, ignoring\n", num_offloaded_pdns, IPA_MAX_NUM_HW_PDNS);
+							return IPACM_FAILURE;
 						}
+						num_offloaded_pdns++;
+						IPACMDBG_H("this is a new PDN, num of offloaded PDN increased to %d\n", num_offloaded_pdns);
 					}
 				}
 			}

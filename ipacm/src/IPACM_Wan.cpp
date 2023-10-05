@@ -632,6 +632,17 @@ int IPACM_Wan::handle_addr_evt(ipacm_event_data_addr *data)
 			{
 				IPACM_Iface::ipacmcfg->add_vlan_ipv6_prefix(ipv6_to_iface[modem_ipv6_pdn_index].ipv6_prefix, ipa_if_num, associated_VID);
 
+				if(m_is_sta_mode == Q6_WAN)
+				{
+					config_wan_firewall_rule(IPA_IP_v6);
+					install_wan_filtering_rule(false);
+				}
+				else
+				{
+					del_dft_firewall_rules(IPA_IP_v6);
+					config_dft_firewall_rules(IPA_IP_v6);
+				}
+
 				//need to post handle_wan_up_v6 to enable conntrack for XLAT mode.
 				ipacm_cmd_q_data evt_data;
 				ipacm_event_iface_up *wanup_data;
@@ -687,6 +698,11 @@ int IPACM_Wan::handle_addr_evt(ipacm_event_data_addr *data)
 		/* add WAN DL interface IP specific flt rule for IPv6 when backhaul is not Q6 */
 		if(m_is_sta_mode != Q6_WAN)
 		{
+			if(is_xlat && active_v6 && ipv6_to_iface[modem_ipv6_pdn_index].ipv6_prefix[0] && ipv6_to_iface[modem_ipv6_pdn_index].ipv6_prefix[1])
+			{
+				del_dft_firewall_rules(IPA_IP_v6);
+				config_dft_firewall_rules(IPA_IP_v6);
+			}
 			if(rx_prop != NULL && is_global_ipv6_addr(data->ipv6_addr)
 				&& num_ipv6_dest_flt_rule < MAX_DEFAULT_v6_ROUTE_RULES)
 			{
@@ -744,9 +760,15 @@ int IPACM_Wan::handle_addr_evt(ipacm_event_data_addr *data)
 				}
 			}
 		}
-
-	    num_dft_rt_v6++;
-    }
+		else if((m_is_sta_mode == Q6_WAN) && is_xlat && active_v6 &&
+			 ipv6_to_iface[modem_ipv6_pdn_index].ipv6_prefix[0] &&
+			 ipv6_to_iface[modem_ipv6_pdn_index].ipv6_prefix[1])
+		{
+			config_wan_firewall_rule(IPA_IP_v6);
+			install_wan_filtering_rule(false);
+		}
+		num_dft_rt_v6++;
+    	}
 	else
 	{
 #if defined(FEATURE_SOCKSv5) && defined (IPA_SOCKV5_EVENT_MAX)

@@ -16616,7 +16616,10 @@ int IPACM_Lan::handle_ext_router_add_evt(char* pdn_name, uint8_t *mac_addr, uint
 	uint32_t wan_ipv6_addr[4];
 	memset(&hdr, 0, sizeof(hdr));
 
-	strlcpy(info.pdn_name, pdn_name, sizeof(info.pdn_name));
+	if (strlcpy(info.pdn_name, pdn_name, sizeof(info.pdn_name)) == 0) {
+		IPACMERR("Recevied NULL PDN name\n");
+		return IPACM_FAILURE;
+	}
 	if(IPACM_Iface::ipacmcfg->get_ext_router_info(&info) == IPACM_FAILURE)
 	{
 		IPACMERR("failed to get ext_router_info\n");
@@ -16723,6 +16726,7 @@ int IPACM_Lan::handle_ext_router_add_evt(char* pdn_name, uint8_t *mac_addr, uint
 	}
 	get_client_memptr(eth_client, eth_idx)->ext_router_prefix_rt_hdl =  rt_rule_entry->rt_rule_hdl;
 
+	IPACMDBG_H("set route/filter rule for v6_external router completed\n");
 	/* if in prefix sharing mode, need to add 1 more rt and flt exception rule as per design*/
 	if (IPACM_Iface::ipacmcfg->ext_router_mode == IPA_PREFIX_SHARING)
 	{

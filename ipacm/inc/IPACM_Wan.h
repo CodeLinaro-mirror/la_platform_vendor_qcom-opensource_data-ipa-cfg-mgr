@@ -83,6 +83,7 @@ IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <IPACM_Iface.h>
 #include <IPACM_Defs.h>
 #include <IPACM_Xml.h>
+#include <list>
 
 #define IPA_NUM_DEFAULT_WAN_FILTER_RULES 3 /*1 for v4, 2 for v6*/
 #define IPA_V2_NUM_DEFAULT_WAN_FILTER_RULE_IPV4 2
@@ -161,6 +162,8 @@ public:
 	int num_firewall_v6_ul_pdn;
 #endif
 	uint16_t associated_VID;
+	/* once STA up, need associated pending VID to STA-WAN */
+	std::list<uint16_t> pending_VID_STA;
 #endif
 	static uint16_t mtu_default_wan;
 	uint16_t mtu_size;

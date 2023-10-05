@@ -7811,6 +7811,8 @@ int IPACM_Lan::disable_dft_firewall_rules_ul_ex(int vid)
 				{
 					IPACMDBG_H("mux %d up, restore v6 VLAN PDN rules\n", v6_mux_up[i].mux_id);
 					data.mux_id = v6_mux_up[i].mux_id;
+					data.VlanID = vid;
+					set_mux_down(v6_mux_up[i].mux_id, IPA_IP_v6);
 					handle_vlan_pdn_up(&data, false);
 				}
 			}

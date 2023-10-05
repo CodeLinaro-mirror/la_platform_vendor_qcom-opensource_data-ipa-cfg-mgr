@@ -6162,11 +6162,11 @@ int IPACM_Lan::handle_vlan_phys_if_down()
 
 	IPACMDBG_H("Complete deletion of STA BH IPV4\n");
 
-        for(i = 0; (m_ipv6_default_filterting_rules_count + i) < IPA_MAX_NUM_OFFLOAD_VLANS; i++)
+        for(i = 0; i < IPA_MAX_NUM_OFFLOAD_VLANS; i++)
         {
-                if(dft_v6fl_rule_hdl[m_ipv6_default_filterting_rules_count + i])
+                if(vlan_sta_info[i].v6_flt_hdl > 0)
                 {
-                        if (!m_filtering.DeleteFilteringHdls(&dft_v6fl_rule_hdl[m_ipv6_default_filterting_rules_count + i], IPA_IP_v6, 1))
+                        if (!m_filtering.DeleteFilteringHdls(&vlan_sta_info[i].v6_flt_hdl, IPA_IP_v6, 1))
                         {
                                 IPACMERR("Error Deleting last default flt rule, aborting...\n");
                                 return IPACM_FAILURE;

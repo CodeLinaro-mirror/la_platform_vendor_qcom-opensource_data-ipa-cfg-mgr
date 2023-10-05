@@ -667,8 +667,12 @@ uint32_t IPACM_Wan::GetQCMAPhdrByName(char* pdn_name)
 
 	for(int i = 0; i < IPA_MAX_NUM_SW_PDNS; i++)
 	{
-		if(strncmp(pdn_name, ipv6_to_iface[i].pIface->dev_name, sizeof(pdn_name)) == 0)
+		if(ipv6_to_iface[i].pIface && strncmp(pdn_name, ipv6_to_iface[i].pIface->dev_name, sizeof(pdn_name)) == 0)
 		{
+			if (!ipv6_to_iface[i].pIface->tx_prop) {
+				IPACMERR("couldn't find PDN tx prop %s\n", pdn_name);
+				return 0;
+			}
 			strlcpy(hdr.name, ipv6_to_iface[i].pIface->tx_prop->tx[0].hdr_name, sizeof(hdr.name));
 			hdr.name[IPA_RESOURCE_NAME_MAX-1] = '\0';
 			if(m_header.GetHeaderHandle(&hdr) == false)

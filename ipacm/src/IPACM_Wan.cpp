@@ -715,6 +715,16 @@ int IPACM_Wan::handle_addr_evt(ipacm_event_data_addr *data)
 			{
 				IPACM_Iface::ipacmcfg->add_vlan_ipv6_prefix(ipv6_to_iface[modem_ipv6_pdn_index].ipv6_prefix, ipa_if_num, associated_VID);
 
+				if(m_is_sta_mode == Q6_WAN)
+				{
+					config_wan_firewall_rule(IPA_IP_v6);
+					install_wan_filtering_rule(false);
+				}
+				else
+				{
+					config_dft_firewall_rules(IPA_IP_v6);
+				}
+
 				//need to post handle_wan_up_v6 to enable conntrack for XLAT mode
 				ipacm_cmd_q_data evt_data;
 				ipacm_event_iface_up *wanup_data;
@@ -750,6 +760,18 @@ int IPACM_Wan::handle_addr_evt(ipacm_event_data_addr *data)
 				evt_data.event = IPA_HANDLE_WAN_UP_V6;
 				evt_data.evt_data = (void *)wanup_data;
 				IPACM_EvtDispatcher::PostEvt(&evt_data);
+			}
+		}
+		else if(is_xlat && active_v6 && ipv6_to_iface[modem_ipv6_pdn_index].ipv6_prefix[0] && ipv6_to_iface[modem_ipv6_pdn_index].ipv6_prefix[1])
+		{
+			if(m_is_sta_mode == Q6_WAN)
+			{
+				config_wan_firewall_rule(IPA_IP_v6);
+				install_wan_filtering_rule(false);
+			}
+			else
+			{
+				config_dft_firewall_rules(IPA_IP_v6);
 			}
 		}
 	    num_dft_rt_v6++;

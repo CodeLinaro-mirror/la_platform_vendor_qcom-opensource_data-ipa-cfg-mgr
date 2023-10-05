@@ -15440,7 +15440,7 @@ int IPACM_Lan::gre_do_rt_work(
 	IPACMDBG_H(
 		"Attempting to create compatible gre routing info for ip-type: %d\n",
 		iptype);
-
+	IPACMDBG_H("GRE protocol Enabled : %x\n",ipgre_info.gre_protocol);
 	if ( gre_make_hdr_for_add_ctx(ipgre_info)    != 0 ||
 		 gre_make_hdr_add_ctx(ipgre_info)        != 0 ||
 		 gre_make_hdr_for_rmv_ctx(ipgre_info)    != 0 ||
@@ -15789,14 +15789,18 @@ int IPACM_Lan::gre_make_hdr_for_add_ctx(
 			"The dst addr added to gre header template:",
 			iptype,
 			&(hdr->words[IPV4_DST_ADDR_IDX]));
-		if ( ipgre_info.gre_protocol )
-		{
-			hdr_data_len = EoGRE_V4_HEADER_LEN;
-		}
-		else
-		{
+		
+#ifdef IPA_FLT_EXT_MPLS_GRE_GENERAL
+		if (ipgre_info.mpls_protocol)
+		{     
 			hdr_data_len = sizeof(v4_gre_hdr_t);
-		}
+		}     
+		else
+#endif
+		{     
+			hdr_data_len = EoGRE_V4_HEADER_LEN;
+		}     		
+
 		IPACMDBG_H("Sending to uC, v4 header length : %d\n",hdr_data_len);
 	}
 	else
@@ -15834,18 +15838,20 @@ int IPACM_Lan::gre_make_hdr_for_add_ctx(
 			&(hdr->words[IPV6_SRC_ADDR_IDX]));
 
 		IPACM_LOG_IP_ADDR(
-			"The dst addr added to gre header template:",
-			iptype,
-			&(hdr->words[IPV6_DST_ADDR_IDX]));
+				"The dst addr added to gre header template:",
+				iptype,
+				&(hdr->words[IPV6_DST_ADDR_IDX]));
 
-		if ( ipgre_info.gre_protocol )
-		{
-			hdr_data_len = EoGRE_V6_HEADER_LEN;
-		}
-		else
-		{
+#ifdef IPA_FLT_EXT_MPLS_GRE_GENERAL
+		if (ipgre_info.mpls_protocol)
+		{     
 			hdr_data_len = sizeof(v6_gre_hdr_t);
-		}
+		}     
+		else
+#endif
+		{     
+			hdr_data_len = EoGRE_V6_HEADER_LEN;
+		}     		
 		IPACMDBG_H("Sending to uC, v6 header length : %d\n",hdr_data_len);
 	}
 
@@ -16083,15 +16089,18 @@ int IPACM_Lan::gre_make_hdr_rmv_ctx(
 	procCtx->status       = -1; // Return parameter
 	procCtx->type         = IPA_HDR_PROC_EoGRE_HEADER_REMOVE;
 
-	if ( ipgre_info.gre_protocol )
+#ifdef IPA_FLT_EXT_MPLS_GRE_GENERAL
+	if (ipgre_info.mpls_protocol)
+	{
+		procCtx->eogre_params.hdr_remove_param.hdr_len_remove =
+			( iptype == IPA_IP_v4 ) ? sizeof(v4_gre_hdr_t) :
+			sizeof(v6_gre_hdr_t);
+	}
+	else
+#endif
 	{
 		procCtx->eogre_params.hdr_remove_param.hdr_len_remove =
 			( iptype == IPA_IP_v4 ) ? EoGRE_V4_HEADER_LEN : EoGRE_V6_HEADER_LEN;
-	}
-	else
-	{
-		procCtx->eogre_params.hdr_remove_param.hdr_len_remove =
-			( iptype == IPA_IP_v4 ) ? sizeof(v4_gre_hdr_t) : sizeof(v6_gre_hdr_t);
 	}
 
 	IPACMDBG_H("Sending to uC, Remove header length : %d\n",procCtx->eogre_params.hdr_remove_param.hdr_len_remove);

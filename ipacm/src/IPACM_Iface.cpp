@@ -678,6 +678,7 @@ int IPACM_Iface::query_iface_property(void)
 		{
 			IPACMERR("Unable to allocate tx_prop memory.\n");
 			close(fd);
+			free(iface_query);
 			return IPACM_FAILURE;
 		}
 		memcpy(tx_prop->name, queried_name, queried_name_size);
@@ -687,6 +688,7 @@ int IPACM_Iface::query_iface_property(void)
 		{
 			PERROR("ioctl IPA_IOC_QUERY_INTF_TX_PROPS failed\n");
 			/* tx_prop memory will free when iface-down*/
+			free(iface_query);
 			res = IPACM_FAILURE;
 		}
 
@@ -705,6 +707,8 @@ int IPACM_Iface::query_iface_property(void)
 				{
 					IPACMERR("Tx(%d): wrong tx property: dst_pipe: 0.\n", cnt);
 					close(fd);
+					free(iface_query);
+					free(tx_prop);
 					return IPACM_FAILURE;
 				}
 				/* Move the alt_dst_pipe logic to wlan/wan instance */
@@ -722,6 +726,8 @@ int IPACM_Iface::query_iface_property(void)
 		{
 			IPACMERR("Unable to allocate rx_prop memory.\n");
 			close(fd);
+			free(iface_query);
+			free(tx_prop);
 			return IPACM_FAILURE;
 		}
 		memcpy(rx_prop->name, queried_name, queried_name_size);
@@ -731,6 +737,8 @@ int IPACM_Iface::query_iface_property(void)
 		{
 			PERROR("ioctl IPA_IOC_QUERY_INTF_RX_PROPS failed\n");
 			/* rx_prop memory will free when iface-down*/
+			free(iface_query);
+			free(tx_prop);
 			res = IPACM_FAILURE;
 		}
 

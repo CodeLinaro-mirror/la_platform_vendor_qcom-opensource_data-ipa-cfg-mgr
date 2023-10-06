@@ -1447,6 +1447,7 @@ static int ipa_nl_decode_nlmsg
 				IPACMERR("Failed to decode rtm route message\n");
 				return IPACM_FAILURE;
 			}
+
 			/* take care of route delete of default route & uniroute */
 			if((msg_ptr->nl_route_info.metainfo.rtm_type == RTN_UNICAST) &&
 				 ((msg_ptr->nl_route_info.metainfo.rtm_protocol == RTPROT_BOOT) ||
@@ -1455,7 +1456,8 @@ static int ipa_nl_decode_nlmsg
 				 (msg_ptr->nl_route_info.metainfo.rtm_table == RT_TABLE_MAIN))
 			{
 
-				if(msg_ptr->nl_route_info.attr_info.param_mask & IPA_RTA_PARAM_DST)
+				if(AF_INET == msg_ptr->nl_route_info.metainfo.rtm_family &&
+					 msg_ptr->nl_route_info.attr_info.param_mask & IPA_RTA_PARAM_DST)
 				{
 					ret_val = ipa_get_if_name(dev_name, msg_ptr->nl_route_info.attr_info.oif_index);
 					if(ret_val != IPACM_SUCCESS)

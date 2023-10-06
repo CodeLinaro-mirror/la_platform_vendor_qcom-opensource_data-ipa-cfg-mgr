@@ -86,7 +86,7 @@
 #include <map>
 #include <set>
 #include <unordered_set>
-#include<algorithm>
+#include <algorithm>
 #include <string>
 
 
@@ -1264,9 +1264,31 @@ public:
 	 * @param macsecMap: MACSEC map of the interface to mark as
 	 *      	   non-virtual.
 	 *
-	 * @return bool
+	 * @return bool: true on success, false otherwise.
 	 */
 	bool delMacsecMap(struct ipa_macsec_map *macsecMap);
+	/**
+	 * Populate macsec mapping information by Linux interface index
+	 * if such an interface exist.
+	 *
+	 * @param interfaceIndex Linux interface index.
+	 * @param macsecMap      Pointer to MACsec mapping information
+	 *      		 allocated by the caller.
+	 *
+	 * @return bool true when mapping is populated successfully,
+	 *         false otherwise.
+	 */
+	bool populateMacsecMap(const int interfaceIndex, struct ipa_macsec_map *macsecMap) {
+		if (!macsecMap)
+			return false;
+		auto ipaInterfaceInfo = getMacsecInterface(interfaceIndex);
+		if (ipaInterfaceInfo) {
+			strlcpy(macsecMap->macsec_name, ipaInterfaceInfo->iface_name, sizeof(macsecMap->macsec_name));
+			strlcpy(macsecMap->phy_name, ipaInterfaceInfo->phy_dev_name, sizeof(macsecMap->phy_name));
+			return true;
+		}
+		return false;
+	}
 
 #ifdef IPA_IOCTL_SET_EXT_ROUTER_MODE
 	enum ipa_ext_router_mode ext_router_mode;
@@ -1315,6 +1337,29 @@ private:
 			}
 		}
 		return interfaceName;
+	}
+	/**
+	 * Get MACsec interface information by Linux interface index.
+	 *
+	 * @param interfaceIndex Linux interface index.
+	 *
+	 * @return ipa_ifi_dev_name_t* pointer to MACsec interface
+	 *         information if such an interface exist, nullptr
+	 *         otherwise.
+	 */
+	ipa_ifi_dev_name_t* getMacsecInterface(const int interfaceIndex) const {
+		if (!iface_table)
+			return nullptr;
+		auto it = std::find_if(iface_table, iface_table + ipa_num_ipa_interfaces,
+			[interfaceIndex](const decltype(iface_table[0])& item) {
+				IPACMDBG("iface_name:%s, phy_dev_name:%s, virtual_iface:%d, netlink_interface_index:%d\n", item.iface_name,
+					item.phy_dev_name, item.virtual_iface, item.netlink_interface_index);
+				return item.netlink_interface_index == interfaceIndex && item.virtual_iface;
+		});
+		if (it < iface_table + ipa_num_ipa_interfaces) {
+			return it;
+		}
+		return nullptr;
 	}
 };
 

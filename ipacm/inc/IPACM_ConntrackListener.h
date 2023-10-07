@@ -80,7 +80,7 @@
 #include "IPACM_LanToLan.h"
 #endif
 
-#define MAX_IFACE_ADDRESS 50
+#define MAX_IFACE_ADDRESS 128
 #define MAX_STA_CLNT_IFACES 10
 #define STA_CLNT_SUBNET_MASK 0xFFFFFF00
 

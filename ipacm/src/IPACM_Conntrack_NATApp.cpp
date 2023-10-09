@@ -1209,7 +1209,7 @@ void NatApp::AddTempEntry(const nat_table_entry *new_entry)
 	IPACMDBG("Private Port: %d\t Target Port: %d\t", new_entry->private_port, new_entry->target_port);
 	IPACMDBG("protocol: %d\n", new_entry->protocol);
 
-	if(ChkForDup(new_entry))
+	if(ChkForDup(new_entry) || ChkSWAllow(new_entry))
 	{
 		return;
 	}
@@ -1460,7 +1460,7 @@ void NatApp::CacheEntry(const nat_table_entry *rule)
 		return;
 	}
 
-	if(!ChkForDup(rule))
+	if(!ChkForDup(rule) && !ChkSWAllow(rule))
 	{
 		for(cnt=0; cnt < max_entries; cnt++)
 		{
@@ -2946,6 +2946,12 @@ void NatBase::CacheEntry(const NatEntryBase& entry)
 		return;
 	}
 
+	if (ChkSWAllow(entry))
+	{
+		IPACMERR("SwAllow Entry. Ignore it\n");
+		return;
+	}
+
 	NatEntryBase* new_entry = m_cache.GetFirstEmpty();
 	if (new_entry == NULL)
 	{
@@ -2966,6 +2972,12 @@ void NatBase::AddTempEntry(const NatEntryBase& entry)
 	if (m_cache.Find(entry) != NULL || m_temp.Find(entry) != NULL)
 	{
 		IPACMERR("Duplicate rule. Ignore it\n");
+		return;
+	}
+
+	if (ChkSWAllow(entry))
+	{
+		IPACMERR("SwAllow Entry. Ignore it\n");
 		return;
 	}
 

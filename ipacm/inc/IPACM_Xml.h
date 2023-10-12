@@ -343,8 +343,8 @@ typedef struct
 	char net_dev[IPA_IFACE_NAME_LEN];
 	IPACM_extd_swallow_entry_conf_t extd_swallow_entries[IPACM_MAX_FIREWALL_ENTRIES];
 	uint8_t num_extd_swallow_entries;
-	int pdn_index_v4;
-	int pdn_index_v6;
+	bool v4_up;
+	bool v6_up;
 	uint8_t profile;
 } IPACM_swallow_conf_t;
 

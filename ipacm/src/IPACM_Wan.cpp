@@ -1763,7 +1763,7 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 				IPACM_Iface::ipacmcfg->sw_allow_flag = TRUE;
 
 				IPACMDBG_H("Received IPA_SWALLOW_PDN_UPDATE\n");
-				set_swallow_pdn_index();
+				set_swallow_pdn_up();
 
 				ipacm_cmd_q_data evt_data;
 				memset(&evt_data, 0, sizeof(evt_data));
@@ -5292,7 +5292,7 @@ IPACM_firewall_conf_t* IPACM_Wan::get_firewall_conf_by_vid_ul(int vid)
 }
 #endif //FEATURE_VLAN_MPDN
 
-void IPACM_Wan::set_swallow_pdn_index(void)
+void IPACM_Wan::set_swallow_pdn_up(void)
 {
 	int num_pdns;
 
@@ -5313,9 +5313,9 @@ void IPACM_Wan::set_swallow_pdn_index(void)
 				if(!strcmp(ipv6_to_iface[i].pIface->dev_name,
 					IPACM_Iface::ipacmcfg->sw_filter_cfg->pdns[j].net_dev))
 				{
-					IPACMDBG("found %s dev in index %d updating v6 pdn index %d\n",
-						IPACM_Iface::ipacmcfg->sw_filter_cfg->pdns[j].net_dev, j, ipv6_to_iface[i].pIface->modem_ipv6_pdn_index);
-					IPACM_Iface::ipacmcfg->sw_filter_cfg->pdns[j].pdn_index_v6 = ipv6_to_iface[i].pIface->modem_ipv6_pdn_index;
+					IPACM_Iface::ipacmcfg->sw_filter_cfg->pdns[j].v6_up = TRUE;
+					IPACMDBG("V6-found %s dev in index %d updating\n",
+						IPACM_Iface::ipacmcfg->sw_filter_cfg->pdns[j].net_dev, j);
 				}
 			}
 			if(ipv4_to_iface[i].pIface)
@@ -5323,9 +5323,9 @@ void IPACM_Wan::set_swallow_pdn_index(void)
 				if(!strcmp(ipv4_to_iface[i].pIface->dev_name,
 					IPACM_Iface::ipacmcfg->sw_filter_cfg->pdns[j].net_dev))
 				{
-					IPACMDBG("found %s dev in index %d updating v4 pdn index %d\n",
-						IPACM_Iface::ipacmcfg->sw_filter_cfg->pdns[j].net_dev, j, ipv4_to_iface[i].pIface->modem_ipv4_pdn_index);
-					IPACM_Iface::ipacmcfg->sw_filter_cfg->pdns[j].pdn_index_v4 = ipv4_to_iface[i].pIface->modem_ipv4_pdn_index;
+					IPACM_Iface::ipacmcfg->sw_filter_cfg->pdns[j].v4_up = TRUE;
+					IPACMDBG("V4-found %s dev in index %d updating\n",
+						IPACM_Iface::ipacmcfg->sw_filter_cfg->pdns[j].net_dev, j);
 				}
 			}
 		}

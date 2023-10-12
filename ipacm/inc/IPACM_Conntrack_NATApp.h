@@ -1,6 +1,5 @@
 /*
 Copyright (c) 2013-2020, The Linux Foundation. All rights reserved.
-Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are
@@ -26,6 +25,11 @@ BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
 WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
 OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
 IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+Changes from Qualcomm Innovation Center are provided under the following license:
+
+Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+SPDX-License-Identifier: BSD-3-Clause-Clear
 */
 #ifndef IPACM_CONNTRACK_NATAPP_H
 #define IPACM_CONNTRACK_NATAPP_H
@@ -691,7 +695,6 @@ private:
 	typedef struct
 	{
 		uint32_t ipv4_addr;
-		bool wan_up_vlan;
 		char dev_name[IF_NAME_LEN];
 	}ipacm_v4_wan_info;
 
@@ -746,44 +749,15 @@ public:
 	void FlushTempEntries(uint32_t, bool, bool isDummy = false);
 
 	/*
-	* Method: FirewallNatTupleCompare: compare firewall tuples
-	* against nat cache
+	* Method: ChkSWAllow: to check SW allow entries
 	*
 	* Params:
-	* @fw_mpdn_config_data: Firewall config data stored locally
-	* after reading from firewall config file.
-	* @firewall_pdn_index: Get PDN index of matched firewall tuple.
-	* @firewall_entry_index: Get index of matched firewall tuple
-	* from fw_mpdn_config_data.
-	* @nat_index: Nat index from cache to compare against.
-	* @pdn_index: WAN PDN index to compare against, from
-	* the fw_mpdn_config_data.
-	*
-	* Return: bool
-	* @true: If firewall tuple match against NAT cache.
-	* @false: If firewall tuple does not match against
-	* NAT cache.
-	*/
-	void FirewallNatTupleCompare(IPACM_firewall_conf_t, int);
-
-	/*
-	* Method: handle_conntrack: Add/Delete NAT entries
-	* for software allowed tuple.
-	*
-	* Params:
-	* @fw_mpdn_config_data: Firewall config data received from firewall
-	* config file.
-	* @firewall_pdn_index: PDN index of matched firewall tuple.
-	* @firewall_entry_index: Index of matched firewall tuple
-	* from fw_mpdn_config_data.
-	* @nat_index: Nat index from cache to Add/Delete.
-	* @pdn_index: WAN PDN index of the firewall tuple from
-	* the fw_mpdn_config_data.
+	* @rule: nat rule
 	*
 	* Return: Void
 	*
  	*/
-	void handle_conntrack(IPACM_firewall_conf_t, int, int);
+	bool ChkSWAllow(const nat_table_entry *rule);
 
 	/*
 	* Method: HandleSwAllowEntries: Handle SW Allow Tuples
@@ -791,13 +765,10 @@ public:
 	* Params:
 	* @data: Firewall config data received from firewall
 	* config file.
-	* @update: Flag to update local firewall config structure.
-	* @filter_iface: Flag to update local WAN iface structureWAN iface structure.
-	*
 	* Return: Void
 	*
 	*/
-	void HandleSwAllowEntries(void *, bool);
+	void HandleSwAllowEntries(void *);
 };
 
 #endif /* IPACM_CONNTRACK_NATAPP_H */

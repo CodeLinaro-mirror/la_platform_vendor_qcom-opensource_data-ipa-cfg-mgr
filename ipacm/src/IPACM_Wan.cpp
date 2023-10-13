@@ -842,6 +842,12 @@ int IPACM_Wan::handle_addr_evt(ipacm_event_data_addr *data)
 				IPACM_Iface::ipacmcfg->add_no_offload_ipv6_prefix(ipv6_to_iface[modem_ipv6_pdn_index].ipv6_prefix);
 			}
 #endif
+			/* Check to handle the race-cond, if route_add recevied before handle_addr_evt */
+			IPACMDBG_H("is_xlat :%d, active_v6: %d, wan_v6_addr_gw_set: %d \n", is_xlat, active_v6, wan_v6_addr_gw_set);
+			if(is_xlat && active_v6 && ipv6_to_iface[modem_ipv6_pdn_index].ipv6_prefix[0] && ipv6_to_iface[modem_ipv6_pdn_index].ipv6_prefix[1])
+			{
+				IPACM_Iface::ipacmcfg->add_vlan_ipv6_prefix(ipv6_to_iface[modem_ipv6_pdn_index].ipv6_prefix, ipa_if_num, associated_VID);
+			}
 		}
 	    num_dft_rt_v6++;
     }
@@ -3122,7 +3128,7 @@ int IPACM_Wan::handle_route_add_evt(ipa_ip_type iptype)
 			IPACM_Wan::xlat_mux_id = ext_prop->ext[0].mux_id;
 			wanup_data->xlat_mux_id = IPACM_Wan::xlat_mux_id;
 			IPACMDBG_H("Set xlat configuraiton with below information:\n");
-			IPACMDBG_H("xlat_enabled:  xlat_mux_id: %d \n",
+			IPACMDBG_H("xlat_enabled: %d, xlat_mux_id:%d\n",
 					is_xlat, xlat_mux_id);
 		}
 		else
@@ -10763,7 +10769,14 @@ int IPACM_Wan::gre_add_exception_rule(
 	attrib.attrib_mask |= (IPA_FLT_SRC_ADDR | IPA_FLT_DST_ADDR);
 
 	/*Update the Metadata to use GRE PDN mux ID */
-	IPACM_Wan::GetMuxByAddr(IPA_IP_v4, &ipgre_info.ipv4_src, mux_id);
+	if (iptype == IPA_IP_v4)
+	{
+		IPACM_Wan::GetMuxByAddr(IPA_IP_v4, &ipgre_info.ipv4_src, mux_id);
+	}
+	else
+	{
+		IPACM_Wan::GetMuxByAddr(IPA_IP_v6, &ipgre_info.ipv6_src, mux_id);
+	}
 	IPACMDBG("MPLS GRE PDN is using mux id %d\n", mux_id);
 	attrib.meta_data = (mux_id & 0xFF) << 24;
 

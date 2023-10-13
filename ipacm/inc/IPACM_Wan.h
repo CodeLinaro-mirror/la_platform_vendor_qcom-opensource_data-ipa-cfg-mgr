@@ -499,7 +499,7 @@ public:
 		return curr_wan_ip;
 	}
 
-	static bool getXlat_Mux_Id()
+	static uint8_t getXlat_Mux_Id()
 	{
 		return xlat_mux_id;
 	}

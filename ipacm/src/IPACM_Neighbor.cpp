@@ -1014,9 +1014,23 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 									}
 									/* construct IPA_NEIGH_CLIENT_IP_ADDR_ADD_EVENT command and insert to command-queue */
 									if (event == IPA_NEW_NEIGH_EVENT)
+									{
+										evt_data.event = IPA_LAN_CLIENT_ADD_EVENT;
+										data_all = (ipacm_event_data_all *)malloc(sizeof(ipacm_event_data_all));
+										if (data_all == NULL)
+										{
+											IPACMERR("Unable to allocate memory\n");
+											return;
+										}
+										memcpy(data_all, data, sizeof(ipacm_event_data_all));
+										evt_data.evt_data = (void *)data_all;
+										IPACM_EvtDispatcher::PostEvt(&evt_data);
 										evt_data.event = IPA_NEIGH_CLIENT_IP_ADDR_ADD_EVENT;
+									}
 									else
+									{
 										evt_data.event = IPA_NEIGH_CLIENT_IP_ADDR_DEL_EVENT;
+									}
 #ifdef FEATURE_VLAN_MPDN
 									if(IPACM_Iface::ipacmcfg->ipacm_mpdn_enable == TRUE)
 									{

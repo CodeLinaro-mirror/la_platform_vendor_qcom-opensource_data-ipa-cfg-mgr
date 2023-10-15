@@ -838,6 +838,15 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 						IPACMDBG_H("Finish handling IPA_ADDR_ADD_EVENT for ip-family(%d)\n", data->iptype);
 					}
 
+					if ( IPACM_Iface::ipacmcfg->eogre_enabled )
+					{
+						IPACMDBG_H(
+							"A previous eogre enable needs to be undone, then redone. "
+							"Need to call eogre_down followed by an eogre_up\n");
+						eogre_down();
+						eogre_up();
+					}
+
 					IPACMDBG_H("Finish handling IPA_ADDR_ADD_EVENT for ip-family(%d)\n", data->iptype);
 					/* checking if SW-RT_enable */
 					if (IPACM_Iface::ipacmcfg->ipa_sw_rt_enable == true)
@@ -13999,6 +14008,7 @@ void IPACM_Lan::eogre_up()
 		IPACMERR("eogre_add_catchup_rule failed\n");
 		return;
 	}
+	eogre_mod_ula_rule(0xFFFFFFFF);
 }
 
 void IPACM_Lan::eogre_down()
@@ -14024,6 +14034,8 @@ void IPACM_Lan::eogre_down()
 		iptype);
 
 	del_ul_flt_rules(iptype);
+
+	eogre_mod_ula_rule(0xFF000000);
 }
 
 int IPACM_Lan::eogre_do_rt_work(
@@ -14649,7 +14661,7 @@ int IPACM_Lan::eogre_make_header_add_rt_rule(
 		IPACM_Iface::ipacmcfg->rt_tbl_v6.name);
 
 	rt_rule_entry->at_rear                 = true;
-	rt_rule_entry->rule.dst                = IPA_CLIENT_APPS_LAN_CONS;
+	rt_rule_entry->rule.dst                = IPA_CLIENT_DUMMY_CONS;
 	rt_rule_entry->rule.attrib.attrib_mask = IPA_FLT_DST_ADDR;
 	rt_rule_entry->rule.hdr_proc_ctx_hdl   = ctx_2use;
 
@@ -14727,7 +14739,7 @@ int IPACM_Lan::eogre_make_header_rem_rt_rule(
 		IPACM_Iface::ipacmcfg->rt_tbl_wan_v6.name);
 
 	rt_rule_entry->at_rear                 = false;
-	rt_rule_entry->rule.dst                = IPA_CLIENT_ETHERNET_CONS;
+	rt_rule_entry->rule.dst                = tx_prop->tx[0].dst_pipe;
 	rt_rule_entry->rule.attrib.attrib_mask = IPA_FLT_SRC_ADDR | IPA_FLT_DST_ADDR;
 	rt_rule_entry->rule.hdr_proc_ctx_hdl   =
 		eogre_route_data[iptype].proc_ctx_eogre_rmv_hdl;

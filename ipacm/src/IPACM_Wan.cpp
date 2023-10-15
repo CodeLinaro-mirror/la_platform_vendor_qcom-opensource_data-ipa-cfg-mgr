@@ -7586,12 +7586,10 @@ int IPACM_Wan::installWanPostIpsecRt(
 	struct ipa_ioc_add_flt_rule *rule_table_v6)
 {
 	int i, num_rules, res = IPACM_SUCCESS;
-	struct ipa_ioc_add_rt_rule *rt_rule;
-	struct ipa_rt_rule_add *rt_rule_entry;
-	struct ipa_ioc_del_rt_rule *del_rt;
-	struct ipa_rt_rule_del *del_rt_rule;
-	struct ipa_ioc_add_flt_rule *flt_tbl;
-	struct ipa_ioc_get_hdr hdr;
+	struct ipa_ioc_add_rt_rule *rt_rule = NULL;
+	struct ipa_rt_rule_add *rt_rule_entry = NULL;
+	struct ipa_ioc_add_flt_rule *flt_tbl = NULL;
+	struct ipa_ioc_get_hdr hdr = {0};
 
 	/* Nothing to be done, if there are no TX props. */
 	if (iface_query == NULL || iface_query->num_tx_props == 0 || tx_prop == NULL) {
@@ -7612,13 +7610,9 @@ int IPACM_Wan::installWanPostIpsecRt(
 	rt_rule = (struct ipa_ioc_add_rt_rule *)
 		calloc(1, sizeof(struct ipa_ioc_add_rt_rule) +
 			num_rules * sizeof(struct ipa_rt_rule_add));
-	num_rules = std::max(num_ipsec_post_pol_rt[IPA_IP_v4], num_ipsec_post_pol_rt[IPA_IP_v6]);
-	del_rt = (struct ipa_ioc_del_rt_rule *)
-		calloc(1, sizeof(struct ipa_ioc_del_rt_rule) +
-			num_rules * sizeof(struct ipa_rt_rule_del));
-	if (!rt_rule || !del_rt)
+	if (!rt_rule)
 	{
-		IPACMERR("Error allocating ipa_ioc_add_rt_rule/ipa_ioc_del_rt_rule memory.\n");
+		IPACMERR("Error allocating ipa_ioc_add_rt_rule memory.\n");
 		res = IPACM_FAILURE;
 		goto end;
 	}
@@ -7626,18 +7620,12 @@ int IPACM_Wan::installWanPostIpsecRt(
 	rt_rule->commit = 1;
 
 	for (const auto iptype:{ipa_ip_type::IPA_IP_v4, ipa_ip_type::IPA_IP_v6}) {
-
 		/* Clean old rules */
-		del_rt->commit = 1;
-		del_rt->ip = iptype;
-		del_rt->num_hdls = num_ipsec_post_pol_rt[iptype];
-		for (i = 0; i < del_rt->num_hdls; i++) {
-			del_rt->hdl[i].hdl = ipsec_post_pol_rt[iptype][i];
-			del_rt->hdl[i].status = -1;
-		}
-		if (false == m_routing.DeleteRoutingRule(del_rt)) {
-			res = IPACM_FAILURE;
-			goto end;
+		for (i = 0; i < num_ipsec_post_pol_rt[iptype]; i++) {
+			if (false == m_routing.DeleteRoutingHdl(ipsec_post_pol_rt_hdls[iptype][i], iptype)) {
+				res = IPACM_FAILURE;
+				goto end;
+			}
 		}
 
 		switch (iptype) {
@@ -7660,6 +7648,9 @@ int IPACM_Wan::installWanPostIpsecRt(
 			res =  IPACM_FAILURE;
 			goto end;
 		}
+
+		if (rt_rule->num_rules == 0)
+			continue;
 
 		IPACMDBG_H("rt_tbl_name = %s num_rules = %d\n",
 			rt_rule->rt_tbl_name, rt_rule->num_rules);
@@ -7695,17 +7686,15 @@ int IPACM_Wan::installWanPostIpsecRt(
 		}
 
 		for (i = 0; i < rt_rule->num_rules; i++)
-			ipsec_post_pol_rt[iptype][i] = rt_rule->rules[i].rt_rule_hdl;
+			ipsec_post_pol_rt_hdls[iptype][i] = rt_rule->rules[i].rt_rule_hdl;
+
+		num_ipsec_post_pol_rt[iptype] = rt_rule->num_rules;
 	}
 
-	num_ipsec_post_pol_rt[IPA_IP_v4] = IPACM_Wan::num_v4_flt_rule;
-	num_ipsec_post_pol_rt[IPA_IP_v6] = IPACM_Wan::num_v6_flt_rule;
 end:
-	if (del_rt)
-		free(del_rt);
 	if (rt_rule)
 		free(rt_rule);
-	return IPACM_SUCCESS;
+	return res;
 }
 #endif
 
@@ -8182,12 +8171,6 @@ int IPACM_Wan::install_wan_filtering_rule(bool is_sw_routing, bool is_socksv5_en
 #endif
 			}
 		}
-#ifdef FEATURE_IPA_IPSEC
-		IPACMDBG_H("Calling install_wan_post_ipsec_rt\n");
-		if (installWanPostIpsecRt(pFilteringTable_v4, pFilteringTable_v6))
-			IPACMERR("install_wan_post_ipsec_rt failed\n");
-#endif
-
 	}
 
 #ifdef FEATURE_VLAN_MPDN
@@ -8200,6 +8183,11 @@ int IPACM_Wan::install_wan_filtering_rule(bool is_sw_routing, bool is_socksv5_en
 		res = IPACM_FAILURE;
 		goto fail;
 	}
+#ifdef FEATURE_IPA_IPSEC
+	IPACMDBG_H("Calling install_wan_post_ipsec_rt\n");
+	if (installWanPostIpsecRt(pFilteringTable_v4, pFilteringTable_v6))
+		IPACMERR("install_wan_post_ipsec_rt failed\n");
+#endif
 
 fail:
 	if(pFilteringTable_v4 != NULL)

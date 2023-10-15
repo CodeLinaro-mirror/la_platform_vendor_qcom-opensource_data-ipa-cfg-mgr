@@ -431,8 +431,8 @@ public:
 	static int num_firewall_v6_ul;
 #endif
 #ifdef FEATURE_IPA_IPSEC
-	uint32_t ipsec_post_pol_rt[2][IPA_MAX_FLT_RULE];
-	int num_ipsec_post_pol_rt[2];
+	uint32_t ipsec_post_pol_rt_hdls[IPA_IP_MAX][IPA_MAX_FLT_RULE];
+	int num_ipsec_post_pol_rt[IPA_IP_MAX];
 #endif
 	ipacm_wan_iface_type m_is_sta_mode;
 	static bool backhaul_is_sta_mode;

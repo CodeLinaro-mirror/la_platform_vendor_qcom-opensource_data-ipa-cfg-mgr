@@ -1507,7 +1507,11 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 			if (ipa_interface_index == ipa_if_num)
 			{
 				IPACMDBG_H("Received IPA_WLAN_GW_ADDR_ADD_EVENT\n");
-				IPACMDBG_H("ipv4 addr 0x%x\n", data->ipv4_addr_gw);
+				if(data->iptype == IPA_IP_v4)
+					IPACMDBG_H("ipv4 addr 0x%x\n", data->ipv4_addr_gw);
+				if(data->iptype == IPA_IP_v6)
+					IPACMDBG_H("ipv6 addr 0x%x 0x%x 0x%x 0x%x\n", data->ipv6_addr_gw[0], data->ipv6_addr_gw[1],
+									data->ipv6_addr_gw[2], data->ipv6_addr_gw[3]);
 				if(m_is_sta_mode == WLAN_WAN)
 				{
 					IPACMDBG_H("GW info for WLAN Iface\n");
@@ -1521,7 +1525,7 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 						IPACMDBG_H("adding header, dev (%s) ip-type(%d), default gw (%x)\n", dev_name,data->iptype, wan_v4_addr_gw);
 					}
 					if ((data->iptype == IPA_IP_v6 || data->iptype == IPA_IP_MAX) &&
-						(data->ipv6_addr_gw[0] != 0) && (data->ipv6_addr_gw[1] != 0) && (data->ipv6_addr_gw[2] != 0) && (data->ipv6_addr_gw[3] != 0))
+						(data->ipv6_addr_gw[0] != 0) || (data->ipv6_addr_gw[1] != 0) || (data->ipv6_addr_gw[2] != 0) || (data->ipv6_addr_gw[3] != 0))
 					{
 
 						IPACMDBG_H(" IPV6 gateway: %08x:%08x:%08x:%08x \n",
@@ -2593,6 +2597,7 @@ int IPACM_Wan::handle_route_add_vlan_pdn_evt(ipa_ip_type iptype, uint16_t vlan_i
 					iptype);
 			}
 			/* for STA mode: add firewall rules */
+			del_dft_firewall_rules(IPA_IP_v6);
 			config_dft_firewall_rules(IPA_IP_v6);
 			FullConfig = false;
 			IPACMDBG_H("new VLAN PDN prefix is 0x%08x%08x.\n", ipv6_prefix[0], ipv6_prefix[1]);
@@ -2795,6 +2800,7 @@ int IPACM_Wan::handle_route_add_vlan_pdn_evt(ipa_ip_type iptype, uint16_t vlan_i
 					iptype);
 			}
 			/* for STA mode: add firewall rules */
+			del_dft_firewall_rules(IPA_IP_v4);
 			config_dft_firewall_rules(IPA_IP_v4);
 			FullConfig = false;
 			ipv4_to_iface[wlan_ipv4_pdn_index].wan_up_vlan = true;
@@ -3319,6 +3325,8 @@ int IPACM_Wan::handle_route_add_evt(ipa_ip_type iptype)
 		}
 		else
 		{
+			/* STA Backhaul */
+			del_dft_firewall_rules(IPA_IP_v4);
 			config_dft_firewall_rules(IPA_IP_v4);
 		}
 
@@ -3379,6 +3387,7 @@ int IPACM_Wan::handle_route_add_evt(ipa_ip_type iptype)
 		}
 		else
 		{
+			del_dft_firewall_rules(IPA_IP_v6);
 			config_dft_firewall_rules(IPA_IP_v6);
 		}
 
@@ -6060,12 +6069,13 @@ int IPACM_Wan::del_dft_firewall_rules(ipa_ip_type iptype, bool wan_up_vlan)
 		}
 		if (num_firewall_v4 != 0)
 		{
-			if (m_filtering.DeleteFilteringHdls(firewall_hdl_v4,
-																					IPA_IP_v4, num_firewall_v4) == false)
+			if (m_filtering.DeleteFilteringHdls(firewall_hdl_v4, IPA_IP_v4, num_firewall_v4) == false)
 			{
 				IPACMERR("Error Deleting Filtering rules, aborting...\n");
 				return IPACM_FAILURE;
 			}
+			for(int i = 0; i < num_firewall_v4; i++)
+				firewall_hdl_v4[i] = 0;
 			IPACM_Iface::ipacmcfg->decreaseFltRuleCount(rx_prop->rx[0].src_pipe, IPA_IP_v4, num_firewall_v4);
 		}
 		else
@@ -6073,12 +6083,12 @@ int IPACM_Wan::del_dft_firewall_rules(ipa_ip_type iptype, bool wan_up_vlan)
 			IPACMDBG_H("No ipv4 firewall rules, no need deleted\n");
 		}
 
-		if (m_filtering.DeleteFilteringHdls(dft_wan_fl_hdl,
-																				IPA_IP_v4, 1) == false)
+		if (m_filtering.DeleteFilteringHdls(&dft_wan_fl_hdl[0], IPA_IP_v4, 1) == false)
 		{
 			IPACMERR("Error Deleting Filtering rules, aborting...\n");
 			return IPACM_FAILURE;
 		}
+		dft_wan_fl_hdl[0] = 0;
 		IPACM_Iface::ipacmcfg->decreaseFltRuleCount(rx_prop->rx[0].src_pipe, IPA_IP_v4, 1);
 
 		num_firewall_v4 = 0;
@@ -6101,12 +6111,13 @@ int IPACM_Wan::del_dft_firewall_rules(ipa_ip_type iptype, bool wan_up_vlan)
 		}
 		if (num_firewall_v6 != 0)
 		{
-			if (m_filtering.DeleteFilteringHdls(firewall_hdl_v6,
-																					IPA_IP_v6, num_firewall_v6) == false)
+			if (m_filtering.DeleteFilteringHdls(firewall_hdl_v6, IPA_IP_v6, num_firewall_v6) == false)
 			{
 				IPACMERR("Error Deleting Filtering rules, aborting...\n");
 				return IPACM_FAILURE;
 			}
+			for(int i = 0; i < num_firewall_v6; i++)
+				firewall_hdl_v6[i] = 0;
 			IPACM_Iface::ipacmcfg->decreaseFltRuleCount(rx_prop->rx[0].src_pipe, IPA_IP_v6, num_firewall_v6);
 		}
 		else
@@ -6121,22 +6132,24 @@ int IPACM_Wan::del_dft_firewall_rules(ipa_ip_type iptype, bool wan_up_vlan)
 				IPACMERR("Error Deleting Filtering rules, aborting...\n");
 				return IPACM_FAILURE;
 			}
+			ipv6_ula_prefix_hdl = 0;
 			IPACM_Iface::ipacmcfg->decreaseFltRuleCount(rx_prop->rx[0].src_pipe, IPA_IP_v6, 1);
 		}
 #endif
-		if (m_filtering.DeleteFilteringHdls(&dft_wan_fl_hdl[1],
-																				IPA_IP_v6, 1) == false)
+		if (m_filtering.DeleteFilteringHdls(&dft_wan_fl_hdl[1], IPA_IP_v6, 1) == false)
 		{
 			IPACMERR("Error Deleting Filtering rules, aborting...\n");
 			return IPACM_FAILURE;
 		}
+		dft_wan_fl_hdl[1] = 0;
 		IPACM_Iface::ipacmcfg->decreaseFltRuleCount(rx_prop->rx[0].src_pipe, IPA_IP_v6, 1);
-		if (m_filtering.DeleteFilteringHdls(&dft_wan_fl_hdl[2],
-																				IPA_IP_v6, 1) == false)
+
+		if (m_filtering.DeleteFilteringHdls(&dft_wan_fl_hdl[2], IPA_IP_v6, 1) == false)
 		{
 			IPACMERR("Error Deleting Filtering rules, aborting...\n");
 			return IPACM_FAILURE;
 		}
+		dft_wan_fl_hdl[2] = 0;
 		IPACM_Iface::ipacmcfg->decreaseFltRuleCount(rx_prop->rx[0].src_pipe, IPA_IP_v6, 1);
 
 		if (is_ipv6_frag_firewall_flt_rule_installed)
@@ -6146,6 +6159,7 @@ int IPACM_Wan::del_dft_firewall_rules(ipa_ip_type iptype, bool wan_up_vlan)
 				IPACMERR("Error deleting IPv6 frag filtering rules.\n");
 				return IPACM_FAILURE;
 			}
+			ipv6_frag_firewall_flt_rule_hdl = 0;
 			is_ipv6_frag_firewall_flt_rule_installed = false;
 			IPACM_Iface::ipacmcfg->decreaseFltRuleCount(rx_prop->rx[0].src_pipe, IPA_IP_v6, 1);
 		}
@@ -6226,6 +6240,7 @@ int IPACM_Wan::handle_route_del_evt(ipa_ip_type iptype, bool wan_up_vlan)
 		if(wan_up_vlan)
 		{
 			IPACMDBG_H("Don't post IPA_HANDLE_WAN_DOWN event if vlan id on demand PDN\n");
+			IPACM_Iface::ipacmcfg->del_vlan_ipv6_prefix(ipv6_prefix, -1);
 			return IPACM_SUCCESS;
 		}
 		ipacm_event_iface_up *wandown_data;

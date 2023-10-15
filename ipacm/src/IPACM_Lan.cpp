@@ -1388,7 +1388,7 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 		{
 			ipacm_event_data_fid *data = (ipacm_event_data_fid *)param;
 
-			IPACMDBG_H("Received IPA_LAN_CLIENT_CONNECT_EVENT\n");
+			IPACMDBG_H("Received IPA_PREFIX_CHANGE_EVENT\n");
 			if(ipa_if_num != data->if_index)
 				modify_ipv6_prefix_flt_rule();
 			else
@@ -2704,11 +2704,7 @@ int IPACM_Lan::handle_wan_down(bool is_sta_mode, uint8_t mux_id)
 	/* clean MTU rules if needed */
 	if (IPACM_Iface::ipacmcfg->ipacm_mpdn_enable)
 	{
-		if (modify_private_subnet() == false)
-		{
-			IPACMERR("Error modifying MTU rule for private subnet, aborting...\n");
-			return IPACM_FAILURE;
-		}
+		return modify_private_subnet();
 	}
 	else
 #endif
@@ -8043,6 +8039,7 @@ int IPACM_Lan::disable_dft_firewall_rules_ul_ex(int vid)
 			for(int i = 0; i < IPA_MAX_NUM_HW_PDNS; i++)
 			{
 				data.iptype = IPA_IP_v6;
+				data.VlanID = vid;
 				if(v6_mux_up[i].mux_id)
 				{
 					IPACMDBG_H("mux %d up, restore v6 VLAN PDN rules\n", v6_mux_up[i].mux_id);
@@ -10349,10 +10346,12 @@ int IPACM_Lan::modify_ipv6_prefix_flt_rule()
 		if(m_filtering.DeleteFilteringHdls(ipv6_prefix_flt_rule_hdl, IPA_IP_v6,
 			num_wan_prefix_rules) == false)
 		{
-			IPACMERR("Error Deleting Filtering, aborting...\n");
+			IPACMERR("Error Deleting ipv6 prefix Filtering, aborting...\n");
 			res = IPACM_FAILURE;
 			goto fail;
 		}
+		for (i = 0; i < num_wan_prefix_rules; i++)
+			ipv6_prefix_flt_rule_hdl[i] = 0;
 		IPACM_Iface::ipacmcfg->decreaseFltRuleCount(rx_prop->rx[0].src_pipe, IPA_IP_v6, num_wan_prefix_rules);
 		num_wan_prefix_rules = 0;
 	}
@@ -10721,6 +10720,8 @@ void IPACM_Lan::delete_ipv6_prefix_flt_rule()
 		IPACMERR("Failed to delete ipv6 prefix flt rule.\n");
 		return;
 	}
+	for (int i = 0; i < IPv6_PREFIX_DEFAULT_PDN_RULE_NUM; i++)
+		ipv6_prefix_flt_rule_hdl[i] = 0;
 	IPACM_Iface::ipacmcfg->decreaseFltRuleCount(rx_prop->rx[0].src_pipe, IPA_IP_v6, IPv6_PREFIX_DEFAULT_PDN_RULE_NUM);
 	return;
 }

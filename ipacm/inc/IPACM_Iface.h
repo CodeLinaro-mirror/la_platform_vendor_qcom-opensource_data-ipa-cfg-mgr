@@ -139,6 +139,7 @@ public:
 
 	uint32_t dft_v4fl_rule_hdl[IPV4_DEFAULT_FILTERTING_RULES];
 	uint32_t dft_v6fl_rule_hdl[IPV6_DEFAULT_FILTERTING_RULES + IPV6_DEFAULT_LAN_FILTERTING_RULES];
+	uint32_t ula_hdl; /* used for rule moidification when eogre toggles up and down */
 	/* create additional set of v6 RT-rules in Wanv6RT table*/
 	uint32_t dft_rt_rule_hdl[MAX_DEFAULT_v4_ROUTE_RULES+2*MAX_DEFAULT_v6_ROUTE_RULES];
 
@@ -184,6 +185,11 @@ public:
 	/* software routing disable */
 	virtual int handle_software_routing_disable(void);
 	void delete_iface(void);
+
+#ifdef FEATURE_EoGRE
+	int eogre_mod_ula_rule(
+		uint32_t dst_addr_mask );
+#endif
 
 	static inline void addr2host(
 		enum ipa_ip_type addr_type,

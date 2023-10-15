@@ -152,7 +152,7 @@ public:
 	static bool wan_up;
 	static bool wan_up_v6;
 	static uint8_t xlat_mux_id;
-	uint32_t ipps_dft_v4_rt_rule_hdl;
+
 #ifdef FEATURE_VLAN_MPDN
 #ifdef FEATURE_IPACM_UL_FIREWALL
 	int num_firewall_v6_ul_pdn;
@@ -754,6 +754,9 @@ private:
 
 	/* handle new_address event */
 	int handle_addr_evt(ipacm_event_data_addr *data);
+
+	/* handle del_address event */
+	int handle_addr_del_evt(ipacm_event_data_addr *data);
 
 	/* wan default route/filter rule configuration */
 	int handle_route_add_evt(ipa_ip_type iptype);

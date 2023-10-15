@@ -73,9 +73,9 @@
 */
 #include <IPACM_Config.h>
 #include <IPACM_Log.h>
+#include <IPACM_Netlink.h>
 #include <IPACM_Iface.h>
 #include <sys/ioctl.h>
-#include <net/if.h>
 #include <fcntl.h>
 #include <string.h>
 #include <errno.h>
@@ -1304,6 +1304,8 @@ void IPACM_Config::add_bridge_vlan_mapping(ipa_bridge_vlan_mapping_info *data)
 {
 	list<bridge_vlan_mapping_info>::iterator it_mapping;
 	ipacm_bridge *bridge = NULL;
+	char iface_name[IPA_IFACE_NAME_LEN] = {0};
+	int ret = IPACM_FAILURE;
 
 	if(pthread_mutex_lock(&vlan_l2tp_lock) != 0)
 	{
@@ -1359,6 +1361,14 @@ void IPACM_Config::add_bridge_vlan_mapping(ipa_bridge_vlan_mapping_info *data)
 		new_mapping.bridge_associated_VID = data->vlan_id;
 		new_mapping.bridge_if_index = data->master_if_index;
 		new_mapping.status == 0;
+
+		ret = ipa_get_if_name(iface_name, data->master_if_index);
+		if(ret == IPACM_SUCCESS)
+		{
+			strlcpy(new_mapping.bridge_iface_name, iface_name,
+				sizeof(new_mapping.bridge_iface_name));
+		}
+
 		m_bridge_vlan_mapping.push_front(new_mapping);
 		bridge = get_vlan_bridge(data->bridge_name);
 		if(bridge)
@@ -1381,6 +1391,8 @@ void IPACM_Config::del_bridge_vlan_mapping(uint16_t *data)
 {
 	list<bridge_vlan_mapping_info>::iterator it_mapping;
 	ipacm_bridge *bridge = NULL;
+	int ret = IPACM_FAILURE;
+	char iface_name[IPA_IFACE_NAME_LEN] = {0};
 
 	IPACMDBG_H("Deleting bridge vlan mapping with interface index %d\n",*data);
 
@@ -1406,7 +1418,9 @@ void IPACM_Config::del_bridge_vlan_mapping(uint16_t *data)
 				it_mapping->bridge_associated_VID);
 			m_bridge_vlan_mapping.erase(it_mapping);
 
-			bridge = get_vlan_bridge(it_mapping->bridge_iface_name);
+			ret = ipa_get_if_name(iface_name, it_mapping->bridge_if_index);
+
+			bridge = get_vlan_bridge(iface_name);
 			if(bridge)
 			{
 				IPACMDBG_H("bridge %s - remove vlan id\n",

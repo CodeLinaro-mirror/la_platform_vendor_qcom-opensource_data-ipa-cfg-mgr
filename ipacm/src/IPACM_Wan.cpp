@@ -490,7 +490,7 @@ bool IPACM_Wan::is_xlat_by_ipv4(uint32_t ipv4_addr)
 /* handle new_address event */
 int IPACM_Wan::handle_addr_evt(ipacm_event_data_addr *data)
 {
-	struct ipa_ioc_add_rt_rule *rt_rule;
+	struct ipa_ioc_add_rt_rule *rt_rule = NULL;
 	struct ipa_rt_rule_add *rt_rule_entry;
 	struct ipa_ioc_add_flt_rule *flt_rule;
 	struct ipa_flt_rule_add flt_rule_entry;
@@ -615,8 +615,6 @@ int IPACM_Wan::handle_addr_evt(ipacm_event_data_addr *data)
 		{
 			if(m_is_sta_mode == Q6_WAN)
 			{
-				num_ipv6_modem_pdn++;
-				IPACMDBG_H("Now the number of modem ipv6 pdn is %d.\n", num_ipv6_modem_pdn);
 				init_fl_rule_ex(data->iptype);
 			}
 			else
@@ -705,12 +703,57 @@ int IPACM_Wan::handle_addr_evt(ipacm_event_data_addr *data)
 				memcpy(ipv6_to_iface[modem_ipv6_pdn_index].ipv6_prefix, data->ipv6_addr, sizeof(uint32_t) * 2);
 				ipv6_to_iface[modem_ipv6_pdn_index].pIface = this;
 				IPACMDBG_H("index %d prefix: 0x%08x%08x\n", modem_ipv6_pdn_index,
-				ipv6_to_iface[modem_ipv6_pdn_index].ipv6_prefix[0],
-				ipv6_to_iface[modem_ipv6_pdn_index].ipv6_prefix[1]);
+						ipv6_to_iface[modem_ipv6_pdn_index].ipv6_prefix[0],
+						ipv6_to_iface[modem_ipv6_pdn_index].ipv6_prefix[1]);
 
 				IPACM_Iface::ipacmcfg->add_no_offload_ipv6_prefix(ipv6_to_iface[modem_ipv6_pdn_index].ipv6_prefix);
+
+				num_ipv6_modem_pdn++;
+				IPACMDBG_H("Now the number of modem ipv6 pdn is %d.\n", num_ipv6_modem_pdn);
 			}
 #endif
+			/* Check to handle the race-cond, if route_add recevied before handle_addr_evt */
+			IPACMDBG_H("is_xlat :%d, active_v6: %d, wan_v6_addr_gw_set: %d \n", is_xlat, active_v6, wan_v6_addr_gw_set);
+			if(is_xlat && active_v6 && ipv6_to_iface[modem_ipv6_pdn_index].ipv6_prefix[0] && ipv6_to_iface[modem_ipv6_pdn_index].ipv6_prefix[1])
+			{
+				IPACM_Iface::ipacmcfg->add_vlan_ipv6_prefix(ipv6_to_iface[modem_ipv6_pdn_index].ipv6_prefix, ipa_if_num, associated_VID);
+
+				//need to post handle_wan_up_v6 to enable conntrack for XLAT mode
+				ipacm_cmd_q_data evt_data;
+				ipacm_event_iface_up *wanup_data;
+
+				memset(&evt_data, 0, sizeof(evt_data));
+				wanup_data = (ipacm_event_iface_up *)malloc(sizeof(ipacm_event_iface_up));
+				if (wanup_data == NULL)
+				{
+					IPACMERR("Unable to allocate memory\n");
+					free(rt_rule);
+					return IPACM_FAILURE;
+				}
+				memset(wanup_data, 0, sizeof(ipacm_event_iface_up));
+
+				memcpy(wanup_data->ifname, dev_name, sizeof(wanup_data->ifname));
+				if (m_is_sta_mode!=Q6_WAN)
+				{
+					wanup_data->is_sta = true;
+				}
+				else
+				{
+					wanup_data->is_sta = false;
+				}
+
+				memcpy(wanup_data->ipv6_prefix, ipv6_prefix, sizeof(wanup_data->ipv6_prefix));
+				memcpy(wanup_data->ipv6_addr, m_ipv6_addr, sizeof(wanup_data->ipv6_addr));
+
+				IPACMDBG_H("Posting IPA_HANDLE_WAN_UP_V6 with below information:\n");
+				IPACMDBG_H("if_name:%s, is sta mode: %d\n", wanup_data->ifname, wanup_data->is_sta);
+				IPACMDBG_H("ipv6 prefix: 0x%08x%08x.\n", ipv6_prefix[0], ipv6_prefix[1]);
+				IPACMDBG_H("ipv6 addr: 0x%08x%08x%08x%08x\n", m_ipv6_addr[0], m_ipv6_addr[1], m_ipv6_addr[2], m_ipv6_addr[3]);
+				memset(&evt_data, 0, sizeof(evt_data));
+				evt_data.event = IPA_HANDLE_WAN_UP_V6;
+				evt_data.evt_data = (void *)wanup_data;
+				IPACM_EvtDispatcher::PostEvt(&evt_data);
+			}
 		}
 	    num_dft_rt_v6++;
     }
@@ -896,6 +939,64 @@ int IPACM_Wan::handle_addr_evt(ipacm_event_data_addr *data)
 fail:
 	free(rt_rule);
 
+	return res;
+}
+
+/* handle del_address event */
+int IPACM_Wan::handle_addr_del_evt(ipacm_event_data_addr *data)
+{
+	uint32_t num_ipv6_addr, num_v6_value;
+	int res = IPACM_SUCCESS;
+	int i = 0;
+
+	if (tx_prop == NULL || rx_prop == NULL)
+	{
+		IPACMDBG_H("Either tx or rx property is NULL, return.\n");
+		return IPACM_SUCCESS;
+	}
+
+	if (data->iptype == IPA_IP_v6)
+	{
+		num_v6_value = num_dft_rt_v6;
+		/* Check the address deleted. */
+		for (num_ipv6_addr=0; num_ipv6_addr<num_v6_value; num_ipv6_addr++)
+		{
+			if((ipv6_addr[num_ipv6_addr][0] == data->ipv6_addr[0]) &&
+			(ipv6_addr[num_ipv6_addr][1] == data->ipv6_addr[1]) &&
+			(ipv6_addr[num_ipv6_addr][2] == data->ipv6_addr[2]) &&
+			(ipv6_addr[num_ipv6_addr][3] == data->ipv6_addr[3]))
+			{
+				IPACMDBG_H("find matched ipv6 address, index:%d \n", num_ipv6_addr);
+				for (i = 0; i < MAX_DEFAULT_v6_ROUTE_RULES; i++)
+				{
+					if (m_routing.DeleteRoutingHdl(dft_rt_rule_hdl[MAX_DEFAULT_v4_ROUTE_RULES+2*num_ipv6_addr+i], IPA_IP_v6) == false)
+					{
+						IPACMERR("Routing rule deletion failed!\n");
+						res = IPACM_FAILURE;
+						goto fail;
+					}
+				}
+#ifdef FEATURE_VLAN_MPDN
+				if ((data->ipv6_addr[0] == ipv6_prefix[0]) && (data->ipv6_addr[1] == ipv6_prefix[1]))
+				{
+					IPACMDBG_H("Del vlan ipv6_prefix:0x%x%x\n", ipv6_prefix[0], ipv6_prefix[1]);
+					if (is_xlat)
+						IPACM_Iface::ipacmcfg->del_vlan_ipv6_prefix(ipv6_prefix, -1, true);
+					else
+						IPACM_Iface::ipacmcfg->del_vlan_ipv6_prefix(ipv6_prefix, -1);
+				}
+#endif
+				if (num_dft_rt_v6 > 0)
+					num_dft_rt_v6--;
+				IPACMDBG_H("v6 num: %d\n",num_dft_rt_v6);
+			}
+		}
+	}
+	else
+	{
+		IPACMDBG_H("IPv4 addr del evt is not handled.\n");
+	}
+fail:
 	return res;
 }
 
@@ -1198,6 +1299,29 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 					}
 #endif
 				}
+			}
+		}
+		break;
+
+	case IPA_ADDR_DEL_EVENT:
+		{
+			ipacm_event_data_addr *data = (ipacm_event_data_addr *)param;
+			ipa_interface_index = iface_ipa_index_query(data->if_index);
+
+			if ( (data->iptype == IPA_IP_v4 && data->ipv4_addr == 0) ||
+				(data->iptype == IPA_IP_v6 &&
+				data->ipv6_addr[0] == 0 && data->ipv6_addr[1] == 0 &&
+				data->ipv6_addr[2] == 0 && data->ipv6_addr[3] == 0) )
+			{
+				IPACMDBG_H("Invalid address, ignore IPA_ADDR_DEL_EVENT event\n");
+				return;
+			}
+
+			if (ipa_interface_index == ipa_if_num)
+			{
+				IPACMDBG_H("Get IPA_ADDR_DEL_EVENT: IF ip type %d, incoming ip type %d\n", ip_type, data->iptype);
+				IPACMDBG_H("v6 num: %d\n",num_dft_rt_v6);
+				handle_addr_del_evt(data);
 			}
 		}
 		break;
@@ -2145,6 +2269,7 @@ int IPACM_Wan::handle_route_add_vlan_pdn_evt(ipa_ip_type iptype, uint16_t vlan_i
 	const int NUM = 1;
 	ipacm_cmd_q_data evt_data;
 	bool FullConfig = false;
+	ipacm_event_vlan_pdn *pdn_update = NULL;
 
 	/* copy header from tx-property, see if partial or not */
 	/* assume all tx-property uses the same header name for v4 or v6*/
@@ -2267,6 +2392,12 @@ int IPACM_Wan::handle_route_add_vlan_pdn_evt(ipa_ip_type iptype, uint16_t vlan_i
 		wanup_vlan_data->VlanID = vlan_id;
 		wanup_vlan_data->mux_id = ext_prop->ext[0].mux_id;
 		memcpy(wanup_vlan_data->ipv6_prefix, ipv6_prefix, sizeof(ipv6_prefix));
+		if (is_xlat)
+		{
+			ipv6_to_iface[modem_ipv6_pdn_index].ipv6_prefix[0] = IPA_DUMMY_PREFIX;
+			ipv6_to_iface[modem_ipv6_pdn_index].ipv6_prefix[1] = IPA_DUMMY_PREFIX;
+			IPACMDBG_H("XLAT case, new VLAN PDN prefix is 0x%08x%08x.\n", ipv6_to_iface[modem_ipv6_pdn_index].ipv6_prefix[0], ipv6_to_iface[modem_ipv6_pdn_index].ipv6_prefix[1]);
+		}
 
 		IPACMDBG_H("Posting IPA_HANDLE_WAN_VLAN_PDN_UP (v6) with below information:\n");
 		IPACMDBG_H("iptype IPA_IP_v6, VlanID %d, mux_id %d, if num %d\n",
@@ -2324,6 +2455,37 @@ int IPACM_Wan::handle_route_add_vlan_pdn_evt(ipa_ip_type iptype, uint16_t vlan_i
 		evt_data.event = IPA_HANDLE_WAN_VLAN_PDN_UP;
 		evt_data.evt_data = (void *)wanup_vlan_data;
 		IPACM_EvtDispatcher::PostEvt(&evt_data);
+
+		/* This is to handle out-of-order events from Netlink like route events
+                   and IPA CLI command received from QCMAP to configure IPPT since
+                   we have received RTM_DELROUTE from kernel before to Passthrough
+                   configuration sent from QCMAP and we were not posting below event to
+                   Conntrack as active_v4 was false. */
+
+		if (ip_pass_pdn_info.enable)
+		{
+			pdn_update = (ipacm_event_vlan_pdn *)malloc(sizeof(ipacm_event_vlan_pdn));
+			if(pdn_update == NULL)
+			{
+				IPACMERR("Unable to allocate memory\n");
+				return IPACM_FAILURE;
+			}
+			memset(pdn_update, 0, sizeof(ipacm_event_vlan_pdn));
+			pdn_update->ipv4_addr = wan_v4_addr;
+			pdn_update->ip_pass_enable = ip_pass_pdn_info.enable;
+			pdn_update->ip_pass_dummy_ip = (ip_pass_pdn_info.enable) ?
+				ip_pass_pdn_info.pdn_ip_addr : 0;
+			pdn_update->ip_pass_skip_nat = (ip_pass_pdn_info.enable) ? ip_pass_pdn_info.skip_nat : 0;
+			IPACMDBG_H("Posting IPA_HANDLE_IP_PASS_PDN_INFO_UPDATE_EVENT\n");
+			IPACMDBG_H("IP Passthrough enabled:%d WAN IP: 0x%x, Dummy IP 0x%x, Skip NAT: %d\n",
+				pdn_update->ip_pass_enable,
+				pdn_update->ipv4_addr,
+				pdn_update->ip_pass_dummy_ip,
+				pdn_update->ip_pass_skip_nat);
+			evt_data.event = IPA_HANDLE_IP_PASS_PDN_INFO_UPDATE_EVENT;
+			evt_data.evt_data = (void *)pdn_update;
+			IPACM_EvtDispatcher::PostEvt(&evt_data);
+		}
 	}
 
 	associated_VID = vlan_id;
@@ -2433,6 +2595,7 @@ int IPACM_Wan::handle_route_add_evt(ipa_ip_type iptype)
 	ipacm_cmd_q_data evt_data;
 	struct ipa_ioc_copy_hdr sCopyHeader; /* checking if partial header*/
 	struct ipa_ioc_get_hdr hdr;
+	ipacm_event_vlan_pdn *pdn_update = NULL;
 #ifdef FEATURE_VLAN_MPDN
 	bool FullConfig = true;
 #endif
@@ -2807,6 +2970,37 @@ int IPACM_Wan::handle_route_add_evt(ipa_ip_type iptype)
 		evt_data.event = IPA_HANDLE_WAN_UP;
 		evt_data.evt_data = (void *)wanup_data;
 		IPACM_EvtDispatcher::PostEvt(&evt_data);
+
+		/* This is to handle out-of-order events from Netlink like route events
+                   and IPA CLI command received from QCMAP to configure IPPT since
+                   we have received RTM_DELROUTE from kernel before to Passthrough
+                   configuration sent from QCMAP and we were not posting below event to
+                   Conntrack as active_v4 was false. */
+
+		if (ip_pass_pdn_info.enable)
+		{
+			pdn_update = (ipacm_event_vlan_pdn *)malloc(sizeof(ipacm_event_vlan_pdn));
+			if(pdn_update == NULL)
+			{
+				IPACMERR("Unable to allocate memory\n");
+				return IPACM_FAILURE;
+			}
+			memset(pdn_update, 0, sizeof(ipacm_event_vlan_pdn));
+			pdn_update->ipv4_addr = wan_v4_addr;
+			pdn_update->ip_pass_enable = ip_pass_pdn_info.enable;
+			pdn_update->ip_pass_dummy_ip = (ip_pass_pdn_info.enable) ?
+				ip_pass_pdn_info.pdn_ip_addr : 0;
+			pdn_update->ip_pass_skip_nat = (ip_pass_pdn_info.enable) ? ip_pass_pdn_info.skip_nat : 0;
+			IPACMDBG_H("Posting IPA_HANDLE_IP_PASS_PDN_INFO_UPDATE_EVENT\n");
+			IPACMDBG_H("IP Passthrough enabled:%d WAN IP: 0x%x, Dummy IP 0x%x, Skip NAT: %d\n",
+				pdn_update->ip_pass_enable,
+				pdn_update->ipv4_addr,
+				pdn_update->ip_pass_dummy_ip,
+				pdn_update->ip_pass_skip_nat);
+			evt_data.event = IPA_HANDLE_IP_PASS_PDN_INFO_UPDATE_EVENT;
+			evt_data.evt_data = (void *)pdn_update;
+			IPACM_EvtDispatcher::PostEvt(&evt_data);
+		}
 	}
 	else
 	{
@@ -5328,8 +5522,8 @@ int IPACM_Wan::add_dft_filtering_rule(struct ipa_flt_rule_add *rules, int rule_o
 			&flt_rule_entry, sizeof(struct ipa_flt_rule_add));
 #endif
 
-#ifdef FEATURE_IPA_ANDROID
-		IPACMDBG_H("Add TCP ctrl rules\n");
+		/* Always adding tcp syn SW-exception rule for MSS clamping support */
+		IPACMDBG_H("Add TCP sync rules\n");
 		memset(&flt_rule_entry, 0, sizeof(struct ipa_flt_rule_add));
 
 		flt_rule_entry.at_rear = true;
@@ -5352,15 +5546,18 @@ int IPACM_Wan::add_dft_filtering_rule(struct ipa_flt_rule_add *rules, int rule_o
 		flt_rule_entry.rule.eq_attrib.num_ihl_offset_meq_32 = 1;
 		flt_rule_entry.rule.eq_attrib.ihl_offset_meq_32[0].offset = 12;
 
-		/* add TCP FIN rule*/
-		flt_rule_entry.rule.eq_attrib.ihl_offset_meq_32[0].value = (((uint32_t)1)<<TCP_FIN_SHIFT);
-		flt_rule_entry.rule.eq_attrib.ihl_offset_meq_32[0].mask = (((uint32_t)1)<<TCP_FIN_SHIFT);
-		memcpy(&(rules[rule_offset + m_ipv6_default_filterting_rules_count++]),
-			&flt_rule_entry, sizeof(struct ipa_flt_rule_add));
-
 		/* add TCP SYN rule*/
 		flt_rule_entry.rule.eq_attrib.ihl_offset_meq_32[0].value = (((uint32_t)1)<<TCP_SYN_SHIFT);
 		flt_rule_entry.rule.eq_attrib.ihl_offset_meq_32[0].mask = (((uint32_t)1)<<TCP_SYN_SHIFT);
+		memcpy(&(rules[rule_offset + m_ipv6_default_filterting_rules_count++]),
+			&flt_rule_entry, sizeof(struct ipa_flt_rule_add));
+
+#if defined(FEATURE_IPA_ANDROID)
+		IPACMDBG_H("Add TCP other ctrl rules\n");
+
+		/* add TCP FIN rule*/
+		flt_rule_entry.rule.eq_attrib.ihl_offset_meq_32[0].value = (((uint32_t)1)<<TCP_FIN_SHIFT);
+		flt_rule_entry.rule.eq_attrib.ihl_offset_meq_32[0].mask = (((uint32_t)1)<<TCP_FIN_SHIFT);
 		memcpy(&(rules[rule_offset + m_ipv6_default_filterting_rules_count++]),
 			&flt_rule_entry, sizeof(struct ipa_flt_rule_add));
 
@@ -6956,7 +7153,7 @@ int IPACM_Wan::handle_down_evt_ex()
 			/* if there are still secondary PDNs up we need to reconfigure firewall */
 			if(isVlanWanUP_V6())
 			{
-				config_wan_firewall_rule(IPA_IP_v4);
+				config_wan_firewall_rule(IPA_IP_v6);
 			}
 #endif
 			handle_route_del_evt_ex(IPA_IP_v6);

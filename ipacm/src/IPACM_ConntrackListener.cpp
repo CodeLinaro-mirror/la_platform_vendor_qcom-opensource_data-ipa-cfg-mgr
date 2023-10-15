@@ -251,8 +251,14 @@ void IPACM_ConntrackListener::event_callback(ipa_cm_event_id evt,
 					IPACMDBG_H("Received IPA_HANDLE_WAN_VLAN_PDN_DOWN event for IPv6\n");
 					HandleVlanDownV6(data);
 				}
-				break;
+				else if(vlandown->iptype == IPA_IP_MAX)
+				{
+					IPACMDBG_H("Received IPA_HANDLE_WAN_VLAN_PDN_DOWN event for IPV4 and IPv6\n");
+					HandleVlanDown(data);
+					HandleVlanDownV6(data);
+				}
 			}
+			break;
 #endif
 
 	 case IPA_HANDLE_IP_PASS_PDN_INFO_UPDATE_EVENT:
@@ -919,14 +925,14 @@ void IPACM_ConntrackListener::HandleNeighIpAddrAddEvt_v6(ipacm_event_data_all *d
 			}
 		}
 
-		IPACMDBG_H("Received IPv6 address: 0x%08x%08x%08x%08x current IPv6 address: 0x%08x%08x%08x%08x i: %d\n",i,
-			data->ipv6_addr[0], data->ipv6_addr[1], data->ipv6_addr[2], data->ipv6_addr[3],nat_clients_v6[i].nat_iface_ipv6_addr[0],
-			nat_clients_v6[i].nat_iface_ipv6_addr[1],nat_clients_v6[i].nat_iface_ipv6_addr[2],nat_clients_v6[i].nat_iface_ipv6_addr[3],i);
-
 		/* Add the cached temp entries to NAT table */
 		if(i != MAX_IFACE_ADDRESS)
 		{
 #ifdef FEATURE_VLAN_MPDN
+
+			IPACMDBG_H("Received IPv6 address: 0x%08x%08x%08x%08x current IPv6 address: 0x%08x%08x%08x%08x i: %d\n",i,
+			data->ipv6_addr[0], data->ipv6_addr[1], data->ipv6_addr[2], data->ipv6_addr[3],nat_clients_v6[i].nat_iface_ipv6_addr[0],
+			nat_clients_v6[i].nat_iface_ipv6_addr[1],nat_clients_v6[i].nat_iface_ipv6_addr[2],nat_clients_v6[i].nat_iface_ipv6_addr[3],i);
 
 			IPACMDBG_H("client %d is_vlan_client %d\n", i, nat_clients_v6[i].is_vlan_client);
 			if (nat_clients_v6[i].is_vlan_client)
@@ -3086,7 +3092,7 @@ void IPACM_ConntrackListener::ProcessTCPorUDPMsg_v6(const ipacm_ct_evt_data* evt
 		CheckSTAClient_v6(entry, isTempEntry);
 	}
 
-	uint64_t src_ipv6_msb;
+	uint64_t src_ipv6_msb = 0;
 
 	if (entry.m_direction == NatEntryBase::DirectionUnknown || entry.m_direction == NatEntryBase::DirectionOutbound)
 	{
@@ -3094,7 +3100,7 @@ void IPACM_ConntrackListener::ProcessTCPorUDPMsg_v6(const ipacm_ct_evt_data* evt
 	}
 	else if (entry.m_direction == NatEntryBase::DirectionInbound)
 	{
-		src_ipv6_msb = ((Ipv6IpAddress &)entry.GetTargetIp()).GetMsb();
+		src_ipv6_msb = ((Ipv6IpAddress &)entry.GetClientIp()).GetMsb();
 	}
 
 	for(int i = 0; i < IPA_MAX_NUM_HW_PDNS; i++)
@@ -3105,6 +3111,8 @@ void IPACM_ConntrackListener::ProcessTCPorUDPMsg_v6(const ipacm_ct_evt_data* evt
 			entry.IsVlanUp = true;
 		}
 	}
+
+	IPACMDBG_H("Entry temp:%d isvlan:%d isvlanup:%d\n", isTempEntry, entry.isVlan, entry.IsVlanUp);
 
 	AddORDeleteNatEntry_v6(evt_data, entry, isTempEntry);
 	IPACMDBG_H("return\n");

@@ -85,7 +85,7 @@
 #define IPACM_CFG_FILE_NAME    "IPACM_cfg.xml"
 #ifndef FEATURE_IPA_ANDROID
 #define IPACM_PID_FILE "/var/run/data/ipa/ipacm.pid"
-#define IPACM_DIR_NAME     "/systemrw/data/ipa"
+#define IPACM_DIR_NAME     "/etc/data/ipa"
 #else
 #define IPACM_PID_FILE "/data/misc/ipa/ipacm.pid"
 #define IPACM_DIR_NAME     "/data/misc/ipa/"
@@ -1269,13 +1269,13 @@ static void IPACM_Signals_handler(int sig, siginfo_t *info, void *extra)
 	case SIGABRT:
 	case SIGTERM:
 		p = (ucontext_t *)extra;
-		//IPACMERR("siginfo address=%x\n", info->si_addr);
-		//IPACMERR("arm_pc address = 0x%X\n", p->uc_mcontext.arm_pc);
-		//IPACMERR("cpsr = 0x%X\n", p->uc_mcontext.arm_cpsr);
-		//IPACMERR("fault address = 0x%X\n", p->uc_mcontext.fault_address);
-		//IPACMERR("arm_sp address = 0x%X\n", p->uc_mcontext.arm_sp);
-		//IPACMERR("arm_lr address = 0x%X\n", p->uc_mcontext.arm_lr);
-		//IPACMERR("arm_r0  address = 0x%X\n", p->uc_mcontext.arm_r0);
+		IPACMERR("siginfo address=%x\n", info->si_addr);
+		IPACMERR("arm_pc address = 0x%X\n", p->uc_mcontext.arm_pc);
+		IPACMERR("cpsr = 0x%X\n", p->uc_mcontext.arm_cpsr);
+		IPACMERR("fault address = 0x%X\n", p->uc_mcontext.fault_address);
+		IPACMERR("arm_sp address = 0x%X\n", p->uc_mcontext.arm_sp);
+		IPACMERR("arm_lr address = 0x%X\n", p->uc_mcontext.arm_lr);
+		IPACMERR("arm_r0  address = 0x%X\n", p->uc_mcontext.arm_r0);
 		size = backtrace(array, MAX_IPACM_TRACE_STACK);
 
 		messages = backtrace_symbols(array, size);

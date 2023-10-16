@@ -1411,9 +1411,10 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 					else
 						IPACM_Wan::backhaul_is_sta_mode = false;
 					IPACMDBG_H("backhual_is_sta_mode is %d\n", IPACM_Wan::backhaul_is_sta_mode);
-					
+
 					wan_v4_addr_gw = data->ipv4_addr_gw;
 					wan_v4_addr_gw_set = true;
+					wan_v4_is_default_gw = true;
 					IPACMDBG_H("adding routing table, dev (%s) ip-type(%d), default gw (%x)\n", dev_name,data->iptype, wan_v4_addr_gw);
 					/* Check & construct STA header */
 					handle_sta_header_add_evt();
@@ -1453,6 +1454,7 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 					wan_v6_addr_gw[2] = data->ipv6_addr_gw[2];
 					wan_v6_addr_gw[3] = data->ipv6_addr_gw[3];
 					wan_v6_addr_gw_set = true;
+					wan_v6_is_default_gw = true;
 					/* Check & construct STA header */
 					handle_sta_header_add_evt();
 					handle_route_add_evt(data->iptype);
@@ -1516,7 +1518,7 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 				{
 					IPACMDBG_H("GW info for WLAN Iface\n");
 
-					if ((data->iptype == IPA_IP_v4 || data->iptype == IPA_IP_MAX) && data->ipv4_addr_gw != 0)
+					if ((data->iptype == IPA_IP_v4 || data->iptype == IPA_IP_MAX) && data->ipv4_addr_gw != 0 &&  wan_v4_addr_gw_set != true)
 					{
 						IPACMDBG_H("ipv4 addr 0x%x\n", data->ipv4_addr_gw);
 						wan_v4_is_default_gw = false;
@@ -1524,8 +1526,8 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 						wan_v4_addr_gw_set = true;
 						IPACMDBG_H("adding header, dev (%s) ip-type(%d), default gw (%x)\n", dev_name,data->iptype, wan_v4_addr_gw);
 					}
-					if ((data->iptype == IPA_IP_v6 || data->iptype == IPA_IP_MAX) &&
-						(data->ipv6_addr_gw[0] != 0) || (data->ipv6_addr_gw[1] != 0) || (data->ipv6_addr_gw[2] != 0) || (data->ipv6_addr_gw[3] != 0))
+					if ((data->iptype == IPA_IP_v6 || data->iptype == IPA_IP_MAX) &&  wan_v6_addr_gw_set != true &&
+						(data->ipv6_addr_gw[0] != 0) && (data->ipv6_addr_gw[1] != 0) && (data->ipv6_addr_gw[2] != 0) && (data->ipv6_addr_gw[3] != 0))
 					{
 
 						IPACMDBG_H(" IPV6 gateway: %08x:%08x:%08x:%08x \n",
@@ -3612,6 +3614,12 @@ int IPACM_Wan::post_wan_down_tether_evt(ipa_ip_type iptype, int ipa_if_num_tethe
 int IPACM_Wan::handle_sta_header_add_evt()
 {
 	int res = IPACM_SUCCESS, index = IPACM_INVALID_INDEX;
+
+	if (header_set_v4 == true && header_set_v6 == true)
+	{
+		IPACMDBG_H("Both V4 and V6 headers are added\n");
+		return res;
+	}
 
 	if (header_set_v4 != true)
 	{

@@ -3456,6 +3456,12 @@ void IPACM_ConntrackListener::CreateIpv6ctEntryFromCtEventData(const ipacm_ct_ev
 		goto bail;
 	}
 
+	if(!srcAddr.IsGlobalAddr() || !dstAddr.IsGlobalAddr())
+	{
+		IPACMDBG("addresses aren't global, bail\n");
+		goto bail;
+	}
+
 	if (nat_iface_ipv6_addr.Find(srcAddr) != NULL)
 	{
 		entry.m_direction = NatEntryBase::DirectionOutbound;

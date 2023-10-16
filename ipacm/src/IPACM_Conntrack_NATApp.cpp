@@ -577,7 +577,7 @@ bool NatApp::ChkSWAllow(const nat_table_entry *rule)
 	for(i = 0; i < sw_filter_cfg.pdn_count;i++)
 	{
 		/* PDN Not yet up */
-		if(sw_filter_cfg.pdns[i].pdn_index_v4 == -1)
+		if(sw_filter_cfg.pdns[i].v4_up != TRUE)
 			continue;
 
 		for(j = 0; j < sw_filter_cfg.pdns[i].num_extd_swallow_entries;j++)
@@ -693,7 +693,7 @@ void NatApp::HandleSWAllowEntries(void)
 	for(i = 0; i < sw_filter_cfg.pdn_count;i++)
 	{
 		/* PDN not up yet */
-		if(sw_filter_cfg.pdns[i].pdn_index_v4 == -1)
+		if(sw_filter_cfg.pdns[i].v4_up != TRUE)
 			continue;
 
 		for(j = 0; j < sw_filter_cfg.pdns[i].num_extd_swallow_entries;j++)
@@ -3385,7 +3385,7 @@ bool NatBase::ChkSWAllow(const NatEntryBase& rule)
 	for(i = 0; i < sw_filter_cfg.pdn_count;i++)
 	{
 		/* PDN not up yet */
-		if(sw_filter_cfg.pdns[i].pdn_index_v6 == -1)
+		if(sw_filter_cfg.pdns[i].v6_up != TRUE)
 			continue;
 
 		for(j = 0; j < sw_filter_cfg.pdns[i].num_extd_swallow_entries;j++)
@@ -3475,7 +3475,7 @@ void NatBase::HandleSWAllowEntries(void)
 	for(i = 0; i < sw_filter_cfg.pdn_count;i++)
 	{
 		/* PDN not up yet */
-		if(sw_filter_cfg.pdns[i].pdn_index_v6 == -1)
+		if(sw_filter_cfg.pdns[i].v6_up != TRUE)
 			continue;
 
 		for(j = 0; j < sw_filter_cfg.pdns[i].num_extd_swallow_entries;j++)

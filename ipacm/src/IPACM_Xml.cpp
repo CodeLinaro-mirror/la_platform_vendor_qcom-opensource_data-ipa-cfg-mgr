@@ -423,8 +423,8 @@ static int IPACM_swallow_xml_parse_tree(const char *xml_file, xmlNode* xml_node,
 							strlcpy(config->net_dev, content, sizeof(config->net_dev));
 							IPACMDBG_H("NetDev is %s\n", config->net_dev);
 						}
-						config->pdn_index_v4 = -1;
-						config->pdn_index_v6 = -1;
+						config->v4_up = FALSE;
+						config->v6_up = FALSE;
 					}
 				}
 				else if (IPACM_util_icmp_string((char*)xml_node->name, Profile_TAG) == 0)

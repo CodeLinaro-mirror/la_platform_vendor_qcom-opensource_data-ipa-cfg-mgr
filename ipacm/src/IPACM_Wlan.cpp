@@ -311,7 +311,6 @@ void IPACM_Wlan::event_callback(ipa_cm_event_id event, void *param)
 					}
 
 #if defined(FEATURE_IPA_ANDROID) || defined(FEATURE_VLAN_MPDN)
-					add_dummy_private_subnet_flt_rule(data->iptype);
 					handle_private_subnet_android(data->iptype);
 #else
 					handle_private_subnet(data->iptype);

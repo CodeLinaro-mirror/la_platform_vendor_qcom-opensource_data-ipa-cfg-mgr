@@ -1602,13 +1602,21 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 		ipa_mtu_info *data = &(evt_data->mtu_info);
 
 		/* IPA_IP_MAX means both ipv4 and ipv6 */
+#ifdef FEATURE_VLAN_MPDN
+		if ((data->ip_type == IPA_IP_v4 || data->ip_type == IPA_IP_MAX) && (IPACM_Wan::isWanUP(ipa_if_num) || IPACM_Wan::isVlanWanUP()))
+#else
 		if ((data->ip_type == IPA_IP_v4 || data->ip_type == IPA_IP_MAX) && IPACM_Wan::isWanUP(ipa_if_num))
+#endif
 		{
 			modify_private_subnet();
 		}
 
 		/* IPA_IP_MAX means both ipv4 and ipv6 */
+#ifdef FEATURE_VLAN_MPDN
+		if ((data->ip_type == IPA_IP_v6 || data->ip_type == IPA_IP_MAX) && (IPACM_Wan::isWanUP_V6(ipa_if_num) || IPACM_Wan::isVlanWanUP_V6()))
+#else
 		if ((data->ip_type == IPA_IP_v6 || data->ip_type == IPA_IP_MAX) && IPACM_Wan::isWanUP_V6(ipa_if_num))
+#endif
 		{
 			modify_ipv6_prefix_flt_rule();
 		}
@@ -3529,15 +3537,6 @@ int IPACM_Lan::handle_wan_up(ipa_ip_type ip_type)
 		/* add MTU rules for ipv4 */
 		modify_private_subnet();
 
-		/* MTU might have changed. Need to update ipv6 MTU rule if up */
-#ifndef FEATURE_VLAN_MPDN
-		if (IPACM_Wan::isWanUP_V6(ipa_if_num))
-			modify_ipv6_prefix_flt_rule();
-#else
-		if (IPACM_Wan::isWanUP_V6(ipa_if_num) || IPACM_Wan::isVlanWanUP_V6())
-			modify_ipv6_prefix_flt_rule();
-#endif
-
 		len = sizeof(struct ipa_ioc_add_flt_rule) + (1 * sizeof(struct ipa_flt_rule_add));
 		m_pFilteringTable = (struct ipa_ioc_add_flt_rule *)calloc(1, len);
 		if (m_pFilteringTable == NULL)
@@ -3613,15 +3612,6 @@ int IPACM_Lan::handle_wan_up(ipa_ip_type ip_type)
 	{
 		/* add ipv6_mtu rule */
 		modify_ipv6_prefix_flt_rule();
-
-		/* MTU might have changed. Need to update ipv4 MTU rule if up */
-#ifndef FEATURE_VLAN_MPDN
-		if (IPACM_Wan::isWanUP(ipa_if_num))
-			modify_private_subnet();
-#else
-		if (IPACM_Wan::isWanUP(ipa_if_num) || IPACM_Wan::isVlanWanUP())
-			modify_private_subnet();
-#endif
 
 		if(IPACM_Iface::ipacmcfg->ipv6_nat_enable)
 		{
@@ -3758,15 +3748,6 @@ int IPACM_Lan::handle_wan_up_ex(ipacm_ext_prop *ext_prop, ipa_ip_type iptype, ui
 		/* add ipv6_mtu rule */
 		modify_ipv6_prefix_flt_rule();
 
-#ifndef FEATURE_VLAN_MPDN
-		/* MTU might have changed. Need to update ipv4 MTU rule if up */
-		if (IPACM_Wan::isWanUP(ipa_if_num))
-			modify_private_subnet();
-#else
-		if (IPACM_Wan::isWanUP(ipa_if_num) || IPACM_Wan::isVlanWanUP())
-			modify_private_subnet();
-#endif
-
 		if(num_dft_rt_v6 == 1 && modem_ul_v6_set == FALSE)
 		{
 			IPACMDBG_H("IPA_IP_v6 num_dft_rt_v6 %d xlat_mux_id: %d modem_ul_v6_set: %d\n", num_dft_rt_v6, xlat_mux_id, modem_ul_v6_set);
@@ -3812,9 +3793,7 @@ int IPACM_Lan::handle_wan_up_ex(ipacm_ext_prop *ext_prop, ipa_ip_type iptype, ui
 	{
 		/* add MTU rules for ipv4 */
 		modify_private_subnet();
-		/* MTU might have changed. Need to update ipv6 MTU rule if up */
-		if (IPACM_Wan::isWanUP_V6(ipa_if_num))
-			modify_ipv6_prefix_flt_rule();
+
 		if(modem_ul_v4_set == false)
 		{
 			IPACMDBG_H("IPA_IP_v4 xlat_mux_id: %d, modem_ul_v4_set %d\n", xlat_mux_id, modem_ul_v4_set);

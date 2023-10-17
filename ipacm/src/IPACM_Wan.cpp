@@ -154,6 +154,11 @@ uint8_t IPACM_Wan::num_offloaded_pdns = 0;
 uint16_t IPACM_Wan::mtu_default_wan_v4 = DEFAULT_MTU_SIZE;
 uint16_t IPACM_Wan::mtu_default_wan_v6 = DEFAULT_MTU_SIZE;
 
+#ifdef FEATURE_EoGRE
+uint16_t IPACM_Wan::mtu_gre_v4 = DEFAULT_MTU_SIZE;
+uint16_t IPACM_Wan::mtu_gre_v6 = DEFAULT_MTU_SIZE;
+#endif
+
 #define MOBILE_FIREWALL_FILE "/etc/data/mobileap_firewall.xml"
 
 IPACM_Wan::IPACM_Wan(int iface_index,
@@ -1864,6 +1869,7 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 		ipacm_event_mtu_info *data = (ipacm_event_mtu_info *)param;
 		ipa_mtu_info *mtu_info = &(data->mtu_info);
 		ipa_interface_index = iface_ipa_index_query(data->if_index);
+		bool post_mtu_update_event = false;
 
 		if (ipa_interface_index == ipa_if_num)
 		{
@@ -1879,7 +1885,15 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 				{
 					/* upstream interface. update default MTU. */
 					mtu_default_wan_v4 = mtu_v4;
+					post_mtu_update_event = true;
 				}
+#ifdef FEATURE_EoGRE
+				/*Always update MTU for GRE since initial MTU set will come before GRE is enabled, post if GRE is enabled */
+				mtu_gre_v4 = mtu_v4;
+				if (IPACM_Iface::ipacmcfg->eogre_enabled)
+					post_mtu_update_event = true;
+#endif
+
 				IPACMDBG_H("Updated v4 mtu=[%d] for (%s), upstream_mtu=[%d]\n",
 					mtu_v4, mtu_info->if_name, mtu_default_wan_v4);
 			}
@@ -1892,12 +1906,19 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 				{
 					/* upstream interface. update default MTU. */
 					mtu_default_wan_v6 = mtu_v6;
+					post_mtu_update_event = true;
 				}
+#ifdef FEATURE_EoGRE
+				/*Always update MTU for GRE since initial MTU set will come before GRE is enabled, post if GRE is enabled */
+				mtu_gre_v6 = mtu_v6;
+				if (IPACM_Iface::ipacmcfg->eogre_enabled)
+					post_mtu_update_event = true;
+#endif
 				IPACMDBG_H("Updated v6 mtu=[%d] for (%s), upstream_mtu=[%d]\n",
 					mtu_v6, mtu_info->if_name, mtu_default_wan_v6);
 			}
 
-			if (active_v4 || active_v6)
+			if (post_mtu_update_event)
 			{
 				ipacm_event_mtu_info *mtu_event;
 				ipacm_cmd_q_data evt_data;

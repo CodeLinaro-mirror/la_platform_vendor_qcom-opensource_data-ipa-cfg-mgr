@@ -2040,7 +2040,7 @@ int IPACM_Wan::check_vlan_pdn(ipa_ip_type iptype, ipacm_event_route_vlan *data, 
 					{
 						if (IPACM_Wan::ipv6_to_iface[wlan_ipv6_pdn_index].associated_VIDs[vlan_idx] == data->VlanID)
 						{
-							IPACMDBG_H("VlanID found in associated_VIDs in STA BH\n");
+							IPACMDBG_H("VlanID found in associated_VIDs in STA BH %d\n", wlan_ipv6_pdn_index);
 							is_vlan_wlan_associated = true;
 							wlan_vlan_idx = vlan_idx;
 							break;
@@ -2056,7 +2056,7 @@ int IPACM_Wan::check_vlan_pdn(ipa_ip_type iptype, ipacm_event_route_vlan *data, 
 						{
 							if(ipv6_to_iface[pdn_idx].associated_VIDs[vlan_idx] == data->VlanID)
 							{
-								IPACMDBG_H("VlanID found in associated_VIDs in LTE BH\n");
+								IPACMDBG_H("VlanID found in associated_VIDs in LTE BH %d\n", pdn_idx);
 								is_vlan_modem_associated = true;
 								modem_vlan_v6_pdn_index = pdn_idx;
 								modem_vlan_idx = vlan_idx;
@@ -2087,6 +2087,7 @@ int IPACM_Wan::check_vlan_pdn(ipa_ip_type iptype, ipacm_event_route_vlan *data, 
 					vlandown_data->iptype = IPA_IP_v6;
 					vlandown_data->VlanID = data->VlanID;
 					vlandown_data ->mux_id = mux_id;
+					memcpy(vlandown_data->ipv6_prefix, ipv6_to_iface[modem_vlan_v6_pdn_index].ipv6_prefix, sizeof(ipv6_to_iface[modem_vlan_v6_pdn_index].ipv6_prefix));
 
 					ipv6_to_iface[modem_vlan_v6_pdn_index].wan_up_vlan_v6 = false;
 					ipv6_to_iface[modem_vlan_v6_pdn_index].VID_cnt--;
@@ -2142,7 +2143,7 @@ int IPACM_Wan::check_vlan_pdn(ipa_ip_type iptype, ipacm_event_route_vlan *data, 
 					{
 						if(IPACM_Wan::ipv6_to_iface[wlan_vlan_v6_pdn_index].associated_VIDs[vlan_idx] == data->VlanID)
 						{
-							IPACMDBG_H("VlanID found in associated_VIDs\n");
+							IPACMDBG_H("VlanID found in associated_VIDs in STA BH %d\n", wlan_vlan_v6_pdn_index);
 							is_vlan_wlan_associated = true;
 							wlan_vlan_idx = vlan_idx;
 							break;
@@ -2157,6 +2158,7 @@ int IPACM_Wan::check_vlan_pdn(ipa_ip_type iptype, ipacm_event_route_vlan *data, 
 						{
 							if(IPACM_Wan::ipv6_to_iface[pdn_idx].associated_VIDs[vlan_idx] == data->VlanID)
 							{
+								IPACMDBG_H("VlanID found in associated_VIDs in LTE BH %d\n", pdn_idx);
 								is_vlan_modem_associated = true;
 								modem_vlan_v6_pdn_index = pdn_idx;
 								modem_vlan_idx = vlan_idx;
@@ -2182,6 +2184,7 @@ int IPACM_Wan::check_vlan_pdn(ipa_ip_type iptype, ipacm_event_route_vlan *data, 
 					vlandown_data->iptype = IPA_IP_v6;
 					vlandown_data->VlanID = data->VlanID;
 					vlandown_data ->mux_id = 0;
+					memcpy(vlandown_data->ipv6_prefix, ipv6_to_iface[wlan_vlan_v6_pdn_index].ipv6_prefix, sizeof(ipv6_to_iface[wlan_vlan_v6_pdn_index].ipv6_prefix));
 
 					ipv6_to_iface[wlan_vlan_v6_pdn_index].wan_up_vlan_v6 = false;
 					ipv6_to_iface[wlan_vlan_v6_pdn_index].VID_cnt--;
@@ -2278,7 +2281,7 @@ int IPACM_Wan::check_vlan_pdn(ipa_ip_type iptype, ipacm_event_route_vlan *data, 
 					{
 						if(ipv4_to_iface[wlan_vlan_v4_pdn_index].associated_VIDs[vlan_idx] == data->VlanID)
 						{
-							IPACMDBG_H("VlanID found in associated_VIDs in STA BH\n");
+							IPACMDBG_H("VlanID found in associated_VIDs in STA BH %d\n", wlan_vlan_v4_pdn_index);
 							is_vlan_wlan_associated = true;
 							wlan_vlan_idx = vlan_idx;
 							break;
@@ -2294,7 +2297,7 @@ int IPACM_Wan::check_vlan_pdn(ipa_ip_type iptype, ipacm_event_route_vlan *data, 
 						{
 							if(ipv4_to_iface[pdn_idx].associated_VIDs[vlan_idx] == data->VlanID)
 							{
-								IPACMDBG_H("VlanID found in associated_VIDs in LTE BH\n");
+								IPACMDBG_H("VlanID found in associated_VIDs in LTE BH %d\n", pdn_idx);
 								is_vlan_modem_associated = true;
 								modem_vlan_v4_pdn_index = pdn_idx;
 								modem_vlan_idx = vlan_idx;
@@ -2383,7 +2386,7 @@ int IPACM_Wan::check_vlan_pdn(ipa_ip_type iptype, ipacm_event_route_vlan *data, 
 					{
 						if(IPACM_Wan::ipv4_to_iface[wlan_vlan_v4_pdn_index].associated_VIDs[vlan_idx] == data->VlanID)
 						{
-							IPACMDBG_H("VlanID found in associated_VIDs\n");
+							IPACMDBG_H("VlanID found in associated_VIDs in STA BH %d\n", wlan_vlan_v4_pdn_index);
 							is_vlan_wlan_associated = true;
 							wlan_vlan_idx = vlan_idx;
 							break;
@@ -2398,6 +2401,7 @@ int IPACM_Wan::check_vlan_pdn(ipa_ip_type iptype, ipacm_event_route_vlan *data, 
 						{
 							if(IPACM_Wan::ipv4_to_iface[pdn_idx].associated_VIDs[vlan_idx] == data->VlanID)
 							{
+								IPACMDBG_H("VlanID found in associated_VIDs in LTE BH %d\n", pdn_idx);
 								is_vlan_modem_associated = true;
 								modem_vlan_v4_pdn_index = pdn_idx;
 								modem_vlan_idx = vlan_idx;
@@ -2626,6 +2630,7 @@ int IPACM_Wan::handle_route_add_vlan_pdn_evt(ipa_ip_type iptype, uint16_t vlan_i
 			wanup_vlan_data->iptype = IPA_IP_v6;
 			wanup_vlan_data->VlanID = vlan_id;
 			wanup_vlan_data->mux_id = 0;
+			memcpy(wanup_vlan_data->ipv6_prefix, ipv6_prefix, sizeof(ipv6_prefix));
 			associated_VID = vlan_id;
 
 			IPACMDBG_H("Posting IPA_HANDLE_WAN_VLAN_PDN_UP (V6) with below info:\n");
@@ -6847,6 +6852,7 @@ int IPACM_Wan::handle_down_evt()
 		vlandown_data->iptype = IPA_IP_MAX;
 		vlandown_data->ipv4_addr = wan_v4_addr;
 		vlandown_data->VlanID = ipv6_to_iface[wlan_ipv6_pdn_index].associated_VIDs[0];
+		memcpy(vlandown_data->ipv6_prefix, ipv6_to_iface[wlan_ipv6_pdn_index].ipv6_prefix, sizeof(ipv6_to_iface[wlan_ipv6_pdn_index].ipv6_prefix));
 		memset(ipv4_to_iface[wlan_ipv4_pdn_index].associated_VIDs, 0, sizeof(ipv4_to_iface[wlan_ipv4_pdn_index].associated_VIDs));
 		ipv4_to_iface[wlan_ipv4_pdn_index].VID_cnt = 0;
 		memset(ipv6_to_iface[wlan_ipv6_pdn_index].associated_VIDs, 0, sizeof(ipv6_to_iface[wlan_ipv6_pdn_index].associated_VIDs));
@@ -6893,7 +6899,8 @@ int IPACM_Wan::handle_down_evt()
 
 		vlandown_data->iptype = IPA_IP_v6;
 		vlandown_data->VlanID = ipv6_to_iface[wlan_ipv6_pdn_index].associated_VIDs[0];;
-		memset(ipv4_to_iface[wlan_ipv4_pdn_index].associated_VIDs, 0, sizeof(ipv4_to_iface[wlan_ipv4_pdn_index].associated_VIDs));
+		memcpy(vlandown_data->ipv6_prefix, ipv6_to_iface[wlan_ipv6_pdn_index].ipv6_prefix, sizeof(ipv6_to_iface[wlan_ipv6_pdn_index].ipv6_prefix));
+		memset(ipv6_to_iface[wlan_ipv6_pdn_index].associated_VIDs, 0, sizeof(ipv6_to_iface[wlan_ipv6_pdn_index].associated_VIDs));
 		ipv6_to_iface[wlan_ipv6_pdn_index].VID_cnt = 0;
 		vlandown_data->mux_id = 0;
 
@@ -7383,10 +7390,6 @@ int IPACM_Wan::handle_down_evt_ex()
 			ipacm_cmd_q_data evt_data;
 			ipacm_event_vlan_pdn *vlandown_data;
 
-			ipv6_to_iface[modem_ipv6_pdn_index].wan_up_vlan_v6 = false;
-			memset(ipv6_to_iface[modem_ipv6_pdn_index].associated_VIDs, 0, sizeof(ipv6_to_iface[modem_ipv6_pdn_index].associated_VIDs));
-			ipv6_to_iface[modem_ipv6_pdn_index].VID_cnt = 0;
-
 			/* Xlat cfg offload pdn count is updated during v4 handling */
 			if (!xlat_cfg)
 				num_offloaded_pdns--;
@@ -7419,6 +7422,11 @@ int IPACM_Wan::handle_down_evt_ex()
 			vlandown_data->iptype = IPA_IP_v6;
 			vlandown_data->VlanID = ipv6_to_iface[modem_ipv6_pdn_index].associated_VIDs[0];
 			vlandown_data->mux_id = ext_prop->ext[0].mux_id;
+			memcpy(vlandown_data->ipv6_prefix, ipv6_to_iface[modem_ipv6_pdn_index].ipv6_prefix, sizeof(ipv6_to_iface[modem_ipv6_pdn_index].ipv6_prefix));
+
+			ipv6_to_iface[modem_ipv6_pdn_index].wan_up_vlan_v6 = false;
+			memset(ipv6_to_iface[modem_ipv6_pdn_index].associated_VIDs, 0, sizeof(ipv6_to_iface[modem_ipv6_pdn_index].associated_VIDs));
+			ipv6_to_iface[modem_ipv6_pdn_index].VID_cnt = 0;
 
 			IPACMDBG_H("Posting IPA_HANDLE_WAN_VLAN_PDN_DOWN (v6) with below information:\n");
 			IPACMDBG_H("iptype IPA_IP_v6, VlanID %d, mux_id %d, if num %d\n", vlandown_data->VlanID, ext_prop->ext[0].mux_id, ipa_if_num);
@@ -7578,6 +7586,7 @@ int IPACM_Wan::handle_down_evt_ex()
 				vlandown_data->iptype = IPA_IP_MAX;
 				vlandown_data->ipv4_addr = wan_v4_addr;
 				vlandown_data->VlanID = ipv6_to_iface[modem_ipv6_pdn_index].associated_VIDs[0];
+				memcpy(vlandown_data->ipv6_prefix, ipv6_to_iface[modem_ipv6_pdn_index].ipv6_prefix, sizeof(ipv6_to_iface[modem_ipv6_pdn_index].ipv6_prefix));
 				ipv4_to_iface[modem_ipv4_pdn_index].wan_up_vlan = false;
 				memset(ipv4_to_iface[modem_ipv4_pdn_index].associated_VIDs, 0, sizeof(ipv4_to_iface[modem_ipv4_pdn_index].associated_VIDs));
 				ipv4_to_iface[modem_ipv4_pdn_index].VID_cnt = 0;
@@ -7599,6 +7608,7 @@ int IPACM_Wan::handle_down_evt_ex()
 			{
 				vlandown_data->iptype = IPA_IP_v6;
 				vlandown_data->VlanID = ipv6_to_iface[modem_ipv6_pdn_index].associated_VIDs[0];
+				memcpy(vlandown_data->ipv6_prefix, ipv6_to_iface[modem_ipv6_pdn_index].ipv6_prefix, sizeof(ipv6_to_iface[modem_ipv6_pdn_index].ipv6_prefix));
 				ipv6_to_iface[modem_ipv6_pdn_index].wan_up_vlan_v6 = false;
 				memset(ipv6_to_iface[modem_ipv6_pdn_index].associated_VIDs, 0, sizeof(ipv6_to_iface[modem_ipv6_pdn_index].associated_VIDs));
 				ipv6_to_iface[modem_ipv6_pdn_index].VID_cnt = 0;

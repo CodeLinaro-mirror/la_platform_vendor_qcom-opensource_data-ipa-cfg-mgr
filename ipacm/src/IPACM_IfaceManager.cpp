@@ -401,6 +401,11 @@ int IPACM_IfaceManager::create_iface_instance(ipacm_ifacemgr_data *param)
 					IPACM_EvtDispatcher::registr(IPA_HANDLE_EoGRE_UP, odu);
 					IPACM_EvtDispatcher::registr(IPA_HANDLE_EoGRE_DOWN, odu);
 #endif
+
+#ifdef IPA_MTU_EVENT_MAX
+					IPACM_EvtDispatcher::registr(IPA_MTU_UPDATE, odu);
+#endif
+
 					IPACM_EvtDispatcher::registr(IPA_ADDR_ADD_EVENT, odu);
 					IPACM_EvtDispatcher::registr(IPA_NEIGH_CLIENT_IP_ADDR_ADD_EVENT, odu);
 					IPACM_EvtDispatcher::registr(IPA_NEIGH_CLIENT_IP_ADDR_DEL_EVENT, odu);

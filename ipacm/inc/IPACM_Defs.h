@@ -477,7 +477,8 @@ typedef enum
 {
 	Q6_WAN = 0,
 	WLAN_WAN,
-	ECM_WAN
+	ECM_WAN,
+	IFACE_MAX
 } ipacm_wan_iface_type;
 
 typedef struct _ipacm_ifacemgr_data

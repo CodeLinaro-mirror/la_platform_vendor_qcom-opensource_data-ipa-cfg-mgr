@@ -141,6 +141,26 @@ typedef struct
 	IPACM_Wan *pIface;
 }ipacm_ipv6_wan_iface;
 
+/*
+ * vlan_id : VLAN ID
+ * v4_association: The WAN interface V4 VLAN is associated to 
+ * v6_association: The WAN interface V6 VLAN is associated to
+ * v4_idx: Index of the WAN interface in ipv4_to_iface to which VLAN is associated
+ * v6_idx: Index of the WAN interface in ipv6_to_iface to which VLAN is associated
+ * v4_vlan_idx: Index of vlan_id in the associated_VIDs[] of ipv4_to_iface[v6_idx]
+ * v6_vlan_idx: Index of vlan_id in the associated_VIDs[] of ipv6_to_iface[v6_idx]
+ */
+typedef struct
+{
+	ipacm_wan_iface_type v4_association;
+	ipacm_wan_iface_type v6_association;
+	int v4_idx[IFACE_MAX];
+	int v6_idx[IFACE_MAX];
+	int v4_vlan_idx[IFACE_MAX];
+	int v6_vlan_idx[IFACE_MAX];
+	uint16_t vlan_id;
+}ipacm_vlan_association_info;
+
 struct ipacm_pdn_flt_rule
 {
 	struct ipa_flt_rule_add flt_rule;
@@ -700,6 +720,10 @@ private:
 	int handle_route_add_evt(ipa_ip_type iptype);
 
 #ifdef FEATURE_VLAN_MPDN
+	void get_vlan_association_info(ipacm_vlan_association_info* vlan_info);
+	void post_wan_vlan_pdn_event(ipa_ip_type iptype, int pdn_idx, int vlan_idx, uint16_t vlan_id, bool vlan_up);
+	int handle_vlan_backhaul_switch_v4(ipacm_event_route_vlan *data);
+	int handle_vlan_backhaul_switch_v6(ipacm_event_route_vlan *data, bool xlat_cfg = false);
 	int check_vlan_pdn(ipa_ip_type iptype, ipacm_event_route_vlan *data, bool xlat_cfg = false);
 	int handle_route_add_vlan_pdn_evt(ipa_ip_type iptype, uint16_t vlan_id);
 #endif

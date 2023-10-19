@@ -454,7 +454,7 @@ static int ipa_nl_decode_rtm_link
 			strlcpy(link_info->vlan_info.name, rta_data, IFACE_NAME);
 			IPACMDBG("Extracted vlan interface name %s\n", link_info->vlan_info.name);
 			/* This is the interface name. in case of macsec/vlan/vlan-macsec it can be macsec0, vlan0, macsec100.0 */
-			strlcpy(link_info->name, (strdup((const char *)RTA_DATA(attrib))), IFACE_NAME);
+			strlcpy(link_info->name, rta_data, IFACE_NAME);
 			IPACMDBG("Extracted interface name %s\n", link_info->name);
 		}
 		if (attrib->rta_type == IFLA_LINKINFO) {

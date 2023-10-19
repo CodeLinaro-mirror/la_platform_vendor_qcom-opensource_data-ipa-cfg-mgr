@@ -12376,7 +12376,12 @@ bool IPACM_Lan::is_vlan_event(char *event_iface_name)
 	tokens.emplace_back(tmpName);
 
 	IPACMDBG("return value = %d\n", tokens.size() > 1 && !tokens.back().empty() && std::isdigit(tokens.back()[0]));
-	return tokens.size() > 1 && !tokens.back().empty() && std::isdigit(tokens.back()[0]);
+	if (tokens.size() > 1 && !tokens.back().empty() && std::isdigit(tokens.back()[0]) && (strncmp(((const char *)tokens[0].c_str()),  dev_name,strlen(tokens[0].c_str())) == 0)) {
+			return true;
+	}
+	else {
+			return false;
+	}
 }
 #ifdef FEATURE_L2TP
 /* check if the event is associated with l2tp interface */

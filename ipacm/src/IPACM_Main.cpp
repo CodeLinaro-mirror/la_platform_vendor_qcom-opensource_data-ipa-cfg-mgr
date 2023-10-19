@@ -391,7 +391,11 @@ void* ipa_driver_msg_notifier(void *param)
 				IPACMERR("unable to allocate memory for event_wlan data_fid\n");
 				goto done;
 			}
-			ipa_get_if_index(event_wlan->name, &(data_fid->if_index));
+			if(IPACM_FAILURE == ipa_get_if_index(event_wlan->name, &(data_fid->if_index)))
+			{
+				data_fid->if_index = event_wlan->if_index;
+				IPACMDBG_H("Using WLAN_AP_DISCONNECT if_index: %d\n",event_wlan->if_index);
+			}
 			evt_data.event = IPA_WLAN_LINK_DOWN_EVENT;
 			evt_data.evt_data = data_fid;
 			break;

@@ -437,6 +437,7 @@ static int ipa_nl_decode_rtm_link
 	char *intf_type = NULL;
 	/* NL message header */
 	struct nlmsghdr *nlh = (struct nlmsghdr *)buffer;
+	char *rta_data = NULL;
 
 	ifm = (struct ifinfomsg *) NLMSG_DATA(nlh);
 	len = nlh->nlmsg_len - NLMSG_LENGTH(sizeof(struct ifinfomsg));
@@ -445,11 +446,12 @@ static int ipa_nl_decode_rtm_link
 	buflen -= sizeof(struct nlmsghdr);
 
 	for (attrib = IFLA_RTA(ifm); RTA_OK(attrib, len); attrib = RTA_NEXT(attrib, len)) {
-		if (attrib->rta_type == IFLA_IFNAME) {
-			strlcpy(link_info->vlan_info.name, (strdup((const char *)RTA_DATA(attrib))), IFACE_NAME);
+		rta_data = strdup((const char *)RTA_DATA(attrib));
+		if (attrib->rta_type == IFLA_IFNAME && rta_data) {
+			strlcpy(link_info->vlan_info.name, rta_data, IFACE_NAME);
 			IPACMDBG("Extracted vlan interface name %s\n", link_info->vlan_info.name);
 			/* This is the interface name. in case of macsec/vlan/vlan-macsec it can be macsec0, vlan0, macsec100.0 */
-			strlcpy(link_info->name, (strdup((const char *)RTA_DATA(attrib))), IFACE_NAME);
+			strlcpy(link_info->name, rta_data, IFACE_NAME);
 			IPACMDBG("Extracted interface name %s\n", link_info->name);
 		}
 		if (attrib->rta_type == IFLA_LINKINFO) {
@@ -489,7 +491,14 @@ static int ipa_nl_decode_rtm_link
 
 				}
 			}
+			if(intf_type != NULL){
+				free(intf_type);
+			}
 		}
+		if(rta_data != NULL){
+			free(rta_data);
+		}
+
 		if (attrib->rta_type == IFLA_MASTER) {
 			memcpy(&link_info->master_interface_index,
 						 RTA_DATA(attrib),
@@ -900,6 +909,7 @@ static int ipa_nl_decode_nlmsg
 					if(ret_val != IPACM_SUCCESS)
 					{
 						IPACMERR("Error while getting interface name\n");
+						free(data_fid);
 						return IPACM_FAILURE;
 					}
 					IPACMDBG_H("Got a usb link_down event (Interface %s) \n", dev_name);
@@ -927,6 +937,7 @@ static int ipa_nl_decode_nlmsg
 							msg_ptr->nl_link_info.metainfo.ifi_index);
 						uint16_t vlan_master_interface_index = msg_ptr->nl_link_info.metainfo.ifi_index;
 						IPACM_Iface::ipacmcfg->del_bridge_vlan_mapping(&vlan_master_interface_index);
+						free(data_fid);
 						return IPACM_SUCCESS;
 					}
 
@@ -1091,15 +1102,22 @@ static int ipa_nl_decode_nlmsg
 								 data_addr->ipv6_addr[1],
 								 data_addr->ipv6_addr[2],
 								 data_addr->ipv6_addr[3]);
+					evt_data.evt_data = data_addr;
+					IPACM_EvtDispatcher::PostEvt(&evt_data);
                 }
-				else
+				else if(AF_INET == msg_ptr->nl_addr_info.attr_info.prefix_addr.ss_family)
 				{
-				IPACMDBG("Posting IPA_ADDR_ADD_EVENT with if index:%d, ipv4 addr:0x%x\n",
+					IPACMDBG("Posting IPA_ADDR_ADD_EVENT with if index:%d, ipv4 addr:0x%x\n",
 								 data_addr->if_index,
 								 data_addr->ipv4_addr);
+					evt_data.evt_data = data_addr;
+					IPACM_EvtDispatcher::PostEvt(&evt_data);
 				}
-				evt_data.evt_data = data_addr;
-				IPACM_EvtDispatcher::PostEvt(&evt_data);
+				else
+				{
+					free(data_addr);
+				}	
+
 			}
 			break;
 
@@ -1138,6 +1156,10 @@ static int ipa_nl_decode_nlmsg
 						data_addr->ipv4_addr);
 					evt_data.evt_data = data_addr;
 					IPACM_EvtDispatcher::PostEvt(&evt_data);
+				}
+				else
+				{
+					free(data_addr);
 				}
 			}
 			break;

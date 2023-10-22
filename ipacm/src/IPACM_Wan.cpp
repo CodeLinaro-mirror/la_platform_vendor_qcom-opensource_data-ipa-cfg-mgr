@@ -28,7 +28,7 @@ IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 Changes from Qualcomm Innovation Center are provided under the following license:
 
-Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted (subject to the limitations in the
@@ -2551,9 +2551,14 @@ int IPACM_Wan::handle_route_add_evt(ipa_ip_type iptype, bool add_only)
 	{
 		if (iface_query != NULL && iface_query->num_ext_props > 0)
 		{
+			if(ext_prop == NULL || !ext_prop->num_ext_props)
+			{
+				IPACMERR("Extended property is empty.\n");
+				return IPACM_FAILURE;
+			}
 			/* treat Q6_MHI_WAN as STA mode also */
 			IPACMDBG_H("Q6-MHI  ipv4/v6-header already constructed \n");
-			IPACM_Wan::backhaul_mode = m_is_sta_mode;		
+			IPACM_Wan::backhaul_mode = m_is_sta_mode;
 			IPACMDBG_H("Setting up QMAP ID %d.\n", ext_prop->ext[0].mux_id);
 			IPACM_Iface::ipacmcfg->SetQmapId(ext_prop->ext[0].mux_id);
 			/* sending mux-id info to PCIE-modem for UL */
@@ -8837,6 +8842,18 @@ int IPACM_Wan::add_offload_frag_rule()
 	uint8_t mux_id;
 	ipa_ioc_add_flt_rule *pFilteringTable = NULL;
 
+	if(rx_prop == NULL || !rx_prop->num_rx_props)
+	{
+		IPACMERR("Rx property is empty.\n");
+		return IPACM_FAILURE;
+	}
+
+	if (ext_prop == NULL || !ext_prop->num_ext_props)
+	{
+		IPACMERR("Extended property is empty.\n");
+		return IPACM_FAILURE;
+	}
+
 	mux_id = ext_prop->ext[0].mux_id;
 	/* contruct filter rules to pcie modem */
 	struct ipa_flt_rule_add flt_rule_entry;
@@ -8978,6 +8995,18 @@ int IPACM_Wan::add_icmpv6_exception_rule()
 	uint8_t mux_id;
 	ipa_ioc_add_flt_rule *pFilteringTable = NULL;
 
+	if (rx_prop == NULL || !rx_prop->num_rx_props)
+	{
+		IPACMERR("Rx property is empty.\n");
+		return IPACM_FAILURE;
+	}
+
+	if (ext_prop == NULL || !ext_prop->num_ext_props)
+	{
+		IPACMERR("Extended property is empty.\n");
+		return IPACM_FAILURE;
+	}
+
 	mux_id = ext_prop->ext[0].mux_id;
 	/* contruct filter rules to pcie modem */
 	struct ipa_flt_rule_add flt_rule_entry;
@@ -9114,6 +9143,18 @@ int IPACM_Wan::add_tcp_fin_rst_exception_rule()
 	int len, res = IPACM_SUCCESS;
 	uint8_t mux_id;
 	ipa_ioc_add_flt_rule *pFilteringTable = NULL;
+
+	if (rx_prop == NULL || !rx_prop->num_rx_props)
+	{
+		IPACMERR("Rx property is empty.\n");
+		return IPACM_FAILURE;
+	}
+
+	if (ext_prop == NULL || !ext_prop->num_ext_props)
+	{
+		IPACMERR("Extended property is empty.\n");
+		return IPACM_FAILURE;
+	}
 
 	mux_id = ext_prop->ext[0].mux_id;
 	/* contruct filter rules to pcie modem */

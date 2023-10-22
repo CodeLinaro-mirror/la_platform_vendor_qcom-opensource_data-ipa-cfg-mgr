@@ -146,6 +146,8 @@ public:
             int64_t /* warningBytes */,
             int64_t /* limitBytes */) override;
 
+    static void clientDeathCallback(void* cookie);
+
 private:
     typedef struct BoolResult {
         bool success;
@@ -175,5 +177,7 @@ private:
     shared_ptr<ITetheringOffloadCallback> mCb;
     IpaEventRelay *mCbIpa;
     CtUpdateAmbassador *mCbCt;
+
+    ::ndk::ScopedAIBinder_DeathRecipient mDeathRecipient;
 }; /* AIDL */
 #endif /* _AIDL_H_ */

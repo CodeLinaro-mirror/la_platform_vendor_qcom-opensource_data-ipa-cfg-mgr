@@ -28,7 +28,7 @@ IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 Changes from Qualcomm Innovation Center are provided under the following license:
 
-Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted (subject to the limitations in the
@@ -255,6 +255,10 @@ static int ipacm_cfg_xml_parse_tree
 					if (content)
 					{
 						str_size = strlen(content);
+						if (str_size >= MAX_XML_STR_LEN) {
+							IPACMERR("content str_size %d greater than max %d.. continue\n", str_size, MAX_XML_STR_LEN);
+							continue;
+						}
 						memset(content_buf, 0, sizeof(content_buf));
 						memcpy(content_buf, (void *)content, str_size);
 						if (atoi(content_buf))
@@ -297,6 +301,10 @@ static int ipacm_cfg_xml_parse_tree
 					if (content)
 					{
 						str_size = strlen(content);
+						if (str_size >= MAX_XML_STR_LEN) {
+							IPACMERR("content str_size %d greater than max %d.. continue\n", str_size, MAX_XML_STR_LEN);
+							continue;
+						}
 						memset(content_buf, 0, sizeof(content_buf));
 						memcpy(content_buf, (void *)content, str_size);
 						if (atoi(content_buf))
@@ -470,6 +478,10 @@ static int ipacm_cfg_xml_parse_tree
 					if (content)
 					{
 						str_size = strlen(content);
+						if (str_size >= MAX_XML_STR_LEN) {
+							IPACMERR("content str_size %d greater than max %d.. continue\n", str_size, MAX_XML_STR_LEN);
+							continue;
+						}
 						memset(content_buf, 0, sizeof(content_buf));
 						memcpy(content_buf, (void *)content, str_size);
 						config->alg_config.alg_entries[config->alg_config.num_alg_entries - 1].port
@@ -483,6 +495,10 @@ static int ipacm_cfg_xml_parse_tree
 					if (content)
 					{
 						str_size = strlen(content);
+						if (str_size >= MAX_XML_STR_LEN) {
+							IPACMERR("content str_size %d greater than max %d.. continue\n", str_size, MAX_XML_STR_LEN);
+							continue;
+						}
 						memset(content_buf, 0, sizeof(content_buf));
 						memcpy(content_buf, (void *)content, str_size);
 						config->nat_max_entries = atoi(content_buf);

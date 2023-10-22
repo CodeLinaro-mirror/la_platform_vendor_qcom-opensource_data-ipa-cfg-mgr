@@ -42,7 +42,6 @@ cc_binary {
     vintf_fragments: [
         "src/vendor.qti.hardware.tetheroffload.service.xml",
     ],
-    clang: true,
     vendor: true,
 
     shared_libs: [

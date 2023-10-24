@@ -358,6 +358,7 @@ typedef enum
 #ifdef FEATURE_IPA_IPSEC
 	IPA_HANDLE_IPSEC_UL_FLT_ADD,              /* ipa_ioc_ipsec_ul_flt_attr */
 	IPA_HANDLE_IPSEC_UL_FLT_DEL,              /* ipa_ioc_ipsec_ul_flt_attr */
+	IPA_IPSEC_LAN_CLIENT_ROUTE_ADD_EVENT,     /* ipa_ip_type */
 #endif
 	IPACM_EVENT_MAX
 } ipa_cm_event_id;

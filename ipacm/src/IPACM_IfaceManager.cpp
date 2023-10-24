@@ -658,6 +658,15 @@ int IPACM_IfaceManager::create_iface_instance(ipacm_ifacemgr_data *param)
 						IPACM_EvtDispatcher::registr(IPA_MTU_SET, w);
 					}
 #endif
+#ifdef FEATURE_IPA_IPSEC
+					/* IPsec offload uses post decap to APPs RT rules, which must be above client rules.
+					   The WAN interface should be informed about the client RT rules,
+					   to reinstall the post decap rules above. */
+					if(is_sta_mode == Q6_WAN)
+					{
+						IPACM_EvtDispatcher::registr(IPA_IPSEC_LAN_CLIENT_ROUTE_ADD_EVENT, w);
+					}
+#endif
 					if(is_sta_mode == WLAN_WAN)
 					{
 						IPACM_EvtDispatcher::registr(IPA_WLAN_LINK_DOWN_EVENT, w); // for STA mode

@@ -103,6 +103,8 @@ int IPACM_ConntrackClient::IPAConntrackEventCB
 	ipacm_cmd_q_data evt_data;
 	ipacm_ct_evt_data *ct_data;
 	uint8_t ip_type = 0;
+	uint16_t sport = 0;
+	uint16_t dport = 0;
 	IPACM_Config *config_instance = NULL;
 	uint16_t sport = 0;
 	uint16_t dport = 0;
@@ -131,7 +133,7 @@ int IPACM_ConntrackClient::IPAConntrackEventCB
 	if(dport == 53 || sport == 53)
 	{
 		IPACMDBG("iptype: %d: sport: %d: dport: %d\n", ip_type, sport, dport);
-		goto IGNORE;
+		return NFCT_CB_STOLEN;
 	}
 	IPACMDBG("iptype: %d\n", ip_type);
 

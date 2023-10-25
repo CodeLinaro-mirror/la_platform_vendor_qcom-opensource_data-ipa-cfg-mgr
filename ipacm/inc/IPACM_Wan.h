@@ -86,7 +86,7 @@ IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #define IPA_NUM_DEFAULT_WAN_FILTER_RULES 3 /*1 for v4, 2 for v6*/
 #define IPA_V2_NUM_DEFAULT_WAN_FILTER_RULE_IPV4 2
 
-#define NETWORK_STATS "%s %lu %lu %lu %lu"
+#define NETWORK_STATS "%s %llu %llu %llu %llu"
 #ifdef FEATURE_IPA_ANDROID
 #define IPA_NETWORK_STATS_FILE_NAME "/data/misc/ipa/network_stats"
 #else
@@ -431,8 +431,8 @@ public:
 	static int num_firewall_v6_ul;
 #endif
 #ifdef FEATURE_IPA_IPSEC
-	uint32_t ipsec_post_pol_rt[2][IPA_MAX_FLT_RULE];
-	int num_ipsec_post_pol_rt[2];
+	uint32_t ipsec_post_pol_rt_hdls[IPA_IP_MAX][IPA_MAX_FLT_RULE];
+	int num_ipsec_post_pol_rt[IPA_IP_MAX];
 #endif
 	ipacm_wan_iface_type m_is_sta_mode;
 	static bool backhaul_is_sta_mode;

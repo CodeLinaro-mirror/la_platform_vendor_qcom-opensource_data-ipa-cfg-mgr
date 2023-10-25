@@ -87,6 +87,16 @@
 #include "IPACM_ConntrackListener.h"
 #include <sys/ioctl.h>
 #include <fcntl.h>
+#include <memory>
+#include <cstdio>
+#include <iostream>
+#include <vector>
+#include <cctype>
+
+
+using std::string;
+using std::vector;
+
 
 bool IPACM_Lan::odu_up = false;
 
@@ -148,7 +158,7 @@ IPACM_Lan::IPACM_Lan(int iface_index) : IPACM_Iface(iface_index)
 	memset(wan_ul_fl_rule_hdl_v6, 0, MAX_WAN_UL_FILTER_RULES * sizeof(uint32_t));
 
 #ifdef FEATURE_IPACM_UL_FIREWALL
-	IPACMDBG_H("Mem-setting iface_ul_firewall of size %d\n", sizeof(iface_ul_firewall));
+	IPACMDBG_H("Mem-setting iface_ul_firewall of size %zu\n", sizeof(iface_ul_firewall));
 	memset(&iface_ul_firewall, 0, sizeof(iface_ul_firewall));
 #endif
 
@@ -1258,6 +1268,7 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 					if(IPACM_Iface::ipacmcfg->mac_addr_in_blacklist(data->mac_addr) == false)
 					{
 						handle_eth_client_route_rule(data->mac_addr, data->iptype);
+					IPACM_Iface::ipacmcfg->AddNatIfaces(data->iface_name);
 						/* Add NAT rules after RT rules are set */
 						HandleNeighIpAddrAddEvt(data);
 					}
@@ -1521,7 +1532,7 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 			if(ipa_if_num != data->if_index)
 				modify_ipv6_prefix_flt_rule();
 			else
-				IPACMDBG_H("matching if index, ignoring\n", ipa_if_num);
+				IPACMDBG_H("matching if index, ignoring. ipa_if_num:%d\n", ipa_if_num);
 		}
 		break;
 	case IPA_HANDLE_WAN_VLAN_PDN_UP:
@@ -1769,7 +1780,7 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 
 		if(strncmp(ext_router_pdn_name, (char*)param, sizeof(ext_router_pdn_name)) == 0)
 		{
-			IPACMDBG_H("Deleting ext route rules for lan client %s, pdn %s\n", dev_name, param);
+			IPACMDBG_H("Deleting ext route rules for lan client %s, pdn %s\n", dev_name, ext_router_pdn_name);
 
 			if(handle_ext_router_del_evt() == IPACM_FAILURE)
 				IPACMERR("failed deleting ext route mode rules");
@@ -2757,7 +2768,7 @@ bool IPACM_Lan::is_vlan_IF(uint16_t vlan_id)
 	strlcpy(vlan_iface_name, dev_name, sizeof(vlan_iface_name));
 	if(strlcat(vlan_iface_name, vlan_suffix, sizeof(vlan_iface_name)) > IPA_RESOURCE_NAME_MAX)
 	{
-		IPACMERR("vlan IF name construction failed exceed length (%d)\n", strlen(vlan_iface_name));
+		IPACMERR("vlan IF name construction failed exceed length (%zu)\n", strlen(vlan_iface_name));
 		return false;
 	}
 
@@ -4392,7 +4403,7 @@ int IPACM_Lan::handle_eth_hdr_init(uint8_t *mac_addr, ipacm_bridge *bridge, uint
 				pHeaderDescriptor->hdr[0].name[IPA_RESOURCE_NAME_MAX-1] = '\0';
 				if (strlcat(pHeaderDescriptor->hdr[0].name, IPA_ETH_HDR_NAME_v4, sizeof(pHeaderDescriptor->hdr[0].name)) > IPA_RESOURCE_NAME_MAX)
 				{
-					IPACMERR(" header name construction failed exceed length (%d)\n", strlen(pHeaderDescriptor->hdr[0].name));
+					IPACMERR(" header name construction failed exceed length (%zu)\n", strlen(pHeaderDescriptor->hdr[0].name));
 					res = IPACM_FAILURE;
 					goto fail;
 				}
@@ -4400,7 +4411,7 @@ int IPACM_Lan::handle_eth_hdr_init(uint8_t *mac_addr, ipacm_bridge *bridge, uint
 				snprintf(index,sizeof(index), "_%d", header_name_count);
 				if (strlcat(pHeaderDescriptor->hdr[0].name, index, sizeof(pHeaderDescriptor->hdr[0].name)) > IPA_RESOURCE_NAME_MAX)
 				{
-					IPACMERR(" header name construction failed exceed length (%d)\n", strlen(pHeaderDescriptor->hdr[0].name));
+					IPACMERR(" header name construction failed exceed length (%zu)\n", strlen(pHeaderDescriptor->hdr[0].name));
 					res = IPACM_FAILURE;
 					goto fail;
 				}
@@ -4411,7 +4422,7 @@ int IPACM_Lan::handle_eth_hdr_init(uint8_t *mac_addr, ipacm_bridge *bridge, uint
 					snprintf(index,sizeof(index), "_%d", vlan_id);
 					if (strlcat(pHeaderDescriptor->hdr[0].name, index, sizeof(pHeaderDescriptor->hdr[0].name)) > IPA_RESOURCE_NAME_MAX)
 					{
-						IPACMERR(" header name construction failed exceed length (%d)\n", strlen(pHeaderDescriptor->hdr[0].name));
+						IPACMERR(" header name construction failed exceed length (%zu)\n", strlen(pHeaderDescriptor->hdr[0].name));
 						res = IPACM_FAILURE;
 						goto fail;
 					}
@@ -4566,14 +4577,14 @@ int IPACM_Lan::handle_eth_hdr_init(uint8_t *mac_addr, ipacm_bridge *bridge, uint
 				pHeaderDescriptor->hdr[0].name[IPA_RESOURCE_NAME_MAX-1] = '\0';
 				if (strlcat(pHeaderDescriptor->hdr[0].name, IPA_ETH_HDR_NAME_v6, sizeof(pHeaderDescriptor->hdr[0].name)) > IPA_RESOURCE_NAME_MAX)
 				{
-					IPACMERR(" header name construction failed exceed length (%d)\n", strlen(pHeaderDescriptor->hdr[0].name));
+					IPACMERR(" header name construction failed exceed length (%zu)\n", strlen(pHeaderDescriptor->hdr[0].name));
 					res = IPACM_FAILURE;
 					goto fail;
 				}
 				snprintf(index,sizeof(index), "_%d", header_name_count);
 				if (strlcat(pHeaderDescriptor->hdr[0].name, index, sizeof(pHeaderDescriptor->hdr[0].name)) > IPA_RESOURCE_NAME_MAX)
 				{
-					IPACMERR(" header name construction failed exceed length (%d)\n", strlen(pHeaderDescriptor->hdr[0].name));
+					IPACMERR(" header name construction failed exceed length (%zu)\n", strlen(pHeaderDescriptor->hdr[0].name));
 					res = IPACM_FAILURE;
 					goto fail;
 				}
@@ -4584,7 +4595,7 @@ int IPACM_Lan::handle_eth_hdr_init(uint8_t *mac_addr, ipacm_bridge *bridge, uint
 					snprintf(index,sizeof(index), "_%d", vlan_id);
 					if (strlcat(pHeaderDescriptor->hdr[0].name, index, sizeof(pHeaderDescriptor->hdr[0].name)) > IPA_RESOURCE_NAME_MAX)
 					{
-						IPACMERR(" header name construction failed exceed length (%d)\n", strlen(pHeaderDescriptor->hdr[0].name));
+						IPACMERR(" header name construction failed exceed length (%zu)\n", strlen(pHeaderDescriptor->hdr[0].name));
 						res = IPACM_FAILURE;
 						goto fail;
 					}
@@ -5045,9 +5056,8 @@ int IPACM_Lan::handle_eth_client_ipaddr(ipacm_event_data_all *data)
 			{
 				IPACMDBG_H("eth client:%d, current ipv6:%d, v6_route_set:%d, total_client_ipv6: %d, limit %d\n",
 					clnt_indx, get_client_memptr(eth_client, clnt_indx)->ipv6_set,
-					clnt_indx, get_client_memptr(eth_client, clnt_indx)->route_rule_set_v6,
-					IPACM_Iface::ipacmcfg->ipa_num_clients_ipv6,
-					IPA_MAX_NUM_CLIENTS_IPV6);
+					get_client_memptr(eth_client, clnt_indx)->route_rule_set_v6,
+					IPACM_Iface::ipacmcfg->ipa_num_clients_ipv6, IPA_MAX_NUM_CLIENTS_IPV6);
 				std::copy(std::begin(data->ipv6_addr), std::end(data->ipv6_addr), std::begin(ipv6));
 
 				/* never see this ipv6, insert to the map*/
@@ -6165,7 +6175,7 @@ int IPACM_Lan::handle_odu_hdr_init(uint8_t *mac_addr)
 					pHeaderDescriptor->hdr[0].name[IPA_RESOURCE_NAME_MAX-1] = '\0';
 					if (strlcat(pHeaderDescriptor->hdr[0].name, IPA_ODU_HDR_NAME_v4, sizeof(pHeaderDescriptor->hdr[0].name)) > IPA_RESOURCE_NAME_MAX)
 					{
-						IPACMERR(" header name construction failed exceed length (%d)\n", strlen(pHeaderDescriptor->hdr[0].name));
+						IPACMERR(" header name construction failed exceed length (%zu)\n", strlen(pHeaderDescriptor->hdr[0].name));
 						res = IPACM_FAILURE;
 						goto fail;
 					}
@@ -6254,7 +6264,7 @@ int IPACM_Lan::handle_odu_hdr_init(uint8_t *mac_addr)
 				pHeaderDescriptor->hdr[0].name[IPA_RESOURCE_NAME_MAX-1] = '\0';
 				if (strlcat(pHeaderDescriptor->hdr[0].name, IPA_ODU_HDR_NAME_v6, sizeof(pHeaderDescriptor->hdr[0].name)) > IPA_RESOURCE_NAME_MAX)
 				{
-					IPACMERR(" header name construction failed exceed length (%d)\n", strlen(pHeaderDescriptor->hdr[0].name));
+					IPACMERR(" header name construction failed exceed length (%zu)\n", strlen(pHeaderDescriptor->hdr[0].name));
 					res = IPACM_FAILURE;
 					goto fail;
 				}
@@ -12347,40 +12357,26 @@ int IPACM_Lan::eth_bridge_del_hdr_proc_ctx(uint32_t hdr_proc_ctx_hdl)
 /* check if the event is associated with vlan interface */
 bool IPACM_Lan::is_vlan_event(char *event_iface_name)
 {
-	int self_name_len, event_iface_name_len, if_name_len;
-	char if_name[IPA_IFACE_NAME_LEN];
-
-	if(event_iface_name == NULL)
-	{
-		IPACMERR("Invalid input\n");
+	string selfDevName(dev_name), eventInterfaceName(event_iface_name);
+	if (eventInterfaceName.find(selfDevName) == std::string::npos) {
+		IPACMDBG("dev_name %s is not a substring of event_iface_name %s\n", dev_name, event_iface_name);
 		return false;
 	}
 
-	strlcpy(if_name, event_iface_name, IPA_IFACE_NAME_LEN);
-	IPACMDBG_H("Self iface %s, event iface %s\n", dev_name, event_iface_name);
-
-	char* char_idx =  strstr(if_name, ".");
-
-	if (char_idx) {
-		char_idx[0] = '\0';
-		IPACMDBG_H("truncated iface name %s\n", if_name);
+	vector<string> tokens;
+	string delimiter = ".", tmpName = eventInterfaceName;
+	size_t pos = 0;
+	while ((pos = tmpName.find(delimiter)) != std::string::npos) {
+		string token = tmpName.substr(0, pos);
+		tokens.emplace_back(token);
+		tmpName.erase(0, pos + delimiter.length());
+		IPACMDBG("token = %s tmpName = %s\n", token.c_str(), tmpName.c_str());
 	}
-	else {
-		return false;
-	}
+	IPACMDBG("Insert last token tmpName = %s\n", tmpName.c_str());
+	tokens.emplace_back(tmpName);
 
-	self_name_len = strlen(dev_name);
-	event_iface_name_len = strlen(event_iface_name);
-	if_name_len = strlen(if_name);
-
-	if(event_iface_name_len > self_name_len &&
-	   if_name_len == self_name_len &&
-	   strncmp(dev_name, if_name, self_name_len) == 0)
-	{
-		IPACMDBG_H("This is vlan event.\n");
-		return true;
-	}
-	return false;
+	IPACMDBG("return value = %d\n", tokens.size() > 1 && !tokens.back().empty() && std::isdigit(tokens.back()[0]));
+	return tokens.size() > 1 && !tokens.back().empty() && std::isdigit(tokens.back()[0]);
 }
 #ifdef FEATURE_L2TP
 /* check if the event is associated with l2tp interface */

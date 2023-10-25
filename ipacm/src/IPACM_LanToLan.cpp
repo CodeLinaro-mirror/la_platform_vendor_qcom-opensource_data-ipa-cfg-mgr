@@ -328,7 +328,7 @@ void IPACM_LanToLan::handle_iface_up(ipacm_event_eth_bridge *data)
 		new_iface.set_m_is_ip_addr_assigned(data->iptype, true);
 
 		m_iface.push_front(new_iface);
-		IPACMDBG_H("Now the total number of interfaces is %d.\n", m_iface.size());
+		IPACMDBG_H("Now the total number of interfaces is %zu.\n", m_iface.size());
 
 		IPACM_LanToLan_Iface &front_iface = m_iface.front();
 #ifdef FEATURE_L2TP
@@ -952,13 +952,13 @@ void IPACM_LanToLan::print_data_structure_info()
 	int i;
 
 	IPACMDBG_H("Is there l2tp interface? %d\n", m_has_l2tp_iface);
-	IPACMDBG_H("There are %d interfaces in total.\n", m_iface.size());
+	IPACMDBG_H("There are %zu interfaces in total.\n", m_iface.size());
 	for(it = m_iface.begin(); it != m_iface.end(); it++)
 	{
 		it->print_data_structure_info();
 	}
 
-	IPACMDBG_H("There are %d cached client add events in total.\n", m_cached_client_add_event.size());
+	IPACMDBG_H("There are %zu cached client add events in total.\n", m_cached_client_add_event.size());
 
 	i = 1;
 	for(it_event = m_cached_client_add_event.begin(); it_event != m_cached_client_add_event.end(); it_event++)
@@ -1560,7 +1560,7 @@ void IPACM_LanToLan_Iface::add_client_flt_rule(peer_iface_info *peer, client_inf
 		new_flt_info.l2tp_first_pass_flt_rule_hdl[iptype].flt_rule_hdls = flt_rule_hdls;
 		new_flt_info.l2tp_second_pass_flt_rule_hdl = l2tp_second_pass_flt_rule_hdl;
 		peer->flt_rule.push_front(new_flt_info);
-		IPACMDBG_H("Inserted the new client %d.\n", sizeof(new_flt_info));
+		IPACMDBG_H("Inserted the new client %zu.\n", sizeof(new_flt_info));
 	}
 
 	return;
@@ -1885,7 +1885,7 @@ void IPACM_LanToLan_Iface::handle_vlan_id_del(uint16_t vlan_id)
 		get_iface_pointer()->dev_name, vlan_id);
 
 	/* go over all clients and remove those with the removed vlan id */
-	IPACMDBG_H("There are %d m_client_info in total.\n", m_client_info.size());
+	IPACMDBG_H("There are %zu m_client_info in total.\n", m_client_info.size());
 	it_client = m_client_info.begin();
 	while (it_client != m_client_info.end())
 	{
@@ -2491,10 +2491,10 @@ void IPACM_LanToLan_Iface::print_data_structure_info()
 	IPACMDBG_H("Hdr proc ctx for l2tp: %d\n", hdr_proc_ctx_for_l2tp);
 
 	i = 1;
-	IPACMDBG_H("There are %d clients in total.\n", m_client_info.size());
+	IPACMDBG_H("There are %zu clients in total.\n", m_client_info.size());
 	for(it_client = m_client_info.begin(); it_client != m_client_info.end(); it_client++)
 	{
-		IPACMDBG_H("Client %d MAC: 0x%02x%02x%02x%02x%02x%02x Pointer: 0x%08x\n", i, it_client->mac_addr[0], it_client->mac_addr[1],
+		IPACMDBG_H("Client %d MAC: 0x%02x%02x%02x%02x%02x%02x Pointer: %p\n", i, it_client->mac_addr[0], it_client->mac_addr[1],
 			it_client->mac_addr[2], it_client->mac_addr[3], it_client->mac_addr[4], it_client->mac_addr[5], &(*it_client));
 		IPACMDBG_H("Is l2tp client? %d\n", it_client->is_l2tp_client);
 		if(it_client->is_l2tp_client && it_client->mapping_info)
@@ -2601,7 +2601,7 @@ void IPACM_LanToLan_Iface::print_data_structure_info()
 		i++;
 	}
 
-	IPACMDBG_H("There are %d peer interfaces in total.\n", m_peer_iface_info.size());
+	IPACMDBG_H("There are %zu peer interfaces in total.\n", m_peer_iface_info.size());
 	for(it_peer = m_peer_iface_info.begin(); it_peer != m_peer_iface_info.end(); it_peer++)
 	{
 		print_peer_info(&(*it_peer));
@@ -2624,10 +2624,10 @@ void IPACM_LanToLan_Iface::print_peer_info(peer_iface_info *peer_info)
 
 	IPACMDBG_H("Printing peer info for iface %s:\n", peer_info->peer->m_p_iface->dev_name);
 
-	IPACMDBG_H("There are %d flt info in total.\n", peer_info->flt_rule.size());
+	IPACMDBG_H("There are %zu flt info in total.\n", peer_info->flt_rule.size());
 	for(it_flt = peer_info->flt_rule.begin(); it_flt != peer_info->flt_rule.end(); it_flt++)
 	{
-		IPACMDBG_H("Flt rule handle for client 0x%08x:\n", it_flt->p_client);
+		IPACMDBG_H("Flt rule handle for client %p:\n", it_flt->p_client);
 		if(m_is_ip_addr_assigned[IPA_IP_v4])
 		{
 			IPACMDBG_H("IPv4 %d\n", it_flt->flt_rule_hdl[IPA_IP_v4]);

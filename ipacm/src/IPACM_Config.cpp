@@ -340,16 +340,16 @@ static void dump_fnr_counters(const struct ipa_ioc_flt_rt_counter_alloc *fnr)
 {
 	if (!fnr)
 		return;
-	IPACMERR("hw hdl = %d, 0x%x\n"
-		 "hw_num_counters = %u\n"
-	 	 "hw_start_id = %u\n, hw_allow_less = %u\n",
-		 fnr->hdl, fnr->hw_counter.num_counters, fnr->hw_counter.allow_less,
-		 fnr->hw_counter.start_id);
-	IPACMERR("sw hdl = %d, 0x%x\n"
-		 "sw_num_counters = %u\n"
-	 	 "sw_start_id = %u\n, sw_allow_less = %u\n",
-		 fnr->hdl, fnr->sw_counter.num_counters, fnr->sw_counter.allow_less,
-		 fnr->sw_counter.start_id);
+	IPACMERR("hw hdl = %d\n"
+		"hw_num_counters = %hhu\n"
+		"hw_start_id = %hhu\n, hw_allow_less = %hhu\n",
+		fnr->hdl, fnr->hw_counter.num_counters, fnr->hw_counter.allow_less,
+		fnr->hw_counter.start_id);
+	IPACMERR("sw hdl = %d\n"
+		"sw_num_counters = %hhu\n"
+		"sw_start_id = %hhu\n, sw_allow_less = %hhu\n",
+		fnr->hdl, fnr->sw_counter.num_counters, fnr->sw_counter.allow_less,
+		fnr->sw_counter.start_id);
 }
 
 int IPACM_Config::get_free_cnt_idx(void)
@@ -408,7 +408,7 @@ int IPACM_Config::ipacm_reset_hw_fnr_counters(const uint8_t start_id, const uint
 	{
 		ret = ipacm_fnr_v2_ioctl(fd, IPA_IOC_FNR_COUNTER_QUERY, query);
 		if (ret < 0)
-			IPACMERR("IOCTL %d failed\n", IPA_IOC_FNR_COUNTER_QUERY);
+			IPACMERR("IOCTL %lu failed\n", IPA_IOC_FNR_COUNTER_QUERY);
 	}
 
 	free(query);
@@ -465,7 +465,7 @@ int IPACM_Config::ipacm_alloc_fnr_counters(struct ipa_ioc_flt_rt_counter_alloc *
 	ret = ipacm_fnr_v2_ioctl(nfd, IPA_IOC_FNR_COUNTER_ALLOC, fnr_counters);
 	if (ret < 0)
 	{
-		IPACMERR("Failed to execute ioctl %d\n", IPA_IOC_FNR_COUNTER_ALLOC);
+		IPACMERR("Failed to execute ioctl %lu\n", IPA_IOC_FNR_COUNTER_ALLOC);
 		goto bail;
 	}
 
@@ -587,6 +587,9 @@ int IPACM_Config::Init(void)
 		/* copy bridge interface name to ipacmcfg */
 		if( iface_table[i].if_cat == VIRTUAL_IF)
 		{
+#ifdef FEATURE_RDKB
+			strlcpy(iface_table[i].iface_name, DEFAULT_BRIDGE_IFACE_NAME, sizeof(iface_table[i].iface_name));
+#endif
 			strlcpy(ipa_virtual_iface_name, iface_table[i].iface_name, sizeof(ipa_virtual_iface_name));
 			IPACMDBG_H("ipa_virtual_iface_name(%s) \n", ipa_virtual_iface_name);
 		}
@@ -1669,7 +1672,7 @@ void IPACM_Config::add_vlan_iface(ipa_vlan_iface_info *data)
 	 */
 	evt_data.event = IPA_NOTIFY_VLAN_UP;
 	evt_data.evt_data = NULL;
-	IPACMDBG_H("Posting IPA_NOTIFY_VLAN_UP event!\n", evt_data.event);
+	IPACMDBG_H("Posting %s\n", IPACM_Iface::ipacmcfg->getEventName(evt_data.event));
 	IPACM_EvtDispatcher::PostEvt(&evt_data);
 
 #endif
@@ -2175,55 +2178,45 @@ bool IPACM_Config::is_added_vlan_iface(char *iface_name)
 	return ret;
 }
 
-bool IPACM_Config::iface_in_vlan_mode(const char *phys_iface_name)
-{
-
-	IPACMDBG_H("iface %s is getting checked if it is vlan\n", phys_iface_name);
+bool IPACM_Config::iface_in_vlan_mode(const char *interfaceName) {
+	IPACMDBG_H("iface %s is getting checked if it is vlan\n", interfaceName);
+	string nameToCheck = getNameForVlanQuery(interfaceName);
 #if IPA_ETH_API_VER >= 2
-	/* Differentiate Dual NIC mode where interface name is either [eth0|eth1] and legacy while where
-	 * name is always "eth0".
+	/**
+	 *  Differentiate Dual NIC mode where interface name is either
+	 *  [eth0|eth1] and legacy while where name is always "eth0".
 	 */
-	if (strstr(phys_iface_name, "eth0")) {
+	if (strstr(nameToCheck.c_str(), "eth0")) {
 		IPACMDBG("eth0 vlan mode %d\n", vlan_devices[IPA_VLAN_IF_ETH0]);
 		return vlan_devices[IPA_VLAN_IF_ETH0] || vlan_devices[IPA_VLAN_IF_EMAC];
 	}
-
-	if (strstr(phys_iface_name, "eth1")) {
+	if (strstr(nameToCheck.c_str(), "eth1")) {
 		IPACMDBG("eth1 vlan mode %d\n", vlan_devices[IPA_VLAN_IF_ETH1]);
 		return vlan_devices[IPA_VLAN_IF_ETH1] || vlan_devices[IPA_VLAN_IF_EMAC];
 	}
 #endif
-
-	if (strstr(phys_iface_name, "eth") || strstr(phys_iface_name, "macsec"))
-	{
+	if (strstr(nameToCheck.c_str(), "eth") || strstr(nameToCheck.c_str(), "macsec")) {
 		IPACMDBG("eth vlan mode %d\n", vlan_devices[IPA_VLAN_IF_EMAC]);
 		return vlan_devices[IPA_VLAN_IF_EMAC];
 	}
-
-	if(strstr(phys_iface_name, "rndis"))
-	{
+	if (strstr(nameToCheck.c_str(), "rndis")) {
 		IPACMDBG("rndis vlan mode %d\n", vlan_devices[IPA_VLAN_IF_RNDIS]);
 		return vlan_devices[IPA_VLAN_IF_RNDIS];
 	}
-
-	if(strstr(phys_iface_name, "ecm"))
-	{
+	if (strstr(nameToCheck.c_str(), "ecm")) {
 		IPACMDBG("ecm vlan mode %d\n", vlan_devices[IPA_VLAN_IF_ECM]);
 		return vlan_devices[IPA_VLAN_IF_ECM];
 	}
-
 #ifdef IPA_VLAN_IF_WLAN
-	if(strstr(phys_iface_name, "ath"))
-	{
+	if (strstr(nameToCheck.c_str(), "ath")) {
 		IPACMDBG("ath vlan mode %d\n", vlan_devices[IPA_VLAN_IF_WLAN]);
 		return (vlan_devices[IPA_VLAN_IF_WLAN] ||
-					((IPACM_Iface::ipacmcfg->ipacm_emesh_enable && IPACM_Iface::ipacmcfg->ipacm_emesh_mode >= 2) &&
-					is_svap_related(phys_iface_name)) ||
-					IsWlanIfVlan(phys_iface_name));
+			((IPACM_Iface::ipacmcfg->ipacm_emesh_enable && IPACM_Iface::ipacmcfg->ipacm_emesh_mode >= 2) &&
+			is_svap_related(nameToCheck.c_str())) || IsWlanIfVlan(nameToCheck.c_str()));
 	}
 #endif
 
-	IPACMDBG_H("iface %s did not match any known ifaces\n", phys_iface_name);
+	IPACMDBG_H("iface %s did not match any known ifaces\n", nameToCheck.c_str());
 	return false;
 }
 
@@ -3596,67 +3589,50 @@ bool IPACM_Config::client_in_stats_cache(uint8_t *mac_addr)
 }
 #endif
 
-/*
- * Add new macsec map to the config
- */
-bool IPACM_Config::AddMacsecMap(struct ipa_macsec_map *new_macsec_map)
-{
-	int netlink_index, iface_table_index;
+bool IPACM_Config::insertOrAssignMacsecMap(struct ipa_macsec_map *macsecMap) {
+	int netlinkIdx, ifaceTableIdx;
 
+	if (!macsecMap)
+		return false;
 	/* first check if we have macsec iface entry or not */
-	if (IPACM_Iface::ipa_get_if_index(new_macsec_map->macsec_name, &netlink_index) == IPACM_SUCCESS &&
-	    (iface_table_index = IPACM_Iface::iface_ipa_index_query(netlink_index)) != INVALID_IFACE)
-	{
-		IPACMDBG_H("Will modify the existing macsec interface %s with new phy %s\n",
-			new_macsec_map->macsec_name, new_macsec_map->phy_name);
+	if (IPACM_Iface::ipa_get_if_index(macsecMap->macsec_name, &netlinkIdx) == IPACM_SUCCESS &&
+	    (ifaceTableIdx = IPACM_Iface::iface_ipa_index_query(netlinkIdx)) != INVALID_IFACE) {
+		IPACMDBG_H("Will modify the existing macsec interface %s with new phy %s\n", macsecMap->macsec_name, macsecMap->phy_name);
 
 		/* Modify an existing macsec interface macsec interface in the config table*/
-		strlcpy(iface_table[iface_table_index].phy_dev_name, new_macsec_map->phy_name,
-			sizeof(iface_table[iface_table_index].phy_dev_name));
-	}
-	else
-	{
-		IPACMDBG_H("Will add new macsec interface: %s instead of %s\n",
-			new_macsec_map->macsec_name, new_macsec_map->phy_name);
+		strlcpy(iface_table[ifaceTableIdx].phy_dev_name, macsecMap->phy_name, sizeof(iface_table[ifaceTableIdx].phy_dev_name));
+	} else {
+		IPACMDBG_H("Will add new macsec interface: %s instead of %s\n", macsecMap->macsec_name, macsecMap->phy_name);
 
 		/* check if physical iface is valid */
-		if (IPACM_Iface::ipa_get_if_index(new_macsec_map->phy_name, &netlink_index) == IPACM_FAILURE ||
-		    (iface_table_index = IPACM_Iface::iface_ipa_index_query(netlink_index)) == INVALID_IFACE)
-		{
+		if (IPACM_Iface::ipa_get_if_index(macsecMap->phy_name, &netlinkIdx) == IPACM_FAILURE ||
+		    (ifaceTableIdx = IPACM_Iface::iface_ipa_index_query(netlinkIdx)) == INVALID_IFACE) {
 			/* can't find physical nic name, ignoring this macsec handling */
-			IPACMERR("Got wrong physical NIC name: %s\n", new_macsec_map->phy_name);
+			IPACMERR("Got wrong physical NIC name: %s\n", macsecMap->phy_name);
 			return false;
 		}
-
 		/* Replace a physical interface with macsec interface in the config table */
-		iface_table[iface_table_index].virtual_iface = true;
-		strlcpy(iface_table[iface_table_index].iface_name, new_macsec_map->macsec_name,
-			sizeof(iface_table[iface_table_index].iface_name));
-		strlcpy(iface_table[iface_table_index].phy_dev_name, new_macsec_map->phy_name,
-			sizeof(iface_table[iface_table_index].phy_dev_name));
+		iface_table[ifaceTableIdx].virtual_iface = true;
+		strlcpy(iface_table[ifaceTableIdx].iface_name, macsecMap->macsec_name, sizeof(iface_table[ifaceTableIdx].iface_name));
+		strlcpy(iface_table[ifaceTableIdx].phy_dev_name, macsecMap->phy_name, sizeof(iface_table[ifaceTableIdx].phy_dev_name));
 	}
 
 	return true;
 }
 
-/*
- * Delete a macsec map from the config
- */
-bool IPACM_Config::DelMacsecMap(struct ipa_macsec_map *macsec_map_to_delete)
-{
-	int netlink_index, iface_table_index;
+bool IPACM_Config::delMacsecMap(struct ipa_macsec_map *macsecMap) {
+	int netlinkIdx, ifaceTableIdx;
 
+	if (!macsecMap)
+		return false;
 	/* Replace the requested macsec interface with physical interface */
-	if (IPACM_Iface::ipa_get_if_index(macsec_map_to_delete->macsec_name, &netlink_index) == IPACM_SUCCESS &&
-	    (iface_table_index = IPACM_Iface::iface_ipa_index_query(netlink_index)) != INVALID_IFACE)
-	{
-		IPACMDBG_H("Will replace the macsec interface: %s with %s\n",
-			macsec_map_to_delete->macsec_name, macsec_map_to_delete->phy_name);
-		iface_table[iface_table_index].virtual_iface = false;
-		strlcpy(iface_table[iface_table_index].iface_name,
-			iface_table[iface_table_index].phy_dev_name,
-			sizeof(iface_table[iface_table_index].iface_name));
-		iface_table[iface_table_index].phy_dev_name[0] = '\0';
+	if (IPACM_Iface::ipa_get_if_index(macsecMap->macsec_name, &netlinkIdx) == IPACM_SUCCESS &&
+	    (ifaceTableIdx = IPACM_Iface::iface_ipa_index_query(netlinkIdx)) != INVALID_IFACE) {
+		IPACMDBG_H("Will replace the macsec interface: %s with %s\n", macsecMap->macsec_name, macsecMap->phy_name);
+		iface_table[ifaceTableIdx].virtual_iface = false;
+		strlcpy(iface_table[ifaceTableIdx].iface_name, iface_table[ifaceTableIdx].phy_dev_name,
+			sizeof(iface_table[ifaceTableIdx].iface_name));
+		iface_table[ifaceTableIdx].phy_dev_name[0] = '\0';
 
 		return true;
 	}

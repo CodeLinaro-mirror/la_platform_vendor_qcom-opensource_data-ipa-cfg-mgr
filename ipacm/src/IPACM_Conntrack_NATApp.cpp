@@ -1700,7 +1700,7 @@ bool Ipv6IpAddress::Valid() const
 
 void Ipv6IpAddress::DebugDump(const char* msg_prefix) const
 {
-	IPACMDBG_H("%s IPv6 address 0x%llx%llx\n", msg_prefix, m_msb, m_lsb);
+	IPACMDBG_H("%s IPv6 address 0x%llu%llu\n", msg_prefix, m_msb, m_lsb);
 }
 
 bool Ipv6IpAddress::IsSameSubnet(uint32_t* prefix) const
@@ -1755,7 +1755,7 @@ void Ipv6IpAddress::Convert64to2x32(uint64_t in, uint32_t* pair32, bool outputNe
 	}
 	IPACMDBG_H("return\n");
 }
-#ifdef FEATURE_IPV6_NAT
+
 bool Ipv6IpAddress::IsGlobalAddr() const
 {
 	uint64_t ipv6_link_local_prefix, ipv6_link_local_prefix_mask, ipv6_ula_prefix, ipv6_ula_mask;
@@ -1778,7 +1778,7 @@ bool Ipv6IpAddress::IsGlobalAddr() const
 
 	return true;
 }
-#endif
+
 NatEntryBase::NatEntryBase(ipa_ip_type type) :
 	m_type(type),
 	m_timestamp(0),

@@ -110,6 +110,13 @@ typedef enum
 	IPA_LINK_DOWN
 } ipa_nl_state_e;
 
+typedef enum
+{
+	IPA_LINK_TYPE_NORMAL = 0,
+	IPA_LINK_TYPE_VLAN,
+	IPA_LINK_TYPE_MACSEC,
+} ipa_nl_type_e;
+
 typedef struct
 {
 	int sk_fd;
@@ -145,6 +152,10 @@ typedef struct
 {
 	struct ifinfomsg  metainfo;                   /* from header */
 	struct ipa_vlan_iface_info vlan_info;
+	ipa_nl_type_e link_type;
+	char name[IPA_RESOURCE_NAME_MAX];
+	uint16_t vlan_id;
+	uint16_t master_interface_index;
 } ipa_nl_link_info_t;
 
 
@@ -208,6 +219,11 @@ typedef struct
 	ipa_nl_route_info_t      nl_route_info;
 } ipa_nl_msg_t;
 
+typedef struct {
+    struct nlmsghdr nlh;
+    struct rtmsg rtm;
+} nl_request_t;
+
 /* Initialization routine for listener on NetLink sockets interface */
 int ipa_nl_listener_init
 (
@@ -224,6 +240,8 @@ int ipa_nl_recv_msg(int fd);
 int mask_v6(int index, uint32_t *mask);
 
 int ipa_get_if_name(char *if_name, int if_index);
+
+int ipa_nl_send_getroute(ipa_ip_type ip_type);
 
 #ifdef __cplusplus
 }

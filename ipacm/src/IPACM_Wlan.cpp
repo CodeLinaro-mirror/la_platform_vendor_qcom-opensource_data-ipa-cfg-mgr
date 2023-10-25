@@ -360,7 +360,7 @@ void IPACM_Wlan::event_callback(ipa_cm_event_id event, void *param)
 
 		if(ip_type != IPA_IP_v4)
 		{
-			IPACMDBG_H ("iface_ul_firewall Addr = (0x%x)\n", &iface_ul_firewall);
+			IPACMDBG_H ("iface_ul_firewall Addr = (%p)\n", &iface_ul_firewall);
 #ifdef FEATURE_IPv6CT_DISABLED
 #ifdef IPA_V6_UL_WL_FIREWALL_HANDLE
 			configure_v6_ul_firewall_wlan();
@@ -1272,7 +1272,7 @@ void IPACM_Wlan::event_callback(ipa_cm_event_id event, void *param)
 		}
 
 		/* Issue add/delete ioctl and update cache */
-		IPACMDBG_H("Issuing DSCP PCP %d command\n", (dscp_pcp_map_info.add)?"add":"delete");
+		IPACMDBG_H("Issuing DSCP PCP %s command\n", (dscp_pcp_map_info.add)?"add":"delete");
 		dscp_pcp_map_info.add = IPACM_Iface::ipacmcfg->dscp_pcp_config.add;
 		memcpy(&(dscp_pcp_map_info.dscp_pcp_map[0]), IPACM_Iface::ipacmcfg->dscp_pcp_config.dscp_pcp_map,
 			sizeof(IPACM_Iface::ipacmcfg->dscp_pcp_config.dscp_pcp_map));
@@ -1909,14 +1909,14 @@ int IPACM_Wlan::handle_wlan_client_init_ex(ipacm_event_data_wlan_ex *data, bool 
 
 				if (strlcat(pHeaderDescriptor->hdr[0].name, IPA_WLAN_PARTIAL_HDR_NAME_v4, sizeof(pHeaderDescriptor->hdr[0].name)) > IPA_RESOURCE_NAME_MAX)
 				{
-					IPACMERR(" header name construction failed exceed length (%d)\n", strlen(pHeaderDescriptor->hdr[0].name));
+					IPACMERR(" header name construction failed exceed length (%zu)\n", strlen(pHeaderDescriptor->hdr[0].name));
 					res = IPACM_FAILURE;
 					goto fail;
 				}
 				snprintf(index,sizeof(index), "_%d", header_name_count);
 				if (strlcat(pHeaderDescriptor->hdr[0].name, index, sizeof(pHeaderDescriptor->hdr[0].name)) > IPA_RESOURCE_NAME_MAX)
 				{
-					IPACMERR(" header name construction failed exceed length (%d)\n", strlen(pHeaderDescriptor->hdr[0].name));
+					IPACMERR(" header name construction failed exceed length (%zu)\n", strlen(pHeaderDescriptor->hdr[0].name));
 					res = IPACM_FAILURE;
 					goto fail;
 				}
@@ -2046,7 +2046,7 @@ int IPACM_Wlan::handle_wlan_client_init_ex(ipacm_event_data_wlan_ex *data, bool 
 				pHeaderDescriptor->hdr[0].name[IPA_RESOURCE_NAME_MAX-1] = '\0';
 				if (strlcat(pHeaderDescriptor->hdr[0].name, IPA_WLAN_PARTIAL_HDR_NAME_v6, sizeof(pHeaderDescriptor->hdr[0].name)) > IPA_RESOURCE_NAME_MAX)
 				{
-					IPACMERR(" header name construction failed exceed length (%d)\n", strlen(pHeaderDescriptor->hdr[0].name));
+					IPACMERR(" header name construction failed exceed length (%zu)\n", strlen(pHeaderDescriptor->hdr[0].name));
 					res = IPACM_FAILURE;
 					goto fail;
 				}
@@ -2054,7 +2054,7 @@ int IPACM_Wlan::handle_wlan_client_init_ex(ipacm_event_data_wlan_ex *data, bool 
 				snprintf(index,sizeof(index), "_%d", header_name_count);
 				if (strlcat(pHeaderDescriptor->hdr[0].name, index, sizeof(pHeaderDescriptor->hdr[0].name)) > IPA_RESOURCE_NAME_MAX)
 				{
-					IPACMERR(" header name construction failed exceed length (%d)\n", strlen(pHeaderDescriptor->hdr[0].name));
+					IPACMERR(" header name construction failed exceed length (%zu)\n", strlen(pHeaderDescriptor->hdr[0].name));
 					res = IPACM_FAILURE;
 					goto fail;
 				}
@@ -2305,8 +2305,8 @@ int IPACM_Wlan::handle_wlan_primary_client_init_ex(ipacm_event_data_wlan_ex *dat
 	int res = IPACM_FAILURE, cnt = 0, i, evt_size;
 
 	/* start of adding header */
-	IPACMDBG_H("Primary Wifi client number for this iface: %d & total number of wlan clients: %d\n",
-                 num_wifi_primary_client);
+	IPACMDBG_H("Primary Wifi client number for this iface: %d, total number of wlan clients: %d\n",
+                 num_wifi_primary_client, -1/*todo: add the correct variable here*/);
 
 	IPACMDBG_H("Primary Wifi client number: %d\n", num_wifi_primary_client);
 
@@ -2534,9 +2534,8 @@ int IPACM_Wlan::handle_wlan_client_ipaddr(ipacm_event_data_all *data)
 			{
 				IPACMDBG_H("eth client:%d, current ipv6:%d, v6_route_set:%d, total_client_ipv6: %d, limit %d\n",
 					clnt_indx, get_client_memptr(wlan_client, clnt_indx)->ipv6_set,
-					clnt_indx, get_client_memptr(wlan_client, clnt_indx)->route_rule_set_v6,
-					IPACM_Iface::ipacmcfg->ipa_num_clients_ipv6,
-					IPA_MAX_NUM_CLIENTS_IPV6);
+					get_client_memptr(wlan_client, clnt_indx)->route_rule_set_v6,
+					IPACM_Iface::ipacmcfg->ipa_num_clients_ipv6, IPA_MAX_NUM_CLIENTS_IPV6);
 				std::copy(std::begin(data->ipv6_addr), std::end(data->ipv6_addr), std::begin(ipv6));
 
 				/* never see this ipv6, insert to the map*/
@@ -6682,13 +6681,13 @@ int IPACM_Wlan::handle_wlan_vlan_client_init(int client_idx, ipacm_bridge *bridg
 			pHeaderDescriptor->hdr[0].name[IPA_RESOURCE_NAME_MAX - 1] = '\0';
 
 			if (strlcat(pHeaderDescriptor->hdr[0].name, IPA_WLAN_PARTIAL_HDR_NAME_v4, sizeof(pHeaderDescriptor->hdr[0].name)) > IPA_RESOURCE_NAME_MAX) {
-				IPACMERR(" header name construction failed exceed length (%d)\n", strlen(pHeaderDescriptor->hdr[0].name));
+				IPACMERR(" header name construction failed exceed length (%zu)\n", strlen(pHeaderDescriptor->hdr[0].name));
 				res = IPACM_FAILURE;
 				goto fail;
 			}
 			snprintf(index, sizeof(index), "_%d", header_name_count);
 			if (strlcat(pHeaderDescriptor->hdr[0].name, index, sizeof(pHeaderDescriptor->hdr[0].name)) > IPA_RESOURCE_NAME_MAX) {
-				IPACMERR(" header name construction failed exceed length (%d)\n", strlen(pHeaderDescriptor->hdr[0].name));
+				IPACMERR(" header name construction failed exceed length (%zu)\n", strlen(pHeaderDescriptor->hdr[0].name));
 				res = IPACM_FAILURE;
 				goto fail;
 			}
@@ -6845,14 +6844,14 @@ int IPACM_Wlan::handle_wlan_vlan_client_init(int client_idx, ipacm_bridge *bridg
 			pHeaderDescriptor->hdr[0].name[IPA_RESOURCE_NAME_MAX - 1] = '\0';
 
 			if (strlcat(pHeaderDescriptor->hdr[0].name, IPA_WLAN_PARTIAL_HDR_NAME_v6, sizeof(pHeaderDescriptor->hdr[0].name)) > IPA_RESOURCE_NAME_MAX) {
-				IPACMERR(" header name construction failed exceed length (%d)\n", strlen(pHeaderDescriptor->hdr[0].name));
+				IPACMERR(" header name construction failed exceed length (%zu)\n", strlen(pHeaderDescriptor->hdr[0].name));
 				res = IPACM_FAILURE;
 				goto fail;
 			}
 
 			snprintf(index, sizeof(index), "_%d", header_name_count);
 			if (strlcat(pHeaderDescriptor->hdr[0].name, index, sizeof(pHeaderDescriptor->hdr[0].name)) > IPA_RESOURCE_NAME_MAX) {
-				IPACMERR(" header name construction failed exceed length (%d)\n", strlen(pHeaderDescriptor->hdr[0].name));
+				IPACMERR(" header name construction failed exceed length (%zu)\n", strlen(pHeaderDescriptor->hdr[0].name));
 				res = IPACM_FAILURE;
 				goto fail;
 			}

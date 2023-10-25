@@ -86,7 +86,12 @@
 #include <map>
 #include <set>
 #include <unordered_set>
-#include<algorithm>
+#include <algorithm>
+#include <string>
+
+
+using std::string;
+
 
 typedef struct
 {
@@ -457,7 +462,7 @@ public:
 	ipacm_bridge *get_vlan_bridge(char *name);
 	ipacm_bridge *get_vlan_bridge_from_vid(uint16_t vlan_id);
 	bool is_added_vlan_iface(char *iface_name);
-	bool iface_in_vlan_mode(const char * phys_iface_name);
+	bool iface_in_vlan_mode(const char * interfaceName);
 	int get_iface_vlan_ids(char *phys_iface_name, uint16_t *Ids);
 	int get_vlan_id(char *iface_name, uint16_t *vlan_id);
 	void get_vlan_mode_ifaces();
@@ -1059,11 +1064,9 @@ public:
 				/* Update the vlan id if prefix already saved but vlan id not associated
 				 * e.g Wlan for default pdn reserves a slot with vlan id 0, then eth vlan
 				 * for default pdn associates with vlan id */
-				IPACMDBG_H("Updating vlan id %d for prefix 0x[%X][%X] \n",
-					ipa_ipv6_prefixes[i].vlan_id, ipa_ipv6_prefixes[i].addr[0], ipa_ipv6_prefixes[i].addr[1]);
+				IPACMDBG_H("Updating vlan id %d for prefix 0x[%X][%X] \n", vlan_id, prefix[0], prefix[1]);
 				ipa_ipv6_prefixes[i].vlan_id = vlan_id;
 				updated_reserved_slot =true;
-				IPACMDBG_H("Updated vlan id %d v6 prefix 0x[%X][%X] for vlan id %d\n",ipa_ipv6_prefixes[i].vlan_id, prefix[0], prefix[1]);
 			}
 		}
 
@@ -1242,9 +1245,50 @@ public:
 		return IPACM_SUCCESS;
 	}
 #endif //defined(FEATURE_SOCKSv5) && defined (IPA_SOCKV5_EVENT_MAX)
-
-	bool AddMacsecMap(struct ipa_macsec_map *new_macsec_map);
-	bool DelMacsecMap(struct ipa_macsec_map *macsec_map_to_delete);
+	/**
+	 * Insert a new MACSEC map to the configuration table and mark
+	 * this interface as virtual. in case the a MACSEC map is
+	 * already present for the interface provided, the old MACSEC
+	 * map is replaced with the provided MACSEC map.
+	 *
+	 * @param macsecMap: MACSEC map to add to an interface
+	 *      	   configuration.
+	 *
+	 * @return bool: true on success, false otherwise.
+	 */
+	bool insertOrAssignMacsecMap(struct ipa_macsec_map *macsecMap);
+	/**
+	 * Reset the given interface MACSEC configuration and mark it as
+	 * non-virtual interface.
+	 *
+	 * @param macsecMap: MACSEC map of the interface to mark as
+	 *      	   non-virtual.
+	 *
+	 * @return bool: true on success, false otherwise.
+	 */
+	bool delMacsecMap(struct ipa_macsec_map *macsecMap);
+	/**
+	 * Populate macsec mapping information by Linux interface index
+	 * if such an interface exist.
+	 *
+	 * @param interfaceIndex Linux interface index.
+	 * @param macsecMap      Pointer to MACsec mapping information
+	 *      		 allocated by the caller.
+	 *
+	 * @return bool true when mapping is populated successfully,
+	 *         false otherwise.
+	 */
+	bool populateMacsecMap(const int interfaceIndex, struct ipa_macsec_map *macsecMap) {
+		if (!macsecMap)
+			return false;
+		auto ipaInterfaceInfo = getMacsecInterface(interfaceIndex);
+		if (ipaInterfaceInfo) {
+			strlcpy(macsecMap->macsec_name, ipaInterfaceInfo->iface_name, sizeof(macsecMap->macsec_name));
+			strlcpy(macsecMap->phy_name, ipaInterfaceInfo->phy_dev_name, sizeof(macsecMap->phy_name));
+			return true;
+		}
+		return false;
+	}
 
 #ifdef IPA_IOCTL_SET_EXT_ROUTER_MODE
 	enum ipa_ext_router_mode ext_router_mode;
@@ -1275,6 +1319,48 @@ private:
 	uint8_t qmap_id;
 	ipacm_ext_prop ext_prop_v4;
 	ipacm_ext_prop ext_prop_v6;
+
+	/**
+	 * Return the physical device name if the interface is marked as
+	 * virtual.
+	 *
+	 * @param interfaceName name of the interface.
+	 *
+	 * @return string physical device name if device is virtual,
+	 *         interfaceName otherwise.
+	 */
+	string getNameForVlanQuery(const string &interfaceName) {
+		IPACMDBG("interfaceName = %s\n", interfaceName.c_str());
+		for (int i = 0; i < ipa_num_ipa_interfaces; i++) {
+			if (string(interfaceName).rfind(string(iface_table[i].iface_name), 0) == 0 && iface_table[i].virtual_iface) {
+				return string(iface_table[i].phy_dev_name);
+			}
+		}
+		return interfaceName;
+	}
+	/**
+	 * Get MACsec interface information by Linux interface index.
+	 *
+	 * @param interfaceIndex Linux interface index.
+	 *
+	 * @return ipa_ifi_dev_name_t* pointer to MACsec interface
+	 *         information if such an interface exist, nullptr
+	 *         otherwise.
+	 */
+	ipa_ifi_dev_name_t* getMacsecInterface(const int interfaceIndex) const {
+		if (!iface_table)
+			return nullptr;
+		auto it = std::find_if(iface_table, iface_table + ipa_num_ipa_interfaces,
+			[interfaceIndex](const decltype(iface_table[0])& item) {
+				IPACMDBG("iface_name:%s, phy_dev_name:%s, virtual_iface:%d, netlink_interface_index:%d\n", item.iface_name,
+					item.phy_dev_name, item.virtual_iface, item.netlink_interface_index);
+				return item.netlink_interface_index == interfaceIndex && item.virtual_iface;
+		});
+		if (it < iface_table + ipa_num_ipa_interfaces) {
+			return it;
+		}
+		return nullptr;
+	}
 };
 
 #endif /* IPACM_CONFIG */

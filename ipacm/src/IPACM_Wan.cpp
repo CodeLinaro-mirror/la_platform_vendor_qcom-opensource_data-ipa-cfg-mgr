@@ -1,6 +1,5 @@
 /*
  * Copyright (c) 2013-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -27,43 +26,10 @@
  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * Changes from Qualcomm Innovation Center are provided under the following license:
  *
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
- *
- * Redistribution and use in source and binary forms, with or without
- * modification, are permitted (subject to the limitations in the
- * disclaimer below) provided that the following conditions are met:
- *
- *   * Redistributions of source code must retain the above copyright
- *     notice, this list of conditions and the following disclaimer.
- *
- *   * Redistributions in binary form must reproduce the above
- *     copyright notice, this list of conditions and the following
- *     disclaimer in the documentation and/or other materials provided
- *     with the distribution.
- *
- *   * Neither the name of Qualcomm Innovation Center, Inc. nor the names of its
- *     contributors may be used to endorse or promote products derived
- *     from this software without specific prior written permission.
- *
- * NO EXPRESS OR IMPLIED LICENSES TO ANY PARTY'S PATENT RIGHTS ARE
- * GRANTED BY THIS LICENSE. THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT
- * HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED
- * WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
- * MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
- * IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR
- * ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
- * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE
- * GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
- * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER
- * IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
- * OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
- * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- *
- * Changes from Qualcomm Innovation Center are provided under the following license:
- * Copyright (c) 2025 Qualcomm Innovation Center, Inc. All rights reserved.
- * SPDX-License-Identifier: BSD-3-Clause-Clear
+ * Changes from Qualcomm Technologies, Inc. are provided under the following license:
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear.
  */
 /*!
 		@file
@@ -1196,43 +1162,6 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 						evt_data.evt_data = (void *)wanup_data;
 						IPACM_EvtDispatcher::PostEvt(&evt_data);
 					}
-#ifdef FEATURE_VLAN_MPDN
-					else
-					{
-						if((IPACM_Iface::ipacmcfg->ipacm_mpdn_enable) && (associated_VID != 0))
-						{
-							IPACM_SYSLOG("PDN already associated with VLAN ID via V6 address (0x[%X][%X]), add V4 vlan pdn\n",
-								ipv6_prefix[0], ipv6_prefix[1]);
-
-							/* in case of ip passthrough we receive a link local address and shouldn't add a vlan v4 pdn */
-							if (is_link_local_ipv4_addr(data->ipv4_addr)) {
-								IPACMDBG_H("ipv4 address is link local, don't add v4 vlan pdn\n");
-								break;
-							}
-
-							/* generate IPA_ROUTE_ADD_VLAN_PDN_EVENT for v4 PDN as v6 PDN already has associated vlan*/
-							ipacm_cmd_q_data evt_data;
-							ipacm_event_route_vlan *vlan_data;
-
-							evt_data.event = IPA_ROUTE_ADD_VLAN_PDN_EVENT;
-							vlan_data = (ipacm_event_route_vlan *)malloc(sizeof(ipacm_event_route_vlan));
-							if(!vlan_data)
-							{
-								IPACMERR("couldn't allocate memory for new vlan pdn event\n");
-								return;
-							}
-							vlan_data->iptype = IPA_IP_v4;
-							vlan_data->VlanID = associated_VID;
-							vlan_data->wan_ipv4_addr = data->ipv4_addr;
-							evt_data.evt_data = vlan_data;
-							IPACM_SYSLOG("sending IPA_ROUTE_ADD_VLAN_PDN_EVENT vlan id %d, iptype %d pdn ip 0x%X\n",
-								vlan_data->VlanID,
-								vlan_data->iptype, data->ipv4_addr);
-
-							IPACM_EvtDispatcher::PostEvt(&evt_data);
-						}
-					}
-#endif
 				}
 			}
 		}

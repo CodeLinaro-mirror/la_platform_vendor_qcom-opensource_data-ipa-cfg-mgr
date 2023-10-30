@@ -27,8 +27,35 @@ OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
 IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 Changes from Qualcomm Innovation Center are provided under the following license:
-Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
-SPDX-License-Identifier: BSD-3-Clause-Clear.
+* Redistribution and use in source and binary forms, with or without
+*  modification, are permitted (subject to the limitations in the
+*  disclaimer below) provided that the following conditions are met:
+* 
+*      * Redistributions of source code must retain the above copyright
+*        notice, this list of conditions and the following disclaimer.
+* 
+*      * Redistributions in binary form must reproduce the above
+*        copyright notice, this list of conditions and the following
+*        disclaimer in the documentation and/or other materials provided
+*        with the distribution.
+* 
+*      * Neither the name of Qualcomm Innovation Center, Inc. nor the names of its
+*        contributors may be used to endorse or promote products derived
+*        from this software without specific prior written permission.
+* 
+*  NO EXPRESS OR IMPLIED LICENSES TO ANY PARTY'S PATENT RIGHTS ARE
+*  GRANTED BY THIS LICENSE. THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT
+*  HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED
+*  WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
+*  MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
+*  IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR
+*  ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+*  DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE
+*  GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+*  INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER
+*  IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
+*  OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
+*  IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE
 */
 /*!
 	@file
@@ -198,6 +225,58 @@ typedef struct _xlat_context
 	uint32_t active_pdn_count;
 }xlat_context;
 
+#ifdef FEATURE_EoGRE
+/*
+ * Structure for maintaining state associated with eogre route
+ * contexts and rules...
+ */
+typedef struct eogre_route_data_s
+{
+	uint32_t header_hdl;
+	uint32_t proc_ctx_eogre_add_hdl;
+	uint32_t proc_ctx_eogre_rmv_hdl;
+	uint32_t rt_eogre_add_hdl;
+	uint32_t rt_eogre_rmv_hdl;
+	uint32_t rt_tbl_hdl;
+	uint32_t flt_eogre_1st_pass_hdl;
+} eogre_route_data_t;
+
+/*
+ * An IP v4 plus GRE header..
+ */
+typedef struct v4_gre_hdr_s
+{
+	uint32_t words[6]; /* extra (ie. last) uint32_t for gre header */
+} v4_gre_hdr_t;
+
+
+
+/*
+ * Where things reside in the struct above...
+ */
+#define IPV4_SRC_ADDR  3
+#define IPV4_DST_ADDR  4
+#define IPV4_GRE_PROT  5
+
+/*
+ * An IP v6 plus GRE header.
+ */
+typedef struct v6_gre_hdr_s
+{
+	uint32_t words[11]; /* extra (ie. last) uint32_t for gre header */
+} v6_gre_hdr_t;
+
+
+
+/*
+ * Where things reside in the struct above...
+ */
+#define IPV6_SRC_ADDR  2
+#define IPV6_DST_ADDR  6
+#define IPV6_GRE_PROT 10
+
+#endif /* #ifdef FEATURE_EoGRE */
+
 /* lan iface */
 class IPACM_Lan : public IPACM_Iface
 {
@@ -275,6 +354,65 @@ public:
 
 	static bool odu_up;
 
+#ifdef FEATURE_EoGRE
+	/*
+	 * The following is for keeping eogre route rule state...
+	 *
+	 * We're using two below (one for v4, one for v6) because there
+	 * may be a mismatch between the tunnel iptype (ie. the one
+	 * specified in the eogre enable) and the Vlan Ethernet packet's
+	 * IP payload type. In other words:
+	 *
+	 *   The tunnel may be v4, while the Vlan Ethernet packet's IP
+	 *   type is v6; or
+	 *
+	 *   The tunnel may be v6, while the Vlan Ethernet packet's IP
+	 *   type is v4...
+	 */
+	eogre_route_data_t eogre_route_data[2];
+
+	void eogre_up();
+
+	void eogre_down();
+
+	int eogre_do_rt_work(
+		ipa_ipgre_info& ipgre_info );
+
+	void eogre_route_data_init(
+		enum ipa_ip_type iptype );
+
+	uint32_t eogre_get_rt_tbl_hdl(
+		enum ipa_ip_type iptype );
+
+	int eogre_make_hdr_for_add_ctx(
+		ipa_ipgre_info& ipgre_info );
+
+	int eogre_make_hdr_add_ctx(
+		ipa_ipgre_info& ipgre_info,
+		uint32_t        hdr_2use = 0 );
+
+	int eogre_make_hdr_rem_ctx(
+		ipa_ipgre_info& ipgre_info );
+
+	int eogre_make_header_add_rt_rule(
+		ipa_ipgre_info& ipgre_info,
+		uint32_t        ctx_2use = 0 );
+
+	int eogre_make_header_rem_rt_rule(
+		ipa_ipgre_info& ipgre_info );
+
+	void eogre_clear_route_data(
+		enum ipa_ip_type             iptype,
+		ipa_ioc_query_intf_rx_props* rx_prop = 0 );
+
+	int eogre_add_catchup_rule(
+		enum ipa_ip_type iptype );
+
+	int update_complementary_table(
+		ipa_flt_rule_add& flt_rule_entry,
+		ipa_ip_type       iptype );
+#endif
+
 	/* install UL filter rule from Q6 */
 #ifdef FEATURE_VLAN_MPDN
 	virtual int handle_uplink_filter_rule(ipacm_ext_prop *prop, ipa_ip_type iptype, uint8_t pdn_mux_id, bool notif_only, bool is_xlat = false);
@@ -339,7 +477,7 @@ public:
 
 	/* Delete UL firewall filter rules from LAN prod pipe */
 	virtual int delete_uplink_filter_rule_ul(ul_firewall_t *ul_firewall);
-	
+
 	/* delete UL firewall rules, to be sent to Q6 side*/
 	virtual int disable_dft_firewall_rules_ul_ex(int vid);
 #endif
@@ -1054,6 +1192,7 @@ private:
 	bool ipv6_header_set;
 
 	bool is_l2tp_iface;
+
 #ifdef FEATURE_L2TP
 	uint32_t l2tp_ul_dummy_hdr_hdl; /* 4-byte dummy header */
 
@@ -1344,9 +1483,6 @@ private:
 	/*handle reset usb-client rt-rules */
 	int handle_lan_client_reset_rt(ipa_ip_type iptype);
 
-#ifdef FEATURE_IPACM_UL_FIREWALL
-	void change_to_network_order(ipa_ip_type iptype, ipa_rule_attrib* attrib);
-#endif
 #ifdef FEATURE_L2TP
 	/* install l2tp dl rules */
 	int install_l2tp_dl_rules(ipacm_event_data_all *data, int index);
@@ -1376,6 +1512,7 @@ private:
 	void delete_eth_mac_flt_rules();
 	int handle_eth_client_mac_flt_route_rule(ipa_ip_type iptype, int clt_index, bool is_blacklist);
 	int handle_eth_mac_flt_conn_disc(uint8_t * mac_addr, bool con_state_flag);
+
 };
 
 #endif /* IPACM_LAN_H */

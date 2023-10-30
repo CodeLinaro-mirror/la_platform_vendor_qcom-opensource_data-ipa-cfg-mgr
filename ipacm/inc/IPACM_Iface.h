@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2013-2016, 2018, 2020 The Linux Foundation. All rights reserved.
- *
+ 
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
  * met:
@@ -25,6 +25,41 @@
  * WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *
+ * Changes from Qualcomm Innovation Center are provided under the following
+ * license:
+ * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ *  
+ *   Redistribution and use in source and binary forms, with or without
+ *   modification, are permitted (subject to the limitations in the
+ *   disclaimer below) provided that the following conditions are met:
+ *  
+ *       * Redistributions of source code must retain the above copyright
+ *         notice, this list of conditions and the following disclaimer.
+ *  
+ *       * Redistributions in binary form must reproduce the above
+ *         copyright notice, this list of conditions and the following
+ *         disclaimer in the documentation and/or other materials provided
+ *         with the distribution.
+ *  
+ *       * Neither the name of Qualcomm Innovation Center, Inc. nor the names of its
+ *         contributors may be used to endorse or promote products derived
+ *         from this software without specific prior written permission.
+ *  
+ *   NO EXPRESS OR IMPLIED LICENSES TO ANY PARTY'S PATENT RIGHTS ARE
+ *   GRANTED BY THIS LICENSE. THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT
+ *   HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED
+ *   WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
+ *   MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
+ *   IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR
+ *   ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+ *   DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE
+ *   GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ *   INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER
+ *   IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
+ *   OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
+ *   IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE
+ *
  */
 /*!
 		@file
@@ -104,6 +139,7 @@ public:
 
 	uint32_t dft_v4fl_rule_hdl[IPV4_DEFAULT_FILTERTING_RULES];
 	uint32_t dft_v6fl_rule_hdl[IPV6_DEFAULT_FILTERTING_RULES + IPV6_DEFAULT_LAN_FILTERTING_RULES];
+	uint32_t ula_hdl; /* used for rule moidification when eogre toggles up and down */
 	/* create additional set of v6 RT-rules in Wanv6RT table*/
 	uint32_t dft_rt_rule_hdl[MAX_DEFAULT_v4_ROUTE_RULES+2*MAX_DEFAULT_v6_ROUTE_RULES];
 
@@ -149,6 +185,61 @@ public:
 	/* software routing disable */
 	virtual int handle_software_routing_disable(void);
 	void delete_iface(void);
+
+#ifdef FEATURE_EoGRE
+	int eogre_mod_ula_rule(
+		uint32_t dst_addr_mask );
+#endif
+
+	static inline void addr2host(
+		enum ipa_ip_type addr_type,
+		void*            addr ) {
+		if ( VALID_IPA_IP_TYPE(addr_type) && addr ) {
+			uint32_t* ptr = (uint32_t*) addr;
+			if ( addr_type == IPA_IP_v4 ) {
+				ptr[0] = ntohl(ptr[0]);
+			} else {
+				ptr[0] = ntohl(ptr[0]);
+				ptr[1] = ntohl(ptr[1]);
+				ptr[2] = ntohl(ptr[2]);
+				ptr[3] = ntohl(ptr[3]);
+			}
+		}
+	}
+
+	static inline void addr2network(
+		enum ipa_ip_type addr_type,
+		void*            addr ) {
+		if ( VALID_IPA_IP_TYPE(addr_type) && addr ) {
+			uint32_t* ptr = (uint32_t*) addr;
+			if ( addr_type == IPA_IP_v4 ) {
+				ptr[0] = htonl(ptr[0]);
+			} else {
+				ptr[0] = htonl(ptr[0]);
+				ptr[1] = htonl(ptr[1]);
+				ptr[2] = htonl(ptr[2]);
+				ptr[3] = htonl(ptr[3]);
+			}
+		}
+	}
+
+	void change_to_network_order(
+		ipa_ip_type      iptype,
+		ipa_rule_attrib* attrib ) {
+		if ( ! VALID_IPA_IP_TYPE(iptype) || ! attrib ) {
+			IPACMERR(
+				"Bad iptype(%u) and/or attribute pointer(%p) is NULL.\n",
+				iptype, attrib);
+		}
+		if ( iptype == IPA_IP_v6 ) {
+			addr2network(iptype, attrib->u.v6.src_addr);
+			addr2network(iptype, attrib->u.v6.src_addr_mask);
+			addr2network(iptype, attrib->u.v6.dst_addr);
+			addr2network(iptype, attrib->u.v6.dst_addr_mask);
+		} else {
+			IPACMDBG_H("IP type is not IPv6, do nothing: %d\n", iptype);
+		}
+	}
 
 protected:
 

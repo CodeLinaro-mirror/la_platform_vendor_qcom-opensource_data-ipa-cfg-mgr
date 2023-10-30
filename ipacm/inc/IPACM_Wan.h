@@ -25,6 +25,40 @@ BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
 WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
 OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
 IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+Changes from Qualcomm Innovation Center are provided under the following
+license:
+* Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+* 
+*  Redistribution and use in source and binary forms, with or without
+*  modification, are permitted (subject to the limitations in the
+*  disclaimer below) provided that the following conditions are met:
+* 
+*      * Redistributions of source code must retain the above copyright
+*        notice, this list of conditions and the following disclaimer.
+* 
+*      * Redistributions in binary form must reproduce the above
+*        copyright notice, this list of conditions and the following
+*        disclaimer in the documentation and/or other materials provided
+*        with the distribution.
+* 
+*      * Neither the name of Qualcomm Innovation Center, Inc. nor the names of its
+*        contributors may be used to endorse or promote products derived
+*        from this software without specific prior written permission.
+* 
+*  NO EXPRESS OR IMPLIED LICENSES TO ANY PARTY'S PATENT RIGHTS ARE
+*  GRANTED BY THIS LICENSE. THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT
+*  HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED
+*  WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
+*  MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
+*  IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR
+*  ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+*  DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE
+*  GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+*  INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER
+*  IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
+*  OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
+*  IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE
 */
 /*!
 	@file
@@ -383,6 +417,27 @@ public:
 	static bool is_xlat_by_vid(uint16_t vlan_id);
 	static bool is_xlat_by_ipv4(uint32_t ipv4_addr);
 #endif
+
+#ifdef FEATURE_EoGRE
+	void eogre_up();
+
+	void eogre_down();
+
+	int eogre_v4_work(
+		bool eogre_enable );
+
+	int eogre_v6_work(
+		bool eogre_enable );
+
+	int eogre_notify_wan_state(
+		bool eogre_enable );
+#endif
+
+	static int GetMuxByAddr(
+		enum ipa_ip_type iptype,
+		void*            addr,
+		uint8_t&         mux_id );
+
 private:
 
 	bool is_ipv6_frag_firewall_flt_rule_installed;
@@ -706,8 +761,6 @@ private:
 
 	int install_wan_filtering_rule(bool is_sw_routing);
 
-	void change_to_network_order(ipa_ip_type iptype, ipa_rule_attrib* attrib);
-
 	void handle_wlan_SCC_MCC_switch(bool, ipa_ip_type);
 
 	void handle_wan_client_SCC_MCC_switch(bool, ipa_ip_type);
@@ -732,7 +785,7 @@ private:
 	int add_dummy_rx_hdr();
 
 	void HandleSTAClientDelEvt(const ipa_wan_client* client);
-	
+
 	int add_catchup_all_filtering_rule_each_pdn(const IPACM_firewall_conf_t& firewall_config, ipa_ip_type iptype,
 		const struct ipa_rule_attrib& rx_prop_attrib, struct ipa_flt_rule_add& flt_rule_add, int fltr_rule_number);
 	int add_ipv6_frag_filtering_rule_ex(const struct ipa_rule_attrib& rx_prop_attrib,

@@ -5061,7 +5061,7 @@ int IPACM_Lan::handle_eth_client_ipaddr(ipacm_event_data_all *data)
 				std::copy(std::begin(data->ipv6_addr), std::end(data->ipv6_addr), std::begin(ipv6));
 
 				/* never see this ipv6, insert to the map*/
-				if(rt_hdl_v6_list[clnt_indx].count(ipv6) == 0)
+				if(rt_hdl_v6_list[clnt_indx].count(ipv6) == 0 && ((data->ipv6_addr[0] & ipv6_link_local_prefix_mask) != (ipv6_link_local_prefix & ipv6_link_local_prefix_mask)))
 				{
 					IPACMDBG_H("can't find client\n");
 					/*

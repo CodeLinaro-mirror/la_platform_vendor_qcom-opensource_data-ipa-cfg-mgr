@@ -359,7 +359,7 @@ int IPACM_Wan::GetMuxByVid(uint16_t vlan_id, uint8_t *mux_id, ipa_ip_type iptype
 	return IPACM_FAILURE;
 }
 
-int IPACM_Wan::GetMTUByVid(uint16_t *mtu, uint16_t vlan_id, ipa_ip_type iptype)
+int IPACM_Wan::GetMTUByVid(uint16_t *mtu, uint16_t vlan_id, ipa_ip_type iptype) //mike
 {
 	for(int i = 0; i < IPA_MAX_NUM_SW_PDNS; i++)
 	{

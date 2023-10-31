@@ -162,6 +162,11 @@ public:
 	static uint16_t mtu_default_wan_v4;
 	static uint16_t mtu_default_wan_v6;
 
+#ifdef FEATURE_EoGRE
+	static uint16_t mtu_gre_v4;
+	static uint16_t mtu_gre_v6;
+#endif
+
 	/* IPACM interface name */
 	static char wan_up_dev_name[IF_NAME_LEN];
 	static uint32_t curr_wan_ip;
@@ -219,18 +224,35 @@ public:
 	{
 		if (iptype == IPA_IP_v4)
 		{
+#ifdef FEATURE_EoGRE
+			if (IPACM_Iface::ipacmcfg->eogre_enabled)
+			{
+				IPACMDBG_H("got mtu_gre_v4\n")
+				return mtu_gre_v4;
+			}
+#endif
 			if (isWanUP(ipa_if_num_tether))
 			{
+				IPACMDBG_H("got mtu_default_v4\n")
 				return mtu_default_wan_v4;
 			}
 		}
 		else if (iptype == IPA_IP_v6)
 		{
+#ifdef FEATURE_EoGRE
+			if (IPACM_Iface::ipacmcfg->eogre_enabled)
+			{
+				IPACMDBG_H("got mtu_gre_v6\n")
+				return mtu_gre_v6;
+			}
+#endif
 			if (isWanUP_V6(ipa_if_num_tether))
 			{
+				IPACMDBG_H("got mtu_default_v6\n")
 				return mtu_default_wan_v6;
 			}
 		}
+		IPACMDBG_H("No conditions hit. Return default value %d", DEFAULT_MTU_SIZE);
 		return DEFAULT_MTU_SIZE;
 	}
 

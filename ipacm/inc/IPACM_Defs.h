@@ -139,8 +139,8 @@ extern "C"
 #define IPA_MAX_NUM_OFFLOAD_VLANS 15
 /* mbb reconstructor not able to associate vlan to bridge0, need one more */
 #define IPA_MAX_NUM_BRIDGES (IPA_MAX_NUM_OFFLOAD_VLANS + 1)
-#define IPA_MAX_NUM_SW_PDNS 15
-#define IPA_MAX_NUM_HW_PDNS (IPA_MAX_PDN_NUM - 1) /* currently 16 - 1 = 15 */
+#define IPA_MAX_NUM_SW_PDNS IPA_MAX_PDN_NUM
+#define IPA_MAX_NUM_HW_PDNS IPA_MAX_PDN_NUM
 #ifdef FEATURE_VLAN_MPDN
 /* mbb reconstructor not able to associate vlan to bridge0, need one more */
 #define IPA_MAX_PRIVATE_SUBNET_ENTRIES (IPA_MAX_NUM_OFFLOAD_VLANS + 1)
@@ -157,8 +157,6 @@ extern "C"
 #define IPV6_HEADER_SIZE 40
 
 #ifdef FEATURE_VLAN_MPDN
-/* support default PDN+3 VLAN PDNs */
-/* all PDNs can be non_offload PDNs, but only 4 can be offloaded */
 #define IPA_MAX_IPV6_PREFIX_FLT_RULE IPA_MAX_NUM_HW_PDNS
 #define IPA_MAX_IPV6_NO_OFFLOAD_PREFIX_FLT_RULE IPA_MAX_NUM_SW_PDNS
 #else

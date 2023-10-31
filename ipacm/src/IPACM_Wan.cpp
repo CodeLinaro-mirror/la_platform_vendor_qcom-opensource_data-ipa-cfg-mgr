@@ -6083,34 +6083,22 @@ int IPACM_Wan::handle_down_evt()
 	/* free dft ipv4 filter rule handlers if any */
 	if (ip_type != IPA_IP_v6 && rx_prop != NULL)
 	{
-		if (dft_v4fl_rule_hdl[0] != 0)
+		res = delete_dflt_filter_rules(IPA_IP_v4);
+		if (res == IPACM_FAILURE)
 		{
-			if (m_filtering.DeleteFilteringHdls(dft_v4fl_rule_hdl,
-				IPA_IP_v4,
-				IPV4_DEFAULT_FILTERTING_RULES) == false)
-			{
-				IPACMERR("Error Delete Filtering rules, aborting...\n");
-				res = IPACM_FAILURE;
-				goto fail;
-			}
-			IPACM_Iface::ipacmcfg->decreaseFltRuleCount(rx_prop->rx[0].src_pipe, IPA_IP_v4, IPV4_DEFAULT_FILTERTING_RULES);
-			IPACMDBG_H("finished delete default v4 filtering rules\n ");
+			IPACMERR("delete_dflt_filter_rules failed\n");
+			goto fail;
 		}
 	}
 
 	/* free dft ipv6 filter rule handlers if any */
 	if (ip_type != IPA_IP_v4 && rx_prop != NULL)
 	{
-		if (dft_v6fl_rule_hdl[0] != 0)
+		res = delete_dflt_filter_rules(IPA_IP_v6);
+		if (res == IPACM_FAILURE)
 		{
-			if (!m_filtering.DeleteFilteringHdls(dft_v6fl_rule_hdl, IPA_IP_v6, m_ipv6_default_filterting_rules_count))
-			{
-				IPACMERR("ErrorDeleting Filtering rule, aborting...\n");
-				res = IPACM_FAILURE;
-				goto fail;
-			}
-			IPACM_Iface::ipacmcfg->decreaseFltRuleCount(
-				rx_prop->rx[0].src_pipe, IPA_IP_v6, m_ipv6_default_filterting_rules_count);
+			IPACMERR("delete_dflt_filter_rules failed\n");
+			goto fail;
 		}
 
 		if(num_ipv6_dest_flt_rule > 0 && num_ipv6_dest_flt_rule <= MAX_DEFAULT_v6_ROUTE_RULES)

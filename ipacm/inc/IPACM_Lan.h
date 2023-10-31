@@ -267,6 +267,13 @@ typedef struct v6_gre_hdr_s
 } v6_gre_hdr_t;
 
 
+/*
+ * An IP v6 plus GRE header with dest option.
+ */
+typedef struct v6_eogre_hdr_s
+{
+	uint32_t words[13]; /* extra (ie. last) uint32_t for gre header */
+} v6_eogre_hdr_t;
 
 /*
  * Where things reside in the struct above...
@@ -274,6 +281,7 @@ typedef struct v6_gre_hdr_s
 #define IPV6_SRC_ADDR  2
 #define IPV6_DST_ADDR  6
 #define IPV6_GRE_PROT 10
+#define IPV6_GRE_PROT_IDX  12
 
 #endif /* #ifdef FEATURE_EoGRE */
 

@@ -14609,7 +14609,23 @@ int IPACM_Lan::eogre_make_hdr_for_add_ctx(
 		// GRE header here
 		0x00, 0x00, 0x00, 0x00
 	};
-
+	const uint8_t v6_eogre_header[] = {
+		0x60, 0x00, 0x00, 0x00,
+		0x00, 0x00, 0x3c, 0x40, // 0x3c Protocol (destination option) hop limit to 64
+		0x00, 0x00, 0x00, 0x00, // src address here
+		0x00, 0x00, 0x00, 0x00,
+		0x00, 0x00, 0x00, 0x00,
+		0x00, 0x00, 0x00, 0x00,
+		0x00, 0x00, 0x00, 0x00, // dest address here
+		0x00, 0x00, 0x00, 0x00,
+		0x00, 0x00, 0x00, 0x00,
+		0x00, 0x00, 0x00, 0x00,
+		// options header
+		0x2f, 0x00, 0x04, 0x01,
+		0x04, 0x01, 0x01, 0x00,
+		// GRE header here
+		0x00, 0x00, 0x00, 0x00
+	};
 	uint8_t  hdr_data_buf[128];
 	uint32_t hdr_data_len;
 
@@ -14640,37 +14656,73 @@ int IPACM_Lan::eogre_make_hdr_for_add_ctx(
 			&(hdr->words[IPV4_DST_ADDR]));
 
 		hdr_data_len = sizeof(v4_gre_hdr_t);
+		IPACMDBG_H("Sending to uC, v4 header length : %d\n",hdr_data_len);
 	}
-	else
+	else /*iptype == IPA_IP_v6*/
 	{
-		v6_gre_hdr_t* hdr = (v6_gre_hdr_t*) hdr_data_buf;
+		if(ipgre_info.ipv6_option_hdr_enabled == 1) 
+		{
+			v6_eogre_hdr_t* hdr = (v6_eogre_hdr_t*) hdr_data_buf;
 
-		memcpy(hdr_data_buf, v6_header, sizeof(v6_header));
+			memcpy(hdr_data_buf, v6_eogre_header, sizeof(v6_eogre_header));
 
-		hdr->words[IPV6_GRE_PROT] = htonl(ipgre_info.gre_protocol);
+			hdr->words[IPV6_GRE_PROT_IDX] = htonl(ipgre_info.gre_protocol);
 
-		memcpy(&(hdr->words[IPV6_SRC_ADDR]),
-			   &ipgre_info.ipv6_src,
-			   sizeof(ipgre_info.ipv6_src));
+			memcpy(&(hdr->words[IPV6_SRC_ADDR]),
+					&ipgre_info.ipv6_src,
+					sizeof(ipgre_info.ipv6_src));
 
-		memcpy(&(hdr->words[IPV6_DST_ADDR]),
-			   &ipgre_info.ipv6_dst,
-			   sizeof(ipgre_info.ipv6_dst));
+			memcpy(&(hdr->words[IPV6_DST_ADDR]),
+					&ipgre_info.ipv6_dst,
+					sizeof(ipgre_info.ipv6_dst));
 
-		addr2network(iptype, &(hdr->words[IPV6_SRC_ADDR]));
-		addr2network(iptype, &(hdr->words[IPV6_DST_ADDR]));
+			addr2network(iptype, &(hdr->words[IPV6_SRC_ADDR]));
+			addr2network(iptype, &(hdr->words[IPV6_DST_ADDR]));
 
-		IPACM_LOG_IP_ADDR(
-			"The src addr added to eogre header template:",
-			iptype,
-			&(hdr->words[IPV6_SRC_ADDR]));
+			IPACM_LOG_IP_ADDR(
+					"The src addr added to eogre header template:",
+					iptype,
+					&(hdr->words[IPV6_SRC_ADDR]));
 
-		IPACM_LOG_IP_ADDR(
-			"The dst addr added to eogre header template:",
-			iptype,
-			&(hdr->words[IPV6_DST_ADDR]));
+			IPACM_LOG_IP_ADDR(
+					"The dst addr added to eogre header template:",
+					iptype,
+					&(hdr->words[IPV6_DST_ADDR]));
 
-		hdr_data_len = sizeof(v6_gre_hdr_t);
+			hdr_data_len = sizeof(v6_eogre_hdr_t);
+		}
+		else /*ipgre_info.ipv6_option_hdr_enabled == 0*/
+		{
+			v6_gre_hdr_t* hdr = (v6_gre_hdr_t*) hdr_data_buf;
+
+			memcpy(hdr_data_buf, v6_header, sizeof(v6_header));
+
+			hdr->words[IPV6_GRE_PROT] = htonl(ipgre_info.gre_protocol);
+
+			memcpy(&(hdr->words[IPV6_SRC_ADDR]),
+					&ipgre_info.ipv6_src,
+					sizeof(ipgre_info.ipv6_src));
+
+			memcpy(&(hdr->words[IPV6_DST_ADDR]),
+					&ipgre_info.ipv6_dst,
+					sizeof(ipgre_info.ipv6_dst));
+
+			addr2network(iptype, &(hdr->words[IPV6_SRC_ADDR]));
+			addr2network(iptype, &(hdr->words[IPV6_DST_ADDR]));
+
+			IPACM_LOG_IP_ADDR(
+					"The src addr added to eogre header template:",
+					iptype,
+					&(hdr->words[IPV6_SRC_ADDR]));
+
+			IPACM_LOG_IP_ADDR(
+					"The dst addr added to eogre header template:",
+					iptype,
+					&(hdr->words[IPV6_DST_ADDR]));
+
+			hdr_data_len = sizeof(v6_gre_hdr_t);
+		}
+		IPACMDBG_H("Sending to uC, v6 header length:%d with options:%d \n",hdr_data_len,ipgre_info.ipv6_option_hdr_enabled);
 	}
 
 	/*
@@ -14825,10 +14877,12 @@ int IPACM_Lan::eogre_make_hdr_rem_ctx(
 	procCtx->proc_ctx_hdl = -1; // return value
 	procCtx->status       = -1; // Return parameter
 	procCtx->type         = IPA_HDR_PROC_EoGRE_HEADER_REMOVE;
-	
-	procCtx->eogre_params.hdr_remove_param.hdr_len_remove =
-		( iptype == IPA_IP_v4 ) ? sizeof(v4_gre_hdr_t) : sizeof(v6_gre_hdr_t);
 
+	procCtx->eogre_params.hdr_remove_param.hdr_len_remove =
+		( iptype == IPA_IP_v4 ) ? sizeof(v4_gre_hdr_t) :
+		( ipgre_info.ipv6_option_hdr_enabled == 1) ? sizeof(v6_eogre_hdr_s) :sizeof(v6_gre_hdr_t);
+
+	IPACMDBG_H("Sending to uC, Remove header length :c%d\n",procCtx->eogre_params.hdr_remove_param.hdr_len_remove);
 	if ( m_header.AddHeaderProcCtx(procCtxTable) == true )
 	{
 		IPACMDBG_H(

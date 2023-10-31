@@ -25,6 +25,10 @@
  * WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *
+ * Changes from Qualcomm Innovation Center are provided under the following license:
+ * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear.
  */
 /*!
 	@file
@@ -491,6 +495,28 @@ void IPACM_Wlan::event_callback(ipa_cm_event_id event, void *param)
 			}
 		}
 		break;
+#ifdef IPA_MTU_EVENT_MAX
+	case IPA_MTU_UPDATE:
+	{
+		IPACMDBG_H("Received IPA_MTU_UPDATE");
+		ipacm_event_mtu_info *evt_data = (ipacm_event_mtu_info *)param;
+		ipa_mtu_info *data = &(evt_data->mtu_info);
+
+		/* IPA_IP_MAX means both ipv4 and ipv6 */
+		if ((data->ip_type == IPA_IP_v4 || data->ip_type == IPA_IP_MAX) && IPACM_Wan::isWanUP(ipa_if_num))
+		{
+			modify_private_subnet();
+		}
+
+		/* IPA_IP_MAX means both ipv4 and ipv6 */
+		if ((data->ip_type == IPA_IP_v6 || data->ip_type == IPA_IP_MAX) && IPACM_Wan::isWanUP_V6(ipa_if_num))
+		{
+			modify_ipv6_prefix_flt_rule();
+		}
+	}
+	break;
+#endif
+
 #else
 	case IPA_HANDLE_WAN_UP:
 		IPACMDBG_H("Received IPA_HANDLE_WAN_UP event\n");
@@ -3260,15 +3286,14 @@ int IPACM_Wlan::handle_down_evt()
 #endif
 		IPACMDBG_H("Deleted private subnet v4 filter rules successfully.\n");
 
-#ifdef FEATURE_L2TP
-		if((IPACM_Iface::ipacmcfg->ipacm_l2tp_enable == IPACM_L2TP) &&
-			m_filtering.DeleteFilteringHdls(&tcp_syn_flt_rule_hdl[IPA_IP_v4], IPA_IP_v4, 1) == false)
+		if(m_filtering.DeleteFilteringHdls(&tcp_syn_flt_rule_hdl[IPA_IP_v4], IPA_IP_v4, 1) == false)
 		{
 			IPACMERR("Error deleting tcp syn flt rule, aborting...\n");
 			res = IPACM_FAILURE;
 			goto fail;
 		}
-#endif
+		IPACM_Iface::ipacmcfg->decreaseFltRuleCount(rx_prop->rx[0].src_pipe, IPA_IP_v4, 1);
+		IPACMDBG_H("Deleted TCP syn v4 filter rules successfully.\n");
 	}
 
 	/* Delete v6 filtering rules */
@@ -3295,15 +3320,16 @@ int IPACM_Wlan::handle_down_evt()
 				rx_prop->rx[0].src_pipe, IPA_IP_v6, m_ipv6_default_filterting_rules_count);
 			IPACMDBG_H("Deleted default v6 filter rules successfully.\n");
 		}
-#ifdef FEATURE_L2TP
-		if((IPACM_Iface::ipacmcfg->ipacm_l2tp_enable == IPACM_L2TP) &&
-			m_filtering.DeleteFilteringHdls(&tcp_syn_flt_rule_hdl[IPA_IP_v6], IPA_IP_v6, 1) == false)
+
+		if(m_filtering.DeleteFilteringHdls(&tcp_syn_flt_rule_hdl[IPA_IP_v6], IPA_IP_v6, 1) == false)
 		{
 			IPACMERR("Error deleting tcp syn flt rule, aborting...\n");
 			res = IPACM_FAILURE;
 			goto fail;
 		}
-#endif
+		IPACM_Iface::ipacmcfg->decreaseFltRuleCount(rx_prop->rx[0].src_pipe, IPA_IP_v6, 1);
+		IPACMDBG_H("Deleted TCP syn v6 filter rules successfully.\n");
+
 	}
 	IPACMDBG_H("finished delete filtering rules\n ");
 

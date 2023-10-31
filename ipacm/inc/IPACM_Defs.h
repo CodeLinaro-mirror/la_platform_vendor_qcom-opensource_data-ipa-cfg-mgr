@@ -232,6 +232,10 @@ typedef enum
 	IPA_ETH_BRIDGE_DEL_VLAN_ID,               /* ipacm_event_eth_bridge */
 #endif
 	IPA_LAN_DELETE_SELF,                      /* ipacm_event_data_fid */
+#ifdef IPA_MTU_EVENT_MAX
+	IPA_MTU_SET,                              /* ipa_mtu_info */
+	IPA_MTU_UPDATE,                           /* ipacm_event_mtu_info */
+#endif
 #ifdef FEATURE_L2TP
 	IPA_ADD_L2TP_CLIENT,                      /* ipacm_event_data_all */
 	IPA_DEL_L2TP_CLIENT,                      /* ipacm_event_data_all */
@@ -525,4 +529,11 @@ struct rmnet_mux_id_info
 };
 #endif
 
+#ifdef IPA_MTU_EVENT_MAX
+typedef struct _ipacm_event_mtu_info
+{
+	int if_index;
+	ipa_mtu_info mtu_info;
+} ipacm_event_mtu_info;
+#endif
 #endif /* IPA_CM_DEFS_H */

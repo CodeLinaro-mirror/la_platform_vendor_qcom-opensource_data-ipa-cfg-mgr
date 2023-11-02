@@ -2401,7 +2401,11 @@ void IPACM_Wan::post_wan_vlan_pdn_event(ipa_ip_type iptype, int pdn_idx, int vla
 			{
 				if(ext_prop != NULL)
 					vlan_data->mux_id = ext_prop->ext[0].mux_id;
-				if (is_xlat)
+				if (is_xlat && ipv6_to_iface[pdn_idx].ipv6_prefix[0] && ipv6_to_iface[pdn_idx].ipv6_prefix[1])
+				{
+					IPACM_Iface::ipacmcfg->add_vlan_ipv6_prefix(ipv6_to_iface[modem_ipv6_pdn_index].ipv6_prefix, ipa_if_num, vlan_id);
+				}
+				else if (is_xlat)
 				{
 					ipv6_to_iface[pdn_idx].ipv6_prefix[0] = IPA_DUMMY_PREFIX;
 					ipv6_to_iface[pdn_idx].ipv6_prefix[1] = IPA_DUMMY_PREFIX;

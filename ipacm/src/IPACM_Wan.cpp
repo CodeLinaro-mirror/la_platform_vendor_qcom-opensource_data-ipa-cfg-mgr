@@ -2644,7 +2644,11 @@ int IPACM_Wan::handle_route_add_vlan_pdn_evt(ipa_ip_type iptype, uint16_t vlan_i
 		wanup_vlan_data->VlanID = vlan_id;
 		wanup_vlan_data->mux_id = ext_prop->ext[0].mux_id;
 		memcpy(wanup_vlan_data->ipv6_prefix, ipv6_prefix, sizeof(ipv6_prefix));
-		if (is_xlat)
+		if (is_xlat && ipv6_to_iface[modem_ipv6_pdn_index].ipv6_prefix[0] && ipv6_to_iface[modem_ipv6_pdn_index].ipv6_prefix[1])
+		{
+			IPACM_Iface::ipacmcfg->add_vlan_ipv6_prefix(ipv6_to_iface[modem_ipv6_pdn_index].ipv6_prefix, ipa_if_num, vlan_id);
+		}
+		else if (is_xlat)
 		{
 			ipv6_to_iface[modem_ipv6_pdn_index].ipv6_prefix[0] = IPA_DUMMY_PREFIX;
 			ipv6_to_iface[modem_ipv6_pdn_index].ipv6_prefix[1] = IPA_DUMMY_PREFIX;

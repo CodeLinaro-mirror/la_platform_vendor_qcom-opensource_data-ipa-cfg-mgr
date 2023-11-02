@@ -6957,10 +6957,10 @@ void IPACM_Wlan::update_svap_state() {
 
 	IPACMDBG_H("dev_name %s\n", dev_name);
 
-	snprintf(cmd, 200, "cfg80211tool_mesh %s get_MapBSSType| awk -F ':' '{print $2}' > /tmp/data/ipa_vap.txt", dev_name);
+	snprintf(cmd, 200, "cfg80211tool_mesh %s get_MapBSSType| awk -F ':' '{print $2}' > /tmp/data_ipa/ipa_vap.txt", dev_name);
 	system(cmd);
 
-	fp = fopen("/tmp/data/ipa_vap.txt", "r");
+	fp = fopen("/tmp/data_ipa/ipa_vap.txt", "r");
 	if (fp == NULL) {
 		IPACMERR("can't open fdb file\n");
 		return;

@@ -11540,6 +11540,12 @@ ipa_hdr_proc_type IPACM_Lan::eth_bridge_get_hdr_proc_type(ipa_hdr_l2_type t1,
 			return IPA_HDR_PROC_ETHII_TO_ETHII;
 		if(t2 == IPA_HDR_L2_802_3)
 			return IPA_HDR_PROC_ETHII_TO_802_3;
+		if(t2 == IPA_HDR_L2_802_1Q) {
+			generic_params.input_ethhdr_negative_offset = 14;
+			generic_params.output_ethhdr_negative_offset = 18;
+			return IPA_HDR_PROC_ETHII_TO_ETHII_EX;
+		}
+
 #ifdef IPA_HDR_L2_ETHERNET_II_AST
 		if(t2 == IPA_HDR_L2_ETHERNET_II_AST)
 			return IPA_HDR_PROC_ETHII_TO_ETHII;
@@ -11556,11 +11562,15 @@ ipa_hdr_proc_type IPACM_Lan::eth_bridge_get_hdr_proc_type(ipa_hdr_l2_type t1,
 		if(t2 == IPA_HDR_L2_802_3)
 			return IPA_HDR_PROC_802_3_TO_802_3;
 		break;
-#ifdef IPA_HDR_L2_ETHERNET_II_AST
 	case IPA_HDR_L2_802_1Q:
 		if(t2 == IPA_HDR_L2_802_1Q || t2 == IPA_HDR_L2_802_1Q_AST) {
 			generic_params.input_ethhdr_negative_offset = 18;
 			generic_params.output_ethhdr_negative_offset = 18;
+			return IPA_HDR_PROC_ETHII_TO_ETHII_EX;
+		}
+		if (t2 == IPA_HDR_L2_ETHERNET_II || t2 == IPA_HDR_L2_ETHERNET_II_AST) {
+			generic_params.input_ethhdr_negative_offset = 18;
+			generic_params.output_ethhdr_negative_offset = 14;
 			return IPA_HDR_PROC_ETHII_TO_ETHII_EX;
 		}
 		break;
@@ -11583,7 +11593,6 @@ ipa_hdr_proc_type IPACM_Lan::eth_bridge_get_hdr_proc_type(ipa_hdr_l2_type t1,
 			return IPA_HDR_PROC_ETHII_TO_ETHII_EX;
 		}
 		break;
-#endif
 	default:
 		return IPA_HDR_PROC_NONE;
 	}
@@ -12266,7 +12275,7 @@ int IPACM_Lan::eth_bridge_add_flt_rule(uint8_t *mac, uint32_t rt_tbl_hdl, ipa_ip
 	flt_rule_entry.rule.hashable = true;
 
 	memcpy(&flt_rule_entry.rule.attrib, &rx_prop->rx[idx].attrib, sizeof(flt_rule_entry.rule.attrib));
-	switch(tx_prop->tx[0].hdr_l2_type)
+	switch(tx_prop->tx[idx].hdr_l2_type)
 	{
 #ifdef IPA_HDR_L2_ETHERNET_II_AST
 	case IPA_HDR_L2_ETHERNET_II_AST:
@@ -12293,7 +12302,7 @@ int IPACM_Lan::eth_bridge_add_flt_rule(uint8_t *mac, uint32_t rt_tbl_hdl, ipa_ip
 	memset(flt_rule_entry.rule.attrib.dst_mac_addr_mask, 0xFF, sizeof(flt_rule_entry.rule.attrib.dst_mac_addr_mask));
 
 #ifdef FEATURE_VLAN_MPDN
-	if((IPACM_Iface::ipacmcfg->iface_in_vlan_mode(dev_name)))
+	if((IPACM_Iface::ipacmcfg->iface_in_vlan_mode(dev_name)) && (vlan_id != 0))
 	{
 		if(!vlan_id)
 		{

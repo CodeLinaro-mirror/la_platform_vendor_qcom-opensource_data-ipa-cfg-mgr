@@ -928,6 +928,26 @@ int IPACM_Config::GetNatIfaces(int nIfaces, NatIfaces *pIfaces)
 	return 0;
 }
 
+void IPACM_Config::update_repeater_iface(char *str) {
+
+
+	char *first, *second;
+	first = strstr(str,"sta");
+	if (first == NULL) {
+		IPACMDBG("Non wds-ext non-vlan interface\n");
+		return;
+	}
+	second = strstr(first, ".");
+	if(second == NULL) {
+		IPACMDBG("wds-ext non-vlan interface\n");
+		first = first-1;
+		*first = '\0';
+		return;
+	}
+	IPACMDBG("wds-ext vlan interface\n");
+	strlcpy((first-1), second, sizeof(second));
+	return;
+}
 
 int IPACM_Config::AddNatIfaces(char *dev_name)
 {
@@ -3686,10 +3706,10 @@ bool IPACM_Config::is_svap_related(const char* phy_inf) {
 		IPACMDBG_H("truncated iface name %s\n", if_name);
 	}
 
-	snprintf(cmd, 200, "cfg80211tool_mesh %s get_MapBSSType| awk -F ':' '{print $2}' > /tmp/data/ipa_vap.txt", if_name);
+	snprintf(cmd, 200, "cfg80211tool_mesh %s get_MapBSSType| awk -F ':' '{print $2}' > /tmp/data_ipa/ipa_vap.txt", if_name);
 	system(cmd);
 
-	fp = fopen("/tmp/data/ipa_vap.txt", "r");
+	fp = fopen("/tmp/data_ipa/ipa_vap.txt", "r");
 	if (fp == NULL) {
 		IPACMERR("can't open fdb file\n");
 		return false;

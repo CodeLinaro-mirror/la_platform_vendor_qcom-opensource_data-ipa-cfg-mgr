@@ -361,6 +361,9 @@ public:
 			IPACMERR("IPv6 address is empty.\n");
 			return false;
 		}
+
+		IPACMDBG_H("Received prefix: 0x%08x%08x\n", v6_addr[0], v6_addr[1]);
+
 		for(int i = 0; i < IPA_MAX_NUM_SW_PDNS; i++)
 		{
 			if(ipv6_to_iface[i].ipv6_prefix[0] == v6_addr[0] &&
@@ -368,6 +371,12 @@ public:
 			{
 				IPACMDBG_H("v6 prefix mached pdn %s\n", ipv6_to_iface[i].pIface->dev_name);
 				return true;
+			}
+			else
+			{
+				IPACMDBG_H("index: %d Current prefix: 0x%08x%08x\n", i,
+					ipv6_to_iface[i].ipv6_prefix[0],
+					ipv6_to_iface[i].ipv6_prefix[1]);
 			}
 		}
 		IPACMDBG_H("V6 prefix didnt match any active wan iface\n");

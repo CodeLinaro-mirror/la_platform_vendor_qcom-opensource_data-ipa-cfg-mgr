@@ -59,6 +59,10 @@
  * IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
  * OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE
+ *
+ * Changes from Qualcomm Innovation Center are provided under the following license:
+ * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear.
  */
 /*!
 	@file
@@ -180,7 +184,7 @@ extern "C"
 #define IPACM_IP_NULL (ipa_ip_type)0xFF
 #define IPACM_INVALID_INDEX (ipa_ip_type)0xFF
 
-#define IPA_MAX_NUM_WIFI_CLIENTS 128
+#define IPA_MAX_NUM_WIFI_CLIENTS 70
 #define IPA_MAX_NUM_WAN_CLIENTS  10
 #define IPA_MAX_NUM_VLAN_CLIENTS 32
 #define IPA_MAX_NUM_ETH_CLIENTS  32

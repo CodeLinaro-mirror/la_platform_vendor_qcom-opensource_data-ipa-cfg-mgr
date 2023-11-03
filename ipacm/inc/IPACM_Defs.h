@@ -268,7 +268,6 @@ typedef enum
 	IPA_WLAN_SWITCH_TO_MCC,                   /* No Data */
 	IPA_WLAN_SWITCH_VLAN_MODE,                /* ipacm_event_vlan_mode */
 	IPA_CRADLE_WAN_MODE_SWITCH,               /* ipacm_event_cradle_wan_mode */
-	IPA_WAN_XLAT_CONNECT_EVENT,               /* ipacm_event_data_fid */
 	IPA_TETHERING_STATS_UPDATE_EVENT,         /* ipacm_event_data_fid */
 	IPA_NETWORK_STATS_UPDATE_EVENT,           /* ipacm_event_data_fid */
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS

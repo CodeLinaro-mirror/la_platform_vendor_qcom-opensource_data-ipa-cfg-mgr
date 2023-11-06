@@ -1371,10 +1371,6 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 						}
 					}
 #endif
-					IPACMDBG_H("LAN iface delete client\n");
-					handle_eth_client_down_evt(data->mac_addr, vlan_id, data);
-					IPACMDBG_H("Posting IPA_ETH_BRIDGE_CLIENT_DEL MAC:0x%x iface_name:%s\n",data->mac_addr,data->iface_name);
-					eth_bridge_post_event(IPA_ETH_BRIDGE_CLIENT_DEL, data->iptype, data->mac_addr, NULL, data->iface_name, vlan_id);
 				}
 #ifdef FEATURE_L2TP
 				else

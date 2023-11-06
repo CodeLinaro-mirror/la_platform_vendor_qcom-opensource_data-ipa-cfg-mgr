@@ -2048,22 +2048,213 @@ int ipa_nl_listener_init
 	return IPACM_SUCCESS;
 }
 
+/* To get dump of routes from kernel in case of RTM_GETROUTE */
+int ipa_nl_route_receive(int fd, struct msghdr *msg, int flags)
+{
+	int len;
+
+	do
+	{
+		len = recvmsg(fd, msg, flags);
+	} while (len < 0 && (errno == EINTR || errno == EAGAIN));
+
+	if (len < 0)
+	{
+		IPACMERR("Netlink receive failed");
+		return -errno;
+	}
+
+	if (len == 0)
+	{
+		IPACMERR("EOF on Netlink");
+		return -ENODATA;
+	}
+
+	return len;
+}
+
+int ipa_nl_route_recvmsg(int fd, struct msghdr *msg, char **result)
+{
+	struct iovec *iov = msg->msg_iov;
+	char *buf;
+	int len;
+
+	iov->iov_base = NULL;
+	iov->iov_len = 0;
+
+	len = ipa_nl_route_receive(fd, msg, MSG_PEEK | MSG_TRUNC);
+
+	IPACMDBG_DMESG("Netlink route message length : %d\n", len);
+
+	if (len < 0)
+	{
+		return len;
+	}
+
+	buf = (char *)malloc(len);
+
+	if (!buf)
+	{
+		IPACMERR("Failed malloc for buffer\n");
+		return -ENOMEM;
+	}
+
+	iov->iov_base = buf;
+	iov->iov_len = len;
+
+	len = ipa_nl_route_receive(fd, msg, 0);
+
+	if (len < 0)
+	{
+		free(buf);
+		return len;
+	}
+
+	*result = buf;
+
+	return len;
+}
+
 int ipa_nl_send_getroute(ipa_ip_type ip_type)
 {
+
+	ipacm_event_data_addr *data_addr = NULL;
+	int ret_val = IPACM_FAILURE, dump_intr = 0, msglen = 0, nl_sock = 0;
+	ipacm_cmd_q_data evt_data;
+	uint32_t ipv4_addr = 0, ipv4_addr_mask = 0, temp = 0, ipv4_addr_gw = 0;
+	ssize_t msgsent_len = 0;
+	char *buf = NULL;
 	nl_request_t nl_request;
+	struct sockaddr_nl nladdr;
+	struct msghdr msg;
+	struct nlmsghdr *h = NULL;
+	ipa_nl_route_info_t nl_route_info_get_route;
+	struct iovec iov;
+
+	nl_sock = socket(AF_NETLINK, SOCK_RAW, NETLINK_ROUTE);
+
+	if (nl_sock < 0)
+	{
+		IPACMERR("Failed to open netlink socket");
+		return IPACM_FAILURE;
+	}
+
 	nl_request.nlh.nlmsg_type = RTM_GETROUTE;
 	nl_request.nlh.nlmsg_flags = NLM_F_REQUEST | NLM_F_DUMP;
 	nl_request.nlh.nlmsg_len = sizeof(nl_request);
 	nl_request.nlh.nlmsg_seq = time(NULL);
-	nl_request.nlh.nlmsg_pid = getpid();
-	if(ip_type == IPA_IP_v6){
+
+	if(ip_type == IPA_IP_v6)
+	{
 		nl_request.rtm.rtm_family = AF_INET6;
 	}
-	else{
+	else
+	{
 		nl_request.rtm.rtm_family = AF_INET;
 	}
 
-	ssize_t sent = send(*p_sk_fd, &nl_request, sizeof(nl_request), 0);
+	msgsent_len = send(nl_sock, &nl_request, sizeof(nl_request), 0);
+
+	msg = {
+		.msg_name = &nladdr,
+		.msg_namelen = sizeof(nladdr),
+		.msg_iov = &iov,
+		.msg_iovlen = 1,
+	};
+
+	msglen = ipa_nl_route_recvmsg(nl_sock, &msg, &buf);
+
+	if(msglen <= 0)
+	{
+		PERROR("NL route recv error\n");
+		free(buf);
+		close(nl_sock);
+		return IPACM_FAILURE;
+	}
+
+	h = (struct nlmsghdr *)buf;
+
+	IPACMDBG("Route msg_len : %d\n", msglen)
+
+	while (NLMSG_OK(h, msglen))
+	{
+		if (h->nlmsg_flags & NLM_F_DUMP_INTR)
+		{
+			IPACMERR("Dump was interrupted\n");
+			free(buf);
+			close(nl_sock);
+			return IPACM_FAILURE;
+		}
+
+		if (nladdr.nl_pid != 0)
+		{
+			continue;
+		}
+
+		if (h->nlmsg_type == NLMSG_ERROR)
+		{
+			IPACMERR("Netlink message error");
+			free(buf);
+			close(nl_sock);
+			return IPACM_FAILURE;
+		}
+
+		ipa_nl_decode_rtm_route((char*)h,msglen,&nl_route_info_get_route);
+		IPACMDBG("In case RTM_GETROUTE\n");
+		IPACMDBG("rtm_type: %d\n", nl_route_info_get_route.metainfo.rtm_type);
+		IPACMDBG("protocol: %d\n", nl_route_info_get_route.metainfo.rtm_protocol);
+		IPACMDBG("rtm_scope: %d\n", nl_route_info_get_route.metainfo.rtm_scope);
+		IPACMDBG("rtm_table: %d\n", nl_route_info_get_route.metainfo.rtm_table);
+		IPACMDBG("rtm_family: %d\n", nl_route_info_get_route.metainfo.rtm_family);
+		IPACMDBG("param_mask: 0x%x\n", nl_route_info_get_route.attr_info.param_mask);
+
+		if ((nl_route_info_get_route.metainfo.rtm_type == RTN_UNICAST) &&
+				 ((nl_route_info_get_route.metainfo.rtm_protocol == RTPROT_BOOT) ||
+				  (nl_route_info_get_route.metainfo.rtm_protocol == RTPROT_RA) ||
+				  (nl_route_info_get_route.metainfo.rtm_protocol == RTPROT_STATIC))&&
+				 ((nl_route_info_get_route.metainfo.rtm_scope == RT_SCOPE_UNIVERSE)||
+				 (nl_route_info_get_route.metainfo.rtm_scope == RT_SCOPE_LINK))&&
+				 (nl_route_info_get_route.metainfo.rtm_table == RT_TABLE_MAIN) &&
+				 (0 == (nl_route_info_get_route.attr_info.param_mask & IPA_RTA_PARAM_DST)))
+		{
+			IPACM_NL_REPORT_ADDR( "route add default gw \n", nl_route_info_get_route.attr_info.gateway_addr );
+			IPACM_NL_REPORT_ADDR( "dstIP:", nl_route_info_get_route.attr_info.dst_addr );
+
+			data_addr = (ipacm_event_data_addr *)malloc(sizeof(ipacm_event_data_addr));
+			if (data_addr == NULL)
+			{
+				IPACMERR("unable to allocate memory for event data_addr\n");
+				free(buf);
+				close(nl_sock);
+				return IPACM_FAILURE;
+			}
+
+			IPACM_EVENT_COPY_ADDR_v4( ipv4_addr, nl_route_info_get_route.attr_info.dst_addr);
+			IPACM_EVENT_COPY_ADDR_v4( ipv4_addr_mask, nl_route_info_get_route.attr_info.dst_addr);
+			IPACM_EVENT_COPY_ADDR_v4( ipv4_addr_gw, nl_route_info_get_route.attr_info.gateway_addr);
+
+			evt_data.event = IPA_ROUTE_ADD_EVENT;
+			data_addr->if_index = nl_route_info_get_route.attr_info.oif_index;
+			data_addr->iptype = IPA_IP_v4;
+			data_addr->ipv4_addr = ntohl(ipv4_addr);
+			data_addr->ipv4_addr_gw = ntohl(ipv4_addr_gw);
+			data_addr->ipv4_addr_mask = ntohl(ipv4_addr_mask);
+
+			IPACMDBG_H("Posting IPA_ROUTE_ADD_EVENT with if index:%d, ipv4 addr:0x%x, mask: 0x%x and gw: 0x%x\n",
+								data_addr->if_index,
+								data_addr->ipv4_addr,
+								data_addr->ipv4_addr_mask,
+								data_addr->ipv4_addr_gw);
+			evt_data.evt_data = data_addr;
+			IPACM_EvtDispatcher::PostEvt(&evt_data);
+			break;
+		}
+
+		h = NLMSG_NEXT(h, msglen);
+    }
+
+	free(buf);
+	close(nl_sock);
 	return IPACM_SUCCESS;
 }
 

@@ -45,6 +45,7 @@ SPDX-License-Identifier: BSD-3-Clause-Clear
 #include <unistd.h>
 #include <sys/ioctl.h>
 #include <netinet/in.h>
+#include <net/if.h>
 #include "IPACM_CmdQueue.h"
 #include "IPACM_Defs.h"
 #include "IPACM_Netlink.h"
@@ -116,6 +117,9 @@ int find_mask(int ip_v4_last, int *mask_value);
                     (unsigned char)(ip_addr >> 16) ,                        \
                     (unsigned char)(ip_addr >> 24));
 
+/*sockfd global*/
+int *p_sk_fd = NULL;
+
 /* Opens a netlink socket*/
 static int ipa_nl_open_socket
 (
@@ -124,7 +128,6 @@ static int ipa_nl_open_socket
 	 unsigned int grps
 	 )
 {
-	int *p_sk_fd;
 	int buf_size = 6669999, sendbuff=0, res;
 	struct sockaddr_nl *p_sk_addr_loc;
 	socklen_t optlen;
@@ -1057,7 +1060,8 @@ static int ipa_nl_decode_nlmsg
 			IPACMDBG("param_mask: 0x%x\n", msg_ptr->nl_route_info.attr_info.param_mask);
 
 			/* take care of route add default route & uniroute */
-			if((msg_ptr->nl_route_info.metainfo.rtm_type == RTN_UNICAST) &&
+			if((AF_INET == msg_ptr->nl_route_info.metainfo.rtm_family) &&
+				 (msg_ptr->nl_route_info.metainfo.rtm_type == RTN_UNICAST) &&
 				 ((msg_ptr->nl_route_info.metainfo.rtm_protocol == RTPROT_BOOT) ||
 				  (msg_ptr->nl_route_info.metainfo.rtm_protocol == RTPROT_RA) ||
 				  (msg_ptr->nl_route_info.metainfo.rtm_protocol == RTPROT_STATIC))&&
@@ -1113,58 +1117,6 @@ static int ipa_nl_decode_nlmsg
 						IPACMERR("Error while getting interface name\n");
 						return IPACM_FAILURE;
 					}
-
-					if(AF_INET6 == msg_ptr->nl_route_info.metainfo.rtm_family)
-					{
-						/* insert to command queue */
-						data_addr = (ipacm_event_data_addr *)malloc(sizeof(ipacm_event_data_addr));
-						if(data_addr == NULL)
-						{
-							IPACMERR("unable to allocate memory for event data_addr\n");
-							return IPACM_FAILURE;
-						}
-
-						if(msg_ptr->nl_route_info.attr_info.param_mask & IPA_RTA_PARAM_PRIORITY)
-						{
-							IPACMDBG_H("ip -6 route add default dev %s metric %d\n",
-											 dev_name,
-											 msg_ptr->nl_route_info.attr_info.priority);
-						}
-						else
-						{
-							IPACMDBG_H("ip -6 route add default dev %s\n", dev_name);
-						}
-
-						IPACM_EVENT_COPY_ADDR_v6( data_addr->ipv6_addr, msg_ptr->nl_route_info.attr_info.dst_addr);
-						data_addr->ipv6_addr[0] = ntohl(data_addr->ipv6_addr[0]);
-						data_addr->ipv6_addr[1] = ntohl(data_addr->ipv6_addr[1]);
-						data_addr->ipv6_addr[2] = ntohl(data_addr->ipv6_addr[2]);
-						data_addr->ipv6_addr[3] = ntohl(data_addr->ipv6_addr[3]);
-
-						IPACM_EVENT_COPY_ADDR_v6( data_addr->ipv6_addr_mask, msg_ptr->nl_route_info.attr_info.dst_addr);
-						data_addr->ipv6_addr_mask[0] = ntohl(data_addr->ipv6_addr_mask[0]);
-						data_addr->ipv6_addr_mask[1] = ntohl(data_addr->ipv6_addr_mask[1]);
-						data_addr->ipv6_addr_mask[2] = ntohl(data_addr->ipv6_addr_mask[2]);
-						data_addr->ipv6_addr_mask[3] = ntohl(data_addr->ipv6_addr_mask[3]);
-
-						IPACM_EVENT_COPY_ADDR_v6( data_addr->ipv6_addr_gw, msg_ptr->nl_route_info.attr_info.gateway_addr);
-						data_addr->ipv6_addr_gw[0] = ntohl(data_addr->ipv6_addr_gw[0]);
-						data_addr->ipv6_addr_gw[1] = ntohl(data_addr->ipv6_addr_gw[1]);
-						data_addr->ipv6_addr_gw[2] = ntohl(data_addr->ipv6_addr_gw[2]);
-						data_addr->ipv6_addr_gw[3] = ntohl(data_addr->ipv6_addr_gw[3]);
-						IPACM_NL_REPORT_ADDR( " ", msg_ptr->nl_route_info.attr_info.gateway_addr);
-
-						evt_data.event = IPA_ROUTE_ADD_EVENT;
-						data_addr->if_index = msg_ptr->nl_route_info.attr_info.oif_index;
-						data_addr->iptype = IPA_IP_v6;
-
-						IPACMDBG("Posting IPA_ROUTE_ADD_EVENT with if index:%d, ipv6 address\n",
-										 data_addr->if_index);
-						evt_data.evt_data = data_addr;
-						IPACM_EvtDispatcher::PostEvt(&evt_data);
-						/* finish command queue */
-
-					}
 					else
 					{
 						IPACM_NL_REPORT_ADDR( "route add default gw \n", msg_ptr->nl_route_info.attr_info.gateway_addr );
@@ -1204,9 +1156,13 @@ static int ipa_nl_decode_nlmsg
 
 			/* ipv6 routing table */
 			if((AF_INET6 == msg_ptr->nl_route_info.metainfo.rtm_family) &&
-				 (msg_ptr->nl_route_info.metainfo.rtm_type == RTN_UNICAST) &&
-				 ((msg_ptr->nl_route_info.metainfo.rtm_protocol == RTPROT_KERNEL) ||
-				  (msg_ptr->nl_route_info.metainfo.rtm_protocol == RTPROT_STATIC))&&
+				(msg_ptr->nl_route_info.metainfo.rtm_type == RTN_UNICAST) &&
+				 ((msg_ptr->nl_route_info.metainfo.rtm_protocol == RTPROT_BOOT) ||
+				  (msg_ptr->nl_route_info.metainfo.rtm_protocol == RTPROT_RA) ||
+				  (msg_ptr->nl_route_info.metainfo.rtm_protocol == RTPROT_STATIC) ||
+				  (msg_ptr->nl_route_info.metainfo.rtm_protocol == RTPROT_KERNEL))&&
+				 ((msg_ptr->nl_route_info.metainfo.rtm_scope == RT_SCOPE_UNIVERSE)||
+				 (msg_ptr->nl_route_info.metainfo.rtm_scope == RT_SCOPE_LINK))&&
 				 (msg_ptr->nl_route_info.metainfo.rtm_table == RT_TABLE_MAIN))
 			{
 				IPACMDBG("\n GOT valid v6-RTM_NEWROUTE event\n");
@@ -1292,6 +1248,17 @@ static int ipa_nl_decode_nlmsg
 						return IPACM_FAILURE;
 					}
 
+					if(msg_ptr->nl_route_info.attr_info.param_mask & IPA_RTA_PARAM_PRIORITY)
+					{
+						IPACMDBG_H("ip -6 route add default dev %s metric %d\n",
+										 dev_name,
+										 msg_ptr->nl_route_info.attr_info.priority);
+					}
+					else
+					{
+						IPACMDBG_H("ip -6 route add default dev %s\n", dev_name);
+					}
+
 					IPACM_EVENT_COPY_ADDR_v6( data_addr->ipv6_addr, msg_ptr->nl_route_info.attr_info.dst_addr);
 
                     data_addr->ipv6_addr[0]=ntohl(data_addr->ipv6_addr[0]);
@@ -1305,6 +1272,13 @@ static int ipa_nl_decode_nlmsg
                     data_addr->ipv6_addr_mask[1]=ntohl(data_addr->ipv6_addr_mask[1]);
                     data_addr->ipv6_addr_mask[2]=ntohl(data_addr->ipv6_addr_mask[2]);
                     data_addr->ipv6_addr_mask[3]=ntohl(data_addr->ipv6_addr_mask[3]);
+
+					IPACM_EVENT_COPY_ADDR_v6( data_addr->ipv6_addr_gw, msg_ptr->nl_route_info.attr_info.gateway_addr);
+					data_addr->ipv6_addr_gw[0] = ntohl(data_addr->ipv6_addr_gw[0]);
+					data_addr->ipv6_addr_gw[1] = ntohl(data_addr->ipv6_addr_gw[1]);
+					data_addr->ipv6_addr_gw[2] = ntohl(data_addr->ipv6_addr_gw[2]);
+					data_addr->ipv6_addr_gw[3] = ntohl(data_addr->ipv6_addr_gw[3]);
+					IPACM_NL_REPORT_ADDR( " ", msg_ptr->nl_route_info.attr_info.gateway_addr);
 
 					evt_data.event = IPA_ROUTE_ADD_EVENT;
 					data_addr->if_index = msg_ptr->nl_route_info.attr_info.oif_index;
@@ -1907,6 +1881,25 @@ int ipa_nl_listener_init
 		IPACMERR("Failed to start NL listener\n");
 	}
 
+	return IPACM_SUCCESS;
+}
+
+int ipa_nl_send_getroute(ipa_ip_type ip_type)
+{
+	nl_request_t nl_request;
+	nl_request.nlh.nlmsg_type = RTM_GETROUTE;
+	nl_request.nlh.nlmsg_flags = NLM_F_REQUEST | NLM_F_DUMP;
+	nl_request.nlh.nlmsg_len = sizeof(nl_request);
+	nl_request.nlh.nlmsg_seq = time(NULL);
+	nl_request.nlh.nlmsg_pid = getpid();
+	if(ip_type == IPA_IP_v6){
+		nl_request.rtm.rtm_family = AF_INET6;
+	}
+	else{
+		nl_request.rtm.rtm_family = AF_INET;
+	}
+
+	ssize_t sent = send(*p_sk_fd, &nl_request, sizeof(nl_request), 0);
 	return IPACM_SUCCESS;
 }
 

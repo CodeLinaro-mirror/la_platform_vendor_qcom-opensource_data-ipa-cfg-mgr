@@ -122,9 +122,8 @@ public:
 	bool IsSameSubnet(uint32_t* prefix) const;
 	void CreateFromArray(const uint32_t* addr, bool inputNetworkEndianness);
 	void ToArray(uint32_t* addr, bool outputNetworkEndianness) const;
-#ifdef FEATURE_IPV6_NAT
+
 	bool IsGlobalAddr() const;
-#endif
 
 	uint64_t GetMsb() const
 	{

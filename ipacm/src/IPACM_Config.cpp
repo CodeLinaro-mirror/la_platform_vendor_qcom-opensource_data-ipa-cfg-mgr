@@ -89,10 +89,11 @@ const char *IPACM_Config::DEVICE_NAME_ODU = "/dev/odu_ipa_bridge";
 #ifdef FEATURE_IPA_ANDROID
 #define IPACM_CONFIG_FILE "/etc/IPACM_cfg.xml"
 #else
+#define IPACM_CONFIG_FACTORY_FILE "/etc/data/ipa/factory_IPACM_cfg.xml"
 #define IPACM_CONFIG_FILE "/etc/data/ipa/IPACM_cfg.xml"
 #define IPACM_CONFIG_EXT_FILE "/etc/data/ipa/IPACM_cfg_ext.xml"
 #endif
-
+#define MAX_RETRIES 5
 const char *ipacm_event_name[] = {
 	__stringify(IPA_CFG_CHANGE_EVENT),                     /* NULL */
 	__stringify(IPA_PRIVATE_SUBNET_CHANGE_EVENT),          /* ipacm_event_data_fid */
@@ -509,6 +510,8 @@ int IPACM_Config::Init(void)
 	/* Read IPACM Config file */
 	char	IPACM_config_file[IPA_MAX_FILE_LEN];
 	IPACM_conf_t	*cfg;
+	uint8_t loop_count = 0;
+	char cmd[200] = {'\0'};
 
 	cfg = (IPACM_conf_t *)malloc(sizeof(IPACM_conf_t));
 	if(cfg == NULL)
@@ -535,23 +538,33 @@ int IPACM_Config::Init(void)
 			already_reset = true;
 		}
 	}
-
 #ifdef FEATURE_VLAN_MPDN
 	get_vlan_mode_ifaces();
 #endif
 
+	snprintf(cmd, 200,"cat " IPACM_CONFIG_FACTORY_FILE ">" IPACM_CONFIG_FILE);
 	strlcpy(IPACM_config_file, IPACM_CONFIG_FILE, sizeof(IPACM_config_file));
 
 	IPACMDBG_H("\n IPACM XML file is %s \n", IPACM_config_file);
+
+reread:
 	if (IPACM_SUCCESS == ipacm_read_cfg_xml(IPACM_config_file, cfg))
 	{
 		IPACMDBG_H("\n IPACM XML read OK \n");
 	}
 	else
 	{
-		IPACMERR("\n IPACM XML read failed \n");
-		ret = IPACM_FAILURE;
-		goto fail;
+		if(loop_count < MAX_RETRIES) {
+			IPACMERR("\nIPACM XML read failed,Updating the xml file\n");
+			system(cmd);
+			loop_count++;
+			goto reread;
+		}
+		else {
+			IPACMERR("Reached max count exiting\n");
+			ret = IPACM_FAILURE;
+			goto fail;
+		}
 	}
 
 	/* Construct IPACM Iface table */

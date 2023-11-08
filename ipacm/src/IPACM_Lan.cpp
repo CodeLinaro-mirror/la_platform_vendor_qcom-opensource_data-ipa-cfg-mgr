@@ -10445,7 +10445,7 @@ int IPACM_Lan::install_l2tp_inner_private_subnet_flt_rule()
 }
 #endif
 
-int IPACM_Lan::modify_private_subnet()
+int IPACM_Lan::modify_private_subnet(bool eogre_enabled)
 {
 	int i, len, res = IPACM_SUCCESS;
 	struct ipa_flt_rule_add flt_rule;
@@ -10485,7 +10485,7 @@ int IPACM_Lan::modify_private_subnet()
 		return IPACM_SUCCESS;
 	}
 
-	if (dft_v4fl_rule_hdl[0] == 0)
+	if (dft_v4fl_rule_hdl[0] == 0 && eogre_enabled == false)
 	{
 		IPACMERR("install v4 default rules first.Subnet + MTU rule will be installed later\n");
 		return IPACM_FAILURE;
@@ -10728,7 +10728,7 @@ int IPACM_Lan::handle_private_subnet_android(ipa_ip_type iptype)
 }
 
 #ifdef FEATURE_VLAN_MPDN
-int IPACM_Lan::modify_ipv6_prefix_flt_rule()
+int IPACM_Lan::modify_ipv6_prefix_flt_rule(bool eogre_enabled)
 {
 	int i, len, res = IPACM_SUCCESS;
 	struct ipa_flt_rule_add flt_rule;
@@ -10755,7 +10755,7 @@ int IPACM_Lan::modify_ipv6_prefix_flt_rule()
 		return IPACM_FAILURE;
 	}
 
-	if (dft_v6fl_rule_hdl[0] == 0)
+	if (dft_v6fl_rule_hdl[0] == 0 && eogre_enabled == false)
 	{
 		IPACMERR("install v6 default rules first.Prefix + MTU rule will be installed later\n");
 		return IPACM_FAILURE;
@@ -15272,9 +15272,9 @@ if(isPmipv6){/*PMIPV6 needs to take care of WAN up before GRE UP scenario */
 		return;
 	}
 	//need to add mtu rules when gre is enabled
-	modify_private_subnet();
+	modify_private_subnet(true);
 #ifdef FEATURE_VLAN_MPDN
-	modify_ipv6_prefix_flt_rule();
+	modify_ipv6_prefix_flt_rule(true);
 #else
 	delete_ipv6_prefix_flt_rule();
 	install_ipv6_prefix_flt_rule(IPACM_Wan::backhaul_ipv6_prefix);

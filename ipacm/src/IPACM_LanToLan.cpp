@@ -275,6 +275,38 @@ void IPACM_LanToLan::event_callback(ipa_cm_event_id event, void* param)
 	return;
 }
 
+bool IPACM_LanToLan_Iface::IsPeerFound_In_ClientReject_List(char *client_peer, char *client_iface)
+{
+	if(client_peer == NULL || client_iface == NULL)
+	{
+		IPACMERR("Null Client info passed.\n");
+		return false;
+	}
+	/*Get config instance to get the reject interface */
+	IPACM_Config* conf = IPACM_Config::GetInstance();
+	if (conf == NULL)
+	{
+		IPACMERR("Unable to get Config instance \n");
+	}
+	else
+	{
+		std::list<std::string> reject_list = conf->Reject_Iface_Map[client_iface];
+		IPACMDBG_H("Finding peer [%s] in reject list of iface [%s]..\n",client_peer,client_iface);
+		list <string>::iterator itr = find(reject_list.begin(),reject_list.end(),client_peer);
+		if(itr != reject_list.end())
+		{
+			IPACMDBG_H("Peer found as reject iface..\n");
+			return true;
+		}
+		else
+		{
+			IPACMDBG_H("Peer not found as reject iface.\n");
+		}
+	}
+	return false;
+}
+
+
 void IPACM_LanToLan::handle_iface_up(ipacm_event_eth_bridge *data)
 {
 	list<IPACM_LanToLan_Iface>::iterator it;
@@ -359,6 +391,7 @@ void IPACM_LanToLan::handle_iface_up(ipacm_event_eth_bridge *data)
 		IPACMDBG_H("Now the total number of interfaces is %d.\n", m_iface.size());
 
 		IPACM_LanToLan_Iface &front_iface = m_iface.front();
+		IPACMERR("front_iface %s\n", front_iface.get_iface_pointer()->dev_name);
 #ifdef FEATURE_L2TP
 		if (IPACM_Iface::ipacmcfg->ipacm_l2tp_enable == IPACM_L2TP)
 		{
@@ -1016,7 +1049,7 @@ void IPACM_LanToLan_Iface::add_client_rt_rule_for_new_iface()
 		peer_l2_type = peer.peer->get_iface_pointer()->tx_prop->tx[0].hdr_l2_type;
 	}
 
-	IPACMDBG_H("peer_iface %s MAC: has hdr_type: %d with ref count: %d\n",
+	IPACMDBG_H("peer_iface %s has hdr_type: %d with ref count: %d\n",
 			   peer.peer->get_iface_pointer()->dev_name, peer_l2_type, ref_cnt_peer_l2_hdr_type[peer_l2_type]);
 
 	if(ref_cnt_peer_l2_hdr_type[peer_l2_type] == 1)
@@ -1060,7 +1093,6 @@ void IPACM_LanToLan_Iface::add_client_rt_rule(peer_iface_info *peer_info, client
 	else {
 		peer_l2_hdr_type = peer_info->peer->get_iface_pointer()->tx_prop->tx[0].hdr_l2_type;
 	}
-
 	/* if the peer info is not for intra interface communication */
 	if(peer_info->peer != this)
 	{
@@ -1349,7 +1381,13 @@ void IPACM_LanToLan_Iface::add_all_inter_interface_client_flt_rule(ipa_ip_type i
 #endif
 	for(it_iface = m_peer_iface_info.begin(); it_iface != m_peer_iface_info.end(); it_iface++)
 	{
-		IPACMDBG_H("Add flt rules for clients of interface %s.\n", it_iface->peer->get_iface_pointer()->dev_name);
+		IPACMDBG_H("Add flt rules for clients of existing interface %s.\n", it_iface->peer->get_iface_pointer()->dev_name);
+		IPACMDBG_H("Add flt rules for clients of new interface %s.\n", this->get_iface_pointer()->dev_name);
+		if (IsPeerFound_In_ClientReject_List(it_iface->peer->get_iface_pointer()->dev_name, this->get_iface_pointer()->dev_name) == true)
+		{
+			IPACMDBG_H("don't install inter clients.. continue.\n");
+			continue;
+		}
 		for(it_client = it_iface->peer->m_client_info.begin(); it_client != it_iface->peer->m_client_info.end(); it_client++)
 		{
 #ifdef FEATURE_VLAN_MPDN
@@ -1383,7 +1421,12 @@ void IPACM_LanToLan_Iface::add_all_intra_interface_client_flt_rule(ipa_ip_type i
 {
 	list<client_info>::iterator it_client;
 
-	IPACMDBG_H("Add flt rules for own clients.\n");
+	IPACMDBG_H("Add flt rules for own clients. of %s\n",this->get_iface_pointer()->dev_name);
+	if (IsPeerFound_In_ClientReject_List(this->get_iface_pointer()->dev_name,this->get_iface_pointer()->dev_name) == true)
+	{
+		IPACMDBG_H("don't install intra/self..\n");
+		return;
+	}
 	for(it_client = m_client_info.begin(); it_client != m_client_info.end(); it_client++)
 	{
 		add_client_flt_rule(&m_intra_interface_info, &(*it_client), iptype);
@@ -1396,11 +1439,22 @@ void IPACM_LanToLan_Iface::add_one_client_flt_rule(IPACM_LanToLan_Iface *peer_if
 {
 	list<peer_iface_info>::iterator it;
 
+	if(peer_iface == NULL || client == NULL)
+	{
+		IPACMERR("Null peer or client passed\n");
+		return;
+	}
 	for(it = m_peer_iface_info.begin(); it != m_peer_iface_info.end(); it++)
 	{
+		IPACMDBG_H("this: %s it->peers %s, handle_add for client iface: %s \n",this->get_iface_pointer()->dev_name,it->peer->get_iface_pointer()->dev_name, peer_iface->get_iface_pointer()->dev_name);
 		if(it->peer == peer_iface)
 		{
 			IPACMDBG_H("Found the peer iface info.\n");
+			if (IsPeerFound_In_ClientReject_List(it->peer->get_iface_pointer()->dev_name,this->get_iface_pointer()->dev_name) == true)
+			{
+				IPACMDBG_H("don't install for peer iface..continue.\n");
+				continue;
+			}
 			if(m_is_ip_addr_assigned[IPA_IP_v4])
 			{
 				add_client_flt_rule(&(*it), client, IPA_IP_v4);
@@ -2247,7 +2301,7 @@ void IPACM_LanToLan_Iface::handle_client_add(uint8_t *mac, bool is_l2tp_client, 
 		IPACMDBG_H("The number of clients has reached maximum %d.\n", max_num_clients);
 		return;
 	}
-
+	
 	IPACMDBG_H("is_l2tp_client: %d, mapping_info: %p, vlan id %d, is l2tp enable: %d\n", is_l2tp_client, mapping_info, vlan_id, IPACM_Iface::ipacmcfg->ipacm_l2tp_enable);
 	memset(&new_client, 0, sizeof(new_client));
 	memcpy(new_client.mac_addr, mac, sizeof(new_client.mac_addr));
@@ -2257,6 +2311,7 @@ void IPACM_LanToLan_Iface::handle_client_add(uint8_t *mac, bool is_l2tp_client, 
 	m_client_info.push_front(new_client);
 
 	client_info &front_client = m_client_info.front();
+	IPACMDBG_H("This is %s, has peer count: %d \n",this->get_iface_pointer()->dev_name,m_peer_iface_info.size());
 
 	/* install inter-interface rules */
 	if(m_support_inter_iface_offload)
@@ -2264,6 +2319,8 @@ void IPACM_LanToLan_Iface::handle_client_add(uint8_t *mac, bool is_l2tp_client, 
 		memset(flag, 0, sizeof(flag));
 		for(it_peer_info = m_peer_iface_info.begin(); it_peer_info != m_peer_iface_info.end(); it_peer_info++)
 		{
+			IPACMDBG_H("This is %s and m_support_inter_iface_offload %d has peer: %s\n",this->get_iface_pointer()->dev_name,m_support_intra_iface_offload,it_peer_info->peer->get_iface_pointer()->dev_name);
+
 			if (it_peer_info->peer->is_svap_iface() || it_peer_info->peer->is_ap_iface_vlan_enabled())
 				l2_hdr_type = it_peer_info->peer->get_iface_pointer()->rx_prop->rx[2].hdr_l2_type;
 			else
@@ -2286,7 +2343,6 @@ void IPACM_LanToLan_Iface::handle_client_add(uint8_t *mac, bool is_l2tp_client, 
 #endif
 				flag[l2_hdr_type] = true;
 			}
-
 			/* add client filtering rule on peer interfaces */
 			if (!it_peer_info->peer->get_m_support_ast_update())
 				it_peer_info->peer->add_one_client_flt_rule(this, &front_client);
@@ -2308,6 +2364,13 @@ void IPACM_LanToLan_Iface::handle_client_add(uint8_t *mac, bool is_l2tp_client, 
 	/* install intra-interface rules */
 	if(m_support_intra_iface_offload)
 	{
+		IPACMDBG_H("This is %s and m_support_intra_iface_offload %d\n",this->get_iface_pointer()->dev_name,m_support_intra_iface_offload);
+		if (IsPeerFound_In_ClientReject_List(this->get_iface_pointer()->dev_name,this->get_iface_pointer()->dev_name) == true)
+		{
+			IPACMDBG_H("don't install intra/self..\n");
+			return;
+		}
+
 		/* add routing rule first */
 		add_client_rt_rule(&m_intra_interface_info, &front_client);
 

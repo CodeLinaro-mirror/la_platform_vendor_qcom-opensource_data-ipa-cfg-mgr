@@ -783,6 +783,7 @@ static int ipa_nl_decode_nlmsg
 		{
 		case RTM_NEWLINK:
 		{
+			IPACMDBG("\nGOT RTM_NEWLINK event\n");
 			msg_ptr->type = nlh->nlmsg_type;
 			msg_ptr->link_event = true;
 			if (IPACM_SUCCESS != ipa_nl_decode_rtm_link(buffer, buflen, &(msg_ptr->nl_link_info))) {
@@ -956,17 +957,14 @@ static int ipa_nl_decode_nlmsg
 		break;
 
 		case RTM_DELLINK:
-			IPACMDBG("\n GOT dellink event\n");
+			IPACMDBG("\nGOT RTM_DELLINK event\n");
 			msg_ptr->type = nlh->nlmsg_type;
 			msg_ptr->link_event = true;
 			IPACMDBG("entering rtm decode\n");
-			if(IPACM_SUCCESS != ipa_nl_decode_rtm_link(buffer, buflen, &(msg_ptr->nl_link_info)))
-			{
+			if (IPACM_SUCCESS != ipa_nl_decode_rtm_link(buffer, buflen, &(msg_ptr->nl_link_info))) {
 				IPACMERR("Failed to decode rtm link message\n");
 				return IPACM_FAILURE;
-			}
-			else
-			{
+			} else {
 				IPACMDBG("Got RTM_DELLINK with below values\n");
 				IPACMDBG("RTM_DELLINK, ifi_change:%d\n", msg_ptr->nl_link_info.metainfo.ifi_change);
 				IPACMDBG("RTM_DELLINK, ifi_flags:%d\n", msg_ptr->nl_link_info.metainfo.ifi_flags);
@@ -1046,14 +1044,11 @@ static int ipa_nl_decode_nlmsg
 			break;
 
 		case RTM_NEWADDR:
-			IPACMDBG("\n GOT RTM_NEWADDR event\n");
-			if(IPACM_SUCCESS != ipa_nl_decode_rtm_addr(buffer, buflen, &(msg_ptr->nl_addr_info)))
-			{
+			IPACMDBG("\nGOT RTM_NEWADDR event\n");
+			if (IPACM_SUCCESS != ipa_nl_decode_rtm_addr(buffer, buflen, &(msg_ptr->nl_addr_info))) {
 				IPACMERR("Failed to decode rtm addr message\n");
 				return IPACM_FAILURE;
-			}
-			else
-			{
+			} else {
 				ret_val = ipa_get_if_name(dev_name, msg_ptr->nl_addr_info.metainfo.ifa_index);
 				if(ret_val != IPACM_SUCCESS)
 				{
@@ -1122,14 +1117,11 @@ static int ipa_nl_decode_nlmsg
 			break;
 
 		case RTM_DELADDR:
-			IPACMDBG("\n GOT RTM_DELADDR event\n");
-			if(IPACM_SUCCESS != ipa_nl_decode_rtm_addr(buffer, buflen, &(msg_ptr->nl_addr_info)))
-			{
+			IPACMDBG("\nGOT RTM_DELADDR event\n");
+			if (IPACM_SUCCESS != ipa_nl_decode_rtm_addr(buffer, buflen, &(msg_ptr->nl_addr_info))) {
 				IPACMERR("Failed to decode rtm addr message\n");
 				return IPACM_FAILURE;
-			}
-			else
-			{
+			} else {
 
 				data_addr = (ipacm_event_data_addr *)malloc(sizeof(ipacm_event_data_addr));
 				if(data_addr == NULL)
@@ -1164,14 +1156,11 @@ static int ipa_nl_decode_nlmsg
 			}
 			break;
 		case RTM_NEWROUTE:
-
-			if(IPACM_SUCCESS != ipa_nl_decode_rtm_route(buffer, buflen, &(msg_ptr->nl_route_info)))
-			{
+			IPACMDBG("\nGOT RTM_NEWROUTE event\n");
+			if (IPACM_SUCCESS != ipa_nl_decode_rtm_route(buffer, buflen, &(msg_ptr->nl_route_info))) {
 				IPACMERR("Failed to decode rtm route message\n");
 				return IPACM_FAILURE;
 			}
-
-			IPACMDBG("In case RTM_NEWROUTE\n");
 			IPACMDBG("rtm_type: %d\n", msg_ptr->nl_route_info.metainfo.rtm_type);
 			IPACMDBG("protocol: %d\n", msg_ptr->nl_route_info.metainfo.rtm_protocol);
 			IPACMDBG("rtm_scope: %d\n", msg_ptr->nl_route_info.metainfo.rtm_scope);
@@ -1464,12 +1453,11 @@ static int ipa_nl_decode_nlmsg
 			break;
 
 		case RTM_DELROUTE:
-			if(IPACM_SUCCESS != ipa_nl_decode_rtm_route(buffer, buflen, &(msg_ptr->nl_route_info)))
-			{
+			IPACMDBG("\nGOT RTM_DELROUTE event\n");
+			if (IPACM_SUCCESS != ipa_nl_decode_rtm_route(buffer, buflen, &(msg_ptr->nl_route_info))) {
 				IPACMERR("Failed to decode rtm route message\n");
 				return IPACM_FAILURE;
 			}
-
 			/* take care of route delete of default route & uniroute */
 			if((msg_ptr->nl_route_info.metainfo.rtm_type == RTN_UNICAST) &&
 				 ((msg_ptr->nl_route_info.metainfo.rtm_protocol == RTPROT_BOOT) ||
@@ -1679,12 +1667,11 @@ static int ipa_nl_decode_nlmsg
 			break;
 
 		case RTM_NEWNEIGH:
-			if(IPACM_SUCCESS != ipa_nl_decode_rtm_neigh(buffer, buflen, &(msg_ptr->nl_neigh_info)))
-			{
+			IPACMDBG("\nGOT RTM_NEWNEIGH event\n");
+			if (IPACM_SUCCESS != ipa_nl_decode_rtm_neigh(buffer, buflen, &(msg_ptr->nl_neigh_info))) {
 				IPACMERR("Failed to decode rtm neighbor message\n");
 				return IPACM_FAILURE;
 			}
-
 			ret_val = ipa_get_if_name(dev_name, msg_ptr->nl_neigh_info.metainfo.ndm_ifindex);
 			if(ret_val != IPACM_SUCCESS)
 			{
@@ -1808,12 +1795,11 @@ static int ipa_nl_decode_nlmsg
 			break;
 
 		case RTM_DELNEIGH:
-			if(IPACM_SUCCESS != ipa_nl_decode_rtm_neigh(buffer, buflen, &(msg_ptr->nl_neigh_info)))
-			{
+			IPACMDBG("\nGOT RTM_DELNEIGH event\n");
+			if (IPACM_SUCCESS != ipa_nl_decode_rtm_neigh(buffer, buflen, &(msg_ptr->nl_neigh_info))) {
 				IPACMERR("Failed to decode rtm neighbor message\n");
 				return IPACM_FAILURE;
 			}
-
 			ret_val = ipa_get_if_name(dev_name, msg_ptr->nl_neigh_info.metainfo.ndm_ifindex);
 			if(ret_val != IPACM_SUCCESS)
 			{

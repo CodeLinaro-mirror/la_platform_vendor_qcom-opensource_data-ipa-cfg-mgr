@@ -3649,16 +3649,22 @@ bool IPACM_Config::insertOrAssignMacsecMap(struct ipa_macsec_map *macsecMap) {
 	ipacm_cmd_q_data eventItem;
 	ipacm_event_data_all *eventData;
 
+	IPACMDBG_H("macsecMap->macsec_name=%s, macsecMap->phy_name=%s\n", macsecMap->macsec_name, macsecMap->phy_name);
+
 	if (!macsecMap)
 		return false;
 	/* first check if we have macsec iface entry or not */
 	if (IPACM_Iface::ipa_get_if_index(macsecMap->macsec_name, &netlinkIdx) == IPACM_SUCCESS &&
 	    (ifaceTableIdx = IPACM_Iface::iface_ipa_index_query(netlinkIdx)) != INVALID_IFACE) {
+		IPACMDBG_H("iface_table[%d].iface_name=%s, phy_dev_name=%s\n",
+			ifaceTableIdx, iface_table[ifaceTableIdx].iface_name, iface_table[ifaceTableIdx].phy_dev_name);
 		IPACMDBG_H("Will modify the existing macsec interface %s with new phy %s\n", macsecMap->macsec_name, macsecMap->phy_name);
 
-		/* Modify an existing macsec interface in the config table*/
+		/* Modify an existing macsec interface macsec interface in the config table*/
 		strlcpy(iface_table[ifaceTableIdx].phy_dev_name, macsecMap->phy_name,
 			sizeof(iface_table[ifaceTableIdx].phy_dev_name));
+		IPACMDBG_H("iface_table[%d].iface_name=%s, phy_dev_name=%s\n",
+			ifaceTableIdx, iface_table[ifaceTableIdx].iface_name, iface_table[ifaceTableIdx].phy_dev_name);
 	} else {
 		IPACMDBG_H("Adding new macsec <-> physical mapping: %s <-> %s\n", macsecMap->macsec_name, macsecMap->phy_name);
 
@@ -3675,6 +3681,8 @@ bool IPACM_Config::insertOrAssignMacsecMap(struct ipa_macsec_map *macsecMap) {
 			sizeof(iface_table[ifaceTableIdx].iface_name));
 		strlcpy(iface_table[ifaceTableIdx].phy_dev_name, macsecMap->phy_name,
 			sizeof(iface_table[ifaceTableIdx].phy_dev_name));
+		IPACMERR("iface_table[%d].iface_name=%s, phy_dev_name=%s\n",
+			ifaceTableIdx, iface_table[ifaceTableIdx].iface_name, iface_table[ifaceTableIdx].phy_dev_name);
 		eventItem.event = IPA_CLEAN_NEIGHBOR_CACHE;
 		eventData = static_cast<decltype(eventData)>(malloc(sizeof(*eventData)));
 		if (!eventData) {

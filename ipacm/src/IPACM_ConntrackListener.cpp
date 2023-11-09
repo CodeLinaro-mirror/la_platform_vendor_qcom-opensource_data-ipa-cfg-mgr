@@ -1094,24 +1094,24 @@ void IPACM_ConntrackListener::HandleVlanUpV6(void *in_param)
 			{
 				for(int j = 0; j < v6_vlan_pdns[i].VID_cnt; j ++)
 				{
-					if (vlanup_data->VlanID == vlan_pdns[i].associated_VIDs[j])
+					if (vlanup_data->VlanID == v6_vlan_pdns[i].associated_VIDs[j])
 					{
-						IPACMDBG_H("found existing PDN entry in %d, with vlan %d\n", i, vlanup_data->VlanID);
+						IPACMDBG_H("found existing ipv6 PDN entry in %d, with vlan %d\n", i, vlanup_data->VlanID);
 						return;
 					}
 				}
 				IPACMDBG_H("found existing PDN entry in %d, but got new VLAN id. Adding vlan %d to the entry\n", i, vlanup_data->VlanID);
-				vlan_pdns[i].associated_VIDs[vlan_pdns[i].VID_cnt] = vlanup_data->VlanID;
-				vlan_pdns[i].VID_cnt++;
+				v6_vlan_pdns[i].associated_VIDs[v6_vlan_pdns[i].VID_cnt] = vlanup_data->VlanID;
+				v6_vlan_pdns[i].VID_cnt++;
 				return;
 			}
 		}
 
 		for(int i = 0; i < IPA_MAX_NUM_HW_PDNS; i++)
 		{
-			if((v6_vlan_pdns[i].ipv6_prefix[0] == 0) && (v6_vlan_pdns[i].ipv6_prefix[0] == 0))
+			if((v6_vlan_pdns[i].ipv6_prefix[0] == 0) && (v6_vlan_pdns[i].ipv6_prefix[1] == 0))
 			{
-				IPACMDBG_H("found empty PDN entry in %d num_vlan_pdns %d\n", i, num_v6_vlan_pdns);
+				IPACMDBG_H("found empty ipv6 PDN entry in %d num_vlan_pdns %d\n", i, num_v6_vlan_pdns);
 				v6_vlan_pdns[i].ipv6_prefix[0] = vlanup_data->ipv6_prefix[0];
 				v6_vlan_pdns[i].ipv6_prefix[1] = vlanup_data->ipv6_prefix[1];
 				v6_vlan_pdns[i].associated_VIDs[v6_vlan_pdns[i].VID_cnt] = vlanup_data->VlanID;
@@ -3279,6 +3279,12 @@ void IPACM_ConntrackListener::CreateIpv6ctEntryFromCtEventData(const ipacm_ct_ev
 	else
 	{
 		IPACMDBG("Received unexpected protocl %d conntrack message\n", entry.m_protocol);
+		goto bail;
+	}
+
+	if(!srcAddr.IsGlobalAddr() || !dstAddr.IsGlobalAddr())
+	{
+		IPACMDBG("addresses aren't global, bail\n");
 		goto bail;
 	}
 

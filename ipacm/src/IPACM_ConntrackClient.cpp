@@ -799,6 +799,7 @@ void IPACM_ConntrackClient::UpdateUDPFilters(void *param, bool isWan)
 	static bool isIgnore = false;
 	int ret = 0;
 	IPACM_ConntrackClient *pClient = NULL;
+	int ippt_set = 0;
 
 	pClient = IPACM_ConntrackClient::GetInstance();
 	if(pClient == NULL)
@@ -819,7 +820,19 @@ void IPACM_ConntrackClient::UpdateUDPFilters(void *param, bool isWan)
 
 		if(!isIgnore)
 		{
-			IPA_Conntrack_Filters_Ignore_Bridge_Addrs(pClient->udp_filter);
+			for (int i = 0; i < MAX_NUM_IP_PASS_MPDN; i++)
+			{
+				if(IPACM_Iface::ipacmcfg->ip_pass_mpdn_table[i].valid_entry == true)
+				{
+					ippt_set = 1;
+					break;
+				}
+			}
+			if(!ippt_set)
+			{
+				IPACMDBG_H("IPPT is not set hence proceed for ignoring bridge IP based conntrack\n");
+				IPA_Conntrack_Filters_Ignore_Bridge_Addrs(pClient->udp_filter);
+			}
 			IPA_Conntrack_Filters_Ignore_Local_Addrs(pClient->udp_filter);
 			isIgnore = true;
 		}
@@ -846,6 +859,7 @@ void IPACM_ConntrackClient::UpdateTCPFilters(void *param, bool isWan)
 	static bool isIgnore = false;
 	int ret = 0;
 	IPACM_ConntrackClient *pClient = NULL;
+	int ippt_set = 0;
 
 	pClient = IPACM_ConntrackClient::GetInstance();
 	if(pClient == NULL)
@@ -864,8 +878,20 @@ void IPACM_ConntrackClient::UpdateTCPFilters(void *param, bool isWan)
 
 		if(!isIgnore)
 		{
-			IPA_Conntrack_Filters_Ignore_Bridge_Addrs(pClient->udp_filter);
-			IPA_Conntrack_Filters_Ignore_Local_Addrs(pClient->udp_filter);
+			for (int i = 0; i < MAX_NUM_IP_PASS_MPDN; i++)
+			{
+				if(IPACM_Iface::ipacmcfg->ip_pass_mpdn_table[i].valid_entry == true)
+				{
+					ippt_set = 1;
+					break;
+				}
+			}
+			if(!ippt_set)
+			{
+				IPACMDBG_H("IPPT is not set hence proceed for ignoring bridge IP based conntrack\n");
+				IPA_Conntrack_Filters_Ignore_Bridge_Addrs(pClient->tcp_filter);
+			}
+			IPA_Conntrack_Filters_Ignore_Local_Addrs(pClient->tcp_filter);
 			isIgnore = true;
 		}
 	}

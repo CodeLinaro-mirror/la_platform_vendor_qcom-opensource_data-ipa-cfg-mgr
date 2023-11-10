@@ -623,6 +623,10 @@ static int ipa_nl_decode_rtm_route
 {
 	struct nlmsghdr *nlh = (struct nlmsghdr *)buffer;  /* NL message header */
 	struct rtattr *rtah = NULL;
+#ifdef FEATURE_RDKB
+	struct rtattr *inner_rtah = NULL;
+	int inner_rtalen;
+#endif
 
 	/* Extract the header data */
 	route_info->metainfo = *((struct rtmsg *)NLMSG_DATA(nlh));
@@ -675,7 +679,23 @@ static int ipa_nl_decode_rtm_route
 						 sizeof(route_info->attr_info.priority));
 			route_info->attr_info.param_mask |= IPA_RTA_PARAM_PRIORITY;
 			break;
+#ifdef FEATURE_RDKB
+		case RTA_METRICS:
+			inner_rtalen = RTA_PAYLOAD(rtah);
+			for(inner_rtah = (struct rtattr *)RTA_DATA(rtah); RTA_OK(inner_rtah, inner_rtalen);
+				inner_rtah = RTA_NEXT(inner_rtah,inner_rtalen))
+			{
+				if(inner_rtah->rta_type == RTAX_MTU)
+				{
+					memcpy(&route_info->attr_info.mtu,
+						RTA_DATA(inner_rtah),
+					 	sizeof(route_info->attr_info.mtu));
 
+					IPACMDBG_H("MTU: %d\n", route_info->attr_info.mtu);
+				}
+			}
+			break;
+#endif
 		default:
 			break;
 
@@ -734,6 +754,10 @@ static int ipa_nl_decode_nlmsg
 	ipacm_event_data_all *vlan_data;
 	struct ipa_vlan_iface_info vlan_info;
 	struct ipa_macsec_map macsec_map, *macsec_map_data;
+#ifdef FEATURE_RDKB
+	ipacm_event_mtu_info *mtu_event = NULL;
+	ipa_mtu_info *mtu_info;
+#endif
 	memset(nullMac, 0, sizeof(nullMac));
 	memset(&vlan_info, 0, sizeof(vlan_info));
 	memset(&macsec_map, 0, sizeof(macsec_map));
@@ -1152,6 +1176,62 @@ static int ipa_nl_decode_nlmsg
 			IPACMDBG("rtm_table: %d\n", msg_ptr->nl_route_info.metainfo.rtm_table);
 			IPACMDBG("rtm_family: %d\n", msg_ptr->nl_route_info.metainfo.rtm_family);
 			IPACMDBG("param_mask: 0x%x\n", msg_ptr->nl_route_info.attr_info.param_mask);
+
+#ifdef FEATURE_RDKB
+			/* take care of MTU */
+			if((msg_ptr->nl_route_info.metainfo.rtm_type == RTN_UNICAST) &&
+				 ((msg_ptr->nl_route_info.metainfo.rtm_protocol == RTPROT_BOOT) ||
+				  (msg_ptr->nl_route_info.metainfo.rtm_protocol == RTPROT_RA) ||
+				  (msg_ptr->nl_route_info.metainfo.rtm_protocol == RTPROT_STATIC))&&
+				  ((msg_ptr->nl_route_info.metainfo.rtm_scope == RT_SCOPE_UNIVERSE)||
+				  (msg_ptr->nl_route_info.metainfo.rtm_scope == RT_SCOPE_LINK))&&
+				  (msg_ptr->nl_route_info.attr_info.mtu))
+			{
+				mtu_event = (ipacm_event_mtu_info *)malloc(sizeof(*mtu_event));
+				if(mtu_event == NULL)
+				{
+					IPACMERR("Failed to allocate memory.\n");
+					return IPACM_FAILURE;
+				}
+
+				memset(mtu_event, 0, sizeof(ipa_mtu_info));
+				mtu_info = &(mtu_event->mtu_info);
+				mtu_event->if_index = msg_ptr->nl_route_info.attr_info.oif_index;
+
+				ret_val = ipa_get_if_name(mtu_info->if_name, msg_ptr->nl_route_info.attr_info.oif_index);
+				if(ret_val != IPACM_SUCCESS)
+				{
+					IPACMERR("Error while getting interface name\n");
+					free(mtu_event);
+					return IPACM_FAILURE;
+				}
+
+				if(AF_INET == msg_ptr->nl_route_info.metainfo.rtm_family)
+				{
+					mtu_info->ip_type = IPA_IP_v4;
+					mtu_info->mtu_v4 = msg_ptr->nl_route_info.attr_info.mtu;
+					IPACMDBG_H("Posting IPA_MTU_SET if_name %s ip_type %d mtu_v4 %d\n",
+						mtu_info->if_name, mtu_info->ip_type, mtu_info->mtu_v4);
+				}
+				else if(AF_INET6 == msg_ptr->nl_route_info.metainfo.rtm_family)
+				{
+					mtu_info->ip_type = IPA_IP_v6;
+					mtu_info->mtu_v6 = msg_ptr->nl_route_info.attr_info.mtu;
+					IPACMDBG_H("Posting IPA_MTU_SET if_name %s ip_type %d mtu_v6 %d\n",
+						mtu_info->if_name, mtu_info->ip_type, mtu_info->mtu_v6);
+				}
+				else
+				{
+					IPACMERR("Invalid ip_type (%d) abort\n", msg_ptr->nl_route_info.metainfo.rtm_family);
+					free(mtu_event);
+					return IPACM_FAILURE;
+				}
+
+				evt_data.event = IPA_MTU_SET;
+				evt_data.evt_data = mtu_event;
+				IPACM_EvtDispatcher::PostEvt(&evt_data);
+			}
+#endif
 
 			/* take care of route add default route & uniroute */
 			if((msg_ptr->nl_route_info.metainfo.rtm_type == RTN_UNICAST) &&

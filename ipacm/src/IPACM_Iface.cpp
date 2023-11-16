@@ -655,6 +655,7 @@ int IPACM_Iface::query_iface_property(void)
 		{
 			IPACMERR("Unable to allocate tx_prop memory.\n");
 			close(fd);
+			free(iface_query);
 			return IPACM_FAILURE;
 		}
 		memcpy(tx_prop->name, queried_name, queried_name_size);
@@ -664,6 +665,7 @@ int IPACM_Iface::query_iface_property(void)
 		{
 			PERROR("ioctl IPA_IOC_QUERY_INTF_TX_PROPS failed\n");
 			/* tx_prop memory will free when iface-down*/
+			free(iface_query);
 			res = IPACM_FAILURE;
 		}
 
@@ -681,6 +683,8 @@ int IPACM_Iface::query_iface_property(void)
 				{
 					IPACMERR("Tx(%d): wrong tx property: dst_pipe: 0.\n", cnt);
 					close(fd);
+					free(iface_query);
+					free(tx_prop);
 					return IPACM_FAILURE;
 				}
 				/* Move the alt_dst_pipe logic to wlan/wan instance */
@@ -698,6 +702,8 @@ int IPACM_Iface::query_iface_property(void)
 		{
 			IPACMERR("Unable to allocate rx_prop memory.\n");
 			close(fd);
+			free(iface_query);
+			free(tx_prop);
 			return IPACM_FAILURE;
 		}
 		memcpy(rx_prop->name, queried_name, queried_name_size);
@@ -707,6 +713,8 @@ int IPACM_Iface::query_iface_property(void)
 		{
 			PERROR("ioctl IPA_IOC_QUERY_INTF_RX_PROPS failed\n");
 			/* rx_prop memory will free when iface-down*/
+			free(iface_query);
+			free(tx_prop);
 			res = IPACM_FAILURE;
 		}
 
@@ -804,8 +812,25 @@ int IPACM_Iface::init_fl_rule(
 		IPACMDBG_H("Interface is WLAN Svap or vlan, install rules on Rx pipe at idx %d \n", idx);
 	}
 
-		/* construct ipa_ioc_add_flt_rule with default filter rules */
-	if (iptype == IPA_IP_v4) {
+
+
+
+	/* construct ipa_ioc_add_flt_rule with default filter rules */
+    if(eogre_enabled)
+    {
+        IPACMDBG_H("Will not install frag,mcast, and bcast rules when gre enabled\n");
+    
+        if (m_ipv4_default_filterting_rules_count || m_ipv6_default_filterting_rules_count)
+        {
+            if ( delete_dflt_filter_rules(iptype) == IPACM_FAILURE )
+            {
+                IPACMERR("delete_dflt_filter_rules failed, iptype: %d\n",iptype);
+                return IPACM_FAILURE;
+            }
+            IPACMDBG_H("delete_dflt_filter_rules previously installed, iptype :%d\n",iptype);
+        }
+	}
+	else if (iptype == IPA_IP_v4) {
 		if (m_ipv4_default_filterting_rules_count) {
 			IPACMDBG_H("v4 rules already installed\n");
 			return IPACM_SUCCESS;
@@ -842,14 +867,7 @@ int IPACM_Iface::init_fl_rule(
 			sizeof(struct ipa_flt_rule_add));
 		m_ipv4_default_filterting_rules_count++;
 
-		if (eogre_enabled)
-		{
-			IPACMDBG_H(
-				"Will install frag, but not mcast "
-				"and bcast rules when gre enabled\n");
-		}
-		else
-		{
+
 			IPACMDBG_H("Installing frag, mcast, and bcast rules\n");
 
 			/* Configuring Multicast Filtering Rule */
@@ -881,7 +899,7 @@ int IPACM_Iface::init_fl_rule(
 				&flt_rule_entry,
 				sizeof(struct ipa_flt_rule_add));
 			m_ipv4_default_filterting_rules_count++;
-		}
+
 
 		IPACMDBG_H("Total num rules to add %d\n", m_ipv4_default_filterting_rules_count);
 
@@ -906,7 +924,7 @@ int IPACM_Iface::init_fl_rule(
 			}
 		}
 	}
-	else {
+	else{
 		/* (iptype == IPA_IP_v6) */
 		if (m_ipv6_default_filterting_rules_count) {
 			IPACMDBG_H("v6 rules already installed\n");
@@ -953,15 +971,6 @@ int IPACM_Iface::init_fl_rule(
 #else
 		const char *rule_set_ex = "mcast, fe80::/10, fec0::/10, and fd00::/8";
 #endif
-		if (eogre_enabled)
-		{
-			if ( *rule_set )
-			{
-				IPACMDBG_H(
-					"Will install %s but not %s rules when gre enabled\n",
-					rule_set, rule_set_ex);
-			}
-		} else {
 			IPACMDBG_H("Installing %s%s rules\n", rule_set, rule_set_ex);
 
 			/* Configuring Multicast Filtering Rule */
@@ -1089,7 +1098,7 @@ int IPACM_Iface::init_fl_rule(
 			memcpy(&(m_pFilteringTable->rules[m_ipv6_default_filterting_rules_count++]),
 				   &flt_rule_entry, sizeof(struct ipa_flt_rule_add));
 #endif
-		}
+
 
 		IPACMDBG_H(
 			"Total num rules to add %d\n",

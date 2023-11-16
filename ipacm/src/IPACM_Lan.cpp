@@ -97,6 +97,22 @@ const uint8_t IPACM_Lan::v4_eogre_header[] = {
 	0x00, 0x00, 0x00, 0x00
 };
 
+
+const uint8_t IPACM_Lan::v6_eogre_header_nops[] = {
+	0x60, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x2f, 0x40, // 0x2f Protocol (Generic Routing Encapsulation)
+	0x00, 0x00, 0x00, 0x00, // src address here
+	0x00, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00, // dest address here
+	0x00, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00,
+	// GRE header here
+	0x00, 0x00, 0x00, 0x00
+};
+
 const uint8_t IPACM_Lan::v6_eogre_header[] = {
 	0x60, 0x00, 0x00, 0x00,
 	0x00, 0x00, 0x3c, 0x40, // 0x3c Protocol (destination option) hop limit to 64
@@ -126,6 +142,25 @@ const uint8_t IPACM_Lan::v4_mpls_header[] = {
 	// MPLS header
 	0x00, 0x00, 0x01, 0x40,
 };
+
+
+const uint8_t IPACM_Lan::v6_mpls_header_nops[] = {
+	0x60, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x3c, 0x40, // 0x2f Protocol (Generic Routing Encapsulation)
+	0x00, 0x00, 0x00, 0x00, // src address here
+	0x00, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00, // dest address here
+	0x00, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00,
+	// GRE header here
+	0x00, 0x00, 0x00, 0x00,
+	// MPLS header
+	0x00, 0x00, 0x01, 0x40,
+};
+
 
 const uint8_t IPACM_Lan::v6_mpls_header[] = {
 	0x60, 0x00, 0x00, 0x00,
@@ -10410,7 +10445,7 @@ int IPACM_Lan::install_l2tp_inner_private_subnet_flt_rule()
 }
 #endif
 
-int IPACM_Lan::modify_private_subnet()
+int IPACM_Lan::modify_private_subnet(bool eogre_enabled)
 {
 	int i, len, res = IPACM_SUCCESS;
 	struct ipa_flt_rule_add flt_rule;
@@ -10450,7 +10485,7 @@ int IPACM_Lan::modify_private_subnet()
 		return IPACM_SUCCESS;
 	}
 
-	if (dft_v4fl_rule_hdl[0] == 0)
+	if (dft_v4fl_rule_hdl[0] == 0 && eogre_enabled == false)
 	{
 		IPACMERR("install v4 default rules first.Subnet + MTU rule will be installed later\n");
 		return IPACM_FAILURE;
@@ -10693,7 +10728,7 @@ int IPACM_Lan::handle_private_subnet_android(ipa_ip_type iptype)
 }
 
 #ifdef FEATURE_VLAN_MPDN
-int IPACM_Lan::modify_ipv6_prefix_flt_rule()
+int IPACM_Lan::modify_ipv6_prefix_flt_rule(bool eogre_enabled)
 {
 	int i, len, res = IPACM_SUCCESS;
 	struct ipa_flt_rule_add flt_rule;
@@ -10720,7 +10755,7 @@ int IPACM_Lan::modify_ipv6_prefix_flt_rule()
 		return IPACM_FAILURE;
 	}
 
-	if (dft_v6fl_rule_hdl[0] == 0)
+	if (dft_v6fl_rule_hdl[0] == 0 && eogre_enabled == false)
 	{
 		IPACMERR("install v6 default rules first.Prefix + MTU rule will be installed later\n");
 		return IPACM_FAILURE;
@@ -15237,9 +15272,9 @@ if(isPmipv6){/*PMIPV6 needs to take care of WAN up before GRE UP scenario */
 		return;
 	}
 	//need to add mtu rules when gre is enabled
-	modify_private_subnet();
+	modify_private_subnet(true);
 #ifdef FEATURE_VLAN_MPDN
-	modify_ipv6_prefix_flt_rule();
+	modify_ipv6_prefix_flt_rule(true);
 #else
 	delete_ipv6_prefix_flt_rule();
 	install_ipv6_prefix_flt_rule(IPACM_Wan::backhaul_ipv6_prefix);
@@ -15789,70 +15824,122 @@ int IPACM_Lan::gre_make_hdr_for_add_ctx(
 			"The dst addr added to gre header template:",
 			iptype,
 			&(hdr->words[IPV4_DST_ADDR_IDX]));
-		
+
 #ifdef IPA_FLT_EXT_MPLS_GRE_GENERAL
 		if (ipgre_info.mpls_protocol)
-		{     
+		{
 			hdr_data_len = sizeof(v4_gre_hdr_t);
-		}     
+		}
 		else
 #endif
-		{     
+		{
 			hdr_data_len = EoGRE_V4_HEADER_LEN;
-		}     		
-
+		}
 		IPACMDBG_H("Sending to uC, v4 header length : %d\n",hdr_data_len);
 	}
-	else
+	else /*iptype == IPA_IP_v6*/
 	{
-		v6_gre_hdr_t* hdr = (v6_gre_hdr_t*) hdr_data_buf;
+		if(ipgre_info.ipv6_option_hdr_enabled == 1)
+		{
+			v6_gre_hdr_t* hdr = (v6_gre_hdr_t*) hdr_data_buf;
 
 #ifdef IPA_FLT_EXT_MPLS_GRE_GENERAL
-		if ( ipgre_info.mpls_protocol )
-		{
-			memcpy(hdr_data_buf, v6_mpls_header, sizeof(v6_mpls_header));
-			hdr->words[IPV6_MPLS_PROT_IDX] = htonl(ipgre_info.mpls_protocol);
-		}
-		else
+			if ( ipgre_info.mpls_protocol )
+			{
+				memcpy(hdr_data_buf, v6_mpls_header, sizeof(v6_mpls_header));
+				hdr->words[IPV6_MPLS_PROT_IDX] = htonl(ipgre_info.mpls_protocol);
+			}
+			else
 #endif
-		{
-			memcpy(hdr_data_buf, v6_eogre_header, sizeof(v6_eogre_header));
-		}
+			{
+				memcpy(hdr_data_buf, v6_eogre_header, sizeof(v6_eogre_header));
+			}
 
-		hdr->words[IPV6_GRE_PROT_IDX] = htonl(ipgre_info.gre_protocol);
+			hdr->words[IPV6_GRE_PROT_IDX] = htonl(ipgre_info.gre_protocol);
 
-		memcpy(&(hdr->words[IPV6_SRC_ADDR_IDX]),
-			   &ipgre_info.ipv6_src,
-			   sizeof(ipgre_info.ipv6_src));
+			memcpy(&(hdr->words[IPV6_SRC_ADDR_IDX]),
+					&ipgre_info.ipv6_src,
+					sizeof(ipgre_info.ipv6_src));
 
-		memcpy(&(hdr->words[IPV6_DST_ADDR_IDX]),
-			   &ipgre_info.ipv6_dst,
-			   sizeof(ipgre_info.ipv6_dst));
+			memcpy(&(hdr->words[IPV6_DST_ADDR_IDX]),
+					&ipgre_info.ipv6_dst,
+					sizeof(ipgre_info.ipv6_dst));
 
-		addr2network(iptype, &(hdr->words[IPV6_SRC_ADDR_IDX]));
-		addr2network(iptype, &(hdr->words[IPV6_DST_ADDR_IDX]));
+			addr2network(iptype, &(hdr->words[IPV6_SRC_ADDR_IDX]));
+			addr2network(iptype, &(hdr->words[IPV6_DST_ADDR_IDX]));
 
-		IPACM_LOG_IP_ADDR(
-			"The src addr added to gre header template:",
-			iptype,
-			&(hdr->words[IPV6_SRC_ADDR_IDX]));
+			IPACM_LOG_IP_ADDR(
+					"The src addr added to gre header template:",
+					iptype,
+					&(hdr->words[IPV6_SRC_ADDR_IDX]));
 
-		IPACM_LOG_IP_ADDR(
+			IPACM_LOG_IP_ADDR(
 				"The dst addr added to gre header template:",
 				iptype,
 				&(hdr->words[IPV6_DST_ADDR_IDX]));
 
 #ifdef IPA_FLT_EXT_MPLS_GRE_GENERAL
-		if (ipgre_info.mpls_protocol)
-		{     
-			hdr_data_len = sizeof(v6_gre_hdr_t);
-		}     
-		else
+			if (ipgre_info.mpls_protocol)
+			{
+				hdr_data_len = sizeof(v6_gre_hdr_t);
+			}
+			else
 #endif
-		{     
-			hdr_data_len = EoGRE_V6_HEADER_LEN;
-		}     		
-		IPACMDBG_H("Sending to uC, v6 header length : %d\n",hdr_data_len);
+			{
+				hdr_data_len = EoGRE_V6_HEADER_LEN;
+			}
+		} 
+		else /* ipgre_info.ipv6_option_hdr_enabled == 0 */
+		{
+			v6_gre_hdr_t_nops* hdr = (v6_gre_hdr_t_nops*) hdr_data_buf;
+
+#ifdef IPA_FLT_EXT_MPLS_GRE_GENERAL
+			if ( ipgre_info.mpls_protocol )
+			{
+				memcpy(hdr_data_buf, v6_mpls_header_nops, sizeof(v6_mpls_header_nops));
+				hdr->words[IPV6_MPLS_PROT_IDX_NOPS] = htonl(ipgre_info.mpls_protocol);
+			}
+			else
+#endif
+			{
+				memcpy(hdr_data_buf, v6_eogre_header_nops, sizeof(v6_eogre_header_nops));
+			}
+
+			hdr->words[IPV6_GRE_PROT_IDX_NOPS] = htonl(ipgre_info.gre_protocol);
+
+			memcpy(&(hdr->words[IPV6_SRC_ADDR_IDX]),
+					&ipgre_info.ipv6_src,
+					sizeof(ipgre_info.ipv6_src));
+
+			memcpy(&(hdr->words[IPV6_DST_ADDR_IDX]),
+					&ipgre_info.ipv6_dst,
+					sizeof(ipgre_info.ipv6_dst));
+
+			addr2network(iptype, &(hdr->words[IPV6_SRC_ADDR_IDX]));
+			addr2network(iptype, &(hdr->words[IPV6_DST_ADDR_IDX]));
+
+			IPACM_LOG_IP_ADDR(
+					"The src addr added to gre header template:",
+					iptype,
+					&(hdr->words[IPV6_SRC_ADDR_IDX]));
+
+			IPACM_LOG_IP_ADDR(
+					"The dst addr added to gre header template:",
+					iptype,
+					&(hdr->words[IPV6_DST_ADDR_IDX]));
+#ifdef IPA_FLT_EXT_MPLS_GRE_GENERAL
+			if (ipgre_info.mpls_protocol)
+			{	  
+				hdr_data_len = sizeof(v6_gre_hdr_t_nops);
+			}	  
+			else
+#endif
+			{	  
+				hdr_data_len = EoGRE_V6_HEADER_LEN_NOPS;
+			}			
+		}
+
+		IPACMDBG_H("Sending to uC, v6 header length:%d with options:%d \n",hdr_data_len,ipgre_info.ipv6_option_hdr_enabled);
 	}
 
 	/*
@@ -16092,17 +16179,13 @@ int IPACM_Lan::gre_make_hdr_rmv_ctx(
 #ifdef IPA_FLT_EXT_MPLS_GRE_GENERAL
 	if (ipgre_info.mpls_protocol)
 	{
-		procCtx->eogre_params.hdr_remove_param.hdr_len_remove =
-			( iptype == IPA_IP_v4 ) ? sizeof(v4_gre_hdr_t) :
-			sizeof(v6_gre_hdr_t);
+		procCtx->eogre_params.hdr_remove_param.hdr_len_remove = ( iptype == IPA_IP_v4 ) ? sizeof(v4_gre_hdr_t) : (ipgre_info.ipv6_option_hdr_enabled == 1) ? sizeof(v6_gre_hdr_t): sizeof(v6_gre_hdr_t_nops);
 	}
 	else
 #endif
 	{
-		procCtx->eogre_params.hdr_remove_param.hdr_len_remove =
-			( iptype == IPA_IP_v4 ) ? EoGRE_V4_HEADER_LEN : EoGRE_V6_HEADER_LEN;
+		procCtx->eogre_params.hdr_remove_param.hdr_len_remove = ( iptype == IPA_IP_v4 ) ? EoGRE_V4_HEADER_LEN : (ipgre_info.ipv6_option_hdr_enabled == 1) ? EoGRE_V6_HEADER_LEN : EoGRE_V6_HEADER_LEN_NOPS;
 	}
-
 	IPACMDBG_H("Sending to uC, Remove header length : %d\n",procCtx->eogre_params.hdr_remove_param.hdr_len_remove);
 #ifdef IPA_FLT_EXT_MPLS_GRE_GENERAL
 	procCtx->eogre_params.hdr_remove_param.outer_ip_version =
@@ -16625,7 +16708,10 @@ int IPACM_Lan::handle_ext_router_add_evt(char* pdn_name, uint8_t *mac_addr, uint
 	uint32_t wan_ipv6_addr[4];
 	memset(&hdr, 0, sizeof(hdr));
 
-	strlcpy(info.pdn_name, pdn_name, sizeof(info.pdn_name));
+	if (strlcpy(info.pdn_name, pdn_name, sizeof(info.pdn_name)) == 0) {
+		IPACMERR("Recevied NULL PDN name\n");
+		return IPACM_FAILURE;
+	}
 	if(IPACM_Iface::ipacmcfg->get_ext_router_info(&info) == IPACM_FAILURE)
 	{
 		IPACMERR("failed to get ext_router_info\n");
@@ -16732,6 +16818,7 @@ int IPACM_Lan::handle_ext_router_add_evt(char* pdn_name, uint8_t *mac_addr, uint
 	}
 	get_client_memptr(eth_client, eth_idx)->ext_router_prefix_rt_hdl =  rt_rule_entry->rt_rule_hdl;
 
+	IPACMDBG_H("set route/filter rule for v6_external router completed\n");
 	/* if in prefix sharing mode, need to add 1 more rt and flt exception rule as per design*/
 	if (IPACM_Iface::ipacmcfg->ext_router_mode == IPA_PREFIX_SHARING)
 	{

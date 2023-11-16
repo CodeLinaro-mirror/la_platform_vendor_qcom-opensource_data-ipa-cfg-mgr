@@ -278,7 +278,21 @@ typedef struct v6_gre_hdr_s
 	uint32_t words[14];
 } v6_gre_hdr_t;
 
+
+/*
+ * Enough space for :
+ *
+ * -> An IP v6 header (ten 32-bit words),
+ * -> A GRE header (one 32-bit word), and
+ * -> An MPLS header (one 32-bit word).
+ */
+typedef struct v6_gre_hdr_s_nops
+{
+	uint32_t words[12];
+} v6_gre_hdr_t_nops;
+
 #define EoGRE_V6_HEADER_LEN 52 /* 40bytes (v6 hdr)+ 8bytes (v6 ext hdr) + 4bytes (GRE hdr) */
+#define EoGRE_V6_HEADER_LEN_NOPS 44 /* 40bytes (v6 hdr) + 4bytes (GRE hdr) */
 
 /*
  * Where things reside in the struct above...
@@ -286,7 +300,9 @@ typedef struct v6_gre_hdr_s
 #define IPV6_SRC_ADDR_IDX   2
 #define IPV6_DST_ADDR_IDX   6
 #define IPV6_GRE_PROT_IDX  12
+#define IPV6_GRE_PROT_IDX_NOPS  10
 #define IPV6_MPLS_PROT_IDX 13
+#define IPV6_MPLS_PROT_IDX_NOPS 11
 #define IPV6_GRE_PMIP_PROT_IDX  10
 
 #endif /* #ifdef FEATURE_EoGRE */
@@ -350,12 +366,12 @@ public:
 	virtual int handle_wan_down_v6(bool is_sta_mode, bool is_support_mpdn = true);
 
 	/* configure private subnet filter rules*/
-	int modify_private_subnet();
+	int modify_private_subnet(bool eogre_enabled = false);
 	virtual int handle_private_subnet(ipa_ip_type iptype);
 	int eth_bridge_get_vlan_hdr_template_hdl(uint32_t *hdr_hdl, uint16_t vlan_id);
 #ifdef FEATURE_VLAN_MPDN
 	int add_vlan_private_subnet(ipacm_bridge *bridge);
-	int modify_ipv6_prefix_flt_rule();
+	int modify_ipv6_prefix_flt_rule(bool eogre_enabled = false);
 	int handle_backhaul_switch_vlan_mode(bool to_sta);
 #endif
 
@@ -1669,8 +1685,10 @@ public:
 
 	static const uint8_t v4_eogre_header[];
 	static const uint8_t v6_eogre_header[];
+	static const uint8_t v6_eogre_header_nops[];
 	static const uint8_t v4_mpls_header[];
 	static const uint8_t v6_mpls_header[];
+	static const uint8_t v6_mpls_header_nops[];
 	static const uint8_t sc_tag_header[];
 };
 

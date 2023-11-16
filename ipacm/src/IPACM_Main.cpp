@@ -1409,6 +1409,10 @@ void* ipa_driver_msg_notifier(void *param)
 				ext_router_info.ipv6_addr[0], ext_router_info.ipv6_addr[1], ext_router_info.ipv6_addr[2], ext_router_info.ipv6_addr[3],
 				ext_router_info.ipv6_mask[0], ext_router_info.ipv6_mask[1], ext_router_info.ipv6_mask[2], ext_router_info.ipv6_mask[3]);
 
+			if (!strlen(ext_router_info.pdn_name)){
+				IPACMERR("Received the null pdn name for IPA_SET_EXT_ROUTER_MODE_EVENT\n");
+				goto done;
+			}
 			if (IPACM_Iface::ipacmcfg->ext_router_mode == IPA_PREFIX_DISABLED && ext_router_info.mode == IPA_PREFIX_DISABLED )
 			{
 				IPACMERR("IPACM is already in ext_router disabled mode\n");

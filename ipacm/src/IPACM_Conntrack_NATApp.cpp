@@ -173,6 +173,7 @@ int NatApp::AddPdn(uint32_t pub_ip, uint8_t mux_id, bool is_sta, bool ip_pass)
 	entry.dst_metadata = 0;
 	entry.src_metadata = GenerateMetdata(mux_id);
 	entry.public_ip = pub_ip;
+	entry.is_sta = is_sta;
 
 	ret = ipa_nat_get_pdn_count(&pdn_count);
 	if(ret)

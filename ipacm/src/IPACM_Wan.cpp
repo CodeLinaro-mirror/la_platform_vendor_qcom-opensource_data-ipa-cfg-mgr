@@ -234,6 +234,9 @@ IPACM_Wan::IPACM_Wan(int iface_index,
 	hdr_hdl_dummy_v6 = 0;
 	hdr_proc_hdl_dummy_v6 = 0;
 
+	memset(num_ipsec_post_pol_rt, 0, sizeof(num_ipsec_post_pol_rt));
+	memset(ipsec_post_pol_rt_hdls, 0, sizeof(ipsec_post_pol_rt_hdls));
+
 #ifdef IPA_MTU_EVENT_MAX
 	/* Query WAN MTU to handle IPACM restart scenarios. */
 	if(is_sta_mode == Q6_WAN)
@@ -7631,7 +7634,9 @@ int IPACM_Wan::installWanPostIpsecRt(
 				res = IPACM_FAILURE;
 				goto end;
 			}
+			ipsec_post_pol_rt_hdls[iptype][i] = 0;
 		}
+		num_ipsec_post_pol_rt[iptype] = 0;
 
 		switch (iptype) {
 		case IPA_IP_v4:

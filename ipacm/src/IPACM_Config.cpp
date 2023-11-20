@@ -3701,24 +3701,57 @@ bool IPACM_Config::insertOrAssignMacsecMap(struct ipa_macsec_map *macsecMap) {
 
 bool IPACM_Config::delMacsecMap(struct ipa_macsec_map *macsecMap) {
 	int netlinkIdx, ifaceTableIdx;
+	ipacm_cmd_q_data eventItem;
+	ipacm_event_data_all *eventData;
+
+	IPACMDBG("macsecMap->macsec_name=%s, macsecMap->phy_name=%s\n", macsecMap->macsec_name, macsecMap->phy_name);
 
 	if (!macsecMap)
 		return false;
-	/* Replace the requested macsec interface with physical interface */
-	if (IPACM_Iface::ipa_get_if_index(macsecMap->macsec_name, &netlinkIdx) == IPACM_SUCCESS &&
-	    (ifaceTableIdx = IPACM_Iface::iface_ipa_index_query(netlinkIdx)) != INVALID_IFACE) {
-		IPACMDBG_H("Will replace the macsec interface: %s with %s\n", macsecMap->macsec_name, macsecMap->phy_name);
-		iface_table[ifaceTableIdx].virtual_iface = false;
-		strlcpy(iface_table[ifaceTableIdx].iface_name, iface_table[ifaceTableIdx].phy_dev_name,
-			sizeof(iface_table[ifaceTableIdx].iface_name));
-		iface_table[ifaceTableIdx].phy_dev_name[0] = '\0';
-		IPACM_Iface::ipa_get_if_index(macsecMap->phy_name, &netlinkIdx);
-		iface_table[ifaceTableIdx].netlink_interface_index = netlinkIdx;
-
+	if (IPACM_Iface::ipa_get_if_index(macsecMap->macsec_name, &netlinkIdx) != IPACM_SUCCESS) {
+		if (IPACM_Iface::ipa_get_if_index(macsecMap->phy_name, &netlinkIdx) != IPACM_SUCCESS) {
+			IPACMERR("macsec name and physical name not found in the Linux kernel\n");
+			return false;
+		}
+	}
+	ifaceTableIdx = IPACM_Iface::iface_ipa_index_query(netlinkIdx);
+	if (ifaceTableIdx == INVALID_IFACE) {
+		IPACMERR("netlinkIdx not known to ipacm\n");
+		return false;
+	}
+	if (!iface_table[ifaceTableIdx].virtual_iface) {
+		IPACMERR("Interface marked as non-MACsec (non-virtual) iface_table[%d].virtualIface=%d\n", ifaceTableIdx,
+			iface_table[ifaceTableIdx].virtual_iface);
 		return true;
 	}
 
-	return false;
+	/**
+	 * Replace the requested macsec interface with physical
+	 * interface
+	 */
+	IPACMDBG("iface_table[%d].iface_name=%s, physDevName=%s\n", ifaceTableIdx, iface_table[ifaceTableIdx].iface_name,
+		iface_table[ifaceTableIdx].phy_dev_name);
+	IPACMDBG("Will replace the macsec interface: %s with %s\n", macsecMap->macsec_name, macsecMap->phy_name);
+	iface_table[ifaceTableIdx].virtual_iface = false;
+	strlcpy(iface_table[ifaceTableIdx].iface_name, iface_table[ifaceTableIdx].phy_dev_name,
+		sizeof(iface_table[ifaceTableIdx].iface_name));
+	IPACMDBG("iface_table[%d].iface_name=%s, physDevName=%s\n", ifaceTableIdx, iface_table[ifaceTableIdx].iface_name,
+		iface_table[ifaceTableIdx].phy_dev_name);
+	iface_table[ifaceTableIdx].phy_dev_name[0] = '\0';
+
+	eventItem.event = IPA_CLEAN_NEIGHBOR_CACHE;
+	eventData = static_cast<decltype(eventData)>(malloc(sizeof(*eventData)));
+	if (!eventData) {
+		IPACMERR("malloc failed\n");
+		return false;
+	}
+	memset(eventData, 0, sizeof(*eventData));
+	strlcpy(eventData->iface_name, iface_table[ifaceTableIdx].iface_name, sizeof(eventData->iface_name));
+	eventItem.evt_data = eventData;
+	IPACMDBG("Posting %s\n", getEventName(eventItem.event));
+	IPACM_EvtDispatcher::PostEvt(&eventItem);
+
+	return true;
 }
 
 #ifdef FEATURE_IPA_IPSEC

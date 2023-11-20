@@ -249,6 +249,8 @@ struct NatEntryBase
 	bool isVlan;
 	bool IsVlanUp;
 
+	bool isSocksV5;
+
 protected:
 
 	explicit NatEntryBase(ipa_ip_type type);

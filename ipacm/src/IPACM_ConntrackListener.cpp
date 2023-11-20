@@ -110,13 +110,12 @@ IPACM_ConntrackListener::IPACM_ConntrackListener() :
 	 IPACM_EvtDispatcher::registr(IPA_HANDLE_SOCKSv5_DOWN, this);
 	 IPACM_EvtDispatcher::registr(IPA_ADD_SOCKSv5_CONN, this);
 	 IPACM_EvtDispatcher::registr(IPA_DEL_SOCKSv5_CONN, this);
-#else
+#endif
 	if (IsIpv6CTEnabled())
 	{
 		IPACM_EvtDispatcher::registr(IPA_HANDLE_WAN_UP_V6, this);
 		IPACM_EvtDispatcher::registr(IPA_HANDLE_WAN_DOWN_V6, this);
 	}
-#endif
 
 #ifdef FEATURE_VLAN_MPDN
 	 IPACM_EvtDispatcher::registr(IPA_HANDLE_WAN_VLAN_PDN_UP, this);
@@ -201,8 +200,7 @@ void IPACM_ConntrackListener::event_callback(ipa_cm_event_id evt,
 
 #endif
 
-#ifndef FEATURE_SOCKSv5
-        case IPA_PROCESS_CT_MESSAGE_V6:
+	case IPA_PROCESS_CT_MESSAGE_V6:
 	{
 		const ipacm_ct_evt_data* evt_data = static_cast<const ipacm_ct_evt_data*>(data);
 		IPACMDBG_H("Received IPA_PROCESS_CT_MESSAGE_V6 event\n");
@@ -226,7 +224,6 @@ void IPACM_ConntrackListener::event_callback(ipa_cm_event_id evt,
 #endif
 		break;
 	}
-#endif // FEATURE_SOCKSv5
 
 	 case IPA_HANDLE_WAN_UP:
 			IPACMDBG_H("Received IPA_HANDLE_WAN_UP event\n");
@@ -541,7 +538,7 @@ void IPACM_ConntrackListener::HandleNonNatIPAddr(void* inParam, bool AddOp)
 		/* For IPv4 legacy HandleNonNatIPAddr renamed to HandleNonNatIPAddr_v4 */
 		HandleNonNatIPAddr_v4(inParam, AddOp);
 		break;
-#ifndef FEATURE_SOCKSv5
+
 	case IPA_IP_v6:
 	{
 		if (IsIpv6CTEnabled())
@@ -551,7 +548,7 @@ void IPACM_ConntrackListener::HandleNonNatIPAddr(void* inParam, bool AddOp)
 		}
 		break;
 	}
-#endif
+
 	default:
 		IPACMERR("Not supported IP type %d\n", data->iptype);
 	}
@@ -1352,14 +1349,16 @@ void IPACM_ConntrackListener::TriggerWANUp_v6(const ipacm_event_iface_up* evt_da
 		IPACMDBG("Ignoring\n");
 		return;
 	}
-/* need QCMAP changes to remove below feature flag and use run time flag instead. */
-#ifndef FEATURE_SOCKSv5
-	if (!wan_ipaddr_v6.Valid())
+
+	if(!IPACM_Iface::ipacmcfg->ipacm_socksv5_enable)
 	{
-		IPACMERR("Invalid WAN address,ignoring WAN UP event\n");
-		return;
+		if (!wan_ipaddr_v6.Valid())
+		{
+			IPACMERR("Invalid WAN address,ignoring WAN UP event\n");
+			return;
+		}
 	}
-#endif
+
 	IPACMDBG_H("Recevied below information during wanup\n");
 	IPACMDBG_H("if_name: %s", evt_data->ifname);
 	wan_ipaddr_v6.DebugDump("WAN");
@@ -1374,11 +1373,9 @@ void IPACM_ConntrackListener::TriggerWANUp_v6(const ipacm_event_iface_up* evt_da
 
 	ipv6ct_inst->AddTable(evt_data->ipv6_prefix);
 
-/* need QCMAP changes to remove below feature flag and use run time flag instead*/
-#ifndef FEATURE_SOCKSv5
 	IPACMDBG_H("creating nat threads\n");
 	CreateNatThreads();
-#endif
+
 	WanUp_v6 = true;
 
 	IPACMDBG_H("return\n");
@@ -1581,15 +1578,16 @@ void IPACM_ConntrackListener::TriggerWANDown_v6(const uint32_t* ipv6_addr)
 	Ipv6IpAddress wan_addr;
 	wan_addr.CreateFromArray(ipv6_addr, false);
 
-#ifndef FEATURE_SOCKSv5
-	if (wan_addr != wan_ipaddr_v6)
+	if(!IPACM_Iface::ipacmcfg->ipacm_socksv5_enable)
 	{
-		IPACMDBG_H("WAN IP address is not matching\n");
-		return;
+		if (wan_addr != wan_ipaddr_v6)
+		{
+			IPACMDBG_H("WAN IP address is not matching\n");
+			return;
+		}
+		wan_addr.DebugDump("Deleting the table with");
 	}
-	wan_addr.DebugDump("Deleting the table with");
-#endif
-	/* delete entries one by one to insure all uc activation entries gets removed */
+	/* delete entries one by one to ensure all uc activation entries gets removed */
 	ipv6ct_inst->DelEntriesOnWanDown();
 	ipv6ct_inst->DeleteTable(ipv6_addr, num_v6_vlan_pdns);
 	IPACMDBG_H("return\n");
@@ -1835,6 +1833,8 @@ void IPACM_ConntrackListener::ProcessCTMessage_v6(const ipacm_ct_evt_data* evt_d
 	nfct_snprintf(buf, sizeof(buf), evt_data->ct, evt_data->type, NFCT_O_PLAIN, NFCT_OF_TIME);
 	IPACMDBG("%s\n", buf);
 
+	entry.isSocksV5 = false;
+
 	ParseCTV6Message(evt_data->ct);
 #endif
 
@@ -1865,6 +1865,7 @@ void IPACM_ConntrackListener::ProcessSocksv5Conn(ipa_socksv5_msg *socksv5_info, 
 		entry.m_ucp = true;
 		entry.m_s = true;
 		entry.m_uc_activation_index = (uint16_t) socksv5_info->ul_in.index;
+		entry.isSocksV5 = true;
 		if (is_add)
 			ipv6ct_inst->AddEntry(entry);
 		else
@@ -1880,6 +1881,7 @@ void IPACM_ConntrackListener::ProcessSocksv5Conn(ipa_socksv5_msg *socksv5_info, 
 		entry.m_ucp = true;
 		entry.m_s = true;
 		entry.m_uc_activation_index = (uint16_t) socksv5_info->dl_in.index;
+		entry.isSocksV5 = true;
 		if (is_add)
 			ipv6ct_inst->AddEntry(entry);
 		else

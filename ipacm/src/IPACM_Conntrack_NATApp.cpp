@@ -2709,7 +2709,7 @@ int NatBase::AddTable(const uint32_t v6_prefix[2])
 		IPACMERR("unable to create the table Error:%d\n", ret);
 		return ret;
 	}
-#ifndef FEATURE_SOCKSv5
+
 	/* Add back the cached NAT-entry */
 	IPACMDBG_H("Restore the cache to ipa NAT-table\n");
 	for (int cnt = 0; cnt < m_maxEntries; ++cnt)
@@ -2741,7 +2741,6 @@ int NatBase::AddTable(const uint32_t v6_prefix[2])
 			}
 		}
 	}
-#endif
 
 	IPACMDBG_H("return\n");
 	return 0;
@@ -2801,63 +2800,86 @@ int NatBase::DeleteTable(const uint32_t v6_prefix[2],int num_v6_vlan_pdns)
 int NatBase::AddEntry(const NatEntryBase& entry)
 {
 	IPACMDBG_H("\n");
-#ifdef FEATURE_SOCKSv5
 	Ipv6ctEntry new_entry;
+	NatEntryBase* del_entry = NULL;
+	Ipv6ctEntry del;
 
-	memcpy(&new_entry, &entry, sizeof(Ipv6ctEntry));
-
-	if (m_proxy.AddEntry(new_entry))
+	if(entry.isSocksV5 && IPACM_Iface::ipacmcfg->ipacm_socksv5_enable)
 	{
-		IPACMERR("unable to add the v6-ct entry\n");
-		return -EPERM;
-	}
-	IPACMDBG_H("Added entry successfully handle (%d)\n", new_entry.m_ruleHandle);
-	socksv5_v6_conn.push_front(new_entry);
-#else
-	entry.DebugDump("The new entry to add");
+		IPACMDBG("Socks Entry to add\n");
 
-	if (!entry.Valid())
-	{
-		IPACMERR("Invalid Connection, ignoring it\n");
-		return 0;
-	}
+		/* Clean up previous v6ct entries if v6ct comes 
+		 * before socksv5 events from tcp-splice 
+		 */
+		if(del_entry = m_cache.Find(entry))
+		{
+			memcpy(&del, del_entry, sizeof(Ipv6ctEntry));
+			DeleteEntry(del);
+		}
 
-	if (m_cache.Find(entry) != NULL)
-	{
-		IPACMERR("Duplicate rule. Ignore it\n");
-		return -EPERM;
-	}
+		/* Add SocksV5 connection */
+		memcpy(&new_entry, &entry, sizeof(Ipv6ctEntry));
 
-	if (ChkSWAllow(entry))
-	{
-		IPACMERR("SwAllow Entry. Ignore it\n");
-		return -EPERM;
-	}
-
-	NatEntryBase* new_entry = m_cache.GetFirstEmpty();
-	if(new_entry == NULL)
-	{
-		IPACMERR("Error: Unable to add, reached maximum rules\n");
-		return -EPERM;
-	}
-
-	*new_entry = entry;
-
-	if(m_pwrSaveIfs.Find(new_entry->GetClientIp()) != NULL || m_pwrSaveIfs.Find(new_entry->GetTargetIp()) != NULL)
-	{
-		IPACMDBG_H("Device is Power Save mode: Don't send to HW but successfully cached\n");
+		if (m_proxy.AddEntry(new_entry))
+		{
+			IPACMERR("unable to add the v6-ct entry\n");
+			return -EPERM;
+		}
+		IPACMDBG_H("Added entry successfully handle (%d)\n", new_entry.m_ruleHandle);
+		socksv5_v6_conn.push_front(new_entry);
 	}
 	else
 	{
-		if(m_proxy.AddEntry(*new_entry))
+		if (is_SocksV5_CT(entry))
 		{
-			IPACMERR("unable to add the rule\n");
-			new_entry->Clear();
+			IPACMERR("Socks V5 Connection do not add CT\n");
 			return -EPERM;
 		}
-		IPACMDBG_H("Added entry successfully\n");
+
+		entry.DebugDump("The new entry to add");
+
+		if (!entry.Valid())
+		{
+			IPACMERR("Invalid Connection, ignoring it\n");
+			return 0;
+		}
+
+		if (m_cache.Find(entry) != NULL)
+		{
+			IPACMERR("Duplicate rule. Ignore it\n");
+			return -EPERM;
+		}
+
+		if (ChkSWAllow(entry))
+		{
+			IPACMERR("SwAllow Entry. Ignore it\n");
+			return -EPERM;
+		}
+
+		NatEntryBase* new_entry = m_cache.GetFirstEmpty();
+		if(new_entry == NULL)
+		{
+			IPACMERR("Error: Unable to add, reached maximum rules\n");
+			return -EPERM;
+		}
+
+		*new_entry = entry;
+
+		if(m_pwrSaveIfs.Find(new_entry->GetClientIp()) != NULL || m_pwrSaveIfs.Find(new_entry->GetTargetIp()) != NULL)
+		{
+			IPACMDBG_H("Device is Power Save mode: Don't send to HW but successfully cached\n");
+		}
+		else
+		{
+			if(m_proxy.AddEntry(*new_entry))
+			{
+				IPACMERR("unable to add the rule\n");
+				new_entry->Clear();
+				return -EPERM;
+			}
+			IPACMDBG_H("Added entry successfully\n");
+		}
 	}
-#endif
 	IPACMDBG_H("\n");
 	++m_curCnt;
 	IPACMDBG_H("return\n");
@@ -2867,63 +2889,66 @@ int NatBase::AddEntry(const NatEntryBase& entry)
 void NatBase::DeleteEntry(const NatEntryBase& entry)
 {
 	IPACMDBG_H("\n");
-#ifdef FEATURE_SOCKSv5
-	Ipv6ctEntry new_entry;
-	list<Ipv6ctEntry>::iterator it_mapping;
-
-	memcpy(&new_entry, &entry, sizeof(Ipv6ctEntry));
-
-	/* find the entry and clean up*/
-	for(it_mapping = socksv5_v6_conn.begin(); it_mapping != socksv5_v6_conn.end(); it_mapping++)
+	if(entry.isSocksV5 && IPACM_Iface::ipacmcfg->ipacm_socksv5_enable)
 	{
-		if((it_mapping->m_srcAddr == new_entry.m_srcAddr) && (it_mapping->m_dstAddr == new_entry.m_dstAddr) &&
-			(it_mapping->m_srcPort == new_entry.m_srcPort) && (it_mapping->m_dstPort == new_entry.m_dstPort) &&
-			(it_mapping->m_protocol == new_entry.m_protocol))
-		{
-			new_entry.m_ruleHandle = it_mapping->m_ruleHandle;
-			IPACMDBG_H("Found the matched handle (%d)\n",
-				new_entry.m_ruleHandle);
+		Ipv6ctEntry new_entry;
+		list<Ipv6ctEntry>::iterator it_mapping;
 
-			if (m_proxy.DelEntry(new_entry))
+		memcpy(&new_entry, &entry, sizeof(Ipv6ctEntry));
+
+		/* find the entry and clean up*/
+		for(it_mapping = socksv5_v6_conn.begin(); it_mapping != socksv5_v6_conn.end(); it_mapping++)
+		{
+			if((it_mapping->m_srcAddr == new_entry.m_srcAddr) && (it_mapping->m_dstAddr == new_entry.m_dstAddr) &&
+				(it_mapping->m_srcPort == new_entry.m_srcPort) && (it_mapping->m_dstPort == new_entry.m_dstPort) &&
+				(it_mapping->m_protocol == new_entry.m_protocol))
 			{
-				IPACMERR("unable to delete the v6-ct entry\n");
-				return;
+				new_entry.m_ruleHandle = it_mapping->m_ruleHandle;
+				IPACMDBG_H("Found the matched handle (%d)\n",
+					new_entry.m_ruleHandle);
+
+				if (m_proxy.DelEntry(new_entry))
+				{
+					IPACMERR("unable to delete the v6-ct entry\n");
+					return;
+				}
+				IPACMDBG_H("Deleted entry successfully\n");
+
+				/* delete the entry */
+				socksv5_v6_conn.erase(it_mapping);
+				break;
 			}
-			IPACMDBG_H("Deleted entry successfully\n");
-
-			/* delete the entry */
-			socksv5_v6_conn.erase(it_mapping);
-			break;
 		}
-	}
 
-	if (it_mapping == socksv5_v6_conn.end())
-	{
-		IPACMERR("Can't find the matched socksv5_v6_conn!\n");
-	}
-#else
-	entry.DebugDump("The entry to delete");
-
-	NatEntryBase* entryDelete = m_cache.Find(entry);
-	if (entryDelete == NULL)
-	{
-		IPACMDBG_H("No Such Entry exists\n");
-		return;
-	}
-
-	if (entryDelete->m_enabled)
-	{
-		if (m_proxy.DelEntry(*entryDelete))
+		if (it_mapping == socksv5_v6_conn.end())
 		{
-			IPACMERR("Deletion failed\n");
-		}
-		else
-		{
-			IPACMDBG_H("Deleted NAT entry successfully\n");
+			IPACMERR("Can't find the matched socksv5_v6_conn!\n");
 		}
 	}
-	entryDelete->Clear();
-#endif
+	else
+	{
+		entry.DebugDump("The entry to delete");
+
+		NatEntryBase* entryDelete = m_cache.Find(entry);
+		if (entryDelete == NULL)
+		{
+			IPACMDBG_H("No Such Entry exists\n");
+			return;
+		}
+
+		if (entryDelete->m_enabled)
+		{
+			if (m_proxy.DelEntry(*entryDelete))
+			{
+				IPACMERR("Deletion failed\n");
+			}
+			else
+			{
+				IPACMDBG_H("Deleted NAT entry successfully\n");
+			}
+		}
+		entryDelete->Clear();
+	}
 	--m_curCnt;
 
 	IPACMDBG_H("return\n");

@@ -186,7 +186,7 @@ IPACM_Lan::IPACM_Lan(int iface_index) : IPACM_Iface(iface_index)
 #endif
 
 #ifdef FEATURE_SOCKSv5
-        socksv5_flt_hdl_v6 = 0;
+	socksv5_flt_hdl_v6 = 0;
 #endif
 
 	/* support eth multiple clients */
@@ -635,7 +635,7 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 
 #ifdef FEATURE_SOCKSv5
 						/* handle socksv5 MPDN logic */
-						else if(!IPACM_Iface::ipacmcfg->ipacm_mpdn_enable)
+						else if(IPACM_Iface::ipacmcfg->ipacm_socksv5_enable)
 						{
 							if(IPACM_Wan::isWanUP(ipa_if_num) || IPACM_Wan::isVlanWanUP())
 							{
@@ -705,7 +705,7 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 #ifdef FEATURE_VLAN_MPDN
 #ifdef FEATURE_SOCKSv5
 						/* handle socksv5 MPDN logic */
-						if(!IPACM_Iface::ipacmcfg->ipacm_mpdn_enable)
+						if(IPACM_Iface::ipacmcfg->ipacm_socksv5_enable)
 						{
 							if(IPACM_Wan::isWanUP_V6(ipa_if_num) ||  IPACM_Wan::isVlanWanUP_V6()) /* Modem v6 call is UP?*/
 							{
@@ -1934,7 +1934,8 @@ int IPACM_Lan::handle_vlan_neighbor(ipacm_event_data_all *data)
 		IPACMERR("vlan with NULL bridge\n");
 		return IPACM_FAILURE;
 	}
-	if(IPACM_Iface::ipacmcfg->ipacm_mpdn_enable) {
+	/* TO DO: Enable SOCKSV5 with MPDN flag */
+	if(IPACM_Iface::ipacmcfg->ipacm_mpdn_enable && !IPACM_Iface::ipacmcfg->ipacm_socksv5_enable) {
 		if(data_vlan->data_all.iptype == IPA_IP_v6)
 		{
 			if(IPACM_Wan::is_global_ipv6_addr(data_vlan->data_all.ipv6_addr))
@@ -2122,7 +2123,7 @@ bool IPACM_Lan::is_vlan_IF(uint16_t vlan_id)
 
 #ifdef FEATURE_SOCKSv5
 	/* handle socksv5 MPDN logic */
-	if (IPACM_Iface::ipacmcfg->ipacm_mpdn_enable == false)
+	if (IPACM_Iface::ipacmcfg->ipacm_socksv5_enable)
 	{
 		IPACMDBG_H("MPDN is disabled, return true\n");
 		return true;
@@ -2474,7 +2475,7 @@ int IPACM_Lan::handle_vlan_pdn_down(ipacm_event_vlan_pdn *data)
 
 #ifdef FEATURE_SOCKSv5
 			/* socksv5 case */
-			if (IPACM_Iface::ipacmcfg->ipacm_mpdn_enable == false &&
+			if (IPACM_Iface::ipacmcfg->ipacm_socksv5_enable &&
 				(IPACM_Wan::isWanUP(ipa_if_num) || IPACM_Wan::isVlanWanUP()))
 				notif_only = true;
 #endif //FEATURE_SOCKSv5
@@ -2540,7 +2541,7 @@ int IPACM_Lan::handle_vlan_pdn_down(ipacm_event_vlan_pdn *data)
 
 #ifdef FEATURE_SOCKSv5
 			/* socksv5 case */
-			if (IPACM_Iface::ipacmcfg->ipacm_mpdn_enable == false &&
+			if (IPACM_Iface::ipacmcfg->ipacm_socksv5_enable &&
 				(IPACM_Wan::isWanUP_V6(ipa_if_num) || IPACM_Wan::isVlanWanUP_V6()))
 				notif_only = true;
 #endif //FEATURE_SOCKSv5
@@ -2613,7 +2614,7 @@ int IPACM_Lan::handle_vlan_pdn_down(ipacm_event_vlan_pdn *data)
 
 #ifdef FEATURE_SOCKSv5
 			/* socksv5 case */
-			if (IPACM_Iface::ipacmcfg->ipacm_mpdn_enable == false &&
+			if (IPACM_Iface::ipacmcfg->ipacm_socksv5_enable &&
 				((IPACM_Wan::isWanUP(ipa_if_num) || IPACM_Wan::isVlanWanUP()) ||
 				(IPACM_Wan::isWanUP(ipa_if_num) || IPACM_Wan::isVlanWanUP())))
 				notif_only = true;
@@ -3579,11 +3580,7 @@ int IPACM_Lan::handle_wan_up(ipa_ip_type ip_type, uint16_t vlan_id)
 #endif
 			if (IPACM_Iface::ipacmcfg->IsIpv6CTEnabled() && !IPACM_Wan::isWan_Bridge_Mode())
 		{
-#ifndef FEATURE_SOCKSv5
 			flt_rule_entry.rule.action = IPA_PASS_TO_SRC_NAT;
-#else
-			flt_rule_entry.rule.action = IPA_PASS_TO_ROUTING;
-#endif
 		}
 		else
 		{
@@ -6239,7 +6236,7 @@ int IPACM_Lan::handle_vlan_phys_if_down()
 
 #ifdef FEATURE_SOCKSv5
 	/* socksv5 case */
-	if (IPACM_Iface::ipacmcfg->ipacm_mpdn_enable == false)
+	if (IPACM_Iface::ipacmcfg->ipacm_socksv5_enable)
 	{
 		if(IPACM_Wan::isWanUP(ipa_if_num) || IPACM_Wan::isVlanWanUP())
 		{
@@ -7104,9 +7101,6 @@ int IPACM_Lan::handle_uplink_filter_rule(ipacm_ext_prop *prop, ipa_ip_type iptyp
 	}
 	else if(iptype == IPA_IP_v6)
 	{
-#ifndef FEATURE_SOCKSv5
-
-		IPACMDBG_H("Feature SOCKv5 not defined\n");
 #ifdef FEATURE_IPV6_NAT
 		/* for v6 nat, second pass should go directly to RT block */
 		if(IPACM_Iface::ipacmcfg->ipv6_nat_enable)
@@ -7119,9 +7113,6 @@ int IPACM_Lan::handle_uplink_filter_rule(ipacm_ext_prop *prop, ipa_ip_type iptyp
 
 		        IPACMDBG_H("IPV6CT Filter action:%d\n",flt_rule_entry.rule.action);
                 }
-#else
-		flt_rule_entry.rule.action = IPA_PASS_TO_ROUTING;
-#endif
 	}
 	else
 	{
@@ -7629,12 +7620,8 @@ bool IPACM_Lan::replicate_flt_rule(ipa_flt_rule_add *replicate_rule,
 	replicate_rule->rule.hashable = q6_rule->rule.hashable;
 	replicate_rule->rule.rule_id = q6_rule->rule.rule_id;
 	replicate_rule->rule.rt_tbl_hdl = q6_rule->rule.rt_tbl_hdl;
-#ifndef FEATURE_SOCKSv5
 	replicate_rule->rule.action = IPACM_Iface::ipacmcfg->IsIpv6CTEnabled()?
 		IPA_PASS_TO_SRC_NAT : IPA_PASS_TO_ROUTING;
-#else
-	replicate_rule->rule.action = IPA_PASS_TO_ROUTING;
-#endif
 exit:
 	return ret;
 }
@@ -8435,12 +8422,8 @@ int IPACM_Lan::config_dft_firewall_rules_ul(IPACM_firewall_conf_t* firewall_conf
 
 			if(firewall_conf->rule_action_accept == true)
 			{
-#ifndef FEATURE_SOCKSv5
 				flt_rule_entry.rule.action =
 					IPACM_Iface::ipacmcfg->IsIpv6CTEnabled() ? IPA_PASS_TO_SRC_NAT : IPA_PASS_TO_ROUTING;
-#else
-				flt_rule_entry.rule.action = IPA_PASS_TO_ROUTING;
-#endif
 			}
 			else
 			{
@@ -9114,9 +9097,6 @@ int IPACM_Lan::install_uplink_filter_rule_per_client_v2
 	}
 	else if(iptype == IPA_IP_v6)
 	{
-#ifdef FEATURE_SOCKSv5
-		flt_rule_entry.rule.action = IPA_PASS_TO_ROUTING;
-#else
 #ifdef FEATURE_IPV6_NAT
 		/* for v6 nat, second pass should go directly to RT block */
 		if(IPACM_Iface::ipacmcfg->ipv6_nat_enable)
@@ -9125,7 +9105,6 @@ int IPACM_Lan::install_uplink_filter_rule_per_client_v2
 #endif
 			flt_rule_entry.rule.action = IPACM_Iface::ipacmcfg->IsIpv6CTEnabled()?
 					IPA_PASS_TO_SRC_NAT : IPA_PASS_TO_ROUTING;
-#endif
 	}
 	else
 	{
@@ -9435,9 +9414,6 @@ int IPACM_Lan::install_uplink_filter_rule_per_client
 	}
 	else if(iptype == IPA_IP_v6)
 	{
-#ifdef FEATURE_SOCKSv5
-		flt_rule_entry.rule.action = IPA_PASS_TO_ROUTING;
-#else
 #ifdef FEATURE_IPV6_NAT
 		/* for v6 nat, second pass should go directly to RT block */
 		if(IPACM_Iface::ipacmcfg->ipv6_nat_enable)
@@ -9446,7 +9422,6 @@ int IPACM_Lan::install_uplink_filter_rule_per_client
 #endif
 			flt_rule_entry.rule.action = IPACM_Iface::ipacmcfg->IsIpv6CTEnabled()?
 					IPA_PASS_TO_SRC_NAT : IPA_PASS_TO_ROUTING;
-#endif
 	}
 	else
 	{

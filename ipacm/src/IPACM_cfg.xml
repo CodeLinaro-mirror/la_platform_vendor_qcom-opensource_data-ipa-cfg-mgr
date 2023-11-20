@@ -213,7 +213,10 @@
 			<IPACMMPDNEnabled>1</IPACMMPDNEnabled>
 		</IPACMMPDN>
 		<IPACMLog>
-                        <IPACMfilevar>0</IPACMfilevar>
-                </IPACMLog>
+			<IPACMfilevar>0</IPACMfilevar>
+		</IPACMLog>
+		<IPACMSOCKSv5>
+			<IPACMSOCKSv5Enabled>0</IPACMSOCKSv5Enabled>
+		</IPACMSOCKSv5>
 	</IPACM>
 </system>

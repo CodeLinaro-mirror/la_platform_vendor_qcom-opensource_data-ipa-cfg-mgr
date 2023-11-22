@@ -106,6 +106,7 @@ int IPACM_ConntrackClient::IPAConntrackEventCB
 	 void *data
 	 )
 {
+	#pragma unused (data)
 	ipacm_cmd_q_data evt_data;
 	ipacm_ct_evt_data *ct_data;
 	uint8_t ip_type = 0;
@@ -391,6 +392,7 @@ int IPACM_ConntrackClient::IPA_Conntrack_UDP_Filter_Init(void)
 
 void* IPACM_ConntrackClient::UDPConnTimeoutUpdate(void *ptr)
 {
+	#pragma unused (ptr)
 	NatApp *nat_inst = NULL;
 #ifdef IPACM_DEBUG
 	IPACMDBG("\n");

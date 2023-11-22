@@ -141,6 +141,7 @@ IPACM_Wan::IPACM_Wan(int iface_index,
 	ipacm_wan_iface_type is_sta_mode,
 	uint8_t *mac_addr) : IPACM_Iface(iface_index)
 {
+	#pragma unused (mac_addr)
 	num_firewall_v4 = 0;
 	num_firewall_v6 = 0;
 	wan_route_rule_v4_hdl = NULL;
@@ -6117,7 +6118,10 @@ int IPACM_Wan::config_dft_embms_rules(ipa_ioc_add_flt_rule *pFilteringTable_v4, 
 int IPACM_Wan::handle_down_evt()
 {
 	int res = IPACM_SUCCESS;
-	uint32_t i, tether_total;
+	uint32_t i;
+#ifndef FEATURE_IPACM_AIDL
+	uint32_t tether_total = 0;
+#endif
 	int ipa_if_num_tether_tmp[IPA_MAX_IFACE_ENTRIES];
 
 	memset(ipa_if_num_tether_tmp, 0, IPA_MAX_IFACE_ENTRIES);
@@ -9350,6 +9354,7 @@ int IPACM_Wan::query_mtu_size()
 /* construct complete ethernet header */
 int IPACM_Wan::handle_gw_mac_renew(ipacm_event_data_all *data, int index_client)
 {
+	#pragma unused (index_client)
 	int index = IPACM_INVALID_INDEX;
 
 	/* checking if client has same ipv4, v6 will put future work */

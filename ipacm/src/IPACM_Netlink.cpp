@@ -461,6 +461,7 @@ static int ipa_nl_decode_rtm_link
 	 ipa_nl_link_info_t      *link_info
 )
 {
+	#pragma unused (buflen)
 	struct rtattr;
 	/* NL message header */
 	struct nlmsghdr *nlh = (struct nlmsghdr *)buffer;

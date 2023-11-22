@@ -1994,7 +1994,10 @@ int IPACM_Wlan::handle_wlan_client_down_evt(uint8_t *mac_addr)
 /*handle wlan iface down event*/
 int IPACM_Wlan::handle_down_evt()
 {
-	int res = IPACM_SUCCESS, num_private_subnet_fl_rule;
+	int res = IPACM_SUCCESS;
+#ifndef FEATURE_IPA_ANDROID
+	int num_private_subnet_fl_rule = 0;
+#endif
 	uint32_t i;
 
 	IPACMDBG_H("WLAN ip-type: %d \n", ip_type);

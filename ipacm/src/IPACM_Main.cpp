@@ -171,6 +171,7 @@ int ipa_reset_hw_index_counter();
 /* start netlink socket monitor*/
 void* netlink_start(void *param)
 {
+	#pragma unused (param)
 	ipa_nl_sk_fd_set_info_t sk_fdset;
 	int ret_val = 0;
 	memset(&sk_fdset, 0, sizeof(ipa_nl_sk_fd_set_info_t));
@@ -192,6 +193,7 @@ void* netlink_start(void *param)
 /* start Config change monitor*/
 void* cfg_change_monitor(void *param)
 {
+	#pragma unused (param)
 	int length;
 	int wd;
 	char buffer[INOTIFY_BUF_LEN];
@@ -303,6 +305,7 @@ void* cfg_change_monitor(void *param)
 /* start IPACM wan-driver notifier */
 void* ipa_driver_msg_notifier(void *param)
 {
+	#pragma unused (param)
 	int length, fd, cnt;
 	char buffer[IPA_DRIVER_WLAN_BUF_LEN];
 	struct ipa_msg_meta event_hdr;

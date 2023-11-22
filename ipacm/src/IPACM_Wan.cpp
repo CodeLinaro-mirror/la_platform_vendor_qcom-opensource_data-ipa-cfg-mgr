@@ -7593,6 +7593,8 @@ int IPACM_Wan::installWanPostIpsecRt(
 	int i, num_rules, res = IPACM_SUCCESS;
 	struct ipa_ioc_add_rt_rule *rt_rule = NULL;
 	struct ipa_rt_rule_add *rt_rule_entry = NULL;
+	struct ipa_ioc_del_rt_rule *del_rt = NULL;
+	struct ipa_rt_rule_del *del_rt_rule;
 	struct ipa_ioc_add_flt_rule *flt_tbl = NULL;
 	struct ipa_ioc_get_hdr hdr = {0};
 
@@ -7683,7 +7685,7 @@ int IPACM_Wan::installWanPostIpsecRt(
 			res = IPACM_FAILURE;
 			goto end;
 		}
-		else if (rt_rule_entry->status)
+		else if (rt_rule_entry && rt_rule_entry->status)
 		{
 			IPACMERR("rt rule adding failed. Result=%d\n", rt_rule_entry->status);
 			res = rt_rule_entry->status;

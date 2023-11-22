@@ -16705,8 +16705,7 @@ int IPACM_Lan::handleIpsecUlFltAddEvt(struct ipa_ioc_ipsec_ul_flt_attr *uf)
 
 	memset(&rtTblHdl, 0, sizeof(rtTblHdl));
 	rtTblHdl.ip = uf->ip;
-	snprintf(rtTblHdl.name, sizeof(rtTblHdl.name),
-		(uf->ip == IPA_IP_v4) ? "IPSEC_ENCAP_v4" : "IPSEC_ENCAP_v6");
+	strlcpy(rtTblHdl.name, (uf->ip == IPA_IP_v4) ? "IPSEC_ENCAP_v4" : "IPSEC_ENCAP_v6", sizeof(rtTblHdl.name));
 	rtTblHdl.name[IPA_RESOURCE_NAME_MAX-1] = '\0';
 	if(m_routing.GetRoutingTable(&rtTblHdl) == false)
 	{
@@ -16844,8 +16843,7 @@ int IPACM_Lan::handleIpsecUlFltAddAll(enum ipa_ip_type ip)
 
 	memset(&rtTblHdl, 0, sizeof(rtTblHdl));
 	rtTblHdl.ip = ip;
-	snprintf(rtTblHdl.name, sizeof(rtTblHdl.name),
-		(ip == IPA_IP_v4) ? "IPSEC_ENCAP_v4" : "IPSEC_ENCAP_v6");
+	strlcpy(rtTblHdl.name, (ip == IPA_IP_v4) ? "IPSEC_ENCAP_v4" : "IPSEC_ENCAP_v6", sizeof(rtTblHdl.name));
 	rtTblHdl.name[IPA_RESOURCE_NAME_MAX-1] = '\0';
 	if(m_routing.GetRoutingTable(&rtTblHdl) == false)
 	{

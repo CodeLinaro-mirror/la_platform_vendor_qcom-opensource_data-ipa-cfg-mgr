@@ -86,6 +86,10 @@
 #include <sys/ioctl.h>
 #include <fcntl.h>
 
+#ifndef IPA_LAN_RX_HDR_NAME
+#define IPA_LAN_RX_HDR_NAME "ipa_lan_hdr"
+#endif
+
 
 const uint8_t IPACM_Lan::v4_eogre_header[] = {
 	0x45, 0x00, 0x00, 0x00,
@@ -16207,8 +16211,21 @@ int IPACM_Lan::gre_make_hdr_rmv_ctx(
 		procCtx->eogre_params.hdr_remove_param.tag_add_len =
 			sizeof(sc_tag_header);
 	}
+	else
 #endif
-
+	{
+		//add hdr_handle for eogre
+		struct ipa_ioc_get_hdr hdr;
+		memset(&hdr, 0, sizeof(hdr));
+		strlcpy(hdr.name, IPA_LAN_RX_HDR_NAME, sizeof(IPA_LAN_RX_HDR_NAME));
+		if(m_header.GetHeaderHandle(&hdr) == false)
+		{
+			IPACMERR("Failed to get LAN RX header hdl.\n");
+			return IPACM_FAILURE;
+		}
+		procCtx->hdr_hdl = hdr.hdl;
+		gre_route_data[iptype].dl_header_hdl = hdr.hdl;
+	}
 	if ( m_header.AddHeaderProcCtx(procCtxTable) == true )
 	{
 		IPACMDBG_H(
@@ -16216,6 +16233,8 @@ int IPACM_Lan::gre_make_hdr_rmv_ctx(
 
 		gre_route_data[iptype].proc_ctx_gre_rmv_hdl =
 			procCtx->proc_ctx_hdl;
+		IPACMDBG_H("GRE procCtx->proc_ctx_hdl : %x\n", procCtx->proc_ctx_hdl);
+		IPACMDBG_H("GRE procCtx->hdr_hdl : %x\n", procCtx->hdr_hdl);
 	}
 	else
 	{

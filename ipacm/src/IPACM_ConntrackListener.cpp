@@ -2210,8 +2210,8 @@ int IPACM_ConntrackListener::AddORDeleteNatEntry(const nat_entry_bundle *input, 
 	{
 		tcp_state = nfct_get_attr_u8(input->ct, ATTR_TCP_STATE);
 
-		if ((TCP_CONNTRACK_ESTABLISHED == tcp_state) &&
-                    (((pkt_threshld != 0) && (pkt_count >= pkt_threshld)) ||
+		if ((TCP_CONNTRACK_ESTABLISHED == tcp_state) && (input->type != NFCT_T_DESTROY)
+                   && (((pkt_threshld != 0) && (pkt_count >= pkt_threshld)) ||
                     (pkt_threshld == 0)))
 		{
 			IPACMDBG("TCP state TCP_CONNTRACK_ESTABLISHED(%d)\n", tcp_state);
@@ -2339,7 +2339,7 @@ void IPACM_ConntrackListener::AddORDeleteNatEntry_v6(const ipacm_ct_evt_data* ev
 	{
 		uint8_t tcp_state = nfct_get_attr_u8(evt_data->ct, ATTR_TCP_STATE);
 
-		if (TCP_CONNTRACK_ESTABLISHED == tcp_state && pkt_count >= pkt_threshld)
+		if (TCP_CONNTRACK_ESTABLISHED == tcp_state && pkt_count >= pkt_threshld && (evt_data->type != NFCT_T_DESTROY))
 		{
 			IPACMDBG_H("TCP state TCP_CONNTRACK_ESTABLISHED(%d)\n", tcp_state);
 

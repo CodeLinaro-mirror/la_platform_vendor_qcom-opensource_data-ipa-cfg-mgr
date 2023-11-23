@@ -1486,6 +1486,7 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 						wan_v4_is_default_gw = false;
 						wan_v4_addr_gw = data->ipv4_addr_gw;
 						wan_v4_addr_gw_set = true;
+						wan_v6_is_default_gw = false;
 						IPACMDBG_H("adding header, dev (%s) ip-type(%d), default gw (%x)\n", dev_name,data->iptype, wan_v4_addr_gw);
 					}
 					if ((data->iptype == IPA_IP_v6 || data->iptype == IPA_IP_MAX) &&  wan_v6_addr_gw_set != true &&
@@ -1499,6 +1500,7 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 						wan_v6_addr_gw[2] = data->ipv6_addr_gw[2];
 						wan_v6_addr_gw[3] = data->ipv6_addr_gw[3];
 						wan_v6_addr_gw_set = true;
+						wan_v4_is_default_gw = false;
 						wan_v6_is_default_gw = false;
 					}
 					/* Check & construct STA header */
@@ -1944,6 +1946,7 @@ int IPACM_Wan::check_vlan_pdn(ipa_ip_type iptype, ipacm_event_route_vlan *data, 
 	int wlan_vlan_idx = -1;
 	ipacm_event_vlan_pdn *vlandown_data;
 	ipacm_event_vlan_pdn *wanup_vlan_data;
+	std::list<uint16_t>::iterator it;
 
 	memset(&evt_data, 0, sizeof(evt_data));
 
@@ -1966,15 +1969,28 @@ int IPACM_Wan::check_vlan_pdn(ipa_ip_type iptype, ipacm_event_route_vlan *data, 
 			IPACMDBG_H("STA ipv4-header haven't constructed \n");
 			return IPACM_SUCCESS;
 		}
-		else if((iptype==IPA_IP_v6) && (header_set_v6 != true))
+		else if((iptype==IPA_IP_v6 || iptype == IPA_IP_MAX) && (header_set_v6 != true))
 		{
 			header_partial_default_wan_v6 = true;
 			IPACMDBG_H("STA ipv6-header haven't constructed \n");
+			/* Adding pending vid to pending-STA-VID list */
+			for(it = pending_VID_STA.begin(); it != pending_VID_STA.end(); ++it)
+			{
+				if (data->VlanID == *it)
+				{
+					IPACMDBG_H("Already added vlan_id: %d as pending_VID_STA \n", data->VlanID);
+					 return IPACM_SUCCESS;
+				}
+			}
+			pending_VID_STA.push_back(data->VlanID);
+			IPACMDBG_H("Added vlan_id: %d as pending_VID_STA\n", data->VlanID);
 			return IPACM_SUCCESS;
 		}
 	}
 
 	IPACMDBG_H("Process IPA_ROUTE_ADD_VLAN_PDN_EVENT for iptype: %d\n", iptype);
+	IPACMDBG_H("data->wan_ipv6_prefix: 0x%08x%08x\n", data->wan_ipv6_prefix[0], data->wan_ipv6_prefix[1]);
+	IPACMDBG_H("ipv6_prefix: 0x%08x%08x\n", ipv6_prefix[0], ipv6_prefix[1]);
 
 	if (iptype == IPA_IP_v6 || iptype == IPA_IP_MAX)
 	{
@@ -3580,6 +3596,7 @@ int IPACM_Wan::post_wan_down_tether_evt(ipa_ip_type iptype, int ipa_if_num_tethe
 /* construct complete ethernet header */
 int IPACM_Wan::handle_sta_header_add_evt()
 {
+	std::list<uint16_t>::iterator it;
 	int res = IPACM_SUCCESS, index = IPACM_INVALID_INDEX;
 
 	if (header_set_v4 == true && header_set_v6 == true)
@@ -3624,7 +3641,7 @@ int IPACM_Wan::handle_sta_header_add_evt()
 		else if(m_is_sta_mode == Q6_WAN)
 		{
 			IPACMDBG_H(" currently can't find matched wan-client's MAC-addr, waiting for header construction\n");
-			return IPACM_SUCCESS;
+			res = IPACM_SUCCESS;
 		}
 	}
 	else
@@ -3666,7 +3683,7 @@ int IPACM_Wan::handle_sta_header_add_evt()
 			else
 			{
 				IPACMDBG_H(" currently can't find matched wan-client's MAC-addr, waiting for header construction\n");
-				return IPACM_SUCCESS;
+				res = IPACM_SUCCESS;
 			}
 		}
 	}
@@ -3686,7 +3703,28 @@ int IPACM_Wan::handle_sta_header_add_evt()
 	{
 		handle_route_add_evt(IPA_IP_v6);
 	}
-
+	else if(wlan_ipv6_pdn_index!=-1 && header_set_v6 == true && header_partial_default_wan_v6 == true && !pending_VID_STA.empty())
+	{
+		/* start associate pending_sta_vid to STA-WAN */
+		for(it = pending_VID_STA.begin(); it != pending_VID_STA.end(); ++it)
+		{
+			ipacm_event_route_vlan *data;
+			data = (ipacm_event_route_vlan *)malloc(sizeof(ipacm_event_route_vlan));
+			if(!data)
+			{
+				IPACMERR("couldn't allocate memory for new vlan pdn event\n");
+				return IPACM_FAILURE;
+			}
+			memset(data, 0, sizeof(ipacm_event_route_vlan));
+			data->iptype = IPA_IP_v6;
+			data->VlanID = *it;
+			data->wan_ipv6_prefix[0] = ipv6_to_iface[wlan_ipv6_pdn_index].ipv6_prefix[0];
+			data->wan_ipv6_prefix[1] = ipv6_to_iface[wlan_ipv6_pdn_index].ipv6_prefix[1];
+			check_vlan_pdn(IPA_IP_v6, data);
+		}
+		pending_VID_STA.clear();
+		header_partial_default_wan_v6 = false;
+	}
 	return res;
 }
 

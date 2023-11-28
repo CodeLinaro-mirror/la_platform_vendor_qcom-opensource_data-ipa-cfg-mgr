@@ -861,6 +861,22 @@ static int ipa_nl_decode_nlmsg
 						IPACMDBG_H("Posting IPA_LINK_UP_EVENT with if index: %d\n",
 							msg_ptr->nl_link_info.metainfo.ifi_index);
 					} else {
+						if (msg_ptr->nl_link_info.link_type == IPA_LINK_TYPE_MACSEC ||
+							IPACM_Iface::ipacmcfg->getMacsecMapping(msg_ptr->nl_link_info.metainfo.ifi_index,
+							&macsec_map)) {
+							if (IPACM_Iface::ipacmcfg->delMacsecMap(&macsec_map)) {
+								evt_data.event = IPA_HANDLE_MACSEC_DEL;
+								macsec_map_data = static_cast<decltype(macsec_map_data)>
+									(malloc(sizeof(*macsec_map_data)));
+								if (!macsec_map_data) {
+									IPACMERR("malloc failed\n");
+									return IPACM_FAILURE;
+								}
+								memcpy(macsec_map_data, &macsec_map, sizeof(macsec_map));
+								evt_data.evt_data = macsec_map_data;
+								IPACM_EvtDispatcher::PostEvt(&evt_data);
+							}
+						}
 						IPACMDBG_H("Interface %s bring down with IP-family: %d \n", dev_name,
 							msg_ptr->nl_link_info.metainfo.ifi_family);
 						/* post link down to command queue */

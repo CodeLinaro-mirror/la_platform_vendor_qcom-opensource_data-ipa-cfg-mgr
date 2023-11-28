@@ -1034,16 +1034,6 @@ static int ipa_nl_decode_nlmsg
 					vlan_info.vlan_interface_index = msg_ptr->nl_link_info.metainfo.ifi_index;
 				}
 
-				if (msg_ptr->nl_link_info.link_type == IPA_LINK_TYPE_MACSEC) {
-					strlcpy(macsec_map.macsec_name, msg_ptr->nl_link_info.name, sizeof(macsec_map.macsec_name));
-					ret_val = ipa_get_if_name(master_dev_name, msg_ptr->nl_link_info.master_interface_index);
-					if (ret_val != IPACM_SUCCESS) {
-						IPACMERR("Error while getting master interface name\n");
-						return IPACM_FAILURE;
-					}
-					strlcpy(macsec_map.phy_name, msg_ptr->nl_link_info.name, sizeof(macsec_map.phy_name));
-				}
-
 				if(msg_ptr->nl_link_info.link_type == IPA_LINK_TYPE_VLAN)
 					IPACM_Iface::ipacmcfg->del_vlan_iface(&vlan_info);
 				if (msg_ptr->nl_link_info.link_type == IPA_LINK_TYPE_MACSEC ||

@@ -2391,6 +2391,23 @@ int IPACM_Lan::handle_vlan_pdn_down(ipacm_event_vlan_pdn *data)
 		}
 		else
 		{
+			//LTE case delete routing rule of client with associated vlan_id
+			for(int i = 0; i < IPA_MAX_NUM_HW_PDNS; i++)
+			{
+				if(v6_mux_up[i].mux_id == data->mux_id)
+				{
+					for(int j = 0; j < IPA_MAX_NUM_SW_PDNS; j++)
+					{
+						if(v6_mux_up[i].associated_VIDs[j] != 0)
+						{
+							/* reset vlan client ipv6 rt-rules */
+							handle_lan_client_reset_rt(IPA_IP_v6, v6_mux_up[i].associated_VIDs[j]);
+							IPACMDBG_H("successfully deleted v6 rt: vid %d for mux id %d, dev %s, i = %d, j = %d, VID_cnt = %d \n",
+								v6_mux_up[i].associated_VIDs[j], v6_mux_up[i].mux_id, dev_name, i, j, v6_mux_up[i].VID_cnt);
+						}
+					}
+				}
+			}
 			/* if we still have vlan pdns up notify only */
 			if(set_mux_down(data->mux_id, data->iptype))
 				return IPACM_FAILURE;
@@ -2410,9 +2427,6 @@ int IPACM_Lan::handle_vlan_pdn_down(ipacm_event_vlan_pdn *data)
 
 			if(!notif_only)
 			{
-				/* reset usb-client ipv6 rt-rules */
-				handle_lan_client_reset_rt(IPA_IP_v6);
-
 				if(del_ul_flt_rules(IPA_IP_v6))
 				{
 					return IPACM_FAILURE;
@@ -2443,6 +2457,23 @@ int IPACM_Lan::handle_vlan_pdn_down(ipacm_event_vlan_pdn *data)
 		}
 		else
 		{
+			//LTE case delete routing rule of client with associated vlan_id
+			for(int i = 0; i < IPA_MAX_NUM_HW_PDNS; i++)
+			{
+				if(v6_mux_up[i].mux_id == data->mux_id)
+				{
+					for(int j = 0; j < IPA_MAX_NUM_SW_PDNS; j++)
+					{
+						if(v6_mux_up[i].associated_VIDs[j] != 0)
+						{
+							/* reset vlan client ipv6 rt-rules */
+							handle_lan_client_reset_rt(IPA_IP_v6, v6_mux_up[i].associated_VIDs[j]);
+							IPACMDBG_H("successfully deleted v6 rt: vid %d for mux id %d, dev %s, i = %d, j = %d, VID_cnt = %d \n",
+								v6_mux_up[i].associated_VIDs[j], v6_mux_up[i].mux_id, dev_name, i, j, v6_mux_up[i].VID_cnt);
+						}
+					}
+				}
+			}
 			/* if we still have vlan pdns up notify only */
 			if(set_mux_down(data->mux_id, IPA_IP_v4))
 				return IPACM_FAILURE;
@@ -2493,9 +2524,6 @@ int IPACM_Lan::handle_vlan_pdn_down(ipacm_event_vlan_pdn *data)
 
 			if(!notif_only_v6)
 			{
-				/* reset usb-client ipv6 rt-rules */
-				handle_lan_client_reset_rt(IPA_IP_v6);
-
 				if(del_ul_flt_rules(IPA_IP_v6))
 				{
 					return IPACM_FAILURE;
@@ -9723,6 +9751,8 @@ int IPACM_Lan::handle_wan_down_v6(bool is_sta_mode, bool is_support_mpdn)
 		{
 			if (vlan_sta_info[i].v6_flt_hdl != 0)
 			{
+				/* STA case reset vlan client ipv6 rt-rules */
+				handle_lan_client_reset_rt(IPA_IP_v6, vlan_sta_info[i].vlan_id);
 				if (m_filtering.DeleteFilteringHdls(&vlan_sta_info[i].v6_flt_hdl, IPA_IP_v6, 1) == false)
 				{
 					IPACMERR("Error Deleting RuleTable(1) to Filtering, aborting...\n");
@@ -9733,7 +9763,7 @@ int IPACM_Lan::handle_wan_down_v6(bool is_sta_mode, bool is_support_mpdn)
 				if (vlan_sta_info[i].v4_flt_hdl == 0)
 					vlan_sta_info[i].vlan_id = 0;
 			}
-                }
+		}
 		IPACMDBG_H("STA BH v6 rules has been deleted successfully.\n");
 	}
 
@@ -9862,7 +9892,7 @@ void IPACM_Lan::post_del_self_evt()
 }
 
 /*handle reset usb-client rt-rules */
-int IPACM_Lan::handle_lan_client_reset_rt(ipa_ip_type iptype)
+int IPACM_Lan::handle_lan_client_reset_rt(ipa_ip_type iptype, uint16_t vlan_id)
 {
 	int i, res = IPACM_SUCCESS;
 
@@ -9870,7 +9900,14 @@ int IPACM_Lan::handle_lan_client_reset_rt(ipa_ip_type iptype)
 	IPACMDBG_H("left %d eth clients need to be deleted \n ", num_eth_client);
 	for (i = 0; i < num_eth_client; i++)
 	{
-		res = delete_eth_rtrules(i, iptype);
+		if(vlan_id && get_client_memptr(eth_client, i)->vlan_id == vlan_id)
+		{
+			res = delete_eth_rtrules(i, iptype);
+		}
+		else if (vlan_id == 0)
+		{
+			res = delete_eth_rtrules(i, iptype);
+		}
 		if (res != IPACM_SUCCESS)
 		{
 			IPACMERR("Failed to delete old iptype(%d) rules.\n", iptype);
@@ -9881,13 +9918,27 @@ int IPACM_Lan::handle_lan_client_reset_rt(ipa_ip_type iptype)
 	/* Reset ip-address */
 	for (i = 0; i < num_eth_client; i++)
 	{
-		if(iptype == IPA_IP_v4)
+		if(vlan_id == 0)
 		{
-			get_client_memptr(eth_client, i)->ipv4_set = false;
+			if(iptype == IPA_IP_v4)
+			{
+				get_client_memptr(eth_client, i)->ipv4_set = false;
+			}
+			else
+			{
+				get_client_memptr(eth_client, i)->ipv6_set = 0;
+			}
 		}
-		else
+		else if(get_client_memptr(eth_client, i)->vlan_id == vlan_id)
 		{
-			get_client_memptr(eth_client, i)->ipv6_set = 0;
+			if(iptype == IPA_IP_v4)
+			{
+				get_client_memptr(eth_client, i)->ipv4_set = false;
+			}
+			else
+			{
+				get_client_memptr(eth_client, i)->ipv6_set = 0;
+			}
 		}
 	} /* end of for loop */
 	return res;

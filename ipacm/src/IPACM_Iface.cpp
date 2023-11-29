@@ -931,7 +931,7 @@ int IPACM_Iface::init_fl_rule(ipa_ip_type iptype)
 
 		if(rx_prop->rx[0].attrib.attrib_mask & IPA_FLT_META_DATA)
 		{
-			flt_rule_entry.rule.eq_attrib.rule_eq_bitmap |= (1<<14);
+			flt_rule_entry.rule.eq_attrib.rule_eq_bitmap |= (1<<9);
 			flt_rule_entry.rule.eq_attrib.metadata_meq32_present = 1;
 			flt_rule_entry.rule.eq_attrib.metadata_meq32.offset = 0;
 			flt_rule_entry.rule.eq_attrib.metadata_meq32.value = rx_prop->rx[0].attrib.meta_data;

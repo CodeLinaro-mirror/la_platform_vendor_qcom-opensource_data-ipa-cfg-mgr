@@ -83,6 +83,7 @@ IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <IPACM_Iface.h>
 #include <IPACM_Defs.h>
 #include <IPACM_Xml.h>
+#include <list>
 
 #define IPA_NUM_DEFAULT_WAN_FILTER_RULES 3 /*1 for v4, 2 for v6*/
 #define IPA_V2_NUM_DEFAULT_WAN_FILTER_RULE_IPV4 2
@@ -140,6 +141,26 @@ typedef struct
 	IPACM_Wan *pIface;
 }ipacm_ipv6_wan_iface;
 
+/*
+ * vlan_id : VLAN ID
+ * v4_association: The WAN interface V4 VLAN is associated to 
+ * v6_association: The WAN interface V6 VLAN is associated to
+ * v4_idx: Index of the WAN interface in ipv4_to_iface to which VLAN is associated
+ * v6_idx: Index of the WAN interface in ipv6_to_iface to which VLAN is associated
+ * v4_vlan_idx: Index of vlan_id in the associated_VIDs[] of ipv4_to_iface[v6_idx]
+ * v6_vlan_idx: Index of vlan_id in the associated_VIDs[] of ipv6_to_iface[v6_idx]
+ */
+typedef struct
+{
+	ipacm_wan_iface_type v4_association;
+	ipacm_wan_iface_type v6_association;
+	int v4_idx[IFACE_MAX];
+	int v6_idx[IFACE_MAX];
+	int v4_vlan_idx[IFACE_MAX];
+	int v6_vlan_idx[IFACE_MAX];
+	uint16_t vlan_id;
+}ipacm_vlan_association_info;
+
 struct ipacm_pdn_flt_rule
 {
 	struct ipa_flt_rule_add flt_rule;
@@ -161,6 +182,8 @@ public:
 	int num_firewall_v6_ul_pdn;
 #endif
 	uint16_t associated_VID;
+	/* once STA up, need associated pending VID to STA-WAN */
+	std::list<uint16_t> pending_VID_STA;
 #endif
 	static uint16_t mtu_default_wan;
 	uint16_t mtu_size;
@@ -697,6 +720,10 @@ private:
 	int handle_route_add_evt(ipa_ip_type iptype);
 
 #ifdef FEATURE_VLAN_MPDN
+	void get_vlan_association_info(ipacm_vlan_association_info* vlan_info);
+	void post_wan_vlan_pdn_event(ipa_ip_type iptype, int pdn_idx, int vlan_idx, uint16_t vlan_id, bool vlan_up);
+	int handle_vlan_backhaul_switch_v4(ipacm_event_route_vlan *data);
+	int handle_vlan_backhaul_switch_v6(ipacm_event_route_vlan *data, bool xlat_cfg = false);
 	int check_vlan_pdn(ipa_ip_type iptype, ipacm_event_route_vlan *data, bool xlat_cfg = false);
 	int handle_route_add_vlan_pdn_evt(ipa_ip_type iptype, uint16_t vlan_id);
 #endif

@@ -2391,6 +2391,23 @@ int IPACM_Lan::handle_vlan_pdn_down(ipacm_event_vlan_pdn *data)
 		}
 		else
 		{
+			//LTE case delete routing rule of client with associated vlan_id
+			for(int i = 0; i < IPA_MAX_NUM_HW_PDNS; i++)
+			{
+				if(v6_mux_up[i].mux_id == data->mux_id)
+				{
+					for(int j = 0; j < IPA_MAX_NUM_SW_PDNS; j++)
+					{
+						if(v6_mux_up[i].associated_VIDs[j] != 0)
+						{
+							/* reset vlan client ipv6 rt-rules */
+							handle_lan_client_reset_rt(IPA_IP_v6, v6_mux_up[i].associated_VIDs[j]);
+							IPACMDBG_H("successfully deleted v6 rt: vid %d for mux id %d, dev %s, i = %d, j = %d, VID_cnt = %d \n",
+								v6_mux_up[i].associated_VIDs[j], v6_mux_up[i].mux_id, dev_name, i, j, v6_mux_up[i].VID_cnt);
+						}
+					}
+				}
+			}
 			/* if we still have vlan pdns up notify only */
 			if(set_mux_down(data->mux_id, data->iptype))
 				return IPACM_FAILURE;
@@ -2410,9 +2427,6 @@ int IPACM_Lan::handle_vlan_pdn_down(ipacm_event_vlan_pdn *data)
 
 			if(!notif_only)
 			{
-				/* reset usb-client ipv6 rt-rules */
-				handle_lan_client_reset_rt(IPA_IP_v6);
-
 				if(del_ul_flt_rules(IPA_IP_v6))
 				{
 					return IPACM_FAILURE;
@@ -2443,6 +2457,23 @@ int IPACM_Lan::handle_vlan_pdn_down(ipacm_event_vlan_pdn *data)
 		}
 		else
 		{
+			//LTE case delete routing rule of client with associated vlan_id
+			for(int i = 0; i < IPA_MAX_NUM_HW_PDNS; i++)
+			{
+				if(v6_mux_up[i].mux_id == data->mux_id)
+				{
+					for(int j = 0; j < IPA_MAX_NUM_SW_PDNS; j++)
+					{
+						if(v6_mux_up[i].associated_VIDs[j] != 0)
+						{
+							/* reset vlan client ipv6 rt-rules */
+							handle_lan_client_reset_rt(IPA_IP_v6, v6_mux_up[i].associated_VIDs[j]);
+							IPACMDBG_H("successfully deleted v6 rt: vid %d for mux id %d, dev %s, i = %d, j = %d, VID_cnt = %d \n",
+								v6_mux_up[i].associated_VIDs[j], v6_mux_up[i].mux_id, dev_name, i, j, v6_mux_up[i].VID_cnt);
+						}
+					}
+				}
+			}
 			/* if we still have vlan pdns up notify only */
 			if(set_mux_down(data->mux_id, IPA_IP_v4))
 				return IPACM_FAILURE;
@@ -2493,9 +2524,6 @@ int IPACM_Lan::handle_vlan_pdn_down(ipacm_event_vlan_pdn *data)
 
 			if(!notif_only_v6)
 			{
-				/* reset usb-client ipv6 rt-rules */
-				handle_lan_client_reset_rt(IPA_IP_v6);
-
 				if(del_ul_flt_rules(IPA_IP_v6))
 				{
 					return IPACM_FAILURE;
@@ -3353,7 +3381,7 @@ int IPACM_Lan::handle_wan_up(ipa_ip_type ip_type, uint16_t vlan_id)
 	}
 	else if(ip_type == IPA_IP_v6)
 	{
-		ipa_ioc_add_flt_rule *m_pFilteringTable;
+		ipa_ioc_add_flt_rule_after *m_pFilteringTable;
 #ifdef FEATURE_VLAN_MPDN
 		/* add ipv6_mtu rule */
 		modify_ipv6_prefix_flt_rule();
@@ -3386,8 +3414,8 @@ int IPACM_Lan::handle_wan_up(ipa_ip_type ip_type, uint16_t vlan_id)
 		}
 #endif
 		/* add default v6 filter rule */
-		m_pFilteringTable = (struct ipa_ioc_add_flt_rule *)
-			 calloc(1, sizeof(struct ipa_ioc_add_flt_rule) +
+		m_pFilteringTable = (struct ipa_ioc_add_flt_rule_after *)
+			 calloc(1, sizeof(struct ipa_ioc_add_flt_rule_after) +
 					1 * sizeof(struct ipa_flt_rule_add));
 
 		if (!m_pFilteringTable)
@@ -3398,9 +3426,9 @@ int IPACM_Lan::handle_wan_up(ipa_ip_type ip_type, uint16_t vlan_id)
 
 		m_pFilteringTable->commit = 1;
 		m_pFilteringTable->ep = rx_prop->rx[0].src_pipe;
-		m_pFilteringTable->global = false;
 		m_pFilteringTable->ip = IPA_IP_v6;
 		m_pFilteringTable->num_rules = (uint8_t)1;
+		m_pFilteringTable->add_after_hdl = ipv6_prefix_flt_rule_hdl[num_wan_prefix_rules - 1];
 
 		if (false == m_routing.GetRoutingTable(&IPACM_Iface::ipacmcfg->rt_tbl_v6))
 		{
@@ -3465,7 +3493,7 @@ int IPACM_Lan::handle_wan_up(ipa_ip_type ip_type, uint16_t vlan_id)
 		flt_rule_entry.rule.attrib.u.v6.dst_addr[3] = 0X00000000;
 
 		memcpy(&(m_pFilteringTable->rules[0]), &flt_rule_entry, sizeof(struct ipa_flt_rule_add));
-		if (false == m_filtering.AddFilteringRule(m_pFilteringTable))
+		if (false == m_filtering.AddFilteringRuleAfter(m_pFilteringTable))
 		{
 			IPACMERR("Error Adding Filtering rule, aborting...\n");
 			free(m_pFilteringTable);
@@ -9723,6 +9751,8 @@ int IPACM_Lan::handle_wan_down_v6(bool is_sta_mode, bool is_support_mpdn)
 		{
 			if (vlan_sta_info[i].v6_flt_hdl != 0)
 			{
+				/* STA case reset vlan client ipv6 rt-rules */
+				handle_lan_client_reset_rt(IPA_IP_v6, vlan_sta_info[i].vlan_id);
 				if (m_filtering.DeleteFilteringHdls(&vlan_sta_info[i].v6_flt_hdl, IPA_IP_v6, 1) == false)
 				{
 					IPACMERR("Error Deleting RuleTable(1) to Filtering, aborting...\n");
@@ -9733,7 +9763,7 @@ int IPACM_Lan::handle_wan_down_v6(bool is_sta_mode, bool is_support_mpdn)
 				if (vlan_sta_info[i].v4_flt_hdl == 0)
 					vlan_sta_info[i].vlan_id = 0;
 			}
-                }
+		}
 		IPACMDBG_H("STA BH v6 rules has been deleted successfully.\n");
 	}
 
@@ -9862,7 +9892,7 @@ void IPACM_Lan::post_del_self_evt()
 }
 
 /*handle reset usb-client rt-rules */
-int IPACM_Lan::handle_lan_client_reset_rt(ipa_ip_type iptype)
+int IPACM_Lan::handle_lan_client_reset_rt(ipa_ip_type iptype, uint16_t vlan_id)
 {
 	int i, res = IPACM_SUCCESS;
 
@@ -9870,7 +9900,14 @@ int IPACM_Lan::handle_lan_client_reset_rt(ipa_ip_type iptype)
 	IPACMDBG_H("left %d eth clients need to be deleted \n ", num_eth_client);
 	for (i = 0; i < num_eth_client; i++)
 	{
-		res = delete_eth_rtrules(i, iptype);
+		if(vlan_id && get_client_memptr(eth_client, i)->vlan_id == vlan_id)
+		{
+			res = delete_eth_rtrules(i, iptype);
+		}
+		else if (vlan_id == 0)
+		{
+			res = delete_eth_rtrules(i, iptype);
+		}
 		if (res != IPACM_SUCCESS)
 		{
 			IPACMERR("Failed to delete old iptype(%d) rules.\n", iptype);
@@ -9881,13 +9918,27 @@ int IPACM_Lan::handle_lan_client_reset_rt(ipa_ip_type iptype)
 	/* Reset ip-address */
 	for (i = 0; i < num_eth_client; i++)
 	{
-		if(iptype == IPA_IP_v4)
+		if(vlan_id == 0)
 		{
-			get_client_memptr(eth_client, i)->ipv4_set = false;
+			if(iptype == IPA_IP_v4)
+			{
+				get_client_memptr(eth_client, i)->ipv4_set = false;
+			}
+			else
+			{
+				get_client_memptr(eth_client, i)->ipv6_set = 0;
+			}
 		}
-		else
+		else if(get_client_memptr(eth_client, i)->vlan_id == vlan_id)
 		{
-			get_client_memptr(eth_client, i)->ipv6_set = 0;
+			if(iptype == IPA_IP_v4)
+			{
+				get_client_memptr(eth_client, i)->ipv4_set = false;
+			}
+			else
+			{
+				get_client_memptr(eth_client, i)->ipv6_set = 0;
+			}
 		}
 	} /* end of for loop */
 	return res;
@@ -10701,11 +10752,13 @@ int IPACM_Lan::install_ipv6_prefix_flt_rule(uint32_t* prefix)
 			IPACM_Iface::ipacmcfg->increaseFltRuleCount(rx_prop->rx[0].src_pipe,
 				IPA_IP_v6, IPv6_PREFIX_DEFAULT_PDN_RULE_NUM);
 			ipv6_prefix_flt_rule_hdl[0] = flt_rule->rules[0].flt_rule_hdl;
+			num_wan_prefix_rules++;
 			IPACMDBG_H("IPv6 prefix filter rule HDL:0x%x\n", ipv6_prefix_flt_rule_hdl[0]);
 			if (rule_cnt > 1)
 			{
 				ipv6_prefix_flt_rule_hdl[1] = flt_rule->rules[1].flt_rule_hdl;
 				IPACMDBG_H("IPv6 prefix MTU filter rule HDL:0x%x\n", ipv6_prefix_flt_rule_hdl[1]);
+				num_wan_prefix_rules++;
 			}
 			free(flt_rule);
 		}
@@ -10723,6 +10776,7 @@ void IPACM_Lan::delete_ipv6_prefix_flt_rule()
 	for (int i = 0; i < IPv6_PREFIX_DEFAULT_PDN_RULE_NUM; i++)
 		ipv6_prefix_flt_rule_hdl[i] = 0;
 	IPACM_Iface::ipacmcfg->decreaseFltRuleCount(rx_prop->rx[0].src_pipe, IPA_IP_v6, IPv6_PREFIX_DEFAULT_PDN_RULE_NUM);
+	num_wan_prefix_rules = 0;
 	return;
 }
 

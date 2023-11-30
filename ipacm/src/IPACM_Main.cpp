@@ -649,41 +649,6 @@ void* ipa_driver_msg_notifier(void *param)
 			}
 			continue;
 
-		case WAN_XLAT_CONNECT:
-			memcpy(&event_wan, buffer + sizeof(struct ipa_msg_meta),
-				sizeof(struct ipa_wan_msg));
-			IPACMDBG_H("Received WAN_XLAT_CONNECT name: %s\n",
-					event_wan.upstream_ifname);
-
-			/* post IPA_LINK_UP_EVENT event
-			 * may be WAN interface is not up
-			*/
-			data_fid = (ipacm_event_data_fid *)calloc(1, sizeof(ipacm_event_data_fid));
-			if(data_fid == NULL)
-			{
-				IPACMERR("unable to allocate memory for xlat event\n");
-				goto done;
-			}
-			ipa_get_if_index(event_wan.upstream_ifname, &(data_fid->if_index));
-			evt_data.event = IPA_LINK_UP_EVENT;
-			evt_data.evt_data = data_fid;
-			IPACMDBG_H("Posting IPA_LINK_UP_EVENT event:%d\n", evt_data.event);
-			IPACM_EvtDispatcher::PostEvt(&evt_data);
-
-			/* post IPA_WAN_XLAT_CONNECT_EVENT event */
-			memset(&evt_data, 0, sizeof(evt_data));
-			data_fid = (ipacm_event_data_fid *)calloc(1, sizeof(ipacm_event_data_fid));
-			if(data_fid == NULL)
-			{
-				IPACMERR("unable to allocate memory for xlat event\n");
-				goto done;
-			}
-			ipa_get_if_index(event_wan.upstream_ifname, &(data_fid->if_index));
-			evt_data.event = IPA_WAN_XLAT_CONNECT_EVENT;
-			evt_data.evt_data = data_fid;
-			IPACMDBG_H("Posting IPA_WAN_XLAT_CONNECT_EVENT event:%d\n", evt_data.event);
-			break;
-
 		case IPA_TETHERING_STATS_UPDATE_STATS:
 			memcpy(&event_data_stats, buffer + sizeof(struct ipa_msg_meta), sizeof(struct ipa_get_data_stats_resp_msg_v01));
 			data_tethering_stats = (ipa_get_data_stats_resp_msg_v01 *)malloc(sizeof(struct ipa_get_data_stats_resp_msg_v01));

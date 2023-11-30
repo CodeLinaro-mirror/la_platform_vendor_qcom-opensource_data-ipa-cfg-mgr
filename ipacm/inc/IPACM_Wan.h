@@ -85,6 +85,7 @@ IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #define IPA_NUM_DEFAULT_WAN_FILTER_RULES 3 /*1 for v4, 2 for v6*/
 #define IPA_V2_NUM_DEFAULT_WAN_FILTER_RULE_IPV4 2
+#define XLAT_IP 0xc0000000
 
 #define NETWORK_STATS "%s %lu %lu %lu %lu"
 #ifdef FEATURE_IPA_ANDROID
@@ -361,6 +362,9 @@ public:
 			IPACMERR("IPv6 address is empty.\n");
 			return false;
 		}
+
+		IPACMDBG_H("Received prefix: 0x%08x%08x\n", v6_addr[0], v6_addr[1]);
+
 		for(int i = 0; i < IPA_MAX_NUM_SW_PDNS; i++)
 		{
 			if(ipv6_to_iface[i].ipv6_prefix[0] == v6_addr[0] &&
@@ -368,6 +372,12 @@ public:
 			{
 				IPACMDBG_H("v6 prefix mached pdn %s\n", ipv6_to_iface[i].pIface->dev_name);
 				return true;
+			}
+			else
+			{
+				IPACMDBG_H("index: %d Current prefix: 0x%08x%08x\n", i,
+					ipv6_to_iface[i].ipv6_prefix[0],
+					ipv6_to_iface[i].ipv6_prefix[1]);
 			}
 		}
 		IPACMDBG_H("V6 prefix didnt match any active wan iface\n");

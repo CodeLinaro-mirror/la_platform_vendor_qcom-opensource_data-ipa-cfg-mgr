@@ -149,10 +149,10 @@ IPACM_Lan::IPACM_Lan(int iface_index) : IPACM_Iface(iface_index)
 		return;
 	}
 
-	num_wan_ul_fl_rule_v4 = 0;
-	num_wan_ul_fl_rule_v6 = 0;
-	num_wan_subnet_rules = 0;
-	num_wan_prefix_rules = 0;
+	memset(num_wan_ul_fl_rule_v4, 0, sizeof(num_wan_ul_fl_rule_v4));
+	memset(num_wan_ul_fl_rule_v6, 0, sizeof(num_wan_ul_fl_rule_v6));
+	memset(num_wan_subnet_rules, 0, sizeof(num_wan_subnet_rules));
+	memset(num_wan_prefix_rules, 0, sizeof(num_wan_prefix_rules));
 	hdr_len = 0;
 	memset(wan_ul_fl_rule_hdl_v4, 0, MAX_WAN_UL_FILTER_RULES * sizeof(uint32_t));
 	memset(wan_ul_fl_rule_hdl_v6, 0, MAX_WAN_UL_FILTER_RULES * sizeof(uint32_t));
@@ -170,8 +170,8 @@ IPACM_Lan::IPACM_Lan(int iface_index) : IPACM_Iface(iface_index)
 	memset(private_fl_rule_hdl, 0, (IPA_MAX_PRIVATE_SUBNET_ENTRIES + IPA_MAX_MTU_ENTRIES) * sizeof(uint32_t));
 	memset(ipv6_prefix_flt_rule_hdl, 0, (IPA_MAX_IPV6_NO_OFFLOAD_PREFIX_FLT_RULE + IPA_MAX_MTU_ENTRIES)  * sizeof(uint32_t));
 	memset(ipv6_icmp_flt_rule_hdl, 0, NUM_IPV6_ICMP_FLT_RULE * sizeof(uint32_t));
-	modem_ul_v4_set = false;
-	modem_ul_v6_set = false;
+	memset(modem_ul_v4_set, 0, sizeof(modem_ul_v4_set));
+	memset(modem_ul_v6_set, 0, sizeof(modem_ul_v6_set));
 	memset(ipv6_prefix, 0, sizeof(ipv6_prefix));
 	memset(&xlat_ctx, 0, sizeof(xlat_context));
 
@@ -356,6 +356,20 @@ IPACM_Lan::IPACM_Lan(int iface_index) : IPACM_Iface(iface_index)
 	eogre_route_data_init(IPA_IP_v6);
 #endif
 
+	if (IPACM_Iface::ipacmcfg->ipacm_emesh_enable && IPACM_Iface::ipacmcfg->ipacm_emesh_mode >= 2)
+	{
+		if (device_type == IPACM_CLIENT_DEVICE_TYPE_ETH && rx_prop && rx_prop->num_rx_props > 2)
+		{
+			sIface = true;
+			IPACM_Iface::ipacmcfg->SetSpclIface(dev_name);
+			IPACMDBG("Ezmesh is enabled for dev name %s, Iface cat %d device type IPACM_CLIENT_DEVICE_TYPE_ETH %d\n", dev_name, ipa_if_cate, device_type);
+			IPACMDBG("Device rx_prop->num_rx_props %d\n", rx_prop->num_rx_props);
+		}
+		else
+			sIface = false;
+	}
+	IPACMDBG_H("Is %s an sIface: %d\n", dev_name, sIface);
+
 	return;
 }
 
@@ -409,6 +423,7 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 	struct ipa_ioc_ipsec_ul_flt_attr *uf;
 #endif
 	int idx = 0;
+	int j = 0;
 
 	switch (event)
 	{
@@ -527,20 +542,28 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 			if(rx_prop != NULL)
 			{
 
-				if ((ipa_if_cate == WLAN_IF) && (is_if_svap || is_wlan_if_vlan) && (rx_prop->num_rx_props > 2)) {
-					idx = 2;
-					IPACMDBG_H("Interface is WLAN Svap or vlan, install rules on Rx1 pipe at idx %d \n", idx);
-				}
+				for (j = 0; j < rx_prop->num_rx_props / 2 && j < IPA_MAX_NUM_PROPS; j++)
+				{
+					if ((ipa_if_cate == WLAN_IF) && (is_if_svap || is_wlan_if_vlan) && (rx_prop->num_rx_props > 2)) {
+						if (j < 2) {
+							IPACMDBG_H("Interface is WLAN Svap or w-vlan, dont install rules on pipe %d..... continue\n", idx);
+							continue;
+						}
+						idx = 2;
+						IPACMDBG_H("Interface is WLAN Svap or vlan, install rules on Rx1 pipe at idx %d \n", idx);
+					} else {
+						idx = idx + j * 2;
+						IPACMDBG_H("Install rules at idx %d\n", idx);
+					}
 
-				if(IPACM_Iface::ipacmcfg->getFltRuleCount(rx_prop->rx[idx].src_pipe, IPA_IP_v4) != 0)
-				{
-					IPACMDBG_DMESG("### WARNING ### num ipv4 flt rules on client %d is not expected: %d expected value: 0",
-						rx_prop->rx[idx].src_pipe, IPACM_Iface::ipacmcfg->getFltRuleCount(rx_prop->rx[idx].src_pipe, IPA_IP_v4));
-				}
-				if(IPACM_Iface::ipacmcfg->getFltRuleCount(rx_prop->rx[idx].src_pipe, IPA_IP_v6) != 0)
-				{
-					IPACMDBG_DMESG("### WARNING ### num ipv6 flt rules on client %d is not expected: %d expected value: 0",
-						rx_prop->rx[idx].src_pipe, IPACM_Iface::ipacmcfg->getFltRuleCount(rx_prop->rx[idx].src_pipe, IPA_IP_v6));
+					if (IPACM_Iface::ipacmcfg->getFltRuleCount(rx_prop->rx[idx].src_pipe, IPA_IP_v4) != 0) {
+						IPACMDBG_DMESG("### WARNING ### num ipv4 flt rules on client %d is not expected: %d expected value: 0",
+									   rx_prop->rx[idx].src_pipe, IPACM_Iface::ipacmcfg->getFltRuleCount(rx_prop->rx[idx].src_pipe, IPA_IP_v4));
+					}
+					if (IPACM_Iface::ipacmcfg->getFltRuleCount(rx_prop->rx[idx].src_pipe, IPA_IP_v6) != 0) {
+						IPACMDBG_DMESG("### WARNING ### num ipv6 flt rules on client %d is not expected: %d expected value: 0",
+									   rx_prop->rx[idx].src_pipe, IPACM_Iface::ipacmcfg->getFltRuleCount(rx_prop->rx[idx].src_pipe, IPA_IP_v6));
+					}
 				}
 			}
 #endif
@@ -944,7 +967,8 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 #ifdef FEATURE_VLAN_MPDN
 		/* VLAN IFACES don't care about default route */
 		if((IPACM_Iface::ipacmcfg->iface_in_vlan_mode(dev_name)) &&
-			(IPACM_Iface::ipacmcfg->ipacm_mpdn_enable == TRUE))
+		   (IPACM_Iface::ipacmcfg->ipacm_mpdn_enable == TRUE) &&
+		   !sIface)
 		{
 			if(data_wan->is_sta == false)
 			{
@@ -1233,7 +1257,7 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 			{
 				IPACMDBG_H("ETH iface got client \n");
 #ifdef FEATURE_VLAN_MPDN
-				if(IPACM_Iface::ipacmcfg->iface_in_vlan_mode(dev_name))
+				if(IPACM_Iface::ipacmcfg->iface_in_vlan_mode(dev_name) && !sIface)
 				{
 					IPACMDBG_H("physical iface in vlan mode got neighbor event with iptype %d, ip4 0x%X, ip6 pref [0x%X] [0x%X]\n",
 						data->iptype, data->ipv4_addr, data->ipv6_addr[0], data->ipv6_addr[1]);
@@ -1931,6 +1955,7 @@ int IPACM_Lan::add_mac_flt_blacklist_rule(uint8_t *mac_addr, ipa_ip_type iptype,
 	uint8_t mac_a[6] = {0};
 	std::array<uint8_t, 6> mac = {0};
 	std::map<std::array<uint8_t, 6>, mac_flt_type * >::iterator it;
+	int j = 0;
 
 	memcpy(mac_a,mac_addr,IPA_MAC_ADDR_SIZE);
 	std::copy(std::begin(mac_a), std::end(mac_a), std::begin(mac));
@@ -1947,11 +1972,6 @@ int IPACM_Lan::add_mac_flt_blacklist_rule(uint8_t *mac_addr, ipa_ip_type iptype,
 		return IPACM_FAILURE;
 	}
 
-	if ((ipa_if_cate == WLAN_IF) && (is_if_svap || is_wlan_if_vlan) && (rx_prop->num_rx_props > 2)) {
-		idx = 2;
-		IPACMDBG_H("Interface is WLAN Svap or vlan, install rules on Rx1 pipe at idx %d \n", idx);
-	}
-
 	len = sizeof(struct ipa_ioc_add_flt_rule_v2);
 	pFilteringTable_v2 = (struct ipa_ioc_add_flt_rule_v2*)malloc(len);
 	if (!pFilteringTable_v2)
@@ -1960,45 +1980,57 @@ int IPACM_Lan::add_mac_flt_blacklist_rule(uint8_t *mac_addr, ipa_ip_type iptype,
 		return IPACM_FAILURE;
 	}
 
-	memset(pFilteringTable_v2, 0, len);
-	pFilteringTable_v2->rules = (uintptr_t)calloc(1, sizeof(struct ipa_flt_rule_add_v2));
-	if (!pFilteringTable_v2->rules)
+	for (j = 0; j < rx_prop->num_rx_props / 2 && j < IPA_MAX_NUM_PROPS; j++)
 	{
-		IPACMERR("Failed to allocate ipa_flt_rule_add_v2 memory...\n");
-		free(pFilteringTable_v2);
-		return IPACM_FAILURE;
-	}
+		if ((ipa_if_cate == WLAN_IF) && (is_if_svap || is_wlan_if_vlan) && (rx_prop->num_rx_props > 2)) {
+			if (j < 2) {
+				IPACMDBG_H("Interface is WLAN Svap or w-vlan, dont install rules on pipe %d..... continue\n", idx);
+				continue;
+			}
+			idx = 2;
+			IPACMDBG_H("Interface is WLAN Svap or vlan, install rules on Rx1 pipe at idx %d \n", idx);
+		} else {
+			idx = idx + j * 2;
+			IPACMDBG_H("Install rules at idx %d\n", idx);
+		}
 
-	pFilteringTable_v2->commit = 1;
-	pFilteringTable_v2->ep = rx_prop->rx[idx].src_pipe;
-	pFilteringTable_v2->global = false;
-	pFilteringTable_v2->num_rules = 1;
-	pFilteringTable_v2->ip = iptype;
-	pFilteringTable_v2->flt_rule_size = sizeof(struct ipa_flt_rule_add_v2);
+		memset(pFilteringTable_v2, 0, len);
+		pFilteringTable_v2->rules = (uintptr_t)calloc(1, sizeof(struct ipa_flt_rule_add_v2));
+		if (!pFilteringTable_v2->rules) {
+			IPACMERR("Failed to allocate ipa_flt_rule_add_v2 memory...\n");
+			free(pFilteringTable_v2);
+			return IPACM_FAILURE;
+		}
 
-	memset(&flt_rule_entry_v2, 0, sizeof(struct ipa_flt_rule_add_v2)); // Zero All Fields
-	flt_rule_entry_v2.at_rear = false;
-	flt_rule_entry_v2.flt_rule_hdl = -1;
-	flt_rule_entry_v2.status = -1;
-	flt_rule_entry_v2.rule.retain_hdr = 1;
-	flt_rule_entry_v2.rule.action = IPA_PASS_TO_EXCEPTION;
-	flt_rule_entry_v2.rule.hashable = false;
+		pFilteringTable_v2->commit = 1;
+		pFilteringTable_v2->ep = rx_prop->rx[idx].src_pipe;
+		pFilteringTable_v2->global = false;
+		pFilteringTable_v2->num_rules = 1;
+		pFilteringTable_v2->ip = iptype;
+		pFilteringTable_v2->flt_rule_size = sizeof(struct ipa_flt_rule_add_v2);
 
-	flt_rule_entry_v2.rule.attrib.attrib_mask |= IPA_FLT_MAC_SRC_ADDR_ETHER_II;
-	memset(flt_rule_entry_v2.rule.attrib.src_mac_addr_mask, 0xFF, sizeof(flt_rule_entry_v2.rule.attrib.src_mac_addr_mask));
-	memcpy(flt_rule_entry_v2.rule.attrib.src_mac_addr, mac_addr, sizeof(flt_rule_entry_v2.rule.attrib.src_mac_addr));
+		memset(&flt_rule_entry_v2, 0, sizeof(struct ipa_flt_rule_add_v2)); // Zero All Fields
+		flt_rule_entry_v2.at_rear = false;
+		flt_rule_entry_v2.flt_rule_hdl = -1;
+		flt_rule_entry_v2.status = -1;
+		flt_rule_entry_v2.rule.retain_hdr = 1;
+		flt_rule_entry_v2.rule.action = IPA_PASS_TO_EXCEPTION;
+		flt_rule_entry_v2.rule.hashable = false;
 
-	memcpy((void *)pFilteringTable_v2->rules, &flt_rule_entry_v2, sizeof(flt_rule_entry_v2));
+		flt_rule_entry_v2.rule.attrib.attrib_mask |= IPA_FLT_MAC_SRC_ADDR_ETHER_II;
+		memset(flt_rule_entry_v2.rule.attrib.src_mac_addr_mask, 0xFF, sizeof(flt_rule_entry_v2.rule.attrib.src_mac_addr_mask));
+		memcpy(flt_rule_entry_v2.rule.attrib.src_mac_addr, mac_addr, sizeof(flt_rule_entry_v2.rule.attrib.src_mac_addr));
 
-	if(false == m_filtering.AddFilteringRule_v2(pFilteringTable_v2)) {
-		IPACMERR("Error Adding RuleTable to Filtering, aborting...\n");
-		free((void *)pFilteringTable_v2->rules);
-		free(pFilteringTable_v2);
-		return IPACM_FAILURE;
-	}
-	else
-	{
-		*flt_rule_hdl = ((struct ipa_flt_rule_add_v2 *)pFilteringTable_v2->rules)[0].flt_rule_hdl;
+		memcpy((void *)pFilteringTable_v2->rules, &flt_rule_entry_v2, sizeof(flt_rule_entry_v2));
+
+		if (false == m_filtering.AddFilteringRule_v2(pFilteringTable_v2)) {
+			IPACMERR("Error Adding RuleTable to Filtering, aborting...\n");
+			free((void *)pFilteringTable_v2->rules);
+			free(pFilteringTable_v2);
+			return IPACM_FAILURE;
+		} else {
+			*flt_rule_hdl = ((struct ipa_flt_rule_add_v2 *)pFilteringTable_v2->rules)[0].flt_rule_hdl;
+		}
 	}
 
 free((void *)pFilteringTable_v2->rules);
@@ -2401,6 +2433,7 @@ int IPACM_Lan::del_socksv5_flt_rule(void)
 int IPACM_Lan::del_ul_flt_rules(enum ipa_ip_type iptype)
 {
 	int idx = 0;
+	int j = 0;
 
 	IPACMDBG_H("Deleting modem UL flt rules for iptype(%d)\n", iptype);
 
@@ -2410,108 +2443,108 @@ int IPACM_Lan::del_ul_flt_rules(enum ipa_ip_type iptype)
 		return IPACM_SUCCESS;
 	}
 
-	if ((ipa_if_cate == WLAN_IF) && (is_if_svap || is_wlan_if_vlan) && (rx_prop->num_rx_props > 2)) {
-		idx = 2;
-		IPACMDBG_H("Interface is WLAN Svap or vlan, install rules on Rx1 pipe at idx %d \n", idx);
-	}
-
-	if(iptype == IPA_IP_v4)
+	for (j = 0; j < rx_prop->num_rx_props / 2 && j < IPA_MAX_NUM_PROPS; j++)
 	{
-		if (num_wan_ul_fl_rule_v4 == 0)
-		{
-			IPACMERR("No modem UL rules were installed, return...\n");
-			modem_ul_v4_set = false;
-			return IPACM_SUCCESS;
-		}
-#ifdef FEATURE_IPACM_PER_CLIENT_STATS
-		if(IPACM_Iface::ipacmcfg->ipacm_lan_stats_enable == false)
-#endif
-		{
-			if(num_wan_ul_fl_rule_v4 > MAX_WAN_UL_FILTER_RULES)
-			{
-				IPACMERR("number of wan_ul_fl_rule_v4 (%d) > MAX_WAN_UL_FILTER_RULES (%d), aborting...\n", num_wan_ul_fl_rule_v4, MAX_WAN_UL_FILTER_RULES);
-				return IPACM_FAILURE;
+		if ((ipa_if_cate == WLAN_IF) && (is_if_svap || is_wlan_if_vlan) && (rx_prop->num_rx_props > 2)) {
+			if (j < 2) {
+				IPACMDBG_H("Interface is WLAN Svap or w-vlan, dont install rules on pipe %d..... continue\n", idx);
+				continue;
 			}
+			idx = 2;
+			IPACMDBG_H("Interface is WLAN Svap or vlan, install rules on Rx1 pipe at idx %d \n", idx);
+		} else {
+			idx = idx + j * 2;
+			IPACMDBG_H("Install rules at idx %d\n", idx);
+		}
 
-			if(m_filtering.DeleteFilteringHdls(wan_ul_fl_rule_hdl_v4,
-				IPA_IP_v4, num_wan_ul_fl_rule_v4) == false)
-			{
-				IPACMERR("Error Deleting RuleTable(1) to Filtering, aborting...\n");
-				return IPACM_FAILURE;
+		if (iptype == IPA_IP_v4) {
+			if (num_wan_ul_fl_rule_v4[j] == 0) {
+				IPACMERR("No modem UL rules were installed, return...\n");
+				modem_ul_v4_set[j] = false;
+				return IPACM_SUCCESS;
 			}
-			IPACM_Iface::ipacmcfg->decreaseFltRuleCount(rx_prop->rx[idx].src_pipe, IPA_IP_v4, num_wan_ul_fl_rule_v4);
-
-			memset(wan_ul_fl_rule_hdl_v4, 0, MAX_WAN_UL_FILTER_RULES * sizeof(uint32_t));
-			memset(xlat_ctx.ul_rule_id_hdl_map, 0, MAX_WAN_UL_FILTER_RULES*sizeof(rule_id_hdl_map));
-			num_wan_ul_fl_rule_v4 = 0;
-		}
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
-		else {
-			IPACMDBG_H("deleting uplink filter rule\n");
-			if(delete_uplink_filter_rule(IPA_IP_v4) == IPACM_FAILURE)
-			{
-				IPACMERR("Error delete_uplink_filter_rule, aborting...\n");
-				return IPACM_FAILURE;
-			}
-			num_wan_ul_fl_rule_v4 = 0;
-		}
-#endif
-		modem_ul_v4_set = false;
-	}
-	else
-	{
-		if(num_wan_ul_fl_rule_v6 == 0)
-		{
-			IPACMERR("No modem UL rules were installed, return...\n");
-			modem_ul_v6_set = false;
-			return IPACM_SUCCESS;
-		}
-#ifdef FEATURE_IPACM_PER_CLIENT_STATS
-		if(IPACM_Iface::ipacmcfg->ipacm_lan_stats_enable == false)
-#endif
-		{
-#ifndef IPA_V6_UL_WL_FIREWALL_HANDLE
-			if(num_wan_ul_fl_rule_v6 > MAX_WAN_UL_FILTER_RULES)
-#else
-			if(num_wan_ul_fl_rule_v6 > IPACM_MAX_V6_UL_WL_FIREWALL_ENTRIES)
+			if (IPACM_Iface::ipacmcfg->ipacm_lan_stats_enable == false)
 #endif
 			{
-				IPACMERR(" the number of rules (%d) are bigger than array (%d), aborting...\n", num_wan_ul_fl_rule_v6, MAX_WAN_UL_FILTER_RULES);
-				return IPACM_FAILURE;
-			}
+				if (num_wan_ul_fl_rule_v4[j] > MAX_WAN_UL_FILTER_RULES) {
+					IPACMERR("number of wan_ul_fl_rule_v4 (%d) > MAX_WAN_UL_FILTER_RULES (%d), aborting...\n", num_wan_ul_fl_rule_v4[j], MAX_WAN_UL_FILTER_RULES);
+					return IPACM_FAILURE;
+				}
 
-#ifdef FEATURE_L2TP
-			if(IPACM_Iface::ipacmcfg->ipacm_l2tp_enable != IPACM_L2TP_E2E)
-#endif
-			{
-				/* When OCU is enabled, no need to delete modem UL IPv6 rules. */
-				if(m_filtering.DeleteFilteringHdls(wan_ul_fl_rule_hdl_v6,
-					IPA_IP_v6, num_wan_ul_fl_rule_v6) == false)
-				{
+				if (m_filtering.DeleteFilteringHdls(wan_ul_fl_rule_hdl_v4[j],
+													IPA_IP_v4, num_wan_ul_fl_rule_v4[j]) == false) {
 					IPACMERR("Error Deleting RuleTable(1) to Filtering, aborting...\n");
 					return IPACM_FAILURE;
 				}
-				IPACM_Iface::ipacmcfg->decreaseFltRuleCount(rx_prop->rx[idx].src_pipe, IPA_IP_v6, num_wan_ul_fl_rule_v6);
-#ifndef IPA_V6_UL_WL_FIREWALL_HANDLE
-				memset(wan_ul_fl_rule_hdl_v6, 0, MAX_WAN_UL_FILTER_RULES * sizeof(uint32_t));
-#else
-				memset(wan_ul_fl_rule_hdl_v6, 0, IPACM_MAX_V6_UL_WL_FIREWALL_ENTRIES * sizeof(uint32_t));
-#endif
-				num_wan_ul_fl_rule_v6 = 0;
+				IPACM_Iface::ipacmcfg->decreaseFltRuleCount(rx_prop->rx[idx].src_pipe, IPA_IP_v4, num_wan_ul_fl_rule_v4[j]);
+
+				memset(wan_ul_fl_rule_hdl_v4[j], 0, MAX_WAN_UL_FILTER_RULES * sizeof(uint32_t));
+				memset(xlat_ctx.ul_rule_id_hdl_map, 0, MAX_WAN_UL_FILTER_RULES * sizeof(rule_id_hdl_map));
+				num_wan_ul_fl_rule_v4[j] = 0;
 			}
-		}
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
-		else {
-			IPACMDBG_H("deleting uplink filter rule v6\n");
-			if(delete_uplink_filter_rule(IPA_IP_v6) == IPACM_FAILURE)
-			{
-				IPACMERR("Error delete_uplink_filter_rule, aborting...\n");
-				return IPACM_FAILURE;
+else {
+				IPACMDBG_H("deleting uplink filter rule\n");
+				if (delete_uplink_filter_rule(IPA_IP_v4) == IPACM_FAILURE) {
+					IPACMERR("Error delete_uplink_filter_rule, aborting...\n");
+					return IPACM_FAILURE;
+				}
+				num_wan_ul_fl_rule_v4[j] = 0;
 			}
-			num_wan_ul_fl_rule_v6 = 0;
-		}
 #endif
-		modem_ul_v6_set = false;
+			modem_ul_v4_set[j] = false;
+		} else {
+			if (num_wan_ul_fl_rule_v6[j] == 0) {
+				IPACMERR("No modem UL rules were installed, return...\n");
+				modem_ul_v6_set[j] = false;
+				return IPACM_SUCCESS;
+			}
+#ifdef FEATURE_IPACM_PER_CLIENT_STATS
+			if (IPACM_Iface::ipacmcfg->ipacm_lan_stats_enable == false)
+#endif
+			{
+#ifndef IPA_V6_UL_WL_FIREWALL_HANDLE
+				if (num_wan_ul_fl_rule_v6[j] > MAX_WAN_UL_FILTER_RULES)
+#else
+				if (num_wan_ul_fl_rule_v6[j] > IPACM_MAX_V6_UL_WL_FIREWALL_ENTRIES)
+#endif
+					{
+						IPACMERR(" the number of rules (%d) are bigger than array (%d), aborting...\n", num_wan_ul_fl_rule_v6[j], MAX_WAN_UL_FILTER_RULES);
+						return IPACM_FAILURE;
+					}
+
+#ifdef FEATURE_L2TP
+				if (IPACM_Iface::ipacmcfg->ipacm_l2tp_enable != IPACM_L2TP_E2E)
+#endif
+				{
+					/* When OCU is enabled, no need to delete modem UL IPv6 rules. */
+					if (m_filtering.DeleteFilteringHdls(wan_ul_fl_rule_hdl_v6[j],
+														IPA_IP_v6, num_wan_ul_fl_rule_v6[j]) == false) {
+						IPACMERR("Error Deleting RuleTable(1) to Filtering, aborting...\n");
+						return IPACM_FAILURE;
+					}
+					IPACM_Iface::ipacmcfg->decreaseFltRuleCount(rx_prop->rx[idx].src_pipe, IPA_IP_v6, num_wan_ul_fl_rule_v6[j]);
+#ifndef IPA_V6_UL_WL_FIREWALL_HANDLE
+					memset(wan_ul_fl_rule_hdl_v6[j], 0, MAX_WAN_UL_FILTER_RULES * sizeof(uint32_t));
+#else
+					memset(wan_ul_fl_rule_hdl_v6[j], 0, IPACM_MAX_V6_UL_WL_FIREWALL_ENTRIES * sizeof(uint32_t));
+#endif
+					num_wan_ul_fl_rule_v6[j] = 0;
+				}
+			}
+#ifdef FEATURE_IPACM_PER_CLIENT_STATS
+else {
+				IPACMDBG_H("deleting uplink filter rule v6\n");
+				if (delete_uplink_filter_rule(IPA_IP_v6) == IPACM_FAILURE) {
+					IPACMERR("Error delete_uplink_filter_rule, aborting...\n");
+					return IPACM_FAILURE;
+				}
+				num_wan_ul_fl_rule_v6[j] = 0;
+			}
+#endif
+			modem_ul_v6_set[j] = false;
+		}
 	}
 
 	return IPACM_SUCCESS;
@@ -2939,7 +2972,9 @@ int IPACM_Lan::handle_vlan_pdn_up(ipacm_event_vlan_pdn *data, bool set_mux)
 		if(num_dft_rt_v6 == 1 && modem_ul_v6_set == FALSE)
 		{
 			ret = handle_uplink_filter_rule(IPACM_Iface::ipacmcfg->GetExtProp(IPA_IP_v6), data->iptype, data->mux_id, false);
-			modem_ul_v6_set = !!num_wan_ul_fl_rule_v6;
+			modem_ul_v6_set[0] = !!num_wan_ul_fl_rule_v6[0];
+			if (sIface)
+				modem_ul_v6_set[1] = !!num_wan_ul_fl_rule_v6[1];
 		}
 		/* for the next PDNs only notify modem about new MUX IDs */
 		else
@@ -2960,10 +2995,12 @@ int IPACM_Lan::handle_vlan_pdn_up(ipacm_event_vlan_pdn *data, bool set_mux)
 		modify_private_subnet();
 
 		/* for the first PDN install UL filtering rules */
-		if(modem_ul_v4_set == false)
+		if(modem_ul_v4_set[0] == false)
 		{
 			ret = handle_uplink_filter_rule(IPACM_Iface::ipacmcfg->GetExtProp(IPA_IP_v4), data->iptype, data->mux_id, false, true);
-			modem_ul_v4_set = !!num_wan_ul_fl_rule_v4;
+			modem_ul_v4_set[0] = !!num_wan_ul_fl_rule_v4[0];
+			if (sIface)
+				modem_ul_v4_set[1] = !!num_wan_ul_fl_rule_v4[1];
 		}
 		/* for the next PDNs only notify modem about new MUX IDs */
 		else
@@ -3245,6 +3282,7 @@ int IPACM_Lan::notify_flt_removed(uint8_t mux_id)
 {
 	ipa_fltr_installed_notif_req_msg_v01 flt_index;
 	int fd, idx = 0;
+	int j = 0;
 
 	fd = open(IPA_DEVICE_NAME, O_RDWR);
 	if(0 == fd)
@@ -3259,32 +3297,41 @@ int IPACM_Lan::notify_flt_removed(uint8_t mux_id)
 		return IPACM_SUCCESS;
 	}
 
-	if ((ipa_if_cate == WLAN_IF) && (is_if_svap || is_wlan_if_vlan) && (rx_prop->num_rx_props > 2)) {
-		idx = 2;
-		IPACMDBG_H("Interface is WLAN Svap or vlan, install rules on Rx1 pipe at idx %d \n", idx);
-	}
-
-	memset(&flt_index, 0, sizeof(flt_index));
-	flt_index.source_pipe_index = ioctl(fd, IPA_IOC_QUERY_EP_MAPPING, rx_prop->rx[idx].src_pipe);
-	flt_index.install_status = IPA_QMI_RESULT_SUCCESS_V01;
-#ifndef FEATURE_IPA_V3
-	flt_index.filter_index_list_len = 0;
-#else /* defined (FEATURE_IPA_V3) */
-	flt_index.rule_id_valid = 1;
-	flt_index.rule_id_len = 0;
-#endif
-	flt_index.embedded_pipe_index_valid = 1;
-	flt_index.embedded_pipe_index = ioctl(fd, IPA_IOC_QUERY_EP_MAPPING, IPA_CLIENT_APPS_LAN_WAN_PROD);
-	flt_index.retain_header_valid = 1;
-	flt_index.retain_header = 0;
-	flt_index.embedded_call_mux_id_valid = 1;
-	flt_index.embedded_call_mux_id = mux_id;
-
-	if(false == m_filtering.SendFilteringRuleIndex(&flt_index))
+	for (j = 0; j < rx_prop->num_rx_props / 2 && j < IPA_MAX_NUM_PROPS; j++)
 	{
-		IPACMERR("Error sending filtering rule index, aborting...\n");
-		close(fd);
-		return IPACM_FAILURE;
+		if ((ipa_if_cate == WLAN_IF) && (is_if_svap || is_wlan_if_vlan) && (rx_prop->num_rx_props > 2)) {
+			if (j < 2) {
+				IPACMDBG_H("Interface is WLAN Svap or w-vlan, dont install rules on pipe %d..... continue\n", idx);
+				continue;
+			}
+			idx = 2;
+			IPACMDBG_H("Interface is WLAN Svap or vlan, install rules on Rx1 pipe at idx %d \n", idx);
+		} else {
+			idx = idx + j * 2;
+			IPACMDBG_H("Install rules at idx %d\n", idx);
+		}
+
+		memset(&flt_index, 0, sizeof(flt_index));
+		flt_index.source_pipe_index = ioctl(fd, IPA_IOC_QUERY_EP_MAPPING, rx_prop->rx[idx].src_pipe);
+		flt_index.install_status = IPA_QMI_RESULT_SUCCESS_V01;
+#ifndef FEATURE_IPA_V3
+		flt_index.filter_index_list_len = 0;
+#else /* defined (FEATURE_IPA_V3) */
+		flt_index.rule_id_valid = 1;
+		flt_index.rule_id_len = 0;
+#endif
+		flt_index.embedded_pipe_index_valid = 1;
+		flt_index.embedded_pipe_index = ioctl(fd, IPA_IOC_QUERY_EP_MAPPING, IPA_CLIENT_APPS_LAN_WAN_PROD);
+		flt_index.retain_header_valid = 1;
+		flt_index.retain_header = 0;
+		flt_index.embedded_call_mux_id_valid = 1;
+		flt_index.embedded_call_mux_id = mux_id;
+
+		if (false == m_filtering.SendFilteringRuleIndex(&flt_index)) {
+			IPACMERR("Error sending filtering rule index, aborting...\n");
+			close(fd);
+			return IPACM_FAILURE;
+		}
 	}
 
 	close(fd);
@@ -3295,6 +3342,7 @@ int IPACM_Lan::notify_flt_removed(uint8_t mux_id)
 int IPACM_Lan::handle_wan_down(bool is_sta_mode)
 {
 	int idx = 0;
+	int j;
 
 	if (rx_prop == NULL)
 	{
@@ -3302,29 +3350,32 @@ int IPACM_Lan::handle_wan_down(bool is_sta_mode)
 		return IPACM_SUCCESS;
 	}
 
-	if ((ipa_if_cate == WLAN_IF) && (is_if_svap || is_wlan_if_vlan) && (rx_prop->num_rx_props > 2)) {
-		idx = 2;
-		IPACMDBG_H("Interface is WLAN Svap or vlan, install rules on Rx1 pipe at idx %d \n", idx);
-	}
-
-	if(is_sta_mode == false)
+	for (j = 0; j < rx_prop->num_rx_props / 2 && j < IPA_MAX_NUM_PROPS; j++)
 	{
-		if(del_ul_flt_rules(IPA_IP_v4))
-			return IPACM_FAILURE;
-
-		if(notify_flt_removed(IPACM_Iface::ipacmcfg->GetQmapId()))
-			return IPACM_FAILURE;
-	}
-	else
-	{
-		if (m_filtering.DeleteFilteringHdls(&lan_wan_fl_rule_hdl[0], IPA_IP_v4, 1) == false)
-		{
-			IPACMERR("Error Adding RuleTable(1) to Filtering, aborting...\n");
-			return IPACM_FAILURE;
+		if ((ipa_if_cate == WLAN_IF) && (is_if_svap || is_wlan_if_vlan) && (rx_prop->num_rx_props > 2)) {
+			if (j < 2) {
+				IPACMDBG_H("Interface is WLAN Svap or w-vlan, dont install rules on pipe %d..... continue\n", idx);
+				continue;
+			}
+			idx = 2;
+			IPACMDBG_H("Interface is WLAN Svap or vlan, install rules on Rx1 pipe at idx %d \n", idx);
+		} else {
+			idx = idx + j * 2;
+			IPACMDBG_H("Install rules at idx %d\n", idx);
 		}
-		IPACM_Iface::ipacmcfg->decreaseFltRuleCount(rx_prop->rx[idx].src_pipe, IPA_IP_v4, 1);
-	}
 
+		if (is_sta_mode == false) {
+			if (del_ul_flt_rules(IPA_IP_v4)) return IPACM_FAILURE;
+
+			if (notify_flt_removed(IPACM_Iface::ipacmcfg->GetQmapId())) return IPACM_FAILURE;
+		} else {
+			if (m_filtering.DeleteFilteringHdls(&lan_wan_fl_rule_hdl[j][0], IPA_IP_v4, 1) == false) {
+				IPACMERR("Error Adding RuleTable(1) to Filtering, aborting...\n");
+				return IPACM_FAILURE;
+			}
+			IPACM_Iface::ipacmcfg->decreaseFltRuleCount(rx_prop->rx[idx].src_pipe, IPA_IP_v4, 1);
+		}
+	}
 	/* clean MTU rules if needed */
 	modify_private_subnet();
 
@@ -3412,13 +3463,21 @@ int IPACM_Lan::handle_addr_evt(ipacm_event_data_addr *data)
 		init_fl_rule(data->iptype);
 
 		/* populate the flt rule offset for eth bridge */
-		eth_bridge_flt_rule_offset[data->iptype] = ipv4_icmp_flt_rule_hdl[0];
+		eth_bridge_flt_rule_offset[0][data->iptype] = ipv4_icmp_flt_rule_hdl[0][0];
+		eth_bridge_flt_rule_offset[1][data->iptype] = ipv4_icmp_flt_rule_hdl[1][0];
+
 		/* populate the flt rule offset for mtu_offset (offset = broadcast rule)*/
-		if (m_ipv4_default_filterting_rules_count && m_ipv4_default_filterting_rules_count <= IPV4_DEFAULT_FILTERTING_RULES)
+		if (m_ipv4_default_filterting_rules_count[0] && m_ipv4_default_filterting_rules_count[0] <= IPV4_DEFAULT_FILTERTING_RULES)
 		{
-			mtu_flt_rule_offset[data->iptype] =
-				dft_v4fl_rule_hdl[m_ipv4_default_filterting_rules_count - 1];
+			mtu_flt_rule_offset[0][data->iptype] =
+				dft_v4fl_rule_hdl[0][m_ipv4_default_filterting_rules_count[0] - 1];
 		}
+		if (m_ipv4_default_filterting_rules_count[1] && m_ipv4_default_filterting_rules_count[1] <= IPV4_DEFAULT_FILTERTING_RULES && sIface)
+		{
+			mtu_flt_rule_offset[1][data->iptype] =
+				dft_v4fl_rule_hdl[1][m_ipv4_default_filterting_rules_count[1] - 1];
+		}
+
 		eth_bridge_post_event(IPA_ETH_BRIDGE_IFACE_UP, IPA_IP_v4, NULL, NULL, NULL);
 	}
 	else
@@ -3524,7 +3583,7 @@ int IPACM_Lan::handle_addr_evt(ipacm_event_data_addr *data)
 			install_ipv6_icmp_flt_rule();
 
 			/* populate the flt rule offset for eth bridge */
-			eth_bridge_flt_rule_offset[data->iptype] = ipv6_icmp_flt_rule_hdl[0];
+			eth_bridge_flt_rule_offset[0][data->iptype] = ipv6_icmp_flt_rule_hdl[0][0];
 #ifdef FEATURE_L2TP
 			if (IPACM_Iface::ipacmcfg->ipacm_l2tp_enable == IPACM_L2TP)
 			{
@@ -3539,10 +3598,10 @@ int IPACM_Lan::handle_addr_evt(ipacm_event_data_addr *data)
 			init_fl_rule(data->iptype);
 
 			/* populate the mtu_rule_offset */
-			if (m_ipv6_default_filterting_rules_count && m_ipv6_default_filterting_rules_count <= (IPV6_DEFAULT_FILTERTING_RULES + IPV6_DEFAULT_LAN_FILTERTING_RULES))
+			if (m_ipv6_default_filterting_rules_count[0] && m_ipv6_default_filterting_rules_count[0] <= (IPV6_DEFAULT_FILTERTING_RULES + IPV6_DEFAULT_LAN_FILTERTING_RULES) && sIface)
 			{
-				mtu_flt_rule_offset[data->iptype] =
-					dft_v6fl_rule_hdl[m_ipv6_default_filterting_rules_count - 1];
+				mtu_flt_rule_offset[0][data->iptype] =
+					dft_v6fl_rule_hdl[0][m_ipv6_default_filterting_rules_count[0] - 1];
 			}
 		}
 		num_dft_rt_v6++;
@@ -3562,7 +3621,7 @@ fail:
 int IPACM_Lan::handle_private_subnet(ipa_ip_type iptype)
 {
 	struct ipa_flt_rule_add flt_rule_entry;
-	int i, idx = 0;
+	int i, j, idx = 0;
 
 	ipa_ioc_add_flt_rule *m_pFilteringTable;
 
@@ -3574,82 +3633,86 @@ int IPACM_Lan::handle_private_subnet(ipa_ip_type iptype)
 		return IPACM_SUCCESS;
 	}
 
-	if ((ipa_if_cate == WLAN_IF) && (is_if_svap || is_wlan_if_vlan) && (rx_prop->num_rx_props > 2)) {
-		idx = 2;
-		IPACMDBG_H("Interface is WLAN Svap or vlan, install rules on Rx1 pipe at idx %d \n", idx);
-	}
+	for (j = 0; j < rx_prop->num_rx_props / 2 && j < IPA_MAX_NUM_PROPS; j++) {
 
-	if (iptype == IPA_IP_v4)
-	{
-
-		m_pFilteringTable = (struct ipa_ioc_add_flt_rule *)
-			 calloc(1,
-							sizeof(struct ipa_ioc_add_flt_rule) +
-							(IPACM_Iface::ipacmcfg->ipa_num_private_subnet) * sizeof(struct ipa_flt_rule_add)
-							);
-		if (!m_pFilteringTable)
+		if ((ipa_if_cate == WLAN_IF) && (is_if_svap || is_wlan_if_vlan) && (rx_prop->num_rx_props > 2))
 		{
-			PERROR("Error Locate ipa_flt_rule_add memory...\n");
-			return IPACM_FAILURE;
-		}
-		m_pFilteringTable->commit = 1;
-		m_pFilteringTable->ep = rx_prop->rx[idx].src_pipe;
-		m_pFilteringTable->global = false;
-		m_pFilteringTable->ip = IPA_IP_v4;
-		m_pFilteringTable->num_rules = (uint8_t)IPACM_Iface::ipacmcfg->ipa_num_private_subnet;
-
-		/* Make LAN-traffic always go A5, use default IPA-RT table */
-		if (false == m_routing.GetRoutingTable(&IPACM_Iface::ipacmcfg->rt_tbl_default_v4))
-		{
-			IPACMERR("LAN m_routing.GetRoutingTable(&IPACM_Iface::ipacmcfg->rt_tbl_default_v4=0x%p) Failed.\n", &IPACM_Iface::ipacmcfg->rt_tbl_default_v4);
-			free(m_pFilteringTable);
-			return IPACM_FAILURE;
+			if (j < 2) {
+				IPACMDBG_H("Interface is WLAN Svap or w-vlan, dont install rules on pipe %d..... continue\n", idx);
+				continue;
+			}
+			idx = 2;
+			IPACMDBG_H("Interface is WLAN Svap or vlan, install rules on Rx1 pipe at idx %d \n", idx);
+		} else {
+			idx = idx + j * 2;
+			IPACMDBG_H("Install rules at idx %d\n", idx);
 		}
 
-		for (i = 0; i < (IPACM_Iface::ipacmcfg->ipa_num_private_subnet); i++)
-		{
-			memset(&flt_rule_entry, 0, sizeof(struct ipa_flt_rule_add));
-			flt_rule_entry.at_rear = true;
-			flt_rule_entry.rule.retain_hdr = 1;
-			flt_rule_entry.flt_rule_hdl = -1;
-			flt_rule_entry.status = -1;
-			flt_rule_entry.rule.action = IPA_PASS_TO_ROUTING;
+		if (iptype == IPA_IP_v4) {
+
+			m_pFilteringTable = (struct ipa_ioc_add_flt_rule *)
+				calloc(1,
+					   sizeof(struct ipa_ioc_add_flt_rule) +
+					   (IPACM_Iface::ipacmcfg->ipa_num_private_subnet) * sizeof(struct ipa_flt_rule_add)
+					  );
+			if (!m_pFilteringTable) {
+				PERROR("Error Locate ipa_flt_rule_add memory...\n");
+				return IPACM_FAILURE;
+			}
+			m_pFilteringTable->commit = 1;
+			m_pFilteringTable->ep = rx_prop->rx[idx].src_pipe;
+			m_pFilteringTable->global = false;
+			m_pFilteringTable->ip = IPA_IP_v4;
+			m_pFilteringTable->num_rules = (uint8_t)IPACM_Iface::ipacmcfg->ipa_num_private_subnet;
+
+			/* Make LAN-traffic always go A5, use default IPA-RT table */
+			if (false == m_routing.GetRoutingTable(&IPACM_Iface::ipacmcfg->rt_tbl_default_v4)) {
+				IPACMERR("LAN m_routing.GetRoutingTable(&IPACM_Iface::ipacmcfg->rt_tbl_default_v4=0x%p) Failed.\n", &IPACM_Iface::ipacmcfg->rt_tbl_default_v4);
+				free(m_pFilteringTable);
+				return IPACM_FAILURE;
+			}
+
+			for (i = 0; i < (IPACM_Iface::ipacmcfg->ipa_num_private_subnet); i++) {
+				memset(&flt_rule_entry, 0, sizeof(struct ipa_flt_rule_add));
+				flt_rule_entry.at_rear = true;
+				flt_rule_entry.rule.retain_hdr = 1;
+				flt_rule_entry.flt_rule_hdl = -1;
+				flt_rule_entry.status = -1;
+				flt_rule_entry.rule.action = IPA_PASS_TO_ROUTING;
 #ifdef FEATURE_IPA_V3
-			flt_rule_entry.rule.hashable = true;
+				flt_rule_entry.rule.hashable = true;
 #endif
-			 /* Support private subnet feature including guest-AP can't talk to primary AP etc */
-			flt_rule_entry.rule.rt_tbl_hdl = IPACM_Iface::ipacmcfg->rt_tbl_default_v4.hdl;
-			IPACMDBG_H(" private filter rule use table: %s\n",IPACM_Iface::ipacmcfg->rt_tbl_default_v4.name);
+				/* Support private subnet feature including guest-AP can't talk to primary AP etc */
+				flt_rule_entry.rule.rt_tbl_hdl = IPACM_Iface::ipacmcfg->rt_tbl_default_v4.hdl;
+				IPACMDBG_H(" private filter rule use table: %s\n", IPACM_Iface::ipacmcfg->rt_tbl_default_v4.name);
 
-			memcpy(&flt_rule_entry.rule.attrib,
-						 &rx_prop->rx[idx].attrib,
-						 sizeof(flt_rule_entry.rule.attrib));
-			flt_rule_entry.rule.attrib.attrib_mask |= IPA_FLT_DST_ADDR;
-			flt_rule_entry.rule.attrib.u.v4.dst_addr_mask = IPACM_Iface::ipacmcfg->private_subnet_table[i].subnet_mask;
-			flt_rule_entry.rule.attrib.u.v4.dst_addr = IPACM_Iface::ipacmcfg->private_subnet_table[i].subnet_addr;
-			memcpy(&(m_pFilteringTable->rules[i]), &flt_rule_entry, sizeof(struct ipa_flt_rule_add));
-			IPACMDBG_H("Loop %d  5\n", i);
-		}
+				memcpy(&flt_rule_entry.rule.attrib,
+					   &rx_prop->rx[idx].attrib,
+					   sizeof(flt_rule_entry.rule.attrib));
+				flt_rule_entry.rule.attrib.attrib_mask |= IPA_FLT_DST_ADDR;
+				flt_rule_entry.rule.attrib.u.v4.dst_addr_mask = IPACM_Iface::ipacmcfg->private_subnet_table[i].subnet_mask;
+				flt_rule_entry.rule.attrib.u.v4.dst_addr = IPACM_Iface::ipacmcfg->private_subnet_table[i].subnet_addr;
+				memcpy(&(m_pFilteringTable->rules[i]), &flt_rule_entry, sizeof(struct ipa_flt_rule_add));
+				IPACMDBG_H("Loop %d  5\n", i);
+			}
 
-		if (false == m_filtering.AddFilteringRule(m_pFilteringTable))
-		{
-			IPACMERR("Error Adding RuleTable(0) to Filtering, aborting...\n");
+			if (false == m_filtering.AddFilteringRule(m_pFilteringTable)) {
+				IPACMERR("Error Adding RuleTable(0) to Filtering, aborting...\n");
+				free(m_pFilteringTable);
+				return IPACM_FAILURE;
+			}
+			IPACM_Iface::ipacmcfg->increaseFltRuleCount(rx_prop->rx[idx].src_pipe, IPA_IP_v4, IPACM_Iface::ipacmcfg->ipa_num_private_subnet);
+
+			/* copy filter rule hdls */
+			for (i = 0; i < IPACM_Iface::ipacmcfg->ipa_num_private_subnet; i++) {
+				private_fl_rule_hdl[idx/2][i] = m_pFilteringTable->rules[i].flt_rule_hdl;
+				IPACMDBG("Adding filter hdl:(0x%x)\n", private_fl_rule_hdl[i]);
+			}
 			free(m_pFilteringTable);
-			return IPACM_FAILURE;
+		} else {
+			IPACMDBG_H("No private subnet rules for ipv6 iface %s\n", dev_name);
 		}
-		IPACM_Iface::ipacmcfg->increaseFltRuleCount(rx_prop->rx[idx].src_pipe, IPA_IP_v4, IPACM_Iface::ipacmcfg->ipa_num_private_subnet);
 
-		/* copy filter rule hdls */
-		for (i = 0; i < IPACM_Iface::ipacmcfg->ipa_num_private_subnet; i++)
-		{
-			private_fl_rule_hdl[i] = m_pFilteringTable->rules[i].flt_rule_hdl;
-			IPACMDBG("Adding filter hdl:(0x%x)\n", private_fl_rule_hdl[i]);
-		}
-		free(m_pFilteringTable);
-	}
-	else
-	{
-		IPACMDBG_H("No private subnet rules for ipv6 iface %s\n", dev_name);
 	}
 	return IPACM_SUCCESS;
 }
@@ -3815,6 +3878,7 @@ int IPACM_Lan::handle_wan_up(ipa_ip_type ip_type)
 	struct ipa_flt_rule_add flt_rule_entry;
 	int len = 0, idx = 0;
 	ipa_ioc_add_flt_rule *m_pFilteringTable;
+	int j = 0;
 
 	IPACMDBG_H("set WAN interface as default filter rule\n");
 
@@ -3824,192 +3888,179 @@ int IPACM_Lan::handle_wan_up(ipa_ip_type ip_type)
 		return IPACM_SUCCESS;
 	}
 
-	if ((ipa_if_cate == WLAN_IF) && (is_if_svap || is_wlan_if_vlan) && (rx_prop->num_rx_props > 2)) {
-		idx = 2;
-		IPACMDBG_H("Interface is WLAN Svap or vlan, install rules on Rx1 pipe at idx %d \n", idx);
-	}
+	for (j = 0; j < rx_prop->num_rx_props / 2 && j < IPA_MAX_NUM_PROPS; j++) {
 
-	if(ip_type == IPA_IP_v4)
-	{
-
-		/* add MTU rules for ipv4 */
-		modify_private_subnet();
-
-		len = sizeof(struct ipa_ioc_add_flt_rule) + (1 * sizeof(struct ipa_flt_rule_add));
-		m_pFilteringTable = (struct ipa_ioc_add_flt_rule *)calloc(1, len);
-		if (m_pFilteringTable == NULL)
-		{
-			PERROR("Error Locate ipa_flt_rule_add memory...\n");
-			return IPACM_FAILURE;
+		if ((ipa_if_cate == WLAN_IF) && (is_if_svap || is_wlan_if_vlan) && (rx_prop->num_rx_props > 2)) {
+			if (j < 2) {
+				IPACMDBG_H("Interface is WLAN Svap or w-vlan, dont install rules on pipe %d..... continue\n", idx);
+				continue;
+			}
+			idx = 2;
+			IPACMDBG_H("Interface is WLAN Svap or vlan, install rules on Rx1 pipe at idx %d \n", idx);
+		} else {
+			idx = idx + j * 2;
+			IPACMDBG_H("Install rules at idx %d\n", idx);
 		}
 
-		m_pFilteringTable->commit = 1;
-		m_pFilteringTable->ep = rx_prop->rx[idx].src_pipe;
-		m_pFilteringTable->global = false;
-		m_pFilteringTable->ip = IPA_IP_v4;
-		m_pFilteringTable->num_rules = (uint8_t)1;
+		if (ip_type == IPA_IP_v4) {
 
-		IPACMDBG_H("Retrieving routing hanle for table: %s\n",
-						 IPACM_Iface::ipacmcfg->rt_tbl_wan_v4.name);
-		if (false == m_routing.GetRoutingTable(&IPACM_Iface::ipacmcfg->rt_tbl_wan_v4))
-		{
-			IPACMERR("m_routing.GetRoutingTable(&IPACM_Iface::ipacmcfg->rt_tbl_wan_v4=0x%p) Failed.\n",
-							 &IPACM_Iface::ipacmcfg->rt_tbl_wan_v4);
-			free(m_pFilteringTable);
-			return IPACM_FAILURE;
-		}
-		IPACMDBG_H("Routing hanle for table: %d\n", IPACM_Iface::ipacmcfg->rt_tbl_wan_v4.hdl);
-
-
-		memset(&flt_rule_entry, 0, sizeof(struct ipa_flt_rule_add));
-		flt_rule_entry.at_rear = true;
-		flt_rule_entry.flt_rule_hdl = -1;
-		flt_rule_entry.status = -1;
-		if(IPACM_Wan::isWan_Bridge_Mode())
-		{
-			flt_rule_entry.rule.action = IPA_PASS_TO_ROUTING;
-		}
-		else
-		{
-			flt_rule_entry.rule.action = IPA_PASS_TO_SRC_NAT;
-		}
-#ifdef FEATURE_IPA_V3
-		flt_rule_entry.rule.hashable = true;
-#endif
-		flt_rule_entry.rule.rt_tbl_hdl = IPACM_Iface::ipacmcfg->rt_tbl_wan_v4.hdl;
-
-		memcpy(&flt_rule_entry.rule.attrib,
-					 &rx_prop->rx[idx].attrib,
-					 sizeof(flt_rule_entry.rule.attrib));
-
-		flt_rule_entry.rule.attrib.attrib_mask |= IPA_FLT_DST_ADDR;
-		flt_rule_entry.rule.attrib.u.v4.dst_addr_mask = 0x0;
-		flt_rule_entry.rule.attrib.u.v4.dst_addr = 0x0;
-
-		memcpy(&m_pFilteringTable->rules[0], &flt_rule_entry, sizeof(flt_rule_entry));
-		if (false == m_filtering.AddFilteringRule(m_pFilteringTable))
-		{
-			IPACMERR("Error Adding RuleTable(0) to Filtering, aborting...\n");
-			free(m_pFilteringTable);
-			return IPACM_FAILURE;
-		}
-		else
-		{
-			IPACM_Iface::ipacmcfg->increaseFltRuleCount(rx_prop->rx[idx].src_pipe, IPA_IP_v4, 1);
-			IPACMDBG_H("flt rule hdl0=0x%x, status=0x%x\n",
-							 m_pFilteringTable->rules[0].flt_rule_hdl,
-							 m_pFilteringTable->rules[0].status);
-		}
-
-
-		/* copy filter hdls  */
-		lan_wan_fl_rule_hdl[0] = m_pFilteringTable->rules[0].flt_rule_hdl;
-		free(m_pFilteringTable);
-	}
-	else if(ip_type == IPA_IP_v6)
-	{
-		/* add ipv6_mtu rule */
-		modify_ipv6_prefix_flt_rule();
-
-		/* MTU might have changed. Need to update ipv4 MTU rule if up */
-		if (IPACM_Wan::isWanUP(ipa_if_num))
+			/* add MTU rules for ipv4 */
 			modify_private_subnet();
-#ifndef FEATURE_IPV6_NAT
-		if(IPACM_Iface::ipacmcfg->ipv6_nat_enable)
-		{
-			IPACMDBG_H("IPV6 NAT is enabled. Don't install v6 rules\n");
-			return IPACM_SUCCESS;
-		}
+
+			len = sizeof(struct ipa_ioc_add_flt_rule) + (1 * sizeof(struct ipa_flt_rule_add));
+			m_pFilteringTable = (struct ipa_ioc_add_flt_rule *)calloc(1, len);
+			if (m_pFilteringTable == NULL) {
+				PERROR("Error Locate ipa_flt_rule_add memory...\n");
+				return IPACM_FAILURE;
+			}
+
+			m_pFilteringTable->commit = 1;
+			m_pFilteringTable->ep = rx_prop->rx[idx].src_pipe;
+			m_pFilteringTable->global = false;
+			m_pFilteringTable->ip = IPA_IP_v4;
+			m_pFilteringTable->num_rules = (uint8_t)1;
+
+			IPACMDBG_H("Retrieving routing hanle for table: %s\n",
+					   IPACM_Iface::ipacmcfg->rt_tbl_wan_v4.name);
+			if (false == m_routing.GetRoutingTable(&IPACM_Iface::ipacmcfg->rt_tbl_wan_v4)) {
+				IPACMERR("m_routing.GetRoutingTable(&IPACM_Iface::ipacmcfg->rt_tbl_wan_v4=0x%p) Failed.\n",
+						 &IPACM_Iface::ipacmcfg->rt_tbl_wan_v4);
+				free(m_pFilteringTable);
+				return IPACM_FAILURE;
+			}
+			IPACMDBG_H("Routing hanle for table: %d\n", IPACM_Iface::ipacmcfg->rt_tbl_wan_v4.hdl);
+
+
+			memset(&flt_rule_entry, 0, sizeof(struct ipa_flt_rule_add));
+			flt_rule_entry.at_rear = true;
+			flt_rule_entry.flt_rule_hdl = -1;
+			flt_rule_entry.status = -1;
+			if (IPACM_Wan::isWan_Bridge_Mode()) {
+				flt_rule_entry.rule.action = IPA_PASS_TO_ROUTING;
+			} else {
+				flt_rule_entry.rule.action = IPA_PASS_TO_SRC_NAT;
+			}
+#ifdef FEATURE_IPA_V3
+			flt_rule_entry.rule.hashable = true;
 #endif
-		/* add default v6 filter rule */
-		m_pFilteringTable = (struct ipa_ioc_add_flt_rule *)
-			 calloc(1, sizeof(struct ipa_ioc_add_flt_rule) +
-					1 * sizeof(struct ipa_flt_rule_add));
+			flt_rule_entry.rule.rt_tbl_hdl = IPACM_Iface::ipacmcfg->rt_tbl_wan_v4.hdl;
 
-		if (!m_pFilteringTable)
-		{
-			PERROR("Error Locate ipa_flt_rule_add memory...\n");
-			return IPACM_FAILURE;
-		}
+			memcpy(&flt_rule_entry.rule.attrib,
+				   &rx_prop->rx[idx].attrib,
+				   sizeof(flt_rule_entry.rule.attrib));
 
-		m_pFilteringTable->commit = 1;
-		m_pFilteringTable->ep = rx_prop->rx[idx].src_pipe;
-		m_pFilteringTable->global = false;
-		m_pFilteringTable->ip = IPA_IP_v6;
-		m_pFilteringTable->num_rules = (uint8_t)1;
+			flt_rule_entry.rule.attrib.attrib_mask |= IPA_FLT_DST_ADDR;
+			flt_rule_entry.rule.attrib.u.v4.dst_addr_mask = 0x0;
+			flt_rule_entry.rule.attrib.u.v4.dst_addr = 0x0;
 
-		if (false == m_routing.GetRoutingTable(&IPACM_Iface::ipacmcfg->rt_tbl_v6))
-		{
-			IPACMERR("m_routing.GetRoutingTable(&IPACM_Iface::ipacmcfg->rt_tbl_v6=0x%p) Failed.\n", &IPACM_Iface::ipacmcfg->rt_tbl_v6);
+			memcpy(&m_pFilteringTable->rules[0], &flt_rule_entry, sizeof(flt_rule_entry));
+			if (false == m_filtering.AddFilteringRule(m_pFilteringTable)) {
+				IPACMERR("Error Adding RuleTable(0) to Filtering, aborting...\n");
+				free(m_pFilteringTable);
+				return IPACM_FAILURE;
+			} else {
+				IPACM_Iface::ipacmcfg->increaseFltRuleCount(rx_prop->rx[idx].src_pipe, IPA_IP_v4, 1);
+				IPACMDBG_H("flt rule hdl0=0x%x, status=0x%x\n",
+						   m_pFilteringTable->rules[0].flt_rule_hdl,
+						   m_pFilteringTable->rules[0].status);
+			}
+
+
+			/* copy filter hdls  */
+			lan_wan_fl_rule_hdl[j][0] = m_pFilteringTable->rules[0].flt_rule_hdl;
 			free(m_pFilteringTable);
-			return IPACM_FAILURE;
-		}
+		} else if (ip_type == IPA_IP_v6) {
+			/* add ipv6_mtu rule */
+			modify_ipv6_prefix_flt_rule();
 
-		memset(&flt_rule_entry, 0, sizeof(struct ipa_flt_rule_add));
+			/* MTU might have changed. Need to update ipv4 MTU rule if up */
+			if (IPACM_Wan::isWanUP(ipa_if_num)) modify_private_subnet();
+#ifndef FEATURE_IPV6_NAT
+			if (IPACM_Iface::ipacmcfg->ipv6_nat_enable) {
+				IPACMDBG_H("IPV6 NAT is enabled. Don't install v6 rules\n");
+				return IPACM_SUCCESS;
+			}
+#endif
+			/* add default v6 filter rule */
+			m_pFilteringTable = (struct ipa_ioc_add_flt_rule *)
+				calloc(1, sizeof(struct ipa_ioc_add_flt_rule) +
+					   1 * sizeof(struct ipa_flt_rule_add));
 
-		flt_rule_entry.at_rear = true;
-		flt_rule_entry.flt_rule_hdl = -1;
-		flt_rule_entry.status = -1;
+			if (!m_pFilteringTable) {
+				PERROR("Error Locate ipa_flt_rule_add memory...\n");
+				return IPACM_FAILURE;
+			}
+
+			m_pFilteringTable->commit = 1;
+			m_pFilteringTable->ep = rx_prop->rx[idx].src_pipe;
+			m_pFilteringTable->global = false;
+			m_pFilteringTable->ip = IPA_IP_v6;
+			m_pFilteringTable->num_rules = (uint8_t)1;
+
+			if (false == m_routing.GetRoutingTable(&IPACM_Iface::ipacmcfg->rt_tbl_v6)) {
+				IPACMERR("m_routing.GetRoutingTable(&IPACM_Iface::ipacmcfg->rt_tbl_v6=0x%p) Failed.\n", &IPACM_Iface::ipacmcfg->rt_tbl_v6);
+				free(m_pFilteringTable);
+				return IPACM_FAILURE;
+			}
+
+			memset(&flt_rule_entry, 0, sizeof(struct ipa_flt_rule_add));
+
+			flt_rule_entry.at_rear = true;
+			flt_rule_entry.flt_rule_hdl = -1;
+			flt_rule_entry.status = -1;
 #ifdef FEATURE_IPV6_NAT
-		if(IPACM_Iface::ipacmcfg->ipv6_nat_enable)
-		{
-			/* construct 1st pass v6NAT flt-rule */
-			add_ipv6_nat_ula_prefix_flt_rule();
+			if (IPACM_Iface::ipacmcfg->ipv6_nat_enable) {
+				/* construct 1st pass v6NAT flt-rule */
+				add_ipv6_nat_ula_prefix_flt_rule();
 
-			/* 2nd pass rule - go to RT block */
-			flt_rule_entry.rule.action = IPA_PASS_TO_ROUTING;
-		}
-		else
+				/* 2nd pass rule - go to RT block */
+				flt_rule_entry.rule.action = IPA_PASS_TO_ROUTING;
+			} else
 #endif
-			if (IPACM_Iface::ipacmcfg->IsIpv6CTEnabled() && !IPACM_Wan::isWan_Bridge_Mode())
-		{
+				if (IPACM_Iface::ipacmcfg->IsIpv6CTEnabled() && !IPACM_Wan::isWan_Bridge_Mode()) {
 #ifndef FEATURE_SOCKSv5
-			/* for v6nat, need to revisit all v6ct related logic*/
-			flt_rule_entry.rule.action = IPA_PASS_TO_SRC_NAT;
+					/* for v6nat, need to revisit all v6ct related logic*/
+					flt_rule_entry.rule.action = IPA_PASS_TO_SRC_NAT;
 #else
-			flt_rule_entry.rule.action = IPA_PASS_TO_ROUTING;
+					flt_rule_entry.rule.action = IPA_PASS_TO_ROUTING;
 #endif
-		}
-		else
-		{
-			flt_rule_entry.rule.action = IPA_PASS_TO_ROUTING;
-		}
+				} else {
+					flt_rule_entry.rule.action = IPA_PASS_TO_ROUTING;
+				}
 
 #ifdef FEATURE_IPA_V3
-		flt_rule_entry.rule.hashable = true;
+			flt_rule_entry.rule.hashable = true;
 #endif
-		flt_rule_entry.rule.rt_tbl_hdl = IPACM_Iface::ipacmcfg->rt_tbl_v6.hdl;
+			flt_rule_entry.rule.rt_tbl_hdl = IPACM_Iface::ipacmcfg->rt_tbl_v6.hdl;
 
-		memcpy(&flt_rule_entry.rule.attrib,
-					 &rx_prop->rx[idx].attrib,
-					 sizeof(flt_rule_entry.rule.attrib));
+			memcpy(&flt_rule_entry.rule.attrib,
+				   &rx_prop->rx[idx].attrib,
+				   sizeof(flt_rule_entry.rule.attrib));
 
-		flt_rule_entry.rule.attrib.attrib_mask |= IPA_FLT_DST_ADDR;
-		flt_rule_entry.rule.attrib.u.v6.dst_addr_mask[0] = 0x00000000;
-		flt_rule_entry.rule.attrib.u.v6.dst_addr_mask[1] = 0x00000000;
-		flt_rule_entry.rule.attrib.u.v6.dst_addr_mask[2] = 0x00000000;
-		flt_rule_entry.rule.attrib.u.v6.dst_addr_mask[3] = 0x00000000;
-		flt_rule_entry.rule.attrib.u.v6.dst_addr[0] = 0X00000000;
-		flt_rule_entry.rule.attrib.u.v6.dst_addr[1] = 0x00000000;
-		flt_rule_entry.rule.attrib.u.v6.dst_addr[2] = 0x00000000;
-		flt_rule_entry.rule.attrib.u.v6.dst_addr[3] = 0X00000000;
+			flt_rule_entry.rule.attrib.attrib_mask |= IPA_FLT_DST_ADDR;
+			flt_rule_entry.rule.attrib.u.v6.dst_addr_mask[0] = 0x00000000;
+			flt_rule_entry.rule.attrib.u.v6.dst_addr_mask[1] = 0x00000000;
+			flt_rule_entry.rule.attrib.u.v6.dst_addr_mask[2] = 0x00000000;
+			flt_rule_entry.rule.attrib.u.v6.dst_addr_mask[3] = 0x00000000;
+			flt_rule_entry.rule.attrib.u.v6.dst_addr[0] = 0X00000000;
+			flt_rule_entry.rule.attrib.u.v6.dst_addr[1] = 0x00000000;
+			flt_rule_entry.rule.attrib.u.v6.dst_addr[2] = 0x00000000;
+			flt_rule_entry.rule.attrib.u.v6.dst_addr[3] = 0X00000000;
 
-		memcpy(&(m_pFilteringTable->rules[0]), &flt_rule_entry, sizeof(struct ipa_flt_rule_add));
-		if (false == m_filtering.AddFilteringRule(m_pFilteringTable))
-		{
-			IPACMERR("Error Adding Filtering rule, aborting...\n");
+			memcpy(&(m_pFilteringTable->rules[0]), &flt_rule_entry, sizeof(struct ipa_flt_rule_add));
+			if (false == m_filtering.AddFilteringRule(m_pFilteringTable)) {
+				IPACMERR("Error Adding Filtering rule, aborting...\n");
+				free(m_pFilteringTable);
+				return IPACM_FAILURE;
+			} else {
+				IPACM_Iface::ipacmcfg->increaseFltRuleCount(rx_prop->rx[idx].src_pipe, IPA_IP_v6, 1);
+				IPACMDBG_H("flt rule hdl0=0x%x, status=0x%x\n", m_pFilteringTable->rules[0].flt_rule_hdl, m_pFilteringTable->rules[0].status);
+			}
+
+			/* copy filter hdls */
+			dft_v6fl_rule_hdl[j][m_ipv6_default_filterting_rules_count[j]] = m_pFilteringTable->rules[0].flt_rule_hdl;
 			free(m_pFilteringTable);
-			return IPACM_FAILURE;
 		}
-		else
-		{
-			IPACM_Iface::ipacmcfg->increaseFltRuleCount(rx_prop->rx[idx].src_pipe, IPA_IP_v6, 1);
-			IPACMDBG_H("flt rule hdl0=0x%x, status=0x%x\n", m_pFilteringTable->rules[0].flt_rule_hdl, m_pFilteringTable->rules[0].status);
-		}
-
-		/* copy filter hdls */
-		dft_v6fl_rule_hdl[m_ipv6_default_filterting_rules_count] = m_pFilteringTable->rules[0].flt_rule_hdl;
-		free(m_pFilteringTable);
 	}
 
 	return IPACM_SUCCESS;
@@ -4038,6 +4089,7 @@ int IPACM_Lan::handle_wan_up_ex(ipacm_ext_prop *ext_prop, ipa_ip_type iptype, ui
 		for(cnt=0; cnt<rx_prop->num_rx_props; cnt++)
 		{
 			mux.client = rx_prop->rx[cnt].src_pipe;
+			IPACMDBG("mux.client %d.\n", mux.client);
 			ret = ioctl(fd, IPA_IOC_WRITE_QMAPID, &mux);
 			if (ret)
 			{
@@ -4074,9 +4126,9 @@ int IPACM_Lan::handle_wan_up_ex(ipacm_ext_prop *ext_prop, ipa_ip_type iptype, ui
 		/* add ipv6_mtu rule */
 		modify_ipv6_prefix_flt_rule();
 
-		if(num_dft_rt_v6 == 1 && modem_ul_v6_set == FALSE)
+		if(num_dft_rt_v6 == 1 && modem_ul_v6_set[0] == FALSE)
 		{
-			IPACMDBG_H("IPA_IP_v6 num_dft_rt_v6 %d xlat_mux_id: %d modem_ul_v6_set: %d\n", num_dft_rt_v6, xlat_mux_id, modem_ul_v6_set);
+			IPACMDBG_H("IPA_IP_v6 num_dft_rt_v6 %d xlat_mux_id: %d modem_ul_v6_set: %d\n", num_dft_rt_v6, xlat_mux_id, modem_ul_v6_set[0]);
 #ifdef FEATURE_L2TP
 			if((IPACM_Iface::ipacmcfg->ipacm_l2tp_enable == IPACM_L2TP_E2E) &&
 				ipa_if_cate == ODU_IF)
@@ -4100,8 +4152,12 @@ int IPACM_Lan::handle_wan_up_ex(ipacm_ext_prop *ext_prop, ipa_ip_type iptype, ui
 #else
 			ret = handle_uplink_filter_rule(ext_prop, iptype, xlat_mux_id, ast_update);
 #endif
-			if (num_wan_ul_fl_rule_v6 != 0)
-				modem_ul_v6_set = true;
+			if (num_wan_ul_fl_rule_v6[0] != 0) {
+				modem_ul_v6_set[0] = true;
+				if (sIface) {
+					modem_ul_v6_set[1] = true;
+				}
+			}
 			else {
 				IPACMERR("Modem UL v6 rules not installed, error: %d \n",ret);
 				goto fail;
@@ -4112,7 +4168,7 @@ int IPACM_Lan::handle_wan_up_ex(ipacm_ext_prop *ext_prop, ipa_ip_type iptype, ui
 		{
 			notif_only = true;
 			ret = handle_uplink_filter_rule(ext_prop, iptype, xlat_mux_id, true, true, ast_update);
-			if (num_wan_ul_fl_rule_v6 == 0) {
+			if (num_wan_ul_fl_rule_v6[0] == 0) {
 				IPACMERR("Modem UL v6 rules not installed, error: %d \n",ret);
 				goto fail;
 			}
@@ -4127,9 +4183,9 @@ int IPACM_Lan::handle_wan_up_ex(ipacm_ext_prop *ext_prop, ipa_ip_type iptype, ui
 		if (IPACM_Wan::isWanUP_V6(ipa_if_num))
 			modify_ipv6_prefix_flt_rule();
 
-		if(modem_ul_v4_set == false)
+		if(modem_ul_v4_set[0] == false)
 		{
-			IPACMDBG_H("IPA_IP_v4 xlat_mux_id: %d, modem_ul_v4_set %d\n", xlat_mux_id, modem_ul_v4_set);
+			IPACMDBG_H("IPA_IP_v4 xlat_mux_id: %d, modem_ul_v4_set %d\n", xlat_mux_id, modem_ul_v4_set[0]);
 #ifdef FEATURE_VLAN_MPDN
 			/* for v4, always install the rules like before */
 			notif_only = false;
@@ -4137,8 +4193,11 @@ int IPACM_Lan::handle_wan_up_ex(ipacm_ext_prop *ext_prop, ipa_ip_type iptype, ui
 #else
 			ret = handle_uplink_filter_rule(ext_prop, iptype, xlat_mux_id, ast_update);
 #endif
-			if (num_wan_ul_fl_rule_v4 != 0)
-				modem_ul_v4_set = true;
+			if (num_wan_ul_fl_rule_v4[0] != 0) {
+				modem_ul_v4_set[0] = true;
+				if (sIface)
+					modem_ul_v4_set[1] = true;
+			}
 			else {
 				IPACMERR("Modem UL v4 rules not installed, error: %d \n",ret);
 				goto fail;
@@ -4150,7 +4209,7 @@ int IPACM_Lan::handle_wan_up_ex(ipacm_ext_prop *ext_prop, ipa_ip_type iptype, ui
 			/* for v4, always install the rules like before */
 			notif_only = false;
 			ret = handle_uplink_filter_rule(ext_prop, iptype, xlat_mux_id, true	, true, ast_update);
-			if (num_wan_ul_fl_rule_v4 == 0) {
+			if (num_wan_ul_fl_rule_v4[0] == 0) {
 				IPACMERR("Modem UL v4 rules not installed, error: %d \n",ret);
 				goto fail;
 			}
@@ -4160,7 +4219,7 @@ int IPACM_Lan::handle_wan_up_ex(ipacm_ext_prop *ext_prop, ipa_ip_type iptype, ui
 	else
 	{
 		IPACMDBG_H("ip-type: %d modem_ul_v4_set: %d, modem_ul_v6_set %d\n",
-			iptype, modem_ul_v4_set, modem_ul_v6_set);
+			iptype, modem_ul_v4_set[0], modem_ul_v6_set[0]);
 	}
 
 #if defined(FEATURE_IPACM_PER_CLIENT_STATS) || defined(IPA_WDI_AST_UPDATE)
@@ -4203,6 +4262,9 @@ int IPACM_Lan::handle_eth_hdr_init(uint8_t *mac_addr, ipacm_bridge *bridge, uint
 	struct ipa_ioc_add_hdr *pHeaderDescriptor = NULL;
 	uint32_t cnt;
 	int clnt_indx;
+	struct ipa_ioc_add_hdr_proc_ctx *hdr_proc_ctx_table = NULL;
+	struct ipa_hdr_proc_ctx_add *hdr_proc_ctx = NULL;
+	int size = 0;
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
 	struct wan_ioctl_lan_client_info *client_info;
 	ipacm_ext_prop* ext_prop;
@@ -4264,6 +4326,13 @@ int IPACM_Lan::handle_eth_hdr_init(uint8_t *mac_addr, ipacm_bridge *bridge, uint
 	IPACMDBG_H("isvlan %d, vlan_id %d\n", isVlan, vlan_id);
 #endif
 
+	size = sizeof(ipa_ioc_add_hdr_proc_ctx) + sizeof(ipa_hdr_proc_ctx_add);
+	hdr_proc_ctx_table = (ipa_ioc_add_hdr_proc_ctx *)malloc(size);
+	if (hdr_proc_ctx_table == NULL) {
+		IPACMERR("Failed to allocate memory.\n");
+		return IPACM_FAILURE;
+	}
+
 	/* add header to IPA */
 	if(tx_prop != NULL)
 	{
@@ -4290,6 +4359,14 @@ int IPACM_Lan::handle_eth_hdr_init(uint8_t *mac_addr, ipacm_bridge *bridge, uint
 		/* copy partial header for v4*/
 		for (cnt=0; cnt<tx_prop->num_tx_props; cnt++)
 		{
+			if (!sIface && cnt >= 2  || (sIface && !vlan_id && cnt >= 2)) {
+				IPACMDBG_H("Only special interface can have more than 2 properties.. else continue cnt %d\n", cnt);
+				continue;
+			}
+			if (sIface && vlan_id && cnt < 2) {
+				IPACMDBG_H("Vlan event for special interface ignore non-vlan properties cnt %d\n", cnt);
+				continue;
+			}
 			if(tx_prop->tx[cnt].ip==IPA_IP_v4)
 			{
 				IPACMDBG_H("Got partial v4-header name from %d tx props\n", cnt);
@@ -4452,6 +4529,40 @@ int IPACM_Lan::handle_eth_hdr_init(uint8_t *mac_addr, ipacm_bridge *bridge, uint
 												hdr_len);
 				get_client_memptr(eth_client, num_eth_client)->ipv4_header_set=true;
 
+				if (vlan_id && false == get_client_memptr(eth_client, num_eth_client)->ipv4_hpc_set)
+				{
+					memset(hdr_proc_ctx_table, 0, size);
+					hdr_proc_ctx_table->commit = 1;
+					hdr_proc_ctx_table->num_proc_ctxs = 1;
+					hdr_proc_ctx = &hdr_proc_ctx_table->proc_ctx[0];
+					hdr_proc_ctx->type = IPA_HDR_PROC_NONE;
+
+					if ((IPACM_Iface::ipacmcfg->ipacm_emesh_mode >= 3) && (IPACM_Iface::ipacmcfg->dscp_pcp_config_cache.add == 1)) {
+						hdr_proc_ctx->type = IPA_HDR_PROC_WWAN_TO_ETHII_EX;
+						hdr_proc_ctx->generic_params_v2.output_dscp_pcp_update = 1;
+						hdr_proc_ctx->generic_params_v2.input_ethhdr_valid = 0;
+						hdr_proc_ctx->generic_params_v2.output_ethhdr_negative_offset = 18;
+						hdr_proc_ctx->generic_params_v2.input_ethhdr_negative_offset = 0;
+					}
+
+					hdr_proc_ctx->hdr_hdl = get_client_memptr(eth_client, num_eth_client)->hdr_hdl_v4;
+					IPACMDBG_H("hdr_proc_ctx->hdr_hdl v4 0x%x\n", hdr_proc_ctx->hdr_hdl);
+
+					if (m_header.AddHeaderProcCtx(hdr_proc_ctx_table) == false ||
+						hdr_proc_ctx_table->proc_ctx[0].status != 0) {
+						IPACMERR("ioctl IPA_IOC_ADD_HDR_PROC_CTX failed: %d\n", hdr_proc_ctx_table->proc_ctx[0].status);
+						res = IPACM_FAILURE;
+						goto fail;
+					}
+
+					get_client_memptr(eth_client, num_eth_client)->hpc_hdr_hdl_v4 = hdr_proc_ctx_table->proc_ctx[0].proc_ctx_hdl;
+					IPACMDBG_H("client(%d) v4 hpc header handle:(0x%x) Len:%d\n",
+							   num_eth_client,
+							   get_client_memptr(eth_client, num_eth_client)->hpc_hdr_hdl_v4,
+							   hdr_len);
+					get_client_memptr(eth_client, num_eth_client)->ipv4_hpc_set = true;
+				}
+
 				break;
 			}
 		}
@@ -4460,6 +4571,15 @@ int IPACM_Lan::handle_eth_hdr_init(uint8_t *mac_addr, ipacm_bridge *bridge, uint
 		/* copy partial header for v6*/
 		for (cnt=0; cnt<tx_prop->num_tx_props; cnt++)
 		{
+			if (!sIface && cnt >= 2  || (sIface && !vlan_id && cnt >= 2)) {
+				IPACMDBG_H("Only special interface can have more than 2 properties.. else continue cnt %d\n", cnt);
+				continue;
+			}
+			if (sIface && vlan_id && cnt < 2) {
+				IPACMDBG_H("Vlan event for special interface ignore non-vlan properties cnt %d\n", cnt);
+				continue;
+			}
+
 			if(tx_prop->tx[cnt].ip==IPA_IP_v6)
 			{
 
@@ -4624,7 +4744,41 @@ int IPACM_Lan::handle_eth_hdr_init(uint8_t *mac_addr, ipacm_bridge *bridge, uint
 									 get_client_memptr(eth_client, num_eth_client)->hdr_hdl_v6,
 									 hdr_len);
 
-									get_client_memptr(eth_client, num_eth_client)->ipv6_header_set=true;
+				get_client_memptr(eth_client, num_eth_client)->ipv6_header_set=true;
+
+				if (vlan_id && false == get_client_memptr(eth_client, num_eth_client)->ipv6_hpc_set)
+				{
+					memset(hdr_proc_ctx_table, 0, size);
+					hdr_proc_ctx_table->commit = 1;
+					hdr_proc_ctx_table->num_proc_ctxs = 1;
+					hdr_proc_ctx = &hdr_proc_ctx_table->proc_ctx[0];
+					hdr_proc_ctx->type = IPA_HDR_PROC_NONE;
+
+					if ((IPACM_Iface::ipacmcfg->ipacm_emesh_mode >= 3) && (IPACM_Iface::ipacmcfg->dscp_pcp_config_cache.add == 1)) {
+						hdr_proc_ctx->type = IPA_HDR_PROC_WWAN_TO_ETHII_EX;
+						hdr_proc_ctx->generic_params_v2.output_dscp_pcp_update = 1;
+						hdr_proc_ctx->generic_params_v2.input_ethhdr_valid = 0;
+						hdr_proc_ctx->generic_params_v2.output_ethhdr_negative_offset = 18;
+						hdr_proc_ctx->generic_params_v2.input_ethhdr_negative_offset = 0;
+					}
+
+					hdr_proc_ctx->hdr_hdl = get_client_memptr(eth_client, num_eth_client)->hdr_hdl_v6;
+					IPACMDBG_H("hdr_proc_ctx->hdr_hdl v6 0x%x\n", hdr_proc_ctx->hdr_hdl);
+
+					if (m_header.AddHeaderProcCtx(hdr_proc_ctx_table) == false ||
+						hdr_proc_ctx_table->proc_ctx[0].status != 0) {
+						IPACMERR("ioctl IPA_IOC_ADD_HDR_PROC_CTX failed: %d\n", hdr_proc_ctx_table->proc_ctx[0].status);
+						res = IPACM_FAILURE;
+						goto fail;
+					}
+
+					get_client_memptr(eth_client, num_eth_client)->hpc_hdr_hdl_v6 = hdr_proc_ctx_table->proc_ctx[0].proc_ctx_hdl;
+					IPACMDBG_H("client(%d) v6 hpc header handle:(0x%x) Len:%d\n",
+							   num_eth_client,
+							   get_client_memptr(eth_client, num_eth_client)->hpc_hdr_hdl_v6,
+							   hdr_len);
+					get_client_memptr(eth_client, num_eth_client)->ipv6_hpc_set = true;
+				}
 
 				break;
 
@@ -5166,6 +5320,12 @@ int IPACM_Lan::handle_eth_client_route_rule(uint8_t *mac_addr, ipa_ip_type iptyp
 					tx_index, tx_prop->tx[tx_index].ip, iptype);
 				continue;
 			}
+			if ((tx_index >= 2 && sIface && !vlan_id) ||
+				tx_index < 2 && sIface && vlan_id) {
+				IPACMDBG_H("Tx:%d, ip-type: %d duplicate rule ip-type: %d no RT-rule added\n",
+					tx_index, tx_prop->tx[tx_index].ip, iptype);
+				continue;
+			}
 
 			rt_rule_entry = &rt_rule->rules[0];
 			rt_rule_entry->at_rear = 0;
@@ -5187,7 +5347,10 @@ int IPACM_Lan::handle_eth_client_route_rule(uint8_t *mac_addr, ipa_ip_type iptyp
 					&tx_prop->tx[tx_index].attrib,
 					sizeof(rt_rule_entry->rule.attrib));
 				rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_DST_ADDR;
-				rt_rule_entry->rule.hdr_hdl = get_client_memptr(eth_client, eth_index)->hdr_hdl_v4;
+				if (get_client_memptr(eth_client, eth_index)->ipv4_hpc_set)
+					rt_rule_entry->rule.hdr_proc_ctx_hdl = get_client_memptr(eth_client, eth_index)->hpc_hdr_hdl_v4;
+				else
+					rt_rule_entry->rule.hdr_hdl = get_client_memptr(eth_client, eth_index)->hdr_hdl_v4;
 				rt_rule_entry->rule.attrib.u.v4.dst_addr = get_client_memptr(eth_client, eth_index)->v4_addr;
 				rt_rule_entry->rule.attrib.u.v4.dst_addr_mask = 0xFFFFFFFF;
 
@@ -5274,7 +5437,10 @@ int IPACM_Lan::handle_eth_client_route_rule(uint8_t *mac_addr, ipa_ip_type iptyp
 					memcpy(&rt_rule_entry->rule.attrib,
 						&tx_prop->tx[tx_index].attrib,
 						sizeof(rt_rule_entry->rule.attrib));
-					rt_rule_entry->rule.hdr_hdl = get_client_memptr(eth_client, eth_index)->hdr_hdl_v6;
+					if (get_client_memptr(eth_client, eth_index)->ipv6_hpc_set)
+						rt_rule_entry->rule.hdr_proc_ctx_hdl = get_client_memptr(eth_client, eth_index)->hpc_hdr_hdl_v6;
+					else
+						rt_rule_entry->rule.hdr_hdl = get_client_memptr(eth_client, eth_index)->hdr_hdl_v6;
 					rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_DST_ADDR;
 					rt_rule_entry->rule.attrib.u.v6.dst_addr[0] = it->first[0];
 					rt_rule_entry->rule.attrib.u.v6.dst_addr[1] = it->first[1];
@@ -6797,7 +6963,7 @@ int IPACM_Lan::handle_vlan_phys_if_down()
 /*handle LAN iface down event*/
 int IPACM_Lan::handle_down_evt()
 {
-	int i;
+	int i, j;
 	int res = IPACM_SUCCESS, idx = 0;
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
 /* Link down event */
@@ -6914,133 +7080,127 @@ int IPACM_Lan::handle_down_evt()
 	}
 #endif
 
-	if ((ipa_if_cate == WLAN_IF) && (is_if_svap || is_wlan_if_vlan) && (rx_prop && rx_prop->num_rx_props > 2)) {
-		idx = 2;
-		IPACMDBG_H("Interface is WLAN Svap or vlan, install rules on Rx1 pipe at idx %d \n", idx);
-	}
-
-	/* Delete v4 default filtering rules */
-	if (ip_type != IPA_IP_v6 && rx_prop != NULL)
+	for (j = 0; j < rx_prop->num_rx_props / 2 && j < IPA_MAX_NUM_PROPS; j++)
 	{
-		res = delete_icmp_filter_rule(IPA_IP_v4);
-		if (res == IPACM_FAILURE)
-		{
-			IPACMERR("delete_icmp_filter_rule failed\n");
-			goto fail;
+		if ((ipa_if_cate == WLAN_IF) && (is_if_svap || is_wlan_if_vlan) && (rx_prop->num_rx_props > 2)) {
+			if (j < 2) {
+				IPACMDBG_H("Interface is WLAN Svap or w-vlan, dont install rules on pipe %d..... continue\n", idx);
+				continue;
+			}
+			idx = 2;
+			IPACMDBG_H("Interface is WLAN Svap or vlan, install rules on Rx1 pipe at idx %d \n", idx);
+		} else {
+			idx = idx + j * 2;
+			IPACMDBG_H("Install rules at idx %d\n", idx);
 		}
 
-		res = delete_dflt_filter_rules(IPA_IP_v4);
-		if(res == IPACM_FAILURE)
-		{
-			IPACMERR("delete_dflt_filter_rules failed\n");
-			goto fail;
-		}
+		/* Delete v4 default filtering rules */
+		if (ip_type != IPA_IP_v6 && rx_prop != NULL) {
+			res = delete_icmp_filter_rule(IPA_IP_v4);
+			if (res == IPACM_FAILURE) {
+				IPACMERR("delete_icmp_filter_rule failed\n");
+				goto fail;
+			}
 
-		/* free private-subnet ipv4 + mtu filter rules */
-		if (num_wan_subnet_rules > IPA_MAX_PRIVATE_SUBNET_ENTRIES + IPA_MAX_MTU_ENTRIES)
-		{
-			IPACMERR(" the number of rules are bigger than array, aborting...\n");
-			res = IPACM_FAILURE;
-			goto fail;
-		}
+			res = delete_dflt_filter_rules(IPA_IP_v4);
+			if (res == IPACM_FAILURE) {
+				IPACMERR("delete_dflt_filter_rules failed\n");
+				goto fail;
+			}
 
-		if(m_filtering.DeleteFilteringHdls(private_fl_rule_hdl, IPA_IP_v4, num_wan_subnet_rules) == false)
-		{
-			IPACMERR("Error deleting private subnet IPv4 flt rules.\n");
-			res = IPACM_FAILURE;
-			goto fail;
-		}
-		IPACM_Iface::ipacmcfg->decreaseFltRuleCount(rx_prop->rx[idx].src_pipe, IPA_IP_v4, num_wan_subnet_rules);
-		num_wan_subnet_rules = 0;
-		IPACMDBG_H("Deleted private subnet v4 filter rules successfully.\n");
+			/* free private-subnet ipv4 + mtu filter rules */
+			if (num_wan_subnet_rules[j] > IPA_MAX_PRIVATE_SUBNET_ENTRIES + IPA_MAX_MTU_ENTRIES) {
+				IPACMERR(" the number of rules are bigger than array, aborting...\n");
+				res = IPACM_FAILURE;
+				goto fail;
+			}
 
-		if(m_filtering.DeleteFilteringHdls(&tcp_syn_flt_rule_hdl[IPA_IP_v4], IPA_IP_v4, 1) == false)
-		{
-			IPACMERR("Error deleting tcp syn flt rule, aborting...\n");
-			res = IPACM_FAILURE;
-			goto fail;
-		}
-		IPACM_Iface::ipacmcfg->decreaseFltRuleCount(rx_prop->rx[idx].src_pipe, IPA_IP_v4, 1);
-		IPACMDBG_H("Deleted TCP syn v4 filter rules successfully.\n");
-	}
-	IPACMDBG_H("Finished delete default iface ipv4 filtering rules \n ");
+			if (m_filtering.DeleteFilteringHdls(private_fl_rule_hdl[j], IPA_IP_v4, num_wan_subnet_rules[j]) == false) {
+				IPACMERR("Error deleting private subnet IPv4 flt rules.\n");
+				res = IPACM_FAILURE;
+				goto fail;
+			}
+			IPACM_Iface::ipacmcfg->decreaseFltRuleCount(rx_prop->rx[idx].src_pipe, IPA_IP_v4, num_wan_subnet_rules[j]);
+			num_wan_subnet_rules[j] = 0;
+			IPACMDBG_H("Deleted private subnet v4 filter rules successfully.\n");
 
-	/* Delete v6 filtering rules */
-	if (ip_type != IPA_IP_v4 && rx_prop != NULL)
-	{
-		res = delete_icmp_filter_rule(IPA_IP_v6);
-		if (res == IPACM_FAILURE)
-		{
-			IPACMERR("delete_icmp_filter_rule failed\n");
-			goto fail;
+			if (m_filtering.DeleteFilteringHdls(&tcp_syn_flt_rule_hdl[j][IPA_IP_v4], IPA_IP_v4, 1) == false) {
+				IPACMERR("Error deleting tcp syn flt rule, aborting...\n");
+				res = IPACM_FAILURE;
+				goto fail;
+			}
+			IPACM_Iface::ipacmcfg->decreaseFltRuleCount(rx_prop->rx[idx].src_pipe, IPA_IP_v4, 1);
+			IPACMDBG_H("Deleted TCP syn v4 filter rules successfully.\n");
 		}
+		IPACMDBG_H("Finished delete default iface ipv4 filtering rules \n ");
+
+		/* Delete v6 filtering rules */
+		if (ip_type != IPA_IP_v4 && rx_prop != NULL) {
+			res = delete_icmp_filter_rule(IPA_IP_v6);
+			if (res == IPACM_FAILURE) {
+				IPACMERR("delete_icmp_filter_rule failed\n");
+				goto fail;
+			}
 
 #ifdef FEATURE_VLAN_MPDN
-		if(m_filtering.DeleteFilteringHdls(ipv6_prefix_flt_rule_hdl, IPA_IP_v6,
-			num_wan_prefix_rules) == false)
-		{
-			IPACMERR("Error Deleting Filtering, aborting...\n");
-			res = IPACM_FAILURE;
-			goto fail;
-		}
-		IPACM_Iface::ipacmcfg->decreaseFltRuleCount(rx_prop->rx[idx].src_pipe, IPA_IP_v6, num_wan_prefix_rules);
-		num_wan_prefix_rules = 0;
-		IPACMDBG_H("Deleted private prefix v6 filter rules successfully.\n");
-#endif
-
-#ifdef FEATURE_L2TP
-		if((IPACM_Iface::ipacmcfg->ipacm_l2tp_enable == IPACM_L2TP_E2E) &&
-			ipa_if_cate == ODU_IF)
-		{
-			if (m_filtering.DeleteFilteringHdls(l2tp_inner_private_subnet_flt_rule_hdl, IPA_IP_v6,
-				IPACM_Iface::ipacmcfg->ipa_num_private_subnet) == false)
-			{
+			if (m_filtering.DeleteFilteringHdls(ipv6_prefix_flt_rule_hdl[j], IPA_IP_v6,
+												num_wan_prefix_rules[j]) == false) {
 				IPACMERR("Error Deleting Filtering, aborting...\n");
 				res = IPACM_FAILURE;
 				goto fail;
 			}
-			IPACM_Iface::ipacmcfg->decreaseFltRuleCount(rx_prop->rx[idx].src_pipe, IPA_IP_v6, IPACM_Iface::ipacmcfg->ipa_num_private_subnet);
-		}
+			IPACM_Iface::ipacmcfg->decreaseFltRuleCount(rx_prop->rx[idx].src_pipe, IPA_IP_v6, num_wan_prefix_rules[j]);
+			num_wan_prefix_rules[j] = 0;
+			IPACMDBG_H("Deleted private prefix v6 filter rules successfully.\n");
 #endif
-		res = delete_dflt_filter_rules(IPA_IP_v6);
-		if (res == IPACM_FAILURE)
-		{
-			IPACMERR("delete_dflt_filter_rules failed\n");
-			goto fail;
-		}
-
-		if(m_filtering.DeleteFilteringHdls(&tcp_syn_flt_rule_hdl[IPA_IP_v6], IPA_IP_v6, 1) == false)
-		{
-			IPACMERR("Error deleting tcp syn flt rule, aborting...\n");
-			res = IPACM_FAILURE;
-			goto fail;
-		}
-
-		IPACM_Iface::ipacmcfg->decreaseFltRuleCount(rx_prop->rx[idx].src_pipe, IPA_IP_v6, 1);
-		IPACMDBG_H("Deleted TCP syn v6 filter rules successfully.\n");
 
 #ifdef FEATURE_L2TP
-		if((IPACM_Iface::ipacmcfg->ipacm_l2tp_enable == IPACM_L2TP) &&
-			ipa_if_cate == ODU_IF)
-		{
-#ifdef IPA_L2TP_TUNNEL_UDP
-			if(del_l2tp_udp_dflt_flt_rules(l2tp_udp_dflt_flt_rule_hdl) == IPACM_FAILURE)
-			{
-				IPACMERR("Error Deleting default L2TP UDP rules, aborting...\n");
+			if ((IPACM_Iface::ipacmcfg->ipacm_l2tp_enable == IPACM_L2TP_E2E) &&
+				ipa_if_cate == ODU_IF) {
+				if (m_filtering.DeleteFilteringHdls(l2tp_inner_private_subnet_flt_rule_hdl[j], IPA_IP_v6,
+													IPACM_Iface::ipacmcfg->ipa_num_private_subnet) == false) {
+					IPACMERR("Error Deleting Filtering, aborting...\n");
+					res = IPACM_FAILURE;
+					goto fail;
+				}
+				IPACM_Iface::ipacmcfg->decreaseFltRuleCount(rx_prop->rx[idx].src_pipe, IPA_IP_v6, IPACM_Iface::ipacmcfg->ipa_num_private_subnet);
+			}
+#endif
+			res = delete_dflt_filter_rules(IPA_IP_v6);
+			if (res == IPACM_FAILURE) {
+				IPACMERR("delete_dflt_filter_rules failed\n");
+				goto fail;
+			}
+
+			if (m_filtering.DeleteFilteringHdls(&tcp_syn_flt_rule_hdl[j][IPA_IP_v6], IPA_IP_v6, 1) == false) {
+				IPACMERR("Error deleting tcp syn flt rule, aborting...\n");
 				res = IPACM_FAILURE;
 				goto fail;
 			}
+
+			IPACM_Iface::ipacmcfg->decreaseFltRuleCount(rx_prop->rx[idx].src_pipe, IPA_IP_v6, 1);
+			IPACMDBG_H("Deleted TCP syn v6 filter rules successfully.\n");
+
+#ifdef FEATURE_L2TP
+			if ((IPACM_Iface::ipacmcfg->ipacm_l2tp_enable == IPACM_L2TP) &&
+				ipa_if_cate == ODU_IF) {
+#ifdef IPA_L2TP_TUNNEL_UDP
+				if (del_l2tp_udp_dflt_flt_rules(l2tp_udp_dflt_flt_rule_hdl) == IPACM_FAILURE) {
+					IPACMERR("Error Deleting default L2TP UDP rules, aborting...\n");
+					res = IPACM_FAILURE;
+					goto fail;
+				}
+#endif
+			}
 #endif
 		}
-#endif
+		IPACMDBG_H("Finished delete default iface ipv6 filtering rules \n ");
 	}
-	IPACMDBG_H("Finished delete default iface ipv6 filtering rules \n ");
 
 	if (ip_type != IPA_IP_v6)
 	{
 		if (m_routing.DeleteRoutingHdl(dft_rt_rule_hdl[0], IPA_IP_v4)
-				== false)
-		{
+			== false) {
 			IPACMERR("Routing rule deletion failed!\n");
 			res = IPACM_FAILURE;
 			goto fail;
@@ -7052,11 +7212,9 @@ int IPACM_Lan::handle_down_evt()
 	if (ip_type != IPA_IP_v4)
 	{
 		/* may have multiple ipv6 iface-RT rules*/
-		for (i = 0; i < 2*num_dft_rt_v6; i++)
-		{
+		for (i = 0; i < 2 * num_dft_rt_v6; i++) {
 			if (m_routing.DeleteRoutingHdl(dft_rt_rule_hdl[MAX_DEFAULT_v4_ROUTE_RULES + i], IPA_IP_v6)
-					== false)
-			{
+				== false) {
 				IPACMERR("Routing rule deletion failed!\n");
 				res = IPACM_FAILURE;
 				goto fail;
@@ -7391,7 +7549,7 @@ int IPACM_Lan::handle_uplink_filter_rule(ipacm_ext_prop *prop, ipa_ip_type iptyp
 	ipa_ioc_add_flt_rule *pFilteringTable;
 	ipa_fltr_installed_notif_req_msg_v01 flt_index;
 	int fd;
-	int i, index, idx = 0;
+	int i, j, index, idx = 0;
 	uint32_t value = 0, total_rules = 0, v6_xlat_ul_rules = 0;
 	bool is_dev_in_vlan_mode=false;
 	enum ipa_flt_action action_cache;
@@ -7415,12 +7573,6 @@ int IPACM_Lan::handle_uplink_filter_rule(ipacm_ext_prop *prop, ipa_ip_type iptyp
 	{
 		IPACMDBG_H("No rx properties registered for iface %s\n", dev_name);
 		return IPACM_SUCCESS;
-	}
-
-	if ((ipa_if_cate == WLAN_IF) && (is_if_svap || is_wlan_if_vlan) && (rx_prop->num_rx_props > 2)) {
-		idx = 2;
-		IPACMDBG_H("Interface is WLAN Svap %d vlan %d, install rules on Rx pipe at idx %d \n",
-			is_if_svap, is_wlan_if_vlan, idx);
 	}
 
 	if(prop == NULL || prop->num_ext_props <= 0)
@@ -7457,7 +7609,9 @@ int IPACM_Lan::handle_uplink_filter_rule(ipacm_ext_prop *prop, ipa_ip_type iptyp
 
 #ifdef FEATURE_VLAN_MPDN
 	is_dev_in_vlan_mode = IPACM_Iface::ipacmcfg->iface_in_vlan_mode(dev_name);
-	if (is_dev_in_vlan_mode && IPACM_Iface::ipacmcfg->ipacm_mpdn_enable) {
+
+	/* MPDN is not enabled in ezmesh mode */
+	if (is_dev_in_vlan_mode && IPACM_Iface::ipacmcfg->ipacm_mpdn_enable && !sIface) {
 		IPACMDBG_H("number of xlat rules %d \n", prop->num_v4_xlat_props);
 		total_rules = prop->num_ext_props - prop->num_v4_xlat_props;
 	}
@@ -7485,425 +7639,381 @@ int IPACM_Lan::handle_uplink_filter_rule(ipacm_ext_prop *prop, ipa_ip_type iptyp
 		IPACMDBG("Need %d additional XLAT rules\n", v6_xlat_ul_rules);
 	}
 
-	memset(&flt_index, 0, sizeof(flt_index));
-	flt_index.source_pipe_index = ioctl(fd, IPA_IOC_QUERY_EP_MAPPING, rx_prop->rx[idx].src_pipe);
-#ifdef FEATURE_IPACM_PER_CLIENT_STATS
-	if (tx_prop && IPACM_Iface::ipacmcfg->ipacm_lan_stats_enable)
-	{
-		flt_index.dst_pipe_id_valid = 1;
-		flt_index.dst_pipe_id_len = tx_prop->num_tx_props;
-		for (i = 0; i < tx_prop->num_tx_props && i < QMI_IPA_MAX_CLIENT_DST_PIPES; i++)
-		{
-			flt_index.dst_pipe_id[i] = ioctl(fd, IPA_IOC_QUERY_EP_MAPPING, tx_prop->tx[i].dst_pipe);
-		}
-	}
-#endif
-	flt_index.install_status = IPA_QMI_RESULT_SUCCESS_V01;
-#ifndef FEATURE_IPA_V3
-	flt_index.filter_index_list_len = prop->num_ext_props;
-#else /* defined (FEATURE_IPA_V3) */
-	flt_index.rule_id_valid = 1;
-	flt_index.rule_id_len = total_rules;
-#endif
-	flt_index.embedded_pipe_index_valid = 1;
-	flt_index.embedded_pipe_index = ioctl(fd, IPA_IOC_QUERY_EP_MAPPING, IPA_CLIENT_APPS_LAN_WAN_PROD);
-	flt_index.retain_header_valid = 1;
-	flt_index.retain_header = 0;
-	flt_index.embedded_call_mux_id_valid = 1;
-#ifdef FEATURE_VLAN_MPDN
-	if (is_xlat &&
-		!(is_dev_in_vlan_mode && IPACM_Iface::ipacmcfg->ipacm_mpdn_enable))
-		flt_index.embedded_call_mux_id = IPACM_Iface::ipacmcfg->GetQmapId();
-	else
-		flt_index.embedded_call_mux_id = pdn_mux_id;
-#else
-	flt_index.embedded_call_mux_id = IPACM_Iface::ipacmcfg->GetQmapId();
-#endif
-#ifndef FEATURE_IPA_V3
-	IPACMDBG_H("flt_index: src pipe: %d, num of rules: %d, ebd pipe: %d, mux id: %d\n",
-		flt_index.source_pipe_index, flt_index.filter_index_list_len, flt_index.embedded_pipe_index, flt_index.embedded_call_mux_id);
-#else /* defined (FEATURE_IPA_V3) */
-	IPACMDBG_H("flt_index: src pipe: %d, num of rules: %d, ebd pipe: %d, mux id: %d\n",
-		flt_index.source_pipe_index, flt_index.rule_id_len, flt_index.embedded_pipe_index, flt_index.embedded_call_mux_id);
-#endif
-
-	len = sizeof(struct ipa_ioc_add_flt_rule) +
-		total_rules * sizeof(struct ipa_flt_rule_add);
-
-	pFilteringTable =
-		(struct ipa_ioc_add_flt_rule*) calloc(len, sizeof(uint8_t));
-
-	if (pFilteringTable == NULL)
-	{
-		IPACMERR("Error Locate ipa_flt_rule_add memory...\n");
-		close(fd);
-		return IPACM_FAILURE;
-	}
-
-	pFilteringTable->commit = 1;
-	pFilteringTable->ep = rx_prop->rx[idx].src_pipe;
-	pFilteringTable->global = false;
-	pFilteringTable->ip = iptype;
-	pFilteringTable->num_rules = total_rules;
-
-	memset(&flt_rule_entry, 0, sizeof(struct ipa_flt_rule_add)); // Zero All Fields
-	flt_rule_entry.at_rear = 1;
-#ifdef FEATURE_IPA_V3
-	if (flt_rule_entry.rule.eq_attrib.ipv4_frag_eq_present)
-		flt_rule_entry.at_rear = 0;
-#endif
-	flt_rule_entry.flt_rule_hdl = -1;
-	flt_rule_entry.status = -1;
-
-	flt_rule_entry.rule.retain_hdr = 0;
-	flt_rule_entry.rule.to_uc = 0;
-	flt_rule_entry.rule.eq_attrib_type = 1;
-
-	if(iptype == IPA_IP_v4)
-	{
-		bool wan_odu_bridge = (ipa_if_cate == ODU_IF && IPACM_Wan::isWan_Bridge_Mode());
-
-		if ( wan_odu_bridge || compatible_eogre || IPACM_Iface::ipacmcfg->is_public_ip_support_enabled)
-		{
-			IPACMDBG_H(
-				"%s%s%s\n",
-				(wan_odu_bridge)   ? "[WAN, ODU are in bridge mode] " : "",
-				(compatible_eogre) ? "[EoGRE enabled]"                : "",
-				(IPACM_Iface::ipacmcfg->is_public_ip_support_enabled) ? "[Public IP enabled]": "");
-			flt_rule_entry.rule.action = IPA_PASS_TO_ROUTING;
-		}
-		else
-		{
-			flt_rule_entry.rule.action = IPA_PASS_TO_SRC_NAT;
-
-			/* NAT block will set the proper MUX ID in the metadata according to the relevant PDN */
-			if ((IPACM_Iface::ipacmcfg->GetIPAVer() >= IPA_HW_v4_0) &&
-				((ipa_if_cate != WLAN_IF) || ((ipa_if_cate == WLAN_IF) && is_wlan_if_vlan)))
-				flt_rule_entry.rule.set_metadata = true;
-		}
-	}
-	else /* (iptype == IPA_IP_v6) */
-	{
-		if ( compatible_eogre )
-		{
-			flt_rule_entry.rule.action = IPA_PASS_TO_ROUTING;
-		}
-		else
-#if defined(FEATURE_IPV6_NAT) && !defined(FEATURE_SOCKSv5)
-			/* for v6 nat, second pass should go directly to RT block */
-			if(IPACM_Iface::ipacmcfg->ipv6_nat_enable)
-				flt_rule_entry.rule.action = IPA_PASS_TO_ROUTING;
-			else
-#endif
-				flt_rule_entry.rule.action = IPACM_Iface::ipacmcfg->IsIpv6CTEnabled()?
-					IPA_PASS_TO_SRC_NAT : IPA_PASS_TO_ROUTING;
-	}
-
-	index = IPACM_Iface::ipacmcfg->getFltRuleCount(rx_prop->rx[idx].src_pipe, iptype);
-
-	/* cache the flt action */
-	action_cache = flt_rule_entry.rule.action;
-	for( cnt=i=0; cnt < prop->num_ext_props && i < total_rules; cnt++ )
-	{
-		memcpy(&flt_rule_entry.rule.eq_attrib,
-			   &prop->prop[cnt].eq_attrib,
-			   sizeof(prop->prop[cnt].eq_attrib));
-
-		/* Populate the flt rule action from ext_prop */
-		if (prop->prop[cnt].action == IPA_PASS_TO_EXCEPTION)
-		{
-			/* Override the rule action if Q6 can't handle it, go A7 exception */
-			flt_rule_entry.rule.action = prop->prop[cnt].action;
-			flt_rule_entry.rule.rt_tbl_idx = 0;
-			IPACMDBG_H("Override rule index %d to act: %d, rt_tbl_idx: %d to %d\n",
-					   cnt, flt_rule_entry.rule.action,
-					   prop->prop[cnt].rt_tbl_idx,
-					   flt_rule_entry.rule.rt_tbl_idx);
-		}
-		else
-		{
-			/* restore the rule action */
-			flt_rule_entry.rule.action = action_cache;
-			flt_rule_entry.rule.rt_tbl_idx = prop->prop[cnt].rt_tbl_idx;
-			IPACMDBG_H("Restore rule index %d to act: %d, rt_tbl_idx: %d \n",
-					   cnt, flt_rule_entry.rule.action,
-					   flt_rule_entry.rule.rt_tbl_idx);
-		}
-
-#ifndef FEATURE_VLAN_MPDN
-		/* Handle XLAT configuration */
-		if ((iptype == IPA_IP_v4) && prop->prop[cnt].is_xlat_rule && (xlat_mux_id != 0))
-		{
-			/* fill the value of meta-data */
-			value = xlat_mux_id;
-			flt_rule_entry.rule.eq_attrib.metadata_meq32_present = 1;
-			flt_rule_entry.rule.eq_attrib.metadata_meq32.offset = 0;
-			flt_rule_entry.rule.eq_attrib.metadata_meq32.value = (value & 0xFF) << 16;
-			flt_rule_entry.rule.eq_attrib.metadata_meq32.mask = 0x00FF0000;
-			IPACMDBG_H("xlat meta-data is modified for rule: %d has index %d with xlat_mux_id: %d\n",
-					   cnt, index, xlat_mux_id);
-		}
-#else
-		/* Handle XLAT configuration */
-		if ((iptype == IPA_IP_v4) && prop->prop[cnt].is_xlat_rule && (pdn_mux_id != 0) && is_xlat)
-		{
-			/* For vlan mpdn xlat rules will be installed with vlan id as metadata */
-			if (is_dev_in_vlan_mode && IPACM_Iface::ipacmcfg->ipacm_mpdn_enable) {
-				IPACMDBG("skip xlat mpdn rule id %d ext prop no. %d i %d\n",
-						 prop->prop[cnt].rule_id, cnt, i);
+	for (j = 0; j < rx_prop->num_rx_props / 2 && j < IPA_MAX_NUM_PROPS; j++) {
+		if ((ipa_if_cate == WLAN_IF) && (is_if_svap || is_wlan_if_vlan) && (rx_prop->num_rx_props > 2)) {
+			if (j < 2) {
+				IPACMDBG_H("Interface is WLAN Svap or w-vlan, dont install rules on pipe %d..... continue\n", idx);
 				continue;
 			}
-
-			/* fill the value of meta-data */
-			value = pdn_mux_id;
-			flt_rule_entry.rule.eq_attrib.metadata_meq32_present = 1;
-			flt_rule_entry.rule.eq_attrib.metadata_meq32.offset = 0;
-			flt_rule_entry.rule.eq_attrib.metadata_meq32.value = (value & 0xFF) << 16;
-			flt_rule_entry.rule.eq_attrib.metadata_meq32.mask = 0x00FF0000;
-			IPACMDBG_H("xlat meta-data is modified for rule: %d has index %d with xlat_mux_id: %d\n",
-					   cnt, index, pdn_mux_id);
+			idx = 2;
+			IPACMDBG_H("Interface is WLAN Svap or vlan, install rules on Rx1 pipe at idx %d \n", idx);
+		} else {
+			idx = idx + j * 2;
+			IPACMDBG_H("Install rules at idx %d\n", idx);
+		}
+		memset(&flt_index, 0, sizeof(flt_index));
+		flt_index.source_pipe_index = ioctl(fd, IPA_IOC_QUERY_EP_MAPPING, rx_prop->rx[idx].src_pipe);
+#ifdef FEATURE_IPACM_PER_CLIENT_STATS
+		if (tx_prop && IPACM_Iface::ipacmcfg->ipacm_lan_stats_enable) {
+			flt_index.dst_pipe_id_valid = 1;
+			flt_index.dst_pipe_id_len = tx_prop->num_tx_props;
+			for (i = 0; i < tx_prop->num_tx_props && i < QMI_IPA_MAX_CLIENT_DST_PIPES; i++) {
+				flt_index.dst_pipe_id[i] = ioctl(fd, IPA_IOC_QUERY_EP_MAPPING, tx_prop->tx[i].dst_pipe);
+			}
 		}
 #endif
-#ifdef FEATURE_IPA_V3
-		flt_rule_entry.rule.hashable = prop->prop[cnt].is_rule_hashable;
-		flt_rule_entry.rule.rule_id = prop->prop[cnt].rule_id;
-		/* Skip Metadata equation for WLAN VLAN scenarios to handle XLAT. */
-		if(!idx && rx_prop->rx[idx].attrib.attrib_mask & IPA_FLT_META_DATA)	//turn on meta-data equation
-		{
-			flt_rule_entry.rule.eq_attrib.rule_eq_bitmap |= (1<<9);
-			flt_rule_entry.rule.eq_attrib.metadata_meq32_present = 1;
-			flt_rule_entry.rule.eq_attrib.metadata_meq32.offset = 0;
-			flt_rule_entry.rule.eq_attrib.metadata_meq32.value |= rx_prop->rx[idx].attrib.meta_data;
-			flt_rule_entry.rule.eq_attrib.metadata_meq32.mask |= rx_prop->rx[idx].attrib.meta_data_mask;
+		flt_index.install_status = IPA_QMI_RESULT_SUCCESS_V01;
+#ifndef FEATURE_IPA_V3
+		flt_index.filter_index_list_len = prop->num_ext_props;
+#else /* defined (FEATURE_IPA_V3) */
+		flt_index.rule_id_valid = 1;
+		flt_index.rule_id_len = total_rules;
+#endif
+		flt_index.embedded_pipe_index_valid = 1;
+		flt_index.embedded_pipe_index = ioctl(fd, IPA_IOC_QUERY_EP_MAPPING, IPA_CLIENT_APPS_LAN_WAN_PROD);
+		flt_index.retain_header_valid = 1;
+		flt_index.retain_header = 0;
+		flt_index.embedded_call_mux_id_valid = 1;
+#ifdef FEATURE_VLAN_MPDN
+		if (is_xlat &&
+			!(is_dev_in_vlan_mode && IPACM_Iface::ipacmcfg->ipacm_mpdn_enable)) flt_index.embedded_call_mux_id = IPACM_Iface::ipacmcfg->GetQmapId();
+		else flt_index.embedded_call_mux_id = pdn_mux_id;
+#else
+		flt_index.embedded_call_mux_id = IPACM_Iface::ipacmcfg->GetQmapId();
+#endif
+#ifndef FEATURE_IPA_V3
+		IPACMDBG_H("flt_index: src pipe: %d, num of rules: %d, ebd pipe: %d, mux id: %d\n",
+				   flt_index.source_pipe_index, flt_index.filter_index_list_len, flt_index.embedded_pipe_index, flt_index.embedded_call_mux_id);
+#else /* defined (FEATURE_IPA_V3) */
+		IPACMDBG_H("flt_index: src pipe: %d, num of rules: %d, ebd pipe: %d, mux id: %d\n",
+				   flt_index.source_pipe_index, flt_index.rule_id_len, flt_index.embedded_pipe_index, flt_index.embedded_call_mux_id);
+#endif
+
+		len = sizeof(struct ipa_ioc_add_flt_rule) +
+			total_rules * sizeof(struct ipa_flt_rule_add);
+
+		pFilteringTable =
+			(struct ipa_ioc_add_flt_rule *)calloc(len, sizeof(uint8_t));
+
+		if (pFilteringTable == NULL) {
+			IPACMERR("Error Locate ipa_flt_rule_add memory...\n");
+			close(fd);
+			return IPACM_FAILURE;
 		}
+
+		pFilteringTable->commit = 1;
+		pFilteringTable->ep = rx_prop->rx[idx].src_pipe;
+		pFilteringTable->global = false;
+		pFilteringTable->ip = iptype;
+		pFilteringTable->num_rules = total_rules;
+
+		memset(&flt_rule_entry, 0, sizeof(struct ipa_flt_rule_add)); // Zero All Fields
+		flt_rule_entry.at_rear = 1;
+#ifdef FEATURE_IPA_V3
+		if (flt_rule_entry.rule.eq_attrib.ipv4_frag_eq_present) flt_rule_entry.at_rear = 0;
+#endif
+		flt_rule_entry.flt_rule_hdl = -1;
+		flt_rule_entry.status = -1;
+
+		flt_rule_entry.rule.retain_hdr = 0;
+		flt_rule_entry.rule.to_uc = 0;
+		flt_rule_entry.rule.eq_attrib_type = 1;
+
+		if (iptype == IPA_IP_v4) {
+			bool wan_odu_bridge = (ipa_if_cate == ODU_IF && IPACM_Wan::isWan_Bridge_Mode());
+
+			if (wan_odu_bridge || compatible_eogre || IPACM_Iface::ipacmcfg->is_public_ip_support_enabled) {
+				IPACMDBG_H(
+					"%s%s%s\n",
+					(wan_odu_bridge) ? "[WAN, ODU are in bridge mode] " : "",
+					(compatible_eogre) ? "[EoGRE enabled]"                : "",
+					(IPACM_Iface::ipacmcfg->is_public_ip_support_enabled) ? "[Public IP enabled]" : "");
+				flt_rule_entry.rule.action = IPA_PASS_TO_ROUTING;
+			} else {
+				flt_rule_entry.rule.action = IPA_PASS_TO_SRC_NAT;
+
+				/* NAT block will set the proper MUX ID in the metadata according to the relevant PDN */
+				if ((IPACM_Iface::ipacmcfg->GetIPAVer() >= IPA_HW_v4_0) &&
+					((ipa_if_cate != WLAN_IF) || ((ipa_if_cate == WLAN_IF) && is_wlan_if_vlan))) flt_rule_entry.rule.set_metadata = true;
+			}
+		} else { /* (iptype == IPA_IP_v6) */
+			if (compatible_eogre) {
+				flt_rule_entry.rule.action = IPA_PASS_TO_ROUTING;
+			} else
+#if defined(FEATURE_IPV6_NAT) && !defined(FEATURE_SOCKSv5)
+				/* for v6 nat, second pass should go directly to RT block */
+				if (IPACM_Iface::ipacmcfg->ipv6_nat_enable) flt_rule_entry.rule.action = IPA_PASS_TO_ROUTING;
+				else
+#endif
+					flt_rule_entry.rule.action = IPACM_Iface::ipacmcfg->IsIpv6CTEnabled() ?
+						IPA_PASS_TO_SRC_NAT : IPA_PASS_TO_ROUTING;
+		}
+
+		index = IPACM_Iface::ipacmcfg->getFltRuleCount(rx_prop->rx[idx].src_pipe, iptype);
+
+		/* cache the flt action */
+		action_cache = flt_rule_entry.rule.action;
+		for (cnt = i = 0; cnt < prop->num_ext_props && i < total_rules; cnt++) {
+			memcpy(&flt_rule_entry.rule.eq_attrib,
+				   &prop->prop[cnt].eq_attrib,
+				   sizeof(prop->prop[cnt].eq_attrib));
+
+			/* Populate the flt rule action from ext_prop */
+			if (prop->prop[cnt].action == IPA_PASS_TO_EXCEPTION) {
+				/* Override the rule action if Q6 can't handle it, go A7 exception */
+				flt_rule_entry.rule.action = prop->prop[cnt].action;
+				flt_rule_entry.rule.rt_tbl_idx = 0;
+				IPACMDBG_H("Override rule index %d to act: %d, rt_tbl_idx: %d to %d\n",
+						   cnt, flt_rule_entry.rule.action,
+						   prop->prop[cnt].rt_tbl_idx,
+						   flt_rule_entry.rule.rt_tbl_idx);
+			} else {
+				/* restore the rule action */
+				flt_rule_entry.rule.action = action_cache;
+				flt_rule_entry.rule.rt_tbl_idx = prop->prop[cnt].rt_tbl_idx;
+				IPACMDBG_H("Restore rule index %d to act: %d, rt_tbl_idx: %d \n",
+						   cnt, flt_rule_entry.rule.action,
+						   flt_rule_entry.rule.rt_tbl_idx);
+			}
+
+#ifndef FEATURE_VLAN_MPDN
+			/* Handle XLAT configuration */
+			if ((iptype == IPA_IP_v4) && prop->prop[cnt].is_xlat_rule && (xlat_mux_id != 0)) {
+				/* fill the value of meta-data */
+				value = xlat_mux_id;
+				flt_rule_entry.rule.eq_attrib.metadata_meq32_present = 1;
+				flt_rule_entry.rule.eq_attrib.metadata_meq32.offset = 0;
+				flt_rule_entry.rule.eq_attrib.metadata_meq32.value = (value & 0xFF) << 16;
+				flt_rule_entry.rule.eq_attrib.metadata_meq32.mask = 0x00FF0000;
+				IPACMDBG_H("xlat meta-data is modified for rule: %d has index %d with xlat_mux_id: %d\n",
+						   cnt, index, xlat_mux_id);
+			}
+#else
+			/* Handle XLAT configuration */
+			if ((iptype == IPA_IP_v4) && prop->prop[cnt].is_xlat_rule && (pdn_mux_id || sIface) && is_xlat) {
+				/* For vlan mpdn xlat rules will be installed with vlan id as metadata */
+				if (is_dev_in_vlan_mode && IPACM_Iface::ipacmcfg->ipacm_mpdn_enable) {
+					IPACMDBG("skip xlat mpdn rule id %d ext prop no. %d i %d\n",
+							 prop->prop[cnt].rule_id, cnt, i);
+					continue;
+				}
+
+				/* fill the value of meta-data */
+				value = pdn_mux_id;
+				flt_rule_entry.rule.eq_attrib.metadata_meq32_present = 1;
+				flt_rule_entry.rule.eq_attrib.metadata_meq32.offset = 0;
+				flt_rule_entry.rule.eq_attrib.metadata_meq32.value = (value & 0xFF) << 16;
+				flt_rule_entry.rule.eq_attrib.metadata_meq32.mask = 0x00FF0000;
+				IPACMDBG_H("xlat meta-data is modified for rule: %d has index %d with xlat_mux_id: %d\n",
+						   cnt, index, pdn_mux_id);
+			}
+#endif
+#ifdef FEATURE_IPA_V3
+			flt_rule_entry.rule.hashable = prop->prop[cnt].is_rule_hashable;
+			flt_rule_entry.rule.rule_id = prop->prop[cnt].rule_id;
+			/* Skip Metadata equation for WLAN VLAN scenarios to handle XLAT. */
+			if (!idx && rx_prop->rx[idx].attrib.attrib_mask & IPA_FLT_META_DATA) { //turn on meta-data equation
+				flt_rule_entry.rule.eq_attrib.rule_eq_bitmap |= (1 << 9);
+				flt_rule_entry.rule.eq_attrib.metadata_meq32_present = 1;
+				flt_rule_entry.rule.eq_attrib.metadata_meq32.offset = 0;
+				flt_rule_entry.rule.eq_attrib.metadata_meq32.value |= rx_prop->rx[idx].attrib.meta_data;
+				flt_rule_entry.rule.eq_attrib.metadata_meq32.mask |= rx_prop->rx[idx].attrib.meta_data_mask;
+			}
 #endif
 
 #ifdef FEATURE_EoGRE
-		if ( compatible_eogre )
-		{
-			ipa_ioc_generate_flt_eq flt_eq;
+			if (compatible_eogre) {
+				ipa_ioc_generate_flt_eq flt_eq;
 
-			memset(&flt_eq, 0, sizeof(flt_eq));
+				memset(&flt_eq, 0, sizeof(flt_eq));
 
-			memcpy(&flt_rule_entry.rule.attrib,
-				   &rx_prop->rx[idx].attrib,
-				   sizeof(flt_rule_entry.rule.attrib));
+				memcpy(&flt_rule_entry.rule.attrib,
+					   &rx_prop->rx[idx].attrib,
+					   sizeof(flt_rule_entry.rule.attrib));
 
-			flt_rule_entry.rule.attrib.attrib_mask |= IPA_FLT_SRC_ADDR;
+				flt_rule_entry.rule.attrib.attrib_mask |= IPA_FLT_SRC_ADDR;
 
-			if ( ipgre_info.iptype == IPA_IP_v4 )
-			{
-				flt_rule_entry.rule.attrib.u.v4.src_addr_mask = 0xFFFFFFFF;
-				flt_rule_entry.rule.attrib.u.v4.src_addr      = ipgre_info.ipv4_src;
-			}
-			else
-			{
-				memset(
-					&flt_rule_entry.rule.attrib.u.v6.src_addr_mask,
-					0xFFFFFFFF,
-					sizeof(flt_rule_entry.rule.attrib.u.v6.src_addr_mask));
+				if (ipgre_info.iptype == IPA_IP_v4) {
+					flt_rule_entry.rule.attrib.u.v4.src_addr_mask = 0xFFFFFFFF;
+					flt_rule_entry.rule.attrib.u.v4.src_addr      = ipgre_info.ipv4_src;
+				} else {
+					memset(
+						&flt_rule_entry.rule.attrib.u.v6.src_addr_mask,
+						0xFFFFFFFF,
+						sizeof(flt_rule_entry.rule.attrib.u.v6.src_addr_mask));
 
-				flt_rule_entry.rule.attrib.u.v6.src_addr[0] = ipgre_info.ipv6_src[3];
-				flt_rule_entry.rule.attrib.u.v6.src_addr[1] = ipgre_info.ipv6_src[2];
-				flt_rule_entry.rule.attrib.u.v6.src_addr[2] = ipgre_info.ipv6_src[1];
-				flt_rule_entry.rule.attrib.u.v6.src_addr[3] = ipgre_info.ipv6_src[0];
-			}
-
-			/*
-			 * Generate eq
-			 */
-			flt_eq.ip = iptype;
-
-			memcpy(&flt_eq.attrib,
-				   &flt_rule_entry.rule.attrib,
-				   sizeof(flt_eq.attrib));
-
-			/*
-			 * The following ioctl will convert our parameters to an
-			 * equation format. The eqation data will be passed back
-			 * in flt_eq...
-			 */
-			if (0 != ioctl(fd, IPA_IOC_GENERATE_FLT_EQ, &flt_eq))
-			{
-				IPACMERR("Failed to get eq_attrib\n");
-				ret = IPACM_FAILURE;
-				goto fail;
-			}
-
-			if ( ipgre_info.iptype == IPA_IP_v4 )
-			{
-				if ((flt_rule_entry.rule.eq_attrib.num_offset_meq_32 + 1) >
-					IPA_IPFLTR_NUM_MEQ_32_EQNS) //MAX is 2 currently
-				{
-					IPACMERR("Can't add another meq_32 equation to this rule");
+					flt_rule_entry.rule.attrib.u.v6.src_addr[0] = ipgre_info.ipv6_src[3];
+					flt_rule_entry.rule.attrib.u.v6.src_addr[1] = ipgre_info.ipv6_src[2];
+					flt_rule_entry.rule.attrib.u.v6.src_addr[2] = ipgre_info.ipv6_src[1];
+					flt_rule_entry.rule.attrib.u.v6.src_addr[3] = ipgre_info.ipv6_src[0];
 				}
-				else //add the extra src_addr rule
-				{
-					flt_rule_entry.rule.eq_attrib.offset_meq_32[
-						flt_rule_entry.rule.eq_attrib.num_offset_meq_32] =
-						flt_eq.eq_attrib.offset_meq_32[0];
 
-					/*
-					 * Add the bitmap that will point to the new meq32
-					 * equation
-					 */
-					flt_rule_entry.rule.eq_attrib.rule_eq_bitmap |=
-						(flt_eq.eq_attrib.rule_eq_bitmap << flt_rule_entry.rule.eq_attrib.num_offset_meq_32);
+				/*
+				 * Generate eq
+				 */
+				flt_eq.ip = iptype;
 
-					flt_rule_entry.rule.eq_attrib.num_offset_meq_32++;
+				memcpy(&flt_eq.attrib,
+					   &flt_rule_entry.rule.attrib,
+					   sizeof(flt_eq.attrib));
+
+				/*
+				 * The following ioctl will convert our parameters to an
+				 * equation format. The eqation data will be passed back
+				 * in flt_eq...
+				 */
+				if (0 != ioctl(fd, IPA_IOC_GENERATE_FLT_EQ, &flt_eq)) {
+					IPACMERR("Failed to get eq_attrib\n");
+					ret = IPACM_FAILURE;
+					goto fail;
 				}
-			}
-			else
-			{
-				if ((flt_rule_entry.rule.eq_attrib.num_offset_meq_128 + 1) >
-					IPA_IPFLTR_NUM_MEQ_128_EQNS) //MAX is 2 currently
-				{
-					IPACMERR("Can't add another meq_128 equation to this rule");
-				}
-				else //add the extra src_addr rule
-				{
-					flt_rule_entry.rule.eq_attrib.offset_meq_128[
-						flt_rule_entry.rule.eq_attrib.num_offset_meq_128] =
-						flt_eq.eq_attrib.offset_meq_128[0];
 
-					/*
-					 * Add the bitmap that will point to the new
-					 * meq128 equation
-					 */
-					flt_rule_entry.rule.eq_attrib.rule_eq_bitmap |=
-						(flt_eq.eq_attrib.rule_eq_bitmap << flt_rule_entry.rule.eq_attrib.num_offset_meq_128);
+				if (ipgre_info.iptype == IPA_IP_v4) {
+					if ((flt_rule_entry.rule.eq_attrib.num_offset_meq_32 + 1) >
+							IPA_IPFLTR_NUM_MEQ_32_EQNS) { //MAX is 2 currently
+						IPACMERR("Can't add another meq_32 equation to this rule");
+					} else { //add the extra src_addr rule
+						flt_rule_entry.rule.eq_attrib.offset_meq_32[
+																	flt_rule_entry.rule.eq_attrib.num_offset_meq_32] =
+							flt_eq.eq_attrib.offset_meq_32[0];
 
-					flt_rule_entry.rule.eq_attrib.num_offset_meq_128++;
+						/*
+						 * Add the bitmap that will point to the new meq32
+						 * equation
+						 */
+						flt_rule_entry.rule.eq_attrib.rule_eq_bitmap |=
+							(flt_eq.eq_attrib.rule_eq_bitmap << flt_rule_entry.rule.eq_attrib.num_offset_meq_32);
+
+						flt_rule_entry.rule.eq_attrib.num_offset_meq_32++;
+					}
+				} else {
+					if ((flt_rule_entry.rule.eq_attrib.num_offset_meq_128 + 1) >
+							IPA_IPFLTR_NUM_MEQ_128_EQNS) { //MAX is 2 currently
+						IPACMERR("Can't add another meq_128 equation to this rule");
+					} else { //add the extra src_addr rule
+						flt_rule_entry.rule.eq_attrib.offset_meq_128[
+																	 flt_rule_entry.rule.eq_attrib.num_offset_meq_128] =
+							flt_eq.eq_attrib.offset_meq_128[0];
+
+						/*
+						 * Add the bitmap that will point to the new
+						 * meq128 equation
+						 */
+						flt_rule_entry.rule.eq_attrib.rule_eq_bitmap |=
+							(flt_eq.eq_attrib.rule_eq_bitmap << flt_rule_entry.rule.eq_attrib.num_offset_meq_128);
+
+						flt_rule_entry.rule.eq_attrib.num_offset_meq_128++;
+					}
 				}
 			}
-		}
 #endif /* #ifdef FEATURE_EoGRE */
 
-		memcpy(&pFilteringTable->rules[i], &flt_rule_entry, sizeof(flt_rule_entry));
-
-		IPACMDBG_H("Modem UL filtering rule %d has index %d installed at %d\n", cnt, index, i);
-#ifndef FEATURE_IPA_V3
-		flt_index.filter_index_list[cnt].filter_index = index;
-		flt_index.filter_index_list[cnt].filter_handle = prop->prop[cnt].filter_hdl;
-#else /* defined (FEATURE_IPA_V3) */
-		flt_index.rule_id[i] = prop->prop[cnt].rule_id;
-#endif
-		index++;
-		i++;
-
-		//for IPv6CT enabled and XLAT, add a duplicate rule above that will let XLAT packets go to routing instead of NAT
-		if (iptype == IPA_IP_v6 && IPACM_Iface::ipacmcfg->IsIpv6CTEnabled() &&
-			flt_rule_entry.rule.action!= IPA_PASS_TO_EXCEPTION)
-		{
-			//duplicate the old rule to new index
 			memcpy(&pFilteringTable->rules[i], &flt_rule_entry, sizeof(flt_rule_entry));
 
-			//change old rule to pass to route and non hashable
-			flt_rule_entry.rule.action = IPA_PASS_TO_ROUTING;
-			flt_rule_entry.rule.hashable = false;
-
-			//add the eth header equation for v4 to the old rule
-			int meq32_n = flt_rule_entry.rule.eq_attrib.num_offset_meq_32;
-
-			if (meq32_n + 1 > IPA_IPFLTR_NUM_MEQ_32_EQNS)
-			{
-				IPACMERR("Can't add another meq_32 equation to this rule");
-				memcpy(&pFilteringTable->rules[cnt], &flt_rule_entry, sizeof(flt_rule_entry));
-				continue;
-			}
-
-			flt_rule_entry.rule.eq_attrib.offset_meq_32[meq32_n].offset = -4;
-			flt_rule_entry.rule.eq_attrib.offset_meq_32[meq32_n].mask = 0xFFFF;
-			flt_rule_entry.rule.eq_attrib.offset_meq_32[meq32_n].value = ETH_P_IP;
-
-			//Add the bitmap that will point to the new meq32 eq
-			if (meq32_n == 0)
-				flt_rule_entry.rule.eq_attrib.rule_eq_bitmap |= (1<<5);
-			else
-				flt_rule_entry.rule.eq_attrib.rule_eq_bitmap |= (1<<6);
-
-			flt_rule_entry.rule.eq_attrib.num_offset_meq_32++;
-
-			//overwrite the old rule and increment the rule count
-			memcpy(&pFilteringTable->rules[i - 1], &flt_rule_entry, sizeof(flt_rule_entry));
+			IPACMDBG_H("Modem UL filtering rule %d has index %d installed at %d\n", cnt, index, i);
+#ifndef FEATURE_IPA_V3
+			flt_index.filter_index_list[cnt].filter_index = index;
+			flt_index.filter_index_list[cnt].filter_handle = prop->prop[cnt].filter_hdl;
+#else /* defined (FEATURE_IPA_V3) */
+			flt_index.rule_id[i] = prop->prop[cnt].rule_id;
+#endif
 			index++;
 			i++;
-		}
-	}
 
-	if(false == m_filtering.SendFilteringRuleIndex(&flt_index))
-	{
-		IPACMERR("Error sending filtering rule index, aborting...\n");
-		ret = IPACM_FAILURE;
-		goto fail;
-	}
-#ifdef FEATURE_VLAN_MPDN
-	if(notif_only)
-	{
-		IPACMDBG_H("UL filtering rules already installed for %s, only sent notification for modem (mux %d)\n",
-			dev_name, pdn_mux_id);
-		ret = IPACM_SUCCESS;
-		goto finish_notif;
-	}
-	else
-	{
-		IPACMDBG_H("this is the first PDN for dev %s, commiting modem UL rules, mux %d\n", dev_name, pdn_mux_id);
-	}
-#endif
-#ifdef FEATURE_IPACM_PER_CLIENT_STATS
-	if (IPACM_Iface::ipacmcfg->ipacm_lan_stats_enable == false && !ast_update)
-#else
-	if (!ast_update)
-#endif
-	{
-		if(false == m_filtering.AddFilteringRule(pFilteringTable))
-		{
-			IPACMERR("Error Adding RuleTable to Filtering, aborting...\n");
+			//for IPv6CT enabled and XLAT, add a duplicate rule above that will let XLAT packets go to routing instead of NAT
+			if (iptype == IPA_IP_v6 && IPACM_Iface::ipacmcfg->IsIpv6CTEnabled() &&
+				flt_rule_entry.rule.action != IPA_PASS_TO_EXCEPTION) {
+				//duplicate the old rule to new index
+				memcpy(&pFilteringTable->rules[i], &flt_rule_entry, sizeof(flt_rule_entry));
+
+				//change old rule to pass to route and non hashable
+				flt_rule_entry.rule.action = IPA_PASS_TO_ROUTING;
+				flt_rule_entry.rule.hashable = false;
+
+				//add the eth header equation for v4 to the old rule
+				int meq32_n = flt_rule_entry.rule.eq_attrib.num_offset_meq_32;
+
+				if (meq32_n + 1 > IPA_IPFLTR_NUM_MEQ_32_EQNS) {
+					IPACMERR("Can't add another meq_32 equation to this rule");
+					memcpy(&pFilteringTable->rules[cnt], &flt_rule_entry, sizeof(flt_rule_entry));
+					continue;
+				}
+
+				flt_rule_entry.rule.eq_attrib.offset_meq_32[meq32_n].offset = -4;
+				flt_rule_entry.rule.eq_attrib.offset_meq_32[meq32_n].mask = 0xFFFF;
+				flt_rule_entry.rule.eq_attrib.offset_meq_32[meq32_n].value = ETH_P_IP;
+
+				//Add the bitmap that will point to the new meq32 eq
+				if (meq32_n == 0) flt_rule_entry.rule.eq_attrib.rule_eq_bitmap |= (1 << 5);
+				else flt_rule_entry.rule.eq_attrib.rule_eq_bitmap |= (1 << 6);
+
+				flt_rule_entry.rule.eq_attrib.num_offset_meq_32++;
+
+				//overwrite the old rule and increment the rule count
+				memcpy(&pFilteringTable->rules[i - 1], &flt_rule_entry, sizeof(flt_rule_entry));
+				index++;
+				i++;
+			}
+		}
+
+		if (false == m_filtering.SendFilteringRuleIndex(&flt_index)) {
+			IPACMERR("Error sending filtering rule index, aborting...\n");
 			ret = IPACM_FAILURE;
 			goto fail;
 		}
-		else
-		{
-			if(iptype == IPA_IP_v4)
+#ifdef FEATURE_VLAN_MPDN
+		if (notif_only) {
+			IPACMDBG_H("UL filtering rules already installed for %s, only sent notification for modem (mux %d)\n",
+					   dev_name, pdn_mux_id);
+			ret = IPACM_SUCCESS;
+			goto finish_notif;
+		} else {
+			IPACMDBG_H("this is the first PDN for dev %s, commiting modem UL rules, mux %d\n", dev_name, pdn_mux_id);
+		}
+#endif
+#ifdef FEATURE_IPACM_PER_CLIENT_STATS
+		if (IPACM_Iface::ipacmcfg->ipacm_lan_stats_enable == false && !ast_update)
+#else
+		if (!ast_update)
+#endif
 			{
-				for(i=0; i<pFilteringTable->num_rules; i++)
-				{
-					wan_ul_fl_rule_hdl_v4[num_wan_ul_fl_rule_v4] = pFilteringTable->rules[i].flt_rule_hdl;
-					num_wan_ul_fl_rule_v4++;
-					/*Map for dynamic insertion of xlat rules */
-					if (is_dev_in_vlan_mode && IPACM_Iface::ipacmcfg->ipacm_mpdn_enable) {
-						xlat_ctx.ul_rule_id_hdl_map[i].rule_id = pFilteringTable->rules[i].rule.rule_id;
-						xlat_ctx.ul_rule_id_hdl_map[i].flt_hdl = pFilteringTable->rules[i].flt_rule_hdl;
+				if (false == m_filtering.AddFilteringRule(pFilteringTable)) {
+					IPACMERR("Error Adding RuleTable to Filtering, aborting...\n");
+					ret = IPACM_FAILURE;
+					goto fail;
+				} else {
+					if (iptype == IPA_IP_v4) {
+						for (i = 0; i < pFilteringTable->num_rules; i++) {
+							wan_ul_fl_rule_hdl_v4[j][num_wan_ul_fl_rule_v4[j]] = pFilteringTable->rules[i].flt_rule_hdl;
+							num_wan_ul_fl_rule_v4[j]++;
+							/*Map for dynamic insertion of xlat rules */
+							if (is_dev_in_vlan_mode && IPACM_Iface::ipacmcfg->ipacm_mpdn_enable) {
+								xlat_ctx.ul_rule_id_hdl_map[i].rule_id = pFilteringTable->rules[i].rule.rule_id;
+								xlat_ctx.ul_rule_id_hdl_map[i].flt_hdl = pFilteringTable->rules[i].flt_rule_hdl;
+							}
+						}
+						IPACM_Iface::ipacmcfg->increaseFltRuleCount(rx_prop->rx[idx].src_pipe, iptype, pFilteringTable->num_rules);
+					} else { /* (iptype == IPA_IP_v6) */
+						for (i = 0; i < pFilteringTable->num_rules; i++) {
+							wan_ul_fl_rule_hdl_v6[j][num_wan_ul_fl_rule_v6[j]] = pFilteringTable->rules[i].flt_rule_hdl;
+							num_wan_ul_fl_rule_v6[j]++;
+
+						}
+						IPACM_Iface::ipacmcfg->increaseFltRuleCount(rx_prop->rx[idx].src_pipe, iptype, pFilteringTable->num_rules);
 					}
 				}
-				IPACM_Iface::ipacmcfg->increaseFltRuleCount(rx_prop->rx[idx].src_pipe, iptype, pFilteringTable->num_rules);
 			}
-			else /* (iptype == IPA_IP_v6) */
-			{
-				for(i=0; i<pFilteringTable->num_rules; i++)
-				{
-					wan_ul_fl_rule_hdl_v6[num_wan_ul_fl_rule_v6] = pFilteringTable->rules[i].flt_rule_hdl;
-					num_wan_ul_fl_rule_v6++;
-
-				}
-				IPACM_Iface::ipacmcfg->increaseFltRuleCount(rx_prop->rx[idx].src_pipe, iptype, pFilteringTable->num_rules);
-			}
-		}
-	}
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
-	else
-	{
-		/*per client stats will be disabled when vlan is enabled */
-		if(iptype == IPA_IP_v4)
-		{
-			num_wan_ul_fl_rule_v4 = pFilteringTable->num_rules;
-		}
-		else /* (iptype == IPA_IP_v6) */
-		{
-			num_wan_ul_fl_rule_v6 = pFilteringTable->num_rules;
-		}
-	}
+else {
+				/*per client stats will be disabled when vlan is enabled */
+				if (iptype == IPA_IP_v4) {
+					num_wan_ul_fl_rule_v4[j] = pFilteringTable->num_rules;
+				} else { /* (iptype == IPA_IP_v6) */
+					num_wan_ul_fl_rule_v6[j] = pFilteringTable->num_rules;
+				}
+			}
 #endif
+	}
 fail:
 finish_notif:
 	free(pFilteringTable);
@@ -7917,80 +8027,79 @@ int IPACM_Lan::delete_uplink_filter_rule_ul(ul_firewall_t *ul_firewall)
 {
 	uint32_t *flt_rule_hdls = NULL;
 	int num_of_rules = 0, idx = 0;
+	int j = 0;
+
 	if (rx_prop == NULL)
 	{
 		IPACMDBG_H("No rx properties registered for iface %s\n", dev_name);
 		return IPACM_SUCCESS;
 	}
 
-	if ((ipa_if_cate == WLAN_IF) && (is_if_svap || is_wlan_if_vlan) && (rx_prop && rx_prop->num_rx_props > 2)) {
-		idx = 2;
-		IPACMDBG_H("Interface is WLAN Svap or vlan, install rules on Rx1 pipe at idx %d \n", idx);
-	}
+	for (j = 0; j < rx_prop->num_rx_props / 2 && j < IPA_MAX_NUM_PROPS; j++)
+	{
+		if ((ipa_if_cate == WLAN_IF) && (is_if_svap || is_wlan_if_vlan) && (rx_prop->num_rx_props > 2)) {
+			if (j < 2) {
+				IPACMDBG_H("Interface is WLAN Svap or w-vlan, dont install rules on pipe %d..... continue\n", idx);
+				continue;
+			}
+			idx = 2;
+			IPACMDBG_H("Interface is WLAN Svap or vlan, install rules on Rx1 pipe at idx %d \n", idx);
+		} else {
+			idx = idx + j * 2;
+			IPACMDBG_H("Install rules at idx %d\n", idx);
+		}
 
-	IPACMDBG_H("Deleting UL firewall rules for pipe (%d)\n", rx_prop->rx[idx].src_pipe);
+		IPACMDBG_H("Deleting UL firewall rules for pipe (%d)\n", rx_prop->rx[idx].src_pipe);
 #ifdef FEATURE_VLAN_MPDN
-	if(ul_firewall->num_ul_frag_installed)
-	{
-		IPACMDBG_H("deleting %d UL frag flt rules\n", ul_firewall->num_ul_frag_installed);
-		if (ul_firewall->num_ul_frag_installed > IPA_MAX_NUM_HW_PDNS)
-		{
-			IPACMDBG_H("Invalid number of UL fragment rules\n");
-			return IPACM_FAILURE;
+		if (ul_firewall->num_ul_frag_installed[j]) {
+			IPACMDBG_H("deleting %d UL frag flt rules\n", ul_firewall->num_ul_frag_installed[j]);
+			if (ul_firewall->num_ul_frag_installed[j] > IPA_MAX_NUM_HW_PDNS) {
+				IPACMDBG_H("Invalid number of UL fragment rules\n");
+				return IPACM_FAILURE;
+			}
+			flt_rule_hdls = ul_firewall->ul_frag_handle[j];
+			if (m_filtering.DeleteFilteringHdls(flt_rule_hdls, IPA_IP_v6, ul_firewall->num_ul_frag_installed[j]) == false) {
+				IPACMERR("Error deleting IPv6 UL frag filtering rules.\n");
+				return IPACM_FAILURE;
+			}
+			IPACM_Iface::ipacmcfg->decreaseFltRuleCount(rx_prop->rx[idx].src_pipe, IPA_IP_v6, ul_firewall->num_ul_frag_installed[j]);
+			ul_firewall->num_ul_frag_installed[j] = 0;
+		} else {
+			IPACMDBG_H("no UL frag flt rules were installed\n");
 		}
-		flt_rule_hdls = ul_firewall->ul_frag_handle;
-		if(m_filtering.DeleteFilteringHdls(flt_rule_hdls, IPA_IP_v6, ul_firewall->num_ul_frag_installed) == false)
-		{
-			IPACMERR("Error deleting IPv6 UL frag filtering rules.\n");
-			return IPACM_FAILURE;
-		}
-		IPACM_Iface::ipacmcfg->decreaseFltRuleCount(rx_prop->rx[idx].src_pipe, IPA_IP_v6, ul_firewall->num_ul_frag_installed);
-		ul_firewall->num_ul_frag_installed = 0;
-	}
-	else
-	{
-		IPACMDBG_H("no UL frag flt rules were installed\n");
-	}
 #else
-	if (true == ul_firewall->ul_frag_installed)
-	{
-		flt_rule_hdls = &ul_firewall->ul_frag_handle;
+		if (true == ul_firewall->ul_frag_installed) {
+			flt_rule_hdls = &ul_firewall->ul_frag_handle;
 
-		if (m_filtering.DeleteFilteringHdls(flt_rule_hdls, IPA_IP_v6, 1) == false)
-		{
-			IPACMERR("Error deleting IPv6 UL frag filtering rules.\n");
-			return IPACM_FAILURE;
+			if (m_filtering.DeleteFilteringHdls(flt_rule_hdls, IPA_IP_v6, 1) == false) {
+				IPACMERR("Error deleting IPv6 UL frag filtering rules.\n");
+				return IPACM_FAILURE;
+			}
+			ul_firewall->ul_frag_installed = false;
+			IPACM_Iface::ipacmcfg->decreaseFltRuleCount(rx_prop->rx[idx].src_pipe, IPA_IP_v6, 1);
+			IPACMDBG_H("Frag deleted successfully\n");
 		}
-		ul_firewall->ul_frag_installed = false;
-		IPACM_Iface::ipacmcfg->decreaseFltRuleCount(rx_prop->rx[idx].src_pipe, IPA_IP_v6, 1);
-		IPACMDBG_H("Frag deleted successfully\n");
-	}
 #endif
 
-	if (ul_firewall->num_ul_firewall_installed &&
-		ul_firewall->num_ul_firewall_installed < IPACM_MAX_FIREWALL_ENTRIES)
-	{
-		flt_rule_hdls = ul_firewall->ul_firewall_handle;
-		if (m_filtering.DeleteFilteringHdls(flt_rule_hdls,
-					IPA_IP_v6, ul_firewall->num_ul_firewall_installed) == false)
-		{
-			IPACMERR("Error Deleting UL Filtering rules, aborting...\n");
-			return IPACM_FAILURE;
+		if (ul_firewall->num_ul_firewall_installed[j] &&
+			ul_firewall->num_ul_firewall_installed[j] < IPACM_MAX_FIREWALL_ENTRIES) {
+			flt_rule_hdls = ul_firewall->ul_firewall_handle[j];
+			if (m_filtering.DeleteFilteringHdls(flt_rule_hdls,
+												IPA_IP_v6, ul_firewall->num_ul_firewall_installed[j]) == false) {
+				IPACMERR("Error Deleting UL Filtering rules, aborting...\n");
+				return IPACM_FAILURE;
+			}
+			IPACM_Iface::ipacmcfg->decreaseFltRuleCount(rx_prop->rx[idx].src_pipe,
+														IPA_IP_v6,
+														ul_firewall->num_ul_firewall_installed[j]);
+			IPACMDBG_H("%d num UL rules on pipe (%d) deleted successfully\n",
+					   ul_firewall->num_ul_firewall_installed[j],
+					   rx_prop->rx[idx].src_pipe);
+		} else if (ul_firewall->num_ul_firewall_installed[j] > IPACM_MAX_FIREWALL_ENTRIES) {
+			IPACMDBG_H("The number of ul firewall rules exceed limit.\n");
+		} else {
+			IPACMDBG_H("No UL Firewall filter rule to delete\n");
 		}
-		IPACM_Iface::ipacmcfg->decreaseFltRuleCount(rx_prop->rx[idx].src_pipe,
-			IPA_IP_v6,
-			ul_firewall->num_ul_firewall_installed);
-		IPACMDBG_H("%d num UL rules on pipe (%d) deleted successfully\n",
-			ul_firewall->num_ul_firewall_installed,
-			rx_prop->rx[idx].src_pipe);
-	}
-	else if (ul_firewall->num_ul_firewall_installed > IPACM_MAX_FIREWALL_ENTRIES)
-	{
-		IPACMDBG_H("The number of ul firewall rules exceed limit.\n");
-	}
-	else
-	{
-		IPACMDBG_H("No UL Firewall filter rule to delete\n");
 	}
 	memset(ul_firewall, 0, sizeof (ul_firewall_t));
 	return IPACM_SUCCESS;
@@ -8002,6 +8111,7 @@ int IPACM_Lan::install_wan_firewall_rule_ul(bool enable, int vid, int num_of_ul_
 	int len, res = IPACM_SUCCESS, idx = 0;
 	uint8_t mux_id;
 	ipa_ioc_add_flt_rule *pFilteringTable_v6 = NULL;
+	int j = 0;
 
 	mux_id = IPACM_Iface::ipacmcfg->GetQmapId();
 	if (rx_prop == NULL)
@@ -8010,48 +8120,54 @@ int IPACM_Lan::install_wan_firewall_rule_ul(bool enable, int vid, int num_of_ul_
 		return IPACM_FAILURE;
 	}
 
-	if ((ipa_if_cate == WLAN_IF) && (is_if_svap || is_wlan_if_vlan) && (rx_prop && rx_prop->num_rx_props > 2)) {
-		idx = 2;
-		IPACMDBG_H("Interface is WLAN Svap or vlan, install rules on Rx1 pipe at idx %d \n", idx);
-	}
+	for (j = 0; j < rx_prop->num_rx_props / 2 && j < IPA_MAX_NUM_PROPS; j++)
+	{
+		if ((ipa_if_cate == WLAN_IF) && (is_if_svap || is_wlan_if_vlan) && (rx_prop->num_rx_props > 2)) {
+			if (j < 2) {
+				IPACMDBG_H("Interface is WLAN Svap or w-vlan, dont install rules on pipe %d..... continue\n", idx);
+				continue;
+			}
+			idx = 2;
+			IPACMDBG_H("Interface is WLAN Svap or vlan, install rules on Rx1 pipe at idx %d \n", idx);
+		} else {
+			idx = idx + j * 2;
+			IPACMDBG_H("Install rules at idx %d\n", idx);
+		}
 
 #ifdef FEATURE_VLAN_MPDN
-	if(vid && IPACM_Wan::GetMuxByVid(vid, &mux_id, IPA_IP_v6))
-	{
-		IPACMERR("failed getting mux for vid %d\n", vid);
-		return IPACM_FAILURE;
-	}
-#endif
-
-	/* Not considering is_sw_routing and embm is on or off */
-
-	if (num_of_ul_rules >= 0)
-	{
-		len = sizeof(struct ipa_ioc_add_flt_rule) + num_of_ul_rules * sizeof(struct ipa_flt_rule_add);
-		pFilteringTable_v6 = (struct ipa_ioc_add_flt_rule*)malloc(len);
-
-		IPACMDBG_H("Total number of WAN UL filtering rule for IPv6 is %d : mux_id (%d), vid (%d)\n", num_of_ul_rules,
-			mux_id, vid);
-
-		if (pFilteringTable_v6 == NULL)
-		{
-			IPACMERR("Error Locate ipa_flt_rule_add memory...\n");
+		if (vid && IPACM_Wan::GetMuxByVid(vid, &mux_id, IPA_IP_v6)) {
+			IPACMERR("failed getting mux for vid %d\n", vid);
 			return IPACM_FAILURE;
 		}
-		memset(pFilteringTable_v6, 0, len);
-		pFilteringTable_v6->commit = 1;
-		pFilteringTable_v6->ep = rx_prop->rx[idx].src_pipe;
-		pFilteringTable_v6->global = false;
-		pFilteringTable_v6->ip = IPA_IP_v6;
-		pFilteringTable_v6->num_rules = (uint8_t)num_of_ul_rules;
+#endif
 
-		memcpy(pFilteringTable_v6->rules, IPACM_Wan::firewall_flt_rule_v6_ul, num_of_ul_rules * sizeof(ipa_flt_rule_add));
-	}
-	if (false == m_filtering.AddWanULFilteringRule(pFilteringTable_v6, mux_id, enable))
-	{
-		IPACMERR("Failed to install WAN UL filtering table.\n");
-		res = IPACM_FAILURE;
-		goto fail;
+		/* Not considering is_sw_routing and embm is on or off */
+
+		if (num_of_ul_rules >= 0) {
+			len = sizeof(struct ipa_ioc_add_flt_rule) + num_of_ul_rules * sizeof(struct ipa_flt_rule_add);
+			pFilteringTable_v6 = (struct ipa_ioc_add_flt_rule *)malloc(len);
+
+			IPACMDBG_H("Total number of WAN UL filtering rule for IPv6 is %d : mux_id (%d), vid (%d)\n", num_of_ul_rules,
+					   mux_id, vid);
+
+			if (pFilteringTable_v6 == NULL) {
+				IPACMERR("Error Locate ipa_flt_rule_add memory...\n");
+				return IPACM_FAILURE;
+			}
+			memset(pFilteringTable_v6, 0, len);
+			pFilteringTable_v6->commit = 1;
+			pFilteringTable_v6->ep = rx_prop->rx[idx].src_pipe;
+			pFilteringTable_v6->global = false;
+			pFilteringTable_v6->ip = IPA_IP_v6;
+			pFilteringTable_v6->num_rules = (uint8_t)num_of_ul_rules;
+
+			memcpy(pFilteringTable_v6->rules, IPACM_Wan::firewall_flt_rule_v6_ul, num_of_ul_rules * sizeof(ipa_flt_rule_add));
+		}
+		if (false == m_filtering.AddWanULFilteringRule(pFilteringTable_v6, mux_id, enable)) {
+			IPACMERR("Failed to install WAN UL filtering table.\n");
+			res = IPACM_FAILURE;
+			goto fail;
+		}
 	}
 
 fail:
@@ -8068,6 +8184,7 @@ int IPACM_Lan::config_wan_frag_firewall_rule_ul_ex(ul_firewall_t *ul_firewall, i
 	struct ipa_flt_rule_add flt_rule_entry;
 	int len = 0, index, rule_v6_ul = 0, idx = 0;
 	uint32_t *flt_rule_hdls = NULL;
+	int j = 0;
 
 	if (rx_prop == NULL)
 	{
@@ -8075,90 +8192,93 @@ int IPACM_Lan::config_wan_frag_firewall_rule_ul_ex(ul_firewall_t *ul_firewall, i
 		return IPACM_SUCCESS;
 	}
 
-	if ((ipa_if_cate == WLAN_IF) && (is_if_svap || is_wlan_if_vlan) && (rx_prop && rx_prop->num_rx_props > 2)) {
-		idx = 2;
-		IPACMDBG_H("Interface is WLAN Svap or vlan, install rules on Rx1 pipe at idx %d \n", idx);
-	}
+	for (j = 0; j < rx_prop->num_rx_props / 2 && j < IPA_MAX_NUM_PROPS; j++)
+	{
+		if ((ipa_if_cate == WLAN_IF) && (is_if_svap || is_wlan_if_vlan) && (rx_prop->num_rx_props > 2)) {
+			if (j < 2) {
+				IPACMDBG_H("Interface is WLAN Svap or w-vlan, dont install rules on pipe %d..... continue\n", idx);
+				continue;
+			}
+			idx = 2;
+			IPACMDBG_H("Interface is WLAN Svap or vlan, install rules on Rx1 pipe at idx %d \n", idx);
+		} else {
+			idx = idx + j * 2;
+			IPACMDBG_H("Install rules at idx %d\n", idx);
+		}
 
-	if (ipacmcfg->IsIpv6CTEnabled())
-	{
-		IPACMDBG_H("The fragment rule already installed. Nothing to do\n");
-		return IPACM_SUCCESS;
-	}
+		if (ipacmcfg->IsIpv6CTEnabled()) {
+			IPACMDBG_H("The fragment rule already installed. Nothing to do\n");
+			return IPACM_SUCCESS;
+		}
 #ifdef FEATURE_VLAN_MPDN
-	uint8_t mux_id = 0;
-	if(IPACM_Wan::GetMuxByVid(vid, &mux_id, IPA_IP_v6))
-	{
-		IPACMERR("couldn't get MUX for VID %d, dev %s\n", vid, dev_name);
-		return IPACM_FAILURE;
-	}
+		uint8_t mux_id = 0;
+		if (IPACM_Wan::GetMuxByVid(vid, &mux_id, IPA_IP_v6)) {
+			IPACMERR("couldn't get MUX for VID %d, dev %s\n", vid, dev_name);
+			return IPACM_FAILURE;
+		}
 #endif
 
-	/* Frag rule installation */
-	/* construct ipa_ioc_add_flt_rule with 1 frag rule */
-	ipa_ioc_add_flt_rule *m_pFilteringTable = NULL;
-	len = sizeof(struct ipa_ioc_add_flt_rule) + 1 * sizeof(struct ipa_flt_rule_add);
-	m_pFilteringTable = (struct ipa_ioc_add_flt_rule *)calloc(1, len);
+		/* Frag rule installation */
+		/* construct ipa_ioc_add_flt_rule with 1 frag rule */
+		ipa_ioc_add_flt_rule *m_pFilteringTable = NULL;
+		len = sizeof(struct ipa_ioc_add_flt_rule) + 1 * sizeof(struct ipa_flt_rule_add);
+		m_pFilteringTable = (struct ipa_ioc_add_flt_rule *)calloc(1, len);
 
-	if (!m_pFilteringTable)
-	{
-		IPACMERR("Error Locate ipa_flt_rule_add memory...\n");
-		return IPACM_FAILURE;
-	}
+		if (!m_pFilteringTable) {
+			IPACMERR("Error Locate ipa_flt_rule_add memory...\n");
+			return IPACM_FAILURE;
+		}
 
-	memset(m_pFilteringTable, 0, len);
+		memset(m_pFilteringTable, 0, len);
 
-	m_pFilteringTable->commit = 1;
-	m_pFilteringTable->ep = rx_prop->rx[idx].src_pipe;
-	m_pFilteringTable->global = false;
-	m_pFilteringTable->ip = IPA_IP_v6;
-	m_pFilteringTable->num_rules = (uint8_t)1;
+		m_pFilteringTable->commit = 1;
+		m_pFilteringTable->ep = rx_prop->rx[idx].src_pipe;
+		m_pFilteringTable->global = false;
+		m_pFilteringTable->ip = IPA_IP_v6;
+		m_pFilteringTable->num_rules = (uint8_t)1;
 
-	memset(&flt_rule_entry, 0, sizeof(struct ipa_flt_rule_add));
-	flt_rule_entry.at_rear = false;
-	flt_rule_entry.rule.hashable = false;
-	flt_rule_entry.flt_rule_hdl = -1;
-	flt_rule_entry.status = -1;
-	flt_rule_entry.rule.action = IPA_PASS_TO_EXCEPTION;
-	flt_rule_entry.rule.attrib.attrib_mask |= IPA_FLT_FRAGMENT;
+		memset(&flt_rule_entry, 0, sizeof(struct ipa_flt_rule_add));
+		flt_rule_entry.at_rear = false;
+		flt_rule_entry.rule.hashable = false;
+		flt_rule_entry.flt_rule_hdl = -1;
+		flt_rule_entry.status = -1;
+		flt_rule_entry.rule.action = IPA_PASS_TO_EXCEPTION;
+		flt_rule_entry.rule.attrib.attrib_mask |= IPA_FLT_FRAGMENT;
 #ifdef FEATURE_VLAN_MPDN
-	uint32_t v6_prefix[2];
-	if(IPACM_Wan::GetV6PrefixByVid(vid, v6_prefix))
-	{
-		IPACMERR("couldn't get v6 prefix for vid %d\n", vid);
-		return IPACM_FAILURE;
-	}
-	flt_rule_entry.rule.attrib.attrib_mask |= IPA_FLT_SRC_ADDR;
-	flt_rule_entry.rule.attrib.u.v6.src_addr[0] = v6_prefix[0];
-	flt_rule_entry.rule.attrib.u.v6.src_addr[1] = v6_prefix[1];
-	flt_rule_entry.rule.attrib.u.v6.src_addr[2] = 0x0;
-	flt_rule_entry.rule.attrib.u.v6.src_addr[3] = 0x0;
-	flt_rule_entry.rule.attrib.u.v6.src_addr_mask[0] = 0xFFFFFFFF;
-	flt_rule_entry.rule.attrib.u.v6.src_addr_mask[1] = 0xFFFFFFFF;
-	flt_rule_entry.rule.attrib.u.v6.src_addr_mask[2] = 0x0;
-	flt_rule_entry.rule.attrib.u.v6.src_addr_mask[3] = 0x0;
+		uint32_t v6_prefix[2];
+		if (IPACM_Wan::GetV6PrefixByVid(vid, v6_prefix)) {
+			IPACMERR("couldn't get v6 prefix for vid %d\n", vid);
+			return IPACM_FAILURE;
+		}
+		flt_rule_entry.rule.attrib.attrib_mask |= IPA_FLT_SRC_ADDR;
+		flt_rule_entry.rule.attrib.u.v6.src_addr[0] = v6_prefix[0];
+		flt_rule_entry.rule.attrib.u.v6.src_addr[1] = v6_prefix[1];
+		flt_rule_entry.rule.attrib.u.v6.src_addr[2] = 0x0;
+		flt_rule_entry.rule.attrib.u.v6.src_addr[3] = 0x0;
+		flt_rule_entry.rule.attrib.u.v6.src_addr_mask[0] = 0xFFFFFFFF;
+		flt_rule_entry.rule.attrib.u.v6.src_addr_mask[1] = 0xFFFFFFFF;
+		flt_rule_entry.rule.attrib.u.v6.src_addr_mask[2] = 0x0;
+		flt_rule_entry.rule.attrib.u.v6.src_addr_mask[3] = 0x0;
 #endif
 
-	memcpy(&(m_pFilteringTable->rules[0]), &flt_rule_entry, sizeof(struct ipa_flt_rule_add));
+		memcpy(&(m_pFilteringTable->rules[0]), &flt_rule_entry, sizeof(struct ipa_flt_rule_add));
 
-	if (false == m_filtering.AddFilteringRule(m_pFilteringTable))
-	{
-		IPACMERR("Error Adding RuleTable(0) to Filtering, aborting...\n");
-		free(m_pFilteringTable);
-		return IPACM_FAILURE;
-	}
-	else
-	{
-		IPACM_Iface::ipacmcfg->increaseFltRuleCount(m_pFilteringTable->ep, IPA_IP_v6, 1);
-		IPACMDBG_H("flt rule hdl0=0x%x, status=0x%x\n", m_pFilteringTable->rules[0].flt_rule_hdl, m_pFilteringTable->rules[0].status);
-	}
+		if (false == m_filtering.AddFilteringRule(m_pFilteringTable)) {
+			IPACMERR("Error Adding RuleTable(0) to Filtering, aborting...\n");
+			free(m_pFilteringTable);
+			return IPACM_FAILURE;
+		} else {
+			IPACM_Iface::ipacmcfg->increaseFltRuleCount(m_pFilteringTable->ep, IPA_IP_v6, 1);
+			IPACMDBG_H("flt rule hdl0=0x%x, status=0x%x\n", m_pFilteringTable->rules[0].flt_rule_hdl, m_pFilteringTable->rules[0].status);
+		}
 #ifdef FEATURE_VLAN_MPDN
-	ul_firewall->ul_frag_handle[ul_firewall->num_ul_frag_installed] = m_pFilteringTable->rules[0].flt_rule_hdl;
-	ul_firewall->num_ul_frag_installed++;
+		ul_firewall->ul_frag_handle[j][ul_firewall->num_ul_frag_installed[j]] = m_pFilteringTable->rules[0].flt_rule_hdl;
+		ul_firewall->num_ul_frag_installed[j]++;
 #else
-	ul_firewall->ul_frag_handle = m_pFilteringTable->rules[0].flt_rule_hdl;
-	ul_firewall->ul_frag_installed = true;
+		ul_firewall->ul_frag_handle[j] = m_pFilteringTable->rules[0].flt_rule_hdl;
+		ul_firewall->ul_frag_installed[j] = true;
 #endif
+	}
 	return IPACM_SUCCESS;
 }
 
@@ -8225,396 +8345,369 @@ int IPACM_Lan::config_dft_firewall_rules_ul_ex(IPACM_firewall_conf_t* firewall_c
 		return IPACM_SUCCESS;
 	}
 
-	if ((ipa_if_cate == WLAN_IF) && (is_if_svap || is_wlan_if_vlan) && (rx_prop && rx_prop->num_rx_props > 2)) {
-		idx = 2;
-		IPACMDBG_H("Interface is WLAN Svap or vlan, install rules on Rx1 pipe at idx %d \n", idx);
-	}
+	for (j = 0; j < rx_prop->num_rx_props / 2 && j < IPA_MAX_NUM_PROPS; j++) {
 
-	/* 1. Delete: Already expected to be taken care */
-	/* 2: ext_prop will have a Q6 UL rules*/
-	ext_prop = IPACM_Iface::ipacmcfg->GetExtProp(IPA_IP_v6);
+		if ((ipa_if_cate == WLAN_IF) && (is_if_svap || is_wlan_if_vlan) && (rx_prop->num_rx_props > 2)) {
+			if (j < 2) {
+				IPACMDBG_H("Interface is WLAN Svap or w-vlan, dont install rules on pipe %d..... continue\n", idx);
+				continue;
+			}
+			idx = 2;
+			IPACMDBG_H("Interface is WLAN Svap or vlan, install rules on Rx1 pipe at idx %d \n", idx);
+		} else {
+			idx = idx + j * 2;
+			IPACMDBG_H("Install rules at idx %d\n", idx);
+		}
 
-	if(ext_prop == NULL || ext_prop->num_ext_props <= 0)
-	{
-		IPACMDBG_H("No extended property.\n");
-		return IPACM_SUCCESS;
-	}
+		/* 1. Delete: Already expected to be taken care */
+		/* 2: ext_prop will have a Q6 UL rules*/
+		ext_prop = IPACM_Iface::ipacmcfg->GetExtProp(IPA_IP_v6);
 
-	fd = open(IPA_DEVICE_NAME, O_RDWR);
-	if (0 == fd)
-	{
-		IPACMERR("Failed opening %s.\n", IPA_DEVICE_NAME);
-		return IPACM_FAILURE;
-	}
+		if (ext_prop == NULL || ext_prop->num_ext_props <= 0) {
+			IPACMDBG_H("No extended property.\n");
+			return IPACM_SUCCESS;
+		}
 
-	if (ext_prop->num_ext_props > MAX_WAN_UL_FILTER_RULES)
-	{
-		IPACMERR("number of modem UL rules > MAX_WAN_UL_FILTER_RULES, aborting...\n");
-		close(fd);
-		return IPACM_FAILURE;
-	}
+		fd = open(IPA_DEVICE_NAME, O_RDWR);
+		if (0 == fd) {
+			IPACMERR("Failed opening %s.\n", IPA_DEVICE_NAME);
+			return IPACM_FAILURE;
+		}
 
-	/* 3: Prepare rules with replicate effort*/
-	/*
-	 * Calc total number of rules
-	 * Eg:
-	 * N --> Q6 # number of UL rules
-	 * M --> Replicate # rule (M <= N)
-	 * X --> v6 UL WL rule
-	 * Total = ((M * X) + (N - M))
-	 *
-	 */
-	/* Q6 # of v6 UL rules */
-	q6_v6_ul_rules = ext_prop->num_ext_props;
-	IPACMDBG_H("q6_v6_ul_rules %d\n", q6_v6_ul_rules);
+		if (ext_prop->num_ext_props > MAX_WAN_UL_FILTER_RULES) {
+			IPACMERR("number of modem UL rules > MAX_WAN_UL_FILTER_RULES, aborting...\n");
+			close(fd);
+			return IPACM_FAILURE;
+		}
 
-	/* Get replicate count */
-	for (i = 0; i < q6_v6_ul_rules; i++)
-		if (ext_prop->prop[i].replicate_needed == true)
-			replicate_rules++;
+		/* 3: Prepare rules with replicate effort*/
+		/*
+		 * Calc total number of rules
+		 * Eg:
+		 * N --> Q6 # number of UL rules
+		 * M --> Replicate # rule (M <= N)
+		 * X --> v6 UL WL rule
+		 * Total = ((M * X) + (N - M))
+		 *
+		 */
+		/* Q6 # of v6 UL rules */
+		q6_v6_ul_rules = ext_prop->num_ext_props;
+		IPACMDBG_H("q6_v6_ul_rules %d\n", q6_v6_ul_rules);
 
-	IPACMDBG_H("replicate_rules %d\n", replicate_rules);
+		/* Get replicate count */
+		for (i = 0; i < q6_v6_ul_rules; i++) if (ext_prop->prop[i].replicate_needed == true) replicate_rules++;
 
-	/* Calc v6 UL WL rule*/
-	for (i = 0; i < firewall_conf->num_extd_firewall_entries; i++)
-	{
-		if (firewall_conf->extd_firewall_entries[i].ip_vsn == 6 &&
+		IPACMDBG_H("replicate_rules %d\n", replicate_rules);
+
+		/* Calc v6 UL WL rule*/
+		for (i = 0; i < firewall_conf->num_extd_firewall_entries; i++) {
+			if (firewall_conf->extd_firewall_entries[i].ip_vsn == 6 &&
 				firewall_conf->extd_firewall_entries[i].firewall_direction
 				== IPACM_MSGR_UL_FIREWALL
 #ifdef FEATURE_IPV6_NAT
-	&& !firewall_conf->extd_firewall_entries[i].IPV6NatEnabledfw
+				&& !firewall_conf->extd_firewall_entries[i].IPV6NatEnabledfw
 #endif
-		)
-		{
-			v6_ul_wl_rules++;
-			if (firewall_conf->extd_firewall_entries[i].attrib.u.v6.next_hdr ==
-				IPACM_FIREWALL_IPPROTO_TCP_UDP)
-			{
-				v6_ul_wl_rules++; //rule should be installed for TCP and UDP both
+			   ) {
+				v6_ul_wl_rules++;
+				if (firewall_conf->extd_firewall_entries[i].attrib.u.v6.next_hdr ==
+						IPACM_FIREWALL_IPPROTO_TCP_UDP) {
+					v6_ul_wl_rules++; //rule should be installed for TCP and UDP both
+				}
 			}
 		}
-	}
 
-	IPACMDBG_H("v6_ul_wl_rules %d\n", v6_ul_wl_rules);
+		IPACMDBG_H("v6_ul_wl_rules %d\n", v6_ul_wl_rules);
 
-	if ((v6_ul_wl_rules == 0) || (replicate_rules == 0))
-	{
-		/*
-		 * There is no rule to WL
-		 * Dont install any UL rules
-		 * Take all in exception path
-		 * Will be dropped in linux kernel
-		 */
-		modem_ul_v6_set = true;
-		ret = IPACM_SUCCESS;
-		goto close_fd;
-	}
+		if ((v6_ul_wl_rules == 0) || (replicate_rules == 0)) {
+			/*
+			 * There is no rule to WL
+			 * Dont install any UL rules
+			 * Take all in exception path
+			 * Will be dropped in linux kernel
+			 */
+			modem_ul_v6_set[j] = true;
+			ret = IPACM_SUCCESS;
+			goto close_fd;
+		}
 
-	total_rules = ((replicate_rules * v6_ul_wl_rules) +
-			(q6_v6_ul_rules - replicate_rules));
-	IPACMDBG_H("total_rules %d\n", total_rules);
+		total_rules = ((replicate_rules * v6_ul_wl_rules) +
+					   (q6_v6_ul_rules - replicate_rules));
+		IPACMDBG_H("total_rules %d\n", total_rules);
 
-	/* ***** */
+		/* ***** */
 
-	memset(&flt_index, 0, sizeof(flt_index));
-	flt_index.source_pipe_index = ioctl(fd, IPA_IOC_QUERY_EP_MAPPING, rx_prop->rx[idx].src_pipe);
+		memset(&flt_index, 0, sizeof(flt_index));
+		flt_index.source_pipe_index = ioctl(fd, IPA_IOC_QUERY_EP_MAPPING, rx_prop->rx[idx].src_pipe);
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
-	if (tx_prop && IPACM_Iface::ipacmcfg->ipacm_lan_stats_enable)
-	{
-		flt_index.dst_pipe_id_valid = 1;
-		flt_index.dst_pipe_id_len = tx_prop->num_tx_props;
-		for (i = 0; i < tx_prop->num_tx_props && i < QMI_IPA_MAX_CLIENT_DST_PIPES; i++)
-		{
-			flt_index.dst_pipe_id[i] = ioctl(fd, IPA_IOC_QUERY_EP_MAPPING, tx_prop->tx[i].dst_pipe);
+		if (tx_prop && IPACM_Iface::ipacmcfg->ipacm_lan_stats_enable) {
+			flt_index.dst_pipe_id_valid = 1;
+			flt_index.dst_pipe_id_len = tx_prop->num_tx_props;
+			for (i = 0; i < tx_prop->num_tx_props && i < QMI_IPA_MAX_CLIENT_DST_PIPES; i++) {
+				flt_index.dst_pipe_id[i] = ioctl(fd, IPA_IOC_QUERY_EP_MAPPING, tx_prop->tx[i].dst_pipe);
+			}
 		}
-	}
 #endif
-	flt_index.install_status = IPA_QMI_RESULT_SUCCESS_V01;
-	flt_index.rule_id_ex_valid = 1;
-	flt_index.rule_id_ex_len = total_rules - 1;
+		flt_index.install_status = IPA_QMI_RESULT_SUCCESS_V01;
+		flt_index.rule_id_ex_valid = 1;
+		flt_index.rule_id_ex_len = total_rules - 1;
 
-	flt_index.embedded_pipe_index_valid = 1;
-	flt_index.embedded_pipe_index = ioctl(fd, IPA_IOC_QUERY_EP_MAPPING, IPA_CLIENT_APPS_LAN_WAN_PROD);
-	flt_index.retain_header_valid = 1;
-	flt_index.retain_header = 0;
-	flt_index.embedded_call_mux_id_valid = 1;
-	flt_index.embedded_call_mux_id = IPACM_Iface::ipacmcfg->GetQmapId();
+		flt_index.embedded_pipe_index_valid = 1;
+		flt_index.embedded_pipe_index = ioctl(fd, IPA_IOC_QUERY_EP_MAPPING, IPA_CLIENT_APPS_LAN_WAN_PROD);
+		flt_index.retain_header_valid = 1;
+		flt_index.retain_header = 0;
+		flt_index.embedded_call_mux_id_valid = 1;
+		flt_index.embedded_call_mux_id = IPACM_Iface::ipacmcfg->GetQmapId();
 
-	len = sizeof(struct ipa_ioc_add_flt_rule) + total_rules * sizeof(struct ipa_flt_rule_add);
-	pFilteringTable = (struct ipa_ioc_add_flt_rule*)malloc(len);
-	if (pFilteringTable == NULL)
-	{
-		IPACMERR("Error Locate ipa_flt_rule_add memory...\n");
-		close(fd);
-		return IPACM_FAILURE;
-	}
-	memset(pFilteringTable, 0, len);
-
-	pFilteringTable->commit = 1;
-	pFilteringTable->ep = rx_prop->rx[idx].src_pipe;
-	pFilteringTable->global = false;
-	pFilteringTable->ip = IPA_IP_v6;
-	pFilteringTable->num_rules = total_rules;
-
-	memset(&flt_rule_entry, 0, sizeof(struct ipa_flt_rule_add));
-	flt_rule_entry.at_rear = true;
-	flt_rule_entry.flt_rule_hdl = -1;
-	flt_rule_entry.status = -1;
-	flt_rule_entry.rule.retain_hdr = 0;
-	flt_rule_entry.rule.to_uc = 0;
-	flt_rule_entry.rule.eq_attrib_type = 1;
-
-	index = IPACM_Iface::ipacmcfg->getFltRuleCount(rx_prop->rx[idx].src_pipe, IPA_IP_v6);
-
-	/* Traverse all q6_v6_ul_rules */
-	for (i = 0; i < q6_v6_ul_rules; i++)
-	{
-		memcpy(&flt_rule_entry.rule.eq_attrib,
-				&ext_prop->prop[i].eq_attrib,
-				sizeof(ext_prop->prop[i].eq_attrib));
-		flt_rule_entry.rule.rt_tbl_idx = ext_prop->prop[i].rt_tbl_idx;
-		flt_rule_entry.rule.hashable = ext_prop->prop[i].is_rule_hashable;
-		flt_rule_entry.rule.rule_id = ext_prop->prop[i].rule_id;
-
-		/* Skip Meatadata rules for VLAN Pipe. */
-		if(!idx && rx_prop->rx[idx].attrib.attrib_mask & IPA_FLT_META_DATA) //turn on meta-data equation
-		{
-			flt_rule_entry.rule.eq_attrib.rule_eq_bitmap |= (1<<9);
-			flt_rule_entry.rule.eq_attrib.metadata_meq32_present = 1;
-			flt_rule_entry.rule.eq_attrib.metadata_meq32.offset = 0;
-			flt_rule_entry.rule.eq_attrib.metadata_meq32.value |= rx_prop->rx[idx].attrib.meta_data;
-			flt_rule_entry.rule.eq_attrib.metadata_meq32.mask |= rx_prop->rx[idx].attrib.meta_data_mask;
+		len = sizeof(struct ipa_ioc_add_flt_rule) + total_rules * sizeof(struct ipa_flt_rule_add);
+		pFilteringTable = (struct ipa_ioc_add_flt_rule *)malloc(len);
+		if (pFilteringTable == NULL) {
+			IPACMERR("Error Locate ipa_flt_rule_add memory...\n");
+			close(fd);
+			return IPACM_FAILURE;
 		}
-		/* Is this rule needed replication w.r.t v6 UL WL rule ?*/
-		if (ext_prop->prop[i].replicate_needed == true)
-		{
-			/* Replicate logic */
-			for (j = 0; j < firewall_conf->num_extd_firewall_entries; j++)
-			{
-				if (firewall_conf->extd_firewall_entries[j].ip_vsn == 6 &&
+		memset(pFilteringTable, 0, len);
+
+		pFilteringTable->commit = 1;
+		pFilteringTable->ep = rx_prop->rx[idx].src_pipe;
+		pFilteringTable->global = false;
+		pFilteringTable->ip = IPA_IP_v6;
+		pFilteringTable->num_rules = total_rules;
+
+		memset(&flt_rule_entry, 0, sizeof(struct ipa_flt_rule_add));
+		flt_rule_entry.at_rear = true;
+		flt_rule_entry.flt_rule_hdl = -1;
+		flt_rule_entry.status = -1;
+		flt_rule_entry.rule.retain_hdr = 0;
+		flt_rule_entry.rule.to_uc = 0;
+		flt_rule_entry.rule.eq_attrib_type = 1;
+
+		index = IPACM_Iface::ipacmcfg->getFltRuleCount(rx_prop->rx[idx].src_pipe, IPA_IP_v6);
+
+		/* Traverse all q6_v6_ul_rules */
+		for (i = 0; i < q6_v6_ul_rules; i++) {
+			memcpy(&flt_rule_entry.rule.eq_attrib,
+				   &ext_prop->prop[i].eq_attrib,
+				   sizeof(ext_prop->prop[i].eq_attrib));
+			flt_rule_entry.rule.rt_tbl_idx = ext_prop->prop[i].rt_tbl_idx;
+			flt_rule_entry.rule.hashable = ext_prop->prop[i].is_rule_hashable;
+			flt_rule_entry.rule.rule_id = ext_prop->prop[i].rule_id;
+
+			/* Skip Meatadata rules for VLAN Pipe. */
+			if (!idx && rx_prop->rx[idx].attrib.attrib_mask & IPA_FLT_META_DATA) { //turn on meta-data equation
+				flt_rule_entry.rule.eq_attrib.rule_eq_bitmap |= (1 << 9);
+				flt_rule_entry.rule.eq_attrib.metadata_meq32_present = 1;
+				flt_rule_entry.rule.eq_attrib.metadata_meq32.offset = 0;
+				flt_rule_entry.rule.eq_attrib.metadata_meq32.value |= rx_prop->rx[idx].attrib.meta_data;
+				flt_rule_entry.rule.eq_attrib.metadata_meq32.mask |= rx_prop->rx[idx].attrib.meta_data_mask;
+			}
+			/* Is this rule needed replication w.r.t v6 UL WL rule ?*/
+			if (ext_prop->prop[i].replicate_needed == true) {
+				/* Replicate logic */
+				for (j = 0; j < firewall_conf->num_extd_firewall_entries; j++) {
+					if (firewall_conf->extd_firewall_entries[j].ip_vsn == 6 &&
 						firewall_conf->extd_firewall_entries[j].firewall_direction
-						== IPACM_MSGR_UL_FIREWALL)
-				{
+						== IPACM_MSGR_UL_FIREWALL) {
 #ifdef FEATURE_IPV6_NAT
-					// in ipv6_nat_enable=false case, ignore the firewall rules if it's specific to v6nat
-					if(firewall_conf->extd_firewall_entries[j].IPV6NatEnabledfw)
-						continue;
+						// in ipv6_nat_enable=false case, ignore the firewall rules if it's specific to v6nat
+						if (firewall_conf->extd_firewall_entries[j].IPV6NatEnabledfw) continue;
 #endif
-					memset(&flt_rule_entry_fw, 0, sizeof(struct ipa_flt_rule_add));
-					flt_rule_entry_fw.at_rear = 1;
-					flt_rule_entry_fw.flt_rule_hdl = -1;
-					flt_rule_entry_fw.status = -1;
-					flt_rule_entry_fw.rule.hashable = true;
-					flt_rule_entry_fw.rule.eq_attrib_type = 1;
+						memset(&flt_rule_entry_fw, 0, sizeof(struct ipa_flt_rule_add));
+						flt_rule_entry_fw.at_rear = 1;
+						flt_rule_entry_fw.flt_rule_hdl = -1;
+						flt_rule_entry_fw.status = -1;
+						flt_rule_entry_fw.rule.hashable = true;
+						flt_rule_entry_fw.rule.eq_attrib_type = 1;
 
-					flt_rule_entry.rule.rt_tbl_hdl =
-						IPACM_Iface::ipacmcfg->rt_tbl_wan_v6.hdl;
+						flt_rule_entry.rule.rt_tbl_hdl =
+							IPACM_Iface::ipacmcfg->rt_tbl_wan_v6.hdl;
 
-					memcpy(&flt_rule_entry_fw.rule.attrib,
-							&firewall_conf->extd_firewall_entries[j].attrib,
-							sizeof(struct ipa_rule_attrib));
+						memcpy(&flt_rule_entry_fw.rule.attrib,
+							   &firewall_conf->extd_firewall_entries[j].attrib,
+							   sizeof(struct ipa_rule_attrib));
 
-					flt_rule_entry_fw.rule.attrib.attrib_mask |= rx_prop->rx[idx].attrib.attrib_mask;
-					flt_rule_entry_fw.rule.attrib.attrib_mask &= ~IPA_FLT_META_DATA;
-					flt_rule_entry_fw.rule.attrib.meta_data_mask = rx_prop->rx[idx].attrib.meta_data_mask;
-					flt_rule_entry_fw.rule.attrib.meta_data = rx_prop->rx[idx].attrib.meta_data;
+						flt_rule_entry_fw.rule.attrib.attrib_mask |= rx_prop->rx[idx].attrib.attrib_mask;
+						flt_rule_entry_fw.rule.attrib.attrib_mask &= ~IPA_FLT_META_DATA;
+						flt_rule_entry_fw.rule.attrib.meta_data_mask = rx_prop->rx[idx].attrib.meta_data_mask;
+						flt_rule_entry_fw.rule.attrib.meta_data = rx_prop->rx[idx].attrib.meta_data;
 
-					memcpy(&temp_rule.rule.attrib,
-							&flt_rule_entry_fw.rule.attrib,
-							sizeof(struct ipa_rule_attrib));
+						memcpy(&temp_rule.rule.attrib,
+							   &flt_rule_entry_fw.rule.attrib,
+							   sizeof(struct ipa_rule_attrib));
 
-					flt_rule_entry_fw.rule.attrib.u.v6.src_addr[3] =
-						temp_rule.rule.attrib.u.v6.src_addr[0];
-					flt_rule_entry_fw.rule.attrib.u.v6.src_addr[2] =
-						temp_rule.rule.attrib.u.v6.src_addr[1];
-					flt_rule_entry_fw.rule.attrib.u.v6.src_addr[1] =
-						temp_rule.rule.attrib.u.v6.src_addr[2];
-					flt_rule_entry_fw.rule.attrib.u.v6.src_addr[0] =
-						temp_rule.rule.attrib.u.v6.src_addr[3];
+						flt_rule_entry_fw.rule.attrib.u.v6.src_addr[3] =
+							temp_rule.rule.attrib.u.v6.src_addr[0];
+						flt_rule_entry_fw.rule.attrib.u.v6.src_addr[2] =
+							temp_rule.rule.attrib.u.v6.src_addr[1];
+						flt_rule_entry_fw.rule.attrib.u.v6.src_addr[1] =
+							temp_rule.rule.attrib.u.v6.src_addr[2];
+						flt_rule_entry_fw.rule.attrib.u.v6.src_addr[0] =
+							temp_rule.rule.attrib.u.v6.src_addr[3];
 
-					flt_rule_entry_fw.rule.attrib.u.v6.src_addr_mask[3] =
-						temp_rule.rule.attrib.u.v6.src_addr_mask[0];
-					flt_rule_entry_fw.rule.attrib.u.v6.src_addr_mask[2] =
-						temp_rule.rule.attrib.u.v6.src_addr_mask[1];
-					flt_rule_entry_fw.rule.attrib.u.v6.src_addr_mask[1] =
-						temp_rule.rule.attrib.u.v6.src_addr_mask[2];
-					flt_rule_entry_fw.rule.attrib.u.v6.src_addr_mask[0] =
-						temp_rule.rule.attrib.u.v6.src_addr_mask[3];
+						flt_rule_entry_fw.rule.attrib.u.v6.src_addr_mask[3] =
+							temp_rule.rule.attrib.u.v6.src_addr_mask[0];
+						flt_rule_entry_fw.rule.attrib.u.v6.src_addr_mask[2] =
+							temp_rule.rule.attrib.u.v6.src_addr_mask[1];
+						flt_rule_entry_fw.rule.attrib.u.v6.src_addr_mask[1] =
+							temp_rule.rule.attrib.u.v6.src_addr_mask[2];
+						flt_rule_entry_fw.rule.attrib.u.v6.src_addr_mask[0] =
+							temp_rule.rule.attrib.u.v6.src_addr_mask[3];
 
-					flt_rule_entry_fw.rule.attrib.u.v6.dst_addr[3] =
-						temp_rule.rule.attrib.u.v6.dst_addr[0];
-					flt_rule_entry_fw.rule.attrib.u.v6.dst_addr[2] =
-						temp_rule.rule.attrib.u.v6.dst_addr[1];
-					flt_rule_entry_fw.rule.attrib.u.v6.dst_addr[1] =
-						temp_rule.rule.attrib.u.v6.dst_addr[2];
-					flt_rule_entry_fw.rule.attrib.u.v6.dst_addr[0] =
-						temp_rule.rule.attrib.u.v6.dst_addr[3];
+						flt_rule_entry_fw.rule.attrib.u.v6.dst_addr[3] =
+							temp_rule.rule.attrib.u.v6.dst_addr[0];
+						flt_rule_entry_fw.rule.attrib.u.v6.dst_addr[2] =
+							temp_rule.rule.attrib.u.v6.dst_addr[1];
+						flt_rule_entry_fw.rule.attrib.u.v6.dst_addr[1] =
+							temp_rule.rule.attrib.u.v6.dst_addr[2];
+						flt_rule_entry_fw.rule.attrib.u.v6.dst_addr[0] =
+							temp_rule.rule.attrib.u.v6.dst_addr[3];
 
-					flt_rule_entry_fw.rule.attrib.u.v6.dst_addr_mask[3] =
-						temp_rule.rule.attrib.u.v6.dst_addr_mask[0];
-					flt_rule_entry_fw.rule.attrib.u.v6.dst_addr_mask[2] =
-						temp_rule.rule.attrib.u.v6.dst_addr_mask[1];
-					flt_rule_entry_fw.rule.attrib.u.v6.dst_addr_mask[1] =
-						temp_rule.rule.attrib.u.v6.dst_addr_mask[2];
-					flt_rule_entry_fw.rule.attrib.u.v6.dst_addr_mask[0] =
-						temp_rule.rule.attrib.u.v6.dst_addr_mask[3];
+						flt_rule_entry_fw.rule.attrib.u.v6.dst_addr_mask[3] =
+							temp_rule.rule.attrib.u.v6.dst_addr_mask[0];
+						flt_rule_entry_fw.rule.attrib.u.v6.dst_addr_mask[2] =
+							temp_rule.rule.attrib.u.v6.dst_addr_mask[1];
+						flt_rule_entry_fw.rule.attrib.u.v6.dst_addr_mask[1] =
+							temp_rule.rule.attrib.u.v6.dst_addr_mask[2];
+						flt_rule_entry_fw.rule.attrib.u.v6.dst_addr_mask[0] =
+							temp_rule.rule.attrib.u.v6.dst_addr_mask[3];
 
-					/* check if the rule is define as TCP/UDP */
-					if (firewall_conf->extd_firewall_entries[j].attrib.u.v6.next_hdr == IPACM_FIREWALL_IPPROTO_TCP_UDP)
-					{
-						/* insert TCP rule*/
-						flt_rule_entry_fw.rule.attrib.u.v6.next_hdr = IPACM_FIREWALL_IPPROTO_TCP;
+						/* check if the rule is define as TCP/UDP */
+						if (firewall_conf->extd_firewall_entries[j].attrib.u.v6.next_hdr == IPACM_FIREWALL_IPPROTO_TCP_UDP) {
+							/* insert TCP rule*/
+							flt_rule_entry_fw.rule.attrib.u.v6.next_hdr = IPACM_FIREWALL_IPPROTO_TCP;
 
-						/* Actual replication happens here*/
-						if (replicate_flt_rule(&flt_rule_entry_r, &flt_rule_entry, &flt_rule_entry_fw) == false)
-							continue;
-						memcpy(&pFilteringTable->rules[k], &flt_rule_entry_r, sizeof(flt_rule_entry));
-						IPACMDBG_H("Modem UL filtering rule %d has index %d\n", i, index);
-						/* Rule ID of replicate is same as Q6 rule I.D still */
-						flt_index.rule_id_ex[k] = ext_prop->prop[i].rule_id;
-						index++; k++;
+							/* Actual replication happens here*/
+							if (replicate_flt_rule(&flt_rule_entry_r, &flt_rule_entry, &flt_rule_entry_fw) == false) continue;
+							memcpy(&pFilteringTable->rules[k], &flt_rule_entry_r, sizeof(flt_rule_entry));
+							IPACMDBG_H("Modem UL filtering rule %d has index %d\n", i, index);
+							/* Rule ID of replicate is same as Q6 rule I.D still */
+							flt_index.rule_id_ex[k] = ext_prop->prop[i].rule_id;
+							index++; k++;
 
-						/* insert UDP rule*/
-						flt_rule_entry_fw.rule.attrib.u.v6.next_hdr = IPACM_FIREWALL_IPPROTO_UDP;
+							/* insert UDP rule*/
+							flt_rule_entry_fw.rule.attrib.u.v6.next_hdr = IPACM_FIREWALL_IPPROTO_UDP;
 
-						/* Actual replication happens here*/
-						if (replicate_flt_rule(&flt_rule_entry_r, &flt_rule_entry, &flt_rule_entry_fw) == false)
-							continue;
-						memcpy(&pFilteringTable->rules[k], &flt_rule_entry_r, sizeof(flt_rule_entry));
-						IPACMDBG_H("Modem UL filtering rule %d has index %d\n", i, index);
-						/* Rule ID of replicate is same as Q6 rule I.D still */
-						flt_index.rule_id_ex[k] = ext_prop->prop[i].rule_id;
-						index++; k++;
-					}
-					else
-					{
-						/* Actual replication happens here*/
-						if (replicate_flt_rule(&flt_rule_entry_r, &flt_rule_entry, &flt_rule_entry_fw) == false)
-							continue;
-						IPACMDBG_H("Modem UL filtering rule %d has index %d\n", i, index);
-						memcpy(&pFilteringTable->rules[k], &flt_rule_entry_r, sizeof(flt_rule_entry));
-						/* Rule ID of replicate is same as Q6 rule I.D still */
-						flt_index.rule_id_ex[k] = ext_prop->prop[i].rule_id;
-						index++; k++;
-					}
-				} /* if loop -->WL rule is there */
-			} /* for loop */
-		}
-		else
-		{	/* No? just install as it is */
-			flt_rule_entry.rule.action = IPACM_Iface::ipacmcfg->IsIpv6CTEnabled()?
-				IPA_PASS_TO_SRC_NAT : IPA_PASS_TO_ROUTING;
-			memcpy(&pFilteringTable->rules[k], &flt_rule_entry, sizeof(flt_rule_entry));
-			IPACMDBG_H("Modem UL filtering rule %d has index %d\n", i, index);
-			flt_index.rule_id_ex[k] = ext_prop->prop[i].rule_id;
-			index++; k++;
-		}
-	}
-
-	if(false == m_filtering.SendFilteringRuleIndex(&flt_index))
-	{
-		IPACMERR("Error sending filtering rule index, aborting...\n");
-		ret = IPACM_FAILURE;
-		goto alloc_fail;
-	}
-
-#ifdef FEATURE_IPACM_PER_CLIENT_STATS
-	if (IPACM_Iface::ipacmcfg->ipacm_lan_stats_enable == false)
-#endif
-	{
-		if(false == m_filtering.AddFilteringRule(pFilteringTable))
-		{
-			IPACMERR("Error Adding RuleTable to Filtering, aborting...\n");
-			ret = IPACM_FAILURE;
-			goto alloc_fail;
-		}
-		else
-		{
-			for(i = 0; i < pFilteringTable->num_rules; i++)
-			{
-				wan_ul_fl_rule_hdl_v6[num_wan_ul_fl_rule_v6] = pFilteringTable->rules[i].flt_rule_hdl;
-				num_wan_ul_fl_rule_v6++;
+							/* Actual replication happens here*/
+							if (replicate_flt_rule(&flt_rule_entry_r, &flt_rule_entry, &flt_rule_entry_fw) == false) continue;
+							memcpy(&pFilteringTable->rules[k], &flt_rule_entry_r, sizeof(flt_rule_entry));
+							IPACMDBG_H("Modem UL filtering rule %d has index %d\n", i, index);
+							/* Rule ID of replicate is same as Q6 rule I.D still */
+							flt_index.rule_id_ex[k] = ext_prop->prop[i].rule_id;
+							index++; k++;
+						} else {
+							/* Actual replication happens here*/
+							if (replicate_flt_rule(&flt_rule_entry_r, &flt_rule_entry, &flt_rule_entry_fw) == false) continue;
+							IPACMDBG_H("Modem UL filtering rule %d has index %d\n", i, index);
+							memcpy(&pFilteringTable->rules[k], &flt_rule_entry_r, sizeof(flt_rule_entry));
+							/* Rule ID of replicate is same as Q6 rule I.D still */
+							flt_index.rule_id_ex[k] = ext_prop->prop[i].rule_id;
+							index++; k++;
+						}
+					} /* if loop -->WL rule is there */
+				} /* for loop */
+			} else {   /* No? just install as it is */
+				flt_rule_entry.rule.action = IPACM_Iface::ipacmcfg->IsIpv6CTEnabled() ?
+					IPA_PASS_TO_SRC_NAT : IPA_PASS_TO_ROUTING;
+				memcpy(&pFilteringTable->rules[k], &flt_rule_entry, sizeof(flt_rule_entry));
+				IPACMDBG_H("Modem UL filtering rule %d has index %d\n", i, index);
+				flt_index.rule_id_ex[k] = ext_prop->prop[i].rule_id;
+				index++; k++;
 			}
-			IPACM_Iface::ipacmcfg->increaseFltRuleCount(rx_prop->rx[idx].src_pipe, IPA_IP_v6,
-					pFilteringTable->num_rules);
 		}
-	}
+
+		if (false == m_filtering.SendFilteringRuleIndex(&flt_index)) {
+			IPACMERR("Error sending filtering rule index, aborting...\n");
+			ret = IPACM_FAILURE;
+			goto alloc_fail;
+		}
+
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
-	else
-	{
+		if (IPACM_Iface::ipacmcfg->ipacm_lan_stats_enable == false)
+#endif
+		{
+			if (false == m_filtering.AddFilteringRule(pFilteringTable)) {
+				IPACMERR("Error Adding RuleTable to Filtering, aborting...\n");
+				ret = IPACM_FAILURE;
+				goto alloc_fail;
+			} else {
+				for (i = 0; i < pFilteringTable->num_rules; i++) {
+					wan_ul_fl_rule_hdl_v6[j][num_wan_ul_fl_rule_v6[j]] = pFilteringTable->rules[i].flt_rule_hdl;
+					num_wan_ul_fl_rule_v6[j]++;
+				}
+				IPACM_Iface::ipacmcfg->increaseFltRuleCount(rx_prop->rx[idx].src_pipe, IPA_IP_v6,
+															pFilteringTable->num_rules);
+			}
+		}
+#ifdef FEATURE_IPACM_PER_CLIENT_STATS
+else {
 #if defined(FEATURE_IPACM_PER_CLIENT_STATS) && defined(IPA_HW_FNR_STATS)
-		/* Install v6 ul firewall rules per client*/
-		/************************/
+			/* Install v6 ul firewall rules per client*/
+			/************************/
 #if 0
-		/* Catch-all rule*/
-		len = sizeof(struct ipa_ioc_add_flt_rule_v2);
+			/* Catch-all rule*/
+			len = sizeof(struct ipa_ioc_add_flt_rule_v2);
 
-		pFilteringTable_v2 = (struct ipa_ioc_add_flt_rule_v2*)malloc(len);
-		if (pFilteringTable_v2 == NULL)
-		{
-			IPACMERR("Error ipa_ioc_add_flt_rule_v2 memory...\n");
-			ret = IPACM_FAILURE;
-			goto alloc_fail;
-		}
-		memset(pFilteringTable_v2, 0, len);
+			pFilteringTable_v2 = (struct ipa_ioc_add_flt_rule_v2*)malloc(len);
+			if (pFilteringTable_v2 == NULL){
+				IPACMERR("Error ipa_ioc_add_flt_rule_v2 memory...\n");
+				ret = IPACM_FAILURE;
+				goto alloc_fail;
+			}
+			memset(pFilteringTable_v2, 0, len);
 
-		pFilteringTable_v2->rules = (uintptr_t)calloc(1, sizeof(struct ipa_flt_rule_add_v2));
-		if (!pFilteringTable->rules) {
-			IPACMERR("Failed to allocate memory for filtering rules\n");
-			ret = IPACM_FAILURE;
-			free(pFilteringTable_v2);
-			goto alloc_fail; //Todo: Free pFilteringTable_v2 memory
-		}
+			pFilteringTable_v2->rules = (uintptr_t)calloc(1, sizeof(struct ipa_flt_rule_add_v2));
+			if (!pFilteringTable->rules) {
+				IPACMERR("Failed to allocate memory for filtering rules\n");
+				ret = IPACM_FAILURE;
+				free(pFilteringTable_v2);
+				goto alloc_fail; //Todo: Free pFilteringTable_v2 memory
+			}
 
-		pFilteringTable_v2->commit = 1;
-		pFilteringTable_v2->ep = rx_prop->rx[0].src_pipe;
-		pFilteringTable_v2->global = false;
-		pFilteringTable_v2->ip = IPA_IP_v6;
-		pFilteringTable_v2->num_rules = 1;
-		pFilteringTable_v2->flt_rule_size = sizeof(struct ipa_flt_rule_add_v2);
+			pFilteringTable_v2->commit = 1;
+			pFilteringTable_v2->ep = rx_prop->rx[0].src_pipe;
+			pFilteringTable_v2->global = false;
+			pFilteringTable_v2->ip = IPA_IP_v6;
+			pFilteringTable_v2->num_rules = 1;
+			pFilteringTable_v2->flt_rule_size = sizeof(struct ipa_flt_rule_add_v2);
 
-		memset(&flt_rule_entry_v2, 0, sizeof(struct ipa_flt_rule_add_v2)); // Zero All Fields
-		flt_rule_entry_v2.at_rear = true;
-		flt_rule_entry_v2.flt_rule_hdl = -1;
-		flt_rule_entry_v2.status = -1;
-		flt_rule_entry_v2.rule.retain_hdr = 1;
+			memset(&flt_rule_entry_v2, 0, sizeof(struct ipa_flt_rule_add_v2)); // Zero All Fields
+			flt_rule_entry_v2.at_rear = true;
+			flt_rule_entry_v2.flt_rule_hdl = -1;
+			flt_rule_entry_v2.status = -1;
+			flt_rule_entry_v2.rule.retain_hdr = 1;
 
-		flt_rule_entry_v2.rule.action = IPA_PASS_TO_EXCEPTION;
-		memcpy((void *)pFilteringTable_v2->rules, &flt_rule_entry_v2, sizeof(flt_rule_entry_v2));
+			flt_rule_entry_v2.rule.action = IPA_PASS_TO_EXCEPTION;
+			memcpy((void *)pFilteringTable_v2->rules, &flt_rule_entry_v2, sizeof(flt_rule_entry_v2));
 
-		if(false == m_filtering.AddFilteringRule_v2(pFilteringTable_v2))
-		{
-			IPACMERR("Error Adding RuleTable to Filtering, aborting...\n");
-			free((void *)pFilteringTable_v2->rules);
-			free(pFilteringTable_v2);
-			ret = IPACM_FAILURE;
-			goto alloc_fail;
-		}
-		else
-		{
+			if(false == m_filtering.AddFilteringRule_v2(pFilteringTable_v2)){
+				IPACMERR("Error Adding RuleTable to Filtering, aborting...\n");
+				free((void *)pFilteringTable_v2->rules);
+				free(pFilteringTable_v2);
+				ret = IPACM_FAILURE;
+				goto alloc_fail;
+			} else {
 				wan_ul_fl_rule_hdl_v6[num_wan_ul_fl_rule_v6] =
-					((struct ipa_flt_rule_add_v2 *)pFilteringTable_v2->rules)[i].flt_rule_hdl;
+				((struct ipa_flt_rule_add_v2 *)pFilteringTable_v2->rules)[i].flt_rule_hdl;
 				num_wan_ul_fl_rule_v6++;
 				IPACM_Iface::ipacmcfg->increaseFltRuleCount(rx_prop->rx[0].src_pipe, IPA_IP_v6, 1);
-		}
+			}
 #endif
-		/*All rules installation */
-		num_wan_ul_fl_rule_v6 = pFilteringTable->num_rules;
-		for (eth_idx = 0; eth_idx < num_eth_client; eth_idx++)
-		{
-			install_uplink_filter_rule_per_client_v2(ext_prop, IPA_IP_v6, IPACM_Wan::getXlat_Mux_Id(),
-				get_client_memptr(eth_client, eth_idx)->mac,
-				get_client_memptr(eth_client, eth_idx)->ul_cnt_idx,
-				pFilteringTable, true);
-		}
-	/************************/
+			/*All rules installation */
+			num_wan_ul_fl_rule_v6[j] = pFilteringTable->num_rules;
+			for (eth_idx = 0; eth_idx < num_eth_client; eth_idx++) {
+				install_uplink_filter_rule_per_client_v2(ext_prop, IPA_IP_v6, IPACM_Wan::getXlat_Mux_Id(),
+														 get_client_memptr(eth_client, eth_idx)->mac,
+														 get_client_memptr(eth_client, eth_idx)->ul_cnt_idx,
+														 pFilteringTable, true);
+			}
+			/************************/
 #else
-		num_wan_ul_fl_rule_v6 = pFilteringTable->num_rules;
+			num_wan_ul_fl_rule_v6[j] = pFilteringTable->num_rules;
 #endif
-	}
+		}
 #endif
 
-	modem_ul_v6_set = true;
+		modem_ul_v6_set[j] = true;
+	}
 
 alloc_fail:
 	free(pFilteringTable);
@@ -8641,146 +8734,139 @@ int IPACM_Lan::config_dft_firewall_rules_ul_ex(IPACM_firewall_conf_t* firewall_c
 		return IPACM_SUCCESS;
 	}
 
-	if ((ipa_if_cate == WLAN_IF) && (is_if_svap || is_wlan_if_vlan) && (rx_prop && rx_prop->num_rx_props > 2)) {
-		idx = 2;
-		IPACMDBG_H("Interface is WLAN Svap or vlan, install rules on Rx1 pipe at idx %d \n", idx);
-	}
+	for (j = 0; j < rx_prop->num_rx_props / 2 && j < IPA_MAX_NUM_PROPS; j++) {
 
-	if(IPACM_Wan::get_pdn_num_fw_rules_by_vid(vid, &orig_num_q6_rules))
-	{
-		IPACMERR("failed getting num of Q6 rules for VID %d\n", vid);
-		return IPACM_FAILURE;
-	}
-
-	for (i = 0; i < firewall_conf->num_extd_firewall_entries; i++)
-	{
-		if (firewall_conf->extd_firewall_entries[i].ip_vsn == 6 &&
-			firewall_conf->extd_firewall_entries[i].firewall_direction
-			== IPACM_MSGR_UL_FIREWALL)
-		{
-#ifdef FEATURE_IPV6_NAT
-			// in ipv6_nat_enable=false case, ignore the firewall rules if it's specific to v6nat
-			if(firewall_conf->extd_firewall_entries[i].IPV6NatEnabledfw)
+		if ((ipa_if_cate == WLAN_IF) && (is_if_svap || is_wlan_if_vlan) && (rx_prop->num_rx_props > 2)) {
+			if (j < 2) {
+				IPACMDBG_H("Interface is WLAN Svap or w-vlan, dont install rules on pipe %d..... continue\n", idx);
 				continue;
-#endif
-			memset(&flt_rule_entry, 0, sizeof(struct ipa_flt_rule_add));
-			flt_rule_entry.at_rear = true;
-			flt_rule_entry.flt_rule_hdl = -1;
-			flt_rule_entry.status = -1;
-			flt_rule_entry.rule.retain_hdr = 1;
-			flt_rule_entry.rule.to_uc = 0;
-			flt_rule_entry.rule.eq_attrib_type = 1;
-			flt_rule_entry.rule.action = IPA_PASS_TO_ROUTING;
-
-			flt_rule_entry.rule.hashable = true;
-
-			memset(&rt_tbl_idx, 0, sizeof(rt_tbl_idx));
-			rt_tbl_idx.ip = IPA_IP_v6;
-			/* matched rules for v6 go PASS_TO_ROUTE */
-			if(firewall_conf->rule_action_accept == true)
-			{
-				strlcpy(rt_tbl_idx.name, IPACM_Iface::ipacmcfg->rt_tbl_wan_v6.name, IPA_RESOURCE_NAME_MAX);
 			}
-			else
-			{
-				strlcpy(rt_tbl_idx.name, IPACM_Iface::ipacmcfg->rt_tbl_wan_dl.name, IPA_RESOURCE_NAME_MAX);
-			}
-			rt_tbl_idx.name[IPA_RESOURCE_NAME_MAX-1] = '\0';
-			if(0 != ioctl(IPACM_Wan::m_fd_ipa_ul, IPA_IOC_QUERY_RT_TBL_INDEX, &rt_tbl_idx))
-			{
-				IPACMERR("Failed to get routing table index from name\n");
-				return IPACM_FAILURE;
-			}
-			flt_rule_entry.rule.rt_tbl_idx = rt_tbl_idx.idx;
-			IPACMDBG_H("Routing table %s has index %d\n", rt_tbl_idx.name, rt_tbl_idx.idx);
-
-
-			memcpy(&flt_rule_entry.rule.attrib,
-			&firewall_conf->extd_firewall_entries[i].attrib,
-			sizeof(struct ipa_rule_attrib));
-			flt_rule_entry.rule.attrib.attrib_mask |= rx_prop->rx[idx].attrib.attrib_mask;
-			flt_rule_entry.rule.attrib.attrib_mask &= ~IPA_FLT_META_DATA;
-			flt_rule_entry.rule.attrib.meta_data_mask = rx_prop->rx[idx].attrib.meta_data_mask;
-			flt_rule_entry.rule.attrib.meta_data = rx_prop->rx[idx].attrib.meta_data;
-			change_to_network_order(IPA_IP_v6, &flt_rule_entry.rule.attrib);
-
-			/* check if the rule is define as TCP/UDP */
-			if (firewall_conf->extd_firewall_entries[i].attrib.u.v6.next_hdr == IPACM_FIREWALL_IPPROTO_TCP_UDP)
-			{
-				/* insert TCP rule*/
-				flt_rule_entry.rule.attrib.u.v6.next_hdr = IPACM_FIREWALL_IPPROTO_TCP;
-				memset(&flt_eq, 0, sizeof(flt_eq));
-				memcpy(&flt_eq.attrib, &flt_rule_entry.rule.attrib, sizeof(flt_eq.attrib));
-				flt_eq.ip = IPA_IP_v6;
-				if(0 != ioctl(IPACM_Wan::m_fd_ipa_ul, IPA_IOC_GENERATE_FLT_EQ, &flt_eq))
-				{
-					IPACMERR("Failed to get eq_attrib\n");
-					return IPACM_FAILURE;
-				}
-
-				memcpy(&flt_rule_entry.rule.eq_attrib,
-					&flt_eq.eq_attrib,
-					sizeof(flt_rule_entry.rule.eq_attrib));
-				memcpy(&(rules[rule_v6_ul]), &flt_rule_entry, sizeof(struct ipa_flt_rule_add));
-				rule_v6_ul++;
-
-				/* insert UDP rule*/
-				flt_rule_entry.rule.attrib.u.v6.next_hdr = IPACM_FIREWALL_IPPROTO_UDP;
-				memset(&flt_eq, 0, sizeof(flt_eq));
-				memcpy(&flt_eq.attrib, &flt_rule_entry.rule.attrib, sizeof(flt_eq.attrib));
-				flt_eq.ip = IPA_IP_v6;
-				if(0 != ioctl(IPACM_Wan::m_fd_ipa_ul, IPA_IOC_GENERATE_FLT_EQ, &flt_eq))
-				{
-					IPACMERR("Failed to get eq_attrib\n");
-					return IPACM_FAILURE;
-				}
-
-				memcpy(&flt_rule_entry.rule.eq_attrib,
-					&flt_eq.eq_attrib,
-					sizeof(flt_rule_entry.rule.eq_attrib));
-				memcpy(&(rules[rule_v6_ul]), &flt_rule_entry, sizeof(struct ipa_flt_rule_add));
-				rule_v6_ul++;
-			}
-			else
-			{
-				memset(&flt_eq, 0, sizeof(flt_eq));
-				memcpy(&flt_eq.attrib, &flt_rule_entry.rule.attrib, sizeof(flt_eq.attrib));
-				flt_eq.ip = IPA_IP_v6;
-				if(0 != ioctl(IPACM_Wan::m_fd_ipa_ul, IPA_IOC_GENERATE_FLT_EQ, &flt_eq))
-				{
-					IPACMERR("Failed to get eq_attrib\n");
-					return IPACM_FAILURE;
-				}
-
-				memcpy(&flt_rule_entry.rule.eq_attrib,
-					&flt_eq.eq_attrib,
-					sizeof(flt_rule_entry.rule.eq_attrib));
-				memcpy(&(rules[rule_v6_ul]), &flt_rule_entry, sizeof(struct ipa_flt_rule_add));
-				rule_v6_ul++;
-			}
+			idx = 2;
+			IPACMDBG_H("Interface is WLAN Svap or vlan, install rules on Rx1 pipe at idx %d \n", idx);
+		} else {
+			idx = idx + j * 2;
+			IPACMDBG_H("Install rules at idx %d\n", idx);
 		}
-	} /* end of firewall ipv6 filter rule add for loop*/
 
-	if(IPACM_Wan::num_firewall_v6_ul - orig_num_q6_rules + rule_v6_ul > IPACM_MAX_FIREWALL_ENTRIES)
-	{
-		IPACMERR("exceeded overall number of possible Q6 firewall rules for all PDNs, aborting\n");
-		return IPACM_FAILURE;
-	}
+		if (IPACM_Wan::get_pdn_num_fw_rules_by_vid(vid, &orig_num_q6_rules)) {
+			IPACMERR("failed getting num of Q6 rules for VID %d\n", vid);
+			return IPACM_FAILURE;
+		}
 
-	if(IPACM_Lan::install_wan_firewall_rule_ul(true, vid, rule_v6_ul))
-	{
-		IPACMERR("failed sending QMI to Q6\n");
-		return IPACM_FAILURE;
-	}
+		for (i = 0; i < firewall_conf->num_extd_firewall_entries; i++) {
+			if (firewall_conf->extd_firewall_entries[i].ip_vsn == 6 &&
+				firewall_conf->extd_firewall_entries[i].firewall_direction
+				== IPACM_MSGR_UL_FIREWALL) {
+#ifdef FEATURE_IPV6_NAT
+				// in ipv6_nat_enable=false case, ignore the firewall rules if it's specific to v6nat
+				if (firewall_conf->extd_firewall_entries[i].IPV6NatEnabledfw) continue;
+#endif
+				memset(&flt_rule_entry, 0, sizeof(struct ipa_flt_rule_add));
+				flt_rule_entry.at_rear = true;
+				flt_rule_entry.flt_rule_hdl = -1;
+				flt_rule_entry.status = -1;
+				flt_rule_entry.rule.retain_hdr = 1;
+				flt_rule_entry.rule.to_uc = 0;
+				flt_rule_entry.rule.eq_attrib_type = 1;
+				flt_rule_entry.rule.action = IPA_PASS_TO_ROUTING;
 
-	if(IPACM_Wan::set_pdn_num_fw_rules_by_vid(vid, rule_v6_ul))
-	{
-		IPACMERR("failed setting num of Q6 rules for VID %d\n", vid);
+				flt_rule_entry.rule.hashable = true;
+
+				memset(&rt_tbl_idx, 0, sizeof(rt_tbl_idx));
+				rt_tbl_idx.ip = IPA_IP_v6;
+				/* matched rules for v6 go PASS_TO_ROUTE */
+				if (firewall_conf->rule_action_accept == true) {
+					strlcpy(rt_tbl_idx.name, IPACM_Iface::ipacmcfg->rt_tbl_wan_v6.name, IPA_RESOURCE_NAME_MAX);
+				} else {
+					strlcpy(rt_tbl_idx.name, IPACM_Iface::ipacmcfg->rt_tbl_wan_dl.name, IPA_RESOURCE_NAME_MAX);
+				}
+				rt_tbl_idx.name[IPA_RESOURCE_NAME_MAX - 1] = '\0';
+				if (0 != ioctl(IPACM_Wan::m_fd_ipa_ul, IPA_IOC_QUERY_RT_TBL_INDEX, &rt_tbl_idx)) {
+					IPACMERR("Failed to get routing table index from name\n");
+					return IPACM_FAILURE;
+				}
+				flt_rule_entry.rule.rt_tbl_idx = rt_tbl_idx.idx;
+				IPACMDBG_H("Routing table %s has index %d\n", rt_tbl_idx.name, rt_tbl_idx.idx);
+
+
+				memcpy(&flt_rule_entry.rule.attrib,
+					   &firewall_conf->extd_firewall_entries[i].attrib,
+					   sizeof(struct ipa_rule_attrib));
+				flt_rule_entry.rule.attrib.attrib_mask |= rx_prop->rx[idx].attrib.attrib_mask;
+				flt_rule_entry.rule.attrib.attrib_mask &= ~IPA_FLT_META_DATA;
+				flt_rule_entry.rule.attrib.meta_data_mask = rx_prop->rx[idx].attrib.meta_data_mask;
+				flt_rule_entry.rule.attrib.meta_data = rx_prop->rx[idx].attrib.meta_data;
+				change_to_network_order(IPA_IP_v6, &flt_rule_entry.rule.attrib);
+
+				/* check if the rule is define as TCP/UDP */
+				if (firewall_conf->extd_firewall_entries[i].attrib.u.v6.next_hdr == IPACM_FIREWALL_IPPROTO_TCP_UDP) {
+					/* insert TCP rule*/
+					flt_rule_entry.rule.attrib.u.v6.next_hdr = IPACM_FIREWALL_IPPROTO_TCP;
+					memset(&flt_eq, 0, sizeof(flt_eq));
+					memcpy(&flt_eq.attrib, &flt_rule_entry.rule.attrib, sizeof(flt_eq.attrib));
+					flt_eq.ip = IPA_IP_v6;
+					if (0 != ioctl(IPACM_Wan::m_fd_ipa_ul, IPA_IOC_GENERATE_FLT_EQ, &flt_eq)) {
+						IPACMERR("Failed to get eq_attrib\n");
+						return IPACM_FAILURE;
+					}
+
+					memcpy(&flt_rule_entry.rule.eq_attrib,
+						   &flt_eq.eq_attrib,
+						   sizeof(flt_rule_entry.rule.eq_attrib));
+					memcpy(&(rules[rule_v6_ul]), &flt_rule_entry, sizeof(struct ipa_flt_rule_add));
+					rule_v6_ul++;
+
+					/* insert UDP rule*/
+					flt_rule_entry.rule.attrib.u.v6.next_hdr = IPACM_FIREWALL_IPPROTO_UDP;
+					memset(&flt_eq, 0, sizeof(flt_eq));
+					memcpy(&flt_eq.attrib, &flt_rule_entry.rule.attrib, sizeof(flt_eq.attrib));
+					flt_eq.ip = IPA_IP_v6;
+					if (0 != ioctl(IPACM_Wan::m_fd_ipa_ul, IPA_IOC_GENERATE_FLT_EQ, &flt_eq)) {
+						IPACMERR("Failed to get eq_attrib\n");
+						return IPACM_FAILURE;
+					}
+
+					memcpy(&flt_rule_entry.rule.eq_attrib,
+						   &flt_eq.eq_attrib,
+						   sizeof(flt_rule_entry.rule.eq_attrib));
+					memcpy(&(rules[rule_v6_ul]), &flt_rule_entry, sizeof(struct ipa_flt_rule_add));
+					rule_v6_ul++;
+				} else {
+					memset(&flt_eq, 0, sizeof(flt_eq));
+					memcpy(&flt_eq.attrib, &flt_rule_entry.rule.attrib, sizeof(flt_eq.attrib));
+					flt_eq.ip = IPA_IP_v6;
+					if (0 != ioctl(IPACM_Wan::m_fd_ipa_ul, IPA_IOC_GENERATE_FLT_EQ, &flt_eq)) {
+						IPACMERR("Failed to get eq_attrib\n");
+						return IPACM_FAILURE;
+					}
+
+					memcpy(&flt_rule_entry.rule.eq_attrib,
+						   &flt_eq.eq_attrib,
+						   sizeof(flt_rule_entry.rule.eq_attrib));
+					memcpy(&(rules[rule_v6_ul]), &flt_rule_entry, sizeof(struct ipa_flt_rule_add));
+					rule_v6_ul++;
+				}
+			}
+		} /* end of firewall ipv6 filter rule add for loop*/
+
+		if (IPACM_Wan::num_firewall_v6_ul - orig_num_q6_rules + rule_v6_ul > IPACM_MAX_FIREWALL_ENTRIES) {
+			IPACMERR("exceeded overall number of possible Q6 firewall rules for all PDNs, aborting\n");
+			return IPACM_FAILURE;
+		}
+
+		if (IPACM_Lan::install_wan_firewall_rule_ul(true, vid, rule_v6_ul)) {
+			IPACMERR("failed sending QMI to Q6\n");
+			return IPACM_FAILURE;
+		}
+
+		if (IPACM_Wan::set_pdn_num_fw_rules_by_vid(vid, rule_v6_ul)) {
+			IPACMERR("failed setting num of Q6 rules for VID %d\n", vid);
+		}
+		IPACMDBG_H("total %d Q6 UL firewall rules sent to Q6, %d just sent for vid %d\n ",
+				   IPACM_Wan::num_firewall_v6_ul,
+				   rule_v6_ul,
+				   vid);
 	}
-	IPACMDBG_H("total %d Q6 UL firewall rules sent to Q6, %d just sent for vid %d\n ",
-		IPACM_Wan::num_firewall_v6_ul,
-		rule_v6_ul,
-		vid);
 	return IPACM_SUCCESS;
 }
 #endif //IPA_V6_UL_WL_FIREWALL_HANDLE
@@ -8825,12 +8911,14 @@ int IPACM_Lan::disable_dft_firewall_rules_ul_ex(int vid)
 	else if (IPACM_Wan::isWanUP_V6(ipa_if_num)) {
 		if(!handle_uplink_filter_rule(IPACM_Iface::ipacmcfg->GetExtProp(IPA_IP_v6),
 			IPA_IP_v6, IPACM_Iface::ipacmcfg->GetQmapId(), false, true))
-			modem_ul_v6_set = true;
+			modem_ul_v6_set[0] = true;
+			modem_ul_v6_set[1] = true;
 #else
 	if (IPACM_Wan::isWanUP_V6(ipa_if_num)) {
 		if(!handle_uplink_filter_rule(IPACM_Iface::ipacmcfg->GetExtProp(IPA_IP_v6),
 			IPA_IP_v6, IPACM_Iface::ipacmcfg->GetQmapId()))
-			modem_ul_v6_set = true;
+			modem_ul_v6_set[0] = true;
+			modem_ul_v6_set[1] = true;
 #endif //FEATURE_VLAN_MPDN
 #if defined FEATURE_IPACM_PER_CLIENT_STATS && defined IPA_HW_FNR_STATS
 		/* Install Q6 UL rules for all the clients. */
@@ -8863,31 +8951,13 @@ int IPACM_Lan::config_dft_firewall_rules_ul(IPACM_firewall_conf_t* firewall_conf
 	struct ipa_flt_rule_add flt_rule_entry;
 	int len = 0, i, idx = 0;
 	int res = IPACM_SUCCESS;
+	int j = 0;
 
 	if (rx_prop == NULL)
 	{
 		IPACMDBG_H("No rx properties registered for iface %s\n", dev_name);
 		return IPACM_SUCCESS;
 	}
-
-	if ((ipa_if_cate == WLAN_IF) && (is_if_svap || is_wlan_if_vlan) && (rx_prop && rx_prop->num_rx_props > 2)) {
-		idx = 2;
-		IPACMDBG_H("Interface is WLAN Svap or vlan, install rules on Rx1 pipe at idx %d \n", idx);
-	}
-
-	IPACMDBG_H("num rules %d, pdn dev_name %s, accept %d\n",
-		firewall_conf->num_extd_firewall_entries,
-		firewall_conf->net_dev,
-		firewall_conf->rule_action_accept);
-
-#ifdef FEATURE_VLAN_MPDN
-	uint32_t v6_prefix[2];
-	if(IPACM_Wan::GetV6PrefixByVid(vid, v6_prefix))
-	{
-		IPACMERR("couldn't get v6 prefix for vid %d\n", vid);
-		return IPACM_FAILURE;
-	}
-#endif
 
 	/* construct ipa_ioc_add_flt_rule with N firewall rules */
 	ipa_ioc_add_flt_rule *m_pFilteringTable = NULL;
@@ -8900,121 +8970,63 @@ int IPACM_Lan::config_dft_firewall_rules_ul(IPACM_firewall_conf_t* firewall_conf
 		return IPACM_FAILURE;
 	}
 
-	if (false == m_routing.GetRoutingTable(&IPACM_Iface::ipacmcfg->rt_tbl_wan_v6))
-	{
-		IPACMERR("m_routing.GetRoutingTable(rt_tbl_wan_v6) Failed.\n");
-		res = IPACM_FAILURE;
-		goto fail;
-	}
+	for (j = 0; j < rx_prop->num_rx_props / 2 && j < IPA_MAX_NUM_PROPS; j++) {
 
-	if(ul_firewall->num_ul_firewall_installed >= IPACM_MAX_FIREWALL_ENTRIES)
-	{
-		IPACMERR("reached MAX num of UL FW rules for ep, skipping pdn firewall (vid %d)\n", vid);
-		res = IPACM_FAILURE;
-		goto fail;
-	}
+		if ((ipa_if_cate == WLAN_IF) && (is_if_svap || is_wlan_if_vlan) && (rx_prop->num_rx_props > 2)) {
+			if (j < 2) {
+				IPACMDBG_H("Interface is WLAN Svap or w-vlan, dont install rules on pipe %d..... continue\n", idx);
+				continue;
+			}
+			idx = 2;
+			IPACMDBG_H("Interface is WLAN Svap or vlan, install rules on Rx1 pipe at idx %d \n", idx);
+		} else {
+			idx = idx + j * 2;
+			IPACMDBG_H("Install rules at idx %d\n", idx);
+		}
 
-	/* Catch-all filter rule in case of whitelisting case, redirecting packets to exception path */
-	if (firewall_conf->rule_action_accept == true)
-	{
-		memset(m_pFilteringTable, 0, len);
-		m_pFilteringTable->commit = 1;
+		IPACMDBG_H("num rules %d, pdn dev_name %s, accept %d\n",
+				   firewall_conf->num_extd_firewall_entries,
+				   firewall_conf->net_dev,
+				   firewall_conf->rule_action_accept);
 
-		m_pFilteringTable->ep = rx_prop->rx[idx].src_pipe;
-		m_pFilteringTable->global = false;
-		m_pFilteringTable->ip = IPA_IP_v6;
-		m_pFilteringTable->num_rules = (uint8_t)1;
-
-		IPACMDBG_H ("Catch all rule to drop all in excep path\n");
-
-		memset(&flt_rule_entry, 0, sizeof(struct ipa_flt_rule_add));
-	   	flt_rule_entry.at_rear = false;
-		flt_rule_entry.flt_rule_hdl = -1;
-		flt_rule_entry.status = -1;
-		flt_rule_entry.rule.action = IPA_PASS_TO_EXCEPTION;
-		flt_rule_entry.rule.hashable = true;
 #ifdef FEATURE_VLAN_MPDN
-		flt_rule_entry.rule.attrib.attrib_mask |= IPA_FLT_SRC_ADDR;
-		flt_rule_entry.rule.attrib.u.v6.src_addr[0] = v6_prefix[0];
-		flt_rule_entry.rule.attrib.u.v6.src_addr[1] = v6_prefix[1];
-		flt_rule_entry.rule.attrib.u.v6.src_addr[2] = 0x0;
-		flt_rule_entry.rule.attrib.u.v6.src_addr[3] = 0x0;
-		flt_rule_entry.rule.attrib.u.v6.src_addr_mask[0] = 0xFFFFFFFF;
-		flt_rule_entry.rule.attrib.u.v6.src_addr_mask[1] = 0xFFFFFFFF;
-		flt_rule_entry.rule.attrib.u.v6.src_addr_mask[2] = 0x0;
-		flt_rule_entry.rule.attrib.u.v6.src_addr_mask[3] = 0x0;
+		uint32_t v6_prefix[2];
+		if (IPACM_Wan::GetV6PrefixByVid(vid, v6_prefix)) {
+			IPACMERR("couldn't get v6 prefix for vid %d\n", vid);
+			return IPACM_FAILURE;
+		}
 #endif
-		memcpy(&(m_pFilteringTable->rules[0]), &flt_rule_entry, sizeof(struct ipa_flt_rule_add));
 
-		if (false == m_filtering.AddFilteringRule(m_pFilteringTable))
-		{
-			IPACMERR("Error Adding Filtering rules, aborting...\n");
+		if (false == m_routing.GetRoutingTable(&IPACM_Iface::ipacmcfg->rt_tbl_wan_v6)) {
+			IPACMERR("m_routing.GetRoutingTable(rt_tbl_wan_v6) Failed.\n");
 			res = IPACM_FAILURE;
 			goto fail;
 		}
-		else
-		{
-			IPACM_Iface::ipacmcfg->increaseFltRuleCount(m_pFilteringTable->ep, IPA_IP_v6, 1);
-			/* save v6 firewall filter rule handler */
-			IPACMDBG_H("flt rule hdl0=0x%x, status=0x%x\n", m_pFilteringTable->rules[0].flt_rule_hdl, m_pFilteringTable->rules[0].status);
+
+		if (ul_firewall->num_ul_firewall_installed[j] >= IPACM_MAX_FIREWALL_ENTRIES) {
+			IPACMERR("reached MAX num of UL FW rules for ep, skipping pdn firewall (vid %d)\n", vid);
+			res = IPACM_FAILURE;
+			goto fail;
 		}
 
-		ul_firewall->ul_firewall_handle[ul_firewall->num_ul_firewall_installed++] = m_pFilteringTable->rules[0].flt_rule_hdl;
-	}
+		/* Catch-all filter rule in case of whitelisting case, redirecting packets to exception path */
+		if (firewall_conf->rule_action_accept == true) {
+			memset(m_pFilteringTable, 0, len);
+			m_pFilteringTable->commit = 1;
 
-	memset(m_pFilteringTable, 0, len);
-	m_pFilteringTable->commit = 1;
-	m_pFilteringTable->ep = rx_prop->rx[idx].src_pipe;
-	m_pFilteringTable->global = false;
-	m_pFilteringTable->ip = IPA_IP_v6;
-	m_pFilteringTable->num_rules = (uint8_t)1;
+			m_pFilteringTable->ep = rx_prop->rx[idx].src_pipe;
+			m_pFilteringTable->global = false;
+			m_pFilteringTable->ip = IPA_IP_v6;
+			m_pFilteringTable->num_rules = (uint8_t)1;
 
-	for (i = 0; i < firewall_conf->num_extd_firewall_entries; i++)
-	{
-		if(ul_firewall->num_ul_firewall_installed >= (IPACM_MAX_FIREWALL_ENTRIES - 1))
-		{
-			IPACMERR("reached MAX num of UL FW rules for ep, breaking\n");
-			break;
-		}
-		if (firewall_conf->extd_firewall_entries[i].ip_vsn == 6 &&
-			firewall_conf->extd_firewall_entries[i].firewall_direction ==
-			IPACM_MSGR_UL_FIREWALL)
-		{
+			IPACMDBG_H("Catch all rule to drop all in excep path\n");
 
-#ifdef FEATURE_IPV6_NAT
-			// in ipv6_nat_enable=false case, ignore the firewall rules if it's specific to v6nat
-			if(firewall_conf->extd_firewall_entries[i].IPV6NatEnabledfw)
-				continue;
-#endif
 			memset(&flt_rule_entry, 0, sizeof(struct ipa_flt_rule_add));
 			flt_rule_entry.at_rear = false;
 			flt_rule_entry.flt_rule_hdl = -1;
 			flt_rule_entry.status = -1;
-
-			if(firewall_conf->rule_action_accept == true)
-			{
-#ifndef FEATURE_SOCKSv5
-				flt_rule_entry.rule.action =
-					IPACM_Iface::ipacmcfg->IsIpv6CTEnabled() ? IPA_PASS_TO_SRC_NAT : IPA_PASS_TO_ROUTING;
-#else
-				flt_rule_entry.rule.action = IPA_PASS_TO_ROUTING;
-#endif
-			}
-			else
-			{
-				flt_rule_entry.rule.action = IPA_PASS_TO_EXCEPTION;
-			}
-
+			flt_rule_entry.rule.action = IPA_PASS_TO_EXCEPTION;
 			flt_rule_entry.rule.hashable = true;
-
-			flt_rule_entry.rule.rt_tbl_hdl = IPACM_Iface::ipacmcfg->rt_tbl_v6.hdl;
-			memcpy(&flt_rule_entry.rule.attrib,
-			&firewall_conf->extd_firewall_entries[i].attrib,
-			sizeof(struct ipa_rule_attrib));
-
-			flt_rule_entry.rule.attrib.attrib_mask |= rx_prop->rx[idx].attrib.attrib_mask;
-			flt_rule_entry.rule.attrib.meta_data_mask = rx_prop->rx[idx].attrib.meta_data_mask;
-			flt_rule_entry.rule.attrib.meta_data = rx_prop->rx[idx].attrib.meta_data;
 #ifdef FEATURE_VLAN_MPDN
 			flt_rule_entry.rule.attrib.attrib_mask |= IPA_FLT_SRC_ADDR;
 			flt_rule_entry.rule.attrib.u.v6.src_addr[0] = v6_prefix[0];
@@ -9026,128 +9038,185 @@ int IPACM_Lan::config_dft_firewall_rules_ul(IPACM_firewall_conf_t* firewall_conf
 			flt_rule_entry.rule.attrib.u.v6.src_addr_mask[2] = 0x0;
 			flt_rule_entry.rule.attrib.u.v6.src_addr_mask[3] = 0x0;
 #endif
+			memcpy(&(m_pFilteringTable->rules[0]), &flt_rule_entry, sizeof(struct ipa_flt_rule_add));
 
-			/* check if the rule is define as TCP/UDP */
-			if (firewall_conf->extd_firewall_entries[i].attrib.u.v6.next_hdr == IPACM_FIREWALL_IPPROTO_TCP_UDP)
-			{
-				/* insert TCP rule*/
-				flt_rule_entry.rule.attrib.u.v6.next_hdr = IPACM_FIREWALL_IPPROTO_TCP;
-				memcpy(&(m_pFilteringTable->rules[0]), &flt_rule_entry, sizeof(struct ipa_flt_rule_add));
-				if (false == m_filtering.AddFilteringRule(m_pFilteringTable))
-				{
-					IPACMERR("Error Adding Filtering rules, aborting...\n");
-					res = IPACM_FAILURE;
-					goto fail;
-				}
-				else
-				{
-					IPACM_Iface::ipacmcfg->increaseFltRuleCount(m_pFilteringTable->ep, IPA_IP_v6, 1);
-					/* save v4 firewall filter rule handler */
-					IPACMDBG_H("flt rule hdl0=0x%x, status=0x%x\n", m_pFilteringTable->rules[0].flt_rule_hdl, m_pFilteringTable->rules[0].status);
-					ul_firewall->ul_firewall_handle[ul_firewall->num_ul_firewall_installed++] = m_pFilteringTable->rules[0].flt_rule_hdl;
-				}
+			if (false == m_filtering.AddFilteringRule(m_pFilteringTable)) {
+				IPACMERR("Error Adding Filtering rules, aborting...\n");
+				res = IPACM_FAILURE;
+				goto fail;
+			} else {
+				IPACM_Iface::ipacmcfg->increaseFltRuleCount(m_pFilteringTable->ep, IPA_IP_v6, 1);
+				/* save v6 firewall filter rule handler */
+				IPACMDBG_H("flt rule hdl0=0x%x, status=0x%x\n", m_pFilteringTable->rules[0].flt_rule_hdl, m_pFilteringTable->rules[0].status);
+			}
 
-				/* insert UDP rule*/
-				flt_rule_entry.rule.attrib.u.v6.next_hdr = IPACM_FIREWALL_IPPROTO_UDP;
-				memcpy(&(m_pFilteringTable->rules[0]), &flt_rule_entry, sizeof(struct ipa_flt_rule_add));
-				if (false == m_filtering.AddFilteringRule(m_pFilteringTable))
-				{
-					IPACMERR("Error Adding Filtering rules, aborting...\n");
-					res = IPACM_FAILURE;
-					goto fail;
-				}
-				else
-				{
-					IPACM_Iface::ipacmcfg->increaseFltRuleCount(m_pFilteringTable->ep, IPA_IP_v6, 1);
-					/* save v6 firewall filter rule handler */
-					IPACMDBG_H("flt rule hdl0=0x%x, status=0x%x\n", m_pFilteringTable->rules[0].flt_rule_hdl, m_pFilteringTable->rules[0].status);
-					ul_firewall->ul_firewall_handle[ul_firewall->num_ul_firewall_installed++] = m_pFilteringTable->rules[0].flt_rule_hdl;
-				}
-			}
-			else
-			{
-				memcpy(&(m_pFilteringTable->rules[0]), &flt_rule_entry, sizeof(struct ipa_flt_rule_add));
-				if (false == m_filtering.AddFilteringRule(m_pFilteringTable))
-				{
-					IPACMERR("Error Adding Filtering rules, aborting...\n");
-					res = IPACM_FAILURE;
-					goto fail;
-				}
-				else
-				{
-					IPACM_Iface::ipacmcfg->increaseFltRuleCount(m_pFilteringTable->ep, IPA_IP_v6, 1);
-					/* save v6 firewall filter rule handler */
-					IPACMDBG_H("flt rule hdl0=0x%x, status=0x%x\n", m_pFilteringTable->rules[0].flt_rule_hdl, m_pFilteringTable->rules[0].status);
-					ul_firewall->ul_firewall_handle[ul_firewall->num_ul_firewall_installed++] = m_pFilteringTable->rules[0].flt_rule_hdl;
-				}
-			}
+			ul_firewall->ul_firewall_handle[j][ul_firewall->num_ul_firewall_installed[j]++] = m_pFilteringTable->rules[0].flt_rule_hdl;
 		}
-	} /* end of firewall ipv6 filter rule add for loop*/
 
-	if (!ipacmcfg->IsIpv6CTEnabled() &&
-		(IPACM_Wan::check_dft_firewall_rules_attr_mask_ul(firewall_conf) ||
-			firewall_conf->rule_action_accept))
-	{
-#ifndef FEATURE_VLAN_MPDN
-		ul_firewall->ul_frag_installed = true;
-#endif
 		memset(m_pFilteringTable, 0, len);
-
 		m_pFilteringTable->commit = 1;
 		m_pFilteringTable->ep = rx_prop->rx[idx].src_pipe;
-
-		memset(&flt_rule_entry, 0, sizeof(struct ipa_flt_rule_add));
-
-		if (firewall_conf->rule_action_accept != true)
-			memcpy(&flt_rule_entry.rule.attrib, &rx_prop->rx[idx].attrib, sizeof(struct ipa_rule_attrib));
-
 		m_pFilteringTable->global = false;
 		m_pFilteringTable->ip = IPA_IP_v6;
 		m_pFilteringTable->num_rules = (uint8_t)1;
 
-		flt_rule_entry.at_rear = false;
+		for (i = 0; i < firewall_conf->num_extd_firewall_entries; i++) {
+			if (ul_firewall->num_ul_firewall_installed[j] >= (IPACM_MAX_FIREWALL_ENTRIES - 1)) {
+				IPACMERR("reached MAX num of UL FW rules for ep, breaking\n");
+				break;
+			}
+			if (firewall_conf->extd_firewall_entries[i].ip_vsn == 6 &&
+				firewall_conf->extd_firewall_entries[i].firewall_direction ==
+					IPACM_MSGR_UL_FIREWALL) {
 
-		flt_rule_entry.rule.hashable = false;
-
-		flt_rule_entry.flt_rule_hdl = -1;
-		flt_rule_entry.status = -1;
-		flt_rule_entry.rule.action = IPA_PASS_TO_EXCEPTION;
-
-		flt_rule_entry.rule.attrib.attrib_mask |= IPA_FLT_FRAGMENT;
-#ifdef FEATURE_VLAN_MPDN
-		flt_rule_entry.rule.attrib.attrib_mask |= IPA_FLT_SRC_ADDR;
-		flt_rule_entry.rule.attrib.u.v6.src_addr[0] = v6_prefix[0];
-		flt_rule_entry.rule.attrib.u.v6.src_addr[1] = v6_prefix[1];
-		flt_rule_entry.rule.attrib.u.v6.src_addr[2] = 0x0;
-		flt_rule_entry.rule.attrib.u.v6.src_addr[3] = 0x0;
-		flt_rule_entry.rule.attrib.u.v6.src_addr_mask[0] = 0xFFFFFFFF;
-		flt_rule_entry.rule.attrib.u.v6.src_addr_mask[1] = 0xFFFFFFFF;
-		flt_rule_entry.rule.attrib.u.v6.src_addr_mask[2] = 0x0;
-		flt_rule_entry.rule.attrib.u.v6.src_addr_mask[3] = 0x0;
+#ifdef FEATURE_IPV6_NAT
+				// in ipv6_nat_enable=false case, ignore the firewall rules if it's specific to v6nat
+				if (firewall_conf->extd_firewall_entries[i].IPV6NatEnabledfw) continue;
 #endif
-		memcpy(&(m_pFilteringTable->rules[0]), &flt_rule_entry, sizeof(struct ipa_flt_rule_add));
-		if (false == m_filtering.AddFilteringRule(m_pFilteringTable))
-		{
-			IPACMERR("Error Adding RuleTable(0) to Filtering, aborting...\n");
-			res = IPACM_FAILURE;
-			goto fail;
-		}
-		else
-		{
-			IPACM_Iface::ipacmcfg->increaseFltRuleCount(m_pFilteringTable->ep, IPA_IP_v6, 1);
-			IPACMDBG_H("flt rule hdl0=0x%x, status=0x%x\n", m_pFilteringTable->rules[0].flt_rule_hdl, m_pFilteringTable->rules[0].status);
-#ifdef FEATURE_VLAN_MPDN
-			ul_firewall->ul_frag_handle[ul_firewall->num_ul_frag_installed++] = m_pFilteringTable->rules[0].flt_rule_hdl;
+				memset(&flt_rule_entry, 0, sizeof(struct ipa_flt_rule_add));
+				flt_rule_entry.at_rear = false;
+				flt_rule_entry.flt_rule_hdl = -1;
+				flt_rule_entry.status = -1;
+
+				if (firewall_conf->rule_action_accept == true) {
+#ifndef FEATURE_SOCKSv5
+					flt_rule_entry.rule.action =
+						IPACM_Iface::ipacmcfg->IsIpv6CTEnabled() ? IPA_PASS_TO_SRC_NAT : IPA_PASS_TO_ROUTING;
 #else
-			ul_firewall->ul_frag_handle = m_pFilteringTable->rules[0].flt_rule_hdl;
+					flt_rule_entry.rule.action = IPA_PASS_TO_ROUTING;
 #endif
-		}
-	}
+				} else {
+					flt_rule_entry.rule.action = IPA_PASS_TO_EXCEPTION;
+				}
 
-	IPACMDBG_H ("Configured and installed (%d) UL firewall rules on pipe (%d)\n ",
-		ul_firewall->num_ul_firewall_installed,
-		(int)m_pFilteringTable->ep);
-	IPACMDBG_H ("Firewall Status (%d)\n", firewall_conf->firewall_enable);
+				flt_rule_entry.rule.hashable = true;
+
+				flt_rule_entry.rule.rt_tbl_hdl = IPACM_Iface::ipacmcfg->rt_tbl_v6.hdl;
+				memcpy(&flt_rule_entry.rule.attrib,
+					   &firewall_conf->extd_firewall_entries[i].attrib,
+					   sizeof(struct ipa_rule_attrib));
+
+				flt_rule_entry.rule.attrib.attrib_mask |= rx_prop->rx[idx].attrib.attrib_mask;
+				flt_rule_entry.rule.attrib.meta_data_mask = rx_prop->rx[idx].attrib.meta_data_mask;
+				flt_rule_entry.rule.attrib.meta_data = rx_prop->rx[idx].attrib.meta_data;
+#ifdef FEATURE_VLAN_MPDN
+				flt_rule_entry.rule.attrib.attrib_mask |= IPA_FLT_SRC_ADDR;
+				flt_rule_entry.rule.attrib.u.v6.src_addr[0] = v6_prefix[0];
+				flt_rule_entry.rule.attrib.u.v6.src_addr[1] = v6_prefix[1];
+				flt_rule_entry.rule.attrib.u.v6.src_addr[2] = 0x0;
+				flt_rule_entry.rule.attrib.u.v6.src_addr[3] = 0x0;
+				flt_rule_entry.rule.attrib.u.v6.src_addr_mask[0] = 0xFFFFFFFF;
+				flt_rule_entry.rule.attrib.u.v6.src_addr_mask[1] = 0xFFFFFFFF;
+				flt_rule_entry.rule.attrib.u.v6.src_addr_mask[2] = 0x0;
+				flt_rule_entry.rule.attrib.u.v6.src_addr_mask[3] = 0x0;
+#endif
+
+				/* check if the rule is define as TCP/UDP */
+				if (firewall_conf->extd_firewall_entries[i].attrib.u.v6.next_hdr == IPACM_FIREWALL_IPPROTO_TCP_UDP) {
+					/* insert TCP rule*/
+					flt_rule_entry.rule.attrib.u.v6.next_hdr = IPACM_FIREWALL_IPPROTO_TCP;
+					memcpy(&(m_pFilteringTable->rules[0]), &flt_rule_entry, sizeof(struct ipa_flt_rule_add));
+					if (false == m_filtering.AddFilteringRule(m_pFilteringTable)) {
+						IPACMERR("Error Adding Filtering rules, aborting...\n");
+						res = IPACM_FAILURE;
+						goto fail;
+					} else {
+						IPACM_Iface::ipacmcfg->increaseFltRuleCount(m_pFilteringTable->ep, IPA_IP_v6, 1);
+						/* save v4 firewall filter rule handler */
+						IPACMDBG_H("flt rule hdl0=0x%x, status=0x%x\n", m_pFilteringTable->rules[0].flt_rule_hdl, m_pFilteringTable->rules[0].status);
+						ul_firewall->ul_firewall_handle[j][ul_firewall->num_ul_firewall_installed[j]++] = m_pFilteringTable->rules[0].flt_rule_hdl;
+					}
+
+					/* insert UDP rule*/
+					flt_rule_entry.rule.attrib.u.v6.next_hdr = IPACM_FIREWALL_IPPROTO_UDP;
+					memcpy(&(m_pFilteringTable->rules[0]), &flt_rule_entry, sizeof(struct ipa_flt_rule_add));
+					if (false == m_filtering.AddFilteringRule(m_pFilteringTable)) {
+						IPACMERR("Error Adding Filtering rules, aborting...\n");
+						res = IPACM_FAILURE;
+						goto fail;
+					} else {
+						IPACM_Iface::ipacmcfg->increaseFltRuleCount(m_pFilteringTable->ep, IPA_IP_v6, 1);
+						/* save v6 firewall filter rule handler */
+						IPACMDBG_H("flt rule hdl0=0x%x, status=0x%x\n", m_pFilteringTable->rules[0].flt_rule_hdl, m_pFilteringTable->rules[0].status);
+						ul_firewall->ul_firewall_handle[j][ul_firewall->num_ul_firewall_installed[j]++] = m_pFilteringTable->rules[0].flt_rule_hdl;
+					}
+				} else {
+					memcpy(&(m_pFilteringTable->rules[0]), &flt_rule_entry, sizeof(struct ipa_flt_rule_add));
+					if (false == m_filtering.AddFilteringRule(m_pFilteringTable)) {
+						IPACMERR("Error Adding Filtering rules, aborting...\n");
+						res = IPACM_FAILURE;
+						goto fail;
+					} else {
+						IPACM_Iface::ipacmcfg->increaseFltRuleCount(m_pFilteringTable->ep, IPA_IP_v6, 1);
+						/* save v6 firewall filter rule handler */
+						IPACMDBG_H("flt rule hdl0=0x%x, status=0x%x\n", m_pFilteringTable->rules[0].flt_rule_hdl, m_pFilteringTable->rules[0].status);
+						ul_firewall->ul_firewall_handle[j][ul_firewall->num_ul_firewall_installed[j]++] = m_pFilteringTable->rules[0].flt_rule_hdl;
+					}
+				}
+			}
+		} /* end of firewall ipv6 filter rule add for loop*/
+
+		if (!ipacmcfg->IsIpv6CTEnabled() &&
+			(IPACM_Wan::check_dft_firewall_rules_attr_mask_ul(firewall_conf) ||
+			 firewall_conf->rule_action_accept)) {
+#ifndef FEATURE_VLAN_MPDN
+			ul_firewall->ul_frag_installed = true;
+#endif
+			memset(m_pFilteringTable, 0, len);
+
+			m_pFilteringTable->commit = 1;
+			m_pFilteringTable->ep = rx_prop->rx[idx].src_pipe;
+
+			memset(&flt_rule_entry, 0, sizeof(struct ipa_flt_rule_add));
+
+			if (firewall_conf->rule_action_accept != true) memcpy(&flt_rule_entry.rule.attrib, &rx_prop->rx[idx].attrib, sizeof(struct ipa_rule_attrib));
+
+			m_pFilteringTable->global = false;
+			m_pFilteringTable->ip = IPA_IP_v6;
+			m_pFilteringTable->num_rules = (uint8_t)1;
+
+			flt_rule_entry.at_rear = false;
+
+			flt_rule_entry.rule.hashable = false;
+
+			flt_rule_entry.flt_rule_hdl = -1;
+			flt_rule_entry.status = -1;
+			flt_rule_entry.rule.action = IPA_PASS_TO_EXCEPTION;
+
+			flt_rule_entry.rule.attrib.attrib_mask |= IPA_FLT_FRAGMENT;
+#ifdef FEATURE_VLAN_MPDN
+			flt_rule_entry.rule.attrib.attrib_mask |= IPA_FLT_SRC_ADDR;
+			flt_rule_entry.rule.attrib.u.v6.src_addr[0] = v6_prefix[0];
+			flt_rule_entry.rule.attrib.u.v6.src_addr[1] = v6_prefix[1];
+			flt_rule_entry.rule.attrib.u.v6.src_addr[2] = 0x0;
+			flt_rule_entry.rule.attrib.u.v6.src_addr[3] = 0x0;
+			flt_rule_entry.rule.attrib.u.v6.src_addr_mask[0] = 0xFFFFFFFF;
+			flt_rule_entry.rule.attrib.u.v6.src_addr_mask[1] = 0xFFFFFFFF;
+			flt_rule_entry.rule.attrib.u.v6.src_addr_mask[2] = 0x0;
+			flt_rule_entry.rule.attrib.u.v6.src_addr_mask[3] = 0x0;
+#endif
+			memcpy(&(m_pFilteringTable->rules[0]), &flt_rule_entry, sizeof(struct ipa_flt_rule_add));
+			if (false == m_filtering.AddFilteringRule(m_pFilteringTable)) {
+				IPACMERR("Error Adding RuleTable(0) to Filtering, aborting...\n");
+				res = IPACM_FAILURE;
+				goto fail;
+			} else {
+				IPACM_Iface::ipacmcfg->increaseFltRuleCount(m_pFilteringTable->ep, IPA_IP_v6, 1);
+				IPACMDBG_H("flt rule hdl0=0x%x, status=0x%x\n", m_pFilteringTable->rules[0].flt_rule_hdl, m_pFilteringTable->rules[0].status);
+#ifdef FEATURE_VLAN_MPDN
+				ul_firewall->ul_frag_handle[j][ul_firewall->num_ul_frag_installed[j]++] = m_pFilteringTable->rules[0].flt_rule_hdl;
+#else
+				ul_firewall->ul_frag_handle[j] = m_pFilteringTable->rules[0].flt_rule_hdl;
+#endif
+			}
+		}
+
+		IPACMDBG_H("Configured and installed (%d) UL firewall rules on pipe (%d)\n ",
+				   ul_firewall->num_ul_firewall_installed,
+				   (int)m_pFilteringTable->ep);
+		IPACMDBG_H("Firewall Status (%d)\n", firewall_conf->firewall_enable);
+
+	}
 fail:
 	if(m_pFilteringTable != NULL)
 	{
@@ -10107,16 +10176,16 @@ int IPACM_Lan::delete_uplink_filter_rule_per_client
 		return IPACM_FAILURE;
 	}
 #ifndef IPA_V6_UL_WL_FIREWALL_HANDLE
-	if (((iptype == IPA_IP_v4) && num_wan_ul_fl_rule_v4 > MAX_WAN_UL_FILTER_RULES) ||
-		((iptype == IPA_IP_v6) && num_wan_ul_fl_rule_v6 > MAX_WAN_UL_FILTER_RULES))
+	if (((iptype == IPA_IP_v4) && num_wan_ul_fl_rule_v4[0] > MAX_WAN_UL_FILTER_RULES) ||
+		((iptype == IPA_IP_v6) && num_wan_ul_fl_rule_v6[0] > MAX_WAN_UL_FILTER_RULES))
 #else
-	if (((iptype == IPA_IP_v4) && num_wan_ul_fl_rule_v4 > MAX_WAN_UL_FILTER_RULES) ||
-		((iptype == IPA_IP_v6) && num_wan_ul_fl_rule_v6 > IPACM_MAX_V6_UL_WL_FIREWALL_ENTRIES))
+	if (((iptype == IPA_IP_v4) && num_wan_ul_fl_rule_v4[0] > MAX_WAN_UL_FILTER_RULES) ||
+		((iptype == IPA_IP_v6) && num_wan_ul_fl_rule_v6[0] > IPACM_MAX_V6_UL_WL_FIREWALL_ENTRIES))
 #endif
 	{
 		IPACMERR("number of wan_ul_fl_rule_v4 (%d)/wan_ul_fl_rule_v6 (%d) > MAX_WAN_UL_FILTER_RULES (%d), aborting...\n",
-			num_wan_ul_fl_rule_v4,
-			num_wan_ul_fl_rule_v6,
+			num_wan_ul_fl_rule_v4[0],
+			num_wan_ul_fl_rule_v6[0],
 			MAX_WAN_UL_FILTER_RULES);
 #ifdef IPA_V6_UL_WL_FIREWALL_HANDLE
 		IPACMERR("IPACM_MAX_V6_UL_WL_FIREWALL_ENTRIES %d\n", IPACM_MAX_V6_UL_WL_FIREWALL_ENTRIES);
@@ -10129,7 +10198,7 @@ int IPACM_Lan::delete_uplink_filter_rule_per_client
 	{
 		IPACMDBG_H("Del (%d) num of v4 UL rules for cliend idx:%d\n", num_wan_ul_fl_rule_v4, clnt_indx);
 		if (m_filtering.DeleteFilteringHdls(get_client_memptr(eth_client, clnt_indx)->wan_ul_fl_rule_hdl_v4,
-				iptype, num_wan_ul_fl_rule_v4) == false)
+				iptype, num_wan_ul_fl_rule_v4[0]) == false)
 		{
 			IPACMERR("Error Deleting RuleTable(1) to Filtering, aborting...\n");
 			close(fd);
@@ -10141,9 +10210,9 @@ int IPACM_Lan::delete_uplink_filter_rule_per_client
 
 	if ((iptype == IPA_IP_v6) && get_client_memptr(eth_client, clnt_indx)->ipv6_ul_rules_set)
 	{
-		IPACMDBG_H("Del (%d) num of v6 UL rules for cliend idx:%d\n", num_wan_ul_fl_rule_v6, clnt_indx);
+		IPACMDBG_H("Del (%d) num of v6 UL rules for cliend idx:%d\n", num_wan_ul_fl_rule_v6[0], clnt_indx);
 		if (m_filtering.DeleteFilteringHdls(get_client_memptr(eth_client, clnt_indx)->wan_ul_fl_rule_hdl_v6,
-				iptype, num_wan_ul_fl_rule_v6) == false)
+				iptype, num_wan_ul_fl_rule_v6[0]) == false)
 		{
 			IPACMERR("Error Deleting RuleTable(1) to Filtering, aborting...\n");
 			close(fd);
@@ -10296,15 +10365,11 @@ int IPACM_Lan::enable_per_client_stats(bool *status)
 int IPACM_Lan::handle_wan_down_v6(bool is_sta_mode, bool is_support_mpdn)
 {
 	int idx = 0;
+	int j;
 	if (rx_prop == NULL)
 	{
 		IPACMERR("Rx prop is NULL, return\n");
 		return IPACM_SUCCESS;
-	}
-
-	if ((ipa_if_cate == WLAN_IF) && (is_if_svap || is_wlan_if_vlan) && (rx_prop->num_rx_props > 2)) {
-		idx = 2;
-		IPACMDBG_H("Interface is WLAN Svap or vlan, install rules on Rx1 pipe at idx %d \n", idx);
 	}
 
 #ifdef FEATURE_VLAN_MPDN
@@ -10329,15 +10394,27 @@ int IPACM_Lan::handle_wan_down_v6(bool is_sta_mode, bool is_support_mpdn)
 		if(notify_flt_removed(IPACM_Iface::ipacmcfg->GetQmapId()))
 			return IPACM_FAILURE;
 	}
-	else
-	{
-		if (!m_filtering.DeleteFilteringHdls(&dft_v6fl_rule_hdl[m_ipv6_default_filterting_rules_count], IPA_IP_v6, 1))
+	else {
+		for (j = 0; j < rx_prop->num_rx_props / 2 && j < IPA_MAX_NUM_PROPS; j++)
 		{
-			IPACMERR("Error Deleting last default flt rule, aborting...\n");
-			return IPACM_FAILURE;
+			if ((ipa_if_cate == WLAN_IF) && (is_if_svap || is_wlan_if_vlan) && (rx_prop->num_rx_props > 2)) {
+				if (j < 2) {
+					IPACMDBG_H("Interface is WLAN Svap or w-vlan, dont install rules on pipe %d..... continue\n", idx);
+					continue;
+				}
+				idx = 2;
+				IPACMDBG_H("Interface is WLAN Svap or vlan, install rules on Rx1 pipe at idx %d \n", idx);
+			} else {
+				idx = idx + j * 2;
+				IPACMDBG_H("Install rules at idx %d\n", idx);
+			}
+			if (!m_filtering.DeleteFilteringHdls(&dft_v6fl_rule_hdl[j][m_ipv6_default_filterting_rules_count[j]], IPA_IP_v6, 1)) {
+				IPACMERR("Error Deleting last default flt rule, aborting...\n");
+				return IPACM_FAILURE;
+			}
+			IPACM_Iface::ipacmcfg->decreaseFltRuleCount(rx_prop->rx[idx].src_pipe, IPA_IP_v6, 1);
+			dft_v6fl_rule_hdl[j][m_ipv6_default_filterting_rules_count[j]] = 0;
 		}
-		IPACM_Iface::ipacmcfg->decreaseFltRuleCount(rx_prop->rx[idx].src_pipe, IPA_IP_v6, 1);
-		dft_v6fl_rule_hdl[m_ipv6_default_filterting_rules_count] = 0;
 	}
 
 #ifdef FEATURE_IPA_IPSEC
@@ -10518,13 +10595,28 @@ int IPACM_Lan::install_ipv4_icmp_flt_rule()
 	struct ipa_ioc_add_flt_rule_v2 *flt_rule;
 	struct ipa_flt_rule_add_v2 *flt_rule_entry;
 	int idx = 0;
+	int j = 0;
 
-	if (rx_prop != NULL) {
+	if (rx_prop == NULL)
+	{
+		IPACMERR("rx/tx properties empty...exit\n");
+		return IPACM_FAILURE;
+	}
+	for (j = 0; j < rx_prop->num_rx_props / 2 && j < IPA_MAX_NUM_PROPS; j++)
+	{
 		IPACMDBG_H("Will attempt to add v4 icmp filter rule for prop idx %d\n", idx);
 
-		if ((ipa_if_cate == WLAN_IF) && (is_if_svap || is_wlan_if_vlan) && (rx_prop->num_rx_props > 2)) {
+		if ((ipa_if_cate == WLAN_IF) && (is_if_svap || is_wlan_if_vlan) && (rx_prop->num_rx_props > 2))
+		{
+			if (j < 2) {
+				IPACMDBG_H("Interface is WLAN Svap or w-vlan, dont install rules on pipe %d..... continue\n", idx);
+				continue;
+			}
 			idx = 2;
-			IPACMDBG_H("Interface is WLAN Svap or vlan, install rules on Rx pipe at idx %d \n", idx);
+			IPACMDBG_H("Interface is WLAN Svap or vlan, install rules on Rx1 pipe at idx %d \n", idx);
+		} else {
+			idx = idx + j * 2;
+			IPACMDBG_H("Install rules at idx %d\n", idx);
 		}
 
 #ifdef FEATURE_EoGRE
@@ -10583,8 +10675,8 @@ int IPACM_Lan::install_ipv4_icmp_flt_rule()
 			ret = IPACM_FAILURE;
 		} else {
 			IPACM_Iface::ipacmcfg->increaseFltRuleCount(rx_prop->rx[idx].src_pipe, IPA_IP_v4, NUM_RULES);
-			ipv4_icmp_flt_rule_hdl[0] = flt_rule_entry->flt_rule_hdl;
-			IPACMDBG_H("IPv4 icmp filter rule HDL:0x%x\n", ipv4_icmp_flt_rule_hdl[0]);
+			ipv4_icmp_flt_rule_hdl[j][0] = flt_rule_entry->flt_rule_hdl;
+			IPACMDBG_H("IPv4 icmp filter rule HDL:0x%x\n", ipv4_icmp_flt_rule_hdl[j][0]);
 		}
 	}
 
@@ -10596,15 +10688,30 @@ int IPACM_Lan::install_ipv6_icmp_flt_rule()
 	int ret = IPACM_SUCCESS;
 	struct ipa_ioc_add_flt_rule_v2 *flt_rule;
 	struct ipa_flt_rule_add_v2 *flt_rule_entry;
-	int idx = 0;
+	int idx = 0, j;
 
-	if (rx_prop != NULL) {
-		IPACMDBG_H("Will attempt to add v6 icmp filter rule for prop idx %d\n", idx);
+	if (rx_prop != NULL)
+	{
+		IPACMDBG_H("No rx properties registered for iface %s\n", dev_name);
+		return ret;
+	}
 
-		if ((ipa_if_cate == WLAN_IF) && (is_if_svap || is_wlan_if_vlan) && (rx_prop->num_rx_props > 2)) {
+	for (j = 0; j < rx_prop->num_rx_props / 2 && j < IPA_MAX_NUM_PROPS; j++) {
+
+		if ((ipa_if_cate == WLAN_IF) && (is_if_svap || is_wlan_if_vlan) && (rx_prop->num_rx_props > 2))
+		{
+			if (j < 2) {
+				IPACMDBG_H("Interface is WLAN Svap or w-vlan, dont install rules on pipe %d..... continue\n", idx);
+				continue;
+			}
 			idx = 2;
 			IPACMDBG_H("Interface is WLAN Svap or vlan, install rules on Rx1 pipe at idx %d \n", idx);
+		} else {
+			idx = idx + j * 2;
+			IPACMDBG_H("Install rules at idx %d\n", idx);
 		}
+
+		IPACMDBG_H("Will attempt to add v6 icmp filter rule for prop idx %d\n", idx);
 
 #ifdef FEATURE_EoGRE
 		bool eogre_enabled = IPACM_Iface::ipacmcfg->eogre_enabled;
@@ -10662,7 +10769,7 @@ int IPACM_Lan::install_ipv6_icmp_flt_rule()
 			ret = IPACM_FAILURE;
 		} else {
 			IPACM_Iface::ipacmcfg->increaseFltRuleCount(rx_prop->rx[idx].src_pipe, IPA_IP_v6, NUM_RULES);
-			ipv6_icmp_flt_rule_hdl[0] = flt_rule_entry->flt_rule_hdl;
+			ipv6_icmp_flt_rule_hdl[j][0] = flt_rule_entry->flt_rule_hdl;
 			IPACMDBG_H("IPv6 icmp filter rule HDL:0x%x\n", ipv6_icmp_flt_rule_hdl[0]);
 		}
 	}
@@ -10737,7 +10844,7 @@ int IPACM_Lan::install_l2tp_inner_private_subnet_flt_rule()
 
 int IPACM_Lan::modify_private_subnet()
 {
-	int i, len, res = IPACM_SUCCESS;
+	int i, j, len, res = IPACM_SUCCESS;
 	struct ipa_flt_rule_add flt_rule;
 	struct ipa_ioc_add_flt_rule_after* pFilteringTable;
 	int mtu_rule_cnt = 0;
@@ -10745,6 +10852,7 @@ int IPACM_Lan::modify_private_subnet()
 	uint16_t vid[IPA_MAX_MTU_ENTRIES] = { };
 	int mtu_rule_idx = IPACM_Iface::ipacmcfg->ipa_num_private_subnet;
 	int idx = 0;
+	int is_if_eth_ezmesh = false;
 
 	if(ip_type == IPA_IP_v6)
 	{
@@ -10752,203 +10860,195 @@ int IPACM_Lan::modify_private_subnet()
 		return IPACM_FAILURE;
 	}
 
-	if ((ipa_if_cate == WLAN_IF) && (is_if_svap || is_wlan_if_vlan) && (rx_prop && rx_prop->num_rx_props > 2)) {
-		idx = 2;
-		IPACMDBG_H("Interface is WLAN Svap or vlan, install rules on Rx pipe at idx %d \n", idx);
-	}
 	if(rx_prop == NULL)
 	{
 		IPACMERR("no rx props\n");
 		return IPACM_FAILURE;
 	}
 
-	if(num_wan_subnet_rules > 0)
+	for (j = 0; j < rx_prop->num_rx_props / 2 && j < IPA_MAX_NUM_PROPS; j++)
 	{
-		if(m_filtering.DeleteFilteringHdls(private_fl_rule_hdl, IPA_IP_v4, num_wan_subnet_rules) == false)
-		{
-			IPACMERR("Error deleting private subnet IPv4 flt rules.\n");
+		if ((ipa_if_cate == WLAN_IF) && (is_if_svap || is_wlan_if_vlan) && (rx_prop->num_rx_props > 2)) {
+			if (j < 2) {
+				IPACMDBG_H("Interface is WLAN Svap or w-vlan, dont install rules on pipe %d..... continue\n", idx);
+				continue;
+			}
+			idx = 2;
+			IPACMDBG_H("Interface is WLAN Svap or vlan, install rules on Rx1 pipe at idx %d \n", idx);
+		} else {
+			idx = idx + j * 2;
+			if ((ipa_if_cate == ETH_IF) && idx == 2 ) {
+				is_if_eth_ezmesh = true;
+			}
+			IPACMDBG_H("Install rules at idx %d\n", idx);
+			IPACMDBG("is_if_eth_ezmesh %d j %d\n", is_if_eth_ezmesh, j);
+		}
+
+		if (num_wan_subnet_rules[j] > 0) {
+			if (m_filtering.DeleteFilteringHdls(private_fl_rule_hdl[j], IPA_IP_v4, num_wan_subnet_rules[j]) == false) {
+				IPACMERR("Error deleting private subnet IPv4 flt rules.\n");
+				return IPACM_FAILURE;
+			}
+			IPACM_Iface::ipacmcfg->decreaseFltRuleCount(rx_prop->rx[idx].src_pipe, IPA_IP_v4, num_wan_subnet_rules[j]);
+			memset(private_fl_rule_hdl[j], 0, (IPA_MAX_PRIVATE_SUBNET_ENTRIES + IPA_MAX_MTU_ENTRIES) * sizeof(uint32_t));
+			num_wan_subnet_rules[j] = 0;
+		}
+
+		if (IPACM_Iface::ipacmcfg->ipa_num_private_subnet == 0) {
+			IPACMDBG("no need configure subnet rules \n");
+			return IPACM_SUCCESS;
+		}
+
+		if (dft_v4fl_rule_hdl[j][0] == 0) {
+			IPACMERR("install v4 default rules first.Subnet + MTU rule will be installed later\n");
 			return IPACM_FAILURE;
 		}
-		IPACM_Iface::ipacmcfg->decreaseFltRuleCount(rx_prop->rx[idx].src_pipe, IPA_IP_v4, num_wan_subnet_rules);
-		memset(private_fl_rule_hdl, 0, (IPA_MAX_PRIVATE_SUBNET_ENTRIES + IPA_MAX_MTU_ENTRIES) * sizeof(uint32_t));
-		num_wan_subnet_rules = 0;
-	}
 
-	if (IPACM_Iface::ipacmcfg->ipa_num_private_subnet == 0)
-	{
-		IPACMDBG("no need configure subnet rules \n");
-		return IPACM_SUCCESS;
-	}
-
-	if (dft_v4fl_rule_hdl[0] == 0)
-	{
-		IPACMERR("install v4 default rules first.Subnet + MTU rule will be installed later\n");
-		return IPACM_FAILURE;
-	}
-
-	/* for single PDN case, only add MTU rule for first subnet */
-	if(IPACM_Wan::isWanUP(ipa_if_num) && !IPACM_Iface::ipacmcfg->iface_in_vlan_mode(dev_name))
-	{
-		/* first subnet is reserved for default PDN */
-		mtu[0] = IPACM_Wan::queryMTU(ipa_if_num, IPA_IP_v4);
-		IPACMDBG_H("defaut PDN mtu = %d\n", mtu[0]);
-		if(mtu[0] < DEFAULT_MTU_SIZE)
-			mtu_rule_cnt++;
-		else
-			IPACMDBG_H("Mtu size is unchanged. No need to install mtu rule for above subnet\n");
-	}
+		/* for single PDN case, only add MTU rule for first subnet */
+		if (IPACM_Wan::isWanUP(ipa_if_num) &&
+			(!IPACM_Iface::ipacmcfg->iface_in_vlan_mode(dev_name) || is_if_eth_ezmesh)) {
+			/* first subnet is reserved for default PDN */
+			mtu[0] = IPACM_Wan::queryMTU(ipa_if_num, IPA_IP_v4);
+			IPACMDBG_H("defaut PDN mtu = %d\n", mtu[0]);
+			if (mtu[0] < DEFAULT_MTU_SIZE) mtu_rule_cnt++;
+			else IPACMDBG_H("Mtu size is unchanged. No need to install mtu rule for above subnet\n");
+		}
 
 #ifdef FEATURE_EoGRE
-	/* if in GRE mode, also query MTU since WanUP flag is false but WAN is up */
-	if(IPACM_Iface::ipacmcfg->eogre_enabled)
-	{
-		/* re-calculate the ipv4 mtu based on GRE tunnel type*/
-		if(IPACM_Iface::ipacmcfg->eogre_info.iptype == IPA_IP_v4)
-			/* mtu_v4_new = mtu_v4 - 20(ipv4) - 4(gre) - 18(eth + VLAN) */
-			mtu[0] = IPACM_Wan::queryMTU(ipa_if_num, IPA_IP_v4) - sizeof(v4_gre_hdr_t) - 18;
-		else if (IPACM_Iface::ipacmcfg->eogre_info.iptype == IPA_IP_v6)
-			/* mtu_v4_new = mtu_v6 - 40(ipv6) - 8(opt) - 4(gre) - 18(eth + VLAN) */
-			mtu[0] = IPACM_Wan::queryMTU(ipa_if_num, IPA_IP_v6) - sizeof(v6_gre_hdr_t) - 18;
-		else
-			IPACMERR("invalid iptype = %d\n", IPACM_Iface::ipacmcfg->eogre_info.iptype);
+		/* if in GRE mode, also query MTU since WanUP flag is false but WAN is up */
+		if (IPACM_Iface::ipacmcfg->eogre_enabled) {
+			/* re-calculate the ipv4 mtu based on GRE tunnel type*/
+			if (IPACM_Iface::ipacmcfg->eogre_info.iptype == IPA_IP_v4)
+				/* mtu_v4_new = mtu_v4 - 20(ipv4) - 4(gre) - 18(eth + VLAN) */
+				mtu[0] = IPACM_Wan::queryMTU(ipa_if_num, IPA_IP_v4) - sizeof(v4_gre_hdr_t) - 18;
+			else if (IPACM_Iface::ipacmcfg->eogre_info.iptype == IPA_IP_v6)
+				/* mtu_v4_new = mtu_v6 - 40(ipv6) - 8(opt) - 4(gre) - 18(eth + VLAN) */
+				mtu[0] = IPACM_Wan::queryMTU(ipa_if_num, IPA_IP_v6) - sizeof(v6_gre_hdr_t) - 18;
+			else IPACMERR("invalid iptype = %d\n", IPACM_Iface::ipacmcfg->eogre_info.iptype);
 
-		IPACMDBG("GRE v4 PDN mtu = %d\n", mtu[0]);
-		IPACMDBG("num_wan_ul_fl_rule_v4= %d\n", num_wan_ul_fl_rule_v4);
+			IPACMDBG("GRE v4 PDN mtu = %d\n", mtu[0]);
+			IPACMDBG("num_wan_ul_fl_rule_v4= %d\n", num_wan_ul_fl_rule_v4);
 
-		//add the MTU rule after the 2nd pass rules but before the 1st pass rule
-		if (num_wan_ul_fl_rule_v4)
-		{
-			IPACMDBG("v4 GRE MTU rule will be installed after v4 modem UL rules\n");
-			mtu_flt_rule_offset[IPA_IP_v4] = wan_ul_fl_rule_hdl_v4[num_wan_ul_fl_rule_v4 - 1];
+			//add the MTU rule after the 2nd pass rules but before the 1st pass rule
+			if (num_wan_ul_fl_rule_v4) {
+				IPACMDBG("v4 GRE MTU rule will be installed after v4 modem UL rules\n");
+				mtu_flt_rule_offset[j][IPA_IP_v4] = wan_ul_fl_rule_hdl_v4[j][num_wan_ul_fl_rule_v4[j] - 1];
+			} else {
+				IPACMDBG("v4 GRE MTU rule will be installed after v4 default rules\n");
+				mtu_flt_rule_offset[j][IPA_IP_v4] = dft_v4fl_rule_hdl[j][m_ipv4_default_filterting_rules_count[j] - 1];
+			}
+			mtu_rule_cnt++;
 		}
-		else
-		{
-			IPACMDBG("v4 GRE MTU rule will be installed after v4 default rules\n");
-			mtu_flt_rule_offset[IPA_IP_v4] = dft_v4fl_rule_hdl[m_ipv4_default_filterting_rules_count - 1];
-		}
-		mtu_rule_cnt++;
-	}
 #endif
 
 #ifdef FEATURE_VLAN_MPDN
-	/* for MPDN case, need to query VLAN and mtus */
-	if(IPACM_Iface::ipacmcfg->ipacm_mpdn_enable)
-	{
-		if(IPACM_Iface::ipacmcfg->iface_in_vlan_mode(dev_name) && IPACM_Wan::isVlanWanUP())
-		{
-			for(i = mtu_rule_cnt; i < IPACM_Iface::ipacmcfg->ipa_num_private_subnet; i++)
-			{
-				vid[i] = IPACM_Iface::ipacmcfg->get_bridge_vlan_mapping_from_subnet(
-					IPACM_Iface::ipacmcfg->private_subnet_table[i].subnet_addr);
+		/* for MPDN case, need to query VLAN and mtus */
+		if (IPACM_Iface::ipacmcfg->ipacm_mpdn_enable) {
+			if (IPACM_Iface::ipacmcfg->iface_in_vlan_mode(dev_name) && IPACM_Wan::isVlanWanUP()) {
+				for (i = mtu_rule_cnt; i < IPACM_Iface::ipacmcfg->ipa_num_private_subnet; i++) {
+					vid[i] = IPACM_Iface::ipacmcfg->get_bridge_vlan_mapping_from_subnet(
+						IPACM_Iface::ipacmcfg->private_subnet_table[i].subnet_addr);
 
-				if (!vid[i])
+					if (!vid[i]) mtu[i] = DEFAULT_MTU_SIZE;
+					else IPACM_Wan::GetMTUByVid(&mtu[i], vid[i], IPA_IP_v4);
 
-					mtu[i] = DEFAULT_MTU_SIZE;
-				else
-					IPACM_Wan::GetMTUByVid(&mtu[i], vid[i], IPA_IP_v4);
-
-				IPACMDBG_H("mtu = %d for subnet %d\n", mtu[i], i);
-				if(mtu[i] < DEFAULT_MTU_SIZE)
-					mtu_rule_cnt++;
-				else
-					IPACMDBG_H("Mtu size is unchanged. No need to install mtu rule for above subnet\n");
+					IPACMDBG_H("mtu = %d for subnet %d\n", mtu[i], i);
+					if (mtu[i] < DEFAULT_MTU_SIZE) mtu_rule_cnt++;
+					else IPACMDBG_H("Mtu size is unchanged. No need to install mtu rule for above subnet\n");
+				}
+				IPACMDBG_H("total %d MTU rules are needed\n", mtu_rule_cnt);
 			}
-			IPACMDBG_H("total %d MTU rules are needed\n", mtu_rule_cnt);
 		}
-	}
 #endif
-	IPACMDBG_H("Memory allocating for ipa_num_private_subnet = %d mtu_rule_cnt = %d\n", IPACM_Iface::ipacmcfg->ipa_num_private_subnet, mtu_rule_cnt);
-	len = sizeof(struct ipa_ioc_add_flt_rule_after) + (IPACM_Iface::ipacmcfg->ipa_num_private_subnet + mtu_rule_cnt) * sizeof(struct ipa_flt_rule_add);
-	pFilteringTable = (struct ipa_ioc_add_flt_rule_after*)malloc(len);
-	if(!pFilteringTable)
-	{
-		IPACMERR("Failed to allocate ipa_ioc_add_flt_rule_after memory...\n");
-		return IPACM_FAILURE;
-	}
-	memset(pFilteringTable, 0, len);
+		IPACMDBG_H("Memory allocating for ipa_num_private_subnet = %d mtu_rule_cnt = %d\n", IPACM_Iface::ipacmcfg->ipa_num_private_subnet, mtu_rule_cnt);
+		len = sizeof(struct ipa_ioc_add_flt_rule_after) + (IPACM_Iface::ipacmcfg->ipa_num_private_subnet + mtu_rule_cnt) * sizeof(struct ipa_flt_rule_add);
+		pFilteringTable = (struct ipa_ioc_add_flt_rule_after *)malloc(len);
+		if (!pFilteringTable) {
+			IPACMERR("Failed to allocate ipa_ioc_add_flt_rule_after memory...\n");
+			return IPACM_FAILURE;
+		}
+		memset(pFilteringTable, 0, len);
 
-	pFilteringTable->commit = 1;
-	pFilteringTable->ip = IPA_IP_v4;
-	pFilteringTable->num_rules = num_wan_subnet_rules = (uint8_t)IPACM_Iface::ipacmcfg->ipa_num_private_subnet + mtu_rule_cnt;
-	pFilteringTable->ep = rx_prop->rx[idx].src_pipe;
-	pFilteringTable->add_after_hdl = mtu_flt_rule_offset[IPA_IP_v4];
-	IPACMDBG_H("pFilteringTable->add_after_hdl 0x%x\n", pFilteringTable->add_after_hdl);
+		pFilteringTable->commit = 1;
+		pFilteringTable->ip = IPA_IP_v4;
+		pFilteringTable->num_rules = num_wan_subnet_rules[j] = (uint8_t)IPACM_Iface::ipacmcfg->ipa_num_private_subnet + mtu_rule_cnt;
+		pFilteringTable->ep = rx_prop->rx[idx].src_pipe;
+		pFilteringTable->add_after_hdl = mtu_flt_rule_offset[j][IPA_IP_v4];
+		IPACMDBG_H("pFilteringTable->add_after_hdl 0x%x\n", pFilteringTable->add_after_hdl);
 
-	/* Make LAN-traffic always go A5, use default IPA-RT table */
-	if(false == m_routing.GetRoutingTable(&IPACM_Iface::ipacmcfg->rt_tbl_default_v4))
-	{
-		IPACMERR("Failed to get routing table handle.\n");
-		res = IPACM_FAILURE;
-		goto fail;
-	}
+		/* Make LAN-traffic always go A5, use default IPA-RT table */
+		if (false == m_routing.GetRoutingTable(&IPACM_Iface::ipacmcfg->rt_tbl_default_v4)) {
+			IPACMERR("Failed to get routing table handle.\n");
+			res = IPACM_FAILURE;
+			goto fail;
+		}
 
-	memset(&flt_rule, 0, sizeof(struct ipa_flt_rule_add));
-	flt_rule.status = -1;
-	flt_rule.at_rear = 1;
+		memset(&flt_rule, 0, sizeof(struct ipa_flt_rule_add));
+		flt_rule.status = -1;
+		flt_rule.at_rear = 1;
 
-	flt_rule.rule.retain_hdr = 1;
-	flt_rule.rule.to_uc = 0;
-	flt_rule.rule.action = IPA_PASS_TO_ROUTING;
-	flt_rule.rule.eq_attrib_type = 0;
-	flt_rule.rule.rt_tbl_hdl = IPACM_Iface::ipacmcfg->rt_tbl_default_v4.hdl;
-	IPACMDBG_H("Private filter rule use table: %s\n", IPACM_Iface::ipacmcfg->rt_tbl_default_v4.name);
-
-	for(i = 0; i < (IPACM_Iface::ipacmcfg->ipa_num_private_subnet); i++)
-	{
-		/* add private subnet rule for ipv4 */
+		flt_rule.rule.retain_hdr = 1;
+		flt_rule.rule.to_uc = 0;
 		flt_rule.rule.action = IPA_PASS_TO_ROUTING;
 		flt_rule.rule.eq_attrib_type = 0;
-		memcpy(&flt_rule.rule.attrib, &rx_prop->rx[idx].attrib, sizeof(flt_rule.rule.attrib));
-		flt_rule.rule.attrib.attrib_mask |= IPA_FLT_DST_ADDR;
-		flt_rule.rule.attrib.u.v4.dst_addr_mask = IPACM_Iface::ipacmcfg->private_subnet_table[i].subnet_mask;
-		flt_rule.rule.attrib.u.v4.dst_addr = IPACM_Iface::ipacmcfg->private_subnet_table[i].subnet_addr;
-		memcpy(&(pFilteringTable->rules[i]), &flt_rule, sizeof(struct ipa_flt_rule_add));
-		IPACMDBG_H(" IPACM private subnet_addr as: 0x%x entry(%d)\n", flt_rule.rule.attrib.u.v4.dst_addr, i);
+		flt_rule.rule.rt_tbl_hdl = IPACM_Iface::ipacmcfg->rt_tbl_default_v4.hdl;
+		IPACMDBG_H("Private filter rule use table: %s\n", IPACM_Iface::ipacmcfg->rt_tbl_default_v4.name);
 
-		/* add corresponding MTU rule for ipv4 */
-		if (mtu[i] > 0 && mtu[i] < DEFAULT_MTU_SIZE)
-		{
+		for (i = 0; i < (IPACM_Iface::ipacmcfg->ipa_num_private_subnet); i++) {
+			/* add private subnet rule for ipv4 */
+			flt_rule.rule.action = IPA_PASS_TO_ROUTING;
+			flt_rule.rule.eq_attrib_type = 0;
 			memcpy(&flt_rule.rule.attrib, &rx_prop->rx[idx].attrib, sizeof(flt_rule.rule.attrib));
+			flt_rule.rule.attrib.attrib_mask |= IPA_FLT_DST_ADDR;
+			flt_rule.rule.attrib.u.v4.dst_addr_mask = IPACM_Iface::ipacmcfg->private_subnet_table[i].subnet_mask;
+			flt_rule.rule.attrib.u.v4.dst_addr = IPACM_Iface::ipacmcfg->private_subnet_table[i].subnet_addr;
+			memcpy(&(pFilteringTable->rules[i]), &flt_rule, sizeof(struct ipa_flt_rule_add));
+			IPACMDBG_H(" IPACM private subnet_addr as: 0x%x entry(%d)\n", flt_rule.rule.attrib.u.v4.dst_addr, i);
 
-			/* if Vlan enabled, add vlan id as a parameter of the MTU rule*/
-			if(vid[i])
-			{
-				flt_rule.rule.attrib.attrib_mask |= IPA_FLT_VLAN_ID;
-				flt_rule.rule.attrib.vlan_id = vid[i];
+			/* add corresponding MTU rule for ipv4 */
+			if (mtu[i] > 0 && mtu[i] < DEFAULT_MTU_SIZE) {
+				memcpy(&flt_rule.rule.attrib, &rx_prop->rx[idx].attrib, sizeof(flt_rule.rule.attrib));
+
+				/* if Vlan enabled, add vlan id as a parameter of the MTU rule*/
+				if (vid[i]) {
+					flt_rule.rule.attrib.attrib_mask |= IPA_FLT_VLAN_ID;
+					flt_rule.rule.attrib.vlan_id = vid[i];
+				}
+
+				if (construct_mtu_rule(&flt_rule.rule, IPA_IP_v4, mtu[i])) IPACMERR("Failed to modify MTU filtering rule.\n");
+				memcpy(&(pFilteringTable->rules[mtu_rule_idx]), &flt_rule, sizeof(struct ipa_flt_rule_add));
+				IPACMDBG_H("Succesfully constructed v4 MTU rule for vlan id %d entry(%d)\n", vid[i], mtu_rule_idx);
+				mtu_rule_idx++;
 			}
-
-			if (construct_mtu_rule(&flt_rule.rule, IPA_IP_v4, mtu[i]))
-				IPACMERR("Failed to modify MTU filtering rule.\n");
-			memcpy(&(pFilteringTable->rules[mtu_rule_idx]), &flt_rule, sizeof(struct ipa_flt_rule_add));
-			IPACMDBG_H("Succesfully constructed v4 MTU rule for vlan id %d entry(%d)\n", vid[i], mtu_rule_idx);
-			mtu_rule_idx++;
 		}
-	}
 
 #ifdef FEATURE_EoGRE
-	//Case where eogre is enabled for opposite iptype. Need to install MTU rule with no subnets
-	if(IPACM_Iface::ipacmcfg->ipa_num_private_subnet == 0 && IPACM_Iface::ipacmcfg->eogre_enabled && IPACM_Iface::ipacmcfg->eogre_info.iptype == IPA_IP_v6)
-	{
-		if (construct_mtu_rule(&flt_rule.rule, IPA_IP_v4, mtu[0]))
-			IPACMERR("Failed to modify MTU filtering rule.\n");
-		memcpy(&(pFilteringTable->rules[mtu_rule_idx++]), &flt_rule, sizeof(struct ipa_flt_rule_add));
-		IPACMDBG_H("Succesfully constructed GRE v4 MTU rule\n");
-	}
+		//Case where eogre is enabled for opposite iptype. Need to install MTU rule with no subnets
+		if (IPACM_Iface::ipacmcfg->ipa_num_private_subnet == 0 && IPACM_Iface::ipacmcfg->eogre_enabled && IPACM_Iface::ipacmcfg->eogre_info.iptype == IPA_IP_v6) {
+			if (construct_mtu_rule(&flt_rule.rule, IPA_IP_v4, mtu[0])) IPACMERR("Failed to modify MTU filtering rule.\n");
+			memcpy(&(pFilteringTable->rules[mtu_rule_idx++]), &flt_rule, sizeof(struct ipa_flt_rule_add));
+			IPACMDBG_H("Succesfully constructed GRE v4 MTU rule\n");
+		}
 #endif
 
-	if(false == m_filtering.AddFilteringRuleAfter(pFilteringTable))
-	{
-		IPACMERR("Failed to modify private subnet filtering rules.\n");
-		res = IPACM_FAILURE;
-		goto fail;
-	}
-	IPACM_Iface::ipacmcfg->increaseFltRuleCount(rx_prop->rx[idx].src_pipe, IPA_IP_v4, num_wan_subnet_rules);
+		if (false == m_filtering.AddFilteringRuleAfter(pFilteringTable)) {
+			IPACMERR("Failed to modify private subnet filtering rules.\n");
+			res = IPACM_FAILURE;
+			goto fail;
+		}
+		IPACM_Iface::ipacmcfg->increaseFltRuleCount(rx_prop->rx[idx].src_pipe, IPA_IP_v4, num_wan_subnet_rules[j]);
 
-	/* save the rule hdls */
-	for (i = 0; i < num_wan_subnet_rules; i++)
-	{
-		private_fl_rule_hdl[i] = pFilteringTable->rules[i].flt_rule_hdl;
-		IPACMDBG("Adding filter hdl:(0x%x)\n", private_fl_rule_hdl[i]);
+		/* save the rule hdls */
+		for (i = 0; i < num_wan_subnet_rules[j]; i++) {
+			private_fl_rule_hdl[j][i] = pFilteringTable->rules[i].flt_rule_hdl;
+			IPACMDBG("Adding filter hdl:(0x%x)\n", private_fl_rule_hdl[j][i]);
+		}
+
+		if (pFilteringTable != NULL)
+		{
+			free(pFilteringTable);
+			pFilteringTable = NULL;
+		}
 	}
 
 fail:
@@ -10991,68 +11091,69 @@ int IPACM_Lan::modify_ipv6_prefix_flt_rule()
 	uint16_t vid[IPA_MAX_MTU_ENTRIES] = { };
 	int mtu_rule_idx = IPACM_Iface::ipacmcfg->num_ipv6_prefixes +
 						IPACM_Iface::ipacmcfg->num_no_offload_ipv6_prefix;
+	int j;
+
 	if(rx_prop == NULL)
 	{
 		IPACMERR("no rx props\n");
 		return IPACM_FAILURE;
 	}
 
-	if ((ipa_if_cate == WLAN_IF) && (is_if_svap || is_wlan_if_vlan) && (rx_prop && rx_prop->num_rx_props > 2)) {
-		idx = 2;
-		IPACMDBG_H("Interface is WLAN Svap or vlan, install rules on Rx pipe at idx %d \n", idx);
-	}
+	for (j = 0; j < rx_prop->num_rx_props / 2 && j < IPA_MAX_NUM_PROPS; j++) {
+		if ((ipa_if_cate == WLAN_IF) && (is_if_svap || is_wlan_if_vlan) && (rx_prop->num_rx_props > 2)) {
+			if (j < 2) {
+				IPACMDBG_H("Interface is WLAN Svap or w-vlan, dont install rules on pipe %d..... continue\n", idx);
+				continue;
+			}
+			idx = 2;
+			IPACMDBG_H("Interface is WLAN Svap or vlan, install rules on Rx1 pipe at idx %d \n", idx);
+		} else {
+			idx = idx + j * 2;
+			IPACMDBG_H("Install rules at idx %d\n", idx);
+		}
 
-	if(ip_type == IPA_IP_v4)
-	{
-		IPACMERR("inconsistent iptype. iptype = %d\n", ip_type);
-		return IPACM_FAILURE;
-	}
-
-	/* not supported for wlan vlan for now */
-	if (ipa_if_cate == WLAN_IF && !is_wlan_if_vlan)
-	{
-		IPACMERR("not supported for wlan vlan\n");
-		return IPACM_SUCCESS;
-	}
-
-	if (dft_v6fl_rule_hdl[0] == 0)
-	{
-		IPACMERR("install v6 default rules first.Prefix + MTU rule will be installed later\n");
-		return IPACM_FAILURE;
-	}
-
-	IPACMDBG_H("modifying offload prefixes, num %d\n", IPACM_Iface::ipacmcfg->num_ipv6_prefixes);
-	IPACMDBG_H("modifying no offload prefixes, num %d\n", IPACM_Iface::ipacmcfg->num_no_offload_ipv6_prefix);
-
-	if(num_wan_prefix_rules > 0)
-	{
-		if(m_filtering.DeleteFilteringHdls(ipv6_prefix_flt_rule_hdl, IPA_IP_v6,
-			num_wan_prefix_rules) == false)
-		{
-			IPACMERR("Error Deleting Filtering, aborting...\n");
+		if (ip_type == IPA_IP_v4) {
+			IPACMERR("inconsistent iptype. iptype = %d\n", ip_type);
 			return IPACM_FAILURE;
 		}
-		IPACM_Iface::ipacmcfg->decreaseFltRuleCount(rx_prop->rx[idx].src_pipe, IPA_IP_v6, num_wan_prefix_rules);
-		num_wan_prefix_rules = 0;
-	}
 
-	if (IPACM_Iface::ipacmcfg->num_ipv6_prefixes == 0 && IPACM_Iface::ipacmcfg->num_no_offload_ipv6_prefix == 0 )
-	{
-#ifdef FEATURE_EoGRE
-		if(IPACM_Iface::ipacmcfg->eogre_enabled)
-		{
-			IPACMDBG("GRE is enabled, need to configure v6 MTU \n");
-		}
-		else
-		{
-			IPACMDBG("no need configure prefix rules \n");
+		/* not supported for wlan vlan for now */
+		if (ipa_if_cate == WLAN_IF && !is_wlan_if_vlan) {
+			IPACMERR("not supported for wlan vlan\n");
 			return IPACM_SUCCESS;
 		}
+
+		if (dft_v6fl_rule_hdl[0] == 0) {
+			IPACMERR("install v6 default rules first.Prefix + MTU rule will be installed later\n");
+			return IPACM_FAILURE;
+		}
+
+		IPACMDBG_H("modifying offload prefixes, num %d\n", IPACM_Iface::ipacmcfg->num_ipv6_prefixes);
+		IPACMDBG_H("modifying no offload prefixes, num %d\n", IPACM_Iface::ipacmcfg->num_no_offload_ipv6_prefix);
+
+		if (num_wan_prefix_rules[j] > 0) {
+			if (m_filtering.DeleteFilteringHdls(ipv6_prefix_flt_rule_hdl[j], IPA_IP_v6,
+												num_wan_prefix_rules[j]) == false) {
+				IPACMERR("Error Deleting Filtering, aborting...\n");
+				return IPACM_FAILURE;
+			}
+			IPACM_Iface::ipacmcfg->decreaseFltRuleCount(rx_prop->rx[idx].src_pipe, IPA_IP_v6, num_wan_prefix_rules[j]);
+			num_wan_prefix_rules[j] = 0;
+		}
+
+		if (IPACM_Iface::ipacmcfg->num_ipv6_prefixes == 0 && IPACM_Iface::ipacmcfg->num_no_offload_ipv6_prefix == 0) {
+#ifdef FEATURE_EoGRE
+			if (IPACM_Iface::ipacmcfg->eogre_enabled) {
+				IPACMDBG("GRE is enabled, need to configure v6 MTU \n");
+			} else {
+				IPACMDBG("no need configure prefix rules \n");
+				return IPACM_SUCCESS;
+			}
 #else
-		IPACMDBG("no need configure prefix rules \n");
-		return IPACM_SUCCESS;
+			IPACMDBG("no need configure prefix rules \n");
+			return IPACM_SUCCESS;
 #endif
-	}
+		}
 
 	/* for single PDN case, only add MTU rule for first prefix */
 	if(IPACM_Wan::isWanUP_V6(ipa_if_num) && !IPACM_Iface::ipacmcfg->iface_in_vlan_mode(dev_name))
@@ -11080,10 +11181,8 @@ int IPACM_Lan::modify_ipv6_prefix_flt_rule()
 					IPACM_Wan::GetV6MTUByPrefix(&mtu[i], IPACM_Iface::ipacmcfg->ipa_ipv6_prefixes[i].addr); //might be able to get MTU by vid now
 				IPACMDBG_H("mtu = %d for prefix %d\n", mtu[i], i);
 
-				if(mtu[i] < DEFAULT_MTU_SIZE)
-					mtu_rule_cnt++;
-				else
-					IPACMDBG_H("Mtu size is unchanged. No need to install mtu rule for above prefix\n");
+					if (mtu[i] < DEFAULT_MTU_SIZE) mtu_rule_cnt++;
+					else IPACMDBG_H("Mtu size is unchanged. No need to install mtu rule for above prefix\n");
 
 			}
 			IPACMDBG_H("total %d MTU rules are needed\n", mtu_rule_cnt);
@@ -11091,157 +11190,147 @@ int IPACM_Lan::modify_ipv6_prefix_flt_rule()
 	}
 
 #ifdef FEATURE_EoGRE
-	/* if in GRE mode, also query MTU since WANup_v6 flag is false but WANv6 is up*/
-	if(IPACM_Iface::ipacmcfg->eogre_enabled)
-	{
-		/* re-calculate the ipv6 mtu based on GRE tunnel type*/
-		if(IPACM_Iface::ipacmcfg->eogre_info.iptype == IPA_IP_v4)
-			/* mtu_v6_new = mtu_v4 - 20(ipv4) - 4(gre) - 18(eth + vlan) - 40(inner_ipv6) */
-			mtu[0] = IPACM_Wan::queryMTU(ipa_if_num, IPA_IP_v4) - sizeof(v4_gre_hdr_t) - 18;
-		else if (IPACM_Iface::ipacmcfg->eogre_info.iptype == IPA_IP_v6)
-			/* mtu_v6_new = mtu_v6 - 40(ipv6) - 8(opt) - 4(gre)- 18(eth + vlan) - 40(inner_ipv6) */
-			mtu[0] = IPACM_Wan::queryMTU(ipa_if_num, IPA_IP_v6) - sizeof(v6_gre_hdr_t) - 18;
-		else
-			IPACMERR("invalid iptype = %d\n", IPACM_Iface::ipacmcfg->eogre_info.iptype);
+		/* if in GRE mode, also query MTU since WANup_v6 flag is false but WANv6 is up*/
+		if (IPACM_Iface::ipacmcfg->eogre_enabled) {
+			/* re-calculate the ipv6 mtu based on GRE tunnel type*/
+			if (IPACM_Iface::ipacmcfg->eogre_info.iptype == IPA_IP_v4)
+				/* mtu_v6_new = mtu_v4 - 20(ipv4) - 4(gre) - 18(eth + vlan) - 40(inner_ipv6) */
+				mtu[0] = IPACM_Wan::queryMTU(ipa_if_num, IPA_IP_v4) - sizeof(v4_gre_hdr_t) - 18;
+			else if (IPACM_Iface::ipacmcfg->eogre_info.iptype == IPA_IP_v6)
+				/* mtu_v6_new = mtu_v6 - 40(ipv6) - 8(opt) - 4(gre)- 18(eth + vlan) - 40(inner_ipv6) */
+				mtu[0] = IPACM_Wan::queryMTU(ipa_if_num, IPA_IP_v6) - sizeof(v6_gre_hdr_t) - 18;
+			else IPACMERR("invalid iptype = %d\n", IPACM_Iface::ipacmcfg->eogre_info.iptype);
 
-		IPACMDBG("GRE v6 PDN mtu = %d\n", mtu[0]);
-		IPACMDBG("num_wan_ul_fl_rule_v6= %d\n", num_wan_ul_fl_rule_v6);
+			IPACMDBG("GRE v6 PDN mtu = %d\n", mtu[0]);
+			IPACMDBG("num_wan_ul_fl_rule_v6= %d\n", num_wan_ul_fl_rule_v6);
 
-		//add the MTU rule after the 2nd pass rules but before the 1st pass rule
-		if (num_wan_ul_fl_rule_v6)
-		{
-			IPACMDBG("v6 GRE MTU rule will be installed after v6 modem UL rules\n");
-			mtu_flt_rule_offset[IPA_IP_v6] = wan_ul_fl_rule_hdl_v6[num_wan_ul_fl_rule_v6 - 1];
-		}
-		else
-		{
-			IPACMDBG("v6 GRE MTU rule will be installed after v6 default rules\n");
-			mtu_flt_rule_offset[IPA_IP_v6] = dft_v6fl_rule_hdl[m_ipv6_default_filterting_rules_count - 1];
-		}
-
-		mtu_rule_cnt++;
-	}
-#endif
-	IPACMDBG_H("Memory allocating for num_ipv6_prefixes rules = %d num_no_offload_ipv6_prefix rules = %d mtu_rule_cnt = %d\n", IPACM_Iface::ipacmcfg->num_ipv6_prefixes, IPACM_Iface::ipacmcfg->num_no_offload_ipv6_prefix, mtu_rule_cnt);
-	len = sizeof(struct ipa_ioc_add_flt_rule_after) + (IPACM_Iface::ipacmcfg->num_ipv6_prefixes + IPACM_Iface::ipacmcfg->num_no_offload_ipv6_prefix + mtu_rule_cnt) * sizeof(struct ipa_flt_rule_add);
-	pFilteringTable = (struct ipa_ioc_add_flt_rule_after*)malloc(len);
-	if(!pFilteringTable)
-	{
-		IPACMERR("Failed to allocate ipa_ioc_add_flt_rule_after memory...\n");
-		return IPACM_FAILURE;
-	}
-	memset(pFilteringTable, 0, len);
-
-	pFilteringTable->commit = 1;
-	pFilteringTable->ip = IPA_IP_v6;
-	pFilteringTable->num_rules = num_wan_prefix_rules = (uint8_t)IPACM_Iface::ipacmcfg->num_ipv6_prefixes + IPACM_Iface::ipacmcfg->num_no_offload_ipv6_prefix + mtu_rule_cnt;
-	if (pFilteringTable->num_rules > IPA_MAX_IPV6_NO_OFFLOAD_PREFIX_FLT_RULE + IPA_MAX_MTU_ENTRIES)
-	{
-		IPACMERR("Number of rules crossed the maximum available space");
-		return IPACM_FAILURE;
-	}
-	pFilteringTable->ep = rx_prop->rx[idx].src_pipe;
-	pFilteringTable->add_after_hdl = mtu_flt_rule_offset[IPA_IP_v6];
-
-	memset(&flt_rule, 0, sizeof(struct ipa_flt_rule_add));
-	flt_rule.status = -1;
-	flt_rule.at_rear = 1;
-	flt_rule.rule.retain_hdr = 1;
-	flt_rule.rule.to_uc = 0;
-	flt_rule.rule.action = IPA_PASS_TO_EXCEPTION;
-	flt_rule.rule.eq_attrib_type = 0;
-	/* first install DST address exception rules for offloaded PDNs */
-	for(i = 0; i < (IPACM_Iface::ipacmcfg->num_ipv6_prefixes); i++)
-	{
-		/* add private prefix rule for ipv6 */
-		flt_rule.rule.action = IPA_PASS_TO_EXCEPTION;
-		flt_rule.rule.eq_attrib_type = 0;
-		memcpy(&flt_rule.rule.attrib, &rx_prop->rx[idx].attrib, sizeof(flt_rule.rule.attrib));
-		flt_rule.rule.attrib.attrib_mask |= IPA_FLT_DST_ADDR;
-		flt_rule.rule.attrib.u.v6.dst_addr[0] = IPACM_Iface::ipacmcfg->ipa_ipv6_prefixes[i].addr[0];
-		flt_rule.rule.attrib.u.v6.dst_addr[1] = IPACM_Iface::ipacmcfg->ipa_ipv6_prefixes[i].addr[1];
-		flt_rule.rule.attrib.u.v6.dst_addr[2] = 0x0;
-		flt_rule.rule.attrib.u.v6.dst_addr[3] = 0x0;
-		flt_rule.rule.attrib.u.v6.dst_addr_mask[0] = 0xFFFFFFFF;
-		flt_rule.rule.attrib.u.v6.dst_addr_mask[1] = 0xFFFFFFFF;
-		flt_rule.rule.attrib.u.v6.dst_addr_mask[2] = 0x0;
-		flt_rule.rule.attrib.u.v6.dst_addr_mask[3] = 0x0;
-		memcpy(&(pFilteringTable->rules[i]), &flt_rule, sizeof(struct ipa_flt_rule_add));
-		IPACMDBG_H(" IPACM v6 prefix as: 0x[%X][%X] entry(%d)\n",
-			flt_rule.rule.attrib.u.v6.dst_addr[0],
-			flt_rule.rule.attrib.u.v6.dst_addr[1], i);
-
-		/* add corresponding MTU rule for ipv6 */
-		if (mtu[i] > 0 && mtu[i] < DEFAULT_MTU_SIZE)
-		{
-			memcpy(&flt_rule.rule.attrib, &rx_prop->rx[idx].attrib, sizeof(flt_rule.rule.attrib));
-
-			/* if Vlan enabled, add vlan id as a parameter of the MTU rule*/
-			if (vid[i])
-			{
-				flt_rule.rule.attrib.attrib_mask |= IPA_FLT_VLAN_ID;
-				flt_rule.rule.attrib.vlan_id = vid[i];
+			//add the MTU rule after the 2nd pass rules but before the 1st pass rule
+			if (num_wan_ul_fl_rule_v6) {
+				IPACMDBG("v6 GRE MTU rule will be installed after v6 modem UL rules\n");
+				mtu_flt_rule_offset[IPA_IP_v6] = wan_ul_fl_rule_hdl_v6[num_wan_ul_fl_rule_v6 - 1];
+			} else {
+				IPACMDBG("v6 GRE MTU rule will be installed after v6 default rules\n");
+				mtu_flt_rule_offset[IPA_IP_v6] = dft_v6fl_rule_hdl[m_ipv6_default_filterting_rules_count - 1];
 			}
 
-			if (construct_mtu_rule(&flt_rule.rule, IPA_IP_v6, mtu[i]))
-				IPACMERR("Failed to modify MTU filtering rule.\n");
-			memcpy(&(pFilteringTable->rules[mtu_rule_idx]), &flt_rule, sizeof(struct ipa_flt_rule_add));
-
-			IPACMDBG_H("Succesfully constructed v6 MTU rule for vlan id %d entry(%d)\n", vid[i], mtu_rule_idx);
-			mtu_rule_idx++;
+			mtu_rule_cnt++;
 		}
-	}
+#endif
+		IPACMDBG_H("Memory allocating for num_ipv6_prefixes rules = %d num_no_offload_ipv6_prefix rules = %d mtu_rule_cnt = %d\n", IPACM_Iface::ipacmcfg->num_ipv6_prefixes, IPACM_Iface::ipacmcfg->num_no_offload_ipv6_prefix, mtu_rule_cnt);
+		len = sizeof(struct ipa_ioc_add_flt_rule_after) + (IPACM_Iface::ipacmcfg->num_ipv6_prefixes + IPACM_Iface::ipacmcfg->num_no_offload_ipv6_prefix + mtu_rule_cnt) * sizeof(struct ipa_flt_rule_add);
+		pFilteringTable = (struct ipa_ioc_add_flt_rule_after *)malloc(len);
+		if (!pFilteringTable) {
+			IPACMERR("Failed to allocate ipa_ioc_add_flt_rule_after memory...\n");
+			return IPACM_FAILURE;
+		}
+		memset(pFilteringTable, 0, len);
 
-	/* reset the attrib for no offload prefix rules */
-	flt_rule.rule.eq_attrib_type = 0;
-	memcpy(&flt_rule.rule.attrib, &rx_prop->rx[idx].attrib, sizeof(flt_rule.rule.attrib));
-	flt_rule.rule.attrib.attrib_mask |= IPA_FLT_SRC_ADDR;
-	/* now install SRC address exception rules for no offload PDNs */
-	for(i = 0; i < (IPACM_Iface::ipacmcfg->num_no_offload_ipv6_prefix); i++)
-	{
-		flt_rule.rule.attrib.u.v6.src_addr[0] = IPACM_Iface::ipacmcfg->ipa_no_offload_ipv6_prefixes[i][0];
-		flt_rule.rule.attrib.u.v6.src_addr[1] = IPACM_Iface::ipacmcfg->ipa_no_offload_ipv6_prefixes[i][1];
-		flt_rule.rule.attrib.u.v6.src_addr[2] = 0x0;
-		flt_rule.rule.attrib.u.v6.src_addr[3] = 0x0;
-		flt_rule.rule.attrib.u.v6.src_addr_mask[0] = 0xFFFFFFFF;
-		flt_rule.rule.attrib.u.v6.src_addr_mask[1] = 0xFFFFFFFF;
-		flt_rule.rule.attrib.u.v6.src_addr_mask[2] = 0x0;
-		flt_rule.rule.attrib.u.v6.src_addr_mask[3] = 0x0;
-		memcpy(&(pFilteringTable->rules[IPACM_Iface::ipacmcfg->num_ipv6_prefixes + i]), &flt_rule, sizeof(struct ipa_flt_rule_mdfy));
-		IPACMDBG_H(" IPACM v6 no offload prefix as: 0x[%X][%X] entry(%d)\n",
-				flt_rule.rule.attrib.u.v6.src_addr[0],
-				flt_rule.rule.attrib.u.v6.src_addr[1],
-				IPACM_Iface::ipacmcfg->num_ipv6_prefixes + i);
+		pFilteringTable->commit = 1;
+		pFilteringTable->ip = IPA_IP_v6;
+		pFilteringTable->num_rules = num_wan_prefix_rules[j] = (uint8_t)IPACM_Iface::ipacmcfg->num_ipv6_prefixes + IPACM_Iface::ipacmcfg->num_no_offload_ipv6_prefix + mtu_rule_cnt;
+		if (pFilteringTable->num_rules > IPA_MAX_IPV6_NO_OFFLOAD_PREFIX_FLT_RULE + IPA_MAX_MTU_ENTRIES) {
+			IPACMERR("Number of rules crossed the maximum available space");
+			return IPACM_FAILURE;
+		}
+		pFilteringTable->ep = rx_prop->rx[idx].src_pipe;
+		pFilteringTable->add_after_hdl = mtu_flt_rule_offset[j][IPA_IP_v6];
+
+		memset(&flt_rule, 0, sizeof(struct ipa_flt_rule_add));
+		flt_rule.status = -1;
+		flt_rule.at_rear = 1;
+		flt_rule.rule.retain_hdr = 1;
+		flt_rule.rule.to_uc = 0;
+		flt_rule.rule.action = IPA_PASS_TO_EXCEPTION;
+		flt_rule.rule.eq_attrib_type = 0;
+		/* first install DST address exception rules for offloaded PDNs */
+		for (i = 0; i < (IPACM_Iface::ipacmcfg->num_ipv6_prefixes); i++) {
+			/* add private prefix rule for ipv6 */
+			flt_rule.rule.action = IPA_PASS_TO_EXCEPTION;
+			flt_rule.rule.eq_attrib_type = 0;
+			memcpy(&flt_rule.rule.attrib, &rx_prop->rx[idx].attrib, sizeof(flt_rule.rule.attrib));
+			flt_rule.rule.attrib.attrib_mask |= IPA_FLT_DST_ADDR;
+			flt_rule.rule.attrib.u.v6.dst_addr[0] = IPACM_Iface::ipacmcfg->ipa_ipv6_prefixes[i].addr[0];
+			flt_rule.rule.attrib.u.v6.dst_addr[1] = IPACM_Iface::ipacmcfg->ipa_ipv6_prefixes[i].addr[1];
+			flt_rule.rule.attrib.u.v6.dst_addr[2] = 0x0;
+			flt_rule.rule.attrib.u.v6.dst_addr[3] = 0x0;
+			flt_rule.rule.attrib.u.v6.dst_addr_mask[0] = 0xFFFFFFFF;
+			flt_rule.rule.attrib.u.v6.dst_addr_mask[1] = 0xFFFFFFFF;
+			flt_rule.rule.attrib.u.v6.dst_addr_mask[2] = 0x0;
+			flt_rule.rule.attrib.u.v6.dst_addr_mask[3] = 0x0;
+			memcpy(&(pFilteringTable->rules[i]), &flt_rule, sizeof(struct ipa_flt_rule_add));
+			IPACMDBG_H(" IPACM v6 prefix as: 0x[%X][%X] entry(%d)\n",
+					   flt_rule.rule.attrib.u.v6.dst_addr[0],
+					   flt_rule.rule.attrib.u.v6.dst_addr[1], i);
+
+			/* add corresponding MTU rule for ipv6 */
+			if (mtu[i] > 0 && mtu[i] < DEFAULT_MTU_SIZE) {
+				memcpy(&flt_rule.rule.attrib, &rx_prop->rx[idx].attrib, sizeof(flt_rule.rule.attrib));
+
+				/* if Vlan enabled, add vlan id as a parameter of the MTU rule*/
+				if (vid[i]) {
+					flt_rule.rule.attrib.attrib_mask |= IPA_FLT_VLAN_ID;
+					flt_rule.rule.attrib.vlan_id = vid[i];
+				}
+
+				if (construct_mtu_rule(&flt_rule.rule, IPA_IP_v6, mtu[i])) IPACMERR("Failed to modify MTU filtering rule.\n");
+				memcpy(&(pFilteringTable->rules[mtu_rule_idx]), &flt_rule, sizeof(struct ipa_flt_rule_add));
+
+				IPACMDBG_H("Succesfully constructed v6 MTU rule for vlan id %d entry(%d)\n", vid[i], mtu_rule_idx);
+				mtu_rule_idx++;
+			}
+		}
+
+		/* reset the attrib for no offload prefix rules */
+		flt_rule.rule.eq_attrib_type = 0;
+		memcpy(&flt_rule.rule.attrib, &rx_prop->rx[idx].attrib, sizeof(flt_rule.rule.attrib));
 		flt_rule.rule.attrib.attrib_mask |= IPA_FLT_SRC_ADDR;
-	}
+		/* now install SRC address exception rules for no offload PDNs */
+		for (i = 0; i < (IPACM_Iface::ipacmcfg->num_no_offload_ipv6_prefix); i++) {
+			flt_rule.rule.attrib.u.v6.src_addr[0] = IPACM_Iface::ipacmcfg->ipa_no_offload_ipv6_prefixes[i][0];
+			flt_rule.rule.attrib.u.v6.src_addr[1] = IPACM_Iface::ipacmcfg->ipa_no_offload_ipv6_prefixes[i][1];
+			flt_rule.rule.attrib.u.v6.src_addr[2] = 0x0;
+			flt_rule.rule.attrib.u.v6.src_addr[3] = 0x0;
+			flt_rule.rule.attrib.u.v6.src_addr_mask[0] = 0xFFFFFFFF;
+			flt_rule.rule.attrib.u.v6.src_addr_mask[1] = 0xFFFFFFFF;
+			flt_rule.rule.attrib.u.v6.src_addr_mask[2] = 0x0;
+			flt_rule.rule.attrib.u.v6.src_addr_mask[3] = 0x0;
+			memcpy(&(pFilteringTable->rules[IPACM_Iface::ipacmcfg->num_ipv6_prefixes + i]), &flt_rule, sizeof(struct ipa_flt_rule_mdfy));
+			IPACMDBG_H(" IPACM v6 no offload prefix as: 0x[%X][%X] entry(%d)\n",
+					   flt_rule.rule.attrib.u.v6.src_addr[0],
+					   flt_rule.rule.attrib.u.v6.src_addr[1],
+					   IPACM_Iface::ipacmcfg->num_ipv6_prefixes + i);
+			flt_rule.rule.attrib.attrib_mask |= IPA_FLT_SRC_ADDR;
+		}
 
 #ifdef FEATURE_EoGRE
-	//Case where eogre is enabled for opposite iptype. Need to install MTU rule with no prefixes
-	if(IPACM_Iface::ipacmcfg->num_ipv6_prefixes == 0 && IPACM_Iface::ipacmcfg->eogre_enabled && IPACM_Iface::ipacmcfg->eogre_info.iptype == IPA_IP_v4)
-	{
-		memcpy(
-			&flt_rule.rule.attrib,
-			&rx_prop->rx[idx].attrib,
-			sizeof(flt_rule.rule.attrib));
-		if (construct_mtu_rule(&flt_rule.rule, IPA_IP_v6, mtu[0]))
-			IPACMERR("Failed to modify MTU filtering rule.\n");
-		memcpy(&(pFilteringTable->rules[mtu_rule_idx++]), &flt_rule, sizeof(struct ipa_flt_rule_add));
-		IPACMDBG_H("Succesfully constructed GRE v6 MTU rule\n");
-	}
+		//Case where eogre is enabled for opposite iptype. Need to install MTU rule with no prefixes
+		if (IPACM_Iface::ipacmcfg->num_ipv6_prefixes == 0 && IPACM_Iface::ipacmcfg->eogre_enabled && IPACM_Iface::ipacmcfg->eogre_info.iptype == IPA_IP_v4) {
+			memcpy(
+				&flt_rule.rule.attrib,
+				&rx_prop->rx[idx].attrib,
+				sizeof(flt_rule.rule.attrib));
+			if (construct_mtu_rule(&flt_rule.rule, IPA_IP_v6, mtu[0])) IPACMERR("Failed to modify MTU filtering rule.\n");
+			memcpy(&(pFilteringTable->rules[mtu_rule_idx++]), &flt_rule, sizeof(struct ipa_flt_rule_add));
+			IPACMDBG_H("Succesfully constructed GRE v6 MTU rule\n");
+		}
 #endif
 
-	if(false == m_filtering.AddFilteringRuleAfter(pFilteringTable))
-	{
-		IPACMERR("Failed to add prefix filtering rules.\n");
-		res = IPACM_FAILURE;
-		goto fail;
+		if (false == m_filtering.AddFilteringRuleAfter(pFilteringTable)) {
+			IPACMERR("Failed to add prefix filtering rules.\n");
+			res = IPACM_FAILURE;
+			goto fail;
+		}
+		IPACM_Iface::ipacmcfg->increaseFltRuleCount(rx_prop->rx[idx].src_pipe, IPA_IP_v6, num_wan_prefix_rules[j]);
+
+		/* save the rule hdls */
+		for (i = 0; i < num_wan_prefix_rules[j]; i++)
+			ipv6_prefix_flt_rule_hdl[j][i] = pFilteringTable->rules[i].flt_rule_hdl;
+
+		if (pFilteringTable != NULL)
+		{
+			free(pFilteringTable);
+		}
 	}
-	IPACM_Iface::ipacmcfg->increaseFltRuleCount(rx_prop->rx[idx].src_pipe, IPA_IP_v6, num_wan_prefix_rules);
-
-	/* save the rule hdls */
-	for (i = 0; i < num_wan_prefix_rules; i++)
-		ipv6_prefix_flt_rule_hdl[i] = pFilteringTable->rules[i].flt_rule_hdl;
-
 fail:
 	if(pFilteringTable != NULL)
 	{
@@ -11375,17 +11464,30 @@ int IPACM_Lan::install_ipv6_prefix_flt_rule(uint32_t* prefix)
 	struct ipa_ioc_add_flt_rule* flt_rule;
 	struct ipa_flt_rule_add flt_rule_entry;
 	int rule_cnt = 1, idx = 0;
+	int j = 0;
 
 	uint16_t mtu = IPACM_Wan::queryMTU(ipa_if_num, IPA_IP_v6);
 	if (mtu > 0)
 		rule_cnt ++;
 
-	if(rx_prop != NULL)
+	if(rx_prop == NULL || tx_prop == NULL)
 	{
+		IPACMERR("no valid props\n");
+		return IPACM_FAILURE;
+	}
 
-		if ((ipa_if_cate == WLAN_IF) && (is_if_svap || is_wlan_if_vlan) && (rx_prop && rx_prop->num_rx_props > 2)) {
+	for (j = 0; j < rx_prop->num_rx_props / 2 && j < IPA_MAX_NUM_PROPS; j++)
+	{
+		if ((ipa_if_cate == WLAN_IF) && (is_if_svap || is_wlan_if_vlan) && (rx_prop->num_rx_props > 2)) {
+			if (j < 2) {
+				IPACMDBG_H("Interface is WLAN Svap or w-vlan, dont install rules on pipe %d..... continue\n", idx);
+				continue;
+			}
 			idx = 2;
-			IPACMDBG_H("Interface is WLAN Svap or vlan, install rules on Rx pipe at idx %d \n", idx);
+			IPACMDBG_H("Interface is WLAN Svap or vlan, install rules on Rx1 pipe at idx %d \n", idx);
+		} else {
+			idx = idx + j * 2;
+			IPACMDBG_H("Install rules at idx %d\n", idx);
 		}
 
 		len = sizeof(struct ipa_ioc_add_flt_rule) + rule_cnt * sizeof(struct ipa_flt_rule_add);
@@ -11457,11 +11559,11 @@ int IPACM_Lan::install_ipv6_prefix_flt_rule(uint32_t* prefix)
 		{
 			IPACM_Iface::ipacmcfg->increaseFltRuleCount(rx_prop->rx[idx].src_pipe,
 				IPA_IP_v6, IPv6_PREFIX_DEFAULT_PDN_RULE_NUM);
-			ipv6_prefix_flt_rule_hdl[0] = flt_rule->rules[0].flt_rule_hdl;
+			ipv6_prefix_flt_rule_hdl[j][0] = flt_rule->rules[0].flt_rule_hdl;
 			IPACMDBG_H("IPv6 prefix filter rule HDL:0x%x\n", ipv6_prefix_flt_rule_hdl[0]);
 			if (rule_cnt > 1)
 			{
-				ipv6_prefix_flt_rule_hdl[1] = flt_rule->rules[1].flt_rule_hdl;
+				ipv6_prefix_flt_rule_hdl[j][1] = flt_rule->rules[1].flt_rule_hdl;
 				IPACMDBG_H("IPv6 prefix MTU filter rule HDL:0x%x\n", ipv6_prefix_flt_rule_hdl[1]);
 			}
 			free(flt_rule);
@@ -11473,23 +11575,32 @@ int IPACM_Lan::install_ipv6_prefix_flt_rule(uint32_t* prefix)
 void IPACM_Lan::delete_ipv6_prefix_flt_rule()
 {
 	int idx = 0;
+	int j = 0;
 
-	if ((ipa_if_cate == WLAN_IF) && (is_if_svap || is_wlan_if_vlan) && (rx_prop && rx_prop->num_rx_props > 2)) {
-		idx = 2;
-		IPACMDBG_H("Interface is WLAN Svap or vlan, install rules on Rx pipe at idx %d \n", idx);
-	}
+	for (j = 0; j < rx_prop->num_rx_props / 2 && j < IPA_MAX_NUM_PROPS; j++)
+	{
+		if ((ipa_if_cate == WLAN_IF) && (is_if_svap || is_wlan_if_vlan) && (rx_prop->num_rx_props > 2)) {
+			if (j < 2) {
+				IPACMDBG_H("Interface is WLAN Svap or w-vlan, dont install rules on pipe %d..... continue\n", idx);
+				continue;
+			}
+			idx = 2;
+			IPACMDBG_H("Interface is WLAN Svap or vlan, install rules on Rx1 pipe at idx %d \n", idx);
+		} else {
+			idx = idx + j * 2;
+			IPACMDBG_H("Install rules at idx %d\n", idx);
+		}
 
-	if(m_filtering.DeleteFilteringHdls(&ipv6_prefix_flt_rule_hdl[0], IPA_IP_v6, IPv6_PREFIX_DEFAULT_PDN_RULE_NUM) == false)
-	{
-		IPACMERR("Failed to delete ipv6 prefix flt rule.\n");
-		return;
+		if (m_filtering.DeleteFilteringHdls(&ipv6_prefix_flt_rule_hdl[j][0], IPA_IP_v6, IPv6_PREFIX_DEFAULT_PDN_RULE_NUM) == false) {
+			IPACMERR("Failed to delete ipv6 prefix flt rule.\n");
+			return;
+		}
+		if (rx_prop == NULL) {
+			IPACMERR("no rx props\n");
+			return;
+		}
+		IPACM_Iface::ipacmcfg->decreaseFltRuleCount(rx_prop->rx[idx].src_pipe, IPA_IP_v6, IPv6_PREFIX_DEFAULT_PDN_RULE_NUM);
 	}
-	if(rx_prop == NULL)
-	{
-		IPACMERR("no rx props\n");
-		return ;
-	}
-	IPACM_Iface::ipacmcfg->decreaseFltRuleCount(rx_prop->rx[idx].src_pipe, IPA_IP_v6, IPv6_PREFIX_DEFAULT_PDN_RULE_NUM);
 	return;
 }
 
@@ -11623,6 +11734,7 @@ int IPACM_Lan::handle_cradle_wan_mode_switch(bool is_wan_bridge_mode)
 	struct ipa_flt_rule_mdfy flt_rule_entry;
 	int len = 0;
 	ipa_ioc_mdfy_flt_rule *m_pFilteringTable;
+	int j, idx = 0;
 
 	IPACMDBG_H("Handle wan mode swtich: is wan bridge mode?%d\n", is_wan_bridge_mode);
 
@@ -11640,59 +11752,66 @@ int IPACM_Lan::handle_cradle_wan_mode_switch(bool is_wan_bridge_mode)
 		return IPACM_FAILURE;
 	}
 
-	m_pFilteringTable->commit = 1;
-	m_pFilteringTable->ip = IPA_IP_v4;
-	m_pFilteringTable->num_rules = (uint8_t)1;
-
-	IPACMDBG_H("Retrieving routing hanle for table: %s\n",
-					 IPACM_Iface::ipacmcfg->rt_tbl_wan_v4.name);
-	if (false == m_routing.GetRoutingTable(&IPACM_Iface::ipacmcfg->rt_tbl_wan_v4))
+	for (j = 0; j < rx_prop->num_rx_props / 2 && j < IPA_MAX_NUM_PROPS; j++)
 	{
-		IPACMERR("m_routing.GetRoutingTable(&IPACM_Iface::ipacmcfg->rt_tbl_wan_v4=0x%p) Failed.\n",
-						 &IPACM_Iface::ipacmcfg->rt_tbl_wan_v4);
-		free(m_pFilteringTable);
-		return IPACM_FAILURE;
-	}
-	IPACMDBG_H("Routing handle for table: %d\n", IPACM_Iface::ipacmcfg->rt_tbl_wan_v4.hdl);
+		if ((ipa_if_cate == WLAN_IF) && (is_if_svap || is_wlan_if_vlan) && (rx_prop->num_rx_props > 2)) {
+			if (j < 2) {
+				IPACMDBG_H("Interface is WLAN Svap or w-vlan, dont install rules on pipe %d..... continue\n", idx);
+				continue;
+			}
+			idx = 2;
+			IPACMDBG_H("Interface is WLAN Svap or vlan, install rules on Rx1 pipe at idx %d \n", idx);
+		} else {
+			idx = idx + j * 2;
+			IPACMDBG_H("Install rules at idx %d\n", idx);
+		}
+		m_pFilteringTable->commit = 1;
+		m_pFilteringTable->ip = IPA_IP_v4;
+		m_pFilteringTable->num_rules = (uint8_t)1;
+
+		IPACMDBG_H("Retrieving routing hanle for table: %s\n",
+				   IPACM_Iface::ipacmcfg->rt_tbl_wan_v4.name);
+		if (false == m_routing.GetRoutingTable(&IPACM_Iface::ipacmcfg->rt_tbl_wan_v4)) {
+			IPACMERR("m_routing.GetRoutingTable(&IPACM_Iface::ipacmcfg->rt_tbl_wan_v4=0x%p) Failed.\n",
+					 &IPACM_Iface::ipacmcfg->rt_tbl_wan_v4);
+			free(m_pFilteringTable);
+			return IPACM_FAILURE;
+		}
+		IPACMDBG_H("Routing handle for table: %d\n", IPACM_Iface::ipacmcfg->rt_tbl_wan_v4.hdl);
 
 
-	memset(&flt_rule_entry, 0, sizeof(struct ipa_flt_rule_mdfy)); // Zero All Fields
-	flt_rule_entry.status = -1;
-	flt_rule_entry.rule_hdl = lan_wan_fl_rule_hdl[0];
+		memset(&flt_rule_entry, 0, sizeof(struct ipa_flt_rule_mdfy)); // Zero All Fields
+		flt_rule_entry.status = -1;
+		flt_rule_entry.rule_hdl = lan_wan_fl_rule_hdl[j][0];
 
-	flt_rule_entry.rule.retain_hdr = 0;
-	flt_rule_entry.rule.to_uc = 0;
-	flt_rule_entry.rule.eq_attrib_type = 0;
-	if(is_wan_bridge_mode)
-	{
-		flt_rule_entry.rule.action = IPA_PASS_TO_ROUTING;
-	}
-	else
-	{
-		flt_rule_entry.rule.action = IPA_PASS_TO_SRC_NAT;
-	}
-	flt_rule_entry.rule.rt_tbl_hdl = IPACM_Iface::ipacmcfg->rt_tbl_wan_v4.hdl;
+		flt_rule_entry.rule.retain_hdr = 0;
+		flt_rule_entry.rule.to_uc = 0;
+		flt_rule_entry.rule.eq_attrib_type = 0;
+		if (is_wan_bridge_mode) {
+			flt_rule_entry.rule.action = IPA_PASS_TO_ROUTING;
+		} else {
+			flt_rule_entry.rule.action = IPA_PASS_TO_SRC_NAT;
+		}
+		flt_rule_entry.rule.rt_tbl_hdl = IPACM_Iface::ipacmcfg->rt_tbl_wan_v4.hdl;
 
-	memcpy(&flt_rule_entry.rule.attrib,
-				 &rx_prop->rx[0].attrib,
-				 sizeof(flt_rule_entry.rule.attrib));
+		memcpy(&flt_rule_entry.rule.attrib,
+			   &rx_prop->rx[idx].attrib,
+			   sizeof(flt_rule_entry.rule.attrib));
 
-	flt_rule_entry.rule.attrib.attrib_mask |= IPA_FLT_DST_ADDR;
-	flt_rule_entry.rule.attrib.u.v4.dst_addr_mask = 0x0;
-	flt_rule_entry.rule.attrib.u.v4.dst_addr = 0x0;
+		flt_rule_entry.rule.attrib.attrib_mask |= IPA_FLT_DST_ADDR;
+		flt_rule_entry.rule.attrib.u.v4.dst_addr_mask = 0x0;
+		flt_rule_entry.rule.attrib.u.v4.dst_addr = 0x0;
 
-	memcpy(&m_pFilteringTable->rules[0], &flt_rule_entry, sizeof(flt_rule_entry));
-	if (false == m_filtering.ModifyFilteringRule(m_pFilteringTable))
-	{
-		IPACMERR("Error Modifying RuleTable(0) to Filtering, aborting...\n");
-		free(m_pFilteringTable);
-		return IPACM_FAILURE;
-	}
-	else
-	{
-		IPACMDBG_H("flt rule hdl = %d, status = %d\n",
-						 m_pFilteringTable->rules[0].rule_hdl,
-						 m_pFilteringTable->rules[0].status);
+		memcpy(&m_pFilteringTable->rules[0], &flt_rule_entry, sizeof(flt_rule_entry));
+		if (false == m_filtering.ModifyFilteringRule(m_pFilteringTable)) {
+			IPACMERR("Error Modifying RuleTable(0) to Filtering, aborting...\n");
+			free(m_pFilteringTable);
+			return IPACM_FAILURE;
+		} else {
+			IPACMDBG_H("flt rule hdl = %d, status = %d\n",
+					   m_pFilteringTable->rules[0].rule_hdl,
+					   m_pFilteringTable->rules[0].status);
+		}
 	}
 	free(m_pFilteringTable);
 	return IPACM_SUCCESS;
@@ -11916,18 +12035,18 @@ int IPACM_Lan::eth_bridge_add_hdr_proc_ctx(ipa_hdr_l2_type peer_l2_hdr_type, uin
 	ipa_ioc_add_hdr_proc_ctx* pHeaderProcTable = NULL;
 	ipa_hdr_l2_type t2_hdr;
 
-	if (ipa_if_cate == WLAN_IF && (((IPACM_Wlan *)this)->is_svap_iface() ||
-		((IPACM_Wlan *)this)->is_vlan_iface())) {
-		t2_hdr = tx_prop->tx[2].hdr_l2_type;
-	}
-	else {
-		t2_hdr = tx_prop->tx[0].hdr_l2_type;
-	}
-
 	if(tx_prop == NULL)
 	{
 		IPACMERR("No tx prop.\n");
 		return IPACM_FAILURE;
+	}
+
+	if (ipa_if_cate == WLAN_IF &&
+		(((IPACM_Wlan *)this)->is_svap_iface() || ((IPACM_Wlan *)this)->is_vlan_iface()) ||
+		sIface && vlan_id) {
+		t2_hdr = tx_prop->tx[2].hdr_l2_type;
+	} else {
+		t2_hdr = tx_prop->tx[0].hdr_l2_type;
 	}
 
 	len = sizeof(struct ipa_ioc_add_hdr_proc_ctx) + sizeof(struct ipa_hdr_proc_ctx_add);
@@ -11969,7 +12088,7 @@ int IPACM_Lan::eth_bridge_add_hdr_proc_ctx(ipa_hdr_l2_type peer_l2_hdr_type, uin
 		goto end;
 	}
 
-	*hdl = pHeaderProcTable->proc_ctx[0].proc_ctx_hdl;
+	hdl[0] = pHeaderProcTable->proc_ctx[0].proc_ctx_hdl;
 
 end:
 	free(pHeaderProcTable);
@@ -12224,33 +12343,29 @@ end:
 	return res;
 }
 
-int IPACM_Lan::eth_bridge_add_flt_rule(uint8_t *mac, uint32_t rt_tbl_hdl, ipa_ip_type iptype, uint32_t *flt_rule_hdl, uint16_t vlan_id)
-{
+int IPACM_Lan::eth_bridge_add_flt_rule(uint8_t *mac, uint32_t rt_tbl_hdl, ipa_ip_type iptype, uint32_t *flt_rule_hdl, uint16_t vlan_id, uint16_t pipe_idx) {
 	int len, res = IPACM_SUCCESS, idx = 0;
 	struct ipa_flt_rule_add flt_rule_entry;
 	struct ipa_ioc_add_flt_rule_after *pFilteringTable = NULL;
+	int j = 0;
 
 #ifdef FEATURE_IPA_V3
-	if (rx_prop == NULL || tx_prop == NULL)
-	{
+	if (rx_prop == NULL || tx_prop == NULL) {
 		IPACMDBG_H("No rx or tx properties registered for iface %s\n", dev_name);
 		return IPACM_FAILURE;
-	}
-
-	if ((ipa_if_cate == WLAN_IF) && (is_if_svap || is_wlan_if_vlan) && (rx_prop && rx_prop->num_rx_props > 2)) {
-		idx = 2;
-		IPACMDBG_H("Interface is WLAN Svap or vlan, install rules on Rx pipe at idx %d \n", idx);
 	}
 
 	IPACMDBG_H("Received client MAC 0x%02x%02x%02x%02x%02x%02x.\n", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
 
 	len = sizeof(struct ipa_ioc_add_flt_rule_after) + sizeof(struct ipa_flt_rule_add);
-	pFilteringTable = (struct ipa_ioc_add_flt_rule_after*)malloc(len);
-	if (!pFilteringTable)
-	{
+	pFilteringTable = (struct ipa_ioc_add_flt_rule_after *)malloc(len);
+	if (!pFilteringTable) {
 		IPACMERR("Failed to allocate ipa_ioc_add_flt_rule_after memory...\n");
 		return IPACM_FAILURE;
 	}
+
+	idx = pipe_idx;
+	IPACMDBG_H("Install rules on Rx pipe at idx %d \n", idx);
 	memset(pFilteringTable, 0, len);
 
 	/* add mac based rule*/
@@ -12258,7 +12373,7 @@ int IPACM_Lan::eth_bridge_add_flt_rule(uint8_t *mac, uint32_t rt_tbl_hdl, ipa_ip
 	pFilteringTable->ep = rx_prop->rx[idx].src_pipe;
 	pFilteringTable->ip = iptype;
 	pFilteringTable->num_rules = 1;
-	pFilteringTable->add_after_hdl = eth_bridge_flt_rule_offset[iptype];
+	pFilteringTable->add_after_hdl = eth_bridge_flt_rule_offset[idx / 2][iptype];
 
 	memset(&flt_rule_entry, 0, sizeof(flt_rule_entry));
 	flt_rule_entry.at_rear = 1;
@@ -12271,8 +12386,8 @@ int IPACM_Lan::eth_bridge_add_flt_rule(uint8_t *mac, uint32_t rt_tbl_hdl, ipa_ip
 	flt_rule_entry.rule.hashable = true;
 
 	memcpy(&flt_rule_entry.rule.attrib, &rx_prop->rx[idx].attrib, sizeof(flt_rule_entry.rule.attrib));
-	switch(tx_prop->tx[idx].hdr_l2_type)
-	{
+	switch (tx_prop->tx[idx].hdr_l2_type) {
+
 #ifdef IPA_HDR_L2_ETHERNET_II_AST
 	case IPA_HDR_L2_ETHERNET_II_AST:
 #endif
@@ -12298,10 +12413,8 @@ int IPACM_Lan::eth_bridge_add_flt_rule(uint8_t *mac, uint32_t rt_tbl_hdl, ipa_ip
 	memset(flt_rule_entry.rule.attrib.dst_mac_addr_mask, 0xFF, sizeof(flt_rule_entry.rule.attrib.dst_mac_addr_mask));
 
 #ifdef FEATURE_VLAN_MPDN
-	if((IPACM_Iface::ipacmcfg->iface_in_vlan_mode(dev_name)) && (vlan_id != 0))
-	{
-		if(!vlan_id)
-		{
+	if ((IPACM_Iface::ipacmcfg->iface_in_vlan_mode(dev_name)) && (vlan_id != 0)) {
+		if (!vlan_id) {
 			IPACMERR("got vlan id 0 for vlan iface %s\n", dev_name);
 			res = IPACM_FAILURE;
 			goto end;
@@ -12309,16 +12422,13 @@ int IPACM_Lan::eth_bridge_add_flt_rule(uint8_t *mac, uint32_t rt_tbl_hdl, ipa_ip
 
 		flt_rule_entry.rule.attrib.attrib_mask |= IPA_FLT_VLAN_ID;
 		flt_rule_entry.rule.attrib.vlan_id = vlan_id;
-	}
-	else if(vlan_id)
-	{
+	} else if (vlan_id) {
 		IPACMERR("vlan id is not 0 (%d) for non vlan iface %s!\n", vlan_id, dev_name);
 	}
 #endif //FEATURE_VLAN_MPDN
 
 	memcpy(&(pFilteringTable->rules[0]), &flt_rule_entry, sizeof(flt_rule_entry));
-	if (false == m_filtering.AddFilteringRuleAfter(pFilteringTable))
-	{
+	if (false == m_filtering.AddFilteringRuleAfter(pFilteringTable)) {
 		IPACMERR("Failed to add client filtering rules.\n");
 		res = IPACM_FAILURE;
 		goto end;
@@ -13933,16 +14043,12 @@ int IPACM_Lan::add_tcp_syn_flt_rule(ipa_ip_type iptype)
 	int len, idx = 0;
 	struct ipa_flt_rule_add flt_rule_entry;
 	ipa_ioc_add_flt_rule *m_pFilteringTable;
+	int j;
 
 	if(rx_prop == NULL)
 	{
 		IPACMDBG_H("No rx properties registered for iface %s\n", dev_name);
 		return IPACM_SUCCESS;
-	}
-
-	if ((ipa_if_cate == WLAN_IF) && (is_if_svap || is_wlan_if_vlan) && (rx_prop->num_rx_props > 2)) {
-		idx = 2;
-		IPACMDBG_H("Interface is WLAN Svap or vlan, install rules on Rx1 pipe at idx %d \n", idx);
 	}
 
 	len = sizeof(struct ipa_ioc_add_flt_rule) + sizeof(struct ipa_flt_rule_add);
@@ -13952,46 +14058,59 @@ int IPACM_Lan::add_tcp_syn_flt_rule(ipa_ip_type iptype)
 		PERROR("Not enough memory.\n");
 		return IPACM_FAILURE;
 	}
-	memset(m_pFilteringTable, 0, len);
 
-	m_pFilteringTable->commit = 1;
-	m_pFilteringTable->ep = rx_prop->rx[idx].src_pipe;
-	m_pFilteringTable->global = false;
-	m_pFilteringTable->ip = iptype;
-	m_pFilteringTable->num_rules = 1;
+	for (j = 0; j < rx_prop->num_rx_props / 2 && j < IPA_MAX_NUM_PROPS; j++) {
+		if ((ipa_if_cate == WLAN_IF) && (is_if_svap || is_wlan_if_vlan) && (rx_prop->num_rx_props > 2))
+		{
+			if (j < 2) {
+				IPACMDBG_H("Interface is WLAN Svap or w-vlan, dont install rules on pipe %d..... continue\n", idx);
+				continue;
+			}
+			idx = 2;
+			IPACMDBG_H("Interface is WLAN Svap or vlan, install rules on Rx1 pipe at idx %d \n", idx);
+		} else {
+			idx = idx + j * 2;
+			IPACMDBG_H("Install rules at idx %d\n", idx);
+		}
 
-	memset(&flt_rule_entry, 0, sizeof(flt_rule_entry));
-	flt_rule_entry.at_rear = true;
-	flt_rule_entry.rule.retain_hdr = 1;
-	flt_rule_entry.flt_rule_hdl = -1;
-	flt_rule_entry.status = -1;
-	flt_rule_entry.rule.action = IPA_PASS_TO_EXCEPTION;
+		memset(m_pFilteringTable, 0, len);
 
-	memcpy(&flt_rule_entry.rule.attrib, &rx_prop->rx[idx].attrib,
-		sizeof(flt_rule_entry.rule.attrib));
-	flt_rule_entry.rule.attrib.attrib_mask |= IPA_FLT_TCP_SYN;
-	if(iptype == IPA_IP_v4)
-	{
-		flt_rule_entry.rule.attrib.attrib_mask |= IPA_FLT_PROTOCOL;
-		flt_rule_entry.rule.attrib.u.v4.protocol = 6;
+		m_pFilteringTable->commit = 1;
+		m_pFilteringTable->ep = rx_prop->rx[idx].src_pipe;
+		m_pFilteringTable->global = false;
+		m_pFilteringTable->ip = iptype;
+		m_pFilteringTable->num_rules = 1;
+
+		memset(&flt_rule_entry, 0, sizeof(flt_rule_entry));
+		flt_rule_entry.at_rear = true;
+		flt_rule_entry.rule.retain_hdr = 1;
+		flt_rule_entry.flt_rule_hdl = -1;
+		flt_rule_entry.status = -1;
+		flt_rule_entry.rule.action = IPA_PASS_TO_EXCEPTION;
+
+		memcpy(&flt_rule_entry.rule.attrib, &rx_prop->rx[idx].attrib,
+			   sizeof(flt_rule_entry.rule.attrib));
+		flt_rule_entry.rule.attrib.attrib_mask |= IPA_FLT_TCP_SYN;
+		if (iptype == IPA_IP_v4) {
+			flt_rule_entry.rule.attrib.attrib_mask |= IPA_FLT_PROTOCOL;
+			flt_rule_entry.rule.attrib.u.v4.protocol = 6;
+		} else {
+			flt_rule_entry.rule.attrib.attrib_mask |= IPA_FLT_NEXT_HDR;
+			flt_rule_entry.rule.attrib.u.v6.next_hdr = 6;
+		}
+
+		memcpy(&(m_pFilteringTable->rules[0]), &flt_rule_entry, sizeof(flt_rule_entry));
+
+		if (false == m_filtering.AddFilteringRule(m_pFilteringTable)) {
+			IPACMERR("Error Adding RuleTable(0) to Filtering, aborting...\n");
+			free(m_pFilteringTable);
+			return IPACM_FAILURE;
+		}
+
+		tcp_syn_flt_rule_hdl[j][iptype] = m_pFilteringTable->rules[0].flt_rule_hdl;
+		IPACM_Iface::ipacmcfg->increaseFltRuleCount(rx_prop->rx[idx].src_pipe, iptype, 1);
 	}
-	else
-	{
-		flt_rule_entry.rule.attrib.attrib_mask |= IPA_FLT_NEXT_HDR;
-		flt_rule_entry.rule.attrib.u.v6.next_hdr = 6;
-	}
 
-	memcpy(&(m_pFilteringTable->rules[0]), &flt_rule_entry, sizeof(flt_rule_entry));
-
-	if(false == m_filtering.AddFilteringRule(m_pFilteringTable))
-	{
-		IPACMERR("Error Adding RuleTable(0) to Filtering, aborting...\n");
-		free(m_pFilteringTable);
-		return IPACM_FAILURE;
-	}
-
-	tcp_syn_flt_rule_hdl[iptype] = m_pFilteringTable->rules[0].flt_rule_hdl;
-	IPACM_Iface::ipacmcfg->increaseFltRuleCount(rx_prop->rx[idx].src_pipe, iptype, 1);
 	free(m_pFilteringTable);
 	return IPACM_SUCCESS;
 }
@@ -14052,7 +14171,7 @@ int IPACM_Lan::add_tcp_syn_flt_rule_l2tp(ipa_ip_type inner_ip_type)
 		return IPACM_FAILURE;
 	}
 
-	tcp_syn_flt_rule_hdl[inner_ip_type] = m_pFilteringTable->rules[0].flt_rule_hdl;
+	tcp_syn_flt_rule_hdl[0][inner_ip_type] = m_pFilteringTable->rules[0].flt_rule_hdl;
 	free(m_pFilteringTable);
 	return IPACM_SUCCESS;
 }
@@ -14827,7 +14946,7 @@ int IPACM_Lan::handle_mpdn_ul_xlat_filter_rule(ipacm_ext_prop * prop,
 	ipa_flt_rule_add flt_rule_entry;
 	ipa_ioc_add_flt_rule_after *pFilteringTable;
 	ipa_fltr_installed_notif_req_msg_v01 flt_index;
-	int i, cnt, entry_idx = 0, prev =0, curr =0, pos, idx_q6 = 0, idx = 0;
+	int i, j, cnt, entry_idx = 0, prev =0, curr =0, pos, idx_q6 = 0, idx = 0;
 	uint16_t value = 0, mask = 0;
 	int xlat_pdn_ctx_id;
 
@@ -14850,11 +14969,6 @@ int IPACM_Lan::handle_mpdn_ul_xlat_filter_rule(ipacm_ext_prop * prop,
 		return IPACM_FAILURE;
 	}
 
-	if ((ipa_if_cate == WLAN_IF) && (is_if_svap || is_wlan_if_vlan) && (rx_prop && rx_prop->num_rx_props > 2)) {
-		idx = 2;
-		IPACMDBG_H("Interface is WLAN Svap or vlan, install rules on Rx pipe at idx %d \n", idx);
-	}
-
 	fd = open(IPA_DEVICE_NAME, O_RDWR);
 	if (0 == fd)
 	{
@@ -14874,222 +14988,205 @@ int IPACM_Lan::handle_mpdn_ul_xlat_filter_rule(ipacm_ext_prop * prop,
 
 	IPACMDBG_H("Number of - xlat rules : %d \n", prop->num_v4_xlat_props);
 
-	memset(&flt_index, 0, sizeof(flt_index));
-	if(rx_prop == NULL)
+	for (j = 0; j < rx_prop->num_rx_props / 2 && j < IPA_MAX_NUM_PROPS; j++)
 	{
-		IPACMERR("no rx props\n");
-		return IPACM_FAILURE;
-	}
-	flt_index.source_pipe_index = ioctl(fd, IPA_IOC_QUERY_EP_MAPPING, rx_prop->rx[idx].src_pipe);
-	flt_index.install_status = IPA_QMI_RESULT_SUCCESS_V01;
-	flt_index.rule_id_ex_valid = 1;
-	flt_index.rule_id_ex_len = prop->num_v4_xlat_props;
-	flt_index.embedded_pipe_index_valid = 1;
-	flt_index.embedded_pipe_index = ioctl(fd, IPA_IOC_QUERY_EP_MAPPING, IPA_CLIENT_APPS_LAN_WAN_PROD);
-	flt_index.retain_header_valid = 1;
-	flt_index.retain_header = 0;
-	flt_index.embedded_call_mux_id_valid = 1;
-	flt_index.embedded_call_mux_id = pdn_mux_id;
-
-	IPACMDBG_H("flt_index: src pipe: %d, num of rules: %d, ebd pipe: %d, mux id: %d\n",
-		flt_index.source_pipe_index, flt_index.rule_id_ex_len,
-		flt_index.embedded_pipe_index, flt_index.embedded_call_mux_id);
-
-	len = sizeof(struct ipa_ioc_add_flt_rule_after) + prop->num_v4_xlat_props*sizeof(struct ipa_flt_rule_add);
-	pFilteringTable = (struct ipa_ioc_add_flt_rule_after*)malloc(len);
-	if (pFilteringTable == NULL)
-	{
-		IPACMERR("Error Locate ipa_flt_rule_add memory...\n");
-		ret = IPACM_FAILURE;
-		goto fail;
-	}
-	memset(pFilteringTable, 0, len);
-
-	pFilteringTable->commit = 1;
-	pFilteringTable->ep = rx_prop->rx[idx].src_pipe;
-	pFilteringTable->ip = iptype;
-	pFilteringTable->num_rules = 0;
-
-	memset(&flt_rule_entry, 0, sizeof(struct ipa_flt_rule_add)); // Zero All Fields
-	flt_rule_entry.at_rear = true;
-	flt_rule_entry.flt_rule_hdl = -1;
-	flt_rule_entry.status = -1;
-	flt_rule_entry.rule.retain_hdr = 0;
-	flt_rule_entry.rule.to_uc = 0;
-	flt_rule_entry.rule.eq_attrib_type = 1;
-	flt_rule_entry.rule.action = IPA_PASS_TO_SRC_NAT;
-	flt_rule_entry.rule.set_metadata = false;
-
-	IPACMDBG_H("filter rule count :%d\n",
-		IPACM_Iface::ipacmcfg->getFltRuleCount(rx_prop->rx[idx].src_pipe, iptype));
-
-	for(cnt=0; cnt < prop->num_ext_props; cnt++)
-	{
-		if (prop->prop[cnt].is_xlat_rule)
-		{
-			memcpy(&flt_rule_entry.rule.eq_attrib,
-						 &prop->prop[cnt].eq_attrib,
-						 sizeof(prop->prop[cnt].eq_attrib));
-			flt_rule_entry.rule.rt_tbl_idx = prop->prop[cnt].rt_tbl_idx;
-			flt_rule_entry.rule.hashable = prop->prop[cnt].is_rule_hashable;
-			flt_rule_entry.rule.rule_id = prop->prop[cnt].rule_id;
-			/* Rule ID of replicate is same as Q6 rule I.D */
-			flt_index.rule_id_ex[idx_q6] = prop->prop[cnt].rule_id;
-
-			value = vlan_id;
-			flt_rule_entry.rule.eq_attrib.rule_eq_bitmap |= (1<<9);
-			flt_rule_entry.rule.eq_attrib.metadata_meq32_present = 1;
-			flt_rule_entry.rule.eq_attrib.metadata_meq32.offset = 0;
-			flt_rule_entry.rule.eq_attrib.metadata_meq32.value = (value & 0xFFF)<<16;
-			flt_rule_entry.rule.eq_attrib.metadata_meq32.mask = 0x0FFF0000;
-
-			/* start with prev = curr = 0
-			 * find smallest q6 rule id greater than current xlat filter's rule id,
-			 * commit set of rules formed till now excluding curr rule based on prev pointer
-			 * make prev = curr i.e prev stores smallest rule id > max xlat rule id current consecutive set
-			 */
-			for (; curr < num_wan_ul_fl_rule_v4 && curr < MAX_NUM_EXT_PROPS; ++curr)
-			{
-				if (xlat_ctx.ul_rule_id_hdl_map[curr].rule_id > flt_rule_entry.rule.rule_id)
-					break;
+		if ((ipa_if_cate == WLAN_IF) && (is_if_svap || is_wlan_if_vlan) && (rx_prop->num_rx_props > 2)) {
+			if (j < 2) {
+				IPACMDBG_H("Interface is WLAN Svap or w-vlan, dont install rules on pipe %d..... continue\n", idx);
+				continue;
 			}
+			idx = 2;
+			IPACMDBG_H("Interface is WLAN Svap or vlan, install rules on Rx1 pipe at idx %d \n", idx);
+		} else {
+			idx = idx + j * 2;
+			IPACMDBG_H("Install rules at idx %d\n", idx);
+		}
 
-			/* commit consecutive rules with single ioctl */
-			if (curr != prev && pFilteringTable->num_rules != 0)
-			{
-				/* Starting Q6 rules after private subnet rules and rest maintains serial order
-				 * private subnet rule -> 512(pdn2)->513(2)->514(1)->512(pdn1)->513(1)->514(1)->515->516...
+		memset(&flt_index, 0, sizeof(flt_index));
+		if (rx_prop == NULL) {
+			IPACMERR("no rx props\n");
+			return IPACM_FAILURE;
+		}
+		flt_index.source_pipe_index = ioctl(fd, IPA_IOC_QUERY_EP_MAPPING, rx_prop->rx[idx].src_pipe);
+		flt_index.install_status = IPA_QMI_RESULT_SUCCESS_V01;
+		flt_index.rule_id_ex_valid = 1;
+		flt_index.rule_id_ex_len = prop->num_v4_xlat_props;
+		flt_index.embedded_pipe_index_valid = 1;
+		flt_index.embedded_pipe_index = ioctl(fd, IPA_IOC_QUERY_EP_MAPPING, IPA_CLIENT_APPS_LAN_WAN_PROD);
+		flt_index.retain_header_valid = 1;
+		flt_index.retain_header = 0;
+		flt_index.embedded_call_mux_id_valid = 1;
+		flt_index.embedded_call_mux_id = pdn_mux_id;
+
+		IPACMDBG_H("flt_index: src pipe: %d, num of rules: %d, ebd pipe: %d, mux id: %d\n",
+				   flt_index.source_pipe_index, flt_index.rule_id_ex_len,
+				   flt_index.embedded_pipe_index, flt_index.embedded_call_mux_id);
+
+		len = sizeof(struct ipa_ioc_add_flt_rule_after) + prop->num_v4_xlat_props * sizeof(struct ipa_flt_rule_add);
+		pFilteringTable = (struct ipa_ioc_add_flt_rule_after *)malloc(len);
+		if (pFilteringTable == NULL) {
+			IPACMERR("Error Locate ipa_flt_rule_add memory...\n");
+			ret = IPACM_FAILURE;
+			goto fail;
+		}
+		memset(pFilteringTable, 0, len);
+
+		pFilteringTable->commit = 1;
+		pFilteringTable->ep = rx_prop->rx[idx].src_pipe;
+		pFilteringTable->ip = iptype;
+		pFilteringTable->num_rules = 0;
+
+		memset(&flt_rule_entry, 0, sizeof(struct ipa_flt_rule_add)); // Zero All Fields
+		flt_rule_entry.at_rear = true;
+		flt_rule_entry.flt_rule_hdl = -1;
+		flt_rule_entry.status = -1;
+		flt_rule_entry.rule.retain_hdr = 0;
+		flt_rule_entry.rule.to_uc = 0;
+		flt_rule_entry.rule.eq_attrib_type = 1;
+		flt_rule_entry.rule.action = IPA_PASS_TO_SRC_NAT;
+		flt_rule_entry.rule.set_metadata = false;
+
+		IPACMDBG_H("filter rule count :%d\n",
+				   IPACM_Iface::ipacmcfg->getFltRuleCount(rx_prop->rx[idx].src_pipe, iptype));
+
+		for (cnt = 0; cnt < prop->num_ext_props; cnt++) {
+			if (prop->prop[cnt].is_xlat_rule) {
+				memcpy(&flt_rule_entry.rule.eq_attrib,
+					   &prop->prop[cnt].eq_attrib,
+					   sizeof(prop->prop[cnt].eq_attrib));
+				flt_rule_entry.rule.rt_tbl_idx = prop->prop[cnt].rt_tbl_idx;
+				flt_rule_entry.rule.hashable = prop->prop[cnt].is_rule_hashable;
+				flt_rule_entry.rule.rule_id = prop->prop[cnt].rule_id;
+				/* Rule ID of replicate is same as Q6 rule I.D */
+				flt_index.rule_id_ex[idx_q6] = prop->prop[cnt].rule_id;
+
+				value = vlan_id;
+				flt_rule_entry.rule.eq_attrib.rule_eq_bitmap |= (1 << 9);
+				flt_rule_entry.rule.eq_attrib.metadata_meq32_present = 1;
+				flt_rule_entry.rule.eq_attrib.metadata_meq32.offset = 0;
+				flt_rule_entry.rule.eq_attrib.metadata_meq32.value = (value & 0xFFF) << 16;
+				flt_rule_entry.rule.eq_attrib.metadata_meq32.mask = 0x0FFF0000;
+
+				/* start with prev = curr = 0
+				 * find smallest q6 rule id greater than current xlat filter's rule id,
+				 * commit set of rules formed till now excluding curr rule based on prev pointer
+				 * make prev = curr i.e prev stores smallest rule id > max xlat rule id current consecutive set
 				 */
-				if (prev == 0)
-				{
-					/* add the XLAT rule after the dynamic subnet/MTU rules */
-					pFilteringTable->add_after_hdl = private_fl_rule_hdl[num_wan_subnet_rules - 1];
-					if (!pFilteringTable->add_after_hdl)
-					{
-						for (int j = 0; j < MAX_NUM_IP_PASS_MPDN; j++)
-						{
-							if(IPACM_Iface::ipacmcfg->ip_pass_mpdn_table[j].valid_entry == true &&
-							IPACM_Iface::ipacmcfg->ip_pass_mpdn_table[j].ip_pass_skip_nat == 1)
-							{
-								pFilteringTable->add_after_hdl = dft_v4fl_rule_hdl[m_ipv4_default_filterting_rules_count - 1];
-								IPACMDBG_H("Add after handle 0x%x j %d\n", pFilteringTable->add_after_hdl, j);
-								break;
+				for (; curr < num_wan_ul_fl_rule_v4[j] && curr < MAX_NUM_EXT_PROPS; ++curr) {
+					if (xlat_ctx.ul_rule_id_hdl_map[curr].rule_id > flt_rule_entry.rule.rule_id) break;
+				}
+
+				/* commit consecutive rules with single ioctl */
+				if (curr != prev && pFilteringTable->num_rules != 0) {
+					/* Starting Q6 rules after private subnet rules and rest maintains serial order
+					 * private subnet rule -> 512(pdn2)->513(2)->514(1)->512(pdn1)->513(1)->514(1)->515->516...
+					 */
+					if (prev == 0) {
+						/* add the XLAT rule after the dynamic subnet/MTU rules */
+						pFilteringTable->add_after_hdl = private_fl_rule_hdl[j][num_wan_subnet_rules[j] - 1];
+						if (!pFilteringTable->add_after_hdl) {
+							for (int j = 0; j < MAX_NUM_IP_PASS_MPDN; j++) {
+								if (IPACM_Iface::ipacmcfg->ip_pass_mpdn_table[j].valid_entry == true &&
+									IPACM_Iface::ipacmcfg->ip_pass_mpdn_table[j].ip_pass_skip_nat == 1) {
+									pFilteringTable->add_after_hdl = dft_v4fl_rule_hdl[j][m_ipv4_default_filterting_rules_count[j] - 1];
+									IPACMDBG_H("Add after handle 0x%x j %d\n", pFilteringTable->add_after_hdl, j);
+									break;
+								}
 							}
 						}
+					} else pFilteringTable->add_after_hdl = xlat_ctx.ul_rule_id_hdl_map[prev - 1].flt_hdl;
+
+					IPACMDBG("Installing after 0x%x\n", pFilteringTable->add_after_hdl);
+
+					if (!pFilteringTable->add_after_hdl) {
+						IPACMDBG("Bad add_after_hdl = 0\n");
+						ret = IPACM_FAILURE;
+						goto fail;
 					}
-				}
-				else
-					pFilteringTable->add_after_hdl = xlat_ctx.ul_rule_id_hdl_map[prev - 1].flt_hdl;
 
-				IPACMDBG("Installing after 0x%x\n", pFilteringTable->add_after_hdl);
+					if (false == m_filtering.AddFilteringRuleAfter(pFilteringTable)) {
+						IPACMERR("Error Adding RuleTable to Filtering, aborting...\n");
+						ret = IPACM_FAILURE;
+						goto fail;
+					} else {
+						for (i = 0; i < pFilteringTable->num_rules; i++) {
+							if (xlat_ctx.active_pdn_list[xlat_pdn_ctx_id].num_wan_mpdn_ul_xlat_fl_rule_v4 > MAX_WAN_UL_FILTER_RULES) {
+								IPACMERR("Number of rules installed exceeded capacity\n");
+								goto fail;
+							}
 
-				if (!pFilteringTable->add_after_hdl)
-				{
-					IPACMDBG("Bad add_after_hdl = 0\n");
-					ret = IPACM_FAILURE;
-					goto fail;
-				}
-
-				if(false == m_filtering.AddFilteringRuleAfter(pFilteringTable))
-				{
-					IPACMERR("Error Adding RuleTable to Filtering, aborting...\n");
-					ret = IPACM_FAILURE;
-					goto fail;
-				}
-				else
-				{
-					for(i=0; i < pFilteringTable->num_rules; i++)
-					{
-						if (xlat_ctx.active_pdn_list[xlat_pdn_ctx_id].num_wan_mpdn_ul_xlat_fl_rule_v4 > MAX_WAN_UL_FILTER_RULES)
-						{
-							IPACMERR("Number of rules installed exceeded capacity\n");
-							goto fail;
-						}
-
-						pos = xlat_ctx.active_pdn_list[xlat_pdn_ctx_id].num_wan_mpdn_ul_xlat_fl_rule_v4++;
-						xlat_ctx.active_pdn_list[xlat_pdn_ctx_id].wan_mpdn_ul_xlat_fl_rule_hdl_v4[pos] =
+							pos = xlat_ctx.active_pdn_list[xlat_pdn_ctx_id].num_wan_mpdn_ul_xlat_fl_rule_v4++;
+							xlat_ctx.active_pdn_list[xlat_pdn_ctx_id].wan_mpdn_ul_xlat_fl_rule_hdl_v4[pos] =
 								pFilteringTable->rules[i].flt_rule_hdl;
-						IPACMDBG("flt rule id %d flt hdl %d\n",pFilteringTable->rules[i].rule.rule_id,
-							xlat_ctx.active_pdn_list[xlat_pdn_ctx_id].wan_mpdn_ul_xlat_fl_rule_hdl_v4[pos]);
+							IPACMDBG("flt rule id %d flt hdl %d\n", pFilteringTable->rules[i].rule.rule_id,
+									 xlat_ctx.active_pdn_list[xlat_pdn_ctx_id].wan_mpdn_ul_xlat_fl_rule_hdl_v4[pos]);
+						}
+						IPACM_Iface::ipacmcfg->increaseFltRuleCount(rx_prop->rx[idx].src_pipe, iptype, pFilteringTable->num_rules);
 					}
-					IPACM_Iface::ipacmcfg->increaseFltRuleCount(rx_prop->rx[idx].src_pipe, iptype, pFilteringTable->num_rules);
+					entry_idx = 0;
+					pFilteringTable->num_rules = 0;
+					prev = curr;
 				}
-				entry_idx = 0;
-				pFilteringTable->num_rules = 0;
-				prev = curr;
-			}
 
-			memcpy(&pFilteringTable->rules[entry_idx], &flt_rule_entry, sizeof(flt_rule_entry));
-			pFilteringTable->num_rules++;
-			IPACMDBG_H("xlat meta-data is modified for rule: %d index %d metadata : 0x%x rule_id %d\n",
-					cnt, entry_idx, flt_rule_entry.rule.eq_attrib.metadata_meq32.value, flt_index.rule_id_ex[idx_q6]);
-			entry_idx++;
-			idx_q6++;
-		}
-	}
-
-	if (pFilteringTable->num_rules != 0)
-	{
-		if (prev == 0)
-		/* add the XLAT rule after the dynamic subnet/MTU rules */
-		{
-			pFilteringTable->add_after_hdl = private_fl_rule_hdl[num_wan_subnet_rules - 1];
-			if (!pFilteringTable->add_after_hdl)
-			{
-				for (int j = 0; j < MAX_NUM_IP_PASS_MPDN; j++)
-				{
-					if(IPACM_Iface::ipacmcfg->ip_pass_mpdn_table[j].valid_entry == true &&
-					IPACM_Iface::ipacmcfg->ip_pass_mpdn_table[j].ip_pass_skip_nat == 1)
-					{
-						pFilteringTable->add_after_hdl = dft_v4fl_rule_hdl[m_ipv4_default_filterting_rules_count - 1];
-						IPACMDBG("Add after handle 0x%x j %d\n", pFilteringTable->add_after_hdl, j);
-						break;
-					}
-				}
+				memcpy(&pFilteringTable->rules[entry_idx], &flt_rule_entry, sizeof(flt_rule_entry));
+				pFilteringTable->num_rules++;
+				IPACMDBG_H("xlat meta-data is modified for rule: %d index %d metadata : 0x%x rule_id %d\n",
+						   cnt, entry_idx, flt_rule_entry.rule.eq_attrib.metadata_meq32.value, flt_index.rule_id_ex[idx_q6]);
+				entry_idx++;
+				idx_q6++;
 			}
 		}
-		else
-			pFilteringTable->add_after_hdl = xlat_ctx.ul_rule_id_hdl_map[prev - 1].flt_hdl;
 
-		IPACMDBG("Installing after 0x%x\n", pFilteringTable->add_after_hdl);
-
-		if (!pFilteringTable->add_after_hdl)
-		{
-			IPACMDBG("Bad add_after_hdl = 0\n");
-			ret = IPACM_FAILURE;
-			goto fail;
-		}
-
-		if(false == m_filtering.AddFilteringRuleAfter(pFilteringTable))
-		{
-			IPACMERR("Error Adding RuleTable to Filtering, aborting...\n");
-			ret = IPACM_FAILURE;
-			goto fail;
-		}
-		else
-		{
-			for(i=0; i < pFilteringTable->num_rules; i++)
+		if (pFilteringTable->num_rules != 0) {
+			if (prev == 0)
+			/* add the XLAT rule after the dynamic subnet/MTU rules */
 			{
-				if (xlat_ctx.active_pdn_list[xlat_pdn_ctx_id].num_wan_mpdn_ul_xlat_fl_rule_v4 > MAX_WAN_UL_FILTER_RULES)
-				{
-					IPACMERR("Number of rules installed exceeded capacity\n");
-					goto fail;
+				pFilteringTable->add_after_hdl = private_fl_rule_hdl[j][num_wan_subnet_rules[j] - 1];
+				if (!pFilteringTable->add_after_hdl) {
+					for (int j = 0; j < MAX_NUM_IP_PASS_MPDN; j++) {
+						if (IPACM_Iface::ipacmcfg->ip_pass_mpdn_table[j].valid_entry == true &&
+							IPACM_Iface::ipacmcfg->ip_pass_mpdn_table[j].ip_pass_skip_nat == 1) {
+							pFilteringTable->add_after_hdl = dft_v4fl_rule_hdl[j][m_ipv4_default_filterting_rules_count[j] - 1];
+							IPACMDBG("Add after handle 0x%x j %d\n", pFilteringTable->add_after_hdl, j);
+							break;
+						}
+					}
 				}
-				pos = xlat_ctx.active_pdn_list[xlat_pdn_ctx_id].num_wan_mpdn_ul_xlat_fl_rule_v4++;
-				xlat_ctx.active_pdn_list[xlat_pdn_ctx_id].wan_mpdn_ul_xlat_fl_rule_hdl_v4[pos] =
+			} else pFilteringTable->add_after_hdl = xlat_ctx.ul_rule_id_hdl_map[prev - 1].flt_hdl;
+
+			IPACMDBG("Installing after 0x%x\n", pFilteringTable->add_after_hdl);
+
+			if (!pFilteringTable->add_after_hdl) {
+				IPACMDBG("Bad add_after_hdl = 0\n");
+				ret = IPACM_FAILURE;
+				goto fail;
+			}
+
+			if (false == m_filtering.AddFilteringRuleAfter(pFilteringTable)) {
+				IPACMERR("Error Adding RuleTable to Filtering, aborting...\n");
+				ret = IPACM_FAILURE;
+				goto fail;
+			} else {
+				for (i = 0; i < pFilteringTable->num_rules; i++) {
+					if (xlat_ctx.active_pdn_list[xlat_pdn_ctx_id].num_wan_mpdn_ul_xlat_fl_rule_v4 > MAX_WAN_UL_FILTER_RULES) {
+						IPACMERR("Number of rules installed exceeded capacity\n");
+						goto fail;
+					}
+					pos = xlat_ctx.active_pdn_list[xlat_pdn_ctx_id].num_wan_mpdn_ul_xlat_fl_rule_v4++;
+					xlat_ctx.active_pdn_list[xlat_pdn_ctx_id].wan_mpdn_ul_xlat_fl_rule_hdl_v4[pos] =
 						pFilteringTable->rules[i].flt_rule_hdl;
-				IPACMDBG("flt rule id %d flt hdl %d\n",pFilteringTable->rules[i].rule.rule_id,
-					xlat_ctx.active_pdn_list[xlat_pdn_ctx_id].wan_mpdn_ul_xlat_fl_rule_hdl_v4[pos]);
+					IPACMDBG("flt rule id %d flt hdl %d\n", pFilteringTable->rules[i].rule.rule_id,
+							 xlat_ctx.active_pdn_list[xlat_pdn_ctx_id].wan_mpdn_ul_xlat_fl_rule_hdl_v4[pos]);
+				}
+				IPACM_Iface::ipacmcfg->increaseFltRuleCount(rx_prop->rx[idx].src_pipe, iptype, pFilteringTable->num_rules);
 			}
-			IPACM_Iface::ipacmcfg->increaseFltRuleCount(rx_prop->rx[idx].src_pipe, iptype, pFilteringTable->num_rules);
 		}
-	}
 
-	if(false == m_filtering.SendFilteringRuleIndex(&flt_index))
-	{
-		IPACMERR("Error sending filtering rule index, aborting...\n");
-		ret = IPACM_FAILURE;
-		goto fail;
+		if (false == m_filtering.SendFilteringRuleIndex(&flt_index)) {
+			IPACMERR("Error sending filtering rule index, aborting...\n");
+			ret = IPACM_FAILURE;
+			goto fail;
+		}
 	}
 
 fail:
@@ -15151,15 +15248,11 @@ int IPACM_Lan::delete_icmp_filter_rule(
 	ipa_ip_type iptype )
 {
 	int idx = 0;
+	int j = 0;
 	if ( ! VALID_IPA_IP_TYPE(iptype) )
 	{
 		IPACMERR("Bad iptype(%u)\n", iptype);
 		return IPACM_FAILURE;
-	}
-
-	if ((ipa_if_cate == WLAN_IF) && (is_if_svap || is_wlan_if_vlan) && (rx_prop && rx_prop->num_rx_props > 2)) {
-		idx = 2;
-		IPACMDBG_H("Interface is WLAN Svap or vlan, install rules on Rx pipe at idx %d \n", idx);
 	}
 
 	if(rx_prop == NULL){
@@ -15167,51 +15260,55 @@ int IPACM_Lan::delete_icmp_filter_rule(
 		return IPACM_FAILURE;
 	}
 
-	if ( iptype == IPA_IP_v4 )
+	for (j = 0; j < rx_prop->num_rx_props / 2 && j < IPA_MAX_NUM_PROPS; j++)
 	{
-		if (ipv4_icmp_flt_rule_hdl[0])
-		{
-			IPACMDBG_H("Attempting to delete v4 icmp filter rule.\n");
-
-			if(m_filtering.DeleteFilteringHdls(
-				   ipv4_icmp_flt_rule_hdl, IPA_IP_v4, NUM_IPV4_ICMP_FLT_RULE) == true)
-			{
-				IPACMDBG_H("Deleted v4 icmp filter rule successfully.\n");
-				IPACM_Iface::ipacmcfg->decreaseFltRuleCount(
-					rx_prop->rx[idx].src_pipe, IPA_IP_v4, NUM_IPV4_ICMP_FLT_RULE);
-				memset(
-					ipv4_icmp_flt_rule_hdl,
-					0,
-					sizeof(uint32_t) * NUM_IPV4_ICMP_FLT_RULE);
+		if ((ipa_if_cate == WLAN_IF) && (is_if_svap || is_wlan_if_vlan) && (rx_prop->num_rx_props > 2)) {
+			if (j < 2) {
+				IPACMDBG_H("Interface is WLAN Svap or w-vlan, dont install rules on pipe %d..... continue\n", idx);
+				continue;
 			}
-			else
-			{
-				IPACMERR("Error deleting v4 icmp filter rule...\n");
-				return IPACM_FAILURE;
-			}
+			idx = 2;
+			IPACMDBG_H("Interface is WLAN Svap or vlan, install rules on Rx1 pipe at idx %d \n", idx);
+		} else {
+			idx = idx + j * 2;
+			IPACMDBG_H("Install rules at idx %d\n", idx);
 		}
-	}
-	else /* iptype == IPA_IP_v6 */
-	{
-		if (ipv6_icmp_flt_rule_hdl[0])
-		{
-			IPACMDBG_H("Attempting to delete v6 icmp filter rule.\n");
 
-			if(m_filtering.DeleteFilteringHdls(
-				   ipv6_icmp_flt_rule_hdl, IPA_IP_v6, NUM_IPV6_ICMP_FLT_RULE) == true)
-			{
-				IPACMDBG_H("Deleted v6 icmp filter rule successfully.\n");
-				IPACM_Iface::ipacmcfg->decreaseFltRuleCount(
-					rx_prop->rx[idx].src_pipe, IPA_IP_v6, NUM_IPV6_ICMP_FLT_RULE);
-				memset(
-					ipv6_icmp_flt_rule_hdl,
-					0,
-					sizeof(uint32_t) * NUM_IPV6_ICMP_FLT_RULE);
+		if (iptype == IPA_IP_v4) {
+			if (ipv4_icmp_flt_rule_hdl[j][0]) {
+				IPACMDBG_H("Attempting to delete v4 icmp filter rule.\n");
+
+				if (m_filtering.DeleteFilteringHdls(
+						ipv4_icmp_flt_rule_hdl[j], IPA_IP_v4, NUM_IPV4_ICMP_FLT_RULE) == true) {
+					IPACMDBG_H("Deleted v4 icmp filter rule successfully.\n");
+					IPACM_Iface::ipacmcfg->decreaseFltRuleCount(
+						rx_prop->rx[idx].src_pipe, IPA_IP_v4, NUM_IPV4_ICMP_FLT_RULE);
+					memset(
+						ipv4_icmp_flt_rule_hdl[j],
+						0,
+						sizeof(uint32_t) * NUM_IPV4_ICMP_FLT_RULE);
+				} else {
+					IPACMERR("Error deleting v4 icmp filter rule...\n");
+					return IPACM_FAILURE;
+				}
 			}
-			else
-			{
-				IPACMERR("Error deleting v6 icmp filter rule...\n");
-				return IPACM_FAILURE;
+		} else { /* iptype == IPA_IP_v6 */
+			if (ipv6_icmp_flt_rule_hdl[j][0]) {
+				IPACMDBG_H("Attempting to delete v6 icmp filter rule.\n");
+
+				if (m_filtering.DeleteFilteringHdls(
+						ipv6_icmp_flt_rule_hdl[j], IPA_IP_v6, NUM_IPV6_ICMP_FLT_RULE) == true) {
+					IPACMDBG_H("Deleted v6 icmp filter rule successfully.\n");
+					IPACM_Iface::ipacmcfg->decreaseFltRuleCount(
+						rx_prop->rx[idx].src_pipe, IPA_IP_v6, NUM_IPV6_ICMP_FLT_RULE);
+					memset(
+						ipv6_icmp_flt_rule_hdl[j],
+						0,
+						sizeof(uint32_t) * NUM_IPV6_ICMP_FLT_RULE);
+				} else {
+					IPACMERR("Error deleting v6 icmp filter rule...\n");
+					return IPACM_FAILURE;
+				}
 			}
 		}
 	}
@@ -16588,7 +16685,7 @@ int IPACM_Lan::handle_ext_router_add_evt(char* pdn_name, uint8_t *mac_addr, uint
 		pFilteringTable->ip = IPA_IP_v6;
 		pFilteringTable->num_rules = 1;
 		pFilteringTable->ep = rx_prop->rx[idx].src_pipe;
-		pFilteringTable->add_after_hdl = mtu_flt_rule_offset[IPA_IP_v6];
+		pFilteringTable->add_after_hdl = mtu_flt_rule_offset[0][IPA_IP_v6];
 
 		memset(&flt_rule, 0, sizeof(struct ipa_flt_rule_add));
 		flt_rule.status = -1;
@@ -16734,7 +16831,7 @@ int IPACM_Lan::handleIpsecUlFltAddEvt(struct ipa_ioc_ipsec_ul_flt_attr *uf)
 	pFilteringTable->ip = uf->ip;
 	pFilteringTable->num_rules = 1;
 	pFilteringTable->ep = rx_prop->rx[idx].src_pipe;
-	pFilteringTable->add_after_hdl = mtu_flt_rule_offset[uf->ip];
+	pFilteringTable->add_after_hdl = mtu_flt_rule_offset[0][uf->ip];
 
 	pFltRule = &(pFilteringTable->rules[0]);
 	pFltRule->status = -1;
@@ -16873,7 +16970,7 @@ int IPACM_Lan::handleIpsecUlFltAddAll(enum ipa_ip_type ip)
 	pFilteringTable->ip = ip;
 	pFilteringTable->num_rules = 0;
 	pFilteringTable->ep = rx_prop->rx[idx].src_pipe;
-	pFilteringTable->add_after_hdl = mtu_flt_rule_offset[ip];
+	pFilteringTable->add_after_hdl = mtu_flt_rule_offset[0][ip];
 
 	for (const auto& UlFlt: IPACM_Iface::ipacmcfg->ipsecUlFlt)
 	{

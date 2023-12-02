@@ -2220,7 +2220,9 @@ bool IPACM_Config::iface_in_vlan_mode(const char *interfaceName) {
 	 */
 	if (strstr(nameToCheck.c_str(), "eth0")) {
 		IPACMDBG("eth0 vlan mode %d\n", vlan_devices[IPA_VLAN_IF_ETH0]);
-		return vlan_devices[IPA_VLAN_IF_ETH0] || vlan_devices[IPA_VLAN_IF_EMAC];
+		IPACMDBG("eth0 vlan spcl mode %d\n", IsSpclIface(nameToCheck.c_str()));
+		return vlan_devices[IPA_VLAN_IF_ETH0] || vlan_devices[IPA_VLAN_IF_EMAC] ||
+			(IPACM_Iface::ipacmcfg->ipacm_emesh_enable && IPACM_Iface::ipacmcfg->ipacm_emesh_mode >= 2 && IsSpclIface(nameToCheck.c_str()));
 	}
 	if (strstr(nameToCheck.c_str(), "eth1")) {
 		IPACMDBG("eth1 vlan mode %d\n", vlan_devices[IPA_VLAN_IF_ETH1]);
@@ -4021,6 +4023,83 @@ int IPACM_Config::SetWlanVlanAp(char *event_iface_name) {
 	} else {
 		IPACMDBG_H("AP interface doesn't exists, exiting switch mode %s\n", if_name);
 	}
+
+	return ret;
+}
+
+bool IPACM_Config::IsSpclIface(const char *event_iface_name) {
+	int ipa_interface_index, if_index;
+	int ret = IPACM_FAILURE;
+	bool res = false;
+	char if_name[IPA_IFACE_NAME_LEN];
+
+	if (event_iface_name == NULL) {
+		IPACMERR("Invalid input\n");
+		return IPACM_FAILURE;
+	}
+
+	/* extract the parent if_name from the vlan iface */
+	strlcpy(if_name, event_iface_name, IPA_IFACE_NAME_LEN);
+	IPACMDBG_H("iface %s, event iface %s\n", if_name, event_iface_name);
+
+	char *char_idx =  strrchr(if_name, '.');
+	if (char_idx) {
+		char_idx[0] = '\0';
+		IPACMDBG_H("truncated iface name %s\n", if_name);
+	}
+
+	/* check if the AP iface already exists or not*/
+	ret = IPACM_Iface::ipa_get_if_index(if_name, &(if_index));
+	if (ret != IPACM_SUCCESS) {
+		IPACMERR("Error while getting interface index for %s device", if_name);
+		return IPACM_FAILURE;
+	}
+
+	/* Map the interface index. */
+	ipa_interface_index = IPACM_Iface::iface_ipa_index_query(if_index);
+
+	res = IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].is_spcl_if;
+	IPACMDBG_H("%s is Ezmesh AP, vlan enabled special AP %d\n", if_name, res);
+
+	return res;
+}
+
+int IPACM_Config::SetSpclIface(char *event_iface_name) {
+	int ipa_interface_index, if_index;
+	int ret = IPACM_FAILURE;
+	char if_name[IPA_IFACE_NAME_LEN];
+
+	if (event_iface_name == NULL) {
+		IPACMERR("Invalid input\n");
+		return IPACM_FAILURE;
+	}
+
+	/* extract the parent if_name from the vlan iface */
+	strlcpy(if_name, event_iface_name, IPA_IFACE_NAME_LEN);
+	IPACMDBG_H("iface %s, event iface %s\n", if_name, event_iface_name);
+
+	char *char_idx =  strrchr(if_name, '.');
+	if (char_idx) {
+		char_idx[0] = '\0';
+		IPACMDBG_H("truncated iface name %s\n", if_name);
+	}
+
+	/* check if the AP iface already exists or not*/
+	ret = IPACM_Iface::ipa_get_if_index(if_name, &(if_index));
+	if (ret != IPACM_SUCCESS) {
+		IPACMERR("Error while getting interface index for %s device", if_name);
+		return IPACM_FAILURE;
+	}
+
+	/* Map the interface index. */
+	ipa_interface_index = IPACM_Iface::iface_ipa_index_query(if_index);
+
+	IPACMDBG_H("ipa_interface_index %d, if_cat:%d\n",
+			   ipa_interface_index ,IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].if_cat);
+	IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].is_spcl_if = true;
+
+	IPACMDBG("eth %s changed to special iface %d\n",
+			    if_name, IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].is_spcl_if);
 
 	return ret;
 }

@@ -2969,7 +2969,7 @@ int IPACM_Lan::handle_vlan_pdn_up(ipacm_event_vlan_pdn *data, bool set_mux)
 		modify_ipv6_prefix_flt_rule();
 
 		/* for the first PDN install UL filtering rules */
-		if(num_dft_rt_v6 == 1 && modem_ul_v6_set == FALSE)
+		if(num_dft_rt_v6 == 1 && modem_ul_v6_set[0] == FALSE)
 		{
 			ret = handle_uplink_filter_rule(IPACM_Iface::ipacmcfg->GetExtProp(IPA_IP_v6), data->iptype, data->mux_id, false);
 			modem_ul_v6_set[0] = !!num_wan_ul_fl_rule_v6[0];
@@ -3394,8 +3394,14 @@ int IPACM_Lan::handle_addr_evt(ipacm_event_data_addr *data)
 	const int NUM_RULES = 1;
 	int num_ipv6_addr;
 	int res = IPACM_SUCCESS;
+	int j = 0;
 
 	IPACMDBG_H("set route/filter rule ip-type: %d \n", data->iptype);
+	if (rx_prop == NULL)
+	{
+		IPACMERR("rx/tx properties empty...exit\n");
+		return IPACM_FAILURE;
+	}
 
 /* Add private subnet*/
 #ifdef FEATURE_IPA_ANDROID
@@ -3462,20 +3468,21 @@ int IPACM_Lan::handle_addr_evt(ipacm_event_data_addr *data)
 		/* initial fragment/multicast/broadcast/filter rule. Fragment has set_rear = false, will be above icmp rule */
 		init_fl_rule(data->iptype);
 
-		/* populate the flt rule offset for eth bridge */
-		eth_bridge_flt_rule_offset[0][data->iptype] = ipv4_icmp_flt_rule_hdl[0][0];
-		eth_bridge_flt_rule_offset[1][data->iptype] = ipv4_icmp_flt_rule_hdl[1][0];
+		for (j = 0; j < rx_prop->num_rx_props / 2 && j < IPA_MAX_NUM_PROPS; j++)
+		{
+			if (j > 2 && !sIface) {
+				IPACMDBG_H("Iface is not Special iface, no need to install v4 rules on 2nd rx pipe\n", num_dft_rt_v6);
+				continue;
+			}
+			/* populate the flt rule offset for eth bridge */
+			eth_bridge_flt_rule_offset[j][data->iptype] = ipv4_icmp_flt_rule_hdl[j][0];
 
-		/* populate the flt rule offset for mtu_offset (offset = broadcast rule)*/
-		if (m_ipv4_default_filterting_rules_count[0] && m_ipv4_default_filterting_rules_count[0] <= IPV4_DEFAULT_FILTERTING_RULES)
-		{
-			mtu_flt_rule_offset[0][data->iptype] =
-				dft_v4fl_rule_hdl[0][m_ipv4_default_filterting_rules_count[0] - 1];
-		}
-		if (m_ipv4_default_filterting_rules_count[1] && m_ipv4_default_filterting_rules_count[1] <= IPV4_DEFAULT_FILTERTING_RULES && sIface)
-		{
-			mtu_flt_rule_offset[1][data->iptype] =
-				dft_v4fl_rule_hdl[1][m_ipv4_default_filterting_rules_count[1] - 1];
+			/* populate the flt rule offset for mtu_offset (offset = broadcast rule)*/
+			if (m_ipv4_default_filterting_rules_count[j] && m_ipv4_default_filterting_rules_count[j] <= IPV4_DEFAULT_FILTERTING_RULES)
+			{
+				mtu_flt_rule_offset[j][data->iptype] =
+					dft_v4fl_rule_hdl[j][m_ipv4_default_filterting_rules_count[j] - 1];
+			}
 		}
 
 		eth_bridge_post_event(IPA_ETH_BRIDGE_IFACE_UP, IPA_IP_v4, NULL, NULL, NULL);
@@ -3597,11 +3604,19 @@ int IPACM_Lan::handle_addr_evt(ipacm_event_data_addr *data)
 
 			init_fl_rule(data->iptype);
 
-			/* populate the mtu_rule_offset */
-			if (m_ipv6_default_filterting_rules_count[0] && m_ipv6_default_filterting_rules_count[0] <= (IPV6_DEFAULT_FILTERTING_RULES + IPV6_DEFAULT_LAN_FILTERTING_RULES) && sIface)
+			for (j = 0; j < rx_prop->num_rx_props / 2 && j < IPA_MAX_NUM_PROPS; j++)
 			{
-				mtu_flt_rule_offset[0][data->iptype] =
-					dft_v6fl_rule_hdl[0][m_ipv6_default_filterting_rules_count[0] - 1];
+				if (j > 2 && !sIface)
+				{
+					IPACMDBG_H("Iface is not Special iface, no need to install v6 rules on 2nd rx pipe\n", num_dft_rt_v6);
+					continue;
+				}
+				/* populate the mtu_rule_offset */
+				if (m_ipv6_default_filterting_rules_count[j] && m_ipv6_default_filterting_rules_count[j] <= (IPV6_DEFAULT_FILTERTING_RULES + IPV6_DEFAULT_LAN_FILTERTING_RULES))
+				{
+					mtu_flt_rule_offset[j][data->iptype] =
+						dft_v6fl_rule_hdl[j][m_ipv6_default_filterting_rules_count[j] - 1];
+				}
 			}
 		}
 		num_dft_rt_v6++;
@@ -11207,10 +11222,10 @@ int IPACM_Lan::modify_ipv6_prefix_flt_rule()
 			//add the MTU rule after the 2nd pass rules but before the 1st pass rule
 			if (num_wan_ul_fl_rule_v6) {
 				IPACMDBG("v6 GRE MTU rule will be installed after v6 modem UL rules\n");
-				mtu_flt_rule_offset[IPA_IP_v6] = wan_ul_fl_rule_hdl_v6[num_wan_ul_fl_rule_v6 - 1];
+				mtu_flt_rule_offset[j][IPA_IP_v6] = wan_ul_fl_rule_hdl_v6[j][num_wan_ul_fl_rule_v6[j] - 1];
 			} else {
 				IPACMDBG("v6 GRE MTU rule will be installed after v6 default rules\n");
-				mtu_flt_rule_offset[IPA_IP_v6] = dft_v6fl_rule_hdl[m_ipv6_default_filterting_rules_count - 1];
+				mtu_flt_rule_offset[j][IPA_IP_v6] = dft_v6fl_rule_hdl[j][m_ipv6_default_filterting_rules_count[j] - 1];
 			}
 
 			mtu_rule_cnt++;
@@ -11329,6 +11344,7 @@ int IPACM_Lan::modify_ipv6_prefix_flt_rule()
 		if (pFilteringTable != NULL)
 		{
 			free(pFilteringTable);
+			pFilteringTable = NULL;
 		}
 	}
 fail:
@@ -15513,6 +15529,7 @@ void IPACM_Lan::eogre_down()
 	ipa_ipgre_info ipgre_info = IPACM_Iface::ipacmcfg->eogre_info;
 	ipa_ip_type    iptype     = ipgre_info.iptype;
 	int            res;
+	int j = 0;
 
 	IPACMDBG_H(
 		"There's eogre disable work to be done for iptype(%d)\n",
@@ -15521,6 +15538,12 @@ void IPACM_Lan::eogre_down()
 	IPACMDBG_H(
 		"Clearing route rules for eogre iptype(%d)\n",
 		iptype);
+
+	if (rx_prop == NULL)
+	{
+		IPACMERR("rx/tx properties empty...exit\n");
+		return IPACM_FAILURE;
+	}
 
 	eogre_clear_route_data(IPA_IP_v4, rx_prop);
 	eogre_clear_route_data(IPA_IP_v6, rx_prop);
@@ -15581,50 +15604,56 @@ void IPACM_Lan::eogre_down()
 		}
 	}
 
-	/*
-	 * Below we'll do two things:
-	 *
-	 *  1) Populate the flt rule offset for eth bridge (offset = icmp)
-	 *
-	 *  2) Populate the flt rule offset for mtu_offset (offset = broadcast rule)
-	 */
-	if ( iptype == IPA_IP_v4 )
-	{
-		eth_bridge_flt_rule_offset[iptype] =
-			ipv4_icmp_flt_rule_hdl[0];
 
-		if (m_ipv4_default_filterting_rules_count)
-		{
-			mtu_flt_rule_offset[iptype] =
-				dft_v4fl_rule_hdl[m_ipv4_default_filterting_rules_count - 1];
-		}
-		IPACMDBG(
-			"Prepping for modify_private_subnet(): "
-			"eth_bridge_flt_rule_offset[v4]=%u, "
-			"m_ipv4_default_filterting_rules_count=%u "
-			"mtu_flt_rule_offset[v4]=%u\n",
-			eth_bridge_flt_rule_offset[iptype],
-			m_ipv4_default_filterting_rules_count,
-			mtu_flt_rule_offset[iptype]);
-	}
-	else
+	for (j = 0; j < rx_prop->num_rx_props / 2 && j < IPA_MAX_NUM_PROPS; j++)
 	{
-		eth_bridge_flt_rule_offset[iptype] =
-			ipv6_icmp_flt_rule_hdl[0];
-
-		if (m_ipv6_default_filterting_rules_count)
-		{
-			mtu_flt_rule_offset[iptype] =
-				dft_v6fl_rule_hdl[m_ipv6_default_filterting_rules_count - 1];
+		if (j > 2 && !sIface) {
+			IPACMDBG_H("Iface is not Special iface, no need to install rules on 2nd rx pipe\n", num_dft_rt_v6);
+			continue;
 		}
-		IPACMDBG(
-			"Prepping for modify_private_subnet(): "
-			"eth_bridge_flt_rule_offset[v6]=%u, "
-			"m_ipv6_default_filterting_rules_count=%u "
-			"mtu_flt_rule_offset[v6]=%u\n",
-			eth_bridge_flt_rule_offset[iptype],
-			m_ipv6_default_filterting_rules_count,
-			mtu_flt_rule_offset[iptype]);
+		/*
+		 * Below we'll do two things:
+		 *
+		 *  1) Populate the flt rule offset for eth bridge (offset = icmp)
+		 *
+		 *  2) Populate the flt rule offset for mtu_offset (offset = broadcast rule)
+		 */
+		if (iptype == IPA_IP_v4)
+		{
+			eth_bridge_flt_rule_offset[j][iptype] =
+				ipv4_icmp_flt_rule_hdl[j][0];
+
+			if (m_ipv4_default_filterting_rules_count[j])
+			{
+				mtu_flt_rule_offset[j][iptype] =
+					dft_v4fl_rule_hdl[j][m_ipv4_default_filterting_rules_count[j] - 1];
+			}
+			IPACMDBG(
+				"Prepping for modify_private_subnet(): "
+				"eth_bridge_flt_rule_offset[v4]=%u, "
+				"m_ipv4_default_filterting_rules_count=%u "
+				"mtu_flt_rule_offset[v4]=%u\n",
+				eth_bridge_flt_rule_offset[j][iptype],
+				m_ipv4_default_filterting_rules_count[j],
+				mtu_flt_rule_offset[j][iptype]);
+		} else {
+			eth_bridge_flt_rule_offset[j][iptype] =
+				ipv6_icmp_flt_rule_hdl[j][0];
+
+			if (m_ipv6_default_filterting_rules_count[j])
+			{
+				mtu_flt_rule_offset[j][iptype] =
+					dft_v6fl_rule_hdl[j][m_ipv6_default_filterting_rules_count[j] - 1];
+			}
+			IPACMDBG(
+				"Prepping for modify_private_subnet(): "
+				"eth_bridge_flt_rule_offset[v6]=%u, "
+				"m_ipv6_default_filterting_rules_count=%u "
+				"mtu_flt_rule_offset[v6]=%u\n",
+				eth_bridge_flt_rule_offset[j][iptype],
+				m_ipv6_default_filterting_rules_count[j],
+				mtu_flt_rule_offset[j][iptype]);
+		}
 	}
 
 	IPACM_Iface::ipacmcfg->SetQmapId(0xFF);

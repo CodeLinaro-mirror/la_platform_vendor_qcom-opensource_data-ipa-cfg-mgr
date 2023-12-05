@@ -1644,6 +1644,7 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 	case IPA_HANDLE_WAN_ADDR_ADD_V6:
 		{
 			data_wan = (ipacm_event_iface_up*)param;
+			IPACMDBG_H( "Received IPA_HANDLE_WAN_ADDR_ADD_V6 \n");
 			if(data_wan == NULL)
 			{
 				IPACMERR("No event data is found.\n");

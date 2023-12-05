@@ -1313,12 +1313,16 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 				IPACMDBG_H("Invalid address, ignore IPA_ADDR_ADD_EVENT event\n");
 				return;
 			}
+			IPACMDBG_H("Recieved IPA_ADDR_ADD_EVENT: IF ip type %d, incoming ip type %d\n", ip_type, data->iptype);
+			if(data->iptype == IPA_IP_v6){
+			IPACMDBG_H("Checking v6 address in  IPA_ADDR_ADD_EVENT:ipv6 addr:0x%x:%x:%x:%x\n", data->ipv6_addr[0],data->ipv6_addr[1],data->ipv6_addr[2],data->ipv6_addr[3]);
+			}
 
 #ifdef IPA_FLT_EXT_MPLS_GRE_GENERAL
 			/* In mpls GRE mode, other non-offload wan instance no need exception filter rules handling */
 			ipa_ipgre_info ipgre_info = IPACM_Iface::ipacmcfg->eogre_info;
 
-			if (IPACM_Iface::ipacmcfg->eogre_enabled)
+			if (IPACM_Iface::ipacmcfg->eogre_enabled && ipgre_info.mpls_protocol)
 			{
 				if (data->iptype == IPA_IP_v4 && ipgre_info.ipv4_src != data->ipv4_addr)
 				{
@@ -1333,6 +1337,7 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 				}
 			}
 #endif
+			IPACMDBG_H("Received IPA_ADDR_ADD_EVENT: ipa_interface_index %d, ipa_if_num %d, num_dft_rt_v6 %d\n", ipa_interface_index, ipa_if_num, num_dft_rt_v6);
 
 			if (ipa_interface_index == ipa_if_num)
 			{

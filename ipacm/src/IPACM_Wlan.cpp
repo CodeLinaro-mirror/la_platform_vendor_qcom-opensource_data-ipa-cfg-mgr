@@ -237,6 +237,10 @@ IPACM_Wlan::~IPACM_Wlan()
 	{
 		free(wlan_client);
 	}
+	if (wlan_primary_client != NULL)
+	{
+		free(wlan_primary_client);
+	}
 	IPACM_EvtDispatcher::deregistr(this);
 	IPACM_IfaceManager::deregistr(this);
 	IPACM_Wlan::num_wlan_ap_iface--;

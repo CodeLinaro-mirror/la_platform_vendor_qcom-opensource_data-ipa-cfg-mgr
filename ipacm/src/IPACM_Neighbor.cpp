@@ -291,6 +291,10 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 								if (!bridge) {
 									/* get_vlan bridge failed */
 									IPACMERR("couldn't get bridge %s, not sending internal event\n", neighbor_client[i].iface_name);
+									if(new_neigh_vlan_data != NULL)
+									{
+										free(new_neigh_vlan_data);
+									}
 									return;
 								}
 							}

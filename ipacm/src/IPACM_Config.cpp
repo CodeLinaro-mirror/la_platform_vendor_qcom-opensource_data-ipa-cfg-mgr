@@ -3751,11 +3751,6 @@ bool IPACM_Config::add_ext_router_info(ipa_ioc_ext_router_info *data)
 	struct ext_router_prefix_info info;
 	int i, j;
 
-	IPACMDBG_H("info - mode:%d, pdn_name:%s\nv6_addr:0x%08x:%08x:%08x:%08x\nv6_mask:0x%08x:%08x:%08x:%08x\n",
-				data->mode, data->pdn_name,
-				data->ipv6_addr[0], data->ipv6_addr[1], data->ipv6_addr[2], data->ipv6_addr[3],
-				data->ipv6_mask[0], data->ipv6_mask[1], data->ipv6_mask[2], data->ipv6_mask[3]);
-
 	for(it = ext_router_prefix.begin(); it != ext_router_prefix.end(); it++)
 	{
 		if(strncmp(it->pdn_name, data->pdn_name, sizeof(it->pdn_name)) == 0)
@@ -3791,7 +3786,10 @@ bool IPACM_Config::add_ext_router_info(ipa_ioc_ext_router_info *data)
 	}
 	ext_router_prefix.push_front(info);
 
-	IPACMDBG_H("succesfully added ext router info for pdn %s\n", data->pdn_name);
+	IPACMDBG_H("succesfully added info - mode:%d, pdn_name:%s\nv6_addr:0x%08x:%08x:%08x:%08x\nv6_mask:0x%08x:%08x:%08x:%08x\n",
+				data->mode, info.pdn_name,
+				info.ipv6_addr[0], info.ipv6_addr[1], info.ipv6_addr[2], info.ipv6_addr[3],
+				info.ipv6_mask[0], info.ipv6_mask[1], info.ipv6_mask[2], info.ipv6_mask[3]);
 
 	return true;
 }

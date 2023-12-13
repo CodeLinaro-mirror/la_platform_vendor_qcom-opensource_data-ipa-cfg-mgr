@@ -3307,6 +3307,7 @@ int IPACM_Lan::handle_wan_down(bool is_sta_mode)
 {
 	int idx = 0;
 
+	IPACMDBG_H("Received handle_wan_down is_sta_mode %d, ipa_if_cate  %d \n",is_sta_mode, ipa_if_cate);
 	if (rx_prop == NULL)
 	{
 		IPACMERR("Rx prop is NULL, return\n");
@@ -10047,6 +10048,8 @@ int IPACM_Lan::enable_per_client_stats(bool *status)
 int IPACM_Lan::handle_wan_down_v6(bool is_sta_mode, bool is_support_mpdn)
 {
 	int idx = 0;
+
+	IPACMDBG_H("Received handle_wan_down_v6 is_sta_mode %d, is_support_mpdn %d, ipa_if_cate  %d \n",is_sta_mode,is_support_mpdn, ipa_if_cate);
 	if (rx_prop == NULL)
 	{
 		IPACMERR("Rx prop is NULL, return\n");
@@ -10660,7 +10663,7 @@ int IPACM_Lan::modify_private_subnet(bool eogre_enabled)
 	flt_rule.rule.eq_attrib_type = 0;
 	flt_rule.rule.rt_tbl_hdl = IPACM_Iface::ipacmcfg->rt_tbl_default_v4.hdl;
 	IPACMDBG_H("Private filter rule use table: %s, hdl: %d\n",IPACM_Iface::ipacmcfg->rt_tbl_default_v4.name,IPACM_Iface::ipacmcfg->rt_tbl_default_v4.hdl);
-	IPACMDBG_H("num privatesubnet:%d",IPACM_Iface::ipacmcfg->ipa_num_private_subnet);
+	IPACMDBG_H("num privatesubnet:%d\n",IPACM_Iface::ipacmcfg->ipa_num_private_subnet);
 	for(i = 0; i < (IPACM_Iface::ipacmcfg->ipa_num_private_subnet); i++)
 	{
 		/* add private subnet rule for ipv4 */

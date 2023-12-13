@@ -4094,26 +4094,25 @@ int IPACM_Wlan::handle_down_evt()
 			goto fail;
 		}
 
-		/* delete private-ipv4 filter rules */
-#if defined(FEATURE_IPA_ANDROID)
-		if(m_filtering.DeleteFilteringHdls(private_fl_rule_hdl, IPA_IP_v4, IPA_MAX_PRIVATE_SUBNET_ENTRIES + IPA_MAX_MTU_ENTRIES) == false)
+		/* delete private-subnet ipv4 + mtu filter rules */
+		IPACMDBG_H("Number of num_wan_subnet_rules %d\n",num_wan_subnet_rules);
+		/* free private-subnet ipv4 + mtu filter rules */
+		if (num_wan_subnet_rules > IPA_MAX_PRIVATE_SUBNET_ENTRIES + IPA_MAX_MTU_ENTRIES)
+		{
+			IPACMERR(" the number of rules are bigger than array, aborting...\n");
+			res = IPACM_FAILURE;
+			goto fail;
+		}
+
+		if(m_filtering.DeleteFilteringHdls(private_fl_rule_hdl, IPA_IP_v4, num_wan_subnet_rules) == false)
 		{
 			IPACMERR("Error deleting private subnet IPv4 flt rules.\n");
 			res = IPACM_FAILURE;
 			goto fail;
 		}
-		IPACM_Iface::ipacmcfg->decreaseFltRuleCount(rx_prop->rx[idx].src_pipe, IPA_IP_v4, IPA_MAX_PRIVATE_SUBNET_ENTRIES + IPA_MAX_MTU_ENTRIES);
-#else
-		num_private_subnet_fl_rule = IPACM_Iface::ipacmcfg->ipa_num_private_subnet > (IPA_MAX_PRIVATE_SUBNET_ENTRIES + IPA_MAX_MTU_ENTRIES)?
-			(IPA_MAX_PRIVATE_SUBNET_ENTRIES + IPA_MAX_MTU_ENTRIES): IPACM_Iface::ipacmcfg->ipa_num_private_subnet;
-		if(m_filtering.DeleteFilteringHdls(private_fl_rule_hdl, IPA_IP_v4, num_private_subnet_fl_rule) == false)
-		{
-			IPACMERR("Error deleting private subnet flt rules, aborting...\n");
-			res = IPACM_FAILURE;
-			goto fail;
-		}
-		IPACM_Iface::ipacmcfg->decreaseFltRuleCount(rx_prop->rx[idx].src_pipe, IPA_IP_v4, num_private_subnet_fl_rule);
-#endif
+		IPACM_Iface::ipacmcfg->decreaseFltRuleCount(rx_prop->rx[idx].src_pipe, IPA_IP_v4, num_wan_subnet_rules);
+		num_wan_subnet_rules = 0;
+
 		IPACMDBG_H("Deleted private subnet v4 filter rules successfully.\n");
 
 		if(m_filtering.DeleteFilteringHdls(&tcp_syn_flt_rule_hdl[IPA_IP_v4], IPA_IP_v4, 1) == false)
@@ -4125,6 +4124,7 @@ int IPACM_Wlan::handle_down_evt()
 		IPACM_Iface::ipacmcfg->decreaseFltRuleCount(rx_prop->rx[idx].src_pipe, IPA_IP_v4, 1);
 		IPACMDBG_H("Deleted TCP syn v4 filter rules successfully.\n");
 	}
+	IPACMDBG_H("Finished delete default iface ipv4 filtering rules \n ");
 
 	/* Delete v6 filtering rules */
 	if (ip_type != IPA_IP_v4 && rx_prop != NULL)
@@ -4154,7 +4154,7 @@ int IPACM_Wlan::handle_down_evt()
 		IPACMDBG_H("Deleted TCP syn v6 filter rules successfully.\n");
 
 	}
-	IPACMDBG_H("finished delete filtering rules\n ");
+	IPACMDBG_H("Finished delete default iface ipv6 filtering rules \n ");
 
 	/* Delete default v4 RT rule */
 	if (ip_type != IPA_IP_v6)

@@ -2627,6 +2627,7 @@ int IPACM_Lan::notify_flt_removed(uint8_t mux_id)
 /* delete filter rule for wan_down event for IPv4*/
 int IPACM_Lan::handle_wan_down(bool is_sta_mode, uint8_t mux_id)
 {
+	IPACMDBG_H("Received handle_wan_down is_sta_mode %d, ipa_if_cate  %d \n",is_sta_mode, ipa_if_cate);
 	if (rx_prop == NULL)
 	{
 		IPACMERR("Rx prop is NULL, return\n");
@@ -9633,6 +9634,7 @@ int IPACM_Lan::enable_per_client_stats(bool *status)
 int IPACM_Lan::handle_wan_down_v6(bool is_sta_mode, bool is_support_mpdn)
 {
 
+	IPACMDBG_H("Received handle_wan_down_v6 is_sta_mode %d, is_support_mpdn %d, ipa_if_cate  %d \n",is_sta_mode,is_support_mpdn,ipa_if_cate);
 	if (rx_prop == NULL)
 	{
 		IPACMERR("Rx prop is NULL, return\n");

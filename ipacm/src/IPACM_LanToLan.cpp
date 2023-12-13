@@ -1935,6 +1935,12 @@ void IPACM_LanToLan_Iface::handle_down_event()
 				it_own_peer_hdr_type = it_own_peer_info->peer->get_iface_pointer()->tx_prop->tx[0].hdr_l2_type;
 			}
 
+			if (it_own_peer_hdr_type >= IPA_HDR_L2_MAX)
+			{
+				IPACMDBG_H("Invalid peer_l2_hdr_type: %d\n", it_own_peer_hdr_type);
+				return;
+			}
+
 			/* decrement reference count of peer l2 header type on both interfaces*/
 			decrement_ref_cnt_peer_l2_hdr_type(it_own_peer_hdr_type);
 			it_own_peer_info->peer->decrement_ref_cnt_peer_l2_hdr_type(m_p_iface->tx_prop->tx[0].hdr_l2_type);
@@ -2329,6 +2335,7 @@ void IPACM_LanToLan_Iface::handle_new_iface_up(char rt_tbl_name_for_flt[][IPA_RE
 	}
 	else {
 		peer_l2_hdr_type = peer_iface->m_p_iface->tx_prop->tx[0].hdr_l2_type;
+		new_peer.is_vlan_peer = false;
 	}
 
 	/* Skip adding hdr proc ctx for svap iface, will be performed during client add */

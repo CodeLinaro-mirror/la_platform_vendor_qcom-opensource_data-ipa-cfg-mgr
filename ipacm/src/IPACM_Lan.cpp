@@ -10705,7 +10705,7 @@ int IPACM_Lan::install_ipv6_icmp_flt_rule()
 	struct ipa_flt_rule_add_v2 *flt_rule_entry;
 	int idx = 0, j;
 
-	if (rx_prop != NULL)
+	if (rx_prop == NULL)
 	{
 		IPACMDBG_H("No rx properties registered for iface %s\n", dev_name);
 		return ret;

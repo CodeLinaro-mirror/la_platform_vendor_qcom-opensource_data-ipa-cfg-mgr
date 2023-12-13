@@ -26,8 +26,8 @@ WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
 OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
 IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-* ​​​​Changes from Qualcomm Innovation Center are provided under the following license:
-* Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+* Changes from Qualcomm Innovation Center, Inc. are provided under the following license:
+* Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
 * SPDX-License-Identifier: BSD-3-Clause-Clear.
 */
 /*!
@@ -300,6 +300,9 @@ public:
 		IPACM_firewall_conf_t* firewall_conf,
 		ul_firewall_t *ul_firewall,
 		int vid);
+
+        /* Configuresrc_prefix_attribute for sw-allow rules on the LAN prod pipe */
+	void add_swallow_prfx_attr(struct ipa_rule_attrib *attrib, uint32_t *v6_prefix);
 
 	/* Config WL UL firewall filter rules on LTE BH (FW on Q6 routing table) */
 	virtual int config_dft_firewall_rules_ul_ex(

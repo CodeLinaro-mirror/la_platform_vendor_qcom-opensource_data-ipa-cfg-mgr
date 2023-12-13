@@ -26,10 +26,9 @@ WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
 OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
 IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-Changes from Qualcomm Innovation Center are provided under the following license:
-
-Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
-SPDX-License-Identifier: BSD-3-Clause-Clear
+* Changes from Qualcomm Innovation Center, Inc. are provided under the following license:
+* Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+* SPDX-License-Identifier: BSD-3-Clause-Clear.
 */
 #ifndef IPACM_CONNTRACK_NATAPP_H
 #define IPACM_CONNTRACK_NATAPP_H
@@ -700,6 +699,7 @@ private:
 
 #ifdef FEATURE_VLAN_MPDN
 	IPACM_firewall_t fw_mpdn_config_data;
+	IPACM_firewall_t fw_mpdn_cfg_bkp;
 	ipacm_v4_wan_info ipv4_wan[IPA_MAX_NUM_SW_PDNS];
 #else
 	IPACM_firewall_conf_t fw_config_data;
@@ -729,7 +729,7 @@ public:
 	int DeleteTable(uint32_t);
 
 	int AddEntry(const nat_table_entry *, bool isVlan = false);
-	int DeleteEntry(const nat_table_entry *);
+	int DeleteEntry(const nat_table_entry *, bool);
 
 	void UpdateUDPTimeStamp();
 
@@ -747,7 +747,6 @@ public:
 	void FlushAndCacheVlanTempEntries(uint32_t ip_addr, bool *entry_exists, uint32_t *public_ip);
 #endif
 	void FlushTempEntries(uint32_t, bool, bool isDummy = false);
-
 	/*
 	* Method: ChkSWAllow: to check SW allow entries
 	*
@@ -769,6 +768,41 @@ public:
 	*
 	*/
 	void HandleSwAllowEntries(void *);
+
+	/*
+	* Method: firewall_tuple_match_with_nat: firewall Tuples
+	* match is compare firewall and nat rule.
+	*
+	* Params:
+	* @data: Firewall config data received from firewall
+	* config file and Nat rule.
+	* Return: bool
+	*
+	*/
+	bool firewall_tuple_match_with_nat(IPACM_extd_firewall_entry_conf_t , const nat_table_entry*);
+
+	/*
+	* Method: firewall_compare: firewall Tuples
+	*  compare  for firewall rules and nat rule.
+	*
+	* Params:
+	* @data: Firewall config data received from firewall
+	* config file and Nat rule and pdn index.
+	* Return: void
+	*
+	*/
+	void firewall_compare(IPACM_firewall_conf_t*, IPACM_firewall_conf_t*);
+
+	/*
+	* Method: restore_nat_for_sw_flt_entries: Flushing the conntrack from system
+	*
+	* Params:
+	* @data: Firewall config entrie received from firewall backup config file.
+	* and pdn index.
+	* Return: void
+	*
+	*/
+	void restore_nat_for_sw_flt_entries(IPACM_extd_firewall_entry_conf_t extd_firewall_entries);
 };
 
 #endif /* IPACM_CONNTRACK_NATAPP_H */

@@ -27,7 +27,7 @@
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  * Changes from Qualcomm Innovation Center are provided under the following license:
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear.
  */
 #include <sys/ioctl.h>
@@ -1524,7 +1524,7 @@ void IPACM_ConntrackListener::ProcessSocksv5Conn(ipa_socksv5_msg *socksv5_info, 
 		rule.enabled = true;
 		if (is_add) {
 			/* clean the existing NAT entry */
-			nat_inst->DeleteEntry(&rule);
+			nat_inst->DeleteEntry(&rule, false);
 			/* construct the DL nat socksv5 rule */
 			rule.uc_activation_index = (uint16_t) socksv5_info->dl_in.index;
 			rule.s = true;
@@ -1549,14 +1549,14 @@ void IPACM_ConntrackListener::ProcessSocksv5Conn(ipa_socksv5_msg *socksv5_info, 
 			rule.ucp = true;
 			rule.src_only = false;
 			rule.dst_only = true;
-			nat_inst->DeleteEntry(&rule);
+			nat_inst->DeleteEntry(&rule, false);
 			/* delete UL nat socksv5 rule */
 			rule.uc_activation_index = 0;
 			rule.s = false;
 			rule.ucp = false;
 			rule.dst_only = false;
 			rule.src_only = true;
-			nat_inst->DeleteEntry(&rule);
+			nat_inst->DeleteEntry(&rule, false);
 		}
 	}
 	IPACMDBG_H("return\n");
@@ -1847,7 +1847,7 @@ int IPACM_ConntrackListener::AddORDeleteNatEntry(const nat_entry_bundle *input, 
 			IPACMDBG("TCP state TCP_CONNTRACK_FIN_WAIT(%d) "
 					 "or type NFCT_T_DESTROY(%d)\n", tcp_state, input->type);
 
-			nat_inst->DeleteEntry(input->rule);
+			nat_inst->DeleteEntry(input->rule, false);
 			nat_inst->DeleteTempEntry(input->rule);
 		}
 		else
@@ -1905,7 +1905,7 @@ int IPACM_ConntrackListener::AddORDeleteNatEntry(const nat_entry_bundle *input, 
 		else if (NFCT_T_DESTROY == input->type)
 		{
 			IPACMDBG("UDP connection close at time %ld\n", time(NULL));
-			nat_inst->DeleteEntry(input->rule);
+			nat_inst->DeleteEntry(input->rule, false);
 			nat_inst->DeleteTempEntry(input->rule);
 		}
 		else

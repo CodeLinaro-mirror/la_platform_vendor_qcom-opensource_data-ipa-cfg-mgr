@@ -1155,24 +1155,24 @@ void IPACM_ConntrackListener::HandleVlanUpV6(void *in_param)
 			{
 				for(int j = 0; j < v6_vlan_pdns[i].VID_cnt; j ++)
 				{
-					if (vlanup_data->VlanID == vlan_pdns[i].associated_VIDs[j])
+					if (vlanup_data->VlanID == v6_vlan_pdns[i].associated_VIDs[j])
 					{
-						IPACMDBG_H("found existing PDN entry in %d, with vlan %d\n", i, vlanup_data->VlanID);
+						IPACMDBG_H("found existing ipv6 PDN entry in %d, with vlan %d\n", i, vlanup_data->VlanID);
 						return;
 					}
 				}
 				IPACMDBG_H("found existing PDN entry in %d, but got new VLAN id. Adding vlan %d to the entry\n", i, vlanup_data->VlanID);
-				vlan_pdns[i].associated_VIDs[vlan_pdns[i].VID_cnt] = vlanup_data->VlanID;
-				vlan_pdns[i].VID_cnt++;
+				v6_vlan_pdns[i].associated_VIDs[v6_vlan_pdns[i].VID_cnt] = vlanup_data->VlanID;
+				v6_vlan_pdns[i].VID_cnt++;
 				return;
 			}
 		}
 
 		for(int i = 0; i < IPA_MAX_NUM_HW_PDNS; i++)
 		{
-			if((v6_vlan_pdns[i].ipv6_prefix[0] == 0) && (v6_vlan_pdns[i].ipv6_prefix[0] == 0))
+			if((v6_vlan_pdns[i].ipv6_prefix[0] == 0) && (v6_vlan_pdns[i].ipv6_prefix[1] == 0))
 			{
-				IPACMDBG_H("found empty PDN entry in %d num_vlan_pdns %d\n", i, num_v6_vlan_pdns);
+				IPACMDBG_H("found empty ipv6 PDN entry in %d num_vlan_pdns %d\n", i, num_v6_vlan_pdns);
 				v6_vlan_pdns[i].ipv6_prefix[0] = vlanup_data->ipv6_prefix[0];
 				v6_vlan_pdns[i].ipv6_prefix[1] = vlanup_data->ipv6_prefix[1];
 				v6_vlan_pdns[i].associated_VIDs[v6_vlan_pdns[i].VID_cnt] = vlanup_data->VlanID;
@@ -2286,8 +2286,8 @@ int IPACM_ConntrackListener::AddORDeleteNatEntry(const nat_entry_bundle *input, 
 	{
 		tcp_state = nfct_get_attr_u8(input->ct, ATTR_TCP_STATE);
 
-		if ((TCP_CONNTRACK_ESTABLISHED == tcp_state) &&
-                    (((pkt_threshld != 0) && (pkt_count >= pkt_threshld)) ||
+		if ((TCP_CONNTRACK_ESTABLISHED == tcp_state) && (input->type != NFCT_T_DESTROY)
+                   && (((pkt_threshld != 0) && (pkt_count >= pkt_threshld)) ||
                     (pkt_threshld == 0)))
 		{
 			IPACMDBG("TCP state TCP_CONNTRACK_ESTABLISHED(%d)\n", tcp_state);
@@ -2499,7 +2499,7 @@ void IPACM_ConntrackListener::AddORDeleteNatEntry_v6(const ipacm_ct_evt_data* ev
 	{
 		uint8_t tcp_state = nfct_get_attr_u8(evt_data->ct, ATTR_TCP_STATE);
 
-		if (TCP_CONNTRACK_ESTABLISHED == tcp_state && pkt_count >= pkt_threshld)
+		if (TCP_CONNTRACK_ESTABLISHED == tcp_state && pkt_count >= pkt_threshld && (evt_data->type != NFCT_T_DESTROY))
 		{
 			IPACMDBG_H("TCP state TCP_CONNTRACK_ESTABLISHED(%d)\n", tcp_state);
 

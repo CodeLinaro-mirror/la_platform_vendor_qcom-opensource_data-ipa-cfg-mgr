@@ -73,6 +73,8 @@ IPACM_LanToLan_Iface::IPACM_LanToLan_Iface(IPACM_Lan *p_iface)
 	m_is_vlan = false;
 #endif
 	m_ast_update = false;
+	m_is_sIface = false;
+	pipe_idx = 0;
 	for(i = 0; i < IPA_HDR_L2_MAX; i++)
 	{
 		ref_cnt_peer_l2_hdr_type[i] = 0;
@@ -110,6 +112,18 @@ IPACM_LanToLan_Iface::IPACM_LanToLan_Iface(IPACM_Lan *p_iface)
 
 		m_is_vlan_ap = ((IPACM_Wlan*)p_iface)->is_vlan_iface();
 		if (is_ap_iface_vlan_enabled()) {
+			m_support_intra_iface_offload = false;
+		}
+	}
+	else if(p_iface->device_type == IPACM_CLIENT_DEVICE_TYPE_ETH && ((IPACM_Lan *)p_iface)->sIface)
+	{
+		IPACMDBG_H("Interface %s is sIface ETH interface.\n", p_iface->dev_name);
+		m_support_intra_iface_offload = true;
+
+		max_num_clients = MAX_NUM_CLIENT;
+		m_is_sIface = ((IPACM_Lan *)p_iface)->sIface;
+
+		if (is_spcl_iface()) {
 			m_support_intra_iface_offload = false;
 		}
 	}
@@ -369,7 +383,7 @@ void IPACM_LanToLan::handle_iface_up(ipacm_event_eth_bridge *data)
 			/* add header processing context for peer VLAN interfaces */
 			for(it = ++m_iface.begin(); it != m_iface.end(); it++)
 			{
-				if (!it->get_is_vlan() && !front_iface.is_svap_iface() && !front_iface.is_ap_iface_vlan_enabled())
+				if (!it->get_is_vlan() && !front_iface.is_svap_iface() && !front_iface.is_ap_iface_vlan_enabled() && !front_iface.is_spcl_iface())
 				{
 					IPACMDBG_H("iface %s is non VLAN iface - skipping\n", it->get_iface_pointer()->dev_name);
 					continue;
@@ -404,7 +418,7 @@ void IPACM_LanToLan::handle_iface_up(ipacm_event_eth_bridge *data)
 			{
 #ifdef FEATURE_VLAN_MPDN
 				/* non VLAN case - currently no support for non vlan <-> vlan offload */
-				if(it->get_is_vlan() && !it->is_svap_iface())
+				if(it->get_is_vlan() && !it->is_svap_iface() && !it->is_spcl_iface())
 					continue;
 #endif
 				/* add peer info only when both interfaces support inter-interface communication */
@@ -498,218 +512,240 @@ void IPACM_LanToLan::handle_new_iface_up(IPACM_LanToLan_Iface *new_iface, IPACM_
 	char lan_rt_tbl_name_for_flt_svap[IPA_IP_MAX][IPA_RESOURCE_NAME_MAX];
 	char lan_rt_tbl_name_for_rt_svap[IPA_IP_MAX][IPA_RESOURCE_NAME_MAX];
 	ipa_hdr_l2_type exist_iface_hdr, new_iface_hdr;
+	int num_prop = 0, spcl_vlan_iface = 0;
 
-
-	if (new_iface->is_svap_iface() || new_iface->is_ap_iface_vlan_enabled())
-		new_iface_hdr = new_iface->get_iface_pointer()->tx_prop->tx[2].hdr_l2_type;
-	else
-		new_iface_hdr = new_iface->get_iface_pointer()->tx_prop->tx[0].hdr_l2_type;
-
-	if (exist_iface->is_svap_iface() || exist_iface->is_ap_iface_vlan_enabled())
-		exist_iface_hdr = exist_iface->get_iface_pointer()->tx_prop->tx[2].hdr_l2_type;
-	else
-		exist_iface_hdr = exist_iface->get_iface_pointer()->tx_prop->tx[0].hdr_l2_type;
-
-
-	IPACMDBG_H("Populate peer info between: new_iface %s, existing iface %s\n", new_iface->get_iface_pointer()->dev_name,
-		exist_iface->get_iface_pointer()->dev_name);
-
-	/* populate the routing table information */
-	snprintf(rt_tbl_name_for_flt[IPA_IP_v4], IPA_RESOURCE_NAME_MAX, "eth_v4_%s_to_%s",
-		ipa_l2_hdr_type[exist_iface_hdr],
-		ipa_l2_hdr_type[new_iface_hdr]);
-	IPACMDBG_H("IPv4 routing table for flt name: %s\n", rt_tbl_name_for_flt[IPA_IP_v4]);
-
-	snprintf(rt_tbl_name_for_flt[IPA_IP_v6], IPA_RESOURCE_NAME_MAX, "eth_v6_%s_to_%s",
-		ipa_l2_hdr_type[exist_iface_hdr],
-		ipa_l2_hdr_type[new_iface_hdr]);
-	IPACMDBG_H("IPv6 routing table for flt name: %s\n", rt_tbl_name_for_flt[IPA_IP_v6]);
-
-	snprintf(rt_tbl_name_for_rt[IPA_IP_v4], IPA_RESOURCE_NAME_MAX, "eth_v4_%s_to_%s",
-		ipa_l2_hdr_type[new_iface_hdr],
-		ipa_l2_hdr_type[exist_iface_hdr]);
-	IPACMDBG_H("IPv4 routing table for rt name: %s\n", rt_tbl_name_for_rt[IPA_IP_v4]);
-
-	snprintf(rt_tbl_name_for_rt[IPA_IP_v6], IPA_RESOURCE_NAME_MAX, "eth_v6_%s_to_%s",
-		ipa_l2_hdr_type[new_iface_hdr],
-		ipa_l2_hdr_type[exist_iface_hdr]);
-	IPACMDBG_H("IPv6 routing table for rt name: %s\n", rt_tbl_name_for_rt[IPA_IP_v6]);
-
-	if (new_iface->get_m_support_ast_update())
+	if (new_iface == NULL || exist_iface == NULL)
 	{
-		    snprintf(lan_rt_tbl_name_for_flt[IPA_IP_v4], IPA_RESOURCE_NAME_MAX, "eth_v4_lan_to_lan_%s",
-				ipa_l2_hdr_type[new_iface->get_iface_pointer()->tx_prop->tx[0].hdr_l2_type]);
+		IPACMERR("Either new_iface or exist_iface is Invalid\n");
+		return;
+	}
+
+	if (new_iface->is_spcl_iface()) {
+		num_prop = new_iface->get_iface_pointer()->rx_prop->num_rx_props;
+	}
+	else if (exist_iface->is_spcl_iface()) {
+		num_prop = exist_iface->get_iface_pointer()->rx_prop->num_rx_props;
+	}
+	else {
+		num_prop = new_iface->get_iface_pointer()->rx_prop->num_rx_props;
+	}
+
+	// If either new or existing iface is spcl iface, then IPACM will treat them as two separate peers
+	// one with vlan properties and other with non-vlan
+	for (int i = 0; i < num_prop/2; i++)
+	{
+		if (i >= 1 && !new_iface->is_spcl_iface() && !exist_iface->is_spcl_iface()) {
+			IPACMDBG_H("Neither new_iface %s or exist_iface %s is eth special\n", new_iface->get_iface_pointer()->dev_name, exist_iface->get_iface_pointer()->dev_name);
+			continue;
+		}
+
+		spcl_vlan_iface = i ? true : false;
+		IPACMDBG_H("Is spcl_vlan_iface %d\n", spcl_vlan_iface);
+
+		if (new_iface->is_svap_iface() || new_iface->is_ap_iface_vlan_enabled() || (new_iface->is_spcl_iface() && i))
+			new_iface_hdr = new_iface->get_iface_pointer()->tx_prop->tx[2].hdr_l2_type;
+		else
+			new_iface_hdr = new_iface->get_iface_pointer()->tx_prop->tx[0].hdr_l2_type;
+
+		if (exist_iface->is_svap_iface() || exist_iface->is_ap_iface_vlan_enabled() || (exist_iface->is_spcl_iface() && i))
+			exist_iface_hdr = exist_iface->get_iface_pointer()->tx_prop->tx[2].hdr_l2_type;
+		else
+			exist_iface_hdr = exist_iface->get_iface_pointer()->tx_prop->tx[0].hdr_l2_type;
+
+
+		IPACMDBG_H("Populate peer info between: new_iface %s, existing iface %s\n", new_iface->get_iface_pointer()->dev_name,
+				   exist_iface->get_iface_pointer()->dev_name);
+
+		/* populate the routing table information */
+		snprintf(rt_tbl_name_for_flt[IPA_IP_v4], IPA_RESOURCE_NAME_MAX, "eth_v4_%s_to_%s",
+				 ipa_l2_hdr_type[exist_iface_hdr],
+				 ipa_l2_hdr_type[new_iface_hdr]);
+		IPACMDBG_H("IPv4 routing table for flt name: %s\n", rt_tbl_name_for_flt[IPA_IP_v4]);
+
+		snprintf(rt_tbl_name_for_flt[IPA_IP_v6], IPA_RESOURCE_NAME_MAX, "eth_v6_%s_to_%s",
+				 ipa_l2_hdr_type[exist_iface_hdr],
+				 ipa_l2_hdr_type[new_iface_hdr]);
+		IPACMDBG_H("IPv6 routing table for flt name: %s\n", rt_tbl_name_for_flt[IPA_IP_v6]);
+
+		snprintf(rt_tbl_name_for_rt[IPA_IP_v4], IPA_RESOURCE_NAME_MAX, "eth_v4_%s_to_%s",
+				 ipa_l2_hdr_type[new_iface_hdr],
+				 ipa_l2_hdr_type[exist_iface_hdr]);
+		IPACMDBG_H("IPv4 routing table for rt name: %s\n", rt_tbl_name_for_rt[IPA_IP_v4]);
+
+		snprintf(rt_tbl_name_for_rt[IPA_IP_v6], IPA_RESOURCE_NAME_MAX, "eth_v6_%s_to_%s",
+				 ipa_l2_hdr_type[new_iface_hdr],
+				 ipa_l2_hdr_type[exist_iface_hdr]);
+		IPACMDBG_H("IPv6 routing table for rt name: %s\n", rt_tbl_name_for_rt[IPA_IP_v6]);
+
+		if (new_iface->get_m_support_ast_update()) {
+			snprintf(lan_rt_tbl_name_for_flt[IPA_IP_v4], IPA_RESOURCE_NAME_MAX, "eth_v4_lan_to_lan_%s",
+					 ipa_l2_hdr_type[new_iface->get_iface_pointer()->tx_prop->tx[0].hdr_l2_type]);
 			IPACMDBG_H("IPv4 LAN routing table for flt name: %s\n", lan_rt_tbl_name_for_flt[IPA_IP_v4]);
 
 			snprintf(lan_rt_tbl_name_for_flt[IPA_IP_v6], IPA_RESOURCE_NAME_MAX, "eth_v6_lan_to_lan_%s",
-				ipa_l2_hdr_type[new_iface->get_iface_pointer()->tx_prop->tx[0].hdr_l2_type]);
+					 ipa_l2_hdr_type[new_iface->get_iface_pointer()->tx_prop->tx[0].hdr_l2_type]);
 			IPACMDBG_H("IPv6 LAN routing table for flt name: %s\n", lan_rt_tbl_name_for_flt[IPA_IP_v6]);
 
 			snprintf(lan_rt_tbl_name_for_rt[IPA_IP_v4], IPA_RESOURCE_NAME_MAX, "eth_v4_lan_to_lan_%s",
-				ipa_l2_hdr_type[new_iface->get_iface_pointer()->tx_prop->tx[0].hdr_l2_type]);
+					 ipa_l2_hdr_type[new_iface->get_iface_pointer()->tx_prop->tx[0].hdr_l2_type]);
 			IPACMDBG_H("IPv4 lan routing table for rt name: %s\n", lan_rt_tbl_name_for_rt[IPA_IP_v4]);
 
 			snprintf(lan_rt_tbl_name_for_rt[IPA_IP_v6], IPA_RESOURCE_NAME_MAX, "eth_v6_lan_to_lan_%s",
-				ipa_l2_hdr_type[new_iface->get_iface_pointer()->tx_prop->tx[0].hdr_l2_type]);
+					 ipa_l2_hdr_type[new_iface->get_iface_pointer()->tx_prop->tx[0].hdr_l2_type]);
 			IPACMDBG_H("IPv4 lan routing table for rt name: %s\n", lan_rt_tbl_name_for_rt[IPA_IP_v6]);
 
-		/* populate the routing table information */
+			/* populate the routing table information */
 			if (new_iface->is_svap_iface() || exist_iface->is_svap_iface() || new_iface->is_ap_iface_vlan_enabled() || exist_iface->is_ap_iface_vlan_enabled()) {
-			snprintf(lan_rt_tbl_name_for_flt_svap[IPA_IP_v4], IPA_RESOURCE_NAME_MAX, "eth_v4_lan_to_lan_%s",
-				ipa_l2_hdr_type[new_iface->get_iface_pointer()->tx_prop->tx[2].hdr_l2_type]);
-			IPACMDBG_H("IPv4 LAN routing table for flt name: %s\n", lan_rt_tbl_name_for_flt_svap[IPA_IP_v4]);
+				snprintf(lan_rt_tbl_name_for_flt_svap[IPA_IP_v4], IPA_RESOURCE_NAME_MAX, "eth_v4_lan_to_lan_%s",
+						 ipa_l2_hdr_type[new_iface->get_iface_pointer()->tx_prop->tx[2].hdr_l2_type]);
+				IPACMDBG_H("IPv4 LAN routing table for flt name: %s\n", lan_rt_tbl_name_for_flt_svap[IPA_IP_v4]);
 
-			snprintf(lan_rt_tbl_name_for_flt_svap[IPA_IP_v6], IPA_RESOURCE_NAME_MAX, "eth_v6_lan_to_lan_%s",
-				ipa_l2_hdr_type[new_iface->get_iface_pointer()->tx_prop->tx[2].hdr_l2_type]);
-			IPACMDBG_H("IPv6 LAN routing table for flt name: %s\n", lan_rt_tbl_name_for_flt_svap[IPA_IP_v6]);
+				snprintf(lan_rt_tbl_name_for_flt_svap[IPA_IP_v6], IPA_RESOURCE_NAME_MAX, "eth_v6_lan_to_lan_%s",
+						 ipa_l2_hdr_type[new_iface->get_iface_pointer()->tx_prop->tx[2].hdr_l2_type]);
+				IPACMDBG_H("IPv6 LAN routing table for flt name: %s\n", lan_rt_tbl_name_for_flt_svap[IPA_IP_v6]);
 
-			snprintf(lan_rt_tbl_name_for_rt_svap[IPA_IP_v4], IPA_RESOURCE_NAME_MAX, "eth_v4_lan_to_lan_%s",
-				ipa_l2_hdr_type[new_iface->get_iface_pointer()->tx_prop->tx[2].hdr_l2_type]);
-			IPACMDBG_H("IPv4 lan routing table for rt name: %s\n", lan_rt_tbl_name_for_rt_svap[IPA_IP_v4]);
+				snprintf(lan_rt_tbl_name_for_rt_svap[IPA_IP_v4], IPA_RESOURCE_NAME_MAX, "eth_v4_lan_to_lan_%s",
+						 ipa_l2_hdr_type[new_iface->get_iface_pointer()->tx_prop->tx[2].hdr_l2_type]);
+				IPACMDBG_H("IPv4 lan routing table for rt name: %s\n", lan_rt_tbl_name_for_rt_svap[IPA_IP_v4]);
 
-			snprintf(lan_rt_tbl_name_for_rt_svap[IPA_IP_v6], IPA_RESOURCE_NAME_MAX, "eth_v6_lan_to_lan_%s",
-				ipa_l2_hdr_type[new_iface->get_iface_pointer()->tx_prop->tx[2].hdr_l2_type]);
-			IPACMDBG_H("IPv4 lan routing table for rt name: %s\n", lan_rt_tbl_name_for_rt_svap[IPA_IP_v6]);
-		}
+				snprintf(lan_rt_tbl_name_for_rt_svap[IPA_IP_v6], IPA_RESOURCE_NAME_MAX, "eth_v6_lan_to_lan_%s",
+						 ipa_l2_hdr_type[new_iface->get_iface_pointer()->tx_prop->tx[2].hdr_l2_type]);
+				IPACMDBG_H("IPv4 lan routing table for rt name: %s\n", lan_rt_tbl_name_for_rt_svap[IPA_IP_v6]);
+			}
 
-		/* add new peer info in both new iface and existing iface */
-		if (new_iface->is_svap_iface() || new_iface->is_ap_iface_vlan_enabled()) {
-			if (exist_iface->get_m_support_ast_update()) {
-				if (exist_iface->is_svap_iface() || exist_iface->is_ap_iface_vlan_enabled()) {
-					/* ath02(svap) <--> ath12 (svap)*/
-					exist_iface->handle_new_iface_up(lan_rt_tbl_name_for_flt_svap, lan_rt_tbl_name_for_rt_svap, new_iface);
-					new_iface->handle_new_iface_up(lan_rt_tbl_name_for_rt_svap, lan_rt_tbl_name_for_flt_svap, exist_iface);
+			/* add new peer info in both new iface and existing iface */
+			if (new_iface->is_svap_iface() || new_iface->is_ap_iface_vlan_enabled()) {
+				if (exist_iface->get_m_support_ast_update()) {
+					if (exist_iface->is_svap_iface() || exist_iface->is_ap_iface_vlan_enabled()) {
+						/* ath02(svap) <--> ath12 (svap)*/
+						exist_iface->handle_new_iface_up(lan_rt_tbl_name_for_flt_svap, lan_rt_tbl_name_for_rt_svap, new_iface);
+						new_iface->handle_new_iface_up(lan_rt_tbl_name_for_rt_svap, lan_rt_tbl_name_for_flt_svap, exist_iface);
+					} else {
+						/* ath1(ast) <--> ath12 (svap) */
+						exist_iface->handle_new_iface_up(lan_rt_tbl_name_for_flt, lan_rt_tbl_name_for_rt_svap, new_iface);
+						new_iface->handle_new_iface_up(lan_rt_tbl_name_for_rt_svap, lan_rt_tbl_name_for_flt, exist_iface);
+					}
 				} else {
-					/* ath1(ast) <--> ath12 (svap) */
-					exist_iface->handle_new_iface_up(lan_rt_tbl_name_for_flt, lan_rt_tbl_name_for_rt_svap, new_iface);
-					new_iface->handle_new_iface_up(lan_rt_tbl_name_for_rt_svap, lan_rt_tbl_name_for_flt, exist_iface);
+					/* eth1 <--> ath12(svap) */
+					exist_iface->handle_new_iface_up(rt_tbl_name_for_flt, lan_rt_tbl_name_for_rt_svap, new_iface);
+					new_iface->handle_new_iface_up(lan_rt_tbl_name_for_rt_svap, rt_tbl_name_for_flt, exist_iface);
 				}
 			} else {
-				/* eth1 <--> ath12(svap) */
-				exist_iface->handle_new_iface_up(rt_tbl_name_for_flt, lan_rt_tbl_name_for_rt_svap, new_iface);
-				new_iface->handle_new_iface_up(lan_rt_tbl_name_for_rt_svap, rt_tbl_name_for_flt, exist_iface);
-			}
-		}
-		else {
-			if (exist_iface->get_m_support_ast_update()) {
-				if (exist_iface->is_svap_iface() || exist_iface->is_ap_iface_vlan_enabled()) {
-					/* ath12(svap) <--> ath1(ast) */
-					exist_iface->handle_new_iface_up(lan_rt_tbl_name_for_rt_svap, lan_rt_tbl_name_for_flt, new_iface);
-					new_iface->handle_new_iface_up(lan_rt_tbl_name_for_flt, lan_rt_tbl_name_for_rt_svap, exist_iface);
+				if (exist_iface->get_m_support_ast_update()) {
+					if (exist_iface->is_svap_iface() || exist_iface->is_ap_iface_vlan_enabled()) {
+						/* ath12(svap) <--> ath1(ast) */
+						exist_iface->handle_new_iface_up(lan_rt_tbl_name_for_rt_svap, lan_rt_tbl_name_for_flt, new_iface);
+						new_iface->handle_new_iface_up(lan_rt_tbl_name_for_flt, lan_rt_tbl_name_for_rt_svap, exist_iface);
+					} else {
+						/* ast <--> ast iface*/
+						exist_iface->handle_new_iface_up(lan_rt_tbl_name_for_flt, lan_rt_tbl_name_for_rt, new_iface);
+						new_iface->handle_new_iface_up(lan_rt_tbl_name_for_flt, lan_rt_tbl_name_for_flt, exist_iface);
+					}
 				} else {
-					/* ast <--> ast iface*/
-					exist_iface->handle_new_iface_up(lan_rt_tbl_name_for_flt, lan_rt_tbl_name_for_rt, new_iface);
-					new_iface->handle_new_iface_up(lan_rt_tbl_name_for_flt, lan_rt_tbl_name_for_flt, exist_iface);
+					/* eth/usb <--> ath1(ast only) */
+					exist_iface->handle_new_iface_up(rt_tbl_name_for_flt, lan_rt_tbl_name_for_rt, new_iface);
+					new_iface->handle_new_iface_up(lan_rt_tbl_name_for_flt, rt_tbl_name_for_flt, exist_iface);
 				}
-			} else {
-				/* eth/usb <--> ath1(ast only) */
-				exist_iface->handle_new_iface_up(rt_tbl_name_for_flt, lan_rt_tbl_name_for_rt, new_iface);
-				new_iface->handle_new_iface_up(lan_rt_tbl_name_for_flt, rt_tbl_name_for_flt, exist_iface);
 			}
-		}
-	}
-	else if (exist_iface->get_m_support_ast_update())
-	{
-		snprintf(lan_rt_tbl_name_for_flt[IPA_IP_v4], IPA_RESOURCE_NAME_MAX, "eth_v4_lan_to_lan_%s",
-			ipa_l2_hdr_type[exist_iface->get_iface_pointer()->tx_prop->tx[0].hdr_l2_type]);
-		IPACMDBG_H("IPv4 LAN routing table for flt name: %s\n", lan_rt_tbl_name_for_flt[IPA_IP_v4]);
+		} else if (exist_iface->get_m_support_ast_update()) {
+			snprintf(lan_rt_tbl_name_for_flt[IPA_IP_v4], IPA_RESOURCE_NAME_MAX, "eth_v4_lan_to_lan_%s",
+					 ipa_l2_hdr_type[exist_iface->get_iface_pointer()->tx_prop->tx[0].hdr_l2_type]);
+			IPACMDBG_H("IPv4 LAN routing table for flt name: %s\n", lan_rt_tbl_name_for_flt[IPA_IP_v4]);
 
-		snprintf(lan_rt_tbl_name_for_flt[IPA_IP_v6], IPA_RESOURCE_NAME_MAX, "eth_v6_lan_to_lan_%s",
-			ipa_l2_hdr_type[exist_iface->get_iface_pointer()->tx_prop->tx[0].hdr_l2_type]);
-		IPACMDBG_H("IPv6 LAN routing table for flt name: %s\n", lan_rt_tbl_name_for_flt[IPA_IP_v6]);
+			snprintf(lan_rt_tbl_name_for_flt[IPA_IP_v6], IPA_RESOURCE_NAME_MAX, "eth_v6_lan_to_lan_%s",
+					 ipa_l2_hdr_type[exist_iface->get_iface_pointer()->tx_prop->tx[0].hdr_l2_type]);
+			IPACMDBG_H("IPv6 LAN routing table for flt name: %s\n", lan_rt_tbl_name_for_flt[IPA_IP_v6]);
 
 			snprintf(lan_rt_tbl_name_for_rt[IPA_IP_v4], IPA_RESOURCE_NAME_MAX, "eth_v4_lan_to_lan_%s",
-				ipa_l2_hdr_type[exist_iface->get_iface_pointer()->tx_prop->tx[0].hdr_l2_type]);
+					 ipa_l2_hdr_type[exist_iface->get_iface_pointer()->tx_prop->tx[0].hdr_l2_type]);
 			IPACMDBG_H("IPv4 lan routing table for rt name: %s\n", lan_rt_tbl_name_for_rt[IPA_IP_v4]);
 
 			snprintf(lan_rt_tbl_name_for_rt[IPA_IP_v6], IPA_RESOURCE_NAME_MAX, "eth_v6_lan_to_lan_%s",
-				ipa_l2_hdr_type[exist_iface->get_iface_pointer()->tx_prop->tx[0].hdr_l2_type]);
+					 ipa_l2_hdr_type[exist_iface->get_iface_pointer()->tx_prop->tx[0].hdr_l2_type]);
 			IPACMDBG_H("IPv4 lan routing table for rt name: %s\n", lan_rt_tbl_name_for_rt[IPA_IP_v6]);
 
-		/* populate the routing table information */
-		if (exist_iface->is_svap_iface() || exist_iface->is_ap_iface_vlan_enabled()) {
-			snprintf(lan_rt_tbl_name_for_flt_svap[IPA_IP_v4], IPA_RESOURCE_NAME_MAX, "eth_v4_lan_to_lan_%s",
-				ipa_l2_hdr_type[exist_iface->get_iface_pointer()->tx_prop->tx[2].hdr_l2_type]);
-			IPACMDBG_H("IPv4 LAN routing table for flt name: %s\n", lan_rt_tbl_name_for_flt_svap[IPA_IP_v4]);
+			/* populate the routing table information */
+			if (exist_iface->is_svap_iface() || exist_iface->is_ap_iface_vlan_enabled()) {
+				snprintf(lan_rt_tbl_name_for_flt_svap[IPA_IP_v4], IPA_RESOURCE_NAME_MAX, "eth_v4_lan_to_lan_%s",
+						 ipa_l2_hdr_type[exist_iface->get_iface_pointer()->tx_prop->tx[2].hdr_l2_type]);
+				IPACMDBG_H("IPv4 LAN routing table for flt name: %s\n", lan_rt_tbl_name_for_flt_svap[IPA_IP_v4]);
 
-			snprintf(lan_rt_tbl_name_for_flt_svap[IPA_IP_v6], IPA_RESOURCE_NAME_MAX, "eth_v6_lan_to_lan_%s",
-				ipa_l2_hdr_type[exist_iface->get_iface_pointer()->tx_prop->tx[2].hdr_l2_type]);
-			IPACMDBG_H("IPv6 LAN routing table for flt name: %s\n", lan_rt_tbl_name_for_flt_svap[IPA_IP_v6]);
+				snprintf(lan_rt_tbl_name_for_flt_svap[IPA_IP_v6], IPA_RESOURCE_NAME_MAX, "eth_v6_lan_to_lan_%s",
+						 ipa_l2_hdr_type[exist_iface->get_iface_pointer()->tx_prop->tx[2].hdr_l2_type]);
+				IPACMDBG_H("IPv6 LAN routing table for flt name: %s\n", lan_rt_tbl_name_for_flt_svap[IPA_IP_v6]);
 
-			snprintf(lan_rt_tbl_name_for_rt_svap[IPA_IP_v4], IPA_RESOURCE_NAME_MAX, "eth_v4_lan_to_lan_%s",
-				ipa_l2_hdr_type[exist_iface->get_iface_pointer()->tx_prop->tx[2].hdr_l2_type]);
-			IPACMDBG_H("IPv4 lan routing table for rt name: %s\n", lan_rt_tbl_name_for_rt_svap[IPA_IP_v4]);
+				snprintf(lan_rt_tbl_name_for_rt_svap[IPA_IP_v4], IPA_RESOURCE_NAME_MAX, "eth_v4_lan_to_lan_%s",
+						 ipa_l2_hdr_type[exist_iface->get_iface_pointer()->tx_prop->tx[2].hdr_l2_type]);
+				IPACMDBG_H("IPv4 lan routing table for rt name: %s\n", lan_rt_tbl_name_for_rt_svap[IPA_IP_v4]);
 
-			snprintf(lan_rt_tbl_name_for_rt_svap[IPA_IP_v6], IPA_RESOURCE_NAME_MAX, "eth_v6_lan_to_lan_%s",
-				ipa_l2_hdr_type[exist_iface->get_iface_pointer()->tx_prop->tx[2].hdr_l2_type]);
-			IPACMDBG_H("IPv4 lan routing table for rt name: %s\n", lan_rt_tbl_name_for_rt_svap[IPA_IP_v6]);
+				snprintf(lan_rt_tbl_name_for_rt_svap[IPA_IP_v6], IPA_RESOURCE_NAME_MAX, "eth_v6_lan_to_lan_%s",
+						 ipa_l2_hdr_type[exist_iface->get_iface_pointer()->tx_prop->tx[2].hdr_l2_type]);
+				IPACMDBG_H("IPv4 lan routing table for rt name: %s\n", lan_rt_tbl_name_for_rt_svap[IPA_IP_v6]);
+			}
+
+			/* add new peer info in both new iface and existing iface
+			   AST update flag is valid for all WLAN APs, at this point new iface can only be a interface
+			   of non-AST type, hence default rt rules are used for new iface here */
+			if (exist_iface->is_svap_iface() || exist_iface->is_ap_iface_vlan_enabled()) {
+				/* ath12(svap) <--> eth1 */
+				new_iface->handle_new_iface_up(rt_tbl_name_for_rt, lan_rt_tbl_name_for_flt_svap, exist_iface);
+				exist_iface->handle_new_iface_up(lan_rt_tbl_name_for_flt_svap, rt_tbl_name_for_rt, new_iface);
+			} else {
+				/* ath1(ast) <--> eth1 */
+				new_iface->handle_new_iface_up(rt_tbl_name_for_rt, lan_rt_tbl_name_for_flt, exist_iface);
+				exist_iface->handle_new_iface_up(lan_rt_tbl_name_for_flt, rt_tbl_name_for_rt, new_iface);
+			}
+		} else {
+			if (new_iface->is_svap_iface() || new_iface->is_ap_iface_vlan_enabled()) {
+				snprintf(rt_tbl_name_for_flt[IPA_IP_v4], IPA_RESOURCE_NAME_MAX, "eth_v4_%s_to_%s",
+						 ipa_l2_hdr_type[exist_iface->get_iface_pointer()->tx_prop->tx[0].hdr_l2_type],
+						 ipa_l2_hdr_type[new_iface->get_iface_pointer()->tx_prop->tx[2].hdr_l2_type]);
+				IPACMDBG_H("IPv4 routing table for flt name: %s\n", rt_tbl_name_for_flt[IPA_IP_v4]);
+
+				snprintf(rt_tbl_name_for_flt[IPA_IP_v6], IPA_RESOURCE_NAME_MAX, "eth_v6_%s_to_%s",
+						 ipa_l2_hdr_type[exist_iface->get_iface_pointer()->tx_prop->tx[0].hdr_l2_type],
+						 ipa_l2_hdr_type[new_iface->get_iface_pointer()->tx_prop->tx[2].hdr_l2_type]);
+				IPACMDBG_H("IPv6 routing table for flt name: %s\n", rt_tbl_name_for_flt[IPA_IP_v6]);
+
+				snprintf(rt_tbl_name_for_rt[IPA_IP_v4], IPA_RESOURCE_NAME_MAX, "eth_v4_%s_to_%s",
+						 ipa_l2_hdr_type[new_iface->get_iface_pointer()->tx_prop->tx[2].hdr_l2_type],
+						 ipa_l2_hdr_type[exist_iface->get_iface_pointer()->tx_prop->tx[0].hdr_l2_type]);
+				IPACMDBG_H("IPv4 routing table for rt name: %s\n", rt_tbl_name_for_rt[IPA_IP_v4]);
+
+				snprintf(rt_tbl_name_for_rt[IPA_IP_v6], IPA_RESOURCE_NAME_MAX, "eth_v6_%s_to_%s",
+						 ipa_l2_hdr_type[new_iface->get_iface_pointer()->tx_prop->tx[2].hdr_l2_type],
+						 ipa_l2_hdr_type[exist_iface->get_iface_pointer()->tx_prop->tx[0].hdr_l2_type]);
+				IPACMDBG_H("IPv6 routing table for rt name: %s\n", rt_tbl_name_for_rt[IPA_IP_v6]);
+			} else if (exist_iface->is_svap_iface() || exist_iface->is_ap_iface_vlan_enabled()) {
+				snprintf(rt_tbl_name_for_flt[IPA_IP_v4], IPA_RESOURCE_NAME_MAX, "eth_v4_%s_to_%s",
+						 ipa_l2_hdr_type[exist_iface->get_iface_pointer()->tx_prop->tx[2].hdr_l2_type],
+						 ipa_l2_hdr_type[new_iface->get_iface_pointer()->tx_prop->tx[0].hdr_l2_type]);
+				IPACMDBG_H("IPv4 routing table for flt name: %s\n", rt_tbl_name_for_flt[IPA_IP_v4]);
+
+				snprintf(rt_tbl_name_for_flt[IPA_IP_v6], IPA_RESOURCE_NAME_MAX, "eth_v6_%s_to_%s",
+						 ipa_l2_hdr_type[exist_iface->get_iface_pointer()->tx_prop->tx[2].hdr_l2_type],
+						 ipa_l2_hdr_type[new_iface->get_iface_pointer()->tx_prop->tx[0].hdr_l2_type]);
+				IPACMDBG_H("IPv6 routing table for flt name: %s\n", rt_tbl_name_for_flt[IPA_IP_v6]);
+
+				snprintf(rt_tbl_name_for_rt[IPA_IP_v4], IPA_RESOURCE_NAME_MAX, "eth_v4_%s_to_%s",
+						 ipa_l2_hdr_type[new_iface->get_iface_pointer()->tx_prop->tx[0].hdr_l2_type],
+						 ipa_l2_hdr_type[exist_iface->get_iface_pointer()->tx_prop->tx[2].hdr_l2_type]);
+				IPACMDBG_H("IPv4 routing table for rt name: %s\n", rt_tbl_name_for_rt[IPA_IP_v4]);
+
+				snprintf(rt_tbl_name_for_rt[IPA_IP_v6], IPA_RESOURCE_NAME_MAX, "eth_v6_%s_to_%s",
+						 ipa_l2_hdr_type[new_iface->get_iface_pointer()->tx_prop->tx[0].hdr_l2_type],
+						 ipa_l2_hdr_type[exist_iface->get_iface_pointer()->tx_prop->tx[2].hdr_l2_type]);
+				IPACMDBG_H("IPv6 routing table for rt name: %s\n", rt_tbl_name_for_rt[IPA_IP_v6]);
+			}
+
+			/* add new peer info in both new iface and existing iface (eth <--> eth)*/
+			/* spcl_vlan_iface would be 0, when both ifaces are considered non-vlan and 1 when one of them
+			   is a special-iface. By this way we will install 2 peer instance(vlan and non-vlan) of the
+			   same interface */
+			exist_iface->handle_new_iface_up(rt_tbl_name_for_flt, rt_tbl_name_for_rt, new_iface, spcl_vlan_iface);
+
+			new_iface->handle_new_iface_up(rt_tbl_name_for_rt, rt_tbl_name_for_flt, exist_iface, spcl_vlan_iface);
 		}
-
-		/* add new peer info in both new iface and existing iface
-		   AST update flag is valid for all WLAN APs, at this point new iface can only be a interface
-		   of non-AST type, hence default rt rules are used for new iface here */
-		if(exist_iface->is_svap_iface() || exist_iface->is_ap_iface_vlan_enabled())
-		{
-			/* ath12(svap) <--> eth1 */
-			new_iface->handle_new_iface_up(rt_tbl_name_for_rt, lan_rt_tbl_name_for_flt_svap, exist_iface);
-			exist_iface->handle_new_iface_up(lan_rt_tbl_name_for_flt_svap, rt_tbl_name_for_rt, new_iface);
-		}
-		else{
-			/* ath1(ast) <--> eth1 */
-			new_iface->handle_new_iface_up(rt_tbl_name_for_rt, lan_rt_tbl_name_for_flt, exist_iface);
-			exist_iface->handle_new_iface_up(lan_rt_tbl_name_for_flt, rt_tbl_name_for_rt, new_iface);
-		}
-	}else
-	{
-		if (new_iface->is_svap_iface() || new_iface->is_ap_iface_vlan_enabled())
-		{
-			snprintf(rt_tbl_name_for_flt[IPA_IP_v4], IPA_RESOURCE_NAME_MAX, "eth_v4_%s_to_%s",
-					 ipa_l2_hdr_type[exist_iface->get_iface_pointer()->tx_prop->tx[0].hdr_l2_type],
-					 ipa_l2_hdr_type[new_iface->get_iface_pointer()->tx_prop->tx[2].hdr_l2_type]);
-			IPACMDBG_H("IPv4 routing table for flt name: %s\n", rt_tbl_name_for_flt[IPA_IP_v4]);
-
-			snprintf(rt_tbl_name_for_flt[IPA_IP_v6], IPA_RESOURCE_NAME_MAX, "eth_v6_%s_to_%s",
-					 ipa_l2_hdr_type[exist_iface->get_iface_pointer()->tx_prop->tx[0].hdr_l2_type],
-					 ipa_l2_hdr_type[new_iface->get_iface_pointer()->tx_prop->tx[2].hdr_l2_type]);
-			IPACMDBG_H("IPv6 routing table for flt name: %s\n", rt_tbl_name_for_flt[IPA_IP_v6]);
-
-			snprintf(rt_tbl_name_for_rt[IPA_IP_v4], IPA_RESOURCE_NAME_MAX, "eth_v4_%s_to_%s",
-					 ipa_l2_hdr_type[new_iface->get_iface_pointer()->tx_prop->tx[2].hdr_l2_type],
-					 ipa_l2_hdr_type[exist_iface->get_iface_pointer()->tx_prop->tx[0].hdr_l2_type]);
-			IPACMDBG_H("IPv4 routing table for rt name: %s\n", rt_tbl_name_for_rt[IPA_IP_v4]);
-
-			snprintf(rt_tbl_name_for_rt[IPA_IP_v6], IPA_RESOURCE_NAME_MAX, "eth_v6_%s_to_%s",
-					 ipa_l2_hdr_type[new_iface->get_iface_pointer()->tx_prop->tx[2].hdr_l2_type],
-					 ipa_l2_hdr_type[exist_iface->get_iface_pointer()->tx_prop->tx[0].hdr_l2_type]);
-			IPACMDBG_H("IPv6 routing table for rt name: %s\n", rt_tbl_name_for_rt[IPA_IP_v6]);
-		}
-		else if (exist_iface->is_svap_iface() || exist_iface->is_ap_iface_vlan_enabled())
-		{
-			snprintf(rt_tbl_name_for_flt[IPA_IP_v4], IPA_RESOURCE_NAME_MAX, "eth_v4_%s_to_%s",
-					 ipa_l2_hdr_type[exist_iface->get_iface_pointer()->tx_prop->tx[2].hdr_l2_type],
-					 ipa_l2_hdr_type[new_iface->get_iface_pointer()->tx_prop->tx[0].hdr_l2_type]);
-			IPACMDBG_H("IPv4 routing table for flt name: %s\n", rt_tbl_name_for_flt[IPA_IP_v4]);
-
-			snprintf(rt_tbl_name_for_flt[IPA_IP_v6], IPA_RESOURCE_NAME_MAX, "eth_v6_%s_to_%s",
-					 ipa_l2_hdr_type[exist_iface->get_iface_pointer()->tx_prop->tx[2].hdr_l2_type],
-					 ipa_l2_hdr_type[new_iface->get_iface_pointer()->tx_prop->tx[0].hdr_l2_type]);
-			IPACMDBG_H("IPv6 routing table for flt name: %s\n", rt_tbl_name_for_flt[IPA_IP_v6]);
-
-			snprintf(rt_tbl_name_for_rt[IPA_IP_v4], IPA_RESOURCE_NAME_MAX, "eth_v4_%s_to_%s",
-					 ipa_l2_hdr_type[new_iface->get_iface_pointer()->tx_prop->tx[0].hdr_l2_type],
-					 ipa_l2_hdr_type[exist_iface->get_iface_pointer()->tx_prop->tx[2].hdr_l2_type]);
-			IPACMDBG_H("IPv4 routing table for rt name: %s\n", rt_tbl_name_for_rt[IPA_IP_v4]);
-
-			snprintf(rt_tbl_name_for_rt[IPA_IP_v6], IPA_RESOURCE_NAME_MAX, "eth_v6_%s_to_%s",
-					 ipa_l2_hdr_type[new_iface->get_iface_pointer()->tx_prop->tx[0].hdr_l2_type],
-					 ipa_l2_hdr_type[exist_iface->get_iface_pointer()->tx_prop->tx[2].hdr_l2_type]);
-			IPACMDBG_H("IPv6 routing table for rt name: %s\n", rt_tbl_name_for_rt[IPA_IP_v6]);
-		}
-
-		/* add new peer info in both new iface and existing iface (eth <--> eth)*/
-		exist_iface->handle_new_iface_up(rt_tbl_name_for_flt, rt_tbl_name_for_rt, new_iface);
-
-		new_iface->handle_new_iface_up(rt_tbl_name_for_rt, rt_tbl_name_for_flt, exist_iface);
 	}
 	return;
 }
@@ -818,7 +854,11 @@ void IPACM_LanToLan::handle_client_add(ipacm_event_eth_bridge *data)
 #ifdef FEATURE_VLAN_MPDN
 			if (IPACM_Iface::ipacmcfg->ipacm_mpdn_enable == true)
 			{
-				if(it_iface->get_is_vlan())
+				if (it_iface->is_spcl_iface())
+				{
+					IPACMDBG_H("Special interface, allow both vlan and non-vlan clients\n");
+				}
+				else if (it_iface->get_is_vlan())
 				{
 					if(!data->VlanID)
 					{
@@ -975,43 +1015,77 @@ void IPACM_LanToLan_Iface::add_client_rt_rule_for_new_iface()
 {
 	list<client_info>::iterator it;
 	ipa_hdr_l2_type peer_l2_type;
+	int num_prop = 0;
 	peer_iface_info &peer = m_peer_iface_info.front();
+	peer_iface_info& front_peer = m_peer_iface_info.front();
+	list<peer_iface_info>::iterator itr;
+	int i = 0;
 
-	if (!peer.peer) {
+	if (!peer.peer || !peer.peer->get_iface_pointer() || !peer.peer->get_iface_pointer()->rx_prop) {
 		return;
 	}
 
-	if (peer.peer->is_svap_iface() || peer.peer->is_ap_iface_vlan_enabled()) {
-		peer_l2_type = peer.peer->get_iface_pointer()->tx_prop->tx[2].hdr_l2_type;
-	}
-	else {
-		peer_l2_type = peer.peer->get_iface_pointer()->tx_prop->tx[0].hdr_l2_type;
-	}
+	num_prop = peer.peer->get_iface_pointer()->rx_prop->num_rx_props;
 
-	if((peer_l2_type < IPA_HDR_L2_MAX) && ref_cnt_peer_l2_hdr_type[peer_l2_type] == 1)
+	for (itr = m_peer_iface_info.begin(); itr != m_peer_iface_info.end(); itr++)
 	{
-		IPACMDBG_H("peer_iface %s MAC: has hdr_type: %d with ref count: %d\n",
-			   peer.peer->get_iface_pointer()->dev_name, peer_l2_type, ref_cnt_peer_l2_hdr_type[peer_l2_type]);
+		/* For special interface, a client rule needs to be installed on both the vlan and non-vlan supported route tables.
+		   Hence we need to iterate on both the peer interface(special vlan peer and special non-vlan peer) */
+		IPACMDBG("rt_tbl %s \n flt %s\n", (*itr).rt_tbl_name_for_rt[IPA_IP_v4], (*itr).rt_tbl_name_for_flt[IPA_IP_v4]);
+		IPACMDBG("Debug iterator %d\n", i);
 
-		for(it = m_client_info.begin(); it != m_client_info.end(); it++)
+		if (!(*itr).peer || !(*itr).peer->get_iface_pointer() || !(*itr).peer->get_iface_pointer()->tx_prop)
 		{
-#ifdef FEATURE_L2TP
-			if(IPACM_Iface::ipacmcfg->ipacm_l2tp_enable == IPACM_L2TP)
-			{
-				if(it->is_l2tp_client == false)
-				{
-					add_client_rt_rule(&peer, &(*it));
-				}
-				/* add l2tp rt rules */
-				add_l2tp_client_rt_rule(&peer, &(*it));
-			}
-			else
-				add_client_rt_rule(&peer, &(*it));
-#else
-			add_client_rt_rule(&peer, &(*it));
-#endif
+			IPACMERR("Invalid peer info..\n", i);
+			return;
 		}
+
+		if ((*itr).peer->is_svap_iface() || (*itr).peer->is_ap_iface_vlan_enabled() || ((*itr).peer->is_spcl_iface() && i)) {
+			peer_l2_type = (*itr).peer->get_iface_pointer()->tx_prop->tx[2].hdr_l2_type;
+		} else {
+			peer_l2_type = (*itr).peer->get_iface_pointer()->tx_prop->tx[0].hdr_l2_type;
+		}
+
+		/* Special interface can have ref_count of 2 for a header type since eth_to_eth and 802_to_eth both will increase
+		   the eth l2 hdr ref count resulting in 2 */
+		if ((peer_l2_type < IPA_HDR_L2_MAX) &&
+			(ref_cnt_peer_l2_hdr_type[peer_l2_type] == 1 || (m_is_sIface && ref_cnt_peer_l2_hdr_type[peer_l2_type] == 2) || (*itr).peer->ref_cnt_peer_l2_hdr_type[peer_l2_type] == 1)) {
+			IPACMDBG_H("peer_iface %s MAC: has hdr_type: %d with ref count: %d\n",
+				(*itr).peer->get_iface_pointer()->dev_name, peer_l2_type, ref_cnt_peer_l2_hdr_type[peer_l2_type]);
+
+			for (it = m_client_info.begin(); it != m_client_info.end(); it++) {
+				IPACMDBG("Client info iterator it %d\n", it);
+#ifdef FEATURE_L2TP
+				if (IPACM_Iface::ipacmcfg->ipacm_l2tp_enable == IPACM_L2TP) {
+					if (it->is_l2tp_client == false) {
+						add_client_rt_rule(&(*itr), &(*it));
+					}
+					/* add l2tp rt rules */
+					add_l2tp_client_rt_rule(&(*itr), &(*it));
+				} else add_client_rt_rule(&(*itr), &(*it));
+#else
+				if (is_spcl_iface())
+				{
+					/* Install vlan client on vlan peer only and similarly versa for non-vlan client */
+					if (((*it).vlan_id && !(*itr).is_vlan_peer) ||
+						(!(*it).vlan_id && (*itr).is_vlan_peer))
+					{
+						IPACMDBG("Vlan client with vlan id %d on non-vlan peer ..continue %d\n", (*it).vlan_id);
+						continue;
+					}
+				}
+				add_client_rt_rule(&(*itr), &(*it));
+#endif
+			}
+		}
+		i++;
 	}
+
+	if (peer.peer->pipe_idx ) {
+		peer.peer->pipe_idx = 0;
+	}
+	auto l_front = m_peer_iface_info.begin();
+	peer = *l_front;
 
 	return;
 }
@@ -1026,12 +1100,20 @@ void IPACM_LanToLan_Iface::add_client_rt_rule(peer_iface_info *peer_info, client
 	std::map<std::array<uint8_t, 6>, int >::iterator it;
 #endif
 
-	if (peer_info->peer->m_is_svap_iface) {
+	if (!peer_info || !peer_info->peer || !client) {
+		IPACMDBG_H("Invalid peer or client info\n");
+		return;
+	}
+
+
+	if (peer_info->peer->m_is_svap_iface || (peer_info->peer->m_is_sIface && peer_info->is_vlan_peer))
+	{
 		peer_l2_hdr_type = peer_info->peer->get_iface_pointer()->tx_prop->tx[2].hdr_l2_type;
 	}
 	else {
 		peer_l2_hdr_type = peer_info->peer->get_iface_pointer()->tx_prop->tx[0].hdr_l2_type;
 	}
+	IPACMDBG_H("peer_l2_hdr_type: %d\n", peer_l2_hdr_type);
 
 	if(peer_l2_hdr_type >= IPA_HDR_L2_MAX)
 	{
@@ -1053,7 +1135,9 @@ void IPACM_LanToLan_Iface::add_client_rt_rule(peer_iface_info *peer_info, client
 
 			/* check if peer already has rt rule for this mac address */
 			it = peer_info->mac_rt_rule_ref.find(mac);
-			if(it != peer_info->mac_rt_rule_ref.end())
+
+			/* Only special interface can have same mac address twice, one for eth_to_eth and other for 802_to_eth */
+			if(it != peer_info->mac_rt_rule_ref.end()  && !peer_info->peer->is_spcl_iface())
 			{
 				/* mac address already has rt rules, increase ref cnt and copy rt rules handles for future deletion*/
 				(it->second)++;
@@ -1101,8 +1185,10 @@ void IPACM_LanToLan_Iface::add_client_rt_rule(peer_iface_info *peer_info, client
 		}
 #endif
 
-		if (is_svap_iface() || is_ap_iface_vlan_enabled()) {
-			IPACMDBG_H("Perform delayed add_hdr_proc_ctx for svap clients \n");
+		/* Special interface needs to install hpc twice once during handle_iface_up for non-vlan clients
+		   and the again here for vlan clients */
+		if (is_svap_iface() || is_ap_iface_vlan_enabled() || (is_spcl_iface() && client->vlan_id)) {
+			IPACMDBG_H("Perform delayed add_hdr_proc_ctx for svap/spcl clients \n");
 			increment_ref_cnt_peer_l2_hdr_type(peer_l2_hdr_type);
 			add_hdr_proc_ctx_vlan(peer_l2_hdr_type, client->vlan_id);
 		}
@@ -1111,7 +1197,7 @@ void IPACM_LanToLan_Iface::add_client_rt_rule(peer_iface_info *peer_info, client
 			peer_info->peer->get_iface_pointer()->dev_name,
 			client->mac_addr[0], client->mac_addr[1], client->mac_addr[2], client->mac_addr[3], client->mac_addr[4], client->mac_addr[5]);
 
-		if (is_svap_iface() || is_ap_iface_vlan_enabled()) {
+		if (is_svap_iface() || is_ap_iface_vlan_enabled() || (is_spcl_iface() && client->vlan_id)) {
 			m_p_iface->eth_bridge_add_rt_rule(client->mac_addr, peer_info->rt_tbl_name_for_rt[IPA_IP_v4], is_entry_present_wlan_svap_hpc_hdl(client->vlan_id, peer_l2_hdr_type),
 			peer_l2_hdr_type, IPA_IP_v4, rt_rule_hdl, &num_rt_rule);
 		}
@@ -1128,7 +1214,7 @@ void IPACM_LanToLan_Iface::add_client_rt_rule(peer_iface_info *peer_info, client
 			client->inter_iface_rt_rule_hdl[peer_l2_hdr_type].rule_hdl[IPA_IP_v4][i] = rt_rule_hdl[i];
 		}
 
-		if (is_svap_iface() || is_ap_iface_vlan_enabled()) {
+		if (is_svap_iface() || is_ap_iface_vlan_enabled() || (is_spcl_iface() && client->vlan_id)) {
 			m_p_iface->eth_bridge_add_rt_rule(client->mac_addr, peer_info->rt_tbl_name_for_rt[IPA_IP_v6], is_entry_present_wlan_svap_hpc_hdl(client->vlan_id, peer_l2_hdr_type),
 			peer_l2_hdr_type, IPA_IP_v6, rt_rule_hdl, &num_rt_rule);
 		}
@@ -1288,7 +1374,7 @@ void IPACM_LanToLan_Iface::add_all_inter_interface_client_flt_rule_one_vlan_id(i
 		/* look for specific client with this vlan id */
 		for(it_client = it_iface->peer->m_client_info.begin(); it_client != it_iface->peer->m_client_info.end(); it_client++)
 		{
-			if (vlan_id == it_client->vlan_id)
+			if ((vlan_id == it_client->vlan_id) || ((IPACM_Iface::ipacmcfg->ipacm_emesh_mode >= 2) && (it_iface->peer->get_m_support_inter_iface_offload())))
 				add_client_flt_rule(&(*it_iface), &(*it_client), iptype);
 		}
 	}
@@ -1376,8 +1462,13 @@ void IPACM_LanToLan_Iface::add_one_client_flt_rule(IPACM_LanToLan_Iface *peer_if
 
 	for(it = m_peer_iface_info.begin(); it != m_peer_iface_info.end(); it++)
 	{
-		if(it->peer == peer_iface)
+		if (it->peer == peer_iface)
 		{
+			if (client->vlan_id &&
+				!(it->peer->is_spcl_iface() && it->is_vlan_peer)) {
+				IPACMDBG_H("Client has hdr type %d vlan id %d, is_vlan_peer %d continue ...\n", it->peer_hdr_type, client->vlan_id, it->is_vlan_peer);
+				continue;
+			}
 			IPACMDBG_H("Found the peer iface info.\n");
 			if(m_is_ip_addr_assigned[IPA_IP_v4])
 			{
@@ -1421,14 +1512,9 @@ void IPACM_LanToLan_Iface::add_client_flt_rule(peer_iface_info *peer, client_inf
 #ifdef FEATURE_VLAN_MPDN
 	if(m_is_vlan)
 	{
-		if(!client->vlan_id)
-		{
-			IPACMERR("VLAN IFACE and non VLAN client\n");
-			return;
-		}
 		if(it_flt != peer->flt_rule.end())
 		{
-			if(it_flt->flt_rule_hdl[iptype]) {
+			if (it_flt->flt_rule_hdl[iptype] && !is_spcl_iface()) {
 				IPACMDBG_H("not adding rule for already found client 0x[%X][%X][%X][%X][%X][%X] vlan %d, iptype %d\n",
 					it_flt->p_client->mac_addr[0], it_flt->p_client->mac_addr[1], it_flt->p_client->mac_addr[2],
 					it_flt->p_client->mac_addr[3], it_flt->p_client->mac_addr[4], it_flt->p_client->mac_addr[5],
@@ -1448,18 +1534,22 @@ void IPACM_LanToLan_Iface::add_client_flt_rule(peer_iface_info *peer, client_inf
 		}
 
 		int i;
-		for(i = 0; i < IPA_MAX_NUM_OFFLOAD_VLANS; i++)
+		/* To avoid the vlan id 0 validations.*/
+		if (client->vlan_id != 0)
 		{
-			if(Ids[i] == client->vlan_id)
+			for(i = 0; i < IPA_MAX_NUM_OFFLOAD_VLANS; i++)
 			{
-				IPACMDBG_H("found vlan Id %d for dev %s, adding vlan client flt rule\n", Ids[i], get_iface_pointer()->dev_name);
-				break;
+				if(Ids[i] == client->vlan_id)
+				{
+					IPACMDBG_H("found vlan Id %d for dev %s, adding vlan client flt rule\n", Ids[i], get_iface_pointer()->dev_name);
+					break;
+				}
 			}
-		}
-		if(i >= IPA_MAX_NUM_OFFLOAD_VLANS)
-		{
-			IPACMDBG_H("client vlan Id %d doesn't match with iface %s VLAN ID list\n", client->vlan_id, get_iface_pointer()->dev_name);
-			return;
+			if(i >= IPA_MAX_NUM_OFFLOAD_VLANS)
+			{
+				IPACMDBG_H("client vlan Id %d doesn't match with iface %s VLAN ID list\n", client->vlan_id, get_iface_pointer()->dev_name);
+				return;
+			}
 		}
 	}
 #endif //FEATURE_VLAN_MPDN
@@ -1526,6 +1616,24 @@ void IPACM_LanToLan_Iface::add_client_flt_rule(peer_iface_info *peer, client_inf
 		{
 			if (!this->get_m_support_ast_update())
 			{
+				if (!peer->peer)
+				{
+					IPACMERR("Invalid peer info\n");
+					return;
+				}
+				int pipe_idx = 0;
+				/* While add peer interface eth-to_eth rule will be inserted followed by 802_to_eth
+				   hence while poping out 802_to_eth will be popped first hence we install rules on
+				   pipe idx 2 first and then on pipe idx 0 for special interface */
+				if (this->is_spcl_iface())
+				{
+					pipe_idx = 2;
+					if(peer->peer->pipe_idx){
+						IPACMDBG_H("lan2lan flt already set ignore this %d.\n", peer->peer->pipe_idx);
+						peer->peer->pipe_idx = 0;
+						pipe_idx = 0;
+					}
+				}
 				rt_tbl.ip = iptype;
 				memcpy(rt_tbl.name, peer->rt_tbl_name_for_flt[iptype], sizeof(rt_tbl.name));
 				IPACMDBG_H("This flt rule points to rt tbl %s.\n", rt_tbl.name);
@@ -1537,7 +1645,9 @@ void IPACM_LanToLan_Iface::add_client_flt_rule(peer_iface_info *peer, client_inf
 				}
 
 				m_p_iface->eth_bridge_add_flt_rule(client->mac_addr, rt_tbl.hdl,
-					iptype, &flt_rule_hdl, client->vlan_id);
+					iptype, &flt_rule_hdl, client->vlan_id, pipe_idx);
+
+				peer->peer->pipe_idx = true;
 			}
 			IPACMDBG_H("Installed flt rule for IP type %d: handle %d\n", iptype, flt_rule_hdl);
 		}
@@ -1745,8 +1855,8 @@ void IPACM_LanToLan_Iface::del_client_rt_rule(peer_iface_info *peer, client_info
 			}
 			client->inter_iface_rt_rule_hdl[peer_l2_hdr_type].num_hdl[IPA_IP_v6] = 0;
 
-			if (is_svap_iface() || is_ap_iface_vlan_enabled()) {
-				IPACMDBG_H("Perform delayed add_hdr_proc_ctx for svap clients \n");
+			if (is_svap_iface() || is_ap_iface_vlan_enabled() || (is_spcl_iface() &&  client->vlan_id)) {
+				IPACMDBG_H("Perform del_hdr_proc_ctx_vlan for svap/spcl clients \n");
 				decrement_ref_cnt_peer_l2_hdr_type(peer_l2_hdr_type);
 				del_hdr_proc_ctx_vlan(peer_l2_hdr_type, client->vlan_id);
 			}
@@ -1804,6 +1914,7 @@ void IPACM_LanToLan_Iface::handle_down_event()
 {
 	list<peer_iface_info>::iterator it_own_peer_info, it_other_iface_peer_info;
 	IPACM_LanToLan_Iface *other_iface;
+	ipa_hdr_l2_type it_own_peer_hdr_type;
 
 	/* clear inter-interface rules */
 	if(m_support_inter_iface_offload)
@@ -1811,8 +1922,21 @@ void IPACM_LanToLan_Iface::handle_down_event()
 		for(it_own_peer_info = m_peer_iface_info.begin(); it_own_peer_info != m_peer_iface_info.end();
 			it_own_peer_info++)
 		{
+			if (!it_own_peer_info->peer)
+			{
+				IPACMERR("Invalid it_own_peer_info\n");
+				return;
+			}
+
+			if (it_own_peer_info->is_vlan_peer){
+				it_own_peer_hdr_type = it_own_peer_info->peer->get_iface_pointer()->tx_prop->tx[2].hdr_l2_type;
+			}
+			else {
+				it_own_peer_hdr_type = it_own_peer_info->peer->get_iface_pointer()->tx_prop->tx[0].hdr_l2_type;
+			}
+
 			/* decrement reference count of peer l2 header type on both interfaces*/
-			decrement_ref_cnt_peer_l2_hdr_type(it_own_peer_info->peer->get_iface_pointer()->tx_prop->tx[0].hdr_l2_type);
+			decrement_ref_cnt_peer_l2_hdr_type(it_own_peer_hdr_type);
 			it_own_peer_info->peer->decrement_ref_cnt_peer_l2_hdr_type(m_p_iface->tx_prop->tx[0].hdr_l2_type);
 
 			/* first clear all flt rule on target interface */
@@ -2017,7 +2141,6 @@ void IPACM_LanToLan_Iface::clear_all_rt_rule_for_one_peer_iface(peer_iface_info 
 	list<client_info>::iterator it;
 	ipa_hdr_l2_type peer_l2_type;
 
-	peer_l2_type = peer->peer->get_iface_pointer()->tx_prop->tx[0].hdr_l2_type;
 	if (peer_l2_type >= IPA_HDR_L2_MAX)
 	{
 		IPACMDBG_H("Invalid peer_l2_type: %d\n", peer_l2_type);
@@ -2123,7 +2246,7 @@ void IPACM_LanToLan_Iface::handle_wlan_scc_mcc_switch()
 
 void IPACM_LanToLan_Iface::handle_intra_interface_info()
 {
-	uint32_t hdr_proc_ctx_hdl;
+	uint32_t hdr_proc_ctx_hdl[IPA_MAX_NUM_PROPS] = { 0 };
 
 	if(m_p_iface->tx_prop == NULL)
 	{
@@ -2173,18 +2296,23 @@ void IPACM_LanToLan_Iface::handle_intra_interface_info()
 	IPACMDBG_H("IPv6 routing table for rt name: %s\n", m_intra_interface_info.rt_tbl_name_for_rt[IPA_IP_v6]);
 
 	m_p_iface->eth_bridge_add_hdr_proc_ctx(m_p_iface->tx_prop->tx[0].hdr_l2_type,
-		&hdr_proc_ctx_hdl, 0);
-	hdr_proc_ctx_for_intra_interface = hdr_proc_ctx_hdl;
-	IPACMDBG_H("Hdr proc ctx for intra-interface communication: hdl %d\n", hdr_proc_ctx_hdl);
+		hdr_proc_ctx_hdl, 0);
+	hdr_proc_ctx_for_intra_interface = hdr_proc_ctx_hdl[0];
+	IPACMDBG_H("Hdr proc ctx for intra-interface communication: hdl %d\n", hdr_proc_ctx_hdl[0]);
 
 	return;
 }
 
 void IPACM_LanToLan_Iface::handle_new_iface_up(char rt_tbl_name_for_flt[][IPA_RESOURCE_NAME_MAX], char rt_tbl_name_for_rt[][IPA_RESOURCE_NAME_MAX],
-		IPACM_LanToLan_Iface *peer_iface)
+		IPACM_LanToLan_Iface *peer_iface, int spcl_vlan_iface)
 {
 	peer_iface_info new_peer;
 	ipa_hdr_l2_type peer_l2_hdr_type;
+
+	if (!peer_iface) {
+		IPACMERR("Invalid peer iface info\n");
+		return;
+	}
 
 	new_peer.peer = peer_iface;
 	memcpy(new_peer.rt_tbl_name_for_rt[IPA_IP_v4], rt_tbl_name_for_rt[IPA_IP_v4], IPA_RESOURCE_NAME_MAX);
@@ -2192,8 +2320,12 @@ void IPACM_LanToLan_Iface::handle_new_iface_up(char rt_tbl_name_for_flt[][IPA_RE
 	memcpy(new_peer.rt_tbl_name_for_flt[IPA_IP_v4], rt_tbl_name_for_flt[IPA_IP_v4], IPA_RESOURCE_NAME_MAX);
 	memcpy(new_peer.rt_tbl_name_for_flt[IPA_IP_v6], rt_tbl_name_for_flt[IPA_IP_v6], IPA_RESOURCE_NAME_MAX);
 
-	if (peer_iface->is_svap_iface() || peer_iface->is_ap_iface_vlan_enabled()) {
+	/* spcl_vlan_iface = 1 means that the interface needs to be treated as vlan supported and hence appropiate l2_hdr type
+	   needs to be selected */
+	if (peer_iface->is_svap_iface() || peer_iface->is_ap_iface_vlan_enabled() || (peer_iface->is_spcl_iface() && spcl_vlan_iface))
+	{
 		peer_l2_hdr_type = peer_iface->m_p_iface->tx_prop->tx[2].hdr_l2_type;
+		new_peer.is_vlan_peer = true;
 	}
 	else {
 		peer_l2_hdr_type = peer_iface->m_p_iface->tx_prop->tx[0].hdr_l2_type;
@@ -2205,6 +2337,15 @@ void IPACM_LanToLan_Iface::handle_new_iface_up(char rt_tbl_name_for_flt[][IPA_RE
 		add_hdr_proc_ctx(peer_l2_hdr_type);
 	}
 
+
+	/* is_vlan_peer is set to true for both the interfaces even if one of them is a special interface.
+	   For example: ethii_to_802 and 802_to_eth both need be marked as vlan peer so that appropiate mac
+	   based rules can be selected later */
+	if (spcl_vlan_iface)
+	{
+		new_peer.is_vlan_peer = true;
+	}
+	new_peer.peer_hdr_type = peer_l2_hdr_type;
 	/* push the new peer_iface_info into the list */
 	m_peer_iface_info.push_front(new_peer);
 
@@ -2255,7 +2396,7 @@ void IPACM_LanToLan_Iface::handle_client_add(uint8_t *mac, bool is_l2tp_client, 
 		memset(flag, 0, sizeof(flag));
 		for(it_peer_info = m_peer_iface_info.begin(); it_peer_info != m_peer_iface_info.end(); it_peer_info++)
 		{
-			if (it_peer_info->peer->is_svap_iface() || it_peer_info->peer->is_ap_iface_vlan_enabled())
+			if (it_peer_info->peer->is_svap_iface() || it_peer_info->peer->is_ap_iface_vlan_enabled() || (it_peer_info->peer->is_spcl_iface() && it_peer_info->is_vlan_peer))
 				l2_hdr_type = it_peer_info->peer->get_iface_pointer()->rx_prop->rx[2].hdr_l2_type;
 			else
 				l2_hdr_type = it_peer_info->peer->get_iface_pointer()->rx_prop->rx[0].hdr_l2_type;
@@ -2267,7 +2408,7 @@ void IPACM_LanToLan_Iface::handle_client_add(uint8_t *mac, bool is_l2tp_client, 
 			}
 
 			/* make sure add routing rule only once for each peer l2 header type */
-			if(flag[l2_hdr_type] == false)
+			if(flag[l2_hdr_type] == false || is_spcl_iface())
 			{
 				/* add client routing rule for each peer interface */
 				if(front_client.is_l2tp_client == false)
@@ -2408,13 +2549,13 @@ list<client_info>::iterator IPACM_LanToLan_Iface::handle_client_del(uint8_t *mac
 
 void IPACM_LanToLan_Iface::add_hdr_proc_ctx(ipa_hdr_l2_type peer_l2_type)
 {
-	uint32_t hdr_proc_ctx_hdl;
+	uint32_t hdr_proc_ctx_hdl[IPA_MAX_NUM_PROPS] = { 0 };
 
 	if(ref_cnt_peer_l2_hdr_type[peer_l2_type] == 1)
 	{
-		m_p_iface->eth_bridge_add_hdr_proc_ctx(peer_l2_type, &hdr_proc_ctx_hdl, 0);
-		hdr_proc_ctx_for_inter_interface[peer_l2_type] = hdr_proc_ctx_hdl;
-		IPACMDBG_H("Installed inter-interface hdr proc ctx on iface %s: handle %d\n", m_p_iface->dev_name, hdr_proc_ctx_hdl);
+		m_p_iface->eth_bridge_add_hdr_proc_ctx(peer_l2_type, hdr_proc_ctx_hdl, 0);
+		hdr_proc_ctx_for_inter_interface[peer_l2_type] = hdr_proc_ctx_hdl[0];
+		IPACMDBG_H("Installed inter-interface hdr proc ctx on iface %s: handle %d\n", m_p_iface->dev_name, hdr_proc_ctx_hdl[0]);
 	}
 	return;
 }
@@ -2431,11 +2572,11 @@ void IPACM_LanToLan_Iface::del_hdr_proc_ctx(ipa_hdr_l2_type peer_l2_type)
 
 void IPACM_LanToLan_Iface::add_hdr_proc_ctx_vlan(ipa_hdr_l2_type peer_l2_type, uint16_t vlan_id)
 {
-	uint32_t hdr_proc_ctx_hdl;
+	uint32_t hdr_proc_ctx_hdl[IPA_MAX_NUM_PROPS] = { 0 };
 
 	if (!is_entry_present_wlan_svap_hpc_hdl(vlan_id, peer_l2_type))
 	{
-		m_p_iface->eth_bridge_add_hdr_proc_ctx(peer_l2_type, &hdr_proc_ctx_hdl, vlan_id);
+		m_p_iface->eth_bridge_add_hdr_proc_ctx(peer_l2_type, hdr_proc_ctx_hdl, vlan_id);
 		add_wlan_svap_hpc_hdl(vlan_id, peer_l2_type, hdr_proc_ctx_hdl);
 		IPACMDBG_H("Installed inter-interface hdr proc ctx on iface %s: handle %d\n", m_p_iface->dev_name, hdr_proc_ctx_hdl);
 	}
@@ -2449,7 +2590,7 @@ void IPACM_LanToLan_Iface::del_hdr_proc_ctx_vlan(ipa_hdr_l2_type peer_l2_type, u
 	{
 		m_p_iface->eth_bridge_del_hdr_proc_ctx(hpc_hdl);
 		IPACMDBG_H("Hdr proc ctx with hdl %d is deleted.\n", hdr_proc_ctx_for_inter_interface[peer_l2_type]);
-		del_wlan_svap_hpc_hdl(vlan_id, peer_l2_type, hpc_hdl);
+		del_wlan_svap_hpc_hdl(vlan_id, peer_l2_type, &hpc_hdl);
 	}
 	return;
 }
@@ -2684,6 +2825,11 @@ bool IPACM_LanToLan_Iface::is_ap_iface_vlan_enabled() {
 	return m_is_vlan_ap;
 }
 
+bool IPACM_LanToLan_Iface::is_spcl_iface() {
+	IPACMDBG_H("Is %s AP Special iface? %d\n", m_p_iface->dev_name, m_is_sIface);
+	return m_is_sIface;
+}
+
 bool IPACM_LanToLan_Iface::get_m_support_inter_iface_offload()
 {
 	IPACMDBG_H("Support inter interface offload on %s? %d\n", m_p_iface->dev_name,
@@ -2849,7 +2995,7 @@ void IPACM_LanToLan_Iface::handle_l2tp_disable()
 }
 #endif
 
-uint32_t IPACM_LanToLan_Iface::add_wlan_svap_hpc_hdl(uint16_t vlan_id, ipa_hdr_l2_type peer_l2_type, uint32_t hpc_hdl)
+uint32_t IPACM_LanToLan_Iface::add_wlan_svap_hpc_hdl(uint16_t vlan_id, ipa_hdr_l2_type peer_l2_type, uint32_t* hpc_hdl)
 {
 	uint32_t ret_hdl = 0;
 
@@ -2862,7 +3008,7 @@ uint32_t IPACM_LanToLan_Iface::add_wlan_svap_hpc_hdl(uint16_t vlan_id, ipa_hdr_l
 			wlan_svap_hpc_hdls[i].peer_l2_type == peer_l2_type)
 		{
 			IPACMDBG_H("Entry with vlan_id %d and peer %d, already exists\n", vlan_id, peer_l2_type);
-			wlan_svap_hpc_hdls[i].hpc_hdr_hdl = hpc_hdl;
+			wlan_svap_hpc_hdls[i].hpc_hdr_hdl = hpc_hdl[0];
 			break;
 		}
 	}
@@ -2871,14 +3017,14 @@ uint32_t IPACM_LanToLan_Iface::add_wlan_svap_hpc_hdl(uint16_t vlan_id, ipa_hdr_l
 	IPACMDBG_H("Entry with vlan_id %d and peer %d, absent, create a new entry\n", vlan_id, peer_l2_type);
 	wlan_svap_hpc_hdls[num_of_wlan_svap_hpc_hdls].vlan_id = vlan_id;
 	wlan_svap_hpc_hdls[num_of_wlan_svap_hpc_hdls].peer_l2_type = peer_l2_type;
-	wlan_svap_hpc_hdls[num_of_wlan_svap_hpc_hdls].hpc_hdr_hdl = hpc_hdl;
+	wlan_svap_hpc_hdls[num_of_wlan_svap_hpc_hdls].hpc_hdr_hdl = hpc_hdl[0];
 
 	num_of_wlan_svap_hpc_hdls++;
 
 	return ret_hdl;
 }
 
-uint32_t IPACM_LanToLan_Iface::del_wlan_svap_hpc_hdl(uint16_t vlan_id, ipa_hdr_l2_type peer_l2_type, uint32_t hpc_hdl)
+uint32_t IPACM_LanToLan_Iface::del_wlan_svap_hpc_hdl(uint16_t vlan_id, ipa_hdr_l2_type peer_l2_type, uint32_t* hpc_hdl)
 {
 	uint32_t ret_hdl = 0;
 

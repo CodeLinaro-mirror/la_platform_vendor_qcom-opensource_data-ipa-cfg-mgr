@@ -92,7 +92,7 @@ extern "C"
 
 #define IPA_MAX_ACTIVE_WLAN_IFACE 21
 
-#define IPA_MAX_IFACE_ENTRIES (41 + IPA_MAX_ACTIVE_WLAN_IFACE) /* current: 15 rmnet + 21 wlan + bridge+ eth+ rndis + ecm + 15 rmnet for RDKB. */
+#define IPA_MAX_IFACE_ENTRIES (48 + IPA_MAX_ACTIVE_WLAN_IFACE) /* current: 15 rmnet + 21 wlan + bridge+ eth+ rndis + ecm + 15 rmnet for RDKB + 7mld. */
 #define IPA_MAX_ALG_ENTRIES 20
 #define IPA_MAX_RM_ENTRY 9
 
@@ -149,9 +149,9 @@ extern "C"
 #define IPACM_FAILURE               -1         /* Unsuccessful operation */
 
 #define IPACM_IP_NULL (ipa_ip_type)0xFF
-#define IPACM_INVALID_INDEX (ipa_ip_type)0xFF
+#define IPACM_INVALID_INDEX (ipa_ip_type)0x15E
 
-#define IPA_MAX_NUM_WIFI_CLIENTS 128
+#define IPA_MAX_NUM_WIFI_CLIENTS 350
 #define IPA_MAX_NUM_WAN_CLIENTS  10
 #define IPA_MAX_NUM_VLAN_CLIENTS 32
 #define IPA_MAX_NUM_ETH_CLIENTS  32
@@ -192,6 +192,7 @@ extern "C"
 #endif
 
 #define IPA_DUMMY_PREFIX 0xFFFFFFFF
+#define IPA_MAX_NUM_PROPS 2
 
 /*
  * The following macros allow callers to print the raw bytes making up
@@ -268,7 +269,6 @@ typedef enum
 	IPA_WLAN_SWITCH_TO_MCC,                   /* No Data */
 	IPA_WLAN_SWITCH_VLAN_MODE,                /* ipacm_event_vlan_mode */
 	IPA_CRADLE_WAN_MODE_SWITCH,               /* ipacm_event_cradle_wan_mode */
-	IPA_WAN_XLAT_CONNECT_EVENT,               /* ipacm_event_data_fid */
 	IPA_TETHERING_STATS_UPDATE_EVENT,         /* ipacm_event_data_fid */
 	IPA_NETWORK_STATS_UPDATE_EVENT,           /* ipacm_event_data_fid */
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
@@ -409,6 +409,7 @@ typedef struct
 	ipacm_wlan_access_mode wlan_mode;
 	int netlink_interface_index;
 	bool is_wlan_if_vlan;
+	bool is_spcl_if;
 } ipa_ifi_dev_name_t;
 
 typedef struct

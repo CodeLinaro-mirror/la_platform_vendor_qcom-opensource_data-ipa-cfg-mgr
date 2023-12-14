@@ -52,7 +52,7 @@ SPDX-License-Identifier: BSD-3-Clause-Clear
 #include "IPACM_Listener.h"
 #include "IPACM_Iface.h"
 
-#define IPA_MAX_NUM_NEIGHBOR_CLIENTS  200
+#define IPA_MAX_NUM_NEIGHBOR_CLIENTS  400
 
 struct ipa_neighbor_client
 {

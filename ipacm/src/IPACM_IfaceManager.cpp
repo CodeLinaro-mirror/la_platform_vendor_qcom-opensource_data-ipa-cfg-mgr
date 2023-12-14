@@ -367,6 +367,9 @@ int IPACM_IfaceManager::create_iface_instance(ipacm_ifacemgr_data *param)
 				IPACM_EvtDispatcher::registr(IPA_HANDLE_WAN_DOWN, ETH);
 				IPACM_EvtDispatcher::registr(IPA_HANDLE_WAN_DOWN_V6, ETH);
 				IPACM_EvtDispatcher::registr(IPA_CRADLE_WAN_MODE_SWITCH, ETH);
+#ifdef IPA_MTU_EVENT_MAX
+				IPACM_EvtDispatcher::registr(IPA_MTU_UPDATE, ETH);
+#endif
 				IPACM_EvtDispatcher::registr(IPA_LINK_DOWN_EVENT, ETH);
 				IPACM_EvtDispatcher::registr(IPA_MAC_ADD_DEL_FLT_EVENT, ETH);
 #ifdef FEATURE_IPv6CT_DISABLED
@@ -428,6 +431,9 @@ int IPACM_IfaceManager::create_iface_instance(ipacm_ifacemgr_data *param)
 					/* only need for vlan supported lan instance */
 					IPACM_EvtDispatcher::registr(IPA_HANDLE_WAN_ADDR_ADD_V6, odu);
 					IPACM_EvtDispatcher::registr(IPA_CRADLE_WAN_MODE_SWITCH, odu);
+#ifdef IPA_MTU_EVENT_MAX
+					IPACM_EvtDispatcher::registr(IPA_MTU_UPDATE, odu);
+#endif
 					IPACM_EvtDispatcher::registr(IPA_LINK_DOWN_EVENT, odu);
 					IPACM_EvtDispatcher::registr(IPA_MAC_ADD_DEL_FLT_EVENT, odu);
 #ifdef FEATURE_VLAN_MPDN
@@ -631,7 +637,6 @@ int IPACM_IfaceManager::create_iface_instance(ipacm_ifacemgr_data *param)
 					IPACM_EvtDispatcher::registr(IPA_SW_ROUTING_ENABLE, w);
 					IPACM_EvtDispatcher::registr(IPA_SW_ROUTING_DISABLE, w);
 					IPACM_EvtDispatcher::registr(IPA_CFG_CHANGE_EVENT, w); 		// register for IPA_CFG_CHANGE event
-					IPACM_EvtDispatcher::registr(IPA_WAN_XLAT_CONNECT_EVENT, w);
 					IPACM_EvtDispatcher::registr(IPA_IP_PASS_UPDATE_EVENT, w);
 					IPACM_EvtDispatcher::registr(IPA_IP_COLLISION_UPDATE_EVENT, w);
 					IPACM_EvtDispatcher::registr(IPA_IPACM_DISABLE, w);

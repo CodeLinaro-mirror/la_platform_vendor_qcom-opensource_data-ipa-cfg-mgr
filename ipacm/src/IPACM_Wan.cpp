@@ -27,6 +27,38 @@
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  * Changes from Qualcomm Innovation Center are provided under the following license:
  *
+ * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted (subject to the limitations in the
+ * disclaimer below) provided that the following conditions are met:
+ *
+ *     * Redistributions of source code must retain the above copyright
+ *       notice, this list of conditions and the following disclaimer.
+ *
+ *     * Redistributions in binary form must reproduce the above
+ *       copyright notice, this list of conditions and the following
+ *       disclaimer in the documentation and/or other materials provided
+ *       with the distribution.
+ *
+ *     * Neither the name of Qualcomm Innovation Center, Inc. nor the names of its
+ *       contributors may be used to endorse or promote products derived
+ *       from this software without specific prior written permission.
+ *
+ * NO EXPRESS OR IMPLIED LICENSES TO ANY PARTY'S PATENT RIGHTS ARE
+ * GRANTED BY THIS LICENSE. THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT
+ * HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED
+ * WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
+ * MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
+ * IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR
+ * ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+ * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE
+ * GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER
+ * IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
+ * OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
+ * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE
+ *
  * Changes from Qualcomm Innovation Center are provided under the following license:
  * Copyright (c) 2022- 2023 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
@@ -1052,6 +1084,7 @@ int IPACM_Wan::handle_addr_evt(ipacm_event_data_addr *data)
 			res = rt_rule_entry->status;
 			goto fail;
 		}
+
 		dft_rt_rule_hdl[0] = rt_rule_entry->rt_rule_hdl;
 		IPACMDBG_H("ipv4 wan iface rt-rule hdll=0x%x\n", dft_rt_rule_hdl[0]);
 #ifdef FEATURE_IPA_IPSEC
@@ -1061,6 +1094,8 @@ int IPACM_Wan::handle_addr_evt(ipacm_event_data_addr *data)
 				goto fail;
 		}
 #endif
+
+		/* initial multicast/broadcast/fragment filter rule */
 		/* only do one time */
 		if(!wan_v4_addr_set)
 		{
@@ -1206,21 +1241,6 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 		}
 		break;
 
-	case IPA_WAN_XLAT_CONNECT_EVENT:
-		{
-			IPACMDBG_H("Recieved IPA_WAN_XLAT_CONNECT_EVENT\n");
-			ipacm_event_data_fid *data = (ipacm_event_data_fid *)param;
-			ipa_interface_index = IPACM_Iface::iface_ipa_index_query(data->if_index);
-			if ((ipa_interface_index == ipa_if_num) && (m_is_sta_mode == Q6_WAN))
-			{
-				is_xlat = true;
-				if (modem_ipv4_pdn_index != -1)
-					IPACM_Wan::ipv4_to_iface[modem_ipv4_pdn_index].is_xlat = true;
-				IPACMDBG_H("WAN-LTE (%s) link up, iface: %d is_xlat: %d \n",
-						IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].iface_name,data->if_index, is_xlat);
-			}
-			break;
-		}
 	case IPA_CFG_CHANGE_EVENT:
 		{
 			if ( (IPACM_Iface::ipacmcfg->iface_table[ipa_if_num].if_cat == ipa_if_cate) &&
@@ -1404,7 +1424,23 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 					IPACMDBG_H("Got IPA_ADDR_ADD_EVENT ip-family:%d, v6 num %d: \n",data->iptype,num_dft_rt_v6);
 
 					if (data->iptype == IPA_IP_v4)
+					{
 						IPACM_Iface::iface_addr_query(data->if_index, false, &data->ipv4_addr);
+
+						IPACMDBG_H("ipv4_addr : 0x%x subnet_mask : 0x%x result: 0x%x xlat_ip : 0x%x\n",
+							data->ipv4_addr, data->ipv4_addr_mask, data->ipv4_addr & data->ipv4_addr_mask, XLAT_IP);
+
+						if((data->ipv4_addr & data->ipv4_addr_mask) == XLAT_IP && (m_is_sta_mode == Q6_WAN))
+						{
+							is_xlat = true;
+							if (modem_ipv4_pdn_index != -1)
+							{
+								IPACM_Wan::ipv4_to_iface[modem_ipv4_pdn_index].is_xlat = true;
+							}
+							IPACMDBG_H("WAN-LTE (%s) link up, iface: %d is_xlat: %d \n",
+							IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].iface_name,data->if_index, is_xlat);
+						}
+					}
 
 					handle_addr_evt(data);
 					/* checking if SW-RT_enable */
@@ -2612,7 +2648,11 @@ int IPACM_Wan::handle_route_add_vlan_pdn_evt(ipa_ip_type iptype, uint16_t vlan_i
 		wanup_vlan_data->VlanID = vlan_id;
 		wanup_vlan_data->mux_id = ext_prop->ext[0].mux_id;
 		memcpy(wanup_vlan_data->ipv6_prefix, ipv6_prefix, sizeof(ipv6_prefix));
-		if (is_xlat)
+		if (is_xlat && ipv6_to_iface[modem_ipv6_pdn_index].ipv6_prefix[0] && ipv6_to_iface[modem_ipv6_pdn_index].ipv6_prefix[1])
+		{
+			IPACM_Iface::ipacmcfg->add_vlan_ipv6_prefix(ipv6_to_iface[modem_ipv6_pdn_index].ipv6_prefix, ipa_if_num, vlan_id);
+		}
+		else if (is_xlat)
 		{
 			ipv6_to_iface[modem_ipv6_pdn_index].ipv6_prefix[0] = IPA_DUMMY_PREFIX;
 			ipv6_to_iface[modem_ipv6_pdn_index].ipv6_prefix[1] = IPA_DUMMY_PREFIX;
@@ -5572,7 +5612,7 @@ int IPACM_Wan::add_dft_filtering_rule(struct ipa_flt_rule_add *rules, int rule_o
 	}
 	else	/*insert rules for ipv6*/
 	{
-		m_ipv6_default_filterting_rules_count = 0;
+		m_ipv6_default_filterting_rules_count[0] = 0;
 		memset(&rt_tbl_idx, 0, sizeof(rt_tbl_idx));
 		strlcpy(rt_tbl_idx.name, IPACM_Iface::ipacmcfg->rt_tbl_wan_dl.name, IPA_RESOURCE_NAME_MAX);
 		rt_tbl_idx.name[IPA_RESOURCE_NAME_MAX-1] = '\0';
@@ -5627,11 +5667,11 @@ int IPACM_Wan::add_dft_filtering_rule(struct ipa_flt_rule_add *rules, int rule_o
 			memcpy(&flt_rule_entry.rule.eq_attrib, &flt_eq.eq_attrib, sizeof(flt_rule_entry.rule.eq_attrib));
 #ifdef FEATURE_VLAN_MPDN
 			/* default rules are not metadata dependant - mux_id is not relevant */
-			rules[rule_offset + m_ipv6_default_filterting_rules_count].mux_id = 0;
-			memcpy(&(rules[rule_offset + m_ipv6_default_filterting_rules_count++].flt_rule),
+			rules[rule_offset + m_ipv6_default_filterting_rules_count[0]].mux_id = 0;
+			memcpy(&(rules[rule_offset + m_ipv6_default_filterting_rules_count[0]++].flt_rule),
 				&flt_rule_entry, sizeof(struct ipa_flt_rule_add));
 #else
-			memcpy(&(rules[rule_offset + m_ipv6_default_filterting_rules_count++]),
+			memcpy(&(rules[rule_offset + m_ipv6_default_filterting_rules_count[0]++]),
 				&flt_rule_entry, sizeof(struct ipa_flt_rule_add));
 #endif
 		}
@@ -5673,11 +5713,11 @@ int IPACM_Wan::add_dft_filtering_rule(struct ipa_flt_rule_add *rules, int rule_o
 					 sizeof(flt_rule_entry.rule.eq_attrib));
 #ifdef FEATURE_VLAN_MPDN
 		/* default rules are not metadata dependant - mux_id is not relevant */
-		rules[rule_offset + m_ipv6_default_filterting_rules_count].mux_id = 0;
-		memcpy(&(rules[rule_offset + m_ipv6_default_filterting_rules_count++].flt_rule),
+		rules[rule_offset + m_ipv6_default_filterting_rules_count[0]].mux_id = 0;
+		memcpy(&(rules[rule_offset + m_ipv6_default_filterting_rules_count[0]++].flt_rule),
 			&flt_rule_entry, sizeof(struct ipa_flt_rule_add));
 #else
-		memcpy(&(rules[rule_offset + m_ipv6_default_filterting_rules_count++]),
+		memcpy(&(rules[rule_offset + m_ipv6_default_filterting_rules_count[0]++]),
 			&flt_rule_entry, sizeof(struct ipa_flt_rule_add));
 #endif
 
@@ -5709,11 +5749,11 @@ int IPACM_Wan::add_dft_filtering_rule(struct ipa_flt_rule_add *rules, int rule_o
 
 #ifdef FEATURE_VLAN_MPDN
 		/* default rules are not metadata dependant - mux_id is not relevant */
-		rules[rule_offset + m_ipv6_default_filterting_rules_count].mux_id = 0;
-		memcpy(&(rules[rule_offset + m_ipv6_default_filterting_rules_count++].flt_rule),
+		rules[rule_offset + m_ipv6_default_filterting_rules_count[0]].mux_id = 0;
+		memcpy(&(rules[rule_offset + m_ipv6_default_filterting_rules_count[0]++].flt_rule),
 			&flt_rule_entry, sizeof(struct ipa_flt_rule_add));
 #else
-		memcpy(&(rules[rule_offset + m_ipv6_default_filterting_rules_count++]),
+		memcpy(&(rules[rule_offset + m_ipv6_default_filterting_rules_count[0]++]),
 			&flt_rule_entry, sizeof(struct ipa_flt_rule_add));
 #endif
 
@@ -5745,11 +5785,11 @@ int IPACM_Wan::add_dft_filtering_rule(struct ipa_flt_rule_add *rules, int rule_o
 
 #ifdef FEATURE_VLAN_MPDN
 		/* default rules are not metadata dependant - mux_id is not relevant */
-		rules[rule_offset + m_ipv6_default_filterting_rules_count].mux_id = 0;
-		memcpy(&(rules[rule_offset + m_ipv6_default_filterting_rules_count++].flt_rule),
+		rules[rule_offset + m_ipv6_default_filterting_rules_count[0]].mux_id = 0;
+		memcpy(&(rules[rule_offset + m_ipv6_default_filterting_rules_count[0]++].flt_rule),
 			&flt_rule_entry, sizeof(struct ipa_flt_rule_add));
 #else
-		memcpy(&(rules[rule_offset + m_ipv6_default_filterting_rules_count++]),
+		memcpy(&(rules[rule_offset + m_ipv6_default_filterting_rules_count[0]++]),
 			&flt_rule_entry, sizeof(struct ipa_flt_rule_add));
 #endif
 
@@ -5780,7 +5820,7 @@ int IPACM_Wan::add_dft_filtering_rule(struct ipa_flt_rule_add *rules, int rule_o
 		/* add TCP SYN rule*/
 		flt_rule_entry.rule.eq_attrib.ihl_offset_meq_32[0].value = (((uint32_t)1)<<TCP_SYN_SHIFT);
 		flt_rule_entry.rule.eq_attrib.ihl_offset_meq_32[0].mask = (((uint32_t)1)<<TCP_SYN_SHIFT);
-		memcpy(&(rules[rule_offset + m_ipv6_default_filterting_rules_count++]),
+		memcpy(&(rules[rule_offset + m_ipv6_default_filterting_rules_count[0]++]),
 			&flt_rule_entry, sizeof(struct ipa_flt_rule_add));
 
 #if defined(FEATURE_IPA_ANDROID)
@@ -5789,26 +5829,26 @@ int IPACM_Wan::add_dft_filtering_rule(struct ipa_flt_rule_add *rules, int rule_o
 		/* add TCP FIN rule*/
 		flt_rule_entry.rule.eq_attrib.ihl_offset_meq_32[0].value = (((uint32_t)1)<<TCP_FIN_SHIFT);
 		flt_rule_entry.rule.eq_attrib.ihl_offset_meq_32[0].mask = (((uint32_t)1)<<TCP_FIN_SHIFT);
-		memcpy(&(rules[rule_offset + m_ipv6_default_filterting_rules_count++]),
+		memcpy(&(rules[rule_offset + m_ipv6_default_filterting_rules_count[0]++]),
 			&flt_rule_entry, sizeof(struct ipa_flt_rule_add));
 
 		/* add TCP RST rule*/
 		flt_rule_entry.rule.eq_attrib.ihl_offset_meq_32[0].value = (((uint32_t)1)<<TCP_RST_SHIFT);
 		flt_rule_entry.rule.eq_attrib.ihl_offset_meq_32[0].mask = (((uint32_t)1)<<TCP_RST_SHIFT);
-		memcpy(&(rules[rule_offset + m_ipv6_default_filterting_rules_count++]),
+		memcpy(&(rules[rule_offset + m_ipv6_default_filterting_rules_count[0]++]),
 			&flt_rule_entry, sizeof(struct ipa_flt_rule_add));
 #endif
 
-		IPACM_Wan::num_v6_flt_rule += m_ipv6_default_filterting_rules_count;
+		IPACM_Wan::num_v6_flt_rule += m_ipv6_default_filterting_rules_count[0];
 #ifdef FEATURE_VLAN_MPDN
 		/**
 		 * store the default filtering rules count since on each WAN IFACE construction
 		 * this variable is zeroed, but it is incremented only at this init function which is called with the first pdn
 		 */
-		IPACM_Wan::ipv6_mpdn_default_filterting_rules_count = m_ipv6_default_filterting_rules_count;
+		IPACM_Wan::ipv6_mpdn_default_filterting_rules_count = m_ipv6_default_filterting_rules_count[0];
 #endif
 		IPACMDBG_H("Constructed %d default filtering rules for ip type %d\n",
-			m_ipv6_default_filterting_rules_count, iptype);
+			m_ipv6_default_filterting_rules_count[0], iptype);
 	}
 
 fail:
@@ -7556,6 +7596,8 @@ int IPACM_Wan::installWanPostIpsecRt(
 	int i, num_rules, res = IPACM_SUCCESS;
 	struct ipa_ioc_add_rt_rule *rt_rule = NULL;
 	struct ipa_rt_rule_add *rt_rule_entry = NULL;
+	struct ipa_ioc_del_rt_rule *del_rt = NULL;
+	struct ipa_rt_rule_del *del_rt_rule;
 	struct ipa_ioc_add_flt_rule *flt_tbl = NULL;
 	struct ipa_ioc_get_hdr hdr = {0};
 
@@ -7646,7 +7688,7 @@ int IPACM_Wan::installWanPostIpsecRt(
 			res = IPACM_FAILURE;
 			goto end;
 		}
-		else if (rt_rule_entry->status)
+		else if (rt_rule_entry && rt_rule_entry->status)
 		{
 			IPACMERR("rt rule adding failed. Result=%d\n", rt_rule_entry->status);
 			res = rt_rule_entry->status;

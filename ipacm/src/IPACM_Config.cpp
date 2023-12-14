@@ -89,10 +89,11 @@ const char *IPACM_Config::DEVICE_NAME_ODU = "/dev/odu_ipa_bridge";
 #ifdef FEATURE_IPA_ANDROID
 #define IPACM_CONFIG_FILE "/etc/IPACM_cfg.xml"
 #else
+#define IPACM_CONFIG_FACTORY_FILE "/etc/data/ipa/factory_IPACM_cfg.xml"
 #define IPACM_CONFIG_FILE "/etc/data/ipa/IPACM_cfg.xml"
 #define IPACM_CONFIG_EXT_FILE "/etc/data/ipa/IPACM_cfg_ext.xml"
 #endif
-
+#define MAX_RETRIES 5
 const char *ipacm_event_name[] = {
 	__stringify(IPA_CFG_CHANGE_EVENT),                     /* NULL */
 	__stringify(IPA_PRIVATE_SUBNET_CHANGE_EVENT),          /* ipacm_event_data_fid */
@@ -130,7 +131,6 @@ const char *ipacm_event_name[] = {
 	__stringify(IPA_WLAN_SWITCH_TO_MCC),                   /* No Data */
 	__stringify(IPA_WLAN_SWITCH_VLAN_MODE),                /* ipacm_event_vlan_mode */
 	__stringify(IPA_CRADLE_WAN_MODE_SWITCH),               /* ipacm_event_cradle_wan_mode */
-	__stringify(IPA_WAN_XLAT_CONNECT_EVENT),               /* ipacm_event_data_fid */
 	__stringify(IPA_TETHERING_STATS_UPDATE_EVENT),         /* ipacm_event_data_fid */
 	__stringify(IPA_NETWORK_STATS_UPDATE_EVENT),           /* ipacm_event_data_fid */
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
@@ -510,6 +510,8 @@ int IPACM_Config::Init(void)
 	/* Read IPACM Config file */
 	char	IPACM_config_file[IPA_MAX_FILE_LEN];
 	IPACM_conf_t	*cfg;
+	uint8_t loop_count = 0;
+	char cmd[200] = {'\0'};
 
 	cfg = (IPACM_conf_t *)malloc(sizeof(IPACM_conf_t));
 	if(cfg == NULL)
@@ -536,23 +538,33 @@ int IPACM_Config::Init(void)
 			already_reset = true;
 		}
 	}
-
 #ifdef FEATURE_VLAN_MPDN
 	get_vlan_mode_ifaces();
 #endif
 
+	snprintf(cmd, 200,"cat " IPACM_CONFIG_FACTORY_FILE ">" IPACM_CONFIG_FILE);
 	strlcpy(IPACM_config_file, IPACM_CONFIG_FILE, sizeof(IPACM_config_file));
 
 	IPACMDBG_H("\n IPACM XML file is %s \n", IPACM_config_file);
+
+reread:
 	if (IPACM_SUCCESS == ipacm_read_cfg_xml(IPACM_config_file, cfg))
 	{
 		IPACMDBG_H("\n IPACM XML read OK \n");
 	}
 	else
 	{
-		IPACMERR("\n IPACM XML read failed \n");
-		ret = IPACM_FAILURE;
-		goto fail;
+		if(loop_count < MAX_RETRIES) {
+			IPACMERR("\nIPACM XML read failed,Updating the xml file\n");
+			system(cmd);
+			loop_count++;
+			goto reread;
+		}
+		else {
+			IPACMERR("Reached max count exiting\n");
+			ret = IPACM_FAILURE;
+			goto fail;
+		}
 	}
 
 	/* Construct IPACM Iface table */
@@ -928,6 +940,26 @@ int IPACM_Config::GetNatIfaces(int nIfaces, NatIfaces *pIfaces)
 	return 0;
 }
 
+void IPACM_Config::update_repeater_iface(char *str) {
+
+
+	char *first, *second;
+	first = strstr(str,"sta");
+	if (first == NULL) {
+		IPACMDBG("Non wds-ext non-vlan interface\n");
+		return;
+	}
+	second = strstr(first, ".");
+	if(second == NULL) {
+		IPACMDBG("wds-ext non-vlan interface\n");
+		first = first-1;
+		*first = '\0';
+		return;
+	}
+	IPACMDBG("wds-ext vlan interface\n");
+	strlcpy((first-1), second, sizeof(second));
+	return;
+}
 
 int IPACM_Config::AddNatIfaces(char *dev_name)
 {
@@ -2188,7 +2220,9 @@ bool IPACM_Config::iface_in_vlan_mode(const char *interfaceName) {
 	 */
 	if (strstr(nameToCheck.c_str(), "eth0")) {
 		IPACMDBG("eth0 vlan mode %d\n", vlan_devices[IPA_VLAN_IF_ETH0]);
-		return vlan_devices[IPA_VLAN_IF_ETH0] || vlan_devices[IPA_VLAN_IF_EMAC];
+		IPACMDBG("eth0 vlan spcl mode %d\n", IsSpclIface(nameToCheck.c_str()));
+		return vlan_devices[IPA_VLAN_IF_ETH0] || vlan_devices[IPA_VLAN_IF_EMAC] ||
+			(IPACM_Iface::ipacmcfg->ipacm_emesh_enable && IPACM_Iface::ipacmcfg->ipacm_emesh_mode >= 2 && IsSpclIface(nameToCheck.c_str()));
 	}
 	if (strstr(nameToCheck.c_str(), "eth1")) {
 		IPACMDBG("eth1 vlan mode %d\n", vlan_devices[IPA_VLAN_IF_ETH1]);
@@ -3686,10 +3720,10 @@ bool IPACM_Config::is_svap_related(const char* phy_inf) {
 		IPACMDBG_H("truncated iface name %s\n", if_name);
 	}
 
-	snprintf(cmd, 200, "cfg80211tool_mesh %s get_MapBSSType| awk -F ':' '{print $2}' > /tmp/data/ipa_vap.txt", if_name);
+	snprintf(cmd, 200, "cfg80211tool_mesh %s get_MapBSSType| awk -F ':' '{print $2}' > /tmp/data_ipa/ipa_vap.txt", if_name);
 	system(cmd);
 
-	fp = fopen("/tmp/data/ipa_vap.txt", "r");
+	fp = fopen("/tmp/data_ipa/ipa_vap.txt", "r");
 	if (fp == NULL) {
 		IPACMERR("can't open fdb file\n");
 		return false;
@@ -3989,6 +4023,83 @@ int IPACM_Config::SetWlanVlanAp(char *event_iface_name) {
 	} else {
 		IPACMDBG_H("AP interface doesn't exists, exiting switch mode %s\n", if_name);
 	}
+
+	return ret;
+}
+
+bool IPACM_Config::IsSpclIface(const char *event_iface_name) {
+	int ipa_interface_index, if_index;
+	int ret = IPACM_FAILURE;
+	bool res = false;
+	char if_name[IPA_IFACE_NAME_LEN];
+
+	if (event_iface_name == NULL) {
+		IPACMERR("Invalid input\n");
+		return IPACM_FAILURE;
+	}
+
+	/* extract the parent if_name from the vlan iface */
+	strlcpy(if_name, event_iface_name, IPA_IFACE_NAME_LEN);
+	IPACMDBG_H("iface %s, event iface %s\n", if_name, event_iface_name);
+
+	char *char_idx =  strrchr(if_name, '.');
+	if (char_idx) {
+		char_idx[0] = '\0';
+		IPACMDBG_H("truncated iface name %s\n", if_name);
+	}
+
+	/* check if the AP iface already exists or not*/
+	ret = IPACM_Iface::ipa_get_if_index(if_name, &(if_index));
+	if (ret != IPACM_SUCCESS) {
+		IPACMERR("Error while getting interface index for %s device", if_name);
+		return IPACM_FAILURE;
+	}
+
+	/* Map the interface index. */
+	ipa_interface_index = IPACM_Iface::iface_ipa_index_query(if_index);
+
+	res = IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].is_spcl_if;
+	IPACMDBG_H("%s is Ezmesh AP, vlan enabled special AP %d\n", if_name, res);
+
+	return res;
+}
+
+int IPACM_Config::SetSpclIface(char *event_iface_name) {
+	int ipa_interface_index, if_index;
+	int ret = IPACM_FAILURE;
+	char if_name[IPA_IFACE_NAME_LEN];
+
+	if (event_iface_name == NULL) {
+		IPACMERR("Invalid input\n");
+		return IPACM_FAILURE;
+	}
+
+	/* extract the parent if_name from the vlan iface */
+	strlcpy(if_name, event_iface_name, IPA_IFACE_NAME_LEN);
+	IPACMDBG_H("iface %s, event iface %s\n", if_name, event_iface_name);
+
+	char *char_idx =  strrchr(if_name, '.');
+	if (char_idx) {
+		char_idx[0] = '\0';
+		IPACMDBG_H("truncated iface name %s\n", if_name);
+	}
+
+	/* check if the AP iface already exists or not*/
+	ret = IPACM_Iface::ipa_get_if_index(if_name, &(if_index));
+	if (ret != IPACM_SUCCESS) {
+		IPACMERR("Error while getting interface index for %s device", if_name);
+		return IPACM_FAILURE;
+	}
+
+	/* Map the interface index. */
+	ipa_interface_index = IPACM_Iface::iface_ipa_index_query(if_index);
+
+	IPACMDBG_H("ipa_interface_index %d, if_cat:%d\n",
+			   ipa_interface_index ,IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].if_cat);
+	IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].is_spcl_if = true;
+
+	IPACMDBG("eth %s changed to special iface %d\n",
+			    if_name, IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].is_spcl_if);
 
 	return ret;
 }

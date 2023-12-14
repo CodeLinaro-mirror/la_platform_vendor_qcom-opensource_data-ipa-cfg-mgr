@@ -440,6 +440,7 @@ public:
 
 	int find_matching_vlan(uint16_t interface_index, struct vlan_iface_info *vlan_data);
 
+	void update_repeater_iface(char *interface_name);
 #ifdef FEATURE_L2TP
 	std::list<l2tp_vlan_mapping_info> m_l2tp_vlan_mapping;
 	std::list<l2tp_client_info> l2tp_client;
@@ -784,8 +785,11 @@ public:
 	int SwitchAPVlanMode(char *dev_name, bool vlan_mpdn);
 
 	bool IsWlanIfVlan(const char *dev_name);
-
 	int SetWlanVlanAp(char *event_iface_name);
+
+	/* Special Inteface handles both vlan and non-vlan clients*/
+	bool IsSpclIface(const char *dev_name);
+	int SetSpclIface(char *event_iface_name);
 
 	inline void SetQmapId(uint8_t id)
 	{

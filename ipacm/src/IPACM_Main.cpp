@@ -538,16 +538,21 @@ void* ipa_driver_msg_notifier(void *param)
 			IPACMDBG_H("Mac Address %02x:%02x:%02x:%02x:%02x:%02x\n",
 							 event_wlan->mac_addr[0], event_wlan->mac_addr[1], event_wlan->mac_addr[2],
 							 event_wlan->mac_addr[3], event_wlan->mac_addr[4], event_wlan->mac_addr[5]);
-		        data = (ipacm_event_data_mac *)malloc(sizeof(ipacm_event_data_mac));
-		        if (data == NULL)
-		        {
-		    	        IPACMERR("unable to allocate memory for event_wlan data\n");
-		    	        goto done;
-		        }
+			data = (ipacm_event_data_mac *)malloc(sizeof(ipacm_event_data_mac));
+			if (data == NULL)
+			{
+				IPACMERR("unable to allocate memory for event_wlan data\n");
+				goto done;
+			}
+			if(IPACM_FAILURE == ipa_get_if_index(event_wlan->name, &(data->if_index)))
+			{
+				data->if_index = event_wlan->if_index;
+				IPACMDBG_H("Using WLAN_CLIENT_DISCONNECT if_index: %d\n",event_wlan->if_index);
+			}
+
 			memcpy(data->mac_addr,
 						 event_wlan->mac_addr,
 						 sizeof(event_wlan->mac_addr));
-			ipa_get_if_index(event_wlan->name, &(data->if_index));
 			evt_data.event = IPA_WLAN_CLIENT_DEL_EVENT;
 			evt_data.evt_data = data;
 			break;
@@ -708,41 +713,6 @@ void* ipa_driver_msg_notifier(void *param)
 				break;
 			}
 			continue;
-
-		case WAN_XLAT_CONNECT:
-			memcpy(&event_wan, buffer + sizeof(struct ipa_msg_meta),
-				sizeof(struct ipa_wan_msg));
-			IPACMDBG_H("Received WAN_XLAT_CONNECT name: %s\n",
-					event_wan.upstream_ifname);
-
-			/* post IPA_LINK_UP_EVENT event
-			 * may be WAN interface is not up
-			*/
-			data_fid = (ipacm_event_data_fid *)calloc(1, sizeof(ipacm_event_data_fid));
-			if(data_fid == NULL)
-			{
-				IPACMERR("unable to allocate memory for xlat event\n");
-				goto done;
-			}
-			ipa_get_if_index(event_wan.upstream_ifname, &(data_fid->if_index));
-			evt_data.event = IPA_LINK_UP_EVENT;
-			evt_data.evt_data = data_fid;
-			IPACMDBG_H("Posting IPA_LINK_UP_EVENT event:%d\n", evt_data.event);
-			IPACM_EvtDispatcher::PostEvt(&evt_data);
-
-			/* post IPA_WAN_XLAT_CONNECT_EVENT event */
-			memset(&evt_data, 0, sizeof(evt_data));
-			data_fid = (ipacm_event_data_fid *)calloc(1, sizeof(ipacm_event_data_fid));
-			if(data_fid == NULL)
-			{
-				IPACMERR("unable to allocate memory for xlat event\n");
-				goto done;
-			}
-			ipa_get_if_index(event_wan.upstream_ifname, &(data_fid->if_index));
-			evt_data.event = IPA_WAN_XLAT_CONNECT_EVENT;
-			evt_data.evt_data = data_fid;
-			IPACMDBG_H("Posting IPA_WAN_XLAT_CONNECT_EVENT event:%d\n", evt_data.event);
-			break;
 
 		case IPA_TETHERING_STATS_UPDATE_STATS:
 			memcpy(&event_data_stats, buffer + sizeof(struct ipa_msg_meta), sizeof(struct ipa_get_data_stats_resp_msg_v01));

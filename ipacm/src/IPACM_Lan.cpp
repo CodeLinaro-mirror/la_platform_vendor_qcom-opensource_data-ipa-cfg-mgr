@@ -88,6 +88,13 @@
 #include <memory>
 #include <cstdio>
 #include <iostream>
+#include <vector>
+#include <cctype>
+
+
+using std::string;
+using std::vector;
+
 
 bool IPACM_Lan::odu_up = false;
 
@@ -11667,35 +11674,26 @@ int IPACM_Lan::eth_bridge_del_hdr_proc_ctx(uint32_t hdr_proc_ctx_hdl)
 /* check if the event is associated with vlan interface */
 bool IPACM_Lan::is_vlan_event(char *event_iface_name)
 {
-	auto commandStr = std::string("ls /proc/net/vlan/ | grep -x ") + std::string(event_iface_name);
-	std::unique_ptr<FILE, decltype(&pclose)> pipe(popen(commandStr.c_str(), "r"), pclose);
-	char buffer[64] = {};
-	int self_name_len, event_iface_name_len;
-
-	IPACMDBG("commandStr: %s\n", commandStr.c_str());
-	if (!pipe) {
-		IPACMERR("command = %s\n", commandStr.c_str());
+	string selfDevName(dev_name), eventInterfaceName(event_iface_name);
+	if (eventInterfaceName.find(selfDevName) == std::string::npos) {
+		IPACMDBG("dev_name %s is not a substring of event_iface_name %s\n", dev_name, event_iface_name);
 		return false;
 	}
 
-	IPACMDBG_H("Self iface %s, event iface %s\n", dev_name, event_iface_name);
-        self_name_len = strlen(dev_name);
-        event_iface_name_len = strlen(event_iface_name);
-
-        if(event_iface_name_len < self_name_len || strncmp(dev_name, event_iface_name, self_name_len) != 0)
-        {
-		IPACMERR("Mismatched interface names\n");
-                return false;
-        }
-
-	if (fgets(buffer, sizeof(buffer), pipe.get()) != nullptr) {
-		IPACMDBG("buffer contents: %s\n", buffer);
-		IPACMDBG("return vlaue = %d\n", buffer[0] != '\0');
-		return buffer[0] != '\0';
+	vector<string> tokens;
+	string delimiter = ".", tmpName = eventInterfaceName;
+	size_t pos = 0;
+	while ((pos = tmpName.find(delimiter)) != std::string::npos) {
+		string token = tmpName.substr(0, pos);
+		tokens.emplace_back(token);
+		tmpName.erase(0, pos + delimiter.length());
+		IPACMDBG("token = %s tmpName = %s\n", token.c_str(), tmpName.c_str());
 	}
-	IPACMDBG("fgets failed\n");
+	IPACMDBG("Insert last token tmpName = %s\n", tmpName.c_str());
+	tokens.emplace_back(tmpName);
 
-	return false;
+	IPACMDBG("return value = %d\n", tokens.size() > 1 && !tokens.back().empty() && std::isdigit(tokens.back()[0]));
+	return tokens.size() > 1 && !tokens.back().empty() && std::isdigit(tokens.back()[0]);
 }
 #ifdef FEATURE_L2TP
 /* check if the event is associated with l2tp interface */

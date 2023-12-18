@@ -545,6 +545,9 @@ int IPACM_Config::Init(void)
 	get_vlan_mode_ifaces();
 #endif
 
+	/*Reseting Reject_Iface_Map before reading from IPACM_cfg.xml*/
+	IPACMDBG_H("Clear the map Reject_Iface_Map, before update..\n");
+	Reject_Iface_Map.clear();
 	strlcpy(IPACM_config_file, IPACM_CONFIG_FILE, sizeof(IPACM_config_file));
 
 	IPACMDBG_H("\n IPACM XML file is %s \n", IPACM_config_file);
@@ -580,6 +583,20 @@ int IPACM_Config::Init(void)
 		IPACMDBG_H("Could not load file\n");
 	}
 	IPACMDBG_H("macsec_interface : %d\n",macsec_interface_num);
+
+	IPACMDBG_H("........Start Printing Reject Ifaces......\n");
+	for (const auto& pair : Reject_Iface_Map)
+	{
+		const std::string& key = pair.first;
+		const std::list<std::string>& values = pair.second;
+		std::cout << "Actual Interface: " << key << ", Reject Interfaces: ";
+		for (const std::string& value : values)
+		{
+			std::cout << value << " ";
+		}
+		std::cout << std::endl;
+	}
+	IPACMDBG_H("........End Printing Reject Ifaces........\n");
 
 	for (i = 0; i < cfg->iface_config.num_iface_entries; i++)
 	{

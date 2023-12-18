@@ -73,10 +73,21 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
+#ifdef FEATURE_IPA_ANDROID
+#include <libxml/list.h>
+#else
+#include <list>
+#endif
+#include <map>
+#include <set>
+#include<algorithm>
+
 
 #include "IPACM_Xml.h"
 #include "IPACM_Log.h"
 #include "IPACM_Netlink.h"
+#include <IPACM_Config.h>
+
 
 static char* IPACM_read_content_element
 (
@@ -194,6 +205,7 @@ static int ipacm_cfg_xml_parse_tree
 {
 	int32_t ret_val = IPACM_SUCCESS;
 	int str_size;
+	char map_iface[IF_NAME_LEN];
 	char* content;
 	char content_buf[MAX_XML_STR_LEN];
 	struct ether_addr *eth_addr = NULL;
@@ -212,6 +224,8 @@ static int ipacm_cfg_xml_parse_tree
 						IPACM_util_icmp_string((char*)xml_node->name, IPACMCFG_TAG) == 0 ||
 						IPACM_util_icmp_string((char*)xml_node->name, IPACMIFACECFG_TAG) == 0 ||
 						IPACM_util_icmp_string((char*)xml_node->name, IFACE_TAG) == 0 ||
+						IPACM_util_icmp_string((char*)xml_node->name, DISABLE_LAN2LAN_TAG) == 0 ||
+						IPACM_util_icmp_string((char*)xml_node->name, REJECT_IFACE_TAG) == 0 ||
 						IPACM_util_icmp_string((char*)xml_node->name, IPACMPRIVATESUBNETCFG_TAG) == 0 ||
 						IPACM_util_icmp_string((char*)xml_node->name, SUBNET_TAG) == 0 ||
 						IPACM_util_icmp_string((char*)xml_node->name, IPACMALG_TAG) == 0 ||
@@ -286,6 +300,32 @@ static int ipacm_cfg_xml_parse_tree
 					{
 						/* increase iface entry number */
 						config->iface_config.num_iface_entries++;
+					}
+					if (IPACM_util_icmp_string((char*)xml_node->name, DISABLE_LAN2LAN_TAG) == 0)
+					{
+						IPACMDBG_H("Inside DISABLE_LAN2LAN_TAG\n");
+					}
+					if (IPACM_util_icmp_string((char*)xml_node->name, REJECT_IFACE_TAG) == 0)
+					{
+						IPACMDBG_H("Inside REJECT_IFACE_TAG\n");
+						content = IPACM_read_content_element(xml_node);
+						if (content)
+						{
+							str_size = strlen(content);
+							memset(content_buf, 0, sizeof(content_buf));
+							memcpy(content_buf, (void *)content, str_size);
+							IPACM_Config* conf = IPACM_Config::GetInstance();
+							if (conf == NULL)
+							{
+								IPACMERR("Unable to get Config instance\n");
+							}
+							else
+							{
+								memset(map_iface, 0, sizeof(map_iface));
+								memcpy(map_iface, config->iface_config.iface_entries[config->iface_config.num_iface_entries - 1].iface_name,sizeof(config->iface_config.iface_entries[config->iface_config.num_iface_entries - 1].iface_name));
+								conf->Reject_Iface_Map[map_iface].insert(conf->Reject_Iface_Map[map_iface].end(),{content_buf});
+							}
+						}
 					}
 
 					if (0 == IPACM_util_icmp_string((char*)xml_node->name, SUBNET_TAG))

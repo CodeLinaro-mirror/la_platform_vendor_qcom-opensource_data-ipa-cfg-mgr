@@ -119,6 +119,8 @@ if (!(a)) {                                                 \
 #define IPACMCFG_TAG                         "IPACM"
 #define IPACMIFACECFG_TAG                    "IPACMIface"
 #define IFACE_TAG                            "Iface"
+#define REJECT_IFACE_TAG		     "RejectIface"
+#define DISABLE_LAN2LAN_TAG		     "DisableLan2LanIface"
 #define NAME_TAG                             "Name"
 #define PHY_TAG                              "Phy"
 #define CATEGORY_TAG                         "Category"

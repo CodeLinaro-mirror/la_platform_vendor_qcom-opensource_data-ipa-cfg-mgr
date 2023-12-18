@@ -15,6 +15,15 @@
 			<Iface>
 			   <Name>rndis0</Name>
 			   <Category>LAN</Category>
+			   <DisableLan2LanIface>
+			   		<RejectIface></RejectIface>
+					<RejectIface></RejectIface>
+					<RejectIface></RejectIface>
+					<RejectIface></RejectIface>
+					<RejectIface></RejectIface>
+					<RejectIface></RejectIface>
+					<RejectIface></RejectIface>
+			   </DisableLan2LanIface>
 			</Iface>
 			<Iface>
 			   <Name>ecm0</Name>
@@ -29,7 +38,7 @@
 			<Iface>
 			   <Name>rmnet_data1</Name>
 			   <Category>WAN</Category>
-			</Iface>			
+			</Iface>
 			<Iface>
 			   <Name>rmnet_data2</Name>
 			   <Category>WAN</Category>
@@ -86,7 +95,7 @@
 			   <Name>wlan0</Name>
 			   <Category>UNKNOWN</Category>
 			   <WlanMode>full</WlanMode>
-			</Iface>			
+			</Iface>
 			<Iface>
 			   <Name>wlan1</Name>
 			   <Category>UNKNOWN</Category>
@@ -106,77 +115,222 @@
 			   <Name>ath0</Name>
 			   <Category>UNKNOWN</Category>
 			   <WlanMode>full</WlanMode>
+			   <DisableLan2LanIface>
+					<RejectIface></RejectIface>
+					<RejectIface></RejectIface>
+					<RejectIface></RejectIface>
+					<RejectIface></RejectIface>
+					<RejectIface></RejectIface>
+					<RejectIface></RejectIface>
+					<RejectIface></RejectIface>
+			   </DisableLan2LanIface>
 			</Iface>
 			<Iface>
 			   <Name>ath01</Name>
 			   <Category>UNKNOWN</Category>
 			   <WlanMode>full</WlanMode>
+			   <DisableLan2LanIface>
+			   		<RejectIface></RejectIface>
+					<RejectIface></RejectIface>
+					<RejectIface></RejectIface>
+					<RejectIface></RejectIface>
+					<RejectIface></RejectIface>
+					<RejectIface></RejectIface>
+					<RejectIface></RejectIface>
+			   </DisableLan2LanIface>
 			</Iface>
 			<Iface>
 			   <Name>ath02</Name>
 			   <Category>UNKNOWN</Category>
 			   <WlanMode>full</WlanMode>
+			   <DisableLan2LanIface>
+			   		<RejectIface></RejectIface>
+					<RejectIface></RejectIface>
+					<RejectIface></RejectIface>
+					<RejectIface></RejectIface>
+					<RejectIface></RejectIface>
+					<RejectIface></RejectIface>
+					<RejectIface></RejectIface>
+			   </DisableLan2LanIface>
 			</Iface>
 			<Iface>
 			   <Name>ath03</Name>
 			   <Category>UNKNOWN</Category>
 			   <WlanMode>full</WlanMode>
+			   <DisableLan2LanIface>
+			   		<RejectIface></RejectIface>
+					<RejectIface></RejectIface>
+					<RejectIface></RejectIface>
+					<RejectIface></RejectIface>
+					<RejectIface></RejectIface>
+					<RejectIface></RejectIface>
+					<RejectIface></RejectIface>
+			   </DisableLan2LanIface>
 			</Iface>
 			<Iface>
 			   <Name>ath04</Name>
 			   <Category>UNKNOWN</Category>
 			   <WlanMode>full</WlanMode>
+			   <DisableLan2LanIface>
+			   		<RejectIface></RejectIface>
+					<RejectIface></RejectIface>
+					<RejectIface></RejectIface>
+					<RejectIface></RejectIface>
+					<RejectIface></RejectIface>
+					<RejectIface></RejectIface>
+					<RejectIface></RejectIface>
+			   </DisableLan2LanIface>
 			</Iface>
 			<Iface>
 			   <Name>ath05</Name>
 			   <Category>UNKNOWN</Category>
 			   <WlanMode>full</WlanMode>
-			</Iface><Iface>
+			   <DisableLan2LanIface>
+			   		<RejectIface></RejectIface>
+					<RejectIface></RejectIface>
+					<RejectIface></RejectIface>
+					<RejectIface></RejectIface>
+					<RejectIface></RejectIface>
+					<RejectIface></RejectIface>
+					<RejectIface></RejectIface>
+			   </DisableLan2LanIface>
+			</Iface>
+			<Iface>
 			   <Name>ath06</Name>
 			   <Category>UNKNOWN</Category>
 			   <WlanMode>full</WlanMode>
+			   <DisableLan2LanIface>
+			   		<RejectIface></RejectIface>
+					<RejectIface></RejectIface>
+					<RejectIface></RejectIface>
+					<RejectIface></RejectIface>
+					<RejectIface></RejectIface>
+					<RejectIface></RejectIface>
+					<RejectIface></RejectIface>
+			   </DisableLan2LanIface>
 			</Iface>
 			<Iface>
 			   <Name>ath1</Name>
 			   <Category>UNKNOWN</Category>
 			   <WlanMode>full</WlanMode>
+			   <DisableLan2LanIface>
+			   		<RejectIface></RejectIface>
+					<RejectIface></RejectIface>
+					<RejectIface></RejectIface>
+					<RejectIface></RejectIface>
+					<RejectIface></RejectIface>
+					<RejectIface></RejectIface>
+					<RejectIface></RejectIface>
+			   </DisableLan2LanIface>
 			</Iface>
 			<Iface>
 			   <Name>ath11</Name>
 			   <Category>UNKNOWN</Category>
 			   <WlanMode>full</WlanMode>
+			   <DisableLan2LanIface>
+			   		<RejectIface></RejectIface>
+					<RejectIface></RejectIface>
+					<RejectIface></RejectIface>
+					<RejectIface></RejectIface>
+					<RejectIface></RejectIface>
+					<RejectIface></RejectIface>
+					<RejectIface></RejectIface>
+			   </DisableLan2LanIface>
 			</Iface>
 			<Iface>
 			   <Name>ath12</Name>
 			   <Category>UNKNOWN</Category>
 			   <WlanMode>full</WlanMode>
+			   <DisableLan2LanIface>
+			   		<RejectIface></RejectIface>
+					<RejectIface></RejectIface>
+					<RejectIface></RejectIface>
+					<RejectIface></RejectIface>
+					<RejectIface></RejectIface>
+					<RejectIface></RejectIface>
+					<RejectIface></RejectIface>
+			   </DisableLan2LanIface>
 			</Iface>
 			<Iface>
 			   <Name>ath13</Name>
 			   <Category>UNKNOWN</Category>
 			   <WlanMode>full</WlanMode>
+			   <DisableLan2LanIface>
+			   		<RejectIface></RejectIface>
+					<RejectIface></RejectIface>
+					<RejectIface></RejectIface>
+					<RejectIface></RejectIface>
+					<RejectIface></RejectIface>
+					<RejectIface></RejectIface>
+					<RejectIface></RejectIface>
+			   </DisableLan2LanIface>
 			</Iface>
 			<Iface>
 			   <Name>ath14</Name>
 			   <Category>UNKNOWN</Category>
 			   <WlanMode>full</WlanMode>
+			   <DisableLan2LanIface>
+			   		<RejectIface></RejectIface>
+					<RejectIface></RejectIface>
+					<RejectIface></RejectIface>
+					<RejectIface></RejectIface>
+					<RejectIface></RejectIface>
+					<RejectIface></RejectIface>
+					<RejectIface></RejectIface>
+			   </DisableLan2LanIface>
 			</Iface>
 			<Iface>
 			   <Name>ath15</Name>
 			   <Category>UNKNOWN</Category>
 			   <WlanMode>full</WlanMode>
+			   <DisableLan2LanIface>
+			   		<RejectIface></RejectIface>
+					<RejectIface></RejectIface>
+					<RejectIface></RejectIface>
+					<RejectIface></RejectIface>
+					<RejectIface></RejectIface>
+					<RejectIface></RejectIface>
+					<RejectIface></RejectIface>
+			   </DisableLan2LanIface>
 			</Iface><Iface>
 			   <Name>ath16</Name>
 			   <Category>UNKNOWN</Category>
 			   <WlanMode>full</WlanMode>
+			   <DisableLan2LanIface>
+			   		<RejectIface></RejectIface>
+					<RejectIface></RejectIface>
+					<RejectIface></RejectIface>
+					<RejectIface></RejectIface>
+					<RejectIface></RejectIface>
+					<RejectIface></RejectIface>
+					<RejectIface></RejectIface>
+			   </DisableLan2LanIface>
 			</Iface>
 			<Iface>
 			   <Name>eth0</Name>
 			   <Category>ODU</Category>
+			   <DisableLan2LanIface>
+					<RejectIface></RejectIface>
+					<RejectIface></RejectIface>
+					<RejectIface></RejectIface>
+					<RejectIface></RejectIface>
+					<RejectIface></RejectIface>
+					<RejectIface></RejectIface>
+					<RejectIface></RejectIface>
+			   </DisableLan2LanIface>
 			</Iface>
 			<Iface>
 			   <Name>eth1</Name>
 			   <Category>ODU</Category>
+			   <DisableLan2LanIface>
+			   		<RejectIface></RejectIface>
+					<RejectIface></RejectIface>
+					<RejectIface></RejectIface>
+					<RejectIface></RejectIface>
+					<RejectIface></RejectIface>
+					<RejectIface></RejectIface>
+					<RejectIface></RejectIface>
+			   </DisableLan2LanIface>
 			</Iface>
 			<Iface>
 			   <Name>bridge0</Name>
@@ -192,14 +346,14 @@
 		</GREFlag>
 		<IPACMPrivateSubnet>
 			<Subnet>
-				<SubnetAddress>192.168.225.0</SubnetAddress>
-				<SubnetMask>255.255.255.0</SubnetMask>
+  			   <SubnetAddress>192.168.225.0</SubnetAddress>
+  			   <SubnetMask>255.255.255.0</SubnetMask>
 		    </Subnet>
 		</IPACMPrivateSubnet>
 		<IPACMALG>
 			<ALG>
 				<Protocol>TCP</Protocol>
-				<Port>21</Port> 
+				<Port>21</Port>
 				<Description>FTP</Description>
 		    </ALG>
 			<ALG>

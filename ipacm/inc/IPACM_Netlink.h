@@ -60,6 +60,13 @@ extern "C"
 #include <linux/rtnetlink.h>
 #include <linux/netlink.h>
 #include <netinet/in.h>
+#include <netlink/object.h>
+#include <netlink/genl/genl.h>
+#include <netlink/genl/family.h>
+#include <netlink/genl/ctrl.h>
+#include <netlink/object-api.h>
+#include <netlink/cache.h>
+#include <string.h>
 #include "IPACM_Defs.h"
 
 #define MAX_NUM_OF_FD 10
@@ -158,6 +165,7 @@ typedef struct
 	char name[IPA_RESOURCE_NAME_MAX];
 	uint16_t vlan_id;
 	uint16_t master_interface_index;
+	uint16_t mtu;
 } ipa_nl_link_info_t;
 
 
@@ -222,6 +230,18 @@ typedef struct
 	ipa_nl_route_info_t      nl_route_info;
 } ipa_nl_msg_t;
 
+typedef struct
+{
+	uint16_t encap_type;
+	char l2tp_iface_name[IF_NAME_LEN];
+	uint32_t tunnel_id;
+	uint32_t session_id;
+	uint16_t src_port;
+	uint16_t dst_port;
+	uint32_t src_ipv6_addr[4];
+	uint32_t dst_ipv6_addr[4];
+}ipa_nl_l2tp_info_t;
+
 /* Initialization routine for listener on NetLink sockets interface */
 int ipa_nl_listener_init
 (
@@ -230,6 +250,9 @@ int ipa_nl_listener_init
 	 ipa_nl_sk_fd_set_info_t *sk_fdset,
 	 ipa_sock_thrd_fd_read_f read_f
 	 );
+
+void *l2tp_nl_process(void *param);
+
 
 /*  Virtual function registered to receive incoming messages over the NETLINK routing socket*/
 int ipa_nl_recv_msg(int fd);

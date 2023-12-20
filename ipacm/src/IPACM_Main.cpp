@@ -94,6 +94,14 @@
 #include <execinfo.h>
 #include "linux/ipa_qmi_service_v01.h"
 
+#include <string.h>
+#include <netlink/object.h>
+#include <netlink/genl/genl.h>
+#include <netlink/genl/family.h>
+#include <netlink/genl/ctrl.h>
+#include <netlink/object-api.h>
+#include <netlink/cache.h>
+
 #include "IPACM_CmdQueue.h"
 #include "IPACM_EvtDispatcher.h"
 #include "IPACM_Defs.h"
@@ -841,17 +849,6 @@ void* ipa_driver_msg_notifier(void *param)
 			evt_data.evt_data = data;
 			break;
 #endif
-#ifdef FEATURE_L2TP
-		case ADD_L2TP_VLAN_MAPPING:
-			memcpy(&mapping, buffer + sizeof(struct ipa_msg_meta), sizeof(mapping));
-			IPACM_Iface::ipacmcfg->add_l2tp_vlan_mapping(&mapping);
-			continue;
-
-		case DEL_L2TP_VLAN_MAPPING:
-			memcpy(&mapping, buffer + sizeof(struct ipa_msg_meta), sizeof(mapping));
-			IPACM_Iface::ipacmcfg->del_l2tp_vlan_mapping(&mapping);
-			continue;
-#endif //#ifdef FEATURE_L2TP
 #if defined(FEATURE_SOCKSv5) && defined(IPA_SOCKV5_EVENT_MAX)
 		case IPA_SOCKV5_ADD:
 			/* enable socksv5 */
@@ -1139,6 +1136,10 @@ void RegisterForSignals(bool default_handler)
 	}
 }
 
+void *l2tp_process(void *param)
+{
+	return l2tp_nl_process(param);
+}
 
 int main(int argc, char **argv)
 {
@@ -1150,6 +1151,7 @@ int main(int argc, char **argv)
 
 	pthread_t netlink_thread = 0, monitor_thread = 0, ipa_driver_thread = 0;
 	pthread_t cmd_queue_thread = 0;
+	pthread_t l2tp_thread = 0;
 
 	/* check if ipacm is already running or not */
 	ipa_is_ipacm_running();
@@ -1266,13 +1268,30 @@ int main(int argc, char **argv)
 
 	neigh->update_neigh_cache();
 
-	/* Create Conntrack listener threads here to support on-demand PDNs connections before WAN is up */
+	if (IPACM_SUCCESS == l2tp_thread)
+	{
+		ret = pthread_create(&l2tp_thread, NULL, l2tp_process, NULL);
+		if (IPACM_SUCCESS != ret)
+		{
+			IPACMERR("unable to start l2tp_thread\n");
+			return ret;
+		}
+		IPACMDBG_H("l2tp_thread created\n");
+		if(pthread_setname_np(cmd_queue_thread, "l2tp_thread") != 0)
+		{
+			IPACMERR("unable to set thread name for l2tp_thrad\n");
+		}
+	}
+
+	/* Create Conntrack listener threads here to support on-demand PDNs connections before WAN is up */
 	CtList->CreateConnTrackThreads();
 
 	pthread_join(cmd_queue_thread, NULL);
 	pthread_join(netlink_thread, NULL);
 	pthread_join(monitor_thread, NULL);
 	pthread_join(ipa_driver_thread, NULL);
+   	pthread_join(l2tp_thread, NULL);
+
 	return IPACM_SUCCESS;
 }
 

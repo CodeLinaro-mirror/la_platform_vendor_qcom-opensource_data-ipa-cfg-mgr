@@ -179,6 +179,8 @@ extern "C"
 
 #if defined(FEATURE_L2TP)
 #define L2TP_BRIDGE_VLAN_ID_START 4096
+#define MAX_L2TP_TUNNEL 2
+#define MAX_L2TP_SESSION 4
 #endif
 
 /*===========================================================================
@@ -526,6 +528,7 @@ struct vlan_iface_info
 struct l2tp_vlan_mapping_info
 {
 	/* the following are l2tp iface info (name, session id) */
+	uint32_t l2tp_tunnel_id;
 	char l2tp_iface_name[IPA_RESOURCE_NAME_MAX];
 	uint32_t l2tp_session_id;
 	/* Add support for L2TP over UDP. */
@@ -549,6 +552,7 @@ struct l2tp_vlan_mapping_info
 	char l2tp_bridge_iface_name[IPA_RESOURCE_NAME_MAX];
 	uint32_t l2tp_bridge_vlan_id;
 #endif
+	bool is_session_info_updated;
 };
 
 struct ipa_bridge_vlan_mapping_info {
@@ -575,6 +579,23 @@ struct bridge_vlan_mapping_info
 struct l2tp_client_info
 {
 	char client_iface_name[IPA_IFACE_NAME_LEN];
+};
+
+struct l2tp_tunnel_info
+{
+	enum ipa_l2tp_tunnel_type tunnel_type;
+	uint32_t l2tp_tunnel_id;
+	uint16_t src_port;
+	uint16_t dst_port;
+	uint32_t src_ipv6_addr[4];
+	uint32_t dst_ipv6_addr[4];
+};
+
+struct l2tp_session_info
+{
+	char l2tp_iface_name[IPA_IFACE_NAME_LEN];
+	uint32_t l2tp_session_id;
+	uint32_t l2tp_tunnel_id;
 };
 
 #ifdef FEATURE_SOCKSv5

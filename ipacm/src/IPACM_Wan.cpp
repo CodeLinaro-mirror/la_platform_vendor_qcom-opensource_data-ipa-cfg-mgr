@@ -2080,7 +2080,6 @@ void IPACM_Wan::post_wan_vlan_pdn_event(ipa_ip_type iptype, int pdn_idx, int vla
 				free(vlan_data);
 				return;
 			}
-			associated_VID = vlan_id;
 			vlan_data->iptype = IPA_IP_v6;
 			memcpy(vlan_data->ipv6_prefix, ipv6_prefix, sizeof(ipv6_prefix));
 			if(m_is_sta_mode == WLAN_WAN)
@@ -2115,7 +2114,6 @@ void IPACM_Wan::post_wan_vlan_pdn_event(ipa_ip_type iptype, int pdn_idx, int vla
 				free(vlan_data);
 				return;
 			}
-			associated_VID = vlan_id;
 			vlan_data->iptype = IPA_IP_v4;
 			vlan_data->ipv4_addr = wan_v4_addr;
 			if(m_is_sta_mode == WLAN_WAN)
@@ -2579,11 +2577,11 @@ int IPACM_Wan::handle_route_add_vlan_pdn_evt(ipa_ip_type iptype, uint16_t vlan_i
 					tx_index,
 					iptype);
 			}
+			post_wan_vlan_pdn_event(IPA_IP_v6, wlan_ipv6_pdn_index, ipv6_to_iface[wlan_ipv6_pdn_index].VID_cnt, vlan_id, true);
 			/* for STA mode: add firewall rules */
 			del_dft_firewall_rules(IPA_IP_v6);
 			config_dft_firewall_rules(IPA_IP_v6);
 			FullConfig = false;
-			post_wan_vlan_pdn_event(IPA_IP_v6, wlan_ipv6_pdn_index, ipv6_to_iface[wlan_ipv6_pdn_index].VID_cnt, vlan_id, true);
 		}
 		else
 		{
@@ -2650,10 +2648,10 @@ int IPACM_Wan::handle_route_add_vlan_pdn_evt(ipa_ip_type iptype, uint16_t vlan_i
 				ipv6_to_iface[modem_ipv6_pdn_index].pIface = this;
 				IPACMDBG_H("index allocated %d \n", modem_ipv6_pdn_index);
 			}
+			post_wan_vlan_pdn_event(IPA_IP_v6, modem_ipv6_pdn_index, ipv6_to_iface[modem_ipv6_pdn_index].VID_cnt, vlan_id, true);
 			/*config_wan_firewall_rule traverses all active wan IF and configures them*/
 			config_wan_firewall_rule(IPA_IP_v6);
 			install_wan_filtering_rule(false);
-			post_wan_vlan_pdn_event(IPA_IP_v6, modem_ipv6_pdn_index, ipv6_to_iface[modem_ipv6_pdn_index].VID_cnt, vlan_id, true);
 		}
 	}
 	else
@@ -2714,11 +2712,11 @@ int IPACM_Wan::handle_route_add_vlan_pdn_evt(ipa_ip_type iptype, uint16_t vlan_i
 					tx_index,
 					iptype);
 			}
+			post_wan_vlan_pdn_event(IPA_IP_v4, wlan_ipv4_pdn_index, ipv4_to_iface[wlan_ipv4_pdn_index].VID_cnt, vlan_id, true);
 			/* for STA mode: add firewall rules */
 			del_dft_firewall_rules(IPA_IP_v4);
 			config_dft_firewall_rules(IPA_IP_v4);
 			FullConfig = false;
-			post_wan_vlan_pdn_event(IPA_IP_v4, wlan_ipv4_pdn_index, ipv4_to_iface[wlan_ipv4_pdn_index].VID_cnt, vlan_id, true);
 		}
 		else
 		{
@@ -2727,9 +2725,9 @@ int IPACM_Wan::handle_route_add_vlan_pdn_evt(ipa_ip_type iptype, uint16_t vlan_i
 				IPACMDBG_H("a v4 PDN is already up, minimal configuration is needed\n");
 				FullConfig = true;
 			}
+			post_wan_vlan_pdn_event(IPA_IP_v4, modem_ipv4_pdn_index, ipv4_to_iface[modem_ipv4_pdn_index].VID_cnt, vlan_id, true);
 			config_wan_firewall_rule(IPA_IP_v4);
 			install_wan_filtering_rule(false);
-			post_wan_vlan_pdn_event(IPA_IP_v4, modem_ipv4_pdn_index, ipv4_to_iface[modem_ipv4_pdn_index].VID_cnt, vlan_id, true);
 		}
 	}
 

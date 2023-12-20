@@ -45,7 +45,7 @@ extern "C"
 #include <libnetfilter_conntrack/libnetfilter_conntrack.h>
 }
 
-#define MAX_TEMP_ENTRIES 25
+#define MAX_TEMP_ENTRIES 128
 
 #define IPACM_TCP_FULL_FILE_NAME  "/proc/sys/net/ipv4/netfilter/ip_conntrack_tcp_timeout_established"
 #define IPACM_UDP_FULL_FILE_NAME   "/proc/sys/net/ipv4/netfilter/ip_conntrack_udp_timeout_stream"

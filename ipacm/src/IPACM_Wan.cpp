@@ -2523,6 +2523,7 @@ int IPACM_Wan::handle_route_add_vlan_pdn_evt(ipa_ip_type iptype, uint16_t vlan_i
 	ipacm_cmd_q_data evt_data;
 	bool FullConfig = false;
 	uint32_t tx_index = 0;
+	int ret = IPACM_SUCCESS;
 
 	/* copy header from tx-property, see if partial or not */
 	/* assume all tx-property uses the same header name for v4 or v6*/
@@ -2557,7 +2558,8 @@ int IPACM_Wan::handle_route_add_vlan_pdn_evt(ipa_ip_type iptype, uint16_t vlan_i
 			{
 				header_partial_default_wan_v6 = true;
 				IPACMDBG_H("STA ipv6-header haven't constructed \n");
-				return IPACM_SUCCESS;
+				ret = IPACM_SUCCESS;
+				goto fail;
 			}
 			strlcpy(rt_rule->rt_tbl_name, IPACM_Iface::ipacmcfg->rt_tbl_v6.name, sizeof(rt_rule->rt_tbl_name));
 			IPACMDBG_H(" WAN table created %s \n", rt_rule->rt_tbl_name);
@@ -2602,8 +2604,8 @@ int IPACM_Wan::handle_route_add_vlan_pdn_evt(ipa_ip_type iptype, uint16_t vlan_i
 				if (false == m_routing.AddRoutingRule(rt_rule))
 				{
 					IPACMERR("Routing rule addition failed!\n");
-					free(rt_rule);
-					return IPACM_FAILURE;
+					ret = IPACM_FAILURE;
+					goto fail;
 				}
 				wan_route_rule_v6_hdl[tx_index] = rt_rule_entry->rt_rule_hdl;
 				IPACMDBG_H("Set ipv6 wan-route rule hdl for v6_lan_table:0x%x,tx:%d,ip-type: %d \n",
@@ -2640,7 +2642,8 @@ int IPACM_Wan::handle_route_add_vlan_pdn_evt(ipa_ip_type iptype, uint16_t vlan_i
 				if(m_header.GetHeaderHandle(&hdr) == false)
 				{
 					IPACMERR("Failed to get QMAP header.\n");
-					return IPACM_FAILURE;
+					ret = IPACM_FAILURE;
+					goto fail;
 				}
 				rt_rule_entry->rule.hdr_hdl = hdr.hdl;
 				rt_rule_entry->rule.dst = IPA_CLIENT_APPS_WAN_CONS;
@@ -2660,14 +2663,12 @@ int IPACM_Wan::handle_route_add_vlan_pdn_evt(ipa_ip_type iptype, uint16_t vlan_i
 				if(false == m_routing.AddRoutingRule(rt_rule))
 				{
 					IPACMERR("Routing rule addition failed!\n");
-					free(rt_rule);
-					return IPACM_FAILURE;
+					ret = IPACM_FAILURE;
+					goto fail;
 				}
 				wan_route_rule_v6_hdl_a5 = rt_rule_entry->rt_rule_hdl;
 				IPACMDBG_H("Set ipv6 wan-route rule hdl for v6_wan_table:0x%x,tx:%d,ip-type: %d \n",
 					wan_route_rule_v6_hdl_a5, 0, iptype);
-
-				free(rt_rule);
 			}
 
 			/* Xlat case pdn_index might not be populated*/
@@ -2676,7 +2677,8 @@ int IPACM_Wan::handle_route_add_vlan_pdn_evt(ipa_ip_type iptype, uint16_t vlan_i
 				if (modem_ipv6_pdn_index == -1)
 				{
 					IPACMERR("No Free index available.!\n");
-					return IPACM_FAILURE;
+					ret = IPACM_FAILURE;
+					goto fail;
 				}
 
 				ipv6_to_iface[modem_ipv6_pdn_index].pIface = this;
@@ -2699,7 +2701,8 @@ int IPACM_Wan::handle_route_add_vlan_pdn_evt(ipa_ip_type iptype, uint16_t vlan_i
 			{
 				header_partial_default_wan_v4 = true;
 				IPACMDBG_H("STA ipv4-header haven't constructed \n");
-				return IPACM_SUCCESS;
+				ret = IPACM_SUCCESS;
+				goto fail;
 			}
 
 			for (tx_index = 0; tx_index < iface_query->num_tx_props; tx_index++)
@@ -2737,8 +2740,8 @@ int IPACM_Wan::handle_route_add_vlan_pdn_evt(ipa_ip_type iptype, uint16_t vlan_i
 				if (false == m_routing.AddRoutingRule(rt_rule))
 				{
 					IPACMERR("Routing rule addition failed!\n");
-					free(rt_rule);
-					return IPACM_FAILURE;
+					ret = IPACM_FAILURE;
+					goto fail;
 				}
 				wan_route_rule_v4_hdl[tx_index] = rt_rule_entry->rt_rule_hdl;
 				IPACMDBG_H("Got ipv4 wan-route rule hdl:0x%x,tx:%d,ip-type: %d \n",
@@ -2791,7 +2794,8 @@ int IPACM_Wan::handle_route_add_vlan_pdn_evt(ipa_ip_type iptype, uint16_t vlan_i
 				if(fd_wwan_ioctl < 0)
 				{
 					IPACMERR("Failed to open %s.\n", WWAN_QMI_IOCTL_DEVICE_NAME);
-					return false;
+					ret = IPACM_FAILURE;
+					goto fail;
 				}
 				IPACMDBG_H("send WAN_IOC_NOTIFY_WAN_STATE up to IPA_PM\n");
 				wan_state.up = true;
@@ -2810,7 +2814,10 @@ int IPACM_Wan::handle_route_add_vlan_pdn_evt(ipa_ip_type iptype, uint16_t vlan_i
 		IPACMDBG_H("don't AddRmDepend, a PDN is already up\n");
 	}
 
-	return IPACM_SUCCESS;
+fail:
+	if(rt_rule)
+		free(rt_rule);
+	return ret;
 }
 
 IPACM_firewall_conf_t* IPACM_Wan::get_curr_pdn_firewall_config(IPACM_firewall_t &firewall_configs, const char* curr_dev_name)

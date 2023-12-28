@@ -26,8 +26,8 @@
  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * Changes from Qualcomm Innovation Center are provided under the following license:
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Changes from Qualcomm Innovation Center, Inc. are provided under the following license:
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear.
  */
 /*!
@@ -68,6 +68,7 @@ int IPACM_Wan::ipv6_mpdn_default_filterting_rules_count = 0;
 #endif
 
 int IPACM_Wan::ipa_pm_q6_check = 0;
+int IPACM_Wan::firewall_profile_cnt = 0;
 
 #ifdef FEATURE_IPACM_UL_FIREWALL
 int IPACM_Wan::num_firewall_v6_ul = 0;
@@ -105,6 +106,8 @@ uint32_t IPACM_Wan::backhaul_ipv6_prefix[2];
 IPACM_firewall_t IPACM_Wan::firewall_mpdn_config_ul;
 #endif
 IPACM_firewall_conf_t IPACM_Wan::firewall_config_ul;
+_firewall_state_t IPACM_Wan::firewall_state[IPA_MAX_NUM_HW_PDNS];
+
 
 int IPACM_Wan::m_fd_ipa_ul = 0;
 #endif //FEATURE_IPACM_UL_FIREWALL
@@ -169,6 +172,8 @@ IPACM_Wan::IPACM_Wan(int iface_index,
 	hdr_hdl_sta_v6 = 0;
 	num_ipv6_dest_flt_rule = 0;
 	memset(ipv6_dest_flt_rule_hdl, 0, MAX_DEFAULT_v6_ROUTE_RULES*sizeof(uint32_t));
+	memset(&IPACM_Wan::firewall_state, 0, IPA_MAX_NUM_HW_PDNS*sizeof(_firewall_state_t));
+
 	memset(ipv6_prefix, 0, sizeof(ipv6_prefix));
 	memset(m_ipv6_addr, 0, sizeof(m_ipv6_addr));
 	memset(wan_v6_addr_gw, 0, sizeof(wan_v6_addr_gw));
@@ -4155,19 +4160,13 @@ int IPACM_Wan::config_dft_firewall_rules_ex(struct ipa_flt_rule_add *rules, int 
 
 #ifdef FEATURE_IPACM_UL_FIREWALL
 
-typedef struct
-{
-	uint8_t profile;
-	bool firewall_enabled;
-}_firewall_state_t;
+
 
 int IPACM_Wan::read_firewall_filter_rules_ul(void)
 {
 	int i = 0;
 #ifdef FEATURE_VLAN_MPDN
 	std::pair<IPACM_firewall_conf_t*, ipacm_ipv6_wan_iface*> offloaded_pdns_v6[IPA_MAX_NUM_HW_PDNS];
-	_firewall_state_t firewall_state[IPA_MAX_NUM_HW_PDNS];
-	int firewall_profile_cnt;
 	bool has_firewall_changed = false;
 	int firewall_num_v6_pdns_ul = 0;
 	int num_mpdn_firewall_v6_ul[IPA_MAX_NUM_HW_PDNS];
@@ -4175,14 +4174,6 @@ int IPACM_Wan::read_firewall_filter_rules_ul(void)
 	IPACMDBG_H("Firewall XML file is %s\n", MOBILE_FIREWALL_FILE);
 #ifdef FEATURE_VLAN_MPDN
 	/* Save current state of firewall */
-	memset(&firewall_state, 0, IPA_MAX_NUM_HW_PDNS*sizeof(_firewall_state_t));
-	firewall_profile_cnt = firewall_mpdn_config_ul.pdn_count;
-	for (i = 0; i < firewall_profile_cnt; ++i)
-	{
-		firewall_state[i].profile = firewall_mpdn_config_ul.pdns[i].profile;
-		firewall_state[i].firewall_enabled = firewall_mpdn_config_ul.pdns[i].firewall_enable;
-	}
-
 	if(IPACM_read_firewall_xml(MOBILE_FIREWALL_FILE, firewall_mpdn_config_ul) == IPACM_SUCCESS)
 #else
 	if(IPACM_read_firewall_xml(MOBILE_FIREWALL_FILE, firewall_config_ul) == IPACM_SUCCESS)
@@ -4242,7 +4233,7 @@ int IPACM_Wan::read_firewall_filter_rules_ul(void)
 			{
 				if (curr_conf->profile == firewall_state[i].profile)
 				{
-					if (!firewall_state[i].firewall_enabled)
+					if (!IPACM_Wan::firewall_state[i].firewall_enabled && (IPACM_Wan::firewall_state[i].SWAllowed == curr_conf->SWAllowed ))
 					{
 						IPACMDBG_H("For pdn %s fw state is disabled & hasnt changed, ignore the event\n ", dev);
 					}
@@ -4256,12 +4247,21 @@ int IPACM_Wan::read_firewall_filter_rules_ul(void)
 			}
 			if(IPACM_Iface::ipacmcfg->ipacm_MsgFlt_enable)
 			{
-				if(curr_conf->SWAllowed)
+				if(((IPACM_Wan::firewall_state[i].SWAllowed== true) &&  curr_conf->SWAllowed ==false) || curr_conf->SWAllowed)
 					has_firewall_changed = true;
 			}
 			num_mpdn_firewall_v6_ul[j] = 0;
 		}
 	}
+	memset(&IPACM_Wan::firewall_state, 0, IPA_MAX_NUM_HW_PDNS*sizeof(_firewall_state_t));
+	firewall_profile_cnt = firewall_mpdn_config_ul.pdn_count;
+	for (i = 0; i < firewall_profile_cnt; ++i)
+	{
+		IPACM_Wan::firewall_state[i].profile = firewall_mpdn_config_ul.pdns[i].profile;
+		IPACM_Wan::firewall_state[i].firewall_enabled = firewall_mpdn_config_ul.pdns[i].firewall_enable;
+		IPACM_Wan::firewall_state[i].SWAllowed = firewall_mpdn_config_ul.pdns[i].SWAllowed;
+	}
+
 	if (!has_firewall_changed)
 		return IPACM_FAILURE;
 #else
@@ -4314,7 +4314,6 @@ int IPACM_Wan::set_pdn_num_fw_rules_by_vid(int vid, int num_fw_rules)
 				IPACM_Wan::num_firewall_v6_ul -= ipv6_to_iface[i].pIface->num_firewall_v6_ul_pdn;
 				IPACM_Wan::num_firewall_v6_ul += num_fw_rules;
 				IPACMDBG_H("num_firewall_v6_ul (%d)->(%d)\n", orig_num, IPACM_Wan::num_firewall_v6_ul);
-
 				ipv6_to_iface[i].pIface->num_firewall_v6_ul_pdn = num_fw_rules;
 				return IPACM_SUCCESS;
 			}
@@ -4330,9 +4329,6 @@ int IPACM_Wan::set_pdn_num_fw_rules_by_vid(int vid, int num_fw_rules)
 	IPACMERR("couldn't find match for vid %d\n", vid);
 	return IPACM_FAILURE;
 }
-
-
-
 
 int IPACM_Wan::get_pdn_num_fw_rules_by_vid(int vid, int *num_fw_rules)
 {

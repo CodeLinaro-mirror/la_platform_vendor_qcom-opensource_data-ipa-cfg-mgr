@@ -1,6 +1,5 @@
 /*
 Copyright (c) 2013, 2018-2021, The Linux Foundation. All rights reserved.
-Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are
@@ -26,6 +25,10 @@ BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
 WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
 OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
 IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+Changes from Qualcomm Innovation Center, Inc. are provided under the following license:
+Copyright (c) 2022,2024 Qualcomm Innovation Center, Inc. All rights reserved.
+SPDX-License-Identifier: BSD-3-Clause-Clear
 */
 /*!
 	@file
@@ -122,6 +125,12 @@ typedef struct _ipacm_event_data_sw_allow
 	char dev_name[IF_NAME_LEN];
 	int pdn_index;
 }ipacm_event_data_sw_allow;
+typedef struct
+{
+	uint8_t profile;
+	bool firewall_enabled;
+	bool SWAllowed;
+}_firewall_state_t;
 
 /* wan iface */
 class IPACM_Wan : public IPACM_Iface
@@ -130,9 +139,11 @@ class IPACM_Wan : public IPACM_Iface
 public:
 	/* IPACM pm_depency q6 check*/
 	static int ipa_pm_q6_check;
+	static int firewall_profile_cnt;
 	static bool wan_up;
 	static bool wan_up_v6;
 	static uint8_t xlat_mux_id;
+	static _firewall_state_t firewall_state[IPA_MAX_NUM_HW_PDNS];
 #ifdef FEATURE_VLAN_MPDN
 #ifdef FEATURE_IPACM_UL_FIREWALL
 	int num_firewall_v6_ul_pdn;

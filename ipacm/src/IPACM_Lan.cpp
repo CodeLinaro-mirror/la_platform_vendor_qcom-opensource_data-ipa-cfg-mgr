@@ -7232,6 +7232,15 @@ int IPACM_Lan::config_dft_firewall_rules_ul_ex(IPACM_firewall_conf_t* firewall_c
 	uint8_t xlat_mux_id;
 	struct ipa_ioc_add_flt_rule_v2 *pFilteringTable_v2 = NULL;
 	struct ipa_flt_rule_add_v2 flt_rule_entry_v2;
+	uint32_t v6_prefix[2];
+
+#ifdef FEATURE_VLAN_MPDN
+	if(IPACM_Wan::GetV6PrefixByVid(vid, v6_prefix))
+	{
+		IPACMERR("couldn't get v6 prefix for vid %d\n", vid);
+		return IPACM_FAILURE;
+	}
+ #endif
 
 	if (rx_prop == NULL)
 	{
@@ -7548,6 +7557,19 @@ int IPACM_Lan::config_dft_firewall_rules_ul_ex(IPACM_firewall_conf_t* firewall_c
 					else
 					{
 						/* Actual replication happens here*/
+						if(!(flt_rule_entry_fw.rule.attrib.attrib_mask&IPA_FLT_SRC_ADDR))
+						{
+							flt_rule_entry_fw.rule.attrib.attrib_mask |= IPA_FLT_SRC_ADDR;
+							flt_rule_entry_fw.rule.attrib.u.v6.src_addr[0] = 0x0;
+							flt_rule_entry_fw.rule.attrib.u.v6.src_addr[1] = 0x0;
+							flt_rule_entry_fw.rule.attrib.u.v6.src_addr[2] = v6_prefix[1];
+							flt_rule_entry_fw.rule.attrib.u.v6.src_addr[3] = v6_prefix[0];
+							flt_rule_entry_fw.rule.attrib.u.v6.src_addr_mask[3] = 0xFFFFFFFF;
+							flt_rule_entry_fw.rule.attrib.u.v6.src_addr_mask[2] = 0xFFFFFFFF;
+							flt_rule_entry_fw.rule.attrib.u.v6.src_addr_mask[1] = 0x0;
+							flt_rule_entry_fw.rule.attrib.u.v6.src_addr_mask[0] = 0x0;
+						}
+
 						if (replicate_flt_rule(&flt_rule_entry_r, &flt_rule_entry, &flt_rule_entry_fw) == false)
 							continue;
 						IPACMDBG_H("Modem UL filtering rule %d has index %d\n", i, index);

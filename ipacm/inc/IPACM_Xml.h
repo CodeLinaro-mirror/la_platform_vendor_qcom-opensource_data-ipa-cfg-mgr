@@ -131,9 +131,13 @@ if (!(a)) {                                                 \
 #define Protocol_TAG                         "Protocol"
 #define Direction_TAG                        "Direction"
 #define SourceAddress_TAG                    "SourceAddress"
+#define SourceSubnetMask_TAG                 "SourceSubnetMask"
 #define DestinationAddress_TAG               "DestinationAddress"
+#define DestinationSubnetMask_TAG            "DestinationSubnetMask"
 #define SourcePort_TAG                       "SourcePort"
+#define SourcePortRange_TAG                  "SourcePortRange"
 #define DestinationPort_TAG                  "DestinationPort"
+#define DestinationPortRange_TAG             "DestinationPortRange"
 
 #define UNKNOWN_NetDev_TAG                   "UNKNOWN"
 
@@ -349,6 +353,8 @@ typedef struct
 	uint8_t num_extd_swallow_entries;
 	bool v4_up;
 	bool v6_up;
+	uint32_t  public_ipv4_addr;
+	uint32_t  ipv6_prefix[2];
 	uint8_t profile;
 } IPACM_swallow_conf_t;
 

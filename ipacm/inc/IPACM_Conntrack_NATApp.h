@@ -248,6 +248,7 @@ struct NatEntryBase
 
 	bool isVlan;
 	bool IsVlanUp;
+	bool sw_allow;
 
 protected:
 
@@ -335,6 +336,7 @@ typedef struct _nat_table_entry
 	bool ucp;
 	bool dst_only;
 	bool src_only;
+	bool sw_allow;
 }nat_table_entry;
 
 #define CHK_TBL_HDL()  if(nat_table_hdl == 0){ return -1; }
@@ -604,6 +606,7 @@ public:
 	virtual NatEntriesCollectionBase& GetEntriesCollection(int max_entries) const;
 };
 #endif
+
 class NatBase
 {
 public:
@@ -635,7 +638,10 @@ public:
 	void DelEntriesOnWanDown();
 	void HandleSWAllowEntries(void);
 	bool ChkSWAllow(const NatEntryBase& rule);
-
+	void restore_nat_for_sw_flt_entries(IPACM_extd_swallow_entry_conf_t);
+	void firewall_compare(IPACM_swallow_conf_t*, IPACM_swallow_conf_t*);
+	void GetIpAddress_firewall(uint64_t*, uint64_t*, uint64_t*, uint64_t*, ipa_rule_attrib);
+	bool firewall_tuple_match_with_nat(IPACM_extd_swallow_entry_conf_t, const Ipv6ctEntry*);
 #ifdef FEATURE_SOCKSv5
 	std::list<Ipv6ctEntry> socksv5_v6_conn;
 #endif //FEATURE_SOCKSv5
@@ -662,6 +668,9 @@ private:
 	NatEntriesCollectionBase& m_cache;
 
 	IpAddress& m_previousWanAddress;
+	IPACM_swallow_t sw_filter_cfg;
+	IPACM_swallow_t backup_sw_filter_cfg;
+
 };
 
 class Ipv6ct : public NatBase
@@ -719,7 +728,8 @@ private:
 
 	struct nf_conntrack *ct;
 	struct nfct_handle *ct_hdl;
-
+	IPACM_swallow_t sw_filter_cfg;
+	IPACM_swallow_t backup_sw_filter_cfg;
 	NatApp();
 	int Init();
 
@@ -762,6 +772,9 @@ public:
 	void FlushTempEntries(uint32_t, bool, bool isDummy = false);
 	bool ChkSWAllow(const nat_table_entry *);
 	void HandleSWAllowEntries(void);
+	void restore_nat_for_sw_flt_entries(IPACM_extd_swallow_entry_conf_t);
+	void firewall_compare(IPACM_swallow_conf_t*, IPACM_swallow_conf_t*);
+	bool firewall_tuple_match_with_nat(IPACM_extd_swallow_entry_conf_t, const nat_table_entry*);
 };
 
 #endif /* IPACM_CONNTRACK_NATAPP_H */

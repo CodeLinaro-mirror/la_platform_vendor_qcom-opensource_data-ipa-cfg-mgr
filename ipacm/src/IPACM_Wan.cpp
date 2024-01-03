@@ -5400,22 +5400,30 @@ void IPACM_Wan::set_swallow_pdn_up(void)
 		{
 			if(ipv6_to_iface[i].pIface)
 			{
-				if(!strcmp(ipv6_to_iface[i].pIface->dev_name,
-					IPACM_Iface::ipacmcfg->sw_filter_cfg->pdns[j].net_dev))
+				if(!(strcmp(ipv6_to_iface[i].pIface->dev_name,
+					IPACM_Iface::ipacmcfg->sw_filter_cfg->pdns[j].net_dev)) &&
+					IPACM_Iface::ipacmcfg->sw_filter_cfg->pdns[j].v6_up != TRUE)
 				{
 					IPACM_Iface::ipacmcfg->sw_filter_cfg->pdns[j].v6_up = TRUE;
-					IPACMDBG("V6-found %s dev in index %d updating\n",
-						IPACM_Iface::ipacmcfg->sw_filter_cfg->pdns[j].net_dev, j);
+					IPACMDBG("found %s dev in index %d updating v6 pdn index %d\n",
+						IPACM_Iface::ipacmcfg->sw_filter_cfg->pdns[j].net_dev, j, ipv6_to_iface[i].pIface->modem_ipv6_pdn_index);
+					memset(&IPACM_Iface::ipacmcfg->sw_filter_cfg->pdns[j].ipv6_prefix, 0, sizeof(uint32_t)*2);
+					memcpy(&IPACM_Iface::ipacmcfg->sw_filter_cfg->pdns[j].ipv6_prefix, &ipv6_to_iface[i].ipv6_prefix, sizeof(uint32_t)*2);
+					IPACMDBG_H("ipv6 prefix: 0x%08x%08x.\n", IPACM_Iface::ipacmcfg->sw_filter_cfg->pdns[j].ipv6_prefix[0], IPACM_Iface::ipacmcfg->sw_filter_cfg->pdns[j].ipv6_prefix[1]);
+					break;
 				}
 			}
 			if(ipv4_to_iface[i].pIface)
 			{
 				if(!strcmp(ipv4_to_iface[i].pIface->dev_name,
-					IPACM_Iface::ipacmcfg->sw_filter_cfg->pdns[j].net_dev))
+					IPACM_Iface::ipacmcfg->sw_filter_cfg->pdns[j].net_dev) &&
+					IPACM_Iface::ipacmcfg->sw_filter_cfg->pdns[j].v4_up != TRUE)
 				{
 					IPACM_Iface::ipacmcfg->sw_filter_cfg->pdns[j].v4_up = TRUE;
-					IPACMDBG("V4-found %s dev in index %d updating\n",
-						IPACM_Iface::ipacmcfg->sw_filter_cfg->pdns[j].net_dev, j);
+					IPACMDBG("found %s dev in index %d updating v4 pdn index %d\n",
+						IPACM_Iface::ipacmcfg->sw_filter_cfg->pdns[j].net_dev, j, ipv4_to_iface[i].pIface->modem_ipv4_pdn_index);
+					IPACM_Iface::ipacmcfg->sw_filter_cfg->pdns[j].public_ipv4_addr = ipv4_to_iface[i].ipv4_addr;
+					break;
 				}
 			}
 		}

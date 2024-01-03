@@ -86,8 +86,15 @@
 #include <list>
 #endif
 #include <set>
+#include <unordered_set>
 #include <map>
 #include <algorithm>
+#include <string>
+
+
+using std::string;
+
+
 typedef struct
 {
   char iface_name[IPA_IFACE_NAME_LEN];
@@ -312,7 +319,7 @@ public:
 	void add_vlan_bridge(ipacm_event_data_all * data_all);
 	ipacm_bridge *get_vlan_bridge(char *name);
 	bool is_added_vlan_iface(char *iface_name);
-	bool iface_in_vlan_mode(const char * phys_iface_name);
+	bool iface_in_vlan_mode(const char * interfaceName);
 	int get_iface_vlan_ids(char *phys_iface_name, uint16_t *Ids);
 #ifdef IPA_IOCTL_ADD_VLAN_PRIORITY
 	int update_vlan_priority(struct ipa_ioc_vlan_priority *vlan_priority);
@@ -948,6 +955,25 @@ private:
 	uint8_t qmap_id;
 	ipacm_ext_prop ext_prop_v4;
 	ipacm_ext_prop ext_prop_v6;
+
+	/**
+	 * Return the physical device name if the interface is marked as
+	 * virtual.
+	 *
+	 * @param interfaceName name of the interface.
+	 *
+	 * @return string physical device name if device is virtual,
+	 *         interfaceName otherwise.
+	 */
+	string getNameForVlanQuery(const string &interfaceName) {
+		IPACMDBG("interfaceName = %s\n", interfaceName.c_str());
+		for (int i = 0; i < ipa_num_ipa_interfaces; i++) {
+			if (string(interfaceName).rfind(string(iface_table[i].iface_name), 0) == 0 && iface_table[i].virtualIface) {
+				return string(iface_table[i].physDevName);
+			}
+		}
+		return interfaceName;
+	}
 };
 
 #endif /* IPACM_CONFIG */

@@ -165,6 +165,7 @@ const char *ipacm_event_name[] = {
 	__stringify(IPA_HANDLE_MACSEC_ADD),                    /* ipa_macsec_map. */
 	__stringify(IPA_HANDLE_MACSEC_DEL),                    /* ipa_macsec_map. */
 	__stringify(IPA_WLAN_GW_ADDR_ADD_EVENT),		/* ipacm_event_data_addr */
+	__stringify(IPA_CLEAN_NEIGHBOR_CACHE),                  /* ipacm_event_data_all */
 	__stringify(IPACM_EVENT_MAX)
 };
 
@@ -1670,6 +1671,12 @@ void IPACM_Config::add_vlan_iface(ipa_vlan_iface_info *data)
 #endif
 	memset(&new_vlan_info, 0 , sizeof(new_vlan_info));
 	strlcpy(new_vlan_info.vlan_iface_name, data->name, sizeof(new_vlan_info.vlan_iface_name));
+	if (!getLowerInterfaceName(new_vlan_info.vlan_iface_name, new_vlan_info.lower_iface_name)) {
+		IPACMDBG("getLowerInterfaceName failed\n");
+	} else {
+		IPACMDBG("new_vlan_info.vlan_iface_name %s, new_vlan_info.lower_iface_name %s\n",
+			new_vlan_info.vlan_iface_name, new_vlan_info.lower_iface_name);
+	}
 	new_vlan_info.vlan_id = data->vlan_id;
 #ifdef IPA_VLAN_PRIORITY
 	new_vlan_info.priority = data->priority;
@@ -1765,7 +1772,10 @@ void IPACM_Config::del_vlan_iface(ipa_vlan_iface_info *data)
 	{
 		if(it_vlan->vlan_interface_index == data->vlan_interface_index)
 		{
-			IPACMDBG_H("Found the vlan interface\n");
+			auto eraseRes = mVlanInterfacesArchive.erase(*it_vlan);
+			auto insertRes = mVlanInterfacesArchive.insert(*it_vlan).second;
+			IPACMDBG_H("Found the vlan interface. Update archive set (remove=%d followed by insert=%d), remove from list\n",
+				eraseRes, insertRes);
 			m_vlan_iface.erase(it_vlan);
 			break;
 		}
@@ -2229,6 +2239,16 @@ int IPACM_Config::get_iface_vlan_ids(char *phys_iface_name, uint16_t *Ids)
 #endif
 			ret = IPACM_SUCCESS;
 			break;
+		}
+	}
+
+	if (ret != IPACM_SUCCESS) {
+		const struct vlan_iface_info archivedVlanInfo = getArchivedVlanInterfaceInfo(iface_name);
+		IPACMDBG_H("Archived VLAN interface: vlan_iface_name:%s, lower_iface_name:%s, vlan_id:%hu\n",
+			archivedVlanInfo.vlan_iface_name, archivedVlanInfo.lower_iface_name, archivedVlanInfo.vlan_id);
+		if (!string(archivedVlanInfo.vlan_iface_name).empty()) {
+			*vlan_id = archivedVlanInfo.vlan_id;
+			ret = IPACM_SUCCESS;
 		}
 	}
 
@@ -2965,6 +2985,8 @@ bool IPACM_Config::client_in_stats_cache(uint8_t *mac_addr)
 
 bool IPACM_Config::insertOrAssignMacsecMap(struct ipa_macsec_map *macsecMap) {
 	int netlinkIdx, ifaceTableIdx;
+	ipacm_cmd_q_data eventItem;
+	ipacm_event_data_all *eventData;
 
 	if (!macsecMap)
 		return false;
@@ -2976,7 +2998,7 @@ bool IPACM_Config::insertOrAssignMacsecMap(struct ipa_macsec_map *macsecMap) {
 		/* Modify an existing macsec interface macsec interface in the config table*/
 		strlcpy(iface_table[ifaceTableIdx].physDevName, macsecMap->phy_name, sizeof(iface_table[ifaceTableIdx].physDevName));
 	} else {
-		IPACMDBG_H("Will add new macsec interface: %s instead of %s\n", macsecMap->macsec_name, macsecMap->phy_name);
+		IPACMDBG_H("Adding new macsec <-> physical mapping: %s <-> %s\n", macsecMap->macsec_name, macsecMap->phy_name);
 
 		/* check if physical iface is valid */
 		if (IPACM_Iface::ipa_get_if_index(macsecMap->phy_name, &netlinkIdx) == IPACM_FAILURE ||
@@ -2989,6 +3011,17 @@ bool IPACM_Config::insertOrAssignMacsecMap(struct ipa_macsec_map *macsecMap) {
 		iface_table[ifaceTableIdx].virtualIface = true;
 		strlcpy(iface_table[ifaceTableIdx].iface_name, macsecMap->macsec_name, sizeof(iface_table[ifaceTableIdx].iface_name));
 		strlcpy(iface_table[ifaceTableIdx].physDevName, macsecMap->phy_name, sizeof(iface_table[ifaceTableIdx].physDevName));
+		eventItem.event = IPA_CLEAN_NEIGHBOR_CACHE;
+		eventData = static_cast<decltype(eventData)>(malloc(sizeof(*eventData)));
+		if (!eventData) {
+			IPACMERR("malloc failed\n");
+			return IPACM_FAILURE;
+		}
+		memset(eventData, 0, sizeof(*eventData));
+		strlcpy(eventData->iface_name, iface_table[ifaceTableIdx].physDevName, sizeof(eventData->iface_name));
+		eventItem.evt_data = eventData;
+		IPACMDBG("Posting %s\n", getEventName(eventItem.event));
+		IPACM_EvtDispatcher::PostEvt(&eventItem);
 	}
 
 	return true;

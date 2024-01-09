@@ -1034,8 +1034,18 @@ static int ipa_nl_decode_nlmsg
 					ipa_nl_get_vlan_priority(&vlan_info);
 				}
 
-				if(msg_ptr->nl_link_info.link_type == IPA_LINK_TYPE_VLAN)
+				if(msg_ptr->nl_link_info.link_type == IPA_LINK_TYPE_VLAN) {
+					data_all = (ipacm_event_data_all *)malloc(sizeof(*data_all));
+					if (!data_all) {
+						IPACMERR("malloc failed\n");
+						return IPACM_FAILURE;
+					}
+					data_all->if_index = msg_ptr->nl_link_info.metainfo.ifi_index;
+					evt_data.evt_data = data_all;
+					evt_data.event = IPA_CLEAN_NEIGHBOR_CACHE;
+					IPACM_EvtDispatcher::PostEvt(&evt_data);
 					IPACM_Iface::ipacmcfg->del_vlan_iface(&vlan_info);
+				}
 				if (msg_ptr->nl_link_info.link_type == IPA_LINK_TYPE_MACSEC) {
 					if (!IPACM_Iface::ipacmcfg->getMacsecMapping(msg_ptr->nl_link_info.metainfo.ifi_index,
 						&macsec_map))

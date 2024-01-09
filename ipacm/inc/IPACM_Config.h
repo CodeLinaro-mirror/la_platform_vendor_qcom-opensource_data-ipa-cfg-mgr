@@ -93,6 +93,7 @@
 
 
 using std::string;
+using std::set;
 
 
 typedef struct
@@ -284,6 +285,20 @@ public:
 #if defined(FEATURE_L2TP) || defined(FEATURE_VLAN_MPDN)
 	pthread_mutex_t vlan_l2tp_lock;
 	std::list<vlan_iface_info> m_vlan_iface;
+
+	struct VlanNamesCompare {
+
+	public:
+
+		bool operator()(const struct vlan_iface_info &v1, const struct vlan_iface_info &v2) const {
+			if (string(v1.vlan_iface_name) == string(v2.vlan_iface_name)) {
+				return string(v1.lower_iface_name) < string(v2.lower_iface_name);
+			}
+			return string(v1.vlan_iface_name) < string(v2.vlan_iface_name);
+		}
+	};
+
+	set<struct vlan_iface_info, VlanNamesCompare> mVlanInterfacesArchive{};
 
 	void add_vlan_iface(ipa_vlan_iface_info *data);
 
@@ -939,6 +954,76 @@ public:
 	 * @return bool
 	 */
 	bool delMacsecMap(struct ipa_macsec_map *macsecMap);
+	/**
+	 * Check for existence of a VLAN interface name and a lower
+	 * interface name pair in the known VLAN interfaces. Assumes
+	 * both argument are non-nullptr.
+	 *
+	 * @param interfaceName      VLAN interface name
+	 * @param lowerInterfaceName Lower interface name as seen before
+	 *      		     in the kernel
+	 *
+	 * @return bool true if the pair exist, false otherwise.
+	 */
+	bool isKnownVlanLowerPair(const char *interfaceName, const char *lowerInterfaceName) {
+		IPACMDBG("interfaceName %s, lowerInterfaceName %s\n", interfaceName, lowerInterfaceName);
+		for (auto &it: m_vlan_iface) {
+			IPACMDBG("it.vlan_iface_name %s, it.lower_iface_name %s\n", it.vlan_iface_name, it.lower_iface_name);
+			if (string(interfaceName) == string(it.vlan_iface_name) &&
+				string(lowerInterfaceName) == string(it.lower_iface_name))
+				return true;
+		}
+
+		IPACMDBG("VLAN-lower interfaces names pair not in m_vlan_iface. Search in archive\n");
+		struct vlan_iface_info vlanInfo = {0};
+
+		strlcpy(vlanInfo.vlan_iface_name, interfaceName, sizeof(vlanInfo.vlan_iface_name));
+		strlcpy(vlanInfo.lower_iface_name, lowerInterfaceName, sizeof(vlanInfo.lower_iface_name));
+		return mVlanInterfacesArchive.count(vlanInfo) > 0;
+	}
+	const struct vlan_iface_info getArchivedVlanInterfaceInfo(const char *vlanInterfaceName) const {
+		for (const auto& it: mVlanInterfacesArchive) {
+			if (string(it.vlan_iface_name) == string(vlanInterfaceName)) {
+				return it;
+			}
+		}
+		struct vlan_iface_info notFoundRes = {0};
+		return notFoundRes;
+	}
+	/**
+	 * Query sysfs for lower interface name of the virtual device.
+	 *
+	 * @param interfaceName The virtual interface name
+	 * @param lowerInterfaceName Output array with pre allocated
+	 *      		     memory
+	 *
+	 * @return bool true when a lower interface name is found, false
+	 *         otherwise.
+	 */
+	static bool getLowerInterfaceName(const char *interfaceName, char *lowerInterfaceName) {
+		char cmd[200] = {0};
+		FILE *fp = NULL;
+
+		snprintf(cmd, 200, "ls /sys/devices/virtual/net/%s | grep lower | cut -d'_' -f2 > /tmp/lower_interface_name.txt",
+			interfaceName);
+		system(cmd);
+		fp = fopen("/tmp/lower_interface_name.txt", "r");
+		if (!fp) {
+			IPACMERR("can't open /tmp/lower_interface_name.txt\n");
+			return false;
+		}
+		if (!fgets(lowerInterfaceName, IF_NAME_LEN, fp)) {
+			IPACMERR("fgets failed\n");
+			remove("/tmp/lower_interface_name.txt");
+			fclose(fp);
+			return false;
+		}
+		fclose(fp);
+		remove("/tmp/lower_interface_name.txt");
+		lowerInterfaceName[strcspn(lowerInterfaceName, "\r\n")] = 0;
+		IPACMDBG("lowerInterfaceName %s\n", lowerInterfaceName);
+		return true;
+	}
 	/**
 	 * Populate macsec mapping information by Linux interface index
 	 * if such an interface exist.

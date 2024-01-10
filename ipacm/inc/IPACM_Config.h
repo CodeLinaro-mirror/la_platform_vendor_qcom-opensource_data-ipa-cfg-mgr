@@ -28,7 +28,7 @@
  *
  * Changes from Qualcomm Innovation Center are provided under the following license:
  *
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted (subject to the limitations in the
@@ -345,6 +345,17 @@ public:
 	ipa_ipgre_info eogre_info;
 	bool           eogre_enabled;
 #endif
+	/* Private IP forwarding details*/
+	typedef struct private_IP_Forwarding_Config
+	{
+		bool privateIPForwarding_enable;
+		uint8_t vlan; //0, if APN 1 or untagged traffic has to be accelerated, and the vlan ID, if tagged traffic, and that vlan has to be accelerated
+		char interface_name[IPA_IFACE_NAME_LEN];
+		char bridge_name[IPA_IFACE_NAME_LEN];
+		uint32_t bridge_net_mask;
+	}forwarding_config;
+	forwarding_config IP_Forwarding_config;
+
 	ipa_ipgre_info ipgre_info;
 	typedef struct pmipv6_status
 	{
@@ -388,6 +399,8 @@ public:
 #endif
 	bool mac_addr_in_blacklist(uint8_t *mac_addr);
 	void clear_whitelist_mac_add(uint8_t *mac_addr);
+	void update_config_private_forwarding(bool reset=false);
+	void update_bridge_vlan_details_private_forwarding(uint32_t ip_addr);
 
 	decltype(mac_flt_lists) getMacFltListsCopySafe() {
 		if(pthread_mutex_lock(&mac_flt_info_lock) != 0) {

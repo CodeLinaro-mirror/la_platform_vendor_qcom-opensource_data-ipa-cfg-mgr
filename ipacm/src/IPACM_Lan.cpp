@@ -28,7 +28,7 @@
  *
  * Changes from Qualcomm Innovation Center are provided under the following license:
  *
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted (subject to the limitations in the
@@ -492,6 +492,7 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 	ipa_macsec_map *map;
 	ipa_ioc_ext_router_info *info;
 	int idx = 0;
+	int ret = 0;
 
 	switch (event)
 	{
@@ -1029,6 +1030,28 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 		}
 		IPACMDBG_H("Backhaul is sta mode?%d\n", data_wan->is_sta);
 #ifdef FEATURE_VLAN_MPDN
+		if(IPACM_Iface::ipacmcfg->IP_Forwarding_config.privateIPForwarding_enable){
+			ext_prop = IPACM_Iface::ipacmcfg->GetExtProp(IPA_IP_v4);
+			if(ext_prop == NULL)
+			{
+				IPACMDBG_H("No extended property.\n");
+			}
+			else
+			{
+				ret = handle_uplink_filter_rule(
+					ext_prop,
+					IPA_IP_v4,
+					IPACM_Iface::ipacmcfg->GetQmapId(),
+					false,
+					false, false,false);
+				if(!ret){
+					IPACMDBG_H("Private IP forward, UL rules installed\n");
+				}
+				else{
+					IPACMDBG_H("Private IP forward, UL rules installation error\n");
+				}
+			}
+		}
 		/* VLAN IFACES don't care about default route */
 		if((IPACM_Iface::ipacmcfg->iface_in_vlan_mode(dev_name)) &&
 			(IPACM_Iface::ipacmcfg->ipacm_mpdn_enable == TRUE))
@@ -5123,6 +5146,12 @@ int IPACM_Lan::handle_eth_client_route_rule(uint8_t *mac_addr, ipa_ip_type iptyp
 				rt_rule_entry->rule.hdr_hdl = get_client_memptr(eth_client, eth_index)->hdr_hdl_v4;
 				rt_rule_entry->rule.attrib.u.v4.dst_addr = get_client_memptr(eth_client, eth_index)->v4_addr;
 				rt_rule_entry->rule.attrib.u.v4.dst_addr_mask = 0xFFFFFFFF;
+				if(IPACM_Iface::ipacmcfg->IP_Forwarding_config.privateIPForwarding_enable && strstr(dev_name,IPACM_Iface::ipacmcfg->IP_Forwarding_config.interface_name)){
+					//Make it a catchall rule, if its a neighbour of the configured index
+					rt_rule_entry->rule.attrib.u.v4.dst_addr = 0;
+					rt_rule_entry->rule.attrib.u.v4.dst_addr_mask = 0;
+					rt_rule_entry->at_rear = 1;
+				}
 
 				if (IPACM_Iface::ipacmcfg->GetIPAVer() >= IPA_HW_v4_0)
 				{
@@ -7363,7 +7392,7 @@ int IPACM_Lan::handle_uplink_filter_rule(ipacm_ext_prop *prop, ipa_ip_type iptyp
 #ifdef FEATURE_VLAN_MPDN
 	is_dev_in_vlan_mode = IPACM_Iface::ipacmcfg->iface_in_vlan_mode(dev_name);
 	if (is_dev_in_vlan_mode && IPACM_Iface::ipacmcfg->ipacm_mpdn_enable) {
-		IPACMDBG_H("number of xlat rules %d \n", prop->num_v4_xlat_props);
+		IPACMDBG_H("number of xlat rules %d total rules %d\n", prop->num_v4_xlat_props,prop->num_ext_props - prop->num_v4_xlat_props);
 		total_rules = prop->num_ext_props - prop->num_v4_xlat_props;
 	}
 	else
@@ -7377,7 +7406,10 @@ int IPACM_Lan::handle_uplink_filter_rule(ipacm_ext_prop *prop, ipa_ip_type iptyp
 		total_rules = prop->num_ext_props;
 	}
 #endif
-
+	if(IPACM_Iface::ipacmcfg->IP_Forwarding_config.privateIPForwarding_enable){
+			total_rules = prop->num_ext_props;
+			IPACMDBG_H("Private IP forwarding is enabled, dont need XLAT rules\n");
+	}
 	memset(&flt_index, 0, sizeof(flt_index));
 	flt_index.source_pipe_index = ioctl(fd, IPA_IOC_QUERY_EP_MAPPING, rx_prop->rx[idx].src_pipe);
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
@@ -7460,13 +7492,14 @@ int IPACM_Lan::handle_uplink_filter_rule(ipacm_ext_prop *prop, ipa_ip_type iptyp
 	{
 		bool wan_odu_bridge = (ipa_if_cate == ODU_IF && IPACM_Wan::isWan_Bridge_Mode());
 
-		if ( wan_odu_bridge || compatible_gre || IPACM_Iface::ipacmcfg->is_public_ip_support_enabled)
+		if ( wan_odu_bridge || compatible_gre || IPACM_Iface::ipacmcfg->is_public_ip_support_enabled || IPACM_Iface::ipacmcfg->IP_Forwarding_config.privateIPForwarding_enable)
 		{
 			IPACMDBG_H(
-				"%s%s%s\n",
+				"%s%s%s%s\n",
 				(wan_odu_bridge)   ? "[WAN, ODU are in bridge mode] " : "",
 				(compatible_gre) ? "[GRE enabled]"                : "",
-				(IPACM_Iface::ipacmcfg->is_public_ip_support_enabled) ? "[Public IP enabled]": "");
+				(IPACM_Iface::ipacmcfg->is_public_ip_support_enabled) ? "[Public IP enabled]": "",
+				(IPACM_Iface::ipacmcfg->IP_Forwarding_config.privateIPForwarding_enable) ? "[Private IP Forwarding enabled]": "");
 			flt_rule_entry.rule.action = IPA_PASS_TO_ROUTING;
 		}
 		else

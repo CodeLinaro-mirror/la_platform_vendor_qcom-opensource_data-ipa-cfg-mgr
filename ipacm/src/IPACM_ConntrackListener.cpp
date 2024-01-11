@@ -156,7 +156,7 @@ void IPACM_ConntrackListener::event_callback(ipa_cm_event_id evt,
 						void *data)
 {
 	const ipacm_event_iface_up *wan_data = NULL;
-	ipacm_event_connection *data_evt_conn = NULL;
+	ipa_socksv5_msg *data_evt_conn = NULL;
 	ipacm_event_iface_up wan_data_local;
 	memset(&wan_data_local, 0, sizeof(wan_data_local));
 #ifdef FEATURE_SOCKSv5
@@ -319,13 +319,13 @@ void IPACM_ConntrackListener::event_callback(ipa_cm_event_id evt,
 			ipv6ct_inst = Ipv6ct::GetInstance();
 		}
 		/* create v6-ct tble */
-		data_evt_conn = (ipacm_event_connection*)data;
+		data_evt_conn = (ipa_socksv5_msg*)data;
 		IPACMDBG_H("Received IPA_HANDLE_SOCKSv5_UP event\n");
 		memset(&wan_data_local, 0, sizeof(wan_data_local));
-		wan_data_local.ipv6_addr[0] = data_evt_conn->dst_ipv6_addr[0];
-		wan_data_local.ipv6_addr[1] = data_evt_conn->dst_ipv6_addr[1];
-		wan_data_local.ipv6_addr[2] = data_evt_conn->dst_ipv6_addr[2];
-		wan_data_local.ipv6_addr[3] = data_evt_conn->dst_ipv6_addr[3];
+		wan_data_local.ipv6_addr[0] = data_evt_conn->ul_in.ipv6_dst[0];
+		wan_data_local.ipv6_addr[1] = data_evt_conn->ul_in.ipv6_dst[1];
+		wan_data_local.ipv6_addr[2] = data_evt_conn->ul_in.ipv6_dst[2];
+		wan_data_local.ipv6_addr[3] = data_evt_conn->ul_in.ipv6_dst[3];
 		strlcpy(wan_data_local.ifname, IPA_IF_SOCKSv5_NAME, sizeof(wan_data_local.ifname));
 		IPACMDBG_H("WanUp_v6 %d\n", WanUp_v6);
 		if (!WanUp_v6)
@@ -2002,18 +2002,18 @@ void IPACM_ConntrackListener::PostRouteAddVlanPdn(uint32_t public_ip)
 	IPACM_EvtDispatcher::PostEvt(&evt_data);
 }
 
-void IPACM_ConntrackListener::PostSocksv5Ready(ipacm_event_connection* data_evt_conn)
+void IPACM_ConntrackListener::PostSocksv5Ready(ipa_socksv5_msg* data_evt_conn)
 {
 	ipacm_cmd_q_data evt_data;
-	ipacm_event_connection *data_event_conn = NULL;
+	ipa_socksv5_msg *data_event_conn = NULL;
 
-	data_event_conn = (ipacm_event_connection *)malloc(sizeof(ipacm_event_connection));
+	data_event_conn = (ipa_socksv5_msg *)malloc(sizeof(ipa_socksv5_msg));
 	if(data_event_conn == NULL)
 	{
 		IPACMERR("unable to allocate memory for event_wlan data_event_conn\n");
 		return;
-	}
-	memcpy(data_event_conn, data_evt_conn, sizeof(ipacm_event_connection));
+	}	
+	memcpy(data_event_conn, data_evt_conn, sizeof(ipa_socksv5_msg));
 	evt_data.event = IPA_HANDLE_SOCKSv5_READY;
 	evt_data.evt_data = data_event_conn;
 	/* finish command queue */

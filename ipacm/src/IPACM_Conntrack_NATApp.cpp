@@ -1902,10 +1902,10 @@ bool Ipv6ctEntry::Compare(const NatEntryBase& other) const
 
 	const Ipv6ctEntry& entry = static_cast<const Ipv6ctEntry&>(other);
 	return NatEntryBase::Compare(other) &&
-		m_srcAddr == entry.m_srcAddr &&
-		m_dstAddr == entry.m_dstAddr &&
-		m_dstPort == entry.m_dstPort &&
-		m_srcPort == entry.m_srcPort;
+		(m_srcAddr == entry.m_srcAddr || m_srcAddr == entry.m_dstAddr) &&
+		(m_dstAddr == entry.m_dstAddr || m_dstAddr == entry.m_srcAddr) &&
+		(m_dstPort == entry.m_dstPort || m_dstPort == entry.m_srcPort) &&
+		(m_srcPort == entry.m_srcPort || m_srcPort == entry.m_dstPort);
 }
 
 void Ipv6ctEntry::Copy(const NatEntryBase& other)
@@ -2797,6 +2797,27 @@ int NatBase::DeleteTable(const uint32_t v6_prefix[2],int num_v6_vlan_pdns)
 	return 0;
 }
 
+bool NatBase::is_SocksV5_CT(const NatEntryBase& entry)
+{
+	list<Ipv6ctEntry>::iterator it_mapping;
+	Ipv6ctEntry new_entry;
+
+	memcpy(&new_entry, &entry, sizeof(Ipv6ctEntry));
+
+	/* find the entry in the cache */
+	for(it_mapping = socksv5_v6_conn.begin(); it_mapping != socksv5_v6_conn.end(); it_mapping++)
+	{
+		if((it_mapping->m_srcAddr == new_entry.m_srcAddr || it_mapping->m_srcAddr == new_entry.m_dstAddr) &&
+			(it_mapping->m_dstAddr == new_entry.m_dstAddr || it_mapping->m_dstAddr == new_entry.m_srcAddr) &&
+			(it_mapping->m_srcPort == new_entry.m_srcPort || it_mapping->m_srcPort == new_entry.m_dstPort) &&
+			(it_mapping->m_dstPort == new_entry.m_dstPort || it_mapping->m_dstPort == new_entry.m_srcPort) &&
+			(it_mapping->m_protocol == new_entry.m_protocol))
+				return true;
+	}
+
+	return false;
+}
+
 int NatBase::AddEntry(const NatEntryBase& entry)
 {
 	IPACMDBG_H("\n");
@@ -2832,7 +2853,7 @@ int NatBase::AddEntry(const NatEntryBase& entry)
 	{
 		if (is_SocksV5_CT(entry))
 		{
-			IPACMERR("Socks V5 Connection do not add CT\n");
+			IPACMERR("Socks V5 Connection do not add normal CT\n");
 			return -EPERM;
 		}
 

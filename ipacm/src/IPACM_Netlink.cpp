@@ -552,6 +552,36 @@ static int ipa_nl_decode_rtm_addr
 	return IPACM_SUCCESS;
 }
 
+static void logNeighborState(const uint16_t state, const int interfaceIndex) {
+	std::string stateStr;
+	char interfaceName[IF_NAME_LEN] = {0};
+
+
+	ipa_get_if_name(interfaceName, interfaceIndex);
+	stateStr += "interface index: " + std::to_string(interfaceIndex) + ", interface name: " + string(interfaceName) + ", neighbor state:";
+
+	if (state & NUD_INCOMPLETE)
+		stateStr += " INCOMPLETE";
+	if (state & NUD_REACHABLE)
+		stateStr += " NUD_REACHABLE";
+	if (state & NUD_STALE)
+		stateStr += " NUD_STALE";
+	if (state & NUD_DELAY)
+		stateStr += " NUD_DELAY";
+	if (state & NUD_PROBE)
+		stateStr += " NUD_PROBE";
+	if (state & NUD_FAILED)
+		stateStr += " NUD_FAILED";
+	if (state & NUD_NOARP)
+		stateStr += " NUD_NOARP";
+	if (state & NUD_PERMANENT)
+		stateStr += " NUD_PERMANENT";
+	if (state == NUD_NONE)
+		stateStr += " NUD_NONE";
+
+	IPACMDBG("%s\n", stateStr.c_str());
+}
+
 /* Decode kernel neighbor message parameters from Netlink attribute TLVs. */
 static int ipa_nl_decode_rtm_neigh
 (
@@ -571,6 +601,7 @@ static int ipa_nl_decode_rtm_neigh
 	memset(&neigh_info->attr_info, 0, sizeof(neigh_info->attr_info));
 	/* Extract the available attributes */
 	neigh_info->attr_info.param_mask = IPA_NLA_PARAM_NONE;
+	logNeighborState(neigh_info->metainfo.ndm_state, neigh_info->metainfo.ndm_ifindex);
 
 	rtah = NDA_RTA(NLMSG_DATA(nlh));
 
@@ -783,6 +814,7 @@ static int ipa_nl_decode_nlmsg
 		{
 		case RTM_NEWLINK:
 		{
+			IPACMDBG("\nGOT RTM_NEWLINK event\n");
 			msg_ptr->type = nlh->nlmsg_type;
 			msg_ptr->link_event = true;
 			if (IPACM_SUCCESS != ipa_nl_decode_rtm_link(buffer, buflen, &(msg_ptr->nl_link_info))) {
@@ -861,6 +893,22 @@ static int ipa_nl_decode_nlmsg
 						IPACMDBG_H("Posting IPA_LINK_UP_EVENT with if index: %d\n",
 							msg_ptr->nl_link_info.metainfo.ifi_index);
 					} else {
+						if (msg_ptr->nl_link_info.link_type == IPA_LINK_TYPE_MACSEC ||
+							IPACM_Iface::ipacmcfg->getMacsecMapping(msg_ptr->nl_link_info.metainfo.ifi_index,
+							&macsec_map)) {
+							if (IPACM_Iface::ipacmcfg->delMacsecMap(&macsec_map)) {
+								evt_data.event = IPA_HANDLE_MACSEC_DEL;
+								macsec_map_data = static_cast<decltype(macsec_map_data)>
+									(malloc(sizeof(*macsec_map_data)));
+								if (!macsec_map_data) {
+									IPACMERR("malloc failed\n");
+									return IPACM_FAILURE;
+								}
+								memcpy(macsec_map_data, &macsec_map, sizeof(macsec_map));
+								evt_data.evt_data = macsec_map_data;
+								IPACM_EvtDispatcher::PostEvt(&evt_data);
+							}
+						}
 						IPACMDBG_H("Interface %s bring down with IP-family: %d \n", dev_name,
 							msg_ptr->nl_link_info.metainfo.ifi_family);
 						/* post link down to command queue */
@@ -918,6 +966,9 @@ static int ipa_nl_decode_nlmsg
 					if (msg_ptr->nl_link_info.link_type == IPA_LINK_TYPE_VLAN)
 						IPACM_Iface::ipacmcfg->del_vlan_iface(&vlan_info);
 					if (msg_ptr->nl_link_info.link_type == IPA_LINK_TYPE_MACSEC) {
+						if (!IPACM_Iface::ipacmcfg->getMacsecMapping(msg_ptr->nl_link_info.metainfo.ifi_index,
+							&macsec_map))
+							IPACMERR("getMacsecMapping failed\n");
 						if (IPACM_Iface::ipacmcfg->delMacsecMap(&macsec_map)) {
 							evt_data.event = IPA_HANDLE_MACSEC_DEL;
 							macsec_map_data = static_cast<decltype(macsec_map_data)>
@@ -956,17 +1007,14 @@ static int ipa_nl_decode_nlmsg
 		break;
 
 		case RTM_DELLINK:
-			IPACMDBG("\n GOT dellink event\n");
+			IPACMDBG("\nGOT RTM_DELLINK event\n");
 			msg_ptr->type = nlh->nlmsg_type;
 			msg_ptr->link_event = true;
 			IPACMDBG("entering rtm decode\n");
-			if(IPACM_SUCCESS != ipa_nl_decode_rtm_link(buffer, buflen, &(msg_ptr->nl_link_info)))
-			{
+			if (IPACM_SUCCESS != ipa_nl_decode_rtm_link(buffer, buflen, &(msg_ptr->nl_link_info))) {
 				IPACMERR("Failed to decode rtm link message\n");
 				return IPACM_FAILURE;
-			}
-			else
-			{
+			} else {
 				IPACMDBG("Got RTM_DELLINK with below values\n");
 				IPACMDBG("RTM_DELLINK, ifi_change:%d\n", msg_ptr->nl_link_info.metainfo.ifi_change);
 				IPACMDBG("RTM_DELLINK, ifi_flags:%d\n", msg_ptr->nl_link_info.metainfo.ifi_flags);
@@ -986,19 +1034,12 @@ static int ipa_nl_decode_nlmsg
 					ipa_nl_get_vlan_priority(&vlan_info);
 				}
 
-				if (msg_ptr->nl_link_info.link_type == IPA_LINK_TYPE_MACSEC) {
-					strlcpy(macsec_map.macsec_name, msg_ptr->nl_link_info.name, sizeof(macsec_map.macsec_name));
-					ret_val = ipa_get_if_name(master_dev_name, msg_ptr->nl_link_info.master_interface_index);
-					if (ret_val != IPACM_SUCCESS) {
-						IPACMERR("Error while getting master interface name\n");
-						return IPACM_FAILURE;
-					}
-					strlcpy(macsec_map.phy_name, msg_ptr->nl_link_info.name, sizeof(macsec_map.phy_name));
-				}
-
 				if(msg_ptr->nl_link_info.link_type == IPA_LINK_TYPE_VLAN)
 					IPACM_Iface::ipacmcfg->del_vlan_iface(&vlan_info);
 				if (msg_ptr->nl_link_info.link_type == IPA_LINK_TYPE_MACSEC) {
+					if (!IPACM_Iface::ipacmcfg->getMacsecMapping(msg_ptr->nl_link_info.metainfo.ifi_index,
+						&macsec_map))
+						IPACMERR("getMacsecMapping failed\n");
 					if (IPACM_Iface::ipacmcfg->delMacsecMap(&macsec_map)) {
 						evt_data.event = IPA_HANDLE_MACSEC_DEL;
 						macsec_map_data = static_cast<decltype(macsec_map_data)>
@@ -1046,14 +1087,11 @@ static int ipa_nl_decode_nlmsg
 			break;
 
 		case RTM_NEWADDR:
-			IPACMDBG("\n GOT RTM_NEWADDR event\n");
-			if(IPACM_SUCCESS != ipa_nl_decode_rtm_addr(buffer, buflen, &(msg_ptr->nl_addr_info)))
-			{
+			IPACMDBG("\nGOT RTM_NEWADDR event\n");
+			if (IPACM_SUCCESS != ipa_nl_decode_rtm_addr(buffer, buflen, &(msg_ptr->nl_addr_info))) {
 				IPACMERR("Failed to decode rtm addr message\n");
 				return IPACM_FAILURE;
-			}
-			else
-			{
+			} else {
 				ret_val = ipa_get_if_name(dev_name, msg_ptr->nl_addr_info.metainfo.ifa_index);
 				if(ret_val != IPACM_SUCCESS)
 				{
@@ -1122,14 +1160,11 @@ static int ipa_nl_decode_nlmsg
 			break;
 
 		case RTM_DELADDR:
-			IPACMDBG("\n GOT RTM_DELADDR event\n");
-			if(IPACM_SUCCESS != ipa_nl_decode_rtm_addr(buffer, buflen, &(msg_ptr->nl_addr_info)))
-			{
+			IPACMDBG("\nGOT RTM_DELADDR event\n");
+			if (IPACM_SUCCESS != ipa_nl_decode_rtm_addr(buffer, buflen, &(msg_ptr->nl_addr_info))) {
 				IPACMERR("Failed to decode rtm addr message\n");
 				return IPACM_FAILURE;
-			}
-			else
-			{
+			} else {
 
 				data_addr = (ipacm_event_data_addr *)malloc(sizeof(ipacm_event_data_addr));
 				if(data_addr == NULL)
@@ -1164,14 +1199,11 @@ static int ipa_nl_decode_nlmsg
 			}
 			break;
 		case RTM_NEWROUTE:
-
-			if(IPACM_SUCCESS != ipa_nl_decode_rtm_route(buffer, buflen, &(msg_ptr->nl_route_info)))
-			{
+			IPACMDBG("\nGOT RTM_NEWROUTE event\n");
+			if (IPACM_SUCCESS != ipa_nl_decode_rtm_route(buffer, buflen, &(msg_ptr->nl_route_info))) {
 				IPACMERR("Failed to decode rtm route message\n");
 				return IPACM_FAILURE;
 			}
-
-			IPACMDBG("In case RTM_NEWROUTE\n");
 			IPACMDBG("rtm_type: %d\n", msg_ptr->nl_route_info.metainfo.rtm_type);
 			IPACMDBG("protocol: %d\n", msg_ptr->nl_route_info.metainfo.rtm_protocol);
 			IPACMDBG("rtm_scope: %d\n", msg_ptr->nl_route_info.metainfo.rtm_scope);
@@ -1180,7 +1212,8 @@ static int ipa_nl_decode_nlmsg
 			IPACMDBG("param_mask: 0x%x\n", msg_ptr->nl_route_info.attr_info.param_mask);
 
 			/* take care of route add default route & uniroute */
-			if((msg_ptr->nl_route_info.metainfo.rtm_type == RTN_UNICAST) &&
+			if((AF_INET == msg_ptr->nl_route_info.metainfo.rtm_family) &&
+				 (msg_ptr->nl_route_info.metainfo.rtm_type == RTN_UNICAST) &&
 				 ((msg_ptr->nl_route_info.metainfo.rtm_protocol == RTPROT_BOOT) ||
 				  (msg_ptr->nl_route_info.metainfo.rtm_protocol == RTPROT_RA)) &&
 				 (msg_ptr->nl_route_info.metainfo.rtm_scope == RT_SCOPE_UNIVERSE) &&
@@ -1189,7 +1222,7 @@ static int ipa_nl_decode_nlmsg
 			{
 				IPACMDBG("\n GOT RTM_NEWROUTE event\n");
 
-				if(AF_INET == msg_ptr->nl_route_info.metainfo.rtm_family && msg_ptr->nl_route_info.attr_info.param_mask & IPA_RTA_PARAM_DST)
+				if(msg_ptr->nl_route_info.attr_info.param_mask & IPA_RTA_PARAM_DST)
 				{
 					ret_val = ipa_get_if_name(dev_name, msg_ptr->nl_route_info.attr_info.oif_index);
 					if(ret_val != IPACM_SUCCESS)
@@ -1234,68 +1267,6 @@ static int ipa_nl_decode_nlmsg
 					{
 						IPACMERR("Error while getting interface name\n");
 						return IPACM_FAILURE;
-					}
-
-					if(AF_INET6 == msg_ptr->nl_route_info.metainfo.rtm_family)
-					{
-						/* insert to command queue */
-						data_addr = (ipacm_event_data_addr *)malloc(sizeof(ipacm_event_data_addr));
-						if(data_addr == NULL)
-						{
-							IPACMERR("unable to allocate memory for event data_addr\n");
-							return IPACM_FAILURE;
-						}
-
-						if(msg_ptr->nl_route_info.attr_info.param_mask & IPA_RTA_PARAM_PRIORITY)
-						{
-							IPACMDBG_H("ip -6 route add default dev %s metric %d\n",
-											 dev_name,
-											 msg_ptr->nl_route_info.attr_info.priority);
-						}
-						else
-						{
-							IPACMDBG_H("ip -6 route add default dev %s\n", dev_name);
-						}
-
-						IPACM_EVENT_COPY_ADDR_v6( data_addr->ipv6_addr, msg_ptr->nl_route_info.attr_info.dst_addr);
-						data_addr->ipv6_addr[0] = ntohl(data_addr->ipv6_addr[0]);
-						data_addr->ipv6_addr[1] = ntohl(data_addr->ipv6_addr[1]);
-						data_addr->ipv6_addr[2] = ntohl(data_addr->ipv6_addr[2]);
-						data_addr->ipv6_addr[3] = ntohl(data_addr->ipv6_addr[3]);
-
-						IPACM_EVENT_COPY_ADDR_v6( data_addr->ipv6_addr_mask, msg_ptr->nl_route_info.attr_info.dst_addr);
-						data_addr->ipv6_addr_mask[0] = ntohl(data_addr->ipv6_addr_mask[0]);
-						data_addr->ipv6_addr_mask[1] = ntohl(data_addr->ipv6_addr_mask[1]);
-						data_addr->ipv6_addr_mask[2] = ntohl(data_addr->ipv6_addr_mask[2]);
-						data_addr->ipv6_addr_mask[3] = ntohl(data_addr->ipv6_addr_mask[3]);
-
-						IPACM_EVENT_COPY_ADDR_v6( data_addr->ipv6_addr_gw, msg_ptr->nl_route_info.attr_info.gateway_addr);
-						data_addr->ipv6_addr_gw[0] = ntohl(data_addr->ipv6_addr_gw[0]);
-						data_addr->ipv6_addr_gw[1] = ntohl(data_addr->ipv6_addr_gw[1]);
-						data_addr->ipv6_addr_gw[2] = ntohl(data_addr->ipv6_addr_gw[2]);
-						data_addr->ipv6_addr_gw[3] = ntohl(data_addr->ipv6_addr_gw[3]);
-						IPACM_NL_REPORT_ADDR( " ", msg_ptr->nl_route_info.attr_info.gateway_addr);
-
-						data_addr->if_index = msg_ptr->nl_route_info.attr_info.oif_index;
-						data_addr->iptype = IPA_IP_v6;
-
-						if(msg_ptr->nl_route_info.metainfo.rtm_table == RT_TABLE_MAIN)
-						{
-							evt_data.event = IPA_ROUTE_ADD_EVENT;
-							IPACMDBG("Posting IPA_ROUTE_ADD_EVENT with if index:%d, ipv6 address\n",
-										 data_addr->if_index);
-						}
-						else if(msg_ptr->nl_route_info.metainfo.rtm_table == RT_TABLE_COMPAT &&
-								msg_ptr->nl_route_info.attr_info.table_id == WLAN_RT_TABLE_ID)
-						{
-							evt_data.event = IPA_WLAN_GW_ADDR_ADD_EVENT;
-							IPACMDBG("Posting IPA_WLAN_GW_ADDR_ADD_EVENT with if index:%d, ipv6 address\n",
-										data_addr->if_index);
-						}
-						evt_data.evt_data = data_addr;
-						IPACM_EvtDispatcher::PostEvt(&evt_data);
-						/* finish command queue */
-
 					}
 					else
 					{
@@ -1350,8 +1321,11 @@ static int ipa_nl_decode_nlmsg
 			/* ipv6 routing table */
 			if((AF_INET6 == msg_ptr->nl_route_info.metainfo.rtm_family) &&
 				 (msg_ptr->nl_route_info.metainfo.rtm_type == RTN_UNICAST) &&
-				 (msg_ptr->nl_route_info.metainfo.rtm_protocol == RTPROT_KERNEL) &&
-				 (msg_ptr->nl_route_info.metainfo.rtm_table == RT_TABLE_MAIN))
+				 ((msg_ptr->nl_route_info.metainfo.rtm_protocol == RTPROT_KERNEL) ||
+				 (msg_ptr->nl_route_info.metainfo.rtm_protocol == RTPROT_BOOT) ||
+				 (msg_ptr->nl_route_info.metainfo.rtm_protocol == RTPROT_RA)) &&
+				 ((msg_ptr->nl_route_info.metainfo.rtm_table == RT_TABLE_MAIN) ||
+					(msg_ptr->nl_route_info.metainfo.rtm_table == RT_TABLE_COMPAT)))
 			{
 				IPACMDBG("\n GOT valid v6-RTM_NEWROUTE event\n");
 				ret_val = ipa_get_if_name(dev_name, msg_ptr->nl_route_info.attr_info.oif_index);
@@ -1436,26 +1410,55 @@ static int ipa_nl_decode_nlmsg
 						return IPACM_FAILURE;
 					}
 
+					if(msg_ptr->nl_route_info.attr_info.param_mask & IPA_RTA_PARAM_PRIORITY)
+					{
+						IPACMDBG_H("ip -6 route add default dev %s metric %d\n",
+										 dev_name,
+										 msg_ptr->nl_route_info.attr_info.priority);
+					}
+					else
+					{
+						IPACMDBG_H("ip -6 route add default dev %s\n", dev_name);
+					}
+
 					IPACM_EVENT_COPY_ADDR_v6( data_addr->ipv6_addr, msg_ptr->nl_route_info.attr_info.dst_addr);
 
-                    data_addr->ipv6_addr[0]=ntohl(data_addr->ipv6_addr[0]);
-                    data_addr->ipv6_addr[1]=ntohl(data_addr->ipv6_addr[1]);
-                    data_addr->ipv6_addr[2]=ntohl(data_addr->ipv6_addr[2]);
-                    data_addr->ipv6_addr[3]=ntohl(data_addr->ipv6_addr[3]);
+					data_addr->ipv6_addr[0]=ntohl(data_addr->ipv6_addr[0]);
+					data_addr->ipv6_addr[1]=ntohl(data_addr->ipv6_addr[1]);
+					data_addr->ipv6_addr[2]=ntohl(data_addr->ipv6_addr[2]);
+					data_addr->ipv6_addr[3]=ntohl(data_addr->ipv6_addr[3]);
 
 					IPACM_EVENT_COPY_ADDR_v6( data_addr->ipv6_addr_mask, msg_ptr->nl_route_info.attr_info.dst_addr);
 
 					data_addr->ipv6_addr_mask[0]=ntohl(data_addr->ipv6_addr_mask[0]);
-                    data_addr->ipv6_addr_mask[1]=ntohl(data_addr->ipv6_addr_mask[1]);
-                    data_addr->ipv6_addr_mask[2]=ntohl(data_addr->ipv6_addr_mask[2]);
-                    data_addr->ipv6_addr_mask[3]=ntohl(data_addr->ipv6_addr_mask[3]);
+					data_addr->ipv6_addr_mask[1]=ntohl(data_addr->ipv6_addr_mask[1]);
+					data_addr->ipv6_addr_mask[2]=ntohl(data_addr->ipv6_addr_mask[2]);
+					data_addr->ipv6_addr_mask[3]=ntohl(data_addr->ipv6_addr_mask[3]);
 
-					evt_data.event = IPA_ROUTE_ADD_EVENT;
+					IPACM_EVENT_COPY_ADDR_v6( data_addr->ipv6_addr_gw, msg_ptr->nl_route_info.attr_info.gateway_addr);
+					data_addr->ipv6_addr_gw[0] = ntohl(data_addr->ipv6_addr_gw[0]);
+					data_addr->ipv6_addr_gw[1] = ntohl(data_addr->ipv6_addr_gw[1]);
+					data_addr->ipv6_addr_gw[2] = ntohl(data_addr->ipv6_addr_gw[2]);
+					data_addr->ipv6_addr_gw[3] = ntohl(data_addr->ipv6_addr_gw[3]);
+					IPACM_NL_REPORT_ADDR( " ", msg_ptr->nl_route_info.attr_info.gateway_addr);
+
+					if(msg_ptr->nl_route_info.metainfo.rtm_table == RT_TABLE_MAIN)
+					{
+						evt_data.event = IPA_ROUTE_ADD_EVENT;
+						IPACMDBG("Posting IPA_ROUTE_ADD_EVENT with if index:%d, ipv6 address\n",
+									data_addr->if_index);
+					}
+					else if(msg_ptr->nl_route_info.metainfo.rtm_table == RT_TABLE_COMPAT &&
+						msg_ptr->nl_route_info.attr_info.table_id == WLAN_RT_TABLE_ID)
+					{
+						evt_data.event = IPA_WLAN_GW_ADDR_ADD_EVENT;
+						IPACMDBG("Posting IPA_WLAN_GW_ADDR_ADD_EVENT with if index:%d, ipv6 address\n",
+									data_addr->if_index);
+					}
+
 					data_addr->if_index = msg_ptr->nl_route_info.attr_info.oif_index;
 					data_addr->iptype = IPA_IP_v6;
 
-					IPACMDBG("posting IPA_ROUTE_ADD_EVENT with if index:%d, ipv6 address\n",
-									 data_addr->if_index);
 					evt_data.evt_data = data_addr;
 					IPACM_EvtDispatcher::PostEvt(&evt_data);
 					/* finish command queue */
@@ -1464,12 +1467,11 @@ static int ipa_nl_decode_nlmsg
 			break;
 
 		case RTM_DELROUTE:
-			if(IPACM_SUCCESS != ipa_nl_decode_rtm_route(buffer, buflen, &(msg_ptr->nl_route_info)))
-			{
+			IPACMDBG("\nGOT RTM_DELROUTE event\n");
+			if (IPACM_SUCCESS != ipa_nl_decode_rtm_route(buffer, buflen, &(msg_ptr->nl_route_info))) {
 				IPACMERR("Failed to decode rtm route message\n");
 				return IPACM_FAILURE;
 			}
-
 			/* take care of route delete of default route & uniroute */
 			if((msg_ptr->nl_route_info.metainfo.rtm_type == RTN_UNICAST) &&
 				 ((msg_ptr->nl_route_info.metainfo.rtm_protocol == RTPROT_BOOT) ||
@@ -1679,12 +1681,11 @@ static int ipa_nl_decode_nlmsg
 			break;
 
 		case RTM_NEWNEIGH:
-			if(IPACM_SUCCESS != ipa_nl_decode_rtm_neigh(buffer, buflen, &(msg_ptr->nl_neigh_info)))
-			{
+			IPACMDBG("\nGOT RTM_NEWNEIGH event\n");
+			if (IPACM_SUCCESS != ipa_nl_decode_rtm_neigh(buffer, buflen, &(msg_ptr->nl_neigh_info))) {
 				IPACMERR("Failed to decode rtm neighbor message\n");
 				return IPACM_FAILURE;
 			}
-
 			ret_val = ipa_get_if_name(dev_name, msg_ptr->nl_neigh_info.metainfo.ndm_ifindex);
 			if(ret_val != IPACM_SUCCESS)
 			{
@@ -1808,12 +1809,11 @@ static int ipa_nl_decode_nlmsg
 			break;
 
 		case RTM_DELNEIGH:
-			if(IPACM_SUCCESS != ipa_nl_decode_rtm_neigh(buffer, buflen, &(msg_ptr->nl_neigh_info)))
-			{
+			IPACMDBG("\nGOT RTM_DELNEIGH event\n");
+			if (IPACM_SUCCESS != ipa_nl_decode_rtm_neigh(buffer, buflen, &(msg_ptr->nl_neigh_info))) {
 				IPACMERR("Failed to decode rtm neighbor message\n");
 				return IPACM_FAILURE;
 			}
-
 			ret_val = ipa_get_if_name(dev_name, msg_ptr->nl_neigh_info.metainfo.ndm_ifindex);
 			if(ret_val != IPACM_SUCCESS)
 			{

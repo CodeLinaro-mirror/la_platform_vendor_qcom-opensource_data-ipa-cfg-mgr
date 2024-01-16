@@ -28,7 +28,7 @@ IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 Changes from Qualcomm Innovation Center are provided under the following license:
 
-Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted (subject to the limitations in the
@@ -141,6 +141,7 @@ IPACM_Wan::IPACM_Wan(int iface_index,
 	ipacm_wan_iface_type is_sta_mode,
 	uint8_t *mac_addr) : IPACM_Iface(iface_index)
 {
+	#pragma unused (mac_addr)
 	num_firewall_v4 = 0;
 	num_firewall_v6 = 0;
 	wan_route_rule_v4_hdl = NULL;
@@ -2551,9 +2552,14 @@ int IPACM_Wan::handle_route_add_evt(ipa_ip_type iptype, bool add_only)
 	{
 		if (iface_query != NULL && iface_query->num_ext_props > 0)
 		{
+			if(ext_prop == NULL || !ext_prop->num_ext_props)
+			{
+				IPACMERR("Extended property is empty.\n");
+				return IPACM_FAILURE;
+			}
 			/* treat Q6_MHI_WAN as STA mode also */
 			IPACMDBG_H("Q6-MHI  ipv4/v6-header already constructed \n");
-			IPACM_Wan::backhaul_mode = m_is_sta_mode;		
+			IPACM_Wan::backhaul_mode = m_is_sta_mode;
 			IPACMDBG_H("Setting up QMAP ID %d.\n", ext_prop->ext[0].mux_id);
 			IPACM_Iface::ipacmcfg->SetQmapId(ext_prop->ext[0].mux_id);
 			/* sending mux-id info to PCIE-modem for UL */
@@ -6112,7 +6118,10 @@ int IPACM_Wan::config_dft_embms_rules(ipa_ioc_add_flt_rule *pFilteringTable_v4, 
 int IPACM_Wan::handle_down_evt()
 {
 	int res = IPACM_SUCCESS;
-	uint32_t i, tether_total;
+	uint32_t i;
+#ifndef FEATURE_IPACM_AIDL
+	uint32_t tether_total = 0;
+#endif
 	int ipa_if_num_tether_tmp[IPA_MAX_IFACE_ENTRIES];
 
 	memset(ipa_if_num_tether_tmp, 0, IPA_MAX_IFACE_ENTRIES);
@@ -8837,6 +8846,18 @@ int IPACM_Wan::add_offload_frag_rule()
 	uint8_t mux_id;
 	ipa_ioc_add_flt_rule *pFilteringTable = NULL;
 
+	if(rx_prop == NULL || !rx_prop->num_rx_props)
+	{
+		IPACMERR("Rx property is empty.\n");
+		return IPACM_FAILURE;
+	}
+
+	if (ext_prop == NULL || !ext_prop->num_ext_props)
+	{
+		IPACMERR("Extended property is empty.\n");
+		return IPACM_FAILURE;
+	}
+
 	mux_id = ext_prop->ext[0].mux_id;
 	/* contruct filter rules to pcie modem */
 	struct ipa_flt_rule_add flt_rule_entry;
@@ -8978,6 +8999,18 @@ int IPACM_Wan::add_icmpv6_exception_rule()
 	uint8_t mux_id;
 	ipa_ioc_add_flt_rule *pFilteringTable = NULL;
 
+	if (rx_prop == NULL || !rx_prop->num_rx_props)
+	{
+		IPACMERR("Rx property is empty.\n");
+		return IPACM_FAILURE;
+	}
+
+	if (ext_prop == NULL || !ext_prop->num_ext_props)
+	{
+		IPACMERR("Extended property is empty.\n");
+		return IPACM_FAILURE;
+	}
+
 	mux_id = ext_prop->ext[0].mux_id;
 	/* contruct filter rules to pcie modem */
 	struct ipa_flt_rule_add flt_rule_entry;
@@ -9114,6 +9147,18 @@ int IPACM_Wan::add_tcp_fin_rst_exception_rule()
 	int len, res = IPACM_SUCCESS;
 	uint8_t mux_id;
 	ipa_ioc_add_flt_rule *pFilteringTable = NULL;
+
+	if (rx_prop == NULL || !rx_prop->num_rx_props)
+	{
+		IPACMERR("Rx property is empty.\n");
+		return IPACM_FAILURE;
+	}
+
+	if (ext_prop == NULL || !ext_prop->num_ext_props)
+	{
+		IPACMERR("Extended property is empty.\n");
+		return IPACM_FAILURE;
+	}
 
 	mux_id = ext_prop->ext[0].mux_id;
 	/* contruct filter rules to pcie modem */
@@ -9309,6 +9354,7 @@ int IPACM_Wan::query_mtu_size()
 /* construct complete ethernet header */
 int IPACM_Wan::handle_gw_mac_renew(ipacm_event_data_all *data, int index_client)
 {
+	#pragma unused (index_client)
 	int index = IPACM_INVALID_INDEX;
 
 	/* checking if client has same ipv4, v6 will put future work */

@@ -209,6 +209,12 @@ bool AIDL::isInitialized() {
     return mCb.get() != nullptr;
 } /* isInitialized */
 
+void AIDL::clientDeathCallback(void* cookie)
+{
+  AIDL* self = reinterpret_cast<AIDL*>(cookie);
+  self->stopOffload();
+}
+
 
 /* -------------------------- IOffload ------------------------------- */
 ScopedAStatus AIDL::initOffload
@@ -283,6 +289,11 @@ ScopedAStatus AIDL::initOffload
         res = ipaResultToBoolResult(RET::SUCCESS);
     }
 
+    mDeathRecipient = ndk::ScopedAIBinder_DeathRecipient(
+          AIBinder_DeathRecipient_new(&clientDeathCallback));
+    AIBinder_linkToDeath(mCb->asBinder().get(), mDeathRecipient.get(),
+          reinterpret_cast<void*>(this));
+
     fl.setResult(res.success, res.errMsg);
     mLogs.addLog(fl);
 
@@ -302,6 +313,8 @@ ScopedAStatus AIDL::stopOffload() {
     }
 
     /* Should removing the CB be a function? */
+    AIBinder_unlinkToDeath(mCb->asBinder().get(), mDeathRecipient.get(),
+            reinterpret_cast<void*>(this));
     mCb = nullptr;
     unregisterEventListeners();
 

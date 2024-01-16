@@ -119,6 +119,7 @@ Message* MessageQueue::dequeue(void)
 
 void* MessageQueue::Process(void *param)
 {
+	#pragma unused (param)
 	MessageQueue *MsgQueueInternal = NULL;
 	MessageQueue *MsgQueueExternal = NULL;
 	Message *item = NULL;

@@ -547,7 +547,9 @@ int IPACM_Config::Init(void)
 #ifdef FEATURE_VLAN_MPDN
 	get_vlan_mode_ifaces();
 #endif
-
+#ifdef FEATURE_EoGRE
+	get_tunnel_feature();
+#endif
 	/*Reseting Reject_Iface_Map before reading from IPACM_cfg.xml*/
 	IPACMDBG_H("Clear the map Reject_Iface_Map, before update..\n");
 	Reject_Iface_Map.clear();
@@ -2000,6 +2002,28 @@ void IPACM_Config::handle_vlan_client_info(ipacm_event_data_all *data)
 	pthread_mutex_unlock(&vlan_l2tp_lock);
 
 	return;
+}
+#endif
+
+#ifdef FEATURE_EoGRE
+void IPACM_Config::get_tunnel_feature()
+{
+	int fd,ret;
+	fd = open(IPA_DEVICE_NAME, O_RDWR);
+	if (fd < 0)
+	{
+		IPACMERR("Failed opening %s.\n",IPA_DEVICE_NAME);
+		return;
+	}
+	memset(&tunnel_feature, 0, sizeof(tunnel_feature));
+	ret = ioctl(fd, IPA_IOC_QUERY_TUNNEL_FEATURE, &tunnel_feature);
+	close(fd);
+	if ( ret )
+	{
+		IPACMERR("Failed to query tunnel feature [ %x ]\n",tunnel_feature);
+		return;
+	}
+	IPACMDBG_H("Queried tunnel feature [ %x ]\n",tunnel_feature);
 }
 #endif
 

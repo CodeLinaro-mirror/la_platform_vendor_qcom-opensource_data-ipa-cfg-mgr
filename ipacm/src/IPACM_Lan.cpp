@@ -15247,7 +15247,6 @@ void IPACM_Lan::gre_up(bool isPmipv6)/*Reusing Gre function for PMIP, with isPmi
 			return;
 		}
 	}
-
 	/*
 	 * In an attempt to get symmetric message flow for exception
 	 * rules, the following will ensure some rules are deleted to aid
@@ -15357,11 +15356,14 @@ if(isPmipv6){/*PMIPV6 needs to take care of WAN up before GRE UP scenario */
 	 * Need to add the one final rule, which is the gre catch all
 	 * rule...
 	 */
-	if ( gre_add_catchup_rule(iptype,isPmipv6) != 0 )
+	 if(IPACM_Iface::ipacmcfg->tunnel_feature == DEFAULT_FEATURE)
 	{
-		IPACMERR("gre_add_catchup_rule failed\n");
-		return;
-	}
+		if ( gre_add_catchup_rule(iptype,isPmipv6) != 0 )
+		{
+			IPACMERR("gre_add_catchup_rule failed\n");
+			return;
+		}
+	 }
 	//need to add mtu rules when gre is enabled
 	modify_private_subnet(true);
 #ifdef FEATURE_VLAN_MPDN
@@ -16020,162 +16022,21 @@ int IPACM_Lan::gre_make_hdr_for_add_ctx(
 					&(hdr->words[IPV6_DST_ADDR_IDX]));
 #ifdef IPA_FLT_EXT_MPLS_GRE_GENERAL
 			if (ipgre_info.mpls_protocol)
-			{	  
+			{
 				hdr_data_len = sizeof(v6_gre_hdr_t_nops);
-			}	  
+			}
 			else
 #endif
-			{	  
+			{
 				hdr_data_len = EoGRE_V6_HEADER_LEN_NOPS;
-			}			
+			}
 		}
 
 		IPACMDBG_H("Sending to uC, v6 header length:%d with options:%d \n",hdr_data_len,ipgre_info.ipv6_option_hdr_enabled);
 	}
 
-	/*
-	 * Add the header...
-	 */
-	static const int NUM_OF_HEADERS = 1;
-
-	uint8_t buf[
-		sizeof(struct ipa_ioc_add_hdr) +
-		(NUM_OF_HEADERS * sizeof(struct ipa_hdr_add)) ];
-
-	memset(buf, 0, sizeof(buf));
-
-	struct ipa_ioc_add_hdr *hdrTable =
-		(struct ipa_ioc_add_hdr *) buf;
-
-	struct ipa_hdr_add *hdr = &(hdrTable->hdr[0]);
-
-	// init hdr table
-	hdrTable->commit   = true;
-	hdrTable->num_hdrs = NUM_OF_HEADERS;
-
-	// init the hdr common fields
-	hdr->is_partial = false;
-	hdr->hdr_hdl    = -1; // Return Value
-	hdr->status     = -1; // Return Parameter
-
-#ifdef IPA_FLT_EXT_MPLS_GRE_GENERAL
-	snprintf(
-		hdr->name,
-		sizeof(hdr->name),
-		( ipgre_info.mpls_protocol ) ? IPA_MPLSoGRE_HDR_NAME : IPA_EoGRE_HDR_NAME,
-		( iptype == IPA_IP_v4 )      ? 4                     : 6);
-#endif
-
-	hdr->type    = IPA_HDR_L2_802_1Q;
-	hdr->hdr_len = hdr_data_len;
-
-	memcpy(hdr->hdr, hdr_data_buf, hdr->hdr_len);
-
-	if ( m_header.AddHeader(hdrTable) && hdr->status == 0 )
+	if(IPACM_Iface::ipacmcfg->tunnel_feature == DEFAULT_FEATURE)
 	{
-		IPACMDBG_H(
-			"Successfully added %d bytes for IP/gre header %s\n",
-			hdr->hdr_len,
-			hdr->name);
-		gre_route_data[iptype].ul_header_hdl = hdr->hdr_hdl;
-	}
-	else
-	{
-		IPACMERR("AddHeader failed: %d\n", hdr->status);
-		return IPACM_FAILURE;
-	}
-
-	return IPACM_SUCCESS;
-}
-
-int IPACM_Lan::gre_make_hdr_add_ctx(
-	ipa_ipgre_info& ipgre_info,
-	uint32_t        hdr_2use )
-{
-	enum ipa_ip_type iptype = ipgre_info.iptype;
-
-	IPACMDBG_H(
-		"Attempting to create \"header add\" context "
-		"(outer ip(%d) header) for uplink gre traffic.\n",
-		iptype);
-
-	hdr_2use = (hdr_2use) ? hdr_2use : gre_route_data[iptype].ul_header_hdl;
-
-	if ( hdr_2use == 0 )
-	{
-		IPACMERR("Can't create \"header add\" context without creating header first.\n");
-		return IPACM_FAILURE;
-	}
-
-	/*
-	 * Make "header add" process context...
-	 */
-	static const int NUM_OF_PROC_CTX = 1;
-
-	uint8_t buf[
-		sizeof(struct ipa_ioc_add_hdr_proc_ctx) +
-		(NUM_OF_PROC_CTX * sizeof(struct ipa_hdr_proc_ctx_add)) ];
-
-	memset(buf, 0, sizeof(buf));
-
-	struct ipa_ioc_add_hdr_proc_ctx *procCtxTable =
-		(struct ipa_ioc_add_hdr_proc_ctx *) buf;
-
-	struct ipa_hdr_proc_ctx_add *procCtx = &(procCtxTable->proc_ctx[0]);
-
-	// init proc ctx table
-	procCtxTable->commit        = true;
-	procCtxTable->num_proc_ctxs = NUM_OF_PROC_CTX;
-
-	// init proc_ctx common fields
-	procCtx->proc_ctx_hdl = -1; // return value
-	procCtx->status       = -1; // Return parameter
-	procCtx->type         = IPA_HDR_PROC_EoGRE_HEADER_ADD;
-	procCtx->hdr_hdl      = hdr_2use;
-	procCtx->eogre_params.hdr_add_param.eth_hdr_retained = 1;
-	procCtx->eogre_params.hdr_add_param.input_ip_version = iptype;
-	procCtx->eogre_params.hdr_add_param.output_ip_version =
-		IPACM_Iface::ipacmcfg->eogre_info.iptype;
-	procCtx->eogre_params.hdr_add_param.second_pass = 1;
-
-#ifdef IPA_FLT_EXT_MPLS_GRE_GENERAL
-	if ( ipgre_info.mpls_protocol )
-	{
-		procCtx->eogre_params.hdr_add_param.is_mpls = true;
-		procCtx->eogre_params.hdr_add_param.tag_remove_len =
-			sizeof(sc_tag_header);
-	}
-#endif
-
-	if ( m_header.AddHeaderProcCtx(procCtxTable) == true )
-	{
-		IPACMDBG_H(
-			"GRE header context successfully installed\n");
-
-		gre_route_data[iptype].proc_ctx_gre_add_hdl =
-			procCtx->proc_ctx_hdl;
-	}
-	else
-	{
-		IPACMERR("AddHeaderProcCtx failed\n");
-		return IPACM_FAILURE;
-	}
-
-	return IPACM_SUCCESS;
-}
-
-int IPACM_Lan::gre_make_hdr_for_rmv_ctx(
-	ipa_ipgre_info& ipgre_info )
-{
-#ifdef IPA_FLT_EXT_MPLS_GRE_GENERAL
-	if ( ipgre_info.mpls_protocol )
-	{
-		enum ipa_ip_type iptype = ipgre_info.iptype;
-
-		IPACMDBG_H(
-			"Attempting to create S and C tag header "
-			"for downlink \"mpls over gre\" traffic context.\n");
-
 		/*
 		 * Add the header...
 		 */
@@ -16201,11 +16062,233 @@ int IPACM_Lan::gre_make_hdr_for_rmv_ctx(
 		hdr->hdr_hdl    = -1; // Return Value
 		hdr->status     = -1; // Return Parameter
 
+#ifdef IPA_FLT_EXT_MPLS_GRE_GENERAL
 		snprintf(
 			hdr->name,
 			sizeof(hdr->name),
-			IPA_SCTag_HDR_NAME,
-			( iptype == IPA_IP_v4 ) ? 4 : 6);
+			( ipgre_info.mpls_protocol ) ? IPA_MPLSoGRE_HDR_NAME : IPA_EoGRE_HDR_NAME,
+			( iptype == IPA_IP_v4 )      ? 4                     : 6);
+#endif
+
+		hdr->type    = IPA_HDR_L2_802_1Q;
+		hdr->hdr_len = hdr_data_len;
+
+		memcpy(hdr->hdr, hdr_data_buf, hdr->hdr_len);
+
+		if ( m_header.AddHeader(hdrTable) && hdr->status == 0 )
+		{
+			IPACMDBG_H(
+				"Successfully added %d bytes for IP/gre header %s\n",
+				hdr->hdr_len,
+				hdr->name);
+			gre_route_data[iptype].ul_header_hdl = hdr->hdr_hdl;
+		}
+		else
+		{
+			IPACMERR("AddHeader failed: %d\n", hdr->status);
+			return IPACM_FAILURE;
+		}
+	}
+	else
+	{
+		/*
+		 * Send ioctl to uC..
+		 */
+		IPACMDBG_H("Ioctl Sending to uC : %x \n",IPACM_Iface::ipacmcfg->tunnel_feature);
+		int fd, ret;
+		uint8_t muxid;
+		struct ipa_ioc_tunnel_template_info template_info_to_uc;
+		memset(&template_info_to_uc, 0x00, sizeof(struct ipa_ioc_tunnel_template_info));
+		memcpy(&template_info_to_uc.template_header[0], hdr_data_buf, hdr_data_len);
+		template_info_to_uc.template_len = hdr_data_len;
+		template_info_to_uc.template_type = IPACM_Iface::ipacmcfg->tunnel_feature;
+
+		if(IPACM_Iface::ipacmcfg->tunnel_feature == UNTAG_FEATURE) 
+		{
+			/*Fill Action to be taken for traffic*/
+			template_info_to_uc.tunnel_config.untagged_mapping_table.action_configured
+				= HW_PATH_ADJ_L2_ADD_TUNNEL_RESUME_2ND_PASS;
+			/*Fill zero for number of single and double tag info Since unTag to support*/	
+			template_info_to_uc.tunnel_config.num_of_single_tag_configs = 0;
+			template_info_to_uc.tunnel_config.num_of_double_tag_configs = 0;
+
+			/*Fill Associated muxid*/
+			if ( ipgre_info.iptype == IPA_IP_v4 )
+			{
+				ret = IPACM_Wan::GetMuxByAddr(IPA_IP_v4, &ipgre_info.ipv4_src, muxid);
+			}
+			else
+			{
+				ret = IPACM_Wan::GetMuxByAddr(IPA_IP_v6, &ipgre_info.ipv6_src, muxid);
+			}
+
+			if ( ret == IPACM_SUCCESS )
+			{
+				template_info_to_uc.tunnel_config.untagged_mapping_table.mux_id 
+					= muxid;
+				IPACMDBG_H("GetMuxByAddr succeed %d\n",muxid);
+			}
+			else
+			{
+				IPACMERR("GetMuxByAddr did not succeed.\n");
+				return IPACM_FAILURE;
+			}
+			/*Fill Option param if v6 tunnel only*/
+			if ( ipgre_info.iptype == IPA_IP_v6 )
+			{
+				template_info_to_uc.tunnel_config.untagged_mapping_table.is_v6_options_hdr_present 
+										= ipgre_info.ipv6_option_hdr_enabled;
+			}
+		}
+		if(IPACM_Iface::ipacmcfg->tunnel_feature == SINGLE_TAG_FEATURE)
+		{
+
+		}
+		if(IPACM_Iface::ipacmcfg->tunnel_feature == DOUBLE_TAG_FEATURE)
+		{
+
+		}
+
+		IPACMDBG_H("Ioctl Sending param uC,"
+				"len: %d, mux :%d \n",template_info_to_uc.template_len,muxid);
+		fd = open(IPA_DEVICE_NAME, O_RDWR);
+		if (fd < 0)
+		{
+			IPACMDBG_H("Failed opening %s.\n", IPA_DEVICE_NAME);
+			return IPACM_FAILURE;
+		}
+		
+		ret = ioctl(fd, IPA_IOC_SEND_TUNNEL_TEMPLATE_INFO, &template_info_to_uc);
+		close(fd);
+		if ( ret )
+		{
+			IPACMERR("Failed to write Template to uC..\n");
+			return IPACM_FAILURE;
+		}
+	}
+	return IPACM_SUCCESS;
+}
+
+int IPACM_Lan::gre_make_hdr_add_ctx(
+	ipa_ipgre_info& ipgre_info,
+	uint32_t        hdr_2use )
+{
+	if(IPACM_Iface::ipacmcfg->tunnel_feature == DEFAULT_FEATURE)
+	{
+		enum ipa_ip_type iptype = ipgre_info.iptype;
+
+		IPACMDBG_H(
+			"Attempting to create \"header add\" context "
+			"(outer ip(%d) header) for uplink gre traffic.\n",
+			iptype);
+
+		hdr_2use = (hdr_2use) ? hdr_2use : gre_route_data[iptype].ul_header_hdl;
+
+		if ( hdr_2use == 0 )
+		{
+			IPACMERR("Can't create \"header add\" context without creating header\n");
+			return IPACM_FAILURE;
+		}
+
+		/*
+		 * Make "header add" process context...
+		 */
+		static const int NUM_OF_PROC_CTX = 1;
+
+		uint8_t buf[
+			sizeof(struct ipa_ioc_add_hdr_proc_ctx) +
+			(NUM_OF_PROC_CTX * sizeof(struct ipa_hdr_proc_ctx_add)) ];
+
+		memset(buf, 0, sizeof(buf));
+
+		struct ipa_ioc_add_hdr_proc_ctx *procCtxTable =
+			(struct ipa_ioc_add_hdr_proc_ctx *) buf;
+
+		struct ipa_hdr_proc_ctx_add *procCtx = &(procCtxTable->proc_ctx[0]);
+
+		// init proc ctx table
+		procCtxTable->commit        = true;
+		procCtxTable->num_proc_ctxs = NUM_OF_PROC_CTX;
+
+		// init proc_ctx common fields
+		procCtx->proc_ctx_hdl = -1; // return value
+		procCtx->status       = -1; // Return parameter
+		procCtx->type         = IPA_HDR_PROC_EoGRE_HEADER_ADD;
+		procCtx->hdr_hdl      = hdr_2use;
+		procCtx->eogre_params.hdr_add_param.eth_hdr_retained = 1;
+		procCtx->eogre_params.hdr_add_param.input_ip_version = iptype;
+		procCtx->eogre_params.hdr_add_param.output_ip_version =
+			IPACM_Iface::ipacmcfg->eogre_info.iptype;
+		procCtx->eogre_params.hdr_add_param.second_pass = 1;
+
+#ifdef IPA_FLT_EXT_MPLS_GRE_GENERAL
+		if ( ipgre_info.mpls_protocol )
+		{
+			procCtx->eogre_params.hdr_add_param.is_mpls = true;
+			procCtx->eogre_params.hdr_add_param.tag_remove_len =
+				sizeof(sc_tag_header);
+		}
+#endif
+
+		if ( m_header.AddHeaderProcCtx(procCtxTable) == true )
+		{
+			IPACMDBG_H(
+				"GRE header context successfully installed\n");
+
+			gre_route_data[iptype].proc_ctx_gre_add_hdl =
+				procCtx->proc_ctx_hdl;
+		}
+		else
+		{
+			IPACMERR("AddHeaderProcCtx failed\n");
+			return IPACM_FAILURE;
+		}
+	}
+	return IPACM_SUCCESS;
+}
+
+int IPACM_Lan::gre_make_hdr_for_rmv_ctx(
+	ipa_ipgre_info& ipgre_info )
+{
+#ifdef IPA_FLT_EXT_MPLS_GRE_GENERAL
+	if ( ipgre_info.mpls_protocol )
+	{
+		enum ipa_ip_type iptype = ipgre_info.iptype;
+
+		IPACMDBG_H(
+				"Attempting to create S and C tag header "
+				"for downlink \"mpls over gre\" traffic context.\n");
+
+		/*
+		 * Add the header...
+		 */
+		static const int NUM_OF_HEADERS = 1;
+
+		uint8_t buf[
+			sizeof(struct ipa_ioc_add_hdr) +
+				(NUM_OF_HEADERS * sizeof(struct ipa_hdr_add)) ];
+
+		memset(buf, 0, sizeof(buf));
+
+		struct ipa_ioc_add_hdr *hdrTable =
+			(struct ipa_ioc_add_hdr *) buf;
+
+		struct ipa_hdr_add *hdr = &(hdrTable->hdr[0]);
+
+		// init hdr table
+		hdrTable->commit   = true;
+		hdrTable->num_hdrs = NUM_OF_HEADERS;
+
+		// init the hdr common fields
+		hdr->is_partial = false;
+		hdr->hdr_hdl    = -1; // Return Value
+		hdr->status     = -1; // Return Parameter
+
+		snprintf(
+				hdr->name,
+				sizeof(hdr->name),
+				IPA_SCTag_HDR_NAME,
+				( iptype == IPA_IP_v4 ) ? 4 : 6);
 
 		hdr->type    = IPA_HDR_L2_802_1Q;
 		hdr->hdr_len = sizeof(sc_tag_header);
@@ -16215,9 +16298,9 @@ int IPACM_Lan::gre_make_hdr_for_rmv_ctx(
 		if ( m_header.AddHeader(hdrTable) && hdr->status == 0 )
 		{
 			IPACMDBG_H(
-				"Successfully added %d bytes for S&C Tag mpls over gre header %s\n",
-				hdr->hdr_len,
-				hdr->name);
+					"Successfully added %d bytes for S&C mpls over gre header %s\n",
+					hdr->hdr_len,
+					hdr->name);
 			gre_route_data[iptype].dl_header_hdl = hdr->hdr_hdl;
 		}
 		else
@@ -16227,7 +16310,6 @@ int IPACM_Lan::gre_make_hdr_for_rmv_ctx(
 		}
 	}
 #endif
-
 	return IPACM_SUCCESS;
 }
 
@@ -16288,7 +16370,7 @@ int IPACM_Lan::gre_make_hdr_rmv_ctx(
 		if ( hdr_2use == 0 )
 		{
 			IPACMERR("Can't create mpls over gre \"header rem\" "
-					 "context without creating header first.\n");
+					"context without creating header first.\n");
 			return IPACM_FAILURE;
 		}
 
@@ -16335,80 +16417,82 @@ int IPACM_Lan::gre_make_header_add_rt_rule(
 	ipa_ipgre_info& ipgre_info,
 	uint32_t        ctx_2use )
 {
-	enum ipa_ip_type iptype = ipgre_info.iptype;
-
-	IPACMDBG_H(
-		"Attempting to create iptype(%d) \"header add\" route rule for gre routing\n",
-		iptype);
-
-	ctx_2use = (ctx_2use) ? ctx_2use : gre_route_data[iptype].proc_ctx_gre_add_hdl;
-
-	if ( ctx_2use == 0 )
+	if(IPACM_Iface::ipacmcfg->tunnel_feature == DEFAULT_FEATURE)
 	{
-		IPACMERR("Can't create a \"header add\" route rule without a context.\n");
-		return IPACM_FAILURE;
-	}
+		enum ipa_ip_type iptype = ipgre_info.iptype;
 
-	/*
-	 * Make "header add" route rule...
-	 */
-	static const int NUM_RT_RULE = 1;
+		IPACMDBG_H(
+			"Attempting to create iptype(%d) \"header add\" route rule for gre routing\n",
+			iptype);
 
-	uint8_t buf[
-		sizeof(struct ipa_ioc_add_rt_rule) +
-		(NUM_RT_RULE * sizeof(struct ipa_rt_rule_add)) ];
+		ctx_2use = (ctx_2use) ? ctx_2use : gre_route_data[iptype].proc_ctx_gre_add_hdl;
 
-	memset(buf, 0, sizeof(buf));
+		if ( ctx_2use == 0 )
+		{
+			IPACMERR("Can't create a \"header add\" route rule without a context.\n");
+			return IPACM_FAILURE;
+		}
 
-	struct ipa_ioc_add_rt_rule* rt_table =
-		(struct ipa_ioc_add_rt_rule*) buf;
+		/*
+		 * Make "header add" route rule...
+		 */
+		static const int NUM_RT_RULE = 1;
 
-	struct ipa_rt_rule_add* rt_rule_entry = &(rt_table->rules[0]);
+		uint8_t buf[
+			sizeof(struct ipa_ioc_add_rt_rule) +
+			(NUM_RT_RULE * sizeof(struct ipa_rt_rule_add)) ];
 
-	rt_table->commit    = true;
-	rt_table->num_rules = NUM_RT_RULE;
-	rt_table->ip        = iptype;
+		memset(buf, 0, sizeof(buf));
 
-	snprintf(
-		rt_table->rt_tbl_name,
-		sizeof(rt_table->rt_tbl_name),
-		"%s",
-		( iptype == IPA_IP_v4 )                   ?
-		IPACM_Iface::ipacmcfg->rt_tbl_lan_v4.name :
-		IPACM_Iface::ipacmcfg->rt_tbl_v6.name);
+		struct ipa_ioc_add_rt_rule* rt_table =
+			(struct ipa_ioc_add_rt_rule*) buf;
 
-	rt_rule_entry->at_rear                 = true;
-	rt_rule_entry->rule.dst                = IPA_CLIENT_DUMMY_CONS;
-	rt_rule_entry->rule.attrib.attrib_mask = IPA_FLT_DST_ADDR;
-	rt_rule_entry->rule.hdr_proc_ctx_hdl   = ctx_2use;
+		struct ipa_rt_rule_add* rt_rule_entry = &(rt_table->rules[0]);
+
+		rt_table->commit    = true;
+		rt_table->num_rules = NUM_RT_RULE;
+		rt_table->ip        = iptype;
+
+		snprintf(
+			rt_table->rt_tbl_name,
+			sizeof(rt_table->rt_tbl_name),
+			"%s",
+			( iptype == IPA_IP_v4 )                   ?
+			IPACM_Iface::ipacmcfg->rt_tbl_lan_v4.name :
+			IPACM_Iface::ipacmcfg->rt_tbl_v6.name);
+
+		rt_rule_entry->at_rear                 = true;
+		rt_rule_entry->rule.dst                = IPA_CLIENT_DUMMY_CONS;
+		rt_rule_entry->rule.attrib.attrib_mask = IPA_FLT_DST_ADDR;
+		rt_rule_entry->rule.hdr_proc_ctx_hdl   = ctx_2use;
 
 #ifdef FEATURE_IPA_V3
-	rt_rule_entry->rule.hashable           = true;
+		rt_rule_entry->rule.hashable           = true;
 #endif
-	rt_rule_entry->rule.retain_hdr         = 1;
+		rt_rule_entry->rule.retain_hdr         = 1;
 
-	/*
-	 * Addresses need to be zero, hence..
-	 */
-	memset(
-		&rt_rule_entry->rule.attrib.u,
-		0,
-		sizeof(rt_rule_entry->rule.attrib.u));
+		/*
+		 * Addresses need to be zero, hence..
+		 */
+		memset(
+			&rt_rule_entry->rule.attrib.u,
+			0,
+			sizeof(rt_rule_entry->rule.attrib.u));
 
-	if ( m_routing.AddRoutingRule(rt_table) == true )
-	{
-		IPACMDBG_H(
-			"GRE route rule for \"header add\" successfully installed in %s\n",
-			rt_table->rt_tbl_name);
-		gre_route_data[iptype].rt_gre_add_hdl =
-			rt_rule_entry->rt_rule_hdl;
+		if ( m_routing.AddRoutingRule(rt_table) == true )
+		{
+			IPACMDBG_H(
+				"GRE route rule for \"header add\" successfully installed in %s\n",
+				rt_table->rt_tbl_name);
+			gre_route_data[iptype].rt_gre_add_hdl =
+				rt_rule_entry->rt_rule_hdl;
+		}
+		else
+		{
+			IPACMERR("AddRoutingRule failed\n");
+			return IPACM_FAILURE;
+		}
 	}
-	else
-	{
-		IPACMERR("AddRoutingRule failed\n");
-		return IPACM_FAILURE;
-	}
-
 	return IPACM_SUCCESS;
 }
 

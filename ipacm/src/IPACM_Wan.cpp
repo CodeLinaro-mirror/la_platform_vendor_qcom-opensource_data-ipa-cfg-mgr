@@ -2021,9 +2021,14 @@ void IPACM_Wan::post_wan_vlan_pdn_event(ipa_ip_type iptype, int pdn_idx, int vla
 {
 	uint8_t mux_id;
 	ipacm_cmd_q_data evt_data;
-	ipacm_event_vlan_pdn *vlan_data;
+	ipacm_event_vlan_pdn *vlan_data = NULL;
 
 	vlan_data = (ipacm_event_vlan_pdn *)malloc(sizeof(ipacm_event_vlan_pdn));
+	if(vlan_data == NULL)
+	{
+		IPACMERR("vlan_data allocation failed\n");
+		return;
+	}
 	memset(vlan_data, 0, sizeof(ipacm_event_vlan_pdn));
 	vlan_data->VlanID = vlan_id;
 

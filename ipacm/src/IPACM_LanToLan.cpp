@@ -54,6 +54,8 @@ const char *ipa_l2_hdr_type[] = {
 	__stringify(ETH_II),
 	__stringify(802_3),
 	__stringify(802_1Q),
+	__stringify(ETH_II_AST),
+	__stringify(802_1Q_AST),
 	__stringify(L2_MAX)
 };
 

@@ -366,6 +366,23 @@ private:
 		}
 	}
 
+	inline int get_wlan_client_index_from_if_index(int if_index)
+	{
+		int cnt;
+		int num_wifi_client_tmp = num_wifi_client;
+
+		for(cnt = 0; cnt < num_wifi_client_tmp; cnt++)
+		{
+			if(if_index == get_client_memptr(wlan_client, cnt)->if_index)
+			{
+				IPACMDBG_H("if_index %d is used by client %d\n", if_index, cnt);
+				return cnt;
+			}
+		}
+		IPACMERR("could not find client with if_index %d\n", if_index);
+		return IPACM_INVALID_INDEX;
+	}
+
 	inline ipa_wlan_primary_client* get_primary_client_memptr(ipa_wlan_primary_client *param, int cnt)
 	{
 	    char *ret = ((char *)param) + (sizeof(ipa_wlan_primary_client) * cnt);

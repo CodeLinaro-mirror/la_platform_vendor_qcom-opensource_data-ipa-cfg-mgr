@@ -317,6 +317,9 @@
 			<GREEnabled>0</GREEnabled>
 			 <GREServer>172.20.98.78</GREServer>
 		</GREFlag>
+		<PolicyBasedRouting>
+			<StaticPolicyEnabled>0</StaticPolicyEnabled>
+		</PolicyBasedRouting>
 		<IPACMALG>
 			<ALG>
   			   <Protocol>TCP</Protocol>

@@ -256,6 +256,7 @@ void IPACM_Wlan::event_callback(ipa_cm_event_id event, void *param)
 	}
 
 	int ipa_interface_index;
+	int if_index;
 	int wlan_index, cnt, primary_wlan_index;
 	ipacm_ext_prop* ext_prop;
 	ipacm_event_iface_up* data_wan;
@@ -654,6 +655,13 @@ void IPACM_Wlan::event_callback(ipa_cm_event_id event, void *param)
 			return;
 		}
 #endif
+
+		//Static policy mode dont care about default route. Rules will be installed by conntrack
+		if (IPACM_Iface::ipacmcfg->ipacm_static_policy_enable)
+		{
+			IPACMDBG_H("IPACM in static policy enable mode. Dont need to install UL rules\n");
+			return;
+		}
 
 		IPACMDBG_H("Backhaul is sta mode?%d\n", data_wan->is_sta);
 		if(ip_type == IPA_IP_v4 || ip_type == IPA_IP_MAX)
@@ -1412,6 +1420,71 @@ end:
 			}
 			handle_vlan_pdn_up(data);
 		}
+
+		//can add if (IPACM_Iface::ipacmcfg->ipacm_static_policy_enable
+		if(IPACM_Iface::ipa_get_if_index(dev_name, &if_index))
+		{
+			IPACMERR("Error while getting if index for %s device", dev_name);
+			break;
+		}
+		IPACMDBG_H("if_index = %d, vlan_id = %d\n", if_index, data->VlanID);
+
+		//Handle for the right LAN instance for static policy case
+		if (data->iptype == IPA_IP_v4 && data->VlanID == if_index + IPA_STATIC_POLICY_VLAN_ID)
+		{
+			associated_pdn_cnt++;
+			IPACM_Lan::total_vlan_pdn_cnt++;
+			IPACMDBG_H("Handling static policy PDN up for %s\n", dev_name);
+			IPACMDBG_H("associated_pdn_cnt = %d\n",associated_pdn_cnt);
+			IPACMDBG_H("total_vlan_pdn_cnt = %d\n",IPACM_Lan::total_vlan_pdn_cnt);
+
+			//modify private subnet_rules
+			if (modify_private_subnet())
+			{
+				IPACMERR("failed to modify private subnet \n");
+				break;
+			}
+
+			//dont need to install uplink rules twice
+			if (modem_ul_v4_set[0] && !data->is_xlat)
+			{
+				IPACMDBG_H("Modem UL v4 rules already installed\n");
+			}
+			else
+			{
+				//If XLAT, need to delete the UL rules first so no duplicates
+				if (data->is_xlat && modem_ul_v4_set[0])
+					del_ul_flt_rules(IPA_IP_v4);
+
+				//modify the UL rules to pass to route and install XLAT rules if needed
+				if (handle_uplink_filter_rule(
+					IPACM_Iface::ipacmcfg->GetExtProp(IPA_IP_v4),
+					data->iptype, data->mux_id, false,
+					data->is_xlat, false, true))
+				{
+					IPACMERR("Modem UL v4 rules not installed, error\n");
+					break;
+				}
+				else
+					modem_ul_v4_set[0] = true;
+			}
+			//add proc_ctx and rt_rule for 1st static policy client
+			if (!IPACM_Lan::static_policy_proc_ctx_hdl && !IPACM_Lan::static_policy_rt_rule_hdl)
+				if (handle_static_policy_rt_rule_add())
+					IPACMERR("failed to add 1st pass static policy rt rule\n");
+
+			//add new flt rule for every new WLAN client
+			if (!static_policy_flt_rule_hdl)
+			{
+				uint32_t ipv4_addr;
+
+				int clnt_indx = get_wlan_client_index_from_if_index(if_index);
+				ipv4_addr = get_client_memptr(wlan_client, clnt_indx)->v4_addr;
+
+				if (handle_static_policy_flt_rule_add(ipv4_addr) == IPACM_FAILURE)
+					IPACMERR("failed to add 1st pass static policy flt rule\n")
+			}
+		}
 	}
 	break;
 
@@ -1433,6 +1506,44 @@ end:
 			}
 #endif
 			handle_vlan_pdn_down(data);
+		}
+
+		if(IPACM_Iface::ipa_get_if_index(dev_name, &if_index))
+		{
+			IPACMERR("Error while getting if index for %s device", dev_name);
+			break;
+		}
+		IPACMDBG_H("if_index = %d, vlan_id = %d\n", if_index, data->VlanID);
+
+		/* clean static policy rules */
+		if (data->iptype == IPA_IP_v4 && data->VlanID == if_index + IPA_STATIC_POLICY_VLAN_ID)
+		{
+			associated_pdn_cnt--;
+			IPACM_Lan::total_vlan_pdn_cnt--;
+			IPACMDBG_H("Handling static policy PDN down for %s\n", dev_name);
+			IPACMDBG_H("associated_pdn_cnt = %d\n",associated_pdn_cnt);
+			IPACMDBG_H("total_vlan_pdn_cnt = %d\n",IPACM_Lan::total_vlan_pdn_cnt);
+
+			//modify MTU rules
+			if (modify_private_subnet())
+			{
+				IPACMERR("failed to modify private subnet \n");
+				break;
+			}
+
+			if (associated_pdn_cnt)
+			{
+				IPACMDBG_H("There are still %d PDNs associated with %s, don't delete static policy rules\n",
+					associated_pdn_cnt, dev_name);
+				break;
+			}
+
+			if (handle_static_policy_rule_delete())
+			{
+				IPACMERR("failed to delete static policy rules.\n");
+				break;
+			}
+			IPACMDBG_H("Deleted static policy PDN rules for %s\n", dev_name);
 		}
 	}
 	break;
@@ -4413,6 +4524,16 @@ fail:
 		free(rx_prop);
 		rx_prop = NULL;
 #endif
+	}
+
+	//delete static policy rules here if mode is enabled
+	if (IPACM_Iface::ipacmcfg->ipacm_static_policy_enable)
+	{
+		if (handle_static_policy_rule_delete())
+		{
+			IPACMERR("failed to delete static policy rules.\n");
+			return IPACM_FAILURE;
+		}
 	}
 
 	for (i = 0; i < num_wifi_client; i++)

@@ -1617,7 +1617,7 @@ static int ipa_nl_decode_nlmsg
 				ret_val = ipa_get_if_name(dev_name, msg_ptr->nl_route_info.attr_info.oif_index);
 				if(ret_val != IPACM_SUCCESS)
 				{
-					IPACMERR("Error while getting interface name");
+					IPACMERR("Error while getting interface name\n");
 					return IPACM_FAILURE;
 				}
 

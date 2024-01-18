@@ -368,6 +368,16 @@ public:
 	int handleIpsecUlFltDelAll(enum ipa_ip_type ip);
 #endif
 
+	int handle_static_policy_rt_rule_add(void);
+	int handle_static_policy_flt_rule_add(uint32_t ipv4_addr);
+	int handle_static_policy_rule_delete(void);
+
+	uint32_t static_policy_flt_rule_hdl;
+	static uint32_t static_policy_rt_rule_hdl;
+	static uint32_t static_policy_proc_ctx_hdl;
+	uint32_t associated_pdn_cnt;
+	static uint32_t total_vlan_pdn_cnt;
+
 	static bool odu_up;
 
 #ifdef FEATURE_EoGRE
@@ -431,7 +441,7 @@ public:
 
 	/* install UL filter rule from Q6 */
 #ifdef FEATURE_VLAN_MPDN
-	virtual int handle_uplink_filter_rule(ipacm_ext_prop *prop, ipa_ip_type iptype, uint8_t pdn_mux_id, bool notif_only, bool is_xlat = false, bool ast_update = false);
+	virtual int handle_uplink_filter_rule(ipacm_ext_prop *prop, ipa_ip_type iptype, uint8_t pdn_mux_id, bool notif_only, bool is_xlat = false, bool ast_update = false, bool static_policy = false);
 
 	virtual int handle_mpdn_ul_xlat_filter_rule(ipacm_ext_prop *prop, ipa_ip_type iptype, int pdn_mux_id, uint16_t vlan_id);
 
@@ -1195,7 +1205,7 @@ protected:
 		IPACMDBG_H("Max number of pdns reached, can't add pdn to ctx!\n");
 	}
 
-	inline void remove_pdn_xlat_ctx(int pdn_mux_id) //mike remove all vlans, if we need to remove vlan one by one need to change
+	inline void remove_pdn_xlat_ctx(int pdn_mux_id)
 	{
 		for (int i = 0; i < IPA_MAX_NUM_HW_PDNS ; ++i)
 		{
@@ -1283,7 +1293,7 @@ private:
 	typedef struct ipacm_mux_struct
 	{
 		uint8_t mux_id = 0;
-		uint16_t associated_VIDs[IPA_MAX_NUM_SW_PDNS] = { };
+		uint16_t associated_VIDs[IPA_MAX_NUM_VLAN_CLIENTS] = { };
 		uint8_t VID_cnt = 0;
 	}ipacm_mux_struct;
 
@@ -1485,6 +1495,23 @@ private:
 		return IPACM_INVALID_INDEX;
 	}
 
+	inline int get_eth_client_index_from_if_index(int if_index)
+	{
+		int cnt;
+		int num_eth_client_tmp = num_eth_client;
+
+		for(cnt = 0; cnt < num_eth_client_tmp; cnt++)
+		{
+			if(if_index == get_client_memptr(eth_client, cnt)->if_index)
+			{
+				IPACMDBG_H("if_index %d is used by client %d\n", if_index, cnt);
+				return cnt;
+			}
+		}
+		IPACMERR("could not find client with if_index %d\n", if_index);
+		return IPACM_INVALID_INDEX;
+	}
+
 	inline int get_eth_client_ip4_addr(uint8_t *mac_addr, uint32_t &ip_addr, uint8_t vlan_id = 0)
 	{
 		int clnt_indx;
@@ -1647,7 +1674,7 @@ private:
 	int handle_eth_client_mac_flt_route_rule(ipa_ip_type iptype, int clt_index, bool is_blacklist);
 	int handle_eth_mac_flt_conn_disc(uint8_t * mac_addr, bool con_state_flag);
 
-public:
+public:  //mike why we have 2 public. Why not just move this on top?
 #ifdef FEATURE_VLAN_MPDN
 	int check_vlan_PDNUp(enum ipa_ip_type iptype);
 	bool is_vlan_IF(uint16_t vlan_id);

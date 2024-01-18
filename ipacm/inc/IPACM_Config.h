@@ -359,6 +359,9 @@ public:
 	/* Indicates whether vlan mpdn for WLAN is enabled */
 	bool wlan_vlan_mpdn_enabled;
 
+	/* Indicates whether static policy mode is enabled */
+	bool ipacm_static_policy_enable;
+
 #ifdef FEATURE_EoGRE
 	ipa_ipgre_info eogre_info;
 	bool           eogre_enabled;

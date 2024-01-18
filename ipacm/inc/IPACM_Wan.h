@@ -477,6 +477,7 @@ public:
 	static uint8_t num_offloaded_pdns;
 	static int GetMuxByVid(uint16_t vlan_id, uint8_t *mux_id, ipa_ip_type iptype);
 	static int GetMTUByVid(uint16_t *mtu, uint16_t vlan_id, ipa_ip_type iptype);
+	static int GetWanPDNinfo(uint16_t *mtu, uint32_t *ipv4_addr, ipa_ip_type iptype);
 	static int Getv6addrByName(char* pdn_name, uint32_t* ipv6_addr);
 	static uint32_t GetQCMAPhdrByName(char* pdn_name);
 	static bool is_xlat_by_vid(uint16_t vlan_id);

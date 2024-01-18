@@ -227,7 +227,7 @@ if (!(a)) {                                                 \
 #define IPACM_SOCKSv5_Enable_TAG             "IPACMSOCKSv5Enabled"
 #define GRE_TAG                              "GREFlag"
 #define GREEnabled_TAG                       "GREEnabled"
-#define GREAutolearn_TAG                       "GREAutolearn"
+#define GREAutolearn_TAG                     "GREAutolearn"
 #define GRE_Server_TAG                       "GREServer"
 
 #define IPACM_EASY_MESH                      "IPACMEMESH"
@@ -236,6 +236,9 @@ if (!(a)) {                                                 \
 
 #define IPACM_WLAN_VLAN_MPDN                 "IPACMVLANMPDN"
 #define IPACM_Wlan_Vlan_Mpdn_Enabled         "IPACMVlanMpdnEnabled"
+
+#define Static_Policy_TAG                    "PolicyBasedRouting"
+#define Static_Policy_Enabled                "StaticPolicyEnabled"
 
 /*---------------------------------------------------------------------------
       IP protocol numbers - use in dss_socket() to identify protocols.
@@ -375,6 +378,7 @@ typedef struct  _IPACM_conf_t
 	ipacm_gre_conf_t gre_conf;
 	bool public_ip_support_enable;
 	bool wlan_vlan_mpdn_enable;
+	bool static_policy_enable;
 } IPACM_conf_t;
 
 typedef struct _IPACM_conf_ext_t

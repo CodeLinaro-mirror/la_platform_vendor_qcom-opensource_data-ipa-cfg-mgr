@@ -423,6 +423,37 @@ int IPACM_Wan::GetMTUByVid(uint16_t *mtu, uint16_t vlan_id, ipa_ip_type iptype)
 	return IPACM_FAILURE;
 }
 
+int IPACM_Wan::GetWanPDNinfo(uint16_t *mtu, uint32_t *ipv4_addr, ipa_ip_type iptype)
+{
+	int num_mtu = 0;
+
+	for(int i = 0; i < IPA_MAX_NUM_SW_PDNS; i++)
+	{
+		if(iptype == IPA_IP_v4)
+		{
+			if(ipv4_to_iface[i].ipv4_addr)
+			{
+				mtu[num_mtu] = ipv4_to_iface[i].pIface->mtu_v4;
+				ipv4_addr[num_mtu] = ipv4_to_iface[i].ipv4_addr;
+				IPACMERR("iface %s has MTU %d and ipv4_addr 0x%x\n",
+					ipv4_to_iface[i].pIface->dev_name,
+					mtu[num_mtu], ipv4_addr[num_mtu]);
+				num_mtu++;
+			}
+		}
+		else
+		{
+			if(ipv6_to_iface[i].ipv6_prefix[0] ||
+				ipv6_to_iface[i].ipv6_prefix[1])
+			{
+				mtu[num_mtu++] = ipv6_to_iface[i].pIface->mtu_v6;
+			}
+		}
+	}
+	IPACMDBG_H("Found %d MTUs for ip_type %d\n", num_mtu, iptype);
+	return num_mtu;
+}
+
 int IPACM_Wan::Getv6addrByName(char* pdn_name, uint32_t* ipv6_addr)
 {
 	for(int i = 0; i < IPA_MAX_NUM_SW_PDNS; i++)
@@ -2314,43 +2345,43 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 #endif
 
 	case IPA_IPACM_DISABLE:
-			if(m_is_sta_mode == WLAN_WAN)
-			{
-				IPACMDBG_H("Received IPA_IPACM_DISABLE\n");
-				handle_down_evt();
-				/* reset the STA-iface category to unknown */
-				IPACM_Iface::ipacmcfg->iface_table[ipa_if_num].if_cat = UNKNOWN_IF;
-				IPACMDBG_H("IPA_WAN_STA (%s):ipa_index (%d) instance close \n", IPACM_Iface::ipacmcfg->iface_table[ipa_if_num].iface_name, ipa_if_num);
-				IPACM_Iface::ipacmcfg->DelNatIfaces(dev_name); // delete NAT-iface
-				delete this;
-				return;
-			}
-			else if(m_is_sta_mode == Q6_WAN)
-			{
-				IPACMDBG_H("Received IPA_IPACM_DISABLE\n");
-				handle_down_evt_ex();
-				IPACMDBG_H("IPA_WAN_Q6 (%s):ipa_index (%d) instance close \n", IPACM_Iface::ipacmcfg->iface_table[ipa_if_num].iface_name, ipa_if_num);
+		if(m_is_sta_mode == WLAN_WAN)
+		{
+			IPACMDBG_H("Received IPA_IPACM_DISABLE\n");
+			handle_down_evt();
+			/* reset the STA-iface category to unknown */
+			IPACM_Iface::ipacmcfg->iface_table[ipa_if_num].if_cat = UNKNOWN_IF;
+			IPACMDBG_H("IPA_WAN_STA (%s):ipa_index (%d) instance close \n", IPACM_Iface::ipacmcfg->iface_table[ipa_if_num].iface_name, ipa_if_num);
+			IPACM_Iface::ipacmcfg->DelNatIfaces(dev_name); // delete NAT-iface
+			delete this;
+			return;
+		}
+		else if(m_is_sta_mode == Q6_WAN)
+		{
+			IPACMDBG_H("Received IPA_IPACM_DISABLE\n");
+			handle_down_evt_ex();
+			IPACMDBG_H("IPA_WAN_Q6 (%s):ipa_index (%d) instance close \n", IPACM_Iface::ipacmcfg->iface_table[ipa_if_num].iface_name, ipa_if_num);
 #if defined(FEATURE_SOCKSv5) && defined (IPA_SOCKV5_EVENT_MAX)
-				info.ipv4_addr = wan_v4_addr;
-				info.mux_id = ext_prop->ext[0].mux_id;;
-				memcpy(info.iface_name, dev_name, sizeof(dev_name));
-				/* add qmuxd mapping*/
-				IPACM_Iface::ipacmcfg->del_mux_id_mapping(&info);
+			info.ipv4_addr = wan_v4_addr;
+			info.mux_id = ext_prop->ext[0].mux_id;;
+			memcpy(info.iface_name, dev_name, sizeof(dev_name));
+			/* add qmuxd mapping*/
+			IPACM_Iface::ipacmcfg->del_mux_id_mapping(&info);
 #endif //defined(FEATURE_SOCKSv5) && defined (IPA_SOCKV5_EVENT_MAX)
-				IPACM_Iface::ipacmcfg->DelNatIfaces(dev_name); // delete NAT-iface
-				delete this;
-				return;
-			}
-			else if (m_is_sta_mode == ECM_WAN)
-			{
-				IPACMDBG_H("Received IPA_IPACM_DISABLE(wan_mode:%d)\n", m_is_sta_mode);
-				/* delete previous instance */
-				handle_down_evt();
-				IPACMDBG_H("IPA_WAN_CRADLE (%s):ipa_index (%d) instance close \n", IPACM_Iface::ipacmcfg->iface_table[ipa_if_num].iface_name, ipa_if_num);
-				IPACM_Iface::ipacmcfg->DelNatIfaces(dev_name); // delete NAT-iface
-				delete this;
-				return;
-			}
+			IPACM_Iface::ipacmcfg->DelNatIfaces(dev_name); // delete NAT-iface
+			delete this;
+			return;
+		}
+		else if (m_is_sta_mode == ECM_WAN)
+		{
+			IPACMDBG_H("Received IPA_IPACM_DISABLE(wan_mode:%d)\n", m_is_sta_mode);
+			/* delete previous instance */
+			handle_down_evt();
+			IPACMDBG_H("IPA_WAN_CRADLE (%s):ipa_index (%d) instance close \n", IPACM_Iface::ipacmcfg->iface_table[ipa_if_num].iface_name, ipa_if_num);
+			IPACM_Iface::ipacmcfg->DelNatIfaces(dev_name); // delete NAT-iface
+			delete this;
+			return;
+		}
 
 	default:
 		break;
@@ -2365,12 +2396,22 @@ int IPACM_Wan::check_vlan_pdn(ipa_ip_type iptype, ipacm_event_route_vlan *data, 
 	int pdn_idx, vlan_idx, ret = IPACM_FAILURE;
 	bool new_pdn = true;
 
+	//if (MPDN_single_client_mode)  For future MPDN to single client
+	//	IPACMDBG_H("received IPA_ROUTE_ADD_VLAN_PDN_EVENT for iptype %d, VID %d, wan %s, if %d\n", iptype, data->VlanID, dev_name, ipa_if_num);
+	//	handle_route_add_vlan_pdn_evt(iptype, data->VlanID);
+	//	return IPACM_success;
+
 	if (iptype == IPA_IP_v6 || iptype == IPA_IP_MAX)
 	{
 		if(((data->wan_ipv6_prefix[0] == ipv6_prefix[0]) &&
 			(data->wan_ipv6_prefix[1] == ipv6_prefix[1])) || v4_only_xlat)
 		{
-			IPACMDBG_H("received v6 IPA_ROUTE_ADD_VLAN_PDN_EVENT for VID %d, wan %s, %d\n", data->VlanID, dev_name, ipa_if_num);
+			IPACMDBG_H("received v6 IPA_ROUTE_ADD_VLAN_PDN_EVENT for VID %d, wan %s, if %d\n", data->VlanID, dev_name, ipa_if_num);
+
+			//When we need to allow single VLAN to be connected to multiple PDNs
+			//if (MPDN_single_client_mode)
+			//	goto v6_skip;
+
 			if ((modem_ipv6_pdn_index != -1) && (ipv6_to_iface[modem_ipv6_pdn_index].wan_up_vlan_v6))
 			{
 				for(pdn_idx = 0; pdn_idx < ipv6_to_iface[modem_ipv6_pdn_index].VID_cnt; pdn_idx++)
@@ -2406,7 +2447,7 @@ int IPACM_Wan::check_vlan_pdn(ipa_ip_type iptype, ipacm_event_route_vlan *data, 
 					}
 				}
 			}
-
+v6_skip:
 			if(new_pdn && ipv6_to_iface[modem_ipv6_pdn_index].VID_cnt == 0)
 			{
 				if(num_offloaded_pdns >= IPA_MAX_NUM_HW_PDNS) {
@@ -2431,7 +2472,13 @@ int IPACM_Wan::check_vlan_pdn(ipa_ip_type iptype, ipacm_event_route_vlan *data, 
 
 		if(data->wan_ipv4_addr == wan_v4_addr)
 		{
-			IPACMDBG_H("received v4 IPA_ROUTE_ADD_VLAN_PDN_EVENT for VID %d, wan %s, %d\n", data->VlanID, dev_name, ipa_if_num);
+			IPACMDBG_H("received v4 IPA_ROUTE_ADD_VLAN_PDN_EVENT for VID %d, wan %s, if %d\n", data->VlanID, dev_name, ipa_if_num);
+
+			//mike when need to allow single VLAN to be connected to multiple PDNs
+			//if (MPDN_single_client_mode)
+			//	goto v4_skip;
+
+			//this is false for static policy client so we never hit. for single VLAN to MPDN, need to use above
 			if(ipv4_to_iface[modem_ipv4_pdn_index].wan_up_vlan)
 			{
 				for(pdn_idx = 0; pdn_idx < ipv4_to_iface[modem_ipv4_pdn_index].VID_cnt; pdn_idx++)
@@ -2467,7 +2514,7 @@ int IPACM_Wan::check_vlan_pdn(ipa_ip_type iptype, ipacm_event_route_vlan *data, 
 					}
 				}
 			}
-
+v4_skip:
 			if(new_pdn && ipv4_to_iface[modem_ipv4_pdn_index].VID_cnt == 0)
 			{
 				if(num_offloaded_pdns >= IPA_MAX_NUM_HW_PDNS) {
@@ -3191,7 +3238,7 @@ int IPACM_Wan::handle_route_add_evt(ipa_ip_type iptype)
 		{
 			IPACM_Wan::xlat_mux_id = ext_prop->ext[0].mux_id;
 			wanup_data->xlat_mux_id = IPACM_Wan::xlat_mux_id;
-			IPACMDBG_H("Set xlat configuraiton with below information:\n");
+			IPACMDBG_H("Set xlat configuration with below information:\n");
 			IPACMDBG_H("xlat_enabled: %d, xlat_mux_id: %d\n",
 					is_xlat, xlat_mux_id);
 		}
@@ -6880,6 +6927,59 @@ int IPACM_Wan::handle_down_evt_ex()
 			ipacm_cmd_q_data evt_data;
 			ipacm_event_vlan_pdn *vlandown_data;
 
+			//post multiple WAN DOWNS if there are multiple clients associated with the PDN
+			if (ipv4_to_iface[modem_ipv4_pdn_index].VID_cnt)
+			{
+				for (i = 0; i < ipv4_to_iface[modem_ipv4_pdn_index].VID_cnt; i++)
+				{
+					vlandown_data = (ipacm_event_vlan_pdn *)malloc(sizeof(ipacm_event_vlan_pdn));
+					if(vlandown_data == NULL)
+					{
+						IPACMERR("Unable to allocate memory\n");
+						res = IPACM_FAILURE;
+						goto fail;
+					}
+					memset(vlandown_data, 0, sizeof(ipacm_event_vlan_pdn));
+
+					vlandown_data->iptype = IPA_IP_v4;
+					vlandown_data->VlanID = associated_VID; //this should just be array
+					vlandown_data->ipv4_addr = (public_wan_v4_addr_set) ? public_wan_v4_addr : wan_v4_addr;
+					vlandown_data->mux_id = ext_prop->ext[0].mux_id;
+					vlandown_data->VlanID =
+						ipv4_to_iface[modem_ipv4_pdn_index].associated_VIDs[i];
+					IPACMDBG_H("Posting IPA_HANDLE_WAN_VLAN_PDN_DOWN with below information:\n");
+					IPACMDBG_H("iptype IPA_IP_v4, VlanID %d, mux_id %d, if num %d\n",
+						vlandown_data->VlanID, ext_prop->ext[0].mux_id, ipa_if_num);
+					evt_data.event = IPA_HANDLE_WAN_VLAN_PDN_DOWN;
+					evt_data.evt_data = (void *)vlandown_data;
+
+					//the memory will be freed by handler of the evt
+					IPACM_EvtDispatcher::PostEvt(&evt_data);
+				}
+			}
+			else //remove this in future. Should always be consistent with array.
+			{
+				vlandown_data = (ipacm_event_vlan_pdn *)malloc(sizeof(ipacm_event_vlan_pdn));
+				if(vlandown_data == NULL)
+				{
+					IPACMERR("Unable to allocate memory\n");
+					res = IPACM_FAILURE;
+					goto fail;
+				}
+				memset(vlandown_data, 0, sizeof(ipacm_event_vlan_pdn));
+
+				vlandown_data->iptype = IPA_IP_v4;
+				vlandown_data->VlanID = associated_VID; //this should just be array
+				vlandown_data->ipv4_addr = (public_wan_v4_addr_set) ? public_wan_v4_addr : wan_v4_addr;
+				vlandown_data->mux_id = ext_prop->ext[0].mux_id;
+				evt_data.event = IPA_HANDLE_WAN_VLAN_PDN_DOWN;
+				evt_data.evt_data = (void *)vlandown_data;
+				IPACMDBG_H("Posting IPA_HANDLE_WAN_VLAN_PDN_DOWN with below information:\n");
+				IPACMDBG_H("iptype IPA_IP_v4, VlanID %d, mux_id %d, if num %d\n",
+					associated_VID, ext_prop->ext[0].mux_id, ipa_if_num);
+				IPACM_EvtDispatcher::PostEvt(&evt_data);
+			}
+
 			ipv4_to_iface[modem_ipv4_pdn_index].wan_up_vlan = false;
 			ipv4_to_iface[modem_ipv4_pdn_index].is_xlat = false;
 			memset(ipv4_to_iface[modem_ipv4_pdn_index].associated_VIDs, 0, sizeof(ipv4_to_iface[modem_ipv4_pdn_index].associated_VIDs));
@@ -6887,28 +6987,6 @@ int IPACM_Wan::handle_down_evt_ex()
 
 			num_offloaded_pdns--;
 			IPACMDBG_H("now num offloaded PDNs is %d\n", num_offloaded_pdns);
-
-			vlandown_data = (ipacm_event_vlan_pdn *)malloc(sizeof(ipacm_event_vlan_pdn));
-			if(vlandown_data == NULL)
-			{
-				IPACMERR("Unable to allocate memory\n");
-				res = IPACM_FAILURE;
-				goto fail;
-			}
-			memset(vlandown_data, 0, sizeof(ipacm_event_vlan_pdn));
-
-			vlandown_data->iptype = IPA_IP_v4;
-			vlandown_data->VlanID = associated_VID;
-			vlandown_data->ipv4_addr = (public_wan_v4_addr_set) ? public_wan_v4_addr : wan_v4_addr;
-			vlandown_data->mux_id = ext_prop->ext[0].mux_id;
-
-			IPACMDBG_H("Posting IPA_HANDLE_WAN_VLAN_PDN_DOWN with below information:\n");
-			IPACMDBG_H("iptype IPA_IP_v4, VlanID %d, mux_id %d, if num %d\n", associated_VID, ext_prop->ext[0].mux_id, ipa_if_num);
-
-			evt_data.event = IPA_HANDLE_WAN_VLAN_PDN_DOWN;
-			evt_data.evt_data = (void *)vlandown_data;
-
-			IPACM_EvtDispatcher::PostEvt(&evt_data);
 
 			/* clear reserved slot for offloading v6 prefix */
 			if (is_xlat) {
@@ -7165,6 +7243,7 @@ int IPACM_Wan::handle_down_evt_ex()
 			IPACMDBG_H("not deleting rm depend for default rt, a v6 VLAN PDN is still up, iptype %d\n", ip_type);
 		}
 #endif
+		//Note: check for static policy xlat case, if we need to do
 		if(is_default_gateway == true)
 		{
 			IPACM_Wan::wan_up_v6 = false;

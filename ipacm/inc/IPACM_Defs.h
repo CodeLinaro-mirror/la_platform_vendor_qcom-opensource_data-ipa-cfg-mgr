@@ -202,6 +202,8 @@ extern "C"
 #define _SS_SIZE 128
 #endif
 
+#define IPA_STATIC_POLICY_VLAN_ID 5000
+
 /*
  * The following macros allow callers to print the raw bytes making up
  * an address.  No assumptions are made about endianess.

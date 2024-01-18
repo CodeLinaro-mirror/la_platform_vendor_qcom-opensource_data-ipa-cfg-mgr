@@ -199,7 +199,8 @@ static int ipacm_cfg_xml_parse_tree
 						IPACM_util_icmp_string((char*)xml_node->name, IPACM_SOCKSv5_TAG) == 0 ||
 						IPACM_util_icmp_string((char*)xml_node->name, GRE_TAG) == 0 ||
 						IPACM_util_icmp_string((char*)xml_node->name, PUBLIC_IP_SUPPORT_TAG) == 0 ||
-						IPACM_util_icmp_string((char*)xml_node->name, IPACM_WLAN_VLAN_MPDN) == 0)
+						IPACM_util_icmp_string((char*)xml_node->name, IPACM_WLAN_VLAN_MPDN) == 0 ||
+						IPACM_util_icmp_string((char*)xml_node->name, Static_Policy_TAG) == 0)
 				{
 					if (0 == IPACM_util_icmp_string((char*)xml_node->name, IFACE_TAG))
 					{
@@ -729,6 +730,27 @@ static int ipacm_cfg_xml_parse_tree
 						IPACMDBG_H("VLAN Mpdn for WLAN enable %d buf(%d)\n", config->wlan_vlan_mpdn_enable, atoi(content_buf));
 					}
 				}
+				else if (IPACM_util_icmp_string((char*)xml_node->name, Static_Policy_Enabled) == 0)
+				{
+					IPACMDBG_H("inside enable Static Policy-XML\n");
+					content = IPACM_read_content_element(xml_node);
+					if (content)
+					{
+						str_size = strlen(content);
+						memset(content_buf, 0, sizeof(content_buf));
+						memcpy(content_buf, (void *)content, str_size);
+						if (atoi(content_buf))
+						{
+							config->static_policy_enable = true;
+						}
+						else
+						{
+							config->static_policy_enable = false;
+						}
+						IPACMDBG_H("static_policy_enable %d buf(%d)\n", config->static_policy_enable, atoi(content_buf));
+					}
+				}
+
 			}
 			break;
 		default:

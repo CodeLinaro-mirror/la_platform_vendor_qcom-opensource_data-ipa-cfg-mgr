@@ -710,6 +710,8 @@ skip_fnr_alloc:
 	ipacm_emesh_enable = cfg->ipacm_emesh_enable;
 	ipacm_emesh_mode = cfg->ipacm_emesh_mode;
 
+	ipacm_static_policy_enable = cfg->static_policy_enable;
+
 	if (ipacm_mpdn_enable == TRUE && ipacm_l2tp_enable != IPACM_L2TP_DISABLE)
 	{
 		IPACMERR("Not support both VLAN_MPDN and L2TP are enable \n");

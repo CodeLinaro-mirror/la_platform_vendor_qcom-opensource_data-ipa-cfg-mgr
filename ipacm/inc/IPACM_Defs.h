@@ -195,6 +195,13 @@ extern "C"
 #define IPA_DUMMY_PREFIX 0xFFFFFFFF
 #define IPA_MAX_NUM_PROPS 2
 
+#ifndef __ss_aligntype
+#define __ss_aligntype unsigned long int
+#endif
+#ifndef _SS_SIZE
+#define _SS_SIZE 128
+#endif
+
 /*
  * The following macros allow callers to print the raw bytes making up
  * an address.  No assumptions are made about endianess.

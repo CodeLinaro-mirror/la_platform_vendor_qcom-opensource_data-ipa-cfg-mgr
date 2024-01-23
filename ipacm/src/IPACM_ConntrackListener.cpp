@@ -4035,9 +4035,14 @@ void IPACM_ConntrackListener::CreateIpv6ctEntryFromCtEventData(const ipacm_ct_ev
 	Ipv6ctEntry& entry) const
 {
 	IPACMDBG_H("\n");
-	struct nfct_attr_grp_ipv6 orig_params;
+	struct nfct_attr_grp_ipv6 orig_params, host_params;
 	nfct_get_attr_grp(evt_data->ct, ATTR_GRP_ORIG_IPV6, (void *)&orig_params);
 	const Ipv6IpAddress srcAddr(orig_params.src, true), dstAddr(orig_params.dst, true);
+	for(int i=0; i<4; i++)
+	{
+		host_params.src[i] = ntohl(orig_params.src[i]);
+		host_params.dst[i] = ntohl(orig_params.dst[i]);
+	}
 
 	uint16_t srcPort = nfct_get_attr_u16(evt_data->ct, ATTR_ORIG_PORT_SRC);
 	uint16_t dstPort = nfct_get_attr_u16(evt_data->ct, ATTR_ORIG_PORT_DST);
@@ -4075,6 +4080,30 @@ void IPACM_ConntrackListener::CreateIpv6ctEntryFromCtEventData(const ipacm_ct_ev
 	{
 		entry.m_direction = NatEntryBase::DirectionInbound;
 	}
+#ifdef IPA_IOCTL_SET_EXT_ROUTER_MODE
+	else if (IPACM_Iface::ipacmcfg->ext_router_mode == IPA_PREFIX_SHARING)
+	{
+		if(wan_ipaddr_v6.IsSameSubnet(srcAddr))
+		{
+			entry.m_direction = NatEntryBase::DirectionOutbound;
+		}
+		else if(wan_ipaddr_v6.IsSameSubnet(dstAddr))
+		{
+			entry.m_direction = NatEntryBase::DirectionInbound;
+		}
+	}
+	else if (IPACM_Iface::ipacmcfg->ext_router_mode == IPA_PREFIX_DELEGATION)
+	{
+		if (IPACM_Iface::ipacmcfg->is_ext_route_ipv6_prefix(host_params.src))
+		{
+			entry.m_direction = NatEntryBase::DirectionOutbound;
+		}
+		else if (IPACM_Iface::ipacmcfg->is_ext_route_ipv6_prefix(host_params.dst))
+		{
+			entry.m_direction = NatEntryBase::DirectionInbound;
+		}
+	}
+#endif
 	else if(IPACM_Iface::ipacmcfg->GetIPAVer() >= IPA_HW_v5_5)
 	{
 		IPACMDBG_H("bail dummy CT entries\n");

@@ -6022,7 +6022,7 @@ int IPACM_Wlan::install_uplink_filter_rule
 				else
 #endif //IPA_HW_FNR_STATS
 				{
-					IPACMDBG_H("IPA_IP_v4 xlat_mux_id: %d, modem_ul_v4_set %d\n", xlat_mux_id, modem_ul_v4_set);
+					IPACMDBG_H("IPA_IP_v4 xlat_mux_id: %d, modem_ul_v4_set %d\n", xlat_mux_id, modem_ul_v4_set[0]);
 					ret = install_uplink_filter_rule_per_client(prop, iptype, xlat_mux_id, get_client_memptr(wlan_client, i)->mac,
 						get_client_memptr(wlan_client, i)->ta_peer_id);
 				}
@@ -6043,14 +6043,14 @@ int IPACM_Wlan::install_uplink_filter_rule
 				else
 #endif //IPA_HW_FNR_STATS
 				{
-					IPACMDBG_H("IPA_IP_v6 num_dft_rt_v6 %d xlat_mux_id: %d modem_ul_v6_set: %d\n", num_dft_rt_v6, xlat_mux_id, modem_ul_v6_set);
+					IPACMDBG_H("IPA_IP_v6 num_dft_rt_v6 %d xlat_mux_id: %d modem_ul_v6_set: %d\n", num_dft_rt_v6, xlat_mux_id, modem_ul_v6_set[0]);
 					ret = install_uplink_filter_rule_per_client(prop, iptype, xlat_mux_id, get_client_memptr(wlan_client, i)->mac,
 						get_client_memptr(wlan_client, i)->ta_peer_id);
 				}
 			}
 		} else {
 			IPACMDBG_H("ip-type: %d modem_ul_v4_set: %d, modem_ul_v6_set %d\n",
-				iptype, modem_ul_v4_set, modem_ul_v6_set);
+				iptype, modem_ul_v4_set[0], modem_ul_v6_set[0]);
 		}
 	} /* end of for loop */
 	return ret;

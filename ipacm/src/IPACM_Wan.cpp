@@ -201,8 +201,10 @@ IPACM_Wan::IPACM_Wan(int iface_index,
 	hdr_hdl_dummy_v6 = 0;
 	hdr_proc_hdl_dummy_v6 = 0;
 
+#ifdef FEATURE_IPA_IPSEC
 	memset(num_ipsec_post_pol_rt, 0, sizeof(num_ipsec_post_pol_rt));
 	memset(ipsec_post_pol_rt_hdls, 0, sizeof(ipsec_post_pol_rt_hdls));
+#endif
 
 #ifdef IPA_MTU_EVENT_MAX
 	/* Query WAN MTU to handle IPACM restart scenarios. */

@@ -706,7 +706,7 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 				{
 
 					/* check v4 not setup before, v6 can have 2 iface ip */
-					if( ((data->iptype != ip_type) && (ip_type != IPA_IP_MAX))
+					if( ((data->iptype != ip_type) && (ip_type != IPA_IP_MAX || data->iptype == IPA_IP_v4))
 						|| ((data->iptype==IPA_IP_v6) && (num_dft_rt_v6!=MAX_DEFAULT_v6_ROUTE_RULES)))
 					{
 						IPACMDBG_H("Got IPA_ADDR_ADD_EVENT ip-family:%d, v6 num %d, LAN ip_type:%d \n",data->iptype,num_dft_rt_v6, ip_type);

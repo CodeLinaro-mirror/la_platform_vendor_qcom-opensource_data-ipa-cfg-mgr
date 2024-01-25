@@ -11169,7 +11169,8 @@ int IPACM_Lan::modify_private_subnet()
 		flt_rule.rule.rt_tbl_hdl = IPACM_Iface::ipacmcfg->rt_tbl_default_v4.hdl;
 		IPACMDBG_H("Private filter rule use table: %s\n", IPACM_Iface::ipacmcfg->rt_tbl_default_v4.name);
 
-		for (i = 0; i < (IPACM_Iface::ipacmcfg->ipa_num_private_subnet); i++) {
+		for (i = 0; i < (IPACM_Iface::ipacmcfg->ipa_num_private_subnet); i++)
+		{
 			/* add private subnet rule for ipv4 */
 			flt_rule.rule.action = IPA_PASS_TO_ROUTING;
 			flt_rule.rule.eq_attrib_type = 0;
@@ -11179,7 +11180,11 @@ int IPACM_Lan::modify_private_subnet()
 			flt_rule.rule.attrib.u.v4.dst_addr = IPACM_Iface::ipacmcfg->private_subnet_table[i].subnet_addr;
 			memcpy(&(pFilteringTable->rules[i]), &flt_rule, sizeof(struct ipa_flt_rule_add));
 			IPACMDBG_H(" IPACM private subnet_addr as: 0x%x entry(%d)\n", flt_rule.rule.attrib.u.v4.dst_addr, i);
+		}
 
+		/* add MTU rules for ipv4 */
+		for(i = 0; i < mtu_rule_cnt; i++)
+		{
 			/* add corresponding MTU rule for ipv4 */
 			if (mtu[i] > 0 && mtu[i] < DEFAULT_MTU_SIZE) {
 				memcpy(&flt_rule.rule.attrib, &rx_prop->rx[idx].attrib, sizeof(flt_rule.rule.attrib));
@@ -11190,7 +11195,8 @@ int IPACM_Lan::modify_private_subnet()
 					flt_rule.rule.attrib.vlan_id = vid[i];
 				}
 
-				if (construct_mtu_rule(&flt_rule.rule, IPA_IP_v4, mtu[i])) IPACMERR("Failed to modify MTU filtering rule.\n");
+				if (construct_mtu_rule(&flt_rule.rule, IPA_IP_v4, mtu[i]))
+					IPACMERR("Failed to modify MTU filtering rule.\n");
 				memcpy(&(pFilteringTable->rules[mtu_rule_idx]), &flt_rule, sizeof(struct ipa_flt_rule_add));
 				IPACMDBG_H("Succesfully constructed v4 MTU rule for vlan id %d entry(%d)\n", vid[i], mtu_rule_idx);
 				mtu_rule_idx++;
@@ -15096,19 +15102,19 @@ int IPACM_Lan::construct_mtu_rule(struct ipa_flt_rule *rule, ipa_ip_type iptype,
 
 	if (rule == NULL)
 	{
-		IPACMERR("rule is empty");
+		IPACMERR("rule is empty\n");
 		return IPACM_FAILURE;
 	}
 
 	if (mtu == 0)
 	{
-		IPACMERR("mtu is uninitialized");
+		IPACMERR("mtu is uninitialized\n");
 		return IPACM_FAILURE;
 	}
 
 	if (iptype >= IPA_IP_MAX)
 	{
-		IPACMERR("invalid iptype");
+		IPACMERR("invalid iptype\n");
 		return IPACM_FAILURE;
 	}
 

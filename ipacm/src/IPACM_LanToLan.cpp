@@ -1014,7 +1014,7 @@ void IPACM_LanToLan::print_data_structure_info()
 void IPACM_LanToLan_Iface::add_client_rt_rule_for_new_iface()
 {
 	list<client_info>::iterator it;
-	ipa_hdr_l2_type peer_l2_type;
+	ipa_hdr_l2_type peer_l2_type = IPA_HDR_L2_NONE;
 	int num_prop = 0;
 	peer_iface_info &peer = m_peer_iface_info.front();
 	peer_iface_info& front_peer = m_peer_iface_info.front();
@@ -2145,7 +2145,7 @@ void IPACM_LanToLan_Iface::clear_all_flt_rule_for_one_peer_iface(peer_iface_info
 void IPACM_LanToLan_Iface::clear_all_rt_rule_for_one_peer_iface(peer_iface_info *peer)
 {
 	list<client_info>::iterator it;
-	ipa_hdr_l2_type peer_l2_type;
+	ipa_hdr_l2_type peer_l2_type = IPA_HDR_L2_NONE;
 
 	if (peer->is_vlan_peer)
 		peer_l2_type = peer->peer->get_iface_pointer()->tx_prop->tx[2].hdr_l2_type;

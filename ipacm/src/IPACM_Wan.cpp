@@ -7741,6 +7741,12 @@ int IPACM_Wan::installWanPostIpsecRt(
 				i, rt_rule_entry->rule.attrib.attrib_mask);
 		}
 
+		if (rt_rule_entry == NULL)
+		{
+			IPACMERR("rt_rule_entry is empty...exit\n");
+			return IPACM_FAILURE;
+		}
+
 		if (false == m_routing.AddRoutingRule(rt_rule))
 		{
 			IPACMERR("Routing rule addition failed!\n");

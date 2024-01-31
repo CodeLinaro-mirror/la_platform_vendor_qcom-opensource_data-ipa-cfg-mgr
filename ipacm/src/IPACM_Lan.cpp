@@ -201,6 +201,7 @@ IPACM_Lan::IPACM_Lan(char *iface_name, int iface_index, bool is_ppp_iface) : IPA
 	memset(modem_ul_v6_set, 0, sizeof(modem_ul_v6_set));
 	memset(ipv6_prefix, 0, sizeof(ipv6_prefix));
 	memset(&xlat_ctx, 0, sizeof(xlat_context));
+	memset(tcp_syn_flt_rule_hdl, 0, sizeof(tcp_syn_flt_rule_hdl));
 
 	vlan_hdr_hdl = 0;
 
@@ -214,7 +215,6 @@ IPACM_Lan::IPACM_Lan(char *iface_name, int iface_index, bool is_ppp_iface) : IPA
 #ifdef FEATURE_L2TP
 #ifdef IPA_L2TP_TUNNEL_UDP
 	l2tp_udp_dflt_flt_tule_offset = 0;
-	memset(tcp_syn_flt_rule_hdl, 0, sizeof(tcp_syn_flt_rule_hdl));
 	memset(l2tp_udp_dflt_flt_rule_hdl, 0, sizeof(l2tp_udp_dflt_flt_rule_hdl));
 #endif
 #endif

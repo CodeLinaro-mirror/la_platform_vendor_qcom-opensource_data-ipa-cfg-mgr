@@ -441,7 +441,7 @@ int IPACM_Iface::iface_ipa_index_query
 }
 
 /* Query ipa_interface ipv4_addr by given linux interface_index */
-ipa_ip_type IPACM_Iface::iface_addr_query
+void IPACM_Iface::iface_addr_query
 (
 	int interface_index,
 	bool post_new_addr_event,
@@ -454,13 +454,12 @@ ipa_ip_type IPACM_Iface::iface_addr_query
 	ipacm_cmd_q_data evt_data;
 	ipacm_event_data_addr *data_addr;
 	struct in_addr iface_ipv4;
-	ipa_ip_type ret = IPACM_IP_NULL;
 
 	/* use linux interface-index to find interface name */
 	if ((fd = socket(AF_INET, SOCK_DGRAM, 0)) < 0)
 	{
 		PERROR("get interface name socket create failed");
-		return ret;
+		return ;
 	}
 
 	memset(&ifr, 0, sizeof(struct ifreq));
@@ -472,7 +471,7 @@ ipa_ip_type IPACM_Iface::iface_addr_query
 	{
 		PERROR("call_ioctl_on_dev: ioctl failed:");
 		close(fd);
-		return ret;
+		return ;
 	}
 	IPACMDBG_H("Interface index %d name: %s\n", interface_index,ifr.ifr_name);
 	close(fd);
@@ -481,7 +480,7 @@ ipa_ip_type IPACM_Iface::iface_addr_query
 	if(getifaddrs(&myaddrs) != 0)
 	{
         	IPACMERR("getifaddrs");
-		return ret;
+		return ;
 	}
 
 	for (ifa = myaddrs; ifa != NULL; ifa = ifa->ifa_next)
@@ -502,15 +501,6 @@ ipa_ip_type IPACM_Iface::iface_addr_query
 					IPACMDBG_H("ipv4 address %s\n",inet_ntoa(s4->sin_addr));
 					iface_ipv4 = s4->sin_addr;
 
-					if ((ret == IPA_IP_v6) || (ret == IPA_IP_MAX))
-					{
-						ret = IPA_IP_MAX;
-					}
-					else
-					{
-						ret = IPA_IP_v4;
-					}
-
 					if (curr_ip4_addr != NULL && (post_new_addr_event == false))
 					{
 						if(ntohl(iface_ipv4.s_addr) != (*curr_ip4_addr))
@@ -520,13 +510,13 @@ ipa_ip_type IPACM_Iface::iface_addr_query
 
 							*curr_ip4_addr = ntohl(iface_ipv4.s_addr);
 							freeifaddrs(myaddrs);
-							return ret;
+							return;
 						}
 						else
 						{
 							IPACMDBG_H("curr_ip4_addr is same as iface addr\n");
 							freeifaddrs(myaddrs);
-							return ret;
+							return;
 						}
 					}
 					else if (post_new_addr_event)
@@ -538,7 +528,7 @@ ipa_ip_type IPACM_Iface::iface_addr_query
 						{
 							IPACMERR("unable to allocate memory for event data_addr\n");
 							freeifaddrs(myaddrs);
-							return ret;
+							return;
 						}
 						memset(data_addr, 0, sizeof(ipacm_event_data_addr));
 						data_addr->iptype = IPA_IP_v4;
@@ -563,15 +553,6 @@ ipa_ip_type IPACM_Iface::iface_addr_query
 				}
 				case AF_INET6:
 				{
-					if ((ret == IPA_IP_v4) || (ret == IPA_IP_MAX))
-					{
-						ret = IPA_IP_MAX;
-					}
-					else
-					{
-						ret = IPA_IP_v6;
-					}
-
 					if (post_new_addr_event)
 					{
 						struct sockaddr_in6 *s6 = (struct sockaddr_in6 *)ifa->ifa_addr;
@@ -581,7 +562,7 @@ ipa_ip_type IPACM_Iface::iface_addr_query
 						{
 							IPACMERR("unable to allocate memory for event data_addr\n");
 							freeifaddrs(myaddrs);
-							return ret;
+							return;
 						}
 						memset(data_addr, 0, sizeof(ipacm_event_data_addr));
 						data_addr->iptype = IPA_IP_v6;
@@ -616,7 +597,7 @@ ipa_ip_type IPACM_Iface::iface_addr_query
 		}
 	}
     freeifaddrs(myaddrs);
-	return ret;
+	return ;
 }
 
 /*Query the IPA endpoint property */
@@ -1229,14 +1210,7 @@ void IPACM_Iface::config_ip_type(ipa_ip_type iptype)
 		}
 		else
 		{
-			if (iptype == IPA_IP_v6)
-			{
-				ip_type = IPA_IP_v6;
-			}
-			else
-			{
-				ip_type = IPA_IP_MAX;
-			}
+			ip_type = IPA_IP_v6;
 		}
 
 		IPACMDBG_H(" interface(%s:%d) now ip-type is %d\n", dev_name, ipa_if_num, ip_type);

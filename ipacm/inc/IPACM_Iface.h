@@ -188,7 +188,7 @@ public:
 	static int iface_ipa_index_query(int interface_index);
 
 	/* Query ipa_interface ipv4_addr by given linux interface_index */
-	static ipa_ip_type iface_addr_query(int interface_index, bool post_new_addr_event = true,
+	static void iface_addr_query(int interface_index, bool post_new_addr_event = true,
 		uint32_t *curr_ip4_addr = 0);
 
 	/*Query the IPA endpoint property */

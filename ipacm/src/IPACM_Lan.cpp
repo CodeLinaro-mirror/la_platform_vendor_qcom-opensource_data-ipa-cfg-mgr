@@ -86,6 +86,10 @@
 #include <sys/ioctl.h>
 #include <fcntl.h>
 
+#ifndef IPA_LAN_RX_HDR_NAME
+#define IPA_LAN_RX_HDR_NAME "ipa_lan_hdr"
+#endif
+
 
 const uint8_t IPACM_Lan::v4_eogre_header[] = {
 	0x45, 0x00, 0x00, 0x00,
@@ -3303,6 +3307,7 @@ int IPACM_Lan::handle_wan_down(bool is_sta_mode)
 {
 	int idx = 0;
 
+	IPACMDBG_H("Received handle_wan_down is_sta_mode %d, ipa_if_cate  %d \n",is_sta_mode, ipa_if_cate);
 	if (rx_prop == NULL)
 	{
 		IPACMERR("Rx prop is NULL, return\n");
@@ -7052,6 +7057,28 @@ fail:
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
 			if (get_client_memptr(eth_client, i)->lan_stats_idx != -1)
 			{
+				IPACMDBG_H("Clearing the Q6 UL flt rules as IPA_LINK_DOWN\n");
+				if (IPACM_Iface::ipacmcfg->ipacm_lan_stats_enable == true)
+				{
+					if (get_client_memptr(eth_client, i)->ipv4_ul_rules_set == true)
+					{
+						if (delete_uplink_filter_rule_per_client(IPA_IP_v4, get_client_memptr(eth_client, i)->mac))
+						{
+							IPACMERR("unbale to delete uplink v4 filter rules for index:%d\n", i);
+							return IPACM_FAILURE;
+						}
+					}
+
+					if (get_client_memptr(eth_client, i)->ipv6_ul_rules_set == true)
+					{
+						if (delete_uplink_filter_rule_per_client(IPA_IP_v6, get_client_memptr(eth_client, i)->mac))
+						{
+							IPACMERR("unbale to delete uplink v6 filter rules for index:%d\n", i);
+							return IPACM_FAILURE;
+						}
+					}
+				}
+
 				/* Clear the lan client info. */
 				client_info = (struct wan_ioctl_lan_client_info *)malloc(sizeof(struct wan_ioctl_lan_client_info));
 				if (client_info == NULL)
@@ -7192,12 +7219,12 @@ fail:
 #endif
 
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
-		/* Reset the lan stats indices belonging to this object. */
-		if (IPACM_Iface::ipacmcfg->ipacm_lan_stats_enable)
-		{
-			IPACMDBG_H("Resetting lan stats indices. \n");
-			reset_lan_stats_index();
-		}
+	/* Reset the lan stats indices belonging to this object. */
+	if (IPACM_Iface::ipacmcfg->ipacm_lan_stats_enable)
+	{
+		IPACMDBG_H("Resetting lan stats indices. \n");
+		reset_lan_stats_index();
+	}
 #endif
 
 #ifdef IPA_IOCTL_SET_EXT_ROUTER_MODE
@@ -9463,6 +9490,7 @@ int IPACM_Lan::install_uplink_filter_rule_per_client_v2
 					((struct ipa_flt_rule_add_v2 *)pFilteringTable->rules)[i].flt_rule_hdl;
 			}
 			get_client_memptr(eth_client, clnt_indx)->ipv4_ul_rules_set = true;
+			num_wan_ul_fl_rule_v4 = pFilteringTable->num_rules;
 		}
 		else if(iptype == IPA_IP_v6)
 		{
@@ -9472,6 +9500,7 @@ int IPACM_Lan::install_uplink_filter_rule_per_client_v2
 					((struct ipa_flt_rule_add_v2 *)pFilteringTable->rules)[i].flt_rule_hdl;
 			}
 			get_client_memptr(eth_client, clnt_indx)->ipv6_ul_rules_set = true;
+			num_wan_ul_fl_rule_v6 = pFilteringTable->num_rules;
 		}
 		else
 		{
@@ -10019,6 +10048,8 @@ int IPACM_Lan::enable_per_client_stats(bool *status)
 int IPACM_Lan::handle_wan_down_v6(bool is_sta_mode, bool is_support_mpdn)
 {
 	int idx = 0;
+
+	IPACMDBG_H("Received handle_wan_down_v6 is_sta_mode %d, is_support_mpdn %d, ipa_if_cate  %d \n",is_sta_mode,is_support_mpdn, ipa_if_cate);
 	if (rx_prop == NULL)
 	{
 		IPACMERR("Rx prop is NULL, return\n");
@@ -10632,7 +10663,7 @@ int IPACM_Lan::modify_private_subnet(bool eogre_enabled)
 	flt_rule.rule.eq_attrib_type = 0;
 	flt_rule.rule.rt_tbl_hdl = IPACM_Iface::ipacmcfg->rt_tbl_default_v4.hdl;
 	IPACMDBG_H("Private filter rule use table: %s, hdl: %d\n",IPACM_Iface::ipacmcfg->rt_tbl_default_v4.name,IPACM_Iface::ipacmcfg->rt_tbl_default_v4.hdl);
-	IPACMDBG_H("num privatesubnet:%d",IPACM_Iface::ipacmcfg->ipa_num_private_subnet);
+	IPACMDBG_H("num privatesubnet:%d\n",IPACM_Iface::ipacmcfg->ipa_num_private_subnet);
 	for(i = 0; i < (IPACM_Iface::ipacmcfg->ipa_num_private_subnet); i++)
 	{
 		/* add private subnet rule for ipv4 */
@@ -16207,8 +16238,21 @@ int IPACM_Lan::gre_make_hdr_rmv_ctx(
 		procCtx->eogre_params.hdr_remove_param.tag_add_len =
 			sizeof(sc_tag_header);
 	}
+	else
 #endif
-
+	{
+		//add hdr_handle for eogre
+		struct ipa_ioc_get_hdr hdr;
+		memset(&hdr, 0, sizeof(hdr));
+		strlcpy(hdr.name, IPA_LAN_RX_HDR_NAME, sizeof(IPA_LAN_RX_HDR_NAME));
+		if(m_header.GetHeaderHandle(&hdr) == false)
+		{
+			IPACMERR("Failed to get LAN RX header hdl.\n");
+			return IPACM_FAILURE;
+		}
+		procCtx->hdr_hdl = hdr.hdl;
+		gre_route_data[iptype].dl_header_hdl = hdr.hdl;
+	}
 	if ( m_header.AddHeaderProcCtx(procCtxTable) == true )
 	{
 		IPACMDBG_H(
@@ -16216,6 +16260,8 @@ int IPACM_Lan::gre_make_hdr_rmv_ctx(
 
 		gre_route_data[iptype].proc_ctx_gre_rmv_hdl =
 			procCtx->proc_ctx_hdl;
+		IPACMDBG_H("GRE procCtx->proc_ctx_hdl : %x\n", procCtx->proc_ctx_hdl);
+		IPACMDBG_H("GRE procCtx->hdr_hdl : %x\n", procCtx->hdr_hdl);
 	}
 	else
 	{

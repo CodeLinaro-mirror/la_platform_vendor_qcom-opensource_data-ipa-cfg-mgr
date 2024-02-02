@@ -226,6 +226,8 @@ private:
 
 	void add_client_rt_rule(peer_iface_info *peer, client_info *client);
 
+	bool IsPeerFound_In_ClientReject_List(char *client_peer = NULL, char *client_iface = NULL);
+
 	void del_client_rt_rule(peer_iface_info *peer, client_info *client);
 
 	void add_l2tp_client_rt_rule(peer_iface_info *peer, client_info *client);

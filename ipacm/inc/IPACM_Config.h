@@ -87,6 +87,9 @@
 #include <set>
 #include<algorithm>
 
+#include <iostream>
+#include <ostream>
+
 typedef struct
 {
   char iface_name[IPA_IFACE_NAME_LEN];
@@ -208,6 +211,8 @@ class IPACM_Config
 {
 public:
 
+	int max_file_size;
+
 	/* IPACM ipa_client map to rm_resource*/
 	ipa_rm_resource_name ipa_client_rm_map_tbl[IPA_CLIENT_MAX];
 
@@ -219,6 +224,9 @@ public:
 
 	/* Store interested interface and their configuration from XML file */
 	ipa_ifi_dev_name_t *iface_table;
+
+	/*Store the reject interfaces list per Iface*/
+	std::map<std::string, std::list<std::string>> Reject_Iface_Map;
 
 	/* Store macsec details */
 	ipa_macsec_map_cache *macsec_cache;

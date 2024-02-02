@@ -28,7 +28,7 @@
  *
  * Changes from Qualcomm Innovation Center are provided under the following license:
  *
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted (subject to the limitations in the
@@ -260,6 +260,7 @@ IPACM_Lan::IPACM_Lan(int iface_index) : IPACM_Iface(iface_index)
 	modem_ul_v6_set = false;
 	memset(ipv6_prefix, 0, sizeof(ipv6_prefix));
 	memset(&xlat_ctx, 0, sizeof(xlat_context));
+	memset(tcp_syn_flt_rule_hdl, 0, sizeof(tcp_syn_flt_rule_hdl));
 
 #ifdef FEATURE_VLAN_MPDN
 	is_vlan_offload_disabled = false;
@@ -270,7 +271,6 @@ IPACM_Lan::IPACM_Lan(int iface_index) : IPACM_Iface(iface_index)
 #ifdef FEATURE_L2TP
 #ifdef IPA_L2TP_TUNNEL_UDP
 	l2tp_udp_dflt_flt_tule_offset = 0;
-	memset(tcp_syn_flt_rule_hdl, 0, sizeof(tcp_syn_flt_rule_hdl));
 	memset(l2tp_udp_dflt_flt_rule_hdl, 0, sizeof(l2tp_udp_dflt_flt_rule_hdl));
 #endif
 #endif

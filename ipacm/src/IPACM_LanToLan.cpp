@@ -2147,6 +2147,11 @@ void IPACM_LanToLan_Iface::clear_all_rt_rule_for_one_peer_iface(peer_iface_info 
 	list<client_info>::iterator it;
 	ipa_hdr_l2_type peer_l2_type;
 
+	if (peer->is_vlan_peer)
+		peer_l2_type = peer->peer->get_iface_pointer()->tx_prop->tx[2].hdr_l2_type;
+	else
+		peer_l2_type = peer->peer->get_iface_pointer()->tx_prop->tx[0].hdr_l2_type;
+
 	if (peer_l2_type >= IPA_HDR_L2_MAX || peer_l2_type < 0)
 	{
 		IPACMDBG_H("Invalid peer_l2_type: %d\n", peer_l2_type);

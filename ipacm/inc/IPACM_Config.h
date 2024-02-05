@@ -297,11 +297,6 @@ public:
 	/* Indicates whether sw-filtering is enabled or not. */
 	int ipacm_flt_enable;
 
-#ifdef FEATURE_EoGRE
-	ipa_ipgre_info eogre_info;
-	bool           eogre_enabled;
-#endif
-
 #ifdef FEATURE_VLAN_MPDN
 	bool vlan_firewall_change_handle;
 

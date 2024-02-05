@@ -185,56 +185,6 @@ public:
 	virtual int handle_software_routing_disable(void);
 	void delete_iface(void);
 
-	static inline void addr2host(
-		enum ipa_ip_type addr_type,
-		void*            addr ) {
-		if ( VALID_IPA_IP_TYPE(addr_type) && addr ) {
-			uint32_t* ptr = (uint32_t*) addr;
-			if ( addr_type == IPA_IP_v4 ) {
-				ptr[0] = ntohl(ptr[0]);
-			} else {
-				ptr[0] = ntohl(ptr[0]);
-				ptr[1] = ntohl(ptr[1]);
-				ptr[2] = ntohl(ptr[2]);
-				ptr[3] = ntohl(ptr[3]);
-			}
-		}
-	}
-
-	static inline void addr2network(
-		enum ipa_ip_type addr_type,
-		void*            addr ) {
-		if ( VALID_IPA_IP_TYPE(addr_type) && addr ) {
-			uint32_t* ptr = (uint32_t*) addr;
-			if ( addr_type == IPA_IP_v4 ) {
-				ptr[0] = htonl(ptr[0]);
-			} else {
-				ptr[0] = htonl(ptr[0]);
-				ptr[1] = htonl(ptr[1]);
-				ptr[2] = htonl(ptr[2]);
-				ptr[3] = htonl(ptr[3]);
-			}
-		}
-	}
-
-	void change_to_network_order(
-		ipa_ip_type      iptype,
-		ipa_rule_attrib* attrib ) {
-		if ( ! VALID_IPA_IP_TYPE(iptype) || ! attrib ) {
-			IPACMERR(
-				"Bad iptype(%u) and/or attribute pointer(%p) is NULL.\n",
-				iptype, attrib);
-		}
-		if ( iptype == IPA_IP_v6 ) {
-			addr2network(iptype, attrib->u.v6.src_addr);
-			addr2network(iptype, attrib->u.v6.src_addr_mask);
-			addr2network(iptype, attrib->u.v6.dst_addr);
-			addr2network(iptype, attrib->u.v6.dst_addr_mask);
-		} else {
-			IPACMDBG_H("IP type is not IPv6, do nothing: %d\n", iptype);
-		}
-	}
-
 protected:
 
 	uint8_t m_ipv6_default_filterting_rules_count;

@@ -364,7 +364,7 @@ void* ipa_driver_msg_notifier(void *param)
 			if(data_fid == NULL)
 			{
 				IPACMERR("unable to allocate memory for event_wlan data_fid\n");
-				goto done;
+				return NULL;
 			}
 			ipa_get_if_index(event_wlan->name, &(data_fid->if_index));
 			evt_data.event = IPA_WLAN_AP_LINK_UP_EVENT;
@@ -381,7 +381,7 @@ void* ipa_driver_msg_notifier(void *param)
 			if(data_fid == NULL)
 			{
 				IPACMERR("unable to allocate memory for event_wlan data_fid\n");
-				goto done;
+				return NULL;
 			}
 			ipa_get_if_index(event_wlan->name, &(data_fid->if_index));
 			evt_data.event = IPA_WLAN_LINK_DOWN_EVENT;
@@ -397,7 +397,7 @@ void* ipa_driver_msg_notifier(void *param)
 			if(data == NULL)
 			{
 				IPACMERR("unable to allocate memory for event_wlan data_fid\n");
-				goto done;
+				return NULL;
 			}
 			memcpy(data->mac_addr,
 				 event_wlan->mac_addr,
@@ -417,7 +417,7 @@ void* ipa_driver_msg_notifier(void *param)
 			if(data_fid == NULL)
 			{
 				IPACMERR("unable to allocate memory for event_wlan data_fid\n");
-				goto done;
+				return NULL;
 			}
 			ipa_get_if_index(event_wlan->name, &(data_fid->if_index));
 			evt_data.event = IPA_WLAN_LINK_DOWN_EVENT;
@@ -434,7 +434,7 @@ void* ipa_driver_msg_notifier(void *param)
 		        if (data == NULL)
 		        {
 		    	        IPACMERR("unable to allocate memory for event_wlan data\n");
-		    	        goto done;
+		    	        return NULL;
 		        }
 			memcpy(data->mac_addr,
 						 event_wlan->mac_addr,
@@ -451,7 +451,7 @@ void* ipa_driver_msg_notifier(void *param)
 			if(event_ex_o.num_of_attribs > IPA_DRIVER_WLAN_EVENT_MAX_OF_ATTRIBS)
 			{
 				IPACMERR("buffer size overflow\n");
-				goto done;
+				return NULL;
 			}
 			length = sizeof(ipa_wlan_msg_ex)+ event_ex_o.num_of_attribs * sizeof(ipa_wlan_hdr_attrib_val);
 			IPACMDBG_H("num_of_attribs %d, length %d\n", event_ex_o.num_of_attribs, length);
@@ -459,14 +459,14 @@ void* ipa_driver_msg_notifier(void *param)
 			if(event_ex == NULL )
 			{
 				IPACMERR("Unable to allocate memory\n");
-				goto done;
+				return NULL;
 			}
 			memcpy(event_ex, buffer + sizeof(struct ipa_msg_meta), length);
 			data_ex = (ipacm_event_data_wlan_ex *)malloc(sizeof(ipacm_event_data_wlan_ex) + event_ex_o.num_of_attribs * sizeof(ipa_wlan_hdr_attrib_val));
 		    if (data_ex == NULL)
 		    {
 				IPACMERR("unable to allocate memory for event data\n");
-		    	goto done;
+		    	return NULL;
 		    }
 			data_ex->num_of_attribs = event_ex->num_of_attribs;
 
@@ -483,7 +483,7 @@ void* ipa_driver_msg_notifier(void *param)
 			if(new_neigh_data == NULL)
 			{
 				IPACMERR("Failed to allocate memory.\n");
-				goto done;
+				return NULL;
 			}
 			memset(new_neigh_data, 0, sizeof(ipacm_event_data_all));
 			new_neigh_data->iptype = IPA_IP_v6;
@@ -521,7 +521,7 @@ void* ipa_driver_msg_notifier(void *param)
 		        if (data == NULL)
 		        {
 		    	        IPACMERR("unable to allocate memory for event_wlan data\n");
-		    	        goto done;
+		    	        return NULL;
 		        }
 			memcpy(data->mac_addr,
 						 event_wlan->mac_addr,
@@ -541,7 +541,7 @@ void* ipa_driver_msg_notifier(void *param)
 		        if (data == NULL)
 		        {
 		    	        IPACMERR("unable to allocate memory for event_wlan data\n");
-		    	        goto done;
+		    	        return NULL;
 		        }
 			memcpy(data->mac_addr,
 						 event_wlan->mac_addr,
@@ -561,7 +561,7 @@ void* ipa_driver_msg_notifier(void *param)
 		        if (data == NULL)
 		        {
 		    	       IPACMERR("unable to allocate memory for event_wlan data\n");
-		    	       goto done;
+		    	       return NULL;
 		        }
 			memcpy(data->mac_addr,
 						 event_wlan->mac_addr,
@@ -578,7 +578,7 @@ void* ipa_driver_msg_notifier(void *param)
 			if(data_fid == NULL)
 			{
 				IPACMERR("unable to allocate memory for event_ecm data_fid\n");
-				goto done;
+				return NULL;
 			}
 			data_fid->if_index = event_ecm.ifindex;
 			evt_data.event = IPA_USB_LINK_UP_EVENT;
@@ -592,7 +592,7 @@ void* ipa_driver_msg_notifier(void *param)
 			if(data_fid == NULL)
 			{
 				IPACMERR("unable to allocate memory for event_ecm data_fid\n");
-				goto done;
+				return NULL;
 			}
 			data_fid->if_index = event_ecm.ifindex;
 			evt_data.event = IPA_LINK_DOWN_EVENT;
@@ -606,7 +606,7 @@ void* ipa_driver_msg_notifier(void *param)
 			if(data_iptype == NULL)
 			{
 				IPACMERR("unable to allocate memory for event_ecm data_iptype\n");
-				goto done;
+				return NULL;
 			}
 			ipa_get_if_index(event_wan.upstream_ifname, &(data_iptype->if_index));
 			ipa_get_if_index(event_wan.tethered_ifname, &(data_iptype->if_index_tether));
@@ -623,7 +623,7 @@ void* ipa_driver_msg_notifier(void *param)
 			if(data_iptype == NULL)
 			{
 				IPACMERR("unable to allocate memory for event_ecm data_iptype\n");
-				goto done;
+				return NULL;
 			}
 			ipa_get_if_index(event_wan.upstream_ifname, &(data_iptype->if_index));
 			ipa_get_if_index(event_wan.tethered_ifname, &(data_iptype->if_index_tether));
@@ -642,7 +642,7 @@ void* ipa_driver_msg_notifier(void *param)
 			if(data_fid == NULL)
 			{
 				IPACMERR("unable to allocate memory for event data_fid\n");
-				goto done;
+				return NULL;
 			}
 			ipa_get_if_index(event_wan.upstream_ifname, &(data_fid->if_index));
 			evt_data.event = IPA_WAN_EMBMS_LINK_UP_EVENT;
@@ -685,7 +685,7 @@ void* ipa_driver_msg_notifier(void *param)
 			if(data_fid == NULL)
 			{
 				IPACMERR("unable to allocate memory for xlat event\n");
-				goto done;
+				return NULL;
 			}
 			ipa_get_if_index(event_wan.upstream_ifname, &(data_fid->if_index));
 			evt_data.event = IPA_LINK_UP_EVENT;
@@ -699,7 +699,7 @@ void* ipa_driver_msg_notifier(void *param)
 			if(data_fid == NULL)
 			{
 				IPACMERR("unable to allocate memory for xlat event\n");
-				goto done;
+				return NULL;
 			}
 			ipa_get_if_index(event_wan.upstream_ifname, &(data_fid->if_index));
 			evt_data.event = IPA_WAN_XLAT_CONNECT_EVENT;
@@ -713,7 +713,7 @@ void* ipa_driver_msg_notifier(void *param)
 			if(data_tethering_stats == NULL)
 			{
 				IPACMERR("unable to allocate memory for event data_tethering_stats\n");
-				goto done;
+				return NULL;
 			}
 			memcpy(data_tethering_stats,
 					 &event_data_stats,
@@ -730,7 +730,7 @@ void* ipa_driver_msg_notifier(void *param)
 			if(data_network_stats == NULL)
 			{
 				IPACMERR("unable to allocate memory for event data_network_stats\n");
-				goto done;
+				return NULL;
 			}
 			memcpy(data_network_stats,
 					 &event_network_stats,
@@ -747,7 +747,7 @@ void* ipa_driver_msg_notifier(void *param)
 			if(data == NULL)
 			{
 				IPACMERR("unable to allocate memory for event data\n");
-				goto done;
+				return NULL;
 			}
 			memcpy(data->mac_addr,
 						 event_lan_client.mac,
@@ -765,7 +765,7 @@ void* ipa_driver_msg_notifier(void *param)
 			if(data == NULL)
 			{
 				IPACMERR("unable to allocate memory for event data\n");
-				goto done;
+				return NULL;
 			}
 			memcpy(data->mac_addr,
 						 event_lan_client.mac,
@@ -882,7 +882,7 @@ void* ipa_driver_msg_notifier(void *param)
 				if(data_event_conn == NULL)
 				{
 					IPACMERR("unable to allocate memory for event_wlan data_event_conn\n");
-				goto done;
+				return NULL;
 				}//sky
 				data_event_conn->iptype = add_socksv5_info.ul_in.ip_type;
 				data_event_conn->src_ipv6_addr[0] = add_socksv5_info.ul_in.ipv6_src[0];
@@ -927,7 +927,7 @@ void* ipa_driver_msg_notifier(void *param)
 			if(data_fid == NULL)
 			{
 				IPACMERR("unable to allocate memory for event_gsb\n");
-				goto done;
+				return NULL;
 			}
 			ipa_get_if_index(event_gsb->name, &(data_fid->if_index));
 			evt_data.event = IPA_USB_LINK_UP_EVENT;
@@ -941,7 +941,7 @@ void* ipa_driver_msg_notifier(void *param)
 			if(data_fid == NULL)
 			{
 				IPACMERR("unable to allocate memory for event_gsb\n");
-				goto done;
+				return NULL;
 			}
 			ipa_get_if_index(event_gsb->name, &(data_fid->if_index));
 			evt_data.event = IPA_LINK_DOWN_EVENT;
@@ -968,7 +968,7 @@ void* ipa_driver_msg_notifier(void *param)
 			if(!ip_pass_pdn_data)
 			{
 				IPACMERR("unable to allocate memory for pdn_config\n");
-				goto done;
+				return NULL;
 			}
 			ip_pass_pdn_data->skip_nat = pdn_info->u.passthrough_cfg.skip_nat;
 			ip_pass_pdn_data->pdn_ip_addr = htonl(pdn_info->u.passthrough_cfg.pdn_ip_addr);
@@ -1056,110 +1056,6 @@ void* ipa_driver_msg_notifier(void *param)
 			break;
 #endif
 
-#ifdef FEATURE_EoGRE
-		case IPA_EoGRE_UP_EVENT: {
-			IPACMDBG_H("Received an IPA_EoGRE_UP_EVENT\n");
-
-			if ( IPACM_Iface::ipacmcfg->eogre_enabled == true )
-			{
-				IPACMERR("Can't enable eogre when it's already enabled\n");
-				return NULL;
-			}
-
-			/*
-			 * The logic below is to check that we've been sent vaild,
-			 * non-empty ipa_ipgre_info data.
-			 */
-			ipa_ipgre_info null_ipgre_info;
-			ipa_ipgre_info new_ipgre_info;
-			bool           new_contains_nulls;
-
-			/*
-			 * Get the new data from the message...
-			 */
-			memcpy(
-				&new_ipgre_info,
-				buffer + sizeof(struct ipa_msg_meta),
-				sizeof(ipa_ipgre_info));
-
-			/*
-			 * Determine if the new message contains nulls...
-			 */
-			memset(&null_ipgre_info, 0, sizeof(null_ipgre_info));
-
-			new_contains_nulls =
-				! memcmp(&new_ipgre_info, &null_ipgre_info, sizeof(ipa_ipgre_info));
-
-			if ( new_contains_nulls )
-			{
-				IPACMERR("Inbound ipa_ipgre_info on IPA_EoGRE_UP_EVENT is empty/NULL\n");
-				return NULL;
-			}
-			else /* ( ! new_contains_nulls ) */
-			{
-				IPACM_Iface::ipacmcfg->eogre_enabled = true;
-				char          buf[64];
-
-				if ( new_ipgre_info.iptype == IPA_IP_v4 )
-				{
-
-					IPACM_Iface::addr2host(IPA_IP_v4, &new_ipgre_info.ipv4_src);
-					IPACM_Iface::addr2host(IPA_IP_v4, &new_ipgre_info.ipv4_dst);
-
-					IPACM_LOG_IP_ADDR(
-						"The eogre src address (host order) on conversion from input:",
-						IPA_IP_v4,
-						&new_ipgre_info.ipv4_src);
-
-					IPACM_LOG_IP_ADDR(
-						"The eogre dst address (host order) on conversion from input:",
-						IPA_IP_v4,
-						&new_ipgre_info.ipv4_dst);
-				}
-				else
-				{
-					IPACM_Iface::addr2host(IPA_IP_v6, &new_ipgre_info.ipv6_src);
-					IPACM_Iface::addr2host(IPA_IP_v6, &new_ipgre_info.ipv6_dst);
-
-					IPACM_LOG_IP_ADDR(
-						"The eogre src address (host order) on conversion from input:",
-						IPA_IP_v6,
-						&new_ipgre_info.ipv6_src);
-
-					IPACM_LOG_IP_ADDR(
-						"The eogre dst address (host order) on conversion from input:",
-						IPA_IP_v6,
-						&new_ipgre_info.ipv6_dst);
-				}
-
-				memcpy(
-					&(IPACM_Iface::ipacmcfg->eogre_info),
-					&new_ipgre_info,
-					sizeof(ipa_ipgre_info));
-			}
-
-			evt_data.event    = IPA_HANDLE_EoGRE_UP;
-			evt_data.evt_data = 0;
-		}
-			break;
-
-		case IPA_EoGRE_DOWN_EVENT:
-			IPACMDBG_H("Received an IPA_EoGRE_DOWN_EVENT\n");
-
-			if ( IPACM_Iface::ipacmcfg->eogre_enabled == false )
-			{
-				IPACMERR("Can't disable eogre when it's already disabled\n");
-				return NULL;
-			}
-
-			IPACM_Iface::ipacmcfg->eogre_enabled = false;
-
-			evt_data.event    = IPA_HANDLE_EoGRE_DOWN;
-			evt_data.evt_data = 0;
-
-			break;
-#endif
-
 		default:
 			IPACMDBG_H("Unhandled message type: %d\n", event_hdr.msg_type);
 			continue;
@@ -1176,7 +1072,6 @@ void* ipa_driver_msg_notifier(void *param)
 		}
 	}
 
-done:
 	(void)close(fd);
 	return NULL;
 }
@@ -1200,95 +1095,14 @@ static void IPACM_Signals_handler(int sig, siginfo_t *info, void *extra)
 	switch(sig)
 	{
 	case SIGUSR1:
-#if defined(FEATURE_EoGRE)
-		IPACMDBG_H("Received SIGUSR1\n");
-		{
-			struct ipa_ioc_eogre_info ei;
-
-			int fd = open("/dev/ipa", O_RDWR);
-			if (fd < 0) {
-				IPACMERR("Failed to open /dev/ipa\n");
-				return;
-			}
-
-			memset(&ei, 0, sizeof(ei));
-			ei.ipgre_info.gre_protocol = 0x6558;
-# if defined(IPV6_EoGRE_TEST)
-			IPACMDBG_H("Received SIGUSR1 for ipv6 eogre\n");
-			ei.ipgre_info.iptype = IPA_IP_v6;
-			/*
-			 * Standard libg function for turning an ascii
-			 * representation of an ip address into a network order
-			 * binary version...
-			 */
-			inet_pton(AF_INET6,
-					  "8877:6655:4433:2211:ACFE:2667:189:16C1",
-					  &ei.ipgre_info.ipv6_src);
-			inet_pton(AF_INET6,
-					  "FEED:FACE:0000:0000:DEAD:BEEF:0000:0000",
-					  &ei.ipgre_info.ipv6_dst);
-			IPACM_LOG_IP_ADDR(
-				"The eogre src address (network order) on input:",
-				IPA_IP_v6,
-				&ei.ipgre_info.ipv6_src);
-			IPACM_LOG_IP_ADDR(
-				"The eogre dst address (network order) on input:",
-				IPA_IP_v6,
-				&ei.ipgre_info.ipv6_dst);
-#else
-			IPACMDBG_H("Received SIGUSR1 for ipv4 eogre\n");
-			ei.ipgre_info.iptype = IPA_IP_v4;
-			/*
-			 * Standard libg function for turning an ascii
-			 * representation of an ip address into a network order
-			 * binary version...
-			 */
-			inet_pton(AF_INET,
-					  "192.168.48.171",
-					  &ei.ipgre_info.ipv4_src);
-			inet_pton(AF_INET,
-					  "222.173.190.239",
-					  &ei.ipgre_info.ipv4_dst);
-			IPACM_LOG_IP_ADDR(
-				"The eogre src address (network order) on input:",
-				IPA_IP_v4,
-				&ei.ipgre_info.ipv4_src);
-			IPACM_LOG_IP_ADDR(
-				"The eogre dst address (network order) on input:",
-				IPA_IP_v4,
-				&ei.ipgre_info.ipv4_dst);
-
-# endif
-			ioctl(fd, IPA_IOC_ADD_EoGRE_MAPPING, &ei);
-			close(fd);
-		}
-#else
 		IPACMDBG_H("Received SW_ROUTING_ENABLE request \n");
 		evt_data.event = IPA_SW_ROUTING_ENABLE;
 		IPACM_Iface::ipacmcfg->ipa_sw_rt_enable = true;
-#endif
 		break;
 	case SIGUSR2:
-#if defined(FEATURE_EoGRE)
-		IPACMDBG_H("Received SIGUSR2\n");
-		{
-			struct ipa_ioc_eogre_info ei;
-
-			int fd = open("/dev/ipa", O_RDWR);
-			if (fd < 0) {
-				IPACMERR("Failed to open /dev/ipa\n");
-				return;
-			}
-
-			memset(&ei, 0, sizeof(ei));
-			ioctl(fd, IPA_IOC_DEL_EoGRE_MAPPING, &ei);
-			close(fd);
-		}
-#else
 		IPACMDBG_H("Received SW_ROUTING_DISABLE request \n");
 		evt_data.event = IPA_SW_ROUTING_DISABLE;
 		IPACM_Iface::ipacmcfg->ipa_sw_rt_enable = false;
-#endif
 		break;
 	case SIGFPE:
 	case SIGSEGV:
@@ -1309,10 +1123,10 @@ static void IPACM_Signals_handler(int sig, siginfo_t *info, void *extra)
 		messages = backtrace_symbols(array, size);
 
 		/* skip first stack frame (points here) */
-		IPACMERR("crash stack:\n");
+		IPACMERR("crash stack:\n")
 		for(i = 1; i < size && messages != NULL; ++i)
 		{
-			IPACMERR("[bt]: (%d) %s\n", i, messages[i]);
+			IPACMERR("[bt]: (%d) %s\n", i, messages[i])
 		}
 		IPACMERR("return to default signal handler\n");
 

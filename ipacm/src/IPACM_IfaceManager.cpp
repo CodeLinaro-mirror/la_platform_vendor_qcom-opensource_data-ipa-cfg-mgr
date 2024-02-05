@@ -342,7 +342,7 @@ int IPACM_IfaceManager::create_iface_instance(ipacm_ifacemgr_data *param)
 				IPACMDBG_H("ipa_LAN (%s):ipa_index (%d) instance open/registr ok\n", lan->dev_name, lan->ipa_if_num);
 				registr(ipa_interface_index, lan);
 				/* solve the new_addr comes earlier issue */
-				IPACM_Iface::iface_addr_query(if_index);
+                                IPACM_Iface::iface_addr_query(if_index);
 			}
 			break;
 
@@ -397,10 +397,6 @@ int IPACM_IfaceManager::create_iface_instance(ipacm_ifacemgr_data *param)
 						odu->delete_iface();
 						return IPACM_FAILURE;
 					}
-#ifdef FEATURE_EoGRE
-					IPACM_EvtDispatcher::registr(IPA_HANDLE_EoGRE_UP, odu);
-					IPACM_EvtDispatcher::registr(IPA_HANDLE_EoGRE_DOWN, odu);
-#endif
 					IPACM_EvtDispatcher::registr(IPA_ADDR_ADD_EVENT, odu);
 					IPACM_EvtDispatcher::registr(IPA_NEIGH_CLIENT_IP_ADDR_ADD_EVENT, odu);
 					IPACM_EvtDispatcher::registr(IPA_NEIGH_CLIENT_IP_ADDR_DEL_EVENT, odu);
@@ -559,10 +555,6 @@ int IPACM_IfaceManager::create_iface_instance(ipacm_ifacemgr_data *param)
 							return IPACM_FAILURE;
 						}
 					}
-#ifdef FEATURE_EoGRE
-					IPACM_EvtDispatcher::registr(IPA_HANDLE_EoGRE_UP, w);
-					IPACM_EvtDispatcher::registr(IPA_HANDLE_EoGRE_DOWN, w);
-#endif
 					IPACM_EvtDispatcher::registr(IPA_ADDR_ADD_EVENT, w);
 #ifdef FEATURE_IPA_ANDROID
 					IPACM_EvtDispatcher::registr(IPA_WAN_UPSTREAM_ROUTE_ADD_EVENT, w);

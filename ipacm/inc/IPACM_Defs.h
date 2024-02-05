@@ -109,7 +109,6 @@ extern "C"
 #define IPA_ODU_HDR_NAME_v4  "IPACM_ODU_v4"
 #define IPA_ODU_HDR_NAME_v6  "IPACM_ODU_v6"
 #define IPA_IF_SOCKSv5_NAME  "IPACM_SOCKSv5"
-#define IPA_EOGRE_HDR_NAME   "IPACM_EoGRE_v%d"
 
 #define IPA_MAX_IFACE_ENTRIES 30 /* current: 15 rmnet + 4 wlan + bridge+ eth+ rndis + ecm.*/
 #define IPA_MAX_ALG_ENTRIES 20
@@ -195,51 +194,11 @@ extern "C"
 #define IPA_MAX_IPV6_PREFIX_FLT_RULE 1
 #endif
 
-
 #define IPA_DUMMY_PREFIX 0xFFFFFFFF
 
 /*===========================================================================
 										 GLOBAL DEFINITIONS AND DECLARATIONS
 ===========================================================================*/
-
-/*
- * The following macros allow callers to print the raw bytes making up
- * an address.  No assumptions are made about endianess.
- */
-#define IPACM_LOG_V4_ADDR(prefix, ip_addr)								\
-	IPACMDBG_H("%s IPV4 Address %d.%d.%d.%d\n",							\
-			   (prefix) ? prefix : "",									\
-			   ((uint8_t*) ip_addr)[0],  ((uint8_t*) ip_addr)[1],		\
-			   ((uint8_t*) ip_addr)[2],  ((uint8_t*) ip_addr)[3]);
-
-#define IPACM_LOG_V6_ADDR(prefix, ip_addr)								\
-	IPACMDBG_H("%s IPV6 Address %02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x\n", \
-			   (prefix) ? prefix : "",									\
-			   ((uint8_t*) ip_addr)[0],  ((uint8_t*) ip_addr)[1],		\
-			   ((uint8_t*) ip_addr)[2],  ((uint8_t*) ip_addr)[3],		\
-			   ((uint8_t*) ip_addr)[4],  ((uint8_t*) ip_addr)[5],		\
-			   ((uint8_t*) ip_addr)[6],  ((uint8_t*) ip_addr)[7],		\
-			   ((uint8_t*) ip_addr)[8],  ((uint8_t*) ip_addr)[9],		\
-			   ((uint8_t*) ip_addr)[10], ((uint8_t*) ip_addr)[11],		\
-			   ((uint8_t*) ip_addr)[12], ((uint8_t*) ip_addr)[13],		\
-			   ((uint8_t*) ip_addr)[14], ((uint8_t*) ip_addr)[15]);
-
-#define IPACM_LOG_IP_ADDR(prefix, iptype, ip_addr)	\
-	if ( iptype == IPA_IP_v4 )						\
-	{												\
-		IPACM_LOG_V4_ADDR(prefix, ip_addr);			\
-	}												\
-	else											\
-	{												\
-		IPACM_LOG_V6_ADDR(prefix, ip_addr);			\
-	}
-
-/*
- *===========================================================================
- * GLOBAL DEFINITIONS AND DECLARATIONS
- *===========================================================================
- */
-
 typedef enum
 {
 	IPA_CFG_CHANGE_EVENT,                 /* NULL */
@@ -325,18 +284,12 @@ typedef enum
 #ifdef FEATURE_SOCKSv5
 	IPA_HANDLE_SOCKSv5_UP,                    /* ipacm_event_connection */
 	IPA_HANDLE_SOCKSv5_DOWN,                  /* NULL */
-	IPA_ADD_SOCKSv5_CONN,                     /* ipa_socksv5_msg */
+	IPA_ADD_SOCKSv5_CONN,              	      /* ipa_socksv5_msg */
 	IPA_DEL_SOCKSv5_CONN,                     /* ipa_socksv5_msg */
 #endif
 	IPA_MAC_ADD_DEL_FLT_EVENT,                /* NULL */
-	IPA_IP_PASS_UPDATE_EVENT,                 /* ipacm_ip_pass_pdn_info */
-	IPA_HANDLE_IP_PASS_PDN_INFO_UPDATE_EVENT, /* ipacm_event_vlan_pdn */
-
-#ifdef FEATURE_EoGRE
-	IPA_HANDLE_EoGRE_UP,                      /* ipa_ipgre_info */
-	IPA_HANDLE_EoGRE_DOWN,                    /* ipa_ipgre_info */
-#endif
-
+	IPA_IP_PASS_UPDATE_EVENT,			  /* ipacm_ip_pass_pdn_info */
+	IPA_HANDLE_IP_PASS_PDN_INFO_UPDATE_EVENT,	  /* Handle ip pass pdn info update.*/
 	IPACM_EVENT_MAX
 } ipa_cm_event_id;
 

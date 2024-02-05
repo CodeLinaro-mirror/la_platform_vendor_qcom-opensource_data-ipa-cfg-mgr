@@ -77,7 +77,6 @@ IPACM_Iface::IPACM_Iface(int iface_index) : m_ipv6_default_filterting_rules_coun
 
 	memset(dft_v4fl_rule_hdl, 0, sizeof(dft_v4fl_rule_hdl));
 	memset(dft_v6fl_rule_hdl, 0, sizeof(dft_v6fl_rule_hdl));
-	ula_hdl = 0;
 
 	memset(dft_rt_rule_hdl, 0, sizeof(dft_rt_rule_hdl));
 	memset(software_routing_fl_rule_hdl, 0, sizeof(software_routing_fl_rule_hdl));
@@ -667,7 +666,7 @@ int IPACM_Iface::query_iface_property(void)
 int IPACM_Iface::init_fl_rule(ipa_ip_type iptype)
 {
 
-	int res = IPACM_SUCCESS, len = 0,fd00_sub;
+	int res = IPACM_SUCCESS, len = 0;
 	struct ipa_flt_rule_add flt_rule_entry;
 	ipa_ioc_add_flt_rule *m_pFilteringTable;
 
@@ -906,7 +905,6 @@ int IPACM_Iface::init_fl_rule(ipa_ip_type iptype)
 		flt_rule_entry.at_rear = true;
 		flt_rule_entry.rule.hashable = true;
 #endif
-		fd00_sub = m_ipv6_default_filterting_rules_count;
 		memcpy(&(m_pFilteringTable->rules[m_ipv6_default_filterting_rules_count++]),
 			&flt_rule_entry, sizeof(struct ipa_flt_rule_add));
 
@@ -978,10 +976,6 @@ int IPACM_Iface::init_fl_rule(ipa_ip_type iptype)
 				if (m_pFilteringTable->rules[i].status == 0)
 				{
 					dft_v6fl_rule_hdl[i] = m_pFilteringTable->rules[i].flt_rule_hdl;
-					if ( i == fd00_sub )
-					{
-						ula_hdl = dft_v6fl_rule_hdl[i];
-					}
 					IPACMDBG_H("Default v6 Filter Rule %d HDL:0x%x\n", i, dft_v6fl_rule_hdl[i]);
 				}
 				else
@@ -1095,61 +1089,3 @@ void IPACM_Iface::delete_iface(void)
 		free(this->tx_prop);
 	delete this;
 }
-
-#ifdef FEATURE_EoGRE
-
-int IPACM_Iface::eogre_mod_ula_rule(
-	uint32_t dst_addr_mask )
-{
-	int res = IPACM_SUCCESS;
-
-	IPACMDBG_H("In with dst_addr_mask(0x%08X)\n", dst_addr_mask);
-
-	if ( ula_hdl )
-	{
-		char buf [
-			sizeof(struct ipa_ioc_mdfy_flt_rule) +
-			sizeof(struct ipa_flt_rule_mdfy) ];
-
-		memset(buf, 0, sizeof(buf));
-
-		struct ipa_ioc_mdfy_flt_rule *pFilteringTable =
-			(struct ipa_ioc_mdfy_flt_rule *) buf;
-
-		struct ipa_flt_rule_mdfy *flt_rule = pFilteringTable->rules;
-
-		pFilteringTable->num_rules = 1;
-		pFilteringTable->commit    = 1;
-		pFilteringTable->ip        = IPA_IP_v6;
-
-		flt_rule->rule_hdl         = ula_hdl;
-		flt_rule->rule.retain_hdr  = 1;
-		flt_rule->status           = -1;
-		flt_rule->rule.action      = IPA_PASS_TO_EXCEPTION;
-
-		memcpy(
-			&flt_rule->rule.attrib,
-			&rx_prop->rx[0].attrib,
-			sizeof(flt_rule->rule.attrib));
-
-		flt_rule->rule.attrib.attrib_mask |= IPA_FLT_DST_ADDR;
-
-#ifdef FEATURE_IPA_V3
-		flt_rule->rule.hashable = true;
-#endif
-		flt_rule->rule.attrib.u.v6.dst_addr_mask[0] = dst_addr_mask;
-		flt_rule->rule.attrib.u.v6.dst_addr[0]      = 0xFD000000;
-
-		if ( m_filtering.ModifyFilteringRule(pFilteringTable) == false )
-		{
-			IPACMERR("Error modifying filtering rule.\n");
-			res = IPACM_FAILURE;
-		}
-	}
-
-	IPACMDBG_H("Out\n");
-
-	return res;
-}
-
-#endif

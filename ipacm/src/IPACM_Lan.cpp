@@ -1661,21 +1661,6 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 		{
 			modify_private_subnet();
 		}
-		
-		if ((data->ip_type == IPA_IP_v6 || data->ip_type == IPA_IP_MAX) && IPACM_Wan::isWanUP_V6(ipa_if_num))
-		{
-			delete_ipv6_prefix_flt_rule();
-			install_ipv6_prefix_flt_rule(IPACM_Wan::backhaul_ipv6_prefix);
-		}
-#ifdef FEATURE_EoGRE
-		/* if GRE is enabled, update both v4 and v6 MTU */
-		if (IPACM_Iface::ipacmcfg->ipacm_gre_enable)
-		{
-			modify_private_subnet();
-			delete_ipv6_prefix_flt_rule();
-			install_ipv6_prefix_flt_rule(IPACM_Wan::backhaul_ipv6_prefix);
-		}
-#endif
 
 		/* IPA_IP_MAX means both ipv4 and ipv6 */
 #ifdef FEATURE_VLAN_MPDN
@@ -9834,38 +9819,6 @@ int IPACM_Lan::modify_private_subnet()
 			IPACMDBG_H("Mtu size is unchanged. No need to install mtu rule for above subnet\n");
 	}
 
-#ifdef FEATURE_EoGRE
-	/* if in GRE mode, also query MTU since WanUP flag is false but WAN is up */
-	if(IPACM_Iface::ipacmcfg->eogre_enabled)
-	{
-		/* re-calculate the ipv4 mtu based on GRE tunnel type*/
-		if(IPACM_Iface::ipacmcfg->eogre_info.iptype == IPA_IP_v4)
-			/* mtu_v4_new = mtu_v4 - 20(ipv4) - 4(gre) - 18(eth + VLAN) */
-			mtu[0] = IPACM_Wan::queryMTU(ipa_if_num, IPA_IP_v4) - sizeof(v4_gre_hdr_t) - 18;
-		else if (IPACM_Iface::ipacmcfg->eogre_info.iptype == IPA_IP_v6)
-			/* mtu_v4_new = mtu_v6 - 40(ipv6) - 8(opt) - 4(gre) - 18(eth + VLAN) */
-			mtu[0] = IPACM_Wan::queryMTU(ipa_if_num, IPA_IP_v6) - sizeof(v6_gre_hdr_t) - 18;
-		else
-			IPACMERR("invalid iptype = %d\n", IPACM_Iface::ipacmcfg->eogre_info.iptype);
-
-		IPACMDBG("GRE v4 PDN mtu = %d\n", mtu[0]);
-		IPACMDBG("num_wan_ul_fl_rule_v4= %d\n", num_wan_ul_fl_rule_v4);
-
-		//add the MTU rule after the 2nd pass rules but before the 1st pass rule
-		if (num_wan_ul_fl_rule_v4)
-		{
-			IPACMDBG("v4 GRE MTU rule will be installed after v4 modem UL rules\n");
-			mtu_flt_rule_offset[IPA_IP_v4] = wan_ul_fl_rule_hdl_v4[num_wan_ul_fl_rule_v4 - 1];
-		}
-		else
-		{
-			IPACMDBG("v4 GRE MTU rule will be installed after v4 default rules\n");
-			mtu_flt_rule_offset[IPA_IP_v4] = dft_v4fl_rule_hdl[IPV4_DEFAULT_FILTERTING_RULES - 1];
-		}
-		mtu_rule_cnt++;
-	}
-#endif
-
 #ifdef FEATURE_VLAN_MPDN
 	/* for MPDN case, need to query VLAN and mtus */
 	if(IPACM_Iface::ipacmcfg->ipacm_mpdn_enable)
@@ -9968,17 +9921,6 @@ int IPACM_Lan::modify_private_subnet()
 
 		}
 	}
-	
-#ifdef FEATURE_EoGRE
-	//Case where eogre is enabled for opposite iptype. Need to install MTU rule with no subnets
-	if(IPACM_Iface::ipacmcfg->ipa_num_private_subnet == 0 && IPACM_Iface::ipacmcfg->eogre_enabled && IPACM_Iface::ipacmcfg->eogre_info.iptype == IPA_IP_v6)
-	{
-		if (construct_mtu_rule(&flt_rule.rule, IPA_IP_v4, mtu[0]))
-			IPACMERR("Failed to modify MTU filtering rule.\n");
-		memcpy(&(pFilteringTable->rules[mtu_rule_idx++]), &flt_rule, sizeof(struct ipa_flt_rule_add));
-		IPACMDBG_H("Succesfully constructed GRE v4 MTU rule\n");
-	}
-#endif
 
 	if(false == m_filtering.AddFilteringRuleAfter(pFilteringTable))
 	{
@@ -10071,20 +10013,8 @@ int IPACM_Lan::modify_ipv6_prefix_flt_rule()
 
 	if (IPACM_Iface::ipacmcfg->num_ipv6_prefixes == 0 && IPACM_Iface::ipacmcfg->num_no_offload_ipv6_prefix == 0 )
 	{
-#ifdef FEATURE_EoGRE
-		if(IPACM_Iface::ipacmcfg->eogre_enabled)
-		{
-			IPACMDBG("GRE is enabled, need to configure v6 MTU \n");
-		}
-		else
-		{
-			IPACMDBG("no need configure prefix rules \n");
-			return IPACM_SUCCESS;
-		}
-#else
 		IPACMDBG("no need configure prefix rules \n");
 		return IPACM_SUCCESS;
-#endif
 	}
 
 	/* for MPDN case, need to query VLAN and mtus */
@@ -10110,40 +10040,6 @@ int IPACM_Lan::modify_ipv6_prefix_flt_rule()
 			IPACMDBG_H("total %d MTU rules are needed\n", mtu_rule_cnt);
 		}
 	}
-
-	
-#ifdef FEATURE_EoGRE
-	/* if in GRE mode, also query MTU since WANup_v6 flag is false but WANv6 is up*/
-	if(IPACM_Iface::ipacmcfg->eogre_enabled)
-	{
-		/* re-calculate the ipv6 mtu based on GRE tunnel type*/
-		if(IPACM_Iface::ipacmcfg->eogre_info.iptype == IPA_IP_v4)
-			/* mtu_v6_new = mtu_v4 - 20(ipv4) - 4(gre) - 18(eth + vlan) - 40(inner_ipv6) */
-			mtu[0] = IPACM_Wan::queryMTU(ipa_if_num, IPA_IP_v4) - sizeof(v4_gre_hdr_t) - 18;
-		else if (IPACM_Iface::ipacmcfg->eogre_info.iptype == IPA_IP_v6)
-			/* mtu_v6_new = mtu_v6 - 40(ipv6) - 8(opt) - 4(gre)- 18(eth + vlan) - 40(inner_ipv6) */
-			mtu[0] = IPACM_Wan::queryMTU(ipa_if_num, IPA_IP_v6) - sizeof(v6_gre_hdr_t) - 18;
-		else
-			IPACMERR("invalid iptype = %d\n", IPACM_Iface::ipacmcfg->eogre_info.iptype);
-
-		IPACMDBG("GRE v6 PDN mtu = %d\n", mtu[0]);
-		IPACMDBG("num_wan_ul_fl_rule_v6= %d\n", num_wan_ul_fl_rule_v6);
-
-		//add the MTU rule after the 2nd pass rules but before the 1st pass rule
-		if (num_wan_ul_fl_rule_v6)
-		{
-			IPACMDBG("v6 GRE MTU rule will be installed after v6 modem UL rules\n");
-			mtu_flt_rule_offset[IPA_IP_v6] = wan_ul_fl_rule_hdl_v6[num_wan_ul_fl_rule_v6 - 1];
-		}
-		else
-		{
-			IPACMDBG("v6 GRE MTU rule will be installed after v6 default rules\n");
-			mtu_flt_rule_offset[IPA_IP_v6] = dft_v6fl_rule_hdl[m_ipv6_default_filterting_rules_count - 1];
-		}
-
-		mtu_rule_cnt++;
-	}
-#endif
 
 	len = sizeof(struct ipa_ioc_add_flt_rule_after) + (IPACM_Iface::ipacmcfg->num_ipv6_prefixes + IPACM_Iface::ipacmcfg->num_no_offload_ipv6_prefix + mtu_rule_cnt) * sizeof(struct ipa_flt_rule_add);
 	pFilteringTable = (struct ipa_ioc_add_flt_rule_after*)malloc(len);
@@ -10198,8 +10094,19 @@ int IPACM_Lan::modify_ipv6_prefix_flt_rule()
 		{
 			memcpy(&flt_rule.rule.attrib, &rx_prop->rx[0].attrib, sizeof(flt_rule.rule.attrib));
 
-			/* if Vlan enabled, add vlan id as a parameter of the MTU rule*/
-			if (vid[i])
+			if (!vid[i])
+			{
+				flt_rule.rule.attrib.u.v6.src_addr[3] = IPACM_Iface::ipacmcfg->ipa_ipv6_prefixes[i].addr[0];
+				flt_rule.rule.attrib.u.v6.src_addr[2] = IPACM_Iface::ipacmcfg->ipa_ipv6_prefixes[i].addr[1];
+				flt_rule.rule.attrib.u.v6.src_addr[1] = 0x0;
+				flt_rule.rule.attrib.u.v6.src_addr[0] = 0x0;
+				flt_rule.rule.attrib.u.v6.src_addr_mask[3] = 0xFFFFFFFF;
+				flt_rule.rule.attrib.u.v6.src_addr_mask[2] = 0xFFFFFFFF;
+				flt_rule.rule.attrib.u.v6.src_addr_mask[1] = 0x0;
+				flt_rule.rule.attrib.u.v6.src_addr_mask[0] = 0x0;
+				flt_rule.rule.attrib.attrib_mask |= IPA_FLT_SRC_ADDR;
+			}
+			else
 			{
 				flt_rule.rule.attrib.attrib_mask |= IPA_FLT_VLAN_ID;
 				flt_rule.rule.attrib.vlan_id = vid[i];
@@ -10234,17 +10141,6 @@ int IPACM_Lan::modify_ipv6_prefix_flt_rule()
 				flt_rule.rule.attrib.u.v6.src_addr[1],
 				IPACM_Iface::ipacmcfg->num_ipv6_prefixes + i);
 	}
-
-	#ifdef FEATURE_EoGRE
-	//Case where eogre is enabled for opposite iptype. Need to install MTU rule with no prefixes
-	if(IPACM_Iface::ipacmcfg->num_ipv6_prefixes == 0 && IPACM_Iface::ipacmcfg->eogre_enabled && IPACM_Iface::ipacmcfg->eogre_info.iptype == IPA_IP_v4)
-	{
-		if (construct_mtu_rule(&flt_rule.rule, IPA_IP_v6, mtu[0]))
-			IPACMERR("Failed to modify MTU filtering rule.\n");
-		memcpy(&(pFilteringTable->rules[mtu_rule_idx++]), &flt_rule, sizeof(struct ipa_flt_rule_add));
-		IPACMDBG_H("Succesfully constructed GRE v6 MTU rule\n");
-	}
-#endif
 
 	if(false == m_filtering.AddFilteringRuleAfter(pFilteringTable))
 	{
@@ -13976,23 +13872,7 @@ void IPACM_Lan::eogre_up()
 		IPACMERR("eogre_add_catchup_rule failed\n");
 		return;
 	}
-
 	eogre_mod_ula_rule(0xFFFFFFFF);
-
-
-	eogre_mod_ula_rule(0xFFFFFFFF);
-	//need to add mtu rules when eogre is enabled
-	modify_private_subnet();
-#ifdef FEATURE_VLAN_MPDN
-	modify_ipv6_prefix_flt_rule();
-#else
-	delete_ipv6_prefix_flt_rule();
-	install_ipv6_prefix_flt_rule(IPACM_Wan::backhaul_ipv6_prefix);
-#endif
-
-	IPACMDBG("Finished handling eogre_up\n");
-
-
 }
 
 void IPACM_Lan::eogre_down()
@@ -14020,19 +13900,6 @@ void IPACM_Lan::eogre_down()
 	del_ul_flt_rules(iptype);
 
 	eogre_mod_ula_rule(0xFF000000);
-
-	
-	//need to clean mtu rules when eogre is disabled
-	modify_private_subnet();
-#ifdef FEATURE_VLAN_MPDN
-	modify_ipv6_prefix_flt_rule();
-#else
-	delete_ipv6_prefix_flt_rule();
-	install_ipv6_prefix_flt_rule(IPACM_Wan::backhaul_ipv6_prefix);
-#endif
-
-	IPACMDBG("finished handling eogre_down\n");
-
 }
 
 int IPACM_Lan::eogre_do_rt_work(

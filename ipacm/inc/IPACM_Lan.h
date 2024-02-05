@@ -300,8 +300,6 @@ public:
 	int num_wan_ul_fl_rule_v6;
 	/* Number of UL subnet IPv4 rules. */
 	int num_wan_subnet_rules;
-	/* Number of UL prefix IPv6 rules. */
-	int num_wan_prefix_rules;
 
 	/* Header length. */
 	uint8_t hdr_len;
@@ -341,6 +339,7 @@ public:
 	virtual int handle_private_subnet(ipa_ip_type iptype);
 #ifdef FEATURE_VLAN_MPDN
 	int add_vlan_private_subnet(ipacm_bridge *bridge);
+	int add_dummy_ipv6_prefix_flt_rule();
 	int modify_ipv6_prefix_flt_rule();
 	int handle_backhaul_switch_vlan_mode(bool to_sta);
 #endif

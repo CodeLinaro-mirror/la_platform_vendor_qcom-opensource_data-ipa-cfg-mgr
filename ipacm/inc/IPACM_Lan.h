@@ -546,6 +546,7 @@ public:
 
 	int install_ipv4_icmp_flt_rule();
 
+
 	/* add header processing context and return handle to lan2lan controller */
 	int eth_bridge_add_hdr_proc_ctx(ipa_hdr_l2_type peer_l2_hdr_type, uint32_t *hdl);
 
@@ -1512,10 +1513,6 @@ private:
 	int handle_eth_client_mac_flt_route_rule(ipa_ip_type iptype, int clt_index, bool is_blacklist);
 	int handle_eth_mac_flt_conn_disc(uint8_t * mac_addr, bool con_state_flag);
 
-public:
-
-	int delete_icmp_filter_rule(
-		ipa_ip_type iptype);
 };
 
 #endif /* IPACM_LAN_H */

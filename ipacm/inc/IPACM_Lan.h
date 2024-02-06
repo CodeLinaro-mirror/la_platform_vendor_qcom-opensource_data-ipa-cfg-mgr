@@ -225,6 +225,66 @@ typedef struct _xlat_context
 	uint32_t active_pdn_count;
 }xlat_context;
 
+#ifdef FEATURE_EoGRE
+/*
+ * Structure for maintaining state associated with eogre route
+ * contexts and rules...
+ */
+typedef struct eogre_route_data_s
+{
+	uint32_t header_hdl;
+	uint32_t proc_ctx_eogre_add_hdl;
+	uint32_t proc_ctx_eogre_rmv_hdl;
+	uint32_t rt_eogre_add_hdl;
+	uint32_t rt_eogre_rmv_hdl;
+	uint32_t rt_tbl_hdl;
+	uint32_t flt_eogre_1st_pass_hdl;
+} eogre_route_data_t;
+
+/*
+ * An IP v4 plus GRE header..
+ */
+typedef struct v4_gre_hdr_s
+{
+	uint32_t words[6]; /* extra (ie. last) uint32_t for gre header */
+} v4_gre_hdr_t;
+
+
+
+/*
+ * Where things reside in the struct above...
+ */
+#define IPV4_SRC_ADDR  3
+#define IPV4_DST_ADDR  4
+#define IPV4_GRE_PROT  5
+
+/*
+ * An IP v6 plus GRE header.
+ */
+typedef struct v6_gre_hdr_s
+{
+	uint32_t words[11]; /* extra (ie. last) uint32_t for gre header */
+} v6_gre_hdr_t;
+
+
+/*
+ * An IP v6 plus GRE header with dest option.
+ */
+typedef struct v6_eogre_hdr_s
+{
+	uint32_t words[13]; /* extra (ie. last) uint32_t for gre header */
+} v6_eogre_hdr_t;
+
+/*
+ * Where things reside in the struct above...
+ */
+#define IPV6_SRC_ADDR  2
+#define IPV6_DST_ADDR  6
+#define IPV6_GRE_PROT 10
+#define IPV6_GRE_PROT_IDX  12
+
+#endif /* #ifdef FEATURE_EoGRE */
+
 /* lan iface */
 class IPACM_Lan : public IPACM_Iface
 {
@@ -246,6 +306,10 @@ public:
 	int num_wan_ul_fl_rule_v4;
 	/* Number of Q6 UL IPv6 rules. */
 	int num_wan_ul_fl_rule_v6;
+	/* Number of UL subnet IPv4 rules. */
+	int num_wan_subnet_rules;
+	/* Number of UL prefix IPv6 rules. */
+	int num_wan_prefix_rules;
 
 	/* Header length. */
 	uint8_t hdr_len;
@@ -281,12 +345,11 @@ public:
 	virtual int handle_wan_down_v6(bool is_sta_mode, bool is_support_mpdn = true);
 
 	/* configure private subnet filter rules*/
-	int modify_private_subnet();
+	int modify_private_subnet(bool eogre_enabled = false);
 	virtual int handle_private_subnet(ipa_ip_type iptype);
 #ifdef FEATURE_VLAN_MPDN
 	int add_vlan_private_subnet(ipacm_bridge *bridge);
-	int add_dummy_ipv6_prefix_flt_rule();
-	int modify_ipv6_prefix_flt_rule();
+	int modify_ipv6_prefix_flt_rule(bool eogre_enabled = false);
 	int handle_backhaul_switch_vlan_mode(bool to_sta);
 #endif
 
@@ -298,6 +361,65 @@ public:
 	int handle_del_ipv6_addr(ipacm_event_data_all *data);
 
 	static bool odu_up;
+
+#ifdef FEATURE_EoGRE
+	/*
+	 * The following is for keeping eogre route rule state...
+	 *
+	 * We're using two below (one for v4, one for v6) because there
+	 * may be a mismatch between the tunnel iptype (ie. the one
+	 * specified in the eogre enable) and the Vlan Ethernet packet's
+	 * IP payload type. In other words:
+	 *
+	 *   The tunnel may be v4, while the Vlan Ethernet packet's IP
+	 *   type is v6; or
+	 *
+	 *   The tunnel may be v6, while the Vlan Ethernet packet's IP
+	 *   type is v4...
+	 */
+	eogre_route_data_t eogre_route_data[2];
+
+	void eogre_up();
+
+	void eogre_down();
+
+	int eogre_do_rt_work(
+		ipa_ipgre_info& ipgre_info );
+
+	void eogre_route_data_init(
+		enum ipa_ip_type iptype );
+
+	uint32_t eogre_get_rt_tbl_hdl(
+		enum ipa_ip_type iptype );
+
+	int eogre_make_hdr_for_add_ctx(
+		ipa_ipgre_info& ipgre_info );
+
+	int eogre_make_hdr_add_ctx(
+		ipa_ipgre_info& ipgre_info,
+		uint32_t        hdr_2use = 0 );
+
+	int eogre_make_hdr_rem_ctx(
+		ipa_ipgre_info& ipgre_info );
+
+	int eogre_make_header_add_rt_rule(
+		ipa_ipgre_info& ipgre_info,
+		uint32_t        ctx_2use = 0 );
+
+	int eogre_make_header_rem_rt_rule(
+		ipa_ipgre_info& ipgre_info );
+
+	void eogre_clear_route_data(
+		enum ipa_ip_type             iptype,
+		ipa_ioc_query_intf_rx_props* rx_prop = 0 );
+
+	int eogre_add_catchup_rule(
+		enum ipa_ip_type iptype );
+
+	int update_complementary_table(
+		ipa_flt_rule_add& flt_rule_entry,
+		ipa_ip_type       iptype );
+#endif
 
 	/* install UL filter rule from Q6 */
 #ifdef FEATURE_VLAN_MPDN
@@ -363,7 +485,7 @@ public:
 
 	/* Delete UL firewall filter rules from LAN prod pipe */
 	virtual int delete_uplink_filter_rule_ul(ul_firewall_t *ul_firewall);
-	
+
 	/* delete UL firewall rules, to be sent to Q6 side*/
 	virtual int disable_dft_firewall_rules_ul_ex(int vid);
 #endif
@@ -431,7 +553,6 @@ public:
 	int handle_cradle_wan_mode_switch(bool is_wan_bridge_mode);
 
 	int install_ipv4_icmp_flt_rule();
-
 
 	/* add header processing context and return handle to lan2lan controller */
 	int eth_bridge_add_hdr_proc_ctx(ipa_hdr_l2_type peer_l2_hdr_type, uint32_t *hdl);
@@ -545,6 +666,7 @@ protected:
 	int each_client_rt_rule_count[IPA_IP_MAX];
 
 	uint32_t eth_bridge_flt_rule_offset[IPA_IP_MAX];
+	uint32_t mtu_flt_rule_offset[IPA_IP_MAX];
 
 #ifdef FEATURE_L2TP
 #ifdef IPA_L2TP_TUNNEL_UDP
@@ -565,8 +687,6 @@ protected:
 #endif //#if defined(FEATURE_L2TP) || defined(FEATURE_VLAN_MPDN)
 	/* check if the IPv6 address is unique local address */
 	bool is_unique_local_ipv6_addr(uint32_t *ipv6_addr);
-
-	virtual int add_dummy_private_subnet_flt_rule(ipa_ip_type iptype);
 
 	int handle_private_subnet_android(ipa_ip_type iptype);
 
@@ -1079,6 +1199,7 @@ private:
 	bool ipv6_header_set;
 
 	bool is_l2tp_iface;
+
 #ifdef FEATURE_L2TP
 	uint32_t l2tp_ul_dummy_hdr_hdl; /* 4-byte dummy header */
 
@@ -1136,7 +1257,7 @@ private:
 			if(mux[i] == 0)
 			{
 				mux[i] = mux_id;
-				IPACMDBG_H("successfully set mux id %d for dev %s, i = %d, iptype\n", mux_id, dev_name, i, iptype);
+				IPACMDBG_H("successfully set mux id %d for dev %s, i = %d, iptype %d\n", mux_id, dev_name, i, iptype);
 				return IPACM_SUCCESS;
 			}
 		}
@@ -1162,7 +1283,7 @@ private:
 			if(mux[i] == mux_id)
 			{
 				mux[i] = 0;
-				IPACMDBG_H("successfully removed mux id %d for dev %s, i = %d, iptype\n", mux_id, dev_name, i, iptype);
+				IPACMDBG_H("successfully removed mux id %d for dev %s, i = %d, iptype %d\n", mux_id, dev_name, i, iptype);
 				return IPACM_SUCCESS;
 			}
 		}
@@ -1369,9 +1490,6 @@ private:
 	/*handle reset usb-client rt-rules */
 	int handle_lan_client_reset_rt(ipa_ip_type iptype);
 
-#ifdef FEATURE_IPACM_UL_FIREWALL
-	void change_to_network_order(ipa_ip_type iptype, ipa_rule_attrib* attrib);
-#endif
 #ifdef FEATURE_L2TP
 	/* install l2tp dl rules */
 	int install_l2tp_dl_rules(ipacm_event_data_all *data, int index);
@@ -1401,6 +1519,11 @@ private:
 	void delete_eth_mac_flt_rules();
 	int handle_eth_client_mac_flt_route_rule(ipa_ip_type iptype, int clt_index, bool is_blacklist);
 	int handle_eth_mac_flt_conn_disc(uint8_t * mac_addr, bool con_state_flag);
+
+public:
+
+	int delete_icmp_filter_rule(
+		ipa_ip_type iptype);
 };
 
 #endif /* IPACM_LAN_H */

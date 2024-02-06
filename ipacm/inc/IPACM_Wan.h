@@ -162,6 +162,11 @@ public:
 	static uint16_t mtu_default_wan_v4;
 	static uint16_t mtu_default_wan_v6;
 
+#ifdef FEATURE_EoGRE
+	static uint16_t mtu_gre_v4;
+	static uint16_t mtu_gre_v6;
+#endif
+
 	/* IPACM interface name */
 	static char wan_up_dev_name[IF_NAME_LEN];
 	static uint32_t curr_wan_ip;
@@ -219,18 +224,35 @@ public:
 	{
 		if (iptype == IPA_IP_v4)
 		{
+#ifdef FEATURE_EoGRE
+			if (IPACM_Iface::ipacmcfg->eogre_enabled)
+			{
+				IPACMDBG_H("got mtu_gre_v4\n")
+				return mtu_gre_v4;
+			}
+#endif
 			if (isWanUP(ipa_if_num_tether))
 			{
+				IPACMDBG_H("got mtu_default_v4\n")
 				return mtu_default_wan_v4;
 			}
 		}
 		else if (iptype == IPA_IP_v6)
 		{
+#ifdef FEATURE_EoGRE
+			if (IPACM_Iface::ipacmcfg->eogre_enabled)
+			{
+				IPACMDBG_H("got mtu_gre_v6\n")
+				return mtu_gre_v6;
+			}
+#endif
 			if (isWanUP_V6(ipa_if_num_tether))
 			{
+				IPACMDBG_H("got mtu_default_v6\n")
 				return mtu_default_wan_v6;
 			}
 		}
+		IPACMDBG_H("No conditions hit. Return default value %d", DEFAULT_MTU_SIZE);
 		return DEFAULT_MTU_SIZE;
 	}
 
@@ -417,6 +439,27 @@ public:
 	static bool is_xlat_by_vid(uint16_t vlan_id);
 	static bool is_xlat_by_ipv4(uint32_t ipv4_addr);
 #endif
+
+#ifdef FEATURE_EoGRE
+	void eogre_up();
+
+	void eogre_down();
+
+	int eogre_v4_work(
+		bool eogre_enable );
+
+	int eogre_v6_work(
+		bool eogre_enable );
+
+	int eogre_notify_wan_state(
+		bool eogre_enable );
+#endif
+
+	static int GetMuxByAddr(
+		enum ipa_ip_type iptype,
+		void*            addr,
+		uint8_t&         mux_id );
+
 private:
 
 	bool is_ipv6_frag_firewall_flt_rule_installed;
@@ -740,8 +783,6 @@ private:
 
 	int install_wan_filtering_rule(bool is_sw_routing);
 
-	void change_to_network_order(ipa_ip_type iptype, ipa_rule_attrib* attrib);
-
 	void handle_wlan_SCC_MCC_switch(bool, ipa_ip_type);
 
 	void handle_wan_client_SCC_MCC_switch(bool, ipa_ip_type);
@@ -766,7 +807,7 @@ private:
 	int add_dummy_rx_hdr();
 
 	void HandleSTAClientDelEvt(const ipa_wan_client* client);
-	
+
 	int add_catchup_all_filtering_rule_each_pdn(const IPACM_firewall_conf_t& firewall_config, ipa_ip_type iptype,
 		const struct ipa_rule_attrib& rx_prop_attrib, struct ipa_flt_rule_add& flt_rule_add, int fltr_rule_number);
 	int add_ipv6_frag_filtering_rule_ex(const struct ipa_rule_attrib& rx_prop_attrib,

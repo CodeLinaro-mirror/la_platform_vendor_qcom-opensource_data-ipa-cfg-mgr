@@ -154,6 +154,11 @@ uint8_t IPACM_Wan::num_offloaded_pdns = 0;
 uint16_t IPACM_Wan::mtu_default_wan_v4 = DEFAULT_MTU_SIZE;
 uint16_t IPACM_Wan::mtu_default_wan_v6 = DEFAULT_MTU_SIZE;
 
+#ifdef FEATURE_EoGRE
+uint16_t IPACM_Wan::mtu_gre_v4 = DEFAULT_MTU_SIZE;
+uint16_t IPACM_Wan::mtu_gre_v6 = DEFAULT_MTU_SIZE;
+#endif
+
 #define MOBILE_FIREWALL_FILE "/etc/data/mobileap_firewall.xml"
 
 IPACM_Wan::IPACM_Wan(int iface_index,
@@ -388,7 +393,7 @@ int IPACM_Wan::GetMuxByVid(uint16_t vlan_id, uint8_t *mux_id, ipa_ip_type iptype
 	return IPACM_FAILURE;
 }
 
-int IPACM_Wan::GetMTUByVid(uint16_t *mtu, uint16_t vlan_id, ipa_ip_type iptype)
+int IPACM_Wan::GetMTUByVid(uint16_t *mtu, uint16_t vlan_id, ipa_ip_type iptype) //mike
 {
 	for(int i = 0; i < IPA_MAX_NUM_SW_PDNS; i++)
 	{
@@ -1857,12 +1862,14 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 		}
 		break;
 #endif
+
 #ifdef IPA_MTU_EVENT_MAX
 	case IPA_MTU_SET:
 	{
 		ipacm_event_mtu_info *data = (ipacm_event_mtu_info *)param;
 		ipa_mtu_info *mtu_info = &(data->mtu_info);
 		ipa_interface_index = iface_ipa_index_query(data->if_index);
+		bool post_mtu_update_event = false;
 
 		if (ipa_interface_index == ipa_if_num)
 		{
@@ -1878,7 +1885,15 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 				{
 					/* upstream interface. update default MTU. */
 					mtu_default_wan_v4 = mtu_v4;
+					post_mtu_update_event = true;
 				}
+#ifdef FEATURE_EoGRE
+				/*Always update MTU for GRE since initial MTU set will come before GRE is enabled, post if GRE is enabled */
+				mtu_gre_v4 = mtu_v4;
+				if (IPACM_Iface::ipacmcfg->eogre_enabled)
+					post_mtu_update_event = true;
+#endif
+
 				IPACMDBG_H("Updated v4 mtu=[%d] for (%s), upstream_mtu=[%d]\n",
 					mtu_v4, mtu_info->if_name, mtu_default_wan_v4);
 			}
@@ -1891,12 +1906,19 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 				{
 					/* upstream interface. update default MTU. */
 					mtu_default_wan_v6 = mtu_v6;
+					post_mtu_update_event = true;
 				}
+#ifdef FEATURE_EoGRE
+				/*Always update MTU for GRE since initial MTU set will come before GRE is enabled, post if GRE is enabled */
+				mtu_gre_v6 = mtu_v6;
+				if (IPACM_Iface::ipacmcfg->eogre_enabled)
+					post_mtu_update_event = true;
+#endif
 				IPACMDBG_H("Updated v6 mtu=[%d] for (%s), upstream_mtu=[%d]\n",
 					mtu_v6, mtu_info->if_name, mtu_default_wan_v6);
 			}
 
-			if (active_v4 || active_v6)
+			if (post_mtu_update_event)
 			{
 				ipacm_event_mtu_info *mtu_event;
 				ipacm_cmd_q_data evt_data;
@@ -1917,6 +1939,19 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 	}
 	break;
 #endif
+
+#ifdef FEATURE_EoGRE
+	case IPA_HANDLE_EoGRE_UP:
+		IPACMDBG_H("Received and will process an IPA_HANDLE_EoGRE_UP\n");
+		eogre_up();
+		break;
+
+	case IPA_HANDLE_EoGRE_DOWN:
+		IPACMDBG_H("Received and will process an IPA_HANDLE_EoGRE_DOWN\n");
+		eogre_down();
+		break;
+#endif
+
 	default:
 		break;
 	}
@@ -4122,7 +4157,7 @@ int IPACM_Wan::config_dft_firewall_rules_ex(struct ipa_flt_rule_add *rules, int 
 			++pos;
 		}
 		if(offloaded_pdns_count_v4)
-			num_rules = IPACM_Wan::num_v4_flt_rule - original_num_rules - 1;
+			num_rules = IPACM_Wan::num_v4_flt_rule - original_num_rules;
 		else
 			num_rules = 0;
 #else
@@ -4133,7 +4168,7 @@ int IPACM_Wan::config_dft_firewall_rules_ex(struct ipa_flt_rule_add *rules, int 
 		}
 		++pos;
 		if(wan_up)
-			num_rules = IPACM_Wan::num_v4_flt_rule - original_num_rules - 1;
+			num_rules = IPACM_Wan::num_v4_flt_rule - original_num_rules;
 		else
 			num_rules = 0;
 #endif
@@ -4181,7 +4216,7 @@ int IPACM_Wan::config_dft_firewall_rules_ex(struct ipa_flt_rule_add *rules, int 
 		}
 
 		if(offloaded_pdns_count_v6)
-			num_rules = IPACM_Wan::num_v6_flt_rule - original_num_rules - 1;
+			num_rules = IPACM_Wan::num_v6_flt_rule - original_num_rules;
 		else
 			num_rules = 0;
 #else
@@ -4192,7 +4227,7 @@ int IPACM_Wan::config_dft_firewall_rules_ex(struct ipa_flt_rule_add *rules, int 
 		}
 		++pos;
 		if(wan_up_v6)
-			num_rules = IPACM_Wan::num_v6_flt_rule - original_num_rules - 1;
+			num_rules = IPACM_Wan::num_v6_flt_rule - original_num_rules;
 		else
 			num_rules = 0;
 #endif
@@ -6048,34 +6083,22 @@ int IPACM_Wan::handle_down_evt()
 	/* free dft ipv4 filter rule handlers if any */
 	if (ip_type != IPA_IP_v6 && rx_prop != NULL)
 	{
-		if (dft_v4fl_rule_hdl[0] != 0)
+		res = delete_dflt_filter_rules(IPA_IP_v4);
+		if (res == IPACM_FAILURE)
 		{
-			if (m_filtering.DeleteFilteringHdls(dft_v4fl_rule_hdl,
-				IPA_IP_v4,
-				IPV4_DEFAULT_FILTERTING_RULES) == false)
-			{
-				IPACMERR("Error Delete Filtering rules, aborting...\n");
-				res = IPACM_FAILURE;
-				goto fail;
-			}
-			IPACM_Iface::ipacmcfg->decreaseFltRuleCount(rx_prop->rx[0].src_pipe, IPA_IP_v4, IPV4_DEFAULT_FILTERTING_RULES);
-			IPACMDBG_H("finished delete default v4 filtering rules\n ");
+			IPACMERR("delete_dflt_filter_rules failed\n");
+			goto fail;
 		}
 	}
 
 	/* free dft ipv6 filter rule handlers if any */
 	if (ip_type != IPA_IP_v4 && rx_prop != NULL)
 	{
-		if (dft_v6fl_rule_hdl[0] != 0)
+		res = delete_dflt_filter_rules(IPA_IP_v6);
+		if (res == IPACM_FAILURE)
 		{
-			if (!m_filtering.DeleteFilteringHdls(dft_v6fl_rule_hdl, IPA_IP_v6, m_ipv6_default_filterting_rules_count))
-			{
-				IPACMERR("ErrorDeleting Filtering rule, aborting...\n");
-				res = IPACM_FAILURE;
-				goto fail;
-			}
-			IPACM_Iface::ipacmcfg->decreaseFltRuleCount(
-				rx_prop->rx[0].src_pipe, IPA_IP_v6, m_ipv6_default_filterting_rules_count);
+			IPACMERR("delete_dflt_filter_rules failed\n");
+			goto fail;
 		}
 
 		if(num_ipv6_dest_flt_rule > 0 && num_ipv6_dest_flt_rule <= MAX_DEFAULT_v6_ROUTE_RULES)
@@ -7220,33 +7243,6 @@ fail:
 	}
 #endif
 	return res;
-}
-
-void IPACM_Wan::change_to_network_order(ipa_ip_type iptype, ipa_rule_attrib* attrib)
-{
-	if(attrib == NULL)
-	{
-		IPACMERR("Attribute pointer is NULL.\n");
-		return;
-	}
-
-	if(iptype == IPA_IP_v6)
-	{
-		int i;
-		for(i=0; i<4; i++)
-		{
-			attrib->u.v6.src_addr[i] = htonl(attrib->u.v6.src_addr[i]);
-			attrib->u.v6.src_addr_mask[i] = htonl(attrib->u.v6.src_addr_mask[i]);
-			attrib->u.v6.dst_addr[i] = htonl(attrib->u.v6.dst_addr[i]);
-			attrib->u.v6.dst_addr_mask[i] = htonl(attrib->u.v6.dst_addr_mask[i]);
-		}
-	}
-	else
-	{
-		IPACMDBG_H("IP type is not IPv6, do nothing: %d\n", iptype);
-	}
-
-	return;
 }
 
 bool IPACM_Wan::is_link_local_ipv4_addr(uint32_t ipv4_addr)
@@ -8529,16 +8525,41 @@ void IPACM_Wan::HandleSTAClientDelEvt(const ipa_wan_client* client)
 	}
 }
 
-
-int IPACM_Wan::add_catchup_all_filtering_rule_each_pdn(const IPACM_firewall_conf_t& firewall_config, ipa_ip_type iptype,
-	const struct ipa_rule_attrib& rx_prop_attrib, struct ipa_flt_rule_add& flt_rule_add, int fltr_rule_number)
+int IPACM_Wan::add_catchup_all_filtering_rule_each_pdn(
+	const IPACM_firewall_conf_t&  firewall_config,
+	ipa_ip_type                   iptype,
+	const struct ipa_rule_attrib& rx_prop_attrib,
+	struct ipa_flt_rule_add&      flt_rule_add,
+	int                           fltr_rule_number )
 {
+	if ( ! VALID_IPA_IP_TYPE(iptype) )
+	{
+		IPACMERR("Invalid IP type passed to function\n");
+		return IPACM_FAILURE;
+	}
+
 	/* Check for "out of boundary" failure before adding a rule */
 	if (fltr_rule_number >= IPA_MAX_FLT_RULE)
 	{
-		IPACMERR("Filtering table is full. Number of rules %d allowed %d\n", fltr_rule_number + 1, IPA_MAX_FLT_RULE);
+		IPACMERR(
+			"Filtering table is full. Number of rules %d allowed %d\n",
+			fltr_rule_number + 1, IPA_MAX_FLT_RULE);
 		return IPACM_FAILURE;
 	}
+
+#ifdef FEATURE_EoGRE
+	ipa_ipgre_info ipgre_info  = IPACM_Iface::ipacmcfg->eogre_info;
+	bool           doing_eogre = IPACM_Iface::ipacmcfg->eogre_enabled;
+
+	/*
+	 * If we're doing eogre and the iptype in the eogre matches what's
+	 * been passed to this function, we've got relevant eogre work to
+	 * do...
+	 */
+	bool compatible_eogre = ( doing_eogre && iptype == ipgre_info.iptype );
+#else
+	bool compatible_eogre = false;
+#endif
 
 	struct ipa_flt_rule_add flt_rule_entry;
 	memset(&flt_rule_entry, 0, sizeof(struct ipa_flt_rule_add));
@@ -8553,57 +8574,84 @@ int IPACM_Wan::add_catchup_all_filtering_rule_each_pdn(const IPACM_firewall_conf
 #ifdef FEATURE_IPA_V3
 	flt_rule_entry.rule.hashable = true;
 #endif
-	memcpy(&flt_rule_entry.rule.attrib, &rx_prop_attrib, sizeof(struct ipa_rule_attrib));
+	memcpy(
+		&flt_rule_entry.rule.attrib,
+		&rx_prop_attrib,
+		sizeof(struct ipa_rule_attrib));
+
 	flt_rule_entry.rule.attrib.attrib_mask |= IPA_FLT_DST_ADDR;
 
 	int *num_firewall, *num_flt_rule;
 	const char* rt_tbl_name;
+
 	if (iptype == IPA_IP_v4)
 	{
 		num_firewall = &num_firewall_v4;
 		num_flt_rule = &num_v4_flt_rule;
 
-		flt_rule_entry.rule.attrib.u.v4.dst_addr_mask = 0x00000000;
-		flt_rule_entry.rule.attrib.u.v4.dst_addr = 0x00000000;
+		if ( ! compatible_eogre )
+		{
+			flt_rule_entry.rule.attrib.u.v4.dst_addr_mask = 0x00000000;
+			flt_rule_entry.rule.attrib.u.v4.dst_addr = 0x00000000;
 
 #if !defined FEATURE_IPACM_UL_FIREWALL
-		/* firewall disable, all traffic are allowed */
-		if (firewall_config.firewall_enable)
-		{
-			/* default action for v4 is go DST_NAT unless user set to exception*/
-			if (firewall_config.rule_action_accept)
+			/* firewall disable, all traffic are allowed */
+			if (firewall_config.firewall_enable)
 			{
-				flt_rule_entry.rule.action = IPA_PASS_TO_ROUTING;
-				rt_tbl_name = ipacmcfg->rt_tbl_wan_dl.name;
+				/* default action for v4 is go DST_NAT unless user set to exception*/
+				if (firewall_config.rule_action_accept)
+				{
+					flt_rule_entry.rule.action = IPA_PASS_TO_ROUTING;
+					rt_tbl_name = ipacmcfg->rt_tbl_wan_dl.name;
+				}
+				else
+				{
+					flt_rule_entry.rule.action = IPA_PASS_TO_DST_NAT;
+					rt_tbl_name = ipacmcfg->rt_tbl_lan_v4.name;
+				}
 			}
 			else
-			{
-				flt_rule_entry.rule.action = IPA_PASS_TO_DST_NAT;
-				rt_tbl_name = ipacmcfg->rt_tbl_lan_v4.name;
-			}
-		}
-		else
 #endif //FEATURE_IPACM_UL_FIREWALL
-		{
-			if (isWan_Bridge_Mode())
 			{
-				IPACMDBG_H("ODU is in bridge mode. \n");
-				flt_rule_entry.rule.action = IPA_PASS_TO_ROUTING;
-				rt_tbl_name = ipacmcfg->rt_tbl_wan_dl.name;
-			}
-			else
-			{
-				flt_rule_entry.rule.action = IPA_PASS_TO_DST_NAT;
-				rt_tbl_name = ipacmcfg->rt_tbl_lan_v4.name;
+				if (isWan_Bridge_Mode())
+				{
+					IPACMDBG_H("ODU is in bridge mode. \n");
+					flt_rule_entry.rule.action = IPA_PASS_TO_ROUTING;
+					rt_tbl_name = ipacmcfg->rt_tbl_wan_dl.name;
+				}
+				else
+				{
+					flt_rule_entry.rule.action = IPA_PASS_TO_DST_NAT;
+					rt_tbl_name = ipacmcfg->rt_tbl_lan_v4.name;
+				}
 			}
 		}
+#ifdef FEATURE_EoGRE
+		else /* ( compatible_eogre ) */
+		{
+			flt_rule_entry.rule.attrib.u.v4.dst_addr_mask = 0xFFFFFFFF;
+			flt_rule_entry.rule.attrib.u.v4.dst_addr = ipgre_info.ipv4_src;
+
+			flt_rule_entry.rule.attrib.u.v4.src_addr_mask = 0xFFFFFFFF;
+			flt_rule_entry.rule.attrib.u.v4.src_addr = ipgre_info.ipv4_dst;
+
+			flt_rule_entry.rule.attrib.attrib_mask |= IPA_FLT_SRC_ADDR;
+
+			flt_rule_entry.rule.action = IPA_PASS_TO_ROUTING;
+
+			rt_tbl_name = ipacmcfg->rt_tbl_lan_v4.name;
+		}
+#endif /* #ifdef FEATURE_EoGRE */
 	}
-	else if (iptype == IPA_IP_v6)
+	else /* (iptype == IPA_IP_v6) */
 	{
 		/* sky socksv5 */
 		if (IPACM_Iface::ipacmcfg->ipacm_socksv5_enable == TRUE)
 		{
-			/* remove meta data mask since we only install default flt rules once for all modem PDN on socksv5 2s-pass */
+			/*
+			 * Remove meta data mask since we only install default flt
+			 * rules once for all modem PDN on socksv5 2s-pass
+			 */
 			IPACMDBG_H("sky unmask meta_data. ipv6 \n");
 			flt_rule_entry.rule.attrib.attrib_mask &= ~((uint32_t)IPA_FLT_META_DATA);
 		}
@@ -8611,46 +8659,71 @@ int IPACM_Wan::add_catchup_all_filtering_rule_each_pdn(const IPACM_firewall_conf
 		num_firewall = &num_firewall_v6;
 		num_flt_rule = &num_v6_flt_rule;
 
-		flt_rule_entry.rule.attrib.u.v6.dst_addr_mask[0] = 0x00000000;
-		flt_rule_entry.rule.attrib.u.v6.dst_addr_mask[1] = 0x00000000;
-		flt_rule_entry.rule.attrib.u.v6.dst_addr_mask[2] = 0x00000000;
-		flt_rule_entry.rule.attrib.u.v6.dst_addr_mask[3] = 0x00000000;
-		flt_rule_entry.rule.attrib.u.v6.dst_addr[0] = 0X00000000;
-		flt_rule_entry.rule.attrib.u.v6.dst_addr[1] = 0x00000000;
-		flt_rule_entry.rule.attrib.u.v6.dst_addr[2] = 0x00000000;
-		flt_rule_entry.rule.attrib.u.v6.dst_addr[3] = 0X00000000;
-
-		/* firewall disable, all traffic are allowed */
-		if (firewall_config.firewall_enable)
+		if ( ! compatible_eogre )
 		{
-			if (firewall_config.rule_action_accept)
+			flt_rule_entry.rule.attrib.u.v6.dst_addr_mask[0] = 0x00000000;
+			flt_rule_entry.rule.attrib.u.v6.dst_addr_mask[1] = 0x00000000;
+			flt_rule_entry.rule.attrib.u.v6.dst_addr_mask[2] = 0x00000000;
+			flt_rule_entry.rule.attrib.u.v6.dst_addr_mask[3] = 0x00000000;
+			flt_rule_entry.rule.attrib.u.v6.dst_addr[0] = 0X00000000;
+			flt_rule_entry.rule.attrib.u.v6.dst_addr[1] = 0x00000000;
+			flt_rule_entry.rule.attrib.u.v6.dst_addr[2] = 0x00000000;
+			flt_rule_entry.rule.attrib.u.v6.dst_addr[3] = 0X00000000;
+
+			/* firewall disable, all traffic are allowed */
+			if (firewall_config.firewall_enable)
 			{
-				flt_rule_entry.rule.action = IPA_PASS_TO_ROUTING;
-				rt_tbl_name = ipacmcfg->rt_tbl_wan_dl.name;
+				if (firewall_config.rule_action_accept)
+				{
+					flt_rule_entry.rule.action = IPA_PASS_TO_ROUTING;
+					rt_tbl_name = ipacmcfg->rt_tbl_wan_dl.name;
+				}
+				else
+				{
+					flt_rule_entry.rule.action = IPACM_Iface::ipacmcfg->IsIpv6CTEnabled() ?
+						IPA_PASS_TO_DST_NAT : IPA_PASS_TO_ROUTING;
+					rt_tbl_name = ipacmcfg->rt_tbl_wan_v6.name;
+				}
 			}
 			else
 			{
+#ifndef FEATURE_SOCKSv5
 				flt_rule_entry.rule.action = IPACM_Iface::ipacmcfg->IsIpv6CTEnabled() ?
 					IPA_PASS_TO_DST_NAT : IPA_PASS_TO_ROUTING;
+
+#else
+				flt_rule_entry.rule.action = IPA_PASS_TO_ROUTING;
+#endif
 				rt_tbl_name = ipacmcfg->rt_tbl_wan_v6.name;
 			}
 		}
-		else
+#ifdef FEATURE_EoGRE
+		else /* ( compatible_eogre ) */
 		{
-#ifndef FEATURE_SOCKSv5
-			flt_rule_entry.rule.action = IPACM_Iface::ipacmcfg->IsIpv6CTEnabled() ?
-				IPA_PASS_TO_DST_NAT : IPA_PASS_TO_ROUTING;
+			memset(
+				&flt_rule_entry.rule.attrib.u.v6.dst_addr_mask,
+				0xFFFFFFFF,
+				sizeof(flt_rule_entry.rule.attrib.u.v6.dst_addr_mask));
+			memcpy(
+				&flt_rule_entry.rule.attrib.u.v6.dst_addr,
+				&ipgre_info.ipv6_src,
+				sizeof(flt_rule_entry.rule.attrib.u.v6.dst_addr));
+			memset(
+				&flt_rule_entry.rule.attrib.u.v6.src_addr_mask,
+				0xFFFFFFFF,
+				sizeof(flt_rule_entry.rule.attrib.u.v6.src_addr_mask));
+			memcpy(
+				&flt_rule_entry.rule.attrib.u.v6.src_addr,
+				&ipgre_info.ipv6_dst,
+				sizeof(flt_rule_entry.rule.attrib.u.v6.src_addr));
 
-#else
+			flt_rule_entry.rule.attrib.attrib_mask |= IPA_FLT_SRC_ADDR;
+
 			flt_rule_entry.rule.action = IPA_PASS_TO_ROUTING;
-#endif
+
 			rt_tbl_name = ipacmcfg->rt_tbl_wan_v6.name;
 		}
-	}
-	else
-	{
-		IPACMERR("IP type is not expected.\n");
-		return IPACM_FAILURE;
+#endif /* #ifdef FEATURE_EoGRE */
 	}
 
 	ipa_ioc_get_rt_tbl_indx rt_tbl_idx;
@@ -8666,6 +8739,10 @@ int IPACM_Wan::add_catchup_all_filtering_rule_each_pdn(const IPACM_firewall_conf
 	flt_rule_entry.rule.rt_tbl_idx = rt_tbl_idx.idx;
 	IPACMDBG_H("Routing table %s has index %d\n", rt_tbl_idx.name, rt_tbl_idx.idx);
 
+	/*
+	 * FIXME FINDME If we've flipped in main on entry of the eogre
+	 * data into ipacm, what then will this do?
+	 */
 	change_to_network_order(iptype, &flt_rule_entry.rule.attrib);
 
 	ipa_ioc_generate_flt_eq flt_eq;
@@ -9002,3 +9079,315 @@ int IPACM_Wan::query_mtu_size()
 	close(fd);
 	return IPACM_SUCCESS;
 }
+
+int IPACM_Wan::GetMuxByAddr(
+	enum ipa_ip_type iptype,
+	void*            addr,
+	uint8_t&         mux_id )
+{
+	if ( ! VALID_IPA_IP_TYPE(iptype) || addr == NULL )
+	{
+		IPACMERR("Invalid iptype(%d) of addr(%p) passed to function\n",
+				 iptype, addr);
+		return IPACM_FAILURE;
+	}
+
+	bool found = false;
+
+#if defined(IPV6_EoGRE_TEST)
+	found = true;
+	mux_id = 1;
+	goto done;
+#endif
+
+	for ( int i = 0; i < IPA_MAX_NUM_SW_PDNS && ! found; i++ )
+	{
+		if ( iptype == IPA_IP_v4 )
+		{
+			IPACM_LOG_IP_ADDR("Searching for:", iptype, addr);
+
+			IPACM_LOG_IP_ADDR(
+				"Interface has:",
+				iptype,
+				&IPACM_Wan::ipv4_to_iface[i].ipv4_addr);
+
+			if( *((uint32_t*) addr) == IPACM_Wan::ipv4_to_iface[i].ipv4_addr )
+			{
+				mux_id = IPACM_Wan::ipv4_to_iface[i].pIface->ext_prop->ext[0].mux_id;
+				found = true;
+			}
+		}
+		else /* IPA_IP_v6 */
+		{
+			if ( IPACM_Wan::ipv6_to_iface[i].pIface )
+			{
+				IPACM_LOG_IP_ADDR("Searching for:", iptype, addr);
+
+				IPACM_LOG_IP_ADDR(
+					"Interface has:",
+					iptype,
+					&IPACM_Wan::ipv6_to_iface[i].pIface->m_ipv6_addr);
+
+				bool equal = ! memcmp(
+					addr,
+					&IPACM_Wan::ipv6_to_iface[i].pIface->m_ipv6_addr,
+					sizeof(IPACM_Wan::ipv6_to_iface[i].pIface->m_ipv6_addr));
+
+				if ( equal )
+				{
+					mux_id = IPACM_Wan::ipv6_to_iface[i].pIface->ext_prop->ext[0].mux_id;
+					found = true;
+				}
+			}
+		}
+	}
+
+done:
+	if ( found )
+	{
+		IPACMDBG_H(
+			"MUX ID(%u) found\n",
+			mux_id);
+
+		return IPACM_SUCCESS;
+	}
+	else
+	{
+		IPACMERR("No MUX ID found\n");
+
+		return IPACM_FAILURE;
+	}
+}
+
+#ifdef FEATURE_EoGRE
+
+void IPACM_Wan::eogre_up()
+{
+	IPACMDBG_H("Into eogre_up\n");
+
+	ipa_ip_type iptype = IPACM_Iface::ipacmcfg->eogre_info.iptype;
+
+	bool        eogre_enable = true;
+
+	IPACMDBG_H(
+		"About to enable eogre. Will do default catchup rule work for iptype(%d).\n",
+		iptype);
+
+	if ( eogre_notify_wan_state(eogre_enable) != IPACM_SUCCESS )
+	{
+		IPACMERR("eogre_notify_wan_state failed\n");
+		return;
+	}
+
+	if ( iptype == IPA_IP_v4 )
+	{
+		if ( eogre_v4_work(eogre_enable) != IPACM_SUCCESS )
+		{
+			IPACMERR("eogre_v4_work failed\n");
+			return;
+		}
+	}
+	else
+	{
+		if ( eogre_v6_work(eogre_enable) != IPACM_SUCCESS )
+		{
+			IPACMERR("eogre_v6_work failed\n");
+			return;
+		}
+	}
+
+	IPACMDBG_H(
+		"Success with the enable for iptype(%d)\n",
+		iptype);
+}
+
+void IPACM_Wan::eogre_down()
+{
+	IPACMDBG_H("Into eogre_down\n");
+
+	ipa_ip_type iptype = IPACM_Iface::ipacmcfg->eogre_info.iptype;
+
+	bool        eogre_enable = false;
+
+	IPACMDBG_H(
+		"About to disable eogre. Will do default catchup rule work for iptype(%d).\n",
+		iptype);
+
+	if ( eogre_notify_wan_state(eogre_enable) != IPACM_SUCCESS )
+	{
+		IPACMERR("eogre_notify_wan_state failed\n");
+		return;
+	}
+
+	if ( iptype == IPA_IP_v4 )
+	{
+		if ( eogre_v4_work(eogre_enable) != IPACM_SUCCESS )
+		{
+			IPACMERR("eogre_v4_work failed\n");
+			return;
+		}
+	}
+	else
+	{
+		if ( eogre_v6_work(eogre_enable) != IPACM_SUCCESS )
+		{
+			IPACMERR("eogre_v6_work failed\n");
+			return;
+		}
+	}
+
+	IPACMDBG_H(
+		"Success with the disable for iptype(%d)\n",
+		iptype);
+}
+
+int IPACM_Wan::eogre_v4_work(
+	bool eogre_enable )
+{
+	if ( eogre_enable )
+	{
+		IPACMDBG_H("Adding v4 modem DL rules on eogre enable.\n");
+
+		wan_up = is_default_gateway = true;
+
+		if ( config_wan_firewall_rule(IPA_IP_v4) != IPACM_SUCCESS )
+		{
+			IPACMERR(
+				"config_wan_firewall_rule failed\n");
+			wan_up = is_default_gateway = false;
+			return IPACM_FAILURE;
+		}
+
+		if ( install_wan_filtering_rule(false) != IPACM_SUCCESS )
+		{
+			IPACMERR(
+				"install_wan_filtering_rule failed\n");
+			wan_up = is_default_gateway = false;
+			return IPACM_FAILURE;
+		}
+	}
+	else
+	{
+		IPACMDBG_H("Deleting v4 modem DL rules on eogre disable.\n");
+
+		IPACM_Wan::num_v4_flt_rule = 0;
+
+#ifdef FEATURE_VLAN_MPDN
+		memset(IPACM_Wan::pdn_flt_rule_v4,
+			   0,
+			   sizeof(IPACM_Wan::pdn_flt_rule_v4));
+#else
+		memset(IPACM_Wan::flt_rule_v4,
+			   0,
+			   sizeof(IPACM_Wan::flt_rule_v4));
+#endif
+		if ( install_wan_filtering_rule(false) != IPACM_SUCCESS )
+		{
+			IPACMERR(
+				"install_wan_filtering_rule failed\n");
+			wan_up = is_default_gateway = false;
+			return IPACM_FAILURE;
+		}
+
+		wan_up = is_default_gateway = false;
+	}
+
+	return IPACM_SUCCESS;
+}
+
+int IPACM_Wan::eogre_v6_work(
+	bool eogre_enable )
+{
+	if ( eogre_enable )
+	{
+		IPACMDBG_H("Adding v6 modem DL rules on eogre enable.\n");
+
+		wan_up_v6 = is_default_gateway = true;
+
+		if ( config_wan_firewall_rule(IPA_IP_v6) != IPACM_SUCCESS )
+		{
+			IPACMERR(
+				"config_wan_firewall_rule failed\n");
+			wan_up_v6 = is_default_gateway = false;
+			return IPACM_FAILURE;
+		}
+
+		if ( install_wan_filtering_rule(false) != IPACM_SUCCESS )
+		{
+			IPACMERR(
+				"install_wan_filtering_rule failed\n");
+			wan_up_v6 = is_default_gateway = false;
+			return IPACM_FAILURE;
+		}
+	}
+	else
+	{
+		IPACMDBG_H("Deleting v6 modem DL rules on eogre disable.\n");
+
+		IPACM_Wan::num_v6_flt_rule = 0;
+
+#ifdef FEATURE_VLAN_MPDN
+		memset(IPACM_Wan::pdn_flt_rule_v6,
+			   0,
+			   sizeof(IPACM_Wan::pdn_flt_rule_v6));
+#else
+		memset(IPACM_Wan::flt_rule_v6,
+			   0,
+			   sizeof(IPACM_Wan::flt_rule_v6));
+#endif
+		if ( install_wan_filtering_rule(false) != IPACM_SUCCESS )
+		{
+			IPACMERR(
+				"install_wan_filtering_rule failed\n");
+			wan_up_v6 = is_default_gateway = false;
+			return IPACM_FAILURE;
+		}
+
+		wan_up_v6 = is_default_gateway = false;
+	}
+
+	return IPACM_SUCCESS;
+}
+
+int IPACM_Wan::eogre_notify_wan_state(
+	bool eogre_enable )
+{
+	IPACMDBG_H("In\n");
+
+	struct wan_ioctl_notify_wan_state wan_state;
+
+	int fd;
+
+	IPACMDBG_H(
+		"Send WAN_IOC_NOTIFY_WAN_STATE %s to IPA_PM\n",
+		(eogre_enable) ? "up" : "down");
+
+	fd = open(WWAN_QMI_IOCTL_DEVICE_NAME, O_RDWR);
+
+	if ( fd < 0 )
+	{
+		IPACMERR(
+			"Failed to open %s.\n",
+			WWAN_QMI_IOCTL_DEVICE_NAME);
+		return IPACM_FAILURE;
+	}
+
+	memset(&wan_state, 0, sizeof(wan_state));
+
+	wan_state.up = eogre_enable;
+
+	if ( ioctl(fd, WAN_IOC_NOTIFY_WAN_STATE, &wan_state) )
+	{
+		IPACMERR("The ioctl to send WAN_IOC_NOTIFY_WAN_STATE failed\n");
+		close(fd);
+		return IPACM_FAILURE;
+	}
+
+	close(fd);
+
+	IPACMDBG_H("Out\n");
+
+	return IPACM_SUCCESS;
+}
+
+#endif /* #ifdef FEATURE_EoGRE */

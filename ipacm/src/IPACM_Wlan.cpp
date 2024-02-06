@@ -311,7 +311,6 @@ void IPACM_Wlan::event_callback(ipa_cm_event_id event, void *param)
 					}
 
 #if defined(FEATURE_IPA_ANDROID) || defined(FEATURE_VLAN_MPDN)
-					add_dummy_private_subnet_flt_rule(data->iptype);
 					handle_private_subnet_android(data->iptype);
 #else
 					handle_private_subnet(data->iptype);
@@ -2285,7 +2284,7 @@ int IPACM_Wlan::handle_lan_client_connect(uint8_t *mac_addr)
 				ext_prop = IPACM_Iface::ipacmcfg->GetExtProp(IPA_IP_v4);
 #ifdef IPA_HW_FNR_STATS
 				if (IPACM_Wan::ipacmcfg->hw_fnr_stats_support)
-					install_uplink_filter_rule_per_client_v2(ext_prop, IPA_IP_v4, IPACM_Wan::getXlat_Mux_Id(), 
+					install_uplink_filter_rule_per_client_v2(ext_prop, IPA_IP_v4, IPACM_Wan::getXlat_Mux_Id(),
 						get_client_memptr(wlan_client, wlan_index)->mac,
 						get_client_memptr(wlan_client, wlan_index)->ul_cnt_idx);
 				else
@@ -3246,24 +3245,20 @@ int IPACM_Wlan::handle_down_evt()
 	if (ip_type != IPA_IP_v6 && rx_prop != NULL)
 	{
 		/* delete IPv4 icmp filter rules */
-		if(m_filtering.DeleteFilteringHdls(ipv4_icmp_flt_rule_hdl, IPA_IP_v4, NUM_IPV4_ICMP_FLT_RULE) == false)
+		res = delete_icmp_filter_rule(IPA_IP_v4);
+		if (res == IPACM_FAILURE)
 		{
-			IPACMERR("Error Deleting ICMPv4 Filtering Rule, aborting...\n");
-			res = IPACM_FAILURE;
+			IPACMERR("delete_icmp_filter_rule failed\n");
 			goto fail;
 		}
-		IPACM_Iface::ipacmcfg->decreaseFltRuleCount(rx_prop->rx[0].src_pipe, IPA_IP_v4, NUM_IPV4_ICMP_FLT_RULE);
-		if (dft_v4fl_rule_hdl[0] != 0)
+
+		res = delete_dflt_filter_rules(IPA_IP_v4);
+		if (res == IPACM_FAILURE)
 		{
-			if (m_filtering.DeleteFilteringHdls(dft_v4fl_rule_hdl, IPA_IP_v4, IPV4_DEFAULT_FILTERTING_RULES) == false)
-			{
-				IPACMERR("Error Deleting Filtering Rule, aborting...\n");
-				res = IPACM_FAILURE;
-				goto fail;
-			}
-			IPACM_Iface::ipacmcfg->decreaseFltRuleCount(rx_prop->rx[0].src_pipe, IPA_IP_v4, IPV4_DEFAULT_FILTERTING_RULES);
-			IPACMDBG_H("Deleted default v4 filter rules successfully.\n");
+			IPACMERR("delete_dflt_filter_rules failed\n");
+			goto fail;
 		}
+
 		/* delete private-ipv4 filter rules */
 #if defined(FEATURE_IPA_ANDROID) || defined(FEATURE_VLAN_MPDN)
 		if(m_filtering.DeleteFilteringHdls(private_fl_rule_hdl, IPA_IP_v4, IPA_MAX_PRIVATE_SUBNET_ENTRIES + IPA_MAX_MTU_ENTRIES) == false)
@@ -3300,25 +3295,18 @@ int IPACM_Wlan::handle_down_evt()
 	if (ip_type != IPA_IP_v4 && rx_prop != NULL)
 	{
 		/* delete icmp filter rules */
-		if(m_filtering.DeleteFilteringHdls(ipv6_icmp_flt_rule_hdl, IPA_IP_v6, NUM_IPV6_ICMP_FLT_RULE) == false)
+		res = delete_icmp_filter_rule(IPA_IP_v6);
+		if (res == IPACM_FAILURE)
 		{
-			IPACMERR("Error Deleting ICMPv6 Filtering Rule, aborting...\n");
-			res = IPACM_FAILURE;
+			IPACMERR("delete_icmp_filter_rule failed\n");
 			goto fail;
 		}
-		IPACM_Iface::ipacmcfg->decreaseFltRuleCount(rx_prop->rx[0].src_pipe, IPA_IP_v6, NUM_IPV6_ICMP_FLT_RULE);
 
-		if (dft_v6fl_rule_hdl[0] != 0)
+		res = delete_dflt_filter_rules(IPA_IP_v6);
+		if (res == IPACM_FAILURE)
 		{
-			if (!m_filtering.DeleteFilteringHdls(dft_v6fl_rule_hdl, IPA_IP_v6, m_ipv6_default_filterting_rules_count))
-			{
-				IPACMERR("Error Adding RuleTable(1) to Filtering, aborting...\n");
-				res = IPACM_FAILURE;
-				goto fail;
-			}
-			IPACM_Iface::ipacmcfg->decreaseFltRuleCount(
-				rx_prop->rx[0].src_pipe, IPA_IP_v6, m_ipv6_default_filterting_rules_count);
-			IPACMDBG_H("Deleted default v6 filter rules successfully.\n");
+			IPACMERR("delete_dflt_filter_rules failed\n");
+			goto fail;
 		}
 
 		if(m_filtering.DeleteFilteringHdls(&tcp_syn_flt_rule_hdl[IPA_IP_v6], IPA_IP_v6, 1) == false)

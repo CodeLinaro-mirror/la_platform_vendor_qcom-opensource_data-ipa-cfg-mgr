@@ -5398,7 +5398,7 @@ int IPACM_Lan::handle_eth_client_route_rule(uint8_t *mac_addr, ipa_ip_type iptyp
 			}
 
 			rt_rule_entry = &rt_rule->rules[0];
-			rt_rule_entry->at_rear = 0;
+			rt_rule_entry->at_rear = 1;
 
 			if (iptype == IPA_IP_v4)
 			{
@@ -5888,7 +5888,7 @@ int IPACM_Lan::handle_eth_client_route_rule_ext_v2(uint8_t *mac_addr, ipa_ip_typ
 			}
 			rules = rt_rule->rules;
 			rt_rule_entry = (struct ipa_rt_rule_add_ext_v2 *)rules;
-			rt_rule_entry->at_rear = 0;
+			rt_rule_entry->at_rear = 1;
 			rt_rule_entry->rule.enable_stats = true;
 			rt_rule_entry->rule.cnt_idx = dl_cnt_idx;
 
@@ -6153,7 +6153,7 @@ int IPACM_Lan::handle_eth_client_route_rule_ext(uint8_t *mac_addr, ipa_ip_type i
 			}
 
 			rt_rule_entry = &rt_rule->rules[0];
-			rt_rule_entry->at_rear = 0;
+			rt_rule_entry->at_rear = 1;
 
 			if (iptype == IPA_IP_v4)
 			{

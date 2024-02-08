@@ -2391,7 +2391,7 @@ int IPACM_Lan::handle_vlan_neighbor(ipacm_event_data_all *data)
 	ipacm_event_data_all data_all;
 	std::list <ipacm_event_data_all>::iterator it;
 	ipacm_bridge *bridge;
-
+	int skip_nat_set = 0;
 	IPACMDBG_H("\n");
 
 	if (IPACM_Iface::ipacmcfg->get_vlan_id(data->iface_name, &vlan_id))
@@ -2453,9 +2453,26 @@ int IPACM_Lan::handle_vlan_neighbor(ipacm_event_data_all *data)
 		}
 		else if(data_vlan->data_all.iptype == IPA_IP_v4)
 		{
-			add_vlan_private_subnet(bridge);
-		}
+			/*	This is to avoid installing IPA private subnet Filter rules in case of
+				IPPT without NAT scenario to avoid packets taking SW path because we
+				are installing private subnet rules with public IP assigned to bridge
+				since bridge has no longer the private IP assigned. */
 
+			for (int i = 0; i < MAX_NUM_IP_PASS_MPDN; i++)
+			{
+				if(IPACM_Iface::ipacmcfg->ip_pass_mpdn_table[i].valid_entry == true &&
+					IPACM_Iface::ipacmcfg->ip_pass_mpdn_table[i].ip_pass_skip_nat == 1)
+				{
+					skip_nat_set = 1;
+					break;
+				}
+			}
+			if(!skip_nat_set)
+			{
+				add_vlan_private_subnet(bridge);
+			}
+		}
+		skip_nat_set = 0;
 		/* first construc ETH full header */
 		handle_eth_hdr_init(data->mac_addr, bridge, vlan_id, true);
 	}

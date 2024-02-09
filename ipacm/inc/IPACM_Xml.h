@@ -241,6 +241,8 @@ if (!(a)) {                                                 \
 #define IPACM_VLAN_PCP_VALUE                "VlanPcp"
 #define IPACMLOG_TAG                         "IPACMLog"
 #define IPACMFILEVAR_TAG                     "IPACMfilevar"
+#define IPACM_MSGFLT_ENABLE_TAG              "IPACMMSGFLTEnable"
+#define IPACM_MSGFLT_TAG                     "IPACMMSGFLT"
 
 /*---------------------------------------------------------------------------
       IP protocol numbers - use in dss_socket() to identify protocols.
@@ -410,6 +412,7 @@ typedef struct  _IPACM_conf_t
 	bool ipacm_mpdn_enable;
 	bool ipacm_socksv5_enable;
 	IPACM_vlan_conf_t vlan_cfg;
+	bool msgflt_enable;
 } IPACM_conf_t;
 
 /* This function read IPACM XML configuration*/

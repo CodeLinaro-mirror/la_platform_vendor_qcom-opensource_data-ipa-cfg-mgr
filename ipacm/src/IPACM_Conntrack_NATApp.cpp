@@ -570,12 +570,16 @@ bool NatApp::ChkSWAllow(const nat_table_entry *rule)
 	IPACM_swallow_t sw_filter_cfg;
 	IPACMDBG("Entry\n");
 
+	if(!IPACM_Iface::ipacmcfg->ipacm_msgflt_enable)
+	{
+		IPACMERR("msg filtering feature is not enabled\n");
+		return false;
+	}
 	if(!IPACM_Iface::ipacmcfg->sw_filter_cfg)
 	{
 		IPACMERR("SW Config not updated/pdn index not updated!\n");
 		return false;
 	}
-
 	memcpy(&sw_filter_cfg, IPACM_Iface::ipacmcfg->sw_filter_cfg, sizeof(IPACM_swallow_t));
 
 	for(i = 0; i < sw_filter_cfg.pdn_count;i++)
@@ -3426,6 +3430,11 @@ bool NatBase::ChkSWAllow(const NatEntryBase& rule)
 	IPACM_swallow_t sw_filter_cfg;
 	IPACMDBG("Entry\n");
 
+	if(!IPACM_Iface::ipacmcfg->ipacm_msgflt_enable)
+	{
+		IPACMERR("msg filtering feature is not enabled\n");
+		return false;
+	}
 	if(!IPACM_Iface::ipacmcfg->sw_filter_cfg)
 	{
 		IPACMERR("SW Config not updated/pdn index not updated!\n");

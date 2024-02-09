@@ -469,6 +469,12 @@ int IPACM_Config::ReadSwAllow(void)
 			free(cfg);
 			return IPACM_FAILURE;
 		}
+		else if(!IPACM_Iface::ipacmcfg->ipacm_msgflt_enable)
+		{
+			IPACMERR("msg filtering feature is not enabled\n");
+			free(cfg);
+			return IPACM_FAILURE;
+		}
 
 		memset(sw_filter_cfg, 0, sizeof(IPACM_swallow_t));
 		memcpy(sw_filter_cfg, cfg, sizeof(IPACM_swallow_t));
@@ -659,6 +665,9 @@ int IPACM_Config::Init(void)
 	IPACMDBG_H("ipacm_ip_passthrough_mode %d. \n", ipacm_ip_passthrough_mode);
 
 	memcpy(ipacm_ip_passthrough_mac, cfg->ip_passthrough_mac.ether_addr_octet, IPA_MAC_ADDR_SIZE);
+
+	ipacm_msgflt_enable = cfg->msgflt_enable;
+	IPACMDBG_H("ipacm_msgflt_feature_enable %d\n", ipacm_msgflt_enable);
 
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
 	if (!ipacm_lan_stats_enable_set)

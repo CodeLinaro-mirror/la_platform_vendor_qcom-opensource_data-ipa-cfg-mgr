@@ -585,6 +585,7 @@ static int ipacm_cfg_xml_parse_tree
 						IPACM_util_icmp_string((char*)xml_node->name, IPACM_MPDN_TAG) == 0 ||
 						IPACM_util_icmp_string((char*)xml_node->name, IPACM_SOCKSv5_TAG) == 0 ||
 						IPACM_util_icmp_string((char*)xml_node->name, IP_PassthroughFlag_TAG) == 0 ||
+						IPACM_util_icmp_string((char*)xml_node->name, IPACM_MSGFLT_TAG) == 0 ||
 						IPACM_util_icmp_string((char*)xml_node->name, IPACMLOG_TAG) == 0)
 				{
 					if (0 == IPACM_util_icmp_string((char*)xml_node->name, IFACE_TAG))
@@ -976,6 +977,31 @@ static int ipacm_cfg_xml_parse_tree
 							IPACMDBG_H("IPV6 NAT enable %d buf(%d)\n",
 								config->ipv6_nat_enable, atoi(content_buf));
 						}
+					}
+				}
+				else if (IPACM_util_icmp_string((char*)xml_node->name, IPACM_MSGFLT_ENABLE_TAG) == 0)
+				{
+					IPACMDBG_H("inside enable message filtering feature enable\n");
+					content = IPACM_read_content_element(xml_node);
+					if (content == NULL)
+					{
+						IPACMERR("Failed to read the content of the tag %s\n", IPACM_MSGFLT_ENABLE_TAG);
+					}
+					else
+					{
+						str_size = strlen(content);
+						memset(content_buf, 0, sizeof(content_buf));
+						memcpy(content_buf, (void *)content, str_size);
+						if (atoi(content_buf))
+						{
+							config->msgflt_enable = true;
+						}
+						else
+						{
+							config->msgflt_enable = false;
+						}
+						IPACMDBG_H("msgflt feature enable %d buf(%d)\n",
+						config->msgflt_enable, atoi(content_buf));
 					}
 				}
 				else if (IPACM_util_icmp_string((char*)xml_node->name, IPACM_L2TP_Enable_TAG) == 0)

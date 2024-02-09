@@ -216,7 +216,10 @@
 			<IPACMQOSEnabled>0</IPACMQOSEnabled>
 		</IPACMQOS>
 		<IPACMLog>
-                        <IPACMfilevar>0</IPACMfilevar>
-                </IPACMLog>
+			<IPACMfilevar>0</IPACMfilevar>
+    		</IPACMLog>
+		<IPACMMSGFLT>
+			<IPACMMSGFLTEnable>0</IPACMMSGFLTEnable>
+		</IPACMMSGFLT>
 	</IPACM>
 </system>

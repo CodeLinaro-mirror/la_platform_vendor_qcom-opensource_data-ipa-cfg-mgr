@@ -1018,7 +1018,7 @@ done:
 
 void RegisterForSignals(bool default_handler);
 
-#define MAX_IPACM_TRACE_STACK 20
+#define MAX_IPACM_TRACE_STACK 40
 
 static void IPACM_Signals_handler(int sig, siginfo_t *info, void *extra)
 {
@@ -1052,14 +1052,12 @@ static void IPACM_Signals_handler(int sig, siginfo_t *info, void *extra)
 	case SIGTERM:
 		p = (ucontext_t *)extra;
 		IPACMERR("siginfo address=%x\n", info->si_addr);
-		/*
-		IPACMERR("arm_pc address = 0x%X\n", p->uc_mcontext.arm_pc);
-		IPACMERR("cpsr = 0x%X\n", p->uc_mcontext.arm_cpsr);
+		IPACMERR("arm_pc address = 0x%X\n", p->uc_mcontext.pc);
+		IPACMERR("pstate = 0x%X\n", p->uc_mcontext.pstate);
 		IPACMERR("fault address = 0x%X\n", p->uc_mcontext.fault_address);
-		IPACMERR("arm_sp address = 0x%X\n", p->uc_mcontext.arm_sp);
-		IPACMERR("arm_lr address = 0x%X\n", p->uc_mcontext.arm_lr);
-		IPACMERR("arm_r0  address = 0x%X\n", p->uc_mcontext.arm_r0);
-		*/
+		IPACMERR("arm_sp address = 0x%X\n", p->uc_mcontext.sp);
+		IPACMERR("arm_lr address = 0x%X\n", p->uc_mcontext.regs[30]);
+		IPACMERR("arm_r0  address = 0x%X\n", p->uc_mcontext.regs[0]);
 		size = backtrace(array, MAX_IPACM_TRACE_STACK);
 
 		messages = backtrace_symbols(array, size);

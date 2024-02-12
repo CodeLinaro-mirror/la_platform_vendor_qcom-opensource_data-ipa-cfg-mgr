@@ -452,7 +452,7 @@ bool IPACM_Filtering::DeleteFilteringHdls
 		IPACMERR("unable to allocate memory for del filter rule\n");
 		return false;
 	}
-
+	IPACMDBG("num_rules = %d\n",num_rules);
 	for (cnt = 0; cnt < num_rules; cnt++)
 	{
 	    memset(flt_rule, 0, len);
@@ -487,6 +487,7 @@ bool IPACM_Filtering::DeleteFilteringHdls
 			     res = false;
 			     goto fail;
 		        }
+				flt_rule_hdls[cnt] = 0;
 		   }
 	    }
 	}

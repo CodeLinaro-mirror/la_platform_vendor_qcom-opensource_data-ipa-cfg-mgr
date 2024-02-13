@@ -27,7 +27,7 @@ OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
 IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
  * Changes from Qualcomm Innovation Center are provided under the following license:
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
 */
 
@@ -2528,7 +2528,9 @@ list<client_info>::iterator IPACM_LanToLan_Iface::handle_client_del(uint8_t *mac
 #endif
 					flag[it_peer_info->peer->get_iface_pointer()->tx_prop->tx[0].hdr_l2_type] = true;
 				}
-				if(flag[it_peer_info->peer->get_iface_pointer()->tx_prop->tx[2].hdr_l2_type] == false)
+				if((it_peer_info->peer->is_svap_iface() || it_peer_info->peer->is_ap_iface_vlan_enabled() ||
+					(it_peer_info->peer->is_spcl_iface() && it_peer_info->is_vlan_peer)) &&
+					(flag[it_peer_info->peer->get_iface_pointer()->tx_prop->tx[2].hdr_l2_type] == false))
 				{
 						IPACMDBG_H("Delete client routing rule for peer interface.\n");
 						del_client_rt_rule(&(*it_peer_info), &(*it_client));

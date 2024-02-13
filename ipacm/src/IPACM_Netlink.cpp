@@ -78,9 +78,13 @@ int find_mask(int ip_v4_last, int *mask_value);
 #else/* defined(FEATURE_IPA_ANDROID) */
 
 #define IPACM_NL_COPY_ADDR( event_info, element )                                        \
+        RTA_PAYLOAD(rtah) >  (_SS_SIZE - (2 * sizeof (__ss_aligntype))) ?                \
         memcpy( &event_info->attr_info.element.__ss_padding,                             \
                 RTA_DATA(rtah),                                                          \
-                sizeof(event_info->attr_info.element.__ss_padding) );
+                (_SS_SIZE - (2 * sizeof (__ss_aligntype)))):                             \
+                memcpy( &event_info->attr_info.element.__ss_padding,                     \
+                RTA_DATA(rtah),                                                          \
+                RTA_PAYLOAD(rtah));
 
 #define IPACM_EVENT_COPY_ADDR_v6( event_data, element)                                   \
         memcpy( event_data, element.__ss_padding, sizeof(event_data));

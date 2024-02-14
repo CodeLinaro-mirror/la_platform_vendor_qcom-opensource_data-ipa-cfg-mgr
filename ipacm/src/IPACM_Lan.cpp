@@ -150,7 +150,7 @@ const uint8_t IPACM_Lan::v4_mpls_header[] = {
 
 const uint8_t IPACM_Lan::v6_mpls_header_nops[] = {
 	0x60, 0x00, 0x00, 0x00,
-	0x00, 0x00, 0x3c, 0x40, // 0x2f Protocol (Generic Routing Encapsulation)
+	0x00, 0x00, 0x2f, 0x40, // 0x2f Protocol (Generic Routing Encapsulation)
 	0x00, 0x00, 0x00, 0x00, // src address here
 	0x00, 0x00, 0x00, 0x00,
 	0x00, 0x00, 0x00, 0x00,
@@ -16376,37 +16376,46 @@ int IPACM_Lan::gre_make_hdr_for_add_ctx(
 		/*
 		 * Send ioctl to uC..
 		 */
-		IPACMDBG_H("Ioctl Sending to uC : %x \n",IPACM_Iface::ipacmcfg->tunnel_feature);
+		IPACMDBG_H("Ioctl Sending to uC : %x \n",
+				IPACM_Iface::ipacmcfg->tunnel_feature);
 		int fd, ret;
 		uint8_t muxid;
 		struct ipa_ioc_tunnel_template_info template_info_to_uc;
-		memset(&template_info_to_uc, 0x00, sizeof(struct ipa_ioc_tunnel_template_info));
-		memcpy(&template_info_to_uc.template_header[0], hdr_data_buf, hdr_data_len);
-		template_info_to_uc.template_len = hdr_data_len;
-		template_info_to_uc.template_type = IPACM_Iface::ipacmcfg->tunnel_feature;
+		memset(&template_info_to_uc, 0x00,
+				sizeof(struct ipa_ioc_tunnel_template_info));
+		memcpy(&template_info_to_uc.template_header[0], hdr_data_buf,
+				hdr_data_len);
+		template_info_to_uc.template_len =
+			hdr_data_len;
+		template_info_to_uc.template_type =
+			IPACM_Iface::ipacmcfg->tunnel_feature;
 
-		if(IPACM_Iface::ipacmcfg->tunnel_feature == UNTAG_FEATURE) 
+		if(IPACM_Iface::ipacmcfg->tunnel_feature == UNTAG_FEATURE)
 		{
-			/*Fill Action to be taken for traffic*/
+			/* Fill Action to be taken for traffic */
 			template_info_to_uc.tunnel_config.untagged_mapping_table.action_configured
 				= HW_PATH_ADJ_L2_ADD_TUNNEL_RESUME_2ND_PASS;
-			/*Fill zero for number of single and double tag info Since unTag to support*/	
+			/*
+			 * Fill zero for number of single and double tag info Since unTag to support
+			 */
 			template_info_to_uc.tunnel_config.num_of_single_tag_configs = 0;
 			template_info_to_uc.tunnel_config.num_of_double_tag_configs = 0;
 
-			/*Fill Associated muxid*/
+			/* Fill Associated muxid */
 			if ( ipgre_info.iptype == IPA_IP_v4 )
 			{
-				ret = IPACM_Wan::GetMuxByAddr(IPA_IP_v4, &ipgre_info.ipv4_src, muxid);
+				ret = IPACM_Wan::GetMuxByAddr(IPA_IP_v4,
+						&ipgre_info.ipv4_src, muxid);
 			}
 			else
 			{
-				ret = IPACM_Wan::GetMuxByAddr(IPA_IP_v6, &ipgre_info.ipv6_src, muxid);
+				ret = IPACM_Wan::GetMuxByAddr(IPA_IP_v6,
+						&ipgre_info.ipv6_src, muxid);
 			}
 
 			if ( ret == IPACM_SUCCESS )
 			{
-				template_info_to_uc.tunnel_config.untagged_mapping_table.mux_id 
+				template_info_to_uc.tunnel_config.untagged_mapping_table.mux_id
 					= muxid;
 				IPACMDBG_H("GetMuxByAddr succeed %d\n",muxid);
 			}
@@ -16415,11 +16424,11 @@ int IPACM_Lan::gre_make_hdr_for_add_ctx(
 				IPACMERR("GetMuxByAddr did not succeed.\n");
 				return IPACM_FAILURE;
 			}
-			/*Fill Option param if v6 tunnel only*/
+			/* Fill Option param if v6 tunnel only */
 			if ( ipgre_info.iptype == IPA_IP_v6 )
 			{
-				template_info_to_uc.tunnel_config.untagged_mapping_table.is_v6_options_hdr_present 
-										= ipgre_info.ipv6_option_hdr_enabled;
+				template_info_to_uc.tunnel_config.untagged_mapping_table.is_v6_options_hdr_present
+					= ipgre_info.ipv6_option_hdr_enabled;
 			}
 		}
 		if(IPACM_Iface::ipacmcfg->tunnel_feature == SINGLE_TAG_FEATURE)
@@ -16473,19 +16482,62 @@ int IPACM_Lan::gre_make_hdr_for_add_ctx(
 		}
 		if(IPACM_Iface::ipacmcfg->tunnel_feature == DOUBLE_TAG_FEATURE)
 		{
+			/* CTag and Stag set to zero since single pdn only */
+			template_info_to_uc.tunnel_config.doubletag_mux_mapping_table[0].stag_id_start
+				= 0;
+			template_info_to_uc.tunnel_config.doubletag_mux_mapping_table[0].stag_id_end
+				= 0;
+			template_info_to_uc.tunnel_config.doubletag_mux_mapping_table[0].ctag_id_start
+				= 0;
+			template_info_to_uc.tunnel_config.doubletag_mux_mapping_table[0].ctag_id_end
+				= 0;
+			/* Fill Action to be taken for traffic */
+			template_info_to_uc.tunnel_config.doubletag_mux_mapping_table[0].action_configured
+				= HW_PATH_ADJ_L2_ADD_TUNNEL_RESUME_2ND_PASS;
+			/* Fill zero for other single and double tag info Since */
+			template_info_to_uc.tunnel_config.num_of_single_tag_configs = 0;
+			template_info_to_uc.tunnel_config.num_of_double_tag_configs = 1;
 
+			/* Fill Associated muxid */
+			if ( ipgre_info.iptype == IPA_IP_v4 )
+			{
+				ret = IPACM_Wan::GetMuxByAddr(IPA_IP_v4,&ipgre_info.ipv4_src,muxid);
+			}
+			else
+			{
+				ret = IPACM_Wan::GetMuxByAddr(IPA_IP_v6,&ipgre_info.ipv6_src,muxid);
+			}
+
+			if ( ret == IPACM_SUCCESS )
+			{
+				template_info_to_uc.tunnel_config.doubletag_mux_mapping_table[0].mux_id
+					= muxid;
+				IPACMDBG_H("GetMuxByAddr succeed %d\n",muxid);
+			}
+			else
+			{
+				IPACMERR("GetMuxByAddr did not succeed.\n");
+				return IPACM_FAILURE;
+			}
+			/* Fill Option param if v6 tunnel only */
+			if ( ipgre_info.iptype == IPA_IP_v6 )
+			{
+				template_info_to_uc.tunnel_config.doubletag_mux_mapping_table[0].is_v6_options_hdr_present
+					= ipgre_info.ipv6_option_hdr_enabled;
+			}
 		}
 
 		IPACMDBG_H("Ioctl Sending param uC,"
-				"len: %d, mux :%d \n",template_info_to_uc.template_len,muxid);
+				"len: %d, mux :%d \n",
+				template_info_to_uc.template_len,muxid);
 		fd = open(IPA_DEVICE_NAME, O_RDWR);
 		if (fd < 0)
 		{
 			IPACMDBG_H("Failed opening %s.\n", IPA_DEVICE_NAME);
 			return IPACM_FAILURE;
 		}
-		
-		ret = ioctl(fd, IPA_IOC_SEND_TUNNEL_TEMPLATE_INFO, &template_info_to_uc);
+		ret = ioctl(fd, IPA_IOC_SEND_TUNNEL_TEMPLATE_INFO,
+				&template_info_to_uc);
 		close(fd);
 		if ( ret )
 		{

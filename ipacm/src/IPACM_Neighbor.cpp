@@ -73,6 +73,7 @@ IPACM_Neighbor::IPACM_Neighbor()
 	IPACM_EvtDispatcher::registr(IPA_DEL_NEIGH_EVENT, this);
 	IPACM_EvtDispatcher::registr(IPA_ADD_BRIDGE_VLAN_PHY_INTF, this);
 	IPACM_EvtDispatcher::registr(IPA_ADD_BRIDGE_VLAN_BR_INTF, this);
+	IPACM_EvtDispatcher::registr(IPA_CLEAN_NEIGHBOR_CACHE, this);
 
 	return;
 }
@@ -319,6 +320,17 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 				vlan_bridge_data.master_if_index = data_all->if_index;
 				IPACMDBG("Update bridge details in bridge<->vlan mapping list with bridge %s, IP 0x%x subnet 0x%x, status %d\n", vlan_bridge_data.bridge_name, vlan_bridge_data.bridge_ipv4, vlan_bridge_data.subnet_mask, vlan_bridge_data.status);
 				IPACM_Iface::ipacmcfg->add_bridge_vlan_mapping(&vlan_bridge_data);
+		}
+		break;
+		/* Update partial bridge interface<->vlan entry with bridge interface
+		   data.
+		*/
+		case IPA_CLEAN_NEIGHBOR_CACHE:
+		{
+				IPACMDBG("Handling %s\n", IPACM_Iface::ipacmcfg->getEventName(IPA_CLEAN_NEIGHBOR_CACHE));
+				ipacm_event_data_all *data = (ipacm_event_data_all *)param;
+				IPACMDBG("data->iface_name: %s, data->if_index: %d\n", data->iface_name, data->if_index);
+				cleanCache(data->if_index);
 		}
 		break;
 

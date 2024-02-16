@@ -2519,11 +2519,6 @@ int IPACM_Wan::handle_route_add_vlan_pdn_evt(ipa_ip_type iptype, uint16_t vlan_i
 		{
 			IPACMDBG_H("a v6 PDN is already up, don't create default rt rule\n");
 		}
-		/* no need the catch all rule due to v6ct enabled */
-		else if (ipacmcfg->IsIpv6CTEnabled())
-		{
-			IPACMDBG_H("IPv6 connection tracking is enabled, don't create default rt rule\n");
-		}
 		else
 		{
 			FullConfig = true;
@@ -3067,9 +3062,8 @@ int IPACM_Wan::handle_route_add_evt(ipa_ip_type iptype)
 	}
 
 	/* add a catch-all rule in wan dl routing table */
-	/* no need the catch all rule due to v6ct enabled */
 
-	if (iptype == IPA_IP_v6 && !ipacmcfg->IsIpv6CTEnabled())
+	if (iptype == IPA_IP_v6)
 	{
 		strlcpy(rt_rule->rt_tbl_name, IPACM_Iface::ipacmcfg->rt_tbl_wan_v6.name, sizeof(rt_rule->rt_tbl_name));
 		memset(rt_rule_entry, 0, sizeof(struct ipa_rt_rule_add));
@@ -6056,7 +6050,7 @@ int IPACM_Wan::handle_route_del_evt(ipa_ip_type iptype)
 		}
 
 		/* Delete the default wan route*/
-		if (iptype == IPA_IP_v6 && wan_route_rule_v6_hdl_a5 != 0)
+		if (iptype == IPA_IP_v6)
 		{
 		   	IPACMDBG_H("ip-type %d: default v6 wan RT-rule deleted\n",iptype);
 			if (m_routing.DeleteRoutingHdl(wan_route_rule_v6_hdl_a5, IPA_IP_v6) == false)
@@ -6208,7 +6202,7 @@ int IPACM_Wan::handle_route_del_evt_ex(ipa_ip_type iptype)
 	}
 #endif
 		/* Delete the default route*/
-		if (iptype == IPA_IP_v6 && wan_route_rule_v6_hdl_a5 != 0)
+		if (iptype == IPA_IP_v6)
 		{
 #ifdef FEATURE_VLAN_MPDN
 			if(!isVlanWanUP_V6())
@@ -7072,7 +7066,7 @@ int IPACM_Wan::handle_down_evt_ex()
 
 			IPACMDBG_H("now num offloaded PDNs is %d\n", num_offloaded_pdns);
 
-			if(!isVlanWanUP_V6() && wan_route_rule_v6_hdl_a5 != 0)
+			if(!isVlanWanUP_V6())
 			{
 				IPACMDBG_H("ip-type %d: default v6 wan RT-rule deleted\n", ip_type);
 				if(m_routing.DeleteRoutingHdl(wan_route_rule_v6_hdl_a5, IPA_IP_v6) == false)

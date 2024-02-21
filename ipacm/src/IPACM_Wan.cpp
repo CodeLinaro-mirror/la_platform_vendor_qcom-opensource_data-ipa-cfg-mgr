@@ -1387,13 +1387,6 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 				{
 					IPACMDBG_H("get default v4 route (dst:0.0.0.0)\n");
 
-					/* Modifying this only for default route */
-					if(m_is_sta_mode == WLAN_WAN)
-						IPACM_Wan::backhaul_is_sta_mode = true;
-					else
-						IPACM_Wan::backhaul_is_sta_mode = false;
-					IPACMDBG_H("backhual_is_sta_mode is %d\n", IPACM_Wan::backhaul_is_sta_mode);
-
 					wan_v4_addr_gw = data->ipv4_addr_gw;
 					wan_v4_addr_gw_set = true;
 					wan_v4_is_default_gw = true;
@@ -1418,13 +1411,6 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 						return;
 					}
 					IPACMDBG_H("\n get default v6 route (dst:00.00.00.00)\n");
-
-					/* Modifying backhaul_is_sta_mode only for default route */
-					if(m_is_sta_mode == WLAN_WAN)
-						IPACM_Wan::backhaul_is_sta_mode = true;
-					else
-						IPACM_Wan::backhaul_is_sta_mode = false;
-					IPACMDBG_H("backhual_is_sta_mode is %d\n", IPACM_Wan::backhaul_is_sta_mode);
 
 					IPACMDBG_H("\n get default v6 route (dst:00.00.00.00)\n");
 					IPACMDBG_H(" IPV6 dst: %08x:%08x:%08x:%08x \n",
@@ -1586,14 +1572,9 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 			if (ipa_interface_index == ipa_if_num)
 			{
 				IPACMDBG_H("Received IPA_ROUTE_DEL_EVENT\n");
-
 				if ((data->iptype == IPA_IP_v4) && (!data->ipv4_addr) && (!data->ipv4_addr_mask) && (active_v4 == true))
 				{
 					IPACMDBG_H("get del default v4 route (dst:0.0.0.0)\n");
-					/* Modifying backhaul_is_sta_mode only for default route */
-					if(m_is_sta_mode == WLAN_WAN)
-						IPACM_Wan::backhaul_is_sta_mode = false;
-					IPACMDBG_H("backhual_is_sta_mode is %d\n", IPACM_Wan::backhaul_is_sta_mode);
 
 					wan_v4_addr_gw_set = false;
 					if(m_is_sta_mode == Q6_WAN)
@@ -1619,11 +1600,6 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 				else if ((data->iptype == IPA_IP_v6) && (!data->ipv6_addr[0]) && (!data->ipv6_addr[1]) && (!data->ipv6_addr[2]) && (!data->ipv6_addr[3]) && (active_v6 == true))
 				{
 					IPACMDBG_H("get del default v6 route (dst:00.00.00.00)\n");
-					
-					/* Modifying backhaul_is_sta_mode only for default route */
-					if(m_is_sta_mode == WLAN_WAN)
-						IPACM_Wan::backhaul_is_sta_mode = false;
-					IPACMDBG_H("backhual_is_sta_mode is %d\n", IPACM_Wan::backhaul_is_sta_mode);
 
 					if(m_is_sta_mode == Q6_WAN)
 					{
@@ -2924,6 +2900,7 @@ int IPACM_Wan::handle_route_add_evt(ipa_ip_type iptype)
 
 	if (m_is_sta_mode !=Q6_WAN)
 	{
+		IPACM_Wan::backhaul_is_sta_mode	= true;
 		if((iptype==IPA_IP_v4) && (header_set_v4 != true))
 		{
 			header_partial_default_wan_v4 = true;
@@ -2939,6 +2916,7 @@ int IPACM_Wan::handle_route_add_evt(ipa_ip_type iptype)
 	}
 	else
 	{
+		IPACM_Wan::backhaul_is_sta_mode	= false;
 		IPACMDBG_H("reset backhaul to LTE \n");
 
 		if (iface_query != NULL && iface_query->num_ext_props > 0)

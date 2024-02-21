@@ -3067,7 +3067,7 @@ fail:
 					pthread_mutex_lock(&IPACM_Wan::ipacmcfg->cnt_idx_lock);
 					if (IPACM_Wan::ipacmcfg->reset_cnt_idx(client_info->ul_cnt_idx, false))
 						IPACMERR("Failed to reset counter index = %u\n", client_info->ul_cnt_idx);
-					pthread_mutex_lock(&IPACM_Wan::ipacmcfg->cnt_idx_lock);
+					pthread_mutex_unlock(&IPACM_Wan::ipacmcfg->cnt_idx_lock);
 				}
 #endif //IPA_HW_FNR_STATS
 				if (rx_prop)

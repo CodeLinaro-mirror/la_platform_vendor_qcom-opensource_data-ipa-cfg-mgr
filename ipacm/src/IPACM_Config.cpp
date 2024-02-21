@@ -2128,43 +2128,37 @@ bool IPACM_Config::is_added_vlan_iface(char *iface_name)
 	return ret;
 }
 
-bool IPACM_Config::iface_in_vlan_mode(const char *phys_iface_name)
-{
-
+bool IPACM_Config::iface_in_vlan_mode(const char *interfaceName) {
+	IPACMDBG_H("iface %s is getting checked if it is vlan\n", interfaceName);
+	string nameToCheck = getNameForVlanQuery(interfaceName);
 #if IPA_ETH_API_VER >= 2
-	/* Differentiate Dual NIC mode where interface name is either [eth0|eth1] and legacy while where
-	 * name is always "eth0".
+	/**
+	 *  Differentiate Dual NIC mode where interface name is either
+	 *  [eth0|eth1] and legacy while where name is always "eth0".
 	 */
-	if (strstr(phys_iface_name, "eth0")) {
+	if (strstr(nameToCheck.c_str(), "eth0")) {
 		IPACMDBG("eth0 vlan mode %d\n", vlan_devices[IPA_VLAN_IF_ETH0]);
 		return vlan_devices[IPA_VLAN_IF_ETH0] || vlan_devices[IPA_VLAN_IF_EMAC];
 	}
-
-	if (strstr(phys_iface_name, "eth1")) {
+	if (strstr(nameToCheck.c_str(), "eth1")) {
 		IPACMDBG("eth1 vlan mode %d\n", vlan_devices[IPA_VLAN_IF_ETH1]);
 		return vlan_devices[IPA_VLAN_IF_ETH1] || vlan_devices[IPA_VLAN_IF_EMAC];
 	}
 #endif
-
-	if (strstr(phys_iface_name, "eth") || strstr(phys_iface_name, "macsec"))
-	{
+	if (strstr(nameToCheck.c_str(), "eth") || strstr(nameToCheck.c_str(), "macsec")) {
 		IPACMDBG("eth vlan mode %d\n", vlan_devices[IPA_VLAN_IF_EMAC]);
 		return vlan_devices[IPA_VLAN_IF_EMAC];
 	}
-
-	if(strstr(phys_iface_name, "rndis"))
-	{
+	if (strstr(nameToCheck.c_str(), "rndis")) {
 		IPACMDBG("rndis vlan mode %d\n", vlan_devices[IPA_VLAN_IF_RNDIS]);
 		return vlan_devices[IPA_VLAN_IF_RNDIS];
 	}
-
-	if(strstr(phys_iface_name, "ecm"))
-	{
+	if (strstr(nameToCheck.c_str(), "ecm")) {
 		IPACMDBG("ecm vlan mode %d\n", vlan_devices[IPA_VLAN_IF_ECM]);
 		return vlan_devices[IPA_VLAN_IF_ECM];
 	}
 
-	IPACMDBG("iface %s did not match any known ifaces\n", phys_iface_name);
+	IPACMDBG_H("iface %s did not match any known ifaces\n", nameToCheck.c_str());
 	return false;
 }
 

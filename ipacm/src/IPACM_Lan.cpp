@@ -2607,7 +2607,7 @@ int IPACM_Lan::handle_vlan_pdn_down(ipacm_event_vlan_pdn *data)
 		}
 		else
 		{
-			//LTE case delete routing rule of client with associated vlan_id
+			//LTE case delete routing rule of client with associated mux_id
 			for(int i = 0; i < IPA_MAX_NUM_HW_PDNS; i++)
 			{
 				if(v6_mux_up[i].mux_id == data->mux_id)
@@ -2673,7 +2673,7 @@ int IPACM_Lan::handle_vlan_pdn_down(ipacm_event_vlan_pdn *data)
 		}
 		else
 		{
-			//LTE case delete routing rule of client with associated vlan_id
+			//LTE case delete routing rule of client with associated mux_id
 			for(int i = 0; i < IPA_MAX_NUM_HW_PDNS; i++)
 			{
 				if(v6_mux_up[i].mux_id == data->mux_id)

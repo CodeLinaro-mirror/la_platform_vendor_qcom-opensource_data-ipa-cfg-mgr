@@ -27,9 +27,9 @@ WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
 OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
 IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 *
- * Changes from Qualcomm Innovation Center are provided under the following license:
+ * Changes from Qualcomm Innovation Center, Inc. are provided under the following license:
  *
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2023, 2025 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted (subject to the limitations in the
@@ -127,7 +127,7 @@ typedef struct
 	uint32_t ipv4_addr;
 	bool wan_up_vlan;
 	bool is_xlat;
-	uint16_t associated_VIDs[IPA_MAX_NUM_SW_PDNS];
+	uint16_t associated_VIDs[IPA_MAX_NUM_SW_PDNS] = {0};
 	uint8_t VID_cnt = 0;
 	IPACM_Wan *pIface;
 }ipacm_ipv4_wan_iface;
@@ -136,7 +136,7 @@ typedef struct
 {
 	uint32_t ipv6_prefix[2];
 	bool wan_up_vlan_v6;
-	uint16_t associated_VIDs[IPA_MAX_NUM_SW_PDNS];
+	uint16_t associated_VIDs[IPA_MAX_NUM_SW_PDNS] = {0};
 	uint8_t VID_cnt = 0;
 	IPACM_Wan *pIface;
 }ipacm_ipv6_wan_iface;

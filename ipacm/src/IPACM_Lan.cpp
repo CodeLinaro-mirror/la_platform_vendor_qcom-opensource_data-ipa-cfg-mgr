@@ -9758,20 +9758,6 @@ int IPACM_Lan::install_ipv6_icmp_flt_rule()
 	{
 		IPACMDBG_H("Will attempt to add v6 icmp filter rule\n");
 
-#ifdef FEATURE_EoGRE
-		bool eogre_enabled = IPACM_Iface::ipacmcfg->eogre_enabled;
-#else
-		bool eogre_enabled = false;
-#endif
-		/*
-		 * Don't configure icmp when eogre enabled:
-		 */
-		if ( eogre_enabled )
-		{
-			IPACMDBG_H("Won't install icmp rule when eogre enabled\n");
-			return ret;
-		}
-
 		static const int NUM_RULES = 1;
 
 		char buf1[ sizeof(struct ipa_ioc_add_flt_rule_v2) ];

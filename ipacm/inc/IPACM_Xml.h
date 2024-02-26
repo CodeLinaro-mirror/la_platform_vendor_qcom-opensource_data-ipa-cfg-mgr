@@ -28,8 +28,7 @@
  *
  * Changes from Qualcomm Innovation Center are provided under the following license:
  *
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
- 
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted (subject to the limitations in the
@@ -274,6 +273,16 @@ if (!(a)) {                                                 \
 
 #define IPACM_WLAN_VLAN_MPDN                 "IPACMVLANMPDN"
 #define IPACM_Wlan_Vlan_Mpdn_Enabled         "IPACMVlanMpdnEnabled"
+
+#define PrivateIPForwarding_TAG              "PrivateIPForwarding"
+#define PrivateIPForwarding_Enabled          "PrivateIPForwardingEnabled"
+#define OffloadAPN_TAG                       "Offload_APN"
+#define VLAN_Interface_TAG                   "VLAN_interface"
+#define VLAN_Bridge_TAG                      "VLAN_bridge"
+#define VLAN_Bridge_subnet_TAG               "VLAN_bridge_subnet"
+
+
+
 // Tunnel Config entries
 #define PMIPv6_Enabled_TAG                   "PMIPV6Enable"
 #define PMIPv6_TAG                           "PMIPV6"
@@ -399,6 +408,15 @@ typedef struct
 	uint32_t gre_server_ipv4_subnet[IPA_MAX_IPGRE_SUBNET_ENTRY];
 } ipacm_gre_conf_t;
 
+typedef struct
+{
+	bool privateIPForwarding_enable;
+	uint8_t vlan; //0, if APN 1 or untagged traffic has to be accelerated, and the vlan ID, if tagged traffic, and that vlan has to be accelerated
+	char interface_name[IPA_IFACE_NAME_LEN];
+	char bridge_name[IPA_IFACE_NAME_LEN];
+	uint32_t bridge_net_mask;
+} ipacm_private_ip_forward_conf_t;
+
 typedef struct  _IPACM_conf_t
 {
 	ipacm_iface_conf_t iface_config;
@@ -423,6 +441,7 @@ typedef struct  _IPACM_conf_t
 	uint32_t ipacm_emesh_mode;
 	bool ipacm_socksv5_enable;
 	ipacm_gre_conf_t gre_conf;
+	ipacm_private_ip_forward_conf_t private_IP_conf;
 	bool public_ip_support_enable;
 	bool wlan_vlan_mpdn_enable;
 } IPACM_conf_t;

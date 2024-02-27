@@ -1022,44 +1022,6 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 						evt_data.evt_data = (void *)wanup_data;
 						IPACM_EvtDispatcher::PostEvt(&evt_data);
 					}
-#ifdef FEATURE_VLAN_MPDN
-					else
-					{
-						if((IPACM_Iface::ipacmcfg->ipacm_mpdn_enable) && (associated_VID != 0))
-						{
-							IPACMDBG_H("PDN already associated with VLAN ID via V6 address (0x[%X][%X]), add V4 vlan pdn\n",
-								ipv6_prefix[0], ipv6_prefix[1]);
-
-							/* in case of ip passthrough we receive a link local address and shouldn't add a vlan v4 pdn */
-							if (is_link_local_ipv4_addr(data->ipv4_addr)) {
-								IPACMDBG_H("ipv4 address is link local, don't add v4 vlan pdn\n");
-								break;
-							}
-
-							/* generate IPA_ROUTE_ADD_VLAN_PDN_EVENT for v4 PDN as v6 PDN already has associated vlan*/
-							ipacm_cmd_q_data evt_data;
-							ipacm_event_route_vlan *vlan_data;
-
-							evt_data.event = IPA_ROUTE_ADD_VLAN_PDN_EVENT;
-							vlan_data = (ipacm_event_route_vlan *)malloc(sizeof(ipacm_event_route_vlan));
-							if(!vlan_data)
-							{
-								IPACMERR("couldn't allocate memory for new vlan pdn event\n");
-								return;
-							}
-							vlan_data->iptype = IPA_IP_v4;
-							vlan_data->VlanID = associated_VID;
-							vlan_data->wan_ipv4_addr = data->ipv4_addr;
-							evt_data.evt_data = vlan_data;
-							IPACMDBG_H("sending IPA_ROUTE_ADD_VLAN_PDN_EVENT vlan id %d, iptype %d,\n",
-								vlan_data->VlanID,
-								vlan_data->iptype);
-							IPACMDBG_H("pdn ip 0x%X\n", data->ipv4_addr);
-
-							IPACM_EvtDispatcher::PostEvt(&evt_data);
-						}
-					}
-#endif
 				}
 			}
 		}

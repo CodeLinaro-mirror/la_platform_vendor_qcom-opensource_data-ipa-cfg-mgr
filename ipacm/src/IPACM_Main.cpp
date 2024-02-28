@@ -247,6 +247,7 @@ void* firewall_monitor(void *param)
 void* ipa_driver_msg_notifier(void *param)
 {
 	int length, fd, cnt;
+	int if_index;
 
 #ifdef FEATURE_IPACM_RESTART
 	FILE *fp = NULL;
@@ -273,6 +274,8 @@ void* ipa_driver_msg_notifier(void *param)
 	ipa_get_data_stats_resp_msg_v01 *data_tethering_stats = NULL;
 	ipa_get_apn_data_stats_resp_msg_v01 *data_network_stats = NULL;
 	ipacm_event_connection *data_event_conn = NULL;
+	ipacm_event_ip_collision_pdn_info *ip_collision_pdn_data = NULL;
+	ipacm_event_data_addr *data_addr = NULL;
 
 #if defined(FEATURE_L2TP) || defined(FEATURE_VLAN_MPDN)
 	ipa_ioc_vlan_iface_info vlan_info;
@@ -281,6 +284,7 @@ void* ipa_driver_msg_notifier(void *param)
 	ipacm_cmd_q_data new_neigh_evt;
 	ipacm_event_data_all* new_neigh_data;
 	ipa_ioc_gsb_info *event_gsb = NULL;
+	ipa_ioc_pdn_config *pdn_info = NULL;
 
 #ifdef FEATURE_SOCKSv5
 	ipa_socksv5_msg add_socksv5_info;
@@ -941,6 +945,68 @@ void* ipa_driver_msg_notifier(void *param)
 			ipa_get_if_index(event_gsb->name, &(data_fid->if_index));
 			evt_data.event = IPA_LINK_DOWN_EVENT;
 			evt_data.evt_data = data_fid;
+			break;
+
+		case IPA_PDN_IP_COLLISION_MODE_CONFIG:
+			pdn_info = (ipa_ioc_pdn_config *)(buffer + sizeof(struct ipa_msg_meta));
+			IPACMDBG_H("Received IPA_PDN_IP_COLLISION_MODE_CONFIG name: %s, default_pdn: %d, type: %d, enable: %d and Vlan ID: %d!\n",
+				pdn_info->dev_name, pdn_info->default_pdn, pdn_info->pdn_cfg_type, pdn_info->enable, pdn_info->u.collison_cfg.vlan_id);
+
+			ipa_get_if_index(pdn_info->dev_name, &if_index);
+			/* post IPA_LINK_UP_EVENT event in case WAN interface is not up */
+			data_fid = (ipacm_event_data_fid *)calloc(1, sizeof(ipacm_event_data_fid));
+			if(data_fid == NULL)
+			{
+				IPACMERR("unable to allocate memory for LINK_UP event in collision case\n");
+				return NULL;
+			}
+			data_fid->if_index = if_index;
+			evt_data.event = IPA_LINK_UP_EVENT;
+			evt_data.evt_data = data_fid;
+			IPACMDBG_H("Posting IPA_LINK_UP_EVENT event:%d\n", evt_data.event);
+			IPACM_EvtDispatcher::PostEvt(&evt_data);
+
+			IPACM_Iface::ipacmcfg->ip_collision_config_update(pdn_info);
+			IPACM_Iface::ipacmcfg->update_private_subnet_collision(pdn_info->enable, pdn_info->u.collison_cfg.vlan_id);
+
+			/* In collision mode, default route won't be posted. Handle this internally */
+			if(pdn_info->default_pdn)
+			{
+				data_addr = (ipacm_event_data_addr *)malloc(sizeof(ipacm_event_data_addr));
+				if(!data_addr)
+				{
+					IPACMERR("unable to allocate memory for route add event\n");
+					return NULL;
+				}
+				memset(data_addr, 0, sizeof(ipacm_event_data_addr));
+				data_addr->if_index = if_index;
+				data_addr->iptype = IPA_IP_v4;
+				memset(&evt_data, 0, sizeof(evt_data));
+				evt_data.event = IPA_ROUTE_ADD_EVENT;
+				evt_data.evt_data = data_addr;
+				IPACMDBG_H("Collision Mode: Posting IPA_ROUTE_ADD_EVENT with if index:%d, ipv4 addr:0x%x, mask: 0x%x and gw: 0x%x\n",
+											data_addr->if_index,
+											data_addr->ipv4_addr,
+											data_addr->ipv4_addr_mask,
+											data_addr->ipv4_addr_gw);
+				IPACM_EvtDispatcher::PostEvt(&evt_data);
+			}
+
+			ip_collision_pdn_data = (ipacm_event_ip_collision_pdn_info *)malloc(sizeof(ipacm_event_ip_collision_pdn_info));
+			if(!ip_collision_pdn_data)
+			{
+				IPACMERR("unable to allocate memory for pdn_config\n");
+				return NULL;
+			}
+			memset(ip_collision_pdn_data, 0, sizeof(ipacm_event_ip_collision_pdn_info));
+			ip_collision_pdn_data->enable = pdn_info->enable;
+			ip_collision_pdn_data->VlanID = pdn_info->u.collison_cfg.vlan_id;
+			strlcpy(ip_collision_pdn_data->dev_name, pdn_info->dev_name, IPA_RESOURCE_NAME_MAX);
+			ip_collision_pdn_data->if_index = if_index;
+			memset(&evt_data, 0, sizeof(evt_data));
+			evt_data.event = IPA_IP_COLLISION_UPDATE_EVENT;
+			evt_data.evt_data = ip_collision_pdn_data;
+			IPACMDBG_H("Posting IPA_IP_COLLISION_UPDATE_EVENT event:%d for interface: %d\n", evt_data.event, if_index);
 			break;
 
 		default:

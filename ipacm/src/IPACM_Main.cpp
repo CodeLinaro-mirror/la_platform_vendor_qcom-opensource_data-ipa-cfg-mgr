@@ -431,7 +431,11 @@ void* ipa_driver_msg_notifier(void *param)
 				IPACMERR("unable to allocate memory for event_wlan data_fid\n");
 				goto done;
 			}
-			ipa_get_if_index(event_wlan->name, &(data_fid->if_index));
+			if(IPACM_FAILURE == ipa_get_if_index(event_wlan->name, &(data_fid->if_index)))
+			{
+				data_fid->if_index = event_wlan->if_index;
+				IPACMDBG_H("Using WLAN_STA_DISCONNECT if_index: %d\n",event_wlan->if_index);
+			}
 			evt_data.event = IPA_WLAN_LINK_DOWN_EVENT;
 			evt_data.evt_data = data_fid;
 			break;
@@ -1706,7 +1710,7 @@ int ipa_get_if_index
 
 	if (ioctl(fd, SIOCGIFINDEX, &ifr) < 0)
 	{
-		IPACMERR("call_ioctl_on_dev: ioctl failed: can't find device %s",if_name);
+		IPACMERR("call_ioctl_on_dev: ioctl failed: can't find device %s\n",if_name);
 		*if_index = -1;
 		close(fd);
 		return IPACM_FAILURE;

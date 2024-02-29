@@ -427,7 +427,11 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 									else
 									{
 										/* for VLAN interfaces make sure bridge is with correct VID */
-										if(IPACM_Iface::ipacmcfg->iface_in_vlan_mode(neighbor_client[i].iface_name))
+										if(IPACM_Iface::ipacmcfg->iface_in_vlan_mode(neighbor_client[i].iface_name)
+#ifdef IPA_L2TP_TUNNEL_UDP
+											&& !IPACM_Iface::ipacmcfg->check_l2tp_iface(neighbor_client[i].iface_name)
+#endif
+											)
 										{
 											uint16_t vlan_id;
 											if(IPACM_Iface::ipacmcfg->get_vlan_id(neighbor_client[i].iface_name, &vlan_id))
@@ -443,6 +447,11 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 											}
 											IPACMDBG_H("client - bridge vid match (%d)\n", vlan_id);
 										}
+#ifdef IPA_L2TP_TUNNEL_UDP
+										//this is first time associating bridge to neighbor client, here do the dummy VLAN update.
+										IPACM_Iface::ipacmcfg->add_l2tp_dummy_bridge_vlan_mapping(data->iface_name,
+																		neighbor_client[i].iface_name, data->if_index);
+#endif
 									}
 								}
 #endif
@@ -819,7 +828,11 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 									else
 									{
 										/* for VLAN interfaces make sure bridge is with correct VID */
-										if(IPACM_Iface::ipacmcfg->iface_in_vlan_mode(neighbor_client[i].iface_name))
+										if(IPACM_Iface::ipacmcfg->iface_in_vlan_mode(neighbor_client[i].iface_name)
+#ifdef IPA_L2TP_TUNNEL_UDP
+												&& !IPACM_Iface::ipacmcfg->check_l2tp_iface(neighbor_client[i].iface_name)
+#endif
+											)
 										{
 											uint16_t vlan_id;
 											if(IPACM_Iface::ipacmcfg->get_vlan_id(neighbor_client[i].iface_name, &vlan_id))
@@ -836,6 +849,11 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 											IPACMDBG_H("client - bridge vid match (%d)\n", vlan_id);
 										}
 									}
+#ifdef IPA_L2TP_TUNNEL_UDP
+									//this is first time associating bridge to neighbor client, here do the dummy VLAN update.
+									IPACM_Iface::ipacmcfg->add_l2tp_dummy_bridge_vlan_mapping(data->iface_name,
+																		neighbor_client[i].iface_name, data->if_index);
+#endif
 								}
 #endif
 								data->if_index = neighbor_client[i].iface_index;
@@ -902,19 +920,22 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 					}
 					else
 					{
+						/* In l2tp case can recieve vlan iface address without bridge */
 						/* construct IPA_NEIGH_CLIENT_IP_ADDR_ADD_EVENT command and insert to command-queue */
 						if (event == IPA_NEW_NEIGH_EVENT)
 							evt_data.event = IPA_NEIGH_CLIENT_IP_ADDR_ADD_EVENT;
 						else
 							evt_data.event = IPA_NEIGH_CLIENT_IP_ADDR_DEL_EVENT;
-						data_all = (ipacm_event_data_all *)malloc(sizeof(ipacm_event_data_all));
-						if (data_all == NULL)
+						data_vlan = (ipacm_event_new_neigh_vlan *)malloc(sizeof(ipacm_event_new_neigh_vlan));
+						if(data_vlan == NULL)
 						{
 							IPACMERR("Unable to allocate memory\n");
 							return;
 						}
-						memcpy(data_all, data, sizeof(ipacm_event_data_all));
-						evt_data.evt_data = (void *)data_all;
+						memcpy(&data_vlan->data_all, data, sizeof(ipacm_event_data_all));
+						data_vlan->bridge = NULL;
+						evt_data.evt_data = (void *)data_vlan;
+						data_all = (ipacm_event_data_all *)data_vlan;
 						IPACM_EvtDispatcher::PostEvt(&evt_data);
 						IPACMDBG_H("Posted event %d with %s for ipv6 (%d)\n",
 							evt_data.event, data_all->iface_name, data_all->iptype);

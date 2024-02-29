@@ -1892,7 +1892,7 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 			break;
 #ifdef FEATURE_L2TP
 	case IPA_ADD_L2TP_CLIENT:
-		if(active_v4)
+		if(active_v4 && IPACM_Iface::ipacmcfg->ipacm_mpdn_enable == false)
 		{
 			ipacm_event_data_all *data = (ipacm_event_data_all *)param;
 			handle_l2tp_client_add(data->iface_name);
@@ -1901,13 +1901,51 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 		break;
 
 	case IPA_DEL_L2TP_CLIENT:
-		if(active_v4)
+		if(active_v4 && IPACM_Iface::ipacmcfg->ipacm_mpdn_enable == false)
 		{
 			ipacm_event_data_all *data = (ipacm_event_data_all *)param;
 			handle_l2tp_client_del(data->iface_name);
 			install_wan_filtering_rule(false);
 		}
+#ifdef IPA_L2TP_TUNNEL_UDP
+	case IPA_ROUTE_DEL_L2TP_VLAN_EVENT:
+		{
+			IPACMDBG("Received IPA_ROUTE_DEL_L2TP_VLAN_EVENT event\n");
+			int vlan_idx;
+			bool vlan_pdn_up = false;
+			ipacm_event_route_vlan *vlandown_data = (ipacm_event_route_vlan *)param;
+			if(vlandown_data->VlanID)
+			{
+				if ((modem_ipv6_pdn_index != -1) && (ipv6_to_iface[modem_ipv6_pdn_index].wan_up_vlan_v6))
+				{
+					for(vlan_idx = 0; vlan_idx < ipv6_to_iface[modem_ipv6_pdn_index].VID_cnt; vlan_idx++)
+					{
+						if(IPACM_Wan::ipv6_to_iface[modem_ipv6_pdn_index].associated_VIDs[vlan_idx] == vlandown_data->VlanID)
+						{
+							vlan_pdn_up = true;
+							break;
+						}
+					}
+				}
+				if((modem_ipv4_pdn_index >= 0) && (ipv4_to_iface[modem_ipv4_pdn_index].wan_up_vlan))
+				{
+					for(vlan_idx = 0; vlan_idx < ipv4_to_iface[modem_ipv4_pdn_index].VID_cnt; vlan_idx++)
+					{
+						if(IPACM_Wan::ipv4_to_iface[modem_ipv4_pdn_index].associated_VIDs[vlan_idx] == vlandown_data->VlanID)
+						{
+							vlan_pdn_up = true;
+							break;
+						}
+					}
+				}
+				if(vlan_pdn_up)
+				{
+					remove_l2tp_brige_vlan_pdn(vlandown_data->VlanID);
+				}
+			}
+		}
 		break;
+#endif
 #endif
 #ifdef FEATURE_SOCKSv5
 	case IPA_UPDATE_SOCKSv5_v6_CONN:
@@ -1939,6 +1977,119 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 
 	return;
 }
+
+#ifdef IPA_L2TP_TUNNEL_UDP
+void IPACM_Wan::remove_l2tp_brige_vlan_pdn(uint16_t vlan_id)
+{
+	int vlan_idx, pdn_idx;
+	ipacm_event_route_vlan *vlan_data;
+	ipacm_cmd_q_data vlan_down_evt;
+
+	for(pdn_idx = 0; pdn_idx < IPA_MAX_NUM_SW_PDNS; pdn_idx++)
+	{
+		if(ipv4_to_iface[pdn_idx].wan_up_vlan)
+		{
+			for(vlan_idx = 0; vlan_idx < ipv4_to_iface[pdn_idx].VID_cnt; vlan_idx++)
+			{
+				if(IPACM_Wan::ipv4_to_iface[pdn_idx].associated_VIDs[vlan_idx] == vlan_id )
+				{
+					IPACMDBG("iface already has v4 vlan: %d association, pdn_idx:%d, vlan_idx: %d, ipv4 iface pdn ip %x\n",
+								vlan_id, pdn_idx, vlan_idx, IPACM_Wan::ipv4_to_iface[pdn_idx].ipv4_addr);
+					IPACM_Wan::ipv4_to_iface[pdn_idx].associated_VIDs[vlan_idx] = 0;
+					IPACM_Wan::ipv4_to_iface[pdn_idx].VID_cnt--;
+					if(IPACM_Wan::ipv4_to_iface[pdn_idx].VID_cnt == 0)
+					{
+						ipv4_to_iface[pdn_idx].wan_up_vlan = false;
+					}
+					IPACMDBG("Now PDN: %d, v4 vid count is %d\n", pdn_idx, IPACM_Wan::ipv4_to_iface[pdn_idx].VID_cnt);
+					break;
+				}
+			}
+		}
+		if(ipv6_to_iface[pdn_idx].wan_up_vlan_v6)
+		{
+			for(vlan_idx = 0; vlan_idx < ipv6_to_iface[pdn_idx].VID_cnt; vlan_idx++)
+			{
+				if(IPACM_Wan::ipv6_to_iface[pdn_idx].associated_VIDs[vlan_idx] == vlan_id )
+				{
+					IPACMDBG("iface already has v6 vlan %d association, pdn_idx:%d, vlan_idx: %d, ipv6 iface pdn ip %x and %x\n",
+								vlan_id, pdn_idx, vlan_idx, IPACM_Wan::ipv6_to_iface[pdn_idx].ipv6_prefix[0],
+								IPACM_Wan::ipv6_to_iface[pdn_idx].ipv6_prefix[1]);
+					IPACM_Wan::ipv6_to_iface[pdn_idx].associated_VIDs[vlan_idx] = 0;
+					IPACM_Wan::ipv6_to_iface[pdn_idx].VID_cnt--;
+					if(IPACM_Wan::ipv6_to_iface[pdn_idx].VID_cnt == 0)
+					{
+						ipv6_to_iface[pdn_idx].wan_up_vlan_v6 = false;
+					}
+					IPACMDBG("Now PDN: %d, v6 vid count is %d\n", pdn_idx, IPACM_Wan::ipv6_to_iface[pdn_idx].VID_cnt);
+					break;
+				}
+			}
+		}
+	}
+	/* Remove DL MTU rules for the session */
+	config_wan_firewall_rule(IPA_IP_v4);
+	config_wan_firewall_rule(IPA_IP_v6);
+	install_wan_filtering_rule(false);
+
+	if (IPACM_Iface::ipacmcfg->ipacm_mpdn_enable == TRUE && vlan_id != 0)
+	{
+		vlan_data = (ipacm_event_route_vlan *)malloc(sizeof(ipacm_event_route_vlan));
+		if(vlan_data == NULL)
+		{
+			IPACMERR("Failed to allocate memory.\n");
+			return;
+		}
+		memset(vlan_data, 0, sizeof(ipacm_event_route_vlan));
+
+		vlan_data->VlanID = vlan_id;
+
+		vlan_down_evt.evt_data = vlan_data;
+		vlan_down_evt.event = IPA_HANDLE_WAN_L2TP_VLAN_DOWN;
+
+		IPACMDBG_H("Posting event %s for vlan id: %d\n",
+			IPACM_Iface::ipacmcfg->getEventName(vlan_down_evt.event), vlan_id);
+		IPACM_EvtDispatcher::PostEvt(&vlan_down_evt);
+	}
+}
+
+/* check l2tp vlan up with any other pdn */
+bool IPACM_Wan::check_l2tp_brige_vlan_pdn_up(ipacm_event_route_vlan *data)
+{
+	int pdn_idx, vlan_idx;
+	for(pdn_idx = 0; pdn_idx < IPA_MAX_NUM_SW_PDNS; pdn_idx++)
+	{
+		if(IPACM_Wan::ipv4_to_iface[pdn_idx].wan_up_vlan)
+		{
+			IPACMDBG("ipv4 iface pdn ip %d, input ipv4 %d\n", IPACM_Wan::ipv4_to_iface[pdn_idx].ipv4_addr, data->wan_ipv4_addr);
+			for(vlan_idx = 0; vlan_idx < ipv4_to_iface[pdn_idx].VID_cnt; vlan_idx++)
+			{
+				if((IPACM_Wan::ipv4_to_iface[pdn_idx].associated_VIDs[vlan_idx] == data->VlanID) && (pdn_idx != modem_ipv4_pdn_index))
+				{
+						IPACMDBG("current iface:%d already has v4 vlan %d association with pdn_idx:%d\n",
+							modem_ipv4_pdn_index, data->VlanID, pdn_idx);
+						return true;
+				}
+			}
+		}
+		if(IPACM_Wan::ipv6_to_iface[pdn_idx].wan_up_vlan_v6)
+		{
+			IPACMDBG("ipv6 iface pdn ip %d and %d, input ipv6 %d and %d\n", IPACM_Wan::ipv6_to_iface[pdn_idx].ipv6_prefix[0], IPACM_Wan::ipv6_to_iface[pdn_idx].ipv6_prefix[1],
+				data->wan_ipv6_prefix[0], data->wan_ipv6_prefix[1]);
+			for(vlan_idx = 0; vlan_idx < ipv6_to_iface[pdn_idx].VID_cnt; vlan_idx++)
+			{
+				if(IPACM_Wan::ipv6_to_iface[pdn_idx].associated_VIDs[vlan_idx] == data->VlanID && (pdn_idx != modem_ipv6_pdn_index))
+				{
+					IPACMDBG("current iface:%d already has v6 vlan %d association with pdn_idx:%d\n",
+						modem_ipv6_pdn_index, data->VlanID, pdn_idx);
+					return true;
+				}
+			}
+		}
+	}
+	return false;
+}
+#endif
 
 #ifdef FEATURE_VLAN_MPDN
 
@@ -4649,6 +4800,79 @@ int IPACM_Wan::config_dft_firewall_rules_ex(struct ipa_flt_rule_add *rules, int 
 	IPACMDBG_H("found %d v6 pdns\n", offloaded_pdns_count_v6);
 #endif
 
+#ifdef IPA_L2TP_TUNNEL_UDP
+	if (iptype == IPA_IP_v4)
+	{
+		for (uint32_t i = 0; i < offloaded_pdns_count_v4; ++i)
+		{
+			int pdn_mtu_sessions = 0;
+			IPACM_Wan* curr_interface = offloaded_pdns_v4[i]->pIface;
+			/* get smallest mtu out of all sessions associated with pdn */
+			for(uint32_t vid_index = 0; vid_index < offloaded_pdns_v4[i]->VID_cnt; vid_index++)
+			{
+				l2tp_vlan_mapping_info info;
+				int vid = offloaded_pdns_v4[i]->associated_VIDs[vid_index];
+				if(IPACM_Iface::ipacmcfg->get_l2tp_mapping_by_bridge_vlan_id(vid, info) == IPACM_FAILURE)
+				{
+					IPACMERR("Failed to find vlan-l2tp mapping.\n");
+				}
+				if(info.mtu > pdn_mtu_sessions)
+				{
+					pdn_mtu_sessions = info.mtu;
+				}
+			}
+			if(pdn_mtu_sessions != 0)
+			{
+				res = handle_l2tp_client_mtu_rule(curr_interface->rx_prop->rx[0].attrib, rules[pos].flt_rule, pos, pdn_mtu_sessions, IPA_IP_v4);
+				if (res != IPACM_SUCCESS)
+				{
+					return res;
+				}
+				rules[pos].mux_id = curr_interface->ext_prop->ext[0].mux_id;
+				IPACMDBG_H("v4 DL MTU rule: pos = %d, Mux_id = %d, no rules = %d\n", pos, curr_interface->ext_prop->ext[0].mux_id,
+					IPACM_Wan::num_v4_flt_rule);
+				IPACMDBG_H("added mtu rule for iface %s\n", curr_interface->dev_name);
+				++pos;
+			}
+		}
+	}
+	else
+	{
+		for (uint32_t i = 0; i < offloaded_pdns_count_v6; ++i)
+		{
+			int pdn_mtu_sessions = 0;
+			IPACM_Wan* curr_interface = offloaded_pdns_v6[i]->pIface;
+			//get smallest mtu out of all sessions associated with pdn
+			for(uint32_t vid_index = 0; vid_index < offloaded_pdns_v6[i]->VID_cnt; vid_index++)
+			{
+				l2tp_vlan_mapping_info info;
+				int vid = offloaded_pdns_v6[i]->associated_VIDs[vid_index];
+				if(IPACM_Iface::ipacmcfg->get_l2tp_mapping_by_bridge_vlan_id(vid, info) == IPACM_FAILURE)
+				{
+					IPACMERR("Failed to find vlan-l2tp mapping.\n");
+				}
+				if(info.mtu > pdn_mtu_sessions)
+				{
+					pdn_mtu_sessions = info.mtu;
+				}
+			}
+			if(pdn_mtu_sessions != 0)
+			{
+				res = handle_l2tp_client_mtu_rule(curr_interface->rx_prop->rx[0].attrib, rules[pos].flt_rule, pos, pdn_mtu_sessions, IPA_IP_v6);
+				if (res != IPACM_SUCCESS)
+				{
+					return res;
+				}
+				rules[pos].mux_id = curr_interface->ext_prop->ext[0].mux_id;
+				IPACMDBG_H("v6 DL MTU rule: pos = %d, Mux_id = %d, no rules = %d\n", pos, curr_interface->ext_prop->ext[0].mux_id,
+					IPACM_Wan::num_v6_flt_rule);
+				IPACMDBG_H("added mtu rule for iface %s\n", curr_interface->dev_name);
+				++pos;
+			}
+		}
+	}
+#endif
+
 	if (iptype == IPA_IP_v4)
 	{
 		original_num_rules = IPACM_Wan::num_v4_flt_rule;
@@ -5509,7 +5733,8 @@ int IPACM_Wan::config_wan_firewall_rule(ipa_ip_type iptype)
 #ifdef FEATURE_L2TP
 		for(it = IPACM_Iface::ipacmcfg->l2tp_client.begin();
 			it != IPACM_Iface::ipacmcfg->l2tp_client.end() &&
-			(IPACM_Iface::ipacmcfg->ipacm_l2tp_enable == IPACM_L2TP_E2E); it++)
+			(IPACM_Iface::ipacmcfg->ipacm_l2tp_enable == IPACM_L2TP_E2E
+			&& IPACM_Iface::ipacmcfg->ipacm_mpdn_enable == false); it++)
 		{
 			handle_l2tp_client_add(it->client_iface_name);
 		}
@@ -5523,7 +5748,8 @@ int IPACM_Wan::config_wan_firewall_rule(ipa_ip_type iptype)
 		IPACM_Wan::num_v6_flt_rule = m_ipv6_default_filterting_rules_count;
 #endif
 #ifdef FEATURE_L2TP
-		if(active_v4 && (IPACM_Iface::ipacmcfg->ipacm_l2tp_enable == IPACM_L2TP_E2E))
+		if(active_v4 && (IPACM_Iface::ipacmcfg->ipacm_l2tp_enable == IPACM_L2TP_E2E
+			&& IPACM_Iface::ipacmcfg->ipacm_mpdn_enable == false))
 		{
 			IPACM_Wan::num_v6_flt_rule += IPACM_Iface::ipacmcfg->l2tp_client.size();
 		}
@@ -5942,7 +6168,8 @@ int IPACM_Wan::del_wan_firewall_rule(ipa_ip_type iptype)
 #endif
 #ifdef FEATURE_L2TP
 		for(it = IPACM_Iface::ipacmcfg->l2tp_client.begin(); it != IPACM_Iface::ipacmcfg->l2tp_client.end() &&
-			(IPACM_Iface::ipacmcfg->ipacm_l2tp_enable == IPACM_L2TP_E2E); it++)
+			(IPACM_Iface::ipacmcfg->ipacm_l2tp_enable == IPACM_L2TP_E2E
+			&& IPACM_Iface::ipacmcfg->ipacm_mpdn_enable == false); it++)
 		{
 			handle_l2tp_client_del(it->client_iface_name);
 		}
@@ -5956,7 +6183,8 @@ int IPACM_Wan::del_wan_firewall_rule(ipa_ip_type iptype)
 		IPACM_Wan::num_v6_flt_rule = m_ipv6_default_filterting_rules_count;
 #endif
 #ifdef FEATURE_L2TP
-		if(active_v4 && (IPACM_Iface::ipacmcfg->ipacm_l2tp_enable == IPACM_L2TP_E2E))
+		if(active_v4 && (IPACM_Iface::ipacmcfg->ipacm_l2tp_enable == IPACM_L2TP_E2E
+			&& IPACM_Iface::ipacmcfg->ipacm_mpdn_enable == false))
 		{
 			IPACM_Wan::num_v6_flt_rule += IPACM_Iface::ipacmcfg->l2tp_client.size();
 		}
@@ -9564,6 +9792,96 @@ void IPACM_Wan::install_l2tp_flt_rule(ipa_flt_rule_add* rules, int rule_offset, 
 
 	return;
 }
+
+#ifdef IPA_L2TP_TUNNEL_UDP
+/* configure DL MTU rules for L2TP sessions */
+int IPACM_Wan::handle_l2tp_client_mtu_rule(const struct ipa_rule_attrib& rx_prop_attrib,
+		struct ipa_flt_rule_add& flt_rule_add, int fltr_rule_number, int mtu, ipa_ip_type iptype)
+{
+	/* Check for "out of boundary" failure before adding a rule */
+	if (fltr_rule_number >= IPA_MAX_FLT_RULE)
+	{
+		IPACMERR("Filtering table is full. Number of rules %d allowed %d\n", fltr_rule_number + 1, IPA_MAX_FLT_RULE);
+		return IPACM_FAILURE;
+	}
+	if (mtu == 0)
+	{
+		IPACMERR("mtu is uninitialized");
+		return IPACM_FAILURE;
+	}
+
+	struct ipa_flt_rule_add flt_rule_entry;
+	memset(&flt_rule_entry, 0, sizeof(struct ipa_flt_rule_add));
+	flt_rule_entry.at_rear = true;
+	flt_rule_entry.flt_rule_hdl = -1;
+	flt_rule_entry.status = -1;
+
+	flt_rule_entry.rule.retain_hdr = 1;
+	flt_rule_entry.rule.to_uc = 0;
+	flt_rule_entry.rule.eq_attrib_type = 1;
+	flt_rule_entry.rule.eq_attrib.rule_eq_bitmap = 0;
+	flt_rule_entry.rule.action = IPA_PASS_TO_ROUTING;
+#ifdef FEATURE_IPA_V3
+		flt_rule_entry.rule.hashable = true;
+#endif
+
+	ipa_ioc_get_rt_tbl_indx rt_tbl_idx;
+	memset(&rt_tbl_idx, 0, sizeof(rt_tbl_idx));
+	rt_tbl_idx.ip = iptype;
+	strlcpy(rt_tbl_idx.name, IPACM_Iface::ipacmcfg->rt_tbl_wan_dl.name, IPA_RESOURCE_NAME_MAX);
+	rt_tbl_idx.name[IPA_RESOURCE_NAME_MAX - 1] = '\0';
+	if (ioctl(m_fd_ipa, IPA_IOC_QUERY_RT_TBL_INDEX, &rt_tbl_idx))
+	{
+		IPACMERR("Failed to get routing table index from name\n");
+		return IPACM_FAILURE;
+	}
+
+	flt_rule_entry.rule.rt_tbl_idx = rt_tbl_idx.idx;
+	IPACMDBG_H(" uses routing table index %d\n", rt_tbl_idx.idx);
+
+	memcpy(&flt_rule_entry.rule.attrib, &rx_prop_attrib, sizeof(struct ipa_rule_attrib));
+
+	ipa_ioc_generate_flt_eq flt_eq;
+	memset(&flt_eq, 0, sizeof(flt_eq));
+	memcpy(&flt_eq.attrib, &flt_rule_entry.rule.attrib, sizeof(flt_eq.attrib));
+	flt_eq.ip = iptype;
+	if (ioctl(m_fd_ipa, IPA_IOC_GENERATE_FLT_EQ, &flt_eq))
+	{
+		IPACMERR("Failed to get eq_attrib\n");
+		return IPACM_FAILURE;
+	}
+
+	memcpy(&flt_rule_entry.rule.eq_attrib, &flt_eq.eq_attrib, sizeof(flt_rule_entry.rule.eq_attrib));
+	//add IHL offsets
+	flt_rule_entry.rule.eq_attrib.rule_eq_bitmap |= (1<<10);
+	flt_rule_entry.rule.eq_attrib.num_ihl_offset_range_16 = 1;
+	if (iptype == IPA_IP_v4)
+	{
+		flt_rule_entry.rule.eq_attrib.ihl_offset_range_16[0].offset = 0x82;
+		/* ipv4 header total length value includes header length also, therefore add 20 byte to mtu for ipv4 */
+		flt_rule_entry.rule.eq_attrib.ihl_offset_range_16[0].range_low = mtu + 21;
+	}
+	else
+	{
+		flt_rule_entry.rule.eq_attrib.ihl_offset_range_16[0].offset = 0x84;
+		flt_rule_entry.rule.eq_attrib.ihl_offset_range_16[0].range_low = mtu + 1;
+	}
+	flt_rule_entry.rule.eq_attrib.ihl_offset_range_16[0].range_high = UINT16_MAX; //0xFFFF
+	memcpy(&flt_rule_add, &flt_rule_entry, sizeof(struct ipa_flt_rule_add));
+
+	if (iptype == IPA_IP_v4)
+	{
+		++IPACM_Wan::num_v4_flt_rule;
+	}
+	else
+	{
+		++IPACM_Wan::num_v6_flt_rule;
+	}
+
+	return IPACM_SUCCESS;
+}
+#endif
+
 #endif
 
 void IPACM_Wan::HandleSTAClientDelEvt(const ipa_wan_client* client)

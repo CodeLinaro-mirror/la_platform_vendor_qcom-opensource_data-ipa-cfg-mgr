@@ -211,7 +211,9 @@ private:
 	void HandleLan2Lan(struct nf_conntrack *,
 		enum nf_conntrack_msg_type, nat_table_entry* );
 #endif
-
+#ifdef IPA_L2TP_TUNNEL_UDP
+	void Handlel2tpVlanDown(void *);
+#endif
 	bool IsIpv6CTEnabled() const
 	{
 		return ipv6ct_inst != NULL;

@@ -157,13 +157,15 @@ typedef struct _ipa_eth_client
 #endif //IPA_HW_FNR_STATS
 #endif
 #ifdef FEATURE_L2TP
-	uint32_t dl_first_pass_hdr_hdl;
-	uint32_t dl_first_pass_hdr_proc_ctx_hdl;
+	uint32_t dl_first_pass_hdr_hdl[IPA_IP_MAX];
+	uint32_t dl_first_pass_hdr_proc_ctx_hdl[IPA_IP_MAX];
 	uint32_t dl_first_pass_rt_rule_hdl;
 	uint32_t dl_second_pass_hdr_hdl;
 	uint32_t dl_second_pass_rt_rule_hdl;
 	uint32_t ul_first_pass_rt_rule_hdl;
 	uint32_t ul_first_pass_flt_rule_hdl;
+	bool ul_first_pass_rules_set;
+	bool is_l2tp_client;
 #endif
 #ifdef FEATURE_VLAN_MPDN
 	uint16_t vlan_id;
@@ -1303,6 +1305,47 @@ private:
 		return false;
 	}
 #endif
+
+#ifdef IPA_L2TP_TUNNEL_UDP
+	inline void set_vlan_mux_down(uint16_t vlan_id)
+	{
+		for(int i = 0; i < IPA_MAX_NUM_HW_PDNS; i++)
+		{
+			if(v4_mux_up[i].mux_id)
+			{
+				for(int j = 0; j < v4_mux_up[i].VID_cnt; j++)
+				{
+					if(v4_mux_up[i].associated_VIDs[j] == vlan_id)
+					{
+						v4_mux_up[i].associated_VIDs[j] = 0;
+						v4_mux_up[i].VID_cnt--;
+						if(v4_mux_up[i].VID_cnt == 0)
+						{
+							v4_mux_up[i].mux_id = 0;
+						}
+						break;
+					}
+				}
+			}
+			if(v6_mux_up[i].mux_id)
+			{
+				for(int j = 0; j < v6_mux_up[i].VID_cnt; j++)
+				{
+					if(v6_mux_up[i].associated_VIDs[j] == vlan_id)
+					{
+						v6_mux_up[i].associated_VIDs[j] = 0;
+						v6_mux_up[i].VID_cnt--;
+						if(v6_mux_up[i].VID_cnt == 0)
+						{
+							v6_mux_up[i].mux_id = 0;
+						}
+						break;
+					}
+				}
+			}
+		}
+	}
+#endif
 	inline ipa_eth_client* get_client_memptr(ipa_eth_client *param, int cnt)
 	{
 	    char *ret = ((char *)param) + (eth_client_len * cnt);
@@ -1494,6 +1537,26 @@ private:
 
 	/* install UL hdr proc ctx for L2TP E2E use case */
 	int install_l2tp_ul_hdr_proc_ctx();
+
+#ifdef IPA_L2TP_TUNNEL_UDP
+	/* install 96 byte header template and hdr proc ctx pointing to 96 byte header */
+	int install_l2tp_udp_dl_hdr_proc_ctx(int client_idx, uint16_t vlan_id, uint8_t *client_mac,
+			uint32_t l2tp_session_id, uint8_t *vlan_client_mac, uint32_t *vlan_iface_ipv6_addr,
+			uint32_t *vlan_client_ipv6_addr, uint16_t src_port, uint16_t dst_port, ipa_ip_type iptype);
+
+	/* install l2tp over udp dl rules */
+	int install_l2tp_udp_dl_rules(ipacm_event_data_all *data, int index, ipa_ip_type iptype);
+
+	/* install first pass routing rule and store its handle*/
+	int install_l2tp_udp_ul_rt_rule(int client_idx, uint32_t *vlan_iface_ipv6_addr);
+
+	/* install ul first pass filtering rule and store its handle */
+	int install_l2tp_udp_ul_flt_rule(int client_idx, uint32_t *vlan_iface_ipv6_addr,
+		uint16_t src_port, uint16_t dst_port);
+
+	/* install l2tp over udp ul rules */
+	int install_l2tp_udp_ul_rules(ipacm_event_data_all *data, int index);
+#endif
 #endif
 #ifdef FEATURE_VLAN_MPDN
 	int handle_vlan_neighbor(ipacm_event_data_all *data);

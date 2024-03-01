@@ -3708,7 +3708,7 @@ int IPACM_Lan::handle_eth_hdr_init(uint8_t *mac_addr, ipacm_bridge *bridge, uint
 	char index[ETH_IFACE_INDEX_LEN];
 	struct ipa_ioc_copy_hdr sCopyHeader;
 	struct ipa_ioc_add_hdr *pHeaderDescriptor = NULL;
-	uint32_t cnt;
+	uint32_t cnt, idx;
 	int clnt_indx;
 	uint8_t *mac_address;
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
@@ -4176,6 +4176,24 @@ int IPACM_Lan::handle_eth_hdr_init(uint8_t *mac_addr, ipacm_bridge *bridge, uint
 		if (IPACM_Iface::ipacmcfg->ipacm_lan_stats_enable == true &&
 			get_client_memptr(eth_client, clnt_indx)->lan_stats_idx != -1)
 		{
+			for(idx = 0; idx < clnt_indx; idx++)
+			{
+				/* check if already same mac client neighbor recieved populate its counter */
+				if(memcmp(get_client_memptr(eth_client, idx)->mac,
+						get_client_memptr(eth_client, clnt_indx)->mac,IPA_MAC_ADDR_SIZE) == 0 &&
+						get_client_memptr(eth_client, idx)->index_populated == true)
+				{
+					get_client_memptr(eth_client, clnt_indx)->ul_cnt_idx = get_client_memptr(eth_client, idx)->ul_cnt_idx;
+					get_client_memptr(eth_client, clnt_indx)->dl_cnt_idx = get_client_memptr(eth_client, idx)->dl_cnt_idx;
+					get_client_memptr(eth_client, clnt_indx)->index_populated = true;
+					header_name_count++; //keep increasing header_name_count
+					res = IPACM_SUCCESS;
+					IPACMDBG_H("header_name_count: %d\n", header_name_count);
+					IPACMDBG_H("eth client number: %d\n", num_eth_client);
+					goto fail;
+				}
+			}
+
 			/* Store the client info at WAN driver. */
 			client_info = (struct wan_ioctl_lan_client_info *)malloc(sizeof(struct wan_ioctl_lan_client_info));
 			if (client_info == NULL)
@@ -5023,7 +5041,7 @@ int IPACM_Lan::handle_eth_client_route_rule_ext_v2(uint8_t *mac_addr, ipa_ip_typ
 	struct ipa_ioc_add_rt_rule_ext_v2 *rt_rule;
 	struct ipa_rt_rule_add_ext_v2 *rt_rule_entry;
 	uint32_t tx_index;
-	int eth_index,v6_num;
+	int eth_index,v6_num,idx;
 	const int NUM = 1;
 	ipacm_event_data_all data;
 	uint64_t rules;
@@ -5038,193 +5056,108 @@ int IPACM_Lan::handle_eth_client_route_rule_ext_v2(uint8_t *mac_addr, ipa_ip_typ
 					mac_addr[0], mac_addr[1], mac_addr[2],
 					mac_addr[3], mac_addr[4], mac_addr[5]);
 
-	eth_index = get_eth_client_index(mac_addr);
-	if (eth_index == IPACM_INVALID_INDEX)
+	for(idx = 0; idx < num_eth_client; idx++)
 	{
-		IPACMDBG_H("eth client not found/attached \n");
-		return IPACM_SUCCESS;
-	}
-
-	if (get_client_memptr(eth_client, eth_index)->lan_stats_idx == -1)
-	{
-		IPACMDBG_H("Lan client index not attached. \n");
-		return IPACM_SUCCESS;
-	}
-
-	if (iptype==IPA_IP_v4) {
-		IPACMDBG_H("eth client index: %d, ip-type: %d, ipv4_set:%d, ipv4_rule_set:%d \n", eth_index, iptype,
-					get_client_memptr(eth_client, eth_index)->ipv4_set,
-					get_client_memptr(eth_client, eth_index)->route_rule_set_v4);
-	} else {
-		IPACMDBG_H("eth client index: %d, ip-type: %d, ipv6_set:%d, ipv6_rule_num:%d \n", eth_index, iptype,
-					get_client_memptr(eth_client, eth_index)->ipv6_set,
-					get_client_memptr(eth_client, eth_index)->route_rule_set_v6);
-	}
-	/* Add default routing rules if not set yet */
-	if ((iptype == IPA_IP_v4
-			&& get_client_memptr(eth_client, eth_index)->route_rule_set_v4 == false
-			&& get_client_memptr(eth_client, eth_index)->ipv4_set == true)
-			|| (iptype == IPA_IP_v6
-			&& get_client_memptr(eth_client, eth_index)->route_rule_set_v6 < get_client_memptr(eth_client, eth_index)->ipv6_set
-			))
-	{
-		if(IPACM_Iface::ipacmcfg->GetIPAVer() >= IPA_HW_None && IPACM_Iface::ipacmcfg->GetIPAVer() < IPA_HW_v4_0)
+		if(memcmp(get_client_memptr(eth_client, idx)->mac,
+					mac_addr,IPA_MAC_ADDR_SIZE) == 0)
 		{
-			/* Add corresponding ipa_rm_resource_name of TX-endpoint up before IPV6 RT-rule set */
-			IPACMDBG_H("dev %s add producer dependency\n", dev_name);
-			if (tx_prop != NULL)
+			eth_index = idx;
+		}
+		else
+		{
+			continue;
+		}
+
+		if (get_client_memptr(eth_client, eth_index)->lan_stats_idx == -1)
+		{
+			IPACMDBG_H("Lan client index not attached. \n");
+			return IPACM_SUCCESS;
+		}
+
+		if (iptype==IPA_IP_v4) {
+			IPACMDBG_H("eth client index: %d, ip-type: %d, ipv4_set:%d, ipv4_rule_set:%d \n", eth_index, iptype,
+						get_client_memptr(eth_client, eth_index)->ipv4_set,
+						get_client_memptr(eth_client, eth_index)->route_rule_set_v4);
+		} else {
+			IPACMDBG_H("eth client index: %d, ip-type: %d, ipv6_set:%d, ipv6_rule_num:%d \n", eth_index, iptype,
+						get_client_memptr(eth_client, eth_index)->ipv6_set,
+						get_client_memptr(eth_client, eth_index)->route_rule_set_v6);
+		}
+		/* Add default routing rules if not set yet */
+		if ((iptype == IPA_IP_v4
+				&& get_client_memptr(eth_client, eth_index)->route_rule_set_v4 == false
+				&& get_client_memptr(eth_client, eth_index)->ipv4_set == true)
+				|| (iptype == IPA_IP_v6
+				&& get_client_memptr(eth_client, eth_index)->route_rule_set_v6 < get_client_memptr(eth_client, eth_index)->ipv6_set
+				))
+		{
+			if(IPACM_Iface::ipacmcfg->GetIPAVer() >= IPA_HW_None && IPACM_Iface::ipacmcfg->GetIPAVer() < IPA_HW_v4_0)
 			{
-				IPACMDBG_H("depend Got pipe %d rm index : %d \n", tx_prop->tx[0].dst_pipe, IPACM_Iface::ipacmcfg->ipa_client_rm_map_tbl[tx_prop->tx[0].dst_pipe]);
-				IPACM_Iface::ipacmcfg->AddRmDepend(IPACM_Iface::ipacmcfg->ipa_client_rm_map_tbl[tx_prop->tx[0].dst_pipe],false);
+				/* Add corresponding ipa_rm_resource_name of TX-endpoint up before IPV6 RT-rule set */
+				IPACMDBG_H("dev %s add producer dependency\n", dev_name);
+				if (tx_prop != NULL)
+				{
+					IPACMDBG_H("depend Got pipe %d rm index : %d \n", tx_prop->tx[0].dst_pipe, IPACM_Iface::ipacmcfg->ipa_client_rm_map_tbl[tx_prop->tx[0].dst_pipe]);
+					IPACM_Iface::ipacmcfg->AddRmDepend(IPACM_Iface::ipacmcfg->ipa_client_rm_map_tbl[tx_prop->tx[0].dst_pipe],false);
+				}
 			}
-		}
-		rt_rule = (struct ipa_ioc_add_rt_rule_ext_v2 *)
-			 calloc(1, sizeof(struct ipa_ioc_add_rt_rule_ext_v2));
-		if (rt_rule == NULL)
-		{
-			IPACMERR("Error allocating ipa_ioc_add_rt_rule memory...\n");
-			return IPACM_FAILURE;
-		}
-
-		rt_rule->rules = (uintptr_t)calloc(NUM, sizeof(struct ipa_rt_rule_add_ext_v2));
-		if (!rt_rule->rules) {
-			IPACMERR("Error allocating memory for routing rule\n");
-			free(rt_rule);
-			return IPACM_FAILURE;
-		}
-
-		rt_rule->commit = 1;
-		rt_rule->num_rules = (uint8_t)NUM;
-		rt_rule->ip = iptype;
-		rt_rule->rule_add_ext_size = sizeof(struct ipa_rt_rule_add_ext_v2);
-		for (tx_index = 0; tx_index < iface_query->num_tx_props; tx_index++)
-		{
-			if(iptype != tx_prop->tx[tx_index].ip)
+			rt_rule = (struct ipa_ioc_add_rt_rule_ext_v2 *)
+			 	calloc(1, sizeof(struct ipa_ioc_add_rt_rule_ext_v2));
+			if (rt_rule == NULL)
 			{
-				IPACMDBG_H("Tx:%d, ip-type: %d conflict ip-type: %d no RT-rule added\n",
-						tx_index, tx_prop->tx[tx_index].ip,iptype);
-				continue;
+				IPACMERR("Error allocating ipa_ioc_add_rt_rule memory...\n");
+				return IPACM_FAILURE;
 			}
-			rules = rt_rule->rules;
-			rt_rule_entry = (struct ipa_rt_rule_add_ext_v2 *)rules;
-			rt_rule_entry->at_rear = 0;
-			rt_rule_entry->rule.enable_stats = true;
-			rt_rule_entry->rule.cnt_idx = dl_cnt_idx;
 
-			if (iptype == IPA_IP_v4)
+			rt_rule->rules = (uintptr_t)calloc(NUM, sizeof(struct ipa_rt_rule_add_ext_v2));
+			if (!rt_rule->rules) {
+				IPACMERR("Error allocating memory for routing rule\n");
+				free(rt_rule);
+				return IPACM_FAILURE;
+			}
+
+			rt_rule->commit = 1;
+			rt_rule->num_rules = (uint8_t)NUM;
+			rt_rule->ip = iptype;
+			rt_rule->rule_add_ext_size = sizeof(struct ipa_rt_rule_add_ext_v2);
+			for (tx_index = 0; tx_index < iface_query->num_tx_props; tx_index++)
 			{
-				IPACMDBG_H("client index(%d):ipv4 address: 0x%x\n", eth_index,
-					get_client_memptr(eth_client, eth_index)->v4_addr);
-
-				IPACMDBG_H("client(%d): v4 header handle:(0x%x)\n",
-						 eth_index,
-						 get_client_memptr(eth_client, eth_index)->hdr_hdl_v4);
-				strlcpy(rt_rule->rt_tbl_name,
-								IPACM_Iface::ipacmcfg->rt_tbl_lan_v4.name,
-								sizeof(rt_rule->rt_tbl_name));
-				rt_rule->rt_tbl_name[IPA_RESOURCE_NAME_MAX-1] = '\0';
-				rt_rule_entry->rule.dst = tx_prop->tx[tx_index].dst_pipe;
-				memcpy(&rt_rule_entry->rule.attrib,
-						 &tx_prop->tx[tx_index].attrib,
-						 sizeof(rt_rule_entry->rule.attrib));
-				rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_DST_ADDR;
-				rt_rule_entry->rule.hdr_hdl = get_client_memptr(eth_client, eth_index)->hdr_hdl_v4;
-				rt_rule_entry->rule.attrib.u.v4.dst_addr = get_client_memptr(eth_client, eth_index)->v4_addr;
-				rt_rule_entry->rule.attrib.u.v4.dst_addr_mask = 0xFFFFFFFF;
+				if(iptype != tx_prop->tx[tx_index].ip)
+				{
+					IPACMDBG_H("Tx:%d, ip-type: %d conflict ip-type: %d no RT-rule added\n",
+							tx_index, tx_prop->tx[tx_index].ip,iptype);
+					continue;
+				}
+				rules = rt_rule->rules;
+				rt_rule_entry = (struct ipa_rt_rule_add_ext_v2 *)rules;
+				rt_rule_entry->at_rear = 0;
 				rt_rule_entry->rule.enable_stats = true;
 				rt_rule_entry->rule.cnt_idx = dl_cnt_idx;
-				rt_rule_entry->rule.hashable = true;
-				rt_rule_entry->rule_id = 0;
-				IPACMDBG_H("Add v4 route rule table %s\n", rt_rule->rt_tbl_name);
-				if (false == m_routing.AddRoutingRuleExt_v2(rt_rule))
+				if (iptype == IPA_IP_v4)
 				{
-					IPACMERR("Routing rule addition failed!\n");
-					free((void *)rt_rule->rules);
-					free(rt_rule);
-					return IPACM_FAILURE;
-				}
+					IPACMDBG_H("client index(%d):ipv4 address: 0x%x\n", eth_index,
+						get_client_memptr(eth_client, eth_index)->v4_addr);
 
-				/* copy ipv4 RT hdl */
-				get_client_memptr(eth_client, eth_index)->eth_rt_hdl[tx_index].eth_rt_rule_hdl_v4 =
-					((struct ipa_rt_rule_add_ext_v2 *)rt_rule->rules)[0].rt_rule_hdl;
-				IPACMDBG_H("tx:%d, rt rule id=%x ip-type: %d\n", tx_index,
-					rt_rule_entry->rule_id, iptype);
-
-				get_client_memptr(eth_client, eth_index)->route_rule_set_v4 = true;
-				/* Add NAT rules after ipv4 RT rules are set */
-				if(get_client_memptr(eth_client, eth_index)->if_index_set)
-				{
-					memset(&data, 0, sizeof(data));
-					data.if_index = get_client_memptr(eth_client, eth_index)->if_index;
-					ipa_get_if_name(iface_name, data.if_index);
-					strlcpy(data.iface_name, iface_name, sizeof(data.iface_name));
-					data.iptype = IPA_IP_v4;
-					data.ipv4_addr = get_client_memptr(eth_client, eth_index)->v4_addr;
-					HandleNeighIpAddrAddEvt(&data);
-				}
-			} else {
-
-				for(v6_num = get_client_memptr(eth_client, eth_index)->route_rule_set_v6;v6_num < get_client_memptr(eth_client, eth_index)->ipv6_set;v6_num++)
-				{
-					IPACMDBG_H("client(%d): v6 header handle:(0x%x)\n",
-							eth_index,
-							get_client_memptr(eth_client, eth_index)->hdr_hdl_v6);
-					/* v6 LAN_RT_TBL */
+					IPACMDBG_H("client(%d): v4 header handle:(0x%x)\n",
+							 eth_index,
+							 get_client_memptr(eth_client, eth_index)->hdr_hdl_v4);
 					strlcpy(rt_rule->rt_tbl_name,
-							IPACM_Iface::ipacmcfg->rt_tbl_v6.name,
-							sizeof(rt_rule->rt_tbl_name));
+									IPACM_Iface::ipacmcfg->rt_tbl_lan_v4.name,
+									sizeof(rt_rule->rt_tbl_name));
 					rt_rule->rt_tbl_name[IPA_RESOURCE_NAME_MAX-1] = '\0';
-					/* Support QCMAP LAN traffic feature, send to A5 */
-					rt_rule_entry->rule.dst = IPA_CLIENT_APPS_LAN_CONS;
-					memset(&rt_rule_entry->rule.attrib, 0, sizeof(rt_rule_entry->rule.attrib));
-					rt_rule_entry->rule.hdr_hdl = 0;
-					rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_DST_ADDR;
-					rt_rule_entry->rule.attrib.u.v6.dst_addr[0] = get_client_memptr(eth_client, eth_index)->v6_addr[v6_num][0];
-					rt_rule_entry->rule.attrib.u.v6.dst_addr[1] = get_client_memptr(eth_client, eth_index)->v6_addr[v6_num][1];
-					rt_rule_entry->rule.attrib.u.v6.dst_addr[2] = get_client_memptr(eth_client, eth_index)->v6_addr[v6_num][2];
-					rt_rule_entry->rule.attrib.u.v6.dst_addr[3] = get_client_memptr(eth_client, eth_index)->v6_addr[v6_num][3];
-					rt_rule_entry->rule.attrib.u.v6.dst_addr_mask[0] = 0xFFFFFFFF;
-					rt_rule_entry->rule.attrib.u.v6.dst_addr_mask[1] = 0xFFFFFFFF;
-					rt_rule_entry->rule.attrib.u.v6.dst_addr_mask[2] = 0xFFFFFFFF;
-					rt_rule_entry->rule.attrib.u.v6.dst_addr_mask[3] = 0xFFFFFFFF;
-					rt_rule_entry->rule.enable_stats = true;
-					rt_rule_entry->rule.cnt_idx = dl_cnt_idx;
-					rt_rule_entry->rule.hashable = true;
-					rt_rule_entry->rule_id = 0;
-					IPACMERR("Add v6 route rule table nanme = %s\n", rt_rule->rt_tbl_name);
-					if (false == m_routing.AddRoutingRuleExt_v2(rt_rule))
-					{
-						IPACMERR("Routing rule addition failed!\n");
-						free((void *)rt_rule->rules);
-						free(rt_rule);
-						return IPACM_FAILURE;
-					}
-					get_client_memptr(eth_client, eth_index)->eth_rt_hdl[tx_index].eth_rt_rule_hdl_v6[v6_num] =
-						((struct ipa_rt_rule_add_ext_v2 *)rt_rule->rules)[0].rt_rule_hdl;
-					IPACMDBG_H("tx:%d, rt rule id=%x ip-type: %d\n", tx_index,
-						rt_rule_entry->rule_id, iptype);
-					/*Copy same rule to v6 WAN RT TBL*/
-					strlcpy(rt_rule->rt_tbl_name, IPACM_Iface::ipacmcfg->rt_tbl_wan_v6.name, sizeof(rt_rule->rt_tbl_name));
-					rt_rule->rt_tbl_name[IPA_RESOURCE_NAME_MAX-1] = '\0';
-					/* Downlink traffic from Wan iface, directly through IPA */
 					rt_rule_entry->rule.dst = tx_prop->tx[tx_index].dst_pipe;
 					memcpy(&rt_rule_entry->rule.attrib,
-							&tx_prop->tx[tx_index].attrib,
-							sizeof(rt_rule_entry->rule.attrib));
-					rt_rule_entry->rule.hdr_hdl = get_client_memptr(eth_client, eth_index)->hdr_hdl_v6;
+							 &tx_prop->tx[tx_index].attrib,
+							 sizeof(rt_rule_entry->rule.attrib));
 					rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_DST_ADDR;
-					rt_rule_entry->rule.attrib.u.v6.dst_addr[0] = get_client_memptr(eth_client, eth_index)->v6_addr[v6_num][0];
-					rt_rule_entry->rule.attrib.u.v6.dst_addr[1] = get_client_memptr(eth_client, eth_index)->v6_addr[v6_num][1];
-					rt_rule_entry->rule.attrib.u.v6.dst_addr[2] = get_client_memptr(eth_client, eth_index)->v6_addr[v6_num][2];
-					rt_rule_entry->rule.attrib.u.v6.dst_addr[3] = get_client_memptr(eth_client, eth_index)->v6_addr[v6_num][3];
-					rt_rule_entry->rule.attrib.u.v6.dst_addr_mask[0] = 0xFFFFFFFF;
-					rt_rule_entry->rule.attrib.u.v6.dst_addr_mask[1] = 0xFFFFFFFF;
-					rt_rule_entry->rule.attrib.u.v6.dst_addr_mask[2] = 0xFFFFFFFF;
-					rt_rule_entry->rule.attrib.u.v6.dst_addr_mask[3] = 0xFFFFFFFF;
+					rt_rule_entry->rule.hdr_hdl = get_client_memptr(eth_client, eth_index)->hdr_hdl_v4;
+					rt_rule_entry->rule.attrib.u.v4.dst_addr = get_client_memptr(eth_client, eth_index)->v4_addr;
+					rt_rule_entry->rule.attrib.u.v4.dst_addr_mask = 0xFFFFFFFF;
 					rt_rule_entry->rule.enable_stats = true;
 					rt_rule_entry->rule.cnt_idx = dl_cnt_idx;
 					rt_rule_entry->rule.hashable = true;
 					rt_rule_entry->rule_id = 0;
+					IPACMDBG_H("Add v4 route rule table %s\n", rt_rule->rt_tbl_name);
 					if (false == m_routing.AddRoutingRuleExt_v2(rt_rule))
 					{
 						IPACMERR("Routing rule addition failed!\n");
@@ -5232,29 +5165,118 @@ int IPACM_Lan::handle_eth_client_route_rule_ext_v2(uint8_t *mac_addr, ipa_ip_typ
 						free(rt_rule);
 						return IPACM_FAILURE;
 					}
-					get_client_memptr(eth_client, eth_index)->eth_rt_hdl[tx_index].eth_rt_rule_hdl_v6_wan[v6_num] =
+
+					/* copy ipv4 RT hdl */
+					get_client_memptr(eth_client, eth_index)->eth_rt_hdl[tx_index].eth_rt_rule_hdl_v4 =
 						((struct ipa_rt_rule_add_ext_v2 *)rt_rule->rules)[0].rt_rule_hdl;
 					IPACMDBG_H("tx:%d, rt rule id=%x ip-type: %d\n", tx_index,
 							rt_rule_entry->rule_id, iptype);
-
-					/* Add IPv6CT rules after ipv6 RT rules are set */
-                                	if(get_client_memptr(eth_client, eth_index)->if_index_set)
+					get_client_memptr(eth_client, eth_index)->route_rule_set_v4 = true;
+					/* Add NAT rules after ipv4 RT rules are set */
+					if(get_client_memptr(eth_client, eth_index)->if_index_set)
 					{
 						memset(&data, 0, sizeof(data));
 						data.if_index = get_client_memptr(eth_client, eth_index)->if_index;
 						ipa_get_if_name(iface_name, data.if_index);
 						strlcpy(data.iface_name, iface_name, sizeof(data.iface_name));
-						data.iptype = IPA_IP_v6;
-						memcpy(data.ipv6_addr, get_client_memptr(eth_client, eth_index)->v6_addr[v6_num], sizeof(data.ipv6_addr));
+						data.iptype = IPA_IP_v4;
+						data.ipv4_addr = get_client_memptr(eth_client, eth_index)->v4_addr;
 						HandleNeighIpAddrAddEvt(&data);
 					}
-				}
-				get_client_memptr(eth_client, eth_index)->route_rule_set_v6 = get_client_memptr(eth_client, eth_index)->ipv6_set;
-				IPACMDBG_H("rt rule entry enable stats = %d, dl cnt index = %u\n", rt_rule_entry->rule.enable_stats, rt_rule_entry->rule.cnt_idx);
-			} /* end of for loop */
+				} else {
+
+					for(v6_num = get_client_memptr(eth_client, eth_index)->route_rule_set_v6;v6_num < get_client_memptr(eth_client, eth_index)->ipv6_set;v6_num++)
+					{
+						IPACMDBG_H("client(%d): v6 header handle:(0x%x)\n",
+								eth_index,
+								get_client_memptr(eth_client, eth_index)->hdr_hdl_v6);
+						/* v6 LAN_RT_TBL */
+						strlcpy(rt_rule->rt_tbl_name,
+								IPACM_Iface::ipacmcfg->rt_tbl_v6.name,
+								sizeof(rt_rule->rt_tbl_name));
+						rt_rule->rt_tbl_name[IPA_RESOURCE_NAME_MAX-1] = '\0';
+						/* Support QCMAP LAN traffic feature, send to A5 */
+						rt_rule_entry->rule.dst = IPA_CLIENT_APPS_LAN_CONS;
+						memset(&rt_rule_entry->rule.attrib, 0, sizeof(rt_rule_entry->rule.attrib));
+						rt_rule_entry->rule.hdr_hdl = 0;
+						rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_DST_ADDR;
+						rt_rule_entry->rule.attrib.u.v6.dst_addr[0] = get_client_memptr(eth_client, eth_index)->v6_addr[v6_num][0];
+						rt_rule_entry->rule.attrib.u.v6.dst_addr[1] = get_client_memptr(eth_client, eth_index)->v6_addr[v6_num][1];
+						rt_rule_entry->rule.attrib.u.v6.dst_addr[2] = get_client_memptr(eth_client, eth_index)->v6_addr[v6_num][2];
+						rt_rule_entry->rule.attrib.u.v6.dst_addr[3] = get_client_memptr(eth_client, eth_index)->v6_addr[v6_num][3];
+						rt_rule_entry->rule.attrib.u.v6.dst_addr_mask[0] = 0xFFFFFFFF;
+						rt_rule_entry->rule.attrib.u.v6.dst_addr_mask[1] = 0xFFFFFFFF;
+						rt_rule_entry->rule.attrib.u.v6.dst_addr_mask[2] = 0xFFFFFFFF;
+						rt_rule_entry->rule.attrib.u.v6.dst_addr_mask[3] = 0xFFFFFFFF;
+						rt_rule_entry->rule.enable_stats = true;
+						rt_rule_entry->rule.cnt_idx = dl_cnt_idx;
+						rt_rule_entry->rule.hashable = true;
+						rt_rule_entry->rule_id = 0;
+						IPACMERR("Add v6 route rule table nanme = %s\n", rt_rule->rt_tbl_name);
+						if (false == m_routing.AddRoutingRuleExt_v2(rt_rule))
+						{
+							IPACMERR("Routing rule addition failed!\n");
+							free((void *)rt_rule->rules);
+							free(rt_rule);
+							return IPACM_FAILURE;
+						}
+						get_client_memptr(eth_client, eth_index)->eth_rt_hdl[tx_index].eth_rt_rule_hdl_v6[v6_num] =
+							((struct ipa_rt_rule_add_ext_v2 *)rt_rule->rules)[0].rt_rule_hdl;
+						IPACMDBG_H("tx:%d, rt rule id=%x ip-type: %d\n", tx_index,
+							rt_rule_entry->rule_id, iptype);
+						/*Copy same rule to v6 WAN RT TBL*/
+						strlcpy(rt_rule->rt_tbl_name, IPACM_Iface::ipacmcfg->rt_tbl_wan_v6.name, sizeof(rt_rule->rt_tbl_name));
+						rt_rule->rt_tbl_name[IPA_RESOURCE_NAME_MAX-1] = '\0';
+						/* Downlink traffic from Wan iface, directly through IPA */
+						rt_rule_entry->rule.dst = tx_prop->tx[tx_index].dst_pipe;
+						memcpy(&rt_rule_entry->rule.attrib,
+								&tx_prop->tx[tx_index].attrib,
+								sizeof(rt_rule_entry->rule.attrib));
+						rt_rule_entry->rule.hdr_hdl = get_client_memptr(eth_client, eth_index)->hdr_hdl_v6;
+						rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_DST_ADDR;
+						rt_rule_entry->rule.attrib.u.v6.dst_addr[0] = get_client_memptr(eth_client, eth_index)->v6_addr[v6_num][0];
+						rt_rule_entry->rule.attrib.u.v6.dst_addr[1] = get_client_memptr(eth_client, eth_index)->v6_addr[v6_num][1];
+						rt_rule_entry->rule.attrib.u.v6.dst_addr[2] = get_client_memptr(eth_client, eth_index)->v6_addr[v6_num][2];
+						rt_rule_entry->rule.attrib.u.v6.dst_addr[3] = get_client_memptr(eth_client, eth_index)->v6_addr[v6_num][3];
+						rt_rule_entry->rule.attrib.u.v6.dst_addr_mask[0] = 0xFFFFFFFF;
+						rt_rule_entry->rule.attrib.u.v6.dst_addr_mask[1] = 0xFFFFFFFF;
+						rt_rule_entry->rule.attrib.u.v6.dst_addr_mask[2] = 0xFFFFFFFF;
+						rt_rule_entry->rule.attrib.u.v6.dst_addr_mask[3] = 0xFFFFFFFF;
+						rt_rule_entry->rule.enable_stats = true;
+						rt_rule_entry->rule.cnt_idx = dl_cnt_idx;
+						rt_rule_entry->rule.hashable = true;
+						rt_rule_entry->rule_id = 0;
+						if (false == m_routing.AddRoutingRuleExt_v2(rt_rule))
+						{
+							IPACMERR("Routing rule addition failed!\n");
+							free((void *)rt_rule->rules);
+							free(rt_rule);
+							return IPACM_FAILURE;
+						}
+						get_client_memptr(eth_client, eth_index)->eth_rt_hdl[tx_index].eth_rt_rule_hdl_v6_wan[v6_num] =
+							((struct ipa_rt_rule_add_ext_v2 *)rt_rule->rules)[0].rt_rule_hdl;
+						IPACMDBG_H("tx:%d, rt rule id=%x ip-type: %d\n", tx_index,
+								rt_rule_entry->rule_id, iptype);
+
+						/* Add IPv6CT rules after ipv6 RT rules are set */
+	                                	if(get_client_memptr(eth_client, eth_index)->if_index_set)
+						{
+							memset(&data, 0, sizeof(data));
+							data.if_index = get_client_memptr(eth_client, eth_index)->if_index;
+							ipa_get_if_name(iface_name, data.if_index);
+							strlcpy(data.iface_name, iface_name, sizeof(data.iface_name));
+							data.iptype = IPA_IP_v6;
+							memcpy(data.ipv6_addr, get_client_memptr(eth_client, eth_index)->v6_addr[v6_num], sizeof(data.ipv6_addr));
+							HandleNeighIpAddrAddEvt(&data);
+						}
+					}
+					get_client_memptr(eth_client, eth_index)->route_rule_set_v6 = get_client_memptr(eth_client, eth_index)->ipv6_set;
+					IPACMDBG_H("rt rule entry enable stats = %d, dl cnt index = %u\n", rt_rule_entry->rule.enable_stats, rt_rule_entry->rule.cnt_idx);
+				} /* end of for loop */
+			}
+			free((void *)rt_rule->rules);
+			free(rt_rule);
 		}
-		free((void *)rt_rule->rules);
-		free(rt_rule);
 	}
 	return IPACM_SUCCESS;
 }

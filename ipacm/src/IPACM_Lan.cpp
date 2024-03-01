@@ -3141,13 +3141,20 @@ int IPACM_Lan::handle_private_subnet(ipa_ip_type iptype)
 			flt_rule_entry.rule.retain_hdr = 1;
 			flt_rule_entry.flt_rule_hdl = -1;
 			flt_rule_entry.status = -1;
-			flt_rule_entry.rule.action = IPA_PASS_TO_ROUTING;
+			if (ipa_if_cate == ODU_IF && IPACM_Iface::ipacmcfg->ipacm_l2tp_enable)
+			{
+				flt_rule_entry.rule.action = IPA_PASS_TO_EXCEPTION;
+			}
+			else
+			{
+				flt_rule_entry.rule.action = IPA_PASS_TO_ROUTING;
+				/* Support private subnet feature including guest-AP can't talk to primary AP etc */
+				flt_rule_entry.rule.rt_tbl_hdl = IPACM_Iface::ipacmcfg->rt_tbl_default_v4.hdl;
+				IPACMDBG_H(" private filter rule use table: %s\n",IPACM_Iface::ipacmcfg->rt_tbl_default_v4.name);
+			}
 #ifdef FEATURE_IPA_V3
 			flt_rule_entry.rule.hashable = true;
 #endif
-                        /* Support private subnet feature including guest-AP can't talk to primary AP etc */
-			flt_rule_entry.rule.rt_tbl_hdl = IPACM_Iface::ipacmcfg->rt_tbl_default_v4.hdl;
-			IPACMDBG_H(" private filter rule use table: %s\n",IPACM_Iface::ipacmcfg->rt_tbl_default_v4.name);
 
 			memcpy(&flt_rule_entry.rule.attrib,
 						 &rx_prop->rx[0].attrib,
@@ -10458,13 +10465,20 @@ int IPACM_Lan::modify_private_subnet()
 	flt_rule.rule.to_uc = 0;
 	flt_rule.rule.action = IPA_PASS_TO_ROUTING;
 	flt_rule.rule.eq_attrib_type = 0;
-	flt_rule.rule.rt_tbl_hdl = IPACM_Iface::ipacmcfg->rt_tbl_default_v4.hdl;
 	IPACMDBG_H("Private filter rule use table: %s\n", IPACM_Iface::ipacmcfg->rt_tbl_default_v4.name);
 
 	for(i = 0; i < (IPACM_Iface::ipacmcfg->ipa_num_private_subnet); i++)
 	{
 		/* add private subnet rule for ipv4 */
-		flt_rule.rule.action = IPA_PASS_TO_ROUTING;
+		if (ipa_if_cate == ODU_IF && IPACM_Iface::ipacmcfg->ipacm_l2tp_enable)
+		{
+			flt_rule.rule.action = IPA_PASS_TO_EXCEPTION;
+		}
+		else
+		{
+			flt_rule.rule.action = IPA_PASS_TO_ROUTING;
+			flt_rule.rule.rt_tbl_hdl = IPACM_Iface::ipacmcfg->rt_tbl_default_v4.hdl;
+		}
 		flt_rule.rule.eq_attrib_type = 0;
 		memcpy(&flt_rule.rule.attrib, &rx_prop->rx[0].attrib, sizeof(flt_rule.rule.attrib));
 		flt_rule.rule.attrib.attrib_mask |= IPA_FLT_DST_ADDR;

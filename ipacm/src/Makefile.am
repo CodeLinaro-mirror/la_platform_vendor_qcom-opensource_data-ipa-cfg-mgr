@@ -35,18 +35,18 @@ ipacm_SOURCES =	IPACM_Main.cpp \
 bin_PROGRAMS  =  ipacm
 
 requiredlibs =  ${LIBXML_LIB} -lxml2 -lpthread -lnetfilter_conntrack \
-                -lnfnetlink -lipanat
+                -lnfnetlink -lipanat $(LIBNL_LIBS)
 
 AM_CPPFLAGS += "-std=c++0x"
 
 if USE_GLIB
 ipacm_CFLAGS  = $(AM_CFLAGS) -DUSE_GLIB @GLIB_CFLAGS@
-ipacm_LDFLAGS = -lpthread @GLIB_LIBS@
-ipacm_CPPFLAGS = -DUSE_GLIB $(AM_CFLAGS) $(AM_CPPFLAGS) @GLIB_CFLAGS@
+ipacm_LDFLAGS = -lpthread @GLIB_LIBS@ $(LIBNL_LIBS)
+ipacm_CPPFLAGS = -DUSE_GLIB $(AM_CFLAGS) $(AM_CPPFLAGS) @GLIB_CFLAGS@ $(LIBNL_CFLAGS)
 else
 ipacm_CFLAGS = $(AM_CFLAGS)
 ipacm_LDFLAGS = -lpthread
-ipacm_CPPFLAGS = $(AM_CPPFLAGS)
+ipacm_CPPFLAGS = $(AM_CPPFLAGS) $(LIBNL_CFLAGS)
 endif
 ipacm_LDADD =  $(requiredlibs)
 

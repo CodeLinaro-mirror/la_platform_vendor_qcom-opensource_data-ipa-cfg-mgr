@@ -99,6 +99,7 @@ IPACM_ConntrackListener::IPACM_ConntrackListener() :
 #ifdef FEATURE_VLAN_MPDN
 	 memset(vlan_pdns, 0, sizeof(vlan_pdns));
 	 num_vlan_pdns = 0;
+	 num_v6_vlan_pdns = 0;
 #endif
 	 memset(nonnat_iface_ipv4_addr, 0, sizeof(nonnat_iface_ipv4_addr));
 	 memset(sta_clnt_ipv4_addr, 0, sizeof(sta_clnt_ipv4_addr));

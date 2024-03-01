@@ -2000,8 +2000,13 @@ void IPACM_Wan::remove_l2tp_brige_vlan_pdn(uint16_t vlan_id)
 					if(IPACM_Wan::ipv4_to_iface[pdn_idx].VID_cnt == 0)
 					{
 						ipv4_to_iface[pdn_idx].wan_up_vlan = false;
+						if(ipv6_to_iface[pdn_idx].wan_up_vlan_v6 == false)
+						{
+							num_offloaded_pdns--;
+						}
 					}
-					IPACMDBG("Now PDN: %d, v4 vid count is %d\n", pdn_idx, IPACM_Wan::ipv4_to_iface[pdn_idx].VID_cnt);
+					IPACMDBG("Now PDN: %d, v4 vid count is %d num_offload_pdn: %d\n", pdn_idx,
+						IPACM_Wan::ipv4_to_iface[pdn_idx].VID_cnt, num_offloaded_pdns);
 					break;
 				}
 			}
@@ -2020,8 +2025,13 @@ void IPACM_Wan::remove_l2tp_brige_vlan_pdn(uint16_t vlan_id)
 					if(IPACM_Wan::ipv6_to_iface[pdn_idx].VID_cnt == 0)
 					{
 						ipv6_to_iface[pdn_idx].wan_up_vlan_v6 = false;
+						if(ipv4_to_iface[pdn_idx].wan_up_vlan == false)
+						{
+							num_offloaded_pdns--;
+						}
 					}
-					IPACMDBG("Now PDN: %d, v6 vid count is %d\n", pdn_idx, IPACM_Wan::ipv6_to_iface[pdn_idx].VID_cnt);
+					IPACMDBG("Now PDN: %d, v6 vid count is %d, num_offload_pdn: %d\n", pdn_idx,
+						IPACM_Wan::ipv6_to_iface[pdn_idx].VID_cnt, num_offloaded_pdns);
 					break;
 				}
 			}
@@ -2053,42 +2063,6 @@ void IPACM_Wan::remove_l2tp_brige_vlan_pdn(uint16_t vlan_id)
 	}
 }
 
-/* check l2tp vlan up with any other pdn */
-bool IPACM_Wan::check_l2tp_brige_vlan_pdn_up(ipacm_event_route_vlan *data)
-{
-	int pdn_idx, vlan_idx;
-	for(pdn_idx = 0; pdn_idx < IPA_MAX_NUM_SW_PDNS; pdn_idx++)
-	{
-		if(IPACM_Wan::ipv4_to_iface[pdn_idx].wan_up_vlan)
-		{
-			IPACMDBG("ipv4 iface pdn ip %d, input ipv4 %d\n", IPACM_Wan::ipv4_to_iface[pdn_idx].ipv4_addr, data->wan_ipv4_addr);
-			for(vlan_idx = 0; vlan_idx < ipv4_to_iface[pdn_idx].VID_cnt; vlan_idx++)
-			{
-				if((IPACM_Wan::ipv4_to_iface[pdn_idx].associated_VIDs[vlan_idx] == data->VlanID) && (pdn_idx != modem_ipv4_pdn_index))
-				{
-						IPACMDBG("current iface:%d already has v4 vlan %d association with pdn_idx:%d\n",
-							modem_ipv4_pdn_index, data->VlanID, pdn_idx);
-						return true;
-				}
-			}
-		}
-		if(IPACM_Wan::ipv6_to_iface[pdn_idx].wan_up_vlan_v6)
-		{
-			IPACMDBG("ipv6 iface pdn ip %d and %d, input ipv6 %d and %d\n", IPACM_Wan::ipv6_to_iface[pdn_idx].ipv6_prefix[0], IPACM_Wan::ipv6_to_iface[pdn_idx].ipv6_prefix[1],
-				data->wan_ipv6_prefix[0], data->wan_ipv6_prefix[1]);
-			for(vlan_idx = 0; vlan_idx < ipv6_to_iface[pdn_idx].VID_cnt; vlan_idx++)
-			{
-				if(IPACM_Wan::ipv6_to_iface[pdn_idx].associated_VIDs[vlan_idx] == data->VlanID && (pdn_idx != modem_ipv6_pdn_index))
-				{
-					IPACMDBG("current iface:%d already has v6 vlan %d association with pdn_idx:%d\n",
-						modem_ipv6_pdn_index, data->VlanID, pdn_idx);
-					return true;
-				}
-			}
-		}
-	}
-	return false;
-}
 #endif
 
 #ifdef FEATURE_VLAN_MPDN
@@ -2442,9 +2416,30 @@ int IPACM_Wan::handle_vlan_backhaul_switch_v6(ipacm_event_route_vlan *data, bool
 			}
 			else if(vlan_info->v6_association == Q6_WAN && vlan_info->v6_idx[Q6_WAN] != modem_ipv6_pdn_index)
 			{
+#ifdef IPA_L2TP_TUNNEL_UDP
+				/* check if l2tp vlan associated with other than current PDN */
+				if(IPACM_Iface::ipacmcfg->check_l2tp_bridge_vlan_id(data->VlanID))
+				{
+					/* remove l2tp vlan from the PDN */
+					remove_l2tp_brige_vlan_pdn(data->VlanID);
+					if(((modem_ipv4_pdn_index >= 0) && ipv4_to_iface[modem_ipv4_pdn_index].wan_up_vlan == false) &&
+						((modem_ipv6_pdn_index >= 0) && ipv6_to_iface[modem_ipv6_pdn_index].wan_up_vlan_v6 == false))
+					{
+						num_offloaded_pdns++;
+						IPACMDBG_H("num of offloaded PDN: %d\n", num_offloaded_pdns);
+					}
+				}
+				else
+				{
+					IPACMERR("VID (%d) already mapped to v6 PDN %d, can't map to v6 PDN %d\n",data->VlanID,
+					vlan_info->v6_idx[Q6_WAN], modem_ipv6_pdn_index);
+					goto fail;
+				}
+#else
 				IPACMERR("VID (%d) already mapped to v6 PDN %d, can't map to v6 PDN %d\n",data->VlanID,
-						vlan_info->v6_idx[Q6_WAN], modem_ipv6_pdn_index);
+				vlan_info->v6_idx[Q6_WAN], modem_ipv6_pdn_index);
 				goto fail;
+#endif
 			}
 			else if(vlan_info->v4_idx[Q6_WAN] != -1 && vlan_info->v4_idx[Q6_WAN] != modem_ipv4_pdn_index)
 			{
@@ -2579,9 +2574,30 @@ int IPACM_Wan::handle_vlan_backhaul_switch_v4(ipacm_event_route_vlan *data)
 			}
 			else if(vlan_info->v4_idx[Q6_WAN] != -1 && vlan_info->v4_idx[Q6_WAN] != modem_ipv4_pdn_index)
 			{
+#ifdef IPA_L2TP_TUNNEL_UDP
+				/* check if l2tp vlan associated with other than current PDN */
+				if(IPACM_Iface::ipacmcfg->check_l2tp_bridge_vlan_id(data->VlanID))
+				{
+					/* remove l2tp vlan from the PDN */
+					remove_l2tp_brige_vlan_pdn(data->VlanID);
+					if(((modem_ipv4_pdn_index >= 0) && ipv4_to_iface[modem_ipv4_pdn_index].wan_up_vlan == false) &&
+						((modem_ipv6_pdn_index >= 0) && ipv6_to_iface[modem_ipv6_pdn_index].wan_up_vlan_v6 == false))
+					{
+						num_offloaded_pdns++;
+						IPACMDBG_H("num of offloaded PDN: %d\n", num_offloaded_pdns);
+					}
+				}
+				else
+				{
+					IPACMERR("VID (%d) already mapped to v4 PDN %d, can't map to v4 PDN %d\n",data->VlanID,
+						vlan_info->v4_idx[Q6_WAN], modem_ipv4_pdn_index);
+					goto fail;
+				}
+#else
 				IPACMERR("VID (%d) already mapped to v4 PDN %d, can't map to v4 PDN %d\n",data->VlanID,
 						vlan_info->v4_idx[Q6_WAN], modem_ipv4_pdn_index);
 				goto fail;
+#endif
 			}
 			else if(vlan_info->v6_idx[Q6_WAN] != -1 && vlan_info->v6_idx[Q6_WAN] != modem_ipv6_pdn_index)
 			{
@@ -9858,13 +9874,14 @@ int IPACM_Wan::handle_l2tp_client_mtu_rule(const struct ipa_rule_attrib& rx_prop
 	if (iptype == IPA_IP_v4)
 	{
 		flt_rule_entry.rule.eq_attrib.ihl_offset_range_16[0].offset = 0x82;
-		/* ipv4 header total length value includes header length also, therefore add 20 byte to mtu for ipv4 */
-		flt_rule_entry.rule.eq_attrib.ihl_offset_range_16[0].range_low = mtu + 21;
+		/* ipv4 header total length value includes header length also */
+		flt_rule_entry.rule.eq_attrib.ihl_offset_range_16[0].range_low = mtu + 1;
 	}
 	else
 	{
 		flt_rule_entry.rule.eq_attrib.ihl_offset_range_16[0].offset = 0x84;
-		flt_rule_entry.rule.eq_attrib.ihl_offset_range_16[0].range_low = mtu + 1;
+		/* ipv6 header payload not include header length */
+		flt_rule_entry.rule.eq_attrib.ihl_offset_range_16[0].range_low = mtu + 1 - 40;
 	}
 	flt_rule_entry.rule.eq_attrib.ihl_offset_range_16[0].range_high = UINT16_MAX; //0xFFFF
 	memcpy(&flt_rule_add, &flt_rule_entry, sizeof(struct ipa_flt_rule_add));

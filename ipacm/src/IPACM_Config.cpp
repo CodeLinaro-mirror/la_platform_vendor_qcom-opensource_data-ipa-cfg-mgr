@@ -2536,6 +2536,14 @@ bool IPACM_Config::check_l2tp_iface(const char *client_iface)
 		}
 	}
 
+	/* To handle the case if del vlan l2tp IOCTL from QCMAP received before DELNEIGH on phy or Bridge iface */
+	if(strncmp(client_iface, "l2tp", 4) == 0)
+	{
+		IPACMDBG_H("This is l2tp iface.\n");
+		pthread_mutex_unlock(&vlan_l2tp_lock);
+		return true;
+	}
+
 	pthread_mutex_unlock(&vlan_l2tp_lock);
 	return false;
 }

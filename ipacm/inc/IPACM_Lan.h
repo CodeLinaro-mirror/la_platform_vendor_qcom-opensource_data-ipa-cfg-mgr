@@ -150,6 +150,7 @@ typedef struct _ipa_eth_client
 	eth_client_rt_hdl dscp_eth_rt_hdl[IPA_UC_MAX_PDN_DSCP_VAL];
 #endif
 	int if_index;
+	bool if_index_set;
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
 	bool ipv4_ul_rules_set;
 	bool ipv6_ul_rules_set;

@@ -3650,6 +3650,8 @@ bool IPACM_Config::insertOrAssignMacsecMap(struct ipa_macsec_map *macsecMap) {
 		iface_table[ifaceTableIdx].virtual_iface = true;
 		strlcpy(iface_table[ifaceTableIdx].iface_name, macsecMap->macsec_name, sizeof(iface_table[ifaceTableIdx].iface_name));
 		strlcpy(iface_table[ifaceTableIdx].phy_dev_name, macsecMap->phy_name, sizeof(iface_table[ifaceTableIdx].phy_dev_name));
+		IPACM_Iface::ipa_get_if_index(macsecMap->macsec_name, &netlinkIdx);
+		iface_table[ifaceTableIdx].netlink_interface_index = netlinkIdx;
 	}
 
 	return true;
@@ -3668,6 +3670,8 @@ bool IPACM_Config::delMacsecMap(struct ipa_macsec_map *macsecMap) {
 		strlcpy(iface_table[ifaceTableIdx].iface_name, iface_table[ifaceTableIdx].phy_dev_name,
 			sizeof(iface_table[ifaceTableIdx].iface_name));
 		iface_table[ifaceTableIdx].phy_dev_name[0] = '\0';
+		IPACM_Iface::ipa_get_if_index(macsecMap->phy_name, &netlinkIdx);
+		iface_table[ifaceTableIdx].netlink_interface_index = netlinkIdx;
 
 		return true;
 	}

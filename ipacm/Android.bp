@@ -4,10 +4,10 @@ cc_binary {
 
     local_include_dirs: ["src"] + ["inc"],
     header_libs: ["device_kernel_headers"]+["qti_kernel_headers",
-	"libutils_headers", "libcutils_headers"],
+	"libutils_headers", "libcutils_headers"]+["qti_ipa_kernel_headers"],
 
     cflags: ["-v"] + ["-DFEATURE_IPA_ANDROID"] + ["-DFEATURE_IPACM_RESTART"] + [
-        "-DFEATURE_IPACM_HAL",
+        "-DFEATURE_IPACM_AIDL",
 	"-DDEBUG",
         "-Wall",
         "-Werror",
@@ -39,26 +39,23 @@ cc_binary {
     ],
 
     init_rc: ["src/ipacm.rc"],
-    clang: true,
+    vintf_fragments: [
+        "src/vendor.qti.hardware.tetheroffload.service.xml",
+    ],
     vendor: true,
 
     shared_libs: [
-	"liboffloadhal",
-	"libipanat",
-	"libxml2",
-	"libnfnetlink",
-	"libnetfilter_conntrack",
-        "libhidlbase",
+        "liboffloadhal",
+        "libipanat",
+        "libxml2",
+        "libnfnetlink",
+        "libnetfilter_conntrack",
         "liblog",
         "libcutils",
         "libdl",
-        "libbase",
+        "libbinder_ndk",
         "libutils",
-        "libhardware_legacy",
-        "libhardware",
-        "android.hardware.tetheroffload.config@1.0",
-        "android.hardware.tetheroffload.control@1.0",
-        "android.hardware.tetheroffload.control@1.1",
+        "android.hardware.tetheroffload-V1-ndk",
     ],
 }
 

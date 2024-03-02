@@ -60,6 +60,11 @@ IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
 OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
 IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE
 */
+/*
+ * ​​​​​Changes from Qualcomm Innovation Center are provided under the following license:
+ * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
+ */
 /*!
 @file
 IPACM_Wlan.cpp
@@ -86,7 +91,7 @@ typedef uint32_t in_addr_t;
 #include <IPACM_Lan.h>
 #include <IPACM_IfaceManager.h>
 #include <IPACM_ConntrackListener.h>
-#ifdef FEATURE_IPACM_HAL
+#ifdef FEATURE_IPACM_AIDL
 #include "IPACM_OffloadManager.h"
 #endif
 
@@ -157,7 +162,7 @@ IPACM_Wlan::IPACM_Wlan(int iface_index) : IPACM_Lan(iface_index)
 	/* set the IPA-client pipe enum */
 	if(ipa_if_cate == WLAN_IF)
 	{
-#ifdef FEATURE_IPACM_HAL
+#ifdef FEATURE_IPACM_AIDL
 		handle_tethering_client(false, IPACM_CLIENT_MAX);
 #else
 		handle_tethering_client(false, IPACM_CLIENT_WLAN);
@@ -188,7 +193,7 @@ void IPACM_Wlan::event_callback(ipa_cm_event_id event, void *param)
 	int wlan_index;
 	ipacm_ext_prop* ext_prop;
 	ipacm_event_iface_up_tehter* data_wan_tether;
-#ifdef FEATURE_IPACM_HAL
+#ifdef FEATURE_IPACM_AIDL
 	IPACM_OffloadManager* OffloadMng;
 #endif
 
@@ -328,7 +333,7 @@ void IPACM_Wlan::event_callback(ipa_cm_event_id event, void *param)
 					handle_private_subnet(data->iptype);
 #endif
 
-#ifndef FEATURE_IPACM_HAL
+#ifndef FEATURE_IPACM_AIDL
 					if (IPACM_Wan::isWanUP(ipa_if_num))
 					{
 						if(data->iptype == IPA_IP_v4 || data->iptype == IPA_IP_MAX)
@@ -408,7 +413,7 @@ void IPACM_Wlan::event_callback(ipa_cm_event_id event, void *param)
 					data_wan_tether->if_index_tether,
 					IPACM_Iface::ipacmcfg->iface_table[data_wan_tether->if_index_tether].iface_name,
 					data_wan_tether->xlat_mux_id);
-#ifndef FEATURE_IPACM_HAL
+#ifndef FEATURE_IPACM_AIDL
 		if (data_wan_tether->if_index_tether != ipa_if_num)
 		{
 			IPACMERR("IPA_HANDLE_WAN_UP_TETHER tether_if(%d), not valid (%d) ignore\n", data_wan_tether->if_index_tether, ipa_if_num);
@@ -417,7 +422,7 @@ void IPACM_Wlan::event_callback(ipa_cm_event_id event, void *param)
 #endif
 		if(ip_type == IPA_IP_v4 || ip_type == IPA_IP_MAX)
 		{
-#ifdef FEATURE_IPACM_HAL
+#ifdef FEATURE_IPACM_AIDL
 			if(is_upstream_set[IPA_IP_v4] == false)
 			{
 				IPACMDBG_H("Add upstream for IPv4.\n");
@@ -459,7 +464,7 @@ void IPACM_Wlan::event_callback(ipa_cm_event_id event, void *param)
 		IPACMDBG_H("Backhaul is sta mode?%d, if_index_tether:%d tether_if_name:%s\n", data_wan_tether->backhaul_type,
 					data_wan_tether->if_index_tether,
 					IPACM_Iface::ipacmcfg->iface_table[data_wan_tether->if_index_tether].iface_name);
-#ifndef FEATURE_IPACM_HAL
+#ifndef FEATURE_IPACM_AIDL
 		if (data_wan_tether->if_index_tether != ipa_if_num)
 		{
 			IPACMERR("IPA_HANDLE_WAN_UP_V6_TETHER tether_if(%d), not valid (%d) ignore\n", data_wan_tether->if_index_tether, ipa_if_num);
@@ -468,7 +473,7 @@ void IPACM_Wlan::event_callback(ipa_cm_event_id event, void *param)
 #endif
 		if(ip_type == IPA_IP_v6 || ip_type == IPA_IP_MAX)
 		{
-#ifdef FEATURE_IPACM_HAL
+#ifdef FEATURE_IPACM_AIDL
 			if(is_upstream_set[IPA_IP_v6] == false)
 			{
 				IPACMDBG_H("Add upstream for IPv6.\n");
@@ -520,7 +525,7 @@ void IPACM_Wlan::event_callback(ipa_cm_event_id event, void *param)
 		IPACMDBG_H("Backhaul is sta mode?%d, if_index_tether:%d tether_if_name:%s\n", data_wan_tether->backhaul_type,
 					data_wan_tether->if_index_tether,
 					IPACM_Iface::ipacmcfg->iface_table[data_wan_tether->if_index_tether].iface_name);
-#ifndef FEATURE_IPACM_HAL
+#ifndef FEATURE_IPACM_AIDL
 		if (data_wan_tether->if_index_tether != ipa_if_num)
 		{
 			IPACMERR("IPA_HANDLE_WAN_DOWN_TETHER tether_if(%d), not valid (%d) ignore\n", data_wan_tether->if_index_tether, ipa_if_num);
@@ -529,7 +534,7 @@ void IPACM_Wlan::event_callback(ipa_cm_event_id event, void *param)
 #endif
 		if(ip_type == IPA_IP_v4 || ip_type == IPA_IP_MAX)
 		{
-#ifdef FEATURE_IPACM_HAL
+#ifdef FEATURE_IPACM_AIDL
 			if(is_upstream_set[IPA_IP_v4] == true)
 			{
 				IPACMDBG_H("Del upstream for IPv4.\n");
@@ -562,7 +567,7 @@ void IPACM_Wlan::event_callback(ipa_cm_event_id event, void *param)
 		IPACMDBG_H("Backhaul is sta mode?%d, if_index_tether:%d tether_if_name:%s\n", data_wan_tether->backhaul_type,
 					data_wan_tether->if_index_tether,
 					IPACM_Iface::ipacmcfg->iface_table[data_wan_tether->if_index_tether].iface_name);
-#ifndef FEATURE_IPACM_HAL
+#ifndef FEATURE_IPACM_AIDL
 		if (data_wan_tether->if_index_tether != ipa_if_num)
 		{
 			IPACMERR("IPA_HANDLE_WAN_DOWN_V6_TETHER tether_if(%d), not valid (%d) ignore\n", data_wan_tether->if_index_tether, ipa_if_num);
@@ -571,7 +576,7 @@ void IPACM_Wlan::event_callback(ipa_cm_event_id event, void *param)
 #endif
 		if(ip_type == IPA_IP_v6 || ip_type == IPA_IP_MAX)
 		{
-#ifdef FEATURE_IPACM_HAL
+#ifdef FEATURE_IPACM_AIDL
 			if(is_upstream_set[IPA_IP_v6] == true)
 			{
 				IPACMDBG_H("Del upstream for IPv6.\n");
@@ -1053,7 +1058,7 @@ void IPACM_Wlan::event_callback(ipa_cm_event_id event, void *param)
 		}
 	}
 	break;
-#ifdef FEATURE_IPACM_HAL
+#ifdef FEATURE_IPACM_AIDL
 	/* WA for WLAN to clean up NAT instance during SSR */
 	case IPA_SSR_NOTICE:
 	{
@@ -1145,9 +1150,10 @@ int IPACM_Wlan::handle_wlan_client_init_ex(ipacm_event_data_wlan_ex *data)
                  num_wifi_client,IPACM_Wlan::total_num_wifi_clients);
 
 	if ((num_wifi_client >= IPA_MAX_NUM_WIFI_CLIENTS) ||
-			(IPACM_Wlan::total_num_wifi_clients >= IPA_MAX_NUM_WIFI_CLIENTS))
+			(IPACM_Wlan::total_num_wifi_clients >= IPA_MAX_NUM_WIFI_CLIENTS) ||
+			(data->num_of_attribs > WLAN_HDR_ATTRIB_STA_ID + 1))
 	{
-		IPACMERR("Reached maximum number of wlan clients\n");
+		IPACMERR("Reached maximum number of wlan clients or exceeds number of attribs\n");
 		return IPACM_FAILURE;
 	}
 
@@ -1203,7 +1209,7 @@ int IPACM_Wlan::handle_wlan_client_init_ex(ipacm_event_data_wlan_ex *data)
 
 				for(i = 0; i < data->num_of_attribs; i++)
 				{
-					if (data->attribs[i].offset >= IPA_HDR_MAX_SIZE)
+					if (data->attribs[i].offset >= (IPA_HDR_MAX_SIZE - IPA_MAC_ADDR_SIZE))
 					{
 						IPACMERR("offset overflowing the hdr array\n");
 						res = IPACM_FAILURE;
@@ -1325,7 +1331,7 @@ int IPACM_Wlan::handle_wlan_client_init_ex(ipacm_event_data_wlan_ex *data)
 
 				for(i = 0; i < data->num_of_attribs; i++)
 				{
-					if (data->attribs[i].offset >= IPA_HDR_MAX_SIZE)
+					if (data->attribs[i].offset >= (IPA_HDR_MAX_SIZE - IPA_MAC_ADDR_SIZE))
 					{
 						IPACMERR("offset overflowing the hdr array\n");
 						res = IPACM_FAILURE;
@@ -1988,9 +1994,11 @@ int IPACM_Wlan::handle_wlan_client_down_evt(uint8_t *mac_addr)
 /*handle wlan iface down event*/
 int IPACM_Wlan::handle_down_evt()
 {
-	int res = IPACM_SUCCESS, num_private_subnet_fl_rule;
+	int res = IPACM_SUCCESS;
+#ifndef FEATURE_IPA_ANDROID
+	int num_private_subnet_fl_rule = 0;
+#endif
 	uint32_t i;
-	num_private_subnet_fl_rule = 0;
 
 	IPACMDBG_H("WLAN ip-type: %d \n", ip_type);
 	/* no iface address up, directly close iface*/
@@ -2006,7 +2014,7 @@ int IPACM_Wlan::handle_down_evt()
 		IPACMDBG_H("LAN IF goes down, backhaul type %d\n", IPACM_Wan::backhaul_mode);
 		IPACM_Lan::handle_wan_down(IPACM_Wan::backhaul_mode);
 #ifdef FEATURE_IPA_ANDROID
-#ifndef FEATURE_IPACM_HAL
+#ifndef FEATURE_IPACM_AIDL
 		/* Clean-up tethered-iface list */
 		IPACM_Wan::delete_tether_iface(IPA_IP_v4, ipa_if_num);
 #endif
@@ -2172,7 +2180,7 @@ int IPACM_Wlan::handle_down_evt()
 		}
 	}
 	/* reset the IPA-client pipe enum */
-#ifdef FEATURE_IPACM_HAL
+#ifdef FEATURE_IPACM_AIDL
 	handle_tethering_client(true, IPACM_CLIENT_MAX);
 #else
 	handle_tethering_client(true, IPACM_CLIENT_WLAN);

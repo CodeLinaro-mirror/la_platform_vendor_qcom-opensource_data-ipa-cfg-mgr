@@ -76,7 +76,7 @@ RET IPACM_OffloadManager::registerEventListener(IpaEventListener* eventlistener)
 		elrInstance = eventlistener;
 		result = FAIL_INPUT_CHECK;
 	}
-	return SUCCESS;
+	return result;
 }
 
 RET IPACM_OffloadManager::unregisterEventListener(IpaEventListener* )
@@ -88,7 +88,7 @@ RET IPACM_OffloadManager::unregisterEventListener(IpaEventListener* )
 		IPACMDBG_H("already unregisterEventListener previously \n");
 		result = SUCCESS_DUPLICATE_CONFIG;
 	}
-	return SUCCESS;
+	return result;
 }
 
 RET IPACM_OffloadManager::registerCtTimeoutUpdater(ConntrackTimeoutUpdater* timeoutupdater)
@@ -103,7 +103,7 @@ RET IPACM_OffloadManager::registerCtTimeoutUpdater(ConntrackTimeoutUpdater* time
 		touInstance = timeoutupdater;
 		result = FAIL_INPUT_CHECK;
 	}
-	return SUCCESS;
+	return result;
 }
 
 RET IPACM_OffloadManager::unregisterCtTimeoutUpdater(ConntrackTimeoutUpdater* )
@@ -115,7 +115,7 @@ RET IPACM_OffloadManager::unregisterCtTimeoutUpdater(ConntrackTimeoutUpdater* )
 		IPACMDBG_H("already unregisterCtTimeoutUpdater previously \n");
 		result = SUCCESS_DUPLICATE_CONFIG;
 	}
-	return SUCCESS;
+	return result;
 }
 
 RET IPACM_OffloadManager::provideFd(int fd, unsigned int groups)

@@ -26,6 +26,11 @@ WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
 OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
 IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
+/*
+ * ​​​​​Changes from Qualcomm Innovation Center are provided under the following license:
+ * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
+ */
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -101,10 +106,10 @@ int IPACM_ConntrackClient::IPAConntrackEventCB
 	 void *data
 	 )
 {
+	#pragma unused (data)
 	ipacm_cmd_q_data evt_data;
 	ipacm_ct_evt_data *ct_data;
 	uint8_t ip_type = 0;
-	data = NULL;
 
 	IPACMDBG("Event callback called with msgtype: %d\n",type);
 
@@ -387,8 +392,8 @@ int IPACM_ConntrackClient::IPA_Conntrack_UDP_Filter_Init(void)
 
 void* IPACM_ConntrackClient::UDPConnTimeoutUpdate(void *ptr)
 {
+	#pragma unused (ptr)
 	NatApp *nat_inst = NULL;
-	ptr = NULL;
 #ifdef IPACM_DEBUG
 	IPACMDBG("\n");
 #endif
@@ -434,7 +439,7 @@ void* IPACM_ConntrackClient::TCPRegisterWithConnTrack(void *)
 	subscrips |= NF_NETLINK_CONNTRACK_NEW;
 #endif
 
-#ifdef FEATURE_IPACM_HAL
+#ifdef FEATURE_IPACM_AIDL
 	if (pClient->fd_tcp < 0) {
 		IPACMERR("unable to get conntrack TCP handle due to fd_tcp is invalid \n");
 		return NULL;
@@ -504,7 +509,7 @@ ctcatch:
 	/* de-register the callback */
 	nfct_callback_unregister(pClient->tcp_hdl);
 	/* close the handle */
-#ifdef FEATURE_IPACM_HAL
+#ifdef FEATURE_IPACM_AIDL
 	nfct_close2(pClient->tcp_hdl, true);
 #else
 	nfct_close(pClient->tcp_hdl);
@@ -530,7 +535,7 @@ void* IPACM_ConntrackClient::UDPRegisterWithConnTrack(void *)
 		return NULL;
 	}
 
-#ifdef FEATURE_IPACM_HAL
+#ifdef FEATURE_IPACM_AIDL
 	if (pClient->fd_udp < 0) {
 		IPACMERR("unable to get conntrack UDP handle due to fd_udp is invalid \n");
 		return NULL;
@@ -595,7 +600,7 @@ ctcatch:
 	/* de-register the callback */
 	nfct_callback_unregister(pClient->udp_hdl);
 	/* close the handle */
-#ifdef FEATURE_IPACM_HAL
+#ifdef FEATURE_IPACM_AIDL
 	nfct_close2(pClient->udp_hdl, true);
 #else
 	nfct_close(pClient->udp_hdl);

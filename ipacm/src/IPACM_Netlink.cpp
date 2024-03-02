@@ -461,13 +461,13 @@ static int ipa_nl_decode_rtm_link
 	 ipa_nl_link_info_t      *link_info
 )
 {
+	#pragma unused (buflen)
 	struct rtattr;
 	/* NL message header */
 	struct nlmsghdr *nlh = (struct nlmsghdr *)buffer;
 
 	/* Extract the header data */
 	link_info->metainfo = *(struct ifinfomsg *)NLMSG_DATA(nlh);
-	buflen -= sizeof(struct nlmsghdr);
 
 	return IPACM_SUCCESS;
 }
@@ -1748,7 +1748,6 @@ int ipa_nl_listener_init
 	 )
 {
 	ipa_nl_sk_info_t sk_info;
-	int ret_val;
 
 	memset(&sk_info, 0, sizeof(ipa_nl_sk_info_t));
 	IPACMDBG_H("Entering IPA NL listener init\n");
@@ -1774,9 +1773,7 @@ int ipa_nl_listener_init
 	}
 
 	/* Start the socket listener thread */
-	ret_val = ipa_nl_sock_listener_start(sk_fdset);
-
-	if(ret_val != IPACM_SUCCESS)
+	if(ipa_nl_sock_listener_start(sk_fdset) != IPACM_SUCCESS)
 	{
 		IPACMERR("Failed to start NL listener\n");
 	}

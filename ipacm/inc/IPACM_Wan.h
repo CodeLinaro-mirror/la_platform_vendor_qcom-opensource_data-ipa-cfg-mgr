@@ -60,6 +60,11 @@ IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
 OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
 IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE
 */
+/*
+ * ​​​​​Changes from Qualcomm Innovation Center are provided under the following license:
+ * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
+ */
 /*!
 	@file
 	IPACM_Wan.cpp
@@ -154,7 +159,7 @@ public:
 	static bool isWanUP(int ipa_if_num_tether)
 	{
 #ifdef FEATURE_IPA_ANDROID
-#ifdef FEATURE_IPACM_HAL
+#ifdef FEATURE_IPACM_AIDL
 		/*To avoid -Wall -Werror error */
 		IPACMDBG_H("ipa_if_num_tether: %d\n",ipa_if_num_tether);
 		return wan_up;
@@ -199,7 +204,7 @@ public:
 	static bool isWanUP_V6(int ipa_if_num_tether)
 	{
 #ifdef FEATURE_IPA_ANDROID
-#ifdef FEATURE_IPACM_HAL
+#ifdef FEATURE_IPACM_AIDL
 		/*To avoid -Wall -Werror error */
 		IPACMDBG_H("ipa_if_num_tether: %d\n",ipa_if_num_tether);
 		return wan_up_v6;

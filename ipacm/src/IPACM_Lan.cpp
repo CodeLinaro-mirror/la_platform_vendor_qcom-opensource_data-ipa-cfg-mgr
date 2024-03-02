@@ -62,6 +62,11 @@ IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  * OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE
 */
+/*
+ * ​​​​​Changes from Qualcomm Innovation Center are provided under the following license:
+ * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
+ */
 /*!
 	@file
 	IPACM_Lan.cpp
@@ -89,7 +94,7 @@ typedef uint32_t in_addr_t;
 #include "IPACM_ConntrackListener.h"
 #include <sys/ioctl.h>
 #include <fcntl.h>
-#ifdef FEATURE_IPACM_HAL
+#ifdef FEATURE_IPACM_AIDL
 #include "IPACM_OffloadManager.h"
 #endif
 bool IPACM_Lan::odu_up = false;
@@ -220,11 +225,11 @@ IPACM_Lan::IPACM_Lan(int iface_index) : IPACM_Iface(iface_index)
 	/* set the IPA-client pipe enum */
 	if(ipa_if_cate == LAN_IF)
 	{
-#ifdef FEATURE_IPACM_HAL
+#ifdef FEATURE_IPACM_AIDL
 		handle_tethering_client(false, IPACM_CLIENT_MAX);
 #else
 		handle_tethering_client(false, IPACM_CLIENT_USB);
-#endif // FEATURE_IPACM_HAL end
+#endif // FEATURE_IPACM_AIDL end
 	}
 #endif // FEATURE_IPA_ANDROID end
 
@@ -232,7 +237,7 @@ IPACM_Lan::IPACM_Lan(int iface_index) : IPACM_Iface(iface_index)
 	memset(is_upstream_set, 0, sizeof(is_upstream_set));
 	memset(&prefix, 0, sizeof(prefix));
 
-#ifdef FEATURE_IPACM_HAL
+#ifdef FEATURE_IPACM_AIDL
 
 		/* check if Upstream was set before as WIFI with RNDIS case */
 		if(ipa_if_cate == LAN_IF && IPACM_Wan::backhaul_mode == WLAN_WAN)  /* LTE */
@@ -253,7 +258,7 @@ IPACM_Lan::IPACM_Lan(int iface_index) : IPACM_Iface(iface_index)
 				IPACMDBG_H("Upstream was set previously for ipv6, change is_upstream_set flag\n");
 				is_upstream_set[IPA_IP_v6] = true;
 		}
-#endif // FEATURE_IPACM_HAL end
+#endif // FEATURE_IPACM_AIDL end
 	return;
 }
 
@@ -480,7 +485,7 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 						handle_private_subnet(data->iptype);
 #endif // FEATURE_IPA_ANDROID end
 
-#ifndef FEATURE_IPACM_HAL
+#ifndef FEATURE_IPACM_AIDL
 						if (IPACM_Wan::isWanUP(ipa_if_num))
 						{
 							if(data->iptype == IPA_IP_v4 || data->iptype == IPA_IP_MAX)
@@ -533,7 +538,7 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 							IPACMDBG_H("Upstream was set previously for ipv6, change is_upstream_set flag\n");
 							is_upstream_set[IPA_IP_v6] = true;
 						}
-#endif //FEATURE_IPACM_HAL end
+#endif //FEATURE_IPACM_AIDL end
 						/* Post event to NAT */
 						if (data->iptype == IPA_IP_v4)
 						{
@@ -591,7 +596,7 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 					data_wan_tether->if_index_tether,
 					IPACM_Iface::ipacmcfg->iface_table[data_wan_tether->if_index_tether].iface_name,
 					data_wan_tether->xlat_mux_id);
-#ifndef FEATURE_IPACM_HAL
+#ifndef FEATURE_IPACM_AIDL
 		if (data_wan_tether->if_index_tether != ipa_if_num)
 		{
 			IPACMERR("IPA_HANDLE_WAN_UP_TETHER tether_if(%d), not valid (%d) ignore\n", data_wan_tether->if_index_tether, ipa_if_num);
@@ -636,10 +641,10 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 			} /* end of for loop */
 			return;
 		}
-#endif // FEATURE_IPACM_HAL end
+#endif // FEATURE_IPACM_AIDL end
 		if (ip_type == IPA_IP_v4 || ip_type == IPA_IP_MAX)
 		{
-#ifdef FEATURE_IPACM_HAL
+#ifdef FEATURE_IPACM_AIDL
 			if (is_upstream_set[IPA_IP_v4] == false)
 			{
 				IPACMDBG_H("Add upstream for IPv4.\n");
@@ -665,7 +670,7 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 			} else {
 					handle_wan_up(IPA_IP_v4);
 			}
-#endif // FEATURE_IPACM_HAL end
+#endif // FEATURE_IPACM_AIDL end
 		}
 		break;
 
@@ -681,16 +686,16 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 		IPACMDBG_H("Backhaul is sta mode?%d, if_index_tether:%d tether_if_name:%s\n", data_wan_tether->backhaul_type,
 					data_wan_tether->if_index_tether,
 					IPACM_Iface::ipacmcfg->iface_table[data_wan_tether->if_index_tether].iface_name);
-#ifndef FEATURE_IPACM_HAL
+#ifndef FEATURE_IPACM_AIDL
 		if (data_wan_tether->if_index_tether != ipa_if_num)
 		{
 			IPACMERR("IPA_HANDLE_WAN_UP_V6_TETHER tether_if(%d), not valid (%d) ignore\n", data_wan_tether->if_index_tether, ipa_if_num);
 			return;
 		}
-#endif // FEATURE_IPACM_HAL end
+#endif // FEATURE_IPACM_AIDL end
 		if (ip_type == IPA_IP_v6 || ip_type == IPA_IP_MAX)
 		{
-#ifdef FEATURE_IPACM_HAL
+#ifdef FEATURE_IPACM_AIDL
 			if (is_upstream_set[IPA_IP_v6] == false)
 			{
 				IPACMDBG_H("Add upstream for IPv6.\n");
@@ -720,7 +725,7 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 			} else {
 				handle_wan_up(IPA_IP_v6);
 			}
-#endif // FEATURE_IPACM_HAL end
+#endif // FEATURE_IPACM_AIDL end
 		}
 		break;
 
@@ -735,16 +740,16 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 		IPACMDBG_H("Backhaul is sta mode?%d, if_index_tether:%d tether_if_name:%s\n", data_wan_tether->backhaul_type,
 					data_wan_tether->if_index_tether,
 					IPACM_Iface::ipacmcfg->iface_table[data_wan_tether->if_index_tether].iface_name);
-#ifndef FEATURE_IPACM_HAL
+#ifndef FEATURE_IPACM_AIDL
 		if (data_wan_tether->if_index_tether != ipa_if_num)
 		{
 			IPACMERR("IPA_HANDLE_WAN_DOWN_TETHER tether_if(%d), not valid (%d) ignore\n", data_wan_tether->if_index_tether, ipa_if_num);
 			return;
 		}
-#endif // FEATURE_IPACM_HAL end
+#endif // FEATURE_IPACM_AIDL end
 		if (ip_type == IPA_IP_v4 || ip_type == IPA_IP_MAX)
 		{
-#ifdef FEATURE_IPACM_HAL
+#ifdef FEATURE_IPACM_AIDL
 			if(is_upstream_set[IPA_IP_v4] == true)
 			{
 				IPACMDBG_H("Del upstream for IPv4.\n");
@@ -757,7 +762,7 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 			}
 #else
 			handle_wan_down(data_wan_tether->backhaul_type);
-#endif // FEATURE_IPACM_HAL end
+#endif // FEATURE_IPACM_AIDL end
 		}
 		break;
 
@@ -772,16 +777,16 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 		IPACMDBG_H("Backhaul is sta mode?%d, if_index_tether:%d tether_if_name:%s\n", data_wan_tether->backhaul_type,
 					data_wan_tether->if_index_tether,
 					IPACM_Iface::ipacmcfg->iface_table[data_wan_tether->if_index_tether].iface_name);
-#ifndef FEATURE_IPACM_HAL
+#ifndef FEATURE_IPACM_AIDL
 		if (data_wan_tether->if_index_tether != ipa_if_num)
 		{
 			IPACMERR("IPA_HANDLE_WAN_DOWN_V6_TETHER tether_if(%d), not valid (%d) ignore\n", data_wan_tether->if_index_tether, ipa_if_num);
 			return;
 		}
-#endif // FEATURE_IPACM_HAL end
+#endif // FEATURE_IPACM_AIDL end
 		if (ip_type == IPA_IP_v6 || ip_type == IPA_IP_MAX)
 		{
-#ifdef FEATURE_IPACM_HAL
+#ifdef FEATURE_IPACM_AIDL
 			if (is_upstream_set[IPA_IP_v6] == true)
 			{
 				IPACMDBG_H("Del upstream for IPv6.\n");
@@ -798,7 +803,7 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 			/* reset usb-client ipv6 rt-rules */
 			handle_lan_client_reset_rt(IPA_IP_v6);
 			handle_wan_down_v6(data_wan_tether->backhaul_type);
-#endif // FEATURE_IPACM_HAL end
+#endif // FEATURE_IPACM_AIDL end
 		}
 		break;
 
@@ -1016,7 +1021,7 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 			IPACMDBG_H("check iface %s category: %d\n", dev_name, ipa_if_cate);
 
 			/* if RNDIS under WIFI mode in MSM, dun add RT rule*/
-#ifdef FEATURE_IPACM_HAL
+#ifdef FEATURE_IPACM_AIDL
 			if(IPACM_Wan::backhaul_mode == WLAN_WAN) /* WIFI */
 			{
 				IPACMDBG_H(" dun construct header and RT-rules for RNDIS-PC in WIFI mode on MSM targets (STA %d) \n", IPACM_Wan::backhaul_mode);
@@ -1498,7 +1503,7 @@ int IPACM_Lan::handle_addr_evt(ipacm_event_data_addr *data)
 	const int NUM_RULES = 1;
 	uint32_t num_ipv6_addr;
 	int res = IPACM_SUCCESS;
-#ifdef FEATURE_IPACM_HAL
+#ifdef FEATURE_IPACM_AIDL
 	IPACM_OffloadManager* OffloadMng;
 #endif
 
@@ -1681,7 +1686,7 @@ int IPACM_Lan::handle_addr_evt(ipacm_event_data_addr *data)
 		IPACMDBG_H("number of default route rules %d\n", num_dft_rt_v6);
 	}
 
-#ifdef FEATURE_IPACM_HAL
+#ifdef FEATURE_IPACM_AIDL
 	/* check if having pending add_downstream cache*/
 	OffloadMng = IPACM_OffloadManager::GetInstance();
 	if (OffloadMng == NULL) {
@@ -1889,7 +1894,7 @@ int IPACM_Lan::handle_wan_up(ipa_ip_type ip_type)
 		flt_rule_entry.rule.attrib.u.v4.dst_addr = 0x0;
 
 /* only offload UL traffic of certain clients */
-#ifdef FEATURE_IPACM_HAL
+#ifdef FEATURE_IPACM_AIDL
 		flt_rule_entry.rule.attrib.attrib_mask |= IPA_FLT_SRC_ADDR;
 		flt_rule_entry.rule.attrib.u.v4.src_addr_mask = prefix[IPA_IP_v4].v4Mask;
 		flt_rule_entry.rule.attrib.u.v4.src_addr = prefix[IPA_IP_v4].v4Addr;
@@ -1983,7 +1988,7 @@ int IPACM_Lan::handle_wan_up(ipa_ip_type ip_type)
 		flt_rule_entry.rule.attrib.u.v6.dst_addr[3] = 0X00000000;
 
 /* only offload UL traffic of certain clients */
-#ifdef FEATURE_IPACM_HAL
+#ifdef FEATURE_IPACM_AIDL
 		flt_rule_entry.rule.attrib.attrib_mask |= IPA_FLT_SRC_ADDR;
 		flt_rule_entry.rule.attrib.u.v6.src_addr_mask[0] = prefix[IPA_IP_v6].v6Mask[0];
 		flt_rule_entry.rule.attrib.u.v6.src_addr_mask[1] = prefix[IPA_IP_v6].v6Mask[1];
@@ -3241,7 +3246,7 @@ int IPACM_Lan::handle_down_evt()
 		IPACMDBG_H("LAN IF goes down, backhaul type %d\n", IPACM_Wan::backhaul_mode);
 		handle_wan_down(IPACM_Wan::backhaul_mode);
 #ifdef FEATURE_IPA_ANDROID
-#ifndef FEATURE_IPACM_HAL
+#ifndef FEATURE_IPACM_AIDL
 		/* Clean-up tethered-iface list */
 		IPACM_Wan::delete_tether_iface(IPA_IP_v4, ipa_if_num);
 #endif
@@ -3424,7 +3429,7 @@ int IPACM_Lan::handle_down_evt()
 	/* reset the IPA-client pipe enum */
 	if(ipa_if_cate != WAN_IF)
 	{
-#ifdef FEATURE_IPACM_HAL
+#ifdef FEATURE_IPACM_AIDL
 		handle_tethering_client(true, IPACM_CLIENT_MAX);
 #else
 		handle_tethering_client(true, IPACM_CLIENT_USB);
@@ -3709,7 +3714,7 @@ int IPACM_Lan::handle_uplink_filter_rule(ipacm_ext_prop *prop, ipa_ip_type iptyp
 			/* In XLAT UL case TTL needs to be done after IPv4->IPv6 transformation */
 #ifdef IPA_FLTRT_TTL_UPDATE
 			if(IPACM_Iface::ipacmcfg->GetIPAVer() >= IPA_HW_v5_5)
-			flt_rule_entry.rule.ttl_update = true;
+			flt_rule_entry.rule.ttl_update = false;
 #endif
 			/* fill the value of meta-data */
 			value = xlat_mux_id;
@@ -3724,7 +3729,7 @@ int IPACM_Lan::handle_uplink_filter_rule(ipacm_ext_prop *prop, ipa_ip_type iptyp
 				flt_rule_entry.rule.set_metadata = false;
 		}
 
-#ifdef FEATURE_IPACM_HAL
+#ifdef FEATURE_IPACM_AIDL
 		/* add prefix equation in modem UL rules */
 		if(iptype == IPA_IP_v4 && (flt_rule_entry.rule.eq_attrib.num_offset_meq_32 >= 0)
 			&& (flt_rule_entry.rule.eq_attrib.num_offset_meq_32 < IPA_IPFLTR_NUM_MEQ_32_EQNS))

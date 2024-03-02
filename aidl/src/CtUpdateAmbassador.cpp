@@ -26,6 +26,11 @@
  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
+/*
+ * ​​​​​Changes from Qualcomm Innovation Center are provided under the following license:
+ * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
+ */
 #ifndef DBG
     #define DBG false
 #endif /* DBG */
@@ -35,17 +40,17 @@
 #include <arpa/inet.h>
 #include <cutils/log.h>
 
-/* HIDL Includes */
-#include <android/hardware/tetheroffload/control/1.1/ITetheringOffloadCallback.h>
+/* AIDL Includes */
+#include <aidl/android/hardware/tetheroffload/BnTetheringOffloadCallback.h>
 
 /* Internal Includes */
 #include "CtUpdateAmbassador.h"
 
 /* Namespace pollution avoidance */
-using ::android::hardware::tetheroffload::control::V1_0::ITetheringOffloadCallback;
-using ::android::hardware::tetheroffload::control::V1_0::NetworkProtocol;
-using HALIpAddrPortPair = ::android::hardware::tetheroffload::control::V1_0::IPv4AddrPortPair;
-using HALNatTimeoutUpdate = ::android::hardware::tetheroffload::control::V1_0::NatTimeoutUpdate;
+using aidl::android::hardware::tetheroffload::ITetheringOffloadCallback;
+using aidl::android::hardware::tetheroffload::NetworkProtocol;
+using AIDLIpAddrPortPair = aidl::android::hardware::tetheroffload::IPv4AddrPortPair;
+using AIDLNatTimeoutUpdate = aidl::android::hardware::tetheroffload::NatTimeoutUpdate;
 
 using IpaIpAddrPortPair = ::IOffloadManager::ConntrackTimeoutUpdater::IpAddrPortPair;
 using IpaNatTimeoutUpdate = ::IOffloadManager::ConntrackTimeoutUpdater::NatTimeoutUpdate;
@@ -53,7 +58,7 @@ using IpaL4Protocol = ::IOffloadManager::ConntrackTimeoutUpdater::L4Protocol;
 
 
 CtUpdateAmbassador::CtUpdateAmbassador(
-        const ::android::sp<ITetheringOffloadCallback>& cb) : mFramework(cb) {
+        const shared_ptr<ITetheringOffloadCallback>& cb) : mFramework(cb) {
 } /* CtUpdateAmbassador */
 
 void CtUpdateAmbassador::updateTimeout(IpaNatTimeoutUpdate in) {
@@ -62,7 +67,7 @@ void CtUpdateAmbassador::updateTimeout(IpaNatTimeoutUpdate in) {
                 in.src.ipAddr, in.src.port, in.dst.ipAddr, in.dst.port,
                 in.proto);
     }
-    HALNatTimeoutUpdate out;
+    AIDLNatTimeoutUpdate out;
     if (!translate(in, out)) {
         /* Cannot log the input outside of DBG flag because it contains sensitive
          * information.  This will lead to a two step debug if the information
@@ -85,13 +90,13 @@ void CtUpdateAmbassador::updateTimeout(IpaNatTimeoutUpdate in) {
     }
 } /* updateTimeout */
 
-bool CtUpdateAmbassador::translate(IpaNatTimeoutUpdate in, HALNatTimeoutUpdate &out) {
+bool CtUpdateAmbassador::translate(IpaNatTimeoutUpdate in, AIDLNatTimeoutUpdate &out) {
     return translate(in.src, out.src)
             && translate(in.dst, out.dst)
             && L4ToNetwork(in.proto, out.proto);
 } /* translate */
 
-bool CtUpdateAmbassador::translate(IpaIpAddrPortPair in, HALIpAddrPortPair& out) {
+bool CtUpdateAmbassador::translate(IpaIpAddrPortPair in, AIDLIpAddrPortPair& out) {
     char ipAddrStr[INET_ADDRSTRLEN];
 
     if (inet_ntop(AF_INET, &(in.ipAddr), ipAddrStr, INET_ADDRSTRLEN) == nullptr) {

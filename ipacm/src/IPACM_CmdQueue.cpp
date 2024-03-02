@@ -119,10 +119,10 @@ Message* MessageQueue::dequeue(void)
 
 void* MessageQueue::Process(void *param)
 {
+	#pragma unused (param)
 	MessageQueue *MsgQueueInternal = NULL;
 	MessageQueue *MsgQueueExternal = NULL;
 	Message *item = NULL;
-	param = NULL;
 	const char *eventName = NULL;
 
 	IPACMDBG("MessageQueue::Process()\n");

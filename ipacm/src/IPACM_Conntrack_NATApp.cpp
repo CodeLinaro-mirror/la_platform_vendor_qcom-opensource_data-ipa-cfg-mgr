@@ -26,10 +26,15 @@ WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
 OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
 IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
+/*
+ * ​​​​​Changes from Qualcomm Innovation Center are provided under the following license:
+ * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
+ */
 #include "IPACM_Conntrack_NATApp.h"
 #include "IPACM_ConntrackClient.h"
 #include "IPACM_ConntrackListener.h"
-#ifdef FEATURE_IPACM_HAL
+#ifdef FEATURE_IPACM_AIDL
 #include "IPACM_OffloadManager.h"
 #endif
 #include "IPACM_Iface.h"
@@ -668,7 +673,7 @@ fail:
 
 void NatApp::UpdateCTUdpTs(nat_table_entry *rule, uint32_t new_ts)
 {
-#ifdef FEATURE_IPACM_HAL
+#ifdef FEATURE_IPACM_AIDL
 	IOffloadManager::ConntrackTimeoutUpdater::natTimeoutUpdate_t entry;
 	IPACM_OffloadManager* OffloadMng;
 #endif
@@ -676,7 +681,7 @@ void NatApp::UpdateCTUdpTs(nat_table_entry *rule, uint32_t new_ts)
 	iptodot("Target IP:",  rule->target_ip);
 	IPACMDBG("Private Port: %d, Target Port: %d\n", rule->private_port, rule->target_port);
 
-#ifndef FEATURE_IPACM_HAL
+#ifndef FEATURE_IPACM_AIDL
 	int ret;
 	if(!ct_hdl)
 	{
@@ -1326,7 +1331,7 @@ void NatApp::CacheEntry(const nat_table_entry *rule)
 }
 
 void NatApp::Read_TcpUdp_Timeout(void) {
-#ifdef FEATURE_IPACM_HAL
+#ifdef FEATURE_IPACM_AIDL
 	tcp_timeout = 432000;
 	udp_timeout = 180;
 	IPACMDBG_H("udp timeout value: %d\n", udp_timeout);

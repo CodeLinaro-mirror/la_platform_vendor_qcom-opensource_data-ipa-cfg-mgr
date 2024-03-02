@@ -26,25 +26,29 @@
  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
+/*
+ * ​​​​​Changes from Qualcomm Innovation Center are provided under the following license:
+ * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
+ */
 #ifndef _IPA_EVENT_RELAY_H_
 #define _IPA_EVENT_RELAY_H_
-/* External Includes */
-#include <hidl/HidlTransportSupport.h>
 
-/* HIDL Includes */
-#include <android/hardware/tetheroffload/control/1.1/ITetheringOffloadCallback.h>
+/* AIDL Includes */
+#include <aidl/android/hardware/tetheroffload/BnTetheringOffloadCallback.h>
 
 /* Internal Includes */
 #include "IOffloadManager.h"
 
 /* Namespace pollution avoidance */
-using namespace android::hardware::tetheroffload::control;
-using ::android::hardware::tetheroffload::control::V1_1::OffloadCallbackEvent;
+using ::std::shared_ptr;
+
+using aidl::android::hardware::tetheroffload::ITetheringOffloadCallback;
+using aidl::android::hardware::tetheroffload::OffloadCallbackEvent;
 
 class IpaEventRelay : public IOffloadManager::IpaEventListener {
 public:
-    IpaEventRelay(const ::android::sp<V1_0::ITetheringOffloadCallback>& /* 1.0 cb */,
-                  const ::android::sp<V1_1::ITetheringOffloadCallback>& /* 1.1 cb */);
+    IpaEventRelay(const shared_ptr<ITetheringOffloadCallback>& /* cb */);
     /* ----------------------- IPA EVENT LISTENER --------------------------- */
     void onOffloadStarted();
     void onOffloadStopped(StoppedReason /* reason */);
@@ -52,8 +56,7 @@ public:
     void onLimitReached();
     void onWarningReached();
 private:
-    const ::android::sp<V1_0::ITetheringOffloadCallback>& mFramework;
-    const ::android::sp<V1_1::ITetheringOffloadCallback>& mFramework_1_1;
+    const shared_ptr<ITetheringOffloadCallback>& mFramework;
 
     void sendEvent(OffloadCallbackEvent);
 }; /* IpaEventRelay */

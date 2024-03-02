@@ -60,6 +60,11 @@ IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
 OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
 IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
+/*
+ * ​​​​​Changes from Qualcomm Innovation Center are provided under the following license:
+ * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
+ */
 /*!
 	@file
 	IPACM_Main.cpp
@@ -106,9 +111,10 @@ typedef uint32_t in_addr_t;
 #include "IPACM_ConntrackClient.h"
 #include "IPACM_Netlink.h"
 
-#ifdef FEATURE_IPACM_HAL
+#ifdef FEATURE_IPACM_AIDL
 #include "IPACM_OffloadManager.h"
-#include <HAL.h>
+#include <AIDL.h>
+#include <android/binder_process.h>
 #endif
 
 #include "IPACM_LanToLan.h"
@@ -157,15 +163,15 @@ int ipa_query_wlan_client();
 int ipa_reset_hw_index_counter();
 #endif
 
-#ifdef FEATURE_IPACM_HAL
+#ifdef FEATURE_IPACM_AIDL
 	IPACM_OffloadManager* OffloadMng;
-	::android::sp<HAL> hal;
+	::std::shared_ptr<AIDL> aidl_instance;
 #endif
 
 /* start netlink socket monitor*/
 void* netlink_start(void *param)
 {
-	param = NULL;
+	#pragma unused (param)
 	ipa_nl_sk_fd_set_info_t sk_fdset;
 	int ret_val = 0;
 	memset(&sk_fdset, 0, sizeof(ipa_nl_sk_fd_set_info_t));
@@ -187,6 +193,7 @@ void* netlink_start(void *param)
 /* start Config change monitor*/
 void* cfg_change_monitor(void *param)
 {
+	#pragma unused (param)
 	int length;
 	int wd;
 	char buffer[INOTIFY_BUF_LEN];
@@ -194,7 +201,6 @@ void* cfg_change_monitor(void *param)
 	ipacm_cmd_q_data evt_data;
 	uint32_t mask = IN_MODIFY | IN_MOVE;
 
-	param = NULL;
 	inotify_fd = inotify_init();
 	if (inotify_fd < 0)
 	{
@@ -299,6 +305,7 @@ void* cfg_change_monitor(void *param)
 /* start IPACM wan-driver notifier */
 void* ipa_driver_msg_notifier(void *param)
 {
+	#pragma unused (param)
 	int length, fd, cnt;
 	char buffer[IPA_DRIVER_WLAN_BUF_LEN];
 	struct ipa_msg_meta event_hdr;
@@ -316,7 +323,7 @@ void* ipa_driver_msg_notifier(void *param)
 	struct ipa_coalesce_info coalesce_info;
 #endif
 
-#ifdef FEATURE_IPACM_HAL
+#ifdef FEATURE_IPACM_AIDL
 	IPACM_OffloadManager* OffloadMng;
 #endif
 
@@ -341,7 +348,6 @@ void* ipa_driver_msg_notifier(void *param)
 	ipa_mtu_info *mtu_info;
 #endif
 
-	param = NULL;
 	struct ipa_move_nat_req_msg_v01 *move_nat;
 	ipacm_event_move_nat *move_nat_data;
 
@@ -359,10 +365,6 @@ void* ipa_driver_msg_notifier(void *param)
 		memset(&evt_data, 0, sizeof(evt_data));
 		memset(&new_neigh_evt, 0, sizeof(ipacm_cmd_q_data));
 		new_neigh_data = NULL;
-		data = NULL;
-		data_fid = NULL;
-		data_tethering_stats = NULL;
-		data_network_stats = NULL;
 
 		length = read(fd, buffer, IPA_DRIVER_WLAN_BUF_LEN);
 		if (length < 0)
@@ -812,7 +814,7 @@ void* ipa_driver_msg_notifier(void *param)
 			evt_data.evt_data = data_network_stats;
 			break;
 
-#ifdef FEATURE_IPACM_HAL
+#ifdef FEATURE_IPACM_AIDL
 		case IPA_QUOTA_REACH:
 			IPACMDBG_H("Received IPA_QUOTA_REACH\n");
 			OffloadMng = IPACM_OffloadManager::GetInstance();
@@ -1082,9 +1084,11 @@ int main(int argc, char **argv)
 
 	neigh = new IPACM_Neighbor();
 	ifacemgr = new IPACM_IfaceManager();
-#ifdef FEATURE_IPACM_HAL
+#ifdef FEATURE_IPACM_AIDL
+	ABinderProcess_setThreadPoolMaxThreadCount(1);
+	ABinderProcess_startThreadPool();
 	OffloadMng = IPACM_OffloadManager::GetInstance();
-	hal = HAL::makeIPAHAL(1, OffloadMng);
+	aidl_instance = AIDL::makeIPAAIDL(1, OffloadMng);
 	IPACMDBG_H(" START IPACM_OffloadManager and link to android framework\n");
 #endif
 
@@ -1167,6 +1171,7 @@ int main(int argc, char **argv)
 	pthread_join(netlink_thread, NULL);
 	pthread_join(monitor_thread, NULL);
 	pthread_join(ipa_driver_thread, NULL);
+
 	return IPACM_SUCCESS;
 }
 

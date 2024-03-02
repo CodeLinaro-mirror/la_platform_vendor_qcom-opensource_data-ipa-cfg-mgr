@@ -26,43 +26,34 @@
  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
+/*
+ * ​​​​​Changes from Qualcomm Innovation Center are provided under the following license:
+ * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
+ */
 #define LOG_TAG "IPAHALService/IpaEventRelay"
 /* External Includes */
 #include <cutils/log.h>
-//#include <hidl/Status.h> //TODO: Might be easier to return Status
-
-/* HIDL Includes */
-#include <android/hardware/tetheroffload/control/1.1/ITetheringOffloadCallback.h>
 
 /* Internal Includes */
 #include "IpaEventRelay.h"
 
 /* Namespace pollution avoidance */
-using ::android::hardware::Return;
-// using ::android::hardware::Status;
-using ::android::hardware::tetheroffload::control::V1_1::ITetheringOffloadCallback;
+using aidl::android::hardware::tetheroffload::ITetheringOffloadCallback;
 
 
 IpaEventRelay::IpaEventRelay(
-        const ::android::sp<V1_0::ITetheringOffloadCallback>& cb,
-        const ::android::sp<V1_1::ITetheringOffloadCallback>& cb_1_1) : mFramework(cb), mFramework_1_1(cb_1_1) {
+        const shared_ptr<ITetheringOffloadCallback>& cb) : mFramework(cb) {
 } /* IpaEventRelay */
 
-using OnEventVersion = std::function<Return<void>()>;
 void IpaEventRelay::sendEvent(OffloadCallbackEvent event) {
     // Events need to be sent for the version passed in and all versions defined after that.
     // This ensures all new versions get the correct events, but vrsion where events where not
     // defined do not.
-    Return<void> ret;
-    if(mFramework_1_1 != nullptr) {
-        ALOGI("Triggering onEvent_1_1");
-        ret = mFramework_1_1->onEvent_1_1(event);
-    }
-    else { // Fallback to V1_0
-        ALOGI("Triggering onEvent");
-        ret = mFramework->onEvent(
-            (::android::hardware::tetheroffload::control::V1_0::OffloadCallbackEvent) event);
-    }
+    ndk::ScopedAStatus ret;
+
+    ALOGI("Triggering onEvent");
+    ret = mFramework->onEvent(event);
 
     if (!ret.isOk()) {
         ALOGE("Triggering onEvent Callback failed.");

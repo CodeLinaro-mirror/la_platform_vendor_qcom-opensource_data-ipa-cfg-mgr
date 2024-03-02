@@ -26,13 +26,16 @@
  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-#ifndef _HAL_H_
-#define _HAL_H_
+/*
+ * ​​​​​Changes from Qualcomm Innovation Center are provided under the following license:
+ * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
+ */
+#ifndef _AIDL_H_
+#define _AIDL_H_
 
-/* HIDL Includes */
-#include <android/hardware/tetheroffload/config/1.0/IOffloadConfig.h>
-#include <android/hardware/tetheroffload/control/1.1/IOffloadControl.h>
-#include <hidl/HidlTransportSupport.h>
+/* AIDL Includes */
+#include <aidl/android/hardware/tetheroffload/BnOffload.h>
 
 /* External Includes */
 #include <string>
@@ -45,29 +48,23 @@
 #include "LocalLogBuffer.h"
 
 /* Avoid the namespace litering everywhere */
-using ::android::hardware::configureRpcThreadpool;
-using ::android::hardware::joinRpcThreadpool;
-using ::android::hardware::Return;
-using ::android::hardware::hidl_handle;
-using ::android::hardware::hidl_string;
-using ::android::hardware::hidl_vec;
-
 using RET = ::IOffloadManager::RET;
 using Prefix = ::IOffloadManager::Prefix;
 
-using ::std::map;
 using ::std::string;
 using ::std::vector;
+using ::std::shared_ptr;
 
-using namespace android::hardware::tetheroffload::control;
-using ::android::sp;
-using ::android::hardware::tetheroffload::config::V1_0::IOffloadConfig;
-using ::android::hardware::tetheroffload::control::V1_1::IOffloadControl;
-using ::android::hardware::tetheroffload::control::V1_1::ITetheringOffloadCallback;
+using ::ndk::ScopedAStatus;
+using ::ndk::ScopedFileDescriptor;
+
+using namespace aidl::android::hardware::tetheroffload;
+using aidl::android::hardware::tetheroffload::ForwardedStats;
+using aidl::android::hardware::tetheroffload::ITetheringOffloadCallback;
 
 #define KERNEL_PAGE 4096
 
-class HAL : public IOffloadControl, IOffloadConfig {
+class AIDL : public BnOffload {
 public:
     /* Static Const Definitions */
     static const uint32_t UDP_SUBSCRIPTIONS =
@@ -79,11 +76,6 @@ public:
     /**
      * @TODO This will likely need to be extended into a proper FactoryPattern
      * when version bumps are needed.
-     *
-     * This makeIPAHAL function would move to a HALFactory class.  Each HAL could
-     * then be versioned (class HAL_V1, class HAL_V2, etc) and inherit from a base class HAL.
-     * Then the version number in this function could be used to decide which one to return
-     * (if any).
      *
      * IPACM does not need to talk directly back to the returned HAL class.  The other methods that
      * IPACM needs to call are covered by registering the event listeners.  If IPACM did need to
@@ -101,7 +93,7 @@ public:
      * Yet, it seems possible that a HAL_V1 and HAL_V2 service could both be registered, extending
      * support to both old and new client implementations.  It would be difficult to multiplex
      * information from both versions.  Additionally, IPACM would be responsible for instantiating
-     * two HALs (makeIPAHAL(1, ...); makeIPAHAL(2, ...)) which makes signaling between HAL versions
+     * two HALs (makeIPAAIDL(1, ...); makeIPAAIDL(2, ...)) which makes signaling between HAL versions
      * (see next paragraph) slightly more difficult but not impossible.
      *
      * If concurrent versions of HAL are required, there will likely need to only be one master.
@@ -124,50 +116,37 @@ public:
      * Yet, a major version update, would not be backwards compatible.  This means that a 2.x HAL
      * could not linked into the same IPACM code base as a 1.x HAL.
      */
-    static Return<::android::sp<HAL>> makeIPAHAL(int /* version */, IOffloadManager* /* mgr */);
+    AIDL(IOffloadManager*  /* mgr */);
 
-    /* IOffloadConfig */
-    Return<void> setHandles(
-            const hidl_handle& /* fd1 */,
-            const hidl_handle& /* fd2 */,
-            setHandles_cb /* hidl_cb */);
+    static shared_ptr<AIDL> makeIPAAIDL(int /* version */, IOffloadManager* /* mgr */);
 
-    /* IOffloadControl 1.0 */
-    Return<void> initOffload(
-            const ::android::sp<::android::hardware::tetheroffload::control::V1_0::ITetheringOffloadCallback>& /* cb */,
-            initOffload_cb /* hidl_cb */);
-    Return<void> stopOffload(
-            stopOffload_cb /* hidl_cb */);
-    Return<void> setLocalPrefixes(
-            const hidl_vec<hidl_string>& /* prefixes */,
-            setLocalPrefixes_cb /* hidl_cb */);
-    Return<void> getForwardedStats(
-            const hidl_string& /* upstream */,
-            getForwardedStats_cb /* hidl_cb */);
-    Return<void> setDataLimit(
-            const hidl_string& /* upstream */,
-            uint64_t /* limit */,
-            setDataLimit_cb /* hidl_cb */);
-    Return<void> setUpstreamParameters(
-            const hidl_string& /* iface */,
-            const hidl_string& /* v4Addr */,
-            const hidl_string& /* v4Gw */,
-            const hidl_vec<hidl_string>& /* v6Gws */,
-            setUpstreamParameters_cb /* hidl_cb */);
-    Return<void> addDownstream(
-            const hidl_string& /* iface */,
-            const hidl_string& /* prefix */,
-            addDownstream_cb /* hidl_cb */);
-    Return<void> removeDownstream(
-            const hidl_string& /* iface */,
-            const hidl_string& /* prefix */,
-            removeDownstream_cb /* hidl_cb */);
-    /* IOffloadControl 1.1 */
-    Return<void> setDataWarningAndLimit(
-            const hidl_string& /* upstream */,
-            uint64_t /* warningBytes */,
-            uint64_t /* limitBytes */,
-            setDataWarningAndLimit_cb /* hidl_cb */);
+    ScopedAStatus initOffload(
+            const ScopedFileDescriptor& /* fd1 */,
+            const ScopedFileDescriptor& /* fd2 */,
+            const shared_ptr<ITetheringOffloadCallback>&  /* cb */) override;
+    ScopedAStatus stopOffload() override;
+    ScopedAStatus setLocalPrefixes(
+            const vector<string>& /* prefixes */) override;
+    ScopedAStatus getForwardedStats(
+            const string& /* upstream */,
+            ForwardedStats* /* aidl_return */) override;
+    ScopedAStatus setUpstreamParameters(
+            const string& /* iface */,
+            const string& /* v4Addr */,
+            const string& /* v4Gw */,
+            const vector<string>& /* v6Gws */) override;
+    ScopedAStatus addDownstream(
+            const string& /* iface */,
+            const string& /* prefix */) override;
+    ScopedAStatus removeDownstream(
+            const string& /* iface */,
+            const string& /* prefix */) override;
+    ScopedAStatus setDataWarningAndLimit(
+            const string& /* upstream */,
+            int64_t /* warningBytes */,
+            int64_t /* limitBytes */) override;
+
+    static void clientDeathCallback(void* cookie);
 
 private:
     typedef struct BoolResult {
@@ -175,15 +154,10 @@ private:
         string errMsg;
     } boolResult_t;
 
-    HAL(IOffloadManager* /* mgr */);
-    void registerAsSystemService(const char* /* name */);
-
     void doLogcatDump();
 
     static BoolResult makeInputCheckFailure(string /* customErr */);
     static BoolResult ipaResultToBoolResult(RET /* in */);
-
-    static vector<string> convertHidlStrToStdStr(hidl_vec<hidl_string> /* in */);
 
     void registerEventListeners();
     void registerIpaCb();
@@ -197,12 +171,13 @@ private:
     bool isInitialized();
 
     IOffloadManager* mIPA;
-    hidl_handle mHandle1;
-    hidl_handle mHandle2;
+    ScopedFileDescriptor mHandle1;
+    ScopedFileDescriptor mHandle2;
     LocalLogBuffer mLogs;
-    android::sp<V1_0::ITetheringOffloadCallback> mCb;
-    android::sp<V1_1::ITetheringOffloadCallback> mCb_1_1;
+    shared_ptr<ITetheringOffloadCallback> mCb;
     IpaEventRelay *mCbIpa;
     CtUpdateAmbassador *mCbCt;
-}; /* HAL */
-#endif /* _HAL_H_ */
+
+    ::ndk::ScopedAIBinder_DeathRecipient mDeathRecipient;
+}; /* AIDL */
+#endif /* _AIDL_H_ */

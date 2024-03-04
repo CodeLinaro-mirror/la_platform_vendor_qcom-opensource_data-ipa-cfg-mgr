@@ -27,7 +27,7 @@ OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
 IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 Changes from Qualcomm Innovation Center are provided under the following license
-Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+Copyright (c) 2023-2024 Qualcomm Innovation Center, Inc. All rights reserved.
 SPDX-License-Identifier: BSD-3-Clause-Clear,
 */
 /*!
@@ -488,7 +488,7 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 			if(IPACM_FAILURE != ipa_interface_index && ((IPACM_Iface::ipacmcfg->ipacm_mpdn_enable == TRUE) ||
 				(IPACM_Iface::ipacmcfg->ipacm_emesh_enable == TRUE && IPACM_Iface::ipacmcfg->ipacm_emesh_mode >= 2)))
 			{
-				if(IPACM_Iface::ipacmcfg->iface_in_vlan_mode(data->iface_name))
+				if(IPACM_Iface::ipacmcfg->iface_in_vlan_mode(data->iface_name) && !IPACM_Iface::ipacmcfg->IsSpclIface(data->iface_name))
 				{
 					IPACMDBG_H("ignoring physical IFACE neighbor event in VLAN mode\n");
 					break;

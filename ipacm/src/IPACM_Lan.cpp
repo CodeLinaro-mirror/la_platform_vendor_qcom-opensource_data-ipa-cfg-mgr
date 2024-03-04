@@ -9869,9 +9869,15 @@ int IPACM_Lan::install_uplink_filter_rule_per_client_v2
 
 	if(iptype == IPA_IP_v4)
 	{
-		if (ipa_if_cate == ODU_IF && IPACM_Wan::isWan_Bridge_Mode())
+		
+		if (ipa_if_cate == ODU_IF && IPACM_Wan::isWan_Bridge_Mode() ||
+			IPACM_Iface::ipacmcfg->is_public_ip_support_enabled)
 		{
 			IPACMDBG_H("WAN, ODU are in bridge mode \n");
+			IPACMDBG_H(
+					"%s%s\n",
+					(ipa_if_cate == ODU_IF && IPACM_Wan::isWan_Bridge_Mode()) ? "[WAN, ODU are in bridge mode] " : "",
+					(IPACM_Iface::ipacmcfg->is_public_ip_support_enabled) ? "[Public IP enabled]" : "");
 			flt_rule_entry.rule.action = IPA_PASS_TO_ROUTING;
 		}
 		else
@@ -10200,9 +10206,14 @@ int IPACM_Lan::install_uplink_filter_rule_per_client
 	flt_rule_entry.rule.eq_attrib_type = 1;
 	if(iptype == IPA_IP_v4)
 	{
-		if (ipa_if_cate == ODU_IF && IPACM_Wan::isWan_Bridge_Mode())
+		if (ipa_if_cate == ODU_IF && IPACM_Wan::isWan_Bridge_Mode() ||
+			IPACM_Iface::ipacmcfg->is_public_ip_support_enabled)
 		{
 			IPACMDBG_H("WAN, ODU are in bridge mode \n");
+			IPACMDBG_H(
+					"%s%s\n",
+					(ipa_if_cate == ODU_IF && IPACM_Wan::isWan_Bridge_Mode()) ? "[WAN, ODU are in bridge mode] " : "",
+					(IPACM_Iface::ipacmcfg->is_public_ip_support_enabled) ? "[Public IP enabled]" : "");
 			flt_rule_entry.rule.action = IPA_PASS_TO_ROUTING;
 		}
 		else

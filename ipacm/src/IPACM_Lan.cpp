@@ -10378,22 +10378,6 @@ int IPACM_Lan::install_ipv6_icmp_flt_rule()
 			idx = 2;
 			IPACMDBG_H("Interface is WLAN Svap or vlan, install rules on Rx pipe at idx %d \n", idx);
 		}
-
-#ifdef FEATURE_EoGRE
-		bool eogre_enabled = IPACM_Iface::ipacmcfg->eogre_enabled;
-#else
-		bool eogre_enabled = false;
-#endif
-		/*
-		 * Don't configure icmp when gre enabled:
-		 */
-
-		if ( eogre_enabled )
-		{
-			IPACMDBG_H("Won't install icmp rule when gre enabled\n");
-			return ret;
-		}
-
 		static const int NUM_RULES = 1;
 
 		char buf1[sizeof(struct ipa_ioc_add_flt_rule_v2)];

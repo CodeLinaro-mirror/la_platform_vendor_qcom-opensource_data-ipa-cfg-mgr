@@ -5329,6 +5329,10 @@ int IPACM_Lan::handle_eth_client_route_rule(uint8_t *mac_addr, ipa_ip_type iptyp
 {
 	struct ipa_ioc_add_rt_rule *rt_rule;
 	struct ipa_rt_rule_add *rt_rule_entry;
+#ifdef FEATURE_IPA_IPSEC
+	ipa_ip_type *iptype_p = NULL;
+	ipacm_cmd_q_data evt_data;
+#endif
 	uint32_t tx_index;
 	int eth_index,v6_num;
 	const int NUM = 1;
@@ -5569,6 +5573,17 @@ int IPACM_Lan::handle_eth_client_route_rule(uint8_t *mac_addr, ipa_ip_type iptyp
 			get_client_memptr(eth_client, eth_index)->route_rule_set_v6 = get_client_memptr(eth_client, eth_index)->ipv6_set;
 		}
 	}
+#ifdef FEATURE_IPA_IPSEC
+	iptype_p = (ipa_ip_type *)malloc(sizeof(*iptype_p));
+	if (!iptype_p) {
+		IPACMERR("Failed allocating memory for IPA_IPSEC_LAN_CLIENT_ROUTE_ADD_EVENT\n");
+		return IPACM_FAILURE;
+	}
+	*iptype_p = iptype;
+	evt_data.event = IPA_IPSEC_LAN_CLIENT_ROUTE_ADD_EVENT;
+	evt_data.evt_data = (void *)iptype_p;
+	IPACM_EvtDispatcher::PostEvt(&evt_data);
+#endif
 	return IPACM_SUCCESS;
 }
 
@@ -5813,6 +5828,10 @@ int IPACM_Lan::handle_eth_client_route_rule_ext_v2(uint8_t *mac_addr, ipa_ip_typ
 {
 	struct ipa_ioc_add_rt_rule_ext_v2 *rt_rule;
 	struct ipa_rt_rule_add_ext_v2 *rt_rule_entry;
+#ifdef FEATURE_IPA_IPSEC
+	ipa_ip_type *iptype_p = NULL;
+	ipacm_cmd_q_data evt_data;
+#endif
 	uint32_t tx_index;
 	int eth_index,v6_num;
 	const int NUM = 1;
@@ -6074,6 +6093,17 @@ int IPACM_Lan::handle_eth_client_route_rule_ext_v2(uint8_t *mac_addr, ipa_ip_typ
 		free((void *)rt_rule->rules);
 		free(rt_rule);
 	}
+#ifdef FEATURE_IPA_IPSEC
+	iptype_p = (ipa_ip_type *)malloc(sizeof(*iptype_p));
+	if (!iptype_p) {
+		IPACMERR("Failed allocating memory for IPA_IPSEC_LAN_CLIENT_ROUTE_ADD_EVENT\n");
+		return IPACM_FAILURE;
+	}
+	*iptype_p = iptype;
+	evt_data.event = IPA_IPSEC_LAN_CLIENT_ROUTE_ADD_EVENT;
+	evt_data.evt_data = (void *)iptype_p;
+	IPACM_EvtDispatcher::PostEvt(&evt_data);
+#endif
 	return IPACM_SUCCESS;
 }
 #endif //IPA_HW_FNR_STATS
@@ -6083,6 +6113,10 @@ int IPACM_Lan::handle_eth_client_route_rule_ext(uint8_t *mac_addr, ipa_ip_type i
 {
 	struct ipa_ioc_add_rt_rule_ext *rt_rule;
 	struct ipa_rt_rule_add_ext *rt_rule_entry;
+#ifdef FEATURE_IPA_IPSEC
+	ipa_ip_type *iptype_p = NULL;
+	ipacm_cmd_q_data evt_data;
+#endif
 	uint32_t tx_index;
 	int eth_index,v6_num;
 	const int NUM = 1;
@@ -6328,6 +6362,17 @@ int IPACM_Lan::handle_eth_client_route_rule_ext(uint8_t *mac_addr, ipa_ip_type i
 		get_client_memptr(eth_client, eth_index)->route_rule_set_v6 = get_client_memptr(eth_client, eth_index)->ipv6_set;
 		free(rt_rule);
 	}
+#ifdef FEATURE_IPA_IPSEC
+	iptype_p = (ipa_ip_type *)malloc(sizeof(*iptype_p));
+	if (!iptype_p) {
+		IPACMERR("Failed allocating memory for IPA_IPSEC_LAN_CLIENT_ROUTE_ADD_EVENT\n");
+		return IPACM_FAILURE;
+	}
+	*iptype_p = iptype;
+	evt_data.event = IPA_IPSEC_LAN_CLIENT_ROUTE_ADD_EVENT;
+	evt_data.evt_data = (void *)iptype_p;
+	IPACM_EvtDispatcher::PostEvt(&evt_data);
+#endif
 	return IPACM_SUCCESS;
 }
 #endif
@@ -11109,7 +11154,7 @@ int IPACM_Lan::modify_private_subnet()
 			IPACMDBG_H("defaut PDN mtu = %d\n", mtu[0]);
 			if (mtu[0] < DEFAULT_MTU_SIZE)
 				mtu_rule_cnt++;
-			else 
+			else
 				IPACMDBG_H("Mtu size is unchanged. No need to install mtu rule for above subnet\n");
 		}
 
@@ -11143,7 +11188,7 @@ int IPACM_Lan::modify_private_subnet()
 
 #ifdef FEATURE_VLAN_MPDN
 		/* for MPDN case, need to query VLAN and mtus */
-		if (IPACM_Iface::ipacmcfg->ipacm_mpdn_enable) 
+		if (IPACM_Iface::ipacmcfg->ipacm_mpdn_enable)
 		{
 			if (IPACM_Iface::ipacmcfg->iface_in_vlan_mode(dev_name) && IPACM_Wan::isVlanWanUP())
 			{
@@ -11152,7 +11197,7 @@ int IPACM_Lan::modify_private_subnet()
 					vid[i] = IPACM_Iface::ipacmcfg->get_bridge_vlan_mapping_from_subnet(
 						IPACM_Iface::ipacmcfg->private_subnet_table[i].subnet_addr);
 
-					if (!vid[i]) 
+					if (!vid[i])
 						mtu[i] = DEFAULT_MTU_SIZE;
 					else
 						IPACM_Wan::GetMTUByVid(&mtu[i], vid[i], IPA_IP_v4);
@@ -11418,7 +11463,7 @@ int IPACM_Lan::modify_ipv6_prefix_flt_rule()
 			else if (IPACM_Iface::ipacmcfg->eogre_info.iptype == IPA_IP_v6)
 				/* mtu_v6_new = mtu_v6 - 40(ipv6) - 8(opt) - 4(gre)- 18(eth + vlan) - 40(inner_ipv6) */
 				mtu[0] = IPACM_Wan::queryMTU(ipa_if_num, IPA_IP_v6) - sizeof(v6_gre_hdr_t) - 18;
-			else 
+			else
 				IPACMERR("invalid iptype = %d\n", IPACM_Iface::ipacmcfg->eogre_info.iptype);
 
 			IPACMDBG("GRE v6 PDN mtu = %d\n", mtu[0]);

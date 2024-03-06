@@ -1395,7 +1395,7 @@ static int IPACM_firewall_xml_parse_tree(const char *xml_file, xmlNode* xml_node
 						memset(content_buf, 0, sizeof(content_buf));
 						memcpy(content_buf, (void *)content, str_size);
 						content_buf[MAX_XML_STR_LEN-1] = '\0';
-						if (content_buf > 0)
+						if (content_buf[0] != '\0')
 						{
 							config->extd_firewall_entries[config->num_extd_firewall_entries - 1].attrib.u.v4.dst_addr_mask
 								 = ntohl(inet_addr(content_buf));

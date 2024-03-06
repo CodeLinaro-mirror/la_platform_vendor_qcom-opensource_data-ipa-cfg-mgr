@@ -44,10 +44,6 @@ SPDX-License-Identifier: BSD-3-Clause-Clear
 #ifndef IPACM_NETLINK_H
 #define IPACM_NETLINK_H
 
-#ifdef __cplusplus
-extern "C"
-{
-#endif
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -100,6 +96,11 @@ extern "C"
 	 Type representing function callback registered with a socket listener 
 	 thread for reading from a socket on receipt of an incoming message
 ---------------------------------------------------------------------------*/
+#ifdef __cplusplus
+extern "C"
+{
+#endif
+
 typedef int (*ipa_sock_thrd_fd_read_f)(int fd);
 
 typedef enum

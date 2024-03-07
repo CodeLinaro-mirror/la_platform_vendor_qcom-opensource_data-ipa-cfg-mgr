@@ -211,7 +211,8 @@ const char *ipacm_event_name[] = {
 #ifdef FEATURE_IPA_IPSEC
 	__stringify(IPA_HANDLE_IPSEC_UL_FLT_ADD),              /* Handle IPsec UL policy flt add */
 	__stringify(IPA_HANDLE_IPSEC_UL_FLT_DEL),              /* Handle IPsec UL policy flt delete */
-#endif	
+	__stringify(IPA_IPSEC_LAN_CLIENT_ROUTE_ADD_EVENT),     /* Internal event for a new LAN client route */
+#endif
 	__stringify(IPACM_EVENT_MAX),
 };
 

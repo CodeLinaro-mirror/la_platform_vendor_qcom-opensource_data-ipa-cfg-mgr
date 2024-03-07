@@ -441,8 +441,8 @@ public:
 	static int num_firewall_v6_ul;
 #endif
 #ifdef FEATURE_IPA_IPSEC
-	uint32_t ipsec_post_pol_rt_hdls[IPA_IP_MAX][IPA_MAX_FLT_RULE];
-	int num_ipsec_post_pol_rt[IPA_IP_MAX];
+	static uint32_t ipsec_post_pol_rt_hdls[IPA_IP_MAX][IPA_MAX_FLT_RULE];
+	static int num_ipsec_post_pol_rt[IPA_IP_MAX];
 #endif
 	ipacm_wan_iface_type m_is_sta_mode;
 	static bool backhaul_is_sta_mode;
@@ -480,6 +480,7 @@ public:
 	static int GetWanPDNinfo(uint16_t *mtu, uint32_t *ipv4_addr, ipa_ip_type iptype);
 	static int Getv6addrByName(char* pdn_name, uint32_t* ipv6_addr);
 	static uint32_t GetQCMAPhdrByName(char* pdn_name);
+	static uint32_t GetQCMAPhdrOfFirstRmnet(ipa_ip_type ipType);
 	static bool is_xlat_by_vid(uint16_t vlan_id);
 	static int get_vid_index_for_iface_v6(ipacm_ipv6_wan_iface iface, uint16_t vlan_id);
 	static bool is_xlat_by_ipv4(uint32_t ipv4_addr);
@@ -504,6 +505,18 @@ public:
 		enum ipa_ip_type iptype,
 		void*            addr,
 		uint8_t&         mux_id );
+
+#ifdef FEATURE_IPA_IPSEC
+	/*
+	 * The FLT rules that we send to Q6 via QMI are being skipped by IPsec packets.
+	 * Therefore we have to add these rules after IPsec DL policying. Since the policying is done
+	 * In 3rd round filtering table, the copied rules have to go to the DL routing table.
+	 * This method translates all QMI IPv4 and IPv6 rules into routing rules and installs them.
+	 *
+	 * @ipType: IP type
+	 */
+	static int installWanPostIpsecRt(ipa_ip_type ipType);
+#endif
 
 private:
 
@@ -847,20 +860,6 @@ private:
 #endif
 
 	int install_wan_filtering_rule(bool is_sw_routing, bool is_socksv5_en = false);
-
-#ifdef FEATURE_IPA_IPSEC
-	/*
-	 * The FLT rules that we send to Q6 via QMI are being skipped by IPsec packets.
-	 * Therefore we have to add these rules after IPsec DL policying. Since the policying is done
-	 * In 3rd round filtering table, the copied rules have to go to the DL routing table.
-	 * This method translates all QMI IPv4 and IPv6 rules into routing rules and installs them.
-	 *
-	 * @param rule_table_v4: IPv4 filtering table to translate from
-	 * @param rule_table_v6: IPv6 filtering table to translate from
-	 */
-	int installWanPostIpsecRt(struct ipa_ioc_add_flt_rule *rule_table_v4,
-		struct ipa_ioc_add_flt_rule *rule_table_v6);
-#endif
 
 	void handle_wlan_SCC_MCC_switch(bool, ipa_ip_type);
 

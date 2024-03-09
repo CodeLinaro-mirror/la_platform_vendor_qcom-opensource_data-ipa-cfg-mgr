@@ -203,10 +203,8 @@ struct NatEntryBase
 	virtual bool Valid() const = 0;
 	virtual void DebugDump(const char* msg_prefix) const;
 	virtual const IpAddress& GetClientIp() const = 0;
-#ifdef FEATURE_IPV6_NAT
 	virtual const IpAddress& GetPublicIp() const = 0;
 	virtual const uint16_t& GetPublicPort() const = 0;
-#endif
 	virtual const IpAddress& GetTargetIp() const = 0;
 	virtual const uint16_t& GetSrcPort() const = 0;
 	virtual const uint16_t& GetDstPort() const = 0;
@@ -272,10 +270,8 @@ struct Ipv6ctEntry : public NatEntryBase
 	virtual bool Valid() const;
 	virtual void DebugDump(const char* msg_prefix) const;
 	virtual const IpAddress& GetClientIp() const;
-#ifdef FEATURE_IPV6_NAT
 	virtual const IpAddress& GetPublicIp() const { return GetClientIp(); }
 	virtual const uint16_t& GetPublicPort() const { return GetSrcPort(); };
-#endif
 	virtual const IpAddress& GetTargetIp() const;
 	virtual const uint16_t& GetSrcPort() const;
 	virtual const uint16_t& GetDstPort() const;
@@ -623,6 +619,13 @@ public:
 		return m_type;
 	}
 
+	ipacm_alg *pALGPorts;
+	uint16_t nALGPort;
+
+	int Init();
+
+	bool isAlgPort(uint8_t proto, uint16_t port);
+
 	int AddTable(const uint32_t v6_prefix[2]);
 	int DeleteTable(const uint32_t v6_prefix[2], int num_v6_vlan_pdns);
 
@@ -702,7 +705,7 @@ public:
 	static Ipv6Nat* GetInstance();
 private:
 
-	explicit Ipv6Nat(int max_entries);
+	explicit Ipv6Nat(int max_entries, const char* mem_type);
 
 	static Ipv6Nat* m_instance;
 };

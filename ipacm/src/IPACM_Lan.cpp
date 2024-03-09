@@ -1998,6 +1998,10 @@ int IPACM_Lan::del_ul_flt_rules(enum ipa_ip_type iptype)
 	}
 	else
 	{
+#ifdef FEATURE_IPV6_NAT
+		if(IPACM_Iface::ipacmcfg->ipv6_nat_enable)
+			delete_ipv6_nat_ula_prefix_flt_rule();
+#endif
 		if(num_wan_ul_fl_rule_v6 == 0)
 		{
 			IPACMERR("No modem UL rules were installed, return...\n");
@@ -2055,7 +2059,6 @@ int IPACM_Lan::handle_vlan_neighbor(ipacm_event_data_all *data)
 	ipacm_event_new_neigh_vlan *data_vlan;
 	uint16_t vlan_id = 0;
 	uint8_t priority = 0;
-	bool new_prefix = false;
 	ipacm_event_data_all data_all;
 	std::list <ipacm_event_data_all>::iterator it;
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
@@ -2096,7 +2099,8 @@ int IPACM_Lan::handle_vlan_neighbor(ipacm_event_data_all *data)
 		{
 			if(IPACM_Wan::is_global_ipv6_addr(data_vlan->data_all.ipv6_addr))
 			{
-				if (!IPACM_Wan::isWan_active_with_prefix(data_vlan->data_all.ipv6_addr))
+				if (!IPACM_Wan::isWan_active_with_prefix(data_vlan->data_all.ipv6_addr) &&
+					!(IPACM_Iface::ipacmcfg->ipv6_nat_enable && is_unique_local_ipv6_addr(data->ipv6_addr)))
 				{
 					if (neigh_cache.size() < 2*IPA_MAX_NUM_HW_PATH_CLIENTS)
 					{
@@ -2124,7 +2128,7 @@ int IPACM_Lan::handle_vlan_neighbor(ipacm_event_data_all *data)
 				}
 
 				/* add ipv6 prefix */
-				new_prefix = IPACM_Iface::ipacmcfg->add_vlan_ipv6_prefix(data_vlan->data_all.ipv6_addr, ipa_if_num, vlan_id);
+				IPACM_Iface::ipacmcfg->add_vlan_ipv6_prefix(data_vlan->data_all.ipv6_addr, ipa_if_num, vlan_id);
 			}
 		}
 		else if(data_vlan->data_all.iptype == IPA_IP_v4)
@@ -2210,54 +2214,6 @@ int IPACM_Lan::handle_vlan_neighbor(ipacm_event_data_all *data)
 		HandleNeighIpAddrAddEvt(data);
 #endif
 
-		/*
-		* if this is the first time we have this global ipv6 prefix (or this
-		* is the default pdn prefix) we can notify WAN that it is a v6 vlan pdn
-		*/
-		if(new_prefix ||
-			((IPACM_Wan::backhaul_ipv6_prefix[0] || IPACM_Wan::backhaul_ipv6_prefix[1]) &&
-				(IPACM_Wan::backhaul_ipv6_prefix[0] == data_vlan->data_all.ipv6_addr[0]) &&
-				(IPACM_Wan::backhaul_ipv6_prefix[1] == data_vlan->data_all.ipv6_addr[1])))
-		{
-			ipacm_cmd_q_data evt_data;
-			ipacm_event_route_vlan *data;
-
-			/* first check if v6 pdn is offloaded or not */
-			check_vlan_PDNUp(IPA_IP_v6);
-
-			IPACMDBG_H("generating IPA_ROUTE_ADD_VLAN_PDN_EVENT, new_prefix %d\n", new_prefix);
-			IPACMDBG_H("prefixes 0x[%X][%X], 0x[%X][%X]\n",
-				IPACM_Wan::backhaul_ipv6_prefix[0],
-				IPACM_Wan::backhaul_ipv6_prefix[1],
-				data_vlan->data_all.ipv6_addr[0],
-				data_vlan->data_all.ipv6_addr[1]);
-
-			evt_data.event = IPA_ROUTE_ADD_VLAN_PDN_EVENT;
-			data = (ipacm_event_route_vlan *)malloc(sizeof(ipacm_event_route_vlan));
-			if(!data)
-			{
-				IPACMERR("couldn't allocate memory for new vlan pdn event\n");
-				return IPACM_FAILURE;
-			}
-			memset(data, 0, sizeof(ipacm_event_route_vlan));
-
-			uint32_t ip4_addr;
-			if(get_eth_client_ip4_addr(data_vlan->data_all.mac_addr, ip4_addr, vlan_id) == IPACM_SUCCESS) {
-				IPACMDBG_H("ipv4 address 0x%X is valid, generate IPA_ROUTE_ADD_VLAN_PDN_EVENT v4 as well\n", ip4_addr);
-				data->iptype = IPA_IP_MAX;
-				data->wan_ipv4_addr = IPA_DUMMY_PREFIX;
-				check_vlan_PDNUp(IPA_IP_v4);
-			}
-			else {
-				data->iptype = IPA_IP_v6;
-				IPACMDBG_H("ipv4 address is not valid, don't generate IPA_ROUTE_ADD_VLAN_PDN_EVENT v4\n");
-			}
-			data->VlanID = vlan_id;
-			data->wan_ipv6_prefix[0] = data_vlan->data_all.ipv6_addr[0];
-			data->wan_ipv6_prefix[1] = data_vlan->data_all.ipv6_addr[1];
-			evt_data.evt_data = data;
-			IPACM_EvtDispatcher::PostEvt(&evt_data);
-		}
 #ifdef IPA_L2TP_TUNNEL_UDP
 		if(!IPACM_Iface::ipacmcfg->check_l2tp_iface(data->iface_name) ||
 				IPACM_Iface::ipacmcfg->ipacm_l2tp_enable == IPACM_L2TP)
@@ -2486,6 +2442,13 @@ int IPACM_Lan::handle_vlan_pdn_up(ipacm_event_vlan_pdn *data, bool set_mux)
 			/* for the first PDN install UL filtering rules */
 			if(num_dft_rt_v6 == 1 && modem_ul_v6_set == FALSE)
 			{
+#ifdef FEATURE_IPV6_NAT
+				if(IPACM_Iface::ipacmcfg->ipv6_nat_enable)
+				{
+					/* construct 1st pass v6NAT flt-rule */
+					add_ipv6_nat_ula_prefix_flt_rule();
+				}
+#endif
 				ret = handle_uplink_filter_rule(IPACM_Iface::ipacmcfg->GetExtProp(IPA_IP_v6), data->iptype, data->mux_id, false);
 				modem_ul_v6_set = true;
 			}
@@ -4728,7 +4691,7 @@ int IPACM_Lan::handle_eth_client_ipaddr(ipacm_event_data_all *data)
 					IPACM_Iface::ipacmcfg->is_offload_ipv6_prefix(data->ipv6_addr) != true)
 #else
 					memcmp(ipv6_prefix, data->ipv6_addr, sizeof(ipv6_prefix)) != 0)
-#endif
+#endif           
 				{
 					if (neigh_cache.size() < 2*IPA_MAX_NUM_HW_PATH_CLIENTS)
 					{

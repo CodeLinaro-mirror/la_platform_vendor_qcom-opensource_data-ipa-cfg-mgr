@@ -26,9 +26,9 @@
  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * Changes from Qualcomm Innovation Center are provided under the following license:
+ * Changes from Qualcomm Innovation Center, Inc. are provided under the following license:
  *
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2023, 2025 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted (subject to the limitations in the
@@ -195,7 +195,7 @@ private:
 	int  CreateNatThreads(void);
 	bool AddIface(nat_table_entry *, bool *);
 	int AddORDeleteNatEntry(const nat_entry_bundle *, bool *sendVlanEvent);
-	void AddORDeleteNatEntry_v6(const ipacm_ct_evt_data* evt_data, const NatEntryBase& entry, bool isTempEntry);
+	int AddORDeleteNatEntry_v6(const ipacm_ct_evt_data* evt_data, const NatEntryBase& entry, bool isTempEntry, bool *sendVlanEvent);
 	void PopulateTCPorUDPEntry(struct nf_conntrack *, uint32_t, nat_table_entry *);
 	void CheckSTAClient(const nat_table_entry *rule, bool *isTempEntry);
 	void CheckSTAClient_v6(const NatEntryBase& entry, bool& isTempEntry);
@@ -239,6 +239,7 @@ public:
 #ifdef FEATURE_VLAN_MPDN
 	bool IsVlanIPv4(uint32_t ipv4_address, uint16_t *VlanId);
 #endif
+	bool IsVlanIPv6(const Ipv6IpAddress& ip, uint16_t *VlanId);
 };
 
 extern IPACM_ConntrackListener *CtList;

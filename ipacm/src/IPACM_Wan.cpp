@@ -1991,6 +1991,7 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 #ifdef FEATURE_VLAN_MPDN
 	case IPA_ROUTE_ADD_VLAN_PDN_EVENT:
 		{
+			IPACMDBG_H("Received IPA_ROUTE_ADD_VLAN_PDN_EVENT event\n");
 			ipacm_event_route_vlan *data = (ipacm_event_route_vlan *)param;
 			enum ipa_ip_type iptype = data->iptype;
 			uint32_t prefix[2];
@@ -2522,6 +2523,12 @@ int IPACM_Wan::check_vlan_pdn(ipa_ip_type iptype, ipacm_event_route_vlan *data, 
 
 	if (iptype == IPA_IP_v6 || iptype == IPA_IP_MAX)
 	{
+		IPACMDBG_H("Received v6 IPA_ROUTE_ADD_VLAN_PDN_EVENT for VID %d, wan %s, %d\n",
+			data->VlanID, dev_name, ipa_if_num);
+		IPACMDBG_H("with IPv6 address:0x%08x:%08x ipv6_prefix:0x%08x:%08x\n",
+			data->wan_ipv6_prefix[0], data->wan_ipv6_prefix[1], ipv6_prefix[0],
+			ipv6_prefix[1]);
+
 		if(((data->wan_ipv6_prefix[0] == ipv6_prefix[0]) &&
 			(data->wan_ipv6_prefix[1] == ipv6_prefix[1])) || v4_only_xlat)
 		{
@@ -4822,7 +4829,7 @@ int IPACM_Wan::config_dft_firewall_rules_ex(struct ipa_flt_rule_add *rules, int 
 		IPACM_Wan::num_firewall_v6 = 0;
 
 #ifdef FEATURE_IPV6_NAT
-		if(IPACM_Iface::ipacmcfg->ipv6_nat_enable && wan_up_v6)
+		if(IPACM_Iface::ipacmcfg->ipv6_nat_enable && (wan_up_v6 || isVlanWanUP_V6()))
 		{
 			/*
 			 * construct 2nd pass DL v6nat flt rule to send all ULA

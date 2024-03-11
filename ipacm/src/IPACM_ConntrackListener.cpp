@@ -1503,7 +1503,7 @@ void IPACM_ConntrackListener::HandleVlanDown(void *in_param)
 			{
 				IPACMDBG_H("removing pdn entry in %d\n", i);
 				vlan_pdns[i].public_ip = 0;
-				memset(vlan_pdns[i].associated_VIDs, 0, IPA_MAX_NUM_VLAN_CLIENTS * sizeof(vlan_pdns[i].associated_VIDs[0]));
+				memset(vlan_pdns[i].associated_VIDs, 0, IPA_MAX_NUM_HW_PDNS * sizeof(vlan_pdns[i].associated_VIDs[0]));
 				vlan_pdns[i].ip_pass_dummy_ip = 0;
 				vlan_pdns[i].ip_pass_enable = 0;
 				vlan_pdns[i].ip_pass_skip_nat = 0;
@@ -1544,7 +1544,7 @@ void IPACM_ConntrackListener::HandleVlanDownV6(void *in_param)
 		if((v6_vlan_pdns[i].ipv6_prefix[0] == vlandown_data->ipv6_prefix[0]) &&
 			(v6_vlan_pdns[i].ipv6_prefix[1] == vlandown_data->ipv6_prefix[1]))
 		{
-			memset(v6_vlan_pdns[i].associated_VIDs, 0, IPA_MAX_NUM_VLAN_CLIENTS * sizeof(v6_vlan_pdns[i].associated_VIDs[0]));
+			memset(v6_vlan_pdns[i].associated_VIDs, 0, IPA_MAX_NUM_HW_PDNS * sizeof(v6_vlan_pdns[i].associated_VIDs[0]));
 					v6_vlan_pdns[i].ipv6_prefix[0] = 0;
 					v6_vlan_pdns[i].ipv6_prefix[1] = 0;
 					v6_vlan_pdns[i].VID_cnt = 0;

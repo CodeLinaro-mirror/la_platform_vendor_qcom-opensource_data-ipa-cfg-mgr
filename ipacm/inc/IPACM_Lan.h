@@ -1293,7 +1293,7 @@ private:
 	typedef struct ipacm_mux_struct
 	{
 		uint8_t mux_id = 0;
-		uint16_t associated_VIDs[IPA_MAX_NUM_VLAN_CLIENTS] = { };
+		uint16_t associated_VIDs[IPA_MAX_NUM_HW_PDNS] = { };
 		uint8_t VID_cnt = 0;
 	}ipacm_mux_struct;
 

@@ -3100,6 +3100,9 @@ void IPACM_ConntrackListener::ProcessTCPorUDPMsg_v6(const ipacm_ct_evt_data* evt
 		src_ipv6_msb = ((Ipv6IpAddress &)entry.GetClientIp()).GetMsb();
 	}
 
+	entry.isVlan = false;
+	entry.IsVlanUp = false;
+
 	for(int i = 0; i < IPA_MAX_NUM_HW_PDNS; i++)
 	{
 		if(((src_ipv6_msb >> 32) == v6_vlan_pdns[i].ipv6_prefix[0]) && ((src_ipv6_msb & 0x00000000FFFFFFFF) == v6_vlan_pdns[i].ipv6_prefix[1]))

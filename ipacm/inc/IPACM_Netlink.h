@@ -202,9 +202,7 @@ typedef struct ipa_nl_route_info_s {
 		__u32		oif_index;                      /* Link index  */
 		__u32       priority;
 		__u32       metrics;
-#ifdef FEATURE_RDKB
 		__u32       mtu;
-#endif
 		ipa_nl_proto_info_t        proto_info;
 	} attr_info;
 } ipa_nl_route_info_t;

@@ -52,7 +52,6 @@ IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "IPACM_EvtDispatcher.h"
 #include "IPACM_Log.h"
 
-int ipa_get_if_name(char *if_name, int if_index);
 int find_mask(int ip_v4_last, int *mask_value);
 
 #ifdef FEATURE_IPA_ANDROID

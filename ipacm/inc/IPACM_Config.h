@@ -1,6 +1,5 @@
 /*
  * Copyright (c) 2013-2020 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -298,6 +297,9 @@ public:
 #endif
 
 	const char* getEventName(ipa_cm_event_id event_id);
+
+	void add_dummy_vlan_mapping(char *bridge_iface, char* client_iface, int if_index);
+	bool is_dummy_VID(uint16_t vid);
 
 	inline void increaseFltRuleCount(int index, ipa_ip_type iptype, int increment)
 	{

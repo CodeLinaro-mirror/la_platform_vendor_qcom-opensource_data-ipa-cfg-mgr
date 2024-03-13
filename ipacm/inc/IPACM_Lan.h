@@ -28,7 +28,7 @@ IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  * Changes from Qualcomm Innovation Center are provided under the following license:
  *
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted (subject to the limitations in the
@@ -1084,6 +1084,67 @@ protected:
 		return IPACM_FAILURE;
 	}
 
+public:
+#ifdef FEATURE_VLAN_MPDN
+	inline bool is_mux_up(uint8_t mux_id, ipa_ip_type iptype, uint16_t vid)
+	{
+		ipacm_mux_struct *mux = v4_mux_up;
+
+		if(mux_id == 0)
+			return false;
+		if(iptype == IPA_IP_v6)
+			mux = v6_mux_up;
+
+		for(int i = 0; i < IPA_MAX_NUM_HW_PDNS; i++)
+		{
+			if(mux[i].mux_id == mux_id)
+			{
+				//vid = 0 means just check if mux is up
+				if(vid == 0)
+				{
+						IPACMDBG_H("mux id %d is up for dev %s, iptype %d\n", mux_id, dev_name, iptype);
+						return true;
+				}
+
+				//vlan case
+				for(int j = 0; j < mux[i].VID_cnt; j++)
+				{
+					if(mux[i].associated_VIDs[j] == vid)
+					{
+						IPACMDBG_H("mux id %d is up for dev %s, iptype %d, vid %d, VID_cnt = %d\n", mux_id, dev_name, iptype, vid, mux[i].VID_cnt);
+						return true;
+					}
+				}
+			}
+		}
+		IPACMDBG_H("mux id %d is not up for dev %s iptype %d, vid %d\n", mux_id, dev_name, iptype, vid);
+		return false;
+	}
+	inline bool is_any_mux_up(ipa_ip_type iptype)
+	{
+		ipacm_mux_struct *mux = v4_mux_up;
+		bool res = false;
+
+		if(iptype == IPA_IP_v6)
+			mux = v6_mux_up;
+
+		for(int i = 0; i < IPA_MAX_NUM_HW_PDNS; i++)
+		{
+			if(mux[i].mux_id)
+			{
+				IPACMDBG("mux id %d up for dev %s, i = %d, iptype %d\n", mux[i].mux_id, dev_name, i, iptype);
+				res = true;
+			}
+		}
+
+		if(res)
+			return res;
+
+		IPACMDBG_H("no vlan mux up for dev %s, iptype %d\n", dev_name, iptype);
+		return false;
+	}
+#endif
+
 private:
 
 	/* get hdr proc ctx type given source and destination l2 hdr type */
@@ -1141,46 +1202,6 @@ private:
 		uint16_t associated_VIDs[IPA_MAX_NUM_SW_PDNS] = { };
 		uint8_t VID_cnt = 0;
 	}ipacm_mux_struct;
-
-	ipacm_mux_struct v4_mux_up[IPA_MAX_NUM_HW_PDNS];
-	uint8_t num_v4_mux;
-	ipacm_mux_struct v6_mux_up[IPA_MAX_NUM_HW_PDNS];
-	uint8_t num_v6_mux;
-
-	inline bool is_mux_up(uint8_t mux_id, ipa_ip_type iptype, uint16_t vid)
-	{
-		ipacm_mux_struct *mux = v4_mux_up;
-
-		if(mux_id == 0)
-			return false;
-		if(iptype == IPA_IP_v6)
-			mux = v6_mux_up;
-
-		for(int i = 0; i < IPA_MAX_NUM_HW_PDNS; i++)
-		{
-			if(mux[i].mux_id == mux_id)
-			{
-				//vid = 0 means just check if mux is up
-				if(vid == 0)
-				{
-						IPACMDBG_H("mux id %d is up for dev %s, iptype %d\n", mux_id, dev_name, iptype);
-						return true;
-				}
-
-				//vlan case
-				for(int j = 0; j < mux[i].VID_cnt; j++)
-				{
-					if(mux[i].associated_VIDs[j] == vid)
-					{
-						IPACMDBG_H("mux id %d is up for dev %s, iptype %d, vid %d, VID_cnt = %d\n", mux_id, dev_name, iptype, vid, mux[i].VID_cnt);
-						return true;
-					}
-				}
-			}
-		}
-		IPACMDBG_H("mux id %d is not up for dev %s iptype %d, vid %d\n", mux_id, dev_name, iptype, vid);
-		return false;
-	}
 
 	inline int set_mux_up(uint8_t mux_id, ipa_ip_type iptype, uint16_t vid)
 	{
@@ -1263,30 +1284,6 @@ private:
 
 		IPACMERR("could not find mux %d, iptype %d\n", mux_id, iptype);
 		return IPACM_FAILURE;
-	}
-
-	inline bool is_any_mux_up(ipa_ip_type iptype)
-	{
-		ipacm_mux_struct *mux = v4_mux_up;
-		bool res = false;
-
-		if(iptype == IPA_IP_v6)
-			mux = v6_mux_up;
-
-		for(int i = 0; i < IPA_MAX_NUM_HW_PDNS; i++)
-		{
-			if(mux[i].mux_id)
-			{
-				IPACMDBG("mux id %d up for dev %s, i = %d, iptype %d\n", mux[i].mux_id, dev_name, i, iptype);
-				res = true;
-			}
-		}
-
-		if(res)
-			return res;
-
-		IPACMDBG_H("no vlan mux up for dev %s, iptype %d\n", dev_name, iptype);
-		return false;
 	}
 #endif
 	inline ipa_eth_client* get_client_memptr(ipa_eth_client *param, int cnt)
@@ -1484,14 +1481,22 @@ private:
 #ifdef FEATURE_VLAN_MPDN
 	int handle_vlan_neighbor(ipacm_event_data_all *data);
 	bool is_vlan_IF(uint16_t vlan_id);
-	int handle_vlan_pdn_up(ipacm_event_vlan_pdn *data, bool set_mux = true);
-	int handle_vlan_pdn_down(ipacm_event_vlan_pdn *data);
 	int handle_vlan_phys_if_down();
-	int check_vlan_PDNUp(enum ipa_ip_type iptype);
 #endif
 
 	int construct_mtu_rule(struct ipa_flt_rule *rule, enum ipa_ip_type iptype, uint16_t mtu);
 	int add_mtu_rule_v4_default_pdn();
+
+public:
+#ifdef FEATURE_VLAN_MPDN
+	int handle_vlan_pdn_up(ipacm_event_vlan_pdn *data, bool set_mux = true);
+	int handle_vlan_pdn_down(ipacm_event_vlan_pdn *data);
+	int check_vlan_PDNUp(enum ipa_ip_type iptype);
+	ipacm_mux_struct v4_mux_up[IPA_MAX_NUM_HW_PDNS];
+	uint8_t num_v4_mux;
+	ipacm_mux_struct v6_mux_up[IPA_MAX_NUM_HW_PDNS];
+	uint8_t num_v6_mux;
+#endif
 };
 
 #endif /* IPACM_LAN_H */

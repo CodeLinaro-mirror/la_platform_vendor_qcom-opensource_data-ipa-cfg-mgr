@@ -28,7 +28,7 @@
  *
  * Changes from Qualcomm Innovation Center are provided under the following license:
  *
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted (subject to the limitations in the
@@ -909,6 +909,13 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 			return;
 		}
 #endif
+		/* if dummy vlan present for iface, don't handle via default route */
+		if (IPACM_Iface::ipacmcfg->is_added_vlan_iface(data_wan->ifname))
+		{
+			IPACMDBG_H("Iface in dumm VLAN do not handle default route\n");
+			return;
+		}
+
 		if(ip_type == IPA_IP_v4 || ip_type == IPA_IP_MAX)
 		{
 			if(data_wan->is_sta == false)
@@ -969,6 +976,13 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 			return;
 		}
 #endif
+		/* if dummy vlan present for iface, don't handle via default route */
+		if (IPACM_Iface::ipacmcfg->is_added_vlan_iface(data_wan->ifname))
+		{
+			IPACMDBG_H("Iface in dumm VLAN do not handle default route\n");
+			return;
+		}
+
 		if(ip_type == IPA_IP_v6 || ip_type == IPA_IP_MAX)
 		{
 #ifdef FEATURE_IPACM_UL_FIREWALL
@@ -1073,6 +1087,13 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 			}
 		}
 #endif
+		/* if dummy vlan present for iface, don't handle via default route */
+		if (IPACM_Iface::ipacmcfg->is_added_vlan_iface(data_wan->ifname))
+		{
+			IPACMDBG_H("Iface in dumm VLAN do not handle default route\n");
+			return;
+		}
+
 		if(ip_type == IPA_IP_v4 || ip_type == IPA_IP_MAX)
 		{
 			handle_wan_down(data_wan->is_sta, data_wan->mux_id);
@@ -1103,6 +1124,13 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 			}
 		}
 #endif
+		/* if dummy vlan present for iface, don't handle via default route */
+		if (IPACM_Iface::ipacmcfg->is_added_vlan_iface(data_wan->ifname))
+		{
+			IPACMDBG_H("Iface in dumm VLAN do not handle default route\n");
+			return;
+		}
+
 		/* reset usb-client ipv6 rt-rules */
 		handle_lan_client_reset_rt(IPA_IP_v6);
 		it = neigh_cache.begin();
@@ -1175,39 +1203,49 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 					return;
 				}
 #endif
-				/* first construc ETH full header */
-				handle_eth_hdr_init(data->mac_addr);
-				IPACMDBG_H("construct ETH header and route rules \n");
-				/* Associate with IP and construct RT-rule */
-				if (handle_eth_client_ipaddr(data) == IPACM_FAILURE)
-				{
-					return;
-				}
-#ifdef FEATURE_IPACM_PER_CLIENT_STATS
-				if (IPACM_Iface::ipacmcfg->ipacm_lan_stats_enable == false)
-#endif
-				{
-					handle_eth_client_route_rule(data->mac_addr, data->iptype);
 
-					/* Add NAT rules after RT rules are set */
-					HandleNeighIpAddrAddEvt(data);
+				/* Non Vlan with dummy VLAN handling */
+				if (IPACM_Iface::ipacmcfg->is_added_vlan_iface(data->iface_name))
+				{
+					handle_vlan_neighbor(data);
 				}
-#ifdef FEATURE_IPACM_PER_CLIENT_STATS
 				else
 				{
-#ifdef IPA_HW_FNR_STATS
-					if (IPACM_Iface::ipacmcfg->hw_fnr_stats_support) {
-						eth_index = get_eth_client_index(data->mac_addr);
-						retval = handle_eth_client_route_rule_ext_v2(data->mac_addr, data->iptype,
-							get_client_memptr(eth_client, eth_index)->dl_cnt_idx);
-						IPACMDBG_H("Route install retval = %d\n", retval);
+					/* first construct ETH full header */
+					handle_eth_hdr_init(data->mac_addr);
+					IPACMDBG_H("construct ETH header and route rules \n");
+					/* Associate with IP and construct RT-rule */
+					if (handle_eth_client_ipaddr(data) == IPACM_FAILURE)
+					{
+						IPACMERR("Failed handle_eth_client_ipaddr\n");
+						return;
 					}
-					else
-#endif //IPA_HW_FNR_STATS
-						handle_eth_client_route_rule_ext(data->mac_addr, data->iptype);
-				}
+#ifdef FEATURE_IPACM_PER_CLIENT_STATS
+					if (IPACM_Iface::ipacmcfg->ipacm_lan_stats_enable == false)
 #endif
-				eth_bridge_post_event(IPA_ETH_BRIDGE_CLIENT_ADD, IPA_IP_MAX, data->mac_addr, NULL, data->iface_name);
+					{
+						handle_eth_client_route_rule(data->mac_addr, data->iptype);
+
+						/* Add NAT rules after RT rules are set */
+						HandleNeighIpAddrAddEvt(data);
+					}
+#ifdef FEATURE_IPACM_PER_CLIENT_STATS
+					else
+					{
+#ifdef IPA_HW_FNR_STATS
+						if (IPACM_Iface::ipacmcfg->hw_fnr_stats_support) {
+							eth_index = get_eth_client_index(data->mac_addr);
+							retval = handle_eth_client_route_rule_ext_v2(data->mac_addr, data->iptype,
+								get_client_memptr(eth_client, eth_index)->dl_cnt_idx);
+							IPACMDBG_H("Route install retval = %d\n", retval);
+						}
+						else
+#endif //IPA_HW_FNR_STATS
+							handle_eth_client_route_rule_ext(data->mac_addr, data->iptype);
+					}
+#endif
+					eth_bridge_post_event(IPA_ETH_BRIDGE_CLIENT_ADD, IPA_IP_MAX, data->mac_addr, NULL, data->iface_name);
+				}
 			}
 #ifdef FEATURE_L2TP
 			if((IPACM_Iface::ipacmcfg->ipacm_l2tp_enable == IPACM_L2TP_E2E ||
@@ -1951,12 +1989,19 @@ int IPACM_Lan::handle_vlan_neighbor(ipacm_event_data_all *data)
 			add_vlan_private_subnet(data_vlan->bridge);
 		}
 
-		/* first construc ETH full header */
-		handle_eth_hdr_init(data->mac_addr, data_vlan->bridge, vlan_id, true, priority);
+		/* first construct ETH full header */
+		if(IPACM_Iface::ipacmcfg->is_dummy_VID(vlan_id))
+		{
+			handle_eth_hdr_init(data->mac_addr);
+		}
+		else
+		{
+			handle_eth_hdr_init(data->mac_addr, data_vlan->bridge, vlan_id, true, priority);
+		}
 	}
 	else
 	{
-		/* first construc ETH full header */
+		/* first construct ETH full header */
 		handle_eth_hdr_init(data->mac_addr, NULL, vlan_id, true, priority);
 	}
 
@@ -2053,7 +2098,7 @@ bool IPACM_Lan::is_vlan_IF(uint16_t vlan_id)
 		return false;
 	}
 
-	if(IPACM_Iface::ipacmcfg->is_added_vlan_iface(vlan_iface_name))
+	if(IPACM_Iface::ipacmcfg->is_added_vlan_iface(vlan_iface_name) || IPACM_Iface::ipacmcfg->is_added_vlan_iface(dev_name))
 	{
 		IPACMDBG_H("found VLAN IF named %s\n", vlan_iface_name);
 		return true;
@@ -3309,7 +3354,7 @@ int IPACM_Lan::handle_wan_up(ipa_ip_type ip_type, uint16_t vid)
 
 		flt_rule_entry.rule.attrib.attrib_mask |= IPA_FLT_DST_ADDR;
 #ifdef FEATURE_VLAN_MPDN
-		if (vid > 0)
+		if ((vid > 0) && !IPACM_Iface::ipacmcfg->is_dummy_VID(vid))
 		{
 			flt_rule_entry.rule.attrib.attrib_mask |= IPA_FLT_VLAN_ID;
 			flt_rule_entry.rule.attrib.vlan_id = vid;
@@ -3471,7 +3516,7 @@ int IPACM_Lan::handle_wan_up(ipa_ip_type ip_type, uint16_t vid)
 
 		flt_rule_entry.rule.attrib.attrib_mask |= IPA_FLT_DST_ADDR;
 #ifdef FEATURE_VLAN_MPDN
-		if(vid > 0)
+		if ((vid > 0) && !IPACM_Iface::ipacmcfg->is_dummy_VID(vid))
 		{
 			flt_rule_entry.rule.attrib.attrib_mask |= IPA_FLT_VLAN_ID;
 			flt_rule_entry.rule.attrib.vlan_id = vid;
@@ -6847,9 +6892,20 @@ int IPACM_Lan::handle_uplink_filter_rule(ipacm_ext_prop *prop, ipa_ip_type iptyp
 #ifdef FEATURE_VLAN_MPDN
 	if (is_xlat &&
 		!(is_dev_in_vlan_mode && IPACM_Iface::ipacmcfg->ipacm_mpdn_enable))
-		flt_index.embedded_call_mux_id = IPACM_Iface::ipacmcfg->GetQmapId();
+	{
+		if (IPACM_Iface::ipacmcfg->is_added_vlan_iface(dev_name))
+		{
+			flt_index.embedded_call_mux_id = pdn_mux_id;
+		}
+		else
+		{
+			flt_index.embedded_call_mux_id = IPACM_Iface::ipacmcfg->GetQmapId();
+		}
+	}
 	else
+	{
 		flt_index.embedded_call_mux_id = pdn_mux_id;
+	}
 #else
 	flt_index.embedded_call_mux_id = IPACM_Iface::ipacmcfg->GetQmapId();
 #endif
@@ -6900,9 +6956,13 @@ int IPACM_Lan::handle_uplink_filter_rule(ipacm_ext_prop *prop, ipa_ip_type iptyp
 			flt_rule_entry.rule.action = IPA_PASS_TO_SRC_NAT;
 
 			/* NAT block will set the proper MUX ID in the metadata according to the relevant PDN */
-			if ((IPACM_Iface::ipacmcfg->GetIPAVer() >= IPA_HW_v4_0) &&
-				(ipa_if_cate != WLAN_IF))
-				flt_rule_entry.rule.set_metadata = true;
+			if (((IPACM_Iface::ipacmcfg->GetIPAVer() >= IPA_HW_v4_0) &&
+				(ipa_if_cate != WLAN_IF)) ||
+				((IPACM_Iface::ipacmcfg->is_added_vlan_iface(dev_name)) &&
+				(ipa_if_cate == WLAN_IF)))
+				{
+					flt_rule_entry.rule.set_metadata = true;
+				}
 		}
 	}
 	else if(iptype == IPA_IP_v6)
@@ -10086,6 +10146,7 @@ int IPACM_Lan::modify_ipv6_prefix_flt_rule()
 	uint16_t vid[IPA_MAX_MTU_ENTRIES] = { };
 	int mtu_rule_idx = IPACM_Iface::ipacmcfg->num_ipv6_prefixes +
 						IPACM_Iface::ipacmcfg->num_no_offload_ipv6_prefix;
+
 	if(rx_prop == NULL)
 	{
 		IPACMERR("no rx props\n");
@@ -10101,8 +10162,11 @@ int IPACM_Lan::modify_ipv6_prefix_flt_rule()
 	/* not supported for wlan vlan for now */
 	if (ipa_if_cate == WLAN_IF)
 	{
-		IPACMERR("not supported for wlan vlan\n");
-		return IPACM_SUCCESS;
+		if (!IPACM_Iface::ipacmcfg->is_added_vlan_iface(dev_name))
+		{
+			IPACMERR("not supported for wlan vlan\n");
+			return IPACM_SUCCESS;
+		}
 	}
 
 	if (dft_v6fl_rule_hdl[0] == 0)

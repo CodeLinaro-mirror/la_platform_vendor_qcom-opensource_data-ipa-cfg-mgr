@@ -29,7 +29,7 @@
  *
  * Changes from Qualcomm Innovation Center are provided under the following license:
  *
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted (subject to the limitations in the
@@ -502,6 +502,7 @@ void* ipa_driver_msg_notifier(void *param)
 				return NULL;
 			}
 			memset(new_neigh_data, 0, sizeof(ipacm_event_data_all));
+			strlcpy(new_neigh_data->iface_name, event_ex->name, sizeof(new_neigh_data->iface_name));
 			new_neigh_data->iptype = IPA_IP_v6;
 			for(cnt = 0; cnt < event_ex->num_of_attribs; cnt++)
 			{

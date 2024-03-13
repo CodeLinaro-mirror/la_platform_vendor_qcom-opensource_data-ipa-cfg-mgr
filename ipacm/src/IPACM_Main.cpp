@@ -520,6 +520,7 @@ void* ipa_driver_msg_notifier(void *param)
 				return NULL;
 			}
 			memset(new_neigh_data, 0, sizeof(ipacm_event_data_all));
+			strlcpy(new_neigh_data->iface_name, event_ex->name, sizeof(new_neigh_data->iface_name));
 			new_neigh_data->iptype = IPA_IP_v6;
 			for(cnt = 0; cnt < event_ex->num_of_attribs; cnt++)
 			{

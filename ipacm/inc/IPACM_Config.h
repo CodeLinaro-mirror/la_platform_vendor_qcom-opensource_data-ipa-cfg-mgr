@@ -406,6 +406,9 @@ public:
 
 	const char* getEventName(ipa_cm_event_id event_id);
 
+	void add_dummy_vlan_mapping(char *bridge_iface, char* client_iface, int if_index);
+	bool is_dummy_VID(uint16_t vid);
+
 	inline void increaseFltRuleCount(int index, ipa_ip_type iptype, int increment)
 	{
 		if((index >= IPA_CLIENT_MAX) || (index < 0))

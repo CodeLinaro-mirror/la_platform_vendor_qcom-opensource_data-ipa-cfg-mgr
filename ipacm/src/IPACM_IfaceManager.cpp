@@ -202,6 +202,16 @@ void IPACM_IfaceManager::event_callback(ipa_cm_event_id event, void *param)
 				break;
 			}
 			strlcpy(ifmgr_data.iface_name, IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].iface_name, IPA_IFACE_NAME_LEN);
+
+                        /*In sta-bridge mode, treating wlan instance as lan instace
+                         * to avoid relying on WLAN_CLIENT_CONNECT_EX events. */
+			if (IPACM_Iface::ipacmcfg->device_mode == DEVMODE_STABRIDGE) {
+					IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].if_cat = ODU_IF;
+				    ifmgr_data.if_index = StaData->if_index;
+					ifmgr_data.if_type = Q6_WAN;
+					create_iface_instance(&ifmgr_data);
+					break;
+			}
 			/* change iface category from unknown to WAN_IF */
 			if(IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].if_cat == UNKNOWN_IF)
 			{

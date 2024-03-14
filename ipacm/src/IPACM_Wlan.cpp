@@ -61,6 +61,7 @@ int IPACM_Wlan::total_num_wifi_clients = 0;
 int IPACM_Wlan::num_wlan_ap_iface = 0;
 
 #define BSSTYPE_SVAP 72
+#define STA_SVAP 128
 #define VLAN_TPID_SIZE 2
 #define VLAN_VID_MASK 0x0FFF
 
@@ -10128,7 +10129,7 @@ void IPACM_Wlan::update_svap_state() {
 		goto end;
 	}
 
-	if (BSSTYPE_SVAP == atoi(MapBSSType_row)) {
+	if ((BSSTYPE_SVAP == atoi(MapBSSType_row)) || (STA_SVAP == atoi(MapBSSType_row))) {
 		set_svap_iface_mode(true);
 		is_if_svap = true;
 	} else {

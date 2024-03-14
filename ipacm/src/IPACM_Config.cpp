@@ -3940,7 +3940,7 @@ bool IPACM_Config::is_svap_related(const char* phy_inf) {
 		goto end;
 	}
 
-	if (72 == atoi(MapBSSType_row)) {
+	if ((72 == atoi(MapBSSType_row))|| (128 == atoi(MapBSSType_row))) {
 		is_svap = true;
 	}
 	IPACMDBG_H("get_MapBSSType %d\n", atoi(MapBSSType_row));

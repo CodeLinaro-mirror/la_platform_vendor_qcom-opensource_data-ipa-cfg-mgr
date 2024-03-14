@@ -249,6 +249,8 @@ struct NatEntryBase
 	bool isVlan;
 	bool IsVlanUp;
 
+	bool isSocksV5;
+
 protected:
 
 	explicit NatEntryBase(ipa_ip_type type);
@@ -635,6 +637,7 @@ public:
 	void DelEntriesOnWanDown();
 	void HandleSWAllowEntries(void);
 	bool ChkSWAllow(const NatEntryBase& rule);
+	bool is_SocksV5_CT(const NatEntryBase& entry);
 
 #ifdef FEATURE_SOCKSv5
 	std::list<Ipv6ctEntry> socksv5_v6_conn;

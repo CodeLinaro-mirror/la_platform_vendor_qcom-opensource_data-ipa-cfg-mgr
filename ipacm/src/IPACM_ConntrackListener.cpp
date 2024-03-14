@@ -111,13 +111,12 @@ IPACM_ConntrackListener::IPACM_ConntrackListener() :
 	 IPACM_EvtDispatcher::registr(IPA_HANDLE_SOCKSv5_DOWN, this);
 	 IPACM_EvtDispatcher::registr(IPA_ADD_SOCKSv5_CONN, this);
 	 IPACM_EvtDispatcher::registr(IPA_DEL_SOCKSv5_CONN, this);
-#else
+#endif
 	if (IsIpv6CTEnabled())
 	{
 		IPACM_EvtDispatcher::registr(IPA_HANDLE_WAN_UP_V6, this);
 		IPACM_EvtDispatcher::registr(IPA_HANDLE_WAN_DOWN_V6, this);
 	}
-#endif
 
 #ifdef FEATURE_VLAN_MPDN
 	 IPACM_EvtDispatcher::registr(IPA_HANDLE_WAN_VLAN_PDN_UP, this);
@@ -158,7 +157,7 @@ void IPACM_ConntrackListener::event_callback(ipa_cm_event_id evt,
 						void *data)
 {
 	const ipacm_event_iface_up *wan_data = NULL;
-	ipacm_event_connection *data_evt_conn = NULL;
+	ipa_socksv5_msg *data_evt_conn = NULL;
 	ipacm_event_iface_up wan_data_local;
 	memset(&wan_data_local, 0, sizeof(wan_data_local));
 #ifdef FEATURE_SOCKSv5
@@ -202,8 +201,7 @@ void IPACM_ConntrackListener::event_callback(ipa_cm_event_id evt,
 
 #endif
 
-#ifndef FEATURE_SOCKSv5
-        case IPA_PROCESS_CT_MESSAGE_V6:
+	case IPA_PROCESS_CT_MESSAGE_V6:
 	{
 		const ipacm_ct_evt_data* evt_data = static_cast<const ipacm_ct_evt_data*>(data);
 		IPACMDBG_H("Received IPA_PROCESS_CT_MESSAGE_V6 event\n");
@@ -227,7 +225,6 @@ void IPACM_ConntrackListener::event_callback(ipa_cm_event_id evt,
 #endif
 		break;
 	}
-#endif // FEATURE_SOCKSv5
 
 	 case IPA_HANDLE_WAN_UP:
 			IPACMDBG_H("Received IPA_HANDLE_WAN_UP event\n");
@@ -323,13 +320,13 @@ void IPACM_ConntrackListener::event_callback(ipa_cm_event_id evt,
 			ipv6ct_inst = Ipv6ct::GetInstance();
 		}
 		/* create v6-ct tble */
-		data_evt_conn = (ipacm_event_connection*)data;
+		data_evt_conn = (ipa_socksv5_msg*)data;
 		IPACMDBG_H("Received IPA_HANDLE_SOCKSv5_UP event\n");
 		memset(&wan_data_local, 0, sizeof(wan_data_local));
-		wan_data_local.ipv6_addr[0] = data_evt_conn->dst_ipv6_addr[0];
-		wan_data_local.ipv6_addr[1] = data_evt_conn->dst_ipv6_addr[1];
-		wan_data_local.ipv6_addr[2] = data_evt_conn->dst_ipv6_addr[2];
-		wan_data_local.ipv6_addr[3] = data_evt_conn->dst_ipv6_addr[3];
+		wan_data_local.ipv6_addr[0] = data_evt_conn->ul_in.ipv6_dst[0];
+		wan_data_local.ipv6_addr[1] = data_evt_conn->ul_in.ipv6_dst[1];
+		wan_data_local.ipv6_addr[2] = data_evt_conn->ul_in.ipv6_dst[2];
+		wan_data_local.ipv6_addr[3] = data_evt_conn->ul_in.ipv6_dst[3];
 		strlcpy(wan_data_local.ifname, IPA_IF_SOCKSv5_NAME, sizeof(wan_data_local.ifname));
 		IPACMDBG_H("WanUp_v6 %d\n", WanUp_v6);
 		if (!WanUp_v6)
@@ -542,7 +539,7 @@ void IPACM_ConntrackListener::HandleNonNatIPAddr(void* inParam, bool AddOp)
 		/* For IPv4 legacy HandleNonNatIPAddr renamed to HandleNonNatIPAddr_v4 */
 		HandleNonNatIPAddr_v4(inParam, AddOp);
 		break;
-#ifndef FEATURE_SOCKSv5
+
 	case IPA_IP_v6:
 	{
 		if (IsIpv6CTEnabled())
@@ -552,7 +549,7 @@ void IPACM_ConntrackListener::HandleNonNatIPAddr(void* inParam, bool AddOp)
 		}
 		break;
 	}
-#endif
+
 	default:
 		IPACMERR("Not supported IP type %d\n", data->iptype);
 	}
@@ -1353,14 +1350,16 @@ void IPACM_ConntrackListener::TriggerWANUp_v6(const ipacm_event_iface_up* evt_da
 		IPACMDBG("Ignoring\n");
 		return;
 	}
-/* need QCMAP changes to remove below feature flag and use run time flag instead. */
-#ifndef FEATURE_SOCKSv5
-	if (!wan_ipaddr_v6.Valid())
+
+	if(!IPACM_Iface::ipacmcfg->ipacm_socksv5_enable)
 	{
-		IPACMERR("Invalid WAN address,ignoring WAN UP event\n");
-		return;
+		if (!wan_ipaddr_v6.Valid())
+		{
+			IPACMERR("Invalid WAN address,ignoring WAN UP event\n");
+			return;
+		}
 	}
-#endif
+
 	IPACMDBG_H("Recevied below information during wanup\n");
 	IPACMDBG_H("if_name: %s", evt_data->ifname);
 	wan_ipaddr_v6.DebugDump("WAN");
@@ -1375,11 +1374,9 @@ void IPACM_ConntrackListener::TriggerWANUp_v6(const ipacm_event_iface_up* evt_da
 
 	ipv6ct_inst->AddTable(evt_data->ipv6_prefix);
 
-/* need QCMAP changes to remove below feature flag and use run time flag instead*/
-#ifndef FEATURE_SOCKSv5
 	IPACMDBG_H("creating nat threads\n");
 	CreateNatThreads();
-#endif
+
 	WanUp_v6 = true;
 
 	IPACMDBG_H("return\n");
@@ -1582,15 +1579,16 @@ void IPACM_ConntrackListener::TriggerWANDown_v6(const uint32_t* ipv6_addr)
 	Ipv6IpAddress wan_addr;
 	wan_addr.CreateFromArray(ipv6_addr, false);
 
-#ifndef FEATURE_SOCKSv5
-	if (wan_addr != wan_ipaddr_v6)
+	if(!IPACM_Iface::ipacmcfg->ipacm_socksv5_enable)
 	{
-		IPACMDBG_H("WAN IP address is not matching\n");
-		return;
+		if (wan_addr != wan_ipaddr_v6)
+		{
+			IPACMDBG_H("WAN IP address is not matching\n");
+			return;
+		}
+		wan_addr.DebugDump("Deleting the table with");
 	}
-	wan_addr.DebugDump("Deleting the table with");
-#endif
-	/* delete entries one by one to insure all uc activation entries gets removed */
+	/* delete entries one by one to ensure all uc activation entries gets removed */
 	ipv6ct_inst->DelEntriesOnWanDown();
 	ipv6ct_inst->DeleteTable(ipv6_addr, num_v6_vlan_pdns);
 	IPACMDBG_H("return\n");
@@ -1836,6 +1834,8 @@ void IPACM_ConntrackListener::ProcessCTMessage_v6(const ipacm_ct_evt_data* evt_d
 	nfct_snprintf(buf, sizeof(buf), evt_data->ct, evt_data->type, NFCT_O_PLAIN, NFCT_OF_TIME);
 	IPACMDBG("%s\n", buf);
 
+	entry.isSocksV5 = false;
+
 	ParseCTV6Message(evt_data->ct);
 #endif
 
@@ -1866,6 +1866,7 @@ void IPACM_ConntrackListener::ProcessSocksv5Conn(ipa_socksv5_msg *socksv5_info, 
 		entry.m_ucp = true;
 		entry.m_s = true;
 		entry.m_uc_activation_index = (uint16_t) socksv5_info->ul_in.index;
+		entry.isSocksV5 = true;
 		if (is_add)
 			ipv6ct_inst->AddEntry(entry);
 		else
@@ -1881,6 +1882,7 @@ void IPACM_ConntrackListener::ProcessSocksv5Conn(ipa_socksv5_msg *socksv5_info, 
 		entry.m_ucp = true;
 		entry.m_s = true;
 		entry.m_uc_activation_index = (uint16_t) socksv5_info->dl_in.index;
+		entry.isSocksV5 = true;
 		if (is_add)
 			ipv6ct_inst->AddEntry(entry);
 		else
@@ -2001,18 +2003,18 @@ void IPACM_ConntrackListener::PostRouteAddVlanPdn(uint32_t public_ip)
 	IPACM_EvtDispatcher::PostEvt(&evt_data);
 }
 
-void IPACM_ConntrackListener::PostSocksv5Ready(ipacm_event_connection* data_evt_conn)
+void IPACM_ConntrackListener::PostSocksv5Ready(ipa_socksv5_msg* data_evt_conn)
 {
 	ipacm_cmd_q_data evt_data;
-	ipacm_event_connection *data_event_conn = NULL;
+	ipa_socksv5_msg *data_event_conn = NULL;
 
-	data_event_conn = (ipacm_event_connection *)malloc(sizeof(ipacm_event_connection));
+	data_event_conn = (ipa_socksv5_msg *)malloc(sizeof(ipa_socksv5_msg));
 	if(data_event_conn == NULL)
 	{
 		IPACMERR("unable to allocate memory for event_wlan data_event_conn\n");
 		return;
-	}
-	memcpy(data_event_conn, data_evt_conn, sizeof(ipacm_event_connection));
+	}	
+	memcpy(data_event_conn, data_evt_conn, sizeof(ipa_socksv5_msg));
 	evt_data.event = IPA_HANDLE_SOCKSv5_READY;
 	evt_data.evt_data = data_event_conn;
 	/* finish command queue */

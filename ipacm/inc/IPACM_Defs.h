@@ -107,6 +107,8 @@ extern "C"
 #define IPA_MAX_FLT_RULE 100
 #endif
 
+#define IPA_MAX_SOCKS_FLT_RULE 20
+
 #define TCP_FIN_SHIFT 16
 #define TCP_SYN_SHIFT 17
 #define TCP_RST_SHIFT 18

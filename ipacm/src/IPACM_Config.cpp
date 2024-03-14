@@ -684,6 +684,7 @@ skip_fnr_alloc:
 	ipv6_nat_enable = cfg->ipv6_nat_enable;
 	ipacm_l2tp_enable = cfg->ipacm_l2tp_enable;
 	ipacm_mpdn_enable = cfg->ipacm_mpdn_enable;
+	ipacm_socksv5_enable = cfg->ipacm_socksv5_enable;
 
 #ifndef IPA_L2TP_TUNNEL_UDP
 	if (ipacm_mpdn_enable == TRUE && ipacm_l2tp_enable != IPACM_L2TP_DISABLE)

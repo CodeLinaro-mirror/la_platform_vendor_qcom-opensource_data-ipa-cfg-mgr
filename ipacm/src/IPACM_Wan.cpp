@@ -10144,12 +10144,9 @@ int IPACM_Wan::add_catchup_all_filtering_rule_each_pdn(ipa_ip_type iptype,
 		else
 #endif
 		{
-#ifndef FEATURE_SOCKSv5
 			flt_rule_entry.rule.action = IPACM_Iface::ipacmcfg->IsIpv6CTEnabled() ?
 				IPA_PASS_TO_DST_NAT : IPA_PASS_TO_ROUTING;
-#else
-			flt_rule_entry.rule.action = IPA_PASS_TO_ROUTING;
-#endif
+
 			rt_tbl_name = ipacmcfg->rt_tbl_wan_v6.name;
 		}
 	}

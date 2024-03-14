@@ -327,7 +327,6 @@ void* ipa_driver_msg_notifier(void *param)
 	ipacm_event_data_wlan_ex *data_ex;
 	ipa_get_data_stats_resp_msg_v01 *data_tethering_stats = NULL;
 	ipa_get_apn_data_stats_resp_msg_v01 *data_network_stats = NULL;
-	ipacm_event_connection *data_event_conn = NULL;
 	ipacm_event_data_addr *data_addr = NULL;
 
 #if defined(FEATURE_L2TP) || defined(FEATURE_VLAN_MPDN)
@@ -340,6 +339,7 @@ void* ipa_driver_msg_notifier(void *param)
 
 #ifdef FEATURE_SOCKSv5
 	ipa_socksv5_msg add_socksv5_info;
+	ipa_socksv5_msg *sock_up_event_data = NULL;
 	uint32_t del_socksv5_info;
 #endif
 #ifdef IPA_IOCTL_ADD_VLAN_PRIORITY
@@ -912,23 +912,15 @@ void* ipa_driver_msg_notifier(void *param)
 				IPACM_Iface::ipacmcfg->update_socksv5_client_v6_addr(add_socksv5_info.ul_in.ipv6_src);
 				IPACMDBG_H("socksv5_conn size %d \n", IPACM_Iface::ipacmcfg->socksv5_conn.size());
 
-				data_event_conn = (ipacm_event_connection *)malloc(sizeof(ipacm_event_connection));
-				if(data_event_conn == NULL)
+				sock_up_event_data = (ipa_socksv5_msg *)malloc(sizeof(ipa_socksv5_msg));
+				if(sock_up_event_data == NULL)
 				{
 					IPACMERR("unable to allocate memory for event_wlan data_event_conn\n");
-				return NULL;
+					return NULL;
 				}
-				data_event_conn->iptype = add_socksv5_info.ul_in.ip_type;
-				data_event_conn->src_ipv6_addr[0] = add_socksv5_info.ul_in.ipv6_src[0];
-				data_event_conn->src_ipv6_addr[1] = add_socksv5_info.ul_in.ipv6_src[1];
-				data_event_conn->src_ipv6_addr[2] = add_socksv5_info.ul_in.ipv6_src[2];
-				data_event_conn->src_ipv6_addr[3] = add_socksv5_info.ul_in.ipv6_src[3];
-				data_event_conn->dst_ipv6_addr[0] = add_socksv5_info.ul_in.ipv6_dst[0];
-				data_event_conn->dst_ipv6_addr[1] = add_socksv5_info.ul_in.ipv6_dst[1];
-				data_event_conn->dst_ipv6_addr[2] = add_socksv5_info.ul_in.ipv6_dst[2];
-				data_event_conn->dst_ipv6_addr[3] = add_socksv5_info.ul_in.ipv6_dst[3];
+				memcpy(sock_up_event_data, &add_socksv5_info, sizeof(ipa_socksv5_msg));
 				evt_data.event = IPA_HANDLE_SOCKSv5_UP;
-				evt_data.evt_data = data_event_conn;
+				evt_data.evt_data = sock_up_event_data;
 				/* finish command queue */
 				IPACMDBG_H("Posting IPA_HANDLE_SOCKSv5_UP event:%d\n", evt_data.event);
 				IPACM_EvtDispatcher::PostEvt(&evt_data);

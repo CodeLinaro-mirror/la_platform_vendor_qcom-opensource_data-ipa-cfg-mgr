@@ -186,7 +186,8 @@ IPACM_Lan::IPACM_Lan(int iface_index) : IPACM_Iface(iface_index)
 #endif
 
 #ifdef FEATURE_SOCKSv5
-        socksv5_flt_hdl_v6 = 0;
+	memset(socksv5_flt_hdl_v6, 0, sizeof(socksv5_flt_hdl_v6));
+	num_socksv5_flt = 0;
 #endif
 
 	/* support eth multiple clients */
@@ -635,7 +636,7 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 
 #ifdef FEATURE_SOCKSv5
 						/* handle socksv5 MPDN logic */
-						else if(!IPACM_Iface::ipacmcfg->ipacm_mpdn_enable)
+						else if(IPACM_Iface::ipacmcfg->ipacm_socksv5_enable)
 						{
 							if(IPACM_Wan::isWanUP(ipa_if_num) || IPACM_Wan::isVlanWanUP())
 							{
@@ -705,7 +706,7 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 #ifdef FEATURE_VLAN_MPDN
 #ifdef FEATURE_SOCKSv5
 						/* handle socksv5 MPDN logic */
-						if(!IPACM_Iface::ipacmcfg->ipacm_mpdn_enable)
+						if(IPACM_Iface::ipacmcfg->ipacm_socksv5_enable)
 						{
 							if(IPACM_Wan::isWanUP_V6(ipa_if_num) ||  IPACM_Wan::isVlanWanUP_V6()) /* Modem v6 call is UP?*/
 							{
@@ -1304,7 +1305,7 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 	case IPA_HANDLE_SOCKSv5_READY:
 		{
 			IPACMDBG_H("Received IPA_HANDLE_SOCKSv5_READY %d\n", IPA_HANDLE_SOCKSv5_READY);
-			ipacm_event_connection *data_evt_conn = (ipacm_event_connection *)param;
+			ipa_socksv5_msg  *data_evt_conn = (ipa_socksv5_msg  *)param;
 			add_socksv5_flt_rule(data_evt_conn);
 		}
 		break;
@@ -1677,17 +1678,23 @@ int IPACM_Lan::handle_l2tp_neigh(ipacm_event_data_all *data)
 
 #ifdef FEATURE_SOCKSv5
 /* add socksv5 flt rule. */
-int IPACM_Lan::add_socksv5_flt_rule(ipacm_event_connection *data_event_conn)
+int IPACM_Lan::add_socksv5_flt_rule(ipa_socksv5_msg *data_event_conn)
 {
-	int len;
+	int len, i, k;
 	int fd_ipa = 0;
-	struct ipa_flt_rule_add flt_rule_entry;
+	struct ipa_flt_rule_add flt_rule_entry, flt_rule_entry_socks, flt_rule_entry_r;
 	struct ipa_ioc_add_flt_rule_after *pFilteringTable = NULL;
 	int ret = IPACM_SUCCESS;
+	ipacm_ext_prop* ext_prop = NULL;
 
 	if (rx_prop == NULL || tx_prop == NULL)
 	{
 		IPACMDBG_H("No rx or tx properties registered for iface %s\n", dev_name);
+		return IPACM_FAILURE;
+	}
+	if(num_socksv5_flt >= (IPA_MAX_SOCKS_FLT_RULE - 1))
+	{
+		IPACMDBG_H("Failed to add rules. Max Socks rules already installed\n");
 		return IPACM_FAILURE;
 	}
 
@@ -1724,10 +1731,10 @@ int IPACM_Lan::add_socksv5_flt_rule(ipacm_event_connection *data_event_conn)
 
 	/* Match src/dst ipv6 */
 	flt_rule_entry.rule.attrib.attrib_mask |= IPA_FLT_DST_ADDR;
-	flt_rule_entry.rule.attrib.u.v6.dst_addr[0] = data_event_conn->dst_ipv6_addr[0];
-	flt_rule_entry.rule.attrib.u.v6.dst_addr[1] = data_event_conn->dst_ipv6_addr[1];
-	flt_rule_entry.rule.attrib.u.v6.dst_addr[2] = data_event_conn->dst_ipv6_addr[2];
-	flt_rule_entry.rule.attrib.u.v6.dst_addr[3] = data_event_conn->dst_ipv6_addr[3];
+	flt_rule_entry.rule.attrib.u.v6.dst_addr[0] = data_event_conn->ul_in.ipv6_dst[0];
+	flt_rule_entry.rule.attrib.u.v6.dst_addr[1] = data_event_conn->ul_in.ipv6_dst[1];
+	flt_rule_entry.rule.attrib.u.v6.dst_addr[2] = data_event_conn->ul_in.ipv6_dst[2];
+	flt_rule_entry.rule.attrib.u.v6.dst_addr[3] = data_event_conn->ul_in.ipv6_dst[3];
 	flt_rule_entry.rule.attrib.u.v6.dst_addr_mask[0] = 0xFFFFFFFF;
 	flt_rule_entry.rule.attrib.u.v6.dst_addr_mask[1] = 0xFFFFFFFF;
 	flt_rule_entry.rule.attrib.u.v6.dst_addr_mask[2] = 0xFFFFFFFF;
@@ -1753,7 +1760,127 @@ int IPACM_Lan::add_socksv5_flt_rule(ipacm_event_connection *data_event_conn)
 		ret = IPACM_FAILURE;
 		goto end;
 	}
-	socksv5_flt_hdl_v6 = pFilteringTable->rules[0].flt_rule_hdl;
+	socksv5_flt_hdl_v6[num_socksv5_flt++] = pFilteringTable->rules[0].flt_rule_hdl;
+
+	free(pFilteringTable);
+
+	len = sizeof(struct ipa_ioc_add_flt_rule_after) + IPA_MAX_SOCKS_FLT_RULE * sizeof(struct ipa_flt_rule_add);
+	pFilteringTable = (struct ipa_ioc_add_flt_rule_after*)malloc(len);
+
+	/* In V6-V6 UL case add a rule for second pass with action as RT */
+	if(data_event_conn->dl_in.ip_type == IPA_IP_v6)
+	{
+		memset(pFilteringTable, 0, len);
+
+		/* ext_prop will have a Q6 UL rules*/
+		ext_prop = IPACM_Iface::ipacmcfg->GetExtProp(IPA_IP_v6);
+
+		if(ext_prop == NULL || ext_prop->num_ext_props <= 0)
+		{
+			IPACMDBG_H("No extended properties found not configuring UL Second pass rules for SocksV5\n");
+			ret = IPACM_SUCCESS;
+			goto end;
+		}
+
+		if (ext_prop->num_ext_props > MAX_WAN_UL_FILTER_RULES)
+		{
+			IPACMERR("number of modem UL rules > MAX_WAN_UL_FILTER_RULES, aborting...\n");
+			ret = IPACM_FAILURE;
+			goto end;
+		}
+
+		k = 0;
+		for (i = 0; i < ext_prop->num_ext_props; i++)
+		{
+			if (ext_prop->prop[i].replicate_needed != true)
+				continue;
+
+			memset(&flt_rule_entry, 0, sizeof(flt_rule_entry));
+			flt_rule_entry.at_rear = true;
+			flt_rule_entry.flt_rule_hdl = -1;
+			flt_rule_entry.status = -1;
+			flt_rule_entry.rule.eq_attrib_type = 1;
+			flt_rule_entry.rule.action = IPA_PASS_TO_ROUTING;
+
+			memcpy(&flt_rule_entry.rule.eq_attrib,
+					&ext_prop->prop[i].eq_attrib,
+					sizeof(ext_prop->prop[i].eq_attrib));
+			flt_rule_entry.rule.rt_tbl_idx = ext_prop->prop[i].rt_tbl_idx;
+			flt_rule_entry.rule.hashable = ext_prop->prop[i].is_rule_hashable;
+			flt_rule_entry.rule.rule_id = ext_prop->prop[i].rule_id;
+
+			if(rx_prop->rx[0].attrib.attrib_mask & IPA_FLT_META_DATA) //turn on meta-data equation
+			{
+				   flt_rule_entry.rule.eq_attrib.rule_eq_bitmap |= (1<<9);
+				   flt_rule_entry.rule.eq_attrib.metadata_meq32_present = 1;
+				   flt_rule_entry.rule.eq_attrib.metadata_meq32.offset = 0;
+				   flt_rule_entry.rule.eq_attrib.metadata_meq32.value |= rx_prop->rx[0].attrib.meta_data;
+				   flt_rule_entry.rule.eq_attrib.metadata_meq32.mask |= rx_prop->rx[0].attrib.meta_data_mask;
+			}
+
+			memset(&flt_rule_entry_socks, 0, sizeof(struct ipa_flt_rule_add));
+			flt_rule_entry_socks.at_rear = true;
+			flt_rule_entry_socks.flt_rule_hdl = -1;
+			flt_rule_entry_socks.status = -1;
+			flt_rule_entry_socks.rule.eq_attrib_type = 1;
+			flt_rule_entry.rule.rt_tbl_idx = ext_prop->prop[i].rt_tbl_idx;
+			
+			flt_rule_entry_socks.rule.attrib.attrib_mask |= rx_prop->rx[0].attrib.attrib_mask;
+			flt_rule_entry_socks.rule.attrib.attrib_mask &= ~IPA_FLT_META_DATA;
+			flt_rule_entry_socks.rule.attrib.meta_data_mask = rx_prop->rx[0].attrib.meta_data_mask;
+			flt_rule_entry_socks.rule.attrib.meta_data = rx_prop->rx[0].attrib.meta_data;
+
+			/* Match src ipv6 */
+			flt_rule_entry_socks.rule.attrib.attrib_mask |= IPA_FLT_SRC_ADDR;
+			flt_rule_entry_socks.rule.attrib.u.v6.src_addr[0] = data_event_conn->dl_in.ipv6_dst[3];
+			flt_rule_entry_socks.rule.attrib.u.v6.src_addr[1] = data_event_conn->dl_in.ipv6_dst[2];
+			flt_rule_entry_socks.rule.attrib.u.v6.src_addr[2] = data_event_conn->dl_in.ipv6_dst[1];
+			flt_rule_entry_socks.rule.attrib.u.v6.src_addr[3] = data_event_conn->dl_in.ipv6_dst[0];
+			flt_rule_entry_socks.rule.attrib.u.v6.src_addr_mask[0] = 0xFFFFFFFF;
+			flt_rule_entry_socks.rule.attrib.u.v6.src_addr_mask[1] = 0xFFFFFFFF;
+			flt_rule_entry_socks.rule.attrib.u.v6.src_addr_mask[2] = 0xFFFFFFFF;
+			flt_rule_entry_socks.rule.attrib.u.v6.src_addr_mask[3] = 0xFFFFFFFF;
+
+			/* Match Next header to TCP */
+			flt_rule_entry_socks.rule.attrib.attrib_mask |= IPA_FLT_NEXT_HDR;
+			flt_rule_entry_socks.rule.attrib.u.v6.next_hdr = (uint8_t)IPACM_FIREWALL_IPPROTO_TCP;
+
+			/* Actual replication of modem rule happens here*/
+			if (replicate_flt_rule(&flt_rule_entry_r, &flt_rule_entry, &flt_rule_entry_socks) == false)
+			{
+				IPACMERR("Replication Failed!\n");
+				continue;
+			}
+			flt_rule_entry_r.rule.action = IPA_PASS_TO_ROUTING;
+			memcpy(&(pFilteringTable->rules[k++]), &flt_rule_entry_r, sizeof(flt_rule_entry));
+
+		}
+
+		pFilteringTable->commit = 1;
+		pFilteringTable->ep = rx_prop->rx[0].src_pipe;
+		pFilteringTable->ip = IPA_IP_v6;
+		pFilteringTable->num_rules = k;
+		pFilteringTable->add_after_hdl = eth_bridge_flt_rule_offset[IPA_IP_v6];
+
+		if((num_socksv5_flt + pFilteringTable->num_rules) > (IPA_MAX_SOCKS_FLT_RULE - 1))
+		{
+			IPACMDBG_H("Failed to add rules. Max Socks rules already installed\n");
+			ret = IPACM_FAILURE;
+			goto end;
+		}
+
+		if(m_filtering.AddFilteringRuleAfter(pFilteringTable) == false)
+		{
+			IPACMERR("Failed to add client filtering rules.\n");
+			ret = IPACM_FAILURE;
+			goto end;
+		}
+
+		for (i = 0; i < k; i++)
+		{
+			socksv5_flt_hdl_v6[num_socksv5_flt++] = pFilteringTable->rules[i].flt_rule_hdl;
+		}
+	}
 
 end:
 	if (pFilteringTable)
@@ -1766,18 +1893,20 @@ end:
 /* del socksv5 flt rule */
 int IPACM_Lan::del_socksv5_flt_rule(void)
 {
-	if(socksv5_flt_hdl_v6 != 0)
+	for(int i = 0; i < num_socksv5_flt; i++)
 	{
-		if(m_filtering.DeleteFilteringHdls(&socksv5_flt_hdl_v6, IPA_IP_v6, 1) == false)
+		if(socksv5_flt_hdl_v6[i] != 0)
 		{
-			return IPACM_FAILURE;
+			if(m_filtering.DeleteFilteringHdls(&socksv5_flt_hdl_v6[i], IPA_IP_v6, 1) == false)
+			{
+				return IPACM_FAILURE;
+			}
+			socksv5_flt_hdl_v6[i] = 0;
 		}
-		socksv5_flt_hdl_v6 = 0;
 	}
 	return IPACM_SUCCESS;
 }
 #endif
-
 
 int IPACM_Lan::del_ul_flt_rules(enum ipa_ip_type iptype)
 {
@@ -1928,7 +2057,8 @@ int IPACM_Lan::handle_vlan_neighbor(ipacm_event_data_all *data)
 		IPACMERR("vlan with NULL bridge\n");
 		return IPACM_FAILURE;
 	}
-	if(IPACM_Iface::ipacmcfg->ipacm_mpdn_enable) {
+	/* TO DO: Enable SOCKSV5 with MPDN flag */
+	if(IPACM_Iface::ipacmcfg->ipacm_mpdn_enable && !IPACM_Iface::ipacmcfg->ipacm_socksv5_enable) {
 		if(data_vlan->data_all.iptype == IPA_IP_v6)
 		{
 			if(IPACM_Wan::is_global_ipv6_addr(data_vlan->data_all.ipv6_addr))
@@ -2116,7 +2246,7 @@ bool IPACM_Lan::is_vlan_IF(uint16_t vlan_id)
 
 #ifdef FEATURE_SOCKSv5
 	/* handle socksv5 MPDN logic */
-	if (IPACM_Iface::ipacmcfg->ipacm_mpdn_enable == false)
+	if (IPACM_Iface::ipacmcfg->ipacm_socksv5_enable)
 	{
 		IPACMDBG_H("MPDN is disabled, return true\n");
 		return true;
@@ -2468,7 +2598,7 @@ int IPACM_Lan::handle_vlan_pdn_down(ipacm_event_vlan_pdn *data)
 
 #ifdef FEATURE_SOCKSv5
 			/* socksv5 case */
-			if (IPACM_Iface::ipacmcfg->ipacm_mpdn_enable == false &&
+			if (IPACM_Iface::ipacmcfg->ipacm_socksv5_enable &&
 				(IPACM_Wan::isWanUP(ipa_if_num) || IPACM_Wan::isVlanWanUP()))
 				notif_only = true;
 #endif //FEATURE_SOCKSv5
@@ -2534,7 +2664,7 @@ int IPACM_Lan::handle_vlan_pdn_down(ipacm_event_vlan_pdn *data)
 
 #ifdef FEATURE_SOCKSv5
 			/* socksv5 case */
-			if (IPACM_Iface::ipacmcfg->ipacm_mpdn_enable == false &&
+			if (IPACM_Iface::ipacmcfg->ipacm_socksv5_enable &&
 				(IPACM_Wan::isWanUP_V6(ipa_if_num) || IPACM_Wan::isVlanWanUP_V6()))
 				notif_only = true;
 #endif //FEATURE_SOCKSv5
@@ -2607,7 +2737,7 @@ int IPACM_Lan::handle_vlan_pdn_down(ipacm_event_vlan_pdn *data)
 
 #ifdef FEATURE_SOCKSv5
 			/* socksv5 case */
-			if (IPACM_Iface::ipacmcfg->ipacm_mpdn_enable == false &&
+			if (IPACM_Iface::ipacmcfg->ipacm_socksv5_enable &&
 				((IPACM_Wan::isWanUP(ipa_if_num) || IPACM_Wan::isVlanWanUP()) ||
 				(IPACM_Wan::isWanUP(ipa_if_num) || IPACM_Wan::isVlanWanUP())))
 				notif_only = true;
@@ -3580,11 +3710,7 @@ int IPACM_Lan::handle_wan_up(ipa_ip_type ip_type, uint16_t vlan_id)
 #endif
 			if (IPACM_Iface::ipacmcfg->IsIpv6CTEnabled() && !IPACM_Wan::isWan_Bridge_Mode())
 		{
-#ifndef FEATURE_SOCKSv5
 			flt_rule_entry.rule.action = IPA_PASS_TO_SRC_NAT;
-#else
-			flt_rule_entry.rule.action = IPA_PASS_TO_ROUTING;
-#endif
 		}
 		else
 		{
@@ -6240,7 +6366,7 @@ int IPACM_Lan::handle_vlan_phys_if_down()
 
 #ifdef FEATURE_SOCKSv5
 	/* socksv5 case */
-	if (IPACM_Iface::ipacmcfg->ipacm_mpdn_enable == false)
+	if (IPACM_Iface::ipacmcfg->ipacm_socksv5_enable)
 	{
 		if(IPACM_Wan::isWanUP(ipa_if_num) || IPACM_Wan::isVlanWanUP())
 		{
@@ -7105,9 +7231,6 @@ int IPACM_Lan::handle_uplink_filter_rule(ipacm_ext_prop *prop, ipa_ip_type iptyp
 	}
 	else if(iptype == IPA_IP_v6)
 	{
-#ifndef FEATURE_SOCKSv5
-
-		IPACMDBG_H("Feature SOCKv5 not defined\n");
 #ifdef FEATURE_IPV6_NAT
 		/* for v6 nat, second pass should go directly to RT block */
 		if(IPACM_Iface::ipacmcfg->ipv6_nat_enable)
@@ -7120,9 +7243,6 @@ int IPACM_Lan::handle_uplink_filter_rule(ipacm_ext_prop *prop, ipa_ip_type iptyp
 
 		        IPACMDBG_H("IPV6CT Filter action:%d\n",flt_rule_entry.rule.action);
                 }
-#else
-		flt_rule_entry.rule.action = IPA_PASS_TO_ROUTING;
-#endif
 	}
 	else
 	{
@@ -7630,12 +7750,8 @@ bool IPACM_Lan::replicate_flt_rule(ipa_flt_rule_add *replicate_rule,
 	replicate_rule->rule.hashable = q6_rule->rule.hashable;
 	replicate_rule->rule.rule_id = q6_rule->rule.rule_id;
 	replicate_rule->rule.rt_tbl_hdl = q6_rule->rule.rt_tbl_hdl;
-#ifndef FEATURE_SOCKSv5
 	replicate_rule->rule.action = IPACM_Iface::ipacmcfg->IsIpv6CTEnabled()?
 		IPA_PASS_TO_SRC_NAT : IPA_PASS_TO_ROUTING;
-#else
-	replicate_rule->rule.action = IPA_PASS_TO_ROUTING;
-#endif
 exit:
 	return ret;
 }
@@ -8436,12 +8552,8 @@ int IPACM_Lan::config_dft_firewall_rules_ul(IPACM_firewall_conf_t* firewall_conf
 
 			if(firewall_conf->rule_action_accept == true)
 			{
-#ifndef FEATURE_SOCKSv5
 				flt_rule_entry.rule.action =
 					IPACM_Iface::ipacmcfg->IsIpv6CTEnabled() ? IPA_PASS_TO_SRC_NAT : IPA_PASS_TO_ROUTING;
-#else
-				flt_rule_entry.rule.action = IPA_PASS_TO_ROUTING;
-#endif
 			}
 			else
 			{
@@ -9115,9 +9227,6 @@ int IPACM_Lan::install_uplink_filter_rule_per_client_v2
 	}
 	else if(iptype == IPA_IP_v6)
 	{
-#ifdef FEATURE_SOCKSv5
-		flt_rule_entry.rule.action = IPA_PASS_TO_ROUTING;
-#else
 #ifdef FEATURE_IPV6_NAT
 		/* for v6 nat, second pass should go directly to RT block */
 		if(IPACM_Iface::ipacmcfg->ipv6_nat_enable)
@@ -9126,7 +9235,6 @@ int IPACM_Lan::install_uplink_filter_rule_per_client_v2
 #endif
 			flt_rule_entry.rule.action = IPACM_Iface::ipacmcfg->IsIpv6CTEnabled()?
 					IPA_PASS_TO_SRC_NAT : IPA_PASS_TO_ROUTING;
-#endif
 	}
 	else
 	{
@@ -9436,9 +9544,6 @@ int IPACM_Lan::install_uplink_filter_rule_per_client
 	}
 	else if(iptype == IPA_IP_v6)
 	{
-#ifdef FEATURE_SOCKSv5
-		flt_rule_entry.rule.action = IPA_PASS_TO_ROUTING;
-#else
 #ifdef FEATURE_IPV6_NAT
 		/* for v6 nat, second pass should go directly to RT block */
 		if(IPACM_Iface::ipacmcfg->ipv6_nat_enable)
@@ -9447,7 +9552,6 @@ int IPACM_Lan::install_uplink_filter_rule_per_client
 #endif
 			flt_rule_entry.rule.action = IPACM_Iface::ipacmcfg->IsIpv6CTEnabled()?
 					IPA_PASS_TO_SRC_NAT : IPA_PASS_TO_ROUTING;
-#endif
 	}
 	else
 	{

@@ -541,7 +541,7 @@ public:
 
 #ifdef FEATURE_SOCKSv5
 	/* add socksv5 flt rule */
-	int add_socksv5_flt_rule(ipacm_event_connection *data_event_conn);
+	int add_socksv5_flt_rule(ipa_socksv5_msg *data_event_conn);
 	int del_socksv5_flt_rule(void);
 #endif
 
@@ -1002,7 +1002,8 @@ protected:
 #endif
 
 #ifdef FEATURE_SOCKSv5
-	uint32_t socksv5_flt_hdl_v6;
+	uint32_t socksv5_flt_hdl_v6[IPA_MAX_SOCKS_FLT_RULE];
+	uint32_t num_socksv5_flt;
 #endif
 
 	bool is_active;

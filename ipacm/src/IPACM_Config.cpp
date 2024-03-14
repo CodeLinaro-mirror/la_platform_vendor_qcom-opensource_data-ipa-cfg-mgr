@@ -4310,7 +4310,8 @@ bool IPACM_Config::is_svap_related(const char* phy_inf) {
 		goto end;
 	}
 
-	if ((72 == atoi(MapBSSType_row)) && (IPACM_Iface::ipacmcfg->ipacm_easy_mesh_traffic_separation_enable)) {
+	if ((BSSTYPE_SVAP == atoi(MapBSSType_row)) && (IPACM_Iface::ipacmcfg->ipacm_easy_mesh_traffic_separation_enable)
+				|| (STA_SVAP == atoi(MapBSSType_row))) {
 		is_svap = true;
 	}
 	IPACMDBG_H("get_MapBSSType %d\n", atoi(MapBSSType_row));

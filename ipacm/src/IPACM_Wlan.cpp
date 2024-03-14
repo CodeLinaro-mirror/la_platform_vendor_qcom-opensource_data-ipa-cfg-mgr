@@ -92,7 +92,6 @@ int IPACM_Wlan::total_num_wifi_clients = 0;
 
 int IPACM_Wlan::num_wlan_ap_iface = 0;
 
-#define BSSTYPE_SVAP 72
 #define VLAN_TPID_SIZE 2
 #define VLAN_VID_MASK 0x0FFF
 #define NUM_TX_PROPS 4

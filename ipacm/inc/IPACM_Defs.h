@@ -77,6 +77,8 @@ extern "C"
 #define IPA_MAX_FILE_LEN  64
 #define IPA_IFACE_NAME_LEN 16
 #define IPA_ALG_PROTOCOL_NAME_LEN  10
+#define BSSTYPE_SVAP 72
+#define STA_SVAP 128
 
 #define IPA_WLAN_PARTIAL_HDR_OFFSET  0 // dst mac first then src mac
 #define IPA_ODU_PARTIAL_HDR_OFFSET  8 // dst mac first then src mac

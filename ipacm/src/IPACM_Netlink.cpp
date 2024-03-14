@@ -627,10 +627,8 @@ static int ipa_nl_decode_rtm_route
 {
 	struct nlmsghdr *nlh = (struct nlmsghdr *)buffer;  /* NL message header */
 	struct rtattr *rtah = NULL;
-#ifdef FEATURE_RDKB
 	struct rtattr *inner_rtah = NULL;
 	int inner_rtalen;
-#endif
 
 	/* Extract the header data */
 	route_info->metainfo = *((struct rtmsg *)NLMSG_DATA(nlh));
@@ -683,7 +681,7 @@ static int ipa_nl_decode_rtm_route
 						 sizeof(route_info->attr_info.priority));
 			route_info->attr_info.param_mask |= IPA_RTA_PARAM_PRIORITY;
 			break;
-#ifdef FEATURE_RDKB
+
 		case RTA_METRICS:
 			inner_rtalen = RTA_PAYLOAD(rtah);
 			for(inner_rtah = (struct rtattr *)RTA_DATA(rtah); RTA_OK(inner_rtah, inner_rtalen);
@@ -699,7 +697,7 @@ static int ipa_nl_decode_rtm_route
 				}
 			}
 			break;
-#endif
+
 		default:
 			break;
 
@@ -758,10 +756,9 @@ static int ipa_nl_decode_nlmsg
 	ipacm_event_data_all *vlan_data;
 	struct ipa_vlan_iface_info vlan_info;
 	struct ipa_macsec_map macsec_map, *macsec_map_data;
-#ifdef FEATURE_RDKB
 	ipacm_event_mtu_info *mtu_event = NULL;
 	ipa_mtu_info *mtu_info;
-#endif
+
 	memset(nullMac, 0, sizeof(nullMac));
 	memset(&vlan_info, 0, sizeof(vlan_info));
 	memset(&macsec_map, 0, sizeof(macsec_map));
@@ -1181,7 +1178,6 @@ static int ipa_nl_decode_nlmsg
 			IPACMDBG("rtm_family: %d\n", msg_ptr->nl_route_info.metainfo.rtm_family);
 			IPACMDBG("param_mask: 0x%x\n", msg_ptr->nl_route_info.attr_info.param_mask);
 
-#ifdef FEATURE_RDKB
 			/* take care of MTU */
 			if((msg_ptr->nl_route_info.metainfo.rtm_type == RTN_UNICAST) &&
 				 ((msg_ptr->nl_route_info.metainfo.rtm_protocol == RTPROT_BOOT) ||
@@ -1235,7 +1231,6 @@ static int ipa_nl_decode_nlmsg
 				evt_data.evt_data = mtu_event;
 				IPACM_EvtDispatcher::PostEvt(&evt_data);
 			}
-#endif
 
 			/* take care of route add default route & uniroute */
 			if((AF_INET == msg_ptr->nl_route_info.metainfo.rtm_family) &&

@@ -15323,6 +15323,18 @@ if(isPmipv6){/*PMIPV6 needs to take care of WAN up before GRE UP scenario */
 		del_ul_flt_rules(iptype);
 	}
 }
+
+/*EoGRE needs to take care of WAN up before GRE UP scenario */
+if(IPACM_Iface::ipacmcfg->eogre_enabled && (modem_ul_v6_set || modem_ul_v4_set)){
+	IPACMDBG_H("delete model ul rules: ipa_if_num:%d iptype:%d, modem_ul_v4_set:%d, modem_ul_v6_set :%d \n",ipa_if_num, iptype, modem_ul_v4_set,modem_ul_v6_set);
+	if(IPACM_Wan::isWanUP(ipa_if_num)){
+		del_ul_flt_rules(iptype);
+	}
+	if(IPACM_Wan::isWanUP_V6(ipa_if_num)){
+		del_ul_flt_rules(iptype);
+	}
+}
+
 #ifdef FEATURE_VLAN_MPDN
 	ret = handle_uplink_filter_rule(
 		IPACM_Iface::ipacmcfg->GetExtProp(iptype),

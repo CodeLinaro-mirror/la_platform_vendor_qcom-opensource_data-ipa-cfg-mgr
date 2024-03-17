@@ -282,6 +282,9 @@ void* ipa_driver_msg_notifier(void *param)
 	ipacm_event_data_all* new_neigh_data;
 	ipa_ioc_gsb_info *event_gsb = NULL;
 	ipa_ioc_pdn_config *pdn_info = NULL;
+#ifdef FEATURE_STATIC_POLICY
+	ipa_ioc_pdn_dscp_map_info *pdn_dscp_info = NULL;
+#endif
 #ifdef IPA_IOC_SET_MAC_FLT
 	ipa_ioc_mac_client_list_type *event_mac_flt = NULL;
 #endif
@@ -980,6 +983,22 @@ void* ipa_driver_msg_notifier(void *param)
 			evt_data.evt_data = ip_collision_pdn_data;
 			ipa_get_if_index(pdn_info->dev_name, &(ip_collision_pdn_data->if_index));
 			break;
+
+#ifdef FEATURE_STATIC_POLICY
+		case IPA_PDN_DSCP_ADD_EVENT:
+			pdn_dscp_info = (ipa_ioc_pdn_dscp_map_info *)
+				(buffer + sizeof(struct ipa_msg_meta));
+			IPACMDBG_H("Received IPA_PDN_DSCP_ADD_EVENT add: %d\n",pdn_dscp_info->add);
+			IPACM_Iface::ipacmcfg->pdn_dscp_config_update(pdn_dscp_info);
+			continue;
+
+		case IPA_PDN_DSCP_DEL_EVENT:
+			pdn_dscp_info = (ipa_ioc_pdn_dscp_map_info *)
+				(buffer + sizeof(struct ipa_msg_meta));
+			IPACMDBG_H("Received IPA_PDN_DSCP_DEL_EVENT add: %d\n",pdn_dscp_info->add);
+			IPACM_Iface::ipacmcfg->pdn_dscp_config_update(pdn_dscp_info);
+			continue;
+#endif
 
 #ifdef IPA_IOC_SET_MAC_FLT
 		case IPA_MAC_FLT_EVENT:

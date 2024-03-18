@@ -13932,12 +13932,21 @@ int IPACM_Lan::add_tcp_syn_flt_rule(ipa_ip_type iptype)
 		}
 		else
 		{
+			flt_rule_entry.rule.eq_attrib_type = 1;
 			flt_rule_entry.rule.eq_attrib.rule_eq_bitmap = 0;
 			flt_rule_entry.rule.eq_attrib.rule_eq_bitmap |= 0x20<<flt_rule_entry.rule.eq_attrib.num_offset_meq_32;
 			flt_rule_entry.rule.eq_attrib.offset_meq_32[flt_rule_entry.rule.eq_attrib.num_offset_meq_32].offset = 6;
 			flt_rule_entry.rule.eq_attrib.offset_meq_32[flt_rule_entry.rule.eq_attrib.num_offset_meq_32].mask = 0xFF000000;
 			flt_rule_entry.rule.eq_attrib.offset_meq_32[flt_rule_entry.rule.eq_attrib.num_offset_meq_32].value = 6 << 24;
 			flt_rule_entry.rule.eq_attrib.num_offset_meq_32 ++;
+
+			flt_rule_entry.rule.eq_attrib.rule_eq_bitmap |= (1<<8);
+			flt_rule_entry.rule.eq_attrib.num_ihl_offset_meq_32 = 1;
+			flt_rule_entry.rule.eq_attrib.ihl_offset_meq_32[0].offset = 12;
+
+			/* add TCP SYN rule*/
+			flt_rule_entry.rule.eq_attrib.ihl_offset_meq_32[0].value = (((uint32_t)1)<<TCP_SYN_SHIFT);
+			flt_rule_entry.rule.eq_attrib.ihl_offset_meq_32[0].mask = (((uint32_t)1)<<TCP_SYN_SHIFT);
 		}
 	}
 

@@ -4244,9 +4244,9 @@ int IPACM_Wan::add_icmp_alg_rules(struct ipa_flt_rule_add *rules, int rule_offse
 			if(ipv4_to_iface[i].pIface &&
 				(ipv4_to_iface[i].wan_up_vlan || isDefaultGatewayIfaceUp(ipv4_to_iface[i].pIface)))
 			{
-				IPACMDBG_H("adding ICMP rule for IF %s ipv4\n", ipv4_to_iface[i].pIface->dev_name);
-				rules[rule_offset + i].mux_id = ipv4_to_iface[i].pIface->ext_prop->ext[0].mux_id;
-				memcpy(&(rules[rule_offset + i].flt_rule), &flt_rule_entry, sizeof(struct ipa_flt_rule_add));
+				IPACMDBG_H("adding ICMP rule for IF %s ipv4 at index %d\n", ipv4_to_iface[i].pIface->dev_name, num_icmp_rules);
+				rules[rule_offset + num_icmp_rules].mux_id = ipv4_to_iface[i].pIface->ext_prop->ext[0].mux_id;
+				memcpy(&(rules[rule_offset + num_icmp_rules].flt_rule), &flt_rule_entry, sizeof(struct ipa_flt_rule_add));
 				IPACM_Wan::num_v4_flt_rule++;
 				num_icmp_rules++;
 			}
@@ -4324,9 +4324,9 @@ int IPACM_Wan::add_icmp_alg_rules(struct ipa_flt_rule_add *rules, int rule_offse
 		{
 			if(ipv6_to_iface[i].pIface && (ipv6_to_iface[i].wan_up_vlan_v6 || isDefaultGatewayIfaceUp_v6(ipv6_to_iface[i].pIface)))
 			{
-				IPACMDBG_H("adding ICMPv6 rule for IF %s \n", ipv6_to_iface[i].pIface->dev_name);
-				rules[rule_offset + i].mux_id = ipv6_to_iface[i].pIface->ext_prop->ext[0].mux_id;
-				memcpy(&(rules[rule_offset + i].flt_rule), &flt_rule_entry, sizeof(struct ipa_flt_rule_add));
+				IPACMDBG_H("adding ICMPv6 rule for IF %s at index %d\n", ipv6_to_iface[i].pIface->dev_name, num_icmp_rules);
+				rules[rule_offset + num_icmp_rules].mux_id = ipv6_to_iface[i].pIface->ext_prop->ext[0].mux_id;
+				memcpy(&(rules[rule_offset + num_icmp_rules].flt_rule), &flt_rule_entry, sizeof(struct ipa_flt_rule_add));
 				IPACM_Wan::num_v6_flt_rule++;
 				num_icmp_rules++;
 			}

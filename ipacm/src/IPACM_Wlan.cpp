@@ -5580,7 +5580,8 @@ int IPACM_Wlan::install_uplink_filter_rule_per_client
 	flt_rule_entry.rule.eq_attrib_type = 1;
 	if(iptype == IPA_IP_v4)
 	{
-		if (ipa_if_cate == ODU_IF && IPACM_Wan::isWan_Bridge_Mode())
+		if (ipa_if_cate == ODU_IF && IPACM_Wan::isWan_Bridge_Mode() ||
+			IPACM_Iface::ipacmcfg->is_public_ip_support_enabled)
 		{
 			IPACMDBG_H(
 					"%s%s\n",
@@ -5940,7 +5941,8 @@ int IPACM_Wlan::install_uplink_filter_rule_per_client_v2
 #endif
 	if(iptype == IPA_IP_v4)
 	{
-		if (ipa_if_cate == ODU_IF && IPACM_Wan::isWan_Bridge_Mode())
+		if (ipa_if_cate == ODU_IF && IPACM_Wan::isWan_Bridge_Mode() ||
+			IPACM_Iface::ipacmcfg->is_public_ip_support_enabled)
 		{
 			IPACMDBG_H(
 					"%s%s\n",

@@ -104,7 +104,7 @@ int log_init();
 		memset(buffer_send, 0, MAX_BUF_LEN); \
 		snprintf(buffer_send, MAX_BUF_LEN," %s %s:%d %s(): " fmt, get_time_string(timestamp_buf, TimeStamp_buff_len), __FILE__,  __LINE__, __FUNCTION__, ##__VA_ARGS__); \
 		ipacm_log_dump(buffer_send); \
-	} while (0);
+	} while (0)
 #ifdef DEBUG
 #define PERROR(fmt) \
 	do { \
@@ -112,7 +112,7 @@ int log_init();
 		snprintf(buffer_send,MAX_BUF_LEN,"%s:%d %s()", __FILE__, __LINE__, __FUNCTION__); \
 		ipacm_log_send (buffer_send); \
 		perror(fmt); \
-	} while (0);
+	} while (0)
 #define IPACMERR(fmt, ...) \
 	do { \
 		memset(buffer_send, 0, MAX_BUF_LEN); \
@@ -122,7 +122,7 @@ int log_init();
 		memset(buffer_send, 0, MAX_BUF_LEN); \
 		snprintf(buffer_send, MAX_BUF_LEN," %s %s:%d %s(): " fmt, get_time_string(timestamp_buf, TimeStamp_buff_len), __FILE__,  __LINE__, __FUNCTION__, ##__VA_ARGS__); \
 		ipacm_log_dump(buffer_send); \
-	} while (0);
+	} while (0)
 #define IPACMDBG_H(fmt, ...) \
 	do { \
 		memset(buffer_send, 0, MAX_BUF_LEN); \
@@ -132,21 +132,28 @@ int log_init();
 		memset(buffer_send, 0, MAX_BUF_LEN); \
 		snprintf(buffer_send, MAX_BUF_LEN," %s %s:%d %s(): " fmt, get_time_string(timestamp_buf, TimeStamp_buff_len), __FILE__,  __LINE__, __FUNCTION__, ##__VA_ARGS__); \
 		ipacm_log_dump(buffer_send); \
-	} while (0);
+	} while (0)
 #else
 #define PERROR(fmt)   perror(fmt)
 #define IPACMERR(fmt, ...)   printf("ERR: %s %s:%d %s() " fmt, get_time_string(timestamp_buf, TimeStamp_buff_len), __FILE__,  __LINE__, __FUNCTION__, ##__VA_ARGS__);
 #define IPACMDBG_H(fmt, ...) printf("%s %s:%d %s() " fmt, get_time_string(timestamp_buf, TimeStamp_buff_len), __FILE__,  __LINE__, __FUNCTION__, ##__VA_ARGS__);
 #endif
-#define IPACMDBG(fmt, ...)  printf(" %s %s:%d %s() " fmt, get_time_string(timestamp_buf, TimeStamp_buff_len), __FILE__,  __LINE__, __FUNCTION__, ##__VA_ARGS__); \
-			    memset(buffer_send, 0, MAX_BUF_LEN); \
-                	    snprintf(buffer_send, MAX_BUF_LEN," %s %s:%d %s(): " fmt, get_time_string(timestamp_buf, TimeStamp_buff_len), __FILE__,  __LINE__, __FUNCTION__, ##__VA_ARGS__); \
-			    ipacm_log_dump(buffer_send);
+#define IPACMDBG(fmt, ...) \
+	do { \
+		printf(" %s %s:%d %s() " fmt, get_time_string(timestamp_buf, TimeStamp_buff_len), __FILE__,  __LINE__, __FUNCTION__, ##__VA_ARGS__); \
+		memset(buffer_send, 0, MAX_BUF_LEN); \
+		snprintf(buffer_send, MAX_BUF_LEN," %s %s:%d %s(): " fmt, get_time_string(timestamp_buf, TimeStamp_buff_len), __FILE__,  __LINE__, __FUNCTION__, ##__VA_ARGS__); \
+		ipacm_log_dump(buffer_send); \
+	} while (0)
 
-#define IPACMLOG(fmt, ...)  printf(fmt, ##__VA_ARGS__); \
-			    memset(buffer_send, 0, MAX_BUF_LEN); \
-                	    snprintf(buffer_send, MAX_BUF_LEN," %s %s:%d %s(): " fmt, get_time_string(timestamp_buf, TimeStamp_buff_len), __FILE__,  __LINE__, __FUNCTION__, ##__VA_ARGS__); \
-			    ipacm_log_dump(buffer_send);
+#define IPACMLOG(fmt, ...) \
+	do { \
+		printf(fmt, ##__VA_ARGS__); \
+		memset(buffer_send, 0, MAX_BUF_LEN); \
+		snprintf(buffer_send, MAX_BUF_LEN," %s %s:%d %s(): " fmt, get_time_string(timestamp_buf, TimeStamp_buff_len), __FILE__,  __LINE__, __FUNCTION__, ##__VA_ARGS__); \
+		ipacm_log_dump(buffer_send); \
+	} while (0)
+
 
 inline void get_kernel_version(char *kernel_ver)
 {

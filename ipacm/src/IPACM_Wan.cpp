@@ -57,6 +57,7 @@
 #include <IPACM_Netlink.h>
 
 #define META_IS_IPSEC 0x10
+#define META_IPSEC_MASK 0xF0
 #define META_SA_MASK  0xF
 #define META_SA_SHIFT 0
 
@@ -657,7 +658,7 @@ int IPACM_Wan::add_ipsec_wan_dl_rt_rules(ipacm_event_data_addr *data,
 	rt_rule_entry->at_rear = false;
 	rt_rule_entry->rule.hashable = true;
 	rt_rule_entry->rule.attrib.meta_data = META_IS_IPSEC;
-	rt_rule_entry->rule.attrib.meta_data_mask = META_IS_IPSEC;
+	rt_rule_entry->rule.attrib.meta_data_mask = META_IPSEC_MASK;
 	rt_rule_entry->rule.attrib.attrib_mask = IPA_FLT_DST_ADDR | IPA_FLT_META_DATA;
 
 	if (data->iptype == IPA_IP_v6) {
@@ -7883,7 +7884,7 @@ int IPACM_Wan::installWanPostIpsecRt(ipa_ip_type ipType)
 		}
 		rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_META_DATA;
 		rt_rule_entry->rule.attrib.meta_data = META_IS_IPSEC;
-		rt_rule_entry->rule.attrib.meta_data_mask = META_IS_IPSEC;
+		rt_rule_entry->rule.attrib.meta_data_mask = META_IPSEC_MASK;
 
 		IPACMDBG_H("rt_rule_entry->rule.attrib.attrib_mask = 0x%X\n",
 			rt_rule_entry->rule.attrib.attrib_mask);

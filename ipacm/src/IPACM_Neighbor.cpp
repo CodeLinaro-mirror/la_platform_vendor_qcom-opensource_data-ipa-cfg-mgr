@@ -25,6 +25,8 @@ BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
 WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
 OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
 IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+Copyright (c) 2020-2024 Qualcomm Innovation Center, Inc. All rights reserved.
 */
 /*!
 	@file
@@ -325,6 +327,13 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 						{
 							/* Try to add new bridge. If bridge exists, renew its mac addr to handle bridge down/up cases*/
 							IPACMDBG("trying to add bridge%s\n", data->iface_name);
+
+							if(IPACM_Iface::ipacmcfg->IP_Forwarding_config.privateIPForwarding_enable && IPACM_Iface::ipacmcfg->IP_Forwarding_config.vlan > 0 &&
+							strstr(data->iface_name,IPACM_Iface::ipacmcfg->IP_Forwarding_config.bridge_name))
+							{
+								IPACMDBG("Adding the bridge-vlan mapping in the Private IP Forwarding case bridge %s\n", data->iface_name);
+								IPACM_Iface::ipacmcfg->update_bridge_vlan_details_private_forwarding(data->ipv4_addr);
+							}
 							IPACM_Iface::ipacmcfg->add_vlan_bridge(data);
 							bridge = IPACM_Iface::ipacmcfg->get_vlan_bridge(data->iface_name);
 							if(!bridge)
@@ -1076,7 +1085,7 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 								(IPACM_Iface::ipacmcfg->iface_in_vlan_mode(data->iface_name)) &&
 								!(IPACM_Iface::ipacmcfg->is_added_vlan_iface(data->iface_name)))
 							{
-								IPACMDBG_H("not added VLAN interface %s, ignoring\n", data->iface_name);
+								IPACMDBG_H("not added VLAN interface %s, ignoring   mpdn:%d index:%d is_iface_vlan:%d is_added_vlan_iface:%d\n", data->iface_name,IPACM_Iface::ipacmcfg->ipacm_mpdn_enable,ipa_interface_index,IPACM_Iface::ipacmcfg->iface_in_vlan_mode(data->iface_name),IPACM_Iface::ipacmcfg->is_added_vlan_iface(data->iface_name));
 								return;
 							}
 #endif

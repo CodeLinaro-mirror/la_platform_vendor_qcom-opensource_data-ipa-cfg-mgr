@@ -27,7 +27,7 @@
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  * Changes from Qualcomm Innovation Center are provided under the following license:
  *
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted (subject to the limitations in the
@@ -247,7 +247,8 @@ static int ipacm_cfg_xml_parse_tree
 						IPACM_util_icmp_string((char*)xml_node->name, GRE_Server_TAG) == 0 ||
 						IPACM_util_icmp_string((char*)xml_node->name, GRE_Server_Subnet_TAG) == 0 ||
 						IPACM_util_icmp_string((char*)xml_node->name, PUBLIC_IP_SUPPORT_TAG) == 0 ||
-						IPACM_util_icmp_string((char*)xml_node->name, IPACM_WLAN_VLAN_MPDN) == 0)
+						IPACM_util_icmp_string((char*)xml_node->name, IPACM_WLAN_VLAN_MPDN) == 0 ||
+						IPACM_util_icmp_string((char*)xml_node->name, PrivateIPForwarding_TAG) == 0)
 				{
 					/* IP GRE SERVER IPv4 */
 					if (IPACM_util_icmp_string((char*)xml_node->name, GRE_Server_TAG) == 0)
@@ -341,6 +342,83 @@ static int ipacm_cfg_xml_parse_tree
 					}
 					/* go to child */
 					ret_val = ipacm_cfg_xml_parse_tree(xml_node->children, config);
+				}
+				/* Private IP forwarding Enabled */
+				else if (IPACM_util_icmp_string((char*)xml_node->name, PrivateIPForwarding_Enabled) == 0)
+				{
+					content = IPACM_read_content_element(xml_node);
+					if (content)
+					{
+						str_size = strlen(content);
+						memset(content_buf, 0, sizeof(content_buf));
+						memcpy(content_buf, (void *)content, str_size);
+						content_buf[MAX_XML_STR_LEN-1] = '\0';
+						if (atoi(content_buf))
+						{
+							config->private_IP_conf.privateIPForwarding_enable = true;
+						}
+						else
+						{
+							config->private_IP_conf.privateIPForwarding_enable = false;
+						}
+						IPACMDBG_H("privateIPForwarding enable %d\n", config->private_IP_conf.privateIPForwarding_enable);
+					}
+				}
+				/* Private IP forwarding Enabled, and configuring which APN needs IPA offloading */
+				else if (IPACM_util_icmp_string((char*)xml_node->name, OffloadAPN_TAG) == 0)
+				{
+					content = IPACM_read_content_element(xml_node);
+					if (content)
+					{
+						str_size = strlen(content);
+						memset(content_buf, 0, sizeof(content_buf));
+						memcpy(content_buf, (void *)content, str_size);
+						content_buf[MAX_XML_STR_LEN-1] = '\0';
+						config->private_IP_conf.vlan=atoi(content_buf);
+						IPACMDBG_H("privateIPForwarding APN %d\n", config->private_IP_conf.vlan);
+					}
+				}
+				/* Private IP forwarding Enabled, and configuring which iface the vlans are on, if tagged traffic is to be offloaded */
+				else if (IPACM_util_icmp_string((char*)xml_node->name, VLAN_Interface_TAG) == 0)
+				{
+					content = IPACM_read_content_element(xml_node);
+					if (content)
+					{
+						str_size = strlen(content);
+						memset(content_buf, 0, sizeof(content_buf));
+						memcpy(content_buf, (void *)content, str_size);
+						content_buf[MAX_XML_STR_LEN-1] = '\0';
+						strlcpy(config->private_IP_conf.interface_name, content_buf, str_size+1);
+						IPACMDBG_H("privateIPForwarding Iface Name %s\n", config->private_IP_conf.interface_name);
+					}
+				}
+				/* Private IP forwarding Enabled, and configuring which bridge the vlan is on, if that vlan traffic is to be offloaded */
+				else if (IPACM_util_icmp_string((char*)xml_node->name, VLAN_Bridge_TAG) == 0)
+				{
+					content = IPACM_read_content_element(xml_node);
+					if (content)
+					{
+						str_size = strlen(content);
+						memset(content_buf, 0, sizeof(content_buf));
+						memcpy(content_buf, (void *)content, str_size);
+						content_buf[MAX_XML_STR_LEN-1] = '\0';
+						strlcpy(config->private_IP_conf.bridge_name, content_buf, str_size+1);
+						IPACMDBG_H("privateIPForwarding Iface Name %s\n", config->private_IP_conf.bridge_name);
+					}
+				}
+				/* Private IP forwarding Enabled, and configuring the bridge subnet of the bridge on which the vlan is, if that vlan traffic is to be offloaded */
+				else if (IPACM_util_icmp_string((char*)xml_node->name, VLAN_Bridge_subnet_TAG) == 0)
+				{
+					content = IPACM_read_content_element(xml_node);
+					if (content)
+					{
+						str_size = strlen(content);
+						memset(content_buf, 0, sizeof(content_buf));
+						memcpy(content_buf, (void *)content, str_size);
+						content_buf[MAX_XML_STR_LEN-1] = '\0';
+						config->private_IP_conf.bridge_net_mask= ntohl(inet_addr(content_buf));
+						IPACMDBG_H("privateIPForwarding bridge_subnet_mask: %s \n", content_buf);
+					}
 				}
 				else if (IPACM_util_icmp_string((char*)xml_node->name, GREEnabled_TAG) == 0)
 				{

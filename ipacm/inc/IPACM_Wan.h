@@ -28,7 +28,7 @@ IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  * Changes from Qualcomm Innovation Center are provided under the following license:
  *
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted (subject to the limitations in the
@@ -530,6 +530,29 @@ public:
 		return false;
 	}
 
+	static bool GetMuxID_For_Private_IP_Forwarding(uint16_t vlan_id, uint8_t *mux_id)
+	{
+		if(!IPACM_Wan::wan_up)
+			return false;
+		for(int i = 0; i < IPA_MAX_NUM_SW_PDNS; i++)
+		{
+			if(IPACM_Wan::ipv4_to_iface[i].ipv4_addr)
+			{
+				if(vlan_id == 0 && ipv4_to_iface[i].pIface->is_default_gateway)
+				{
+					*mux_id = IPACM_Wan::ipv4_to_iface[i].pIface->ext_prop->ext[0].mux_id;
+					return true;
+				}
+				else if(vlan_id > 0 && !ipv4_to_iface[i].pIface->is_default_gateway)
+				{
+					*mux_id = IPACM_Wan::ipv4_to_iface[i].pIface->ext_prop->ext[0].mux_id;
+					return true;
+				}
+			}
+		}
+		return false;
+	}
+
 	void event_callback(ipa_cm_event_id event, void *data);
 
 #ifdef FEATURE_VLAN_MPDN
@@ -554,10 +577,12 @@ public:
 
 	ipacm_wan_iface_type m_is_sta_mode;
 	static bool backhaul_is_sta_mode;
+	static bool sent_private_ip_mux_id_to_uc;
 	ipacm_event_ip_pass_pdn_info ip_pass_pdn_info;
 	ipacm_event_ip_collision_pdn_info ip_collision_pdn_info;
 	static bool is_ext_prop_set;
 	static uint32_t backhaul_ipv6_prefix[2];
+	static struct ipa_ioc_mux_mapping_table uc_mux_vlan_info;
 #ifdef FEATURE_IPACM_UL_FIREWALL
 	static int m_fd_ipa_ul;
 #endif
@@ -591,7 +616,7 @@ public:
 	static int get_vid_index_for_iface_v6(ipacm_ipv6_wan_iface iface, uint16_t vlan_id);
 	static bool is_xlat_by_ipv4(uint32_t ipv4_addr);
 #endif
-
+	static void send_config_to_uc(void);
 #ifdef FEATURE_EoGRE
 	static uint16_t GetGREMTU(ipa_ip_type iptype);
 
@@ -1009,7 +1034,7 @@ private:
 	void HandleSTAClientDelEvt(const ipa_wan_client* client, int index);
 
 	int add_catchup_all_filtering_rule_each_pdn(const IPACM_firewall_conf_t& firewall_config, ipa_ip_type iptype,
-		const struct ipa_rule_attrib& rx_prop_attrib, struct ipa_flt_rule_add& flt_rule_add, int fltr_rule_number, bool isPmipv6 = false);
+		const struct ipa_rule_attrib& rx_prop_attrib, struct ipa_flt_rule_add& flt_rule_add, int fltr_rule_number, bool isPmipv6 = false, uint8_t muxid=0);
 
 #ifdef FEATURE_IPV6_NAT
 #ifdef FEATURE_VLAN_MPDN

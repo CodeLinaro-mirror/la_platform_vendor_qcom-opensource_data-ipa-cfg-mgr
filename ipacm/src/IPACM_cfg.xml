@@ -344,6 +344,13 @@
 			 <GREServer>172.20.98.76</GREServer>
 			 <GREServerSubnet>172.20.97.1</GREServerSubnet>
 		</GREFlag>
+		<PrivateIPForwarding>
+			<PrivateIPForwardingEnabled>0</PrivateIPForwardingEnabled>
+			<Offload_APN>0</Offload_APN>
+			<VLAN_interface>eth1</VLAN_interface>
+			<VLAN_bridge>bridge1</VLAN_bridge>
+			<VLAN_bridge_subnet>255.255.255.0</VLAN_bridge_subnet>
+		</PrivateIPForwarding>
 		<IPACMPrivateSubnet>
 			<Subnet>
   			   <SubnetAddress>192.168.225.0</SubnetAddress>

@@ -27,7 +27,7 @@
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  * Changes from Qualcomm Innovation Center are provided under the following license:
  *
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted (subject to the limitations in the
@@ -145,6 +145,7 @@ struct ipacm_pdn_flt_rule IPACM_Wan::pdn_flt_rule_v6[IPA_MAX_FLT_RULE];
 ipgre_route_data_t IPACM_Wan::ipgre_route_data[IPA_IP_MAX];
 struct ipa_flt_rule_add IPACM_Wan::flt_rule_v4[IPA_MAX_FLT_RULE];
 struct ipa_flt_rule_add IPACM_Wan::flt_rule_v6[IPA_MAX_FLT_RULE];
+struct ipa_ioc_mux_mapping_table IPACM_Wan::uc_mux_vlan_info;
 
 #ifdef FEATURE_IPACM_UL_FIREWALL
 struct ipa_flt_rule_add IPACM_Wan::firewall_flt_rule_v6_ul[IPACM_MAX_FIREWALL_ENTRIES+1];
@@ -154,6 +155,7 @@ char IPACM_Wan::wan_up_dev_name[IF_NAME_LEN];
 
 bool IPACM_Wan::backhaul_is_sta_mode = false;
 bool IPACM_Wan::is_ext_prop_set = false;
+bool IPACM_Wan::sent_private_ip_mux_id_to_uc = false;
 
 uint32_t IPACM_Wan::wan_route_rule_v6_hdl_a5 = 0;
 
@@ -1001,6 +1003,23 @@ int IPACM_Wan::handle_addr_evt(ipacm_event_data_addr *data)
 				num_ipv4_modem_pdn++;
 				IPACMDBG_H("Now the number of modem ipv4 pdn is %d.\n", num_ipv4_modem_pdn);
 				init_fl_rule_ex(data->iptype);
+				if(IPACM_Iface::ipacmcfg->IP_Forwarding_config.privateIPForwarding_enable){
+					IPACM_Wan::send_config_to_uc();
+					if(IPACM_Wan::sent_private_ip_mux_id_to_uc){
+						if ( config_wan_firewall_rule(IPA_IP_v4) != IPACM_SUCCESS )
+						{
+							IPACMERR(
+								"config_wan_firewall_rule failed\n");
+							goto fail;
+						}
+						if ( install_wan_filtering_rule(false) != IPACM_SUCCESS )
+						{
+							IPACMERR(
+								"install_wan_filtering_rule failed\n");
+							goto fail;
+						}
+					}
+				}
 				if (is_xlat)
 					IPACM_Wan::ipv4_to_iface[modem_ipv4_pdn_index].is_xlat = true;
 			}
@@ -3097,7 +3116,9 @@ int IPACM_Wan::handle_route_add_evt(ipa_ip_type iptype)
 		memcpy(IPACM_Wan::wan_up_dev_name,
 			dev_name,
 				sizeof(IPACM_Wan::wan_up_dev_name));
-
+		if(IPACM_Iface::ipacmcfg->IP_Forwarding_config.privateIPForwarding_enable){
+			IPACM_Wan::send_config_to_uc();
+		}
 		if(m_is_sta_mode == Q6_WAN)
 		{
 			config_wan_firewall_rule(IPA_IP_v4);
@@ -4740,7 +4761,7 @@ int IPACM_Wan::config_dft_firewall_rules_ex(struct ipa_flt_rule_add *rules, int 
 			}
 			IPACMDBG_H("adding default rule for iface %s\n", curr_interface->dev_name);
 			res = add_catchup_all_filtering_rule_each_pdn(*offloaded_pdns_v4[i].first, iptype,
-				curr_interface->rx_prop->rx[0].attrib, rules[pos].flt_rule, pos,isPmipv6);
+				curr_interface->rx_prop->rx[0].attrib, rules[pos].flt_rule, pos,isPmipv6,curr_interface->ext_prop->ext[0].mux_id);
 			if(isPmipv6 && iptype==IPACM_Iface::ipacmcfg->ipgre_info.iptype)
 			{
 				rules[pos].mux_id = curr_interface->ext_prop->ext[0].mux_id;
@@ -6056,9 +6077,11 @@ int IPACM_Wan::add_dft_filtering_rule(struct ipa_flt_rule_add *rules, int rule_o
 
 		flt_rule_entry.rule.eq_attrib.rule_eq_bitmap = 0;
 
-		flt_rule_entry.rule.eq_attrib.rule_eq_bitmap |= (1<<1);
-		flt_rule_entry.rule.eq_attrib.protocol_eq_present = 1;
-		flt_rule_entry.rule.eq_attrib.protocol_eq = IPACM_FIREWALL_IPPROTO_TCP;
+		flt_rule_entry.rule.eq_attrib.rule_eq_bitmap |= 0x20<<flt_rule_entry.rule.eq_attrib.num_offset_meq_32;
+		flt_rule_entry.rule.eq_attrib.offset_meq_32[flt_rule_entry.rule.eq_attrib.num_offset_meq_32].offset = 6;
+		flt_rule_entry.rule.eq_attrib.offset_meq_32[flt_rule_entry.rule.eq_attrib.num_offset_meq_32].mask = 0xFF000000;
+		flt_rule_entry.rule.eq_attrib.offset_meq_32[flt_rule_entry.rule.eq_attrib.num_offset_meq_32].value = 6 << 24;
+		flt_rule_entry.rule.eq_attrib.num_offset_meq_32 ++;
 
 		flt_rule_entry.rule.eq_attrib.rule_eq_bitmap |= (1<<8);
 		flt_rule_entry.rule.eq_attrib.num_ihl_offset_meq_32 = 1;
@@ -9789,7 +9812,7 @@ int IPACM_Wan::add_catchup_all_filtering_rule_each_pdn(
 	ipa_ip_type                   iptype,
 	const struct ipa_rule_attrib& rx_prop_attrib,
 	struct ipa_flt_rule_add&      flt_rule_add,
-	int                           fltr_rule_number, bool isPmipv6 )
+	int                           fltr_rule_number, bool isPmipv6, uint8_t muxid )
 {
 	if ( ! VALID_IPA_IP_TYPE(iptype) )
 	{
@@ -9925,6 +9948,16 @@ flt_rule_entry.rule.attrib.u.v4.dst_addr_mask = 0x00000000;
 				{
 					flt_rule_entry.rule.action = IPA_PASS_TO_DST_NAT;
 					rt_tbl_name = ipacmcfg->rt_tbl_lan_v4.name;
+				}
+			}
+			if(IPACM_Iface::ipacmcfg->IP_Forwarding_config.privateIPForwarding_enable && IPACM_Wan::sent_private_ip_mux_id_to_uc){
+				flt_rule_entry.rule.action = IPA_PASS_TO_ROUTING;
+				IPACMDBG_H("Private IP forward, mux ID DL rule: curr_iface muxid:%d, xml mux id:%d \n",muxid,IPACM_Wan::uc_mux_vlan_info.map_entries[0].mux_id);
+				if(muxid == IPACM_Wan::uc_mux_vlan_info.map_entries[0].mux_id){
+					rt_tbl_name = ipacmcfg->rt_tbl_lan_v4.name;
+				}
+				else{
+					rt_tbl_name = ipacmcfg->rt_tbl_wan_dl.name;
 				}
 			}
 #if defined(FEATURE_EoGRE) || defined(FEATURE_PMIPV6)
@@ -11839,3 +11872,51 @@ void IPACM_Wan::ipgre_clear_route_data(
 }
 
 #endif // endif pmipv6
+
+void IPACM_Wan::send_config_to_uc(){
+	bool res;
+	uint8_t mux_id;
+	int fd, ret = 0;
+	uint8_t vlan_id = IPACM_Iface::ipacmcfg->IP_Forwarding_config.vlan;
+	res=IPACM_Wan::GetMuxID_For_Private_IP_Forwarding(vlan_id,&mux_id);
+	if(IPACM_Wan::sent_private_ip_mux_id_to_uc){
+		//If default route changed, then we will have to resend the mux ID
+		if(vlan_id==0 && IPACM_Wan::uc_mux_vlan_info.map_entries[0].mux_id != mux_id){
+			//Then we have to resend the mux ID mapping
+		}
+		else{
+			IPACMDBG("Already sent IOCTL to uC\n");
+			return;
+		}
+	}
+	if(res){
+		//Send IOCTL
+		struct ipa_ioc_mux_mapping_table vlan_info;
+		memset(&IPACM_Wan::uc_mux_vlan_info, 0xFF,sizeof(struct ipa_ioc_mux_mapping_table));
+		memset(&vlan_info, 0xFF,sizeof(struct ipa_ioc_mux_mapping_table));
+		vlan_info.map_entries[0].vlan_id = vlan_id;
+		vlan_info.map_entries[0].mux_id = mux_id;
+		vlan_info.map_entries[0].pkt_path = HW_PATH_OUTSIDE_TUNNEL;
+		vlan_info.map_entries[0].tunnel_id = 0;
+		fd = open(IPA_DEVICE_NAME, O_RDWR);
+		if(0 == fd)
+		{
+			IPACMERR("Failed opening %s.\n", IPA_DEVICE_NAME);
+			return;
+		}
+		IPACMDBG("Sending muxID,vlan to uC vlan:%d, mux: %d \n",vlan_info.map_entries[0].vlan_id,vlan_info.map_entries[0].mux_id);
+		ret = ioctl(fd, IPA_IOC_SEND_VLAN_MUXID_MAPPING, &vlan_info);
+		if(ret){
+			IPACMERR("IOCTL to send VLAN ID to uC failed.\n");
+			close(fd);
+			return;
+		}
+		memcpy(&IPACM_Wan::uc_mux_vlan_info,&vlan_info,sizeof(struct ipa_ioc_mux_mapping_table));
+		IPACM_Wan::sent_private_ip_mux_id_to_uc = true;
+		IPACMDBG("muxID VLAN mapping IOCTL sent to uC vlan:%d, mux: %d \n",vlan_info.map_entries[0].vlan_id,vlan_info.map_entries[0].mux_id);
+		close(fd);
+	}
+	else{
+		IPACMDBG("Mux ID corresponding to the VLAN %d is not up yet, waiting. \n",IPACM_Iface::ipacmcfg->IP_Forwarding_config.vlan);
+	}
+}

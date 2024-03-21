@@ -28,7 +28,7 @@
  *
  * Changes from Qualcomm Innovation Center are provided under the following license:
  *
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted (subject to the limitations in the
@@ -307,6 +307,7 @@ IPACM_Config::IPACM_Config()
 	memset(&ipgre_info, 0, sizeof(ipgre_info));
 	memset(&pmip_details, 0, sizeof(pmip_details));
 #endif
+	memset(&IP_Forwarding_config, 0, sizeof(IP_Forwarding_config));
 	ext_router_mode = IPA_PREFIX_DISABLED;
 
 	/* Clear the DSCP PCP mapping data during init */
@@ -929,6 +930,24 @@ skip_fnr_alloc:
 	IPACMDBG_H(" depend MAP-7 rm index %d to rm index: %d \n", IPA_RM_RESOURCE_ETHERNET_PROD, IPA_RM_RESOURCE_USB_CONS);
 	IPACMDBG_H(" depend MAP-8 rm index %d to rm index: %d \n", IPA_RM_RESOURCE_WLAN_PROD, IPA_RM_RESOURCE_ETHERNET_CONS);
 
+	/*Private IP forwarding Config*/
+	IPACMDBG_H("Private IP forwarding Before if Condition\n");
+	IP_Forwarding_config.vlan = cfg->private_IP_conf.vlan;
+	IP_Forwarding_config.bridge_net_mask = cfg->private_IP_conf.bridge_net_mask;
+	strlcpy(IP_Forwarding_config.interface_name, cfg->private_IP_conf.interface_name, sizeof(cfg->private_IP_conf.interface_name));
+	strlcpy(IP_Forwarding_config.bridge_name, cfg->private_IP_conf.bridge_name, sizeof(cfg->private_IP_conf.bridge_name));
+	if(IP_Forwarding_config.privateIPForwarding_enable == true && cfg->private_IP_conf.privateIPForwarding_enable==false){
+		//FR disable, erase the contents of ipa_config.txt
+		pInstance->update_config_private_forwarding(true);
+	}
+	IP_Forwarding_config.privateIPForwarding_enable = cfg->private_IP_conf.privateIPForwarding_enable;
+	if(IP_Forwarding_config.privateIPForwarding_enable == true){
+				IPACMDBG_H("Inside If condition\n");
+				pInstance->update_config_private_forwarding();
+	}
+	IPACMDBG_H("Private IP forwarding Config: enable:%d, vlan:%d, iface:%s, bridge: %s, bridge_net_mask: %d\n", IP_Forwarding_config.privateIPForwarding_enable,IP_Forwarding_config.vlan,IP_Forwarding_config.interface_name,IP_Forwarding_config.bridge_name,IP_Forwarding_config.bridge_net_mask);
+
+
 fail:
 	if (cfg != NULL)
 	{
@@ -957,6 +976,63 @@ IPACM_Config* IPACM_Config::GetInstance()
 	}
 
 	return pInstance;
+}
+void IPACM_Config::update_config_private_forwarding(bool reset){
+	char cmd[200] = { 0 };
+	FILE *fp = NULL;
+	char file_buf[100] = { 0 };
+	char vlan_name[20] = {0};
+	struct ipa_ioc_vlan_iface_info data;
+	int eth_iface_no = 0;
+	if(reset){
+		snprintf(cmd, 200, "echo \"\" > /etc/data/ipa_config.txt");
+		system(cmd);
+		IPACMDBG_H("Executed system command to disable Private IP Forwarding\n");
+		return;
+	}
+
+	fp = fopen("/etc/data/ipa_config.txt", "r");
+	fread(file_buf, 100, 1, fp);
+	fclose(fp);
+	if(strstr(file_buf, "ipforward")){
+		//If this string is present, it means the FR is active
+		IPACMDBG_H("Private IP Forward FR already active\n");
+	}
+	else{
+		if(strstr(IP_Forwarding_config.interface_name, "0")){
+			eth_iface_no = 1;
+		}
+		else if(strstr(IP_Forwarding_config.interface_name, "1")){
+			eth_iface_no = 2;
+		}
+		if(IP_Forwarding_config.vlan)
+			snprintf(cmd, 200, "echo \"ipforward%dvlan:%s\r\n\" > /etc/data/ipa_config.txt",eth_iface_no,IP_Forwarding_config.interface_name);
+		else
+			snprintf(cmd, 200, "echo \"ipforward%d\n\r\" > /etc/data/ipa_config.txt",eth_iface_no);
+		system(cmd);
+		IPACMDBG_H("Executed system command\n");
+	}
+}
+
+void IPACM_Config::update_bridge_vlan_details_private_forwarding(uint32_t ip_addr)
+{
+	ipa_ioc_vlan_iface_info vlan_info;
+	ipa_ioc_bridge_vlan_mapping_info bridge_vlan_info;
+
+	vlan_info.vlan_id = IPACM_Iface::ipacmcfg->IP_Forwarding_config.vlan;
+	snprintf(vlan_info.name,sizeof(IPACM_Iface::ipacmcfg->IP_Forwarding_config.interface_name)+2,"%s.%d",IPACM_Iface::ipacmcfg->IP_Forwarding_config.interface_name,IPACM_Iface::ipacmcfg->IP_Forwarding_config.vlan);
+	IPACMDBG_H("PIF: Adding vlan iface %s\n",vlan_info.name);
+	IPACM_Iface::ipacmcfg->add_vlan_iface(&vlan_info);
+
+	IPACMDBG_H("PIF: Adding bridge-vlan mapping \n");
+	strlcpy(bridge_vlan_info.bridge_name,IPACM_Iface::ipacmcfg->IP_Forwarding_config.bridge_name,sizeof(IPACM_Iface::ipacmcfg->IP_Forwarding_config.bridge_name));
+	bridge_vlan_info.vlan_id = IPACM_Iface::ipacmcfg->IP_Forwarding_config.vlan;
+	bridge_vlan_info.bridge_ipv4 = ip_addr;
+	bridge_vlan_info.subnet_mask = IPACM_Iface::ipacmcfg->IP_Forwarding_config.bridge_net_mask;
+	IPACM_Iface::ipacmcfg->add_bridge_vlan_mapping(&bridge_vlan_info);
+	IPACMDBG_H("PIF: Added bridge-vlan mapping %s\n",bridge_vlan_info.bridge_name);
+
+	return;
 }
 
 int IPACM_Config::Load_tunnel_xml_details(){

@@ -78,9 +78,13 @@ int find_mask(int ip_v4_last, int *mask_value);
 #else/* defined(FEATURE_IPA_ANDROID) */
 
 #define IPACM_NL_COPY_ADDR( event_info, element )                                        \
+        RTA_PAYLOAD(rtah) >  (_SS_SIZE - (2 * sizeof (__ss_aligntype))) ?                \
         memcpy( &event_info->attr_info.element.__ss_padding,                             \
                 RTA_DATA(rtah),                                                          \
-                sizeof(event_info->attr_info.element.__ss_padding) );
+                (_SS_SIZE - (2 * sizeof (__ss_aligntype)))):                             \
+                memcpy( &event_info->attr_info.element.__ss_padding,                     \
+                RTA_DATA(rtah),                                                          \
+                RTA_PAYLOAD(rtah));
 
 #define IPACM_EVENT_COPY_ADDR_v6( event_data, element)                                   \
         memcpy( event_data, element.__ss_padding, sizeof(event_data));
@@ -917,15 +921,6 @@ static int ipa_nl_decode_nlmsg
 					}
 					IPACMDBG_H("Got a usb link_down event (Interface %s) \n", dev_name);
 
-					if (msg_ptr->nl_link_info.metainfo.ifi_family == AF_BRIDGE ||
-					    msg_ptr->nl_link_info.metainfo.ifi_family == AF_UNSPEC) {
-						IPACMDBG("Deleting the bridge<->vlan mapping entry with intterface index %d\n",
-							msg_ptr->nl_link_info.metainfo.ifi_index);
-						uint16_t vlan_master_interface_index = msg_ptr->nl_link_info.metainfo.ifi_index;
-						IPACM_Iface::ipacmcfg->del_bridge_vlan_mapping(&vlan_master_interface_index);
-						free(data_fid);
-						return IPACM_SUCCESS;
-					}
 
 					if (msg_ptr->nl_link_info.link_type == IPA_LINK_TYPE_VLAN)
 						IPACM_Iface::ipacmcfg->del_vlan_iface(&vlan_info);
@@ -944,6 +939,15 @@ static int ipa_nl_decode_nlmsg
 							evt_data.evt_data = macsec_map_data;
 							IPACM_EvtDispatcher::PostEvt(&evt_data);
 						}
+					}
+					if (msg_ptr->nl_link_info.metainfo.ifi_family == AF_BRIDGE ||
+						msg_ptr->nl_link_info.metainfo.ifi_family == AF_UNSPEC) {
+						IPACMDBG("Deleting the bridge<->vlan mapping entry with intterface index %d\n",
+							msg_ptr->nl_link_info.metainfo.ifi_index);
+						uint16_t vlan_master_interface_index = msg_ptr->nl_link_info.metainfo.ifi_index;
+						IPACM_Iface::ipacmcfg->del_bridge_vlan_mapping(&vlan_master_interface_index);
+						free(data_fid);
+						return IPACM_SUCCESS;
 					}
 
 					data_fid->if_index = msg_ptr->nl_link_info.metainfo.ifi_index;

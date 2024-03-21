@@ -211,7 +211,8 @@ const char *ipacm_event_name[] = {
 #ifdef FEATURE_IPA_IPSEC
 	__stringify(IPA_HANDLE_IPSEC_UL_FLT_ADD),              /* Handle IPsec UL policy flt add */
 	__stringify(IPA_HANDLE_IPSEC_UL_FLT_DEL),              /* Handle IPsec UL policy flt delete */
-#endif	
+	__stringify(IPA_IPSEC_LAN_CLIENT_ROUTE_ADD_EVENT),     /* Internal event for a new LAN client route */
+#endif
 	__stringify(IPACM_EVENT_MAX),
 };
 
@@ -3649,6 +3650,8 @@ bool IPACM_Config::insertOrAssignMacsecMap(struct ipa_macsec_map *macsecMap) {
 		iface_table[ifaceTableIdx].virtual_iface = true;
 		strlcpy(iface_table[ifaceTableIdx].iface_name, macsecMap->macsec_name, sizeof(iface_table[ifaceTableIdx].iface_name));
 		strlcpy(iface_table[ifaceTableIdx].phy_dev_name, macsecMap->phy_name, sizeof(iface_table[ifaceTableIdx].phy_dev_name));
+		IPACM_Iface::ipa_get_if_index(macsecMap->macsec_name, &netlinkIdx);
+		iface_table[ifaceTableIdx].netlink_interface_index = netlinkIdx;
 	}
 
 	return true;
@@ -3667,6 +3670,8 @@ bool IPACM_Config::delMacsecMap(struct ipa_macsec_map *macsecMap) {
 		strlcpy(iface_table[ifaceTableIdx].iface_name, iface_table[ifaceTableIdx].phy_dev_name,
 			sizeof(iface_table[ifaceTableIdx].iface_name));
 		iface_table[ifaceTableIdx].phy_dev_name[0] = '\0';
+		IPACM_Iface::ipa_get_if_index(macsecMap->phy_name, &netlinkIdx);
+		iface_table[ifaceTableIdx].netlink_interface_index = netlinkIdx;
 
 		return true;
 	}

@@ -27,7 +27,7 @@ OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
 IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
  * Changes from Qualcomm Innovation Center are provided under the following license:
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
 */
 
@@ -1014,7 +1014,7 @@ void IPACM_LanToLan::print_data_structure_info()
 void IPACM_LanToLan_Iface::add_client_rt_rule_for_new_iface()
 {
 	list<client_info>::iterator it;
-	ipa_hdr_l2_type peer_l2_type;
+	ipa_hdr_l2_type peer_l2_type = IPA_HDR_L2_NONE;
 	int num_prop = 0;
 	peer_iface_info &peer = m_peer_iface_info.front();
 	peer_iface_info& front_peer = m_peer_iface_info.front();
@@ -2145,7 +2145,12 @@ void IPACM_LanToLan_Iface::clear_all_flt_rule_for_one_peer_iface(peer_iface_info
 void IPACM_LanToLan_Iface::clear_all_rt_rule_for_one_peer_iface(peer_iface_info *peer)
 {
 	list<client_info>::iterator it;
-	ipa_hdr_l2_type peer_l2_type;
+	ipa_hdr_l2_type peer_l2_type = IPA_HDR_L2_NONE;
+
+	if (peer->is_vlan_peer)
+		peer_l2_type = peer->peer->get_iface_pointer()->tx_prop->tx[2].hdr_l2_type;
+	else
+		peer_l2_type = peer->peer->get_iface_pointer()->tx_prop->tx[0].hdr_l2_type;
 
 	if (peer_l2_type >= IPA_HDR_L2_MAX || peer_l2_type < 0)
 	{
@@ -2528,7 +2533,9 @@ list<client_info>::iterator IPACM_LanToLan_Iface::handle_client_del(uint8_t *mac
 #endif
 					flag[it_peer_info->peer->get_iface_pointer()->tx_prop->tx[0].hdr_l2_type] = true;
 				}
-				if(flag[it_peer_info->peer->get_iface_pointer()->tx_prop->tx[2].hdr_l2_type] == false)
+				if((it_peer_info->peer->is_svap_iface() || it_peer_info->peer->is_ap_iface_vlan_enabled() ||
+					(it_peer_info->peer->is_spcl_iface() && it_peer_info->is_vlan_peer)) &&
+					(flag[it_peer_info->peer->get_iface_pointer()->tx_prop->tx[2].hdr_l2_type] == false))
 				{
 						IPACMDBG_H("Delete client routing rule for peer interface.\n");
 						del_client_rt_rule(&(*it_peer_info), &(*it_client));

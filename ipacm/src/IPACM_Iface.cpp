@@ -27,7 +27,7 @@
 * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 *
 * Changes from Qualcomm Innovation Center are provided under the following license:
-* Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+* Copyright (c) 2023-2024 Qualcomm Innovation Center, Inc. All rights reserved.
 * SPDX-License-Identifier: BSD-3-Clause-Clear
 */
 /*!
@@ -398,7 +398,7 @@ int IPACM_Iface::iface_ipa_index_query
 	move_pos = strchr(ifr.ifr_name, '.');
 
 #ifdef FEATURE_RDKB
-	if (strstr(ifr.ifr_name, RMNET_IFACE_NAME) && str_idx < strlen(ifr.ifr_name))
+	if (strstr(ifr.ifr_name, RMNET_IFACE_NAME) && str_idx < strlen(ifr.ifr_name) && move_pos != NULL)
 	{
 		ifr.ifr_name[str_idx] = 'X';
 		memmove(&ifr.ifr_name[str_idx+1], move_pos, strlen(move_pos)+1);

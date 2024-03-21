@@ -431,7 +431,11 @@ void* ipa_driver_msg_notifier(void *param)
 				IPACMERR("unable to allocate memory for event_wlan data_fid\n");
 				goto done;
 			}
-			ipa_get_if_index(event_wlan->name, &(data_fid->if_index));
+			if(IPACM_FAILURE == ipa_get_if_index(event_wlan->name, &(data_fid->if_index)))
+			{
+				data_fid->if_index = event_wlan->if_index;
+				IPACMDBG_H("Using WLAN_STA_DISCONNECT if_index: %d\n",event_wlan->if_index);
+			}
 			evt_data.event = IPA_WLAN_LINK_DOWN_EVENT;
 			evt_data.evt_data = data_fid;
 			break;
@@ -1383,7 +1387,7 @@ done:
 
 void RegisterForSignals(bool default_handler);
 
-#define MAX_IPACM_TRACE_STACK 20
+#define MAX_IPACM_TRACE_STACK 40
 
 static void IPACM_Signals_handler(int sig, siginfo_t *info, void *extra)
 {
@@ -1415,13 +1419,13 @@ static void IPACM_Signals_handler(int sig, siginfo_t *info, void *extra)
 	case SIGABRT:
 	case SIGTERM:
 		p = (ucontext_t *)extra;
-		//IPACMERR("siginfo address=%x\n", info->si_addr);
-		//IPACMERR("arm_pc address = 0x%X\n", p->uc_mcontext.arm_pc);
-		//IPACMERR("cpsr = 0x%X\n", p->uc_mcontext.arm_cpsr);
-		//IPACMERR("fault address = 0x%X\n", p->uc_mcontext.fault_address);
-		//IPACMERR("arm_sp address = 0x%X\n", p->uc_mcontext.arm_sp);
-		//IPACMERR("arm_lr address = 0x%X\n", p->uc_mcontext.arm_lr);
-		//IPACMERR("arm_r0  address = 0x%X\n", p->uc_mcontext.arm_r0);
+		IPACMERR("siginfo address=%x\n", info->si_addr);
+		IPACMERR("arm_pc address = 0x%X\n", p->uc_mcontext.pc);
+		IPACMERR("pstate = 0x%X\n", p->uc_mcontext.pstate);
+		IPACMERR("fault address = 0x%X\n", p->uc_mcontext.fault_address);
+		IPACMERR("arm_sp address = 0x%X\n", p->uc_mcontext.sp);
+		IPACMERR("arm_lr address = 0x%X\n", p->uc_mcontext.regs[30]);
+		IPACMERR("arm_r0  address = 0x%X\n", p->uc_mcontext.regs[0]);
 		size = backtrace(array, MAX_IPACM_TRACE_STACK);
 
 		messages = backtrace_symbols(array, size);
@@ -1706,7 +1710,7 @@ int ipa_get_if_index
 
 	if (ioctl(fd, SIOCGIFINDEX, &ifr) < 0)
 	{
-		IPACMERR("call_ioctl_on_dev: ioctl failed: can't find device %s",if_name);
+		IPACMERR("call_ioctl_on_dev: ioctl failed: can't find device %s\n",if_name);
 		*if_index = -1;
 		close(fd);
 		return IPACM_FAILURE;

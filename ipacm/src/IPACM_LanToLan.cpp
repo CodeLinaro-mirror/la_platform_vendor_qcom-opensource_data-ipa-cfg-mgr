@@ -27,7 +27,7 @@ OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
 IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
  * Changes from Qualcomm Innovation Center are provided under the following license:
- * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2025 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
 */
 
@@ -534,6 +534,8 @@ void IPACM_LanToLan::handle_new_iface_up(IPACM_LanToLan_Iface *new_iface, IPACM_
 		num_prop = new_iface->get_iface_pointer()->rx_prop->num_rx_props;
 	}
 
+	IPACMDBG_H("DEBUG: Num of tx props %d\n",new_iface->get_iface_pointer()->tx_prop->num_tx_props);
+
 	// If either new or existing iface is spcl iface, then IPACM will treat them as two separate peers
 	// one with vlan properties and other with non-vlan
 	for (int i = 0; i < num_prop/2; i++)
@@ -547,14 +549,38 @@ void IPACM_LanToLan::handle_new_iface_up(IPACM_LanToLan_Iface *new_iface, IPACM_
 		IPACMDBG_H("Is spcl_vlan_iface %d\n", spcl_vlan_iface);
 
 		if (new_iface->is_svap_iface() || new_iface->is_ap_iface_vlan_enabled() || (new_iface->is_spcl_iface() && i))
-			new_iface_hdr = new_iface->get_iface_pointer()->tx_prop->tx[2].hdr_l2_type;
+		{
+			if(new_iface->get_iface_pointer()->tx_prop->num_tx_props > 2)
+			{
+				new_iface_hdr = new_iface->get_iface_pointer()->tx_prop->tx[2].hdr_l2_type;
+			}
+			else
+			{
+				IPACMERR("Incorrect tx properties\n");
+				return;
+			}
+		}
 		else
+		{
 			new_iface_hdr = new_iface->get_iface_pointer()->tx_prop->tx[0].hdr_l2_type;
+		}
 
 		if (exist_iface->is_svap_iface() || exist_iface->is_ap_iface_vlan_enabled() || (exist_iface->is_spcl_iface() && i))
-			exist_iface_hdr = exist_iface->get_iface_pointer()->tx_prop->tx[2].hdr_l2_type;
+		{
+			if(exist_iface->get_iface_pointer()->tx_prop->num_tx_props > 2)
+			{
+				exist_iface_hdr = exist_iface->get_iface_pointer()->tx_prop->tx[2].hdr_l2_type;
+			}
+			else
+			{
+				IPACMERR("Incorrect tx properties\n");
+				return;
+			}
+		}
 		else
+		{
 			exist_iface_hdr = exist_iface->get_iface_pointer()->tx_prop->tx[0].hdr_l2_type;
+		}
 
 
 		IPACMDBG_H("Populate peer info between: new_iface %s, existing iface %s\n", new_iface->get_iface_pointer()->dev_name,

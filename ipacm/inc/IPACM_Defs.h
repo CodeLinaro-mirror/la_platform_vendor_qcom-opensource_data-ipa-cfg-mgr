@@ -345,6 +345,8 @@ typedef enum
 	IPA_ADD_EXT_ROUTER_RULES,                 /* char */
 	IPA_DEL_EXT_ROUTER_RULES,                 /* char */
 	IPA_IPACM_DISABLE,                        /* void */
+	IPA_LAN_CLIENT_ADD_EVENT,		 /* Add MAC based rule for lan2lan offload with static-ip */
+	IPA_LAN_CLIENT_DEL_EVENT,		 /* Del MAC based rule for lan2lan offload with static-ip */
 	IPACM_EVENT_MAX
 } ipa_cm_event_id;
 

@@ -27,24 +27,24 @@
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  * Changes from Qualcomm Innovation Center are provided under the following license:
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  *  Redistribution and use in source and binary forms, with or without
  *  modification, are permitted (subject to the limitations in the
  *  disclaimer below) provided that the following conditions are met:
- * 
+ *
  *      * Redistributions of source code must retain the above copyright
  *        notice, this list of conditions and the following disclaimer.
- * 
+ *
  *      * Redistributions in binary form must reproduce the above
  *        copyright notice, this list of conditions and the following
  *        disclaimer in the documentation and/or other materials provided
  *        with the distribution.
- * 
+ *
  *      * Neither the name of Qualcomm Innovation Center, Inc. nor the names of its
  *        contributors may be used to endorse or promote products derived
  *        from this software without specific prior written permission.
- * 
+ *
  *  NO EXPRESS OR IMPLIED LICENSES TO ANY PARTY'S PATENT RIGHTS ARE
  *  GRANTED BY THIS LICENSE. THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT
  *  HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED
@@ -3354,6 +3354,23 @@ int IPACM_Lan::handle_addr_evt(ipacm_event_data_addr *data)
 
 		if (num_dft_rt_v6 == 0)
 		{
+#ifdef FEATURE_IPACM_PER_CLIENT_STATS
+			/* Handle the race condition if ipv6 address assignment
+			 * is delayed and route add event or wan_up received prior*/
+			if (IPACM_Iface::ipacmcfg->ipacm_lan_stats_enable)
+			{
+				IPACMDBG_H("Check If wan-up before IPA_ADDR_ADD evt.\n");
+				if(IPACM_Wan::isWanUP_V6(ipa_if_num))
+				{
+					IPACMDBG_H("if_index:%d \n",data->if_index);
+					IPACMDBG_H("num_wan_ul_fl_rule_v6:%d\n",
+							num_wan_ul_fl_rule_v6);
+					IPACMDBG_H("Delete %d q6 rule,if before ipv6 addr assign\n",
+							num_wan_ul_fl_rule_v6);
+					del_ul_flt_rules(IPA_IP_v6);
+				}
+			}
+#endif
 			/* Always adding tcp syn SW-exception rule for MSS clamping support */
 			add_tcp_syn_flt_rule(data->iptype);
 

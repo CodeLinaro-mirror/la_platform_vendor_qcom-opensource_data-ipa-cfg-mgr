@@ -7863,24 +7863,6 @@ int IPACM_Wan::installWanPostIpsecRt(ipa_ip_type ipType)
 #endif
 
 
-		if (rt_rule_entry == NULL)
-		{
-			IPACMERR("rt_rule_entry is empty...exit\n");
-			return IPACM_FAILURE;
-		}
-
-		if (false == m_routing.AddRoutingRule(rt_rule))
-		{
-			IPACMERR("Routing rule addition failed!\n");
-			res = IPACM_FAILURE;
-			goto end;
-		}
-		else if (rt_rule_entry && rt_rule_entry->status)
-		{
-			IPACMERR("rt rule adding failed. Result=%d\n", rt_rule_entry->status);
-			res = rt_rule_entry->status;
-			goto end;
-		}
 		rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_META_DATA;
 		rt_rule_entry->rule.attrib.meta_data = META_IS_IPSEC;
 		rt_rule_entry->rule.attrib.meta_data_mask = META_IS_IPSEC;

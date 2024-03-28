@@ -28,7 +28,7 @@
  *
  * Changes from Qualcomm Innovation Center are provided under the following license:
  *
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted (subject to the limitations in the
@@ -1727,7 +1727,7 @@ int IPACM_Lan::handle_vlan_neighbor(ipacm_event_data_all *data)
 				}
 
 				/* add ipv6 prefix */
-				new_prefix = IPACM_Iface::ipacmcfg->add_vlan_ipv6_prefix(data_vlan->data_all.ipv6_addr, ipa_if_num);
+				new_prefix = IPACM_Iface::ipacmcfg->add_vlan_ipv6_prefix(data_vlan->data_all.ipv6_addr, ipa_if_num, vlan_id);
 			}
 		}
 		else if(data_vlan->data_all.iptype == IPA_IP_v4)
@@ -1791,6 +1791,7 @@ int IPACM_Lan::handle_vlan_neighbor(ipacm_event_data_all *data)
 			if(get_eth_client_ip4_addr(data_vlan->data_all.mac_addr, ip4_addr, vlan_id) == IPACM_SUCCESS) {
 				IPACMDBG_H("ipv4 address 0x%X is valid, generate IPA_ROUTE_ADD_VLAN_PDN_EVENT v4 as well\n", ip4_addr);
 				data->iptype = IPA_IP_MAX;
+				data->wan_ipv4_addr = IPA_DUMMY_PREFIX;
 			}
 			else {
 				data->iptype = IPA_IP_v6;
@@ -2041,7 +2042,8 @@ int IPACM_Lan::handle_vlan_pdn_up(ipacm_event_vlan_pdn *data, bool set_mux)
 
 int IPACM_Lan::handle_vlan_pdn_down(ipacm_event_vlan_pdn *data)
 {
-	bool notif_only = false, xlat_pdn_ctx_id;
+	bool notif_only = false;
+	int xlat_pdn_ctx_id;
 
 	if(data->iptype == IPA_IP_v4)
 	{
@@ -9344,7 +9346,7 @@ int IPACM_Lan::modify_ipv6_prefix_flt_rule()
 		{
 			for(i = 0; i < IPACM_Iface::ipacmcfg->num_ipv6_prefixes; i++)
 			{
-				IPACM_Wan::GetV6MTUByPrefix(&mtu[i], IPACM_Iface::ipacmcfg->ipa_ipv6_prefixes[i]);
+				IPACM_Wan::GetV6MTUByPrefix(&mtu[i], IPACM_Iface::ipacmcfg->ipa_ipv6_prefixes[i].addr);
 				IPACMDBG_H("mtu = %d for prefix %d\n", mtu[i], i);
 				mtu_rule_cnt++;
 			}
@@ -9393,8 +9395,8 @@ int IPACM_Lan::modify_ipv6_prefix_flt_rule()
 		flt_rule.rule_hdl = ipv6_prefix_flt_rule_hdl[i];
 		memcpy(&flt_rule.rule.attrib, &rx_prop->rx[0].attrib, sizeof(flt_rule.rule.attrib));
 		flt_rule.rule.attrib.attrib_mask |= IPA_FLT_DST_ADDR;
-		flt_rule.rule.attrib.u.v6.dst_addr[0] = IPACM_Iface::ipacmcfg->ipa_ipv6_prefixes[i][0];
-		flt_rule.rule.attrib.u.v6.dst_addr[1] = IPACM_Iface::ipacmcfg->ipa_ipv6_prefixes[i][1];
+		flt_rule.rule.attrib.u.v6.dst_addr[0] = IPACM_Iface::ipacmcfg->ipa_ipv6_prefixes[i].addr[0];
+		flt_rule.rule.attrib.u.v6.dst_addr[1] = IPACM_Iface::ipacmcfg->ipa_ipv6_prefixes[i].addr[1];
 		flt_rule.rule.attrib.u.v6.dst_addr[2] = 0x0;
 		flt_rule.rule.attrib.u.v6.dst_addr[3] = 0x0;
 		flt_rule.rule.attrib.u.v6.dst_addr_mask[0] = 0xFFFFFFFF;
@@ -9411,8 +9413,8 @@ int IPACM_Lan::modify_ipv6_prefix_flt_rule()
 		{
 			flt_rule.rule_hdl = ipv6_prefix_flt_rule_hdl[mtu_rule_idx + i];
 			memcpy(&flt_rule.rule.attrib, &rx_prop->rx[0].attrib, sizeof(flt_rule.rule.attrib)); // this will remove the IPA_FLT_DST_ADDR
-			flt_rule.rule.attrib.u.v6.src_addr[3] = IPACM_Iface::ipacmcfg->ipa_ipv6_prefixes[i][0];
-			flt_rule.rule.attrib.u.v6.src_addr[2] = IPACM_Iface::ipacmcfg->ipa_ipv6_prefixes[i][1];
+			flt_rule.rule.attrib.u.v6.src_addr[3] = IPACM_Iface::ipacmcfg->ipa_ipv6_prefixes[i].addr[0];
+			flt_rule.rule.attrib.u.v6.src_addr[2] = IPACM_Iface::ipacmcfg->ipa_ipv6_prefixes[i].addr[1];
 			flt_rule.rule.attrib.u.v6.src_addr[1] = 0x0;
 			flt_rule.rule.attrib.u.v6.src_addr[0] = 0x0;
 			flt_rule.rule.attrib.u.v6.src_addr_mask[3] = 0xFFFFFFFF;

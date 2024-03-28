@@ -28,7 +28,7 @@
  *
  * Changes from Qualcomm Innovation Center are provided under the following license:
  *
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022, 2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted (subject to the limitations in the
@@ -709,11 +709,16 @@ void IPACM_ConntrackListener::HandleNeighIpAddrAddEvt(
 						IPACMERR("couldn't allocate memory for new vlan pdn event\n");
 						return;
 					}
+					memset(vlan_data, 0, sizeof(ipacm_event_route_vlan));
 					vlan_data->iptype = IPA_IP_v4;
 					vlan_data->VlanID = nat_clients[j].vlan_id;
 					vlan_data->wan_ipv4_addr = public_ip;
+					if (IPACM_Wan::is_xlat_by_ipv4(public_ip)){
+						vlan_data->iptype = IPA_IP_MAX;
+						vlan_data->wan_ipv6_prefix[0]=IPA_DUMMY_PREFIX;
+					}
 					evt_data.evt_data = vlan_data;
-					IPACMDBG("sending IPA_ROUTE_ADD_VLAN_PDN_EVENT vlan id %d, iptype %d,\n",
+					IPACMDBG_H("sending IPA_ROUTE_ADD_VLAN_PDN_EVENT vlan id %d, iptype %d,\n",
 						vlan_data->VlanID,
 						vlan_data->iptype);
 					iptodot("pdn ip", public_ip);
@@ -2419,11 +2424,16 @@ void IPACM_ConntrackListener::ProcessTCPorUDPMsg(
 			 IPACMERR("couldn't allocate memory for new vlan pdn event\n");
 			 return;
 		 }
+		 memset(data, 0, sizeof(ipacm_event_route_vlan));
 		 data->iptype = IPA_IP_v4;
 		 data->VlanID = VlanID;
 		 data->wan_ipv4_addr = public_ip;
+		if (IPACM_Wan::is_xlat_by_ipv4(public_ip)){
+			data->iptype = IPA_IP_MAX;
+			data->wan_ipv6_prefix[0]=IPA_DUMMY_PREFIX;
+		}
 		 evt_data.evt_data = data;
-		 IPACMDBG("sending IPA_ROUTE_ADD_VLAN_PDN_EVENT vlan id %d, iptype %d,\n",
+		 IPACMDBG_H("sending IPA_ROUTE_ADD_VLAN_PDN_EVENT vlan id %d, iptype %d,\n",
 			 data->VlanID,
 			 data->iptype);
 		 iptodot("pdn ip", public_ip);
@@ -2705,7 +2715,7 @@ bool IPACM_ConntrackListener::IsIpv6PrivateSubnet(const IpAddress& ip)
 		const Ipv6IpAddress& ipv6 = static_cast<const Ipv6IpAddress&>(ip);
 		for (int i = 0; i < pConfig->num_ipv6_prefixes; ++i)
 		{
-			if (ipv6.IsSameSubnet(pConfig->ipa_ipv6_prefixes[i]))
+			if (ipv6.IsSameSubnet(pConfig->ipa_ipv6_prefixes[i].addr))
 			{
 				ret = true;
 				break;

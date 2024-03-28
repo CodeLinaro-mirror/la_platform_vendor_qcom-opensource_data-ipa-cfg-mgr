@@ -28,7 +28,7 @@
  *
  * Changes from Qualcomm Innovation Center are provided under the following license:
  *
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted (subject to the limitations in the
@@ -412,6 +412,7 @@ public:
 	static int GetMuxByVid(uint16_t vlan_id, uint8_t *mux_id, ipa_ip_type iptype);
 	static int GetMTUByVid(uint16_t *mtu, uint16_t vlan_id, ipa_ip_type iptype);
 	static bool is_xlat_by_vid(uint16_t vlan_id);
+	static bool is_xlat_by_ipv4(uint32_t ipv4_addr);
 #endif
 private:
 
@@ -661,7 +662,7 @@ private:
 	int handle_route_add_evt(ipa_ip_type iptype);
 
 #ifdef FEATURE_VLAN_MPDN
-	int check_vlan_pdn(ipa_ip_type iptype, ipacm_event_route_vlan *data);
+	int check_vlan_pdn(ipa_ip_type iptype, ipacm_event_route_vlan *data, bool xlat_cfg = false);
 	int handle_route_add_vlan_pdn_evt(ipa_ip_type iptype, uint16_t vlan_id);
 #endif
 

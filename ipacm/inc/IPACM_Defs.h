@@ -1,5 +1,6 @@
 /*
 Copyright (c) 2013-2019, The Linux Foundation. All rights reserved.
+Copyright (c) 2022, 2024 Qualcomm Innovation Center, Inc. All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are
@@ -157,6 +158,8 @@ extern "C"
 #define IPA_MAX_ACTIVE_WLAN_IFACE 4
 #define IPA_MAX_NAT_IFACE (IPA_MAX_ACTIVE_LAN_IFACE*IPA_MAX_NUM_OFFLOAD_VLANS+ \
 	IPA_MAX_ACTIVE_LAN_IFACE + IPA_MAX_ACTIVE_WLAN_IFACE + IPA_MAX_NUM_SW_PDNS)
+
+#define IPA_DUMMY_PREFIX 0xFFFFFFFF
 
 /*===========================================================================
 										 GLOBAL DEFINITIONS AND DECLARATIONS

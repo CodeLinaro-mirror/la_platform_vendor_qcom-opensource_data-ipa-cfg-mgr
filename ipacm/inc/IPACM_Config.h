@@ -28,7 +28,7 @@
 
  * Changes from Qualcomm Innovation Center are provided under the following license:
  *
- * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2023-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted (subject to the limitations in the
@@ -126,6 +126,13 @@ struct cnt_idx {
 };
 #endif //IPA_HW_FNR_STATS
 
+/* struct to keep prefix info
+ */
+struct ipa_prefix_info {
+	uint32_t addr[2];
+	uint16_t vlan_id;
+};
+
 /* iface */
 class IPACM_Config
 {
@@ -151,7 +158,7 @@ public:
 
 #ifdef FEATURE_VLAN_MPDN
 	int num_ipv6_prefixes;
-	uint32_t ipa_ipv6_prefixes[IPA_MAX_IPV6_PREFIX_FLT_RULE + IPA_MAX_MTU_ENTRIES][2];
+	struct ipa_prefix_info ipa_ipv6_prefixes[IPA_MAX_IPV6_PREFIX_FLT_RULE + IPA_MAX_MTU_ENTRIES];
 	int num_no_offload_ipv6_prefix;
 	uint32_t ipa_no_offload_ipv6_prefixes[IPA_MAX_IPV6_NO_OFFLOAD_PREFIX_FLT_RULE + IPA_MAX_MTU_ENTRIES][2];
 #endif
@@ -554,7 +561,7 @@ public:
 		/* prefix shouldn't be present in offload list - this is a bug */
 		for(int i = 0; i < num_ipv6_prefixes; i++)
 		{
-			if((prefix[0] == ipa_ipv6_prefixes[i][0]) && (prefix[1] == ipa_ipv6_prefixes[i][1]))
+			if((prefix[0] == ipa_ipv6_prefixes[i].addr[0]) && (prefix[1] == ipa_ipv6_prefixes[i].addr[1]))
 			{
 				IPACMERR("prefix 0x[%X][%X] already exists in offload list\n", prefix[0], prefix[1]);
 				return false;
@@ -581,25 +588,23 @@ public:
 	}
 
 	/* add to prefixes list if needed and notify LAN objects to modify rules*/
-	inline bool add_vlan_ipv6_prefix(uint32_t *prefix, int ipa_if_num)
+	inline bool add_vlan_ipv6_prefix(uint32_t *prefix, int ipa_if_num, uint16_t vlan_id)
 	{
 		int i = 0;
 		int no_offload_temp = num_no_offload_ipv6_prefix;
+		bool updated_reserved_slot = false;
 
 		/* check for duplication */
 		for(i = 0; i < num_ipv6_prefixes; i++)
 		{
-			if((prefix[0] == ipa_ipv6_prefixes[i][0]) && (prefix[1] == ipa_ipv6_prefixes[i][1]))
+			if((prefix[0] == ipa_ipv6_prefixes[i].addr[0])
+				&& (prefix[1] == ipa_ipv6_prefixes[i].addr[1])
+				&& (vlan_id == ipa_ipv6_prefixes[i].vlan_id))
 			{
-				IPACMDBG_H("prefix 0x[%X][%X] already exists\n", prefix[0], prefix[1]);
+				IPACMDBG_H("prefix 0x[%X][%X] already exists vlan_id inp %d saved %d\n",
+					prefix[0], prefix[1], vlan_id, ipa_ipv6_prefixes[i].vlan_id);
 				return false;
 			}
-		}
-
-		if(num_ipv6_prefixes >= IPA_MAX_IPV6_PREFIX_FLT_RULE)
-		{
-			IPACMERR("we already reached maximum prefix rules\n");
-			return false;
 		}
 
 		/* remove from no offload list */
@@ -618,15 +623,48 @@ public:
 			}
 		}
 
-		if(no_offload_temp == num_no_offload_ipv6_prefix)
+		if(no_offload_temp == num_no_offload_ipv6_prefix && prefix[0] != IPA_DUMMY_PREFIX)
 		{
 			IPACMERR("could not find prefix 0x[%X][%X] in no offload list\n", prefix[0], prefix[1]);
 		}
-		ipa_ipv6_prefixes[num_ipv6_prefixes][0] = prefix[0];
-		ipa_ipv6_prefixes[num_ipv6_prefixes][1] = prefix[1];
-		num_ipv6_prefixes++;
+		/* Update v6_prefix/vlan id if slot is reserved*/
+		for(i = 0; i < num_ipv6_prefixes; i++)
+		{
+			if (ipa_ipv6_prefixes[i].addr[0] == IPA_DUMMY_PREFIX && vlan_id == ipa_ipv6_prefixes[i].vlan_id)
+			{
+				IPACMDBG_H("Updating old prefix 0x[%X][%X] of vlan_id %d\n",
+					ipa_ipv6_prefixes[i].addr[0], ipa_ipv6_prefixes[i].addr[1], ipa_ipv6_prefixes[i].vlan_id);
+				ipa_ipv6_prefixes[i].addr[0] = prefix[0];
+				ipa_ipv6_prefixes[i].addr[1] = prefix[1];
+				updated_reserved_slot =true;
+				IPACMDBG_H("Updated v6 prefix 0x[%X][%X] for vlan id %d\n", prefix[0], prefix[1], ipa_ipv6_prefixes[i].vlan_id);
+			}
+			else if ((prefix[0] == ipa_ipv6_prefixes[i].addr[0])
+				&& (prefix[1] == ipa_ipv6_prefixes[i].addr[1])
+				&& (ipa_ipv6_prefixes[i].vlan_id ==0)) {
+				/* Update the vlan id if prefix already saved but vlan id not associated
+				 * e.g Wlan for default pdn reserves a slot with vlan id 0, then eth vlan
+				 * for default pdn associates with vlan id */
+				IPACMDBG_H("Updating vlan id %d for prefix 0x[%X][%X] \n",
+					ipa_ipv6_prefixes[i].vlan_id, ipa_ipv6_prefixes[i].addr[0], ipa_ipv6_prefixes[i].addr[1]);
+				ipa_ipv6_prefixes[i].vlan_id = vlan_id;
+				updated_reserved_slot =true;
+				IPACMDBG_H("Updated vlan id %d v6 prefix 0x[%X][%X]\n",ipa_ipv6_prefixes[i].vlan_id, prefix[0], prefix[1]);
+			}
+		}
 
-		IPACMDBG("added v6 prefix 0x[%X][%X]\n", prefix[0], prefix[1]);
+		if (!updated_reserved_slot) {
+			if(num_ipv6_prefixes >= IPA_MAX_IPV6_PREFIX_FLT_RULE)
+			{
+				IPACMERR("we already reached maximum prefix rules\n");
+				return false;
+			}
+			ipa_ipv6_prefixes[num_ipv6_prefixes].addr[0] = prefix[0];
+			ipa_ipv6_prefixes[num_ipv6_prefixes].addr[1] = prefix[1];
+			ipa_ipv6_prefixes[num_ipv6_prefixes].vlan_id = vlan_id;
+			num_ipv6_prefixes++;
+			IPACMDBG("added v6 prefix 0x[%X][%X] for vlan id %d\n", prefix[0], prefix[1], ipa_ipv6_prefixes[i].vlan_id);
+		}
 
 		/* tell other LAN interfaces that we have a change in v6 prefixes */
 		SendPrefixChangeEvent(ipa_if_num);
@@ -634,20 +672,28 @@ public:
 	}
 
 	/* remove from prefixes list if needed and notify LAN objects to modify rules*/
-	inline int del_vlan_ipv6_prefix(uint32_t* prefix, int ipa_if_num)
+	inline int del_vlan_ipv6_prefix(uint32_t* prefix, int ipa_if_num, bool reserve_slot = false)
 	{
 		int i = 0;
 		for(i = 0; i < num_ipv6_prefixes; i++)
 		{
-			if((prefix[0] == ipa_ipv6_prefixes[i][0]) && (prefix[1] == ipa_ipv6_prefixes[i][1]))
+			if((prefix[0] == ipa_ipv6_prefixes[i].addr[0]) && (prefix[1] == ipa_ipv6_prefixes[i].addr[1]))
 			{
-				IPACMDBG_H("prefix 0x[%X][%X] will be removed\n", prefix[0], prefix[1]);
-				for(; i < (num_ipv6_prefixes - 1); i++)
-				{
-					ipa_ipv6_prefixes[i][0] = ipa_ipv6_prefixes[i + 1][0];
-					ipa_ipv6_prefixes[i][1] = ipa_ipv6_prefixes[i + 1][1];
+				if (reserve_slot) {
+					IPACMDBG_H("Reserve slot for ipa_if_num %d\n", ipa_if_num);
+					ipa_ipv6_prefixes[i].addr[0] = IPA_DUMMY_PREFIX;
+					ipa_ipv6_prefixes[i].addr[1] = IPA_DUMMY_PREFIX;
 				}
-				num_ipv6_prefixes--;
+				else {
+					for(; i < (num_ipv6_prefixes - 1); i++)
+					{
+						IPACMDBG_H("prefix 0x[%X][%X] will be removed\n", prefix[0], prefix[1]);
+						ipa_ipv6_prefixes[i].addr[0] = ipa_ipv6_prefixes[i + 1].addr[0];
+						ipa_ipv6_prefixes[i].addr[1] = ipa_ipv6_prefixes[i + 1].addr[1];
+						ipa_ipv6_prefixes[i].vlan_id = ipa_ipv6_prefixes[i + 1].vlan_id;
+					}
+					num_ipv6_prefixes--;
+				}
 
 				/* tell other LAN interfaces that we have a change in v6 prefixes */
 				SendPrefixChangeEvent(ipa_if_num);
@@ -681,14 +727,15 @@ public:
 		IPACMDBG_H("checking prefix 0x[%X][%X]\n", prefix[0], prefix[1]);
 		for(int i = 0; i < num_ipv6_prefixes; i++)
 		{
-			if((prefix[0] == ipa_ipv6_prefixes[i][0]) && (prefix[1] == ipa_ipv6_prefixes[i][1]))
+			if((prefix[0] == ipa_ipv6_prefixes[i].addr[0]) && (prefix[1] == ipa_ipv6_prefixes[i].addr[1]))
 			{
-				IPACMDBG_H("prefix 0x[%X][%X] is a known ipv6 prefix\n", prefix[0], prefix[1]);
+				IPACMDBG_H("prefix 0x[%X][%X] is a known ipv6 prefix for vlan id %d\n",
+					prefix[0], prefix[1], ipa_ipv6_prefixes[i].vlan_id);
 				return true;
 			}
 			else
 			{
-				IPACMDBG("no match with [%X][%X]\n", ipa_ipv6_prefixes[i][0], ipa_ipv6_prefixes[i][1]);
+				IPACMDBG("no match with [%X][%X]\n", ipa_ipv6_prefixes[i].addr[0], ipa_ipv6_prefixes[i].addr[1]);
 			}
 		}
 		return false;

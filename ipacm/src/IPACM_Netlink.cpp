@@ -78,10 +78,11 @@ int find_mask(int ip_v4_last, int *mask_value);
 
 #else/* defined(FEATURE_IPA_ANDROID) */
 
-#define IPACM_NL_COPY_ADDR( event_info, element )                                        \
-        memcpy( &event_info->attr_info.element.__ss_padding,                             \
-                RTA_DATA(rtah),                                                          \
-                sizeof(event_info->attr_info.element.__ss_padding) );
+#define IPACM_NL_COPY_ADDR( event_info, element ) \
+	do { \
+		memcpy( &event_info->attr_info.element.__ss_padding, RTA_DATA(rtah), sizeof(event_info->attr_info.element.__ss_padding) ); \
+	} while (0)
+
 
 #define IPACM_EVENT_COPY_ADDR_v6( event_data, element)                                   \
         memcpy( event_data, element.__ss_padding, sizeof(event_data));
@@ -89,12 +90,15 @@ int find_mask(int ip_v4_last, int *mask_value);
 #define IPACM_EVENT_COPY_ADDR_v4( event_data, element)                                   \
         memcpy( &event_data, element.__ss_padding, sizeof(event_data));
 
-#define IPACM_NL_REPORT_ADDR( prefix, addr )                                             \
-        if( AF_INET6 == (addr).ss_family ) {                                             \
-          IPACM_LOG_IPV6_ADDR( prefix, addr.__ss_padding);                               \
-        } else {                                                                         \
-          IPACM_LOG_IPV4_ADDR( prefix, (*(unsigned int*)&(addr).__ss_padding) );         \
-        }
+#define IPACM_NL_REPORT_ADDR( prefix, addr ) \
+	do { \
+		if( AF_INET6 == (addr).ss_family ) {       \
+			IPACM_LOG_IPV6_ADDR( prefix, addr.__ss_padding); \
+		} else {                                   \
+		IPACM_LOG_IPV4_ADDR( prefix, (*(unsigned int*)&(addr).__ss_padding) ); \
+		}                                          \
+	} while (0)
+
 #endif /* defined(FEATURE_IPA_ANDROID)*/
 
 #define NDA_RTA(r)  ((struct rtattr*)(((char*)(r)) + NLMSG_ALIGN(sizeof(struct ndmsg))))
@@ -817,7 +821,7 @@ static int ipa_nl_decode_nlmsg
 	while(NLMSG_OK(nlh, buflen))
 	{
 		memset(dev_name,0,IF_NAME_LEN);
-		IPACMDBG("Received msg:%d from netlink\n", nlh->nlmsg_type)
+		IPACMDBG("Received msg:%d from netlink\n", nlh->nlmsg_type);
 		switch(nlh->nlmsg_type)
 		{
 		case RTM_NEWLINK:

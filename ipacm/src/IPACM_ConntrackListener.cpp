@@ -957,7 +957,7 @@ bool IPACM_ConntrackListener::IsVlanIPv4(uint32_t ipv4_address, uint16_t *VlanId
 		{
 			if(nat_clients[i].is_vlan_client)
 			{
-				IPACMDBG_H("ipv4 address belong to vlan iface with id %d\n", nat_clients[i].vlan_id)
+				IPACMDBG_H("ipv4 address belong to vlan iface with id %d\n", nat_clients[i].vlan_id);
 				*VlanId = nat_clients[i].vlan_id;
 				return true;
 			}
@@ -2770,12 +2770,12 @@ void IPACM_ConntrackListener::ProcessTCPorUDPMsg(
 			if((i >= IPA_MAX_NUM_HW_PDNS) && (num_vlan_pdns >= IPA_MAX_NUM_HW_PDNS) && (!nat_entry.IsVlanUp))
 			{
 				iptodot("vlan client ip", orig_src_ip);
-				iptodot("pdn ip",repl_dst_ip)
+				iptodot("pdn ip",repl_dst_ip);
 				IPACMERR("dst NAT: can't add more PDN, already got max \n");
 				return;
 			}
 			iptodot("vlan client ip ", orig_src_ip);
-			iptodot("pdn ip ", repl_dst_ip)
+			iptodot("pdn ip ", repl_dst_ip);
 			IPACMDBG_H("IsVlanUp %d\n", nat_entry.IsVlanUp);
 		}
 		public_ip = repl_dst_ip;

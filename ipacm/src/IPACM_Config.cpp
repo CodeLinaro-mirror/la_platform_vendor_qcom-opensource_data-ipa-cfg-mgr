@@ -1745,7 +1745,7 @@ void IPACM_Config::restore_vlan_nat_ifaces(const char *phys_iface_name)
 		return;
 	}
 
-	IPACMDBG_H("searching iface %s vlan interfaces to add to NAT devices\n", phys_iface_name)
+	IPACMDBG_H("searching iface %s vlan interfaces to add to NAT devices\n", phys_iface_name);
 
 	for(it_vlan = m_vlan_iface.begin(); it_vlan != m_vlan_iface.end(); it_vlan++)
 	{

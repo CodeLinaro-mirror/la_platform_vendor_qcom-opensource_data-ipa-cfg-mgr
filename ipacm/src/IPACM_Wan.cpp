@@ -2282,7 +2282,7 @@ void IPACM_Wan::post_wan_vlan_pdn_event(ipa_ip_type iptype, int pdn_idx, int vla
 				{
 					vlan_data->is_xlat = true;
 					ipv4_to_iface[modem_ipv4_pdn_index].is_xlat=true;
-					IPACMDBG_H("xlat config enabled\n")
+					IPACMDBG_H("xlat config enabled\n");
 				}
 			}
 

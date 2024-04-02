@@ -9898,7 +9898,7 @@ int IPACM_Wan::add_catchup_all_filtering_rule_each_pdn(
 			flt_rule_entry.rule.attrib.u.v4.src_addr = ipgre_info.ipv4_dst;
 
 			flt_rule_entry.rule.attrib.attrib_mask |= IPA_FLT_SRC_ADDR;
-			if(isPmipv6)
+			if(isPmipv6 || IPACM_Iface::ipacmcfg->eogre_enabled)
 			{
 				flt_rule_entry.rule.attrib.attrib_mask |= IPA_FLT_PROTOCOL;
 				flt_rule_entry.rule.attrib.u.v4.protocol=(uint8_t)IPACM_FIREWALL_IPPROTO_GRE;
@@ -10043,7 +10043,7 @@ flt_rule_entry.rule.attrib.u.v4.dst_addr_mask = 0x00000000;
 				sizeof(flt_rule_entry.rule.attrib.u.v6.src_addr));
 
 			flt_rule_entry.rule.attrib.attrib_mask |= IPA_FLT_SRC_ADDR;
-			if(isPmipv6)
+			if(isPmipv6 || IPACM_Iface::ipacmcfg->eogre_enabled)
 			{
 				flt_rule_entry.rule.attrib.attrib_mask |= IPA_FLT_NEXT_HDR;
 				flt_rule_entry.rule.attrib.u.v6.next_hdr=(uint8_t)IPACM_FIREWALL_IPPROTO_GRE;

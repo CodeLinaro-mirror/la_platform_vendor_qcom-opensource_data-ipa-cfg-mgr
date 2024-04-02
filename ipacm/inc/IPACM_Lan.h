@@ -84,6 +84,7 @@ IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "IPACM_Filtering.h"
 #include "IPACM_Config.h"
 #include "IPACM_Conntrack_NATApp.h"
+#include "IPACM_Wan.h"
 
 #define IPA_WAN_DEFAULT_FILTER_RULE_HANDLES  1
 #define IPA_NUM_ODU_ROUTE_RULES 2
@@ -171,6 +172,8 @@ typedef struct _ipa_eth_client
 #endif
 #ifdef FEATURE_VLAN_MPDN
 	uint16_t vlan_id;
+	uint32_t client_backhaul_prefix[2];
+	bool v6_vlan_rt_installed;
 #endif
 	eth_client_rt_hdl eth_rt_hdl[0]; /* depends on number of tx properties */
 }ipa_eth_client;
@@ -1360,9 +1363,12 @@ private:
 		int cnt;
 		int num_eth_client_tmp = num_eth_client;
 
-		IPACMDBG_H("Passed MAC %02x:%02x:%02x:%02x:%02x:%02x\n",
+		if(mac_addr != NULL)
+		{
+			IPACMDBG_H("Passed MAC %02x:%02x:%02x:%02x:%02x:%02x\n",
 						 mac_addr[0], mac_addr[1], mac_addr[2],
 						 mac_addr[3], mac_addr[4], mac_addr[5]);
+		}
 
 		for(cnt = 0; cnt < num_eth_client_tmp; cnt++)
 		{
@@ -1373,10 +1379,16 @@ private:
 							 get_client_memptr(eth_client, cnt)->mac[3],
 							 get_client_memptr(eth_client, cnt)->mac[4],
 							 get_client_memptr(eth_client, cnt)->mac[5]);
+			if((mac_addr == NULL) &&
+			   (get_client_memptr(eth_client, cnt)->vlan_id == vlan_id))
+			{
+				IPACMDBG_H("Matched client index: %d for vid %d\n", cnt, vlan_id);
+				return cnt;
+			}
 
-			if(memcmp(get_client_memptr(eth_client, cnt)->mac,
+			if((mac_addr != NULL) && (memcmp(get_client_memptr(eth_client, cnt)->mac,
 								mac_addr,
-								IPA_MAC_ADDR_SIZE) == 0)
+								IPA_MAC_ADDR_SIZE) == 0))
 			{
 #ifdef FEATURE_VLAN_MPDN
 				if(vlan_id)
@@ -1497,7 +1509,7 @@ private:
 	int handle_eth_client_ipaddr(ipacm_event_data_all *data);
 
 	/* handle eth client routing rule*/
-	int handle_eth_client_route_rule(uint8_t *mac_addr, ipa_ip_type iptype, uint16_t vlan_id = 0);
+	int handle_eth_client_route_rule(uint8_t *mac_addr, ipa_ip_type iptype, uint16_t vlan_id = 0, uint32_t *prefix = NULL);
 
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
 	/* handle eth client routing rule with rule id*/

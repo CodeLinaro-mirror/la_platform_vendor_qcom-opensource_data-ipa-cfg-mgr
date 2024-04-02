@@ -107,6 +107,8 @@ extern "C"
 #define IPA_MAX_FLT_RULE 100
 #endif
 
+#define IPA_MAX_SOCKS_FLT_RULE 20
+
 #define TCP_FIN_SHIFT 16
 #define TCP_SYN_SHIFT 17
 #define TCP_RST_SHIFT 18
@@ -176,6 +178,12 @@ extern "C"
 	IPA_MAX_ACTIVE_LAN_IFACE + IPA_MAX_ACTIVE_WLAN_IFACE + IPA_MAX_NUM_SW_PDNS)
 
 #define IPA_DUMMY_PREFIX 0xFFFFFFFF
+
+#if defined(FEATURE_L2TP)
+#define L2TP_BRIDGE_VLAN_ID_START 4096
+#define MAX_L2TP_TUNNEL 2
+#define MAX_L2TP_SESSION 4
+#endif
 
 /*===========================================================================
 										 GLOBAL DEFINITIONS AND DECLARATIONS
@@ -253,6 +261,10 @@ typedef enum
 #ifdef FEATURE_L2TP
 	IPA_ADD_L2TP_CLIENT,                      /* ipacm_event_data_all */
 	IPA_DEL_L2TP_CLIENT,                      /* ipacm_event_data_all */
+#ifdef IPA_L2TP_TUNNEL_UDP
+	IPA_ROUTE_DEL_L2TP_VLAN_EVENT,            /* ipacm_event_route_vlan */
+	IPA_HANDLE_WAN_L2TP_VLAN_DOWN,            /* ipacm_event_route_vlan */
+#endif
 #endif
 #ifdef FEATURE_VLAN_MPDN
 	IPA_PREFIX_CHANGE_EVENT,                  /* ipacm_event_data_fid */
@@ -518,6 +530,7 @@ struct vlan_iface_info
 struct l2tp_vlan_mapping_info
 {
 	/* the following are l2tp iface info (name, session id) */
+	uint32_t l2tp_tunnel_id;
 	char l2tp_iface_name[IPA_RESOURCE_NAME_MAX];
 	uint32_t l2tp_session_id;
 	/* Add support for L2TP over UDP. */
@@ -536,6 +549,12 @@ struct l2tp_vlan_mapping_info
 	uint32_t vlan_client_ipv6_addr[4];
 	/* the following is MIB3 l2tp client info (mac) */
 	uint8_t l2tp_client_mac[6];
+	/* Add dummy bridge info */
+#ifdef IPA_L2TP_TUNNEL_UDP
+	char l2tp_bridge_iface_name[IPA_RESOURCE_NAME_MAX];
+	uint32_t l2tp_bridge_vlan_id;
+#endif
+	bool is_session_info_updated;
 };
 
 struct ipa_bridge_vlan_mapping_info {
@@ -562,6 +581,23 @@ struct bridge_vlan_mapping_info
 struct l2tp_client_info
 {
 	char client_iface_name[IPA_IFACE_NAME_LEN];
+};
+
+struct l2tp_tunnel_info
+{
+	enum ipa_l2tp_tunnel_type tunnel_type;
+	uint32_t l2tp_tunnel_id;
+	uint16_t src_port;
+	uint16_t dst_port;
+	uint32_t src_ipv6_addr[4];
+	uint32_t dst_ipv6_addr[4];
+};
+
+struct l2tp_session_info
+{
+	char l2tp_iface_name[IPA_IFACE_NAME_LEN];
+	uint32_t l2tp_session_id;
+	uint32_t l2tp_tunnel_id;
 };
 
 #ifdef FEATURE_SOCKSv5

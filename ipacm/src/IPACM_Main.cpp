@@ -94,6 +94,14 @@
 #include <execinfo.h>
 #include "linux/ipa_qmi_service_v01.h"
 
+#include <string.h>
+#include <netlink/object.h>
+#include <netlink/genl/genl.h>
+#include <netlink/genl/family.h>
+#include <netlink/genl/ctrl.h>
+#include <netlink/object-api.h>
+#include <netlink/cache.h>
+
 #include "IPACM_CmdQueue.h"
 #include "IPACM_EvtDispatcher.h"
 #include "IPACM_Defs.h"
@@ -319,7 +327,6 @@ void* ipa_driver_msg_notifier(void *param)
 	ipacm_event_data_wlan_ex *data_ex;
 	ipa_get_data_stats_resp_msg_v01 *data_tethering_stats = NULL;
 	ipa_get_apn_data_stats_resp_msg_v01 *data_network_stats = NULL;
-	ipacm_event_connection *data_event_conn = NULL;
 	ipacm_event_data_addr *data_addr = NULL;
 
 #if defined(FEATURE_L2TP) || defined(FEATURE_VLAN_MPDN)
@@ -332,6 +339,7 @@ void* ipa_driver_msg_notifier(void *param)
 
 #ifdef FEATURE_SOCKSv5
 	ipa_socksv5_msg add_socksv5_info;
+	ipa_socksv5_msg *sock_up_event_data = NULL;
 	uint32_t del_socksv5_info;
 #endif
 #ifdef IPA_IOCTL_ADD_VLAN_PRIORITY
@@ -841,17 +849,6 @@ void* ipa_driver_msg_notifier(void *param)
 			evt_data.evt_data = data;
 			break;
 #endif
-#ifdef FEATURE_L2TP
-		case ADD_L2TP_VLAN_MAPPING:
-			memcpy(&mapping, buffer + sizeof(struct ipa_msg_meta), sizeof(mapping));
-			IPACM_Iface::ipacmcfg->add_l2tp_vlan_mapping(&mapping);
-			continue;
-
-		case DEL_L2TP_VLAN_MAPPING:
-			memcpy(&mapping, buffer + sizeof(struct ipa_msg_meta), sizeof(mapping));
-			IPACM_Iface::ipacmcfg->del_l2tp_vlan_mapping(&mapping);
-			continue;
-#endif //#ifdef FEATURE_L2TP
 #if defined(FEATURE_SOCKSv5) && defined(IPA_SOCKV5_EVENT_MAX)
 		case IPA_SOCKV5_ADD:
 			/* enable socksv5 */
@@ -915,23 +912,15 @@ void* ipa_driver_msg_notifier(void *param)
 				IPACM_Iface::ipacmcfg->update_socksv5_client_v6_addr(add_socksv5_info.ul_in.ipv6_src);
 				IPACMDBG_H("socksv5_conn size %d \n", IPACM_Iface::ipacmcfg->socksv5_conn.size());
 
-				data_event_conn = (ipacm_event_connection *)malloc(sizeof(ipacm_event_connection));
-				if(data_event_conn == NULL)
+				sock_up_event_data = (ipa_socksv5_msg *)malloc(sizeof(ipa_socksv5_msg));
+				if(sock_up_event_data == NULL)
 				{
 					IPACMERR("unable to allocate memory for event_wlan data_event_conn\n");
-				return NULL;
+					return NULL;
 				}
-				data_event_conn->iptype = add_socksv5_info.ul_in.ip_type;
-				data_event_conn->src_ipv6_addr[0] = add_socksv5_info.ul_in.ipv6_src[0];
-				data_event_conn->src_ipv6_addr[1] = add_socksv5_info.ul_in.ipv6_src[1];
-				data_event_conn->src_ipv6_addr[2] = add_socksv5_info.ul_in.ipv6_src[2];
-				data_event_conn->src_ipv6_addr[3] = add_socksv5_info.ul_in.ipv6_src[3];
-				data_event_conn->dst_ipv6_addr[0] = add_socksv5_info.ul_in.ipv6_dst[0];
-				data_event_conn->dst_ipv6_addr[1] = add_socksv5_info.ul_in.ipv6_dst[1];
-				data_event_conn->dst_ipv6_addr[2] = add_socksv5_info.ul_in.ipv6_dst[2];
-				data_event_conn->dst_ipv6_addr[3] = add_socksv5_info.ul_in.ipv6_dst[3];
+				memcpy(sock_up_event_data, &add_socksv5_info, sizeof(ipa_socksv5_msg));
 				evt_data.event = IPA_HANDLE_SOCKSv5_UP;
-				evt_data.evt_data = data_event_conn;
+				evt_data.evt_data = sock_up_event_data;
 				/* finish command queue */
 				IPACMDBG_H("Posting IPA_HANDLE_SOCKSv5_UP event:%d\n", evt_data.event);
 				IPACM_EvtDispatcher::PostEvt(&evt_data);
@@ -1018,7 +1007,7 @@ done:
 
 void RegisterForSignals(bool default_handler);
 
-#define MAX_IPACM_TRACE_STACK 20
+#define MAX_IPACM_TRACE_STACK 40
 
 static void IPACM_Signals_handler(int sig, siginfo_t *info, void *extra)
 {
@@ -1052,14 +1041,12 @@ static void IPACM_Signals_handler(int sig, siginfo_t *info, void *extra)
 	case SIGTERM:
 		p = (ucontext_t *)extra;
 		IPACMERR("siginfo address=%x\n", info->si_addr);
-		/*
-		IPACMERR("arm_pc address = 0x%X\n", p->uc_mcontext.arm_pc);
-		IPACMERR("cpsr = 0x%X\n", p->uc_mcontext.arm_cpsr);
+		IPACMERR("arm_pc address = 0x%X\n", p->uc_mcontext.pc);
+		IPACMERR("pstate = 0x%X\n", p->uc_mcontext.pstate);
 		IPACMERR("fault address = 0x%X\n", p->uc_mcontext.fault_address);
-		IPACMERR("arm_sp address = 0x%X\n", p->uc_mcontext.arm_sp);
-		IPACMERR("arm_lr address = 0x%X\n", p->uc_mcontext.arm_lr);
-		IPACMERR("arm_r0  address = 0x%X\n", p->uc_mcontext.arm_r0);
-		*/
+		IPACMERR("arm_sp address = 0x%X\n", p->uc_mcontext.sp);
+		IPACMERR("arm_lr address = 0x%X\n", p->uc_mcontext.regs[30]);
+		IPACMERR("arm_r0  address = 0x%X\n", p->uc_mcontext.regs[0]);
 		size = backtrace(array, MAX_IPACM_TRACE_STACK);
 
 		messages = backtrace_symbols(array, size);
@@ -1139,6 +1126,10 @@ void RegisterForSignals(bool default_handler)
 	}
 }
 
+void *l2tp_process(void *param)
+{
+	return l2tp_nl_process(param);
+}
 
 int main(int argc, char **argv)
 {
@@ -1150,6 +1141,7 @@ int main(int argc, char **argv)
 
 	pthread_t netlink_thread = 0, monitor_thread = 0, ipa_driver_thread = 0;
 	pthread_t cmd_queue_thread = 0;
+	pthread_t l2tp_thread = 0;
 
 	/* check if ipacm is already running or not */
 	ipa_is_ipacm_running();
@@ -1266,13 +1258,30 @@ int main(int argc, char **argv)
 
 	neigh->update_neigh_cache();
 
-	/* Create Conntrack listener threads here to support on-demand PDNs connections before WAN is up */
+	if (IPACM_SUCCESS == l2tp_thread)
+	{
+		ret = pthread_create(&l2tp_thread, NULL, l2tp_process, NULL);
+		if (IPACM_SUCCESS != ret)
+		{
+			IPACMERR("unable to start l2tp_thread\n");
+			return ret;
+		}
+		IPACMDBG_H("l2tp_thread created\n");
+		if(pthread_setname_np(cmd_queue_thread, "l2tp_thread") != 0)
+		{
+			IPACMERR("unable to set thread name for l2tp_thrad\n");
+		}
+	}
+
+	/* Create Conntrack listener threads here to support on-demand PDNs connections before WAN is up */
 	CtList->CreateConnTrackThreads();
 
 	pthread_join(cmd_queue_thread, NULL);
 	pthread_join(netlink_thread, NULL);
 	pthread_join(monitor_thread, NULL);
 	pthread_join(ipa_driver_thread, NULL);
+   	pthread_join(l2tp_thread, NULL);
+
 	return IPACM_SUCCESS;
 }
 

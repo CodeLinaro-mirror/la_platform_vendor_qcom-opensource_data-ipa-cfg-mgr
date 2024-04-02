@@ -969,7 +969,22 @@ static int ipacm_cfg_xml_parse_tree
 							config->ipacm_l2tp_enable = atoi(content_buf);
 						}
 				}
-
+				else if (IPACM_util_icmp_string((char*)xml_node->name, IPACM_SOCKSv5_Enable_TAG) == 0)
+				{
+						IPACMDBG_H("inside enable SCOKS\n");
+						content = IPACM_read_content_element(xml_node);
+						if (content == NULL)
+						{
+							IPACMERR("Failed to read the content of the tag %s\n", IPACM_SOCKSv5_Enable_TAG);
+						}
+						else
+						{
+							str_size = strlen(content);
+							memset(content_buf, 0, sizeof(content_buf));
+							memcpy(content_buf, (void *)content, str_size);
+							config->ipacm_socksv5_enable = atoi(content_buf);
+						}
+				}
 				else if (0 == IPACM_util_icmp_string((char*)xml_node->name, IPACMFILEVAR_TAG))
 				{		IPACMDBG_H("inside ipacm_logging \n");
 						content = IPACM_read_content_element(xml_node);

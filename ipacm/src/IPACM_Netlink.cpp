@@ -51,6 +51,8 @@ SPDX-License-Identifier: BSD-3-Clause-Clear
 #include "IPACM_EvtDispatcher.h"
 #include "IPACM_Log.h"
 #include "IPACM_Iface.h"
+#include <linux/l2tp.h>
+
 int ipa_get_if_name(char *if_name, int if_index);
 int find_mask(int ip_v4_last, int *mask_value);
 
@@ -495,6 +497,12 @@ static int ipa_nl_decode_rtm_link
 				free(intf_type);
 			}
 		}
+		if (attrib->rta_type == IFLA_MTU) {
+			memcpy(&link_info->mtu,
+						 RTA_DATA(attrib),
+						 sizeof(link_info->mtu));
+			IPACMDBG("Extracted MTU %d\n",link_info->mtu);
+		}
 		if(rta_data != NULL){
 			free(rta_data);
 		}
@@ -873,6 +881,10 @@ static int ipa_nl_decode_nlmsg
 					}
 				}
 
+				if (IPACM_Iface::ipacmcfg->check_l2tp_iface( msg_ptr->nl_link_info.name) &&
+						msg_ptr->nl_link_info.mtu) {
+						IPACM_Iface::ipacmcfg->add_l2tp_mtu_info(msg_ptr->nl_link_info.mtu, msg_ptr->nl_link_info.name);
+				}
 				if (IFF_UP & msg_ptr->nl_link_info.metainfo.ifi_change) {
 					IPACMDBG("GOT useful newlink event\n");
 
@@ -1736,6 +1748,7 @@ static int ipa_nl_decode_nlmsg
 					}
 					vlan_data->if_index = msg_ptr->nl_neigh_info.metainfo.ndm_ifindex;
 					vlan_data->master_if_index = msg_ptr->nl_neigh_info.master_interface_index;
+					strlcpy(vlan_data->iface_name, dev_name, sizeof(vlan_data->iface_name));
 					vlan_event.evt_data = (void *)vlan_data;
 					IPACM_EvtDispatcher::PostEvt(&vlan_event);
 			}
@@ -2058,6 +2071,247 @@ int ipa_nl_listener_init
 
 	return IPACM_SUCCESS;
 }
+
+int recv_genl(struct nlmsghdr *nlh, ipa_nl_l2tp_info_t *l2tp_attr_info)
+{
+	char *message;
+	uint32_t data32;
+	uint16_t data16;
+	uint8_t data8;
+	int fd_attr;
+	struct in6_addr *v6_addr;
+	struct in6_addr saddr6;
+	struct in6_addr daddr6;
+
+	struct nlattr *attrs[L2TP_ATTR_MAX + 1];
+
+	IPACMDBG_H("recv_genl\n");
+
+	if(genlmsg_parse(nlh, 0, attrs, L2TP_ATTR_MAX, NULL))
+	{
+		IPACMDBG_H("genlmsg_parse failed");
+		return NL_SKIP;
+	}
+
+	if(attrs[L2TP_ATTR_NONE])
+	{
+		IPACMDBG_H("received data is NULL");
+		return NL_SKIP;
+	}
+
+	if(attrs[L2TP_ATTR_ENCAP_TYPE])
+	{
+		data16 = nla_get_u16(attrs[L2TP_ATTR_ENCAP_TYPE]);
+		l2tp_attr_info->encap_type = data16;
+		IPACMDBG_H("received data_encap=%hu\n",data16);
+	}
+
+	if(attrs[L2TP_ATTR_CONN_ID])
+	{
+		data32 = nla_get_u32(attrs[L2TP_ATTR_CONN_ID]);
+		l2tp_attr_info->tunnel_id = data32;
+		IPACMDBG_H("received data_conn_id=%u\n",data32);
+	}
+
+	if(attrs[L2TP_ATTR_SESSION_ID])
+	{
+		data32 = nla_get_u32(attrs[L2TP_ATTR_SESSION_ID]);
+		l2tp_attr_info->session_id = data32;
+		IPACMDBG_H("received session id=%u\n",data32);
+	}
+
+	if(attrs[L2TP_ATTR_IFNAME])
+	{
+		message = nla_get_string(attrs[L2TP_ATTR_IFNAME]);
+		strlcpy(l2tp_attr_info->l2tp_iface_name, message, sizeof(l2tp_attr_info->l2tp_iface_name));
+		IPACMDBG_H("received data_ifname=%s\n",message);
+	}
+
+	if(attrs[L2TP_ATTR_UDP_SPORT])
+	{
+		data16 = nla_get_u16(attrs[L2TP_ATTR_UDP_SPORT]);
+		l2tp_attr_info->src_port = data16;
+		IPACMDBG_H("received source port=%hu\n",data16);
+	}
+
+	if(attrs[L2TP_ATTR_UDP_DPORT])
+	{
+		data16 = nla_get_u16(attrs[L2TP_ATTR_UDP_DPORT]);
+		l2tp_attr_info->dst_port = data16;
+		IPACMDBG_H("received dst port=%hu\n",data16);
+	}
+
+	if(attrs[L2TP_ATTR_IP6_SADDR])
+	{
+		v6_addr = (struct in6_addr *)nla_data(attrs[L2TP_ATTR_IP6_SADDR]);
+		memcpy(l2tp_attr_info->src_ipv6_addr, v6_addr, 4*sizeof(uint32_t));
+		l2tp_attr_info->src_ipv6_addr[0] = ntohl(l2tp_attr_info->src_ipv6_addr[0]);
+		l2tp_attr_info->src_ipv6_addr[1] = ntohl(l2tp_attr_info->src_ipv6_addr[1]);
+		l2tp_attr_info->src_ipv6_addr[2] = ntohl(l2tp_attr_info->src_ipv6_addr[2]);
+		l2tp_attr_info->src_ipv6_addr[3] = ntohl(l2tp_attr_info->src_ipv6_addr[3]);
+		IPACMDBG_H("received src addr:0x%x:%x:%x:%x\n",l2tp_attr_info->src_ipv6_addr[0],l2tp_attr_info->src_ipv6_addr[1],
+			l2tp_attr_info->src_ipv6_addr[2],l2tp_attr_info->src_ipv6_addr[3]);
+	}
+
+	if(attrs[L2TP_ATTR_IP6_DADDR])
+	{
+		v6_addr = (struct in6_addr *)nla_data(attrs[L2TP_ATTR_IP6_DADDR]);
+		memcpy(l2tp_attr_info->dst_ipv6_addr, v6_addr, 4*sizeof(uint32_t));
+		l2tp_attr_info->dst_ipv6_addr[0] = ntohl(l2tp_attr_info->dst_ipv6_addr[0]);
+		l2tp_attr_info->dst_ipv6_addr[1] = ntohl(l2tp_attr_info->dst_ipv6_addr[1]);
+		l2tp_attr_info->dst_ipv6_addr[2] = ntohl(l2tp_attr_info->dst_ipv6_addr[2]);
+		l2tp_attr_info->dst_ipv6_addr[3] = ntohl(l2tp_attr_info->dst_ipv6_addr[3]);
+		IPACMDBG_H("received dst addr:0x%x:%x:%x:%x\n",l2tp_attr_info->dst_ipv6_addr[0],l2tp_attr_info->dst_ipv6_addr[1],
+			l2tp_attr_info->dst_ipv6_addr[2],l2tp_attr_info->dst_ipv6_addr[3]);
+	}
+
+	IPACMDBG_H("exit recv_genl\n");
+
+	return NL_OK;
+}
+
+int recv_genl_msg(struct nl_msg *msg,void *arg)
+{
+	ipa_nl_l2tp_info_t l2tp_attr_info;
+	struct l2tp_tunnel_info tunnel_info;
+	struct l2tp_session_info session_info;
+	int ret = 0;
+	struct nlmsghdr *nlh = nlmsg_hdr(msg);
+	struct genlmsghdr *gnlh = genlmsg_hdr(nlh);
+
+	IPACMDBG_H("exit recv_genl_msg cmd_id : %d\n",gnlh->cmd);
+
+	memset(&l2tp_attr_info, 0, sizeof(ipa_nl_l2tp_info_t));
+	ret = recv_genl(nlh, &l2tp_attr_info);
+	if(ret != NL_OK)
+	{
+		IPACMERR("Unable to parse msg\n");
+		return ret;
+	}
+
+	switch(gnlh->cmd)
+	{
+		case L2TP_CMD_TUNNEL_CREATE:
+			IPACMDBG_H("kernel_tunnel creation\n");
+			tunnel_info.l2tp_tunnel_id = l2tp_attr_info.tunnel_id;
+			tunnel_info.tunnel_type = l2tp_attr_info.encap_type ? IPA_L2TP_TUNNEL_IP :
+										IPA_L2TP_TUNNEL_UDP;
+			tunnel_info.src_port = l2tp_attr_info.src_port;
+			tunnel_info.dst_port = l2tp_attr_info.dst_port;
+			memcpy(tunnel_info.src_ipv6_addr, l2tp_attr_info.src_ipv6_addr, 4*sizeof(uint32_t));
+			memcpy(tunnel_info.dst_ipv6_addr, l2tp_attr_info.dst_ipv6_addr, 4*sizeof(uint32_t));
+			IPACM_Iface::ipacmcfg->add_l2tp_tunnel_info(&tunnel_info);
+			break;
+
+		case L2TP_CMD_TUNNEL_DELETE:
+			IPACMDBG_H("kernel_tunnel deletion\n");
+			tunnel_info.l2tp_tunnel_id = l2tp_attr_info.tunnel_id;
+			tunnel_info.src_port = l2tp_attr_info.src_port;
+			tunnel_info.dst_port = l2tp_attr_info.dst_port;
+			memcpy(tunnel_info.src_ipv6_addr, l2tp_attr_info.src_ipv6_addr, 4*sizeof(uint32_t));
+			memcpy(tunnel_info.dst_ipv6_addr, l2tp_attr_info.dst_ipv6_addr, 4*sizeof(uint32_t));
+			IPACM_Iface::ipacmcfg->del_l2tp_tunnel_info(tunnel_info.l2tp_tunnel_id);
+			break;
+
+		case L2TP_CMD_SESSION_CREATE:
+			IPACMDBG_H("kernel_session creation\n");
+			strlcpy(session_info.l2tp_iface_name, l2tp_attr_info.l2tp_iface_name,
+				sizeof(session_info.l2tp_iface_name));
+			session_info.l2tp_session_id = l2tp_attr_info.session_id;
+			session_info.l2tp_tunnel_id = l2tp_attr_info.tunnel_id;
+			IPACM_Iface::ipacmcfg->add_l2tp_vlan_mapping(&session_info);
+			break;
+
+		case L2TP_CMD_SESSION_DELETE:
+			IPACMDBG_H("kernel_session deletion\n");
+			strlcpy(session_info.l2tp_iface_name, l2tp_attr_info.l2tp_iface_name,
+				sizeof(session_info.l2tp_iface_name));
+			session_info.l2tp_session_id = l2tp_attr_info.session_id;
+			session_info.l2tp_tunnel_id = l2tp_attr_info.tunnel_id;
+			IPACM_Iface::ipacmcfg->del_l2tp_vlan_mapping(&session_info);
+			break;
+
+		default:
+			ret = NL_SKIP;
+	}
+
+	IPACMDBG_H("exit recv_genl_msg\n");
+	return ret;
+}
+
+void *l2tp_nl_process(void *param)
+{
+	struct nl_sock* sock;
+	int family_id = -1;
+	int ret = 0;
+	int group_id = -1;
+
+	IPACMDBG_H("function l2tp_process start\n");
+
+	sock = nl_socket_alloc();
+	if(!sock)
+	{
+		IPACMDBG_H("allocating nl_sock failed");
+		goto handle;
+	}
+
+	ret = genl_connect(sock);
+	if(ret < 0)
+	{
+		IPACMDBG_H("genl_connect failed");
+		nl_socket_free(sock);
+		goto handle;
+	}
+
+	family_id = genl_ctrl_resolve(sock,"l2tp");
+	if(family_id < 0)
+	{
+		IPACMDBG_H("genl_ctrl_resolve failed %s",nl_geterror(family_id));
+		nl_socket_free(sock);
+		goto handle;
+	}
+
+	IPACMDBG_H("family_id : %d\n",family_id);
+
+	group_id = genl_ctrl_resolve_grp(sock, "l2tp", "l2tp");
+	if(group_id < 0)
+	{
+		IPACMDBG_H("genl_ctrl_resolve_grp failed\n");
+		nl_socket_free(sock);
+		goto handle;
+	}
+
+	IPACMDBG_H("group_id : %d\n",group_id);
+
+	ret = nl_socket_add_membership(sock, group_id);
+	if(ret < 0)
+	{
+		IPACMDBG_H("nl_socket_add_membership failed");
+		nl_socket_free(sock);
+		goto handle;
+	}
+
+	IPACMDBG_H("nl_socket_add_membership success\n");
+
+	nl_socket_modify_cb(sock, NL_CB_MSG_IN, NL_CB_CUSTOM, &recv_genl_msg, sock);
+
+	IPACMDBG_H("started receiving messages\n");
+
+	while(1)
+	{
+		nl_recvmsgs_default(sock);
+	}
+
+	IPACMDBG_H("freeing netlink socket\n");
+
+	nl_socket_free(sock);
+
+	IPACMDBG_H("function l2tp_process complete\n");
+
+handle:
+	return NULL;
+}
+
 
 /* find the newroute subnet mask */
 int find_mask(int ip_v4_last, int *mask_value)

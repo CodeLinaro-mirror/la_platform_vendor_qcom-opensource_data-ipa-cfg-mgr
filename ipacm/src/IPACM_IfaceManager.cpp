@@ -399,6 +399,10 @@ int IPACM_IfaceManager::create_iface_instance(ipacm_ifacemgr_data *param)
 #endif
 					IPACM_EvtDispatcher::registr(IPA_HANDLE_MACSEC_ADD, odu);
 					IPACM_EvtDispatcher::registr(IPA_HANDLE_MACSEC_DEL, odu);
+#ifdef IPA_L2TP_TUNNEL_UDP
+					IPACM_EvtDispatcher::registr(IPA_HANDLE_WAN_L2TP_VLAN_DOWN, odu);
+#endif
+
 					/* IPA_LAN_DELETE_SELF should be always last */
 					IPACM_EvtDispatcher::registr(IPA_LAN_DELETE_SELF, odu);
 					IPACMDBG_H("ipa_LAN (%s):ipa_index (%d) instance open/registr ok\n", odu->dev_name, odu->ipa_if_num);
@@ -551,6 +555,9 @@ int IPACM_IfaceManager::create_iface_instance(ipacm_ifacemgr_data *param)
 					{
 						IPACM_EvtDispatcher::registr(IPA_ADD_L2TP_CLIENT, w);
 						IPACM_EvtDispatcher::registr(IPA_DEL_L2TP_CLIENT, w);
+#ifdef IPA_L2TP_TUNNEL_UDP
+						IPACM_EvtDispatcher::registr(IPA_ROUTE_DEL_L2TP_VLAN_EVENT, w);
+#endif
 					}
 #endif
 #ifdef FEATURE_SOCKSv5

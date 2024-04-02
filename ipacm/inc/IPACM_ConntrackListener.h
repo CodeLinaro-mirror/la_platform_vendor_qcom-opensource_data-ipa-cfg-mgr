@@ -173,7 +173,7 @@ private:
 #if defined(FEATURE_SOCKSv5) && defined (IPA_SOCKV5_EVENT_MAX)
 	void ProcessSocksv5Conn(ipa_socksv5_msg *socksv5_info, bool is_add);
 	void PostRouteAddVlanPdn(uint32_t public_ip);
-	void PostSocksv5Ready(ipacm_event_connection* data_evt_conn);
+	void PostSocksv5Ready(ipa_socksv5_msg* data_evt_conn);
 #endif //defined(FEATURE_SOCKSv5) && defined (IPA_SOCKV5_EVENT_MAX)
 	void ProcessTCPorUDPMsg(struct nf_conntrack *,
 		enum nf_conntrack_msg_type, u_int8_t);
@@ -211,7 +211,9 @@ private:
 	void HandleLan2Lan(struct nf_conntrack *,
 		enum nf_conntrack_msg_type, nat_table_entry* );
 #endif
-
+#ifdef IPA_L2TP_TUNNEL_UDP
+	void Handlel2tpVlanDown(void *);
+#endif
 	bool IsIpv6CTEnabled() const
 	{
 		return ipv6ct_inst != NULL;

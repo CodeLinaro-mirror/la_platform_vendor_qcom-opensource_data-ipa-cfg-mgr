@@ -809,6 +809,14 @@ private:
 #else
 	void install_l2tp_flt_rule(ipa_flt_rule_add* rules, int rule_offset, char *iface_name);
 #endif
+#ifdef IPA_L2TP_TUNNEL_UDP
+	/* remove dummy vlan id associated to any PDN */
+	void remove_l2tp_brige_vlan_pdn(uint16_t vlan_id);
+
+	/* construct WAN DL MTU rules */
+	int handle_l2tp_client_mtu_rule(const struct ipa_rule_attrib& rx_prop_attrib,
+		struct ipa_flt_rule_add& flt_rule_add, int fltr_rule_number, int mtu, ipa_ip_type iptype);
+#endif
 
 #endif
 	int handle_network_stats_evt();

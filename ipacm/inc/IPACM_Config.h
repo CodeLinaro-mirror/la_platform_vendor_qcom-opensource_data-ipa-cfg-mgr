@@ -271,6 +271,11 @@ public:
 
 	bool isMCC_Mode;
 
+#ifdef IPA_L2TP_TUNNEL_UDP
+	int num_ipa_l2tp_tunnel;
+	int num_ipa_l2tp_session;
+#endif
+
 	/* To return the instance */
 	static IPACM_Config* GetInstance();
 
@@ -315,12 +320,33 @@ public:
 #ifdef FEATURE_L2TP
 	std::list<l2tp_vlan_mapping_info> m_l2tp_vlan_mapping;
 	std::list<l2tp_client_info> l2tp_client;
+	std::list<l2tp_tunnel_info> l2tp_tunnels;
 
-	void add_l2tp_vlan_mapping(ipa_ioc_l2tp_vlan_mapping_info *data);
+	void add_l2tp_vlan_mapping(l2tp_session_info *data);
 
-	void del_l2tp_vlan_mapping(ipa_ioc_l2tp_vlan_mapping_info *data);
+	void del_l2tp_vlan_mapping(l2tp_session_info *data);
 
 	int get_vlan_l2tp_mapping(char *client_iface, l2tp_vlan_mapping_info& info);
+
+	/* check if client iface is l2tp iface */
+	bool check_l2tp_iface(const char *client_iface);
+
+#ifdef IPA_L2TP_TUNNEL_UDP
+	/* add l2tp bridge dummy vlan mapping*/
+	void add_l2tp_dummy_bridge_vlan_mapping(const char *bridge_iface, const char* l2tp_client_iface, int bridge_if_index);
+
+	/* check if vlan id is l2tp bridge dummy vlan id */
+	bool check_l2tp_bridge_vlan_id(uint32_t vlan_id);
+
+	/* get l2tp vlan mapping info using dummy vlan id */
+	int get_l2tp_mapping_by_bridge_vlan_id(uint32_t vlan_id, l2tp_vlan_mapping_info& info);
+
+	void add_l2tp_tunnel_info(l2tp_tunnel_info *data);
+
+	void del_l2tp_tunnel_info(uint32_t data);
+
+	void add_l2tp_mtu_info(uint16_t mtu , char * iface_name);
+#endif //#ifdef IPA_L2TP_TUNNEL_UDP
 #endif //#ifdef FEATURE_L2TP
 #endif //defined(FEATURE_L2TP) || defined(FEATURE_VLAN_MPDN)
 

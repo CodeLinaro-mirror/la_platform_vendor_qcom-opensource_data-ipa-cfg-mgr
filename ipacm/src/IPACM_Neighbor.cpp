@@ -281,6 +281,13 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 
 				data_all = (ipacm_event_data_all *)param;
 				ret = IPACM_Iface::ipacmcfg->find_matching_vlan(data_all->if_index, &vlan_data);
+#ifdef IPA_L2TP_TUNNEL_UDP
+				if(IPACM_Iface::ipacmcfg->check_l2tp_iface(data_all->iface_name))
+				{
+					vlan_data.vlan_id = L2TP_BRIDGE_VLAN_ID_START + data_all->master_if_index;
+					ret = IPACM_SUCCESS;
+				}
+#endif
 				if(ret == IPACM_FAILURE)
 				{
 					IPACMERR("Vlan entry has not been created for interface index %d\n", data_all->if_index);
@@ -427,7 +434,11 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 									else
 									{
 										/* for VLAN interfaces make sure bridge is with correct VID */
-										if(IPACM_Iface::ipacmcfg->iface_in_vlan_mode(neighbor_client[i].iface_name))
+										if(IPACM_Iface::ipacmcfg->iface_in_vlan_mode(neighbor_client[i].iface_name)
+#ifdef IPA_L2TP_TUNNEL_UDP
+											&& !IPACM_Iface::ipacmcfg->check_l2tp_iface(neighbor_client[i].iface_name)
+#endif
+											)
 										{
 											uint16_t vlan_id;
 											if(IPACM_Iface::ipacmcfg->get_vlan_id(neighbor_client[i].iface_name, &vlan_id))
@@ -443,6 +454,11 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 											}
 											IPACMDBG_H("client - bridge vid match (%d)\n", vlan_id);
 										}
+#ifdef IPA_L2TP_TUNNEL_UDP
+										//this is first time associating bridge to neighbor client, here do the dummy VLAN update.
+										IPACM_Iface::ipacmcfg->add_l2tp_dummy_bridge_vlan_mapping(data->iface_name,
+																		neighbor_client[i].iface_name, data->if_index);
+#endif
 									}
 								}
 #endif
@@ -526,7 +542,7 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 							}
 						}
 						/* Cache the neighbor event from bridgeX as well if physical netdev can't find */
-						if (i == num_neighbor_client_temp)
+						if ((i == num_neighbor_client_temp) && (event == IPA_NEW_NEIGH_EVENT))
 						{
 							IPACMDBG_H("Cant find ipv4 neighbor client with MAC %02x:%02x:%02x:%02x:%02x:%02x\n",
 								data->mac_addr[0], data->mac_addr[1], data->mac_addr[2],
@@ -819,7 +835,11 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 									else
 									{
 										/* for VLAN interfaces make sure bridge is with correct VID */
-										if(IPACM_Iface::ipacmcfg->iface_in_vlan_mode(neighbor_client[i].iface_name))
+										if(IPACM_Iface::ipacmcfg->iface_in_vlan_mode(neighbor_client[i].iface_name)
+#ifdef IPA_L2TP_TUNNEL_UDP
+												&& !IPACM_Iface::ipacmcfg->check_l2tp_iface(neighbor_client[i].iface_name)
+#endif
+											)
 										{
 											uint16_t vlan_id;
 											if(IPACM_Iface::ipacmcfg->get_vlan_id(neighbor_client[i].iface_name, &vlan_id))
@@ -835,6 +855,11 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 											}
 											IPACMDBG_H("client - bridge vid match (%d)\n", vlan_id);
 										}
+#ifdef IPA_L2TP_TUNNEL_UDP
+										//this is first time associating bridge to neighbor client, here do the dummy VLAN update.
+										IPACM_Iface::ipacmcfg->add_l2tp_dummy_bridge_vlan_mapping(data->iface_name,
+																			neighbor_client[i].iface_name, data->if_index);
+#endif
 									}
 								}
 #endif
@@ -902,19 +927,22 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 					}
 					else
 					{
+						/* In l2tp case can recieve vlan iface address without bridge */
 						/* construct IPA_NEIGH_CLIENT_IP_ADDR_ADD_EVENT command and insert to command-queue */
 						if (event == IPA_NEW_NEIGH_EVENT)
 							evt_data.event = IPA_NEIGH_CLIENT_IP_ADDR_ADD_EVENT;
 						else
 							evt_data.event = IPA_NEIGH_CLIENT_IP_ADDR_DEL_EVENT;
-						data_all = (ipacm_event_data_all *)malloc(sizeof(ipacm_event_data_all));
-						if (data_all == NULL)
+						data_vlan = (ipacm_event_new_neigh_vlan *)malloc(sizeof(ipacm_event_new_neigh_vlan));
+						if(data_vlan == NULL)
 						{
 							IPACMERR("Unable to allocate memory\n");
 							return;
 						}
-						memcpy(data_all, data, sizeof(ipacm_event_data_all));
-						evt_data.evt_data = (void *)data_all;
+						memcpy(&data_vlan->data_all, data, sizeof(ipacm_event_data_all));
+						data_vlan->bridge = NULL;
+						evt_data.evt_data = (void *)data_vlan;
+						data_all = (ipacm_event_data_all *)data_vlan;
 						IPACM_EvtDispatcher::PostEvt(&evt_data);
 						IPACMDBG_H("Posted event %d with %s for ipv6 (%d)\n",
 							evt_data.event, data_all->iface_name, data_all->iptype);
@@ -958,7 +986,11 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 									if(strcmp(neighbor_client[i].iface_name, IPA_NO_IFACE_NAME) == 0)
 									{
 										/* for VLAN interfaces make sure bridge is with correct VID */
-										if(IPACM_Iface::ipacmcfg->iface_in_vlan_mode(data->iface_name))
+										if(IPACM_Iface::ipacmcfg->iface_in_vlan_mode(data->iface_name)
+#ifdef IPA_L2TP_TUNNEL_UDP
+											&& !IPACM_Iface::ipacmcfg->check_l2tp_iface(data->iface_name)
+#endif
+											)
 										{
 											uint16_t vlan_id;
 											if(IPACM_Iface::ipacmcfg->get_vlan_id(data->iface_name, &vlan_id))
@@ -1017,6 +1049,12 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 											return;
 										}
 										data_vlan->data_all.iptype = IPA_IP_v4;
+#ifdef IPA_L2TP_TUNNEL_UDP
+										if(IPACM_Iface::ipacmcfg->check_l2tp_iface(neighbor_client[i].iface_name))
+										{
+											data_vlan->data_all.iptype = IPA_IP_MAX;
+										}
+#endif
 										data_vlan->data_all.if_index = neighbor_client[i].iface_index;
 										data_vlan->data_all.ipv4_addr = neighbor_client[i].v4_addr; //use previous ipv4 address
 										memcpy(data_vlan->data_all.mac_addr, neighbor_client[i].mac_addr,
@@ -1036,6 +1074,12 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 											return;
 										}
 										data_all->iptype = IPA_IP_v4;
+#ifdef IPA_L2TP_TUNNEL_UDP
+										if(IPACM_Iface::ipacmcfg->check_l2tp_iface(neighbor_client[i].iface_name))
+										{
+											data_vlan->data_all.iptype = IPA_IP_MAX;
+										}
+#endif
 										data_all->if_index = neighbor_client[i].iface_index;
 										data_all->ipv4_addr = neighbor_client[i].v4_addr; //use previous ipv4 address
 										memcpy(data_all->mac_addr, neighbor_client[i].mac_addr,

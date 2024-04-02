@@ -10527,6 +10527,11 @@ int IPACM_Wan::add_catchup_all_filtering_rule_each_pdn(
 			flt_rule_entry.rule.action = IPA_PASS_TO_ROUTING;
 
 			rt_tbl_name = ipacmcfg->rt_tbl_lan_v4.name;
+                        if(IPACM_Iface::ipacmcfg->eogre_enabled)
+			{
+				flt_rule_entry.rule.attrib.attrib_mask |= IPA_FLT_PROTOCOL;
+				flt_rule_entry.rule.attrib.u.v4.protocol=(uint8_t)IPACM_FIREWALL_IPPROTO_GRE;
+			}
 		}
 #endif /* #ifdef FEATURE_EoGRE */
 	}
@@ -10587,7 +10592,12 @@ int IPACM_Wan::add_catchup_all_filtering_rule_each_pdn(
 				sizeof(flt_rule_entry.rule.attrib.u.v6.src_addr));
 
 			flt_rule_entry.rule.attrib.attrib_mask |= IPA_FLT_SRC_ADDR;
-
+			if(IPACM_Iface::ipacmcfg->eogre_enabled)
+			{
+				flt_rule_entry.rule.attrib.attrib_mask |= IPA_FLT_NEXT_HDR;
+				flt_rule_entry.rule.attrib.u.v6.next_hdr=(uint8_t)IPACM_FIREWALL_IPPROTO_GRE;
+			}
+			IPACMDBG_H("Adding GRE check v6\n");
 			flt_rule_entry.rule.action = IPA_PASS_TO_ROUTING;
 
 			rt_tbl_name = ipacmcfg->rt_tbl_wan_v6.name;

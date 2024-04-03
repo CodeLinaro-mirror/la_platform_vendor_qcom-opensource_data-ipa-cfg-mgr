@@ -58,6 +58,10 @@
  * IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
  * OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *
+ * Changes from Qualcomm Innovation Center are provided under the following license:
+ * Copyright (c) 2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear.
  */
 /*!
 	@file
@@ -193,6 +197,13 @@ typedef struct ipa_lan_client_idx
 	int ipa_if_num;
 }ipa_lan_client_idx;
 #endif
+
+typedef struct ipacm_mux_struct
+{
+	uint8_t mux_id = 0;
+	uint16_t associated_VIDs[IPA_MAX_NUM_SW_PDNS] = {0};
+	uint8_t VID_cnt = 0;
+}ipacm_mux_struct;
 
 typedef struct rule_id_hdl_map
 {
@@ -1068,35 +1079,51 @@ private:
 #endif
 
 #ifdef FEATURE_VLAN_MPDN
-	uint8_t v4_mux_up[IPA_MAX_NUM_HW_PDNS];
+	ipacm_mux_struct v4_mux_info[IPA_MAX_NUM_HW_PDNS];
 	uint8_t num_v4_mux;
-	uint8_t v6_mux_up[IPA_MAX_NUM_HW_PDNS];
+	ipacm_mux_struct v6_mux_info[IPA_MAX_NUM_HW_PDNS];
 	uint8_t num_v6_mux;
 
-	inline bool is_mux_up(uint8_t mux_id, ipa_ip_type iptype)
+	inline bool is_mux_up(uint8_t mux_id, ipa_ip_type iptype, uint16_t vid)
 	{
-		uint8_t *mux = v4_mux_up;
+		ipacm_mux_struct *mux = v4_mux_info;
 
 		if(mux_id == 0)
 			return false;
 		if(iptype == IPA_IP_v6)
-			mux = v6_mux_up;
+			mux = v6_mux_info;
 
 		for(int i = 0; i < IPA_MAX_NUM_HW_PDNS; i++)
 		{
-			if(mux[i] == mux_id)
+			if(mux[i].mux_id == mux_id)
 			{
-				IPACMDBG_H("mux id %d is up for dev %s, iptype %d\n", mux_id, dev_name, iptype);
+				if(vid == 0)
+				{
+				IPACMDBG_H("mux id %d is up for dev %s, iptype %d\n",
+					mux_id, dev_name, iptype);
 				return true;
+				}
+				else
+				{
+					for(int j = 0; j < mux[i].VID_cnt; j++)
+					{
+						if(mux[i].associated_VIDs[j] == vid)
+						{
+							IPACMDBG_H("mux id %d is up for dev %s, iptype %d, vid %d, VID_cnt = %d\n",
+								mux_id, dev_name, iptype, vid, mux[i].VID_cnt);
+							return true;
+						}
+					}
+				}
 			}
 		}
 		IPACMDBG_H("mux id %d is not up for dev %s iptype %d\n", mux_id, dev_name, iptype);
 		return false;
 	}
 
-	inline int set_mux_up(uint8_t mux_id, ipa_ip_type iptype)
+	inline int set_mux_up(uint8_t mux_id, ipa_ip_type iptype, uint16_t vid)
 	{
-		uint8_t *mux = v4_mux_up;
+		ipacm_mux_struct *mux = v4_mux_info;
 
 		if(mux_id == 0)
 		{
@@ -1104,21 +1131,45 @@ private:
 			return IPACM_FAILURE;
 		}
 
-		if(is_mux_up(mux_id, iptype))
+		if(is_mux_up(mux_id, iptype, vid))
 		{
 			IPACMERR("mux id %d is already up, not setting it iptype %d\n", mux_id, iptype);
 			return IPACM_FAILURE;
 		}
 
 		if(iptype == IPA_IP_v6)
-			mux = v6_mux_up;
+			mux = v6_mux_info;
 
+ 		//check if mux_id was already added but need to add VLAN
 		for(int i = 0; i < IPA_MAX_NUM_HW_PDNS; i++)
 		{
-			if(mux[i] == 0)
+ 			if(mux[i].mux_id == mux_id)
+ 			{
+ 				for(int j = 0; j < mux[i].VID_cnt; j++)
+ 				{
+ 					if(mux[i].associated_VIDs[j] == 0)
+ 					{
+ 						mux[i].associated_VIDs[j] = vid;
+ 						mux[i].VID_cnt++;
+ 						mux[i].mux_id = mux_id;
+ 						IPACMDBG_H("successfully added vid %d for mux id %d, dev %s, i = %d, j = %d, iptype %d, VID_cnt = %d\n",
+							vid, mux_id, dev_name, i, j, iptype, mux[i].VID_cnt);
+ 						return IPACM_SUCCESS;
+ 					}
+ 				}
+ 			}
+ 		}
+ 
+ 		//Mux ID is new, add to the first open spot
+ 		for(int i = 0; i < IPA_MAX_NUM_HW_PDNS; i++)
+ 		{
+ 			if(mux[i].mux_id == 0)
 			{
-				mux[i] = mux_id;
-				IPACMDBG_H("successfully set mux id %d for dev %s, i = %d, iptype\n", mux_id, dev_name, i, iptype);
+ 				mux[i].associated_VIDs[0] = vid;
+ 				mux[i].VID_cnt++;
+ 				mux[i].mux_id = mux_id;
+ 				IPACMDBG_H("successfully added mux id %d with vid %d, dev %s, i = %d, iptype %d, VID_cnt = %d\n",
+					mux_id, vid, dev_name, i, iptype, mux[i].VID_cnt);
 				return IPACM_SUCCESS;
 			}
 		}
@@ -1128,7 +1179,7 @@ private:
 
 	inline int set_mux_down(uint8_t mux_id, ipa_ip_type iptype)
 	{
-		uint8_t *mux = v4_mux_up;
+		ipacm_mux_struct *mux = v4_mux_info;
 
 		if(mux_id == 0)
 		{
@@ -1137,14 +1188,15 @@ private:
 		}
 
 		if(iptype == IPA_IP_v6)
-			mux = v6_mux_up;
+			mux = v6_mux_info;
 
 		for(int i = 0; i < IPA_MAX_NUM_HW_PDNS; i++)
 		{
-			if(mux[i] == mux_id)
+ 			if(mux[i].mux_id == mux_id)
 			{
-				mux[i] = 0;
-				IPACMDBG_H("successfully removed mux id %d for dev %s, i = %d, iptype\n", mux_id, dev_name, i, iptype);
+ 				memset(&mux[i], 0, sizeof(mux[i]));
+ 				IPACMDBG_H("successfully removed mux id %d for dev %s, i = %d, iptype %d, VID_cnt = %d\n",
+					mux_id, dev_name, i, iptype, mux[i].VID_cnt);
 				return IPACM_SUCCESS;
 			}
 		}
@@ -1154,17 +1206,18 @@ private:
 
 	inline bool is_any_mux_up(ipa_ip_type iptype)
 	{
-		uint8_t *mux = v4_mux_up;
+		ipacm_mux_struct *mux = v4_mux_info;
 		bool res = false;
 
 		if(iptype == IPA_IP_v6)
-			mux = v6_mux_up;
+			mux = v6_mux_info;
 
 		for(int i = 0; i < IPA_MAX_NUM_HW_PDNS; i++)
 		{
-			if(mux[i])
+			if(mux[i].mux_id)
 			{
-				IPACMDBG("mux id %d up for dev %s, i = %d, iptype %d\n", mux[i], dev_name, i, iptype);
+				IPACMDBG("mux id %d up for dev %s, i = %d, iptype %d\n",
+					mux[i], dev_name, i, iptype);
 				res = true;
 			}
 		}

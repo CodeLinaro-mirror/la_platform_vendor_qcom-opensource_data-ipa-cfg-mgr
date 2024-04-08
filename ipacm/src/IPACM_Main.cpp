@@ -1206,6 +1206,27 @@ void* ipa_driver_msg_notifier(void *param)
 			evt_data.evt_data = 0;
 
 			break;
+
+		case IPA_EoGRE_NOTIFY_EVENT:
+			IPACMDBG_H("Received an IPA_EoGRE_NOTIFY_EVENT\n");
+
+			if ( IPACM_Iface::ipacmcfg->eogre_enabled == false )
+			{
+				IPACMERR("eogre tunnel is not up yet, no work need to be done\n");
+				goto done;
+			}
+
+			evt_data.event    = IPA_HANDLE_EoGRE_DOWN;
+			evt_data.evt_data = 0;
+			IPACMDBG_H("srinu Posting IPA_HANDLE_EoGRE_DOWN \n");
+			IPACM_EvtDispatcher::PostEvt(&evt_data);
+
+			evt_data.event    = IPA_HANDLE_EoGRE_UP;
+			evt_data.evt_data = 0;
+			IPACMDBG_H("srinu Posting IPA_HANDLE_EoGRE_UP \n");
+			IPACM_EvtDispatcher::PostEvt(&evt_data);
+
+			continue;
 #endif
 
 		case IPA_MACSEC_ADD_EVENT:

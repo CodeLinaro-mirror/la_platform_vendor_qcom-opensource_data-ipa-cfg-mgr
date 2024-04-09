@@ -472,7 +472,6 @@ int IPACM_Config::ReadSwAllow(void)
 
 		memset(sw_filter_cfg, 0, sizeof(IPACM_swallow_t));
 		memcpy(sw_filter_cfg, cfg, sizeof(IPACM_swallow_t));
-		sw_allow_flag = FALSE;
 		free(cfg);
 
 		/* Fetch PDN index for the sw allow pdns */

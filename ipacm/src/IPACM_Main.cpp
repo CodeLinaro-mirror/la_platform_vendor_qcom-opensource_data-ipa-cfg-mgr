@@ -61,6 +61,10 @@
  * IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
  * OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *
+ * Changes from Qualcomm Innovation Center, Inc. are provided under the following license:
+ * Copyright (c) 2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear.
  */
  /*!
 	@file
@@ -205,17 +209,9 @@ void* firewall_monitor(void *param)
 
 	if(config != NULL)
 	{
-		if(config->ReadSwAllow() == IPACM_SUCCESS)
+		if(config->ReadSwAllow() != IPACM_SUCCESS)
 		{
-			IPACM_swallow_t *dummy_cfg = (IPACM_swallow_t *)malloc(sizeof(IPACM_swallow_t));
-
-			evt_data.event = IPA_SWALLOW_CHANGE_EVENT;
-			/* Dummy Data Ignored on received side */
-			evt_data.evt_data = (void *)dummy_cfg;
-
-			IPACMDBG("Posting IPA_SWALLOW_CHANGE_EVENT\n");
-			/* Insert IPA_SWALLOW_CHANGE_EVENT to command queue */
-			IPACM_EvtDispatcher::PostEvt(&evt_data);
+			IPACMERR("ReadSwAllow is failed\n");
 		}
 	}
 	else

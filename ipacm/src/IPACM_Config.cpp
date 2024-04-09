@@ -28,7 +28,7 @@
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  * Changes from Qualcomm Innovation Center are provided under the following license:
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear.
  */
 /*!
@@ -463,7 +463,6 @@ int IPACM_Config::ReadSwAllow(void)
 
 		memset(sw_filter_cfg, 0, sizeof(IPACM_swallow_t));
 		memcpy(sw_filter_cfg, cfg, sizeof(IPACM_swallow_t));
-		sw_allow_flag = FALSE;
 		free(cfg);
 
 		/* Fetch PDN index for the sw allow pdns */

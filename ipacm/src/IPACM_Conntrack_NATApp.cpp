@@ -27,7 +27,7 @@ OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
 IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 Changes from Qualcomm Innovation Center are provided under the following license:
-Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+Copyright (c) 2023-2024 Qualcomm Innovation Center, Inc. All rights reserved.
 SPDX-License-Identifier: BSD-3-Clause-Clear
 */
 #include "IPACM_Conntrack_NATApp.h"
@@ -2299,7 +2299,7 @@ NatProxyBase::~NatProxyBase()
 	IPACMDBG_H("\n");
 }
 
-int NatProxyBase::AddTable(uint16_t number_of_entries)
+int NatProxyBase::AddTable(uint16_t number_of_entries, const char* mem_type)
 {
 	IPACMDBG_H("\n");
 	uint32_t table_handle;
@@ -2310,7 +2310,7 @@ int NatProxyBase::AddTable(uint16_t number_of_entries)
 		return 0;
 	}
 
-	int ret = DoAddTable(number_of_entries, table_handle);
+	int ret = DoAddTable(number_of_entries, mem_type, table_handle);
 	if (!ret)
 	{
 		m_tableHandle = table_handle;
@@ -2388,10 +2388,11 @@ int NatProxyBase::DelEntry(NatEntryBase& entry)
 	return ret;
 }
 
-int Ipv6ctProxy::DoAddTable(uint16_t number_of_entries, uint32_t& table_handle)
+int Ipv6ctProxy::DoAddTable(uint16_t number_of_entries, const char* mem_type, uint32_t& table_handle)
 {
 	IPACMDBG_H("\n");
-	int ret = ipa_ipv6ct_add_tbl(number_of_entries, &table_handle);
+
+	int ret = ipa_ct_add_ipv6_tbl(number_of_entries, mem_type, &table_handle);
 	IPACMDBG_H("return\n");
 	return ret;
 }
@@ -2399,7 +2400,7 @@ int Ipv6ctProxy::DoAddTable(uint16_t number_of_entries, uint32_t& table_handle)
 int Ipv6ctProxy::DoDeleteTable()
 {
 	IPACMDBG_H("\n");
-	int ret = ipa_ipv6ct_del_tbl(m_tableHandle);
+	int ret = ipa_ct_del_ipv6_tbl(m_tableHandle);
 	IPACMDBG_H("return\n");
 	return ret;
 }
@@ -2494,7 +2495,7 @@ int Ipv6ctProxy::DoAddEntry(const NatEntryBase& entry, uint32_t& entry_handle,
 			IPACMDBG_H("ucp: en %d, idx %d, s %d\n", entry.m_ucp, entry.m_uc_activation_index, entry.m_s);
 		}
 
-		ret = ipa_ipv6ct_add_rule(m_tableHandle, &rule, &entry_handle);
+		ret = ipa_ct_add_ipv6_rule(m_tableHandle, &rule, &entry_handle);
 
 		IPACMDBG("added ipv6CT entry, src_lsb 0x%llX, src_msb 0x%llX, src_port %u, dst_lsb 0x%llX, dst_msb 0x%llX, dst_port %u, dir %d, prot %d, handle %d\n",
 			rule.src_ipv6_lsb, rule.src_ipv6_msb, rule.src_port, rule.dest_ipv6_lsb, rule.dest_ipv6_msb, rule.dest_port, rule.direction_settings, rule.protocol, entry_handle);
@@ -2537,7 +2538,7 @@ int Ipv6ctProxy::DoAddEntry(const NatEntryBase& entry, uint32_t& entry_handle,
 		rule.dest_port = ipv6nat_entry.m_dstPort;
 		rule.protocol = ipv6nat_entry.m_protocol;
 
-		ret = ipa_ipv6ct_add_rule(m_tableHandle, &rule, &entry_handle);
+		ret = ipa_ct_add_ipv6_rule(m_tableHandle, &rule, &entry_handle);
 		if(ret)
 		{
 			IPACMERR("failed adding outbound rule, bail\n");
@@ -2559,7 +2560,7 @@ int Ipv6ctProxy::DoAddEntry(const NatEntryBase& entry, uint32_t& entry_handle,
 		rule.dest_port = ipv6nat_entry.m_dstPort;
 		rule.protocol = ipv6nat_entry.m_protocol;
 
-		ret = ipa_ipv6ct_add_rule(m_tableHandle, &rule, &additional_entry_handle);
+		ret = ipa_ct_add_ipv6_rule(m_tableHandle, &rule, &additional_entry_handle);
 		if(ret)
 		{
 			IPACMERR("failed adding outbound rule, bail\n");
@@ -2576,7 +2577,7 @@ int Ipv6ctProxy::DoAddEntry(const NatEntryBase& entry, uint32_t& entry_handle,
 	return ret;
 #ifdef FEATURE_IPV6_NAT
 inbound_fail:
-	ipa_ipv6ct_del_rule(m_tableHandle, entry_handle);
+	ipa_ct_del_ipv6_rule(m_tableHandle, entry_handle);
 clean_ucp:
 	DelIpv6NatUcAct(rule.uc_activation_index);
 	return ret;
@@ -2594,7 +2595,7 @@ int Ipv6ctProxy::DoDelEntry(const NatEntryBase& entry)
 		return -EINVAL;
 	}
 
-	ret = ipa_ipv6ct_del_rule(m_tableHandle, entry.m_ruleHandle);
+	ret = ipa_ct_del_ipv6_rule(m_tableHandle, entry.m_ruleHandle);
 	if(ret)
 	{
 		IPACMERR("failed deleting ipv6ct rule\n");
@@ -2608,7 +2609,7 @@ int Ipv6ctProxy::DoDelEntry(const NatEntryBase& entry)
 
 			IPACMDBG_H("this is ipv6 nat entry, delete inbound rule\n");
 
-			ret = ipa_ipv6ct_del_rule(m_tableHandle, ipv6nat.m_inboundRuleHandle);
+			ret = ipa_ct_del_ipv6_rule(m_tableHandle, ipv6nat.m_inboundRuleHandle);
 			if(ret)
 			{
 				IPACMERR("failed deleting inbound ipv6 nat rule\n");
@@ -2638,7 +2639,7 @@ int Ipv6ctProxy::QueryTimestamp(const NatEntryBase& entry, uint32_t& time_stamp)
 		return -EINVAL;
 	}
 
-	int ret = ipa_ipv6ct_query_timestamp(m_tableHandle, entry.m_ruleHandle, &time_stamp);
+	int ret = ipa_ct_query_timestamp(m_tableHandle, entry.m_ruleHandle, &time_stamp);
 #ifdef FEATURE_IPV6_NAT
 	if(ret)
 	{
@@ -2652,7 +2653,7 @@ int Ipv6ctProxy::QueryTimestamp(const NatEntryBase& entry, uint32_t& time_stamp)
 		const Ipv6NatEntry &ipv6nat = static_cast<const Ipv6NatEntry&>(entry);
 
 		IPACMDBG_H("ipv6 nat entry, check inbound handle\n");
-		ret = ipa_ipv6ct_query_timestamp(m_tableHandle, ipv6nat.m_inboundRuleHandle, &additional_timestamp);
+		ret = ipa_ct_query_timestamp(m_tableHandle, ipv6nat.m_inboundRuleHandle, &additional_timestamp);
 		if(ret)
 		{
 			IPACMERR(" inbound query failed, return\n");
@@ -2723,7 +2724,7 @@ NatEntriesCollectionBase& Ipv6NatObjectsGenerator::GetEntriesCollection(int max_
 }
 #endif
 
-NatBase::NatBase(ipa_ip_type type, int max_entries, const NatObjectsGeneratorBase& objectsGenerator)
+NatBase::NatBase(ipa_ip_type type, int max_entries, const char* mem_type, const NatObjectsGeneratorBase& objectsGenerator)
 	:
 	m_type(type),
 	m_temp(objectsGenerator.GetEntriesCollection(MAX_TEMP_ENTRIES)),
@@ -2733,7 +2734,8 @@ NatBase::NatBase(ipa_ip_type type, int max_entries, const NatObjectsGeneratorBas
 	m_proxy(objectsGenerator.GetProxy()),
 	m_ctTimestampUtil(objectsGenerator.GetConntrackTimestampUtil()),
 	m_cache(objectsGenerator.GetEntriesCollection(max_entries)),
-	m_previousWanAddress(objectsGenerator.GetIpAddress())
+	m_previousWanAddress(objectsGenerator.GetIpAddress()),
+	ct_mem_type(mem_type)
 {
 	IPACMDBG_H("\n");
 }
@@ -2753,7 +2755,7 @@ NatBase::~NatBase()
 int NatBase::AddTable(const uint32_t v6_prefix[2])
 {
 	IPACMDBG_H("\n");
-	int ret = m_proxy.AddTable(m_maxEntries);
+	int ret = m_proxy.AddTable(m_maxEntries, ct_mem_type);
 	if (ret)
 	{
 		IPACMERR("unable to create the table Error:%d\n", ret);
@@ -3424,12 +3426,12 @@ NatBase* Ipv6ct::GetInstance()
 		return NULL;
 	}
 
-	m_instance = new Ipv6ct(pConfig->GetIpv6CTMaxEntries());
+	m_instance = new Ipv6ct(pConfig->GetIpv6CTMaxEntries(), pConfig->GetCTMemType());
 	IPACMDBG_H("return\n");
 	return m_instance;
 }
 
-Ipv6ct::Ipv6ct(int max_entries) : NatBase(IPA_IP_v6, max_entries, Ipv6ctObjectsGenerator())
+Ipv6ct::Ipv6ct(int max_entries, const char* mem_type) : NatBase(IPA_IP_v6, max_entries, mem_type, Ipv6ctObjectsGenerator())
 {
 	IPACMDBG_H("\n");
 }

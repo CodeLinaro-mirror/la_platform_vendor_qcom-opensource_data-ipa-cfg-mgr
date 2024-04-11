@@ -89,7 +89,7 @@ static char dmesg_cmd[MAX_BUF_LEN];
 		memset(dmesg_cmd, 0, MAX_BUF_LEN); \
 		snprintf(dmesg_cmd, MAX_BUF_LEN, "echo %s > /dev/kmsg", buffer_send); \
 		system(dmesg_cmd); \
-	} while (0);
+	} while (0)
 #ifdef DEBUG
 #define PERROR(fmt) \
 	do { \
@@ -97,28 +97,34 @@ static char dmesg_cmd[MAX_BUF_LEN];
 		snprintf(buffer_send,MAX_BUF_LEN,"%s:%d %s()", __FILE__, __LINE__, __FUNCTION__); \
 		ipacm_log_send (buffer_send); \
 		perror(fmt); \
-	} while (0);
+	} while (0)
 #define IPACMERR(fmt, ...) \
 	do { \
 		memset(buffer_send, 0, MAX_BUF_LEN); \
 		snprintf(buffer_send,MAX_BUF_LEN,"ERROR: %s:%d %s() " fmt, __FILE__,  __LINE__, __FUNCTION__, ##__VA_ARGS__); \
 		ipacm_log_send (buffer_send); \
 		printf("ERROR: %s:%d %s() " fmt, __FILE__,  __LINE__, __FUNCTION__, ##__VA_ARGS__); \
-	} while (0);
+	} while (0)
 #define IPACMDBG_H(fmt, ...) \
 	do { \
 		memset(buffer_send, 0, MAX_BUF_LEN); \
 		snprintf(buffer_send,MAX_BUF_LEN,"%s:%d %s() " fmt, __FILE__,  __LINE__, __FUNCTION__, ##__VA_ARGS__); \
 		ipacm_log_send (buffer_send); \
 		printf("%s:%d %s() " fmt, __FILE__,  __LINE__, __FUNCTION__, ##__VA_ARGS__); \
-	} while (0);
+	} while (0)
 #else
 #define PERROR(fmt)   perror(fmt)
 #define IPACMERR(fmt, ...)   printf("ERR: %s:%d %s() " fmt, __FILE__,  __LINE__, __FUNCTION__, ##__VA_ARGS__);
 #define IPACMDBG_H(fmt, ...) printf("%s:%d %s() " fmt, __FILE__,  __LINE__, __FUNCTION__, ##__VA_ARGS__);
 #endif
-#define IPACMDBG(fmt, ...)	printf("%s:%d %s() " fmt, __FILE__,  __LINE__, __FUNCTION__, ##__VA_ARGS__);
-#define IPACMLOG(fmt, ...)  printf(fmt, ##__VA_ARGS__);
+#define IPACMDBG(fmt, ...) \
+	do { \
+		printf("%s:%d %s() " fmt, __FILE__,  __LINE__, __FUNCTION__, ##__VA_ARGS__); \
+	} while (0)
+#define IPACMLOG(fmt, ...) \
+	do { \
+                printf(fmt, ##__VA_ARGS__); \
+        } while (0)
 
 inline void get_kernel_version(char *kernel_ver)
 {

@@ -98,6 +98,7 @@ IPACM_ConntrackListener::IPACM_ConntrackListener() :
 	 isStaMode = false;
 #ifdef FEATURE_VLAN_MPDN
 	 memset(vlan_pdns, 0, sizeof(vlan_pdns));
+	 memset(v6_vlan_pdns, 0, sizeof(v6_vlan_pdns));
 	 num_vlan_pdns = 0;
 	 num_v6_vlan_pdns = 0;
 #endif

@@ -26,7 +26,7 @@ WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
 OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
 IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-Changes from Qualcomm Innovation Center are provided under the following license:
+Changes from Qualcomm Innovation Center, Inc. are provided under the following license:
 
 Copyright (c) 2022,2024 Qualcomm Innovation Center, Inc. All rights reserved.
 
@@ -502,7 +502,7 @@ void IPACM_LanToLan::handle_iface_down(ipacm_event_eth_bridge *data)
 	bool has_l2tp_iface = false;
 
 	IPACMDBG_H("Interface name: %s\n", data->p_iface->dev_name);
-
+	del_mac_addr(data, true);
 	for(it_target_iface = m_iface.begin(); it_target_iface != m_iface.end(); it_target_iface++)
 	{
 		if(it_target_iface->get_iface_pointer() == data->p_iface)
@@ -867,19 +867,53 @@ void IPACM_LanToLan::handle_vlan_id_del(ipacm_event_eth_bridge *data)
 }
 #endif
 
+void IPACM_LanToLan::add_mac_addr(ipacm_event_eth_bridge *data)
+{
+	list<add_iface_mac>::iterator it_client;
+	add_iface_mac add_iface_macs;
+	IPACMDBG_H("Adding Interface %s  to list\n", data->p_iface->dev_name);
+	for(it_client = add_ifaces_mac.begin();
+		it_client != add_ifaces_mac.end(); it_client++)
+	{
+		if((!memcmp(it_client->mac, data->mac_addr, sizeof(data->mac_addr))) &&
+		!(memcmp(data->p_iface->dev_name, it_client->iface_name, sizeof(data->p_iface->dev_name))))
+		{
+			IPACMDBG_H("found the Interface name: %s in list\n",
+				data->p_iface->dev_name);
+			break;
+		}
+	}
+	if(it_client == add_ifaces_mac.end())
+	{
+		memcpy(add_iface_macs.mac, data->mac_addr, sizeof(data->mac_addr));
+		memcpy(add_iface_macs.iface_name, data->p_iface->dev_name,
+			sizeof(data->p_iface->dev_name));
+
+		IPACMDBG_H("Added Interface %s  successfully to list with client MAC 0x%02x%02x%02x%02x%02x%02x\n",
+			add_iface_macs.iface_name, add_iface_macs.mac[0], add_iface_macs.mac[1], add_iface_macs.mac[2],
+			add_iface_macs.mac[3],	add_iface_macs.mac[4], add_iface_macs.mac[5]);
+		add_iface_macs.vlan_id = data->VlanID;
+		add_ifaces_mac.push_back(add_iface_macs);
+
+	}
+}
+
 void IPACM_LanToLan::handle_client_add(ipacm_event_eth_bridge *data)
 {
 	list<IPACM_LanToLan_Iface>::iterator it_iface;
 	list<l2tp_vlan_mapping_info>::iterator it_mapping;
 	l2tp_vlan_mapping_info *mapping_info = NULL;
 	bool is_l2tp_client = false;
-
-	IPACMDBG_H("Incoming client MAC: 0x%02x%02x%02x%02x%02x%02x, interface: %s\n", data->mac_addr[0], data->mac_addr[1],
-		data->mac_addr[2], data->mac_addr[3], data->mac_addr[4], data->mac_addr[5], data->p_iface->dev_name);
+	add_mac_addr(data);
+	IPACMDBG_H("Incoming client MAC: 0x%02x%02x%02x%02x%02x%02x, interface: %s\n", 
+		data->mac_addr[0], data->mac_addr[1],
+		data->mac_addr[2], data->mac_addr[3], data->mac_addr[4], 
+		data->mac_addr[5], data->p_iface->dev_name);
 #ifdef FEATURE_L2TP
 	if(IPACM_Iface::ipacmcfg->ipacm_l2tp_enable == IPACM_L2TP)
 	{
-		for(it_mapping = IPACM_Iface::ipacmcfg->m_l2tp_vlan_mapping.begin(); it_mapping != IPACM_Iface::ipacmcfg->m_l2tp_vlan_mapping.end(); it_mapping++)
+		for(it_mapping = IPACM_Iface::ipacmcfg->m_l2tp_vlan_mapping.begin();
+			it_mapping != IPACM_Iface::ipacmcfg->m_l2tp_vlan_mapping.end(); it_mapping++)
 		{
 			if(strncmp(it_mapping->l2tp_iface_name, data->iface_name,
 				sizeof(it_mapping->l2tp_iface_name)) == 0)
@@ -941,12 +975,46 @@ void IPACM_LanToLan::handle_client_add(ipacm_event_eth_bridge *data)
 	return;
 }
 
-void IPACM_LanToLan::handle_client_del(ipacm_event_eth_bridge *data)
+void IPACM_LanToLan::del_mac_addr(ipacm_event_eth_bridge *data, bool iface_down)
+{
+	list<add_iface_mac>::iterator it_client;
+
+	IPACMDBG_H("deleting the Interface %s from list\n", 
+			data->p_iface->dev_name);
+	for(it_client = add_ifaces_mac.begin();
+		it_client != add_ifaces_mac.end(); it_client++)
+	{
+		if(((!iface_down && (!memcmp(it_client->mac, data->mac_addr, sizeof(it_client->mac)))) || (iface_down)) && 
+		!(memcmp(data->p_iface->dev_name, it_client->iface_name, sizeof(data->p_iface->dev_name))))
+		{
+			IPACMDBG_H("deleting the Interface: %s MAC: 0x%02x%02x%02x%02x%02x%02x\n", data->p_iface->dev_name,
+			it_client->mac[0], it_client->mac[1], it_client->mac[2],
+			it_client->mac[3], it_client->mac[4], it_client->mac[5]);
+			add_ifaces_mac.erase(it_client);
+			if(iface_down)
+			{
+				memcpy(data->mac_addr, it_client->mac, sizeof(it_client->mac));
+			}
+			handle_client_del(data, true);
+			break;
+		}
+	}
+	if(it_client == add_ifaces_mac.end())
+	{
+		IPACMERR(" Not found the Interface name: %s in list\n",
+				data->p_iface->dev_name);
+	}
+}
+
+void IPACM_LanToLan::handle_client_del(ipacm_event_eth_bridge *data, bool del_client)
 {
 	list<IPACM_LanToLan_Iface>::iterator it_iface;
-
-	IPACMDBG_H("Incoming client MAC: 0x%02x%02x%02x%02x%02x%02x, interface: %s\n", data->mac_addr[0], data->mac_addr[1],
-		data->mac_addr[2], data->mac_addr[3], data->mac_addr[4], data->mac_addr[5], data->p_iface->dev_name);
+	if(!del_client)
+		del_mac_addr(data);
+	IPACMDBG_H("Incoming client MAC: 0x%02x%02x%02x%02x%02x%02x, interface: %s\n",
+			data->mac_addr[0], data->mac_addr[1], data->mac_addr[2],
+			data->mac_addr[3], data->mac_addr[4], data->mac_addr[5],
+			data->p_iface->dev_name);
 #ifdef FEATURE_VLAN_MPDN
 	if(data->VlanID)
 		IPACMDBG_H("vlan client! ID %d\n", data->VlanID);
@@ -1006,6 +1074,24 @@ void IPACM_LanToLan::handle_cached_client_add_event(IPACM_Lan *p_iface)
 		}
 	}
 	return;
+}
+
+char* IPACM_LanToLan::handle_cached_client_get_iface(uint8_t *mac)
+{
+	list<ipacm_event_eth_bridge>::iterator it;
+
+	it = m_cached_client_add_event.begin();
+	while(it != m_cached_client_add_event.end())
+	{
+		if(memcmp(it->mac_addr, mac, sizeof(it->mac_addr)) == 0)
+		{
+			IPACMDBG_H("Found client %s with MAC: 0x%02x%02x%02x%02x%02x%02x\n",
+				it->iface_name, it->mac_addr[0], it->mac_addr[1],
+				it->mac_addr[2], it->mac_addr[3], it->mac_addr[4], it->mac_addr[5]);
+				return it->iface_name;
+		}
+	}
+	return nullptr;
 }
 
 void IPACM_LanToLan::clear_cached_client_add_event(IPACM_Lan *p_iface)
@@ -1902,7 +1988,7 @@ void IPACM_LanToLan_Iface::del_client_rt_rule(peer_iface_info *peer, client_info
 
 void IPACM_LanToLan_Iface::handle_down_event()
 {
-	list<peer_iface_info>::iterator it_own_peer_info, it_other_iface_peer_info;
+	list<peer_iface_info>::iterator it_own_peer_info, it_other_iface_peer_info, it_other_mac_iface;
 	IPACM_LanToLan_Iface *other_iface;
 
 	/* clear inter-interface rules */
@@ -1930,6 +2016,53 @@ void IPACM_LanToLan_Iface::handle_down_event()
 				if(it_other_iface_peer_info->peer == this)	//found myself in other iface's peer info list
 				{
 					IPACMDBG_H("Found the right peer info on other iface.\n");
+
+					if(!it_other_iface_peer_info->mac_rt_rule_ref.empty())
+					{
+						std::map<std::array<uint8_t, 6>, int >::iterator it;
+						std::array<uint8_t, 6> mac = {0};
+						uint8_t mac_addr[6];
+						char *peer_iface_name;
+						bool flag;
+						IPACMDBG_H("iface name %s\n", it_other_iface_peer_info->peer->get_iface_pointer()->dev_name);
+						for(it = it_other_iface_peer_info->mac_rt_rule_ref.begin();
+							it != it_other_iface_peer_info->mac_rt_rule_ref.end(); it++)
+						{
+							IPACMDBG_H("Found  mac 0x[%X][%X][%X][%X][%X][%X] with hdr ref cnt is %d\n",
+								it->first[0],it->first[1],it->first[2],it->first[3],it->first[4],it->first[5],
+							ref_cnt_peer_l2_hdr_type[it_other_iface_peer_info->peer->get_iface_pointer()->tx_prop->tx[0].hdr_l2_type]);
+							std::copy(std::begin(it->first), std::end(it->first), std::begin(mac));
+							mac_addr[0]= mac[0];
+							mac_addr[1]= mac[1];
+							mac_addr[2]= mac[2];
+							mac_addr[3]= mac[3];
+							mac_addr[4]= mac[4];
+							mac_addr[5]= mac[5];
+							for(it_other_mac_iface = other_iface->m_peer_iface_info.begin();
+							 it_other_mac_iface != other_iface->m_peer_iface_info.end();
+							 it_other_mac_iface++)
+							 {
+								peer_iface_name =
+									IPACM_LanToLan::get_instance()->handle_cached_client_get_iface(mac_addr);
+
+								if(peer_iface_name &&
+									(!strcmp(peer_iface_name, it_other_mac_iface->peer->get_iface_pointer()->dev_name)))
+									flag = false;
+								else
+									flag = true;
+
+								if(it_other_mac_iface->peer != this &&
+									it_other_mac_iface->mac_rt_rule_ref.empty() && flag)
+								{
+									IPACMDBG_H("mac list is not empty copying the mac for iface name %s\n",
+										it_other_mac_iface->peer->get_iface_pointer()->dev_name);
+									it_other_mac_iface->mac_rt_rule_ref.insert(std::make_pair(mac, (it->second)));
+								}
+
+							}
+						}
+					}
+
 					other_iface->clear_all_flt_rule_for_one_peer_iface(&(*it_other_iface_peer_info));
 					other_iface->clear_all_rt_rule_for_one_peer_iface(&(*it_other_iface_peer_info));
 					/* remove the peer info from the list */
@@ -2418,6 +2551,8 @@ list<client_info>::iterator IPACM_LanToLan_Iface::handle_client_del(uint8_t *mac
 	list<client_info>::iterator it_client;
 	list<peer_iface_info>::iterator it_peer_info;
 	bool flag[IPA_HDR_L2_MAX];
+	std::array<uint8_t, 6> mac1;
+	std::map<std::array<uint8_t, 6>, int >::iterator it;
 
 #ifdef FEATURE_VLAN_MPDN
 	if((vlan_id && !m_is_vlan) || (!vlan_id && m_is_vlan))
@@ -2458,18 +2593,27 @@ list<client_info>::iterator IPACM_LanToLan_Iface::handle_client_del(uint8_t *mac
 				/* make sure to delete routing rule only once for each peer l2 header type */
 				if(flag[it_peer_info->peer->get_iface_pointer()->tx_prop->tx[0].hdr_l2_type] == false)
 				{
-					IPACMDBG_H("Delete client routing rule for peer interface.\n");
-					del_client_rt_rule(&(*it_peer_info), &(*it_client));
-#ifdef FEATURE_L2TP
-					if((IPACM_Iface::ipacmcfg->ipacm_l2tp_enable == IPACM_L2TP) &&
-						it_client->is_l2tp_client == false && IPACM_LanToLan::get_instance()->has_l2tp_iface() == true
-						&& m_client_info.size() == 1)
+					std::copy(std::begin(it_client->mac_addr), std::end(it_client->mac_addr), std::begin(mac1));
+					it = it_peer_info->mac_rt_rule_ref.find(mac1);
+					if(it != it_peer_info->mac_rt_rule_ref.end())
 					{
-						m_p_iface->eth_bridge_del_hdr_proc_ctx(hdr_proc_ctx_for_l2tp);
-						hdr_proc_ctx_for_l2tp = 0;
-					}
+						IPACMDBG_H("Delete client routing rule for peer interface.\n");
+						del_client_rt_rule(&(*it_peer_info), &(*it_client));
+#ifdef FEATURE_L2TP
+						if((IPACM_Iface::ipacmcfg->ipacm_l2tp_enable == IPACM_L2TP) &&
+							it_client->is_l2tp_client == false && IPACM_LanToLan::get_instance()->has_l2tp_iface() == true
+							&& m_client_info.size() == 1)
+						{
+							m_p_iface->eth_bridge_del_hdr_proc_ctx(hdr_proc_ctx_for_l2tp);
+							hdr_proc_ctx_for_l2tp = 0;
+						}
 #endif
-					flag[it_peer_info->peer->get_iface_pointer()->tx_prop->tx[0].hdr_l2_type] = true;
+						flag[it_peer_info->peer->get_iface_pointer()->tx_prop->tx[0].hdr_l2_type] = true;
+					}
+					else
+					{
+						IPACMDBG_H("Delete client routing rule for peer interface not found.\n");
+					}
 				}
 			}
 		}

@@ -2646,7 +2646,7 @@ int NatBase::AddTable(const uint32_t v6_prefix[2])
 			}
 			else if (entry.m_direction == NatEntryBase::DirectionInbound)
 			{
-				src_ipv6_msb = ((Ipv6IpAddress &)entry.GetTargetIp()).GetMsb();
+				src_ipv6_msb = ((Ipv6IpAddress &)entry.GetClientIp()).GetMsb();
 			}
 
 			if(ipv6prefixmatch(src_ipv6_msb, v6_prefix))
@@ -2685,7 +2685,7 @@ int NatBase::DeleteTable(const uint32_t v6_prefix[2],int num_v6_vlan_pdns)
 			}
 			else if (entry.m_direction == NatEntryBase::DirectionInbound)
 			{
-				src_ipv6_msb = ((Ipv6IpAddress &)entry.GetTargetIp()).GetMsb();
+				src_ipv6_msb = ((Ipv6IpAddress &)entry.GetClientIp()).GetMsb();
 			}
 
 			if(ipv6prefixmatch(src_ipv6_msb, v6_prefix))

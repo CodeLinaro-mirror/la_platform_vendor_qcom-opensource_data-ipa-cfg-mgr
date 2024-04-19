@@ -1990,22 +1990,73 @@ void IPACM_LanToLan_Iface::handle_down_event()
 {
 	list<peer_iface_info>::iterator it_own_peer_info, it_other_iface_peer_info, it_other_mac_iface;
 	IPACM_LanToLan_Iface *other_iface;
+	ipa_hdr_l2_type iface_l2_hdr_type, peer_l2_hdr_type;
 
 	/* clear inter-interface rules */
 	if(m_support_inter_iface_offload)
 	{
-		for(it_own_peer_info = m_peer_iface_info.begin(); it_own_peer_info != m_peer_iface_info.end();
-			it_own_peer_info++)
+		for(it_own_peer_info = m_peer_iface_info.begin();
+				it_own_peer_info != m_peer_iface_info.end();
+				it_own_peer_info++)
 		{
+			other_iface = it_own_peer_info->peer;
 			/* decrement reference count of peer l2 header type on both interfaces*/
-			decrement_ref_cnt_peer_l2_hdr_type(it_own_peer_info->peer->get_iface_pointer()->tx_prop->tx[0].hdr_l2_type);
-			it_own_peer_info->peer->decrement_ref_cnt_peer_l2_hdr_type(m_p_iface->tx_prop->tx[0].hdr_l2_type);
+			if(it_own_peer_info->peer->is_svap_iface() ||
+					it_own_peer_info->peer->is_ap_iface_vlan_enabled())
+			{
+				if(it_own_peer_info->peer->get_iface_pointer()->tx_prop->num_tx_props > 2)
+				{
+					IPACMDBG_H("Peer interface is in vlan mode.\n");
+					peer_l2_hdr_type = 
+						it_own_peer_info->peer->get_iface_pointer()->tx_prop->tx[2].hdr_l2_type;
+				}
+				else
+				{
+					IPACMERR("Peer interface is in vlan mode but not found proper hdr.\n");
+				}
+			}
+			else
+			{
+				IPACMDBG_H("peer interface is in non vlan mode.\n");
+				peer_l2_hdr_type = 
+					it_own_peer_info->peer->get_iface_pointer()->tx_prop->tx[0].hdr_l2_type;
+			}
+			for(it_other_iface_peer_info = other_iface->m_peer_iface_info.begin();
+ 				it_other_iface_peer_info != other_iface->m_peer_iface_info.end();
+ 				it_other_iface_peer_info++)
+			{
+				if(it_other_iface_peer_info->peer == this)
+				{
+					if(it_other_iface_peer_info->peer->is_svap_iface() ||
+					it_other_iface_peer_info->peer->is_ap_iface_vlan_enabled())
+					{
+						if(m_p_iface->tx_prop->num_tx_props > 2)
+						{
+							IPACMDBG_H("interface is in vlan mode.\n");
+							iface_l2_hdr_type =
+								m_p_iface->tx_prop->tx[2].hdr_l2_type;
+						}
+						else
+						{
+							IPACMERR("interface is in vlan mode but not found proper hdr\n");
+						}
+					}
+					else
+					{
+						IPACMDBG_H("interface is in non vlan mode.\n");
+						iface_l2_hdr_type =
+							m_p_iface->tx_prop->tx[0].hdr_l2_type;
+					}
+					break;
+				}
+			}
+			decrement_ref_cnt_peer_l2_hdr_type(peer_l2_hdr_type);
+			it_own_peer_info->peer->decrement_ref_cnt_peer_l2_hdr_type(iface_l2_hdr_type);
 
 			/* first clear all flt rule on target interface */
 			IPACMDBG_H("Clear all flt rule on target interface.\n");
 			clear_all_flt_rule_for_one_peer_iface(&(*it_own_peer_info));
 
-			other_iface = it_own_peer_info->peer;
 			/* then clear all flt/rt rule and hdr proc ctx for target interface on peer interfaces */
 			IPACMDBG_H("Clear all flt/rt rules and hdr proc ctx for target interface on peer interfaces %s.\n",
 				it_own_peer_info->peer->get_iface_pointer()->dev_name);
@@ -2067,7 +2118,7 @@ void IPACM_LanToLan_Iface::handle_down_event()
 					other_iface->clear_all_rt_rule_for_one_peer_iface(&(*it_other_iface_peer_info));
 					/* remove the peer info from the list */
 					other_iface->m_peer_iface_info.erase(it_other_iface_peer_info);
-					other_iface->del_hdr_proc_ctx(m_p_iface->tx_prop->tx[0].hdr_l2_type);
+					other_iface->del_hdr_proc_ctx(iface_l2_hdr_type);
 					break;
 				}
 			}
@@ -2075,7 +2126,7 @@ void IPACM_LanToLan_Iface::handle_down_event()
 			/* then clear rt rule and hdr proc ctx and release rt table on target interface */
 			IPACMDBG_H("Clear rt rules and hdr proc ctx and release rt table on target interface.\n");
 			clear_all_rt_rule_for_one_peer_iface(&(*it_own_peer_info));
-			del_hdr_proc_ctx(it_own_peer_info->peer->get_iface_pointer()->tx_prop->tx[0].hdr_l2_type);
+			del_hdr_proc_ctx(peer_l2_hdr_type);
 		}
 		m_peer_iface_info.clear();
 	}
@@ -2250,7 +2301,11 @@ void IPACM_LanToLan_Iface::clear_all_rt_rule_for_one_peer_iface(peer_iface_info 
 	list<client_info>::iterator it;
 	ipa_hdr_l2_type peer_l2_type;
 
-	peer_l2_type = peer->peer->get_iface_pointer()->tx_prop->tx[0].hdr_l2_type;
+	if(peer->peer->is_svap_iface() || peer->peer->is_ap_iface_vlan_enabled())
+		peer_l2_type = peer->peer->get_iface_pointer()->tx_prop->tx[2].hdr_l2_type;
+	else
+		peer_l2_type = peer->peer->get_iface_pointer()->tx_prop->tx[0].hdr_l2_type;
+
 	if(ref_cnt_peer_l2_hdr_type[peer_l2_type] == 0)
 	{
 		for(it = m_client_info.begin(); it != m_client_info.end(); it++)

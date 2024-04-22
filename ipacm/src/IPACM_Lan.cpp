@@ -1907,11 +1907,13 @@ int IPACM_Lan::del_socksv5_flt_rule(void)
 		{
 			if(m_filtering.DeleteFilteringHdls(&socksv5_flt_hdl_v6[i], IPA_IP_v6, 1) == false)
 			{
+				num_socksv5_flt = num_socksv5_flt - i;
 				return IPACM_FAILURE;
 			}
 			socksv5_flt_hdl_v6[i] = 0;
 		}
 	}
+	num_socksv5_flt = 0;
 	return IPACM_SUCCESS;
 }
 #endif
@@ -2060,11 +2062,7 @@ int IPACM_Lan::handle_vlan_neighbor(ipacm_event_data_all *data)
 	IPACMDBG_H("VLAN IF %s got client, vlan id %d \n", data->iface_name, vlan_id);
 #endif
 	data_vlan = (ipacm_event_new_neigh_vlan *)data;
-	if(!data_vlan->bridge)
-	{
-		IPACMERR("vlan with NULL bridge\n");
-		return IPACM_FAILURE;
-	}
+
 	/* TO DO: Enable SOCKSV5 with MPDN flag */
 	if(IPACM_Iface::ipacmcfg->ipacm_mpdn_enable && !IPACM_Iface::ipacmcfg->ipacm_socksv5_enable) {
 		if(data_vlan->data_all.iptype == IPA_IP_v6)

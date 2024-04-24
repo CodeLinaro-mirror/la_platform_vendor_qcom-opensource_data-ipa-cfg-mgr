@@ -310,10 +310,34 @@ IPACM_Lan::IPACM_Lan(int iface_index) : IPACM_Iface(iface_index)
 #endif
 
 #ifdef FEATURE_L2TP
-	if(ipa_if_cate == ODU_IF && IPACM_Iface::ipacmcfg->ipacm_l2tp_enable == IPACM_L2TP_E2E
-		&& iface_query->num_rx_props && iface_query->num_tx_props)
+	if(ipa_if_cate == ODU_IF && iface_query->num_rx_props 
+		&& iface_query->num_tx_props)
 	{
-		install_l2tp_ul_hdr_proc_ctx();
+		if (IPACM_Iface::ipacmcfg->ipacm_l2tp_enable == IPACM_L2TP_E2E)
+		{
+			install_l2tp_ul_hdr_proc_ctx();
+		}
+#ifdef IPA_L2TP_TUNNEL_UDP
+		if (IPACM_Iface::ipacmcfg->ipacm_l2tp_enable != IPACM_L2TP_DISABLE)
+		{
+			if(tx_prop != NULL)
+			{
+				/* Give L2TP enable info to IPA-driver */
+				m_fd_odu = open(IPA_DEVICE_NAME, O_RDWR);
+				if (0 == m_fd_odu)
+				{
+					IPACMDBG_H("Failed opening %s.\n", IPA_DEVICE_NAME);
+				}
+
+				ret = ioctl(m_fd_odu, IPA_IOC_UPDATE_L2TP_CONFIG, tx_prop->tx[0].dst_pipe);
+				if (ret)
+				{
+					IPACMERR("Failed to update L2TP config\n");
+				}
+				close(m_fd_odu);
+			}
+		}
+#endif
 	}
 #endif
 

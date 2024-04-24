@@ -388,14 +388,14 @@ void* ipa_driver_msg_notifier(void *param)
 		case SW_ROUTING_ENABLE:
 			IPACMDBG_H("Received SW_ROUTING_ENABLE\n");
 			evt_data.event = IPA_SW_ROUTING_ENABLE;
-			IPACMDBG_H("Not supported anymore\n");
-			continue;
+			IPACM_Iface::ipacmcfg->ipa_sw_rt_enable = true;
+			break;
 
 		case SW_ROUTING_DISABLE:
 			IPACMDBG_H("Received SW_ROUTING_DISABLE\n");
 			evt_data.event = IPA_SW_ROUTING_DISABLE;
-			IPACMDBG_H("Not supported anymore\n");
-			continue;
+			IPACM_Iface::ipacmcfg->ipa_sw_rt_enable = false;
+			break;
 
 		case WLAN_AP_CONNECT:
 			event_wlan = (struct ipa_wlan_msg *) (buffer + sizeof(struct ipa_msg_meta));

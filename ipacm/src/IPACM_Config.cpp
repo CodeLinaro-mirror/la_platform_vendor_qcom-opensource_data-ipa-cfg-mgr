@@ -2626,7 +2626,7 @@ void IPACM_Config::add_l2tp_dummy_bridge_vlan_mapping(const char *bridge_iface, 
 				l2tp_client_iface);
 			strlcpy(it_mapping->l2tp_bridge_iface_name, bridge_iface, IF_NAME_LEN);
 			/* Each l2tp session have seperate bridge */
-			it_mapping->l2tp_bridge_vlan_id = L2TP_BRIDGE_VLAN_ID_START + bridge_if_index;
+			it_mapping->l2tp_bridge_vlan_id = DUMMY_VLAN_ID_BASE + bridge_if_index;
 			IPACMDBG_H("Assigned l2tp iface %s, vlan id %d\n", it_mapping->l2tp_iface_name,
 				it_mapping->l2tp_bridge_vlan_id);
 			break;

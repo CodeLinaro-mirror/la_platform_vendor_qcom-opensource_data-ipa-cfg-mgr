@@ -180,10 +180,11 @@ extern "C"
 #define IPA_DUMMY_PREFIX 0xFFFFFFFF
 
 #if defined(FEATURE_L2TP)
-#define L2TP_BRIDGE_VLAN_ID_START 4096
 #define MAX_L2TP_TUNNEL 2
 #define MAX_L2TP_SESSION 4
 #endif
+
+#define DUMMY_VLAN_ID_BASE 4096
 
 /*===========================================================================
 										 GLOBAL DEFINITIONS AND DECLARATIONS

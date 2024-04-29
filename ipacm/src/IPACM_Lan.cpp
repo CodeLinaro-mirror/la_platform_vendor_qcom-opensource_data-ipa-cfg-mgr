@@ -237,6 +237,8 @@ IPACM_Lan::IPACM_Lan(int iface_index) : IPACM_Iface(iface_index)
 
 	num_wan_ul_fl_rule_v4 = 0;
 	num_wan_ul_fl_rule_v6 = 0;
+	num_wan_ul_eogre_fl_rule_v4 = 0;
+	num_wan_ul_eogre_fl_rule_v6 = 0;
 	num_wan_subnet_rules = 0;
 	num_wan_prefix_rules = 0;
 	hdr_len = 0;
@@ -258,6 +260,9 @@ IPACM_Lan::IPACM_Lan(int iface_index) : IPACM_Iface(iface_index)
 	memset(ipv6_icmp_flt_rule_hdl, 0, NUM_IPV6_ICMP_FLT_RULE * sizeof(uint32_t));
 	modem_ul_v4_set = false;
 	modem_ul_v6_set = false;
+	modem_eogre_ul_v4_set = false;
+	modem_eogre_ul_v6_set = false;
+
 	memset(ipv6_prefix, 0, sizeof(ipv6_prefix));
 	memset(&xlat_ctx, 0, sizeof(xlat_context));
 	memset(tcp_syn_flt_rule_hdl, 0, sizeof(tcp_syn_flt_rule_hdl));
@@ -2487,7 +2492,7 @@ int IPACM_Lan::del_socksv5_flt_rule(void)
 #endif
 
 
-int IPACM_Lan::del_ul_flt_rules(enum ipa_ip_type iptype)
+int IPACM_Lan::del_ul_flt_rules(enum ipa_ip_type iptype, bool is_eogre_stats)
 {
 	int idx = 0;
 
@@ -2510,10 +2515,12 @@ int IPACM_Lan::del_ul_flt_rules(enum ipa_ip_type iptype)
 		{
 			IPACMERR("No modem UL rules were installed, return...\n");
 			modem_ul_v4_set = false;
+			modem_eogre_ul_v4_set = false;
 			return IPACM_SUCCESS;
 		}
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
-		if(IPACM_Iface::ipacmcfg->ipacm_lan_stats_enable == false)
+		if((IPACM_Iface::ipacmcfg->ipacm_lan_stats_enable == false) ||
+		(IPACM_Iface::ipacmcfg->ipacm_lan_stats_enable  && is_eogre_stats))
 #endif
 		{
 			if(num_wan_ul_fl_rule_v4 > MAX_WAN_UL_FILTER_RULES)
@@ -2546,6 +2553,7 @@ int IPACM_Lan::del_ul_flt_rules(enum ipa_ip_type iptype)
 		}
 #endif
 		modem_ul_v4_set = false;
+		modem_eogre_ul_v4_set = false;
 	}
 	else
 	{
@@ -2556,7 +2564,8 @@ int IPACM_Lan::del_ul_flt_rules(enum ipa_ip_type iptype)
 			return IPACM_SUCCESS;
 		}
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
-		if(IPACM_Iface::ipacmcfg->ipacm_lan_stats_enable == false)
+		if((IPACM_Iface::ipacmcfg->ipacm_lan_stats_enable == false) ||
+		(IPACM_Iface::ipacmcfg->ipacm_lan_stats_enable  && is_eogre_stats))
 #endif
 		{
 #ifndef IPA_V6_UL_WL_FIREWALL_HANDLE
@@ -2601,6 +2610,7 @@ int IPACM_Lan::del_ul_flt_rules(enum ipa_ip_type iptype)
 		}
 #endif
 		modem_ul_v6_set = false;
+		modem_eogre_ul_v6_set = false;
 	}
 
 	return IPACM_SUCCESS;
@@ -4168,6 +4178,13 @@ int IPACM_Lan::handle_wan_up_ex(ipacm_ext_prop *ext_prop, ipa_ip_type iptype, ui
 			}
 #ifdef FEATURE_VLAN_MPDN
 			notif_only = false;
+			if(IPACM_Iface::ipacmcfg->eogre_enabled &&
+			(IPACM_Iface::ipacmcfg->tunnel_feature == SINGLE_TAG_FEATURE) &&
+			!modem_eogre_ul_v6_set && iptype ==
+			IPACM_Iface::ipacmcfg->eogre_info.iptype)
+			{
+				gre_up();
+			}
 			ret = handle_uplink_filter_rule(ext_prop, iptype, xlat_mux_id, false, true, ast_update);
 #else
 			ret = handle_uplink_filter_rule(ext_prop, iptype, xlat_mux_id, ast_update);
@@ -4205,6 +4222,13 @@ int IPACM_Lan::handle_wan_up_ex(ipacm_ext_prop *ext_prop, ipa_ip_type iptype, ui
 #ifdef FEATURE_VLAN_MPDN
 			/* for v4, always install the rules like before */
 			notif_only = false;
+			if(IPACM_Iface::ipacmcfg->eogre_enabled &&
+			(IPACM_Iface::ipacmcfg->tunnel_feature == SINGLE_TAG_FEATURE) &&
+			(iptype == IPACM_Iface::ipacmcfg->eogre_info.iptype) &&
+			!modem_eogre_ul_v4_set)
+			{
+				gre_up();
+			}
 			ret = handle_uplink_filter_rule(ext_prop, iptype, xlat_mux_id, false, true, ast_update);
 #else
 			ret = handle_uplink_filter_rule(ext_prop, iptype, xlat_mux_id, ast_update);
@@ -4240,6 +4264,15 @@ int IPACM_Lan::handle_wan_up_ex(ipacm_ext_prop *ext_prop, ipa_ip_type iptype, ui
 	if (!notif_only && (IPACM_Iface::ipacmcfg->ipacm_lan_stats_enable == true || ast_update))
 	{
 		IPACMDBG_H("xlat_mux_id: %d, iptype %d\n", xlat_mux_id, iptype);
+		if(IPACM_Iface::ipacmcfg->eogre_enabled &&
+		(iptype == IPACM_Iface::ipacmcfg->eogre_info.iptype) &&
+		(IPACM_Iface::ipacmcfg->tunnel_feature == SINGLE_TAG_FEATURE) &&
+		((!modem_eogre_ul_v6_set &&  (iptype == IPA_IP_v6)) ||
+		(!modem_eogre_ul_v4_set &&  (iptype == IPA_IP_v4))))
+		{
+			gre_up();
+		}
+
 		ret = install_uplink_filter_rule(ext_prop, iptype, xlat_mux_id);
 	}
 	else if (notif_only == true)
@@ -5503,7 +5536,6 @@ fail:
 	get_client_memptr(eth_client, eth_index)->lan_stats_idx = -1;
 	return IPACM_FAILURE;
 }
-
 int IPACM_Lan::handle_lan_client_disconnect(uint8_t *mac_addr)
 {
 	int i;
@@ -7364,9 +7396,9 @@ fail:
 
 /* install UL filter rule from Q6 */
 #ifdef FEATURE_VLAN_MPDN
-int IPACM_Lan::handle_uplink_filter_rule(ipacm_ext_prop *prop, ipa_ip_type iptype, uint8_t pdn_mux_id, bool notif_only, bool is_xlat, bool ast_update, bool isPmipv6)
+int IPACM_Lan::handle_uplink_filter_rule(ipacm_ext_prop *prop, ipa_ip_type iptype, uint8_t pdn_mux_id, bool notif_only, bool is_xlat, bool ast_update, bool isPmipv6, bool is_eogre_rules)
 #else
-int IPACM_Lan::handle_uplink_filter_rule(ipacm_ext_prop *prop, ipa_ip_type iptype, uint8_t xlat_mux_id, bool ast_update, bool isPmipv6)
+int IPACM_Lan::handle_uplink_filter_rule(ipacm_ext_prop *prop, ipa_ip_type iptype, uint8_t xlat_mux_id, bool ast_update, bool isPmipv6, bool is_eogre_rules)
 #endif
 {
 	ipa_flt_rule_add flt_rule_entry;
@@ -7670,7 +7702,10 @@ int IPACM_Lan::handle_uplink_filter_rule(ipacm_ext_prop *prop, ipa_ip_type iptyp
 #endif
 
 #if defined(FEATURE_EoGRE) || defined(FEATURE_PMIPV6) /* This rule is exactly same for PMIPV6 and EOGRE */
-		if ( compatible_gre )
+		if ((compatible_gre  &&
+		IPACM_Iface::ipacmcfg->tunnel_feature != SINGLE_TAG_FEATURE) ||
+		((IPACM_Iface::ipacmcfg->tunnel_feature == SINGLE_TAG_FEATURE) &&
+		compatible_gre && is_eogre_rules))
 		{
 			ipa_ioc_generate_flt_eq flt_eq;
 
@@ -7808,7 +7843,8 @@ int IPACM_Lan::handle_uplink_filter_rule(ipacm_ext_prop *prop, ipa_ip_type iptyp
 	}
 #endif
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
-	if (IPACM_Iface::ipacmcfg->ipacm_lan_stats_enable == false && !ast_update)
+	if (((IPACM_Iface::ipacmcfg->ipacm_lan_stats_enable == false) ||
+	(is_eogre_rules && IPACM_Iface::ipacmcfg->ipacm_lan_stats_enable)) && !ast_update)
 #else
 	if (!ast_update)
 #endif
@@ -7841,7 +7877,6 @@ int IPACM_Lan::handle_uplink_filter_rule(ipacm_ext_prop *prop, ipa_ip_type iptyp
 				{
 					wan_ul_fl_rule_hdl_v6[num_wan_ul_fl_rule_v6] = pFilteringTable->rules[i].flt_rule_hdl;
 					num_wan_ul_fl_rule_v6++;
-
 				}
 				IPACM_Iface::ipacmcfg->increaseFltRuleCount(rx_prop->rx[idx].src_pipe, iptype, pFilteringTable->num_rules);
 			}
@@ -7853,11 +7888,25 @@ int IPACM_Lan::handle_uplink_filter_rule(ipacm_ext_prop *prop, ipa_ip_type iptyp
 		/*per client stats will be disabled when vlan is enabled */
 		if(iptype == IPA_IP_v4)
 		{
-			num_wan_ul_fl_rule_v4 = pFilteringTable->num_rules;
+			if(modem_eogre_ul_v4_set)
+			{
+				num_wan_ul_fl_rule_v4 += pFilteringTable->num_rules;
+			}
+			else
+			{
+				num_wan_ul_fl_rule_v4 = pFilteringTable->num_rules;
+			}
 		}
 		else /* (iptype == IPA_IP_v6) */
 		{
-			num_wan_ul_fl_rule_v6 = pFilteringTable->num_rules;
+			if(modem_eogre_ul_v6_set)
+			{
+				num_wan_ul_fl_rule_v6 += pFilteringTable->num_rules;
+			}
+			else
+			{
+				num_wan_ul_fl_rule_v6 = pFilteringTable->num_rules;
+			}
 		}
 	}
 #endif
@@ -15139,6 +15188,10 @@ int IPACM_Lan::delete_icmp_filter_rule(
 
 void IPACM_Lan::gre_up(bool isPmipv6)/*Reusing Gre function for PMIP, with isPmipv6 parameter */
 {
+	ipa_ipgre_info ipgre_info;
+	ipa_ip_type iptype;
+	int ret, fd;
+
 	if(isPmipv6)
 	{
 		if(!IPACM_Iface::ipacmcfg->pmip_details.pmipv6_up_wan)
@@ -15152,7 +15205,6 @@ void IPACM_Lan::gre_up(bool isPmipv6)/*Reusing Gre function for PMIP, with isPmi
 			return;
 		}
 	}
-	ipa_ipgre_info ipgre_info;
 	if(isPmipv6)
 	{
 		ipgre_info = IPACM_Iface::ipacmcfg->ipgre_info;
@@ -15162,9 +15214,8 @@ void IPACM_Lan::gre_up(bool isPmipv6)/*Reusing Gre function for PMIP, with isPmi
 	{
 		ipgre_info = IPACM_Iface::ipacmcfg->eogre_info;
 	}
-	ipa_ip_type    iptype     = ipgre_info.iptype;
-	int            ret, fd;
 
+        iptype = ipgre_info.iptype;
 	IPACMDBG_H(
 		"There's gre enable work to be done for iptype(%d)\n",
 		iptype);
@@ -15329,35 +15380,59 @@ void IPACM_Lan::gre_up(bool isPmipv6)/*Reusing Gre function for PMIP, with isPmi
 		"Embellishing existing filter rules for GRE iptype(%d)\n",
 		iptype);
 
-if(isPmipv6){/*PMIPV6 needs to take care of WAN up before GRE UP scenario */
-	if(IPACM_Wan::isWanUP(ipa_if_num)){
-		del_ul_flt_rules(iptype);
+	/* PMIPV6 needs to take care of WAN up before GRE UP scenario */
+	if(isPmipv6 || ((IPACM_Iface::ipacmcfg->eogre_enabled)))
+	{
+		if((IPACM_Wan::isWanUP(ipa_if_num) && (iptype == IPA_IP_v4)) ||
+		(IPACM_Wan::isWanUP_V6(ipa_if_num) && (iptype == IPA_IP_v6)))
+		{
+			del_ul_flt_rules(iptype);
+			IPACMDBG_H(
+			"deleted UL rules for (%d)\n",
+			iptype);
+		}
 	}
-}
 
-/*EoGRE needs to take care of WAN up before GRE UP scenario */
-if(IPACM_Iface::ipacmcfg->eogre_enabled && (modem_ul_v6_set || modem_ul_v4_set)){
-	IPACMDBG_H("delete model ul rules: ipa_if_num:%d iptype:%d, modem_ul_v4_set:%d, modem_ul_v6_set :%d \n",ipa_if_num, iptype, modem_ul_v4_set,modem_ul_v6_set);
-	if(IPACM_Wan::isWanUP(ipa_if_num)){
-		del_ul_flt_rules(iptype);
-	}
-	if(IPACM_Wan::isWanUP_V6(ipa_if_num)){
-		del_ul_flt_rules(iptype);
-	}
-}
-
+/* installing the normal eogre UL rules to suport the tunnel traffic*/
 #ifdef FEATURE_VLAN_MPDN
 	ret = handle_uplink_filter_rule(
 		IPACM_Iface::ipacmcfg->GetExtProp(iptype),
 		iptype,
 		IPACM_Iface::ipacmcfg->GetQmapId(),
 		false,
-		false, false,isPmipv6);
+		false, false, isPmipv6, true);
+	if(!ret && IPACM_Iface::ipacmcfg->tunnel_feature == SINGLE_TAG_FEATURE)
+	{
+		if(iptype == IPA_IP_v6)
+		{
+			num_wan_ul_eogre_fl_rule_v6 = num_wan_ul_fl_rule_v6;
+			modem_eogre_ul_v6_set = true;
+		}
+		else if(iptype == IPA_IP_v4)
+		{
+			num_wan_ul_eogre_fl_rule_v4 = num_wan_ul_fl_rule_v4;
+			modem_eogre_ul_v4_set = true;
+		}
+	}
+
 #else
 	ret = handle_uplink_filter_rule(
 		IPACM_Iface::ipacmcfg->GetExtProp(iptype),
 		iptype,
-		IPACM_Iface::ipacmcfg->GetQmapId(), false, isPmipv6);
+		IPACM_Iface::ipacmcfg->GetQmapId(), false, isPmipv6, true);
+	if(!ret && IPACM_Iface::ipacmcfg->tunnel_feature == SINGLE_TAG_FEATURE)
+	{
+		if(iptype == IPA_IP_v6)
+		{
+			num_wan_ul_eogre_fl_rule_v6 = num_wan_ul_fl_rule_v6;
+                	modem_eogre_ul_v6_set = true;
+		}
+		else if(iptype == IPA_IP_v4)
+		{
+			num_wan_ul_eogre_fl_rule_v4 = num_wan_ul_fl_rule_v4;
+			modem_eogre_ul_v4_set = true;
+		}
+	}
 #endif
 	if (ret)
 	{
@@ -15395,13 +15470,100 @@ if(IPACM_Iface::ipacmcfg->eogre_enabled && (modem_ul_v6_set || modem_ul_v4_set))
 	delete_ipv6_prefix_flt_rule();
 	install_ipv6_prefix_flt_rule(IPACM_Wan::backhaul_ipv6_prefix);
 #endif
+	/* installing the normal UL rules to suport the untagged traffic */
+	if((IPACM_Iface::ipacmcfg->tunnel_feature == SINGLE_TAG_FEATURE) &&
+	IPACM_Iface::ipacmcfg->eogre_enabled)
+	{
+#ifdef FEATURE_VLAN_MPDN
+		if(!(IPACM_Iface::ipacmcfg->hw_fnr_stats_support) &&
+		((IPACM_Wan::isWanUP_V6(ipa_if_num) && (iptype == IPA_IP_v6)) ||
+		(IPACM_Wan::isWanUP(ipa_if_num) && (iptype == IPA_IP_v4))))
+		{
+			IPACMDBG("installing  modem ul rules for iptype  %d \n",
+				iptype);
+			ret = handle_uplink_filter_rule(
+				IPACM_Iface::ipacmcfg->GetExtProp(iptype),
+				iptype,
+				IPACM_Iface::ipacmcfg->GetQmapId(),
+				false,
+				false, false, isPmipv6, false);
+			if(!ret)
+			{
+				if(iptype == IPA_IP_v4)
+					modem_ul_v4_set = true;
+				else if(iptype == IPA_IP_v6)
+					modem_ul_v6_set = true;
+			}
+		} 
+		else if((IPACM_Iface::ipacmcfg->hw_fnr_stats_support) &&
+		((IPACM_Wan::isWanUP_V6(ipa_if_num) && (iptype == IPA_IP_v6)) ||
+		(IPACM_Wan::isWanUP(ipa_if_num) && (iptype == IPA_IP_v4))))
+		{
+			IPACMDBG("installing the per clients rulesfor iptype %d\n",
+				iptype);
 
+			if(eth_client == NULL)
+			{
+				IPACMDBG("eth_client is null\n");
+				return;
+			}
+				ret = install_uplink_filter_rule(
+					IPACM_Iface::ipacmcfg->GetExtProp(iptype),
+						iptype,
+					IPACM_Iface::ipacmcfg->GetQmapId());
+			if(ret == IPACM_SUCCESS)
+			{
+				IPACMDBG("installed the per clients rules with list\n");
+			}
+		}
+#else
+		if(!(IPACM_Iface::ipacmcfg->hw_fnr_stats_support) &&
+		((IPACM_Wan::isWanUP_V6(ipa_if_num) && (iptype == IPA_IP_v6)) ||
+		(IPACM_Wan::isWanUP(ipa_if_num) && (iptype == IPA_IP_v4))))
+		{
+			IPACMDBG("installing  modem ul rules for iptype  %d \n",
+				iptype);
+			res = handle_uplink_filter_rule(
+			IPACM_Iface::ipacmcfg->GetExtProp(iptype),
+			iptype,
+			IPACM_Iface::ipacmcfg->GetQmapId(), false, false);
+			if(iptype == IPA_IP_v6)
+				modem_ul_v6_set = true;	
+			else if(iptype == IPA_IP_v4)
+				modem_ul_v4_set = true;
+		}
+		else if((IPACM_Iface::ipacmcfg->hw_fnr_stats_support) &&
+		((IPACM_Wan::isWanUP_V6(ipa_if_num) && (iptype == IPA_IP_v6)) ||
+		(IPACM_Wan::isWanUP(ipa_if_num) && (iptype == IPA_IP_v4))))
+		{
+			IPACMDBG("installing  per client rules for iptype  %d \n",
+				iptype);
+			if(eth_client == NULL)
+			{
+				IPACMDBG("eth_client is null\n");
+				return;
+			}
+			res = install_uplink_filter_rule(
+				IPACM_Iface::ipacmcfg->GetExtProp(iptype),
+				iptype,
+				IPACM_Iface::ipacmcfg->GetQmapId());
+			if(res == IPACM_SUCCESS)
+			{
+				IPACMDBG("installed the per clients rules with list\n");
+			}
+		}
+
+#endif
+	}
 	IPACMDBG("Finished handling gre_up\n");
 }
 
 void IPACM_Lan::gre_down(bool isPmipv6)
 {
+	int res;
 	ipa_ipgre_info ipgre_info = IPACM_Iface::ipacmcfg->eogre_info;
+	ipa_ip_type iptype  = ipgre_info.iptype;
+
 	if(isPmipv6)
 	{
 		if(pmipv6_greup == false)
@@ -15412,8 +15574,6 @@ void IPACM_Lan::gre_down(bool isPmipv6)
 		pmipv6_greup=false;
 		ipgre_info = IPACM_Iface::ipacmcfg->ipgre_info;
 	}
-	ipa_ip_type    iptype     = ipgre_info.iptype;
-	int            res;
 
 	IPACMDBG_H(
 		"There's gre disable work to be done for iptype(%d)\n",
@@ -15448,7 +15608,24 @@ void IPACM_Lan::gre_down(bool isPmipv6)
 	}
 	if(!isPmipv6)
 	{
-		del_ul_flt_rules(iptype);
+		if((num_wan_ul_fl_rule_v4 == 0) && (iptype == IPA_IP_v4) &&
+		(IPACM_Iface::ipacmcfg->tunnel_feature == SINGLE_TAG_FEATURE))
+		{
+			num_wan_ul_fl_rule_v4 = num_wan_ul_eogre_fl_rule_v4;
+		}
+		else if((num_wan_ul_fl_rule_v6 == 0) && (iptype == IPA_IP_v6) &&
+		(IPACM_Iface::ipacmcfg->tunnel_feature == SINGLE_TAG_FEATURE))
+		{
+			num_wan_ul_fl_rule_v6 = num_wan_ul_eogre_fl_rule_v6;
+		}
+		IPACMDBG("delete_dflt_filter_rules num_wan_ul_fl_rule_v6 = %d , iptype = %d\n",
+			num_wan_ul_fl_rule_v6, ip_type);
+		if (IPACM_Iface::ipacmcfg->hw_fnr_stats_support &&
+		(IPACM_Iface::ipacmcfg->tunnel_feature == SINGLE_TAG_FEATURE))
+			del_ul_flt_rules(iptype, true);
+		else
+			del_ul_flt_rules(iptype);
+
 		if ( IPACM_Iface::ip_type == IPA_IP_v4 || IPACM_Iface::ip_type == IPA_IP_MAX )
 		{
 			/*
@@ -15550,7 +15727,89 @@ void IPACM_Lan::gre_down(bool isPmipv6)
 				m_ipv6_default_filterting_rules_count,
 				mtu_flt_rule_offset[iptype]);
 		}
-		IPACM_Iface::ipacmcfg->SetQmapId(0xFF);
+
+		if(!IPACM_Iface::ipacmcfg->eogre_enabled &&
+		(IPACM_Iface::ipacmcfg->tunnel_feature == SINGLE_TAG_FEATURE))
+		{
+	#ifdef FEATURE_VLAN_MPDN
+			if(!(IPACM_Iface::ipacmcfg->hw_fnr_stats_support) &&
+			((IPACM_Wan::isWanUP_V6(ipa_if_num) && (iptype == IPA_IP_v6)) ||
+			(IPACM_Wan::isWanUP(ipa_if_num) && (iptype == IPA_IP_v4))))
+			{
+				res = handle_uplink_filter_rule(
+				IPACM_Iface::ipacmcfg->GetExtProp(iptype),
+				iptype,
+				IPACM_Iface::ipacmcfg->GetQmapId(),
+				false,
+				false, false, false);
+				if(iptype == IPA_IP_v6)
+					modem_ul_v6_set = true;	
+				else if(iptype == IPA_IP_v4)
+					modem_ul_v4_set = true;
+
+				IPACMDBG("call is up for ip %d and installed modem rules successfully\n",
+					iptype);
+
+			}
+			else if((IPACM_Iface::ipacmcfg->hw_fnr_stats_support) &&
+			((IPACM_Wan::isWanUP_V6(ipa_if_num) && (iptype == IPA_IP_v6)) ||
+			(IPACM_Wan::isWanUP(ipa_if_num) && (iptype == IPA_IP_v4))))
+			{
+				IPACMDBG("installing the per clients rules\n");
+				if(eth_client == NULL)
+				{
+					IPACMDBG("eth_client is null\n");
+					return;
+				}
+				res = install_uplink_filter_rule(
+					IPACM_Iface::ipacmcfg->GetExtProp(iptype),
+					iptype,
+					IPACM_Iface::ipacmcfg->GetQmapId());
+				if(res == IPACM_SUCCESS)
+				{
+					IPACMDBG("installed the per clients rules with list\n");
+				}
+			}
+#else
+			if(!(IPACM_Iface::ipacmcfg->hw_fnr_stats_support) &&
+			((IPACM_Wan::isWanUP_V6(ipa_if_num) && (iptype == IPA_IP_v6)) ||
+			(IPACM_Wan::isWanUP(ipa_if_num) && (iptype == IPA_IP_v4))))
+			{
+				res = handle_uplink_filter_rule(
+				IPACM_Iface::ipacmcfg->GetExtProp(iptype),
+				iptype,
+				IPACM_Iface::ipacmcfg->GetQmapId(), false, false);
+				if(iptype == IPA_IP_v6)
+					modem_ul_v6_set = true;	
+				else if(iptype == IPA_IP_v4)
+					modem_ul_v4_set = true;
+				IPACMDBG("call is enable for ip %d so installing modem rule again \n",
+					iptype);
+			}
+			else if((IPACM_Iface::ipacmcfg->hw_fnr_stats_support) &&
+			((IPACM_Wan::isWanUP_V6(ipa_if_num) && (iptype == IPA_IP_v6)) ||
+			(IPACM_Wan::isWanUP(ipa_if_num) && (iptype == IPA_IP_v4))))
+			{
+				IPACMDBG("installing the per clients rules\n");
+
+				if(eth_client == NULL)
+				{
+					IPACMDBG("eth_client is null\n");
+					return;
+				}
+				res = install_uplink_filter_rule(
+					IPACM_Iface::ipacmcfg->GetExtProp(iptype),
+					iptype,
+					IPACM_Iface::ipacmcfg->GetQmapId());
+				if(res == IPACM_SUCCESS)
+				{
+					IPACMDBG("installed the per clients rules with list\n");
+				}
+			}
+	#endif		
+		}
+		else
+			IPACM_Iface::ipacmcfg->SetQmapId(0xFF);
 	}
 	if(isPmipv6)
 	{
@@ -15897,8 +16156,8 @@ int IPACM_Lan::gre_make_hdr_for_add_ctx(
 	enum ipa_ip_type iptype = ipgre_info.iptype;
 
 	IPACMDBG_H(
-		"Attempting to create iptype(%d) context header for gre routing\n",
-		iptype);
+		"Attempting to create iptype(%d) context header for gre feature %d\n",
+		iptype, IPACM_Iface::ipacmcfg->tunnel_feature);
 
 	/*
 	 * Create, the add, header for "header add" proc_ctx...
@@ -16165,6 +16424,51 @@ int IPACM_Lan::gre_make_hdr_for_add_ctx(
 		}
 		if(IPACM_Iface::ipacmcfg->tunnel_feature == SINGLE_TAG_FEATURE)
 		{
+			/*Fill Action to be taken for traffic*/
+			template_info_to_uc.tunnel_config.untagged_mapping_table.action_configured
+				= HW_PATH_ADJ_L2_RESUME_2ND_PASS;
+			/*Fill zero for other single and double tag info Since */
+			template_info_to_uc.tunnel_config.num_of_single_tag_configs = 1;
+			template_info_to_uc.tunnel_config.num_of_double_tag_configs = 0;
+			template_info_to_uc.tunnel_config.singletag_mux_mapping_table[0].vlan_id_start
+				= 0xFFFF;
+			template_info_to_uc.tunnel_config.singletag_mux_mapping_table[0].vlan_id_end
+				= 0xFFFF;
+			template_info_to_uc.tunnel_config.singletag_mux_mapping_table[0].action_configured
+				= HW_PATH_ADJ_L2_ADD_TUNNEL_RESUME_2ND_PASS;
+			template_info_to_uc.tunnel_config.singletag_mux_mapping_table[0].is_v6_options_hdr_present
+				= 0xFFFF;
+			template_info_to_uc.tunnel_config.singletag_mux_mapping_table[0].tunnel_template_addr = 0;
+
+			/*Fill Associated muxid*/
+			if ( ipgre_info.iptype == IPA_IP_v4 )
+			{
+				ret = IPACM_Wan::GetMuxByAddr(IPA_IP_v4, &ipgre_info.ipv4_src, muxid);
+			}
+			else
+			{
+				ret = IPACM_Wan::GetMuxByAddr(IPA_IP_v6, &ipgre_info.ipv6_src, muxid);
+			}
+
+			if ( ret == IPACM_SUCCESS )
+			{
+				template_info_to_uc.tunnel_config.untagged_mapping_table.mux_id = muxid;
+				IPACMDBG_H("GetMuxByAddr succeed %d\n",
+					template_info_to_uc.tunnel_config.untagged_mapping_table.mux_id);
+				template_info_to_uc.tunnel_config.singletag_mux_mapping_table[0].mux_id
+					= muxid;
+			}
+			else
+			{
+				IPACMERR("GetMuxByAddr did not succeed.\n");
+				return IPACM_FAILURE;
+			}
+			/*Fill Option param if v6 tunnel only*/
+			if ( ipgre_info.iptype == IPA_IP_v6 )
+			{
+				template_info_to_uc.tunnel_config.singletag_mux_mapping_table[0].is_v6_options_hdr_present =
+					ipgre_info.ipv6_option_hdr_enabled;
+			}
 
 		}
 		if(IPACM_Iface::ipacmcfg->tunnel_feature == DOUBLE_TAG_FEATURE)

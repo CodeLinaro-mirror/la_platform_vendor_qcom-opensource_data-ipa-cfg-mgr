@@ -185,10 +185,20 @@ void IPACM_IfaceManager::event_callback(ipa_cm_event_id event, void *param)
 			if(IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].if_cat == UNKNOWN_IF)
 			{
 				/* wlan-backhaul using sta_mode WLAN_WAN */
-				IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].if_cat = WAN_IF;
-				IPACMDBG_H("WLAN STA (%s) link up, iface: %d: \n",
-				IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].iface_name, StaData->if_index);
+				if(IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].if_mode == BRIDGE)
+				{
+					IPACMDBG_H("WLAN STA (%s) link up - Bridge mode, iface: %d: \n",
+						    IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].iface_name,
+						    StaData->if_index);
+				}
+				else
+				{
+					IPACMDBG_H("WLAN STA (%s) link up - Router mode, iface: %d: \n",
+						    IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].iface_name,
+						    StaData->if_index);
+				}
 
+				IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].if_cat = WAN_IF;
 				ifmgr_data.if_index = StaData->if_index;
 				ifmgr_data.if_type = WLAN_WAN;
 				memcpy(ifmgr_data.mac_addr, StaData->mac_addr, sizeof(ifmgr_data.mac_addr));
@@ -529,6 +539,11 @@ int IPACM_IfaceManager::create_iface_instance(ipacm_ifacemgr_data *param)
 							/* close the netdev instance if IPA not support*/
 							w->delete_iface();
 							return IPACM_FAILURE;
+						}
+						if(IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].if_mode == BRIDGE)
+						{
+							IPACMDBG_H("Updated WLAN WAN IF bridge mode\n");
+							IPACM_Wan::backhaul_is_wan_bridge[WLAN_WAN] = true;
 						}
 					}
 					else

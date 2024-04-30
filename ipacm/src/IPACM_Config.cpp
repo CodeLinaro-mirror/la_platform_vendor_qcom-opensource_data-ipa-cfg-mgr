@@ -47,6 +47,8 @@
 #include <sys/ioctl.h>
 #include <net/if.h>
 #include <fcntl.h>
+#include <sys/types.h>
+#include <ifaddrs.h>
 #include <string.h>
 #include <errno.h>
 
@@ -1831,6 +1833,68 @@ void IPACM_Config::handle_vlan_client_info(ipacm_event_data_all *data)
 
 	return;
 }
+
+/* In bridge mode, the initial IP address of
+ * the STA bridge interface would be changes
+ * once WLAN is enabled. This function gets
+ * this IP address and updates global sta
+ * bridge info struct. */
+int IPACM_Config::update_sta_bridge_info()
+{
+	int fd;
+	struct ifreq ifr;
+	list<bridge_vlan_mapping_info>::iterator it_mapping;
+	int ret = 0;
+
+	fd = socket(AF_INET, SOCK_DGRAM, 0);
+	memset(&ifr, 0, sizeof(struct ifreq));
+
+	ifr.ifr_addr.sa_family = AF_INET;
+	strlcpy(ifr.ifr_name, sta_bridge.iface_name, sizeof(ifr.ifr_name));
+
+	ret = ioctl(fd, SIOCGIFADDR, &ifr);
+	if (ret < 0)
+	{
+		IPACMERR("unable to retrieve (%s) interface address\n",ifr.ifr_name);
+		close(fd);
+		return IPACM_FAILURE;
+	}
+	IPACMDBG("Interface (%s) address %s\n", ifr.ifr_name, inet_ntoa(((struct sockaddr_in *)&ifr.ifr_addr)->sin_addr));
+	sta_bridge.ipv4_addr =  ntohl(((struct sockaddr_in *)&ifr.ifr_addr)->sin_addr.s_addr);
+
+	if(sta_bridge.ipv4_addr == 0)
+	{
+		IPACMERR("STA Bridge V4 address is not yet available\n");
+		close(fd);
+		return IPACM_FAILURE;
+        }
+	close(fd);
+	return IPACM_SUCCESS;
+}
+
+int IPACM_Config::get_iface_mac(char* iface_name, uint8_t *mac_addr)
+{
+	int fd;
+	struct ifreq ifr;
+
+	fd = socket(AF_INET, SOCK_DGRAM, 0);
+	memset(&ifr, 0, sizeof(struct ifreq));
+	ifr.ifr_addr.sa_family = AF_INET;
+	strlcpy(ifr.ifr_name, iface_name, sizeof(ifr.ifr_name));
+	if(ioctl(fd, SIOCGIFHWADDR, &ifr) < 0)
+	{
+		IPACMERR("unable to retrieve (%s) bridge MAC\n", ifr.ifr_name);
+		close(fd);
+		return IPACM_FAILURE;
+	}
+	memcpy(mac_addr, ifr.ifr_hwaddr.sa_data, IPA_MAC_ADDR_SIZE);
+	IPACMDBG_H("MAC address of %s from IOCTL is: %02x:%02x:%02x:%02x:%02x:%02x\n", iface_name,
+				mac_addr[0], mac_addr[1], mac_addr[2], mac_addr[3],
+				mac_addr[4], mac_addr[5]);
+	close(fd);
+	return IPACM_SUCCESS;
+}
+
 #endif
 
 #ifdef FEATURE_VLAN_MPDN
@@ -1909,36 +1973,25 @@ void IPACM_Config::add_vlan_bridge(ipacm_event_data_all *data_all)
 			vlan_bridges[i].bridge_ipv4_addr = mapping_info.bridge_ipv4;
 			strlcpy(vlan_bridges[i].bridge_name, data_all->iface_name, IF_NAME_LEN);
 			vlan_bridges[i].associate_VID = mapping_info.vlan_id;
-			IPACMDBG("bridge (%s) mask 0x%X, address 0x%X, VID %d, lan2lan_sw %d\n", data_all->iface_name,
-				mapping_info.subnet_mask,
-				mapping_info.bridge_ipv4,
-				mapping_info.vlan_id,
-				mapping_info.lan2lan_sw);
+			IPACMDBG("bridge (%s) mask 0x%X, address 0x%X, VID %d, lan2lan_sw %d\n",
+					data_all->iface_name, mapping_info.subnet_mask,
+					mapping_info.bridge_ipv4, mapping_info.vlan_id,
+					mapping_info.lan2lan_sw);
 
-			struct ifreq ifr;
-			int fd;
-
-			fd = socket(AF_INET, SOCK_DGRAM, 0);
-			memset(&ifr, 0, sizeof(struct ifreq));
-			ifr.ifr_addr.sa_family = AF_INET;
-			strlcpy(ifr.ifr_name, data_all->iface_name, sizeof(ifr.ifr_name));
-			if(ioctl(fd, SIOCGIFHWADDR, &ifr) < 0)
+			if(IPACM_Iface::ipacmcfg->get_iface_mac(data_all->iface_name,
+					vlan_bridges[i].bridge_mac) == IPACM_FAILURE)
 			{
-				IPACMERR("unable to retrieve (%s) bridge MAC\n", ifr.ifr_name);
+				IPACMERR("unable to retrieve (%s) bridge MAC\n", data_all->iface_name);
 				vlan_bridges[i].bridge_netmask = 0;
 				vlan_bridges[i].bridge_ipv4_addr = 0;
 				vlan_bridges[i].associate_VID = 0;
-				close(fd);
 				return;
 			}
-			memcpy(vlan_bridges[i].bridge_mac,
-				ifr.ifr_hwaddr.sa_data,
-				sizeof(vlan_bridges[i].bridge_mac));
 			IPACMDBG("got bridge MAC using IOCTL\n");
 			if(default_bridge)
 			{
 				memcpy(IPACM_Iface::ipacmcfg->bridge_mac,
-					ifr.ifr_hwaddr.sa_data,
+					vlan_bridges[i].bridge_mac,
 					sizeof(IPACM_Iface::ipacmcfg->bridge_mac));
 
 				IPACM_Iface::ipacmcfg->ipa_bridge_enable = true;
@@ -1946,7 +1999,6 @@ void IPACM_Config::add_vlan_bridge(ipacm_event_data_all *data_all)
 				IPACMDBG("set default bridge flag dev %s\n",
 					data_all->iface_name);
 			}
-			close(fd);
 			IPACMDBG_H("added bridge named %s, MAC %02x:%02x:%02x:%02x:%02x:%02x\n",
 				IPACM_Iface::ipacmcfg->vlan_bridges[i].bridge_name,
 				IPACM_Iface::ipacmcfg->vlan_bridges[i].bridge_mac[0],

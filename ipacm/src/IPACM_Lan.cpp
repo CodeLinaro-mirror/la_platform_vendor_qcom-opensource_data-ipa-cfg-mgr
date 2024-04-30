@@ -2167,11 +2167,15 @@ int IPACM_Lan::check_vlan_PDNUp(enum ipa_ip_type iptype)
 
 			if(Ids[i] != 0)
 			{
-				/* In STA Mode this will return error and continue */
+				/* In STA Router Mode this will return error and continue */
 				if(IPACM_Wan::GetMuxByVid(Ids[i], &mux_id, iptype))
 				{
 					IPACMDBG_H("no v4 vlan up PDN for Id %d\n", Ids[i]);
-					continue;
+					if(IPACM_Iface::ipacmcfg->sta_bridge.vlan_id != Ids[i])
+					{
+						continue;
+					}
+					IPACMDBG_H("In STA Bridge mode. mux_id is 0\n");
 				}
 				/* create event data and call the handler */
 				memset(&vlan_data, 0, sizeof(vlan_data));
@@ -2226,7 +2230,11 @@ int IPACM_Lan::check_vlan_PDNUp(enum ipa_ip_type iptype)
 				if(IPACM_Wan::GetMuxByVid(Ids[i], &mux_id, iptype))
 				{
 					IPACMDBG_H("no v6 vlan up PDN for Id %d\n", Ids[i]);
-					continue;
+					if(IPACM_Iface::ipacmcfg->sta_bridge.vlan_id != Ids[i])
+					{
+						continue;
+					}
+					IPACMDBG_H("In STA Bridge mode. mux_id is 0\n");
 				}
 #ifdef FEATURE_IPACM_UL_FIREWALL
 				if(!firewall_updated)
@@ -3976,6 +3984,7 @@ int IPACM_Lan::handle_eth_hdr_init(uint8_t *mac_addr, ipacm_bridge *bridge, uint
 				/* VLAN case */
 				if(bridge)
 				{
+					IPACM_Iface::ipacmcfg->get_iface_mac(bridge->bridge_name, bridge->bridge_mac);
 					memcpy(&pHeaderDescriptor->hdr[0].hdr[sCopyHeader.eth2_ofst +
 					IPA_MAC_ADDR_SIZE],
 					bridge->bridge_mac,
@@ -4151,6 +4160,7 @@ int IPACM_Lan::handle_eth_hdr_init(uint8_t *mac_addr, ipacm_bridge *bridge, uint
 				/* VLAN case */
 				if(bridge)
 				{
+					IPACM_Iface::ipacmcfg->get_iface_mac(bridge->bridge_name, bridge->bridge_mac);
 					memcpy(&pHeaderDescriptor->hdr[0].hdr[sCopyHeader.eth2_ofst +
 						IPA_MAC_ADDR_SIZE],
 						bridge->bridge_mac,
@@ -4471,7 +4481,8 @@ int IPACM_Lan::handle_eth_client_ipaddr(ipacm_event_data_all *data)
 			else
 			{
 				/* Check if the IP is not in private subnet and ignore. */
-				if (!IPACM_Iface::ipacmcfg->isPrivateSubnet(data->ipv4_addr))
+				if (IPACM_Wan::isWan_Bridge_Mode() && (vlan_id != IPACM_Iface::ipacmcfg->sta_bridge.vlan_id) &&
+					 !IPACM_Iface::ipacmcfg->isPrivateSubnet(data->ipv4_addr))
 				{
 					IPACMDBG_H("Client is not in IP passthrough mode, but got public IP: 0x%x\n", data->ipv4_addr);
 					return IPACM_FAILURE;
@@ -6854,6 +6865,7 @@ int IPACM_Lan::handle_uplink_filter_rule(ipacm_ext_prop *prop, ipa_ip_type iptyp
 	int i, index;
 	uint32_t value = 0, total_rules = 0;
 	bool is_dev_in_vlan_mode=false;
+	uint16_t vlan_id = 0;
 
 	IPACMDBG_H("Set modem UL flt rules\n");
 
@@ -6894,6 +6906,7 @@ int IPACM_Lan::handle_uplink_filter_rule(ipacm_ext_prop *prop, ipa_ip_type iptyp
 	if (is_dev_in_vlan_mode && IPACM_Iface::ipacmcfg->ipacm_mpdn_enable) {
 		IPACMDBG_H("number of xlat rules %d \n", prop->num_v4_xlat_props);
 		total_rules = prop->num_ext_props - prop->num_v4_xlat_props;
+		IPACM_Iface::ipacmcfg->get_vlan_id(dev_name, &vlan_id);
 	}
 	else
 #endif
@@ -6981,7 +6994,8 @@ int IPACM_Lan::handle_uplink_filter_rule(ipacm_ext_prop *prop, ipa_ip_type iptyp
 	flt_rule_entry.rule.eq_attrib_type = 1;
 	if(iptype == IPA_IP_v4)
 	{
-		if (ipa_if_cate == ODU_IF && IPACM_Wan::isWan_Bridge_Mode())
+		if (ipa_if_cate == ODU_IF && IPACM_Wan::isWan_Bridge_Mode() &&
+			IPACM_Iface::ipacmcfg->sta_bridge.vlan_id == vlan_id)
 		{
 			IPACMDBG_H("WAN, ODU are in bridge mode \n");
 			flt_rule_entry.rule.action = IPA_PASS_TO_ROUTING;

@@ -401,11 +401,11 @@ public:
 #endif
 
 	static bool embms_is_on;
-	static bool backhaul_is_wan_bridge;
+	static bool backhaul_is_wan_bridge[IFACE_MAX];
 
-	static bool isWan_Bridge_Mode()
+	static bool isWan_Bridge_Mode(ipacm_wan_iface_type wan_iface = WLAN_WAN)
 	{
-		return backhaul_is_wan_bridge;
+		return backhaul_is_wan_bridge[wan_iface];
 	}
 #ifdef FEATURE_IPA_ANDROID
 	/* IPACM interface id */
@@ -438,6 +438,8 @@ private:
 	uint32_t firewall_hdl_v4[IPACM_MAX_FIREWALL_ENTRIES];
 	uint32_t firewall_hdl_v6[IPACM_MAX_FIREWALL_ENTRIES];
 	uint32_t dft_wan_fl_hdl[IPA_NUM_DEFAULT_WAN_FILTER_RULES];
+	uint32_t dhcp_wan_fl_hdl;
+	uint32_t tcp_syn_fl_hdl[IPA_IP_MAX];
 #ifdef FEATURE_IPV6_NAT
 	uint32_t ipv6_ula_prefix_hdl;
 #endif
@@ -461,6 +463,8 @@ private:
 	bool header_set_v6;
 	bool header_partial_default_wan_v4;
 	bool header_partial_default_wan_v6;
+	bool sta_bridge_v4_rules_installed;
+	bool sta_bridge_v6_rules_installed;
 	uint8_t ext_router_mac_addr[IPA_MAC_ADDR_SIZE];
 	uint8_t netdev_mac[IPA_MAC_ADDR_SIZE];
 
@@ -700,6 +704,8 @@ private:
 	int post_wan_down_tether_evt(ipa_ip_type iptype, int ipa_if_num_tether);
 #endif
 	int config_dft_firewall_rules(ipa_ip_type iptype);
+	int add_dhcp_flt_rule(ipa_ip_type iptype);
+	int add_tcp_syn_flt_rule(ipa_ip_type iptype);
 
 	/* configure the initial firewall filter rules */
 	int config_dft_embms_rules(ipa_ioc_add_flt_rule *pFilteringTable_v4, ipa_ioc_add_flt_rule *pFilteringTable_v6);

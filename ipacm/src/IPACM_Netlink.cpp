@@ -641,7 +641,7 @@ static int ipa_nl_decode_nlmsg
 	ipacm_event_data_fid *data_fid;
 	ipacm_event_data_addr *data_addr;
 
-	IPACM_Config* config = NULL;
+	IPACM_Config* config = IPACM_Config::GetInstance();
 
 	memset(nullMac, 0, sizeof(nullMac));
 	while(NLMSG_OK(nlh, buflen))
@@ -878,20 +878,56 @@ static int ipa_nl_decode_nlmsg
 				evt_data.event = IPA_ADDR_ADD_EVENT;
 				data_addr->if_index = msg_ptr->nl_addr_info.metainfo.ifa_index;
 				strlcpy(data_addr->iface_name, dev_name, sizeof(data_addr->iface_name));
+				if((config->sta_bridge.vlan_id != 0) &&
+				   (strncmp(config->sta_bridge.iface_name, dev_name, IPA_IFACE_NAME_LEN) == 0))
+				{
+					int idx = 0;
+					if(AF_INET6 == msg_ptr->nl_addr_info.attr_info.prefix_addr.ss_family)
+					{
+						IPACM_Iface::ipa_get_if_index(WLAN_STA_IFACE, &idx);
+						data_addr->if_index = idx;
+						uint32_t ipv6_link_local_prefix = 0xFE800000;
+						uint32_t ipv6_link_local_prefix_mask = 0xFFC00000;
+
+						if((data_addr->ipv6_addr[0] & ipv6_link_local_prefix_mask) ==
+							(ipv6_link_local_prefix & ipv6_link_local_prefix_mask))
+						{
+							IPACMDBG_H("Ignoring Link local address\n");
+						}
+						else
+						{
+							config->sta_bridge.ipv6_addr[0] = data_addr->ipv6_addr[0];
+							config->sta_bridge.ipv6_addr[1] = data_addr->ipv6_addr[1];
+							config->sta_bridge.ipv6_addr[2] = data_addr->ipv6_addr[2];
+							config->sta_bridge.ipv6_addr[3] = data_addr->ipv6_addr[3];
+							IPACMDBG_H("STA Bridge interface ipv6 addr:0x%x:%x:%x:%x\n",
+									config->sta_bridge.ipv6_addr[0],
+									config->sta_bridge.ipv6_addr[1],
+									config->sta_bridge.ipv6_addr[2],
+									config->sta_bridge.ipv6_addr[3]);
+						}
+					}
+					else
+					{
+						config->sta_bridge.ipv4_addr = data_addr->ipv4_addr;
+						IPACMDBG_H("STA Bridge interface ipv4 address 0x%x\n",
+									 config->sta_bridge.ipv4_addr);
+					}
+				}
 				if(AF_INET6 == msg_ptr->nl_addr_info.attr_info.prefix_addr.ss_family)
 				{
-				    IPACMDBG("Posting IPA_ADDR_ADD_EVENT with if index:%d, ipv6 addr:0x%x:%x:%x:%x\n",
-								 data_addr->if_index,
-								 data_addr->ipv6_addr[0],
-								 data_addr->ipv6_addr[1],
-								 data_addr->ipv6_addr[2],
-								 data_addr->ipv6_addr[3]);
-                }
+					IPACMDBG("Posting IPA_ADDR_ADD_EVENT with if index:%d, ipv6 addr:0x%x:%x:%x:%x\n",
+								data_addr->if_index,
+								data_addr->ipv6_addr[0],
+								data_addr->ipv6_addr[1],
+								data_addr->ipv6_addr[2],
+								data_addr->ipv6_addr[3]);
+				}
 				else
 				{
-				IPACMDBG("Posting IPA_ADDR_ADD_EVENT with if index:%d, ipv4 addr:0x%x\n",
-								 data_addr->if_index,
-								 data_addr->ipv4_addr);
+					IPACMDBG("Posting IPA_ADDR_ADD_EVENT with if index:%d, ipv4 addr:0x%x\n",
+								data_addr->if_index,
+								data_addr->ipv4_addr);
 				}
 				evt_data.evt_data = data_addr;
 				IPACM_EvtDispatcher::PostEvt(&evt_data);
@@ -1484,7 +1520,6 @@ static int ipa_nl_decode_nlmsg
  		                    data_all->if_index,
 		    				 msg_ptr->nl_neigh_info.attr_info.local_addr.ss_family);
 
-				config = IPACM_Config::GetInstance();
 				/* Add Dummy VLAN Mapping for Non-Vlan Ifaces */
 				if(config != NULL)
 				{

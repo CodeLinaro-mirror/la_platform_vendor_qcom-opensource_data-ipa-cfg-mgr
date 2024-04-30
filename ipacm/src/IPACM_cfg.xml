@@ -83,7 +83,8 @@
 			   <Name>wlan0</Name>
 			   <Category>UNKNOWN</Category>
 			   <WlanMode>full</WlanMode>
-			</Iface>			
+			   <Mode>ROUTER</Mode>
+			</Iface>
 			<Iface>
 			   <Name>wlan1</Name>
 			   <Category>UNKNOWN</Category>

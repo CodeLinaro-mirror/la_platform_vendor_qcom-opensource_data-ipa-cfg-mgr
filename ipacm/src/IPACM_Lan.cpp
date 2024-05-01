@@ -1772,7 +1772,7 @@ int IPACM_Lan::handle_vlan_neighbor(ipacm_event_data_all *data)
 		{
 			ipacm_cmd_q_data evt_data;
 			ipacm_event_route_vlan *data;
-
+			check_vlan_PDNUp(IPA_IP_v6);
 			IPACMDBG_H("generating IPA_ROUTE_ADD_VLAN_PDN_EVENT, new_prefix %d\n", new_prefix);
 			IPACMDBG_H("prefixes 0x[%X][%X], 0x[%X][%X]\n",
 				IPACM_Wan::backhaul_ipv6_prefix[0],
@@ -1911,6 +1911,8 @@ int IPACM_Lan::check_vlan_PDNUp(enum ipa_ip_type iptype)
 					continue;
 				}
 
+				modify_ipv6_prefix_flt_rule();
+
 				/* avoid deletion/addition of prefix rules if vlan mux is up */
  				if(is_mux_up( mux_id, iptype, Ids[i]))
   				{
@@ -1924,8 +1926,6 @@ int IPACM_Lan::check_vlan_PDNUp(enum ipa_ip_type iptype)
 					firewall_updated = true;
 				}
 #endif
-				modify_ipv6_prefix_flt_rule();
-
 				/* create event data and call the handler */
 				vlan_data.iptype = iptype;
 				vlan_data.mux_id = mux_id;

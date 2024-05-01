@@ -2450,7 +2450,14 @@ int IPACM_Wan::handle_route_add_evt(ipa_ip_type iptype)
 		memcpy(wanup_data->ipv6_prefix, ipv6_prefix, sizeof(wanup_data->ipv6_prefix));
 		memcpy(wanup_data->ipv6_addr, m_ipv6_addr, sizeof(wanup_data->ipv6_addr));
 #ifdef FEATURE_VLAN_MPDN
-		IPACM_Iface::ipacmcfg->add_vlan_ipv6_prefix(wanup_data->ipv6_prefix, ipa_if_num, associated_VID);
+		if (ipv6_prefix[0] == 0 && ipv6_prefix[1] == 0)
+		{
+			IPACMDBG_H("ipv6_prefix is zero\n");
+		}
+		else
+		{
+			IPACM_Iface::ipacmcfg->add_vlan_ipv6_prefix(wanup_data->ipv6_prefix, ipa_if_num, associated_VID);
+		}
 #endif
 		IPACMDBG_H("Posting IPA_HANDLE_WAN_UP_V6 with below information:\n");
 		IPACMDBG_H("if_name:%s, is sta mode: %d\n", wanup_data->ifname, wanup_data->is_sta);

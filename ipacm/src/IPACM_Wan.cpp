@@ -1540,6 +1540,15 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 			uint32_t prefix[2];
 			int ret;
 
+#ifdef FEATURE_SOCKSv5
+			/* Handle each PDN in case of SOCKSV5 with a unique VID as the client is always same */
+			if((IPACM_Iface::ipacmcfg->ipacm_socksv5_enable) && (data->VlanID == 0) && (data->wan_ipv4_addr == wan_v4_addr))
+			{
+				data->VlanID = DUMMY_VLAN_ID_BASE + IPACM_Iface::ipacmcfg->iface_table[ipa_if_num].netlink_interface_index;
+				IPACMDBG_H("Received SocksV5 IPA_ROUTE_ADD_VLAN_PDN_EVENT with vid 0 assigning dummy vid %d\n", data->VlanID);
+			}
+#endif
+
 			ret = check_vlan_pdn(iptype, data);
 			/* If event for this->pIface, process the other iptype with local info*/
 			if(ret == IPACM_SUCCESS && iptype == IPA_IP_MAX)

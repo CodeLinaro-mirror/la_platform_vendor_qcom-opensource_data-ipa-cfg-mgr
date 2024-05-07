@@ -217,6 +217,9 @@
 		<IPACMMPDN>
 			<IPACMMPDNEnabled>1</IPACMMPDNEnabled>
 		</IPACMMPDN>
+		<IPACMQOS>
+			<IPACMQOSEnabled>0</IPACMQOSEnabled>
+		</IPACMQOS>
 		<IPACMLog>
 			<IPACMfilevar>0</IPACMfilevar>
 		</IPACMLog>

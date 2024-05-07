@@ -170,12 +170,16 @@ extern "C"
 #define IPA_MAX_IPV6_PREFIX_FLT_RULE 1
 #endif
 
+#define IPV6_NUM_ADDR 3
+
 #define IPA_MAX_ACTIVE_LAN_IFACE 2
 #define IPA_MAX_ACTIVE_WLAN_IFACE 4
 #define IPA_MAX_NAT_IFACE (IPA_MAX_ACTIVE_LAN_IFACE*IPA_MAX_NUM_OFFLOAD_VLANS+ \
 	IPA_MAX_ACTIVE_LAN_IFACE + IPA_MAX_ACTIVE_WLAN_IFACE + IPA_MAX_NUM_SW_PDNS)
 
 #define IPA_DUMMY_PREFIX 0xFFFFFFFF
+
+#define IPA_MAX_NUM_PROPS 5
 
 /*===========================================================================
 										 GLOBAL DEFINITIONS AND DECLARATIONS
@@ -273,6 +277,9 @@ typedef enum
 	IPA_HANDLE_MACSEC_ADD,                    /* ipa_macsec_map */
 	IPA_HANDLE_MACSEC_DEL,                    /* ipa_macsec_map */
 	IPA_WLAN_GW_ADDR_ADD_EVENT,               /* ipacm_event_data_addr */
+	IPA_QOS_RULE_ADD_EVENT,                   /* ipacm_qos_rule_add_event */
+	IPA_QOS_RULE_DEL_EVENT,                   /* ipacm_qos_rule_del_event */
+	IPA_QOS_RULE_FLUSH_EVENT,                 /* ipacm_qos_rule_flush_event */
 	IPACM_EVENT_MAX
 } ipa_cm_event_id;
 
@@ -577,5 +584,34 @@ struct rmnet_mux_id_info
 	uint8_t mux_id;
 };
 #endif
+
+enum qos_param_type {
+	IP_TUP,
+	MAC,
+	VLAN,
+	PCP,
+	DSCP
+};
+
+struct ip_tuple {
+		uint32_t src_ip_addr;
+		uint32_t src_sub_mask;
+		uint32_t dst_ip_addr;
+		uint32_t dst_sub_mask;
+
+		uint16_t sport_start;
+		uint16_t sport_end;
+		uint16_t dport_start;
+		uint16_t dport_end;
+		uint8_t protocol;
+
+		uint32_t src_v6_ip_addr[4];
+		uint32_t src_v6_sub_mask[4];
+		uint32_t dst_v6_ip_addr[4];
+		uint32_t dst_v6_sub_mask[4];
+
+		uint16_t vlan_count;
+		uint16_t vlan_id;
+};
 
 #endif /* IPA_CM_DEFS_H */

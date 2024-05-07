@@ -333,6 +333,7 @@ void* ipa_driver_msg_notifier(void *param)
 #ifdef IPA_IOCTL_ADD_VLAN_PRIORITY
 	struct ipa_ioc_vlan_priority *vlan_prio_evt;
 #endif
+	struct ipa_ioc_qos_config *qos_param;
 	struct ipa_macsec_map *macsecMap = NULL;
 	int currentIfaceIndex;
 
@@ -988,6 +989,36 @@ void* ipa_driver_msg_notifier(void *param)
 			IPACMDBG_H("Updated vlan priority successfully!\n");
 			continue;
 #endif
+
+		case IPA_QOS_PARAM_ADD_EVENT:
+			qos_param = (ipa_ioc_qos_config *)(buffer + sizeof(struct ipa_msg_meta));
+			IPACMDBG_H("Received IPA_QOS_PARAM_ADD_EVENT (%s) qos enabled (%d) \n", qos_param->dev_name, IPACM_Iface::ipacmcfg->ipacm_qos_enable);
+
+			if (IPACM_Iface::ipacmcfg->ipacm_qos_enable)
+			{
+				IPACM_Iface::ipacmcfg->add_qos_params_info(qos_param);
+			}
+			continue;
+
+		case IPA_QOS_PARAM_DELETE_EVENT:
+			qos_param = (ipa_ioc_qos_config *)(buffer + sizeof(struct ipa_msg_meta));
+			IPACMDBG_H("Received IPA_QOS_PARAM_DELETE_EVENT (%s) qos enabled (%d) \n", qos_param->dev_name, IPACM_Iface::ipacmcfg->ipacm_qos_enable);
+
+			if (IPACM_Iface::ipacmcfg->ipacm_qos_enable)
+			{
+				IPACM_Iface::ipacmcfg->delete_qos_params_info(qos_param);
+			}
+			continue;
+
+		case IPA_QOS_PARAM_FLUSH_EVENT:
+			qos_param = (ipa_ioc_qos_config *)(buffer + sizeof(struct ipa_msg_meta));
+			IPACMDBG_H("Received IPA_QOS_PARAM_FLUSH_EVENT (%s) qos enabled (%d) \n", qos_param->dev_name, IPACM_Iface::ipacmcfg->ipacm_qos_enable);
+
+			if (IPACM_Iface::ipacmcfg->ipacm_qos_enable)
+			{
+				IPACM_Iface::ipacmcfg->flush_qos_params_info(qos_param);
+			}
+			continue;
 
 		default:
 			IPACMDBG_H("Unhandled message type: %d\n", event_hdr.msg_type);

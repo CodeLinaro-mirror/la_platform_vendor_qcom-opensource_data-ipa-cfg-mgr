@@ -230,6 +230,8 @@ if (!(a)) {                                                 \
 #define IPACM_MPDN_Enable_TAG                "IPACMMPDNEnabled"
 #define IPACM_SOCKSv5_TAG                    "IPACMSOCKSv5"
 #define IPACM_SOCKSv5_Enable_TAG             "IPACMSOCKSv5Enabled"
+#define IPACM_QOS_ENABLE_TAG                 "IPACMQOSEnabled"
+#define IPACM_QOS_TAG                        "IPACMQOS"
 
 /* VLAN MPDN config file */
 #define IPACM_VLAN_IFACE                    "IPACMVLANIFACES"
@@ -398,6 +400,7 @@ typedef struct  _IPACM_conf_t
 	bool odu_embms_enable;
 	int num_wlan_guest_ap;
 	bool ip_passthrough_mode;
+	bool qos_mode;
 	struct ether_addr ip_passthrough_mac;
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
 	bool lan_stats_enable;

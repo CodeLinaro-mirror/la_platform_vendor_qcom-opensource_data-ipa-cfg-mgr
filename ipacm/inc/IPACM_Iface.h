@@ -66,7 +66,6 @@
 #endif
 
 #define IPV6_DEFAULT_LAN_FILTERTING_RULES 1
-#define IPV6_NUM_ADDR 3
 #define MAX_SOFTWAREROUTING_FILTERTING_RULES 2
 #define INVALID_IFACE -1
 
@@ -105,10 +104,12 @@ public:
 	/* IPACM number of default route rules for ipv6*/
 	int num_dft_rt_v6;
 
-	uint32_t dft_v4fl_rule_hdl[IPV4_DEFAULT_FILTERTING_RULES];
-	uint32_t dft_v6fl_rule_hdl[IPV6_DEFAULT_FILTERTING_RULES + IPA_MAX_NUM_OFFLOAD_VLANS];
+	uint32_t dft_v4fl_rule_hdl[IPA_MAX_NUM_PROPS][IPV4_DEFAULT_FILTERTING_RULES];
+	uint32_t dft_v6fl_rule_hdl[IPA_MAX_NUM_PROPS][IPV6_DEFAULT_FILTERTING_RULES + IPA_MAX_NUM_OFFLOAD_VLANS];
 	/* create additional set of v6 RT-rules in Wanv6RT table*/
 	uint32_t dft_rt_rule_hdl[MAX_DEFAULT_v4_ROUTE_RULES+2*MAX_DEFAULT_v6_ROUTE_RULES];
+
+	uint32_t dft_qos_rt_rule_hdl[3];
 
 	ipa_ioc_query_intf *iface_query;
 	ipa_ioc_query_intf_tx_props *tx_prop;
@@ -155,7 +156,7 @@ public:
 
 protected:
 
-	uint8_t m_ipv6_default_filterting_rules_count;
+	uint8_t m_ipv6_default_filterting_rules_count[IPA_MAX_NUM_PROPS];
 
 private:
 

@@ -7132,7 +7132,7 @@ int IPACM_Wan::handle_down_evt_ex()
 		num_ipv4_modem_pdn--;
 		IPACMDBG_H("Now the number of modem ipv4 pdn is %d.\n", num_ipv4_modem_pdn);
 #ifdef FEATURE_VLAN_MPDN
-		if(ipv4_to_iface[modem_ipv4_pdn_index].wan_up_vlan)
+		if((modem_ipv4_pdn_index >= 0) && (ipv4_to_iface[modem_ipv4_pdn_index].wan_up_vlan))
 		{
 			ipacm_cmd_q_data evt_data;
 			ipacm_event_vlan_pdn *vlandown_data;
@@ -7303,7 +7303,7 @@ int IPACM_Wan::handle_down_evt_ex()
 #ifdef FEATURE_VLAN_MPDN
 		IPACM_Iface::ipacmcfg->del_vlan_ipv6_prefix(ipv6_prefix, -1);
 
-		if((modem_ipv6_pdn_index != -1) && ipv6_to_iface[modem_ipv6_pdn_index].wan_up_vlan_v6)
+		if((modem_ipv6_pdn_index >= 0) && ipv6_to_iface[modem_ipv6_pdn_index].wan_up_vlan_v6)
 		{
 			ipacm_cmd_q_data evt_data;
 			ipacm_event_vlan_pdn *vlandown_data;

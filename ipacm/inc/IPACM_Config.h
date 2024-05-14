@@ -350,6 +350,8 @@ public:
 #ifdef FEATURE_EoGRE
 	ipa_ipgre_info eogre_info;
 	bool           eogre_enabled;
+	uint8_t        tunnel_feature;
+	void get_tunnel_feature();
 #endif
 	/* Private IP forwarding details*/
 	typedef struct private_IP_Forwarding_Config

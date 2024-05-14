@@ -28,7 +28,7 @@ IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  * Changes from Qualcomm Innovation Center are provided under the following license:
  *
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted (subject to the limitations in the
@@ -328,6 +328,11 @@ public:
 	int num_wan_ul_fl_rule_v4;
 	/* Number of Q6 UL IPv6 rules. */
 	int num_wan_ul_fl_rule_v6;
+	/* Number of Q6 EOGRE UL IPv4 rules. */
+	int num_wan_ul_eogre_fl_rule_v4;
+	/* Number of Q6 EOGRE UL IPv6 rules. */
+	int num_wan_ul_eogre_fl_rule_v6;
+
 	/* Number of UL subnet IPv4 rules. */
 	int num_wan_subnet_rules;
 	/* Number of UL prefix IPv6 rules. */
@@ -473,16 +478,18 @@ public:
 
 	/* install UL filter rule from Q6 */
 #ifdef FEATURE_VLAN_MPDN
-	virtual int handle_uplink_filter_rule(ipacm_ext_prop *prop, ipa_ip_type iptype, uint8_t pdn_mux_id, bool notif_only, bool is_xlat = false, bool ast_update = false, bool isPmipv6 = false);
+	virtual int handle_uplink_filter_rule(ipacm_ext_prop *prop, ipa_ip_type iptype, uint8_t pdn_mux_id, bool notif_only, bool is_xlat = false,
+	bool ast_update = false, bool isPmipv6 = false, bool is_eogre_rules = false);
 
 	virtual int handle_mpdn_ul_xlat_filter_rule(ipacm_ext_prop *prop, ipa_ip_type iptype, int pdn_mux_id, uint16_t vlan_id);
 
 	virtual int delete_mdpn_ul_xlat_filter_rule(int mux_id);
 #else
-	virtual int handle_uplink_filter_rule(ipacm_ext_prop* prop, ipa_ip_type iptype, uint8_t xlat_mux_id, bool ast_update = false, bool isPmipv6=false);
+	virtual int handle_uplink_filter_rule(ipacm_ext_prop* prop, ipa_ip_type iptype, uint8_t xlat_mux_id, bool ast_update = false,
+	bool isPmipv6=false, bool is_eogre_rules = false);
 #endif
 
-	virtual int del_ul_flt_rules(enum ipa_ip_type iptype);
+	virtual int del_ul_flt_rules(enum ipa_ip_type iptype, bool is_eogre_stats = false);
 
 #ifdef FEATURE_IPACM_UL_FIREWALL
 	/* configure UL firewalls for all PDNs relevant for this LAN */
@@ -1154,7 +1161,10 @@ protected:
 
 	bool is_active;
 	bool modem_ul_v4_set;
+	bool modem_eogre_ul_v4_set;
+
 	bool modem_ul_v6_set;
+	bool modem_eogre_ul_v6_set;
 
 	uint32_t if_ipv4_subnet;
 

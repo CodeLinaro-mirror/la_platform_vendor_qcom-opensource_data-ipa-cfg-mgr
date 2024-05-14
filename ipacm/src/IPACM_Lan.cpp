@@ -3830,10 +3830,10 @@ int IPACM_Lan::handle_addr_evt(ipacm_event_data_addr *data)
 		dft_rt_rule_hdl[0] = rt_rule_entry->rt_rule_hdl;
 		IPACMDBG_H("ipv4 iface rt-rule hdl1=0x%x\n", dft_rt_rule_hdl[0]);
 
-		/* ICMP rule is 1st to keep consistent with v6 and to use as offset for L2L rules */
-		install_ipv4_icmp_flt_rule();
-
 		add_tcp_syn_flt_rule(data->iptype);
+
+		/* ICMP rule to be use as offset for L2L rules */
+		install_ipv4_icmp_flt_rule();
 
 		/* initial fragment/multicast/broadcast/filter rule. Fragment has set_rear = false, will be above icmp rule */
 		init_fl_rule(data->iptype);
@@ -16926,6 +16926,8 @@ int IPACM_Lan::add_tcp_syn_flt_rule(ipa_ip_type iptype)
 
 		tcp_syn_flt_rule_hdl[j][iptype] = m_pFilteringTable->rules[0].flt_rule_hdl;
 		IPACM_Iface::ipacmcfg->increaseFltRuleCount(rx_prop->rx[idx].src_pipe, iptype, 1);
+		IPACMDBG_H("ip type: %d pFilteringTable->add_after_hdl 0x%x\n", iptype,
+			   tcp_syn_flt_rule_hdl[j][iptype]);
 	}
 
 	free(m_pFilteringTable);

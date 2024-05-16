@@ -25,6 +25,10 @@ BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
 WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
 OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
 IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+Changes from Qualcomm Technologies, Inc. are provided under the following license:
+Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+SPDX-License-Identifier: BSD-3-Clause-Clear
 */
 
 /*
@@ -136,6 +140,8 @@ public:
 	void handle_new_iface_up(char rt_tbl_name_for_flt[][IPA_RESOURCE_NAME_MAX], char rt_tbl_name_for_rt[][IPA_RESOURCE_NAME_MAX],
 		IPACM_LanToLan_Iface *peer_iface);
 
+	void install_iface_cross_proc_ctx(IPACM_LanToLan_Iface *peer_iface);
+
 	void handle_client_add(uint8_t *mac, bool is_l2tp_client, l2tp_vlan_mapping_info *mapping_info, uint16_t vlan_id = 0);
 
 	list<client_info>::iterator handle_client_del(uint8_t *mac, uint16_t vlan_id);
@@ -212,7 +218,7 @@ private:
 
 	void clear_all_rt_rule_for_one_peer_iface(peer_iface_info *peer);
 
-	void add_hdr_proc_ctx(ipa_hdr_l2_type peer_l2_type);
+	void add_hdr_proc_ctx(ipa_hdr_l2_type peer_l2_type, char* peer_dev_name = NULL);
 
 	void del_hdr_proc_ctx(ipa_hdr_l2_type peer_l2_type);
 
@@ -245,6 +251,8 @@ private:
 
 	void handle_iface_up(ipacm_event_eth_bridge *data);
 
+	void handle_client_cross_proc_ctx(ipacm_event_eth_bridge *data);
+
 	void handle_iface_down(ipacm_event_eth_bridge *data);
 
 	void handle_client_add(ipacm_event_eth_bridge *data);
@@ -254,6 +262,7 @@ private:
 	void handle_wlan_scc_mcc_switch(ipacm_event_eth_bridge *data);
 
 	void handle_new_iface_up(IPACM_LanToLan_Iface *new_iface, IPACM_LanToLan_Iface *exist_iface);
+
 #ifdef FEATURE_VLAN_MPDN
 	void handle_vlan_id_add(ipacm_event_eth_bridge * data);
 

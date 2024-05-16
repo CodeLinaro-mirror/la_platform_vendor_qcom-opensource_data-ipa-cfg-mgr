@@ -451,6 +451,9 @@ int IPACM_IfaceManager::create_iface_instance(ipacm_ifacemgr_data *param)
 					return IPACM_FAILURE;
 				}
 				IPACM_EvtDispatcher::registr(IPA_ADDR_ADD_EVENT, wl);
+				/*lan2lan ipa offload with static IP*/
+				IPACM_EvtDispatcher::registr(IPA_LAN_CLIENT_ADD_EVENT, wl);
+				IPACM_EvtDispatcher::registr(IPA_LAN_CLIENT_DEL_EVENT, wl);
 #ifdef FEATURE_IPACM_UL_FIREWALL
 				IPACM_EvtDispatcher::registr(IPA_FIREWALL_CHANGE_EVENT, wl);			// register for Firewall change event
 #endif //FEATURE_IPACM_UL_FIREWALL

@@ -126,7 +126,8 @@ public:
 
 	/* Query ipa_interface ipv4_addr by given linux interface_index */
 	static void iface_addr_query(int interface_index, bool post_new_addr_event = true,
-		uint32_t *curr_ip4_addr = 0);
+		uint32_t *curr_ip4_addr = 0, uint32_t *curr_ip4_mask = 0);
+
 	/*Query the IPA endpoint property */
 	int query_iface_property(void);
 

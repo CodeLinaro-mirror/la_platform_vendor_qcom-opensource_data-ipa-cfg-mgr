@@ -1153,6 +1153,7 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 				IPACMDBG_H("construct ETH header and route rules \n");
 				IPACMDBG_H("Posting IPA_ETH_BRIDGE_CLIENT_ADD for Static IP MaC:0x%x iface_name: %s\n",data->mac_addr,data->iface_name);
 				eth_bridge_post_event(IPA_ETH_BRIDGE_CLIENT_ADD, IPA_IP_MAX, data->mac_addr, NULL, data->iface_name);
+				eth_bridge_post_event(IPA_CLIENT_CROSS_PRC_CTX, IPA_IP_MAX, data->mac_addr, NULL, data->iface_name, NULL);
 				IPACMDBG_H("Handled IPA_LAN_CLIENT_ADD_EVENT event \n");
 			}
 		}
@@ -11711,13 +11712,14 @@ void IPACM_Lan::eth_bridge_post_event(ipa_cm_event_id evt, ipa_ip_type iptype, u
 }
 
 /* add header processing context and return handle to lan2lan controller */
-int IPACM_Lan::eth_bridge_add_hdr_proc_ctx(ipa_hdr_l2_type peer_l2_hdr_type, uint32_t *hdl)
+int IPACM_Lan::eth_bridge_add_hdr_proc_ctx(ipa_hdr_l2_type peer_l2_hdr_type, uint32_t *hdl, char* peer_dev_name)
 {
 	int len, res = IPACM_SUCCESS;
 	uint32_t hdr_template;
 	ipa_ioc_add_hdr_proc_ctx* pHeaderProcTable = NULL;
 	ipa_bridge_vlan_mapping_info mapping_info;
 	uint16_t vlan_id = 0;
+	uint8_t priority = 0;
 
 	if(tx_prop == NULL)
 	{
@@ -11745,11 +11747,41 @@ int IPACM_Lan::eth_bridge_add_hdr_proc_ctx(ipa_hdr_l2_type peer_l2_hdr_type, uin
 	if (tx_prop->tx[0].hdr_l2_type == IPA_HDR_L2_802_1Q &&
 		peer_l2_hdr_type == IPA_HDR_L2_ETHERNET_II)
 	{
+		if(peer_dev_name != NULL)
+		{
+#ifdef IPA_VLAN_PRIORITY
+			if(IPACM_Iface::ipacmcfg->get_vlan_id(peer_dev_name, &vlan_id, &priority))
+#else
+			if(IPACM_Iface::ipacmcfg->get_vlan_id(peer_dev_name, &vlan_id))
+#endif
+			{
+				IPACMERR("Unable to find VLAN ID for Dev %s\n", peer_dev_name);
+				return IPACM_FAILURE;
+			}
+		}
+
 		memset(&mapping_info, 0, sizeof(mapping_info));
 
-		strlcpy(mapping_info.bridge_name, "bridge0", IF_NAME_LEN);
+		/*Query the bridge for dummy_vid iface and extract actual vid from that bridge */
+		if(vlan_id > 0 && IPACM_Iface::ipacmcfg->is_dummy_VID(vlan_id))
+		{
+			mapping_info.vlan_id = vlan_id;
+			IPACMDBG_H("Query Bridge for Dummy VID %d\n", vlan_id);
+			if(IPACM_Iface::ipacmcfg->get_bridge_vlan_mapping(&mapping_info, true))
+			{
+				IPACMERR("Unable to find Bridge for Dummy VLAN ID %d\n", vlan_id);
+				return IPACM_FAILURE;
+			}
+			vlan_id = 0;
+		}
+		else
+			strlcpy(mapping_info.bridge_name, "bridge0", IF_NAME_LEN);
+		
+		/*Extract VID from br0 if non-vlan on default or extract from respective bridge */
 		if(!IPACM_Iface::ipacmcfg->get_bridge_vlan_mapping(&mapping_info))
+		{
 			vlan_id = mapping_info.vlan_id;
+		}
 
 		eth_bridge_get_vlan_hdr_template_hdl(&hdr_template, vlan_id);
 	}
@@ -15309,6 +15341,7 @@ int IPACM_Lan::handle_mpdn_ul_xlat_filter_rule(ipacm_ext_prop * prop,
 	int i, cnt, entry_idx = 0, prev =0, curr =0, pos, idx_q6 = 0;
 	uint16_t value = 0, mask = 0;
 	int xlat_pdn_ctx_id;
+	ipa_ioc_bridge_vlan_mapping_info mapping_info;
 
 	IPACMDBG_H("Set modem UL flt rules for xlat mode in MPDN config with vlan: %d\n", vlan_id);
 
@@ -15405,12 +15438,30 @@ int IPACM_Lan::handle_mpdn_ul_xlat_filter_rule(ipacm_ext_prop * prop,
 			/* Rule ID of replicate is same as Q6 rule I.D */
 			flt_index.rule_id_ex[idx_q6] = prop->prop[cnt].rule_id;
 
-			value = vlan_id;
-			flt_rule_entry.rule.eq_attrib.rule_eq_bitmap |= (1<<9);
-			flt_rule_entry.rule.eq_attrib.metadata_meq32_present = 1;
-			flt_rule_entry.rule.eq_attrib.metadata_meq32.offset = 0;
-			flt_rule_entry.rule.eq_attrib.metadata_meq32.value = (value & 0xFFF)<<16;
-			flt_rule_entry.rule.eq_attrib.metadata_meq32.mask = 0x0FFF0000;
+			if(!IPACM_Iface::ipacmcfg->is_dummy_VID(vlan_id))
+			{
+				value = vlan_id;
+				flt_rule_entry.rule.eq_attrib.rule_eq_bitmap |= (1<<9);
+				flt_rule_entry.rule.eq_attrib.metadata_meq32_present = 1;
+				flt_rule_entry.rule.eq_attrib.metadata_meq32.offset = 0;
+				flt_rule_entry.rule.eq_attrib.metadata_meq32.value = (value & 0xFFF)<<16;
+				flt_rule_entry.rule.eq_attrib.metadata_meq32.mask = 0x0FFF0000;
+			}
+			else
+			{
+				/* For Dummy VID based ifaces add 1st Pass flt with source subnet range */
+				mapping_info.vlan_id = vlan_id;
+				if(IPACM_Iface::ipacmcfg->get_bridge_vlan_mapping(&mapping_info, true))
+				{
+					IPACMERR("Unable to find Bridge for Dummy VLAN ID %d\n", vlan_id);
+					return IPACM_FAILURE;
+				}
+				flt_rule_entry.rule.eq_attrib.rule_eq_bitmap |= 0x20<<flt_rule_entry.rule.eq_attrib.num_offset_meq_32;
+				flt_rule_entry.rule.eq_attrib.offset_meq_32[flt_rule_entry.rule.eq_attrib.num_offset_meq_32].offset = 12;
+				flt_rule_entry.rule.eq_attrib.offset_meq_32[flt_rule_entry.rule.eq_attrib.num_offset_meq_32].value = mapping_info.bridge_ipv4 & mapping_info.subnet_mask;
+				flt_rule_entry.rule.eq_attrib.offset_meq_32[flt_rule_entry.rule.eq_attrib.num_offset_meq_32].mask = mapping_info.subnet_mask;
+				flt_rule_entry.rule.eq_attrib.num_offset_meq_32 ++;
+			}
 
 			/* start with prev = curr = 0
 			 * find smallest q6 rule id greater than current xlat filter's rule id,

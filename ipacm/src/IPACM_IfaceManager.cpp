@@ -463,6 +463,10 @@ int IPACM_IfaceManager::create_iface_instance(ipacm_ifacemgr_data *param)
 #ifdef FEATURE_IPv6CT_DISABLED
                                 IPACM_EvtDispatcher::registr(IPA_FIREWALL_CHANGE_EVENT, wl);			// register for Firewall change event
 #endif //FEATURE_IPACM_UL_FIREWALL
+				/*lan2lan ipa offload with static IP*/
+				IPACM_EvtDispatcher::registr(IPA_LAN_CLIENT_ADD_EVENT, wl);
+				IPACM_EvtDispatcher::registr(IPA_LAN_CLIENT_DEL_EVENT, wl);
+
 				IPACM_EvtDispatcher::registr(IPA_ROUTE_DEL_EVENT, wl);
 				IPACM_EvtDispatcher::registr(IPA_WLAN_CLIENT_ADD_EVENT, wl);
 				IPACM_EvtDispatcher::registr(IPA_WLAN_CLIENT_ADD_EVENT_EX, wl);

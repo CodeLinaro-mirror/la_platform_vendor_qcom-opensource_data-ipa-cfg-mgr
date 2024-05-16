@@ -26,7 +26,11 @@
  * WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- */
+ *
+ * Changes from Qualcomm Innovation Center, Inc. are provided under the following license:
+ * Copyright (c) 2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
+ /
 /*!
   @file
   IPACM_Iface.cpp
@@ -398,7 +402,8 @@ void IPACM_Iface::iface_addr_query
 (
 	int interface_index,
 	bool post_new_addr_event,
-	uint32_t *curr_ip4_addr
+	uint32_t *curr_ip4_addr,
+	uint32_t *curr_ip4_mask
 )
 {
 	int fd;
@@ -501,6 +506,19 @@ void IPACM_Iface::iface_addr_query
 					else
 					{
 						IPACMDBG_H("post_new_addr_event is false\n");
+					}
+
+					s4 = (struct sockaddr_in *)ifa->ifa_netmask;
+					IPACMDBG_H("ipv4 address %s\n",inet_ntoa(s4->sin_addr));
+					iface_ipv4 = s4->sin_addr;
+
+					if (curr_ip4_mask)
+					{
+						if(ntohl(iface_ipv4.s_addr) != (*curr_ip4_addr))
+						{
+							IPACMDBG_H("iface ip4 mask: (0x%x)\n", ntohl(iface_ipv4.s_addr));
+							*curr_ip4_mask = ntohl(iface_ipv4.s_addr);
+						}
 					}
 					break;
 				}

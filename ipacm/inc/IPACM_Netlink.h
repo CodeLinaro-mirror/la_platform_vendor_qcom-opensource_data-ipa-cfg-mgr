@@ -170,6 +170,7 @@ typedef struct ipa_nl_neigh_info_s {
 		struct sockaddr_storage     local_addr;
 		struct  sockaddr            lladdr_hwaddr;
 	} attr_info;
+	uint16_t master_interface_index;
 } ipa_nl_neigh_info_t;
 
 

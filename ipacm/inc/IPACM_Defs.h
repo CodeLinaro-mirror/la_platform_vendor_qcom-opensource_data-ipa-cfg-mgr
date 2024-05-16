@@ -177,6 +177,8 @@ extern "C"
 
 #define IPA_DUMMY_PREFIX 0xFFFFFFFF
 
+#define BRIDGE_0 "bridge0"
+
 /*===========================================================================
 										 GLOBAL DEFINITIONS AND DECLARATIONS
 ===========================================================================*/
@@ -242,6 +244,7 @@ typedef enum
 	IPA_ETH_BRIDGE_IFACE_DOWN,                /* ipacm_event_eth_bridge*/
 	IPA_ETH_BRIDGE_CLIENT_ADD,                /* ipacm_event_eth_bridge */
 	IPA_ETH_BRIDGE_CLIENT_DEL,                /* ipacm_event_eth_bridge*/
+	IPA_CLIENT_CROSS_PRC_CTX,                 /* ipacm_event_eth_bridge*/
 	IPA_ETH_BRIDGE_WLAN_SCC_MCC_SWITCH,       /* ipacm_event_eth_bridge*/
 #ifdef FEATURE_VLAN_MPDN
 	IPA_ETH_BRIDGE_ADD_VLAN_ID,               /* ipacm_event_eth_bridge */

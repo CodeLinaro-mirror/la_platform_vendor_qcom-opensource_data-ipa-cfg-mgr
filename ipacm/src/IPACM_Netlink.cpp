@@ -25,6 +25,11 @@ BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
 WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
 OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
 IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+Changes from Qualcomm Innovation Center, Inc. are provided under the following license:
+Copyright (c) 2024 Qualcomm Innovation Center, Inc. All rights reserved.
+SPDX-License-Identifier: BSD-3-Clause-Clear
+
 */
 /*!
 	@file
@@ -45,6 +50,8 @@ IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "IPACM_Defs.h"
 #include "IPACM_Netlink.h"
 #include "IPACM_EvtDispatcher.h"
+#include "IPACM_Config.h"
+#include "IPACM_Iface.h"
 #include "IPACM_Log.h"
 
 int find_mask(int ip_v4_last, int *mask_value);
@@ -520,6 +527,11 @@ static int ipa_nl_decode_rtm_neigh
 						 sizeof(neigh_info->attr_info.lladdr_hwaddr.sa_data));
 			break;
 
+		case NDA_MASTER:
+				neigh_info->master_interface_index = *((int *) RTA_DATA(rtah));
+				IPACMDBG("Interface Index for is %d\n", neigh_info->master_interface_index);
+			break;
+
 		default:
 			break;
 
@@ -616,6 +628,8 @@ static int ipa_nl_decode_nlmsg
 	 )
 {
 	char dev_name[IF_NAME_LEN]={0};
+	char master_dev_name[IF_NAME_LEN]={0};
+	ipa_ioc_bridge_vlan_mapping_info vlan_bridge_data;
 	int ret_val, mask_value, mask_index, mask_value_v6;
 	struct nlmsghdr *nlh = (struct nlmsghdr *)buffer;
 
@@ -1385,7 +1399,7 @@ static int ipa_nl_decode_nlmsg
 				return IPACM_FAILURE;
 			}
 			else
-				{
+			{
 				IPACMDBG("\n GOT RTM_NEWNEIGH event (%s) ip %d\n",dev_name,msg_ptr->nl_neigh_info.attr_info.local_addr.ss_family);
 			}
 
@@ -1467,6 +1481,25 @@ static int ipa_nl_decode_nlmsg
                                  dev_name,
  		                    data_all->if_index,
 		    				 msg_ptr->nl_neigh_info.attr_info.local_addr.ss_family);
+
+				IPACM_Config* config = IPACM_Config::GetInstance();
+				/* Add Dummy VLAN Mapping for Non-Vlan Ifaces */
+				if((msg_ptr->nl_neigh_info.metainfo.ndm_ifindex != msg_ptr->nl_neigh_info.master_interface_index) && (!config->iface_in_vlan_mode(dev_name)))
+				{
+					memset(master_dev_name,0,IF_NAME_LEN);
+					if(ipa_get_if_name(master_dev_name, msg_ptr->nl_neigh_info.master_interface_index) == IPACM_SUCCESS)
+					{
+						memset(&vlan_bridge_data, 0, sizeof(vlan_bridge_data));
+						vlan_bridge_data.vlan_id = DUMMY_VLAN_ID_BASE+ msg_ptr->nl_neigh_info.metainfo.ndm_ifindex;
+						strlcpy(vlan_bridge_data.bridge_name, master_dev_name, IF_NAME_LEN);
+						IPACM_Iface::iface_addr_query(msg_ptr->nl_neigh_info.master_interface_index, false, &if_ipv4_addr, &if_ipipv4_addr_mask);
+						vlan_bridge_data.bridge_ipv4 = if_ipv4_addr;
+						vlan_bridge_data.subnet_mask = if_ipipv4_addr_mask;
+						config->add_dummy_vlan_mapping(master_dev_name,
+														data_all->iface_name, msg_ptr->nl_neigh_info.metainfo.ndm_ifindex);
+						config->add_bridge_vlan_mapping(&vlan_bridge_data);
+					}
+				}
 			}
 		    evt_data.evt_data = data_all;
 					IPACM_EvtDispatcher::PostEvt(&evt_data);

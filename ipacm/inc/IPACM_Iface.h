@@ -26,7 +26,11 @@
  * WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- */
+ *
+ * Changes from Qualcomm Innovation Center, Inc. are provided under the following license:
+ * Copyright (c) 2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
+ /
 /*!
 		@file
 		IPACM_iface.h
@@ -128,7 +132,7 @@ public:
 
 	/* Query ipa_interface ipv4_addr by given linux interface_index */
 	static void iface_addr_query(int interface_index, bool post_new_addr_event = true,
-		uint32_t *curr_ip4_addr = 0);
+		uint32_t *curr_ip4_addr = 0, uint32_t *curr_ip4_mask = 0);
 
 	/*Query the IPA endpoint property */
 	int query_iface_property(void);

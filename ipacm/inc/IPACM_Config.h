@@ -267,7 +267,7 @@ public:
 	std::list<bridge_vlan_mapping_info> m_bridge_vlan_mapping;
 	void add_bridge_vlan_mapping(ipa_ioc_bridge_vlan_mapping_info *data);
 	void del_bridge_vlan_mapping(ipa_ioc_bridge_vlan_mapping_info *data);
-	int get_bridge_vlan_mapping(ipa_ioc_bridge_vlan_mapping_info *data);
+	int get_bridge_vlan_mapping(ipa_ioc_bridge_vlan_mapping_info *data, bool is_dummy = false);
 	bool is_lan2lan_sw_path(uint16_t vlan_id);
 	uint16_t get_bridge_vlan_mapping_from_subnet(uint32_t ipv4_subnet);
 	void add_vlan_bridge(ipacm_event_data_all * data_all);

@@ -181,6 +181,8 @@ void IPACM_Wlan::event_callback(ipa_cm_event_id event, void *param)
 	list <ipacm_event_data_all>::iterator it;
 	ipacm_event_data_all *data_all=NULL;
 	ipacm_cmd_q_data evt_data;
+	uint16_t vlan_id = 0;
+	uint8_t priority = 0;
 
 	switch (event)
 	{
@@ -829,15 +831,6 @@ void IPACM_Wlan::event_callback(ipa_cm_event_id event, void *param)
 			ipa_interface_index = iface_ipa_index_query(data->if_index);
 			if (ipa_interface_index == ipa_if_num)
 			{
-				int i;
-				for(i=0; i<data->num_of_attribs; i++)
-				{
-					if(data->attribs[i].attrib_type == WLAN_HDR_ATTRIB_MAC_ADDR)
-					{
-						eth_bridge_post_event(IPA_ETH_BRIDGE_CLIENT_ADD, IPA_IP_MAX, data->attribs[i].u.mac_addr, NULL, NULL);
-						break;
-					}
-				}
 				IPACM_SYSLOG("Received IPA_WLAN_CLIENT_ADD_EVENT\n");
 				handle_wlan_client_init_ex(data);
 			}
@@ -851,11 +844,58 @@ void IPACM_Wlan::event_callback(ipa_cm_event_id event, void *param)
 			if (ipa_interface_index == ipa_if_num)
 			{
 				IPACM_SYSLOG("Received IPA_WLAN_CLIENT_DEL_EVENT\n");
-				eth_bridge_post_event(IPA_ETH_BRIDGE_CLIENT_DEL, IPA_IP_MAX, data->mac_addr, NULL, NULL);
 				handle_wlan_client_down_evt(data->mac_addr);
 			}
 		}
 		break;
+
+	case IPA_LAN_CLIENT_ADD_EVENT:
+		{
+			ipacm_event_data_all *data = (ipacm_event_data_all *)param;
+			char iface_dev_name[IF_NAME_LEN]={0};
+			IPACMDBG_H("Received IPA_LAN_CLIENT_ADD_EVENT\n");
+			ipa_interface_index = iface_ipa_index_query(data->if_index);
+			IPACMDBG_H("check iface %s category: %d\n", dev_name, ipa_if_cate);
+			if (ipa_interface_index == ipa_if_num)
+			{
+#ifdef IPA_VLAN_PRIORITY
+				if(IPACM_Iface::ipacmcfg->get_vlan_id(data->iface_name, &vlan_id, &priority))
+#else
+				if(IPACM_Iface::ipacmcfg->get_vlan_id(data->iface_name, &vlan_id))
+#endif
+				{
+					IPACMERR("Unable to find VLAN ID for Dev %s\n", data->iface_name);
+					return;
+				}
+
+				eth_bridge_post_event(IPA_ETH_BRIDGE_CLIENT_ADD, IPA_IP_MAX, data->mac_addr, NULL, NULL, vlan_id);
+				eth_bridge_post_event(IPA_CLIENT_CROSS_PRC_CTX, IPA_IP_MAX, data->mac_addr, NULL, data->iface_name, NULL);
+			}
+		}
+		break;
+
+	case IPA_LAN_CLIENT_DEL_EVENT:
+	{
+		ipacm_event_data_all *data = (ipacm_event_data_all *)param;
+		IPACMDBG_H("Received IPA_LAN_CLIENT_DEL_EVENT\n");
+		ipa_interface_index = iface_ipa_index_query(data->if_index);
+		IPACMDBG_H("check iface %s category: %d\n", dev_name, ipa_if_cate);
+#ifdef IPA_VLAN_PRIORITY
+		if(IPACM_Iface::ipacmcfg->get_vlan_id(data->iface_name, &vlan_id, &priority))
+#else
+		if(IPACM_Iface::ipacmcfg->get_vlan_id(data->iface_name, &vlan_id))
+#endif
+		{
+			IPACMERR("Unable to find VLAN ID for Dev %s\n", data->iface_name);
+			return;
+		}
+
+		if (ipa_interface_index == ipa_if_num)
+		{
+			eth_bridge_post_event(IPA_ETH_BRIDGE_CLIENT_DEL, IPA_IP_MAX, data->mac_addr, NULL, NULL, vlan_id);
+		}
+	}
+	break;
 
 	case IPA_WLAN_CLIENT_POWER_SAVE_EVENT:
 		{

@@ -4190,8 +4190,16 @@ int IPACM_Lan::handle_wan_up_ex(ipacm_ext_prop *ext_prop, ipa_ip_type iptype, ui
 			ret = handle_uplink_filter_rule(ext_prop, iptype, xlat_mux_id, ast_update);
 #endif
 			if (num_wan_ul_fl_rule_v6 != 0)
+			{
 				modem_ul_v6_set = true;
-			else {
+				if(IPACM_Iface::ipacmcfg->eogre_enabled &&
+				!(IPACM_Iface::ipacmcfg->tunnel_feature == SINGLE_TAG_FEATURE))
+				{
+					modify_ipv6_prefix_flt_rule(true);
+				}
+			}
+			else
+			{
 				IPACMERR("Modem UL v6 rules not installed, error: %d \n",ret);
 				goto fail;
 			}
@@ -4234,8 +4242,16 @@ int IPACM_Lan::handle_wan_up_ex(ipacm_ext_prop *ext_prop, ipa_ip_type iptype, ui
 			ret = handle_uplink_filter_rule(ext_prop, iptype, xlat_mux_id, ast_update);
 #endif
 			if (num_wan_ul_fl_rule_v4 != 0)
+			{
 				modem_ul_v4_set = true;
-			else {
+				if(IPACM_Iface::ipacmcfg->eogre_enabled &&
+				!(IPACM_Iface::ipacmcfg->tunnel_feature == SINGLE_TAG_FEATURE))
+				{
+					modify_private_subnet(true);
+				}
+			}
+			else
+			{
 				IPACMERR("Modem UL v4 rules not installed, error: %d \n",ret);
 				goto fail;
 			}

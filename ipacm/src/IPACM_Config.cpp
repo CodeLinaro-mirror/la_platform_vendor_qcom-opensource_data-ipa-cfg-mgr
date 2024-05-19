@@ -1728,7 +1728,7 @@ void IPACM_Config::restore_vlan_nat_ifaces(const char *phys_iface_name)
 		return;
 	}
 
-	IPACMDBG_H("searching iface %s vlan interfaces to add to NAT devices\n", phys_iface_name)
+	IPACMDBG_H("searching iface %s vlan interfaces to add to NAT devices\n", phys_iface_name);
 
 	for(it_vlan = m_vlan_iface.begin(); it_vlan != m_vlan_iface.end(); it_vlan++)
 	{
@@ -3098,7 +3098,7 @@ void IPACM_Config::sw_flt_info(ipa_sw_flt_list_type *sw_flt)
 				mac_flt_type *temp = (mac_flt_type *)malloc(sizeof(mac_flt_type));
 				if(temp == NULL)
 				{
-					IPACMDBG_H("Failed to allocate memmory \n")
+					IPACMDBG_H("Failed to allocate memmory \n");
 					goto UPDATE;
 				}
 				memset(temp, 0, sizeof(mac_flt_type));
@@ -3142,7 +3142,7 @@ void IPACM_Config::sw_flt_info(ipa_sw_flt_list_type *sw_flt)
 						mac_flt_type *temp = (mac_flt_type *)malloc(sizeof(mac_flt_type));
 						if(temp == NULL)
 						{
-							IPACMDBG_H("Failed to allocate memmory \n")
+							IPACMDBG_H("Failed to allocate memmory \n");
 							goto UPDATE;
 						}
 						memset(temp, 0, sizeof(mac_flt_type));
@@ -3183,7 +3183,7 @@ void IPACM_Config::sw_flt_info(ipa_sw_flt_list_type *sw_flt)
 						mac_flt_type *temp = (mac_flt_type *)malloc(sizeof(mac_flt_type));
 						if(temp == NULL)
 						{
-							IPACMDBG_H("Failed to allocate memmory \n")
+							IPACMDBG_H("Failed to allocate memmory \n");
 							goto UPDATE;
 						}
 						memset(temp, 0, sizeof(mac_flt_type));
@@ -3272,7 +3272,7 @@ void IPACM_Config::mac_flt_info(ipa_ioc_mac_client_list_type *mac_flt_data)
 				mac_flt_type *temp = (mac_flt_type *)malloc(sizeof(mac_flt_type));
 				if(temp == NULL)
 				{
-					IPACMDBG_H("Failed to allocate memmory \n")
+					IPACMDBG_H("Failed to allocate memmory \n");
 					goto UPDATE;
 				}
 				memset(temp, 0, sizeof(mac_flt_type));
@@ -3351,7 +3351,7 @@ void IPACM_Config::clear_whitelist_mac_add(uint8_t * mac_addr)
 	uint8_t mac_a[6] = {0};
 	std::array<uint8_t, 6> mac = {0};
 
-	IPACMDBG_H("clear from mac_flt_list! \n")
+	IPACMDBG_H("clear from mac_flt_list! \n");
 	if(pthread_mutex_lock(&mac_flt_info_lock) != 0)
 	{
 		IPACMERR("Unable to lock the mutex\n");
@@ -3483,7 +3483,7 @@ void IPACM_Config::update_client_info(uint8_t *mac_addr, tether_client_info *cli
 						mac_flt_type *temp2 = (mac_flt_type *)malloc(sizeof(mac_flt_type));
 						if(temp2 == NULL)
 						{
-							IPACMDBG_H("Failed to allocate memmory \n")
+							IPACMDBG_H("Failed to allocate memmory \n");
 							pthread_mutex_unlock(&mac_flt_info_lock);
 							return;
 						}
@@ -3515,7 +3515,7 @@ void IPACM_Config::update_client_info(uint8_t *mac_addr, tether_client_info *cli
 						mac_flt_type *temp2 = (mac_flt_type *)malloc(sizeof(mac_flt_type));
 						if(temp2 == NULL)
 						{
-							IPACMDBG_H("Failed to allocate memmory \n")
+							IPACMDBG_H("Failed to allocate memmory \n");
 							pthread_mutex_unlock(&mac_flt_info_lock);
 							return;
 						}
@@ -3808,7 +3808,7 @@ bool IPACM_Config::del_ext_router_info(char* pdn_name)
 	{
 		if(strncmp(it->pdn_name, pdn_name, sizeof(it->pdn_name)) == 0)
 		{
-			IPACMDBG_H("Found pdn %s\n", it->pdn_name)
+			IPACMDBG_H("Found pdn %s\n", it->pdn_name);
 			ext_router_prefix.erase(it);
 			return true;
 		}

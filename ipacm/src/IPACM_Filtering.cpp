@@ -463,7 +463,7 @@ bool IPACM_Filtering::DeleteFilteringHdls
 
 	    if (flt_rule_hdls[cnt] == 0)
 	    {
-		   IPACMERR("invalid filter handle passed, ignoring it: %d\n", cnt)
+		   IPACMERR("invalid filter handle passed, ignoring it: %d\n", cnt);
 	    }
             else
 	    {

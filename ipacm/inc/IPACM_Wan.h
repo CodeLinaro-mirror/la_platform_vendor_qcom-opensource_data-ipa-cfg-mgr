@@ -234,7 +234,7 @@ public:
 #endif
 			if (isWanUP(ipa_if_num_tether))
 			{
-				IPACMDBG_H("got mtu_default_v4\n")
+				IPACMDBG_H("got mtu_default_v4\n");
 				return mtu_default_wan_v4;
 			}
 		}
@@ -249,7 +249,7 @@ public:
 #endif
 			if (isWanUP_V6(ipa_if_num_tether))
 			{
-				IPACMDBG_H("got mtu_default_v6\n")
+				IPACMDBG_H("got mtu_default_v6\n");
 				return mtu_default_wan_v6;
 			}
 		}

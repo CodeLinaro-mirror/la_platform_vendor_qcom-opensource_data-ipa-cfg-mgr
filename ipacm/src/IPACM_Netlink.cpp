@@ -800,7 +800,7 @@ static int ipa_nl_decode_nlmsg
 	while(NLMSG_OK(nlh, buflen))
 	{
 		memset(dev_name,0,IF_NAME_LEN);
-		IPACMDBG("Received msg:%d from netlink\n", nlh->nlmsg_type)
+		IPACMDBG("Received msg:%d from netlink\n", nlh->nlmsg_type);
 		switch(nlh->nlmsg_type)
 		{
 		case RTM_NEWLINK:
@@ -2219,7 +2219,7 @@ int ipa_nl_send_getroute(ipa_ip_type ip_type)
 
 	h = (struct nlmsghdr *)buf;
 
-	IPACMDBG("Route msg_len : %d\n", msglen)
+	IPACMDBG("Route msg_len : %d\n", msglen);
 
 	while (NLMSG_OK(h, msglen))
 	{

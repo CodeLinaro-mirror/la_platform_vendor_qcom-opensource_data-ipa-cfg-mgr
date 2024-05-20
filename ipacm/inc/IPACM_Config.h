@@ -1282,7 +1282,7 @@ public:
 	 * @return bool true when mapping is populated successfully,
 	 *         false otherwise.
 	 */
-	bool populateMacsecMap(const int interfaceIndex, struct ipa_macsec_map *macsecMap) {
+	bool getMacsecMapping(const int interfaceIndex, struct ipa_macsec_map *macsecMap) {
 		if (!macsecMap)
 			return false;
 		auto ipaInterfaceInfo = getMacsecInterface(interfaceIndex);

@@ -16405,6 +16405,8 @@ int IPACM_Lan::gre_make_hdr_for_add_ctx(
 			hdr_data_len;
 		template_info_to_uc.template_type =
 			IPACM_Iface::ipacmcfg->tunnel_feature;
+		template_info_to_uc.tunnel_config.feature_mode =
+			IPACM_Iface::ipacmcfg->tunnel_feature;
 
 		if(IPACM_Iface::ipacmcfg->tunnel_feature == UNTAG_FEATURE)
 		{

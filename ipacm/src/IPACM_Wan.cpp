@@ -60,6 +60,10 @@
  * IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
  * OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *
+ * Changes from Qualcomm Innovation Center, Inc. are provided under the following license:
+ * Copyright (c) 2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear.
  */
 /*!
 		@file
@@ -462,6 +466,8 @@ int IPACM_Wan::handle_addr_evt(ipacm_event_data_addr *data)
 	const int NUM_RULES = 1;
 	int num_ipv6_addr, len;
 	int res = IPACM_SUCCESS;
+	ipacm_cmd_q_data evt_data;
+	IPACM_swallow_t *dummy_cfg;
 
 	memset(&hdr, 0, sizeof(hdr));
 	if(tx_prop == NULL || rx_prop == NULL)
@@ -939,6 +945,17 @@ int IPACM_Wan::handle_addr_evt(ipacm_event_data_addr *data)
 
 		IPACMDBG_H("Received wan ipv4-addr:0x%x\n",wan_v4_addr);
 	}
+
+	set_swallow_pdn_up();
+	memset(&evt_data, 0, sizeof(evt_data));
+	dummy_cfg = (IPACM_swallow_t *)calloc(1, sizeof(IPACM_swallow_t));
+	evt_data.event = IPA_SWALLOW_CHANGE_EVENT;
+	/* Dummy Data Ignored on received side */
+	evt_data.evt_data = (void *)dummy_cfg;
+
+	IPACMDBG("Posting IPA_SWALLOW_CHANGE_EVENT\n");
+	/* Insert IPA_SWALLOW_CHANGE_EVENT to command queue */
+	IPACM_EvtDispatcher::PostEvt(&evt_data);
 
 	IPACMDBG_H("number of default route rules %d\n", num_dft_rt_v6);
 
@@ -1750,25 +1767,20 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 
 	case IPA_SWALLOW_PDN_UPDATE:
 		{
-			if(!IPACM_Iface::ipacmcfg->sw_allow_flag)
-			{
-				IPACM_Iface::ipacmcfg->sw_allow_flag = TRUE;
+			IPACMDBG_H("Received IPA_SWALLOW_PDN_UPDATE\n");
+			set_swallow_pdn_up();
 
-				IPACMDBG_H("Received IPA_SWALLOW_PDN_UPDATE\n");
-				set_swallow_pdn_up();
+			ipacm_cmd_q_data evt_data;
+			memset(&evt_data, 0, sizeof(evt_data));
+			IPACM_swallow_t *dummy_cfg = (IPACM_swallow_t *)calloc(1, sizeof(IPACM_swallow_t));
 
-				ipacm_cmd_q_data evt_data;
-				memset(&evt_data, 0, sizeof(evt_data));
-				IPACM_swallow_t *dummy_cfg = (IPACM_swallow_t *)calloc(1, sizeof(IPACM_swallow_t));
+			evt_data.event = IPA_SWALLOW_CHANGE_EVENT;
+			/* Dummy Data Ignored on received side */
+			evt_data.evt_data = (void *)dummy_cfg;
 
-				evt_data.event = IPA_SWALLOW_CHANGE_EVENT;
-				/* Dummy Data Ignored on received side */
-				evt_data.evt_data = (void *)dummy_cfg;
-
-				IPACMDBG("Posting IPA_SWALLOW_CHANGE_EVENT\n");
-				/* Insert IPA_SWALLOW_CHANGE_EVENT to command queue */
-				IPACM_EvtDispatcher::PostEvt(&evt_data);
-			}
+			IPACMDBG("Posting IPA_SWALLOW_CHANGE_EVENT\n");
+			/* Insert IPA_SWALLOW_CHANGE_EVENT to command queue */
+			IPACM_EvtDispatcher::PostEvt(&evt_data);
 		}
 		break;
 

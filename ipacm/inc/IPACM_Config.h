@@ -61,6 +61,10 @@
  * IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
  * OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE
+ *
+ * Changes from Qualcomm Innovation Center, Inc. are provided under the following license:
+ * Copyright (c) 2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear.
  */
 /*!
 	@file
@@ -173,9 +177,6 @@ public:
 
 	/* Store Software allow tuple information */
 	IPACM_swallow_t *sw_filter_cfg;
-
-	/* sw_allow flag */
-	bool sw_allow_flag;
 
 #ifdef FEATURE_VLAN_MPDN
 	int num_ipv6_prefixes;

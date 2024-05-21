@@ -61,6 +61,10 @@ IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  * IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
  * OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *
+ * Changes from Qualcomm Innovation Center, Inc. are provided under the following license:
+ * Copyright (c) 2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear.
  */
 #include "IPACM_Conntrack_NATApp.h"
 #include "IPACM_ConntrackClient.h"
@@ -566,7 +570,7 @@ bool NatApp::ChkSWAllow(const nat_table_entry *rule)
 	IPACM_swallow_t sw_filter_cfg;
 	IPACMDBG("Entry\n");
 
-	if(!IPACM_Iface::ipacmcfg->sw_filter_cfg || !IPACM_Iface::ipacmcfg->sw_allow_flag)
+	if(!IPACM_Iface::ipacmcfg->sw_filter_cfg)
 	{
 		IPACMERR("SW Config not updated/pdn index not updated!\n");
 		return false;
@@ -682,7 +686,7 @@ void NatApp::HandleSWAllowEntries(void)
 	IPACM_swallow_t sw_filter_cfg;
 	IPACMDBG("Entry\n");
 
-	if(!IPACM_Iface::ipacmcfg->sw_filter_cfg || !IPACM_Iface::ipacmcfg->sw_allow_flag)
+	if(!IPACM_Iface::ipacmcfg->sw_filter_cfg)
 	{
 		IPACMERR("SW Config not updated/pdn index not updated!\n");
 		return;
@@ -3420,7 +3424,7 @@ bool NatBase::ChkSWAllow(const NatEntryBase& rule)
 	IPACM_swallow_t sw_filter_cfg;
 	IPACMDBG("Entry\n");
 
-	if(!IPACM_Iface::ipacmcfg->sw_filter_cfg || !IPACM_Iface::ipacmcfg->sw_allow_flag)
+	if(!IPACM_Iface::ipacmcfg->sw_filter_cfg)
 	{
 		IPACMERR("SW Config not updated/pdn index not updated!\n");
 		return false;
@@ -3510,7 +3514,7 @@ void NatBase::HandleSWAllowEntries(void)
 	IPACM_swallow_t sw_filter_cfg;
 	IPACMDBG("Entry\n");
 
-	if(!IPACM_Iface::ipacmcfg->sw_filter_cfg || !IPACM_Iface::ipacmcfg->sw_allow_flag)
+	if(!IPACM_Iface::ipacmcfg->sw_filter_cfg)
 	{
 		IPACMERR("SW Config not updated/pdn index not updated!\n");
 		return;

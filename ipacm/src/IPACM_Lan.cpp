@@ -8029,7 +8029,8 @@ int IPACM_Lan::handle_uplink_filter_rule(ipacm_ext_prop *prop, ipa_ip_type iptyp
 
 				/* NAT block will set the proper MUX ID in the metadata according to the relevant PDN */
 				if ((IPACM_Iface::ipacmcfg->GetIPAVer() >= IPA_HW_v4_0) &&
-					((ipa_if_cate != WLAN_IF) || ((ipa_if_cate == WLAN_IF) && is_wlan_if_vlan))) flt_rule_entry.rule.set_metadata = true;
+					((ipa_if_cate != WLAN_IF) || ((ipa_if_cate == WLAN_IF) && is_wlan_if_vlan)))
+					flt_rule_entry.rule.set_metadata = true;
 			}
 		} else { /* (iptype == IPA_IP_v6) */
 			if (compatible_eogre) {
@@ -8123,6 +8124,7 @@ int IPACM_Lan::handle_uplink_filter_rule(ipacm_ext_prop *prop, ipa_ip_type iptyp
 
 					//change to pass to route since NATting is already done on 1st pass
 					flt_rule_entry.rule.action = IPA_PASS_TO_ROUTING;
+					flt_rule_entry.rule.set_metadata = false;
 
 					IPACMDBG_H("xlat meta-data is modified for rule: %d has index %d with src subnet: 0x%X\n",
 							   cnt, index, flt_rule_entry.rule.eq_attrib.offset_meq_32[meq32_n].value);
@@ -8248,6 +8250,7 @@ int IPACM_Lan::handle_uplink_filter_rule(ipacm_ext_prop *prop, ipa_ip_type iptyp
 				{
 					IPACMDBG_H("Changing rule to pass to route\n");
 					flt_rule_entry.rule.action = IPA_PASS_TO_ROUTING;
+					flt_rule_entry.rule.set_metadata = false;
 				}
 			}
 			memcpy(&pFilteringTable->rules[i], &flt_rule_entry, sizeof(flt_rule_entry));

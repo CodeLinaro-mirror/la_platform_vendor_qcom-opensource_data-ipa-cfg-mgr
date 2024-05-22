@@ -27,7 +27,7 @@ OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
 IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 Changes from Qualcomm Innovation Center are provided under the following license:
-Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+Copyright (c) 2023-2024 Qualcomm Innovation Center, Inc. All rights reserved.
 SPDX-License-Identifier: BSD-3-Clause-Clear
 */
 /*!
@@ -611,6 +611,10 @@ int IPACM_IfaceManager::create_iface_instance(ipacm_ifacemgr_data *param)
 					IPACM_EvtDispatcher::registr(IPA_HANDLE_EoGRE_UP, w);
 					IPACM_EvtDispatcher::registr(IPA_HANDLE_EoGRE_DOWN, w);
 #endif
+#ifdef FEATURE_DUAL_BACKHAUL
+					IPACM_EvtDispatcher::registr(IPA_HANDLE_WAN_DOWN, w);
+					IPACM_EvtDispatcher::registr(IPA_HANDLE_WAN_UP, w);
+#endif
 					IPACM_EvtDispatcher::registr(IPA_ADDR_ADD_EVENT, w);
 #ifdef FEATURE_IPA_ANDROID
 					IPACM_EvtDispatcher::registr(IPA_WAN_UPSTREAM_ROUTE_ADD_EVENT, w);
@@ -656,6 +660,15 @@ int IPACM_IfaceManager::create_iface_instance(ipacm_ifacemgr_data *param)
 					if(is_sta_mode == Q6_WAN)
 					{
 						IPACM_EvtDispatcher::registr(IPA_MTU_SET, w);
+					}
+#endif
+#ifdef FEATURE_IPA_IPSEC
+					/* IPsec offload uses post decap to APPs RT rules, which must be above client rules.
+					   The WAN interface should be informed about the client RT rules,
+					   to reinstall the post decap rules above. */
+					if(is_sta_mode == Q6_WAN)
+					{
+						IPACM_EvtDispatcher::registr(IPA_IPSEC_LAN_CLIENT_ROUTE_ADD_EVENT, w);
 					}
 #endif
 					if(is_sta_mode == WLAN_WAN)

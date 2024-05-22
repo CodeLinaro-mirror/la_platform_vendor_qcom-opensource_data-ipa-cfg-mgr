@@ -28,7 +28,7 @@
  *
  * Changes from Qualcomm Innovation Center are provided under the following license:
  *
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted (subject to the limitations in the
@@ -232,6 +232,18 @@ public:
 };
 #endif
 
+#ifdef FEATURE_DUAL_BACKHAUL
+/* Struct used to store 2nd backhaul details for dual backhaul
+*/
+typedef struct {
+	bool enable;
+	uint32_t gateway_ipv4;
+	char net_dev[IPA_IFACE_NAME_LEN];
+	uint8_t src_mac[6];
+	uint8_t dst_mac[6];
+}ipa_dual_backhaul_info;
+#endif
+
 /* iface */
 class IPACM_Config
 {
@@ -254,6 +266,11 @@ public:
 
 	/* Store private subnet configuration from XML file */
 	ipa_private_subnet private_subnet_table[IPA_MAX_PRIVATE_SUBNET_ENTRIES + IPA_MAX_MTU_ENTRIES];
+
+#ifdef FEATURE_DUAL_BACKHAUL
+	/* Store the second backhaul info. Fetch gateway,enabled, and netdev details from XML file */
+	ipa_dual_backhaul_info second_backhaul_info;
+#endif
 
 #ifdef FEATURE_VLAN_MPDN
 	int num_ipv6_prefixes;
@@ -286,6 +303,7 @@ public:
 	const char* ipa_nat_memtype;
 	int ipa_nat_max_entries;
 	int ipa_ipv6ct_max_entries;
+	const char* ipa_ct_memtype;
 
 	bool ipacm_odu_router_mode;
 
@@ -358,6 +376,9 @@ public:
 
 	/* Indicates whether vlan mpdn for WLAN is enabled */
 	bool wlan_vlan_mpdn_enabled;
+
+	/* Indicates whether static policy mode is enabled */
+	bool ipacm_static_policy_enable;
 
 #ifdef FEATURE_EoGRE
 	ipa_ipgre_info eogre_info;
@@ -745,6 +766,11 @@ public:
 	inline const char* GetNatMemType(void)
 	{
 		return ipa_nat_memtype;
+	}
+
+	inline const char* GetCTMemType(void)
+	{
+		return ipa_ct_memtype;
 	}
 
 	inline int GetIpv6CTMaxEntries(void)
@@ -1314,6 +1340,7 @@ private:
 
 	static const int DEFAULT_IPV6CT_MAX_ENTRIES = 500;
 	const char* DEFAULT_NAT_MEMTYPE = "DDR";
+	const char* DEFAULT_CT_MEMTYPE = "DDR";
 
 	enum ipa_hw_type ver;
 	static IPACM_Config *pInstance;

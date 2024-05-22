@@ -27,12 +27,13 @@ OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
 IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 Changes from Qualcomm Innovation Center are provided under the following license:
-Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+Copyright (c) 2023-2024 Qualcomm Innovation Center, Inc. All rights reserved.
 SPDX-License-Identifier: BSD-3-Clause-Clear
 */
 #include "IPACM_Conntrack_NATApp.h"
 #include "IPACM_ConntrackClient.h"
 #include "IPACM_Iface.h"
+#include "IPACM_Wan.h"
 
 extern "C"
 {
@@ -47,6 +48,8 @@ extern "C"
 #define HDR_METADATA_MUX_ID_BMASK 0x00FF0000
 #define HDR_METADATA_MUX_ID_SHFT 0x10
 
+#define DUAL_BACKHAUL_PDN_COUNT 2
+
 #undef strcasesame
 #define strcasesame(a, b) (!strcasecmp(a, b))
 
@@ -60,6 +63,8 @@ NatApp *NatApp::pInstance = NULL;
 
 bool NatApp::kernel_ver_updated = false;
 bool NatApp::is_kernel_ver_upgraded = false;
+
+extern int bool_dual_backhaul;
 
 NatApp::NatApp()
 {
@@ -184,21 +189,43 @@ int NatApp::AddPdn(uint32_t pub_ip, uint8_t mux_id, bool is_sta, bool ip_pass)
 		IPACMERR("unable to get pdn count Error:%d\n", ret);
 		return ret;
 	}
+	IPACMDBG_H("AddPDN isSta:%d, pdn_count: %d, ip 0x%X\n", is_sta,pdn_count,pub_ip);
+
 
 	if(!pdn_count)
 	{
 		/* create the NAT table, the PDN will be stored in index 0 */
-		ret = ipa_nat_add_ipv4_tbl(pub_ip, mem_type, max_entries, &nat_table_hdl);
+		if(is_sta)
+		{
+			/* This function stores pub_ip at pdn[0]. 
+			 * We don't want that for non STA PDNs*/
+			ret = ipa_nat_add_ipv4_tbl(pub_ip, mem_type, max_entries, &nat_table_hdl);
+		}
+		else
+		{
+			ret = ipa_nat_add_ipv4_tbl(0, mem_type, max_entries, &nat_table_hdl);
+		}
 		if(ret)
 		{
 			IPACMERR("unable to create nat table Error:%d\n", ret);
 			return ret;
 		}
 		IPACMDBG_H("succeesfully created NAT table for ip 0x%X\n", pub_ip);
+		entry.src_metadata = GenerateMetdata(mux_id);
+		pdn_index = 1;
+#ifdef FEATURE_DUAL_BACKHAUL
+		if(is_sta)
+		{
+			pdn_index = 0;
+			entry.src_metadata = 0;
+			entry.is_sta = true;
+			IPACMDBG_H("attempting second backhaul ADDPDN\n");
+		}
+#endif
 
 		/* modify PDN 0 so it will hold the mux ID in the src metadata field */
-		pdn_index = 0;
 		ret = ipa_nat_modify_pdn(nat_table_hdl, pdn_index, &entry);
+		IPACMDBG_H("modify pdn index %d\n", pdn_index);
 		if(ret)
 		{
 			IPACMERR("unable to modify PDN 0 entry Error:%d\n", ret);
@@ -207,21 +234,43 @@ int NatApp::AddPdn(uint32_t pub_ip, uint8_t mux_id, bool is_sta, bool ip_pass)
 	}
 	else
 	{
-		/* only allocate a PDN if it is a new one */
-		if(ipa_nat_get_pdn_index(pub_ip, &pdn_index) < 0)
+#ifdef FEATURE_DUAL_BACKHAUL
+		if(is_sta)
 		{
+			pdn_index=0;
+			entry.public_ip = pub_ip;
+			entry.src_metadata = 0;
+			entry.is_sta = true;
+			IPACMDBG_H("attempting second backhaul modify ADDPDN\n");
 			ret = ipa_nat_alloc_pdn(&entry, &pdn_index);
-			if(ret)
-			{
-				IPACMERR("couldn't allocate a pdn index\n");
+			if(ret){
+				IPACMERR("unable to modify PDN 0 entry Error:%d\n", ret);
 				return ret;
 			}
-			IPACMDBG_H("successfully allocated index %d for ip 0x%X\n", pdn_index, pub_ip);
 		}
 		else
 		{
-			IPACMDBG_H("pdn already existed with index %d\n", pdn_index);
+#endif
+			/* only allocate a PDN if it is a new one */
+			if(ipa_nat_get_pdn_index(pub_ip, &pdn_index) < 0)
+			{
+				ret = ipa_nat_alloc_pdn(&entry, &pdn_index);
+				if(ret)
+				{
+					IPACMERR("couldn't allocate a pdn index\n");
+					return ret;
+				}
+				IPACMDBG_H("successfully allocated index %d for ip 0x%X\n",
+						pdn_index, pub_ip);
+			}
+			else
+			{
+				IPACMDBG_H("pdn already existed with index %d\n", pdn_index);
+			}
+#ifdef FEATURE_DUAL_BACKHAUL
 		}
+#endif
+
 	}
 
 	/* now traverse cache and add the PDN entries */
@@ -396,6 +445,17 @@ int NatApp::RemovePdn(uint32_t pub_ip)
 	CHK_TBL_HDL();
 
 	ret = ipa_nat_get_pdn_index(pub_ip, &pdn_index);
+#ifdef FEATURE_DUAL_BACKHAUL
+	ret = ipa_nat_get_pdn_count(&pdn_cnt);
+	if(pdn_cnt < DUAL_BACKHAUL_PDN_COUNT && pdn_index == 0 && bool_dual_backhaul == 1)
+	{
+		IPACMDBG_H("only eth is there don't remove any pdn\n");
+		bool_dual_backhaul = 0;
+		return IPACM_FAILURE;
+	}
+#endif
+
+	IPACMDBG_H("RemovePDN  pdn_index:%d, IP: %x\n",pdn_index, pub_ip);
 	if(ret)
 	{
 		IPACMERR("pdn doesn't exist on pdn table\n");
@@ -443,6 +503,8 @@ int NatApp::RemovePdn(uint32_t pub_ip)
 
 		Reset();
 	}
+	IPACMDBG_H("RemovePDN  pdn_index:%d, pdn_count: %d, ip 0x%X\n",pdn_index,pdn_cnt,pub_ip);
+
 
 	return 0;
 }
@@ -650,22 +712,36 @@ int NatApp::AddEntry(const nat_table_entry *rule, bool isVlan)
 		return 0;
 	}
 #ifdef FEATURE_VLAN_MPDN
-	if(ipa_nat_get_pdn_index(rule->public_ip, &pdn_index))
+#ifdef FEATURE_DUAL_BACKHAUL
+	if(IPACM_Wan::second_backhaul_active && rule->public_ip == IPACM_Wan::second_backhaul_ipv4)
 	{
-		if(isVlan)
-		{
-			IPACMDBG_H("vlan iface doesn't have a valid pdn, only moving to cache");
-			iptodot("private ip", rule->private_ip);
-			iptodot("target ip", rule->target_ip);
-			iptodot("public ip", rule->public_ip);
-			cacheOnly = true;
-		}
-		else
-		{
-			IPACMERR("couldn't acquire PDN index for public ip 0x%X\n", rule->public_ip);
-			return IPACM_FAILURE;
-		}
+		pdn_index = 0;
+		IPACMDBG_H("second backhaul addentry\n");
 	}
+	else
+	{
+#endif
+		if(ipa_nat_get_pdn_index(rule->public_ip, &pdn_index))
+		{
+			if(isVlan)
+			{
+				IPACMDBG_H("vlan iface doesn't have a valid pdn, \
+					only moving to cache");
+				iptodot("private ip", rule->private_ip);
+				iptodot("target ip", rule->target_ip);
+				iptodot("public ip", rule->public_ip);
+				cacheOnly = true;
+			}
+			else
+			{
+				IPACMERR("couldn't acquire PDN index for public ip 0x%X\n",
+					rule->public_ip);
+				return IPACM_FAILURE;
+			}
+		}
+#ifdef FEATURE_DUAL_BACKHAUL
+	}
+#endif
 #endif
 
 	if(!ChkForDup(rule))
@@ -2299,7 +2375,7 @@ NatProxyBase::~NatProxyBase()
 	IPACMDBG_H("\n");
 }
 
-int NatProxyBase::AddTable(uint16_t number_of_entries)
+int NatProxyBase::AddTable(uint16_t number_of_entries, const char* mem_type)
 {
 	IPACMDBG_H("\n");
 	uint32_t table_handle;
@@ -2310,7 +2386,7 @@ int NatProxyBase::AddTable(uint16_t number_of_entries)
 		return 0;
 	}
 
-	int ret = DoAddTable(number_of_entries, table_handle);
+	int ret = DoAddTable(number_of_entries, mem_type, table_handle);
 	if (!ret)
 	{
 		m_tableHandle = table_handle;
@@ -2388,10 +2464,11 @@ int NatProxyBase::DelEntry(NatEntryBase& entry)
 	return ret;
 }
 
-int Ipv6ctProxy::DoAddTable(uint16_t number_of_entries, uint32_t& table_handle)
+int Ipv6ctProxy::DoAddTable(uint16_t number_of_entries, const char* mem_type, uint32_t& table_handle)
 {
 	IPACMDBG_H("\n");
-	int ret = ipa_ipv6ct_add_tbl(number_of_entries, &table_handle);
+
+	int ret = ipa_ct_add_ipv6_tbl(number_of_entries, mem_type, &table_handle);
 	IPACMDBG_H("return\n");
 	return ret;
 }
@@ -2399,7 +2476,7 @@ int Ipv6ctProxy::DoAddTable(uint16_t number_of_entries, uint32_t& table_handle)
 int Ipv6ctProxy::DoDeleteTable()
 {
 	IPACMDBG_H("\n");
-	int ret = ipa_ipv6ct_del_tbl(m_tableHandle);
+	int ret = ipa_ct_del_ipv6_tbl(m_tableHandle);
 	IPACMDBG_H("return\n");
 	return ret;
 }
@@ -2494,7 +2571,7 @@ int Ipv6ctProxy::DoAddEntry(const NatEntryBase& entry, uint32_t& entry_handle,
 			IPACMDBG_H("ucp: en %d, idx %d, s %d\n", entry.m_ucp, entry.m_uc_activation_index, entry.m_s);
 		}
 
-		ret = ipa_ipv6ct_add_rule(m_tableHandle, &rule, &entry_handle);
+		ret = ipa_ct_add_ipv6_rule(m_tableHandle, &rule, &entry_handle);
 
 		IPACMDBG("added ipv6CT entry, src_lsb 0x%llX, src_msb 0x%llX, src_port %u, dst_lsb 0x%llX, dst_msb 0x%llX, dst_port %u, dir %d, prot %d, handle %d\n",
 			rule.src_ipv6_lsb, rule.src_ipv6_msb, rule.src_port, rule.dest_ipv6_lsb, rule.dest_ipv6_msb, rule.dest_port, rule.direction_settings, rule.protocol, entry_handle);
@@ -2537,7 +2614,7 @@ int Ipv6ctProxy::DoAddEntry(const NatEntryBase& entry, uint32_t& entry_handle,
 		rule.dest_port = ipv6nat_entry.m_dstPort;
 		rule.protocol = ipv6nat_entry.m_protocol;
 
-		ret = ipa_ipv6ct_add_rule(m_tableHandle, &rule, &entry_handle);
+		ret = ipa_ct_add_ipv6_rule(m_tableHandle, &rule, &entry_handle);
 		if(ret)
 		{
 			IPACMERR("failed adding outbound rule, bail\n");
@@ -2559,7 +2636,7 @@ int Ipv6ctProxy::DoAddEntry(const NatEntryBase& entry, uint32_t& entry_handle,
 		rule.dest_port = ipv6nat_entry.m_dstPort;
 		rule.protocol = ipv6nat_entry.m_protocol;
 
-		ret = ipa_ipv6ct_add_rule(m_tableHandle, &rule, &additional_entry_handle);
+		ret = ipa_ct_add_ipv6_rule(m_tableHandle, &rule, &additional_entry_handle);
 		if(ret)
 		{
 			IPACMERR("failed adding outbound rule, bail\n");
@@ -2576,7 +2653,7 @@ int Ipv6ctProxy::DoAddEntry(const NatEntryBase& entry, uint32_t& entry_handle,
 	return ret;
 #ifdef FEATURE_IPV6_NAT
 inbound_fail:
-	ipa_ipv6ct_del_rule(m_tableHandle, entry_handle);
+	ipa_ct_del_ipv6_rule(m_tableHandle, entry_handle);
 clean_ucp:
 	DelIpv6NatUcAct(rule.uc_activation_index);
 	return ret;
@@ -2594,7 +2671,7 @@ int Ipv6ctProxy::DoDelEntry(const NatEntryBase& entry)
 		return -EINVAL;
 	}
 
-	ret = ipa_ipv6ct_del_rule(m_tableHandle, entry.m_ruleHandle);
+	ret = ipa_ct_del_ipv6_rule(m_tableHandle, entry.m_ruleHandle);
 	if(ret)
 	{
 		IPACMERR("failed deleting ipv6ct rule\n");
@@ -2608,7 +2685,7 @@ int Ipv6ctProxy::DoDelEntry(const NatEntryBase& entry)
 
 			IPACMDBG_H("this is ipv6 nat entry, delete inbound rule\n");
 
-			ret = ipa_ipv6ct_del_rule(m_tableHandle, ipv6nat.m_inboundRuleHandle);
+			ret = ipa_ct_del_ipv6_rule(m_tableHandle, ipv6nat.m_inboundRuleHandle);
 			if(ret)
 			{
 				IPACMERR("failed deleting inbound ipv6 nat rule\n");
@@ -2638,7 +2715,7 @@ int Ipv6ctProxy::QueryTimestamp(const NatEntryBase& entry, uint32_t& time_stamp)
 		return -EINVAL;
 	}
 
-	int ret = ipa_ipv6ct_query_timestamp(m_tableHandle, entry.m_ruleHandle, &time_stamp);
+	int ret = ipa_ct_query_timestamp(m_tableHandle, entry.m_ruleHandle, &time_stamp);
 #ifdef FEATURE_IPV6_NAT
 	if(ret)
 	{
@@ -2652,7 +2729,7 @@ int Ipv6ctProxy::QueryTimestamp(const NatEntryBase& entry, uint32_t& time_stamp)
 		const Ipv6NatEntry &ipv6nat = static_cast<const Ipv6NatEntry&>(entry);
 
 		IPACMDBG_H("ipv6 nat entry, check inbound handle\n");
-		ret = ipa_ipv6ct_query_timestamp(m_tableHandle, ipv6nat.m_inboundRuleHandle, &additional_timestamp);
+		ret = ipa_ct_query_timestamp(m_tableHandle, ipv6nat.m_inboundRuleHandle, &additional_timestamp);
 		if(ret)
 		{
 			IPACMERR(" inbound query failed, return\n");
@@ -2723,7 +2800,7 @@ NatEntriesCollectionBase& Ipv6NatObjectsGenerator::GetEntriesCollection(int max_
 }
 #endif
 
-NatBase::NatBase(ipa_ip_type type, int max_entries, const NatObjectsGeneratorBase& objectsGenerator)
+NatBase::NatBase(ipa_ip_type type, int max_entries, const char* mem_type, const NatObjectsGeneratorBase& objectsGenerator)
 	:
 	m_type(type),
 	m_temp(objectsGenerator.GetEntriesCollection(MAX_TEMP_ENTRIES)),
@@ -2733,7 +2810,8 @@ NatBase::NatBase(ipa_ip_type type, int max_entries, const NatObjectsGeneratorBas
 	m_proxy(objectsGenerator.GetProxy()),
 	m_ctTimestampUtil(objectsGenerator.GetConntrackTimestampUtil()),
 	m_cache(objectsGenerator.GetEntriesCollection(max_entries)),
-	m_previousWanAddress(objectsGenerator.GetIpAddress())
+	m_previousWanAddress(objectsGenerator.GetIpAddress()),
+	ct_mem_type(mem_type)
 {
 	IPACMDBG_H("\n");
 }
@@ -2753,7 +2831,7 @@ NatBase::~NatBase()
 int NatBase::AddTable(const uint32_t v6_prefix[2])
 {
 	IPACMDBG_H("\n");
-	int ret = m_proxy.AddTable(m_maxEntries);
+	int ret = m_proxy.AddTable(m_maxEntries, ct_mem_type);
 	if (ret)
 	{
 		IPACMERR("unable to create the table Error:%d\n", ret);
@@ -2775,7 +2853,7 @@ int NatBase::AddTable(const uint32_t v6_prefix[2])
 			}
 			else if (entry.m_direction == NatEntryBase::DirectionInbound)
 			{
-				src_ipv6_msb = ((Ipv6IpAddress &)entry.GetTargetIp()).GetMsb();
+				src_ipv6_msb = ((Ipv6IpAddress &)entry.GetClientIp()).GetMsb();
 			}
 
 			if(ipv6prefixmatch(src_ipv6_msb, v6_prefix))
@@ -2814,7 +2892,7 @@ int NatBase::DeleteTable(const uint32_t v6_prefix[2],int num_v6_vlan_pdns)
 			}
 			else if (entry.m_direction == NatEntryBase::DirectionInbound)
 			{
-				src_ipv6_msb = ((Ipv6IpAddress &)entry.GetTargetIp()).GetMsb();
+				src_ipv6_msb = ((Ipv6IpAddress &)entry.GetClientIp()).GetMsb();
 			}
 
 			if(ipv6prefixmatch(src_ipv6_msb, v6_prefix))
@@ -3424,12 +3502,12 @@ NatBase* Ipv6ct::GetInstance()
 		return NULL;
 	}
 
-	m_instance = new Ipv6ct(pConfig->GetIpv6CTMaxEntries());
+	m_instance = new Ipv6ct(pConfig->GetIpv6CTMaxEntries(), pConfig->GetCTMemType());
 	IPACMDBG_H("return\n");
 	return m_instance;
 }
 
-Ipv6ct::Ipv6ct(int max_entries) : NatBase(IPA_IP_v6, max_entries, Ipv6ctObjectsGenerator())
+Ipv6ct::Ipv6ct(int max_entries, const char* mem_type) : NatBase(IPA_IP_v6, max_entries, mem_type, Ipv6ctObjectsGenerator())
 {
 	IPACMDBG_H("\n");
 }

@@ -27,7 +27,7 @@
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  * Changes from Qualcomm Innovation Center are provided under the following license:
- * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2023-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 /*!
@@ -209,6 +209,7 @@ if (!(a)) {                                                 \
 #define IPACM_IPV6CT_TAG                     "IPACMIPV6CT"
 #define IPV6CT_ENABLED_TAG                   "IPv6CTEnabled"
 #define IPV6CT_MAX_ENTRIES_TAG               "MaxIpv6CTEntries"
+#define CT_TableType_TAG                     "CTTableType"
 
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
 #define LAN_Stats_TAG                        "LANStats"
@@ -227,7 +228,7 @@ if (!(a)) {                                                 \
 #define IPACM_SOCKSv5_Enable_TAG             "IPACMSOCKSv5Enabled"
 #define GRE_TAG                              "GREFlag"
 #define GREEnabled_TAG                       "GREEnabled"
-#define GREAutolearn_TAG                       "GREAutolearn"
+#define GREAutolearn_TAG                     "GREAutolearn"
 #define GRE_Server_TAG                       "GREServer"
 
 #define IPACM_EASY_MESH                      "IPACMEMESH"
@@ -236,6 +237,12 @@ if (!(a)) {                                                 \
 
 #define IPACM_WLAN_VLAN_MPDN                 "IPACMVLANMPDN"
 #define IPACM_Wlan_Vlan_Mpdn_Enabled         "IPACMVlanMpdnEnabled"
+
+#define Static_Policy_TAG                    "PolicyBasedRouting"
+#define Static_Policy_Enabled                "StaticPolicyEnabled"
+
+#define Dual_backhaul_TAG                    "IPACMDUALBACKHAUL"
+#define Dual_backhaul_enable_TAG             "IPACMDUALBHEnabled"
 
 /*---------------------------------------------------------------------------
       IP protocol numbers - use in dss_socket() to identify protocols.
@@ -350,6 +357,15 @@ typedef struct
 	uint32_t gre_server_ipv4;
 } ipacm_gre_conf_t;
 
+#ifdef FEATURE_DUAL_BACKHAUL
+typedef struct
+{
+	bool dualbackhaul_enable;
+	uint32_t gateway_ipv4;
+	char net_dev[IPA_IFACE_NAME_LEN];
+} ipacm_dual_backhaul_conf_t;
+#endif
+
 typedef struct  _IPACM_conf_t
 {
 	ipacm_iface_conf_t iface_config;
@@ -359,6 +375,7 @@ typedef struct  _IPACM_conf_t
 	const char* nat_table_memtype;
 	int ipv6ct_max_entries;
 	bool ipv6ct_enable;
+	const char* ct_table_memtype;
 	bool odu_enable;
 	bool router_mode_enable;
 	bool odu_embms_enable;
@@ -373,8 +390,12 @@ typedef struct  _IPACM_conf_t
 	uint32_t ipacm_emesh_mode;
 	bool ipacm_socksv5_enable;
 	ipacm_gre_conf_t gre_conf;
+#ifdef FEATURE_DUAL_BACKHAUL
+	ipacm_dual_backhaul_conf_t dual_backhaul_conf;
+#endif
 	bool public_ip_support_enable;
 	bool wlan_vlan_mpdn_enable;
+	bool static_policy_enable;
 } IPACM_conf_t;
 
 typedef struct _IPACM_conf_ext_t

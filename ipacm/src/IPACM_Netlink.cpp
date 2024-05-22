@@ -27,7 +27,7 @@ OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
 IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 Changes from Qualcomm Innovation Center are provided under the following license:
-Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+Copyright (c) 2023-2024 Qualcomm Innovation Center, Inc. All rights reserved.
 SPDX-License-Identifier: BSD-3-Clause-Clear
 */
 /*!
@@ -627,10 +627,8 @@ static int ipa_nl_decode_rtm_route
 {
 	struct nlmsghdr *nlh = (struct nlmsghdr *)buffer;  /* NL message header */
 	struct rtattr *rtah = NULL;
-#ifdef FEATURE_RDKB
 	struct rtattr *inner_rtah = NULL;
 	int inner_rtalen;
-#endif
 
 	/* Extract the header data */
 	route_info->metainfo = *((struct rtmsg *)NLMSG_DATA(nlh));
@@ -683,7 +681,7 @@ static int ipa_nl_decode_rtm_route
 						 sizeof(route_info->attr_info.priority));
 			route_info->attr_info.param_mask |= IPA_RTA_PARAM_PRIORITY;
 			break;
-#ifdef FEATURE_RDKB
+
 		case RTA_METRICS:
 			inner_rtalen = RTA_PAYLOAD(rtah);
 			for(inner_rtah = (struct rtattr *)RTA_DATA(rtah); RTA_OK(inner_rtah, inner_rtalen);
@@ -699,7 +697,7 @@ static int ipa_nl_decode_rtm_route
 				}
 			}
 			break;
-#endif
+
 		default:
 			break;
 
@@ -758,10 +756,9 @@ static int ipa_nl_decode_nlmsg
 	ipacm_event_data_all *vlan_data;
 	struct ipa_vlan_iface_info vlan_info;
 	struct ipa_macsec_map macsec_map, *macsec_map_data;
-#ifdef FEATURE_RDKB
 	ipacm_event_mtu_info *mtu_event = NULL;
 	ipa_mtu_info *mtu_info;
-#endif
+
 	memset(nullMac, 0, sizeof(nullMac));
 	memset(&vlan_info, 0, sizeof(vlan_info));
 	memset(&macsec_map, 0, sizeof(macsec_map));
@@ -827,6 +824,9 @@ static int ipa_nl_decode_nlmsg
 
 				if (IFF_UP & msg_ptr->nl_link_info.metainfo.ifi_change) {
 					IPACMDBG("GOT useful newlink event\n");
+
+					IPACMDBG_H("New Interface %s  with IP-family: %d \n",
+						dev_name, msg_ptr->nl_link_info.metainfo.ifi_family);
 
 					data_fid = (ipacm_event_data_fid *)malloc(sizeof(ipacm_event_data_fid));
 					if (data_fid == NULL) {
@@ -921,15 +921,6 @@ static int ipa_nl_decode_nlmsg
 					}
 					IPACMDBG_H("Got a usb link_down event (Interface %s) \n", dev_name);
 
-					if (msg_ptr->nl_link_info.metainfo.ifi_family == AF_BRIDGE ||
-					    msg_ptr->nl_link_info.metainfo.ifi_family == AF_UNSPEC) {
-						IPACMDBG("Deleting the bridge<->vlan mapping entry with intterface index %d\n",
-							msg_ptr->nl_link_info.metainfo.ifi_index);
-						uint16_t vlan_master_interface_index = msg_ptr->nl_link_info.metainfo.ifi_index;
-						IPACM_Iface::ipacmcfg->del_bridge_vlan_mapping(&vlan_master_interface_index);
-						free(data_fid);
-						return IPACM_SUCCESS;
-					}
 
 					if (msg_ptr->nl_link_info.link_type == IPA_LINK_TYPE_VLAN)
 						IPACM_Iface::ipacmcfg->del_vlan_iface(&vlan_info);
@@ -948,6 +939,15 @@ static int ipa_nl_decode_nlmsg
 							evt_data.evt_data = macsec_map_data;
 							IPACM_EvtDispatcher::PostEvt(&evt_data);
 						}
+					}
+					if (msg_ptr->nl_link_info.metainfo.ifi_family == AF_BRIDGE ||
+						msg_ptr->nl_link_info.metainfo.ifi_family == AF_UNSPEC) {
+						IPACMDBG("Deleting the bridge<->vlan mapping entry with intterface index %d\n",
+							msg_ptr->nl_link_info.metainfo.ifi_index);
+						uint16_t vlan_master_interface_index = msg_ptr->nl_link_info.metainfo.ifi_index;
+						IPACM_Iface::ipacmcfg->del_bridge_vlan_mapping(&vlan_master_interface_index);
+						free(data_fid);
+						return IPACM_SUCCESS;
 					}
 
 					data_fid->if_index = msg_ptr->nl_link_info.metainfo.ifi_index;
@@ -1181,7 +1181,6 @@ static int ipa_nl_decode_nlmsg
 			IPACMDBG("rtm_family: %d\n", msg_ptr->nl_route_info.metainfo.rtm_family);
 			IPACMDBG("param_mask: 0x%x\n", msg_ptr->nl_route_info.attr_info.param_mask);
 
-#ifdef FEATURE_RDKB
 			/* take care of MTU */
 			if((msg_ptr->nl_route_info.metainfo.rtm_type == RTN_UNICAST) &&
 				 ((msg_ptr->nl_route_info.metainfo.rtm_protocol == RTPROT_BOOT) ||
@@ -1235,7 +1234,6 @@ static int ipa_nl_decode_nlmsg
 				evt_data.evt_data = mtu_event;
 				IPACM_EvtDispatcher::PostEvt(&evt_data);
 			}
-#endif
 
 			/* take care of route add default route & uniroute */
 			if((AF_INET == msg_ptr->nl_route_info.metainfo.rtm_family) &&
@@ -1617,7 +1615,7 @@ static int ipa_nl_decode_nlmsg
 				ret_val = ipa_get_if_name(dev_name, msg_ptr->nl_route_info.attr_info.oif_index);
 				if(ret_val != IPACM_SUCCESS)
 				{
-					IPACMERR("Error while getting interface name");
+					IPACMERR("Error while getting interface name\n");
 					return IPACM_FAILURE;
 				}
 

@@ -28,7 +28,7 @@ IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  * Changes from Qualcomm Innovation Center are provided under the following license:
  *
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022, 2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted (subject to the limitations in the
@@ -94,6 +94,8 @@ IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #define IPA_NETWORK_STATS_FILE_NAME "/tmp/network_stats"
 #endif
 
+extern int bool_dual_backhaul;
+
 typedef struct _wan_client_rt_hdl
 {
 	uint32_t wan_rt_rule_hdl_v4;
@@ -123,7 +125,7 @@ typedef struct
 	uint32_t ipv4_addr;
 	bool wan_up_vlan;
 	bool is_xlat;
-	uint8_t associated_VIDs[IPA_MAX_NUM_SW_PDNS];
+	uint16_t associated_VIDs[IPA_MAX_NUM_SW_PDNS];
 	uint8_t VID_cnt = 0;
 	IPACM_Wan *pIface;
 }ipacm_ipv4_wan_iface;
@@ -132,7 +134,7 @@ typedef struct
 {
 	uint32_t ipv6_prefix[2];
 	bool wan_up_vlan_v6;
-	uint8_t associated_VIDs[IPA_MAX_NUM_SW_PDNS];
+	uint16_t associated_VIDs[IPA_MAX_NUM_SW_PDNS];
 	uint8_t VID_cnt = 0;
 	IPACM_Wan *pIface;
 }ipacm_ipv6_wan_iface;
@@ -441,8 +443,8 @@ public:
 	static int num_firewall_v6_ul;
 #endif
 #ifdef FEATURE_IPA_IPSEC
-	uint32_t ipsec_post_pol_rt_hdls[IPA_IP_MAX][IPA_MAX_FLT_RULE];
-	int num_ipsec_post_pol_rt[IPA_IP_MAX];
+	static uint32_t ipsec_post_pol_rt_hdls[IPA_IP_MAX][IPA_MAX_FLT_RULE];
+	static int num_ipsec_post_pol_rt[IPA_IP_MAX];
 #endif
 	ipacm_wan_iface_type m_is_sta_mode;
 	static bool backhaul_is_sta_mode;
@@ -450,6 +452,12 @@ public:
 	ipacm_event_ip_collision_pdn_info ip_collision_pdn_info;
 	static bool is_ext_prop_set;
 	static uint32_t backhaul_ipv6_prefix[2];
+
+#ifdef FEATURE_DUAL_BACKHAUL
+	static uint32_t second_backhaul_ipv4;
+	static bool second_backhaul_active;
+#endif
+
 #ifdef FEATURE_IPACM_UL_FIREWALL
 	static int m_fd_ipa_ul;
 #endif
@@ -477,8 +485,10 @@ public:
 	static uint8_t num_offloaded_pdns;
 	static int GetMuxByVid(uint16_t vlan_id, uint8_t *mux_id, ipa_ip_type iptype);
 	static int GetMTUByVid(uint16_t *mtu, uint16_t vlan_id, ipa_ip_type iptype);
+	static int GetWanPDNinfo(uint16_t *mtu, uint32_t *ipv4_addr, ipa_ip_type iptype);
 	static int Getv6addrByName(char* pdn_name, uint32_t* ipv6_addr);
 	static uint32_t GetQCMAPhdrByName(char* pdn_name);
+	static uint32_t GetQCMAPhdrOfFirstRmnet(ipa_ip_type ipType);
 	static bool is_xlat_by_vid(uint16_t vlan_id);
 	static int get_vid_index_for_iface_v6(ipacm_ipv6_wan_iface iface, uint16_t vlan_id);
 	static bool is_xlat_by_ipv4(uint32_t ipv4_addr);
@@ -503,6 +513,18 @@ public:
 		enum ipa_ip_type iptype,
 		void*            addr,
 		uint8_t&         mux_id );
+
+#ifdef FEATURE_IPA_IPSEC
+	/*
+	 * The FLT rules that we send to Q6 via QMI are being skipped by IPsec packets.
+	 * Therefore we have to add these rules after IPsec DL policying. Since the policying is done
+	 * In 3rd round filtering table, the copied rules have to go to the DL routing table.
+	 * This method translates all QMI IPv4 and IPv6 rules into routing rules and installs them.
+	 *
+	 * @ipType: IP type
+	 */
+	static int installWanPostIpsecRt(ipa_ip_type ipType);
+#endif
 
 private:
 
@@ -765,6 +787,10 @@ private:
 	int handle_wan_hdr_init(uint8_t *mac_addr, bool gw_addr);
 	int handle_wan_client_ipaddr(ipacm_event_data_all *data);
 	int handle_wan_client_route_rule(uint8_t *mac_addr, ipa_ip_type iptype);
+#ifdef FEATURE_DUAL_BACKHAUL
+	int handle_dual_backhaul_enable(ipacm_event_data_all *data, bool evt);
+	int handle_dual_backhaul_disable();
+#endif
 
 	/* handle new_address event */
 	int handle_addr_evt(ipacm_event_data_addr *data);
@@ -846,20 +872,6 @@ private:
 #endif
 
 	int install_wan_filtering_rule(bool is_sw_routing, bool is_socksv5_en = false);
-
-#ifdef FEATURE_IPA_IPSEC
-	/*
-	 * The FLT rules that we send to Q6 via QMI are being skipped by IPsec packets.
-	 * Therefore we have to add these rules after IPsec DL policying. Since the policying is done
-	 * In 3rd round filtering table, the copied rules have to go to the DL routing table.
-	 * This method translates all QMI IPv4 and IPv6 rules into routing rules and installs them.
-	 *
-	 * @param rule_table_v4: IPv4 filtering table to translate from
-	 * @param rule_table_v6: IPv6 filtering table to translate from
-	 */
-	int installWanPostIpsecRt(struct ipa_ioc_add_flt_rule *rule_table_v4,
-		struct ipa_ioc_add_flt_rule *rule_table_v6);
-#endif
 
 	void handle_wlan_SCC_MCC_switch(bool, ipa_ip_type);
 

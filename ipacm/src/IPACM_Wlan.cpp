@@ -28,7 +28,7 @@
  *
  * Changes from Qualcomm Innovation Center are provided under the following license:
  *
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted (subject to the limitations in the
@@ -256,6 +256,7 @@ void IPACM_Wlan::event_callback(ipa_cm_event_id event, void *param)
 	}
 
 	int ipa_interface_index;
+	int if_index;
 	int wlan_index, cnt, primary_wlan_index;
 	ipacm_ext_prop* ext_prop;
 	ipacm_event_iface_up* data_wan;
@@ -654,6 +655,13 @@ void IPACM_Wlan::event_callback(ipa_cm_event_id event, void *param)
 			return;
 		}
 #endif
+
+		//Static policy mode dont care about default route. Rules will be installed by conntrack
+		if (IPACM_Iface::ipacmcfg->ipacm_static_policy_enable)
+		{
+			IPACMDBG_H("IPACM in static policy enable mode. Dont need to install UL rules\n");
+			return;
+		}
 
 		IPACMDBG_H("Backhaul is sta mode?%d\n", data_wan->is_sta);
 		if(ip_type == IPA_IP_v4 || ip_type == IPA_IP_MAX)
@@ -1412,6 +1420,76 @@ end:
 			}
 			handle_vlan_pdn_up(data);
 		}
+
+		//can add if (IPACM_Iface::ipacmcfg->ipacm_static_policy_enable
+		if(IPACM_Iface::ipa_get_if_index(dev_name, &if_index))
+		{
+			IPACMERR("Error while getting if index for %s device", dev_name);
+			break;
+		}
+		IPACMDBG_H("if_index = %d, vlan_id = %d\n", if_index, data->VlanID);
+
+		//Handle for the right LAN instance for static policy case
+		if (data->iptype == IPA_IP_v4 && data->VlanID == if_index + IPA_STATIC_POLICY_VLAN_ID)
+		{
+			associated_pdn_cnt++;
+			IPACM_Lan::total_vlan_pdn_cnt++;
+			IPACMDBG_H("Handling static policy PDN up for %s\n", dev_name);
+			IPACMDBG_H("associated_pdn_cnt = %d\n",associated_pdn_cnt);
+			IPACMDBG_H("total_vlan_pdn_cnt = %d\n",IPACM_Lan::total_vlan_pdn_cnt);
+
+			//modify private subnet_rules
+			if (modify_private_subnet())
+			{
+				IPACMERR("failed to modify private subnet \n");
+				break;
+			}
+
+			//dont need to install uplink rules twice
+			if (modem_ul_v4_set[0] && !data->is_xlat)
+			{
+				IPACMDBG_H("Modem UL v4 rules already installed\n");
+			}
+			else
+			{
+				//If XLAT, need to delete the UL rules first so no duplicates
+				if (data->is_xlat && modem_ul_v4_set[0])
+					del_ul_flt_rules(IPA_IP_v4);
+
+				//modify the UL rules to pass to route and install XLAT rules if needed
+				if (handle_uplink_filter_rule(
+					IPACM_Iface::ipacmcfg->GetExtProp(IPA_IP_v4),
+					data->iptype, data->mux_id, false,
+					data->is_xlat, false, true))
+				{
+					IPACMERR("Modem UL v4 rules not installed, error\n");
+					break;
+				}
+				else
+					modem_ul_v4_set[0] = true;
+			}
+
+			//Add per client stats rules for all active WLAN clients if feature is enabled
+#ifdef IPA_HW_FNR_STATS
+			if (IPACM_Iface::ipacmcfg->hw_fnr_stats_support)
+				if (install_uplink_filter_rule(IPACM_Iface::ipacmcfg->GetExtProp(IPA_IP_v4), data->iptype, data->mux_id))
+					IPACMDBG_H("failed to install per client rules for V4 UL\n");
+#endif
+			//add proc_ctx and rt_rule for 1st static policy client
+			if (!IPACM_Lan::static_policy_proc_ctx_hdl && !IPACM_Lan::static_policy_rt_rule_hdl)
+				if (handle_static_policy_rt_rule_add())
+					IPACMERR("failed to add 1st pass static policy rt rule\n");
+
+			//add new flt rule for every new WLAN iface
+			if (!static_policy_flt_rule_hdl)
+			{
+				int clnt_indx = get_wlan_client_index_from_if_index(if_index);
+				uint32_t ipv4_addr = get_client_memptr(wlan_client, clnt_indx)->v4_addr;
+
+				if (handle_static_policy_flt_rule_add(ipv4_addr) == IPACM_FAILURE)
+					IPACMERR("failed to add 1st pass static policy flt rule\n")
+			}
+		}
 	}
 	break;
 
@@ -1433,6 +1511,44 @@ end:
 			}
 #endif
 			handle_vlan_pdn_down(data);
+		}
+
+		if(IPACM_Iface::ipa_get_if_index(dev_name, &if_index))
+		{
+			IPACMERR("Error while getting if index for %s device", dev_name);
+			break;
+		}
+		IPACMDBG_H("if_index = %d, vlan_id = %d\n", if_index, data->VlanID);
+
+		/* clean static policy rules */
+		if (data->iptype == IPA_IP_v4 && data->VlanID == if_index + IPA_STATIC_POLICY_VLAN_ID)
+		{
+			associated_pdn_cnt--;
+			IPACM_Lan::total_vlan_pdn_cnt--;
+			IPACMDBG_H("Handling static policy PDN down for %s\n", dev_name);
+			IPACMDBG_H("associated_pdn_cnt = %d\n",associated_pdn_cnt);
+			IPACMDBG_H("total_vlan_pdn_cnt = %d\n",IPACM_Lan::total_vlan_pdn_cnt);
+
+			//modify MTU rules
+			if (modify_private_subnet())
+			{
+				IPACMERR("failed to modify private subnet \n");
+				break;
+			}
+
+			if (associated_pdn_cnt)
+			{
+				IPACMDBG_H("There are still %d PDNs associated with %s, don't delete static policy rules\n",
+					associated_pdn_cnt, dev_name);
+				break;
+			}
+
+			if (handle_static_policy_rule_delete())
+			{
+				IPACMERR("failed to delete static policy rules.\n");
+				break;
+			}
+			IPACMDBG_H("Deleted static policy PDN rules for %s\n", dev_name);
 		}
 	}
 	break;
@@ -2197,7 +2313,9 @@ int IPACM_Wlan::handle_wlan_client_init_ex(ipacm_event_data_wlan_ex *data, bool 
 				goto fail;
 			}
 			free(client_info);
-			if (IPACM_Wan::isWanUP(ipa_if_num))
+
+			//if IPACM is in static policy mode, we will install rules later based on conntrack evt
+			if (IPACM_Wan::isWanUP(ipa_if_num) && !IPACM_Iface::ipacmcfg->ipacm_static_policy_enable)
 			{
 				if(IPACM_Wan::backhaul_is_sta_mode == false)
 				{
@@ -2584,6 +2702,10 @@ int IPACM_Wlan::handle_wlan_client_route_rule(uint8_t *mac_addr, ipa_ip_type ipt
 {
 	struct ipa_ioc_add_rt_rule *rt_rule;
 	struct ipa_rt_rule_add *rt_rule_entry;
+#ifdef FEATURE_IPA_IPSEC
+	ipa_ip_type *iptype_p = NULL;
+	ipacm_cmd_q_data evt_data;
+#endif
 	uint32_t tx_index;
 	int wlan_index;
 	const int NUM = 1;
@@ -2860,6 +2982,18 @@ int IPACM_Wlan::handle_wlan_client_route_rule(uint8_t *mac_addr, ipa_ip_type ipt
 		}
 	}
 
+#ifdef FEATURE_IPA_IPSEC
+	iptype_p = (ipa_ip_type *)malloc(sizeof(*iptype_p));
+	if (!iptype_p) {
+		IPACMERR("Failed allocating memory for IPA_IPSEC_LAN_CLIENT_ROUTE_ADD_EVENT\n");
+		return IPACM_FAILURE;
+	}
+	*iptype_p = iptype;
+	evt_data.event = IPA_IPSEC_LAN_CLIENT_ROUTE_ADD_EVENT;
+	evt_data.evt_data = (void *)iptype_p;
+	IPACM_EvtDispatcher::PostEvt(&evt_data);
+#endif
+
 	return IPACM_SUCCESS;
 }
 
@@ -3082,6 +3216,10 @@ int IPACM_Wlan::handle_wlan_client_route_rule_ext(uint8_t *mac_addr, ipa_ip_type
 {
 	struct ipa_ioc_add_rt_rule_ext *rt_rule;
 	struct ipa_rt_rule_add_ext *rt_rule_entry;
+#ifdef FEATURE_IPA_IPSEC
+	ipa_ip_type *iptype_p = NULL;
+	ipacm_cmd_q_data evt_data;
+#endif
 	uint32_t tx_index;
 	int wlan_index;
 	const int NUM = 1;
@@ -3379,6 +3517,19 @@ int IPACM_Wlan::handle_wlan_client_route_rule_ext(uint8_t *mac_addr, ipa_ip_type
 		get_client_memptr(wlan_client, wlan_index)->route_rule_set_v6 = get_client_memptr(wlan_client, wlan_index)->ipv6_set;
 		free(rt_rule);
 	}
+
+#ifdef FEATURE_IPA_IPSEC
+	iptype_p = (ipa_ip_type *)malloc(sizeof(*iptype_p));
+	if (!iptype_p) {
+		IPACMERR("Failed allocating memory for IPA_IPSEC_LAN_CLIENT_ROUTE_ADD_EVENT\n");
+		return IPACM_FAILURE;
+	}
+	*iptype_p = iptype;
+	evt_data.event = IPA_IPSEC_LAN_CLIENT_ROUTE_ADD_EVENT;
+	evt_data.evt_data = (void *)iptype_p;
+	IPACM_EvtDispatcher::PostEvt(&evt_data);
+#endif
+
 	return IPACM_SUCCESS;
 }
 
@@ -3387,6 +3538,10 @@ int IPACM_Wlan::handle_wlan_client_route_rule_ext_v2(uint8_t *mac_addr, ipa_ip_t
 {
 	struct ipa_ioc_add_rt_rule_ext_v2 *rt_rule;
 	struct ipa_rt_rule_add_ext_v2 *rt_rule_entry;
+#ifdef FEATURE_IPA_IPSEC
+	ipa_ip_type *iptype_p = NULL;
+	ipacm_cmd_q_data evt_data;
+#endif
 	uint32_t tx_index;
 	int wlan_index;
 	const int NUM = 1;
@@ -3677,6 +3832,19 @@ int IPACM_Wlan::handle_wlan_client_route_rule_ext_v2(uint8_t *mac_addr, ipa_ip_t
 		get_client_memptr(wlan_client, wlan_index)->route_rule_set_v6 = get_client_memptr(wlan_client, wlan_index)->ipv6_set;
 		free(rt_rule);
 	}
+
+#ifdef FEATURE_IPA_IPSEC
+	iptype_p = (ipa_ip_type *)malloc(sizeof(*iptype_p));
+	if (!iptype_p) {
+		IPACMERR("Failed allocating memory for IPA_IPSEC_LAN_CLIENT_ROUTE_ADD_EVENT\n");
+		return IPACM_FAILURE;
+	}
+	*iptype_p = iptype;
+	evt_data.event = IPA_IPSEC_LAN_CLIENT_ROUTE_ADD_EVENT;
+	evt_data.evt_data = (void *)iptype_p;
+	IPACM_EvtDispatcher::PostEvt(&evt_data);
+#endif
+
 
 	return IPACM_SUCCESS;
 }
@@ -4413,6 +4581,16 @@ fail:
 		free(rx_prop);
 		rx_prop = NULL;
 #endif
+	}
+
+	//delete static policy rules here if mode is enabled
+	if (IPACM_Iface::ipacmcfg->ipacm_static_policy_enable)
+	{
+		if (handle_static_policy_rule_delete())
+		{
+			IPACMERR("failed to delete static policy rules.\n");
+			return IPACM_FAILURE;
+		}
 	}
 
 	for (i = 0; i < num_wifi_client; i++)
@@ -5409,9 +5587,13 @@ int IPACM_Wlan::install_uplink_filter_rule_per_client
 	flt_rule_entry.rule.eq_attrib_type = 1;
 	if(iptype == IPA_IP_v4)
 	{
-		if (ipa_if_cate == ODU_IF && IPACM_Wan::isWan_Bridge_Mode())
+		if (ipa_if_cate == ODU_IF && IPACM_Wan::isWan_Bridge_Mode() ||
+			IPACM_Iface::ipacmcfg->is_public_ip_support_enabled)
 		{
-			IPACMDBG_H("WAN, ODU are in bridge mode \n");
+			IPACMDBG_H(
+					"%s%s\n",
+					(ipa_if_cate == ODU_IF && IPACM_Wan::isWan_Bridge_Mode()) ? "[WAN, ODU are in bridge mode] " : "",
+					(IPACM_Iface::ipacmcfg->is_public_ip_support_enabled) ? "[Public IP enabled]" : "");
 			flt_rule_entry.rule.action = IPA_PASS_TO_ROUTING;
 		}
 		else
@@ -5766,9 +5948,18 @@ int IPACM_Wlan::install_uplink_filter_rule_per_client_v2
 #endif
 	if(iptype == IPA_IP_v4)
 	{
-		if (ipa_if_cate == ODU_IF && IPACM_Wan::isWan_Bridge_Mode())
+		if (ipa_if_cate == ODU_IF && IPACM_Wan::isWan_Bridge_Mode() ||
+			IPACM_Iface::ipacmcfg->is_public_ip_support_enabled)
 		{
-			IPACMDBG_H("WAN, ODU are in bridge mode \n");
+			IPACMDBG_H(
+					"%s%s\n",
+					(ipa_if_cate == ODU_IF && IPACM_Wan::isWan_Bridge_Mode()) ? "[WAN, ODU are in bridge mode] " : "",
+					(IPACM_Iface::ipacmcfg->is_public_ip_support_enabled) ? "[Public IP enabled]" : "");
+			flt_rule_entry.rule.action = IPA_PASS_TO_ROUTING;
+		}
+		else if (IPACM_Iface::ipacmcfg->ipacm_static_policy_enable)
+		{
+			IPACMDBG_H("Static policy is enabled, modem UL rule pass to route\n");
 			flt_rule_entry.rule.action = IPA_PASS_TO_ROUTING;
 		}
 		else
@@ -5879,14 +6070,50 @@ int IPACM_Wlan::install_uplink_filter_rule_per_client_v2
 		/* Handle XLAT configuration */
 		if ((!isFirewall) && (iptype == IPA_IP_v4) && prop->prop[cnt].is_xlat_rule && (xlat_mux_id != 0))
 		{
-			/* fill the value of meta-data */
-			value = xlat_mux_id;
-			flt_rule_entry.rule.eq_attrib.metadata_meq32_present = 1;
-			flt_rule_entry.rule.eq_attrib.metadata_meq32.offset = 0;
-			flt_rule_entry.rule.eq_attrib.metadata_meq32.value = (value & 0xFF) << 16;
-			flt_rule_entry.rule.eq_attrib.metadata_meq32.mask = 0x00FF0000;
-			IPACMDBG_H("xlat meta-data is modified for rule: %d has rule_id %d with xlat_mux_id: %d\n",
-					index, prop->prop[cnt].rule_id, xlat_mux_id);
+			/* for static policy, xlat rules will be installed with src_addr = XLAT PDN subnet */
+			if (IPACM_Iface::ipacmcfg->ipacm_static_policy_enable)
+			{
+				int meq32_n = flt_rule_entry.rule.eq_attrib.num_offset_meq_32;
+
+				//check if over max meq32 equatipons
+				if (meq32_n + 1 > IPA_IPFLTR_NUM_MEQ_32_EQNS)
+				{
+					IPACMERR("Can't add another meq_32 equation to this rule: %d index %d\n", cnt, index);
+					continue;
+				}
+				flt_rule_entry.rule.eq_attrib.offset_meq_32[meq32_n].offset = 12;  //SRC ADDR
+				flt_rule_entry.rule.eq_attrib.offset_meq_32[meq32_n].value =  0xC0000000;  //XLAT PDN
+				flt_rule_entry.rule.eq_attrib.offset_meq_32[meq32_n].mask = 0xFFFFFF00;
+
+				//Add the bitmap that will point to the new meq32 eq
+				if (meq32_n == 0)
+					flt_rule_entry.rule.eq_attrib.rule_eq_bitmap |= (1<<5);
+				else
+					flt_rule_entry.rule.eq_attrib.rule_eq_bitmap |= (1<<6);
+
+				flt_rule_entry.rule.eq_attrib.num_offset_meq_32++;
+
+				//clear metadata bit
+				flt_rule_entry.rule.eq_attrib.rule_eq_bitmap &= ~(1<<9);
+				flt_rule_entry.rule.eq_attrib.metadata_meq32_present = 0;
+
+				//change to pass to route since NATting is already done on 1st pass
+				flt_rule_entry.rule.action = IPA_PASS_TO_ROUTING;
+
+				IPACMDBG_H("xlat meta-data is modified for rule: %d has index %d with src subnet: 0x%X\n",
+						   cnt, index, flt_rule_entry.rule.eq_attrib.offset_meq_32[meq32_n].value);
+			}
+			else
+			{
+				/* fill the value of meta-data */
+				value = xlat_mux_id;
+				flt_rule_entry.rule.eq_attrib.metadata_meq32_present = 1;
+				flt_rule_entry.rule.eq_attrib.metadata_meq32.offset = 0;
+				flt_rule_entry.rule.eq_attrib.metadata_meq32.value = (value & 0xFF) << 16;
+				flt_rule_entry.rule.eq_attrib.metadata_meq32.mask = 0x00FF0000;
+				IPACMDBG_H("xlat meta-data is modified for rule: %d has rule_id %d with xlat_mux_id: %d\n",
+						index, prop->prop[cnt].rule_id, xlat_mux_id);
+			}
 		}
 
 		if(rx_prop->rx[idx].attrib.attrib_mask & IPA_FLT_META_DATA)	//turn on meta-data equation

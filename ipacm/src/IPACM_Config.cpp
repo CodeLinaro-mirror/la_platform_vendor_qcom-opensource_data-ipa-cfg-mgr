@@ -28,7 +28,7 @@
  *
  * Changes from Qualcomm Innovation Center are provided under the following license:
  *
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted (subject to the limitations in the
@@ -211,7 +211,8 @@ const char *ipacm_event_name[] = {
 #ifdef FEATURE_IPA_IPSEC
 	__stringify(IPA_HANDLE_IPSEC_UL_FLT_ADD),              /* Handle IPsec UL policy flt add */
 	__stringify(IPA_HANDLE_IPSEC_UL_FLT_DEL),              /* Handle IPsec UL policy flt delete */
-#endif	
+	__stringify(IPA_IPSEC_LAN_CLIENT_ROUTE_ADD_EVENT),     /* Internal event for a new LAN client route */
+#endif
 	__stringify(IPACM_EVENT_MAX),
 };
 
@@ -304,6 +305,7 @@ IPACM_Config::IPACM_Config()
 	memset(&eogre_info, 0, sizeof(eogre_info));
 	eogre_enabled = false;
 #endif
+	memset(&second_backhaul_info,0,sizeof(second_backhaul_info));
 	ext_router_mode = IPA_PREFIX_DISABLED;
 
 	/* Clear the DSCP PCP mapping data during init */
@@ -644,6 +646,11 @@ reread:
 	{
 		ipa_ipv6ct_max_entries = (cfg->ipv6ct_max_entries > 0) ? cfg->ipv6ct_max_entries : DEFAULT_IPV6CT_MAX_ENTRIES;
 		IPACMDBG_H("IPv6CT Maximum Entries %d\n", ipa_ipv6ct_max_entries);
+
+		ipa_ct_memtype =
+			(cfg->ct_table_memtype) ?
+			cfg->ct_table_memtype   : DEFAULT_CT_MEMTYPE;
+		IPACMDBG_H("Ct Mem Type %s\n", ipa_ct_memtype);
 	}
 	else
 	{
@@ -710,6 +717,8 @@ skip_fnr_alloc:
 	ipacm_emesh_enable = cfg->ipacm_emesh_enable;
 	ipacm_emesh_mode = cfg->ipacm_emesh_mode;
 
+	ipacm_static_policy_enable = cfg->static_policy_enable;
+
 	if (ipacm_mpdn_enable == TRUE && ipacm_l2tp_enable != IPACM_L2TP_DISABLE)
 	{
 		IPACMERR("Not support both VLAN_MPDN and L2TP are enable \n");
@@ -736,6 +745,14 @@ skip_fnr_alloc:
 
 	ipa_num_wlan_guest_ap = cfg->num_wlan_guest_ap;
 	IPACMDBG_H("ipa_num_wlan_guest_ap %d\n",ipa_num_wlan_guest_ap);
+
+#ifdef FEATURE_DUAL_BACKHAUL
+	/* Fetch second backhaul details */
+	second_backhaul_info.enable = cfg->dual_backhaul_conf.dualbackhaul_enable;
+	IPACMDBG_H("Second backhaul details enabled: %d, netdev: %s, gwipv4: %x\n",
+		second_backhaul_info.enable, second_backhaul_info.net_dev,
+		second_backhaul_info.gateway_ipv4);
+#endif
 
 	/* Allocate more non-nat entries if the monitored iface dun have Tx/Rx properties */
 
@@ -3649,6 +3666,8 @@ bool IPACM_Config::insertOrAssignMacsecMap(struct ipa_macsec_map *macsecMap) {
 		iface_table[ifaceTableIdx].virtual_iface = true;
 		strlcpy(iface_table[ifaceTableIdx].iface_name, macsecMap->macsec_name, sizeof(iface_table[ifaceTableIdx].iface_name));
 		strlcpy(iface_table[ifaceTableIdx].phy_dev_name, macsecMap->phy_name, sizeof(iface_table[ifaceTableIdx].phy_dev_name));
+		IPACM_Iface::ipa_get_if_index(macsecMap->macsec_name, &netlinkIdx);
+		iface_table[ifaceTableIdx].netlink_interface_index = netlinkIdx;
 	}
 
 	return true;
@@ -3667,6 +3686,8 @@ bool IPACM_Config::delMacsecMap(struct ipa_macsec_map *macsecMap) {
 		strlcpy(iface_table[ifaceTableIdx].iface_name, iface_table[ifaceTableIdx].phy_dev_name,
 			sizeof(iface_table[ifaceTableIdx].iface_name));
 		iface_table[ifaceTableIdx].phy_dev_name[0] = '\0';
+		IPACM_Iface::ipa_get_if_index(macsecMap->phy_name, &netlinkIdx);
+		iface_table[ifaceTableIdx].netlink_interface_index = netlinkIdx;
 
 		return true;
 	}

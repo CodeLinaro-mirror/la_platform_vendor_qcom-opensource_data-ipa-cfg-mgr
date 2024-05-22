@@ -27,7 +27,7 @@ OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
 IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 Changes from Qualcomm Innovation Center are provided under the following license:
-Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+Copyright (c) 2023-2024 Qualcomm Innovation Center, Inc. All rights reserved.
 SPDX-License-Identifier: BSD-3-Clause-Clear
 */
 #ifndef IPACM_CONNTRACK_NATAPP_H
@@ -495,7 +495,7 @@ class NatProxyBase
 public:
 
 	virtual ~NatProxyBase();
-	int AddTable(uint16_t number_of_entries);
+	int AddTable(uint16_t number_of_entries, const char* mem_type);
 	int DeleteTable();
 	int AddEntry(NatEntryBase& entry);
 	int DelEntry(NatEntryBase& entry);
@@ -516,7 +516,7 @@ private:
 	NatProxyBase(const NatProxyBase&);
 	NatProxyBase& operator=(const NatProxyBase&);
 
-	virtual int DoAddTable(uint16_t number_of_entries, uint32_t& table_handle) = 0;
+	virtual int DoAddTable(uint16_t number_of_entries, const char* mem_type, uint32_t& table_handle) = 0;
 	virtual int DoDeleteTable() = 0;
 	virtual int DoAddEntry(const NatEntryBase& entry, uint32_t& entry_handle,
 		uint32_t& additional_entry_handle, int& uc_act_handle) = 0;
@@ -532,7 +532,7 @@ public:
 
 private:
 
-	virtual int DoAddTable(uint16_t number_of_entries, uint32_t& table_handle);
+	virtual int DoAddTable(uint16_t number_of_entries, const char* mem_type, uint32_t& table_handle);
 	virtual int DoDeleteTable();
 	virtual int DoAddEntry(const NatEntryBase& entry, uint32_t& entry_handle,
 		uint32_t& additional_entry_handle, int& uc_act_handle);
@@ -617,7 +617,7 @@ public:
 #endif //FEATURE_SOCKSv5
 protected:
 
-	NatBase(ipa_ip_type type, int max_entries, const NatObjectsGeneratorBase& objectsGenerator);
+	NatBase(ipa_ip_type type, int max_entries, const char* mem_type, const NatObjectsGeneratorBase& objectsGenerator);
 
 	const ipa_ip_type m_type;
 	NatEntriesCollectionBase& m_temp;
@@ -637,6 +637,8 @@ private:
 	ConntrackTimestampUtil& m_ctTimestampUtil;
 	NatEntriesCollectionBase& m_cache;
 
+	const char* ct_mem_type;
+
 	IpAddress& m_previousWanAddress;
 };
 
@@ -648,7 +650,7 @@ public:
 
 private:
 
-	explicit Ipv6ct(int max_entries);
+	explicit Ipv6ct(int max_entries, const char* mem_type);
 
 	static Ipv6ct* m_instance;
 };

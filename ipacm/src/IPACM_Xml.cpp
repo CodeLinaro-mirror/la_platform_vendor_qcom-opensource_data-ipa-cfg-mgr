@@ -27,7 +27,7 @@
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  * Changes from Qualcomm Innovation Center are provided under the following license:
- * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2023-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 /*!
@@ -198,8 +198,12 @@ static int ipacm_cfg_xml_parse_tree
 
 						IPACM_util_icmp_string((char*)xml_node->name, IPACM_SOCKSv5_TAG) == 0 ||
 						IPACM_util_icmp_string((char*)xml_node->name, GRE_TAG) == 0 ||
+#ifdef FEATURE_DUAL_BACKHAUL
+						IPACM_util_icmp_string((char*)xml_node->name, Dual_backhaul_TAG) == 0 ||
+#endif
 						IPACM_util_icmp_string((char*)xml_node->name, PUBLIC_IP_SUPPORT_TAG) == 0 ||
-						IPACM_util_icmp_string((char*)xml_node->name, IPACM_WLAN_VLAN_MPDN) == 0)
+						IPACM_util_icmp_string((char*)xml_node->name, IPACM_WLAN_VLAN_MPDN) == 0 ||
+						IPACM_util_icmp_string((char*)xml_node->name, Static_Policy_TAG) == 0)
 				{
 					if (0 == IPACM_util_icmp_string((char*)xml_node->name, IFACE_TAG))
 					{
@@ -215,6 +219,28 @@ static int ipacm_cfg_xml_parse_tree
 					/* go to child */
 					ret_val = ipacm_cfg_xml_parse_tree(xml_node->children, config);
 				}
+#ifdef FEATURE_DUAL_BACKHAUL
+				else if(IPACM_util_icmp_string((char*)xml_node->name, Dual_backhaul_enable_TAG) == 0){
+					IPACMDBG_H("Inside Dual backhaul TAG \n");
+					content = IPACM_read_content_element(xml_node);
+					if (content)
+					{
+						str_size = strlen(content);
+						memset(content_buf, 0, sizeof(content_buf));
+						memcpy(content_buf, (void *)content, str_size);
+						if (atoi(content_buf))
+						{
+							config->dual_backhaul_conf.dualbackhaul_enable = true;
+							IPACMDBG_H("Dual Backhaul enable %d buf(%d)\n", config->dual_backhaul_conf.dualbackhaul_enable, atoi(content_buf));
+						}
+						else
+						{
+							config->dual_backhaul_conf.dualbackhaul_enable = false;
+							IPACMDBG_H("Dual Backhaul enable %d buf(%d)\n", config->dual_backhaul_conf.dualbackhaul_enable, atoi(content_buf));
+						}
+					}
+				}
+#endif
 				else if (IPACM_util_icmp_string((char*)xml_node->name, GREEnabled_TAG) == 0)
 				{
 					IPACMDBG_H("inside GRE TAG \n");
@@ -573,6 +599,31 @@ static int ipacm_cfg_xml_parse_tree
 						}
 					}
 				}
+				else if (IPACM_util_icmp_string((char*)xml_node->name, CT_TableType_TAG) == 0)
+				{
+					config->ct_table_memtype = DDR_TABLETYPE_TAG;
+					content = IPACM_read_content_element(xml_node);
+					if (content)
+					{
+						str_size = strlen(content);
+						memset(content_buf, 0, sizeof(content_buf));
+						memcpy(content_buf, (void *)content, str_size);
+						content_buf[MAX_XML_STR_LEN-1] = '\0';
+						if (0 == strncasecmp(content_buf, DDR_TABLETYPE_TAG, str_size))
+						{
+							config->ct_table_memtype = DDR_TABLETYPE_TAG;
+						}
+						else if (0 == strncasecmp(content_buf, SRAM_TABLETYPE_TAG, str_size))
+						{
+							config->ct_table_memtype = SRAM_TABLETYPE_TAG;
+						}
+						else if (0 == strncasecmp(content_buf, HYBRID_TABLETYPE_TAG, str_size))
+						{
+							config->ct_table_memtype = HYBRID_TABLETYPE_TAG;
+						}
+					}
+					IPACMDBG_H("CT Table location %s\n", config->ct_table_memtype);
+				}
 				else if (IPACM_util_icmp_string((char*)xml_node->name, IPACM_IPV6NAT_Enable_TAG) == 0)
 				{
 					IPACMDBG_H("inside enable IPV6 NAT\n");
@@ -729,6 +780,27 @@ static int ipacm_cfg_xml_parse_tree
 						IPACMDBG_H("VLAN Mpdn for WLAN enable %d buf(%d)\n", config->wlan_vlan_mpdn_enable, atoi(content_buf));
 					}
 				}
+				else if (IPACM_util_icmp_string((char*)xml_node->name, Static_Policy_Enabled) == 0)
+				{
+					IPACMDBG_H("inside enable Static Policy-XML\n");
+					content = IPACM_read_content_element(xml_node);
+					if (content)
+					{
+						str_size = strlen(content);
+						memset(content_buf, 0, sizeof(content_buf));
+						memcpy(content_buf, (void *)content, str_size);
+						if (atoi(content_buf))
+						{
+							config->static_policy_enable = true;
+						}
+						else
+						{
+							config->static_policy_enable = false;
+						}
+						IPACMDBG_H("static_policy_enable %d buf(%d)\n", config->static_policy_enable, atoi(content_buf));
+					}
+				}
+
 			}
 			break;
 		default:

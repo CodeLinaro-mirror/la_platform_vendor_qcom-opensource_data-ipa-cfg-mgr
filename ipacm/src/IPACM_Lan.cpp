@@ -151,8 +151,8 @@ IPACM_Lan::IPACM_Lan(int iface_index) : IPACM_Iface(iface_index)
 #ifdef FEATURE_VLAN_MPDN
 	dummy_prefix_installed = false;
 	is_vlan_offload_disabled = false;
-	memset(v4_mux_info, 0, sizeof(v4_mux_info[0]) * IPA_MAX_NUM_HW_PDNS);
-	memset(v6_mux_info, 0, sizeof(v6_mux_info[0]) * IPA_MAX_NUM_HW_PDNS);
+	memset(v4_mux_up, 0, sizeof(v4_mux_up[0]) * IPA_MAX_NUM_HW_PDNS);
+	memset(v6_mux_up, 0, sizeof(v6_mux_up[0]) * IPA_MAX_NUM_HW_PDNS);
 #endif
 
 #ifdef FEATURE_L2TP
@@ -1333,7 +1333,7 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 				(!IPACM_Iface::ipacmcfg->iface_in_vlan_mode(dev_name)))
 				break;
 #endif
-			if (is_mux_up(data_wan->mux_id, IPA_IP_v6, 0))
+			if(is_mux_up(data_wan->mux_id, IPA_IP_v6, 0)) //0 is to just check for mux without VLANS
 			{
 				IPACMERR("mux id %d is already up for v6 ignore\n", data_wan->mux_id);
 				break;
@@ -2031,9 +2031,9 @@ int IPACM_Lan::handle_vlan_pdn_up(ipacm_event_vlan_pdn *data, bool set_mux)
 
 		if (data->is_xlat)
 		{
-			if (get_pdn_xlat_ctx(data->mux_id) == IPACM_FAILURE)
+			if (get_pdn_xlat_ctx(data->mux_id, data->VlanID) == IPACM_FAILURE)
 			{
-				add_pdn_xlat_ctx(data->mux_id);
+				add_pdn_xlat_ctx(data->mux_id, data->VlanID);
 				if (handle_mpdn_ul_xlat_filter_rule(IPACM_Iface::ipacmcfg->GetExtProp(IPA_IP_v4),
 							data->iptype, data->mux_id, data->VlanID))
 				{
@@ -2042,7 +2042,16 @@ int IPACM_Lan::handle_vlan_pdn_up(ipacm_event_vlan_pdn *data, bool set_mux)
 				}
 			}
 			else
-				IPACMDBG_H("UL filter rules already set for PDN : %d\n",data->mux_id);
+				IPACMDBG_H("XLAT filter rules already set for PDN : %d, vlan : %d\n",data->mux_id, data->VlanID);
+		}
+	}
+
+	if (ret == IPACM_SUCCESS)
+	{
+		if(set_mux && set_mux_up(data->mux_id, data->iptype, data->VlanID))
+		{
+			IPACMERR("couldn't set mux up for %d, iptype %d\n", data->mux_id, data->iptype);
+			return IPACM_FAILURE;
 		}
 	}
  	if (ret == IPACM_SUCCESS)
@@ -2075,7 +2084,7 @@ int IPACM_Lan::handle_vlan_pdn_down(ipacm_event_vlan_pdn *data)
 		if(is_any_mux_up(data->iptype) == true)
 			notif_only = true;
 
-		xlat_pdn_ctx_id = get_pdn_xlat_ctx(data->mux_id);
+		xlat_pdn_ctx_id = get_pdn_xlat_ctx(data->mux_id, 0);
 		if (xlat_pdn_ctx_id != -1)
 		{
 			delete_mdpn_ul_xlat_filter_rule(data->mux_id);
@@ -2149,7 +2158,8 @@ int IPACM_Lan::handle_vlan_pdn_down(ipacm_event_vlan_pdn *data)
 		/* Clean up MTU rule */
 		modify_private_subnet();
 
-		xlat_pdn_ctx_id = get_pdn_xlat_ctx(data->mux_id);
+		xlat_pdn_ctx_id = get_pdn_xlat_ctx(data->mux_id, 0);
+
 		if (xlat_pdn_ctx_id != -1)
 		{
 			delete_mdpn_ul_xlat_filter_rule(data->mux_id);
@@ -2777,16 +2787,16 @@ int IPACM_Lan::handle_backhaul_switch_vlan_mode(bool to_sta)
 			del_ul_flt_rules(IPA_IP_v4);
 			for(int i = 0; i < IPA_MAX_NUM_HW_PDNS; i++)
 			{
-				if(v4_mux_info[i].mux_id)
+				if(v4_mux_up[i].mux_id)
 				{
-					IPACMDBG_H("mux %d up, notify modem we deleted v4 flt rules in STA mode\n", v4_mux_info[i].mux_id);
-					notify_flt_removed(v4_mux_info[i].mux_id);
+					IPACMDBG_H("mux %d up, notify modem we deleted v4 flt rules in STA mode\n", v4_mux_up[i].mux_id);
+					notify_flt_removed(v4_mux_up[i].mux_id);
 				}
-				xlat_pdn_ctx_id = get_pdn_xlat_ctx(v4_mux_info[i].mux_id);
+				xlat_pdn_ctx_id = get_pdn_xlat_ctx(v4_mux_up[i].mux_id, 0);
 				if (xlat_pdn_ctx_id != -1)
 				{
-					delete_mdpn_ul_xlat_filter_rule(v4_mux_info[i].mux_id);
-					remove_pdn_xlat_ctx(v4_mux_info[i].mux_id);
+					delete_mdpn_ul_xlat_filter_rule(v4_mux_up[i].mux_id);
+					remove_pdn_xlat_ctx(v4_mux_up[i].mux_id);
 				}
 			}
 		}
@@ -2796,10 +2806,10 @@ int IPACM_Lan::handle_backhaul_switch_vlan_mode(bool to_sta)
 			del_ul_flt_rules(IPA_IP_v6);
 			for(int i = 0; i < IPA_MAX_NUM_HW_PDNS; i++)
 			{
-				if(v6_mux_info[i].mux_id)
+				if(v6_mux_up[i].mux_id)
 				{
-					IPACMDBG_H("mux %d up, notify modem we deleted v6 flt rules in STA mode\n", v6_mux_info[i].mux_id);
-					notify_flt_removed(v6_mux_info[i].mux_id);
+					IPACMDBG_H("mux %d up, notify modem we deleted v6 flt rules in STA mode\n", v6_mux_up[i].mux_id);
+					notify_flt_removed(v6_mux_up[i].mux_id);
 				}
 			}
 		}
@@ -2822,11 +2832,11 @@ int IPACM_Lan::handle_backhaul_switch_vlan_mode(bool to_sta)
 			for(int i = 0; i < IPA_MAX_NUM_HW_PDNS; i++)
 			{
 				data.iptype = IPA_IP_v4;
-				if(v4_mux_info[i].mux_id)
+				if(v4_mux_up[i].mux_id)
 				{
-					IPACMDBG_H("mux %d up, restore v4 VLAN PDN on transition to LTE\n", v4_mux_info[i].mux_id);
-					data.mux_id = v4_mux_info[i].mux_id;
-					if (IPACM_Wan::is_xlat_by_vid(v4_mux_info[i].mux_id))
+					IPACMDBG_H("mux %d up, restore v4 VLAN PDN on transition to LTE\n", v4_mux_up[i].mux_id);
+					data.mux_id = v4_mux_up[i].mux_id;
+					if (IPACM_Wan::is_xlat_by_vid(v4_mux_up[i].mux_id))
 						data.is_xlat = true;
 					handle_vlan_pdn_up(&data, false);
 				}
@@ -2838,10 +2848,10 @@ int IPACM_Lan::handle_backhaul_switch_vlan_mode(bool to_sta)
 			for(int i = 0; i < IPA_MAX_NUM_HW_PDNS; i++)
 			{
 				data.iptype = IPA_IP_v6;
-				if(v6_mux_info[i].mux_id)
+				if(v6_mux_up[i].mux_id)
 				{
-					IPACMDBG_H("mux %d up, restore v6 VLAN PDN on transition to LTE\n", v6_mux_info[i].mux_id);
-					data.mux_id = v6_mux_info[i].mux_id;
+					IPACMDBG_H("mux %d up, restore v6 VLAN PDN on transition to LTE\n", v6_mux_up[i].mux_id);
+					data.mux_id = v6_mux_up[i].mux_id;
 					handle_vlan_pdn_up(&data, false);
 				}
 			}
@@ -5472,27 +5482,31 @@ int IPACM_Lan::handle_vlan_phys_if_down()
 	/* notify once per each mux ID per each ip type */
 	for(int i = 0; i < IPA_MAX_NUM_HW_PDNS; i++)
 	{
-		if(v4_mux_info[i].mux_id)
+		if(v4_mux_up[i].mux_id)
 		{
-			IPACMDBG_H("notifying flt removed for mux %d, ipv4\n", v4_mux_info[i].mux_id);
-			notify_flt_removed(v4_mux_info[i].mux_id);
-			xlat_pdn_ctx_id = get_pdn_xlat_ctx(v4_mux_info[i].mux_id);
+			IPACMDBG_H("notifying flt removed for mux %d, ipv4\n", v4_mux_up[i].mux_id);
+			notify_flt_removed(v4_mux_up[i].mux_id);
+			xlat_pdn_ctx_id = get_pdn_xlat_ctx(v4_mux_up[i].mux_id, 0);
 			if (xlat_pdn_ctx_id != -1)
 			{
-				if (delete_mdpn_ul_xlat_filter_rule(v4_mux_info[i].mux_id))
+				if (delete_mdpn_ul_xlat_filter_rule(v4_mux_up[i].mux_id)) //need to remove all associated with the mux
 				{
 					IPACMDBG_H("Failed to delete xlat rules \n");
 				}
-				remove_pdn_xlat_ctx(v4_mux_info[i].mux_id);
+				remove_pdn_xlat_ctx(v4_mux_up[i].mux_id);
 			}
-			v4_mux_info[i].mux_id = 0;
+			v4_mux_up[i].mux_id = 0;
+			v4_mux_up[i].VID_cnt = 0;
+			memset(v4_mux_up[i].associated_VIDs, 0, sizeof(v4_mux_up[i].associated_VIDs[0]) * IPA_MAX_NUM_SW_PDNS);
 		}
 
-		if(v6_mux_info[i].mux_id)
+		if(v6_mux_up[i].mux_id)
 		{
-			IPACMDBG_H("notifying flt removed for mux %d, ipv6\n", v6_mux_info[i].mux_id);
-			notify_flt_removed(v6_mux_info[i].mux_id);
-			v6_mux_info[i].mux_id = 0;
+			IPACMDBG_H("notifying flt removed for mux %d, ipv6\n", v6_mux_up[i].mux_id);
+			notify_flt_removed(v6_mux_up[i].mux_id);
+			v6_mux_up[i].mux_id = 0;
+			v6_mux_up[i].VID_cnt = 0;
+			memset(v6_mux_up[i].associated_VIDs, 0, sizeof(v6_mux_up[i].associated_VIDs[0]) * IPA_MAX_NUM_SW_PDNS);
 		}
 	}
 
@@ -7293,10 +7307,10 @@ int IPACM_Lan::disable_dft_firewall_rules_ul_ex(int vid)
 			for(int i = 0; i < IPA_MAX_NUM_HW_PDNS; i++)
 			{
 				data.iptype = IPA_IP_v6;
-				if(v6_mux_info[i].mux_id)
+				if(v6_mux_up[i].mux_id)
 				{
-					IPACMDBG_H("mux %d up, restore v6 VLAN PDN rules\n", v6_mux_info[i].mux_id);
-					data.mux_id = v6_mux_info[i].mux_id;
+					IPACMDBG_H("mux %d up, restore v6 VLAN PDN rules\n", v6_mux_up[i].mux_id);
+					data.mux_id = v6_mux_up[i].mux_id;
 					handle_vlan_pdn_up(&data, false);
 				}
 			}
@@ -7710,10 +7724,10 @@ void IPACM_Lan::configure_v6_ul_firewall(void)
 
 			for(int i = 0; i < IPA_MAX_NUM_HW_PDNS; i++)
 			{
-				if(v6_mux_info[i].mux_id)
+				if(v6_mux_up[i].mux_id)
 				{
-					IPACMDBG_H("mux %d up, notify modem we deleted v6 flt rules\n", v6_mux_info[i].mux_id);
-					if (notify_flt_removed(v6_mux_info[i].mux_id))
+					IPACMDBG_H("mux %d up, notify modem we deleted v6 flt rules\n", v6_mux_up[i].mux_id);
+					if (notify_flt_removed(v6_mux_up[i].mux_id))
 						return;
 				}
 			}
@@ -12849,7 +12863,7 @@ int IPACM_Lan::handle_mpdn_ul_xlat_filter_rule(ipacm_ext_prop * prop,
 		goto fail;
 	}
 
-	xlat_pdn_ctx_id = get_pdn_xlat_ctx(pdn_mux_id);
+	xlat_pdn_ctx_id = get_pdn_xlat_ctx(pdn_mux_id, vlan_id);
 	if (xlat_pdn_ctx_id == IPACM_FAILURE)
 	{
 		IPACMDBG_H("pdn not added in xlat ctx \n");
@@ -13037,7 +13051,7 @@ int IPACM_Lan::delete_mdpn_ul_xlat_filter_rule(int mux_id)
 {
 	int ret = IPACM_SUCCESS, xlat_pdn_ctx_id;
 
-	xlat_pdn_ctx_id = get_pdn_xlat_ctx(mux_id);
+	xlat_pdn_ctx_id = get_pdn_xlat_ctx(mux_id, 0);
 	if (xlat_pdn_ctx_id == IPACM_FAILURE)
 	{
 		IPACMERR("pdn not found in xlat ctx \n");

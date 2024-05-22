@@ -26,9 +26,9 @@
  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * Changes from Qualcomm Innovation Center are provided under the following license:
+ * Changes from Qualcomm Innovation Center, Inc. are provided under the following license:
  *
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022, 2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted (subject to the limitations in the
@@ -111,7 +111,8 @@ typedef struct __nat_client_info
 typedef struct _nat_pdn_entry
 {
 	uint32_t public_ip;
-	uint16_t vlan_id;
+	uint16_t associated_VIDs[IPA_MAX_NUM_SW_PDNS];
+	uint8_t VID_cnt;
 }nat_pdn_entry;
 #endif
 

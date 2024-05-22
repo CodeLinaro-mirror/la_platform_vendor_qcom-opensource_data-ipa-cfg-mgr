@@ -26,7 +26,7 @@
  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * Changes from Qualcomm Innovation Center are provided under the following license:
+ * Changes from Qualcomm Innovation Center, Inc. are provided under the following license:
  *
  * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
@@ -1674,19 +1674,18 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 
 int IPACM_Wan::check_vlan_pdn(ipa_ip_type iptype, ipacm_event_route_vlan *data, bool v4_only_xlat)
 {
-	int ret = IPACM_FAILURE;
+	int pdn_idx, vlan_idx, ret = IPACM_FAILURE;
+	bool new_pdn = true;
 
 	if (iptype == IPA_IP_v6 || iptype == IPA_IP_MAX)
 	{
 		if(((data->wan_ipv6_prefix[0] == ipv6_prefix[0]) &&
 			(data->wan_ipv6_prefix[1] == ipv6_prefix[1])) || v4_only_xlat)
 		{
-			bool new_pdn = true;
-
 			IPACMDBG_H("received v6 IPA_ROUTE_ADD_VLAN_PDN_EVENT for VID %d, wan %s, %d\n", data->VlanID, dev_name, ipa_if_num);
 			if(ipv6_to_iface[modem_ipv6_pdn_index].wan_up_vlan_v6)
 			{
-				IPACMERR("v6 vlan wan is already up for %s, ignoring\n", dev_name);
+				IPACMERR("v6 vlan wan is already up for %s vlan %d\n", dev_name, data->VlanID);
 				return IPACM_FAILURE;
 			}
 
@@ -1701,7 +1700,7 @@ int IPACM_Wan::check_vlan_pdn(ipa_ip_type iptype, ipacm_event_route_vlan *data, 
 				}
 			}
 
-			if(new_pdn)
+			if(new_pdn && ipv6_to_iface[modem_ipv6_pdn_index].VID_cnt == 0)
 			{
 				if(num_offloaded_pdns >= IPA_MAX_NUM_HW_PDNS) {
 					IPACMERR("number of offloaded PDNs %d can't add more than %d, ignoring\n", num_offloaded_pdns, IPA_MAX_NUM_HW_PDNS);
@@ -1721,7 +1720,7 @@ int IPACM_Wan::check_vlan_pdn(ipa_ip_type iptype, ipacm_event_route_vlan *data, 
 	}
 	if (iptype == IPA_IP_v4 || iptype == IPA_IP_MAX)
 	{
-		bool new_pdn = true;
+		new_pdn = true;
 
 		if(data->wan_ipv4_addr == wan_v4_addr)
 		{
@@ -1743,7 +1742,7 @@ int IPACM_Wan::check_vlan_pdn(ipa_ip_type iptype, ipacm_event_route_vlan *data, 
 				}
 			}
 
-			if(new_pdn)
+			if(new_pdn && ipv4_to_iface[modem_ipv4_pdn_index].VID_cnt == 0)
 			{
 				if(num_offloaded_pdns >= IPA_MAX_NUM_HW_PDNS) {
 					IPACMERR("number of offloaded PDNs %d can't add more than %d, ignoring\n", num_offloaded_pdns, IPA_MAX_NUM_HW_PDNS);
@@ -1764,6 +1763,7 @@ int IPACM_Wan::check_vlan_pdn(ipa_ip_type iptype, ipacm_event_route_vlan *data, 
 
 	return ret;
 }
+
 int IPACM_Wan::handle_route_add_vlan_pdn_evt(ipa_ip_type iptype, uint16_t vlan_id)
 {
 	struct ipa_ioc_add_rt_rule *rt_rule = NULL;

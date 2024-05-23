@@ -475,7 +475,9 @@ public:
 		int                           fltr_rule_number );
 #endif /* # IPA_FLT_EXT_MPLS_GRE_GENERAL */
 #endif
-
+	/*Install exception rule for specific IP*/
+	bool ip_excp_v4_rule_set;
+	int install_ip_specific_filter_rule(enum ipa_ip_type iptype);
 	/* install UL filter rule from Q6 */
 #ifdef FEATURE_VLAN_MPDN
 	virtual int handle_uplink_filter_rule(ipacm_ext_prop *prop, ipa_ip_type iptype, uint8_t pdn_mux_id, bool notif_only, bool is_xlat = false,

@@ -259,6 +259,7 @@ IPACM_Lan::IPACM_Lan(int iface_index) : IPACM_Iface(iface_index)
 	memset(ipv6_prefix_flt_rule_hdl, 0, (IPA_MAX_IPV6_NO_OFFLOAD_PREFIX_FLT_RULE + IPA_MAX_MTU_ENTRIES)  * sizeof(uint32_t));
 	memset(ipv6_icmp_flt_rule_hdl, 0, NUM_IPV6_ICMP_FLT_RULE * sizeof(uint32_t));
 	modem_ul_v4_set = false;
+	ip_excp_v4_rule_set = false;
 	modem_ul_v6_set = false;
 	modem_eogre_ul_v4_set = false;
 	modem_eogre_ul_v6_set = false;
@@ -1043,6 +1044,9 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 			}
 			else
 			{
+				if(install_ip_specific_filter_rule(IPA_IP_v4) == IPACM_FAILURE){
+					IPACMERR("Failed to add exception rule for specific ip.\n");
+				}
 				ret = handle_uplink_filter_rule(
 					ext_prop,
 					IPA_IP_v4,
@@ -2554,6 +2558,7 @@ int IPACM_Lan::del_ul_flt_rules(enum ipa_ip_type iptype, bool is_eogre_stats)
 #endif
 		modem_ul_v4_set = false;
 		modem_eogre_ul_v4_set = false;
+		ip_excp_v4_rule_set = false;
 	}
 	else
 	{
@@ -17622,3 +17627,78 @@ int IPACM_Lan::eth_bridge_get_vlan_hdr_template_hdl(uint32_t* hdr_hdl, uint16_t 
 	free(pHeaderDescriptor);
 	return IPACM_SUCCESS;
 }
+
+int IPACM_Lan::install_ip_specific_filter_rule(enum ipa_ip_type iptype)
+{
+	int len;
+	int ret = IPACM_SUCCESS;
+	ipa_ioc_add_flt_rule* pFilteringTable = NULL;
+	static const int NUM_RULES = 1;
+
+	if ( ! VALID_IPA_IP_TYPE(iptype) )
+	{
+		IPACMERR("Invalid IP type passed to function\n");
+		ret = IPACM_FAILURE;
+	}
+
+	if(IPACM_Iface :: ipacmcfg->IP_Forwarding_config.excep_ipv4_addr == 0)
+	{
+		IPACMERR("Invalid src IP passed to function\n");
+		ret = IPACM_FAILURE;
+	}
+	IPACMDBG_H("Attempting to install src address [%x] based exception filter rule: iptype(%d)\n",IPACM_Iface :: ipacmcfg->IP_Forwarding_config.excep_ipv4_addr,iptype);
+	if(ip_excp_v4_rule_set == true)
+	{
+		IPACMDBG_H("Already installed src address [%x] based exception filter rule: iptype(%d)\n",IPACM_Iface :: ipacmcfg->IP_Forwarding_config.excep_ipv4_addr,iptype);
+		ret = IPACM_SUCCESS;
+	}
+
+	len = sizeof(ipa_ioc_add_flt_rule) +(NUM_RULES * sizeof(ipa_flt_rule_add));
+
+	pFilteringTable = (ipa_ioc_add_flt_rule*) malloc(len);
+	memset(pFilteringTable, 0, len);
+
+	pFilteringTable->commit    = 1;
+	pFilteringTable->ep        = rx_prop->rx[0].src_pipe;
+	pFilteringTable->global    = false;
+	pFilteringTable->ip        = iptype;
+	pFilteringTable->num_rules = NUM_RULES;
+
+	ipa_flt_rule_add flt_rule_entry;
+
+	memset(&flt_rule_entry, 0, sizeof(flt_rule_entry));
+
+	flt_rule_entry.at_rear                  = true;
+	flt_rule_entry.flt_rule_hdl             = -1;
+	flt_rule_entry.status                   = -1;
+
+	flt_rule_entry.rule.to_uc               = 0;
+	flt_rule_entry.rule.action              = IPA_PASS_TO_EXCEPTION;
+	flt_rule_entry.rule.rt_tbl_hdl          = -1;
+	flt_rule_entry.rule.attrib.attrib_mask |= IPA_FLT_DST_ADDR;
+	flt_rule_entry.rule.attrib.u.v4.dst_addr_mask = IPACM_Iface::ipacmcfg->IP_Forwarding_config.excep_ipv4_addr_mask;
+	flt_rule_entry.rule.attrib.u.v4.dst_addr = IPACM_Iface::ipacmcfg->IP_Forwarding_config.excep_ipv4_addr;
+
+	memcpy(pFilteringTable->rules, &flt_rule_entry, sizeof(flt_rule_entry));
+
+	if ( m_filtering.AddFilteringRule(pFilteringTable) == false )
+	{
+		IPACMERR("Error adding ip specific rule\n");
+		ret = IPACM_FAILURE;
+		goto end;
+	}
+
+	/*
+	 * Save handle for subsequent cleanup.
+	 */
+	wan_ul_fl_rule_hdl_v4[num_wan_ul_fl_rule_v4] = pFilteringTable->rules[0].flt_rule_hdl;
+	ip_excp_v4_rule_set = true;
+	IPACM_Iface::ipacmcfg->increaseFltRuleCount( rx_prop->rx[0].src_pipe, iptype, pFilteringTable->num_rules);
+	num_wan_ul_fl_rule_v4 += pFilteringTable->num_rules;
+	IPACMDBG_H("Successfully constructed (%d) exception rule for specific src ip.\n",pFilteringTable->num_rules);
+end:
+	free(pFilteringTable);
+
+	return ret;
+}
+

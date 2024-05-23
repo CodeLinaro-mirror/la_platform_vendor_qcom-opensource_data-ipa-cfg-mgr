@@ -442,6 +442,35 @@ static int ipacm_cfg_xml_parse_tree
 						}
 					}
 				}
+				/* Dst Ip address not to offload*/
+				else if (IPACM_util_icmp_string((char*)xml_node->name, Exception_Ip_Address_TAG) == 0)
+				{
+					content = IPACM_read_content_element(xml_node);
+					if (content)
+					{
+						str_size = strlen(content);
+						memset(content_buf, 0, sizeof(content_buf));
+						memcpy(content_buf, (void *)content, str_size);
+						content_buf[MAX_XML_STR_LEN-1] = '\0';
+						config->private_IP_conf.excep_ipv4_addr=
+							ntohl(inet_addr(content_buf));
+						IPACMDBG_H("Src IP for exception path: %s \n", content_buf);
+					}
+				}
+				else if (IPACM_util_icmp_string((char*)xml_node->name, Exception_Ip_AddrMask_TAG) == 0)
+				{
+					content = IPACM_read_content_element(xml_node);
+					if (content)
+					{
+						str_size = strlen(content);
+						memset(content_buf, 0, sizeof(content_buf));
+						memcpy(content_buf, (void *)content, str_size);
+						content_buf[MAX_XML_STR_LEN-1] = '\0';
+						config->private_IP_conf.excep_ipv4_addr_mask=
+							ntohl(inet_addr(content_buf));
+						IPACMDBG_H("Src IP mask for exception path: %s \n", content_buf);
+					}
+				}
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
 				else if (IPACM_util_icmp_string((char*)xml_node->name, LAN_Stats_Enable_TAG) == 0)
 				{

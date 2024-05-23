@@ -361,6 +361,8 @@ public:
 		char interface_name[IPA_IFACE_NAME_LEN];
 		char bridge_name[IPA_IFACE_NAME_LEN];
 		uint32_t bridge_net_mask;
+		uint32_t excep_ipv4_addr;
+		uint32_t excep_ipv4_addr_mask;
 	}forwarding_config;
 	forwarding_config IP_Forwarding_config;
 

@@ -1016,6 +1016,42 @@ bool IPACM_ConntrackListener::IsVlanIPv4(uint32_t ipv4_address, uint16_t *VlanId
 	IPACMDBG("couldn't match IP\n");
 	return false;
 }
+
+bool IPACM_ConntrackListener::IsVlanIPv6(const Ipv6IpAddress& ip, uint16_t *VlanId)
+{
+	IPACMDBG_H("Checking ipv6_address 0x%08x:%08x:%08x:%08x\n", ip.GetMsb() >> 32,
+		ip.GetMsb() & 0x00000000FFFFFFFF,
+		ip.GetLsb() >> 32, ip.GetLsb() & 0x00000000FFFFFFFF);
+
+	for(int i = 0; i < MAX_IFACE_ADDRESS; i++)
+	{
+
+		if(nat_clients_v6[i].nat_iface_ipv6_addr[0] ==
+			(uint32_t)((ip.GetMsb() >> 32)& 0x00000000FFFFFFFF) &&
+			nat_clients_v6[i].nat_iface_ipv6_addr[1] ==
+			(uint32_t)(ip.GetMsb() & 0x00000000FFFFFFFF) &&
+			nat_clients_v6[i].nat_iface_ipv6_addr[2] ==
+			(uint32_t)((ip.GetLsb() >> 32)& 0x00000000FFFFFFFF) &&
+			nat_clients_v6[i].nat_iface_ipv6_addr[3] ==
+			(uint32_t)(ip.GetLsb() & 0x00000000FFFFFFFF))
+		{
+			if(nat_clients_v6[i].is_vlan_client)
+			{
+				IPACMDBG_H("ipv6 address belong to vlan iface with id %d\n",
+					nat_clients_v6[i].vlan_id)
+				*VlanId = nat_clients_v6[i].vlan_id;
+				return true;
+			}
+			else
+			{
+				IPACMDBG_H("not vlan v6 address\n");
+				return false;
+			}
+		}
+	}
+	IPACMDBG("couldn't match IP\n");
+	return false;
+}
 #endif
 
 void IPACM_ConntrackListener::HandleGREIpAddrAddEvt(
@@ -2246,6 +2282,7 @@ bool IPACM_ConntrackListener::AddIface(
 
 	return false;
 }
+
 int IPACM_ConntrackListener::ProcessAndAddNatEntry(const nat_entry_bundle *input, bool *sendVlanEvent)
 {
 	int ret = 0;
@@ -2536,10 +2573,16 @@ void IPACM_ConntrackListener::ProcessAndAddNatEntry_v6(const ipacm_ct_evt_data* 
 			}
 }
 
-void IPACM_ConntrackListener::AddORDeleteNatEntry_v6(const ipacm_ct_evt_data* evt_data,
-	const NatEntryBase& entry, bool isTempEntry)
+int IPACM_ConntrackListener::AddORDeleteNatEntry_v6(const ipacm_ct_evt_data* evt_data,
+	const NatEntryBase& entry, bool isTempEntry, bool *sendVlanEvent)
 {
 	IPACMDBG_H("\n");
+
+	if(!sendVlanEvent)
+	{
+		IPACMERR("sendVlanEvent is NULL\n");
+		return IPACM_FAILURE;
+	}
 
 	uint64_t pkt_count = nfct_get_attr_u64(evt_data->ct, ATTR_ORIG_COUNTER_PACKETS) +
 		nfct_get_attr_u64(evt_data->ct, ATTR_REPL_COUNTER_PACKETS);
@@ -2559,6 +2602,7 @@ void IPACM_ConntrackListener::AddORDeleteNatEntry_v6(const ipacm_ct_evt_data* ev
 				if (!entry.IsVlanUp)
 				{
 					IPACMDBG_H("Wan is not up, cache connections\n");
+					*sendVlanEvent = true;
 					ipv6ct_inst->CacheEntry(entry);
 				}
 				else if (isTempEntry)
@@ -2615,6 +2659,7 @@ void IPACM_ConntrackListener::AddORDeleteNatEntry_v6(const ipacm_ct_evt_data* ev
 				if (!entry.IsVlanUp)
 				{
 					IPACMDBG_H("Wan is not up, cache connections\n");
+					*sendVlanEvent = true;
 					ipv6ct_inst->CacheEntry(entry);
 				}
 				else if (isTempEntry)
@@ -2668,6 +2713,7 @@ void IPACM_ConntrackListener::AddORDeleteNatEntry_v6(const ipacm_ct_evt_data* ev
 		}
 	}
 	IPACMDBG_H("return\n");
+	return IPACM_SUCCESS;
 }
 
 void IPACM_ConntrackListener::PopulateTCPorUDPEntry(
@@ -3656,11 +3702,15 @@ void IPACM_ConntrackListener::ProcessTCPorUDPMsg(
 IGNORE:
 	IPACMDBG_H("ignoring below Nat Entry\n");
 	iptodot("ProcessTCPorUDPMsg(): target ip or dst ip", rule.target_ip);
-	IPACMDBG("target port or dst port: 0x%x Decimal:%d\n", rule.target_port, rule.target_port);
+	IPACMDBG("target port or dst port: 0x%x Decimal:%d\n", rule.target_port,
+			rule.target_port);
 	iptodot("ProcessTCPorUDPMsg(): private ip or src ip", rule.private_ip);
-	IPACMDBG("private port or src port: 0x%x, Decimal:%d\n", rule.private_port, rule.private_port);
-	IPACMDBG("public port or reply dst port: 0x%x, Decimal:%d\n", rule.public_port, rule.public_port);
-	IPACMDBG("Protocol: %d, destination nat flag: %d\n", rule.protocol, rule.dst_nat);
+	IPACMDBG("private port or src port: 0x%x, Decimal:%d\n", rule.private_port,
+			rule.private_port);
+	IPACMDBG("public port or reply dst port: 0x%x, Decimal:%d\n",
+			rule.public_port, rule.public_port);
+	IPACMDBG("Protocol: %d, destination nat flag: %d\n",
+			rule.protocol, rule.dst_nat);
 	return;
 }
 
@@ -3670,47 +3720,294 @@ void IPACM_ConntrackListener::ProcessTCPorUDPMsg_v6(const ipacm_ct_evt_data* evt
 	entry.DebugDump("with");
 
 	bool isTempEntry = false;
-	if (entry.m_direction == NatEntryBase::DirectionUnknown)
-	{
-		if (!IsIpv6PrivateSubnet(entry.GetClientIp()) && !IsIpv6PrivateSubnet(entry.GetTargetIp()))
-		{
-			IPACMDBG_H("Ignore the entry\n");
-			return;
-		}
-		isTempEntry = true;
-	}
-	else
+	entry.isVlan = false;
+	entry.IsVlanUp = false;
+	bool SendVlanEvent = false;
+	uint16_t VlanID = 0;
+	int vlan_idx = 0;
+	int i = 0;
+
+	struct nf_conntrack *ct = evt_data->ct;
+
+	if (entry.m_direction != NatEntryBase::DirectionUnknown)
 	{
 		CheckSTAClient_v6(entry, isTempEntry);
 	}
 
-	uint64_t src_ipv6_msb = 0;
-
-	if (entry.m_direction == NatEntryBase::DirectionUnknown || entry.m_direction == NatEntryBase::DirectionOutbound)
+	if(!IPACM_Iface::ipacmcfg->ipv6_nat_enable)
 	{
-		src_ipv6_msb = ((Ipv6IpAddress &)entry.GetClientIp()).GetMsb();
-	}
-	else if (entry.m_direction == NatEntryBase::DirectionInbound)
-	{
-		src_ipv6_msb = ((Ipv6IpAddress &)entry.GetClientIp()).GetMsb();
-	}
+		uint64_t src_ipv6_msb = 0;
 
-	entry.isVlan = false;
-	entry.IsVlanUp = false;
-
-	for(int i = 0; i < IPA_MAX_NUM_HW_PDNS; i++)
-	{
-		if(((src_ipv6_msb >> 32) == v6_vlan_pdns[i].ipv6_prefix[0]) && ((src_ipv6_msb & 0x00000000FFFFFFFF) == v6_vlan_pdns[i].ipv6_prefix[1]))
+		if (entry.m_direction == NatEntryBase::DirectionUnknown)
 		{
-			entry.isVlan = true;
-			entry.IsVlanUp = true;
+			if (!IsIpv6PrivateSubnet(entry.GetClientIp()) &&
+				!IsIpv6PrivateSubnet(entry.GetTargetIp()))
+			{
+				IPACMDBG_H("Ignore the entry\n");
+				return;
+			}
+			isTempEntry = true;
 		}
+
+		if (entry.m_direction == NatEntryBase::DirectionUnknown ||
+			entry.m_direction == NatEntryBase::DirectionOutbound ||
+			entry.m_direction == NatEntryBase::DirectionInbound)
+		{
+			src_ipv6_msb = ((Ipv6IpAddress &)entry.GetClientIp()).GetMsb();
+		}
+
+		entry.isVlan = IsVlanIPv6(((Ipv6IpAddress &)entry.GetClientIp()), &VlanID);
+
+		if(entry.isVlan)
+		{
+			entry.IsVlanUp = false;
+			for(i = 0; i < IPA_MAX_NUM_HW_PDNS; i++)
+			{
+				if(((src_ipv6_msb >> 32) == v6_vlan_pdns[i].ipv6_prefix[0]) &&
+					((src_ipv6_msb & 0x00000000FFFFFFFF) ==
+						v6_vlan_pdns[i].ipv6_prefix[1]))
+				{
+					for(vlan_idx = 0; vlan_idx < v6_vlan_pdns[i].VID_cnt; vlan_idx++)
+					{
+						if(VlanID == v6_vlan_pdns[i].associated_VIDs[vlan_idx])
+						{
+							IPACMDBG_H("CT: vlan pdn already up for ");
+							IPACMDBG_H("0x%08x-%08x-%08x-%08x\n",
+								((((Ipv6IpAddress &)entry.GetClientIp()).GetMsb()) >> 32),
+								((((Ipv6IpAddress &)entry.GetClientIp()).GetMsb()) & 0x00000000FFFFFFFF),
+								((((Ipv6IpAddress &)entry.GetClientIp()).GetLsb()) >> 32),
+								((((Ipv6IpAddress &)entry.GetClientIp()).GetLsb()) & 0x00000000FFFFFFFF));
+							entry.IsVlanUp = true;
+							break;
+						}
+					}
+				}
+			}
+			if((i >= IPA_MAX_NUM_HW_PDNS) && (num_v6_vlan_pdns >= IPA_MAX_NUM_HW_PDNS) && (!entry.IsVlanUp))
+			{
+					IPACMDBG_H("IP 0x%08x-%08x-%08x-%08x\n",
+						((((Ipv6IpAddress &)entry.GetClientIp()).GetMsb()) >> 32),
+						((((Ipv6IpAddress &)entry.GetClientIp()).GetMsb()) & 0x00000000FFFFFFFF),
+						((((Ipv6IpAddress &)entry.GetClientIp()).GetLsb()) >> 32),
+						((((Ipv6IpAddress &)entry.GetClientIp()).GetLsb()) & 0x00000000FFFFFFFF));
+					IPACMERR("CT: can't add more PDN, already got max \n");
+					return;
+			}
+			IPACMDBG_H("IsVlanUp %d\n", entry.IsVlanUp);
+		}
+
+		IPACMDBG_H("Entry temp:%d isvlan:%d isvlanup:%d\n", isTempEntry, entry.isVlan, entry.IsVlanUp);
+
+#ifdef FEATURE_VLAN_MPDN
+		AddORDeleteNatEntry_v6(evt_data, entry, isTempEntry, &SendVlanEvent);
+
+		if(SendVlanEvent)
+	 	{
+			ipacm_cmd_q_data evt_data;
+			ipacm_event_route_vlan *data;
+
+			evt_data.event = IPA_ROUTE_ADD_VLAN_PDN_EVENT;
+
+			data = (ipacm_event_route_vlan *)malloc(sizeof(ipacm_event_route_vlan));
+			if(!data)
+			{
+				IPACMERR("couldn't allocate memory for new vlan pdn event\n");
+				return;
+			}
+
+			memset(data, 0, sizeof(ipacm_event_route_vlan));
+
+			data->iptype = IPA_IP_v6;
+			data->VlanID = VlanID;
+			data->wan_ipv6_prefix[0] =
+				(uint32_t)((((Ipv6IpAddress &)entry.GetClientIp()).GetMsb() >> 32)
+				& 0x00000000FFFFFFFF);
+			data->wan_ipv6_prefix[1] =
+				(uint32_t)((Ipv6IpAddress &)entry.GetClientIp()).GetMsb()
+				& 0x00000000FFFFFFFF;
+			IPACMDBG_H("Sending IPv6 address: msb 0x%08x lsb 0x%08x\n",
+					data->wan_ipv6_prefix[0],
+					data->wan_ipv6_prefix[1]);
+			evt_data.evt_data = data;
+			IPACMDBG_H("sending IPA_ROUTE_ADD_VLAN_PDN_EVENT vlan id %d, iptype %d,\n",
+					data->VlanID,
+					data->iptype);
+
+			IPACM_EvtDispatcher::PostEvt(&evt_data);
+		}
+#endif
+		IPACMDBG_H("return\n");
+		return;
+	}
+	else
+	{
+		uint32_t status = 0;
+
+		status = nfct_get_attr_u32(ct, ATTR_STATUS);
+
+		if(IPS_DST_NAT & status)
+		{
+			status = IPS_DST_NAT;
+
+			entry.isVlan = IsVlanIPv6(((Ipv6IpAddress &)entry.GetClientIp()), &VlanID);
+			if(entry.isVlan)
+			{
+				i = 0;
+				entry.IsVlanUp = false;
+				for(i = 0; i < IPA_MAX_NUM_HW_PDNS; i++)
+				{
+					IPACMDBG_H("vlan prefix address: 0x%08x-%08x i: %d compare IPv6 address: 0x%08x-%08x check %d %d vid_cnt\n",
+						v6_vlan_pdns[i].ipv6_prefix[0], v6_vlan_pdns[i].ipv6_prefix[1],i,
+						((((Ipv6IpAddress &)entry.GetPublicIp()).GetMsb()) >> 32),
+						((((Ipv6IpAddress &)entry.GetPublicIp()).GetMsb()) & 0x00000000FFFFFFFF),
+						v6_vlan_pdns[i].ipv6_prefix[0] == ((((Ipv6IpAddress &)entry.GetPublicIp()).GetMsb()) >> 32),
+						v6_vlan_pdns[i].ipv6_prefix[1] == ((((Ipv6IpAddress &)entry.GetPublicIp()).GetMsb()) & 0x00000000FFFFFFFF),
+						v6_vlan_pdns[i].VID_cnt);
+
+					/* check if we already got vlan_pdn_up event for this ip */
+					if(v6_vlan_pdns[i].ipv6_prefix[0] ==
+						((((Ipv6IpAddress &)entry.GetPublicIp()).GetMsb()) >> 32) &&
+						v6_vlan_pdns[i].ipv6_prefix[1] ==
+						((((Ipv6IpAddress &)entry.GetPublicIp()).GetMsb()) & 0x00000000FFFFFFFF))
+					{
+						for(vlan_idx = 0; vlan_idx < v6_vlan_pdns[i].VID_cnt; vlan_idx++)
+						{
+							if(VlanID == v6_vlan_pdns[i].associated_VIDs[vlan_idx])
+							{
+								IPACMDBG_H("DST_NAT: vlan pdn already up for ");
+								IPACMDBG_H("IP 0x%08x-%08x-%08x-%08x\n",
+									((((Ipv6IpAddress &)entry.GetClientIp()).GetMsb()) >> 32),
+									((((Ipv6IpAddress &)entry.GetClientIp()).GetMsb()) & 0x00000000FFFFFFFF),
+									((((Ipv6IpAddress &)entry.GetClientIp()).GetLsb()) >> 32),
+									((((Ipv6IpAddress &)entry.GetClientIp()).GetLsb()) & 0x00000000FFFFFFFF));
+								entry.IsVlanUp = true;
+								break;
+							}
+						}
+				 	}
+			 	}
+
+				if((i >= IPA_MAX_NUM_HW_PDNS) && (num_v6_vlan_pdns >= IPA_MAX_NUM_HW_PDNS) && (!entry.IsVlanUp))
+				{
+					IPACMDBG_H("IP 0x%08x-%08x-%08x-%08x\n",
+						((((Ipv6IpAddress &)entry.GetClientIp()).GetMsb()) >> 32),
+						((((Ipv6IpAddress &)entry.GetClientIp()).GetMsb()) & 0x00000000FFFFFFFF),
+						((((Ipv6IpAddress &)entry.GetClientIp()).GetLsb()) >> 32),
+						((((Ipv6IpAddress &)entry.GetClientIp()).GetLsb()) & 0x00000000FFFFFFFF));
+					IPACMERR("dst NAT: can't add more PDN, already got max \n");
+					return;
+				}
+				IPACMDBG_H("IsVlanUp %d\n", entry.IsVlanUp);
+			}
+		}
+		else if(IPS_SRC_NAT & status)
+		{
+			i = 0;
+			status = IPS_SRC_NAT;
+			entry.isVlan = IsVlanIPv6(((Ipv6IpAddress &)entry.GetClientIp()), &VlanID);
+			if(entry.isVlan)
+			{
+				IPACMDBG_H("vlan prefix address: 0x%08x-%08x i: %d compare IPv6 address: 0x%08x-%08x check %d %d vid_cnt\n",
+						v6_vlan_pdns[i].ipv6_prefix[0], v6_vlan_pdns[i].ipv6_prefix[1],i,
+						((((Ipv6IpAddress &)entry.GetPublicIp()).GetMsb()) >> 32),
+						((((Ipv6IpAddress &)entry.GetPublicIp()).GetMsb()) & 0x00000000FFFFFFFF),
+						v6_vlan_pdns[i].ipv6_prefix[0] == ((((Ipv6IpAddress &)entry.GetPublicIp()).GetMsb()) >> 32),
+						v6_vlan_pdns[i].ipv6_prefix[1] == ((((Ipv6IpAddress &)entry.GetPublicIp()).GetMsb()) & 0x00000000FFFFFFFF),
+						v6_vlan_pdns[i].VID_cnt);
+
+				entry.IsVlanUp = false;
+				for(i = 0; i < IPA_MAX_NUM_HW_PDNS; i++)
+				{
+					/* check if we already got vlan_pdn_up event for this ip */
+					if(v6_vlan_pdns[i].ipv6_prefix[0] ==
+						((((Ipv6IpAddress &)entry.GetPublicIp()).GetMsb()) >> 32) &&
+						v6_vlan_pdns[i].ipv6_prefix[1] ==
+						((((Ipv6IpAddress &)entry.GetPublicIp()).GetMsb()) & 0x00000000FFFFFFFF))
+					{
+						for(vlan_idx = 0; vlan_idx < v6_vlan_pdns[i].VID_cnt; vlan_idx++)
+						{
+							if(VlanID == v6_vlan_pdns[i].associated_VIDs[vlan_idx])
+							{
+								IPACMDBG_H("SRC_NAT: vlan pdn already up for ");
+								IPACMDBG_H("IP 0x%08x-%08x-%08x-%08x\n",
+									((((Ipv6IpAddress &)entry.GetClientIp()).GetMsb()) >> 32),
+									((((Ipv6IpAddress &)entry.GetClientIp()).GetMsb()) & 0x00000000FFFFFFFF),
+									((((Ipv6IpAddress &)entry.GetClientIp()).GetLsb()) >> 32),
+									((((Ipv6IpAddress &)entry.GetClientIp()).GetLsb()) & 0x00000000FFFFFFFF));
+								entry.IsVlanUp = true;
+								break;
+							}
+						}
+					}
+				}
+
+				if((i >= IPA_MAX_NUM_HW_PDNS) && (num_v6_vlan_pdns >= IPA_MAX_NUM_HW_PDNS) && (!entry.IsVlanUp))
+				{
+					IPACMDBG_H("IP 0x%08x-%08x-%08x-%08x\n",
+						((((Ipv6IpAddress &)entry.GetClientIp()).GetMsb()) >> 32),
+						((((Ipv6IpAddress &)entry.GetClientIp()).GetMsb()) & 0x00000000FFFFFFFF),
+						((((Ipv6IpAddress &)entry.GetClientIp()).GetLsb()) >> 32),
+						((((Ipv6IpAddress &)entry.GetClientIp()).GetLsb()) & 0x00000000FFFFFFFF));
+					IPACMERR("src NAT: can't add more PDN, already got max \n");
+					return;
+				}
+				IPACMDBG_H("IsVlanUp %d\n", entry.IsVlanUp);
+			 }
+		}
+		else
+	 	{
+			IPACMDBG_H("Neither Destination nor Source nat flag Set\n");
+			goto IGNORE;
+		}
+
+		AddORDeleteNatEntry_v6(evt_data, entry, isTempEntry, &SendVlanEvent);
+
+		if(SendVlanEvent)
+	 	{
+			ipacm_cmd_q_data evt_data;
+			ipacm_event_route_vlan *data;
+
+			evt_data.event = IPA_ROUTE_ADD_VLAN_PDN_EVENT;
+			data = (ipacm_event_route_vlan *)malloc(sizeof(ipacm_event_route_vlan));
+			if(!data)
+			{
+				IPACMERR("couldn't allocate memory for new vlan pdn event\n");
+				return;
+			}
+			memset(data, 0, sizeof(ipacm_event_route_vlan));
+			data->iptype = IPA_IP_v6;
+			data->VlanID = VlanID;
+			data->wan_ipv6_prefix[0] =
+				(uint32_t)((((Ipv6IpAddress &)entry.GetPublicIp()).GetMsb() >> 32)
+				& 0x00000000FFFFFFFF);
+			data->wan_ipv6_prefix[1] =
+				(uint32_t)((Ipv6IpAddress &)entry.GetPublicIp()).GetMsb()
+				& 0x00000000FFFFFFFF;
+			IPACMDBG_H("Sending IPv6 address: msb 0x%08x lsb 0x%08x\n",
+					data->wan_ipv6_prefix[0],
+					data->wan_ipv6_prefix[1]);
+
+			evt_data.evt_data = data;
+			IPACMDBG_H("sending IPA_ROUTE_ADD_VLAN_PDN_EVENT vlan id %d, iptype %d,\n",
+					data->VlanID,
+					data->iptype);
+
+			IPACM_EvtDispatcher::PostEvt(&evt_data);
+		}
+
+		IPACMDBG_H("return\n");
+		return;
+
+IGNORE:
+	IPACMDBG_H("ignoring below v6 CT or Nat Entry\n");
+	IPACMDBG_H("Client IP 0x%08x-%08x-%08x-%08x\n",
+		((((Ipv6IpAddress &)entry.GetClientIp()).GetMsb()) >> 32),
+		((((Ipv6IpAddress &)entry.GetClientIp()).GetMsb()) & 0x00000000FFFFFFFF),
+		((((Ipv6IpAddress &)entry.GetClientIp()).GetLsb()) >> 32),
+		((((Ipv6IpAddress &)entry.GetClientIp()).GetLsb()) & 0x00000000FFFFFFFF));
+	return;
 	}
 
-	IPACMDBG_H("Entry temp:%d isvlan:%d isvlanup:%d\n", isTempEntry, entry.isVlan, entry.IsVlanUp);
-
-	AddORDeleteNatEntry_v6(evt_data, entry, isTempEntry);
-	IPACMDBG_H("return\n");
 }
 
 void IPACM_ConntrackListener::ProcessGREMsg(
@@ -3956,6 +4253,7 @@ void IPACM_ConntrackListener::CreateIpv6NatEntryFromCtEventData(const ipacm_ct_e
 	srcPort = nfct_get_attr_u16(evt_data->ct, ATTR_ORIG_PORT_SRC);
 	dstPort = nfct_get_attr_u16(evt_data->ct, ATTR_ORIG_PORT_DST);
 	replSrcPort = nfct_get_attr_u16(evt_data->ct, ATTR_REPL_PORT_SRC);
+
 	if(!replSrcPort)
 	{
 		IPACMDBG("Received 0 replSrcPort\n");
@@ -3989,20 +4287,19 @@ void IPACM_ConntrackListener::CreateIpv6NatEntryFromCtEventData(const ipacm_ct_e
 
 	if(!replDstAddr.IsGlobalAddr() && !dstAddr.IsGlobalAddr())
 	{
-		IPACMDBG("addresses aren't global, bail\n");
+		IPACMDBG_H("addresses aren't global, bail\n");
 		goto bail;
 	}
 
 	/* E2E case */
 	if(nat_iface_ipv6_addr.Find(srcAddr) != NULL)
 	{
-		IPACMDBG("found src addr in nat iface list - OUTBOUND\n");
+		IPACMDBG_H("found src addr in nat iface list - OUTBOUND\n");
 		entry.m_direction = NatEntryBase::DirectionOutbound;
 	}
 	else if(nat_iface_ipv6_addr.Find(replSrcAddr) != NULL)
 	{
-		IPACMDBG("found replSrcAddr addr in nat iface list - INBOUND\n");
-		entry.m_direction = NatEntryBase::DirectionInbound;
+		IPACMDBG_H("found replSrcAddr addr in nat iface list - INBOUND\n");
 	}
 	/*
 	 * embedded case
@@ -4035,7 +4332,8 @@ void IPACM_ConntrackListener::CreateIpv6NatEntryFromCtEventData(const ipacm_ct_e
 			goto bail;
 		}
 
-		IPACMDBG("nonnat - setting to dummy\n");
+		IPACMDBG_H("nonnat - setting to dummy src_port:%d dst_port:%d\n",
+			ntohs(srcPort), ntohs(dstPort));
 		entry.m_isDummy = true;
 
 		/*
@@ -4060,25 +4358,9 @@ void IPACM_ConntrackListener::CreateIpv6NatEntryFromCtEventData(const ipacm_ct_e
 	/* we probably didn't get the neigh event and this is going to Temp */
 	else
 	{
-		/*
-		 * last try to identify the direction by finding the NATed address
-		 * since Only the private address is NATed
-		 */
-		if((dstAddr == replSrcAddr) & (srcAddr != replDstAddr))
-		{
-			IPACMDBG_H("identified OUTBOUND NAT by addresses\n");
-			entry.m_direction = NatEntryBase::DirectionOutbound;
-		}
-		else if((srcAddr == replDstAddr) && (dstAddr != replSrcAddr))
-		{
-			IPACMDBG_H("identified INBOUND NAT by addresses\n");
-			entry.m_direction = NatEntryBase::DirectionInbound;
-		}
-		else
-		{
-			IPACMDBG("Neither source Nor destination NAT. entry invalid\n");
-			goto bail;
-		}
+		IPACMDBG_H("Neither source Nor destination NAT. entry invalid src_port:%d "
+			"dst_port:%d\n", ntohs(srcPort), ntohs(dstPort));
+		goto bail;
 	}
 
 	/* need to fill the fields as if it is an outbound connection */
@@ -4116,10 +4398,20 @@ void IPACM_ConntrackListener::CreateIpv6NatEntryFromCtEventData(const ipacm_ct_e
 		goto bail;
 	}
 
+	if(ipv6ct_inst->isAlgPort(entry.m_protocol, entry.m_srcPort) ||
+		ipv6ct_inst->isAlgPort(entry.m_protocol, entry.m_dstPort))
+	{
+		IPACMERR("Don't install dummy rules for ALG Traffic src_port:%d, dst_port:%d\n",
+			entry.m_srcPort, entry.m_dstPort);
+		goto bail;
+	}
+
 	IPACMDBG_H("return\n");
 	return;
 
 bail:
+	IPACMDBG_H("Bailed v6 NAT Entry src_port:%d dst_port:%d\n",
+		ntohs(srcPort), ntohs(dstPort));
 	srcAddr.DebugDump("srcAddr");
 	replDstAddr.DebugDump("replDstAddr");
 	dstAddr.DebugDump("dstAddr");
@@ -4127,6 +4419,7 @@ bail:
 	entry.Clear();
 }
 #endif
+
 void IPACM_ConntrackListener::CreateIpv6ctEntryFromCtEventData(const ipacm_ct_evt_data* evt_data,
 	Ipv6ctEntry& entry) const
 {
@@ -4213,7 +4506,7 @@ void IPACM_ConntrackListener::CreateIpv6ctEntryFromCtEventData(const ipacm_ct_ev
 			goto bail;
 		}
 
-		IPACMDBG("setting to dummy\n");
+		IPACMDBG_H("setting to dummy %d %d\n", srcPort, dstPort);
 		entry.m_isDummy = true;
 		entry.m_direction = NatEntryBase::DirectionOutbound;
 	}
@@ -4225,7 +4518,7 @@ void IPACM_ConntrackListener::CreateIpv6ctEntryFromCtEventData(const ipacm_ct_ev
 			goto bail;
 		}
 
-		IPACMDBG("setting to dummy\n");
+		IPACMDBG_H("setting to dummy\n");
 		entry.m_isDummy = true;
 		entry.m_direction = NatEntryBase::DirectionInbound;
 	}
@@ -4259,6 +4552,8 @@ void IPACM_ConntrackListener::CreateIpv6ctEntryFromCtEventData(const ipacm_ct_ev
 	return;
 
 bail:
+	IPACMDBG_H("Bailed v6 CT Entry src_port:%d dst_port:%d\n",
+		ntohs(srcPort), ntohs(dstPort));
 	entry.Clear();
 }
 

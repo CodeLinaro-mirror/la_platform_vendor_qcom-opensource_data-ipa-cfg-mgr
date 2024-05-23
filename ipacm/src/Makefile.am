@@ -1,6 +1,8 @@
 AM_CPPFLAGS = -I./../inc \
 	      ${LIBXML_CFLAGS} \
-	      $(CFLAGS)
+	      $(CFLAGS) \
+	      -I/local/mnt/workspace/code/kernel-msm-5.15/include/uapi \
+	      -I/local/mnt/workspace/code/clion-code/data-ipa-cfg-mgr/ipacm/inc
 AM_CPPFLAGS += -Wall -Wundef -Wno-trigraphs
 
 if NO_L2TP

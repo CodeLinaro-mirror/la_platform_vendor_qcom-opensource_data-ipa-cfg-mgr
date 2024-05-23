@@ -5990,7 +5990,8 @@ int IPACM_Wan::handle_down_evt_ex()
 
 			ipv4_to_iface[modem_ipv4_pdn_index].wan_up_vlan = false;
 			ipv4_to_iface[modem_ipv4_pdn_index].is_xlat = false;
-
+			memset(ipv4_to_iface[modem_ipv4_pdn_index].associated_VIDs, 0, sizeof(ipv4_to_iface[modem_ipv4_pdn_index].associated_VIDs));
+			ipv4_to_iface[modem_ipv4_pdn_index].VID_cnt = 0;
 			num_offloaded_pdns--;
 			IPACMDBG_H("now num offloaded PDNs is %d\n", num_offloaded_pdns);
 
@@ -6158,6 +6159,9 @@ int IPACM_Wan::handle_down_evt_ex()
 			ipacm_event_vlan_pdn *vlandown_data;
 
 			ipv6_to_iface[modem_ipv6_pdn_index].wan_up_vlan_v6 = false;
+			memset(ipv6_to_iface[modem_ipv6_pdn_index].associated_VIDs, 0, sizeof(ipv6_to_iface[modem_ipv6_pdn_index].associated_VIDs));
+			ipv6_to_iface[modem_ipv6_pdn_index].VID_cnt = 0;
+
 			/* Xlat cfg offload pdn count is updated during v4 handling */
 			if (!xlat_cfg)
 				num_offloaded_pdns--;

@@ -26,7 +26,7 @@
  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * Changes from Qualcomm Innovation Center are provided under the following license:
+ * Changes from Qualcomm Innovation Center, Inc. are provided under the following license:
  *
  * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
@@ -125,6 +125,8 @@ typedef struct
 	uint32_t ipv4_addr;
 	bool wan_up_vlan;
 	bool is_xlat;
+	uint16_t associated_VIDs[IPA_MAX_NUM_SW_PDNS];
+	uint8_t VID_cnt = 0;
 	IPACM_Wan *pIface;
 }ipacm_ipv4_wan_iface;
 
@@ -132,6 +134,8 @@ typedef struct
 {
 	uint32_t ipv6_prefix[2];
 	bool wan_up_vlan_v6;
+	uint16_t associated_VIDs[IPA_MAX_NUM_SW_PDNS];
+	uint8_t VID_cnt = 0;
 	IPACM_Wan *pIface;
 }ipacm_ipv6_wan_iface;
 
@@ -413,6 +417,7 @@ public:
 	static int GetMTUByVid(uint16_t *mtu, uint16_t vlan_id, ipa_ip_type iptype);
 	static bool is_xlat_by_vid(uint16_t vlan_id);
 	static bool is_xlat_by_ipv4(uint32_t ipv4_addr);
+	static int get_vid_index_for_iface_v6(ipacm_ipv6_wan_iface iface, uint16_t vlan_id);
 #endif
 private:
 

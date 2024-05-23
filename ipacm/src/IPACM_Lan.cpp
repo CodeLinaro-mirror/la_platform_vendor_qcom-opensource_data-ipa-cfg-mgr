@@ -2797,6 +2797,7 @@ int IPACM_Lan::handle_vlan_neighbor(ipacm_event_data_all *data)
 				IPACMDBG_H("ipv4 address 0x%X is valid, generate IPA_ROUTE_ADD_VLAN_PDN_EVENT v4 as well\n", ip4_addr);
 				data->iptype = IPA_IP_MAX;
 				data->wan_ipv4_addr = IPA_DUMMY_PREFIX;
+				check_vlan_PDNUp(IPA_IP_v4);
 			}
 			else {
 				data->iptype = IPA_IP_v6;

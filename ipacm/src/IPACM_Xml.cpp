@@ -800,7 +800,22 @@ static int ipacm_cfg_xml_parse_tree
 						IPACMDBG_H("static_policy_enable %d buf(%d)\n", config->static_policy_enable, atoi(content_buf));
 					}
 				}
-
+#ifdef FEATURE_STATIC_POLICY
+				else if (IPACM_util_icmp_string((char*)xml_node->name, Static_Policy_DSCP_Mark_Mode) == 0)
+				{
+					IPACMDBG_H("inside Static_Policy_DSCP_Mark_Mode\n");
+					content = IPACM_read_content_element(xml_node);
+					if (content)
+					{
+						str_size = strlen(content);
+						memset(content_buf, 0, sizeof(content_buf));
+						memcpy(content_buf, (void *)content, str_size);
+						config->static_policy_dscp_mark_mode = atoi(content_buf);
+						IPACMDBG_H("Static_Policy_DSCP_Mark_Mode:%d\n",
+							atoi(content_buf));
+					}
+				}
+#endif
 			}
 			break;
 		default:

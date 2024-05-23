@@ -107,6 +107,15 @@ typedef struct _ipa_wlan_client
 	bool ipv6_header_set;
 	bool ipv4_hpc_set;
 	bool ipv6_hpc_set;
+#ifdef FEATURE_STATIC_POLICY
+	uint32_t dscp_hpc_hdr_hdl_v4[IPA_UC_MAX_PDN_DSCP_VAL];
+	uint32_t dscp_hpc_hdr_hdl_v6[IPA_UC_MAX_PDN_DSCP_VAL];
+	bool dscp_route_rule_set_v4[IPA_UC_MAX_PDN_DSCP_VAL];
+	bool dscp_ipv4_hpc_set[IPA_UC_MAX_PDN_DSCP_VAL];
+	bool dscp_ipv6_hpc_set[IPA_UC_MAX_PDN_DSCP_VAL];
+	int dscp_ipv4_hpc_count[IPA_UC_MAX_PDN_DSCP_VAL];
+	int dscp_ipv6_hpc_count[IPA_UC_MAX_PDN_DSCP_VAL];
+#endif
 	bool power_save_set;
 	bool is_vlan;
 	/* default vlan support in wlan */
@@ -136,6 +145,9 @@ typedef struct _ipa_wlan_client
 	/* store ipv6 LAN2LAN filter rule handle when ast update is needed. */
 	uint32_t lan2lan_fl_rule_hdl_v6;
 	wlan_client_rt_hdl wifi_rt_hdl[0]; /* depends on number of tx properties */
+#ifdef FEATURE_STATIC_POLICY
+	wlan_client_rt_hdl dscp_wifi_rt_hdl[IPA_UC_MAX_PDN_DSCP_VAL];
+#endif
 }ipa_wlan_client;
 
 typedef struct _ipa_wlan_primary_client
@@ -725,6 +737,22 @@ private:
 
 	/*handle wifi client routing rule*/
 	int handle_wlan_client_route_rule(uint8_t *mac_addr, ipa_ip_type iptype, uint16_t vlan_id = 0);
+
+#ifdef FEATURE_STATIC_POLICY
+		/* handle wlan client PDN<->DSCP based routing rule addition*/
+		int handle_pdn_dscp_wlan_client_route_rule(uint8_t *mac_addr,
+			ipa_ip_type iptype, uint32_t trigger, uint16_t vlan_id = 0,
+			uint8_t mux_id = 0, uint8_t dscp_val = 0, uint32_t* ipv6_addr = 0);
+#ifdef IPA_HW_FNR_STATS
+		/* handle wlan client PDN<->DSCP based routing rule addition when LAN Stats is enabled*/
+		int handle_pdn_dscp_wlan_client_route_rule_ext_v2(uint8_t *mac_addr,
+			ipa_ip_type iptype, uint32_t trigger, uint32_t* ipv6_addr = 0,
+			uint16_t vlan_id = 0, uint8_t mux_id = 0, uint8_t dscp_val = 0);
+#endif //IPA_HW_FNR_STATS
+		/* handle wlan client PDN<->DSCP based routing rule deletion*/
+		int delete_pdn_dscp_wlan_rtrules(ipa_ip_type iptype,
+			uint32_t trigger, int clnt_idx = -1, int mux_id = 0);
+#endif //FEATURE_STATIC_POLICY
 
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
 	/*handle wifi client routing rule with rule id*/

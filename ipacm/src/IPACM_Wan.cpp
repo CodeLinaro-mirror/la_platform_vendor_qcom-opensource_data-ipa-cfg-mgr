@@ -437,8 +437,6 @@ int IPACM_Wan::GetWanPDNinfo(uint16_t *mtu, uint32_t *ipv4_addr, ipa_ip_type ipt
 
 	for(int i = 0; i < IPA_MAX_NUM_SW_PDNS; i++)
 	{
-		if(iptype == IPA_IP_v4)
-		{
 			if(ipv4_to_iface[i].ipv4_addr)
 			{
 				mtu[num_mtu] = ipv4_to_iface[i].pIface->mtu_v4;
@@ -448,15 +446,29 @@ int IPACM_Wan::GetWanPDNinfo(uint16_t *mtu, uint32_t *ipv4_addr, ipa_ip_type ipt
 					mtu[num_mtu], ipv4_addr[num_mtu]);
 				num_mtu++;
 			}
-		}
-		else
-		{
+	}
+	IPACMDBG_H("Found %d MTUs for ip_type %d\n", num_mtu, iptype);
+	return num_mtu;
+}
+
+
+int IPACM_Wan::GetWanPDNinfo_v6(uint16_t *mtu, uint32_t (*ipv6_prefix)[2], ipa_ip_type iptype)
+{
+	int num_mtu = 0;
+
+	for(int i = 0; i < IPA_MAX_NUM_SW_PDNS; i++)
+	{
 			if(ipv6_to_iface[i].ipv6_prefix[0] ||
 				ipv6_to_iface[i].ipv6_prefix[1])
 			{
-				mtu[num_mtu++] = ipv6_to_iface[i].pIface->mtu_v6;
+				mtu[num_mtu] = ipv6_to_iface[i].pIface->mtu_v6;
+				ipv6_prefix[num_mtu][0] = ipv6_to_iface[i].ipv6_prefix[0];
+				ipv6_prefix[num_mtu][1] = ipv6_to_iface[i].ipv6_prefix[1];
+				IPACMERR("iface %s has MTU %d and ipv6_addr 0x%08x:%08x\n",
+					ipv6_to_iface[i].pIface->dev_name,
+					mtu[num_mtu], ipv6_prefix[num_mtu][0], ipv6_prefix[num_mtu][1]);
+				num_mtu++;
 			}
-		}
 	}
 	IPACMDBG_H("Found %d MTUs for ip_type %d\n", num_mtu, iptype);
 	return num_mtu;
@@ -719,6 +731,10 @@ int IPACM_Wan::handle_addr_evt(ipacm_event_data_addr *data)
 	const int NUM_RULES = 1;
 	int num_ipv6_addr, len;
 	int res = IPACM_SUCCESS;
+#ifdef FEATURE_STATIC_POLICY
+	struct ipa_ioc_pdn_dscp_map_info pdn_dscp_map_info;
+	ipacm_cmd_q_data evt_data;
+#endif
 
 	memset(&hdr, 0, sizeof(hdr));
 	if(tx_prop == NULL || rx_prop == NULL)
@@ -729,6 +745,56 @@ int IPACM_Wan::handle_addr_evt(ipacm_event_data_addr *data)
 
 	/* Update the IP Type. */
 	config_ip_type(data->iptype);
+
+#ifdef FEATURE_STATIC_POLICY
+	if(pthread_mutex_lock(&IPACM_Iface::ipacmcfg->pdn_dscp_lock) != 0)
+	{
+		IPACMERR("Unable to lock the mutex\n");
+		return IPACM_FAILURE;
+	}
+	for(int indx = 0; indx < IPA_UC_MAX_PDN_DSCP_VAL; indx++)
+	{
+		if(IPACM_Iface::ipacmcfg->pdn_dscp_table[indx].status == 1)
+		{
+			IPACM_Iface::ipacmcfg->pdn_dscp_table[indx].mux_id = ext_prop->ext[0].mux_id;
+			IPACM_Iface::ipacmcfg->pdn_dscp_table[indx].status = 2;
+		}
+
+		if(IPACM_Iface::ipacmcfg->pdn_dscp_table[indx].status == 2)
+		{
+			ipacm_event_pdn_dscp_info* pdn_dscp_data = (ipacm_event_pdn_dscp_info *)
+				malloc(sizeof(ipacm_event_pdn_dscp_info));
+			if(pdn_dscp_data == NULL)
+			{
+				IPACMERR("unable to allocate memory for event pdn_dscp_data\n");
+				pthread_mutex_unlock(&IPACM_Iface::ipacmcfg->pdn_dscp_lock);
+				return IPACM_FAILURE;
+			}
+
+			memset(pdn_dscp_data, 0, sizeof(ipacm_event_pdn_dscp_info));
+			pdn_dscp_data->enable = 1;
+			pdn_dscp_data->dscp_val =IPACM_Iface::ipacmcfg->pdn_dscp_table[indx].dscp_val;
+			pdn_dscp_data->mux_id = IPACM_Iface::ipacmcfg->pdn_dscp_table[indx].mux_id;
+
+			IPACMDBG_H("Posting IPA_PDN_DSCP_UPDATE_EVENT event!\n");
+
+			evt_data.event = IPA_PDN_DSCP_UPDATE_EVENT;
+			evt_data.evt_data = pdn_dscp_data;
+			IPACM_EvtDispatcher::PostEvt(&evt_data);
+
+			memset(&pdn_dscp_map_info, 0, sizeof(pdn_dscp_map_info));
+			memset(&pdn_dscp_map_info.pdn_dscp_map, 255, sizeof(pdn_dscp_map_info));
+			pdn_dscp_map_info.add = 1;
+			pdn_dscp_map_info.pdn_dscp_map[IPACM_Iface::ipacmcfg->pdn_dscp_table[indx].mux_id] =
+				IPACM_Iface::ipacmcfg->pdn_dscp_table[indx].dscp_val;
+			if(0 != ioctl(m_fd_ipa, IPA_IOC_UPDATE_PDN_DSCP_MAPPING, &pdn_dscp_map_info))
+			{
+				IPACMERR("ioctl to IPA driver failed for setting PDN-DSCP Mapping\n");
+			}
+		}
+	}
+	pthread_mutex_unlock(&IPACM_Iface::ipacmcfg->pdn_dscp_lock);
+#endif
 
 	if (data->iptype == IPA_IP_v6)
 	{
@@ -2502,6 +2568,65 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 			delete this;
 			return;
 		}
+		break;
+
+#ifdef FEATURE_STATIC_POLICY
+	case IPA_PDN_MUX_ID_UPDATE:
+	{
+		struct ipa_ioc_pdn_dscp_map_info pdn_dscp_map_info;
+		ipacm_event_pdn_mux_info *data = (ipacm_event_pdn_mux_info *)param;
+		ipacm_cmd_q_data evt_data;
+
+		if (strncmp(dev_name, data->pdn_name, IPA_IFACE_NAME_LEN) == 0)
+		{
+			if(pthread_mutex_lock(&IPACM_Iface::ipacmcfg->pdn_dscp_lock) != 0)
+			{
+				IPACMERR("Unable to lock the mutex\n");
+				return;
+			}
+			if(IPACM_Iface::ipacmcfg->pdn_dscp_table[data->indx].status == 1)
+			{
+				IPACM_Iface::ipacmcfg->pdn_dscp_table[data->indx].mux_id = ext_prop->ext[0].mux_id;
+				IPACM_Iface::ipacmcfg->pdn_dscp_table[data->indx].status = 2;
+			}
+
+			if(IPACM_Iface::ipacmcfg->pdn_dscp_table[data->indx].status == 2)
+			{
+				ipacm_event_pdn_dscp_info* pdn_dscp_data = (ipacm_event_pdn_dscp_info *)
+					malloc(sizeof(ipacm_event_pdn_dscp_info));
+				if(pdn_dscp_data == NULL)
+				{
+					IPACMERR("unable to allocate memory for event pdn_dscp_data\n");
+					pthread_mutex_unlock(&IPACM_Iface::ipacmcfg->pdn_dscp_lock);
+					return;
+				}
+
+				memset(pdn_dscp_data, 0, sizeof(ipacm_event_pdn_dscp_info));
+				pdn_dscp_data->enable = 1;
+				pdn_dscp_data->dscp_val = IPACM_Iface::ipacmcfg->pdn_dscp_table[data->indx].dscp_val;
+				pdn_dscp_data->mux_id = IPACM_Iface::ipacmcfg->pdn_dscp_table[data->indx].mux_id;
+
+				IPACMDBG_H("Posting IPA_PDN_DSCP_UPDATE_EVENT event!\n");
+
+				evt_data.event = IPA_PDN_DSCP_UPDATE_EVENT;
+				evt_data.evt_data = pdn_dscp_data;
+				IPACM_EvtDispatcher::PostEvt(&evt_data);
+
+				memset(&pdn_dscp_map_info, 0, sizeof(pdn_dscp_map_info));
+				memset(&pdn_dscp_map_info.pdn_dscp_map, 255, sizeof(pdn_dscp_map_info));
+				pdn_dscp_map_info.add = 1;
+				pdn_dscp_map_info.pdn_dscp_map[IPACM_Iface::ipacmcfg->pdn_dscp_table[data->indx].mux_id] =
+					IPACM_Iface::ipacmcfg->pdn_dscp_table[data->indx].dscp_val;
+				if(0 != ioctl(m_fd_ipa, IPA_IOC_UPDATE_PDN_DSCP_MAPPING, &pdn_dscp_map_info))
+				{
+					IPACMERR("ioctl to IPA driver failed for setting PDN-DSCP Mapping\n");
+				}
+			}
+			pthread_mutex_unlock(&IPACM_Iface::ipacmcfg->pdn_dscp_lock);
+		}
+	}
+	break;
+#endif
 
 	default:
 		break;
@@ -2803,6 +2928,12 @@ int IPACM_Wan::handle_route_add_vlan_pdn_evt(ipa_ip_type iptype, uint16_t vlan_i
 			ipv6_to_iface[modem_ipv6_pdn_index].ipv6_prefix[1] = IPA_DUMMY_PREFIX;
 			IPACMDBG_H("XLAT case, new VLAN PDN prefix is 0x%08x%08x.\n", ipv6_to_iface[modem_ipv6_pdn_index].ipv6_prefix[0], ipv6_to_iface[modem_ipv6_pdn_index].ipv6_prefix[1]);
 		}
+#ifdef FEATURE_STATIC_POLICY
+		else if (IPACM_Iface::ipacmcfg->ipacm_static_policy_enable && ipv6_to_iface[modem_ipv6_pdn_index].ipv6_prefix[0] && ipv6_to_iface[modem_ipv6_pdn_index].ipv6_prefix[1])
+		{
+			IPACM_Iface::ipacmcfg->add_vlan_ipv6_prefix(ipv6_to_iface[modem_ipv6_pdn_index].ipv6_prefix, ipa_if_num, 0);
+		}
+#endif
 
 		IPACMDBG_H("Posting IPA_HANDLE_WAN_VLAN_PDN_UP (v6) with below information:\n");
 		IPACMDBG_H("iptype IPA_IP_v6, VlanID %d, mux_id %d, if num %d\n",
@@ -7281,6 +7412,61 @@ int IPACM_Wan::handle_down_evt_ex()
 			ipacm_cmd_q_data evt_data;
 			ipacm_event_vlan_pdn *vlandown_data;
 
+			//post multiple WAN DOWNS if there are multiple clients associated with the PDN
+			if (ipv6_to_iface[modem_ipv6_pdn_index].VID_cnt)
+			{
+				for (i = 0; i < ipv6_to_iface[modem_ipv6_pdn_index].VID_cnt; i++)
+				{
+					vlandown_data = (ipacm_event_vlan_pdn *)malloc(sizeof(ipacm_event_vlan_pdn));
+					if(vlandown_data == NULL)
+					{
+						IPACMERR("Unable to allocate memory\n");
+						res = IPACM_FAILURE;
+						goto fail;
+					}
+					memset(vlandown_data, 0, sizeof(ipacm_event_vlan_pdn));
+
+					vlandown_data->iptype = IPA_IP_v6;
+					vlandown_data->mux_id = ext_prop->ext[0].mux_id;
+					vlandown_data->VlanID =
+						ipv6_to_iface[modem_ipv6_pdn_index].associated_VIDs[i];
+					vlandown_data->ipv6_prefix[0] = ipv6_to_iface[modem_ipv6_pdn_index].ipv6_prefix[0];
+					vlandown_data->ipv6_prefix[1] = ipv6_to_iface[modem_ipv6_pdn_index].ipv6_prefix[1];
+					IPACMDBG_H("Posting IPA_HANDLE_WAN_VLAN_PDN_DOWN with below information:\n");
+					IPACMDBG_H("iptype IPA_IP_v6, VlanID %d, mux_id %d, if num %d ipv6 prefix 0x%08x:%08x\n\n",
+						associated_VID, ext_prop->ext[0].mux_id, ipa_if_num, vlandown_data->ipv6_prefix[0],
+						vlandown_data->ipv6_prefix[1]);
+					evt_data.event = IPA_HANDLE_WAN_VLAN_PDN_DOWN;
+					evt_data.evt_data = (void *)vlandown_data;
+
+					//the memory will be freed by handler of the evt
+					IPACM_EvtDispatcher::PostEvt(&evt_data);
+				}
+			}
+			else //remove this in future. Should always be consistent with array.
+			{
+				vlandown_data = (ipacm_event_vlan_pdn *)malloc(sizeof(ipacm_event_vlan_pdn));
+				if(vlandown_data == NULL)
+				{
+					IPACMERR("Unable to allocate memory\n");
+					res = IPACM_FAILURE;
+					goto fail;
+				}
+				memset(vlandown_data, 0, sizeof(ipacm_event_vlan_pdn));
+
+				vlandown_data->iptype = IPA_IP_v6;
+				vlandown_data->VlanID = associated_VID; //this should just be array
+				vlandown_data->mux_id = ext_prop->ext[0].mux_id;
+				vlandown_data->ipv6_prefix[0] = ipv6_to_iface[modem_ipv6_pdn_index].ipv6_prefix[0];
+				vlandown_data->ipv6_prefix[1] = ipv6_to_iface[modem_ipv6_pdn_index].ipv6_prefix[1];
+				evt_data.event = IPA_HANDLE_WAN_VLAN_PDN_DOWN;
+				evt_data.evt_data = (void *)vlandown_data;
+				IPACMDBG_H("Posting IPA_HANDLE_WAN_VLAN_PDN_DOWN with below information:\n");
+				IPACMDBG_H("iptype IPA_IP_v6, VlanID %d, mux_id %d, if num %d ipv6 prefix 0x%08x:%08x\n",
+					associated_VID, ext_prop->ext[0].mux_id, ipa_if_num, vlandown_data->ipv6_prefix[0], vlandown_data->ipv6_prefix[1]);
+				IPACM_EvtDispatcher::PostEvt(&evt_data);
+			}
+
 			ipv6_to_iface[modem_ipv6_pdn_index].wan_up_vlan_v6 = false;
 			memset(ipv6_to_iface[modem_ipv6_pdn_index].associated_VIDs, 0, sizeof(ipv6_to_iface[modem_ipv6_pdn_index].associated_VIDs));
 			ipv6_to_iface[modem_ipv6_pdn_index].VID_cnt = 0;
@@ -7305,27 +7491,6 @@ int IPACM_Wan::handle_down_evt_ex()
 			{
 				IPACMDBG_H("not deleting default v6 RT rule, vlan v6 PDN is up\n");
 			}
-
-			vlandown_data = (ipacm_event_vlan_pdn *)malloc(sizeof(ipacm_event_vlan_pdn));
-			if(vlandown_data == NULL)
-			{
-				IPACMERR("Unable to allocate memory\n");
-				res = IPACM_FAILURE;
-				goto fail;
-			}
-			memset(vlandown_data, 0, sizeof(ipacm_event_vlan_pdn));
-
-			vlandown_data->iptype = IPA_IP_v6;
-			vlandown_data->VlanID = ipv6_to_iface[modem_ipv6_pdn_index].associated_VIDs[0];
-			vlandown_data->mux_id = ext_prop->ext[0].mux_id;
-
-			IPACMDBG_H("Posting IPA_HANDLE_WAN_VLAN_PDN_DOWN (v6) with below information:\n");
-			IPACMDBG_H("iptype IPA_IP_v6, VlanID %d, mux_id %d, if num %d\n", vlandown_data->VlanID, ext_prop->ext[0].mux_id, ipa_if_num);
-
-			evt_data.event = IPA_HANDLE_WAN_VLAN_PDN_DOWN;
-			evt_data.evt_data = (void *)vlandown_data;
-
-			IPACM_EvtDispatcher::PostEvt(&evt_data);
 
 			/* in also default gateway, DL filtering rules will be reconfigured later */
 			if(!is_default_gateway)
@@ -7495,6 +7660,8 @@ int IPACM_Wan::handle_down_evt_ex()
 				vlandown_data->iptype = IPA_IP_MAX;
 				vlandown_data->ipv4_addr = (public_wan_v4_addr_set) ? public_wan_v4_addr : wan_v4_addr;
 				vlandown_data->VlanID = ipv6_to_iface[modem_ipv6_pdn_index].associated_VIDs[0];
+				vlandown_data->ipv6_prefix[0] = ipv6_to_iface[modem_ipv6_pdn_index].ipv6_prefix[0];
+				vlandown_data->ipv6_prefix[1] = ipv6_to_iface[modem_ipv6_pdn_index].ipv6_prefix[1];
 				ipv4_to_iface[modem_ipv4_pdn_index].wan_up_vlan = false;
 				memset(ipv4_to_iface[modem_ipv4_pdn_index].associated_VIDs, 0, sizeof(ipv4_to_iface[modem_ipv4_pdn_index].associated_VIDs));
 				ipv4_to_iface[modem_ipv4_pdn_index].VID_cnt = 0;
@@ -7516,6 +7683,8 @@ int IPACM_Wan::handle_down_evt_ex()
 			{
 				vlandown_data->iptype = IPA_IP_v6;
 				vlandown_data->VlanID = ipv6_to_iface[modem_ipv6_pdn_index].associated_VIDs[0];
+				vlandown_data->ipv6_prefix[0] = ipv6_to_iface[modem_ipv6_pdn_index].ipv6_prefix[0];
+				vlandown_data->ipv6_prefix[1] = ipv6_to_iface[modem_ipv6_pdn_index].ipv6_prefix[1];
 				ipv6_to_iface[modem_ipv6_pdn_index].wan_up_vlan_v6 = false;
 				memset(ipv6_to_iface[modem_ipv6_pdn_index].associated_VIDs, 0, sizeof(ipv6_to_iface[modem_ipv6_pdn_index].associated_VIDs));
 				ipv6_to_iface[modem_ipv6_pdn_index].VID_cnt = 0;
@@ -7528,7 +7697,9 @@ int IPACM_Wan::handle_down_evt_ex()
 			vlandown_data->mux_id = ext_prop->ext[0].mux_id;
 
 			IPACMDBG_H("Posting IPA_HANDLE_WAN_VLAN_PDN_DOWN with below information:\n");
-			IPACMDBG_H("iptype %d, VlanID %d, mux_id %d, if num %d\n", vlandown_data->iptype, vlandown_data->VlanID, ext_prop->ext[0].mux_id, ipa_if_num);
+			IPACMDBG_H("iptype %d, VlanID %d, mux_id %d, if num %d ipv6 prefix 0x%08x:%08x\n\n",
+				vlandown_data->iptype, vlandown_data->VlanID, ext_prop->ext[0].mux_id, ipa_if_num,
+				vlandown_data->ipv6_prefix[0], vlandown_data->ipv6_prefix[1]);
 
 			evt_data.event = IPA_HANDLE_WAN_VLAN_PDN_DOWN;
 			evt_data.evt_data = (void *)vlandown_data;

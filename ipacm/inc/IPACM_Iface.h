@@ -119,12 +119,26 @@ struct client_rt_hdl_v6 {
 	uint32_t rt_rule_hdl_v6_wan;
 };
 
+#ifdef FEATURE_STATIC_POLICY
+struct dscp_pdn_client_rt_hdl_v6 {
+	uint32_t rt_rule_hdl_v6_wan[IPA_UC_MAX_PDN_DSCP_VAL];
+	bool dscp_route_rule_set_v6[IPA_UC_MAX_PDN_DSCP_VAL];
+	uint32_t dscp_hpc_hdr_hdl_v6[IPA_UC_MAX_PDN_DSCP_VAL];
+	bool dscp_ipv6_hpc_set[IPA_UC_MAX_PDN_DSCP_VAL];
+};
+#endif
+
 struct handleTypeV6 {
 	bool route_rule_set_v6{false};
 	vector<client_rt_hdl_v6> hdl_v6{};
-
+#ifdef FEATURE_STATIC_POLICY
+	vector<dscp_pdn_client_rt_hdl_v6> dscp_pdn_hdl_v6{};
+#endif
 	handleTypeV6(size_t n) {
 		hdl_v6.resize(n);
+#ifdef FEATURE_STATIC_POLICY
+		dscp_pdn_hdl_v6.resize(n);
+#endif
 	}
 };
 

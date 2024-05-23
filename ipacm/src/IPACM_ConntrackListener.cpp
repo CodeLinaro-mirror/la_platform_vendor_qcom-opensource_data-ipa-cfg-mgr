@@ -923,6 +923,21 @@ void IPACM_ConntrackListener::HandleNeighIpAddrAddEvt_v6(ipacm_event_data_all *d
 					nat_clients_v6[i].is_vlan_client = true;
 					IPACMDBG_H("client %d: vlan iface %s has vlan id %d \n", i, data->iface_name, nat_clients_v6[i].vlan_id);
 				}
+#ifdef FEATURE_STATIC_POLICY
+				/* if we are in static policy mode, treat every client as VLAN */
+				else if(IPACM_Iface::ipacmcfg->ipacm_static_policy_enable)
+				{
+					/* VLAN ID is 5000 + if_index which is unique per client */
+					nat_clients_v6[i].vlan_id =
+						IPA_STATIC_POLICY_VLAN_ID + data->if_index;
+					nat_clients_v6[i].is_vlan_client = true;
+					IPACMDBG_H("client %d: iface %s has vlan id %d ",
+						i, data->iface_name, nat_clients_v6[i].vlan_id);
+					IPACMDBG_H("and IPv6 address: 0x%08x%08x%08x%08x\n",
+						data->ipv6_addr[0], data->ipv6_addr[1],
+						data->ipv6_addr[2], data->ipv6_addr[3]);
+				}
+#endif
 				else
 				{
 					nat_clients_v6[i].is_vlan_client = false;

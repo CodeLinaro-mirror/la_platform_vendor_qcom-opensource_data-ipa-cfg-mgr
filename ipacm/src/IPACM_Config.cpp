@@ -291,6 +291,14 @@ IPACM_Config::IPACM_Config()
 	memset(vlan_bridges, 0, IPA_MAX_NUM_BRIDGES * sizeof(vlan_bridges[0]));
 	memset(vlan_devices, 0, IPA_VLAN_IF_MAX * sizeof(vlan_devices[0]));
 	memset(ip_pass_mpdn_table, 0, sizeof(ip_pass_mpdn_table));
+#ifdef FEATURE_STATIC_POLICY
+	memset(pdn_dscp_table, 0, sizeof(pdn_dscp_table));
+	for(int i = 0; i<IPA_UC_MAX_PDN_DSCP_VAL;i++)
+	{
+		pdn_dscp_table[i].dscp_val = 255;
+	}
+	pthread_mutex_init(&pdn_dscp_lock, NULL);
+#endif
 	memset(&sw_flt_list, 0, sizeof(ipa_sw_flt_list_type));
 
 	pthread_mutex_init(&ip_pass_mpdn_lock, NULL);
@@ -718,7 +726,9 @@ skip_fnr_alloc:
 	ipacm_emesh_mode = cfg->ipacm_emesh_mode;
 
 	ipacm_static_policy_enable = cfg->static_policy_enable;
-
+#ifdef FEATURE_STATIC_POLICY
+	ipacm_static_policy_dscp_mark_mode = cfg->static_policy_dscp_mark_mode;
+#endif
 	if (ipacm_mpdn_enable == TRUE && ipacm_l2tp_enable != IPACM_L2TP_DISABLE)
 	{
 		IPACMERR("Not support both VLAN_MPDN and L2TP are enable \n");
@@ -2609,6 +2619,114 @@ void IPACM_Config::ip_collision_config_update(ipa_ioc_pdn_config *pdn_config)
 	}
 	pthread_mutex_unlock(&ip_pass_mpdn_lock);
 }
+
+#ifdef FEATURE_STATIC_POLICY
+void IPACM_Config::pdn_dscp_config_update(ipa_ioc_pdn_dscp_map_info *pdn_dscp_config)
+{
+	int indx;
+	ipacm_cmd_q_data evt_data;
+	ipacm_event_pdn_dscp_info *pdn_dscp_data;
+	ipacm_event_pdn_mux_info *data_pdn_mux_info;
+	struct ipa_ioc_pdn_dscp_map_info pdn_dscp_map_info;
+
+	if(pthread_mutex_lock(&pdn_dscp_lock) != 0)
+	{
+		IPACMERR("Unable to lock the mutex\n");
+		goto fail;
+	}
+
+	/* On receiving the pdn and dscp value from user space through IPA driver, pdn name and
+         * dscp value is stored in the first free entry available and status is set to 1 if it
+         * is an add command.
+         *
+         * If it is a del command, all the fields of pdn_dscp_table of that particular index
+         * will be reset.
+         */
+
+	if (pdn_dscp_config->add)
+	{
+		indx = get_free_pdn_dscp_index(pdn_dscp_config->pdn_name[0]);
+		if (indx < IPA_UC_MAX_PDN_DSCP_VAL)
+		{
+			strlcpy(pdn_dscp_table[indx].pdn_name,
+				pdn_dscp_config->pdn_name[0], IPA_RESOURCE_NAME_MAX);
+			pdn_dscp_table[indx].status = 1;
+			pdn_dscp_table[indx].mux_id = 0;
+			pdn_dscp_table[indx].dscp_val = pdn_dscp_config->pdn_dscp_map[0];
+			IPACMDBG_H("Updated PDN DSCP config for pdn_name:%s at %d with "
+				"dscp_val:%d\n", pdn_dscp_table[indx].pdn_name,
+				indx, pdn_dscp_config->pdn_dscp_map[0]);
+
+			data_pdn_mux_info = (ipacm_event_pdn_mux_info *)malloc
+				(sizeof(ipacm_event_pdn_mux_info));
+			if(data_pdn_mux_info == NULL)
+			{
+				IPACMERR("unable to allocate memory for event data_pdn_mux_info\n");
+				pthread_mutex_unlock(&pdn_dscp_lock);
+				return;
+			}
+
+			memset(data_pdn_mux_info, 0, sizeof(ipacm_event_pdn_mux_info));
+			data_pdn_mux_info->indx = indx;
+			strlcpy(data_pdn_mux_info->pdn_name, pdn_dscp_table[indx].pdn_name,
+				sizeof(data_pdn_mux_info->pdn_name));
+
+			IPACMDBG_H("Posting IPA_PDN_MUX_ID_UPDATE with pdn_name:%s indx:%d\n",
+				data_pdn_mux_info->pdn_name, indx);
+
+			evt_data.event = IPA_PDN_MUX_ID_UPDATE;
+			evt_data.evt_data = data_pdn_mux_info;
+			IPACM_EvtDispatcher::PostEvt(&evt_data);
+		}
+	}
+	else
+	{
+		indx = get_pdn_dscp_index(pdn_dscp_config->pdn_name[0]);
+		if (indx < IPA_UC_MAX_PDN_DSCP_VAL)
+		{
+			if(pdn_dscp_table[indx].status == 2)
+			{
+				pdn_dscp_data = (ipacm_event_pdn_dscp_info *)malloc
+					(sizeof(ipacm_event_pdn_dscp_info));
+				if(!pdn_dscp_data)
+				{
+					IPACMERR("unable to allocate memory for pdn_dscp_data\n");
+					pthread_mutex_unlock(&pdn_dscp_lock);
+					goto fail;
+				}
+
+				memset(pdn_dscp_data, 0, sizeof(ipacm_event_pdn_dscp_info));
+				pdn_dscp_data->mux_id = pdn_dscp_table[indx].mux_id;
+				IPACMDBG_H("Posting IPA_PDN_DSCP_UPDATE_EVENT event!\n");
+				evt_data.event = IPA_PDN_DSCP_UPDATE_EVENT;
+				evt_data.evt_data = pdn_dscp_data;
+				IPACM_EvtDispatcher::PostEvt(&evt_data);
+			}
+
+			memset(&pdn_dscp_map_info, 0, sizeof(pdn_dscp_map_info));
+			pdn_dscp_map_info.pdn_dscp_map
+				[IPACM_Iface::ipacmcfg->pdn_dscp_table[indx].mux_id] = 255;
+			if(0 != ioctl(m_fd, IPA_IOC_UPDATE_PDN_DSCP_MAPPING, &pdn_dscp_map_info))
+			{
+				IPACMERR("ioctl to IPA driver failed for setting "
+					"PDN-DSCP Mapping\n");
+			}
+
+			/* Reset the configuration */
+			IPACMDBG_H("Reset PDN DSCP config for pdn_name:%s at %d\n",
+				pdn_dscp_table->pdn_name, indx);
+			pdn_dscp_table[indx].status = 0;
+			pdn_dscp_table[indx].dscp_val = 255;
+			pdn_dscp_table[indx].mux_id = 0;
+			memset(pdn_dscp_table[indx].pdn_name, 0, IPA_RESOURCE_NAME_MAX);
+		}
+	}
+
+	pthread_mutex_unlock(&pdn_dscp_lock);
+fail:
+	return;
+}
+#endif
 
 #if defined(FEATURE_SOCKSv5) && defined (IPA_SOCKV5_EVENT_MAX)
 void IPACM_Config::update_socksv5_client_v6_addr(uint32_t* ipv6_addr)

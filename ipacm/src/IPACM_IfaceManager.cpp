@@ -336,6 +336,9 @@ int IPACM_IfaceManager::create_iface_instance(ipacm_ifacemgr_data *param)
 				IPACM_EvtDispatcher::registr(IPA_HANDLE_IPSEC_UL_FLT_ADD, lan);
 				IPACM_EvtDispatcher::registr(IPA_HANDLE_IPSEC_UL_FLT_DEL, lan);
 #endif
+#ifdef FEATURE_STATIC_POLICY
+				IPACM_EvtDispatcher::registr(IPA_PDN_DSCP_UPDATE_EVENT, lan);
+#endif
 				/* IPA_LAN_DELETE_SELF should be always last */
 				IPACM_EvtDispatcher::registr(IPA_LAN_DELETE_SELF, lan);
 				IPACMDBG_H("ipa_LAN (%s):ipa_index (%d) instance open/registr ok\n", lan->dev_name, lan->ipa_if_num);
@@ -390,6 +393,9 @@ int IPACM_IfaceManager::create_iface_instance(ipacm_ifacemgr_data *param)
 #ifdef FEATURE_IPA_IPSEC
 				IPACM_EvtDispatcher::registr(IPA_HANDLE_IPSEC_UL_FLT_ADD, ETH);
 				IPACM_EvtDispatcher::registr(IPA_HANDLE_IPSEC_UL_FLT_DEL, ETH);
+#endif
+#ifdef FEATURE_STATIC_POLICY
+				IPACM_EvtDispatcher::registr(IPA_PDN_DSCP_UPDATE_EVENT, ETH);
 #endif
 				/* IPA_LAN_DELETE_SELF should be always last */
 				IPACM_EvtDispatcher::registr(IPA_LAN_DELETE_SELF, ETH);
@@ -464,6 +470,9 @@ int IPACM_IfaceManager::create_iface_instance(ipacm_ifacemgr_data *param)
 #ifdef FEATURE_IPA_IPSEC
 					IPACM_EvtDispatcher::registr(IPA_HANDLE_IPSEC_UL_FLT_ADD, odu);
 					IPACM_EvtDispatcher::registr(IPA_HANDLE_IPSEC_UL_FLT_DEL, odu);
+#endif
+#ifdef FEATURE_STATIC_POLICY
+					IPACM_EvtDispatcher::registr(IPA_PDN_DSCP_UPDATE_EVENT, odu);
 #endif
 					/* IPA_LAN_DELETE_SELF should be always last */
 					IPACM_EvtDispatcher::registr(IPA_LAN_DELETE_SELF, odu);
@@ -570,6 +579,9 @@ int IPACM_IfaceManager::create_iface_instance(ipacm_ifacemgr_data *param)
 				IPACM_EvtDispatcher::registr(IPA_HANDLE_IPSEC_UL_FLT_ADD, wl);
 				IPACM_EvtDispatcher::registr(IPA_HANDLE_IPSEC_UL_FLT_DEL, wl);
 #endif
+#ifdef FEATURE_STATIC_POLICY
+				IPACM_EvtDispatcher::registr(IPA_PDN_DSCP_UPDATE_EVENT, wl);
+#endif
 				/* IPA_LAN_DELETE_SELF should be always last */
 				IPACM_EvtDispatcher::registr(IPA_LAN_DELETE_SELF, wl);
 				IPACMDBG_H("ipa_WLAN (%s):ipa_index (%d) instance open/registr ok\n", wl->dev_name, wl->ipa_if_num);
@@ -669,6 +681,12 @@ int IPACM_IfaceManager::create_iface_instance(ipacm_ifacemgr_data *param)
 					if(is_sta_mode == Q6_WAN)
 					{
 						IPACM_EvtDispatcher::registr(IPA_IPSEC_LAN_CLIENT_ROUTE_ADD_EVENT, w);
+					}
+#endif
+#ifdef FEATURE_STATIC_POLICY
+					if(is_sta_mode == Q6_WAN)
+					{
+						IPACM_EvtDispatcher::registr(IPA_PDN_MUX_ID_UPDATE, w);
 					}
 #endif
 					if(is_sta_mode == WLAN_WAN)

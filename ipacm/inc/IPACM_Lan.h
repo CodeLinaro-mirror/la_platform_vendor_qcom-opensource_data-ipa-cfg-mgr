@@ -139,6 +139,15 @@ typedef struct _ipa_eth_client
 	bool ipv6_header_set;
 	bool ipv4_hpc_set;
 	bool ipv6_hpc_set;
+#ifdef FEATURE_STATIC_POLICY
+	uint32_t dscp_hpc_hdr_hdl_v4[IPA_UC_MAX_PDN_DSCP_VAL];
+	uint32_t dscp_hpc_hdr_hdl_v6[IPA_UC_MAX_PDN_DSCP_VAL];
+	bool dscp_route_rule_set_v4[IPA_UC_MAX_PDN_DSCP_VAL];
+	bool dscp_ipv4_hpc_set[IPA_UC_MAX_PDN_DSCP_VAL];
+	bool dscp_ipv6_hpc_set[IPA_UC_MAX_PDN_DSCP_VAL];
+	int dscp_ipv4_hpc_count[IPA_UC_MAX_PDN_DSCP_VAL];
+	int dscp_ipv6_hpc_count[IPA_UC_MAX_PDN_DSCP_VAL];
+#endif
 	int if_index;
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
 	bool ipv4_ul_rules_set;
@@ -177,6 +186,9 @@ typedef struct _ipa_eth_client
 	uint32_t ext_router_prefix_rt_hdl;
 #endif
 	eth_client_rt_hdl eth_rt_hdl[0]; /* depends on number of tx properties */
+#ifdef FEATURE_STATIC_POLICY
+	eth_client_rt_hdl dscp_eth_rt_hdl[IPA_UC_MAX_PDN_DSCP_VAL];
+#endif
 }ipa_eth_client;
 
 #ifdef FEATURE_IPACM_UL_FIREWALL
@@ -368,15 +380,18 @@ public:
 	int handleIpsecUlFltDelAll(enum ipa_ip_type ip);
 #endif
 
-	int handle_static_policy_rt_rule_add(void);
+	int handle_static_policy_rt_rule_add();
 	int handle_static_policy_flt_rule_add(uint32_t ipv4_addr);
-	int handle_static_policy_rule_delete(void);
+	int handle_static_policy_rule_delete();
 
 	uint32_t static_policy_flt_rule_hdl;
+	uint32_t static_policy_flt_rule_hdl_v6;
 	static uint32_t static_policy_rt_rule_hdl;
 	static uint32_t static_policy_proc_ctx_hdl;
 	uint32_t associated_pdn_cnt;
+	uint32_t associated_pdn_cnt_v6;
 	static uint32_t total_vlan_pdn_cnt;
+	static uint32_t total_vlan_pdn_cnt_v6;
 
 	static bool odu_up;
 
@@ -1337,60 +1352,6 @@ private:
 		return false;
 	}
 
-	inline int set_mux_up(uint8_t mux_id, ipa_ip_type iptype, uint16_t vid)
-	{
-		ipacm_mux_struct *mux = v4_mux_up;
-
-		if(mux_id == 0)
-		{
-			IPACMERR("0 mux id!\n");
-			return IPACM_FAILURE;
-		}
-
-		if(is_mux_up(mux_id, iptype, vid))
-		{
-			IPACMERR("mux id %d is already up, not setting it iptype %d\n", mux_id, iptype);
-			return IPACM_FAILURE;
-		}
-
-		if(iptype == IPA_IP_v6)
-			mux = v6_mux_up;
-
-		//check if mux_id was already added but need to add VLAN
-		for(int i = 0; i < IPA_MAX_NUM_HW_PDNS; i++)
-		{
-			if(mux[i].mux_id == mux_id)
-			{
-				for(int j = 0; j < mux[i].VID_cnt; j++)
-				{
-					if(mux[i].associated_VIDs[j] == 0)
-					{
-						mux[i].associated_VIDs[j] = vid;
-						mux[i].VID_cnt++;
-						mux[i].mux_id = mux_id;
-						IPACMDBG_H("successfully added vid %d for mux id %d, dev %s, i = %d, j = %d, iptype %d, VID_cnt = %d\n", vid, mux_id, dev_name, i, j, iptype, mux[i].VID_cnt);
-						return IPACM_SUCCESS;
-					}
-				}
-			}
-		}
-
-		//Mux ID is new, add to the first open spot
-		for(int i = 0; i < IPA_MAX_NUM_HW_PDNS; i++)
-		{
-			if(mux[i].mux_id == 0)
-			{
-				mux[i].associated_VIDs[0] = vid;
-				mux[i].VID_cnt++;
-				mux[i].mux_id = mux_id;
-				IPACMDBG_H("successfully added mux id %d with vid %d, dev %s, i = %d, iptype %d, VID_cnt = %d\n", mux_id, vid, dev_name, i, iptype, mux[i].VID_cnt);
-				return IPACM_SUCCESS;
-			}
-		}
-		IPACMERR("exceeded max num mux ids, couldn't set mux %d, iptype %d, vid %d\n", mux_id, iptype, vid);
-		return IPACM_FAILURE;
-	}
-
 	inline int set_mux_down(uint8_t mux_id, ipa_ip_type iptype)
 	{
 		ipacm_mux_struct *mux = v4_mux_up;
@@ -1622,6 +1583,22 @@ private:
 	/* handle eth client routing rule*/
 	int handle_eth_client_route_rule(uint8_t *mac_addr, ipa_ip_type iptype, uint16_t vlan_id = 0);
 
+#ifdef FEATURE_STATIC_POLICY
+	/* handle eth client PDN<->DSCP based routing rule addition*/
+	int handle_pdn_dscp_eth_client_route_rule(uint8_t *mac_addr,
+		ipa_ip_type iptype, uint32_t trigger, uint16_t vlan_id = 0,
+		uint8_t mux_id = 0, uint8_t dscp_val = 0, uint32_t* ipv6_addr = 0);
+#ifdef IPA_HW_FNR_STATS
+	/* handle eth client PDN<->DSCP based routing rule addition when LAN Stats is enabled*/
+	int handle_pdn_dscp_eth_client_route_rule_ext_v2(uint8_t *mac_addr,
+		ipa_ip_type iptype, uint32_t trigger, uint32_t* ipv6_addr = 0,
+		uint16_t vlan_id = 0, uint8_t mux_id = 0, uint8_t dscp_val = 0);
+#endif //IPA_HW_FNR_STATS
+	/* handle eth client PDN<->DSCP based routing rule deletion*/
+	int delete_pdn_dscp_eth_rtrules(ipa_ip_type iptype,
+		uint32_t trigger, int clnt_idx = -1, int mux_id = 0);
+#endif //FEATURE_STATIC_POLICY
+
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
 	/* handle eth client routing rule with rule id*/
 	int handle_eth_client_route_rule_ext(uint8_t *mac_addr, ipa_ip_type iptype);
@@ -1680,6 +1657,67 @@ public:  //mike why we have 2 public. Why not just move this on top?
 	bool is_vlan_IF(uint16_t vlan_id);
 	int handle_vlan_pdn_up(ipacm_event_vlan_pdn *data, bool set_mux = true);
 	int handle_vlan_pdn_down(ipacm_event_vlan_pdn *data);
+
+	inline int set_mux_up(uint8_t mux_id, ipa_ip_type iptype, uint16_t vid)
+	{
+		ipacm_mux_struct *mux = v4_mux_up;
+
+		if(mux_id == 0)
+		{
+			IPACMERR("0 mux id!\n");
+			return IPACM_FAILURE;
+		}
+
+		if(is_mux_up(mux_id, iptype, vid))
+		{
+			IPACMERR("mux id %d is already up, not setting it iptype %d\n", mux_id,
+				iptype);
+			return IPACM_FAILURE;
+		}
+
+		if(iptype == IPA_IP_v6)
+			mux = v6_mux_up;
+
+		//check if mux_id was already added but need to add VLAN
+		for(int i = 0; i < IPA_MAX_NUM_HW_PDNS; i++)
+		{
+			if(mux[i].mux_id == mux_id)
+			{
+				for(int j = 0; j < mux[i].VID_cnt; j++)
+				{
+					if(mux[i].associated_VIDs[j] == 0)
+					{
+						mux[i].associated_VIDs[j] = vid;
+						mux[i].VID_cnt++;
+						mux[i].mux_id = mux_id;
+						IPACMDBG_H("successfully added vid %d for mux id "
+							"%d, dev %s, i = %d, j = %d, iptype %d, "
+							"VID_cnt = %d\n", vid, mux_id, dev_name,
+							i, j, iptype, mux[i].VID_cnt);
+						return IPACM_SUCCESS;
+					}
+				}
+			}
+		}
+
+		//Mux ID is new, add to the first open spot
+		for(int i = 0; i < IPA_MAX_NUM_HW_PDNS; i++)
+		{
+			if(mux[i].mux_id == 0)
+			{
+				mux[i].associated_VIDs[0] = vid;
+				mux[i].VID_cnt++;
+				mux[i].mux_id = mux_id;
+				IPACMDBG_H("successfully added mux id %d with vid %d, dev %s, "
+					"i = %d, iptype %d, VID_cnt = %d\n",
+					mux_id, vid, dev_name, i, iptype, mux[i].VID_cnt);
+				return IPACM_SUCCESS;
+			}
+		}
+		IPACMERR("exceeded max num mux ids, couldn't set mux %d, iptype %d, "
+			"vid %d\n", mux_id, iptype, vid);
+		return IPACM_FAILURE;
+	}
 #endif
 	int delete_icmp_filter_rule(
 		ipa_ip_type iptype);

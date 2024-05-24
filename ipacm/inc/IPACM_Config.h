@@ -149,6 +149,9 @@ struct qos_client_info
 
 	bool route_rule_set_v4;
 	bool route_rule_set_v6;
+
+	uint32_t v4_ip_addr;
+	uint32_t v6_ip_addr[IPV6_NUM_ADDR][4];
 };
 
 struct qos_param_info {

@@ -1679,6 +1679,7 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 			}
 			break;
 		}
+
 	case IPA_QOS_RULE_DEL_EVENT:
 		{
 			qos_delete_param_info *qos_param;
@@ -1687,7 +1688,6 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 
 			IPACMDBG_H("Deleting %d qos eth clients \n", qos_param->client_cnt);
 
-			//for (it_qos_client = qos_param->qos_client_list.begin(); it_qos_client != qos_param->qos_client_list.end(); ++it_qos_client)
 			for (int i = 0; i < qos_param->client_cnt; i++)
 			{
 				IPACMDBG_H("QOS is v4 set %d for hdl %d\n",
@@ -5703,7 +5703,7 @@ uint32_t IPACM_Lan::get_u8_bitmap_from_tc(uint8_t traffic_class)
 
 /*handle qos routing rules */
 int IPACM_Lan::handle_qos_route_rule(uint8_t *client_mac, uint16_t client_vlan_id,
-					ipa_ip_type iptype, list<qos_param_info>::iterator qos_param, int qos_client_idx)
+					ipa_ip_type iptype, list<qos_param_info>::iterator qos_param)
 {
 	struct ipa_ioc_add_rt_rule *rt_rule;
 	struct ipa_rt_rule_add *rt_rule_entry;
@@ -5784,13 +5784,13 @@ int IPACM_Lan::handle_qos_route_rule(uint8_t *client_mac, uint16_t client_vlan_i
 				continue;
 			}
 
-			IPACMDBG("Pipe Tx:%d, ip-type: %d debug traffic class 0x%x bmap_tc 0x%x to be compared with pipe tc 0x%x\n",
+			IPACMDBG_H("Pipe Tx:%d, ip-type: %d debug traffic class 0x%x bmap_tc 0x%x to be compared with pipe tc 0x%x\n",
 					tx_index, tx_prop->tx[tx_index].ip, qos_param->traffic_class, get_u8_bitmap_from_tc(qos_param->traffic_class), tx_prop->tx[tx_index].tc_bmap);
 
-			IPACMDBG("Qos params, sport_start %d sport_end %d dport_start %d, dport_end %d, \n",
+			IPACMDBG_H("Qos params, sport_start %d sport_end %d dport_start %d, dport_end %d, \n",
 					 qos_param->ip_tup.sport_start, qos_param->ip_tup.sport_end, qos_param->ip_tup.dport_start, qos_param->ip_tup.dport_end);
 
-			IPACMDBG("Qos params, protocol %d, src_ip_addr 0x%x, dst_ip_addr 0x%x \n",
+			IPACMDBG_H("Qos params, protocol %d, src_ip_addr 0x%x, dst_ip_addr 0x%x \n",
 					 qos_param->ip_tup.protocol, qos_param->ip_tup.src_ip_addr, qos_param->ip_tup.dst_ip_addr);
 
 			if (!(tx_prop->tx[tx_index].tc_bmap & get_u8_bitmap_from_tc(qos_param->traffic_class)))
@@ -5831,10 +5831,10 @@ int IPACM_Lan::handle_qos_route_rule(uint8_t *client_mac, uint16_t client_vlan_i
 				rt_rule_entry->rule.hdr_hdl = get_client_memptr(eth_client, eth_index)->hdr_hdl_v4;
 
 
-				//TBD if required of not, these values will be overwritten if ip_tuple dstn addrr is passed.
-				//rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_DST_ADDR;
-				//rt_rule_entry->rule.attrib.u.v4.dst_addr = get_client_memptr(eth_client, eth_index)->v4_addr;
-				//rt_rule_entry->rule.attrib.u.v4.dst_addr_mask = 0xffffffff;
+				//Client ip is required to differentiate different clients, else hdr collision will happen
+				rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_DST_ADDR;
+				rt_rule_entry->rule.attrib.u.v4.dst_addr = get_client_memptr(eth_client, eth_index)->v4_addr;
+				rt_rule_entry->rule.attrib.u.v4.dst_addr_mask = 0xffffffff;
 
 				// IP Tuple
 				if (qos_param->ip_tup.src_ip_addr)
@@ -5851,9 +5851,6 @@ int IPACM_Lan::handle_qos_route_rule(uint8_t *client_mac, uint16_t client_vlan_i
 						IPACMERR("Mismatched destination qos ip addr 0x%x with client ip 0x%x\n", qos_param->ip_tup.dst_ip_addr, get_client_memptr(eth_client, eth_index)->v4_addr);
 						return IPACM_SUCCESS;
 					}
-					rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_DST_ADDR;
-					rt_rule_entry->rule.attrib.u.v4.dst_addr = qos_param->ip_tup.dst_ip_addr;
-					rt_rule_entry->rule.attrib.u.v4.dst_addr_mask = qos_param->ip_tup.dst_sub_mask;
 				}
 
 				// If single port is provided
@@ -5886,22 +5883,6 @@ int IPACM_Lan::handle_qos_route_rule(uint8_t *client_mac, uint16_t client_vlan_i
 				{
 					rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_PROTOCOL;
 					rt_rule_entry->rule.attrib.u.v4.protocol = qos_param->ip_tup.protocol;
-				}
-
-				if (memcmp(zero_mac_array, qos_param->src_mac_addr, sizeof(qos_param->src_mac_addr)))
-				{
-					rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_MAC_SRC_ADDR_ETHER_II;
-					memcpy(rt_rule_entry->rule.attrib.src_mac_addr, qos_param->src_mac_addr,
-						   sizeof(rt_rule_entry->rule.attrib.src_mac_addr));
-					memset(rt_rule_entry->rule.attrib.src_mac_addr_mask, 1, sizeof(rt_rule_entry->rule.attrib.src_mac_addr_mask));
-				}
-
-				if (memcmp(zero_mac_array, qos_param->dst_mac_addr, sizeof(qos_param->dst_mac_addr)))
-				{
-					rt_rule_entry->rule.attrib.attrib_mask |=  IPA_FLT_MAC_DST_ADDR_ETHER_II;
-					memcpy(rt_rule_entry->rule.attrib.dst_mac_addr, qos_param->dst_mac_addr,
-						   sizeof(rt_rule_entry->rule.attrib.dst_mac_addr));
-					memset(rt_rule_entry->rule.attrib.dst_mac_addr_mask, 1, sizeof(rt_rule_entry->rule.attrib.dst_mac_addr_mask));
 				}
 
 				if (qos_param->vlan_id)
@@ -5940,6 +5921,9 @@ int IPACM_Lan::handle_qos_route_rule(uint8_t *client_mac, uint16_t client_vlan_i
 
 				new_client_info.qos_rt_rule_hdl_v4 = rt_rule->rules[0].rt_rule_hdl;
 				new_client_info.route_rule_set_v4 = true;
+				new_client_info.v4_ip_addr = rt_rule_entry->rule.attrib.u.v4.dst_addr;
+
+				memcpy(new_client_info.mac, get_client_memptr(eth_client, eth_index)->mac, IPA_MAC_ADDR_SIZE);
 
 				qos_param->qos_client_list.push_front(new_client_info);
 				qos_param->client_cnt++;
@@ -5966,6 +5950,18 @@ int IPACM_Lan::handle_qos_route_rule(uint8_t *client_mac, uint16_t client_vlan_i
 						rt_rule_entry->rule.dst = IPA_CLIENT_APPS_LAN_CONS;
 						memset(&rt_rule_entry->rule.attrib, 0, sizeof(rt_rule_entry->rule.attrib));
 						rt_rule_entry->rule.hdr_hdl = 0;
+
+
+						//Client ip is required to differentiate different clients, else hdr collision will happen
+						rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_DST_ADDR;
+						rt_rule_entry->rule.attrib.u.v6.dst_addr[0] = get_client_memptr(eth_client, eth_index)->v6_addr[v6_num][0];
+						rt_rule_entry->rule.attrib.u.v6.dst_addr[1] = get_client_memptr(eth_client, eth_index)->v6_addr[v6_num][1];
+						rt_rule_entry->rule.attrib.u.v6.dst_addr[2] = get_client_memptr(eth_client, eth_index)->v6_addr[v6_num][2];
+						rt_rule_entry->rule.attrib.u.v6.dst_addr[3] = get_client_memptr(eth_client, eth_index)->v6_addr[v6_num][3];
+						rt_rule_entry->rule.attrib.u.v6.dst_addr_mask[0] = 0xffffffff;
+						rt_rule_entry->rule.attrib.u.v6.dst_addr_mask[1] = 0xffffffff;
+						rt_rule_entry->rule.attrib.u.v6.dst_addr_mask[2] = 0xffffffff;
+						rt_rule_entry->rule.attrib.u.v6.dst_addr_mask[3] = 0xffffffff;
 
 						// IP Tuple V6 params
 						if (qos_param->ip_tup.src_v6_ip_addr[0])
@@ -5997,16 +5993,6 @@ int IPACM_Lan::handle_qos_route_rule(uint8_t *client_mac, uint16_t client_vlan_i
 										 get_client_memptr(eth_client, eth_index)->v6_addr[v6_num][3]);
 								continue;
 							}
-
-							rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_DST_ADDR;
-							rt_rule_entry->rule.attrib.u.v6.dst_addr[0] = qos_param->ip_tup.dst_v6_ip_addr[0];
-							rt_rule_entry->rule.attrib.u.v6.dst_addr[1] = qos_param->ip_tup.dst_v6_ip_addr[1];
-							rt_rule_entry->rule.attrib.u.v6.dst_addr[2] = qos_param->ip_tup.dst_v6_ip_addr[2];
-							rt_rule_entry->rule.attrib.u.v6.dst_addr[3] = qos_param->ip_tup.dst_v6_ip_addr[3];
-							rt_rule_entry->rule.attrib.u.v6.dst_addr_mask[0] = qos_param->ip_tup.dst_v6_sub_mask[0];
-							rt_rule_entry->rule.attrib.u.v6.dst_addr_mask[1] = qos_param->ip_tup.dst_v6_sub_mask[1];
-							rt_rule_entry->rule.attrib.u.v6.dst_addr_mask[2] = qos_param->ip_tup.dst_v6_sub_mask[2];
-							rt_rule_entry->rule.attrib.u.v6.dst_addr_mask[3] = qos_param->ip_tup.dst_v6_sub_mask[3];
 						}
 
 
@@ -6034,22 +6020,6 @@ int IPACM_Lan::handle_qos_route_rule(uint8_t *client_mac, uint16_t client_vlan_i
 							rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_DST_PORT_RANGE;
 							rt_rule_entry->rule.attrib.dst_port_lo = qos_param->ip_tup.dport_start;
 							rt_rule_entry->rule.attrib.dst_port_hi = qos_param->ip_tup.dport_end;
-						}
-
-						if (memcmp(zero_mac_array, qos_param->src_mac_addr, sizeof(qos_param->src_mac_addr)))
-						{
-							rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_MAC_SRC_ADDR_ETHER_II;
-							memcpy(rt_rule_entry->rule.attrib.src_mac_addr, qos_param->src_mac_addr,
-								   sizeof(rt_rule_entry->rule.attrib.src_mac_addr));
-							memset(rt_rule_entry->rule.attrib.src_mac_addr_mask, 1, sizeof(rt_rule_entry->rule.attrib.src_mac_addr_mask));
-						}
-
-						if (memcmp(zero_mac_array, qos_param->dst_mac_addr, sizeof(qos_param->dst_mac_addr)))
-						{
-							rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_MAC_DST_ADDR_ETHER_II;
-							memcpy(rt_rule_entry->rule.attrib.dst_mac_addr, qos_param->dst_mac_addr,
-								   sizeof(rt_rule_entry->rule.attrib.dst_mac_addr));
-							memset(rt_rule_entry->rule.attrib.dst_mac_addr_mask, 1, sizeof(rt_rule_entry->rule.attrib.dst_mac_addr_mask));
 						}
 
 						if (qos_param->vlan_id)
@@ -6157,22 +6127,6 @@ int IPACM_Lan::handle_qos_route_rule(uint8_t *client_mac, uint16_t client_vlan_i
 							rt_rule_entry->rule.attrib.dst_port_hi = qos_param->ip_tup.dport_end;
 						}
 
-						if (memcmp(zero_mac_array, qos_param->src_mac_addr, sizeof(qos_param->src_mac_addr)))
-						{
-							rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_MAC_SRC_ADDR_ETHER_II;
-							memcpy(rt_rule_entry->rule.attrib.src_mac_addr, qos_param->src_mac_addr,
-								   sizeof(rt_rule_entry->rule.attrib.src_mac_addr));
-							memset(rt_rule_entry->rule.attrib.src_mac_addr_mask, 1, sizeof(rt_rule_entry->rule.attrib.src_mac_addr_mask));
-						}
-
-						if (memcmp(zero_mac_array, qos_param->dst_mac_addr, sizeof(qos_param->dst_mac_addr)))
-						{
-							rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_MAC_DST_ADDR_ETHER_II;
-							memcpy(rt_rule_entry->rule.attrib.dst_mac_addr, qos_param->dst_mac_addr,
-								   sizeof(rt_rule_entry->rule.attrib.dst_mac_addr));
-							memset(rt_rule_entry->rule.attrib.dst_mac_addr_mask, 1, sizeof(rt_rule_entry->rule.attrib.dst_mac_addr_mask));
-						}
-
 						if (qos_param->vlan_id)
 						{
 							rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_DST_ADDR;
@@ -6211,12 +6165,20 @@ int IPACM_Lan::handle_qos_route_rule(uint8_t *client_mac, uint16_t client_vlan_i
 						new_client_info.qos_rt_rule_hdl_wan_v6[v6_num] = rt_rule->rules[0].rt_rule_hdl;
 						new_client_info.route_rule_set_v6 = true;
 
-						qos_param->qos_client_list.push_front(new_client_info);
-						qos_param->client_cnt++;
+						new_client_info.v6_ip_addr[v6_num][0] = rt_rule_entry->rule.attrib.u.v6.dst_addr[0];
+						new_client_info.v6_ip_addr[v6_num][1] = rt_rule_entry->rule.attrib.u.v6.dst_addr[1];
+						new_client_info.v6_ip_addr[v6_num][2] = rt_rule_entry->rule.attrib.u.v6.dst_addr[2];
+						new_client_info.v6_ip_addr[v6_num][3] = rt_rule_entry->rule.attrib.u.v6.dst_addr[3];
+
+						memcpy(new_client_info.mac, get_client_memptr(eth_client, eth_index)->mac, IPA_MAC_ADDR_SIZE);
+
 						IPACMDBG_H("tx:%d, rt rule hdl=%x ip-type: %d\n", tx_index,
 								   new_client_info.qos_rt_rule_hdl_wan_v6[v6_num], iptype);
 					}
 				}
+
+				qos_param->qos_client_list.push_front(new_client_info);
+				qos_param->client_cnt++;
 			}
 
 		} /* end of for loop */
@@ -6226,35 +6188,72 @@ int IPACM_Lan::handle_qos_route_rule(uint8_t *client_mac, uint16_t client_vlan_i
 	return IPACM_SUCCESS;
 }
 
-int IPACM_Lan::if_client_qos_rule_exist(uint8_t * client_mac, uint16_t client_vlan_id, list<qos_param_info>::iterator qos_param)
+int IPACM_Lan::if_client_qos_rule_needed(uint8_t * client_mac, uint16_t client_vlan_id, list<qos_param_info>::iterator qos_param)
 {
-	int ret = -1;
+	int ret = false;
 	int i = 0;
 	list<qos_client_info>::iterator it_qos_client;
+	int eth_index;
+	uint8_t null_mac[IPA_MAC_ADDR_SIZE] = {0, 0, 0, 0, 0, 0};
+
+	eth_index = get_eth_client_index(client_mac, client_vlan_id);
+	if (eth_index == IPACM_INVALID_INDEX)
+	{
+		IPACMERR("eth client not found/attached\n");
+		return ret;
+	}
 
 	// Check if vlan type is matching, if client is non-vlan then qos param can't be vlan and vice versa
 	if (qos_param->vlan_id &&
 		(client_vlan_id != qos_param->vlan_id))
 	{
-		IPACMERR("Vlan client for non-vlan qos param or vice-versa, client vlan id %d , qos vlanid %d\n",
+		IPACMDBG_H("Vlan client for non-vlan qos param or vice-versa, client vlan id %d , qos vlanid %d\n",
 						 client_vlan_id, qos_param->vlan_id);
+		return ret;
+	}
+
+	// Check if mac id is matching the qos rule mac id
+	if (memcmp(qos_param->dst_mac_addr, null_mac, sizeof(null_mac)) &&
+		memcmp(qos_param->dst_mac_addr, get_client_memptr(eth_client, eth_index)->mac, IPA_MAC_ADDR_SIZE))
+	{
+		IPACMDBG_H("Destination qos mac address %x:%x:%x:%x:%x:%x requested does not match client mac %x:%x:%x:%x:%x:%x, client vlanid %d\n",
+					 qos_param->dst_mac_addr[0], qos_param->dst_mac_addr[1], qos_param->dst_mac_addr[2],
+					 qos_param->dst_mac_addr[3], qos_param->dst_mac_addr[4], qos_param->dst_mac_addr[5],
+					 get_client_memptr(eth_client, eth_index)->mac[0], get_client_memptr(eth_client, eth_index)->mac[1],
+					 get_client_memptr(eth_client, eth_index)->mac[2], get_client_memptr(eth_client, eth_index)->mac[3],
+					 get_client_memptr(eth_client, eth_index)->mac[4], get_client_memptr(eth_client, eth_index)->mac[5],
+					 client_vlan_id);
 		return ret;
 	}
 
 	for (it_qos_client = qos_param->qos_client_list.begin(); it_qos_client != qos_param->qos_client_list.end(); ++it_qos_client)
 	{
-		if (memcmp(client_mac,
-				   it_qos_client->mac,
-				   IPA_MAC_ADDR_SIZE) == 0)
+		if (it_qos_client->v4_ip_addr &&
+			(it_qos_client->v4_ip_addr == get_client_memptr(eth_client, eth_index)->v4_addr))
 		{
-			IPACMDBG("Client already exists in qos list, Client vlan id %d , qos vlanid %d\n",
+			IPACMDBG_H("v4 Client already exists in qos list, Client vlan id %d , qos vlanid %d\n",
 					 client_vlan_id, qos_param->vlan_id);
 			return ret;
 		}
+
+		for (int i = 0; i < IPV6_NUM_ADDR; i++)
+		{
+			if (it_qos_client->v6_ip_addr[i][0] &&
+				it_qos_client->v6_ip_addr[i][0] == get_client_memptr(eth_client, eth_index)->v6_addr[i][0] &&
+				it_qos_client->v6_ip_addr[i][1] == get_client_memptr(eth_client, eth_index)->v6_addr[i][1] &&
+				it_qos_client->v6_ip_addr[i][2] == get_client_memptr(eth_client, eth_index)->v6_addr[i][2] &&
+				it_qos_client->v6_ip_addr[i][3] == get_client_memptr(eth_client, eth_index)->v6_addr[i][3]
+				)
+			{
+				IPACMDBG_H("v6 Client already exists in qos list, Client vlan id %d , qos vlanid %d\n",
+						 client_vlan_id, qos_param->vlan_id);
+				return ret;
+			}
+		}
 	}
 
-	ret = i;
-	IPACMDBG_H("No matching client already exists.... add new qos client at index %d\n", ret);
+	ret = true;
+	IPACMDBG_H("No qos rule exists for this client, Adding qos rule for client at idx %d\n", eth_index);
 	return ret;
 }
 
@@ -6275,6 +6274,7 @@ int IPACM_Lan::install_all_qos_route_rule(uint8_t * client_mac, uint16_t client_
 
 	for (it_qos_params = IPACM_Iface::ipacmcfg->m_qos_params.begin(); it_qos_params != IPACM_Iface::ipacmcfg->m_qos_params.end(); ++it_qos_params)
 	{
+		IPACMDBG_H("Individual qos rules with ip type: %d and tc: %d\n", (ipa_ip_type)it_qos_params->ip_type, it_qos_params->traffic_class);
 		IPACMDBG("Install_all_qos_route_rule it_qos_params called start 0x%x\n",
 			   it_qos_params);
 		if ((it_qos_params->ip_type == IPA_IP_v4 && it_qos_params->route_rule_set_v4) ||
@@ -6284,11 +6284,10 @@ int IPACM_Lan::install_all_qos_route_rule(uint8_t * client_mac, uint16_t client_
 					 it_qos_params->qos_rt_rule_hdl_v4, it_qos_params->qos_rt_rule_hdl_v6);
 		}
 
-		client_idx = if_client_qos_rule_exist(client_mac, client_vlan_id, it_qos_params);
-		if (client_idx == it_qos_params->client_cnt)
+		if (if_client_qos_rule_needed(client_mac, client_vlan_id, it_qos_params))
 		{
-			IPACMDBG_H("Install individual qos rules\n");
-			handle_qos_route_rule(client_mac, client_vlan_id, (ipa_ip_type)it_qos_params->ip_type, it_qos_params, client_idx);
+			IPACMDBG_H("Install individual qos rules with ip type: %d and tc: %d\n", (ipa_ip_type)it_qos_params->ip_type, it_qos_params->traffic_class);
+			handle_qos_route_rule(client_mac, client_vlan_id, (ipa_ip_type)it_qos_params->ip_type, it_qos_params);
 		}
 	}
 
@@ -6366,14 +6365,13 @@ int IPACM_Lan::delete_client_qos_rule(uint8_t *client_mac, uint16_t vlan_id)
 
 int IPACM_Lan::delete_all_client_info_from_qos(list<qos_param_info>::iterator qos_param)
 {
-	int remove_idx = -1;
 	list<qos_client_info>::iterator it_qos_client;
 	int ret = IPACM_SUCCESS;
 
-	for (it_qos_client = qos_param->qos_client_list.begin(); it_qos_client != qos_param->qos_client_list.end(); ++it_qos_client)
+	for (it_qos_client = qos_param->qos_client_list.begin(); it_qos_client != qos_param->qos_client_list.end(); )
 	{
 		//Delete the respective route handles
-		IPACMDBG_H("Delete client rule from index %d is v4 set %d for hdl %d\n", remove_idx,
+		IPACMDBG_H("Delete client rule from is v4 set %d for hdl %d\n",
 				   it_qos_client->route_rule_set_v4, it_qos_client->qos_rt_rule_hdl_v4);
 
 		if (it_qos_client->route_rule_set_v4 &&
@@ -6384,7 +6382,7 @@ int IPACM_Lan::delete_all_client_info_from_qos(list<qos_param_info>::iterator qo
 
 		for (int v6_num = 0; v6_num < IPV6_NUM_ADDR; v6_num++)
 		{
-			IPACMDBG_H("Delete client rule from index %d is v6 set %d for hdl %d\n", remove_idx,
+			IPACMDBG_H("Delete client rule from is v6 set %d for hdl %d\n",
 					   it_qos_client->route_rule_set_v6, it_qos_client->qos_rt_rule_hdl_v6[v6_num]);
 			if (it_qos_client->route_rule_set_v6 &&
 				(m_routing.DeleteRoutingHdl(it_qos_client->qos_rt_rule_hdl_v6[v6_num], IPA_IP_v6) == false) &&
@@ -6393,7 +6391,10 @@ int IPACM_Lan::delete_all_client_info_from_qos(list<qos_param_info>::iterator qo
 				ret = IPACM_FAILURE;
 			}
 		}
+
+		it_qos_client = qos_param->qos_client_list.erase(it_qos_client);
 	}
+	IPACMDBG_H("Qos client list for qos param after deleting client is now :%d \n", qos_param->qos_client_list.size());
 		//else if (memcmp(client_mac, it_qos_client->mac, IPA_MAC_ADDR_SIZE) == 0)
 		//{
 		//	IPACMDBG_H("Found a matching entry in qos rule list for client\n");
@@ -6421,6 +6422,7 @@ int IPACM_Lan::delete_all_client_qos_rules()
 		delete_all_client_info_from_qos(it_qos_params);
 	}
 
+	IPACMDBG_H("Qos params list size after deleting client is now :%d \n", IPACM_Iface::ipacmcfg->m_qos_params.size());
 	pthread_mutex_unlock(&IPACM_Iface::ipacmcfg->qos_param_list_lock);
 	return IPACM_SUCCESS;
 }

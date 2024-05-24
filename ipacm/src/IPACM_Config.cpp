@@ -3729,7 +3729,10 @@ void IPACM_Config::add_qos_params_info(ipa_ioc_qos_config *data)
 		   (data->dst_port_end == it_qos_params->ip_tup.dport_end) &&
 		   (data->protocol == it_qos_params->ip_tup.protocol) &&
 		   (data->dscp == it_qos_params->dscp) &&
-		   (data->pcp == it_qos_params->pcp)
+		   (data->pcp == it_qos_params->pcp) &&
+		   !memcmp(it_qos_params->dst_mac_addr, data->dst_mac_addr, sizeof(new_qos_info.dst_mac_addr)) &&
+		   !memcmp(it_qos_params->ip_tup.src_v6_ip_addr, data->src_v6_ip_addr, sizeof(data->src_v6_ip_addr)) &&
+		   !memcmp(it_qos_params->ip_tup.dst_v6_ip_addr, data->dst_v6_ip_addr, sizeof(data->dst_v6_ip_addr))
 		   )
 		{
 			if (data->vlan_count)
@@ -3810,6 +3813,11 @@ void IPACM_Config::add_qos_params_info(ipa_ioc_qos_config *data)
 	m_qos_params.push_front(new_qos_info);
 	pthread_mutex_unlock(&qos_param_list_lock);
 
+	m_qos_params.sort(
+		[](const qos_param_info &a, const qos_param_info &b) {
+			return a.traffic_class > b.traffic_class;
+	});
+
 	IPACMDBG_H("Added qos iface: %s vlan id: %d with traffic class :%d \n", data->dev_name, data->dir, data->traffic_class);
 	IPACMDBG_H("qos params list size now :%d \n", m_qos_params.size());
 
@@ -3870,7 +3878,10 @@ void IPACM_Config::delete_qos_params_info(ipa_ioc_qos_config *data)
 		   (data->dst_port_end == it_qos_params->ip_tup.dport_end) &&
 		   (data->protocol == it_qos_params->ip_tup.protocol) &&
 		   (data->dscp == it_qos_params->dscp) &&
-		   (data->pcp == it_qos_params->pcp)
+		   (data->pcp == it_qos_params->pcp)  &&
+		   !memcmp(it_qos_params->dst_mac_addr, data->dst_mac_addr, sizeof(new_qos_info.dst_mac_addr)) &&
+		   !memcmp(it_qos_params->ip_tup.src_v6_ip_addr, data->src_v6_ip_addr, sizeof(data->src_v6_ip_addr)) &&
+		   !memcmp(it_qos_params->ip_tup.dst_v6_ip_addr, data->dst_v6_ip_addr, sizeof(data->dst_v6_ip_addr))
 		   )
 		{
 			//Send qos rule del event

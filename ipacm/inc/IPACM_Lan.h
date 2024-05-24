@@ -1598,9 +1598,9 @@ public:
 #endif
 
     uint32_t get_u8_bitmap_from_tc(uint8_t traffic_class);
-	int handle_qos_route_rule(uint8_t *client_mac, uint16_t vlan_id, ipa_ip_type iptype, list<qos_param_info>::iterator qos_param, int qos_client_idx);
+	int handle_qos_route_rule(uint8_t *client_mac, uint16_t vlan_id, ipa_ip_type iptype, list<qos_param_info>::iterator qos_param);
 	int install_all_qos_route_rule(uint8_t * client_mac, uint16_t vlan_id);
-	int if_client_qos_rule_exist(uint8_t *client_mac, uint16_t vlan_id, list<qos_param_info>::iterator qos_param);
+	int if_client_qos_rule_needed(uint8_t *client_mac, uint16_t vlan_id, list<qos_param_info>::iterator qos_param);
 	int delete_client_qos_rule(uint8_t *client_mac, uint16_t vlan_id);
 	int delete_client_info_from_qos(uint8_t *client_mac, uint16_t vlan_id, list<qos_param_info>::iterator qos_param);
 	int delete_all_client_qos_rules();

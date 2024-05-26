@@ -456,10 +456,16 @@ int IPACM_Wan::GetWanPDNinfo_v6(uint16_t *mtu, uint32_t (*ipv6_prefix)[2], ipa_i
 {
 	int num_mtu = 0;
 
-	for(int i = 0; i < IPA_MAX_NUM_SW_PDNS; i++)
+	for (int j = 0; j < (IPACM_Iface::ipacmcfg->num_ipv6_prefixes); j++)
 	{
-			if(ipv6_to_iface[i].ipv6_prefix[0] ||
-				ipv6_to_iface[i].ipv6_prefix[1])
+		for(int i = 0; i < IPA_MAX_NUM_SW_PDNS; i++)
+		{
+			if((ipv6_to_iface[i].ipv6_prefix[0] ||
+				ipv6_to_iface[i].ipv6_prefix[1]) &&
+				(ipv6_to_iface[i].ipv6_prefix[0] ==
+					IPACM_Iface::ipacmcfg->ipa_ipv6_prefixes[j].addr[0]) &&
+				(ipv6_to_iface[i].ipv6_prefix[1] ==
+					IPACM_Iface::ipacmcfg->ipa_ipv6_prefixes[j].addr[1]))
 			{
 				mtu[num_mtu] = ipv6_to_iface[i].pIface->mtu_v6;
 				ipv6_prefix[num_mtu][0] = ipv6_to_iface[i].ipv6_prefix[0];
@@ -469,6 +475,7 @@ int IPACM_Wan::GetWanPDNinfo_v6(uint16_t *mtu, uint32_t (*ipv6_prefix)[2], ipa_i
 					mtu[num_mtu], ipv6_prefix[num_mtu][0], ipv6_prefix[num_mtu][1]);
 				num_mtu++;
 			}
+		}
 	}
 	IPACMDBG_H("Found %d MTUs for ip_type %d\n", num_mtu, iptype);
 	return num_mtu;

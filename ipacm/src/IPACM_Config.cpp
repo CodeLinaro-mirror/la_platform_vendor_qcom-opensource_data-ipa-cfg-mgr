@@ -2706,11 +2706,20 @@ void IPACM_Config::pdn_dscp_config_update(ipa_ioc_pdn_dscp_map_info *pdn_dscp_co
 			memset(&pdn_dscp_map_info, 0, sizeof(pdn_dscp_map_info));
 			pdn_dscp_map_info.pdn_dscp_map
 				[IPACM_Iface::ipacmcfg->pdn_dscp_table[indx].mux_id] = 255;
+
+			m_fd = open(DEVICE_NAME, O_RDWR);
+			if (0 > m_fd)
+			{
+				IPACMERR("Failed opening %s.\n", DEVICE_NAME);
+			}
+
 			if(0 != ioctl(m_fd, IPA_IOC_UPDATE_PDN_DSCP_MAPPING, &pdn_dscp_map_info))
 			{
 				IPACMERR("ioctl to IPA driver failed for setting "
 					"PDN-DSCP Mapping\n");
 			}
+
+			close(m_fd);
 
 			/* Reset the configuration */
 			IPACMDBG_H("Reset PDN DSCP config for pdn_name:%s at %d\n",

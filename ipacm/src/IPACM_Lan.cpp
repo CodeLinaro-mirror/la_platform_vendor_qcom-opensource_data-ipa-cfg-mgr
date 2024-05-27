@@ -13313,19 +13313,6 @@ int IPACM_Lan::install_ipv4_icmp_flt_rule()
 			IPACMDBG_H("Install rules at idx %d\n", idx);
 		}
 
-#ifdef FEATURE_EoGRE
-		bool eogre_enabled = IPACM_Iface::ipacmcfg->eogre_enabled;
-#else
-		bool eogre_enabled = false;
-#endif
-		/*
-		 * Don't configure icmp when eogre enabled:
-		 */
-		if (eogre_enabled) {
-			IPACMDBG_H("Won't install icmp rule when eogre enabled\n");
-			return ret;
-		}
-
 		static const int NUM_RULES = 1;
 
 		char buf1[sizeof(struct ipa_ioc_add_flt_rule_v2)];
@@ -13413,19 +13400,6 @@ int IPACM_Lan::install_ipv6_icmp_flt_rule()
 		}
 
 		IPACMDBG_H("Will attempt to add v6 icmp filter rule for prop idx %d\n", idx);
-
-#ifdef FEATURE_EoGRE
-		bool eogre_enabled = IPACM_Iface::ipacmcfg->eogre_enabled;
-#else
-		bool eogre_enabled = false;
-#endif
-		/*
-		 * Don't configure icmp when eogre enabled:
-		 */
-		if (eogre_enabled) {
-			IPACMDBG_H("Won't install icmp rule when eogre enabled\n");
-			return ret;
-		}
 
 		static const int NUM_RULES = 1;
 
@@ -18281,14 +18255,6 @@ void IPACM_Lan::eogre_up()
 	if ( IPACM_Iface::ip_type == IPA_IP_v4 || IPACM_Iface::ip_type == IPA_IP_MAX )
 	{
 		/*
-		 * Will delete icpm rule.
-		 */
-		if ( delete_icmp_filter_rule(IPA_IP_v4) == IPACM_FAILURE )
-		{
-			IPACMERR("delete_icmp_filter_rule failed\n");
-			return;
-		}
-		/*
 		 * Will delete all exception rules.
 		 */
 		if ( delete_dflt_filter_rules(IPA_IP_v4) == IPACM_FAILURE )
@@ -18391,7 +18357,7 @@ void IPACM_Lan::eogre_down()
 	if (rx_prop == NULL)
 	{
 		IPACMERR("rx/tx properties empty...exit\n");
-		return IPACM_FAILURE;
+		return;
 	}
 
 	eogre_clear_route_data(IPA_IP_v4, rx_prop);
@@ -18858,6 +18824,21 @@ int IPACM_Lan::eogre_make_hdr_for_add_ctx(
 		0x00, 0x00, 0x00, 0x00
 	};
 
+	const uint8_t v6_eogre_header[] = {
+		0x60, 0x00, 0x00, 0x00,
+		0x00, 0x00, 0x2f, 0x40, // 0x2f Protocol (Generic Routing Encapsulation)
+		0x00, 0x00, 0x00, 0x00, // src address here
+		0x00, 0x00, 0x00, 0x00,
+		0x00, 0x00, 0x00, 0x00,
+		0x00, 0x00, 0x00, 0x00,
+		0x00, 0x00, 0x00, 0x00, // dest address here
+		0x00, 0x00, 0x00, 0x00,
+		0x00, 0x00, 0x00, 0x00,
+		0x00, 0x00, 0x00, 0x00,
+		// GRE header here
+		0x00, 0x00, 0x00, 0x00
+	};
+
 	uint8_t  hdr_data_buf[64];
 	uint32_t hdr_data_len;
 
@@ -18888,37 +18869,76 @@ int IPACM_Lan::eogre_make_hdr_for_add_ctx(
 			&(hdr->words[IPV4_DST_ADDR_IDX]));
 
 		hdr_data_len = sizeof(v4_gre_hdr_t);
+		IPACMDBG_H("Sending to uC, v4 header length : %d\n", hdr_data_len);
 	}
-	else
+	else /*iptype == IPA_IP_v6*/
 	{
-		v6_gre_hdr_t* hdr = (v6_gre_hdr_t*) hdr_data_buf;
+		if (IPACM_Iface::ipacmcfg->v6options_enabled == true)
+		{
+			v6_gre_hdr_t* hdr = (v6_gre_hdr_t*) hdr_data_buf;
 
-		memcpy(hdr_data_buf, v6_header, sizeof(v6_header));
+			memcpy(hdr_data_buf, v6_header, sizeof(v6_header));
 
-		hdr->words[IPV6_GRE_PROT_IDX] = htonl(ipgre_info.gre_protocol);
+			hdr->words[IPV6_GRE_PROT_IDX] = htonl(ipgre_info.gre_protocol);
 
-		memcpy(&(hdr->words[IPV6_SRC_ADDR_IDX]),
-			   &ipgre_info.ipv6_src,
-			   sizeof(ipgre_info.ipv6_src));
+			memcpy(&(hdr->words[IPV6_SRC_ADDR_IDX]),
+				&ipgre_info.ipv6_src,
+				sizeof(ipgre_info.ipv6_src));
 
-		memcpy(&(hdr->words[IPV6_DST_ADDR_IDX]),
-			   &ipgre_info.ipv6_dst,
-			   sizeof(ipgre_info.ipv6_dst));
+			memcpy(&(hdr->words[IPV6_DST_ADDR_IDX]),
+				&ipgre_info.ipv6_dst,
+				sizeof(ipgre_info.ipv6_dst));
 
-		addr2network(iptype, &(hdr->words[IPV6_SRC_ADDR_IDX]));
-		addr2network(iptype, &(hdr->words[IPV6_DST_ADDR_IDX]));
+			addr2network(iptype, &(hdr->words[IPV6_SRC_ADDR_IDX]));
+			addr2network(iptype, &(hdr->words[IPV6_DST_ADDR_IDX]));
 
-		IPACM_LOG_IP_ADDR(
-			"The src addr added to eogre header template:",
-			iptype,
-			&(hdr->words[IPV6_SRC_ADDR_IDX]));
+			IPACM_LOG_IP_ADDR(
+				"The src addr added to eogre header template:",
+				iptype,
+				&(hdr->words[IPV6_SRC_ADDR_IDX]));
 
-		IPACM_LOG_IP_ADDR(
-			"The dst addr added to eogre header template:",
-			iptype,
-			&(hdr->words[IPV6_DST_ADDR_IDX]));
+			IPACM_LOG_IP_ADDR(
+				"The dst addr added to eogre header template:",
+				iptype,
+				&(hdr->words[IPV6_DST_ADDR_IDX]));
 
-		hdr_data_len = sizeof(v6_gre_hdr_t);
+			hdr_data_len = sizeof(v6_gre_hdr_t);
+			IPACMDBG_H("Sending to uC, v6 header length with options: %d\n",
+								hdr_data_len);
+		}
+		else
+		{
+			v6_eogre_hdr_t* hdr = (v6_eogre_hdr_t*) hdr_data_buf;
+
+			memcpy(hdr_data_buf, v6_eogre_header, sizeof(v6_eogre_header));
+
+			hdr->words[IPV6_GRE_PROT] = htonl(ipgre_info.gre_protocol);
+
+			memcpy(&(hdr->words[IPV6_SRC_ADDR_IDX]),
+				&ipgre_info.ipv6_src,
+				sizeof(ipgre_info.ipv6_src));
+
+			memcpy(&(hdr->words[IPV6_DST_ADDR_IDX]),
+				&ipgre_info.ipv6_dst,
+				sizeof(ipgre_info.ipv6_dst));
+
+			addr2network(iptype, &(hdr->words[IPV6_SRC_ADDR_IDX]));
+			addr2network(iptype, &(hdr->words[IPV6_DST_ADDR_IDX]));
+
+			IPACM_LOG_IP_ADDR(
+				"The src addr added to eogre header template:",
+				iptype,
+				&(hdr->words[IPV6_SRC_ADDR_IDX]));
+
+			IPACM_LOG_IP_ADDR(
+				"The dst addr added to eogre header template:",
+				iptype,
+				&(hdr->words[IPV6_DST_ADDR_IDX]));
+
+			hdr_data_len = sizeof(v6_eogre_hdr_t);
+			IPACMDBG_H("Sending to uC, v6 header length without options: %d\n",
+								hdr_data_len);
+		}
 	}
 
 	/*
@@ -19074,7 +19094,11 @@ int IPACM_Lan::eogre_make_hdr_rem_ctx(
 	procCtx->status       = -1; // Return parameter
 	procCtx->type         = IPA_HDR_PROC_EoGRE_HEADER_REMOVE;
 	procCtx->eogre_params.hdr_remove_param.hdr_len_remove =
-		( iptype == IPA_IP_v4 ) ? sizeof(v4_gre_hdr_t) : sizeof(v6_gre_hdr_t);
+		( iptype == IPA_IP_v4 ) ? sizeof(v4_gre_hdr_t) :
+		(IPACM_Iface::ipacmcfg->v6options_enabled == true) ? sizeof(v6_gre_hdr_t) :
+							sizeof(v6_eogre_hdr_t);
+		IPACMDBG_H("Sending to uC, Remove header length :c%d\n",
+				procCtx->eogre_params.hdr_remove_param.hdr_len_remove);
 
 	if ( m_header.AddHeaderProcCtx(procCtxTable) == true )
 	{

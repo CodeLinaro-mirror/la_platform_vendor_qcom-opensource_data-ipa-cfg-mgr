@@ -113,6 +113,7 @@ typedef struct _ipa_rm_client
 
 #define MAX_NUM_EXT_PROPS 25
 #define MAX_NUM_IP_PASS_MPDN 15
+#define EOGRE_PROTOCOL_TYPE 0x6558
 
 /* used to hold extended properties */
 typedef struct
@@ -409,6 +410,8 @@ public:
 #ifdef FEATURE_EoGRE
 	ipa_ipgre_info eogre_info;
 	bool           eogre_enabled;
+	char eogre_tunnel_name[IPA_IFACE_NAME_LEN];
+	bool v6options_enabled;
 #endif
 
 	bool eth_pdu_enabled;

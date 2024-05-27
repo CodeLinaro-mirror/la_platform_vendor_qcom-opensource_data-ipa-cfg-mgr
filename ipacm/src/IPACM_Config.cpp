@@ -312,6 +312,8 @@ IPACM_Config::IPACM_Config()
 #ifdef FEATURE_EoGRE
 	memset(&eogre_info, 0, sizeof(eogre_info));
 	eogre_enabled = false;
+	eogre_tunnel_name[0] = '\0';
+	v6options_enabled = false;
 #endif
 	memset(&second_backhaul_info,0,sizeof(second_backhaul_info));
 	ext_router_mode = IPA_PREFIX_DISABLED;
@@ -762,6 +764,11 @@ skip_fnr_alloc:
 	IPACMDBG_H("Second backhaul details enabled: %d, netdev: %s, gwipv4: %x\n",
 		second_backhaul_info.enable, second_backhaul_info.net_dev,
 		second_backhaul_info.gateway_ipv4);
+#endif
+#ifdef FEATURE_EoGRE
+	/* Fetch v6options enable details */
+	v6options_enabled = cfg->v6options_enable;
+	IPACMDBG_H("v6options enabled is %d\n", v6options_enabled);
 #endif
 
 	/* Allocate more non-nat entries if the monitored iface dun have Tx/Rx properties */

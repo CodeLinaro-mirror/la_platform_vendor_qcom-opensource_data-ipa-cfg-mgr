@@ -248,6 +248,11 @@ if (!(a)) {                                                 \
 #define Static_Policy_DSCP_Mark_Mode         "DSCPMode"
 #endif
 
+#ifdef FEATURE_EoGRE
+#define EoGRE_v6options_TAG                  "IPACMEoGRE"
+#define EoGRE_v6options_enable_TAG           "IPACMv6optEnabled"
+#endif
+
 /*---------------------------------------------------------------------------
       IP protocol numbers - use in dss_socket() to identify protocols.
       Also contains the extension header types for IPv6.
@@ -396,6 +401,9 @@ typedef struct  _IPACM_conf_t
 	ipacm_gre_conf_t gre_conf;
 #ifdef FEATURE_DUAL_BACKHAUL
 	ipacm_dual_backhaul_conf_t dual_backhaul_conf;
+#endif
+#ifdef FEATURE_EoGRE
+	bool v6options_enable;
 #endif
 	bool public_ip_support_enable;
 	bool wlan_vlan_mpdn_enable;

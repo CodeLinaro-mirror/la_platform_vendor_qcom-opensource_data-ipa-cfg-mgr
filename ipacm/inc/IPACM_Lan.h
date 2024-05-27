@@ -285,6 +285,15 @@ typedef struct v6_gre_hdr_s
 #define IPV6_SRC_ADDR_IDX  2
 #define IPV6_DST_ADDR_IDX  6
 #define IPV6_GRE_PROT_IDX 12
+#define IPV6_GRE_PROT     10
+
+/*
+ * An IP v6 + GRE header.
+ */
+typedef struct v6_eogre_hdr_s
+{
+	uint32_t words[11]; /* 10 words for header + 1 word for gre header */
+} v6_eogre_hdr_t;
 
 #endif /* #ifdef FEATURE_EoGRE */
 

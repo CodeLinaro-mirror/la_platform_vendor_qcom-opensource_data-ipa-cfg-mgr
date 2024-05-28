@@ -1371,8 +1371,8 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 					}
 #endif
 					IPACMDBG_H("LAN iface delete client \n");
-					handle_eth_client_down_evt(data->mac_addr, vlan_id, data);
 					delete_client_qos_rule(data->mac_addr, vlan_id);
+					handle_eth_client_down_evt(data->mac_addr, vlan_id, data);
 					eth_bridge_post_event(IPA_ETH_BRIDGE_CLIENT_DEL, IPA_IP_MAX, data->mac_addr, NULL, data->iface_name, vlan_id);
 				}
 #ifdef FEATURE_L2TP
@@ -5764,7 +5764,7 @@ int IPACM_Lan::handle_qos_route_rule(uint8_t *client_mac, uint16_t client_vlan_i
 			return IPACM_FAILURE;
 		}
 
-		rt_rule->commit = 1;
+		rt_rule->commit = false; /* Install all qos route rules together */
 		rt_rule->num_rules = (uint8_t)NUM;
 		rt_rule->ip = iptype;
 
@@ -6226,6 +6226,25 @@ int IPACM_Lan::if_client_qos_rule_needed(uint8_t * client_mac, uint16_t client_v
 		return ret;
 	}
 
+	//don't install qos rules if client rules are not set
+	if (qos_param->ip_type == IPA_IP_v4 &&
+		!get_client_memptr(eth_client, eth_index)->route_rule_set_v4)
+	{
+		IPACMDBG_H("v4 client rule is not set: %d, "
+				"cannot install qos v4 rule for this client\n",
+			get_client_memptr(eth_client, eth_index)->route_rule_set_v4);
+		return ret;
+	}
+
+	if (qos_param->ip_type == IPA_IP_v6 &&
+		!get_client_memptr(eth_client, eth_index)->route_rule_set_v6)
+	{
+		IPACMDBG_H("v6 client rule is not set: %d, "
+			"cannot install qos v6 rule for this client\n",
+			get_client_memptr(eth_client, eth_index)->route_rule_set_v6);
+		return ret;
+	}
+
 	for (it_qos_client = qos_param->qos_client_list.begin(); it_qos_client != qos_param->qos_client_list.end(); ++it_qos_client)
 	{
 		if (it_qos_client->v4_ip_addr &&
@@ -6272,9 +6291,11 @@ int IPACM_Lan::install_all_qos_route_rule(uint8_t * client_mac, uint16_t client_
 		return IPACM_FAILURE;
 	}
 
-	for (it_qos_params = IPACM_Iface::ipacmcfg->m_qos_params.begin(); it_qos_params != IPACM_Iface::ipacmcfg->m_qos_params.end(); ++it_qos_params)
+	for (it_qos_params = IPACM_Iface::ipacmcfg->m_qos_params.begin();
+		it_qos_params != IPACM_Iface::ipacmcfg->m_qos_params.end(); ++it_qos_params)
 	{
-		IPACMDBG_H("Individual qos rules with ip type: %d and tc: %d\n", (ipa_ip_type)it_qos_params->ip_type, it_qos_params->traffic_class);
+		IPACMDBG_H("Individual qos rules with ip type: %d and tc: %d\n",
+			(ipa_ip_type)it_qos_params->ip_type, it_qos_params->traffic_class);
 		IPACMDBG("Install_all_qos_route_rule it_qos_params called start 0x%x\n",
 			   it_qos_params);
 		if ((it_qos_params->ip_type == IPA_IP_v4 && it_qos_params->route_rule_set_v4) ||
@@ -6286,56 +6307,103 @@ int IPACM_Lan::install_all_qos_route_rule(uint8_t * client_mac, uint16_t client_
 
 		if (if_client_qos_rule_needed(client_mac, client_vlan_id, it_qos_params))
 		{
-			IPACMDBG_H("Install individual qos rules with ip type: %d and tc: %d\n", (ipa_ip_type)it_qos_params->ip_type, it_qos_params->traffic_class);
-			handle_qos_route_rule(client_mac, client_vlan_id, (ipa_ip_type)it_qos_params->ip_type, it_qos_params);
+			IPACMDBG_H("Install individual qos rules with ip type: %d and tc: %d\n",
+				(ipa_ip_type)it_qos_params->ip_type, it_qos_params->traffic_class);
+			handle_qos_route_rule(client_mac, client_vlan_id,
+			(ipa_ip_type)it_qos_params->ip_type, it_qos_params);
 		}
 	}
+
+	if (false == m_routing.Commit(IPA_IP_v4))
+	{
+		IPACMERR("QOS Routing rule v4 commit failed!\n");
+		return IPACM_FAILURE;
+	}
+
+	if (false == m_routing.Commit(IPA_IP_v6))
+	{
+		IPACMERR("QOS Routing rule v6 commit failed!\n");
+		return IPACM_FAILURE;
+	}
+
+	IPACMDBG_H("QOS Routing rule added successfully \n");
 
 	pthread_mutex_unlock(&IPACM_Iface::ipacmcfg->qos_param_list_lock);
 	return IPACM_SUCCESS;
 }
 
-int IPACM_Lan::delete_client_info_from_qos(uint8_t *client_mac, uint16_t vlan_id, list<qos_param_info>::iterator qos_param)
+int IPACM_Lan::delete_client_info_from_qos(uint8_t *client_mac,
+				uint16_t vlan_id, list<qos_param_info>::iterator qos_param)
 {
-	int remove_idx = -1;
 	list<qos_client_info>::iterator it_qos_client;
+	int eth_index;
 
-	for (it_qos_client = qos_param->qos_client_list.begin(); it_qos_client != qos_param->qos_client_list.end(); ++it_qos_client)
+	eth_index = get_eth_client_index(client_mac, vlan_id);
+	if (eth_index == IPACM_INVALID_INDEX)
 	{
-		if (qos_param->vlan_id && (qos_param->vlan_id == vlan_id) &&
-			(memcmp(client_mac, it_qos_client->mac, IPA_MAC_ADDR_SIZE) == 0)
-		   )
+		IPACMERR("eth client not found/attached\n");
+		return IPACM_FAILURE;
+	}
+
+	IPACMDBG_H("Attempting to delete qos entry for client at idx %d"
+		" with vlan %d\n", eth_index, vlan_id);
+
+	for (it_qos_client = qos_param->qos_client_list.begin();
+		it_qos_client != qos_param->qos_client_list.end(); )
+	{
+		if (it_qos_client->v4_ip_addr &&
+			(it_qos_client->v4_ip_addr ==
+				get_client_memptr(eth_client, eth_index)->v4_addr))
 		{
-			IPACMDBG_H("Found a matching vlan %d entry in qos rule list for client\n", vlan_id);
+			IPACMDBG_H("Found a matching vlan %d entry in qos rule list "
+				"for client with ipv4: 0x\n",
+				vlan_id, it_qos_client->v4_ip_addr);
 
 			//Delete the respective route handles
-			IPACMDBG_H("Delete client rule from index %d is v4 set %d for hdl %d\n", remove_idx,
-					   it_qos_client->route_rule_set_v4, it_qos_client->qos_rt_rule_hdl_v4);
+			IPACMDBG_H("Delete client rule from index %d is v4 set %d for hdl %d\n",
+				eth_index, it_qos_client->route_rule_set_v4,
+				it_qos_client->qos_rt_rule_hdl_v4);
 
 			if (it_qos_client->route_rule_set_v4 &&
-				(m_routing.DeleteRoutingHdl(it_qos_client->qos_rt_rule_hdl_v4, IPA_IP_v4) == false)) {
-				IPACMERR("Failed to delete v4 qos routing rule hdl %d\n", it_qos_client->qos_rt_rule_hdl_v4);
+				(m_routing.DeleteRoutingHdl(it_qos_client->qos_rt_rule_hdl_v4,
+					IPA_IP_v4) == false)) {
+				IPACMERR("Failed to delete v4 qos routing rule hdl %d\n",
+					it_qos_client->qos_rt_rule_hdl_v4);
 				return IPACM_FAILURE;
 			}
+		}
 
-			for (int v6_num = 0; v6_num < IPV6_NUM_ADDR; v6_num++)
+		for (int v6_num = 0; v6_num < IPV6_NUM_ADDR; v6_num++)
+		{
+			if (it_qos_client->v6_ip_addr[v6_num][0] &&
+				it_qos_client->v6_ip_addr[v6_num][0] ==
+				get_client_memptr(eth_client, eth_index)->v6_addr[v6_num][0] &&
+				it_qos_client->v6_ip_addr[v6_num][1] ==
+				get_client_memptr(eth_client, eth_index)->v6_addr[v6_num][1] &&
+				it_qos_client->v6_ip_addr[v6_num][2] ==
+				get_client_memptr(eth_client, eth_index)->v6_addr[v6_num][2] &&
+				it_qos_client->v6_ip_addr[v6_num][3] ==
+				get_client_memptr(eth_client, eth_index)->v6_addr[v6_num][3])
 			{
-				IPACMDBG_H("Delete client rule from index %d is v6 set %d for hdl %d\n", remove_idx,
-						   it_qos_client->route_rule_set_v6, it_qos_client->qos_rt_rule_hdl_v6[v6_num]);
+				IPACMDBG_H("Delete client rule from index %d is"
+				" v6 set %d for hdl %d\n", eth_index,
+				it_qos_client->route_rule_set_v6,
+				it_qos_client->qos_rt_rule_hdl_v6[v6_num]);
 				if (it_qos_client->route_rule_set_v6 &&
-					(m_routing.DeleteRoutingHdl(it_qos_client->qos_rt_rule_hdl_v6[v6_num], IPA_IP_v6) == false) &&
-					(m_routing.DeleteRoutingHdl(it_qos_client->qos_rt_rule_hdl_wan_v6[v6_num], IPA_IP_v6) == false)) {
-					IPACMERR("Failed to delete v6 qos routing rule hdl %d\n", it_qos_client->qos_rt_rule_hdl_v6[v6_num]);
+					(m_routing.DeleteRoutingHdl(
+						it_qos_client->qos_rt_rule_hdl_v6[v6_num],
+						IPA_IP_v6) == false) &&	
+					(m_routing.DeleteRoutingHdl(
+						it_qos_client->qos_rt_rule_hdl_wan_v6[v6_num],
+						IPA_IP_v6) == false)) {
+					IPACMERR("Failed to delete v6 qos routing rule hdl %d\n",
+						it_qos_client->qos_rt_rule_hdl_v6[v6_num]);
 					return IPACM_FAILURE;
 				}
 			}
-			break;
 		}
-		else if (memcmp(client_mac, it_qos_client->mac, IPA_MAC_ADDR_SIZE) == 0)
-		{
-			IPACMDBG_H("Found a matching entry in qos rule list for client\n");
-			break;
-		}
+
+		it_qos_client = qos_param->qos_client_list.erase(it_qos_client);
 	}
 
 	qos_param->client_cnt--;
@@ -6347,14 +6415,14 @@ int IPACM_Lan::delete_client_qos_rule(uint8_t *client_mac, uint16_t vlan_id)
 {
 	list<qos_param_info>::iterator it_qos_params;
 
-
 	if(pthread_mutex_lock(&IPACM_Iface::ipacmcfg->qos_param_list_lock) != 0)
 	{
 		IPACMERR("Unable to lock the mutex\n");
 		return IPACM_FAILURE;
 	}
 
-	for (it_qos_params = IPACM_Iface::ipacmcfg->m_qos_params.begin(); it_qos_params != IPACM_Iface::ipacmcfg->m_qos_params.end(); ++it_qos_params)
+	for (it_qos_params = IPACM_Iface::ipacmcfg->m_qos_params.begin();
+	it_qos_params != IPACM_Iface::ipacmcfg->m_qos_params.end(); ++it_qos_params)
 	{
 		delete_client_info_from_qos(client_mac, vlan_id, it_qos_params);
 	}
@@ -6368,7 +6436,8 @@ int IPACM_Lan::delete_all_client_info_from_qos(list<qos_param_info>::iterator qo
 	list<qos_client_info>::iterator it_qos_client;
 	int ret = IPACM_SUCCESS;
 
-	for (it_qos_client = qos_param->qos_client_list.begin(); it_qos_client != qos_param->qos_client_list.end(); )
+	for (it_qos_client = qos_param->qos_client_list.begin();
+		it_qos_client != qos_param->qos_client_list.end(); )
 	{
 		//Delete the respective route handles
 		IPACMDBG_H("Delete client rule from is v4 set %d for hdl %d\n",
@@ -6395,11 +6464,6 @@ int IPACM_Lan::delete_all_client_info_from_qos(list<qos_param_info>::iterator qo
 		it_qos_client = qos_param->qos_client_list.erase(it_qos_client);
 	}
 	IPACMDBG_H("Qos client list for qos param after deleting client is now :%d \n", qos_param->qos_client_list.size());
-		//else if (memcmp(client_mac, it_qos_client->mac, IPA_MAC_ADDR_SIZE) == 0)
-		//{
-		//	IPACMDBG_H("Found a matching entry in qos rule list for client\n");
-		//	break;
-		//}
 
 	qos_param->client_cnt--;
 

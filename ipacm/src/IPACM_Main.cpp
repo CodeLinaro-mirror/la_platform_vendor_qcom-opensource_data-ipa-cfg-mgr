@@ -1244,15 +1244,17 @@ void* ipa_driver_msg_notifier(void *param)
 			break;
 
 #ifdef FEATURE_EoGRE
-		case IPA_EoGRE_UP_EVENT: {
+		case IPA_EoGRE_UP_EVENT:
 			IPACMDBG_H("Received an IPA_EoGRE_UP_EVENT\n");
 
-			if ( IPACM_Iface::ipacmcfg->eogre_enabled == true )
+			if ( IPACM_Iface::ipacmcfg->eogre_enabled == true &&
+					(IPACM_Iface::ipacmcfg->tunnel_feature == DEFAULT_FEATURE ||
+					 IPACM_Iface::ipacmcfg->tunnel_feature == DOUBLE_TAG_FEATURE ||
+					 IPACM_Iface::ipacmcfg->tunnel_feature == UNTAG_FEATURE))
 			{
 				IPACMERR("Can't enable eogre when it's already enabled\n");
-				goto done;
+				break;
 			}
-
 			/*
 			 * The logic below is to check that we've been sent vaild,
 			 * non-empty ipa_ipgre_info data.
@@ -1264,8 +1266,7 @@ void* ipa_driver_msg_notifier(void *param)
 			/*
 			 * Get the new data from the message...
 			 */
-			memcpy(
-				&new_ipgre_info,
+			memcpy(&new_ipgre_info,
 				buffer + sizeof(struct ipa_msg_meta),
 				sizeof(ipa_ipgre_info));
 
@@ -1280,7 +1281,7 @@ void* ipa_driver_msg_notifier(void *param)
 			if ( new_contains_nulls )
 			{
 				IPACMERR("Inbound ipa_ipgre_info on IPA_EoGRE_UP_EVENT is empty/NULL\n");
-				goto done;
+				break;
 			}
 			else /* ( ! new_contains_nulls ) */
 			{
@@ -1293,7 +1294,7 @@ void* ipa_driver_msg_notifier(void *param)
 					{
 						IPACMERR("invalid GRE ipv4 addr, mark ipacmcfg->eogre_enabled = false \n");
 						IPACM_Iface::ipacmcfg->eogre_enabled = false;
-						goto done;
+						break;
 					}
 
 					IPACM_Iface::addr2host(IPA_IP_v4, &new_ipgre_info.ipv4_src);
@@ -1319,7 +1320,7 @@ void* ipa_driver_msg_notifier(void *param)
 					{
 						IPACMERR("invalid GRE ipv6 addr, mark ipacmcfg->eogre_enabled = false \n");
 						IPACM_Iface::ipacmcfg->eogre_enabled = false;
-						goto done;
+						break;
 					}
 
 					IPACM_Iface::addr2host(IPA_IP_v6, &new_ipgre_info.ipv6_src);
@@ -1341,26 +1342,103 @@ void* ipa_driver_msg_notifier(void *param)
 					&new_ipgre_info,
 					sizeof(ipa_ipgre_info));
 			}
+			/*Store the tunnel map info*/
+			if(IPACM_Iface::ipacmcfg->eogre_enabled && IPACM_Iface::ipacmcfg->tunnel_feature == SINGLE_TAG_FEATURE)
+			{
+				IPACM_Config* conf = IPACM_Config::GetInstance();
+				if (conf == NULL)
+				{
+					IPACMERR("Unable to get Config instance \n");
+				}
+				/*new_ipgre_info.num_exceptions stores the tunnel_id in EoGRE multi tunnel*/
+				IPACMDBG_H(" Request to Add rules for tunnel_id (%d) .try to lock?.\n",new_ipgre_info.num_exceptions);
+				if(pthread_mutex_lock(&conf->mutexA[new_ipgre_info.num_exceptions]) != 0)
+				{
+					IPACMERR("Unable to lock the mutex\n");
+					break;
+				}
+				IPACMDBG_H(" Request to Add rules for tunnel_id (%d) .locked.\n",new_ipgre_info.num_exceptions);
+				/*Check if tunnel_idx not present then add new*/
+				auto it = find(conf->tunnel_idx.begin(), conf->tunnel_idx.end(), new_ipgre_info.num_exceptions);
+				if (it != conf->tunnel_idx.end())
+				{
+					IPACMDBG_H("Match found tunnel_id : %d, Don't Install rules. \n",new_ipgre_info.num_exceptions);
+					pthread_mutex_unlock(&conf->mutexA[new_ipgre_info.num_exceptions]);
+					IPACMDBG_H(" Unlocked (mutexA) for tunnel_id (%d).\n",new_ipgre_info.num_exceptions);
+					break;
+				}
+				else {
+					conf->tunnel_idx.push_back(new_ipgre_info.num_exceptions);
+					IPACMDBG_H("No match tunnel_id: %d add now.\n",new_ipgre_info.num_exceptions);
+					conf->tunnel_idx_map[new_ipgre_info.num_exceptions].iptype = new_ipgre_info.iptype;
+					if(new_ipgre_info.iptype == IPA_IP_v4)
+					{
+						conf->tunnel_idx_map[new_ipgre_info.num_exceptions].ipv4_src=new_ipgre_info.ipv4_src;
+						conf->tunnel_idx_map[new_ipgre_info.num_exceptions].ipv4_dst=new_ipgre_info.ipv4_dst;
+					} else if (new_ipgre_info.iptype == IPA_IP_v6) {
 
+						memcpy(conf->tunnel_idx_map[new_ipgre_info.num_exceptions].ipv6_src, &new_ipgre_info.ipv6_src,sizeof(new_ipgre_info.ipv6_src));
+						memcpy(conf->tunnel_idx_map[new_ipgre_info.num_exceptions].ipv6_dst, &new_ipgre_info.ipv6_dst,sizeof(new_ipgre_info.ipv6_dst));
+
+					} else
+						IPACMERR("Not Supported iptype failed\n");
+				}
+				pthread_mutex_unlock(&conf->mutexA[new_ipgre_info.num_exceptions]);
+				IPACMDBG_H("Unlocked (mutexA) for tunnel_id (%d).\n",new_ipgre_info.num_exceptions);
+			}
 			evt_data.event    = IPA_HANDLE_EoGRE_UP;
 			evt_data.evt_data = 0;
-		}
 			break;
 
 		case IPA_EoGRE_DOWN_EVENT:
 			IPACMDBG_H("Received an IPA_EoGRE_DOWN_EVENT\n");
 
-			if ( IPACM_Iface::ipacmcfg->eogre_enabled == false )
+			if ( IPACM_Iface::ipacmcfg->eogre_enabled == false &&
+					(IPACM_Iface::ipacmcfg->tunnel_feature == DEFAULT_FEATURE ||
+					 IPACM_Iface::ipacmcfg->tunnel_feature == DOUBLE_TAG_FEATURE ||
+					 IPACM_Iface::ipacmcfg->tunnel_feature == UNTAG_FEATURE))
 			{
 				IPACMERR("Can't disable eogre when it's already disabled\n");
-				goto done;
+				break;
 			}
 
-			IPACM_Iface::ipacmcfg->eogre_enabled = false;
+			if(IPACM_Iface::ipacmcfg->tunnel_feature == SINGLE_TAG_FEATURE)
+			{
+				ipa_ipgre_info null_ipgre_info;
+				ipa_ipgre_info new_ipgre_info;
+				bool           new_contains_nulls;
 
+				/*
+				 * Get the new data from the message...
+				 */
+				memcpy(&new_ipgre_info,
+				buffer + sizeof(struct ipa_msg_meta),
+				sizeof(ipa_ipgre_info));
+
+				/*
+				 * Determine if the new message contains nulls...
+				 */
+				memset(&null_ipgre_info, 0, sizeof(null_ipgre_info));
+
+				new_contains_nulls =
+					! memcmp(&new_ipgre_info, &null_ipgre_info, sizeof(ipa_ipgre_info));
+
+				if ( new_contains_nulls )
+				{
+					IPACMERR("Inbound ipa_ipgre_info on IPA_EoGRE_DOWN_EVENT is empty/NULL\n");
+					break;
+				}
+				else
+				{
+					memcpy(&(IPACM_Iface::ipacmcfg
+							 ->eogre_info),
+					&new_ipgre_info,
+					sizeof(ipa_ipgre_info));
+				}
+			}
+			IPACM_Iface::ipacmcfg->eogre_enabled = false;
 			evt_data.event    = IPA_HANDLE_EoGRE_DOWN;
 			evt_data.evt_data = 0;
-
 			break;
 #endif
 

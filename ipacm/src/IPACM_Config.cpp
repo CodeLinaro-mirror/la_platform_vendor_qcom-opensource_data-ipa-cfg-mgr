@@ -304,6 +304,9 @@ IPACM_Config::IPACM_Config()
 #ifdef FEATURE_EoGRE
 	memset(&eogre_info, 0, sizeof(eogre_info));
 	eogre_enabled = false;
+	memset(tunnel_idx_map, 0, sizeof(tunnel_idx_map));
+	for (int i = 0; i < MAX_TUNNEL_SUPPORT; i++)
+		pthread_mutex_init(&mutexA[i], NULL);
 #endif
 #ifdef FEATURE_PMIPV6
 	memset(&ipgre_info, 0, sizeof(ipgre_info));

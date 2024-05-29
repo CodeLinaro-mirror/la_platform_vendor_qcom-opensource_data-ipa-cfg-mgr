@@ -444,9 +444,9 @@ public:
 	int gre_make_header_rmv_rt_rule(
 		ipa_ipgre_info& ipgre_info);
 
-	void gre_clear_route_data(
-		enum ipa_ip_type             iptype,
-		ipa_ioc_query_intf_rx_props* rx_prop = 0 );
+	void gre_clear_route_data(enum ipa_ip_type iptype,
+				  ipa_ioc_query_intf_rx_props *rx_prop = 0,
+				  uint8_t tunnel_id = 0xFF);
 
 	int gre_add_catchup_rule(
 		enum ipa_ip_type iptype, bool isPmipv6=false );
@@ -491,7 +491,9 @@ public:
 	bool isPmipv6=false, bool is_eogre_rules = false);
 #endif
 
-	virtual int del_ul_flt_rules(enum ipa_ip_type iptype, bool is_eogre_stats = false);
+	virtual int del_ul_flt_rules(enum ipa_ip_type iptype,
+				     bool is_eogre_stats = false,
+				     uint8_t tunnel_id = 0xFF);
 
 #ifdef FEATURE_IPACM_UL_FIREWALL
 	/* configure UL firewalls for all PDNs relevant for this LAN */

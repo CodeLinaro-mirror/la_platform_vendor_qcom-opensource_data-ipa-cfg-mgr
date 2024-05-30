@@ -6471,6 +6471,13 @@ int IPACM_Wan::handle_route_del_evt_ex(ipa_ip_type iptype)
 
 	IPACMDBG_H("Default route is deleted to iface %s.\n", dev_name);
 
+	if(IPACM_Iface::ipacmcfg->ipacm_static_policy_enable)
+	{
+		IPACMDBG_H("Static policy feature is enabled, dont handle default route deletion for %s.\n",
+			dev_name);
+		return IPACM_SUCCESS;
+	}
+
 	if (((iptype == IPA_IP_v4) && (active_v4 == true)) ||
 		((iptype == IPA_IP_v6) && (active_v6 == true)))
 	{

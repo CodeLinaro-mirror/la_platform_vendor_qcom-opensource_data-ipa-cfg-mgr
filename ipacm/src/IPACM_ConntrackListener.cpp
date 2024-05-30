@@ -4315,6 +4315,7 @@ void IPACM_ConntrackListener::CreateIpv6NatEntryFromCtEventData(const ipacm_ct_e
 	else if(nat_iface_ipv6_addr.Find(replSrcAddr) != NULL)
 	{
 		IPACMDBG_H("found replSrcAddr addr in nat iface list - INBOUND\n");
+		entry.m_direction = NatEntryBase::DirectionInbound;
 	}
 	/*
 	 * embedded case

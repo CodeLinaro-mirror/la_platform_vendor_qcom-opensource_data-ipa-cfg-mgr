@@ -48,6 +48,7 @@
 #include "IPACM_Xml.h"
 #include "IPACM_Log.h"
 #include "IPACM_Netlink.h"
+#define IPV6_subnet_mask 0xffffffffffffffffffffffffffffffff
 
 static char* IPACM_read_content_element
 (
@@ -190,7 +191,7 @@ static int IPACM_swallow_xml_parse_tree(const char *xml_file, xmlNode* xml_node,
 	char *content;
 	int str_size;
 	char content_buf[MAX_XML_STR_LEN];
-	struct in6_addr ip6_addr;
+	struct in6_addr ip6_addr, ipv6_mask;
 
 	if (NULL == xml_node)
 		return IPACM_SUCCESS;
@@ -306,12 +307,14 @@ static int IPACM_swallow_xml_parse_tree(const char *xml_file, xmlNode* xml_node,
 					content = IPACM_read_content_element(xml_node);
 					if (content)
 					{
+						memset(&ip6_addr, 0, sizeof(ip6_addr));
 						if(config->extd_swallow_entries[config->num_extd_swallow_entries - 1].ip_vsn == IP_V4)
 						{
 							str_size = strlen(content);
 							memset(content_buf, 0, sizeof(content_buf));
 							memcpy(content_buf, (void *)content, str_size);
 							content_buf[MAX_XML_STR_LEN-1] = '\0';
+							config->extd_swallow_entries[config->num_extd_swallow_entries - 1].attrib.attrib_mask |= IPA_FLT_SRC_ADDR;
 							config->extd_swallow_entries[config->num_extd_swallow_entries - 1].attrib.u.v4.src_addr
 								 = ntohl(inet_addr(content_buf));
 							IPACMDBG_H("IPv4 source address is: %s \n", content_buf);
@@ -322,6 +325,7 @@ static int IPACM_swallow_xml_parse_tree(const char *xml_file, xmlNode* xml_node,
 							memset(content_buf, 0, sizeof(content_buf));
 							memcpy(content_buf, (void *)content, str_size);
 							inet_pton(AF_INET6, content_buf, &ip6_addr);
+							config->extd_swallow_entries[config->num_extd_swallow_entries - 1].attrib.attrib_mask |= IPA_FLT_SRC_ADDR;
 							memcpy(config->extd_swallow_entries[config->num_extd_swallow_entries - 1].attrib.u.v6.src_addr,
 										 ip6_addr.s6_addr, IPACM_IPV6_ADDR_LEN * sizeof(uint8_t));
 							config->extd_swallow_entries[config->num_extd_swallow_entries - 1].attrib.u.v6.src_addr[0]=ntohl(config->extd_swallow_entries[config->num_extd_swallow_entries - 1].attrib.u.v6.src_addr[0]);
@@ -337,17 +341,68 @@ static int IPACM_swallow_xml_parse_tree(const char *xml_file, xmlNode* xml_node,
 						}
 					}
 				}
-				else if (0 == IPACM_util_icmp_string((char*)xml_node->name, DestinationAddress_TAG))
+				else if (0 == IPACM_util_icmp_string((char*)xml_node->name, SourceSubnetMask_TAG))
 				{
 					content = IPACM_read_content_element(xml_node);
 					if (content)
 					{
+						memset(&ip6_addr, 0, sizeof(ip6_addr));
 						if(config->extd_swallow_entries[config->num_extd_swallow_entries - 1].ip_vsn == IP_V4)
 						{
 							str_size = strlen(content);
 							memset(content_buf, 0, sizeof(content_buf));
 							memcpy(content_buf, (void *)content, str_size);
 							content_buf[MAX_XML_STR_LEN-1] = '\0';
+							config->extd_swallow_entries[config->num_extd_swallow_entries - 1].attrib.u.v4.src_addr_mask
+								 = ntohl(inet_addr(content_buf));
+							IPACMDBG_H("IPv4 source address mask is: %s \n", content_buf);
+						}
+						else if(config->extd_swallow_entries[config->num_extd_swallow_entries - 1].ip_vsn == IP_V6)
+						{
+							str_size = strlen(content);
+							memset(content_buf, 0, sizeof(content_buf));
+							memcpy(content_buf, (void *)content, str_size);
+							int len = atoi(content_buf);
+							if(len)
+							{
+							inet_pton(AF_INET6, content_buf, &ip6_addr);
+							memcpy(config->extd_swallow_entries[config->num_extd_swallow_entries - 1].attrib.u.v6.src_addr_mask,
+										 ip6_addr.s6_addr, IPACM_IPV6_ADDR_LEN * sizeof(uint8_t));
+							config->extd_swallow_entries[config->num_extd_swallow_entries - 1].attrib.u.v6.src_addr_mask[0]=ntohl(config->extd_swallow_entries[config->num_extd_swallow_entries - 1].attrib.u.v6.src_addr_mask[0]);
+							config->extd_swallow_entries[config->num_extd_swallow_entries - 1].attrib.u.v6.src_addr_mask[1]=ntohl(config->extd_swallow_entries[config->num_extd_swallow_entries - 1].attrib.u.v6.src_addr_mask[1]);
+							config->extd_swallow_entries[config->num_extd_swallow_entries - 1].attrib.u.v6.src_addr_mask[2]=ntohl(config->extd_swallow_entries[config->num_extd_swallow_entries - 1].attrib.u.v6.src_addr_mask[2]);
+							config->extd_swallow_entries[config->num_extd_swallow_entries - 1].attrib.u.v6.src_addr_mask[3]=ntohl(config->extd_swallow_entries[config->num_extd_swallow_entries - 1].attrib.u.v6.src_addr_mask[3]);
+
+								IPACMDBG_H("\n ipv6 source addr mask is %x %x %x %x \n ",
+									config->extd_swallow_entries[config->num_extd_swallow_entries - 1].attrib.u.v6.src_addr_mask[0],
+									config->extd_swallow_entries[config->num_extd_swallow_entries - 1].attrib.u.v6.src_addr_mask[1],
+									config->extd_swallow_entries[config->num_extd_swallow_entries - 1].attrib.u.v6.src_addr_mask[2],
+									config->extd_swallow_entries[config->num_extd_swallow_entries - 1].attrib.u.v6.src_addr_mask[3]);
+						}
+								else
+								{
+								memset(config->extd_swallow_entries[config->num_extd_swallow_entries - 1].attrib.u.v6.src_addr_mask
+								, 0, 
+								sizeof(config->extd_swallow_entries[config->num_extd_swallow_entries - 1].attrib.u.v6.src_addr_mask));
+									IPACMDBG_H("\n ipv6 source addr mask is zero\n");
+								}
+						}
+					}
+				}
+
+				else if (0 == IPACM_util_icmp_string((char*)xml_node->name, DestinationAddress_TAG))
+				{
+					content = IPACM_read_content_element(xml_node);
+					if (content)
+					{
+						memset(&ip6_addr, 0, sizeof(ip6_addr));;
+						if(config->extd_swallow_entries[config->num_extd_swallow_entries - 1].ip_vsn == IP_V4)
+						{
+							str_size = strlen(content);
+							memset(content_buf, 0, sizeof(content_buf));
+							memcpy(content_buf, (void *)content, str_size);
+							content_buf[MAX_XML_STR_LEN-1] = '\0';
+							config->extd_swallow_entries[config->num_extd_swallow_entries - 1].attrib.attrib_mask |= IPA_FLT_DST_ADDR;
 							config->extd_swallow_entries[config->num_extd_swallow_entries - 1].attrib.u.v4.dst_addr
 								 = ntohl(inet_addr(content_buf));
 							IPACMDBG_H("IPv4 destination address is: %s \n", content_buf);
@@ -359,6 +414,7 @@ static int IPACM_swallow_xml_parse_tree(const char *xml_file, xmlNode* xml_node,
 							memset(content_buf, 0, sizeof(content_buf));
 							memcpy(content_buf, (void *)content, str_size);
 							inet_pton(AF_INET6, content_buf, &ip6_addr);
+							config->extd_swallow_entries[config->num_extd_swallow_entries - 1].attrib.attrib_mask |= IPA_FLT_DST_ADDR;
 							memcpy(config->extd_swallow_entries[config->num_extd_swallow_entries - 1].attrib.u.v6.dst_addr,
 										 ip6_addr.s6_addr, IPACM_IPV6_ADDR_LEN * sizeof(uint8_t));
 							config->extd_swallow_entries[config->num_extd_swallow_entries - 1].attrib.u.v6.dst_addr[0]=ntohl(config->extd_swallow_entries[config->num_extd_swallow_entries - 1].attrib.u.v6.dst_addr[0]);
@@ -374,6 +430,58 @@ static int IPACM_swallow_xml_parse_tree(const char *xml_file, xmlNode* xml_node,
 						}
 					}
 				}
+				else if (0 == IPACM_util_icmp_string((char*)xml_node->name, DestinationSubnetMask_TAG))
+				{
+					content = IPACM_read_content_element(xml_node);
+					if (content)
+					{
+						memset(&ip6_addr, 0, sizeof(ip6_addr));
+						content = IPACM_read_content_element(xml_node);
+						if(config->extd_swallow_entries[config->num_extd_swallow_entries - 1].ip_vsn == IP_V4)
+						{
+							str_size = strlen(content);
+							memset(content_buf, 0, sizeof(content_buf));
+							memcpy(content_buf, (void *)content, str_size);
+							content_buf[MAX_XML_STR_LEN-1] = '\0';
+							config->extd_swallow_entries[config->num_extd_swallow_entries - 1].attrib.u.v4.dst_addr_mask
+								 = ntohl(inet_addr(content_buf));
+							IPACMDBG_H("IPv4 dst address mask is: %s \n", content_buf);
+						}
+						else if(config->extd_swallow_entries[config->num_extd_swallow_entries - 1].ip_vsn == IP_V6)
+						{
+							str_size = strlen(content);
+							memset(content_buf, 0, sizeof(content_buf));
+							memcpy(content_buf, (void *)content, str_size);
+							int len = atoi(content_buf);
+							if(len)
+							{
+								char v6_mask[] = {(IPV6_subnet_mask << len)};
+								//memcpy(&ipv6_mask,v6_mask,sizeof(ipv6_mask));
+								inet_pton(AF_INET6, v6_mask, &ip6_addr);
+								IPACMDBG_H("IPv4 dst address mask is: %s \n", v6_mask);
+
+							memcpy(config->extd_swallow_entries[config->num_extd_swallow_entries - 1].attrib.u.v6.dst_addr_mask,
+										 ip6_addr.s6_addr, IPACM_IPV6_ADDR_LEN * sizeof(uint8_t));
+							config->extd_swallow_entries[config->num_extd_swallow_entries - 1].attrib.u.v6.dst_addr_mask[0]=ntohl(config->extd_swallow_entries[config->num_extd_swallow_entries - 1].attrib.u.v6.dst_addr_mask[0]);
+							config->extd_swallow_entries[config->num_extd_swallow_entries - 1].attrib.u.v6.dst_addr_mask[1]=ntohl(config->extd_swallow_entries[config->num_extd_swallow_entries - 1].attrib.u.v6.dst_addr_mask[1]);
+							config->extd_swallow_entries[config->num_extd_swallow_entries - 1].attrib.u.v6.dst_addr_mask[2]=ntohl(config->extd_swallow_entries[config->num_extd_swallow_entries - 1].attrib.u.v6.dst_addr_mask[2]);
+							config->extd_swallow_entries[config->num_extd_swallow_entries - 1].attrib.u.v6.dst_addr_mask[3]=ntohl(config->extd_swallow_entries[config->num_extd_swallow_entries - 1].attrib.u.v6.dst_addr_mask[3]);
+
+								IPACMDBG_H("\n ipv6 dst addr mask is %x %x %x %x \n ",
+									config->extd_swallow_entries[config->num_extd_swallow_entries - 1].attrib.u.v6.dst_addr_mask[0],
+									config->extd_swallow_entries[config->num_extd_swallow_entries - 1].attrib.u.v6.dst_addr_mask[1],
+									config->extd_swallow_entries[config->num_extd_swallow_entries - 1].attrib.u.v6.dst_addr_mask[2],
+									config->extd_swallow_entries[config->num_extd_swallow_entries - 1].attrib.u.v6.dst_addr_mask[3]);
+						}
+							else
+							{
+								config->extd_swallow_entries[config->num_extd_swallow_entries - 1].attrib.u.v6.dst_addr_mask[0] = 0;
+								IPACMDBG_H("\n ipv6 dst addr mask is zero\n");
+							}
+						}
+					}
+				}
+
 				else if (0 == IPACM_util_icmp_string((char*)xml_node->name, SourcePort_TAG))
 				{
 					content = IPACM_read_content_element(xml_node);
@@ -382,12 +490,42 @@ static int IPACM_swallow_xml_parse_tree(const char *xml_file, xmlNode* xml_node,
 						str_size = strlen(content);
 						memset(content_buf, 0, sizeof(content_buf));
 						memcpy(content_buf, (void *)content, str_size);
+						config->extd_swallow_entries[config->num_extd_swallow_entries - 1].attrib.attrib_mask |= IPA_FLT_SRC_PORT;
 						config->extd_swallow_entries[config->num_extd_swallow_entries - 1].attrib.src_port
 							 = atoi(content_buf);
 						IPACMDBG_H("Source Port %d\n",
 								config->extd_swallow_entries[config->num_extd_swallow_entries - 1].attrib.src_port);
 					}
 				}
+				else if (0 == IPACM_util_icmp_string((char*)xml_node->name, SourcePortRange_TAG))
+				{
+					content = IPACM_read_content_element(xml_node);
+					if (content)
+					{
+						str_size = strlen(content);
+						memset(content_buf, 0, sizeof(content_buf));
+						memcpy(content_buf, (void *)content, str_size);
+						if (atoi(content_buf) != 0)
+						{
+							config->extd_swallow_entries[config->num_extd_swallow_entries - 1].attrib.attrib_mask |= IPA_FLT_SRC_PORT_RANGE;
+							config->extd_swallow_entries[config->num_extd_swallow_entries - 1].attrib.src_port_lo
+								= config->extd_swallow_entries[config->num_extd_swallow_entries - 1].attrib.src_port;
+							config->extd_swallow_entries[config->num_extd_swallow_entries - 1].attrib.src_port_hi
+								= config->extd_swallow_entries[config->num_extd_swallow_entries - 1].attrib.src_port + atoi(content_buf);
+							config->extd_swallow_entries[config->num_extd_swallow_entries - 1].attrib.src_port = 0;
+							IPACMDBG_H("\n tcp source port from %d to %d \n",
+									config->extd_swallow_entries[config->num_extd_swallow_entries - 1].attrib.src_port_lo,
+									config->extd_swallow_entries[config->num_extd_swallow_entries - 1].attrib.src_port_hi);
+						}
+						else
+						{
+							config->extd_swallow_entries[config->num_extd_swallow_entries - 1].attrib.attrib_mask |= IPA_FLT_SRC_PORT;
+							IPACMDBG_H("\n tcp source port= %d \n",
+									config->extd_swallow_entries[config->num_extd_swallow_entries - 1].attrib.src_port);
+						}
+					}
+				}
+
 				else if (0 == IPACM_util_icmp_string((char*)xml_node->name, DestinationPort_TAG))
 				{
 					content = IPACM_read_content_element(xml_node);
@@ -396,12 +534,42 @@ static int IPACM_swallow_xml_parse_tree(const char *xml_file, xmlNode* xml_node,
 						str_size = strlen(content);
 						memset(content_buf, 0, sizeof(content_buf));
 						memcpy(content_buf, (void *)content, str_size);
+						config->extd_swallow_entries[config->num_extd_swallow_entries - 1].attrib.attrib_mask |= IPA_FLT_DST_PORT;
 						config->extd_swallow_entries[config->num_extd_swallow_entries - 1].attrib.dst_port
 							 = atoi(content_buf);
 						IPACMDBG_H("Destination Port %d\n",
 								config->extd_swallow_entries[config->num_extd_swallow_entries - 1].attrib.src_port);
 					}
 				}
+				else if (0 == IPACM_util_icmp_string((char*)xml_node->name, DestinationPortRange_TAG))
+				{
+					content = IPACM_read_content_element(xml_node);
+					if (content)
+					{
+						str_size = strlen(content);
+						memset(content_buf, 0, sizeof(content_buf));
+						memcpy(content_buf, (void *)content, str_size);
+						if(atoi(content_buf)!=0)
+						{
+							config->extd_swallow_entries[config->num_extd_swallow_entries - 1].attrib.attrib_mask |= IPA_FLT_DST_PORT_RANGE;
+							config->extd_swallow_entries[config->num_extd_swallow_entries - 1].attrib.dst_port_lo
+								= config->extd_swallow_entries[config->num_extd_swallow_entries - 1].attrib.dst_port;
+							config->extd_swallow_entries[config->num_extd_swallow_entries - 1].attrib.dst_port_hi
+								= config->extd_swallow_entries[config->num_extd_swallow_entries - 1].attrib.dst_port + atoi(content_buf);
+							config->extd_swallow_entries[config->num_extd_swallow_entries - 1].attrib.dst_port = 0;
+							IPACMDBG_H("\n tcp dest port from %d to %d \n",
+									config->extd_swallow_entries[config->num_extd_swallow_entries - 1].attrib.dst_port_lo,
+									config->extd_swallow_entries[config->num_extd_swallow_entries - 1].attrib.dst_port_hi);
+						}
+						else
+						{
+							config->extd_swallow_entries[config->num_extd_swallow_entries - 1].attrib.attrib_mask |= IPA_FLT_DST_PORT;
+							IPACMDBG_H("\n tcp dest port= %d \n",
+									config->extd_swallow_entries[config->num_extd_swallow_entries - 1].attrib.dst_port);
+						}
+					}
+				}
+
 				else if (IPACM_util_icmp_string((char*)xml_node->name, NetDev_TAG) == 0)
 				{
 					content = IPACM_read_content_element(xml_node);

@@ -1627,6 +1627,13 @@ end:
 					modem_ul_v6_set[0] = true;
 			}
 
+			//Add per client stats rules for all active WLAN clients if feature is enabled
+#ifdef IPA_HW_FNR_STATS
+			if (IPACM_Iface::ipacmcfg->hw_fnr_stats_support)
+				if (install_uplink_filter_rule(IPACM_Iface::ipacmcfg->GetExtProp(IPA_IP_v6), data->iptype, data->mux_id))
+					IPACMDBG_H("Failed to install per client rules for v6 UL\n");
+#endif
+
 			if(set_mux_up(data->mux_id, data->iptype, data->VlanID))
 			{
 				IPACMERR("couldn't set mux up for %d, iptype %d\n", data->mux_id, data->iptype);
@@ -2619,7 +2626,11 @@ int IPACM_Wlan::handle_wlan_client_init_ex(ipacm_event_data_wlan_ex *data, bool 
 					get_client_memptr(wlan_client, wlan_index)->ipv4_ul_rules_set = true;
 				}
 			}
+#ifdef FEATURE_STATIC_POLICY
+			if(IPACM_Wan::isWanUP_V6(ipa_if_num) && !IPACM_Iface::ipacmcfg->ipacm_static_policy_enable)
+#else
 			if(IPACM_Wan::isWanUP_V6(ipa_if_num))
+#endif
 			{
 				if(IPACM_Wan::backhaul_is_sta_mode == false)
 				{

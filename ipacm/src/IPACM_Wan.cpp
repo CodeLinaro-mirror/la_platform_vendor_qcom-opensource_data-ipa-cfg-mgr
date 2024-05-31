@@ -1876,7 +1876,13 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 				IPACMDBG_H("Received IPA_ROUTE_ADD_EVENT\n");
 				IPACMDBG_H("ipv4 addr 0x%x\n", data->ipv4_addr);
 				IPACMDBG_H("ipv4 addr mask 0x%x\n", data->ipv4_addr_mask);
-
+#ifdef FEATURE_STATIC_POLICY
+				if(IPACM_Iface::ipacmcfg->ipacm_static_policy_enable && m_is_sta_mode == Q6_WAN)
+				{
+					IPACMDBG_H("Ignore IPA_ROUTE_ADD_EVENT when Static policy is enabled.\n", dev_name);
+					return;
+				}
+#endif
 				/* The special below condition is to handle default gateway */
 				if ((data->iptype == IPA_IP_v4) && (!data->ipv4_addr) && (!data->ipv4_addr_mask) && (active_v4 == false)
 					&& (ip_type == IPA_IP_v4 || ip_type == IPA_IP_MAX))
@@ -6471,12 +6477,14 @@ int IPACM_Wan::handle_route_del_evt_ex(ipa_ip_type iptype)
 
 	IPACMDBG_H("Default route is deleted to iface %s.\n", dev_name);
 
+#ifdef FEATURE_STATIC_POLICY
 	if(IPACM_Iface::ipacmcfg->ipacm_static_policy_enable)
 	{
 		IPACMDBG_H("Static policy feature is enabled, dont handle default route deletion for %s.\n",
 			dev_name);
 		return IPACM_SUCCESS;
 	}
+#endif
 
 	if (((iptype == IPA_IP_v4) && (active_v4 == true)) ||
 		((iptype == IPA_IP_v6) && (active_v6 == true)))

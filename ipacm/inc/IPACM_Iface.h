@@ -87,6 +87,7 @@
 #include "IPACM_Config.h"
 #include "IPACM_Defs.h"
 #include <string.h>
+#include <array>
 
 using std::vector;
 

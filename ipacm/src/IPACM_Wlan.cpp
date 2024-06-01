@@ -3771,7 +3771,7 @@ int IPACM_Wlan::config_dft_firewall_rules_ul_ex(IPACM_firewall_conf_t* firewall_
 	flt_rule_entry_v2.rule.action = IPA_PASS_TO_EXCEPTION;
 	memcpy((void *)pFilteringTable_v2->rules, &flt_rule_entry_v2, sizeof(flt_rule_entry_v2));
 
-	if(false == m_filtering.AddFilteringRule_v2(pFilteringTable_v2))
+	if(false == m_filtering.addRules(pFilteringTable_v2))
 	{
 		IPACMERR("Error Adding RuleTable to Filtering, aborting...\n");
 		ret = IPACM_FAILURE;
@@ -3965,9 +3965,9 @@ int IPACM_Wlan::install_uplink_filter_rule_per_client
 	uint8_t *mac_addr
 )
 {
-	ipa_flt_rule_add flt_rule_entry;
+	struct ipa_flt_rule_add_v2 flt_rule_entry{}, *rulesPtr = nullptr;
 	int len = 0, cnt, ret = IPACM_SUCCESS;
-	ipa_ioc_add_flt_rule *pFilteringTable;
+	struct ipa_ioc_add_flt_rule_v2 pFilteringTable{};
 	int fd;
 	int i, index = 0;
 	uint32_t value = 0;
@@ -4031,23 +4031,20 @@ int IPACM_Wlan::install_uplink_filter_rule_per_client
 		IPACMDBG("Need %d additional XLAT rules\n", v6_xlat_ul_rules);
 	}
 
-	len = sizeof(struct ipa_ioc_add_flt_rule) + total_rules * sizeof(struct ipa_flt_rule_add);
-	pFilteringTable = (struct ipa_ioc_add_flt_rule*)malloc(len);
-	if (pFilteringTable == NULL)
-	{
-		IPACMERR("Error Locate ipa_flt_rule_add memory...\n");
+	rulesPtr = reinterpret_cast<decltype(rulesPtr)>(malloc(sizeof(flt_rule_entry) * total_rules));
+	if (!rulesPtr) {
+		IPACMERR("malloc failed: %zu\n", sizeof(flt_rule_entry) * total_rules);
 		close(fd);
 		return IPACM_FAILURE;
 	}
-	memset(pFilteringTable, 0, len);
-
-	pFilteringTable->commit = 1;
-	pFilteringTable->ep = rx_prop->rx[0].src_pipe;
-	pFilteringTable->global = false;
-	pFilteringTable->ip = iptype;
-	pFilteringTable->num_rules = total_rules;
-
-	memset(&flt_rule_entry, 0, sizeof(struct ipa_flt_rule_add)); // Zero All Fields
+	memset(rulesPtr, 0, sizeof(flt_rule_entry) * total_rules);
+	pFilteringTable.rules = reinterpret_cast<decltype(pFilteringTable.rules)>(rulesPtr);
+	pFilteringTable.commit = 1;
+	pFilteringTable.ep = rx_prop->rx[0].src_pipe;
+	pFilteringTable.global = false;
+	pFilteringTable.ip = iptype;
+	pFilteringTable.num_rules = total_rules;
+	pFilteringTable.flt_rule_size = sizeof(flt_rule_entry);
 	flt_rule_entry.at_rear = 1;
 	if (flt_rule_entry.rule.eq_attrib.ipv4_frag_eq_present)
 		flt_rule_entry.at_rear = 0;
@@ -4162,7 +4159,7 @@ int IPACM_Wlan::install_uplink_filter_rule_per_client
 			flt_rule_entry.rule.eq_attrib.metadata_meq32.value |= rx_prop->rx[0].attrib.meta_data;
 			flt_rule_entry.rule.eq_attrib.metadata_meq32.mask |= rx_prop->rx[0].attrib.meta_data_mask;
 		}
-		memcpy(&pFilteringTable->rules[index], &flt_rule_entry, sizeof(flt_rule_entry));
+		rulesPtr[index] = flt_rule_entry;
 
 		IPACMDBG_H("Modem UL filtering rule %d has rule_id %d\n", index, prop->prop[cnt].rule_id);
 		index++;
@@ -4172,7 +4169,7 @@ int IPACM_Wlan::install_uplink_filter_rule_per_client
 			prop->prop[cnt].action != IPA_PASS_TO_EXCEPTION)
 		{
 			//duplicate the old rule to new index
-			memcpy(&pFilteringTable->rules[index], &flt_rule_entry, sizeof(flt_rule_entry));
+			rulesPtr[index] = flt_rule_entry;
 
 			//change old rule to pass to route and non hashable
 			flt_rule_entry.rule.action = IPA_PASS_TO_ROUTING;
@@ -4184,7 +4181,7 @@ int IPACM_Wlan::install_uplink_filter_rule_per_client
 			if (meq32_n + 1 > IPA_IPFLTR_NUM_MEQ_32_EQNS)
 			{
 				IPACMERR("Can't add another meq_32 equation to this rule");
-				memcpy(&pFilteringTable->rules[index], &flt_rule_entry, sizeof(flt_rule_entry));
+				rulesPtr[index] = flt_rule_entry;
 				continue;
 			}
 
@@ -4201,13 +4198,13 @@ int IPACM_Wlan::install_uplink_filter_rule_per_client
 			flt_rule_entry.rule.eq_attrib.num_offset_meq_32++;
 
 			//overwrite the old rule and increment the rule count
-			memcpy(&pFilteringTable->rules[index - 1], &flt_rule_entry, sizeof(flt_rule_entry));
+			rulesPtr[index - 1] = flt_rule_entry;
 			index++;
 			flt_rule_entry.rule.action = action_cache;
 		}
 	}
 
-	if(false == m_filtering.AddFilteringRule(pFilteringTable))
+	if (!m_filtering.addRules(&pFilteringTable))
 	{
 		IPACMERR("Error Adding RuleTable to Filtering, aborting...\n");
 		ret = IPACM_FAILURE;
@@ -4217,17 +4214,17 @@ int IPACM_Wlan::install_uplink_filter_rule_per_client
 	{
 		if(iptype == IPA_IP_v4)
 		{
-			for(i = 0; i < pFilteringTable->num_rules; i++)
+			for(i = 0; i < pFilteringTable.num_rules; i++)
 			{
-				get_client_memptr(wlan_client, clnt_indx)->wan_ul_fl_rule_hdl_v4[i] = pFilteringTable->rules[i].flt_rule_hdl;
+				get_client_memptr(wlan_client, clnt_indx)->wan_ul_fl_rule_hdl_v4[i] = rulesPtr[i].flt_rule_hdl;
 			}
 			get_client_memptr(wlan_client, clnt_indx)->ipv4_ul_rules_set = true;
 		}
 		else if(iptype == IPA_IP_v6)
 		{
-			for(i=0; i < pFilteringTable->num_rules; i++)
+			for(i=0; i < pFilteringTable.num_rules; i++)
 			{
-				get_client_memptr(wlan_client, clnt_indx)->wan_ul_fl_rule_hdl_v6[i] = pFilteringTable->rules[i].flt_rule_hdl;
+				get_client_memptr(wlan_client, clnt_indx)->wan_ul_fl_rule_hdl_v6[i] = rulesPtr[i].flt_rule_hdl;
 			}
 			get_client_memptr(wlan_client, clnt_indx)->ipv6_ul_rules_set = true;
 		}
@@ -4239,7 +4236,7 @@ int IPACM_Wlan::install_uplink_filter_rule_per_client
 	}
 
 fail:
-	free(pFilteringTable);
+	free(rulesPtr);
 	close(fd);
 	return ret;
 }
@@ -4543,7 +4540,7 @@ int IPACM_Wlan::install_uplink_filter_rule_per_client_v2
 		}
 	}
 
-	if(false == m_filtering.AddFilteringRule_v2(pFilteringTable))
+	if(false == m_filtering.addRules(pFilteringTable))
 	{
 		IPACMERR("Error Adding RuleTable to Filtering, aborting...\n");
 		ret = IPACM_FAILURE;

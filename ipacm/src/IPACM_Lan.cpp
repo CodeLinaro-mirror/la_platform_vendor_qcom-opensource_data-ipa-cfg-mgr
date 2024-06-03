@@ -3634,6 +3634,8 @@ int IPACM_Lan::handle_wan_up(ipa_ip_type ip_type, uint16_t vlan_id)
 	struct ipa_flt_rule_add flt_rule_entry;
 	int len = 0, i = 0;
 	bool vlan_set = false;
+	ipa_bridge_vlan_mapping_info mapping_info;
+	uint32_t v6_prefix[2] = {0};
 
 	IPACMDBG_H("set WAN interface as default filter rule\n");
 
@@ -3724,27 +3726,42 @@ int IPACM_Lan::handle_wan_up(ipa_ip_type ip_type, uint16_t vlan_id)
 		memcpy(&flt_rule_entry.rule.attrib,
 					 &rx_prop->rx[0].attrib,
 					 sizeof(flt_rule_entry.rule.attrib));
-
-		flt_rule_entry.rule.attrib.attrib_mask |= IPA_FLT_DST_ADDR;
-#ifdef FEATURE_VLAN_MPDN
-		if ((vlan_id > 0) && !IPACM_Iface::ipacmcfg->is_dummy_VID(vlan_id))
+		
+		if(IPACM_Iface::ipacmcfg->check_l2tp_bridge_vlan_id(vlan_id))
 		{
-			flt_rule_entry.rule.attrib.attrib_mask |= IPA_FLT_VLAN_ID;
-			flt_rule_entry.rule.attrib.vlan_id = vlan_id;
-			for(i = 0; i < IPA_MAX_NUM_HW_PDNS; i++)
+			mapping_info.vlan_id = vlan_id;
+			if(IPACM_Iface::ipacmcfg->get_bridge_vlan_mapping(&mapping_info, true))
 			{
-				if (!lan_vlan_id[i])
-				{
-					lan_vlan_id[i] = flt_rule_entry.rule.attrib.vlan_id;
-					break;
-				}
+				IPACMERR("No Mapping found for vlan_id: %d\n", vlan_id);
+				free(m_pFilteringTable);
+				return IPACM_FAILURE;
 			}
-			IPACMDBG_H("flt_rule_entry.rule.attrib.vlan_id: %d is configured\n", flt_rule_entry.rule.attrib.vlan_id);
+			flt_rule_entry.rule.attrib.attrib_mask |= IPA_FLT_SRC_ADDR;
+			flt_rule_entry.rule.attrib.u.v4.src_addr_mask = mapping_info.subnet_mask;
+			flt_rule_entry.rule.attrib.u.v4.src_addr = mapping_info.bridge_ipv4 & mapping_info.subnet_mask;
 		}
+		else
+		{
+			flt_rule_entry.rule.attrib.attrib_mask |= IPA_FLT_DST_ADDR;
+#ifdef FEATURE_VLAN_MPDN
+			if ((vlan_id > 0) && !IPACM_Iface::ipacmcfg->is_dummy_VID(vlan_id))
+			{
+				flt_rule_entry.rule.attrib.attrib_mask |= IPA_FLT_VLAN_ID;
+				flt_rule_entry.rule.attrib.vlan_id = vlan_id;
+				for(i = 0; i < IPA_MAX_NUM_HW_PDNS; i++)
+				{
+					if (!lan_vlan_id[i])
+					{
+						lan_vlan_id[i] = flt_rule_entry.rule.attrib.vlan_id;
+						break;
+					}
+				}
+				IPACMDBG_H("flt_rule_entry.rule.attrib.vlan_id: %d is configured\n", flt_rule_entry.rule.attrib.vlan_id);
+			}
 #endif
-		flt_rule_entry.rule.attrib.u.v4.dst_addr_mask = 0x0;
-		flt_rule_entry.rule.attrib.u.v4.dst_addr = 0x0;
-
+			flt_rule_entry.rule.attrib.u.v4.dst_addr_mask = 0x0;
+			flt_rule_entry.rule.attrib.u.v4.dst_addr = 0x0;
+		}
 		memcpy(&m_pFilteringTable->rules[0], &flt_rule_entry, sizeof(flt_rule_entry));
 		if (false == m_filtering.AddFilteringRuleAfter(m_pFilteringTable))
 		{
@@ -3882,23 +3899,43 @@ int IPACM_Lan::handle_wan_up(ipa_ip_type ip_type, uint16_t vlan_id)
 					 &rx_prop->rx[0].attrib,
 					 sizeof(flt_rule_entry.rule.attrib));
 
-		flt_rule_entry.rule.attrib.attrib_mask |= IPA_FLT_DST_ADDR;
-#ifdef FEATURE_VLAN_MPDN
-		if ((vlan_id > 0) && !IPACM_Iface::ipacmcfg->is_dummy_VID(vlan_id))
+		if(IPACM_Iface::ipacmcfg->check_l2tp_bridge_vlan_id(vlan_id))
 		{
-			flt_rule_entry.rule.attrib.attrib_mask |= IPA_FLT_VLAN_ID;
-			flt_rule_entry.rule.attrib.vlan_id = vlan_id;
+			if(IPACM_Wan::GetV6PrefixByVid(vlan_id, v6_prefix))
+			{
+				IPACMERR("couldn't get v6 prefix for vid %d\n", vlan_id);
+				free(m_pFilteringTable);
+				return IPACM_FAILURE;
+			}
+			flt_rule_entry.rule.attrib.attrib_mask |= IPA_FLT_SRC_ADDR;
+			flt_rule_entry.rule.attrib.u.v6.src_addr[0] = v6_prefix[0];
+			flt_rule_entry.rule.attrib.u.v6.src_addr[1] = v6_prefix[1];
+			flt_rule_entry.rule.attrib.u.v6.src_addr[2] = 0x0;
+			flt_rule_entry.rule.attrib.u.v6.src_addr[3] = 0x0;
+			flt_rule_entry.rule.attrib.u.v6.src_addr_mask[0] = 0xFFFFFFFF;
+			flt_rule_entry.rule.attrib.u.v6.src_addr_mask[1] = 0xFFFFFFFF;
+			flt_rule_entry.rule.attrib.u.v6.src_addr_mask[2] = 0x0;
+			flt_rule_entry.rule.attrib.u.v6.src_addr_mask[3] = 0x0;
 		}
+		else
+		{
+			flt_rule_entry.rule.attrib.attrib_mask |= IPA_FLT_DST_ADDR;
+#ifdef FEATURE_VLAN_MPDN
+			if((vlan_id > 0) && !IPACM_Iface::ipacmcfg->is_dummy_VID(vlan_id))
+			{
+				flt_rule_entry.rule.attrib.attrib_mask |= IPA_FLT_VLAN_ID;
+				flt_rule_entry.rule.attrib.vlan_id = vlan_id;
+			}
 #endif
-		flt_rule_entry.rule.attrib.u.v6.dst_addr_mask[0] = 0x00000000;
-		flt_rule_entry.rule.attrib.u.v6.dst_addr_mask[1] = 0x00000000;
-		flt_rule_entry.rule.attrib.u.v6.dst_addr_mask[2] = 0x00000000;
-		flt_rule_entry.rule.attrib.u.v6.dst_addr_mask[3] = 0x00000000;
-		flt_rule_entry.rule.attrib.u.v6.dst_addr[0] = 0X00000000;
-		flt_rule_entry.rule.attrib.u.v6.dst_addr[1] = 0x00000000;
-		flt_rule_entry.rule.attrib.u.v6.dst_addr[2] = 0x00000000;
-		flt_rule_entry.rule.attrib.u.v6.dst_addr[3] = 0X00000000;
-
+			flt_rule_entry.rule.attrib.u.v6.dst_addr_mask[0] = 0x00000000;
+			flt_rule_entry.rule.attrib.u.v6.dst_addr_mask[1] = 0x00000000;
+			flt_rule_entry.rule.attrib.u.v6.dst_addr_mask[2] = 0x00000000;
+			flt_rule_entry.rule.attrib.u.v6.dst_addr_mask[3] = 0x00000000;
+			flt_rule_entry.rule.attrib.u.v6.dst_addr[0] = 0X00000000;
+			flt_rule_entry.rule.attrib.u.v6.dst_addr[1] = 0x00000000;
+			flt_rule_entry.rule.attrib.u.v6.dst_addr[2] = 0x00000000;
+			flt_rule_entry.rule.attrib.u.v6.dst_addr[3] = 0X00000000;
+		}
 		memcpy(&(m_pFilteringTable->rules[0]), &flt_rule_entry, sizeof(struct ipa_flt_rule_add));
 		if (false == m_filtering.AddFilteringRuleAfter(m_pFilteringTable))
 		{

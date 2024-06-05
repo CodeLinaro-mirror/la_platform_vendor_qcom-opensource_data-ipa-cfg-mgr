@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2013-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -49,6 +49,7 @@
 #include <IPACM_Lan.h>
 #include <IPACM_IfaceManager.h>
 #include <IPACM_ConntrackListener.h>
+#include "utilities/uapi_helper.h"
 
 
 /* static member to store the number of total wifi clients within all APs*/
@@ -1685,7 +1686,8 @@ int IPACM_Wlan::handle_wlan_client_route_rule(uint8_t *mac_addr, ipa_ip_type ipt
 
 				if(IPACM_Iface::ipacmcfg->GetIPAVer() >= IPA_HW_v4_0)
 					rt_rule_entry.rule.hashable = true;
-
+				UapiHelper::ruleTtlUpdateSet(rt_rule_entry.rule);
+				IPACMDBG_H("ttl_update = %u\n", rt_rule_entry.rule.ttl_update);
 				rulesPtr[0] = rt_rule_entry;
 				if (!m_routing.addRules(&rt_rule))
 				{
@@ -1778,6 +1780,8 @@ int IPACM_Wlan::handle_wlan_client_route_rule(uint8_t *mac_addr, ipa_ip_type ipt
 #ifdef FEATURE_IPA_V3
 					rt_rule_entry.rule.hashable = true;
 #endif
+					UapiHelper::ruleTtlUpdateSet(rt_rule_entry.rule);
+					IPACMDBG_H("ttl_update = %u\n", rt_rule_entry.rule.ttl_update);
 					rulesPtr[0] = rt_rule_entry;
 					if (!m_routing.addRules(&rt_rule)) {
 						IPACMERR("Routing rule addition failed!\n");
@@ -2138,6 +2142,8 @@ int IPACM_Wlan::handle_wlan_client_route_rule_ext(uint8_t *mac_addr, ipa_ip_type
 				rt_rule_entry.rule_id = 0;
 				if (get_client_memptr(wlan_client, wlan_index)->lan_stats_idx != -1)
 					rt_rule_entry.rule_id = get_client_memptr(wlan_client, wlan_index)->lan_stats_idx | 0x200;
+				UapiHelper::ruleTtlUpdateSet(rt_rule_entry.rule);
+				IPACMDBG_H("ttl_update = %u\n", rt_rule_entry.rule.ttl_update);
 				rulesPtr[0] = rt_rule_entry;
 				if (!m_routing.AddRoutingRuleExt_v2(&rt_rule))
 				{
@@ -2241,6 +2247,8 @@ int IPACM_Wlan::handle_wlan_client_route_rule_ext(uint8_t *mac_addr, ipa_ip_type
 					if (get_client_memptr(wlan_client, wlan_index)->lan_stats_idx != -1) {
 						rt_rule_entry.rule_id = get_client_memptr(wlan_client, wlan_index)->lan_stats_idx | 0x200;
 					}
+					UapiHelper::ruleTtlUpdateSet(rt_rule_entry.rule);
+					IPACMDBG_H("ttl_update = %u\n", rt_rule_entry.rule.ttl_update);
 					rulesPtr[0] = rt_rule_entry;
 					if (!m_routing.AddRoutingRuleExt_v2(&rt_rule)) {
 						IPACMERR("Routing rule addition failed!\n");
@@ -4085,6 +4093,8 @@ int IPACM_Wlan::install_uplink_filter_rule_per_client
 		ret = IPACM_FAILURE;
 		goto fail;
 	}
+	UapiHelper::ruleTtlUpdateSet(flt_rule_entry.rule);
+	IPACMDBG_H("ttl_update = %u\n", flt_rule_entry.rule.ttl_update);
 
 	action_cache = flt_rule_entry.rule.action;
 	for(cnt=0; prop->num_ext_props && index < total_rules; cnt++)
@@ -4367,7 +4377,8 @@ int IPACM_Wlan::install_uplink_filter_rule_per_client_v2
 	flt_rule_entry.rule.eq_attrib_type = 1;
 	flt_rule_entry.rule.enable_stats = true;
 	flt_rule_entry.rule.cnt_idx = ul_cnt_idx;
-
+	UapiHelper::ruleTtlUpdateSet(flt_rule_entry.rule);
+	IPACMDBG_H("ttl_update = %u\n", flt_rule_entry.rule.ttl_update);
 	if(iptype == IPA_IP_v4)
 	{
 		if (ipa_if_cate == ODU_IF && IPACM_Wan::isWan_Bridge_Mode())

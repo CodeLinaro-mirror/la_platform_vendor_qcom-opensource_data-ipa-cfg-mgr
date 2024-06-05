@@ -8152,7 +8152,7 @@ int IPACM_Wan::installWanPostIpsecRt(ipa_ip_type ipType)
 		res = IPACM_FAILURE;
 		goto end;
 	}
-	else if (rt_rule_entry->status)
+	else if ((rt_rule_entry != NULL) && (rt_rule_entry->status))
 	{
 		IPACMERR("rt rule adding failed. Result=%d\n", rt_rule_entry->status);
 		res = rt_rule_entry->status;

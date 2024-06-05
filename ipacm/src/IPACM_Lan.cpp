@@ -20069,7 +20069,7 @@ int IPACM_Lan::handle_static_policy_flt_rule_add(uint32_t ipv4_addr)
 	struct ipa_flt_rule_add *pFltRule;
 	struct ipa_ioc_add_flt_rule_after* pFilteringTable = NULL;
 	struct ipa_ioc_get_rt_tbl rtTblHdl;
-	int len, idx, res = 0;
+	int len, idx = 0, res = 0;
 
 	memset(&rtTblHdl, 0, sizeof(rtTblHdl));
 	snprintf(rtTblHdl.name, sizeof(rtTblHdl.name),"static_policy_rt");

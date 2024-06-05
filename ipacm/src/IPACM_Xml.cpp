@@ -231,6 +231,7 @@ static int ipacm_cfg_xml_parse_tree
 						str_size = strlen(content);
 						memset(content_buf, 0, sizeof(content_buf));
 						memcpy(content_buf, (void *)content, str_size);
+						content_buf[MAX_XML_STR_LEN-1] = '\0';
 						if (atoi(content_buf))
 						{
 							config->dual_backhaul_conf.dualbackhaul_enable = true;
@@ -253,6 +254,7 @@ static int ipacm_cfg_xml_parse_tree
 						str_size = strlen(content);
 						memset(content_buf, 0, sizeof(content_buf));
 						memcpy(content_buf, (void *)content, str_size);
+						content_buf[MAX_XML_STR_LEN-1] = '\0';
 						if (atoi(content_buf))
 						{
 							config->v6options_enable = true;
@@ -276,6 +278,7 @@ static int ipacm_cfg_xml_parse_tree
 						str_size = strlen(content);
 						memset(content_buf, 0, sizeof(content_buf));
 						memcpy(content_buf, (void *)content, str_size);
+						content_buf[MAX_XML_STR_LEN-1] = '\0';
 						if (atoi(content_buf))
 						{
 							config->gre_conf.gre_enable = true;
@@ -298,6 +301,7 @@ static int ipacm_cfg_xml_parse_tree
 						str_size = strlen(content);
 						memset(content_buf, 0, sizeof(content_buf));
 						memcpy(content_buf, (void *)content, str_size);
+						content_buf[MAX_XML_STR_LEN-1] = '\0';
 						if (atoi(content_buf))
 						{
 							config->gre_conf.gre_autolearn = true;
@@ -334,6 +338,7 @@ static int ipacm_cfg_xml_parse_tree
 						str_size = strlen(content);
 						memset(content_buf, 0, sizeof(content_buf));
 						memcpy(content_buf, (void *)content, str_size);
+						content_buf[MAX_XML_STR_LEN-1] = '\0';
 						if (atoi(content_buf))
 						{
 							config->lan_stats_enable = true;
@@ -356,6 +361,7 @@ static int ipacm_cfg_xml_parse_tree
 						str_size = strlen(content);
 						memset(content_buf, 0, sizeof(content_buf));
 						memcpy(content_buf, (void *)content, str_size);
+						content_buf[MAX_XML_STR_LEN-1] = '\0';
 						if (0 == strncasecmp(content_buf, ODU_ROUTER_TAG, str_size))
 						{
 							config->router_mode_enable = true;
@@ -377,6 +383,7 @@ static int ipacm_cfg_xml_parse_tree
 						str_size = strlen(content);
 						memset(content_buf, 0, sizeof(content_buf));
 						memcpy(content_buf, (void *)content, str_size);
+						content_buf[MAX_XML_STR_LEN-1] = '\0';
 						if (atoi(content_buf))
 						{
 							config->odu_embms_enable = true;
@@ -397,6 +404,7 @@ static int ipacm_cfg_xml_parse_tree
 						str_size = strlen(content);
 						memset(content_buf, 0, sizeof(content_buf));
 						memcpy(content_buf, (void *)content, str_size);
+						content_buf[MAX_XML_STR_LEN-1] = '\0';
 						strlcpy(config->iface_config.iface_entries[config->iface_config.num_iface_entries - 1].iface_name, content_buf, str_size+1);
 						IPACMDBG_H("Name %s\n", config->iface_config.iface_entries[config->iface_config.num_iface_entries - 1].iface_name);
 					}
@@ -409,6 +417,7 @@ static int ipacm_cfg_xml_parse_tree
 						str_size = strlen(content);
 						memset(content_buf, 0, sizeof(content_buf));
 						memcpy(content_buf, (void *)content, str_size);
+						content_buf[MAX_XML_STR_LEN-1] = '\0';
 						strlcpy(config->iface_config.iface_entries[config->iface_config.num_iface_entries - 1].phy_dev_name, content_buf, str_size+1);
 						config->iface_config.iface_entries[config->iface_config.num_iface_entries - 1].virtual_iface = true;
 						IPACMDBG_H("Phy %s\n", config->iface_config.iface_entries[config->iface_config.num_iface_entries - 1].phy_dev_name);
@@ -422,6 +431,7 @@ static int ipacm_cfg_xml_parse_tree
 						str_size = strlen(content);
 						memset(content_buf, 0, sizeof(content_buf));
 						memcpy(content_buf, (void *)content, str_size);
+						content_buf[MAX_XML_STR_LEN-1] = '\0';
 						if (0 == strncasecmp(content_buf, WANIF_TAG, str_size))
 						{
 							config->iface_config.iface_entries[config->iface_config.num_iface_entries - 1].if_cat = WAN_IF;
@@ -467,6 +477,7 @@ static int ipacm_cfg_xml_parse_tree
 						str_size = strlen(content);
 						memset(content_buf, 0, sizeof(content_buf));
 						memcpy(content_buf, (void *)content, str_size);
+						content_buf[MAX_XML_STR_LEN-1] = '\0';
 						if (0 == strncasecmp(content_buf, IFACE_ROUTER_MODE_TAG, str_size))
 						{
 							config->iface_config.iface_entries[config->iface_config.num_iface_entries - 1].if_mode = ROUTER;
@@ -488,7 +499,7 @@ static int ipacm_cfg_xml_parse_tree
 						str_size = strlen(content);
 						memset(content_buf, 0, sizeof(content_buf));
 						memcpy(content_buf, (void *)content, str_size);
-
+						content_buf[MAX_XML_STR_LEN-1] = '\0';
 						if (0 == strncasecmp(content_buf, WLAN_FULL_MODE_TAG, str_size))
 						{
 							config->iface_config.iface_entries[config->iface_config.num_iface_entries - 1].wlan_mode = FULL;
@@ -513,7 +524,6 @@ static int ipacm_cfg_xml_parse_tree
 						memset(content_buf, 0, sizeof(content_buf));
 						memcpy(content_buf, (void *)content, str_size);
 						content_buf[MAX_XML_STR_LEN-1] = '\0';
-
 						if (0 == strncasecmp(content_buf, TCP_PROTOCOL_TAG, str_size))
 						{
 							config->alg_config.alg_entries[config->alg_config.num_alg_entries - 1].protocol = IPPROTO_TCP;
@@ -536,6 +546,7 @@ static int ipacm_cfg_xml_parse_tree
 						str_size = strlen(content);
 						memset(content_buf, 0, sizeof(content_buf));
 						memcpy(content_buf, (void *)content, str_size);
+						content_buf[MAX_XML_STR_LEN-1] = '\0';
 						config->alg_config.alg_entries[config->alg_config.num_alg_entries - 1].port
 							 = atoi(content_buf);
 						IPACMDBG_H("port %d\n", config->alg_config.alg_entries[config->alg_config.num_alg_entries - 1].port);
@@ -549,6 +560,7 @@ static int ipacm_cfg_xml_parse_tree
 						str_size = strlen(content);
 						memset(content_buf, 0, sizeof(content_buf));
 						memcpy(content_buf, (void *)content, str_size);
+						content_buf[MAX_XML_STR_LEN-1] = '\0';
 						config->nat_max_entries = atoi(content_buf);
 						IPACMDBG_H("Nat Table Max Entries %d\n", config->nat_max_entries);
 					}
@@ -596,6 +608,7 @@ static int ipacm_cfg_xml_parse_tree
 						{
 							memset(content_buf, 0, sizeof(content_buf));
 							memcpy(content_buf, (void *)content, str_size);
+							content_buf[MAX_XML_STR_LEN-1] = '\0';
 							config->ipv6ct_enable = atoi(content_buf);
 							IPACMDBG_H("IPv6CT enable %d\n", config->ipv6ct_enable);
 						}
@@ -619,6 +632,7 @@ static int ipacm_cfg_xml_parse_tree
 						{
 							memset(content_buf, 0, sizeof(content_buf));
 							memcpy(content_buf, (void *)content, str_size);
+							content_buf[MAX_XML_STR_LEN-1] = '\0';
 							config->ipv6ct_max_entries = atoi(content_buf);
 							IPACMDBG_H("IPv6CT Table Max Entries %d\n", config->ipv6ct_max_entries);
 						}
@@ -662,6 +676,7 @@ static int ipacm_cfg_xml_parse_tree
 						str_size = strlen(content);
 						memset(content_buf, 0, sizeof(content_buf));
 						memcpy(content_buf, (void *)content, str_size);
+						content_buf[MAX_XML_STR_LEN-1] = '\0';
 						if (atoi(content_buf))
 						{
 							config->ipv6_nat_enable = true;
@@ -689,6 +704,7 @@ static int ipacm_cfg_xml_parse_tree
 							str_size = strlen(content);
 							memset(content_buf, 0, sizeof(content_buf));
 							memcpy(content_buf, (void *)content, str_size);
+							content_buf[MAX_XML_STR_LEN-1] = '\0';
 							config->ipacm_l2tp_enable = atoi(content_buf);
 						}
 				}
@@ -705,6 +721,7 @@ static int ipacm_cfg_xml_parse_tree
 							str_size = strlen(content);
 							memset(content_buf, 0, sizeof(content_buf));
 							memcpy(content_buf, (void *)content, str_size);
+							content_buf[MAX_XML_STR_LEN-1] = '\0';
 							if (atoi(content_buf))
 							{
 								config->ipacm_mpdn_enable = true;
@@ -728,6 +745,7 @@ static int ipacm_cfg_xml_parse_tree
 						str_size = strlen(content);
 						memset(content_buf, 0, sizeof(content_buf));
 						memcpy(content_buf, (void *)content, str_size);
+						content_buf[MAX_XML_STR_LEN-1] = '\0';
 						if (atoi(content_buf))
 						{
 							config->public_ip_support_enable = true;
@@ -752,6 +770,7 @@ static int ipacm_cfg_xml_parse_tree
 						str_size = strlen(content);
 						memset(content_buf, 0, sizeof(content_buf));
 						memcpy(content_buf, (void *)content, str_size);
+						content_buf[MAX_XML_STR_LEN-1] = '\0';
 						if (atoi(content_buf))
 						{
 							config->ipacm_emesh_enable = true;
@@ -779,7 +798,7 @@ static int ipacm_cfg_xml_parse_tree
 						str_size = strlen(content);
 						memset(content_buf, 0, sizeof(content_buf));
 						memcpy(content_buf, (void *)content, str_size);
-
+						content_buf[MAX_XML_STR_LEN-1] = '\0';
 						config->ipacm_emesh_mode = atoi(content_buf);
 						IPACMDBG_H("IPACM Easy mesh mode %d buf(%d)\n",
 								   config->ipacm_emesh_mode, atoi(content_buf));
@@ -794,6 +813,7 @@ static int ipacm_cfg_xml_parse_tree
 						str_size = strlen(content);
 						memset(content_buf, 0, sizeof(content_buf));
 						memcpy(content_buf, (void *)content, str_size);
+						content_buf[MAX_XML_STR_LEN-1] = '\0';
 						if (atoi(content_buf))
 						{
 							config->wlan_vlan_mpdn_enable = true;
@@ -814,6 +834,7 @@ static int ipacm_cfg_xml_parse_tree
 						str_size = strlen(content);
 						memset(content_buf, 0, sizeof(content_buf));
 						memcpy(content_buf, (void *)content, str_size);
+						content_buf[MAX_XML_STR_LEN-1] = '\0';
 						if (atoi(content_buf))
 						{
 							config->static_policy_enable = true;
@@ -835,6 +856,7 @@ static int ipacm_cfg_xml_parse_tree
 						str_size = strlen(content);
 						memset(content_buf, 0, sizeof(content_buf));
 						memcpy(content_buf, (void *)content, str_size);
+						content_buf[MAX_XML_STR_LEN-1] = '\0';
 						config->static_policy_dscp_mark_mode = atoi(content_buf);
 						IPACMDBG_H("Static_Policy_DSCP_Mark_Mode:%d\n",
 							atoi(content_buf));
@@ -990,6 +1012,7 @@ static int IPACM_firewall_xml_parse_tree(const char *xml_file, xmlNode* xml_node
 				{
 					memset(content_buf, 0, sizeof(content_buf));
 					memcpy(content_buf, (void *)content, strlen(content));
+					content_buf[MAX_XML_STR_LEN-1] = '\0';
 					firewall_config.default_profile = atoi(content_buf);
 					IPACMDBG_H("Default profile is %d\n", firewall_config.default_profile);
 				}
@@ -1048,6 +1071,7 @@ static int IPACM_firewall_xml_parse_tree(const char *xml_file, xmlNode* xml_node
 						        str_size = strlen(content);
 						        memset(content_buf, 0, sizeof(content_buf));
 						        memcpy(content_buf, (void *)content, str_size);
+							content_buf[MAX_XML_STR_LEN-1] = '\0';
 							if (atoi(content_buf)==1)
 							{
 								config->rule_action_accept = true;
@@ -1069,6 +1093,7 @@ static int IPACM_firewall_xml_parse_tree(const char *xml_file, xmlNode* xml_node
 						        str_size = strlen(content);
 						        memset(content_buf, 0, sizeof(content_buf));
 						        memcpy(content_buf, (void *)content, str_size);
+							content_buf[MAX_XML_STR_LEN-1] = '\0';
 							if (atoi(content_buf)==1)
 							{
 								config->firewall_enable = true;
@@ -1114,6 +1139,7 @@ static int IPACM_firewall_xml_parse_tree(const char *xml_file, xmlNode* xml_node
 						str_size = strlen(content);
 						memset(content_buf, 0, sizeof(content_buf));
 						memcpy(content_buf, (void *)content, str_size);
+						content_buf[MAX_XML_STR_LEN-1] = '\0';
 						config->extd_firewall_entries[config->num_extd_firewall_entries - 1].ip_vsn
 							 = (firewall_ip_version_enum)atoi(content_buf);
 						IPACMDBG_H("\n IP family type is %d \n",
@@ -1202,6 +1228,7 @@ static int IPACM_firewall_xml_parse_tree(const char *xml_file, xmlNode* xml_node
 						str_size = strlen(content);
 						memset(content_buf, 0, sizeof(content_buf));
 						memcpy(content_buf, (void *)content, str_size);
+						content_buf[MAX_XML_STR_LEN-1] = '\0';
 						config->extd_firewall_entries[config->num_extd_firewall_entries - 1].attrib.u.v4.tos
 							 = atoi(content_buf);
 						// Here we do not know if it is TOS with mask or not, so we put at both places
@@ -1221,6 +1248,7 @@ static int IPACM_firewall_xml_parse_tree(const char *xml_file, xmlNode* xml_node
 						str_size = strlen(content);
 						memset(content_buf, 0, sizeof(content_buf));
 						memcpy(content_buf, (void *)content, str_size);
+						content_buf[MAX_XML_STR_LEN-1] = '\0';
 						mask = atoi(content_buf);
 						IPACMDBG_H("\n IPv4 TOS mask is %u \n", mask);
 						if (mask != 0xFF) {
@@ -1245,6 +1273,7 @@ static int IPACM_firewall_xml_parse_tree(const char *xml_file, xmlNode* xml_node
 						str_size = strlen(content);
 						memset(content_buf, 0, sizeof(content_buf));
 						memcpy(content_buf, (void *)content, str_size);
+						content_buf[MAX_XML_STR_LEN-1] = '\0';
 						config->extd_firewall_entries[config->num_extd_firewall_entries - 1].attrib.attrib_mask |= IPA_FLT_PROTOCOL;
 						config->extd_firewall_entries[config->num_extd_firewall_entries - 1].attrib.u.v4.protocol = atoi(content_buf);
 						IPACMDBG_H("\n IPv4 next header prot is %d \n",
@@ -1266,6 +1295,7 @@ static int IPACM_firewall_xml_parse_tree(const char *xml_file, xmlNode* xml_node
 						str_size = strlen(content);
 						memset(content_buf, 0, sizeof(content_buf));
 						memcpy(content_buf, (void *)content, str_size);
+						content_buf[MAX_XML_STR_LEN-1] = '\0';
 						inet_pton(AF_INET6, content_buf, &ip6_addr);
 						memcpy(config->extd_firewall_entries[config->num_extd_firewall_entries - 1].attrib.u.v6.src_addr,
 									 ip6_addr.s6_addr, IPACM_IPV6_ADDR_LEN * sizeof(uint8_t));
@@ -1286,6 +1316,7 @@ static int IPACM_firewall_xml_parse_tree(const char *xml_file, xmlNode* xml_node
 						str_size = strlen(content);
 						memset(content_buf, 0, sizeof(content_buf));
 						memcpy(content_buf, (void *)content, str_size);
+						content_buf[MAX_XML_STR_LEN-1] = '\0';
 						mask_value_v6 = atoi(content_buf);
 						for (mask_index = 0; mask_index < 4; mask_index++)
 						{
@@ -1318,6 +1349,7 @@ static int IPACM_firewall_xml_parse_tree(const char *xml_file, xmlNode* xml_node
 						str_size = strlen(content);
 						memset(content_buf, 0, sizeof(content_buf));
 						memcpy(content_buf, (void *)content, str_size);
+						content_buf[MAX_XML_STR_LEN-1] = '\0';
 						inet_pton(AF_INET6, content_buf, &ip6_addr);
 						memcpy(config->extd_firewall_entries[config->num_extd_firewall_entries - 1].attrib.u.v6.dst_addr,
 									 ip6_addr.s6_addr, IPACM_IPV6_ADDR_LEN * sizeof(uint8_t));
@@ -1337,6 +1369,7 @@ static int IPACM_firewall_xml_parse_tree(const char *xml_file, xmlNode* xml_node
 						str_size = strlen(content);
 						memset(content_buf, 0, sizeof(content_buf));
 						memcpy(content_buf, (void *)content, str_size);
+						content_buf[MAX_XML_STR_LEN-1] = '\0';
 						mask_value_v6 = atoi(content_buf);
 						for (mask_index = 0; mask_index < 4; mask_index++)
 						{
@@ -1368,6 +1401,7 @@ static int IPACM_firewall_xml_parse_tree(const char *xml_file, xmlNode* xml_node
 						str_size = strlen(content);
 						memset(content_buf, 0, sizeof(content_buf));
 						memcpy(content_buf, (void *)content, str_size);
+						content_buf[MAX_XML_STR_LEN-1] = '\0';
 						config->extd_firewall_entries[config->num_extd_firewall_entries - 1].attrib.u.v6.tc
 							 = atoi(content_buf);
 						IPACMDBG_H("\n ipv6 trf class val is %d \n",
@@ -1382,6 +1416,7 @@ static int IPACM_firewall_xml_parse_tree(const char *xml_file, xmlNode* xml_node
 						str_size = strlen(content);
 						memset(content_buf, 0, sizeof(content_buf));
 						memcpy(content_buf, (void *)content, str_size);
+						content_buf[MAX_XML_STR_LEN-1] = '\0';
 						config->extd_firewall_entries[config->num_extd_firewall_entries - 1].attrib.u.v6.tc
 							 &= atoi(content_buf);
 						IPACMDBG_H("\n ipv6 trf class mask is %d \n", atoi(content_buf));
@@ -1395,6 +1430,7 @@ static int IPACM_firewall_xml_parse_tree(const char *xml_file, xmlNode* xml_node
 						str_size = strlen(content);
 						memset(content_buf, 0, sizeof(content_buf));
 						memcpy(content_buf, (void *)content, str_size);
+						content_buf[MAX_XML_STR_LEN-1] = '\0';
 						config->extd_firewall_entries[config->num_extd_firewall_entries - 1].attrib.attrib_mask |= IPA_FLT_NEXT_HDR;
 						config->extd_firewall_entries[config->num_extd_firewall_entries - 1].attrib.u.v6.next_hdr
 							 = atoi(content_buf);
@@ -1413,6 +1449,7 @@ static int IPACM_firewall_xml_parse_tree(const char *xml_file, xmlNode* xml_node
 						str_size = strlen(content);
 						memset(content_buf, 0, sizeof(content_buf));
 						memcpy(content_buf, (void *)content, str_size);
+						content_buf[MAX_XML_STR_LEN-1] = '\0';
 						val = atoi(content_buf);
 					}
 
@@ -1433,6 +1470,7 @@ static int IPACM_firewall_xml_parse_tree(const char *xml_file, xmlNode* xml_node
 						str_size = strlen(content);
 						memset(content_buf, 0, sizeof(content_buf));
 						memcpy(content_buf, (void *)content, str_size);
+						content_buf[MAX_XML_STR_LEN-1] = '\0';
 						config->extd_firewall_entries[config->num_extd_firewall_entries - 1].attrib.src_port
 							 = atoi(content_buf);
 					}
@@ -1445,6 +1483,7 @@ static int IPACM_firewall_xml_parse_tree(const char *xml_file, xmlNode* xml_node
 						str_size = strlen(content);
 						memset(content_buf, 0, sizeof(content_buf));
 						memcpy(content_buf, (void *)content, str_size);
+						content_buf[MAX_XML_STR_LEN-1] = '\0';
 						if (atoi(content_buf) != 0)
 						{
 							config->extd_firewall_entries[config->num_extd_firewall_entries - 1].attrib.attrib_mask |= IPA_FLT_SRC_PORT_RANGE;
@@ -1478,6 +1517,7 @@ static int IPACM_firewall_xml_parse_tree(const char *xml_file, xmlNode* xml_node
 						str_size = strlen(content);
 						memset(content_buf, 0, sizeof(content_buf));
 						memcpy(content_buf, (void *)content, str_size);
+						content_buf[MAX_XML_STR_LEN-1] = '\0';
 						config->extd_firewall_entries[config->num_extd_firewall_entries - 1].attrib.dst_port
 							 = atoi(content_buf);
 					}
@@ -1490,6 +1530,7 @@ static int IPACM_firewall_xml_parse_tree(const char *xml_file, xmlNode* xml_node
 						str_size = strlen(content);
 						memset(content_buf, 0, sizeof(content_buf));
 						memcpy(content_buf, (void *)content, str_size);
+						content_buf[MAX_XML_STR_LEN-1] = '\0';
 						if(atoi(content_buf)!=0)
 						{
 							config->extd_firewall_entries[config->num_extd_firewall_entries - 1].attrib.attrib_mask |= IPA_FLT_DST_PORT_RANGE;
@@ -1523,6 +1564,7 @@ static int IPACM_firewall_xml_parse_tree(const char *xml_file, xmlNode* xml_node
 						str_size = strlen(content);
 						memset(content_buf, 0, sizeof(content_buf));
 						memcpy(content_buf, (void *)content, str_size);
+						content_buf[MAX_XML_STR_LEN-1] = '\0';
 						config->extd_firewall_entries[config->num_extd_firewall_entries - 1].attrib.src_port
 							 = atoi(content_buf);
 					}
@@ -1535,6 +1577,7 @@ static int IPACM_firewall_xml_parse_tree(const char *xml_file, xmlNode* xml_node
 						str_size = strlen(content);
 						memset(content_buf, 0, sizeof(content_buf));
 						memcpy(content_buf, (void *)content, str_size);
+						content_buf[MAX_XML_STR_LEN-1] = '\0';
 						if(atoi(content_buf)!=0)
 						{
 							config->extd_firewall_entries[config->num_extd_firewall_entries - 1].attrib.attrib_mask |= IPA_FLT_SRC_PORT_RANGE;
@@ -1568,6 +1611,7 @@ static int IPACM_firewall_xml_parse_tree(const char *xml_file, xmlNode* xml_node
 						str_size = strlen(content);
 						memset(content_buf, 0, sizeof(content_buf));
 						memcpy(content_buf, (void *)content, str_size);
+						content_buf[MAX_XML_STR_LEN-1] = '\0';
 						config->extd_firewall_entries[config->num_extd_firewall_entries - 1].attrib.dst_port
 							 = atoi(content_buf);
 					}
@@ -1580,6 +1624,7 @@ static int IPACM_firewall_xml_parse_tree(const char *xml_file, xmlNode* xml_node
 						str_size = strlen(content);
 						memset(content_buf, 0, sizeof(content_buf));
 						memcpy(content_buf, (void *)content, str_size);
+						content_buf[MAX_XML_STR_LEN-1] = '\0';
 						if(atoi(content_buf)!=0)
 						{
 							config->extd_firewall_entries[config->num_extd_firewall_entries - 1].attrib.attrib_mask |= IPA_FLT_DST_PORT_RANGE;
@@ -1608,6 +1653,7 @@ static int IPACM_firewall_xml_parse_tree(const char *xml_file, xmlNode* xml_node
 						str_size = strlen(content);
 						memset(content_buf, 0, sizeof(content_buf));
 						memcpy(content_buf, (void *)content, str_size);
+						content_buf[MAX_XML_STR_LEN-1] = '\0';
 						config->extd_firewall_entries[config->num_extd_firewall_entries - 1].attrib.type = atoi(content_buf);
 						config->extd_firewall_entries[config->num_extd_firewall_entries - 1].attrib.attrib_mask |= IPA_FLT_TYPE;
 						IPACMDBG_H("\n icmp type is %d \n",
@@ -1622,6 +1668,7 @@ static int IPACM_firewall_xml_parse_tree(const char *xml_file, xmlNode* xml_node
 						str_size = strlen(content);
 						memset(content_buf, 0, sizeof(content_buf));
 						memcpy(content_buf, (void *)content, str_size);
+						content_buf[MAX_XML_STR_LEN-1] = '\0';
 						config->extd_firewall_entries[config->num_extd_firewall_entries - 1].attrib.code = atoi(content_buf);
 						config->extd_firewall_entries[config->num_extd_firewall_entries - 1].attrib.attrib_mask |= IPA_FLT_CODE;
 						IPACMDBG_H("\n icmp code is %d \n",
@@ -1636,6 +1683,7 @@ static int IPACM_firewall_xml_parse_tree(const char *xml_file, xmlNode* xml_node
 						str_size = strlen(content);
 						memset(content_buf, 0, sizeof(content_buf));
 						memcpy(content_buf, (void *)content, str_size);
+						content_buf[MAX_XML_STR_LEN-1] = '\0';
 						config->extd_firewall_entries[config->num_extd_firewall_entries - 1].attrib.spi = atoi(content_buf);
 						config->extd_firewall_entries[config->num_extd_firewall_entries - 1].attrib.attrib_mask |= IPA_FLT_SPI;
 						IPACMDBG_H("\n esp spi is %d \n",
@@ -1655,6 +1703,7 @@ static int IPACM_firewall_xml_parse_tree(const char *xml_file, xmlNode* xml_node
 						str_size = strlen(content);
 						memset(content_buf, 0, sizeof(content_buf));
 						memcpy(content_buf, (void *)content,str_size);
+						content_buf[MAX_XML_STR_LEN-1] = '\0';
 						config->extd_firewall_entries[config->num_extd_firewall_entries - 1].attrib.src_port
 							 = atoi(content_buf);
 					}
@@ -1667,6 +1716,7 @@ static int IPACM_firewall_xml_parse_tree(const char *xml_file, xmlNode* xml_node
 						str_size = strlen(content);
 						memset(content_buf, 0, sizeof(content_buf));
 						memcpy(content_buf, (void *)content, str_size);
+						content_buf[MAX_XML_STR_LEN-1] = '\0';
 						if(atoi(content_buf)!=0)
 						{
 							config->extd_firewall_entries[config->num_extd_firewall_entries - 1].attrib.attrib_mask |= IPA_FLT_SRC_PORT_RANGE;
@@ -1700,6 +1750,7 @@ static int IPACM_firewall_xml_parse_tree(const char *xml_file, xmlNode* xml_node
 						str_size = strlen(content);
 						memset(content_buf, 0, sizeof(content_buf));
 						memcpy(content_buf, (void *)content, str_size);
+						content_buf[MAX_XML_STR_LEN-1] = '\0';
 						config->extd_firewall_entries[config->num_extd_firewall_entries - 1].attrib.dst_port
 							 = atoi(content_buf);
 					}
@@ -1712,6 +1763,7 @@ static int IPACM_firewall_xml_parse_tree(const char *xml_file, xmlNode* xml_node
 						str_size = strlen(content);
 						memset(content_buf, 0, sizeof(content_buf));
 						memcpy(content_buf, (void *)content, str_size);
+						content_buf[MAX_XML_STR_LEN-1] = '\0';
 						if(atoi(content_buf)!=0)
 						{
 							config->extd_firewall_entries[config->num_extd_firewall_entries - 1].attrib.attrib_mask |= IPA_FLT_DST_PORT_RANGE;
@@ -1762,6 +1814,7 @@ static int IPACM_firewall_xml_parse_tree(const char *xml_file, xmlNode* xml_node
 					{
 						memset(content_buf, 0, sizeof(content_buf));
 						memcpy(content_buf, (void *)content, strlen(content));
+						content_buf[MAX_XML_STR_LEN-1] = '\0';
 						config->profile = atoi(content_buf);
 						IPACMDBG_H("Profile is %d\n", config->profile);
 					}
@@ -1818,6 +1871,7 @@ static int IPACM_cfg_ext_xml_parse_tree
 							str_size = strlen(content);
 							memset(content_buf, 0, sizeof(content_buf));
 							memcpy(content_buf, (void *)content, str_size);
+							content_buf[MAX_XML_STR_LEN-1] = '\0';
 							if (atoi(content_buf)==1)
 							{
 								config->add = 1;
@@ -1847,6 +1901,7 @@ static int IPACM_cfg_ext_xml_parse_tree
 						str_size = strlen(content);
 						memset(content_buf, 0, sizeof(content_buf));
 						memcpy(content_buf, (void *)content, str_size);
+						content_buf[MAX_XML_STR_LEN-1] = '\0';
 						if ( atoi(content_buf) != (int)(*map_index - 1) )
 						{
 							IPACMERR("DSCP value wrongly added, index = %d\n",(*map_index - 1));
@@ -1863,6 +1918,7 @@ static int IPACM_cfg_ext_xml_parse_tree
 						str_size = strlen(content);
 						memset(content_buf, 0, sizeof(content_buf));
 						memcpy(content_buf, (void *)content, str_size);
+						content_buf[MAX_XML_STR_LEN-1] = '\0';
 						pcp_value = atoi(content_buf);
 						if ((pcp_value > -1) && (pcp_value < 8) && (*map_index >= 1))
 						{

@@ -214,7 +214,7 @@ bool IPACM_Header::DeleteHeaderProcCtx(uint32_t hdl)
 	if (hdl == 0)
 	{
 		IPACMERR("Invalid proc_ctx handle passed. Ignoring it\n");
-		return (ret == 0);
+		return false;
 	}
 
 	len = sizeof(struct ipa_ioc_del_hdr_proc_ctx) + sizeof(struct ipa_hdr_proc_ctx_del);

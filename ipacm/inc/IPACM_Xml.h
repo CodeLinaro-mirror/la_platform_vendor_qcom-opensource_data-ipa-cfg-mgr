@@ -27,7 +27,7 @@
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  * Changes from Qualcomm Innovation Center are provided under the following license:
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear.
  */
 /*!
@@ -131,9 +131,13 @@ if (!(a)) {                                                 \
 #define Protocol_TAG                         "Protocol"
 #define Direction_TAG                        "Direction"
 #define SourceAddress_TAG                    "SourceAddress"
+#define SourceSubnetMask_TAG                 "SourceSubnetMask"
 #define DestinationAddress_TAG               "DestinationAddress"
+#define DestinationSubnetMask_TAG            "DestinationSubnetMask"
 #define SourcePort_TAG                       "SourcePort"
+#define SourcePortRange_TAG                  "SourcePortRange"
 #define DestinationPort_TAG                  "DestinationPort"
+#define DestinationPortRange_TAG             "DestinationPortRange"
 
 #define UNKNOWN_NetDev_TAG                   "UNKNOWN"
 
@@ -210,6 +214,7 @@ if (!(a)) {                                                 \
 #define IPACM_IPV6CT_TAG                     "IPACMIPV6CT"
 #define IPV6CT_ENABLED_TAG                   "IPv6CTEnabled"
 #define IPV6CT_MAX_ENTRIES_TAG               "MaxIpv6CTEntries"
+#define CT_TableType_TAG                     "CTTableType"
 
 #define IP_PassthroughFlag_TAG               "IPPassthroughFlag"
 #define IP_PassthroughMode_TAG               "IPPassthroughMode"
@@ -240,6 +245,8 @@ if (!(a)) {                                                 \
 #define IPACM_VLAN_PCP_VALUE                "VlanPcp"
 #define IPACMLOG_TAG                         "IPACMLog"
 #define IPACMFILEVAR_TAG                     "IPACMfilevar"
+#define IPACM_MSGFLT_ENABLE_TAG              "IPACMMSGFLTEnable"
+#define IPACM_MSGFLT_TAG                     "IPACMMSGFLT"
 
 /*---------------------------------------------------------------------------
       IP protocol numbers - use in dss_socket() to identify protocols.
@@ -345,6 +352,8 @@ typedef struct
 	uint8_t num_extd_swallow_entries;
 	bool v4_up;
 	bool v6_up;
+	uint32_t  public_ipv4_addr;
+	uint32_t  ipv6_prefix[2];
 	uint8_t profile;
 } IPACM_swallow_conf_t;
 
@@ -393,6 +402,7 @@ typedef struct  _IPACM_conf_t
 	const char* nat_table_memtype;
 	int ipv6ct_max_entries;
 	bool ipv6ct_enable;
+	const char* ct_table_memtype;
 	bool odu_enable;
 	bool router_mode_enable;
 	bool odu_embms_enable;
@@ -408,6 +418,7 @@ typedef struct  _IPACM_conf_t
 	bool ipacm_mpdn_enable;
 	bool ipacm_socksv5_enable;
 	IPACM_vlan_conf_t vlan_cfg;
+	bool msgflt_enable;
 } IPACM_conf_t;
 
 /* This function read IPACM XML configuration*/

@@ -56,6 +56,12 @@ public:
 	~IPACM_Routing();
 
 	bool AddRoutingRule(struct ipa_ioc_add_rt_rule *ruleTable);
+	/**
+	 * Add a set of routing rules. Commit to HW in case it is requested (table.commit == 1).
+	 * @param table The IOCTL parameter that holds the data to create the rules from.
+	 * @return true on success, false otherwise.
+	 */
+	 bool addRules(struct ipa_ioc_add_rt_rule_v2 const *table);
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
 #ifdef IPA_HW_FNR_STATS
 	bool AddRoutingRuleExt_v2(struct ipa_ioc_add_rt_rule_ext_v2 *ruleTable);

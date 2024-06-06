@@ -52,12 +52,20 @@ class IPACM_Filtering
 public:
 	IPACM_Filtering();
 	~IPACM_Filtering();
+	/**
+	 * @deprecated - use addRules instead.
+	 */
 	bool AddFilteringRule(struct ipa_ioc_add_flt_rule const *ruleTable);
 	bool combine_flt_attribute(ipa_flt_rule_add *replicate_rule,
 		ipa_flt_rule_add *q6_rule);
-#if defined(FEATURE_IPACM_PER_CLIENT_STATS) && defined(IPA_HW_FNR_STATS)
-	bool AddFilteringRule_v2(struct ipa_ioc_add_flt_rule_v2 const *ruleTable);
-#endif //IPA_HW_FNR_STATS
+	/**
+	 * Add a set of filtering rules using the IPA driver API
+	 * (IOCTL). This call uses version 2 of the filtering rules and
+	 * a matching IPA driver API.
+	 * @param table : The set of filtering rules to add
+	 * @return : true on success, false otherwise.
+	 */
+	bool addRules(struct ipa_ioc_add_flt_rule_v2 const *table);
 	bool AddFilteringRuleAfter(struct ipa_ioc_add_flt_rule_after const *ruleTable);
 	bool DeleteFilteringRule(struct ipa_ioc_del_flt_rule *ruleTable);
 	bool Commit(enum ipa_ip_type ip);

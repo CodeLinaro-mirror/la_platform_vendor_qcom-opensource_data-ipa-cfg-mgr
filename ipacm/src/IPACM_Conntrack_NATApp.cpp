@@ -30,7 +30,7 @@ IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 *
  * Changes from Qualcomm Innovation Center are provided under the following license:
  *
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted (subject to the limitations in the
@@ -570,18 +570,22 @@ bool NatApp::ChkSWAllow(const nat_table_entry *rule)
 	IPACM_swallow_t sw_filter_cfg;
 	IPACMDBG("Entry\n");
 
+	if(!IPACM_Iface::ipacmcfg->ipacm_msgflt_enable)
+	{
+		IPACMERR("msg filtering feature is not enabled\n");
+		return false;
+	}
 	if(!IPACM_Iface::ipacmcfg->sw_filter_cfg)
 	{
 		IPACMERR("SW Config not updated/pdn index not updated!\n");
 		return false;
 	}
-
 	memcpy(&sw_filter_cfg, IPACM_Iface::ipacmcfg->sw_filter_cfg, sizeof(IPACM_swallow_t));
 
 	for(i = 0; i < sw_filter_cfg.pdn_count;i++)
 	{
 		/* PDN Not yet up */
-		if(sw_filter_cfg.pdns[i].v4_up != TRUE)
+		if(sw_filter_cfg.pdns[i].v4_up != TRUE || sw_filter_cfg.pdns[i].public_ipv4_addr != rule->public_ip)
 			continue;
 
 		for(j = 0; j < sw_filter_cfg.pdns[i].num_extd_swallow_entries;j++)
@@ -593,35 +597,15 @@ bool NatApp::ChkSWAllow(const nat_table_entry *rule)
 				continue;
 
 			/* Check if rule protocol matches with entry protocol */
-			if(!(((entry.protocol &  IPPROTO_UDP) == rule->protocol) ||
-			((entry.protocol &	IPPROTO_TCP) == rule->protocol)))
+			if((entry.protocol) && (!(((entry.protocol &  IPPROTO_UDP) == rule->protocol) ||
+			((entry.protocol &	IPPROTO_TCP) == rule->protocol))))
 				continue;
 
-			/* UL */
-			if(!rule->dst_nat && (entry.direction == IPACM_MSGR_UL_FIREWALL))
+			if(firewall_tuple_match_with_nat(entry, rule))
 			{
-				if(entry.attrib.u.v4.src_addr == rule->private_ip &&
-					 entry.attrib.u.v4.dst_addr == rule->target_ip &&
-					 entry.attrib.src_port ==  rule->private_port  &&
-					 entry.attrib.dst_port == rule->target_port)
-				{
-					log_nat(rule->protocol,rule->private_ip,rule->target_ip,rule->private_port,\
-					rule->public_port,rule->target_port,rule->src_only,rule->dst_only,"SW Allow UL V4 Rule - Do not add\n");
-					return true;
-				}
-			}
-			/* DL */
-			else if(rule->dst_nat && (entry.direction == IPACM_MSGR_DL_FIREWALL))
-			{
-				if(entry.attrib.u.v4.src_addr == rule->target_ip &&
-					 entry.attrib.u.v4.dst_addr == rule->private_ip &&
-					 entry.attrib.src_port ==  rule->target_port  &&
-					 entry.attrib.dst_port == rule->private_port)
-				{
-					log_nat(rule->protocol,rule->private_ip,rule->target_ip,rule->private_port,\
-					rule->public_port,rule->target_port,rule->src_only,rule->dst_only,"SW Allow DL V4 Rule - Do not add\n");
-					return true;
-				}
+				log_nat(rule->protocol,rule->private_ip,rule->target_ip,rule->private_port,\
+				rule->public_port,rule->target_port,rule->src_only,rule->dst_only,"SW Allow V4 Rule - Do not add\n");
+				return true;
 			}
 		}
 	}
@@ -669,13 +653,173 @@ int NatApp::DeleteEntry(const nat_table_entry *rule)
 			{
 				IPACMDBG_H("Deleted Nat entry(%d) only from cache\n", cnt);
 			}
-			memset(&cache[cnt], 0, sizeof(cache[cnt]));
-			curCnt--;
+			if(cache[cnt].sw_allow && rule->sw_allow)
+			{
+				IPACMDBG_H("backup the sw allow Nat entry(%d) only from cache\n", cnt);
+			}
+			else
+			{
+				memset(&cache[cnt], 0, sizeof(cache[cnt]));
+				curCnt--;
+			}
 			break;
-		}
-	}
+					}
+				}
 
 	return 0;
+}
+
+void NatApp::restore_nat_for_sw_flt_entries(IPACM_extd_swallow_entry_conf_t extd_firewall_entries)
+{
+	int i;
+	char iptype[4]={0}, cmd[100];
+	ipa_nat_ipv4_rule nat_rule;
+	for(i = 0; i < max_entries; i++)
+	{
+		if(cache[i].sw_allow == true)
+		{
+			if(firewall_tuple_match_with_nat(extd_firewall_entries, &cache[i]))
+			{
+				memset(&nat_rule, 0, sizeof(nat_rule));
+	  			nat_rule.private_ip = cache[i].private_ip;
+	  			nat_rule.target_ip = cache[i].target_ip;
+	  			nat_rule.target_port = cache[i].target_port;
+	  			nat_rule.private_port = cache[i].private_port;
+	  			nat_rule.public_port = cache[i].public_port;
+	  			nat_rule.protocol = cache[i].protocol;
+
+		  		if(IPACM_Iface::ipacmcfg->GetIPAVer() >= IPA_HW_v4_5) {
+		  			nat_rule.uc_activation_index =cache[i].uc_activation_index;
+		  			nat_rule.ucp = cache[i].ucp;
+		  			nat_rule.s = cache[i].s;
+		  			nat_rule.dst_only = cache[i].dst_only;
+		  			nat_rule.src_only = cache[i].src_only;
+				}
+		  		nat_rule.pdn_index = cache[i].pdn_index;
+				if(ipa_nat_add_ipv4_rule(nat_table_hdl, &nat_rule, &cache[i].rule_hdl) < 0)
+				{
+  					IPACMERR("unable to add the rule\n");
+				}
+  				cache[i].sw_allow = false;
+  				IPACMDBG_H("cache entry %d rule handle %d\n", i, cache[i].rule_hdl);
+  				cache[i].enabled = true;
+			}
+		}
+	}
+}
+
+void NatApp::firewall_compare(IPACM_swallow_conf_t *backup_firewall_config, IPACM_swallow_conf_t *firewall_config)
+{
+	int i,j;
+	if(backup_firewall_config->num_extd_swallow_entries == 0)
+	{
+		IPACMERR("backup firewall entry is zero, so no need to check further\n");
+		goto end;
+	}
+	for(i = 0; i < backup_firewall_config->num_extd_swallow_entries; i++)
+	{
+		if(backup_firewall_config->extd_swallow_entries[i].ip_vsn != IP_V4)
+		{
+			continue;
+		}
+		for(j = 0; j < firewall_config->num_extd_swallow_entries; j++)
+		{
+			if((firewall_config->extd_swallow_entries[j].ip_vsn != backup_firewall_config->extd_swallow_entries[i].ip_vsn) ||
+			(firewall_config->extd_swallow_entries[j].direction != backup_firewall_config->extd_swallow_entries[i].direction)||
+			(firewall_config->extd_swallow_entries[j].attrib.u.v4.protocol != backup_firewall_config->extd_swallow_entries[i].attrib.u.v4.protocol))
+			{
+				continue;
+			}
+
+			if(firewall_config->extd_swallow_entries[j].attrib.src_port_lo == backup_firewall_config->extd_swallow_entries[i].attrib.src_port_lo &&
+			firewall_config->extd_swallow_entries[j].attrib.src_port_hi == backup_firewall_config->extd_swallow_entries[i].attrib.src_port_hi &&
+			firewall_config->extd_swallow_entries[j].attrib.dst_port_lo == backup_firewall_config->extd_swallow_entries[i].attrib.dst_port_lo &&
+			firewall_config->extd_swallow_entries[j].attrib.dst_port_hi == backup_firewall_config->extd_swallow_entries[i].attrib.dst_port_hi &&
+			firewall_config->extd_swallow_entries[j].attrib.src_port == backup_firewall_config->extd_swallow_entries[i].attrib.src_port &&
+			firewall_config->extd_swallow_entries[j].attrib.dst_port == backup_firewall_config->extd_swallow_entries[i].attrib.dst_port &&
+			firewall_config->extd_swallow_entries[j].attrib.u.v4.src_addr == backup_firewall_config->extd_swallow_entries[i].attrib.u.v4.src_addr &&
+			firewall_config->extd_swallow_entries[j].attrib.u.v4.dst_addr == backup_firewall_config->extd_swallow_entries[i].attrib.u.v4.dst_addr)
+			{
+				IPACMDBG("firewall entry is matched\n");
+				break;
+			}
+			else
+			{
+				IPACMDBG("firewall entry is not present\n");
+				continue;
+			}
+		}
+		if((j == firewall_config->num_extd_swallow_entries) || (firewall_config->num_extd_swallow_entries == 0))
+		{
+			IPACMERR("flushing the deleted nat entry\n");
+			restore_nat_for_sw_flt_entries(backup_firewall_config->extd_swallow_entries[i]);
+		}
+	}
+end:
+	IPACMERR("reaching end of the firewall\n");
+}
+
+bool NatApp::firewall_tuple_match_with_nat(IPACM_extd_swallow_entry_conf_t extd_firewall_entries, const nat_table_entry *del_entry)
+{
+
+	bool src_range = false,dst_range =false;
+	if(extd_firewall_entries.attrib.attrib_mask & IPA_FLT_SRC_PORT_RANGE)
+	{
+		src_range = true;
+	}
+	if(extd_firewall_entries.attrib.attrib_mask & IPA_FLT_DST_PORT_RANGE)
+	{
+		dst_range = true;
+	}
+	if(extd_firewall_entries.direction == IPACM_MSGR_UL_FIREWALL && !del_entry->dst_nat)
+	{
+		if((!((extd_firewall_entries.attrib.u.v4.src_addr!=0) ^ (extd_firewall_entries.attrib.u.v4.src_addr == del_entry->private_ip)) &&
+		!((extd_firewall_entries.attrib.u.v4.dst_addr!=0)^ (extd_firewall_entries.attrib.u.v4.dst_addr == del_entry->target_ip)) &&
+		!((src_range) ^ (extd_firewall_entries.attrib.src_port_lo <=  del_entry->private_port &&
+		extd_firewall_entries.attrib.src_port_hi >=  del_entry->private_port)) &&
+		!((dst_range) ^ ((extd_firewall_entries.attrib.dst_port_lo <=  del_entry->target_port) &&
+		(extd_firewall_entries.attrib.dst_port_hi >=  del_entry->target_port))) &&
+		!((extd_firewall_entries.attrib.src_port != 0) ^ (extd_firewall_entries.attrib.src_port ==  del_entry->private_port)) &&
+		!((extd_firewall_entries.attrib.dst_port != 0) ^ (extd_firewall_entries.attrib.dst_port ==  del_entry->target_port))))
+		{
+			IPACMERR("Matched in UL\n");
+			return true;
+		}
+		else if(((extd_firewall_entries.attrib.u.v4.src_addr == 0)) &&
+		(extd_firewall_entries.attrib.u.v4.dst_addr == 0) &&
+		(!src_range)  && (!dst_range) &&
+		(extd_firewall_entries.attrib.src_port == 0) &&
+		(extd_firewall_entries.attrib.dst_port == 0))
+		{
+			IPACMERR("Matched in UL wildcard entry\n");
+			return true;
+		}
+	}
+	else if(extd_firewall_entries.direction == IPACM_MSGR_DL_FIREWALL && del_entry->dst_nat)
+	{
+		if (!((extd_firewall_entries.attrib.u.v4.src_addr!=0) ^ (extd_firewall_entries.attrib.u.v4.src_addr == del_entry->target_ip)) &&
+		!((extd_firewall_entries.attrib.u.v4.dst_addr!=0)^ (extd_firewall_entries.attrib.u.v4.dst_addr == del_entry->private_ip)) &&
+		!((src_range) ^ (extd_firewall_entries.attrib.src_port_lo <=  del_entry->target_port &&
+		extd_firewall_entries.attrib.src_port_hi >=  del_entry->target_port)) &&
+		!((dst_range) ^ ((extd_firewall_entries.attrib.dst_port_lo <=  del_entry->private_port) &&
+		(extd_firewall_entries.attrib.dst_port_hi >=  del_entry->private_port))) &&
+		!((extd_firewall_entries.attrib.src_port != 0) ^ (extd_firewall_entries.attrib.src_port ==  del_entry->target_port)) &&
+		!((extd_firewall_entries.attrib.dst_port != 0) ^ (extd_firewall_entries.attrib.dst_port ==  del_entry->private_port)))
+		{
+			IPACMERR("Matched in DL\n");
+			return true;
+		}
+		else if(((extd_firewall_entries.attrib.u.v4.src_addr==0)) &&
+		(extd_firewall_entries.attrib.u.v4.dst_addr!=0) &&
+		(!src_range)  && (!dst_range) &&
+		(extd_firewall_entries.attrib.src_port == 0) &&
+		(extd_firewall_entries.attrib.dst_port == 0))
+		{
+			IPACMERR("Matched in DL wildcard entry\n");
+			return true;
+		}
+	}
+	return false;
 }
 
 void NatApp::HandleSWAllowEntries(void)
@@ -683,7 +827,6 @@ void NatApp::HandleSWAllowEntries(void)
 	int i, j, cnt;
 	IPACM_swallow_conf_t entry;
 	const nat_table_entry *del_entry;
-	IPACM_swallow_t sw_filter_cfg;
 	IPACMDBG("Entry\n");
 
 	if(!IPACM_Iface::ipacmcfg->sw_filter_cfg)
@@ -691,57 +834,56 @@ void NatApp::HandleSWAllowEntries(void)
 		IPACMERR("SW Config not updated/pdn index not updated!\n");
 		return;
 	}
-
+	memset(&backup_sw_filter_cfg, 0, sizeof(IPACM_swallow_t));
+	memcpy(&backup_sw_filter_cfg, &sw_filter_cfg, sizeof(IPACM_swallow_t));
+	memset(&sw_filter_cfg, 0, sizeof(IPACM_swallow_t));
 	memcpy(&sw_filter_cfg, IPACM_Iface::ipacmcfg->sw_filter_cfg, sizeof(IPACM_swallow_t));
 
-	for(i = 0; i < sw_filter_cfg.pdn_count;i++)
+	for(int i = 0; i < IPA_MAX_NUM_SW_PDNS; i++)
 	{
+		firewall_compare(&backup_sw_filter_cfg.pdns[i], &sw_filter_cfg.pdns[i]);
+	}
+	for(i = 0; i < sw_filter_cfg.pdn_count; i++)
+	{
+		IPACMDBG("pdn_index_v4 %d\n", sw_filter_cfg.pdns[i].v4_up);
 		/* PDN not up yet */
 		if(sw_filter_cfg.pdns[i].v4_up != TRUE)
+		{
+			IPACMERR("sw_filter_cfg.pdns[i].v4_up \n");
 			continue;
-
+		}
 		for(j = 0; j < sw_filter_cfg.pdns[i].num_extd_swallow_entries;j++)
 		{
 			entry = sw_filter_cfg.pdns[i];
 
 			/* Check if entry is v4 */
 			if(entry.extd_swallow_entries[j].ip_vsn != IP_V4)
+			{
+				IPACMERR("sw_filter_cfg.pdns[i].pdn is not v4 entry\n");
 				continue;
+			}
+			else
+			{
+				IPACMERR("sw_filter_cfg.pdns[i].pdn is v4 entry\n");
+			}
 
 			for(cnt = 0; cnt < max_entries; cnt++)
 			{
 				/* Check if cache protocol matches with entry protocol */
-				if(!(((entry.extd_swallow_entries[j].protocol &  IPPROTO_UDP) == cache[cnt].protocol) ||
-				((entry.extd_swallow_entries[j].protocol &	IPPROTO_TCP) == cache[cnt].protocol)))
+				if(((entry.extd_swallow_entries[j].protocol) && (!(((entry.extd_swallow_entries[j].protocol &  IPPROTO_UDP) == cache[cnt].protocol) ||
+				((entry.extd_swallow_entries[j].protocol &	IPPROTO_TCP) == cache[cnt].protocol)))) || (!cache[cnt].enabled) ||
+				(sw_filter_cfg.pdns[i].public_ipv4_addr != cache[cnt].public_ip) || (cache[cnt].sw_allow))
+				{
 					continue;
-
-				/* UL */
-				if(!cache[cnt].dst_nat && (entry.extd_swallow_entries[j].direction == IPACM_MSGR_UL_FIREWALL))
-				{
-					if(entry.extd_swallow_entries[j].attrib.u.v4.src_addr == cache[cnt].private_ip &&
-						 entry.extd_swallow_entries[j].attrib.u.v4.dst_addr == cache[cnt].target_ip &&
-						 entry.extd_swallow_entries[j].attrib.src_port ==  cache[cnt].private_port  &&
-						 entry.extd_swallow_entries[j].attrib.dst_port == cache[cnt].target_port)
-					{
-						log_nat(cache[cnt].protocol,cache[cnt].private_ip,cache[cnt].target_ip,cache[cnt].private_port,\
-						cache[cnt].public_port,cache[cnt].target_port,cache[cnt].src_only,cache[cnt].dst_only,"SW Allow UL V4 Rule - Deleting Rule\n");
-						del_entry = &cache[cnt];
-						DeleteEntry(del_entry);
-					}
 				}
-				/* DL */
-				else if(cache[cnt].dst_nat && (entry.extd_swallow_entries[j].direction == IPACM_MSGR_DL_FIREWALL))
+
+				if(firewall_tuple_match_with_nat(entry.extd_swallow_entries[j], &cache[cnt]))
 				{
-					if(entry.extd_swallow_entries[j].attrib.u.v4.src_addr == cache[cnt].target_ip &&
-						 entry.extd_swallow_entries[j].attrib.u.v4.dst_addr == cache[cnt].private_ip &&
-						 entry.extd_swallow_entries[j].attrib.src_port ==  cache[cnt].target_port	&&
-						 entry.extd_swallow_entries[j].attrib.dst_port == cache[cnt].private_port)
-					{
-						log_nat(cache[cnt].protocol,cache[cnt].private_ip,cache[cnt].target_ip,cache[cnt].private_port,\
-						cache[cnt].public_port,cache[cnt].target_port,cache[cnt].src_only,cache[cnt].dst_only,"SW Allow DL V4 Rule - Deleting Rule\n");
-						del_entry = &cache[cnt];
-						DeleteEntry(del_entry);
-					}
+					log_nat(cache[cnt].protocol,cache[cnt].private_ip,cache[cnt].target_ip,cache[cnt].private_port,\
+					cache[cnt].public_port,cache[cnt].target_port,cache[cnt].src_only,cache[cnt].dst_only,"SW Allow V4 Rule - Deleting Rule\n");
+					cache[cnt].sw_allow = true;
+					del_entry = &cache[cnt];
+					DeleteEntry(del_entry);
 				}
 			}
 		}
@@ -793,7 +935,7 @@ int NatApp::AddEntry(const nat_table_entry *rule, bool isVlan)
 	}
 #endif
 
-	if(!ChkForDup(rule) && !ChkSWAllow(rule))
+	if(!ChkForDup(rule))
 	{
 		for(; cnt < max_entries; cnt++)
 		{
@@ -853,6 +995,11 @@ int NatApp::AddEntry(const nat_table_entry *rule, bool isVlan)
 				}
 				cache[cnt].enabled = false;
 				cache[cnt].rule_hdl = 0;
+			}
+			else if(ChkSWAllow(rule))
+			{
+				cache[cnt].sw_allow = true;
+				cache[cnt].enabled = true;
 			}
 			else
 			{
@@ -1213,7 +1360,7 @@ void NatApp::AddTempEntry(const nat_table_entry *new_entry)
 	IPACMDBG("Private Port: %d\t Target Port: %d\t", new_entry->private_port, new_entry->target_port);
 	IPACMDBG("protocol: %d\n", new_entry->protocol);
 
-	if(ChkForDup(new_entry) || ChkSWAllow(new_entry))
+	if(ChkForDup(new_entry))
 	{
 		return;
 	}
@@ -1237,6 +1384,10 @@ void NatApp::AddTempEntry(const nat_table_entry *new_entry)
 			 temp[cnt].target_ip == 0)
 		{
 			memcpy(&temp[cnt], new_entry, sizeof(nat_table_entry));
+			if(ChkSWAllow(new_entry))
+			{
+				temp[cnt].sw_allow = true;
+			}
 			IPACMDBG("Added Temp Entry\n");
 			return;
 		}
@@ -1464,7 +1615,7 @@ void NatApp::CacheEntry(const nat_table_entry *rule)
 		return;
 	}
 
-	if(!ChkForDup(rule) && !ChkSWAllow(rule))
+	if(!ChkForDup(rule))
 	{
 		for(cnt=0; cnt < max_entries; cnt++)
 		{
@@ -2253,7 +2404,7 @@ NatProxyBase::~NatProxyBase()
 	IPACMDBG_H("\n");
 }
 
-int NatProxyBase::AddTable(uint16_t number_of_entries)
+int NatProxyBase::AddTable(uint16_t number_of_entries, const char* mem_type)
 {
 	IPACMDBG_H("\n");
 	uint32_t table_handle;
@@ -2264,7 +2415,7 @@ int NatProxyBase::AddTable(uint16_t number_of_entries)
 		return 0;
 	}
 
-	int ret = DoAddTable(number_of_entries, table_handle);
+	int ret = DoAddTable(number_of_entries, mem_type, table_handle);
 	if (!ret)
 	{
 		m_tableHandle = table_handle;
@@ -2337,15 +2488,24 @@ int NatProxyBase::DelEntry(NatEntryBase& entry)
 	}
 
 	int ret = DoDelEntry(entry);
-	entry.Clear();
+	if(!entry.sw_allow)
+	{
+		entry.Clear();
+	}
+	else
+	{
+		IPACMDBG_H("not deleting sw allow rule\n");
+	}
+
 	IPACMDBG_H("return\n");
 	return ret;
 }
 
-int Ipv6ctProxy::DoAddTable(uint16_t number_of_entries, uint32_t& table_handle)
+int Ipv6ctProxy::DoAddTable(uint16_t number_of_entries, const char* mem_type, uint32_t& table_handle)
 {
 	IPACMDBG_H("\n");
-	int ret = ipa_ipv6ct_add_tbl(number_of_entries, &table_handle);
+
+	int ret = ipa_ct_add_ipv6_tbl(number_of_entries, mem_type, &table_handle);
 	IPACMDBG_H("return\n");
 	return ret;
 }
@@ -2353,7 +2513,7 @@ int Ipv6ctProxy::DoAddTable(uint16_t number_of_entries, uint32_t& table_handle)
 int Ipv6ctProxy::DoDeleteTable()
 {
 	IPACMDBG_H("\n");
-	int ret = ipa_ipv6ct_del_tbl(m_tableHandle);
+	int ret = ipa_ct_del_ipv6_tbl(m_tableHandle);
 	IPACMDBG_H("return\n");
 	return ret;
 }
@@ -2448,7 +2608,7 @@ int Ipv6ctProxy::DoAddEntry(const NatEntryBase& entry, uint32_t& entry_handle,
 			IPACMDBG_H("ucp: en %d, idx %d, s %d\n", entry.m_ucp, entry.m_uc_activation_index, entry.m_s);
 		}
 
-		ret = ipa_ipv6ct_add_rule(m_tableHandle, &rule, &entry_handle);
+		ret = ipa_ct_add_ipv6_rule(m_tableHandle, &rule, &entry_handle);
 
 		IPACMDBG("added ipv6CT entry, src_lsb 0x%llX, src_msb 0x%llX, src_port %u, dst_lsb 0x%llX, dst_msb 0x%llX, dst_port %u, dir %d, prot %d, handle %d\n",
 			rule.src_ipv6_lsb, rule.src_ipv6_msb, rule.src_port, rule.dest_ipv6_lsb, rule.dest_ipv6_msb, rule.dest_port, rule.direction_settings, rule.protocol, entry_handle);
@@ -2491,7 +2651,7 @@ int Ipv6ctProxy::DoAddEntry(const NatEntryBase& entry, uint32_t& entry_handle,
 		rule.dest_port = ipv6nat_entry.m_dstPort;
 		rule.protocol = ipv6nat_entry.m_protocol;
 
-		ret = ipa_ipv6ct_add_rule(m_tableHandle, &rule, &entry_handle);
+		ret = ipa_ct_add_ipv6_rule(m_tableHandle, &rule, &entry_handle);
 		if(ret)
 		{
 			IPACMERR("failed adding outbound rule, bail\n");
@@ -2513,7 +2673,7 @@ int Ipv6ctProxy::DoAddEntry(const NatEntryBase& entry, uint32_t& entry_handle,
 		rule.dest_port = ipv6nat_entry.m_dstPort;
 		rule.protocol = ipv6nat_entry.m_protocol;
 
-		ret = ipa_ipv6ct_add_rule(m_tableHandle, &rule, &additional_entry_handle);
+		ret = ipa_ct_add_ipv6_rule(m_tableHandle, &rule, &additional_entry_handle);
 		if(ret)
 		{
 			IPACMERR("failed adding outbound rule, bail\n");
@@ -2530,7 +2690,7 @@ int Ipv6ctProxy::DoAddEntry(const NatEntryBase& entry, uint32_t& entry_handle,
 	return ret;
 #ifdef FEATURE_IPV6_NAT
 inbound_fail:
-	ipa_ipv6ct_del_rule(m_tableHandle, entry_handle);
+	ipa_ct_del_ipv6_rule(m_tableHandle, entry_handle);
 clean_ucp:
 	DelIpv6NatUcAct(rule.uc_activation_index);
 	return ret;
@@ -2548,7 +2708,7 @@ int Ipv6ctProxy::DoDelEntry(const NatEntryBase& entry)
 		return -EINVAL;
 	}
 
-	ret = ipa_ipv6ct_del_rule(m_tableHandle, entry.m_ruleHandle);
+	ret = ipa_ct_del_ipv6_rule(m_tableHandle, entry.m_ruleHandle);
 	if(ret)
 	{
 		IPACMERR("failed deleting ipv6ct rule\n");
@@ -2562,7 +2722,7 @@ int Ipv6ctProxy::DoDelEntry(const NatEntryBase& entry)
 
 			IPACMDBG_H("this is ipv6 nat entry, delete inbound rule\n");
 
-			ret = ipa_ipv6ct_del_rule(m_tableHandle, ipv6nat.m_inboundRuleHandle);
+			ret = ipa_ct_del_ipv6_rule(m_tableHandle, ipv6nat.m_inboundRuleHandle);
 			if(ret)
 			{
 				IPACMERR("failed deleting inbound ipv6 nat rule\n");
@@ -2592,7 +2752,7 @@ int Ipv6ctProxy::QueryTimestamp(const NatEntryBase& entry, uint32_t& time_stamp)
 		return -EINVAL;
 	}
 
-	int ret = ipa_ipv6ct_query_timestamp(m_tableHandle, entry.m_ruleHandle, &time_stamp);
+	int ret = ipa_ct_query_timestamp(m_tableHandle, entry.m_ruleHandle, &time_stamp);
 #ifdef FEATURE_IPV6_NAT
 	if(ret)
 	{
@@ -2606,7 +2766,7 @@ int Ipv6ctProxy::QueryTimestamp(const NatEntryBase& entry, uint32_t& time_stamp)
 		const Ipv6NatEntry &ipv6nat = static_cast<const Ipv6NatEntry&>(entry);
 
 		IPACMDBG_H("ipv6 nat entry, check inbound handle\n");
-		ret = ipa_ipv6ct_query_timestamp(m_tableHandle, ipv6nat.m_inboundRuleHandle, &additional_timestamp);
+		ret = ipa_ct_query_timestamp(m_tableHandle, ipv6nat.m_inboundRuleHandle, &additional_timestamp);
 		if(ret)
 		{
 			IPACMERR(" inbound query failed, return\n");
@@ -2677,7 +2837,7 @@ NatEntriesCollectionBase& Ipv6NatObjectsGenerator::GetEntriesCollection(int max_
 }
 #endif
 
-NatBase::NatBase(ipa_ip_type type, int max_entries, const NatObjectsGeneratorBase& objectsGenerator)
+NatBase::NatBase(ipa_ip_type type, int max_entries, const char* mem_type, const NatObjectsGeneratorBase& objectsGenerator)
 	:
 	m_type(type),
 	m_temp(objectsGenerator.GetEntriesCollection(MAX_TEMP_ENTRIES)),
@@ -2687,7 +2847,8 @@ NatBase::NatBase(ipa_ip_type type, int max_entries, const NatObjectsGeneratorBas
 	m_proxy(objectsGenerator.GetProxy()),
 	m_ctTimestampUtil(objectsGenerator.GetConntrackTimestampUtil()),
 	m_cache(objectsGenerator.GetEntriesCollection(max_entries)),
-	m_previousWanAddress(objectsGenerator.GetIpAddress())
+	m_previousWanAddress(objectsGenerator.GetIpAddress()),
+	ct_mem_type(mem_type)
 {
 	IPACMDBG_H("\n");
 }
@@ -2707,7 +2868,7 @@ NatBase::~NatBase()
 int NatBase::AddTable(const uint32_t v6_prefix[2])
 {
 	IPACMDBG_H("\n");
-	int ret = m_proxy.AddTable(m_maxEntries);
+	int ret = m_proxy.AddTable(m_maxEntries, ct_mem_type);
 	if (ret)
 	{
 		IPACMERR("unable to create the table Error:%d\n", ret);
@@ -2875,12 +3036,6 @@ int NatBase::AddEntry(const NatEntryBase& entry)
 			return -EPERM;
 		}
 
-		if (ChkSWAllow(entry))
-		{
-			IPACMERR("SwAllow Entry. Ignore it\n");
-			return -EPERM;
-		}
-
 		NatEntryBase* new_entry = m_cache.GetFirstEmpty();
 		if(new_entry == NULL)
 		{
@@ -2889,8 +3044,13 @@ int NatBase::AddEntry(const NatEntryBase& entry)
 		}
 
 		*new_entry = entry;
-
-		if(m_pwrSaveIfs.Find(new_entry->GetClientIp()) != NULL || m_pwrSaveIfs.Find(new_entry->GetTargetIp()) != NULL)
+		if (ChkSWAllow(entry))
+		{
+			IPACMERR("SwAllow Entry added swallow flag\n");
+			new_entry->sw_allow = true;
+			new_entry->m_enabled = true;
+		}
+		else if(m_pwrSaveIfs.Find(new_entry->GetClientIp()) != NULL || m_pwrSaveIfs.Find(new_entry->GetTargetIp()) != NULL)
 		{
 			IPACMDBG_H("Device is Power Save mode: Don't send to HW but successfully cached\n");
 		}
@@ -2960,7 +3120,6 @@ void NatBase::DeleteEntry(const NatEntryBase& entry)
 			IPACMDBG_H("No Such Entry exists\n");
 			return;
 		}
-
 		if (entryDelete->m_enabled)
 		{
 			if (m_proxy.DelEntry(*entryDelete))
@@ -2972,10 +3131,16 @@ void NatBase::DeleteEntry(const NatEntryBase& entry)
 				IPACMDBG_H("Deleted NAT entry successfully\n");
 			}
 		}
-		entryDelete->Clear();
+		if(entryDelete->sw_allow && entry.sw_allow)
+		{
+			IPACMDBG_H("Don't Deleted NAT entry for swallow rule\n");
+		}
+		else
+		{
+			entryDelete->Clear();
+			--m_curCnt;
+		}
 	}
-	--m_curCnt;
-
 	IPACMDBG_H("return\n");
 }
 
@@ -3053,7 +3218,6 @@ void NatBase::DeleteTempEntry(const NatEntryBase& entry)
 		IPACMDBG_H("No Such Temp Entry exists\n");
 		return;
 	}
-
 	entryDelete->Clear();
 	IPACMDBG_H("The Temp Entry successfully deleted\n");
 }
@@ -3418,25 +3582,33 @@ void NatBase::Reset()
 bool NatBase::ChkSWAllow(const NatEntryBase& rule)
 {
 	int i, j;
-	uint64_t src_ipv6_msb, src_ipv6_lsb;
-	uint64_t dst_ipv6_msb, dst_ipv6_lsb;
+	uint64_t src_ipv6_msb, src_ipv6_lsb, fsrc_ipv6_msb;
+	uint64_t dst_ipv6_msb, dst_ipv6_lsb, ipv6_prifix;
 	Ipv6ctEntry rule_entry;
-	IPACM_swallow_t sw_filter_cfg;
 	IPACMDBG("Entry\n");
 
+	if(!IPACM_Iface::ipacmcfg->ipacm_msgflt_enable)
+	{
+		IPACMERR("msg filtering feature is not enabled\n");
+		return false;
+	}
 	if(!IPACM_Iface::ipacmcfg->sw_filter_cfg)
 	{
 		IPACMERR("SW Config not updated/pdn index not updated!\n");
 		return false;
 	}
 
-	memcpy(&sw_filter_cfg, IPACM_Iface::ipacmcfg->sw_filter_cfg, sizeof(IPACM_swallow_t));
+	fsrc_ipv6_msb = ((Ipv6IpAddress &)rule.GetClientIp()).GetMsb();
 
 	for(i = 0; i < sw_filter_cfg.pdn_count;i++)
 	{
+		ipv6_prifix = sw_filter_cfg.pdns[i].ipv6_prefix[0];
+		ipv6_prifix = (ipv6_prifix << 32) | sw_filter_cfg.pdns[i].ipv6_prefix[1];
 		/* PDN not up yet */
-		if(sw_filter_cfg.pdns[i].v6_up != TRUE)
+		if(sw_filter_cfg.pdns[i].v6_up != TRUE || memcmp(&ipv6_prifix, &fsrc_ipv6_msb, sizeof(fsrc_ipv6_msb)))
+		{
 			continue;
+		}
 
 		for(j = 0; j < sw_filter_cfg.pdns[i].num_extd_swallow_entries;j++)
 		{
@@ -3445,10 +3617,12 @@ bool NatBase::ChkSWAllow(const NatEntryBase& rule)
 				continue;
 
 			/* Check if rule protocol matches with entry protocol */
-			if(!(((sw_filter_cfg.pdns[i].extd_swallow_entries[j].protocol &  IPPROTO_UDP) == rule.m_protocol) ||
-			((sw_filter_cfg.pdns[i].extd_swallow_entries[j].protocol &	IPPROTO_TCP) == rule.m_protocol)))
+			if(sw_filter_cfg.pdns[i].extd_swallow_entries[j].protocol &&
+			(!(((sw_filter_cfg.pdns[i].extd_swallow_entries[j].protocol &  IPPROTO_UDP) == rule.m_protocol) ||
+			((sw_filter_cfg.pdns[i].extd_swallow_entries[j].protocol & IPPROTO_TCP) == rule.m_protocol))))
+			{
 				continue;
-
+			}
 			src_ipv6_msb = sw_filter_cfg.pdns[i].extd_swallow_entries[j].attrib.u.v6.src_addr[0];
 			src_ipv6_msb = (src_ipv6_msb << 32) | sw_filter_cfg.pdns[i].extd_swallow_entries[j].attrib.u.v6.src_addr[1];
 			src_ipv6_lsb = sw_filter_cfg.pdns[i].extd_swallow_entries[j].attrib.u.v6.src_addr[2];
@@ -3461,43 +3635,14 @@ bool NatBase::ChkSWAllow(const NatEntryBase& rule)
 
 			memcpy(&rule_entry, &rule, sizeof(Ipv6ctEntry));
 
-			/* UL */
-			if((rule.m_direction == NatEntryBase::DirectionOutbound) &&
-					(sw_filter_cfg.pdns[i].extd_swallow_entries[j].direction == IPACM_MSGR_UL_FIREWALL))
+			if(firewall_tuple_match_with_nat(sw_filter_cfg.pdns[i].extd_swallow_entries[j], &rule_entry))
 			{
-				if(src_ipv6_msb == ((Ipv6IpAddress &)rule_entry.GetClientIp()).GetMsb() &&
-					src_ipv6_lsb == ((Ipv6IpAddress &)rule_entry.GetClientIp()).GetLsb() &&
-					 dst_ipv6_msb == ((Ipv6IpAddress &)rule_entry.GetTargetIp()).GetMsb() &&
-					 dst_ipv6_lsb == ((Ipv6IpAddress &)rule_entry.GetTargetIp()).GetLsb() &&
-					 sw_filter_cfg.pdns[i].extd_swallow_entries[j].attrib.src_port == rule_entry.GetSrcPort() &&
-					 sw_filter_cfg.pdns[i].extd_swallow_entries[j].attrib.dst_port == rule_entry.GetDstPort())
-				{
-					((Ipv6IpAddress &)rule_entry.GetClientIp()).DebugDump("srcAddr (private ip):");
-					((Ipv6IpAddress &)rule_entry.GetTargetIp()).DebugDump("dstAddr (target ip):");
-					IPACMDBG_H("srcPort (private Port): %d\n", rule_entry.GetSrcPort());
-					IPACMDBG_H("dstPort (target Port): %d\n", rule_entry.GetDstPort());
-					IPACMDBG("SW Allow UL Rule - Do not add\n");
-					return true;
-				}
-			}
-			/* DL */
-			else if((rule.m_direction == NatEntryBase::DirectionInbound) &&
-					(sw_filter_cfg.pdns[i].extd_swallow_entries[j].direction == IPACM_MSGR_DL_FIREWALL))
-			{
-				if(src_ipv6_msb == ((Ipv6IpAddress &)rule_entry.GetTargetIp()).GetMsb() &&
-					src_ipv6_lsb == ((Ipv6IpAddress &)rule_entry.GetTargetIp()).GetLsb() &&
-					 dst_ipv6_msb == ((Ipv6IpAddress &)rule_entry.GetClientIp()).GetMsb() &&
-					 dst_ipv6_lsb == ((Ipv6IpAddress &)rule_entry.GetClientIp()).GetLsb() &&
-					 sw_filter_cfg.pdns[i].extd_swallow_entries[j].attrib.src_port == rule_entry.GetDstPort() &&
-					 sw_filter_cfg.pdns[i].extd_swallow_entries[j].attrib.dst_port == rule_entry.GetSrcPort())
-				{
-					((Ipv6IpAddress &)rule_entry.GetClientIp()).DebugDump("srcAddr (private ip):");
-					((Ipv6IpAddress &)rule_entry.GetTargetIp()).DebugDump("dstAddr (target ip):");
-					IPACMDBG_H("srcPort (private Port): %d\n", rule_entry.GetSrcPort());
-					IPACMDBG_H("dstPort (target Port): %d\n", rule_entry.GetDstPort());
-					IPACMDBG("SW Allow DL Rule - Do not add\n");
-					return true;
-				}
+				((Ipv6IpAddress &)rule_entry.GetClientIp()).DebugDump("srcAddr (private ip):");
+				((Ipv6IpAddress &)rule_entry.GetTargetIp()).DebugDump("dstAddr (target ip):");
+				IPACMDBG_H("srcPort (private Port): %d\n", rule_entry.GetSrcPort());
+				IPACMDBG_H("dstPort (target Port): %d\n", rule_entry.GetDstPort());
+				IPACMDBG("SW Allow Rule - Do not add\n");
+				return true;
 			}
 		}
 	}
@@ -3505,13 +3650,225 @@ bool NatBase::ChkSWAllow(const NatEntryBase& rule)
 	return false;
 }
 
+void NatBase::restore_nat_for_sw_flt_entries(IPACM_extd_swallow_entry_conf_t extd_firewall_entries)
+{
+	int i;
+	char iptype[4]={0}, cmd[100];
+	uint64_t src_ipv6[2], src_ipv6_lsb;
+  	uint64_t dst_ipv6[2], dst_ipv6_lsb;
+  	Ipv6ctEntry new_entry;
+
+	for(i = 0; i< m_maxEntries; i++)
+	{
+		if(m_cache[i].sw_allow &&  m_cache[i].m_enabled)
+		{
+			memset(&new_entry, 0, sizeof(Ipv6ctEntry));
+			memcpy(&new_entry, &m_cache[i], sizeof(Ipv6ctEntry));
+			if(firewall_tuple_match_with_nat(extd_firewall_entries, &new_entry))
+			{
+				if(m_pwrSaveIfs.Find(m_cache[i].GetClientIp()) != NULL ||
+				m_pwrSaveIfs.Find(m_cache[i].GetTargetIp()) != NULL)
+				{
+					IPACMDBG_H("Device is Power Save mode: Don't send to HW but successfully cached\n");
+				}
+				else
+				{
+					m_cache[i].sw_allow = false;
+					if(m_proxy.AddEntry(m_cache[i]))
+					{
+						IPACMERR("unable to add the rule\n");
+						m_cache[i].Clear();
+					}
+					IPACMDBG_H("Added entry successfully\n");
+				}
+			}
+		}
+	}
+}
+
+void NatBase::firewall_compare(IPACM_swallow_conf_t *backup_firewall_config, IPACM_swallow_conf_t *firewall_config)
+{
+	int i,j;
+	IPACMDBG_H("enter\n");
+	if(backup_firewall_config->num_extd_swallow_entries == 0)
+	{
+		IPACMERR("backup firewall entry is zero, so no need to check further\n");
+		goto end;
+	}
+	for(i = 0; i < backup_firewall_config->num_extd_swallow_entries; i++)
+	{
+		if(backup_firewall_config->extd_swallow_entries[i].ip_vsn != IP_V6)
+		{
+			IPACMDBG_H("not v6 rule\n");
+			continue;
+		}
+		for(j = 0; j < firewall_config->num_extd_swallow_entries; j++)
+		{
+			if(firewall_config->extd_swallow_entries[i].ip_vsn != IP_V6 ||
+			(firewall_config->extd_swallow_entries[j].direction !=
+			(backup_firewall_config->extd_swallow_entries[i].direction)))
+			{
+				IPACMDBG_H("protocol direction is not match\n");
+				continue;
+			}
+
+			if((firewall_config->extd_swallow_entries[j].direction ==
+			backup_firewall_config->extd_swallow_entries[j].direction) &&
+			firewall_config->extd_swallow_entries[j].attrib.src_port_lo ==
+			backup_firewall_config->extd_swallow_entries[i].attrib.src_port_lo &&
+			firewall_config->extd_swallow_entries[j].attrib.src_port_hi ==
+			backup_firewall_config->extd_swallow_entries[i].attrib.src_port_hi &&
+			firewall_config->extd_swallow_entries[j].attrib.dst_port_lo ==
+			backup_firewall_config->extd_swallow_entries[i].attrib.dst_port_lo &&
+			firewall_config->extd_swallow_entries[j].attrib.dst_port_hi ==
+			backup_firewall_config->extd_swallow_entries[i].attrib.dst_port_hi &&
+			firewall_config->extd_swallow_entries[j].attrib.src_port ==
+			backup_firewall_config->extd_swallow_entries[i].attrib.src_port &&
+			firewall_config->extd_swallow_entries[j].attrib.dst_port ==
+			backup_firewall_config->extd_swallow_entries[i].attrib.dst_port &&
+			(!memcmp(firewall_config->extd_swallow_entries[j].attrib.u.v6.src_addr,
+			backup_firewall_config->extd_swallow_entries[i].attrib.u.v6.src_addr,
+			sizeof(firewall_config->extd_swallow_entries[j].attrib.u.v6.src_addr))) &&
+			(!memcmp(firewall_config->extd_swallow_entries[j].attrib.u.v6.dst_addr,
+			backup_firewall_config->extd_swallow_entries[i].attrib.u.v6.dst_addr,
+			sizeof(backup_firewall_config->extd_swallow_entries[i].attrib.u.v6.dst_addr))))
+			{
+				IPACMDBG("firewall entry is matched\n");
+				break;
+			}
+			else
+			{
+				IPACMDBG("firewall entry is not present\n");
+				continue;
+			}
+		}
+		if((j == firewall_config->num_extd_swallow_entries) ||
+		(firewall_config->num_extd_swallow_entries == 0))
+		{
+			IPACMDBG_H("flushing\n");
+			restore_nat_for_sw_flt_entries(backup_firewall_config->extd_swallow_entries[i]);
+		}
+	}
+end:
+	IPACMERR("reaching end of the firewall\n");
+}
+void NatBase::GetIpAddress_firewall(uint64_t*src_ipv6_msb, uint64_t*src_ipv6_lsb, uint64_t*dst_ipv6_msb, uint64_t*dst_ipv6_lsb, struct ipa_rule_attrib attrib)
+{
+	*src_ipv6_msb = attrib.u.v6.src_addr[0];
+	*src_ipv6_msb = ((*src_ipv6_msb) << 32 | attrib.u.v6.src_addr[1]);
+	*src_ipv6_lsb = attrib.u.v6.src_addr[2];
+	*src_ipv6_lsb = ((*src_ipv6_lsb) << 32 | attrib.u.v6.src_addr[3]);
+	*dst_ipv6_msb = attrib.u.v6.dst_addr[0];
+	*dst_ipv6_msb = ((*dst_ipv6_msb) << 32 | attrib.u.v6.dst_addr[1]);
+	*dst_ipv6_lsb = attrib.u.v6.dst_addr[2];
+	*dst_ipv6_lsb = ((*dst_ipv6_lsb) << 32 | attrib.u.v6.dst_addr[3]);
+}
+
+bool NatBase::firewall_tuple_match_with_nat(IPACM_extd_swallow_entry_conf_t extd_firewall_entries, const Ipv6ctEntry *del_entry)
+{
+	uint64_t src_ipv6_msb, src_ipv6_lsb,fsrc_ipv6_msb, fsrc_ipv6_lsb;
+  	uint64_t dst_ipv6_msb, dst_ipv6_lsb,fdst_ipv6_msb, fdst_ipv6_lsb;
+	bool src_range = false,dst_range = false;
+
+	if(extd_firewall_entries.attrib.attrib_mask & IPA_FLT_SRC_PORT_RANGE)
+	{
+		src_range = true;
+	}
+	if(extd_firewall_entries.attrib.attrib_mask & IPA_FLT_DST_PORT_RANGE)
+	{
+		dst_range = true;
+	}
+
+	GetIpAddress_firewall(&src_ipv6_msb, &src_ipv6_lsb, &dst_ipv6_msb, &dst_ipv6_lsb, extd_firewall_entries.attrib);
+	if(extd_firewall_entries.direction == IPACM_MSGR_UL_FIREWALL &&
+	del_entry->m_direction == NatEntryBase::DirectionOutbound)
+	{
+		fsrc_ipv6_msb = ((Ipv6IpAddress &)del_entry->GetClientIp()).GetMsb();
+		fsrc_ipv6_lsb = ((Ipv6IpAddress &)del_entry->GetClientIp()).GetLsb();
+		fdst_ipv6_msb = ((Ipv6IpAddress &)del_entry->GetTargetIp()).GetMsb();
+		fdst_ipv6_lsb = ((Ipv6IpAddress &)del_entry->GetTargetIp()).GetLsb();
+	}
+	else
+	{
+		fsrc_ipv6_msb = ((Ipv6IpAddress &)del_entry->GetTargetIp()).GetMsb();
+		fsrc_ipv6_lsb = ((Ipv6IpAddress &)del_entry->GetTargetIp()).GetLsb();
+		fdst_ipv6_msb = ((Ipv6IpAddress &)del_entry->GetClientIp()).GetMsb();
+		fdst_ipv6_lsb = ((Ipv6IpAddress &)del_entry->GetClientIp()).GetLsb();
+	}
+
+	if(extd_firewall_entries.direction == IPACM_MSGR_UL_FIREWALL &&
+	del_entry->m_direction == NatEntryBase::DirectionOutbound)
+	{
+		if(((extd_firewall_entries.attrib.u.v6.src_addr[0] == 0) &&
+		(extd_firewall_entries.attrib.u.v6.dst_addr[0] == 0) &&
+		(!src_range)  && (!dst_range) &&
+		(extd_firewall_entries.attrib.src_port == 0) &&
+		(extd_firewall_entries.attrib.dst_port == 0)))
+		{
+			IPACMERR("Matched in UL wildcard entry\n");
+			return true;
+		}
+
+		else if((!((extd_firewall_entries.attrib.u.v6.src_addr[0] != 0) ^ ((memcmp(&src_ipv6_msb, &fsrc_ipv6_msb, sizeof(uint64_t))==0) &&
+		(memcmp(&src_ipv6_lsb, &fsrc_ipv6_lsb,sizeof(uint64_t))) == 0))) &&
+		(!((extd_firewall_entries.attrib.u.v6.dst_addr[0] != 0 ) ^ ((memcmp(&dst_ipv6_msb, &fdst_ipv6_msb, sizeof(uint64_t)) == 0) &&
+		(memcmp(&dst_ipv6_lsb , &fdst_ipv6_lsb,sizeof(uint64_t)))==0))) &&
+		!((src_range) ^ (extd_firewall_entries.attrib.src_port_lo <=  del_entry->GetSrcPort() &&
+		extd_firewall_entries.attrib.src_port_hi >=  del_entry->GetSrcPort())) &&
+		!((dst_range) ^ ((extd_firewall_entries.attrib.dst_port_lo <=  del_entry->GetDstPort()) &&
+		(extd_firewall_entries.attrib.dst_port_hi >=  del_entry->GetDstPort()))) &&
+		!((extd_firewall_entries.attrib.src_port != 0) ^ (extd_firewall_entries.attrib.src_port ==  del_entry->GetSrcPort())) &&
+		!((extd_firewall_entries.attrib.dst_port != 0) ^ (extd_firewall_entries.attrib.dst_port ==  del_entry->GetDstPort())))
+		{
+			IPACMERR("Matched in UL\n");
+			return true;
+		}
+		else
+		{
+			IPACMERR("not matching Matched in UL\n");
+		}
+	}
+	else if(extd_firewall_entries.direction == IPACM_MSGR_DL_FIREWALL &&
+	del_entry->m_direction == NatEntryBase::DirectionInbound)
+	{
+		if(((extd_firewall_entries.attrib.u.v6.src_addr[0] == 0)) &&
+		(extd_firewall_entries.attrib.u.v6.dst_addr[0] == 0) &&
+		(!src_range)  && (!dst_range) &&
+		(extd_firewall_entries.attrib.src_port == 0) &&
+		(extd_firewall_entries.attrib.dst_port == 0))
+		{
+			IPACMERR("Matched in DL wildcard entry\n");
+			return true;
+		}
+		else if((!((extd_firewall_entries.attrib.u.v6.src_addr[0] != 0) ^ ((memcmp(&src_ipv6_msb, &fsrc_ipv6_msb, sizeof(uint64_t))==0) &&
+		(memcmp(&src_ipv6_lsb, &fsrc_ipv6_lsb,sizeof(uint64_t))) == 0))) &&
+		(!((extd_firewall_entries.attrib.u.v6.dst_addr[0] != 0 ) ^ ((memcmp(&dst_ipv6_msb, &fdst_ipv6_msb, sizeof(uint64_t)) == 0) &&
+		(memcmp(&dst_ipv6_lsb , &fdst_ipv6_lsb,sizeof(uint64_t)))==0))) &&
+		!((src_range) ^ (extd_firewall_entries.attrib.src_port_lo <=  del_entry->GetDstPort() &&
+		extd_firewall_entries.attrib.src_port_hi >=  del_entry->GetDstPort())) &&
+		!((dst_range) ^ ((extd_firewall_entries.attrib.dst_port_lo <=  del_entry->GetSrcPort()) &&
+		(extd_firewall_entries.attrib.dst_port_hi >=  del_entry->GetSrcPort()))) &&
+		!((extd_firewall_entries.attrib.src_port != 0) ^ (extd_firewall_entries.attrib.src_port ==  del_entry->GetDstPort())) &&
+		!((extd_firewall_entries.attrib.dst_port != 0) ^ (extd_firewall_entries.attrib.dst_port ==  del_entry->GetSrcPort())))
+		{
+			IPACMERR("Matched in UL\n");
+			return true;
+		}
+		else
+		{
+			IPACMERR("not matching Matched in UL\n");
+		}
+
+	}
+	return false;
+}
+
 void NatBase::HandleSWAllowEntries(void)
 {
 	int i, j, cnt;
-	uint64_t src_ipv6_msb, src_ipv6_lsb;
+	uint64_t src_ipv6_msb, src_ipv6_lsb, fsrc_ipv6_msb, fsrc_ipv6_lsb;
 	uint64_t dst_ipv6_msb, dst_ipv6_lsb;
 	Ipv6ctEntry new_entry;
-	IPACM_swallow_t sw_filter_cfg;
 	IPACMDBG("Entry\n");
 
 	if(!IPACM_Iface::ipacmcfg->sw_filter_cfg)
@@ -3519,81 +3876,58 @@ void NatBase::HandleSWAllowEntries(void)
 		IPACMERR("SW Config not updated/pdn index not updated!\n");
 		return;
 	}
+	memset(&backup_sw_filter_cfg,0,sizeof(backup_sw_filter_cfg));
+	memcpy(&backup_sw_filter_cfg, &sw_filter_cfg, sizeof(IPACM_swallow_t));
 
+	memset(&sw_filter_cfg,0,sizeof(sw_filter_cfg));
 	memcpy(&sw_filter_cfg, IPACM_Iface::ipacmcfg->sw_filter_cfg, sizeof(IPACM_swallow_t));
-
+	
+	for(int i = 0; i < IPA_MAX_NUM_SW_PDNS; i++)
+	{
+		firewall_compare(&backup_sw_filter_cfg.pdns[i], &sw_filter_cfg.pdns[i]);
+	}
 	for(i = 0; i < sw_filter_cfg.pdn_count;i++)
 	{
 		/* PDN not up yet */
 		if(sw_filter_cfg.pdns[i].v6_up != TRUE)
+		{
 			continue;
+		}
+		dst_ipv6_msb = sw_filter_cfg.pdns[i].ipv6_prefix[0];
+		dst_ipv6_msb = (dst_ipv6_msb << 32) | sw_filter_cfg.pdns[i].ipv6_prefix[1];
 
-		for(j = 0; j < sw_filter_cfg.pdns[i].num_extd_swallow_entries;j++)
+		for(j = 0; j < sw_filter_cfg.pdns[i].num_extd_swallow_entries; j++)
 		{
 			/* Check if entry is v6 */
 			if(sw_filter_cfg.pdns[i].extd_swallow_entries[j].ip_vsn != 6)
 				continue;
-
-			src_ipv6_msb = sw_filter_cfg.pdns[i].extd_swallow_entries[j].attrib.u.v6.src_addr[0];
-			src_ipv6_msb = (src_ipv6_msb << 32) | sw_filter_cfg.pdns[i].extd_swallow_entries[j].attrib.u.v6.src_addr[1];
-			src_ipv6_lsb = sw_filter_cfg.pdns[i].extd_swallow_entries[j].attrib.u.v6.src_addr[2];
-			src_ipv6_lsb = (src_ipv6_lsb << 32) | sw_filter_cfg.pdns[i].extd_swallow_entries[j].attrib.u.v6.src_addr[3];
-
-			dst_ipv6_msb = sw_filter_cfg.pdns[i].extd_swallow_entries[j].attrib.u.v6.dst_addr[0];
-			dst_ipv6_msb = (dst_ipv6_msb << 32) | sw_filter_cfg.pdns[i].extd_swallow_entries[j].attrib.u.v6.dst_addr[1];
-			dst_ipv6_lsb = sw_filter_cfg.pdns[i].extd_swallow_entries[j].attrib.u.v6.dst_addr[2];
-			dst_ipv6_lsb = (dst_ipv6_lsb << 32) | sw_filter_cfg.pdns[i].extd_swallow_entries[j].attrib.u.v6.dst_addr[3];
-
 			for(cnt = 0; cnt < m_maxEntries; cnt++)
 			{
 				/* Check if cache entry is enabled */
-				if(!m_cache[cnt].m_enabled)
-					continue;
-
-				/* Check if cache protocol matches with entry protocol */
-				if(!(((sw_filter_cfg.pdns[i].extd_swallow_entries[j].protocol &  IPPROTO_UDP) == m_cache[cnt].m_protocol) ||
-				((sw_filter_cfg.pdns[i].extd_swallow_entries[j].protocol &	IPPROTO_TCP) == m_cache[cnt].m_protocol)))
+				if(!m_cache[cnt].m_enabled || m_cache[cnt].sw_allow)
 					continue;
 
 				memcpy(&new_entry, &(m_cache[cnt]), sizeof(Ipv6ctEntry));
+					fsrc_ipv6_msb = ((Ipv6IpAddress &)new_entry.GetClientIp()).GetMsb();
 
-				/* UL */
-				if((m_cache[cnt].m_direction == NatEntryBase::DirectionOutbound) &&
-						(sw_filter_cfg.pdns[i].extd_swallow_entries[j].direction == IPACM_MSGR_UL_FIREWALL))
+				/* Check if rule protocol matches with entry protocol */
+				if((sw_filter_cfg.pdns[i].extd_swallow_entries[j].protocol &&
+				(!(((sw_filter_cfg.pdns[i].extd_swallow_entries[j].protocol & IPPROTO_UDP) == new_entry.m_protocol) ||
+				((sw_filter_cfg.pdns[i].extd_swallow_entries[j].protocol & IPPROTO_TCP) == new_entry.m_protocol)))) ||
+				(memcmp(&fsrc_ipv6_msb, &dst_ipv6_msb, sizeof(dst_ipv6_msb))))
 				{
-					if(src_ipv6_msb == ((Ipv6IpAddress &)new_entry.GetClientIp()).GetMsb() &&
-						 src_ipv6_lsb == ((Ipv6IpAddress &)new_entry.GetClientIp()).GetLsb() &&
-						 dst_ipv6_msb == ((Ipv6IpAddress &)new_entry.GetTargetIp()).GetMsb() &&
-						 dst_ipv6_lsb == ((Ipv6IpAddress &)new_entry.GetTargetIp()).GetLsb() &&
-						 sw_filter_cfg.pdns[i].extd_swallow_entries[j].attrib.src_port ==  new_entry.GetSrcPort() &&
-						 sw_filter_cfg.pdns[i].extd_swallow_entries[j].attrib.dst_port == new_entry.GetDstPort())
-					{
-						((Ipv6IpAddress &)new_entry.GetClientIp()).DebugDump("srcAddr (private ip):");
-						((Ipv6IpAddress &)new_entry.GetTargetIp()).DebugDump("dstAddr (target ip):");
-						IPACMDBG_H("srcPort (private Port): %d\n", new_entry.GetSrcPort());
-						IPACMDBG_H("dstPort (target Port): %d\n", new_entry.GetDstPort());
-						IPACMDBG("SW Allow UL V6 Rule - Deleting Rule\n");
-						DeleteEntry(new_entry);
-					}
+					continue;
 				}
-				/* DL */
-				else if((m_cache[cnt].m_direction == NatEntryBase::DirectionInbound) &&
-						(sw_filter_cfg.pdns[i].extd_swallow_entries[j].direction == IPACM_MSGR_DL_FIREWALL))
+				if(firewall_tuple_match_with_nat(sw_filter_cfg.pdns[i].extd_swallow_entries[j], &new_entry))
 				{
-					if(src_ipv6_msb == ((Ipv6IpAddress &)new_entry.GetTargetIp()).GetMsb() &&
-						 src_ipv6_lsb == ((Ipv6IpAddress &)new_entry.GetTargetIp()).GetLsb() &&
-						 dst_ipv6_msb == ((Ipv6IpAddress &)new_entry.GetClientIp()).GetMsb() &&
-						 dst_ipv6_lsb == ((Ipv6IpAddress &)new_entry.GetClientIp()).GetLsb() &&
-						 sw_filter_cfg.pdns[i].extd_swallow_entries[j].attrib.src_port ==  new_entry.GetDstPort() &&
-						 sw_filter_cfg.pdns[i].extd_swallow_entries[j].attrib.dst_port == new_entry.GetSrcPort())
-					{
-						((Ipv6IpAddress &)new_entry.GetClientIp()).DebugDump("srcAddr (private ip):");
-						((Ipv6IpAddress &)new_entry.GetTargetIp()).DebugDump("dstAddr (target ip):");
-						IPACMDBG_H("srcPort (private Port): %d\n", new_entry.GetSrcPort());
-						IPACMDBG_H("dstPort (target Port): %d\n", new_entry.GetDstPort());
-						IPACMDBG("SW Allow DL V6 Rule - Deleting Rule\n");
-						DeleteEntry(new_entry);
-					}
+					((Ipv6IpAddress &)new_entry.GetClientIp()).DebugDump("srcAddr (private ip):");
+					((Ipv6IpAddress &)new_entry.GetTargetIp()).DebugDump("dstAddr (target ip):");
+					IPACMDBG_H("srcPort (private Port): %d\n", new_entry.GetSrcPort());
+					IPACMDBG_H("dstPort (target Port): %d\n", new_entry.GetDstPort());
+					IPACMDBG("SW Allow V6 Rule - Deleting Rule\n");
+					m_cache[cnt].sw_allow = true;
+					new_entry.sw_allow = true;
+					DeleteEntry(new_entry);
 				}
 			}
 		}
@@ -3628,12 +3962,12 @@ NatBase* Ipv6ct::GetInstance()
 		return NULL;
 	}
 
-	m_instance = new Ipv6ct(pConfig->GetIpv6CTMaxEntries());
+	m_instance = new Ipv6ct(pConfig->GetIpv6CTMaxEntries(), pConfig->GetCTMemType());
 	IPACMDBG_H("return\n");
 	return m_instance;
 }
 
-Ipv6ct::Ipv6ct(int max_entries) : NatBase(IPA_IP_v6, max_entries, Ipv6ctObjectsGenerator())
+Ipv6ct::Ipv6ct(int max_entries, const char* mem_type) : NatBase(IPA_IP_v6, max_entries, mem_type, Ipv6ctObjectsGenerator())
 {
 	IPACMDBG_H("\n");
 }

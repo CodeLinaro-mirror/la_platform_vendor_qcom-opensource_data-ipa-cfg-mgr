@@ -1557,6 +1557,15 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 			uint32_t prefix[2];
 			int ret;
 
+#ifdef FEATURE_SOCKSv5
+			/* Handle each PDN in case of SOCKSV5 with a unique VID as the client is always same */
+			if((IPACM_Iface::ipacmcfg->ipacm_socksv5_enable) && (data->VlanID == 0) && (data->wan_ipv4_addr == wan_v4_addr))
+			{
+				data->VlanID = DUMMY_VLAN_ID_BASE + IPACM_Iface::ipacmcfg->iface_table[ipa_if_num].netlink_interface_index;
+				IPACMDBG_H("Received SocksV5 IPA_ROUTE_ADD_VLAN_PDN_EVENT with vid 0 assigning dummy vid %d\n", data->VlanID);
+			}
+#endif
+
 			ret = check_vlan_pdn(iptype, data);
 			/* If event for this->pIface, process the other iptype with local info*/
 			if(ret == IPACM_SUCCESS && iptype == IPA_IP_MAX)
@@ -5391,22 +5400,30 @@ void IPACM_Wan::set_swallow_pdn_up(void)
 		{
 			if(ipv6_to_iface[i].pIface)
 			{
-				if(!strcmp(ipv6_to_iface[i].pIface->dev_name,
-					IPACM_Iface::ipacmcfg->sw_filter_cfg->pdns[j].net_dev))
+				if(!(strcmp(ipv6_to_iface[i].pIface->dev_name,
+					IPACM_Iface::ipacmcfg->sw_filter_cfg->pdns[j].net_dev)) &&
+					IPACM_Iface::ipacmcfg->sw_filter_cfg->pdns[j].v6_up != TRUE)
 				{
 					IPACM_Iface::ipacmcfg->sw_filter_cfg->pdns[j].v6_up = TRUE;
-					IPACMDBG("V6-found %s dev in index %d updating\n",
-						IPACM_Iface::ipacmcfg->sw_filter_cfg->pdns[j].net_dev, j);
+					IPACMDBG("found %s dev in index %d updating v6 pdn index %d\n",
+						IPACM_Iface::ipacmcfg->sw_filter_cfg->pdns[j].net_dev, j, ipv6_to_iface[i].pIface->modem_ipv6_pdn_index);
+					memset(&IPACM_Iface::ipacmcfg->sw_filter_cfg->pdns[j].ipv6_prefix, 0, sizeof(uint32_t)*2);
+					memcpy(&IPACM_Iface::ipacmcfg->sw_filter_cfg->pdns[j].ipv6_prefix, &ipv6_to_iface[i].ipv6_prefix, sizeof(uint32_t)*2);
+					IPACMDBG_H("ipv6 prefix: 0x%08x%08x.\n", IPACM_Iface::ipacmcfg->sw_filter_cfg->pdns[j].ipv6_prefix[0], IPACM_Iface::ipacmcfg->sw_filter_cfg->pdns[j].ipv6_prefix[1]);
+					break;
 				}
 			}
 			if(ipv4_to_iface[i].pIface)
 			{
 				if(!strcmp(ipv4_to_iface[i].pIface->dev_name,
-					IPACM_Iface::ipacmcfg->sw_filter_cfg->pdns[j].net_dev))
+					IPACM_Iface::ipacmcfg->sw_filter_cfg->pdns[j].net_dev) &&
+					IPACM_Iface::ipacmcfg->sw_filter_cfg->pdns[j].v4_up != TRUE)
 				{
 					IPACM_Iface::ipacmcfg->sw_filter_cfg->pdns[j].v4_up = TRUE;
-					IPACMDBG("V4-found %s dev in index %d updating\n",
-						IPACM_Iface::ipacmcfg->sw_filter_cfg->pdns[j].net_dev, j);
+					IPACMDBG("found %s dev in index %d updating v4 pdn index %d\n",
+						IPACM_Iface::ipacmcfg->sw_filter_cfg->pdns[j].net_dev, j, ipv4_to_iface[i].pIface->modem_ipv4_pdn_index);
+					IPACM_Iface::ipacmcfg->sw_filter_cfg->pdns[j].public_ipv4_addr = ipv4_to_iface[i].ipv4_addr;
+					break;
 				}
 			}
 		}

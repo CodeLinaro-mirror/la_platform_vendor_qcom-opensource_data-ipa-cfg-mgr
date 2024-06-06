@@ -29,7 +29,7 @@ IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 *
  * Changes from Qualcomm Innovation Center are provided under the following license:
  *
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted (subject to the limitations in the
@@ -248,6 +248,7 @@ struct NatEntryBase
 
 	bool isVlan;
 	bool IsVlanUp;
+	bool sw_allow;
 
 	bool isSocksV5;
 
@@ -337,6 +338,7 @@ typedef struct _nat_table_entry
 	bool ucp;
 	bool dst_only;
 	bool src_only;
+	bool sw_allow;
 }nat_table_entry;
 
 #define CHK_TBL_HDL() \
@@ -522,7 +524,7 @@ class NatProxyBase
 public:
 
 	virtual ~NatProxyBase();
-	int AddTable(uint16_t number_of_entries);
+	int AddTable(uint16_t number_of_entries, const char* mem_type);
 	int DeleteTable();
 	int AddEntry(NatEntryBase& entry);
 	int DelEntry(NatEntryBase& entry);
@@ -543,7 +545,7 @@ private:
 	NatProxyBase(const NatProxyBase&);
 	NatProxyBase& operator=(const NatProxyBase&);
 
-	virtual int DoAddTable(uint16_t number_of_entries, uint32_t& table_handle) = 0;
+	virtual int DoAddTable(uint16_t number_of_entries, const char* mem_type, uint32_t& table_handle) = 0;
 	virtual int DoDeleteTable() = 0;
 	virtual int DoAddEntry(const NatEntryBase& entry, uint32_t& entry_handle,
 		uint32_t& additional_entry_handle, int& uc_act_handle) = 0;
@@ -559,7 +561,7 @@ public:
 
 private:
 
-	virtual int DoAddTable(uint16_t number_of_entries, uint32_t& table_handle);
+	virtual int DoAddTable(uint16_t number_of_entries, const char* mem_type, uint32_t& table_handle);
 	virtual int DoDeleteTable();
 	virtual int DoAddEntry(const NatEntryBase& entry, uint32_t& entry_handle,
 		uint32_t& additional_entry_handle, int& uc_act_handle);
@@ -609,6 +611,7 @@ public:
 	virtual NatEntriesCollectionBase& GetEntriesCollection(int max_entries) const;
 };
 #endif
+
 class NatBase
 {
 public:
@@ -641,13 +644,17 @@ public:
 	void HandleSWAllowEntries(void);
 	bool ChkSWAllow(const NatEntryBase& rule);
 	bool is_SocksV5_CT(const NatEntryBase& entry);
+	void restore_nat_for_sw_flt_entries(IPACM_extd_swallow_entry_conf_t);
+	void firewall_compare(IPACM_swallow_conf_t*, IPACM_swallow_conf_t*);
+	void GetIpAddress_firewall(uint64_t*, uint64_t*, uint64_t*, uint64_t*, ipa_rule_attrib);
+	bool firewall_tuple_match_with_nat(IPACM_extd_swallow_entry_conf_t, const Ipv6ctEntry*);
 
 #ifdef FEATURE_SOCKSv5
 	std::list<Ipv6ctEntry> socksv5_v6_conn;
 #endif //FEATURE_SOCKSv5
 protected:
 
-	NatBase(ipa_ip_type type, int max_entries, const NatObjectsGeneratorBase& objectsGenerator);
+	NatBase(ipa_ip_type type, int max_entries, const char* mem_type, const NatObjectsGeneratorBase& objectsGenerator);
 
 	const ipa_ip_type m_type;
 	NatEntriesCollectionBase& m_temp;
@@ -667,7 +674,12 @@ private:
 	ConntrackTimestampUtil& m_ctTimestampUtil;
 	NatEntriesCollectionBase& m_cache;
 
+	const char* ct_mem_type;
+
 	IpAddress& m_previousWanAddress;
+	IPACM_swallow_t sw_filter_cfg;
+	IPACM_swallow_t backup_sw_filter_cfg;
+
 };
 
 class Ipv6ct : public NatBase
@@ -678,7 +690,7 @@ public:
 
 private:
 
-	explicit Ipv6ct(int max_entries);
+	explicit Ipv6ct(int max_entries, const char* mem_type);
 
 	static Ipv6ct* m_instance;
 };
@@ -725,7 +737,8 @@ private:
 
 	struct nf_conntrack *ct;
 	struct nfct_handle *ct_hdl;
-
+	IPACM_swallow_t sw_filter_cfg;
+	IPACM_swallow_t backup_sw_filter_cfg;
 	NatApp();
 	int Init();
 
@@ -768,6 +781,9 @@ public:
 	void FlushTempEntries(uint32_t, bool, bool isDummy = false);
 	bool ChkSWAllow(const nat_table_entry *);
 	void HandleSWAllowEntries(void);
+	void restore_nat_for_sw_flt_entries(IPACM_extd_swallow_entry_conf_t);
+	void firewall_compare(IPACM_swallow_conf_t*, IPACM_swallow_conf_t*);
+	bool firewall_tuple_match_with_nat(IPACM_extd_swallow_entry_conf_t, const nat_table_entry*);
 };
 
 #endif /* IPACM_CONNTRACK_NATAPP_H */

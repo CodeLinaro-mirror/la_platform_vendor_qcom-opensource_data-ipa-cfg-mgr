@@ -469,6 +469,12 @@ int IPACM_Config::ReadSwAllow(void)
 			free(cfg);
 			return IPACM_FAILURE;
 		}
+		else if(!IPACM_Iface::ipacmcfg->ipacm_msgflt_enable)
+		{
+			IPACMERR("msg filtering feature is not enabled\n");
+			free(cfg);
+			return IPACM_FAILURE;
+		}
 
 		memset(sw_filter_cfg, 0, sizeof(IPACM_swallow_t));
 		memcpy(sw_filter_cfg, cfg, sizeof(IPACM_swallow_t));
@@ -625,6 +631,11 @@ int IPACM_Config::Init(void)
 	{
 		ipa_ipv6ct_max_entries = (cfg->ipv6ct_max_entries > 0) ? cfg->ipv6ct_max_entries : DEFAULT_IPV6CT_MAX_ENTRIES;
 		IPACMDBG_H("IPv6CT Maximum Entries %d\n", ipa_ipv6ct_max_entries);
+
+		ipa_ct_memtype =
+			(cfg->ct_table_memtype) ?
+			cfg->ct_table_memtype   : DEFAULT_CT_MEMTYPE;
+		IPACMDBG_H("Ct Mem Type %s\n", ipa_ct_memtype);
 	}
 	else
 	{
@@ -654,6 +665,9 @@ int IPACM_Config::Init(void)
 	IPACMDBG_H("ipacm_ip_passthrough_mode %d. \n", ipacm_ip_passthrough_mode);
 
 	memcpy(ipacm_ip_passthrough_mac, cfg->ip_passthrough_mac.ether_addr_octet, IPA_MAC_ADDR_SIZE);
+
+	ipacm_msgflt_enable = cfg->msgflt_enable;
+	IPACMDBG_H("ipacm_msgflt_feature_enable %d\n", ipacm_msgflt_enable);
 
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
 	if (!ipacm_lan_stats_enable_set)
@@ -2620,7 +2634,7 @@ void IPACM_Config::add_l2tp_dummy_bridge_vlan_mapping(const char *bridge_iface, 
 				l2tp_client_iface);
 			strlcpy(it_mapping->l2tp_bridge_iface_name, bridge_iface, IF_NAME_LEN);
 			/* Each l2tp session have seperate bridge */
-			it_mapping->l2tp_bridge_vlan_id = L2TP_BRIDGE_VLAN_ID_START + bridge_if_index;
+			it_mapping->l2tp_bridge_vlan_id = DUMMY_VLAN_ID_BASE + bridge_if_index;
 			IPACMDBG_H("Assigned l2tp iface %s, vlan id %d\n", it_mapping->l2tp_iface_name,
 				it_mapping->l2tp_bridge_vlan_id);
 			break;

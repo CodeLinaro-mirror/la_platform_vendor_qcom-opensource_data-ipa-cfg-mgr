@@ -280,8 +280,8 @@ if (!(a)) {                                                 \
 #define VLAN_Interface_TAG                   "VLAN_interface"
 #define VLAN_Bridge_TAG                      "VLAN_bridge"
 #define VLAN_Bridge_subnet_TAG               "VLAN_bridge_subnet"
-#define Exception_Ip_Address_TAG             "Exception_ip_address"
-#define Exception_Ip_AddrMask_TAG            "Exception_ip_address_mask"
+#define Alias_Ip_Address_TAG                 "Alias_ip_address"
+#define Alias_Ip_AddrMask_TAG                "Alias_ip_address_mask"
 
 
 // Tunnel Config entries

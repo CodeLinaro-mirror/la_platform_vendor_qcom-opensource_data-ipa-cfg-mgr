@@ -100,6 +100,11 @@ extern "C"
 #define WWAN_QMI_IOCTL_DEVICE_NAME "/dev/wwan_ioctl"
 #define IPA_DEVICE_NAME "/dev/ipa"
 #define MAX_NUM_PROP 2
+#define ETH_INTF "eth0"
+#define ETH1_INTF "eth1"
+#define RNDIS_INTF "rndis0"
+#define ECM_INTF "ecm0"
+
 
 #ifndef FEATURE_IPA_V3
 #define IPA_MAX_FLT_RULE 50
@@ -286,7 +291,7 @@ typedef enum
 	IPA_ADD_BRIDGE_VLAN_BR_INTF,
 	IPA_HANDLE_MACSEC_ADD,                    /* ipa_macsec_map */
 	IPA_HANDLE_MACSEC_DEL,                    /* ipa_macsec_map */
-	IPA_WLAN_GW_ADDR_ADD_EVENT,               /* ipacm_event_data_addr */
+	IPA_WAN_GW_ADDR_ADD_EVENT,               /* ipacm_event_data_addr */
 	IPA_CLEAN_NEIGHBOR_CACHE,                 /* ipacm_event_data_all */
 	IPA_LAN_CLIENT_ADD_EVENT,		  /* Add MAC based rule for lan2lan offload with static-ip */
 	IPA_LAN_CLIENT_DEL_EVENT,		  /* Del MAC based rule for lan2lan offload with static-ip */

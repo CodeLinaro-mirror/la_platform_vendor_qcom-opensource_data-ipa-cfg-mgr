@@ -2340,6 +2340,12 @@ int IPACM_Lan::handle_vlan_neighbor(ipacm_event_data_all *data)
 	data->vlanID = vlan_id;
 	data_vlan = (ipacm_event_new_neigh_vlan *)data;
 
+	if(!data_vlan->bridge && data_vlan->data_all.iptype == IPA_IP_v4)
+	{
+		IPACMDBG_H("non bridged VLAN interface for v4 %s, ignoring\n", data->iface_name);
+		return IPACM_FAILURE;
+	}
+
 	/* TO DO: Enable SOCKSV5 with MPDN flag */
 	if(IPACM_Iface::ipacmcfg->ipacm_mpdn_enable && !IPACM_Iface::ipacmcfg->ipacm_socksv5_enable) {
 		if(data_vlan->data_all.iptype == IPA_IP_v6)
@@ -3608,6 +3614,9 @@ int IPACM_Lan::handle_addr_evt(ipacm_event_data_addr *data)
 	}
 
 	IPACMDBG_H("finish route/filter rule ip-type: %d, res(%d)\n", data->iptype, res);
+	/*to handle if we have missed new route events before creation
+	  of physical interface in case there is ETH WAN VLAN iface*/
+	ipa_nl_send_getroute(data->iptype);
 
 	/* TODO: get default MTU here instead of using 1500 */
 

@@ -217,6 +217,9 @@ public:
 	/* Store the bridge iface names */
 	char ipa_virtual_iface_name[IPA_IFACE_NAME_LEN];
 
+	/* ETH WAN iface index */
+	int eth_wan_iface_table_idx;
+
 	/* Store the number of interface IPACM read from XML file */
 	int ipa_num_ipa_interfaces;
 
@@ -1260,6 +1263,14 @@ private:
 	ipa_ifi_dev_name_t* getMacsecInterface(const int interfaceIndex) const {
 		if (!iface_table)
 			return nullptr;
+		/* eth_wan_iface_table_idx reserved for ETH VLAN WAN instance */
+		for (int i = 0; i < ipa_num_ipa_interfaces; i++) {
+			if(iface_table[i].netlink_interface_index == interfaceIndex &&
+				i == eth_wan_iface_table_idx)
+			{
+				return nullptr;
+			}
+		}
 		auto it = std::find_if(iface_table, iface_table + ipa_num_ipa_interfaces,
 			[interfaceIndex](const decltype(iface_table[0])& item) {
 				IPACMDBG("iface_name:%s, physDevName:%s, virtualIface:%d, netlink_interface_index:%d\n", item.iface_name,

@@ -98,7 +98,7 @@ SPDX-License-Identifier: BSD-3-Clause-Clear
 #define IPA_RTA_PARAM_METRICS     (0x0100)
 #define IPA_RTA_PARAM_TABLE       (0x0200)
 
-#define WLAN_RT_TABLE_ID 4094
+
 /*--------------------------------------------------------------------------- 
 	 Type representing function callback registered with a socket listener 
 	 thread for reading from a socket on receipt of an incoming message

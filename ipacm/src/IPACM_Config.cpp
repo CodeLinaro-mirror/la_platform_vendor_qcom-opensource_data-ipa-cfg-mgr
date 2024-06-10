@@ -170,7 +170,7 @@ const char *ipacm_event_name[] = {
 	__stringify(IPA_ADD_BRIDGE_VLAN_BR_INTF),              /* Handle vlan-bridge details add for bridge interface. */
 	__stringify(IPA_HANDLE_MACSEC_ADD),                    /* ipa_macsec_map. */
 	__stringify(IPA_HANDLE_MACSEC_DEL),                    /* ipa_macsec_map. */
-	__stringify(IPA_WLAN_GW_ADDR_ADD_EVENT),		/* ipacm_event_data_addr */
+	__stringify(IPA_WAN_GW_ADDR_ADD_EVENT),		/* ipacm_event_data_addr */
 	__stringify(IPA_CLEAN_NEIGHBOR_CACHE),                  /* ipacm_event_data_all */
 	__stringify(IPA_LAN_CLIENT_ADD_EVENT),                /* ipa lan2lan offload for static ip */
 	__stringify(IPA_LAN_CLIENT_DEL_EVENT),                /* ipa lan2lan offload for static ip */
@@ -205,6 +205,7 @@ IPACM_Config::IPACM_Config()
 	ipacm_odu_router_mode = false;
 	ipa_num_wlan_guest_ap = 0;
 
+	eth_wan_iface_table_idx = -1;
 	ipa_num_ipa_interfaces = 0;
 	ipa_num_private_subnet = 0;
 	ipa_num_alg_ports = 0;
@@ -567,6 +568,9 @@ int IPACM_Config::Init(void)
 
 	/* Construct IPACM Iface table */
 	ipa_num_ipa_interfaces = cfg->iface_config.num_iface_entries;
+	/* Reserve iface index for ETH WAN VLAN iface in the end of table */
+	eth_wan_iface_table_idx = ipa_num_ipa_interfaces;
+	ipa_num_ipa_interfaces++;
 	if (iface_table != NULL)
 	{
 		free(iface_table);
@@ -601,7 +605,14 @@ int IPACM_Config::Init(void)
 			IPACMDBG_H("ipa_virtual_iface_name(%s) \n", ipa_virtual_iface_name);
 		}
 	}
-
+	if(eth_wan_iface_table_idx >= 0)
+	{
+		iface_table[eth_wan_iface_table_idx].if_cat = WAN_IF;
+		iface_table[eth_wan_iface_table_idx].if_mode = ROUTER;
+		iface_table[eth_wan_iface_table_idx].virtualIface = true;
+		strlcpy(iface_table[eth_wan_iface_table_idx].physDevName,
+			ETH_INTF, sizeof(iface_table[eth_wan_iface_table_idx].iface_name));
+	}
 
 	/* Construct IPACM ALG table */
 	ipa_num_alg_ports = cfg->alg_config.num_alg_entries;

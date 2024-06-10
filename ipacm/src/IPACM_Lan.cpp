@@ -15222,6 +15222,7 @@ int IPACM_Lan::modify_private_subnet()
 			/* add private subnet rule for ipv4 */
 			flt_rule.rule.action = IPA_PASS_TO_ROUTING;
 			flt_rule.rule.eq_attrib_type = 0;
+			flt_rule.rule.hashable = true;
 			memcpy(&flt_rule.rule.attrib, &rx_prop->rx[idx].attrib, sizeof(flt_rule.rule.attrib));
 			flt_rule.rule.attrib.attrib_mask |= IPA_FLT_DST_ADDR;
 			flt_rule.rule.attrib.u.v4.dst_addr_mask = IPACM_Iface::ipacmcfg->private_subnet_table[i].subnet_mask;
@@ -15229,6 +15230,7 @@ int IPACM_Lan::modify_private_subnet()
 			memcpy(&(pFilteringTable->rules[i]), &flt_rule, sizeof(struct ipa_flt_rule_add));
 			IPACMDBG_H(" IPACM private subnet_addr as: 0x%x entry(%d)\n", flt_rule.rule.attrib.u.v4.dst_addr, i);
 		}
+		flt_rule.rule.hashable = false;
 		/* add MTU rules for ipv4 */
 		for(i = 0; i < mtu_rule_cnt; i++)
 		{
@@ -16753,7 +16755,6 @@ int IPACM_Lan::eth_bridge_add_flt_rule(uint8_t *mac, uint32_t rt_tbl_hdl, ipa_ip
 	pFilteringTable->add_after_hdl = eth_bridge_flt_rule_offset[idx / 2][iptype];
 
 	memset(&flt_rule_entry, 0, sizeof(flt_rule_entry));
-	flt_rule_entry.at_rear = 1;
 
 	flt_rule_entry.rule.retain_hdr = 0;
 	flt_rule_entry.rule.to_uc = 0;

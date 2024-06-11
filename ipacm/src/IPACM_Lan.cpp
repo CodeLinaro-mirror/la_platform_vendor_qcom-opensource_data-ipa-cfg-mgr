@@ -2781,7 +2781,7 @@ int IPACM_Lan::handle_vlan_neighbor(ipacm_event_data_all *data)
 				IPACM_Wan::backhaul_ipv6_prefix[0],
 				IPACM_Wan::backhaul_ipv6_prefix[1],
 				data_vlan->data_all.ipv6_addr[0],
-				data_vlan->data_all.ipv6_addr[1])
+				data_vlan->data_all.ipv6_addr[1]);
 
 			evt_data.event = IPA_ROUTE_ADD_VLAN_PDN_EVENT;
 			data = (ipacm_event_route_vlan *)malloc(sizeof(ipacm_event_route_vlan));
@@ -11818,7 +11818,7 @@ int IPACM_Lan::install_ipv6_prefix_flt_rule(uint32_t* prefix)
 		if (mtu > 0)
 		{
 			if (construct_mtu_rule(&flt_rule_entry.rule, IPA_IP_v6, mtu))
-				IPACMERR("Failed to add MTU filtering rule.\n")
+				IPACMERR("Failed to add MTU filtering rule.\n");
 			else
 				memcpy(&(flt_rule->rules[1]), &flt_rule_entry, sizeof(struct ipa_flt_rule_add));
 		}
@@ -17077,7 +17077,7 @@ fail:
 /* handle ext_route delete event*/
 int IPACM_Lan::handle_ext_router_del_evt(void)
 {
-	IPACMDBG("entering handle_ext_router_del_evt\n")
+	IPACMDBG("entering handle_ext_router_del_evt\n");
 	int cnt, idx = 0;
 
 	if(rx_prop == NULL){
@@ -17126,7 +17126,7 @@ int IPACM_Lan::handle_ext_router_del_evt(void)
 			get_client_memptr(eth_client, cnt)->ext_router_prefix_rt_hdl = 0;
 		}
 	}
-	IPACMDBG("Finished handle_ext_router_del_evt\n")
+	IPACMDBG("Finished handle_ext_router_del_evt\n");
 	return IPACM_SUCCESS;
 }
 

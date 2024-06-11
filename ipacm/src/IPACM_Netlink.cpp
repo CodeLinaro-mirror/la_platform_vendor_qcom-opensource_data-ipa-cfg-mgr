@@ -560,6 +560,37 @@ static int ipa_nl_decode_rtm_addr
 	return IPACM_SUCCESS;
 }
 
+static void logNeighborState(const uint16_t state, const int interfaceIndex) {
+	std::string stateStr;
+	char interfaceName[IF_NAME_LEN] = {0};
+
+
+	ipa_get_if_name(interfaceName, interfaceIndex);
+	stateStr += "interface index: " + std::to_string(interfaceIndex) + ", interface name: " + string(interfaceName) +
+		", neighbor state:";
+
+	if (state & NUD_INCOMPLETE)
+		stateStr += " NUD_INCOMPLETE";
+	if (state & NUD_REACHABLE)
+		stateStr += " NUD_REACHABLE";
+	if (state & NUD_STALE)
+		stateStr += " NUD_STALE";
+	if (state & NUD_DELAY)
+		stateStr += " NUD_DELAY";
+	if (state & NUD_PROBE)
+		stateStr += " NUD_PROBE";
+	if (state & NUD_FAILED)
+		stateStr += " NUD_FAILED";
+	if (state & NUD_NOARP)
+		stateStr += " NUD_NOARP";
+	if (state & NUD_PERMANENT)
+		stateStr += " NUD_PERMANENT";
+	if (state == NUD_NONE)
+		stateStr += " NUD_NONE";
+
+	IPACMDBG("%s\n", stateStr.c_str());
+}
+
 /* Decode kernel neighbor message parameters from Netlink attribute TLVs. */
 static int ipa_nl_decode_rtm_neigh
 (
@@ -579,6 +610,7 @@ static int ipa_nl_decode_rtm_neigh
 	memset(&neigh_info->attr_info, 0, sizeof(neigh_info->attr_info));
 	/* Extract the available attributes */
 	neigh_info->attr_info.param_mask = IPA_NLA_PARAM_NONE;
+	logNeighborState(neigh_info->metainfo.ndm_state, neigh_info->metainfo.ndm_ifindex);
 
 	rtah = NDA_RTA(NLMSG_DATA(nlh));
 
@@ -768,10 +800,11 @@ static int ipa_nl_decode_nlmsg
 	while(NLMSG_OK(nlh, buflen))
 	{
 		memset(dev_name,0,IF_NAME_LEN);
-		IPACMDBG("Received msg:%d from netlink\n", nlh->nlmsg_type)
+		IPACMDBG("Received msg:%d from netlink\n", nlh->nlmsg_type);
 		switch(nlh->nlmsg_type)
 		{
 		case RTM_NEWLINK:
+			IPACMDBG("\nGOT RTM_NEWLINK event\n");
 			msg_ptr->type = nlh->nlmsg_type;
 			msg_ptr->link_event = true;
 			if (IPACM_SUCCESS != ipa_nl_decode_rtm_link(buffer, buflen, &(msg_ptr->nl_link_info))) {
@@ -854,7 +887,7 @@ static int ipa_nl_decode_nlmsg
 							msg_ptr->nl_link_info.metainfo.ifi_index);
 					} else {
 						if (msg_ptr->nl_link_info.link_type == IPA_LINK_TYPE_MACSEC ||
-							IPACM_Iface::ipacmcfg->populateMacsecMap(msg_ptr->nl_link_info.metainfo.ifi_index,
+							IPACM_Iface::ipacmcfg->getMacsecMapping(msg_ptr->nl_link_info.metainfo.ifi_index,
 							&macsec_map)) {
 							if (IPACM_Iface::ipacmcfg->delMacsecMap(&macsec_map)) {
 								evt_data.event = IPA_HANDLE_MACSEC_DEL;
@@ -924,9 +957,10 @@ static int ipa_nl_decode_nlmsg
 
 					if (msg_ptr->nl_link_info.link_type == IPA_LINK_TYPE_VLAN)
 						IPACM_Iface::ipacmcfg->del_vlan_iface(&vlan_info);
-					if (msg_ptr->nl_link_info.link_type == IPA_LINK_TYPE_MACSEC ||
-						IPACM_Iface::ipacmcfg->populateMacsecMap(msg_ptr->nl_link_info.metainfo.ifi_index,
-						&macsec_map)) {
+					if (msg_ptr->nl_link_info.link_type == IPA_LINK_TYPE_MACSEC) {
+						if (!IPACM_Iface::ipacmcfg->getMacsecMapping(msg_ptr->nl_link_info.metainfo.ifi_index,
+							&macsec_map))
+							IPACMERR("getMacsecMapping failed\n");
 						if (IPACM_Iface::ipacmcfg->delMacsecMap(&macsec_map)) {
 							evt_data.event = IPA_HANDLE_MACSEC_DEL;
 							macsec_map_data = static_cast<decltype(macsec_map_data)>
@@ -964,17 +998,14 @@ static int ipa_nl_decode_nlmsg
 			break;
 
 		case RTM_DELLINK:
-			IPACMDBG("\n GOT dellink event\n");
+			IPACMDBG("\nGOT RTM_DELLINK event\n");
 			msg_ptr->type = nlh->nlmsg_type;
 			msg_ptr->link_event = true;
 			IPACMDBG("entering rtm decode\n");
-			if(IPACM_SUCCESS != ipa_nl_decode_rtm_link(buffer, buflen, &(msg_ptr->nl_link_info)))
-			{
+			if (IPACM_SUCCESS != ipa_nl_decode_rtm_link(buffer, buflen, &(msg_ptr->nl_link_info))) {
 				IPACMERR("Failed to decode rtm link message\n");
 				return IPACM_FAILURE;
-			}
-			else
-			{
+			} else {
 				IPACMDBG("Got RTM_DELLINK with below values\n");
 				IPACMDBG("RTM_DELLINK, ifi_change:%d\n", msg_ptr->nl_link_info.metainfo.ifi_change);
 				IPACMDBG("RTM_DELLINK, ifi_flags:%d\n", msg_ptr->nl_link_info.metainfo.ifi_flags);
@@ -1004,21 +1035,12 @@ static int ipa_nl_decode_nlmsg
 					vlan_info.vlan_interface_index = msg_ptr->nl_link_info.metainfo.ifi_index;
 				}
 
-				if (msg_ptr->nl_link_info.link_type == IPA_LINK_TYPE_MACSEC) {
-					strlcpy(macsec_map.macsec_name, msg_ptr->nl_link_info.name, sizeof(macsec_map.macsec_name));
-					ret_val = ipa_get_if_name(master_dev_name, msg_ptr->nl_link_info.master_interface_index);
-					if (ret_val != IPACM_SUCCESS) {
-						IPACMERR("Error while getting master interface name\n");
-						return IPACM_FAILURE;
-					}
-					strlcpy(macsec_map.phy_name, msg_ptr->nl_link_info.name, sizeof(macsec_map.phy_name));
-				}
-
 				if(msg_ptr->nl_link_info.link_type == IPA_LINK_TYPE_VLAN)
 					IPACM_Iface::ipacmcfg->del_vlan_iface(&vlan_info);
-				if (msg_ptr->nl_link_info.link_type == IPA_LINK_TYPE_MACSEC ||
-					IPACM_Iface::ipacmcfg->populateMacsecMap(msg_ptr->nl_link_info.metainfo.ifi_index,
-					&macsec_map)) {
+				if (msg_ptr->nl_link_info.link_type == IPA_LINK_TYPE_MACSEC) {
+					if (!IPACM_Iface::ipacmcfg->getMacsecMapping(msg_ptr->nl_link_info.metainfo.ifi_index,
+						&macsec_map))
+						IPACMERR("getMacsecMapping failed\n");
 					if (IPACM_Iface::ipacmcfg->delMacsecMap(&macsec_map)) {
 						evt_data.event = IPA_HANDLE_MACSEC_DEL;
 						macsec_map_data = static_cast<decltype(macsec_map_data)>
@@ -1057,20 +1079,18 @@ static int ipa_nl_decode_nlmsg
 		case RTM_DELADDR:
 			if(nlh->nlmsg_type == RTM_NEWADDR)
 			{
-				IPACMDBG("\n GOT RTM_NEWADDR event\n");
+				IPACMDBG("\nGOT RTM_NEWADDR event\n");
 			}
 			else
 			{
-				IPACMDBG("\n GOT RTM_DELADDR event\n");
+				IPACMDBG("\nGOT RTM_DELADDR event\n");
 			}
 
 			if(IPACM_SUCCESS != ipa_nl_decode_rtm_addr(buffer, buflen, &(msg_ptr->nl_addr_info)))
 			{
 				IPACMERR("Failed to decode rtm addr message\n");
 				return IPACM_FAILURE;
-			}
-			else
-			{
+			} else {
 				ret_val = ipa_get_if_name(dev_name, msg_ptr->nl_addr_info.metainfo.ifa_index);
 				if(ret_val != IPACM_SUCCESS)
 				{
@@ -1166,7 +1186,7 @@ static int ipa_nl_decode_nlmsg
 			break;
 
 		case RTM_NEWROUTE:
-
+			IPACMDBG("\nGOT RTM_DELADDR event\n");
 			if(IPACM_SUCCESS != ipa_nl_decode_rtm_route(buffer, buflen, &(msg_ptr->nl_route_info)))
 			{
 				IPACMERR("Failed to decode rtm route message\n");
@@ -1472,6 +1492,7 @@ static int ipa_nl_decode_nlmsg
 			break;
 
 		case RTM_DELROUTE:
+			IPACMDBG("\nGOT RTM_DELROUTE event\n");
 			if(IPACM_SUCCESS != ipa_nl_decode_rtm_route(buffer, buflen, &(msg_ptr->nl_route_info)))
 			{
 				IPACMERR("Failed to decode rtm route message\n");
@@ -1696,6 +1717,7 @@ static int ipa_nl_decode_nlmsg
 			break;
 
 		case RTM_NEWNEIGH:
+			IPACMDBG("\nGOT RTM_NEWNEIGH event\n");
 			if(IPACM_SUCCESS != ipa_nl_decode_rtm_neigh(buffer, buflen, &(msg_ptr->nl_neigh_info)))
 			{
 				IPACMERR("Failed to decode rtm neighbor message\n");
@@ -1825,6 +1847,7 @@ static int ipa_nl_decode_nlmsg
 			break;
 
 		case RTM_DELNEIGH:
+			IPACMDBG("\nGOT RTM_DELNEIGH event\n");
 			if(IPACM_SUCCESS != ipa_nl_decode_rtm_neigh(buffer, buflen, &(msg_ptr->nl_neigh_info)))
 			{
 				IPACMERR("Failed to decode rtm neighbor message\n");
@@ -2198,7 +2221,7 @@ int ipa_nl_send_getroute(ipa_ip_type ip_type)
 
 	h = (struct nlmsghdr *)buf;
 
-	IPACMDBG("Route msg_len : %d\n", msglen)
+	IPACMDBG("Route msg_len : %d\n", msglen);
 
 	while (NLMSG_OK(h, msglen))
 	{

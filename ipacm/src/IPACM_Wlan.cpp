@@ -7314,7 +7314,7 @@ int IPACM_Wlan::handle_wlan_vlan_neighbor(ipacm_event_new_neigh_vlan *param) {
 				IPACM_Wan::backhaul_ipv6_prefix[0],
 				IPACM_Wan::backhaul_ipv6_prefix[1],
 				new_neigh_data->data_all.ipv6_addr[0],
-				new_neigh_data->data_all.ipv6_addr[1])
+				new_neigh_data->data_all.ipv6_addr[1]);
 
 			evt_data.event = IPA_ROUTE_ADD_VLAN_PDN_EVENT;
 			data = (ipacm_event_route_vlan *)malloc(sizeof(ipacm_event_route_vlan));

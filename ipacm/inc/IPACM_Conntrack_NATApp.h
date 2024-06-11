@@ -314,7 +314,10 @@ typedef struct _nat_table_entry
 
 }nat_table_entry;
 
-#define CHK_TBL_HDL()  if(nat_table_hdl == 0){ return -1; }
+#define CHK_TBL_HDL() \
+	do { \
+                if(nat_table_hdl == 0){ return -1; } \
+        } while (0)
 
 class CollectionBase
 {

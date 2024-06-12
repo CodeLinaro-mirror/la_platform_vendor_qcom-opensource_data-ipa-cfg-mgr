@@ -1567,7 +1567,7 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 			IPACMDBG_H("Received IPA_HANDLE_WAN_VLAN_PDN_DOWN for VID %d, iptype %d\n",
 				data->VlanID,
 				data->iptype);
-			if(is_vlan_IF(data->VlanID)
+			if(is_vlan_IF(data->VlanID) || IPACM_Iface::ipacmcfg->is_dummy_VID(data->VlanID)
 #ifdef IPA_L2TP_TUNNEL_UDP
 				|| IPACM_Iface::ipacmcfg->check_l2tp_bridge_vlan_id(data->VlanID)
 #endif
@@ -7463,7 +7463,7 @@ int IPACM_Lan::handle_uplink_filter_rule(ipacm_ext_prop *prop, ipa_ip_type iptyp
 		if ((iptype == IPA_IP_v4) && prop->prop[cnt].is_xlat_rule && (pdn_mux_id != 0) && is_xlat)
 		{
 			/* For vlan mpdn xlat rules will be installed with vlan id as metadata */
-			if (is_dev_in_vlan_mode && IPACM_Iface::ipacmcfg->ipacm_mpdn_enable) {
+			if ((is_dev_in_vlan_mode && IPACM_Iface::ipacmcfg->ipacm_mpdn_enable) || IPACM_Iface::ipacmcfg->is_added_vlan_iface(dev_name)) {
 				IPACMDBG("skip xlat mpdn rule id %d ext prop no. %d i %d\n",
 					prop->prop[cnt].rule_id, cnt, i);
 				continue;
@@ -11780,6 +11780,10 @@ int IPACM_Lan::eth_bridge_add_hdr_proc_ctx(ipa_hdr_l2_type peer_l2_hdr_type, uin
 		/*Extract VID from br0 if non-vlan on default or extract from respective bridge */
 		if(!IPACM_Iface::ipacmcfg->get_bridge_vlan_mapping(&mapping_info))
 		{
+			if(vlan_id <= 0 || vlan_id > DUMMY_VLAN_ID_BASE)
+			{
+				IPACMERR("Unable to find Bridge for %s\n", mapping_info.bridge_name);
+			}
 			vlan_id = mapping_info.vlan_id;
 		}
 
@@ -15341,7 +15345,7 @@ int IPACM_Lan::handle_mpdn_ul_xlat_filter_rule(ipacm_ext_prop * prop,
 	int i, cnt, entry_idx = 0, prev =0, curr =0, pos, idx_q6 = 0;
 	uint16_t value = 0, mask = 0;
 	int xlat_pdn_ctx_id;
-	ipa_ioc_bridge_vlan_mapping_info mapping_info;
+	ipa_bridge_vlan_mapping_info mapping_info;
 
 	IPACMDBG_H("Set modem UL flt rules for xlat mode in MPDN config with vlan: %d\n", vlan_id);
 

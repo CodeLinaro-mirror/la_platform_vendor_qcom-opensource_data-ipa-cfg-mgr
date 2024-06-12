@@ -529,7 +529,7 @@ void IPACM_Wlan::event_callback(ipa_cm_event_id event, void *param)
 			IPACMDBG_H("Received IPA_HANDLE_WAN_VLAN_PDN_UP for VID %d, iptype %d\n",
 				data->VlanID,
 				data->iptype);
-			if(IPACM_Iface::ipacmcfg->is_dummy_VID(data->VlanID))
+			if(is_vlan_IF(data->VlanID)  || IPACM_Iface::ipacmcfg->is_dummy_VID(data->VlanID))
 			{
 				if(data->iptype == IPA_IP_v6)
 				{
@@ -561,7 +561,7 @@ void IPACM_Wlan::event_callback(ipa_cm_event_id event, void *param)
 			IPACMDBG_H("Received IPA_HANDLE_WAN_VLAN_PDN_DOWN for VID %d, iptype %d\n",
 				data->VlanID,
 				data->iptype);
-			if(IPACM_Iface::ipacmcfg->is_dummy_VID(data->VlanID))
+			if(is_vlan_IF(data->VlanID)  || IPACM_Iface::ipacmcfg->is_dummy_VID(data->VlanID))
 			{
 #ifdef FEATURE_IPACM_UL_FIREWALL
 				if(data->iptype == IPA_IP_v6)
@@ -3247,57 +3247,54 @@ int IPACM_Wlan::handle_down_evt()
 
 	neigh_cache.clear();
 
-	if (IPACM_Iface::ipacmcfg->is_added_vlan_iface(dev_name))
+	/* remove modem UL rules and notify */
+	if(is_any_mux_up(IPA_IP_v4))
 	{
-		/* remove modem UL rules and notify */
-		if(is_any_mux_up(IPA_IP_v4))
+		ipacm_event_vlan_pdn *data_vlan = (ipacm_event_vlan_pdn *)malloc(sizeof(ipacm_event_vlan_pdn));
+
+		if (data_vlan == NULL)
 		{
-			ipacm_event_vlan_pdn *data_vlan = (ipacm_event_vlan_pdn *)malloc(sizeof(ipacm_event_vlan_pdn));
-
-			if (data_vlan == NULL)
-			{
-				IPACMERR("Unable to allocate memory\n");
-				res = IPACM_FAILURE;
-				goto fail;
-			}
-
-			IPACMDBG_H("MUX is up for V4\n");
-			for(int i = 0; i < IPA_MAX_NUM_HW_PDNS; i++)
-			{
-				if(v4_mux_up[i].mux_id)
-				{
-					data_vlan->mux_id = v4_mux_up[i].mux_id;
-					data_vlan->iptype = IPA_IP_v4;
-					IPACMDBG_H("mux %d up, delete v4 flt rules\n", v4_mux_up[i].mux_id);
-					handle_vlan_pdn_down(data_vlan);
-				}
-			}
-			free(data_vlan);
+			IPACMERR("Unable to allocate memory\n");
+			res = IPACM_FAILURE;
+			goto fail;
 		}
-		if(is_any_mux_up(IPA_IP_v6))
+
+		IPACMDBG_H("MUX is up for V4\n");
+		for(int i = 0; i < IPA_MAX_NUM_HW_PDNS; i++)
 		{
-			ipacm_event_vlan_pdn *data_vlan = (ipacm_event_vlan_pdn *)malloc(sizeof(ipacm_event_vlan_pdn));
-
-			if (data_vlan == NULL)
+			if(v4_mux_up[i].mux_id)
 			{
-				IPACMERR("Unable to allocate memory\n");
-				res = IPACM_FAILURE;
-				goto fail;
+				data_vlan->mux_id = v4_mux_up[i].mux_id;
+				data_vlan->iptype = IPA_IP_v4;
+				IPACMDBG_H("mux %d up, delete v4 flt rules\n", v4_mux_up[i].mux_id);
+				handle_vlan_pdn_down(data_vlan);
 			}
-
-			IPACMDBG_H("MUX is up for V6\n");
-			for(int i = 0; i < IPA_MAX_NUM_HW_PDNS; i++)
-			{
-				if(v6_mux_up[i].mux_id)
-				{
-					data_vlan->mux_id = v6_mux_up[i].mux_id;
-					data_vlan->iptype = IPA_IP_v6;
-					IPACMDBG_H("mux %d up, delete v6 flt rules\n", v6_mux_up[i].mux_id);
-					handle_vlan_pdn_down(data_vlan);
-				}
-			}
-			free(data_vlan);
 		}
+		free(data_vlan);
+	}
+	if(is_any_mux_up(IPA_IP_v6))
+	{
+		ipacm_event_vlan_pdn *data_vlan = (ipacm_event_vlan_pdn *)malloc(sizeof(ipacm_event_vlan_pdn));
+
+		if (data_vlan == NULL)
+		{
+			IPACMERR("Unable to allocate memory\n");
+			res = IPACM_FAILURE;
+			goto fail;
+		}
+
+		IPACMDBG_H("MUX is up for V6\n");
+		for(int i = 0; i < IPA_MAX_NUM_HW_PDNS; i++)
+		{
+			if(v6_mux_up[i].mux_id)
+			{
+				data_vlan->mux_id = v6_mux_up[i].mux_id;
+				data_vlan->iptype = IPA_IP_v6;
+				IPACMDBG_H("mux %d up, delete v6 flt rules\n", v6_mux_up[i].mux_id);
+				handle_vlan_pdn_down(data_vlan);
+			}
+		}
+		free(data_vlan);
 	}
 
 	/* Remove STA case UL rules */
@@ -3877,7 +3874,7 @@ int IPACM_Wlan::handle_wlan_vlan_neighbor(ipacm_event_data_all *data)
 				IPACM_Wan::backhaul_ipv6_prefix[0],
 				IPACM_Wan::backhaul_ipv6_prefix[1],
 				data_vlan->data_all.ipv6_addr[0],
-				data_vlan->data_all.ipv6_addr[1])
+				data_vlan->data_all.ipv6_addr[1]);
 
 			evt_data.event = IPA_ROUTE_ADD_VLAN_PDN_EVENT;
 			data = (ipacm_event_route_vlan *)malloc(sizeof(ipacm_event_route_vlan));

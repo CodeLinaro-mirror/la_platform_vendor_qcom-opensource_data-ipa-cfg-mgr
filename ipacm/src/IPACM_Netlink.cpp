@@ -820,6 +820,8 @@ static int ipa_nl_decode_nlmsg
 	ipacm_event_data_all *vlan_data;
 	struct ipa_vlan_iface_info vlan_info;
 	struct ipa_macsec_map macsec_map, *macsec_map_data;
+	IPACM_Config* config = NULL;
+
 	memset(nullMac, 0, sizeof(nullMac));
 	memset(&vlan_info, 0, sizeof(vlan_info));
 	memset(&macsec_map, 0, sizeof(macsec_map));
@@ -1839,22 +1841,28 @@ static int ipa_nl_decode_nlmsg
                                  dev_name, data_all->if_index,
 								 msg_ptr->nl_neigh_info.attr_info.local_addr.ss_family);
 
-				IPACM_Config* config = IPACM_Config::GetInstance();
+				config = IPACM_Config::GetInstance();
 				/* Add Dummy VLAN Mapping for Non-Vlan Ifaces */
-				if((msg_ptr->nl_neigh_info.metainfo.ndm_ifindex != msg_ptr->nl_neigh_info.master_interface_index) && (!config->iface_in_vlan_mode(dev_name)))
+				if(config != NULL)
 				{
-					memset(master_dev_name,0,IF_NAME_LEN);
-					if(ipa_get_if_name(master_dev_name, msg_ptr->nl_neigh_info.master_interface_index) == IPACM_SUCCESS)
+					if((msg_ptr->nl_neigh_info.metainfo.ndm_ifindex != msg_ptr->nl_neigh_info.master_interface_index) && (!config->iface_in_vlan_mode(dev_name)))
 					{
-						memset(&vlan_bridge_data, 0, sizeof(vlan_bridge_data));
-						vlan_bridge_data.vlan_id = DUMMY_VLAN_ID_BASE+ msg_ptr->nl_neigh_info.metainfo.ndm_ifindex;
-						strlcpy(vlan_bridge_data.bridge_name, master_dev_name, IF_NAME_LEN);
-						IPACM_Iface::iface_addr_query(msg_ptr->nl_neigh_info.master_interface_index, false, &if_ipv4_addr, &if_ipipv4_addr_mask);
-						vlan_bridge_data.bridge_ipv4 = if_ipv4_addr;
-						vlan_bridge_data.subnet_mask = if_ipipv4_addr_mask;
-						config->add_dummy_vlan_mapping(master_dev_name,
-														data_all->iface_name, msg_ptr->nl_neigh_info.metainfo.ndm_ifindex);
-						config->add_bridge_vlan_mapping(&vlan_bridge_data);
+						memset(master_dev_name,0,IF_NAME_LEN);
+						if(ipa_get_if_name(master_dev_name, msg_ptr->nl_neigh_info.master_interface_index) == IPACM_SUCCESS)
+						{
+							memset(&vlan_bridge_data, 0, sizeof(vlan_bridge_data));
+							vlan_bridge_data.vlan_id = DUMMY_VLAN_ID_BASE+ msg_ptr->nl_neigh_info.metainfo.ndm_ifindex;
+							strlcpy(vlan_bridge_data.bridge_name, master_dev_name, IF_NAME_LEN);
+							IPACM_Iface::iface_addr_query(msg_ptr->nl_neigh_info.master_interface_index, false, &if_ipv4_addr, &if_ipipv4_addr_mask);
+							vlan_bridge_data.bridge_ipv4 = if_ipv4_addr;
+							vlan_bridge_data.subnet_mask = if_ipipv4_addr_mask;
+							vlan_bridge_data.master_if_index = msg_ptr->nl_neigh_info.master_interface_index;
+							config->add_dummy_vlan_mapping(master_dev_name,
+															data_all->iface_name, msg_ptr->nl_neigh_info.metainfo.ndm_ifindex);
+							config->add_bridge_vlan_mapping(&vlan_bridge_data);
+							vlan_bridge_data.status = 1;
+							config->add_bridge_vlan_mapping(&vlan_bridge_data);
+						}
 					}
 				}
 			}
@@ -1931,9 +1939,9 @@ static int ipa_nl_decode_nlmsg
 		     (unsigned char)(msg_ptr->nl_neigh_info.attr_info.lladdr_hwaddr).sa_data[4],
 		     (unsigned char)(msg_ptr->nl_neigh_info.attr_info.lladdr_hwaddr).sa_data[5]);
 
-				memcpy(data_all->mac_addr,
-							 msg_ptr->nl_neigh_info.attr_info.lladdr_hwaddr.sa_data,
-							 sizeof(data_all->mac_addr));
+			memcpy(data_all->mac_addr,
+						 msg_ptr->nl_neigh_info.attr_info.lladdr_hwaddr.sa_data,
+						 sizeof(data_all->mac_addr));
 		    evt_data.event = IPA_DEL_NEIGH_EVENT;
 				data_all->if_index = msg_ptr->nl_neigh_info.metainfo.ndm_ifindex;
 
@@ -1944,6 +1952,26 @@ static int ipa_nl_decode_nlmsg
 				evt_data.evt_data = data_all;
 				IPACM_EvtDispatcher::PostEvt(&evt_data);
 				/* finish command queue */
+
+			config = IPACM_Config::GetInstance();
+			/* Remove Dummy VLAN Mapping for Non-Vlan Ifaces */
+			if(config != NULL)
+			{
+				if((msg_ptr->nl_neigh_info.metainfo.ndm_ifindex != msg_ptr->nl_neigh_info.master_interface_index) && (!config->iface_in_vlan_mode(dev_name)))
+				{
+					memset(master_dev_name,0,IF_NAME_LEN);
+					if(ipa_get_if_name(master_dev_name, msg_ptr->nl_neigh_info.master_interface_index) == IPACM_SUCCESS)
+					{
+						memset(&vlan_bridge_data, 0, sizeof(vlan_bridge_data));
+						vlan_bridge_data.vlan_id = DUMMY_VLAN_ID_BASE + msg_ptr->nl_neigh_info.metainfo.ndm_ifindex;
+						strlcpy(vlan_bridge_data.bridge_name, master_dev_name, IF_NAME_LEN);
+						vlan_bridge_data.master_if_index = msg_ptr->nl_neigh_info.master_interface_index;
+						config->del_dummy_vlan_mapping(master_dev_name,
+														data_all->iface_name, msg_ptr->nl_neigh_info.metainfo.ndm_ifindex);
+						config->del_bridge_vlan_mapping((uint16_t *)&(vlan_bridge_data.master_if_index), &(vlan_bridge_data.vlan_id));
+					}
+				}
+			}
 			break;
 
 		default:

@@ -391,6 +391,7 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 				}
 				vlan_bridge_data.status = 1;
 				vlan_bridge_data.master_if_index = data_all->if_index;
+				vlan_bridge_data.vlan_id = 0;
 				IPACMDBG("Update bridge details in bridge<->vlan mapping list with bridge %s, IP 0x%x subnet 0x%x, status %d\n", vlan_bridge_data.bridge_name, vlan_bridge_data.bridge_ipv4, vlan_bridge_data.subnet_mask, vlan_bridge_data.status);
 				IPACM_Iface::ipacmcfg->add_bridge_vlan_mapping(&vlan_bridge_data);
 		}

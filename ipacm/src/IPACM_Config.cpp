@@ -1395,12 +1395,20 @@ void IPACM_Config::add_bridge_vlan_mapping(ipa_bridge_vlan_mapping_info *data)
 		return;
 	}
 
-	IPACMDBG_H("Trying to add bridge vlan mapping status:%d\n", data->status);
+	IPACMDBG_H("Trying to add bridge vlan mapping with status: %d for bridge: %s <-> vlan_id: %d\n", data->status, data->bridge_name, data->vlan_id);
 
 	for(it_mapping = m_bridge_vlan_mapping.begin(); it_mapping != m_bridge_vlan_mapping.end(); it_mapping++)
 	{
 		if(it_mapping->bridge_if_index == data->master_if_index)
 		{
+	                if(is_dummy_VID(data->vlan_id))
+                        {
+                                if((data->vlan_id != it_mapping->bridge_associated_VID) || !is_dummy_VID(it_mapping->bridge_associated_VID))
+                                {
+                                        continue;
+                                }
+			}
+
 			if((data->status == 1) && (it_mapping->status != 1))
 			{
 				strlcpy(it_mapping->bridge_iface_name, data->bridge_name,
@@ -1420,15 +1428,11 @@ void IPACM_Config::add_bridge_vlan_mapping(ipa_bridge_vlan_mapping_info *data)
 					bridge->bridge_netmask = data->subnet_mask;
 				}
 				goto bail;
-			
 			}
 
-			if(!is_dummy_VID(data->vlan_id))
-			{
-				IPACMDBG("The bridge %s was added before with vlan id: %d\n", data->bridge_name,
-						it_mapping->bridge_associated_VID);
-				goto bail;
-			}
+			IPACMERR("The bridge %s was added before with vlan id %d\n", data->bridge_name,
+				it_mapping->bridge_associated_VID);
+			goto bail;
 		}
 	}
 
@@ -1469,7 +1473,7 @@ bail:
 	return;
 }
 
-void IPACM_Config::del_bridge_vlan_mapping(uint16_t *data)
+void IPACM_Config::del_bridge_vlan_mapping(uint16_t *data, uint16_t *vlan_id)
 {
 	list<bridge_vlan_mapping_info>::iterator it_mapping;
 	ipacm_bridge *bridge = NULL;
@@ -1493,8 +1497,11 @@ void IPACM_Config::del_bridge_vlan_mapping(uint16_t *data)
 
 	for(it_mapping = m_bridge_vlan_mapping.begin(); it_mapping != m_bridge_vlan_mapping.end(); it_mapping++)
 	{
-		if(*data == it_mapping->bridge_if_index)
+		if((*data == it_mapping->bridge_if_index))
 		{
+			if(vlan_id)
+				if(it_mapping->bridge_associated_VID != *vlan_id)
+					continue;
 			IPACMDBG_H("Found the bridge mapping (%s->%d)\n",
 				it_mapping->bridge_iface_name,
 				it_mapping->bridge_associated_VID);
@@ -1535,9 +1542,6 @@ int IPACM_Config::get_bridge_vlan_mapping(ipa_bridge_vlan_mapping_info *data, bo
 		{
 			if(strncmp(data->bridge_name, it_mapping->bridge_iface_name, sizeof(data->bridge_name)) == 0)
 			{
-				if(is_dummy_VID(it_mapping->bridge_associated_VID))
-					continue;
-
 				IPACMDBG_H("Found the bridge mapping (%s->%d)\n",
 					data->bridge_name,
 					it_mapping->bridge_associated_VID);
@@ -1547,6 +1551,9 @@ int IPACM_Config::get_bridge_vlan_mapping(ipa_bridge_vlan_mapping_info *data, bo
 				data->subnet_mask = it_mapping->subnet_mask;
 				data->lan2lan_sw = it_mapping->lan2lan_sw;
 				ret = IPACM_SUCCESS;
+
+				if(is_dummy_VID(it_mapping->bridge_associated_VID))
+					continue;
 				break;
 			}
 		}
@@ -2872,7 +2879,7 @@ void IPACM_Config::add_l2tp_mtu_info(uint16_t mtu , char* iface_name)
 void IPACM_Config::add_dummy_vlan_mapping(char *bridge_iface, char* client_iface, int if_index)
 {
 	int ent_exist = 0;
-	ipa_ioc_vlan_iface_info vlan_info;
+	ipa_vlan_iface_info vlan_info;
 	uint16_t vlan_id;
 	uint8_t priority;
 
@@ -2926,6 +2933,27 @@ void IPACM_Config::add_dummy_vlan_mapping(char *bridge_iface, char* client_iface
 			vlan_info.vlan_id = DUMMY_VLAN_ID_BASE + if_index;
 			IPACM_Iface::ipacmcfg->add_vlan_iface(&vlan_info);
 			IPACMDBG_H("New Non-Vlan Mapping Created for %s with VID %d\n", vlan_info.name, vlan_info.vlan_id);
+		}
+	}
+
+	return;
+}
+
+/* Add dummy vlan mapping for the non vlan clients on on-demand bridge*/
+void IPACM_Config::del_dummy_vlan_mapping(char *bridge_iface, char* client_iface, int if_index)
+{
+	ipa_vlan_iface_info vlan_info;
+
+	if(IPACM_Iface::ipacmcfg->is_added_vlan_iface(client_iface))
+	{
+		if(strncmp(bridge_iface, BRIDGE_0,
+				strlen(bridge_iface)) != 0)
+		{
+			IPACMDBG_H("Found dummy mapping for : %s with vid : %d. Deleting from vlan list\n", client_iface, DUMMY_VLAN_ID_BASE + if_index);
+			memset(&vlan_info, 0, sizeof(vlan_info));
+			strlcpy(vlan_info.name, client_iface, sizeof(vlan_info.name));
+			vlan_info.vlan_id = DUMMY_VLAN_ID_BASE + if_index;
+			IPACM_Iface::ipacmcfg->del_vlan_iface(&vlan_info);
 		}
 	}
 

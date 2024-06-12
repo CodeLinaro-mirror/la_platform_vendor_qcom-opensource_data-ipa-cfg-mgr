@@ -354,7 +354,7 @@ public:
 #ifdef FEATURE_VLAN_MPDN
 	std::list<bridge_vlan_mapping_info> m_bridge_vlan_mapping;
 	void add_bridge_vlan_mapping(ipa_bridge_vlan_mapping_info *data);
-	void del_bridge_vlan_mapping(uint16_t *data);
+	void del_bridge_vlan_mapping(uint16_t *data, uint16_t *vlan_id = NULL);
 	int get_bridge_vlan_mapping(ipa_bridge_vlan_mapping_info *datai, bool is_dummy = false);
 	bool is_lan2lan_sw_path(uint16_t vlan_id);
 	uint16_t get_bridge_vlan_mapping_from_subnet(uint32_t ipv4_subnet);
@@ -407,6 +407,7 @@ public:
 	const char* getEventName(ipa_cm_event_id event_id);
 
 	void add_dummy_vlan_mapping(char *bridge_iface, char* client_iface, int if_index);
+	void del_dummy_vlan_mapping(char *bridge_iface, char* client_iface, int if_index);
 	bool is_dummy_VID(uint16_t vid);
 
 	inline void increaseFltRuleCount(int index, ipa_ip_type iptype, int increment)

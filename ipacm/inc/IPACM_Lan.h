@@ -301,6 +301,7 @@ public:
 	int add_vlan_private_subnet(ipacm_bridge *bridge);
 	int modify_ipv6_prefix_flt_rule();
 	int handle_backhaul_switch_vlan_mode(bool to_sta);
+	bool is_vlan_IF(uint16_t vlan_id);
 #endif
 
 	/* handle new_address event*/
@@ -1572,7 +1573,6 @@ private:
 #endif
 #ifdef FEATURE_VLAN_MPDN
 	int handle_vlan_neighbor(ipacm_event_data_all *data);
-	bool is_vlan_IF(uint16_t vlan_id);
 	int handle_vlan_phys_if_down();
 #endif
 

@@ -455,7 +455,20 @@ void IPACM_Iface::iface_addr_query
 			{
 				case AF_INET:
 				{
-					struct sockaddr_in *s4 = (struct sockaddr_in *)ifa->ifa_addr;
+					struct sockaddr_in *s4 = (struct sockaddr_in *)ifa->ifa_netmask;
+					IPACMDBG_H("ipv4 address %s\n",inet_ntoa(s4->sin_addr));
+					iface_ipv4 = s4->sin_addr;
+					
+					if (curr_ip4_mask)
+					{
+						if(ntohl(iface_ipv4.s_addr) != (*curr_ip4_mask))
+						{
+							IPACMDBG_H("iface ip4 mask: (0x%x)\n", ntohl(iface_ipv4.s_addr));
+							*curr_ip4_mask = ntohl(iface_ipv4.s_addr);
+						}
+					}
+
+					s4 = (struct sockaddr_in *)ifa->ifa_addr;
 					IPACMDBG_H("ipv4 address %s\n",inet_ntoa(s4->sin_addr));
 					iface_ipv4 = s4->sin_addr;
 
@@ -508,18 +521,6 @@ void IPACM_Iface::iface_addr_query
 						IPACMDBG_H("post_new_addr_event is false\n");
 					}
 
-					s4 = (struct sockaddr_in *)ifa->ifa_netmask;
-					IPACMDBG_H("ipv4 address %s\n",inet_ntoa(s4->sin_addr));
-					iface_ipv4 = s4->sin_addr;
-
-					if (curr_ip4_mask)
-					{
-						if(ntohl(iface_ipv4.s_addr) != (*curr_ip4_addr))
-						{
-							IPACMDBG_H("iface ip4 mask: (0x%x)\n", ntohl(iface_ipv4.s_addr));
-							*curr_ip4_mask = ntohl(iface_ipv4.s_addr);
-						}
-					}
 					break;
 				}
 				case AF_INET6:

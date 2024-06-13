@@ -25,6 +25,11 @@ BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
 WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
 OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
 IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+Changes from Qualcomm Innovation Center are provided under the following license:
+
+Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+SPDX-License-Identifier: BSD-3-Clause-Clear
 */
 #include "IPACM_Conntrack_NATApp.h"
 #include "IPACM_ConntrackClient.h"
@@ -624,6 +629,7 @@ int NatApp::AddEntry(const nat_table_entry *rule, bool isVlan)
 			cache[cnt].private_port = rule->private_port;
 			cache[cnt].protocol = rule->protocol;
 			cache[cnt].timestamp = 0;
+			cache[cnt].public_ip = rule->public_ip;
 			cache[cnt].public_port = rule->public_port;
 			cache[cnt].dst_nat = rule->dst_nat;
 #ifdef FEATURE_VLAN_MPDN
@@ -1089,6 +1095,7 @@ void NatApp::FlushTempEntries(uint32_t ip_addr, bool isAdd,
 int NatApp::DelEntriesOnClntDiscon(uint32_t ip_addr)
 {
 	int cnt, tmp = 0;
+	nat_table_entry new_entry;
 	IPACMDBG_H("Received IP address: 0x%x\n", ip_addr);
 
 	if(ip_addr == INVALID_IP_ADDR)
@@ -1118,18 +1125,20 @@ int NatApp::DelEntriesOnClntDiscon(uint32_t ip_addr)
 					IPACMERR("unable to delete the rule\n");
 					continue;
 				}
-				else
-				{
-					IPACMDBG("won't delete the rule\n");
-					cache[cnt].enabled = false;
-					tmp++;
-				}
+				
+				tmp++;
+				/*Adding to temp entry*/
+				memcpy(&new_entry, &cache[cnt], sizeof(nat_table_entry));
+				memset(&cache[cnt], 0, sizeof(cache[cnt]));
+				AddTempEntry(&new_entry);	
+				IPACMDBG_H("Deleted Nat entry(%d) Successfully added to temp list\n", cnt);
+			} else {
+				IPACMDBG("won't delete the rule for entry %d, enabled %d\n",cnt, cache[cnt].enabled);
 			}
-			IPACMDBG("won't delete the rule for entry %d, enabled %d\n",cnt, cache[cnt].enabled);
 		}
 	}
 
-	IPACMDBG("Deleted (but cached) %d entries\n", tmp);
+	IPACMDBG("Deleted %d entries\n", tmp);
 	return 0;
 }
 

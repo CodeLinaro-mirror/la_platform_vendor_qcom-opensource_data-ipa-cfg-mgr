@@ -5742,7 +5742,7 @@ int IPACM_Wan::config_wan_firewall_rule(ipa_ip_type iptype)
 #ifdef FEATURE_VLAN_MPDN
 		IPACM_Wan::num_v6_flt_rule = IPACM_Wan::ipv6_mpdn_default_filterting_rules_count;
 #else
-		IPACM_Wan::num_v6_flt_rule = m_ipv6_default_filterting_rules_count;
+		IPACM_Wan::num_v6_flt_rule = m_ipv6_default_filterting_rules_count[0];
 #endif
 #ifdef FEATURE_L2TP
 		if(active_v4 && (IPACM_Iface::ipacmcfg->ipacm_l2tp_enable == IPACM_L2TP_E2E))
@@ -6172,7 +6172,7 @@ int IPACM_Wan::del_wan_firewall_rule(ipa_ip_type iptype)
 #ifdef FEATURE_VLAN_MPDN
 		IPACM_Wan::num_v6_flt_rule = IPACM_Wan::ipv6_mpdn_default_filterting_rules_count;
 #else
-		IPACM_Wan::num_v6_flt_rule = m_ipv6_default_filterting_rules_count;
+		IPACM_Wan::num_v6_flt_rule = m_ipv6_default_filterting_rules_count[0];
 #endif
 #ifdef FEATURE_L2TP
 		if(active_v4 && (IPACM_Iface::ipacmcfg->ipacm_l2tp_enable == IPACM_L2TP_E2E))
@@ -10044,7 +10044,7 @@ void IPACM_Wan::handle_l2tp_client_add(char *iface_name)
 		return;
 	}
 
-	for (i = IPACM_Wan::num_v4_flt_rule - 1; i >= m_ipv6_default_filterting_rules_count; --i)
+	for (i = IPACM_Wan::num_v4_flt_rule - 1; i >= m_ipv6_default_filterting_rules_count[0]; --i)
 	{
 #ifdef FEATURE_VLAN_MPDN
 		pdn_flt_rule_v6[i+1] = pdn_flt_rule_v6[i];
@@ -10053,9 +10053,9 @@ void IPACM_Wan::handle_l2tp_client_add(char *iface_name)
 #endif
 	}
 #ifdef FEATURE_VLAN_MPDN
-	install_l2tp_flt_rule(pdn_flt_rule_v6, m_ipv6_default_filterting_rules_count, iface_name);
+	install_l2tp_flt_rule(pdn_flt_rule_v6, m_ipv6_default_filterting_rules_count[0], iface_name);
 #else
-	install_l2tp_flt_rule(flt_rule_v6, m_ipv6_default_filterting_rules_count, iface_name);
+	install_l2tp_flt_rule(flt_rule_v6, m_ipv6_default_filterting_rules_count[0], iface_name);
 #endif
 	IPACM_Wan::num_v6_flt_rule++;
 	IPACMDBG_H("Now num of v6 dl flt rule is %d.\n", IPACM_Wan::num_v6_flt_rule);
@@ -10080,7 +10080,7 @@ void IPACM_Wan::handle_l2tp_client_del(char *iface_name)
 		ipv6_addr[i] = htonl(ipv6_addr[i]);
 	}
 
-	for (i = m_ipv6_default_filterting_rules_count; i < IPACM_Wan::num_v6_flt_rule; ++i)
+	for (i = m_ipv6_default_filterting_rules_count[0]; i < IPACM_Wan::num_v6_flt_rule; ++i)
 	{
 #ifdef FEATURE_VLAN_MPDN
 		if( (pdn_flt_rule_v6[i].flt_rule.rule.attrib.attrib_mask | IPA_FLT_DST_ADDR)

@@ -695,6 +695,8 @@ public:
 	int del_socksv5_flt_rule(void);
 #endif
 
+	int install_default_qos_rt_rules(uint8_t *client_mac, uint16_t client_vlan_id, enum ipa_ip_type iptype);
+
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
 private:
 	static bool lan_stats_inited;
@@ -1730,6 +1732,17 @@ public:  //mike why we have 2 public. Why not just move this on top?
 #endif
 	int delete_icmp_filter_rule(
 		ipa_ip_type iptype);
+
+    uint32_t get_u8_bitmap_from_tc(uint8_t traffic_class);
+	int handle_qos_route_rule(uint8_t *client_mac, uint16_t vlan_id, ipa_ip_type iptype, list<qos_param_info>::iterator qos_param, int qos_client_idx);
+	int handle_qos_route_rule_ext_v2(uint8_t *client_mac, uint16_t vlan_id,
+		ipa_ip_type iptype, list<qos_param_info>::iterator qos_param);
+	int install_all_qos_route_rule(uint8_t * client_mac, uint16_t vlan_id);
+	int if_client_qos_rule_exist(uint8_t *client_mac, uint16_t vlan_id, list<qos_param_info>::iterator qos_param);
+	int delete_client_qos_rule(uint8_t *client_mac, uint16_t vlan_id);
+	int delete_client_info_from_qos(uint8_t *client_mac, uint16_t vlan_id, list<qos_param_info>::iterator qos_param);
+	int delete_all_client_qos_rules();
+	int delete_all_client_info_from_qos(list<qos_param_info>::iterator qos_param);
 };
 
 #endif /* IPACM_LAN_H */

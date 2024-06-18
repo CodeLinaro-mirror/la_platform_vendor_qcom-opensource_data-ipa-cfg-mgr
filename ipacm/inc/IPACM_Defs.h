@@ -191,7 +191,7 @@ extern "C"
 #endif
 
 #define IPA_DUMMY_PREFIX 0xFFFFFFFF
-#define IPA_MAX_NUM_PROPS 2
+#define IPA_MAX_NUM_PROPS 5
 
 #ifndef __ss_aligntype
 #define __ss_aligntype unsigned long int
@@ -206,6 +206,8 @@ extern "C"
 #define MUX_ID_DL_METADATA_MASK 0x7f
 #define MUX_ID_DL_METADATA_SHIFT 24
 #endif
+
+#define IPV6_NUM_ADDR 3
 
 /*
  * The following macros allow callers to print the raw bytes making up
@@ -238,6 +240,7 @@ extern "C"
 	{												\
 		IPACM_LOG_V6_ADDR(prefix, ip_addr);			\
 	}
+
 
 /*
  *===========================================================================
@@ -369,6 +372,9 @@ typedef enum
 	IPA_PDN_DSCP_UPDATE_EVENT,                /* ipacm_event_pdn_dscp_info */
 	IPA_PDN_MUX_ID_UPDATE,                    /* ipacm_event_pdn_mux_info */
 #endif
+	IPA_QOS_RULE_ADD_EVENT,                   /* ipacm_qos_rule_add_event */
+	IPA_QOS_RULE_DEL_EVENT,                   /* ipacm_qos_rule_del_event */
+	IPA_QOS_RULE_FLUSH_EVENT,                 /* ipacm_qos_rule_flush_event */
 	IPACM_EVENT_MAX
 } ipa_cm_event_id;
 
@@ -767,5 +773,34 @@ public:
 	}
 };
 #endif
+
+enum qos_param_type {
+	IP_TUP,
+	MAC,
+	VLAN,
+	PCP,
+	DSCP
+};
+
+struct ip_tuple {
+		uint32_t src_ip_addr;
+		uint32_t src_sub_mask;
+		uint32_t dst_ip_addr;
+		uint32_t dst_sub_mask;
+
+		uint16_t sport_start;
+		uint16_t sport_end;
+		uint16_t dport_start;
+		uint16_t dport_end;
+		uint8_t protocol;
+
+		uint32_t src_v6_ip_addr[4];
+		uint32_t src_v6_sub_mask[4];
+		uint32_t dst_v6_ip_addr[4];
+		uint32_t dst_v6_sub_mask[4];
+
+		uint16_t vlan_count;
+		uint16_t vlan_id;
+};
 
 #endif /* IPA_CM_DEFS_H */

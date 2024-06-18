@@ -4,7 +4,7 @@
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
  * met:
- *	* Redistributions of source code must retain the above copyright
+        * Redistributions of source code must retain the above copyright
 	  notice, this list of conditions and the following disclaimer.
 	* Redistributions in binary form must reproduce the above
 	  copyright notice, this list of conditions and the following
@@ -419,6 +419,9 @@ int NatApp::RemovePdn(uint32_t pub_ip)
 	CHK_TBL_HDL();
 
 	ret = ipa_nat_get_pdn_index(pub_ip, &pdn_index);
+
+	IPACMDBG_H("pdn index..%d\n", pdn_index);
+
 	if(ret)
 	{
 		IPACMERR("pdn doesn't exist on pdn table\n");
@@ -440,6 +443,7 @@ int NatApp::RemovePdn(uint32_t pub_ip)
 		}
 	}
 
+	IPACMDBG_H("removing the pdn handle is %u\n", nat_table_hdl);
 	ret = ipa_nat_dealloc_pdn(pdn_index);
 	if(ret)
 	{

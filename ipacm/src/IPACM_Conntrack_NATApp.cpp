@@ -25,6 +25,10 @@ BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
 WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
 OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
 IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+Changes from Qualcomm Innovation Center, Inc. are provided under the following license:
+Copyright (c) 2024 Qualcomm Innovation Center, Inc. All rights reserved.
+SPDX-License-Identifier: BSD-3-Clause-Clear
 */
 #include "IPACM_Conntrack_NATApp.h"
 #include "IPACM_ConntrackClient.h"
@@ -382,6 +386,9 @@ int NatApp::RemovePdn(uint32_t pub_ip)
 	CHK_TBL_HDL();
 
 	ret = ipa_nat_get_pdn_index(pub_ip, &pdn_index);
+
+	IPACMDBG_H("pdn index..%d\n", pdn_index);
+
 	if(ret)
 	{
 		IPACMERR("pdn doesn't exist on pdn table\n");
@@ -403,6 +410,7 @@ int NatApp::RemovePdn(uint32_t pub_ip)
 		}
 	}
 
+	IPACMDBG_H("removing the pdn handle is %u\n", nat_table_hdl);
 	ret = ipa_nat_dealloc_pdn(pdn_index);
 	if(ret)
 	{

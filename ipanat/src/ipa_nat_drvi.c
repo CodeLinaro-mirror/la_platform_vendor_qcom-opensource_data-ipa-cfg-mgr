@@ -25,6 +25,10 @@
  * WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *
+ * Changes from Qualcomm Innovation Center, Inc. are provided under the following license:
+ * Copyright (c) 2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
 #include "ipa_nat_drv.h"
@@ -1243,6 +1247,7 @@ int ipa_nati_alloc_pdn(
 
 int ipa_nati_get_pdn_cnt(void)
 {
+	IPADBG("No of pdn count is %d\n", num_pdns);
 	return num_pdns;
 }
 
@@ -1395,6 +1400,13 @@ int ipa_NATI_add_ipv4_tbl(
 
 	nat_cache_ptr = &ipv4_nat_cache[nmi];
 
+	if(!nat_cache_ptr)
+	{
+		IPAERR("Nat pointer is NULL\n");
+		ret = -EINVAL;
+		goto bail;
+	}
+
 	if (pthread_mutex_lock(&nat_mutex)) {
 		IPAERR("unable to lock the nat mutex\n");
 		ret = -EINVAL;
@@ -1422,6 +1434,15 @@ int ipa_NATI_add_ipv4_tbl(
 
 	nat_table = &nat_cache_ptr->ip4_tbl[nat_cache_ptr->table_cnt];
 
+	if(!nat_table)
+	{
+		IPAERR("Nat table pointer is NULL\n");
+		ret = -EINVAL;
+		goto unlock;
+	}
+
+	IPADBG("Creating NAT table\n")
+
 	ret = ipa_nati_create_table(
 		nat_cache_ptr,
 		nat_table,
@@ -1437,6 +1458,7 @@ int ipa_NATI_add_ipv4_tbl(
 	/*
 	 * Initialize the ipa hw with nat table dimensions
 	 */
+	IPADBG("post nati ipv4 init cmd\n");
 	ret = ipa_nati_post_ipv4_init_cmd(
 		nat_cache_ptr,
 		nat_table,
@@ -1500,7 +1522,13 @@ int ipa_NATI_del_ipv4_table(
 
 	int ret;
 
-	IPADBG("In\n");
+	IPADBG("handle %u\n", tbl_hdl);
+	if (!VALID_TBL_HDL(tbl_hdl))
+	{
+		IPAERR("Got invalid table handle %u\n", tbl_hdl);
+		ret = -EINVAL;
+		goto bail;
+	}
 
 	BREAK_TBL_HDL(tbl_hdl, nmi, tbl_hdl);
 
@@ -1512,9 +1540,18 @@ int ipa_NATI_del_ipv4_table(
 
 	IPADBG("nmi(%s)\n", ipa3_nat_mem_in_as_str(nmi));
 
-	nat_cache_ptr = &ipv4_nat_cache[nmi];
+	IPADBG("nmi %d\n", nmi);
 
-	nat_table = &nat_cache_ptr->ip4_tbl[tbl_hdl - 1];
+	nat_cache_ptr = &ipv4_nat_cache[nmi];
+	if(nat_cache_ptr)
+		nat_table = &nat_cache_ptr->ip4_tbl[tbl_hdl - 1];
+
+	if(!nat_table)
+	{
+		IPAERR("Nat table is NULL\n");
+		ret = -EINVAL;
+		goto bail;
+	}
 
 	if (pthread_mutex_lock(&nat_mutex)) {
 		IPAERR("unable to lock the nat mutex\n");

@@ -27,9 +27,10 @@ OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
 IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 Changes from Qualcomm Innovation Center are provided under the following license:
-Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+Copyright (c) 2023-2024 Qualcomm Innovation Center, Inc. All rights reserved.
 SPDX-License-Identifier: BSD-3-Clause-Clear
 */
+
 /*!
 	@file
 	IPA_Netlink.h
@@ -43,6 +44,10 @@ SPDX-License-Identifier: BSD-3-Clause-Clear
 */
 #ifndef IPACM_NETLINK_H
 #define IPACM_NETLINK_H
+
+#ifdef GLIB_VER_2_72_3
+#include "IPACM_Defs.h"
+#endif
 
 #ifdef __cplusplus
 extern "C"
@@ -60,7 +65,9 @@ extern "C"
 #include <linux/rtnetlink.h>
 #include <linux/netlink.h>
 #include <netinet/in.h>
+#ifndef GLIB_VER_2_72_3
 #include "IPACM_Defs.h"
+#endif
 
 #define MAX_NUM_OF_FD 10
 #define IPA_NL_MSG_MAX_LEN (2048)

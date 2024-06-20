@@ -271,6 +271,9 @@ void IPACM_Wlan::event_callback(ipa_cm_event_id event, void *param)
 	uint8_t mux_id;
 	uint8_t dscp_val;
 #endif
+#ifdef FEATURE_IPA_IPSEC
+	struct ipa_ioc_ipsec_ul_flt_attr *uf;
+#endif
 
 	switch (event)
 	{
@@ -1769,6 +1772,26 @@ end:
 		}
 	}
 	break;
+#endif
+
+#ifdef FEATURE_IPA_IPSEC
+	case IPA_HANDLE_IPSEC_UL_FLT_ADD:
+		IPACMDBG_H("Received and will process IPA_HANDLE_IPSEC_UL_FLT_ADD\n");
+		uf = (ipa_ioc_ipsec_ul_flt_attr *)param;
+
+		if(handleIpsecUlFltAddEvt(uf) == IPACM_FAILURE)
+			IPACMERR("failed adding IPsec UL filtering rule\n");
+
+		break;
+
+	case IPA_HANDLE_IPSEC_UL_FLT_DEL:
+		IPACMDBG_H("Received and will process IPA_HANDLE_IPSEC_UL_FLT_DEL\n");
+		uf = (ipa_ioc_ipsec_ul_flt_attr *)param;
+
+		if(handleIpsecUlFltDelEvt(uf) == IPACM_FAILURE)
+			IPACMERR("failed deleting IPsec UL filtering rule\n");
+
+		break;
 #endif
 
 	default:

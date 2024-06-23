@@ -72,6 +72,7 @@ IPACM_Neighbor::IPACM_Neighbor()
 	IPACM_EvtDispatcher::registr(IPA_ADD_BRIDGE_VLAN_PHY_INTF, this);
 	IPACM_EvtDispatcher::registr(IPA_ADD_BRIDGE_VLAN_BR_INTF, this);
 	IPACM_EvtDispatcher::registr(IPA_USB_LINK_UP_EVENT, this);
+	IPACM_EvtDispatcher::registr(IPA_CLEAN_NEIGHBOR_CACHE, this);
 
 	return;
 }
@@ -451,6 +452,14 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 					}
 				}
 			}
+		}
+		break;
+		case IPA_CLEAN_NEIGHBOR_CACHE:
+		{
+				IPACMDBG("Handling %s\n", IPACM_Iface::ipacmcfg->getEventName(IPA_CLEAN_NEIGHBOR_CACHE));
+				auto *data = (ipacm_event_data_all *)param;
+				IPACMDBG("data->iface_name: %s, data->if_index: %d\n", data->iface_name, data->if_index);
+				cleanCache(data->if_index);
 		}
 		break;
 		default:

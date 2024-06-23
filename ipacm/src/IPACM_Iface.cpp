@@ -340,12 +340,19 @@ fail:
 	return res;
 }
 
-/* Query ipa_interface_index by given linux interface_index */
-int IPACM_Iface::iface_ipa_index_query
-(
-	 int interface_index
-)
-{
+/**
+ * Get the stored data index inside the configuration table
+ * corresponding to a Linux interface index. Serach by Linux
+ * interface index first and in case it's not found, search by
+ * interface name. In case the interface is virtual (e.g. MACsec
+ * interface), use the physical device name for compariosion.
+ *
+ * @param interfaceIndex : Linux interface index
+ *
+ * @return int Index in the configuration table in case of success,
+ * INVALID_IFACE otherwise.
+ */
+int IPACM_Iface::iface_ipa_index_query(int interfaceIndex) {
 	int fd;
 	int link = INVALID_IFACE;
 	int i = 0;
@@ -353,47 +360,41 @@ int IPACM_Iface::iface_ipa_index_query
 	int str_idx = strlen(RMNET_IFACE_NAME); // points to X in qmapmuxX.Y in RDKB environment
 	char *move_pos = NULL;
 
-	if(IPACM_Iface::ipacmcfg->iface_table == NULL)
-	{
+
+	if (IPACM_Iface::ipacmcfg->iface_table == NULL) {
 		IPACMERR("Iface table in IPACM_Config is not available.\n");
 		return link;
 	}
-
-	/* Search known linux interface-index and map to IPA interface-index*/
-	for (i = 0; i < IPACM_Iface::ipacmcfg->ipa_num_ipa_interfaces; i++)
-	{
-		if (interface_index == IPACM_Iface::ipacmcfg->iface_table[i].netlink_interface_index)
-		{
+	/**
+	 * Search known linux interface-index and map to IPA
+	 * interface-index
+	 */
+	for (i = 0; i < IPACM_Iface::ipacmcfg->ipa_num_ipa_interfaces; i++) {
+		if (interfaceIndex == IPACM_Iface::ipacmcfg->iface_table[i].netlink_interface_index) {
 			link = i;
-			IPACMDBG_H("Interface (%s) found: linux(%d) ipa(%d) \n",
-							 IPACM_Iface::ipacmcfg->iface_table[i].iface_name,
-							 IPACM_Iface::ipacmcfg->iface_table[i].netlink_interface_index,
-							 link);
+			IPACMDBG("Interface (%s) found: linux(%d) ipa(%d) \n", IPACM_Iface::ipacmcfg->iface_table[i].iface_name,
+				IPACM_Iface::ipacmcfg->iface_table[i].netlink_interface_index, link);
 			return link;
 			break;
 		}
 	}
-
-	/* Search/Configure linux interface-index and map it to IPA interface-index */
-	if ((fd = socket(AF_INET, SOCK_DGRAM, 0)) < 0)
-	{
+	/**
+	 * Search/Configure linux interface-index and map it to IPA
+	 * interface-index
+	 */
+	if ((fd = socket(AF_INET, SOCK_DGRAM, 0)) < 0) {
 		PERROR("get interface name socket create failed");
 		return IPACM_FAILURE;
 	}
-
 	memset(&ifr, 0, sizeof(struct ifreq));
-
-	ifr.ifr_ifindex = interface_index;
-	IPACMDBG_H("Interface index %d\n", interface_index);
-
-	if (ioctl(fd, SIOCGIFNAME, &ifr) < 0)
-	{
+	ifr.ifr_ifindex = interfaceIndex;
+	IPACMDBG_H("Interface index %d\n", interfaceIndex);
+	if (ioctl(fd, SIOCGIFNAME, &ifr) < 0) {
 		PERROR("call_ioctl_on_dev: ioctl failed:");
 		close(fd);
 		return IPACM_FAILURE;
 	}
 	close(fd);
-
 	IPACMDBG_H("Received interface name %s\n", ifr.ifr_name);
 	move_pos = strchr(ifr.ifr_name, '.');
 
@@ -406,18 +407,23 @@ int IPACM_Iface::iface_ipa_index_query
 	}
 #endif
 
-	for (i = 0; i < IPACM_Iface::ipacmcfg->ipa_num_ipa_interfaces; i++)
-	{
-		if (strncmp(ifr.ifr_name,
-								IPACM_Iface::ipacmcfg->iface_table[i].iface_name,
-								sizeof(IPACM_Iface::ipacmcfg->iface_table[i].iface_name)) == 0)
-		{
+	for (i = 0; i < IPACM_Iface::ipacmcfg->ipa_num_ipa_interfaces; i++) {
+		if (strncmp(ifr.ifr_name, IPACM_Iface::ipacmcfg->iface_table[i].iface_name,
+			sizeof(IPACM_Iface::ipacmcfg->iface_table[i].iface_name)) == 0) {
 			IPACMDBG_H("Interface (%s) linux(%d) mapped to ipa(%d) \n", ifr.ifr_name,
-							 IPACM_Iface::ipacmcfg->iface_table[i].netlink_interface_index, i);
-
+				IPACM_Iface::ipacmcfg->iface_table[i].netlink_interface_index, i);
 			link = i;
-			IPACM_Iface::ipacmcfg->iface_table[i].netlink_interface_index = interface_index;
+			IPACM_Iface::ipacmcfg->iface_table[i].netlink_interface_index = interfaceIndex;
 			break;
+		}
+		if (IPACM_Iface::ipacmcfg->iface_table[i].virtual_iface &&
+		    strncmp(ifr.ifr_name, IPACM_Iface::ipacmcfg->iface_table[i].phy_dev_name,
+			sizeof(IPACM_Iface::ipacmcfg->iface_table[i].phy_dev_name)) == 0) {
+			IPACMDBG_H("Linux interface name:%s,index:%d is the lower interface of the MACsec interface name:%s, insed:%d which"
+				" is stored in index %d in IPACM_Iface::ipacmcfg->iface_table\n", ifr.ifr_name, interfaceIndex,
+				IPACM_Iface::ipacmcfg->iface_table[i].iface_name,
+				IPACM_Iface::ipacmcfg->iface_table[i].netlink_interface_index, i);
+			return i;
 		}
 	}
 

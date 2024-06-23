@@ -841,10 +841,13 @@ static int ipa_nl_decode_nlmsg
 				}
 
 				if (msg_ptr->nl_link_info.link_type == IPA_LINK_TYPE_MACSEC) {
+					IPACMDBG("macsec_name=%s, phy_name=%s\n", macsec_map.macsec_name, macsec_map.phy_name);
 					strlcpy(macsec_map.macsec_name, msg_ptr->nl_link_info.name, sizeof(macsec_map.macsec_name));
 					if (get_macsec_lower_interface_name(&macsec_map, master_dev_name) != IPACM_SUCCESS)
 						return IPACM_FAILURE;
 					strlcpy(macsec_map.phy_name, master_dev_name, sizeof(macsec_map.phy_name));
+					IPACMDBG("After assigning to macsec map: macsec_name=%s, phy_name=%s\n", macsec_map.macsec_name,
+						macsec_map.phy_name);
 					if (IPACM_Iface::ipacmcfg->insertOrAssignMacsecMap(&macsec_map)) {
 						evt_data.event = IPA_HANDLE_MACSEC_ADD;
 						macsec_map_data = static_cast<decltype(macsec_map_data)>(malloc(sizeof(*macsec_map_data)));
@@ -853,6 +856,7 @@ static int ipa_nl_decode_nlmsg
 							return IPACM_FAILURE;
 						}
 						memcpy(macsec_map_data, &macsec_map, sizeof(macsec_map));
+						IPACMDBG("macsec_map_data->macsec_name=%s, macsec_map_data->phy_name=%s\n", macsec_map_data->macsec_name, macsec_map_data->phy_name);
 						evt_data.evt_data = macsec_map_data;
 						IPACM_EvtDispatcher::PostEvt(&evt_data);
 					}
@@ -1035,8 +1039,18 @@ static int ipa_nl_decode_nlmsg
 					vlan_info.vlan_interface_index = msg_ptr->nl_link_info.metainfo.ifi_index;
 				}
 
-				if(msg_ptr->nl_link_info.link_type == IPA_LINK_TYPE_VLAN)
+				if(msg_ptr->nl_link_info.link_type == IPA_LINK_TYPE_VLAN) {
+					data_all = (ipacm_event_data_all *)malloc(sizeof(*data_all));
+					if (!data_all) {
+						IPACMERR("malloc failed\n");
+						return IPACM_FAILURE;
+					}
+					data_all->if_index = msg_ptr->nl_link_info.metainfo.ifi_index;
+					evt_data.evt_data = data_all;
+					evt_data.event = IPA_CLEAN_NEIGHBOR_CACHE;
+					IPACM_EvtDispatcher::PostEvt(&evt_data);
 					IPACM_Iface::ipacmcfg->del_vlan_iface(&vlan_info);
+				}
 				if (msg_ptr->nl_link_info.link_type == IPA_LINK_TYPE_MACSEC) {
 					if (!IPACM_Iface::ipacmcfg->getMacsecMapping(msg_ptr->nl_link_info.metainfo.ifi_index,
 						&macsec_map))

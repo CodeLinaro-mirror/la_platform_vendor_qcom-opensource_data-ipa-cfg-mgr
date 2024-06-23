@@ -44,6 +44,7 @@ SPDX-License-Identifier: BSD-3-Clause-Clear
 #ifndef IPACM_NEIGHBOR_H
 #define IPACM_NEIGHBOR_H
 
+#include <string>
 #include <stdio.h>
 #include <IPACM_CmdQueue.h>
 #include <linux/msm_ipa.h>
@@ -51,6 +52,10 @@ SPDX-License-Identifier: BSD-3-Clause-Clear
 #include "IPACM_Filtering.h"
 #include "IPACM_Listener.h"
 #include "IPACM_Iface.h"
+
+
+using std::string;
+
 
 #define IPA_MAX_NUM_NEIGHBOR_CLIENTS  400
 
@@ -83,6 +88,58 @@ public:
 	int parse_bridge_info(int index, struct ipa_bridge_vlan_mapping_info *data);
         int parse_bridge_name(int index, struct ipa_bridge_vlan_mapping_info *data);
 private:
+
+	/**
+	 * Convert IPv4 integer value to a string inreadable format.
+	 *
+	 * @param ip     IPv4 address
+	 *
+	 * @return string IPv4 in a readable format
+	 */
+	static string expandIpv4(unsigned int ip) {
+		string ipString = std::to_string((ip >> 24u) & 0xffu);
+		ipString += "." + std::to_string((ip >> 16u) & 0xfu);
+		ipString += "." + std::to_string((ip >> 8u) & 0xffu);
+		ipString += "." + std::to_string(ip & 0xffu);
+		return ipString;
+	}
+	/**
+	 * Clean neighbor client information cached corresponding to a
+	 * Linux interface index.
+	 *
+	 * @param interfaceIndex Linux interface index of the client to
+	 *      		 be cleaned from cache
+	 */
+	void cleanCache(const uint8_t interfaceIndex) {
+		ipacm_event_data_all *eventData = nullptr;
+		ipacm_cmd_q_data eventsQItem;
+
+		IPACMDBG("interfaceIndex = %d\n", interfaceIndex);
+		for (int i = 0; i < num_neighbor_client; i++) {
+			IPACMERR("iface_name = %s, iface_index = %d, v4_addr = %s, ipa_if_num = %d\n", neighbor_client[i].iface_name,
+				neighbor_client[i].iface_index, expandIpv4(neighbor_client[i].v4_addr).c_str(),
+				neighbor_client[i].ipa_if_num);
+			if (neighbor_client[i].iface_index == interfaceIndex) {
+				eventData = (ipacm_event_data_all *)malloc(sizeof(*eventData));
+				if (!eventData) {
+					IPACMERR("malloc failed: i = %d\n", i);
+					return;
+				}
+				memset(eventData, 0, sizeof(*eventData));
+				memcpy(eventData->mac_addr, neighbor_client[i].mac_addr, sizeof(eventData->mac_addr));
+				eventData->if_index = neighbor_client[i].iface_index;
+				strlcpy(eventData->iface_name, neighbor_client[i].iface_name, sizeof(eventData->iface_name));
+				if (neighbor_client[i].v4_addr) {
+					eventData->iptype = IPA_IP_v4;
+					eventData->ipv4_addr = neighbor_client[i].v4_addr;
+				}
+				eventsQItem.event = IPA_DEL_NEIGH_EVENT;
+				eventsQItem.evt_data = eventData;
+				IPACMERR("Posting %s\n", IPACM_Iface::ipacmcfg->getEventName(eventsQItem.event));
+				IPACM_EvtDispatcher::PostEvt(&eventsQItem);
+			}
+		}
+	}
 
 	int num_neighbor_client;
 

@@ -350,8 +350,8 @@
 			<VLAN_interface>eth1</VLAN_interface>
 			<VLAN_bridge>bridge1</VLAN_bridge>
 			<VLAN_bridge_subnet>255.255.255.0</VLAN_bridge_subnet>
-			<Exception_ip_address>195.3.85.241</Exception_ip_address>
-			<Exception_ip_address_mask>255.255.255.255</Exception_ip_address_mask>
+			<Alias_ip_address>195.3.85.241</Alias_ip_address>
+			<Alias_ip_address_mask>255.255.255.255</Alias_ip_address_mask>
 		</PrivateIPForwarding>
 		<IPACMPrivateSubnet>
 			<Subnet>

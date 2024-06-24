@@ -443,7 +443,7 @@ static int ipacm_cfg_xml_parse_tree
 					}
 				}
 				/* Dst Ip address not to offload*/
-				else if (IPACM_util_icmp_string((char*)xml_node->name, Exception_Ip_Address_TAG) == 0)
+				else if (IPACM_util_icmp_string((char*)xml_node->name, Alias_Ip_Address_TAG) == 0)
 				{
 					content = IPACM_read_content_element(xml_node);
 					if (content)
@@ -457,7 +457,7 @@ static int ipacm_cfg_xml_parse_tree
 						IPACMDBG_H("Src IP for exception path: %s \n", content_buf);
 					}
 				}
-				else if (IPACM_util_icmp_string((char*)xml_node->name, Exception_Ip_AddrMask_TAG) == 0)
+				else if (IPACM_util_icmp_string((char*)xml_node->name, Alias_Ip_AddrMask_TAG) == 0)
 				{
 					content = IPACM_read_content_element(xml_node);
 					if (content)

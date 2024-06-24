@@ -280,7 +280,8 @@ if (!(a)) {                                                 \
 #define VLAN_Interface_TAG                   "VLAN_interface"
 #define VLAN_Bridge_TAG                      "VLAN_bridge"
 #define VLAN_Bridge_subnet_TAG               "VLAN_bridge_subnet"
-
+#define Exception_Ip_Address_TAG             "Exception_ip_address"
+#define Exception_Ip_AddrMask_TAG            "Exception_ip_address_mask"
 
 
 // Tunnel Config entries
@@ -415,6 +416,8 @@ typedef struct
 	char interface_name[IPA_IFACE_NAME_LEN];
 	char bridge_name[IPA_IFACE_NAME_LEN];
 	uint32_t bridge_net_mask;
+	uint32_t excep_ipv4_addr;
+	uint32_t excep_ipv4_addr_mask;
 } ipacm_private_ip_forward_conf_t;
 
 typedef struct  _IPACM_conf_t

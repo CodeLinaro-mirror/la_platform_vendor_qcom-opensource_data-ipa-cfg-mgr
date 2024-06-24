@@ -26,8 +26,8 @@ WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
 OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
 IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-* Changes from Qualcomm Innovation Center are provided under the following license:
-* Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+* Changes from Qualcomm Innovation Center, Inc. are provided under the following license:
+* Copyright (c) 2023-2024 Qualcomm Innovation Center, Inc. All rights reserved.
 * SPDX-License-Identifier: BSD-3-Clause-Clear.
 */
 
@@ -113,6 +113,12 @@ struct peer_iface_info
 	/* MAC addresses as key, ref count as value - counts clients with same mac but different vlan id - change on client add\del */
 	std::map<std::array<uint8_t, 6>, int > mac_rt_rule_ref;
 #endif
+};
+
+struct add_iface_mac {
+	uint8_t mac[6];
+	char iface_name[IPA_IFACE_NAME_LEN];
+	uint16_t vlan_id;
 };
 
 class IPACM_LanToLan_Iface
@@ -257,6 +263,9 @@ public:
 
 	static IPACM_LanToLan* p_instance;
 	static IPACM_LanToLan* get_instance();
+	void add_mac_addr(ipacm_event_eth_bridge *data);
+	void del_mac_addr(ipacm_event_eth_bridge *iface, bool iface_down = false);
+	char * handle_cached_client_get_iface(uint8_t *mac);
 #ifdef FEATURE_L2TP
 	bool has_l2tp_iface();
 #endif
@@ -272,6 +281,7 @@ private:
 	list<class IPACM_LanToLan_Iface> m_iface;
 
 	list<ipacm_event_eth_bridge> m_cached_client_add_event;
+	list<add_iface_mac> add_ifaces_mac;
 
 	void handle_iface_up(ipacm_event_eth_bridge *data);
 
@@ -279,7 +289,7 @@ private:
 
 	void handle_client_add(ipacm_event_eth_bridge *data);
 
-	void handle_client_del(ipacm_event_eth_bridge *data);
+	void handle_client_del(ipacm_event_eth_bridge *data, bool handle_client_del = false);
 
 	void handle_wlan_scc_mcc_switch(ipacm_event_eth_bridge *data);
 

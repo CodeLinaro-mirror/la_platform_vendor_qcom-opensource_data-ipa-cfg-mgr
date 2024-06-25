@@ -789,15 +789,21 @@ private:
 	int handle_refresh_filtering_rules(bool wlan_vlan_mpdn_enable = false);
 
 	int handle_wlan_qos_route_rule(uint8_t *client_mac, uint16_t vlan_id,
-		ipa_ip_type iptype, list<qos_param_info>::iterator qos_param);
+		ipa_ip_type iptype, list<qos_param_info>::iterator qos_param,
+		uint32_t *ipv6_addr = NULL);
 	int handle_wlan_qos_route_rule_ext_v2(uint8_t *client_mac, uint16_t vlan_id,
-		ipa_ip_type iptype, list<qos_param_info>::iterator qos_param);
+		ipa_ip_type iptype, list<qos_param_info>::iterator qos_param,
+		uint32_t *ipv6_addr = NULL);
 	int install_all_wlan_qos_route_rule(uint8_t * client_mac,
-		uint16_t vlan_id);
-	int if_wlan_client_qos_rule_needed(uint8_t *client_mac, uint16_t vlan_id, list<qos_param_info>::iterator qos_param);
-	int delete_wlan_client_qos_rule(uint8_t *client_mac, uint16_t vlan_id);
+		uint16_t vlan_id, uint32_t *ipv6_addr = NULL);
+	int if_wlan_client_qos_rule_needed(uint8_t *client_mac,
+		uint16_t vlan_id, list<qos_param_info>::iterator qos_param,
+		uint32_t *ipv6_addr = NULL);
+	int delete_wlan_client_qos_rule(uint8_t *client_mac, uint16_t vlan_id,
+		ipa_ip_type iptype, uint32_t *ipv6_addr = NULL);
 	int delete_wlan_client_info_from_qos(uint8_t *client_mac,
-		uint16_t vlan_id, list<qos_param_info>::iterator qos_param);
+		uint16_t vlan_id, list<qos_param_info>::iterator qos_param,
+		uint32_t *ipv6_addr = NULL);
 	int delete_all_wlan_client_qos_rules();
 	int delete_all_wlan_client_info_from_qos(
 		list<qos_param_info>::iterator qos_param);

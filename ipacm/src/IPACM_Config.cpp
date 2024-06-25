@@ -1,9 +1,6 @@
 /*
  * Copyright (c) 2013-2021, The Linux Foundation. All rights reserved.
  *
- * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
- * SPDX-License-Identifier: BSD-3-Clause-Clear
- *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
  * met:
@@ -28,6 +25,10 @@
  * WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *
+ * Changes from Qualcomm Technologies, Inc. are provided under the following license:
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 /*!
 		@file
@@ -802,6 +803,7 @@ skip_fnr_alloc:
 	m_vlan_iface.clear();
 #ifdef FEATURE_L2TP
 	m_l2tp_vlan_mapping.clear();
+	l2tp_session_gw_info.clear();
 	l2tp_client.clear();
 #endif //#ifdef FEATURE_L2TP
 #endif //defined(FEATURE_L2TP) || defined(FEATURE_VLAN_MPDN)
@@ -1983,7 +1985,6 @@ void IPACM_Config::del_vlan_iface(ipa_vlan_iface_info *data)
 void IPACM_Config::handle_vlan_iface_info(ipacm_event_data_addr *data)
 {
 	list<vlan_iface_info>::iterator it_vlan;
-
 	if(pthread_mutex_lock(&vlan_l2tp_lock) != 0)
 	{
 		IPACMERR("Unable to lock the mutex\n");
@@ -2032,10 +2033,143 @@ void IPACM_Config::handle_vlan_iface_info(ipacm_event_data_addr *data)
 	return;
 }
 
-void IPACM_Config::handle_vlan_client_info(ipacm_event_data_all *data)
+void IPACM_Config::del_l2tp_client_gw_info(ipacm_event_data_all *data, uint32_t *l2tp_gw_addr)
+{
+	list<l2tp_client_gw_info>::iterator it_l2tp_gw;
+
+	if(data == NULL || l2tp_gw_addr == NULL)
+	{
+		IPACMERR("Not valid GW info recieved\n");
+		return;
+	}
+	if(pthread_mutex_lock(&vlan_l2tp_lock) != 0)
+	{
+		IPACMERR("Unable to lock the mutex\n");
+		return;
+	}
+
+	IPACMDBG_H("Incoming vlan client iface: %s IPv6 address: 0x%08x%08x%08x%08x\n", data->iface_name,
+		data->ipv6_addr[0], data->ipv6_addr[1], data->ipv6_addr[2], data->ipv6_addr[3]);
+
+	for(it_l2tp_gw = l2tp_session_gw_info.begin(); it_l2tp_gw != l2tp_session_gw_info.end(); it_l2tp_gw++)
+	{
+		if(!(memcmp(it_l2tp_gw->client_iface_name,data->iface_name,sizeof(data->iface_name))) &&
+		(!(memcmp(it_l2tp_gw->client_ipv6_addr, data->ipv6_addr, sizeof(data->ipv6_addr)))) &&
+		(!(memcmp(it_l2tp_gw->client_ipv6_gw_addr, l2tp_gw_addr, sizeof(it_l2tp_gw->client_ipv6_gw_addr)))))
+		{
+			IPACMDBG_H("GW info is clearing from the list\n");
+			l2tp_session_gw_info.erase(it_l2tp_gw);
+			pthread_mutex_unlock(&vlan_l2tp_lock);
+			return;
+		}
+	}
+	if(it_l2tp_gw == l2tp_session_gw_info.end())
+	{
+		IPACMERR("GW info is not present in list\n");
+	}
+	pthread_mutex_unlock(&vlan_l2tp_lock);
+	return;
+}
+
+void IPACM_Config::handle_l2tp_client_gw_info(ipacm_event_data_all *data, uint32_t *l2tp_gw_addr)
 {
 	list<l2tp_vlan_mapping_info>::iterator it_mapping;
 	list<vlan_iface_info>::iterator it_vlan;
+	list<l2tp_client_gw_info>::iterator it_l2tp_gw;
+	l2tp_client_gw_info new_mapping;
+	uint8_t mac_addr[6]={0}, peer_client_mac[6];
+	int i;
+	bool rt_info = false;
+
+	if(data == NULL || l2tp_gw_addr == NULL)
+	{
+		IPACMERR("Not valid GW info recieved\n");
+		return;
+	}
+	if(pthread_mutex_lock(&vlan_l2tp_lock) != 0)
+	{
+		IPACMERR("Unable to lock the mutex\n");
+		return;
+	}
+
+	memset(&peer_client_mac, 0, sizeof(peer_client_mac));
+	IPACMDBG_H("Incoming vlan client iface: %s IPv6 address: 0x%08x%08x%08x%08x\n", data->iface_name,
+		data->ipv6_addr[0], data->ipv6_addr[1], data->ipv6_addr[2], data->ipv6_addr[3]);
+
+	memset(&new_mapping, 0, sizeof(new_mapping));
+
+	for(it_l2tp_gw = l2tp_session_gw_info.begin(); it_l2tp_gw != l2tp_session_gw_info.end(); it_l2tp_gw++)
+	{
+		if(!(memcmp(it_l2tp_gw->client_iface_name,data->iface_name,sizeof(data->iface_name))) &&
+		(!(memcmp(it_l2tp_gw->client_ipv6_addr, data->ipv6_addr, sizeof(data->ipv6_addr)))) &&
+		(!(memcmp(it_l2tp_gw->client_ipv6_gw_addr, l2tp_gw_addr, sizeof(l2tp_gw_addr)))))
+		{
+			IPACMERR("Already GW info is updated\n");
+			pthread_mutex_unlock(&vlan_l2tp_lock);
+			return;
+		}
+	}
+	if(it_l2tp_gw == l2tp_session_gw_info.end())
+	{
+		memcpy(&new_mapping.client_iface_name,data->iface_name,sizeof(data->iface_name));
+		memcpy(&new_mapping.client_ipv6_addr, data->ipv6_addr, sizeof(data->ipv6_addr));
+		memcpy(&new_mapping.client_ipv6_gw_addr, l2tp_gw_addr, sizeof(it_l2tp_gw->client_ipv6_gw_addr));
+		memset(&new_mapping.client_mac, 0, sizeof(new_mapping.client_mac));
+		IPACMDBG_H("Added valid GW info to list\n");
+	}
+
+	for(it_vlan = m_vlan_iface.begin(); it_vlan != m_vlan_iface.end(); it_vlan++)
+	{
+		if(strncmp(it_vlan->vlan_iface_name, data->iface_name, sizeof(it_vlan->vlan_iface_name)) == 0)
+		{
+			for(i = 0 ; i < IPA_MAX_NUM_PEER_ULA; i++)
+			{
+				/* checking if neigh is already populated with peer client gw */
+				if(memcmp(it_vlan->vlan_client_ipv6_addr[i], l2tp_gw_addr, sizeof(data->ipv6_addr)) == 0)
+				{
+					IPACMDBG_H("neigh is populated for peer neighour\n");
+					memcpy(&peer_client_mac, &it_vlan->vlan_client_mac[i], sizeof(mac_addr));
+					rt_info = true;
+					break;
+				}
+			}
+		}
+	}
+	if((rt_info == false && ((memcmp(&peer_client_mac, &mac_addr, sizeof(peer_client_mac)) == 0) || (it_vlan == m_vlan_iface.end()))))
+	{
+		IPACMERR("neigh is not populated for peer neighour\n");
+		goto end;
+	}
+	else
+	{
+		IPACMDBG("updated peer neighour mac %x:%x:%x:%x:%x:%x\n", peer_client_mac[0], peer_client_mac[1], peer_client_mac[2],
+			peer_client_mac[3], peer_client_mac[4], peer_client_mac[5]);
+		memcpy(&new_mapping.client_mac, &peer_client_mac, sizeof(peer_client_mac));
+	}
+
+	if ((ipacm_l2tp_enable == IPACM_L2TP) || (ipacm_l2tp_enable == IPACM_L2TP_E2E))
+	{
+		for(it_mapping = m_l2tp_vlan_mapping.begin(); it_mapping != m_l2tp_vlan_mapping.end(); it_mapping++)
+		{
+			/* checking if l2tp client addr and gw client addr matching or not to update mac */
+			if((strncmp(it_mapping->vlan_iface_name, data->iface_name, sizeof(it_mapping->vlan_iface_name)) == 0) &&
+			(!memcmp(it_mapping->vlan_client_ipv6_addr, data->ipv6_addr, sizeof(it_mapping->vlan_client_ipv6_addr))))
+			{
+				IPACMDBG_H("tunnel gateway ip and neigh mac is added\n");
+				memcpy(it_mapping->vlan_client_ipv6_gw_addr, l2tp_gw_addr, sizeof(it_mapping->vlan_client_ipv6_gw_addr));
+				memcpy(it_mapping->vlan_client_mac, &peer_client_mac, sizeof(it_mapping->vlan_client_mac));
+			}
+		}
+	}
+end:
+	l2tp_session_gw_info.push_front(new_mapping);
+	pthread_mutex_unlock(&vlan_l2tp_lock);
+}
+
+void IPACM_Config::del_l2tp_vlan_client_info(ipacm_event_data_all *data)
+{
+	list<vlan_iface_info>::iterator it_vlan;
+	int i;
 
 	if(pthread_mutex_lock(&vlan_l2tp_lock) != 0)
 	{
@@ -2047,24 +2181,105 @@ void IPACM_Config::handle_vlan_client_info(ipacm_event_data_all *data)
 		data->ipv6_addr[0], data->ipv6_addr[1], data->ipv6_addr[2], data->ipv6_addr[3]);
 	IPACMDBG_H("MAC address: 0x%02x::%02x::%02x::%02x::%02x::%02x\n", data->mac_addr[0], data->mac_addr[1],
 		data->mac_addr[2], data->mac_addr[3], data->mac_addr[4], data->mac_addr[5]);
-
 	for(it_vlan = m_vlan_iface.begin(); it_vlan != m_vlan_iface.end(); it_vlan++)
 	{
 		if(it_vlan->vlan_interface_index == data->if_index)
 		{
-			IPACMDBG_H("Found vlan iface in vlan list: %s\n", it_vlan->vlan_iface_name);
-			if(it_vlan->vlan_client_ipv6_addr[0] > 0 || it_vlan->vlan_client_ipv6_addr[1] > 0 ||
-				it_vlan->vlan_client_ipv6_addr[2] > 0 || it_vlan->vlan_client_ipv6_addr[3] > 0)
+			for(i = 0 ; i < IPA_MAX_NUM_PEER_ULA; i++)
 			{
-				IPACMDBG_H("Vlan client info has been populated before, return.\n");
-				pthread_mutex_unlock(&vlan_l2tp_lock);
-				return;
+				if(memcmp(it_vlan->vlan_client_ipv6_addr[i], data->ipv6_addr, sizeof(data->ipv6_addr)) == 0 &&
+				memcmp(it_vlan->vlan_client_mac[i], data->mac_addr, sizeof(data->mac_addr)) == 0)
+				{
+					IPACMDBG_H("Vlan client info found clearing the info\n");
+					memset(it_vlan->vlan_client_mac[i], 0 , sizeof(data->mac_addr));
+					memset(it_vlan->vlan_client_ipv6_addr[i], 0 , sizeof(it_vlan->vlan_client_ipv6_addr[i]));
+					pthread_mutex_unlock(&vlan_l2tp_lock);
+					return;
+				}
+
 			}
-			memcpy(it_vlan->vlan_client_mac, data->mac_addr, sizeof(it_vlan->vlan_client_mac));
-			memcpy(it_vlan->vlan_client_ipv6_addr, data->ipv6_addr, sizeof(it_vlan->vlan_client_ipv6_addr));
-			break;
+			/* updating new vlan info to the list */
+			if(i == IPA_MAX_NUM_PEER_ULA)
+			{
+				IPACMDBG_H("no Vlan client info found to clear the info\n");
+				break;
+			}
 		}
 	}
+	pthread_mutex_unlock(&vlan_l2tp_lock);
+	return;
+}
+
+void IPACM_Config::handle_vlan_client_info(ipacm_event_data_all *data)
+{
+	list<l2tp_vlan_mapping_info>::iterator it_mapping;
+	list<vlan_iface_info>::iterator it_vlan;
+	list<l2tp_client_gw_info>::iterator it_l2tp_gw;
+	uint8_t mac_addr[6]={0};
+	int i, index = IPA_MAX_NUM_PEER_ULA;
+	bool update_free_index = false;
+
+	if(pthread_mutex_lock(&vlan_l2tp_lock) != 0)
+	{
+		IPACMERR("Unable to lock the mutex\n");
+		return;
+	}
+
+	IPACMDBG_H("Incoming vlan client iface: %s IPv6 address: 0x%08x%08x%08x%08x\n", data->iface_name,
+		data->ipv6_addr[0], data->ipv6_addr[1], data->ipv6_addr[2], data->ipv6_addr[3]);
+	IPACMDBG_H("MAC address: 0x%02x::%02x::%02x::%02x::%02x::%02x\n", data->mac_addr[0], data->mac_addr[1],
+		data->mac_addr[2], data->mac_addr[3], data->mac_addr[4], data->mac_addr[5]);
+	for(it_vlan = m_vlan_iface.begin(); it_vlan != m_vlan_iface.end(); it_vlan++)
+	{
+		if(strncmp(it_vlan->vlan_iface_name, data->iface_name, sizeof(it_vlan->vlan_iface_name)) == 0)
+		{
+			for(i = 0 ; i < IPA_MAX_NUM_PEER_ULA; i++)
+			{
+				if(memcmp(it_vlan->vlan_client_ipv6_addr[i], data->ipv6_addr, sizeof(data->ipv6_addr)) == 0 &&
+				memcmp(it_vlan->vlan_client_mac[i], data->mac_addr, sizeof(data->mac_addr)) == 0)
+				{
+					IPACMDBG_H("Vlan client info has been populated before, return.\n");
+					pthread_mutex_unlock(&vlan_l2tp_lock);
+					return;
+				}
+				else if(it_vlan->vlan_client_ipv6_addr[i][0] == 0 && it_vlan->vlan_client_ipv6_addr[i][1] == 0 && !update_free_index)
+				{
+					update_free_index = true;
+					index = i;
+				}
+			}
+			/* updating new vlan info to the list */
+			if(index != IPA_MAX_NUM_PEER_ULA && update_free_index)
+			{
+				memcpy(&it_vlan->vlan_client_mac[index], data->mac_addr, sizeof(it_vlan->vlan_client_mac));
+				memcpy(&it_vlan->vlan_client_ipv6_addr[index], data->ipv6_addr, sizeof(it_vlan->vlan_client_ipv6_addr));
+				break;
+			}
+		}
+	}
+
+	for(it_l2tp_gw = l2tp_session_gw_info.begin(); it_l2tp_gw != l2tp_session_gw_info.end(); it_l2tp_gw++)
+	{
+
+		IPACMDBG_H("GW vlan client iface: %s GW IPv6 address: 0x%08x%08x%08x%08x\n", it_l2tp_gw->client_iface_name,
+		it_l2tp_gw->client_ipv6_gw_addr[0], it_l2tp_gw->client_ipv6_gw_addr[1], it_l2tp_gw->client_ipv6_gw_addr[2], it_l2tp_gw->client_ipv6_gw_addr[3]);
+		/* checking if gw is populated or not, if populated updating mac to gw list */
+		if(!(memcmp(it_l2tp_gw->client_iface_name, data->iface_name,sizeof(data->iface_name))) &&
+		(!(memcmp(it_l2tp_gw->client_ipv6_gw_addr, data->ipv6_addr, sizeof(data->ipv6_addr)))))
+		{
+			if(memcmp(mac_addr, it_l2tp_gw->client_mac, sizeof(it_l2tp_gw->client_mac)) == 0)
+			{
+				IPACMDBG_H("Already GW info is updated , now mac is updating\n");
+				memcpy(it_l2tp_gw->client_mac, data->mac_addr, sizeof(it_mapping->vlan_client_mac));
+				break;
+			}
+		}
+	}
+	if(it_l2tp_gw == l2tp_session_gw_info.end())
+	{
+		IPACMERR("GW info is not populated\n");
+	}
+
 #ifdef FEATURE_L2TP
 	if ((ipacm_l2tp_enable == IPACM_L2TP) || (ipacm_l2tp_enable == IPACM_L2TP_E2E))
 	{
@@ -2075,7 +2290,6 @@ void IPACM_Config::handle_vlan_client_info(ipacm_event_data_all *data)
 				IPACMDBG_H("Found vlan iface in l2tp mapping list: %s, l2tp iface: %s\n", it_mapping->vlan_iface_name,
 					it_mapping->l2tp_iface_name);
 				memcpy(it_mapping->vlan_client_mac, data->mac_addr, sizeof(it_mapping->vlan_client_mac));
-				memcpy(it_mapping->vlan_client_ipv6_addr, data->ipv6_addr, sizeof(it_mapping->vlan_client_ipv6_addr));
 			}
 		}
 	}
@@ -2500,7 +2714,11 @@ void IPACM_Config::add_l2tp_vlan_mapping(l2tp_session_info *data)
 	list<vlan_iface_info>::iterator it_vlan;
 	list<l2tp_tunnel_info>::iterator it_tunnel;
 	l2tp_vlan_mapping_info new_mapping;
-
+	list<l2tp_client_gw_info>::iterator it_l2tp_gw;
+	uint8_t mac_addr[6];
+	uint32_t l2tp_ipv6_addr[4];
+	int i = 0;
+	memset(mac_addr,0,sizeof(mac_addr));
 	if(pthread_mutex_lock(&vlan_l2tp_lock) != 0)
 	{
 		IPACMERR("Unable to lock the mutex\n");
@@ -2534,6 +2752,22 @@ void IPACM_Config::add_l2tp_vlan_mapping(l2tp_session_info *data)
 			it_vlan->vlan_iface_ipv6_addr[3] == it_tunnel->src_ipv6_addr[3])
 		{
 			IPACMDBG_H("Found vlan iface with id %d\n", it_vlan->vlan_id);
+			for(i = 0 ; i < IPA_MAX_NUM_PEER_ULA; i++)
+			{
+				if((memcmp(mac_addr, it_vlan->vlan_client_mac[i], sizeof(it_vlan->vlan_client_mac[i])) != 0) &&
+					(it_vlan->vlan_client_ipv6_addr[i][0] != 0) &&
+					(it_vlan->vlan_client_ipv6_addr[i][1] != 0) &&
+					(it_vlan->vlan_client_ipv6_addr[i][2] != 0) &&
+					(it_vlan->vlan_client_ipv6_addr[i][3] != 0))
+				{
+					break;
+				}
+			}
+			if( i == IPA_MAX_NUM_PEER_ULA)
+			{
+				// No client found in list assign first one
+				i = 0;
+			}
 			break;
 		}
 	}
@@ -2567,7 +2801,7 @@ void IPACM_Config::add_l2tp_vlan_mapping(l2tp_session_info *data)
 					strlcpy(it_mapping->vlan_iface_name, it_vlan->vlan_iface_name, 
 							sizeof(it_mapping->vlan_iface_name));
 					it_mapping->vlan_id = it_vlan->vlan_id;
-					memcpy(it_mapping->vlan_client_mac, it_vlan->vlan_client_mac,
+					memcpy(it_mapping->vlan_client_mac, it_vlan->vlan_client_mac[i],
 							sizeof(it_mapping->vlan_client_mac));
 				}
 				memcpy(it_mapping->vlan_client_ipv6_addr, it_tunnel->dst_ipv6_addr,
@@ -2575,6 +2809,28 @@ void IPACM_Config::add_l2tp_vlan_mapping(l2tp_session_info *data)
 				it_mapping->is_session_info_updated = true;
 				num_ipa_l2tp_session++;
 				IPACMDBG_H("Now num l2tp sessions are %d\n", num_ipa_l2tp_session);
+				for(it_l2tp_gw = l2tp_session_gw_info.begin(); it_l2tp_gw != l2tp_session_gw_info.end(); it_l2tp_gw++)
+				{
+					IPACMDBG_H("Route IPv6 address:0x%08x%08x%08x%08x\n", it_l2tp_gw->client_ipv6_gw_addr[0],it_l2tp_gw->client_ipv6_gw_addr[1], it_l2tp_gw->client_ipv6_gw_addr[2],it_l2tp_gw->client_ipv6_gw_addr[3]);
+					IPACMDBG_H("client IPv6 address:0x%08x%08x%08x%08x\n", it_l2tp_gw->client_ipv6_addr[0],it_l2tp_gw->client_ipv6_addr[1], it_l2tp_gw->client_ipv6_addr[2],it_l2tp_gw->client_ipv6_addr[3]);
+					/* comparing l2tp session peer address is matching with route peer address */
+					if(!(memcmp(it_l2tp_gw->client_iface_name, data->l2tp_iface_name, sizeof(IPA_IFACE_NAME_LEN))) &&
+					(!(memcmp(it_l2tp_gw->client_ipv6_addr, it_mapping->vlan_client_ipv6_addr, sizeof(it_l2tp_gw->client_ipv6_addr)))))
+					{
+						IPACMDBG_H("comparing GW and mac info is updating or not\n");
+						if(memcmp(it_l2tp_gw->client_mac, &mac_addr, sizeof(mac_addr)) != 0)
+						{
+							IPACMDBG_H("updating GW and mac info is updating\n");
+							memcpy(it_mapping->vlan_client_mac, it_l2tp_gw->client_mac, sizeof(it_mapping->vlan_client_mac));
+							memcpy(it_mapping->vlan_client_ipv6_gw_addr, it_l2tp_gw->client_ipv6_gw_addr, sizeof(it_mapping->vlan_client_ipv6_gw_addr));
+							break;
+																							                 }
+					}
+					if(it_l2tp_gw == l2tp_session_gw_info.end())
+					{
+						IPACMERR("GW info is not populated\n");
+					}
+				}
 			}
 			pthread_mutex_unlock(&vlan_l2tp_lock);
 			return;
@@ -2597,7 +2853,7 @@ void IPACM_Config::add_l2tp_vlan_mapping(l2tp_session_info *data)
 		strlcpy(new_mapping.vlan_iface_name, it_vlan->vlan_iface_name,
 			sizeof(new_mapping.vlan_iface_name));
 		new_mapping.vlan_id = it_vlan->vlan_id;
-		memcpy(new_mapping.vlan_client_mac, it_vlan->vlan_client_mac,
+		memcpy(new_mapping.vlan_client_mac, it_vlan->vlan_client_mac[i],
 					sizeof(new_mapping.vlan_client_mac));
 	}
 	memcpy(new_mapping.vlan_client_ipv6_addr, it_tunnel->dst_ipv6_addr,
@@ -2613,6 +2869,32 @@ void IPACM_Config::add_l2tp_vlan_mapping(l2tp_session_info *data)
 	}
 #endif
 	new_mapping.is_session_info_updated = true;
+
+	for(it_l2tp_gw = l2tp_session_gw_info.begin(); it_l2tp_gw != l2tp_session_gw_info.end(); it_l2tp_gw++)
+	{
+		IPACMDBG_H("Route IPv6 address:0x%08x%08x%08x%08x\n", it_l2tp_gw->client_ipv6_gw_addr[0],it_l2tp_gw->client_ipv6_gw_addr[1], it_l2tp_gw->client_ipv6_gw_addr[2],it_l2tp_gw->client_ipv6_gw_addr[3]);
+		IPACMDBG_H("client IPv6 address:0x%08x%08x%08x%08x\n", it_l2tp_gw->client_ipv6_addr[0],it_l2tp_gw->client_ipv6_addr[1], it_l2tp_gw->client_ipv6_addr[2],it_l2tp_gw->client_ipv6_addr[3]);
+		/* comparing l2tp session peer address is matching with route peer address */
+		if(!(memcmp(it_l2tp_gw->client_iface_name, data->l2tp_iface_name, sizeof(IPA_IFACE_NAME_LEN))) &&
+		(!(memcmp(it_l2tp_gw->client_ipv6_addr, new_mapping.vlan_client_ipv6_addr, sizeof(it_l2tp_gw->client_ipv6_addr)))))
+		{
+			IPACMDBG_H("comparing GW and mac info is updating or not\n");
+
+			if(memcmp(it_l2tp_gw->client_mac, &mac_addr, sizeof(mac_addr)) != 0)
+			{
+
+				IPACMDBG_H("updating GW and mac info is updating\n");
+				memcpy(new_mapping.vlan_client_mac, it_l2tp_gw->client_mac, sizeof(it_mapping->vlan_client_mac));
+				memcpy(new_mapping.vlan_client_ipv6_gw_addr, it_l2tp_gw->client_ipv6_gw_addr, sizeof(new_mapping.vlan_client_ipv6_gw_addr));
+				break;
+			}
+		}
+	}
+	if(it_l2tp_gw == l2tp_session_gw_info.end())
+	{
+		IPACMERR("GW info is not populated\n");
+	}
+
 	m_l2tp_vlan_mapping.push_front(new_mapping);
 	num_ipa_l2tp_session++;
 	IPACMDBG_H("Now num l2tp sessions are %d\n", num_ipa_l2tp_session);

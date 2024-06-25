@@ -1371,6 +1371,14 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 					{
 						uninstall_l2tp_rules(data);
 					}
+					/* we are handling all del neighbors in l2tp */
+					if((IPACM_Iface::ipacmcfg->ipacm_l2tp_enable == IPACM_L2TP_E2E ||
+						IPACM_Iface::ipacmcfg->ipacm_l2tp_enable == IPACM_L2TP) &&
+						data->iptype == IPA_IP_v6 && is_unique_local_ipv6_addr(data->ipv6_addr))
+					{
+						IPACM_Iface::ipacmcfg->del_l2tp_vlan_client_info(data);
+						IPACMDBG_H("del_l2tp_vlan_client_info from l2tp vlan list\n");
+					}
 				}
 #endif
 				return;

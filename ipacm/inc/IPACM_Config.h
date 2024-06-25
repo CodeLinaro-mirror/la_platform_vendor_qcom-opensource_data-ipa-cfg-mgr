@@ -25,9 +25,9 @@
  * WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- * Changes from Qualcomm Innovation Center are provided under the following license:
+ * Changes from Qualcomm Innovation Center, Inc. are provided under the following license:
  *
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted (subject to the limitations in the
@@ -253,6 +253,7 @@ public:
 #if defined(FEATURE_L2TP) || defined(FEATURE_VLAN_MPDN)
 	pthread_mutex_t vlan_l2tp_lock;
 	std::list<vlan_iface_info> m_vlan_iface;
+	std::list<l2tp_client_gw_info>l2tp_session_gw_info;
 
 	void add_vlan_iface(ipa_ioc_vlan_iface_info *data);
 
@@ -263,6 +264,9 @@ public:
 	void handle_vlan_iface_info(ipacm_event_data_addr *data);
 
 	void handle_vlan_client_info(ipacm_event_data_all *data);
+	void handle_l2tp_client_gw_info(ipacm_event_data_all *data, uint32_t *l2tp_gw_addr = NULL);
+	void del_l2tp_client_gw_info(ipacm_event_data_all *data, uint32_t *l2tp_gw_addr = NULL);
+	void del_l2tp_vlan_client_info(ipacm_event_data_all *data);
 
 #ifdef FEATURE_L2TP
 	std::list<l2tp_vlan_mapping_info> m_l2tp_vlan_mapping;

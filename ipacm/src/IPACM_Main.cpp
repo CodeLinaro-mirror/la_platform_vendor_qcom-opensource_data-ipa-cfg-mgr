@@ -25,6 +25,10 @@
  * WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *
+ * Changes from Qualcomm Innovation Center, Inc. are provided under the following license:
+ * Copyright (c) 2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 /*!
 	@file
@@ -761,6 +765,7 @@ void* ipa_driver_msg_notifier(void *param)
 			continue;
 #ifdef FEATURE_L2TP
 		case ADD_L2TP_VLAN_MAPPING:
+			IPACMDBG_H("Received ADD_L2TP_VLAN_MAPPING\n");
 			memcpy(&mapping, buffer + sizeof(struct ipa_msg_meta), sizeof(mapping));
 			IPACM_Iface::ipacmcfg->add_l2tp_vlan_mapping(&mapping);
 			continue;

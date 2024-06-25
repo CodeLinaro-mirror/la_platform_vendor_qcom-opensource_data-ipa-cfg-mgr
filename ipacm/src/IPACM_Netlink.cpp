@@ -25,9 +25,9 @@ BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
 WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
 OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
 IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-* changes from Qualcomm Innovation Center are provided under the following license:
+* changes from Qualcomm Innovation Center, Inc. are provided under the following license:
 *
-* Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+* Copyright (c) 2022, 2024 Qualcomm Innovation Center, Inc. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without
 * modification, are permitted (subject to the limitations in the
@@ -79,6 +79,7 @@ IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "IPACM_Netlink.h"
 #include "IPACM_EvtDispatcher.h"
 #include "IPACM_Log.h"
+#include "IPACM_Iface.h"
 
 int ipa_get_if_name(char *if_name, int if_index);
 int find_mask(int ip_v4_last, int *mask_value);
@@ -655,6 +656,8 @@ static int ipa_nl_decode_nlmsg
 
 	uint32_t if_ipv4_addr =0, if_ipipv4_addr_mask =0, temp =0, if_ipv4_addr_gw =0;
 	uint8_t nullMac[IPA_MAC_ADDR_SIZE];
+	uint32_t ipv6_unique_local_prefix = 0xFD000000;
+	uint32_t ipv6_unique_local_prefix_mask = 0xFF000000;
 
 	ipacm_cmd_q_data evt_data;
 	ipacm_event_data_all *data_all;
@@ -1027,13 +1030,28 @@ static int ipa_nl_decode_nlmsg
 						data_addr->ipv6_addr_gw[2] = ntohl(data_addr->ipv6_addr_gw[2]);
 						data_addr->ipv6_addr_gw[3] = ntohl(data_addr->ipv6_addr_gw[3]);
 						IPACM_NL_REPORT_ADDR( " ", msg_ptr->nl_route_info.attr_info.gateway_addr);
+						IPACM_NL_REPORT_ADDR( " ", msg_ptr->nl_route_info.attr_info.dst_addr);
+
 
 						evt_data.event = IPA_ROUTE_ADD_EVENT;
 						data_addr->if_index = msg_ptr->nl_route_info.attr_info.oif_index;
 						data_addr->iptype = IPA_IP_v6;
 
-						IPACMDBG("Posting IPA_ROUTE_ADD_EVENT with if index:%d, ipv6 address\n",
-										 data_addr->if_index);
+						IPACMDBG("Posting IPA_ROUTE_ADD_EVENT with if index:%d, ipv6 address 0x%x\n",
+										 data_addr->if_index, data_addr->ipv6_addr_gw[0]);
+
+						if(((IPACM_Iface::ipacmcfg->ipacm_l2tp_enable == IPACM_L2TP) ||
+			 			(IPACM_Iface::ipacmcfg->ipacm_l2tp_enable == IPACM_L2TP_E2E)) &&
+						((data_addr->ipv6_addr[0] & ipv6_unique_local_prefix_mask) == (ipv6_unique_local_prefix & ipv6_unique_local_prefix_mask)) &&
+						IPACM_Iface::ipacmcfg->is_added_vlan_iface(dev_name))
+						{
+							IPACMDBG(" updating the l2tp peer route_info\n");
+							ipacm_event_data_all data_all;
+							memset(&data_all,0,sizeof(ipacm_event_data_all));
+							memcpy(&data_all.iface_name, dev_name, sizeof(dev_name));
+							memcpy(&data_all.ipv6_addr, data_addr->ipv6_addr, sizeof(data_addr->ipv6_addr));
+							IPACM_Iface::ipacmcfg->handle_l2tp_client_gw_info(&data_all, data_addr->ipv6_addr_gw);
+						}
 						evt_data.evt_data = data_addr;
 						IPACM_EvtDispatcher::PostEvt(&evt_data);
 						/* finish command queue */
@@ -1291,6 +1309,19 @@ static int ipa_nl_decode_nlmsg
 						data_addr->ipv6_addr_gw[3] = ntohl(data_addr->ipv6_addr_gw[3]);
 						IPACM_NL_REPORT_ADDR( " ", msg_ptr->nl_route_info.attr_info.gateway_addr);
 						data_addr->iptype = IPA_IP_v6;
+
+						if(((IPACM_Iface::ipacmcfg->ipacm_l2tp_enable == IPACM_L2TP) ||
+			 			(IPACM_Iface::ipacmcfg->ipacm_l2tp_enable == IPACM_L2TP_E2E)) &&
+						((data_addr->ipv6_addr[0] & ipv6_unique_local_prefix_mask) == (ipv6_unique_local_prefix & ipv6_unique_local_prefix_mask)) &&
+						IPACM_Iface::ipacmcfg->is_added_vlan_iface(dev_name))
+						{
+							IPACMDBG(" updating the l2tp peer route_info\n");
+							ipacm_event_data_all data_all;
+							memset(&data_all,0,sizeof(ipacm_event_data_all));
+							memcpy(&data_all.iface_name, dev_name, sizeof(dev_name));
+							memcpy(&data_all.ipv6_addr, data_addr->ipv6_addr, sizeof(data_addr->ipv6_addr));
+							IPACM_Iface::ipacmcfg->del_l2tp_client_gw_info(&data_all, data_addr->ipv6_addr_gw);
+						}
 					}
 					else
 					{

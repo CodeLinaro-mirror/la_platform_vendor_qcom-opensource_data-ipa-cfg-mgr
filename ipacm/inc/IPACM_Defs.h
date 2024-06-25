@@ -25,9 +25,9 @@ BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
 WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
 OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
 IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-* Changes from Qualcomm Innovation Center are provided under the following license:
+* Changes from Qualcomm Innovation Center, Inc. are provided under the following license:
 *
-* Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+* Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without
 * modification, are permitted (subject to the limitations in the
@@ -196,6 +196,9 @@ extern "C"
 	IPA_MAX_ACTIVE_LAN_IFACE + IPA_MAX_ACTIVE_WLAN_IFACE + IPA_MAX_NUM_SW_PDNS)
 
 #define IPA_DUMMY_PREFIX 0xFFFFFFFF
+
+/* Max number of immediate peer ULA address cache */
+#define IPA_MAX_NUM_PEER_ULA 32
 
 /*===========================================================================
 										 GLOBAL DEFINITIONS AND DECLARATIONS
@@ -496,8 +499,8 @@ struct vlan_iface_info
 	char vlan_iface_name[IPA_RESOURCE_NAME_MAX];
 	uint16_t vlan_id;
 	uint32_t vlan_iface_ipv6_addr[4];
-	uint8_t vlan_client_mac[6];
-	uint32_t vlan_client_ipv6_addr[4];
+	uint8_t vlan_client_mac[IPA_MAX_NUM_PEER_ULA][6];
+	uint32_t vlan_client_ipv6_addr[IPA_MAX_NUM_PEER_ULA][4];
 };
 
 struct l2tp_vlan_mapping_info
@@ -527,6 +530,7 @@ struct l2tp_vlan_mapping_info
 	char l2tp_bridge_iface_name[IPA_RESOURCE_NAME_MAX];
 	uint32_t l2tp_bridge_vlan_id;
 #endif
+	uint32_t vlan_client_ipv6_gw_addr[4];
 };
 
 struct bridge_vlan_mapping_info
@@ -541,6 +545,14 @@ struct bridge_vlan_mapping_info
 struct l2tp_client_info
 {
 	char client_iface_name[IPA_IFACE_NAME_LEN];
+};
+
+struct l2tp_client_gw_info
+{
+	char client_iface_name[IPA_IFACE_NAME_LEN];
+	uint8_t client_mac[6];
+	uint32_t client_ipv6_addr[4];
+	uint32_t client_ipv6_gw_addr[4];
 };
 
 #ifdef FEATURE_SOCKSv5

@@ -25,9 +25,9 @@
  * WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- * Changes from Qualcomm Innovation Center are provided under the following license:
+ * Changes from Qualcomm Innovation Center, Inc. are provided under the following license:
  *
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted (subject to the limitations in the
@@ -1217,6 +1217,14 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 						)
 					{
 						uninstall_l2tp_rules(data);
+					}
+					/* we are handling all del neighbors in l2tp */
+					if((IPACM_Iface::ipacmcfg->ipacm_l2tp_enable == IPACM_L2TP_E2E ||
+						IPACM_Iface::ipacmcfg->ipacm_l2tp_enable == IPACM_L2TP) &&
+						data->iptype == IPA_IP_v6 && is_unique_local_ipv6_addr(data->ipv6_addr))
+					{
+						IPACM_Iface::ipacmcfg->del_l2tp_vlan_client_info(data);
+						IPACMDBG_H("del_l2tp_vlan_client_info from l2tp vlan list\n");
 					}
 				}
 #endif

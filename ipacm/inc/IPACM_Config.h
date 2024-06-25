@@ -144,14 +144,13 @@ struct qos_client_info
 {
 	uint8_t mac[IPA_MAC_ADDR_SIZE];
 	uint32_t qos_rt_rule_hdl_v4;
-	uint32_t qos_rt_rule_hdl_v6[IPV6_NUM_ADDR];
-	uint32_t qos_rt_rule_hdl_wan_v6[IPV6_NUM_ADDR];
+	uint32_t qos_rt_rule_hdl_v6;
 
 	bool route_rule_set_v4;
 	bool route_rule_set_v6;
 
 	uint32_t v4_ip_addr;
-	uint32_t v6_ip_addr[IPV6_NUM_ADDR][4];
+	uint32_t v6_ip_addr[4];
 };
 
 struct qos_param_info {
@@ -170,7 +169,6 @@ struct qos_param_info {
 
 	uint32_t qos_rt_rule_hdl_v4;
 	uint32_t qos_rt_rule_hdl_v6;
-	uint32_t qos_rt_rule_hdl_wan_v6;
 
 	bool route_rule_set_v4;
 	bool route_rule_set_v6;

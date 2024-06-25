@@ -3690,7 +3690,6 @@ void IPACM_Config::ip_pass_config_update(ipa_ioc_pdn_config *pdn_config)
 		else
 			IPACMERR("IP Passthrough PDN not found\n");
 	}
-
 	pthread_mutex_unlock(&ip_pass_mpdn_lock);
 }
 
@@ -3842,6 +3841,7 @@ void IPACM_Config::add_qos_params_info(ipa_ioc_qos_config *data)
 	return;
 }
 
+
 void IPACM_Config::delete_qos_params_info(ipa_ioc_qos_config *data)
 {
 	list<qos_param_info>::iterator it_qos_params;
@@ -3878,7 +3878,7 @@ void IPACM_Config::delete_qos_params_info(ipa_ioc_qos_config *data)
 		   (data->dst_port_end == it_qos_params->ip_tup.dport_end) &&
 		   (data->protocol == it_qos_params->ip_tup.protocol) &&
 		   (data->dscp == it_qos_params->dscp) &&
-		   (data->pcp == it_qos_params->pcp)  &&
+		   (data->pcp == it_qos_params->pcp) &&
 		   !memcmp(it_qos_params->dst_mac_addr, data->dst_mac_addr, sizeof(new_qos_info.dst_mac_addr)) &&
 		   !memcmp(it_qos_params->ip_tup.src_v6_ip_addr, data->src_v6_ip_addr, sizeof(data->src_v6_ip_addr)) &&
 		   !memcmp(it_qos_params->ip_tup.dst_v6_ip_addr, data->dst_v6_ip_addr, sizeof(data->dst_v6_ip_addr))
@@ -3898,15 +3898,9 @@ void IPACM_Config::delete_qos_params_info(ipa_ioc_qos_config *data)
 			for (it_qos_client = it_qos_params->qos_client_list.begin(); it_qos_client != it_qos_params->qos_client_list.end(); ++it_qos_client)
 			{
 				qos_param->qos_client_list[i].qos_rt_rule_hdl_v4 = it_qos_client->qos_rt_rule_hdl_v4;
-
-				for (int v6_num = 0; v6_num < IPV6_NUM_ADDR; v6_num++)
-				{
-					qos_param->qos_client_list[i].qos_rt_rule_hdl_v6[v6_num] = it_qos_client->qos_rt_rule_hdl_v6[v6_num];
-					qos_param->qos_client_list[i].qos_rt_rule_hdl_wan_v6[v6_num] = it_qos_client->qos_rt_rule_hdl_wan_v6[v6_num];
-					IPACMDBG("v6 rule to delete v6_num %d rt hdl %d, wan hdl %d\n", v6_num,
-							 qos_param->qos_client_list[i].qos_rt_rule_hdl_v6[v6_num],
-							 qos_param->qos_client_list[i].qos_rt_rule_hdl_wan_v6[v6_num]);
-				}
+				qos_param->qos_client_list[i].qos_rt_rule_hdl_v6 = it_qos_client->qos_rt_rule_hdl_v6;
+				IPACMDBG("v6 rule to delete wan hdl %d\n",
+						qos_param->qos_client_list[i].qos_rt_rule_hdl_v6);
 				qos_param->qos_client_list[i].route_rule_set_v4 = it_qos_client->route_rule_set_v4;
 				qos_param->qos_client_list[i].route_rule_set_v6 = it_qos_client->route_rule_set_v6;
 
@@ -3965,11 +3959,7 @@ void IPACM_Config::flush_qos_params_info(ipa_ioc_qos_config *data)
 		for (it_qos_client = it_qos_params->qos_client_list.begin(); it_qos_client != it_qos_params->qos_client_list.end(); ++it_qos_client)
 		{
 			qos_param->qos_client_list[i].qos_rt_rule_hdl_v4 = it_qos_client->qos_rt_rule_hdl_v4;
-			for (int v6_num = 0; v6_num < IPV6_NUM_ADDR; v6_num++)
-			{
-				qos_param->qos_client_list[i].qos_rt_rule_hdl_v6[v6_num] = it_qos_client->qos_rt_rule_hdl_v6[v6_num];
-				qos_param->qos_client_list[i].qos_rt_rule_hdl_wan_v6[v6_num] = it_qos_client->qos_rt_rule_hdl_wan_v6[v6_num];
-			}
+			qos_param->qos_client_list[i].qos_rt_rule_hdl_v6 = it_qos_client->qos_rt_rule_hdl_v6;
 			qos_param->qos_client_list[i].route_rule_set_v4 = it_qos_client->route_rule_set_v4;
 			qos_param->qos_client_list[i].route_rule_set_v6 = it_qos_client->route_rule_set_v6;
 

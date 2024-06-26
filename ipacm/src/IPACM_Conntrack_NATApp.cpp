@@ -1759,33 +1759,18 @@ fail:
 	return;
 }
 
-IpAddress::IpAddress(ipa_ip_type type) : m_type(type)
-{
-	IPACMDBG_H("\n");
-}
+IpAddress::IpAddress(ipa_ip_type type) : m_type(type) {}
 
-IpAddress::~IpAddress()
-{
-	IPACMDBG_H("\n");
-}
+IpAddress::~IpAddress() {}
 
-Ipv6IpAddress::Ipv6IpAddress() : IpAddress(IPA_IP_v6), m_msb(0), m_lsb(0)
-{
-	IPACMDBG_H("\n");
-}
+Ipv6IpAddress::Ipv6IpAddress() : IpAddress(IPA_IP_v6), m_msb(0), m_lsb(0) {}
 
-Ipv6IpAddress::~Ipv6IpAddress()
-{
-	DebugDump("destroying ");
-}
+Ipv6IpAddress::~Ipv6IpAddress() {}
 
 Ipv6IpAddress::Ipv6IpAddress(const uint32_t* addr, bool inputNetworkEndianness) :
 	IpAddress(IPA_IP_v6),
 	m_msb(Convert2x32to64(addr, inputNetworkEndianness)),
-	m_lsb(Convert2x32to64(addr + 2, inputNetworkEndianness))
-{
-	IPACMDBG_H("\n");
-}
+	m_lsb(Convert2x32to64(addr + 2, inputNetworkEndianness)) {}
 
 bool Ipv6IpAddress::Compare(const IpAddress& other) const
 {
@@ -1939,10 +1924,7 @@ NatEntryBase::NatEntryBase(ipa_ip_type type) :
 	IPACMDBG_H("%d \n", type);
 }
 
-NatEntryBase::~NatEntryBase()
-{
-	IPACMDBG_H("\n");
-}
+NatEntryBase::~NatEntryBase() {}
 
 bool NatEntryBase::Compare(const NatEntryBase& other) const
 {
@@ -2051,10 +2033,7 @@ const char* NatEntryBase::DirectionToStr(NatEntryBase::Direction direction)
 	return "unknown";
 }
 
-Ipv6ctEntry::Ipv6ctEntry() : NatEntryBase(IPA_IP_v6), m_dstPort(0), m_srcPort(0)
-{
-	IPACMDBG_H("\n");
-}
+Ipv6ctEntry::Ipv6ctEntry() : NatEntryBase(IPA_IP_v6), m_dstPort(0), m_srcPort(0) {}
 
 bool Ipv6ctEntry::Compare(const NatEntryBase& other) const
 {
@@ -2145,10 +2124,7 @@ const uint16_t& Ipv6ctEntry::GetDstPort() const
 	return m_dstPort;
 }
 #ifdef FEATURE_IPV6_NAT
-Ipv6NatEntry:: Ipv6NatEntry() : Ipv6ctEntry(), m_publicPort(0)
-{
-	IPACMDBG_H("\n");
-}
+Ipv6NatEntry:: Ipv6NatEntry() : Ipv6ctEntry(), m_publicPort(0) {}
 
 bool Ipv6NatEntry::Compare(const NatEntryBase& other) const
 {
@@ -2242,15 +2218,9 @@ uint32_t ConntrackTimestampUtil::udp_timeout = 180;
 struct nf_conntrack* ConntrackTimestampUtil::ct = NULL;
 struct nfct_handle* ConntrackTimestampUtil::ct_hdl = NULL;
 
-ConntrackTimestampUtil::ConntrackTimestampUtil()
-{
-	IPACMDBG_H("\n");
-}
+ConntrackTimestampUtil::ConntrackTimestampUtil() {}
 
-ConntrackTimestampUtil::~ConntrackTimestampUtil()
-{
-	IPACMDBG_H("\n");
-}
+ConntrackTimestampUtil::~ConntrackTimestampUtil() {}
 
 void ConntrackTimestampUtil::Init()
 {
@@ -2406,13 +2376,9 @@ void Ipv6ctConntrackTimestampUtil::SetConnectionDetails(const NatEntryBase& entr
 NatProxyBase::NatProxyBase() : m_tableHandle(0)
 {
 	table_created = false;
-	IPACMDBG_H("\n");
 }
 
-NatProxyBase::~NatProxyBase()
-{
-	IPACMDBG_H("\n");
-}
+NatProxyBase::~NatProxyBase() {}
 
 int NatProxyBase::AddTable(uint16_t number_of_entries)
 {

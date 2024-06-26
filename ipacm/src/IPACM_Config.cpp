@@ -315,7 +315,9 @@ IPACM_Config::IPACM_Config()
 	eogre_tunnel_name[0] = '\0';
 	v6options_enabled = false;
 #endif
+#ifdef FEATURE_DUAL_BACKHAUL
 	memset(&second_backhaul_info,0,sizeof(second_backhaul_info));
+#endif
 	ext_router_mode = IPA_PREFIX_DISABLED;
 
 	/* Clear the DSCP PCP mapping data during init */

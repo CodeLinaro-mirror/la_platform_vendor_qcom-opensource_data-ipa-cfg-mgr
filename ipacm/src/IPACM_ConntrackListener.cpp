@@ -1668,19 +1668,22 @@ void IPACM_ConntrackListener::TriggerWANDown(uint32_t wan_addr)
 
 	if(nat_inst != NULL)
 	{
+#ifdef FEATURE_DUAL_BACKHAUL
 		if(IPACM_Wan::second_backhaul_active && wan_addr==IPACM_Wan::second_backhaul_ipv4)
 		{
 			//don't delete PDN, we will manage PDN cleanup in handle_vlan_down
 		}
 		else
 		{
-
+#endif
 #ifdef FEATURE_VLAN_MPDN
 			nat_inst->RemovePdn(wan_addr);
 #else
 			nat_inst->DeleteTable(wan_addr);
 #endif
+#ifdef FEATURE_DUAL_BACKHAUL
 		}
+#endif
 	}
 }
 

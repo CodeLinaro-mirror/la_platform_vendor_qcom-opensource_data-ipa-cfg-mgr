@@ -790,7 +790,8 @@ int IPACM_Wan::handle_addr_evt(ipacm_event_data_addr *data)
 			IPACM_EvtDispatcher::PostEvt(&evt_data);
 
 			memset(&pdn_dscp_map_info, 0, sizeof(pdn_dscp_map_info));
-			memset(&pdn_dscp_map_info.pdn_dscp_map, 255, sizeof(pdn_dscp_map_info));
+			memset(&pdn_dscp_map_info.pdn_dscp_map, 255,
+				sizeof(pdn_dscp_map_info.pdn_dscp_map));
 			pdn_dscp_map_info.add = 1;
 			pdn_dscp_map_info.pdn_dscp_map[IPACM_Iface::ipacmcfg->pdn_dscp_table[indx].mux_id] =
 				IPACM_Iface::ipacmcfg->pdn_dscp_table[indx].dscp_val;

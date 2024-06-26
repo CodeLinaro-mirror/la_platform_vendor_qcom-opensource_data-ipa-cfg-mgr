@@ -495,6 +495,11 @@ static int get_eogre_tunnel_details(struct ifinfomsg* ifi, int len, int type)
 		IPACMDBG("ifname %s \n",(char*)RTA_DATA(attrib[IFLA_IFNAME]));
 		strlcpy(IPACM_Iface::ipacmcfg->eogre_tunnel_name, (char*)RTA_DATA(attrib[IFLA_IFNAME]), IPA_IFACE_NAME_LEN);
 	}
+	else
+	{
+		IPACMDBG("No ifname info\n");
+		return IPACM_FAILURE;
+	}
 
 	if(!strcmp(IPACM_Iface::ipacmcfg->eogre_tunnel_name, "gre4t-gretap2"))
 	{
@@ -520,11 +525,11 @@ static int get_eogre_tunnel_details(struct ifinfomsg* ifi, int len, int type)
 			IPACMDBG("No IFLA_INFO_DATA\n");
 			return IPACM_FAILURE;
 		}
-          	else if(strcmp(IPACM_Iface::ipacmcfg->eogre_tunnel_name, "gre4t-gretap2") && strcmp(IPACM_Iface::ipacmcfg->eogre_tunnel_name, "gre6t-gretap2"))
-                {
-                  IPACMDBG("It is not the gretap evt breaking auto learning here\n");
-                  return IPACM_FAILURE;
-                }
+		else if(strcmp(IPACM_Iface::ipacmcfg->eogre_tunnel_name, "gre4t-gretap2") && strcmp(IPACM_Iface::ipacmcfg->eogre_tunnel_name, "gre6t-gretap2"))
+		{
+			IPACMDBG("It is not the gretap evt breaking auto learning here\n");
+			return IPACM_FAILURE;
+		}
 		else
 		{
 			parse_gre(greinfo, IFLA_GRE_MAX,

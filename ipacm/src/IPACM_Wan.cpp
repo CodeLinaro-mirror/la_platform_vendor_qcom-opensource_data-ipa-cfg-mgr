@@ -1608,6 +1608,7 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 					if(m_is_sta_mode == Q6_WAN)
 					{
 						del_wan_firewall_rule(IPA_IP_v4);
+						config_wan_firewall_rule(IPA_IP_v4);
 						install_wan_filtering_rule(false);
 						handle_route_del_evt_ex(IPA_IP_v4);
 
@@ -1635,6 +1636,7 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 							IPACMDBG_H("xlat v4 pdn active, dont post WAN_DOWN_V6\n");
 						} else {
 							del_wan_firewall_rule(IPA_IP_v6);
+							config_wan_firewall_rule(IPA_IP_v6);
 							install_wan_filtering_rule(false);
 							handle_route_del_evt_ex(IPA_IP_v6);
 						}

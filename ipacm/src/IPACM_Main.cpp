@@ -60,9 +60,9 @@
  * OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-/*Changes from Qualcomm Innovation Center are provided under the following license:
+/*Changes from Qualcomm Innovation Center, Inc. are provided under the following license:
 
-Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+Copyright (c) 2023-2024 Qualcomm Innovation Center, Inc. All rights reserved.
 SPDX-License-Identifier: BSD-3-Clause-Clear*/
 /*!
 	@file
@@ -1291,7 +1291,8 @@ void* ipa_driver_msg_notifier(void *param)
 					/* check if ipv4 src and dst is valid */
 					if (new_ipgre_info.ipv4_src == 0 || new_ipgre_info.ipv4_dst == 0)
 					{
-						IPACMERR("invalid GRE ipv4 addr\n")
+						IPACMERR("invalid GRE ipv4 addr, mark ipacmcfg->eogre_enabled = false \n");
+						IPACM_Iface::ipacmcfg->eogre_enabled = false;
 						goto done;
 					}
 
@@ -1316,7 +1317,8 @@ void* ipa_driver_msg_notifier(void *param)
 						(new_ipgre_info.ipv6_dst[0] == 0 && new_ipgre_info.ipv6_dst[1] == 0
 						&& new_ipgre_info.ipv6_dst[2] == 0 && new_ipgre_info.ipv6_dst[3] == 0))
 					{
-						IPACMERR("invalid GRE ipv6 addr\n")
+						IPACMERR("invalid GRE ipv6 addr, mark ipacmcfg->eogre_enabled = false \n");
+						IPACM_Iface::ipacmcfg->eogre_enabled = false;
 						goto done;
 					}
 

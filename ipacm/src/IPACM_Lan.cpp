@@ -13619,9 +13619,13 @@ int IPACM_Lan::modify_private_subnet()
 			if (IPACM_Iface::ipacmcfg->eogre_info.iptype == IPA_IP_v4)
 				/* mtu_v4_new = mtu_v4 - 20(ipv4) - 4(gre) - 18(eth + VLAN) */
 				mtu[0] = IPACM_Wan::queryMTU(ipa_if_num, IPA_IP_v4) - sizeof(v4_gre_hdr_t) - 18;
-			else if (IPACM_Iface::ipacmcfg->eogre_info.iptype == IPA_IP_v6)
+			else if (IPACM_Iface::ipacmcfg->eogre_info.iptype == IPA_IP_v6 && 
+					IPACM_Iface::ipacmcfg->v6options_enabled == true)
 				/* mtu_v4_new = mtu_v6 - 40(ipv6) - 8(opt) - 4(gre) - 18(eth + VLAN) */
 				mtu[0] = IPACM_Wan::queryMTU(ipa_if_num, IPA_IP_v6) - sizeof(v6_gre_hdr_t) - 18;
+			else if (IPACM_Iface::ipacmcfg->eogre_info.iptype == IPA_IP_v6 &&
+					IPACM_Iface::ipacmcfg->v6options_enabled == false)
+				mtu[0] = IPACM_Wan::queryMTU(ipa_if_num, IPA_IP_v6) - sizeof(v6_eogre_hdr_s) - 18;
 			else
 				IPACMERR("invalid iptype = %d\n", IPACM_Iface::ipacmcfg->eogre_info.iptype);
 

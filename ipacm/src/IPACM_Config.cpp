@@ -93,7 +93,7 @@ const char *IPACM_Config::DEVICE_NAME_ODU = "/dev/odu_ipa_bridge";
 #define IPACM_CONFIG_FILE "/etc/data/ipa/IPACM_cfg.xml"
 #define IPACM_CONFIG_EXT_FILE "/etc/data/ipa/IPACM_cfg_ext.xml"
 #endif
-#define MAX_RETRIES 5
+#define MAX_RETRIES 15
 const char *ipacm_event_name[] = {
 	__stringify(IPA_CFG_CHANGE_EVENT),                     /* NULL */
 	__stringify(IPA_PRIVATE_SUBNET_CHANGE_EVENT),          /* ipacm_event_data_fid */
@@ -550,6 +550,7 @@ int IPACM_Config::Init(void)
 	IPACMDBG_H("\n IPACM XML file is %s \n", IPACM_config_file);
 
 reread:
+	system ("fsync -d " IPACM_CONFIG_FILE);
 	if (IPACM_SUCCESS == ipacm_read_cfg_xml(IPACM_config_file, cfg))
 	{
 		IPACMDBG_H("\n IPACM XML read OK \n");
@@ -557,8 +558,13 @@ reread:
 	else
 	{
 		if(loop_count < MAX_RETRIES) {
-			IPACMERR("\nIPACM XML read failed,Updating the xml file\n");
-			system(cmd);
+			if (loop_count > 10) {
+				IPACMERR(
+					"\nIPACM XML read failed,Updating the xml file\n");
+				system(cmd);
+			} else {
+				IPACMERR("\nIPACM XML read failed,retrying\n");
+			}
 			loop_count++;
 			goto reread;
 		}

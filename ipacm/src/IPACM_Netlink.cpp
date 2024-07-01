@@ -632,6 +632,7 @@ static int ipa_nl_decode_nlmsg
 	ipa_ioc_bridge_vlan_mapping_info vlan_bridge_data;
 	int ret_val, mask_value, mask_index, mask_value_v6;
 	struct nlmsghdr *nlh = (struct nlmsghdr *)buffer;
+	int idx = 0;
 
 	uint32_t if_ipv4_addr =0, if_ipipv4_addr_mask =0, temp =0, if_ipv4_addr_gw =0;
 	uint8_t nullMac[IPA_MAC_ADDR_SIZE];
@@ -1520,8 +1521,10 @@ static int ipa_nl_decode_nlmsg
  		                    data_all->if_index,
 		    				 msg_ptr->nl_neigh_info.attr_info.local_addr.ss_family);
 
+				idx = IPACM_Iface::iface_ipa_index_query(msg_ptr->nl_neigh_info.metainfo.ndm_ifindex);
 				/* Add Dummy VLAN Mapping for Non-Vlan Ifaces */
-				if(config != NULL)
+				if((config != NULL) && (idx != INVALID_IFACE) &&
+				   (config->iface_table[idx].if_cat != WAN_IF))
 				{
 					if((msg_ptr->nl_neigh_info.metainfo.ndm_ifindex != msg_ptr->nl_neigh_info.master_interface_index) && (!config->iface_in_vlan_mode(dev_name)))
 					{
@@ -1629,9 +1632,10 @@ static int ipa_nl_decode_nlmsg
 			IPACM_EvtDispatcher::PostEvt(&evt_data);
 			/* finish command queue */
 
-			config = IPACM_Config::GetInstance();
+			idx = IPACM_Iface::iface_ipa_index_query(msg_ptr->nl_neigh_info.metainfo.ndm_ifindex);
 			/* Remove Dummy VLAN Mapping for Non-Vlan Ifaces */
-			if(config != NULL)
+			if((config != NULL) && (idx != INVALID_IFACE) &&
+			   (config->iface_table[idx].if_cat != WAN_IF))
 			{
 				if((msg_ptr->nl_neigh_info.metainfo.ndm_ifindex != msg_ptr->nl_neigh_info.master_interface_index) && (!config->iface_in_vlan_mode(dev_name)))
 				{

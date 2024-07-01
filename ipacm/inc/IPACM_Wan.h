@@ -439,7 +439,9 @@ private:
 	uint32_t firewall_hdl_v6[IPACM_MAX_FIREWALL_ENTRIES];
 	uint32_t dft_wan_fl_hdl[IPA_NUM_DEFAULT_WAN_FILTER_RULES];
 	uint32_t dhcp_wan_fl_hdl;
+	uint32_t icmp_wan_fl_hdl[IPA_IP_MAX];
 	uint32_t tcp_syn_fl_hdl[IPA_IP_MAX];
+	uint32_t sta_bridge_flt_hdl;
 #ifdef FEATURE_IPV6_NAT
 	uint32_t ipv6_ula_prefix_hdl;
 #endif
@@ -705,7 +707,9 @@ private:
 #endif
 	int config_dft_firewall_rules(ipa_ip_type iptype);
 	int add_dhcp_flt_rule(ipa_ip_type iptype);
+	int add_icmp_flt_rule(ipa_ip_type iptype);
 	int add_tcp_syn_flt_rule(ipa_ip_type iptype);
+	int add_sta_bridge_flt_rule();
 
 	/* configure the initial firewall filter rules */
 	int config_dft_embms_rules(ipa_ioc_add_flt_rule *pFilteringTable_v4, ipa_ioc_add_flt_rule *pFilteringTable_v6);

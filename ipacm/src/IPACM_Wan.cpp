@@ -221,6 +221,8 @@ IPACM_Wan::IPACM_Wan(int iface_index,
 #endif //FEATURE_IPACM_UL_FIREWALL
 	ipv6_frag_firewall_flt_rule_hdl = 0;
 	dhcp_wan_fl_hdl = 0;
+	sta_bridge_flt_hdl = 0;
+	memset(icmp_wan_fl_hdl, 0, IPA_IP_MAX);
 	memset(tcp_syn_fl_hdl, 0, IPA_IP_MAX);
 
 	num_wan_client = 0;
@@ -4001,6 +4003,129 @@ int IPACM_Wan::add_dhcp_flt_rule(ipa_ip_type iptype)
 	return IPACM_SUCCESS;
 }
 
+int IPACM_Wan::add_icmp_flt_rule(ipa_ip_type iptype)
+{
+	struct ipa_flt_rule_add flt_rule_entry;
+	ipa_ioc_add_flt_rule *m_pFilteringTable = NULL;
+	int len = 0;
+
+	len = sizeof(struct ipa_ioc_add_flt_rule) + 1 * sizeof(struct ipa_flt_rule_add);
+	m_pFilteringTable = (struct ipa_ioc_add_flt_rule *)calloc(1, len);
+	if (!m_pFilteringTable)
+	{
+		IPACMERR("Error Locate ipa_flt_rule_add memory...\n");
+		return IPACM_FAILURE;
+	}
+
+	m_pFilteringTable->commit = 1;
+	m_pFilteringTable->ep = rx_prop->rx[0].src_pipe;
+	m_pFilteringTable->ip = iptype;
+	m_pFilteringTable->num_rules = (uint8_t)1;
+	m_pFilteringTable->global = false;
+
+	memset(&flt_rule_entry, 0, sizeof(struct ipa_flt_rule_add));
+	flt_rule_entry.at_rear = true;
+#ifdef FEATURE_IPA_V3
+	flt_rule_entry.rule.hashable = true;
+#endif
+	flt_rule_entry.flt_rule_hdl = -1;
+	flt_rule_entry.status = -1;
+	flt_rule_entry.rule.retain_hdr = 1;
+	flt_rule_entry.rule.eq_attrib_type = 0;
+	flt_rule_entry.rule.action = IPA_PASS_TO_EXCEPTION;
+	memcpy(&flt_rule_entry.rule.attrib, &rx_prop->rx[0].attrib, sizeof(struct ipa_rule_attrib));
+	if(iptype == IPA_IP_v4)
+	{
+		flt_rule_entry.rule.attrib.attrib_mask |= IPA_FLT_PROTOCOL;
+		flt_rule_entry.rule.attrib.u.v4.protocol = (uint8_t)IPACM_FIREWALL_IPPROTO_ICMP;
+	}
+	else
+	{
+		flt_rule_entry.rule.attrib.attrib_mask |= IPA_FLT_NEXT_HDR;
+		flt_rule_entry.rule.attrib.u.v6.next_hdr = (uint8_t)IPACM_FIREWALL_IPPROTO_ICMP6;
+	}
+	memcpy(&(m_pFilteringTable->rules[0]), &flt_rule_entry, sizeof(flt_rule_entry));
+
+	if (false == m_filtering.AddFilteringRule(m_pFilteringTable))
+	{
+		IPACMERR("Error Adding RuleTable(0) to Filtering, aborting...\n");
+		free(m_pFilteringTable);
+		return IPACM_FAILURE;
+	}
+	else
+	{
+		IPACM_Iface::ipacmcfg->increaseFltRuleCount(rx_prop->rx[0].src_pipe, iptype, 1);
+		IPACMDBG_H("flt rule hdl0=0x%x, status=0x%x\n", m_pFilteringTable->rules[0].flt_rule_hdl,
+								m_pFilteringTable->rules[0].status);
+	}
+	icmp_wan_fl_hdl[iptype] =  m_pFilteringTable->rules[0].flt_rule_hdl;
+	free(m_pFilteringTable);
+	return IPACM_SUCCESS;
+}
+
+int IPACM_Wan::add_sta_bridge_flt_rule()
+{
+	struct ipa_flt_rule_add flt_rule_entry;
+	ipa_ioc_add_flt_rule *m_pFilteringTable = NULL;
+	int len = 0;
+	uint32_t ip_addr;
+
+	if((IPACM_Iface::ipacmcfg->sta_bridge.ipv4_addr == 0) &&
+	   (IPACM_Iface::ipacmcfg->update_sta_bridge_info() == IPACM_FAILURE))
+	{
+		IPACMERR("STA Bridge V4 address is not yet available\n");
+		return IPACM_FAILURE;
+	}
+
+	len = sizeof(struct ipa_ioc_add_flt_rule) + 1 * sizeof(struct ipa_flt_rule_add);
+	m_pFilteringTable = (struct ipa_ioc_add_flt_rule *)calloc(1, len);
+	if (!m_pFilteringTable)
+	{
+		IPACMERR("Error Locate ipa_flt_rule_add memory...\n");
+		return IPACM_FAILURE;
+	}
+
+	m_pFilteringTable->commit = 1;
+	m_pFilteringTable->ep = rx_prop->rx[0].src_pipe;
+	m_pFilteringTable->ip = IPA_IP_v4;
+	m_pFilteringTable->num_rules = (uint8_t)1;
+	m_pFilteringTable->global = false;
+
+	memset(&flt_rule_entry, 0, sizeof(struct ipa_flt_rule_add));
+	flt_rule_entry.at_rear = true;
+#ifdef FEATURE_IPA_V3
+	flt_rule_entry.rule.hashable = true;
+#endif
+	flt_rule_entry.flt_rule_hdl = -1;
+	flt_rule_entry.status = -1;
+	flt_rule_entry.rule.retain_hdr = 1;
+	flt_rule_entry.rule.eq_attrib_type = 0;
+	flt_rule_entry.rule.action = IPA_PASS_TO_EXCEPTION;
+
+	memcpy(&flt_rule_entry.rule.attrib, &rx_prop->rx[0].attrib, sizeof(struct ipa_rule_attrib));
+	flt_rule_entry.rule.attrib.attrib_mask |= IPA_FLT_DST_ADDR;
+	flt_rule_entry.rule.attrib.u.v4.dst_addr_mask = 0xFFFFFFFF;
+	flt_rule_entry.rule.attrib.u.v4.dst_addr = IPACM_Iface::ipacmcfg->sta_bridge.ipv4_addr;
+
+	memcpy(&(m_pFilteringTable->rules[0]), &flt_rule_entry, sizeof(flt_rule_entry));
+
+	if (false == m_filtering.AddFilteringRule(m_pFilteringTable))
+	{
+		IPACMERR("Error Adding RuleTable(0) to Filtering, aborting...\n");
+		free(m_pFilteringTable);
+		return IPACM_FAILURE;
+	}
+	else
+	{
+		IPACM_Iface::ipacmcfg->increaseFltRuleCount(rx_prop->rx[0].src_pipe, IPA_IP_v4, 1);
+		IPACMDBG_H("flt rule hdl0=0x%x, status=0x%x\n", m_pFilteringTable->rules[0].flt_rule_hdl,
+							m_pFilteringTable->rules[0].status);
+	}
+	sta_bridge_flt_hdl =  m_pFilteringTable->rules[0].flt_rule_hdl;
+	free(m_pFilteringTable);
+	return IPACM_SUCCESS;
+}
+
 /* for STA mode: add firewall rules */
 int IPACM_Wan::config_dft_firewall_rules(ipa_ip_type iptype)
 {
@@ -4150,7 +4275,9 @@ int IPACM_Wan::config_dft_firewall_rules(ipa_ip_type iptype)
 		{
 			IPACMDBG_H("WLAN is in bridge mode. Adding DHCP and TCP rules\n");
 			add_tcp_syn_flt_rule(IPA_IP_v4);
+			add_icmp_flt_rule(IPA_IP_v4);
 			add_dhcp_flt_rule(IPA_IP_v4);
+			add_sta_bridge_flt_rule();
 		}
 		if (rule_v4 == 0)
 		{
@@ -6391,6 +6518,14 @@ int IPACM_Wan::del_dft_firewall_rules(ipa_ip_type iptype, bool wan_up_vlan)
 		}
 		dhcp_wan_fl_hdl = 0;
 
+		if((icmp_wan_fl_hdl[IPA_IP_v4] != 0) &&
+                    m_filtering.DeleteFilteringHdls(&icmp_wan_fl_hdl[IPA_IP_v4], IPA_IP_v4, 1) == false)
+		{
+			IPACMERR("Error Deleting ICMP Filtering rule, aborting...\n");
+			return IPACM_FAILURE;
+		}
+		icmp_wan_fl_hdl[IPA_IP_v4] = 0;
+
 		if((tcp_syn_fl_hdl[IPA_IP_v4] != 0) &&
 		    m_filtering.DeleteFilteringHdls(&tcp_syn_fl_hdl[IPA_IP_v4], IPA_IP_v4, 1) == false)
 		{
@@ -6398,6 +6533,14 @@ int IPACM_Wan::del_dft_firewall_rules(ipa_ip_type iptype, bool wan_up_vlan)
 			return IPACM_FAILURE;
 		}
 		tcp_syn_fl_hdl[IPA_IP_v4] = 0;
+
+		if((sta_bridge_flt_hdl != 0) &&
+			 m_filtering.DeleteFilteringHdls(&sta_bridge_flt_hdl, IPA_IP_v4, 1) == false)
+		{
+			IPACMERR("Error Deleting sta bridge Filtering rule, aborting...\n");
+			return IPACM_FAILURE;
+		}
+		sta_bridge_flt_hdl = 0;
 
 		if (m_filtering.DeleteFilteringHdls(&dft_wan_fl_hdl[0], IPA_IP_v4, 1) == false)
 		{

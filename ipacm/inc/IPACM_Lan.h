@@ -209,13 +209,13 @@ typedef struct pdn_context
 	int pdn_mux_id;
 	uint16_t associated_VIDs[IPA_MAX_NUM_SW_PDNS];
 	uint32_t active_vlan_count;
-	uint32_t wan_mpdn_ul_xlat_fl_rule_hdl_v4[MAX_WAN_UL_FILTER_RULES];
-	uint32_t num_wan_mpdn_ul_xlat_fl_rule_v4;
+	uint32_t wan_mpdn_ul_xlat_fl_rule_hdl_v4[IPA_MAX_NUM_PROPS][MAX_WAN_UL_FILTER_RULES];
+	uint32_t num_wan_mpdn_ul_xlat_fl_rule_v4[IPA_MAX_NUM_PROPS];
 }pdn_context;
 
 typedef struct _xlat_context
 {
-	rule_id_hdl_map ul_rule_id_hdl_map[MAX_WAN_UL_FILTER_RULES];
+	rule_id_hdl_map ul_rule_id_hdl_map[IPA_MAX_NUM_PROPS][MAX_WAN_UL_FILTER_RULES];
 
 	/* PDN's for which UL filter installed */
 	pdn_context active_pdn_list[IPA_MAX_NUM_HW_PDNS];

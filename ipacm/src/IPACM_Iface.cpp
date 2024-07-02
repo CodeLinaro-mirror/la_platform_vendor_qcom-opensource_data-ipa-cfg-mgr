@@ -1024,11 +1024,17 @@ int IPACM_Iface::init_fl_rule(ipa_ip_type iptype)
 				}
 			}
 		}
+		if (m_pFilteringTable != NULL)
+		{
+			free(m_pFilteringTable);
+			m_pFilteringTable = NULL;
+		}
 	}
 
 
 fail:
-	free(m_pFilteringTable);
+	if (m_pFilteringTable != NULL)
+		free(m_pFilteringTable);
 
 	return res;
 }

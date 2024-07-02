@@ -1119,9 +1119,17 @@ int IPACM_Iface::init_fl_rule(
 				}
 			}
 		}
+		if (m_pFilteringTable != NULL)
+		{
+			free(m_pFilteringTable);
+			m_pFilteringTable = NULL;
+		}
 	}
 
 fail:
+	if (m_pFilteringTable != NULL)
+		free(m_pFilteringTable);
+
 	return res;
 }
 

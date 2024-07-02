@@ -14203,6 +14203,11 @@ fail:
 void IPACM_Lan::delete_ipv6_nat_ula_prefix_flt_rule()
 {
 	int idx = 0;
+	if (rx_prop == NULL)
+	{
+		IPACMDBG_H("No RX property.\n");
+		return;
+	}
 	if ((ipa_if_cate == WLAN_IF) && (is_if_svap || is_wlan_if_vlan) && (rx_prop && rx_prop->num_rx_props > 2)) {
 		idx = 2;
 		IPACMDBG_H("Interface is WLAN Svap or vlan, install rules on Rx pipe at idx %d \n", idx);

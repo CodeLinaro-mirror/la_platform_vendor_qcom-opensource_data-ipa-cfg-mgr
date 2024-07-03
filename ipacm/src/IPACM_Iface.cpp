@@ -700,7 +700,7 @@ int IPACM_Iface::init_fl_rule(ipa_ip_type iptype)
 
 	int res = IPACM_SUCCESS, len = 0;
 	struct ipa_flt_rule_add flt_rule_entry;
-	ipa_ioc_add_flt_rule *m_pFilteringTable;
+	ipa_ioc_add_flt_rule *m_pFilteringTable = NULL;
 	int idx = 0, j;
 
   /* Adding this hack because WLAN may not registered for Rx-endpoint, other ifaces will always have*/

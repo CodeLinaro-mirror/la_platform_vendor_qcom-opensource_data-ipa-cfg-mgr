@@ -1665,9 +1665,9 @@ int IPACM_Lan::handle_l2tp_neigh(ipacm_event_data_all *data)
 /* add socksv5 flt rule. */
 int IPACM_Lan::add_socksv5_flt_rule(ipacm_event_connection *data_event_conn)
 {
-	int len;
+	int len = -1;
 	int fd_ipa = 0;
-	struct ipa_flt_rule_add flt_rule_entry;
+	struct ipa_flt_rule_add flt_rule_entry = {0};
 	struct ipa_ioc_add_flt_rule_after *pFilteringTable = NULL;
 	int ret = IPACM_SUCCESS;
 
@@ -1679,7 +1679,7 @@ int IPACM_Lan::add_socksv5_flt_rule(ipacm_event_connection *data_event_conn)
 
 	len = sizeof(struct ipa_ioc_add_flt_rule_after) + sizeof(struct ipa_flt_rule_add);
 	pFilteringTable = (struct ipa_ioc_add_flt_rule_after*)malloc(len);
-	if (!pFilteringTable)
+	if (NULL == pFilteringTable)
 	{
 		IPACMERR("Failed to allocate ipa_ioc_add_flt_rule_after memory...\n");
 		return IPACM_FAILURE;
@@ -2817,10 +2817,10 @@ int IPACM_Lan::handle_wan_down(bool is_sta_mode, uint8_t mux_id)
 /* handle new_address event*/
 int IPACM_Lan::handle_addr_evt(ipacm_event_data_addr *data)
 {
-	struct ipa_ioc_add_rt_rule *rt_rule;
-	struct ipa_rt_rule_add *rt_rule_entry;
+	struct ipa_ioc_add_rt_rule *rt_rule = NULL;
+	struct ipa_rt_rule_add *rt_rule_entry = NULL;
 	const int NUM_RULES = 1;
-	int num_ipv6_addr;
+	int num_ipv6_addr = 0;
 	int res = IPACM_SUCCESS;
 
 	IPACMDBG_H("set route/filter rule ip-type: %d \n", data->iptype);
@@ -7172,6 +7172,12 @@ int IPACM_Lan::handle_down_evt()
 
 	IPACMDBG_H("lan handle_down_evt\n ");
 
+	if(NULL == rx_prop)
+	{
+		IPACMERR("ERR: rx_props is invalid\n");
+		return IPACM_FAILURE;
+	}
+
 #ifdef FEATURE_IPACM_UL_FIREWALL
 	/* Clear IPv6 UL firewall rules: LAN pipe frag, catch all and FW rules if installed */
 	if (ip_type != IPA_IP_v4)
@@ -7262,13 +7268,13 @@ int IPACM_Lan::handle_down_evt()
 #endif
 	{
 		/* delete wan filter rule */
-		if(IPACM_Wan::isWanUP(ipa_if_num) && rx_prop != NULL)
+		if(IPACM_Wan::isWanUP(ipa_if_num))
 		{
 			IPACMDBG_H("LAN IF goes down, backhaul type %d\n", IPACM_Wan::backhaul_is_sta_mode);
 			handle_wan_down(IPACM_Wan::backhaul_is_sta_mode);
 		}
 
-		if(IPACM_Wan::isWanUP_V6(ipa_if_num) && rx_prop != NULL)
+		if(IPACM_Wan::isWanUP_V6(ipa_if_num))
 		{
 			IPACMDBG_H("LAN IF goes down, backhaul type %d\n", IPACM_Wan::backhaul_is_sta_mode);
 			handle_wan_down_v6(IPACM_Wan::backhaul_is_sta_mode);
@@ -7751,8 +7757,10 @@ int IPACM_Lan::handle_uplink_filter_rule(ipacm_ext_prop *prop, ipa_ip_type iptyp
 	int len = 0, cnt, ret = IPACM_SUCCESS;
 	ipa_ioc_add_flt_rule *pFilteringTable;
 	ipa_fltr_installed_notif_req_msg_v01 flt_index;
-	int fd;
+
+	int fd = -1;
 	int i, j, index, idx = 0;
+
 	uint32_t value = 0, total_rules = 0, v6_xlat_ul_rules = 0;
 	bool is_dev_in_vlan_mode=false;
 	enum ipa_flt_action action_cache;
@@ -10928,8 +10936,8 @@ int IPACM_Lan::handle_lan_client_reset_rt(ipa_ip_type iptype, uint16_t vlan_id)
 int IPACM_Lan::install_ipv4_icmp_flt_rule()
 {
 	int ret = IPACM_SUCCESS;
-	struct ipa_ioc_add_flt_rule_v2 *flt_rule;
-	struct ipa_flt_rule_add_v2 *flt_rule_entry;
+	struct ipa_ioc_add_flt_rule_v2 *flt_rule = NULL;
+	struct ipa_flt_rule_add_v2 *flt_rule_entry = NULL;
 	int j = 0;
 
 	if (rx_prop == NULL)

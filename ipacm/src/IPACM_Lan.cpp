@@ -4819,22 +4819,21 @@ int IPACM_Lan::handle_eth_client_ipaddr(ipacm_event_data_all *data)
                                                 tmp_evt->ipv6_addr[1] = get_client_memptr(eth_client, clnt_indx)->v6_addr[v6_num][1];
                                                 tmp_evt->ipv6_addr[2] = get_client_memptr(eth_client, clnt_indx)->v6_addr[v6_num][2];
                                                 tmp_evt->ipv6_addr[3] = get_client_memptr(eth_client, clnt_indx)->v6_addr[v6_num][3];
-                                                IPACMDBG_H("Got new prefix del old prefix entry [0x%x:%x:%x:%x] at idx %d\n",
+                                                IPACMDBG_H("Got new prefix del old prefix entry [0x%x:%x:%x:%x] at idx %d\n", 
                                                             tmp_evt->ipv6_addr[0], tmp_evt->ipv6_addr[1],
                                                             tmp_evt->ipv6_addr[2], tmp_evt->ipv6_addr[3], v6_num);
-
+                                                
                                                 CtList->HandleNeighIpAddrDelEvt_v6(Ipv6IpAddress(tmp_evt->ipv6_addr, false));
-
+                                                                                                               
                                                 /* This will delete the current IPV6 address, RT routes and copy indices up */
                                                 handle_del_ipv6_addr(tmp_evt);
-                                                IPACM_Iface::ipacmcfg->del_vlan_ipv6_prefix(tmp_evt->ipv6_addr, -1);
                                                 add = 1;
                                         }
                                 } //for loop
-
+                                        
                                 if(tmp_evt!= NULL)
                                         free(tmp_evt);
-
+                               
                                 if(add)
                                 {
                                         if(get_client_memptr(eth_client, clnt_indx)->ipv6_set < IPV6_NUM_ADDR)

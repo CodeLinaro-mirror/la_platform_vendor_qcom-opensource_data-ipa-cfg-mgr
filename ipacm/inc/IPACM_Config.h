@@ -373,7 +373,7 @@ public:
 		return -1;
 	}
 
-	inline bool is_ip_collision_enabled(char* dev_name)
+	inline bool is_ip_collision_enabled(char* dev_name, uint16_t vlan_id = 0)
 	{
 		bool ret = false;
 		if(pthread_mutex_lock(&ip_collision_lock) != 0)
@@ -381,14 +381,23 @@ public:
 			IPACMERR("Unable to lock the mutex\n");
 			return ret;
 		}
-		IPACMDBG_H("dev_name: %s \n", dev_name);
+
 		for (int indx = 0; indx < MAX_NUM_IP_COLLISION_MPDN; indx++)
 		{
 			if (ip_collision_mpdn_table[indx].valid_entry)
 			{
-				if (strncmp(dev_name, ip_collision_mpdn_table[indx].dev_name,
-					sizeof(ip_collision_mpdn_table[indx].dev_name)) == 0)
+				if((dev_name != NULL) &&
+				   (strncmp(dev_name, ip_collision_mpdn_table[indx].dev_name,
+					sizeof(ip_collision_mpdn_table[indx].dev_name)) == 0))
 				{
+					IPACMDBG_H("Found dev_name %s\n", dev_name);
+					ret = true;
+					break;
+				}
+				if((vlan_id != 0) &&
+				   (ip_collision_mpdn_table[indx].vlan_id == vlan_id))
+				{
+					IPACMDBG_H("Found VLAN ID: %d\n", vlan_id);
 					ret = true;
 					break;
 				}

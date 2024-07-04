@@ -2983,7 +2983,8 @@ int IPACM_Lan::add_vlan_private_subnet(ipacm_bridge *bridge)
 
 	if(IPACM_Iface::ipacmcfg->ipa_num_private_subnet >= IPA_MAX_PRIVATE_SUBNET_ENTRIES)
 	{
-		IPACMERR("IPACM private subnet_addr overflow, total entry(%d) existing:\n", IPACM_Iface::ipacmcfg->ipa_num_private_subnet);
+		IPACMERR("IPACM private subnet_addr overflow, total entry(%d) existing:\n",
+					IPACM_Iface::ipacmcfg->ipa_num_private_subnet);
 		for(i = 0; i < IPACM_Iface::ipacmcfg->ipa_num_private_subnet; i++)
 		{
 			IPACMERR("0x%X\n", IPACM_Iface::ipacmcfg->private_subnet_table[i].subnet_addr);
@@ -2992,8 +2993,16 @@ int IPACM_Lan::add_vlan_private_subnet(ipacm_bridge *bridge)
 		return IPACM_FAILURE;
 	}
 
-	IPACM_Iface::ipacmcfg->private_subnet_table[IPACM_Iface::ipacmcfg->ipa_num_private_subnet].subnet_mask = bridge->bridge_netmask;
-	IPACM_Iface::ipacmcfg->private_subnet_table[IPACM_Iface::ipacmcfg->ipa_num_private_subnet].subnet_addr = bridge->bridge_ipv4_addr & bridge->bridge_netmask;
+	IPACM_Iface::ipacmcfg->private_subnet_table[IPACM_Iface::ipacmcfg->ipa_num_private_subnet].subnet_mask =
+								bridge->bridge_netmask;
+	IPACM_Iface::ipacmcfg->private_subnet_table[IPACM_Iface::ipacmcfg->ipa_num_private_subnet].subnet_addr =
+								bridge->bridge_ipv4_addr & bridge->bridge_netmask;
+	IPACM_Iface::ipacmcfg->private_subnet_table[IPACM_Iface::ipacmcfg->ipa_num_private_subnet].isCollisionSubnet = false;
+	if(IPACM_Iface::ipacmcfg->is_ip_collision_enabled(NULL, bridge->associate_VID))
+	{
+		IPACMDBG_H("Enabling IP collision for VLAN: %d\n", bridge->associate_VID);
+		IPACM_Iface::ipacmcfg->private_subnet_table[IPACM_Iface::ipacmcfg->ipa_num_private_subnet].isCollisionSubnet = true;
+	}
 	IPACM_Iface::ipacmcfg->ipa_num_private_subnet++;
 
 	/* handle private subnet change for this interface first*/

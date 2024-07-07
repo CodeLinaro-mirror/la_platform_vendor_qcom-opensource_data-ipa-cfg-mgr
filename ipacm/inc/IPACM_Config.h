@@ -278,6 +278,7 @@ public:
 	int get_iface_vlan_ids(char *phys_iface_name, uint16_t *Ids);
 	int get_iface_mac(char* iface_name, uint8_t *mac_addr);
 	int update_sta_bridge_info();
+	bool is_sta_bridge_prefix(uint32_t *v6_addr);
 #ifdef IPA_VLAN_PRIORITY
 	int get_vlan_id(char *iface_name, uint16_t *vlan_id, uint8_t *priority = NULL);
 #else
@@ -563,6 +564,12 @@ public:
 	/* do not offload this pdn until we get route add\ new vlan neighbor */
 	inline bool add_no_offload_ipv6_prefix(uint32_t *prefix)
 	{
+                if(is_sta_bridge_prefix(prefix))
+                {
+                        IPACMDBG_H("STA bridge prefix. Not adding to prefixes list\n");
+                        return false;
+                }
+
 		/* prefix shouldn't be present in offload list - this is a bug */
 		for(int i = 0; i < num_ipv6_prefixes; i++)
 		{
@@ -598,6 +605,12 @@ public:
 		int i = 0;
 		int no_offload_temp = num_no_offload_ipv6_prefix;
 		bool updated_reserved_slot = false;
+
+		if((vlan_id == sta_bridge.vlan_id) && is_sta_bridge_prefix(prefix))
+		{
+			IPACMDBG_H("STA bridge prefix. Not adding to prefixes list\n");
+			return false;
+		}
 
 		/* check for duplication */
 		for(i = 0; i < num_ipv6_prefixes; i++)

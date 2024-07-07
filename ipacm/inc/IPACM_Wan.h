@@ -707,9 +707,9 @@ private:
 #endif
 	int config_dft_firewall_rules(ipa_ip_type iptype);
 	int add_dhcp_flt_rule(ipa_ip_type iptype);
-	int add_icmp_flt_rule(ipa_ip_type iptype);
+	int add_icmp_sta_bridge_flt_rule(ipa_ip_type iptype);
 	int add_tcp_syn_flt_rule(ipa_ip_type iptype);
-	int add_sta_bridge_flt_rule();
+	int add_sta_bridge_flt_expt_rule();
 
 	/* configure the initial firewall filter rules */
 	int config_dft_embms_rules(ipa_ioc_add_flt_rule *pFilteringTable_v4, ipa_ioc_add_flt_rule *pFilteringTable_v6);

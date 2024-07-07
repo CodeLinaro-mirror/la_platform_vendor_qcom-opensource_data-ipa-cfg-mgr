@@ -2015,6 +2015,7 @@ int IPACM_Lan::handle_vlan_neighbor(ipacm_event_data_all *data)
 					return IPACM_FAILURE;
 				}
 
+
 				/* add ipv6 prefix */
 				new_prefix = IPACM_Iface::ipacmcfg->add_vlan_ipv6_prefix(data_vlan->data_all.ipv6_addr, ipa_if_num, vlan_id);
 			}
@@ -2171,11 +2172,7 @@ int IPACM_Lan::check_vlan_PDNUp(enum ipa_ip_type iptype)
 				if(IPACM_Wan::GetMuxByVid(Ids[i], &mux_id, iptype))
 				{
 					IPACMDBG_H("no v4 vlan up PDN for Id %d\n", Ids[i]);
-					if(IPACM_Iface::ipacmcfg->sta_bridge.vlan_id != Ids[i])
-					{
-						continue;
-					}
-					IPACMDBG_H("In STA Bridge mode. mux_id is 0\n");
+					continue;
 				}
 				/* create event data and call the handler */
 				memset(&vlan_data, 0, sizeof(vlan_data));
@@ -2230,11 +2227,7 @@ int IPACM_Lan::check_vlan_PDNUp(enum ipa_ip_type iptype)
 				if(IPACM_Wan::GetMuxByVid(Ids[i], &mux_id, iptype))
 				{
 					IPACMDBG_H("no v6 vlan up PDN for Id %d\n", Ids[i]);
-					if(IPACM_Iface::ipacmcfg->sta_bridge.vlan_id != Ids[i])
-					{
-						continue;
-					}
-					IPACMDBG_H("In STA Bridge mode. mux_id is 0\n");
+					continue;
 				}
 #ifdef FEATURE_IPACM_UL_FIREWALL
 				if(!firewall_updated)
@@ -3510,7 +3503,15 @@ int IPACM_Lan::handle_wan_up(ipa_ip_type ip_type, uint16_t vid)
 		m_pFilteringTable->ep = rx_prop->rx[0].src_pipe;
 		m_pFilteringTable->ip = IPA_IP_v6;
 		m_pFilteringTable->num_rules = (uint8_t)1;
-		m_pFilteringTable->add_after_hdl = ipv6_prefix_flt_rule_hdl[num_wan_prefix_rules - 1];
+		if(num_wan_prefix_rules == 0)
+		{
+			IPACMDBG_H("num_wan_prefix_rules is 0\n");
+			m_pFilteringTable->add_after_hdl = mtu_flt_rule_offset[IPA_IP_v6];
+		}
+		else
+		{
+			m_pFilteringTable->add_after_hdl = ipv6_prefix_flt_rule_hdl[num_wan_prefix_rules - 1];
+		}
 
 		if (false == m_routing.GetRoutingTable(&IPACM_Iface::ipacmcfg->rt_tbl_v6))
 		{
@@ -4537,7 +4538,8 @@ int IPACM_Lan::handle_eth_client_ipaddr(ipacm_event_data_all *data)
 				if( ((data->ipv6_addr[0] & ipv6_link_local_prefix_mask) != (ipv6_link_local_prefix & ipv6_link_local_prefix_mask)) &&
 #ifdef FEATURE_VLAN_MPDN
 					/* returns true if a VLAN PDN or default PDN should be offloaded */
-					IPACM_Iface::ipacmcfg->is_offload_ipv6_prefix(data->ipv6_addr) != true)
+					(IPACM_Iface::ipacmcfg->is_offload_ipv6_prefix(data->ipv6_addr) != true) &&
+					!(IPACM_Iface::ipacmcfg->is_sta_bridge_prefix(data->ipv6_addr)))
 #else
 					memcmp(ipv6_prefix, data->ipv6_addr, sizeof(ipv6_prefix)) != 0)
 #endif

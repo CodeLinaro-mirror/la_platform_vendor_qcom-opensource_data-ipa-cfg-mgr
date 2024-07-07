@@ -1834,6 +1834,25 @@ void IPACM_Config::handle_vlan_client_info(ipacm_event_data_all *data)
 	return;
 }
 
+bool IPACM_Config::is_sta_bridge_prefix(uint32_t *v6_addr)
+{
+	if(v6_addr == NULL)
+	{
+		IPACMERR("IPv6 address is empty.\n");
+		return false;
+	}
+	if((sta_bridge.ipv6_addr[0] != 0) || (sta_bridge.ipv6_addr[1] != 0))
+	{
+		if((sta_bridge.ipv6_addr[0] == v6_addr[0]) &&
+			(sta_bridge.ipv6_addr[1] == v6_addr[1]))
+		{
+			IPACMDBG_H("STA Bridge prefix\n");
+			return true;
+		}
+	}
+	return false;
+}
+
 /* In bridge mode, the initial IP address of
  * the STA bridge interface would be changes
  * once WLAN is enabled. This function gets

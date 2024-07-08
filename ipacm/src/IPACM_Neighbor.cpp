@@ -349,13 +349,6 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 
 				data_all = (ipacm_event_data_all *)param;
 				ret = IPACM_Iface::ipacmcfg->find_matching_vlan(data_all->if_index, &vlan_data);
-#ifdef IPA_L2TP_TUNNEL_UDP
-				if(IPACM_Iface::ipacmcfg->check_l2tp_iface(data_all->iface_name))
-				{
-					vlan_data.vlan_id = DUMMY_VLAN_ID_BASE + data_all->master_if_index;
-					ret = IPACM_SUCCESS;
-				}
-#endif
 				if(ret == IPACM_FAILURE)
 				{
 					IPACMERR("Vlan entry has not been created for interface index %d\n", data_all->if_index);
@@ -696,11 +689,6 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 											}
 											IPACMDBG_H("client - bridge vid match (%d)\n", vlan_id);
 										}
-#ifdef IPA_L2TP_TUNNEL_UDP
-                                                                                //this is first time associating bridge to neighbor client, here do the dummy VLAN update.
-                                                                                IPACM_Iface::ipacmcfg->add_l2tp_dummy_bridge_vlan_mapping(data->iface_name,
-                                                                                                                                                neighbor_client[i].iface_name, data->if_index);
-#endif
 									}
 								}
 #endif
@@ -1117,11 +1105,6 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 											}
 											IPACMDBG_H("client - bridge vid match (%d)\n", vlan_id);
 										}
-#ifdef IPA_L2TP_TUNNEL_UDP
-                                                                                //this is first time associating bridge to neighbor client, here do the dummy VLAN update.
-                                                                                IPACM_Iface::ipacmcfg->add_l2tp_dummy_bridge_vlan_mapping(data->iface_name,
-                                                                                                                                                        neighbor_client[i].iface_name, data->if_index);
-#endif
 									}
 								}
 #endif

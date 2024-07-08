@@ -362,7 +362,7 @@ public:
 
 #ifdef IPA_L2TP_TUNNEL_UDP
 	/* add l2tp bridge dummy vlan mapping*/
-	void add_l2tp_dummy_bridge_vlan_mapping(const char *bridge_iface, const char* l2tp_client_iface, int bridge_if_index);
+	void add_l2tp_dummy_vlan_mapping(const char *bridge_iface, const char* l2tp_client_iface, int if_index);
 
 	/* check if vlan id is l2tp bridge dummy vlan id */
 	bool check_l2tp_bridge_vlan_id(uint32_t vlan_id);

@@ -1860,8 +1860,18 @@ static int ipa_nl_decode_nlmsg
 							vlan_bridge_data.bridge_ipv4 = if_ipv4_addr;
 							vlan_bridge_data.subnet_mask = if_ipipv4_addr_mask;
 							vlan_bridge_data.master_if_index = msg_ptr->nl_neigh_info.master_interface_index;
-							config->add_dummy_vlan_mapping(master_dev_name,
+#ifdef IPA_L2TP_TUNNEL_UDP
+							if(config->check_l2tp_iface(data_all->iface_name))
+							{
+								config->add_l2tp_dummy_vlan_mapping(master_dev_name, data_all->iface_name,
+																msg_ptr->nl_neigh_info.metainfo.ndm_ifindex);
+							}
+							else
+#endif
+							{
+								config->add_dummy_vlan_mapping(master_dev_name,
 															data_all->iface_name, msg_ptr->nl_neigh_info.metainfo.ndm_ifindex);
+							}
 							config->add_bridge_vlan_mapping(&vlan_bridge_data);
 							vlan_bridge_data.status = 1;
 							config->add_bridge_vlan_mapping(&vlan_bridge_data);

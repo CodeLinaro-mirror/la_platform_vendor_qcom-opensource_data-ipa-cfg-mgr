@@ -2661,7 +2661,7 @@ bool IPACM_Config::check_l2tp_iface(const char *client_iface)
 
 #ifdef IPA_L2TP_TUNNEL_UDP
 /* add l2tp bridge dummy vlan mapping*/
-void IPACM_Config::add_l2tp_dummy_bridge_vlan_mapping(const char *bridge_iface, const char* l2tp_client_iface, int bridge_if_index)
+void IPACM_Config::add_l2tp_dummy_vlan_mapping(const char *bridge_iface, const char* l2tp_client_iface, int bridge_if_index)
 {
 	list<l2tp_vlan_mapping_info>::iterator it_mapping;
 

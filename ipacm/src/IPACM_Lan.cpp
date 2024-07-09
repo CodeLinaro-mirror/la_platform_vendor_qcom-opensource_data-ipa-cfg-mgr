@@ -1606,25 +1606,20 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 			}
 		}
 		break;
+#endif
 	case IPA_NOTIFY_VLAN_UP:
 		{
 			IPACMDBG_H("Received IPA_NOTIFY_VLAN_UP\n");
 			if(IPACM_Iface::ipacmcfg->iface_in_vlan_mode(dev_name))
 			{
-				if(IPACM_Wan::isVlanWanUP() && !modem_ul_v4_set)
-				{
-					IPACMDBG_H("Check any missed v4 VLAN handling in v4 new ADDR\n");
-					check_vlan_PDNUp(IPA_IP_v4);
-				}
-				else if (IPACM_Wan::isVlanWanUP_V6() && !modem_ul_v6_set)
-				{
-					IPACMDBG_H("Check any missed v6 VLAN handling in v6 new ADDR\n");
-					check_vlan_PDNUp(IPA_IP_v6);
-				}
+				IPACMDBG_H("Check any missed v4 VLAN handling in v4 new ADDR\n");
+				check_vlan_PDNUp(IPA_IP_v4);
+				IPACMDBG_H("Check any missed v6 VLAN handling in v6 new ADDR\n");
+				check_vlan_PDNUp(IPA_IP_v6);
 			}
 		}
 		break;
-#endif
+
 	/* only need for vlan supported lan instance */
 	case IPA_HANDLE_WAN_ADDR_ADD_V6:
 		{

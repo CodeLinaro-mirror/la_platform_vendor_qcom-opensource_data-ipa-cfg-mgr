@@ -14953,17 +14953,38 @@ int IPACM_Lan::install_l2tp_udp_dl_rules(ipacm_event_data_all *data, int index, 
 		return IPACM_FAILURE;
 	}
 
-		IPACMDBG_H("construct ETH header and route rules \n");
+	IPACMDBG_H("Got vlan id %d\n", info.l2tp_bridge_vlan_id);
+	get_client_memptr(eth_client, index)->vlan_id = info.l2tp_bridge_vlan_id;
+
+	IPACMDBG_H("construct ETH header and route rules \n");
 	/* Associate with IP and construct RT-rule */
 	if(handle_eth_client_ipaddr(data) == IPACM_FAILURE)
 	{
 		IPACMERR("Failed handle_eth_client_ipaddr, continue\n");
 		return IPACM_FAILURE;
 	}
-	if(handle_eth_client_route_rule(data->mac_addr, iptype))
+
+	if(iptype == IPA_IP_v4)
 	{
-		IPACMERR("Failed to install route rule for iptype %d\n", iptype);
-		return IPACM_FAILURE;
+		if(handle_eth_client_route_rule(data->mac_addr, iptype))
+		{
+			IPACMERR("Failed to install route rule for iptype %d\n", iptype);
+			return IPACM_FAILURE;
+		}
+	}
+	else
+	{
+		if((get_client_memptr(eth_client, index)->client_backhaul_prefix[0] == data->ipv6_addr[0]) &&
+				(get_client_memptr(eth_client, index)->client_backhaul_prefix[1] == data->ipv6_addr[1]) &&
+				(!get_client_memptr(eth_client, index)->v6_vlan_rt_installed))
+		{
+			IPACMDBG_H("Neighbor received after conntrack. Installing Route rules now...\n");
+			if(handle_eth_client_route_rule(data->mac_addr, iptype, info.l2tp_bridge_vlan_id, data->ipv6_addr))
+			{
+				IPACMERR("Failed to install route rule for iptype %d\n", iptype);
+				return IPACM_FAILURE;
+			}
+		}
 	}
 
 	return IPACM_SUCCESS;

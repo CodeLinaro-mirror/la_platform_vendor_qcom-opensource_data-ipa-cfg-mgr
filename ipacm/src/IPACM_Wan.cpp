@@ -1618,7 +1618,7 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 						IPACMDBG_H("adding header, dev (%s) ip-type(%d), default gw (%x)\n", dev_name,data->iptype, wan_v4_addr_gw);
 					}
 					if ((data->iptype == IPA_IP_v6 || data->iptype == IPA_IP_MAX) &&  wan_v6_addr_gw_set != true &&
-						(data->ipv6_addr_gw[0] != 0) && (data->ipv6_addr_gw[1] != 0) && (data->ipv6_addr_gw[2] != 0) && (data->ipv6_addr_gw[3] != 0))
+						(data->ipv6_addr_gw[0] != 0) || (data->ipv6_addr_gw[1] != 0) || (data->ipv6_addr_gw[2] != 0) || (data->ipv6_addr_gw[3] != 0))
 					{
 
 						IPACMDBG_H(" IPV6 gateway: %08x:%08x:%08x:%08x \n",

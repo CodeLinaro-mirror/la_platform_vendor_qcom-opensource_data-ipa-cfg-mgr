@@ -332,11 +332,19 @@ int IPACM_Wan::GetMuxByVid(uint16_t vlan_id, uint8_t *mux_id, ipa_ip_type iptype
 			{
 				for(int j = 0; j <  ipv4_to_iface[i].VID_cnt; j++)
 				{
-					if((IPACM_Wan::ipv4_to_iface[i].pIface->ext_prop) &&
-							(IPACM_Wan::ipv4_to_iface[i].associated_VIDs[j] == vlan_id))
+					if(IPACM_Wan::ipv4_to_iface[i].associated_VIDs[j] == vlan_id)
 					{
-						*mux_id = IPACM_Wan::ipv4_to_iface[i].pIface->ext_prop->ext[0].mux_id;
-						return IPACM_SUCCESS;
+						if(IPACM_Wan::ipv4_to_iface[i].pIface->ext_prop)
+						{
+							*mux_id = IPACM_Wan::ipv4_to_iface[i].pIface->ext_prop->ext[0].mux_id;
+							return IPACM_SUCCESS;
+						}
+						else if((IPACM_Wan::ipv4_to_iface[i].pIface->m_is_sta_mode == WLAN_WAN) ||
+							(IPACM_Wan::ipv4_to_iface[i].pIface->m_is_sta_mode == ECM_WAN))
+						{
+							*mux_id = 0;
+							return IPACM_SUCCESS;
+						}
 					}
 				}
 			}
@@ -352,11 +360,19 @@ int IPACM_Wan::GetMuxByVid(uint16_t vlan_id, uint8_t *mux_id, ipa_ip_type iptype
 			{
 				for(int j = 0; j < ipv6_to_iface[i].VID_cnt; j++)
 				{
-					if((IPACM_Wan::ipv6_to_iface[i].pIface->ext_prop) &&
-							(IPACM_Wan::ipv6_to_iface[i].associated_VIDs[j] == vlan_id))
+					if(IPACM_Wan::ipv6_to_iface[i].associated_VIDs[j] == vlan_id)
 					{
-						*mux_id = IPACM_Wan::ipv6_to_iface[i].pIface->ext_prop->ext[0].mux_id;
-						return IPACM_SUCCESS;
+						if(IPACM_Wan::ipv6_to_iface[i].pIface->ext_prop)
+						{
+							*mux_id = IPACM_Wan::ipv6_to_iface[i].pIface->ext_prop->ext[0].mux_id;
+							return IPACM_SUCCESS;
+						}
+						else if((IPACM_Wan::ipv6_to_iface[i].pIface->m_is_sta_mode == WLAN_WAN) ||
+							(IPACM_Wan::ipv6_to_iface[i].pIface->m_is_sta_mode == ECM_WAN))
+						{
+							*mux_id = 0;
+							return IPACM_SUCCESS;
+						}
 					}
 				}
 			}

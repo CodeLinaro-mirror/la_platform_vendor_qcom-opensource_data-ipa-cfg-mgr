@@ -2560,6 +2560,7 @@ void IPACM_Config::del_l2tp_vlan_mapping(l2tp_session_info *data)
 		{
 			l2tp_bridge_vlan = it->l2tp_bridge_vlan_id;
 			m_l2tp_vlan_mapping.erase(it);
+			it--;
 			DelNatIfaces(data->l2tp_iface_name);
 			if(num_ipa_l2tp_session > 0)
 			{
@@ -2567,6 +2568,7 @@ void IPACM_Config::del_l2tp_vlan_mapping(l2tp_session_info *data)
 			}
 			IPACMDBG_H("Del l2tp iface %s to nat ifaces, Now num l2tp sessions %d\n", 
 					data->l2tp_iface_name, num_ipa_l2tp_session);
+			break;
 		}
 	}
 	pthread_mutex_unlock(&vlan_l2tp_lock);
@@ -2754,6 +2756,7 @@ void IPACM_Config::del_l2tp_tunnel_info(uint32_t tunnel_id)
 			}
 			IPACMDBG_H("Del l2tp iface %s to nat ifaces, Now num l2tp sessions %d\n",
 					it->l2tp_iface_name, num_ipa_l2tp_session);
+			it--;
 		}
 		if (IPACM_Iface::ipacmcfg->ipacm_mpdn_enable == TRUE && l2tp_bridge_vlan != 0)
 		{
@@ -2786,6 +2789,7 @@ void IPACM_Config::del_l2tp_tunnel_info(uint32_t tunnel_id)
 		{
 			IPACMDBG_H("found tunnel with id %d\n", tunnel_id);
 			l2tp_tunnels.erase(it_tunnel);
+			it_tunnel--;
 			if(num_ipa_l2tp_tunnel > 0)
 			{
 				num_ipa_l2tp_tunnel--;

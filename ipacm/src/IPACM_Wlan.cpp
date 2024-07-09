@@ -3825,6 +3825,11 @@ int IPACM_Wlan::handle_wlan_vlan_neighbor(ipacm_event_data_all *data)
 	IPACMDBG_H("VLAN IF %s got client, vlan id %d \n", data->iface_name, vlan_id);
 #endif
 	data_vlan = (ipacm_event_new_neigh_vlan *)data;
+	if(data_vlan->bridge == NULL)
+	{
+		IPACMERR("Got Neighbor with no bridge return\n");
+		return IPACM_FAILURE;
+	}
 	if(IPACM_Iface::ipacmcfg->ipacm_mpdn_enable) {
 		if(data_vlan->data_all.iptype == IPA_IP_v6)
 		{

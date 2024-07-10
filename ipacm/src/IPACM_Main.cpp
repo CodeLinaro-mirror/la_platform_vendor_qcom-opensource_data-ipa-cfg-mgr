@@ -1040,7 +1040,7 @@ void* ipa_driver_msg_notifier(void *param)
 				IPACMERR("unable to allocate memory for addr evt\n");
 				return NULL;
 			}
-			ipa_get_if_index(gw_info.dev_name, &(data_addr->if_index));
+			ipa_get_if_index(WLAN_STA_IFACE, &(data_addr->if_index));
 			data_addr->iptype = gw_info.ip;
 			data_addr->is_default_backhaul_gw = gw_info.is_default_backhaul_gw;
 			data_addr->ipv4_addr_gw = ntohl(gw_info.gw_ipv4);

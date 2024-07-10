@@ -489,6 +489,16 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 											}
 											IPACMDBG_H("client - bridge vid match (%d)\n", vlan_id);
 										}
+										else if(strstr(neighbor_client[i].iface_name, WLAN_STA_IFACE))
+										{
+											IPACMDBG_H("WLAN in bridge mode\n");
+											IPACM_Iface::ipacmcfg->sta_bridge.vlan_id = bridge->associate_VID;
+											strlcpy(IPACM_Iface::ipacmcfg->sta_bridge.iface_name,
+													bridge->bridge_name, IF_NAME_LEN);
+											IPACMDBG_H("Updated STA BridgeVID as %d and bridge name: %s\n",
+													IPACM_Iface::ipacmcfg->sta_bridge.vlan_id,
+													IPACM_Iface::ipacmcfg->sta_bridge.iface_name);
+										}
 									}
 								}
 #endif
@@ -880,6 +890,16 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 												bridge->bridge_name);
 											continue;
 										}
+									}
+									else if(strstr(neighbor_client[i].iface_name, WLAN_STA_IFACE))
+									{
+										IPACMDBG_H("WLAN in bridge mode\n");
+										IPACM_Iface::ipacmcfg->sta_bridge.vlan_id = bridge->associate_VID;
+										strlcpy(IPACM_Iface::ipacmcfg->sta_bridge.iface_name,
+												bridge->bridge_name, IF_NAME_LEN);
+										IPACMDBG_H("Updated STA BridgeVID as %d and bridge name: %s\n",
+												IPACM_Iface::ipacmcfg->sta_bridge.vlan_id,
+												IPACM_Iface::ipacmcfg->sta_bridge.iface_name);
 									}
 									else
 									{

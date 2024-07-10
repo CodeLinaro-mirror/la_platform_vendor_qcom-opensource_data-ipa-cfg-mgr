@@ -214,6 +214,7 @@ public:
 
 	ipacm_bridge vlan_bridges[IPA_MAX_NUM_BRIDGES];
 	bool vlan_devices[IPA_VLAN_IF_MAX];
+	struct sta_bridge_info sta_bridge = {0};
 #endif
 	/* Store the flt rule count for each producer client*/
 	int flt_rule_count_v4[IPA_CLIENT_MAX];
@@ -275,6 +276,8 @@ public:
 	bool is_added_vlan_iface(char *iface_name);
 	bool iface_in_vlan_mode(const char * phys_iface_name);
 	int get_iface_vlan_ids(char *phys_iface_name, uint16_t *Ids);
+	int get_iface_mac(char* iface_name, uint8_t *mac_addr);
+	int update_sta_bridge_info();
 #ifdef IPA_VLAN_PRIORITY
 	int get_vlan_id(char *iface_name, uint16_t *vlan_id, uint8_t *priority = NULL);
 #else
@@ -312,7 +315,6 @@ public:
 	int ipacm_reset_hw_fnr_counters(const uint8_t start_id, const uint8_t end_id);
 	void alloc_fnr_counter(void);
 #endif
-
 	const char* getEventName(ipa_cm_event_id event_id);
 
 	void add_dummy_vlan_mapping(char *bridge_iface, char* client_iface, int if_index);

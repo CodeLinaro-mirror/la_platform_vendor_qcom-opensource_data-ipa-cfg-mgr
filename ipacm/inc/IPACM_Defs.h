@@ -176,8 +176,10 @@ extern "C"
 	IPA_MAX_ACTIVE_LAN_IFACE + IPA_MAX_ACTIVE_WLAN_IFACE + IPA_MAX_NUM_SW_PDNS)
 
 #define IPA_DUMMY_PREFIX 0xFFFFFFFF
+#define DHCP_SRC_PORT 67
 
 #define BRIDGE_0 "bridge0"
+#define WLAN_STA_IFACE "wlan0"
 
 /*===========================================================================
 										 GLOBAL DEFINITIONS AND DECLARATIONS
@@ -469,7 +471,8 @@ typedef enum
 {
 	Q6_WAN = 0,
 	WLAN_WAN,
-	ECM_WAN
+	ECM_WAN,
+	IFACE_MAX
 } ipacm_wan_iface_type;
 
 typedef struct _ipacm_ifacemgr_data
@@ -526,6 +529,14 @@ struct bridge_vlan_mapping_info
 struct l2tp_client_info
 {
 	char client_iface_name[IPA_IFACE_NAME_LEN];
+};
+
+struct sta_bridge_info
+{
+	char iface_name[IPA_IFACE_NAME_LEN];
+	uint16_t vlan_id;
+	uint32_t ipv4_addr;
+	uint32_t ipv6_addr[4];
 };
 
 #ifdef FEATURE_SOCKSv5

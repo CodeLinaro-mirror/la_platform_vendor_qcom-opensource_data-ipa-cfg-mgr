@@ -1442,7 +1442,7 @@ private:
 	int handle_down_evt();
 
 	/*handle reset usb-client rt-rules */
-	int handle_lan_client_reset_rt(ipa_ip_type iptype);
+	int handle_lan_client_reset_rt(ipa_ip_type iptype, uint16_t vlan_id = 0);
 
 #ifdef FEATURE_IPACM_UL_FIREWALL
 	void change_to_network_order(ipa_ip_type iptype, ipa_rule_attrib* attrib);

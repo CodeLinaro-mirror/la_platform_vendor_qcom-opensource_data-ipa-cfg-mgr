@@ -1818,13 +1818,31 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 
 #ifdef FEATURE_EoGRE
 	case IPA_HANDLE_EoGRE_UP:
-		IPACMDBG_H("Received and will process an IPA_HANDLE_EoGRE_UP\n");
-		gre_up();
+		{
+			IPACMDBG_H("Received and will process an IPA_HANDLE_EoGRE_UP\n");
+			gre_up();
+			if (IPACM_Iface::ipacmcfg->tunnel_feature == SINGLE_TAG_FEATURE)
+			{
+				evt_data.event = IPA_WAN_HANDLE_EoGRE_UP;
+				evt_data.evt_data = 0;
+				IPACMDBG_H("Posting event: IPA_WAN_HANDLE_EoGRE_UP.\n");
+				IPACM_EvtDispatcher::PostEvt(&evt_data);
+			}
+		}
 		break;
 
 	case IPA_HANDLE_EoGRE_DOWN:
-		IPACMDBG_H("Received and will process an IPA_HANDLE_EoGRE_DOWN\n");
-		gre_down();
+		{
+			IPACMDBG_H("Received and will process an IPA_HANDLE_EoGRE_DOWN\n");
+			gre_down();
+			if (IPACM_Iface::ipacmcfg->tunnel_feature == SINGLE_TAG_FEATURE)
+			{
+				evt_data.event    = IPA_WAN_HANDLE_EoGRE_DOWN;
+				evt_data.evt_data = 0;
+				IPACMDBG_H("Posting event: IPA_WAN_HANDLE_EoGRE_DOWN.\n");
+				IPACM_EvtDispatcher::PostEvt(&evt_data);
+			}
+		}
 		break;
 #endif
 #ifdef FEATURE_PMIPV6
@@ -16587,12 +16605,12 @@ int IPACM_Lan::gre_make_hdr_for_add_ctx(
 			/*Fill zero for number of double tag info*/
 			template_info_to_uc.tunnel_config.num_of_double_tag_configs = 0;
 
-			/*ipgre_info->num_exceptions stores the tunnel_id in EoGRE mode*/
+			/*ipgre_info->num_exceptions stores the tunnel_id in EoGRE multi tunnel*/
 			tunel_id = ipgre_info.num_exceptions;
 
 			template_info_to_uc.tunnel_config.tunnel_id = tunel_id;
 			template_info_to_uc.tunnel_config.num_of_single_tag_configs = IPACM_Iface::ipacmcfg->tunnel_idx.size();
-			IPACMDBG_H(" Total number of tunnel_idx: %d\n",template_info_to_uc.tunnel_config.num_of_single_tag_configs);
+			IPACMDBG_H("Add tunnel (%d) Total number of tunnel_idx: %d\n", tunel_id, template_info_to_uc.tunnel_config.num_of_single_tag_configs);
 
 			template_info_to_uc.tunnel_config.singletag_mux_mapping_table[tunel_id].vlan_id_start
 				= 0xFFFF;

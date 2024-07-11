@@ -334,6 +334,8 @@ typedef enum
 #ifdef FEATURE_EoGRE
 	IPA_HANDLE_EoGRE_UP,                      /* ipa_ipgre_info */
 	IPA_HANDLE_EoGRE_DOWN,                    /* ipa_ipgre_info */
+	IPA_WAN_HANDLE_EoGRE_UP,		  /* ipa_ipgre_info for SIngle tag feature */
+	IPA_WAN_HANDLE_EoGRE_DOWN,		  /* ipa_ipgre_info for SIngle tag feature */
 #endif
 	IPA_DSCP_PCP_CONFIG_CHANGE_EVENT,         /* ipacm_event_change_dscp_pcp */
 #ifdef FEATURE_PMIPV6

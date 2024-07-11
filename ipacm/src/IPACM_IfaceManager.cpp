@@ -634,8 +634,17 @@ int IPACM_IfaceManager::create_iface_instance(ipacm_ifacemgr_data *param)
 						}
 					}
 #ifdef FEATURE_EoGRE
-					IPACM_EvtDispatcher::registr(IPA_HANDLE_EoGRE_UP, w);
-					IPACM_EvtDispatcher::registr(IPA_HANDLE_EoGRE_DOWN, w);
+					if(IPACM_Iface::ipacmcfg->tunnel_feature == SINGLE_TAG_FEATURE)
+					{
+						IPACM_EvtDispatcher::registr(IPA_WAN_HANDLE_EoGRE_UP, w);
+						IPACM_EvtDispatcher::registr(IPA_WAN_HANDLE_EoGRE_DOWN, w);
+
+					}
+					else
+					{
+						IPACM_EvtDispatcher::registr(IPA_HANDLE_EoGRE_UP, w);
+						IPACM_EvtDispatcher::registr(IPA_HANDLE_EoGRE_DOWN, w);
+					}
 #endif
 #ifdef FEATURE_PMIPV6
 					IPACM_EvtDispatcher::registr(IPA_HANDLE_GRE_UP, w);

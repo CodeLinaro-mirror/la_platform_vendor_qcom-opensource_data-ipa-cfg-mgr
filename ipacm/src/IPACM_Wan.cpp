@@ -2255,6 +2255,7 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 #endif
 
 #ifdef FEATURE_EoGRE
+	case IPA_WAN_HANDLE_EoGRE_UP:
 	case IPA_HANDLE_EoGRE_UP:
 	{
 		ipa_ipgre_info ipgre_info = IPACM_Iface::ipacmcfg->eogre_info;
@@ -2262,17 +2263,37 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 		if (ipgre_info.iptype == IPA_IP_v4 &&
 			ipgre_info.ipv4_src == wan_v4_addr)
 		{
-			IPACMDBG_H("Received and will process an IPA_HANDLE_EoGRE_UP for v4 tunnel\n");
+			if (IPACM_Iface::ipacmcfg->tunnel_feature == SINGLE_TAG_FEATURE)
+			{
+				IPACMDBG_H("Received and will process an IPA_WAN_HANDLE_EoGRE_UP for v4 tunnel(%d) of WAN instance (%s)\n",ipgre_info.num_exceptions,this->dev_name);
+			}
+			else
+			{
+				IPACMDBG_H("Received and will process an IPA_HANDLE_EoGRE_UP for v4 tunnel\n");
+			}
 			eogre_up();
 		}
 		else if (ipgre_info.iptype == IPA_IP_v6 &&
 			memcmp(ipgre_info.ipv6_src, m_ipv6_addr, sizeof(ipgre_info.ipv6_src)) == 0)
 		{
-			IPACMDBG_H("Received and will process an IPA_HANDLE_EoGRE_UP for v6 tunnel\n");
+			if (IPACM_Iface::ipacmcfg->tunnel_feature == SINGLE_TAG_FEATURE)
+			{
+				IPACMDBG_H("Received and will process an IPA_WAN_HANDLE_EoGRE_UP for v6 tunnel (%d) of WAN instance (%s)\n",ipgre_info.num_exceptions,this->dev_name);
+			}
+			else
+			{
+				IPACMDBG_H("Received and will process an IPA_HANDLE_EoGRE_UP for v6 tunnel\n");
+			}
 			eogre_up();
 		}
 		else
 		{
+			/*EOGRE UP comes for other PDN, handle_route_del_evt_ex should not be called */
+			if(IPACM_Iface::ipacmcfg->tunnel_feature == SINGLE_TAG_FEATURE)
+			{
+				IPACMDBG_H("EoGRE UP EVENT for different WAN instance (%s)\n",this->dev_name);
+				break;
+			}
 			if (is_default_gateway && wan_up)
 			{
 				IPACMDBG_H("EoGRE PDN is up, Cleanup v4 default gateway PDN\n");
@@ -2292,6 +2313,7 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 		break;
 	}
 
+	case IPA_WAN_HANDLE_EoGRE_DOWN:
 	case IPA_HANDLE_EoGRE_DOWN:
 	{
 		ipa_ipgre_info ipgre_info = IPACM_Iface::ipacmcfg->eogre_info;
@@ -2299,13 +2321,27 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 		if (ipgre_info.iptype == IPA_IP_v4 &&
 			ipgre_info.ipv4_src == wan_v4_addr)
 		{
-			IPACMDBG_H("Received and will process an IPA_HANDLE_EoGRE_DOWN for v4 tunnel\n");
+			if (IPACM_Iface::ipacmcfg->tunnel_feature == SINGLE_TAG_FEATURE)
+			{
+				IPACMDBG_H("Received and will process an IPA_WAN_HANDLE_EoGRE_DOWN for v4 tunnel (%d)\n",ipgre_info.num_exceptions);
+			}
+			else
+			{
+				IPACMDBG_H("Received and will process an IPA_HANDLE_EoGRE_DOWN for v4 tunnel\n");
+			}
 			eogre_down();
 		}
 		else if (ipgre_info.iptype == IPA_IP_v6 &&
 			memcmp(ipgre_info.ipv6_src, m_ipv6_addr, sizeof(ipgre_info.ipv6_src)) == 0)
 		{
-			IPACMDBG_H("Received and will process an IPA_HANDLE_EoGRE_DOWN for v6 tunnel\n");
+			if (IPACM_Iface::ipacmcfg->tunnel_feature == SINGLE_TAG_FEATURE)
+			{
+				IPACMDBG_H("Received and will process an IPA_WAN_HANDLE_EoGRE_DOWN for v6 tunnel (%d)\n",ipgre_info.num_exceptions);
+			}
+			else
+			{
+				IPACMDBG_H("Received and will process an IPA_HANDLE_EoGRE_DOWN for v6 tunnel\n");
+			}
 			eogre_down();
 		}
 		break;
@@ -4525,7 +4561,14 @@ int IPACM_Wan::config_dft_firewall_rules_ex(struct ipa_flt_rule_add *rules, int 
 		IPACMERR("QCMAP Firewall XML read failed, no such file, use default configuration \n");
 	}
 
+	IPACMDBG_H("Firewall XML file pdn_count:  %d \n",firewall_config.pdn_count);
+	if (firewall_config.default_profile &&
+			strncmp(firewall_config.pdns[0].net_dev, "UNKNOWN", strlen("UNKNOWN")))
+	{
+		IPACMDBG_H("FireWall default net_dev %s, default_profile %d \n", firewall_config.pdns[0].net_dev,firewall_config.default_profile);
+	}
 #ifdef FEATURE_VLAN_MPDN
+	IPACMERR("Config Rule for Wan instance %s\n",this->dev_name);
 	uint32_t offloaded_pdns_count_v4 = 0;
 	std::pair<IPACM_firewall_conf_t*, ipacm_ipv4_wan_iface*> offloaded_pdns_v4[IPA_MAX_NUM_HW_PDNS];
 	for (uint32_t i = 0;
@@ -5267,13 +5310,14 @@ int IPACM_Wan::config_eogre_dl_rules_ex(struct ipacm_pdn_flt_rule* rules, int ru
 			else
 			{
 				IPACMERR("Invalid iptype.\n");
-				return IPACM_FAILURE;
+				continue;
 			}
 		}
 		if(found == false)
 		{
-			IPACMERR("GetWanByAddr did not success.\n");
-			return IPACM_FAILURE;
+			IPACMERR("GetWanByAddr did not success for iptype%d\n",
+				iptype);
+			return IPACM_SUCCESS;
 		}
 install_rule:
 		IPACMDBG_H("GetWanByAddr succeed for tunnel_id: %d associated pdn iface [%s]\n",conf->tunnel_idx[i], pdnIface->dev_name);
@@ -6009,7 +6053,7 @@ int IPACM_Wan::config_wan_firewall_rule(ipa_ip_type iptype,bool isPmipv6,uint8_t
 			res = IPACM_FAILURE;
 			goto fail;
 		}
-		IPACMDBG_H("Succeded in constructing firewall rules for ip type %d\n", iptype);
+		IPACMDBG_H("Succeded in constructing firewall rules for ip type %d, total rules: %d\n", iptype, IPACM_Wan::num_v4_flt_rule);
 #ifdef FEATURE_L2TP
 		for(it = IPACM_Iface::ipacmcfg->l2tp_client.begin();
 			it != IPACM_Iface::ipacmcfg->l2tp_client.end() &&
@@ -6076,7 +6120,7 @@ int IPACM_Wan::config_wan_firewall_rule(ipa_ip_type iptype,bool isPmipv6,uint8_t
 			res = IPACM_FAILURE;
 			goto fail;
 		}
-		IPACMDBG_H("Succeded in constructing firewall rules for ip type %d\n", iptype);
+		IPACMDBG_H("Succeded in constructing firewall rules for ip type %d, total rules: %d\n", iptype, IPACM_Wan::num_v6_flt_rule);
 	}
 	else
 	{
@@ -10458,7 +10502,7 @@ int IPACM_Wan::add_dl_untagged_catchup_filtering_rule_each_pdn(
 		return IPACM_FAILURE;
 	}
 
-	IPACMDBG_H("Adding DL cathall rule\n");
+	IPACMDBG_H("Adding DL cathall rule, iptype (%d)\n",iptype);
 	struct ipa_flt_rule_add flt_rule_entry;
 	memset(&flt_rule_entry, 0, sizeof(struct ipa_flt_rule_add));
 

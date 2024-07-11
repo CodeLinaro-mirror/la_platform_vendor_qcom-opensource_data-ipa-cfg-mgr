@@ -198,6 +198,8 @@ const char *ipacm_event_name[] = {
 #ifdef FEATURE_EoGRE
 	__stringify(IPA_HANDLE_EoGRE_UP),                      /* Handle eogre enable event. */
 	__stringify(IPA_HANDLE_EoGRE_DOWN),                    /* Handle eogre disable event. */
+	__stringify(IPA_WAN_HANDLE_EoGRE_UP),                      /* Handle eogre enable event. */
+	__stringify(IPA_WAN_HANDLE_EoGRE_DOWN),                    /* Handle eogre disable event. */
 #endif
 	__stringify(IPA_DSCP_PCP_CONFIG_CHANGE_EVENT),         /* NULL */
 #ifdef FEATURE_PMIPV6

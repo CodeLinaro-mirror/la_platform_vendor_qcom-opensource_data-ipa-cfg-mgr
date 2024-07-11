@@ -18368,6 +18368,12 @@ void IPACM_Lan::eogre_down()
 	int            res;
 	int j = 0;
 
+	if((iptype != IPA_IP_v4) && (iptype != IPA_IP_v6))
+	{
+		IPACMDBG("Invalid ip type is passed\n");
+		return;
+	}
+
 	IPACMDBG_H(
 		"There's eogre disable work to be done for iptype(%d)\n",
 		iptype);

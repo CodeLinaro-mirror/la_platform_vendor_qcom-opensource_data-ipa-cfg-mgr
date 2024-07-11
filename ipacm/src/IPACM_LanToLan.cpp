@@ -67,6 +67,7 @@ IPACM_LanToLan_Iface::IPACM_LanToLan_Iface(IPACM_Lan *p_iface)
 	memset(m_is_ip_addr_assigned, 0, sizeof(m_is_ip_addr_assigned));
 	m_support_inter_iface_offload = true;
 	m_support_intra_iface_offload = false;
+	m_intra_interface_info.is_vlan_peer = false;
 	m_is_l2tp_iface = false;
 	m_is_svap_iface = false;
 #ifdef FEATURE_VLAN_MPDN

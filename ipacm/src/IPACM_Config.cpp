@@ -2284,6 +2284,14 @@ bool IPACM_Config::iface_in_vlan_mode(const char *interfaceName) {
 			((IPACM_Iface::ipacmcfg->ipacm_emesh_enable && IPACM_Iface::ipacmcfg->ipacm_emesh_mode >= 2) &&
 			is_svap_related(nameToCheck.c_str())) || IsWlanIfVlan(nameToCheck.c_str()));
 	}
+	if (strstr(nameToCheck.c_str(), "wlan")) {
+		IPACMDBG("wlan vlan mode %d\n", vlan_devices[IPA_VLAN_IF_WLAN]);
+		return (vlan_devices[IPA_VLAN_IF_WLAN] ||
+			((IPACM_Iface::ipacmcfg->ipacm_emesh_enable &&
+			  IPACM_Iface::ipacmcfg->ipacm_emesh_mode >= 2) &&
+			 is_svap_related(nameToCheck.c_str())) ||
+			IsWlanIfVlan(nameToCheck.c_str()));
+	}
 #endif
 
 	IPACMDBG_H("iface %s did not match any known ifaces\n", nameToCheck.c_str());

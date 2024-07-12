@@ -8942,7 +8942,7 @@ int IPACM_Wlan::install_wlan_client_lan2lan_flt_rule(uint8_t *mac, ipa_ip_type i
 	pFilteringTable->ip = iptype;
 	pFilteringTable->num_rules = 1;
 
-	pFilteringTable->add_after_hdl = eth_bridge_flt_rule_offset[0][iptype];
+	pFilteringTable->add_after_hdl = eth_bridge_flt_rule_offset[idx/2][iptype];
 	IPACMDBG_H("pFilteringTable->add_after_hdl 0x%x.\n", pFilteringTable->add_after_hdl);
 
 	memset(&flt_rule_entry, 0, sizeof(flt_rule_entry));

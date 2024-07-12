@@ -1663,10 +1663,8 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 			//Handle for the right LAN instance for static policy case
 			if (data->iptype == IPA_IP_v4 && data->VlanID == if_index + IPA_STATIC_POLICY_VLAN_ID)
 			{
-				associated_pdn_cnt++;
 				IPACM_Lan::total_vlan_pdn_cnt++;
 				IPACMDBG_H("Handling static policy PDN up for %s\n", dev_name);
-				IPACMDBG_H("associated_pdn_cnt = %d\n",associated_pdn_cnt);
 				IPACMDBG_H("total_vlan_pdn_cnt = %d\n",IPACM_Lan::total_vlan_pdn_cnt);
 
 				//modify private subnet_rules
@@ -1729,10 +1727,8 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 #ifdef FEATURE_STATIC_POLICY
 			else if (data->iptype == IPA_IP_v6 && data->VlanID == if_index + IPA_STATIC_POLICY_VLAN_ID)
 			{
-				associated_pdn_cnt_v6++;
 				IPACM_Lan::total_vlan_pdn_cnt_v6++;
 				IPACMDBG_H("Handling static policy PDN up for %s\n", dev_name);
-				IPACMDBG_H("associated_pdn_cnt = %d\n",associated_pdn_cnt_v6);
 				IPACMDBG_H("total_vlan_pdn_cnt = %d\n",IPACM_Lan::total_vlan_pdn_cnt_v6);
 
 				/*install MTU rule */
@@ -1812,23 +1808,19 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 			/* clean static policy rules */
 			if (data->iptype == IPA_IP_v4 && data->VlanID == if_index + IPA_STATIC_POLICY_VLAN_ID)
 			{
-				associated_pdn_cnt--;
 				IPACM_Lan::total_vlan_pdn_cnt--;
 				IPACMDBG_H("Handling static policy PDN down for %s\n", dev_name);
-				IPACMDBG_H("associated_pdn_cnt = %d\n",associated_pdn_cnt);
 				IPACMDBG_H("total_vlan_pdn_cnt = %d\n",IPACM_Lan::total_vlan_pdn_cnt);
 
-				//modify MTU rules
-				if (modify_private_subnet())
+				if(data->VlanID)
 				{
-					IPACMERR("failed to modify private subnet \n");
-					break;
+					handle_vlan_pdn_down(data);
 				}
 
-				if (associated_pdn_cnt)
+				if (is_any_mux_up(data->iptype))
 				{
-					IPACMDBG_H("There are still %d PDNs associated with %s, don't delete static policy rules\n",
-						associated_pdn_cnt, dev_name);
+					IPACMDBG_H("There are still PDNs associated with %s, don't delete static policy rules\n",
+						dev_name);
 					break;
 				}
 
@@ -1839,27 +1831,24 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 				}
 				IPACMDBG_H("Deleted static policy PDN rules for %s\n", dev_name);
 
-				if(data->VlanID)
-				{
-					handle_vlan_pdn_down(data);
-				}
+
 			}
 #ifdef FEATURE_STATIC_POLICY
 			else if (data->iptype == IPA_IP_v6 && data->VlanID == if_index + IPA_STATIC_POLICY_VLAN_ID)
 			{
-				associated_pdn_cnt_v6--;
 				IPACM_Lan::total_vlan_pdn_cnt_v6--;
 				IPACMDBG_H("Handling static policy PDN down for %s for v6\n", dev_name);
-				IPACMDBG_H("associated_pdn_cnt = %d\n",associated_pdn_cnt_v6);
 				IPACMDBG_H("total_vlan_pdn_cnt = %d\n",IPACM_Lan::total_vlan_pdn_cnt_v6);
 
-				/*install MTU rule */
-				modify_ipv6_prefix_flt_rule();
-
-				if (associated_pdn_cnt_v6)
+				if(data->VlanID)
 				{
-					IPACMDBG_H("There are still %d PDNs associated with %s, don't delete static policy rules for v6\n",
-						associated_pdn_cnt_v6, dev_name);
+					handle_vlan_pdn_down(data);
+				}
+
+				if (is_any_mux_up(data->iptype))
+				{
+					IPACMDBG_H("There are still PDNs associated with %s, don't delete static policy rules\n",
+						dev_name);
 					break;
 				}
 
@@ -1867,11 +1856,6 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 					delete_ipv6_nat_ula_prefix_flt_rule();
 
 				IPACMDBG_H("Deleted static policy PDN rules for %s for v6\n", dev_name);
-
-				if(data->VlanID)
-				{
-					handle_vlan_pdn_down(data);
-				}
 			}
 #endif
 		}
@@ -5515,7 +5499,7 @@ int IPACM_Lan::handle_eth_client_ipaddr(ipacm_event_data_all *data)
 						}
 						//need to figure out what to do for static policy.
 						// client1 -> PDN1. client2 -> PDN2. PDN 2 down. Client2 -> PDN1
-						if (IPACM_Iface::ipacmcfg->ipacm_static_policy_enable && associated_pdn_cnt == 0)
+						if (IPACM_Iface::ipacmcfg->ipacm_static_policy_enable && !is_any_mux_up(data->iptype))
 						{
 							IPACMDBG_H("Static policy is enabled. need to send VLAN UP for client:%d\n", clnt_indx);
 							return IPACM_SUCCESS;

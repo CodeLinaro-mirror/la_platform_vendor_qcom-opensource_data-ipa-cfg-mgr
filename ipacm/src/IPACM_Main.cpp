@@ -1634,8 +1634,8 @@ int main(int argc, char **argv)
 	/* No required to check log_init return value*/
 	log_init();
 	IPACMDBG_H("In main()\n");
-	IPACM_Neighbor *neigh = new IPACM_Neighbor();
 	IPACM_IfaceManager *ifacemgr = new IPACM_IfaceManager();
+	IPACM_Neighbor *neigh = new IPACM_Neighbor();
 
 #ifdef FEATURE_ETH_BRIDGE_LE
 	IPACM_LanToLan* lan2lan = IPACM_LanToLan::get_instance();

@@ -814,6 +814,8 @@ static int ipa_nl_decode_nlmsg
 	uint32_t if_ipv4_addr =0, if_ipipv4_addr_mask =0, temp =0, if_ipv4_addr_gw =0;
 	uint8_t nullMac[IPA_MAC_ADDR_SIZE];
 	uint32_t prefix_len = ~0;
+	uint32_t ipv6_unique_local_prefix = 0xFD000000;
+	uint32_t ipv6_unique_local_prefix_mask = 0xFF000000;
 
 	ipacm_cmd_q_data evt_data;
 	ipacm_cmd_q_data vlan_event;
@@ -1180,6 +1182,18 @@ static int ipa_nl_decode_nlmsg
 								 data_addr->ipv6_addr[1],
 								 data_addr->ipv6_addr[2],
 								 data_addr->ipv6_addr[3]);
+#if defined(FEATURE_L2TP) || defined(FEATURE_VLAN_MPDN)
+				if(IPACM_Iface::ipacmcfg->is_added_vlan_iface(data_addr->iface_name))
+				{
+					if((data_addr->ipv6_addr[0] & ipv6_unique_local_prefix_mask) == (ipv6_unique_local_prefix & ipv6_unique_local_prefix_mask) &&
+							((IPACM_Iface::ipacmcfg->ipacm_l2tp_enable == IPACM_L2TP) ||
+							(IPACM_Iface::ipacmcfg->ipacm_l2tp_enable == IPACM_L2TP_E2E)))
+					{
+						IPACMDBG_H("Got IPv6 new addr event for a vlan iface %s.\n", data_addr->iface_name);
+						IPACM_Iface::ipacmcfg->handle_vlan_iface_info(data_addr);
+					}
+				}
+#endif
 					evt_data.evt_data = data_addr;
 					IPACM_EvtDispatcher::PostEvt(&evt_data);
                 }

@@ -14979,6 +14979,12 @@ int IPACM_Lan::install_l2tp_udp_dl_rules(ipacm_event_data_all *data, int index, 
 		return IPACM_FAILURE;
 	}
 
+	if(!info.vlan_id)
+	{
+		IPACMERR("VLAN id is not populated.\n");
+		return IPACM_FAILURE;
+	}
+
 	is_l2tp_iface = true;
 
 	/* =========== install hdr template (Outer VLAN Header(18) + IPv6(40) + UDP(8) + L2TP(16) + inner ETH header(14) = 96 bytes) =========

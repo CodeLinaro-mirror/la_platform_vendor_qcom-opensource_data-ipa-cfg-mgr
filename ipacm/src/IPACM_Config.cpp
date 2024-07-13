@@ -2487,13 +2487,16 @@ void IPACM_Config::add_l2tp_vlan_mapping(l2tp_session_info *data)
 				}
 
 				memcpy(it_mapping->vlan_iface_ipv6_addr, it_tunnel->src_ipv6_addr, 4*sizeof(uint32_t));
-				strlcpy(it_mapping->vlan_iface_name, it_vlan->vlan_iface_name, 
-						sizeof(it_mapping->vlan_iface_name));
-				it_mapping->vlan_id = it_vlan->vlan_id;
-				memcpy(it_mapping->vlan_client_mac, it_vlan->vlan_client_mac,
-						sizeof(it_mapping->vlan_client_mac));
+				if(it_vlan != m_vlan_iface.end())
+				{
+					strlcpy(it_mapping->vlan_iface_name, it_vlan->vlan_iface_name, 
+							sizeof(it_mapping->vlan_iface_name));
+					it_mapping->vlan_id = it_vlan->vlan_id;
+					memcpy(it_mapping->vlan_client_mac, it_vlan->vlan_client_mac,
+							sizeof(it_mapping->vlan_client_mac));
+				}
 				memcpy(it_mapping->vlan_client_ipv6_addr, it_tunnel->dst_ipv6_addr,
-						sizeof(it_mapping->vlan_client_ipv6_addr));
+							sizeof(it_mapping->vlan_client_ipv6_addr));
 				it_mapping->is_session_info_updated = true;
 				num_ipa_l2tp_session++;
 				IPACMDBG_H("Now num l2tp sessions are %d\n", num_ipa_l2tp_session);
@@ -2511,14 +2514,17 @@ void IPACM_Config::add_l2tp_vlan_mapping(l2tp_session_info *data)
 	strlcpy(new_mapping.l2tp_iface_name, data->l2tp_iface_name,
 		sizeof(new_mapping.l2tp_iface_name));
 	new_mapping.l2tp_tunnel_id = it_tunnel->l2tp_tunnel_id;
-	strlcpy(new_mapping.vlan_iface_name, it_vlan->vlan_iface_name,
-		sizeof(new_mapping.vlan_iface_name));
 	new_mapping.l2tp_session_id = data->l2tp_session_id;
 	memcpy(new_mapping.vlan_iface_ipv6_addr, it_tunnel->src_ipv6_addr,
 				4*sizeof(uint32_t));
-	new_mapping.vlan_id = it_vlan->vlan_id;
-	memcpy(new_mapping.vlan_client_mac, it_vlan->vlan_client_mac,
-				sizeof(new_mapping.vlan_client_mac));
+	if(it_vlan != m_vlan_iface.end())
+	{
+		strlcpy(new_mapping.vlan_iface_name, it_vlan->vlan_iface_name,
+			sizeof(new_mapping.vlan_iface_name));
+		new_mapping.vlan_id = it_vlan->vlan_id;
+		memcpy(new_mapping.vlan_client_mac, it_vlan->vlan_client_mac,
+					sizeof(new_mapping.vlan_client_mac));
+	}
 	memcpy(new_mapping.vlan_client_ipv6_addr, it_tunnel->dst_ipv6_addr,
 				sizeof(new_mapping.vlan_client_ipv6_addr));
 #ifdef IPA_L2TP_TUNNEL_UDP
@@ -2699,6 +2705,7 @@ void IPACM_Config::add_l2tp_tunnel_info(l2tp_tunnel_info * data)
 	list<l2tp_tunnel_info>::iterator it_tunnel;
 	l2tp_tunnel_info new_tunnel;
 
+	memset(&new_tunnel, 0, sizeof(new_tunnel));
 	if(pthread_mutex_lock(&vlan_l2tp_lock) != 0)
 	{
 		IPACMERR("Unable to lock the mutex\n");

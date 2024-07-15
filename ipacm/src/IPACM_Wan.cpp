@@ -646,8 +646,18 @@ int IPACM_Wan::handle_addr_evt(ipacm_event_data_addr *data)
 				ipv6_to_iface[wlan_ipv6_pdn_index].pIface = this;
 				IPACM_Iface::ipacmcfg->add_no_offload_ipv6_prefix(ipv6_to_iface[wlan_ipv6_pdn_index].ipv6_prefix);
 				IPACMDBG_H("index %d prefix: 0x%08x%08x\n", wlan_ipv6_pdn_index,
-						ipv6_to_iface[wlan_ipv6_pdn_index].ipv6_prefix[0],
-						ipv6_to_iface[wlan_ipv6_pdn_index].ipv6_prefix[1]);
+							ipv6_to_iface[wlan_ipv6_pdn_index].ipv6_prefix[0],
+							ipv6_to_iface[wlan_ipv6_pdn_index].ipv6_prefix[1]);
+				/* Handle race condition where WLAN GW is received but IP is being assigned here*/
+				if(isWan_Bridge_Mode())
+				{
+					if(header_set_v6 && !sta_bridge_v6_rules_installed)
+					{
+						IPACMDBG_H("Received first V6 WAN client on WLAN STA Bridge iface\n");
+						handle_route_add_vlan_pdn_evt(IPA_IP_v6, IPACM_Iface::ipacmcfg->sta_bridge.vlan_id);
+						sta_bridge_v6_rules_installed = true;
+					}
+				}
 			}
 #endif
 		}
@@ -875,6 +885,17 @@ int IPACM_Wan::handle_addr_evt(ipacm_event_data_addr *data)
 				IPACMDBG_H("Wlan ipv4 pdn is %d.\n", wlan_ipv4_pdn_index);
 
 				init_fl_rule(data->iptype);
+
+				/* Handle race condition where WLAN GW is received but IP is being assigned here*/
+				if(isWan_Bridge_Mode())
+				{
+					if(header_set_v4 && !sta_bridge_v4_rules_installed)
+					{
+						IPACMDBG_H("Received first V4 WAN client on WLAN STA Bridge iface\n");
+						handle_route_add_vlan_pdn_evt(IPA_IP_v4, IPACM_Iface::ipacmcfg->sta_bridge.vlan_id);
+						sta_bridge_v4_rules_installed = true;
+					}
+				}
 			}
 		}
 
@@ -1668,14 +1689,6 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 				if ((data->iptype == IPA_IP_v4) && wan_v4_addr_gw_set && (data->ipv4_addr == wan_v4_addr_gw))
 				{
 					gw_addr = true;
-					if((m_is_sta_mode == WLAN_WAN) && isWan_Bridge_Mode() &&
-						 header_set_v4 && !sta_bridge_v4_rules_installed)
-					{
-						IPACMDBG_H("Received first V4 WAN client on WLAN STA Bridge iface\n");
-						handle_route_add_vlan_pdn_evt(IPA_IP_v4,
-								 IPACM_Iface::ipacmcfg->sta_bridge.vlan_id);
-						sta_bridge_v4_rules_installed = true;
-					}
 				}
 
 				if ((data->iptype == IPA_IP_v6) && wan_v6_addr_gw_set)
@@ -1686,14 +1699,6 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 					   data->ipv6_addr[3] == wan_v6_addr_gw[3])
 					{
 					   	gw_addr = true;
-						if((m_is_sta_mode == WLAN_WAN) && isWan_Bridge_Mode() &&
-							header_set_v6 && !sta_bridge_v6_rules_installed)
-						{
-							IPACMDBG_H("Received first V6 WAN client on WLAN STA Bridge iface\n");
-							handle_route_add_vlan_pdn_evt(IPA_IP_v6,
-								 IPACM_Iface::ipacmcfg->sta_bridge.vlan_id);
-							sta_bridge_v6_rules_installed = true;
-						}
 					}
 				}
 
@@ -3826,6 +3831,22 @@ int IPACM_Wan::handle_sta_header_add_evt()
 		pending_VID_STA.clear();
 		header_partial_default_wan_v6 = false;
 	}
+
+	if((m_is_sta_mode == WLAN_WAN) && isWan_Bridge_Mode())
+	{
+		if(header_set_v4 && !sta_bridge_v4_rules_installed && (wlan_ipv4_pdn_index != -1))
+		{
+			IPACMDBG_H("Received first V4 WAN client on WLAN STA Bridge iface\n");
+			handle_route_add_vlan_pdn_evt(IPA_IP_v4, IPACM_Iface::ipacmcfg->sta_bridge.vlan_id);
+			sta_bridge_v4_rules_installed = true;
+		}
+		if(header_set_v6 && !sta_bridge_v6_rules_installed && (wlan_ipv6_pdn_index != -1))
+		{
+			IPACMDBG_H("Received first V6 WAN client on WLAN STA Bridge iface\n");
+			handle_route_add_vlan_pdn_evt(IPA_IP_v6, IPACM_Iface::ipacmcfg->sta_bridge.vlan_id);
+			sta_bridge_v6_rules_installed = true;
+		}
+	}
 	return res;
 }
 
@@ -4019,7 +4040,7 @@ int IPACM_Wan::add_dhcp_flt_rule(ipa_ip_type iptype)
 	return IPACM_SUCCESS;
 }
 
-int IPACM_Wan::add_icmp_flt_rule(ipa_ip_type iptype)
+int IPACM_Wan::add_icmp_sta_bridge_flt_rule(ipa_ip_type iptype)
 {
 	struct ipa_flt_rule_add flt_rule_entry;
 	ipa_ioc_add_flt_rule *m_pFilteringTable = NULL;
@@ -4079,7 +4100,7 @@ int IPACM_Wan::add_icmp_flt_rule(ipa_ip_type iptype)
 	return IPACM_SUCCESS;
 }
 
-int IPACM_Wan::add_sta_bridge_flt_rule()
+int IPACM_Wan::add_sta_bridge_flt_expt_rule()
 {
 	struct ipa_flt_rule_add flt_rule_entry;
 	ipa_ioc_add_flt_rule *m_pFilteringTable = NULL;
@@ -4291,9 +4312,9 @@ int IPACM_Wan::config_dft_firewall_rules(ipa_ip_type iptype)
 		{
 			IPACMDBG_H("WLAN is in bridge mode. Adding DHCP and TCP rules\n");
 			add_tcp_syn_flt_rule(IPA_IP_v4);
-			add_icmp_flt_rule(IPA_IP_v4);
+			add_icmp_sta_bridge_flt_rule(IPA_IP_v4);
 			add_dhcp_flt_rule(IPA_IP_v4);
-			add_sta_bridge_flt_rule();
+			add_sta_bridge_flt_expt_rule();
 		}
 		if (rule_v4 == 0)
 		{

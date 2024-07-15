@@ -799,7 +799,7 @@ int IPACM_Iface::init_fl_rule(
 			if (j == 0) {
 				idx = 0;
 			} else {
-				IPACMDBG_H("Interface is non vlan, dont install rule with index 2");
+				IPACMDBG_H("Interface is non vlan, dont install rule with index 2\n");
 				continue;
 			}
 		} else {
@@ -1248,7 +1248,7 @@ int IPACM_Iface::delete_dflt_filter_rules(
 			if (j == 0) {
 				idx = 0;
 			} else {
-				IPACMDBG_H("Interface is non vlan, dont install rule with index 2");
+				IPACMDBG_H("Interface is non vlan, dont install rule with index 2\n");
 				continue;
 			}
 		} else {

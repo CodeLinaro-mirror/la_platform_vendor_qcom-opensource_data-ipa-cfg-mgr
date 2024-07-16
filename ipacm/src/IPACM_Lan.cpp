@@ -2328,9 +2328,10 @@ int IPACM_Lan::handle_vlan_neighbor(ipacm_event_data_all *data)
 				IPACMERR("eth client not found/attached \n");
 				return IPACM_FAILURE;
 			}
-			if((get_client_memptr(eth_client, eth_index)->client_backhaul_prefix[0] == data_vlan->data_all.ipv6_addr[0]) &&
+			if(((get_client_memptr(eth_client, eth_index)->client_backhaul_prefix[0] == data_vlan->data_all.ipv6_addr[0]) &&
 			   (get_client_memptr(eth_client, eth_index)->client_backhaul_prefix[1] == data_vlan->data_all.ipv6_addr[1]) &&
-			   (!get_client_memptr(eth_client, eth_index)->v6_vlan_rt_installed))
+			   (!get_client_memptr(eth_client, eth_index)->v6_vlan_rt_installed)) || 
+			   (IPACM_Iface::ipacmcfg->ipacm_socksv5_enable && is_unique_local_ipv6_addr(data->ipv6_addr)))
 			{
 				IPACMDBG_H("Neighbor received after conntrack. Installing Route rules now...\n");
 				handle_eth_client_route_rule(data->mac_addr, data->iptype, vlan_id, data_vlan->data_all.ipv6_addr);

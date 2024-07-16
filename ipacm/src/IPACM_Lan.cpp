@@ -9967,14 +9967,14 @@ int IPACM_Lan::install_l2tp_inner_private_subnet_flt_rule()
 
 int IPACM_Lan::modify_private_subnet()
 {
-	int i = 0, j = 0, len, res = IPACM_SUCCESS;
+	int i = 0, len, res = IPACM_SUCCESS;
 	struct ipa_flt_rule_add flt_rule;
 	struct ipa_ioc_add_flt_rule_after* pFilteringTable = NULL;
 	int mtu_rule_cnt = 0;
-	int subnet_rule_cnt = 0;
 	uint16_t mtu[IPA_MAX_MTU_ENTRIES] = { };
 	uint16_t vid[IPA_MAX_MTU_ENTRIES] = { };
-	int mtu_rule_idx = 0;
+	int mtu_rule_idx = IPACM_Iface::ipacmcfg->ipa_num_private_subnet;
+	uint32_t ip_addr = 0;
 
 	if(ip_type == IPA_IP_v6)
 	{
@@ -10067,16 +10067,7 @@ int IPACM_Lan::modify_private_subnet()
 	}
 #endif
 
-	for(i = 0; i < (IPACM_Iface::ipacmcfg->ipa_num_private_subnet); i++)
-	{
-		if(!IPACM_Iface::ipacmcfg->private_subnet_table[i].isCollisionSubnet)
-			subnet_rule_cnt++;
-	}
-
-	mtu_rule_idx = subnet_rule_cnt;
-	if(subnet_rule_cnt + mtu_rule_cnt == 0)
-		goto fail;
-	len = sizeof(struct ipa_ioc_add_flt_rule_after) + (subnet_rule_cnt + mtu_rule_cnt) * sizeof(struct ipa_flt_rule_add);
+	len = sizeof(struct ipa_ioc_add_flt_rule_after) + (IPACM_Iface::ipacmcfg->ipa_num_private_subnet + mtu_rule_cnt) * sizeof(struct ipa_flt_rule_add);
 	pFilteringTable = (struct ipa_ioc_add_flt_rule_after*)malloc(len);
 	if(!pFilteringTable)
 	{
@@ -10087,7 +10078,7 @@ int IPACM_Lan::modify_private_subnet()
 
 	pFilteringTable->commit = 1;
 	pFilteringTable->ip = IPA_IP_v4;
-	pFilteringTable->num_rules = num_wan_subnet_rules = subnet_rule_cnt + mtu_rule_cnt;
+	pFilteringTable->num_rules = num_wan_subnet_rules = (uint8_t)IPACM_Iface::ipacmcfg->ipa_num_private_subnet + mtu_rule_cnt;
 	pFilteringTable->ep = rx_prop->rx[0].src_pipe;
 	pFilteringTable->add_after_hdl = mtu_flt_rule_offset[IPA_IP_v4];
 
@@ -10112,19 +10103,30 @@ int IPACM_Lan::modify_private_subnet()
 
 	for(i = 0; i < (IPACM_Iface::ipacmcfg->ipa_num_private_subnet); i++)
 	{
-		/* Don't install private subnet rule for the bridge during collision case */
+		flt_rule.rule.eq_attrib_type = 0;
+		memcpy(&flt_rule.rule.attrib, &rx_prop->rx[0].attrib, sizeof(flt_rule.rule.attrib));
+		flt_rule.rule.attrib.attrib_mask |= IPA_FLT_DST_ADDR;
+
 		if(!IPACM_Iface::ipacmcfg->private_subnet_table[i].isCollisionSubnet)
 		{
 			/* add private subnet rule for ipv4 */
 			flt_rule.rule.action = IPA_PASS_TO_ROUTING;
-			flt_rule.rule.eq_attrib_type = 0;
-			memcpy(&flt_rule.rule.attrib, &rx_prop->rx[0].attrib, sizeof(flt_rule.rule.attrib));
-			flt_rule.rule.attrib.attrib_mask |= IPA_FLT_DST_ADDR;
 			flt_rule.rule.attrib.u.v4.dst_addr_mask = IPACM_Iface::ipacmcfg->private_subnet_table[i].subnet_mask;
 			flt_rule.rule.attrib.u.v4.dst_addr = IPACM_Iface::ipacmcfg->private_subnet_table[i].subnet_addr;
-			memcpy(&(pFilteringTable->rules[j++]), &flt_rule, sizeof(struct ipa_flt_rule_add));
 			IPACMDBG_H(" IPACM private subnet_addr as: 0x%x entry(%d)\n", flt_rule.rule.attrib.u.v4.dst_addr, i);
 		}
+		else
+		{
+			/* Don't install private subnet rule for the bridge during collision case.
+			   Install Bridge IP rule for embedded case. */
+			flt_rule.rule.action = IPA_PASS_TO_EXCEPTION;
+			IPACM_Iface::ipacmcfg->get_bridge_v4_addr_from_subnet
+				(IPACM_Iface::ipacmcfg->private_subnet_table[i].subnet_addr, &ip_addr);
+			flt_rule.rule.attrib.u.v4.dst_addr = ip_addr;
+			flt_rule.rule.attrib.u.v4.dst_addr_mask = 0xFFFFFFFF;
+			IPACMDBG_H("Collision subnet. Installing rule for IP: 0x%x\n", ip_addr);
+		}
+		memcpy(&(pFilteringTable->rules[i]), &flt_rule, sizeof(struct ipa_flt_rule_add));
 
 		/* add corresponding MTU rule for ipv4 */
 		if (mtu[i] > 0 && mtu[i] < DEFAULT_MTU_SIZE)

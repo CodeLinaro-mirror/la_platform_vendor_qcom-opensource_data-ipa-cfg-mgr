@@ -1474,6 +1474,37 @@ uint16_t IPACM_Config::get_bridge_vlan_mapping_from_subnet(uint32_t ipv4_subnet)
 
 	return 0;
 }
+
+int IPACM_Config::get_bridge_v4_addr_from_subnet(uint32_t ipv4_subnet, uint32_t* ip)
+{
+	list<bridge_vlan_mapping_info>::iterator it_mapping;
+	int ret = IPACM_FAILURE;
+	uint16_t VlanID;
+
+	if(pthread_mutex_lock(&vlan_l2tp_lock) != 0)
+	{
+		IPACMERR("Unable to lock the mutex\n");
+		return IPACM_FAILURE;
+	}
+
+	for(it_mapping = m_bridge_vlan_mapping.begin(); it_mapping != m_bridge_vlan_mapping.end(); it_mapping++)
+	{
+		if(ipv4_subnet == (it_mapping->bridge_ipv4 & it_mapping->subnet_mask))
+		{
+			IPACMDBG_H("Found the bridge mapping for subnet 0x%X (vid = %d)\n",
+					ipv4_subnet,
+					it_mapping->bridge_associated_VID);
+			*ip = it_mapping->bridge_ipv4;
+			pthread_mutex_unlock(&vlan_l2tp_lock);
+			return IPACM_SUCCESS;
+		}
+	}
+
+	pthread_mutex_unlock(&vlan_l2tp_lock);
+	IPACMERR("Could not find subnet 0x%X\n", ipv4_subnet);
+
+	return IPACM_SUCCESS;
+}
 #endif
 
 #if defined(FEATURE_L2TP) || defined(FEATURE_VLAN_MPDN)

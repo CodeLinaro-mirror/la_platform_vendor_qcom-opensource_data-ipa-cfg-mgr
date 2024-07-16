@@ -152,7 +152,11 @@ extern "C"
 #define IPACM_IP_NULL (ipa_ip_type)0xFF
 #define IPACM_INVALID_INDEX (ipa_ip_type)0x15E
 
+#ifdef FEATURE_WLAN_256_CLIENTS
 #define IPA_MAX_NUM_WIFI_CLIENTS 350
+#else
+#define IPA_MAX_NUM_WIFI_CLIENTS  32
+#endif
 #define IPA_MAX_NUM_WAN_CLIENTS  10
 #define IPA_MAX_NUM_VLAN_CLIENTS 32
 #define IPA_MAX_NUM_ETH_CLIENTS  32

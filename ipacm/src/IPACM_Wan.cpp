@@ -2655,11 +2655,6 @@ int IPACM_Wan::check_vlan_pdn(ipa_ip_type iptype, ipacm_event_route_vlan *data, 
 	int pdn_idx, vlan_idx, ret = IPACM_FAILURE;
 	bool new_pdn = true;
 
-	//if (MPDN_single_client_mode)  For future MPDN to single client
-	//	IPACMDBG_H("received IPA_ROUTE_ADD_VLAN_PDN_EVENT for iptype %d, VID %d, wan %s, if %d\n", iptype, data->VlanID, dev_name, ipa_if_num);
-	//	handle_route_add_vlan_pdn_evt(iptype, data->VlanID);
-	//	return IPACM_success;
-
 	if (iptype == IPA_IP_v6 || iptype == IPA_IP_MAX)
 	{
 		IPACMDBG_H("Received v6 IPA_ROUTE_ADD_VLAN_PDN_EVENT for VID %d, wan %s, %d\n",
@@ -2673,9 +2668,17 @@ int IPACM_Wan::check_vlan_pdn(ipa_ip_type iptype, ipacm_event_route_vlan *data, 
 		{
 			IPACMDBG_H("received v6 IPA_ROUTE_ADD_VLAN_PDN_EVENT for VID %d, wan %s, if %d\n", data->VlanID, dev_name, ipa_if_num);
 
-			//When we need to allow single VLAN to be connected to multiple PDNs
-			//if (MPDN_single_client_mode)
-			//	goto v6_skip;
+			if(IPACM_Iface::ipacmcfg->ipacm_static_policy_enable)
+			{
+				if((modem_ipv4_pdn_index >= 0) &&
+					ipv4_to_iface[modem_ipv4_pdn_index].wan_up_vlan)
+				{
+					IPACMDBG("iface already has v4 vlan association,"
+							" not new\n");
+					new_pdn = false;
+				}
+				goto v6_skip;
+			}
 
 			if ((modem_ipv6_pdn_index != -1) && (ipv6_to_iface[modem_ipv6_pdn_index].wan_up_vlan_v6))
 			{
@@ -2739,9 +2742,18 @@ v6_skip:
 		{
 			IPACMDBG_H("received v4 IPA_ROUTE_ADD_VLAN_PDN_EVENT for VID %d, wan %s, if %d\n", data->VlanID, dev_name, ipa_if_num);
 
-			//mike when need to allow single VLAN to be connected to multiple PDNs
-			//if (MPDN_single_client_mode)
-			//	goto v4_skip;
+
+			if(IPACM_Iface::ipacmcfg->ipacm_static_policy_enable)
+			{
+				if((modem_ipv6_pdn_index >= 0) &&
+					ipv6_to_iface[modem_ipv6_pdn_index].wan_up_vlan_v6)
+				{
+					IPACMDBG("iface already has v6 vlan association,"
+							" not new\n");
+					new_pdn = false;
+				}
+				goto v4_skip;
+			}
 
 			//this is false for static policy client so we never hit. for single VLAN to MPDN, need to use above
 			if(ipv4_to_iface[modem_ipv4_pdn_index].wan_up_vlan)

@@ -28,7 +28,7 @@ IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  * Changes from Qualcomm Innovation Center are provided under the following license:
  *
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted (subject to the limitations in the
@@ -1652,7 +1652,6 @@ private:
 #endif
 #ifdef FEATURE_VLAN_MPDN
 	int handle_vlan_neighbor(ipacm_event_data_all *data);
-	int handle_vlan_phys_if_down();
 #endif
 
 	int construct_mtu_rule(struct ipa_flt_rule *rule, enum ipa_ip_type iptype, uint16_t mtu);
@@ -1665,6 +1664,7 @@ private:
 
 public:  //mike why we have 2 public. Why not just move this on top?
 #ifdef FEATURE_VLAN_MPDN
+	int handle_vlan_phys_if_down();
 	int check_vlan_PDNUp(enum ipa_ip_type iptype);
 	bool is_vlan_IF(uint16_t vlan_id);
 	int handle_vlan_pdn_up(ipacm_event_vlan_pdn *data, bool set_mux = true);

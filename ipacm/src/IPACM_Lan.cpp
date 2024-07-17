@@ -5343,11 +5343,11 @@ int IPACM_Lan::handle_qos_route_rule(uint8_t *client_mac, uint16_t client_vlan_i
 					memcpy(new_client_info.mac,
 						get_client_memptr(eth_client, eth_index)->mac,
 						IPA_MAC_ADDR_SIZE);
-
-					IPACMDBG_H("tx:%d, rt rule hdl=%x ip-type: %d\n", tx_index,
-							   new_client_info.qos_rt_rule_hdl_v6, iptype);
 					qos_param->qos_client_list.push_front(new_client_info);
 					qos_param->client_cnt++;
+					IPACMDBG_H("tx:%d, rt hdl=%x ip-type: %d, client_cnt:%d\n",
+						tx_index, new_client_info.qos_rt_rule_hdl_v6, iptype,
+						qos_param->client_cnt);
 				}
 			}
 		} /* end of for loop */
@@ -5604,48 +5604,82 @@ int IPACM_Lan::delete_client_info_from_qos(uint8_t *client_mac,
 	for (it_qos_client = qos_param->qos_client_list.begin();
 		it_qos_client != qos_param->qos_client_list.end(); )
 	{
-		if (it_qos_client->v4_ip_addr &&
-			(it_qos_client->v4_ip_addr ==
-				get_client_memptr(eth_client, eth_index)->v4_addr))
+		if (qos_param->ip_type == IPA_IP_v4)
 		{
-			IPACMDBG_H("Found a matching vlan %d entry in qos rule list "
-				"for client with ipv4: 0x\n",
-				vlan_id, it_qos_client->v4_ip_addr);
+			if (it_qos_client->v4_ip_addr &&
+				(it_qos_client->v4_ip_addr ==
+					get_client_memptr(eth_client, eth_index)->v4_addr))
+			{
+				IPACMDBG_H("Found a matching vlan %d entry in qos rule list "
+					"for client with ipv4: 0x\n",
+					vlan_id, it_qos_client->v4_ip_addr);
 
-			//Delete the respective route handles
-			IPACMDBG_H("Delete client rule from index %d is v4 set %d for hdl %d\n",
-				eth_index, it_qos_client->route_rule_set_v4,
-				it_qos_client->qos_rt_rule_hdl_v4);
-
-			if (it_qos_client->route_rule_set_v4 &&
-				(m_routing.DeleteRoutingHdl(it_qos_client->qos_rt_rule_hdl_v4,
-					IPA_IP_v4) == false)) {
-				IPACMERR("Failed to delete v4 qos routing rule hdl %d\n",
+				//Delete the respective route handles
+				IPACMDBG_H("Delete client rule from index %d is v4 set %d for hdl %d\n",
+					eth_index, it_qos_client->route_rule_set_v4,
 					it_qos_client->qos_rt_rule_hdl_v4);
-				return IPACM_FAILURE;
+
+				if (it_qos_client->route_rule_set_v4 &&
+					(m_routing.DeleteRoutingHdl(it_qos_client->qos_rt_rule_hdl_v4,
+						IPA_IP_v4) == false)) {
+					IPACMERR("Failed to delete v4 qos routing rule hdl %d\n",
+						it_qos_client->qos_rt_rule_hdl_v4);
+					return IPACM_FAILURE;
+				}
+				it_qos_client = qos_param->qos_client_list.erase(it_qos_client);
+				qos_param->client_cnt--;
+				IPACMDBG_H("Current client_cnt %d\n", qos_param->client_cnt);
 			}
 		}
 
-		if (ipv6_addr == NULL)
+		else
 		{
-			/* Check all v6 addresses of the client. */
-			for (int v6_num = 0; v6_num < IPV6_NUM_ADDR; v6_num++)
+			if (ipv6_addr == NULL)
+			{
+				/* Check all v6 addresses of the client. */
+				for (int v6_num = 0; v6_num < IPV6_NUM_ADDR; v6_num++)
+				{
+					if (it_qos_client->v6_ip_addr[0] &&
+						it_qos_client->v6_ip_addr[0] ==
+						get_client_memptr(eth_client, eth_index)->v6_addr[v6_num][0] &&
+						it_qos_client->v6_ip_addr[1] ==
+						get_client_memptr(eth_client, eth_index)->v6_addr[v6_num][1] &&
+						it_qos_client->v6_ip_addr[2] ==
+						get_client_memptr(eth_client, eth_index)->v6_addr[v6_num][2] &&
+						it_qos_client->v6_ip_addr[3] ==
+						get_client_memptr(eth_client, eth_index)->v6_addr[v6_num][3])
+					{
+						IPACMDBG_H("Delete client rule from index %d is"
+						" v6 set %d for hdl %d\n", eth_index,
+						it_qos_client->route_rule_set_v6,
+						it_qos_client->qos_rt_rule_hdl_v6);
+						if (it_qos_client->route_rule_set_v6 &&
+							(m_routing.DeleteRoutingHdl(
+								it_qos_client->qos_rt_rule_hdl_v6,
+								IPA_IP_v6) == false)) {
+							IPACMERR("Failed to delete v6 qos routing rule hdl %d\n",
+								it_qos_client->qos_rt_rule_hdl_v6);
+							return IPACM_FAILURE;
+						}
+					}
+				}
+				it_qos_client = qos_param->qos_client_list.erase(it_qos_client);
+				qos_param->client_cnt--;
+				IPACMDBG_H("Current client_cnt %d\n", qos_param->client_cnt);
+			}
+			else
 			{
 				if (it_qos_client->v6_ip_addr[0] &&
-					it_qos_client->v6_ip_addr[0] ==
-					get_client_memptr(eth_client, eth_index)->v6_addr[v6_num][0] &&
-					it_qos_client->v6_ip_addr[1] ==
-					get_client_memptr(eth_client, eth_index)->v6_addr[v6_num][1] &&
-					it_qos_client->v6_ip_addr[2] ==
-					get_client_memptr(eth_client, eth_index)->v6_addr[v6_num][2] &&
-					it_qos_client->v6_ip_addr[3] ==
-					get_client_memptr(eth_client, eth_index)->v6_addr[v6_num][3])
+					it_qos_client->v6_ip_addr[0] == ipv6_addr[0] &&
+					it_qos_client->v6_ip_addr[1] == ipv6_addr[1] &&
+					it_qos_client->v6_ip_addr[2] == ipv6_addr[2] &&
+					it_qos_client->v6_ip_addr[3] == ipv6_addr[3])
 				{
 					IPACMDBG_H("Delete client rule from index %d is"
 					" v6 set %d for hdl %d\n", eth_index,
 					it_qos_client->route_rule_set_v6,
 					it_qos_client->qos_rt_rule_hdl_v6);
-					if (it_qos_client->route_rule_set_v6 &&	
+					if (it_qos_client->route_rule_set_v6 &&
 						(m_routing.DeleteRoutingHdl(
 							it_qos_client->qos_rt_rule_hdl_v6,
 							IPA_IP_v6) == false)) {
@@ -5654,34 +5688,12 @@ int IPACM_Lan::delete_client_info_from_qos(uint8_t *client_mac,
 						return IPACM_FAILURE;
 					}
 				}
+				it_qos_client = qos_param->qos_client_list.erase(it_qos_client);
+				qos_param->client_cnt--;
+				IPACMDBG_H("Current client_cnt %d\n", qos_param->client_cnt);
 			}
 		}
-		else
-		{
-			if (it_qos_client->v6_ip_addr[0] &&
-				it_qos_client->v6_ip_addr[0] == ipv6_addr[0] &&
-				it_qos_client->v6_ip_addr[1] == ipv6_addr[1] &&
-				it_qos_client->v6_ip_addr[2] == ipv6_addr[2] &&
-				it_qos_client->v6_ip_addr[3] == ipv6_addr[3])
-			{
-				IPACMDBG_H("Delete client rule from index %d is"
-				" v6 set %d for hdl %d\n", eth_index,
-				it_qos_client->route_rule_set_v6,
-				it_qos_client->qos_rt_rule_hdl_v6);
-				if (it_qos_client->route_rule_set_v6 && 
-					(m_routing.DeleteRoutingHdl(
-						it_qos_client->qos_rt_rule_hdl_v6,
-						IPA_IP_v6) == false)) {
-					IPACMERR("Failed to delete v6 qos routing rule hdl %d\n",
-						it_qos_client->qos_rt_rule_hdl_v6);
-					return IPACM_FAILURE;
-				}
-			}
-		}
-		it_qos_client = qos_param->qos_client_list.erase(it_qos_client);
 	}
-
-	qos_param->client_cnt--;
 
 	return IPACM_SUCCESS;
 }
@@ -5736,11 +5748,10 @@ int IPACM_Lan::delete_all_client_info_from_qos(list<qos_param_info>::iterator qo
 			ret = IPACM_FAILURE;
 		}
 		it_qos_client = qos_param->qos_client_list.erase(it_qos_client);
+		qos_param->client_cnt--;
 	}
-	IPACMDBG_H("Qos client list for qos param after deleting client is now :%d \n", qos_param->qos_client_list.size());
-
-	qos_param->client_cnt--;
-
+	IPACMDBG_H("Qos client list size:%d vs %d\n",
+		qos_param->qos_client_list.size(), qos_param->client_cnt);
 	return ret;
 }
 
@@ -7465,6 +7476,7 @@ int IPACM_Lan::handle_down_evt()
 			res = IPACM_FAILURE;
 			goto fail;
 		}
+		dft_qos_rt_rule_hdl[0] = 0;
 	}
 	IPACMDBG_H("Finished delete default iface ipv4 rules \n ");
 
@@ -7492,6 +7504,7 @@ int IPACM_Lan::handle_down_evt()
 				res = IPACM_FAILURE;
 				goto fail;
 			}
+			dft_qos_rt_rule_hdl[i] = 0;
 		}
 	}
 
@@ -15636,6 +15649,7 @@ int IPACM_Lan::install_default_qos_rt_rules(uint8_t *client_mac, uint16_t client
 			res = IPACM_FAILURE;
 			goto fail;
 		}
+		dft_qos_rt_rule_hdl[0] = 0;
 	}
 	IPACMDBG_H("Finished delete default qos ipv4 rules \n");
 
@@ -15651,6 +15665,7 @@ int IPACM_Lan::install_default_qos_rt_rules(uint8_t *client_mac, uint16_t client
 				res = IPACM_FAILURE;
 				goto fail;
 			}
+			dft_qos_rt_rule_hdl[i] = 0;
 		}
 	}
 	IPACMDBG("Finished delete default qos ipv6 rules \n");

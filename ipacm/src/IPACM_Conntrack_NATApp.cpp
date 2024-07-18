@@ -2865,6 +2865,67 @@ NatBase::~NatBase()
 	IPACMDBG_H("return\n");
 }
 
+#ifdef FEATURE_IPV6_NAT
+int NatBase::Init(void)
+{
+	IPACM_Config *pConfig;
+	int size = 0;
+
+	pConfig = IPACM_Config::GetInstance();
+	if(pConfig == NULL)
+	{
+		IPACMERR("Unable to get Config instance\n");
+		return IPACM_FAILURE;
+	}
+
+	nALGPort = pConfig->GetAlgPortCnt();
+	if(nALGPort > 0)
+	{
+		pALGPorts = (ipacm_alg *)malloc(sizeof(ipacm_alg) * nALGPort);
+		if(pALGPorts == NULL)
+		{
+			IPACMERR("Unable to allocate memory for alg prots\n");
+			goto fail;
+		}
+		memset(pALGPorts, 0, sizeof(ipacm_alg) * nALGPort);
+
+		if(pConfig->GetAlgPorts(nALGPort, pALGPorts) != 0)
+		{
+			IPACMERR("Unable to retrieve ALG prots\n");
+			goto fail;
+		}
+
+		IPACMDBG("Printing %d alg ports information\n", nALGPort);
+		for(int cnt=0; cnt<nALGPort; cnt++)
+		{
+			IPACMDBG("%d: Proto[%d], port[%d]\n", cnt, pALGPorts[cnt].protocol, pALGPorts[cnt].port);
+		}
+	}
+
+	return IPACM_SUCCESS;
+
+fail:
+	free(pALGPorts);
+	return IPACM_FAILURE;
+}
+
+bool NatBase::isAlgPort(uint8_t proto, uint16_t port)
+{
+	int cnt;
+	for(cnt = 0; cnt < nALGPort; cnt++)
+	{
+		if(proto == pALGPorts[cnt].protocol &&
+			 port == pALGPorts[cnt].port)
+		{
+			IPACMDBG_H("%d %d\n",proto, port);
+			return true;
+		}
+	}
+	IPACMDBG_H("%d %d\n",proto, port);
+	return false;
+}
+#endif
+
 int NatBase::AddTable(const uint32_t v6_prefix[2])
 {
 	IPACMDBG_H("\n");
@@ -2884,16 +2945,27 @@ int NatBase::AddTable(const uint32_t v6_prefix[2])
 		{
 			uint64_t src_ipv6_msb = 0;
 
-			if (entry.m_direction == NatEntryBase::DirectionOutbound || entry.m_direction == NatEntryBase::DirectionUnknown)
+			if(!(IPACM_Iface::ipacmcfg->ipv6_nat_enable))
 			{
-				src_ipv6_msb = ((Ipv6IpAddress &)entry.GetClientIp()).GetMsb();
+				if (entry.m_direction == NatEntryBase::DirectionOutbound ||
+					entry.m_direction == NatEntryBase::DirectionUnknown ||
+					entry.m_direction == NatEntryBase::DirectionInbound)
+				{
+					src_ipv6_msb =
+						((Ipv6IpAddress &)entry.GetClientIp()).GetMsb();
+				}
 			}
-			else if (entry.m_direction == NatEntryBase::DirectionInbound)
+			else
 			{
-				src_ipv6_msb = ((Ipv6IpAddress &)entry.GetClientIp()).GetMsb();
+				if (entry.m_direction == NatEntryBase::DirectionOutbound ||
+					entry.m_direction == NatEntryBase::DirectionUnknown ||
+					entry.m_direction == NatEntryBase::DirectionInbound)
+				{
+					src_ipv6_msb =
+						((Ipv6IpAddress &)entry.GetPublicIp()).GetMsb();
+				}
 			}
-
-			if(((src_ipv6_msb >> 32) == v6_prefix[0]) && ((src_ipv6_msb & 0x00000000FFFFFFFF) == v6_prefix[1]))
+			if(ipv6prefixmatch(src_ipv6_msb, v6_prefix))
 			{
 				if (m_proxy.AddEntry(entry))
 				{
@@ -2922,13 +2994,25 @@ int NatBase::DeleteTable(const uint32_t v6_prefix[2],int num_v6_vlan_pdns)
 		{
 			uint64_t src_ipv6_msb = 0;
 
-			if (entry.m_direction == NatEntryBase::DirectionOutbound || entry.m_direction == NatEntryBase::DirectionUnknown)
+			if(!(IPACM_Iface::ipacmcfg->ipv6_nat_enable))
 			{
-				src_ipv6_msb = ((Ipv6IpAddress &)entry.GetClientIp()).GetMsb();
+				if (entry.m_direction == NatEntryBase::DirectionOutbound ||
+					entry.m_direction == NatEntryBase::DirectionUnknown ||
+					entry.m_direction == NatEntryBase::DirectionInbound)
+				{
+					src_ipv6_msb =
+						((Ipv6IpAddress &)entry.GetClientIp()).GetMsb();
+				}
 			}
-			else if (entry.m_direction == NatEntryBase::DirectionInbound)
+			else
 			{
-				src_ipv6_msb = ((Ipv6IpAddress &)entry.GetClientIp()).GetMsb();
+				if (entry.m_direction == NatEntryBase::DirectionOutbound ||
+					entry.m_direction == NatEntryBase::DirectionUnknown ||
+					entry.m_direction == NatEntryBase::DirectionInbound)
+				{
+					src_ipv6_msb =
+						((Ipv6IpAddress &)entry.GetPublicIp()).GetMsb();
+				}
 			}
 
 			if(src_ipv6_msb && ipv6prefixmatch(src_ipv6_msb, v6_prefix))
@@ -2941,7 +3025,7 @@ int NatBase::DeleteTable(const uint32_t v6_prefix[2],int num_v6_vlan_pdns)
 					continue;
 				}
 
-				entry.DebugDump("On wan-iface reset added below rule successfully\n");
+				entry.DebugDump("On wan-iface reset deleted below rule successfully\n");
 			}
 		}
 	}
@@ -3996,12 +4080,18 @@ Ipv6Nat* Ipv6Nat::GetInstance()
 		return NULL;
 	}
 
-	m_instance = new Ipv6Nat(pConfig->GetIpv6CTMaxEntries());
+	m_instance = new Ipv6Nat(pConfig->GetIpv6CTMaxEntries(), pConfig->GetCTMemType());
+	if(m_instance->Init() == IPACM_FAILURE)
+	{
+		delete m_instance;
+		return NULL;
+	}
+
 	IPACMDBG_H("return\n");
 	return m_instance;
 }
 
-Ipv6Nat::Ipv6Nat(int max_entries) : NatBase(IPA_IP_v6, max_entries, Ipv6NatObjectsGenerator())
+Ipv6Nat::Ipv6Nat(int max_entries, const char* mem_type) : NatBase(IPA_IP_v6, max_entries, mem_type, Ipv6NatObjectsGenerator())
 {
 	IPACMDBG_H("\n");
 }

@@ -458,10 +458,10 @@ int IPACM_Wan::get_vid_index_for_iface_v6(ipacm_ipv6_wan_iface iface, uint16_t v
 int IPACM_Wan::handle_addr_evt(ipacm_event_data_addr *data)
 {
 	struct ipa_ioc_add_rt_rule *rt_rule = NULL;
-	struct ipa_rt_rule_add *rt_rule_entry;
-	struct ipa_ioc_add_flt_rule *flt_rule;
-	struct ipa_flt_rule_add flt_rule_entry;
-	struct ipa_ioc_get_hdr hdr;
+	struct ipa_rt_rule_add *rt_rule_entry = NULL;
+	struct ipa_ioc_add_flt_rule *flt_rule = NULL;
+	struct ipa_flt_rule_add flt_rule_entry = {0};
+	struct ipa_ioc_get_hdr hdr = {0};
 
 	const int NUM_RULES = 1;
 	int num_ipv6_addr, len;
@@ -1406,13 +1406,6 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 				{
 					IPACMDBG_H("get default v4 route (dst:0.0.0.0)\n");
 
-					/* Modifying this only for default route */
-					if(m_is_sta_mode == WLAN_WAN)
-						IPACM_Wan::backhaul_is_sta_mode = true;
-					else
-						IPACM_Wan::backhaul_is_sta_mode = false;
-					IPACMDBG_H("backhual_is_sta_mode is %d\n", IPACM_Wan::backhaul_is_sta_mode);
-
 					wan_v4_addr_gw = data->ipv4_addr_gw;
 					wan_v4_addr_gw_set = true;
 					wan_v4_is_default_gw = true;
@@ -1437,13 +1430,6 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 						return;
 					}
 					IPACMDBG_H("\n get default v6 route (dst:00.00.00.00)\n");
-
-					/* Modifying backhaul_is_sta_mode only for default route */
-					if(m_is_sta_mode == WLAN_WAN)
-						IPACM_Wan::backhaul_is_sta_mode = true;
-					else
-						IPACM_Wan::backhaul_is_sta_mode = false;
-					IPACMDBG_H("backhual_is_sta_mode is %d\n", IPACM_Wan::backhaul_is_sta_mode);
 
 					IPACMDBG_H("\n get default v6 route (dst:00.00.00.00)\n");
 					IPACMDBG_H(" IPV6 dst: %08x:%08x:%08x:%08x \n",
@@ -1552,6 +1538,7 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 #ifdef FEATURE_VLAN_MPDN
 	case IPA_ROUTE_ADD_VLAN_PDN_EVENT:
 		{
+			IPACMDBG_H("Received IPA_ROUTE_ADD_VLAN_PDN_EVENT event\n");
 			ipacm_event_route_vlan *data = (ipacm_event_route_vlan *)param;
 			enum ipa_ip_type iptype = data->iptype;
 			uint32_t prefix[2];
@@ -1613,14 +1600,9 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 			if (ipa_interface_index == ipa_if_num)
 			{
 				IPACMDBG_H("Received IPA_ROUTE_DEL_EVENT\n");
-
 				if ((data->iptype == IPA_IP_v4) && (!data->ipv4_addr) && (!data->ipv4_addr_mask) && (active_v4 == true))
 				{
 					IPACMDBG_H("get del default v4 route (dst:0.0.0.0)\n");
-					/* Modifying backhaul_is_sta_mode only for default route */
-					if(m_is_sta_mode == WLAN_WAN)
-						IPACM_Wan::backhaul_is_sta_mode = false;
-					IPACMDBG_H("backhual_is_sta_mode is %d\n", IPACM_Wan::backhaul_is_sta_mode);
 
 					wan_v4_addr_gw_set = false;
 					if(m_is_sta_mode == Q6_WAN)
@@ -1646,11 +1628,6 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 				else if ((data->iptype == IPA_IP_v6) && (!data->ipv6_addr[0]) && (!data->ipv6_addr[1]) && (!data->ipv6_addr[2]) && (!data->ipv6_addr[3]) && (active_v6 == true))
 				{
 					IPACMDBG_H("get del default v6 route (dst:00.00.00.00)\n");
-					
-					/* Modifying backhaul_is_sta_mode only for default route */
-					if(m_is_sta_mode == WLAN_WAN)
-						IPACM_Wan::backhaul_is_sta_mode = false;
-					IPACMDBG_H("backhual_is_sta_mode is %d\n", IPACM_Wan::backhaul_is_sta_mode);
 
 					if(m_is_sta_mode == Q6_WAN)
 					{
@@ -2747,6 +2724,17 @@ int IPACM_Wan::handle_route_add_vlan_pdn_evt(ipa_ip_type iptype, uint16_t vlan_i
 		if(m_is_sta_mode == WLAN_WAN)
 		{
 			IPACMDBG_H(" WAN instance is in STA mode \n");
+
+			/* Do not install route rules if this WLAN PDN is already up */
+			if (ipv6_to_iface[wlan_ipv6_pdn_index].wan_up_vlan_v6 == true)
+			{
+				IPACMDBG_H("WLAN V6 WAN [%d] is already up with prefix: 0x%08x%08x\n",
+						wlan_ipv6_pdn_index,
+						ipv6_to_iface[wlan_ipv6_pdn_index].ipv6_prefix[0],
+						ipv6_to_iface[wlan_ipv6_pdn_index].ipv6_prefix[1]);
+				goto PostWanUpV6;
+			}
+
 			if((iptype==IPA_IP_v6) && (header_set_v6 != true))
 			{
 				header_partial_default_wan_v6 = true;
@@ -2806,6 +2794,7 @@ int IPACM_Wan::handle_route_add_vlan_pdn_evt(ipa_ip_type iptype, uint16_t vlan_i
 					tx_index,
 					iptype);
 			}
+PostWanUpV6:
 			post_wan_vlan_pdn_event(IPA_IP_v6, wlan_ipv6_pdn_index, ipv6_to_iface[wlan_ipv6_pdn_index].VID_cnt, vlan_id, true);
 			/* for STA mode: add firewall rules */
 			del_dft_firewall_rules(IPA_IP_v6);
@@ -2890,6 +2879,15 @@ int IPACM_Wan::handle_route_add_vlan_pdn_evt(ipa_ip_type iptype, uint16_t vlan_i
 			IPACMDBG_H(" WAN instance is in STA mode header_set_v4 %d \n", header_set_v4);
 			//Construct STA header 1st
 
+			/* Do not install route rules if V4 WLAN PDN is already up */
+			if (ipv4_to_iface[wlan_ipv4_pdn_index].wan_up_vlan == true)
+			{
+                                IPACMDBG_H("WLAN V4 WAN [%d] is already up with address: 0x%X\n",
+						wlan_ipv4_pdn_index,
+						ipv4_to_iface[wlan_ipv4_pdn_index].ipv4_addr);
+				goto PostWanUp;
+			}
+
 			if((iptype==IPA_IP_v4) && (header_set_v4 != true))
 			{
 				header_partial_default_wan_v4 = true;
@@ -2942,6 +2940,7 @@ int IPACM_Wan::handle_route_add_vlan_pdn_evt(ipa_ip_type iptype, uint16_t vlan_i
 					tx_index,
 					iptype);
 			}
+PostWanUp:
 			post_wan_vlan_pdn_event(IPA_IP_v4, wlan_ipv4_pdn_index, ipv4_to_iface[wlan_ipv4_pdn_index].VID_cnt, vlan_id, true);
 			/* for STA mode: add firewall rules */
 			del_dft_firewall_rules(IPA_IP_v4);
@@ -3108,6 +3107,7 @@ int IPACM_Wan::handle_route_add_evt(ipa_ip_type iptype)
 
 	if (m_is_sta_mode !=Q6_WAN)
 	{
+		IPACM_Wan::backhaul_is_sta_mode	= true;
 		if((iptype==IPA_IP_v4) && (header_set_v4 != true))
 		{
 			header_partial_default_wan_v4 = true;
@@ -3123,6 +3123,7 @@ int IPACM_Wan::handle_route_add_evt(ipa_ip_type iptype)
 	}
 	else
 	{
+		IPACM_Wan::backhaul_is_sta_mode	= false;
 		IPACMDBG_H("reset backhaul to LTE \n");
 
 		if (iface_query != NULL && iface_query->num_ext_props > 0)
@@ -4963,7 +4964,7 @@ int IPACM_Wan::config_dft_firewall_rules_ex(struct ipa_flt_rule_add *rules, int 
 		IPACM_Wan::num_firewall_v6 = 0;
 
 #ifdef FEATURE_IPV6_NAT
-		if(IPACM_Iface::ipacmcfg->ipv6_nat_enable && wan_up_v6)
+		if(IPACM_Iface::ipacmcfg->ipv6_nat_enable && (wan_up_v6 || isVlanWanUP_V6()))
 		{
 			/*
 			 * construct 2nd pass DL v6nat flt rule to send all ULA
@@ -7390,7 +7391,7 @@ int IPACM_Wan::handle_down_evt_ex()
 		num_ipv4_modem_pdn--;
 		IPACMDBG_H("Now the number of modem ipv4 pdn is %d.\n", num_ipv4_modem_pdn);
 #ifdef FEATURE_VLAN_MPDN
-		if(ipv4_to_iface[modem_ipv4_pdn_index].wan_up_vlan)
+		if((modem_ipv4_pdn_index >= 0) && (ipv4_to_iface[modem_ipv4_pdn_index].wan_up_vlan))
 		{
 			ipacm_cmd_q_data evt_data;
 			ipacm_event_vlan_pdn *vlandown_data;
@@ -7561,7 +7562,7 @@ int IPACM_Wan::handle_down_evt_ex()
 #ifdef FEATURE_VLAN_MPDN
 		IPACM_Iface::ipacmcfg->del_vlan_ipv6_prefix(ipv6_prefix, -1);
 
-		if((modem_ipv6_pdn_index != -1) && ipv6_to_iface[modem_ipv6_pdn_index].wan_up_vlan_v6)
+		if((modem_ipv6_pdn_index >= 0) && ipv6_to_iface[modem_ipv6_pdn_index].wan_up_vlan_v6)
 		{
 			ipacm_cmd_q_data evt_data;
 			ipacm_event_vlan_pdn *vlandown_data;

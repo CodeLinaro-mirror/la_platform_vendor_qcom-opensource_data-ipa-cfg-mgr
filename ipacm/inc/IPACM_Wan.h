@@ -369,20 +369,6 @@ public:
 		}
 		for(int i = 0; i < IPA_MAX_NUM_SW_PDNS; i++)
 		{
-			if(ipv6_to_iface[i].pIface)
-			{
-				if(IPACM_Wan::backhaul_is_sta_mode == true)
-				{
-					if(ipv6_to_iface[i].pIface->m_is_sta_mode != WLAN_WAN)
-						continue;
-				}
-				else
-				{
-					if(ipv6_to_iface[i].pIface->m_is_sta_mode == WLAN_WAN)
-						continue;
-				}
-			}
-
 			if(ipv6_to_iface[i].ipv6_prefix[0] == v6_addr[0] &&
 				ipv6_to_iface[i].ipv6_prefix[1] == v6_addr[1])
 			{

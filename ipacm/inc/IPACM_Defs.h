@@ -512,6 +512,14 @@ typedef enum
 	IFACE_MAX
 } ipacm_wan_iface_type;
 
+typedef enum
+{
+	NEIGH_CLIENT_ADD = 0,
+	NEIGH_CLIENT_DEL,
+	NEIGH_CLIENT_DEL_PREFIX,
+	POST_NEIGH_CLIENT_IP_ADDR_EVT
+} ipacm_neigh_cache_ops_type;
+
 typedef struct _ipacm_ifacemgr_data
 {
 	int if_index;

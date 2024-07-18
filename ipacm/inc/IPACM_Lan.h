@@ -1584,6 +1584,7 @@ public:
 	int handle_vlan_pdn_up(ipacm_event_vlan_pdn *data, bool set_mux = true);
 	int handle_vlan_pdn_down(ipacm_event_vlan_pdn *data);
 	int check_vlan_PDNUp(enum ipa_ip_type iptype);
+	int handle_neigh_cache_ops(ipacm_neigh_cache_ops_type ops, void* data);
 	ipacm_mux_struct v4_mux_up[IPA_MAX_NUM_HW_PDNS];
 	uint8_t num_v4_mux;
 	ipacm_mux_struct v6_mux_up[IPA_MAX_NUM_HW_PDNS];

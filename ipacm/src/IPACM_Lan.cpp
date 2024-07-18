@@ -1035,35 +1035,10 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 				}
 			}
 
-			it = neigh_cache.begin();
-			while (it != neigh_cache.end())
+			if(handle_neigh_cache_ops(POST_NEIGH_CLIENT_IP_ADDR_EVT, data_wan->ipv6_prefix) == IPACM_SUCCESS)
 			{
-				if (it->ipv6_addr[0] == data_wan->ipv6_prefix[0] && it->ipv6_addr[1] == data_wan->ipv6_prefix[1])
-				{
-					evt_data.event = IPA_NEIGH_CLIENT_IP_ADDR_ADD_EVENT;
-					data_all = (ipacm_event_data_all *)malloc(sizeof(ipacm_event_data_all));
-					if (data_all == NULL)
-					{
-						IPACMERR("Unable to allocate memory\n");
-						break;
-					}
-					memset(data_all, 0, sizeof(ipacm_event_data_all));
-					data_all->iptype = IPA_IP_v6;
-					data_all->if_index = it->if_index;
-					memcpy(data_all->ipv6_addr,it->ipv6_addr, 4*sizeof(uint32_t));
-					memcpy(data_all->mac_addr, it->mac_addr, IPA_MAC_ADDR_SIZE);
-					memcpy(data_all->iface_name, it->iface_name, IPA_IFACE_NAME_LEN);
-					evt_data.evt_data = (void *)data_all;
-					IPACM_EvtDispatcher::PostEvt(&evt_data);
-					IPACMDBG_H("Posted event %d, with %s for ipv6 client\n",
-						evt_data.event, data_all->iface_name);
-					IPACMDBG_H("v6 addr : 0x%08x:%08x:%08x:%08x mac : 0x%x%x%x%x%x%x\n",
-						it->ipv6_addr[0], it->ipv6_addr[1], it->ipv6_addr[2], it->ipv6_addr[3],
-						it->mac_addr[0], it->mac_addr[1], it->mac_addr[2], it->mac_addr[3], it->mac_addr[4], it->mac_addr[5]);
-					it = neigh_cache.erase(it);
-				}
-				else
-					it++;
+				IPACMDBG_H("Posted Neighbor event from neigh cache with prefix 0x%08x:%08x\n",
+					data_wan->ipv6_prefix[0],data_wan->ipv6_prefix[1]);
 			}
 		}
 		break;
@@ -1131,13 +1106,10 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 
 		/* reset usb-client ipv6 rt-rules */
 		handle_lan_client_reset_rt(IPA_IP_v6);
-		it = neigh_cache.begin();
-		while (it != neigh_cache.end())
+		if(handle_neigh_cache_ops(NEIGH_CLIENT_DEL_PREFIX, data_wan->ipv6_prefix) == IPACM_SUCCESS)
 		{
-			if (it->ipv6_addr[0] == data_wan->ipv6_prefix[0] && it->ipv6_addr[1] == data_wan->ipv6_prefix[1])
-				it = neigh_cache.erase(it);
-			else
-				it++;
+			IPACMDBG_H("Deleted ipv6 address from neigh cache with prefix 0x%08x:%08x\n",
+				data_wan->ipv6_prefix[0],data_wan->ipv6_prefix[1]);
 		}
 
 		IPACMDBG_H("Backhaul is sta mode?%d\n", data_wan->is_sta);
@@ -1643,36 +1615,10 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 
 			if(ip_type == IPA_IP_v6 || ip_type == IPA_IP_MAX)
 			{
-				it = neigh_cache.begin();
-				while (it != neigh_cache.end())
+				if(handle_neigh_cache_ops(POST_NEIGH_CLIENT_IP_ADDR_EVT, data_wan->ipv6_prefix) == IPACM_SUCCESS)
 				{
-					if (it->ipv6_addr[0] == data_wan->ipv6_prefix[0] &&
-							it->ipv6_addr[1] == data_wan->ipv6_prefix[1])
-					{
-						evt_data.event = IPA_NEIGH_CLIENT_IP_ADDR_ADD_EVENT;
-						data_all = (ipacm_event_data_all *)malloc(sizeof(ipacm_event_data_all));
-						if (data_all == NULL)
-						{
-							IPACMERR("Unable to allocate memory\n");
-							break;
-						}
-						memset(data_all, 0, sizeof(ipacm_event_data_all));
-						data_all->iptype = IPA_IP_v6;
-						data_all->if_index = it->if_index;
-						memcpy(data_all->ipv6_addr,it->ipv6_addr, 4*sizeof(uint32_t));
-						memcpy(data_all->mac_addr, it->mac_addr, IPA_MAC_ADDR_SIZE);
-						memcpy(data_all->iface_name, it->iface_name, IPA_IFACE_NAME_LEN);
-						evt_data.evt_data = (void *)data_all;
-						IPACM_EvtDispatcher::PostEvt(&evt_data);
-						IPACMDBG_H("Posted event %d, with %s for ipv6 client \n",
-							evt_data.event, data_all->iface_name);
-						IPACMDBG_H("v6 addr : 0x%08x:%08x:%08x:%08x mac : 0x%x%x%x%x%x%x\n",
-							it->ipv6_addr[0], it->ipv6_addr[1], it->ipv6_addr[2], it->ipv6_addr[3],
-							it->mac_addr[0], it->mac_addr[1], it->mac_addr[2], it->mac_addr[3], it->mac_addr[4], it->mac_addr[5]);
-						it = neigh_cache.erase(it);
-					}
-					else
-						it++;
+					IPACMDBG_H("Posted Neighbor event from neigh cache with prefix 0x%08x:%08x\n",
+					data_wan->ipv6_prefix[0],data_wan->ipv6_prefix[1]);
 				}
 			}
 		}
@@ -2057,6 +2003,189 @@ int IPACM_Lan::del_socksv5_flt_rule(void)
 }
 #endif
 
+/*
+handle_neigh_cache_ops:
+Function to perform neigh cache operations
+
+Parameters:
+ops:
+Operation type in ipacm_neigh_cache_ops_type enum
+
+ops                             data
+NEIGH_CLIENT_ADD                ipacm_event_data_all *data
+NEIGH_CLIENT_DEL                uint32_t *ipv6_addr
+NEIGH_CLIENT_DEL_PREFIX         uint32_t *ipv6_addr
+POST_NEIGH_CLIENT_IP_ADDR_EVT   uint32_t *ipv6_addr
+*/
+int IPACM_Lan::handle_neigh_cache_ops(ipacm_neigh_cache_ops_type ops, void *data)
+{
+	ipacm_event_data_all data_all;
+	ipacm_event_data_all * data_new = NULL;
+	uint32_t *ipv6_addr = NULL;
+	std::list <ipacm_event_data_all>::iterator it;
+	ipacm_cmd_q_data evt_data;
+	int ret = IPACM_SUCCESS;
+
+	switch (ops)
+	{
+	case NEIGH_CLIENT_ADD:
+		{
+			if(data == NULL)
+			{
+				IPACMERR("Wrong param: data is not proper\n");
+				ret = IPACM_FAILURE;
+				goto end;
+			}
+			data_new = (ipacm_event_data_all *)data;
+			if (neigh_cache.size() < 2*IPA_MAX_NUM_HW_PATH_CLIENTS)
+			{
+				for (it = neigh_cache.begin(); it != neigh_cache.end(); ++it)
+				{
+					if ((it->ipv6_addr[0] == data_new->ipv6_addr[0]) && (it->ipv6_addr[1] == data_new->ipv6_addr[1])
+						&& (it->ipv6_addr[2] == data_new->ipv6_addr[2])  && (it->ipv6_addr[3] == data_new->ipv6_addr[3]))
+					{
+						IPACMDBG_H("Already cached client v6 addr : 0x%08x:%08x:%08x:%08x mac 0x%x%x%x%x%x%x\n",
+							data_new->ipv6_addr[0], data_new->ipv6_addr[1], data_new->ipv6_addr[2], data_new->ipv6_addr[3],
+							data_new->mac_addr[0], data_new->mac_addr[1], data_new->mac_addr[2], data_new->mac_addr[3], data_new->mac_addr[4], data_new->mac_addr[5]);
+						break;
+					}
+				}
+				if (it == neigh_cache.end())
+				{
+					memcpy(&data_all, data_new, sizeof(ipacm_event_data_all));
+					neigh_cache.push_back(data_all);
+					IPACMDBG_H("Caching v6 addr : 0x%08x:%08x:%08x:%08x mac 0x%x%x%x%x%x%x\n",
+						data_all.ipv6_addr[0], data_all.ipv6_addr[1], data_all.ipv6_addr[2], data_all.ipv6_addr[3],
+						data_all.mac_addr[0], data_all.mac_addr[1], data_all.mac_addr[2], data_all.mac_addr[3], data_all.mac_addr[4], data_all.mac_addr[5]);
+				}
+			}
+			else
+			{
+				IPACMERR("Already max num of elements in the cache\n");
+				ret = IPACM_FAILURE;
+				goto end;
+			}
+		}
+		break;
+
+	case NEIGH_CLIENT_DEL:
+		{
+			if(data == NULL)
+			{
+				IPACMERR("Wrong param: v6 address not proper\n");
+				ret = IPACM_FAILURE;
+				goto end;
+			}
+			ipv6_addr = (uint32_t *)data;
+			if(ipv6_addr[0] == 0 && ipv6_addr[1] == 0 &&
+				ipv6_addr[2] == 0 && ipv6_addr[3] == 0)
+			{
+				IPACMERR("Wrong param: Invalid v6 address\n");
+				ret = IPACM_FAILURE;
+				goto end;
+			}
+			for (it = neigh_cache.begin(); it != neigh_cache.end(); ++it)
+			{
+				if ((it->ipv6_addr[0] == ipv6_addr[0]) && (it->ipv6_addr[1] == ipv6_addr[1])
+					&& (it->ipv6_addr[2] == ipv6_addr[2]) && (it->ipv6_addr[3] == ipv6_addr[3]))
+				{
+					neigh_cache.erase(it);
+					IPACMDBG_H("deleted v6 addr : 0x%08x:%08x:%08x:%08x from cache\n",
+						ipv6_addr[0], ipv6_addr[1], ipv6_addr[2], ipv6_addr[3]);
+					break;
+				}
+			}
+		}
+		break;
+
+	case NEIGH_CLIENT_DEL_PREFIX:
+		{
+			if(data == NULL)
+			{
+				IPACMERR("Wrong param: v6 address not proper\n");
+				ret = IPACM_FAILURE;
+				goto end;
+			}
+			ipv6_addr = (uint32_t *)data;
+			if(ipv6_addr[0] == 0 && ipv6_addr[1] == 0)
+			{
+				IPACMERR("Wrong param: Invalid v6 address\n");
+				ret = IPACM_FAILURE;
+				goto end;
+			}
+			it = neigh_cache.begin();
+			while (it != neigh_cache.end())
+			{
+				if (it->ipv6_addr[0] == ipv6_addr[0] && it->ipv6_addr[1] == ipv6_addr[1])
+				{
+					it = neigh_cache.erase(it);
+					IPACMDBG_H("deleted v6 addr : 0x%08x:%08x:%08x:%08x from cache\n",
+						ipv6_addr[0], ipv6_addr[1], ipv6_addr[2], ipv6_addr[3]);
+				}
+				else
+				{
+					it++;
+				}
+			}
+		}
+		break;
+
+	case POST_NEIGH_CLIENT_IP_ADDR_EVT:
+		{
+			if(data == NULL)
+			{
+				IPACMERR("Wrong param: v6 address not proper\n");
+				ret = IPACM_FAILURE;
+				goto end;
+			}
+			ipv6_addr = (uint32_t *)data;
+			if(ipv6_addr[0] == 0 && ipv6_addr[1] == 0)
+			{
+				IPACMERR("Wrong param: Invalid v6 address\n");
+				ret = IPACM_FAILURE;
+				goto end;
+			}
+			it = neigh_cache.begin();
+			while (it != neigh_cache.end())
+			{
+				if (it->ipv6_addr[0] == ipv6_addr[0] && it->ipv6_addr[1] == ipv6_addr[1])
+				{
+					evt_data.event = IPA_NEIGH_CLIENT_IP_ADDR_ADD_EVENT;
+					data_new = (ipacm_event_data_all *)malloc(sizeof(ipacm_event_data_all));
+					if (data_new == NULL)
+					{
+						IPACMERR("Unable to allocate memory\n");
+						ret = IPACM_FAILURE;
+						break;
+					}
+					memset(data_new, 0, sizeof(ipacm_event_data_all));
+					data_new->iptype = IPA_IP_v6;
+					data_new->if_index = it->if_index;
+					memcpy(data_new->ipv6_addr,it->ipv6_addr, 4*sizeof(uint32_t));
+					memcpy(data_new->mac_addr, it->mac_addr, IPA_MAC_ADDR_SIZE);
+					memcpy(data_new->iface_name, it->iface_name, IPA_IFACE_NAME_LEN);
+					evt_data.evt_data = (void *)data_new;
+					IPACM_EvtDispatcher::PostEvt(&evt_data);
+					IPACMDBG_H("Posted event %d, with %s for ipv6 client\n",
+						evt_data.event, data_new->iface_name);
+					IPACMDBG_H("v6 addr : 0x%08x:%08x:%08x:%08x mac : 0x%x%x%x%x%x%x\n",
+						it->ipv6_addr[0], it->ipv6_addr[1], it->ipv6_addr[2], it->ipv6_addr[3],
+						it->mac_addr[0], it->mac_addr[1], it->mac_addr[2], it->mac_addr[3], it->mac_addr[4], it->mac_addr[5]);
+					it = neigh_cache.erase(it);
+				}
+				else
+					it++;
+			}
+		}
+		break;
+
+	default:
+		break;
+	}
+end:
+	return ret;
+}
+
 int IPACM_Lan::del_ul_flt_rules(enum ipa_ip_type iptype)
 {
 
@@ -2218,27 +2347,9 @@ int IPACM_Lan::handle_vlan_neighbor(ipacm_event_data_all *data)
 				if (!IPACM_Wan::isWan_active_with_prefix(data_vlan->data_all.ipv6_addr) &&
 					!(IPACM_Iface::ipacmcfg->ipv6_nat_enable && is_unique_local_ipv6_addr(data->ipv6_addr)))
 				{
-					if (neigh_cache.size() < 2*IPA_MAX_NUM_HW_PATH_CLIENTS)
+					if(handle_neigh_cache_ops(NEIGH_CLIENT_ADD, data) != IPACM_SUCCESS)
 					{
-						for (it = neigh_cache.begin(); it != neigh_cache.end(); ++it)
-						{
-							if ((it->ipv6_addr[0] == data->ipv6_addr[0]) && (it->ipv6_addr[1] == data->ipv6_addr[1])
-								&& (it->ipv6_addr[2] == data->ipv6_addr[2])  && (it->ipv6_addr[3] == data->ipv6_addr[3]))
-							{
-								IPACMDBG_H("Already cached client v6 addr : 0x%08x:%08x:%08x:%08x mac 0x%x%x%x%x%x%x\n",
-									data->ipv6_addr[0], data->ipv6_addr[1], data->ipv6_addr[2], data->ipv6_addr[3],
-									data->mac_addr[0], data->mac_addr[1], data->mac_addr[2], data->mac_addr[3], data->mac_addr[4], data->mac_addr[5]);
-								break;
-							}
-						}
-						if (it == neigh_cache.end())
-						{
-							memcpy(&data_all, data, sizeof(ipacm_event_data_all));
-							neigh_cache.push_back(data_all);
-							IPACMDBG_H("Caching v6 addr : 0x%08x:%08x:%08x:%08x mac 0x%x%x%x%x%x%x\n",
-								data_all.ipv6_addr[0], data_all.ipv6_addr[1], data_all.ipv6_addr[2], data_all.ipv6_addr[3],
-								data_all.mac_addr[0], data_all.mac_addr[1], data_all.mac_addr[2], data_all.mac_addr[3], data_all.mac_addr[4], data_all.mac_addr[5]);
-						}
+						IPACMDBG_H("Failed to add data in neigh cache\n");
 					}
 					return IPACM_FAILURE;
 				}
@@ -2851,6 +2962,7 @@ int IPACM_Lan::handle_vlan_pdn_down(ipacm_event_vlan_pdn *data)
 					}
 				}
 			}
+
 			/* if we still have vlan pdns up notify only */
 			if(set_mux_down(data->mux_id, data->iptype))
 				return IPACM_FAILURE;
@@ -2917,6 +3029,7 @@ int IPACM_Lan::handle_vlan_pdn_down(ipacm_event_vlan_pdn *data)
 					}
 				}
 			}
+
 			/* if we still have vlan pdns up notify only */
 			if(set_mux_down(data->mux_id, IPA_IP_v4))
 				return IPACM_FAILURE;
@@ -3020,14 +3133,11 @@ int IPACM_Lan::handle_del_ipv6_addr(ipacm_event_data_all *data)
 
 		IPACMDBG_H("ipv6 address got: 0x%x:%x:%x:%x\n",
 			data->ipv6_addr[0], data->ipv6_addr[1], data->ipv6_addr[2], data->ipv6_addr[3]);
-		for (it = neigh_cache.begin(); it != neigh_cache.end(); ++it)
+
+		if(handle_neigh_cache_ops(NEIGH_CLIENT_DEL, data->ipv6_addr) == IPACM_SUCCESS)
 		{
-			if ((it->ipv6_addr[0] == data->ipv6_addr[0]) && (it->ipv6_addr[1] == data->ipv6_addr[1])
-				&& (it->ipv6_addr[2] == data->ipv6_addr[2]) && (it->ipv6_addr[3] == data->ipv6_addr[3]))
-			{
-				neigh_cache.erase(it);
-				break;
-			}
+			IPACMDBG_H("Deleted ipv6 address from neigh cache v6_addr: 0x%08x:%08x:0x%08x:%08x\n",
+				data->ipv6_addr[0],data->ipv6_addr[1],data->ipv6_addr[2],data->ipv6_addr[3]);
 		}
 
 		for (num_v6 = 0; num_v6 < get_client_memptr(eth_client, clnt_indx)->ipv6_set; ++num_v6)
@@ -4952,27 +5062,9 @@ int IPACM_Lan::handle_eth_client_ipaddr(ipacm_event_data_all *data)
 					memcmp(ipv6_prefix, data->ipv6_addr, sizeof(ipv6_prefix)) != 0)
 #endif           
 				{
-					if (neigh_cache.size() < 2*IPA_MAX_NUM_HW_PATH_CLIENTS)
+					if(handle_neigh_cache_ops(NEIGH_CLIENT_ADD, data) != IPACM_SUCCESS)
 					{
-						for (it = neigh_cache.begin(); it != neigh_cache.end(); ++it)
-						{
-							if ((it->ipv6_addr[0] == data->ipv6_addr[0]) && (it->ipv6_addr[1] == data->ipv6_addr[1])
-								&& (it->ipv6_addr[2] == data->ipv6_addr[2])  && (it->ipv6_addr[3] == data->ipv6_addr[3]))
-							{
-								IPACMDBG_H("Already cached client v6 addr : 0x%08x:%08x:%08x:%08x mac 0x%x%x%x%x%x%x\n",
-									data->ipv6_addr[0], data->ipv6_addr[1], data->ipv6_addr[2], data->ipv6_addr[3],
-									data->mac_addr[0], data->mac_addr[1], data->mac_addr[2], data->mac_addr[3], data->mac_addr[4], data->mac_addr[5]);
-								break;
-							}
-						}
-						if (it == neigh_cache.end())
-						{
-							memcpy(&data_all, data, sizeof(ipacm_event_data_all));
-							neigh_cache.push_back(data_all);
-							IPACMDBG_H("Caching v6 addr : 0x%08x:%08x:%08x:%08x mac 0x%x%x%x%x%x%x\n",
-								data_all.ipv6_addr[0], data_all.ipv6_addr[1], data_all.ipv6_addr[2], data_all.ipv6_addr[3],
-								data_all.mac_addr[0], data_all.mac_addr[1], data_all.mac_addr[2], data_all.mac_addr[3], data_all.mac_addr[4], data_all.mac_addr[5]);
-						}
+						IPACMDBG_H("Failed to add data in neigh cache\n");
 					}
 					IPACMDBG_H("This global IPv6 address is not with correct prefix, ignore.\n");
 					return IPACM_FAILURE;

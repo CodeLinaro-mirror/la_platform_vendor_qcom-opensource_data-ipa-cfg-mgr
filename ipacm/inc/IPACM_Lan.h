@@ -277,7 +277,7 @@ public:
 
 	/* LAN-iface's callback function */
 	void event_callback(ipa_cm_event_id event, void *data);
-
+	int handle_neigh_cache_ops(ipacm_neigh_cache_ops_type ops, void* data);
 	virtual int handle_wan_up(ipa_ip_type ip_type, uint16_t vlan_id = 0);
 
 	/* configure filter rule for wan_up event*/

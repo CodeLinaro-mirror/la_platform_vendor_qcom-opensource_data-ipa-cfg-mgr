@@ -237,8 +237,6 @@ IPACM_Lan::IPACM_Lan(int iface_index) : IPACM_Iface(iface_index)
 
 	num_wan_ul_fl_rule_v4 = 0;
 	num_wan_ul_fl_rule_v6 = 0;
-	num_wan_ul_eogre_fl_rule_v4 = 0;
-	num_wan_ul_eogre_fl_rule_v6 = 0;
 	num_wan_subnet_rules = 0;
 	num_wan_prefix_rules = 0;
 	hdr_len = 0;
@@ -261,8 +259,6 @@ IPACM_Lan::IPACM_Lan(int iface_index) : IPACM_Iface(iface_index)
 	modem_ul_v4_set = false;
 	ip_excp_v4_rule_set = false;
 	modem_ul_v6_set = false;
-	modem_eogre_ul_v4_set = false;
-	modem_eogre_ul_v6_set = false;
 
 	memset(ipv6_prefix, 0, sizeof(ipv6_prefix));
 	memset(&xlat_ctx, 0, sizeof(xlat_context));
@@ -2496,7 +2492,7 @@ int IPACM_Lan::del_socksv5_flt_rule(void)
 #endif
 
 
-int IPACM_Lan::del_ul_flt_rules(enum ipa_ip_type iptype, bool is_eogre_stats)
+int IPACM_Lan::del_ul_flt_rules(enum ipa_ip_type iptype, bool is_eogre_stats, uint8_t tunnel_id)
 {
 	int idx = 0;
 
@@ -2515,35 +2511,63 @@ int IPACM_Lan::del_ul_flt_rules(enum ipa_ip_type iptype, bool is_eogre_stats)
 
 	if(iptype == IPA_IP_v4)
 	{
-		if (num_wan_ul_fl_rule_v4 == 0)
-		{
-			IPACMERR("No modem UL rules were installed, return...\n");
-			modem_ul_v4_set = false;
-			modem_eogre_ul_v4_set = false;
-			return IPACM_SUCCESS;
-		}
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
 		if((IPACM_Iface::ipacmcfg->ipacm_lan_stats_enable == false) ||
 		(IPACM_Iface::ipacmcfg->ipacm_lan_stats_enable  && is_eogre_stats))
 #endif
 		{
-			if(num_wan_ul_fl_rule_v4 > MAX_WAN_UL_FILTER_RULES)
+			if(IPACM_Iface::ipacmcfg->tunnel_feature == SINGLE_TAG_FEATURE && is_eogre_stats)
 			{
-				IPACMERR("number of wan_ul_fl_rule_v4 (%d) > MAX_WAN_UL_FILTER_RULES (%d), aborting...\n", num_wan_ul_fl_rule_v4, MAX_WAN_UL_FILTER_RULES);
-				return IPACM_FAILURE;
-			}
+				if(IPACM_Iface::ipacmcfg->tunnel_idx_map[tunnel_id].num_wan_ul_eogre_fl_rule_v4 > MAX_WAN_UL_FILTER_RULES)
+				{
+					IPACMERR("number of num_wan_ul_eogre_fl_rule_v4 (%d) > MAX_WAN_UL_FILTER_RULES (%d), aborting...\n", IPACM_Iface::ipacmcfg->tunnel_idx_map[tunnel_id].num_wan_ul_eogre_fl_rule_v4, MAX_WAN_UL_FILTER_RULES);
+					return IPACM_FAILURE;
+				}
+				if(tunnel_id == 0xFF)
+				{
+					IPACMERR("Invalid tunnel_id [%d] passed...\n",tunnel_id);
+					return IPACM_FAILURE;
 
-			if(m_filtering.DeleteFilteringHdls(wan_ul_fl_rule_hdl_v4,
-				IPA_IP_v4, num_wan_ul_fl_rule_v4) == false)
+				}
+				IPACMERR("Delete v4 flt rule for tunnel_id [%d] ...\n",tunnel_id);
+				IPACMERR("num_wan_ul_eogre_fl_rule_v4 [%d] ...\n",IPACM_Iface::ipacmcfg->tunnel_idx_map[tunnel_id].num_wan_ul_eogre_fl_rule_v4);
+				if(m_filtering.DeleteFilteringHdls(IPACM_Iface::ipacmcfg->tunnel_idx_map[tunnel_id].eogre_wan_ul_fl_rule_hdl_v4,
+							IPA_IP_v4, IPACM_Iface::ipacmcfg->tunnel_idx_map[tunnel_id].num_wan_ul_eogre_fl_rule_v4) == false)
+				{
+					IPACMERR("Error Deleting RuleTable(1) to Filtering, aborting...\n");
+					return IPACM_FAILURE;
+				}
+				IPACM_Iface::ipacmcfg->decreaseFltRuleCount(rx_prop->rx[idx].src_pipe, IPA_IP_v4, IPACM_Iface::ipacmcfg->tunnel_idx_map[tunnel_id].num_wan_ul_eogre_fl_rule_v4);
+				memset(&IPACM_Iface::ipacmcfg->tunnel_idx_map[tunnel_id].eogre_wan_ul_fl_rule_hdl_v4, 0,sizeof(IPACM_Iface::ipacmcfg->tunnel_idx_map[tunnel_id].eogre_wan_ul_fl_rule_hdl_v4));
+				IPACM_Iface::ipacmcfg->tunnel_idx_map[tunnel_id].num_wan_ul_eogre_fl_rule_v4 = 0;
+				IPACM_Iface::ipacmcfg->tunnel_idx_map[tunnel_id].modem_eogre_ul_v4_set = false;
+			}
+			else
 			{
-				IPACMERR("Error Deleting RuleTable(1) to Filtering, aborting...\n");
-				return IPACM_FAILURE;
+				if (num_wan_ul_fl_rule_v4 == 0)
+				{
+					IPACMERR("No modem UL rules were installed, return...\n");
+					modem_ul_v4_set = false;
+					return IPACM_SUCCESS;
+				}
+				if(num_wan_ul_fl_rule_v4 > MAX_WAN_UL_FILTER_RULES)
+				{
+					IPACMERR("number of wan_ul_fl_rule_v4 (%d) > MAX_WAN_UL_FILTER_RULES (%d), aborting...\n", num_wan_ul_fl_rule_v4, MAX_WAN_UL_FILTER_RULES);
+					return IPACM_FAILURE;
+				}
+	
+				if(m_filtering.DeleteFilteringHdls(wan_ul_fl_rule_hdl_v4,
+					IPA_IP_v4, num_wan_ul_fl_rule_v4) == false)
+				{
+					IPACMERR("Error Deleting RuleTable(1) to Filtering, aborting...\n");
+					return IPACM_FAILURE;
+				}
+				IPACM_Iface::ipacmcfg->decreaseFltRuleCount(rx_prop->rx[idx].src_pipe, IPA_IP_v4, num_wan_ul_fl_rule_v4);
+	
+				memset(wan_ul_fl_rule_hdl_v4, 0, MAX_WAN_UL_FILTER_RULES * sizeof(uint32_t));
+				memset(xlat_ctx.ul_rule_id_hdl_map, 0, MAX_WAN_UL_FILTER_RULES*sizeof(rule_id_hdl_map));
+				num_wan_ul_fl_rule_v4 = 0;
 			}
-			IPACM_Iface::ipacmcfg->decreaseFltRuleCount(rx_prop->rx[idx].src_pipe, IPA_IP_v4, num_wan_ul_fl_rule_v4);
-
-			memset(wan_ul_fl_rule_hdl_v4, 0, MAX_WAN_UL_FILTER_RULES * sizeof(uint32_t));
-			memset(xlat_ctx.ul_rule_id_hdl_map, 0, MAX_WAN_UL_FILTER_RULES*sizeof(rule_id_hdl_map));
-			num_wan_ul_fl_rule_v4 = 0;
 		}
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
 		else {
@@ -2557,50 +2581,76 @@ int IPACM_Lan::del_ul_flt_rules(enum ipa_ip_type iptype, bool is_eogre_stats)
 		}
 #endif
 		modem_ul_v4_set = false;
-		modem_eogre_ul_v4_set = false;
-		ip_excp_v4_rule_set = false;
 	}
 	else
 	{
-		if(num_wan_ul_fl_rule_v6 == 0)
-		{
-			IPACMERR("No modem UL rules were installed, return...\n");
-			modem_ul_v6_set = false;
-			return IPACM_SUCCESS;
-		}
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
 		if((IPACM_Iface::ipacmcfg->ipacm_lan_stats_enable == false) ||
 		(IPACM_Iface::ipacmcfg->ipacm_lan_stats_enable  && is_eogre_stats))
 #endif
 		{
-#ifndef IPA_V6_UL_WL_FIREWALL_HANDLE
-			if(num_wan_ul_fl_rule_v6 > MAX_WAN_UL_FILTER_RULES)
-#else
-			if(num_wan_ul_fl_rule_v6 > IPACM_MAX_V6_UL_WL_FIREWALL_ENTRIES)
-#endif
+			if(IPACM_Iface::ipacmcfg->tunnel_feature == SINGLE_TAG_FEATURE && is_eogre_stats)
 			{
-				IPACMERR(" the number of rules (%d) are bigger than array (%d), aborting...\n", num_wan_ul_fl_rule_v6, MAX_WAN_UL_FILTER_RULES);
-				return IPACM_FAILURE;
-			}
+				if(IPACM_Iface::ipacmcfg->tunnel_idx_map[tunnel_id].num_wan_ul_eogre_fl_rule_v6 > MAX_WAN_UL_FILTER_RULES)
+				{
+					IPACMERR("number of num_wan_ul_eogre_fl_rule_v6 (%d) > MAX_WAN_UL_FILTER_RULES (%d), aborting...\n", IPACM_Iface::ipacmcfg->tunnel_idx_map[tunnel_id].num_wan_ul_eogre_fl_rule_v6, MAX_WAN_UL_FILTER_RULES);
+					return IPACM_FAILURE;
+				}
+				if(tunnel_id == 0xFF)
+				{
+					IPACMERR("Invalid tunnel_id [%d] passed...\n",tunnel_id);
+					return IPACM_FAILURE;
 
-#ifdef FEATURE_L2TP
-			if(IPACM_Iface::ipacmcfg->ipacm_l2tp_enable != IPACM_L2TP_E2E)
-#endif
-			{
-				/* When OCU is enabled, no need to delete modem UL IPv6 rules. */
-				if(m_filtering.DeleteFilteringHdls(wan_ul_fl_rule_hdl_v6,
-					IPA_IP_v6, num_wan_ul_fl_rule_v6) == false)
+				}
+				IPACMERR("Delete v6 flt rule for tunnel_id [%d] ...\n",tunnel_id);
+				if(m_filtering.DeleteFilteringHdls(IPACM_Iface::ipacmcfg->tunnel_idx_map[tunnel_id].eogre_wan_ul_fl_rule_hdl_v6,
+							IPA_IP_v6, IPACM_Iface::ipacmcfg->tunnel_idx_map[tunnel_id].num_wan_ul_eogre_fl_rule_v6) == false)
 				{
 					IPACMERR("Error Deleting RuleTable(1) to Filtering, aborting...\n");
 					return IPACM_FAILURE;
 				}
-				IPACM_Iface::ipacmcfg->decreaseFltRuleCount(rx_prop->rx[idx].src_pipe, IPA_IP_v6, num_wan_ul_fl_rule_v6);
+				IPACM_Iface::ipacmcfg->decreaseFltRuleCount(rx_prop->rx[idx].src_pipe, IPA_IP_v6, IPACM_Iface::ipacmcfg->tunnel_idx_map[tunnel_id].num_wan_ul_eogre_fl_rule_v6);
+				memset(&IPACM_Iface::ipacmcfg->tunnel_idx_map[tunnel_id].eogre_wan_ul_fl_rule_hdl_v6, 0,sizeof(IPACM_Iface::ipacmcfg->tunnel_idx_map[tunnel_id].eogre_wan_ul_fl_rule_hdl_v6));
+				IPACM_Iface::ipacmcfg->tunnel_idx_map[tunnel_id].num_wan_ul_eogre_fl_rule_v6 = 0;
+				IPACM_Iface::ipacmcfg->tunnel_idx_map[tunnel_id].modem_eogre_ul_v6_set = false;
+			}
+			else
+			{
+				if(num_wan_ul_fl_rule_v6 == 0)
+				{
+					IPACMERR("No modem UL rules were installed, return...\n");
+					modem_ul_v6_set = false;
+					return IPACM_SUCCESS;
+				}
 #ifndef IPA_V6_UL_WL_FIREWALL_HANDLE
-				memset(wan_ul_fl_rule_hdl_v6, 0, MAX_WAN_UL_FILTER_RULES * sizeof(uint32_t));
+				if(num_wan_ul_fl_rule_v6 > MAX_WAN_UL_FILTER_RULES)
 #else
-				memset(wan_ul_fl_rule_hdl_v6, 0, IPACM_MAX_V6_UL_WL_FIREWALL_ENTRIES * sizeof(uint32_t));
+					if(num_wan_ul_fl_rule_v6 > IPACM_MAX_V6_UL_WL_FIREWALL_ENTRIES)
 #endif
-				num_wan_ul_fl_rule_v6 = 0;
+					{
+						IPACMERR(" the number of rules (%d) are bigger than array (%d), aborting...\n", num_wan_ul_fl_rule_v6, MAX_WAN_UL_FILTER_RULES);
+						return IPACM_FAILURE;
+					}
+
+#ifdef FEATURE_L2TP
+				if(IPACM_Iface::ipacmcfg->ipacm_l2tp_enable != IPACM_L2TP_E2E)
+#endif
+				{
+					/* When OCU is enabled, no need to delete modem UL IPv6 rules. */
+					if(m_filtering.DeleteFilteringHdls(wan_ul_fl_rule_hdl_v6,
+								IPA_IP_v6, num_wan_ul_fl_rule_v6) == false)
+					{
+						IPACMERR("Error Deleting RuleTable(1) to Filtering, aborting...\n");
+						return IPACM_FAILURE;
+					}
+					IPACM_Iface::ipacmcfg->decreaseFltRuleCount(rx_prop->rx[idx].src_pipe, IPA_IP_v6, num_wan_ul_fl_rule_v6);
+#ifndef IPA_V6_UL_WL_FIREWALL_HANDLE
+					memset(wan_ul_fl_rule_hdl_v6, 0, MAX_WAN_UL_FILTER_RULES * sizeof(uint32_t));
+#else
+					memset(wan_ul_fl_rule_hdl_v6, 0, IPACM_MAX_V6_UL_WL_FIREWALL_ENTRIES * sizeof(uint32_t));
+#endif
+					num_wan_ul_fl_rule_v6 = 0;
+				}
 			}
 		}
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
@@ -2615,7 +2665,6 @@ int IPACM_Lan::del_ul_flt_rules(enum ipa_ip_type iptype, bool is_eogre_stats)
 		}
 #endif
 		modem_ul_v6_set = false;
-		modem_eogre_ul_v6_set = false;
 	}
 
 	return IPACM_SUCCESS;
@@ -4154,7 +4203,6 @@ int IPACM_Lan::handle_wan_up_ex(ipacm_ext_prop *ext_prop, ipa_ip_type iptype, ui
 		}
 	}
 #endif
-
 	/* check only add static UL filter rule once */
 	if(iptype == IPA_IP_v6)
 	{
@@ -4185,7 +4233,7 @@ int IPACM_Lan::handle_wan_up_ex(ipacm_ext_prop *ext_prop, ipa_ip_type iptype, ui
 			notif_only = false;
 			if(IPACM_Iface::ipacmcfg->eogre_enabled &&
 			(IPACM_Iface::ipacmcfg->tunnel_feature == SINGLE_TAG_FEATURE) &&
-			!modem_eogre_ul_v6_set && iptype ==
+			!IPACM_Iface::ipacmcfg->tunnel_idx.size() && iptype ==
 			IPACM_Iface::ipacmcfg->eogre_info.iptype)
 			{
 				gre_up();
@@ -4238,7 +4286,7 @@ int IPACM_Lan::handle_wan_up_ex(ipacm_ext_prop *ext_prop, ipa_ip_type iptype, ui
 			if(IPACM_Iface::ipacmcfg->eogre_enabled &&
 			(IPACM_Iface::ipacmcfg->tunnel_feature == SINGLE_TAG_FEATURE) &&
 			(iptype == IPACM_Iface::ipacmcfg->eogre_info.iptype) &&
-			!modem_eogre_ul_v4_set)
+			!IPACM_Iface::ipacmcfg->tunnel_idx.size())
 			{
 				gre_up();
 			}
@@ -4288,8 +4336,7 @@ int IPACM_Lan::handle_wan_up_ex(ipacm_ext_prop *ext_prop, ipa_ip_type iptype, ui
 		if(IPACM_Iface::ipacmcfg->eogre_enabled &&
 		(iptype == IPACM_Iface::ipacmcfg->eogre_info.iptype) &&
 		(IPACM_Iface::ipacmcfg->tunnel_feature == SINGLE_TAG_FEATURE) &&
-		((!modem_eogre_ul_v6_set &&  (iptype == IPA_IP_v6)) ||
-		(!modem_eogre_ul_v4_set &&  (iptype == IPA_IP_v4))))
+		(!IPACM_Iface::ipacmcfg->tunnel_idx.size()) &&  (iptype == IPA_IP_v6 || iptype == IPA_IP_v4))
 		{
 			gre_up();
 		}
@@ -7431,6 +7478,7 @@ int IPACM_Lan::handle_uplink_filter_rule(ipacm_ext_prop *prop, ipa_ip_type iptyp
 	uint32_t value = 0, total_rules = 0;
 	bool is_dev_in_vlan_mode=false;
 	enum ipa_flt_action action_cache;
+	uint8_t tunel_id;
 
 	IPACMDBG_H("Set modem UL flt rules for iptype(%d), ispmipv6 %d \n", iptype, isPmipv6);
 
@@ -7757,7 +7805,9 @@ int IPACM_Lan::handle_uplink_filter_rule(ipacm_ext_prop *prop, ipa_ip_type iptyp
 				flt_rule_entry.rule.attrib.u.v6.src_addr[2] = ipgre_info.ipv6_src[1];
 				flt_rule_entry.rule.attrib.u.v6.src_addr[3] = ipgre_info.ipv6_src[0];
 			}
-
+			/*ipgre_info.num_exceptions stores the tunnel_id in EoGRE multi tunnel*/
+			tunel_id = ipgre_info.num_exceptions;
+			IPACMDBG_H("Creating gre rule equation for tunnel_id :%d. \n", tunel_id);
 			/*
 			 * Generate eq
 			 */
@@ -7882,24 +7932,48 @@ int IPACM_Lan::handle_uplink_filter_rule(ipacm_ext_prop *prop, ipa_ip_type iptyp
 			{
 				for(i=0; i<pFilteringTable->num_rules; i++)
 				{
-					wan_ul_fl_rule_hdl_v4[num_wan_ul_fl_rule_v4] = pFilteringTable->rules[i].flt_rule_hdl;
-					num_wan_ul_fl_rule_v4++;
-					/*Map for dynamic insertion of xlat rules */
-					if (is_dev_in_vlan_mode && IPACM_Iface::ipacmcfg->ipacm_mpdn_enable) {
-						xlat_ctx.ul_rule_id_hdl_map[i].rule_id = pFilteringTable->rules[i].rule.rule_id;
-						xlat_ctx.ul_rule_id_hdl_map[i].flt_hdl = pFilteringTable->rules[i].flt_rule_hdl;
+					if(IPACM_Iface::ipacmcfg->tunnel_feature == SINGLE_TAG_FEATURE && is_eogre_rules == true)
+					{
+						IPACMDBG_H("num_wan_ul_eogre_fl_rule_v4 %d\n",IPACM_Iface::ipacmcfg->tunnel_idx_map[tunel_id].num_wan_ul_eogre_fl_rule_v4);
+						IPACM_Iface::ipacmcfg->tunnel_idx_map[tunel_id].eogre_wan_ul_fl_rule_hdl_v4[IPACM_Iface::ipacmcfg->tunnel_idx_map[tunel_id].num_wan_ul_eogre_fl_rule_v4] =
+							pFilteringTable->rules[i].flt_rule_hdl;
+						IPACM_Iface::ipacmcfg->tunnel_idx_map[tunel_id].num_wan_ul_eogre_fl_rule_v4 ++;
+					}
+					else
+					{
+						wan_ul_fl_rule_hdl_v4[num_wan_ul_fl_rule_v4] = pFilteringTable->rules[i].flt_rule_hdl;
+						num_wan_ul_fl_rule_v4++;
+						/*Map for dynamic insertion of xlat rules */
+						if (is_dev_in_vlan_mode && IPACM_Iface::ipacmcfg->ipacm_mpdn_enable) {
+							xlat_ctx.ul_rule_id_hdl_map[i].rule_id = pFilteringTable->rules[i].rule.rule_id;
+							xlat_ctx.ul_rule_id_hdl_map[i].flt_hdl = pFilteringTable->rules[i].flt_rule_hdl;
+						}
 					}
 				}
 				IPACM_Iface::ipacmcfg->increaseFltRuleCount(rx_prop->rx[idx].src_pipe, iptype, pFilteringTable->num_rules);
+				IPACMDBG_H("UL_v4: num_wan_ul_fl_rule_v4:[%d],tunnel_id:[%d],num_wan_ul_eogre_fl_rule_v4:[%d]\n",
+						num_wan_ul_fl_rule_v4, tunel_id, IPACM_Iface::ipacmcfg->tunnel_idx_map[tunel_id].num_wan_ul_eogre_fl_rule_v4);
 			}
 			else /* (iptype == IPA_IP_v6) */
 			{
 				for(i=0; i<pFilteringTable->num_rules; i++)
 				{
-					wan_ul_fl_rule_hdl_v6[num_wan_ul_fl_rule_v6] = pFilteringTable->rules[i].flt_rule_hdl;
-					num_wan_ul_fl_rule_v6++;
+					if(IPACM_Iface::ipacmcfg->tunnel_feature == SINGLE_TAG_FEATURE && is_eogre_rules == true)
+					{
+						IPACMDBG_H("num_wan_ul_eogre_fl_rule_v6 %d\n",IPACM_Iface::ipacmcfg->tunnel_idx_map[tunel_id].num_wan_ul_eogre_fl_rule_v6);
+						IPACM_Iface::ipacmcfg->tunnel_idx_map[tunel_id].eogre_wan_ul_fl_rule_hdl_v6[IPACM_Iface::ipacmcfg->tunnel_idx_map[tunel_id].num_wan_ul_eogre_fl_rule_v6] =
+							pFilteringTable->rules[i].flt_rule_hdl;
+						IPACM_Iface::ipacmcfg->tunnel_idx_map[tunel_id].num_wan_ul_eogre_fl_rule_v6 ++;
+					}
+					else
+					{
+						wan_ul_fl_rule_hdl_v6[num_wan_ul_fl_rule_v6] = pFilteringTable->rules[i].flt_rule_hdl;
+						num_wan_ul_fl_rule_v6++;
+					}
 				}
 				IPACM_Iface::ipacmcfg->increaseFltRuleCount(rx_prop->rx[idx].src_pipe, iptype, pFilteringTable->num_rules);
+				IPACMDBG_H("UL_v6: num_wan_ul_fl_rule_v6:[%d],tunnel_id:[%d],num_wan_ul_eogre_fl_rule_v6:[%d]\n",
+						num_wan_ul_fl_rule_v6, tunel_id, IPACM_Iface::ipacmcfg->tunnel_idx_map[tunel_id].num_wan_ul_eogre_fl_rule_v6);
 			}
 		}
 	}
@@ -7909,25 +7983,11 @@ int IPACM_Lan::handle_uplink_filter_rule(ipacm_ext_prop *prop, ipa_ip_type iptyp
 		/*per client stats will be disabled when vlan is enabled */
 		if(iptype == IPA_IP_v4)
 		{
-			if(modem_eogre_ul_v4_set)
-			{
-				num_wan_ul_fl_rule_v4 += pFilteringTable->num_rules;
-			}
-			else
-			{
-				num_wan_ul_fl_rule_v4 = pFilteringTable->num_rules;
-			}
+			num_wan_ul_fl_rule_v4 = pFilteringTable->num_rules;
 		}
 		else /* (iptype == IPA_IP_v6) */
 		{
-			if(modem_eogre_ul_v6_set)
-			{
-				num_wan_ul_fl_rule_v6 += pFilteringTable->num_rules;
-			}
-			else
-			{
-				num_wan_ul_fl_rule_v6 = pFilteringTable->num_rules;
-			}
+			num_wan_ul_fl_rule_v6 = pFilteringTable->num_rules;
 		}
 	}
 #endif
@@ -15224,6 +15284,7 @@ void IPACM_Lan::gre_up(bool isPmipv6)/*Reusing Gre function for PMIP, with isPmi
 	ipa_ipgre_info ipgre_info;
 	ipa_ip_type iptype;
 	int ret, fd;
+	uint8_t tunel_id;
 
 	if(isPmipv6)
 	{
@@ -15436,15 +15497,15 @@ void IPACM_Lan::gre_up(bool isPmipv6)/*Reusing Gre function for PMIP, with isPmi
 		false, false, isPmipv6, true);
 	if(!ret && IPACM_Iface::ipacmcfg->tunnel_feature == SINGLE_TAG_FEATURE)
 	{
+		/*ipgre_info->num_exceptions stores the tunnel_id in EoGRE multi tunnel*/
+		tunel_id = ipgre_info.num_exceptions;
 		if(iptype == IPA_IP_v6)
 		{
-			num_wan_ul_eogre_fl_rule_v6 = num_wan_ul_fl_rule_v6;
-			modem_eogre_ul_v6_set = true;
+			IPACM_Iface::ipacmcfg->tunnel_idx_map[tunel_id].modem_eogre_ul_v6_set = true;
 		}
 		else if(iptype == IPA_IP_v4)
 		{
-			num_wan_ul_eogre_fl_rule_v4 = num_wan_ul_fl_rule_v4;
-			modem_eogre_ul_v4_set = true;
+			IPACM_Iface::ipacmcfg->tunnel_idx_map[tunel_id].modem_eogre_ul_v4_set = true;
 		}
 	}
 
@@ -15455,15 +15516,15 @@ void IPACM_Lan::gre_up(bool isPmipv6)/*Reusing Gre function for PMIP, with isPmi
 		IPACM_Iface::ipacmcfg->GetQmapId(), false, isPmipv6, true);
 	if(!ret && IPACM_Iface::ipacmcfg->tunnel_feature == SINGLE_TAG_FEATURE)
 	{
+		/*ipgre_info->num_exceptions stores the tunnel_id in EoGRE multi tunnel*/
+		tunel_id = ipgre_info.num_exceptions;
 		if(iptype == IPA_IP_v6)
 		{
-			num_wan_ul_eogre_fl_rule_v6 = num_wan_ul_fl_rule_v6;
-                	modem_eogre_ul_v6_set = true;
+			IPACM_Iface::ipacmcfg->tunnel_idx_map[tunel_id].modem_eogre_ul_v6_set = true;
 		}
 		else if(iptype == IPA_IP_v4)
 		{
-			num_wan_ul_eogre_fl_rule_v4 = num_wan_ul_fl_rule_v4;
-			modem_eogre_ul_v4_set = true;
+			IPACM_Iface::ipacmcfg->tunnel_idx_map[tunel_id].modem_eogre_ul_v4_set = true;
 		}
 	}
 #endif
@@ -15596,6 +15657,7 @@ void IPACM_Lan::gre_down(bool isPmipv6)
 	int res;
 	ipa_ipgre_info ipgre_info = IPACM_Iface::ipacmcfg->eogre_info;
 	ipa_ip_type iptype  = ipgre_info.iptype;
+	uint8_t tunel_id;
 
 	if(isPmipv6)
 	{
@@ -15616,8 +15678,20 @@ void IPACM_Lan::gre_down(bool isPmipv6)
 		"Clearing route rules for gre iptype(%d)\n",
 		iptype);
 
-	gre_clear_route_data(IPA_IP_v4, rx_prop);
-	gre_clear_route_data(IPA_IP_v6, rx_prop);
+	if (IPACM_Iface::ipacmcfg->tunnel_feature == SINGLE_TAG_FEATURE)
+	{
+		tunel_id = ipgre_info.num_exceptions;
+		IPACMDBG_H(" Request to delete rules for tunnel_id (%d) .try lock?.\n",ipgre_info.num_exceptions);
+		if(pthread_mutex_lock(&IPACM_Iface::ipacmcfg->mutexA[ipgre_info.num_exceptions]) != 0)
+		{
+			IPACMERR("Unable to lock the mutex\n");
+			return;
+		}
+		IPACMDBG_H(" Request to delete rules for tunnel_id (%d) .locked.\n",ipgre_info.num_exceptions);
+	}
+
+	gre_clear_route_data(IPA_IP_v4, rx_prop, ipgre_info.num_exceptions);
+	gre_clear_route_data(IPA_IP_v6, rx_prop, ipgre_info.num_exceptions);
 
 	IPACMDBG_H(
 		"Clearing filter rules for gre iptype(%d)\n",
@@ -15641,21 +15715,9 @@ void IPACM_Lan::gre_down(bool isPmipv6)
 	}
 	if(!isPmipv6)
 	{
-		if((num_wan_ul_fl_rule_v4 == 0) && (iptype == IPA_IP_v4) &&
-		(IPACM_Iface::ipacmcfg->tunnel_feature == SINGLE_TAG_FEATURE))
-		{
-			num_wan_ul_fl_rule_v4 = num_wan_ul_eogre_fl_rule_v4;
-		}
-		else if((num_wan_ul_fl_rule_v6 == 0) && (iptype == IPA_IP_v6) &&
-		(IPACM_Iface::ipacmcfg->tunnel_feature == SINGLE_TAG_FEATURE))
-		{
-			num_wan_ul_fl_rule_v6 = num_wan_ul_eogre_fl_rule_v6;
-		}
-		IPACMDBG("delete_dflt_filter_rules num_wan_ul_fl_rule_v6 = %d , iptype = %d\n",
-			num_wan_ul_fl_rule_v6, ip_type);
-		if (IPACM_Iface::ipacmcfg->hw_fnr_stats_support &&
-		(IPACM_Iface::ipacmcfg->tunnel_feature == SINGLE_TAG_FEATURE))
-			del_ul_flt_rules(iptype, true);
+		if ((IPACM_Iface::ipacmcfg->hw_fnr_stats_support &&
+		(IPACM_Iface::ipacmcfg->tunnel_feature == SINGLE_TAG_FEATURE)) ||(IPACM_Iface::ipacmcfg->tunnel_feature == SINGLE_TAG_FEATURE))
+			del_ul_flt_rules(iptype, true,ipgre_info.num_exceptions);
 		else
 			del_ul_flt_rules(iptype);
 
@@ -15667,7 +15729,7 @@ void IPACM_Lan::gre_down(bool isPmipv6)
 			if ( delete_dflt_filter_rules(IPA_IP_v4) == IPACM_FAILURE )
 			{
 				IPACMERR("delete_dflt_filter_rules failed\n");
-				return;
+				goto down_end;
 			}
 			/*
 			* Will reinstall the exception rules.
@@ -15675,7 +15737,7 @@ void IPACM_Lan::gre_down(bool isPmipv6)
 			if ( init_fl_rule(IPA_IP_v4, false) == IPACM_FAILURE )
 			{
 				IPACMERR("init_fl_rule failed\n");
-				return;
+				goto down_end;
 			}
 		}
 
@@ -15687,7 +15749,7 @@ void IPACM_Lan::gre_down(bool isPmipv6)
 			if ( delete_dflt_filter_rules(IPA_IP_v6) == IPACM_FAILURE )
 			{
 				IPACMERR("delete_dflt_filter_rules failed\n");
-				return;
+				goto down_end;
 			}
 			/*
 			* Will reinstall the exception rules.
@@ -15695,7 +15757,7 @@ void IPACM_Lan::gre_down(bool isPmipv6)
 			if ( init_fl_rule(IPA_IP_v6, false) == IPACM_FAILURE )
 			{
 				IPACMERR("init_fl_rule failed\n");
-				return;
+				goto down_end;
 			}
 		}
 
@@ -15792,7 +15854,7 @@ void IPACM_Lan::gre_down(bool isPmipv6)
 				if(eth_client == NULL)
 				{
 					IPACMDBG("eth_client is null\n");
-					return;
+					goto down_end;
 				}
 				res = install_uplink_filter_rule(
 					IPACM_Iface::ipacmcfg->GetExtProp(iptype),
@@ -15828,7 +15890,7 @@ void IPACM_Lan::gre_down(bool isPmipv6)
 				if(eth_client == NULL)
 				{
 					IPACMDBG("eth_client is null\n");
-					return;
+					goto down_end;
 				}
 				res = install_uplink_filter_rule(
 					IPACM_Iface::ipacmcfg->GetExtProp(iptype),
@@ -15871,6 +15933,58 @@ void IPACM_Lan::gre_down(bool isPmipv6)
 	delete_ipv6_prefix_flt_rule();
 	install_ipv6_prefix_flt_rule(IPACM_Wan::backhaul_ipv6_prefix);
 #endif
+	/* multi tunnel */
+	if (IPACM_Iface::ipacmcfg->tunnel_feature == SINGLE_TAG_FEATURE)
+	{
+		/*Check if tunnel_idx present then delete*/
+		IPACMDBG_H(" Try search tunnel_id : %d\n", tunel_id);
+		auto it = find(IPACM_Iface::ipacmcfg->tunnel_idx.begin(), IPACM_Iface::ipacmcfg->tunnel_idx.end(), tunel_id);
+		if (it != IPACM_Iface::ipacmcfg->tunnel_idx.end())
+		{
+			IPACM_Iface::ipacmcfg->tunnel_idx.erase(it);
+			memset(&IPACM_Iface::ipacmcfg->tunnel_idx_map[tunel_id],0,sizeof(IPACM_Iface::ipacmcfg->tunnel_idx_map[tunel_id]));
+			IPACMDBG_H(" Found, deleted tunnel_id : %d.\n", tunel_id);
+			IPACMDBG_H(" Total number of active tunnel_id's : %d.\n", IPACM_Iface::ipacmcfg->tunnel_idx.size());
+		}
+		else
+		{
+			IPACMDBG_H(" Not found tunnel_id %d to delete.\n", tunel_id);
+			goto down_end;
+		}
+
+		/*Send ioctl to ipa-driver to update the tunnel config cache*/
+		IPACMDBG_H("Ioctl to DEL template for tunnel_id (%d).\n", tunel_id);
+		int fd, ret;
+		struct ipa_ioc_tunnel_template_info template_info_to_uc;
+		memset(&template_info_to_uc, 0x00, sizeof(struct ipa_ioc_tunnel_template_info));
+
+		template_info_to_uc.template_type = IPACM_Iface::ipacmcfg->tunnel_feature;
+		template_info_to_uc.template_len = 0xff; /*max length(invalid)*/
+		template_info_to_uc.tunnel_config.tunnel_id = tunel_id; /*tunnel_id to del*/
+		template_info_to_uc.tunnel_config.is_tunnel_id_to_del = 1;
+		template_info_to_uc.tunnel_config.num_of_single_tag_configs = IPACM_Iface::ipacmcfg->tunnel_idx.size();
+
+		fd = open(IPA_DEVICE_NAME, O_RDWR);
+		if (fd < 0)
+		{
+			IPACMDBG_H("Failed opening %s.\n", IPA_DEVICE_NAME);
+			goto down_end;
+		}
+		ret = ioctl(fd, IPA_IOC_SEND_TUNNEL_TEMPLATE_INFO,
+				&template_info_to_uc);
+		close(fd);
+		if ( ret )
+		{
+			IPACMERR("Failed to send tunnel info to uC..\n");
+			goto down_end;
+		}
+	}
+down_end:
+	if (IPACM_Iface::ipacmcfg->tunnel_feature == SINGLE_TAG_FEATURE)
+	{
+		pthread_mutex_unlock(&IPACM_Iface::ipacmcfg->mutexA[tunel_id]);
+		IPACMDBG_H(" Unlocked (mutexA) for tunnel_id (%d).\n", tunel_id);
+	}
 
 	IPACMDBG("finished handling gre_down\n");
 }
@@ -16127,9 +16241,7 @@ void IPACM_Lan::gre_route_data_init(
 		return;
 	}
 
-	memset(&(gre_route_data[iptype]),
-		   0,
-		   sizeof(gre_route_data_t));
+	memset(&(gre_route_data[iptype]), 0, sizeof(gre_route_data_t));
 }
 
 uint32_t IPACM_Lan::gre_get_rt_tbl_hdl(
@@ -16436,6 +16548,9 @@ int IPACM_Lan::gre_make_hdr_for_add_ctx(
 			template_info_to_uc.tunnel_config.num_of_single_tag_configs = 0;
 			template_info_to_uc.tunnel_config.num_of_double_tag_configs = 0;
 
+			/* 0 tunnel_id in EoGRE untag mode since single tunnel*/
+			template_info_to_uc.tunnel_config.tunnel_id = 0;
+
 			/* Fill Associated muxid */
 			if ( ipgre_info.iptype == IPA_IP_v4 )
 			{
@@ -16468,21 +16583,26 @@ int IPACM_Lan::gre_make_hdr_for_add_ctx(
 		}
 		if(IPACM_Iface::ipacmcfg->tunnel_feature == SINGLE_TAG_FEATURE)
 		{
-			/*Fill Action to be taken for traffic*/
-			template_info_to_uc.tunnel_config.untagged_mapping_table.action_configured
-				= HW_PATH_ADJ_L2_RESUME_2ND_PASS;
-			/*Fill zero for other single and double tag info Since */
-			template_info_to_uc.tunnel_config.num_of_single_tag_configs = 1;
+			uint8_t tunel_id;
+			/*Fill zero for number of double tag info*/
 			template_info_to_uc.tunnel_config.num_of_double_tag_configs = 0;
-			template_info_to_uc.tunnel_config.singletag_mux_mapping_table[0].vlan_id_start
+
+			/*ipgre_info->num_exceptions stores the tunnel_id in EoGRE mode*/
+			tunel_id = ipgre_info.num_exceptions;
+
+			template_info_to_uc.tunnel_config.tunnel_id = tunel_id;
+			template_info_to_uc.tunnel_config.num_of_single_tag_configs = IPACM_Iface::ipacmcfg->tunnel_idx.size();
+			IPACMDBG_H(" Total number of tunnel_idx: %d\n",template_info_to_uc.tunnel_config.num_of_single_tag_configs);
+
+			template_info_to_uc.tunnel_config.singletag_mux_mapping_table[tunel_id].vlan_id_start
 				= 0xFFFF;
-			template_info_to_uc.tunnel_config.singletag_mux_mapping_table[0].vlan_id_end
+			template_info_to_uc.tunnel_config.singletag_mux_mapping_table[tunel_id].vlan_id_end
 				= 0xFFFF;
-			template_info_to_uc.tunnel_config.singletag_mux_mapping_table[0].action_configured
+			template_info_to_uc.tunnel_config.singletag_mux_mapping_table[tunel_id].action_configured
 				= HW_PATH_ADJ_L2_ADD_TUNNEL_RESUME_2ND_PASS;
-			template_info_to_uc.tunnel_config.singletag_mux_mapping_table[0].is_v6_options_hdr_present
+			template_info_to_uc.tunnel_config.singletag_mux_mapping_table[tunel_id].is_v6_options_hdr_present
 				= 0xFFFF;
-			template_info_to_uc.tunnel_config.singletag_mux_mapping_table[0].tunnel_template_addr = 0;
+			template_info_to_uc.tunnel_config.singletag_mux_mapping_table[tunel_id].tunnel_template_addr = 0;
 
 			/*Fill Associated muxid*/
 			if ( ipgre_info.iptype == IPA_IP_v4 )
@@ -16496,10 +16616,8 @@ int IPACM_Lan::gre_make_hdr_for_add_ctx(
 
 			if ( ret == IPACM_SUCCESS )
 			{
-				template_info_to_uc.tunnel_config.untagged_mapping_table.mux_id = muxid;
-				IPACMDBG_H("GetMuxByAddr succeed %d\n",
-					template_info_to_uc.tunnel_config.untagged_mapping_table.mux_id);
-				template_info_to_uc.tunnel_config.singletag_mux_mapping_table[0].mux_id
+				IPACMDBG_H("GetMuxByAddr succeed %d\n", muxid);
+				template_info_to_uc.tunnel_config.singletag_mux_mapping_table[tunel_id].mux_id
 					= muxid;
 			}
 			else
@@ -16510,13 +16628,16 @@ int IPACM_Lan::gre_make_hdr_for_add_ctx(
 			/*Fill Option param if v6 tunnel only*/
 			if ( ipgre_info.iptype == IPA_IP_v6 )
 			{
-				template_info_to_uc.tunnel_config.singletag_mux_mapping_table[0].is_v6_options_hdr_present =
+				template_info_to_uc.tunnel_config.singletag_mux_mapping_table[tunel_id].is_v6_options_hdr_present =
 					ipgre_info.ipv6_option_hdr_enabled;
 			}
 
 		}
 		if(IPACM_Iface::ipacmcfg->tunnel_feature == DOUBLE_TAG_FEATURE)
 		{
+			/* 0 tunnel_id in EoGRE double tag mode since single tunnel*/
+			template_info_to_uc.tunnel_config.tunnel_id = 0;
+
 			/* CTag and Stag set to zero since single pdn only */
 			template_info_to_uc.tunnel_config.doubletag_mux_mapping_table[0].stag_id_start
 				= 0;
@@ -16732,7 +16853,6 @@ int IPACM_Lan::gre_make_hdr_rmv_ctx(
 	uint32_t        hdr_2use )
 {
 	enum ipa_ip_type iptype = ipgre_info.iptype;
-
 	IPACMDBG_H(
 		"Attempting to create \"header remove\" context "
 		"(outer ip(%d) header) for downlink gre traffic.\n",
@@ -16812,9 +16932,15 @@ int IPACM_Lan::gre_make_hdr_rmv_ctx(
 	{
 		IPACMDBG_H(
 			"GRE header context successfully installed\n");
-
-		gre_route_data[iptype].proc_ctx_gre_rmv_hdl =
-			procCtx->proc_ctx_hdl;
+		if (IPACM_Iface::ipacmcfg->tunnel_feature == SINGLE_TAG_FEATURE)
+		{
+			/*ipgre_info.num_exceptions stores the tunnel_id in EoGRE multi tunnel*/
+			IPACM_Iface::ipacmcfg->tunnel_idx_map[ipgre_info.num_exceptions].gre_route_data[iptype].proc_ctx_gre_rmv_hdl=procCtx->proc_ctx_hdl;
+		}
+		else
+		{
+			gre_route_data[iptype].proc_ctx_gre_rmv_hdl = procCtx->proc_ctx_hdl;
+		}
 		IPACMDBG_H("GRE procCtx->proc_ctx_hdl : %x\n", procCtx->proc_ctx_hdl);
 		IPACMDBG_H("GRE procCtx->hdr_hdl : %x\n", procCtx->hdr_hdl);
 	}
@@ -16914,17 +17040,28 @@ int IPACM_Lan::gre_make_header_rmv_rt_rule(
 	ipa_ipgre_info& ipgre_info )
 {
 	enum ipa_ip_type iptype = ipgre_info.iptype;
-
+	uint8_t tunel_id;
 	IPACMDBG_H(
 		"Attempting to create iptype(%d) \"header remove\" route rule for gre routing\n",
 		iptype);
-
-	if ( gre_route_data[iptype].proc_ctx_gre_rmv_hdl == 0 )
+	if (IPACM_Iface::ipacmcfg->tunnel_feature == SINGLE_TAG_FEATURE)
 	{
-		IPACMERR("Can't create a \"header remove\" route rule without a context.\n");
-		return IPACM_FAILURE;
-	}
+		tunel_id = ipgre_info.num_exceptions;
 
+		if (IPACM_Iface::ipacmcfg->tunnel_idx_map[tunel_id].gre_route_data[iptype].proc_ctx_gre_rmv_hdl == 0 )
+		{
+			IPACMERR("Can't create a \"header remove\" route rule without a context.\n");
+			return IPACM_FAILURE;
+		}
+	}
+	else
+	{
+		if ( gre_route_data[iptype].proc_ctx_gre_rmv_hdl == 0 )
+		{
+			IPACMERR("Can't create a \"header remove\" route rule without a context.\n");
+			return IPACM_FAILURE;
+		}
+	}
 	/*
 	 * Make "header remove" route rule...
 	 */
@@ -16956,8 +17093,18 @@ int IPACM_Lan::gre_make_header_rmv_rt_rule(
 	rt_rule_entry->at_rear                 = false;
 	rt_rule_entry->rule.dst                = tx_prop->tx[0].dst_pipe;
 	rt_rule_entry->rule.attrib.attrib_mask = IPA_FLT_SRC_ADDR | IPA_FLT_DST_ADDR;
-	rt_rule_entry->rule.hdr_proc_ctx_hdl   =
-		gre_route_data[iptype].proc_ctx_gre_rmv_hdl;
+	if (IPACM_Iface::ipacmcfg->tunnel_feature == SINGLE_TAG_FEATURE)
+	{
+		rt_rule_entry->rule.hdr_proc_ctx_hdl =
+			IPACM_Iface::ipacmcfg->tunnel_idx_map[tunel_id]
+				.gre_route_data[iptype]
+				.proc_ctx_gre_rmv_hdl;
+	}
+	else
+	{
+		rt_rule_entry->rule.hdr_proc_ctx_hdl =
+			gre_route_data[iptype].proc_ctx_gre_rmv_hdl;
+	}
 #ifdef FEATURE_IPA_V3
 	rt_rule_entry->rule.hashable           = true;
 #endif
@@ -16995,7 +17142,15 @@ int IPACM_Lan::gre_make_header_rmv_rt_rule(
 		IPACMDBG_H(
 			"GRE route rule for \"header remove\" successfully installed in %s\n",
 			rt_table->rt_tbl_name);
-		gre_route_data[iptype].rt_gre_rmv_hdl = rt_rule_entry->rt_rule_hdl;
+		if (IPACM_Iface::ipacmcfg->tunnel_feature == SINGLE_TAG_FEATURE)
+		{
+			IPACM_Iface::ipacmcfg->tunnel_idx_map[tunel_id].gre_route_data[iptype].rt_gre_rmv_hdl = rt_rule_entry->rt_rule_hdl;
+			memcpy(IPACM_Iface::ipacmcfg->tunnel_idx_map[tunel_id].gre_rt_tbl_name, rt_table->rt_tbl_name, sizeof(rt_table->rt_tbl_name));
+		}
+		else
+		{
+			gre_route_data[iptype].rt_gre_rmv_hdl = rt_rule_entry->rt_rule_hdl;
+		}
 	}
 	else
 	{
@@ -17008,59 +17163,76 @@ int IPACM_Lan::gre_make_header_rmv_rt_rule(
 
 void IPACM_Lan::gre_clear_route_data(
 	enum ipa_ip_type             iptype,
-	ipa_ioc_query_intf_rx_props* rx_prop )
+	ipa_ioc_query_intf_rx_props* rx_prop,
+	uint8_t tunnel_id)
 {
 	if ( VALID_IPA_IP_TYPE(iptype) )
 	{
-		if ( gre_route_data[iptype].ul_header_hdl )
+		if (IPACM_Iface::ipacmcfg->tunnel_feature == SINGLE_TAG_FEATURE && tunnel_id != 0xFF)
 		{
-			m_header.DeleteHeaderHdl(
-				gre_route_data[iptype].ul_header_hdl);
-		}
-
-		if ( gre_route_data[iptype].dl_header_hdl )
-		{
-			m_header.DeleteHeaderHdl(
-				gre_route_data[iptype].dl_header_hdl);
-		}
-
-		if ( gre_route_data[iptype].proc_ctx_gre_add_hdl )
-		{
-			m_header.DeleteHeaderProcCtx(
-				gre_route_data[iptype].proc_ctx_gre_add_hdl);
-		}
-
-		if ( gre_route_data[iptype].proc_ctx_gre_rmv_hdl )
-		{
-			m_header.DeleteHeaderProcCtx(
-				gre_route_data[iptype].proc_ctx_gre_rmv_hdl);
-		}
-
-		if ( gre_route_data[iptype].rt_gre_add_hdl )
-		{
-			m_routing.DeleteRoutingHdl(
-				gre_route_data[iptype].rt_gre_add_hdl, iptype);
-		}
-
-		if ( gre_route_data[iptype].rt_gre_rmv_hdl )
-		{
-			m_routing.DeleteRoutingHdl(
-				gre_route_data[iptype].rt_gre_rmv_hdl, iptype);
-		}
-
-		if ( gre_route_data[iptype].flt_gre_1st_pass_hdl )
-		{
-			m_filtering.DeleteFilteringHdls(
-				&(gre_route_data[iptype].flt_gre_1st_pass_hdl), iptype, 1);
-
-			if ( rx_prop )
+			if ( IPACM_Iface::ipacmcfg->tunnel_idx_map[tunnel_id].gre_route_data[iptype].proc_ctx_gre_rmv_hdl )
 			{
-				IPACM_Iface::ipacmcfg->decreaseFltRuleCount(
-					rx_prop->rx[0].src_pipe, iptype, 1);
+				if(m_header.DeleteHeaderProcCtx(
+						IPACM_Iface::ipacmcfg->tunnel_idx_map[tunnel_id].gre_route_data[iptype].proc_ctx_gre_rmv_hdl) == 0)
+					IPACM_Iface::ipacmcfg->tunnel_idx_map[tunnel_id].gre_route_data[iptype].proc_ctx_gre_rmv_hdl = 0;
 			}
-		}
+			if (IPACM_Iface::ipacmcfg->tunnel_idx_map[tunnel_id].gre_route_data[iptype].rt_gre_rmv_hdl )
+			{
+				if(m_routing.DeleteRoutingHdl(
+						IPACM_Iface::ipacmcfg->tunnel_idx_map[tunnel_id].gre_route_data[iptype].rt_gre_rmv_hdl, iptype) == 0)
+					IPACM_Iface::ipacmcfg->tunnel_idx_map[tunnel_id].gre_route_data[iptype].rt_gre_rmv_hdl = 0;
+			}
+		} else {
+			if ( gre_route_data[iptype].ul_header_hdl )
+			{
+				m_header.DeleteHeaderHdl(
+						gre_route_data[iptype].ul_header_hdl);
+			}
 
-		gre_route_data_init(iptype);
+			if ( gre_route_data[iptype].dl_header_hdl )
+			{
+				m_header.DeleteHeaderHdl(
+						gre_route_data[iptype].dl_header_hdl);
+			}
+
+			if ( gre_route_data[iptype].proc_ctx_gre_add_hdl )
+			{
+				m_header.DeleteHeaderProcCtx(
+						gre_route_data[iptype].proc_ctx_gre_add_hdl);
+			}
+
+			if ( gre_route_data[iptype].proc_ctx_gre_rmv_hdl )
+			{
+				m_header.DeleteHeaderProcCtx(
+						gre_route_data[iptype].proc_ctx_gre_rmv_hdl);
+			}
+
+			if ( gre_route_data[iptype].rt_gre_add_hdl )
+			{
+				m_routing.DeleteRoutingHdl(
+						gre_route_data[iptype].rt_gre_add_hdl, iptype);
+			}
+
+			if ( gre_route_data[iptype].rt_gre_rmv_hdl )
+			{
+				m_routing.DeleteRoutingHdl(
+						gre_route_data[iptype].rt_gre_rmv_hdl, iptype);
+			}
+
+			if ( gre_route_data[iptype].flt_gre_1st_pass_hdl )
+			{
+				m_filtering.DeleteFilteringHdls(
+						&(gre_route_data[iptype].flt_gre_1st_pass_hdl), iptype, 1);
+
+				if ( rx_prop )
+				{
+					IPACM_Iface::ipacmcfg->decreaseFltRuleCount(
+							rx_prop->rx[0].src_pipe, iptype, 1);
+				}
+			}
+
+			gre_route_data_init(iptype);
+		}
 	}
 }
 

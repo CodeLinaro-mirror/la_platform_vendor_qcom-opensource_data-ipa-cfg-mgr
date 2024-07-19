@@ -4497,7 +4497,10 @@ int IPACM_Wan::config_dft_firewall_rules_ex(struct ipa_flt_rule_add *rules, int 
 	bool gre_exceptions = (ipgre_info.num_exceptions) ? true : false;
 #endif
 #endif /* #ifdef FEATURE_EoGRE */
-
+	if(IPACM_Iface::ipacmcfg->eogre_enabled && IPACM_Iface::ipacmcfg->tunnel_feature == SINGLE_TAG_FEATURE)
+	{
+		gre_exceptions = false;
+	}
 	IPACMDBG_H("ip-family: %d; \n", iptype);
 
 	if (rx_prop == NULL)
@@ -4760,8 +4763,19 @@ int IPACM_Wan::config_dft_firewall_rules_ex(struct ipa_flt_rule_add *rules, int 
 				++pos;
 			}
 			IPACMDBG_H("adding default rule for iface %s\n", curr_interface->dev_name);
-			res = add_catchup_all_filtering_rule_each_pdn(*offloaded_pdns_v4[i].first, iptype,
-				curr_interface->rx_prop->rx[0].attrib, rules[pos].flt_rule, pos,isPmipv6,curr_interface->ext_prop->ext[0].mux_id);
+			if(IPACM_Iface::ipacmcfg->eogre_enabled && IPACM_Iface::ipacmcfg->tunnel_feature == SINGLE_TAG_FEATURE)
+			{
+				IPACMDBG_H("adding DL default rule for v4 untagged traffic when eogre enabled\n");
+				add_dl_untagged_catchup_filtering_rule_each_pdn(*offloaded_pdns_v4[i].first,
+						iptype,
+						curr_interface->rx_prop->rx[0].attrib, rules[pos].flt_rule, pos,
+						isPmipv6);
+			}
+			else
+			{
+				res = add_catchup_all_filtering_rule_each_pdn(*offloaded_pdns_v4[i].first, iptype,
+						curr_interface->rx_prop->rx[0].attrib, rules[pos].flt_rule, pos,isPmipv6,curr_interface->ext_prop->ext[0].mux_id);
+			}
 			if(isPmipv6 && iptype==IPACM_Iface::ipacmcfg->ipgre_info.iptype)
 			{
 				rules[pos].mux_id = curr_interface->ext_prop->ext[0].mux_id;
@@ -4776,17 +4790,6 @@ int IPACM_Wan::config_dft_firewall_rules_ex(struct ipa_flt_rule_add *rules, int 
 			}
 			rules[pos].mux_id = curr_interface->ext_prop->ext[0].mux_id;
 			++pos;
-		if(IPACM_Iface::ipacmcfg->eogre_enabled &&
-		IPACM_Iface::ipacmcfg->tunnel_feature == SINGLE_TAG_FEATURE)
-		{
-			IPACMDBG_H("adding DL default rule for untagged traffic when eogre enabled\n");
-			add_dl_untagged_catchup_filtering_rule_each_pdn(*offloaded_pdns_v4[i].first,
-			iptype,
-			curr_interface->rx_prop->rx[0].attrib, rules[pos].flt_rule, pos,
-			isPmipv6);
-			rules[pos].mux_id = curr_interface->ext_prop->ext[0].mux_id;
-			++pos;
-		}
 		}
 
 		if(offloaded_pdns_count_v4)
@@ -4959,9 +4962,19 @@ int IPACM_Wan::config_dft_firewall_rules_ex(struct ipa_flt_rule_add *rules, int 
 			}
 			IPACMDBG_H("adding default rule for iface %s ip-type %d\n", curr_interface->dev_name, iptype);
 			/* for ipv6 nat case this shall be the 2nd pass catch all rule to send to v6 LAN RT table*/
-			res = add_catchup_all_filtering_rule_each_pdn(*offloaded_pdns_v6[i].first, iptype,
-				curr_interface->rx_prop->rx[0].attrib, rules[pos].flt_rule, pos,isPmipv6);
-
+			if(IPACM_Iface::ipacmcfg->eogre_enabled && IPACM_Iface::ipacmcfg->tunnel_feature == SINGLE_TAG_FEATURE)
+			{
+				IPACMDBG_H("adding DL default rule for v6 untagged traffic when eogre enabled\n");
+				add_dl_untagged_catchup_filtering_rule_each_pdn(*offloaded_pdns_v6[i].first,
+						iptype,
+						curr_interface->rx_prop->rx[0].attrib, rules[pos].flt_rule, pos,
+						isPmipv6);
+			}
+			else
+			{
+				res = add_catchup_all_filtering_rule_each_pdn(*offloaded_pdns_v6[i].first, iptype,
+						curr_interface->rx_prop->rx[0].attrib, rules[pos].flt_rule, pos,isPmipv6);
+			}
 			if(isPmipv6)
 			{
 				rules[pos].mux_id = curr_interface->ext_prop->ext[0].mux_id;
@@ -4976,17 +4989,6 @@ int IPACM_Wan::config_dft_firewall_rules_ex(struct ipa_flt_rule_add *rules, int 
 			}
 			rules[pos].mux_id = curr_interface->ext_prop->ext[0].mux_id;
 			++pos;
-			if(IPACM_Iface::ipacmcfg->eogre_enabled &&
-			IPACM_Iface::ipacmcfg->tunnel_feature == SINGLE_TAG_FEATURE)
-			{
-				IPACMDBG_H("adding default rule for iface\n");
-				add_dl_untagged_catchup_filtering_rule_each_pdn(*offloaded_pdns_v6[i].first,
-				iptype,
-				curr_interface->rx_prop->rx[0].attrib, rules[pos].flt_rule, pos,
-				isPmipv6);
-				rules[pos].mux_id = curr_interface->ext_prop->ext[0].mux_id;
-				++pos;
-			}
 		}
 
 		if(offloaded_pdns_count_v6)
@@ -5015,6 +5017,279 @@ int IPACM_Wan::config_dft_firewall_rules_ex(struct ipa_flt_rule_add *rules, int 
 	IPACMDBG_H("Constructed %d firewall rules for ip type %d\n", num_rules, iptype);
 	return IPACM_SUCCESS;
 }
+#ifdef FEATURE_EoGRE
+int IPACM_Wan::add_catchup_dl_flt_rule_for_each_tunnel(
+	const IPACM_firewall_conf_t &firewall_config, ipa_ip_type iptype,
+	const struct ipa_rule_attrib &rx_prop_attrib,
+	struct ipa_flt_rule_add &flt_rule_add, int fltr_rule_number,
+	uint8_t tunnel_id)
+{
+	if ( ! VALID_IPA_IP_TYPE(iptype) )
+	{
+		IPACMERR("Invalid IP type passed to function\n");
+		return IPACM_FAILURE;
+	}
+
+	/* Check for "out of boundary" failure before adding a rule */
+	if (fltr_rule_number >= IPA_MAX_FLT_RULE)
+	{
+		IPACMERR(
+			"Filtering table is full. Number of rules %d allowed %d\n",
+			fltr_rule_number + 1, IPA_MAX_FLT_RULE);
+		return IPACM_FAILURE;
+	}
+	IPACM_Config* conf = IPACM_Config::GetInstance();
+	if (conf == NULL)
+	{
+		IPACMERR("Unable to get Config instance \n");
+		return IPACM_FAILURE;
+	}
+
+	IPACMDBG_H("Construct Rule for tunnel_id :%d, iptype: %d\n", tunnel_id, iptype);
+	int *num_flt_rule;
+	const char* rt_tbl_name;
+	struct ipa_flt_rule_add flt_rule_entry;
+	memset(&flt_rule_entry, 0, sizeof(struct ipa_flt_rule_add));
+
+	flt_rule_entry.at_rear = true;
+	flt_rule_entry.flt_rule_hdl = -1;
+	flt_rule_entry.status = -1;
+
+	flt_rule_entry.rule.retain_hdr = 1;
+	flt_rule_entry.rule.to_uc = 0;
+	flt_rule_entry.rule.eq_attrib_type = 1;
+	memcpy(&flt_rule_entry.rule.attrib, &rx_prop_attrib,
+	       sizeof(struct ipa_rule_attrib));
+	flt_rule_entry.rule.attrib.attrib_mask |= IPA_FLT_DST_ADDR;
+
+	if (iptype == IPA_IP_v4)
+	{
+		num_flt_rule = &num_v4_flt_rule;
+		flt_rule_entry.rule.attrib.u.v4.dst_addr_mask = 0xFFFFFFFF;
+		flt_rule_entry.rule.attrib.u.v4.dst_addr = conf->tunnel_idx_map[tunnel_id].ipv4_src;
+
+		flt_rule_entry.rule.attrib.u.v4.src_addr_mask = 0xFFFFFFFF;
+		flt_rule_entry.rule.attrib.u.v4.src_addr = conf->tunnel_idx_map[tunnel_id].ipv4_dst;
+
+
+		flt_rule_entry.rule.attrib.attrib_mask |= IPA_FLT_SRC_ADDR;
+		flt_rule_entry.rule.attrib.attrib_mask |= IPA_FLT_PROTOCOL;
+		flt_rule_entry.rule.attrib.u.v4.protocol=(uint8_t)IPACM_FIREWALL_IPPROTO_GRE;
+		IPACMDBG_H("Adding EoGRE v4 flt.\n");
+		flt_rule_entry.rule.action = IPA_PASS_TO_ROUTING;
+
+		rt_tbl_name = conf->tunnel_idx_map[tunnel_id].gre_rt_tbl_name;
+		IPACMDBG_H("EoGRE route rule for v4 tunnel_id:%x \"header remove\" successfully installed in %s\n", tunnel_id, rt_tbl_name);
+	}
+	else /* (iptype == IPA_IP_v6) */
+	{
+		num_flt_rule = &num_v6_flt_rule;
+		memset(&flt_rule_entry.rule.attrib.u.v6.dst_addr_mask,
+		       0xFFFFFFFF,
+		       sizeof(flt_rule_entry.rule.attrib.u.v6.dst_addr_mask));
+		memcpy(&flt_rule_entry.rule.attrib.u.v6.dst_addr,
+			&conf->tunnel_idx_map[tunnel_id].ipv6_src,
+			sizeof(flt_rule_entry.rule.attrib.u.v6.dst_addr));
+		memset(&flt_rule_entry.rule.attrib.u.v6.src_addr_mask,
+			0xFFFFFFFF,
+			sizeof(flt_rule_entry.rule.attrib.u.v6.src_addr_mask));
+		memcpy(&flt_rule_entry.rule.attrib.u.v6.src_addr,
+			&conf->tunnel_idx_map[tunnel_id].ipv6_dst,
+			sizeof(flt_rule_entry.rule.attrib.u.v6.src_addr));
+
+		flt_rule_entry.rule.attrib.attrib_mask |= IPA_FLT_SRC_ADDR;
+		flt_rule_entry.rule.attrib.attrib_mask |= IPA_FLT_NEXT_HDR;
+		flt_rule_entry.rule.attrib.u.v6.next_hdr=(uint8_t)IPACM_FIREWALL_IPPROTO_GRE;
+		IPACMDBG_H("Adding EoGRE v6 flt.\n");
+		flt_rule_entry.rule.action = IPA_PASS_TO_ROUTING;
+		rt_tbl_name = conf->tunnel_idx_map[tunnel_id].gre_rt_tbl_name;
+		IPACMDBG_H("EoGRE route rule for v6 tunnel_id:%x \"header remove\" successfully installed in %s\n", tunnel_id, rt_tbl_name);
+	}
+
+	ipa_ioc_get_rt_tbl_indx rt_tbl_idx;
+	memset(&rt_tbl_idx, 0, sizeof(rt_tbl_idx));
+	rt_tbl_idx.ip = iptype;
+	strlcpy(rt_tbl_idx.name, rt_tbl_name, IPA_RESOURCE_NAME_MAX);
+	rt_tbl_idx.name[IPA_RESOURCE_NAME_MAX - 1] = '\0';
+	if (ioctl(m_fd_ipa, IPA_IOC_QUERY_RT_TBL_INDEX, &rt_tbl_idx))
+	{
+		IPACMERR("Failed to get routing table index from name\n");
+		return IPACM_FAILURE;
+	}
+	flt_rule_entry.rule.rt_tbl_idx = rt_tbl_idx.idx;
+	IPACMDBG_H("EoGRE Routing table %s has index %d\n", rt_tbl_idx.name, rt_tbl_idx.idx);
+
+	change_to_network_order(iptype, &flt_rule_entry.rule.attrib);
+
+	ipa_ioc_generate_flt_eq flt_eq;
+	memset(&flt_eq, 0, sizeof(flt_eq));
+	memcpy(&flt_eq.attrib, &flt_rule_entry.rule.attrib, sizeof(flt_eq.attrib));
+	flt_eq.ip = iptype;
+	if (ioctl(m_fd_ipa, IPA_IOC_GENERATE_FLT_EQ, &flt_eq))
+	{
+		IPACMERR("Failed to get eq_attrib\n");
+		return IPACM_FAILURE;
+	}
+
+	memcpy(&flt_rule_entry.rule.eq_attrib, &flt_eq.eq_attrib, sizeof(flt_rule_entry.rule.eq_attrib));
+	memcpy(&flt_rule_add, &flt_rule_entry, sizeof(struct ipa_flt_rule_add));
+	IPACMDBG_H("Filter rule attrib mask: 0x%x\n", flt_rule_add.rule.attrib.attrib_mask);
+
+	++(*num_flt_rule);
+	return IPACM_SUCCESS;
+}
+
+int IPACM_Wan::config_eogre_dl_rules_ex(struct ipacm_pdn_flt_rule* rules, int rule_offset, ipa_ip_type iptype, uint8_t tunnel_id)
+{
+	int pos = rule_offset;
+	int res, ret;
+	IPACM_firewall_t firewall_config;
+	IPACM_Wan *pdnIface = NULL;
+	uint8_t mux_id;
+	bool found = false;
+
+	if ( ! VALID_IPA_IP_TYPE(iptype) )
+	{
+		IPACMERR("Invalid IP type passed to function\n");
+		return IPACM_FAILURE;
+	}
+
+	if (rx_prop == NULL)
+	{
+		IPACMDBG_H("No rx properties registered for iface %s\n", dev_name);
+		return IPACM_SUCCESS;
+	}
+	if (rules == NULL || rule_offset < 0)
+	{
+		IPACMERR("No filtering table is available.\n");
+		return IPACM_FAILURE;
+	}
+	if (IPACM_read_firewall_xml(MOBILE_FIREWALL_FILE, firewall_config) == IPACM_SUCCESS)
+	{
+		IPACMDBG_H("QCMAP Firewall XML read OK \n");
+	}
+	else
+	{
+		IPACMERR("QCMAP Firewall XML read failed, no such file, use default configuration \n");
+	}
+	IPACMDBG_H(" firewall_configs.pdn_count : %d \n", firewall_config.pdn_count);
+	IPACMDBG_H(" firewall_configs.default_profile : %d \n", firewall_config.default_profile);
+
+	IPACM_Config* conf = IPACM_Config::GetInstance();
+	if (conf == NULL)
+	{
+		IPACMERR("Unable to get Config instance \n");
+		return IPACM_FAILURE;
+	}
+
+	/*Check if tunnel_id present in vector*/
+	auto it = find(conf->tunnel_idx.begin(), conf->tunnel_idx.end(), tunnel_id);
+	if (it != conf->tunnel_idx.end())
+	{
+		IPACMDBG_H(" found tunnel_id : %d, Install rules. \n", tunnel_id);
+	}
+	else
+	{
+		IPACMDBG_H("No found tunnel_id: %d, add now.\n", tunnel_id);
+		if(tunnel_id == 0xFF)
+		{
+			IPACMDBG_H("Call back either because of firewall change or del_route or add_route..so tunnel_id : %d, Install rules.\n", tunnel_id);
+			if(conf->tunnel_idx.size() >= 1)
+			{
+				tunnel_id = conf->tunnel_idx[0];
+			}
+		}
+	}
+	IPACMDBG_H("Install DL flt rule for tunnel_id [%d] and Construct rules [%d] out Of [%d] tunnels..\n",tunnel_id,(conf->tunnel_idx.size() - 1), conf->tunnel_idx.size());
+
+	for(int i=0; i < conf->tunnel_idx.size(); i++)
+	{
+		if (conf->tunnel_idx_map[conf->tunnel_idx[i]].iptype == IPA_IP_v4)
+		{
+			IPACMDBG_H("EoGRE tunnel_idx->tunnel_id [%d],iptype [ %d].\n",conf->tunnel_idx[i], conf->tunnel_idx_map[conf->tunnel_idx[i]].iptype);
+			IPACM_LOG_IP_ADDR("The eogre src address (host order) on conversion from input:", IPA_IP_v4,&conf->tunnel_idx_map[conf->tunnel_idx[i]].ipv4_src);
+			IPACM_LOG_IP_ADDR("The eogre dst address (host order) on conversion from input:", IPA_IP_v4,&conf->tunnel_idx_map[conf->tunnel_idx[i]].ipv4_dst);
+		}
+		else
+		{
+			IPACMDBG_H("EoGRE tunnel_idx->tunnel_id [%d],iptype [ %d]. \n",	conf->tunnel_idx[i], conf->tunnel_idx_map[conf->tunnel_idx[i]].iptype);
+			IPACM_LOG_IP_ADDR("The eogre src address (host order) on conversion from input:", IPA_IP_v6,conf->tunnel_idx_map[conf->tunnel_idx[i]].ipv6_src);
+			IPACM_LOG_IP_ADDR("The eogre dst address (host order) on conversion from input:", IPA_IP_v6,conf->tunnel_idx_map[conf->tunnel_idx[i]].ipv6_dst);
+		}
+
+		IPACMERR("Try get GetWanByAddr..iptype (%d)\n",iptype);
+		for(int j = 0; j < IPA_MAX_NUM_SW_PDNS; j++)
+		{
+			if (conf->tunnel_idx_map[conf->tunnel_idx[i]].iptype == IPA_IP_v4 && iptype == IPA_IP_v4 )
+			{
+				IPACM_LOG_IP_ADDR("Searching for:", conf->tunnel_idx_map[conf->tunnel_idx[i]].iptype, &conf->tunnel_idx_map[conf->tunnel_idx[i]].ipv4_src);
+
+				IPACM_LOG_IP_ADDR(
+						"Interface has:",
+						conf->tunnel_idx_map[conf->tunnel_idx[i]].iptype,
+						&IPACM_Wan::ipv4_to_iface[j].ipv4_addr);
+
+				if(conf->tunnel_idx_map[conf->tunnel_idx[i]].ipv4_src  == IPACM_Wan::ipv4_to_iface[j].ipv4_addr )
+				{
+					mux_id = IPACM_Wan::ipv4_to_iface[j].pIface->ext_prop->ext[0].mux_id;
+					found = true;
+					IPACMDBG_H("found matching ipv4 QmapID: %d\n", mux_id);
+					IPACMDBG_H("Fount Wan instance for iface %s\n", IPACM_Wan::ipv4_to_iface[j].pIface->dev_name);
+					pdnIface=IPACM_Wan::ipv4_to_iface[j].pIface;
+					goto install_rule;
+				}
+			}
+			else if(conf->tunnel_idx_map[conf->tunnel_idx[i]].iptype == IPA_IP_v6 && iptype == IPA_IP_v6)
+			{
+				if ( IPACM_Wan::ipv6_to_iface[j].pIface )
+				{
+					IPACM_LOG_IP_ADDR("Searching for:", conf->tunnel_idx_map[conf->tunnel_idx[i]].iptype, conf->tunnel_idx_map[conf->tunnel_idx[i]].ipv6_src);
+					IPACM_LOG_IP_ADDR(
+						"Interface has:",
+						conf->tunnel_idx_map[conf->tunnel_idx[i]].iptype,
+						&IPACM_Wan::ipv6_to_iface[j].pIface->m_ipv6_addr);
+
+					bool equal = ! memcmp(
+						conf->tunnel_idx_map[conf->tunnel_idx[i]].ipv6_src,
+						&IPACM_Wan::ipv6_to_iface[j].pIface->m_ipv6_addr,
+						sizeof(IPACM_Wan::ipv6_to_iface[j].pIface->m_ipv6_addr));
+					if ( equal )
+					{
+						mux_id = IPACM_Wan::ipv6_to_iface[j].pIface->ext_prop->ext[0].mux_id;
+						found = true;
+						IPACMDBG_H("found matching ipv6 QmapID: %d\n", mux_id);
+						IPACMDBG_H("Fount Wan instance for iface %s\n", IPACM_Wan::ipv6_to_iface[j].pIface->dev_name);
+						pdnIface=IPACM_Wan::ipv6_to_iface[j].pIface;
+						goto install_rule;
+					}
+				}
+			}
+			else
+			{
+				IPACMERR("Invalid iptype.\n");
+				return IPACM_FAILURE;
+			}
+		}
+		if(found == false)
+		{
+			IPACMERR("GetWanByAddr did not success.\n");
+			return IPACM_FAILURE;
+		}
+install_rule:
+		IPACMDBG_H("GetWanByAddr succeed for tunnel_id: %d associated pdn iface [%s]\n",conf->tunnel_idx[i], pdnIface->dev_name);
+
+		res = add_catchup_dl_flt_rule_for_each_tunnel(firewall_config.pdns[0],conf->tunnel_idx_map[conf->tunnel_idx[i]].iptype, pdnIface->rx_prop->rx[0].attrib, rules[pos].flt_rule, pos, conf->tunnel_idx[i]);
+		if (res != IPACM_SUCCESS)
+		{
+			IPACMERR("Failed to construct EoGRE DL rule for tunnel_id: %d..\n", conf->tunnel_idx[i]);
+			return res;
+		}
+		++pos;
+	}
+	return IPACM_SUCCESS;
+}
+
+#endif
 
 #ifdef FEATURE_IPACM_UL_FIREWALL
 
@@ -5676,7 +5951,7 @@ int IPACM_Wan::query_ext_prop()
 	return IPACM_SUCCESS;
 }
 
-int IPACM_Wan::config_wan_firewall_rule(ipa_ip_type iptype,bool isPmipv6)
+int IPACM_Wan::config_wan_firewall_rule(ipa_ip_type iptype,bool isPmipv6,uint8_t tunnel_id)
 {
 	list<l2tp_client_info>::iterator it;
 	int res = IPACM_SUCCESS;
@@ -5709,6 +5984,20 @@ int IPACM_Wan::config_wan_firewall_rule(ipa_ip_type iptype,bool isPmipv6)
 			goto fail;
 		}
 		IPACMDBG_H("Succeded in constructing ICMP/ALG rules for ip type %d, total rules: %d\n", iptype, IPACM_Wan::num_v4_flt_rule);
+
+#ifdef FEATURE_EoGRE
+		if(IPACM_Iface::ipacmcfg->eogre_enabled && IPACM_Iface::ipacmcfg->tunnel_feature == SINGLE_TAG_FEATURE)
+		{
+			IPACMDBG_H("Configure v4 EoGRE WAN DL flt rules respectively. tunnel_id: %d\n",tunnel_id);
+			if(IPACM_FAILURE == config_eogre_dl_rules_ex(pdn_flt_rule_v4, IPACM_Wan::num_v4_flt_rule, IPA_IP_v4, tunnel_id))
+			{
+				IPACMERR("Failed to add DL filtering rules.\n");
+				res = IPACM_FAILURE;
+				goto fail;
+			}
+		}
+		IPACMDBG_H("Succeded in constructing EoGRE DL flt rules for tunnels iptype ip type %d, total rules: %d\n", iptype, IPACM_Wan::num_v4_flt_rule);
+#endif
 
 #ifdef FEATURE_VLAN_MPDN
 		if(IPACM_FAILURE == config_dft_firewall_rules_ex(pdn_flt_rule_v4, IPACM_Wan::num_v4_flt_rule, IPA_IP_v4, isPmipv6))
@@ -5762,6 +6051,20 @@ int IPACM_Wan::config_wan_firewall_rule(ipa_ip_type iptype,bool isPmipv6)
 			goto fail;
 		}
 		IPACMDBG_H("Succeded in constructing ICMP/ALG rules for ip type %d, total rules: %d\n", iptype, IPACM_Wan::num_v6_flt_rule);
+
+#ifdef FEATURE_EoGRE
+		if(IPACM_Iface::ipacmcfg->eogre_enabled && IPACM_Iface::ipacmcfg->tunnel_feature == SINGLE_TAG_FEATURE)
+		{
+			IPACMDBG_H("Configure v6 EoGRE WAN DL flt rules respectively. tunnel_id: %d\n",tunnel_id);
+			if(IPACM_FAILURE == config_eogre_dl_rules_ex(pdn_flt_rule_v6, IPACM_Wan::num_v6_flt_rule, IPA_IP_v6, tunnel_id))
+			{
+				IPACMERR("Failed to add DL filtering rules.\n");
+				res = IPACM_FAILURE;
+				goto fail;
+			}
+		}
+		IPACMDBG_H("Succeded in constructing EoGRE DL flt rules for tunnels iptype ip type %d, total rules: %d\n", iptype, IPACM_Wan::num_v6_flt_rule);
+#endif
 
 #ifdef FEATURE_VLAN_MPDN
 		if(IPACM_FAILURE == config_dft_firewall_rules_ex(pdn_flt_rule_v6, IPACM_Wan::num_v6_flt_rule, IPA_IP_v6,isPmipv6))
@@ -6166,6 +6469,7 @@ int IPACM_Wan::del_wan_firewall_rule(ipa_ip_type iptype)
 	list<l2tp_client_info>::iterator it;
 	if(iptype == IPA_IP_v4)
 	{
+		IPACMDBG_H("Delete (%d) DL flt rules, iptype (%d)\n",IPACM_Wan::num_v4_flt_rule,iptype);
 		IPACM_Wan::num_v4_flt_rule = IPA_V2_NUM_DEFAULT_WAN_FILTER_RULE_IPV4;
 #ifdef FEATURE_VLAN_MPDN
 		memset(&IPACM_Wan::pdn_flt_rule_v4[IPA_V2_NUM_DEFAULT_WAN_FILTER_RULE_IPV4], 0,
@@ -6184,6 +6488,7 @@ int IPACM_Wan::del_wan_firewall_rule(ipa_ip_type iptype)
 	}
 	else if(iptype == IPA_IP_v6)
 	{
+		IPACMDBG_H("Delete (%d) DL flt rules, iptype (%d)\n",IPACM_Wan::num_v6_flt_rule,iptype);
 #ifdef FEATURE_VLAN_MPDN
 		IPACM_Wan::num_v6_flt_rule = IPACM_Wan::ipv6_mpdn_default_filterting_rules_count;
 #else
@@ -6208,7 +6513,7 @@ int IPACM_Wan::del_wan_firewall_rule(ipa_ip_type iptype)
 		IPACMERR("IP type is not expected.\n");
 		return IPACM_FAILURE;
 	}
-
+	IPACMDBG_H("Successfully deleleted DL flt rules, iptype (%d)\n",iptype);
 	return IPACM_SUCCESS;
 }
 
@@ -10641,6 +10946,8 @@ void IPACM_Wan::eogre_up()
 	IPACMDBG_H("Into eogre_up\n");
 
 	ipa_ip_type iptype = IPACM_Iface::ipacmcfg->eogre_info.iptype;
+	ipa_ipgre_info ipgre_info;
+	ipgre_info = IPACM_Iface::ipacmcfg->eogre_info;
 
 	bool        eogre_enable = true;
 
@@ -10656,18 +10963,42 @@ void IPACM_Wan::eogre_up()
 
 	if ( iptype == IPA_IP_v4 )
 	{
-		if ( eogre_v4_work(eogre_enable) != IPACM_SUCCESS )
+		/*ipgre_info.num_exceptions stores the tunnel_id in EoGRE multi tunnel*/
+		if(IPACM_Iface::ipacmcfg->tunnel_feature == SINGLE_TAG_FEATURE)
 		{
-			IPACMERR("eogre_v4_work failed\n");
-			return;
+			if ( eogre_v4_work(eogre_enable,ipgre_info.num_exceptions) != IPACM_SUCCESS )
+			{
+				IPACMERR("eogre_v4_work failed\n");
+				return;
+			}
+		}
+		else
+		{
+			if ( eogre_v4_work(eogre_enable) != IPACM_SUCCESS )
+			{
+				IPACMERR("eogre_v4_work failed\n");
+				return;
+			}
 		}
 	}
 	else
 	{
-		if ( eogre_v6_work(eogre_enable) != IPACM_SUCCESS )
+		if(IPACM_Iface::ipacmcfg->tunnel_feature == SINGLE_TAG_FEATURE)
 		{
-			IPACMERR("eogre_v6_work failed\n");
-			return;
+			/*ipgre_info.num_exceptions stores the tunnel_id in EoGRE multi tunnel*/
+			if ( eogre_v6_work(eogre_enable,ipgre_info.num_exceptions) != IPACM_SUCCESS )
+			{
+				IPACMERR("eogre_v6_work failed\n");
+				return;
+			}
+		}
+		else
+		{
+			if ( eogre_v6_work(eogre_enable) != IPACM_SUCCESS )
+			{
+				IPACMERR("eogre_v6_work failed\n");
+				return;
+			}
 		}
 	}
 
@@ -10681,8 +11012,9 @@ void IPACM_Wan::eogre_down()
 	IPACMDBG_H("Into eogre_down\n");
 
 	ipa_ip_type iptype = IPACM_Iface::ipacmcfg->eogre_info.iptype;
-
-	bool        eogre_enable = false;
+	ipa_ipgre_info ipgre_info;
+	ipgre_info = IPACM_Iface::ipacmcfg->eogre_info;
+	bool eogre_enable = false;
 
 	IPACMDBG_H(
 		"About to disable eogre. Will do default catchup rule work for iptype(%d).\n",
@@ -10696,18 +11028,42 @@ void IPACM_Wan::eogre_down()
 
 	if ( iptype == IPA_IP_v4 )
 	{
-		if ( eogre_v4_work(eogre_enable) != IPACM_SUCCESS )
+		if(IPACM_Iface::ipacmcfg->tunnel_feature == SINGLE_TAG_FEATURE)
 		{
-			IPACMERR("eogre_v4_work failed\n");
-			return;
+			/*ipgre_info.num_exceptions stores the tunnel_id in EoGRE multi tunnel*/
+			if ( eogre_v4_work(eogre_enable,ipgre_info.num_exceptions) != IPACM_SUCCESS )
+			{
+				IPACMERR("eogre_v4_work failed\n");
+				return;
+			}
+		}
+		else
+		{
+			if ( eogre_v4_work(eogre_enable) != IPACM_SUCCESS )
+			{
+				IPACMERR("eogre_v4_work failed\n");
+				return;
+			}
 		}
 	}
 	else
 	{
-		if ( eogre_v6_work(eogre_enable) != IPACM_SUCCESS )
+		if(IPACM_Iface::ipacmcfg->tunnel_feature == SINGLE_TAG_FEATURE)
 		{
-			IPACMERR("eogre_v6_work failed\n");
-			return;
+			/*ipgre_info.num_exceptions stores the tunnel_id in EoGRE multi tunnel*/
+			if ( eogre_v6_work(eogre_enable,ipgre_info.num_exceptions) != IPACM_SUCCESS )
+			{
+				IPACMERR("eogre_v6_work failed\n");
+				return;
+			}
+		}
+		else
+		{
+			if ( eogre_v6_work(eogre_enable) != IPACM_SUCCESS )
+			{
+				IPACMERR("eogre_v6_work failed\n");
+				return;
+			}
 		}
 	}
 
@@ -10717,18 +11073,18 @@ void IPACM_Wan::eogre_down()
 }
 
 int IPACM_Wan::eogre_v4_work(
-	bool eogre_enable )
+	bool eogre_enable ,uint8_t tunnel_id)
 {
 	if ( eogre_enable )
 	{
-		IPACMDBG_H("Adding v4 modem DL rules on eogre enable.\n");
+		IPACMDBG_H("Adding v4 modem DL rules on eogre enable tunnel_id: %d\n",tunnel_id);
 
 		if(IPACM_Iface::ipacmcfg->tunnel_feature == SINGLE_TAG_FEATURE)
 			del_wan_firewall_rule(IPA_IP_v4);
 
 		wan_up = is_default_gateway = true;
 
-		if ( config_wan_firewall_rule(IPA_IP_v4) != IPACM_SUCCESS )
+		if ( config_wan_firewall_rule(IPA_IP_v4, false, tunnel_id) != IPACM_SUCCESS )
 		{
 			IPACMERR(
 				"config_wan_firewall_rule failed\n");
@@ -10746,7 +11102,7 @@ int IPACM_Wan::eogre_v4_work(
 	}
 	else
 	{
-		IPACMDBG_H("Deleting v4 modem DL rules on eogre disable.\n");
+		IPACMDBG_H("Deleting v4 modem DL rules on eogre disable.tunnel_id: %d\n", tunnel_id);
 		if(IPACM_Iface::ipacmcfg->tunnel_feature == SINGLE_TAG_FEATURE)
 			del_wan_firewall_rule(IPA_IP_v4);
 		IPACM_Wan::num_v4_flt_rule = 0;
@@ -10784,7 +11140,7 @@ int IPACM_Wan::eogre_v4_work(
 }
 
 int IPACM_Wan::eogre_v6_work(
-	bool eogre_enable )
+	bool eogre_enable, uint8_t tunnel_id )
 {
 	if ( eogre_enable )
 	{
@@ -10795,7 +11151,8 @@ int IPACM_Wan::eogre_v6_work(
 
 		wan_up_v6 = is_default_gateway = true;
 
-		if ( config_wan_firewall_rule(IPA_IP_v6) != IPACM_SUCCESS )
+		IPACMDBG_H("Adding v6 modem DL rules on eogre enable tunnel_id: %d\n", tunnel_id);
+		if ( config_wan_firewall_rule(IPA_IP_v6, false, tunnel_id) != IPACM_SUCCESS )
 		{
 			IPACMERR(
 				"config_wan_firewall_rule failed\n");
@@ -10817,6 +11174,7 @@ int IPACM_Wan::eogre_v6_work(
 
 		IPACM_Wan::num_v6_flt_rule = 0;
 
+		IPACMDBG_H("Delete v6 modem DL rules on eogre enable tunnel_id: %d\n", tunnel_id);
 #ifdef FEATURE_VLAN_MPDN
 		memset(IPACM_Wan::pdn_flt_rule_v6,
 			   0,
@@ -10832,7 +11190,7 @@ int IPACM_Wan::eogre_v6_work(
 		IPACM_Iface::ipacmcfg->tunnel_feature == SINGLE_TAG_FEATURE)
 		{
 			IPACMDBG_H("installing v6 DL rules on eogre down event but call is up\n");
-			config_wan_firewall_rule(IPA_IP_v6);
+			config_wan_firewall_rule(IPA_IP_v6, tunnel_id);
 		}
 
 		if ( install_wan_filtering_rule(false) != IPACM_SUCCESS )

@@ -230,6 +230,8 @@ if (!(a)) {                                                 \
 #define GREEnabled_TAG                       "GREEnabled"
 #define GREAutolearn_TAG                     "GREAutolearn"
 #define GRE_Server_TAG                       "GREServer"
+#define IPACM_QOS_ENABLE_TAG                 "IPACMQOSEnabled"
+#define IPACM_QOS_TAG                        "IPACMQOS"
 
 #define IPACM_EASY_MESH                      "IPACMEMESH"
 #define IPACM_Easy_Mesh_Enabled              "IPACMEMESHEnabled"
@@ -389,6 +391,7 @@ typedef struct  _IPACM_conf_t
 	bool router_mode_enable;
 	bool odu_embms_enable;
 	int num_wlan_guest_ap;
+	bool qos_mode;
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
 	bool lan_stats_enable;
 #endif

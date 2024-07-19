@@ -659,11 +659,12 @@ int IPACM_Iface::query_iface_property(void)
 		{
 			for (cnt = 0; cnt < tx_prop->num_tx_props; cnt++)
 			{
-				IPACMDBG_H("Tx(%d):attrib-mask:0x%x, ip-type: %d, dst_pipe: %d, alt_dst_pipe: %d, header: %s\n",
+				IPACMDBG_H("Tx(%d):attrib-mask:0x%x, ip-type: %d, dst_pipe: %d, alt_dst_pipe: %d, header: %s, tc_bmap 0x%x\n",
 						cnt, tx_prop->tx[cnt].attrib.attrib_mask,
 						tx_prop->tx[cnt].ip, tx_prop->tx[cnt].dst_pipe,
 						tx_prop->tx[cnt].alt_dst_pipe,
-						tx_prop->tx[cnt].hdr_name);
+						tx_prop->tx[cnt].hdr_name,
+						tx_prop->tx[cnt].tc_bmap);
 
 				if (tx_prop->tx[cnt].dst_pipe == 0)
 				{
@@ -802,7 +803,7 @@ int IPACM_Iface::init_fl_rule(
 				continue;
 			}
 		} else {
-			idx = idx + j * 2;
+			idx = j * 2;
 			IPACMDBG_H("Install rules at idx %d\n", idx);
 		}
 
@@ -1251,7 +1252,7 @@ int IPACM_Iface::delete_dflt_filter_rules(
 				continue;
 			}
 		} else {
-			idx = idx + j * 2;
+			idx = j * 2;
 			IPACMDBG_H("Install rules at idx %d\n", idx);
 		}
 

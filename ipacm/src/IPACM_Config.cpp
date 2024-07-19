@@ -1004,6 +1004,10 @@ void IPACM_Config::update_config_private_forwarding(bool reset){
 	}
 
 	fp = fopen("/etc/data/ipa_config.txt", "r");
+	if (fp == NULL) {
+		IPACMERR("can't open ipa_config file\n");
+		return;
+	}
 	fread(file_buf, 100, 1, fp);
 	fclose(fp);
 	if(strstr(file_buf, "ipforward")){

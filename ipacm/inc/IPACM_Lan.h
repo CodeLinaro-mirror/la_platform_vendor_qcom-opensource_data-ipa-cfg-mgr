@@ -397,8 +397,6 @@ public:
 	uint32_t static_policy_flt_rule_hdl_v6;
 	static uint32_t static_policy_rt_rule_hdl;
 	static uint32_t static_policy_proc_ctx_hdl;
-	uint32_t associated_pdn_cnt;
-	uint32_t associated_pdn_cnt_v6;
 	static uint32_t total_vlan_pdn_cnt;
 	static uint32_t total_vlan_pdn_cnt_v6;
 
@@ -1269,6 +1267,32 @@ protected:
 		return IPACM_FAILURE;
 	}
 
+#ifdef FEATURE_VLAN_MPDN
+	inline bool is_any_mux_up(ipa_ip_type iptype)
+	{
+		ipacm_mux_struct *mux = v4_mux_up;
+		bool res = false;
+
+		if(iptype == IPA_IP_v6)
+			mux = v6_mux_up;
+
+		for(int i = 0; i < IPA_MAX_NUM_HW_PDNS; i++)
+		{
+			if(mux[i].mux_id)
+			{
+				IPACMDBG("mux id %d up for dev %s, i = %d, iptype %d\n", mux[i].mux_id, dev_name, i, iptype);
+				res = true;
+			}
+		}
+
+		if(res)
+			return res;
+
+		IPACMDBG_H("no vlan mux up for dev %s, iptype %d\n", dev_name, iptype);
+		return false;
+	}
+#endif
+
 private:
 
 	/* get hdr proc ctx type given source and destination l2 hdr type */
@@ -1390,29 +1414,6 @@ private:
 		return IPACM_FAILURE;
 	}
 
-	inline bool is_any_mux_up(ipa_ip_type iptype)
-	{
-		ipacm_mux_struct *mux = v4_mux_up;
-		bool res = false;
-
-		if(iptype == IPA_IP_v6)
-			mux = v6_mux_up;
-
-		for(int i = 0; i < IPA_MAX_NUM_HW_PDNS; i++)
-		{
-			if(mux[i].mux_id)
-			{
-				IPACMDBG("mux id %d up for dev %s, i = %d, iptype %d\n", mux[i].mux_id, dev_name, i, iptype);
-				res = true;
-			}
-		}
-
-		if(res)
-			return res;
-
-		IPACMDBG_H("no vlan mux up for dev %s, iptype %d\n", dev_name, iptype);
-		return false;
-	}
 #endif
 	inline ipa_eth_client* get_client_memptr(ipa_eth_client *param, int cnt)
 	{

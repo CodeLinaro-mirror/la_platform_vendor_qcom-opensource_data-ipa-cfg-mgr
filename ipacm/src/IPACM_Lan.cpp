@@ -2254,10 +2254,18 @@ int IPACM_Lan::handle_vlan_neighbor(ipacm_event_data_all *data)
 		if(!IPACM_Iface::ipacmcfg->check_l2tp_iface(data->iface_name))
 		{
 			skip_nat_set = 0;
-			handle_eth_hdr_init(data->mac_addr, data_vlan->bridge, vlan_id, true);
+			/* first construct ETH full header */
+			if(IPACM_Iface::ipacmcfg->is_dummy_VID(vlan_id))
+			{
+				handle_eth_hdr_init(data->mac_addr);
+			}
+			else
+			{
+				handle_eth_hdr_init(data->mac_addr, data_vlan->bridge, vlan_id, true);
+			}
 		}
 #else
-
+		skip_nat_set = 0;
 		/* first construct ETH full header */
 		if(IPACM_Iface::ipacmcfg->is_dummy_VID(vlan_id))
 		{
@@ -2314,6 +2322,9 @@ int IPACM_Lan::handle_vlan_neighbor(ipacm_event_data_all *data)
 	}
 	else
 #endif
+#endif
+#ifdef IPA_L2TP_TUNNEL_UDP
+		if(!IPACM_Iface::ipacmcfg->check_l2tp_iface(data->iface_name))
 #endif
 	{
 		if(data_vlan->data_all.iptype == IPA_IP_v4)
@@ -2416,8 +2427,10 @@ int IPACM_Lan::handle_vlan_neighbor(ipacm_event_data_all *data)
 
 bool IPACM_Lan::is_vlan_IF(uint16_t vlan_id)
 {
+	int i =0;
 	char vlan_iface_name[IPA_RESOURCE_NAME_MAX];
 	char vlan_suffix[6];
+	uint16_t Ids[IPA_MAX_NUM_OFFLOAD_VLANS];
 
 #ifdef FEATURE_SOCKSv5
 	/* handle socksv5 MPDN logic */
@@ -2442,10 +2455,21 @@ bool IPACM_Lan::is_vlan_IF(uint16_t vlan_id)
 		IPACMDBG_H("found VLAN IF named %s\n", vlan_iface_name);
 		return true;
 	}
-	else
+
+	if(vlan_id > 0)
 	{
-		IPACMDBG_H("couldn't find VLAN IF named %s\n", vlan_iface_name);
+		if(IPACM_Iface::ipacmcfg->get_iface_vlan_ids(dev_name, Ids))
+		{
+			IPACMERR("failed getting vlan ids for iface %s\n", dev_name);
+			return false;
+		}
+		for(i = 0; i < IPA_MAX_NUM_OFFLOAD_VLANS; i++)
+		{
+			if(Ids[i] !=0 && Ids[i] == vlan_id)
+				return true;
+		}
 	}
+	IPACMDBG_H("couldn't find VLAN IF named %s\n", vlan_iface_name);
 
 	return false;
 }
@@ -12298,7 +12322,14 @@ bool IPACM_Lan::is_vlan_event(char *event_iface_name)
 	tokens.emplace_back(tmpName);
 
 	IPACMDBG("return value = %d\n", tokens.size() > 1 && !tokens.back().empty() && std::isdigit(tokens.back()[0]));
-	return tokens.size() > 1 && !tokens.back().empty() && std::isdigit(tokens.back()[0]);
+	/* For Dual NAD configuration Need to support vlan iface as eth0.connect with no digits at back,
+	   As per macsec design vlan iface name should be end with digit as macsec physical iface can be
+	   eth0.s0, so adding device mode check here. In future need to make it generic to support without
+	   device mode */
+	if(IPACM_Iface::ipacmcfg->ipacm_l2tp_enable || IPACM_Iface::ipacmcfg->ipacm_socksv5_enable)
+		return tokens.size() > 1 && !tokens.back().empty();
+	else
+		return tokens.size() > 1 && !tokens.back().empty() && std::isdigit(tokens.back()[0]);
 }
 #ifdef FEATURE_L2TP
 /* check if the event is associated with l2tp interface */

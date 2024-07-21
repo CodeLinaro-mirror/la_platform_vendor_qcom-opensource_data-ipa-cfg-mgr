@@ -368,6 +368,7 @@ typedef struct _ipacm_event_data_all
 	uint32_t  ipv6_addr[4];
 	uint8_t mac_addr[IPA_MAC_ADDR_SIZE];
 	char iface_name[IPA_IFACE_NAME_LEN];
+	uint16_t vlanID;
 } ipacm_event_data_all;
 
 typedef struct _ipacm_event_new_neigh_vlan
@@ -465,6 +466,7 @@ typedef struct _ipacm_event_iface_up
 	bool is_sta;
 	uint8_t xlat_mux_id;
 	uint8_t mux_id;
+	uint16_t vlanID;
 }ipacm_event_iface_up;
 
 typedef struct _ipacm_event_iface_up_tether

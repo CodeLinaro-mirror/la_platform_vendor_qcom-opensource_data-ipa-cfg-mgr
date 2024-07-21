@@ -173,7 +173,6 @@ typedef struct _ipa_eth_client
 #ifdef FEATURE_VLAN_MPDN
 	uint16_t vlan_id;
 	uint32_t client_backhaul_prefix[2];
-	bool v6_vlan_rt_installed;
 #endif
 	eth_client_rt_hdl eth_rt_hdl[0]; /* depends on number of tx properties */
 }ipa_eth_client;
@@ -1361,12 +1360,9 @@ private:
 		int cnt;
 		int num_eth_client_tmp = num_eth_client;
 
-		if(mac_addr != NULL)
-		{
-			IPACMDBG_H("Passed MAC %02x:%02x:%02x:%02x:%02x:%02x\n",
-						 mac_addr[0], mac_addr[1], mac_addr[2],
-						 mac_addr[3], mac_addr[4], mac_addr[5]);
-		}
+		IPACMDBG_H("Passed MAC %02x:%02x:%02x:%02x:%02x:%02x\n",
+						mac_addr[0], mac_addr[1], mac_addr[2],
+						mac_addr[3], mac_addr[4], mac_addr[5]);
 
 		for(cnt = 0; cnt < num_eth_client_tmp; cnt++)
 		{
@@ -1377,16 +1373,10 @@ private:
 							 get_client_memptr(eth_client, cnt)->mac[3],
 							 get_client_memptr(eth_client, cnt)->mac[4],
 							 get_client_memptr(eth_client, cnt)->mac[5]);
-			if((mac_addr == NULL) &&
-			   (get_client_memptr(eth_client, cnt)->vlan_id == vlan_id))
-			{
-				IPACMDBG_H("Matched client index: %d for vid %d\n", cnt, vlan_id);
-				return cnt;
-			}
 
-			if((mac_addr != NULL) && (memcmp(get_client_memptr(eth_client, cnt)->mac,
+			if(memcmp(get_client_memptr(eth_client, cnt)->mac,
 								mac_addr,
-								IPA_MAC_ADDR_SIZE) == 0))
+								IPA_MAC_ADDR_SIZE) == 0)
 			{
 #ifdef FEATURE_VLAN_MPDN
 				if(vlan_id)
@@ -1507,7 +1497,7 @@ private:
 	int handle_eth_client_ipaddr(ipacm_event_data_all *data);
 
 	/* handle eth client routing rule*/
-	int handle_eth_client_route_rule(uint8_t *mac_addr, ipa_ip_type iptype, uint16_t vlan_id = 0, uint32_t *prefix = NULL);
+	int handle_eth_client_route_rule(uint8_t *mac_addr, ipa_ip_type iptype, uint16_t vlan_id = 0);
 
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
 	/* handle eth client routing rule with rule id*/
@@ -1584,7 +1574,7 @@ public:
 	int handle_vlan_pdn_up(ipacm_event_vlan_pdn *data, bool set_mux = true);
 	int handle_vlan_pdn_down(ipacm_event_vlan_pdn *data);
 	int check_vlan_PDNUp(enum ipa_ip_type iptype);
-	int handle_neigh_cache_ops(ipacm_neigh_cache_ops_type ops, void* data);
+	int handle_neigh_cache_ops(ipacm_neigh_cache_ops_type ops, void* data, uint16_t vlan_id = 0);
 	ipacm_mux_struct v4_mux_up[IPA_MAX_NUM_HW_PDNS];
 	uint8_t num_v4_mux;
 	ipacm_mux_struct v6_mux_up[IPA_MAX_NUM_HW_PDNS];

@@ -1258,6 +1258,7 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 							wanup_data->mux_id = ext_prop->ext[0].mux_id;
 						wanup_data->ipv6_prefix[0] = data->ipv6_addr[0];
 						wanup_data->ipv6_prefix[1] = data->ipv6_addr[1];
+						wanup_data->vlanID = 0;
 						IPACMDBG_H("Posting IPA_HANDLE_WAN_ADDR_ADD_V6 with below information:\n");
 						IPACMDBG_H("if_name:%s ipv6 prefix: 0x%08x%08x mux_id %d\n", wanup_data->ifname,
 							wanup_data->ipv6_prefix[0], wanup_data->ipv6_prefix[1], wanup_data->mux_id);
@@ -2288,7 +2289,7 @@ end:
  */
 void IPACM_Wan::post_wan_vlan_pdn_event(ipa_ip_type iptype, int pdn_idx, int vlan_idx, uint16_t vlan_id, bool vlan_up)
 {
-	uint8_t mux_id;
+	uint8_t mux_id = 0;
 	int idx = vlan_idx + 1;
 	ipacm_cmd_q_data evt_data;
 	ipacm_event_vlan_pdn *vlan_data = NULL;
@@ -2297,7 +2298,7 @@ void IPACM_Wan::post_wan_vlan_pdn_event(ipa_ip_type iptype, int pdn_idx, int vla
 	{
 		IPACMERR("Invalid VLAN Index\n");
 		return;
-	} 
+	}
 
 	vlan_data = (ipacm_event_vlan_pdn *)malloc(sizeof(ipacm_event_vlan_pdn));
 	if(vlan_data == NULL)
@@ -2512,6 +2513,8 @@ int IPACM_Wan::handle_vlan_backhaul_switch_v6(ipacm_event_route_vlan *data, bool
 {
 	int ret = IPACM_FAILURE;
 	ipacm_vlan_association_info *vlan_info = NULL;
+	ipacm_event_iface_up* wanup_data = NULL;
+	ipacm_cmd_q_data evt_data;
 
 	IPACMDBG_H("num_offloaded_pdns: %d\n", num_offloaded_pdns);
 
@@ -2657,6 +2660,28 @@ int IPACM_Wan::handle_vlan_backhaul_switch_v6(ipacm_event_route_vlan *data, bool
 				IPACMDBG_H("this is a new PDN, num of offloaded PDN increased to %d\n", num_offloaded_pdns);
 			}
 		}
+		/* VLAN associated with PDN now add client backhaul prefix for vlan clients and flush neigh_cache */
+		wanup_data = (ipacm_event_iface_up *)malloc(sizeof(ipacm_event_iface_up));
+		if (wanup_data == NULL)
+		{
+			IPACMERR("Unable to allocate memory\n");
+			goto fail;
+		}
+		memset(wanup_data, 0, sizeof(ipacm_event_iface_up));
+		memcpy(wanup_data->ifname, dev_name, sizeof(wanup_data->ifname));
+		if (m_is_sta_mode == Q6_WAN && ext_prop != NULL)
+				wanup_data->mux_id = ext_prop->ext[0].mux_id;
+		wanup_data->ipv6_prefix[0] = ipv6_prefix[0];
+		wanup_data->ipv6_prefix[1] = ipv6_prefix[1];
+		wanup_data->vlanID = data->VlanID;
+		IPACMDBG_H("Posting IPA_HANDLE_WAN_ADDR_ADD_V6 with below information:\n");
+		IPACMDBG_H("if_name:%s ipv6 prefix: 0x%08x%08x mux_id %d\n", wanup_data->ifname,
+				wanup_data->ipv6_prefix[0], wanup_data->ipv6_prefix[1], wanup_data->mux_id);
+		memset(&evt_data, 0, sizeof(evt_data));
+		evt_data.event = IPA_HANDLE_WAN_ADDR_ADD_V6;
+		evt_data.evt_data = (void *)wanup_data;
+		IPACM_EvtDispatcher::PostEvt(&evt_data);
+
 		handle_route_add_vlan_pdn_evt(IPA_IP_v6, data->VlanID);
 		ret = IPACM_SUCCESS;
 	}

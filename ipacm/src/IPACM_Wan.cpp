@@ -738,9 +738,10 @@ int IPACM_Wan::handle_addr_evt(ipacm_event_data_addr *data)
 	const int NUM_RULES = 1;
 	int num_ipv6_addr, len;
 	int res = IPACM_SUCCESS;
+	ipacm_cmd_q_data evt_data;
+	ipacm_event_data_fid *data_fid = NULL;
 #ifdef FEATURE_STATIC_POLICY
 	struct ipa_ioc_pdn_dscp_map_info pdn_dscp_map_info;
-	ipacm_cmd_q_data evt_data;
 #endif
 
 	memset(&hdr, 0, sizeof(hdr));
@@ -1283,6 +1284,17 @@ int IPACM_Wan::handle_addr_evt(ipacm_event_data_addr *data)
 
 	IPACMDBG_H("number of v6 default route rules %d\n", num_dft_rt_v6);
 
+	data_fid = (ipacm_event_data_fid *)malloc(sizeof(ipacm_event_data_fid));
+	if(data_fid == NULL)
+	{
+		IPACMERR("unable to allocate memory for IPA_HANDLE_NEW_NEIGH_EVENT data_fid\n");
+	}
+	data_fid->if_index = data->if_index;
+
+	evt_data.event = IPA_HANDLE_NEW_NEIGH_EVENT;
+	evt_data.evt_data = data_fid;
+	IPACMDBG_H("Posting IPA_HANDLE_NEW_NEIGH_EVENT event:%d\n", evt_data.event);
+	IPACM_EvtDispatcher::PostEvt(&evt_data);
 fail:
 	free(rt_rule);
 

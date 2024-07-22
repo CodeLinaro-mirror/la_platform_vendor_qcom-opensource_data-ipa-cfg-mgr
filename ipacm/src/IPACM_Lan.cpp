@@ -3818,6 +3818,8 @@ int IPACM_Lan::handle_addr_evt(ipacm_event_data_addr *data)
 	int num_ipv6_addr;
 	int res = IPACM_SUCCESS;
 	int j = 0;
+	ipacm_cmd_q_data evt_data;
+	ipacm_event_data_fid *data_fid = NULL;
 
 	IPACMDBG_H("set route/filter rule ip-type: %d \n", data->iptype);
 	if (rx_prop == NULL)
@@ -4048,6 +4050,16 @@ int IPACM_Lan::handle_addr_evt(ipacm_event_data_addr *data)
 
 	IPACMDBG_H("finish route/filter rule ip-type: %d, res(%d)\n", data->iptype, res);
 
+	data_fid = (ipacm_event_data_fid *)malloc(sizeof(ipacm_event_data_fid));
+	if(data_fid == NULL)
+	{
+		IPACMERR("unable to allocate memory for IPA_HANDLE_NEW_NEIGH_EVENT data_fid\n");
+	}
+	data_fid->if_index = data->if_index;
+	evt_data.event = IPA_HANDLE_NEW_NEIGH_EVENT;
+	evt_data.evt_data = data_fid;
+	IPACMDBG_H("Posting IPA_HANDLE_NEW_NEIGH_EVENT event:%d\n", evt_data.event);
+	IPACM_EvtDispatcher::PostEvt(&evt_data);
 	/* TODO: get default MTU here instead of using 1500 */
 
 fail:

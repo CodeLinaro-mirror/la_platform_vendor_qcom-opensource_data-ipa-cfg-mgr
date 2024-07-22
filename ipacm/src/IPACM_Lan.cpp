@@ -77,7 +77,6 @@
 #include <sys/ioctl.h>
 #include "IPACM_Netlink.h"
 #include "IPACM_Lan.h"
-#include "IPACM_Wan.h"
 #include "IPACM_IfaceManager.h"
 #include "linux/rmnet_ipa_fd_ioctl.h"
 #include "linux/ipa_qmi_service_v01.h"
@@ -381,7 +380,7 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 	list <ipacm_event_data_all>::iterator it;
 	ipacm_event_data_all *data_all=NULL;
 	ipacm_cmd_q_data evt_data;
-	int clnt_indx;
+	int clnt_indx = 0;
 	ipa_bridge_vlan_mapping_info mapping_info;
 	ipa_macsec_map *macsecMap;
 
@@ -1053,10 +1052,7 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 		{
 			/* add support for handling default route to WIFI backhaul on vlan case Need to protect with xml entry */
 			IPACMDBG_H("IF %s is vlan IF\n", dev_name);
-			if(data_wan->is_sta == false)
-			{
-				return;
-			}
+			return;
 		}
 #endif
 		if(ip_type == IPA_IP_v4 || ip_type == IPA_IP_MAX)
@@ -1083,10 +1079,7 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 		{
 			/* add support for handling default route to WIFI backhaul on vlan case Need to protect with xml entry */
 			IPACMDBG_H("IF %s is vlan IF\n", dev_name);
-			if(data_wan->is_sta == false)
-			{
-				return;
-			}
+			return;
 		}
 #endif
 		/* reset usb-client ipv6 rt-rules */
@@ -1471,6 +1464,21 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 					configure_v6_ul_firewall();
 #endif
 #endif
+					clnt_indx = get_eth_client_index(NULL, data->VlanID);
+					if (clnt_indx == IPACM_INVALID_INDEX)
+					{
+						IPACMERR("eth client not found/attached \n");
+						return;
+					}
+					get_client_memptr(eth_client, clnt_indx)->client_backhaul_prefix[0] = data->ipv6_prefix[0];
+					get_client_memptr(eth_client, clnt_indx)->client_backhaul_prefix[1] = data->ipv6_prefix[1];
+					get_client_memptr(eth_client, clnt_indx)->v6_vlan_rt_installed = false;
+					if(IPACM_SUCCESS == handle_eth_client_route_rule(get_client_memptr(eth_client, clnt_indx)->mac,
+								 IPA_IP_v6, data->VlanID, data->ipv6_prefix))
+					{
+						IPACMDBG_H("Route rules for vlan %d are installed successfully\n", data->VlanID);
+						get_client_memptr(eth_client, clnt_indx)->v6_vlan_rt_installed = true;
+					}
 				}
 				if(is_mux_up(data->mux_id, data->iptype, data->VlanID))
 				{
@@ -2160,7 +2168,6 @@ int IPACM_Lan::handle_vlan_neighbor(ipacm_event_data_all *data)
 		{
 			return IPACM_FAILURE;
 		}
-		handle_eth_client_route_rule(data->mac_addr, data->iptype, vlan_id);
 	}
 #else
 	IPACMDBG_H("construct ETH header and route rules \n");
@@ -2192,7 +2199,28 @@ int IPACM_Lan::handle_vlan_neighbor(ipacm_event_data_all *data)
 	else
 #endif
 #endif
-		handle_eth_client_route_rule(data->mac_addr, data->iptype, vlan_id);
+	{
+		if(data_vlan->data_all.iptype == IPA_IP_v4)
+		{
+			handle_eth_client_route_rule(data->mac_addr, data->iptype, vlan_id);
+		}
+		else
+		{
+			eth_index = get_eth_client_index(data->mac_addr, vlan_id);
+			if (eth_index == IPACM_INVALID_INDEX)
+			{
+				IPACMERR("eth client not found/attached \n");
+				return IPACM_FAILURE;
+			}
+			if((get_client_memptr(eth_client, eth_index)->client_backhaul_prefix[0] == data_vlan->data_all.ipv6_addr[0]) &&
+			   (get_client_memptr(eth_client, eth_index)->client_backhaul_prefix[1] == data_vlan->data_all.ipv6_addr[1]) &&
+			   (!get_client_memptr(eth_client, eth_index)->v6_vlan_rt_installed))
+			{
+				IPACMDBG_H("Neighbor received after conntrack. Installing Route rules now...\n");
+				handle_eth_client_route_rule(data->mac_addr, data->iptype, vlan_id, data_vlan->data_all.ipv6_addr);
+			}
+		}
+	}
 
 	if(IPACM_Iface::ipacmcfg->ipacm_mpdn_enable)
 	{
@@ -2607,7 +2635,7 @@ int IPACM_Lan::handle_vlan_pdn_down(ipacm_event_vlan_pdn *data)
 		}
 		else
 		{
-			//LTE case delete routing rule of client with associated vlan_id
+			//LTE case delete routing rule of client with associated mux_id
 			for(int i = 0; i < IPA_MAX_NUM_HW_PDNS; i++)
 			{
 				if(v6_mux_up[i].mux_id == data->mux_id)
@@ -2673,7 +2701,7 @@ int IPACM_Lan::handle_vlan_pdn_down(ipacm_event_vlan_pdn *data)
 		}
 		else
 		{
-			//LTE case delete routing rule of client with associated vlan_id
+			//LTE case delete routing rule of client with associated mux_id
 			for(int i = 0; i < IPA_MAX_NUM_HW_PDNS; i++)
 			{
 				if(v6_mux_up[i].mux_id == data->mux_id)
@@ -3588,7 +3616,7 @@ int IPACM_Lan::handle_wan_up(ipa_ip_type ip_type, uint16_t vlan_id)
 				}
 			}
 		}
-
+		
 		if(!vlan_set)
 		{
 			for(i = 0; i < IPA_MAX_NUM_OFFLOAD_VLANS; i++)
@@ -3596,7 +3624,7 @@ int IPACM_Lan::handle_wan_up(ipa_ip_type ip_type, uint16_t vlan_id)
 				if(!vlan_sta_info[i].v4_flt_hdl && !vlan_sta_info[i].v6_flt_hdl)
 				{
 					vlan_sta_info[i].v4_flt_hdl = m_pFilteringTable->rules[0].flt_rule_hdl;
-					if (vlan_id > 0)
+					if(vlan_id > 0)
 						vlan_sta_info[i].vlan_id = vlan_id;
 					break;
 				}
@@ -3748,7 +3776,7 @@ int IPACM_Lan::handle_wan_up(ipa_ip_type ip_type, uint16_t vlan_id)
 				if(!vlan_sta_info[i].v4_flt_hdl && !vlan_sta_info[i].v6_flt_hdl)
 				{
 					vlan_sta_info[i].v6_flt_hdl = m_pFilteringTable->rules[0].flt_rule_hdl;
-					if (vlan_id > 0)
+					if(vlan_id > 0)
 						vlan_sta_info[i].vlan_id = vlan_id;
 					break;
 				}
@@ -4830,13 +4858,14 @@ int IPACM_Lan::handle_eth_client_ipaddr(ipacm_event_data_all *data)
 }
 
 /*handle eth client routing rule*/
-int IPACM_Lan::handle_eth_client_route_rule(uint8_t *mac_addr, ipa_ip_type iptype, uint16_t vlan_id)
+int IPACM_Lan::handle_eth_client_route_rule(uint8_t *mac_addr, ipa_ip_type iptype, uint16_t vlan_id,  uint32_t *prefix)
 {
 	struct ipa_ioc_add_rt_rule_v2 rt_rule{};
 	struct ipa_rt_rule_add_v2 rt_rule_entry{}, *rulesPtr = nullptr;
 	uint32_t tx_index;
 	int eth_index,v6_num;
 	const int NUM = 1;
+	int ret = IPACM_FAILURE;
 
 	if(tx_prop == NULL)
 	{
@@ -4940,7 +4969,7 @@ int IPACM_Lan::handle_eth_client_route_rule(uint8_t *mac_addr, ipa_ip_type iptyp
 					rt_rule_entry.rule.hashable = true;
 				}
 				UapiHelper::ruleTtlUpdateSet(rt_rule_entry.rule);
-				IPACMDBG_H("ttl_update = %u", rt_rule_entry.rule.ttl_update);
+				IPACMDBG_H("ttl_update = %u\n", rt_rule_entry.rule.ttl_update);
 				rulesPtr[0] = rt_rule_entry;
 				if (!m_routing.addRules(&rt_rule))
 				{
@@ -4949,6 +4978,7 @@ int IPACM_Lan::handle_eth_client_route_rule(uint8_t *mac_addr, ipa_ip_type iptyp
 					return IPACM_FAILURE;
 				}
 
+				ret = IPACM_SUCCESS;
 				/* copy ipv4 RT hdl */
 				get_client_memptr(eth_client, eth_index)->eth_rt_hdl[tx_index].eth_rt_rule_hdl_v4 = rulesPtr[0].rt_rule_hdl;
 				IPACMDBG_H("tx:%d, rt rule hdl=%x ip-type: %d\n", tx_index,
@@ -4964,6 +4994,11 @@ int IPACM_Lan::handle_eth_client_route_rule(uint8_t *mac_addr, ipa_ip_type iptyp
 						eth_index,
 						get_client_memptr(eth_client, eth_index)->hdr_hdl_v6);
 
+					if(prefix != NULL &&  (get_client_memptr(eth_client, eth_index)->v6_addr[v6_num][0] != prefix[0]) &&
+						(get_client_memptr(eth_client, eth_index)->v6_addr[v6_num][1] != prefix[1]))
+					{
+						continue;
+					}
 					/* v6 LAN_RT_TBL */
 					strlcpy(rt_rule.rt_tbl_name, IPACM_Iface::ipacmcfg->rt_tbl_v6.name,
 						sizeof(rt_rule.rt_tbl_name));
@@ -5035,7 +5070,7 @@ int IPACM_Lan::handle_eth_client_route_rule(uint8_t *mac_addr, ipa_ip_type iptyp
 					rt_rule_entry.rule.hashable = true;
 #endif
 					UapiHelper::ruleTtlUpdateSet(rt_rule_entry.rule);
-					IPACMDBG_H("ttl_update = %u", rt_rule_entry.rule.ttl_update);
+					IPACMDBG_H("ttl_update = %u\n", rt_rule_entry.rule.ttl_update);
 					rulesPtr[0] = rt_rule_entry;
 					if (!m_routing.addRules(&rt_rule))
 					{
@@ -5043,9 +5078,9 @@ int IPACM_Lan::handle_eth_client_route_rule(uint8_t *mac_addr, ipa_ip_type iptyp
 						free(rulesPtr);
 						return IPACM_FAILURE;
 					}
-
+					ret = IPACM_SUCCESS;
 					get_client_memptr(eth_client, eth_index)->eth_rt_hdl[tx_index].eth_rt_rule_hdl_v6_wan[v6_num] =
-						rulesPtr[0].rt_rule_hdl;
+							 rulesPtr[0].rt_rule_hdl;
 					IPACMDBG_H("tx:%d, rt rule hdl=%x ip-type: %d\n", tx_index,
 						get_client_memptr(eth_client, eth_index)->eth_rt_hdl[tx_index].eth_rt_rule_hdl_v6_wan[v6_num], iptype);
 				}
@@ -5064,7 +5099,8 @@ int IPACM_Lan::handle_eth_client_route_rule(uint8_t *mac_addr, ipa_ip_type iptyp
 			get_client_memptr(eth_client, eth_index)->route_rule_set_v6 = get_client_memptr(eth_client, eth_index)->ipv6_set;
 		}
 	}
-	return IPACM_SUCCESS;
+	IPACMDBG_H("Returning %d\n", ret);
+	return ret;
 }
 
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
@@ -5424,7 +5460,7 @@ int IPACM_Lan::handle_eth_client_route_rule_ext_v2(uint8_t *mac_addr, ipa_ip_typ
 					rt_rule_entry->rule.hashable = true;
 					rt_rule_entry->rule_id = 0;
 					UapiHelper::ruleTtlUpdateSet(rt_rule_entry->rule);
-					IPACMDBG_H("ttl_update = %u", rt_rule_entry->rule.ttl_update);
+					IPACMDBG_H("ttl_update = %u\n", rt_rule_entry->rule.ttl_update);
 					IPACMDBG_H("Add v4 route rule table %s\n", rt_rule->rt_tbl_name);
 					if (false == m_routing.AddRoutingRuleExt_v2(rt_rule))
 					{
@@ -5515,7 +5551,7 @@ int IPACM_Lan::handle_eth_client_route_rule_ext_v2(uint8_t *mac_addr, ipa_ip_typ
 						rt_rule_entry->rule.hashable = true;
 						rt_rule_entry->rule_id = 0;
 						UapiHelper::ruleTtlUpdateSet(rt_rule_entry->rule);
-						IPACMDBG_H("ttl_update = %u", rt_rule_entry->rule.ttl_update);
+						IPACMDBG_H("ttl_update = %u\n", rt_rule_entry->rule.ttl_update);
 						if (false == m_routing.AddRoutingRuleExt_v2(rt_rule))
 						{
 							IPACMERR("Routing rule addition failed!\n");
@@ -5661,7 +5697,7 @@ int IPACM_Lan::handle_eth_client_route_rule_ext(uint8_t *mac_addr, ipa_ip_type i
 				rt_rule_entry.rule_id = 0;
 				rt_rule_entry.rule_id = (get_client_memptr(eth_client, eth_index)->lan_stats_idx) | 0x200;
 				UapiHelper::ruleTtlUpdateSet(rt_rule_entry.rule);
-				IPACMDBG_H("ttl_update = %u", rt_rule_entry.rule.ttl_update);
+				IPACMDBG_H("ttl_update = %u\n", rt_rule_entry.rule.ttl_update);
 				rulesPtr[0] = rt_rule_entry;
 				if (!m_routing.AddRoutingRuleExt_v2(&rt_rule)) {
 					IPACMERR("Routing rule addition failed!\n");
@@ -5745,7 +5781,7 @@ int IPACM_Lan::handle_eth_client_route_rule_ext(uint8_t *mac_addr, ipa_ip_type i
 #endif
 					rt_rule_entry.rule_id = get_client_memptr(eth_client, eth_index)->lan_stats_idx | 0x200;
 					UapiHelper::ruleTtlUpdateSet(rt_rule_entry.rule);
-					IPACMDBG_H("ttl_update = %u", rt_rule_entry.rule.ttl_update);
+					IPACMDBG_H("ttl_update = %u\n", rt_rule_entry.rule.ttl_update);
 					rulesPtr[0] = rt_rule_entry;
 					if (!m_routing.AddRoutingRuleExt_v2(&rt_rule)) {
 						IPACMERR("Routing rule addition failed!\n");
@@ -7311,7 +7347,7 @@ int IPACM_Lan::handle_uplink_filter_rule(ipacm_ext_prop *prop, ipa_ip_type iptyp
 					   cnt, flt_rule_entry.rule.action,
 					   flt_rule_entry.rule.rt_tbl_idx);
 			UapiHelper::ruleTtlUpdateSet(flt_rule_entry.rule);
-			IPACMDBG_H("ttl_update = %u", flt_rule_entry.rule.ttl_update);
+			IPACMDBG_H("ttl_update = %u\n", flt_rule_entry.rule.ttl_update);
 		}
 
 #ifndef FEATURE_VLAN_MPDN
@@ -9369,7 +9405,7 @@ int IPACM_Lan::install_uplink_filter_rule_per_client_v2
 			flt_rule_entry.rule.eq_attrib.metadata_meq32.mask |= rx_prop->rx[0].attrib.meta_data_mask;
 		}
 		UapiHelper::ruleTtlUpdateSet(flt_rule_entry.rule);
-		IPACMDBG_H("ttl_update = %u", flt_rule_entry.rule.ttl_update);
+		IPACMDBG_H("ttl_update = %u\n", flt_rule_entry.rule.ttl_update);
 		memcpy((void *)pFilteringTable->rules + (index * sizeof(struct ipa_flt_rule_add_v2)),
 			&flt_rule_entry, sizeof(flt_rule_entry));
 		index++;
@@ -9664,7 +9700,7 @@ int IPACM_Lan::install_uplink_filter_rule_per_client
 			flt_rule_entry.rule.eq_attrib.metadata_meq32.mask |= rx_prop->rx[0].attrib.meta_data_mask;
 		}
 		UapiHelper::ruleTtlUpdateSet(flt_rule_entry.rule);
-		IPACMDBG_H("ttl_update = %u", flt_rule_entry.rule.ttl_update);
+		IPACMDBG_H("ttl_update = %u\n", flt_rule_entry.rule.ttl_update);
 		rulesPtr[index] = flt_rule_entry;
 
 		IPACMDBG_H("Modem UL filtering rule %d has rule_id %d\n", index, prop->prop[cnt].rule_id);

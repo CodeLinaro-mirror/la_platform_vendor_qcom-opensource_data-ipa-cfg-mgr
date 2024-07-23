@@ -8081,12 +8081,14 @@ int IPACM_Wan::installWanPostIpsecRt(ipa_ip_type ipType)
 	case IPA_IP_v4:
 		strlcpy(rt_rule->rt_tbl_name, IPACM_Iface::ipacmcfg->rt_tbl_lan_v4.name,
 			sizeof(rt_rule->rt_tbl_name));
+		/* Since we don't use NAT in the the IPsec topology,
+		   we must add the TCP syn rule for IPv4 as well. Therefore 1 more rule in IPv4 */
 #ifdef FEATURE_VLAN_MPDN
 		flt_rules = IPACM_Wan::pdn_flt_rule_v4;
-		rt_rule->num_rules = num_rules - 1;
+		rt_rule->num_rules = num_rules - 1 + 1;
 #else
 		flt_rules = IPACM_Wan::flt_rule_v4;
-		rt_rule->num_rules = num_rules;
+		rt_rule->num_rules = num_rules + 1;
 #endif
 		break;
 	case IPA_IP_v6:
@@ -8125,7 +8127,7 @@ int IPACM_Wan::installWanPostIpsecRt(ipa_ip_type ipType)
 
 		/* Fix TCP SYN rules translation */
 		if (flt_rules[i].flt_rule.rule.eq_attrib.protocol_eq == IPACM_FIREWALL_IPPROTO_TCP)
-			rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_TCP_SYN;
+		{
 #else
 		/* Copy the rule attrib from FLT rule to RT rule */
 		IPACMDBG_H("flt_rules[%d].rule.attrib.attrib_mask = 0x%X\n",
@@ -8135,13 +8137,42 @@ int IPACM_Wan::installWanPostIpsecRt(ipa_ip_type ipType)
 
 		/* Fix TCP SYN rules translation */
 		if (flt_rules[i].rule.eq_attrib.protocol_eq == IPACM_FIREWALL_IPPROTO_TCP)
-			rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_TCP_SYN;
+		{
 #endif
-
+			if (ipType == IPA_IP_v4)
+			{
+				rt_rule_entry->rule.attrib.u.v4.protocol = IPACM_FIREWALL_IPPROTO_TCP;
+				rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_PROTOCOL|IPA_FLT_TCP_SYN;
+			}
+			else
+			{
+				rt_rule_entry->rule.attrib.u.v6.next_hdr = IPACM_FIREWALL_IPPROTO_TCP;
+				rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_NEXT_HDR|IPA_FLT_TCP_SYN;
+			}
+			rt_rule_entry->rule.hashable = false;
+		}
 
 		rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_META_DATA;
 		rt_rule_entry->rule.attrib.meta_data = META_IS_IPSEC;
 		rt_rule_entry->rule.attrib.meta_data_mask = META_IPSEC_MASK;
+
+		IPACMDBG_H("rt_rule_entry->rule.attrib.attrib_mask = 0x%X\n",
+			rt_rule_entry->rule.attrib.attrib_mask);
+	}
+
+	/* Since we don't use NAT in the the IPsec topology, we must add the TCP syn rule for IPv4 as well */
+	if (ipType == IPA_IP_v4) {
+		rt_rule_entry = &rt_rule->rules[rt_rule->num_rules - 1];
+		memset(rt_rule_entry, 0, sizeof(*rt_rule_entry));
+		rt_rule_entry->rule.hdr_hdl = qmapHdrHdl;
+		rt_rule_entry->rule.dst = IPA_CLIENT_IPSEC_APPS_WAN_CONS;
+		rt_rule_entry->at_rear = false;
+		rt_rule_entry->rule.hashable = false;
+		rt_rule_entry->rule.attrib.attrib_mask =
+			IPA_FLT_PROTOCOL|IPA_FLT_TCP_SYN|IPA_FLT_META_DATA;
+		rt_rule_entry->rule.attrib.u.v4.protocol = IPACM_FIREWALL_IPPROTO_TCP;
+		rt_rule_entry->rule.attrib.meta_data = META_IS_IPSEC;
+		rt_rule_entry->rule.attrib.meta_data_mask = META_IS_IPSEC;
 
 		IPACMDBG_H("rt_rule_entry->rule.attrib.attrib_mask = 0x%X\n",
 			rt_rule_entry->rule.attrib.attrib_mask);

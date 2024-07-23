@@ -113,6 +113,7 @@ typedef struct _ipa_rm_client
 
 #define MAX_NUM_EXT_PROPS 25
 #define MAX_NUM_IP_PASS_MPDN 15
+#define EOGRE_PROTOCOL_TYPE 0x6558
 
 /* used to hold extended properties */
 typedef struct
@@ -167,7 +168,21 @@ typedef struct
 	uint16_t vlan_id;
 } ipacm_ip_collision_mpdn_info;
 
-
+#ifdef FEATURE_STATIC_POLICY
+typedef struct
+{
+	/* Store the status of the entry
+         * status = 1 when pdn name and dscp value is stored.
+         * status = 2 when mux id is updated and entry is valid now.*/
+	int status;
+	/* Store interface name */
+	char pdn_name[IPA_RESOURCE_NAME_MAX];
+	/* Store mux id */
+	uint8_t mux_id;
+	/* Store dscp_value */
+	uint8_t dscp_val;
+}ipacm_pdn_dscp_info;
+#endif
 
 #if defined(FEATURE_IPACM_PER_CLIENT_STATS) && defined(IPA_HW_FNR_STATS)
 /* Used to keep track of free and used
@@ -314,6 +329,11 @@ public:
 	ipacm_ip_pass_mpdn_info ip_pass_mpdn_table[MAX_NUM_IP_PASS_MPDN];
 	ipacm_ip_collision_mpdn_info ip_collision_mpdn_table[MAX_NUM_IP_PASS_MPDN];
 
+#ifdef FEATURE_STATIC_POLICY
+	ipacm_pdn_dscp_info pdn_dscp_table[IPA_UC_MAX_PDN_DSCP_VAL];
+	pthread_mutex_t pdn_dscp_lock;
+#endif
+
 	pthread_mutex_t ip_pass_mpdn_lock;
 
 	/* nat_iface_lock */
@@ -380,9 +400,18 @@ public:
 	/* Indicates whether static policy mode is enabled */
 	bool ipacm_static_policy_enable;
 
+#ifdef FEATURE_STATIC_POLICY
+	/* Indicates static policy DSCP marking mode
+         * Mode 0 - uc uses pdn_dscp_map table
+         * Mode 1 - uc uses proc params */
+	uint32_t ipacm_static_policy_dscp_mark_mode;
+#endif
+
 #ifdef FEATURE_EoGRE
 	ipa_ipgre_info eogre_info;
 	bool           eogre_enabled;
+	char eogre_tunnel_name[IPA_IFACE_NAME_LEN];
+	bool v6options_enabled;
 #endif
 
 	bool eth_pdu_enabled;
@@ -572,6 +601,49 @@ public:
 		return indx;
 	}
 
+#ifdef FEATURE_STATIC_POLICY
+	inline int get_free_pdn_dscp_index(char *pdn_name)
+	{
+		int indx;
+
+		/* Check if the entry already exists for this iface. */
+		for (indx=0; indx < IPA_UC_MAX_PDN_DSCP_VAL; indx++)
+		{
+			if ((pdn_dscp_table[indx].status == 1 ||
+				pdn_dscp_table[indx].status == 2) &&
+				strncmp(pdn_name,
+						pdn_dscp_table[indx].pdn_name,
+						sizeof(pdn_dscp_table[indx].pdn_name)) == 0)
+			{
+				IPACMDBG("Interface (%s) is already present in PDN DSCP table\n",
+					pdn_name);
+				return IPA_UC_MAX_PDN_DSCP_VAL;
+			}
+		}
+
+		for (indx=0; indx < IPA_UC_MAX_PDN_DSCP_VAL; indx++)
+			if (!pdn_dscp_table[indx].status)
+				return indx;
+
+		return indx;
+	}
+
+	inline int get_pdn_dscp_index(char *pdn_name)
+	{
+		int indx;
+
+		for (indx=0; indx < IPA_UC_MAX_PDN_DSCP_VAL; indx++)
+		{
+			if ((pdn_dscp_table[indx].status == 1 ||
+				pdn_dscp_table[indx].status == 2) &&
+				(strncmp(pdn_name, pdn_dscp_table[indx].pdn_name,
+					IPA_RESOURCE_NAME_MAX) == 0))
+				return indx;
+		}
+		return indx;
+	}
+#endif
+
 	inline int get_ip_pass_pdn_index(ipa_ioc_pdn_config *pdn_config)
 	{
 		int indx;
@@ -691,6 +763,10 @@ public:
 	void ip_pass_config_update(ipa_ioc_pdn_config *pdn_config);
 
 	void ip_collision_config_update(ipa_ioc_pdn_config *pdn_config);
+
+#ifdef FEATURE_STATIC_POLICY
+	void pdn_dscp_config_update(ipa_ioc_pdn_dscp_map_info *pdn_dscp_config);
+#endif
 
 	const char* getEventName(ipa_cm_event_id event_id);
 

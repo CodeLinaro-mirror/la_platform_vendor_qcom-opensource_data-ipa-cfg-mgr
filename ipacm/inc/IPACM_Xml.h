@@ -244,6 +244,15 @@ if (!(a)) {                                                 \
 #define Dual_backhaul_TAG                    "IPACMDUALBACKHAUL"
 #define Dual_backhaul_enable_TAG             "IPACMDUALBHEnabled"
 
+#ifdef FEATURE_STATIC_POLICY
+#define Static_Policy_DSCP_Mark_Mode         "DSCPMode"
+#endif
+
+#ifdef FEATURE_EoGRE
+#define EoGRE_v6options_TAG                  "IPACMEoGRE"
+#define EoGRE_v6options_enable_TAG           "IPACMv6optEnabled"
+#endif
+
 /*---------------------------------------------------------------------------
       IP protocol numbers - use in dss_socket() to identify protocols.
       Also contains the extension header types for IPv6.
@@ -393,9 +402,15 @@ typedef struct  _IPACM_conf_t
 #ifdef FEATURE_DUAL_BACKHAUL
 	ipacm_dual_backhaul_conf_t dual_backhaul_conf;
 #endif
+#ifdef FEATURE_EoGRE
+	bool v6options_enable;
+#endif
 	bool public_ip_support_enable;
 	bool wlan_vlan_mpdn_enable;
 	bool static_policy_enable;
+#ifdef FEATURE_STATIC_POLICY
+	uint32_t static_policy_dscp_mark_mode;
+#endif
 } IPACM_conf_t;
 
 typedef struct _IPACM_conf_ext_t

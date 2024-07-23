@@ -282,6 +282,9 @@ void* ipa_driver_msg_notifier(void *param)
 	ipacm_event_data_all* new_neigh_data;
 	ipa_ioc_gsb_info *event_gsb = NULL;
 	ipa_ioc_pdn_config *pdn_info = NULL;
+#ifdef FEATURE_STATIC_POLICY
+	ipa_ioc_pdn_dscp_map_info *pdn_dscp_info = NULL;
+#endif
 #ifdef IPA_IOC_SET_MAC_FLT
 	ipa_ioc_mac_client_list_type *event_mac_flt = NULL;
 #endif
@@ -981,6 +984,22 @@ void* ipa_driver_msg_notifier(void *param)
 			ipa_get_if_index(pdn_info->dev_name, &(ip_collision_pdn_data->if_index));
 			break;
 
+#ifdef FEATURE_STATIC_POLICY
+		case IPA_PDN_DSCP_ADD_EVENT:
+			pdn_dscp_info = (ipa_ioc_pdn_dscp_map_info *)
+				(buffer + sizeof(struct ipa_msg_meta));
+			IPACMDBG_H("Received IPA_PDN_DSCP_ADD_EVENT add: %d\n",pdn_dscp_info->add);
+			IPACM_Iface::ipacmcfg->pdn_dscp_config_update(pdn_dscp_info);
+			continue;
+
+		case IPA_PDN_DSCP_DEL_EVENT:
+			pdn_dscp_info = (ipa_ioc_pdn_dscp_map_info *)
+				(buffer + sizeof(struct ipa_msg_meta));
+			IPACMDBG_H("Received IPA_PDN_DSCP_DEL_EVENT add: %d\n",pdn_dscp_info->add);
+			IPACM_Iface::ipacmcfg->pdn_dscp_config_update(pdn_dscp_info);
+			continue;
+#endif
+
 #ifdef IPA_IOC_SET_MAC_FLT
 		case IPA_MAC_FLT_EVENT:
 			if (IPACM_Iface::ipacmcfg->ipacm_flt_enable != IPACM_SW_FLT)
@@ -1187,6 +1206,27 @@ void* ipa_driver_msg_notifier(void *param)
 			evt_data.evt_data = 0;
 
 			break;
+
+		case IPA_EoGRE_NOTIFY_EVENT:
+			IPACMDBG_H("Received an IPA_EoGRE_NOTIFY_EVENT\n");
+
+			if ( IPACM_Iface::ipacmcfg->eogre_enabled == false )
+			{
+				IPACMERR("eogre tunnel is not up yet, no work need to be done\n");
+				goto done;
+			}
+
+			evt_data.event    = IPA_HANDLE_EoGRE_DOWN;
+			evt_data.evt_data = 0;
+			IPACMDBG_H("srinu Posting IPA_HANDLE_EoGRE_DOWN \n");
+			IPACM_EvtDispatcher::PostEvt(&evt_data);
+
+			evt_data.event    = IPA_HANDLE_EoGRE_UP;
+			evt_data.evt_data = 0;
+			IPACMDBG_H("srinu Posting IPA_HANDLE_EoGRE_UP \n");
+			IPACM_EvtDispatcher::PostEvt(&evt_data);
+
+			continue;
 #endif
 
 		case IPA_MACSEC_ADD_EVENT:
@@ -1391,12 +1431,20 @@ static void IPACM_Signals_handler(int sig, siginfo_t *info, void *extra)
 	case SIGTERM:
 		p = (ucontext_t *)extra;
 		IPACMERR("siginfo address=%x\n", info->si_addr);
+		IPACMERR("fault address = 0x%X\n", p->uc_mcontext.fault_address);
+#ifdef FEATURE_LOW_MEMORY_TARGET
+		IPACMERR("arm_pc address = 0x%X\n", p->uc_mcontext.arm_pc);
+		IPACMERR("cpsr = 0x%X\n", p->uc_mcontext.arm_cpsr);
+		IPACMERR("arm_sp address = 0x%X\n", p->uc_mcontext.arm_sp);
+		IPACMERR("arm_lr address = 0x%X\n", p->uc_mcontext.arm_lr);
+		IPACMERR("arm_r0  address = 0x%X\n", p->uc_mcontext.arm_r0);
+#else
 		IPACMERR("arm_pc address = 0x%X\n", p->uc_mcontext.pc);
 		IPACMERR("pstate = 0x%X\n", p->uc_mcontext.pstate);
-		IPACMERR("fault address = 0x%X\n", p->uc_mcontext.fault_address);
 		IPACMERR("arm_sp address = 0x%X\n", p->uc_mcontext.sp);
 		IPACMERR("arm_lr address = 0x%X\n", p->uc_mcontext.regs[30]);
 		IPACMERR("arm_r0  address = 0x%X\n", p->uc_mcontext.regs[0]);
+#endif
 		size = backtrace(array, MAX_IPACM_TRACE_STACK);
 
 		messages = backtrace_symbols(array, size);

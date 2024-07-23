@@ -90,9 +90,9 @@ extern "C"
 #define IPA_IF_SOCKSv5_NAME  "IPACM_SOCKSv5"
 #define IPA_EOGRE_HDR_NAME   "IPACM_EoGRE_v%d"
 
-#define IPA_MAX_ACTIVE_WLAN_IFACE 22 // 21 wlan + 1 ath3 interface for RDKB
+#define IPA_MAX_ACTIVE_WLAN_IFACE 28 // 28 wlan (4x7 band support)
 
-#define IPA_MAX_IFACE_ENTRIES (48 + IPA_MAX_ACTIVE_WLAN_IFACE) /* current: 15 rmnet + 21 wlan + bridge+ eth +
+#define IPA_MAX_IFACE_ENTRIES (48 + IPA_MAX_ACTIVE_WLAN_IFACE) /* current: 15 rmnet + 28 wlan + bridge+ eth +
                                                                 * rndis + ecm + 15 rmnet for RDKB + 7mld */
 #define IPA_MAX_ALG_ENTRIES 20
 #define IPA_MAX_RM_ENTRY 9
@@ -201,6 +201,11 @@ extern "C"
 #endif
 
 #define IPA_STATIC_POLICY_VLAN_ID 5000
+
+#ifdef FEATURE_STATIC_POLICY
+#define MUX_ID_DL_METADATA_MASK 0x7f
+#define MUX_ID_DL_METADATA_SHIFT 24
+#endif
 
 /*
  * The following macros allow callers to print the raw bytes making up
@@ -359,6 +364,10 @@ typedef enum
 	IPA_HANDLE_IPSEC_UL_FLT_ADD,              /* ipa_ioc_ipsec_ul_flt_attr */
 	IPA_HANDLE_IPSEC_UL_FLT_DEL,              /* ipa_ioc_ipsec_ul_flt_attr */
 	IPA_IPSEC_LAN_CLIENT_ROUTE_ADD_EVENT,     /* ipa_ip_type */
+#endif
+#ifdef FEATURE_STATIC_POLICY
+	IPA_PDN_DSCP_UPDATE_EVENT,                /* ipacm_event_pdn_dscp_info */
+	IPA_PDN_MUX_ID_UPDATE,                    /* ipacm_event_pdn_mux_info */
 #endif
 	IPACM_EVENT_MAX
 } ipa_cm_event_id;
@@ -571,7 +580,6 @@ typedef struct
 	char dev_name[IPA_RESOURCE_NAME_MAX];
 }ipacm_event_ip_collision_pdn_info;
 
-
 typedef struct
 {
 	enum ipa_ip_type iptype;
@@ -595,6 +603,21 @@ typedef struct _ipacm_event_vlan_mode
 	bool wlan_vlan_mpdn_enable;
 	int if_index;
 }ipacm_event_vlan_mode;
+
+#ifdef FEATURE_STATIC_POLICY
+typedef struct
+{
+	uint8_t enable;
+	uint8_t mux_id;
+	uint8_t dscp_val;
+}ipacm_event_pdn_dscp_info;
+
+typedef struct
+{
+	char pdn_name[IPA_IFACE_NAME_LEN];
+	int indx;
+}ipacm_event_pdn_mux_info;
+#endif
 
 typedef enum
 {

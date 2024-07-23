@@ -6735,18 +6735,33 @@ int IPACM_Wlan::handle_down_evt()
 		idx = 2;
 		IPACMDBG_H("Interface is WLAN Svap or vlan, install rules on Rx pipe at idx %d \n", idx);
 	}
-
-	/* delete wan filter rule */
-	if (IPACM_Wan::isWanUP(ipa_if_num) && rx_prop != NULL)
+#ifdef FEATURE_VLAN_MPDN
+	if(IPACM_Iface::ipacmcfg->ipacm_static_policy_enable)
 	{
-		IPACMDBG_H("LAN IF goes down, backhaul type %d\n", IPACM_Wan::backhaul_is_sta_mode);
-		IPACM_Lan::handle_wan_down(IPACM_Wan::backhaul_is_sta_mode);
+		if(handle_vlan_phys_if_down())
+		{
+			IPACMERR("failed to handle interface down (static policy mode)\n");
+			res = IPACM_FAILURE;
+			goto fail;
+		}
 	}
-
-	if (IPACM_Wan::isWanUP_V6(ipa_if_num) && rx_prop != NULL)
+	else
+#endif
 	{
-		IPACMDBG_H("LAN IF goes down, backhaul type %d\n", IPACM_Wan::backhaul_is_sta_mode);
-		handle_wan_down_v6(IPACM_Wan::backhaul_is_sta_mode, false);
+		/* delete wan filter rule */
+		if (IPACM_Wan::isWanUP(ipa_if_num) && rx_prop != NULL)
+		{
+			IPACMDBG_H("LAN IF goes down, backhaul type %d\n",
+					IPACM_Wan::backhaul_is_sta_mode);
+			IPACM_Lan::handle_wan_down(IPACM_Wan::backhaul_is_sta_mode);
+		}
+
+		if (IPACM_Wan::isWanUP_V6(ipa_if_num) && rx_prop != NULL)
+		{
+			IPACMDBG_H("LAN IF goes down, backhaul type %d\n",
+					IPACM_Wan::backhaul_is_sta_mode);
+			handle_wan_down_v6(IPACM_Wan::backhaul_is_sta_mode, false);
+		}
 	}
 	IPACMDBG_H("finished deleting wan filtering rules\n ");
 
@@ -7077,10 +7092,7 @@ fail:
 		if (handle_static_policy_rule_delete())
 		{
 			IPACMERR("failed to delete static policy rules for v4.\n");
-			return IPACM_FAILURE;
 		}
-		if(IPACM_Iface::ipacmcfg->ipv6_nat_enable)
-			delete_ipv6_nat_ula_prefix_flt_rule();
 	}
 #endif
 

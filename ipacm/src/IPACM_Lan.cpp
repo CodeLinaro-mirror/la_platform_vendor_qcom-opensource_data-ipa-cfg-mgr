@@ -10913,7 +10913,8 @@ int IPACM_Lan::handle_down_evt()
 	}
 
 #ifdef FEATURE_VLAN_MPDN
-	if(IPACM_Iface::ipacmcfg->iface_in_vlan_mode(dev_name))
+	if(IPACM_Iface::ipacmcfg->iface_in_vlan_mode(dev_name)
+		|| IPACM_Iface::ipacmcfg->ipacm_static_policy_enable)
 	{
 		if(handle_vlan_phys_if_down())
 		{
@@ -11403,10 +11404,7 @@ fail:
 		if (handle_static_policy_rule_delete())
 		{
 			IPACMERR("failed to delete static policy rules.\n");
-			return IPACM_FAILURE;
 		}
-		if(IPACM_Iface::ipacmcfg->ipv6_nat_enable)
-			delete_ipv6_nat_ula_prefix_flt_rule();
 	}
 #endif
 
@@ -11615,8 +11613,11 @@ int IPACM_Lan::handle_uplink_filter_rule(ipacm_ext_prop *prop, ipa_ip_type iptyp
 		flt_index.embedded_call_mux_id_valid = 1;
 #ifdef FEATURE_VLAN_MPDN
 		if (is_xlat &&
-			!(is_dev_in_vlan_mode && IPACM_Iface::ipacmcfg->ipacm_mpdn_enable)) flt_index.embedded_call_mux_id = IPACM_Iface::ipacmcfg->GetQmapId();
-		else flt_index.embedded_call_mux_id = pdn_mux_id;
+		   (!(is_dev_in_vlan_mode || static_policy) &&
+		   IPACM_Iface::ipacmcfg->ipacm_mpdn_enable))
+			flt_index.embedded_call_mux_id = IPACM_Iface::ipacmcfg->GetQmapId();
+		else
+			flt_index.embedded_call_mux_id = pdn_mux_id;
 #else
 		flt_index.embedded_call_mux_id = IPACM_Iface::ipacmcfg->GetQmapId();
 #endif

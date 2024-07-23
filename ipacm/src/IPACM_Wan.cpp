@@ -192,6 +192,9 @@ IPACM_Wan::IPACM_Wan(int iface_index,
 	memset(wan_v6_addr_gw, 0, sizeof(wan_v6_addr_gw));
 	ext_prop = NULL;
 	is_ipv6_frag_firewall_flt_rule_installed = false;
+#ifdef FEATURE_IPV6_NAT
+	ipv6_ula_prefix_hdl = 0;
+#endif
 
 	mtu_v4 = DEFAULT_MTU_SIZE;
 	mtu_v4_set = false;

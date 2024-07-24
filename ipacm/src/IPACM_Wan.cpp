@@ -11123,11 +11123,15 @@ int IPACM_Wan::eogre_v4_work(
 	{
 		IPACMDBG_H("Adding v4 modem DL rules on eogre enable tunnel_id: %d\n",tunnel_id);
 
-		if(IPACM_Iface::ipacmcfg->tunnel_feature == SINGLE_TAG_FEATURE)
+		if(IPACM_Iface::ipacmcfg->tunnel_feature == SINGLE_TAG_FEATURE
+			&& IPACM_Wan::isWanUP(ipa_if_num))
+		{
 			del_wan_firewall_rule(IPA_IP_v4);
-
-		wan_up = is_default_gateway = true;
-
+			wan_up = true;
+		}
+		else {
+			wan_up = is_default_gateway = true;
+		}
 		if ( config_wan_firewall_rule(IPA_IP_v4, false, tunnel_id) != IPACM_SUCCESS )
 		{
 			IPACMERR(
@@ -11174,10 +11178,18 @@ int IPACM_Wan::eogre_v4_work(
 				wan_up = is_default_gateway = false;
 			return IPACM_FAILURE;
 		}
-
-		if(IPACM_Iface::ipacmcfg->tunnel_feature == SINGLE_TAG_FEATURE &&
-		!IPACM_Wan::isWanUP(ipa_if_num))
+		/*Making wan_up_v6 and is_default_gateway as false after checking
+                if isWanUP and isWanUP_V6*/
+		if(IPACM_Iface::ipacmcfg->eogre_enabled  &&
+			!IPACM_Iface::ipacmcfg->tunnel_feature == SINGLE_TAG_FEATURE)
+		{
 			wan_up = is_default_gateway = false;
+		}
+		else if(IPACM_Iface::ipacmcfg->tunnel_feature == SINGLE_TAG_FEATURE
+			&& (!IPACM_Wan::isWanUP(ipa_if_num) && !IPACM_Wan::isWanUP_V6(ipa_if_num)))
+		{
+			wan_up = is_default_gateway = false;
+		}
 	}
 
 	return IPACM_SUCCESS;
@@ -11190,10 +11202,15 @@ int IPACM_Wan::eogre_v6_work(
 	{
 		IPACMDBG_H("Adding v6 modem DL rules on eogre enable.\n");
 
-		if(IPACM_Iface::ipacmcfg->tunnel_feature == SINGLE_TAG_FEATURE)
+		if(IPACM_Iface::ipacmcfg->tunnel_feature == SINGLE_TAG_FEATURE
+			&& IPACM_Wan::isWanUP_V6(ipa_if_num))
+		{
 			del_wan_firewall_rule(IPA_IP_v6);
-
-		wan_up_v6 = is_default_gateway = true;
+			wan_up_v6 = true;
+		}
+		else {
+			wan_up_v6 = is_default_gateway = true;
+		}
 
 		IPACMDBG_H("Adding v6 modem DL rules on eogre enable tunnel_id: %d\n", tunnel_id);
 		if ( config_wan_firewall_rule(IPA_IP_v6, false, tunnel_id) != IPACM_SUCCESS )
@@ -11244,10 +11261,18 @@ int IPACM_Wan::eogre_v6_work(
 			wan_up_v6 = is_default_gateway = false;
 			return IPACM_FAILURE;
 		}
-
-		if(IPACM_Iface::ipacmcfg->tunnel_feature == SINGLE_TAG_FEATURE &&
-		!IPACM_Wan::isWanUP_V6(ipa_if_num))
+		/*Making wan_up_v6 and is_default_gateway as false after checking
+                if isWanUP and isWanUP_V6*/
+		if(IPACM_Iface::ipacmcfg->eogre_enabled  &&
+			!IPACM_Iface::ipacmcfg->tunnel_feature == SINGLE_TAG_FEATURE)
+		{
 			wan_up_v6 = is_default_gateway = false;
+		}
+		else if(IPACM_Iface::ipacmcfg->tunnel_feature == SINGLE_TAG_FEATURE
+			&& (!IPACM_Wan::isWanUP(ipa_if_num) && !IPACM_Wan::isWanUP_V6(ipa_if_num)))
+		{
+			wan_up_v6 = is_default_gateway = false;
+		}
 	}
 
 	return IPACM_SUCCESS;

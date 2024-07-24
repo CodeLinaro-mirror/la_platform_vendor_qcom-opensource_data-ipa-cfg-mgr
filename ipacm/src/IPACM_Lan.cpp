@@ -5626,12 +5626,16 @@ int IPACM_Lan::delete_client_info_from_qos(uint8_t *client_mac,
 						it_qos_client->qos_rt_rule_hdl_v4);
 					return IPACM_FAILURE;
 				}
-				it_qos_client = qos_param->qos_client_list.erase(it_qos_client);
+				it_qos_client =
+					qos_param->qos_client_list.erase(it_qos_client);
 				qos_param->client_cnt--;
 				IPACMDBG_H("Current client_cnt %d\n", qos_param->client_cnt);
 			}
+			else
+			{
+				it_qos_client++;
+			}
 		}
-
 		else
 		{
 			if (ipv6_addr == NULL)
@@ -5661,11 +5665,15 @@ int IPACM_Lan::delete_client_info_from_qos(uint8_t *client_mac,
 								it_qos_client->qos_rt_rule_hdl_v6);
 							return IPACM_FAILURE;
 						}
+						it_qos_client =
+							qos_param->qos_client_list.erase(it_qos_client);
+						qos_param->client_cnt--;
+						IPACMDBG_H("After V6 NULL delete, client_cnt %d\n",
+							qos_param->client_cnt);
+						continue;
 					}
 				}
-				it_qos_client = qos_param->qos_client_list.erase(it_qos_client);
-				qos_param->client_cnt--;
-				IPACMDBG_H("Current client_cnt %d\n", qos_param->client_cnt);
+				it_qos_client++;
 			}
 			else
 			{
@@ -5687,14 +5695,20 @@ int IPACM_Lan::delete_client_info_from_qos(uint8_t *client_mac,
 							it_qos_client->qos_rt_rule_hdl_v6);
 						return IPACM_FAILURE;
 					}
+					it_qos_client =
+						qos_param->qos_client_list.erase(it_qos_client);
+					qos_param->client_cnt--;
+					IPACMDBG_H("After v6 delete, client_cnt %d\n",
+						qos_param->client_cnt);
 				}
-				it_qos_client = qos_param->qos_client_list.erase(it_qos_client);
-				qos_param->client_cnt--;
-				IPACMDBG_H("Current client_cnt %d\n", qos_param->client_cnt);
+				else
+				{
+					it_qos_client++;
+				}
 			}
 		}
 	}
-
+	IPACMDBG_H("Final client_cnt %d\n", qos_param->client_cnt);
 	return IPACM_SUCCESS;
 }
 

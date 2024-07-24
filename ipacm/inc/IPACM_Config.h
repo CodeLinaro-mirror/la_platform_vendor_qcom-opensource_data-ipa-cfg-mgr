@@ -117,6 +117,7 @@ typedef struct _ipa_rm_client
 }ipa_rm_client;
 
 #define MAX_NUM_EXT_PROPS 25
+#define MAX_NUM_IP_PASS_MPDN 15
 
 /* used to hold extended properties */
 typedef struct
@@ -125,6 +126,33 @@ typedef struct
 	uint8_t num_v4_xlat_props;
 	ipa_ioc_ext_intf_prop prop[MAX_NUM_EXT_PROPS];
 } ipacm_ext_prop;
+
+/* used to store the PDN info for IP passthrough */
+typedef struct
+{
+	bool valid_entry;
+
+	/* Store interface name */
+	char dev_name[IPA_RESOURCE_NAME_MAX];
+
+	/* Flag indicating default pdn. */
+	uint8_t is_default_pdn;
+
+	/* Store ip_passthrough mac */
+	uint8_t ip_pass_mac[IPA_MAC_ADDR_SIZE];
+
+	/* Store ip_passthrough device type. */
+	ipacm_per_client_device_type ip_pass_dev_type;
+
+	/* PDN IP Address assigned in IP Passthrough mode. */
+	uint32_t ip_pass_pdn_ip_addr;
+
+	/* Skip NAT configuration. */
+	uint8_t ip_pass_skip_nat;
+
+	/* Store vlan ID */
+	uint16_t vlan_id;
+} ipacm_ip_pass_mpdn_info;
 
 #if defined(FEATURE_IPACM_PER_CLIENT_STATS) && defined(IPA_HW_FNR_STATS)
 /* Used to keep track of free and used
@@ -207,13 +235,13 @@ public:
 
 	bool ipacm_odu_embms_enable;
 
-	bool ipacm_ip_passthrough_mode;
-
-	/* Store ippassthrough mac */
-	uint8_t ipacm_ip_passthrough_mac[IPA_MAC_ADDR_SIZE];
-
 	/* nat_iface_lock */
 	pthread_mutex_t nat_iface_lock;
+
+	/* Table containing ip_passthrough mpdn info */
+	ipacm_ip_pass_mpdn_info ip_pass_mpdn_table[MAX_NUM_IP_PASS_MPDN];
+
+	pthread_mutex_t ip_pass_mpdn_lock;
 
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
 	bool ipacm_lan_stats_enable;
@@ -334,7 +362,7 @@ public:
 
 #ifdef IPA_L2TP_TUNNEL_UDP
 	/* add l2tp bridge dummy vlan mapping*/
-	void add_l2tp_dummy_bridge_vlan_mapping(const char *bridge_iface, const char* l2tp_client_iface, int bridge_if_index);
+	void add_l2tp_dummy_vlan_mapping(const char *bridge_iface, const char* l2tp_client_iface, int if_index);
 
 	/* check if vlan id is l2tp bridge dummy vlan id */
 	bool check_l2tp_bridge_vlan_id(uint32_t vlan_id);
@@ -354,12 +382,13 @@ public:
 #ifdef FEATURE_VLAN_MPDN
 	std::list<bridge_vlan_mapping_info> m_bridge_vlan_mapping;
 	void add_bridge_vlan_mapping(ipa_bridge_vlan_mapping_info *data);
-	void del_bridge_vlan_mapping(uint16_t *data);
-	int get_bridge_vlan_mapping(ipa_bridge_vlan_mapping_info *data);
+	void del_bridge_vlan_mapping(uint16_t *data, uint16_t *vlan_id = NULL);
+	int get_bridge_vlan_mapping(ipa_bridge_vlan_mapping_info *data, bool is_dummy = false);
 	bool is_lan2lan_sw_path(uint16_t vlan_id);
 	uint16_t get_bridge_vlan_mapping_from_subnet(uint32_t ipv4_subnet);
 	void add_vlan_bridge(ipacm_event_data_all * data_all);
 	ipacm_bridge *get_vlan_bridge(char *name);
+	ipacm_bridge *get_vlan_bridge_from_vid(uint16_t vlan_id);
 	bool is_added_vlan_iface(char *iface_name);
 	bool iface_in_vlan_mode(const char * interfaceName);
 	int get_iface_vlan_ids(char *phys_iface_name, uint16_t *Ids);
@@ -404,7 +433,108 @@ public:
 	void alloc_fnr_counter(void);
 #endif
 
+	inline int get_free_ip_pass_pdn_index(char *dev_name)
+	{
+		int indx;
+
+		/* Check if the entry already exists for this iface. */
+		for (indx=0; indx < MAX_NUM_IP_PASS_MPDN; indx++)
+		{
+			if (ip_pass_mpdn_table[indx].valid_entry &&
+				strncmp(dev_name,
+						ip_pass_mpdn_table[indx].dev_name,
+						sizeof(ip_pass_mpdn_table[indx].dev_name)) == 0)
+			{
+				IPACMDBG("Interface (%s) is already present in IP Pass table\n", dev_name);
+				return MAX_NUM_IP_PASS_MPDN;
+			}
+		}
+
+		for (indx=0; indx < MAX_NUM_IP_PASS_MPDN; indx++)
+			if (!ip_pass_mpdn_table[indx].valid_entry)
+				return indx;
+
+		return indx;
+	}
+
+	inline int get_ip_pass_pdn_index(ipa_ioc_pdn_config *pdn_config)
+	{
+		int indx;
+		uint32_t ip_addr = htonl(pdn_config->u.passthrough_cfg.pdn_ip_addr);
+
+		for (indx=0; indx < MAX_NUM_IP_PASS_MPDN; indx++)
+		{
+			if (ip_pass_mpdn_table[indx].valid_entry &&
+				(ip_pass_mpdn_table[indx].ip_pass_pdn_ip_addr == ip_addr) &&
+				(ip_pass_mpdn_table[indx].ip_pass_dev_type ==
+					pdn_config->u.passthrough_cfg.device_type) &&
+				ip_pass_mpdn_table[indx].vlan_id == pdn_config->u.passthrough_cfg.vlan_id)
+				return indx;
+		}
+		return indx;
+	}
+
+	inline bool is_ip_pass_enabled(ipacm_per_client_device_type dev_type, uint8_t client_mac[IPA_MAC_ADDR_SIZE], uint16_t vlan_id)
+	{
+		int indx;
+		bool ret = false;
+		uint8_t null_mac[IPA_MAC_ADDR_SIZE] = {0};
+
+		if(pthread_mutex_lock(&ip_pass_mpdn_lock) != 0)
+		{
+			IPACMERR("Unable to lock the mutex\n");
+			return ret;
+		}
+
+		for (indx = 0; indx < MAX_NUM_IP_PASS_MPDN; indx++)
+		{
+			if (ip_pass_mpdn_table[indx].valid_entry)
+			{
+				if ((ip_pass_mpdn_table[indx].ip_pass_dev_type == dev_type) &&
+					(memcmp(ip_pass_mpdn_table[indx].ip_pass_mac, client_mac, IPA_MAC_ADDR_SIZE) == 0) &&
+					(ip_pass_mpdn_table[indx].vlan_id == vlan_id))
+				{
+						ret = true;
+						break;
+				}
+
+	            /* Special case when mac is NULL. Passthrough will be enabled for first client. */
+				/* Device type will be specified as MAX to support WLAN/USB/ETH clients and
+				 * VLAN id can be 0 in case of WLAN or non VLAN interface. */
+				if (ip_pass_mpdn_table[indx].ip_pass_skip_nat &&
+					(memcmp(ip_pass_mpdn_table[indx].ip_pass_mac, null_mac, IPA_MAC_ADDR_SIZE) == 0) &&
+					(ip_pass_mpdn_table[indx].ip_pass_dev_type == IPACM_CLIENT_DEVICE_MAX) &&
+					((ip_pass_mpdn_table[indx].vlan_id == vlan_id) ||
+					(ip_pass_mpdn_table[indx].is_default_pdn && vlan_id == 0)))
+				{
+						ret = true;
+						break;
+				}
+
+				/* Special case for IPACM_CLIENT_DEVICE_TYPE_USB with mac is NULL. */
+				if ((ip_pass_mpdn_table[indx].ip_pass_dev_type == dev_type) &&
+					(dev_type == IPACM_CLIENT_DEVICE_TYPE_USB) &&
+					(memcmp(ip_pass_mpdn_table[indx].ip_pass_mac, null_mac, IPA_MAC_ADDR_SIZE) == 0) &&
+					((ip_pass_mpdn_table[indx].vlan_id == vlan_id) ||
+					(ip_pass_mpdn_table[indx].is_default_pdn && vlan_id == 0)))
+				{
+						ret = true;
+						break;
+				}
+			}
+		}
+
+		pthread_mutex_unlock(&ip_pass_mpdn_lock);
+		return ret;
+	}
+
+	void ip_pass_config_update(ipa_ioc_pdn_config *pdn_config);
+
 	const char* getEventName(ipa_cm_event_id event_id);
+
+	void add_dummy_vlan_mapping(char *bridge_iface, char* client_iface, int if_index);
+	void del_dummy_vlan_mapping(char *bridge_iface, char* client_iface, int if_index);
+	bool is_dummy_VID(uint16_t vid);
 
 	inline void increaseFltRuleCount(int index, ipa_ip_type iptype, int increment)
 	{

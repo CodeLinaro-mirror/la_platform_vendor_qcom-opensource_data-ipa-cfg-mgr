@@ -86,6 +86,10 @@ IPACM_ConntrackListener::IPACM_ConntrackListener() :
 	 isNatThreadStart = false;
 	 isCTReg = false;
 	 WanUp = false;
+	 ip_pass_enable_default_pdn = 0;
+	 ip_pass_dummy_ip_default_pdn = 0;
+	 ip_pass_skip_nat_default_pdn = 0;
+
 	 nat_inst = NatApp::GetInstance();
 
 	 NatIfaceCnt = 0;
@@ -133,6 +137,7 @@ IPACM_ConntrackListener::IPACM_ConntrackListener() :
 #ifdef IPA_L2TP_TUNNEL_UDP
 	 IPACM_EvtDispatcher::registr(IPA_HANDLE_WAN_L2TP_VLAN_DOWN, this);
 #endif
+	 IPACM_EvtDispatcher::registr(IPA_HANDLE_IP_PASS_PDN_INFO_UPDATE_EVENT, this);
 
 #ifdef CT_OPT
 	 p_lan2lan = IPACM_LanToLan::getLan2LanInstance();
@@ -284,6 +289,11 @@ void IPACM_ConntrackListener::event_callback(ipa_cm_event_id evt,
 			}
 			break;
 #endif
+
+	 case IPA_HANDLE_IP_PASS_PDN_INFO_UPDATE_EVENT:
+			IPACMDBG_H("Received IPA_HANDLE_IP_PASS_PDN_INFO_UPDATE_EVENT event\n");
+			HandleIPPassPDNInfoUpdate(data);
+			break;
 
 	 case IPA_HANDLE_WAN_DOWN:
 			IPACMDBG_H("Received IPA_HANDLE_WAN_DOWN event\n");
@@ -822,6 +832,55 @@ void IPACM_ConntrackListener::HandleNeighIpAddrAddEvt(
 	return;
 }
 
+void IPACM_ConntrackListener::HandleIPPassPDNInfoUpdate(void *in_param)
+{
+	ipacm_event_vlan_pdn *pdn_data = (ipacm_event_vlan_pdn *)in_param;
+	IPACMDBG_H("Recevied below information after VLAN PDN up,\n");
+	IPACMDBG_H("PDN IP 0x%x\n", pdn_data->ipv4_addr);
+	IPACMDBG_H("ip_passthrough: %d, ip_pass_dummy_ip:0x%x, ip_pass_skip_nat %d\n",
+		pdn_data->ip_pass_enable,
+		pdn_data->ip_pass_dummy_ip,
+		pdn_data->ip_pass_skip_nat);
+
+	if(nat_inst == NULL)
+	{
+		IPACMERR(" no nat_inst\n");
+		return;
+	}
+
+#ifdef FEATURE_VLAN_MPDN
+	if(IPACM_Iface::ipacmcfg->ipacm_mpdn_enable)
+	{
+		for(int i = 0; i < IPA_MAX_NUM_HW_PDNS; i++)
+		{
+			if(vlan_pdns[i].public_ip == pdn_data->ipv4_addr)
+			{
+				IPACMDBG_H("Updating pdn entry in %d\n", i);
+				vlan_pdns[i].ip_pass_dummy_ip = pdn_data->ip_pass_dummy_ip;
+				vlan_pdns[i].ip_pass_enable = pdn_data->ip_pass_enable;
+				vlan_pdns[i].ip_pass_skip_nat = pdn_data->ip_pass_skip_nat;
+				if (pdn_data->ip_pass_enable && !pdn_data->ip_pass_skip_nat)
+					nat_inst->DelDummyNatEntries(vlan_pdns[i].public_ip);
+				return;
+			}
+		}
+	}
+#endif
+	if(WanUp && !isStaMode)
+	{
+		if(pdn_data->ipv4_addr == wan_ipaddr)
+		{
+				IPACMDBG_H("Updating default pdn info, ip_pass_enable_default_pdn %d\n", ip_pass_enable_default_pdn);
+				ip_pass_dummy_ip_default_pdn = pdn_data->ip_pass_dummy_ip;
+				ip_pass_enable_default_pdn = pdn_data->ip_pass_enable;
+				ip_pass_skip_nat_default_pdn = pdn_data->ip_pass_skip_nat;
+				if (pdn_data->ip_pass_enable && !pdn_data->ip_pass_skip_nat)
+					nat_inst->DelDummyNatEntries(wan_ipaddr);
+		}
+	}
+	return;
+}
+
 void IPACM_ConntrackListener::HandleNeighIpAddrAddEvt_v6(ipacm_event_data_all *data)
 {
 	IPACMDBG_H("\n");
@@ -1207,6 +1266,10 @@ void IPACM_ConntrackListener::HandleVlanUp(void *in_param)
 		vlanup_data->iptype,
 		vlanup_data->VlanID,
 		vlanup_data->mux_id);
+	IPACMDBG_H("ip_passthrough: %d, ip_pass_dummy_ip:%d, ip_pass_skip_nat %d\n",
+		vlanup_data->ip_pass_enable,
+		vlanup_data->ip_pass_dummy_ip,
+		vlanup_data->ip_pass_skip_nat);
 	if(nat_inst == NULL)
 	{
 		IPACMERR(" no nat_inst\n");
@@ -1264,7 +1327,9 @@ void IPACM_ConntrackListener::HandleVlanUp(void *in_param)
 	}
 	else
 	{
-		if(nat_inst->AddPdn(vlanup_data->ipv4_addr, vlanup_data->mux_id, false))
+		IPACMDBG_H("ipv4 address for new PDN 0x%X\n", vlanup_data->ipv4_addr);
+		if(nat_inst->AddPdn(vlanup_data->ipv4_addr, vlanup_data->mux_id, false,
+			(vlanup_data->ip_pass_enable && !vlanup_data->ip_pass_skip_nat)))
 		{
 			IPACMERR("failed adding pdn, num_vlan_pdns %d\n", num_vlan_pdns);
 		}
@@ -1298,6 +1363,9 @@ void IPACM_ConntrackListener::HandleVlanUp(void *in_param)
 					vlan_pdns[i].public_ip = vlanup_data->ipv4_addr;
 					vlan_pdns[i].associated_VIDs[vlan_pdns[i].VID_cnt] = vlanup_data->VlanID;
 					vlan_pdns[i].VID_cnt++;
+					vlan_pdns[i].ip_pass_enable = vlanup_data->ip_pass_enable;
+					vlan_pdns[i].ip_pass_dummy_ip = vlanup_data->ip_pass_dummy_ip;
+					vlan_pdns[i].ip_pass_skip_nat = vlanup_data->ip_pass_skip_nat;
 					num_vlan_pdns++;
 					break;
 				}
@@ -1367,9 +1435,9 @@ void IPACM_ConntrackListener::TriggerWANUp(void *in_param)
 	   	 mux_id = wanup_data->mux_id;
 #ifdef FEATURE_VLAN_MPDN
 	   if(wanup_data->is_sta)
-		   nat_inst->AddPdn(wanup_data->ipv4_addr, mux_id, true);
+		nat_inst->AddPdn(wanup_data->ipv4_addr, mux_id, true);
 	   else
-		   nat_inst->AddPdn(wanup_data->ipv4_addr, mux_id, false);
+		nat_inst->AddPdn(wanup_data->ipv4_addr, mux_id, false, (ip_pass_enable_default_pdn && !ip_pass_skip_nat_default_pdn));
 #else
 		 nat_inst->AddTable(wanup_data->ipv4_addr, mux_id, isStaMode);
 #endif
@@ -1521,6 +1589,9 @@ void IPACM_ConntrackListener::HandleVlanDown(void *in_param)
 				vlan_pdns[i].public_ip = 0;
 				memset(vlan_pdns[i].associated_VIDs, 0, IPA_MAX_NUM_SW_PDNS * sizeof(vlan_pdns[i].associated_VIDs[0]));
 				vlan_pdns[i].VID_cnt = 0;
+				vlan_pdns[i].ip_pass_dummy_ip = 0;
+				vlan_pdns[i].ip_pass_enable = 0;
+				vlan_pdns[i].ip_pass_skip_nat = 0;
 				num_vlan_pdns--;
 				break;
 			}
@@ -1585,12 +1656,20 @@ void IPACM_ConntrackListener::TriggerWANDown(uint32_t wan_addr)
 		if(wan_addr == wan_ipaddr)
 		{
 			WanUp = false;
+			wan_ipaddr = 0;
+			ip_pass_enable_default_pdn = 0;
+			ip_pass_skip_nat_default_pdn = 0;
+			ip_pass_dummy_ip_default_pdn = 0;
 		}
 	}
 	else
 #endif
 	{
 		WanUp = false;
+		wan_ipaddr = 0;
+		ip_pass_enable_default_pdn = 0;
+		ip_pass_skip_nat_default_pdn = 0;
+		ip_pass_dummy_ip_default_pdn = 0;
 	}
 
 	if(nat_inst != NULL)
@@ -2061,7 +2140,8 @@ void IPACM_ConntrackListener::PostSocksv5Ready(ipa_socksv5_msg* data_evt_conn)
 #endif //defined(FEATURE_SOCKSv5) && defined (IPA_SOCKV5_EVENT_MAX)
 
 bool IPACM_ConntrackListener::AddIface(
-   nat_table_entry *rule, bool *isTempEntry)
+   nat_table_entry *rule, bool *isTempEntry, bool IsVlanUp,
+   uint8_t ip_pass_enable, uint32_t ip_pass_dummy_ip, uint8_t ip_pass_skip_nat)
 {
 	int cnt;
 
@@ -2072,9 +2152,9 @@ bool IPACM_ConntrackListener::AddIface(
 	 */
 #ifndef FEATURE_IPPASS_WA
 	/* Special handling for Passthrough IP. */
-	if (IPACM_Iface::ipacmcfg->ipacm_ip_passthrough_mode)
+	if (ip_pass_enable)
 	{
-		if (rule->private_ip == IPACM_Wan::getWANIP())
+		if (rule->private_ip == ip_pass_dummy_ip)
 		{
 			IPACMDBG("In Passthrough mode and entry matched with Wan IP (0x%x)\n",
 				rule->private_ip);
@@ -2093,6 +2173,28 @@ bool IPACM_ConntrackListener::AddIface(
 	if(nat_inst->isAlgPort(rule->protocol, rule->private_port) ||
 		 nat_inst->isAlgPort(rule->protocol, rule->target_port)) {
 
+		/* Special handling for Passthrough IP. */
+		if (ip_pass_enable)
+		{
+			if (ip_pass_skip_nat)
+			{
+				/* In passthrough mode, dummy NAT is same as regular NAT. But add them as regular
+				 * NAT entries to be more specific.
+				 */
+				IPACMDBG("Allow ALG entries to be added to HW when NAT is skipped.\n");
+				return true;
+			}
+			else
+			{
+				/* Cannot add dummy NAT entries for ALG packets in Passthrough mode.
+				 * If we add dummy NAT entries, all packets will be forwarded to passthrough
+				 * client because of destination route.
+				 */
+				IPACMDBG("Do not add dummy NAT entries for ALG packets in passthrough mode.\n");
+				return false;
+			}
+		}
+
 		IPACMDBG("ALG port connection, prot=%u, private_port=%u, target_port=%u\n",
 			rule->protocol, rule->private_port, rule->target_port);
 
@@ -2110,7 +2212,8 @@ bool IPACM_ConntrackListener::AddIface(
 			rule->public_ip, rule->public_port);
 		rule->private_ip = rule->public_ip;
 		rule->private_port = rule->public_port;
-			return true;
+		rule->dummy_nat = true;
+		return true;
 	}
 
 	/* check whether nat iface or not */
@@ -2129,7 +2232,8 @@ bool IPACM_ConntrackListener::AddIface(
 		}
 	}
 
-	if (!isStaMode)
+	/* In Passthrough mode, cannot add dummy NAT entries. */
+	if (!isStaMode && !ip_pass_enable)
 	{
 		/* check whether non nat iface or not, on Non Nat iface
 		   add dummy rule by copying public ip to private ip */
@@ -2146,6 +2250,7 @@ bool IPACM_ConntrackListener::AddIface(
 
 					rule->private_ip = rule->public_ip;
 					rule->private_port = rule->public_port;
+					rule->dummy_nat = true;
 					return true;
 				}
 			}
@@ -2697,7 +2802,9 @@ void IPACM_ConntrackListener::ProcessTCPorUDPMsg(
 	 bool embedded_vlan = false;
 #endif
 	 bool isAdd = false;
-
+	 uint8_t ip_pass_enable = ip_pass_enable_default_pdn;
+	 uint32_t ip_pass_dummy_ip = ip_pass_dummy_ip_default_pdn;
+	 uint8_t ip_pass_skip_nat = ip_pass_skip_nat_default_pdn;
 	 nat_entry_bundle nat_entry;
 	 nat_entry.isTempEntry = false;
 	 nat_entry.ct = ct;
@@ -2705,7 +2812,8 @@ void IPACM_ConntrackListener::ProcessTCPorUDPMsg(
 #ifdef FEATURE_VLAN_MPDN
 	 nat_entry.isVlan = false;
 	 nat_entry.IsVlanUp = false;
-	 int i, vlan_idx = 0;
+	 int vlan_idx = 0;
+	 int i = 0;
 #endif
 
  	 memset(&rule, 0, sizeof(rule));
@@ -2768,6 +2876,9 @@ void IPACM_ConntrackListener::ProcessTCPorUDPMsg(
 							IPACMDBG_H("DST_NAT: vlan pdn already up for ");
 							iptodot("ip", orig_dst_ip);
 							nat_entry.IsVlanUp = true;
+							ip_pass_enable = vlan_pdns[i].ip_pass_enable;
+							ip_pass_dummy_ip = vlan_pdns[i].ip_pass_dummy_ip;
+							ip_pass_skip_nat = vlan_pdns[i].ip_pass_skip_nat;
 							break;
 						}
 					}
@@ -2807,6 +2918,9 @@ void IPACM_ConntrackListener::ProcessTCPorUDPMsg(
 							IPACMDBG_H("SRC_NAT: vlan pdn already up for ");
 							iptodot("ip", repl_dst_ip);
 							nat_entry.IsVlanUp = true;
+							ip_pass_enable = vlan_pdns[i].ip_pass_enable;
+							ip_pass_dummy_ip = vlan_pdns[i].ip_pass_dummy_ip;
+							ip_pass_skip_nat = vlan_pdns[i].ip_pass_skip_nat;
 							break;
 						}
 					}
@@ -2836,7 +2950,24 @@ void IPACM_ConntrackListener::ProcessTCPorUDPMsg(
 			IPACMDBG("orig src ip:0x%x equal to wan ip\n",orig_src_ip);
 			status = IPS_SRC_NAT;
 #ifdef FEATURE_VLAN_MPDN
+			/* For IPPT case, need check if it's vlan on default pdn */
 			public_ip = wan_ipaddr;
+			embedded_vlan = true;
+			nat_entry.isVlan = IsVlanIPv4(orig_src_ip, &VlanID);
+			if (nat_entry.isVlan)
+				nat_entry.IsVlanUp = true;
+			for(i = 0; i < IPA_MAX_NUM_HW_PDNS; i++)
+			{
+				if(orig_src_ip == vlan_pdns[i].public_ip)
+				{
+					if (vlan_pdns[i].ip_pass_enable)
+					{
+						ip_pass_enable = vlan_pdns[i].ip_pass_enable;
+						IPACMDBG_H("ip_pass_enable %d\n",ip_pass_enable);
+						break;
+					}
+				}
+			}
 #endif
 		}
 		else if(orig_dst_ip == wan_ipaddr)
@@ -2844,7 +2975,24 @@ void IPACM_ConntrackListener::ProcessTCPorUDPMsg(
 			IPACMDBG("orig Dst IP:0x%x equal to wan ip\n",orig_dst_ip);
 			status = IPS_DST_NAT;
 #ifdef FEATURE_VLAN_MPDN
+			/* For IPPT case, need check if it's vlan on default pdn */
 			public_ip = wan_ipaddr;
+			embedded_vlan = true;
+			nat_entry.isVlan = IsVlanIPv4(orig_dst_ip, &VlanID);
+			if (nat_entry.isVlan)
+				nat_entry.IsVlanUp = true;
+			for(i = 0; i < IPA_MAX_NUM_HW_PDNS; i++)
+			{
+				if(orig_dst_ip == vlan_pdns[i].public_ip)
+				{
+					if (vlan_pdns[i].ip_pass_enable)
+					{
+						ip_pass_enable = vlan_pdns[i].ip_pass_enable;
+						IPACMDBG_H("ip_pass_enable %d\n",ip_pass_enable);
+						break;
+					}
+				}
+			}
 #endif
 		}
 		else
@@ -2857,18 +3005,30 @@ void IPACM_ConntrackListener::ProcessTCPorUDPMsg(
 				/* check if we already got vlan_pdn_up event for this ip */
 				if(vlan_pdns[i].public_ip == orig_src_ip)
 				{
-					IPACMDBG("orig src ip:0x%x equal to vlan wan ip\n", orig_src_ip);
+					IPACMDBG_H("orig src ip:0x%x equal to vlan wan ip\n", orig_src_ip);
 					status = IPS_SRC_NAT;
 					public_ip = orig_src_ip;
 					embedded_vlan = true;
+					/* In case of IP Passthrough enabled, connection can belong to tethered client. */
+					if (vlan_pdns[i].ip_pass_enable)
+						nat_entry.isVlan = IsVlanIPv4(orig_src_ip, &VlanID);
+					if (nat_entry.isVlan)
+						nat_entry.IsVlanUp = true;
+					ip_pass_enable = vlan_pdns[i].ip_pass_enable;
 					break;
 				}
 				else if(vlan_pdns[i].public_ip == orig_dst_ip)
 				{
-					IPACMDBG("orig Dst IP:0x%x equal to wan ip\n", orig_dst_ip);
+					IPACMDBG_H("orig Dst IP:0x%x equal to wan ip\n", orig_dst_ip);
 					status = IPS_DST_NAT;
 					public_ip = orig_dst_ip;
 					embedded_vlan = true;
+					/* In case of IP Passthrough enabled, connection can belong to tethered client. */
+					if (vlan_pdns[i].ip_pass_enable)
+						nat_entry.isVlan = IsVlanIPv4(orig_dst_ip, &VlanID);
+					if (nat_entry.isVlan)
+						nat_entry.IsVlanUp = true;
+					ip_pass_enable = vlan_pdns[i].ip_pass_enable;
 					break;
 				}
 			}
@@ -2907,7 +3067,8 @@ void IPACM_ConntrackListener::ProcessTCPorUDPMsg(
 #endif
 		 )
 	 {
-		 isAdd = AddIface(&rule, &nat_entry.isTempEntry);
+		 isAdd = AddIface(&rule, &nat_entry.isTempEntry, nat_entry.IsVlanUp,
+		 	ip_pass_enable, ip_pass_dummy_ip, ip_pass_skip_nat);
 		 if (!isAdd)
 		 {
 			 goto IGNORE;
@@ -2925,6 +3086,8 @@ void IPACM_ConntrackListener::ProcessTCPorUDPMsg(
 		 IPACMDBG("Change private port %d to %d\n",
 				  rule.private_port, rule.public_port);
 		 rule.private_port = rule.public_port;
+		if (ip_pass_enable)
+			rule.ip_pass_entry = true;
 	 }
 
 	 CheckSTAClient(&rule, &nat_entry.isTempEntry);

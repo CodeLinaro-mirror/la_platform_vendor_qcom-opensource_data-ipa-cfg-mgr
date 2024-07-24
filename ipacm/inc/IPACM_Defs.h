@@ -29,7 +29,7 @@ OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
 IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 Changes from Qualcomm Innovation Center are provided under the following license:
-Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+Copyright (c) 2023-2024 Qualcomm Innovation Center, Inc. All rights reserved.
 SPDX-License-Identifier: BSD-3-Clause-Clear
 */
 /*!
@@ -113,9 +113,7 @@ extern "C"
 #define TCP_SYN_SHIFT 17
 #define TCP_RST_SHIFT 18
 #define MAX_CMD_SIZE 100
-
-/* WAN IP address in IP Passthrough mode. */
-#define IPACM_IPPASSTHROUGH_WAN_IP "169.254.5.1"
+#define DUMMY_VLAN_ID_BASE 4096
 
 #define IPACM_L2TP_DISABLE 0
 #define IPACM_L2TP 1
@@ -185,6 +183,7 @@ extern "C"
 #endif
 
 #define DUMMY_VLAN_ID_BASE 4096
+#define BRIDGE_0 "bridge0"
 
 /*===========================================================================
 										 GLOBAL DEFINITIONS AND DECLARATIONS
@@ -253,6 +252,7 @@ typedef enum
 	IPA_ETH_BRIDGE_IFACE_DOWN,                /* ipacm_event_eth_bridge*/
 	IPA_ETH_BRIDGE_CLIENT_ADD,                /* ipacm_event_eth_bridge */
 	IPA_ETH_BRIDGE_CLIENT_DEL,                /* ipacm_event_eth_bridge*/
+	IPA_CLIENT_CROSS_PRC_CTX,                 /* ipacm_event_eth_bridge*/
 	IPA_ETH_BRIDGE_WLAN_SCC_MCC_SWITCH,       /* ipacm_event_eth_bridge*/
 #ifdef FEATURE_VLAN_MPDN
 	IPA_ETH_BRIDGE_ADD_VLAN_ID,               /* ipacm_event_eth_bridge */
@@ -287,6 +287,10 @@ typedef enum
 	IPA_HANDLE_MACSEC_DEL,                    /* ipa_macsec_map */
 	IPA_WLAN_GW_ADDR_ADD_EVENT,               /* ipacm_event_data_addr */
 	IPA_CLEAN_NEIGHBOR_CACHE,                 /* ipacm_event_data_all */
+	IPA_LAN_CLIENT_ADD_EVENT,		  /* Add MAC based rule for lan2lan offload with static-ip */
+	IPA_LAN_CLIENT_DEL_EVENT,		  /* Del MAC based rule for lan2lan offload with static-ip */
+	IPA_IP_PASS_UPDATE_EVENT,			/* ipacm_ip_pass_pdn_info */
+	IPA_HANDLE_IP_PASS_PDN_INFO_UPDATE_EVENT,	/* Handle ip pass pdn info update.*/
 	IPACM_EVENT_MAX
 } ipa_cm_event_id;
 
@@ -479,12 +483,24 @@ typedef struct
 
 typedef struct
 {
+	uint8_t enable;
+	uint32_t pdn_ip_addr;
+	uint16_t VlanID;
+	uint8_t skip_nat;
+	int if_index;
+}ipacm_event_ip_pass_pdn_info;
+
+typedef struct
+{
 	enum ipa_ip_type iptype;
 	uint16_t VlanID;
 	int mux_id;
 	int ipv4_addr;
 	uint32_t ipv6_prefix[2];
 	bool is_xlat;
+	uint8_t ip_pass_enable;
+	uint32_t ip_pass_dummy_ip;
+	uint8_t ip_pass_skip_nat;
 }ipacm_event_vlan_pdn;
 
 typedef enum

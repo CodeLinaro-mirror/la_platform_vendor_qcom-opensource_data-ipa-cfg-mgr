@@ -177,6 +177,7 @@ public:
 	static bool wan_up;
 	static bool wan_up_v6;
 	static uint8_t xlat_mux_id;
+	uint32_t ipps_dft_v4_rt_rule_hdl;
 #ifdef FEATURE_VLAN_MPDN
 #ifdef FEATURE_IPACM_UL_FIREWALL
 	int num_firewall_v6_ul_pdn;
@@ -367,6 +368,9 @@ public:
 			IPACMERR("IPv6 address is empty.\n");
 			return false;
 		}
+
+		IPACMDBG_H("Received prefix: 0x%08x%08x\n", v6_addr[0], v6_addr[1]);
+
 		for(int i = 0; i < IPA_MAX_NUM_SW_PDNS; i++)
 		{
 			if(ipv6_to_iface[i].ipv6_prefix[0] == v6_addr[0] &&
@@ -374,6 +378,12 @@ public:
 			{
 				IPACMDBG_H("v6 prefix mached pdn %s\n", ipv6_to_iface[i].pIface->dev_name);
 				return true;
+			}
+			else
+			{
+				IPACMDBG_H("index: %d Current prefix: 0x%08x%08x\n", i,
+					ipv6_to_iface[i].ipv6_prefix[0],
+					ipv6_to_iface[i].ipv6_prefix[1]);
 			}
 		}
 		IPACMDBG_H("V6 prefix didnt match any active wan iface\n");
@@ -416,6 +426,7 @@ public:
 
 	ipacm_wan_iface_type m_is_sta_mode;
 	static bool backhaul_is_sta_mode;
+	ipacm_event_ip_pass_pdn_info ip_pass_pdn_info;
 	static bool is_ext_prop_set;
 	static uint32_t backhaul_ipv6_prefix[2];
 #ifdef FEATURE_IPACM_UL_FIREWALL

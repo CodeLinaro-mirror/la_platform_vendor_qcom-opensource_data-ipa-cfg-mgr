@@ -28,7 +28,7 @@
 * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 *
 * Changes from Qualcomm Innovation Center are provided under the following license:
-* Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+* Copyright (c) 2023-2024 Qualcomm Innovation Center, Inc. All rights reserved.
 * SPDX-License-Identifier: BSD-3-Clause-Clear
 */
 /*!
@@ -407,7 +407,8 @@ void IPACM_Iface::iface_addr_query
 (
 	int interface_index,
 	bool post_new_addr_event,
-	uint32_t *curr_ip4_addr
+	uint32_t *curr_ip4_addr,
+	uint32_t *curr_ip4_mask
 )
 {
 	int fd;
@@ -459,8 +460,21 @@ void IPACM_Iface::iface_addr_query
 			{
 				case AF_INET:
 				{
-					struct sockaddr_in *s4 = (struct sockaddr_in *)ifa->ifa_addr;
-					struct sockaddr_in *net_mask = (struct sockaddr_in *)ifa->ifa_netmask;
+					struct sockaddr_in *s4 = (struct sockaddr_in *)ifa->ifa_netmask;
+					struct sockaddr_in *net_mask = s4;
+					IPACMDBG_H("ipv4 netmask %s\n",inet_ntoa(s4->sin_addr));
+					iface_ipv4 = s4->sin_addr;
+					
+					if (curr_ip4_mask)
+					{
+						if(ntohl(iface_ipv4.s_addr) != (*curr_ip4_mask))
+						{
+							IPACMDBG_H("iface ip4 mask: (0x%x)\n", ntohl(iface_ipv4.s_addr));
+							*curr_ip4_mask = ntohl(iface_ipv4.s_addr);
+						}
+					}
+
+					s4 = (struct sockaddr_in *)ifa->ifa_addr;
 					IPACMDBG_H("ipv4 address %s\n",inet_ntoa(s4->sin_addr));
 					iface_ipv4 = s4->sin_addr;
 
@@ -515,6 +529,7 @@ void IPACM_Iface::iface_addr_query
 					{
 						IPACMDBG_H("post_new_addr_event is false\n");
 					}
+
 					break;
 				}
 				case AF_INET6:

@@ -27,7 +27,7 @@ OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
 IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 Changes from Qualcomm Innovation Center are provided under the following license:
-Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+Copyright (c) 2023-2024 Qualcomm Innovation Center, Inc. All rights reserved.
 SPDX-License-Identifier: BSD-3-Clause-Clear
 */
 /*!
@@ -267,6 +267,9 @@ int IPACM_IfaceManager::create_iface_instance(ipacm_ifacemgr_data *param)
 					return IPACM_FAILURE;
 				}
 				IPACM_EvtDispatcher::registr(IPA_ADDR_ADD_EVENT, lan);
+				/*lan2lan ipa offload with static IP*/
+				IPACM_EvtDispatcher::registr(IPA_LAN_CLIENT_ADD_EVENT, lan);
+				IPACM_EvtDispatcher::registr(IPA_LAN_CLIENT_DEL_EVENT, lan);
 				//IPACM_EvtDispatcher::registr(IPA_ROUTE_ADD_EVENT, lan);
 				//IPACM_EvtDispatcher::registr(IPA_ROUTE_DEL_EVENT, lan);
 				IPACM_EvtDispatcher::registr(IPA_NEIGH_CLIENT_IP_ADDR_ADD_EVENT, lan);
@@ -325,6 +328,9 @@ int IPACM_IfaceManager::create_iface_instance(ipacm_ifacemgr_data *param)
 					return IPACM_FAILURE;
 				}
 				IPACM_EvtDispatcher::registr(IPA_ADDR_ADD_EVENT, ETH);
+				/*lan2lan ipa offload with static IP*/
+				IPACM_EvtDispatcher::registr(IPA_LAN_CLIENT_ADD_EVENT, ETH);
+				IPACM_EvtDispatcher::registr(IPA_LAN_CLIENT_DEL_EVENT, ETH);
 				IPACM_EvtDispatcher::registr(IPA_NEIGH_CLIENT_IP_ADDR_ADD_EVENT, ETH);
 				IPACM_EvtDispatcher::registr(IPA_SW_ROUTING_ENABLE, ETH);
 				IPACM_EvtDispatcher::registr(IPA_SW_ROUTING_DISABLE, ETH);
@@ -367,6 +373,9 @@ int IPACM_IfaceManager::create_iface_instance(ipacm_ifacemgr_data *param)
 						return IPACM_FAILURE;
 					}
 					IPACM_EvtDispatcher::registr(IPA_ADDR_ADD_EVENT, odu);
+					/*lan2lan ipa offload with static IP*/
+					IPACM_EvtDispatcher::registr(IPA_LAN_CLIENT_ADD_EVENT, odu);
+					IPACM_EvtDispatcher::registr(IPA_LAN_CLIENT_DEL_EVENT, odu);
 					IPACM_EvtDispatcher::registr(IPA_NEIGH_CLIENT_IP_ADDR_ADD_EVENT, odu);
 					IPACM_EvtDispatcher::registr(IPA_NEIGH_CLIENT_IP_ADDR_DEL_EVENT, odu);
 					IPACM_EvtDispatcher::registr(IPA_SW_ROUTING_ENABLE, odu);
@@ -421,6 +430,9 @@ int IPACM_IfaceManager::create_iface_instance(ipacm_ifacemgr_data *param)
 						return IPACM_FAILURE;
 					}
 					IPACM_EvtDispatcher::registr(IPA_ADDR_ADD_EVENT, odu);
+					/*lan2lan ipa offload with static IP*/
+					IPACM_EvtDispatcher::registr(IPA_LAN_CLIENT_ADD_EVENT, odu);
+					IPACM_EvtDispatcher::registr(IPA_LAN_CLIENT_DEL_EVENT, odu);
 					IPACM_EvtDispatcher::registr(IPA_NEIGH_CLIENT_IP_ADDR_ADD_EVENT, odu);
 					IPACM_EvtDispatcher::registr(IPA_SW_ROUTING_ENABLE, odu);
 					IPACM_EvtDispatcher::registr(IPA_SW_ROUTING_DISABLE, odu);
@@ -451,6 +463,10 @@ int IPACM_IfaceManager::create_iface_instance(ipacm_ifacemgr_data *param)
 #ifdef FEATURE_IPv6CT_DISABLED
                                 IPACM_EvtDispatcher::registr(IPA_FIREWALL_CHANGE_EVENT, wl);			// register for Firewall change event
 #endif //FEATURE_IPACM_UL_FIREWALL
+				/*lan2lan ipa offload with static IP*/
+				IPACM_EvtDispatcher::registr(IPA_LAN_CLIENT_ADD_EVENT, wl);
+				IPACM_EvtDispatcher::registr(IPA_LAN_CLIENT_DEL_EVENT, wl);
+
 				IPACM_EvtDispatcher::registr(IPA_ROUTE_DEL_EVENT, wl);
 				IPACM_EvtDispatcher::registr(IPA_WLAN_CLIENT_ADD_EVENT, wl);
 				IPACM_EvtDispatcher::registr(IPA_WLAN_CLIENT_ADD_EVENT_EX, wl);
@@ -490,6 +506,9 @@ int IPACM_IfaceManager::create_iface_instance(ipacm_ifacemgr_data *param)
 #endif
 				/* IPA_LAN_DELETE_SELF should be always last */
 				IPACM_EvtDispatcher::registr(IPA_LAN_DELETE_SELF, wl);
+				IPACM_EvtDispatcher::registr(IPA_HANDLE_WAN_VLAN_PDN_UP, wl);
+				IPACM_EvtDispatcher::registr(IPA_HANDLE_WAN_VLAN_PDN_DOWN, wl);
+				IPACM_EvtDispatcher::registr(IPA_HANDLE_WAN_ADDR_ADD_V6, wl);
 				IPACMDBG_H("ipa_WLAN (%s):ipa_index (%d) instance open/registr ok\n", wl->dev_name, wl->ipa_if_num);
 				registr(ipa_interface_index, wl);
 				/* solve the new_addr comes earlier issue */
@@ -550,6 +569,7 @@ int IPACM_IfaceManager::create_iface_instance(ipacm_ifacemgr_data *param)
 					IPACM_EvtDispatcher::registr(IPA_SW_ROUTING_DISABLE, w);
 					IPACM_EvtDispatcher::registr(IPA_CFG_CHANGE_EVENT, w); 		// register for IPA_CFG_CHANGE event
 					IPACM_EvtDispatcher::registr(IPA_WAN_XLAT_CONNECT_EVENT, w);
+					IPACM_EvtDispatcher::registr(IPA_IP_PASS_UPDATE_EVENT, w);
 #ifdef FEATURE_L2TP
 					if (IPACM_Iface::ipacmcfg->ipacm_l2tp_enable == IPACM_L2TP_E2E)
 					{

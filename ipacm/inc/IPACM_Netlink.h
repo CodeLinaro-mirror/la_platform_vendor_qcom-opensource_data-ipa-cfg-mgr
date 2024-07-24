@@ -243,6 +243,11 @@ typedef struct
 	uint32_t dst_ipv6_addr[4];
 }ipa_nl_l2tp_info_t;
 
+typedef struct {
+    struct nlmsghdr nlh;
+    struct rtmsg rtm;
+} nl_request_t;
+
 /* Initialization routine for listener on NetLink sockets interface */
 int ipa_nl_listener_init
 (
@@ -263,6 +268,8 @@ int mask_v6(int index, uint32_t *mask);
 
 /*  get ipa interface name */
 int ipa_get_if_name(char *if_name, int if_index);
+
+int ipa_nl_send_getroute(ipa_ip_type ip_type);
 
 #ifdef __cplusplus
 }

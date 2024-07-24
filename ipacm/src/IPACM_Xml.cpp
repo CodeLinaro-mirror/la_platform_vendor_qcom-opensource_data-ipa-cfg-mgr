@@ -662,8 +662,8 @@ static int ipacm_cfg_xml_parse_tree
 )
 {
 	int32_t ret_val = IPACM_SUCCESS;
-	int str_size;
-	char* content;
+	int str_size = 0;
+	char* content = NULL;
 	struct ether_addr *eth_addr = NULL;
 
 	if (NULL == xml_node)
@@ -808,7 +808,7 @@ static int ipacm_cfg_xml_parse_tree
 					    if (0 == strncasecmp(content, IFACE_ROUTER_MODE_TAG, strlen(content)))
 					        config->iface_config.iface_entries[config->iface_config.num_iface_entries - 1].if_mode = ROUTER;
 
-					    else  if (0 == strncasecmp(content, IFACE_BRIDGE_MODE_TAG, str_size))
+					    else  if (0 == strncasecmp(content, IFACE_BRIDGE_MODE_TAG, strlen(content)))
 						config->iface_config.iface_entries[config->iface_config.num_iface_entries - 1].if_mode = BRIDGE;
 
 					    IPACMDBG_H("Iface mode %d\n", config->iface_config.iface_entries[config->iface_config.num_iface_entries - 1].if_mode);
@@ -826,7 +826,7 @@ static int ipacm_cfg_xml_parse_tree
 						IPACMDBG_H("Wlan-mode full(%d)\n",
 									config->iface_config.iface_entries[config->iface_config.num_iface_entries - 1].wlan_mode);
 					    }
-					    else if (0 == strncasecmp(content, WLAN_INTERNET_MODE_TAG, str_size))
+					    else if (0 == strncasecmp(content, WLAN_INTERNET_MODE_TAG, strlen(content)))
 					    {
 					        config->iface_config.iface_entries[config->iface_config.num_iface_entries - 1].wlan_mode = INTERNET;
 							config->num_wlan_guest_ap++;
@@ -874,6 +874,7 @@ static int ipacm_cfg_xml_parse_tree
 				{
 					config->nat_table_memtype = DDR_TABLETYPE_TAG;
 					content = IPACM_read_content_element(xml_node);
+					str_size = strlen(content);
 					if (content)
 					{
 					    if (0 == strncasecmp(content, DDR_TABLETYPE_TAG, str_size))
@@ -988,7 +989,6 @@ static int ipacm_cfg_xml_parse_tree
 						}
 						else
 						{
-							str_size = strlen(content);
 							config->ipacm_socksv5_enable = atoi(content);
 						}
 				}
@@ -1169,9 +1169,9 @@ static int IPACM_firewall_xml_parse_tree(const char *xml_file, xmlNode* xml_node
 {
 	int mask_value_v6, mask_index;
 	int32_t ret_val = IPACM_SUCCESS;
-	char *content;
-	int str_size;
-        struct in6_addr ip6_addr;
+	char *content = NULL;
+	int str_size = 0;
+        struct in6_addr ip6_addr = {0};
 
 	if (NULL == xml_node)
 		return IPACM_SUCCESS;

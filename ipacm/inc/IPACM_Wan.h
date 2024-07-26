@@ -269,7 +269,8 @@ public:
 	{
 		for(int i = 0; i < IPA_MAX_NUM_SW_PDNS; i++)
 		{
-			if(ipv4_to_iface[i].ipv4_addr && ipv4_to_iface[i].wan_up_vlan && ipv4_to_iface[i].pIface != NULL)
+			if(ipv4_to_iface[i].ipv4_addr && ipv4_to_iface[i].wan_up_vlan && ipv4_to_iface[i].pIface != NULL &&
+				ipv4_to_iface[i].pIface->m_is_sta_mode == Q6_WAN)
 			{
 				IPACMDBG_H("iface %s is vlan up\n", ipv4_to_iface[i].pIface->dev_name);
 				return true;
@@ -282,7 +283,8 @@ public:
 	{
 		for(int i = 0; i < IPA_MAX_NUM_SW_PDNS; i++)
 		{
-			if(ipv6_to_iface[i].wan_up_vlan_v6  && ipv6_to_iface[i].pIface != NULL)
+			if(ipv6_to_iface[i].wan_up_vlan_v6  && ipv6_to_iface[i].pIface != NULL &&
+				ipv6_to_iface[i].pIface->m_is_sta_mode == Q6_WAN)
 			{
 				IPACMDBG_H("iface %s is vlan up v6\n", ipv6_to_iface[i].pIface->dev_name);
 				return true;
@@ -486,7 +488,8 @@ private:
 	uint8_t ext_router_mac_addr[IPA_MAC_ADDR_SIZE];
 	uint8_t netdev_mac[IPA_MAC_ADDR_SIZE];
 
-	static uint32_t wan_route_rule_v6_hdl_a5;
+	static uint32_t wan_route_rule_lan_v6_hdl_a5;
+	static uint32_t wan_route_rule_wan_v6_hdl_a5;
 
 	static int num_ipv4_modem_pdn;
 

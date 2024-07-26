@@ -801,6 +801,7 @@ private:
 	int delete_all_wlan_client_qos_rules();
 	int delete_all_wlan_client_info_from_qos(
 		list<qos_param_info>::iterator qos_param);
+	int handle_wlan_r2_subnet(ipacm_event_new_neigh_vlan *param);
 };
 
 

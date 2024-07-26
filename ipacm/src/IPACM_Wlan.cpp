@@ -1184,9 +1184,17 @@ void IPACM_Wlan::event_callback(ipa_cm_event_id event, void *param)
 				}
 			}
 			// easy mesh R2 or vlan case
-			if (IPACM_Iface::ipacmcfg->iface_in_vlan_mode(data->iface_name) && is_vlan_event(data->iface_name)) {
+			if (IPACM_Iface::ipacmcfg->iface_in_vlan_mode(
+				    data->iface_name) &&
+			    is_vlan_event(data->iface_name)) {
 				IPACMDBG_H("Client is a vlan wlan client \n");
 				handle_wlan_vlan_neighbor(new_neigh_data);
+			} else {
+				if (IPACM_Iface::ipacmcfg->ipacm_emesh_enable &&
+				    IPACM_Iface::ipacmcfg->ipacm_emesh_mode >=
+					    2) {
+					handle_wlan_r2_subnet(new_neigh_data);
+				}
 			}
 
 		}
@@ -9735,6 +9743,16 @@ int IPACM_Wlan::set_svap_iface_mode(bool enable){
 bool IPACM_Wlan::is_vlan_iface(){
 	IPACMDBG_H("Is vlan %d iface %s\n", vlan_enabled_ap, dev_name);
 	return vlan_enabled_ap;
+}
+
+int IPACM_Wlan::handle_wlan_r2_subnet(ipacm_event_new_neigh_vlan *param)
+{
+	ipacm_event_new_neigh_vlan *new_neigh_data =
+		(ipacm_event_new_neigh_vlan *)param;
+	if (new_neigh_data->data_all.iptype == IPA_IP_v4) {
+		add_vlan_private_subnet(new_neigh_data->bridge);
+	}
+	return IPACM_SUCCESS;
 }
 
 int IPACM_Wlan::handle_wlan_vlan_neighbor(ipacm_event_new_neigh_vlan *param) {

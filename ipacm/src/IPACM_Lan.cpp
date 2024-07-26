@@ -568,7 +568,7 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 						if (j == 0) {
 							idx = 0;
 						} else {
-							IPACMDBG_H("Interface is non vlan, dont install rule with index 2");
+							IPACMDBG_H("Interface is non vlan, dont install rule with index 2\n");
 							continue;
 						}
 					} else {
@@ -2335,7 +2335,7 @@ int IPACM_Lan::add_mac_flt_blacklist_rule(uint8_t *mac_addr, ipa_ip_type iptype,
 			if (j == 0) {
 				idx = 0;
 			} else {
-				IPACMDBG_H("Interface is non vlan, dont install rule with index 2");
+				IPACMDBG_H("Interface is non vlan, dont install rule with index 2\n");
 				continue;
 			}
 		} else {
@@ -2873,7 +2873,7 @@ int IPACM_Lan::del_ul_flt_rules(enum ipa_ip_type iptype)
 			if (j == 0) {
 				idx = 0;
 			} else {
-				IPACMDBG_H("Interface is non vlan, dont install rule with index 2");
+				IPACMDBG_H("Interface is non vlan, dont install rule with index 2\n");
 				continue;
 			}
 		} else {
@@ -3719,7 +3719,7 @@ int IPACM_Lan::notify_flt_removed(uint8_t mux_id)
 			if (j == 0) {
 				idx = 0;
 			} else {
-				IPACMDBG_H("Interface is non vlan, dont install rule with index 2");
+				IPACMDBG_H("Interface is non vlan, dont install rule with index 2\n");
 				continue;
 			}
 		} else {
@@ -3780,7 +3780,7 @@ int IPACM_Lan::handle_wan_down(bool is_sta_mode)
 			if (j == 0) {
 				idx = 0;
 			} else {
-				IPACMDBG_H("Interface is non vlan, dont install rule with index 2");
+				IPACMDBG_H("Interface is non vlan, dont install rule with index 2\n");
 				continue;
 			}
 		} else {
@@ -4086,7 +4086,7 @@ int IPACM_Lan::handle_private_subnet(ipa_ip_type iptype)
 			if (j == 0) {
 				idx = 0;
 			} else {
-				IPACMDBG_H("Interface is non vlan, dont install rule with index 2");
+				IPACMDBG_H("Interface is non vlan, dont install rule with index 2\n");
 				continue;
 			}
 		} else {
@@ -4348,7 +4348,7 @@ int IPACM_Lan::handle_wan_up(ipa_ip_type ip_type)
 			if (j == 0) {
 				idx = 0;
 			} else {
-				IPACMDBG_H("Interface is non vlan, dont install rule with index 2");
+				IPACMDBG_H("Interface is non vlan, dont install rule with index 2\n");
 				continue;
 			}
 		} else {
@@ -10968,7 +10968,7 @@ int IPACM_Lan::handle_down_evt()
 			if (j == 0) {
 				idx = 0;
 			} else {
-				IPACMDBG_H("Interface is non vlan, dont install rule with index 2");
+				IPACMDBG_H("Interface is non vlan, dont install rule with index 2\n");
 				continue;
 			}
 		} else {
@@ -11580,7 +11580,7 @@ int IPACM_Lan::handle_uplink_filter_rule(ipacm_ext_prop *prop, ipa_ip_type iptyp
 			if (j == 0) {
 				idx = 0;
 			} else {
-				IPACMDBG_H("Interface is non vlan, dont install rule with index 2");
+				IPACMDBG_H("Interface is non vlan, dont install rule with index 2\n");
 				continue;
 			}
 		} else {
@@ -12041,7 +12041,7 @@ int IPACM_Lan::delete_uplink_filter_rule_ul(ul_firewall_t *ul_firewall)
 			if (j == 0) {
 				idx = 0;
 			} else {
-				IPACMDBG_H("Interface is non vlan, dont install rule with index 2");
+				IPACMDBG_H("Interface is non vlan, dont install rule with index 2\n");
 				continue;
 			}
 		} else {
@@ -12134,7 +12134,7 @@ int IPACM_Lan::install_wan_firewall_rule_ul(bool enable, int vid, int num_of_ul_
 			if (j == 0) {
 				idx = 0;
 			} else {
-				IPACMDBG_H("Interface is non vlan, dont install rule with index 2");
+				IPACMDBG_H("Interface is non vlan, dont install rule with index 2\n");
 				continue;
 			}
 		} else {
@@ -12214,7 +12214,7 @@ int IPACM_Lan::config_wan_frag_firewall_rule_ul_ex(ul_firewall_t *ul_firewall, i
 			if (j == 0) {
 				idx = 0;
 			} else {
-				IPACMDBG_H("Interface is non vlan, dont install rule with index 2");
+				IPACMDBG_H("Interface is non vlan, dont install rule with index 2\n");
 				continue;
 			}
 		} else {
@@ -12375,7 +12375,7 @@ int IPACM_Lan::config_dft_firewall_rules_ul_ex(IPACM_firewall_conf_t* firewall_c
 			if (j == 0) {
 				idx = 0;
 			} else {
-				IPACMDBG_H("Interface is non vlan, dont install rule with index 2");
+				IPACMDBG_H("Interface is non vlan, dont install rule with index 2\n");
 				continue;
 			}
 		} else {
@@ -12772,7 +12772,7 @@ int IPACM_Lan::config_dft_firewall_rules_ul_ex(IPACM_firewall_conf_t* firewall_c
 			if (j == 0) {
 				idx = 0;
 			} else {
-				IPACMDBG_H("Interface is non vlan, dont install rule with index 2");
+				IPACMDBG_H("Interface is non vlan, dont install rule with index 2\n");
 				continue;
 			}
 		} else {
@@ -13024,7 +13024,7 @@ int IPACM_Lan::config_dft_firewall_rules_ul(IPACM_firewall_conf_t* firewall_conf
 			if (j == 0) {
 				idx = 0;
 			} else {
-				IPACMDBG_H("Interface is non vlan, dont install rule with index 2");
+				IPACMDBG_H("Interface is non vlan, dont install rule with index 2\n");
 				continue;
 			}
 		} else {
@@ -14509,7 +14509,7 @@ int IPACM_Lan::handle_wan_down_v6(bool is_sta_mode, bool is_support_mpdn)
 				if (j == 0) {
 					idx = 0;
 				} else {
-					IPACMDBG_H("Interface is non vlan, dont install rule with index 2");
+					IPACMDBG_H("Interface is non vlan, dont install rule with index 2\n");
 					continue;
 				}
 			} else {
@@ -14732,7 +14732,7 @@ int IPACM_Lan::install_ipv4_icmp_flt_rule()
 			if (j == 0) {
 				idx = 0;
 			} else {
-				IPACMDBG_H("Interface is non vlan, dont install rule with index 2");
+				IPACMDBG_H("Interface is non vlan, dont install rule with index 2\n");
 				continue;
 			}
 		} else {
@@ -14818,7 +14818,7 @@ int IPACM_Lan::install_ipv6_icmp_flt_rule()
 			if (j == 0) {
 				idx = 0;
 			} else {
-				IPACMDBG_H("Interface is non vlan, dont install rule with index 2");
+				IPACMDBG_H("Interface is non vlan, dont install rule with index 2\n");
 				continue;
 			}
 		} else {
@@ -14983,7 +14983,7 @@ int IPACM_Lan::modify_private_subnet()
 			if (j == 0) {
 				idx = 0;
 			} else {
-				IPACMDBG_H("Interface is non vlan, dont install rule with index 2");
+				IPACMDBG_H("Interface is non vlan, dont install rule with index 2\n");
 				continue;
 			}
 		} else {
@@ -15255,7 +15255,7 @@ int IPACM_Lan::modify_ipv6_prefix_flt_rule()
 			if (j == 0) {
 				idx = 0;
 			} else {
-				IPACMDBG_H("Interface is non vlan, dont install rule with index 2");
+				IPACMDBG_H("Interface is non vlan, dont install rule with index 2\n");
 				continue;
 			}
 		} else {
@@ -15704,7 +15704,7 @@ int IPACM_Lan::install_ipv6_prefix_flt_rule(uint32_t* prefix)
 			if (j == 0) {
 				idx = 0;
 			} else {
-				IPACMDBG_H("Interface is non vlan, dont install rule with index 2");
+				IPACMDBG_H("Interface is non vlan, dont install rule with index 2\n");
 				continue;
 			}
 		} else {
@@ -15819,7 +15819,7 @@ void IPACM_Lan::delete_ipv6_prefix_flt_rule()
 			if (j == 0) {
 				idx = 0;
 			} else {
-				IPACMDBG_H("Interface is non vlan, dont install rule with index 2");
+				IPACMDBG_H("Interface is non vlan, dont install rule with index 2\n");
 				continue;
 			}
 		} else {
@@ -15998,7 +15998,7 @@ int IPACM_Lan::handle_cradle_wan_mode_switch(bool is_wan_bridge_mode)
 			if ( j == 0 ) {
 				idx = 0 ;
 			} else {
-				IPACMDBG_H("Interface is non vlan, dont install rule with index 2");
+				IPACMDBG_H("Interface is non vlan, dont install rule with index 2\n");
 				continue;
 			}
 		} else {
@@ -18318,7 +18318,7 @@ int IPACM_Lan::add_tcp_syn_flt_rule(ipa_ip_type iptype)
 			if ( j == 0 ) {
 				idx = 0 ;
 			} else {
-				IPACMDBG_H("Interface is non vlan, dont install rule with index 2");
+				IPACMDBG_H("Interface is non vlan, dont install rule with index 2\n");
 				continue;
 			}
 		} else {
@@ -19263,7 +19263,7 @@ int IPACM_Lan::handle_mpdn_ul_xlat_filter_rule(ipacm_ext_prop * prop,
 			if ( j == 0 ) {
 				idx = 0 ;
 			} else {
-				IPACMDBG_H("Interface is non vlan, dont install rule with index 2");
+				IPACMDBG_H("Interface is non vlan, dont install rule with index 2\n");
 				continue;
 			}
 		} else {
@@ -19543,7 +19543,7 @@ int IPACM_Lan::delete_icmp_filter_rule(
 			if (j == 0) {
 				idx = 0;
 			} else {
-				IPACMDBG_H("Interface is non vlan, dont install rule with index 2");
+				IPACMDBG_H("Interface is non vlan, dont install rule with index 2\n");
 				continue;
 			}
 		} else {

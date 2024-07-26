@@ -488,6 +488,11 @@ int IPACM_Wan::Getv6addrByName(char* pdn_name, uint32_t* ipv6_addr)
 {
 	for(int i = 0; i < IPA_MAX_NUM_SW_PDNS; i++)
 	{
+		if(ipv6_to_iface[i].pIface == NULL)
+		{
+			IPACMERR("PDN %s is down\n", pdn_name);
+			continue;
+		}
 		if(strncmp(pdn_name, ipv6_to_iface[i].pIface->dev_name, sizeof(pdn_name)) == 0)
 		{
 			memcpy(ipv6_addr, ipv6_to_iface[i].pIface->m_ipv6_addr, sizeof(ipv6_to_iface[i].pIface->m_ipv6_addr));

@@ -213,7 +213,10 @@ const char *ipacm_event_name[] = {
 	__stringify(IPA_HANDLE_IPSEC_UL_FLT_DEL),              /* Handle IPsec UL policy flt delete */
 	__stringify(IPA_IPSEC_LAN_CLIENT_ROUTE_ADD_EVENT),     /* Internal event for a new LAN client route */
 #endif
-	__stringify(IPACM_EVENT_MAX),
+	__stringify(IPA_QOS_RULE_ADD_EVENT),                   /* ipacm_qos_rule_add_event */
+	__stringify(IPA_QOS_RULE_DEL_EVENT),                   /* ipacm_qos_rule_del_event */
+	__stringify(IPA_QOS_RULE_FLUSH_EVENT),                 /* ipacm_qos_rule_flush_event */
+	__stringify(IPACM_EVENT_MAX)
 };
 
 IPACM_Config::IPACM_Config()
@@ -256,6 +259,7 @@ IPACM_Config::IPACM_Config()
 	ipacm_mpdn_enable = TRUE;   /* default setting as mpdn enable/l2tp disable */
 	ipacm_socksv5_enable = false;
 	ipacm_flt_enable = 0;
+	ipacm_qos_enable = false;
 
 	memset(&rt_tbl_default_v4, 0, sizeof(rt_tbl_default_v4));
 	memset(&rt_tbl_lan_v4, 0, sizeof(rt_tbl_lan_v4));
@@ -307,6 +311,8 @@ IPACM_Config::IPACM_Config()
 	pthread_mutex_init(&vlan_l2tp_lock, NULL);
 #endif
 	pthread_mutex_init(&nat_iface_lock, NULL);
+	pthread_mutex_init(&qos_param_list_lock, NULL);
+	pthread_mutex_init(&qos_param_list_lock, NULL);
 	IPACMDBG_H(" create IPACM_Config constructor\n");
 	pthread_mutex_init(&mac_flt_info_lock, NULL);
 #ifdef FEATURE_EoGRE
@@ -733,6 +739,8 @@ skip_fnr_alloc:
 #ifdef FEATURE_STATIC_POLICY
 	ipacm_static_policy_dscp_mark_mode = cfg->static_policy_dscp_mark_mode;
 #endif
+	ipacm_qos_enable = cfg->qos_mode;
+
 	if (ipacm_mpdn_enable == TRUE && ipacm_l2tp_enable != IPACM_L2TP_DISABLE)
 	{
 		IPACMERR("Not support both VLAN_MPDN and L2TP are enable \n");
@@ -2283,6 +2291,14 @@ bool IPACM_Config::iface_in_vlan_mode(const char *interfaceName) {
 		return (vlan_devices[IPA_VLAN_IF_WLAN] ||
 			((IPACM_Iface::ipacmcfg->ipacm_emesh_enable && IPACM_Iface::ipacmcfg->ipacm_emesh_mode >= 2) &&
 			is_svap_related(nameToCheck.c_str())) || IsWlanIfVlan(nameToCheck.c_str()));
+	}
+	if (strstr(nameToCheck.c_str(), "wlan")) {
+		IPACMDBG("wlan vlan mode %d\n", vlan_devices[IPA_VLAN_IF_WLAN]);
+		return (vlan_devices[IPA_VLAN_IF_WLAN] ||
+			((IPACM_Iface::ipacmcfg->ipacm_emesh_enable &&
+			  IPACM_Iface::ipacmcfg->ipacm_emesh_mode >= 2) &&
+			 is_svap_related(nameToCheck.c_str())) ||
+			IsWlanIfVlan(nameToCheck.c_str()));
 	}
 #endif
 
@@ -4257,4 +4273,302 @@ int IPACM_Config::SetSpclIface(char *event_iface_name) {
 			    if_name, IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].is_spcl_if);
 
 	return ret;
+}
+
+void IPACM_Config::add_qos_params_info(ipa_ioc_qos_config *data)
+{
+	list<qos_param_info>::iterator it_qos_params;
+	qos_param_info new_qos_info = { 0 };
+	ipacm_cmd_q_data evt_data;
+
+	if (data->dir == 1)
+	{
+		IPACMDBG_H("UL qos add params requested, no actions from ipa, dir : %d \n",data->dir);
+		return;
+	}
+
+	if(pthread_mutex_lock(&qos_param_list_lock) != 0)
+	{
+		IPACMERR("Unable to lock the mutex\n");
+		return;
+	}
+
+	IPACMDBG_H("add_qos_params_info called start 0x%x,       end 0x%x \n",
+			   m_qos_params.begin(), m_qos_params.end());
+	IPACMDBG_H("qos iface: %s vlan id: %d\n", data->dev_name, data->dir);
+	for (it_qos_params = m_qos_params.begin(); it_qos_params != m_qos_params.end(); it_qos_params++)
+	{
+		if(strncmp(data->dev_name, it_qos_params->iface_name, sizeof(data->dev_name)) == 0 &&
+		   (data->dir == it_qos_params->dir) &&
+		   (data->ip_type == it_qos_params->ip_type) &&
+		   (data->traffic_class == it_qos_params->traffic_class) &&
+		   (data->src_ip_addr == it_qos_params->ip_tup.src_ip_addr) &&
+		   (data->dst_ip_addr == it_qos_params->ip_tup.dst_ip_addr) &&
+		   (data->src_port_start == it_qos_params->ip_tup.sport_start) &&
+		   (data->src_port_end == it_qos_params->ip_tup.sport_end) &&
+		   (data->dst_port_start == it_qos_params->ip_tup.dport_start) &&
+		   (data->dst_port_end == it_qos_params->ip_tup.dport_end) &&
+		   (data->protocol == it_qos_params->ip_tup.protocol) &&
+		   (data->dscp == it_qos_params->dscp) &&
+		   (data->pcp == it_qos_params->pcp) &&
+		   !memcmp(it_qos_params->dst_mac_addr, data->dst_mac_addr, sizeof(new_qos_info.dst_mac_addr)) &&
+		   !memcmp(it_qos_params->ip_tup.src_v6_ip_addr, data->src_v6_ip_addr, sizeof(data->src_v6_ip_addr)) &&
+		   !memcmp(it_qos_params->ip_tup.dst_v6_ip_addr, data->dst_v6_ip_addr, sizeof(data->dst_v6_ip_addr))
+		   )
+		{
+			if (data->vlan_count)
+			{
+				for (uint16_t i = 0; i < data->vlan_count;i++)
+				{
+					if (data->vlan_ids[i] == it_qos_params->vlan_id)
+					{
+						IPACMDBG_H("The qos param was added before with vlan id %d for tc %d\n", it_qos_params->vlan_id, it_qos_params->traffic_class);
+						pthread_mutex_unlock(&qos_param_list_lock);
+						return;
+					}
+				}
+				IPACMERR("No matching vlan id %d for tc %d was found. Add a new entry\n", it_qos_params->vlan_id, it_qos_params->traffic_class);
+			}
+			else
+			{
+				IPACMERR("The qos param was added before with tc %d\n", it_qos_params->traffic_class);
+				pthread_mutex_unlock(&qos_param_list_lock);
+				return;
+			}
+		}
+	}
+
+	strlcpy(new_qos_info.iface_name, data->dev_name, sizeof(new_qos_info.iface_name));
+
+	new_qos_info.cat = data->iface_cat;
+	new_qos_info.dir = data->dir;
+	new_qos_info.ip_type = data->ip_type;
+	new_qos_info.traffic_class = data->traffic_class;
+
+	new_qos_info.ip_tup.src_ip_addr = data->src_ip_addr;
+	new_qos_info.ip_tup.src_sub_mask = data->src_subnet;
+	new_qos_info.ip_tup.dst_ip_addr = data->dst_ip_addr;
+	new_qos_info.ip_tup.dst_sub_mask = data->dst_subnet;
+
+	new_qos_info.ip_tup.src_v6_ip_addr[0] = data->src_v6_ip_addr[0];
+	new_qos_info.ip_tup.src_v6_ip_addr[1] = data->src_v6_ip_addr[1];
+	new_qos_info.ip_tup.src_v6_ip_addr[2] = data->src_v6_ip_addr[2];
+	new_qos_info.ip_tup.src_v6_ip_addr[3] = data->src_v6_ip_addr[3];
+	new_qos_info.ip_tup.src_v6_sub_mask[0] = data->src_v6_ip_subnet[0];
+	new_qos_info.ip_tup.src_v6_sub_mask[1] = data->src_v6_ip_subnet[1];
+	new_qos_info.ip_tup.src_v6_sub_mask[2] = data->src_v6_ip_subnet[2];
+	new_qos_info.ip_tup.src_v6_sub_mask[3] = data->src_v6_ip_subnet[3];
+
+	new_qos_info.ip_tup.dst_v6_ip_addr[0] = data->dst_v6_ip_addr[0];
+	new_qos_info.ip_tup.dst_v6_ip_addr[1] = data->dst_v6_ip_addr[1];
+	new_qos_info.ip_tup.dst_v6_ip_addr[2] = data->dst_v6_ip_addr[2];
+	new_qos_info.ip_tup.dst_v6_ip_addr[3] = data->dst_v6_ip_addr[3];
+	new_qos_info.ip_tup.dst_v6_sub_mask[0] = data->dst_v6_ip_subnet[0];
+	new_qos_info.ip_tup.dst_v6_sub_mask[1] = data->dst_v6_ip_subnet[1];
+	new_qos_info.ip_tup.dst_v6_sub_mask[2] = data->dst_v6_ip_subnet[2];
+	new_qos_info.ip_tup.dst_v6_sub_mask[3] = data->dst_v6_ip_subnet[3];
+
+	new_qos_info.ip_tup.sport_start = data->src_port_start;
+	new_qos_info.ip_tup.sport_end = data->src_port_end;
+	new_qos_info.ip_tup.dport_start = data->dst_port_start;
+	new_qos_info.ip_tup.dport_end = data->dst_port_end;
+
+	new_qos_info.ip_tup.protocol = data->protocol;
+
+	new_qos_info.ip_tup.vlan_count = data->vlan_count;
+
+	if (data->vlan_count)
+	{
+		for (int i = 0; i < new_qos_info.ip_tup.vlan_count; i++)
+		{
+			new_qos_info.vlan_id = data->vlan_ids[0];
+		}
+	}
+
+	memcpy(new_qos_info.src_mac_addr, data->src_mac_addr, sizeof(new_qos_info.src_mac_addr));
+	memcpy(new_qos_info.dst_mac_addr, data->dst_mac_addr, sizeof(new_qos_info.dst_mac_addr));
+
+	new_qos_info.dscp = data->dscp;
+	new_qos_info.pcp = data->pcp;
+
+	m_qos_params.push_front(new_qos_info);
+	pthread_mutex_unlock(&qos_param_list_lock);
+
+	m_qos_params.sort(
+		[](const qos_param_info &a, const qos_param_info &b) {
+			return a.traffic_class > b.traffic_class;
+	});
+
+	IPACMDBG_H("Added qos iface: %s vlan id: %d with traffic class :%d \n", data->dev_name, data->dir, data->traffic_class);
+	IPACMDBG_H("qos params list size now :%d \n", m_qos_params.size());
+
+
+	//Send qos rule add event
+	evt_data.event = IPA_QOS_RULE_ADD_EVENT;
+	qos_param_info *qos_param = NULL;
+	qos_param = (qos_param_info *)malloc(sizeof(qos_param_info));
+	if (qos_param == NULL)
+	{
+		IPACMERR("Unable to allocate memory\n");
+		return;
+	}
+	memset(qos_param, 0, sizeof(qos_param_info));
+	memcpy(qos_param, &new_qos_info, sizeof(qos_param_info));
+	evt_data.evt_data = (void *)qos_param;
+
+	IPACMDBG_H("Posting event %s\n",
+			   IPACM_Iface::ipacmcfg->getEventName(evt_data.event));
+	IPACM_EvtDispatcher::PostEvt(&evt_data);
+	IPACMDBG_H("Posted IPA_QOS_RULE_ADD_EVENT.\n");
+	return;
+}
+
+void IPACM_Config::delete_qos_params_info(ipa_ioc_qos_config *data)
+{
+	list<qos_param_info>::iterator it_qos_params;
+	qos_param_info new_qos_info;
+	qos_client_info new_client_info;
+	ipacm_cmd_q_data evt_data;
+	list<qos_client_info>::iterator it_qos_client;
+	int i = 0;
+
+	if (data->dir == 1)
+	{
+		IPACMDBG_H("UL qos delete params requested, no actions from ipa, dir : %d \n",data->dir);
+		return;
+	}
+
+	if(pthread_mutex_lock(&qos_param_list_lock) != 0)
+	{
+		IPACMERR("Unable to lock the mutex\n");
+		return;
+	}
+
+	IPACMDBG_H("qos iface: %s vlan id: %d\n", data->dev_name, data->dir);
+	for(it_qos_params = m_qos_params.begin(); it_qos_params != m_qos_params.end(); it_qos_params++)
+	{
+		if(strncmp(data->dev_name, it_qos_params->iface_name, sizeof(data->dev_name)) == 0 &&
+		   (data->dir == it_qos_params->dir) &&
+		   (data->ip_type == it_qos_params->ip_type) &&
+		   (data->traffic_class == it_qos_params->traffic_class) &&
+		   (data->src_ip_addr == it_qos_params->ip_tup.src_ip_addr) &&
+		   (data->dst_ip_addr == it_qos_params->ip_tup.dst_ip_addr) &&
+		   (data->src_port_start == it_qos_params->ip_tup.sport_start) &&
+		   (data->src_port_end == it_qos_params->ip_tup.sport_end) &&
+		   (data->dst_port_start == it_qos_params->ip_tup.dport_start) &&
+		   (data->dst_port_end == it_qos_params->ip_tup.dport_end) &&
+		   (data->protocol == it_qos_params->ip_tup.protocol) &&
+		   (data->dscp == it_qos_params->dscp) &&
+		   (data->pcp == it_qos_params->pcp) &&
+		   !memcmp(it_qos_params->dst_mac_addr, data->dst_mac_addr, sizeof(new_qos_info.dst_mac_addr)) &&
+		   !memcmp(it_qos_params->ip_tup.src_v6_ip_addr, data->src_v6_ip_addr, sizeof(data->src_v6_ip_addr)) &&
+		   !memcmp(it_qos_params->ip_tup.dst_v6_ip_addr, data->dst_v6_ip_addr, sizeof(data->dst_v6_ip_addr))
+		   )
+		{
+			//Send qos rule del event
+			evt_data.event = IPA_QOS_RULE_DEL_EVENT;
+			qos_delete_param_info *qos_param = NULL;
+			qos_param = (qos_delete_param_info *)malloc(sizeof(qos_delete_param_info) + it_qos_params->qos_client_list.size() * sizeof(qos_client_info));
+			if (qos_param == NULL)
+			{
+				IPACMERR("Unable to allocate memory\n");
+				return;
+			}
+
+			qos_param->client_cnt = it_qos_params->qos_client_list.size();
+			for (it_qos_client = it_qos_params->qos_client_list.begin(); it_qos_client != it_qos_params->qos_client_list.end(); ++it_qos_client)
+			{
+				qos_param->qos_client_list[i].qos_rt_rule_hdl_v4 = it_qos_client->qos_rt_rule_hdl_v4;
+
+				for (int v6_num = 0; v6_num < IPV6_NUM_ADDR; v6_num++)
+				{
+					qos_param->qos_client_list[i].qos_rt_rule_hdl_v6[v6_num] = it_qos_client->qos_rt_rule_hdl_v6[v6_num];
+					qos_param->qos_client_list[i].qos_rt_rule_hdl_wan_v6[v6_num] = it_qos_client->qos_rt_rule_hdl_wan_v6[v6_num];
+					IPACMDBG("v6 rule to delete v6_num %d rt hdl %d, wan hdl %d\n", v6_num,
+							 qos_param->qos_client_list[i].qos_rt_rule_hdl_v6[v6_num],
+							 qos_param->qos_client_list[i].qos_rt_rule_hdl_wan_v6[v6_num]);
+				}
+				qos_param->qos_client_list[i].route_rule_set_v4 = it_qos_client->route_rule_set_v4;
+				qos_param->qos_client_list[i].route_rule_set_v6 = it_qos_client->route_rule_set_v6;
+
+				i++;
+			}
+
+			evt_data.evt_data = (void *)qos_param;
+
+			IPACMDBG_H("Posting event %s\n",
+			   IPACM_Iface::ipacmcfg->getEventName(evt_data.event));
+			IPACM_EvtDispatcher::PostEvt(&evt_data);
+			IPACMDBG_H("Posted IPA_QOS_RULE_DEL_EVENT.\n");
+
+
+			m_qos_params.erase(it_qos_params);
+			break;
+		}
+	}
+
+	pthread_mutex_unlock(&qos_param_list_lock);
+
+	IPACMDBG_H("Deleted qos iface: %s vlan id: %d with traffic class :%d \n", data->dev_name, data->dir, data->traffic_class);
+	IPACMDBG_H("qos params list size now :%d \n", m_qos_params.size());
+	return;
+}
+
+void IPACM_Config::flush_qos_params_info(ipa_ioc_qos_config *data)
+{
+	list<qos_param_info>::iterator it_qos_params;
+	qos_param_info new_qos_info;
+	ipacm_cmd_q_data evt_data;
+	list<qos_client_info>::iterator it_qos_client;
+	int i = 0;
+
+	if(pthread_mutex_lock(&qos_param_list_lock) != 0)
+	{
+		IPACMERR("Unable to lock the mutex\n");
+		return;
+	}
+
+	IPACMDBG_H("qos iface: %s vlan id: %d\n", data->dev_name, data->dir);
+	for (it_qos_params = m_qos_params.begin(); it_qos_params != m_qos_params.end(); )
+	{
+		IPACMDBG_H("Flusing the qos parameters \n");
+		//Send qos rule del event
+		evt_data.event = IPA_QOS_RULE_DEL_EVENT;
+		qos_delete_param_info *qos_param = NULL;
+		qos_param = (qos_delete_param_info *)malloc(sizeof(qos_delete_param_info) + it_qos_params->qos_client_list.size() * sizeof(qos_client_info));
+		if (qos_param == NULL)
+		{
+			IPACMERR("Unable to allocate memory\n");
+			return;
+		}
+
+		qos_param->client_cnt = it_qos_params->qos_client_list.size();
+		for (it_qos_client = it_qos_params->qos_client_list.begin(); it_qos_client != it_qos_params->qos_client_list.end(); ++it_qos_client)
+		{
+			qos_param->qos_client_list[i].qos_rt_rule_hdl_v4 = it_qos_client->qos_rt_rule_hdl_v4;
+			for (int v6_num = 0; v6_num < IPV6_NUM_ADDR; v6_num++)
+			{
+				qos_param->qos_client_list[i].qos_rt_rule_hdl_v6[v6_num] = it_qos_client->qos_rt_rule_hdl_v6[v6_num];
+				qos_param->qos_client_list[i].qos_rt_rule_hdl_wan_v6[v6_num] = it_qos_client->qos_rt_rule_hdl_wan_v6[v6_num];
+			}
+			qos_param->qos_client_list[i].route_rule_set_v4 = it_qos_client->route_rule_set_v4;
+			qos_param->qos_client_list[i].route_rule_set_v6 = it_qos_client->route_rule_set_v6;
+
+			i++;
+		}
+
+		evt_data.evt_data = (void *)qos_param;
+
+		IPACMDBG_H("Posting event %s\n",
+				   IPACM_Iface::ipacmcfg->getEventName(evt_data.event));
+		IPACM_EvtDispatcher::PostEvt(&evt_data);
+		IPACMDBG_H("Posted IPA_QOS_RULE_DEL_EVENT.\n");
+
+		it_qos_params = m_qos_params.erase(it_qos_params);
+	}
+
+	pthread_mutex_unlock(&qos_param_list_lock);
+
+	IPACMDBG_H("Flushed qos params list size now :%d \n", m_qos_params.size());
+	return;
 }

@@ -474,6 +474,10 @@ int IPACM_IfaceManager::create_iface_instance(ipacm_ifacemgr_data *param)
 #ifdef FEATURE_STATIC_POLICY
 					IPACM_EvtDispatcher::registr(IPA_PDN_DSCP_UPDATE_EVENT, odu);
 #endif
+
+					IPACM_EvtDispatcher::registr(IPA_QOS_RULE_ADD_EVENT, odu);
+					IPACM_EvtDispatcher::registr(IPA_QOS_RULE_DEL_EVENT, odu);
+					IPACM_EvtDispatcher::registr(IPA_QOS_RULE_FLUSH_EVENT, odu);
 					/* IPA_LAN_DELETE_SELF should be always last */
 					IPACM_EvtDispatcher::registr(IPA_LAN_DELETE_SELF, odu);
 					IPACMDBG_H("ipa_LAN (%s):ipa_index (%d) instance open/registr ok\n", odu->dev_name, odu->ipa_if_num);
@@ -582,6 +586,10 @@ int IPACM_IfaceManager::create_iface_instance(ipacm_ifacemgr_data *param)
 #ifdef FEATURE_STATIC_POLICY
 				IPACM_EvtDispatcher::registr(IPA_PDN_DSCP_UPDATE_EVENT, wl);
 #endif
+
+				IPACM_EvtDispatcher::registr(IPA_QOS_RULE_ADD_EVENT, wl);
+				IPACM_EvtDispatcher::registr(IPA_QOS_RULE_DEL_EVENT, wl);
+				IPACM_EvtDispatcher::registr(IPA_QOS_RULE_FLUSH_EVENT, wl);
 				/* IPA_LAN_DELETE_SELF should be always last */
 				IPACM_EvtDispatcher::registr(IPA_LAN_DELETE_SELF, wl);
 				IPACMDBG_H("ipa_WLAN (%s):ipa_index (%d) instance open/registr ok\n", wl->dev_name, wl->ipa_if_num);

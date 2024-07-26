@@ -28,7 +28,7 @@ IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  * Changes from Qualcomm Innovation Center are provided under the following license:
  *
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted (subject to the limitations in the
@@ -397,8 +397,6 @@ public:
 	uint32_t static_policy_flt_rule_hdl_v6;
 	static uint32_t static_policy_rt_rule_hdl;
 	static uint32_t static_policy_proc_ctx_hdl;
-	uint32_t associated_pdn_cnt;
-	uint32_t associated_pdn_cnt_v6;
 	static uint32_t total_vlan_pdn_cnt;
 	static uint32_t total_vlan_pdn_cnt_v6;
 
@@ -694,6 +692,8 @@ public:
 	int add_socksv5_flt_rule(ipacm_event_connection *data_event_conn);
 	int del_socksv5_flt_rule(void);
 #endif
+
+	int install_default_qos_rt_rules(uint8_t *client_mac, uint16_t client_vlan_id, enum ipa_ip_type iptype);
 
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
 private:
@@ -1267,6 +1267,32 @@ protected:
 		return IPACM_FAILURE;
 	}
 
+#ifdef FEATURE_VLAN_MPDN
+	inline bool is_any_mux_up(ipa_ip_type iptype)
+	{
+		ipacm_mux_struct *mux = v4_mux_up;
+		bool res = false;
+
+		if(iptype == IPA_IP_v6)
+			mux = v6_mux_up;
+
+		for(int i = 0; i < IPA_MAX_NUM_HW_PDNS; i++)
+		{
+			if(mux[i].mux_id)
+			{
+				IPACMDBG("mux id %d up for dev %s, i = %d, iptype %d\n", mux[i].mux_id, dev_name, i, iptype);
+				res = true;
+			}
+		}
+
+		if(res)
+			return res;
+
+		IPACMDBG_H("no vlan mux up for dev %s, iptype %d\n", dev_name, iptype);
+		return false;
+	}
+#endif
+
 private:
 
 	/* get hdr proc ctx type given source and destination l2 hdr type */
@@ -1388,29 +1414,6 @@ private:
 		return IPACM_FAILURE;
 	}
 
-	inline bool is_any_mux_up(ipa_ip_type iptype)
-	{
-		ipacm_mux_struct *mux = v4_mux_up;
-		bool res = false;
-
-		if(iptype == IPA_IP_v6)
-			mux = v6_mux_up;
-
-		for(int i = 0; i < IPA_MAX_NUM_HW_PDNS; i++)
-		{
-			if(mux[i].mux_id)
-			{
-				IPACMDBG("mux id %d up for dev %s, i = %d, iptype %d\n", mux[i].mux_id, dev_name, i, iptype);
-				res = true;
-			}
-		}
-
-		if(res)
-			return res;
-
-		IPACMDBG_H("no vlan mux up for dev %s, iptype %d\n", dev_name, iptype);
-		return false;
-	}
 #endif
 	inline ipa_eth_client* get_client_memptr(ipa_eth_client *param, int cnt)
 	{
@@ -1649,7 +1652,6 @@ private:
 #endif
 #ifdef FEATURE_VLAN_MPDN
 	int handle_vlan_neighbor(ipacm_event_data_all *data);
-	int handle_vlan_phys_if_down();
 #endif
 
 	int construct_mtu_rule(struct ipa_flt_rule *rule, enum ipa_ip_type iptype, uint16_t mtu);
@@ -1662,6 +1664,7 @@ private:
 
 public:  //mike why we have 2 public. Why not just move this on top?
 #ifdef FEATURE_VLAN_MPDN
+	int handle_vlan_phys_if_down();
 	int check_vlan_PDNUp(enum ipa_ip_type iptype);
 	bool is_vlan_IF(uint16_t vlan_id);
 	int handle_vlan_pdn_up(ipacm_event_vlan_pdn *data, bool set_mux = true);
@@ -1730,6 +1733,17 @@ public:  //mike why we have 2 public. Why not just move this on top?
 #endif
 	int delete_icmp_filter_rule(
 		ipa_ip_type iptype);
+
+	uint32_t get_u8_bitmap_from_tc(uint8_t traffic_class);
+	int handle_qos_route_rule(uint8_t *client_mac, uint16_t vlan_id, ipa_ip_type iptype, list<qos_param_info>::iterator qos_param);
+	int handle_qos_route_rule_ext_v2(uint8_t *client_mac, uint16_t vlan_id,
+		ipa_ip_type iptype, list<qos_param_info>::iterator qos_param);
+	int install_all_qos_route_rule(uint8_t * client_mac, uint16_t vlan_id);
+	int if_client_qos_rule_needed(uint8_t *client_mac, uint16_t vlan_id, list<qos_param_info>::iterator qos_param);
+	int delete_client_qos_rule(uint8_t *client_mac, uint16_t vlan_id);
+	int delete_client_info_from_qos(uint8_t *client_mac, uint16_t vlan_id, list<qos_param_info>::iterator qos_param);
+	int delete_all_client_qos_rules();
+	int delete_all_client_info_from_qos(list<qos_param_info>::iterator qos_param);
 };
 
 #endif /* IPACM_LAN_H */

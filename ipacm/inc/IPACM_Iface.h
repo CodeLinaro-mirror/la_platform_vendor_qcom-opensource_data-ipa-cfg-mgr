@@ -108,7 +108,6 @@ using std::vector;
 #endif
 
 #define IPV6_DEFAULT_LAN_FILTERTING_RULES 1
-#define IPV6_NUM_ADDR 3
 #define MAX_SOFTWAREROUTING_FILTERTING_RULES 2
 #define INVALID_IFACE -1
 
@@ -195,6 +194,8 @@ public:
 
 	/* save client ipv6 address info and rt handles */
 	std::map<std::array<uint32_t, 4>, handleTypeV6> rt_hdl_v6_list[IPA_MAX_NUM_CLIENTS_IPV6];
+
+	uint32_t dft_qos_rt_rule_hdl[3];
 
 	ipa_ioc_query_intf *iface_query;
 	ipa_ioc_query_intf_tx_props *tx_prop;

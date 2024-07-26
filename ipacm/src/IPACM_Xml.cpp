@@ -206,7 +206,8 @@ static int ipacm_cfg_xml_parse_tree
 #endif
 						IPACM_util_icmp_string((char*)xml_node->name, PUBLIC_IP_SUPPORT_TAG) == 0 ||
 						IPACM_util_icmp_string((char*)xml_node->name, IPACM_WLAN_VLAN_MPDN) == 0 ||
-						IPACM_util_icmp_string((char*)xml_node->name, Static_Policy_TAG) == 0)
+						IPACM_util_icmp_string((char*)xml_node->name, Static_Policy_TAG) == 0 ||
+						IPACM_util_icmp_string((char*)xml_node->name, IPACM_QOS_TAG) == 0)
 				{
 					if (0 == IPACM_util_icmp_string((char*)xml_node->name, IFACE_TAG))
 					{
@@ -863,6 +864,28 @@ static int ipacm_cfg_xml_parse_tree
 					}
 				}
 #endif
+				else if (IPACM_util_icmp_string((char*)xml_node->name, IPACM_QOS_ENABLE_TAG) == 0)
+				{
+					IPACMDBG_H("inside QOS mode\n");
+					content = IPACM_read_content_element(xml_node);
+					if (content)
+					{
+						str_size = strlen(content);
+						memset(content_buf, 0, sizeof(content_buf));
+						memcpy(content_buf, (void *)content, str_size);
+						if (atoi(content_buf))
+						{
+							config->qos_mode = true;
+							IPACMDBG_H("QOS mode enabled %d buf(%d)\n", config->qos_mode, atoi(content_buf));
+						}
+						else
+						{
+							config->qos_mode = false;
+							IPACMDBG_H("QOS mode disabled %d buf(%d)\n", config->qos_mode, atoi(content_buf));
+						}
+					} else {
+					}
+				}
 			}
 			break;
 		default:

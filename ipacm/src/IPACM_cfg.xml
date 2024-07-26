@@ -479,5 +479,8 @@
 		<IPACMVLANMPDN>
 			<IPACMVlanMpdnEnabled>0</IPACMVlanMpdnEnabled>
 		</IPACMVLANMPDN>
+		<IPACMQOS>
+			<IPACMQOSEnabled>0</IPACMQOSEnabled>
+		</IPACMQOS>
 	</IPACM>
 </system>

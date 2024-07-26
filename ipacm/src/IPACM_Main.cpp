@@ -27,7 +27,7 @@
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  * Changes from Qualcomm Innovation Center are provided under the following license
- * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2023-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 /*!
@@ -311,6 +311,8 @@ void* ipa_driver_msg_notifier(void *param)
 #ifdef FEATURE_IPA_IPSEC
 	struct ipa_ioc_ipsec_ul_flt_attr *ipsec_ul_flt;
 #endif
+	struct ipa_ioc_qos_config *qos_param;
+	struct ipa_macsec_map *macsecMap = NULL;
 
 	fd = open(IPA_DRIVER, O_RDWR);
 	if (fd < 0)
@@ -1376,6 +1378,36 @@ void* ipa_driver_msg_notifier(void *param)
 			break;
 #endif
 
+		case IPA_QOS_PARAM_ADD_EVENT:
+			qos_param = (ipa_ioc_qos_config *)(buffer + sizeof(struct ipa_msg_meta));
+			IPACMDBG_H("Received IPA_QOS_PARAM_ADD_EVENT (%s) qos enabled (%d) \n", qos_param->dev_name, IPACM_Iface::ipacmcfg->ipacm_qos_enable);
+
+			if (IPACM_Iface::ipacmcfg->ipacm_qos_enable)
+			{
+				IPACM_Iface::ipacmcfg->add_qos_params_info(qos_param);
+			}
+			continue;
+
+		case IPA_QOS_PARAM_DELETE_EVENT:
+			qos_param = (ipa_ioc_qos_config *)(buffer + sizeof(struct ipa_msg_meta));
+			IPACMDBG_H("Received IPA_QOS_PARAM_DELETE_EVENT (%s) qos enabled (%d) \n", qos_param->dev_name, IPACM_Iface::ipacmcfg->ipacm_qos_enable);
+
+			if (IPACM_Iface::ipacmcfg->ipacm_qos_enable)
+			{
+				IPACM_Iface::ipacmcfg->delete_qos_params_info(qos_param);
+			}
+			continue;
+
+		case IPA_QOS_PARAM_FLUSH_EVENT:
+			qos_param = (ipa_ioc_qos_config *)(buffer + sizeof(struct ipa_msg_meta));
+			IPACMDBG_H("Received IPA_QOS_PARAM_FLUSH_EVENT (%s) qos enabled (%d) \n", qos_param->dev_name, IPACM_Iface::ipacmcfg->ipacm_qos_enable);
+
+			if (IPACM_Iface::ipacmcfg->ipacm_qos_enable)
+			{
+				IPACM_Iface::ipacmcfg->flush_qos_params_info(qos_param);
+			}
+			continue;
+
 		default:
 			IPACMDBG_H("Unhandled message type: %d\n", event_hdr.msg_type);
 			continue;
@@ -1534,8 +1566,8 @@ int main(int argc, char **argv)
 	ipa_is_ipacm_running();
 
 	IPACMDBG_H("In main()\n");
-	IPACM_Neighbor *neigh = new IPACM_Neighbor();
 	IPACM_IfaceManager *ifacemgr = new IPACM_IfaceManager();
+	IPACM_Neighbor *neigh = new IPACM_Neighbor();
 
 #ifdef FEATURE_ETH_BRIDGE_LE
 	IPACM_LanToLan* lan2lan = IPACM_LanToLan::get_instance();

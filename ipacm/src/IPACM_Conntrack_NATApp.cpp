@@ -2725,7 +2725,7 @@ int Ipv6ctProxy::QueryTimestamp(const NatEntryBase& entry, uint32_t& time_stamp)
 	// since IPv6 NAT entry is actually two IPv6ct entries we need to take the latest of them
 	if(entry.GetPublicIp() != entry.GetClientIp())
 	{
-		uint32_t additional_timestamp;
+		uint32_t additional_timestamp = 0;
 		const Ipv6NatEntry &ipv6nat = static_cast<const Ipv6NatEntry&>(entry);
 
 		IPACMDBG_H("ipv6 nat entry, check inbound handle\n");

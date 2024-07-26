@@ -645,7 +645,7 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 						}
 
 #endif
-						/* add support for handling default route to WIFI backhaul on vlan case Need to protect with xml entry */
+
 						if(IPACM_Wan::isWanUP(ipa_if_num))
 						{
 							if(data->iptype == IPA_IP_v4 || data->iptype == IPA_IP_MAX)
@@ -661,13 +661,7 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 								}
 								else
 								{
-									if(IPACM_Iface::ipacmcfg->iface_in_vlan_mode(dev_name))
-									{
-										uint16_t vid[IPA_MAX_NUM_OFFLOAD_VLANS];
-										IPACM_Iface::ipacmcfg->get_iface_vlan_ids(dev_name, vid);
-										handle_wan_up(IPA_IP_v4, vid[0]);
-									}
-									else
+									if(!IPACM_Iface::ipacmcfg->iface_in_vlan_mode(dev_name))
 									{
 										handle_wan_up(IPA_IP_v4);
 									}
@@ -706,7 +700,7 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 						}
 
 #endif //FEATURE_VLAN_MPDN
-						/* add support for handling default route to WIFI backhaul on vlan case Need to protect with xml entry */
+
 						if(IPACM_Wan::isWanUP_V6(ipa_if_num)) /* Modem v6 call is UP?*/
 						{
 #ifdef FEATURE_IPv6CT_DISABLED
@@ -733,13 +727,7 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 								}
 								else
 								{
-									if(IPACM_Iface::ipacmcfg->iface_in_vlan_mode(dev_name))
-									{
-										uint16_t vid[IPA_MAX_NUM_OFFLOAD_VLANS];
-										IPACM_Iface::ipacmcfg->get_iface_vlan_ids(dev_name, vid);
-										handle_wan_up(IPA_IP_v6, vid[0]);
-									}
-									else
+									if(!IPACM_Iface::ipacmcfg->iface_in_vlan_mode(dev_name))
 									{
 										handle_wan_up(IPA_IP_v6);
 									}
@@ -989,7 +977,7 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 		}
 #endif
 		/* if dummy vlan present for iface, don't handle via default route */
-		if (IPACM_Iface::ipacmcfg->is_added_vlan_iface(data_wan->ifname))
+		if (IPACM_Iface::ipacmcfg->is_added_vlan_iface(dev_name))
 		{
 			IPACMDBG_H("Iface in dumm VLAN do not handle default route\n");
 			return;
@@ -1098,7 +1086,7 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 		}
 #endif
 		/* if dummy vlan present for iface, don't handle via default route */
-		if (IPACM_Iface::ipacmcfg->is_added_vlan_iface(data_wan->ifname))
+		if (IPACM_Iface::ipacmcfg->is_added_vlan_iface(dev_name))
 		{
 			IPACMDBG_H("Iface in dumm VLAN do not handle default route\n");
 			return;
@@ -1543,7 +1531,8 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 			IPACMDBG_H("Received IPA_HANDLE_WAN_VLAN_PDN_DOWN for VID %d, iptype %d\n",
 				data->VlanID,
 				data->iptype);
-			if(is_vlan_IF(data->VlanID) || IPACM_Iface::ipacmcfg->is_dummy_VID(data->VlanID)
+			/* VlanID 0 is using to make VLAN_PDN_DOWN for all VLANs */
+			if(!data->VlanID ||is_vlan_IF(data->VlanID) || IPACM_Iface::ipacmcfg->is_dummy_VID(data->VlanID)
 #ifdef IPA_L2TP_TUNNEL_UDP
 				|| IPACM_Iface::ipacmcfg->check_l2tp_bridge_vlan_id(data->VlanID)
 #endif
@@ -2591,7 +2580,7 @@ int IPACM_Lan::handle_vlan_neighbor(ipacm_event_data_all *data)
 					/* create event data and call the handler */
 					vlan_data.iptype = IPA_IP_v4;
 					vlan_data.mux_id = mux_id;
-	
+
 					if(handle_vlan_pdn_up(&vlan_data))
 					{
 						IPACMERR("failed handling v4 VLAN up for VID %d, dev %s\n",
@@ -2971,7 +2960,7 @@ int IPACM_Lan::handle_vlan_pdn_down(ipacm_event_vlan_pdn *data)
 		else
 		{
 			/* if we still have vlan pdns up notify only */
-			if(set_mux_down(data->mux_id, data->iptype))
+			if(set_mux_down(data->mux_id, data->iptype, data->VlanID))
 				return IPACM_FAILURE;
 
 			if(is_any_mux_up(data->iptype) == true)
@@ -3000,8 +2989,8 @@ int IPACM_Lan::handle_vlan_pdn_down(ipacm_event_vlan_pdn *data)
 					return IPACM_FAILURE;
 				}
 			}
-
-			if(notify_flt_removed(data->mux_id))
+			/* only notify if mux is down */
+			if(!is_mux_up(data->mux_id, data->iptype, 0) && notify_flt_removed(data->mux_id))
 			{
 				return IPACM_FAILURE;
 			}
@@ -3009,9 +2998,15 @@ int IPACM_Lan::handle_vlan_pdn_down(ipacm_event_vlan_pdn *data)
 	}
 	else if (data->iptype == IPA_IP_v6)
 	{
+		if(handle_neigh_cache_ops(NEIGH_CLIENT_DEL_PREFIX, data->ipv6_prefix, data->VlanID) == IPACM_SUCCESS)
+		{
+			IPACMDBG_H("Deleted ipv6 address from neigh cache with prefix 0x%08x:%08x\n",
+				data->ipv6_prefix[0],data->ipv6_prefix[1]);
+		}
+
 		if(data->mux_id == 0)
 		{
-			if(handle_wan_down_v6(true, false, data->VlanID))
+			if(handle_wan_down_v6(true, true, data->VlanID))
 			{
 				IPACMERR("STA flt v6 rule deletion failed\n");
 				return IPACM_FAILURE;
@@ -3020,25 +3015,34 @@ int IPACM_Lan::handle_vlan_pdn_down(ipacm_event_vlan_pdn *data)
 		else
 		{
 			//LTE case delete routing rule of client with associated mux_id
-			for(int i = 0; i < IPA_MAX_NUM_HW_PDNS; i++)
+			if(data->VlanID > 0)
 			{
-				if(v6_mux_up[i].mux_id == data->mux_id)
+				handle_lan_client_reset_rt(IPA_IP_v6, data->VlanID);
+				IPACMDBG_H("successfully deleted v6 rt: vid %d for mux id %d, dev %s\n",
+									data->VlanID, data->mux_id, dev_name);
+			}
+			else if(data->VlanID == 0)
+			{
+				for(int i = 0; i < IPA_MAX_NUM_HW_PDNS; i++)
 				{
-					for(int j = 0; j < IPA_MAX_NUM_SW_PDNS; j++)
+					if(v6_mux_up[i].mux_id == data->mux_id)
 					{
-						if(v6_mux_up[i].associated_VIDs[j] != 0)
+						for(int j = 0; j < IPA_MAX_NUM_SW_PDNS; j++)
 						{
-							/* reset vlan client ipv6 rt-rules */
-							handle_lan_client_reset_rt(IPA_IP_v6, v6_mux_up[i].associated_VIDs[j]);
-							IPACMDBG_H("successfully deleted v6 rt: vid %d for mux id %d, dev %s, i = %d, j = %d, VID_cnt = %d \n",
-								v6_mux_up[i].associated_VIDs[j], v6_mux_up[i].mux_id, dev_name, i, j, v6_mux_up[i].VID_cnt);
+							if(v6_mux_up[i].associated_VIDs[j] != 0)
+							{
+								/* reset vlan client ipv6 rt-rules */
+								handle_lan_client_reset_rt(IPA_IP_v6, v6_mux_up[i].associated_VIDs[j]);
+								IPACMDBG_H("successfully deleted v6 rt: vid %d for mux id %d, dev %s, i = %d, j = %d, VID_cnt = %d \n",
+									v6_mux_up[i].associated_VIDs[j], v6_mux_up[i].mux_id, dev_name, i, j, v6_mux_up[i].VID_cnt);
+							}
 						}
 					}
 				}
 			}
 
 			/* if we still have vlan pdns up notify only */
-			if(set_mux_down(data->mux_id, data->iptype))
+			if(set_mux_down(data->mux_id, data->iptype, data->VlanID))
 				return IPACM_FAILURE;
 
 			if(is_any_mux_up(data->iptype) == true)
@@ -3061,21 +3065,21 @@ int IPACM_Lan::handle_vlan_pdn_down(ipacm_event_vlan_pdn *data)
 					return IPACM_FAILURE;
 				}
 			}
-
-			if(notify_flt_removed(data->mux_id))
+			/* only notify if mux is down */
+			if(!is_mux_up(data->mux_id, data->iptype, 0) && notify_flt_removed(data->mux_id))
 				return IPACM_FAILURE;
-		}
-
-		if(handle_neigh_cache_ops(NEIGH_CLIENT_DEL_PREFIX, data->ipv6_prefix, data->VlanID) == IPACM_SUCCESS)
-		{
-			IPACMDBG_H("Deleted ipv6 address from neigh cache with prefix 0x%08x:%08x\n",
-				data->ipv6_prefix[0],data->ipv6_prefix[1]);
 		}
 	}
 	/* v4 and v6 were up and now down (rmnet_dataX is down)*/
 	else
 	{
 		bool notif_only_v6 = false;
+
+		if(handle_neigh_cache_ops(NEIGH_CLIENT_DEL_PREFIX, data->ipv6_prefix, data->VlanID) == IPACM_SUCCESS)
+		{
+			IPACMDBG_H("Deleted ipv6 address from neigh cache with prefix 0x%08x:%08x\n",
+				data->ipv6_prefix[0],data->ipv6_prefix[1]);
+		}
 
 		if(data->mux_id == 0)
 		{
@@ -3084,7 +3088,7 @@ int IPACM_Lan::handle_vlan_pdn_down(ipacm_event_vlan_pdn *data)
 				IPACMERR("STA flt v4 rule deletion failed\n");
 				return IPACM_FAILURE;
 			}
-			if(handle_wan_down_v6(true, false, data->VlanID))
+			if(handle_wan_down_v6(true, true, data->VlanID))
 			{
 				IPACMERR("STA flt v6 rule deletion failed\n");
 				return IPACM_FAILURE;
@@ -3093,32 +3097,41 @@ int IPACM_Lan::handle_vlan_pdn_down(ipacm_event_vlan_pdn *data)
 		else
 		{
 			//LTE case delete routing rule of client with associated mux_id
-			for(int i = 0; i < IPA_MAX_NUM_HW_PDNS; i++)
+			if(data->VlanID > 0)
 			{
-				if(v6_mux_up[i].mux_id == data->mux_id)
+				handle_lan_client_reset_rt(IPA_IP_v6, data->VlanID);
+				IPACMDBG_H("successfully deleted v6 rt: vid %d for mux id %d, dev %s\n",
+									data->VlanID, data->mux_id, dev_name);
+			}
+			else if(data->VlanID == 0)
+			{
+				for(int i = 0; i < IPA_MAX_NUM_HW_PDNS; i++)
 				{
-					for(int j = 0; j < IPA_MAX_NUM_SW_PDNS; j++)
+					if(v6_mux_up[i].mux_id == data->mux_id)
 					{
-						if(v6_mux_up[i].associated_VIDs[j] != 0)
+						for(int j = 0; j < IPA_MAX_NUM_SW_PDNS; j++)
 						{
-							/* reset vlan client ipv6 rt-rules */
-							handle_lan_client_reset_rt(IPA_IP_v6, v6_mux_up[i].associated_VIDs[j]);
-							IPACMDBG_H("successfully deleted v6 rt: vid %d for mux id %d, dev %s, i = %d, j = %d, VID_cnt = %d \n",
-								v6_mux_up[i].associated_VIDs[j], v6_mux_up[i].mux_id, dev_name, i, j, v6_mux_up[i].VID_cnt);
+							if(v6_mux_up[i].associated_VIDs[j] != 0)
+							{
+								/* reset vlan client ipv6 rt-rules */
+								handle_lan_client_reset_rt(IPA_IP_v6, v6_mux_up[i].associated_VIDs[j]);
+								IPACMDBG_H("successfully deleted v6 rt: vid %d for mux id %d, dev %s, i = %d, j = %d, VID_cnt = %d \n",
+									v6_mux_up[i].associated_VIDs[j], v6_mux_up[i].mux_id, dev_name, i, j, v6_mux_up[i].VID_cnt);
+							}
 						}
 					}
 				}
 			}
 
 			/* if we still have vlan pdns up notify only */
-			if(set_mux_down(data->mux_id, IPA_IP_v4))
+			if(set_mux_down(data->mux_id, IPA_IP_v4, data->VlanID))
 				return IPACM_FAILURE;
 
 			if(is_any_mux_up(IPA_IP_v4) == true)
 				notif_only = true;
 
 			/* if we still have vlan pdns up notify only */
-			if(set_mux_down(data->mux_id, IPA_IP_v6))
+			if(set_mux_down(data->mux_id, IPA_IP_v6, data->VlanID))
 				return IPACM_FAILURE;
 
 			if(is_any_mux_up(IPA_IP_v6) == true)
@@ -3155,7 +3168,7 @@ int IPACM_Lan::handle_vlan_pdn_down(ipacm_event_vlan_pdn *data)
 			}
 
 			/* need to notify once for v4 */
-			if(notify_flt_removed(data->mux_id))
+			if(!is_mux_up(data->mux_id, IPA_IP_v4, 0) && notify_flt_removed(data->mux_id))
 				return IPACM_FAILURE;
 
 			if(!notif_only_v6)
@@ -3167,14 +3180,8 @@ int IPACM_Lan::handle_vlan_pdn_down(ipacm_event_vlan_pdn *data)
 			}
 
 			/* need to notify once for v6 */
-			if(notify_flt_removed(data->mux_id))
+			if(!is_mux_up(data->mux_id, IPA_IP_v6, 0) && notify_flt_removed(data->mux_id))
 				return IPACM_FAILURE;
-		}
-
-		if(handle_neigh_cache_ops(NEIGH_CLIENT_DEL_PREFIX, data->ipv6_prefix, data->VlanID) == IPACM_SUCCESS)
-		{
-			IPACMDBG_H("Deleted ipv6 address from neigh cache with prefix 0x%08x:%08x\n",
-				data->ipv6_prefix[0],data->ipv6_prefix[1]);
 		}
 	}
 

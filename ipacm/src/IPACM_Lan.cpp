@@ -2000,11 +2000,13 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 #ifdef FEATURE_EoGRE
 	case IPA_HANDLE_EoGRE_UP:
 		IPACMDBG_H("Received and will process an IPA_HANDLE_EoGRE_UP\n");
+		IPACM_Iface::ipacmcfg->eogre_enabled = true;
 		eogre_up();
 		break;
 
 	case IPA_HANDLE_EoGRE_DOWN:
 		IPACMDBG_H("Received and will process an IPA_HANDLE_EoGRE_DOWN\n");
+		IPACM_Iface::ipacmcfg->eogre_enabled = false;
 		eogre_down();
 		break;
 #endif
@@ -15415,17 +15417,22 @@ int IPACM_Lan::modify_ipv6_prefix_flt_rule()
 			if (IPACM_Iface::ipacmcfg->eogre_info.iptype == IPA_IP_v4)
 				/* mtu_v6_new = mtu_v4 - 20(ipv4) - 4(gre) - 18(eth + vlan) - 40(inner_ipv6) */
 				mtu[0] = IPACM_Wan::queryMTU(ipa_if_num, IPA_IP_v4) - sizeof(v4_gre_hdr_t) - 18;
-			else if (IPACM_Iface::ipacmcfg->eogre_info.iptype == IPA_IP_v6)
+			else if (IPACM_Iface::ipacmcfg->eogre_info.iptype == IPA_IP_v6 &&
+					IPACM_Iface::ipacmcfg->v6options_enabled == true)
 				/* mtu_v6_new = mtu_v6 - 40(ipv6) - 8(opt) - 4(gre)- 18(eth + vlan) - 40(inner_ipv6) */
 				mtu[0] = IPACM_Wan::queryMTU(ipa_if_num, IPA_IP_v6) - sizeof(v6_gre_hdr_t) - 18;
+			else if (IPACM_Iface::ipacmcfg->eogre_info.iptype == IPA_IP_v6 &&
+					IPACM_Iface::ipacmcfg->v6options_enabled == false)
+				mtu[0] = IPACM_Wan::queryMTU(ipa_if_num, IPA_IP_v6) -
+							 sizeof(v6_eogre_hdr_s) - 18;
 			else
 				IPACMERR("invalid iptype = %d\n", IPACM_Iface::ipacmcfg->eogre_info.iptype);
 
 			IPACMDBG("GRE v6 PDN mtu = %d\n", mtu[0]);
-			IPACMDBG("num_wan_ul_fl_rule_v6= %d\n", num_wan_ul_fl_rule_v6);
+			IPACMDBG("num_wan_ul_fl_rule_v6= %d\n", num_wan_ul_fl_rule_v6[j]);
 
 			//add the MTU rule after the 2nd pass rules but before the 1st pass rule
-			if (num_wan_ul_fl_rule_v6) {
+			if (num_wan_ul_fl_rule_v6[j]) {
 				IPACMDBG("v6 GRE MTU rule will be installed after v6 modem UL rules\n");
 				mtu_flt_rule_offset[j][IPA_IP_v6] = wan_ul_fl_rule_hdl_v6[j][num_wan_ul_fl_rule_v6[j] - 1];
 			} else {

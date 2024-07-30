@@ -6490,9 +6490,12 @@ int IPACM_Lan::delete_client_qos_rule(uint8_t *client_mac, uint16_t vlan_id,
 	}
 
 	for (it_qos_params = IPACM_Iface::ipacmcfg->m_qos_params.begin();
-		(it_qos_params != IPACM_Iface::ipacmcfg->m_qos_params.end()) &&
-		(it_qos_params->ip_type == iptype); ++it_qos_params)
+		(it_qos_params != IPACM_Iface::ipacmcfg->m_qos_params.end()); ++it_qos_params)
 	{
+		if (it_qos_params->ip_type != iptype)
+		{
+			continue;
+		}
 		delete_client_info_from_qos(client_mac, vlan_id, it_qos_params, ipv6_addr);
 	}
 

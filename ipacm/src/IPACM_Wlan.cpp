@@ -424,6 +424,14 @@ void IPACM_Wlan::event_callback(ipa_cm_event_id event, void *param)
 					handle_private_subnet(data->iptype);
 #endif
 
+#ifdef FEATURE_VLAN_MPDN
+					if(data->iptype == IPA_IP_v6)
+					{
+						/* if there are any v6 calls up, update rules */
+						modify_ipv6_prefix_flt_rule();
+					}
+#endif
+
 					if (!IPACM_Iface::ipacmcfg->iface_in_vlan_mode(dev_name))
 					{
 #ifdef FEATURE_STATIC_POLICY

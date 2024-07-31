@@ -108,6 +108,7 @@ extern "C"
 #define V6_WAN_ROUTE_TABLE_NAME  "WANRTBLv6"
 #define V4_ODU_ROUTE_TABLE_NAME  "ODURTBLv4"
 #define V6_ODU_ROUTE_TABLE_NAME  "ODURTBLv6"
+#define V6_DEFAULT_ROUTE_TABLE_NAME  "ipa_dflt_rt"
 
 #define WWAN_QMI_IOCTL_DEVICE_NAME "/dev/wwan_ioctl"
 #define IPA_DEVICE_NAME "/dev/ipa"

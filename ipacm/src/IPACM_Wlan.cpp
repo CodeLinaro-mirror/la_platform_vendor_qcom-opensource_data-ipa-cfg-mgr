@@ -315,7 +315,8 @@ void IPACM_Wlan::event_callback(ipa_cm_event_id event, void *param)
 					handle_private_subnet(data->iptype);
 #endif
 
-					if (IPACM_Wan::isWanUP(ipa_if_num))
+					if(IPACM_Wan::isWanUP(ipa_if_num) &&
+						!IPACM_Iface::ipacmcfg->is_added_vlan_iface(dev_name))
 					{
 						if(data->iptype == IPA_IP_v4 || data->iptype == IPA_IP_MAX)
 						{
@@ -334,7 +335,8 @@ void IPACM_Wlan::event_callback(ipa_cm_event_id event, void *param)
 #ifdef FEATURE_IPACM_UL_FIREWALL
 					IPACM_Wan::read_firewall_filter_rules_ul();
 #endif //FEATURE_IPACM_UL_FIREWALL
-					if(IPACM_Wan::isWanUP_V6(ipa_if_num)) /* Modem v6 call is UP?*/
+					if(IPACM_Wan::isWanUP_V6(ipa_if_num) &&
+						!IPACM_Iface::ipacmcfg->is_added_vlan_iface(dev_name))
 					{
 						if(data->iptype == IPA_IP_v6)
 						{
@@ -536,8 +538,7 @@ void IPACM_Wlan::event_callback(ipa_cm_event_id event, void *param)
 				   IPA_ADDR_ADD_EVENT event, which wouldn't have
 				   correct mux_id and re-install them in
 				   handle_vlan_pdn_up */
-				if(IPACM_Iface::ipacmcfg->is_added_vlan_iface(dev_name) &&
-					(IPACM_Wan::backhaul_is_sta_mode == false))
+				if(IPACM_Iface::ipacmcfg->is_added_vlan_iface(dev_name))
 				{
 					if((data->iptype == IPA_IP_v4) && IPACM_Wan::isWanUP(ipa_if_num))
 						handle_wan_down(false, IPACM_Wan::getXlat_Mux_Id());

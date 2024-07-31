@@ -516,6 +516,7 @@ int IPACM_IfaceManager::create_iface_instance(ipacm_ifacemgr_data *param)
 				IPACM_EvtDispatcher::registr(IPA_HANDLE_WAN_VLAN_PDN_UP, wl);
 				IPACM_EvtDispatcher::registr(IPA_HANDLE_WAN_VLAN_PDN_DOWN, wl);
 				IPACM_EvtDispatcher::registr(IPA_HANDLE_WAN_ADDR_ADD_V6, wl);
+				IPACM_EvtDispatcher::registr(IPA_NOTIFY_VLAN_UP, wl);
 				IPACMDBG_H("ipa_WLAN (%s):ipa_index (%d) instance open/registr ok\n", wl->dev_name, wl->ipa_if_num);
 				registr(ipa_interface_index, wl);
 				/* solve the new_addr comes earlier issue */

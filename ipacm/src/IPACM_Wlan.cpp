@@ -826,11 +826,13 @@ void IPACM_Wlan::event_callback(ipa_cm_event_id event, void *param)
 #endif
 				{
 					IPACMERR("Unable to find VLAN ID for Dev %s\n", data->iface_name);
-					return;
+					eth_bridge_post_event(IPA_ETH_BRIDGE_CLIENT_ADD, IPA_IP_MAX, data->mac_addr, NULL, NULL);
 				}
-
-				eth_bridge_post_event(IPA_ETH_BRIDGE_CLIENT_ADD, IPA_IP_MAX, data->mac_addr, NULL, NULL, vlan_id);
-				eth_bridge_post_event(IPA_CLIENT_CROSS_PRC_CTX, IPA_IP_MAX, data->mac_addr, NULL, data->iface_name, NULL);
+				else
+				{
+					eth_bridge_post_event(IPA_ETH_BRIDGE_CLIENT_ADD, IPA_IP_MAX, data->mac_addr, NULL, NULL, vlan_id);
+					eth_bridge_post_event(IPA_CLIENT_CROSS_PRC_CTX, IPA_IP_MAX, data->mac_addr, NULL, data->iface_name, NULL);
+				}
 			}
 		}
 		break;
@@ -841,19 +843,21 @@ void IPACM_Wlan::event_callback(ipa_cm_event_id event, void *param)
 		IPACMDBG_H("Received IPA_LAN_CLIENT_DEL_EVENT\n");
 		ipa_interface_index = iface_ipa_index_query(data->if_index);
 		IPACMDBG_H("check iface %s category: %d\n", dev_name, ipa_if_cate);
+		if(ipa_interface_index == ipa_if_num)
+		{
 #ifdef IPA_VLAN_PRIORITY
-		if(IPACM_Iface::ipacmcfg->get_vlan_id(data->iface_name, &vlan_id, &priority))
+			if(IPACM_Iface::ipacmcfg->get_vlan_id(data->iface_name, &vlan_id, &priority))
 #else
-		if(IPACM_Iface::ipacmcfg->get_vlan_id(data->iface_name, &vlan_id))
+			if(IPACM_Iface::ipacmcfg->get_vlan_id(data->iface_name, &vlan_id))
 #endif
-		{
-			IPACMERR("Unable to find VLAN ID for Dev %s\n", data->iface_name);
-			return;
-		}
-
-		if (ipa_interface_index == ipa_if_num)
-		{
-			eth_bridge_post_event(IPA_ETH_BRIDGE_CLIENT_DEL, IPA_IP_MAX, data->mac_addr, NULL, NULL, vlan_id);
+			{
+				IPACMERR("Unable to find VLAN ID for Dev %s\n", data->iface_name);
+				eth_bridge_post_event(IPA_ETH_BRIDGE_CLIENT_DEL, IPA_IP_MAX, data->mac_addr, NULL, NULL);
+			}
+			else
+			{
+				eth_bridge_post_event(IPA_ETH_BRIDGE_CLIENT_DEL, IPA_IP_MAX, data->mac_addr, NULL, NULL, vlan_id);
+			}
 		}
 	}
 	break;

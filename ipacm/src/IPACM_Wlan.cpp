@@ -290,17 +290,26 @@ void IPACM_Wlan::event_callback(ipa_cm_event_id event, void *param)
 			if (ipa_interface_index == ipa_if_num || event == IPA_IPACM_DISABLE)
 			{
 				IPACMDBG_H("Received IPA_WLAN_LINK_DOWN_EVENT\n");
-				if (IPACM_Iface::ipacmcfg->dscp_pcp_config_cache.add == 1)
-				{
+				if (is_svap_iface() &&
+				    IPACM_Iface::ipacmcfg->ipacm_emesh_mode >=
+					    3 &&
+				    IPACM_Iface::ipacmcfg->dscp_pcp_config_cache
+						    .add == 1) {
 					dscp_pcp_map_info.add = 0;
+					IPACMDBG_H(
+						"Issuing DSCP PCP delete command\n");
 					m_fd = open(IPA_DEVICE_NAME, O_RDWR);
-					if (0 != ioctl(m_fd, IPA_IOC_ADD_DEL_DSCP_PCP_MAPPING, &dscp_pcp_map_info))
-					{
-						IPACMDBG_H("Failed ioctl IPA_IOC_ADD_DEL_DSCP_PCP_MAPPING\n");
+					if (0 !=
+					    ioctl(m_fd,
+						  IPA_IOC_ADD_DEL_DSCP_PCP_MAPPING,
+						  &dscp_pcp_map_info)) {
+						IPACMDBG_H(
+							"Failed ioctl IPA_IOC_ADD_DEL_DSCP_PCP_MAPPING\n");
 						close(m_fd);
 						return;
 					}
-					IPACM_Iface::ipacmcfg->dscp_pcp_config_cache.add = 0;
+					IPACM_Iface::ipacmcfg
+						->dscp_pcp_config_cache.add = 0;
 				}
 				handle_down_evt();
 				/* reset the AP-iface category to unknown */
@@ -1405,6 +1414,9 @@ void IPACM_Wlan::event_callback(ipa_cm_event_id event, void *param)
 		}
 		close(m_fd);
 
+		IPACM_Iface::ipacmcfg->dscp_pcp_config_cache.add = IPACM_Iface::ipacmcfg->dscp_pcp_config.add;
+		memcpy(IPACM_Iface::ipacmcfg->dscp_pcp_config_cache.dscp_pcp_map, IPACM_Iface::ipacmcfg->dscp_pcp_config.dscp_pcp_map,
+ 									sizeof(IPACM_Iface::ipacmcfg->dscp_pcp_config.dscp_pcp_map));
 		size = sizeof(ipa_ioc_add_hdr_proc_ctx) + sizeof(ipa_hdr_proc_ctx_add);
 		hdr_proc_ctx_table = (ipa_ioc_add_hdr_proc_ctx *)malloc(size);
 		if (hdr_proc_ctx_table == NULL) {

@@ -2102,7 +2102,7 @@ void IPACM_Config::handle_l2tp_client_gw_info(ipacm_event_data_all *data, uint32
 	{
 		if(!(memcmp(it_l2tp_gw->client_iface_name,data->iface_name,sizeof(data->iface_name))) &&
 		(!(memcmp(it_l2tp_gw->client_ipv6_addr, data->ipv6_addr, sizeof(data->ipv6_addr)))) &&
-		(!(memcmp(it_l2tp_gw->client_ipv6_gw_addr, l2tp_gw_addr, sizeof(l2tp_gw_addr)))))
+		(!(memcmp(it_l2tp_gw->client_ipv6_gw_addr, l2tp_gw_addr, sizeof(it_l2tp_gw->client_ipv6_gw_addr)))))
 		{
 			IPACMERR("Already GW info is updated\n");
 			pthread_mutex_unlock(&vlan_l2tp_lock);
@@ -2113,7 +2113,7 @@ void IPACM_Config::handle_l2tp_client_gw_info(ipacm_event_data_all *data, uint32
 	{
 		memcpy(&new_mapping.client_iface_name,data->iface_name,sizeof(data->iface_name));
 		memcpy(&new_mapping.client_ipv6_addr, data->ipv6_addr, sizeof(data->ipv6_addr));
-		memcpy(&new_mapping.client_ipv6_gw_addr, l2tp_gw_addr, sizeof(it_l2tp_gw->client_ipv6_gw_addr));
+		memcpy(&new_mapping.client_ipv6_gw_addr, l2tp_gw_addr, sizeof(new_mapping.client_ipv6_gw_addr));
 		memset(&new_mapping.client_mac, 0, sizeof(new_mapping.client_mac));
 		IPACMDBG_H("Added valid GW info to list\n");
 	}
@@ -2128,10 +2128,14 @@ void IPACM_Config::handle_l2tp_client_gw_info(ipacm_event_data_all *data, uint32
 				if(memcmp(it_vlan->vlan_client_ipv6_addr[i], l2tp_gw_addr, sizeof(data->ipv6_addr)) == 0)
 				{
 					IPACMDBG_H("neigh is populated for peer neighour\n");
-					memcpy(&peer_client_mac, &it_vlan->vlan_client_mac[i], sizeof(mac_addr));
+					memcpy(&peer_client_mac, &it_vlan->vlan_client_mac[i], sizeof(peer_client_mac));
 					rt_info = true;
 					break;
 				}
+			}
+			if(rt_info == true)
+			{
+				break;
 			}
 		}
 	}
@@ -2242,7 +2246,8 @@ void IPACM_Config::handle_vlan_client_info(ipacm_event_data_all *data)
 					pthread_mutex_unlock(&vlan_l2tp_lock);
 					return;
 				}
-				else if(it_vlan->vlan_client_ipv6_addr[i][0] == 0 && it_vlan->vlan_client_ipv6_addr[i][1] == 0 && !update_free_index)
+				else if((it_vlan->vlan_client_ipv6_addr[i][0] == 0) && (it_vlan->vlan_client_ipv6_addr[i][1] == 0) &&
+				(it_vlan->vlan_client_ipv6_addr[i][2] == 0) && (it_vlan->vlan_client_ipv6_addr[i][3] == 0) && !update_free_index)
 				{
 					update_free_index = true;
 					index = i;
@@ -2251,8 +2256,8 @@ void IPACM_Config::handle_vlan_client_info(ipacm_event_data_all *data)
 			/* updating new vlan info to the list */
 			if(index != IPA_MAX_NUM_PEER_ULA && update_free_index)
 			{
-				memcpy(&it_vlan->vlan_client_mac[index], data->mac_addr, sizeof(it_vlan->vlan_client_mac));
-				memcpy(&it_vlan->vlan_client_ipv6_addr[index], data->ipv6_addr, sizeof(it_vlan->vlan_client_ipv6_addr));
+				memcpy(&it_vlan->vlan_client_mac[index], data->mac_addr, sizeof(data->mac_addr));
+				memcpy(&it_vlan->vlan_client_ipv6_addr[index], data->ipv6_addr, sizeof(data->ipv6_addr));
 				break;
 			}
 		}
@@ -2270,7 +2275,7 @@ void IPACM_Config::handle_vlan_client_info(ipacm_event_data_all *data)
 			if(memcmp(mac_addr, it_l2tp_gw->client_mac, sizeof(it_l2tp_gw->client_mac)) == 0)
 			{
 				IPACMDBG_H("Already GW info is updated , now mac is updating\n");
-				memcpy(it_l2tp_gw->client_mac, data->mac_addr, sizeof(it_mapping->vlan_client_mac));
+				memcpy(it_l2tp_gw->client_mac, data->mac_addr, sizeof(data->mac_addr));
 				break;
 			}
 		}
@@ -2884,7 +2889,7 @@ void IPACM_Config::add_l2tp_vlan_mapping(l2tp_session_info *data)
 			{
 
 				IPACMDBG_H("updating GW and mac info is updating\n");
-				memcpy(new_mapping.vlan_client_mac, it_l2tp_gw->client_mac, sizeof(it_mapping->vlan_client_mac));
+				memcpy(new_mapping.vlan_client_mac, it_l2tp_gw->client_mac, sizeof(it_l2tp_gw->client_mac));
 				memcpy(new_mapping.vlan_client_ipv6_gw_addr, it_l2tp_gw->client_ipv6_gw_addr, sizeof(new_mapping.vlan_client_ipv6_gw_addr));
 				break;
 			}

@@ -328,7 +328,7 @@ IPACM_Lan::IPACM_Lan(int iface_index) : IPACM_Iface(iface_index)
 #endif
 
 #ifdef FEATURE_L2TP
-	if(ipa_if_cate == ODU_IF && iface_query->num_rx_props 
+	if(ipa_if_cate == ODU_IF && iface_query && iface_query->num_rx_props
 		&& iface_query->num_tx_props)
 	{
 		if (IPACM_Iface::ipacmcfg->ipacm_l2tp_enable == IPACM_L2TP_E2E)
@@ -1899,6 +1899,11 @@ int IPACM_Lan::add_socksv5_flt_rule(ipa_socksv5_msg *data_event_conn)
 
 	len = sizeof(struct ipa_ioc_add_flt_rule_after) + IPA_MAX_SOCKS_FLT_RULE * sizeof(struct ipa_flt_rule_add);
 	pFilteringTable = (struct ipa_ioc_add_flt_rule_after*)malloc(len);
+	if (NULL == pFilteringTable)
+	{
+		IPACMERR("Failed to allocate memory to pFilteringTable...\n");
+		return IPACM_FAILURE;
+	}
 
 	/* In V6-V6 UL case add a rule for second pass with action as RT */
 	if(data_event_conn->dl_in.ip_type == IPA_IP_v6)
@@ -1925,6 +1930,12 @@ int IPACM_Lan::add_socksv5_flt_rule(ipa_socksv5_msg *data_event_conn)
 		k = 0;
 		for (i = 0; i < ext_prop->num_ext_props; i++)
 		{
+			if(k >= IPA_MAX_SOCKS_FLT_RULE)
+			{
+				IPACMERR("MAX rules[%d] has been updated. Dropping rules[%d ... %d]\n",
+					IPA_MAX_SOCKS_FLT_RULE, k, MAX_WAN_UL_FILTER_RULES);
+				break;
+			}
 			if (ext_prop->prop[i].replicate_needed != true)
 				continue;
 
@@ -5636,7 +5647,7 @@ int IPACM_Lan::handle_eth_client_route_rule_ext_v2(uint8_t *mac_addr, ipa_ip_typ
 			rt_rule->rule_add_ext_size = sizeof(struct ipa_rt_rule_add_ext_v2);
 			for (tx_index = 0; tx_index < iface_query->num_tx_props; tx_index++)
 			{
-				if(iptype != tx_prop->tx[tx_index].ip)
+				if(tx_prop && (iptype != tx_prop->tx[tx_index].ip))
 				{
 					IPACMDBG_H("Tx:%d, ip-type: %d conflict ip-type: %d no RT-rule added\n",
 							tx_index, tx_prop->tx[tx_index].ip,iptype);
@@ -6012,9 +6023,9 @@ int IPACM_Lan::handle_eth_client_route_rule_ext(uint8_t *mac_addr, ipa_ip_type i
 					HandleNeighIpAddrAddEvt(&data);
 				}
 				get_client_memptr(eth_client, eth_index)->route_rule_set_v6 = get_client_memptr(eth_client, eth_index)->ipv6_set;
-			} /* end of for loop */
-			free(rulesPtr);
-		}
+            }
+        }/* end of for loop */
+        free(rulesPtr);
 	}
 	return IPACM_SUCCESS;
 }
@@ -6702,7 +6713,7 @@ int IPACM_Lan::handle_vlan_phys_if_down()
 		/* currently support only all vlans switch to STA or LTE, not partial vlans */
 	for(i = 0; i < IPA_MAX_NUM_OFFLOAD_VLANS; i++)
         {
-                if((vlan_sta_info[i].vlan_id != 0) && (vlan_sta_info[i].v4_flt_hdl != 0))
+                if((vlan_sta_info[i].vlan_id != 0) && (vlan_sta_info[i].v4_flt_hdl != 0) && rx_prop)
                 {
                         IPACMDBG_H("Deleting filter rule for vlan_id %d during iface down\n",vlan_sta_info[i].vlan_id);
                         if (m_filtering.DeleteFilteringHdls(&vlan_sta_info[i].v4_flt_hdl, IPA_IP_v4, 1) == false)
@@ -6720,7 +6731,7 @@ int IPACM_Lan::handle_vlan_phys_if_down()
 
         for(i = 0; i < IPA_MAX_NUM_OFFLOAD_VLANS; i++)
         {
-                if(vlan_sta_info[i].v6_flt_hdl > 0)
+                if((vlan_sta_info[i].v6_flt_hdl > 0) && rx_prop)
                 {
                         if (!m_filtering.DeleteFilteringHdls(&vlan_sta_info[i].v6_flt_hdl, IPA_IP_v6, 1))
                         {
@@ -7241,7 +7252,10 @@ fail:
 						IPACMERR("Failed to delete ul flt rule.\n");
 						return IPACM_FAILURE;
 					}
-					IPACM_Iface::ipacmcfg->decreaseFltRuleCount(rx_prop->rx[0].src_pipe, IPA_IP_v6, 1);
+					if (rx_prop)
+					{
+					    IPACM_Iface::ipacmcfg->decreaseFltRuleCount(rx_prop->rx[0].src_pipe, IPA_IP_v6, 1);
+					}
 				}
 				if(get_client_memptr(eth_client, i)->ul_first_pass_rt_rule_hdl &&
 						m_routing.DeleteRoutingHdl(get_client_memptr(eth_client, i)->ul_first_pass_rt_rule_hdl, IPA_IP_v6) == false)
@@ -11487,6 +11501,11 @@ int IPACM_Lan::eth_bridge_get_vlan_hdr_template_hdl(uint32_t* hdr_hdl, uint16_t 
 	struct ipa_ioc_add_hdr *pHeaderDescriptor = NULL;
 	int len = 0;
 
+	if(tx_prop == NULL)
+	{
+		IPACMERR("No tx prop.\n");
+		return IPACM_FAILURE;
+	}
 	memset(&hdr, 0, sizeof(hdr));
 	memset(&sCopyHeader, 0, sizeof(sCopyHeader));
 	memcpy(sCopyHeader.name,
@@ -15138,6 +15157,11 @@ int IPACM_Lan::install_l2tp_udp_ul_flt_rule(int client_idx, uint32_t *vlan_iface
 	ipa_ioc_add_flt_rule_after *pFilteringTable;
 	ipa_flt_rule_add *flt_rule_entry;
 
+	if(rx_prop == NULL)
+	{
+		IPACMERR("No rx prop.\n");
+		return IPACM_FAILURE;
+	}
 	size = sizeof(struct ipa_ioc_add_flt_rule_after) + sizeof(struct ipa_flt_rule_add);
 	pFilteringTable = (struct ipa_ioc_add_flt_rule_after*)malloc(size);
 	if (!pFilteringTable)

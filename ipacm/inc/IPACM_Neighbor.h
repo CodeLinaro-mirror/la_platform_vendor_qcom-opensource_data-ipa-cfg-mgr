@@ -124,7 +124,10 @@ private:
 			if (neighbor_client[i].iface_index == interfaceIndex) {
 				eventData = (ipacm_event_data_all *)malloc(sizeof(*eventData));
 				if (eventData == NULL)
-					IPACMERR("malloc failed: i = %d\n", i);
+				{
+					IPACMERR("[ALERT] malloc failed: i = %d, Not sending IPA_DEL_NEIGH_EVENT\n", i);
+					continue;
+				}
 				memset(eventData, 0, sizeof(*eventData));
 				memcpy(eventData->mac_addr, neighbor_client[i].mac_addr, sizeof(eventData->mac_addr));
 				eventData->if_index = neighbor_client[i].iface_index;

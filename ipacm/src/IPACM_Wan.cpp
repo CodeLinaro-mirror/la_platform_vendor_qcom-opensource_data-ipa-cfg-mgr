@@ -2277,11 +2277,11 @@ void IPACM_Wan::post_wan_vlan_pdn_event(ipa_ip_type iptype, int pdn_idx, int vla
 	ipacm_cmd_q_data evt_data;
 	ipacm_event_vlan_pdn *vlan_data = NULL;
 
-	if(vlan_idx >= IPA_MAX_NUM_SW_PDNS)
+	if((vlan_idx < 0) || (vlan_idx >= IPA_MAX_NUM_SW_PDNS))
 	{
 		IPACMERR("Invalid VLAN Index\n");
 		return;
-	} 
+	}
 
 	vlan_data = (ipacm_event_vlan_pdn *)malloc(sizeof(ipacm_event_vlan_pdn));
 	if(vlan_data == NULL)
@@ -2334,7 +2334,7 @@ void IPACM_Wan::post_wan_vlan_pdn_event(ipa_ip_type iptype, int pdn_idx, int vla
 						vlan_data->VlanID, vlan_data->mux_id, ipa_if_num);
 		}
 
-		if(iptype == IPA_IP_v4)
+		else if(iptype == IPA_IP_v4)
 		{
 			GetMuxByVid(vlan_id, &mux_id, IPA_IP_v4);
 			ipv4_to_iface[pdn_idx].associated_VIDs[vlan_idx] = 0;
@@ -2425,7 +2425,7 @@ void IPACM_Wan::post_wan_vlan_pdn_event(ipa_ip_type iptype, int pdn_idx, int vla
 					vlan_id, vlan_data->mux_id, ipa_if_num);
 		}
 
-		if(iptype == IPA_IP_v4)
+		else if(iptype == IPA_IP_v4)
 		{
 			ipv4_to_iface[pdn_idx].wan_up_vlan = true;
 			if (ipv4_to_iface[pdn_idx].VID_cnt < IPA_MAX_NUM_SW_PDNS)
@@ -10039,6 +10039,11 @@ void IPACM_Wan::install_l2tp_flt_rule(ipa_flt_rule_add* rules, int rule_offset, 
 	if(IPACM_Iface::ipacmcfg->get_vlan_l2tp_mapping(iface_name, info) == IPACM_FAILURE)
 	{
 		IPACMERR("Failed to find vlan-l2tp mapping.\n");
+		return;
+	}
+	if(rx_prop == NULL)
+	{
+		IPACMERR("No rx property.\n");
 		return;
 	}
 

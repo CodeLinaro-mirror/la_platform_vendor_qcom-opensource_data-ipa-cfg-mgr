@@ -4485,15 +4485,9 @@ void IPACM_Config::delete_qos_params_info(ipa_ioc_qos_config *data)
 			for (it_qos_client = it_qos_params->qos_client_list.begin(); it_qos_client != it_qos_params->qos_client_list.end(); ++it_qos_client)
 			{
 				qos_param->qos_client_list[i].qos_rt_rule_hdl_v4 = it_qos_client->qos_rt_rule_hdl_v4;
-
-				for (int v6_num = 0; v6_num < IPV6_NUM_ADDR; v6_num++)
-				{
-					qos_param->qos_client_list[i].qos_rt_rule_hdl_v6[v6_num] = it_qos_client->qos_rt_rule_hdl_v6[v6_num];
-					qos_param->qos_client_list[i].qos_rt_rule_hdl_wan_v6[v6_num] = it_qos_client->qos_rt_rule_hdl_wan_v6[v6_num];
-					IPACMDBG("v6 rule to delete v6_num %d rt hdl %d, wan hdl %d\n", v6_num,
-							 qos_param->qos_client_list[i].qos_rt_rule_hdl_v6[v6_num],
-							 qos_param->qos_client_list[i].qos_rt_rule_hdl_wan_v6[v6_num]);
-				}
+				qos_param->qos_client_list[i].qos_rt_rule_hdl_v6 = it_qos_client->qos_rt_rule_hdl_v6;
+				IPACMDBG("v6 rule to delete wan hdl %d\n",
+						qos_param->qos_client_list[i].qos_rt_rule_hdl_v6);
 				qos_param->qos_client_list[i].route_rule_set_v4 = it_qos_client->route_rule_set_v4;
 				qos_param->qos_client_list[i].route_rule_set_v6 = it_qos_client->route_rule_set_v6;
 
@@ -4552,11 +4546,7 @@ void IPACM_Config::flush_qos_params_info(ipa_ioc_qos_config *data)
 		for (it_qos_client = it_qos_params->qos_client_list.begin(); it_qos_client != it_qos_params->qos_client_list.end(); ++it_qos_client)
 		{
 			qos_param->qos_client_list[i].qos_rt_rule_hdl_v4 = it_qos_client->qos_rt_rule_hdl_v4;
-			for (int v6_num = 0; v6_num < IPV6_NUM_ADDR; v6_num++)
-			{
-				qos_param->qos_client_list[i].qos_rt_rule_hdl_v6[v6_num] = it_qos_client->qos_rt_rule_hdl_v6[v6_num];
-				qos_param->qos_client_list[i].qos_rt_rule_hdl_wan_v6[v6_num] = it_qos_client->qos_rt_rule_hdl_wan_v6[v6_num];
-			}
+			qos_param->qos_client_list[i].qos_rt_rule_hdl_v6 = it_qos_client->qos_rt_rule_hdl_v6;
 			qos_param->qos_client_list[i].route_rule_set_v4 = it_qos_client->route_rule_set_v4;
 			qos_param->qos_client_list[i].route_rule_set_v6 = it_qos_client->route_rule_set_v6;
 

@@ -11705,7 +11705,6 @@ int IPACM_Wlan::delete_wlan_client_info_from_qos(uint8_t *client_mac,
 {
 	list<qos_client_info>::iterator it_qos_client;
 	int wlan_index;
-	int v6_num = 0;
 
 	wlan_index = get_wlan_client_index(client_mac, vlan_id);
 	if (wlan_index == IPACM_INVALID_INDEX)
@@ -11720,53 +11719,76 @@ int IPACM_Wlan::delete_wlan_client_info_from_qos(uint8_t *client_mac,
 	for (it_qos_client = qos_param->qos_client_list.begin();
 		it_qos_client != qos_param->qos_client_list.end(); )
 	{
-		if (it_qos_client->v4_ip_addr &&
-			(it_qos_client->v4_ip_addr ==
-				get_client_memptr(wlan_client, wlan_index)->v4_addr))
+		if (qos_param->ip_type == IPA_IP_v4)
 		{
-			IPACMDBG_H("Found a matching vlan %d entry in qos rule list "
-				"for client with ipv4: 0x\n",
-				vlan_id, it_qos_client->v4_ip_addr);
-
-			//Delete the respective route handles
-			IPACMDBG_H("Delete client rule from index %d is v4 set %d for hdl %d\n",
-				wlan_index, it_qos_client->route_rule_set_v4,
-				it_qos_client->qos_rt_rule_hdl_v4);
-
-			if (it_qos_client->route_rule_set_v4 &&
-				(m_routing.DeleteRoutingHdl(it_qos_client->qos_rt_rule_hdl_v4,
-					IPA_IP_v4) == false)) {
-				IPACMERR("Failed to delete v4 qos routing rule hdl %d\n",
-					it_qos_client->qos_rt_rule_hdl_v4);
-				return IPACM_FAILURE;
-			}
-			// Delete respective header processing contexts
-			IPACMDBG_H("Deleting dscp hpc 0x%x\n", it_qos_client->dscp_hpc_hdl_v4);
-			if (it_qos_client->dscp_hpc_hdl_v4)
+			if (it_qos_client->v4_ip_addr &&
+				(it_qos_client->v4_ip_addr ==
+					get_client_memptr(wlan_client, wlan_index)->v4_addr))
 			{
-				if (m_header.DeleteHeaderProcCtx(it_qos_client->dscp_hpc_hdl_v4) == false)
-				{
-					IPACMERR("Failed to delete qos dscp hpc v4 hdl 0x%x\n",
+				IPACMDBG_H("Found a matching vlan %d entry in qos rule list "
+					"for client with ipv4: 0x\n",
+					vlan_id, it_qos_client->v4_ip_addr);
+
+				//Delete the respective route handles
+				IPACMDBG_H("Delete client rule from index %d is v4 set %d for hdl %d\n",
+					wlan_index, it_qos_client->route_rule_set_v4,
 					it_qos_client->qos_rt_rule_hdl_v4);
+
+				if (it_qos_client->route_rule_set_v4 &&
+					(m_routing.DeleteRoutingHdl(it_qos_client->qos_rt_rule_hdl_v4,
+						IPA_IP_v4) == false)) {
+					IPACMERR("Failed to delete v4 qos routing rule hdl %d\n",
+						it_qos_client->qos_rt_rule_hdl_v4);
 					return IPACM_FAILURE;
 				}
+				it_qos_client = qos_param->qos_client_list.erase(it_qos_client);
+				qos_param->client_cnt--;
+				IPACMDBG_H("Current client_cnt %d\n", qos_param->client_cnt);
 			}
 		}
 
-		if (ipv6_addr == NULL)
+		else
 		{
-			/* Check all v6 addresses of the client. */
-			for (auto it = rt_hdl_v6_list[wlan_index].begin(); it != rt_hdl_v6_list[wlan_index].end(); ++it)
+			if (ipv6_addr == NULL)
+			{
+				/* Check all v6 addresses of the client. */
+				for (auto it = rt_hdl_v6_list[wlan_index].begin(); it != rt_hdl_v6_list[wlan_index].end(); ++it)
+				{
+					if (it_qos_client->v6_ip_addr[0] &&
+						it_qos_client->v6_ip_addr[0] ==
+						it->first[0] &&
+						it_qos_client->v6_ip_addr[1] ==
+						it->first[1] &&
+						it_qos_client->v6_ip_addr[2] ==
+						it->first[2] &&
+						it_qos_client->v6_ip_addr[3] ==
+						it->first[3])
+					{
+						IPACMDBG_H("Delete client rule from index %d is"
+						" v6 set %d for hdl %d\n", wlan_index,
+						it_qos_client->route_rule_set_v6,
+						it_qos_client->qos_rt_rule_hdl_v6);
+						if (it_qos_client->route_rule_set_v6 &&
+							(m_routing.DeleteRoutingHdl(
+								it_qos_client->qos_rt_rule_hdl_v6,
+								IPA_IP_v6) == false)) {
+							IPACMERR("Failed to delete v6 qos routing rule hdl %d\n",
+								it_qos_client->qos_rt_rule_hdl_v6);
+							return IPACM_FAILURE;
+						}
+					}
+				}
+				it_qos_client = qos_param->qos_client_list.erase(it_qos_client);
+				qos_param->client_cnt--;
+				IPACMDBG_H("Current client_cnt %d\n", qos_param->client_cnt);
+			}
+			else
 			{
 				if (it_qos_client->v6_ip_addr[0] &&
-					it_qos_client->v6_ip_addr[0] ==
-					it->first[0] &&
-					it_qos_client->v6_ip_addr[1] ==
-					it->first[1] &&
-					it_qos_client->v6_ip_addr[2] ==
-					it->first[2] &&
-					it_qos_client->v6_ip_addr[3] ==
-					it->first[3])
+					it_qos_client->v6_ip_addr[0] == ipv6_addr[0] &&
+					it_qos_client->v6_ip_addr[1] == ipv6_addr[1] &&
+					it_qos_client->v6_ip_addr[2] == ipv6_addr[2] &&
+					it_qos_client->v6_ip_addr[3] == ipv6_addr[3])
 				{
 					IPACMDBG_H("Delete client rule from index %d is"
 					" v6 set %d for hdl %d\n", wlan_index,
@@ -11781,34 +11803,12 @@ int IPACM_Wlan::delete_wlan_client_info_from_qos(uint8_t *client_mac,
 						return IPACM_FAILURE;
 					}
 				}
+				it_qos_client = qos_param->qos_client_list.erase(it_qos_client);
+				qos_param->client_cnt--;
+				IPACMDBG_H("Current client_cnt %d\n", qos_param->client_cnt);
 			}
 		}
-		else
-		{
-			if (it_qos_client->v6_ip_addr[0] &&
-				it_qos_client->v6_ip_addr[0] == ipv6_addr[0] &&
-				it_qos_client->v6_ip_addr[1] == ipv6_addr[1] &&
-				it_qos_client->v6_ip_addr[2] == ipv6_addr[2] &&
-				it_qos_client->v6_ip_addr[3] == ipv6_addr[3])
-			{
-				IPACMDBG_H("Delete client rule from index %d is"
-				" v6 set %d for hdl %d\n", wlan_index,
-				it_qos_client->route_rule_set_v6,
-				it_qos_client->qos_rt_rule_hdl_v6);
-				if (it_qos_client->route_rule_set_v6 &&
-					(m_routing.DeleteRoutingHdl(
-						it_qos_client->qos_rt_rule_hdl_v6,
-						IPA_IP_v6) == false)) {
-					IPACMERR("Failed to delete v6 qos routing rule hdl %d\n",
-						it_qos_client->qos_rt_rule_hdl_v6);
-					return IPACM_FAILURE;
-				}
-			}
-		}
-		it_qos_client = qos_param->qos_client_list.erase(it_qos_client);
 	}
-
-	qos_param->client_cnt--;
 
 	return IPACM_SUCCESS;
 }
@@ -11891,12 +11891,11 @@ int IPACM_Wlan::delete_all_wlan_client_info_from_qos(list<qos_param_info>::itera
 		}
 
 		it_qos_client = qos_param->qos_client_list.erase(it_qos_client);
+		qos_param->client_cnt--;
 	}
-	IPACMDBG_H("Qos client list for qos param after deleting client is now :%d \n",
-		qos_param->qos_client_list.size());
 
-	qos_param->client_cnt--;
-
+	IPACMDBG_H("Qos client list size:%d cnt %d\n",
+		qos_param->qos_client_list.size(), qos_param->client_cnt);
 	return ret;
 }
 

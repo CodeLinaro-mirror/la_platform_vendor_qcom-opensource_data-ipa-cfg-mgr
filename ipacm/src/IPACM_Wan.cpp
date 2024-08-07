@@ -5101,6 +5101,8 @@ int IPACM_Wan::add_catchup_dl_flt_rule_for_each_tunnel(
 	flt_rule_entry.rule.retain_hdr = 1;
 	flt_rule_entry.rule.to_uc = 0;
 	flt_rule_entry.rule.eq_attrib_type = 1;
+	flt_rule_entry.rule.hashable = true;
+	IPACMDBG_H("Adding EoGRE Hashable Tunnel flt rules..\n");
 	memcpy(&flt_rule_entry.rule.attrib, &rx_prop_attrib,
 	       sizeof(struct ipa_rule_attrib));
 	flt_rule_entry.rule.attrib.attrib_mask |= IPA_FLT_DST_ADDR;

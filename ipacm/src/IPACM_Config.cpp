@@ -839,6 +839,9 @@ skip_fnr_alloc:
 	rt_tbl_wan_dl.ip = IPA_IP_MAX;
 	strlcpy(rt_tbl_wan_dl.name, WAN_DL_ROUTE_TABLE_NAME, sizeof(rt_tbl_wan_dl.name));
 
+	rt_tbl_default_v6.ip = IPA_IP_v6;
+	strlcpy(rt_tbl_default_v6.name, V6_DEFAULT_ROUTE_TABLE_NAME, sizeof(rt_tbl_default_v6.name));
+
 	/* Construct IPACM ipa_client map to rm_resource table */
 	ipa_client_rm_map_tbl[IPA_CLIENT_WLAN1_PROD]= IPA_RM_RESOURCE_WLAN_PROD;
 	ipa_client_rm_map_tbl[IPA_CLIENT_USB_PROD]= IPA_RM_RESOURCE_USB_PROD;

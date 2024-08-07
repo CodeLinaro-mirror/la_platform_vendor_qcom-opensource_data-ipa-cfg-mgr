@@ -15333,8 +15333,10 @@ int IPACM_Lan::modify_ipv6_prefix_flt_rule()
 		}
 
 		/* not supported for wlan vlan for now */
-		if (ipa_if_cate == WLAN_IF && !is_wlan_if_vlan) {
-			IPACMERR("not supported for wlan vlan\n");
+		if (ipa_if_cate == WLAN_IF && !is_wlan_if_vlan &&
+					!IPACM_Iface::ipacmcfg->ipacm_static_policy_enable) {
+			IPACMERR("not supported for wlan without vlan in"
+						" non-static policy mode.\n");
 			return IPACM_SUCCESS;
 		}
 
@@ -15461,17 +15463,25 @@ int IPACM_Lan::modify_ipv6_prefix_flt_rule()
 		pFilteringTable->ep = rx_prop->rx[idx].src_pipe;
 		pFilteringTable->add_after_hdl = mtu_flt_rule_offset[j][IPA_IP_v6];
 
+		/* Make LAN-traffic always go to Apps, use default IPA-RT table */
+		if (false == m_routing.GetRoutingTable(&IPACM_Iface::ipacmcfg->rt_tbl_default_v6)) {
+			IPACMERR("LAN m_routing.GetRoutingTable(&IPACM_Iface::ipacmcfg->rt_tbl_default_v6=0x%p) Failed.\n",
+						&IPACM_Iface::ipacmcfg->rt_tbl_default_v6);
+			free(pFilteringTable);
+			return IPACM_FAILURE;
+		}
+
 		memset(&flt_rule, 0, sizeof(struct ipa_flt_rule_add));
 		flt_rule.status = -1;
 		flt_rule.at_rear = 1;
 		flt_rule.rule.retain_hdr = 1;
 		flt_rule.rule.to_uc = 0;
-		flt_rule.rule.action = IPA_PASS_TO_EXCEPTION;
+		flt_rule.rule.action = IPA_PASS_TO_ROUTING;
+		flt_rule.rule.rt_tbl_hdl = IPACM_Iface::ipacmcfg->rt_tbl_default_v6.hdl;
 		flt_rule.rule.eq_attrib_type = 0;
 		/* first install DST address exception rules for offloaded PDNs */
 		for (i = 0; i < (IPACM_Iface::ipacmcfg->num_ipv6_prefixes); i++) {
 			/* add private prefix rule for ipv6 */
-			flt_rule.rule.action = IPA_PASS_TO_EXCEPTION;
 			flt_rule.rule.eq_attrib_type = 0;
 			memcpy(&flt_rule.rule.attrib, &rx_prop->rx[idx].attrib, sizeof(flt_rule.rule.attrib));
 			flt_rule.rule.attrib.attrib_mask |= IPA_FLT_DST_ADDR;
@@ -15797,6 +15807,13 @@ int IPACM_Lan::install_ipv6_prefix_flt_rule(uint32_t* prefix)
 		flt_rule->ip = IPA_IP_v6;
 		flt_rule->num_rules = rule_cnt;
 
+		/* Make LAN-traffic always go to Apps, use default IPA-RT table */
+		if (false == m_routing.GetRoutingTable(&IPACM_Iface::ipacmcfg->rt_tbl_default_v6)) {
+			IPACMERR("LAN m_routing.GetRoutingTable(&IPACM_Iface::ipacmcfg->rt_tbl_default_v6=0x%p) Failed.\n",
+						&IPACM_Iface::ipacmcfg->rt_tbl_default_v6);
+			return IPACM_FAILURE;
+		}
+
 		memset(&flt_rule_entry, 0, sizeof(struct ipa_flt_rule_add));
 
 		flt_rule_entry.rule.retain_hdr = 1;
@@ -15805,7 +15822,9 @@ int IPACM_Lan::install_ipv6_prefix_flt_rule(uint32_t* prefix)
 		flt_rule_entry.at_rear = true;
 		flt_rule_entry.flt_rule_hdl = -1;
 		flt_rule_entry.status = -1;
-		flt_rule_entry.rule.action = IPA_PASS_TO_EXCEPTION;
+		flt_rule_entry.rule.action = IPA_PASS_TO_ROUTING;
+		flt_rule_entry.rule.rt_tbl_hdl = IPACM_Iface::ipacmcfg->rt_tbl_default_v6.hdl;
+
 #ifdef FEATURE_IPA_V3
 		flt_rule_entry.rule.hashable = true;
 #endif

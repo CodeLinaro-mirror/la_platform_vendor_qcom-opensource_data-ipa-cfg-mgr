@@ -1359,6 +1359,7 @@ static int ipa_nl_decode_nlmsg
 							}
 							strlcpy(IPACM_Iface::ipacmcfg->iface_table[IPACM_Iface::ipacmcfg->eth_wan_iface_table_idx].iface_name,
 								dev_name, sizeof(IPACM_Iface::ipacmcfg->iface_table[IPACM_Iface::ipacmcfg->eth_wan_iface_table_idx].iface_name));
+							IPACM_Iface::ipacmcfg->iface_table[IPACM_Iface::ipacmcfg->eth_wan_iface_table_idx].virtualIface = true;
 
 							data_fid->if_index = msg_ptr->nl_route_info.attr_info.oif_index;
 							evt_data.event = IPA_USB_LINK_UP_EVENT;
@@ -1526,6 +1527,7 @@ static int ipa_nl_decode_nlmsg
 						}
 						strlcpy(IPACM_Iface::ipacmcfg->iface_table[IPACM_Iface::ipacmcfg->eth_wan_iface_table_idx].iface_name,
 							dev_name, sizeof(IPACM_Iface::ipacmcfg->iface_table[IPACM_Iface::ipacmcfg->eth_wan_iface_table_idx].iface_name));
+						IPACM_Iface::ipacmcfg->iface_table[IPACM_Iface::ipacmcfg->eth_wan_iface_table_idx].virtualIface = true;
 
 						data_fid->if_index = msg_ptr->nl_route_info.attr_info.oif_index;
 						evt_data.event = IPA_USB_LINK_UP_EVENT;
@@ -2690,6 +2692,7 @@ int ipa_nl_send_getroute(ipa_ip_type ip_type)
 						}
 						strlcpy(IPACM_Iface::ipacmcfg->iface_table[IPACM_Iface::ipacmcfg->eth_wan_iface_table_idx].iface_name,
 							dev_name, sizeof(IPACM_Iface::ipacmcfg->iface_table[IPACM_Iface::ipacmcfg->eth_wan_iface_table_idx].iface_name));
+						IPACM_Iface::ipacmcfg->iface_table[IPACM_Iface::ipacmcfg->eth_wan_iface_table_idx].virtualIface = true;
 
 						data_fid->if_index = nl_route_info_get_route.attr_info.oif_index;
 						evt_data.event = IPA_USB_LINK_UP_EVENT;
@@ -2861,6 +2864,7 @@ int ipa_nl_send_getroute(ipa_ip_type ip_type)
 					}
 					strlcpy(IPACM_Iface::ipacmcfg->iface_table[IPACM_Iface::ipacmcfg->eth_wan_iface_table_idx].iface_name,
 						dev_name, sizeof(IPACM_Iface::ipacmcfg->iface_table[IPACM_Iface::ipacmcfg->eth_wan_iface_table_idx].iface_name));
+					IPACM_Iface::ipacmcfg->iface_table[IPACM_Iface::ipacmcfg->eth_wan_iface_table_idx].virtualIface = true;
 
 					data_fid->if_index = nl_route_info_get_route.attr_info.oif_index;
 					evt_data.event = IPA_USB_LINK_UP_EVENT;

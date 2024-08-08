@@ -609,7 +609,6 @@ int IPACM_Config::Init(void)
 	{
 		iface_table[eth_wan_iface_table_idx].if_cat = WAN_IF;
 		iface_table[eth_wan_iface_table_idx].if_mode = ROUTER;
-		iface_table[eth_wan_iface_table_idx].virtualIface = true;
 		strlcpy(iface_table[eth_wan_iface_table_idx].physDevName,
 			ETH_INTF, sizeof(iface_table[eth_wan_iface_table_idx].iface_name));
 	}

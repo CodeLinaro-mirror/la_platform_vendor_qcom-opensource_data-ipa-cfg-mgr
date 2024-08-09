@@ -16,8 +16,16 @@ endif #TARGET_USES_QMAA
 BOARD_IPA_LOW_RAM_EXCP_LIST := bengal
 BOARD_IPA_LOW_RAM_EXCP_LIST += monaco
 
+BOARD_IPA_LOW_1G_DDR_RAM := bengal
+
 ifeq ($(TARGET_HAS_LOW_RAM),true)
 ifneq ($(call is-board-platform-in-list,$(BOARD_IPA_LOW_RAM_EXCP_LIST)),true)
+	TARGET_DISABLE_IPACM := true
+endif
+endif
+
+ifeq ($(TARGET_1G_DDR_RAM),true)
+ifeq ($(call is-board-platform-in-list,$(BOARD_IPA_LOW_1G_DDR_RAM)),true)
 	TARGET_DISABLE_IPACM := true
 endif
 endif

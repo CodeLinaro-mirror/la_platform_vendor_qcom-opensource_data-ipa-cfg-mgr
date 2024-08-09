@@ -26,7 +26,7 @@ endif
 
 ifeq ($(TARGET_1G_DDR_RAM),true)
 ifeq ($(call is-board-platform-in-list,$(BOARD_IPA_LOW_1G_DDR_RAM)),true)
-       TARGET_DISABLE_IPACM := true
+	TARGET_DISABLE_IPACM := true
 endif
 endif
 

@@ -673,12 +673,16 @@ public:
 	/* remove from prefixes list if needed and notify LAN objects to modify rules*/
 	inline int del_vlan_ipv6_prefix(uint32_t* prefix, int ipa_if_num, bool reserve_slot = false)
 	{
-		int i = 0;
-		IPACMDBG_H("prefix %d", num_ipv6_prefixes);
-		
+		int i = 0, j = 0, k = 0;
+		int first_zeroed_index = -1;
+		int num_deleted_prefixes = 0;
+		IPACMDBG_H("number of prefixes %d\n", num_ipv6_prefixes);
+
 		for(i = 0; i < num_ipv6_prefixes; i++)
 		{
-			IPACMERR("prefix 0x[%X][%X] and check prefix 0x[%X][%X] \n", prefix[0], prefix[1], ipa_ipv6_prefixes[i].addr[0], ipa_ipv6_prefixes[i].addr[1]);
+			IPACMDBG("prefix 0x[%X][%X] and check prefix 0x[%X][%X] Vlan id: %d\n",
+					prefix[0], prefix[1], ipa_ipv6_prefixes[i].addr[0],
+					ipa_ipv6_prefixes[i].addr[1], ipa_ipv6_prefixes[i].vlan_id);
 			if((prefix[0] == ipa_ipv6_prefixes[i].addr[0]) && (prefix[1] == ipa_ipv6_prefixes[i].addr[1]))
 			{
 				if (reserve_slot) {
@@ -687,37 +691,87 @@ public:
 					ipa_ipv6_prefixes[i].addr[1] = IPA_DUMMY_PREFIX;
 				}
 				else {
-					for(; i < (num_ipv6_prefixes - 1); i++)
-					{
-						IPACMDBG_H("prefix 0x[%X][%X] will be removed\n", prefix[0], prefix[1]);
-						ipa_ipv6_prefixes[i].addr[0] = ipa_ipv6_prefixes[i + 1].addr[0];
-						ipa_ipv6_prefixes[i].addr[1] = ipa_ipv6_prefixes[i + 1].addr[1];
-						ipa_ipv6_prefixes[i].vlan_id = ipa_ipv6_prefixes[i + 1].vlan_id;
-					}
-					num_ipv6_prefixes--;
+					IPACMDBG_H("prefix 0x[%X][%X] Vlan %d will be removed\n",
+							prefix[0], prefix[1],
+							ipa_ipv6_prefixes[i].vlan_id);
+					ipa_ipv6_prefixes[i].addr[0] = 0;
+					ipa_ipv6_prefixes[i].addr[1] = 0;
+					ipa_ipv6_prefixes[i].vlan_id = 0;
+					num_deleted_prefixes++;
+					if(first_zeroed_index == -1)
+						first_zeroed_index = i;
 				}
-
-				/* tell other LAN interfaces that we have a change in v6 prefixes */
-				SendPrefixChangeEvent(ipa_if_num);
-				return IPACM_SUCCESS;
 			}
 		}
+		if(num_deleted_prefixes > 0)
+		{
+			/* tell other LAN interfaces that we have a change in v6 prefixes */
+			SendPrefixChangeEvent(ipa_if_num);
+
+			/* Re-adjust the array before decrementing num_ipv6_prefixes.
+			   Find zeroed out places (above loop did this) in the array
+			   and move non-zeroed elements to their place.
+			   No swap means, all set. */
+			j = first_zeroed_index;
+			k = j+1;
+			while(k < num_ipv6_prefixes)
+			{
+				if((ipa_ipv6_prefixes[k].vlan_id != 0) &&
+				   (ipa_ipv6_prefixes[k].addr[0] != 0) &&
+				   (ipa_ipv6_prefixes[k].addr[1] != 0))
+				{
+					ipa_ipv6_prefixes[j].vlan_id = ipa_ipv6_prefixes[k].vlan_id;
+					ipa_ipv6_prefixes[j].addr[0] = ipa_ipv6_prefixes[k].addr[0];
+					ipa_ipv6_prefixes[j].addr[1] = ipa_ipv6_prefixes[k].addr[1];
+					j++;
+					k++;
+				}
+				else
+					k++;
+			}
+			num_ipv6_prefixes -= num_deleted_prefixes;
+			IPACMDBG_H("After delete: number of prefixes %d\n", num_ipv6_prefixes);
+			return IPACM_SUCCESS;
+		}
+		IPACMDBG_H("Could not find the Prefix 0x[%X][%X] in ipa_ipv6_prefixes\n", prefix[0], prefix[1]);
 		/* remove from no offload list */
 		for(i = 0; i < num_no_offload_ipv6_prefix; i++)
 		{
 			if((prefix[0] == ipa_no_offload_ipv6_prefixes[i][0]) && (prefix[1] == ipa_no_offload_ipv6_prefixes[i][1]))
 			{
-				for(; i < (num_no_offload_ipv6_prefix - 1); i++)
-				{
-					ipa_no_offload_ipv6_prefixes[i][0] = ipa_no_offload_ipv6_prefixes[i + 1][0];
-					ipa_no_offload_ipv6_prefixes[i][1] = ipa_no_offload_ipv6_prefixes[i + 1][1];
-				}
-				num_no_offload_ipv6_prefix--;
 				IPACMDBG_H("removed prefix 0x[%X][%X] from no offload list\n", prefix[1], prefix[2]);
-				/* tell other LAN interfaces that we have a change in v6 prefixes */
-				SendPrefixChangeEvent(ipa_if_num);
-				return IPACM_SUCCESS;
+				ipa_no_offload_ipv6_prefixes[i][0] = 0;
+				ipa_no_offload_ipv6_prefixes[i][1] = 0;
+				num_deleted_prefixes++;
+				if(first_zeroed_index == -1)
+					first_zeroed_index = i;
 			}
+		}
+		if(num_deleted_prefixes > 0)
+		{
+			/* tell other LAN interfaces that we have a change in v6 prefixes */
+			SendPrefixChangeEvent(ipa_if_num);
+
+			j = first_zeroed_index;
+			k = j+1;
+			while(k < num_ipv6_prefixes)
+			{
+				if((ipa_ipv6_prefixes[k].vlan_id != 0) &&
+				   (ipa_ipv6_prefixes[k].addr[0] != 0) &&
+				   (ipa_ipv6_prefixes[k].addr[1] != 0))
+				{
+					ipa_ipv6_prefixes[j].vlan_id = ipa_ipv6_prefixes[k].vlan_id;
+					ipa_ipv6_prefixes[j].addr[0] = ipa_ipv6_prefixes[k].addr[0];
+					ipa_ipv6_prefixes[j].addr[1] = ipa_ipv6_prefixes[k].addr[1];
+					j++;
+					k++;
+				}
+				else
+					k++;
+			}
+			num_no_offload_ipv6_prefix -= num_deleted_prefixes;
+			IPACMDBG_H("After delete: number of no offload prefixes %d\n", num_no_offload_ipv6_prefix);
+			return IPACM_SUCCESS;
 		}
 		IPACMERR("couldn't find prefix 0x[%X][%X] in either no offload nor offload list\n", prefix[0], prefix[1]);
 		return IPACM_FAILURE;

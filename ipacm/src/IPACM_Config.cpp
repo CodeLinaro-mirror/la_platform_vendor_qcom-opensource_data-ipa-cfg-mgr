@@ -144,7 +144,7 @@ const char *ipacm_event_name[] = {
 	__stringify(IPA_ROUTE_ADD_VLAN_PDN_EVENT),             /* ipacm_event_route_vlan */
 	__stringify(IPA_HANDLE_WAN_VLAN_PDN_UP),               /* ipacm_event_vlan_pdn */
 	__stringify(IPA_HANDLE_WAN_VLAN_PDN_DOWN),             /* ipacm_event_vlan_pdn */
-	__stringify(IPA_NOTIFY_VLAN_UP),                       /* NULL */
+	__stringify(IPA_NOTIFY_VLAN_UP),                       /* ipacm_event_data_vlan */
 #endif
 #ifdef FEATURE_SOCKSv5
 	__stringify(IPA_HANDLE_SOCKSv5_UP),                    /* ipacm_event_connection */
@@ -1509,6 +1509,7 @@ void IPACM_Config::add_vlan_iface(ipa_ioc_vlan_iface_info *data)
 	list<vlan_iface_info>::iterator it_vlan;
 	vlan_iface_info new_vlan_info;
 	ipacm_cmd_q_data evt_data;
+	ipacm_event_data_vlan *vlan_data;
 
 	if(pthread_mutex_lock(&vlan_l2tp_lock) != 0)
 	{
@@ -1599,8 +1600,15 @@ void IPACM_Config::add_vlan_iface(ipa_ioc_vlan_iface_info *data)
 	 * This will handle scenario where add_vlan_iface is received after
 	 * LAN IPA_NEW_ADDR have already been processed.
 	 */
+	vlan_data = (ipacm_event_data_vlan *)malloc(sizeof(*vlan_data));
+	if(vlan_data == NULL)
+	{
+		IPACMERR("Failed to allocate memory.\n");
+		return;
+	}
+	vlan_data->vlan_id = data->vlan_id;
 	evt_data.event = IPA_NOTIFY_VLAN_UP;
-	evt_data.evt_data = NULL;
+	evt_data.evt_data = (void*)vlan_data;
 	IPACMDBG_H("Posting IPA_NOTIFY_VLAN_UP event!\n", evt_data.event);
 	IPACM_EvtDispatcher::PostEvt(&evt_data);
 

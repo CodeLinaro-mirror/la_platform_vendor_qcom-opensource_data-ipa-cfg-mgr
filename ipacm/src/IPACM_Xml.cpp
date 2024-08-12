@@ -780,9 +780,9 @@ static int ipacm_cfg_xml_parse_tree
 				else if (IPACM_util_icmp_string((char*)xml_node->name, CATEGORY_TAG) == 0)
 				{
 					content = IPACM_read_content_element(xml_node);
-					str_size = strlen(content);
 					if (content)
 					{
+					    str_size = strlen(content);
 					    if (0 == strncasecmp(content, WANIF_TAG, str_size))
 					        config->iface_config.iface_entries[config->iface_config.num_iface_entries - 1].if_cat = WAN_IF;
 					    else if (0 == strncasecmp(content, LANIF_TAG, str_size))
@@ -874,9 +874,9 @@ static int ipacm_cfg_xml_parse_tree
 				{
 					config->nat_table_memtype = DDR_TABLETYPE_TAG;
 					content = IPACM_read_content_element(xml_node);
-					str_size = strlen(content);
 					if (content)
 					{
+					    str_size = strlen(content);
 					    if (0 == strncasecmp(content, DDR_TABLETYPE_TAG, str_size))
 						    config->nat_table_memtype = DDR_TABLETYPE_TAG;
 					    else if (0 == strncasecmp(content, SRAM_TABLETYPE_TAG, str_size))

@@ -2801,6 +2801,7 @@ void IPACM_Config::del_l2tp_tunnel_info(uint32_t tunnel_id)
 			if(vlan_data == NULL)
 			{
 				IPACMERR("Failed to allocate memory.\n");
+				pthread_mutex_unlock(&vlan_l2tp_lock);
 				return;
 			}
 			memset(vlan_data, 0, sizeof(ipacm_event_route_vlan));

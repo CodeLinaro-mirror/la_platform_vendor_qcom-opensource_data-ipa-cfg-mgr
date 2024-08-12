@@ -399,6 +399,7 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 	ipacm_event_iface_up_tehter* data_wan_tether;
 	list <ipacm_event_data_all>::iterator it;
 	ipacm_event_data_all *data_all=NULL;
+	ipacm_event_data_vlan *vlan_data = NULL;
 	ipacm_cmd_q_data evt_data;
 	int clnt_indx = 0;
 	ipa_bridge_vlan_mapping_info mapping_info;
@@ -1571,7 +1572,8 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 	case IPA_NOTIFY_VLAN_UP:
 		{
 			IPACMDBG_H("Received IPA_NOTIFY_VLAN_UP\n");
-			if(IPACM_Iface::ipacmcfg->iface_in_vlan_mode(dev_name))
+			vlan_data = (ipacm_event_data_vlan *)param;
+			if(is_vlan_IF(vlan_data->vlan_id))
 			{
 				IPACMDBG_H("Check any missed v4 VLAN handling in v4 new ADDR\n");
 				check_vlan_PDNUp(IPA_IP_v4);

@@ -148,7 +148,8 @@ public:
 
 	/* Static class for reading IPACM configuration from XML file*/
 	static IPACM_Config *ipacmcfg;
-
+	uint8_t prio[IPA_MAX_NUM_PROPS][IPA_IP_MAX] = {1};
+	uint8_t fixed_mac_prio_val[IPA_MAX_NUM_PROPS][IPA_IP_MAX] = {0};
 	/* IPACM interface id */
 	int ipa_if_num;
 

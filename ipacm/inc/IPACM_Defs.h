@@ -380,6 +380,7 @@ typedef enum
 	IPA_QOS_RULE_ADD_EVENT,                   /* ipacm_qos_rule_add_event */
 	IPA_QOS_RULE_DEL_EVENT,                   /* ipacm_qos_rule_del_event */
 	IPA_QOS_RULE_FLUSH_EVENT,                 /* ipacm_qos_rule_flush_event */
+	IPA_HANDLE_NEW_NEIGH_EVENT,               /* ipacm_event_data_fid */
 	IPACM_EVENT_MAX
 } ipa_cm_event_id;
 

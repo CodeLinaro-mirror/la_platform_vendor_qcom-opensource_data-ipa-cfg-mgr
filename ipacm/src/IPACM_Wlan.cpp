@@ -361,7 +361,7 @@ void IPACM_Wlan::event_callback(ipa_cm_event_id event, void *param)
 					else
 						IPACMDBG_H("WAN v6 is not UP\n");
 #endif //FEATURE_IPACM_UL_FIREWALL
-					IPACMDBG_H("Finished checking wan_up\n");
+                                        IPACMDBG_H("Finished checking wan_up\n");
 					/* checking if SW-RT_enable */
 					if (IPACM_Iface::ipacmcfg->ipa_sw_rt_enable == true)
 					{

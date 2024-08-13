@@ -1099,10 +1099,12 @@ void IPACM_LanToLan_Iface::add_client_rt_rule(peer_iface_info *peer_info, client
 	int i, num_rt_rule = 0;
 	uint32_t rt_rule_hdl[MAX_NUM_PROP];
 	ipa_hdr_l2_type peer_l2_hdr_type;
+	list<peer_iface_info>::iterator itr;
 #ifdef FEATURE_VLAN_MPDN
 	std::array<uint8_t, 6> mac = {0};
 	std::map<std::array<uint8_t, 6>, int >::iterator it;
 #endif
+	int mac_found = 0;
 
 	if (!peer_info || !peer_info->peer || !client) {
 		IPACMDBG_H("Invalid peer or client info\n");
@@ -1137,11 +1139,29 @@ void IPACM_LanToLan_Iface::add_client_rt_rule(peer_iface_info *peer_info, client
 			if(client->vlan_id)
 				IPACMDBG_H("client vlan id %d\n", client->vlan_id);
 
-			/* check if peer already has rt rule for this mac address */
 			it = peer_info->mac_rt_rule_ref.find(mac);
+			if(it != peer_info->mac_rt_rule_ref.end() &&
+				!peer_info->peer->is_spcl_iface())
+			{
+				mac_found = 1;
+				return;
+			}
+
+			/* check if peer already has rt rule for this mac address */
+			for (itr = m_peer_iface_info.begin();
+				itr != m_peer_iface_info.end(); itr++)
+			{
+				it = (*itr).mac_rt_rule_ref.find(mac);
+				if(it != (*itr).mac_rt_rule_ref.end()
+					&& !(*itr).peer->is_spcl_iface())
+				{
+					mac_found = 1;
+					break;
+				}
+			}
 
 			/* Only special interface can have same mac address twice, one for eth_to_eth and other for 802_to_eth */
-			if(it != peer_info->mac_rt_rule_ref.end()  && !peer_info->peer->is_spcl_iface())
+			if(mac_found == 1)
 			{
 				/* mac address already has rt rules, increase ref cnt and copy rt rules handles for future deletion*/
 				(it->second)++;

@@ -198,6 +198,8 @@ const char *ipacm_event_name[] = {
 #ifdef FEATURE_EoGRE
 	__stringify(IPA_HANDLE_EoGRE_UP),                      /* Handle eogre enable event. */
 	__stringify(IPA_HANDLE_EoGRE_DOWN),                    /* Handle eogre disable event. */
+	__stringify(IPA_WAN_HANDLE_EoGRE_UP),                      /* Handle eogre enable event. */
+	__stringify(IPA_WAN_HANDLE_EoGRE_DOWN),                    /* Handle eogre disable event. */
 #endif
 	__stringify(IPA_DSCP_PCP_CONFIG_CHANGE_EVENT),         /* NULL */
 #ifdef FEATURE_PMIPV6
@@ -304,6 +306,9 @@ IPACM_Config::IPACM_Config()
 #ifdef FEATURE_EoGRE
 	memset(&eogre_info, 0, sizeof(eogre_info));
 	eogre_enabled = false;
+	memset(tunnel_idx_map, 0, sizeof(tunnel_idx_map));
+	for (int i = 0; i < MAX_TUNNEL_SUPPORT; i++)
+		pthread_mutex_init(&mutexA[i], NULL);
 #endif
 #ifdef FEATURE_PMIPV6
 	memset(&ipgre_info, 0, sizeof(ipgre_info));
@@ -1001,6 +1006,10 @@ void IPACM_Config::update_config_private_forwarding(bool reset){
 	}
 
 	fp = fopen("/etc/data/ipa_config.txt", "r");
+	if (fp == NULL) {
+		IPACMERR("can't open ipa_config file\n");
+		return;
+	}
 	fread(file_buf, 100, 1, fp);
 	fclose(fp);
 	if(strstr(file_buf, "ipforward")){

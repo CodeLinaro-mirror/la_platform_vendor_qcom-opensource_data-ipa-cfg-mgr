@@ -88,6 +88,7 @@
 #include<algorithm>
 
 #include <iostream>
+#include <vector>
 #include <ostream>
 
 typedef struct
@@ -110,7 +111,7 @@ typedef struct _ipa_rm_client
 
 #define MAX_NUM_EXT_PROPS 25
 #define MAX_NUM_IP_PASS_MPDN 15
-
+#define MAX_WAN_UL_FILTER_RULES MAX_NUM_EXT_PROPS
 /* used to hold extended properties */
 typedef struct
 {
@@ -352,6 +353,36 @@ public:
 	bool           eogre_enabled;
 	uint8_t        tunnel_feature;
 	void get_tunnel_feature();
+	typedef struct gre_route_hdl_s
+	{
+		uint32_t proc_ctx_gre_rmv_hdl;
+		uint32_t rt_gre_rmv_hdl;
+	} gre_route_hdl_t;
+
+	/*
+	 * multi-tunnel mapping info for
+	 * tunnel rule handling
+	 */
+	typedef struct tunnel_id_info {
+		enum ipa_ip_type iptype;
+		uint32_t ipv4_src;
+		uint32_t ipv4_dst;
+		uint32_t eogre_wan_ul_fl_rule_hdl_v4[MAX_WAN_UL_FILTER_RULES];
+		uint8_t num_wan_ul_eogre_fl_rule_v4;
+		bool modem_eogre_ul_v4_set;
+		uint32_t ipv6_src[4];
+		uint32_t ipv6_dst[4];
+		uint32_t eogre_wan_ul_fl_rule_hdl_v6[MAX_WAN_UL_FILTER_RULES];
+		uint8_t num_wan_ul_eogre_fl_rule_v6;
+		bool modem_eogre_ul_v6_set;
+		gre_route_hdl_t gre_route_data[IPA_IP_MAX];
+		char gre_rt_tbl_name[IPA_RESOURCE_NAME_MAX];
+	} tunnel_id_info_s;
+
+	/*Vector to keep track of tunnel idx*/
+	std::vector <int> tunnel_idx;
+	tunnel_id_info_s tunnel_idx_map[MAX_TUNNEL_SUPPORT];
+	pthread_mutex_t mutexA[MAX_TUNNEL_SUPPORT];
 #endif
 	/* Private IP forwarding details*/
 	typedef struct private_IP_Forwarding_Config
@@ -718,6 +749,16 @@ public:
 		{
 			flt_rule_count_v6[index] -= decrement;
 			IPACMDBG_H("Now num of v6 flt rules on client %d is %d.\n", index, flt_rule_count_v6[index]);
+		}
+
+		if(flt_rule_count_v4[index] < 0)
+		{
+			flt_rule_count_v4[index] = 0;
+		}
+
+		if(flt_rule_count_v6[index] < 0)
+		{
+			flt_rule_count_v6[index] = 0;
 		}
 		return;
 	}

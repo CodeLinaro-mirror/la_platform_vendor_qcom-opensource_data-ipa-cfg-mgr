@@ -624,11 +624,9 @@ public:
 
 	void eogre_down();
 
-	int eogre_v4_work(
-		bool eogre_enable );
+	int eogre_v4_work(bool eogre_enable, uint8_t tunnel_id = 0xFF);
 
-	int eogre_v6_work(
-		bool eogre_enable );
+	int eogre_v6_work(bool eogre_enable, uint8_t tunnel_id = 0xFF);
 
 	int eogre_notify_wan_state(
 		bool eogre_enable );
@@ -996,7 +994,8 @@ private:
 
 	ipa_ioc_query_intf_ext_props *ext_prop;
 
-	int config_wan_firewall_rule(ipa_ip_type iptype,bool isPmipv6=false);
+	int config_wan_firewall_rule(ipa_ip_type iptype, bool isPmipv6 = false,
+			uint8_t tunnel_id = 0xFF);
 
 	int del_wan_firewall_rule(ipa_ip_type iptype);
 
@@ -1037,6 +1036,19 @@ private:
 		const struct ipa_rule_attrib& rx_prop_attrib, struct ipa_flt_rule_add& flt_rule_add, int fltr_rule_number, bool isPmipv6 = false, uint8_t muxid=0);
 	int add_dl_untagged_catchup_filtering_rule_each_pdn(const IPACM_firewall_conf_t& firewall_config, ipa_ip_type iptype,
 		const struct ipa_rule_attrib& rx_prop_attrib, struct ipa_flt_rule_add& flt_rule_add, int fltr_rule_number, bool isPmipv6 = false);
+
+#ifdef FEATURE_EoGRE
+	int config_eogre_dl_rules_ex(struct ipacm_pdn_flt_rule *rules,
+				int rule_offset, ipa_ip_type iptype,
+				uint8_t tunnel_id = 0xFF);
+
+	int add_catchup_dl_flt_rule_for_each_tunnel(
+		const IPACM_firewall_conf_t &firewall_config,
+		ipa_ip_type iptype,
+		const struct ipa_rule_attrib &rx_prop_attrib,
+		struct ipa_flt_rule_add &flt_rule_add, int fltr_rule_number,
+		uint8_t tunnel_id = 0xFF);
+#endif
 
 #ifdef FEATURE_IPV6_NAT
 #ifdef FEATURE_VLAN_MPDN

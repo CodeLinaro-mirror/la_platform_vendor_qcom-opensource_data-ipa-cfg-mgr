@@ -443,7 +443,7 @@ static int ipacm_cfg_xml_parse_tree
 					}
 				}
 				/* Dst Ip address not to offload*/
-				else if (IPACM_util_icmp_string((char*)xml_node->name, Exception_Ip_Address_TAG) == 0)
+				else if (IPACM_util_icmp_string((char*)xml_node->name, Alias_Ip_Address_TAG) == 0)
 				{
 					content = IPACM_read_content_element(xml_node);
 					if (content)
@@ -457,7 +457,7 @@ static int ipacm_cfg_xml_parse_tree
 						IPACMDBG_H("Src IP for exception path: %s \n", content_buf);
 					}
 				}
-				else if (IPACM_util_icmp_string((char*)xml_node->name, Exception_Ip_AddrMask_TAG) == 0)
+				else if (IPACM_util_icmp_string((char*)xml_node->name, Alias_Ip_AddrMask_TAG) == 0)
 				{
 					content = IPACM_read_content_element(xml_node);
 					if (content)
@@ -1115,6 +1115,7 @@ static int IPACM_tunnel_xml_parse_tree(const char *xml_file, xmlNode* xml_node, 
 						{
 							memset(content_buf, 0, sizeof(content_buf));
 							memcpy(content_buf, (void *)content, strlen(content));
+							content_buf[MAX_XML_STR_LEN-1] = '\0';
 							tunnel_cfg->pmipv6_enable = atoi(content_buf);
 							IPACMDBG_H("PMIPv6 is %d\n", tunnel_cfg->pmipv6_enable);
 						}
@@ -2029,6 +2030,7 @@ static int IPACM_cfg_ext_xml_parse_tree
 							str_size = strlen(content);
 							memset(content_buf, 0, sizeof(content_buf));
 							memcpy(content_buf, (void *)content, str_size);
+							content_buf[MAX_XML_STR_LEN-1] = '\0';
 							if (atoi(content_buf)==1)
 							{
 								config->add = 1;
@@ -2058,6 +2060,7 @@ static int IPACM_cfg_ext_xml_parse_tree
 						str_size = strlen(content);
 						memset(content_buf, 0, sizeof(content_buf));
 						memcpy(content_buf, (void *)content, str_size);
+						content_buf[MAX_XML_STR_LEN-1] = '\0';
 						if ( atoi(content_buf) != (int)(*map_index - 1) )
 						{
 							IPACMERR("DSCP value wrongly added, index = %d\n",(*map_index - 1));
@@ -2074,6 +2077,7 @@ static int IPACM_cfg_ext_xml_parse_tree
 						str_size = strlen(content);
 						memset(content_buf, 0, sizeof(content_buf));
 						memcpy(content_buf, (void *)content, str_size);
+						content_buf[MAX_XML_STR_LEN-1] = '\0';
 						pcp_value = atoi(content_buf);
 						if ((pcp_value > -1) && (pcp_value < 8) && (*map_index >= 1))
 						{

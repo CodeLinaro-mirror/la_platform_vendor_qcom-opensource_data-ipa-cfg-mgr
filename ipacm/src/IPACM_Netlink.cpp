@@ -28,7 +28,7 @@ IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 /*Changes from Qualcomm Innovation Center are provided under the following license:
 
-Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+Copyright (c) 2023-2024 Qualcomm Innovation Center, Inc. All rights reserved.
 SPDX-License-Identifier: BSD-3-Clause-Clear*/
 /*!
 	@file
@@ -468,6 +468,11 @@ static int populate_gre_details(struct ifinfomsg* ifi, int len, int type){
 	struct in6_addr daddr6;
 	enum ipa_ip_type iptype;
 	pConfig = IPACM_Config::GetInstance();
+	if (pConfig == NULL)
+	{
+		IPACMERR("Unable to get Config instance \n");
+		return IPACM_FAILURE;
+	}
 	if(type==778){
 		iptype=IPA_IP_v4;
 	}
@@ -559,6 +564,11 @@ static int tunnel_delete(struct ifinfomsg* ifi, int len, int type)
 	struct in6_addr daddr6;
 	enum ipa_ip_type iptype;
 	pConfig = IPACM_Config::GetInstance();
+	if (pConfig == NULL)
+	{
+		IPACMERR("Unable to get Config instance \n");
+		return IPACM_FAILURE;
+	}
 	if(type==778)
 	{
 		iptype=IPA_IP_v4;

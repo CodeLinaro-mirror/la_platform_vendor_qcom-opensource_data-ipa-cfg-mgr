@@ -230,11 +230,16 @@ public:
 	size_t operator()(const ipa_ioc_ipsec_ul_flt_attr uf) const
 	{
 		return 	std::hash<uint32_t>()(uf.ip) ^
-			std::hash<uint32_t>()(uf.attr.spi) ^
 			std::hash<uint32_t>()((uint32_t)uf.attr.src_port |
 					      ((uint32_t)uf.attr.dst_port << 16)) ^
+			std::hash<uint32_t>()((uint32_t)uf.attr.src_port_lo |
+					      ((uint32_t)uf.attr.src_port_hi << 16)) ^
+			std::hash<uint32_t>()((uint32_t)uf.attr.dst_port_lo |
+					      ((uint32_t)uf.attr.dst_port_hi << 16)) ^
 			std::hash<uint32_t>()((uint32_t)uf.attr.u.v4.protocol |
 					      ((uint32_t)uf.attr.u.v6.next_hdr << 8)) ^
+			std::hash<uint32_t>()(uf.attr.u.v4.src_addr) ^
+			std::hash<uint32_t>()(uf.attr.u.v4.dst_addr) ^
 			std::hash<uint32_t>()(uf.attr.u.v6.src_addr[0]) ^
 			std::hash<uint32_t>()(uf.attr.u.v6.src_addr[1]) ^
 			std::hash<uint32_t>()(uf.attr.u.v6.src_addr[2]) ^

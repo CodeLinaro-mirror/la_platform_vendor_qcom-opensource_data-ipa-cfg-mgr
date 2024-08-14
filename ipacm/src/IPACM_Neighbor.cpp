@@ -68,6 +68,7 @@ IPACM_Neighbor::IPACM_Neighbor()
 	IPACM_EvtDispatcher::registr(IPA_NEW_NEIGH_EVENT, this);
 	IPACM_EvtDispatcher::registr(IPA_DEL_NEIGH_EVENT, this);
 	IPACM_EvtDispatcher::registr(IPA_USB_LINK_UP_EVENT, this);
+	IPACM_EvtDispatcher::registr(IPA_HANDLE_NEW_NEIGH_EVENT, this);
 
 	return;
 }
@@ -217,6 +218,13 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 			}
 		}
 		break;
+		case IPA_HANDLE_NEW_NEIGH_EVENT:
+		{
+			ipacm_event_data_fid *data = (ipacm_event_data_fid *)param;
+			ipa_interface_index = IPACM_Iface::iface_ipa_index_query(data->if_index);
+			IPACMDBG_H("Received IPA_HANDLE_NEW_NEIGH_EVENT with if_index: %d, ipa_interface_index = %d\n", data->if_index, ipa_interface_index);
+			IPACMDBG_H("As part of handling IPA_HANDLE_NEW_NEIGH_EVENT we will process IPA_USB_LINK_UP_EVENT\n");
+		}
 		case IPA_USB_LINK_UP_EVENT:
 		{
 			/* check by netdev interface to post CLIENT_IP_ADDR_ADD for all clients */

@@ -27,7 +27,7 @@
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  * Changes from Qualcomm Innovation Center are provided under the following license:
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear.
  */
 /*!
@@ -349,6 +349,7 @@ typedef enum
 	IPA_IPACM_DISABLE,                        /* void */
 	IPA_LAN_CLIENT_ADD_EVENT,		 /* Add MAC based rule for lan2lan offload with static-ip */
 	IPA_LAN_CLIENT_DEL_EVENT,		 /* Del MAC based rule for lan2lan offload with static-ip */
+	IPA_HANDLE_NEW_NEIGH_EVENT,               /* ipacm_event_data_fid */
 	IPACM_EVENT_MAX
 } ipa_cm_event_id;
 

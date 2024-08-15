@@ -1146,9 +1146,9 @@ void IPACM_Wlan::event_callback(ipa_cm_event_id event, void *param)
 							handle_pdn_dscp_wlan_client_route_rule(data->mac_addr, data->iptype, 0, 0, 0, 0, data->ipv6_addr);
 						}
 #endif
+						install_all_wlan_qos_route_rule(data->mac_addr, 0, data->ipv6_addr);
 						/* Add NAT/IPv6CT rules after RT rules are set */
 						HandleNeighIpAddrAddEvt(data);
-						install_all_wlan_qos_route_rule(data->mac_addr, 0, data->ipv6_addr);
 					}
 				}
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
@@ -1175,6 +1175,7 @@ void IPACM_Wlan::event_callback(ipa_cm_event_id event, void *param)
 							}
 						}
 #endif
+						install_all_wlan_qos_route_rule(data->mac_addr, 0);
 						HandleNeighIpAddrAddEvt(data);
 					}
 					else
@@ -1183,6 +1184,7 @@ void IPACM_Wlan::event_callback(ipa_cm_event_id event, void *param)
 						if(IPACM_Iface::ipacmcfg->mac_addr_in_blacklist(data->mac_addr) == false)
 						{
 							handle_wlan_client_route_rule_ext(data->mac_addr, data->iptype);
+							install_all_wlan_qos_route_rule(data->mac_addr, 0);
 							HandleNeighIpAddrAddEvt(data);
 						}
 					}
@@ -9950,7 +9952,6 @@ int IPACM_Wlan::handle_wlan_vlan_neighbor(ipacm_event_new_neigh_vlan *param) {
 	}
 
 	install_all_wlan_qos_route_rule(data->mac_addr, vlan_id, data->ipv6_addr);
-	install_default_qos_rt_rules(data->mac_addr, vlan_id, data->iptype);
 
 	/* Add NAT rules after ipv4 RT rules are set */
 	HandleNeighIpAddrAddEvt(data);

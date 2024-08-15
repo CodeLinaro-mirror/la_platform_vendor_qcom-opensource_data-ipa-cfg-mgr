@@ -2868,7 +2868,7 @@ int IPACM_Lan::handle_vlan_pdn_up(ipacm_event_vlan_pdn *data, bool set_mux)
 				}
 #endif
 				ret = handle_uplink_filter_rule(IPACM_Iface::ipacmcfg->GetExtProp(IPA_IP_v6), data->iptype, data->mux_id, false);
-				modem_ul_v6_set = true;
+				modem_ul_v6_set = !!num_wan_ul_fl_rule_v6;
 			}
 			/* for the next PDNs only notify modem about new MUX IDs */
 			else
@@ -2906,7 +2906,7 @@ int IPACM_Lan::handle_vlan_pdn_up(ipacm_event_vlan_pdn *data, bool set_mux)
 			if(modem_ul_v4_set == false)
 			{
 				ret = handle_uplink_filter_rule(IPACM_Iface::ipacmcfg->GetExtProp(IPA_IP_v4), data->iptype, data->mux_id, false, true);
-				modem_ul_v4_set = true;
+				modem_ul_v4_set = !!num_wan_ul_fl_rule_v4;
 			}
 			/* for the next PDNs only notify modem about new MUX IDs */
 			else

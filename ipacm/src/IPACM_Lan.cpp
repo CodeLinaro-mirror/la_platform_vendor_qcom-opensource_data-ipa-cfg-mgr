@@ -1144,7 +1144,6 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 				{
 					handle_eth_client_route_rule(data->mac_addr, data->iptype);
 					install_all_qos_route_rule(data->mac_addr, 0, data->ipv6_addr);
-					install_default_qos_rt_rules(data->mac_addr, 0, data->iptype);
 					IPACM_Iface::ipacmcfg->AddNatIfaces(data->iface_name);
 					/* Add NAT rules after RT rules are set */
 					HandleNeighIpAddrAddEvt(data);
@@ -1998,7 +1997,6 @@ int IPACM_Lan::handle_vlan_neighbor(ipacm_event_data_all *data)
 #endif
 		handle_eth_client_route_rule(data->mac_addr, data->iptype, vlan_id);
 		install_all_qos_route_rule(data->mac_addr, vlan_id, data->ipv6_addr);
-		install_default_qos_rt_rules(data->mac_addr, vlan_id, data->iptype);
 
 	if(IPACM_Iface::ipacmcfg->ipacm_mpdn_enable)
 	{
@@ -7484,16 +7482,6 @@ int IPACM_Lan::handle_down_evt()
 			res = IPACM_FAILURE;
 			goto fail;
 		}
-
-		IPACMDBG("Deleting dft qos v4 rt hdl 0x%x\n", dft_qos_rt_rule_hdl[0]);
-		if (m_routing.DeleteRoutingHdl(dft_qos_rt_rule_hdl[0], IPA_IP_v4)
-				== false)
-		{
-			IPACMERR("Routing rule deletion failed!\n");
-			res = IPACM_FAILURE;
-			goto fail;
-		}
-		dft_qos_rt_rule_hdl[0] = 0;
 	}
 	IPACMDBG_H("Finished delete default iface ipv4 rules \n ");
 
@@ -7510,18 +7498,6 @@ int IPACM_Lan::handle_down_evt()
 				res = IPACM_FAILURE;
 				goto fail;
 			}
-		}
-
-		for (i = 1; i < 3; i++)
-		{
-			IPACMDBG("Deleting dft qos v6 rt hdl 0x%x\n", dft_qos_rt_rule_hdl[i]);
-			if (m_routing.DeleteRoutingHdl(dft_qos_rt_rule_hdl[i], IPA_IP_v6)
-				== false) {
-				IPACMERR("Routing rule deletion failed!\n");
-				res = IPACM_FAILURE;
-				goto fail;
-			}
-			dft_qos_rt_rule_hdl[i] = 0;
 		}
 	}
 

@@ -195,8 +195,10 @@ typedef struct v6_ipgre_hdr_s
 #define IPV6_GRE_PROT_IDX  12
 #define IPV6_GRE_PMIP_PROT_IDX  10
 
-
-
+/*
+ * MPLS-PPPoE enable
+ */
+#define PPPOE_ENABLE 1
 
 /* wan iface */
 class IPACM_Wan : public IPACM_Iface
@@ -636,7 +638,8 @@ public:
 		ipa_ip_type                   iptype,
 		const struct ipa_rule_attrib& rx_prop_attrib,
 		struct ipa_flt_rule_add&      flt_rule_add,
-		int                           fltr_rule_number );
+		int                           fltr_rule_number,
+		bool is_pppoe = false );
 #endif /* #ifdef IPA_FLT_EXT_MPLS_GRE_GENERAL */
 #endif
 	int insert_frag_rule_dl(ipa_ip_type iptype, const struct ipa_rule_attrib& rx_prop_attrib,

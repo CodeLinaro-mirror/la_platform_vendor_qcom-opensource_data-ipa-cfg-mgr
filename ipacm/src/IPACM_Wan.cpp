@@ -8184,6 +8184,10 @@ int IPACM_Wan::installWanPostIpsecRt(ipa_ip_type ipType)
 			rt_rule_entry->rule.hashable = false;
 		}
 
+		/* Frag rules must be non-hashable */
+		if (rt_rule_entry->rule.attrib.attrib_mask & IPA_FLT_FRAGMENT)
+			rt_rule_entry->rule.hashable = false;
+
 		rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_META_DATA;
 		rt_rule_entry->rule.attrib.meta_data = META_IS_IPSEC;
 		rt_rule_entry->rule.attrib.meta_data_mask = META_IPSEC_MASK;

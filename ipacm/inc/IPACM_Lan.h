@@ -266,7 +266,6 @@ public:
 	bool dummy_prefix_installed;
 	bool is_vlan_offload_disabled;
 #endif
-
 	std::list <ipacm_event_data_all> neigh_cache;
 
 	/* LAN-iface's callback function */

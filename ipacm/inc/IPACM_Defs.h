@@ -262,7 +262,7 @@ typedef enum
 	IPA_ROUTE_ADD_VLAN_PDN_EVENT,             /* ipacm_event_route_vlan */
 	IPA_HANDLE_WAN_VLAN_PDN_UP,               /* ipacm_event_vlan_pdn */
 	IPA_HANDLE_WAN_VLAN_PDN_DOWN,             /* ipacm_event_vlan_pdn */
-	IPA_NOTIFY_VLAN_UP,                       /* NULL */
+	IPA_NOTIFY_VLAN_UP,                       /* ipacm_event_data_vlan */
 #endif
 #ifdef FEATURE_SOCKSv5
 	IPA_HANDLE_SOCKSv5_UP,                    /* ipacm_event_connection */
@@ -394,6 +394,11 @@ typedef struct
 {
 	ipacm_iface_type if_cat;
 } ipacm_event_data_if_cat;
+
+typedef struct
+{
+	uint16_t vlan_id;
+} ipacm_event_data_vlan;
 
 typedef struct _ipacm_event_data_iptype
 {

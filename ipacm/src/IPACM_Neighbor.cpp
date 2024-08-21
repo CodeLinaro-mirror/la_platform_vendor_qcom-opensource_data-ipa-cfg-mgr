@@ -87,9 +87,12 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 	bool move_elements;
 	int num_neighbor_client_temp = num_neighbor_client;
 	char iface_name[IPA_IFACE_NAME_LEN] = {0};
+	ipacm_bridge* dummy_vlan_bridge = NULL;
+	ipa_ioc_bridge_vlan_mapping_info mapping_info;
 
 	IPACMDBG("Recieved event %d\n", event);
 
+	memset(&mapping_info, 0, sizeof(mapping_info));
 	switch (event)
 	{
 		case IPA_WLAN_CLIENT_ADD_EVENT_EX:
@@ -132,25 +135,9 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 					/* check if iface is not bridge interface*/
 					if (strcmp(IPACM_Iface::ipacmcfg->ipa_virtual_iface_name, IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].iface_name) != 0)
 					{
-						/* use previous ipv4 first */
-						if(data->if_index != neighbor_client[i].iface_index)
-						{
-							IPACMERR("update new kernel iface index \n");
-							neighbor_client[i].iface_index = data->if_index;
-						}
-
-						/* check if client associated with previous network interface */
-						if(ipa_interface_index != neighbor_client[i].ipa_if_num)
-						{
-							/* replacing the updated iface */
-							IPACMERR("client associate to different AP, update to %s \n", IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].iface_name);
-							neighbor_client[i].ipa_if_num = ipa_interface_index;
-							strlcpy(neighbor_client[i].iface_name, IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].iface_name, sizeof(neighbor_client[i].iface_name));
-						}
-
 						if (neighbor_client[i].v4_addr != 0) /* not 0.0.0.0 */
 						{
-							if(strcmp(neighbor_client[i].iface_name, BRIDGE_0) != 0)
+							if(strcmp(neighbor_client[i].bridge->bridge_name, BRIDGE_0) != 0)
 							{
 								if(IPACM_Iface::ipacmcfg->is_added_vlan_iface(iface_name))
 								{
@@ -212,6 +199,22 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 							}
 							else
 							{
+								/* use previous ipv4 first */
+								if(data->if_index != neighbor_client[i].iface_index)
+								{
+									IPACMERR("update new kernel iface index \n");
+									neighbor_client[i].iface_index = data->if_index;
+								}
+
+								/* check if client associated with previous network interface */
+								if(ipa_interface_index != neighbor_client[i].ipa_if_num)
+								{
+									/* replacing the updated iface */
+									IPACMERR("client associate to different AP, update to %s \n", IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].iface_name);
+									neighbor_client[i].ipa_if_num = ipa_interface_index;
+									strlcpy(neighbor_client[i].iface_name, IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].iface_name, sizeof(neighbor_client[i].iface_name));
+								}
+
 								evt_data.event = IPA_NEIGH_CLIENT_IP_ADDR_ADD_EVENT;
 								data_all = (ipacm_event_data_all *)malloc(sizeof(ipacm_event_data_all));
 								if (data_all == NULL)
@@ -386,7 +389,7 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 						}
 
 						/* Post VLAN based event if VLAN iface added */
-						if(strcmp(neighbor_client[i].iface_name, BRIDGE_0) != 0)
+						if(strcmp(neighbor_client[i].bridge->bridge_name, BRIDGE_0) != 0)
 						{
 							if(IPACM_Iface::ipacmcfg->is_added_vlan_iface(neighbor_client[i].iface_name))
 							{
@@ -560,7 +563,8 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 									else
 									{
 										/* for VLAN interfaces make sure bridge is with correct VID */
-										if(IPACM_Iface::ipacmcfg->iface_in_vlan_mode(neighbor_client[i].iface_name))
+										if(IPACM_Iface::ipacmcfg->iface_in_vlan_mode(neighbor_client[i].iface_name) ||
+										   IPACM_Iface::ipacmcfg->is_added_vlan_iface(neighbor_client[i].iface_name))
 										{
 											uint16_t vlan_id;
 											if(IPACM_Iface::ipacmcfg->get_vlan_id(neighbor_client[i].iface_name, &vlan_id))
@@ -568,7 +572,20 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 												IPACMERR("failed to get iface vlan ID, skipping\n");
 												continue;
 											}
-											if(bridge->associate_VID != vlan_id)
+											if((vlan_id > 0) && IPACM_Iface::ipacmcfg->is_dummy_VID(vlan_id))
+											{
+												mapping_info.vlan_id = vlan_id;
+												IPACM_Iface::ipacmcfg->get_bridge_vlan_mapping(&mapping_info, true);
+												dummy_vlan_bridge = IPACM_Iface::ipacmcfg->get_vlan_bridge(mapping_info.bridge_name);
+												if(dummy_vlan_bridge->associate_VID != bridge->associate_VID)
+												{
+													IPACMERR("client bridge dummy vid mismatch (%d)(%d), skip\n",
+														 dummy_vlan_bridge->associate_VID,
+														 bridge->associate_VID);
+													continue;
+												}
+											}
+											else if(bridge->associate_VID != vlan_id)
 											{
 												IPACMDBG("client bridge vid mismatch (%d)(%d), skip\n",
 													vlan_id, bridge->associate_VID);
@@ -838,7 +855,8 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 									if(IPACM_Iface::ipacmcfg->ipacm_mpdn_enable == TRUE)
 									{
 										/* for VLAN interfaces make sure this is the correct interface */
-										if(IPACM_Iface::ipacmcfg->iface_in_vlan_mode(neighbor_client[i].iface_name))
+										if(IPACM_Iface::ipacmcfg->iface_in_vlan_mode(neighbor_client[i].iface_name) ||
+										   IPACM_Iface::ipacmcfg->is_added_vlan_iface(neighbor_client[i].iface_name))
 										{
 											if(strcmp(neighbor_client[i].iface_name, data->iface_name) != 0)
 											{
@@ -991,7 +1009,8 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 									else
 									{
 										/* for VLAN interfaces make sure bridge is with correct VID */
-										if(IPACM_Iface::ipacmcfg->iface_in_vlan_mode(neighbor_client[i].iface_name))
+										if(IPACM_Iface::ipacmcfg->iface_in_vlan_mode(neighbor_client[i].iface_name) ||
+										   IPACM_Iface::ipacmcfg->is_added_vlan_iface(neighbor_client[i].iface_name))
 										{
 											uint16_t vlan_id;
 											if(IPACM_Iface::ipacmcfg->get_vlan_id(neighbor_client[i].iface_name, &vlan_id))
@@ -999,7 +1018,20 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 												IPACMERR("failed to get iface vlan ID, skipping\n");
 												continue;
 											}
-											if(bridge->associate_VID != vlan_id)
+											if((vlan_id > 0) && IPACM_Iface::ipacmcfg->is_dummy_VID(vlan_id))
+											{
+												mapping_info.vlan_id = vlan_id;
+												IPACM_Iface::ipacmcfg->get_bridge_vlan_mapping(&mapping_info, true);
+												dummy_vlan_bridge = IPACM_Iface::ipacmcfg->get_vlan_bridge(mapping_info.bridge_name);
+												if(dummy_vlan_bridge->associate_VID != bridge->associate_VID)
+												{
+													IPACMERR("client bridge dummy vid mismatch (%d)(%d), skip\n",
+														 dummy_vlan_bridge->associate_VID,
+														 bridge->associate_VID);
+													continue;
+												}
+											}
+											else if(bridge->associate_VID != vlan_id)
 											{
 												IPACMDBG("client bridge vid mismatch (%d)(%d), skip\n",
 													vlan_id, bridge->associate_VID);
@@ -1124,13 +1156,15 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 							{
 #ifdef FEATURE_VLAN_MPDN
 								/* VLAN interface && not the same iface name */
-								if(IPACM_Iface::ipacmcfg->ipacm_mpdn_enable == TRUE && IPACM_FAILURE == ipa_interface_index)
+								if((IPACM_Iface::ipacmcfg->ipacm_mpdn_enable == TRUE && (IPACM_FAILURE == ipa_interface_index)) ||
+									IPACM_Iface::ipacmcfg->is_added_vlan_iface(data->iface_name))
 								{
 									/* for this case we cached the neigh event from bridgeX where it won't have iface_name */
 									if(strcmp(neighbor_client[i].iface_name, IPA_NO_IFACE_NAME) == 0)
 									{
 										/* for VLAN interfaces make sure bridge is with correct VID */
-										if(IPACM_Iface::ipacmcfg->iface_in_vlan_mode(data->iface_name))
+										if(IPACM_Iface::ipacmcfg->iface_in_vlan_mode(data->iface_name) ||
+										   IPACM_Iface::ipacmcfg->is_added_vlan_iface(data->iface_name))
 										{
 											uint16_t vlan_id;
 											if(IPACM_Iface::ipacmcfg->get_vlan_id(data->iface_name, &vlan_id))
@@ -1138,7 +1172,20 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 												IPACMERR("failed to get iface vlan ID, skipping\n");
 												continue;
 											}
-											if(neighbor_client[i].bridge->associate_VID != vlan_id)
+											if((vlan_id > 0) && IPACM_Iface::ipacmcfg->is_dummy_VID(vlan_id))
+											{
+												mapping_info.vlan_id = vlan_id;
+												IPACM_Iface::ipacmcfg->get_bridge_vlan_mapping(&mapping_info, true);
+												dummy_vlan_bridge = IPACM_Iface::ipacmcfg->get_vlan_bridge(mapping_info.bridge_name);
+												if(dummy_vlan_bridge->associate_VID != neighbor_client[i].bridge->associate_VID)
+												{
+													IPACMERR("client bridge dummy vid mismatch (%d)(%d), skip\n",
+														 dummy_vlan_bridge->associate_VID,
+														 neighbor_client[i].bridge->associate_VID);
+													continue;
+												}
+											}
+											else if(neighbor_client[i].bridge->associate_VID != vlan_id)
 											{
 												IPACMDBG("client bridge vid mismatch (%d)(%d), skip\n",
 													vlan_id, neighbor_client[i].bridge->associate_VID);

@@ -7101,21 +7101,6 @@ fail:
 	}
 	IPACMDBG_H("finished delete software-routing filtering rules\n ");
 
-	if (rx_prop != NULL)
-	{
-		if(IPACM_Iface::ipacmcfg->GetIPAVer() >= IPA_HW_None && IPACM_Iface::ipacmcfg->GetIPAVer() < IPA_HW_v4_0)
-		{
-			/* Delete corresponding ipa_rm_resource_name of RX-endpoint after delete all IPV4V6 FT-rule */
-			IPACMDBG_H("dev %s add producer dependency\n", dev_name);
-			IPACMDBG_H("depend Got pipe %d rm index : %d \n", rx_prop->rx[0].src_pipe, IPACM_Iface::ipacmcfg->ipa_client_rm_map_tbl[rx_prop->rx[0].src_pipe]);
-			IPACM_Iface::ipacmcfg->DelRmDepend(IPACM_Iface::ipacmcfg->ipa_client_rm_map_tbl[rx_prop->rx[0].src_pipe]);
-		}
-#ifndef FEATURE_ETH_BRIDGE_LE
-		free(rx_prop);
-		rx_prop = NULL;
-#endif
-	}
-
 #ifdef FEATURE_STATIC_POLICY
 	//delete static policy rules here if mode is enabled
 	if (IPACM_Iface::ipacmcfg->ipacm_static_policy_enable)
@@ -7139,19 +7124,6 @@ fail:
 		free(wlan_client);
 		wlan_client = NULL;
 	}
-#ifndef FEATURE_ETH_BRIDGE_LE
-	if (tx_prop != NULL)
-	{
-		free(tx_prop);
-		tx_prop = NULL;
-	}
-
-	if (iface_query != NULL)
-	{
-		free(iface_query);
-		iface_query = NULL;
-	}
-#endif
 
 	is_active = false;
 	post_del_self_evt();

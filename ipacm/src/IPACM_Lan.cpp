@@ -4178,7 +4178,7 @@ int IPACM_Lan::handle_private_subnet(ipa_ip_type iptype)
 			/* copy filter rule hdls */
 			for (i = 0; i < IPACM_Iface::ipacmcfg->ipa_num_private_subnet; i++) {
 				private_fl_rule_hdl[idx/2][i] = m_pFilteringTable->rules[i].flt_rule_hdl;
-				IPACMDBG("Adding filter hdl:(0x%x)\n", private_fl_rule_hdl[i]);
+				IPACMDBG("Adding filter hdl:(0x%x)\n", private_fl_rule_hdl[idx/2][i]);
 			}
 			free(m_pFilteringTable);
 		} else {

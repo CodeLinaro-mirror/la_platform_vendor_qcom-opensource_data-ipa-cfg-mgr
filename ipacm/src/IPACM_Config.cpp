@@ -1375,7 +1375,7 @@ void IPACM_Config::del_bridge_vlan_mapping(ipa_ioc_bridge_vlan_mapping_info *dat
 			m_bridge_vlan_mapping.erase(it_mapping);
 
 			bridge = get_vlan_bridge(data->bridge_name);
-			if(bridge)
+			if(bridge && !is_dummy_VID(data->vlan_id))
 			{
 				IPACMDBG_H("bridge %s - remove vlan id\n",
 					data->bridge_name);

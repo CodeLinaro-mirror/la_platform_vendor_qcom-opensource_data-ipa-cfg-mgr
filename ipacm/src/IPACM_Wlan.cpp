@@ -2883,7 +2883,7 @@ int IPACM_Wlan::handle_down_evt()
 #else
 		num_private_subnet_fl_rule = IPACM_Iface::ipacmcfg->ipa_num_private_subnet > (IPA_MAX_PRIVATE_SUBNET_ENTRIES + IPA_MAX_MTU_ENTRIES)?
 			(IPA_MAX_PRIVATE_SUBNET_ENTRIES + IPA_MAX_MTU_ENTRIES): IPACM_Iface::ipacmcfg->ipa_num_private_subnet;
-		if(m_filtering.DeleteFilteringHdls(private_fl_rule_hdl, IPA_IP_v4, num_private_subnet_fl_rule) == false)
+		if(m_filtering.DeleteFilteringHdls(private_fl_rule_hdl[0], IPA_IP_v4, num_private_subnet_fl_rule) == false)
 		{
 			IPACMERR("Error deleting private subnet flt rules, aborting...\n");
 			res = IPACM_FAILURE;
@@ -4640,7 +4640,7 @@ int IPACM_Wlan::install_uplink_filter_rule
 			}
 		} else {
 			IPACMDBG_H("ip-type: %d modem_ul_v4_set: %d, modem_ul_v6_set %d\n",
-				iptype, modem_ul_v4_set, modem_ul_v6_set[0]);
+				iptype, modem_ul_v4_set[0], modem_ul_v6_set[0]);
 		}
 	} /* end of for loop */
 	return ret;
@@ -4712,7 +4712,7 @@ int IPACM_Wlan::delete_uplink_filter_rule_per_client
 
 	if ((iptype == IPA_IP_v6) && get_client_memptr(wlan_client, clnt_indx)->ipv6_ul_rules_set)
 	{
-		IPACMDBG_H("Del (%d) num of v6 UL rules for cliend idx:%d\n", num_wan_ul_fl_rule_v6, clnt_indx);
+		IPACMDBG_H("Del (%d) num of v6 UL rules for cliend idx:%d\n", num_wan_ul_fl_rule_v6[0], clnt_indx);
 		if (m_filtering.DeleteFilteringHdls(get_client_memptr(wlan_client, clnt_indx)->wan_ul_fl_rule_hdl_v6,
 				iptype, num_wan_ul_fl_rule_v6[0]) == false)
 		{

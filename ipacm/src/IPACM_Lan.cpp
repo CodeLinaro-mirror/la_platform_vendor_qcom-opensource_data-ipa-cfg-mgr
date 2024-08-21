@@ -3132,13 +3132,13 @@ int IPACM_Lan::handle_private_subnet(ipa_ip_type iptype)
 			for (i = 0; i < IPACM_Iface::ipacmcfg->ipa_num_private_subnet; i++)
 			{
 				private_fl_rule_hdl[j][i] = m_pFilteringTable->rules[i].flt_rule_hdl;
-				IPACMDBG("Adding filter hdl:(0x%x)\n", private_fl_rule_hdl[i]);
+				IPACMDBG("Adding filter hdl:(0x%x)\n", private_fl_rule_hdl[j][i]);
 			}
 			free(m_pFilteringTable);
 
 			/* add MTU rule if WAN is up and rule hasnt been added */
-			if (IPACM_Wan::isWanUP(ipa_if_num) && private_fl_rule_hdl[IPACM_Iface::ipacmcfg->ipa_num_private_subnet])
-				add_mtu_rule_v4_default_pdn();
+			if (IPACM_Wan::isWanUP(ipa_if_num) && private_fl_rule_hdl[j][IPACM_Iface::ipacmcfg->ipa_num_private_subnet])
+				add_mtu_rule_v4_default_pdn(j);
 		} else
 		{
 			IPACMDBG_H("No private subnet rules for ipv6 iface %s\n", dev_name);
@@ -3330,7 +3330,7 @@ int IPACM_Lan::handle_wan_up(ipa_ip_type ip_type, uint16_t vlan_id)
 			if (IPACM_Iface::ipacmcfg->ipacm_mpdn_enable)
 				/* add MTU rules for ipv4 */
 				modify_private_subnet();
-			else add_mtu_rule_v4_default_pdn();
+			else add_mtu_rule_v4_default_pdn(j);
 
 			/* MTU might have changed. Need to update ipv6 MTU rule if up */
 			if (IPACM_Wan::isWanUP_V6(ipa_if_num) || IPACM_Wan::isVlanWanUP_V6()) modify_ipv6_prefix_flt_rule();
@@ -3348,7 +3348,7 @@ int IPACM_Lan::handle_wan_up(ipa_ip_type ip_type, uint16_t vlan_id)
 			}
 
 #else
-			add_mtu_rule_v4_default_pdn();
+			add_mtu_rule_v4_default_pdn(j);
 
 			if (IPACM_Wan::isWanUP_V6(ipa_if_num)) delete_ipv6_prefix_flt_rule();
 			install_ipv6_prefix_flt_rule(IPACM_Wan::backhaul_ipv6_prefix);
@@ -3485,7 +3485,7 @@ int IPACM_Lan::handle_wan_up(ipa_ip_type ip_type, uint16_t vlan_id)
 			}
 #else
 			install_ipv6_prefix_flt_rule(IPACM_Wan::backhaul_ipv6_prefix);
-			if (IPACM_Wan::isWanUP(ipa_if_num)) add_mtu_rule_v4_default_pdn();
+			if (IPACM_Wan::isWanUP(ipa_if_num)) add_mtu_rule_v4_default_pdn(j);
 #endif
 #ifndef FEATURE_IPV6_NAT
 			if (IPACM_Iface::ipacmcfg->ipv6_nat_enable)
@@ -3678,12 +3678,12 @@ int IPACM_Lan::handle_wan_up_ex(ipacm_ext_prop *ext_prop, ipa_ip_type iptype, ui
 
 		/* MTU might have changed. Need to update ipv4 MTU rule if up */
 		if (IPACM_Wan::isWanUP(ipa_if_num))
-			add_mtu_rule_v4_default_pdn();
+			add_mtu_rule_v4_default_pdn(0);
 #endif
 
 		if(num_dft_rt_v6 == 1 && modem_ul_v6_set[0] == FALSE)
 		{
-			IPACMDBG_H("IPA_IP_v6 num_dft_rt_v6 %d xlat_mux_id: %d modem_ul_v6_set: %d\n", num_dft_rt_v6, xlat_mux_id, modem_ul_v6_set);
+			IPACMDBG_H("IPA_IP_v6 num_dft_rt_v6 %d xlat_mux_id: %d modem_ul_v6_set: %d\n", num_dft_rt_v6, xlat_mux_id, modem_ul_v6_set[0]);
 #ifdef FEATURE_L2TP
 			if((IPACM_Iface::ipacmcfg->ipacm_l2tp_enable == IPACM_L2TP_E2E) &&
 				ipa_if_cate == ODU_IF)
@@ -3742,12 +3742,12 @@ int IPACM_Lan::handle_wan_up_ex(ipacm_ext_prop *ext_prop, ipa_ip_type iptype, ui
 		/* add MTU rules for ipv4 */
 			modify_private_subnet();
 		else
-			add_mtu_rule_v4_default_pdn();
+			add_mtu_rule_v4_default_pdn(0);
 		/* MTU might have changed. Need to update ipv6 MTU rule if up */
 		if (IPACM_Wan::isWanUP_V6(ipa_if_num))
 			modify_ipv6_prefix_flt_rule();
 #else
-		add_mtu_rule_v4_default_pdn();
+		add_mtu_rule_v4_default_pdn(0);
 		/* MTU might have changed. Need to update ipv6 MTU rule if up */
 		if (IPACM_Wan::isWanUP_V6(ipa_if_num))
 		{
@@ -15223,18 +15223,18 @@ fail:
 }
 
 /* add 1st private subnet mtu rule */
-int IPACM_Lan::add_mtu_rule_v4_default_pdn()
+int IPACM_Lan::add_mtu_rule_v4_default_pdn(uint32_t pipe_idx)
 {
 	struct ipa_flt_rule_add flt_rule_entry;
 	uint16_t mtu = 0;
 	ipa_ioc_add_flt_rule_after *m_pFilteringTable;
 
-	if(private_fl_rule_hdl[IPACM_Iface::ipacmcfg->ipa_num_private_subnet])
+	if(private_fl_rule_hdl[pipe_idx][IPACM_Iface::ipacmcfg->ipa_num_private_subnet])
 	{
 		IPACMDBG_H("deleting old v4 MTU rule\n");
-		if (m_filtering.DeleteFilteringHdls(&private_fl_rule_hdl[0][IPACM_Iface::ipacmcfg->ipa_num_private_subnet], IPA_IP_v4, 1) == false)
+		if (m_filtering.DeleteFilteringHdls(&private_fl_rule_hdl[pipe_idx][IPACM_Iface::ipacmcfg->ipa_num_private_subnet], IPA_IP_v4, 1) == false)
 			IPACMERR("Error deleting default MTU rule for private subnet, \n");
-		private_fl_rule_hdl[0][IPACM_Iface::ipacmcfg->ipa_num_private_subnet] = 0;
+		private_fl_rule_hdl[pipe_idx][IPACM_Iface::ipacmcfg->ipa_num_private_subnet] = 0;
 	}
 
 	IPACMDBG_H("adding IPv4 MTU Rule\n");
@@ -15268,8 +15268,8 @@ int IPACM_Lan::add_mtu_rule_v4_default_pdn()
 		return IPACM_FAILURE;
 	}
 	m_pFilteringTable->commit = 1;
-	m_pFilteringTable->ep = rx_prop->rx[0].src_pipe;
-	m_pFilteringTable->add_after_hdl =  private_fl_rule_hdl[0][0];
+	m_pFilteringTable->ep = rx_prop->rx[pipe_idx*2].src_pipe;
+	m_pFilteringTable->add_after_hdl =  private_fl_rule_hdl[pipe_idx][0];
 	m_pFilteringTable->ip = IPA_IP_v4;
 	m_pFilteringTable->num_rules = 1;
 
@@ -15282,7 +15282,7 @@ int IPACM_Lan::add_mtu_rule_v4_default_pdn()
 	flt_rule_entry.rule.hashable = true;
 #endif
 
-	memcpy(&flt_rule_entry.rule.attrib, &rx_prop->rx[0].attrib, sizeof(flt_rule_entry.rule.attrib));
+	memcpy(&flt_rule_entry.rule.attrib, &rx_prop->rx[pipe_idx*2].attrib, sizeof(flt_rule_entry.rule.attrib));
 	flt_rule_entry.rule.attrib.attrib_mask |= IPA_FLT_SRC_ADDR;
 	flt_rule_entry.rule.attrib.u.v4.src_addr_mask = IPACM_Iface::ipacmcfg->private_subnet_table[0].subnet_mask;
 	flt_rule_entry.rule.attrib.u.v4.src_addr = IPACM_Iface::ipacmcfg->private_subnet_table[0].subnet_addr;
@@ -15301,10 +15301,10 @@ int IPACM_Lan::add_mtu_rule_v4_default_pdn()
 		free(m_pFilteringTable);
 		return IPACM_FAILURE;
 	}
-	IPACM_Iface::ipacmcfg->increaseFltRuleCount(rx_prop->rx[0].src_pipe, IPA_IP_v4, 1);
+	IPACM_Iface::ipacmcfg->increaseFltRuleCount(rx_prop->rx[pipe_idx*2].src_pipe, IPA_IP_v4, 1);
 
 	/* save the handle for delete (MTU rule is always the last private subnet hdl for single PDN) */
-	private_fl_rule_hdl[0][IPACM_Iface::ipacmcfg->ipa_num_private_subnet] = m_pFilteringTable->rules[0].flt_rule_hdl;
+	private_fl_rule_hdl[pipe_idx][IPACM_Iface::ipacmcfg->ipa_num_private_subnet] = m_pFilteringTable->rules[0].flt_rule_hdl;
 	free(m_pFilteringTable);
 
 	return IPACM_SUCCESS;

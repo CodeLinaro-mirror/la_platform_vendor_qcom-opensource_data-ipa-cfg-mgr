@@ -1496,7 +1496,7 @@ private:
 #endif
 
 	int construct_mtu_rule(struct ipa_flt_rule *rule, enum ipa_ip_type iptype, uint16_t mtu);
-	int add_mtu_rule_v4_default_pdn();
+	int add_mtu_rule_v4_default_pdn(uint32_t pipe_idx);
 
     uint32_t get_u8_bitmap_from_tc(uint8_t traffic_class);
 	int handle_qos_route_rule(uint8_t *client_mac, uint16_t vlan_id, ipa_ip_type iptype,

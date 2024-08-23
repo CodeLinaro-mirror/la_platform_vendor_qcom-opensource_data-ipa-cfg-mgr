@@ -321,12 +321,18 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 											}
 											IPACMDBG_H("client - bridge vid match (%d)\n", vlan_id);
 										}
-#ifdef IPA_L2TP_TUNNEL_UDP
-										//this is first time associating bridge to neighbor client, here do the dummy VLAN update.
-										IPACM_Iface::ipacmcfg->add_l2tp_dummy_bridge_vlan_mapping(data->iface_name,
-																		neighbor_client[i].iface_name, data->if_index);
-#endif
 									}
+#ifdef IPA_L2TP_TUNNEL_UDP
+									//this is first time associating bridge to neighbor client, here do the dummy VLAN update.
+									if(IPACM_Iface::ipacmcfg->check_l2tp_iface(neighbor_client[i].iface_name))
+									{
+										if(!IPACM_Iface::ipacmcfg->check_l2tp_bridge_vlan_id(L2TP_BRIDGE_VLAN_ID_START + neighbor_client[i].iface_index))
+										{
+											IPACM_Iface::ipacmcfg->add_l2tp_dummy_bridge_vlan_mapping(data->iface_name,
+												neighbor_client[i].iface_name, neighbor_client[i].iface_index);
+										}
+									}
+#endif
 								}
 #endif
 								IPACMDBG_H("Iface name:%s\n", data->iface_name);
@@ -721,12 +727,18 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 											}
 											IPACMDBG_H("client - bridge vid match (%d)\n", vlan_id);
 										}
-#ifdef IPA_L2TP_TUNNEL_UDP
-										//this is first time associating bridge to neighbor client, here do the dummy VLAN update.
-										IPACM_Iface::ipacmcfg->add_l2tp_dummy_bridge_vlan_mapping(data->iface_name,
-																			neighbor_client[i].iface_name, data->if_index);
-#endif
 									}
+#ifdef IPA_L2TP_TUNNEL_UDP
+									//this is first time associating bridge to neighbor client, here do the dummy VLAN update.
+									if(IPACM_Iface::ipacmcfg->check_l2tp_iface(neighbor_client[i].iface_name))
+									{
+										if(!IPACM_Iface::ipacmcfg->check_l2tp_bridge_vlan_id(L2TP_BRIDGE_VLAN_ID_START + neighbor_client[i].iface_index))
+										{
+											IPACM_Iface::ipacmcfg->add_l2tp_dummy_bridge_vlan_mapping(data->iface_name,
+												neighbor_client[i].iface_name, neighbor_client[i].iface_index);
+										}
+									}
+#endif
 								}
 #endif
 								data->if_index = neighbor_client[i].iface_index;
@@ -897,7 +909,17 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 									neighbor_client[i].ipa_if_num = ipa_interface_index;
 									strlcpy(neighbor_client[i].iface_name, data->iface_name, sizeof(neighbor_client[i].iface_name));
 								}
-
+#ifdef IPA_L2TP_TUNNEL_UDP
+								//this is first time associating bridge to neighbor client, here do the dummy VLAN update.
+								if(IPACM_Iface::ipacmcfg->check_l2tp_iface(neighbor_client[i].iface_name))
+								{
+									if(!IPACM_Iface::ipacmcfg->check_l2tp_bridge_vlan_id(L2TP_BRIDGE_VLAN_ID_START + neighbor_client[i].iface_index))
+									{
+										IPACM_Iface::ipacmcfg->add_l2tp_dummy_bridge_vlan_mapping(neighbor_client[i].bridge->bridge_name,
+															neighbor_client[i].iface_name, neighbor_client[i].iface_index);
+									}
+								}
+#endif
 								if (neighbor_client[i].v4_addr != 0) /* not 0.0.0.0 */
 								{
 									/* construct IPA_NEIGH_CLIENT_IP_ADDR_ADD_EVENT command and insert to command-queue */

@@ -1769,26 +1769,19 @@ int IPACM_Lan::del_ul_flt_rules(enum ipa_ip_type iptype)
 				IPACMERR(" the number of rules (%d) are bigger than array (%d), aborting...\n", num_wan_ul_fl_rule_v6, MAX_WAN_UL_FILTER_RULES);
 				return IPACM_FAILURE;
 			}
-
-#ifdef FEATURE_L2TP
-			if(IPACM_Iface::ipacmcfg->ipacm_l2tp_enable != IPACM_L2TP_E2E)
-#endif
+			if(m_filtering.DeleteFilteringHdls(wan_ul_fl_rule_hdl_v6,
+				IPA_IP_v6, num_wan_ul_fl_rule_v6) == false)
 			{
-				/* When OCU is enabled, no need to delete modem UL IPv6 rules. */
-				if(m_filtering.DeleteFilteringHdls(wan_ul_fl_rule_hdl_v6,
-					IPA_IP_v6, num_wan_ul_fl_rule_v6) == false)
-				{
-					IPACMERR("Error Deleting RuleTable(1) to Filtering, aborting...\n");
-					return IPACM_FAILURE;
-				}
-				IPACM_Iface::ipacmcfg->decreaseFltRuleCount(rx_prop->rx[0].src_pipe, IPA_IP_v6, num_wan_ul_fl_rule_v6);
-#ifndef IPA_V6_UL_WL_FIREWALL_HANDLE
-				memset(wan_ul_fl_rule_hdl_v6, 0, MAX_WAN_UL_FILTER_RULES * sizeof(uint32_t));
-#else
-				memset(wan_ul_fl_rule_hdl_v6, 0, IPACM_MAX_V6_UL_WL_FIREWALL_ENTRIES * sizeof(uint32_t));
-#endif
-				num_wan_ul_fl_rule_v6 = 0;
+				IPACMERR("Error Deleting RuleTable(1) to Filtering, aborting...\n");
+				return IPACM_FAILURE;
 			}
+			IPACM_Iface::ipacmcfg->decreaseFltRuleCount(rx_prop->rx[0].src_pipe, IPA_IP_v6, num_wan_ul_fl_rule_v6);
+#ifndef IPA_V6_UL_WL_FIREWALL_HANDLE
+			memset(wan_ul_fl_rule_hdl_v6, 0, MAX_WAN_UL_FILTER_RULES * sizeof(uint32_t));
+#else
+			memset(wan_ul_fl_rule_hdl_v6, 0, IPACM_MAX_V6_UL_WL_FIREWALL_ENTRIES * sizeof(uint32_t));
+#endif
+			num_wan_ul_fl_rule_v6 = 0;
 		}
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
 		else {

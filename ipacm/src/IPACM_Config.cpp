@@ -95,9 +95,6 @@ uint8_t peer_addr_updated = 0;
 #define IPACM_CONFIG_FILE "/etc/data/ipa/IPACM_cfg.xml"
 #endif
 #endif
-#if defined(FEATURE_L2TP)
-#define L2TP_BRIDGE_VLAN_ID_START 4096
-#endif
 
 
 const char *ipacm_event_name[] = {
@@ -2568,19 +2565,15 @@ bool IPACM_Config::check_l2tp_iface(const char *client_iface)
 
 #ifdef IPA_L2TP_TUNNEL_UDP
 /* add l2tp bridge dummy vlan mapping*/
-void IPACM_Config::add_l2tp_dummy_bridge_vlan_mapping(const char *bridge_iface, const char* l2tp_client_iface, int bridge_if_index)
+void IPACM_Config::add_l2tp_dummy_bridge_vlan_mapping(const char *bridge_iface, const char* l2tp_client_iface, int if_index)
 {
 	list<l2tp_vlan_mapping_info>::iterator it_mapping;
-	ipa_ioc_bridge_vlan_mapping_info bridge_vlan_mapping_info;
 
 	if(pthread_mutex_lock(&vlan_l2tp_lock) != 0)
 	{
 		IPACMERR("Unable to lock the mutex\n");
 		return;
 	}
-
-	memset(&bridge_vlan_mapping_info, 0, sizeof(bridge_vlan_mapping_info));
-	strlcpy(bridge_vlan_mapping_info.bridge_name, bridge_iface, IF_NAME_LEN);
 
 	for(it_mapping = m_l2tp_vlan_mapping.begin(); it_mapping != m_l2tp_vlan_mapping.end(); it_mapping++)
 	{
@@ -2589,32 +2582,10 @@ void IPACM_Config::add_l2tp_dummy_bridge_vlan_mapping(const char *bridge_iface, 
 		{
 			IPACMDBG_H("Found vlan-l2tp mapping for iface %s, checking bridge vlan info\n",
 				l2tp_client_iface);
-			pthread_mutex_unlock(&vlan_l2tp_lock);
-			if(get_bridge_vlan_mapping(&bridge_vlan_mapping_info))
-			{
-				if(pthread_mutex_lock(&vlan_l2tp_lock) != 0)
-				{
-					IPACMERR("Unable to lock the mutex\n");
-					return;
-				}
-				IPACMDBG_H("The bridge %s and vlan mapping not added\n", bridge_iface);
-				strlcpy(it_mapping->l2tp_bridge_iface_name, bridge_iface, IF_NAME_LEN);
-				/* We are getting vlan info also from QCMAP but recalculating dummy vlan again to not depend on QCMAP for future */
-				/* Each l2tp session have seperate bridge */
-				it_mapping->l2tp_bridge_vlan_id = L2TP_BRIDGE_VLAN_ID_START + bridge_if_index;
-				IPACMDBG_H("Assigned l2tp iface %s, vlan id %d\n", it_mapping->l2tp_iface_name,
-					it_mapping->l2tp_bridge_vlan_id);
-				break;
-			}
-			if(pthread_mutex_lock(&vlan_l2tp_lock) != 0)
-			{
-				IPACMERR("Unable to lock the mutex\n");
-				return;
-			}
 			strlcpy(it_mapping->l2tp_bridge_iface_name, bridge_iface, IF_NAME_LEN);
 			/* We are getting vlan info also from QCMAP but recalculating dummy vlan again to not depend on QCMAP for future */
 			/* Each l2tp session have seperate bridge */
-			it_mapping->l2tp_bridge_vlan_id = L2TP_BRIDGE_VLAN_ID_START + bridge_if_index;
+			it_mapping->l2tp_bridge_vlan_id = L2TP_BRIDGE_VLAN_ID_START + if_index;
 			IPACMDBG_H("Assigned l2tp iface %s, vlan id %d\n", it_mapping->l2tp_iface_name,
 				it_mapping->l2tp_bridge_vlan_id);
 			break;

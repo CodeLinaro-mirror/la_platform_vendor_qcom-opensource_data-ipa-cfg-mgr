@@ -199,6 +199,10 @@ extern "C"
 
 /* Max number of immediate peer ULA address cache */
 #define IPA_MAX_NUM_PEER_ULA 32
+#if defined(FEATURE_L2TP)
+#define L2TP_BRIDGE_VLAN_ID_START 4096
+#endif
+
 
 /*===========================================================================
 										 GLOBAL DEFINITIONS AND DECLARATIONS

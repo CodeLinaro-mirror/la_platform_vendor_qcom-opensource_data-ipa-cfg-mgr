@@ -6112,7 +6112,7 @@ int IPACM_Lan::handle_eth_client_route_rule_ext_v2(uint8_t *mac_addr, ipa_ip_typ
 			rt_rule->rule_add_ext_size = sizeof(struct ipa_rt_rule_add_ext_v2);
 			for (tx_index = 0; tx_index < iface_query->num_tx_props; tx_index++)
 			{
-				if(iptype != tx_prop->tx[tx_index].ip)
+				if(tx_prop && (iptype != tx_prop->tx[tx_index].ip))
 				{
 					IPACMDBG_H("Tx:%d, ip-type: %d conflict ip-type: %d no RT-rule added\n",
 							tx_index, tx_prop->tx[tx_index].ip,iptype);
@@ -6492,9 +6492,9 @@ int IPACM_Lan::handle_eth_client_route_rule_ext(uint8_t *mac_addr, ipa_ip_type i
 					HandleNeighIpAddrAddEvt(&data);
 				}
 				get_client_memptr(eth_client, eth_index)->route_rule_set_v6 = get_client_memptr(eth_client, eth_index)->ipv6_set;
-			} /* end of for loop */
-			free(rt_rule);
-		}
+			}
+		}/* end of for loop */
+		free(rt_rule);
 	}
 	return IPACM_SUCCESS;
 }
@@ -7182,7 +7182,7 @@ int IPACM_Lan::handle_vlan_phys_if_down()
 		/* currently support only all vlans switch to STA or LTE, not partial vlans */
 	for(i = 0; i < IPA_MAX_NUM_OFFLOAD_VLANS; i++)
         {
-                if((vlan_sta_info[i].vlan_id != 0) && (vlan_sta_info[i].v4_flt_hdl != 0))
+                if((vlan_sta_info[i].vlan_id != 0) && (vlan_sta_info[i].v4_flt_hdl != 0) && rx_prop)
                 {
                         IPACMDBG_H("Deleting filter rule for vlan_id %d during iface down\n",vlan_sta_info[i].vlan_id);
                         if (m_filtering.DeleteFilteringHdls(&vlan_sta_info[i].v4_flt_hdl, IPA_IP_v4, 1) == false)
@@ -7200,7 +7200,7 @@ int IPACM_Lan::handle_vlan_phys_if_down()
 
         for(i = 0; i < IPA_MAX_NUM_OFFLOAD_VLANS; i++)
         {
-                if(vlan_sta_info[i].v6_flt_hdl > 0)
+                if((vlan_sta_info[i].v6_flt_hdl > 0) && rx_prop)
                 {
                         if (!m_filtering.DeleteFilteringHdls(&vlan_sta_info[i].v6_flt_hdl, IPA_IP_v6, 1))
                         {
@@ -7694,7 +7694,10 @@ fail:
 					IPACMERR("Failed to delete ul flt rule.\n");
 					return IPACM_FAILURE;
 				}
-				IPACM_Iface::ipacmcfg->decreaseFltRuleCount(rx_prop->rx[0].src_pipe, IPA_IP_v6, 1);
+				if (rx_prop)
+				{
+					IPACM_Iface::ipacmcfg->decreaseFltRuleCount(rx_prop->rx[0].src_pipe, IPA_IP_v6, 1);
+				}
 
 				if(m_routing.DeleteRoutingHdl(get_client_memptr(eth_client, i)->ul_first_pass_rt_rule_hdl, IPA_IP_v6) == false)
 				{
@@ -11978,6 +11981,12 @@ int IPACM_Lan::eth_bridge_get_vlan_hdr_template_hdl(uint32_t* hdr_hdl, uint16_t 
 	uint8_t hdr_len;
 	struct ipa_ioc_add_hdr *pHeaderDescriptor = NULL;
 	int len = 0;
+
+	if(tx_prop == NULL)
+	{
+		IPACMERR("No tx prop.\n");
+		return IPACM_FAILURE;
+	}
 
 	memset(&hdr, 0, sizeof(hdr));
 	memset(&sCopyHeader, 0, sizeof(sCopyHeader));

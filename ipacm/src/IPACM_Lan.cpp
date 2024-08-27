@@ -5181,8 +5181,32 @@ int IPACM_Lan::handle_eth_client_ipaddr(ipacm_event_data_all *data)
 				(data->ipv6_addr[2] != 0) || (data->ipv6_addr[3] || 0)) /* check if all 0 not valid ipv6 address */
 		{
 			IPACMDBG_H("ipv6 address: 0x%x:%x:%x:%x\n", data->ipv6_addr[0], data->ipv6_addr[1], data->ipv6_addr[2], data->ipv6_addr[3]);
-
-			if(IPACM_Iface::ipacmcfg->ipacm_mpdn_enable)
+                        /* on dual-nad v6 case, NAD1 client new_neigh will come to NAD2 should treat prefix rule to NAD1 to handle multiple Ipv6 neighbor address */
+			if(IPACM_Iface::ipacmcfg->ipacm_nad2_v6_enable)
+			{
+				if(!IPACM_Wan::is_global_ipv6_addr(data->ipv6_addr))
+				{
+					IPACMDBG_H("Ignore LL address\n");
+					return IPACM_SUCCESS;
+				}
+				if(get_client_memptr(eth_client, clnt_indx)->ipv6_set)
+				{
+					IPACMDBG_H("Already prefix v6 address is set\n");
+					return IPACM_SUCCESS;
+				}
+				else
+				{
+					get_client_memptr(eth_client,clnt_indx)->v6_addr[get_client_memptr(eth_client, clnt_indx)->ipv6_set][0]
+						= get_client_memptr(eth_client,clnt_indx)->client_backhaul_prefix[0];
+                    get_client_memptr(eth_client, clnt_indx)->v6_addr[get_client_memptr(eth_client, clnt_indx)->ipv6_set][1]
+						= get_client_memptr(eth_client,clnt_indx)->client_backhaul_prefix[1];
+                    get_client_memptr(eth_client, clnt_indx)->v6_addr[get_client_memptr(eth_client, clnt_indx)->ipv6_set][2] = 0;
+                    get_client_memptr(eth_client, clnt_indx)->v6_addr[get_client_memptr(eth_client, clnt_indx)->ipv6_set][3] = 0;
+                    get_client_memptr(eth_client, clnt_indx)->ipv6_set++;
+				}
+				return IPACM_SUCCESS;
+			}
+			else if(IPACM_Iface::ipacmcfg->ipacm_mpdn_enable)
 			{
 #ifdef FEATURE_IPV6_NAT
 				if(IPACM_Iface::ipacmcfg->ipv6_nat_enable && is_unique_local_ipv6_addr(data->ipv6_addr))
@@ -5372,6 +5396,14 @@ int IPACM_Lan::handle_eth_client_route_rule(uint8_t *mac_addr, ipa_ip_type iptyp
 			}
 			else
 			{
+				if(IPACM_Iface::ipacmcfg->ipacm_nad2_v6_enable)
+				{
+					if(get_client_memptr(eth_client, eth_index)->route_rule_set_v6)
+					{
+						IPACMDBG_H("Already installed v6 route rule\n");
+						return IPACM_FAILURE;
+					}
+				}
 				for (v6_num = get_client_memptr(eth_client, eth_index)->route_rule_set_v6;
 					 v6_num < get_client_memptr(eth_client, eth_index)->ipv6_set;
 					 ++v6_num)
@@ -5401,6 +5433,17 @@ int IPACM_Lan::handle_eth_client_route_rule(uint8_t *mac_addr, ipa_ip_type iptyp
 					rt_rule_entry.rule.attrib.u.v6.dst_addr_mask[1] = 0xFFFFFFFF;
 					rt_rule_entry.rule.attrib.u.v6.dst_addr_mask[2] = 0xFFFFFFFF;
 					rt_rule_entry.rule.attrib.u.v6.dst_addr_mask[3] = 0xFFFFFFFF;
+					if(IPACM_Iface::ipacmcfg->ipacm_nad2_v6_enable)
+					{
+						if(!IPACM_Wan::is_global_ipv6_addr(
+							get_client_memptr(eth_client, eth_index)->v6_addr[v6_num]))
+						{
+							IPACMDBG_H("Ignore LL address\n");
+							return IPACM_FAILURE;
+						}
+						rt_rule_entry.rule.attrib.u.v6.dst_addr_mask[2] = 0;
+						rt_rule_entry.rule.attrib.u.v6.dst_addr_mask[3] = 0;
+					}
 #ifdef FEATURE_IPA_V3
 					rt_rule_entry.rule.hashable = true;
 #endif
@@ -5447,6 +5490,17 @@ int IPACM_Lan::handle_eth_client_route_rule(uint8_t *mac_addr, ipa_ip_type iptyp
 					rt_rule_entry.rule.attrib.u.v6.dst_addr_mask[1] = 0xFFFFFFFF;
 					rt_rule_entry.rule.attrib.u.v6.dst_addr_mask[2] = 0xFFFFFFFF;
 					rt_rule_entry.rule.attrib.u.v6.dst_addr_mask[3] = 0xFFFFFFFF;
+					if(IPACM_Iface::ipacmcfg->ipacm_nad2_v6_enable)
+					{
+						if(!IPACM_Wan::is_global_ipv6_addr(
+							get_client_memptr(eth_client, eth_index)->v6_addr[v6_num]))
+						{
+							IPACMDBG_H("Ignore LL address\n");
+							return IPACM_FAILURE;
+						}
+						rt_rule_entry.rule.attrib.u.v6.dst_addr_mask[2] = 0;
+						rt_rule_entry.rule.attrib.u.v6.dst_addr_mask[3] = 0;
+					}
 #ifdef FEATURE_IPA_V3
 					rt_rule_entry.rule.hashable = true;
 #endif

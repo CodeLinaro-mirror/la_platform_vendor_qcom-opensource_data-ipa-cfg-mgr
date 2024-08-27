@@ -286,6 +286,9 @@ public:
 	/* Indicates whether socksv5 is enabled or not. */
 	bool ipacm_socksv5_enable;
 
+	/* Indicates whether NAD2 v6 is enabled or not in DUAL NAD Config. */
+	bool ipacm_nad2_v6_enable;
+
 #ifdef FEATURE_VLAN_MPDN
 	bool vlan_firewall_change_handle;
 

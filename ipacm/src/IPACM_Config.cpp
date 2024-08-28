@@ -250,6 +250,7 @@ IPACM_Config::IPACM_Config()
 	memset(pdn_ipv4, 0, IPA_MAX_NUM_HW_PDNS*sizeof(int));
 	memset(pdn_ipv6, 0, IPA_MAX_NUM_HW_PDNS*4*sizeof(int));
 	memset(pdn_ipv6_in_use, 0, IPA_MAX_NUM_HW_PDNS*sizeof(int));
+	memset(pdn_ipv6_wan_up, 0, IPA_MAX_NUM_HW_PDNS*sizeof(int));
 #endif //defined(FEATURE_SOCKSv5) && defined (IPA_SOCKV5_ADD)
 #ifdef FEATURE_VLAN_MPDN
 	num_ipv6_prefixes = 0;
@@ -3255,7 +3256,7 @@ void IPACM_Config::add_socksv5_conn(ipa_socksv5_msg *add_socksv5_info)
 		if (pdn_ipv6_in_use[i] > 0)
 		{
 			pdn_ipv6_in_use_temp ++;
-			IPACMDBG_H(" pdn_ipv6_in_use entry %d, ref %d, total\n", i, pdn_ipv6_in_use[i], pdn_ipv6_in_use_temp);
+			IPACMDBG_H(" pdn_ipv6_in_use entry %d, ref %d, total %d\n", i, pdn_ipv6_in_use[i], pdn_ipv6_in_use_temp);
 		}
 	}
 

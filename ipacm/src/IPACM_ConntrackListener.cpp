@@ -29,7 +29,7 @@
  *
  * Changes from Qualcomm Innovation Center are provided under the following license:
  *
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted (subject to the limitations in the
@@ -330,7 +330,7 @@ void IPACM_ConntrackListener::event_callback(ipa_cm_event_id evt,
 		{
 			ipv6ct_inst = Ipv6ct::GetInstance();
 		}
-		/* create v6-ct tble */
+		/* create v6-ct table */
 		data_evt_conn = (ipa_socksv5_msg*)data;
 		IPACMDBG_H("Received IPA_HANDLE_SOCKSv5_UP event\n");
 		memset(&wan_data_local, 0, sizeof(wan_data_local));
@@ -1453,6 +1453,12 @@ void IPACM_ConntrackListener::TriggerWANUp_v6(const ipacm_event_iface_up* evt_da
 	if (!IsIpv6CTEnabled())
 	{
 		IPACMDBG("Ignoring\n");
+		return;
+	}
+
+	if(WanUp_v6)
+	{
+		IPACMDBG("Already WAN UP. Ignoring..\n");
 		return;
 	}
 

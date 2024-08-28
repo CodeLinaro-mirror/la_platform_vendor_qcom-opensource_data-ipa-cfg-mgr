@@ -877,38 +877,35 @@ void* ipa_driver_msg_notifier(void *param)
 					add_socksv5_info.dl_in.ipv4_src);
 			}
 
-			if (IPACM_Iface::ipacmcfg->socksv5_conn.size() == 0)
-			{
-				IPACMDBG_H("socksv5_conn size %d \n", IPACM_Iface::ipacmcfg->socksv5_conn.size());
-				IPACMDBG_H("src_ipv6 addr:0x%x:%x:%x:%x\n",
-					add_socksv5_info.ul_in.ipv6_src[0],
-					add_socksv5_info.ul_in.ipv6_src[1],
-					add_socksv5_info.ul_in.ipv6_src[2],
-					add_socksv5_info.ul_in.ipv6_src[3]);
-				IPACMDBG_H("dst_ipv6 addr:0x%x:%x:%x:%x\n",
-					add_socksv5_info.ul_in.ipv6_dst[0],
-					add_socksv5_info.ul_in.ipv6_dst[1],
-					add_socksv5_info.ul_in.ipv6_dst[2],
-					add_socksv5_info.ul_in.ipv6_dst[3]);
-				/* update client ipv6 */
-				IPACM_Iface::ipacmcfg->update_socksv5_client_v6_addr(add_socksv5_info.ul_in.ipv6_src);
-				IPACMDBG_H("socksv5_conn size %d \n", IPACM_Iface::ipacmcfg->socksv5_conn.size());
+			IPACMDBG_H("socksv5_conn size %d \n", IPACM_Iface::ipacmcfg->socksv5_conn.size());
+			IPACM_Iface::ipacmcfg->add_socksv5_conn(&add_socksv5_info);
 
-				sock_up_event_data = (ipa_socksv5_msg *)malloc(sizeof(ipa_socksv5_msg));
-				if(sock_up_event_data == NULL)
-				{
-					IPACMERR("unable to allocate memory for event_wlan data_event_conn\n");
-					return NULL;
-				}
-				memcpy(sock_up_event_data, &add_socksv5_info, sizeof(ipa_socksv5_msg));
-				evt_data.event = IPA_HANDLE_SOCKSv5_UP;
-				evt_data.evt_data = sock_up_event_data;
-				/* finish command queue */
-				IPACMDBG_H("Posting IPA_HANDLE_SOCKSv5_UP event:%d\n", evt_data.event);
-				IPACM_EvtDispatcher::PostEvt(&evt_data);
+			IPACMDBG_H("src_ipv6 addr:0x%x:%x:%x:%x\n",
+				add_socksv5_info.ul_in.ipv6_src[0],
+				add_socksv5_info.ul_in.ipv6_src[1],
+				add_socksv5_info.ul_in.ipv6_src[2],
+				add_socksv5_info.ul_in.ipv6_src[3]);
+			IPACMDBG_H("dst_ipv6 addr:0x%x:%x:%x:%x\n",
+				add_socksv5_info.ul_in.ipv6_dst[0],
+				add_socksv5_info.ul_in.ipv6_dst[1],
+				add_socksv5_info.ul_in.ipv6_dst[2],
+				add_socksv5_info.ul_in.ipv6_dst[3]);
+			/* update client ipv6 */
+			IPACM_Iface::ipacmcfg->update_socksv5_client_v6_addr(add_socksv5_info.ul_in.ipv6_src);
+			IPACMDBG_H("socksv5_conn size %d \n", IPACM_Iface::ipacmcfg->socksv5_conn.size());
+
+			sock_up_event_data = (ipa_socksv5_msg *)malloc(sizeof(ipa_socksv5_msg));
+			if(sock_up_event_data == NULL)
+			{
+				IPACMERR("unable to allocate memory for event_wlan data_event_conn\n");
+				return NULL;
 			}
-				IPACMDBG_H("socksv5_conn size %d \n", IPACM_Iface::ipacmcfg->socksv5_conn.size());
-				IPACM_Iface::ipacmcfg->add_socksv5_conn(&add_socksv5_info);
+			memcpy(sock_up_event_data, &add_socksv5_info, sizeof(ipa_socksv5_msg));
+			evt_data.event = IPA_HANDLE_SOCKSv5_UP;
+			evt_data.evt_data = sock_up_event_data;
+			/* finish command queue */
+			IPACMDBG_H("Posting IPA_HANDLE_SOCKSv5_UP event:%d\n", evt_data.event);
+			IPACM_EvtDispatcher::PostEvt(&evt_data);
 			continue;
 
 		case IPA_SOCKV5_DEL:

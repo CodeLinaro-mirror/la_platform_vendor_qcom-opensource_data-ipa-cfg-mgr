@@ -424,6 +424,7 @@ public:
 	int pdn_ipv4[IPA_MAX_NUM_HW_PDNS];
 	uint32_t pdn_ipv6[IPA_MAX_NUM_HW_PDNS][4];
 	int pdn_ipv6_in_use[IPA_MAX_NUM_HW_PDNS];
+	int pdn_ipv6_wan_up[IPA_MAX_NUM_HW_PDNS];
 	/* less impact on v6-embedded traffic */
 	int total_pdn_ipv6_in_use;
 	void add_mux_id_mapping(rmnet_mux_id_info *add_muxd_info);

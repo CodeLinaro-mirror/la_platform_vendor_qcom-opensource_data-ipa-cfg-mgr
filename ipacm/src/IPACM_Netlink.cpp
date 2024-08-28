@@ -25,6 +25,10 @@ BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
 WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
 OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
 IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+Changes from Qualcomm Innovation Center are provided under the following license:
+Copyright (c) 2024 Qualcomm Innovation Center, Inc. All rights reserved.
+SPDX-License-Identifier: BSD-3-Clause-Clear.
 */
 /*!
 	@file
@@ -819,7 +823,16 @@ static int ipa_nl_decode_nlmsg
 			break;
 
 		case RTM_NEWADDR:
-			IPACMDBG("\n GOT RTM_NEWADDR event\n");
+		case RTM_DELADDR:
+			if(nlh->nlmsg_type == RTM_NEWADDR)
+			{
+				IPACMDBG("\n GOT RTM_NEWADDR event\n");
+			}
+			else
+			{
+				IPACMDBG("\n GOT RTM_DELADDR event\n");
+			}
+
 			if(IPACM_SUCCESS != ipa_nl_decode_rtm_addr(buffer, buflen, &(msg_ptr->nl_addr_info)))
 			{
 				IPACMERR("Failed to decode rtm addr message\n");
@@ -860,24 +873,51 @@ static int ipa_nl_decode_nlmsg
 					data_addr->ipv4_addr = ntohl(data_addr->ipv4_addr);
 
 				}
-
-				evt_data.event = IPA_ADDR_ADD_EVENT;
+				if(nlh->nlmsg_type == RTM_NEWADDR)
+				{
+					evt_data.event = IPA_ADDR_ADD_EVENT;
+				}
+				else
+				{
+					evt_data.event = IPA_ADDR_DEL_EVENT;
+				}
 				data_addr->if_index = msg_ptr->nl_addr_info.metainfo.ifa_index;
 				strlcpy(data_addr->iface_name, dev_name, sizeof(data_addr->iface_name));
 				if(AF_INET6 == msg_ptr->nl_addr_info.attr_info.prefix_addr.ss_family)
 				{
-				    IPACMDBG("Posting IPA_ADDR_ADD_EVENT with if index:%d, ipv6 addr:0x%x:%x:%x:%x\n",
+					if(nlh->nlmsg_type == RTM_NEWADDR)
+					{
+						IPACMDBG("Posting IPA_ADDR_ADD_EVENT with if index:%d, ipv6 addr:0x%x:%x:%x:%x\n",
 								 data_addr->if_index,
 								 data_addr->ipv6_addr[0],
 								 data_addr->ipv6_addr[1],
 								 data_addr->ipv6_addr[2],
 								 data_addr->ipv6_addr[3]);
-                }
+					}
+					else
+					{
+						IPACMDBG("Posting IPA_ADDR_DEL_EVENT with if index:%d, ipv6 addr:0x%x:%x:%x:%x\n",
+								 data_addr->if_index,
+								 data_addr->ipv6_addr[0],
+								 data_addr->ipv6_addr[1],
+								 data_addr->ipv6_addr[2],
+								 data_addr->ipv6_addr[3]);
+					}
+				}
 				else
 				{
-				IPACMDBG("Posting IPA_ADDR_ADD_EVENT with if index:%d, ipv4 addr:0x%x\n",
+					if(nlh->nlmsg_type == RTM_NEWADDR)
+					{
+						IPACMDBG("Posting IPA_ADDR_ADD_EVENT with if index:%d, ipv4 addr:0x%x\n",
 								 data_addr->if_index,
 								 data_addr->ipv4_addr);
+					}
+					else
+					{
+						IPACMDBG("Posting IPA_ADDR_DEL_EVENT with if index:%d, ipv4 addr:0x%x\n",
+								 data_addr->if_index,
+								 data_addr->ipv4_addr);
+					}
 				}
 				evt_data.evt_data = data_addr;
 				IPACM_EvtDispatcher::PostEvt(&evt_data);
@@ -909,7 +949,7 @@ static int ipa_nl_decode_nlmsg
 			{
 				IPACMDBG("\n GOT RTM_NEWROUTE event\n");
 
-				if(msg_ptr->nl_route_info.attr_info.param_mask & IPA_RTA_PARAM_DST)
+				if(AF_INET == msg_ptr->nl_route_info.metainfo.rtm_family && msg_ptr->nl_route_info.attr_info.param_mask & IPA_RTA_PARAM_DST)
 				{
 					ret_val = ipa_get_if_name(dev_name, msg_ptr->nl_route_info.attr_info.oif_index);
 					if(ret_val != IPACM_SUCCESS)
@@ -1174,7 +1214,7 @@ static int ipa_nl_decode_nlmsg
 				 (msg_ptr->nl_route_info.metainfo.rtm_table == RT_TABLE_MAIN))
 			{
 
-				if(msg_ptr->nl_route_info.attr_info.param_mask & IPA_RTA_PARAM_DST)
+				if(AF_INET == msg_ptr->nl_route_info.metainfo.rtm_family && msg_ptr->nl_route_info.attr_info.param_mask & IPA_RTA_PARAM_DST)
 				{
 					ret_val = ipa_get_if_name(dev_name, msg_ptr->nl_route_info.attr_info.oif_index);
 					if(ret_val != IPACM_SUCCESS)

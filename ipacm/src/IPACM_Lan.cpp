@@ -27,24 +27,24 @@
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  * Changes from Qualcomm Innovation Center are provided under the following license:
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  *  Redistribution and use in source and binary forms, with or without
  *  modification, are permitted (subject to the limitations in the
  *  disclaimer below) provided that the following conditions are met:
- * 
+ *
  *      * Redistributions of source code must retain the above copyright
  *        notice, this list of conditions and the following disclaimer.
- * 
+ *
  *      * Redistributions in binary form must reproduce the above
  *        copyright notice, this list of conditions and the following
  *        disclaimer in the documentation and/or other materials provided
  *        with the distribution.
- * 
+ *
  *      * Neither the name of Qualcomm Innovation Center, Inc. nor the names of its
  *        contributors may be used to endorse or promote products derived
  *        from this software without specific prior written permission.
- * 
+ *
  *  NO EXPRESS OR IMPLIED LICENSES TO ANY PARTY'S PATENT RIGHTS ARE
  *  GRANTED BY THIS LICENSE. THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT
  *  HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED
@@ -3354,6 +3354,23 @@ int IPACM_Lan::handle_addr_evt(ipacm_event_data_addr *data)
 
 		if (num_dft_rt_v6 == 0)
 		{
+#ifdef FEATURE_IPACM_PER_CLIENT_STATS
+			/* Handle the race condition if ipv6 address assignment
+			 * is delayed and route add event or wan_up received prior*/
+			if (IPACM_Iface::ipacmcfg->ipacm_lan_stats_enable)
+			{
+				IPACMDBG_H("Check If wan-up before IPA_ADDR_ADD evt.\n");
+				if(IPACM_Wan::isWanUP_V6(ipa_if_num))
+				{
+					IPACMDBG_H("if_index:%d \n",data->if_index);
+					IPACMDBG_H("num_wan_ul_fl_rule_v6:%d\n",
+							num_wan_ul_fl_rule_v6);
+					IPACMDBG_H("Delete %d q6 rule,if before ipv6 addr assign\n",
+							num_wan_ul_fl_rule_v6);
+					del_ul_flt_rules(IPA_IP_v6);
+				}
+			}
+#endif
 			/* Always adding tcp syn SW-exception rule for MSS clamping support */
 			add_tcp_syn_flt_rule(data->iptype);
 
@@ -3486,6 +3503,7 @@ int IPACM_Lan::handle_private_subnet(ipa_ip_type iptype)
 		for (i = 0; i < IPACM_Iface::ipacmcfg->ipa_num_private_subnet; i++)
 		{
 			private_fl_rule_hdl[i] = m_pFilteringTable->rules[i].flt_rule_hdl;
+			IPACMDBG("Adding filter hdl:(0x%x)\n", private_fl_rule_hdl[i]);
 		}
 		free(m_pFilteringTable);
 	}
@@ -9694,20 +9712,6 @@ int IPACM_Lan::install_ipv4_icmp_flt_rule()
 	{
 		IPACMDBG_H("Will attempt add v4 icmp filter rule\n");
 
-#ifdef FEATURE_EoGRE
-		bool eogre_enabled = IPACM_Iface::ipacmcfg->eogre_enabled;
-#else
-		bool eogre_enabled = false;
-#endif
-		/*
-		 * Don't configure icmp when eogre enabled:
-		 */
-		if ( eogre_enabled )
-		{
-			IPACMDBG_H("Won't install icmp rule when eogre enabled\n");
-			return ret;
-		}
-
 		static const int NUM_RULES = 1;
 
 		char buf1[ sizeof(struct ipa_ioc_add_flt_rule_v2) ];
@@ -9771,20 +9775,6 @@ int IPACM_Lan::install_ipv6_icmp_flt_rule()
 	if(rx_prop != NULL)
 	{
 		IPACMDBG_H("Will attempt to add v6 icmp filter rule\n");
-
-#ifdef FEATURE_EoGRE
-		bool eogre_enabled = IPACM_Iface::ipacmcfg->eogre_enabled;
-#else
-		bool eogre_enabled = false;
-#endif
-		/*
-		 * Don't configure icmp when eogre enabled:
-		 */
-		if ( eogre_enabled )
-		{
-			IPACMDBG_H("Won't install icmp rule when eogre enabled\n");
-			return ret;
-		}
 
 		static const int NUM_RULES = 1;
 
@@ -9930,6 +9920,7 @@ int IPACM_Lan::modify_private_subnet(bool eogre_enabled)
 			return IPACM_FAILURE;
 		}
 		IPACM_Iface::ipacmcfg->decreaseFltRuleCount(rx_prop->rx[0].src_pipe, IPA_IP_v4, num_wan_subnet_rules);
+		memset(private_fl_rule_hdl, 0, (IPA_MAX_PRIVATE_SUBNET_ENTRIES + IPA_MAX_MTU_ENTRIES) * sizeof(uint32_t));
 		num_wan_subnet_rules = 0;
 	}
 
@@ -9985,7 +9976,10 @@ int IPACM_Lan::modify_private_subnet(bool eogre_enabled)
 			IPACMDBG("v4 GRE MTU rule will be installed after v4 default rules\n");
 			mtu_flt_rule_offset[IPA_IP_v4] = dft_v4fl_rule_hdl[m_ipv4_default_filterting_rules_count - 1];
 		}
-		mtu_rule_cnt++;
+
+		//this should always hit as GRE is always in VLAN mode so will never hit the inc above. (added for safety)
+		if(!mtu_rule_cnt)
+			mtu_rule_cnt++;
 	}
 #endif
 
@@ -10114,7 +10108,10 @@ int IPACM_Lan::modify_private_subnet(bool eogre_enabled)
 
 	/* save the rule hdls */
 	for (i = 0; i < num_wan_subnet_rules; i++)
+	{
 		private_fl_rule_hdl[i] = pFilteringTable->rules[i].flt_rule_hdl;
+		IPACMDBG("Adding filter hdl:(0x%x)\n", private_fl_rule_hdl[i]);
+	}
 
 fail:
 	if(pFilteringTable != NULL)
@@ -14293,16 +14290,6 @@ void IPACM_Lan::eogre_down()
 			return;
 		}
 		/*
-		 * The icmp rule was removed on eogre_up; needs to be added
-		 * back now.
-		 */
-		res = install_ipv4_icmp_flt_rule();
-		if ( res == IPACM_FAILURE )
-		{
-			IPACMERR("install_ipv4_icmp_flt_rule failed\n");
-			return;
-		}
-		/*
 		 * Will reinstall the exception rules.
 		 */
 		if ( init_fl_rule(IPA_IP_v4, false) == IPACM_FAILURE )
@@ -14338,15 +14325,18 @@ void IPACM_Lan::eogre_down()
 	 *  1) Populate the flt rule offset for eth bridge (offset = icmp)
 	 *
 	 *  2) Populate the flt rule offset for mtu_offset (offset = broadcast rule)
+	 *
+	 * IPACM needs to clean up both based on Iface type, not tunnel type
+		*     since rules are installed based on iface type.
 	 */
-	if ( iptype == IPA_IP_v4 )
+	if ( IPACM_Iface::ip_type == IPA_IP_v4 || IPACM_Iface::ip_type == IPA_IP_MAX)
 	{
 		eth_bridge_flt_rule_offset[iptype] =
 			ipv4_icmp_flt_rule_hdl[0];
 
 		if (m_ipv4_default_filterting_rules_count)
 		{
-			mtu_flt_rule_offset[iptype] =
+			mtu_flt_rule_offset[IPA_IP_v4] =
 				dft_v4fl_rule_hdl[m_ipv4_default_filterting_rules_count - 1];
 		}
 		IPACMDBG(
@@ -14358,18 +14348,18 @@ void IPACM_Lan::eogre_down()
 			m_ipv4_default_filterting_rules_count,
 			mtu_flt_rule_offset[iptype]);
 	}
-	else
+	if ( IPACM_Iface::ip_type == IPA_IP_v6 || IPACM_Iface::ip_type == IPA_IP_MAX )
 	{
 		eth_bridge_flt_rule_offset[iptype] =
 			ipv6_icmp_flt_rule_hdl[0];
 
 		if (m_ipv6_default_filterting_rules_count)
 		{
-			mtu_flt_rule_offset[iptype] =
+			mtu_flt_rule_offset[IPA_IP_v6] =
 				dft_v6fl_rule_hdl[m_ipv6_default_filterting_rules_count - 1];
 		}
 		IPACMDBG(
-			"Prepping for modify_private_subnet(): "
+			"Prepping for modify_ipv6_prefix_flt_rule(): "
 			"eth_bridge_flt_rule_offset[v6]=%u, "
 			"m_ipv6_default_filterting_rules_count=%u "
 			"mtu_flt_rule_offset[v6]=%u\n",
@@ -14379,7 +14369,7 @@ void IPACM_Lan::eogre_down()
 	}
 
 	IPACM_Iface::ipacmcfg->SetQmapId(0xFF);
-	
+
 	//need to clean mtu rules when eogre is disabled
 	modify_private_subnet();
 #ifdef FEATURE_VLAN_MPDN

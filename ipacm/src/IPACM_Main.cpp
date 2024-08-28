@@ -27,7 +27,7 @@
  *
  * Changes from Qualcomm Innovation Center, Inc. are provided under the following license:
  * 
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  * 
  *  Redistribution and use in source and binary forms, with or without
  *  modification, are permitted (subject to the limitations in the
@@ -1103,6 +1103,13 @@ void* ipa_driver_msg_notifier(void *param)
 
 				if ( new_ipgre_info.iptype == IPA_IP_v4 )
 				{
+					/* check if ipv4 src and dst is valid */
+					if (new_ipgre_info.ipv4_src == 0 || new_ipgre_info.ipv4_dst == 0)
+					{
+						IPACMERR("invalid GRE ipv4 addr, mark ipacmcfg->eogre_enabled = false \n");
+						IPACM_Iface::ipacmcfg->eogre_enabled = false;
+						goto done;
+					}
 
 					IPACM_Iface::addr2host(IPA_IP_v4, &new_ipgre_info.ipv4_src);
 					IPACM_Iface::addr2host(IPA_IP_v4, &new_ipgre_info.ipv4_dst);
@@ -1119,6 +1126,17 @@ void* ipa_driver_msg_notifier(void *param)
 				}
 				else
 				{
+					/* check if ipv6 src and dst is valid */
+					if ((new_ipgre_info.ipv6_src[0] == 0 && new_ipgre_info.ipv6_src[1] == 0
+						&& new_ipgre_info.ipv6_src[2] == 0 && new_ipgre_info.ipv6_src[3] == 0) ||
+						(new_ipgre_info.ipv6_dst[0] == 0 && new_ipgre_info.ipv6_dst[1] == 0
+						&& new_ipgre_info.ipv6_dst[2] == 0 && new_ipgre_info.ipv6_dst[3] == 0))
+					{
+						IPACMERR("invalid GRE ipv6 addr, mark ipacmcfg->eogre_enabled = false \n");
+						IPACM_Iface::ipacmcfg->eogre_enabled = false;
+						goto done;
+					}
+
 					IPACM_Iface::addr2host(IPA_IP_v6, &new_ipgre_info.ipv6_src);
 					IPACM_Iface::addr2host(IPA_IP_v6, &new_ipgre_info.ipv6_dst);
 

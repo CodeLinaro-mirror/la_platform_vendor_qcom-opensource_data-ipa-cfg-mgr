@@ -760,6 +760,7 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 									if(IPACM_Wan::backhaul_is_sta_mode == false)
 									{
 										ext_prop = IPACM_Iface::ipacmcfg->GetExtProp(IPA_IP_v4);
+										IPACMDBG_H("Install rule for V4 PDN\n");
 										handle_wan_up_ex(ext_prop, IPA_IP_v4,
 											IPACM_Wan::getXlat_Mux_Id());
 									}
@@ -784,6 +785,7 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 									if(IPACM_Wan::backhaul_is_sta_mode == false)
 									{
 										ext_prop = IPACM_Iface::ipacmcfg->GetExtProp(IPA_IP_v4);
+										IPACMDBG_H("SOCKSv5 Install rule for V4 PDN\n");
 										handle_wan_up_ex(ext_prop, IPA_IP_v4,
 											IPACM_Wan::getXlat_Mux_Id());
 									}
@@ -824,7 +826,8 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 									if(IPACM_Wan::backhaul_is_sta_mode == false)
 									{
 										ext_prop = IPACM_Iface::ipacmcfg->GetExtProp(IPA_IP_v6);
-										handle_wan_up_ex(ext_prop, IPA_IP_v6, 0);
+										IPACMDBG_H("Install rule for V6 PDN\n");
+										handle_wan_up_ex(ext_prop, IPA_IP_v6, IPACM_Wan::getXlat_Mux_Id());
 									}
 									else
 									{
@@ -856,7 +859,8 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 									if(IPACM_Wan::backhaul_is_sta_mode == false)
 									{
 										ext_prop = IPACM_Iface::ipacmcfg->GetExtProp(IPA_IP_v6);
-										handle_wan_up_ex(ext_prop, IPA_IP_v6, 0);
+										IPACMDBG_H("SOCKSv5 Install rule for V6 PDN\n");
+										handle_wan_up_ex(ext_prop, IPA_IP_v6, IPACM_Wan::getXlat_Mux_Id());
 									}
 									else
 									{

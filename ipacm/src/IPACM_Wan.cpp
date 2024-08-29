@@ -8038,7 +8038,6 @@ int IPACM_Wan::installWanPostIpsecRt(ipa_ip_type ipType)
 	struct ipa_flt_rule_add *flt_rules;
 #endif
 	struct ipa_ioc_del_rt_rule *rt_rule_del = NULL;
-	struct ipa_rt_rule_del *rt_rule_entry_del = NULL;
 	struct ipa_ioc_add_rt_rule *rt_rule = NULL;
 	struct ipa_rt_rule_add *rt_rule_entry = NULL;
 
@@ -8060,12 +8059,8 @@ int IPACM_Wan::installWanPostIpsecRt(ipa_ip_type ipType)
 
 		for (i = 0; i < num_ipsec_post_pol_rt[ipType]; i++)
 		{
-			rt_rule_entry_del = &rt_rule_del->hdl[i];
-			rt_rule_entry_del->status = -1;
-			rt_rule_entry_del->hdl = ipsec_post_pol_rt_hdls[ipType][i];
-
-			IPACMDBG_H("Deleting Route hdl:(0x%x) with ip type: %d\n", rt_rule_entry_del->hdl, ipType);
-			if ((false == m_routing.DeleteRoutingRule(rt_rule_del)) || (rt_rule_entry_del->status))
+			IPACMDBG_H("Deleting Route hdl:(0x%x) with ip type: %d\n", ipsec_post_pol_rt_hdls[ipType][i], ipType);
+			if (false == m_routing.DeleteRoutingHdl(ipsec_post_pol_rt_hdls[ipType][i], ipType))
 			{
 				IPACMERR("Routing rule deletion failed!\n");
 				res = IPACM_FAILURE;

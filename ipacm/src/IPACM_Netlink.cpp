@@ -1900,13 +1900,14 @@ static int ipa_nl_decode_nlmsg
 
 				/* Add Dummy VLAN Mapping for Non-Vlan Ifaces */
 				idx = IPACM_Iface::iface_ipa_index_query(msg_ptr->nl_neigh_info.metainfo.ndm_ifindex);
-				if((config != NULL) && (idx != INVALID_IFACE) &&
-				   (config->iface_table[idx].if_cat != WAN_IF))
+				if((config != NULL) && ((idx != INVALID_IFACE && config->iface_table[idx].if_cat != WAN_IF &&
+					!config->iface_in_vlan_mode(dev_name)) || config->check_l2tp_iface(data_all->iface_name)))
 				{
-					if((msg_ptr->nl_neigh_info.metainfo.ndm_ifindex != msg_ptr->nl_neigh_info.master_interface_index) && (!config->iface_in_vlan_mode(dev_name)))
+					if((msg_ptr->nl_neigh_info.metainfo.ndm_ifindex != msg_ptr->nl_neigh_info.master_interface_index))
 					{
 						memset(master_dev_name,0,IF_NAME_LEN);
-						if(ipa_get_if_name(master_dev_name, msg_ptr->nl_neigh_info.master_interface_index) == IPACM_SUCCESS)
+						if(msg_ptr->nl_neigh_info.master_interface_index &&
+							ipa_get_if_name(master_dev_name, msg_ptr->nl_neigh_info.master_interface_index) == IPACM_SUCCESS)
 						{
 							memset(&vlan_bridge_data, 0, sizeof(vlan_bridge_data));
 							vlan_bridge_data.vlan_id = DUMMY_VLAN_ID_BASE+ msg_ptr->nl_neigh_info.metainfo.ndm_ifindex;
@@ -2025,13 +2026,14 @@ static int ipa_nl_decode_nlmsg
 
 			/* Remove Dummy VLAN Mapping for Non-Vlan Ifaces */
 			idx = IPACM_Iface::iface_ipa_index_query(msg_ptr->nl_neigh_info.metainfo.ndm_ifindex);
-			if((config != NULL) && (idx != INVALID_IFACE) &&
-			   (config->iface_table[idx].if_cat != WAN_IF))
+			if((config != NULL) && ((idx != INVALID_IFACE && config->iface_table[idx].if_cat != WAN_IF &&
+				!config->iface_in_vlan_mode(dev_name)) || config->check_l2tp_iface(data_all->iface_name)))
 			{
-				if((msg_ptr->nl_neigh_info.metainfo.ndm_ifindex != msg_ptr->nl_neigh_info.master_interface_index) && (!config->iface_in_vlan_mode(dev_name)))
+				if((msg_ptr->nl_neigh_info.metainfo.ndm_ifindex != msg_ptr->nl_neigh_info.master_interface_index))
 				{
 					memset(master_dev_name,0,IF_NAME_LEN);
-					if(ipa_get_if_name(master_dev_name, msg_ptr->nl_neigh_info.master_interface_index) == IPACM_SUCCESS)
+					if(msg_ptr->nl_neigh_info.master_interface_index &&
+						ipa_get_if_name(master_dev_name, msg_ptr->nl_neigh_info.master_interface_index) == IPACM_SUCCESS)
 					{
 						memset(&vlan_bridge_data, 0, sizeof(vlan_bridge_data));
 						vlan_bridge_data.vlan_id = DUMMY_VLAN_ID_BASE + msg_ptr->nl_neigh_info.metainfo.ndm_ifindex;

@@ -2541,7 +2541,7 @@ int IPACM_Lan::del_ul_flt_rules(enum ipa_ip_type iptype, bool is_eogre_stats, ui
 					IPACMERR("number of num_wan_ul_eogre_fl_rule_v4 (%d) > MAX_WAN_UL_FILTER_RULES (%d), aborting...\n", IPACM_Iface::ipacmcfg->tunnel_idx_map[tunnel_id].num_wan_ul_eogre_fl_rule_v4, MAX_WAN_UL_FILTER_RULES);
 					return IPACM_FAILURE;
 				}
-				if(tunnel_id == 0xFF)
+				if(tunnel_id > 0xF)
 				{
 					IPACMERR("Invalid tunnel_id [%d] passed...\n",tunnel_id);
 					return IPACM_FAILURE;
@@ -3571,7 +3571,8 @@ int IPACM_Lan::handle_addr_evt(ipacm_event_data_addr *data)
 		/* populate the flt rule offset for eth bridge */
 		eth_bridge_flt_rule_offset[data->iptype] = ipv4_icmp_flt_rule_hdl[0];
 		/* populate the flt rule offset for mtu_offset (offset = broadcast rule)*/
-		if (m_ipv4_default_filterting_rules_count)
+		if (m_ipv4_default_filterting_rules_count > 0 &&
+				m_ipv4_default_filterting_rules_count <= IPV4_DEFAULT_FILTERTING_RULES)
 		{
 			mtu_flt_rule_offset[data->iptype] =
 				dft_v4fl_rule_hdl[m_ipv4_default_filterting_rules_count - 1];
@@ -3696,7 +3697,8 @@ int IPACM_Lan::handle_addr_evt(ipacm_event_data_addr *data)
 			init_fl_rule(data->iptype);
 
 			/* populate the mtu_rule_offset */
-			if (m_ipv6_default_filterting_rules_count)
+			if (m_ipv6_default_filterting_rules_count > 0 &&
+				(m_ipv6_default_filterting_rules_count <= (IPV6_DEFAULT_FILTERTING_RULES + IPV6_DEFAULT_LAN_FILTERTING_RULES)))
 			{
 				mtu_flt_rule_offset[data->iptype] =
 					dft_v6fl_rule_hdl[m_ipv6_default_filterting_rules_count - 1];
@@ -3712,6 +3714,8 @@ int IPACM_Lan::handle_addr_evt(ipacm_event_data_addr *data)
 	if(data_fid == NULL)
 	{
 		IPACMERR("unable to allocate memory for IPA_HANDLE_NEW_NEIGH_EVENT data_fid\n");
+		res = IPACM_FAILURE;
+		goto fail;
 	}
 	data_fid->if_index = data->if_index;
 	evt_data.event = IPA_HANDLE_NEW_NEIGH_EVENT;
@@ -7508,7 +7512,7 @@ int IPACM_Lan::handle_uplink_filter_rule(ipacm_ext_prop *prop, ipa_ip_type iptyp
 	uint32_t value = 0, total_rules = 0;
 	bool is_dev_in_vlan_mode=false;
 	enum ipa_flt_action action_cache;
-	uint8_t tunel_id;
+	uint8_t tunel_id = 0xFF;
 
 	IPACMDBG_H("Set modem UL flt rules for iptype(%d), ispmipv6 %d \n", iptype, isPmipv6);
 
@@ -10702,7 +10706,16 @@ int IPACM_Lan::modify_private_subnet(bool eogre_enabled)
 	uint16_t vid[IPA_MAX_MTU_ENTRIES] = { };
 	int mtu_rule_idx = IPACM_Iface::ipacmcfg->ipa_num_private_subnet;
 	int idx = 0;
-
+	if(rx_prop == NULL)
+	{
+		IPACMERR("NULL rx props\n");
+		return IPACM_FAILURE;
+	}
+	if(rx_prop->num_rx_props == 0)
+	{
+		IPACMERR("0 rx props\n");
+		return IPACM_FAILURE;
+	}
 	if(ip_type == IPA_IP_v6)
 	{
 		IPACMERR("inconsistent iptype. iptype = %d\n", ip_type);
@@ -11510,7 +11523,10 @@ void IPACM_Lan::delete_ipv6_prefix_flt_rule()
 		IPACMERR("Failed to delete ipv6 prefix flt rule.\n");
 		return;
 	}
-	IPACM_Iface::ipacmcfg->decreaseFltRuleCount(rx_prop->rx[idx].src_pipe, IPA_IP_v6, IPv6_PREFIX_DEFAULT_PDN_RULE_NUM);
+	if(rx_prop && rx_prop->num_rx_props > 0)
+	{
+		IPACM_Iface::ipacmcfg->decreaseFltRuleCount(rx_prop->rx[idx].src_pipe, IPA_IP_v6, IPv6_PREFIX_DEFAULT_PDN_RULE_NUM);
+	}
 	return;
 }
 
@@ -14916,6 +14932,17 @@ int IPACM_Lan::handle_mpdn_ul_xlat_filter_rule(ipacm_ext_prop * prop,
 	uint16_t value = 0, mask = 0;
 	int xlat_pdn_ctx_id;
 
+	if(rx_prop == NULL)
+	{
+		IPACMERR("NULL rx props");
+		return IPACM_FAILURE;
+	}
+
+	if(rx_prop->num_rx_props == 0)
+	{
+		IPACMERR("Incorrect number of rx props");
+		return IPACM_FAILURE;
+	}
 	IPACMDBG_H("Set modem UL flt rules for xlat mode in MPDN config with vlan: %d\n", vlan_id);
 
 	if (iptype != IPA_IP_v4 || !modem_ul_v4_set)
@@ -15227,8 +15254,12 @@ int IPACM_Lan::delete_mdpn_ul_xlat_filter_rule(int mux_id)
 			goto fail;
 		}
 		IPACMDBG_H("Deleted xlat mpdn rules for pdn mux : %d\n", mux_id);
-		IPACM_Iface::ipacmcfg->decreaseFltRuleCount(rx_prop->rx[idx].src_pipe, IPA_IP_v4,
+
+		if(rx_prop && rx_prop->num_rx_props > 0)
+		{
+			IPACM_Iface::ipacmcfg->decreaseFltRuleCount(rx_prop->rx[idx].src_pipe, IPA_IP_v4,
 				xlat_ctx.active_pdn_list[xlat_pdn_ctx_id].num_wan_mpdn_ul_xlat_fl_rule_v4);
+		}
 		memset(xlat_ctx.active_pdn_list[xlat_pdn_ctx_id].wan_mpdn_ul_xlat_fl_rule_hdl_v4,
 				0, MAX_WAN_UL_FILTER_RULES*sizeof(uint32_t));
 		xlat_ctx.active_pdn_list[xlat_pdn_ctx_id].num_wan_mpdn_ul_xlat_fl_rule_v4 = 0;
@@ -15249,7 +15280,17 @@ int IPACM_Lan::delete_icmp_filter_rule(
 		IPACMERR("Bad iptype(%u)\n", iptype);
 		return IPACM_FAILURE;
 	}
+	if(rx_prop == NULL)
+	{
+		IPACMERR("NULL rx_prop\n");
+		return IPACM_FAILURE;
+	}
 
+	if(rx_prop->num_rx_props <= 0)
+	{
+		IPACMERR("0 num 0f rx_prop\n");
+		return IPACM_FAILURE;
+	}
 	if ((ipa_if_cate == WLAN_IF) && (is_if_svap || is_wlan_if_vlan) && (rx_prop && rx_prop->num_rx_props > 2)) {
 		idx = 2;
 		IPACMDBG_H("Interface is WLAN Svap or vlan, delete rules on Rx pipe at idx %d \n", idx);
@@ -15686,6 +15727,11 @@ void IPACM_Lan::gre_down(bool isPmipv6)
 {
 	int res;
 	ipa_ipgre_info ipgre_info = IPACM_Iface::ipacmcfg->eogre_info;
+	if(!VALID_IPA_IP_TYPE(ipgre_info.iptype))
+	{
+		IPACMERR("Incorrect iptype");
+		return;
+	}
 	ipa_ip_type iptype  = ipgre_info.iptype;
 	uint8_t tunel_id;
 
@@ -15819,7 +15865,8 @@ void IPACM_Lan::gre_down(bool isPmipv6)
 			eth_bridge_flt_rule_offset[iptype] =
 				ipv4_icmp_flt_rule_hdl[0];
 
-			if (m_ipv4_default_filterting_rules_count)
+			if (m_ipv4_default_filterting_rules_count &&
+					m_ipv4_default_filterting_rules_count <= IPV4_DEFAULT_FILTERTING_RULES)
 			{
 				mtu_flt_rule_offset[IPA_IP_v4] =
 					dft_v4fl_rule_hdl[m_ipv4_default_filterting_rules_count - 1];
@@ -15838,7 +15885,8 @@ void IPACM_Lan::gre_down(bool isPmipv6)
 			eth_bridge_flt_rule_offset[iptype] =
 				ipv6_icmp_flt_rule_hdl[0];
 
-			if (m_ipv6_default_filterting_rules_count)
+			if (m_ipv6_default_filterting_rules_count &&
+					m_ipv6_default_filterting_rules_count <= (IPV6_DEFAULT_FILTERTING_RULES + IPV6_DEFAULT_LAN_FILTERTING_RULES))
 			{
 				mtu_flt_rule_offset[IPA_IP_v6] =
 					dft_v6fl_rule_hdl[m_ipv6_default_filterting_rules_count - 1];
@@ -15931,7 +15979,7 @@ void IPACM_Lan::gre_down(bool isPmipv6)
 					IPACMDBG("installed the per clients rules with list\n");
 				}
 			}
-	#endif		
+	#endif
 		}
 		else
 			IPACM_Iface::ipacmcfg->SetQmapId(0xFF);
@@ -15940,7 +15988,8 @@ void IPACM_Lan::gre_down(bool isPmipv6)
 	{
 		if ( iptype == IPA_IP_v4 )
 		{
-			if (m_ipv4_default_filterting_rules_count)
+			if (m_ipv4_default_filterting_rules_count &&
+					m_ipv4_default_filterting_rules_count <= IPV4_DEFAULT_FILTERTING_RULES)
 			{
 				mtu_flt_rule_offset[iptype] =
 					dft_v4fl_rule_hdl[m_ipv4_default_filterting_rules_count - 1];
@@ -15948,7 +15997,8 @@ void IPACM_Lan::gre_down(bool isPmipv6)
 		}
 		else
 		{
-			if (m_ipv6_default_filterting_rules_count)
+			if (m_ipv6_default_filterting_rules_count &&
+					m_ipv6_default_filterting_rules_count <= (IPV6_DEFAULT_FILTERTING_RULES + IPV6_DEFAULT_LAN_FILTERTING_RULES))
 			{
 				mtu_flt_rule_offset[iptype] =
 					dft_v6fl_rule_hdl[m_ipv6_default_filterting_rules_count - 1];
@@ -16022,6 +16072,11 @@ down_end:
 int IPACM_Lan::gre_do_rt_work(
 	ipa_ipgre_info& ipgre_info )
 {
+	if(!VALID_IPA_IP_TYPE(ipgre_info.iptype))
+	{
+		IPACMERR("Incorrect iptype");
+		return IPACM_FAILURE;
+	}
 	enum ipa_ip_type iptype = ipgre_info.iptype;
 
 	IPACMDBG_H(
@@ -16096,7 +16151,16 @@ int IPACM_Lan::gre_add_catchup_rule(
 		IPACMERR("Invalid IP type passed to function\n");
 		return IPACM_FAILURE;
 	}
-
+	if(rx_prop == NULL)
+	{
+		IPACMERR("NULL rx props\n");
+		return IPACM_FAILURE;
+	}
+	if(rx_prop->num_rx_props <= 0)
+	{
+		IPACMERR("Incorrect rx props\n");
+		return IPACM_FAILURE;
+	}
 	IPACMDBG_H(
 		"Attempting to add gre catchup rule for iptype(%d)\n",
 		iptype);
@@ -16195,6 +16259,11 @@ int IPACM_Lan::update_complementary_table(
 {
 	if ( rx_prop != NULL )
 	{
+		if(rx_prop->num_rx_props <= 0)
+		{
+			IPACMERR("Incorrect rx props\n");
+			return IPACM_FAILURE;
+		}
 		if ( gre_route_data[iptype].flt_gre_1st_pass_hdl )
 		{
 			IPACMDBG_H(
@@ -16522,7 +16591,7 @@ int IPACM_Lan::gre_make_hdr_for_add_ctx(
 #ifdef IPA_FLT_EXT_MPLS_GRE_GENERAL
 		snprintf(
 			hdr->name,
-			sizeof(hdr->name),
+			sizeof(char)*IPA_RESOURCE_NAME_MAX,
 			( ipgre_info.mpls_protocol ) ? IPA_MPLSoGRE_HDR_NAME : IPA_EoGRE_HDR_NAME,
 			( iptype == IPA_IP_v4 )      ? 4                     : 6);
 #endif
@@ -16882,6 +16951,11 @@ int IPACM_Lan::gre_make_hdr_rmv_ctx(
 	ipa_ipgre_info& ipgre_info,
 	uint32_t        hdr_2use )
 {
+	if ( !VALID_IPA_IP_TYPE(ipgre_info.iptype) )
+	{
+		IPACMERR("Invalid IP type passed to function\n");
+		return 0;
+	}
 	enum ipa_ip_type iptype = ipgre_info.iptype;
 	IPACMDBG_H(
 		"Attempting to create \"header remove\" context "
@@ -17198,7 +17272,7 @@ void IPACM_Lan::gre_clear_route_data(
 {
 	if ( VALID_IPA_IP_TYPE(iptype) )
 	{
-		if (IPACM_Iface::ipacmcfg->tunnel_feature == SINGLE_TAG_FEATURE && tunnel_id != 0xFF)
+		if (IPACM_Iface::ipacmcfg->tunnel_feature == SINGLE_TAG_FEATURE && tunnel_id <= 0xF)
 		{
 			if ( IPACM_Iface::ipacmcfg->tunnel_idx_map[tunnel_id].gre_route_data[iptype].proc_ctx_gre_rmv_hdl )
 			{
@@ -17271,7 +17345,7 @@ int IPACM_Lan::gre_add_exceptions()
 {
 	ipa_ipgre_info ipgre_info = IPACM_Iface::ipacmcfg->eogre_info;
 
-	int res;
+	int res = IPACM_SUCCESS;
 
 	const int NUM_RULES = 1;
 
@@ -17285,7 +17359,16 @@ int IPACM_Lan::gre_add_exceptions()
 	ipa_ip_type iptype = ipgre_info.iptype;
 
 	memset(buf, 0, sizeof(buf));
-
+	if(rx_prop == NULL)
+	{
+		IPACMERR("NULL rx_prop");
+		return IPACM_FAILURE;
+	}
+	if(rx_prop->num_rx_props <= 0)
+	{
+		IPACMERR("Incorrect number of rx props\n",rx_prop->num_rx_props);
+		return IPACM_FAILURE;
+	}
 	flt_rule->commit    = 1;
 	flt_rule->ep        = rx_prop->rx[0].src_pipe;
 	flt_rule->global    = false;
@@ -17492,7 +17575,7 @@ int IPACM_Lan::gre_add_exception_rule(
 	memcpy(
 		&flt_rule_add.rule.attrib,
 		&attrib,
-		sizeof(flt_rule_add.rule.eq_attrib));
+		sizeof(flt_rule_add.rule.attrib));
 
 	return IPACM_SUCCESS;
 }
@@ -17502,7 +17585,7 @@ int IPACM_Lan::gre_add_exception_rule(
 /* handle ext_route new_address event*/
 int IPACM_Lan::handle_ext_router_add_evt(char* pdn_name, uint8_t *mac_addr, uint32_t *idu_v6_addr, uint16_t vid = 0)
 {
-	struct ipa_ioc_add_rt_rule *rt_rule;
+	struct ipa_ioc_add_rt_rule *rt_rule = NULL;
 	struct ipa_rt_rule_add *rt_rule_entry;
 	struct ext_router_prefix_info info;
 	int eth_idx, res = IPACM_SUCCESS;
@@ -17513,7 +17596,17 @@ int IPACM_Lan::handle_ext_router_add_evt(char* pdn_name, uint8_t *mac_addr, uint
 	int len, idx = 0;
 	uint32_t wan_ipv6_addr[4];
 	memset(&hdr, 0, sizeof(hdr));
+	if(rx_prop == NULL)
+	{
+		IPACMERR("NULL rx_prop\n");
+		return IPACM_FAILURE;
+	}
 
+	if(rx_prop->num_rx_props <= 0)
+	{
+		IPACMERR("0 num 0f rx_prop\n");
+		return IPACM_FAILURE;
+	}
 	if (strlcpy(info.pdn_name, pdn_name, sizeof(info.pdn_name)) == 0) {
 		IPACMERR("Recevied NULL PDN name\n");
 		return IPACM_FAILURE;
@@ -17786,6 +17879,16 @@ int IPACM_Lan::eth_bridge_get_vlan_hdr_template_hdl(uint32_t* hdr_hdl, uint16_t 
 	struct ipa_ioc_add_hdr *pHeaderDescriptor = NULL;
 	int len = 0;
 
+	if(tx_prop == NULL)
+	{
+		IPACMERR("NULL tx_prop");
+		return IPACM_FAILURE;
+	}
+	if(tx_prop->num_tx_props < 3)
+	{
+		IPACMERR("Incorrect number of tx prop %d\n",tx_prop->num_tx_props);
+		return IPACM_FAILURE;
+	}
 	memset(&hdr, 0, sizeof(hdr));
 	memset(&sCopyHeader, 0, sizeof(sCopyHeader));
 	memcpy(sCopyHeader.name,
@@ -17845,7 +17948,17 @@ int IPACM_Lan::install_ip_specific_filter_rule(enum ipa_ip_type iptype)
 	int ret = IPACM_SUCCESS;
 	ipa_ioc_add_flt_rule* pFilteringTable = NULL;
 	static const int NUM_RULES = 1;
+	if(rx_prop == NULL)
+	{
+		IPACMERR("NULL rx_prop\n");
+		return IPACM_FAILURE;
+	}
 
+	if(rx_prop->num_rx_props <= 0)
+	{
+		IPACMERR("0 num 0f rx_prop\n");
+		return IPACM_FAILURE;
+	}
 	if ( ! VALID_IPA_IP_TYPE(iptype) )
 	{
 		IPACMERR("Invalid IP type passed to function\n");
@@ -17867,6 +17980,11 @@ int IPACM_Lan::install_ip_specific_filter_rule(enum ipa_ip_type iptype)
 	len = sizeof(ipa_ioc_add_flt_rule) +(NUM_RULES * sizeof(ipa_flt_rule_add));
 
 	pFilteringTable = (ipa_ioc_add_flt_rule*) malloc(len);
+	if(pFilteringTable == NULL)
+	{
+		IPACMERR("Error in assigning pfiltertable memory\n");
+		return IPACM_FAILURE;
+	}
 	memset(pFilteringTable, 0, len);
 
 	pFilteringTable->commit    = 1;

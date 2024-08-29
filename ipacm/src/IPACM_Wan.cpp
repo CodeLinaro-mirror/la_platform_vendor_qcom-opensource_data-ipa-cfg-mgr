@@ -249,6 +249,7 @@ IPACM_Wan::IPACM_Wan(int iface_index,
 	mtu_v6_set = false;
 	memset(&ip_pass_pdn_info, 0 ,sizeof(ip_pass_pdn_info));
 	memset(&ip_collision_pdn_info, 0 ,sizeof(ip_collision_pdn_info));
+	ipps_dft_v4_rt_rule_hdl = 0;
 #ifdef FEATURE_IPACM_UL_FIREWALL
 #ifdef FEATURE_VLAN_MPDN
 	num_firewall_v6_ul_pdn = 0;
@@ -627,7 +628,7 @@ bool IPACM_Wan::is_xlat_by_ipv4(uint32_t ipv4_addr)
 /* handle new_address event */
 int IPACM_Wan::handle_addr_evt(ipacm_event_data_addr *data)
 {
-	struct ipa_ioc_add_rt_rule *rt_rule;
+	struct ipa_ioc_add_rt_rule *rt_rule = NULL;
 	struct ipa_rt_rule_add *rt_rule_entry;
 	struct ipa_ioc_add_flt_rule *flt_rule;
 	struct ipa_flt_rule_add flt_rule_entry;
@@ -1059,6 +1060,8 @@ int IPACM_Wan::handle_addr_evt(ipacm_event_data_addr *data)
 	if(data_fid == NULL)
 	{
 		IPACMERR("unable to allocate memory for IPA_HANDLE_NEW_NEIGH_EVENT data_fid\n");
+		res = IPACM_FAILURE;
+		goto fail;
 	}
 	data_fid->if_index = data->if_index;
 
@@ -4537,7 +4540,7 @@ int IPACM_Wan::config_dft_firewall_rules_ex(struct ipa_flt_rule_add *rules, int 
 {
 	IPACM_firewall_conf_t firewall_config;
 #endif
-	int num_rules = 0, original_num_rules = 0, res, pos = rule_offset;
+	int num_rules = 0, original_num_rules = 0, res = IPACM_SUCCESS, pos = rule_offset;
 
 #ifdef FEATURE_EoGRE
 	ipa_ipgre_info ipgre_info = IPACM_Iface::ipacmcfg->eogre_info;
@@ -12698,7 +12701,7 @@ void IPACM_Wan::ipgre_clear_route_data(
 
 void IPACM_Wan::send_config_to_uc(){
 	bool res;
-	uint8_t mux_id;
+	uint8_t mux_id = 0;
 	int fd, ret = 0;
 	uint8_t vlan_id = IPACM_Iface::ipacmcfg->IP_Forwarding_config.vlan;
 	res=IPACM_Wan::GetMuxID_For_Private_IP_Forwarding(vlan_id,&mux_id);

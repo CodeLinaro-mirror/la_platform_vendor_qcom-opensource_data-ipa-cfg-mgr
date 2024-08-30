@@ -28,7 +28,7 @@
  *
  * Changes from Qualcomm Innovation Center are provided under the following license:
  *
- * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2025 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted (subject to the limitations in the
@@ -112,7 +112,7 @@ IPACM_Wlan::IPACM_Wlan(int iface_index, bool ast_update_needed) : IPACM_Lan(ifac
 
 	wlan_ap_index = IPACM_Wlan::num_wlan_ap_iface;
 	/* In EM config, we support 14 VAPs in total. */
-	if(wlan_ap_index < 0 || wlan_ap_index > 20)
+	if(wlan_ap_index < 0 || wlan_ap_index >= IPA_MAX_ACTIVE_WLAN_IFACE )
 	{
 		IPACMERR("Wlan_ap_index is not correct: %d, not support %d APs .\n", wlan_ap_index, wlan_ap_index + 1);
 		if (tx_prop != NULL)

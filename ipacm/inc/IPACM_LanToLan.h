@@ -27,7 +27,7 @@ OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
 IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 * Changes from Qualcomm Innovation Center, Inc. are provided under the following license:
-* Copyright (c) 2023-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+* Copyright (c) 2023-2025 Qualcomm Innovation Center, Inc. All rights reserved.
 * SPDX-License-Identifier: BSD-3-Clause-Clear.
 */
 
@@ -55,7 +55,7 @@ IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #endif /* ndefined(FEATURE_IPA_ANDROID)*/
 
 #define MAX_NUM_CACHED_CLIENT_ADD_EVENT 10
-#define MAX_NUM_IFACE 20
+#define MAX_NUM_IFACE IPA_MAX_NUM_IFACE_FLT
 #ifdef FEATURE_VLAN_MPDN
 #define MAX_NUM_CLIENT 32
 #define MAX_NUM_WLAN_CLIENT 350

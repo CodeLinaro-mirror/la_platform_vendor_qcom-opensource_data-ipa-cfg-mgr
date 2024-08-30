@@ -27,7 +27,7 @@ OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
 IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 Changes from Qualcomm Innovation Center are provided under the following license:
-Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+Copyright (c) 2023-2025 Qualcomm Innovation Center, Inc. All rights reserved.
 SPDX-License-Identifier: BSD-3-Clause-Clear
 */
 /*!
@@ -90,10 +90,10 @@ extern "C"
 #define IPA_IF_SOCKSv5_NAME  "IPACM_SOCKSv5"
 #define IPA_EOGRE_HDR_NAME   "IPACM_EoGRE_v%d"
 
-#define IPA_MAX_ACTIVE_WLAN_IFACE 22 // 21 wlan + 1 ath3 interface for RDKB
+#define IPA_MAX_ACTIVE_WLAN_IFACE 64 // 64 wlan (4x16 band support)
 
-#define IPA_MAX_IFACE_ENTRIES (48 + IPA_MAX_ACTIVE_WLAN_IFACE) /* current: 15 rmnet + 21 wlan + bridge+ eth +
-                                                                * rndis + ecm + 15 rmnet for RDKB + 7mld */
+#define IPA_MAX_IFACE_ENTRIES (57 + IPA_MAX_ACTIVE_WLAN_IFACE) /* current: 15 rmnet + 64 wlan + bridge+ eth +
+                                                                * rndis + ecm + 15 rmnet for RDKB + 16mld */
 #define IPA_MAX_ALG_ENTRIES 20
 #define IPA_MAX_RM_ENTRY 9
 

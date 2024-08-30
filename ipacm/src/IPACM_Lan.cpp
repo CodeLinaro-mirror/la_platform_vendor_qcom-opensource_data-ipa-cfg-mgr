@@ -6929,7 +6929,7 @@ int IPACM_Lan::handle_uplink_filter_rule(ipacm_ext_prop *prop, ipa_ip_type iptyp
 	}
 
 #ifdef FEATURE_VLAN_MPDN
-	is_dev_in_vlan_mode = IPACM_Iface::ipacmcfg->iface_in_vlan_mode(dev_name);
+	is_dev_in_vlan_mode = IPACM_Iface::ipacmcfg->iface_in_vlan_mode(dev_name) || IPACM_Iface::ipacmcfg->is_added_vlan_iface(dev_name);
 	if (is_dev_in_vlan_mode && IPACM_Iface::ipacmcfg->ipacm_mpdn_enable) {
 		IPACMDBG_H("number of xlat rules %d \n", prop->num_v4_xlat_props);
 		total_rules = prop->num_ext_props - prop->num_v4_xlat_props;
@@ -14283,6 +14283,9 @@ int IPACM_Lan::handle_mpdn_ul_xlat_filter_rule(ipacm_ext_prop * prop,
 					IPACMERR("Unable to find Bridge for Dummy VLAN ID %d\n", vlan_id);
 					return IPACM_FAILURE;
 				}
+				/*Unset metadata eq bit and set mq32 eq bit*/
+				flt_rule_entry.rule.eq_attrib.rule_eq_bitmap = flt_rule_entry.rule.eq_attrib.rule_eq_bitmap & ~(1<<9);
+				flt_rule_entry.rule.eq_attrib.metadata_meq32_present = 0;
 				flt_rule_entry.rule.eq_attrib.rule_eq_bitmap |= 0x20<<flt_rule_entry.rule.eq_attrib.num_offset_meq_32;
 				flt_rule_entry.rule.eq_attrib.offset_meq_32[flt_rule_entry.rule.eq_attrib.num_offset_meq_32].offset = 12;
 				flt_rule_entry.rule.eq_attrib.offset_meq_32[flt_rule_entry.rule.eq_attrib.num_offset_meq_32].value = mapping_info.bridge_ipv4 & mapping_info.subnet_mask;

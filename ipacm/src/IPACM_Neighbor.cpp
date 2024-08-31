@@ -1502,11 +1502,13 @@ void IPACM_Neighbor::update_neigh_cache()
 	char *tok = NULL, *ptr = NULL;
 	char *params[MAX_FDB_PARAM_CNT] = { NULL };
 	char rdev_name[IPA_IFACE_NAME_LEN] = {0}, mac[MAX_FDB_PARAM_LEN] = {0};
+	char mdev_name[IPA_IFACE_NAME_LEN] = {0};
 	char fdb_row[MAX_FDB_ROW_LEN] = {0}, cmd[IPA_SYS_CMD_LEN] = {0};
 	uint8_t mac_addr_fdb[IPA_MAC_ADDR_SIZE] = {0};
 	int tmp_var[IPA_MAC_ADDR_SIZE];
 	int query_ifindex, query_ipa_if_num, j, i;
-	bool is_phy_iface = false, is_client_cached = false, parse_error = false;;
+	bool is_phy_iface = false, is_client_cached = false, parse_error = false;
+	ipacm_bridge *bridge;
 
 	snprintf(cmd, IPA_SYS_CMD_LEN, "bridge fdb show | grep \"master bridge\" > %s",IPA_FDB_TABLE);
 	system(cmd);
@@ -1540,6 +1542,10 @@ void IPACM_Neighbor::update_neigh_cache()
 			if ((strncmp("dev",params[i], IPA_IFACE_NAME_LEN)==0) && (i < MAX_FDB_PARAM_CNT -1))
 			{
 				strlcpy(rdev_name, params[i+1], IPA_IFACE_NAME_LEN);
+			}
+			else if(strncmp("master",params[i], IPA_IFACE_NAME_LEN)==0)
+			{
+				strlcpy(mdev_name, params[i+1], IPA_IFACE_NAME_LEN);
 			}
 			else if (strstr(params[i],":"))
 			{
@@ -1576,6 +1582,22 @@ void IPACM_Neighbor::update_neigh_cache()
 				{
 					is_client_cached = true;
 					break;
+				}
+				if (strncmp(IPA_NO_IFACE_NAME, neighbor_client[i].iface_name,
+							sizeof(neighbor_client[i].iface_name)) == 0)
+				{
+					bridge = IPACM_Iface::ipacmcfg->get_vlan_bridge(mdev_name);
+					if(!bridge)
+					{
+						if(neighbor_client[i].bridge == bridge)
+						{
+							strlcpy(neighbor_client[i].iface_name, rdev_name,
+									sizeof(neighbor_client[i].iface_name));
+							is_client_cached = true;
+							break;
+						}
+						bridge = NULL;
+					}
 				}
 			}
 		}
@@ -1637,7 +1659,7 @@ void IPACM_Neighbor::update_neigh_cache()
 						sizeof(mac_addr_fdb));
 #ifdef FEATURE_VLAN_MPDN
 			if(IPACM_Iface::ipacmcfg->ipacm_mpdn_enable == TRUE)
-				neighbor_client[circular_index].bridge = NULL;
+				neighbor_client[num_neighbor_client].bridge = NULL;
 #endif
 			neighbor_client[num_neighbor_client].iface_index = query_ifindex;
 			/* cache the network interface client associated */

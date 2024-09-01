@@ -118,7 +118,8 @@ void IPACM_IfaceManager::event_callback(ipa_cm_event_id event, void *param)
 			{
 				IPACMDBG("WAN-EMBMS (%s) link already up, iface: %d: \n", IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].iface_name,evt_data->if_index);
 			}
-			else if(IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].if_cat == WAN_IF)
+			else if(IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].if_cat == WAN_IF &&
+				!IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].virtualIface)
 			{
 				IPACMDBG_H("WAN-LTE (%s) link up, iface: %d: \n", IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].iface_name,evt_data->if_index);
 				ifmgr_data.if_index = evt_data->if_index;
@@ -302,6 +303,7 @@ int IPACM_IfaceManager::create_iface_instance(ipacm_ifacemgr_data *param)
 				IPACM_EvtDispatcher::registr(IPA_PREFIX_CHANGE_EVENT, lan);
 				IPACM_EvtDispatcher::registr(IPA_HANDLE_WAN_VLAN_PDN_UP, lan);
 				IPACM_EvtDispatcher::registr(IPA_HANDLE_WAN_VLAN_PDN_DOWN, lan);
+				IPACM_EvtDispatcher::registr(IPA_NOTIFY_VLAN_UP, lan);
 #endif
 #ifdef FEATURE_IPA_ANDROID
 				IPACM_EvtDispatcher::registr(IPA_TETHERING_STATS_UPDATE_EVENT, lan);
@@ -394,6 +396,7 @@ int IPACM_IfaceManager::create_iface_instance(ipacm_ifacemgr_data *param)
 					IPACM_EvtDispatcher::registr(IPA_HANDLE_WAN_VLAN_PDN_DOWN, odu);
 					IPACM_EvtDispatcher::registr(IPA_PRIVATE_SUBNET_CHANGE_EVENT, odu); 	// register for IPA_PRIVATE_SUBNET_CHANGE_EVENT event
 					IPACM_EvtDispatcher::registr(IPA_CFG_CHANGE_EVENT, odu); 				// register for IPA_CFG_CHANGE event
+					IPACM_EvtDispatcher::registr(IPA_NOTIFY_VLAN_UP, odu);
 #endif
 #ifdef FEATURE_SOCKSv5
 						IPACM_EvtDispatcher::registr(IPA_HANDLE_SOCKSv5_READY, odu);
@@ -555,7 +558,7 @@ int IPACM_IfaceManager::create_iface_instance(ipacm_ifacemgr_data *param)
 #else/* defined(FEATURE_IPA_ANDROID) */
 					IPACM_EvtDispatcher::registr(IPA_ROUTE_ADD_EVENT, w);
 					IPACM_EvtDispatcher::registr(IPA_ROUTE_DEL_EVENT, w);
-					IPACM_EvtDispatcher::registr(IPA_WLAN_GW_ADDR_ADD_EVENT, w);
+					IPACM_EvtDispatcher::registr(IPA_WAN_GW_ADDR_ADD_EVENT, w);
 #endif /* not defined(FEATURE_IPA_ANDROID)*/
 #ifdef FEATURE_VLAN_MPDN
 					IPACM_EvtDispatcher::registr(IPA_ROUTE_ADD_VLAN_PDN_EVENT, w);

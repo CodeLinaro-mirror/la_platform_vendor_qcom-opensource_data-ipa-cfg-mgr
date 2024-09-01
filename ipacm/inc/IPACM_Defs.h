@@ -100,6 +100,11 @@ extern "C"
 #define WWAN_QMI_IOCTL_DEVICE_NAME "/dev/wwan_ioctl"
 #define IPA_DEVICE_NAME "/dev/ipa"
 #define MAX_NUM_PROP 2
+#define ETH_INTF "eth0"
+#define ETH1_INTF "eth1"
+#define RNDIS_INTF "rndis0"
+#define ECM_INTF "ecm0"
+
 
 #ifndef FEATURE_IPA_V3
 #define IPA_MAX_FLT_RULE 50
@@ -272,6 +277,7 @@ typedef enum
 	IPA_ROUTE_ADD_VLAN_PDN_EVENT,             /* ipacm_event_route_vlan */
 	IPA_HANDLE_WAN_VLAN_PDN_UP,               /* ipacm_event_vlan_pdn */
 	IPA_HANDLE_WAN_VLAN_PDN_DOWN,             /* ipacm_event_vlan_pdn */
+	IPA_NOTIFY_VLAN_UP,                       /* NULL */
 #endif
 #ifdef FEATURE_SOCKSv5
 	IPA_HANDLE_SOCKSv5_UP,                    /* ipacm_event_connection */
@@ -285,7 +291,7 @@ typedef enum
 	IPA_ADD_BRIDGE_VLAN_BR_INTF,
 	IPA_HANDLE_MACSEC_ADD,                    /* ipa_macsec_map */
 	IPA_HANDLE_MACSEC_DEL,                    /* ipa_macsec_map */
-	IPA_WLAN_GW_ADDR_ADD_EVENT,               /* ipacm_event_data_addr */
+	IPA_WAN_GW_ADDR_ADD_EVENT,               /* ipacm_event_data_addr */
 	IPA_CLEAN_NEIGHBOR_CACHE,                 /* ipacm_event_data_all */
 	IPA_LAN_CLIENT_ADD_EVENT,		  /* Add MAC based rule for lan2lan offload with static-ip */
 	IPA_LAN_CLIENT_DEL_EVENT,		  /* Del MAC based rule for lan2lan offload with static-ip */
@@ -367,6 +373,7 @@ typedef struct _ipacm_event_data_all
 	uint32_t  ipv6_addr[4];
 	uint8_t mac_addr[IPA_MAC_ADDR_SIZE];
 	char iface_name[IPA_IFACE_NAME_LEN];
+	uint16_t vlanID;
 } ipacm_event_data_all;
 
 typedef struct _ipacm_event_new_neigh_vlan
@@ -464,6 +471,7 @@ typedef struct _ipacm_event_iface_up
 	bool is_sta;
 	uint8_t xlat_mux_id;
 	uint8_t mux_id;
+	uint16_t vlanID;
 }ipacm_event_iface_up;
 
 typedef struct _ipacm_event_iface_up_tether
@@ -510,6 +518,14 @@ typedef enum
 	ECM_WAN,
 	IFACE_MAX
 } ipacm_wan_iface_type;
+
+typedef enum
+{
+	NEIGH_CLIENT_ADD = 0,
+	NEIGH_CLIENT_DEL,
+	NEIGH_CLIENT_DEL_PREFIX,
+	POST_NEIGH_CLIENT_IP_ADDR_EVT
+} ipacm_neigh_cache_ops_type;
 
 typedef struct _ipacm_ifacemgr_data
 {

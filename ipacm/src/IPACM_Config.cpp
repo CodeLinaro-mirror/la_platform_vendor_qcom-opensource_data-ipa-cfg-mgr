@@ -156,6 +156,7 @@ const char *ipacm_event_name[] = {
 	__stringify(IPA_ROUTE_ADD_VLAN_PDN_EVENT),             /* ipacm_event_route_vlan */
 	__stringify(IPA_HANDLE_WAN_VLAN_PDN_UP),               /* ipacm_event_vlan_pdn */
 	__stringify(IPA_HANDLE_WAN_VLAN_PDN_DOWN),             /* ipacm_event_vlan_pdn */
+	__stringify(IPA_NOTIFY_VLAN_UP),                       /* NULL */
 #endif
 #ifdef FEATURE_SOCKSv5
 	__stringify(IPA_HANDLE_SOCKSv5_UP),                    /* ipacm_event_connection */
@@ -169,7 +170,7 @@ const char *ipacm_event_name[] = {
 	__stringify(IPA_ADD_BRIDGE_VLAN_BR_INTF),              /* Handle vlan-bridge details add for bridge interface. */
 	__stringify(IPA_HANDLE_MACSEC_ADD),                    /* ipa_macsec_map. */
 	__stringify(IPA_HANDLE_MACSEC_DEL),                    /* ipa_macsec_map. */
-	__stringify(IPA_WLAN_GW_ADDR_ADD_EVENT),		/* ipacm_event_data_addr */
+	__stringify(IPA_WAN_GW_ADDR_ADD_EVENT),		/* ipacm_event_data_addr */
 	__stringify(IPA_CLEAN_NEIGHBOR_CACHE),                  /* ipacm_event_data_all */
 	__stringify(IPA_LAN_CLIENT_ADD_EVENT),                /* ipa lan2lan offload for static ip */
 	__stringify(IPA_LAN_CLIENT_DEL_EVENT),                /* ipa lan2lan offload for static ip */
@@ -204,6 +205,7 @@ IPACM_Config::IPACM_Config()
 	ipacm_odu_router_mode = false;
 	ipa_num_wlan_guest_ap = 0;
 
+	eth_wan_iface_table_idx = -1;
 	ipa_num_ipa_interfaces = 0;
 	ipa_num_private_subnet = 0;
 	ipa_num_alg_ports = 0;
@@ -566,6 +568,9 @@ int IPACM_Config::Init(void)
 
 	/* Construct IPACM Iface table */
 	ipa_num_ipa_interfaces = cfg->iface_config.num_iface_entries;
+	/* Reserve iface index for ETH WAN VLAN iface in the end of table */
+	eth_wan_iface_table_idx = ipa_num_ipa_interfaces;
+	ipa_num_ipa_interfaces++;
 	if (iface_table != NULL)
 	{
 		free(iface_table);
@@ -600,7 +605,13 @@ int IPACM_Config::Init(void)
 			IPACMDBG_H("ipa_virtual_iface_name(%s) \n", ipa_virtual_iface_name);
 		}
 	}
-
+	if(eth_wan_iface_table_idx >= 0)
+	{
+		iface_table[eth_wan_iface_table_idx].if_cat = WAN_IF;
+		iface_table[eth_wan_iface_table_idx].if_mode = ROUTER;
+		strlcpy(iface_table[eth_wan_iface_table_idx].physDevName,
+			ETH_INTF, sizeof(iface_table[eth_wan_iface_table_idx].iface_name));
+	}
 
 	/* Construct IPACM ALG table */
 	ipa_num_alg_ports = cfg->alg_config.num_alg_entries;
@@ -1679,6 +1690,7 @@ void IPACM_Config::add_vlan_iface(ipa_vlan_iface_info *data)
 {
 	list<vlan_iface_info>::iterator it_vlan;
 	vlan_iface_info new_vlan_info;
+	ipacm_cmd_q_data evt_data;
 
 	if(pthread_mutex_lock(&vlan_l2tp_lock) != 0)
 	{
@@ -1770,6 +1782,16 @@ void IPACM_Config::add_vlan_iface(ipa_vlan_iface_info *data)
 			IPACM_Iface::ipacmcfg->getEventName(eth_bridge_evt.event));
 		IPACM_EvtDispatcher::PostEvt(&eth_bridge_evt);
 	}
+	/*
+	 * Call IPA_NOTIFY_VLAN_UP which will allow LAN to check if VLAN PDN is up.
+	 * This will handle scenario where add_vlan_iface is received after
+	 * LAN IPA_NEW_ADDR have already been processed.
+	 */
+	evt_data.event = IPA_NOTIFY_VLAN_UP;
+	evt_data.evt_data = NULL;
+	IPACMDBG_H("Posting IPA_NOTIFY_VLAN_UP event!\n", evt_data.event);
+	IPACM_EvtDispatcher::PostEvt(&evt_data);
+
 #endif
 	return;
 }
@@ -2007,14 +2029,19 @@ void IPACM_Config::get_vlan_mode_ifaces()
 		}
 	}
 
+#if IPA_ETH_API_VER >= 2
 	IPACMDBG("modes are EMAC %d, ETH0 %d, ETH1 %d, RNDIS %d, ECM %d\n",
 		vlan_devices[IPA_VLAN_IF_EMAC],
-#if IPA_ETH_API_VER >= 2
 		vlan_devices[IPA_VLAN_IF_ETH0],
 		vlan_devices[IPA_VLAN_IF_ETH1],
-#endif
 		vlan_devices[IPA_VLAN_IF_RNDIS],
 		vlan_devices[IPA_VLAN_IF_ECM]);
+#else
+	IPACMDBG("modes are EMAC %d, RNDIS %d, ECM %d\n",
+		vlan_devices[IPA_VLAN_IF_EMAC],
+		vlan_devices[IPA_VLAN_IF_RNDIS],
+		vlan_devices[IPA_VLAN_IF_ECM]);
+#endif
 }
 
 void IPACM_Config::add_vlan_bridge(ipacm_event_data_all *data_all)
@@ -2774,6 +2801,7 @@ void IPACM_Config::del_l2tp_tunnel_info(uint32_t tunnel_id)
 			if(vlan_data == NULL)
 			{
 				IPACMERR("Failed to allocate memory.\n");
+				pthread_mutex_unlock(&vlan_l2tp_lock);
 				return;
 			}
 			memset(vlan_data, 0, sizeof(ipacm_event_route_vlan));

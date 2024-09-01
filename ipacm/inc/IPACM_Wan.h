@@ -222,8 +222,8 @@ public:
 	static int GetV6PrefixByVid(int vid, uint32_t *v6_prefix);
 	static int GetV6MTUByPrefix(uint16_t *mtu, uint32_t *v6_prefix);
 	static IPACM_firewall_conf_t* get_curr_pdn_firewall_config(IPACM_firewall_t &firewall_configs, const char* dev_name);
-	static int get_wlan_v4_index();
-	static int get_wlan_v6_index();
+	static int get_wan_v4_index(ipacm_wan_iface_type sta_mode);
+	static int get_wan_v6_index(ipacm_wan_iface_type sta_mode);
 #endif
 	static bool isWanUP(int ipa_if_num_tether)
 	{
@@ -270,7 +270,8 @@ public:
 	{
 		for(int i = 0; i < IPA_MAX_NUM_SW_PDNS; i++)
 		{
-			if(ipv4_to_iface[i].ipv4_addr && ipv4_to_iface[i].wan_up_vlan && ipv4_to_iface[i].pIface != NULL)
+			if(ipv4_to_iface[i].ipv4_addr && ipv4_to_iface[i].wan_up_vlan && ipv4_to_iface[i].pIface != NULL &&
+				ipv4_to_iface[i].pIface->m_is_sta_mode == Q6_WAN)
 			{
 				IPACMDBG_H("iface %s is vlan up\n", ipv4_to_iface[i].pIface->dev_name);
 				return true;
@@ -283,7 +284,8 @@ public:
 	{
 		for(int i = 0; i < IPA_MAX_NUM_SW_PDNS; i++)
 		{
-			if(ipv6_to_iface[i].wan_up_vlan_v6  && ipv6_to_iface[i].pIface != NULL)
+			if(ipv6_to_iface[i].wan_up_vlan_v6  && ipv6_to_iface[i].pIface != NULL &&
+				ipv4_to_iface[i].pIface->m_is_sta_mode == Q6_WAN)
 			{
 				IPACMDBG_H("iface %s is vlan up v6\n", ipv6_to_iface[i].pIface->dev_name);
 				return true;
@@ -407,6 +409,8 @@ public:
 	static struct ipacm_pdn_flt_rule pdn_flt_rule_v6[IPA_MAX_FLT_RULE];
 	static int wlan_v4_vlan_index;
 	static int wlan_v6_vlan_index;
+	static int eth_sta_v4_vlan_index;
+	static int eth_sta_v6_vlan_index;
 #endif
 	static struct ipa_flt_rule_add flt_rule_v4[IPA_MAX_FLT_RULE];
 	static struct ipa_flt_rule_add flt_rule_v6[IPA_MAX_FLT_RULE];
@@ -497,7 +501,8 @@ private:
 	uint8_t ext_router_mac_addr[IPA_MAC_ADDR_SIZE];
 	uint8_t netdev_mac[IPA_MAC_ADDR_SIZE];
 
-	static uint32_t wan_route_rule_v6_hdl_a5;
+	static uint32_t wan_route_rule_lan_v6_hdl_a5;
+	static uint32_t wan_route_rule_wan_v6_hdl_a5;
 
 	static int num_ipv4_modem_pdn;
 
@@ -507,9 +512,11 @@ private:
 
 	int modem_ipv6_pdn_index;
 
-	int wlan_ipv4_pdn_index;
+	int sta_ipv4_pdn_index;
 
-	int wlan_ipv6_pdn_index;
+	int sta_ipv6_pdn_index;
+
+	uint16_t sta_vlan_id;
 
 	bool is_default_gateway;
 

@@ -317,6 +317,7 @@ void* ipa_driver_msg_notifier(void *param)
 	ipacm_cmd_q_data evt_data;
 	ipacm_event_data_mac *data = NULL;
 	ipacm_event_data_fid *data_fid = NULL;
+	ipacm_event_data_fid *data_fid2 = NULL;
 	ipacm_event_data_iptype *data_iptype = NULL;
 	ipacm_event_data_wlan_ex *data_ex;
 	ipa_get_data_stats_resp_msg_v01 *data_tethering_stats = NULL;
@@ -636,6 +637,22 @@ void* ipa_driver_msg_notifier(void *param)
 		case ECM_DISCONNECT:
 			memcpy(&event_ecm, buffer + sizeof(struct ipa_msg_meta), sizeof(struct ipa_ecm_msg));
 			IPACMDBG_H("Received ECM_DISCONNECT name: %s\n",event_ecm.name);
+			if(IPACM_Iface::ipacmcfg->eth_wan_iface_table_idx >= 0 &&
+				strstr(event_ecm.name, ETH_INTF))
+			{
+				data_fid2 = (ipacm_event_data_fid *)malloc(sizeof(ipacm_event_data_fid));
+				if(data_fid2 == NULL)
+				{
+					IPACMERR("unable to allocate memory for event_ecm data_fid\n");
+					return NULL;
+				}
+				data_fid2->if_index = IPACM_Iface::ipacmcfg->iface_table[IPACM_Iface::ipacmcfg->eth_wan_iface_table_idx].netlink_interface_index;
+				evt_data.event = IPA_LINK_DOWN_EVENT;
+				evt_data.evt_data = data_fid2;
+				IPACMDBG_H("Posting event %d for ETH VLAN iface:%d\n", evt_data.event, data_fid2->if_index);
+				IPACM_EvtDispatcher::PostEvt(&evt_data);
+			}
+			memset(&evt_data, 0, sizeof(evt_data));
 			data_fid = (ipacm_event_data_fid *)malloc(sizeof(ipacm_event_data_fid));
 			if(data_fid == NULL)
 			{
@@ -1034,7 +1051,7 @@ done:
 
 void RegisterForSignals(bool default_handler);
 
-#define MAX_IPACM_TRACE_STACK 40
+#define MAX_IPACM_TRACE_STACK 20
 
 static void IPACM_Signals_handler(int sig, siginfo_t *info, void *extra)
 {
@@ -1068,12 +1085,14 @@ static void IPACM_Signals_handler(int sig, siginfo_t *info, void *extra)
 	case SIGTERM:
 		p = (ucontext_t *)extra;
 		IPACMERR("siginfo address=%x\n", info->si_addr);
-		IPACMERR("arm_pc address = 0x%X\n", p->uc_mcontext.pc);
-		IPACMERR("pstate = 0x%X\n", p->uc_mcontext.pstate);
+		/*
+		IPACMERR("arm_pc address = 0x%X\n", p->uc_mcontext.arm_pc);
+		IPACMERR("cpsr = 0x%X\n", p->uc_mcontext.arm_cpsr);
 		IPACMERR("fault address = 0x%X\n", p->uc_mcontext.fault_address);
-		IPACMERR("arm_sp address = 0x%X\n", p->uc_mcontext.sp);
-		IPACMERR("arm_lr address = 0x%X\n", p->uc_mcontext.regs[30]);
-		IPACMERR("arm_r0  address = 0x%X\n", p->uc_mcontext.regs[0]);
+		IPACMERR("arm_sp address = 0x%X\n", p->uc_mcontext.arm_sp);
+		IPACMERR("arm_lr address = 0x%X\n", p->uc_mcontext.arm_lr);
+		IPACMERR("arm_r0  address = 0x%X\n", p->uc_mcontext.arm_r0);
+		*/
 		size = backtrace(array, MAX_IPACM_TRACE_STACK);
 
 		messages = backtrace_symbols(array, size);
@@ -1193,10 +1212,9 @@ int main(int argc, char **argv)
 	IPACMDBG_H("Reallocation FNR Counter: Done\n");
 #endif
 
+	IPACM_IfaceManager *ifacemgr = new IPACM_IfaceManager();
 
 	neigh = new IPACM_Neighbor();
-
-	IPACM_IfaceManager *ifacemgr = new IPACM_IfaceManager();
 
 #ifdef FEATURE_ETH_BRIDGE_LE
 	IPACM_LanToLan* lan2lan = IPACM_LanToLan::get_instance();

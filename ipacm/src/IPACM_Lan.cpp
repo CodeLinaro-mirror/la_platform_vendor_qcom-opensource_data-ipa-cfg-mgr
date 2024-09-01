@@ -328,7 +328,7 @@ IPACM_Lan::IPACM_Lan(int iface_index) : IPACM_Iface(iface_index)
 #endif
 
 #ifdef FEATURE_L2TP
-	if(ipa_if_cate == ODU_IF && iface_query->num_rx_props 
+	if(ipa_if_cate == ODU_IF && iface_query && iface_query->num_rx_props
 		&& iface_query->num_tx_props)
 	{
 		if (IPACM_Iface::ipacmcfg->ipacm_l2tp_enable == IPACM_L2TP_E2E)
@@ -609,9 +609,10 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 					if( ((data->iptype != ip_type) && (ip_type != IPA_IP_MAX))
 						|| ((data->iptype==IPA_IP_v6) && (num_dft_rt_v6!=MAX_DEFAULT_v6_ROUTE_RULES)))
 					{
-						IPACMDBG_H("Got IPA_ADDR_ADD_EVENT ip-family:%d, v6 num %d: \n",data->iptype,num_dft_rt_v6);
+						IPACMDBG_H("Got IPA_ADDR_ADD_EVENT ip-family:%d, v6 num %d, LAN ip_type:%d \n",data->iptype,num_dft_rt_v6, ip_type);
 						if(handle_addr_evt(data) == IPACM_FAILURE)
 						{
+							IPACMDBG_H("failed handle_addr_evt for ip-family:%d\n",data->iptype);
 							return;
 						}
 #if defined(FEATURE_IPA_ANDROID) || defined(FEATURE_VLAN_MPDN) || defined(FEATURE_L2TP)
@@ -644,7 +645,7 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 						}
 
 #endif
-						/* add support for handling default route to WIFI backhaul on vlan case Need to protect with xml entry */
+
 						if(IPACM_Wan::isWanUP(ipa_if_num))
 						{
 							if(data->iptype == IPA_IP_v4 || data->iptype == IPA_IP_MAX)
@@ -660,13 +661,7 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 								}
 								else
 								{
-									if(IPACM_Iface::ipacmcfg->iface_in_vlan_mode(dev_name))
-									{
-										uint16_t vid[IPA_MAX_NUM_OFFLOAD_VLANS];
-										IPACM_Iface::ipacmcfg->get_iface_vlan_ids(dev_name, vid);
-										handle_wan_up(IPA_IP_v4, vid[0]);
-									}
-									else
+									if(!IPACM_Iface::ipacmcfg->iface_in_vlan_mode(dev_name))
 									{
 										handle_wan_up(IPA_IP_v4);
 									}
@@ -705,7 +700,7 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 						}
 
 #endif //FEATURE_VLAN_MPDN
-						/* add support for handling default route to WIFI backhaul on vlan case Need to protect with xml entry */
+
 						if(IPACM_Wan::isWanUP_V6(ipa_if_num)) /* Modem v6 call is UP?*/
 						{
 #ifdef FEATURE_IPv6CT_DISABLED
@@ -732,13 +727,7 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 								}
 								else
 								{
-									if(IPACM_Iface::ipacmcfg->iface_in_vlan_mode(dev_name))
-									{
-										uint16_t vid[IPA_MAX_NUM_OFFLOAD_VLANS];
-										IPACM_Iface::ipacmcfg->get_iface_vlan_ids(dev_name, vid);
-										handle_wan_up(IPA_IP_v6, vid[0]);
-									}
-									else
+									if(!IPACM_Iface::ipacmcfg->iface_in_vlan_mode(dev_name))
 									{
 										handle_wan_up(IPA_IP_v6);
 									}
@@ -988,7 +977,7 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 		}
 #endif
 		/* if dummy vlan present for iface, don't handle via default route */
-		if (IPACM_Iface::ipacmcfg->is_added_vlan_iface(data_wan->ifname))
+		if (IPACM_Iface::ipacmcfg->is_added_vlan_iface(dev_name))
 		{
 			IPACMDBG_H("Iface in dumm VLAN do not handle default route\n");
 			return;
@@ -1034,35 +1023,10 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 				}
 			}
 
-			it = neigh_cache.begin();
-			while (it != neigh_cache.end())
+			if(handle_neigh_cache_ops(POST_NEIGH_CLIENT_IP_ADDR_EVT, data_wan->ipv6_prefix) == IPACM_SUCCESS)
 			{
-				if (it->ipv6_addr[0] == data_wan->ipv6_prefix[0] && it->ipv6_addr[1] == data_wan->ipv6_prefix[1])
-				{
-					evt_data.event = IPA_NEIGH_CLIENT_IP_ADDR_ADD_EVENT;
-					data_all = (ipacm_event_data_all *)malloc(sizeof(ipacm_event_data_all));
-					if (data_all == NULL)
-					{
-						IPACMERR("Unable to allocate memory\n");
-						break;
-					}
-					memset(data_all, 0, sizeof(ipacm_event_data_all));
-					data_all->iptype = IPA_IP_v6;
-					data_all->if_index = it->if_index;
-					memcpy(data_all->ipv6_addr,it->ipv6_addr, 4*sizeof(uint32_t));
-					memcpy(data_all->mac_addr, it->mac_addr, IPA_MAC_ADDR_SIZE);
-					memcpy(data_all->iface_name, it->iface_name, IPA_IFACE_NAME_LEN);
-					evt_data.evt_data = (void *)data_all;
-					IPACM_EvtDispatcher::PostEvt(&evt_data);
-					IPACMDBG_H("Posted event %d, with %s for ipv6 client\n",
-						evt_data.event, data_all->iface_name);
-					IPACMDBG_H("v6 addr : 0x%08x:%08x:%08x:%08x mac : 0x%x%x%x%x%x%x\n",
-						it->ipv6_addr[0], it->ipv6_addr[1], it->ipv6_addr[2], it->ipv6_addr[3],
-						it->mac_addr[0], it->mac_addr[1], it->mac_addr[2], it->mac_addr[3], it->mac_addr[4], it->mac_addr[5]);
-					it = neigh_cache.erase(it);
-				}
-				else
-					it++;
+				IPACMDBG_H("Posted Neighbor event from neigh cache with prefix 0x%08x:%08x\n",
+					data_wan->ipv6_prefix[0],data_wan->ipv6_prefix[1]);
 			}
 		}
 		break;
@@ -1122,7 +1086,7 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 		}
 #endif
 		/* if dummy vlan present for iface, don't handle via default route */
-		if (IPACM_Iface::ipacmcfg->is_added_vlan_iface(data_wan->ifname))
+		if (IPACM_Iface::ipacmcfg->is_added_vlan_iface(dev_name))
 		{
 			IPACMDBG_H("Iface in dumm VLAN do not handle default route\n");
 			return;
@@ -1130,13 +1094,10 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 
 		/* reset usb-client ipv6 rt-rules */
 		handle_lan_client_reset_rt(IPA_IP_v6);
-		it = neigh_cache.begin();
-		while (it != neigh_cache.end())
+		if(handle_neigh_cache_ops(NEIGH_CLIENT_DEL_PREFIX, data_wan->ipv6_prefix) == IPACM_SUCCESS)
 		{
-			if (it->ipv6_addr[0] == data_wan->ipv6_prefix[0] && it->ipv6_addr[1] == data_wan->ipv6_prefix[1])
-				it = neigh_cache.erase(it);
-			else
-				it++;
+			IPACMDBG_H("Deleted ipv6 address from neigh cache with prefix 0x%08x:%08x\n",
+				data_wan->ipv6_prefix[0],data_wan->ipv6_prefix[1]);
 		}
 
 		IPACMDBG_H("Backhaul is sta mode?%d\n", data_wan->is_sta);
@@ -1204,7 +1165,7 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 #endif //IPA_HW_FNR_STATS
 			ipacm_event_data_all *data = (ipacm_event_data_all *)param;
 			ipa_interface_index = iface_ipa_index_query(data->if_index);
-			IPACMDBG_H("Recieved IPA_NEIGH_CLIENT_IP_ADDR_ADD_EVENT event \n");
+			IPACMDBG_H("Received IPA_NEIGH_CLIENT_IP_ADDR_ADD_EVENT event \n");
 			IPACMDBG_H("check iface %s category: %d\n", dev_name, ipa_if_cate);
 			if (ipa_interface_index == ipa_if_num && ipa_if_cate == ODU_IF)
 			{
@@ -1554,21 +1515,6 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 					configure_v6_ul_firewall();
 #endif
 #endif
-					clnt_indx = get_eth_client_index(NULL, data->VlanID);
-					if (clnt_indx == IPACM_INVALID_INDEX)
-					{
-						IPACMERR("eth client not found/attached \n");
-						return;
-					}
-					get_client_memptr(eth_client, clnt_indx)->client_backhaul_prefix[0] = data->ipv6_prefix[0];
-					get_client_memptr(eth_client, clnt_indx)->client_backhaul_prefix[1] = data->ipv6_prefix[1];
-					get_client_memptr(eth_client, clnt_indx)->v6_vlan_rt_installed = false;
-					if(IPACM_SUCCESS == handle_eth_client_route_rule(get_client_memptr(eth_client, clnt_indx)->mac,
-								 IPA_IP_v6, data->VlanID, data->ipv6_prefix))
-					{
-						IPACMDBG_H("Route rules for vlan %d are installed successfully\n", data->VlanID);
-						get_client_memptr(eth_client, clnt_indx)->v6_vlan_rt_installed = true;
-					}
 				}
 				if(is_mux_up(data->mux_id, data->iptype, data->VlanID))
 				{
@@ -1585,7 +1531,8 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 			IPACMDBG_H("Received IPA_HANDLE_WAN_VLAN_PDN_DOWN for VID %d, iptype %d\n",
 				data->VlanID,
 				data->iptype);
-			if(is_vlan_IF(data->VlanID) || IPACM_Iface::ipacmcfg->is_dummy_VID(data->VlanID)
+			/* VlanID 0 is using to make VLAN_PDN_DOWN for all VLANs */
+			if(!data->VlanID ||is_vlan_IF(data->VlanID) || IPACM_Iface::ipacmcfg->is_dummy_VID(data->VlanID)
 #ifdef IPA_L2TP_TUNNEL_UDP
 				|| IPACM_Iface::ipacmcfg->check_l2tp_bridge_vlan_id(data->VlanID)
 #endif
@@ -1606,6 +1553,19 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 		}
 		break;
 #endif
+	case IPA_NOTIFY_VLAN_UP:
+		{
+			IPACMDBG_H("Received IPA_NOTIFY_VLAN_UP\n");
+			if(IPACM_Iface::ipacmcfg->iface_in_vlan_mode(dev_name))
+			{
+				IPACMDBG_H("Check any missed v4 VLAN handling in v4 new ADDR\n");
+				check_vlan_PDNUp(IPA_IP_v4);
+				IPACMDBG_H("Check any missed v6 VLAN handling in v6 new ADDR\n");
+				check_vlan_PDNUp(IPA_IP_v6);
+			}
+		}
+		break;
+
 	/* only need for vlan supported lan instance */
 	case IPA_HANDLE_WAN_ADDR_ADD_V6:
 		{
@@ -1621,44 +1581,25 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 				(!IPACM_Iface::ipacmcfg->iface_in_vlan_mode(dev_name)))
 				break;
 #endif
-			if (is_mux_up(data_wan->mux_id, IPA_IP_v6, 0)) //0 is to just check for mux without VLANS
+			if(data_wan->vlanID > 0)
 			{
-				IPACMERR("mux id %d is already up for v6 ignore\n", data_wan->mux_id);
-				break;
+				for(clnt_indx = 0; clnt_indx < num_eth_client; clnt_indx++)
+				{
+					if(get_client_memptr(eth_client, clnt_indx)->vlan_id == data_wan->vlanID)
+					{
+						IPACMDBG_H("Matched client index: %d for vid %d\n", clnt_indx, data_wan->vlanID);
+						get_client_memptr(eth_client, clnt_indx)->client_backhaul_prefix[0] = data_wan->ipv6_prefix[0];
+						get_client_memptr(eth_client, clnt_indx)->client_backhaul_prefix[1] = data_wan->ipv6_prefix[1];
+					}
+				}
 			}
 
 			if(ip_type == IPA_IP_v6 || ip_type == IPA_IP_MAX)
 			{
-				it = neigh_cache.begin();
-				while (it != neigh_cache.end())
+				if(handle_neigh_cache_ops(POST_NEIGH_CLIENT_IP_ADDR_EVT, data_wan->ipv6_prefix, data_wan->vlanID) == IPACM_SUCCESS)
 				{
-					if (it->ipv6_addr[0] == data_wan->ipv6_prefix[0] &&
-							it->ipv6_addr[1] == data_wan->ipv6_prefix[1])
-					{
-						evt_data.event = IPA_NEIGH_CLIENT_IP_ADDR_ADD_EVENT;
-						data_all = (ipacm_event_data_all *)malloc(sizeof(ipacm_event_data_all));
-						if (data_all == NULL)
-						{
-							IPACMERR("Unable to allocate memory\n");
-							break;
-						}
-						memset(data_all, 0, sizeof(ipacm_event_data_all));
-						data_all->iptype = IPA_IP_v6;
-						data_all->if_index = it->if_index;
-						memcpy(data_all->ipv6_addr,it->ipv6_addr, 4*sizeof(uint32_t));
-						memcpy(data_all->mac_addr, it->mac_addr, IPA_MAC_ADDR_SIZE);
-						memcpy(data_all->iface_name, it->iface_name, IPA_IFACE_NAME_LEN);
-						evt_data.evt_data = (void *)data_all;
-						IPACM_EvtDispatcher::PostEvt(&evt_data);
-						IPACMDBG_H("Posted event %d, with %s for ipv6 client \n",
-							evt_data.event, data_all->iface_name);
-						IPACMDBG_H("v6 addr : 0x%08x:%08x:%08x:%08x mac : 0x%x%x%x%x%x%x\n",
-							it->ipv6_addr[0], it->ipv6_addr[1], it->ipv6_addr[2], it->ipv6_addr[3],
-							it->mac_addr[0], it->mac_addr[1], it->mac_addr[2], it->mac_addr[3], it->mac_addr[4], it->mac_addr[5]);
-						it = neigh_cache.erase(it);
-					}
-					else
-						it++;
+					IPACMDBG_H("Posted Neighbor event from neigh cache with prefix 0x%08x:%08x\n",
+					data_wan->ipv6_prefix[0],data_wan->ipv6_prefix[1]);
 				}
 			}
 		}
@@ -1899,6 +1840,11 @@ int IPACM_Lan::add_socksv5_flt_rule(ipa_socksv5_msg *data_event_conn)
 
 	len = sizeof(struct ipa_ioc_add_flt_rule_after) + IPA_MAX_SOCKS_FLT_RULE * sizeof(struct ipa_flt_rule_add);
 	pFilteringTable = (struct ipa_ioc_add_flt_rule_after*)malloc(len);
+	if (NULL == pFilteringTable)
+	{
+		IPACMERR("Failed to allocate memory to pFilteringTable...\n");
+		return IPACM_FAILURE;
+	}
 
 	/* In V6-V6 UL case add a rule for second pass with action as RT */
 	if(data_event_conn->dl_in.ip_type == IPA_IP_v6)
@@ -1925,6 +1871,12 @@ int IPACM_Lan::add_socksv5_flt_rule(ipa_socksv5_msg *data_event_conn)
 		k = 0;
 		for (i = 0; i < ext_prop->num_ext_props; i++)
 		{
+			if(k >= IPA_MAX_SOCKS_FLT_RULE)
+			{
+				IPACMERR("MAX rules[%d] has been updated. Dropping rules[%d ... %d]\n",
+					IPA_MAX_SOCKS_FLT_RULE, k, MAX_WAN_UL_FILTER_RULES);
+				break;
+			}
 			if (ext_prop->prop[i].replicate_needed != true)
 				continue;
 
@@ -2043,8 +1995,214 @@ int IPACM_Lan::del_socksv5_flt_rule(void)
 }
 #endif
 
+/*
+handle_neigh_cache_ops:
+Function to perform neigh cache operations
+
+Parameters:
+ops:
+Operation type in ipacm_neigh_cache_ops_type enum
+vlan_id:
+If operation needed for particular vlan
+
+ops                             data
+NEIGH_CLIENT_ADD                ipacm_event_data_all *data
+NEIGH_CLIENT_DEL                uint32_t *ipv6_addr
+NEIGH_CLIENT_DEL_PREFIX         uint32_t *ipv6_addr
+POST_NEIGH_CLIENT_IP_ADDR_EVT   uint32_t *ipv6_addr
+*/
+int IPACM_Lan::handle_neigh_cache_ops(ipacm_neigh_cache_ops_type ops, void *data, uint16_t vlan_id)
+{
+	ipacm_event_data_all data_all;
+	ipacm_event_data_all * data_new = NULL;
+	uint32_t *ipv6_addr = NULL;
+	std::list <ipacm_event_data_all>::iterator it;
+	ipacm_cmd_q_data evt_data;
+	int ret = IPACM_SUCCESS;
+
+	switch (ops)
+	{
+	case NEIGH_CLIENT_ADD:
+		{
+			if(data == NULL)
+			{
+				IPACMERR("Wrong param: data is not proper\n");
+				ret = IPACM_FAILURE;
+				goto end;
+			}
+			data_new = (ipacm_event_data_all *)data;
+			if (neigh_cache.size() < 2*IFACE_MAX*IPA_MAX_NUM_HW_PATH_CLIENTS)
+			{
+				for (it = neigh_cache.begin(); it != neigh_cache.end(); ++it)
+				{
+					if ((it->ipv6_addr[0] == data_new->ipv6_addr[0]) && (it->ipv6_addr[1] == data_new->ipv6_addr[1])
+						&& (it->ipv6_addr[2] == data_new->ipv6_addr[2])  && (it->ipv6_addr[3] == data_new->ipv6_addr[3]))
+					{
+						IPACMDBG_H("Already cached client v6 addr : 0x%08x:%08x:%08x:%08x mac 0x%x%x%x%x%x%x\n",
+							data_new->ipv6_addr[0], data_new->ipv6_addr[1], data_new->ipv6_addr[2], data_new->ipv6_addr[3],
+							data_new->mac_addr[0], data_new->mac_addr[1], data_new->mac_addr[2], data_new->mac_addr[3], data_new->mac_addr[4], data_new->mac_addr[5]);
+						break;
+					}
+				}
+				if (it == neigh_cache.end())
+				{
+					memcpy(&data_all, data_new, sizeof(ipacm_event_data_all));
+					neigh_cache.push_back(data_all);
+					IPACMDBG_H("Caching v6 addr : 0x%08x:%08x:%08x:%08x mac 0x%x%x%x%x%x%x\n",
+						data_all.ipv6_addr[0], data_all.ipv6_addr[1], data_all.ipv6_addr[2], data_all.ipv6_addr[3],
+						data_all.mac_addr[0], data_all.mac_addr[1], data_all.mac_addr[2], data_all.mac_addr[3], data_all.mac_addr[4], data_all.mac_addr[5]);
+				}
+			}
+			else
+			{
+				IPACMERR("Already max num of elements in the cache\n");
+				ret = IPACM_FAILURE;
+				goto end;
+			}
+		}
+		break;
+
+	case NEIGH_CLIENT_DEL:
+		{
+			if(data == NULL)
+			{
+				IPACMERR("Wrong param: v6 address not proper\n");
+				ret = IPACM_FAILURE;
+				goto end;
+			}
+			ipv6_addr = (uint32_t *)data;
+			if(ipv6_addr[0] == 0 && ipv6_addr[1] == 0 &&
+				ipv6_addr[2] == 0 && ipv6_addr[3] == 0)
+			{
+				IPACMERR("Wrong param: Invalid v6 address\n");
+				ret = IPACM_FAILURE;
+				goto end;
+			}
+			for (it = neigh_cache.begin(); it != neigh_cache.end(); ++it)
+			{
+				if ((it->ipv6_addr[0] == ipv6_addr[0]) && (it->ipv6_addr[1] == ipv6_addr[1])
+					&& (it->ipv6_addr[2] == ipv6_addr[2]) && (it->ipv6_addr[3] == ipv6_addr[3]))
+				{
+					if(vlan_id == 0 ||(vlan_id > 0 && it->vlanID == vlan_id))
+					{
+						neigh_cache.erase(it);
+						IPACMDBG_H("deleted v6 addr : 0x%08x:%08x:%08x:%08x from cache\n",
+							ipv6_addr[0], ipv6_addr[1], ipv6_addr[2], ipv6_addr[3]);
+						break;
+					}
+				}
+			}
+		}
+		break;
+
+	case NEIGH_CLIENT_DEL_PREFIX:
+		{
+			if(data == NULL)
+			{
+				IPACMERR("Wrong param: v6 address not proper\n");
+				ret = IPACM_FAILURE;
+				goto end;
+			}
+			ipv6_addr = (uint32_t *)data;
+			if(ipv6_addr[0] == 0 && ipv6_addr[1] == 0)
+			{
+				IPACMERR("Wrong param: Invalid v6 address\n");
+				ret = IPACM_FAILURE;
+				goto end;
+			}
+			it = neigh_cache.begin();
+			while (it != neigh_cache.end())
+			{
+				if (it->ipv6_addr[0] == ipv6_addr[0] && it->ipv6_addr[1] == ipv6_addr[1])
+				{
+					if(vlan_id == 0 ||(vlan_id > 0 && it->vlanID == vlan_id))
+					{
+						it = neigh_cache.erase(it);
+						IPACMDBG_H("deleted v6 addr : 0x%08x:%08x:%08x:%08x from cache\n",
+								ipv6_addr[0], ipv6_addr[1], ipv6_addr[2], ipv6_addr[3]);
+					}
+					else
+					{
+						it++;
+					}
+				}
+				else
+				{
+					it++;
+				}
+			}
+		}
+		break;
+
+	case POST_NEIGH_CLIENT_IP_ADDR_EVT:
+		{
+			if(data == NULL)
+			{
+				IPACMERR("Wrong param: v6 address not proper\n");
+				ret = IPACM_FAILURE;
+				goto end;
+			}
+			ipv6_addr = (uint32_t *)data;
+			if(ipv6_addr[0] == 0 && ipv6_addr[1] == 0)
+			{
+				IPACMERR("Wrong param: Invalid v6 address\n");
+				ret = IPACM_FAILURE;
+				goto end;
+			}
+			it = neigh_cache.begin();
+			while (it != neigh_cache.end())
+			{
+				if (it->ipv6_addr[0] == ipv6_addr[0] && it->ipv6_addr[1] == ipv6_addr[1])
+				{
+					if(vlan_id == 0 ||(vlan_id > 0 && it->vlanID == vlan_id))
+					{
+						evt_data.event = IPA_NEIGH_CLIENT_IP_ADDR_ADD_EVENT;
+						data_new = (ipacm_event_data_all *)malloc(sizeof(ipacm_event_data_all));
+						if (data_new == NULL)
+						{
+							IPACMERR("Unable to allocate memory\n");
+							break;
+						}
+						memset(data_new, 0, sizeof(ipacm_event_data_all));
+						data_new->iptype = IPA_IP_v6;
+						data_new->if_index = it->if_index;
+						memcpy(data_new->ipv6_addr,it->ipv6_addr, 4*sizeof(uint32_t));
+						memcpy(data_new->mac_addr, it->mac_addr, IPA_MAC_ADDR_SIZE);
+						memcpy(data_new->iface_name, it->iface_name, IPA_IFACE_NAME_LEN);
+						evt_data.evt_data = (void *)data_new;
+						IPACM_EvtDispatcher::PostEvt(&evt_data);
+						IPACMDBG_H("Posted event %d, with %s for ipv6 client\n",
+							evt_data.event, data_new->iface_name);
+						IPACMDBG_H("v6 addr : 0x%08x:%08x:%08x:%08x mac : 0x%x%x%x%x%x%x\n",
+							it->ipv6_addr[0], it->ipv6_addr[1], it->ipv6_addr[2], it->ipv6_addr[3],
+							it->mac_addr[0], it->mac_addr[1], it->mac_addr[2], it->mac_addr[3], it->mac_addr[4], it->mac_addr[5]);
+						it = neigh_cache.erase(it);
+					}
+					else
+					{
+						it++;
+					}
+				}
+				else
+				{
+					it++;
+				}
+			}
+		}
+		break;
+
+	default:
+		break;
+	}
+end:
+	return ret;
+}
+
 int IPACM_Lan::del_ul_flt_rules(enum ipa_ip_type iptype)
 {
+
+	IPACMDBG_H("Deleting modem UL flt rules for iptype(%d)\n", iptype);
+
 	if (rx_prop == NULL)
 	{
 		IPACMERR("Rx prop is NULL, return\n");
@@ -2190,7 +2348,14 @@ int IPACM_Lan::handle_vlan_neighbor(ipacm_event_data_all *data)
 #else
 	IPACMDBG_H("VLAN IF %s got client, vlan id %d \n", data->iface_name, vlan_id);
 #endif
+	data->vlanID = vlan_id;
 	data_vlan = (ipacm_event_new_neigh_vlan *)data;
+
+	if(!data_vlan->bridge && data_vlan->data_all.iptype == IPA_IP_v4)
+	{
+		IPACMDBG_H("non bridged VLAN interface for v4 %s, ignoring\n", data->iface_name);
+		return IPACM_FAILURE;
+	}
 
 	/* TO DO: Enable SOCKSV5 with MPDN flag */
 	if(IPACM_Iface::ipacmcfg->ipacm_mpdn_enable && !IPACM_Iface::ipacmcfg->ipacm_socksv5_enable) {
@@ -2201,27 +2366,9 @@ int IPACM_Lan::handle_vlan_neighbor(ipacm_event_data_all *data)
 				if (!IPACM_Wan::isWan_active_with_prefix(data_vlan->data_all.ipv6_addr) &&
 					!(IPACM_Iface::ipacmcfg->ipv6_nat_enable && is_unique_local_ipv6_addr(data->ipv6_addr)))
 				{
-					if (neigh_cache.size() < 2*IPA_MAX_NUM_HW_PATH_CLIENTS)
+					if(handle_neigh_cache_ops(NEIGH_CLIENT_ADD, data) != IPACM_SUCCESS)
 					{
-						for (it = neigh_cache.begin(); it != neigh_cache.end(); ++it)
-						{
-							if ((it->ipv6_addr[0] == data->ipv6_addr[0]) && (it->ipv6_addr[1] == data->ipv6_addr[1])
-								&& (it->ipv6_addr[2] == data->ipv6_addr[2])  && (it->ipv6_addr[3] == data->ipv6_addr[3]))
-							{
-								IPACMDBG_H("Already cached client v6 addr : 0x%08x:%08x:%08x:%08x mac 0x%x%x%x%x%x%x\n",
-									data->ipv6_addr[0], data->ipv6_addr[1], data->ipv6_addr[2], data->ipv6_addr[3],
-									data->mac_addr[0], data->mac_addr[1], data->mac_addr[2], data->mac_addr[3], data->mac_addr[4], data->mac_addr[5]);
-								break;
-							}
-						}
-						if (it == neigh_cache.end())
-						{
-							memcpy(&data_all, data, sizeof(ipacm_event_data_all));
-							neigh_cache.push_back(data_all);
-							IPACMDBG_H("Caching v6 addr : 0x%08x:%08x:%08x:%08x mac 0x%x%x%x%x%x%x\n",
-								data_all.ipv6_addr[0], data_all.ipv6_addr[1], data_all.ipv6_addr[2], data_all.ipv6_addr[3],
-								data_all.mac_addr[0], data_all.mac_addr[1], data_all.mac_addr[2], data_all.mac_addr[3], data_all.mac_addr[4], data_all.mac_addr[5]);
-						}
+						IPACMDBG_H("Failed to add data in neigh cache\n");
 					}
 					return IPACM_FAILURE;
 				}
@@ -2286,6 +2433,47 @@ int IPACM_Lan::handle_vlan_neighbor(ipacm_event_data_all *data)
 #ifdef IPA_L2TP_TUNNEL_UDP
 	if(!IPACM_Iface::ipacmcfg->check_l2tp_iface(data->iface_name))
 	{
+		if(data_vlan->data_all.iptype == IPA_IP_v4)
+		{
+			IPACMDBG_H("construct ETH header and route rules \n");
+			/* Associate with IP and construct RT-rule */
+			if(handle_eth_client_ipaddr(data) == IPACM_FAILURE)
+			{
+				return IPACM_FAILURE;
+			}
+		}
+		else
+		{
+			eth_index = get_eth_client_index(data->mac_addr, vlan_id);
+			if (eth_index == IPACM_INVALID_INDEX)
+			{
+				IPACMERR("eth client not found/attached \n");
+				return IPACM_FAILURE;
+			}
+			if(((get_client_memptr(eth_client, eth_index)->client_backhaul_prefix[0] == data_vlan->data_all.ipv6_addr[0]) &&
+			   (get_client_memptr(eth_client, eth_index)->client_backhaul_prefix[1] == data_vlan->data_all.ipv6_addr[1]))||
+			   !IPACM_Wan::is_global_ipv6_addr(data_vlan->data_all.ipv6_addr)||
+			   (IPACM_Iface::ipacmcfg->ipacm_socksv5_enable && is_unique_local_ipv6_addr(data->ipv6_addr)))
+			{
+				IPACMDBG_H("construct ETH header and route rules \n");
+				if(handle_eth_client_ipaddr(data) == IPACM_FAILURE)
+				{
+					return IPACM_FAILURE;
+				}
+			}
+			else
+			{
+				if(handle_neigh_cache_ops(NEIGH_CLIENT_ADD, data) != IPACM_SUCCESS)
+				{
+					IPACMDBG_H("Failed to add data in neigh cache\n");
+					return IPACM_FAILURE;
+				}
+			}
+		}
+	}
+#else
+	if(data_vlan->data_all.iptype == IPA_IP_v4)
+	{
 		IPACMDBG_H("construct ETH header and route rules \n");
 		/* Associate with IP and construct RT-rule */
 		if(handle_eth_client_ipaddr(data) == IPACM_FAILURE)
@@ -2293,13 +2481,33 @@ int IPACM_Lan::handle_vlan_neighbor(ipacm_event_data_all *data)
 			return IPACM_FAILURE;
 		}
 	}
-#else
-	IPACMDBG_H("construct ETH header and route rules \n");
-	/* Associate with IP and construct RT-rule */
-	if(handle_eth_client_ipaddr(data) == IPACM_FAILURE)
+	else
 	{
-		IPACMERR("Failed handle_eth_client_ipaddr, continue\n");
-		return IPACM_FAILURE;
+		eth_index = get_eth_client_index(data->mac_addr, vlan_id);
+		if (eth_index == IPACM_INVALID_INDEX)
+		{
+			IPACMERR("eth client not found/attached \n");
+			return IPACM_FAILURE;
+		}
+		if(((get_client_memptr(eth_client, eth_index)->client_backhaul_prefix[0] == data_vlan->data_all.ipv6_addr[0]) &&
+			  (get_client_memptr(eth_client, eth_index)->client_backhaul_prefix[1] == data_vlan->data_all.ipv6_addr[1]))||
+			  !IPACM_Wan::is_global_ipv6_addr(data_vlan->data_all.ipv6_addr)||
+			  (IPACM_Iface::ipacmcfg->ipacm_socksv5_enable && is_unique_local_ipv6_addr(data->ipv6_addr)))
+		{
+			IPACMDBG_H("construct ETH header and route rules \n");
+			if(handle_eth_client_ipaddr(data) == IPACM_FAILURE)
+			{
+				return IPACM_FAILURE;
+			}
+		}
+		else
+		{
+			if(handle_neigh_cache_ops(NEIGH_CLIENT_ADD, data) != IPACM_SUCCESS)
+			{
+				IPACMDBG_H("Failed to add data in neigh cache\n");
+				return IPACM_FAILURE;
+			}
+		}
 	}
 #endif
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
@@ -2340,12 +2548,12 @@ int IPACM_Lan::handle_vlan_neighbor(ipacm_event_data_all *data)
 				return IPACM_FAILURE;
 			}
 			if(((get_client_memptr(eth_client, eth_index)->client_backhaul_prefix[0] == data_vlan->data_all.ipv6_addr[0]) &&
-			   (get_client_memptr(eth_client, eth_index)->client_backhaul_prefix[1] == data_vlan->data_all.ipv6_addr[1]) &&
-			   (!get_client_memptr(eth_client, eth_index)->v6_vlan_rt_installed)) || 
+			   (get_client_memptr(eth_client, eth_index)->client_backhaul_prefix[1] == data_vlan->data_all.ipv6_addr[1]))||
+			   !IPACM_Wan::is_global_ipv6_addr(data_vlan->data_all.ipv6_addr)||
 			   (IPACM_Iface::ipacmcfg->ipacm_socksv5_enable && is_unique_local_ipv6_addr(data->ipv6_addr)))
 			{
 				IPACMDBG_H("Neighbor received after conntrack. Installing Route rules now...\n");
-				handle_eth_client_route_rule(data->mac_addr, data->iptype, vlan_id, data_vlan->data_all.ipv6_addr);
+				handle_eth_client_route_rule(data->mac_addr, data->iptype, vlan_id);
 			}
 		}
 	}
@@ -2389,7 +2597,7 @@ int IPACM_Lan::handle_vlan_neighbor(ipacm_event_data_all *data)
 					/* create event data and call the handler */
 					vlan_data.iptype = IPA_IP_v4;
 					vlan_data.mux_id = mux_id;
-	
+
 					if(handle_vlan_pdn_up(&vlan_data))
 					{
 						IPACMERR("failed handling v4 VLAN up for VID %d, dev %s\n",
@@ -2769,7 +2977,7 @@ int IPACM_Lan::handle_vlan_pdn_down(ipacm_event_vlan_pdn *data)
 		else
 		{
 			/* if we still have vlan pdns up notify only */
-			if(set_mux_down(data->mux_id, data->iptype))
+			if(set_mux_down(data->mux_id, data->iptype, data->VlanID))
 				return IPACM_FAILURE;
 
 			if(is_any_mux_up(data->iptype) == true)
@@ -2798,8 +3006,8 @@ int IPACM_Lan::handle_vlan_pdn_down(ipacm_event_vlan_pdn *data)
 					return IPACM_FAILURE;
 				}
 			}
-
-			if(notify_flt_removed(data->mux_id))
+			/* only notify if mux is down */
+			if(!is_mux_up(data->mux_id, data->iptype, 0) && notify_flt_removed(data->mux_id))
 			{
 				return IPACM_FAILURE;
 			}
@@ -2807,9 +3015,15 @@ int IPACM_Lan::handle_vlan_pdn_down(ipacm_event_vlan_pdn *data)
 	}
 	else if (data->iptype == IPA_IP_v6)
 	{
+		if(handle_neigh_cache_ops(NEIGH_CLIENT_DEL_PREFIX, data->ipv6_prefix, data->VlanID) == IPACM_SUCCESS)
+		{
+			IPACMDBG_H("Deleted ipv6 address from neigh cache with prefix 0x%08x:%08x\n",
+				data->ipv6_prefix[0],data->ipv6_prefix[1]);
+		}
+
 		if(data->mux_id == 0)
 		{
-			if(handle_wan_down_v6(true, false, data->VlanID))
+			if(handle_wan_down_v6(true, true, data->VlanID))
 			{
 				IPACMERR("STA flt v6 rule deletion failed\n");
 				return IPACM_FAILURE;
@@ -2818,24 +3032,34 @@ int IPACM_Lan::handle_vlan_pdn_down(ipacm_event_vlan_pdn *data)
 		else
 		{
 			//LTE case delete routing rule of client with associated mux_id
-			for(int i = 0; i < IPA_MAX_NUM_HW_PDNS; i++)
+			if(data->VlanID > 0)
 			{
-				if(v6_mux_up[i].mux_id == data->mux_id)
+				handle_lan_client_reset_rt(IPA_IP_v6, data->VlanID);
+				IPACMDBG_H("successfully deleted v6 rt: vid %d for mux id %d, dev %s\n",
+									data->VlanID, data->mux_id, dev_name);
+			}
+			else if(data->VlanID == 0)
+			{
+				for(int i = 0; i < IPA_MAX_NUM_HW_PDNS; i++)
 				{
-					for(int j = 0; j < IPA_MAX_NUM_SW_PDNS; j++)
+					if(v6_mux_up[i].mux_id == data->mux_id)
 					{
-						if(v6_mux_up[i].associated_VIDs[j] != 0)
+						for(int j = 0; j < IPA_MAX_NUM_SW_PDNS; j++)
 						{
-							/* reset vlan client ipv6 rt-rules */
-							handle_lan_client_reset_rt(IPA_IP_v6, v6_mux_up[i].associated_VIDs[j]);
-							IPACMDBG_H("successfully deleted v6 rt: vid %d for mux id %d, dev %s, i = %d, j = %d, VID_cnt = %d \n",
-								v6_mux_up[i].associated_VIDs[j], v6_mux_up[i].mux_id, dev_name, i, j, v6_mux_up[i].VID_cnt);
+							if(v6_mux_up[i].associated_VIDs[j] != 0)
+							{
+								/* reset vlan client ipv6 rt-rules */
+								handle_lan_client_reset_rt(IPA_IP_v6, v6_mux_up[i].associated_VIDs[j]);
+								IPACMDBG_H("successfully deleted v6 rt: vid %d for mux id %d, dev %s, i = %d, j = %d, VID_cnt = %d \n",
+									v6_mux_up[i].associated_VIDs[j], v6_mux_up[i].mux_id, dev_name, i, j, v6_mux_up[i].VID_cnt);
+							}
 						}
 					}
 				}
 			}
+
 			/* if we still have vlan pdns up notify only */
-			if(set_mux_down(data->mux_id, data->iptype))
+			if(set_mux_down(data->mux_id, data->iptype, data->VlanID))
 				return IPACM_FAILURE;
 
 			if(is_any_mux_up(data->iptype) == true)
@@ -2858,8 +3082,8 @@ int IPACM_Lan::handle_vlan_pdn_down(ipacm_event_vlan_pdn *data)
 					return IPACM_FAILURE;
 				}
 			}
-
-			if(notify_flt_removed(data->mux_id))
+			/* only notify if mux is down */
+			if(!is_mux_up(data->mux_id, data->iptype, 0) && notify_flt_removed(data->mux_id))
 				return IPACM_FAILURE;
 		}
 	}
@@ -2868,6 +3092,12 @@ int IPACM_Lan::handle_vlan_pdn_down(ipacm_event_vlan_pdn *data)
 	{
 		bool notif_only_v6 = false;
 
+		if(handle_neigh_cache_ops(NEIGH_CLIENT_DEL_PREFIX, data->ipv6_prefix, data->VlanID) == IPACM_SUCCESS)
+		{
+			IPACMDBG_H("Deleted ipv6 address from neigh cache with prefix 0x%08x:%08x\n",
+				data->ipv6_prefix[0],data->ipv6_prefix[1]);
+		}
+
 		if(data->mux_id == 0)
 		{
 			if(handle_wan_down(true, data->mux_id, data->VlanID))
@@ -2875,7 +3105,7 @@ int IPACM_Lan::handle_vlan_pdn_down(ipacm_event_vlan_pdn *data)
 				IPACMERR("STA flt v4 rule deletion failed\n");
 				return IPACM_FAILURE;
 			}
-			if(handle_wan_down_v6(true, false, data->VlanID))
+			if(handle_wan_down_v6(true, true, data->VlanID))
 			{
 				IPACMERR("STA flt v6 rule deletion failed\n");
 				return IPACM_FAILURE;
@@ -2884,31 +3114,41 @@ int IPACM_Lan::handle_vlan_pdn_down(ipacm_event_vlan_pdn *data)
 		else
 		{
 			//LTE case delete routing rule of client with associated mux_id
-			for(int i = 0; i < IPA_MAX_NUM_HW_PDNS; i++)
+			if(data->VlanID > 0)
 			{
-				if(v6_mux_up[i].mux_id == data->mux_id)
+				handle_lan_client_reset_rt(IPA_IP_v6, data->VlanID);
+				IPACMDBG_H("successfully deleted v6 rt: vid %d for mux id %d, dev %s\n",
+									data->VlanID, data->mux_id, dev_name);
+			}
+			else if(data->VlanID == 0)
+			{
+				for(int i = 0; i < IPA_MAX_NUM_HW_PDNS; i++)
 				{
-					for(int j = 0; j < IPA_MAX_NUM_SW_PDNS; j++)
+					if(v6_mux_up[i].mux_id == data->mux_id)
 					{
-						if(v6_mux_up[i].associated_VIDs[j] != 0)
+						for(int j = 0; j < IPA_MAX_NUM_SW_PDNS; j++)
 						{
-							/* reset vlan client ipv6 rt-rules */
-							handle_lan_client_reset_rt(IPA_IP_v6, v6_mux_up[i].associated_VIDs[j]);
-							IPACMDBG_H("successfully deleted v6 rt: vid %d for mux id %d, dev %s, i = %d, j = %d, VID_cnt = %d \n",
-								v6_mux_up[i].associated_VIDs[j], v6_mux_up[i].mux_id, dev_name, i, j, v6_mux_up[i].VID_cnt);
+							if(v6_mux_up[i].associated_VIDs[j] != 0)
+							{
+								/* reset vlan client ipv6 rt-rules */
+								handle_lan_client_reset_rt(IPA_IP_v6, v6_mux_up[i].associated_VIDs[j]);
+								IPACMDBG_H("successfully deleted v6 rt: vid %d for mux id %d, dev %s, i = %d, j = %d, VID_cnt = %d \n",
+									v6_mux_up[i].associated_VIDs[j], v6_mux_up[i].mux_id, dev_name, i, j, v6_mux_up[i].VID_cnt);
+							}
 						}
 					}
 				}
 			}
+
 			/* if we still have vlan pdns up notify only */
-			if(set_mux_down(data->mux_id, IPA_IP_v4))
+			if(set_mux_down(data->mux_id, IPA_IP_v4, data->VlanID))
 				return IPACM_FAILURE;
 
 			if(is_any_mux_up(IPA_IP_v4) == true)
 				notif_only = true;
 
 			/* if we still have vlan pdns up notify only */
-			if(set_mux_down(data->mux_id, IPA_IP_v6))
+			if(set_mux_down(data->mux_id, IPA_IP_v6, data->VlanID))
 				return IPACM_FAILURE;
 
 			if(is_any_mux_up(IPA_IP_v6) == true)
@@ -2945,7 +3185,7 @@ int IPACM_Lan::handle_vlan_pdn_down(ipacm_event_vlan_pdn *data)
 			}
 
 			/* need to notify once for v4 */
-			if(notify_flt_removed(data->mux_id))
+			if(!is_mux_up(data->mux_id, IPA_IP_v4, 0) && notify_flt_removed(data->mux_id))
 				return IPACM_FAILURE;
 
 			if(!notif_only_v6)
@@ -2957,7 +3197,7 @@ int IPACM_Lan::handle_vlan_pdn_down(ipacm_event_vlan_pdn *data)
 			}
 
 			/* need to notify once for v6 */
-			if(notify_flt_removed(data->mux_id))
+			if(!is_mux_up(data->mux_id, IPA_IP_v6, 0) && notify_flt_removed(data->mux_id))
 				return IPACM_FAILURE;
 		}
 	}
@@ -3003,14 +3243,11 @@ int IPACM_Lan::handle_del_ipv6_addr(ipacm_event_data_all *data)
 
 		IPACMDBG_H("ipv6 address got: 0x%x:%x:%x:%x\n",
 			data->ipv6_addr[0], data->ipv6_addr[1], data->ipv6_addr[2], data->ipv6_addr[3]);
-		for (it = neigh_cache.begin(); it != neigh_cache.end(); ++it)
+
+		if(handle_neigh_cache_ops(NEIGH_CLIENT_DEL, data->ipv6_addr, vlan_id) == IPACM_SUCCESS)
 		{
-			if ((it->ipv6_addr[0] == data->ipv6_addr[0]) && (it->ipv6_addr[1] == data->ipv6_addr[1])
-				&& (it->ipv6_addr[2] == data->ipv6_addr[2]) && (it->ipv6_addr[3] == data->ipv6_addr[3]))
-			{
-				neigh_cache.erase(it);
-				break;
-			}
+			IPACMDBG_H("Deleted ipv6 address from neigh cache v6_addr: 0x%08x:%08x:0x%08x:%08x\n",
+				data->ipv6_addr[0],data->ipv6_addr[1],data->ipv6_addr[2],data->ipv6_addr[3]);
 		}
 
 		for (num_v6 = 0; num_v6 < get_client_memptr(eth_client, clnt_indx)->ipv6_set; ++num_v6)
@@ -3265,18 +3502,18 @@ int IPACM_Lan::handle_addr_evt(ipacm_event_data_addr *data)
 	}
 	else
 	{
-	    /* check if see that v6-addr already or not*/
-	    for(num_ipv6_addr=0;num_ipv6_addr<num_dft_rt_v6;num_ipv6_addr++)
-	    {
-            if((ipv6_addr[num_ipv6_addr][0] == data->ipv6_addr[0]) &&
-	           (ipv6_addr[num_ipv6_addr][1] == data->ipv6_addr[1]) &&
-	           (ipv6_addr[num_ipv6_addr][2] == data->ipv6_addr[2]) &&
-	           (ipv6_addr[num_ipv6_addr][3] == data->ipv6_addr[3]))
-            {
+		/* check if see that v6-addr already or not*/
+		for(num_ipv6_addr=0;num_ipv6_addr<num_dft_rt_v6;num_ipv6_addr++)
+		{
+			if((ipv6_addr[num_ipv6_addr][0] == data->ipv6_addr[0]) &&
+			   (ipv6_addr[num_ipv6_addr][1] == data->ipv6_addr[1]) &&
+			   (ipv6_addr[num_ipv6_addr][2] == data->ipv6_addr[2]) &&
+			   (ipv6_addr[num_ipv6_addr][3] == data->ipv6_addr[3]))
+			{
+				IPACMDBG_H("ipv6_addr already added\n");
 				return IPACM_FAILURE;
-				break;
-	        }
-	    }
+			}
+		}
 
 		rt_rule = (struct ipa_ioc_add_rt_rule *)
 			 calloc(1, sizeof(struct ipa_ioc_add_rt_rule) +
@@ -3388,6 +3625,9 @@ int IPACM_Lan::handle_addr_evt(ipacm_event_data_addr *data)
 	}
 
 	IPACMDBG_H("finish route/filter rule ip-type: %d, res(%d)\n", data->iptype, res);
+	/*to handle if we have missed new route events before creation
+	  of physical interface in case there is ETH WAN VLAN iface*/
+	ipa_nl_send_getroute(data->iptype);
 
 	/* TODO: get default MTU here instead of using 1500 */
 
@@ -4211,6 +4451,7 @@ int IPACM_Lan::handle_eth_hdr_init(uint8_t *mac_addr, ipacm_bridge *bridge, uint
 #endif
 #ifdef FEATURE_VLAN_MPDN
 	uint16_t vlan_tci;
+	uint32_t v6_prefix[2];
 	if(IPACM_Iface::ipacmcfg->ipacm_mpdn_enable)
 		max_clients = IPA_MAX_NUM_VLAN_CLIENTS;
 	if(isVlan)
@@ -4244,6 +4485,17 @@ int IPACM_Lan::handle_eth_hdr_init(uint8_t *mac_addr, ipacm_bridge *bridge, uint
 	if (isVlan)
 	{
 		get_client_memptr(eth_client, num_eth_client)->vlan_id = vlan_id;
+		/* Handle case when ETH toggle after VLAN-PDN up */
+		if(IPACM_Wan::GetV6PrefixByVid(vlan_id, v6_prefix))
+		{
+			IPACMDBG_H("Couldn't get prefix for vid: %d\n", vlan_id);
+			memset(get_client_memptr(eth_client, num_eth_client)->client_backhaul_prefix, 0, 2 * sizeof(uint32_t));
+		}
+		else
+		{
+			get_client_memptr(eth_client, num_eth_client)->client_backhaul_prefix[0] = v6_prefix[0];
+			get_client_memptr(eth_client, num_eth_client)->client_backhaul_prefix[1] = v6_prefix[1];
+		}
 	}
 #endif
 	IPACMDBG_H("Received Client MAC %02x:%02x:%02x:%02x:%02x:%02x\n",
@@ -4808,8 +5060,6 @@ int IPACM_Lan::handle_eth_client_ipaddr(ipacm_event_data_all *data)
 {
 	int clnt_indx = 0;
 	int v6_num = 0;
-        int add = 0;
-        ipacm_event_data_all  *tmp_evt = NULL;
 	uint32_t ipv6_link_local_prefix = 0xFE800000;
 	uint32_t ipv6_link_local_prefix_mask = 0xFFC00000;
 	uint16_t vlan_id = 0;
@@ -4933,35 +5183,17 @@ int IPACM_Lan::handle_eth_client_ipaddr(ipacm_event_data_all *data)
 					IPACM_Iface::ipacmcfg->is_offload_ipv6_prefix(data->ipv6_addr) != true)
 #else
 					memcmp(ipv6_prefix, data->ipv6_addr, sizeof(ipv6_prefix)) != 0)
-#endif           
+#endif
 				{
-					if (neigh_cache.size() < 2*IPA_MAX_NUM_HW_PATH_CLIENTS)
+					if(handle_neigh_cache_ops(NEIGH_CLIENT_ADD, data) != IPACM_SUCCESS)
 					{
-						for (it = neigh_cache.begin(); it != neigh_cache.end(); ++it)
-						{
-							if ((it->ipv6_addr[0] == data->ipv6_addr[0]) && (it->ipv6_addr[1] == data->ipv6_addr[1])
-								&& (it->ipv6_addr[2] == data->ipv6_addr[2])  && (it->ipv6_addr[3] == data->ipv6_addr[3]))
-							{
-								IPACMDBG_H("Already cached client v6 addr : 0x%08x:%08x:%08x:%08x mac 0x%x%x%x%x%x%x\n",
-									data->ipv6_addr[0], data->ipv6_addr[1], data->ipv6_addr[2], data->ipv6_addr[3],
-									data->mac_addr[0], data->mac_addr[1], data->mac_addr[2], data->mac_addr[3], data->mac_addr[4], data->mac_addr[5]);
-								break;
-							}
-						}
-						if (it == neigh_cache.end())
-						{
-							memcpy(&data_all, data, sizeof(ipacm_event_data_all));
-							neigh_cache.push_back(data_all);
-							IPACMDBG_H("Caching v6 addr : 0x%08x:%08x:%08x:%08x mac 0x%x%x%x%x%x%x\n",
-								data_all.ipv6_addr[0], data_all.ipv6_addr[1], data_all.ipv6_addr[2], data_all.ipv6_addr[3],
-								data_all.mac_addr[0], data_all.mac_addr[1], data_all.mac_addr[2], data_all.mac_addr[3], data_all.mac_addr[4], data_all.mac_addr[5]);
-						}
+						IPACMDBG_H("Failed to add data in neigh cache\n");
 					}
 					IPACMDBG_H("This global IPv6 address is not with correct prefix, ignore.\n");
 					return IPACM_FAILURE;
 				}
 			}
-                        
+
 			if(get_client_memptr(eth_client, clnt_indx)->ipv6_set < IPV6_NUM_ADDR)
                         {
                                 for(v6_num=0;v6_num < get_client_memptr(eth_client, clnt_indx)->ipv6_set;v6_num++)
@@ -4975,94 +5207,23 @@ int IPACM_Lan::handle_eth_client_ipaddr(ipacm_event_data_all *data)
                                                 return IPACM_FAILURE; /* not setup the RT rules*/
                                         }
                                 }
-                                
+
                                 /*
                                  * The client got new IPv6 address.
                                  * NOTE: The new address doesn't replace the existing one but being added (up to IPV6_NUM_ADDR),
                                  * so the previous IPv6 addresses of the client will not be deleted.
                                  */
-                                
+
                                 get_client_memptr(eth_client, clnt_indx)->v6_addr[get_client_memptr(eth_client, clnt_indx)->ipv6_set][0] = data->ipv6_addr[0];
                                 get_client_memptr(eth_client, clnt_indx)->v6_addr[get_client_memptr(eth_client, clnt_indx)->ipv6_set][1] = data->ipv6_addr[1];
                                 get_client_memptr(eth_client, clnt_indx)->v6_addr[get_client_memptr(eth_client, clnt_indx)->ipv6_set][2] = data->ipv6_addr[2];
                                 get_client_memptr(eth_client, clnt_indx)->v6_addr[get_client_memptr(eth_client, clnt_indx)->ipv6_set][3] = data->ipv6_addr[3];
                                 get_client_memptr(eth_client, clnt_indx)->ipv6_set++;
                         }
-                        else 
+                        else
                         {
-                                IPACMDBG_H("Already got %d ipv6 addr for client:%d\n", IPV6_NUM_ADDR, clnt_indx);
-                                /* If LL is input then ignore */
-                                if((data->ipv6_addr[0] & ipv6_link_local_prefix_mask) == (ipv6_link_local_prefix & ipv6_link_local_prefix_mask))
-                                {
-                                        IPACMDBG_H("Link Local address [ 0x%x:%x:%x:%x ] no need to overwrite\n",data->ipv6_addr[0]
-                                                ,data->ipv6_addr[1], data->ipv6_addr[2], data->ipv6_addr[3]);
-                                        return IPACM_FAILURE;
-                                }
-                                
-                                tmp_evt = (ipacm_event_data_all *)malloc(sizeof(ipacm_event_data_all));
-                                if(NULL == tmp_evt)
-                                {
-                                        IPACMERR("unable to allocate memory\n");
-                                        return IPACM_FAILURE;
-                                }
-                                
-                                for(v6_num=0; v6_num < get_client_memptr(eth_client, clnt_indx)->ipv6_set; v6_num++)
-                                {       
-                                            /* Ignore if Link local address picked from client array
-                                             * If LL addr added once it is not required to update
-                                             */
-                                        if((get_client_memptr(eth_client, clnt_indx)->v6_addr[v6_num][0] & ipv6_link_local_prefix_mask) 
-                                                    == (ipv6_link_local_prefix & ipv6_link_local_prefix_mask))
-                                                continue;
-
-                                                /* Prefix not match then neighbor got new V6 assigned */
-                                        if((data->ipv6_addr[0] != get_client_memptr(eth_client, clnt_indx)->v6_addr[v6_num][0]) ||
-					     (data->ipv6_addr[1] != get_client_memptr(eth_client, clnt_indx)->v6_addr[v6_num][1]))
-	                                {
-                                                memcpy(tmp_evt, data, sizeof(ipacm_event_data_all));
-                                                tmp_evt->ipv6_addr[0] = get_client_memptr(eth_client, clnt_indx)->v6_addr[v6_num][0];
-                                                tmp_evt->ipv6_addr[1] = get_client_memptr(eth_client, clnt_indx)->v6_addr[v6_num][1];
-                                                tmp_evt->ipv6_addr[2] = get_client_memptr(eth_client, clnt_indx)->v6_addr[v6_num][2];
-                                                tmp_evt->ipv6_addr[3] = get_client_memptr(eth_client, clnt_indx)->v6_addr[v6_num][3];
-                                                IPACMDBG_H("Got new prefix del old prefix entry [0x%x:%x:%x:%x] at idx %d\n", 
-                                                            tmp_evt->ipv6_addr[0], tmp_evt->ipv6_addr[1],
-                                                            tmp_evt->ipv6_addr[2], tmp_evt->ipv6_addr[3], v6_num);
-                                                
-                                                CtList->HandleNeighIpAddrDelEvt_v6(Ipv6IpAddress(tmp_evt->ipv6_addr, false));
-                                                                                                               
-                                                /* This will delete the current IPV6 address, RT routes and copy indices up */
-                                                handle_del_ipv6_addr(tmp_evt);
-                                                add = 1;
-                                        }
-                                } //for loop
-                                        
-                                if(tmp_evt!= NULL)
-                                        free(tmp_evt);
-                               
-                                if(add)
-                                {
-                                        if(get_client_memptr(eth_client, clnt_indx)->ipv6_set < IPV6_NUM_ADDR)
-                                        {
-                                                IPACMDBG_H("Adding new ipv6 addr [0x%x:%x:%x:%x] at pos: %d for client:%d\n",data->ipv6_addr[0], data->ipv6_addr[1],
-                                                        data->ipv6_addr[2], data->ipv6_addr[3], get_client_memptr(eth_client, clnt_indx)->ipv6_set, clnt_indx);
-                                                get_client_memptr(eth_client, clnt_indx)->v6_addr[get_client_memptr(eth_client, clnt_indx)->ipv6_set][0] = data->ipv6_addr[0];
-                                                get_client_memptr(eth_client, clnt_indx)->v6_addr[get_client_memptr(eth_client, clnt_indx)->ipv6_set][1] = data->ipv6_addr[1];
-                                                get_client_memptr(eth_client, clnt_indx)->v6_addr[get_client_memptr(eth_client, clnt_indx)->ipv6_set][2] = data->ipv6_addr[2];
-                                                get_client_memptr(eth_client, clnt_indx)->v6_addr[get_client_memptr(eth_client, clnt_indx)->ipv6_set][3] = data->ipv6_addr[3];
-                                                get_client_memptr(eth_client, clnt_indx)->ipv6_set++;
-                                        }
-                                        else
-                                        {
-                                                IPACMDBG_H("Could not add ipv6 addr for client:%d list full:%d\n", clnt_indx, IPV6_NUM_ADDR);
-                                                return IPACM_FAILURE;
-                                        }
-                                }
-                                else
-                                {
-                                        IPACMDBG_H("Already got %d ipv6 addr with same prefix for client:%d\n", IPV6_NUM_ADDR, clnt_indx);
-                                        return IPACM_FAILURE;
-                                }
-
+                    		IPACMDBG_H("Already got %d ipv6 addr for client:%d\n", IPV6_NUM_ADDR, clnt_indx);
+							return IPACM_FAILURE;
                         } //else end
                 }
         }
@@ -5070,7 +5231,7 @@ int IPACM_Lan::handle_eth_client_ipaddr(ipacm_event_data_all *data)
 }
 
 /*handle eth client routing rule*/
-int IPACM_Lan::handle_eth_client_route_rule(uint8_t *mac_addr, ipa_ip_type iptype, uint16_t vlan_id,  uint32_t *prefix)
+int IPACM_Lan::handle_eth_client_route_rule(uint8_t *mac_addr, ipa_ip_type iptype, uint16_t vlan_id)
 {
 	struct ipa_ioc_add_rt_rule_v2 rt_rule{};
 	struct ipa_rt_rule_add_v2 rt_rule_entry{}, *rulesPtr = nullptr;
@@ -5206,11 +5367,6 @@ int IPACM_Lan::handle_eth_client_route_rule(uint8_t *mac_addr, ipa_ip_type iptyp
 						eth_index,
 						get_client_memptr(eth_client, eth_index)->hdr_hdl_v6);
 
-					if(prefix != NULL &&  (get_client_memptr(eth_client, eth_index)->v6_addr[v6_num][0] != prefix[0]) &&
-						(get_client_memptr(eth_client, eth_index)->v6_addr[v6_num][1] != prefix[1]))
-					{
-						continue;
-					}
 					/* v6 LAN_RT_TBL */
 					strlcpy(rt_rule.rt_tbl_name, IPACM_Iface::ipacmcfg->rt_tbl_v6.name,
 						sizeof(rt_rule.rt_tbl_name));
@@ -5636,7 +5792,7 @@ int IPACM_Lan::handle_eth_client_route_rule_ext_v2(uint8_t *mac_addr, ipa_ip_typ
 			rt_rule->rule_add_ext_size = sizeof(struct ipa_rt_rule_add_ext_v2);
 			for (tx_index = 0; tx_index < iface_query->num_tx_props; tx_index++)
 			{
-				if(iptype != tx_prop->tx[tx_index].ip)
+				if(tx_prop && (iptype != tx_prop->tx[tx_index].ip))
 				{
 					IPACMDBG_H("Tx:%d, ip-type: %d conflict ip-type: %d no RT-rule added\n",
 							tx_index, tx_prop->tx[tx_index].ip,iptype);
@@ -6012,9 +6168,9 @@ int IPACM_Lan::handle_eth_client_route_rule_ext(uint8_t *mac_addr, ipa_ip_type i
 					HandleNeighIpAddrAddEvt(&data);
 				}
 				get_client_memptr(eth_client, eth_index)->route_rule_set_v6 = get_client_memptr(eth_client, eth_index)->ipv6_set;
-			} /* end of for loop */
-			free(rulesPtr);
-		}
+            }
+        }/* end of for loop */
+        free(rulesPtr);
 	}
 	return IPACM_SUCCESS;
 }
@@ -6452,6 +6608,7 @@ int IPACM_Lan::handle_eth_client_down_evt(uint8_t *mac_addr, uint16_t vlan_id, i
 	get_client_memptr(eth_client, clt_indx)->if_index_set = false;
 #ifdef FEATURE_VLAN_MPDN
 	get_client_memptr(eth_client, clt_indx)->vlan_id = 0;
+	memset(get_client_memptr(eth_client, clt_indx)->client_backhaul_prefix, 0, 2 * sizeof(uint32_t));
 #endif
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
 	get_client_memptr(eth_client, clt_indx)->ipv4_ul_rules_set = false;
@@ -6535,6 +6692,8 @@ int IPACM_Lan::handle_eth_client_down_evt(uint8_t *mac_addr, uint16_t vlan_id, i
 
 #ifdef FEATURE_VLAN_MPDN
 		get_client_memptr(eth_client, clt_indx)->vlan_id = get_client_memptr(eth_client, (clt_indx + 1))->vlan_id;
+		get_client_memptr(eth_client, clt_indx)->client_backhaul_prefix[0] = get_client_memptr(eth_client, (clt_indx + 1))->client_backhaul_prefix[0];
+		get_client_memptr(eth_client, clt_indx)->client_backhaul_prefix[1] = get_client_memptr(eth_client, (clt_indx + 1))->client_backhaul_prefix[1];
 #endif
 
         for (num_v6=0;num_v6< get_client_memptr(eth_client, clt_indx)->ipv6_set;num_v6++)
@@ -6702,7 +6861,7 @@ int IPACM_Lan::handle_vlan_phys_if_down()
 		/* currently support only all vlans switch to STA or LTE, not partial vlans */
 	for(i = 0; i < IPA_MAX_NUM_OFFLOAD_VLANS; i++)
         {
-                if((vlan_sta_info[i].vlan_id != 0) && (vlan_sta_info[i].v4_flt_hdl != 0))
+                if((vlan_sta_info[i].vlan_id != 0) && (vlan_sta_info[i].v4_flt_hdl != 0) && rx_prop)
                 {
                         IPACMDBG_H("Deleting filter rule for vlan_id %d during iface down\n",vlan_sta_info[i].vlan_id);
                         if (m_filtering.DeleteFilteringHdls(&vlan_sta_info[i].v4_flt_hdl, IPA_IP_v4, 1) == false)
@@ -6720,7 +6879,7 @@ int IPACM_Lan::handle_vlan_phys_if_down()
 
         for(i = 0; i < IPA_MAX_NUM_OFFLOAD_VLANS; i++)
         {
-                if(vlan_sta_info[i].v6_flt_hdl > 0)
+                if((vlan_sta_info[i].v6_flt_hdl > 0) && rx_prop)
                 {
                         if (!m_filtering.DeleteFilteringHdls(&vlan_sta_info[i].v6_flt_hdl, IPA_IP_v6, 1))
                         {
@@ -7241,7 +7400,10 @@ fail:
 						IPACMERR("Failed to delete ul flt rule.\n");
 						return IPACM_FAILURE;
 					}
-					IPACM_Iface::ipacmcfg->decreaseFltRuleCount(rx_prop->rx[0].src_pipe, IPA_IP_v6, 1);
+					if (rx_prop)
+					{
+					    IPACM_Iface::ipacmcfg->decreaseFltRuleCount(rx_prop->rx[0].src_pipe, IPA_IP_v6, 1);
+					}
 				}
 				if(get_client_memptr(eth_client, i)->ul_first_pass_rt_rule_hdl &&
 						m_routing.DeleteRoutingHdl(get_client_memptr(eth_client, i)->ul_first_pass_rt_rule_hdl, IPA_IP_v6) == false)
@@ -10517,6 +10679,8 @@ int IPACM_Lan::handle_lan_client_reset_rt(ipa_ip_type iptype, uint16_t vlan_id)
 			else
 			{
 				get_client_memptr(eth_client, i)->ipv6_set = 0;
+				memset(get_client_memptr(eth_client, i)->client_backhaul_prefix, 0, 2 * sizeof(uint32_t));
+				memset(get_client_memptr(eth_client, i)->v6_addr, 0, IPV6_NUM_ADDR * 4 * sizeof(uint32_t));
 			}
 		}
 		else if(get_client_memptr(eth_client, i)->vlan_id == vlan_id)
@@ -10528,6 +10692,8 @@ int IPACM_Lan::handle_lan_client_reset_rt(ipa_ip_type iptype, uint16_t vlan_id)
 			else
 			{
 				get_client_memptr(eth_client, i)->ipv6_set = 0;
+				memset(get_client_memptr(eth_client, i)->client_backhaul_prefix, 0, 2 * sizeof(uint32_t));
+				memset(get_client_memptr(eth_client, i)->v6_addr, 0, IPV6_NUM_ADDR * 4 * sizeof(uint32_t));
 			}
 		}
 	} /* end of for loop */
@@ -11487,6 +11653,11 @@ int IPACM_Lan::eth_bridge_get_vlan_hdr_template_hdl(uint32_t* hdr_hdl, uint16_t 
 	struct ipa_ioc_add_hdr *pHeaderDescriptor = NULL;
 	int len = 0;
 
+	if(tx_prop == NULL)
+	{
+		IPACMERR("No tx prop.\n");
+		return IPACM_FAILURE;
+	}
 	memset(&hdr, 0, sizeof(hdr));
 	memset(&sCopyHeader, 0, sizeof(sCopyHeader));
 	memcpy(sCopyHeader.name,
@@ -14598,6 +14769,8 @@ int IPACM_Lan::uninstall_l2tp_rules(ipacm_event_data_all *data)
 
 #ifdef FEATURE_VLAN_MPDN
 			get_client_memptr(eth_client, clt_indx)->vlan_id = get_client_memptr(eth_client, (clt_indx + 1))->vlan_id;
+			get_client_memptr(eth_client, clt_indx)->client_backhaul_prefix[0] = get_client_memptr(eth_client, (clt_indx + 1))->client_backhaul_prefix[0];
+			get_client_memptr(eth_client, clt_indx)->client_backhaul_prefix[1] = get_client_memptr(eth_client, (clt_indx + 1))->client_backhaul_prefix[1];
 #endif
 
 	        for (int num_v6=0;num_v6< get_client_memptr(eth_client, clt_indx)->ipv6_set;num_v6++)
@@ -14998,6 +15171,7 @@ int IPACM_Lan::install_l2tp_udp_dl_hdr_proc_ctx(int client_idx, uint16_t vlan_id
 int IPACM_Lan::install_l2tp_udp_dl_rules(ipacm_event_data_all *data, int index, ipa_ip_type iptype)
 {
 	l2tp_vlan_mapping_info info;
+	uint32_t v6_prefix[2];
 
 	if(tx_prop == NULL)
 	{
@@ -15030,17 +15204,26 @@ int IPACM_Lan::install_l2tp_udp_dl_rules(ipacm_event_data_all *data, int index, 
 
 	IPACMDBG_H("Got vlan id %d\n", info.l2tp_bridge_vlan_id);
 	get_client_memptr(eth_client, index)->vlan_id = info.l2tp_bridge_vlan_id;
-
-	IPACMDBG_H("construct ETH header and route rules \n");
-	/* Associate with IP and construct RT-rule */
-	if(handle_eth_client_ipaddr(data) == IPACM_FAILURE)
+	/* Handle case when ETH toggle after L2TP session-PDN is up */
+	if(IPACM_Wan::GetV6PrefixByVid(info.l2tp_bridge_vlan_id, v6_prefix))
 	{
-		IPACMERR("Failed handle_eth_client_ipaddr, continue\n");
-		return IPACM_FAILURE;
+		IPACMDBG_H("Couldn't get prefix for vid: %d\n", info.l2tp_bridge_vlan_id);
+	}
+	else
+	{
+		get_client_memptr(eth_client, index)->client_backhaul_prefix[0] = v6_prefix[0];
+		get_client_memptr(eth_client, index)->client_backhaul_prefix[1] = v6_prefix[1];
 	}
 
 	if(iptype == IPA_IP_v4)
 	{
+		IPACMDBG_H("construct ETH header and route rules \n");
+		/* Associate with IP and construct RT-rule */
+		if(handle_eth_client_ipaddr(data) == IPACM_FAILURE)
+		{
+			IPACMERR("Failed handle_eth_client_ipaddr, continue\n");
+			return IPACM_FAILURE;
+		}
 		if(handle_eth_client_route_rule(data->mac_addr, iptype))
 		{
 			IPACMERR("Failed to install route rule for iptype %d\n", iptype);
@@ -15050,13 +15233,27 @@ int IPACM_Lan::install_l2tp_udp_dl_rules(ipacm_event_data_all *data, int index, 
 	else
 	{
 		if((get_client_memptr(eth_client, index)->client_backhaul_prefix[0] == data->ipv6_addr[0]) &&
-				(get_client_memptr(eth_client, index)->client_backhaul_prefix[1] == data->ipv6_addr[1]) &&
-				(!get_client_memptr(eth_client, index)->v6_vlan_rt_installed))
+				(get_client_memptr(eth_client, index)->client_backhaul_prefix[1] == data->ipv6_addr[1]))
 		{
+			IPACMDBG_H("construct ETH header and route rules \n");
+			/* Associate with IP and construct RT-rule */
+			if(handle_eth_client_ipaddr(data) == IPACM_FAILURE)
+			{
+				IPACMERR("Failed handle_eth_client_ipaddr, continue\n");
+				return IPACM_FAILURE;
+			}
 			IPACMDBG_H("Neighbor received after conntrack. Installing Route rules now...\n");
-			if(handle_eth_client_route_rule(data->mac_addr, iptype, info.l2tp_bridge_vlan_id, data->ipv6_addr))
+			if(handle_eth_client_route_rule(data->mac_addr, iptype, info.l2tp_bridge_vlan_id))
 			{
 				IPACMERR("Failed to install route rule for iptype %d\n", iptype);
+				return IPACM_FAILURE;
+			}
+		}
+		else
+		{
+			if(handle_neigh_cache_ops(NEIGH_CLIENT_ADD, data) != IPACM_SUCCESS)
+			{
+				IPACMDBG_H("Failed to add data in neigh cache\n");
 				return IPACM_FAILURE;
 			}
 		}
@@ -15138,6 +15335,11 @@ int IPACM_Lan::install_l2tp_udp_ul_flt_rule(int client_idx, uint32_t *vlan_iface
 	ipa_ioc_add_flt_rule_after *pFilteringTable;
 	ipa_flt_rule_add *flt_rule_entry;
 
+	if(rx_prop == NULL)
+	{
+		IPACMERR("No rx prop.\n");
+		return IPACM_FAILURE;
+	}
 	size = sizeof(struct ipa_ioc_add_flt_rule_after) + sizeof(struct ipa_flt_rule_add);
 	pFilteringTable = (struct ipa_ioc_add_flt_rule_after*)malloc(size);
 	if (!pFilteringTable)

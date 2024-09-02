@@ -1242,16 +1242,27 @@ void IPACM_Wlan::event_callback(ipa_cm_event_id event, void *param)
 	case IPA_NOTIFY_VLAN_UP:
 	{
 		IPACMDBG_H("Received IPA_NOTIFY_VLAN_UP\n");
-		if (IPACM_Iface::ipacmcfg->is_added_vlan_iface(dev_name))
+		uint8_t mux_id = 0;
+		vlan_data = (ipacm_event_data_vlan *)param;
+		if (is_vlan_IF(vlan_data->vlan_id))
 		{
 			/* Remove the modem flt rules installed as part of
 			   IPA_ADDR_ADD_EVENT event, which wouldn't have
 			   correct mux_id and re-install them in
 			   handle_vlan_pdn_up in check_vlan_PDNUp*/
-			if(IPACM_Wan::isWanUP(ipa_if_num))
-				handle_wan_down(false, IPACM_Wan::getXlat_Mux_Id());
-			if(IPACM_Wan::isWanUP_V6(ipa_if_num))
-				handle_wan_down_v6(false);
+			if(IPACM_Wan::backhaul_is_sta_mode == false)
+			{
+				if(IPACM_Wan::isWanUP(ipa_if_num) &&
+				   (IPACM_FAILURE == IPACM_Wan::GetMuxByVid(vlan_data->vlan_id, &mux_id, IPA_IP_v4)))
+				{
+					handle_wan_down(false, IPACM_Wan::getXlat_Mux_Id());
+				}
+				if(IPACM_Wan::isWanUP_V6(ipa_if_num) &&
+				   (IPACM_FAILURE == IPACM_Wan::GetMuxByVid(vlan_data->vlan_id, &mux_id, IPA_IP_v6)))
+				{
+					handle_wan_down_v6(false);
+				}
+			}
 			if(IPACM_Wan::isVlanWanUP())
 			{
 				IPACMDBG_H("Check any missed v4 VLAN handling in v4 new ADDR\n");

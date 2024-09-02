@@ -5506,7 +5506,14 @@ int IPACM_Wan::config_eogre_dl_rules_ex(struct ipacm_pdn_flt_rule* rules, int ru
 				continue;
 			}
 		}
-		if(found == false)
+		if(found == false && i != conf->tunnel_idx.size()-1)
+		{
+			IPACMERR("GetWanByAddr did not success for iptype%d"
+				"checking for other tunnels\n",
+				iptype);
+			continue;
+		}
+		else if(found == false)
 		{
 			IPACMERR("GetWanByAddr did not success for iptype%d\n",
 				iptype);

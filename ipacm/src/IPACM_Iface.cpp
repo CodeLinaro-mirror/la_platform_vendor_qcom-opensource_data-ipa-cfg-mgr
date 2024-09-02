@@ -799,7 +799,7 @@ int IPACM_Iface::init_fl_rule(
 			if (j == 0) {
 				idx = 0;
 			} else {
-				IPACMDBG_H("Interface is non vlan, dont install rule with index 2");
+				IPACMDBG_H("Interface is non vlan, dont install rule with index 2\n");
 				continue;
 			}
 		} else {
@@ -902,7 +902,7 @@ int IPACM_Iface::init_fl_rule(
 				for (int i = 0; i < m_ipv4_default_filterting_rules_count[j]; i++) {
 					if (m_pFilteringTable->rules[i].status == 0) {
 						dft_v4fl_rule_hdl[j][i] = m_pFilteringTable->rules[i].flt_rule_hdl;
-						IPACMDBG_H("Default v4 filter Rule %d HDL:0x%x\n", i, dft_v4fl_rule_hdl[i]);
+						IPACMDBG_H("Default v4 filter Rule %d HDL:0x%x\n", i, dft_v4fl_rule_hdl[j][i]);
 					} else {
 						IPACMERR("Failed adding default v4 Filtering rule %d\n", i);
 					}
@@ -1120,7 +1120,6 @@ int IPACM_Iface::init_fl_rule(
 			}
 		}
 	}
-
 fail:
 	return res;
 }
@@ -1248,7 +1247,7 @@ int IPACM_Iface::delete_dflt_filter_rules(
 			if (j == 0) {
 				idx = 0;
 			} else {
-				IPACMDBG_H("Interface is non vlan, dont install rule with index 2");
+				IPACMDBG_H("Interface is non vlan, dont install rule with index 2\n");
 				continue;
 			}
 		} else {

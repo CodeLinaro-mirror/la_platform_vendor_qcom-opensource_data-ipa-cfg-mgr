@@ -212,10 +212,6 @@ void* firewall_monitor(void *param)
 							}
 							else
 							{
-								IPACM_Iface::ipacmcfg->dscp_pcp_config_cache.add = IPACM_Iface::ipacmcfg->dscp_pcp_config.add;
-								memcpy(IPACM_Iface::ipacmcfg->dscp_pcp_config_cache.dscp_pcp_map, IPACM_Iface::ipacmcfg->dscp_pcp_config.dscp_pcp_map,
-									sizeof(IPACM_Iface::ipacmcfg->dscp_pcp_config.dscp_pcp_map));
-
 								evt_data.event = IPA_DSCP_PCP_CONFIG_CHANGE_EVENT;
 								evt_data.evt_data = NULL;
 

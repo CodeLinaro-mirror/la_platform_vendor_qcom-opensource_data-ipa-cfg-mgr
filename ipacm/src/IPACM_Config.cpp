@@ -93,7 +93,7 @@ const char *IPACM_Config::DEVICE_NAME_ODU = "/dev/odu_ipa_bridge";
 #define IPACM_CONFIG_FILE "/etc/data/ipa/IPACM_cfg.xml"
 #define IPACM_CONFIG_EXT_FILE "/etc/data/ipa/IPACM_cfg_ext.xml"
 #endif
-#define MAX_RETRIES 5
+#define MAX_RETRIES 15
 const char *ipacm_event_name[] = {
 	__stringify(IPA_CFG_CHANGE_EVENT),                     /* NULL */
 	__stringify(IPA_PRIVATE_SUBNET_CHANGE_EVENT),          /* ipacm_event_data_fid */
@@ -568,6 +568,7 @@ int IPACM_Config::Init(void)
 	IPACMDBG_H("\n IPACM XML file is %s \n", IPACM_config_file);
 
 reread:
+	system ("fsync -d " IPACM_CONFIG_FILE);
 	if (IPACM_SUCCESS == ipacm_read_cfg_xml(IPACM_config_file, cfg))
 	{
 		IPACMDBG_H("\n IPACM XML read OK \n");
@@ -575,8 +576,13 @@ reread:
 	else
 	{
 		if(loop_count < MAX_RETRIES) {
-			IPACMERR("\nIPACM XML read failed,Updating the xml file\n");
-			system(cmd);
+			if (loop_count > 10) {
+				IPACMERR(
+					"\nIPACM XML read failed,Updating the xml file\n");
+				system(cmd);
+			} else {
+				IPACMERR("\nIPACM XML read failed,retrying\n");
+			}
 			loop_count++;
 			goto reread;
 		}
@@ -832,6 +838,9 @@ skip_fnr_alloc:
 
 	rt_tbl_wan_dl.ip = IPA_IP_MAX;
 	strlcpy(rt_tbl_wan_dl.name, WAN_DL_ROUTE_TABLE_NAME, sizeof(rt_tbl_wan_dl.name));
+
+	rt_tbl_default_v6.ip = IPA_IP_v6;
+	strlcpy(rt_tbl_default_v6.name, V6_DEFAULT_ROUTE_TABLE_NAME, sizeof(rt_tbl_default_v6.name));
 
 	/* Construct IPACM ipa_client map to rm_resource table */
 	ipa_client_rm_map_tbl[IPA_CLIENT_WLAN1_PROD]= IPA_RM_RESOURCE_WLAN_PROD;
@@ -4479,15 +4488,9 @@ void IPACM_Config::delete_qos_params_info(ipa_ioc_qos_config *data)
 			for (it_qos_client = it_qos_params->qos_client_list.begin(); it_qos_client != it_qos_params->qos_client_list.end(); ++it_qos_client)
 			{
 				qos_param->qos_client_list[i].qos_rt_rule_hdl_v4 = it_qos_client->qos_rt_rule_hdl_v4;
-
-				for (int v6_num = 0; v6_num < IPV6_NUM_ADDR; v6_num++)
-				{
-					qos_param->qos_client_list[i].qos_rt_rule_hdl_v6[v6_num] = it_qos_client->qos_rt_rule_hdl_v6[v6_num];
-					qos_param->qos_client_list[i].qos_rt_rule_hdl_wan_v6[v6_num] = it_qos_client->qos_rt_rule_hdl_wan_v6[v6_num];
-					IPACMDBG("v6 rule to delete v6_num %d rt hdl %d, wan hdl %d\n", v6_num,
-							 qos_param->qos_client_list[i].qos_rt_rule_hdl_v6[v6_num],
-							 qos_param->qos_client_list[i].qos_rt_rule_hdl_wan_v6[v6_num]);
-				}
+				qos_param->qos_client_list[i].qos_rt_rule_hdl_v6 = it_qos_client->qos_rt_rule_hdl_v6;
+				IPACMDBG("v6 rule to delete wan hdl %d\n",
+						qos_param->qos_client_list[i].qos_rt_rule_hdl_v6);
 				qos_param->qos_client_list[i].route_rule_set_v4 = it_qos_client->route_rule_set_v4;
 				qos_param->qos_client_list[i].route_rule_set_v6 = it_qos_client->route_rule_set_v6;
 
@@ -4546,11 +4549,7 @@ void IPACM_Config::flush_qos_params_info(ipa_ioc_qos_config *data)
 		for (it_qos_client = it_qos_params->qos_client_list.begin(); it_qos_client != it_qos_params->qos_client_list.end(); ++it_qos_client)
 		{
 			qos_param->qos_client_list[i].qos_rt_rule_hdl_v4 = it_qos_client->qos_rt_rule_hdl_v4;
-			for (int v6_num = 0; v6_num < IPV6_NUM_ADDR; v6_num++)
-			{
-				qos_param->qos_client_list[i].qos_rt_rule_hdl_v6[v6_num] = it_qos_client->qos_rt_rule_hdl_v6[v6_num];
-				qos_param->qos_client_list[i].qos_rt_rule_hdl_wan_v6[v6_num] = it_qos_client->qos_rt_rule_hdl_wan_v6[v6_num];
-			}
+			qos_param->qos_client_list[i].qos_rt_rule_hdl_v6 = it_qos_client->qos_rt_rule_hdl_v6;
 			qos_param->qos_client_list[i].route_rule_set_v4 = it_qos_client->route_rule_set_v4;
 			qos_param->qos_client_list[i].route_rule_set_v6 = it_qos_client->route_rule_set_v6;
 

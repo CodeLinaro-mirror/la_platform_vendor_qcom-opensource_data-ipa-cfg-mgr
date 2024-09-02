@@ -160,8 +160,8 @@ IPACM_Lan::IPACM_Lan(int iface_index) : IPACM_Iface(iface_index)
 	memset(num_wan_subnet_rules, 0, sizeof(num_wan_subnet_rules));
 	memset(num_wan_prefix_rules, 0, sizeof(num_wan_prefix_rules));
 	hdr_len = 0;
-	memset(wan_ul_fl_rule_hdl_v4, 0, MAX_WAN_UL_FILTER_RULES * sizeof(uint32_t));
-	memset(wan_ul_fl_rule_hdl_v6, 0, MAX_WAN_UL_FILTER_RULES * sizeof(uint32_t));
+	memset(wan_ul_fl_rule_hdl_v4, 0, sizeof(wan_ul_fl_rule_hdl_v4));
+	memset(wan_ul_fl_rule_hdl_v6, 0, sizeof(wan_ul_fl_rule_hdl_v6));
 
 #ifdef FEATURE_IPACM_UL_FIREWALL
 	IPACMDBG_H("Mem-setting iface_ul_firewall of size %zu\n", sizeof(iface_ul_firewall));
@@ -169,13 +169,13 @@ IPACM_Lan::IPACM_Lan(int iface_index) : IPACM_Iface(iface_index)
 #endif
 
 	is_active = true;
-	memset(ipv4_icmp_flt_rule_hdl, 0, NUM_IPV4_ICMP_FLT_RULE * sizeof(uint32_t));
+	memset(ipv4_icmp_flt_rule_hdl, 0, sizeof(ipv4_icmp_flt_rule_hdl));
 
 	is_mode_switch = false;
 	if_ipv4_subnet =0;
-	memset(private_fl_rule_hdl, 0, (IPA_MAX_PRIVATE_SUBNET_ENTRIES + IPA_MAX_MTU_ENTRIES) * sizeof(uint32_t));
-	memset(ipv6_prefix_flt_rule_hdl, 0, (IPA_MAX_IPV6_NO_OFFLOAD_PREFIX_FLT_RULE + IPA_MAX_MTU_ENTRIES)  * sizeof(uint32_t));
-	memset(ipv6_icmp_flt_rule_hdl, 0, NUM_IPV6_ICMP_FLT_RULE * sizeof(uint32_t));
+	memset(private_fl_rule_hdl, 0, sizeof(private_fl_rule_hdl));
+	memset(ipv6_prefix_flt_rule_hdl, 0, sizeof(ipv6_prefix_flt_rule_hdl));
+	memset(ipv6_icmp_flt_rule_hdl, 0, sizeof(ipv6_icmp_flt_rule_hdl));
 	memset(modem_ul_v4_set, 0, sizeof(modem_ul_v4_set));
 	memset(modem_ul_v6_set, 0, sizeof(modem_ul_v6_set));
 	memset(ipv6_prefix, 0, sizeof(ipv6_prefix));
@@ -568,7 +568,7 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 						if (j == 0) {
 							idx = 0;
 						} else {
-							IPACMDBG_H("Interface is non vlan, dont install rule with index 2");
+							IPACMDBG_H("Interface is non vlan, dont install rule with index 2\n");
 							continue;
 						}
 					} else {
@@ -1249,7 +1249,7 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 				if(IPACM_Iface::ipacmcfg->mac_addr_in_blacklist(data->mac_addr))
 					handle_eth_mac_flt_conn_disc(data->mac_addr, false);
 
-				delete_client_qos_rule(data->mac_addr, vlan_id);
+				delete_client_qos_rule(data->mac_addr, vlan_id, data->iptype, NULL);
 				IPACMDBG_H("LAN iface delete client \n");
 				handle_eth_client_down_evt(data->mac_addr, vlan_id, data);
 				IPACMDBG_H("Posting IPA_ETH_BRIDGE_CLIENT_DEL for Static IP MaC:0x%x iface_name: %s\n",data->mac_addr,data->iface_name);
@@ -1347,8 +1347,7 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 							handle_pdn_dscp_eth_client_route_rule(data->mac_addr, data->iptype, 0, 0, 0, 0, data->ipv6_addr);
 						}
 #endif
-						install_all_qos_route_rule(data->mac_addr, 0);
-						install_default_qos_rt_rules(data->mac_addr, 0, data->iptype);
+						install_all_qos_route_rule(data->mac_addr, 0, data->ipv6_addr);
 						IPACM_Iface::ipacmcfg->AddNatIfaces(data->iface_name);
 						/* Add NAT rules after RT rules are set */
 						HandleNeighIpAddrAddEvt(data);
@@ -1494,7 +1493,11 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 						}
 					}
 #endif
-					delete_client_qos_rule(data->mac_addr, vlan_id);
+					/* Delete QOS rules. */
+					if (IPACM_Iface::ipacmcfg->ipacm_qos_enable) {
+						delete_client_qos_rule(data->mac_addr, vlan_id, IPA_IP_v4, NULL);
+						delete_client_qos_rule(data->mac_addr, vlan_id, IPA_IP_v6, NULL);
+					}
 				}
 #ifdef FEATURE_L2TP
 				else
@@ -2000,11 +2003,13 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 #ifdef FEATURE_EoGRE
 	case IPA_HANDLE_EoGRE_UP:
 		IPACMDBG_H("Received and will process an IPA_HANDLE_EoGRE_UP\n");
+		IPACM_Iface::ipacmcfg->eogre_enabled = true;
 		eogre_up();
 		break;
 
 	case IPA_HANDLE_EoGRE_DOWN:
 		IPACMDBG_H("Received and will process an IPA_HANDLE_EoGRE_DOWN\n");
+		IPACM_Iface::ipacmcfg->eogre_enabled = false;
 		eogre_down();
 		break;
 #endif
@@ -2048,7 +2053,8 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 			for (int cnt = 0; cnt < num_eth_client; cnt++)
 			{
 				IPACMDBG_H("Install qos for clnt idx %d with vlan id %d\n", cnt, get_client_memptr(eth_client, cnt)->vlan_id);
-				install_all_qos_route_rule(get_client_memptr(eth_client, cnt)->mac, get_client_memptr(eth_client, cnt)->vlan_id);
+				install_all_qos_route_rule(get_client_memptr(eth_client, cnt)->mac,
+					get_client_memptr(eth_client, cnt)->vlan_id, NULL);
 			}
 			break;
 		}
@@ -2072,19 +2078,12 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 					return;
 				}
 
-				for (int v6_num = 0; v6_num < IPV6_NUM_ADDR; v6_num++)
-				{
-					IPACMDBG_H("QOS is v6 set %d for v6_num %d hdl %d\n",
-							   qos_param->qos_client_list[i].route_rule_set_v6, v6_num, qos_param->qos_client_list[i].qos_rt_rule_hdl_v6[v6_num]);
-					if (qos_param->qos_client_list[i].route_rule_set_v6 &&
-						(m_routing.DeleteRoutingHdl(qos_param->qos_client_list[i].qos_rt_rule_hdl_v6[v6_num], IPA_IP_v6) == false)) {
-						return;
-					}
-					if (qos_param->qos_client_list[i].route_rule_set_v6 &&
-						(m_routing.DeleteRoutingHdl(qos_param->qos_client_list[i].qos_rt_rule_hdl_wan_v6[v6_num], IPA_IP_v6) == false)) {
-						return;
-					}
-				}
+				IPACMDBG_H("QOS is v6 set %d hdl %d\n",
+					qos_param->qos_client_list[i].route_rule_set_v6,
+					qos_param->qos_client_list[i].qos_rt_rule_hdl_v6);
+				if (qos_param->qos_client_list[i].route_rule_set_v6 &&
+					(m_routing.DeleteRoutingHdl(qos_param->qos_client_list[i].qos_rt_rule_hdl_v6, IPA_IP_v6) == false))
+					return;
 			}
 
 			break;
@@ -2335,7 +2334,7 @@ int IPACM_Lan::add_mac_flt_blacklist_rule(uint8_t *mac_addr, ipa_ip_type iptype,
 			if (j == 0) {
 				idx = 0;
 			} else {
-				IPACMDBG_H("Interface is non vlan, dont install rule with index 2");
+				IPACMDBG_H("Interface is non vlan, dont install rule with index 2\n");
 				continue;
 			}
 		} else {
@@ -2873,7 +2872,7 @@ int IPACM_Lan::del_ul_flt_rules(enum ipa_ip_type iptype)
 			if (j == 0) {
 				idx = 0;
 			} else {
-				IPACMDBG_H("Interface is non vlan, dont install rule with index 2");
+				IPACMDBG_H("Interface is non vlan, dont install rule with index 2\n");
 				continue;
 			}
 		} else {
@@ -2904,7 +2903,7 @@ int IPACM_Lan::del_ul_flt_rules(enum ipa_ip_type iptype)
 				IPACM_Iface::ipacmcfg->decreaseFltRuleCount(rx_prop->rx[idx].src_pipe, IPA_IP_v4, num_wan_ul_fl_rule_v4[j]);
 
 				memset(wan_ul_fl_rule_hdl_v4[j], 0, MAX_WAN_UL_FILTER_RULES * sizeof(uint32_t));
-				memset(xlat_ctx.ul_rule_id_hdl_map, 0, MAX_WAN_UL_FILTER_RULES * sizeof(rule_id_hdl_map));
+				memset(xlat_ctx.ul_rule_id_hdl_map[j], 0, MAX_WAN_UL_FILTER_RULES * sizeof(rule_id_hdl_map));
 				num_wan_ul_fl_rule_v4[j] = 0;
 			}
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
@@ -3099,8 +3098,7 @@ int IPACM_Lan::handle_vlan_neighbor(ipacm_event_data_all *data)
 	/* TODO for VLAN: Need to return success above and handle the ext router info here */
 
 	handle_eth_client_route_rule(data->mac_addr, data->iptype, vlan_id);
-	install_all_qos_route_rule(data->mac_addr, vlan_id);
-	install_default_qos_rt_rules(data->mac_addr, vlan_id, data->iptype);
+	install_all_qos_route_rule(data->mac_addr, vlan_id, data->ipv6_addr);
 
 	if(IPACM_Iface::ipacmcfg->ipacm_mpdn_enable) {
 		/* Add NAT rules after ipv4 RT rules are set */
@@ -3637,6 +3635,9 @@ int IPACM_Lan::handle_del_ipv6_addr(ipacm_event_data_all *data)
 
 		IPACMDBG_H("ipv6 address got: 0x%x:%x:%x:%x\n",
 			data->ipv6_addr[0], data->ipv6_addr[1], data->ipv6_addr[2], data->ipv6_addr[3]);
+		/* Delete QOS rules. */
+		if (IPACM_Iface::ipacmcfg->ipacm_qos_enable)
+			delete_client_qos_rule(data->mac_addr, vlan_id, IPA_IP_v6, data->ipv6_addr);
 		for (it = neigh_cache.begin(); it != neigh_cache.end(); ++it)
 		{
 			if ((it->ipv6_addr[0] == data->ipv6_addr[0]) && (it->ipv6_addr[1] == data->ipv6_addr[1])
@@ -3719,7 +3720,7 @@ int IPACM_Lan::notify_flt_removed(uint8_t mux_id)
 			if (j == 0) {
 				idx = 0;
 			} else {
-				IPACMDBG_H("Interface is non vlan, dont install rule with index 2");
+				IPACMDBG_H("Interface is non vlan, dont install rule with index 2\n");
 				continue;
 			}
 		} else {
@@ -3780,7 +3781,7 @@ int IPACM_Lan::handle_wan_down(bool is_sta_mode)
 			if (j == 0) {
 				idx = 0;
 			} else {
-				IPACMDBG_H("Interface is non vlan, dont install rule with index 2");
+				IPACMDBG_H("Interface is non vlan, dont install rule with index 2\n");
 				continue;
 			}
 		} else {
@@ -3819,6 +3820,8 @@ int IPACM_Lan::handle_addr_evt(ipacm_event_data_addr *data)
 	int num_ipv6_addr;
 	int res = IPACM_SUCCESS;
 	int j = 0;
+	ipacm_cmd_q_data evt_data;
+	ipacm_event_data_fid *data_fid = NULL;
 
 	IPACMDBG_H("set route/filter rule ip-type: %d \n", data->iptype);
 	if (rx_prop == NULL)
@@ -4049,6 +4052,16 @@ int IPACM_Lan::handle_addr_evt(ipacm_event_data_addr *data)
 
 	IPACMDBG_H("finish route/filter rule ip-type: %d, res(%d)\n", data->iptype, res);
 
+	data_fid = (ipacm_event_data_fid *)malloc(sizeof(ipacm_event_data_fid));
+	if(data_fid == NULL)
+	{
+		IPACMERR("unable to allocate memory for IPA_HANDLE_NEW_NEIGH_EVENT data_fid\n");
+	}
+	data_fid->if_index = data->if_index;
+	evt_data.event = IPA_HANDLE_NEW_NEIGH_EVENT;
+	evt_data.evt_data = data_fid;
+	IPACMDBG_H("Posting IPA_HANDLE_NEW_NEIGH_EVENT event:%d\n", evt_data.event);
+	IPACM_EvtDispatcher::PostEvt(&evt_data);
 	/* TODO: get default MTU here instead of using 1500 */
 
 fail:
@@ -4086,7 +4099,7 @@ int IPACM_Lan::handle_private_subnet(ipa_ip_type iptype)
 			if (j == 0) {
 				idx = 0;
 			} else {
-				IPACMDBG_H("Interface is non vlan, dont install rule with index 2");
+				IPACMDBG_H("Interface is non vlan, dont install rule with index 2\n");
 				continue;
 			}
 		} else {
@@ -4348,7 +4361,7 @@ int IPACM_Lan::handle_wan_up(ipa_ip_type ip_type)
 			if (j == 0) {
 				idx = 0;
 			} else {
-				IPACMDBG_H("Interface is non vlan, dont install rule with index 2");
+				IPACMDBG_H("Interface is non vlan, dont install rule with index 2\n");
 				continue;
 			}
 		} else {
@@ -7989,7 +8002,8 @@ uint32_t IPACM_Lan::get_u8_bitmap_from_tc(uint8_t traffic_class)
 
 /*handle qos routing rules */
 int IPACM_Lan::handle_qos_route_rule(uint8_t *client_mac, uint16_t client_vlan_id,
-					ipa_ip_type iptype, list<qos_param_info>::iterator qos_param)
+					ipa_ip_type iptype, list<qos_param_info>::iterator qos_param,
+					uint32_t *ipv6_addr)
 {
 	struct ipa_ioc_add_rt_rule *rt_rule;
 	struct ipa_rt_rule_add *rt_rule_entry;
@@ -8051,7 +8065,7 @@ int IPACM_Lan::handle_qos_route_rule(uint8_t *client_mac, uint16_t client_vlan_i
 			return IPACM_FAILURE;
 		}
 
-		rt_rule->commit = 1;
+		rt_rule->commit = false; /* Install all qos route rules together */
 		rt_rule->num_rules = (uint8_t)NUM;
 		rt_rule->ip = iptype;
 
@@ -8079,6 +8093,15 @@ int IPACM_Lan::handle_qos_route_rule(uint8_t *client_mac, uint16_t client_vlan_i
 
 			IPACMDBG_H("Qos params, protocol %d, src_ip_addr 0x%x, dst_ip_addr 0x%x \n",
 					 qos_param->ip_tup.protocol, qos_param->ip_tup.src_ip_addr, qos_param->ip_tup.dst_ip_addr);
+			IPACMERR("Qos params, src ipv6 addr: 0x%x:%x:%x:%x, dst ipv6 addr:0x%x:%x:%x:%x\n",
+				qos_param->ip_tup.src_v6_ip_addr[0],
+				qos_param->ip_tup.src_v6_ip_addr[1],
+				qos_param->ip_tup.src_v6_ip_addr[2],
+				qos_param->ip_tup.src_v6_ip_addr[3],
+				qos_param->ip_tup.dst_v6_ip_addr[0],
+				qos_param->ip_tup.dst_v6_ip_addr[1],
+				qos_param->ip_tup.dst_v6_ip_addr[2],
+				qos_param->ip_tup.dst_v6_ip_addr[3]);
 
 			if (!(tx_prop->tx[tx_index].tc_bmap & get_u8_bitmap_from_tc(qos_param->traffic_class)))
 			{
@@ -8219,251 +8242,178 @@ int IPACM_Lan::handle_qos_route_rule(uint8_t *client_mac, uint16_t client_vlan_i
 			}
 			else
 			{
-				for (auto it = rt_hdl_v6_list[eth_index].begin(); it != rt_hdl_v6_list[eth_index].end(); ++it)
+				if (get_client_memptr(eth_client, eth_index)->ipv6_header_set &&
+						get_client_memptr(eth_client, eth_index)->hdr_hdl_v6)
 				{
-					if (get_client_memptr(eth_client, eth_index)->ipv6_header_set &&
-							it->second.route_rule_set_v6)
-					{
-						IPACMDBG_H("client-index(%d): v6 header handle:(0x%x), v6 addr : 0x%08x:%08x:%08x:%08x\n",
+					IPACMDBG_H("client(%d): v6 header handle:(0x%x)\n",
 						eth_index,
-						get_client_memptr(eth_client, eth_index)->hdr_hdl_v6,
-						it->first[0], it->first[1], it->first[2], it->first[3]);
+						get_client_memptr(eth_client, eth_index)->hdr_hdl_v6);
 
-						/* v6 LAN_RT_TBL */
-						strlcpy(rt_rule->rt_tbl_name,
-							IPACM_Iface::ipacmcfg->rt_tbl_v6.name,
-							sizeof(rt_rule->rt_tbl_name));
-						rt_rule->rt_tbl_name[IPA_RESOURCE_NAME_MAX - 1] = '\0';
-						/* Support QCMAP LAN traffic feature, send to A5 */
-						rt_rule_entry->rule.dst = IPA_CLIENT_APPS_LAN_CONS;
-						memset(&rt_rule_entry->rule.attrib, 0, sizeof(rt_rule_entry->rule.attrib));
-						rt_rule_entry->rule.hdr_hdl = 0;
+					/*Copy same rule to v6 WAN RT TBL*/
+					strlcpy(rt_rule->rt_tbl_name,
+						IPACM_Iface::ipacmcfg->rt_tbl_wan_v6.name,
+						sizeof(rt_rule->rt_tbl_name));
+					rt_rule->rt_tbl_name[IPA_RESOURCE_NAME_MAX - 1] = '\0';
+					/* Downlink traffic from Wan iface, directly through IPA */
+					rt_rule_entry->rule.dst = tx_prop->tx[tx_index].dst_pipe;
+					memcpy(&rt_rule_entry->rule.attrib,
+						&tx_prop->tx[tx_index].attrib,
+						sizeof(rt_rule_entry->rule.attrib));
+					rt_rule_entry->rule.hdr_hdl =
+						get_client_memptr(eth_client, eth_index)->hdr_hdl_v6;
 
-						//Client ip is required to differentiate different clients, else hdr collision will happen
+					if ((ipv6_addr[0] || ipv6_addr[1] || ipv6_addr[2] ||
+						ipv6_addr[3]))
+					{
 						rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_DST_ADDR;
-						rt_rule_entry->rule.attrib.u.v6.dst_addr[0] = it->first[0];
-						rt_rule_entry->rule.attrib.u.v6.dst_addr[1] = it->first[1];
-						rt_rule_entry->rule.attrib.u.v6.dst_addr[2] = it->first[2];
-						rt_rule_entry->rule.attrib.u.v6.dst_addr[3] = it->first[3];
+						rt_rule_entry->rule.attrib.u.v6.dst_addr[0] =
+							ipv6_addr[0];
+						rt_rule_entry->rule.attrib.u.v6.dst_addr[1] =
+							ipv6_addr[1];
+						rt_rule_entry->rule.attrib.u.v6.dst_addr[2] =
+							ipv6_addr[2];
+						rt_rule_entry->rule.attrib.u.v6.dst_addr[3] =
+							ipv6_addr[3];
 						rt_rule_entry->rule.attrib.u.v6.dst_addr_mask[0] = 0xffffffff;
 						rt_rule_entry->rule.attrib.u.v6.dst_addr_mask[1] = 0xffffffff;
 						rt_rule_entry->rule.attrib.u.v6.dst_addr_mask[2] = 0xffffffff;
 						rt_rule_entry->rule.attrib.u.v6.dst_addr_mask[3] = 0xffffffff;
-
-						// IP Tuple V6 params
-						if (qos_param->ip_tup.src_v6_ip_addr[0])
-						{
-							rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_SRC_ADDR;
-							rt_rule_entry->rule.attrib.u.v6.src_addr[0] = qos_param->ip_tup.src_v6_ip_addr[0];
-							rt_rule_entry->rule.attrib.u.v6.src_addr[1] = qos_param->ip_tup.src_v6_ip_addr[1];
-							rt_rule_entry->rule.attrib.u.v6.src_addr[2] = qos_param->ip_tup.src_v6_ip_addr[2];
-							rt_rule_entry->rule.attrib.u.v6.src_addr[3] = qos_param->ip_tup.src_v6_ip_addr[3];
-							rt_rule_entry->rule.attrib.u.v6.src_addr_mask[0] = qos_param->ip_tup.src_v6_sub_mask[0];
-							rt_rule_entry->rule.attrib.u.v6.src_addr_mask[1] = qos_param->ip_tup.src_v6_sub_mask[1];
-							rt_rule_entry->rule.attrib.u.v6.src_addr_mask[2] = qos_param->ip_tup.src_v6_sub_mask[2];
-							rt_rule_entry->rule.attrib.u.v6.src_addr_mask[3] = qos_param->ip_tup.src_v6_sub_mask[3];
-						}
-
-						if (qos_param->ip_tup.dst_v6_ip_addr[0])
-						{
-							if (qos_param->ip_tup.dst_v6_ip_addr[0] != it->first[0] ||
-								qos_param->ip_tup.dst_v6_ip_addr[1] != it->first[1] ||
-								qos_param->ip_tup.dst_v6_ip_addr[2] != it->first[2] ||
-								qos_param->ip_tup.dst_v6_ip_addr[3] != it->first[3])
-							{
-								IPACMERR("Mismatched destination qos ip addr 0x%x:%x:%x:%x with client ip 0x%x:%x:%x:%x\n",
-										 qos_param->ip_tup.dst_v6_ip_addr[0], qos_param->ip_tup.dst_v6_ip_addr[1],
-										 qos_param->ip_tup.dst_v6_ip_addr[2], qos_param->ip_tup.dst_v6_ip_addr[3],
-										 it->first[0],
-										 it->first[1],
-										 it->first[2],
-										 it->first[3]);
-								continue;
-							}
-						}
-
-
-						// If single port is provided
-						if (qos_param->ip_tup.sport_start && (qos_param->ip_tup.sport_start == qos_param->ip_tup.sport_end))
-						{
-							rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_SRC_PORT;
-							rt_rule_entry->rule.attrib.src_port = qos_param->ip_tup.sport_start;
-						}
-						else if (qos_param->ip_tup.sport_start && qos_param->ip_tup.sport_end) // If port range is provided
-						{
-							rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_SRC_PORT_RANGE;
-							rt_rule_entry->rule.attrib.src_port_lo = qos_param->ip_tup.sport_start;
-							rt_rule_entry->rule.attrib.src_port_hi = qos_param->ip_tup.sport_end;
-						}
-
-						// If single port is provided
-						if (qos_param->ip_tup.dport_start && (qos_param->ip_tup.dport_start == qos_param->ip_tup.dport_end))
-						{
-							rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_DST_PORT;
-							rt_rule_entry->rule.attrib.dst_port = qos_param->ip_tup.dport_start;
-						}
-						else if (qos_param->ip_tup.dport_start && qos_param->ip_tup.dport_end)
-						{
-							rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_DST_PORT_RANGE;
-							rt_rule_entry->rule.attrib.dst_port_lo = qos_param->ip_tup.dport_start;
-							rt_rule_entry->rule.attrib.dst_port_hi = qos_param->ip_tup.dport_end;
-						}
-
-						if (qos_param->vlan_id)
-						{
-							rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_DST_ADDR;
-							rt_rule_entry->rule.attrib.u.v6.dst_addr[0] = it->first[0];
-							rt_rule_entry->rule.attrib.u.v6.dst_addr[1] = it->first[1];
-							rt_rule_entry->rule.attrib.u.v6.dst_addr[2] = it->first[2];
-							rt_rule_entry->rule.attrib.u.v6.dst_addr[3] = it->first[3];
-							rt_rule_entry->rule.attrib.u.v6.dst_addr_mask[0] = 0xffffffff;
-							rt_rule_entry->rule.attrib.u.v6.dst_addr_mask[1] = 0xffffffff;
-							rt_rule_entry->rule.attrib.u.v6.dst_addr_mask[2] = 0xffffffff;
-							rt_rule_entry->rule.attrib.u.v6.dst_addr_mask[3] = 0xffffffff;
-						}
-
-						if (qos_param->dscp)
-						{
-							rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_TOS;
-							rt_rule_entry->rule.attrib.tos_value = qos_param->dscp;
-							rt_rule_entry->rule.attrib.tos_mask = 0xFF;
-						}
-
-						if (qos_param->pcp)
-						{
-							IPACMERR("QOS param PCP no v6 route rule action from IPA \n");
-						}
-
-	#ifdef FEATURE_IPA_V3
-						rt_rule_entry->rule.hashable = true;
-	#endif
-						if (false == m_routing.AddRoutingRule(rt_rule))
-						{
-							IPACMERR("Routing rule addition failed!\n");
-							free(rt_rule);
-							return IPACM_FAILURE;
-						}
-
-						memset(&new_client_info, 0 , sizeof(new_client_info));
-						new_client_info.qos_rt_rule_hdl_v6[v6_num] = rt_rule->rules[0].rt_rule_hdl;
-
-						IPACMDBG_H("tx:%d, rt rule hdl=%x ip-type: %d\n", tx_index,
-								   new_client_info.qos_rt_rule_hdl_v6[v6_num], iptype);
-
-
-						/*Copy same rule to v6 WAN RT TBL*/
-						strlcpy(rt_rule->rt_tbl_name, IPACM_Iface::ipacmcfg->rt_tbl_wan_v6.name, sizeof(rt_rule->rt_tbl_name));
-						rt_rule->rt_tbl_name[IPA_RESOURCE_NAME_MAX - 1] = '\0';
-						/* Downlink traffic from Wan iface, directly through IPA */
-						rt_rule_entry->rule.dst = tx_prop->tx[tx_index].dst_pipe;
-						memcpy(&rt_rule_entry->rule.attrib,
-							&tx_prop->tx[tx_index].attrib,
-							sizeof(rt_rule_entry->rule.attrib));
-						rt_rule_entry->rule.hdr_hdl = get_client_memptr(eth_client, eth_index)->hdr_hdl_v6;
-
-						// IP Tuple V6 params
-						if (qos_param->ip_tup.src_v6_ip_addr[0])
-						{
-							rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_SRC_ADDR;
-							rt_rule_entry->rule.attrib.u.v6.src_addr[0] = qos_param->ip_tup.src_v6_ip_addr[0];
-							rt_rule_entry->rule.attrib.u.v6.src_addr[1] = qos_param->ip_tup.src_v6_ip_addr[1];
-							rt_rule_entry->rule.attrib.u.v6.src_addr[2] = qos_param->ip_tup.src_v6_ip_addr[2];
-							rt_rule_entry->rule.attrib.u.v6.src_addr[3] = qos_param->ip_tup.src_v6_ip_addr[3];
-							rt_rule_entry->rule.attrib.u.v6.src_addr_mask[0] = qos_param->ip_tup.src_v6_sub_mask[0];
-							rt_rule_entry->rule.attrib.u.v6.src_addr_mask[1] = qos_param->ip_tup.src_v6_sub_mask[1];
-							rt_rule_entry->rule.attrib.u.v6.src_addr_mask[2] = qos_param->ip_tup.src_v6_sub_mask[2];
-							rt_rule_entry->rule.attrib.u.v6.src_addr_mask[3] = qos_param->ip_tup.src_v6_sub_mask[3];
-						}
-
-						if (qos_param->ip_tup.dst_v6_ip_addr[0])
-						{
-							rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_DST_ADDR;
-							rt_rule_entry->rule.attrib.u.v6.dst_addr[0] = qos_param->ip_tup.dst_v6_ip_addr[0];
-							rt_rule_entry->rule.attrib.u.v6.dst_addr[1] = qos_param->ip_tup.dst_v6_ip_addr[1];
-							rt_rule_entry->rule.attrib.u.v6.dst_addr[2] = qos_param->ip_tup.dst_v6_ip_addr[2];
-							rt_rule_entry->rule.attrib.u.v6.dst_addr[3] = qos_param->ip_tup.dst_v6_ip_addr[3];
-							rt_rule_entry->rule.attrib.u.v6.dst_addr_mask[0] = qos_param->ip_tup.dst_v6_sub_mask[0];
-							rt_rule_entry->rule.attrib.u.v6.dst_addr_mask[1] = qos_param->ip_tup.dst_v6_sub_mask[1];
-							rt_rule_entry->rule.attrib.u.v6.dst_addr_mask[2] = qos_param->ip_tup.dst_v6_sub_mask[2];
-							rt_rule_entry->rule.attrib.u.v6.dst_addr_mask[3] = qos_param->ip_tup.dst_v6_sub_mask[3];
-						}
-
-						// If single port is provided
-						if (qos_param->ip_tup.sport_start && (qos_param->ip_tup.sport_start == qos_param->ip_tup.sport_end))
-						{
-							rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_SRC_PORT;
-							rt_rule_entry->rule.attrib.src_port = qos_param->ip_tup.sport_start;
-						}
-						else if (qos_param->ip_tup.sport_start && qos_param->ip_tup.sport_end) // If port range is provided
-						{
-							rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_SRC_PORT_RANGE;
-							rt_rule_entry->rule.attrib.src_port_lo = qos_param->ip_tup.sport_start;
-							rt_rule_entry->rule.attrib.src_port_hi = qos_param->ip_tup.sport_end;
-						}
-
-						// If single port is provided
-						if (qos_param->ip_tup.dport_start && (qos_param->ip_tup.dport_start == qos_param->ip_tup.dport_end))
-						{
-							rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_DST_PORT;
-							rt_rule_entry->rule.attrib.dst_port = qos_param->ip_tup.dport_start;
-						}
-						else if (qos_param->ip_tup.dport_start && qos_param->ip_tup.dport_end)
-						{
-							rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_DST_PORT_RANGE;
-							rt_rule_entry->rule.attrib.dst_port_lo = qos_param->ip_tup.dport_start;
-							rt_rule_entry->rule.attrib.dst_port_hi = qos_param->ip_tup.dport_end;
-						}
-
-						if (qos_param->vlan_id)
-						{
-							rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_DST_ADDR;
-							rt_rule_entry->rule.attrib.u.v6.dst_addr[0] = it->first[0];
-							rt_rule_entry->rule.attrib.u.v6.dst_addr[1] = it->first[1];
-							rt_rule_entry->rule.attrib.u.v6.dst_addr[2] = it->first[2];
-							rt_rule_entry->rule.attrib.u.v6.dst_addr[3] = it->first[3];
-							rt_rule_entry->rule.attrib.u.v6.dst_addr_mask[0] = 0xffffffff;
-							rt_rule_entry->rule.attrib.u.v6.dst_addr_mask[1] = 0xffffffff;
-							rt_rule_entry->rule.attrib.u.v6.dst_addr_mask[2] = 0xffffffff;
-							rt_rule_entry->rule.attrib.u.v6.dst_addr_mask[3] = 0xffffffff;
-						}
-
-						if (qos_param->dscp)
-						{
-							rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_TOS;
-							rt_rule_entry->rule.attrib.tos_value = qos_param->dscp;
-							rt_rule_entry->rule.attrib.tos_mask = 0xFF;
-						}
-
-						if (qos_param->pcp)
-						{
-							IPACMERR("QOS param PCP no v6 route rule action from IPA \n");
-						}
-
-	#ifdef FEATURE_IPA_V3
-						rt_rule_entry->rule.hashable = true;
-	#endif
-						if (false == m_routing.AddRoutingRule(rt_rule))
-						{
-							IPACMERR("Routing rule addition failed!\n");
-							free(rt_rule);
-							return IPACM_FAILURE;
-						}
-
-						new_client_info.qos_rt_rule_hdl_wan_v6[v6_num] = rt_rule->rules[0].rt_rule_hdl;
-						new_client_info.route_rule_set_v6 = true;
-						new_client_info.v6_ip_addr[v6_num][0] = rt_rule_entry->rule.attrib.u.v6.dst_addr[0];
-						new_client_info.v6_ip_addr[v6_num][1] = rt_rule_entry->rule.attrib.u.v6.dst_addr[1];
-						new_client_info.v6_ip_addr[v6_num][2] = rt_rule_entry->rule.attrib.u.v6.dst_addr[2];
-						new_client_info.v6_ip_addr[v6_num][3] = rt_rule_entry->rule.attrib.u.v6.dst_addr[3];
-
-						memcpy(new_client_info.mac, get_client_memptr(eth_client, eth_index)->mac, IPA_MAC_ADDR_SIZE);
-
-						IPACMDBG_H("tx:%d, rt rule hdl=%x ip-type: %d\n", tx_index,
-								   new_client_info.qos_rt_rule_hdl_wan_v6[v6_num], iptype);
 					}
+
+					// IP Tuple V6 params
+					if (qos_param->ip_tup.src_v6_ip_addr[0] ||
+						qos_param->ip_tup.src_v6_ip_addr[1])
+					{
+						rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_SRC_ADDR;
+						rt_rule_entry->rule.attrib.u.v6.src_addr[0] =
+							qos_param->ip_tup.src_v6_ip_addr[0];
+						rt_rule_entry->rule.attrib.u.v6.src_addr[1] =
+							qos_param->ip_tup.src_v6_ip_addr[1];
+						rt_rule_entry->rule.attrib.u.v6.src_addr[2] =
+							qos_param->ip_tup.src_v6_ip_addr[2];
+						rt_rule_entry->rule.attrib.u.v6.src_addr[3] =
+							qos_param->ip_tup.src_v6_ip_addr[3];
+						rt_rule_entry->rule.attrib.u.v6.src_addr_mask[0] =
+							qos_param->ip_tup.src_v6_sub_mask[0];
+						rt_rule_entry->rule.attrib.u.v6.src_addr_mask[1] =
+							qos_param->ip_tup.src_v6_sub_mask[1];
+						rt_rule_entry->rule.attrib.u.v6.src_addr_mask[2] =
+							qos_param->ip_tup.src_v6_sub_mask[2];
+						rt_rule_entry->rule.attrib.u.v6.src_addr_mask[3] =
+							qos_param->ip_tup.src_v6_sub_mask[3];
+					}
+
+					if (qos_param->ip_tup.dst_v6_ip_addr[0] ||
+						qos_param->ip_tup.dst_v6_ip_addr[1])
+					{
+						rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_DST_ADDR;
+						rt_rule_entry->rule.attrib.u.v6.dst_addr[0] =
+							qos_param->ip_tup.dst_v6_ip_addr[0];
+						rt_rule_entry->rule.attrib.u.v6.dst_addr[1] =
+							qos_param->ip_tup.dst_v6_ip_addr[1];
+						rt_rule_entry->rule.attrib.u.v6.dst_addr[2] =
+							qos_param->ip_tup.dst_v6_ip_addr[2];
+						rt_rule_entry->rule.attrib.u.v6.dst_addr[3] =
+							qos_param->ip_tup.dst_v6_ip_addr[3];
+						rt_rule_entry->rule.attrib.u.v6.dst_addr_mask[0] =
+							qos_param->ip_tup.dst_v6_sub_mask[0];
+						rt_rule_entry->rule.attrib.u.v6.dst_addr_mask[1] =
+							qos_param->ip_tup.dst_v6_sub_mask[1];
+						rt_rule_entry->rule.attrib.u.v6.dst_addr_mask[2] =
+							qos_param->ip_tup.dst_v6_sub_mask[2];
+						rt_rule_entry->rule.attrib.u.v6.dst_addr_mask[3] =
+							qos_param->ip_tup.dst_v6_sub_mask[3];
+					}
+
+					// If single port is provided
+					if (qos_param->ip_tup.sport_start &&
+						(qos_param->ip_tup.sport_start == qos_param->ip_tup.sport_end))
+					{
+						rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_SRC_PORT;
+						rt_rule_entry->rule.attrib.src_port = qos_param->ip_tup.sport_start;
+					}
+					else if (qos_param->ip_tup.sport_start &&
+						qos_param->ip_tup.sport_end) // If port range is provided
+					{
+						rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_SRC_PORT_RANGE;
+						rt_rule_entry->rule.attrib.src_port_lo = qos_param->ip_tup.sport_start;
+						rt_rule_entry->rule.attrib.src_port_hi = qos_param->ip_tup.sport_end;
+					}
+
+					// If single port is provided
+					if (qos_param->ip_tup.dport_start &&
+						(qos_param->ip_tup.dport_start == qos_param->ip_tup.dport_end))
+					{
+						rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_DST_PORT;
+						rt_rule_entry->rule.attrib.dst_port = qos_param->ip_tup.dport_start;
+					}
+					else if (qos_param->ip_tup.dport_start && qos_param->ip_tup.dport_end)
+					{
+						rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_DST_PORT_RANGE;
+						rt_rule_entry->rule.attrib.dst_port_lo = qos_param->ip_tup.dport_start;
+						rt_rule_entry->rule.attrib.dst_port_hi = qos_param->ip_tup.dport_end;
+					}
+
+					if (qos_param->vlan_id)
+					{
+						rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_DST_ADDR;
+						rt_rule_entry->rule.attrib.u.v6.dst_addr[0] =
+							ipv6_addr[0];
+						rt_rule_entry->rule.attrib.u.v6.dst_addr[1] =
+							ipv6_addr[1];
+						rt_rule_entry->rule.attrib.u.v6.dst_addr[2] =
+							ipv6_addr[2];
+						rt_rule_entry->rule.attrib.u.v6.dst_addr[3] =
+							ipv6_addr[3];
+						rt_rule_entry->rule.attrib.u.v6.dst_addr_mask[0] = 0xffffffff;
+						rt_rule_entry->rule.attrib.u.v6.dst_addr_mask[1] = 0xffffffff;
+						rt_rule_entry->rule.attrib.u.v6.dst_addr_mask[2] = 0xffffffff;
+						rt_rule_entry->rule.attrib.u.v6.dst_addr_mask[3] = 0xffffffff;
+					}
+
+					if (qos_param->dscp)
+					{
+						rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_TOS;
+						rt_rule_entry->rule.attrib.tos_value = qos_param->dscp;
+						rt_rule_entry->rule.attrib.tos_mask = 0xFF;
+					}
+
+					if (qos_param->pcp)
+					{
+						IPACMERR("QOS param PCP no v6 route rule action from IPA \n");
+					}
+
+#ifdef FEATURE_IPA_V3
+					rt_rule_entry->rule.hashable = true;
+#endif
+					if (false == m_routing.AddRoutingRule(rt_rule))
+					{
+						IPACMERR("Routing rule addition failed!\n");
+						free(rt_rule);
+						return IPACM_FAILURE;
+					}
+
+					new_client_info.qos_rt_rule_hdl_v6 = rt_rule->rules[0].rt_rule_hdl;
+					new_client_info.route_rule_set_v6 = true;
+
+					new_client_info.v6_ip_addr[0] =
+						rt_rule_entry->rule.attrib.u.v6.dst_addr[0];
+					new_client_info.v6_ip_addr[1] =
+						rt_rule_entry->rule.attrib.u.v6.dst_addr[1];
+					new_client_info.v6_ip_addr[2] =
+						rt_rule_entry->rule.attrib.u.v6.dst_addr[2];
+					new_client_info.v6_ip_addr[3] =
+						rt_rule_entry->rule.attrib.u.v6.dst_addr[3];
+
+					memcpy(new_client_info.mac,
+						get_client_memptr(eth_client, eth_index)->mac,
+						IPA_MAC_ADDR_SIZE);
+
+					IPACMDBG_H("tx:%d, rt rule hdl=%x ip-type: %d\n", tx_index,
+							   new_client_info.qos_rt_rule_hdl_v6, iptype);
+					qos_param->qos_client_list.push_front(new_client_info);
+					qos_param->client_cnt++;
 				}
-				qos_param->qos_client_list.push_front(new_client_info);
-				qos_param->client_cnt++;
 			}
 
 		} /* end of for loop */
@@ -8477,7 +8427,7 @@ int IPACM_Lan::handle_qos_route_rule(uint8_t *client_mac, uint16_t client_vlan_i
 /*handle qos routing rules for v2*/
 int IPACM_Lan::handle_qos_route_rule_ext_v2(uint8_t *client_mac,
 	uint16_t client_vlan_id, ipa_ip_type iptype,
-	list<qos_param_info>::iterator qos_param)
+	list<qos_param_info>::iterator qos_param, uint32_t *ipv6_addr)
 {
 	struct ipa_ioc_add_rt_rule_ext_v2 *rt_rule;
 	struct ipa_rt_rule_add_ext_v2 *rt_rule_entry;
@@ -8587,6 +8537,16 @@ int IPACM_Lan::handle_qos_route_rule_ext_v2(uint8_t *client_mac,
 			IPACMDBG_H("Qos params, protocol %d, src_ip_addr 0x%x, dst_ip_addr"
 				" 0x%x \n", qos_param->ip_tup.protocol,
 				qos_param->ip_tup.src_ip_addr, qos_param->ip_tup.dst_ip_addr);
+
+			IPACMERR("Qos params, src ipv6 addr: 0x%x:%x:%x:%x, dst ipv6 addr:0x%x:%x:%x:%x\n",
+				qos_param->ip_tup.src_v6_ip_addr[0],
+				qos_param->ip_tup.src_v6_ip_addr[1],
+				qos_param->ip_tup.src_v6_ip_addr[2],
+				qos_param->ip_tup.src_v6_ip_addr[3],
+				qos_param->ip_tup.dst_v6_ip_addr[0],
+				qos_param->ip_tup.dst_v6_ip_addr[1],
+				qos_param->ip_tup.dst_v6_ip_addr[2],
+				qos_param->ip_tup.dst_v6_ip_addr[3]);
 
 			if (!(tx_prop->tx[tx_index].tc_bmap &
 				get_u8_bitmap_from_tc(qos_param->traffic_class)))
@@ -8749,282 +8709,184 @@ int IPACM_Lan::handle_qos_route_rule_ext_v2(uint8_t *client_mac,
 			}
 			else
 			{
-				for (auto it = rt_hdl_v6_list[eth_index].begin(); it != rt_hdl_v6_list[eth_index].end(); ++it)
+				if (get_client_memptr(eth_client, eth_index)->ipv6_header_set &&
+						get_client_memptr(eth_client, eth_index)->hdr_hdl_v6)
 				{
-					if (get_client_memptr(eth_client, eth_index)->ipv6_header_set &&
-							it->second.route_rule_set_v6)
-					{
-						IPACMDBG_H("client-index(%d): v6 header handle:(0x%x), v6 addr : 0x%08x:%08x:%08x:%08x\n",
+					IPACMDBG_H("client(%d): v6 header handle:(0x%x)\n",
 						eth_index,
-						get_client_memptr(eth_client, eth_index)->hdr_hdl_v6,
-						it->first[0], it->first[1], it->first[2], it->first[3]);
+						get_client_memptr(eth_client, eth_index)->hdr_hdl_v6);
 
-						/* v6 LAN_RT_TBL */
-						strlcpy(rt_rule->rt_tbl_name,
-							IPACM_Iface::ipacmcfg->rt_tbl_v6.name,
-							sizeof(rt_rule->rt_tbl_name));
-						rt_rule->rt_tbl_name[IPA_RESOURCE_NAME_MAX - 1] = '\0';
-						/* Support QCMAP LAN traffic feature, send to A5 */
-						rt_rule_entry->rule.dst = IPA_CLIENT_APPS_LAN_CONS;
-						memset(&rt_rule_entry->rule.attrib, 0,
-							sizeof(rt_rule_entry->rule.attrib));
-						rt_rule_entry->rule.hdr_hdl = 0;
-						
-						rt_rule_entry->rule.enable_stats = true;
-						rt_rule_entry->rule.cnt_idx =
-							get_client_memptr(eth_client, eth_index)->dl_cnt_idx;
-						IPACMDBG_H("eth_client v6 dl index (%d) \n", rt_rule_entry->rule.cnt_idx);
+					/*Copy same rule to v6 WAN RT TBL*/
+					strlcpy(rt_rule->rt_tbl_name,
+						IPACM_Iface::ipacmcfg->rt_tbl_wan_v6.name,
+						sizeof(rt_rule->rt_tbl_name));
+					rt_rule->rt_tbl_name[IPA_RESOURCE_NAME_MAX - 1] = '\0';
+					/* Downlink traffic from Wan iface, directly through IPA */
+					rt_rule_entry->rule.dst = tx_prop->tx[tx_index].dst_pipe;
+					memcpy(&rt_rule_entry->rule.attrib,
+						&tx_prop->tx[tx_index].attrib,
+						sizeof(rt_rule_entry->rule.attrib));
+					rt_rule_entry->rule.hdr_hdl =
+						get_client_memptr(eth_client, eth_index)->hdr_hdl_v6;
 
+					rt_rule_entry->rule.enable_stats = true;
+					rt_rule_entry->rule.cnt_idx =
+						get_client_memptr(eth_client, eth_index)->dl_cnt_idx;
+					IPACMDBG_H("eth_client v6 dl index (%d) \n", rt_rule_entry->rule.cnt_idx);
 
-						//Client ip is required to differentiate different clients, else hdr collision will happen
+					if ((ipv6_addr[0] || ipv6_addr[1] || ipv6_addr[2] ||
+						ipv6_addr[3]))
+					{
 						rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_DST_ADDR;
 						rt_rule_entry->rule.attrib.u.v6.dst_addr[0] =
-							it->first[0];
+							ipv6_addr[0];
 						rt_rule_entry->rule.attrib.u.v6.dst_addr[1] =
-							it->first[1];
+							ipv6_addr[1];
 						rt_rule_entry->rule.attrib.u.v6.dst_addr[2] =
-							it->first[2];
+							ipv6_addr[2];
 						rt_rule_entry->rule.attrib.u.v6.dst_addr[3] =
-							it->first[3];
+							ipv6_addr[3];
 						rt_rule_entry->rule.attrib.u.v6.dst_addr_mask[0] = 0xffffffff;
 						rt_rule_entry->rule.attrib.u.v6.dst_addr_mask[1] = 0xffffffff;
 						rt_rule_entry->rule.attrib.u.v6.dst_addr_mask[2] = 0xffffffff;
 						rt_rule_entry->rule.attrib.u.v6.dst_addr_mask[3] = 0xffffffff;
+					}
 
-						// IP Tuple V6 params
-						if (qos_param->ip_tup.src_v6_ip_addr[0])
-						{
-							rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_SRC_ADDR;
-							rt_rule_entry->rule.attrib.u.v6.src_addr[0] =
-								qos_param->ip_tup.src_v6_ip_addr[0];
-							rt_rule_entry->rule.attrib.u.v6.src_addr[1] =
-								qos_param->ip_tup.src_v6_ip_addr[1];
-							rt_rule_entry->rule.attrib.u.v6.src_addr[2] =
-								qos_param->ip_tup.src_v6_ip_addr[2];
-							rt_rule_entry->rule.attrib.u.v6.src_addr[3] =
-								qos_param->ip_tup.src_v6_ip_addr[3];
-							rt_rule_entry->rule.attrib.u.v6.src_addr_mask[0] =
-								qos_param->ip_tup.src_v6_sub_mask[0];
-							rt_rule_entry->rule.attrib.u.v6.src_addr_mask[1] =
-								qos_param->ip_tup.src_v6_sub_mask[1];
-							rt_rule_entry->rule.attrib.u.v6.src_addr_mask[2] =
-								qos_param->ip_tup.src_v6_sub_mask[2];
-							rt_rule_entry->rule.attrib.u.v6.src_addr_mask[3] =
-								qos_param->ip_tup.src_v6_sub_mask[3];
-						}
+					// IP Tuple V6 params
+					if (qos_param->ip_tup.src_v6_ip_addr[0] ||
+						qos_param->ip_tup.src_v6_ip_addr[1])
+					{
+						rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_SRC_ADDR;
+						rt_rule_entry->rule.attrib.u.v6.src_addr[0] =
+							qos_param->ip_tup.src_v6_ip_addr[0];
+						rt_rule_entry->rule.attrib.u.v6.src_addr[1] =
+							qos_param->ip_tup.src_v6_ip_addr[1];
+						rt_rule_entry->rule.attrib.u.v6.src_addr[2] =
+							qos_param->ip_tup.src_v6_ip_addr[2];
+						rt_rule_entry->rule.attrib.u.v6.src_addr[3] =
+							qos_param->ip_tup.src_v6_ip_addr[3];
+						rt_rule_entry->rule.attrib.u.v6.src_addr_mask[0] =
+							qos_param->ip_tup.src_v6_sub_mask[0];
+						rt_rule_entry->rule.attrib.u.v6.src_addr_mask[1] =
+							qos_param->ip_tup.src_v6_sub_mask[1];
+						rt_rule_entry->rule.attrib.u.v6.src_addr_mask[2] =
+							qos_param->ip_tup.src_v6_sub_mask[2];
+						rt_rule_entry->rule.attrib.u.v6.src_addr_mask[3] =
+							qos_param->ip_tup.src_v6_sub_mask[3];
+					}
 
-						if (qos_param->ip_tup.dst_v6_ip_addr[0])
-						{
-							if (qos_param->ip_tup.dst_v6_ip_addr[0] !=
-									it->first[0] ||
-								qos_param->ip_tup.dst_v6_ip_addr[1] !=
-									it->first[1] ||
-								qos_param->ip_tup.dst_v6_ip_addr[2] !=
-									it->first[2] ||
-								qos_param->ip_tup.dst_v6_ip_addr[3] !=
-									it->first[3])
-							{
-								IPACMERR("Mismatched destination qos ip addr 0x%x:%x:%x:%x with client ip 0x%x:%x:%x:%x\n",
-										 qos_param->ip_tup.dst_v6_ip_addr[0], qos_param->ip_tup.dst_v6_ip_addr[1],
-										 qos_param->ip_tup.dst_v6_ip_addr[2], qos_param->ip_tup.dst_v6_ip_addr[3],
-										 it->first[0],
-										 it->first[1],
-										 it->first[2],
-										 it->first[3]);
-								continue;
-							}
-						}
+					if (qos_param->ip_tup.dst_v6_ip_addr[0] ||
+						qos_param->ip_tup.dst_v6_ip_addr[1])
+					{
+						rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_DST_ADDR;
+						rt_rule_entry->rule.attrib.u.v6.dst_addr[0] =
+							qos_param->ip_tup.dst_v6_ip_addr[0];
+						rt_rule_entry->rule.attrib.u.v6.dst_addr[1] =
+							qos_param->ip_tup.dst_v6_ip_addr[1];
+						rt_rule_entry->rule.attrib.u.v6.dst_addr[2] =
+							qos_param->ip_tup.dst_v6_ip_addr[2];
+						rt_rule_entry->rule.attrib.u.v6.dst_addr[3] =
+							qos_param->ip_tup.dst_v6_ip_addr[3];
+						rt_rule_entry->rule.attrib.u.v6.dst_addr_mask[0] =
+							qos_param->ip_tup.dst_v6_sub_mask[0];
+						rt_rule_entry->rule.attrib.u.v6.dst_addr_mask[1] =
+							qos_param->ip_tup.dst_v6_sub_mask[1];
+						rt_rule_entry->rule.attrib.u.v6.dst_addr_mask[2] =
+							qos_param->ip_tup.dst_v6_sub_mask[2];
+						rt_rule_entry->rule.attrib.u.v6.dst_addr_mask[3] =
+							qos_param->ip_tup.dst_v6_sub_mask[3];
+					}
 
+					// If single port is provided
+					if (qos_param->ip_tup.sport_start &&
+						(qos_param->ip_tup.sport_start == qos_param->ip_tup.sport_end))
+					{
+						rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_SRC_PORT;
+						rt_rule_entry->rule.attrib.src_port = qos_param->ip_tup.sport_start;
+					}
+					else if (qos_param->ip_tup.sport_start &&
+						qos_param->ip_tup.sport_end) // If port range is provided
+					{
+						rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_SRC_PORT_RANGE;
+						rt_rule_entry->rule.attrib.src_port_lo = qos_param->ip_tup.sport_start;
+						rt_rule_entry->rule.attrib.src_port_hi = qos_param->ip_tup.sport_end;
+					}
 
-						// If single port is provided
-						if (qos_param->ip_tup.sport_start &&
-							(qos_param->ip_tup.sport_start == qos_param->ip_tup.sport_end))
-						{
-							rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_SRC_PORT;
-							rt_rule_entry->rule.attrib.src_port = qos_param->ip_tup.sport_start;
-						}
-						else if (qos_param->ip_tup.sport_start && qos_param->ip_tup.sport_end) // If port range is provided
-						{
-							rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_SRC_PORT_RANGE;
-							rt_rule_entry->rule.attrib.src_port_lo = qos_param->ip_tup.sport_start;
-							rt_rule_entry->rule.attrib.src_port_hi = qos_param->ip_tup.sport_end;
-						}
+					// If single port is provided
+					if (qos_param->ip_tup.dport_start &&
+						(qos_param->ip_tup.dport_start == qos_param->ip_tup.dport_end))
+					{
+						rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_DST_PORT;
+						rt_rule_entry->rule.attrib.dst_port = qos_param->ip_tup.dport_start;
+					}
+					else if (qos_param->ip_tup.dport_start && qos_param->ip_tup.dport_end)
+					{
+						rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_DST_PORT_RANGE;
+						rt_rule_entry->rule.attrib.dst_port_lo = qos_param->ip_tup.dport_start;
+						rt_rule_entry->rule.attrib.dst_port_hi = qos_param->ip_tup.dport_end;
+					}
 
-						// If single port is provided
-						if (qos_param->ip_tup.dport_start &&
-							(qos_param->ip_tup.dport_start == qos_param->ip_tup.dport_end))
-						{
-							rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_DST_PORT;
-							rt_rule_entry->rule.attrib.dst_port = qos_param->ip_tup.dport_start;
-						}
-						else if (qos_param->ip_tup.dport_start && qos_param->ip_tup.dport_end)
-						{
-							rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_DST_PORT_RANGE;
-							rt_rule_entry->rule.attrib.dst_port_lo = qos_param->ip_tup.dport_start;
-							rt_rule_entry->rule.attrib.dst_port_hi = qos_param->ip_tup.dport_end;
-						}
+					if (qos_param->vlan_id)
+					{
+						rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_DST_ADDR;
+						rt_rule_entry->rule.attrib.u.v6.dst_addr[0] =
+							ipv6_addr[0];
+						rt_rule_entry->rule.attrib.u.v6.dst_addr[1] =
+							ipv6_addr[1];
+						rt_rule_entry->rule.attrib.u.v6.dst_addr[2] =
+							ipv6_addr[2];
+						rt_rule_entry->rule.attrib.u.v6.dst_addr[3] =
+							ipv6_addr[3];
+						rt_rule_entry->rule.attrib.u.v6.dst_addr_mask[0] = 0xffffffff;
+						rt_rule_entry->rule.attrib.u.v6.dst_addr_mask[1] = 0xffffffff;
+						rt_rule_entry->rule.attrib.u.v6.dst_addr_mask[2] = 0xffffffff;
+						rt_rule_entry->rule.attrib.u.v6.dst_addr_mask[3] = 0xffffffff;
+					}
 
-						if (qos_param->vlan_id)
-						{
-							rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_DST_ADDR;
-							rt_rule_entry->rule.attrib.u.v6.dst_addr[0] = it->first[0];
-							rt_rule_entry->rule.attrib.u.v6.dst_addr[1] = it->first[1];
-							rt_rule_entry->rule.attrib.u.v6.dst_addr[2] = it->first[2];
-							rt_rule_entry->rule.attrib.u.v6.dst_addr[3] = it->first[3];
-							rt_rule_entry->rule.attrib.u.v6.dst_addr_mask[0] = 0xffffffff;
-							rt_rule_entry->rule.attrib.u.v6.dst_addr_mask[1] = 0xffffffff;
-							rt_rule_entry->rule.attrib.u.v6.dst_addr_mask[2] = 0xffffffff;
-							rt_rule_entry->rule.attrib.u.v6.dst_addr_mask[3] = 0xffffffff;
-						}
+					if (qos_param->dscp)
+					{
+						rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_TOS;
+						rt_rule_entry->rule.attrib.tos_value = qos_param->dscp;
+						rt_rule_entry->rule.attrib.tos_mask = 0xFF;
+					}
 
-						if (qos_param->dscp)
-						{
-							rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_TOS;
-							rt_rule_entry->rule.attrib.tos_value = qos_param->dscp;
-							rt_rule_entry->rule.attrib.tos_mask = 0xFF;
-						}
-
-						if (qos_param->pcp)
-						{
-							IPACMERR("QOS param PCP no v6 route rule action from IPA \n");
-						}
+					if (qos_param->pcp)
+					{
+						IPACMERR("QOS param PCP no v6 route rule action from IPA \n");
+					}
 
 #ifdef FEATURE_IPA_V3
-						rt_rule_entry->rule.hashable = true;
+					rt_rule_entry->rule.hashable = true;
 #endif
-						if (false == m_routing.AddRoutingRuleExt_v2(rt_rule))
-						{
-							IPACMERR("Routing rule addition failed!\n");
-							free(rt_rule);
-							return IPACM_FAILURE;
-						}
-
-						memset(&new_client_info, 0 , sizeof(new_client_info));
-						new_client_info.qos_rt_rule_hdl_v6[v6_num] = ((struct ipa_rt_rule_add_ext_v2 *)rt_rule->rules)[0].rt_rule_hdl;
-
-						IPACMDBG_H("tx:%d, rt rule hdl=%x ip-type: %d\n", tx_index,
-								   new_client_info.qos_rt_rule_hdl_v6[v6_num], iptype);
-
-
-						/*Copy same rule to v6 WAN RT TBL*/
-						strlcpy(rt_rule->rt_tbl_name, IPACM_Iface::ipacmcfg->rt_tbl_wan_v6.name, sizeof(rt_rule->rt_tbl_name));
-						rt_rule->rt_tbl_name[IPA_RESOURCE_NAME_MAX - 1] = '\0';
-						/* Downlink traffic from Wan iface, directly through IPA */
-						rt_rule_entry->rule.dst = tx_prop->tx[tx_index].dst_pipe;
-						memcpy(&rt_rule_entry->rule.attrib,
-							&tx_prop->tx[tx_index].attrib,
-							sizeof(rt_rule_entry->rule.attrib));
-
-						rt_rule_entry->rule.hdr_hdl = get_client_memptr(eth_client, eth_index)->hdr_hdl_v6;
-						IPACMDBG_H("rt->hdr_hdl v6 0x%x\n", rt_rule_entry->rule.hdr_hdl);
-
-						// IP Tuple V6 params
-						if (qos_param->ip_tup.src_v6_ip_addr[0])
-						{
-							rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_SRC_ADDR;
-							rt_rule_entry->rule.attrib.u.v6.src_addr[0] = qos_param->ip_tup.src_v6_ip_addr[0];
-							rt_rule_entry->rule.attrib.u.v6.src_addr[1] = qos_param->ip_tup.src_v6_ip_addr[1];
-							rt_rule_entry->rule.attrib.u.v6.src_addr[2] = qos_param->ip_tup.src_v6_ip_addr[2];
-							rt_rule_entry->rule.attrib.u.v6.src_addr[3] = qos_param->ip_tup.src_v6_ip_addr[3];
-							rt_rule_entry->rule.attrib.u.v6.src_addr_mask[0] = qos_param->ip_tup.src_v6_sub_mask[0];
-							rt_rule_entry->rule.attrib.u.v6.src_addr_mask[1] = qos_param->ip_tup.src_v6_sub_mask[1];
-							rt_rule_entry->rule.attrib.u.v6.src_addr_mask[2] = qos_param->ip_tup.src_v6_sub_mask[2];
-							rt_rule_entry->rule.attrib.u.v6.src_addr_mask[3] = qos_param->ip_tup.src_v6_sub_mask[3];
-						}
-
-						if (qos_param->ip_tup.dst_v6_ip_addr[0])
-						{
-							rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_DST_ADDR;
-							rt_rule_entry->rule.attrib.u.v6.dst_addr[0] = qos_param->ip_tup.dst_v6_ip_addr[0];
-							rt_rule_entry->rule.attrib.u.v6.dst_addr[1] = qos_param->ip_tup.dst_v6_ip_addr[1];
-							rt_rule_entry->rule.attrib.u.v6.dst_addr[2] = qos_param->ip_tup.dst_v6_ip_addr[2];
-							rt_rule_entry->rule.attrib.u.v6.dst_addr[3] = qos_param->ip_tup.dst_v6_ip_addr[3];
-							rt_rule_entry->rule.attrib.u.v6.dst_addr_mask[0] = qos_param->ip_tup.dst_v6_sub_mask[0];
-							rt_rule_entry->rule.attrib.u.v6.dst_addr_mask[1] = qos_param->ip_tup.dst_v6_sub_mask[1];
-							rt_rule_entry->rule.attrib.u.v6.dst_addr_mask[2] = qos_param->ip_tup.dst_v6_sub_mask[2];
-							rt_rule_entry->rule.attrib.u.v6.dst_addr_mask[3] = qos_param->ip_tup.dst_v6_sub_mask[3];
-						}
-
-						// If single port is provided
-						if (qos_param->ip_tup.sport_start && (qos_param->ip_tup.sport_start == qos_param->ip_tup.sport_end))
-						{
-							rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_SRC_PORT;
-							rt_rule_entry->rule.attrib.src_port = qos_param->ip_tup.sport_start;
-						}
-						else if (qos_param->ip_tup.sport_start && qos_param->ip_tup.sport_end) // If port range is provided
-						{
-							rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_SRC_PORT_RANGE;
-							rt_rule_entry->rule.attrib.src_port_lo = qos_param->ip_tup.sport_start;
-							rt_rule_entry->rule.attrib.src_port_hi = qos_param->ip_tup.sport_end;
-						}
-
-						// If single port is provided
-						if (qos_param->ip_tup.dport_start && (qos_param->ip_tup.dport_start == qos_param->ip_tup.dport_end))
-						{
-							rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_DST_PORT;
-							rt_rule_entry->rule.attrib.dst_port = qos_param->ip_tup.dport_start;
-						}
-						else if (qos_param->ip_tup.dport_start && qos_param->ip_tup.dport_end)
-						{
-							rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_DST_PORT_RANGE;
-							rt_rule_entry->rule.attrib.dst_port_lo = qos_param->ip_tup.dport_start;
-							rt_rule_entry->rule.attrib.dst_port_hi = qos_param->ip_tup.dport_end;
-						}
-
-						if (qos_param->vlan_id)
-						{
-							rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_DST_ADDR;
-							rt_rule_entry->rule.attrib.u.v6.dst_addr[0] = it->first[0];
-							rt_rule_entry->rule.attrib.u.v6.dst_addr[1] = it->first[1];
-							rt_rule_entry->rule.attrib.u.v6.dst_addr[2] = it->first[2];
-							rt_rule_entry->rule.attrib.u.v6.dst_addr[3] = it->first[3];
-							rt_rule_entry->rule.attrib.u.v6.dst_addr_mask[0] = 0xffffffff;
-							rt_rule_entry->rule.attrib.u.v6.dst_addr_mask[1] = 0xffffffff;
-							rt_rule_entry->rule.attrib.u.v6.dst_addr_mask[2] = 0xffffffff;
-							rt_rule_entry->rule.attrib.u.v6.dst_addr_mask[3] = 0xffffffff;
-						}
-
-						if (qos_param->dscp)
-						{
-							rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_TOS;
-							rt_rule_entry->rule.attrib.tos_value = qos_param->dscp;
-							rt_rule_entry->rule.attrib.tos_mask = 0xFF;
-						}
-
-						if (qos_param->pcp)
-						{
-							IPACMERR("QOS param PCP no v6 route rule action from IPA \n");
-						}
-
-	#ifdef FEATURE_IPA_V3
-						rt_rule_entry->rule.hashable = true;
-	#endif
-						if (false == m_routing.AddRoutingRuleExt_v2(rt_rule))
-						{
-							IPACMERR("Routing rule addition failed!\n");
-							free(rt_rule);
-							return IPACM_FAILURE;
-						}
-
-						new_client_info.qos_rt_rule_hdl_wan_v6[v6_num] = ((struct ipa_rt_rule_add_ext_v2 *)rt_rule->rules)[0].rt_rule_hdl;
-						new_client_info.route_rule_set_v6 = true;
-
-						new_client_info.v6_ip_addr[v6_num][0] = rt_rule_entry->rule.attrib.u.v6.dst_addr[0];
-						new_client_info.v6_ip_addr[v6_num][1] = rt_rule_entry->rule.attrib.u.v6.dst_addr[1];
-						new_client_info.v6_ip_addr[v6_num][2] = rt_rule_entry->rule.attrib.u.v6.dst_addr[2];
-						new_client_info.v6_ip_addr[v6_num][3] = rt_rule_entry->rule.attrib.u.v6.dst_addr[3];
-
-						memcpy(new_client_info.mac, get_client_memptr(eth_client, eth_index)->mac, IPA_MAC_ADDR_SIZE);
-
-						IPACMDBG_H("tx:%d, rt rule hdl=%x ip-type: %d\n", tx_index,
-								   new_client_info.qos_rt_rule_hdl_wan_v6[v6_num], iptype);
+					if (false == m_routing.AddRoutingRuleExt_v2(rt_rule))
+					{
+						IPACMERR("Routing rule addition failed!\n");
+						free(rt_rule);
+						return IPACM_FAILURE;
 					}
+
+					new_client_info.qos_rt_rule_hdl_v6 = ((struct ipa_rt_rule_add_ext_v2 *)rt_rule->rules)[0].rt_rule_hdl;
+					new_client_info.route_rule_set_v6 = true;
+
+					new_client_info.v6_ip_addr[0] =
+						rt_rule_entry->rule.attrib.u.v6.dst_addr[0];
+					new_client_info.v6_ip_addr[1] =
+						rt_rule_entry->rule.attrib.u.v6.dst_addr[1];
+					new_client_info.v6_ip_addr[2] =
+						rt_rule_entry->rule.attrib.u.v6.dst_addr[2];
+					new_client_info.v6_ip_addr[3] =
+						rt_rule_entry->rule.attrib.u.v6.dst_addr[3];
+
+					memcpy(new_client_info.mac,
+						get_client_memptr(eth_client, eth_index)->mac,
+						IPA_MAC_ADDR_SIZE);
+
+					IPACMDBG_H("tx:%d, rt rule hdl=%x ip-type: %d\n", tx_index,
+							   new_client_info.qos_rt_rule_hdl_v6, iptype);
+					qos_param->qos_client_list.push_front(new_client_info);
+					qos_param->client_cnt++;
 				}
-
-				qos_param->qos_client_list.push_front(new_client_info);
-				qos_param->client_cnt++;
 			}
-
 		} /* end of for loop */
 
 		free(rt_rule);
@@ -9032,7 +8894,9 @@ int IPACM_Lan::handle_qos_route_rule_ext_v2(uint8_t *client_mac,
 	return IPACM_SUCCESS;
 }
 
-int IPACM_Lan::if_client_qos_rule_needed(uint8_t * client_mac, uint16_t client_vlan_id, list<qos_param_info>::iterator qos_param)
+int IPACM_Lan::if_client_qos_rule_needed(uint8_t * client_mac,
+	uint16_t client_vlan_id, list<qos_param_info>::iterator qos_param,
+	uint32_t *ipv6_addr)
 {
 	int ret = false;
 	int i = 0;
@@ -9070,6 +8934,66 @@ int IPACM_Lan::if_client_qos_rule_needed(uint8_t * client_mac, uint16_t client_v
 		return ret;
 	}
 
+	//don't install qos rules if client rules are not set
+	if (qos_param->ip_type == IPA_IP_v4)
+	{
+		if (!get_client_memptr(eth_client, eth_index)->route_rule_set_v4)
+		{
+			IPACMDBG_H("v4 client rule is not set: %d, "
+					"cannot install qos v4 rule for this client\n",
+				get_client_memptr(eth_client, eth_index)->route_rule_set_v4);
+			return ret;
+		}
+		if (qos_param->ip_tup.dst_ip_addr)
+		{
+			if (qos_param->ip_tup.dst_ip_addr !=
+				get_client_memptr(eth_client, eth_index)->v4_addr)
+			{
+				IPACMERR("Mismatched destination qos ip addr 0x%x with client ip 0x%x\n",
+					qos_param->ip_tup.dst_ip_addr,
+					get_client_memptr(eth_client, eth_index)->v4_addr);
+				return ret;
+			}
+		}
+	}
+
+	if (qos_param->ip_type == IPA_IP_v6)
+	{
+		if (!get_client_memptr(eth_client, eth_index)->route_rule_set_v6)
+		{
+			IPACMDBG_H("v6 client rule is not set: %d, "
+				"cannot install qos v6 rule for this client\n",
+				get_client_memptr(eth_client, eth_index)->route_rule_set_v6);
+			return ret;
+		}
+		if (qos_param->ip_tup.dst_v6_ip_addr[0] ||
+			qos_param->ip_tup.dst_v6_ip_addr[1])
+		{
+			if (!ipv6_addr)
+			{
+				IPACMDBG_H("NULL IPv6 addr received, cannot install.\n");
+				return ret;
+			}
+			if (qos_param->ip_tup.dst_v6_ip_addr[0] != ipv6_addr[0] ||
+				qos_param->ip_tup.dst_v6_ip_addr[1] != ipv6_addr[1] ||
+				qos_param->ip_tup.dst_v6_ip_addr[2] != ipv6_addr[2] ||
+				qos_param->ip_tup.dst_v6_ip_addr[3] != ipv6_addr[3])
+			{
+				IPACMERR("Mismatched destination qos ip addr "
+					"0x%x:%x:%x:%x with client ip 0x%x:%x:%x:%x\n",
+					qos_param->ip_tup.dst_v6_ip_addr[0],
+					qos_param->ip_tup.dst_v6_ip_addr[1],
+					qos_param->ip_tup.dst_v6_ip_addr[2],
+					qos_param->ip_tup.dst_v6_ip_addr[3],
+					ipv6_addr[0],
+					ipv6_addr[1],
+					ipv6_addr[2],
+					ipv6_addr[3]);
+				return ret;
+			}
+		}
+	}
+
 	for (it_qos_client = qos_param->qos_client_list.begin(); it_qos_client != qos_param->qos_client_list.end(); ++it_qos_client)
 	{
 		if (it_qos_client->v4_ip_addr &&
@@ -9080,20 +9004,16 @@ int IPACM_Lan::if_client_qos_rule_needed(uint8_t * client_mac, uint16_t client_v
 			return ret;
 		}
 
-		for (auto it = rt_hdl_v6_list[eth_index].begin(); it != rt_hdl_v6_list[eth_index].end(); ++it)
+		if (it_qos_client->v6_ip_addr[0] &&
+			it_qos_client->v6_ip_addr[0] == ipv6_addr[0] &&
+			it_qos_client->v6_ip_addr[1] == ipv6_addr[1] &&
+			it_qos_client->v6_ip_addr[2] == ipv6_addr[2] &&
+			it_qos_client->v6_ip_addr[3] == ipv6_addr[3]
+			)
 		{
-			if (it_qos_client->v6_ip_addr[i][0] &&
-				it_qos_client->v6_ip_addr[i][0] == it->first[0] &&
-				it_qos_client->v6_ip_addr[i][1] == it->first[1] &&
-				it_qos_client->v6_ip_addr[i][2] == it->first[2] &&
-				it_qos_client->v6_ip_addr[i][3] == it->first[3]
-				)
-			{
-				IPACMDBG_H("v6 Client already exists in qos list, Client vlan id %d , qos vlanid %d\n",
-						 client_vlan_id, qos_param->vlan_id);
-				return ret;
-			}
-			i++;
+			IPACMDBG_H("v6 Client already exists in qos list, Client vlan id %d , qos vlanid %d\n",
+					 client_vlan_id, qos_param->vlan_id);
+			return ret;
 		}
 	}
 
@@ -9102,14 +9022,24 @@ int IPACM_Lan::if_client_qos_rule_needed(uint8_t * client_mac, uint16_t client_v
 	return ret;
 }
 
-int IPACM_Lan::install_all_qos_route_rule(uint8_t * client_mac, uint16_t client_vlan_id)
+int IPACM_Lan::install_all_qos_route_rule(uint8_t * client_mac,
+	uint16_t client_vlan_id, uint32_t *ipv6_addr)
 {
 
 	list<qos_param_info>::iterator it_qos_params;
 	int client_idx = 0;
+	int eth_index;
 
 	IPACMDBG_H("Install_all_qos_route_rule called start 0x%x, end 0x%x \n",
-			   IPACM_Iface::ipacmcfg->m_qos_params.begin(), IPACM_Iface::ipacmcfg->m_qos_params.end());
+				IPACM_Iface::ipacmcfg->m_qos_params.begin(),
+				IPACM_Iface::ipacmcfg->m_qos_params.end());
+
+	eth_index = get_eth_client_index(client_mac, client_vlan_id);
+	if (eth_index == IPACM_INVALID_INDEX)
+	{
+		IPACMERR("eth client not found/attached\n");
+		return 0;
+	}
 
 	if(pthread_mutex_lock(&IPACM_Iface::ipacmcfg->qos_param_list_lock) != 0)
 	{
@@ -9117,89 +9047,241 @@ int IPACM_Lan::install_all_qos_route_rule(uint8_t * client_mac, uint16_t client_
 		return IPACM_FAILURE;
 	}
 
-	for (it_qos_params = IPACM_Iface::ipacmcfg->m_qos_params.begin(); it_qos_params != IPACM_Iface::ipacmcfg->m_qos_params.end(); ++it_qos_params)
+	for (it_qos_params = IPACM_Iface::ipacmcfg->m_qos_params.begin();
+		it_qos_params != IPACM_Iface::ipacmcfg->m_qos_params.end(); ++it_qos_params)
 	{
-		IPACMDBG_H("Individual qos rules with ip type: %d and tc: %d\n", (ipa_ip_type)it_qos_params->ip_type, it_qos_params->traffic_class);
+		IPACMDBG_H("Individual qos rules with ip type: %d and tc: %d\n",
+			(ipa_ip_type)it_qos_params->ip_type, it_qos_params->traffic_class);
 		IPACMDBG("Install_all_qos_route_rule it_qos_params called start 0x%x\n",
 			   it_qos_params);
-		if ((it_qos_params->ip_type == IPA_IP_v4 && it_qos_params->route_rule_set_v4) ||
-			(it_qos_params->ip_type == IPA_IP_v6 && it_qos_params->route_rule_set_v6))
-		{
-			IPACMDBG("This qos ip rules is already installed v4 hdl 0x%x, v6 hdl: 0x%x\n",
-					 it_qos_params->qos_rt_rule_hdl_v4, it_qos_params->qos_rt_rule_hdl_v6);
-		}
 
-		if (if_client_qos_rule_needed(client_mac, client_vlan_id, it_qos_params))
+		if (it_qos_params->ip_type == IPA_IP_v4)
 		{
-			IPACMDBG_H("Install individual qos rules with ip type: %d and tc: %d\n",
-				(ipa_ip_type)it_qos_params->ip_type, it_qos_params->traffic_class);
-
-			if (IPACM_Iface::ipacmcfg->ipacm_lan_stats_enable == true)
+			if (if_client_qos_rule_needed(client_mac, client_vlan_id,
+				it_qos_params, NULL))
 			{
-				handle_qos_route_rule_ext_v2(client_mac, client_vlan_id,
-				(ipa_ip_type)it_qos_params->ip_type, it_qos_params);
+				IPACMDBG_H("Install qos rules with ip type: %d and tc: %d\n",
+					(ipa_ip_type)it_qos_params->ip_type,
+					it_qos_params->traffic_class);
+
+				if (IPACM_Iface::ipacmcfg->ipacm_lan_stats_enable == true)
+				{
+					handle_qos_route_rule_ext_v2(client_mac, client_vlan_id,
+					(ipa_ip_type)it_qos_params->ip_type, it_qos_params, NULL);
+				}
+				else
+				{
+					handle_qos_route_rule(client_mac, client_vlan_id,
+					(ipa_ip_type)it_qos_params->ip_type, it_qos_params, NULL);
+				}
+			}
+		}
+		else
+		{
+			if (ipv6_addr != NULL)
+			{
+				if (if_client_qos_rule_needed(client_mac, client_vlan_id,
+					it_qos_params, ipv6_addr))
+				{
+					IPACMDBG_H("Install qos rules with ip type: %d and tc: %d\n",
+						(ipa_ip_type)it_qos_params->ip_type,
+						it_qos_params->traffic_class);
+
+					if (IPACM_Iface::ipacmcfg->ipacm_lan_stats_enable == true)
+					{
+						handle_qos_route_rule_ext_v2(client_mac, client_vlan_id,
+						(ipa_ip_type)it_qos_params->ip_type, it_qos_params, ipv6_addr);
+					}
+					else
+					{
+						handle_qos_route_rule(client_mac, client_vlan_id,
+						(ipa_ip_type)it_qos_params->ip_type, it_qos_params, ipv6_addr);
+					}
+				}
 			}
 			else
 			{
-				handle_qos_route_rule(client_mac, client_vlan_id,
-				(ipa_ip_type)it_qos_params->ip_type, it_qos_params);
+				for (auto it = rt_hdl_v6_list[eth_index].begin(); it != rt_hdl_v6_list[eth_index].end(); ++it)
+				{
+					uint32_t ip6[4];
+					ip6[0] = it->first[0];
+					ip6[1] = it->first[1];
+					ip6[2] = it->first[2];
+					ip6[3] = it->first[3];
+					if (if_client_qos_rule_needed(client_mac, client_vlan_id,
+						it_qos_params,
+						ip6))
+					{
+						IPACMDBG_H("Install qos rules with ip type: %d and tc: %d\n",
+							(ipa_ip_type)it_qos_params->ip_type,
+							it_qos_params->traffic_class);
+
+						if (IPACM_Iface::ipacmcfg->ipacm_lan_stats_enable == true)
+						{
+							handle_qos_route_rule_ext_v2(client_mac, client_vlan_id,
+							(ipa_ip_type)it_qos_params->ip_type, it_qos_params,
+							ip6);
+						}
+						else
+						{
+							handle_qos_route_rule(client_mac, client_vlan_id,
+							(ipa_ip_type)it_qos_params->ip_type, it_qos_params,
+							ip6);
+						}
+					}
+				}
 			}
 		}
 	}
 
+	if (false == m_routing.Commit(IPA_IP_v4))
+	{
+		IPACMERR("QOS Routing rule v4 commit failed!\n");
+		return IPACM_FAILURE;
+	}
+
+	if (false == m_routing.Commit(IPA_IP_v6))
+	{
+		IPACMERR("QOS Routing rule v6 commit failed!\n");
+		return IPACM_FAILURE;
+	}
+
+	IPACMDBG_H("QOS Routing rule added successfully \n");
 	pthread_mutex_unlock(&IPACM_Iface::ipacmcfg->qos_param_list_lock);
 	return IPACM_SUCCESS;
 }
 
-int IPACM_Lan::delete_client_info_from_qos(uint8_t *client_mac, uint16_t vlan_id, list<qos_param_info>::iterator qos_param)
+int IPACM_Lan::delete_client_info_from_qos(uint8_t *client_mac,
+				uint16_t vlan_id, list<qos_param_info>::iterator qos_param,
+				uint32_t *ipv6_addr)
 {
-	int remove_idx = -1;
 	list<qos_client_info>::iterator it_qos_client;
+	int eth_index;
+	int v6_num = 0;
 
-	for (it_qos_client = qos_param->qos_client_list.begin(); it_qos_client != qos_param->qos_client_list.end(); ++it_qos_client)
+	eth_index = get_eth_client_index(client_mac, vlan_id);
+	if (eth_index == IPACM_INVALID_INDEX)
 	{
-		if (qos_param->vlan_id && (qos_param->vlan_id == vlan_id) &&
-			(memcmp(client_mac, it_qos_client->mac, IPA_MAC_ADDR_SIZE) == 0)
-		   )
-		{
-			IPACMDBG_H("Found a matching vlan %d entry in qos rule list for client\n", vlan_id);
-
-			//Delete the respective route handles
-			IPACMDBG_H("Delete client rule from index %d is v4 set %d for hdl %d\n", remove_idx,
-					   it_qos_client->route_rule_set_v4, it_qos_client->qos_rt_rule_hdl_v4);
-
-			if (it_qos_client->route_rule_set_v4 &&
-				(m_routing.DeleteRoutingHdl(it_qos_client->qos_rt_rule_hdl_v4, IPA_IP_v4) == false)) {
-				IPACMERR("Failed to delete v4 qos routing rule hdl %d\n", it_qos_client->qos_rt_rule_hdl_v4);
-				return IPACM_FAILURE;
-			}
-
-			for (int v6_num = 0; v6_num < IPV6_NUM_ADDR; v6_num++)
-			{
-				IPACMDBG_H("Delete client rule from index %d is v6 set %d for hdl %d\n", remove_idx,
-						   it_qos_client->route_rule_set_v6, it_qos_client->qos_rt_rule_hdl_v6[v6_num]);
-				if (it_qos_client->route_rule_set_v6 &&
-					(m_routing.DeleteRoutingHdl(it_qos_client->qos_rt_rule_hdl_v6[v6_num], IPA_IP_v6) == false) &&
-					(m_routing.DeleteRoutingHdl(it_qos_client->qos_rt_rule_hdl_wan_v6[v6_num], IPA_IP_v6) == false)) {
-					IPACMERR("Failed to delete v6 qos routing rule hdl %d\n", it_qos_client->qos_rt_rule_hdl_v6[v6_num]);
-					return IPACM_FAILURE;
-				}
-			}
-			break;
-		}
-		else if (memcmp(client_mac, it_qos_client->mac, IPA_MAC_ADDR_SIZE) == 0)
-		{
-			IPACMDBG_H("Found a matching entry in qos rule list for client\n");
-			break;
-		}
+		IPACMERR("eth client not found/attached\n");
+		return IPACM_FAILURE;
 	}
 
-	qos_param->client_cnt--;
+	IPACMDBG_H("Attempting to delete qos entry for client at idx %d"
+		" with vlan %d\n", eth_index, vlan_id);
 
+	for (it_qos_client = qos_param->qos_client_list.begin();
+		it_qos_client != qos_param->qos_client_list.end(); )
+	{
+		if (qos_param->ip_type == IPA_IP_v4)
+		{
+			if (it_qos_client->v4_ip_addr &&
+				(it_qos_client->v4_ip_addr ==
+					get_client_memptr(eth_client, eth_index)->v4_addr))
+			{
+				IPACMDBG_H("Found a matching vlan %d entry in qos rule list "
+					"for client with ipv4: 0x\n",
+					vlan_id, it_qos_client->v4_ip_addr);
+
+				//Delete the respective route handles
+				IPACMDBG_H("Delete client rule from index %d is v4 set %d for hdl %d\n",
+					eth_index, it_qos_client->route_rule_set_v4,
+					it_qos_client->qos_rt_rule_hdl_v4);
+
+				if (it_qos_client->route_rule_set_v4 &&
+					(m_routing.DeleteRoutingHdl(it_qos_client->qos_rt_rule_hdl_v4,
+						IPA_IP_v4) == false)) {
+					IPACMERR("Failed to delete v4 qos routing rule hdl %d\n",
+						it_qos_client->qos_rt_rule_hdl_v4);
+					return IPACM_FAILURE;
+				}
+				it_qos_client =
+					qos_param->qos_client_list.erase(it_qos_client);
+				qos_param->client_cnt--;
+				IPACMDBG_H("Current client_cnt %d\n", qos_param->client_cnt);
+			}
+			else
+			{
+				it_qos_client++;
+			}
+		}
+		else
+		{
+			if (ipv6_addr == NULL)
+			{
+				/* Check all v6 addresses of the client. */
+				for (auto it = rt_hdl_v6_list[eth_index].begin(); it != rt_hdl_v6_list[eth_index].end(); ++it)
+				{
+					if (it_qos_client->v6_ip_addr[0] &&
+						it_qos_client->v6_ip_addr[0] ==
+						it->first[0] &&
+						it_qos_client->v6_ip_addr[1] ==
+						it->first[1] &&
+						it_qos_client->v6_ip_addr[2] ==
+						it->first[2] &&
+						it_qos_client->v6_ip_addr[3] ==
+						it->first[3])
+					{
+						IPACMDBG_H("Delete client rule from index %d is"
+						" v6 set %d for hdl %d\n", eth_index,
+						it_qos_client->route_rule_set_v6,
+						it_qos_client->qos_rt_rule_hdl_v6);
+						if (it_qos_client->route_rule_set_v6 &&
+							(m_routing.DeleteRoutingHdl(
+								it_qos_client->qos_rt_rule_hdl_v6,
+								IPA_IP_v6) == false)) {
+							IPACMERR("Failed to delete v6 qos routing rule hdl %d\n",
+								it_qos_client->qos_rt_rule_hdl_v6);
+							return IPACM_FAILURE;
+						}
+						it_qos_client =
+							qos_param->qos_client_list.erase(it_qos_client);
+						qos_param->client_cnt--;
+						IPACMDBG_H("After V6 NULL delete, client_cnt %d\n",
+							qos_param->client_cnt);
+						continue;
+					}
+				}
+				it_qos_client++;
+			}
+			else
+			{
+				if (it_qos_client->v6_ip_addr[0] &&
+					it_qos_client->v6_ip_addr[0] == ipv6_addr[0] &&
+					it_qos_client->v6_ip_addr[1] == ipv6_addr[1] &&
+					it_qos_client->v6_ip_addr[2] == ipv6_addr[2] &&
+					it_qos_client->v6_ip_addr[3] == ipv6_addr[3])
+				{
+					IPACMDBG_H("Delete client rule from index %d is"
+					" v6 set %d for hdl %d\n", eth_index,
+					it_qos_client->route_rule_set_v6,
+					it_qos_client->qos_rt_rule_hdl_v6);
+					if (it_qos_client->route_rule_set_v6 &&
+						(m_routing.DeleteRoutingHdl(
+							it_qos_client->qos_rt_rule_hdl_v6,
+							IPA_IP_v6) == false)) {
+						IPACMERR("Failed to delete v6 qos routing rule hdl %d\n",
+							it_qos_client->qos_rt_rule_hdl_v6);
+						return IPACM_FAILURE;
+					}
+					it_qos_client =
+						qos_param->qos_client_list.erase(it_qos_client);
+					qos_param->client_cnt--;
+					IPACMDBG_H("After v6 delete, client_cnt %d\n",
+						qos_param->client_cnt);
+				}
+				else
+				{
+					it_qos_client++;
+				}
+			}
+		}
+	}
+	IPACMDBG_H("Final client_cnt %d\n", qos_param->client_cnt);
 	return IPACM_SUCCESS;
 }
 
-int IPACM_Lan::delete_client_qos_rule(uint8_t *client_mac, uint16_t vlan_id)
+int IPACM_Lan::delete_client_qos_rule(uint8_t *client_mac, uint16_t vlan_id,
+	ipa_ip_type iptype, uint32_t *ipv6_addr)
 {
 	list<qos_param_info>::iterator it_qos_params;
 
@@ -9210,9 +9292,14 @@ int IPACM_Lan::delete_client_qos_rule(uint8_t *client_mac, uint16_t vlan_id)
 		return IPACM_FAILURE;
 	}
 
-	for (it_qos_params = IPACM_Iface::ipacmcfg->m_qos_params.begin(); it_qos_params != IPACM_Iface::ipacmcfg->m_qos_params.end(); ++it_qos_params)
+	for (it_qos_params = IPACM_Iface::ipacmcfg->m_qos_params.begin();
+		(it_qos_params != IPACM_Iface::ipacmcfg->m_qos_params.end()); ++it_qos_params)
 	{
-		delete_client_info_from_qos(client_mac, vlan_id, it_qos_params);
+		if (it_qos_params->ip_type != iptype)
+		{
+			continue;
+		}
+		delete_client_info_from_qos(client_mac, vlan_id, it_qos_params, ipv6_addr);
 	}
 
 	pthread_mutex_unlock(&IPACM_Iface::ipacmcfg->qos_param_list_lock);
@@ -9224,7 +9311,8 @@ int IPACM_Lan::delete_all_client_info_from_qos(list<qos_param_info>::iterator qo
 	list<qos_client_info>::iterator it_qos_client;
 	int ret = IPACM_SUCCESS;
 
-	for (it_qos_client = qos_param->qos_client_list.begin(); it_qos_client != qos_param->qos_client_list.end(); )
+	for (it_qos_client = qos_param->qos_client_list.begin();
+		it_qos_client != qos_param->qos_client_list.end(); )
 	{
 		//Delete the respective route handles
 		IPACMDBG_H("Delete client rule from is v4 set %d for hdl %d\n",
@@ -9236,28 +9324,22 @@ int IPACM_Lan::delete_all_client_info_from_qos(list<qos_param_info>::iterator qo
 			ret =  IPACM_FAILURE;
 		}
 
-		for (int v6_num = 0; v6_num < IPV6_NUM_ADDR; v6_num++)
-		{
-			IPACMDBG_H("Delete client rule from is v6 set %d for hdl %d\n",
-					   it_qos_client->route_rule_set_v6, it_qos_client->qos_rt_rule_hdl_v6[v6_num]);
-			if (it_qos_client->route_rule_set_v6 &&
-				(m_routing.DeleteRoutingHdl(it_qos_client->qos_rt_rule_hdl_v6[v6_num], IPA_IP_v6) == false) &&
-				(m_routing.DeleteRoutingHdl(it_qos_client->qos_rt_rule_hdl_wan_v6[v6_num], IPA_IP_v6) == false)) {
-				IPACMERR("Failed to delete v6 qos routing rule hdl %d\n", it_qos_client->qos_rt_rule_hdl_v6[v6_num]);
-				ret = IPACM_FAILURE;
-			}
+		IPACMDBG_H("Delete client rule from is v6 set %d for hdl %d\n",
+				   it_qos_client->route_rule_set_v6,
+				   it_qos_client->qos_rt_rule_hdl_v6);
+		if (it_qos_client->route_rule_set_v6 &&
+			it_qos_client->qos_rt_rule_hdl_v6 &&
+			(m_routing.DeleteRoutingHdl(it_qos_client->qos_rt_rule_hdl_v6, IPA_IP_v6) == false)) {
+			IPACMERR("Failed to delete v6 qos routing rule hdl %d\n", it_qos_client->qos_rt_rule_hdl_v6);
+			ret = IPACM_FAILURE;
 		}
+
 		it_qos_client = qos_param->qos_client_list.erase(it_qos_client);
+		qos_param->client_cnt--;
 	}
-	IPACMDBG_H("Qos client list for qos param after deleting client is now :%d \n", qos_param->qos_client_list.size());
-		//else if (memcmp(client_mac, it_qos_client->mac, IPA_MAC_ADDR_SIZE) == 0)
-		//{
-		//	IPACMDBG_H("Found a matching entry in qos rule list for client\n");
-		//	break;
-		//}
 
-	qos_param->client_cnt--;
-
+	IPACMDBG_H("Qos client list size:%d cnt %d\n",
+		qos_param->qos_client_list.size(), qos_param->client_cnt);
 	return ret;
 }
 
@@ -10968,7 +11050,7 @@ int IPACM_Lan::handle_down_evt()
 			if (j == 0) {
 				idx = 0;
 			} else {
-				IPACMDBG_H("Interface is non vlan, dont install rule with index 2");
+				IPACMDBG_H("Interface is non vlan, dont install rule with index 2\n");
 				continue;
 			}
 		} else {
@@ -11087,15 +11169,6 @@ int IPACM_Lan::handle_down_evt()
 			res = IPACM_FAILURE;
 			goto fail;
 		}
-
-		IPACMDBG("Deleting dft qos v4 rt hdl 0x%x\n", dft_qos_rt_rule_hdl[0]);
-		if (m_routing.DeleteRoutingHdl(dft_qos_rt_rule_hdl[0], IPA_IP_v4)
-				== false)
-		{
-			IPACMERR("Routing rule deletion failed!\n");
-			res = IPACM_FAILURE;
-			goto fail;
-		}
 	}
 	IPACMDBG_H("Finished delete default iface ipv4 rules \n ");
 
@@ -11105,17 +11178,6 @@ int IPACM_Lan::handle_down_evt()
 		/* may have multiple ipv6 iface-RT rules*/
 		for (i = 0; i < 2 * num_dft_rt_v6; i++) {
 			if (m_routing.DeleteRoutingHdl(dft_rt_rule_hdl[MAX_DEFAULT_v4_ROUTE_RULES + i], IPA_IP_v6)
-				== false) {
-				IPACMERR("Routing rule deletion failed!\n");
-				res = IPACM_FAILURE;
-				goto fail;
-			}
-		}
-
-		for (i = 1; i < 3; i++)
-		{
-			IPACMDBG("Deleting dft qos v6 rt hdl 0x%x\n", dft_qos_rt_rule_hdl[i]);
-			if (m_routing.DeleteRoutingHdl(dft_qos_rt_rule_hdl[i], IPA_IP_v6)
 				== false) {
 				IPACMERR("Routing rule deletion failed!\n");
 				res = IPACM_FAILURE;
@@ -11580,7 +11642,7 @@ int IPACM_Lan::handle_uplink_filter_rule(ipacm_ext_prop *prop, ipa_ip_type iptyp
 			if (j == 0) {
 				idx = 0;
 			} else {
-				IPACMDBG_H("Interface is non vlan, dont install rule with index 2");
+				IPACMDBG_H("Interface is non vlan, dont install rule with index 2\n");
 				continue;
 			}
 		} else {
@@ -11977,9 +12039,10 @@ int IPACM_Lan::handle_uplink_filter_rule(ipacm_ext_prop *prop, ipa_ip_type iptyp
 						wan_ul_fl_rule_hdl_v4[j][num_wan_ul_fl_rule_v4[j]] = pFilteringTable->rules[i].flt_rule_hdl;
 						num_wan_ul_fl_rule_v4[j]++;
 						/*Map for dynamic insertion of xlat rules */
-						if (is_dev_in_vlan_mode && IPACM_Iface::ipacmcfg->ipacm_mpdn_enable) {
-							xlat_ctx.ul_rule_id_hdl_map[i].rule_id = pFilteringTable->rules[i].rule.rule_id;
-							xlat_ctx.ul_rule_id_hdl_map[i].flt_hdl = pFilteringTable->rules[i].flt_rule_hdl;
+						if (is_dev_in_vlan_mode && IPACM_Iface::ipacmcfg->ipacm_mpdn_enable)
+						{
+							xlat_ctx.ul_rule_id_hdl_map[j][i].rule_id = pFilteringTable->rules[i].rule.rule_id;
+							xlat_ctx.ul_rule_id_hdl_map[j][i].flt_hdl = pFilteringTable->rules[i].flt_rule_hdl;
 						}
 					}
 					IPACM_Iface::ipacmcfg->increaseFltRuleCount(rx_prop->rx[idx].src_pipe, iptype, pFilteringTable->num_rules);
@@ -12004,6 +12067,11 @@ int IPACM_Lan::handle_uplink_filter_rule(ipacm_ext_prop *prop, ipa_ip_type iptyp
 			}
 		}
 #endif
+		if (pFilteringTable)
+		{
+			free(pFilteringTable);
+			pFilteringTable = NULL;
+		}
 	}
 fail:
 finish_notif:
@@ -12041,7 +12109,7 @@ int IPACM_Lan::delete_uplink_filter_rule_ul(ul_firewall_t *ul_firewall)
 			if (j == 0) {
 				idx = 0;
 			} else {
-				IPACMDBG_H("Interface is non vlan, dont install rule with index 2");
+				IPACMDBG_H("Interface is non vlan, dont install rule with index 2\n");
 				continue;
 			}
 		} else {
@@ -12134,7 +12202,7 @@ int IPACM_Lan::install_wan_firewall_rule_ul(bool enable, int vid, int num_of_ul_
 			if (j == 0) {
 				idx = 0;
 			} else {
-				IPACMDBG_H("Interface is non vlan, dont install rule with index 2");
+				IPACMDBG_H("Interface is non vlan, dont install rule with index 2\n");
 				continue;
 			}
 		} else {
@@ -12214,7 +12282,7 @@ int IPACM_Lan::config_wan_frag_firewall_rule_ul_ex(ul_firewall_t *ul_firewall, i
 			if (j == 0) {
 				idx = 0;
 			} else {
-				IPACMDBG_H("Interface is non vlan, dont install rule with index 2");
+				IPACMDBG_H("Interface is non vlan, dont install rule with index 2\n");
 				continue;
 			}
 		} else {
@@ -12375,7 +12443,7 @@ int IPACM_Lan::config_dft_firewall_rules_ul_ex(IPACM_firewall_conf_t* firewall_c
 			if (j == 0) {
 				idx = 0;
 			} else {
-				IPACMDBG_H("Interface is non vlan, dont install rule with index 2");
+				IPACMDBG_H("Interface is non vlan, dont install rule with index 2\n");
 				continue;
 			}
 		} else {
@@ -12772,7 +12840,7 @@ int IPACM_Lan::config_dft_firewall_rules_ul_ex(IPACM_firewall_conf_t* firewall_c
 			if (j == 0) {
 				idx = 0;
 			} else {
-				IPACMDBG_H("Interface is non vlan, dont install rule with index 2");
+				IPACMDBG_H("Interface is non vlan, dont install rule with index 2\n");
 				continue;
 			}
 		} else {
@@ -13024,7 +13092,7 @@ int IPACM_Lan::config_dft_firewall_rules_ul(IPACM_firewall_conf_t* firewall_conf
 			if (j == 0) {
 				idx = 0;
 			} else {
-				IPACMDBG_H("Interface is non vlan, dont install rule with index 2");
+				IPACMDBG_H("Interface is non vlan, dont install rule with index 2\n");
 				continue;
 			}
 		} else {
@@ -14509,7 +14577,7 @@ int IPACM_Lan::handle_wan_down_v6(bool is_sta_mode, bool is_support_mpdn)
 				if (j == 0) {
 					idx = 0;
 				} else {
-					IPACMDBG_H("Interface is non vlan, dont install rule with index 2");
+					IPACMDBG_H("Interface is non vlan, dont install rule with index 2\n");
 					continue;
 				}
 			} else {
@@ -14668,12 +14736,17 @@ int IPACM_Lan::handle_lan_client_reset_rt(ipa_ip_type iptype)
 			IPACMERR("Failed to delete old iptype(%d) rules.\n", iptype);
 			return res;
 		}
+
 #ifdef FEATURE_STATIC_POLICY
 	if(IPACM_Iface::ipacmcfg->ipacm_static_policy_enable)
 	{
 		delete_pdn_dscp_eth_rtrules(iptype, 2, i);
 	}
 #endif
+		/* Delete QOS rules. */
+		if (IPACM_Iface::ipacmcfg->ipacm_qos_enable)
+			delete_client_qos_rule(get_client_memptr(eth_client, i)->mac,
+				0, iptype, NULL);
 	} /* end of for loop */
 
 	/* Reset ip-address */
@@ -14706,8 +14779,8 @@ int IPACM_Lan::handle_lan_client_reset_rt(ipa_ip_type iptype)
 int IPACM_Lan::install_ipv4_icmp_flt_rule()
 {
 	int ret = IPACM_SUCCESS;
-	struct ipa_ioc_add_flt_rule_v2 *flt_rule;
-	struct ipa_flt_rule_add_v2 *flt_rule_entry;
+	struct ipa_ioc_add_flt_rule_v2 *flt_rule = NULL;
+	struct ipa_flt_rule_add_v2 *flt_rule_entry = NULL;
 	int idx = 0;
 	int j = 0;
 
@@ -14732,7 +14805,7 @@ int IPACM_Lan::install_ipv4_icmp_flt_rule()
 			if (j == 0) {
 				idx = 0;
 			} else {
-				IPACMDBG_H("Interface is non vlan, dont install rule with index 2");
+				IPACMDBG_H("Interface is non vlan, dont install rule with index 2\n");
 				continue;
 			}
 		} else {
@@ -14818,7 +14891,7 @@ int IPACM_Lan::install_ipv6_icmp_flt_rule()
 			if (j == 0) {
 				idx = 0;
 			} else {
-				IPACMDBG_H("Interface is non vlan, dont install rule with index 2");
+				IPACMDBG_H("Interface is non vlan, dont install rule with index 2\n");
 				continue;
 			}
 		} else {
@@ -14983,13 +15056,16 @@ int IPACM_Lan::modify_private_subnet()
 			if (j == 0) {
 				idx = 0;
 			} else {
-				IPACMDBG_H("Interface is non vlan, dont install rule with index 2");
+				IPACMDBG_H("Interface is non vlan, dont install rule with index 2\n");
 				continue;
 			}
 		} else {
 			idx = j * 2;
 			IPACMDBG_H("Install rules at idx %d\n", idx);
 		}
+
+		mtu_rule_cnt = i = 0;
+		mtu_rule_idx = IPACM_Iface::ipacmcfg->ipa_num_private_subnet;
 
 		if (num_wan_subnet_rules[j] > 0) {
 			if (m_filtering.DeleteFilteringHdls(private_fl_rule_hdl[j], IPA_IP_v4, num_wan_subnet_rules[j]) == false) {
@@ -15006,7 +15082,8 @@ int IPACM_Lan::modify_private_subnet()
 			return IPACM_SUCCESS;
 		}
 
-		if (dft_v4fl_rule_hdl[j][0] == 0) {
+		if (dft_v4fl_rule_hdl[j][0] == 0)
+		{
 			IPACMERR("install v4 default rules first.Subnet + MTU rule will be installed later\n");
 			return IPACM_FAILURE;
 		}
@@ -15255,7 +15332,7 @@ int IPACM_Lan::modify_ipv6_prefix_flt_rule()
 			if (j == 0) {
 				idx = 0;
 			} else {
-				IPACMDBG_H("Interface is non vlan, dont install rule with index 2");
+				IPACMDBG_H("Interface is non vlan, dont install rule with index 2\n");
 				continue;
 			}
 		} else {
@@ -15263,18 +15340,27 @@ int IPACM_Lan::modify_ipv6_prefix_flt_rule()
 			IPACMDBG_H("Install rules at idx %d\n", idx);
 		}
 
-		if (ip_type == IPA_IP_v4) {
+		mtu_rule_cnt = i = 0;
+		mtu_rule_idx = IPACM_Iface::ipacmcfg->num_ipv6_prefixes +
+						IPACM_Iface::ipacmcfg->num_no_offload_ipv6_prefix;
+		IPACMDBG_H("Install rules at idx %d\n", idx);
+
+		if (ip_type == IPA_IP_v4)
+		{
 			IPACMERR("inconsistent iptype. iptype = %d\n", ip_type);
 			return IPACM_FAILURE;
 		}
 
 		/* not supported for wlan vlan for now */
-		if (ipa_if_cate == WLAN_IF && !is_wlan_if_vlan) {
-			IPACMERR("not supported for wlan vlan\n");
+		if (ipa_if_cate == WLAN_IF && !is_wlan_if_vlan &&
+					!IPACM_Iface::ipacmcfg->ipacm_static_policy_enable) {
+			IPACMERR("not supported for wlan without vlan in"
+						" non-static policy mode.\n");
 			return IPACM_SUCCESS;
 		}
 
-		if (dft_v6fl_rule_hdl[0] == 0) {
+		if (dft_v6fl_rule_hdl[j][0] == 0)
+		{
 			IPACMERR("install v6 default rules first.Prefix + MTU rule will be installed later\n");
 			return IPACM_FAILURE;
 		}
@@ -15302,7 +15388,7 @@ int IPACM_Lan::modify_ipv6_prefix_flt_rule()
 			}
 #else
 			IPACMDBG("no need configure prefix rules \n");
-			return IPACM_SUCCESS;
+			continue;
 #endif
 		}
 
@@ -15351,17 +15437,22 @@ int IPACM_Lan::modify_ipv6_prefix_flt_rule()
 			if (IPACM_Iface::ipacmcfg->eogre_info.iptype == IPA_IP_v4)
 				/* mtu_v6_new = mtu_v4 - 20(ipv4) - 4(gre) - 18(eth + vlan) - 40(inner_ipv6) */
 				mtu[0] = IPACM_Wan::queryMTU(ipa_if_num, IPA_IP_v4) - sizeof(v4_gre_hdr_t) - 18;
-			else if (IPACM_Iface::ipacmcfg->eogre_info.iptype == IPA_IP_v6)
+			else if (IPACM_Iface::ipacmcfg->eogre_info.iptype == IPA_IP_v6 &&
+					IPACM_Iface::ipacmcfg->v6options_enabled == true)
 				/* mtu_v6_new = mtu_v6 - 40(ipv6) - 8(opt) - 4(gre)- 18(eth + vlan) - 40(inner_ipv6) */
 				mtu[0] = IPACM_Wan::queryMTU(ipa_if_num, IPA_IP_v6) - sizeof(v6_gre_hdr_t) - 18;
+			else if (IPACM_Iface::ipacmcfg->eogre_info.iptype == IPA_IP_v6 &&
+					IPACM_Iface::ipacmcfg->v6options_enabled == false)
+				mtu[0] = IPACM_Wan::queryMTU(ipa_if_num, IPA_IP_v6) -
+							 sizeof(v6_eogre_hdr_s) - 18;
 			else
 				IPACMERR("invalid iptype = %d\n", IPACM_Iface::ipacmcfg->eogre_info.iptype);
 
 			IPACMDBG("GRE v6 PDN mtu = %d\n", mtu[0]);
-			IPACMDBG("num_wan_ul_fl_rule_v6= %d\n", num_wan_ul_fl_rule_v6);
+			IPACMDBG("num_wan_ul_fl_rule_v6= %d\n", num_wan_ul_fl_rule_v6[j]);
 
 			//add the MTU rule after the 2nd pass rules but before the 1st pass rule
-			if (num_wan_ul_fl_rule_v6) {
+			if (num_wan_ul_fl_rule_v6[j]) {
 				IPACMDBG("v6 GRE MTU rule will be installed after v6 modem UL rules\n");
 				mtu_flt_rule_offset[j][IPA_IP_v6] = wan_ul_fl_rule_hdl_v6[j][num_wan_ul_fl_rule_v6[j] - 1];
 			} else {
@@ -15391,17 +15482,25 @@ int IPACM_Lan::modify_ipv6_prefix_flt_rule()
 		pFilteringTable->ep = rx_prop->rx[idx].src_pipe;
 		pFilteringTable->add_after_hdl = mtu_flt_rule_offset[j][IPA_IP_v6];
 
+		/* Make LAN-traffic always go to Apps, use default IPA-RT table */
+		if (false == m_routing.GetRoutingTable(&IPACM_Iface::ipacmcfg->rt_tbl_default_v6)) {
+			IPACMERR("LAN m_routing.GetRoutingTable(&IPACM_Iface::ipacmcfg->rt_tbl_default_v6=0x%p) Failed.\n",
+						&IPACM_Iface::ipacmcfg->rt_tbl_default_v6);
+			free(pFilteringTable);
+			return IPACM_FAILURE;
+		}
+
 		memset(&flt_rule, 0, sizeof(struct ipa_flt_rule_add));
 		flt_rule.status = -1;
 		flt_rule.at_rear = 1;
 		flt_rule.rule.retain_hdr = 1;
 		flt_rule.rule.to_uc = 0;
-		flt_rule.rule.action = IPA_PASS_TO_EXCEPTION;
+		flt_rule.rule.action = IPA_PASS_TO_ROUTING;
+		flt_rule.rule.rt_tbl_hdl = IPACM_Iface::ipacmcfg->rt_tbl_default_v6.hdl;
 		flt_rule.rule.eq_attrib_type = 0;
 		/* first install DST address exception rules for offloaded PDNs */
 		for (i = 0; i < (IPACM_Iface::ipacmcfg->num_ipv6_prefixes); i++) {
 			/* add private prefix rule for ipv6 */
-			flt_rule.rule.action = IPA_PASS_TO_EXCEPTION;
 			flt_rule.rule.eq_attrib_type = 0;
 			memcpy(&flt_rule.rule.attrib, &rx_prop->rx[idx].attrib, sizeof(flt_rule.rule.attrib));
 			flt_rule.rule.attrib.attrib_mask |= IPA_FLT_DST_ADDR;
@@ -15704,7 +15803,7 @@ int IPACM_Lan::install_ipv6_prefix_flt_rule(uint32_t* prefix)
 			if (j == 0) {
 				idx = 0;
 			} else {
-				IPACMDBG_H("Interface is non vlan, dont install rule with index 2");
+				IPACMDBG_H("Interface is non vlan, dont install rule with index 2\n");
 				continue;
 			}
 		} else {
@@ -15727,6 +15826,13 @@ int IPACM_Lan::install_ipv6_prefix_flt_rule(uint32_t* prefix)
 		flt_rule->ip = IPA_IP_v6;
 		flt_rule->num_rules = rule_cnt;
 
+		/* Make LAN-traffic always go to Apps, use default IPA-RT table */
+		if (false == m_routing.GetRoutingTable(&IPACM_Iface::ipacmcfg->rt_tbl_default_v6)) {
+			IPACMERR("LAN m_routing.GetRoutingTable(&IPACM_Iface::ipacmcfg->rt_tbl_default_v6=0x%p) Failed.\n",
+						&IPACM_Iface::ipacmcfg->rt_tbl_default_v6);
+			return IPACM_FAILURE;
+		}
+
 		memset(&flt_rule_entry, 0, sizeof(struct ipa_flt_rule_add));
 
 		flt_rule_entry.rule.retain_hdr = 1;
@@ -15735,7 +15841,9 @@ int IPACM_Lan::install_ipv6_prefix_flt_rule(uint32_t* prefix)
 		flt_rule_entry.at_rear = true;
 		flt_rule_entry.flt_rule_hdl = -1;
 		flt_rule_entry.status = -1;
-		flt_rule_entry.rule.action = IPA_PASS_TO_EXCEPTION;
+		flt_rule_entry.rule.action = IPA_PASS_TO_ROUTING;
+		flt_rule_entry.rule.rt_tbl_hdl = IPACM_Iface::ipacmcfg->rt_tbl_default_v6.hdl;
+
 #ifdef FEATURE_IPA_V3
 		flt_rule_entry.rule.hashable = true;
 #endif
@@ -15819,7 +15927,7 @@ void IPACM_Lan::delete_ipv6_prefix_flt_rule()
 			if (j == 0) {
 				idx = 0;
 			} else {
-				IPACMDBG_H("Interface is non vlan, dont install rule with index 2");
+				IPACMDBG_H("Interface is non vlan, dont install rule with index 2\n");
 				continue;
 			}
 		} else {
@@ -15998,7 +16106,7 @@ int IPACM_Lan::handle_cradle_wan_mode_switch(bool is_wan_bridge_mode)
 			if ( j == 0 ) {
 				idx = 0 ;
 			} else {
-				IPACMDBG_H("Interface is non vlan, dont install rule with index 2");
+				IPACMDBG_H("Interface is non vlan, dont install rule with index 2\n");
 				continue;
 			}
 		} else {
@@ -18318,7 +18426,7 @@ int IPACM_Lan::add_tcp_syn_flt_rule(ipa_ip_type iptype)
 			if ( j == 0 ) {
 				idx = 0 ;
 			} else {
-				IPACMDBG_H("Interface is non vlan, dont install rule with index 2");
+				IPACMDBG_H("Interface is non vlan, dont install rule with index 2\n");
 				continue;
 			}
 		} else {
@@ -19263,7 +19371,7 @@ int IPACM_Lan::handle_mpdn_ul_xlat_filter_rule(ipacm_ext_prop * prop,
 			if ( j == 0 ) {
 				idx = 0 ;
 			} else {
-				IPACMDBG_H("Interface is non vlan, dont install rule with index 2");
+				IPACMDBG_H("Interface is non vlan, dont install rule with index 2\n");
 				continue;
 			}
 		} else {
@@ -19342,7 +19450,7 @@ int IPACM_Lan::handle_mpdn_ul_xlat_filter_rule(ipacm_ext_prop * prop,
 				 * make prev = curr i.e prev stores smallest rule id > max xlat rule id current consecutive set
 				 */
 				for (; curr < num_wan_ul_fl_rule_v4[j] && curr < MAX_NUM_EXT_PROPS; ++curr) {
-					if (xlat_ctx.ul_rule_id_hdl_map[curr].rule_id > flt_rule_entry.rule.rule_id) break;
+					if (xlat_ctx.ul_rule_id_hdl_map[j][curr].rule_id > flt_rule_entry.rule.rule_id) break;
 				}
 
 				/* commit consecutive rules with single ioctl */
@@ -19363,7 +19471,8 @@ int IPACM_Lan::handle_mpdn_ul_xlat_filter_rule(ipacm_ext_prop * prop,
 								}
 							}
 						}
-					} else pFilteringTable->add_after_hdl = xlat_ctx.ul_rule_id_hdl_map[prev - 1].flt_hdl;
+					} else
+						pFilteringTable->add_after_hdl = xlat_ctx.ul_rule_id_hdl_map[j][prev - 1].flt_hdl;
 
 					IPACMDBG("Installing after 0x%x\n", pFilteringTable->add_after_hdl);
 
@@ -19379,16 +19488,16 @@ int IPACM_Lan::handle_mpdn_ul_xlat_filter_rule(ipacm_ext_prop * prop,
 						goto fail;
 					} else {
 						for (i = 0; i < pFilteringTable->num_rules; i++) {
-							if (xlat_ctx.active_pdn_list[xlat_pdn_ctx_id].num_wan_mpdn_ul_xlat_fl_rule_v4 > MAX_WAN_UL_FILTER_RULES) {
+							if (xlat_ctx.active_pdn_list[xlat_pdn_ctx_id].num_wan_mpdn_ul_xlat_fl_rule_v4[j] > MAX_WAN_UL_FILTER_RULES) {
 								IPACMERR("Number of rules installed exceeded capacity\n");
 								goto fail;
 							}
 
-							pos = xlat_ctx.active_pdn_list[xlat_pdn_ctx_id].num_wan_mpdn_ul_xlat_fl_rule_v4++;
-							xlat_ctx.active_pdn_list[xlat_pdn_ctx_id].wan_mpdn_ul_xlat_fl_rule_hdl_v4[pos] =
+							pos = xlat_ctx.active_pdn_list[xlat_pdn_ctx_id].num_wan_mpdn_ul_xlat_fl_rule_v4[j]++;
+							xlat_ctx.active_pdn_list[xlat_pdn_ctx_id].wan_mpdn_ul_xlat_fl_rule_hdl_v4[j][pos] =
 								pFilteringTable->rules[i].flt_rule_hdl;
 							IPACMDBG("flt rule id %d flt hdl %d\n", pFilteringTable->rules[i].rule.rule_id,
-									 xlat_ctx.active_pdn_list[xlat_pdn_ctx_id].wan_mpdn_ul_xlat_fl_rule_hdl_v4[pos]);
+									 xlat_ctx.active_pdn_list[xlat_pdn_ctx_id].wan_mpdn_ul_xlat_fl_rule_hdl_v4[j][pos]);
 						}
 						IPACM_Iface::ipacmcfg->increaseFltRuleCount(rx_prop->rx[idx].src_pipe, iptype, pFilteringTable->num_rules);
 					}
@@ -19421,7 +19530,7 @@ int IPACM_Lan::handle_mpdn_ul_xlat_filter_rule(ipacm_ext_prop * prop,
 						}
 					}
 				}
-			} else pFilteringTable->add_after_hdl = xlat_ctx.ul_rule_id_hdl_map[prev - 1].flt_hdl;
+			} else pFilteringTable->add_after_hdl = xlat_ctx.ul_rule_id_hdl_map[j][prev - 1].flt_hdl;
 
 			IPACMDBG("Installing after 0x%x\n", pFilteringTable->add_after_hdl);
 
@@ -19437,15 +19546,15 @@ int IPACM_Lan::handle_mpdn_ul_xlat_filter_rule(ipacm_ext_prop * prop,
 				goto fail;
 			} else {
 				for (i = 0; i < pFilteringTable->num_rules; i++) {
-					if (xlat_ctx.active_pdn_list[xlat_pdn_ctx_id].num_wan_mpdn_ul_xlat_fl_rule_v4 > MAX_WAN_UL_FILTER_RULES) {
+					if (xlat_ctx.active_pdn_list[xlat_pdn_ctx_id].num_wan_mpdn_ul_xlat_fl_rule_v4[j] > MAX_WAN_UL_FILTER_RULES) {
 						IPACMERR("Number of rules installed exceeded capacity\n");
 						goto fail;
 					}
-					pos = xlat_ctx.active_pdn_list[xlat_pdn_ctx_id].num_wan_mpdn_ul_xlat_fl_rule_v4++;
-					xlat_ctx.active_pdn_list[xlat_pdn_ctx_id].wan_mpdn_ul_xlat_fl_rule_hdl_v4[pos] =
+					pos = xlat_ctx.active_pdn_list[xlat_pdn_ctx_id].num_wan_mpdn_ul_xlat_fl_rule_v4[j]++;
+					xlat_ctx.active_pdn_list[xlat_pdn_ctx_id].wan_mpdn_ul_xlat_fl_rule_hdl_v4[j][pos] =
 						pFilteringTable->rules[i].flt_rule_hdl;
 					IPACMDBG("flt rule id %d flt hdl %d\n", pFilteringTable->rules[i].rule.rule_id,
-							 xlat_ctx.active_pdn_list[xlat_pdn_ctx_id].wan_mpdn_ul_xlat_fl_rule_hdl_v4[pos]);
+							 xlat_ctx.active_pdn_list[xlat_pdn_ctx_id].wan_mpdn_ul_xlat_fl_rule_hdl_v4[j][pos]);
 				}
 				IPACM_Iface::ipacmcfg->increaseFltRuleCount(rx_prop->rx[idx].src_pipe, iptype, pFilteringTable->num_rules);
 			}
@@ -19455,6 +19564,12 @@ int IPACM_Lan::handle_mpdn_ul_xlat_filter_rule(ipacm_ext_prop * prop,
 			IPACMERR("Error sending filtering rule index, aborting...\n");
 			ret = IPACM_FAILURE;
 			goto fail;
+		}
+
+		if (pFilteringTable != NULL)
+		{
+			free(pFilteringTable);
+			pFilteringTable = NULL;
 		}
 	}
 
@@ -19467,7 +19582,7 @@ fail:
 
 int IPACM_Lan::delete_mdpn_ul_xlat_filter_rule(int mux_id)
 {
-	int ret = IPACM_SUCCESS, xlat_pdn_ctx_id, idx = 0;
+	int j, ret = IPACM_SUCCESS, xlat_pdn_ctx_id, idx = 0;
 
 	xlat_pdn_ctx_id = get_pdn_xlat_ctx(mux_id, 0);
 	if (xlat_pdn_ctx_id == IPACM_FAILURE)
@@ -19476,35 +19591,46 @@ int IPACM_Lan::delete_mdpn_ul_xlat_filter_rule(int mux_id)
 		return IPACM_FAILURE;
 	}
 
-	if ((ipa_if_cate == WLAN_IF) && (is_if_svap || is_wlan_if_vlan) && (rx_prop && rx_prop->num_rx_props > 2)) {
-		idx = 2;
-		IPACMDBG_H("Interface is WLAN Svap or vlan, install rules on Rx pipe at idx %d \n", idx);
-	}
+	for (j = 0; j < rx_prop->num_rx_props / 2 && j < IPA_MAX_NUM_PROPS; j++)
+	{
+		if ((ipa_if_cate == WLAN_IF) && (is_if_svap || is_wlan_if_vlan) && (rx_prop->num_rx_props > 2)) {
+			if (j != 1) {
+				IPACMDBG_H("Interface is WLAN Svap or w-vlan, dont install rules on pipe %d..... continue\n", idx);
+				continue;
+			} else {
+				idx = 2;
+				IPACMDBG_H("Interface is WLAN Svap or vlan, install rules on Rx1 pipe at idx %d \n", idx);
+			} /* Easymesh Not Vlan pipe condition need to install for 1st handle of array and idx 0 */
+		} else if ((ipa_if_cate == WLAN_IF) && (rx_prop->num_rx_props > 2)){
+			if (j == 0) {
+				idx = 0;
+			} else {
+				IPACMDBG_H("Interface is non vlan, dont install rule with index 2");
+				continue;
+			}
+		} else {
+			idx = j * 2;
+			IPACMDBG_H("Install rules at idx %d\n", idx);
+		}
 
-	if (xlat_ctx.active_pdn_list[xlat_pdn_ctx_id].num_wan_mpdn_ul_xlat_fl_rule_v4 == 0)
-	{
-		IPACMERR("No modem mpdn UL xlat rules were installed \n");
-	}
-	else
-	{
-		if(m_filtering.DeleteFilteringHdls(xlat_ctx.active_pdn_list[xlat_pdn_ctx_id].wan_mpdn_ul_xlat_fl_rule_hdl_v4,
-			IPA_IP_v4, xlat_ctx.active_pdn_list[xlat_pdn_ctx_id].num_wan_mpdn_ul_xlat_fl_rule_v4) == false)
+		if (xlat_ctx.active_pdn_list[xlat_pdn_ctx_id].num_wan_mpdn_ul_xlat_fl_rule_v4[j] == 0)
 		{
-			IPACMERR("Error deleting mpdn uplink xlat filter rules, aborting...\n");
-			ret = IPACM_FAILURE;
-			goto fail;
-		}
-		IPACMDBG_H("Deleted xlat mpdn rules for pdn mux : %d\n", mux_id);
+			if (xlat_ctx.active_pdn_list[xlat_pdn_ctx_id].num_wan_mpdn_ul_xlat_fl_rule_v4[j] == 0)
+			{
+				IPACMERR("No modem mpdn UL xlat rules were installed \n");
+			}
+			IPACMDBG_H("Deleted xlat mpdn rules for pdn mux : %d\n", mux_id);
 
-		if(rx_prop == NULL){
-			IPACMERR("no rx props\n");
-			return IPACM_FAILURE;
+			if(rx_prop == NULL){
+				IPACMERR("no rx props\n");
+				return IPACM_FAILURE;
+			}
+			IPACM_Iface::ipacmcfg->decreaseFltRuleCount(rx_prop->rx[idx].src_pipe, IPA_IP_v4,
+					xlat_ctx.active_pdn_list[xlat_pdn_ctx_id].num_wan_mpdn_ul_xlat_fl_rule_v4[j]);
+			memset(xlat_ctx.active_pdn_list[xlat_pdn_ctx_id].wan_mpdn_ul_xlat_fl_rule_hdl_v4[j],
+					0, MAX_WAN_UL_FILTER_RULES*sizeof(uint32_t));
+			xlat_ctx.active_pdn_list[xlat_pdn_ctx_id].num_wan_mpdn_ul_xlat_fl_rule_v4[j] = 0;
 		}
-		IPACM_Iface::ipacmcfg->decreaseFltRuleCount(rx_prop->rx[idx].src_pipe, IPA_IP_v4,
-				xlat_ctx.active_pdn_list[xlat_pdn_ctx_id].num_wan_mpdn_ul_xlat_fl_rule_v4);
-		memset(xlat_ctx.active_pdn_list[xlat_pdn_ctx_id].wan_mpdn_ul_xlat_fl_rule_hdl_v4,
-				0, MAX_WAN_UL_FILTER_RULES*sizeof(uint32_t));
-		xlat_ctx.active_pdn_list[xlat_pdn_ctx_id].num_wan_mpdn_ul_xlat_fl_rule_v4 = 0;
 	}
 
 fail:
@@ -19543,7 +19669,7 @@ int IPACM_Lan::delete_icmp_filter_rule(
 			if (j == 0) {
 				idx = 0;
 			} else {
-				IPACMDBG_H("Interface is non vlan, dont install rule with index 2");
+				IPACMDBG_H("Interface is non vlan, dont install rule with index 2\n");
 				continue;
 			}
 		} else {
@@ -21639,6 +21765,7 @@ int IPACM_Lan::install_default_qos_rt_rules(uint8_t *client_mac, uint16_t client
 			res = IPACM_FAILURE;
 			goto fail;
 		}
+		dft_qos_rt_rule_hdl[0] = 0;
 	}
 	IPACMDBG_H("Finished delete default qos ipv4 rules \n");
 
@@ -21654,6 +21781,7 @@ int IPACM_Lan::install_default_qos_rt_rules(uint8_t *client_mac, uint16_t client
 				res = IPACM_FAILURE;
 				goto fail;
 			}
+			dft_qos_rt_rule_hdl[i] = 0;
 		}
 	}
 	IPACMDBG("Finished delete default qos ipv6 rules \n");

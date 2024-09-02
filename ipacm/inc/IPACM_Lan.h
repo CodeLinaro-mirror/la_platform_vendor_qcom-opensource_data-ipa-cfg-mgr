@@ -227,13 +227,13 @@ typedef struct pdn_context
 	int pdn_mux_id;
 	uint16_t associated_VIDs[IPA_MAX_NUM_SW_PDNS];
 	uint32_t active_vlan_count;
-	uint32_t wan_mpdn_ul_xlat_fl_rule_hdl_v4[MAX_WAN_UL_FILTER_RULES];
-	uint32_t num_wan_mpdn_ul_xlat_fl_rule_v4;
+	uint32_t wan_mpdn_ul_xlat_fl_rule_hdl_v4[IPA_MAX_NUM_PROPS][MAX_WAN_UL_FILTER_RULES];
+	uint32_t num_wan_mpdn_ul_xlat_fl_rule_v4[IPA_MAX_NUM_PROPS];
 }pdn_context;
 
 typedef struct _xlat_context
 {
-	rule_id_hdl_map ul_rule_id_hdl_map[MAX_WAN_UL_FILTER_RULES];
+	rule_id_hdl_map ul_rule_id_hdl_map[IPA_MAX_NUM_PROPS][MAX_WAN_UL_FILTER_RULES];
 
 	/* PDN's for which UL filter installed */
 	pdn_context active_pdn_list[IPA_MAX_NUM_HW_PDNS];
@@ -1734,14 +1734,20 @@ public:  //mike why we have 2 public. Why not just move this on top?
 	int delete_icmp_filter_rule(
 		ipa_ip_type iptype);
 
-	uint32_t get_u8_bitmap_from_tc(uint8_t traffic_class);
-	int handle_qos_route_rule(uint8_t *client_mac, uint16_t vlan_id, ipa_ip_type iptype, list<qos_param_info>::iterator qos_param);
+    uint32_t get_u8_bitmap_from_tc(uint8_t traffic_class);
+	int handle_qos_route_rule(uint8_t *client_mac, uint16_t vlan_id, ipa_ip_type iptype,
+		list<qos_param_info>::iterator qos_param, uint32_t *ipv6_addr = NULL);
 	int handle_qos_route_rule_ext_v2(uint8_t *client_mac, uint16_t vlan_id,
-		ipa_ip_type iptype, list<qos_param_info>::iterator qos_param);
-	int install_all_qos_route_rule(uint8_t * client_mac, uint16_t vlan_id);
-	int if_client_qos_rule_needed(uint8_t *client_mac, uint16_t vlan_id, list<qos_param_info>::iterator qos_param);
-	int delete_client_qos_rule(uint8_t *client_mac, uint16_t vlan_id);
-	int delete_client_info_from_qos(uint8_t *client_mac, uint16_t vlan_id, list<qos_param_info>::iterator qos_param);
+		ipa_ip_type iptype, list<qos_param_info>::iterator qos_param,
+		uint32_t *ipv6_addr = NULL);
+	int install_all_qos_route_rule(uint8_t * client_mac, uint16_t vlan_id,
+		uint32_t *ipv6_addr = NULL);
+	int if_client_qos_rule_needed(uint8_t *client_mac, uint16_t vlan_id,
+		list<qos_param_info>::iterator qos_param, uint32_t *ipv6_addr = NULL);
+	int delete_client_qos_rule(uint8_t *client_mac, uint16_t vlan_id,
+		ipa_ip_type iptype, uint32_t *ipv6_addr = NULL);
+	int delete_client_info_from_qos(uint8_t *client_mac, uint16_t vlan_id,
+		list<qos_param_info>::iterator qos_param, uint32_t *ipv6_addr = NULL);
 	int delete_all_client_qos_rules();
 	int delete_all_client_info_from_qos(list<qos_param_info>::iterator qos_param);
 };

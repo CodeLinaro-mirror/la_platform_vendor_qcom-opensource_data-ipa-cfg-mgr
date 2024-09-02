@@ -230,11 +230,16 @@ public:
 	size_t operator()(const ipa_ioc_ipsec_ul_flt_attr uf) const
 	{
 		return 	std::hash<uint32_t>()(uf.ip) ^
-			std::hash<uint32_t>()(uf.attr.spi) ^
 			std::hash<uint32_t>()((uint32_t)uf.attr.src_port |
 					      ((uint32_t)uf.attr.dst_port << 16)) ^
+			std::hash<uint32_t>()((uint32_t)uf.attr.src_port_lo |
+					      ((uint32_t)uf.attr.src_port_hi << 16)) ^
+			std::hash<uint32_t>()((uint32_t)uf.attr.dst_port_lo |
+					      ((uint32_t)uf.attr.dst_port_hi << 16)) ^
 			std::hash<uint32_t>()((uint32_t)uf.attr.u.v4.protocol |
 					      ((uint32_t)uf.attr.u.v6.next_hdr << 8)) ^
+			std::hash<uint32_t>()(uf.attr.u.v4.src_addr) ^
+			std::hash<uint32_t>()(uf.attr.u.v4.dst_addr) ^
 			std::hash<uint32_t>()(uf.attr.u.v6.src_addr[0]) ^
 			std::hash<uint32_t>()(uf.attr.u.v6.src_addr[1]) ^
 			std::hash<uint32_t>()(uf.attr.u.v6.src_addr[2]) ^
@@ -263,8 +268,7 @@ struct qos_client_info
 {
 	uint8_t mac[IPA_MAC_ADDR_SIZE];
 	uint32_t qos_rt_rule_hdl_v4;
-	uint32_t qos_rt_rule_hdl_v6[IPV6_NUM_ADDR];
-	uint32_t qos_rt_rule_hdl_wan_v6[IPV6_NUM_ADDR];
+	uint32_t qos_rt_rule_hdl_v6;
 
 	uint32_t dscp_hpc_hdl_v4;
 	uint32_t dscp_hpc_hdl_v6[IPV6_NUM_ADDR];
@@ -273,7 +277,7 @@ struct qos_client_info
 	bool route_rule_set_v6;
 
 	uint32_t v4_ip_addr;
-	uint32_t v6_ip_addr[IPV6_NUM_ADDR][4];
+	uint32_t v6_ip_addr[4];
 };
 
 struct qos_param_info {
@@ -293,7 +297,6 @@ struct qos_param_info {
 
 	uint32_t qos_rt_rule_hdl_v4;
 	uint32_t qos_rt_rule_hdl_v6;
-	uint32_t qos_rt_rule_hdl_wan_v6;
 
 	bool route_rule_set_v4;
 	bool route_rule_set_v6;
@@ -484,7 +487,7 @@ public:
 
 	/* IPACM routing table name for v4/v6 */
 	struct ipa_ioc_get_rt_tbl rt_tbl_lan_v4, rt_tbl_wan_v4, rt_tbl_default_v4, rt_tbl_v6, rt_tbl_wan_v6;
-	struct ipa_ioc_get_rt_tbl rt_tbl_wan_dl;
+	struct ipa_ioc_get_rt_tbl rt_tbl_wan_dl, rt_tbl_default_v6;
 	struct ipa_ioc_get_rt_tbl rt_tbl_odu_v4, rt_tbl_odu_v6;
 
 

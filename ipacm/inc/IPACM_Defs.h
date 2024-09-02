@@ -108,6 +108,7 @@ extern "C"
 #define V6_WAN_ROUTE_TABLE_NAME  "WANRTBLv6"
 #define V4_ODU_ROUTE_TABLE_NAME  "ODURTBLv4"
 #define V6_ODU_ROUTE_TABLE_NAME  "ODURTBLv6"
+#define V6_DEFAULT_ROUTE_TABLE_NAME  "ipa_dflt_rt"
 
 #define WWAN_QMI_IOCTL_DEVICE_NAME "/dev/wwan_ioctl"
 #define IPA_DEVICE_NAME "/dev/ipa"
@@ -152,7 +153,11 @@ extern "C"
 #define IPACM_IP_NULL (ipa_ip_type)0xFF
 #define IPACM_INVALID_INDEX (ipa_ip_type)0x15E
 
+#ifdef FEATURE_WLAN_256_CLIENTS
 #define IPA_MAX_NUM_WIFI_CLIENTS 350
+#else
+#define IPA_MAX_NUM_WIFI_CLIENTS  32
+#endif
 #define IPA_MAX_NUM_WAN_CLIENTS  10
 #define IPA_MAX_NUM_VLAN_CLIENTS 32
 #define IPA_MAX_NUM_ETH_CLIENTS  32
@@ -375,6 +380,7 @@ typedef enum
 	IPA_QOS_RULE_ADD_EVENT,                   /* ipacm_qos_rule_add_event */
 	IPA_QOS_RULE_DEL_EVENT,                   /* ipacm_qos_rule_del_event */
 	IPA_QOS_RULE_FLUSH_EVENT,                 /* ipacm_qos_rule_flush_event */
+	IPA_HANDLE_NEW_NEIGH_EVENT,               /* ipacm_event_data_fid */
 	IPACM_EVENT_MAX
 } ipa_cm_event_id;
 

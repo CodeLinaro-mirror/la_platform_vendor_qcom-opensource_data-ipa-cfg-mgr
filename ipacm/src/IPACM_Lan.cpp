@@ -1545,7 +1545,7 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 				data->VlanID,
 				data->iptype);
 			/* VlanID 0 is using to make VLAN_PDN_DOWN for all VLANs */
-			if(!data->VlanID ||is_vlan_IF(data->VlanID) || IPACM_Iface::ipacmcfg->is_dummy_VID(data->VlanID)
+			if(!data->VlanID ||is_vlan_IF(data->VlanID)
 #ifdef IPA_L2TP_TUNNEL_UDP
 				|| IPACM_Iface::ipacmcfg->check_l2tp_bridge_vlan_id(data->VlanID)
 #endif
@@ -7362,48 +7362,48 @@ fail:
 						m_routing.DeleteRoutingHdl(get_client_memptr(eth_client, i)->dl_first_pass_rt_rule_hdl, IPA_IP_v4) == false)
 				{
 					IPACMERR("Failed to delete first pass rt rule.\n");
-					return IPACM_FAILURE;
+					res = IPACM_FAILURE;
 				}
 				if(get_client_memptr(eth_client, i)->dl_second_pass_rt_rule_hdl &&
 						m_routing.DeleteRoutingHdl(get_client_memptr(eth_client, i)->dl_second_pass_rt_rule_hdl, IPA_IP_v6) == false)
 				{
 					IPACMERR("Failed to delete second pass rt rule.\n");
-					return IPACM_FAILURE;
+					res = IPACM_FAILURE;
 				}
 
 				if(get_client_memptr(eth_client, i)->dl_first_pass_hdr_proc_ctx_hdl[IPA_IP_v4] &&
 						m_header.DeleteHeaderProcCtx(get_client_memptr(eth_client, i)->dl_first_pass_hdr_proc_ctx_hdl[IPA_IP_v4]) == false)
 				{
 					IPACMERR("Failed to delete first pass hdr proc ctx.\n");
-					return IPACM_FAILURE;
+					res = IPACM_FAILURE;
 				}
 #ifdef IPA_L2TP_TUNNEL_UDP
 				if(get_client_memptr(eth_client, i)->dl_first_pass_hdr_proc_ctx_hdl[IPA_IP_v6] &&
 						m_header.DeleteHeaderProcCtx(get_client_memptr(eth_client, i)->dl_first_pass_hdr_proc_ctx_hdl[IPA_IP_v6]) == false)
 				{
 					IPACMERR("Failed to delete first pass hdr proc ctx.\n");
-					return IPACM_FAILURE;
+					res = IPACM_FAILURE;
 				}
 #endif
 				if(get_client_memptr(eth_client, i)->dl_first_pass_hdr_hdl[IPA_IP_v4] &&
 						m_header.DeleteHeaderHdl(get_client_memptr(eth_client, i)->dl_first_pass_hdr_hdl[IPA_IP_v4]) == false)
 				{
 					IPACMERR("Failed to delete first pass hdr.\n");
-					return IPACM_FAILURE;
+					res = IPACM_FAILURE;
 				}
 #ifdef IPA_L2TP_TUNNEL_UDP
 				if(get_client_memptr(eth_client, i)->dl_first_pass_hdr_hdl[IPA_IP_v6] &&
 						m_header.DeleteHeaderHdl(get_client_memptr(eth_client, i)->dl_first_pass_hdr_hdl[IPA_IP_v6]) == false)
 				{
 					IPACMERR("Failed to delete first pass hdr.\n");
-					return IPACM_FAILURE;
+					res = IPACM_FAILURE;
 				}
 #endif
 				if(get_client_memptr(eth_client, i)->dl_second_pass_hdr_hdl &&
 						m_header.DeleteHeaderHdl(get_client_memptr(eth_client, i)->dl_second_pass_hdr_hdl) == false)
 				{
 					IPACMERR("Failed to delete second pass hdr.\n");
-					return IPACM_FAILURE;
+					res = IPACM_FAILURE;
 				}
 				/* delete ul rules */
 				if(get_client_memptr(eth_client, i)->ul_first_pass_flt_rule_hdl)
@@ -7411,7 +7411,7 @@ fail:
 					if(m_filtering.DeleteFilteringHdls(&get_client_memptr(eth_client, i)->ul_first_pass_flt_rule_hdl, IPA_IP_v6, 1) == false)
 					{
 						IPACMERR("Failed to delete ul flt rule.\n");
-						return IPACM_FAILURE;
+						res = IPACM_FAILURE;
 					}
 					if (rx_prop)
 					{
@@ -7422,7 +7422,7 @@ fail:
 						m_routing.DeleteRoutingHdl(get_client_memptr(eth_client, i)->ul_first_pass_rt_rule_hdl, IPA_IP_v6) == false)
 				{
 					IPACMERR("Failed to delete ul rt rule.\n");
-					return IPACM_FAILURE;
+					res = IPACM_FAILURE;
 				}
 #ifdef IPA_L2TP_TUNNEL_UDP
 				get_client_memptr(eth_client, i)->ipv4_header_set = false;
@@ -10665,7 +10665,7 @@ void IPACM_Lan::post_del_self_evt()
 /*handle reset usb-client rt-rules */
 int IPACM_Lan::handle_lan_client_reset_rt(ipa_ip_type iptype, uint16_t vlan_id)
 {
-	int i, res = IPACM_SUCCESS;
+	int i, j, res = IPACM_SUCCESS;
 
 	/* clean eth-client routing rules */
 	IPACMDBG_H("left %d eth clients need to be deleted \n ", num_eth_client);
@@ -10697,6 +10697,10 @@ int IPACM_Lan::handle_lan_client_reset_rt(ipa_ip_type iptype, uint16_t vlan_id)
 			}
 			else
 			{
+				for (j = 0; j < get_client_memptr(eth_client, i)->ipv6_set; ++j)
+				{
+					CtList->HandleNeighIpAddrDelEvt_v6(Ipv6IpAddress(get_client_memptr(eth_client, i)->v6_addr[j], false));
+				}
 				get_client_memptr(eth_client, i)->ipv6_set = 0;
 				memset(get_client_memptr(eth_client, i)->client_backhaul_prefix, 0, 2 * sizeof(uint32_t));
 				memset(get_client_memptr(eth_client, i)->v6_addr, 0, IPV6_NUM_ADDR * 4 * sizeof(uint32_t));
@@ -10710,6 +10714,10 @@ int IPACM_Lan::handle_lan_client_reset_rt(ipa_ip_type iptype, uint16_t vlan_id)
 			}
 			else
 			{
+				for (j = 0; j < get_client_memptr(eth_client, i)->ipv6_set; ++j)
+				{
+					CtList->HandleNeighIpAddrDelEvt_v6(Ipv6IpAddress(get_client_memptr(eth_client, i)->v6_addr[j], false));
+				}
 				get_client_memptr(eth_client, i)->ipv6_set = 0;
 				memset(get_client_memptr(eth_client, i)->client_backhaul_prefix, 0, 2 * sizeof(uint32_t));
 				memset(get_client_memptr(eth_client, i)->v6_addr, 0, IPV6_NUM_ADDR * 4 * sizeof(uint32_t));
@@ -14635,7 +14643,7 @@ int IPACM_Lan::uninstall_l2tp_rules(ipacm_event_data_all *data)
 			HandleNeighIpAddrDelEvt(
 				get_client_memptr(eth_client, index)->ipv4_set,
 				get_client_memptr(eth_client, index)->v4_addr,
-				get_client_memptr(eth_client, index)->ipv6_set,
+				0,
 				get_client_memptr(eth_client, index)->v6_addr);
 			if(delete_eth_rtrules(index, IPA_IP_v4))
 			{
@@ -14663,6 +14671,9 @@ int IPACM_Lan::uninstall_l2tp_rules(ipacm_event_data_all *data)
 	}
 	else if(data->iptype == IPA_IP_v6)
 	{
+			HandleNeighIpAddrDelEvt(0, 0,
+				get_client_memptr(eth_client, index)->ipv6_set,
+				get_client_memptr(eth_client, index)->v6_addr);
 			if(handle_del_ipv6_addr(data))
 			{
 				IPACMERR("Failed to delete first pass rt rule.\n");

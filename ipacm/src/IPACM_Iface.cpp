@@ -811,7 +811,17 @@ int IPACM_Iface::init_fl_rule(
 		memset(&flt_rule_entry, 0, sizeof(struct ipa_flt_rule_add));
 
 		/* construct ipa_ioc_add_flt_rule with default filter rules */
-		if (iptype == IPA_IP_v4) {
+		if(eogre_enabled)
+		{
+			IPACMDBG_H("Will not install frag, mcast and bcast rules when eogre enabled\n");
+			if (m_ipv4_default_filterting_rules_count[j] || m_ipv6_default_filterting_rules_count[j]) {
+				if ( delete_dflt_filter_rules(iptype) == IPACM_FAILURE ) {
+					IPACMERR("delete_dflt_filter_rules failed, iptype: %d\n",iptype);
+					return IPACM_FAILURE;
+				}
+				IPACMDBG_H("delete_dflt_filter_rules previously installed, iptype :%d\n",iptype);
+			}
+		} else if (iptype == IPA_IP_v4) {
 			if (m_ipv4_default_filterting_rules_count[j]) {
 				IPACMDBG_H("v4 rules already installed\n");
 				return IPACM_SUCCESS;
@@ -848,11 +858,6 @@ int IPACM_Iface::init_fl_rule(
 				sizeof(struct ipa_flt_rule_add));
 			m_ipv4_default_filterting_rules_count[j]++;
 
-			if (eogre_enabled) {
-				IPACMDBG_H(
-					"Will install frag, but not mcast "
-					"and bcast rules when eogre enabled\n");
-			} else {
 				IPACMDBG_H("Installing frag, mcast, and bcast rules\n");
 
 				/* Configuring Multicast Filtering Rule */
@@ -884,7 +889,6 @@ int IPACM_Iface::init_fl_rule(
 					&flt_rule_entry,
 					sizeof(struct ipa_flt_rule_add));
 				m_ipv4_default_filterting_rules_count[j]++;
-			}
 
 			IPACMDBG_H("Total num rules to add %d\n", m_ipv4_default_filterting_rules_count[j]);
 
@@ -953,13 +957,6 @@ int IPACM_Iface::init_fl_rule(
 #else
 			const char *rule_set_ex = "mcast, fe80::/10, fec0::/10, and fd00::/8";
 #endif
-			if (eogre_enabled) {
-				if (*rule_set) {
-					IPACMDBG_H(
-						"Will install %s but not %s rules when eogre enabled\n",
-						rule_set, rule_set_ex);
-				}
-			} else {
 				IPACMDBG_H("Installing %s%s rules\n", rule_set, rule_set_ex);
 
 				/* Configuring Multicast Filtering Rule */
@@ -1087,7 +1084,6 @@ int IPACM_Iface::init_fl_rule(
 				memcpy(&(m_pFilteringTable->rules[m_ipv6_default_filterting_rules_count[j]++]),
 					   &flt_rule_entry, sizeof(struct ipa_flt_rule_add));
 #endif
-			}
 
 			IPACMDBG_H(
 				"Total num rules to add %d\n",

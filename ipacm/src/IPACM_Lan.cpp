@@ -10015,7 +10015,7 @@ int IPACM_Lan::modify_private_subnet()
 					 * for XLAT scenarios, need to -20 to account for
 					 * the v4->v6 translation that will add 20 bytes
 					 */
-					if(IPACM_Wan::is_xlat_by_vid(i))
+					if(IPACM_Wan::is_xlat_by_vid(vid[i]))
 					{
 						mtu[i] = mtu[i] - IPV4_HEADER_SIZE;
 					}

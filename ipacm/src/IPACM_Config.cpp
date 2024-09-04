@@ -1012,11 +1012,6 @@ void IPACM_Config::update_config_private_forwarding(bool reset){
 	}
 	fread(file_buf, 100, 1, fp);
 	fclose(fp);
-	if(strstr(file_buf, "ipforward")){
-		//If this string is present, it means the FR is active
-		IPACMDBG_H("Private IP Forward FR already active\n");
-	}
-	else{
 		if(strstr(IP_Forwarding_config.interface_name, "0")){
 			eth_iface_no = 1;
 		}
@@ -1029,7 +1024,7 @@ void IPACM_Config::update_config_private_forwarding(bool reset){
 			snprintf(cmd, 200, "echo \"ipforward%d\n\r\" > /etc/data/ipa_config.txt",eth_iface_no);
 		system(cmd);
 		IPACMDBG_H("Executed system command\n");
-	}
+		IPACMDBG_H("Private IP Forward FR Active with vlan_id %d\n", IP_Forwarding_config.vlan);
 }
 
 void IPACM_Config::update_bridge_vlan_details_private_forwarding(uint32_t ip_addr)

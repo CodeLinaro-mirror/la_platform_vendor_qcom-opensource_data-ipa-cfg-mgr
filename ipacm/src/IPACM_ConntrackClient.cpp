@@ -25,6 +25,10 @@
  * WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *
+ * Changes from Qualcomm Innovation Center are provided under the following license:
+ * Copyright (c) 2023-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear.
  */
 #include <stdio.h>
 #include <stdlib.h>
@@ -99,12 +103,24 @@ int IPACM_ConntrackClient::IPAConntrackEventCB
 	ipacm_cmd_q_data evt_data;
 	ipacm_ct_evt_data *ct_data;
 	uint8_t ip_type = 0;
+	uint16_t sport = 0;
+	uint16_t dport = 0;
 	IPACM_Config *config_instance = NULL;
 
 	IPACMDBG("Event callback called with msgtype: %d\n",type);
 
 	/* Retrieve ip type */
 	ip_type = nfct_get_attr_u8(ct, ATTR_REPL_L3PROTO);
+	sport = nfct_get_attr_u16(ct, ATTR_ORIG_PORT_SRC);
+	sport = ntohs(sport);
+	dport = nfct_get_attr_u16(ct, ATTR_ORIG_PORT_DST);
+	dport = ntohs(dport);
+        /* Avoid processing conntrack with DNS 53 port */
+	if(dport == 53 || sport == 53)
+	{
+		IPACMDBG("iptype: %d: sport: %d: dport: %d\n", ip_type, sport, dport);
+		return NFCT_CB_STOLEN;
+	}
 	IPACMDBG("iptype: %d\n", ip_type);
 
 #ifndef CT_OPT

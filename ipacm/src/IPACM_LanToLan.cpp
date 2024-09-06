@@ -1601,9 +1601,10 @@ void IPACM_LanToLan_Iface::add_client_flt_rule(peer_iface_info *peer, client_inf
 	list<client_info>::iterator it;
 	uint32_t flt_rule_hdl = 0, l2tp_flt_rule_hdl = 0, l2tp_second_pass_flt_rule_hdl = 0;
 	list<uint32_t> flt_rule_hdls = std::list<uint32_t>();
-	flt_rule_info new_flt_info;
+	flt_rule_info new_flt_info = {0};
 	ipa_ioc_get_rt_tbl rt_tbl;
 	list<peer_iface_info>::iterator it_peer;
+	int ret = 0;
 
 	if(m_is_l2tp_iface && iptype == IPA_IP_v4)
 	{
@@ -1754,8 +1755,13 @@ void IPACM_LanToLan_Iface::add_client_flt_rule(peer_iface_info *peer, client_inf
 					return;
 				}
 
-				m_p_iface->eth_bridge_add_flt_rule(client->mac_addr, rt_tbl.hdl,
+				ret = m_p_iface->eth_bridge_add_flt_rule(client->mac_addr, rt_tbl.hdl,
 					iptype, &flt_rule_hdl, client->vlan_id, pipe_idx);
+				if(ret == -1)
+				{
+						IPACMERR("filter rule addition failed\n");
+						return;
+				}
 
 				peer->peer->pipe_idx = true;
 			}

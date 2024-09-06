@@ -1471,7 +1471,7 @@ bool IPACM_Config::is_lan2lan_sw_path(uint16_t vlan_id)
 	return ret;
 }
 
-uint16_t IPACM_Config::get_bridge_vlan_mapping_from_subnet(uint32_t ipv4_subnet)
+uint16_t IPACM_Config::get_bridge_vlan_mapping_from_subnet(uint32_t ipv4_subnet, bool is_dummy)
 {
 	list<bridge_vlan_mapping_info>::iterator it_mapping;
 	int ret = IPACM_FAILURE;
@@ -1487,12 +1487,17 @@ uint16_t IPACM_Config::get_bridge_vlan_mapping_from_subnet(uint32_t ipv4_subnet)
 	{
 		if(ipv4_subnet == (it_mapping->bridge_ipv4 & it_mapping->subnet_mask))
 		{
-			IPACMDBG_H("Found the bridge mapping for subnet 0x%X (vid = %d)\n",
-				ipv4_subnet,
-				it_mapping->bridge_associated_VID);
-			VlanID = it_mapping->bridge_associated_VID;
-			pthread_mutex_unlock(&vlan_l2tp_lock);
-			return VlanID;
+			/* Do not handle cross combination of dummy and non dummy */
+			if(!((!is_dummy && is_dummy_VID(it_mapping->bridge_associated_VID)) ||
+					(is_dummy && !is_dummy_VID(it_mapping->bridge_associated_VID))))
+			{
+				IPACMDBG_H("Found the bridge mapping for subnet 0x%X (vid = %d)\n",
+					ipv4_subnet,
+					it_mapping->bridge_associated_VID);
+				VlanID = it_mapping->bridge_associated_VID;
+				pthread_mutex_unlock(&vlan_l2tp_lock);
+				return VlanID;
+			}
 		}
 	}
 

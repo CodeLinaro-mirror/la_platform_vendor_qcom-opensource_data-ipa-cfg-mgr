@@ -214,7 +214,7 @@ void* firewall_monitor(void *param)
 						IPACMERR("config is not  initialized\n");
 					}
 				}
-				else if (!strncmp(event->name, IPACM_CFG_FILE_NAME, event->len) && IPACM_Iface::ipacmcfg->ipacm_msgflt_enable) // IPACM_configuration change
+				else if (!strncmp(event->name, IPACM_CFG_FILE_NAME, event->len)) // IPACM_configuration change
 				{
 					IPACMDBG_H("File \"%s\" was 0x%x\n", event->name, event->mask);
 					IPACMDBG_H("The interested file %s .\n", IPACM_CFG_FILE_NAME);

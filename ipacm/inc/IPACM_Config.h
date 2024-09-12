@@ -229,25 +229,39 @@ struct IpsecUlFltHash {
 public:
 	size_t operator()(const ipa_ioc_ipsec_ul_flt_attr uf) const
 	{
-		return 	std::hash<uint32_t>()(uf.ip) ^
-			std::hash<uint32_t>()((uint32_t)uf.attr.src_port |
-					      ((uint32_t)uf.attr.dst_port << 16)) ^
-			std::hash<uint32_t>()((uint32_t)uf.attr.src_port_lo |
-					      ((uint32_t)uf.attr.src_port_hi << 16)) ^
-			std::hash<uint32_t>()((uint32_t)uf.attr.dst_port_lo |
-					      ((uint32_t)uf.attr.dst_port_hi << 16)) ^
-			std::hash<uint32_t>()((uint32_t)uf.attr.u.v4.protocol |
-					      ((uint32_t)uf.attr.u.v6.next_hdr << 8)) ^
-			std::hash<uint32_t>()(uf.attr.u.v4.src_addr) ^
-			std::hash<uint32_t>()(uf.attr.u.v4.dst_addr) ^
-			std::hash<uint32_t>()(uf.attr.u.v6.src_addr[0]) ^
-			std::hash<uint32_t>()(uf.attr.u.v6.src_addr[1]) ^
-			std::hash<uint32_t>()(uf.attr.u.v6.src_addr[2]) ^
-			std::hash<uint32_t>()(uf.attr.u.v6.src_addr[3]) ^
-			std::hash<uint32_t>()(uf.attr.u.v6.dst_addr[0]) ^
-			std::hash<uint32_t>()(uf.attr.u.v6.dst_addr[1]) ^
-			std::hash<uint32_t>()(uf.attr.u.v6.dst_addr[2]) ^
-			std::hash<uint32_t>()(uf.attr.u.v6.dst_addr[3]);
+		switch (uf.ip) {
+		case IPA_IP_v4:
+			return 	std::hash<uint32_t>()(uf.ip) ^
+				std::hash<uint32_t>()((uint32_t)uf.attr.src_port |
+						      ((uint32_t)uf.attr.dst_port << 16)) ^
+				std::hash<uint32_t>()((uint32_t)uf.attr.src_port_lo |
+						      ((uint32_t)uf.attr.src_port_hi << 16)) ^
+				std::hash<uint32_t>()((uint32_t)uf.attr.dst_port_lo |
+						      ((uint32_t)uf.attr.dst_port_hi << 16)) ^
+				std::hash<uint32_t>()((uint32_t)uf.attr.u.v4.protocol) ^
+				std::hash<uint32_t>()(uf.attr.u.v4.src_addr) ^
+				std::hash<uint32_t>()(uf.attr.u.v4.dst_addr);
+		case IPA_IP_v6:
+			return 	std::hash<uint32_t>()(uf.ip) ^
+				std::hash<uint32_t>()((uint32_t)uf.attr.src_port |
+						      ((uint32_t)uf.attr.dst_port << 16)) ^
+				std::hash<uint32_t>()((uint32_t)uf.attr.src_port_lo |
+						      ((uint32_t)uf.attr.src_port_hi << 16)) ^
+				std::hash<uint32_t>()((uint32_t)uf.attr.dst_port_lo |
+						      ((uint32_t)uf.attr.dst_port_hi << 16)) ^
+				std::hash<uint32_t>()(((uint32_t)uf.attr.u.v6.next_hdr)) ^
+				std::hash<uint32_t>()(uf.attr.u.v6.src_addr[0]) ^
+				std::hash<uint32_t>()(uf.attr.u.v6.src_addr[1]) ^
+				std::hash<uint32_t>()(uf.attr.u.v6.src_addr[2]) ^
+				std::hash<uint32_t>()(uf.attr.u.v6.src_addr[3]) ^
+				std::hash<uint32_t>()(uf.attr.u.v6.dst_addr[0]) ^
+				std::hash<uint32_t>()(uf.attr.u.v6.dst_addr[1]) ^
+				std::hash<uint32_t>()(uf.attr.u.v6.dst_addr[2]) ^
+				std::hash<uint32_t>()(uf.attr.u.v6.dst_addr[3]);
+		default:
+			IPACMERR("Got illegal uf.ip = %d\n", uf.ip);
+			return 0;
+		}
 	}
 };
 #endif

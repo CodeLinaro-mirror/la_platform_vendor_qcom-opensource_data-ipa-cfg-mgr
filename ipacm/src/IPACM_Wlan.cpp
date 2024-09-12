@@ -92,7 +92,7 @@ int IPACM_Wlan::num_wlan_ap_iface = 0;
 #define BSSTYPE_SVAP 72
 #define VLAN_TPID_SIZE 2
 #define VLAN_VID_MASK 0x0FFF
-
+#define NUM_TX_PROPS 4
 #ifndef IPA_LAN_RX_HDR_NAME
 #define IPA_LAN_RX_HDR_NAME "ipa_lan_hdr"
 #endif
@@ -3370,8 +3370,19 @@ int IPACM_Wlan::handle_wlan_client_route_rule(uint8_t *mac_addr, ipa_ip_type ipt
 					IPACMDBG_H("tx:%d, rt rule hdl=%x ip-type: %d\n", tx_index,
 							it->second.hdl_v6[tx_index].rt_rule_hdl_v6_wan, iptype);
 					/* mark as route_rule_set_v6 = true*/
-					if (tx_index + 1 == iface_query->num_tx_props)
+					/* In case of easymesh enabled and client is not vlan, will get 4 tx props
+					 * but last 2 props will be for vlan and rule won't be installed for that
+					 * so make sure to update route_rule_set_v6 in that case as well*/
+					if(IPACM_Iface::ipacmcfg->ipacm_emesh_enable && iface_query->num_tx_props == NUM_TX_PROPS && !get_client_memptr(wlan_client, wlan_index)->is_vlan)
+					{
+						if (tx_index + 1 == iface_query->num_tx_props - 2 )
+							it->second.route_rule_set_v6 = true;
+					}
+					else
+					{
+						if (tx_index + 1 == iface_query->num_tx_props)
 						it->second.route_rule_set_v6 = true;
+					}
 				} /* v6 map loop */
 			} /* ipv6 handling */
 		} /* end of for loop */

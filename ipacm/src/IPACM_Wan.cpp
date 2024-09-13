@@ -1296,6 +1296,8 @@ int IPACM_Wan::handle_addr_evt(ipacm_event_data_addr *data)
 	if(data_fid == NULL)
 	{
 		IPACMERR("unable to allocate memory for IPA_HANDLE_NEW_NEIGH_EVENT data_fid\n");
+		res = IPACM_FAILURE;
+		goto fail;
 	}
 	data_fid->if_index = data->if_index;
 

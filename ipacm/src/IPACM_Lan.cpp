@@ -4069,6 +4069,8 @@ int IPACM_Lan::handle_addr_evt(ipacm_event_data_addr *data)
 	if(data_fid == NULL)
 	{
 		IPACMERR("unable to allocate memory for IPA_HANDLE_NEW_NEIGH_EVENT data_fid\n");
+		res = IPACM_FAILURE;
+		goto fail;
 	}
 	data_fid->if_index = data->if_index;
 	evt_data.event = IPA_HANDLE_NEW_NEIGH_EVENT;
@@ -9150,12 +9152,14 @@ int IPACM_Lan::install_all_qos_route_rule(uint8_t * client_mac,
 	if (false == m_routing.Commit(IPA_IP_v4))
 	{
 		IPACMERR("QOS Routing rule v4 commit failed!\n");
+		pthread_mutex_unlock(&IPACM_Iface::ipacmcfg->qos_param_list_lock);
 		return IPACM_FAILURE;
 	}
 
 	if (false == m_routing.Commit(IPA_IP_v6))
 	{
 		IPACMERR("QOS Routing rule v6 commit failed!\n");
+		pthread_mutex_unlock(&IPACM_Iface::ipacmcfg->qos_param_list_lock);
 		return IPACM_FAILURE;
 	}
 
@@ -19610,6 +19614,12 @@ int IPACM_Lan::delete_mdpn_ul_xlat_filter_rule(int mux_id)
 		return IPACM_FAILURE;
 	}
 
+	if(rx_prop == NULL)
+	{
+		IPACMERR("no rx props\n");
+		return IPACM_FAILURE;
+	}
+
 	for (j = 0; j < rx_prop->num_rx_props / 2 && j < IPA_MAX_NUM_PROPS; j++)
 	{
 		if ((ipa_if_cate == WLAN_IF) && (is_if_svap || is_wlan_if_vlan) && (rx_prop->num_rx_props > 2)) {
@@ -21918,6 +21928,9 @@ int IPACM_Lan::install_default_qos_rt_rules(uint8_t *client_mac, uint16_t client
 	IPACMDBG_H("finish route/filter rule ip-type: %d, res(%d)\n", iptype, res);
 
 fail:
-	free(rt_rule);
+	if(rt_rule != NULL)
+	{
+		free(rt_rule);
+	}
 	return res;
 }

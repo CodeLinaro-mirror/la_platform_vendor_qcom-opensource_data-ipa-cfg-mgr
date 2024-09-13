@@ -5566,12 +5566,14 @@ int IPACM_Lan::install_all_qos_route_rule(uint8_t * client_mac,
 
 	if (false == m_routing.Commit(IPA_IP_v4))
 	{
+		pthread_mutex_unlock(&IPACM_Iface::ipacmcfg->qos_param_list_lock);
 		IPACMERR("QOS Routing rule v4 commit failed!\n");
 		return IPACM_FAILURE;
 	}
 
 	if (false == m_routing.Commit(IPA_IP_v6))
 	{
+		pthread_mutex_unlock(&IPACM_Iface::ipacmcfg->qos_param_list_lock);
 		IPACMERR("QOS Routing rule v6 commit failed!\n");
 		return IPACM_FAILURE;
 	}
@@ -15615,7 +15617,7 @@ fail:
 
 int IPACM_Lan::install_default_qos_rt_rules(uint8_t *client_mac, uint16_t client_vlan_id, enum ipa_ip_type iptype)
 {
-	struct ipa_ioc_add_rt_rule *rt_rule;
+	struct ipa_ioc_add_rt_rule *rt_rule = NULL;
 	struct ipa_rt_rule_add *rt_rule_entry;
 	const int NUM_RULES = 1;
 	int res = IPACM_SUCCESS;
@@ -15785,6 +15787,7 @@ int IPACM_Lan::install_default_qos_rt_rules(uint8_t *client_mac, uint16_t client
 	IPACMDBG_H("finish route/filter rule ip-type: %d, res(%d)\n", iptype, res);
 
 fail:
-	free(rt_rule);
+	if(rt_rule)
+		free(rt_rule);
 	return res;
 }

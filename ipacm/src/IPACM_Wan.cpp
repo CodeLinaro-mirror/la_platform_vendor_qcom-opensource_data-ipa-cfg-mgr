@@ -12703,9 +12703,10 @@ void IPACM_Wan::send_config_to_uc(){
 	uint8_t vlan_id = IPACM_Iface::ipacmcfg->IP_Forwarding_config.vlan;
 	res=IPACM_Wan::GetMuxID_For_Private_IP_Forwarding(vlan_id,&mux_id);
 	if(IPACM_Wan::sent_private_ip_mux_id_to_uc){
-		//If default route changed, then we will have to resend the mux ID
-		if(vlan_id==0 && IPACM_Wan::uc_mux_vlan_info.map_entries[0].mux_id != mux_id){
+		//If default route changed or pdn toggled, then we will have to resend the mux ID
+		if(IPACM_Wan::uc_mux_vlan_info.map_entries[0].mux_id != mux_id){
 			//Then we have to resend the mux ID mapping
+			IPACMDBG("Re-Send IOCTL to uC, vlan(%d) with mux(%d)\n", vlan_id, mux_id);
 		}
 		else{
 			IPACMDBG("Already sent IOCTL to uC\n");

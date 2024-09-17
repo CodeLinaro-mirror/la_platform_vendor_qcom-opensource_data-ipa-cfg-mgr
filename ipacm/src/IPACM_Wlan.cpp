@@ -826,11 +826,13 @@ void IPACM_Wlan::event_callback(ipa_cm_event_id event, void *param)
 #endif
 				{
 					IPACMERR("Unable to find VLAN ID for Dev %s\n", data->iface_name);
-					return;
+					eth_bridge_post_event(IPA_ETH_BRIDGE_CLIENT_ADD, IPA_IP_MAX, data->mac_addr, NULL, NULL);
 				}
-
-				eth_bridge_post_event(IPA_ETH_BRIDGE_CLIENT_ADD, IPA_IP_MAX, data->mac_addr, NULL, NULL, vlan_id);
-				eth_bridge_post_event(IPA_CLIENT_CROSS_PRC_CTX, IPA_IP_MAX, data->mac_addr, NULL, data->iface_name, NULL);
+				else
+				{
+					eth_bridge_post_event(IPA_ETH_BRIDGE_CLIENT_ADD, IPA_IP_MAX, data->mac_addr, NULL, NULL, vlan_id);
+					eth_bridge_post_event(IPA_CLIENT_CROSS_PRC_CTX, IPA_IP_MAX, data->mac_addr, NULL, data->iface_name, NULL);
+				}
 			}
 		}
 		break;
@@ -841,19 +843,21 @@ void IPACM_Wlan::event_callback(ipa_cm_event_id event, void *param)
 		IPACMDBG_H("Received IPA_LAN_CLIENT_DEL_EVENT\n");
 		ipa_interface_index = iface_ipa_index_query(data->if_index);
 		IPACMDBG_H("check iface %s category: %d\n", dev_name, ipa_if_cate);
+		if(ipa_interface_index == ipa_if_num)
+		{
 #ifdef IPA_VLAN_PRIORITY
-		if(IPACM_Iface::ipacmcfg->get_vlan_id(data->iface_name, &vlan_id, &priority))
+			if(IPACM_Iface::ipacmcfg->get_vlan_id(data->iface_name, &vlan_id, &priority))
 #else
-		if(IPACM_Iface::ipacmcfg->get_vlan_id(data->iface_name, &vlan_id))
+			if(IPACM_Iface::ipacmcfg->get_vlan_id(data->iface_name, &vlan_id))
 #endif
-		{
-			IPACMERR("Unable to find VLAN ID for Dev %s\n", data->iface_name);
-			return;
-		}
-
-		if (ipa_interface_index == ipa_if_num)
-		{
-			eth_bridge_post_event(IPA_ETH_BRIDGE_CLIENT_DEL, IPA_IP_MAX, data->mac_addr, NULL, NULL, vlan_id);
+			{
+				IPACMERR("Unable to find VLAN ID for Dev %s\n", data->iface_name);
+				eth_bridge_post_event(IPA_ETH_BRIDGE_CLIENT_DEL, IPA_IP_MAX, data->mac_addr, NULL, NULL);
+			}
+			else
+			{
+				eth_bridge_post_event(IPA_ETH_BRIDGE_CLIENT_DEL, IPA_IP_MAX, data->mac_addr, NULL, NULL, vlan_id);
+			}
 		}
 	}
 	break;
@@ -3396,21 +3400,6 @@ fail:
 	}
 	IPACMDBG_H("finished delete software-routing filtering rules\n ");
 
-	if (rx_prop != NULL)
-	{
-		if(IPACM_Iface::ipacmcfg->GetIPAVer() >= IPA_HW_None && IPACM_Iface::ipacmcfg->GetIPAVer() < IPA_HW_v4_0)
-		{
-			/* Delete corresponding ipa_rm_resource_name of RX-endpoint after delete all IPV4V6 FT-rule */
-			IPACMDBG_H("dev %s add producer dependency\n", dev_name);
-			IPACMDBG_H("depend Got pipe %d rm index : %d \n", rx_prop->rx[0].src_pipe, IPACM_Iface::ipacmcfg->ipa_client_rm_map_tbl[rx_prop->rx[0].src_pipe]);
-			IPACM_Iface::ipacmcfg->DelRmDepend(IPACM_Iface::ipacmcfg->ipa_client_rm_map_tbl[rx_prop->rx[0].src_pipe]);
-		}
-#ifndef FEATURE_ETH_BRIDGE_LE
-		free(rx_prop);
-		rx_prop = NULL;
-#endif
-	}
-
 	for (i = 0; i < num_wifi_client; i++)
 	{
 		if(get_client_memptr(wlan_client, i)->p_hdr_info != NULL)
@@ -3423,19 +3412,6 @@ fail:
 		free(wlan_client);
 		wlan_client = NULL;
 	}
-#ifndef FEATURE_ETH_BRIDGE_LE
-	if (tx_prop != NULL)
-	{
-		free(tx_prop);
-		tx_prop = NULL;
-	}
-
-	if (iface_query != NULL)
-	{
-		free(iface_query);
-		iface_query = NULL;
-	}
-#endif
 
 	is_active = false;
 	post_del_self_evt();

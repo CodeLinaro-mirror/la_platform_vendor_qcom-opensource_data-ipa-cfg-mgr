@@ -264,6 +264,45 @@ public:
 		}
 	}
 };
+
+struct IpsecUlFltKeyEquals {
+public:
+	bool operator()( const ipa_ioc_ipsec_ul_flt_attr& lhs, const ipa_ioc_ipsec_ul_flt_attr& rhs ) const {
+		switch (lhs.ip) {
+		case IPA_IP_v4:
+			return 	(lhs.ip == rhs.ip) &&
+				(lhs.attr.src_port == rhs.attr.src_port) &&
+				(lhs.attr.dst_port == rhs.attr.dst_port) &&
+				(lhs.attr.src_port_lo == rhs.attr.src_port_lo) &&
+				(lhs.attr.src_port_hi == rhs.attr.src_port_hi) &&
+				(lhs.attr.dst_port_lo == rhs.attr.dst_port_lo) &&
+				(lhs.attr.dst_port_hi == rhs.attr.dst_port_hi) &&
+				(lhs.attr.u.v4.protocol == rhs.attr.u.v4.protocol) &&
+				(lhs.attr.u.v4.src_addr == rhs.attr.u.v4.src_addr) &&
+				(lhs.attr.u.v4.dst_addr == rhs.attr.u.v4.dst_addr);
+		case IPA_IP_v6:
+			return 	(lhs.ip == rhs.ip) &&
+				(lhs.attr.src_port == rhs.attr.src_port) &&
+				(lhs.attr.dst_port == rhs.attr.dst_port) &&
+				(lhs.attr.src_port_lo == rhs.attr.src_port_lo) &&
+				(lhs.attr.src_port_hi == rhs.attr.src_port_hi) &&
+				(lhs.attr.dst_port_lo == rhs.attr.dst_port_lo) &&
+				(lhs.attr.dst_port_hi == rhs.attr.dst_port_hi) &&
+				(lhs.attr.u.v6.next_hdr == rhs.attr.u.v6.next_hdr) &&
+				(lhs.attr.u.v6.src_addr[0] == rhs.attr.u.v6.src_addr[0]) &&
+				(lhs.attr.u.v6.src_addr[1] == rhs.attr.u.v6.src_addr[1]) &&
+				(lhs.attr.u.v6.src_addr[2] == rhs.attr.u.v6.src_addr[2]) &&
+				(lhs.attr.u.v6.src_addr[3] == rhs.attr.u.v6.src_addr[3]) &&
+				(lhs.attr.u.v6.dst_addr[0] == rhs.attr.u.v6.dst_addr[0]) &&
+				(lhs.attr.u.v6.dst_addr[1] == rhs.attr.u.v6.dst_addr[1]) &&
+				(lhs.attr.u.v6.dst_addr[2] == rhs.attr.u.v6.dst_addr[2]) &&
+				(lhs.attr.u.v6.dst_addr[3] == rhs.attr.u.v6.dst_addr[3]);
+		default:
+			IPACMERR("Got illegal lhs.ip = %d\n", lhs.ip);
+			return false;
+		}
+	}
+};
 #endif
 
 #ifdef FEATURE_DUAL_BACKHAUL
@@ -622,7 +661,17 @@ public:
 #endif //defined(FEATURE_SOCKSv5) && defined (IPA_SOCKV5_EVENT_MAX)
 
 #ifdef FEATURE_IPA_IPSEC
-	std::unordered_set<ipa_ioc_ipsec_ul_flt_attr,IpsecUlFltHash> ipsecUlFlt;
+	std::unordered_multiset<ipa_ioc_ipsec_ul_flt_attr,IpsecUlFltHash, IpsecUlFltKeyEquals> ipsecUlFlt;
+	using ipsecUlFltSetType = decltype(ipsecUlFlt);
+
+	static ipsecUlFltSetType::size_type eraseOne(ipsecUlFltSetType& uSet, const ipsecUlFltSetType::key_type& key){
+		auto it = uSet.find(key);
+		if (it != uSet.end()) {
+			uSet.erase(it);
+			return 1;
+		}
+		return 0;
+	}
 #endif
 
 #if defined(FEATURE_IPACM_PER_CLIENT_STATS) && defined(IPA_HW_FNR_STATS)

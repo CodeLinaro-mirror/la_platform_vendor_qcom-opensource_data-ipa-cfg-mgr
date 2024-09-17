@@ -1471,7 +1471,7 @@ void IPACM_Config::add_bridge_vlan_mapping(ipa_bridge_vlan_mapping_info *data)
 					bridge->bridge_netmask = data->subnet_mask;
 				}
 				goto bail;
-			
+
 			}
 
 			IPACMDBG("The bridge %s was added before with vlan id: %d\n", data->bridge_name,
@@ -3873,14 +3873,36 @@ bool IPACM_Config::AddIpsecUlFlt(struct ipa_ioc_ipsec_ul_flt_attr uf)
 {
 	ipsecUlFlt.insert(uf);
 	IPACMDBG_H("Added an UL rule. Now the number of IPsec UL rules is %ld\n", ipsecUlFlt.size());
+	if (uf.ip == IPA_IP_v4) {
+		IPACMDBG_H("SRC IPv4: %08X\n", uf.attr.u.v4.src_addr);
+		IPACMDBG_H("DST IPv6: %08X\n", uf.attr.u.v4.dst_addr);
+	} else {
+		IPACMDBG_H("SRC IPv6: %08X:%08X:%08X:%08X\n",
+			uf.attr.u.v6.src_addr[0], uf.attr.u.v6.src_addr[1],
+			uf.attr.u.v6.src_addr[2], uf.attr.u.v6.src_addr[3]);
+		IPACMDBG_H("DST IPv6: %08X:%08X:%08X:%08X\n",
+			uf.attr.u.v6.dst_addr[0], uf.attr.u.v6.dst_addr[1],
+			uf.attr.u.v6.dst_addr[2], uf.attr.u.v6.dst_addr[3]);
+	}
 
 	return true;
 }
 
 bool IPACM_Config::DelIpsecUlFlt(struct ipa_ioc_ipsec_ul_flt_attr uf)
 {
-	ipsecUlFlt.erase(uf);
+	eraseOne(ipsecUlFlt, uf);
 	IPACMDBG_H("Deleted an UL rule. Now the number of IPsec UL rules is %ld\n", ipsecUlFlt.size());
+	if (uf.ip == IPA_IP_v4) {
+		IPACMDBG_H("SRC IPv4: %08X\n", uf.attr.u.v4.src_addr);
+		IPACMDBG_H("DST IPv6: %08X\n", uf.attr.u.v4.dst_addr);
+	} else {
+		IPACMDBG_H("SRC IPv6: %08X:%08X:%08X:%08X\n",
+			uf.attr.u.v6.src_addr[0], uf.attr.u.v6.src_addr[1],
+			uf.attr.u.v6.src_addr[2], uf.attr.u.v6.src_addr[3]);
+		IPACMDBG_H("DST IPv6: %08X:%08X:%08X:%08X\n",
+			uf.attr.u.v6.dst_addr[0], uf.attr.u.v6.dst_addr[1],
+			uf.attr.u.v6.dst_addr[2], uf.attr.u.v6.dst_addr[3]);
+	}
 
 	return true;
 }

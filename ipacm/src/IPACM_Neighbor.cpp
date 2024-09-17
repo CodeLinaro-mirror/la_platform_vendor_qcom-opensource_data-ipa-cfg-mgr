@@ -1351,7 +1351,8 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 										}
 										data_vlan->data_all.iptype = IPA_IP_v4;
 #ifdef IPA_L2TP_TUNNEL_UDP
-										if(IPACM_Iface::ipacmcfg->check_l2tp_iface(neighbor_client[i].iface_name))
+										if(IPACM_Iface::ipacmcfg->check_l2tp_iface(neighbor_client[i].iface_name) &&
+											evt_data.event == IPA_NEIGH_CLIENT_IP_ADDR_DEL_EVENT)
 										{
 											data_vlan->data_all.iptype = IPA_IP_MAX;
 										}
@@ -1376,7 +1377,8 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 										}
 										data_all->iptype = IPA_IP_v4;
 #ifdef IPA_L2TP_TUNNEL_UDP
-										if(IPACM_Iface::ipacmcfg->check_l2tp_iface(neighbor_client[i].iface_name))
+										if(IPACM_Iface::ipacmcfg->check_l2tp_iface(neighbor_client[i].iface_name) &&
+											evt_data.event == IPA_NEIGH_CLIENT_IP_ADDR_DEL_EVENT)
 										{
 											data_vlan->data_all.iptype = IPA_IP_MAX;
 										}

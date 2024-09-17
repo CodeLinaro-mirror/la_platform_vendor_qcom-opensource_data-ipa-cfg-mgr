@@ -2029,14 +2029,15 @@ void IPACM_Config::get_vlan_mode_ifaces()
 			vlan_devices[i] = vlan_mode.is_vlan_mode;
 		}
 	}
-
 #if IPA_ETH_API_VER >= 2
-	IPACMDBG("modes are EMAC %d, ETH0 %d, ETH1 %d, RNDIS %d, ECM %d\n",
+	IPACMDBG("modes are EMAC %d, ETH0 %d, ETH1 %d, RNDIS %d, ECM %d, WLAN %d, MHI_ETH %d\n",
 		vlan_devices[IPA_VLAN_IF_EMAC],
 		vlan_devices[IPA_VLAN_IF_ETH0],
 		vlan_devices[IPA_VLAN_IF_ETH1],
 		vlan_devices[IPA_VLAN_IF_RNDIS],
-		vlan_devices[IPA_VLAN_IF_ECM]);
+		vlan_devices[IPA_VLAN_IF_ECM],
+		vlan_devices[IPA_VLAN_IF_WLAN],
+		vlan_devices[IPA_VLAN_IF_MHI_ETH]);
 #else
 	IPACMDBG("modes are EMAC %d, RNDIS %d, ECM %d\n",
 		vlan_devices[IPA_VLAN_IF_EMAC],
@@ -2218,6 +2219,11 @@ bool IPACM_Config::is_added_vlan_iface(char *iface_name)
 bool IPACM_Config::iface_in_vlan_mode(const char *interfaceName) {
 	IPACMDBG_H("iface %s is getting checked if it is vlan\n", interfaceName);
 	string nameToCheck = getNameForVlanQuery(interfaceName);
+
+	if (strstr(nameToCheck.c_str(), "mhi_eth0")) {
+		IPACMDBG("mhi_eth0 vlan mode %d\n", vlan_devices[IPA_VLAN_IF_MHI_ETH]);
+		return vlan_devices[IPA_VLAN_IF_MHI_ETH];
+	}
 #if IPA_ETH_API_VER >= 2
 	/**
 	 *  Differentiate Dual NIC mode where interface name is either

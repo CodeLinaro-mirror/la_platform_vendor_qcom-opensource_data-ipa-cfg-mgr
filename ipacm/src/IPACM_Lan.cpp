@@ -12602,7 +12602,8 @@ int IPACM_Lan::eth_bridge_del_hdr_proc_ctx(uint32_t hdr_proc_ctx_hdl)
 bool IPACM_Lan::is_vlan_event(char *event_iface_name)
 {
 	string selfDevName(dev_name), eventInterfaceName(event_iface_name);
-	if (eventInterfaceName.find(selfDevName) == std::string::npos) {
+	/* expect full match from head eth0.10 = eth0 but mhi_eth0.10 != eth0 */
+	if (eventInterfaceName.find(selfDevName) != 0) {
 		IPACMDBG("dev_name %s is not a substring of event_iface_name %s\n", dev_name, event_iface_name);
 		return false;
 	}

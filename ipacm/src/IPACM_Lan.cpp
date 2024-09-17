@@ -104,6 +104,7 @@ ipa_lan_client_idx IPACM_Lan::active_lan_client_index_odu[IPA_MAX_NUM_HW_PATH_CL
 ipa_lan_client_idx IPACM_Lan::inactive_lan_client_index_odu[IPA_MAX_NUM_HW_PATH_CLIENTS];
 #endif
 
+
 /* for default single pdn use-case: 1 prefix+1 mtu*/
 #define IPv6_PREFIX_DEFAULT_PDN_RULE_NUM 2
 
@@ -3410,6 +3411,11 @@ int IPACM_Lan::handle_wan_down(bool is_sta_mode, uint8_t mux_id, uint16_t vid)
 	/* clean MTU rules if needed */
 	if (IPACM_Iface::ipacmcfg->ipacm_mpdn_enable)
 	{
+		if(ipa_if_cate == ODU_IF && strncmp(dev_name, ETH_INTF, sizeof(dev_name)) == 0 &&
+			num_wan_subnet_rules == 0)
+		{
+			IPACM_Iface::odu_subnet_fl_rule_hdl[IPA_IP_v4] = 0;
+		}
 		return modify_private_subnet();
 	}
 	else
@@ -7158,7 +7164,10 @@ int IPACM_Lan::handle_down_evt()
 #endif
 	}
 	IPACMDBG_H("Finished delete default iface ipv6 filtering rules \n ");
-
+	if(ipa_if_cate == ODU_IF && strncmp(dev_name, ETH_INTF, sizeof(dev_name)))
+	{
+		memset(IPACM_Iface::odu_subnet_fl_rule_hdl, 0, IPA_IP_MAX);
+	}
 	if (ip_type != IPA_IP_v6)
 	{
 		if (m_routing.DeleteRoutingHdl(dft_rt_rule_hdl[0], IPA_IP_v4)
@@ -10461,9 +10470,18 @@ int IPACM_Lan::handle_wan_down_v6(bool is_sta_mode, bool is_support_mpdn, uint16
 #ifdef FEATURE_VLAN_MPDN
 	/* prefixes list updated, install rules accordingly */
 	if (is_support_mpdn == true)
+	{
 		modify_ipv6_prefix_flt_rule();
+		if(ipa_if_cate == ODU_IF && strncmp(dev_name, ETH_INTF, sizeof(dev_name)) == 0 &&
+			num_wan_prefix_rules == 0)
+		{
+			IPACM_Iface::odu_subnet_fl_rule_hdl[IPA_IP_v6] = 0;
+		}
+	}
 	else
+	{
 		delete_ipv6_prefix_flt_rule(); /* the only case is for wlan */
+	}
 #else
 	delete_ipv6_prefix_flt_rule();
 #endif
@@ -11114,6 +11132,11 @@ int IPACM_Lan::modify_private_subnet()
 		IPACMDBG("Adding filter hdl:(0x%x)\n", private_fl_rule_hdl[i]);
 	}
 
+	if(ipa_if_cate == ODU_IF && strncmp(dev_name, ETH_INTF, sizeof(dev_name)) == 0 &&
+		num_wan_subnet_rules > 0)
+	{
+		IPACM_Iface::odu_subnet_fl_rule_hdl[IPA_IP_v4] = private_fl_rule_hdl[num_wan_subnet_rules - 1];
+	}
 fail:
 	if(pFilteringTable != NULL)
 	{
@@ -11363,6 +11386,11 @@ int IPACM_Lan::modify_ipv6_prefix_flt_rule()
 	for (i = 0; i < num_wan_prefix_rules; i++)
 		ipv6_prefix_flt_rule_hdl[i] = pFilteringTable->rules[i].flt_rule_hdl;
 
+	if(ipa_if_cate == ODU_IF && strncmp(dev_name, ETH_INTF, sizeof(dev_name)) == 0 &&
+		num_wan_prefix_rules > 0)
+	{
+		IPACM_Iface::odu_subnet_fl_rule_hdl[IPA_IP_v6] = ipv6_prefix_flt_rule_hdl[num_wan_prefix_rules - 1];
+	}
 fail:
 	if(pFilteringTable != NULL)
 	{

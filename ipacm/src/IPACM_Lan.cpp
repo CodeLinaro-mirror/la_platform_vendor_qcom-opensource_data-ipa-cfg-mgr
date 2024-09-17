@@ -1364,7 +1364,7 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 
 	case IPA_NEIGH_CLIENT_IP_ADDR_ADD_EVENT:
 		{
-			int eth_index;
+			int eth_index, clnt_indx;
 			tether_client_info client_info;
 #if defined(FEATURE_IPACM_PER_CLIENT_STATS) && defined(IPA_HW_FNR_STATS)
 			int retval;
@@ -1426,6 +1426,42 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 				memcpy(client_info.iface, dev_name, IPA_IFACE_NAME_LEN);
 				IPACM_Iface::ipacmcfg->update_client_info(data->mac_addr, &client_info, true);
 
+				/* construct ETH full header
+				 * Still we are handling during NEWNEIGHT on bridge
+				 * if fail on nenwigh on physical during
+				 * IPA_LAN_CLIENT_ADD_EVENT to mainitain LAN client */
+
+				if (handle_eth_hdr_init(data->mac_addr) == IPACM_SUCCESS)
+				{
+					if(IPACM_Iface::ipacmcfg->mac_addr_in_blacklist(data->mac_addr) == false)
+					{
+						IPACMDBG_H("Posting IPA_ETH_BRIDGE_CLIENT_ADD for"
+							"Static IP MAC:0x%x iface_name: %s\n",
+							data->mac_addr,data->iface_name);
+						eth_bridge_post_event(IPA_ETH_BRIDGE_CLIENT_ADD,
+							IPA_IP_MAX,data->mac_addr, NULL, data->iface_name);
+					}
+					else
+						IPACMDBG_H("Client is blacklisted for mac base filtering,"
+								"avoid adding to lan2lan offload \n");
+
+				}
+				else
+				{
+					clnt_indx = get_eth_client_index(data->mac_addr);
+					if (clnt_indx != IPACM_INVALID_INDEX)
+					{
+						IPACMERR("eth client is found/attached already with"
+							"index %d \n", clnt_indx);
+					}
+					else
+					{
+						IPACMERR("Failed to create header and No event "
+							"IPA_ETH_BRIDGE_CLIENT_ADD posted.\n");
+						return;
+					}
+				}
+				IPACMDBG_H("construct ETH header and route rules \n");
 				/* Associate with IP and construct RT-rule */
 				if (handle_eth_client_ipaddr(data) == IPACM_FAILURE)
 				{

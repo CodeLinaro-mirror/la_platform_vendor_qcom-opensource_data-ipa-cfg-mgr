@@ -103,6 +103,7 @@ void IPACM_IfaceManager::event_callback(ipa_cm_event_id event, void *param)
 				IPACMDBG_H("cached bridge0 MAC %02x:%02x:%02x:%02x:%02x:%02x\n",
 						 IPACM_Iface::ipacmcfg->bridge_mac[0], IPACM_Iface::ipacmcfg->bridge_mac[1], IPACM_Iface::ipacmcfg->bridge_mac[2],
 						 IPACM_Iface::ipacmcfg->bridge_mac[3], IPACM_Iface::ipacmcfg->bridge_mac[4], IPACM_Iface::ipacmcfg->bridge_mac[5]);
+				IPACM_Iface::iface_addr_query(data_all->if_index);
 			}
 			break;
 		case IPA_LINK_UP_EVENT:
@@ -623,17 +624,6 @@ int IPACM_IfaceManager::create_iface_instance(ipacm_ifacemgr_data *param)
 				IPACM_EvtDispatcher::registr(IPA_LINK_DOWN_EVENT, embms);
 				IPACMDBG("ipa_WAN (%s):ipa_index (%d) instance open/registr ok\n", embms->dev_name, embms->ipa_if_num);
 				registr(ipa_interface_index, embms);
-			}
-			break;
-		case VIRTUAL_IF:
-			{
-					IPACMDBG("Creating br-lan interface bridge instance\n");
-					IPACM_Bridge *br_lan = new IPACM_Bridge();
-					IPACM_EvtDispatcher::registr(IPA_ADDR_ADD_EVENT, br_lan);
-					IPACM_EvtDispatcher::registr(IPA_ADDR_DEL_EVENT, br_lan);
-					IPACM_EvtDispatcher::registr(IPA_LINK_DOWN_EVENT, br_lan);
-					registr(ipa_interface_index, br_lan);
-					IPACM_Iface::iface_addr_query(if_index);
 			}
 			break;
 

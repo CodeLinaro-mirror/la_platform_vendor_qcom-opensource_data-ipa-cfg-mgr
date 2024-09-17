@@ -110,6 +110,7 @@
 #include "IPACM_Neighbor.h"
 #include "IPACM_IfaceManager.h"
 #include "IPACM_Log.h"
+#include "IPACM_Bridge.h"
 
 #include "IPACM_ConntrackListener.h"
 #include "IPACM_ConntrackClient.h"
@@ -1213,6 +1214,7 @@ int main(int argc, char **argv)
 #endif
 
 	IPACM_IfaceManager *ifacemgr = new IPACM_IfaceManager();
+	IPACM_Bridge *br_lan = new IPACM_Bridge();
 
 	neigh = new IPACM_Neighbor();
 

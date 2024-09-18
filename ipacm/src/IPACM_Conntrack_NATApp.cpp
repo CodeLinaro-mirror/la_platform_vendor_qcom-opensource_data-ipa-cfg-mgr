@@ -1465,7 +1465,7 @@ void NatApp::FlushAndCacheVlanTempEntries(uint32_t ip_addr, bool *entry_exists, 
 			if(ret)
 			{
 				IPACMERR("unable to add temp entry: %d\n", ret);
-				CacheEntry(&temp[cnt]);
+				continue;
 			}
 			/* all entries should have the same public ip (each vlan mapped to single pdn) */
 			*entry_exists = true;

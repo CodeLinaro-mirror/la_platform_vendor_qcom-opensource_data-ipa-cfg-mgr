@@ -2412,14 +2412,14 @@ int IPACM_ConntrackListener::AddORDeleteNatEntry(const nat_entry_bundle *input, 
 				}
 			} else
 #endif
-			if (input->isTempEntry)
-			{
-				nat_inst->AddTempEntry(input->rule);
-			}
-			else if (!WanUp)
+			if (!WanUp)
 			{
 				IPACMDBG("Wan is not up, cache connections\n");
 				nat_inst->CacheEntry(input->rule);
+			}
+			else if (input->isTempEntry)
+			{
+				nat_inst->AddTempEntry(input->rule);
 			}
 			else
 			{

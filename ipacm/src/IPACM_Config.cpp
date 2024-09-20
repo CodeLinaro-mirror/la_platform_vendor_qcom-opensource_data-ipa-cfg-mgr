@@ -3220,7 +3220,6 @@ int IPACM_Config::query_mux_id(rmnet_mux_id_info *mux_id_info)
 void IPACM_Config::sw_flt_info(ipa_sw_flt_list_type *sw_flt)
 {
 	int i = 0;
-	uint32_t mask = 0xFFFFFF00, net_lower = 0, net_upper = 0;
 	std::list<std::array<uint8_t, 6>> mac_list;
 	std::list<std::array<uint8_t, 6>>::iterator it_mac_list;
 	std::array<uint8_t, 6> mac = {0};
@@ -3235,15 +3234,13 @@ void IPACM_Config::sw_flt_info(ipa_sw_flt_list_type *sw_flt)
 	/* check & print ipv4_segs range */
 	if (sw_flt->ipv4_segs_enable)
 	{
-		net_lower = (sw_flt->ipv4_segs[0][0] & mask);
-		net_upper = (net_lower | (~mask));
 		IPACMDBG_H("ipv4_segs_enable number:%d\n", sw_flt->num_of_ipv4_segs);
 		for(i = 0; i < sw_flt->num_of_ipv4_segs; i++)
 		{
 			IPACMDBG_H("%d IPv4-SEGS-flt ipv4 start:0x%X end:0x%X\n",
 				i, sw_flt->ipv4_segs[i][0], sw_flt->ipv4_segs[i][1]);
-			/* subnet check */
-			if ((sw_flt->ipv4_segs[i][1] < net_lower) || (sw_flt->ipv4_segs[i][1] > net_upper) || (sw_flt->ipv4_segs[i][1] < sw_flt->ipv4_segs[i][0]))
+			/*validate the range input*/
+			if (sw_flt->ipv4_segs[i][1] < sw_flt->ipv4_segs[i][0])
 			{
 				sw_flt->ipv4_segs_enable = false;
 				IPACMERR("wrong ipv4-segs-flt in entry(%d)!! disable ipv4_segs(%d) !\n", i, sw_flt->ipv4_segs_enable);

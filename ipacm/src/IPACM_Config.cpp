@@ -4151,7 +4151,7 @@ bool IPACM_Config::IsWlanIfVlan(const char *event_iface_name) {
 
 	if (event_iface_name == NULL) {
 		IPACMERR("Invalid input\n");
-		return IPACM_FAILURE;
+		return false;
 	}
 
 	/* extract the parent if_name from the vlan iface */
@@ -4168,7 +4168,7 @@ bool IPACM_Config::IsWlanIfVlan(const char *event_iface_name) {
 	ret = IPACM_Iface::ipa_get_if_index(if_name, &(if_index));
 	if (ret != IPACM_SUCCESS) {
 		IPACMERR("Error while getting interface index for %s device", if_name);
-		return IPACM_FAILURE;
+		return false;
 	}
 
 	/* Map the interface index. */

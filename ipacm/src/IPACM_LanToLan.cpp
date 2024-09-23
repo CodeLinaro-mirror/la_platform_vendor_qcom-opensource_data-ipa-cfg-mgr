@@ -2966,6 +2966,10 @@ void IPACM_LanToLan_Iface::print_peer_info(peer_iface_info *peer_info)
 	list<rt_rule_info>::iterator it_rt;
 	list<uint32_t>::iterator it_flt_hdl;
 
+	if(peer_info == NULL) {
+		IPACMERR("Peer info with NULL pointer\n");
+		return;
+	}
 	IPACMDBG_H("Printing peer info for iface %s:\n", peer_info->peer->m_p_iface->dev_name);
 
 	IPACMDBG_H("There are %zu flt info in total.\n", peer_info->flt_rule.size());

@@ -693,7 +693,8 @@ static int ipacm_cfg_xml_parse_tree
 						IPACM_util_icmp_string((char*)xml_node->name, IPACM_SOCKSv5_TAG) == 0 ||
 						IPACM_util_icmp_string((char*)xml_node->name, IP_PassthroughFlag_TAG) == 0 ||
 						IPACM_util_icmp_string((char*)xml_node->name, IPACM_MSGFLT_TAG) == 0 ||
-						IPACM_util_icmp_string((char*)xml_node->name, IPACMLOG_TAG) == 0)
+						IPACM_util_icmp_string((char*)xml_node->name, IPACMLOG_TAG) == 0 ||
+						IPACM_util_icmp_string((char*)xml_node->name, IPACM_DUALNAD_TAG) == 0)
 				{
 					if (0 == IPACM_util_icmp_string((char*)xml_node->name, IFACE_TAG))
 					{
@@ -1015,6 +1016,18 @@ static int ipacm_cfg_xml_parse_tree
 							config->ipacm_mpdn_enable = atoi(content);
 							IPACMDBG_H("IPACM VLAN_MPDN is %s \n",
 								config->ipacm_mpdn_enable?"enabled":"disabled");
+						}
+				}
+				else if (IPACM_util_icmp_string((char*)xml_node->name, IPACM_NAD2V6_ENABLE_TAG) == 0)
+				{
+						content = IPACM_read_content_element(xml_node);
+						if (content == NULL)
+							IPACMERR("Failed to read the content of the tag %s\n", IPACM_NAD2V6_ENABLE_TAG);
+						else
+						{
+							config->ipacm_nad2_v6_enable = atoi(content);
+							IPACMDBG_H("IPACM NAD2 V6 is %s \n",
+								config->ipacm_nad2_v6_enable?"enabled":"disabled");
 						}
 				}
 			}

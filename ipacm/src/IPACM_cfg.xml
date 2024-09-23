@@ -83,7 +83,7 @@
 			   <Name>wlan0</Name>
 			   <Category>UNKNOWN</Category>
 			   <WlanMode>full</WlanMode>
-			</Iface>			
+			</Iface>
 			<Iface>
 			   <Name>wlan1</Name>
 			   <Category>UNKNOWN</Category>
@@ -104,6 +104,10 @@
 			   <Category>ODU</Category>
 			</Iface>
 			<Iface>
+			   <Name>mhi_eth0</Name>
+			   <Category>ODU</Category>
+			</Iface>
+			<Iface>
 			   <Name>bridge0</Name>
 			   <Category>VIRTUAL</Category>
 		    </Iface>
@@ -116,12 +120,12 @@
 			<Subnet>
 				<SubnetAddress>192.168.225.0</SubnetAddress>
 				<SubnetMask>255.255.255.0</SubnetMask>
-		    </Subnet>		
+		    </Subnet>
 		</IPACMPrivateSubnet>
 		<IPACMALG>
 			<ALG>
 				<Protocol>TCP</Protocol>
-				<Port>21</Port> 
+				<Port>21</Port>
 				<Description>FTP</Description>
 		    </ALG>
 			<ALG>
@@ -222,5 +226,8 @@
 		<IPACMMSGFLT>
 			<IPACMMSGFLTEnable>0</IPACMMSGFLTEnable>
 		</IPACMMSGFLT>
+		<IPACMDUALNAD>
+			<IPACMNAD2V6Enable>0</IPACMNAD2V6Enable>
+		</IPACMDUALNAD>
 	</IPACM>
 </system>

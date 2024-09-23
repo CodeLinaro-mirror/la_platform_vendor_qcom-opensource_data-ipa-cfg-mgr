@@ -247,6 +247,8 @@ if (!(a)) {                                                 \
 #define IPACMFILEVAR_TAG                     "IPACMfilevar"
 #define IPACM_MSGFLT_ENABLE_TAG              "IPACMMSGFLTEnable"
 #define IPACM_MSGFLT_TAG                     "IPACMMSGFLT"
+#define IPACM_DUALNAD_TAG                    "IPACMDUALNAD"
+#define IPACM_NAD2V6_ENABLE_TAG              "IPACMNAD2V6Enable"
 
 /*---------------------------------------------------------------------------
       IP protocol numbers - use in dss_socket() to identify protocols.
@@ -419,6 +421,7 @@ typedef struct  _IPACM_conf_t
 	bool ipacm_socksv5_enable;
 	IPACM_vlan_conf_t vlan_cfg;
 	bool msgflt_enable;
+	bool ipacm_nad2_v6_enable;
 } IPACM_conf_t;
 
 /* This function read IPACM XML configuration*/

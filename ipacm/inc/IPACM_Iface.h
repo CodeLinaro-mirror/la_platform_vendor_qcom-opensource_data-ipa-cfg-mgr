@@ -151,6 +151,7 @@ public:
 	static IPACM_Routing m_routing;
 	static IPACM_Filtering m_filtering;
 	static IPACM_Header m_header;
+	static uint32_t odu_subnet_fl_rule_hdl[IPA_IP_MAX];
 
 	/* software routing enable */
 	virtual int handle_software_routing_enable(void);

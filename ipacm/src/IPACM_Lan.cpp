@@ -104,6 +104,7 @@ ipa_lan_client_idx IPACM_Lan::active_lan_client_index_odu[IPA_MAX_NUM_HW_PATH_CL
 ipa_lan_client_idx IPACM_Lan::inactive_lan_client_index_odu[IPA_MAX_NUM_HW_PATH_CLIENTS];
 #endif
 
+
 /* for default single pdn use-case: 1 prefix+1 mtu*/
 #define IPv6_PREFIX_DEFAULT_PDN_RULE_NUM 2
 
@@ -1545,7 +1546,7 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 				data->VlanID,
 				data->iptype);
 			/* VlanID 0 is using to make VLAN_PDN_DOWN for all VLANs */
-			if(!data->VlanID ||is_vlan_IF(data->VlanID) || IPACM_Iface::ipacmcfg->is_dummy_VID(data->VlanID)
+			if(!data->VlanID ||is_vlan_IF(data->VlanID)
 #ifdef IPA_L2TP_TUNNEL_UDP
 				|| IPACM_Iface::ipacmcfg->check_l2tp_bridge_vlan_id(data->VlanID)
 #endif
@@ -3410,6 +3411,11 @@ int IPACM_Lan::handle_wan_down(bool is_sta_mode, uint8_t mux_id, uint16_t vid)
 	/* clean MTU rules if needed */
 	if (IPACM_Iface::ipacmcfg->ipacm_mpdn_enable)
 	{
+		if(ipa_if_cate == ODU_IF && strncmp(dev_name, ETH_INTF, sizeof(dev_name)) == 0 &&
+			num_wan_subnet_rules == 0)
+		{
+			IPACM_Iface::odu_subnet_fl_rule_hdl[IPA_IP_v4] = 0;
+		}
 		return modify_private_subnet();
 	}
 	else
@@ -5181,8 +5187,32 @@ int IPACM_Lan::handle_eth_client_ipaddr(ipacm_event_data_all *data)
 				(data->ipv6_addr[2] != 0) || (data->ipv6_addr[3] || 0)) /* check if all 0 not valid ipv6 address */
 		{
 			IPACMDBG_H("ipv6 address: 0x%x:%x:%x:%x\n", data->ipv6_addr[0], data->ipv6_addr[1], data->ipv6_addr[2], data->ipv6_addr[3]);
-
-			if(IPACM_Iface::ipacmcfg->ipacm_mpdn_enable)
+                        /* on dual-nad v6 case, NAD1 client new_neigh will come to NAD2 should treat prefix rule to NAD1 to handle multiple Ipv6 neighbor address */
+			if(IPACM_Iface::ipacmcfg->ipacm_nad2_v6_enable)
+			{
+				if(!IPACM_Wan::is_global_ipv6_addr(data->ipv6_addr))
+				{
+					IPACMDBG_H("Ignore LL address\n");
+					return IPACM_SUCCESS;
+				}
+				if(get_client_memptr(eth_client, clnt_indx)->ipv6_set)
+				{
+					IPACMDBG_H("Already prefix v6 address is set\n");
+					return IPACM_SUCCESS;
+				}
+				else
+				{
+					get_client_memptr(eth_client,clnt_indx)->v6_addr[get_client_memptr(eth_client, clnt_indx)->ipv6_set][0]
+						= get_client_memptr(eth_client,clnt_indx)->client_backhaul_prefix[0];
+                    get_client_memptr(eth_client, clnt_indx)->v6_addr[get_client_memptr(eth_client, clnt_indx)->ipv6_set][1]
+						= get_client_memptr(eth_client,clnt_indx)->client_backhaul_prefix[1];
+                    get_client_memptr(eth_client, clnt_indx)->v6_addr[get_client_memptr(eth_client, clnt_indx)->ipv6_set][2] = 0;
+                    get_client_memptr(eth_client, clnt_indx)->v6_addr[get_client_memptr(eth_client, clnt_indx)->ipv6_set][3] = 0;
+                    get_client_memptr(eth_client, clnt_indx)->ipv6_set++;
+				}
+				return IPACM_SUCCESS;
+			}
+			else if(IPACM_Iface::ipacmcfg->ipacm_mpdn_enable)
 			{
 #ifdef FEATURE_IPV6_NAT
 				if(IPACM_Iface::ipacmcfg->ipv6_nat_enable && is_unique_local_ipv6_addr(data->ipv6_addr))
@@ -5372,6 +5402,14 @@ int IPACM_Lan::handle_eth_client_route_rule(uint8_t *mac_addr, ipa_ip_type iptyp
 			}
 			else
 			{
+				if(IPACM_Iface::ipacmcfg->ipacm_nad2_v6_enable)
+				{
+					if(get_client_memptr(eth_client, eth_index)->route_rule_set_v6)
+					{
+						IPACMDBG_H("Already installed v6 route rule\n");
+						return IPACM_FAILURE;
+					}
+				}
 				for (v6_num = get_client_memptr(eth_client, eth_index)->route_rule_set_v6;
 					 v6_num < get_client_memptr(eth_client, eth_index)->ipv6_set;
 					 ++v6_num)
@@ -5401,6 +5439,17 @@ int IPACM_Lan::handle_eth_client_route_rule(uint8_t *mac_addr, ipa_ip_type iptyp
 					rt_rule_entry.rule.attrib.u.v6.dst_addr_mask[1] = 0xFFFFFFFF;
 					rt_rule_entry.rule.attrib.u.v6.dst_addr_mask[2] = 0xFFFFFFFF;
 					rt_rule_entry.rule.attrib.u.v6.dst_addr_mask[3] = 0xFFFFFFFF;
+					if(IPACM_Iface::ipacmcfg->ipacm_nad2_v6_enable)
+					{
+						if(!IPACM_Wan::is_global_ipv6_addr(
+							get_client_memptr(eth_client, eth_index)->v6_addr[v6_num]))
+						{
+							IPACMDBG_H("Ignore LL address\n");
+							return IPACM_FAILURE;
+						}
+						rt_rule_entry.rule.attrib.u.v6.dst_addr_mask[2] = 0;
+						rt_rule_entry.rule.attrib.u.v6.dst_addr_mask[3] = 0;
+					}
 #ifdef FEATURE_IPA_V3
 					rt_rule_entry.rule.hashable = true;
 #endif
@@ -5447,6 +5496,17 @@ int IPACM_Lan::handle_eth_client_route_rule(uint8_t *mac_addr, ipa_ip_type iptyp
 					rt_rule_entry.rule.attrib.u.v6.dst_addr_mask[1] = 0xFFFFFFFF;
 					rt_rule_entry.rule.attrib.u.v6.dst_addr_mask[2] = 0xFFFFFFFF;
 					rt_rule_entry.rule.attrib.u.v6.dst_addr_mask[3] = 0xFFFFFFFF;
+					if(IPACM_Iface::ipacmcfg->ipacm_nad2_v6_enable)
+					{
+						if(!IPACM_Wan::is_global_ipv6_addr(
+							get_client_memptr(eth_client, eth_index)->v6_addr[v6_num]))
+						{
+							IPACMDBG_H("Ignore LL address\n");
+							return IPACM_FAILURE;
+						}
+						rt_rule_entry.rule.attrib.u.v6.dst_addr_mask[2] = 0;
+						rt_rule_entry.rule.attrib.u.v6.dst_addr_mask[3] = 0;
+					}
 #ifdef FEATURE_IPA_V3
 					rt_rule_entry.rule.hashable = true;
 #endif
@@ -7158,7 +7218,10 @@ int IPACM_Lan::handle_down_evt()
 #endif
 	}
 	IPACMDBG_H("Finished delete default iface ipv6 filtering rules \n ");
-
+	if(ipa_if_cate == ODU_IF && strncmp(dev_name, ETH_INTF, sizeof(dev_name)))
+	{
+		memset(IPACM_Iface::odu_subnet_fl_rule_hdl, 0, IPA_IP_MAX);
+	}
 	if (ip_type != IPA_IP_v6)
 	{
 		if (m_routing.DeleteRoutingHdl(dft_rt_rule_hdl[0], IPA_IP_v4)
@@ -7362,48 +7425,48 @@ fail:
 						m_routing.DeleteRoutingHdl(get_client_memptr(eth_client, i)->dl_first_pass_rt_rule_hdl, IPA_IP_v4) == false)
 				{
 					IPACMERR("Failed to delete first pass rt rule.\n");
-					return IPACM_FAILURE;
+					res = IPACM_FAILURE;
 				}
 				if(get_client_memptr(eth_client, i)->dl_second_pass_rt_rule_hdl &&
 						m_routing.DeleteRoutingHdl(get_client_memptr(eth_client, i)->dl_second_pass_rt_rule_hdl, IPA_IP_v6) == false)
 				{
 					IPACMERR("Failed to delete second pass rt rule.\n");
-					return IPACM_FAILURE;
+					res = IPACM_FAILURE;
 				}
 
 				if(get_client_memptr(eth_client, i)->dl_first_pass_hdr_proc_ctx_hdl[IPA_IP_v4] &&
 						m_header.DeleteHeaderProcCtx(get_client_memptr(eth_client, i)->dl_first_pass_hdr_proc_ctx_hdl[IPA_IP_v4]) == false)
 				{
 					IPACMERR("Failed to delete first pass hdr proc ctx.\n");
-					return IPACM_FAILURE;
+					res = IPACM_FAILURE;
 				}
 #ifdef IPA_L2TP_TUNNEL_UDP
 				if(get_client_memptr(eth_client, i)->dl_first_pass_hdr_proc_ctx_hdl[IPA_IP_v6] &&
 						m_header.DeleteHeaderProcCtx(get_client_memptr(eth_client, i)->dl_first_pass_hdr_proc_ctx_hdl[IPA_IP_v6]) == false)
 				{
 					IPACMERR("Failed to delete first pass hdr proc ctx.\n");
-					return IPACM_FAILURE;
+					res = IPACM_FAILURE;
 				}
 #endif
 				if(get_client_memptr(eth_client, i)->dl_first_pass_hdr_hdl[IPA_IP_v4] &&
 						m_header.DeleteHeaderHdl(get_client_memptr(eth_client, i)->dl_first_pass_hdr_hdl[IPA_IP_v4]) == false)
 				{
 					IPACMERR("Failed to delete first pass hdr.\n");
-					return IPACM_FAILURE;
+					res = IPACM_FAILURE;
 				}
 #ifdef IPA_L2TP_TUNNEL_UDP
 				if(get_client_memptr(eth_client, i)->dl_first_pass_hdr_hdl[IPA_IP_v6] &&
 						m_header.DeleteHeaderHdl(get_client_memptr(eth_client, i)->dl_first_pass_hdr_hdl[IPA_IP_v6]) == false)
 				{
 					IPACMERR("Failed to delete first pass hdr.\n");
-					return IPACM_FAILURE;
+					res = IPACM_FAILURE;
 				}
 #endif
 				if(get_client_memptr(eth_client, i)->dl_second_pass_hdr_hdl &&
 						m_header.DeleteHeaderHdl(get_client_memptr(eth_client, i)->dl_second_pass_hdr_hdl) == false)
 				{
 					IPACMERR("Failed to delete second pass hdr.\n");
-					return IPACM_FAILURE;
+					res = IPACM_FAILURE;
 				}
 				/* delete ul rules */
 				if(get_client_memptr(eth_client, i)->ul_first_pass_flt_rule_hdl)
@@ -7411,7 +7474,7 @@ fail:
 					if(m_filtering.DeleteFilteringHdls(&get_client_memptr(eth_client, i)->ul_first_pass_flt_rule_hdl, IPA_IP_v6, 1) == false)
 					{
 						IPACMERR("Failed to delete ul flt rule.\n");
-						return IPACM_FAILURE;
+						res = IPACM_FAILURE;
 					}
 					if (rx_prop)
 					{
@@ -7422,7 +7485,7 @@ fail:
 						m_routing.DeleteRoutingHdl(get_client_memptr(eth_client, i)->ul_first_pass_rt_rule_hdl, IPA_IP_v6) == false)
 				{
 					IPACMERR("Failed to delete ul rt rule.\n");
-					return IPACM_FAILURE;
+					res = IPACM_FAILURE;
 				}
 #ifdef IPA_L2TP_TUNNEL_UDP
 				get_client_memptr(eth_client, i)->ipv4_header_set = false;
@@ -10461,9 +10524,18 @@ int IPACM_Lan::handle_wan_down_v6(bool is_sta_mode, bool is_support_mpdn, uint16
 #ifdef FEATURE_VLAN_MPDN
 	/* prefixes list updated, install rules accordingly */
 	if (is_support_mpdn == true)
+	{
 		modify_ipv6_prefix_flt_rule();
+		if(ipa_if_cate == ODU_IF && strncmp(dev_name, ETH_INTF, sizeof(dev_name)) == 0 &&
+			num_wan_prefix_rules == 0)
+		{
+			IPACM_Iface::odu_subnet_fl_rule_hdl[IPA_IP_v6] = 0;
+		}
+	}
 	else
+	{
 		delete_ipv6_prefix_flt_rule(); /* the only case is for wlan */
+	}
 #else
 	delete_ipv6_prefix_flt_rule();
 #endif
@@ -10665,7 +10737,7 @@ void IPACM_Lan::post_del_self_evt()
 /*handle reset usb-client rt-rules */
 int IPACM_Lan::handle_lan_client_reset_rt(ipa_ip_type iptype, uint16_t vlan_id)
 {
-	int i, res = IPACM_SUCCESS;
+	int i, j, res = IPACM_SUCCESS;
 
 	/* clean eth-client routing rules */
 	IPACMDBG_H("left %d eth clients need to be deleted \n ", num_eth_client);
@@ -10697,6 +10769,10 @@ int IPACM_Lan::handle_lan_client_reset_rt(ipa_ip_type iptype, uint16_t vlan_id)
 			}
 			else
 			{
+				for (j = 0; j < get_client_memptr(eth_client, i)->ipv6_set; ++j)
+				{
+					CtList->HandleNeighIpAddrDelEvt_v6(Ipv6IpAddress(get_client_memptr(eth_client, i)->v6_addr[j], false));
+				}
 				get_client_memptr(eth_client, i)->ipv6_set = 0;
 				memset(get_client_memptr(eth_client, i)->client_backhaul_prefix, 0, 2 * sizeof(uint32_t));
 				memset(get_client_memptr(eth_client, i)->v6_addr, 0, IPV6_NUM_ADDR * 4 * sizeof(uint32_t));
@@ -10710,6 +10786,10 @@ int IPACM_Lan::handle_lan_client_reset_rt(ipa_ip_type iptype, uint16_t vlan_id)
 			}
 			else
 			{
+				for (j = 0; j < get_client_memptr(eth_client, i)->ipv6_set; ++j)
+				{
+					CtList->HandleNeighIpAddrDelEvt_v6(Ipv6IpAddress(get_client_memptr(eth_client, i)->v6_addr[j], false));
+				}
 				get_client_memptr(eth_client, i)->ipv6_set = 0;
 				memset(get_client_memptr(eth_client, i)->client_backhaul_prefix, 0, 2 * sizeof(uint32_t));
 				memset(get_client_memptr(eth_client, i)->v6_addr, 0, IPV6_NUM_ADDR * 4 * sizeof(uint32_t));
@@ -11072,7 +11152,7 @@ int IPACM_Lan::modify_private_subnet()
 		{
 			memcpy(&flt_rule.rule.attrib, &rx_prop->rx[0].attrib, sizeof(flt_rule.rule.attrib));
 
-			if (!vid[i])
+			if (!vid[i] || IPACM_Iface::ipacmcfg->is_dummy_VID(vid[i]))
 			{
 				flt_rule.rule.attrib.u.v4.src_addr_mask = IPACM_Iface::ipacmcfg->private_subnet_table[i].subnet_mask;
 				flt_rule.rule.attrib.u.v4.src_addr = IPACM_Iface::ipacmcfg->private_subnet_table[i].subnet_addr;
@@ -11106,6 +11186,11 @@ int IPACM_Lan::modify_private_subnet()
 		IPACMDBG("Adding filter hdl:(0x%x)\n", private_fl_rule_hdl[i]);
 	}
 
+	if(ipa_if_cate == ODU_IF && strncmp(dev_name, ETH_INTF, sizeof(dev_name)) == 0 &&
+		num_wan_subnet_rules > 0)
+	{
+		IPACM_Iface::odu_subnet_fl_rule_hdl[IPA_IP_v4] = private_fl_rule_hdl[num_wan_subnet_rules - 1];
+	}
 fail:
 	if(pFilteringTable != NULL)
 	{
@@ -11202,7 +11287,7 @@ int IPACM_Lan::modify_ipv6_prefix_flt_rule()
 	/* for MPDN case, need to query VLAN and mtus */
 	if(IPACM_Iface::ipacmcfg->ipacm_mpdn_enable)
 	{
-		if( IPACM_Wan::isWanUP_V6(ipa_if_num) || (IPACM_Iface::ipacmcfg->iface_in_vlan_mode(dev_name) && IPACM_Wan::isVlanWanUP_V6()))
+		if( IPACM_Wan::isWanUP_V6(ipa_if_num) || (IPACM_Iface::ipacmcfg->iface_in_vlan_mode(dev_name) && IPACM_Wan::isVlanWanUP_V6(true)))
 		{
 			for(i = 0; i < IPACM_Iface::ipacmcfg->num_ipv6_prefixes; i++)
 			{
@@ -11266,6 +11351,24 @@ int IPACM_Lan::modify_ipv6_prefix_flt_rule()
 		flt_rule.rule.attrib.u.v6.dst_addr_mask[1] = 0xFFFFFFFF;
 		flt_rule.rule.attrib.u.v6.dst_addr_mask[2] = 0x0;
 		flt_rule.rule.attrib.u.v6.dst_addr_mask[3] = 0x0;
+
+		if(!vid[i] || IPACM_Iface::ipacmcfg->is_dummy_VID(vid[i]))
+		{
+			flt_rule.rule.attrib.attrib_mask |= IPA_FLT_SRC_ADDR;
+			flt_rule.rule.attrib.u.v6.src_addr[0] = IPACM_Iface::ipacmcfg->ipa_ipv6_prefixes[i].addr[0];
+			flt_rule.rule.attrib.u.v6.src_addr[1] = IPACM_Iface::ipacmcfg->ipa_ipv6_prefixes[i].addr[1];
+			flt_rule.rule.attrib.u.v6.src_addr[2] = 0x0;
+			flt_rule.rule.attrib.u.v6.src_addr[3] = 0x0;
+			flt_rule.rule.attrib.u.v6.src_addr_mask[0] = 0xFFFFFFFF;
+			flt_rule.rule.attrib.u.v6.src_addr_mask[1] = 0xFFFFFFFF;
+			flt_rule.rule.attrib.u.v6.src_addr_mask[2] = 0x0;
+			flt_rule.rule.attrib.u.v6.src_addr_mask[3] = 0x0;
+		}
+		else
+		{
+			flt_rule.rule.attrib.attrib_mask |= IPA_FLT_VLAN_ID;
+			flt_rule.rule.attrib.vlan_id = vid[i];
+		}
 		memcpy(&(pFilteringTable->rules[i]), &flt_rule, sizeof(struct ipa_flt_rule_add));
 		IPACMDBG_H(" IPACM v6 prefix as: 0x[%X][%X] entry(%d)\n",
 			flt_rule.rule.attrib.u.v6.dst_addr[0],
@@ -11276,16 +11379,16 @@ int IPACM_Lan::modify_ipv6_prefix_flt_rule()
 		{
 			memcpy(&flt_rule.rule.attrib, &rx_prop->rx[0].attrib, sizeof(flt_rule.rule.attrib));
 
-			if (!vid[i])
+			if (!vid[i] || IPACM_Iface::ipacmcfg->is_dummy_VID(vid[i]))
 			{
-				flt_rule.rule.attrib.u.v6.src_addr[3] = IPACM_Iface::ipacmcfg->ipa_ipv6_prefixes[i].addr[0];
-				flt_rule.rule.attrib.u.v6.src_addr[2] = IPACM_Iface::ipacmcfg->ipa_ipv6_prefixes[i].addr[1];
-				flt_rule.rule.attrib.u.v6.src_addr[1] = 0x0;
-				flt_rule.rule.attrib.u.v6.src_addr[0] = 0x0;
-				flt_rule.rule.attrib.u.v6.src_addr_mask[3] = 0xFFFFFFFF;
-				flt_rule.rule.attrib.u.v6.src_addr_mask[2] = 0xFFFFFFFF;
-				flt_rule.rule.attrib.u.v6.src_addr_mask[1] = 0x0;
-				flt_rule.rule.attrib.u.v6.src_addr_mask[0] = 0x0;
+				flt_rule.rule.attrib.u.v6.src_addr[0] = IPACM_Iface::ipacmcfg->ipa_ipv6_prefixes[i].addr[0];
+				flt_rule.rule.attrib.u.v6.src_addr[1] = IPACM_Iface::ipacmcfg->ipa_ipv6_prefixes[i].addr[1];
+				flt_rule.rule.attrib.u.v6.src_addr[2] = 0x0;
+				flt_rule.rule.attrib.u.v6.src_addr[3] = 0x0;
+				flt_rule.rule.attrib.u.v6.src_addr_mask[0] = 0xFFFFFFFF;
+				flt_rule.rule.attrib.u.v6.src_addr_mask[1] = 0xFFFFFFFF;
+				flt_rule.rule.attrib.u.v6.src_addr_mask[2] = 0x0;
+				flt_rule.rule.attrib.u.v6.src_addr_mask[3] = 0x0;
 				flt_rule.rule.attrib.attrib_mask &= ~IPA_FLT_DST_ADDR;
 				flt_rule.rule.attrib.attrib_mask |= IPA_FLT_SRC_ADDR;
 			}
@@ -11337,6 +11440,11 @@ int IPACM_Lan::modify_ipv6_prefix_flt_rule()
 	for (i = 0; i < num_wan_prefix_rules; i++)
 		ipv6_prefix_flt_rule_hdl[i] = pFilteringTable->rules[i].flt_rule_hdl;
 
+	if(ipa_if_cate == ODU_IF && strncmp(dev_name, ETH_INTF, sizeof(dev_name)) == 0 &&
+		num_wan_prefix_rules > 0)
+	{
+		IPACM_Iface::odu_subnet_fl_rule_hdl[IPA_IP_v6] = ipv6_prefix_flt_rule_hdl[num_wan_prefix_rules - 1];
+	}
 fail:
 	if(pFilteringTable != NULL)
 	{
@@ -12494,7 +12602,8 @@ int IPACM_Lan::eth_bridge_del_hdr_proc_ctx(uint32_t hdr_proc_ctx_hdl)
 bool IPACM_Lan::is_vlan_event(char *event_iface_name)
 {
 	string selfDevName(dev_name), eventInterfaceName(event_iface_name);
-	if (eventInterfaceName.find(selfDevName) == std::string::npos) {
+	/* expect full match from head eth0.10 = eth0 but mhi_eth0.10 != eth0 */
+	if (eventInterfaceName.find(selfDevName) != 0) {
 		IPACMDBG("dev_name %s is not a substring of event_iface_name %s\n", dev_name, event_iface_name);
 		return false;
 	}
@@ -14635,7 +14744,7 @@ int IPACM_Lan::uninstall_l2tp_rules(ipacm_event_data_all *data)
 			HandleNeighIpAddrDelEvt(
 				get_client_memptr(eth_client, index)->ipv4_set,
 				get_client_memptr(eth_client, index)->v4_addr,
-				get_client_memptr(eth_client, index)->ipv6_set,
+				0,
 				get_client_memptr(eth_client, index)->v6_addr);
 			if(delete_eth_rtrules(index, IPA_IP_v4))
 			{
@@ -14663,6 +14772,9 @@ int IPACM_Lan::uninstall_l2tp_rules(ipacm_event_data_all *data)
 	}
 	else if(data->iptype == IPA_IP_v6)
 	{
+			HandleNeighIpAddrDelEvt(0, 0,
+				get_client_memptr(eth_client, index)->ipv6_set,
+				get_client_memptr(eth_client, index)->v6_addr);
 			if(handle_del_ipv6_addr(data))
 			{
 				IPACMERR("Failed to delete first pass rt rule.\n");

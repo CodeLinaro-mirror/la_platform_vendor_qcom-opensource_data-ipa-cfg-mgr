@@ -266,29 +266,33 @@ public:
 	}
 
 #ifdef FEATURE_VLAN_MPDN
-	static bool isVlanWanUP()
+	static bool isVlanWanUP(bool any_backhaul = false)
 	{
 		for(int i = 0; i < IPA_MAX_NUM_SW_PDNS; i++)
 		{
-			if(ipv4_to_iface[i].ipv4_addr && ipv4_to_iface[i].wan_up_vlan && ipv4_to_iface[i].pIface != NULL &&
-				ipv4_to_iface[i].pIface->m_is_sta_mode == Q6_WAN)
+			if(ipv4_to_iface[i].ipv4_addr && ipv4_to_iface[i].wan_up_vlan && ipv4_to_iface[i].pIface != NULL)
 			{
-				IPACMDBG_H("iface %s is vlan up\n", ipv4_to_iface[i].pIface->dev_name);
-				return true;
+				if(ipv4_to_iface[i].pIface->m_is_sta_mode == Q6_WAN || any_backhaul)
+				{
+					IPACMDBG_H("iface %s is vlan up\n", ipv4_to_iface[i].pIface->dev_name);
+					return true;
+				}
 			}
 		}
 		return false;
 	}
 
-	static bool isVlanWanUP_V6()
+	static bool isVlanWanUP_V6(bool any_backhaul = false)
 	{
 		for(int i = 0; i < IPA_MAX_NUM_SW_PDNS; i++)
 		{
-			if(ipv6_to_iface[i].wan_up_vlan_v6  && ipv6_to_iface[i].pIface != NULL &&
-				ipv4_to_iface[i].pIface->m_is_sta_mode == Q6_WAN)
+			if(ipv6_to_iface[i].wan_up_vlan_v6  && ipv6_to_iface[i].pIface != NULL)
 			{
-				IPACMDBG_H("iface %s is vlan up v6\n", ipv6_to_iface[i].pIface->dev_name);
-				return true;
+				if(ipv6_to_iface[i].pIface->m_is_sta_mode == Q6_WAN || any_backhaul)
+				{
+					IPACMDBG_H("iface %s is vlan up v6\n", ipv6_to_iface[i].pIface->dev_name);
+					return true;
+				}
 			}
 		}
 		return false;
@@ -814,9 +818,6 @@ private:
 	void install_l2tp_flt_rule(ipa_flt_rule_add* rules, int rule_offset, char *iface_name);
 #endif
 #ifdef IPA_L2TP_TUNNEL_UDP
-	/* remove dummy vlan id associated to any PDN */
-	void remove_l2tp_brige_vlan_pdn(uint16_t vlan_id);
-
 	/* construct WAN DL MTU rules */
 	int handle_l2tp_client_mtu_rule(const struct ipa_rule_attrib& rx_prop_attrib,
 		struct ipa_flt_rule_add& flt_rule_add, int fltr_rule_number, int mtu, ipa_ip_type iptype);

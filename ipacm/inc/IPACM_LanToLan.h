@@ -177,6 +177,7 @@ public:
 	void set_is_vlan(bool is_vlan) { m_is_vlan = is_vlan; }
 	bool get_is_vlan() { return m_is_vlan; };
 #endif
+	bool m_is_cross_proc_ctx_handled;
 private:
 
 	IPACM_Lan *m_p_iface;

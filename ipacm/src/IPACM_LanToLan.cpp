@@ -70,6 +70,7 @@ IPACM_LanToLan_Iface::IPACM_LanToLan_Iface(IPACM_Lan *p_iface)
 	m_support_inter_iface_offload = true;
 	m_support_intra_iface_offload = false;
 	m_is_l2tp_iface = false;
+	m_is_cross_proc_ctx_handled = false;
 #ifdef FEATURE_VLAN_MPDN
 	m_is_vlan = false;
 #endif
@@ -442,7 +443,7 @@ void IPACM_LanToLan::handle_client_cross_proc_ctx(ipacm_event_eth_bridge *data)
 				if(it1->get_iface_pointer() == data->p_iface)
 					continue;
 
-				if(!front_iface.get_is_vlan() && it1->get_is_vlan())
+				if(!front_iface.get_is_vlan() && it1->get_is_vlan() && front_iface.m_is_cross_proc_ctx_handled == false)
 				{
 					/* add peer info only when both interfaces support inter-interface communication */
 					if(it1->get_m_support_inter_iface_offload())
@@ -461,9 +462,15 @@ void IPACM_LanToLan::handle_client_cross_proc_ctx(ipacm_event_eth_bridge *data)
 				}
 			}
 
-			/* add client specific filtering rule on new interface for matching vlan ids*/
-			front_iface.add_all_inter_interface_client_flt_rule(IPA_IP_v4);
-			front_iface.add_all_inter_interface_client_flt_rule(IPA_IP_v6);
+			if(front_iface.m_is_cross_proc_ctx_handled == false)
+			{
+				/* add client specific filtering rule on new interface for matching vlan ids*/
+				front_iface.add_all_inter_interface_client_flt_rule(IPA_IP_v4);
+				front_iface.add_all_inter_interface_client_flt_rule(IPA_IP_v6);
+				front_iface.m_is_cross_proc_ctx_handled = true;
+				IPACMDBG("Updating the m_is_cross_proc_ctx_handled to %d for %s\n",
+						front_iface.m_is_cross_proc_ctx_handled, front_iface.get_iface_pointer()->dev_name);
+			}
 			break;
 #endif //FEATURE_VLAN_MPDN
 		}
@@ -496,6 +503,14 @@ void IPACM_LanToLan::handle_iface_down(ipacm_event_eth_bridge *data)
 	}
 
 	it_target_iface->handle_down_event();
+	IPACM_LanToLan_Iface &front_iface = (*it_target_iface);
+	if(!front_iface.get_is_vlan() &&
+		front_iface.m_is_cross_proc_ctx_handled == true)
+	{
+		front_iface.m_is_cross_proc_ctx_handled = false;
+		IPACMDBG("Updating the m_is_cross_proc_ctx_handled to %d for %s\n",
+				front_iface.m_is_cross_proc_ctx_handled, front_iface.get_iface_pointer()->dev_name);
+	}
 	m_iface.erase(it_target_iface);
 #ifdef FEATURE_L2TP
 	if(IPACM_Iface::ipacmcfg->ipacm_l2tp_enable == IPACM_L2TP)
@@ -631,7 +646,7 @@ void IPACM_LanToLan::handle_vlan_id_del(ipacm_event_eth_bridge *data)
 
 void IPACM_LanToLan::handle_client_add(ipacm_event_eth_bridge *data)
 {
-	list<IPACM_LanToLan_Iface>::iterator it_iface;
+	list<IPACM_LanToLan_Iface>::iterator it_iface, it_peer_iface;
 	list<l2tp_vlan_mapping_info>::iterator it_mapping;
 	l2tp_vlan_mapping_info *mapping_info = NULL;
 	bool is_l2tp_client = false;
@@ -681,6 +696,20 @@ void IPACM_LanToLan::handle_client_add(ipacm_event_eth_bridge *data)
 				}
 			}
 #endif //FEATURE_VLAN_MPDN
+			for(it_peer_iface = m_iface.begin(); it_peer_iface != m_iface.end(); it_peer_iface++)
+			{
+				if(it_peer_iface->get_iface_pointer() == data->p_iface)
+					continue;
+				if(it_iface->get_is_vlan() && !it_peer_iface->get_is_vlan() && it_peer_iface->m_is_cross_proc_ctx_handled == false)
+				{
+					IPACM_LanToLan_Iface &front_iface = (*it_peer_iface);
+					/* populate hdr_proc_ctx and routing table handle */
+					it_iface->install_iface_cross_proc_ctx(&front_iface);
+					front_iface.m_is_cross_proc_ctx_handled = true;
+					IPACMDBG("Updating the m_is_cross_proc_ctx_handled to %d for %s\n",
+							front_iface.m_is_cross_proc_ctx_handled, front_iface.get_iface_pointer()->dev_name);
+				}
+			}
 			it_iface->handle_client_add(data->mac_addr, is_l2tp_client, mapping_info, data->VlanID);
 			break;
 		}
@@ -1687,6 +1716,15 @@ void IPACM_LanToLan_Iface::handle_down_event()
 			IPACMDBG_H("Clear rt rules and hdr proc ctx and release rt table on target interface.\n");
 			clear_all_rt_rule_for_one_peer_iface(&(*it_own_peer_info));
 			del_hdr_proc_ctx(it_own_peer_info->peer->get_iface_pointer()->tx_prop->tx[0].hdr_l2_type);
+			if(get_is_vlan() && !it_own_peer_info->peer->get_is_vlan() &&
+				it_own_peer_info->peer->m_is_cross_proc_ctx_handled == true &&
+				it_own_peer_info->peer->ref_cnt_peer_l2_hdr_type[m_p_iface->tx_prop->tx[0].hdr_l2_type] == 0)
+			{
+				it_own_peer_info->peer->m_is_cross_proc_ctx_handled = false;
+				IPACMDBG("Updating the m_is_cross_proc_ctx_handled to %d for %s\n",
+						it_own_peer_info->peer->m_is_cross_proc_ctx_handled,
+						it_own_peer_info->peer->m_p_iface->dev_name);
+			}
 		}
 		m_peer_iface_info.clear();
 	}
@@ -2261,6 +2299,7 @@ void IPACM_LanToLan_Iface::print_data_structure_info()
 	IPACMDBG_H("Support inter interface offload? %d\n", m_support_inter_iface_offload);
 	IPACMDBG_H("Support intra interface offload? %d\n", m_support_intra_iface_offload);
 	IPACMDBG_H("Is l2tp interface? %d\n", m_is_l2tp_iface);
+	IPACMDBG_H("Is Cross Proc Ctx Handled? %d\n", m_is_cross_proc_ctx_handled);
 #ifdef FEATURE_VLAN_MPDN
 	IPACMDBG_H("is_vlan ? %d\n", m_is_vlan);
 #endif

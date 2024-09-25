@@ -725,20 +725,20 @@ void NatApp::firewall_compare(IPACM_swallow_conf_t *backup_firewall_config, IPAC
 		for(j = 0; j < firewall_config->num_extd_swallow_entries; j++)
 		{
 			if((firewall_config->extd_swallow_entries[j].ip_vsn != backup_firewall_config->extd_swallow_entries[i].ip_vsn) ||
-			(firewall_config->extd_swallow_entries[j].direction != backup_firewall_config->extd_swallow_entries[i].direction)||
-			(firewall_config->extd_swallow_entries[j].attrib.u.v4.protocol != backup_firewall_config->extd_swallow_entries[i].attrib.u.v4.protocol))
+				(firewall_config->extd_swallow_entries[j].direction != backup_firewall_config->extd_swallow_entries[i].direction)||
+				(firewall_config->extd_swallow_entries[j].attrib.u.v4.protocol != backup_firewall_config->extd_swallow_entries[i].attrib.u.v4.protocol))
 			{
 				continue;
 			}
 
 			if(firewall_config->extd_swallow_entries[j].attrib.src_port_lo == backup_firewall_config->extd_swallow_entries[i].attrib.src_port_lo &&
-			firewall_config->extd_swallow_entries[j].attrib.src_port_hi == backup_firewall_config->extd_swallow_entries[i].attrib.src_port_hi &&
-			firewall_config->extd_swallow_entries[j].attrib.dst_port_lo == backup_firewall_config->extd_swallow_entries[i].attrib.dst_port_lo &&
-			firewall_config->extd_swallow_entries[j].attrib.dst_port_hi == backup_firewall_config->extd_swallow_entries[i].attrib.dst_port_hi &&
-			firewall_config->extd_swallow_entries[j].attrib.src_port == backup_firewall_config->extd_swallow_entries[i].attrib.src_port &&
-			firewall_config->extd_swallow_entries[j].attrib.dst_port == backup_firewall_config->extd_swallow_entries[i].attrib.dst_port &&
-			firewall_config->extd_swallow_entries[j].attrib.u.v4.src_addr == backup_firewall_config->extd_swallow_entries[i].attrib.u.v4.src_addr &&
-			firewall_config->extd_swallow_entries[j].attrib.u.v4.dst_addr == backup_firewall_config->extd_swallow_entries[i].attrib.u.v4.dst_addr)
+				firewall_config->extd_swallow_entries[j].attrib.src_port_hi == backup_firewall_config->extd_swallow_entries[i].attrib.src_port_hi &&
+				firewall_config->extd_swallow_entries[j].attrib.dst_port_lo == backup_firewall_config->extd_swallow_entries[i].attrib.dst_port_lo &&
+				firewall_config->extd_swallow_entries[j].attrib.dst_port_hi == backup_firewall_config->extd_swallow_entries[i].attrib.dst_port_hi &&
+				firewall_config->extd_swallow_entries[j].attrib.src_port == backup_firewall_config->extd_swallow_entries[i].attrib.src_port &&
+				firewall_config->extd_swallow_entries[j].attrib.dst_port == backup_firewall_config->extd_swallow_entries[i].attrib.dst_port &&
+				firewall_config->extd_swallow_entries[j].attrib.u.v4.src_addr == backup_firewall_config->extd_swallow_entries[i].attrib.u.v4.src_addr &&
+				firewall_config->extd_swallow_entries[j].attrib.u.v4.dst_addr == backup_firewall_config->extd_swallow_entries[i].attrib.u.v4.dst_addr)
 			{
 				IPACMDBG("firewall entry is matched\n");
 				break;
@@ -774,13 +774,13 @@ bool NatApp::firewall_tuple_match_with_nat(IPACM_extd_swallow_entry_conf_t extd_
 	if(extd_firewall_entries.direction == IPACM_MSGR_UL_FIREWALL && !del_entry->dst_nat)
 	{
 		if((!((extd_firewall_entries.attrib.u.v4.src_addr!=0) ^ (extd_firewall_entries.attrib.u.v4.src_addr == del_entry->private_ip)) &&
-		!((extd_firewall_entries.attrib.u.v4.dst_addr!=0)^ (extd_firewall_entries.attrib.u.v4.dst_addr == del_entry->target_ip)) &&
-		!((src_range) ^ (extd_firewall_entries.attrib.src_port_lo <=  del_entry->private_port &&
-		extd_firewall_entries.attrib.src_port_hi >=  del_entry->private_port)) &&
-		!((dst_range) ^ ((extd_firewall_entries.attrib.dst_port_lo <=  del_entry->target_port) &&
-		(extd_firewall_entries.attrib.dst_port_hi >=  del_entry->target_port))) &&
-		!((extd_firewall_entries.attrib.src_port != 0) ^ (extd_firewall_entries.attrib.src_port ==  del_entry->private_port)) &&
-		!((extd_firewall_entries.attrib.dst_port != 0) ^ (extd_firewall_entries.attrib.dst_port ==  del_entry->target_port))))
+			!((extd_firewall_entries.attrib.u.v4.dst_addr!=0)^ (extd_firewall_entries.attrib.u.v4.dst_addr == del_entry->target_ip)) &&
+			!((src_range) ^ (extd_firewall_entries.attrib.src_port_lo <=  del_entry->private_port &&
+			extd_firewall_entries.attrib.src_port_hi >=  del_entry->private_port)) &&
+			!((dst_range) ^ ((extd_firewall_entries.attrib.dst_port_lo <=  del_entry->target_port) &&
+			(extd_firewall_entries.attrib.dst_port_hi >=  del_entry->target_port))) &&
+			!((extd_firewall_entries.attrib.src_port != 0) ^ (extd_firewall_entries.attrib.src_port ==  del_entry->private_port)) &&
+			!((extd_firewall_entries.attrib.dst_port != 0) ^ (extd_firewall_entries.attrib.dst_port ==  del_entry->target_port))))
 		{
 			IPACMERR("Matched in UL\n");
 			return true;
@@ -3536,8 +3536,7 @@ void NatBase::Reset()
 bool NatBase::ChkSWAllow(const NatEntryBase& rule)
 {
 	int i, j;
-	uint64_t src_ipv6_msb, src_ipv6_lsb, fsrc_ipv6_msb;
-	uint64_t dst_ipv6_msb, dst_ipv6_lsb, ipv6_prifix;
+	uint64_t rule_ipv6_msb, fw_ipv6_msb;
 	Ipv6ctEntry rule_entry;
 	IPACMDBG("Entry\n");
 
@@ -3552,14 +3551,15 @@ bool NatBase::ChkSWAllow(const NatEntryBase& rule)
 		return false;
 	}
 
-	fsrc_ipv6_msb = ((Ipv6IpAddress &)rule.GetClientIp()).GetMsb();
+	rule_ipv6_msb = ((Ipv6IpAddress &)rule.GetClientIp()).GetMsb();
 
 	for(i = 0; i < sw_filter_cfg.pdn_count;i++)
 	{
-		ipv6_prifix = sw_filter_cfg.pdns[i].ipv6_prefix[0];
-		ipv6_prifix = (ipv6_prifix << 32) | sw_filter_cfg.pdns[i].ipv6_prefix[1];
-		/* PDN not up yet */
-		if(sw_filter_cfg.pdns[i].v6_up != TRUE || memcmp(&ipv6_prifix, &fsrc_ipv6_msb, sizeof(fsrc_ipv6_msb)))
+		fw_ipv6_msb = sw_filter_cfg.pdns[i].ipv6_prefix[0];
+		fw_ipv6_msb = (fw_ipv6_msb << 32) | sw_filter_cfg.pdns[i].ipv6_prefix[1];
+
+		/* PDN not up yet or PDN IP is different than rule public IP */
+		if(sw_filter_cfg.pdns[i].v6_up != TRUE || memcmp(&fw_ipv6_msb, &rule_ipv6_msb, sizeof(rule_ipv6_msb)))
 		{
 			continue;
 		}
@@ -3577,15 +3577,6 @@ bool NatBase::ChkSWAllow(const NatEntryBase& rule)
 			{
 				continue;
 			}
-			src_ipv6_msb = sw_filter_cfg.pdns[i].extd_swallow_entries[j].attrib.u.v6.src_addr[0];
-			src_ipv6_msb = (src_ipv6_msb << 32) | sw_filter_cfg.pdns[i].extd_swallow_entries[j].attrib.u.v6.src_addr[1];
-			src_ipv6_lsb = sw_filter_cfg.pdns[i].extd_swallow_entries[j].attrib.u.v6.src_addr[2];
-			src_ipv6_lsb = (src_ipv6_lsb << 32) | sw_filter_cfg.pdns[i].extd_swallow_entries[j].attrib.u.v6.src_addr[3];
-
-			dst_ipv6_msb = sw_filter_cfg.pdns[i].extd_swallow_entries[j].attrib.u.v6.dst_addr[0];
-			dst_ipv6_msb = (dst_ipv6_msb << 32) | sw_filter_cfg.pdns[i].extd_swallow_entries[j].attrib.u.v6.dst_addr[1];
-			dst_ipv6_lsb = sw_filter_cfg.pdns[i].extd_swallow_entries[j].attrib.u.v6.dst_addr[2];
-			dst_ipv6_lsb = (dst_ipv6_lsb << 32) | sw_filter_cfg.pdns[i].extd_swallow_entries[j].attrib.u.v6.dst_addr[3];
 
 			memcpy(&rule_entry, &rule, sizeof(Ipv6ctEntry));
 
@@ -3667,25 +3658,25 @@ void NatBase::firewall_compare(IPACM_swallow_conf_t *backup_firewall_config, IPA
 			}
 
 			if((firewall_config->extd_swallow_entries[j].direction ==
-			backup_firewall_config->extd_swallow_entries[j].direction) &&
-			firewall_config->extd_swallow_entries[j].attrib.src_port_lo ==
-			backup_firewall_config->extd_swallow_entries[i].attrib.src_port_lo &&
-			firewall_config->extd_swallow_entries[j].attrib.src_port_hi ==
-			backup_firewall_config->extd_swallow_entries[i].attrib.src_port_hi &&
-			firewall_config->extd_swallow_entries[j].attrib.dst_port_lo ==
-			backup_firewall_config->extd_swallow_entries[i].attrib.dst_port_lo &&
-			firewall_config->extd_swallow_entries[j].attrib.dst_port_hi ==
-			backup_firewall_config->extd_swallow_entries[i].attrib.dst_port_hi &&
-			firewall_config->extd_swallow_entries[j].attrib.src_port ==
-			backup_firewall_config->extd_swallow_entries[i].attrib.src_port &&
-			firewall_config->extd_swallow_entries[j].attrib.dst_port ==
-			backup_firewall_config->extd_swallow_entries[i].attrib.dst_port &&
-			(!memcmp(firewall_config->extd_swallow_entries[j].attrib.u.v6.src_addr,
-			backup_firewall_config->extd_swallow_entries[i].attrib.u.v6.src_addr,
-			sizeof(firewall_config->extd_swallow_entries[j].attrib.u.v6.src_addr))) &&
-			(!memcmp(firewall_config->extd_swallow_entries[j].attrib.u.v6.dst_addr,
-			backup_firewall_config->extd_swallow_entries[i].attrib.u.v6.dst_addr,
-			sizeof(backup_firewall_config->extd_swallow_entries[i].attrib.u.v6.dst_addr))))
+				backup_firewall_config->extd_swallow_entries[j].direction) &&
+				firewall_config->extd_swallow_entries[j].attrib.src_port_lo ==
+				backup_firewall_config->extd_swallow_entries[i].attrib.src_port_lo &&
+				firewall_config->extd_swallow_entries[j].attrib.src_port_hi ==
+				backup_firewall_config->extd_swallow_entries[i].attrib.src_port_hi &&
+				firewall_config->extd_swallow_entries[j].attrib.dst_port_lo ==
+				backup_firewall_config->extd_swallow_entries[i].attrib.dst_port_lo &&
+				firewall_config->extd_swallow_entries[j].attrib.dst_port_hi ==
+				backup_firewall_config->extd_swallow_entries[i].attrib.dst_port_hi &&
+				firewall_config->extd_swallow_entries[j].attrib.src_port ==
+				backup_firewall_config->extd_swallow_entries[i].attrib.src_port &&
+				firewall_config->extd_swallow_entries[j].attrib.dst_port ==
+				backup_firewall_config->extd_swallow_entries[i].attrib.dst_port &&
+				(!memcmp(firewall_config->extd_swallow_entries[j].attrib.u.v6.src_addr,
+				backup_firewall_config->extd_swallow_entries[i].attrib.u.v6.src_addr,
+				sizeof(firewall_config->extd_swallow_entries[j].attrib.u.v6.src_addr))) &&
+				(!memcmp(firewall_config->extd_swallow_entries[j].attrib.u.v6.dst_addr,
+				backup_firewall_config->extd_swallow_entries[i].attrib.u.v6.dst_addr,
+				sizeof(backup_firewall_config->extd_swallow_entries[i].attrib.u.v6.dst_addr))))
 			{
 				IPACMDBG("firewall entry is matched\n");
 				break;
@@ -3697,7 +3688,7 @@ void NatBase::firewall_compare(IPACM_swallow_conf_t *backup_firewall_config, IPA
 			}
 		}
 		if((j == firewall_config->num_extd_swallow_entries) ||
-		(firewall_config->num_extd_swallow_entries == 0))
+			(firewall_config->num_extd_swallow_entries == 0))
 		{
 			IPACMDBG_H("flushing\n");
 			restore_nat_for_sw_flt_entries(backup_firewall_config->extd_swallow_entries[i]);
@@ -3706,7 +3697,7 @@ void NatBase::firewall_compare(IPACM_swallow_conf_t *backup_firewall_config, IPA
 end:
 	IPACMERR("reaching end of the firewall\n");
 }
-void NatBase::GetIpAddress_firewall(uint64_t*src_ipv6_msb, uint64_t*src_ipv6_lsb, uint64_t*dst_ipv6_msb, uint64_t*dst_ipv6_lsb, struct ipa_rule_attrib attrib)
+void NatBase::GetIpAddress_firewall(uint64_t* src_ipv6_msb, uint64_t* src_ipv6_lsb, uint64_t* dst_ipv6_msb, uint64_t* dst_ipv6_lsb, struct ipa_rule_attrib attrib)
 {
 	*src_ipv6_msb = attrib.u.v6.src_addr[0];
 	*src_ipv6_msb = ((*src_ipv6_msb) << 32 | attrib.u.v6.src_addr[1]);
@@ -3720,8 +3711,9 @@ void NatBase::GetIpAddress_firewall(uint64_t*src_ipv6_msb, uint64_t*src_ipv6_lsb
 
 bool NatBase::firewall_tuple_match_with_nat(IPACM_extd_swallow_entry_conf_t extd_firewall_entries, const Ipv6ctEntry *del_entry)
 {
-	uint64_t src_ipv6_msb, src_ipv6_lsb,fsrc_ipv6_msb, fsrc_ipv6_lsb;
-  	uint64_t dst_ipv6_msb, dst_ipv6_lsb,fdst_ipv6_msb, fdst_ipv6_lsb;
+	/* src, dst are for fw entried and fsrc and fdst for rule */
+	uint64_t src_ipv6_msb, src_ipv6_lsb, fsrc_ipv6_msb, fsrc_ipv6_lsb;
+  	uint64_t dst_ipv6_msb, dst_ipv6_lsb, fdst_ipv6_msb, fdst_ipv6_lsb;
 	bool src_range = false,dst_range = false;
 
 	if(extd_firewall_entries.attrib.attrib_mask & IPA_FLT_SRC_PORT_RANGE)
@@ -3734,8 +3726,9 @@ bool NatBase::firewall_tuple_match_with_nat(IPACM_extd_swallow_entry_conf_t extd
 	}
 
 	GetIpAddress_firewall(&src_ipv6_msb, &src_ipv6_lsb, &dst_ipv6_msb, &dst_ipv6_lsb, extd_firewall_entries.attrib);
+
 	if(extd_firewall_entries.direction == IPACM_MSGR_UL_FIREWALL &&
-	del_entry->m_direction == NatEntryBase::DirectionOutbound)
+		del_entry->m_direction == NatEntryBase::DirectionOutbound)
 	{
 		fsrc_ipv6_msb = ((Ipv6IpAddress &)del_entry->GetClientIp()).GetMsb();
 		fsrc_ipv6_lsb = ((Ipv6IpAddress &)del_entry->GetClientIp()).GetLsb();
@@ -3754,25 +3747,25 @@ bool NatBase::firewall_tuple_match_with_nat(IPACM_extd_swallow_entry_conf_t extd
 	del_entry->m_direction == NatEntryBase::DirectionOutbound)
 	{
 		if(((extd_firewall_entries.attrib.u.v6.src_addr[0] == 0) &&
-		(extd_firewall_entries.attrib.u.v6.dst_addr[0] == 0) &&
-		(!src_range)  && (!dst_range) &&
-		(extd_firewall_entries.attrib.src_port == 0) &&
-		(extd_firewall_entries.attrib.dst_port == 0)))
+			(extd_firewall_entries.attrib.u.v6.dst_addr[0] == 0) &&
+			(!src_range)  && (!dst_range) &&
+			(extd_firewall_entries.attrib.src_port == 0) &&
+			(extd_firewall_entries.attrib.dst_port == 0)))
 		{
 			IPACMERR("Matched in UL wildcard entry\n");
 			return true;
 		}
 
 		else if((!((extd_firewall_entries.attrib.u.v6.src_addr[0] != 0) ^ ((memcmp(&src_ipv6_msb, &fsrc_ipv6_msb, sizeof(uint64_t))==0) &&
-		(memcmp(&src_ipv6_lsb, &fsrc_ipv6_lsb,sizeof(uint64_t))) == 0))) &&
-		(!((extd_firewall_entries.attrib.u.v6.dst_addr[0] != 0 ) ^ ((memcmp(&dst_ipv6_msb, &fdst_ipv6_msb, sizeof(uint64_t)) == 0) &&
-		(memcmp(&dst_ipv6_lsb , &fdst_ipv6_lsb,sizeof(uint64_t)))==0))) &&
-		!((src_range) ^ (extd_firewall_entries.attrib.src_port_lo <=  del_entry->GetSrcPort() &&
-		extd_firewall_entries.attrib.src_port_hi >=  del_entry->GetSrcPort())) &&
-		!((dst_range) ^ ((extd_firewall_entries.attrib.dst_port_lo <=  del_entry->GetDstPort()) &&
-		(extd_firewall_entries.attrib.dst_port_hi >=  del_entry->GetDstPort()))) &&
-		!((extd_firewall_entries.attrib.src_port != 0) ^ (extd_firewall_entries.attrib.src_port ==  del_entry->GetSrcPort())) &&
-		!((extd_firewall_entries.attrib.dst_port != 0) ^ (extd_firewall_entries.attrib.dst_port ==  del_entry->GetDstPort())))
+			(memcmp(&src_ipv6_lsb, &fsrc_ipv6_lsb,sizeof(uint64_t))) == 0))) &&
+			(!((extd_firewall_entries.attrib.u.v6.dst_addr[0] != 0 ) ^ ((memcmp(&dst_ipv6_msb, &fdst_ipv6_msb, sizeof(uint64_t)) == 0) &&
+			(memcmp(&dst_ipv6_lsb , &fdst_ipv6_lsb,sizeof(uint64_t)))==0))) &&
+			!((src_range) ^ (extd_firewall_entries.attrib.src_port_lo <=  del_entry->GetSrcPort() &&
+			extd_firewall_entries.attrib.src_port_hi >=  del_entry->GetSrcPort())) &&
+			!((dst_range) ^ ((extd_firewall_entries.attrib.dst_port_lo <=  del_entry->GetDstPort()) &&
+			(extd_firewall_entries.attrib.dst_port_hi >=  del_entry->GetDstPort()))) &&
+			!((extd_firewall_entries.attrib.src_port != 0) ^ (extd_firewall_entries.attrib.src_port ==  del_entry->GetSrcPort())) &&
+			!((extd_firewall_entries.attrib.dst_port != 0) ^ (extd_firewall_entries.attrib.dst_port ==  del_entry->GetDstPort())))
 		{
 			IPACMERR("Matched in UL\n");
 			return true;
@@ -3783,27 +3776,27 @@ bool NatBase::firewall_tuple_match_with_nat(IPACM_extd_swallow_entry_conf_t extd
 		}
 	}
 	else if(extd_firewall_entries.direction == IPACM_MSGR_DL_FIREWALL &&
-	del_entry->m_direction == NatEntryBase::DirectionInbound)
+		del_entry->m_direction == NatEntryBase::DirectionInbound)
 	{
 		if(((extd_firewall_entries.attrib.u.v6.src_addr[0] == 0)) &&
-		(extd_firewall_entries.attrib.u.v6.dst_addr[0] == 0) &&
-		(!src_range)  && (!dst_range) &&
-		(extd_firewall_entries.attrib.src_port == 0) &&
-		(extd_firewall_entries.attrib.dst_port == 0))
+			(extd_firewall_entries.attrib.u.v6.dst_addr[0] == 0) &&
+			(!src_range)  && (!dst_range) &&
+			(extd_firewall_entries.attrib.src_port == 0) &&
+			(extd_firewall_entries.attrib.dst_port == 0))
 		{
 			IPACMERR("Matched in DL wildcard entry\n");
 			return true;
 		}
 		else if((!((extd_firewall_entries.attrib.u.v6.src_addr[0] != 0) ^ ((memcmp(&src_ipv6_msb, &fsrc_ipv6_msb, sizeof(uint64_t))==0) &&
-		(memcmp(&src_ipv6_lsb, &fsrc_ipv6_lsb,sizeof(uint64_t))) == 0))) &&
-		(!((extd_firewall_entries.attrib.u.v6.dst_addr[0] != 0 ) ^ ((memcmp(&dst_ipv6_msb, &fdst_ipv6_msb, sizeof(uint64_t)) == 0) &&
-		(memcmp(&dst_ipv6_lsb , &fdst_ipv6_lsb,sizeof(uint64_t)))==0))) &&
-		!((src_range) ^ (extd_firewall_entries.attrib.src_port_lo <=  del_entry->GetDstPort() &&
-		extd_firewall_entries.attrib.src_port_hi >=  del_entry->GetDstPort())) &&
-		!((dst_range) ^ ((extd_firewall_entries.attrib.dst_port_lo <=  del_entry->GetSrcPort()) &&
-		(extd_firewall_entries.attrib.dst_port_hi >=  del_entry->GetSrcPort()))) &&
-		!((extd_firewall_entries.attrib.src_port != 0) ^ (extd_firewall_entries.attrib.src_port ==  del_entry->GetDstPort())) &&
-		!((extd_firewall_entries.attrib.dst_port != 0) ^ (extd_firewall_entries.attrib.dst_port ==  del_entry->GetSrcPort())))
+			(memcmp(&src_ipv6_lsb, &fsrc_ipv6_lsb,sizeof(uint64_t))) == 0))) &&
+			(!((extd_firewall_entries.attrib.u.v6.dst_addr[0] != 0 ) ^ ((memcmp(&dst_ipv6_msb, &fdst_ipv6_msb, sizeof(uint64_t)) == 0) &&
+			(memcmp(&dst_ipv6_lsb , &fdst_ipv6_lsb,sizeof(uint64_t)))==0))) &&
+			!((src_range) ^ (extd_firewall_entries.attrib.src_port_lo <=  del_entry->GetDstPort() &&
+			extd_firewall_entries.attrib.src_port_hi >=  del_entry->GetDstPort())) &&
+			!((dst_range) ^ ((extd_firewall_entries.attrib.dst_port_lo <=  del_entry->GetSrcPort()) &&
+			(extd_firewall_entries.attrib.dst_port_hi >=  del_entry->GetSrcPort()))) &&
+			!((extd_firewall_entries.attrib.src_port != 0) ^ (extd_firewall_entries.attrib.src_port ==  del_entry->GetDstPort())) &&
+			!((extd_firewall_entries.attrib.dst_port != 0) ^ (extd_firewall_entries.attrib.dst_port ==  del_entry->GetSrcPort())))
 		{
 			IPACMERR("Matched in UL\n");
 			return true;
@@ -3819,6 +3812,7 @@ bool NatBase::firewall_tuple_match_with_nat(IPACM_extd_swallow_entry_conf_t extd
 
 void NatBase::HandleSWAllowEntries(void)
 {
+	/* src, dst are for fw entried and fsrc and fdst for rule */
 	int i, j, cnt;
 	uint64_t  src_ipv6_msb;
 	uint64_t dst_ipv6_msb;
@@ -3830,17 +3824,17 @@ void NatBase::HandleSWAllowEntries(void)
 		IPACMERR("SW Config not updated/pdn index not updated!\n");
 		return;
 	}
-	memset(&backup_sw_filter_cfg,0,sizeof(backup_sw_filter_cfg));
+	memset(&backup_sw_filter_cfg, 0, sizeof(backup_sw_filter_cfg));
 	memcpy(&backup_sw_filter_cfg, &sw_filter_cfg, sizeof(IPACM_swallow_t));
 
-	memset(&sw_filter_cfg,0,sizeof(sw_filter_cfg));
+	memset(&sw_filter_cfg, 0, sizeof(sw_filter_cfg));
 	memcpy(&sw_filter_cfg, IPACM_Iface::ipacmcfg->sw_filter_cfg, sizeof(IPACM_swallow_t));
 
 	for(int i = 0; i < IPA_MAX_NUM_SW_PDNS; i++)
 	{
 		firewall_compare(&backup_sw_filter_cfg.pdns[i], &sw_filter_cfg.pdns[i]);
 	}
-	for(i = 0; i < sw_filter_cfg.pdn_count;i++)
+	for(i = 0; i < sw_filter_cfg.pdn_count; i++)
 	{
 		/* PDN not up yet */
 		if(sw_filter_cfg.pdns[i].v6_up != TRUE)
@@ -3866,9 +3860,9 @@ void NatBase::HandleSWAllowEntries(void)
 
 				/* Check if rule protocol matches with entry protocol */
 				if((sw_filter_cfg.pdns[i].extd_swallow_entries[j].protocol &&
-				(!(((sw_filter_cfg.pdns[i].extd_swallow_entries[j].protocol & IPPROTO_UDP) == new_entry.m_protocol) ||
-				((sw_filter_cfg.pdns[i].extd_swallow_entries[j].protocol & IPPROTO_TCP) == new_entry.m_protocol)))) ||
-				(memcmp(&src_ipv6_msb, &dst_ipv6_msb, sizeof(dst_ipv6_msb))))
+					(!(((sw_filter_cfg.pdns[i].extd_swallow_entries[j].protocol & IPPROTO_UDP) == new_entry.m_protocol) ||
+					((sw_filter_cfg.pdns[i].extd_swallow_entries[j].protocol & IPPROTO_TCP) == new_entry.m_protocol)))) ||
+					(memcmp(&src_ipv6_msb, &dst_ipv6_msb, sizeof(dst_ipv6_msb))))
 				{
 					continue;
 				}

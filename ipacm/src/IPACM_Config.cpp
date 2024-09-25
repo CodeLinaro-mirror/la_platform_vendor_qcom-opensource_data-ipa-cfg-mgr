@@ -2336,7 +2336,7 @@ void IPACM_Config::add_dummy_vlan_mapping(char *bridge_iface, char* client_iface
 	int ent_exist = 0;
 	ipa_ioc_vlan_iface_info vlan_info;
 	uint16_t vlan_id;
-	uint8_t priority;
+	uint8_t priority = 0;
 
 	if(IPACM_Iface::ipacmcfg->is_added_vlan_iface(client_iface))
 	{

@@ -2052,6 +2052,7 @@ int IPACM_Wan::check_vlan_pdn(ipa_ip_type iptype, ipacm_event_route_vlan *data, 
 					if(GetMuxByVid(data->VlanID, &mux_id, IPA_IP_v6))
 					{
 						IPACMDBG_H("no v6 vlan up PDN for vlan Id %d\n", data->VlanID);
+						free(vlandown_data);
 						return IPACM_SUCCESS;
 					}
 					memset(vlandown_data, 0, sizeof(ipacm_event_vlan_pdn));
@@ -2211,6 +2212,7 @@ int IPACM_Wan::check_vlan_pdn(ipa_ip_type iptype, ipacm_event_route_vlan *data, 
 					if(GetMuxByVid(data->VlanID, &mux_id, IPA_IP_v6))
 					{
 						IPACMDBG_H("no v6 vlan up PDN for vlan Id %d\n", data->VlanID);
+						free(wanup_vlan_data);
 						return IPACM_SUCCESS;
 					}
 					wanup_vlan_data->iptype = IPA_IP_v6;
@@ -2348,6 +2350,7 @@ int IPACM_Wan::check_vlan_pdn(ipa_ip_type iptype, ipacm_event_route_vlan *data, 
 					if(GetMuxByVid(data->VlanID, &mux_id, IPA_IP_v4))
 					{
 						IPACMDBG_H("no v4 vlan up PDN for vlan Id %d\n", data->VlanID);
+						free(vlandown_data);
 						return IPACM_SUCCESS;
 					}
 					memset(vlandown_data, 0, sizeof(ipacm_event_vlan_pdn));
@@ -2508,6 +2511,7 @@ int IPACM_Wan::check_vlan_pdn(ipa_ip_type iptype, ipacm_event_route_vlan *data, 
 					if(GetMuxByVid(data->VlanID, &mux_id, IPA_IP_v4))
 					{
 						IPACMDBG_H("no v4 vlan up PDN for vlan Id %d\n", data->VlanID);
+						free(wanup_vlan_data);
 						return IPACM_SUCCESS;
 					}
 					wanup_vlan_data->iptype = IPA_IP_v4;

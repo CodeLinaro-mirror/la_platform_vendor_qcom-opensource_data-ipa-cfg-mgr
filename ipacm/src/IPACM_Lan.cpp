@@ -1531,7 +1531,10 @@ int IPACM_Lan::add_socksv5_flt_rule(ipacm_event_connection *data_event_conn)
 
 end:
 	if (pFilteringTable)
+	{
 		free(pFilteringTable);
+		pFilteringTable = NULL;
+	}
 	if (fd_ipa)
 		close(fd_ipa);
 	return ret;
@@ -6577,6 +6580,7 @@ int IPACM_Lan::handle_uplink_filter_rule(ipacm_ext_prop *prop, ipa_ip_type iptyp
 fail:
 finish_notif:
 	free(pFilteringTable);
+	pFilteringTable = NULL;
 	close(fd);
 	return ret;
 }
@@ -6807,6 +6811,8 @@ int IPACM_Lan::config_wan_frag_firewall_rule_ul_ex(ul_firewall_t *ul_firewall, i
 	if(IPACM_Wan::GetV6PrefixByVid(vid, v6_prefix))
 	{
 		IPACMERR("couldn't get v6 prefix for vid %d\n", vid);
+		free(m_pFilteringTable);
+		m_pFilteringTable = NULL;
 		return IPACM_FAILURE;
 	}
 	flt_rule_entry.rule.attrib.attrib_mask |= IPA_FLT_SRC_ADDR;
@@ -6826,6 +6832,7 @@ int IPACM_Lan::config_wan_frag_firewall_rule_ul_ex(ul_firewall_t *ul_firewall, i
 	{
 		IPACMERR("Error Adding RuleTable(0) to Filtering, aborting...\n");
 		free(m_pFilteringTable);
+		m_pFilteringTable = NULL;
 		return IPACM_FAILURE;
 	}
 	else
@@ -6840,6 +6847,11 @@ int IPACM_Lan::config_wan_frag_firewall_rule_ul_ex(ul_firewall_t *ul_firewall, i
 	ul_firewall->ul_frag_handle = m_pFilteringTable->rules[0].flt_rule_hdl;
 	ul_firewall->ul_frag_installed = true;
 #endif
+	if(m_pFilteringTable)
+	{
+		free(m_pFilteringTable);
+		m_pFilteringTable = NULL;
+	}
 	return IPACM_SUCCESS;
 }
 
@@ -7283,6 +7295,7 @@ int IPACM_Lan::config_dft_firewall_rules_ul_ex(IPACM_firewall_conf_t* firewall_c
 
 alloc_fail:
 	free(pFilteringTable);
+	pFilteringTable = NULL;
 close_fd:
 	close(fd);
 	return ret;
@@ -8252,6 +8265,7 @@ fail:
 
 	free((void *)pFilteringTable->rules);
 	free(pFilteringTable);
+	pFilteringTable = NULL;
 	close(fd);
 	return ret;
 }
@@ -8480,6 +8494,7 @@ int IPACM_Lan::install_uplink_filter_rule_per_client
 
 fail:
 	free(pFilteringTable);
+	pFilteringTable = NULL;
 	close(fd);
 	return ret;
 }
@@ -8909,6 +8924,7 @@ int IPACM_Lan::reset_to_dummy_flt_rule(ipa_ip_type iptype, uint32_t rule_hdl)
 
 fail:
 	free(pFilteringTable);
+	pFilteringTable = NULL;
 	return res;
 }
 
@@ -9255,6 +9271,7 @@ int IPACM_Lan::add_dummy_private_subnet_flt_rule(ipa_ip_type iptype)
 	}
 fail:
 	free(pFilteringTable);
+	pFilteringTable = NULL;
 	return res;
 }
 
@@ -9393,6 +9410,7 @@ fail:
 	if(pFilteringTable != NULL)
 	{
 		free(pFilteringTable);
+		pFilteringTable = NULL;
 	}
 	return res;
 }
@@ -9521,6 +9539,7 @@ int IPACM_Lan::add_dummy_ipv6_prefix_flt_rule()
 
 fail:
 	free(pFilteringTable);
+	pFilteringTable = NULL;
 	return res;
 }
 
@@ -9612,6 +9631,8 @@ int IPACM_Lan::modify_ipv6_prefix_flt_rule()
 	if (pFilteringTable->num_rules > IPA_MAX_IPV6_NO_OFFLOAD_PREFIX_FLT_RULE + IPA_MAX_MTU_ENTRIES)
 	{
 		IPACMERR("Number of rules crossed the maximum available space");
+		free(pFilteringTable);
+		pFilteringTable = NULL;
 		return IPACM_FAILURE;
 	}
 	memset(&flt_rule, 0, sizeof(struct ipa_flt_rule_mdfy));
@@ -9712,6 +9733,7 @@ fail:
 	if(pFilteringTable != NULL)
 	{
 		free(pFilteringTable);
+		pFilteringTable = NULL;
 	}
 	return res;
 }
@@ -11196,6 +11218,7 @@ int IPACM_Lan::add_l2tp_flt_rule(uint8_t *dst_mac, uint32_t *flt_rule_hdl)
 	{
 		IPACMERR("Failed to open %s\n",IPA_DEVICE_NAME);
 		free(pFilteringTable);
+		pFilteringTable = NULL;
 		return IPACM_FAILURE;
 	}
 
@@ -11207,6 +11230,7 @@ int IPACM_Lan::add_l2tp_flt_rule(uint8_t *dst_mac, uint32_t *flt_rule_hdl)
 	{
 		IPACMERR("Failed to get routing table from name\n");
 		free(pFilteringTable);
+		pFilteringTable = NULL;
 		close(fd_ipa);
 		return IPACM_FAILURE;
 	}
@@ -11233,12 +11257,14 @@ int IPACM_Lan::add_l2tp_flt_rule(uint8_t *dst_mac, uint32_t *flt_rule_hdl)
 	{
 		IPACMERR("Failed to add client filtering rules.\n");
 		free(pFilteringTable);
+		pFilteringTable = NULL;
 		close(fd_ipa);
 		return IPACM_FAILURE;
 	}
 	*flt_rule_hdl = pFilteringTable->rules[0].flt_rule_hdl;
 
 	free(pFilteringTable);
+	pFilteringTable = NULL;
 	close(fd_ipa);
 #endif
 	return IPACM_SUCCESS;
@@ -11296,6 +11322,8 @@ int IPACM_Lan::add_l2tp_flt_rule(ipa_ip_type iptype, uint8_t *dst_mac, uint32_t 
 	if(m_routing.GetRoutingTable(&rt_tbl) == false)
 	{
 		IPACMERR("Failed to get routing table.\n");
+		free(pFilteringTable);
+		pFilteringTable = NULL;
 		return IPACM_FAILURE;
 	}
 
@@ -11327,6 +11355,7 @@ int IPACM_Lan::add_l2tp_flt_rule(ipa_ip_type iptype, uint8_t *dst_mac, uint32_t 
 	{
 		IPACMERR("Failed to add first pass filtering rules.\n");
 		free(pFilteringTable);
+		pFilteringTable = NULL;
 		return IPACM_FAILURE;
 	}
 	*first_pass_flt_rule_hdl = pFilteringTable->rules[0].flt_rule_hdl;
@@ -11336,6 +11365,7 @@ int IPACM_Lan::add_l2tp_flt_rule(ipa_ip_type iptype, uint8_t *dst_mac, uint32_t 
 	{
 		IPACMDBG_H("Second pass flt rule was added before, return.\n");
 		free(pFilteringTable);
+		pFilteringTable = NULL;
 		return IPACM_SUCCESS;
 	}
 
@@ -11373,11 +11403,13 @@ int IPACM_Lan::add_l2tp_flt_rule(ipa_ip_type iptype, uint8_t *dst_mac, uint32_t 
 	{
 		IPACMERR("Failed to add client filtering rules.\n");
 		free(pFilteringTable);
+		pFilteringTable = NULL;
 		return IPACM_FAILURE;
 	}
 	*second_pass_flt_rule_hdl = pFilteringTable->rules[0].flt_rule_hdl;
 
 	free(pFilteringTable);
+	pFilteringTable =NULL;
 #endif
 	return IPACM_SUCCESS;
 }
@@ -11898,7 +11930,10 @@ int IPACM_Lan::add_l2tp_udp_flt_rule(uint8_t *dst_mac, uint32_t *vlan_iface_ipv6
 
 end:
 	if (pFilteringTable)
+	{
 		free(pFilteringTable);
+		pFilteringTable = NULL;
+	}
 	if (fd_ipa)
 		close(fd_ipa);
 	return ret;
@@ -11999,7 +12034,10 @@ int IPACM_Lan::add_l2tp_udp_dflt_flt_rules(uint32_t *l2tp_dflt_rules)
 
 end:
 	if (pFilteringTable)
+	{
 		free(pFilteringTable);
+		pFilteringTable = NULL;
+	}
 	if (fd_ipa)
 		close(fd_ipa);
 
@@ -12115,7 +12153,10 @@ int IPACM_Lan::add_l2tp_udp_flt_rule(ipa_ip_type iptype, uint8_t *dst_mac,
 
 end:
 	if (pFilteringTable)
+	{
 		free(pFilteringTable);
+		pFilteringTable = NULL;
+	}
 	if (fd_ipa)
 		close(fd_ipa);
 
@@ -12673,6 +12714,7 @@ int IPACM_Lan::install_l2tp_ul_rules(ipacm_event_data_all *data, int index)
 	{
 		IPACMERR("m_routing.GetRoutingTable Failed.\n");
 		free(pFilteringTable);
+		pFilteringTable = NULL;
 		return IPACM_FAILURE;
 	}
 
@@ -12701,6 +12743,7 @@ int IPACM_Lan::install_l2tp_ul_rules(ipacm_event_data_all *data, int index)
 	{
 		IPACMERR("Failed to add l2tp ul flt rule.\n");
 		free(pFilteringTable);
+		pFilteringTable = NULL;
 		return IPACM_FAILURE;
 	}
 
@@ -12708,6 +12751,7 @@ int IPACM_Lan::install_l2tp_ul_rules(ipacm_event_data_all *data, int index)
 	get_client_memptr(eth_client, index)->ul_first_pass_flt_rule_hdl =
 		pFilteringTable->rules[0].flt_rule_hdl;
 	free(pFilteringTable);
+	pFilteringTable = NULL;
 	return IPACM_SUCCESS;
 }
 
@@ -13261,7 +13305,10 @@ int IPACM_Lan::handle_mpdn_ul_xlat_filter_rule(ipacm_ext_prop * prop,
 
 fail:
 	if (pFilteringTable != NULL)
+	{
 		free(pFilteringTable);
+		pFilteringTable = NULL;
+	}
 	close(fd);
 	return ret;
 }

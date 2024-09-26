@@ -1991,7 +1991,8 @@ void IPACM_LanToLan_Iface::handle_down_event()
 	list<peer_iface_info>::iterator it_own_peer_info, it_other_iface_peer_info, it_other_mac_iface;
 	IPACM_LanToLan_Iface *other_iface;
 	ipa_hdr_l2_type iface_l2_hdr_type, peer_l2_hdr_type;
-
+	memset(&iface_l2_hdr_type,0,sizeof(iface_l2_hdr_type));
+	memset(&peer_l2_hdr_type,0,sizeof(peer_l2_hdr_type));
 	/* clear inter-interface rules */
 	if(m_support_inter_iface_offload)
 	{

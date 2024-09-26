@@ -28,7 +28,7 @@
  *
  * Changes from Qualcomm Innovation Center are provided under the following license:
  *
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted (subject to the limitations in the
@@ -142,7 +142,9 @@ IPACM_Wlan::IPACM_Wlan(int iface_index, bool ast_update_needed) : IPACM_Lan(ifac
 	wlan_client_len = 0;
 	svap_iface = false;
 	vlan_enabled_ap = false;
-
+	wlan_primary_client = NULL;
+	svap_dummy_route_rule_v4_hdl = 0;
+	svap_dummy_route_rule_v6_hdl = 0;
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
 		if (lan_stats_inited == false)
 		{
@@ -7250,7 +7252,14 @@ int IPACM_Wlan::add_dummy_routing_rule(char *routingTableName, ipa_ip_type iptyp
 int IPACM_Wlan::add_rt_rules_for_ast_update_ifaces()
 {
 	ipa_ioc_get_rt_tbl rt_tbl;
-
+	if(tx_prop == NULL) {
+		IPACMERR("tx props NULL\n");
+		return IPACM_FAILURE;
+	}
+	if(tx_prop->num_tx_props == 0) {
+		IPACMERR("num_tx_props 0\n");
+		return IPACM_FAILURE;
+	}
 	snprintf(rt_tbl.name, IPA_RESOURCE_NAME_MAX, "eth_v4_lan_to_lan_%s",
 				ipa_l2_hdr_type[tx_prop->tx[0].hdr_l2_type]);
 	rt_tbl.ip = IPA_IP_v4;
@@ -7304,7 +7313,11 @@ int IPACM_Wlan::handle_refresh_filtering_rules(bool wlan_vlan_mpdn_enable)
 {
 	int res = IPACM_FAILURE;
 	int idx = vlan_enabled_ap ? 2 : 0;
-
+	if(rx_prop == NULL)
+	{
+		IPACMERR("NULL rx_prop\n");
+		goto fail;
+	}
 	IPACMDBG_H("Disabling/Enabling VLAN, vlan:%d, use pipe idx:%d\n",vlan_enabled_ap, idx);
 
 	/* Check if the rx properties for 2nd pipe are registered since vlan rules could only be
@@ -7410,7 +7423,8 @@ int IPACM_Wlan::handle_refresh_filtering_rules(bool wlan_vlan_mpdn_enable)
 	/* populate the flt rule offset for eth bridge */
 	eth_bridge_flt_rule_offset[IPA_IP_v4] = ipv4_icmp_flt_rule_hdl[0];
 	/* populate the flt rule offset for mtu_offset (offset = broadcast rule)*/
-	if (m_ipv4_default_filterting_rules_count) {
+	if (m_ipv4_default_filterting_rules_count &&
+			m_ipv4_default_filterting_rules_count <= IPV4_DEFAULT_FILTERTING_RULES) {
 		mtu_flt_rule_offset[IPA_IP_v4] =
 			dft_v4fl_rule_hdl[m_ipv4_default_filterting_rules_count - 1];
 	}
@@ -7449,7 +7463,8 @@ int IPACM_Wlan::handle_refresh_filtering_rules(bool wlan_vlan_mpdn_enable)
 	init_fl_rule(IPA_IP_v6);
 
 	/* populate the mtu_rule_offset */
-	if (m_ipv6_default_filterting_rules_count) {
+	if (m_ipv6_default_filterting_rules_count &&
+			(m_ipv6_default_filterting_rules_count <= (IPV6_DEFAULT_FILTERTING_RULES + IPV6_DEFAULT_LAN_FILTERTING_RULES))) {
 		mtu_flt_rule_offset[IPA_IP_v6] =
 			dft_v6fl_rule_hdl[m_ipv6_default_filterting_rules_count - 1];
 	}

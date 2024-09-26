@@ -249,6 +249,7 @@ IPACM_Wan::IPACM_Wan(int iface_index,
 	mtu_v6_set = false;
 	memset(&ip_pass_pdn_info, 0 ,sizeof(ip_pass_pdn_info));
 	memset(&ip_collision_pdn_info, 0 ,sizeof(ip_collision_pdn_info));
+	ipps_dft_v4_rt_rule_hdl = 0;
 #ifdef FEATURE_IPACM_UL_FIREWALL
 #ifdef FEATURE_VLAN_MPDN
 	num_firewall_v6_ul_pdn = 0;
@@ -627,7 +628,7 @@ bool IPACM_Wan::is_xlat_by_ipv4(uint32_t ipv4_addr)
 /* handle new_address event */
 int IPACM_Wan::handle_addr_evt(ipacm_event_data_addr *data)
 {
-	struct ipa_ioc_add_rt_rule *rt_rule;
+	struct ipa_ioc_add_rt_rule *rt_rule = NULL;
 	struct ipa_rt_rule_add *rt_rule_entry;
 	struct ipa_ioc_add_flt_rule *flt_rule;
 	struct ipa_flt_rule_add flt_rule_entry;
@@ -636,6 +637,8 @@ int IPACM_Wan::handle_addr_evt(ipacm_event_data_addr *data)
 	const int NUM_RULES = 1;
 	int num_ipv6_addr, len;
 	int res = IPACM_SUCCESS;
+	ipacm_cmd_q_data evt_data;
+	ipacm_event_data_fid *data_fid = NULL;
 
 	memset(&hdr, 0, sizeof(hdr));
 	if(tx_prop == NULL || rx_prop == NULL)
@@ -1053,6 +1056,19 @@ int IPACM_Wan::handle_addr_evt(ipacm_event_data_addr *data)
 
 	IPACMDBG_H("number of v6 default route rules %d\n", num_dft_rt_v6);
 
+	data_fid = (ipacm_event_data_fid *)malloc(sizeof(ipacm_event_data_fid));
+	if(data_fid == NULL)
+	{
+		IPACMERR("unable to allocate memory for IPA_HANDLE_NEW_NEIGH_EVENT data_fid\n");
+		res = IPACM_FAILURE;
+		goto fail;
+	}
+	data_fid->if_index = data->if_index;
+
+	evt_data.event = IPA_HANDLE_NEW_NEIGH_EVENT;
+	evt_data.evt_data = data_fid;
+	IPACMDBG_H("Posting IPA_HANDLE_NEW_NEIGH_EVENT event:%d\n", evt_data.event);
+	IPACM_EvtDispatcher::PostEvt(&evt_data);
 fail:
 	free(rt_rule);
 
@@ -4524,7 +4540,7 @@ int IPACM_Wan::config_dft_firewall_rules_ex(struct ipa_flt_rule_add *rules, int 
 {
 	IPACM_firewall_conf_t firewall_config;
 #endif
-	int num_rules = 0, original_num_rules = 0, res, pos = rule_offset;
+	int num_rules = 0, original_num_rules = 0, res = IPACM_SUCCESS, pos = rule_offset;
 
 #ifdef FEATURE_EoGRE
 	ipa_ipgre_info ipgre_info = IPACM_Iface::ipacmcfg->eogre_info;
@@ -4709,7 +4725,11 @@ int IPACM_Wan::config_dft_firewall_rules_ex(struct ipa_flt_rule_add *rules, int 
 #ifdef IPA_FLT_EXT_MPLS_GRE_GENERAL
 		if ( compatible_gre && gre_exceptions )
 		{
-			IPACMDBG_H("Adding requested downlink GRE exception rules\n");
+			IPACMDBG_H("Adding ( %d )requested downlink GRE exception rules\n",
+					ipgre_info.num_exceptions);
+
+			/* The below exception rules are to send ICMP packet in Exception path */
+			uint8_t num_pppoe_exceps = 0;
 
 			/*
 			 * The following is to convert the exceptions that have inner ip
@@ -4717,11 +4737,97 @@ int IPACM_Wan::config_dft_firewall_rules_ex(struct ipa_flt_rule_add *rules, int 
 			 * simplifies the logic that follows this conversion...
 			 */
 			uint32_t num_in_excepts = 0;
+			uint32_t pppoe_num_in_excepts = 0;
 
 			struct ipa_exception excepts[ipgre_info.num_exceptions * 2];
+			struct ipa_exception pppoe_excepts[ipgre_info.num_exceptions * 2];
 
 			std::set<uint32_t> added; /* Used to ensure eth vals only added once */
+			std::set<uint32_t> pppoe_added; /* Used to ensure eth vals only added once */
 
+			/* Configuring Exception rule PPPoE with MPLSoGRE*/
+			for ( uint8_t i = 0; i < ipgre_info.num_exceptions; i++ )
+			{
+				if ( ipgre_info.exception_list[i].field == FIELD_ETHER_TYPE )
+				{
+					/*
+					 * Only want to add eths once based on value, hence...
+					 */
+					if( pppoe_added.find(ipgre_info.exception_list[i].value) ==
+							pppoe_added.end() )
+					{
+						/*
+						 * Haven't seen yet, let's add it.
+						 */
+						pppoe_excepts[pppoe_num_in_excepts] =
+							ipgre_info.exception_list[i];
+						/*
+						 * Either IP type is fine here, since we're
+						 * only looking at the Eth header and not into
+						 * the innter packet.
+						 */
+						pppoe_excepts[pppoe_num_in_excepts].inner_iptype =
+							IPA_IP_v4;
+						pppoe_num_in_excepts++;
+						/*
+						 * Update our set.
+						 */
+						pppoe_added.insert(ipgre_info.exception_list[i].value);
+					}
+				}
+				else
+				{
+					if ( ipgre_info.exception_list[i].inner_iptype ==
+							IPA_IP_MAX )
+					{
+						pppoe_excepts[pppoe_num_in_excepts] =
+							ipgre_info.exception_list[i];
+						pppoe_excepts[pppoe_num_in_excepts].inner_iptype =
+							IPA_IP_v4;
+						pppoe_num_in_excepts++;
+
+						pppoe_excepts[pppoe_num_in_excepts] =
+							ipgre_info.exception_list[i];
+						pppoe_excepts[pppoe_num_in_excepts].inner_iptype =
+							IPA_IP_v6;
+						pppoe_num_in_excepts++;
+					}
+					else
+					{
+						pppoe_excepts[pppoe_num_in_excepts] =
+ipgre_info.exception_list[i];
+						pppoe_num_in_excepts++;
+					}
+				}
+			}
+
+			IPACMDBG_H("MPLS-PPPoE: num exceptions %d\n", pppoe_num_in_excepts);
+			for ( uint8_t i = 0; i < pppoe_num_in_excepts; i++ )
+			{
+#ifdef FEATURE_VLAN_MPDN
+				struct ipa_flt_rule_add& pppoe_flt_rule = rules[pos].flt_rule;
+#else
+				struct ipa_flt_rule_add& pppoe_flt_rule = rules[pos];
+#endif
+				res = gre_add_exception_rule(
+					pppoe_excepts[i],
+					iptype,
+					rx_prop->rx[1].attrib,
+					pppoe_flt_rule,
+					pos,
+					true);
+
+				if (res == IPACM_SUCCESS)
+				{
+					++pos;
+				}
+				else
+				{
+					return res;
+				}
+			}
+
+			/* Configuring Exception rule for MPLSoGRE*/
 			for ( uint8_t i = 0; i < ipgre_info.num_exceptions; i++ )
 			{
 				/*
@@ -4768,6 +4874,7 @@ int IPACM_Wan::config_dft_firewall_rules_ex(struct ipa_flt_rule_add *rules, int 
 				}
 			}
 
+			IPACMDBG_H("MPLS: num exceptions %d\n", num_in_excepts);
 			for ( uint8_t i = 0; i < num_in_excepts; i++ )
 			{
 #ifdef FEATURE_VLAN_MPDN
@@ -4915,11 +5022,97 @@ int IPACM_Wan::config_dft_firewall_rules_ex(struct ipa_flt_rule_add *rules, int 
 			 * simplifies the logic that follows this conversion...
 			 */
 			uint32_t num_in_excepts = 0;
+			uint32_t pppoe_num_in_excepts = 0;
 
 			struct ipa_exception excepts[ipgre_info.num_exceptions * 2];
+			struct ipa_exception pppoe_excepts[ipgre_info.num_exceptions * 2];
 
 			std::set<uint32_t> added; /* Used to ensure eth vals only added once */
+			std::set<uint32_t> pppoe_added; /* Used to ensure eth vals only added once */
 
+
+			/* Configuring Exception rule PPPoE with MPLSoGRE*/
+			for ( uint8_t i = 0; i < ipgre_info.num_exceptions; i++ )
+			{
+				if ( ipgre_info.exception_list[i].field == FIELD_ETHER_TYPE )
+				{
+					/*
+					 * Only want to add eths once based on value, hence...
+					 */
+					if( pppoe_added.find(ipgre_info.exception_list[i].value) ==
+							pppoe_added.end() )
+					{
+						/*
+						 * Haven't seen yet, let's add it.
+						 */
+						pppoe_excepts[num_in_excepts] =
+							ipgre_info.exception_list[i];
+						/*
+						 * Either IP type is fine here, since we're
+						 * only looking at the Eth header and not into
+						 * the innter packet.
+						 */
+						pppoe_excepts[num_in_excepts].inner_iptype = IPA_IP_v4;
+						pppoe_num_in_excepts++;
+						/*
+						 * Update our set.
+						 */
+						pppoe_added.insert(ipgre_info.exception_list[i].value);
+					}
+				}
+				else
+				{
+					if ( ipgre_info.exception_list[i].inner_iptype ==
+							IPA_IP_MAX )
+					{
+						pppoe_excepts[num_in_excepts] =
+							ipgre_info.exception_list[i];
+						pppoe_excepts[num_in_excepts].inner_iptype =
+							IPA_IP_v4;
+						pppoe_num_in_excepts++;
+
+						pppoe_excepts[num_in_excepts] =
+							ipgre_info.exception_list[i];
+						pppoe_excepts[num_in_excepts].inner_iptype =
+							IPA_IP_v6;
+						pppoe_num_in_excepts++;
+					}
+					else
+					{
+						pppoe_excepts[num_in_excepts] =
+							ipgre_info.exception_list[i];
+						pppoe_num_in_excepts++;
+					}
+				}
+			}
+
+			IPACMDBG_H("MPLS-PPPoE: num exceptions %d\n", pppoe_num_in_excepts);
+			for ( uint8_t i = 0; i < pppoe_num_in_excepts; i++ )
+			{
+#ifdef FEATURE_VLAN_MPDN
+				struct ipa_flt_rule_add& pppoe_flt_rule = rules[pos].flt_rule;
+#else
+				struct ipa_flt_rule_add& pppoe_flt_rule = rules[pos];
+#endif
+				res = gre_add_exception_rule(
+					excepts[i],
+					iptype,
+					rx_prop->rx[1].attrib,
+					pppoe_flt_rule,
+					pos,
+					true);
+
+				if (res == IPACM_SUCCESS)
+				{
+					++pos;
+				}
+				else
+				{
+					return res;
+				}
+			}
+
+			/* Configuring Exception rule for MPLSoGRE*/
 			for ( uint8_t i = 0; i < ipgre_info.num_exceptions; i++ )
 			{
 				if ( ipgre_info.exception_list[i].field == FIELD_ETHER_TYPE )
@@ -4966,6 +5159,7 @@ int IPACM_Wan::config_dft_firewall_rules_ex(struct ipa_flt_rule_add *rules, int 
 				}
 			}
 
+			IPACMDBG_H("MPLS : num exceptions %d\n", num_in_excepts);
 			for ( uint8_t i = 0; i < num_in_excepts; i++ )
 			{
 #ifdef FEATURE_VLAN_MPDN
@@ -5315,7 +5509,14 @@ int IPACM_Wan::config_eogre_dl_rules_ex(struct ipacm_pdn_flt_rule* rules, int ru
 				continue;
 			}
 		}
-		if(found == false)
+		if(found == false && i != conf->tunnel_idx.size()-1)
+		{
+			IPACMERR("GetWanByAddr did not success for iptype%d"
+				"checking for other tunnels\n",
+				iptype);
+			continue;
+		}
+		else if(found == false)
 		{
 			IPACMERR("GetWanByAddr did not success for iptype%d\n",
 				iptype);
@@ -11326,7 +11527,8 @@ int IPACM_Wan::gre_add_exception_rule(
 	ipa_ip_type                   iptype,
 	const struct ipa_rule_attrib& rx_prop_attrib,
 	struct ipa_flt_rule_add&      flt_rule_add,
-	int                           fltr_rule_number )
+	int                           fltr_rule_number,
+	bool is_pppoe )
 {
 	int *num_firewall, *num_flt_rule;
 	ipa_ioc_get_rt_tbl_indx rt_tbl_idx;
@@ -11481,6 +11683,9 @@ int IPACM_Wan::gre_add_exception_rule(
 	attrib.fld_val_eq.field        = except.field;
 	attrib.fld_val_eq.value        = except.value;
 
+	if (is_pppoe)
+		attrib.p_exception = PPPOE_ENABLE;
+
 	memset(&flt_eq, 0, sizeof(flt_eq));
 
 	flt_eq.ip = iptype;
@@ -11489,17 +11694,35 @@ int IPACM_Wan::gre_add_exception_rule(
 		&attrib,
 		sizeof(flt_eq.attrib));
 
-	IPACMDBG(
-		"Adding downlink GRE exception rule for iptype=(%u) and "
-		"exception:(field=%u value=0x%x inner_iptype=%u) mux id:%d "
-		"WAN DL routing table %s has index %d\n",
-		iptype,
-		except.field,
-		except.value,
-		except.inner_iptype,
-		mux_id,
-		rt_tbl_idx.name,
-		rt_tbl_idx.idx);
+	if (is_pppoe)
+	{
+		IPACMDBG(
+			"Adding downlink GRE exception rule for iptype=(%u) and "
+			"exception:(field=%u value=0x%x inner_iptype=%u) mux id:%d "
+			"WAN DL routing table %s has index %d, is_mpls_pppoe %d\n",
+			iptype,
+			except.field,
+			except.value,
+			except.inner_iptype,
+			mux_id,
+			rt_tbl_idx.name,
+			rt_tbl_idx.idx,
+			is_pppoe);
+	}
+	else
+	{
+		IPACMDBG(
+			"Adding downlink GRE exception rule for iptype=(%u) and "
+			"exception:(field=%u value=0x%x inner_iptype=%u) mux id:%d "
+			"WAN DL routing table %s has index %d\n",
+			iptype,
+			except.field,
+			except.value,
+			except.inner_iptype,
+			mux_id,
+			rt_tbl_idx.name,
+			rt_tbl_idx.idx);
+	}
 
 	if ( ioctl(m_fd_ipa, IPA_IOC_GENERATE_FLT_EQ, &flt_eq) != 0 )
 	{
@@ -12478,7 +12701,7 @@ void IPACM_Wan::ipgre_clear_route_data(
 
 void IPACM_Wan::send_config_to_uc(){
 	bool res;
-	uint8_t mux_id;
+	uint8_t mux_id = 0;
 	int fd, ret = 0;
 	uint8_t vlan_id = IPACM_Iface::ipacmcfg->IP_Forwarding_config.vlan;
 	res=IPACM_Wan::GetMuxID_For_Private_IP_Forwarding(vlan_id,&mux_id);

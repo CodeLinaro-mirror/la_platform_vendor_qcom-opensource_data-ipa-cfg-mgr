@@ -28,7 +28,7 @@
 *
 * Changes from Qualcomm Innovation Center are provided under the following license:
 *
-* Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+* Copyright (c) 2023-2024 Qualcomm Innovation Center, Inc. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without
 * modification, are permitted (subject to the limitations in the
@@ -643,7 +643,7 @@ int IPACM_Iface::query_iface_property(void)
 	{
 		PERROR("ioctl IPA_IOC_QUERY_INTF failed\n");
 		/* iface_query memory will free when iface-down*/
-		res = IPACM_FAILURE;
+		return IPACM_FAILURE;
 	}
 
 	if(iface_query->num_tx_props > 0)
@@ -666,31 +666,27 @@ int IPACM_Iface::query_iface_property(void)
 			PERROR("ioctl IPA_IOC_QUERY_INTF_TX_PROPS failed\n");
 			/* tx_prop memory will free when iface-down*/
 			free(iface_query);
-			res = IPACM_FAILURE;
+			return IPACM_FAILURE;
 		}
 
-		if (res != IPACM_FAILURE)
+		for (cnt = 0; cnt < tx_prop->num_tx_props; cnt++)
 		{
-			for (cnt = 0; cnt < tx_prop->num_tx_props; cnt++)
+			IPACMDBG_H("Tx(%d):attrib-mask:0x%x, ip-type: %d, dst_pipe: %d, alt_dst_pipe: %d, header: %s\n",
+					cnt, tx_prop->tx[cnt].attrib.attrib_mask,
+					tx_prop->tx[cnt].ip, tx_prop->tx[cnt].dst_pipe,
+					tx_prop->tx[cnt].alt_dst_pipe,
+					tx_prop->tx[cnt].hdr_name);
+
+			if (tx_prop->tx[cnt].dst_pipe == 0)
 			{
-				IPACMDBG_H("Tx(%d):attrib-mask:0x%x, ip-type: %d, dst_pipe: %d, alt_dst_pipe: %d, header: %s\n",
-						cnt, tx_prop->tx[cnt].attrib.attrib_mask,
-						tx_prop->tx[cnt].ip, tx_prop->tx[cnt].dst_pipe,
-						tx_prop->tx[cnt].alt_dst_pipe,
-						tx_prop->tx[cnt].hdr_name);
-
-				if (tx_prop->tx[cnt].dst_pipe == 0)
-				{
-					IPACMERR("Tx(%d): wrong tx property: dst_pipe: 0.\n", cnt);
-					close(fd);
-					free(iface_query);
-					free(tx_prop);
-					return IPACM_FAILURE;
-				}
-				/* Move the alt_dst_pipe logic to wlan/wan instance */
+				IPACMERR("Tx(%d): wrong tx property: dst_pipe: 0.\n", cnt);
+				close(fd);
+				free(iface_query);
+				free(tx_prop);
+				return IPACM_FAILURE;
 			}
+			/* Move the alt_dst_pipe logic to wlan/wan instance */
 		}
-
 	}
 
 	if (iface_query->num_rx_props > 0)
@@ -715,16 +711,13 @@ int IPACM_Iface::query_iface_property(void)
 			/* rx_prop memory will free when iface-down*/
 			free(iface_query);
 			free(tx_prop);
-			res = IPACM_FAILURE;
+			return IPACM_FAILURE;
 		}
 
-		if (res != IPACM_FAILURE)
+		for (cnt = 0; cnt < rx_prop->num_rx_props; cnt++)
 		{
-			for (cnt = 0; cnt < rx_prop->num_rx_props; cnt++)
-			{
-				IPACMDBG_H("Rx(%d):attrib-mask:0x%x, ip-type: %d, src_pipe: %d\n",
-								 cnt, rx_prop->rx[cnt].attrib.attrib_mask, rx_prop->rx[cnt].ip, rx_prop->rx[cnt].src_pipe);
-			}
+			IPACMDBG_H("Rx(%d):attrib-mask:0x%x, ip-type: %d, src_pipe: %d\n",
+						cnt, rx_prop->rx[cnt].attrib.attrib_mask, rx_prop->rx[cnt].ip, rx_prop->rx[cnt].src_pipe);
 		}
 	}
 
@@ -1269,7 +1262,7 @@ int IPACM_Iface::delete_dflt_filter_rules(
 				memset(
 					dft_v4fl_rule_hdl,
 					0,
-					m_ipv4_default_filterting_rules_count * sizeof(uint32_t));
+					sizeof(dft_v4fl_rule_hdl));
 				m_ipv4_default_filterting_rules_count = 0;
 			}
 			else
@@ -1300,7 +1293,7 @@ int IPACM_Iface::delete_dflt_filter_rules(
 				memset(
 					dft_v6fl_rule_hdl,
 					0,
-					m_ipv6_default_filterting_rules_count * sizeof(uint32_t));
+					sizeof(dft_v6fl_rule_hdl));
 				m_ipv6_default_filterting_rules_count = 0;
 			}
 			else

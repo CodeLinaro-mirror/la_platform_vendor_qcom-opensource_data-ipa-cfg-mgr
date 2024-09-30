@@ -2206,20 +2206,22 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 
 #ifdef FEATURE_VLAN_MPDN
 
-int IPACM_Wan::IPACM_Wan::get_wan_v4_index(ipacm_wan_iface_type sta_mode)
+int IPACM_Wan::get_wan_v4_index(ipacm_wan_iface_type sta_mode)
 {
 	if(sta_mode == WLAN_WAN)
 		return IPACM_Wan::wlan_v4_vlan_index;
 	else if(sta_mode == ECM_WAN)
 		return IPACM_Wan::eth_sta_v4_vlan_index;
+	return IPACM_FAILURE;
 }
 
-int IPACM_Wan::IPACM_Wan::get_wan_v6_index(ipacm_wan_iface_type sta_mode)
+int IPACM_Wan::get_wan_v6_index(ipacm_wan_iface_type sta_mode)
 {
 	if(sta_mode == WLAN_WAN)
 		return IPACM_Wan::wlan_v6_vlan_index;
 	else if(sta_mode == ECM_WAN)
 		return IPACM_Wan::eth_sta_v6_vlan_index;
+	return IPACM_FAILURE;
 }
 
 void IPACM_Wan::get_vlan_association_info(ipacm_vlan_association_info* vlan_info)

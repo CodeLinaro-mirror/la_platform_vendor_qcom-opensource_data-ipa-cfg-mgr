@@ -1310,7 +1310,7 @@ int IPACM_Wlan::handle_wlan_client_init_ex(ipacm_event_data_wlan_ex *data)
 	}
 
 	IPACMDBG_H("Wifi client number: %d\n", num_wifi_client);
-
+	memset(get_client_memptr(wlan_client, num_wifi_client), 0, sizeof(ipa_wlan_client));
 	/* add header to IPA */
 	if(tx_prop != NULL)
 	{

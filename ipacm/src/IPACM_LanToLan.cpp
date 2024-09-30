@@ -1225,25 +1225,36 @@ void IPACM_LanToLan_Iface::add_client_rt_rule(peer_iface_info *peer_info, client
 			if(client->vlan_id)
 				IPACMDBG_H("client vlan id %d\n", client->vlan_id);
 
-			it = peer_info->mac_rt_rule_ref.find(mac);
-			if(it != peer_info->mac_rt_rule_ref.end() &&
-				!peer_info->peer->is_spcl_iface())
+			if(IPACM_Iface::ipacmcfg->ipacm_emesh_enable == false)
 			{
-				mac_found = 1;
-				return;
-			}
-
-			/* check if peer already has rt rule for this mac address */
-			for (itr = m_peer_iface_info.begin();
-				itr != m_peer_iface_info.end(); itr++)
-			{
-				it = (*itr).mac_rt_rule_ref.find(mac);
-				if(it != (*itr).mac_rt_rule_ref.end()
-					&& !(*itr).peer->is_spcl_iface())
+				it = peer_info->mac_rt_rule_ref.find(mac);
+				if(it != peer_info->mac_rt_rule_ref.end())
 				{
 					mac_found = 1;
-					break;
+					return;
 				}
+
+				/* check if peer already has rt rule for this mac address */
+				for (itr = m_peer_iface_info.begin();
+					itr != m_peer_iface_info.end(); itr++)
+				{
+					it = (*itr).mac_rt_rule_ref.find(mac);
+					if(it != (*itr).mac_rt_rule_ref.end())
+					{
+						mac_found = 1;
+						break;
+					}
+				}
+			}
+			else
+			{
+				/* check if peer already has rt rule for this mac address */
+				it = peer_info->mac_rt_rule_ref.find(mac);
+				if(it != peer_info->mac_rt_rule_ref.end()  && !peer_info->peer->is_spcl_iface())
+				{
+					mac_found = 1;
+				}
+
 			}
 
 			/* Only special interface can have same mac address twice, one for eth_to_eth and other for 802_to_eth */

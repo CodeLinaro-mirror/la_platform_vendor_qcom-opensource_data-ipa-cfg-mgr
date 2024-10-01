@@ -4029,8 +4029,6 @@ int IPACM_Lan::handle_addr_evt(ipacm_event_data_addr *data)
 #endif
 			install_ipv6_icmp_flt_rule();
 
-			/* populate the flt rule offset for eth bridge */
-			eth_bridge_flt_rule_offset[0][data->iptype] = ipv6_icmp_flt_rule_hdl[0][0];
 #ifdef FEATURE_L2TP
 			if (IPACM_Iface::ipacmcfg->ipacm_l2tp_enable == IPACM_L2TP)
 			{
@@ -4051,6 +4049,7 @@ int IPACM_Lan::handle_addr_evt(ipacm_event_data_addr *data)
 					IPACMDBG_H("Iface is not Special iface, no need to install v6 rules on 2nd rx pipe\n", num_dft_rt_v6);
 					continue;
 				}
+				eth_bridge_flt_rule_offset[j][IPA_IP_v6] = ipv6_icmp_flt_rule_hdl[j][0];
 				/* populate the mtu_rule_offset */
 				if (m_ipv6_default_filterting_rules_count[j] && m_ipv6_default_filterting_rules_count[j] <= (IPV6_DEFAULT_FILTERTING_RULES + IPV6_DEFAULT_LAN_FILTERTING_RULES))
 				{

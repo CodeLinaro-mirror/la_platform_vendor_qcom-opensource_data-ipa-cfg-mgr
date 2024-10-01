@@ -1128,6 +1128,8 @@ void IPACM_LanToLan_Iface::add_all_inter_interface_client_flt_rule_one_vlan_id(i
 {
 	list<peer_iface_info>::iterator it_iface;
 	list<client_info>::iterator it_client;
+	ipa_bridge_vlan_mapping_info mapping_info;
+	uint16_t client_br_vid = 0;
 
 	/* go over all peers (must be vlan interfaces) */
 	for(it_iface = m_peer_iface_info.begin(); it_iface != m_peer_iface_info.end(); it_iface++)
@@ -1137,7 +1139,25 @@ void IPACM_LanToLan_Iface::add_all_inter_interface_client_flt_rule_one_vlan_id(i
 		/* look for specific client with this vlan id */
 		for(it_client = it_iface->peer->m_client_info.begin(); it_client != it_iface->peer->m_client_info.end(); it_client++)
 		{
-			if (vlan_id == it_client->vlan_id)
+			/*Query the bridge for dummy_vid iface and extract actual vid from that bridge */
+			if(IPACM_Iface::ipacmcfg->is_dummy_VID(it_client->vlan_id))
+			{
+				mapping_info.vlan_id = it_client->vlan_id;
+				IPACMDBG_H("Query Bridge for Dummy VID %d\n", it_client->vlan_id);
+				if(IPACM_Iface::ipacmcfg->get_bridge_vlan_mapping(&mapping_info, true))
+				{
+					IPACMERR("Unable to find Bridge for Dummy VLAN ID %d\n", it_client->vlan_id);
+					continue;
+				}
+				if(IPACM_Iface::ipacmcfg->get_bridge_vlan_mapping(&mapping_info))
+				{
+					IPACMDBG_H("Unable to find actual VID for br %s!\n", mapping_info.bridge_name);
+					continue;
+				}
+				client_br_vid = mapping_info.vlan_id;
+				IPACMDBG_H("Found the VLAN-ID %d.\n", client_br_vid);
+			}
+			if (vlan_id == it_client->vlan_id || (client_br_vid && vlan_id == client_br_vid))
 				add_client_flt_rule(&(*it_iface), &(*it_client), iptype);
 		}
 	}
@@ -1147,6 +1167,8 @@ void IPACM_LanToLan_Iface::del_all_inter_interface_client_flt_rule_one_vlan_id(u
 {
 	list<peer_iface_info>::iterator it_iface;
 	list<client_info>::iterator it_client;
+	ipa_bridge_vlan_mapping_info mapping_info;
+	uint16_t client_br_vid = 0;
 
 	/* go over all peers (must be vlan interfaces) */
 	for(it_iface = m_peer_iface_info.begin(); it_iface != m_peer_iface_info.end(); it_iface++)
@@ -1156,7 +1178,25 @@ void IPACM_LanToLan_Iface::del_all_inter_interface_client_flt_rule_one_vlan_id(u
 		/* look for specific client with this vlan id */
 		for(it_client = it_iface->peer->m_client_info.begin(); it_client != it_iface->peer->m_client_info.end(); it_client++)
 		{
-			if(vlan_id == it_client->vlan_id)
+			/*Query the bridge for dummy_vid iface and extract actual vid from that bridge */
+			if(IPACM_Iface::ipacmcfg->is_dummy_VID(it_client->vlan_id))
+			{
+				mapping_info.vlan_id = it_client->vlan_id;
+				IPACMDBG_H("Query Bridge for Dummy VID %d\n", it_client->vlan_id);
+				if(IPACM_Iface::ipacmcfg->get_bridge_vlan_mapping(&mapping_info, true))
+				{
+					IPACMERR("Unable to find Bridge for Dummy VLAN ID %d\n", it_client->vlan_id);
+					continue;
+				}
+				if(IPACM_Iface::ipacmcfg->get_bridge_vlan_mapping(&mapping_info))
+				{
+					IPACMDBG_H("Unable to find actual VID for br %s!\n", mapping_info.bridge_name);
+					continue;
+				}
+				client_br_vid = mapping_info.vlan_id;
+				IPACMDBG_H("Found the VLAN-ID %d.\n", client_br_vid);
+			}
+			if(vlan_id == it_client->vlan_id || (client_br_vid && vlan_id == client_br_vid))
 				del_client_flt_rule(&(*it_iface), &(*it_client));
 		}
 	}
@@ -1167,6 +1207,8 @@ void IPACM_LanToLan_Iface::add_all_inter_interface_client_flt_rule(ipa_ip_type i
 {
 	list<peer_iface_info>::iterator it_iface;
 	list<client_info>::iterator it_client;
+	ipa_bridge_vlan_mapping_info mapping_info;
+	uint16_t client_br_vid = 0;
 #ifdef FEATURE_VLAN_MPDN
 	if(m_is_vlan && !Ids)
 	{
@@ -1183,9 +1225,27 @@ void IPACM_LanToLan_Iface::add_all_inter_interface_client_flt_rule(ipa_ip_type i
 			if(Ids)
 			{
 				int i;
+				/*Query the bridge for dummy_vid iface and extract actual vid from that bridge */
+				if(IPACM_Iface::ipacmcfg->is_dummy_VID(it_client->vlan_id))
+				{
+					mapping_info.vlan_id = it_client->vlan_id;
+					IPACMDBG_H("Query Bridge for Dummy VID %d\n", it_client->vlan_id);
+					if(IPACM_Iface::ipacmcfg->get_bridge_vlan_mapping(&mapping_info, true))
+					{
+						IPACMERR("Unable to find Bridge for Dummy VLAN ID %d\n", it_client->vlan_id);
+						continue;
+					}
+					if(IPACM_Iface::ipacmcfg->get_bridge_vlan_mapping(&mapping_info))
+					{
+						IPACMDBG_H("Unable to find actual VID for br %s!\n", mapping_info.bridge_name);
+						continue;
+					}
+					client_br_vid = mapping_info.vlan_id;
+					IPACMDBG_H("Found the VLAN-ID %d.\n", client_br_vid);
+				}
 				for(i = 0; i < IPA_MAX_NUM_OFFLOAD_VLANS; i++)
 				{
-					if(Ids[i] == it_client->vlan_id)
+					if(Ids[i] == it_client->vlan_id || (client_br_vid && Ids[i] == client_br_vid))
 					{
 						IPACMDBG_H("vlan id %d match\n", Ids[i]);
 						break;

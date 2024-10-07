@@ -341,6 +341,11 @@ bool IPACM_Filtering::AddFilteringRule(struct ipa_ioc_add_flt_rule const *ruleTa
 {
 	int retval = 0;
 
+	if(ruleTable == NULL)
+	{
+		IPACMERR("Null rueTable, return \n");
+		return false;
+	}
 	IPACMDBG("Printing filter add attributes\n");
 	IPACMDBG("ip type: %d\n", ruleTable->ip);
 	IPACMDBG("Number of rules: %d\n", ruleTable->num_rules);

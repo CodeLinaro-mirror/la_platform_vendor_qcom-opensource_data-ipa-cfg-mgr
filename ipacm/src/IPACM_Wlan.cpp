@@ -1209,14 +1209,17 @@ void IPACM_Wlan::event_callback(ipa_cm_event_id event, void *param)
 			    is_vlan_event(data->iface_name)) {
 				IPACMDBG_H("Client is a vlan wlan client \n");
 				handle_wlan_vlan_neighbor(new_neigh_data);
-			} else {
+			}
+#ifdef FEATURE_VLAN_MPDN
+			else {
 				if (IPACM_Iface::ipacmcfg->ipacm_emesh_enable &&
 				    IPACM_Iface::ipacmcfg->ipacm_emesh_mode >=
-					    2) {
+					    2 && (strstr(data->iface_name,"ath") ||
+						strstr(data->iface_name,"wlan") )) {
 					handle_wlan_r2_subnet(new_neigh_data);
 				}
 			}
-
+#endif
 		}
 		break;
 
@@ -9749,6 +9752,12 @@ int IPACM_Wlan::handle_wlan_r2_subnet(ipacm_event_new_neigh_vlan *param)
 	ipacm_event_new_neigh_vlan *new_neigh_data =
 		(ipacm_event_new_neigh_vlan *)param;
 	if (new_neigh_data->data_all.iptype == IPA_IP_v4) {
+		if(new_neigh_data->bridge == NULL)
+		{
+			IPACMERR("NULL bridge\n");
+			return IPACM_FAILURE;
+		}
+		IPACMDBG_H("adding r2 subnet\n");
 		add_vlan_private_subnet(new_neigh_data->bridge);
 	}
 	return IPACM_SUCCESS;

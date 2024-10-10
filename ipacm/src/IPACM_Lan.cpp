@@ -21656,6 +21656,15 @@ int IPACM_Lan::handle_static_policy_flt_rule_add(uint32_t ipv4_addr)
 	struct ipa_ioc_add_flt_rule_after* pFilteringTable = NULL;
 	struct ipa_ioc_get_rt_tbl rtTblHdl;
 	int len, idx = 0, res = 0;
+	ipa_private_subnet *private_subnet = NULL;
+
+	memset(&private_subnet, 0, sizeof (private_subnet));
+	if ((private_subnet = IPACM_Iface::ipacmcfg->getPrivateSubnet(ipv4_addr)) == NULL)
+	{
+		IPACMERR("Failed to extract private subnet for static policy rule.\n");
+		res = IPACM_FAILURE;
+		return res;
+	}
 
 	memset(&rtTblHdl, 0, sizeof(rtTblHdl));
 	snprintf(rtTblHdl.name, sizeof(rtTblHdl.name),"static_policy_rt");
@@ -21692,8 +21701,8 @@ int IPACM_Lan::handle_static_policy_flt_rule_add(uint32_t ipv4_addr)
 	pFltRule->rule.hashable = true;
 	pFltRule->rule.rt_tbl_hdl = rtTblHdl.hdl;
 	pFltRule->rule.retain_hdr = 1;
-	pFltRule->rule.attrib.u.v4.src_addr = ipv4_addr & 0xFFFFFF00;
-	pFltRule->rule.attrib.u.v4.src_addr_mask = 0xFFFFFF00;
+	pFltRule->rule.attrib.u.v4.src_addr = private_subnet->subnet_addr;
+	pFltRule->rule.attrib.u.v4.src_addr_mask = private_subnet->subnet_mask;
 	pFltRule->rule.attrib.attrib_mask |= IPA_FLT_SRC_ADDR;
 	pFltRule->rule.set_metadata = true;
 

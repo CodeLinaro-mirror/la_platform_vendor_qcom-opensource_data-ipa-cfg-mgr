@@ -399,6 +399,7 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 	ipacm_event_iface_up_tehter* data_wan_tether;
 	list <ipacm_event_data_all>::iterator it;
 	ipacm_event_data_all *data_all=NULL;
+	ipacm_event_data_vlan *vlan_data = NULL;
 	ipacm_cmd_q_data evt_data;
 	int clnt_indx = 0;
 	ipa_bridge_vlan_mapping_info mapping_info;
@@ -934,7 +935,7 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 		}
 #endif
 		/* if dummy vlan present for iface, don't handle via default route */
-		if (IPACM_Iface::ipacmcfg->is_added_vlan_iface(data_wan->ifname))
+		if (IPACM_Iface::ipacmcfg->is_added_vlan_iface(dev_name))
 		{
 			IPACMDBG_H("Iface in dumm VLAN do not handle default route\n");
 			return;
@@ -1067,7 +1068,7 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 		}
 #endif
 		/* if dummy vlan present for iface, don't handle via default route */
-		if (IPACM_Iface::ipacmcfg->is_added_vlan_iface(data_wan->ifname))
+		if (IPACM_Iface::ipacmcfg->is_added_vlan_iface(dev_name))
 		{
 			IPACMDBG_H("Iface in dumm VLAN do not handle default route\n");
 			return;
@@ -1571,7 +1572,8 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 	case IPA_NOTIFY_VLAN_UP:
 		{
 			IPACMDBG_H("Received IPA_NOTIFY_VLAN_UP\n");
-			if(IPACM_Iface::ipacmcfg->iface_in_vlan_mode(dev_name))
+			vlan_data = (ipacm_event_data_vlan *)param;
+			if(is_vlan_IF(vlan_data->vlan_id))
 			{
 				IPACMDBG_H("Check any missed v4 VLAN handling in v4 new ADDR\n");
 				check_vlan_PDNUp(IPA_IP_v4);
@@ -2667,7 +2669,6 @@ int IPACM_Lan::handle_vlan_neighbor(ipacm_event_data_all *data)
 
 bool IPACM_Lan::is_vlan_IF(uint16_t vlan_id)
 {
-	int i =0;
 	char vlan_iface_name[IPA_RESOURCE_NAME_MAX];
 	char vlan_suffix[6];
 	uint16_t Ids[IPA_MAX_NUM_OFFLOAD_VLANS];
@@ -2690,7 +2691,7 @@ bool IPACM_Lan::is_vlan_IF(uint16_t vlan_id)
 		return false;
 	}
 
-	if(IPACM_Iface::ipacmcfg->is_added_vlan_iface(vlan_iface_name) || IPACM_Iface::ipacmcfg->is_added_vlan_iface(dev_name))
+	if(IPACM_Iface::ipacmcfg->is_added_vlan_iface(vlan_iface_name))
 	{
 		IPACMDBG_H("found VLAN IF named %s\n", vlan_iface_name);
 		return true;
@@ -2703,14 +2704,18 @@ bool IPACM_Lan::is_vlan_IF(uint16_t vlan_id)
 			IPACMERR("failed getting vlan ids for iface %s\n", dev_name);
 			return false;
 		}
-		for(i = 0; i < IPA_MAX_NUM_OFFLOAD_VLANS; i++)
+		for(int i = 0; i < IPA_MAX_NUM_OFFLOAD_VLANS; i++)
 		{
 			if(Ids[i] !=0 && Ids[i] == vlan_id)
+			{
+				IPACMDBG_H("found VLAN IF named %s\n", dev_name);
 				return true;
+			}
 		}
 	}
 	IPACMDBG_H("couldn't find VLAN IF named %s\n", vlan_iface_name);
 
+	IPACMDBG_H("couldn't find VLAN IF named %s\n", vlan_iface_name);
 	return false;
 }
 

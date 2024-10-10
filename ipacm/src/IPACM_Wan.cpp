@@ -1070,7 +1070,8 @@ int IPACM_Wan::handle_addr_evt(ipacm_event_data_addr *data)
 	IPACMDBG_H("Posting IPA_HANDLE_NEW_NEIGH_EVENT event:%d\n", evt_data.event);
 	IPACM_EvtDispatcher::PostEvt(&evt_data);
 fail:
-	free(rt_rule);
+	if(rt_rule)
+		free(rt_rule);
 
 	return res;
 }

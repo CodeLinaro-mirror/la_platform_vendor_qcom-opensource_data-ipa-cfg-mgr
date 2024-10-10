@@ -760,6 +760,7 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 									if(IPACM_Wan::backhaul_is_sta_mode == false)
 									{
 										ext_prop = IPACM_Iface::ipacmcfg->GetExtProp(IPA_IP_v4);
+										IPACMDBG_H("Install rule for V4 PDN\n");
 										handle_wan_up_ex(ext_prop, IPA_IP_v4,
 											IPACM_Wan::getXlat_Mux_Id());
 									}
@@ -784,6 +785,7 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 									if(IPACM_Wan::backhaul_is_sta_mode == false)
 									{
 										ext_prop = IPACM_Iface::ipacmcfg->GetExtProp(IPA_IP_v4);
+										IPACMDBG_H("SOCKSv5 Install rule for V4 PDN\n");
 										handle_wan_up_ex(ext_prop, IPA_IP_v4,
 											IPACM_Wan::getXlat_Mux_Id());
 									}
@@ -824,7 +826,8 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 									if(IPACM_Wan::backhaul_is_sta_mode == false)
 									{
 										ext_prop = IPACM_Iface::ipacmcfg->GetExtProp(IPA_IP_v6);
-										handle_wan_up_ex(ext_prop, IPA_IP_v6, 0);
+										IPACMDBG_H("Install rule for V6 PDN\n");
+										handle_wan_up_ex(ext_prop, IPA_IP_v6, IPACM_Wan::getXlat_Mux_Id());
 									}
 									else
 									{
@@ -856,7 +859,8 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 									if(IPACM_Wan::backhaul_is_sta_mode == false)
 									{
 										ext_prop = IPACM_Iface::ipacmcfg->GetExtProp(IPA_IP_v6);
-										handle_wan_up_ex(ext_prop, IPA_IP_v6, 0);
+										IPACMDBG_H("SOCKSv5 Install rule for V6 PDN\n");
+										handle_wan_up_ex(ext_prop, IPA_IP_v6, IPACM_Wan::getXlat_Mux_Id());
 									}
 									else
 									{
@@ -1120,7 +1124,7 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 			memcpy(ipv6_prefix, data_wan->ipv6_prefix, sizeof(ipv6_prefix));
 #ifdef FEATURE_VLAN_MPDN
 			if (IPACM_Iface::ipacmcfg->ipacm_mpdn_enable == TRUE)
-				modify_ipv6_prefix_flt_rule();
+				modify_ipv6_prefix_flt_rule(IPACM_Iface::ipacmcfg->eogre_enabled);
 			else
 				install_ipv6_prefix_flt_rule(data_wan->ipv6_prefix);
 #else
@@ -1635,7 +1639,7 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 
 			IPACMDBG_H("Received IPA_PREFIX_CHANGE_EVENT\n");
 			if(ipa_if_num != data->if_index)
-				modify_ipv6_prefix_flt_rule();
+				modify_ipv6_prefix_flt_rule(IPACM_Iface::ipacmcfg->eogre_enabled);
 			else
 				IPACMDBG_H("matching if index, ignoring\n", ipa_if_num);
 		}
@@ -4241,7 +4245,7 @@ int IPACM_Lan::handle_wan_up_ex(ipacm_ext_prop *ext_prop, ipa_ip_type iptype, ui
 	if(iptype == IPA_IP_v6)
 	{
 		/* add ipv6_mtu rule */
-		modify_ipv6_prefix_flt_rule();
+		modify_ipv6_prefix_flt_rule(IPACM_Iface::ipacmcfg->eogre_enabled);
 
 		if(num_dft_rt_v6 == 1 && modem_ul_v6_set == FALSE)
 		{
@@ -4306,10 +4310,10 @@ int IPACM_Lan::handle_wan_up_ex(ipacm_ext_prop *ext_prop, ipa_ip_type iptype, ui
 	else if(iptype == IPA_IP_v4)
 	{
 		/* add MTU rules for ipv4 */
-		modify_private_subnet();
+		modify_private_subnet(IPACM_Iface::ipacmcfg->eogre_enabled);
 		/* MTU might have changed. Need to update ipv6 MTU rule if up */
 		if (IPACM_Wan::isWanUP_V6(ipa_if_num))
-			modify_ipv6_prefix_flt_rule();
+			modify_ipv6_prefix_flt_rule(IPACM_Iface::ipacmcfg->eogre_enabled);
 
 		if(modem_ul_v4_set == false)
 		{
@@ -10767,27 +10771,58 @@ int IPACM_Lan::modify_private_subnet(bool eogre_enabled)
 	{
 		/* re-calculate the ipv4 mtu based on GRE tunnel type */
 		if(IPACM_Iface::ipacmcfg->eogre_info.iptype == IPA_IP_v4) /* v4 + v4 */
-			/* mtu_v4_new = mtu_v4 - 4(gre) - 4(MPLS) - 14(eth) - 20(outer ipv4) */
-			mtu[0] = IPACM_Wan::GetGREMTU(IPA_IP_v4) - 22 - IPV4_HEADER_SIZE;
+		{
+			if(IPACM_Iface::ipacmcfg->tunnel_feature != SINGLE_TAG_FEATURE)
+			{
+				/* mtu_v4_new = mtu_v4 - 4(gre) - 4(MPLS) - 14(eth) - 20(outer ipv4) */
+				mtu[0] = IPACM_Wan::GetGREMTU(IPA_IP_v4) - 22 - IPV4_HEADER_SIZE;
+			}
+			else
+			{
+				mtu[0] = IPACM_Wan::GetGREMTU(IPA_IP_v4);
+			}
+		}
 		else if (IPACM_Iface::ipacmcfg->eogre_info.iptype == IPA_IP_v6) /* v6 + v4 */
-			/* mtu_v4_new = mtu_v6 - 8(options) - 4(gre) - 4(MPLS) -14(eth) - 40(outer ipv6) */
-			mtu[0] = IPACM_Wan::GetGREMTU(IPA_IP_v6) - 30 - IPV6_HEADER_SIZE;
+		{
+			if(IPACM_Iface::ipacmcfg->tunnel_feature != SINGLE_TAG_FEATURE)
+                        {
+				/* mtu_v4_new = mtu_v4 - 4(gre) - 4(MPLS) - 14(eth) - 20(outer ipv4) */
+				mtu[0] = IPACM_Wan::GetGREMTU(IPA_IP_v6) - 30 - IPV6_HEADER_SIZE;
+			}
+			else
+			{
+				mtu[0] = IPACM_Wan::GetGREMTU(IPA_IP_v6);
+			}
+		}
 		else
 			IPACMERR("invalid iptype = %d\n", IPACM_Iface::ipacmcfg->eogre_info.iptype);
 
 		IPACMDBG("GRE v4 PDN mtu = %d\n", mtu[0]);
 		IPACMDBG("num_wan_ul_fl_rule_v4= %d\n", num_wan_ul_fl_rule_v4);
 
-		//add the MTU rule after the 2nd pass rules but before the 1st pass rule
-		if (num_wan_ul_fl_rule_v4)
-		{
-			IPACMDBG("v4 GRE MTU rule will be installed after v4 modem UL rules\n");
-			mtu_flt_rule_offset[IPA_IP_v4] = wan_ul_fl_rule_hdl_v4[num_wan_ul_fl_rule_v4 - 1];
+		if(IPACM_Iface::ipacmcfg->tunnel_feature != SINGLE_TAG_FEATURE) {
+			//add the MTU rule after the 2nd pass rules but before the 1st pass rule
+			if (num_wan_ul_fl_rule_v4)
+			{
+				IPACMDBG("v4 GRE MTU rule will be installed after v4 modem UL rules\n");
+				mtu_flt_rule_offset[IPA_IP_v4] = wan_ul_fl_rule_hdl_v4[num_wan_ul_fl_rule_v4 - 1];
+			}
+			else
+			{
+				IPACMDBG("v4 GRE MTU rule will be installed after v4 default rules\n");
+				mtu_flt_rule_offset[IPA_IP_v4] = dft_v4fl_rule_hdl[m_ipv4_default_filterting_rules_count - 1];
+			}
 		}
 		else
 		{
-			IPACMDBG("v4 GRE MTU rule will be installed after v4 default rules\n");
-			mtu_flt_rule_offset[IPA_IP_v4] = dft_v4fl_rule_hdl[m_ipv4_default_filterting_rules_count - 1];
+			if(m_ipv4_default_filterting_rules_count)
+			{
+				mtu_flt_rule_offset[IPA_IP_v4] = dft_v4fl_rule_hdl[m_ipv4_default_filterting_rules_count - 1];
+			}
+			else
+			{
+				mtu_flt_rule_offset[IPA_IP_v4] = ipv4_icmp_flt_rule_hdl[0];
+			}
 		}
 		//this should always hit as GRE is always in VLAN mode so will never hit the inc above. (added for safety)
 		if(!mtu_rule_cnt)
@@ -10851,7 +10886,14 @@ int IPACM_Lan::modify_private_subnet(bool eogre_enabled)
 	}
 #endif
 	IPACMDBG_H("Memory allocating for ipa_num_private_subnet = %d mtu_rule_cnt = %d\n", IPACM_Iface::ipacmcfg->ipa_num_private_subnet, mtu_rule_cnt);
-	len = sizeof(struct ipa_ioc_add_flt_rule_after) + (IPACM_Iface::ipacmcfg->ipa_num_private_subnet + mtu_rule_cnt) * sizeof(struct ipa_flt_rule_add);
+	if(IPACM_Iface::ipacmcfg->eogre_enabled && IPACM_Iface::ipacmcfg->tunnel_feature == SINGLE_TAG_FEATURE)
+	{
+		len = sizeof(struct ipa_ioc_add_flt_rule_after) + (mtu_rule_cnt) * sizeof(struct ipa_flt_rule_add);
+	}
+	else
+	{
+		len = sizeof(struct ipa_ioc_add_flt_rule_after) + (IPACM_Iface::ipacmcfg->ipa_num_private_subnet + mtu_rule_cnt) * sizeof(struct ipa_flt_rule_add);
+	}
 	pFilteringTable = (struct ipa_ioc_add_flt_rule_after*)malloc(len);
 	if(!pFilteringTable)
 	{
@@ -10892,39 +10934,58 @@ int IPACM_Lan::modify_private_subnet(bool eogre_enabled)
 	flt_rule.rule.rt_tbl_hdl = IPACM_Iface::ipacmcfg->rt_tbl_default_v4.hdl;
 	IPACMDBG_H("Private filter rule use table: %s, hdl: %d\n",IPACM_Iface::ipacmcfg->rt_tbl_default_v4.name,IPACM_Iface::ipacmcfg->rt_tbl_default_v4.hdl);
 	IPACMDBG_H("num privatesubnet:%d\n",IPACM_Iface::ipacmcfg->ipa_num_private_subnet);
-	for(i = 0; i < (IPACM_Iface::ipacmcfg->ipa_num_private_subnet); i++)
+	if(IPACM_Iface::ipacmcfg->eogre_enabled && IPACM_Iface::ipacmcfg->tunnel_feature == SINGLE_TAG_FEATURE && IPACM_Iface::ipacmcfg->ipa_num_private_subnet !=0)
 	{
-		/* add private subnet rule for ipv4 */
-		if(IPACM_Iface::ipacmcfg->eogre_enabled)
-			flt_rule.rule.action = IPA_PASS_TO_EXCEPTION;
-		else
-			flt_rule.rule.action = IPA_PASS_TO_ROUTING;
-
-		flt_rule.rule.eq_attrib_type = 0;
-		memcpy(&flt_rule.rule.attrib, &rx_prop->rx[idx].attrib, sizeof(flt_rule.rule.attrib));
-		flt_rule.rule.attrib.attrib_mask |= IPA_FLT_DST_ADDR;
-		flt_rule.rule.attrib.u.v4.dst_addr_mask = IPACM_Iface::ipacmcfg->private_subnet_table[i].subnet_mask;
-		flt_rule.rule.attrib.u.v4.dst_addr = IPACM_Iface::ipacmcfg->private_subnet_table[i].subnet_addr;
-		memcpy(&(pFilteringTable->rules[i]), &flt_rule, sizeof(struct ipa_flt_rule_add));
-		IPACMDBG_H(" IPACM private subnet_addr as: 0x%x entry(%d)\n", flt_rule.rule.attrib.u.v4.dst_addr, i);
-
-		/* add corresponding MTU rule for ipv4 */
-		if (mtu[i] > 0)
+		pFilteringTable->num_rules = num_wan_subnet_rules = mtu_rule_cnt;
+		if (mtu[0] > 0)
 		{
 			memcpy(&flt_rule.rule.attrib, &rx_prop->rx[idx].attrib, sizeof(flt_rule.rule.attrib));
-
-			/* if Vlan enabled, add vlan id as a parameter of the MTU rule*/
-			if(vid[i])
+			if(vid[0])
 			{
 				flt_rule.rule.attrib.attrib_mask |= IPA_FLT_VLAN_ID;
-				flt_rule.rule.attrib.vlan_id = vid[i];
+				flt_rule.rule.attrib.vlan_id = vid[0];
 			}
-
-			if (construct_mtu_rule(&flt_rule.rule, IPA_IP_v4, mtu[i]))
+			if (construct_mtu_rule(&flt_rule.rule, IPA_IP_v4, mtu[0]))
 				IPACMERR("Failed to modify MTU filtering rule.\n");
-			memcpy(&(pFilteringTable->rules[mtu_rule_idx]), &flt_rule, sizeof(struct ipa_flt_rule_add));
-			IPACMDBG_H("Succesfully constructed v4 MTU rule for vlan id %d entry(%d)\n", vid[i], mtu_rule_idx);
-			mtu_rule_idx++;
+			memcpy(&(pFilteringTable->rules[0]), &flt_rule, sizeof(struct ipa_flt_rule_add));
+                        IPACMDBG_H("Succesfully constructed v4 MTU rule for vlan id %d entry(%d)\n", vid[0], mtu_rule_idx);
+		}
+	}
+	else {
+		for(i = 0; i < (IPACM_Iface::ipacmcfg->ipa_num_private_subnet); i++)
+		{
+			/* add private subnet rule for ipv4 */
+			if(IPACM_Iface::ipacmcfg->eogre_enabled)
+				flt_rule.rule.action = IPA_PASS_TO_EXCEPTION;
+			else
+				flt_rule.rule.action = IPA_PASS_TO_ROUTING;
+
+			flt_rule.rule.eq_attrib_type = 0;
+			memcpy(&flt_rule.rule.attrib, &rx_prop->rx[idx].attrib, sizeof(flt_rule.rule.attrib));
+			flt_rule.rule.attrib.attrib_mask |= IPA_FLT_DST_ADDR;
+			flt_rule.rule.attrib.u.v4.dst_addr_mask = IPACM_Iface::ipacmcfg->private_subnet_table[i].subnet_mask;
+			flt_rule.rule.attrib.u.v4.dst_addr = IPACM_Iface::ipacmcfg->private_subnet_table[i].subnet_addr;
+			memcpy(&(pFilteringTable->rules[i]), &flt_rule, sizeof(struct ipa_flt_rule_add));
+			IPACMDBG_H(" IPACM private subnet_addr as: 0x%x entry(%d)\n", flt_rule.rule.attrib.u.v4.dst_addr, i);
+
+			/* add corresponding MTU rule for ipv4 */
+			if (mtu[i] > 0)
+			{
+				memcpy(&flt_rule.rule.attrib, &rx_prop->rx[idx].attrib, sizeof(flt_rule.rule.attrib));
+
+				/* if Vlan enabled, add vlan id as a parameter of the MTU rule*/
+				if(vid[i])
+				{
+					flt_rule.rule.attrib.attrib_mask |= IPA_FLT_VLAN_ID;
+					flt_rule.rule.attrib.vlan_id = vid[i];
+				}
+
+				if (construct_mtu_rule(&flt_rule.rule, IPA_IP_v4, mtu[i]))
+					IPACMERR("Failed to modify MTU filtering rule.\n");
+				memcpy(&(pFilteringTable->rules[mtu_rule_idx]), &flt_rule, sizeof(struct ipa_flt_rule_add));
+				IPACMDBG_H("Succesfully constructed v4 MTU rule for vlan id %d entry(%d)\n", vid[i], mtu_rule_idx);
+				mtu_rule_idx++;
+			}
 		}
 	}
 
@@ -11081,32 +11142,59 @@ int IPACM_Lan::modify_ipv6_prefix_flt_rule(bool eogre_enabled)
 		/* re-calculate the ipv6 mtu based on GRE tunnel type */
 		/* Note: Ipv6 gre outer header have 8 byte options */
 		if(IPACM_Iface::ipacmcfg->eogre_info.iptype == IPA_IP_v4) /* v4 + v6  */
-			/* mtu_v6_new = mtu_v4 - 4(gre) - 4(MPLS) - 14(eth) - 20(outer ipv4) */
-			mtu[0] = IPACM_Wan::GetGREMTU(IPA_IP_v4) - 22 - IPV4_HEADER_SIZE;
-
+		{
+			if(IPACM_Iface::ipacmcfg->tunnel_feature != SINGLE_TAG_FEATURE)
+			{
+				/* mtu_v4_new = mtu_v4 - 4(gre) - 4(MPLS) - 14(eth) - 20(outer ipv4) */
+				mtu[0] = IPACM_Wan::GetGREMTU(IPA_IP_v4) - 22 - IPV4_HEADER_SIZE;
+			}
+			else
+			{
+				mtu[0] = IPACM_Wan::GetGREMTU(IPA_IP_v4);
+			}
+		}
 		else if (IPACM_Iface::ipacmcfg->eogre_info.iptype == IPA_IP_v6) /* v6 + v6 */
-			/* mtu_v6_new = mtu_v6 - 8(options) - 4(gre) - 4(MPLS) - 14(eth) - 40(outeripv6)*/
-			mtu[0] = IPACM_Wan::GetGREMTU(IPA_IP_v6) - 30 - IPV6_HEADER_SIZE;
+		{
+			if(IPACM_Iface::ipacmcfg->tunnel_feature != SINGLE_TAG_FEATURE)
+			{
+				/* mtu_v4_new = mtu_v4 - 4(gre) - 4(MPLS) - 14(eth) - 20(outer ipv4) */
+				mtu[0] = IPACM_Wan::GetGREMTU(IPA_IP_v6) - 30 - IPV6_HEADER_SIZE;
+			}
+			else
+			{
+				mtu[0] = IPACM_Wan::GetGREMTU(IPA_IP_v6);
+			}
+		}
 		else
 			IPACMERR("invalid iptype = %d\n", IPACM_Iface::ipacmcfg->eogre_info.iptype);
 
 		IPACMDBG("GRE v6 PDN mtu = %d\n", mtu[0]);
 		IPACMDBG("num_wan_ul_fl_rule_v6= %d\n", num_wan_ul_fl_rule_v6);
 
-		//add the MTU rule after the 2nd pass rules but before the 1st pass rule
-		if (num_wan_ul_fl_rule_v6)
-		{
-			IPACMDBG("v6 GRE MTU rule will be installed after v6 modem UL rules\n");
-			mtu_flt_rule_offset[IPA_IP_v6] = wan_ul_fl_rule_hdl_v6[num_wan_ul_fl_rule_v6 - 1];
+		if(IPACM_Iface::ipacmcfg->tunnel_feature != SINGLE_TAG_FEATURE) {
+			//add the MTU rule after the 2nd pass rules but before the 1st pass rule
+			if (num_wan_ul_fl_rule_v6)
+			{
+				IPACMDBG("v6 GRE MTU rule will be installed after v6 modem UL rules\n");
+				mtu_flt_rule_offset[IPA_IP_v6] = wan_ul_fl_rule_hdl_v6[num_wan_ul_fl_rule_v6 - 1];
+			}
+			else
+			{
+				IPACMDBG("v6 GRE MTU rule will be installed after v6 default rules\n");
+				mtu_flt_rule_offset[IPA_IP_v6] = dft_v6fl_rule_hdl[m_ipv6_default_filterting_rules_count - 1];
+			}
 		}
-		else
+	       	else
 		{
-			IPACMDBG("v6 GRE MTU rule will be installed after v6 default rules\n");
-			mtu_flt_rule_offset[IPA_IP_v6] = dft_v6fl_rule_hdl[m_ipv6_default_filterting_rules_count - 1];
+			if (m_ipv6_default_filterting_rules_count) {
+				mtu_flt_rule_offset[IPA_IP_v6] = dft_v6fl_rule_hdl[m_ipv6_default_filterting_rules_count - 1];
+			}
+		       	else
+			{
+				mtu_flt_rule_offset[IPA_IP_v6] = ipv6_icmp_flt_rule_hdl[0];
+			}
 		}
-
-		if(!mtu_rule_cnt)
-		{
+		if(!mtu_rule_cnt) {
 			mtu_rule_cnt++;
 		}
 		IPACMDBG_H("total %d MTU rules are needed\n", mtu_rule_cnt);
@@ -11147,7 +11235,14 @@ int IPACM_Lan::modify_ipv6_prefix_flt_rule(bool eogre_enabled)
 	}
 #endif
 	IPACMDBG_H("Memory allocating for num_ipv6_prefixes rules = %d num_no_offload_ipv6_prefix rules = %d mtu_rule_cnt = %d\n", IPACM_Iface::ipacmcfg->num_ipv6_prefixes, IPACM_Iface::ipacmcfg->num_no_offload_ipv6_prefix, mtu_rule_cnt);
-	len = sizeof(struct ipa_ioc_add_flt_rule_after) + (IPACM_Iface::ipacmcfg->num_ipv6_prefixes + IPACM_Iface::ipacmcfg->num_no_offload_ipv6_prefix + mtu_rule_cnt) * sizeof(struct ipa_flt_rule_add);
+	if(IPACM_Iface::ipacmcfg->eogre_enabled && IPACM_Iface::ipacmcfg->tunnel_feature == SINGLE_TAG_FEATURE)
+	{
+		len = sizeof(struct ipa_ioc_add_flt_rule_after) + ( mtu_rule_cnt) * sizeof(struct ipa_flt_rule_add);
+	}
+	else
+	{
+		len = sizeof(struct ipa_ioc_add_flt_rule_after) + (IPACM_Iface::ipacmcfg->num_ipv6_prefixes + IPACM_Iface::ipacmcfg->num_no_offload_ipv6_prefix + mtu_rule_cnt) * sizeof(struct ipa_flt_rule_add);
+	}
 	pFilteringTable = (struct ipa_ioc_add_flt_rule_after*)malloc(len);
 	if(!pFilteringTable)
 	{
@@ -11175,72 +11270,96 @@ int IPACM_Lan::modify_ipv6_prefix_flt_rule(bool eogre_enabled)
 	flt_rule.rule.action = IPA_PASS_TO_EXCEPTION;
 	flt_rule.rule.eq_attrib_type = 0;
 	/* first install DST address exception rules for offloaded PDNs */
-	for(i = 0; i < (IPACM_Iface::ipacmcfg->num_ipv6_prefixes); i++)
+	if(IPACM_Iface::ipacmcfg->eogre_enabled && IPACM_Iface::ipacmcfg->tunnel_feature == SINGLE_TAG_FEATURE)
 	{
-		/* add private prefix rule for ipv6 */
-		flt_rule.rule.action = IPA_PASS_TO_EXCEPTION;
-		flt_rule.rule.eq_attrib_type = 0;
-		memcpy(&flt_rule.rule.attrib, &rx_prop->rx[idx].attrib, sizeof(flt_rule.rule.attrib));
-		flt_rule.rule.attrib.attrib_mask |= IPA_FLT_DST_ADDR;
-		flt_rule.rule.attrib.u.v6.dst_addr[0] = IPACM_Iface::ipacmcfg->ipa_ipv6_prefixes[i].addr[0];
-		flt_rule.rule.attrib.u.v6.dst_addr[1] = IPACM_Iface::ipacmcfg->ipa_ipv6_prefixes[i].addr[1];
-		flt_rule.rule.attrib.u.v6.dst_addr[2] = 0x0;
-		flt_rule.rule.attrib.u.v6.dst_addr[3] = 0x0;
-		flt_rule.rule.attrib.u.v6.dst_addr_mask[0] = 0xFFFFFFFF;
-		flt_rule.rule.attrib.u.v6.dst_addr_mask[1] = 0xFFFFFFFF;
-		flt_rule.rule.attrib.u.v6.dst_addr_mask[2] = 0x0;
-		flt_rule.rule.attrib.u.v6.dst_addr_mask[3] = 0x0;
-		memcpy(&(pFilteringTable->rules[i]), &flt_rule, sizeof(struct ipa_flt_rule_add));
-		IPACMDBG_H(" IPACM v6 prefix as: 0x[%X][%X] entry(%d)\n",
-			flt_rule.rule.attrib.u.v6.dst_addr[0],
-			flt_rule.rule.attrib.u.v6.dst_addr[1], i);
-
-		/* add corresponding MTU rule for ipv6 */
-		if (mtu[i] > 0)
+		mtu_rule_idx = 0;
+		pFilteringTable->num_rules = num_wan_prefix_rules = mtu_rule_cnt;
+		if (mtu[0] > 0)
 		{
 			if (ipa_if_cate == WLAN_IF)
 				memset(&flt_rule.rule.attrib, 0, sizeof(flt_rule.rule.attrib));
 			else
 				memcpy(&flt_rule.rule.attrib, &rx_prop->rx[idx].attrib, sizeof(flt_rule.rule.attrib));
-
-
 			/* if Vlan enabled, add vlan id as a parameter of the MTU rule*/
-			if (vid[i])
+			if (vid[0])
 			{
 				flt_rule.rule.attrib.attrib_mask |= IPA_FLT_VLAN_ID;
-				flt_rule.rule.attrib.vlan_id = vid[i];
+				flt_rule.rule.attrib.vlan_id = vid[0];
 			}
-
-			if (construct_mtu_rule(&flt_rule.rule, IPA_IP_v6, mtu[i]))
+			if (construct_mtu_rule(&flt_rule.rule, IPA_IP_v6, mtu[0]))
 				IPACMERR("Failed to modify MTU filtering rule.\n");
-			memcpy(&(pFilteringTable->rules[mtu_rule_idx]), &flt_rule, sizeof(struct ipa_flt_rule_add));
-
-			IPACMDBG_H("Succesfully constructed v6 MTU rule for vlan id %d entry(%d)\n", vid[i], mtu_rule_idx);
-			mtu_rule_idx++;
+			memcpy(&(pFilteringTable->rules[0]), &flt_rule, sizeof(struct ipa_flt_rule_add));
+			IPACMDBG_H("Succesfully constructed v6 MTU rule for vlan id %d entry(%d)\n", vid[0], mtu_rule_idx);
 		}
 	}
-
-	/* reset the attrib for no offload prefix rules */
-	flt_rule.rule.eq_attrib_type = 0;
-	memcpy(&flt_rule.rule.attrib, &rx_prop->rx[idx].attrib, sizeof(flt_rule.rule.attrib));
-	flt_rule.rule.attrib.attrib_mask |= IPA_FLT_SRC_ADDR;
-	/* now install SRC address exception rules for no offload PDNs */
-	for(i = 0; i < (IPACM_Iface::ipacmcfg->num_no_offload_ipv6_prefix); i++)
+	else
 	{
-		flt_rule.rule.attrib.u.v6.src_addr[0] = IPACM_Iface::ipacmcfg->ipa_no_offload_ipv6_prefixes[i][0];
-		flt_rule.rule.attrib.u.v6.src_addr[1] = IPACM_Iface::ipacmcfg->ipa_no_offload_ipv6_prefixes[i][1];
-		flt_rule.rule.attrib.u.v6.src_addr[2] = 0x0;
-		flt_rule.rule.attrib.u.v6.src_addr[3] = 0x0;
-		flt_rule.rule.attrib.u.v6.src_addr_mask[0] = 0xFFFFFFFF;
-		flt_rule.rule.attrib.u.v6.src_addr_mask[1] = 0xFFFFFFFF;
-		flt_rule.rule.attrib.u.v6.src_addr_mask[2] = 0x0;
-		flt_rule.rule.attrib.u.v6.src_addr_mask[3] = 0x0;
-		memcpy(&(pFilteringTable->rules[IPACM_Iface::ipacmcfg->num_ipv6_prefixes + i]), &flt_rule, sizeof(struct ipa_flt_rule_mdfy));
-		IPACMDBG_H(" IPACM v6 no offload prefix as: 0x[%X][%X] entry(%d)\n",
-				flt_rule.rule.attrib.u.v6.src_addr[0],
-				flt_rule.rule.attrib.u.v6.src_addr[1],
-				IPACM_Iface::ipacmcfg->num_ipv6_prefixes + i);
+		for(i = 0; i < (IPACM_Iface::ipacmcfg->num_ipv6_prefixes); i++)
+		{
+			/* add private prefix rule for ipv6 */
+			flt_rule.rule.action = IPA_PASS_TO_EXCEPTION;
+			flt_rule.rule.eq_attrib_type = 0;
+                	memcpy(&flt_rule.rule.attrib, &rx_prop->rx[idx].attrib, sizeof(flt_rule.rule.attrib));
+			flt_rule.rule.attrib.attrib_mask |= IPA_FLT_DST_ADDR;
+			flt_rule.rule.attrib.u.v6.dst_addr[0] = IPACM_Iface::ipacmcfg->ipa_ipv6_prefixes[i].addr[0];
+			flt_rule.rule.attrib.u.v6.dst_addr[1] = IPACM_Iface::ipacmcfg->ipa_ipv6_prefixes[i].addr[1];
+			flt_rule.rule.attrib.u.v6.dst_addr[2] = 0x0;
+			flt_rule.rule.attrib.u.v6.dst_addr[3] = 0x0;
+			flt_rule.rule.attrib.u.v6.dst_addr_mask[0] = 0xFFFFFFFF;
+			flt_rule.rule.attrib.u.v6.dst_addr_mask[1] = 0xFFFFFFFF;
+			flt_rule.rule.attrib.u.v6.dst_addr_mask[2] = 0x0;
+			flt_rule.rule.attrib.u.v6.dst_addr_mask[3] = 0x0;
+			memcpy(&(pFilteringTable->rules[i]), &flt_rule, sizeof(struct ipa_flt_rule_add));
+			IPACMDBG_H(" IPACM v6 prefix as: 0x[%X][%X] entry(%d)\n",
+			flt_rule.rule.attrib.u.v6.dst_addr[0],
+			flt_rule.rule.attrib.u.v6.dst_addr[1], i);
+			/* add corresponding MTU rule for ipv6 */
+			if (mtu[i] > 0)
+			{
+				if (ipa_if_cate == WLAN_IF)
+					memset(&flt_rule.rule.attrib, 0, sizeof(flt_rule.rule.attrib));
+				else
+					memcpy(&flt_rule.rule.attrib, &rx_prop->rx[idx].attrib, sizeof(flt_rule.rule.attrib));
+
+
+				/* if Vlan enabled, add vlan id as a parameter of the MTU rule*/
+				if (vid[i])
+				{
+					flt_rule.rule.attrib.attrib_mask |= IPA_FLT_VLAN_ID;
+					flt_rule.rule.attrib.vlan_id = vid[i];
+				}
+
+				if (construct_mtu_rule(&flt_rule.rule, IPA_IP_v6, mtu[i]))
+				IPACMERR("Failed to modify MTU filtering rule.\n");
+				memcpy(&(pFilteringTable->rules[mtu_rule_idx]), &flt_rule, sizeof(struct ipa_flt_rule_add));
+
+				IPACMDBG_H("Succesfully constructed v6 MTU rule for vlan id %d entry(%d)\n", vid[i], mtu_rule_idx);
+				mtu_rule_idx++;
+			}
+		}
+
+		/* reset the attrib for no offload prefix rules */
+		flt_rule.rule.eq_attrib_type = 0;
+		memcpy(&flt_rule.rule.attrib, &rx_prop->rx[idx].attrib, sizeof(flt_rule.rule.attrib));
 		flt_rule.rule.attrib.attrib_mask |= IPA_FLT_SRC_ADDR;
+		/* now install SRC address exception rules for no offload PDNs */
+		for(i = 0; i < (IPACM_Iface::ipacmcfg->num_no_offload_ipv6_prefix); i++)
+		{
+			flt_rule.rule.attrib.u.v6.src_addr[0] = IPACM_Iface::ipacmcfg->ipa_no_offload_ipv6_prefixes[i][0];
+			flt_rule.rule.attrib.u.v6.src_addr[1] = IPACM_Iface::ipacmcfg->ipa_no_offload_ipv6_prefixes[i][1];
+			flt_rule.rule.attrib.u.v6.src_addr[2] = 0x0;
+			flt_rule.rule.attrib.u.v6.src_addr[3] = 0x0;
+			flt_rule.rule.attrib.u.v6.src_addr_mask[0] = 0xFFFFFFFF;
+			flt_rule.rule.attrib.u.v6.src_addr_mask[1] = 0xFFFFFFFF;
+			flt_rule.rule.attrib.u.v6.src_addr_mask[2] = 0x0;
+			flt_rule.rule.attrib.u.v6.src_addr_mask[3] = 0x0;
+			memcpy(&(pFilteringTable->rules[IPACM_Iface::ipacmcfg->num_ipv6_prefixes + i]), &flt_rule, sizeof(struct ipa_flt_rule_mdfy));
+			IPACMDBG_H(" IPACM v6 no offload prefix as: 0x[%X][%X] entry(%d)\n",
+					flt_rule.rule.attrib.u.v6.src_addr[0],
+					flt_rule.rule.attrib.u.v6.src_addr[1],
+					IPACM_Iface::ipacmcfg->num_ipv6_prefixes + i);
+			flt_rule.rule.attrib.attrib_mask |= IPA_FLT_SRC_ADDR;
+		}
 	}
 
 #if defined(FEATURE_EoGRE) || defined(FEATURE_PMIPV6)

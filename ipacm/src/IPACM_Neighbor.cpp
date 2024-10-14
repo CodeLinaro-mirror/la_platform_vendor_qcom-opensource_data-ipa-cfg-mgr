@@ -396,7 +396,7 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 						}
 
 						/* Post VLAN based event if VLAN iface added */
-						if(strcmp(neighbor_client[i].bridge->bridge_name, BRIDGE_0) != 0)
+						if((neighbor_client[i].bridge != NULL) && (strcmp(neighbor_client[i].bridge->bridge_name, BRIDGE_0) != 0))
 						{
 							if(IPACM_Iface::ipacmcfg->is_added_vlan_iface(neighbor_client[i].iface_name))
 							{

@@ -661,6 +661,10 @@ void* IPACM_ConntrackClient::TCPRegisterWithConnTrack(void *)
 		IPACMERR("(%d)(%s)\n", ret, strerror(errno));
 		return NULL;
 	}
+	else
+	{
+		IPACMERR("(%d)(%s)\n", ret, strerror(errno));
+	}
 
 	IPACMDBG("Exit from tcp thread\n");
 

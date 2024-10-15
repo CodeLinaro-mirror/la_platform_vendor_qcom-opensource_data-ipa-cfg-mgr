@@ -104,11 +104,23 @@ int IPACM_ConntrackClient::IPAConntrackEventCB
 	ipacm_ct_evt_data *ct_data;
 	uint8_t ip_type = 0;
 	IPACM_Config *config_instance = NULL;
+	uint16_t sport = 0;
+	uint16_t dport = 0;
 
 	IPACMDBG("Event callback called with msgtype: %d\n",type);
 
 	/* Retrieve ip type */
 	ip_type = nfct_get_attr_u8(ct, ATTR_REPL_L3PROTO);
+	sport = nfct_get_attr_u16(ct, ATTR_ORIG_PORT_SRC);
+	sport = ntohs(sport);
+	dport = nfct_get_attr_u16(ct, ATTR_ORIG_PORT_DST);
+	dport = ntohs(dport);
+
+	if(dport == 53 || sport == 53)
+	{
+		IPACMDBG("iptype: %d: sport: %d: dport: %d\n", ip_type, sport, dport);
+		goto IGNORE;
+	}
 	IPACMDBG("iptype: %d\n", ip_type);
 
 #ifndef CT_OPT
@@ -665,6 +677,10 @@ void* IPACM_ConntrackClient::TCPRegisterWithConnTrack(void *)
 	{
 		IPACMERR("(%d)(%s)\n", ret, strerror(errno));
 		return NULL;
+	}
+	else
+	{
+		IPACMERR("(%d)(%s)\n", ret, strerror(errno));
 	}
 
 	IPACMDBG("Exit from tcp thread\n");

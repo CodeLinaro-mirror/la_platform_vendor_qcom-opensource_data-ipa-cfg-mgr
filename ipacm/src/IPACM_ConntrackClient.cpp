@@ -115,7 +115,7 @@ int IPACM_ConntrackClient::IPAConntrackEventCB
 	if(dport == 53 || sport == 53)
 	{
 		IPACMDBG("iptype: %d: sport: %d: dport: %d\n", ip_type, sport, dport);
-		return NFCT_CB_STOLEN;
+		goto IGNORE;
 	}
 	IPACMDBG("iptype: %d\n", ip_type);
 
@@ -673,6 +673,10 @@ void* IPACM_ConntrackClient::TCPRegisterWithConnTrack(void *)
 	{
 		IPACMERR("(%d)(%s)\n", ret, strerror(errno));
 		return NULL;
+	}
+	else
+	{
+		IPACMERR("(%d)(%s)\n", ret, strerror(errno));
 	}
 
 	IPACMDBG("Exit from tcp thread\n");

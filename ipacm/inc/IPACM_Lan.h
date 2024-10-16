@@ -566,8 +566,6 @@ protected:
 	bool is_l2tp_event(char *event_iface_name);
 #endif //#ifdef FEATURE_L2TP
 #endif //#if defined(FEATURE_L2TP) || defined(FEATURE_VLAN_MPDN)
-	/* check if the IPv6 address is unique local address */
-	bool is_unique_local_ipv6_addr(uint32_t *ipv6_addr);
 
 	int handle_private_subnet_android(ipa_ip_type iptype);
 
@@ -1479,8 +1477,8 @@ private:
 
 	/* handle eth client initial, construct full headers (tx property) */
 	int handle_eth_hdr_init(uint8_t *mac_addr,
-		ipacm_bridge *bridge = NULL,
-		uint16_t vlan_id = 0, bool isVlan = false, uint8_t priority = 0);
+		ipacm_bridge *bridge = NULL, uint16_t vlan_id = 0,
+		 bool isVlan = false, uint8_t priority = 0, bool is_ula_ipv6_addr = 0);
 
 	/* handle eth client ip-address */
 	int handle_eth_client_ipaddr(ipacm_event_data_all *data);

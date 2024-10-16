@@ -4573,3 +4573,25 @@ void IPACM_Config::flush_qos_params_info(ipa_ioc_qos_config *data)
 	IPACMDBG_H("Flushed qos params list size now :%d \n", m_qos_params.size());
 	return;
 }
+
+bool IPACM_Config::is_unique_local_ipv6_addr(uint32_t* ipv6_addr)
+{
+	uint32_t ipv6_unique_local_prefix, ipv6_unique_local_prefix_mask;
+
+	if(ipv6_addr == NULL)
+	{
+		IPACMERR("IPv6 address is empty.\n");
+		return false;
+	}
+	IPACMDBG_H("Get ipv6 address with first word 0x%08x.\n", ipv6_addr[0]);
+
+	ipv6_unique_local_prefix = 0xFD000000;
+	ipv6_unique_local_prefix_mask = 0xFF000000;
+	if((ipv6_addr[0] & ipv6_unique_local_prefix_mask) == (ipv6_unique_local_prefix & ipv6_unique_local_prefix_mask))
+	{
+		IPACMDBG_H("This IPv6 address is unique local IPv6 address.\n");
+		return true;
+	}
+	return false;
+}
+

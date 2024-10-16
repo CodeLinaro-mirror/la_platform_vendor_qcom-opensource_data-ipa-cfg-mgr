@@ -471,6 +471,8 @@ public:
 	int ipa_get_if_idx_by_vid(uint16_t vlan_id);
 	void disable_collision(const char* dev_name);
 	bool detect_and_handle_collision(const char* dev_name, uint32_t wan_ip, uint32_t wan_mask);
+	/* check if the IPv6 address is unique local address */
+	bool is_unique_local_ipv6_addr(uint32_t* ipv6_addr);
 
 	/**
 	 * Determines whether two IPv4 networks (LAN and WAN) collide.

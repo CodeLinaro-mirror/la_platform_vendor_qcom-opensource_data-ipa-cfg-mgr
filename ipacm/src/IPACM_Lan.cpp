@@ -551,7 +551,7 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 				if(data->iptype == IPA_IP_v6
 
 					// for VLAN_MPDN we only have link local addresses
-					&& (is_unique_local_ipv6_addr(data->ipv6_addr) &&
+					&& (IPACM_Iface::ipacmcfg->is_unique_local_ipv6_addr(data->ipv6_addr) &&
 						((IPACM_Iface::ipacmcfg->ipacm_l2tp_enable == IPACM_L2TP) ||
 						(IPACM_Iface::ipacmcfg->ipacm_l2tp_enable == IPACM_L2TP_E2E))))
 				{
@@ -1266,7 +1266,7 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 				/* in VLAN_MPDN we handle all VLAN neighbors */
 				if((IPACM_Iface::ipacmcfg->ipacm_l2tp_enable == IPACM_L2TP_E2E ||
 					IPACM_Iface::ipacmcfg->ipacm_l2tp_enable == IPACM_L2TP) &&
-					data->iptype == IPA_IP_v6 && is_unique_local_ipv6_addr(data->ipv6_addr))
+					data->iptype == IPA_IP_v6 && IPACM_Iface::ipacmcfg->is_unique_local_ipv6_addr(data->ipv6_addr))
 				{
 					IPACM_Iface::ipacmcfg->handle_vlan_client_info(data);
 					IPACMDBG_H("ipacm_socksv5_enable %d\n", IPACM_Iface::ipacmcfg->ipacm_socksv5_enable);
@@ -1377,7 +1377,7 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 					/* we are handling all del neighbors in l2tp */
 					if((IPACM_Iface::ipacmcfg->ipacm_l2tp_enable == IPACM_L2TP_E2E ||
 						IPACM_Iface::ipacmcfg->ipacm_l2tp_enable == IPACM_L2TP) &&
-						data->iptype == IPA_IP_v6 && is_unique_local_ipv6_addr(data->ipv6_addr))
+						data->iptype == IPA_IP_v6 && IPACM_Iface::ipacmcfg->is_unique_local_ipv6_addr(data->ipv6_addr))
 					{
 						IPACM_Iface::ipacmcfg->del_l2tp_vlan_client_info(data);
 						IPACMDBG_H("del_l2tp_vlan_client_info from l2tp vlan list\n");
@@ -2442,13 +2442,13 @@ int IPACM_Lan::handle_vlan_neighbor(ipacm_event_data_all *data)
 	ipacm_event_data_all data_all;
 	std::list <ipacm_event_data_all>::iterator it;
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
-       int eth_index = 0;
-       int retval;
+	int eth_index = 0;
+	int retval;
 #endif
-       int skip_nat_set = 0;
-       ipacm_bridge *bridge;
+	int skip_nat_set = 0;
+	ipacm_bridge *bridge;
+	bool is_ula_ipv6_addr = 0;
 
-	IPACMDBG_H("\n");
 	memset(&data_all, 0, sizeof(ipacm_event_data_all));
 #ifdef IPA_VLAN_PRIORITY
 	if (IPACM_Iface::ipacmcfg->get_vlan_id(data->iface_name, &vlan_id, &priority))
@@ -2482,15 +2482,18 @@ int IPACM_Lan::handle_vlan_neighbor(ipacm_event_data_all *data)
 		IPACMDBG_H("bridge is NULL with vlan (%s) vid (%d), ignoring!\n", data->iface_name, vlan_id);
 		return IPACM_FAILURE;
 	}
+	if(data_vlan->data_all.iptype == IPA_IP_v6 || data_vlan->data_all.iptype == IPA_IP_MAX)
+	{
+		is_ula_ipv6_addr = IPACM_Iface::ipacmcfg->is_unique_local_ipv6_addr(data->ipv6_addr);
+	}
 
-	/* TO DO: Enable SOCKSV5 with MPDN flag */
-	if(IPACM_Iface::ipacmcfg->ipacm_mpdn_enable && !IPACM_Iface::ipacmcfg->ipacm_socksv5_enable) {
+	if(IPACM_Iface::ipacmcfg->ipacm_mpdn_enable) {
 		if(data_vlan->data_all.iptype == IPA_IP_v6)
 		{
 			if(IPACM_Wan::is_global_ipv6_addr(data_vlan->data_all.ipv6_addr))
 			{
 				if (!IPACM_Wan::isWan_active_with_prefix(data_vlan->data_all.ipv6_addr) &&
-					!(IPACM_Iface::ipacmcfg->ipv6_nat_enable && is_unique_local_ipv6_addr(data->ipv6_addr)))
+					!(IPACM_Iface::ipacmcfg->ipv6_nat_enable && is_ula_ipv6_addr))
 				{
 					if(handle_neigh_cache_ops(NEIGH_CLIENT_ADD, data) != IPACM_SUCCESS)
 					{
@@ -2534,7 +2537,7 @@ int IPACM_Lan::handle_vlan_neighbor(ipacm_event_data_all *data)
 			}
 			else
 			{
-				handle_eth_hdr_init(data->mac_addr, bridge, vlan_id, true, priority);
+				handle_eth_hdr_init(data->mac_addr, bridge, vlan_id, true, priority, is_ula_ipv6_addr);
 			}
 		}
 #else
@@ -2546,14 +2549,14 @@ int IPACM_Lan::handle_vlan_neighbor(ipacm_event_data_all *data)
 		}
 		else
 		{
-			handle_eth_hdr_init(data->mac_addr, bridge, vlan_id, true, priority);
+			handle_eth_hdr_init(data->mac_addr, bridge, vlan_id, true, priority, is_ula_ipv6_addr);
 		}
 #endif
 	}
 	else
 	{
 		/* first construct ETH full header */
-		handle_eth_hdr_init(data->mac_addr, NULL, vlan_id, true, priority);
+		handle_eth_hdr_init(data->mac_addr, NULL, vlan_id, true, priority, is_ula_ipv6_addr);
 	}
 
 #ifdef IPA_L2TP_TUNNEL_UDP
@@ -2578,8 +2581,7 @@ int IPACM_Lan::handle_vlan_neighbor(ipacm_event_data_all *data)
 			}
 			if(((get_client_memptr(eth_client, eth_index)->client_backhaul_prefix[0] == data_vlan->data_all.ipv6_addr[0]) &&
 			   (get_client_memptr(eth_client, eth_index)->client_backhaul_prefix[1] == data_vlan->data_all.ipv6_addr[1]))||
-			   !IPACM_Wan::is_global_ipv6_addr(data_vlan->data_all.ipv6_addr)||
-			   (IPACM_Iface::ipacmcfg->ipacm_socksv5_enable && is_unique_local_ipv6_addr(data->ipv6_addr)))
+			   !IPACM_Wan::is_global_ipv6_addr(data_vlan->data_all.ipv6_addr))
 			{
 				IPACMDBG_H("construct ETH header and route rules \n");
 				if(handle_eth_client_ipaddr(data) == IPACM_FAILURE)
@@ -2617,8 +2619,7 @@ int IPACM_Lan::handle_vlan_neighbor(ipacm_event_data_all *data)
 		}
 		if(((get_client_memptr(eth_client, eth_index)->client_backhaul_prefix[0] == data_vlan->data_all.ipv6_addr[0]) &&
 			  (get_client_memptr(eth_client, eth_index)->client_backhaul_prefix[1] == data_vlan->data_all.ipv6_addr[1]))||
-			  !IPACM_Wan::is_global_ipv6_addr(data_vlan->data_all.ipv6_addr)||
-			  (IPACM_Iface::ipacmcfg->ipacm_socksv5_enable && is_unique_local_ipv6_addr(data->ipv6_addr)))
+			  !IPACM_Wan::is_global_ipv6_addr(data_vlan->data_all.ipv6_addr))
 		{
 			IPACMDBG_H("construct ETH header and route rules \n");
 			if(handle_eth_client_ipaddr(data) == IPACM_FAILURE)
@@ -2677,8 +2678,7 @@ int IPACM_Lan::handle_vlan_neighbor(ipacm_event_data_all *data)
 			}
 			if(((get_client_memptr(eth_client, eth_index)->client_backhaul_prefix[0] == data_vlan->data_all.ipv6_addr[0]) &&
 			   (get_client_memptr(eth_client, eth_index)->client_backhaul_prefix[1] == data_vlan->data_all.ipv6_addr[1]))||
-			   !IPACM_Wan::is_global_ipv6_addr(data_vlan->data_all.ipv6_addr)||
-			   (IPACM_Iface::ipacmcfg->ipacm_socksv5_enable && is_unique_local_ipv6_addr(data->ipv6_addr)))
+			   !IPACM_Wan::is_global_ipv6_addr(data_vlan->data_all.ipv6_addr))
 			{
 				IPACMDBG_H("Neighbor received after conntrack. Installing Route rules now...\n");
 				handle_eth_client_route_rule(data->mac_addr, data->iptype, vlan_id);
@@ -4642,7 +4642,7 @@ fail:
 }
 
 /* handle ETH client initial, construct full headers (tx property) */
-int IPACM_Lan::handle_eth_hdr_init(uint8_t *mac_addr, ipacm_bridge *bridge, uint16_t vlan_id, bool isVlan, uint8_t priority)
+int IPACM_Lan::handle_eth_hdr_init(uint8_t *mac_addr, ipacm_bridge *bridge, uint16_t vlan_id, bool isVlan, uint8_t priority, bool is_ula_ipv6_addr)
 {
 	int res = IPACM_SUCCESS, len = 0;
 	char index[ETH_IFACE_INDEX_LEN];
@@ -4734,7 +4734,7 @@ int IPACM_Lan::handle_eth_hdr_init(uint8_t *mac_addr, ipacm_bridge *bridge, uint
 #ifdef FEATURE_VLAN_MPDN
 		if(IPACM_Iface::ipacmcfg->ipacm_mpdn_enable)
 		{
-			if(isVlan && !bridge)
+			if(isVlan && !bridge && !is_ula_ipv6_addr)
 			{
 				IPACMERR("vlan with NULL bridge\n");
 				return IPACM_FAILURE;
@@ -5406,12 +5406,14 @@ int IPACM_Lan::handle_eth_client_ipaddr(ipacm_event_data_all *data)
 			else if(IPACM_Iface::ipacmcfg->ipacm_mpdn_enable)
 			{
 #ifdef FEATURE_IPV6_NAT
-				if(IPACM_Iface::ipacmcfg->ipv6_nat_enable && is_unique_local_ipv6_addr(data->ipv6_addr))
+				if(IPACM_Iface::ipacmcfg->ipv6_nat_enable &&
+					IPACM_Iface::ipacmcfg->is_unique_local_ipv6_addr(data->ipv6_addr))
 				{
 					IPACMDBG_H("ipv6 nat enabled - add ULA ip address\n")
 				} else
 #endif
-				if( ((data->ipv6_addr[0] & ipv6_link_local_prefix_mask) != (ipv6_link_local_prefix & ipv6_link_local_prefix_mask)) &&
+				if( (((data->ipv6_addr[0] & ipv6_link_local_prefix_mask) != (ipv6_link_local_prefix & ipv6_link_local_prefix_mask)) &&
+						!IPACM_Iface::ipacmcfg->is_unique_local_ipv6_addr(data->ipv6_addr)) &&
 #ifdef FEATURE_VLAN_MPDN
 					/* returns true if a VLAN PDN or default PDN should be offloaded */
 					IPACM_Iface::ipacmcfg->is_offload_ipv6_prefix(data->ipv6_addr) != true)
@@ -15943,27 +15945,6 @@ int IPACM_Lan::del_l2tp_udp_flt_rule(ipa_ip_type iptype, uint32_t flt_rule_hdl)
 #endif
 
 #endif
-bool IPACM_Lan::is_unique_local_ipv6_addr(uint32_t* ipv6_addr)
-{
-	uint32_t ipv6_unique_local_prefix, ipv6_unique_local_prefix_mask;
-
-	if(ipv6_addr == NULL)
-	{
-		IPACMERR("IPv6 address is empty.\n");
-		return false;
-	}
-	IPACMDBG_H("Get ipv6 address with first word 0x%08x.\n", ipv6_addr[0]);
-
-	ipv6_unique_local_prefix = 0xFD000000;
-	ipv6_unique_local_prefix_mask = 0xFF000000;
-	if((ipv6_addr[0] & ipv6_unique_local_prefix_mask) == (ipv6_unique_local_prefix & ipv6_unique_local_prefix_mask))
-	{
-		IPACMDBG_H("This IPv6 address is unique local IPv6 address.\n");
-		return true;
-	}
-	return false;
-}
-
 
 /* add tcp syn flt rule */
 int IPACM_Lan::add_tcp_syn_flt_rule(ipa_ip_type iptype)

@@ -9687,6 +9687,11 @@ bool IPACM_Wan::is_global_ipv6_addr(uint32_t* ipv6_addr)
 		IPACMDBG_H("This IPv6 address is link local.\n");
 		return false;
 	}
+	else if (IPACM_Iface::ipacmcfg->is_unique_local_ipv6_addr(ipv6_addr))
+	{
+		IPACMDBG_H("This IPv6 address is ULA.\n");
+		return false;
+	}
 	else
 	{
 		IPACMDBG_H("This IPv6 address is not link local.\n");

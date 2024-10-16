@@ -922,6 +922,12 @@ void IPACM_ConntrackClient::UpdateFilters_v6(ipacm_event_iface_up* data)
 		return;
 	}
 
+	if ((client->udp_filter == NULL) || (client->tcp_filter == NULL))
+	{
+		IPACMERR("udp_filter or tcp_filter pointers NULL\n");
+		return;
+	}
+
 	IPA_Conntrack_Filters_Ignore_Local_Iface_v6(client->udp_filter, client->udp_hdl, data);
 	IPA_Conntrack_Filters_Ignore_Local_Iface_v6(client->tcp_filter, client->tcp_hdl, data);
 }

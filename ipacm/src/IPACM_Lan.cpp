@@ -887,13 +887,16 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 					}
 
 #ifdef FEATURE_EoGRE
-					if ( IPACM_Iface::ipacmcfg->eogre_enabled )
+					if (IPACM_Iface::ipacmcfg->eogre_enabled)
 					{
 						IPACMDBG_H(
 							"A previous gre enable needs to be undone, then redone. "
 							"Need to call gre_down followed by an gre_up\n");
-						gre_down();
-						gre_up(); //this is where its getting reset. He is calling this for every new IPA_ADD because instance is not ipv4 right away
+						if(IPACM_Iface::ipacmcfg->tunnel_feature != SINGLE_TAG_FEATURE)
+						{
+							gre_down();
+							gre_up(); //this is where its getting reset. He is calling this for every new IPA_ADD because instance is not ipv4 right away
+						}
 					}
 #endif
 #ifdef FEATURE_PMIPV6
@@ -1825,13 +1828,6 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 		{
 			IPACMDBG_H("Received and will process an IPA_HANDLE_EoGRE_UP\n");
 			gre_up();
-			if (IPACM_Iface::ipacmcfg->tunnel_feature == SINGLE_TAG_FEATURE)
-			{
-				evt_data.event = IPA_WAN_HANDLE_EoGRE_UP;
-				evt_data.evt_data = 0;
-				IPACMDBG_H("Posting event: IPA_WAN_HANDLE_EoGRE_UP.\n");
-				IPACM_EvtDispatcher::PostEvt(&evt_data);
-			}
 		}
 		break;
 
@@ -4269,14 +4265,27 @@ int IPACM_Lan::handle_wan_up_ex(ipacm_ext_prop *ext_prop, ipa_ip_type iptype, ui
 			}
 #ifdef FEATURE_VLAN_MPDN
 			notif_only = false;
-			if(IPACM_Iface::ipacmcfg->eogre_enabled &&
-			(IPACM_Iface::ipacmcfg->tunnel_feature == SINGLE_TAG_FEATURE) &&
-			!IPACM_Iface::ipacmcfg->tunnel_idx.size() && iptype ==
-			IPACM_Iface::ipacmcfg->eogre_info.iptype)
+			if (IPACM_Iface::ipacmcfg->eogre_enabled &&
+				IPACM_Iface::ipacmcfg->tunnel_feature == SINGLE_TAG_FEATURE)
 			{
-				gre_up();
+				for(int i=0;i<IPACM_Iface::ipacmcfg->tunnel_idx.size();i++)
+				{
+					int t_id = IPACM_Iface::ipacmcfg->tunnel_idx[i];
+					if (iptype == IPACM_Iface::ipacmcfg->tunnel_idx_map[t_id].iptype &&
+						!IPACM_Iface::ipacmcfg->tunnel_idx_map[t_id].modem_eogre_ul_v6_set)
+					{
+						IPACM_Iface::ipacmcfg->eogre_info.iptype = iptype;
+						memcpy(IPACM_Iface::ipacmcfg->eogre_info.ipv6_src,IPACM_Iface::ipacmcfg->tunnel_idx_map[t_id].ipv6_src,sizeof(IPACM_Iface::ipacmcfg->eogre_info.ipv6_src));
+						memcpy(IPACM_Iface::ipacmcfg->eogre_info.ipv6_dst,IPACM_Iface::ipacmcfg->tunnel_idx_map[t_id].ipv6_dst,sizeof(IPACM_Iface::ipacmcfg->eogre_info.ipv6_dst));
+						IPACM_Iface::ipacmcfg->eogre_info.num_exceptions = t_id;
+						IPACM_LOG_IP_ADDR("The eogre src address (host order) on conversion from input:",IPA_IP_v6,&IPACM_Iface::ipacmcfg->eogre_info.ipv6_src);
+						IPACM_LOG_IP_ADDR("The eogre dst address (host order) on conversion from input:",IPA_IP_v6,&IPACM_Iface::ipacmcfg->eogre_info.ipv6_dst);
+						gre_up();
+					}
+				}
 			}
-			ret = handle_uplink_filter_rule(ext_prop, iptype, xlat_mux_id, false, true, ast_update);
+			if(!modem_ul_v6_set)
+				ret = handle_uplink_filter_rule(ext_prop, iptype, xlat_mux_id, false, true, ast_update);
 #else
 			ret = handle_uplink_filter_rule(ext_prop, iptype, xlat_mux_id, ast_update);
 #endif
@@ -4321,14 +4330,27 @@ int IPACM_Lan::handle_wan_up_ex(ipacm_ext_prop *ext_prop, ipa_ip_type iptype, ui
 #ifdef FEATURE_VLAN_MPDN
 			/* for v4, always install the rules like before */
 			notif_only = false;
-			if(IPACM_Iface::ipacmcfg->eogre_enabled &&
-			(IPACM_Iface::ipacmcfg->tunnel_feature == SINGLE_TAG_FEATURE) &&
-			(iptype == IPACM_Iface::ipacmcfg->eogre_info.iptype) &&
-			!IPACM_Iface::ipacmcfg->tunnel_idx.size())
+			if (IPACM_Iface::ipacmcfg->eogre_enabled &&
+				IPACM_Iface::ipacmcfg->tunnel_feature == SINGLE_TAG_FEATURE)
 			{
-				gre_up();
+				for(int i=0;i<IPACM_Iface::ipacmcfg->tunnel_idx.size();i++)
+				{
+					int t_id = IPACM_Iface::ipacmcfg->tunnel_idx[i];
+					if (iptype == IPACM_Iface::ipacmcfg->tunnel_idx_map[t_id].iptype &&
+						!IPACM_Iface::ipacmcfg->tunnel_idx_map[t_id].modem_eogre_ul_v4_set)
+					{
+						IPACM_Iface::ipacmcfg->eogre_info.iptype = iptype;
+						IPACM_Iface::ipacmcfg->ipgre_info.ipv4_src=IPACM_Iface::ipacmcfg->tunnel_idx_map[t_id].ipv4_src;
+                                                IPACM_Iface::ipacmcfg->ipgre_info.ipv4_dst=IPACM_Iface::ipacmcfg->tunnel_idx_map[t_id].ipv4_dst;
+						IPACM_Iface::ipacmcfg->eogre_info.num_exceptions = t_id;
+						IPACM_LOG_IP_ADDR("The eogre src address (host order) on conversion from input:",IPA_IP_v6,&IPACM_Iface::ipacmcfg->eogre_info.ipv6_src);
+						IPACM_LOG_IP_ADDR("The eogre dst address (host order) on conversion from input:",IPA_IP_v6,&IPACM_Iface::ipacmcfg->eogre_info.ipv6_dst);
+						gre_up();
+					}
+				}
 			}
-			ret = handle_uplink_filter_rule(ext_prop, iptype, xlat_mux_id, false, true, ast_update);
+			if(!modem_ul_v4_set)
+				ret = handle_uplink_filter_rule(ext_prop, iptype, xlat_mux_id, false, true, ast_update);
 #else
 			ret = handle_uplink_filter_rule(ext_prop, iptype, xlat_mux_id, ast_update);
 #endif
@@ -7003,7 +7025,20 @@ int IPACM_Lan::handle_down_evt()
 	if(IPACM_Iface::ipacmcfg->eogre_enabled)
 	{
 		IPACMDBG_H("gre is enabled, need to clean up gre rules.\n");
-		gre_down();
+		if (IPACM_Iface::ipacmcfg->eogre_enabled &&
+				IPACM_Iface::ipacmcfg->tunnel_feature == SINGLE_TAG_FEATURE)
+		{
+			for (auto it = IPACM_Iface::ipacmcfg->tunnel_idx.begin(); it != IPACM_Iface::ipacmcfg->tunnel_idx.end(); )
+			{
+				IPACM_Iface::ipacmcfg->eogre_info.num_exceptions = *it;
+				IPACMERR("tunnel id %d\n",IPACM_Iface::ipacmcfg->eogre_info.num_exceptions);
+				gre_down();
+			}
+		}
+		else
+		{
+			gre_down();
+		}
 	}
 #endif
 	if ((ipa_if_cate == WLAN_IF) && (is_if_svap || is_wlan_if_vlan) && (rx_prop && rx_prop->num_rx_props > 2)) {
@@ -15839,6 +15874,15 @@ void IPACM_Lan::gre_up(bool isPmipv6)/*Reusing Gre function for PMIP, with isPmi
 
 #endif
 	}
+        if (IPACM_Iface::ipacmcfg->tunnel_feature == SINGLE_TAG_FEATURE)
+	{
+		ipacm_cmd_q_data evt_data;
+		memset(&evt_data, 0, sizeof(evt_data));
+		evt_data.event = IPA_WAN_HANDLE_EoGRE_UP;
+		evt_data.evt_data = 0;
+		IPACMDBG_H("Posting event: IPA_WAN_HANDLE_EoGRE_UP.\n");
+		IPACM_EvtDispatcher::PostEvt(&evt_data);
+	}
 	IPACMDBG("Finished handling gre_up\n");
 }
 
@@ -16133,7 +16177,7 @@ void IPACM_Lan::gre_down(bool isPmipv6)
 	install_ipv6_prefix_flt_rule(IPACM_Wan::backhaul_ipv6_prefix);
 #endif
 	/* multi tunnel */
-	if (IPACM_Iface::ipacmcfg->tunnel_feature == SINGLE_TAG_FEATURE)
+	if (IPACM_Iface::ipacmcfg->tunnel_feature == SINGLE_TAG_FEATURE && !IPACM_Iface::ipacmcfg->eogre_enabled)
 	{
 		/*Check if tunnel_idx present then delete*/
 		IPACMDBG_H(" Try search tunnel_id : %d\n", tunel_id);
@@ -17080,7 +17124,14 @@ int IPACM_Lan::gre_make_hdr_rmv_ctx(
 		"Attempting to create \"header remove\" context "
 		"(outer ip(%d) header) for downlink gre traffic.\n",
 		iptype);
-
+	if (IPACM_Iface::ipacmcfg->tunnel_feature == SINGLE_TAG_FEATURE)
+	{
+		if(IPACM_Iface::ipacmcfg->tunnel_idx_map[ipgre_info.num_exceptions].gre_route_data[iptype].proc_ctx_gre_rmv_hdl != 0)
+		{
+			IPACMERR("Already Added gre rmv proc ctx\n");
+			return IPACM_SUCCESS;
+		}
+	}
 	/*
 	 * Make "header remove" process context...
 	 */
@@ -17275,6 +17326,11 @@ int IPACM_Lan::gre_make_header_rmv_rt_rule(
 		{
 			IPACMERR("Can't create a \"header remove\" route rule without a context.\n");
 			return IPACM_FAILURE;
+		}
+		if (IPACM_Iface::ipacmcfg->tunnel_idx_map[tunel_id].gre_route_data[iptype].rt_gre_rmv_hdl != 0)
+		{
+			IPACMERR("Already Added RT rule\n");
+			return IPACM_SUCCESS;
 		}
 	}
 	else

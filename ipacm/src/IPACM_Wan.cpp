@@ -6134,9 +6134,11 @@ int IPACM_Wan::add_dft_filtering_rule(struct ipa_flt_rule_add *rules, int rule_o
 
 		flt_rule_entry.rule.eq_attrib.rule_eq_bitmap = 0;
 
-		flt_rule_entry.rule.eq_attrib.rule_eq_bitmap |= (1<<1);
-		flt_rule_entry.rule.eq_attrib.protocol_eq_present = 1;
-		flt_rule_entry.rule.eq_attrib.protocol_eq = IPACM_FIREWALL_IPPROTO_TCP;
+		flt_rule_entry.rule.eq_attrib.rule_eq_bitmap |= 0x20<<flt_rule_entry.rule.eq_attrib.num_offset_meq_32;
+		flt_rule_entry.rule.eq_attrib.offset_meq_32[flt_rule_entry.rule.eq_attrib.num_offset_meq_32].offset = 6;
+		flt_rule_entry.rule.eq_attrib.offset_meq_32[flt_rule_entry.rule.eq_attrib.num_offset_meq_32].mask = 0xFF000000;
+		flt_rule_entry.rule.eq_attrib.offset_meq_32[flt_rule_entry.rule.eq_attrib.num_offset_meq_32].value = 6 << 24;
+		flt_rule_entry.rule.eq_attrib.num_offset_meq_32 ++;
 
 		flt_rule_entry.rule.eq_attrib.rule_eq_bitmap |= (1<<8);
 		flt_rule_entry.rule.eq_attrib.num_ihl_offset_meq_32 = 1;

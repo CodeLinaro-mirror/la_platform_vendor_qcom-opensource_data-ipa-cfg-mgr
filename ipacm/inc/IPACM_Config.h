@@ -398,9 +398,6 @@ public:
 	bool is_added_vlan_iface(char *iface_name);
 	bool iface_in_vlan_mode(const char * interfaceName);
 	int get_iface_vlan_ids(char *phys_iface_name, uint16_t *Ids);
-#ifdef IPA_IOCTL_ADD_VLAN_PRIORITY
-	int update_vlan_priority(struct ipa_ioc_vlan_priority *vlan_priority);
-#endif
 #ifdef IPA_VLAN_PRIORITY
 	int get_vlan_id(char *iface_name, uint16_t *vlan_id, uint8_t *priority = NULL);
 #else

@@ -548,6 +548,7 @@ public:
 	/* add socksv5 flt rule */
 	int add_socksv5_flt_rule(ipa_socksv5_msg *data_event_conn);
 	int del_socksv5_flt_rule(void);
+	bool socksv5_set;
 #endif
 
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS

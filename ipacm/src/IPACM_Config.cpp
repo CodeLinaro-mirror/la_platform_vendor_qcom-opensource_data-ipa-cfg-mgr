@@ -156,7 +156,7 @@ const char *ipacm_event_name[] = {
 	__stringify(IPA_ROUTE_ADD_VLAN_PDN_EVENT),             /* ipacm_event_route_vlan */
 	__stringify(IPA_HANDLE_WAN_VLAN_PDN_UP),               /* ipacm_event_vlan_pdn */
 	__stringify(IPA_HANDLE_WAN_VLAN_PDN_DOWN),             /* ipacm_event_vlan_pdn */
-	__stringify(IPA_NOTIFY_VLAN_UP),                       /* NULL */
+	__stringify(IPA_NOTIFY_VLAN_UP),                       /* ipacm_event_data_vlan */
 #endif
 #ifdef FEATURE_SOCKSv5
 	__stringify(IPA_HANDLE_SOCKSv5_UP),                    /* ipacm_event_connection */
@@ -1522,7 +1522,7 @@ void IPACM_Config::del_bridge_vlan_mapping(uint16_t *data, uint16_t *vlan_id)
 			ret = ipa_get_if_name(iface_name, it_mapping->bridge_if_index);
 
 			bridge = get_vlan_bridge(iface_name);
-			if(bridge)
+			if(bridge && !is_dummy_VID(*vlan_id))
 			{
 				IPACMDBG_H("bridge %s - remove vlan id\n",
 					it_mapping->bridge_iface_name);
@@ -1619,7 +1619,7 @@ bool IPACM_Config::is_lan2lan_sw_path(uint16_t vlan_id)
 	return ret;
 }
 
-uint16_t IPACM_Config::get_bridge_vlan_mapping_from_subnet(uint32_t ipv4_subnet)
+uint16_t IPACM_Config::get_bridge_vlan_mapping_from_subnet(uint32_t ipv4_subnet, bool is_dummy)
 {
 	list<bridge_vlan_mapping_info>::iterator it_mapping;
 	int ret = IPACM_FAILURE;
@@ -1635,12 +1635,17 @@ uint16_t IPACM_Config::get_bridge_vlan_mapping_from_subnet(uint32_t ipv4_subnet)
 	{
 		if(ipv4_subnet == (it_mapping->bridge_ipv4 & it_mapping->subnet_mask))
 		{
-			IPACMDBG_H("Found the bridge mapping for subnet 0x%X (vid = %d)\n",
-				ipv4_subnet,
-				it_mapping->bridge_associated_VID);
-			VlanID = it_mapping->bridge_associated_VID;
-			pthread_mutex_unlock(&vlan_l2tp_lock);
-			return VlanID;
+			/* Do not handle cross combination of dummy and non dummy */
+			if(!((!is_dummy && is_dummy_VID(it_mapping->bridge_associated_VID)) ||
+					(is_dummy && !is_dummy_VID(it_mapping->bridge_associated_VID))))
+			{
+				IPACMDBG_H("Found the bridge mapping for subnet 0x%X (vid = %d)\n",
+					ipv4_subnet,
+					it_mapping->bridge_associated_VID);
+				VlanID = it_mapping->bridge_associated_VID;
+				pthread_mutex_unlock(&vlan_l2tp_lock);
+				return VlanID;
+			}
 		}
 	}
 
@@ -1693,6 +1698,7 @@ void IPACM_Config::add_vlan_iface(ipa_vlan_iface_info *data)
 	list<vlan_iface_info>::iterator it_vlan;
 	vlan_iface_info new_vlan_info;
 	ipacm_cmd_q_data evt_data;
+	ipacm_event_data_vlan *vlan_data;
 
 	if(pthread_mutex_lock(&vlan_l2tp_lock) != 0)
 	{
@@ -1789,8 +1795,15 @@ void IPACM_Config::add_vlan_iface(ipa_vlan_iface_info *data)
 	 * This will handle scenario where add_vlan_iface is received after
 	 * LAN IPA_NEW_ADDR have already been processed.
 	 */
+	vlan_data = (ipacm_event_data_vlan *)malloc(sizeof(*vlan_data));
+	if(vlan_data == NULL)
+	{
+		IPACMERR("Failed to allocate memory.\n");
+		return;
+	}
+	vlan_data->vlan_id = data->vlan_id;
 	evt_data.event = IPA_NOTIFY_VLAN_UP;
-	evt_data.evt_data = NULL;
+	evt_data.evt_data = (void*)vlan_data;
 	IPACMDBG_H("Posting IPA_NOTIFY_VLAN_UP event!\n", evt_data.event);
 	IPACM_EvtDispatcher::PostEvt(&evt_data);
 
@@ -2376,81 +2389,6 @@ int IPACM_Config::get_iface_vlan_ids(char *phys_iface_name, uint16_t *Ids)
 	return ret;
 }
 
-#ifdef IPA_IOCTL_ADD_VLAN_PRIORITY
-int IPACM_Config::update_vlan_priority(struct ipa_ioc_vlan_priority *vlan_priority)
-{
-    int i, j;
-    bool is_existing;
-    char empty_name[IPA_RESOURCE_NAME_MAX]= {0};
-
-    IPACMDBG_H("Received vlan priority event No of Vlans %d\n", vlan_priority->num_of_vlans);
-
-    for(i = 0; i < vlan_priority->num_of_vlans; i++)
-    {
-        IPACMDBG_H("Vlan Name %s\n", vlan_priority->vlan_prio_info[i].vlan_name);
-        IPACMDBG_H("Vlan Priority %d\n", vlan_priority->vlan_prio_info[i].vlan_priority);
-        is_existing = false;
-
-        for(j = 0; j < IPA_MAX_IFACE_ENTRIES; j++)
-        {
-            if(!strcmp(vlan_config->vlan_if_cfg[j].name, vlan_priority->vlan_prio_info[i].vlan_name))
-            {
-                if(!vlan_priority->vlan_prio_info[i].vlan_priority)
-                {
-					/* remove from the list if priority zero as default priority is zero */
-                    vlan_config->num_vlan_if--;
-                    IPACMDBG_H("Resetting Vlan name %s, Vlan Priority %d\n", vlan_config->vlan_if_cfg[j].name, vlan_config->vlan_if_cfg[j].priority);
-                    memset(&(vlan_config->vlan_if_cfg[j]), 0, sizeof(ipa_vlan_iface_info));
-                }
-                else
-                {
-					/* update priroty for existing entry */
-					if(vlan_config->vlan_if_cfg[j].priority != vlan_priority->vlan_prio_info[i].vlan_priority)
-					{
-						vlan_config->vlan_if_cfg[j].priority = vlan_priority->vlan_prio_info[i].vlan_priority;
-						IPACMDBG_H("Updated Vlan name %s, Vlan Priority %d\n", vlan_config->vlan_if_cfg[j].name, vlan_config->vlan_if_cfg[j].priority);
-					}
-					else
-					{
-						IPACMDBG_H("Not Updating Vlan Priority, it is same %s->%d\n", vlan_config->vlan_if_cfg[j].name, vlan_config->vlan_if_cfg[j].priority);
-					}
-                }
-                is_existing = true;
-                break;
-            }
-        }
-		/* create new entry */
-        if(!is_existing)
-        {
-			/* do not add to list if priority is zero */
-			if(vlan_priority->vlan_prio_info[i].vlan_priority)
-			{
-				for(j = 0; j < IPA_MAX_IFACE_ENTRIES; j++)
-				{
-					if(memcmp(vlan_config->vlan_if_cfg[j].name, empty_name, sizeof(empty_name)) == 0)
-					{
-						vlan_config->num_vlan_if++;
-						vlan_config->vlan_if_cfg[j].priority = vlan_priority->vlan_prio_info[i].vlan_priority;
-						strlcpy(vlan_config->vlan_if_cfg[j].name, vlan_priority->vlan_prio_info[i].vlan_name, sizeof(vlan_config->vlan_if_cfg[j].name));
-						IPACMDBG_H("Updated in %d Vlan name %s, Vlan Priority %d\n", j, vlan_config->vlan_if_cfg[j].name, vlan_config->vlan_if_cfg[j].priority);
-						break;
-					}
-					if(j == (IPA_MAX_IFACE_ENTRIES - 1))
-					{
-						IPACMDBG_H("Max Vlan interfaces set\n");
-						return -1;
-					}
-				}
-			}
-			else
-			{
-				IPACMDBG_H("New Vlan with priority zero ignore!\n");
-			}
-        }
-    }
-    return 0;
-}
-#endif
 #endif
 
 #if defined(FEATURE_L2TP)

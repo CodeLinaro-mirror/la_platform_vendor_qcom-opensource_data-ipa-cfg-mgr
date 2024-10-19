@@ -72,7 +72,8 @@ IPACM_Neighbor::IPACM_Neighbor()
 	IPACM_EvtDispatcher::registr(IPA_ADD_BRIDGE_VLAN_BR_INTF, this);
 	IPACM_EvtDispatcher::registr(IPA_CLEAN_NEIGHBOR_CACHE, this);
 	IPACM_EvtDispatcher::registr(IPA_USB_LINK_UP_EVENT, this);
-
+	IPACM_EvtDispatcher::registr(IPA_LINK_DOWN_EVENT, this);
+	IPACM_EvtDispatcher::registr(IPA_WLAN_LINK_DOWN_EVENT, this);
 	return;
 }
 /* Extract interface name, IP adress, subnet with interface index value */
@@ -170,8 +171,9 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 #ifdef FEATURE_VLAN_MPDN
 	ipacm_event_new_neigh_vlan *data_vlan = NULL;
 #endif
-	int i, ret, ipa_interface_index;
+	int i, j, ret, ipa_interface_index;
 	ipacm_cmd_q_data evt_data;
+	bool move_elements;
 	int num_neighbor_client_temp = num_neighbor_client;
 	char iface_name[IPA_IFACE_NAME_LEN] = {0};
 	int bridge_index;
@@ -226,6 +228,13 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 					{
 						if (neighbor_client[i].v4_addr != 0) /* not 0.0.0.0 */
 						{
+							/* check if getting real netdev name yet */
+							if(strcmp(neighbor_client[i].iface_name, IPA_NO_IFACE_NAME) == 0)
+							{
+								IPACMERR("client %d name %s not real\n", i, neighbor_client[i].iface_name);
+								return;
+							}
+
 							if(strcmp(neighbor_client[i].bridge->bridge_name, BRIDGE_0) != 0)
 							{
 								if(IPACM_Iface::ipacmcfg->is_added_vlan_iface(iface_name))
@@ -401,6 +410,84 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 				ipacm_event_data_all *data = (ipacm_event_data_all *)param;
 				IPACMDBG("data->iface_name: %s, data->if_index: %d\n", data->iface_name, data->if_index);
 				cleanCache(data->if_index);
+		}
+		break;
+
+		case IPA_LINK_DOWN_EVENT:
+		case IPA_WLAN_LINK_DOWN_EVENT:
+		{
+			ipacm_event_data_fid *data = (ipacm_event_data_fid *)param;
+			IPACMDBG_H("Received IPA_LINK_DOWN_EVENT at Neighbour if_index :%d \n",data->if_index);
+			move_elements = false;
+			for (i = 0; i < num_neighbor_client_temp; i++)
+			{
+				/* find the client MAC */
+				if (neighbor_client[i].iface_index == data->if_index)
+				{
+					IPACMDBG_H("Neighbor if_index: %d, ipa_if_index = %d, name =  %s, ip4_addr = 0x%x\n",
+					neighbor_client[i].iface_index,neighbor_client[i].ipa_if_num, neighbor_client[i].iface_name,
+					neighbor_client[i].v4_addr);
+					IPACMDBG_H("Clean %d-st Cached client-MAC %02x:%02x:%02x:%02x:%02x:%02x\n, total client: %d\n",
+					i,
+					neighbor_client[i].mac_addr[0],
+					neighbor_client[i].mac_addr[1],
+					neighbor_client[i].mac_addr[2],
+					neighbor_client[i].mac_addr[3],
+					neighbor_client[i].mac_addr[4],
+					neighbor_client[i].mac_addr[5],
+					num_neighbor_client);
+
+					memset(neighbor_client[i].mac_addr, 0, sizeof(neighbor_client[i].mac_addr));
+					neighbor_client[i].iface_index = 0;
+					neighbor_client[i].v4_addr = 0;
+					neighbor_client[i].ipa_if_num = 0;
+					memset(neighbor_client[i].iface_name, 0, sizeof(neighbor_client[i].iface_name));
+#ifdef FEATURE_VLAN_MPDN
+					if(IPACM_Iface::ipacmcfg->ipacm_mpdn_enable == TRUE)
+					neighbor_client[i].bridge = NULL;
+#endif
+					move_elements = true;
+				}
+			}
+
+			j = 0;
+			if (move_elements)
+			{
+				for (i = 0; i < num_neighbor_client_temp; i++)
+				{
+					if ((neighbor_client[i].iface_index != 0) && (j < i))
+					{
+						memcpy(neighbor_client[j].mac_addr,
+								neighbor_client[i].mac_addr,
+									sizeof(neighbor_client[i].mac_addr));
+#ifdef FEATURE_VLAN_MPDN
+						if(IPACM_Iface::ipacmcfg->ipacm_mpdn_enable == TRUE)
+							neighbor_client[j].bridge = neighbor_client[i].bridge;
+#endif
+						neighbor_client[j].iface_index = neighbor_client[i].iface_index;
+						neighbor_client[j].v4_addr = neighbor_client[i].v4_addr;
+						neighbor_client[j].ipa_if_num = neighbor_client[i].ipa_if_num;
+						strlcpy(neighbor_client[j].iface_name, neighbor_client[i].iface_name,
+							sizeof(neighbor_client[i].iface_name));
+						memset(neighbor_client[i].mac_addr, 0, sizeof(neighbor_client[i].mac_addr));
+						neighbor_client[i].iface_index = 0;
+						neighbor_client[i].v4_addr = 0;
+						neighbor_client[i].ipa_if_num = 0;
+						memset(neighbor_client[i].iface_name, 0, sizeof(neighbor_client[i].iface_name));
+#ifdef FEATURE_VLAN_MPDN
+						neighbor_client[i].bridge = NULL;
+#endif
+						j++;
+					}
+					else if (neighbor_client[i].iface_index != 0)
+					{
+						j++;
+					}
+				}
+
+				num_neighbor_client = j;
+			}
+				IPACMDBG_H(" total number of left cased clients: %d\n", num_neighbor_client);
 		}
 		break;
 
@@ -722,6 +809,12 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 								data->if_index = neighbor_client[i].iface_index;
 								strlcpy(data->iface_name, neighbor_client[i].iface_name, sizeof(data->iface_name));
 								neighbor_client[i].v4_addr = data->ipv4_addr; // cache client's previous ipv4 address
+								/* check if getting real netdev name yet */
+								if(strcmp(data->iface_name, IPA_NO_IFACE_NAME) == 0)
+								{
+									IPACMERR("client %d name %s not real\n", i, data->iface_name);
+									return;
+								}
 								/* construct IPA_NEIGH_CLIENT_IP_ADDR_ADD_EVENT command and insert to command-queue */
 								if (event == IPA_NEW_NEIGH_EVENT)
 									evt_data.event = IPA_NEIGH_CLIENT_IP_ADDR_ADD_EVENT;
@@ -1037,10 +1130,7 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 
 									num_neighbor_client--;
 									IPACMDBG_H(" total number of left cased clients: %d\n", num_neighbor_client);
-									//IPA_LAN_CLIENT_DEL_EVENT
-									//IPV4
 									/* check if getting real netdev name yet */
-
 									if(strcmp(data->iface_name, IPA_NO_IFACE_NAME) == 0)
 									{
 										IPACMERR("client %d name %s not real\n", i, data->iface_name);
@@ -1062,6 +1152,13 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 							}
 							/* not find client, no need clean-up */
 						}
+						/* check if getting real netdev name yet */
+						if(strcmp(data->iface_name, IPA_NO_IFACE_NAME) == 0)
+						{
+							IPACMERR("client %d name %s not real\n", i, data->iface_name);
+							return;
+						}
+
 						/* posting vlan event for wan case for eth vlan wan iface */
 						if(IPACM_Iface::ipacmcfg->is_added_vlan_iface(data->iface_name) &&
 							IPACM_Iface::ipacmcfg->ipacm_mpdn_enable == TRUE)
@@ -1189,6 +1286,12 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 #endif
 								data->if_index = neighbor_client[i].iface_index;
 								strlcpy(data->iface_name, neighbor_client[i].iface_name, sizeof(data->iface_name));
+								/* check if getting real netdev name yet */
+								if(strcmp(data->iface_name, IPA_NO_IFACE_NAME) == 0)
+								{
+									IPACMERR("client %d name %s not real\n", i, data->iface_name);
+									return;
+								}
 								/* construct IPA_NEIGH_CLIENT_IP_ADDR_ADD_EVENT command and insert to command-queue */
 								if(event == IPA_NEW_NEIGH_EVENT)
 									evt_data.event = IPA_NEIGH_CLIENT_IP_ADDR_ADD_EVENT;
@@ -1373,6 +1476,12 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 
 								if (neighbor_client[i].v4_addr != 0) /* not 0.0.0.0 */
 								{
+									/* check if getting real netdev name yet */
+									if(strcmp(neighbor_client[i].iface_name, IPA_NO_IFACE_NAME) == 0)
+									{
+										IPACMERR("client %d name %s not real\n", i, neighbor_client[i].iface_name);
+										return;
+									}
 									/* construct IPA_NEIGH_CLIENT_IP_ADDR_ADD_EVENT command and insert to command-queue */
 									if (event == IPA_NEW_NEIGH_EVENT)
 									{
@@ -1639,11 +1748,13 @@ void IPACM_Neighbor::update_neigh_cache()
 	char *tok = NULL, *ptr = NULL;
 	char *params[MAX_FDB_PARAM_CNT] = { NULL };
 	char rdev_name[IPA_IFACE_NAME_LEN] = {0}, mac[MAX_FDB_PARAM_LEN] = {0};
+	char mdev_name[IPA_IFACE_NAME_LEN] = {0};
 	char fdb_row[MAX_FDB_ROW_LEN] = {0}, cmd[IPA_SYS_CMD_LEN] = {0};
 	uint8_t mac_addr_fdb[IPA_MAC_ADDR_SIZE] = {0};
 	int tmp_var[IPA_MAC_ADDR_SIZE];
 	int query_ifindex, query_ipa_if_num, j, i;
-	bool is_phy_iface = false, is_client_cached = false, parse_error = false;;
+	bool is_phy_iface = false, is_client_cached = false, parse_error = false;
+	ipacm_bridge *bridge;
 
 	snprintf(cmd, IPA_SYS_CMD_LEN, "bridge fdb show | grep \"master bridge\" > %s",IPA_FDB_TABLE);
 	system(cmd);
@@ -1677,6 +1788,10 @@ void IPACM_Neighbor::update_neigh_cache()
 			if ((strncmp("dev",params[i], IPA_IFACE_NAME_LEN)==0) && (i < MAX_FDB_PARAM_CNT -1))
 			{
 				strlcpy(rdev_name, params[i+1], IPA_IFACE_NAME_LEN);
+			}
+			else if(strncmp("master",params[i], IPA_IFACE_NAME_LEN)==0)
+			{
+				strlcpy(mdev_name, params[i+1], IPA_IFACE_NAME_LEN);
 			}
 			else if (strstr(params[i],":"))
 			{
@@ -1713,6 +1828,22 @@ void IPACM_Neighbor::update_neigh_cache()
 				{
 					is_client_cached = true;
 					break;
+				}
+				if (strncmp(IPA_NO_IFACE_NAME, neighbor_client[i].iface_name,
+							sizeof(neighbor_client[i].iface_name)) == 0)
+				{
+					bridge = IPACM_Iface::ipacmcfg->get_vlan_bridge(mdev_name);
+					if(!bridge)
+					{
+						if(neighbor_client[i].bridge == bridge)
+						{
+							strlcpy(neighbor_client[i].iface_name, rdev_name,
+									sizeof(neighbor_client[i].iface_name));
+							is_client_cached = true;
+							break;
+						}
+						bridge = NULL;
+					}
 				}
 			}
 		}
@@ -1774,7 +1905,7 @@ void IPACM_Neighbor::update_neigh_cache()
 						sizeof(mac_addr_fdb));
 #ifdef FEATURE_VLAN_MPDN
 			if(IPACM_Iface::ipacmcfg->ipacm_mpdn_enable == TRUE)
-				neighbor_client[circular_index].bridge = NULL;
+				neighbor_client[num_neighbor_client].bridge = NULL;
 #endif
 			neighbor_client[num_neighbor_client].iface_index = query_ifindex;
 			/* cache the network interface client associated */

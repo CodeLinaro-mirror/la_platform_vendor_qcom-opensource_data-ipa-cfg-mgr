@@ -1471,7 +1471,7 @@ void IPACM_Config::add_bridge_vlan_mapping(ipa_bridge_vlan_mapping_info *data)
 					bridge->bridge_netmask = data->subnet_mask;
 				}
 				goto bail;
-			
+
 			}
 
 			IPACMDBG("The bridge %s was added before with vlan id: %d\n", data->bridge_name,
@@ -3220,7 +3220,6 @@ int IPACM_Config::query_mux_id(rmnet_mux_id_info *mux_id_info)
 void IPACM_Config::sw_flt_info(ipa_sw_flt_list_type *sw_flt)
 {
 	int i = 0;
-	uint32_t mask = 0xFFFFFF00, net_lower = 0, net_upper = 0;
 	std::list<std::array<uint8_t, 6>> mac_list;
 	std::list<std::array<uint8_t, 6>>::iterator it_mac_list;
 	std::array<uint8_t, 6> mac = {0};
@@ -3235,15 +3234,13 @@ void IPACM_Config::sw_flt_info(ipa_sw_flt_list_type *sw_flt)
 	/* check & print ipv4_segs range */
 	if (sw_flt->ipv4_segs_enable)
 	{
-		net_lower = (sw_flt->ipv4_segs[0][0] & mask);
-		net_upper = (net_lower | (~mask));
 		IPACMDBG_H("ipv4_segs_enable number:%d\n", sw_flt->num_of_ipv4_segs);
 		for(i = 0; i < sw_flt->num_of_ipv4_segs; i++)
 		{
 			IPACMDBG_H("%d IPv4-SEGS-flt ipv4 start:0x%X end:0x%X\n",
 				i, sw_flt->ipv4_segs[i][0], sw_flt->ipv4_segs[i][1]);
-			/* subnet check */
-			if ((sw_flt->ipv4_segs[i][1] < net_lower) || (sw_flt->ipv4_segs[i][1] > net_upper) || (sw_flt->ipv4_segs[i][1] < sw_flt->ipv4_segs[i][0]))
+			/*validate the range input*/
+			if (sw_flt->ipv4_segs[i][1] < sw_flt->ipv4_segs[i][0])
 			{
 				sw_flt->ipv4_segs_enable = false;
 				IPACMERR("wrong ipv4-segs-flt in entry(%d)!! disable ipv4_segs(%d) !\n", i, sw_flt->ipv4_segs_enable);
@@ -3873,14 +3870,36 @@ bool IPACM_Config::AddIpsecUlFlt(struct ipa_ioc_ipsec_ul_flt_attr uf)
 {
 	ipsecUlFlt.insert(uf);
 	IPACMDBG_H("Added an UL rule. Now the number of IPsec UL rules is %ld\n", ipsecUlFlt.size());
+	if (uf.ip == IPA_IP_v4) {
+		IPACMDBG_H("SRC IPv4: %08X\n", uf.attr.u.v4.src_addr);
+		IPACMDBG_H("DST IPv6: %08X\n", uf.attr.u.v4.dst_addr);
+	} else {
+		IPACMDBG_H("SRC IPv6: %08X:%08X:%08X:%08X\n",
+			uf.attr.u.v6.src_addr[0], uf.attr.u.v6.src_addr[1],
+			uf.attr.u.v6.src_addr[2], uf.attr.u.v6.src_addr[3]);
+		IPACMDBG_H("DST IPv6: %08X:%08X:%08X:%08X\n",
+			uf.attr.u.v6.dst_addr[0], uf.attr.u.v6.dst_addr[1],
+			uf.attr.u.v6.dst_addr[2], uf.attr.u.v6.dst_addr[3]);
+	}
 
 	return true;
 }
 
 bool IPACM_Config::DelIpsecUlFlt(struct ipa_ioc_ipsec_ul_flt_attr uf)
 {
-	ipsecUlFlt.erase(uf);
+	eraseOne(ipsecUlFlt, uf);
 	IPACMDBG_H("Deleted an UL rule. Now the number of IPsec UL rules is %ld\n", ipsecUlFlt.size());
+	if (uf.ip == IPA_IP_v4) {
+		IPACMDBG_H("SRC IPv4: %08X\n", uf.attr.u.v4.src_addr);
+		IPACMDBG_H("DST IPv6: %08X\n", uf.attr.u.v4.dst_addr);
+	} else {
+		IPACMDBG_H("SRC IPv6: %08X:%08X:%08X:%08X\n",
+			uf.attr.u.v6.src_addr[0], uf.attr.u.v6.src_addr[1],
+			uf.attr.u.v6.src_addr[2], uf.attr.u.v6.src_addr[3]);
+		IPACMDBG_H("DST IPv6: %08X:%08X:%08X:%08X\n",
+			uf.attr.u.v6.dst_addr[0], uf.attr.u.v6.dst_addr[1],
+			uf.attr.u.v6.dst_addr[2], uf.attr.u.v6.dst_addr[3]);
+	}
 
 	return true;
 }
@@ -4132,7 +4151,7 @@ bool IPACM_Config::IsWlanIfVlan(const char *event_iface_name) {
 
 	if (event_iface_name == NULL) {
 		IPACMERR("Invalid input\n");
-		return IPACM_FAILURE;
+		return false;
 	}
 
 	/* extract the parent if_name from the vlan iface */
@@ -4149,7 +4168,7 @@ bool IPACM_Config::IsWlanIfVlan(const char *event_iface_name) {
 	ret = IPACM_Iface::ipa_get_if_index(if_name, &(if_index));
 	if (ret != IPACM_SUCCESS) {
 		IPACMERR("Error while getting interface index for %s device", if_name);
-		return IPACM_FAILURE;
+		return false;
 	}
 
 	/* Map the interface index. */
@@ -4481,6 +4500,7 @@ void IPACM_Config::delete_qos_params_info(ipa_ioc_qos_config *data)
 			if (qos_param == NULL)
 			{
 				IPACMERR("Unable to allocate memory\n");
+				pthread_mutex_unlock(&qos_param_list_lock);
 				return;
 			}
 
@@ -4542,6 +4562,7 @@ void IPACM_Config::flush_qos_params_info(ipa_ioc_qos_config *data)
 		if (qos_param == NULL)
 		{
 			IPACMERR("Unable to allocate memory\n");
+			pthread_mutex_unlock(&qos_param_list_lock);
 			return;
 		}
 

@@ -112,7 +112,7 @@ IPACM_Wlan::IPACM_Wlan(int iface_index, bool ast_update_needed) : IPACM_Lan(ifac
 
 	wlan_ap_index = IPACM_Wlan::num_wlan_ap_iface;
 	/* In EM config, we support 14 VAPs in total. */
-	if(wlan_ap_index < 0 || wlan_ap_index > 20)
+	if(wlan_ap_index < 0 || wlan_ap_index >= IPA_MAX_ACTIVE_WLAN_IFACE )
 	{
 		IPACMERR("Wlan_ap_index is not correct: %d, not support %d APs .\n", wlan_ap_index, wlan_ap_index + 1);
 		if (tx_prop != NULL)
@@ -6816,7 +6816,7 @@ int IPACM_Wlan::handle_down_evt()
 
 		/* delete private-ipv4 filter rules */
 #if defined(FEATURE_IPA_ANDROID) || defined(FEATURE_VLAN_MPDN)
-		if(m_filtering.DeleteFilteringHdls(private_fl_rule_hdl[0], IPA_IP_v4, IPA_MAX_PRIVATE_SUBNET_ENTRIES + IPA_MAX_MTU_ENTRIES) == false)
+		if(m_filtering.DeleteFilteringHdls(private_fl_rule_hdl[idx/2], IPA_IP_v4, IPA_MAX_PRIVATE_SUBNET_ENTRIES + IPA_MAX_MTU_ENTRIES) == false)
 		{
 			IPACMERR("Error deleting private subnet IPv4 flt rules.\n");
 			res = IPACM_FAILURE;
@@ -6826,7 +6826,7 @@ int IPACM_Wlan::handle_down_evt()
 #else
 		num_private_subnet_fl_rule = IPACM_Iface::ipacmcfg->ipa_num_private_subnet > (IPA_MAX_PRIVATE_SUBNET_ENTRIES + IPA_MAX_MTU_ENTRIES)?
 			(IPA_MAX_PRIVATE_SUBNET_ENTRIES + IPA_MAX_MTU_ENTRIES): IPACM_Iface::ipacmcfg->ipa_num_private_subnet;
-		if(m_filtering.DeleteFilteringHdls(private_fl_rule_hdl, IPA_IP_v4, num_private_subnet_fl_rule) == false)
+		if(m_filtering.DeleteFilteringHdls(private_fl_rule_hdl[idx/2], IPA_IP_v4, num_private_subnet_fl_rule) == false)
 		{
 			IPACMERR("Error deleting private subnet flt rules, aborting...\n");
 			res = IPACM_FAILURE;
@@ -6836,7 +6836,7 @@ int IPACM_Wlan::handle_down_evt()
 #endif
 		IPACMDBG_H("Deleted private subnet v4 filter rules successfully.\n");
 
-		if(m_filtering.DeleteFilteringHdls(&tcp_syn_flt_rule_hdl[0][IPA_IP_v4], IPA_IP_v4, 1) == false)
+		if(m_filtering.DeleteFilteringHdls(&tcp_syn_flt_rule_hdl[idx/2][IPA_IP_v4], IPA_IP_v4, 1) == false)
 		{
 			IPACMERR("Error deleting tcp syn flt rule, aborting...\n");
 			res = IPACM_FAILURE;
@@ -6864,7 +6864,7 @@ int IPACM_Wlan::handle_down_evt()
 			goto fail;
 		}
 
-		if(m_filtering.DeleteFilteringHdls(&tcp_syn_flt_rule_hdl[0][IPA_IP_v6], IPA_IP_v6, 1) == false)
+		if(m_filtering.DeleteFilteringHdls(&tcp_syn_flt_rule_hdl[idx/2][IPA_IP_v6], IPA_IP_v6, 1) == false)
 		{
 			IPACMERR("Error deleting tcp syn flt rule, aborting...\n");
 			res = IPACM_FAILURE;
@@ -7101,21 +7101,6 @@ fail:
 	}
 	IPACMDBG_H("finished delete software-routing filtering rules\n ");
 
-	if (rx_prop != NULL)
-	{
-		if(IPACM_Iface::ipacmcfg->GetIPAVer() >= IPA_HW_None && IPACM_Iface::ipacmcfg->GetIPAVer() < IPA_HW_v4_0)
-		{
-			/* Delete corresponding ipa_rm_resource_name of RX-endpoint after delete all IPV4V6 FT-rule */
-			IPACMDBG_H("dev %s add producer dependency\n", dev_name);
-			IPACMDBG_H("depend Got pipe %d rm index : %d \n", rx_prop->rx[0].src_pipe, IPACM_Iface::ipacmcfg->ipa_client_rm_map_tbl[rx_prop->rx[0].src_pipe]);
-			IPACM_Iface::ipacmcfg->DelRmDepend(IPACM_Iface::ipacmcfg->ipa_client_rm_map_tbl[rx_prop->rx[0].src_pipe]);
-		}
-#ifndef FEATURE_ETH_BRIDGE_LE
-		free(rx_prop);
-		rx_prop = NULL;
-#endif
-	}
-
 #ifdef FEATURE_STATIC_POLICY
 	//delete static policy rules here if mode is enabled
 	if (IPACM_Iface::ipacmcfg->ipacm_static_policy_enable)
@@ -7139,19 +7124,6 @@ fail:
 		free(wlan_client);
 		wlan_client = NULL;
 	}
-#ifndef FEATURE_ETH_BRIDGE_LE
-	if (tx_prop != NULL)
-	{
-		free(tx_prop);
-		tx_prop = NULL;
-	}
-
-	if (iface_query != NULL)
-	{
-		free(iface_query);
-		iface_query = NULL;
-	}
-#endif
 
 	is_active = false;
 	post_del_self_evt();
@@ -8891,7 +8863,7 @@ int IPACM_Wlan::delete_uplink_filter_rule_per_client
 
 	if ((iptype == IPA_IP_v6) && get_client_memptr(wlan_client, clnt_indx)->ipv6_ul_rules_set)
 	{
-		IPACMDBG_H("Del (%d) num of v6 UL rules for cliend idx:%d\n", num_wan_ul_fl_rule_v6, clnt_indx);
+		IPACMDBG_H("Del (%d) num of v6 UL rules for cliend idx:%d\n", num_wan_ul_fl_rule_v6[0], clnt_indx);
 		if (m_filtering.DeleteFilteringHdls(get_client_memptr(wlan_client, clnt_indx)->wan_ul_fl_rule_hdl_v6,
 				iptype, num_wan_ul_fl_rule_v6[0]) == false)
 		{
@@ -11535,7 +11507,7 @@ int IPACM_Wlan::if_wlan_client_qos_rule_needed(uint8_t * client_mac,
 			return ret;
 		}
 
-		if (it_qos_client->v6_ip_addr[0] &&
+		if (it_qos_client->v6_ip_addr[0] && ipv6_addr &&
 			it_qos_client->v6_ip_addr[0] == ipv6_addr[0] &&
 			it_qos_client->v6_ip_addr[1] == ipv6_addr[1] &&
 			it_qos_client->v6_ip_addr[2] == ipv6_addr[2] &&

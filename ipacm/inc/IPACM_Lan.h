@@ -360,12 +360,12 @@ public:
 	virtual int handle_wan_down_v6(bool is_sta_mode, bool is_support_mpdn = true);
 
 	/* configure private subnet filter rules*/
-	int modify_private_subnet();
+	int modify_private_subnet(bool eogre_enabled = false);
 	virtual int handle_private_subnet(ipa_ip_type iptype);
 	int eth_bridge_get_vlan_hdr_template_hdl(uint32_t *hdr_hdl, uint16_t vlan_id);
 #ifdef FEATURE_VLAN_MPDN
 	int add_vlan_private_subnet(ipacm_bridge *bridge);
-	int modify_ipv6_prefix_flt_rule();
+	int modify_ipv6_prefix_flt_rule(bool eogre_enabled = false);
 	int handle_backhaul_switch_vlan_mode(bool to_sta);
 #endif
 

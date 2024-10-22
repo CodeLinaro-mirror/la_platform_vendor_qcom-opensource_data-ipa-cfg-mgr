@@ -1296,6 +1296,8 @@ int IPACM_Wan::handle_addr_evt(ipacm_event_data_addr *data)
 	if(data_fid == NULL)
 	{
 		IPACMERR("unable to allocate memory for IPA_HANDLE_NEW_NEIGH_EVENT data_fid\n");
+		res = IPACM_FAILURE;
+		goto fail;
 	}
 	data_fid->if_index = data->if_index;
 
@@ -6132,9 +6134,20 @@ int IPACM_Wan::add_dft_filtering_rule(struct ipa_flt_rule_add *rules, int rule_o
 
 		flt_rule_entry.rule.eq_attrib.rule_eq_bitmap = 0;
 
-		flt_rule_entry.rule.eq_attrib.rule_eq_bitmap |= (1<<1);
-		flt_rule_entry.rule.eq_attrib.protocol_eq_present = 1;
-		flt_rule_entry.rule.eq_attrib.protocol_eq = IPACM_FIREWALL_IPPROTO_TCP;
+		if(IPACM_Iface::ipacmcfg->eogre_enabled)
+		{
+			flt_rule_entry.rule.eq_attrib.rule_eq_bitmap |= (1<<1);
+			flt_rule_entry.rule.eq_attrib.protocol_eq_present = 1;
+			flt_rule_entry.rule.eq_attrib.protocol_eq = IPACM_FIREWALL_IPPROTO_TCP;
+		}
+		else
+		{
+			flt_rule_entry.rule.eq_attrib.rule_eq_bitmap |= 0x20<<flt_rule_entry.rule.eq_attrib.num_offset_meq_32;
+			flt_rule_entry.rule.eq_attrib.offset_meq_32[flt_rule_entry.rule.eq_attrib.num_offset_meq_32].offset = 6;
+			flt_rule_entry.rule.eq_attrib.offset_meq_32[flt_rule_entry.rule.eq_attrib.num_offset_meq_32].mask = 0xFF000000;
+			flt_rule_entry.rule.eq_attrib.offset_meq_32[flt_rule_entry.rule.eq_attrib.num_offset_meq_32].value = 6 << 24;
+			flt_rule_entry.rule.eq_attrib.num_offset_meq_32 ++;
+		}
 
 		flt_rule_entry.rule.eq_attrib.rule_eq_bitmap |= (1<<8);
 		flt_rule_entry.rule.eq_attrib.num_ihl_offset_meq_32 = 1;
@@ -8038,7 +8051,6 @@ int IPACM_Wan::installWanPostIpsecRt(ipa_ip_type ipType)
 	struct ipa_flt_rule_add *flt_rules;
 #endif
 	struct ipa_ioc_del_rt_rule *rt_rule_del = NULL;
-	struct ipa_rt_rule_del *rt_rule_entry_del = NULL;
 	struct ipa_ioc_add_rt_rule *rt_rule = NULL;
 	struct ipa_rt_rule_add *rt_rule_entry = NULL;
 
@@ -8060,12 +8072,8 @@ int IPACM_Wan::installWanPostIpsecRt(ipa_ip_type ipType)
 
 		for (i = 0; i < num_ipsec_post_pol_rt[ipType]; i++)
 		{
-			rt_rule_entry_del = &rt_rule_del->hdl[i];
-			rt_rule_entry_del->status = -1;
-			rt_rule_entry_del->hdl = ipsec_post_pol_rt_hdls[ipType][i];
-
-			IPACMDBG_H("Deleting Route hdl:(0x%x) with ip type: %d\n", rt_rule_entry_del->hdl, ipType);
-			if ((false == m_routing.DeleteRoutingRule(rt_rule_del)) || (rt_rule_entry_del->status))
+			IPACMDBG_H("Deleting Route hdl:(0x%x) with ip type: %d\n", ipsec_post_pol_rt_hdls[ipType][i], ipType);
+			if (false == m_routing.DeleteRoutingHdl(ipsec_post_pol_rt_hdls[ipType][i], ipType))
 			{
 				IPACMERR("Routing rule deletion failed!\n");
 				res = IPACM_FAILURE;
@@ -10532,6 +10540,11 @@ int IPACM_Wan::add_catchup_all_filtering_rule_each_pdn(
 			flt_rule_entry.rule.action = IPA_PASS_TO_ROUTING;
 
 			rt_tbl_name = ipacmcfg->rt_tbl_lan_v4.name;
+                        if(IPACM_Iface::ipacmcfg->eogre_enabled)
+			{
+				flt_rule_entry.rule.attrib.attrib_mask |= IPA_FLT_PROTOCOL;
+				flt_rule_entry.rule.attrib.u.v4.protocol=(uint8_t)IPACM_FIREWALL_IPPROTO_GRE;
+			}
 		}
 #endif /* #ifdef FEATURE_EoGRE */
 	}
@@ -10592,7 +10605,12 @@ int IPACM_Wan::add_catchup_all_filtering_rule_each_pdn(
 				sizeof(flt_rule_entry.rule.attrib.u.v6.src_addr));
 
 			flt_rule_entry.rule.attrib.attrib_mask |= IPA_FLT_SRC_ADDR;
-
+			if(IPACM_Iface::ipacmcfg->eogre_enabled)
+			{
+				flt_rule_entry.rule.attrib.attrib_mask |= IPA_FLT_NEXT_HDR;
+				flt_rule_entry.rule.attrib.u.v6.next_hdr=(uint8_t)IPACM_FIREWALL_IPPROTO_GRE;
+			}
+			IPACMDBG_H("Adding GRE check v6\n");
 			flt_rule_entry.rule.action = IPA_PASS_TO_ROUTING;
 
 			rt_tbl_name = ipacmcfg->rt_tbl_wan_v6.name;

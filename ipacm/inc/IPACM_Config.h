@@ -229,25 +229,78 @@ struct IpsecUlFltHash {
 public:
 	size_t operator()(const ipa_ioc_ipsec_ul_flt_attr uf) const
 	{
-		return 	std::hash<uint32_t>()(uf.ip) ^
-			std::hash<uint32_t>()((uint32_t)uf.attr.src_port |
-					      ((uint32_t)uf.attr.dst_port << 16)) ^
-			std::hash<uint32_t>()((uint32_t)uf.attr.src_port_lo |
-					      ((uint32_t)uf.attr.src_port_hi << 16)) ^
-			std::hash<uint32_t>()((uint32_t)uf.attr.dst_port_lo |
-					      ((uint32_t)uf.attr.dst_port_hi << 16)) ^
-			std::hash<uint32_t>()((uint32_t)uf.attr.u.v4.protocol |
-					      ((uint32_t)uf.attr.u.v6.next_hdr << 8)) ^
-			std::hash<uint32_t>()(uf.attr.u.v4.src_addr) ^
-			std::hash<uint32_t>()(uf.attr.u.v4.dst_addr) ^
-			std::hash<uint32_t>()(uf.attr.u.v6.src_addr[0]) ^
-			std::hash<uint32_t>()(uf.attr.u.v6.src_addr[1]) ^
-			std::hash<uint32_t>()(uf.attr.u.v6.src_addr[2]) ^
-			std::hash<uint32_t>()(uf.attr.u.v6.src_addr[3]) ^
-			std::hash<uint32_t>()(uf.attr.u.v6.dst_addr[0]) ^
-			std::hash<uint32_t>()(uf.attr.u.v6.dst_addr[1]) ^
-			std::hash<uint32_t>()(uf.attr.u.v6.dst_addr[2]) ^
-			std::hash<uint32_t>()(uf.attr.u.v6.dst_addr[3]);
+		switch (uf.ip) {
+		case IPA_IP_v4:
+			return 	std::hash<uint32_t>()(uf.ip) ^
+				std::hash<uint32_t>()((uint32_t)uf.attr.src_port |
+						      ((uint32_t)uf.attr.dst_port << 16)) ^
+				std::hash<uint32_t>()((uint32_t)uf.attr.src_port_lo |
+						      ((uint32_t)uf.attr.src_port_hi << 16)) ^
+				std::hash<uint32_t>()((uint32_t)uf.attr.dst_port_lo |
+						      ((uint32_t)uf.attr.dst_port_hi << 16)) ^
+				std::hash<uint32_t>()((uint32_t)uf.attr.u.v4.protocol) ^
+				std::hash<uint32_t>()(uf.attr.u.v4.src_addr) ^
+				std::hash<uint32_t>()(uf.attr.u.v4.dst_addr);
+		case IPA_IP_v6:
+			return 	std::hash<uint32_t>()(uf.ip) ^
+				std::hash<uint32_t>()((uint32_t)uf.attr.src_port |
+						      ((uint32_t)uf.attr.dst_port << 16)) ^
+				std::hash<uint32_t>()((uint32_t)uf.attr.src_port_lo |
+						      ((uint32_t)uf.attr.src_port_hi << 16)) ^
+				std::hash<uint32_t>()((uint32_t)uf.attr.dst_port_lo |
+						      ((uint32_t)uf.attr.dst_port_hi << 16)) ^
+				std::hash<uint32_t>()(((uint32_t)uf.attr.u.v6.next_hdr)) ^
+				std::hash<uint32_t>()(uf.attr.u.v6.src_addr[0]) ^
+				std::hash<uint32_t>()(uf.attr.u.v6.src_addr[1]) ^
+				std::hash<uint32_t>()(uf.attr.u.v6.src_addr[2]) ^
+				std::hash<uint32_t>()(uf.attr.u.v6.src_addr[3]) ^
+				std::hash<uint32_t>()(uf.attr.u.v6.dst_addr[0]) ^
+				std::hash<uint32_t>()(uf.attr.u.v6.dst_addr[1]) ^
+				std::hash<uint32_t>()(uf.attr.u.v6.dst_addr[2]) ^
+				std::hash<uint32_t>()(uf.attr.u.v6.dst_addr[3]);
+		default:
+			IPACMERR("Got illegal uf.ip = %d\n", uf.ip);
+			return 0;
+		}
+	}
+};
+
+struct IpsecUlFltKeyEquals {
+public:
+	bool operator()( const ipa_ioc_ipsec_ul_flt_attr& lhs, const ipa_ioc_ipsec_ul_flt_attr& rhs ) const {
+		switch (lhs.ip) {
+		case IPA_IP_v4:
+			return 	(lhs.ip == rhs.ip) &&
+				(lhs.attr.src_port == rhs.attr.src_port) &&
+				(lhs.attr.dst_port == rhs.attr.dst_port) &&
+				(lhs.attr.src_port_lo == rhs.attr.src_port_lo) &&
+				(lhs.attr.src_port_hi == rhs.attr.src_port_hi) &&
+				(lhs.attr.dst_port_lo == rhs.attr.dst_port_lo) &&
+				(lhs.attr.dst_port_hi == rhs.attr.dst_port_hi) &&
+				(lhs.attr.u.v4.protocol == rhs.attr.u.v4.protocol) &&
+				(lhs.attr.u.v4.src_addr == rhs.attr.u.v4.src_addr) &&
+				(lhs.attr.u.v4.dst_addr == rhs.attr.u.v4.dst_addr);
+		case IPA_IP_v6:
+			return 	(lhs.ip == rhs.ip) &&
+				(lhs.attr.src_port == rhs.attr.src_port) &&
+				(lhs.attr.dst_port == rhs.attr.dst_port) &&
+				(lhs.attr.src_port_lo == rhs.attr.src_port_lo) &&
+				(lhs.attr.src_port_hi == rhs.attr.src_port_hi) &&
+				(lhs.attr.dst_port_lo == rhs.attr.dst_port_lo) &&
+				(lhs.attr.dst_port_hi == rhs.attr.dst_port_hi) &&
+				(lhs.attr.u.v6.next_hdr == rhs.attr.u.v6.next_hdr) &&
+				(lhs.attr.u.v6.src_addr[0] == rhs.attr.u.v6.src_addr[0]) &&
+				(lhs.attr.u.v6.src_addr[1] == rhs.attr.u.v6.src_addr[1]) &&
+				(lhs.attr.u.v6.src_addr[2] == rhs.attr.u.v6.src_addr[2]) &&
+				(lhs.attr.u.v6.src_addr[3] == rhs.attr.u.v6.src_addr[3]) &&
+				(lhs.attr.u.v6.dst_addr[0] == rhs.attr.u.v6.dst_addr[0]) &&
+				(lhs.attr.u.v6.dst_addr[1] == rhs.attr.u.v6.dst_addr[1]) &&
+				(lhs.attr.u.v6.dst_addr[2] == rhs.attr.u.v6.dst_addr[2]) &&
+				(lhs.attr.u.v6.dst_addr[3] == rhs.attr.u.v6.dst_addr[3]);
+		default:
+			IPACMERR("Got illegal lhs.ip = %d\n", lhs.ip);
+			return false;
+		}
 	}
 };
 #endif
@@ -608,7 +661,17 @@ public:
 #endif //defined(FEATURE_SOCKSv5) && defined (IPA_SOCKV5_EVENT_MAX)
 
 #ifdef FEATURE_IPA_IPSEC
-	std::unordered_set<ipa_ioc_ipsec_ul_flt_attr,IpsecUlFltHash> ipsecUlFlt;
+	std::unordered_multiset<ipa_ioc_ipsec_ul_flt_attr,IpsecUlFltHash, IpsecUlFltKeyEquals> ipsecUlFlt;
+	using ipsecUlFltSetType = decltype(ipsecUlFlt);
+
+	static ipsecUlFltSetType::size_type eraseOne(ipsecUlFltSetType& uSet, const ipsecUlFltSetType::key_type& key){
+		auto it = uSet.find(key);
+		if (it != uSet.end()) {
+			uSet.erase(it);
+			return 1;
+		}
+		return 0;
+	}
 #endif
 
 #if defined(FEATURE_IPACM_PER_CLIENT_STATS) && defined(IPA_HW_FNR_STATS)
@@ -772,8 +835,7 @@ public:
 	            /* Special case when mac is NULL. Passthrough will be enabled for first client. */
 				/* Device type will be specified as MAX to support WLAN/USB/ETH clients and
 				 * VLAN id can be 0 in case of WLAN or non VLAN interface. */
-				if (ip_pass_mpdn_table[indx].ip_pass_skip_nat &&
-					(memcmp(ip_pass_mpdn_table[indx].ip_pass_mac, null_mac, IPA_MAC_ADDR_SIZE) == 0) &&
+				if ((memcmp(ip_pass_mpdn_table[indx].ip_pass_mac, null_mac, IPA_MAC_ADDR_SIZE) == 0) &&
 					(ip_pass_mpdn_table[indx].ip_pass_dev_type == IPACM_CLIENT_DEVICE_MAX) &&
 					((ip_pass_mpdn_table[indx].vlan_id == vlan_id) ||
 					(ip_pass_mpdn_table[indx].is_default_pdn && vlan_id == 0)))

@@ -18487,16 +18487,21 @@ int IPACM_Lan::add_tcp_syn_flt_rule(ipa_ip_type iptype)
 		memcpy(&flt_rule_entry.rule.attrib, &rx_prop->rx[idx].attrib,
 			   sizeof(flt_rule_entry.rule.attrib));
 		flt_rule_entry.rule.attrib.attrib_mask |= IPA_FLT_TCP_SYN;
-		if (iptype == IPA_IP_v4) {
+		if (iptype == IPA_IP_v4)
+		{
 			flt_rule_entry.rule.attrib.attrib_mask |= IPA_FLT_PROTOCOL;
 			flt_rule_entry.rule.attrib.u.v4.protocol = 6;
-		} else {
-                        if(IPACM_Iface::ipacmcfg->eogre_enabled)
-        		{
-        			flt_rule_entry.rule.attrib.attrib_mask |= IPA_FLT_NEXT_HDR;
-        			flt_rule_entry.rule.attrib.u.v6.next_hdr = 6;
-        		}
-                        else
+		}
+		else
+		{
+#ifdef FEATURE_EOGRE
+			if(IPACM_Iface::ipacmcfg->eogre_enabled)
+			{
+				flt_rule_entry.rule.attrib.attrib_mask |= IPA_FLT_NEXT_HDR;
+				flt_rule_entry.rule.attrib.u.v6.next_hdr = 6;
+			}
+			else
+#endif
 			{
 				flt_rule_entry.rule.eq_attrib_type = 1;
 				flt_rule_entry.rule.eq_attrib.rule_eq_bitmap = 0;

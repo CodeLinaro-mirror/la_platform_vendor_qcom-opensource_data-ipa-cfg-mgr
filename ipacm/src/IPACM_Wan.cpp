@@ -6134,6 +6134,7 @@ int IPACM_Wan::add_dft_filtering_rule(struct ipa_flt_rule_add *rules, int rule_o
 
 		flt_rule_entry.rule.eq_attrib.rule_eq_bitmap = 0;
 
+#ifdef FEATURE_EoGRE
 		if(IPACM_Iface::ipacmcfg->eogre_enabled)
 		{
 			flt_rule_entry.rule.eq_attrib.rule_eq_bitmap |= (1<<1);
@@ -6141,6 +6142,7 @@ int IPACM_Wan::add_dft_filtering_rule(struct ipa_flt_rule_add *rules, int rule_o
 			flt_rule_entry.rule.eq_attrib.protocol_eq = IPACM_FIREWALL_IPPROTO_TCP;
 		}
 		else
+#endif
 		{
 			flt_rule_entry.rule.eq_attrib.protocol_eq = IPACM_FIREWALL_IPPROTO_TCP;
 			flt_rule_entry.rule.eq_attrib.rule_eq_bitmap |= 0x20<<flt_rule_entry.rule.eq_attrib.num_offset_meq_32;

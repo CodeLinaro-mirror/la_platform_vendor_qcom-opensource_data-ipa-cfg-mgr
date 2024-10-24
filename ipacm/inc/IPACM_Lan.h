@@ -186,6 +186,7 @@ typedef struct _ipa_eth_client
 #ifdef IPA_IOCTL_SET_EXT_ROUTER_MODE
 	uint32_t ext_router_prefix_rt_hdl;
 #endif
+	uint32_t dft_qos_ack_v4;
 	//Keep below structure as last declaration.
 	eth_client_rt_hdl eth_rt_hdl[0]; /* depends on number of tx properties */
 }ipa_eth_client;
@@ -692,7 +693,12 @@ public:
 	int del_socksv5_flt_rule(void);
 #endif
 
-	int install_default_qos_rt_rules(uint8_t *client_mac, uint16_t client_vlan_id, enum ipa_ip_type iptype);
+	bool update_dft_qos_ack_v6_hdl(size_t eth_index,
+		const std::array<uint32_t, 4> &ipv6_address, uint32_t dft_qos_ack_v6);
+	int get_dft_qos_ack_v6_hdl(uint32_t eth_index,
+		const std::array<uint32_t, 4> &ipv6_address);
+	int install_default_qos_rt_rules(uint8_t *client_mac, uint16_t client_vlan_id,
+		enum ipa_ip_type iptype, uint32_t *ipv6_addr);
 
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
 private:
@@ -1579,6 +1585,57 @@ private:
 				clt_indx, get_client_memptr(eth_client, clt_indx)->ipv6_set,
 				get_client_memptr(eth_client, clt_indx)->route_rule_set_v6,
 				IPACM_Iface::ipacmcfg->ipa_num_clients_ipv6);
+		}
+		return IPACM_SUCCESS;
+	}
+
+	inline int delete_eth_qos_ack_rules(int clt_indx, ipa_ip_type iptype)
+	{
+		uint32_t tx_index;
+		uint32_t rt_hdl;
+		int num_v6 = 0;
+		std::array<uint32_t, 4> ipv6_address;
+
+		if(iptype == IPA_IP_v4)
+		{
+			IPACMDBG_H("Delete client index %d ipv4 RT-rules for tx:%d\n", clt_indx, tx_index);
+			rt_hdl = get_client_memptr(eth_client, clt_indx)->dft_qos_ack_v4;
+
+			if(m_routing.DeleteRoutingHdl(rt_hdl, IPA_IP_v4) == false)
+			{
+				return IPACM_FAILURE;
+			}
+			get_client_memptr(eth_client, clt_indx)->dft_qos_ack_v4 = 0;
+		}
+
+		if(iptype == IPA_IP_v6)
+		{
+			for (auto it = rt_hdl_v6_list[clt_indx].begin(); it != rt_hdl_v6_list[clt_indx].end();++it)
+			{
+				num_v6 ++;
+
+				IPACMDBG_H("v6 addr : 0x%08x:%08x:%08x:%08x\n",
+					it->first[0], it->first[1], it->first[2], it->first[3]);
+				IPACMDBG_H("Current %d client has ipa_num_clients_ipv6:%d\n",
+					clt_indx, IPACM_Iface::ipacmcfg->ipa_num_clients_ipv6);
+
+				ipv6_address = {it->first[0], it->first[1], it->first[2], it->first[3]};
+				rt_hdl = get_dft_qos_ack_v6_hdl(clt_indx, ipv6_address);
+				if (!rt_hdl)
+				{
+					IPACMDBG_H("ack qos rule doesn't exist for this client %d", clt_indx);
+					continue;
+				}
+				if (m_routing.DeleteRoutingHdl(rt_hdl, IPA_IP_v6) == false)
+				{
+					return IPACM_FAILURE;
+				}
+
+				update_dft_qos_ack_v6_hdl(clt_indx, ipv6_address, 0);
+			} /* end of for loop */
+
+			IPACMDBG_H("Current clnt-index:%d update ipa_num_clients_ipv6: %d\n",
+				clt_indx, IPACM_Iface::ipacmcfg->ipa_num_clients_ipv6);
 		}
 		return IPACM_SUCCESS;
 	}

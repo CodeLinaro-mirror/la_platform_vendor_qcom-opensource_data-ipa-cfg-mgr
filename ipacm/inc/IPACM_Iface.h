@@ -130,6 +130,7 @@ struct dscp_pdn_client_rt_hdl_v6 {
 struct handleTypeV6 {
 	bool route_rule_set_v6{false};
 	vector<client_rt_hdl_v6> hdl_v6{};
+	uint32_t dft_qos_ack_v6 = 0;
 #ifdef FEATURE_STATIC_POLICY
 	vector<dscp_pdn_client_rt_hdl_v6> dscp_pdn_hdl_v6{};
 #endif
@@ -195,8 +196,6 @@ public:
 
 	/* save client ipv6 address info and rt handles */
 	std::map<std::array<uint32_t, 4>, handleTypeV6> rt_hdl_v6_list[IPA_MAX_NUM_CLIENTS_IPV6];
-
-	uint32_t dft_qos_rt_rule_hdl[3];
 
 	ipa_ioc_query_intf *iface_query;
 	ipa_ioc_query_intf_tx_props *tx_prop;

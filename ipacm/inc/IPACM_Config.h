@@ -173,6 +173,53 @@ struct ipa_prefix_info {
 	uint16_t vlan_id;
 };
 
+struct qos_client_info
+{
+	uint8_t mac[IPA_MAC_ADDR_SIZE];
+	uint32_t qos_rt_rule_hdl_v4;
+	uint32_t qos_rt_rule_hdl_v6;
+
+	bool route_rule_set_v4;
+	bool route_rule_set_v6;
+
+	uint32_t v4_ip_addr;
+	uint32_t v6_ip_addr[4];
+};
+
+struct qos_param_info {
+	char iface_name[IPA_RESOURCE_NAME_MAX];
+	enum ipa_qos_iface_category cat;
+	uint8_t dir;
+	uint8_t ip_type;
+	uint8_t traffic_class;
+
+	struct ip_tuple ip_tup;
+	uint8_t src_mac_addr[IPA_MAC_ADDR_SIZE];
+	uint8_t dst_mac_addr[IPA_MAC_ADDR_SIZE];
+	uint16_t vlan_id;
+	uint8_t dscp;
+	uint8_t pcp;
+
+	uint32_t qos_rt_rule_hdl_v4;
+	uint32_t qos_rt_rule_hdl_v6;
+
+	bool route_rule_set_v4;
+	bool route_rule_set_v6;
+
+	std::list<qos_client_info> qos_client_list;
+	uint32_t client_cnt;
+
+	/* clear the qos client list if the qos_param_info is erased */
+	~qos_param_info() {
+		qos_client_list.clear();
+	}
+};
+
+struct qos_delete_param_info {
+	uint32_t client_cnt;
+	qos_client_info qos_client_list[];
+};
+
 /* iface */
 class IPACM_Config
 {
@@ -283,6 +330,9 @@ public:
 	/* Indicates whether mpdn is enabled or not. */
 	bool ipacm_mpdn_enable;
 
+	/* Indicates whether qos is enabled or not. */
+	bool ipacm_qos_enable;
+
 	/* Indicates whether socksv5 is enabled or not. */
 	bool ipacm_socksv5_enable;
 
@@ -351,6 +401,12 @@ public:
 	void handle_vlan_client_info(ipacm_event_data_all *data);
 
 	int find_matching_vlan(uint16_t interface_index, struct vlan_iface_info *vlan_data);
+
+	pthread_mutex_t qos_param_list_lock;
+	std::list<qos_param_info> m_qos_params;
+	void add_qos_params_info(ipa_ioc_qos_config *data);
+	void delete_qos_params_info(ipa_ioc_qos_config *data);
+	void flush_qos_params_info(ipa_ioc_qos_config *data);
 
 #ifdef FEATURE_L2TP
 	std::list<l2tp_vlan_mapping_info> m_l2tp_vlan_mapping;

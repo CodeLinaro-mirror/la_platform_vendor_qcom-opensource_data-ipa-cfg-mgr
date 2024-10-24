@@ -665,6 +665,7 @@ static int ipacm_cfg_xml_parse_tree
 	int str_size = 0;
 	char* content = NULL;
 	struct ether_addr *eth_addr = NULL;
+	char content_buf[MAX_XML_STR_LEN];
 
 	if (NULL == xml_node)
 		return ret_val;
@@ -692,6 +693,7 @@ static int ipacm_cfg_xml_parse_tree
 						IPACM_util_icmp_string((char*)xml_node->name, IPACM_MPDN_TAG) == 0 ||
 						IPACM_util_icmp_string((char*)xml_node->name, IPACM_SOCKSv5_TAG) == 0 ||
 						IPACM_util_icmp_string((char*)xml_node->name, IP_PassthroughFlag_TAG) == 0 ||
+						IPACM_util_icmp_string((char*)xml_node->name, IPACM_QOS_TAG) == 0 ||
 						IPACM_util_icmp_string((char*)xml_node->name, IPACM_MSGFLT_TAG) == 0 ||
 						IPACM_util_icmp_string((char*)xml_node->name, IPACMLOG_TAG) == 0 ||
 						IPACM_util_icmp_string((char*)xml_node->name, IPACM_DUALNAD_TAG) == 0)
@@ -1029,6 +1031,28 @@ static int ipacm_cfg_xml_parse_tree
 							IPACMDBG_H("IPACM NAD2 V6 is %s \n",
 								config->ipacm_nad2_v6_enable?"enabled":"disabled");
 						}
+				}
+				else if (IPACM_util_icmp_string((char*)xml_node->name, IPACM_QOS_ENABLE_TAG) == 0)
+				{
+					IPACMDBG_H("inside QOS mode\n");
+					content = IPACM_read_content_element(xml_node);
+					if (content)
+					{
+						str_size = strlen(content);
+						memset(content_buf, 0, sizeof(content_buf));
+						memcpy(content_buf, (void *)content, str_size);
+						if (atoi(content_buf))
+						{
+							config->qos_mode = true;
+							IPACMDBG_H("QOS mode enabled %d buf(%d)\n", config->qos_mode, atoi(content_buf));
+						}
+						else
+						{
+							config->qos_mode = false;
+							IPACMDBG_H("QOS mode disabled %d buf(%d)\n", config->qos_mode, atoi(content_buf));
+						}
+					} else {
+					}
 				}
 			}
 			break;

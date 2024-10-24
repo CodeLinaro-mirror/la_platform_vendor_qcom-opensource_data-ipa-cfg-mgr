@@ -415,6 +415,9 @@ int IPACM_IfaceManager::create_iface_instance(ipacm_ifacemgr_data *param)
 					IPACM_EvtDispatcher::registr(IPA_HANDLE_WAN_L2TP_VLAN_DOWN, odu);
 #endif
 
+					IPACM_EvtDispatcher::registr(IPA_QOS_RULE_ADD_EVENT, odu);
+					IPACM_EvtDispatcher::registr(IPA_QOS_RULE_DEL_EVENT, odu);
+					IPACM_EvtDispatcher::registr(IPA_QOS_RULE_FLUSH_EVENT, odu);
 					/* IPA_LAN_DELETE_SELF should be always last */
 					IPACM_EvtDispatcher::registr(IPA_LAN_DELETE_SELF, odu);
 					IPACMDBG_H("ipa_LAN (%s):ipa_index (%d) instance open/registr ok\n", odu->dev_name, odu->ipa_if_num);

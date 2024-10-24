@@ -6557,7 +6557,7 @@ int IPACM_Wan::config_wan_firewall_rule(ipa_ip_type iptype)
 #ifdef FEATURE_VLAN_MPDN
 		IPACM_Wan::num_v6_flt_rule = IPACM_Wan::ipv6_mpdn_default_filterting_rules_count;
 #else
-		IPACM_Wan::num_v6_flt_rule = m_ipv6_default_filterting_rules_count;
+		IPACM_Wan::num_v6_flt_rule = m_ipv6_default_filterting_rules_count[0];
 #endif
 #ifdef FEATURE_L2TP
 		if(active_v4 && (IPACM_Iface::ipacmcfg->ipacm_l2tp_enable == IPACM_L2TP_E2E
@@ -6721,7 +6721,7 @@ int IPACM_Wan::add_dft_filtering_rule(struct ipa_flt_rule_add *rules, int rule_o
 	}
 	else	/*insert rules for ipv6*/
 	{
-		m_ipv6_default_filterting_rules_count = 0;
+		m_ipv6_default_filterting_rules_count[0] = 0;
 		memset(&rt_tbl_idx, 0, sizeof(rt_tbl_idx));
 		strlcpy(rt_tbl_idx.name, IPACM_Iface::ipacmcfg->rt_tbl_wan_dl.name, IPA_RESOURCE_NAME_MAX);
 		rt_tbl_idx.name[IPA_RESOURCE_NAME_MAX-1] = '\0';
@@ -6776,11 +6776,11 @@ int IPACM_Wan::add_dft_filtering_rule(struct ipa_flt_rule_add *rules, int rule_o
 			memcpy(&flt_rule_entry.rule.eq_attrib, &flt_eq.eq_attrib, sizeof(flt_rule_entry.rule.eq_attrib));
 #ifdef FEATURE_VLAN_MPDN
 			/* default rules are not metadata dependant - mux_id is not relevant */
-			rules[rule_offset + m_ipv6_default_filterting_rules_count].mux_id = 0;
-			memcpy(&(rules[rule_offset + m_ipv6_default_filterting_rules_count++].flt_rule),
+			rules[rule_offset + m_ipv6_default_filterting_rules_count[0]].mux_id = 0;
+			memcpy(&(rules[rule_offset + m_ipv6_default_filterting_rules_count[0]++].flt_rule),
 				&flt_rule_entry, sizeof(struct ipa_flt_rule_add));
 #else
-			memcpy(&(rules[rule_offset + m_ipv6_default_filterting_rules_count++]),
+			memcpy(&(rules[rule_offset + m_ipv6_default_filterting_rules_count[0]++]),
 				&flt_rule_entry, sizeof(struct ipa_flt_rule_add));
 #endif
 		}
@@ -6822,11 +6822,11 @@ int IPACM_Wan::add_dft_filtering_rule(struct ipa_flt_rule_add *rules, int rule_o
 					 sizeof(flt_rule_entry.rule.eq_attrib));
 #ifdef FEATURE_VLAN_MPDN
 		/* default rules are not metadata dependant - mux_id is not relevant */
-		rules[rule_offset + m_ipv6_default_filterting_rules_count].mux_id = 0;
-		memcpy(&(rules[rule_offset + m_ipv6_default_filterting_rules_count++].flt_rule),
+		rules[rule_offset + m_ipv6_default_filterting_rules_count[0]].mux_id = 0;
+		memcpy(&(rules[rule_offset + m_ipv6_default_filterting_rules_count[0]++].flt_rule),
 			&flt_rule_entry, sizeof(struct ipa_flt_rule_add));
 #else
-		memcpy(&(rules[rule_offset + m_ipv6_default_filterting_rules_count++]),
+		memcpy(&(rules[rule_offset + m_ipv6_default_filterting_rules_count[0]++]),
 			&flt_rule_entry, sizeof(struct ipa_flt_rule_add));
 #endif
 
@@ -6858,11 +6858,11 @@ int IPACM_Wan::add_dft_filtering_rule(struct ipa_flt_rule_add *rules, int rule_o
 
 #ifdef FEATURE_VLAN_MPDN
 		/* default rules are not metadata dependant - mux_id is not relevant */
-		rules[rule_offset + m_ipv6_default_filterting_rules_count].mux_id = 0;
-		memcpy(&(rules[rule_offset + m_ipv6_default_filterting_rules_count++].flt_rule),
+		rules[rule_offset + m_ipv6_default_filterting_rules_count[0]].mux_id = 0;
+		memcpy(&(rules[rule_offset + m_ipv6_default_filterting_rules_count[0]++].flt_rule),
 			&flt_rule_entry, sizeof(struct ipa_flt_rule_add));
 #else
-		memcpy(&(rules[rule_offset + m_ipv6_default_filterting_rules_count++]),
+		memcpy(&(rules[rule_offset + m_ipv6_default_filterting_rules_count[0]++]),
 			&flt_rule_entry, sizeof(struct ipa_flt_rule_add));
 #endif
 
@@ -6894,11 +6894,11 @@ int IPACM_Wan::add_dft_filtering_rule(struct ipa_flt_rule_add *rules, int rule_o
 
 #ifdef FEATURE_VLAN_MPDN
 		/* default rules are not metadata dependant - mux_id is not relevant */
-		rules[rule_offset + m_ipv6_default_filterting_rules_count].mux_id = 0;
-		memcpy(&(rules[rule_offset + m_ipv6_default_filterting_rules_count++].flt_rule),
+		rules[rule_offset + m_ipv6_default_filterting_rules_count[0]].mux_id = 0;
+		memcpy(&(rules[rule_offset + m_ipv6_default_filterting_rules_count[0]++].flt_rule),
 			&flt_rule_entry, sizeof(struct ipa_flt_rule_add));
 #else
-		memcpy(&(rules[rule_offset + m_ipv6_default_filterting_rules_count++]),
+		memcpy(&(rules[rule_offset + m_ipv6_default_filterting_rules_count[0]++]),
 			&flt_rule_entry, sizeof(struct ipa_flt_rule_add));
 #endif
 
@@ -6930,7 +6930,7 @@ int IPACM_Wan::add_dft_filtering_rule(struct ipa_flt_rule_add *rules, int rule_o
 		/* add TCP SYN rule*/
 		flt_rule_entry.rule.eq_attrib.ihl_offset_meq_32[0].value = (((uint32_t)1)<<TCP_SYN_SHIFT);
 		flt_rule_entry.rule.eq_attrib.ihl_offset_meq_32[0].mask = (((uint32_t)1)<<TCP_SYN_SHIFT);
-		memcpy(&(rules[rule_offset + m_ipv6_default_filterting_rules_count++]),
+		memcpy(&(rules[rule_offset + m_ipv6_default_filterting_rules_count[0]++]),
 			&flt_rule_entry, sizeof(struct ipa_flt_rule_add));
 
 #if defined(FEATURE_IPA_ANDROID) || defined(FEATURE_SOCKSv5)
@@ -6939,26 +6939,26 @@ int IPACM_Wan::add_dft_filtering_rule(struct ipa_flt_rule_add *rules, int rule_o
 		/* add TCP FIN rule*/
 		flt_rule_entry.rule.eq_attrib.ihl_offset_meq_32[0].value = (((uint32_t)1)<<TCP_FIN_SHIFT);
 		flt_rule_entry.rule.eq_attrib.ihl_offset_meq_32[0].mask = (((uint32_t)1)<<TCP_FIN_SHIFT);
-		memcpy(&(rules[rule_offset + m_ipv6_default_filterting_rules_count++]),
+		memcpy(&(rules[rule_offset + m_ipv6_default_filterting_rules_count[0]++]),
 			&flt_rule_entry, sizeof(struct ipa_flt_rule_add));
 
 		/* add TCP RST rule*/
 		flt_rule_entry.rule.eq_attrib.ihl_offset_meq_32[0].value = (((uint32_t)1)<<TCP_RST_SHIFT);
 		flt_rule_entry.rule.eq_attrib.ihl_offset_meq_32[0].mask = (((uint32_t)1)<<TCP_RST_SHIFT);
-		memcpy(&(rules[rule_offset + m_ipv6_default_filterting_rules_count++]),
+		memcpy(&(rules[rule_offset + m_ipv6_default_filterting_rules_count[0]++]),
 			&flt_rule_entry, sizeof(struct ipa_flt_rule_add));
 #endif
 
-		IPACM_Wan::num_v6_flt_rule += m_ipv6_default_filterting_rules_count;
+		IPACM_Wan::num_v6_flt_rule += m_ipv6_default_filterting_rules_count[0];
 #ifdef FEATURE_VLAN_MPDN
 		/**
 		 * store the default filtering rules count since on each WAN IFACE construction
 		 * this variable is zeroed, but it is incremented only at this init function which is called with the first pdn
 		 */
-		IPACM_Wan::ipv6_mpdn_default_filterting_rules_count = m_ipv6_default_filterting_rules_count;
+		IPACM_Wan::ipv6_mpdn_default_filterting_rules_count = m_ipv6_default_filterting_rules_count[0];
 #endif
 		IPACMDBG_H("Constructed %d default filtering rules for ip type %d\n",
-			m_ipv6_default_filterting_rules_count, iptype);
+			m_ipv6_default_filterting_rules_count[0], iptype);
 	}
 
 fail:
@@ -6992,7 +6992,7 @@ int IPACM_Wan::del_wan_firewall_rule(ipa_ip_type iptype)
 #ifdef FEATURE_VLAN_MPDN
 		IPACM_Wan::num_v6_flt_rule = IPACM_Wan::ipv6_mpdn_default_filterting_rules_count;
 #else
-		IPACM_Wan::num_v6_flt_rule = m_ipv6_default_filterting_rules_count;
+		IPACM_Wan::num_v6_flt_rule = m_ipv6_default_filterting_rules_count[0];
 #endif
 #ifdef FEATURE_L2TP
 		if(active_v4 && (IPACM_Iface::ipacmcfg->ipacm_l2tp_enable == IPACM_L2TP_E2E
@@ -8043,9 +8043,9 @@ int IPACM_Wan::handle_down_evt()
 	/* free dft ipv4 filter rule handlers if any */
 	if (ip_type != IPA_IP_v6 && rx_prop != NULL)
 	{
-		if (dft_v4fl_rule_hdl[0] != 0)
+		if (dft_v4fl_rule_hdl[0][0] != 0)
 		{
-			if (m_filtering.DeleteFilteringHdls(dft_v4fl_rule_hdl,
+			if (m_filtering.DeleteFilteringHdls(dft_v4fl_rule_hdl[0],
 				IPA_IP_v4,
 				IPV4_DEFAULT_FILTERTING_RULES) == false)
 			{
@@ -8061,16 +8061,16 @@ int IPACM_Wan::handle_down_evt()
 	/* free dft ipv6 filter rule handlers if any */
 	if (ip_type != IPA_IP_v4 && rx_prop != NULL)
 	{
-		if (dft_v6fl_rule_hdl[0] != 0)
+		if (dft_v6fl_rule_hdl[0][0] != 0)
 		{
-			if (!m_filtering.DeleteFilteringHdls(dft_v6fl_rule_hdl, IPA_IP_v6, m_ipv6_default_filterting_rules_count))
+			if (!m_filtering.DeleteFilteringHdls(dft_v6fl_rule_hdl[0], IPA_IP_v6, m_ipv6_default_filterting_rules_count[0]))
 			{
 				IPACMERR("ErrorDeleting Filtering rule, aborting...\n");
 				res = IPACM_FAILURE;
 				goto fail;
 			}
 			IPACM_Iface::ipacmcfg->decreaseFltRuleCount(
-				rx_prop->rx[0].src_pipe, IPA_IP_v6, m_ipv6_default_filterting_rules_count);
+				rx_prop->rx[0].src_pipe, IPA_IP_v6, m_ipv6_default_filterting_rules_count[0]);
 		}
 
 		if(num_ipv6_dest_flt_rule > 0 && num_ipv6_dest_flt_rule <= MAX_DEFAULT_v6_ROUTE_RULES)
@@ -10520,7 +10520,7 @@ void IPACM_Wan::handle_l2tp_client_add(char *iface_name)
 		return;
 	}
 
-	for (i = IPACM_Wan::num_v4_flt_rule - 1; i >= m_ipv6_default_filterting_rules_count; --i)
+	for (i = IPACM_Wan::num_v4_flt_rule - 1; i >= m_ipv6_default_filterting_rules_count[0]; --i)
 	{
 #ifdef FEATURE_VLAN_MPDN
 		pdn_flt_rule_v6[i+1] = pdn_flt_rule_v6[i];
@@ -10529,9 +10529,9 @@ void IPACM_Wan::handle_l2tp_client_add(char *iface_name)
 #endif
 	}
 #ifdef FEATURE_VLAN_MPDN
-	install_l2tp_flt_rule(pdn_flt_rule_v6, m_ipv6_default_filterting_rules_count, iface_name);
+	install_l2tp_flt_rule(pdn_flt_rule_v6, m_ipv6_default_filterting_rules_count[0], iface_name);
 #else
-	install_l2tp_flt_rule(flt_rule_v6, m_ipv6_default_filterting_rules_count, iface_name);
+	install_l2tp_flt_rule(flt_rule_v6, m_ipv6_default_filterting_rules_count[0], iface_name);
 #endif
 	IPACM_Wan::num_v6_flt_rule++;
 	IPACMDBG_H("Now num of v6 dl flt rule is %d.\n", IPACM_Wan::num_v6_flt_rule);
@@ -10556,7 +10556,7 @@ void IPACM_Wan::handle_l2tp_client_del(char *iface_name)
 		ipv6_addr[i] = htonl(ipv6_addr[i]);
 	}
 
-	for (i = m_ipv6_default_filterting_rules_count; i < IPACM_Wan::num_v6_flt_rule; ++i)
+	for (i = m_ipv6_default_filterting_rules_count[0]; i < IPACM_Wan::num_v6_flt_rule; ++i)
 	{
 #ifdef FEATURE_VLAN_MPDN
 		if( (pdn_flt_rule_v6[i].flt_rule.rule.attrib.attrib_mask | IPA_FLT_DST_ADDR)

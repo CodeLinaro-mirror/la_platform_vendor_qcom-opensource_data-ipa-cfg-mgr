@@ -213,13 +213,13 @@ typedef struct pdn_context
 	int pdn_mux_id;
 	uint16_t associated_VIDs[IPA_MAX_NUM_SW_PDNS];
 	uint32_t active_vlan_count;
-	uint32_t wan_mpdn_ul_xlat_fl_rule_hdl_v4[MAX_WAN_UL_FILTER_RULES];
-	uint32_t num_wan_mpdn_ul_xlat_fl_rule_v4;
+	uint32_t wan_mpdn_ul_xlat_fl_rule_hdl_v4[IPA_MAX_NUM_PROPS][MAX_WAN_UL_FILTER_RULES];
+	uint32_t num_wan_mpdn_ul_xlat_fl_rule_v4[IPA_MAX_NUM_PROPS];
 }pdn_context;
 
 typedef struct _xlat_context
 {
-	rule_id_hdl_map ul_rule_id_hdl_map[MAX_WAN_UL_FILTER_RULES];
+	rule_id_hdl_map ul_rule_id_hdl_map[IPA_MAX_NUM_PROPS][MAX_WAN_UL_FILTER_RULES];
 
 	/* PDN's for which UL filter installed */
 	pdn_context active_pdn_list[IPA_MAX_NUM_HW_PDNS];
@@ -245,19 +245,19 @@ public:
 	ipacm_vlan_sta_info vlan_sta_info[IPA_MAX_NUM_OFFLOAD_VLANS];
 
 	/* store private-subnet filter rule handlers */
-	uint32_t private_fl_rule_hdl[IPA_MAX_PRIVATE_SUBNET_ENTRIES + IPA_MAX_MTU_ENTRIES];
+	uint32_t private_fl_rule_hdl[IPA_MAX_NUM_PROPS][IPA_MAX_PRIVATE_SUBNET_ENTRIES + IPA_MAX_MTU_ENTRIES];
 
 #ifdef FEATURE_IPACM_UL_FIREWALL
 	ul_firewall_t iface_ul_firewall;
 #endif
 	/* Number of Q6 UL IPv4 rules. */
-	int num_wan_ul_fl_rule_v4;
+	int num_wan_ul_fl_rule_v4[IPA_MAX_NUM_PROPS];
 	/* Number of Q6 UL IPv6 rules. */
-	int num_wan_ul_fl_rule_v6;
+	int num_wan_ul_fl_rule_v6[IPA_MAX_NUM_PROPS];
 	/* Number of UL subnet IPv4 rules. */
-	int num_wan_subnet_rules;
+	int num_wan_subnet_rules[IPA_MAX_NUM_PROPS];
 	/* Number of UL prefix IPv6 rules. */
-	int num_wan_prefix_rules;
+	int num_wan_prefix_rules[IPA_MAX_NUM_PROPS];
 
 	/* Header length. */
 	uint8_t hdr_len;
@@ -550,6 +550,8 @@ public:
 	bool socksv5_set;
 #endif
 
+	int install_default_qos_rt_rules(uint8_t *client_mac, uint16_t client_vlan_id, enum ipa_ip_type iptype);
+
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
 private:
 	static bool lan_stats_inited;
@@ -562,8 +564,8 @@ protected:
 
 	int each_client_rt_rule_count[IPA_IP_MAX];
 
-	uint32_t eth_bridge_flt_rule_offset[IPA_IP_MAX];
-	uint32_t mtu_flt_rule_offset[IPA_IP_MAX];
+	uint32_t eth_bridge_flt_rule_offset[IPA_MAX_NUM_PROPS][IPA_IP_MAX];
+	uint32_t mtu_flt_rule_offset[IPA_MAX_NUM_PROPS][IPA_IP_MAX];
 
 #ifdef FEATURE_L2TP
 #ifdef IPA_L2TP_TUNNEL_UDP
@@ -983,25 +985,25 @@ protected:
 #endif
 
 	/* store ipv4 UL filter rule handlers from Q6*/
-	uint32_t wan_ul_fl_rule_hdl_v4[MAX_WAN_UL_FILTER_RULES];
+	uint32_t wan_ul_fl_rule_hdl_v4[IPA_MAX_NUM_PROPS][MAX_WAN_UL_FILTER_RULES];
 
 	/* store ipv6 UL filter rule handlers from Q6*/
 #ifndef IPA_V6_UL_WL_FIREWALL_HANDLE
-	uint32_t wan_ul_fl_rule_hdl_v6[MAX_WAN_UL_FILTER_RULES];
+	uint32_t wan_ul_fl_rule_hdl_v6[IPA_MAX_NUM_PROPS][MAX_WAN_UL_FILTER_RULES];
 #else
-	uint32_t wan_ul_fl_rule_hdl_v6[IPACM_MAX_V6_UL_WL_FIREWALL_ENTRIES];
+	uint32_t wan_ul_fl_rule_hdl_v6[IPA_MAX_NUM_PROPS][IPACM_MAX_V6_UL_WL_FIREWALL_ENTRIES];
 #endif
 
-	uint32_t ipv4_icmp_flt_rule_hdl[NUM_IPV4_ICMP_FLT_RULE];
+	uint32_t ipv4_icmp_flt_rule_hdl[IPA_MAX_NUM_PROPS][NUM_IPV4_ICMP_FLT_RULE];
 #ifdef FEATURE_VLAN_MPDN
-	uint32_t ipv6_prefix_flt_rule_hdl[IPA_MAX_IPV6_NO_OFFLOAD_PREFIX_FLT_RULE + IPA_MAX_MTU_ENTRIES];
+	uint32_t ipv6_prefix_flt_rule_hdl[IPA_MAX_NUM_PROPS][IPA_MAX_IPV6_NO_OFFLOAD_PREFIX_FLT_RULE + IPA_MAX_MTU_ENTRIES];
 #else
-	uint32_t ipv6_prefix_flt_rule_hdl[IPA_MAX_IPV6_PREFIX_FLT_RULE + IPA_MAX_MTU_ENTRIES];
+	uint32_t ipv6_prefix_flt_rule_hdl[IPA_MAX_NUM_PROPS][IPA_MAX_IPV6_PREFIX_FLT_RULE + IPA_MAX_MTU_ENTRIES];
 #endif
 #ifdef FEATURE_IPV6_NAT
 	uint32_t ipv6_nat_ula_prefix_flt_rule_hdl;
 #endif
-	uint32_t ipv6_icmp_flt_rule_hdl[NUM_IPV6_ICMP_FLT_RULE];
+	uint32_t ipv6_icmp_flt_rule_hdl[IPA_MAX_NUM_PROPS][NUM_IPV6_ICMP_FLT_RULE];
 #ifdef FEATURE_L2TP
 	uint32_t l2tp_inner_private_subnet_flt_rule_hdl[IPA_MAX_PRIVATE_SUBNET_ENTRIES];
 #endif
@@ -1012,14 +1014,14 @@ protected:
 #endif
 
 	bool is_active;
-	bool modem_ul_v4_set;
-	bool modem_ul_v6_set;
+	bool modem_ul_v4_set[IPA_MAX_NUM_PROPS];
+	bool modem_ul_v6_set[IPA_MAX_NUM_PROPS];
 
 	uint32_t if_ipv4_subnet;
 
 	uint32_t ipv6_prefix[2];
 
-	uint32_t tcp_syn_flt_rule_hdl[IPA_IP_MAX];
+	uint32_t tcp_syn_flt_rule_hdl[IPA_MAX_NUM_PROPS][IPA_IP_MAX];
 #ifdef IPA_L2TP_TUNNEL_UDP
 	uint32_t l2tp_udp_dflt_flt_rule_hdl[NUM_L2TP_UDP_DFLT_RULES];
 #endif
@@ -1581,7 +1583,7 @@ private:
 #endif
 
 	int construct_mtu_rule(struct ipa_flt_rule *rule, enum ipa_ip_type iptype, uint16_t mtu);
-	int add_mtu_rule_v4_default_pdn();
+	int add_mtu_rule_v4_default_pdn(uint32_t pipe_idx);
 
 public:
 #ifdef FEATURE_VLAN_MPDN
@@ -1594,6 +1596,20 @@ public:
 	ipacm_mux_struct v6_mux_up[IPA_MAX_NUM_HW_PDNS];
 	uint8_t num_v6_mux;
 #endif
+
+    uint32_t get_u8_bitmap_from_tc(uint8_t traffic_class);
+	int handle_qos_route_rule(uint8_t *client_mac, uint16_t vlan_id, ipa_ip_type iptype,
+		list<qos_param_info>::iterator qos_param, uint32_t *ipv6_addr = NULL);
+	int install_all_qos_route_rule(uint8_t * client_mac, uint16_t vlan_id,
+		uint32_t *ipv6_addr = NULL);
+	int if_client_qos_rule_needed(uint8_t *client_mac, uint16_t vlan_id,
+		list<qos_param_info>::iterator qos_param, uint32_t *ipv6_addr = NULL);
+	int delete_client_qos_rule(uint8_t *client_mac, uint16_t vlan_id,
+		ipa_ip_type iptype, uint32_t *ipv6_addr = NULL);
+	int delete_client_info_from_qos(uint8_t *client_mac, uint16_t vlan_id,
+		list<qos_param_info>::iterator qos_param, uint32_t *ipv6_addr = NULL);
+	int delete_all_client_qos_rules();
+	int delete_all_client_info_from_qos(list<qos_param_info>::iterator qos_param);
 };
 
 #endif /* IPACM_LAN_H */

@@ -3916,6 +3916,7 @@ int IPACM_Lan::handle_addr_evt(ipacm_event_data_addr *data)
 			}
 			/* populate the flt rule offset for eth bridge */
 			eth_bridge_flt_rule_offset[j][data->iptype] = ipv4_icmp_flt_rule_hdl[j][0];
+			fixed_mac_prio_val[j][IPA_IP_v4] = ++prio[j][IPA_IP_v4];
 
 			/* populate the flt rule offset for mtu_offset (offset = broadcast rule)*/
 			if (m_ipv4_default_filterting_rules_count[j] && m_ipv4_default_filterting_rules_count[j] <= IPV4_DEFAULT_FILTERTING_RULES)
@@ -4049,7 +4050,10 @@ int IPACM_Lan::handle_addr_evt(ipacm_event_data_addr *data)
 					IPACMDBG_H("Iface is not Special iface, no need to install v6 rules on 2nd rx pipe\n", num_dft_rt_v6);
 					continue;
 				}
+				/* populate the flt rule offset for eth bridge */
 				eth_bridge_flt_rule_offset[j][IPA_IP_v6] = ipv6_icmp_flt_rule_hdl[j][0];
+				fixed_mac_prio_val[j][IPA_IP_v6] = ++prio[j][IPA_IP_v6];
+
 				/* populate the mtu_rule_offset */
 				if (m_ipv6_default_filterting_rules_count[j] && m_ipv6_default_filterting_rules_count[j] <= (IPV6_DEFAULT_FILTERTING_RULES + IPV6_DEFAULT_LAN_FILTERTING_RULES))
 				{
@@ -14850,6 +14854,7 @@ int IPACM_Lan::install_ipv4_icmp_flt_rule()
 
 		flt_rule->rules = (uint64_t)flt_rule_entry;
 
+		prio[idx][IPA_IP_v4]++;
 		flt_rule->commit = 1;
 		flt_rule->ep = rx_prop->rx[idx].src_pipe;
 		flt_rule->global = false;
@@ -14945,6 +14950,7 @@ int IPACM_Lan::install_ipv6_icmp_flt_rule()
 		flt_rule->num_rules = NUM_RULES;
 		flt_rule->flt_rule_size = sizeof(struct ipa_flt_rule_add_v2);
 
+		prio[idx][IPA_IP_v6]++;
 		flt_rule_entry->rule.retain_hdr = 1;
 		flt_rule_entry->rule.to_uc = 0;
 		flt_rule_entry->rule.eq_attrib_type = 0;
@@ -16761,6 +16767,7 @@ int IPACM_Lan::eth_bridge_add_flt_rule(uint8_t *mac, uint32_t rt_tbl_hdl, ipa_ip
 	flt_rule_entry.rule.rt_tbl_hdl = rt_tbl_hdl;
 	flt_rule_entry.rule.hashable = true;
 
+	flt_rule_entry.rule.max_prio = fixed_mac_prio_val[idx][iptype];
 	memcpy(&flt_rule_entry.rule.attrib, &rx_prop->rx[idx].attrib, sizeof(flt_rule_entry.rule.attrib));
 	switch (tx_prop->tx[idx].hdr_l2_type) {
 
@@ -18457,6 +18464,7 @@ int IPACM_Lan::add_tcp_syn_flt_rule(ipa_ip_type iptype)
 			IPACMDBG_H("Install rules at idx %d\n", idx);
 		}
 
+		prio[idx][iptype]++;
 		memset(m_pFilteringTable, 0, len);
 
 		m_pFilteringTable->commit = 1;
@@ -18485,14 +18493,23 @@ int IPACM_Lan::add_tcp_syn_flt_rule(ipa_ip_type iptype)
         			flt_rule_entry.rule.attrib.u.v6.next_hdr = 6;
         		}
                         else
-                        {
-                                flt_rule_entry.rule.eq_attrib.rule_eq_bitmap = 0;
-                        	flt_rule_entry.rule.eq_attrib.rule_eq_bitmap |= 0x20<<flt_rule_entry.rule.eq_attrib.num_offset_meq_32;
-                		flt_rule_entry.rule.eq_attrib.offset_meq_32[flt_rule_entry.rule.eq_attrib.num_offset_meq_32].offset = 6;
-                		flt_rule_entry.rule.eq_attrib.offset_meq_32[flt_rule_entry.rule.eq_attrib.num_offset_meq_32].mask = 0xFF000000;
-                		flt_rule_entry.rule.eq_attrib.offset_meq_32[flt_rule_entry.rule.eq_attrib.num_offset_meq_32].value = 6 << 24;
-                		flt_rule_entry.rule.eq_attrib.num_offset_meq_32 ++;
-                        }
+			{
+				flt_rule_entry.rule.eq_attrib_type = 1;
+				flt_rule_entry.rule.eq_attrib.rule_eq_bitmap = 0;
+				flt_rule_entry.rule.eq_attrib.rule_eq_bitmap |= 0x20<<flt_rule_entry.rule.eq_attrib.num_offset_meq_32;
+				flt_rule_entry.rule.eq_attrib.offset_meq_32[flt_rule_entry.rule.eq_attrib.num_offset_meq_32].offset = 6;
+				flt_rule_entry.rule.eq_attrib.offset_meq_32[flt_rule_entry.rule.eq_attrib.num_offset_meq_32].mask = 0xFF000000;
+				flt_rule_entry.rule.eq_attrib.offset_meq_32[flt_rule_entry.rule.eq_attrib.num_offset_meq_32].value = 6 << 24;
+				flt_rule_entry.rule.eq_attrib.num_offset_meq_32 ++;
+				flt_rule_entry.rule.eq_attrib.rule_eq_bitmap |= (1<<8);
+				flt_rule_entry.rule.eq_attrib.num_ihl_offset_meq_32 = 1;
+				flt_rule_entry.rule.eq_attrib.ihl_offset_meq_32[0].offset = 12;
+
+				/* add TCP SYN rule*/
+				flt_rule_entry.rule.eq_attrib.ihl_offset_meq_32[0].value = (((uint32_t)1)<<TCP_SYN_SHIFT);
+				flt_rule_entry.rule.eq_attrib.ihl_offset_meq_32[0].mask = (((uint32_t)1)<<TCP_SYN_SHIFT);
+
+			}
 		}
 
 		memcpy(&(m_pFilteringTable->rules[0]), &flt_rule_entry, sizeof(flt_rule_entry));

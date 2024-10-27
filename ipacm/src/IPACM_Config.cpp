@@ -489,6 +489,9 @@ int IPACM_Config::ReadSwAllow(void)
 		{
 			IPACMERR("msg filtering feature is not enabled\n");
 			free(cfg);
+			free(sw_filter_cfg);
+			cfg = NULL;
+			sw_filter_cfg = NULL;
 			return IPACM_FAILURE;
 		}
 
@@ -1365,7 +1368,7 @@ enum ipa_hw_type IPACM_Config::GetIPAVer(bool get)
 {
 	int ret;
 
-	if(!get)
+	if(ver != IPA_HW_None)
 		return ver;
 
 	ret = ioctl(m_fd, IPA_IOC_GET_HW_VERSION, &ver);

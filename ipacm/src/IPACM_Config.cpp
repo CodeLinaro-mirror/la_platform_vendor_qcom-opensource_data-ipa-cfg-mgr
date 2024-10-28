@@ -1425,12 +1425,15 @@ void IPACM_Config::add_bridge_vlan_mapping(ipa_bridge_vlan_mapping_info *data)
 	{
 		if(it_mapping->bridge_if_index == data->master_if_index)
 		{
-	                if(is_dummy_VID(data->vlan_id))
-                        {
-                                if((data->vlan_id != it_mapping->bridge_associated_VID) || !is_dummy_VID(it_mapping->bridge_associated_VID))
-                                {
-                                        continue;
-                                }
+	        	if(is_dummy_VID(data->vlan_id))
+			{
+				if((data->vlan_id != it_mapping->bridge_associated_VID) || !is_dummy_VID(it_mapping->bridge_associated_VID))
+            			{
+                			continue;
+                		}
+			} else if(is_dummy_VID(it_mapping->bridge_associated_VID))
+			{
+				continue;
 			}
 
 			if((data->status == 1) && (it_mapping->status != 1))

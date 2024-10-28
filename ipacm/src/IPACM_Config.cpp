@@ -1283,6 +1283,10 @@ void IPACM_Config::add_bridge_vlan_mapping(ipa_ioc_bridge_vlan_mapping_info *dat
 					continue;
 				}
 			}
+			else if(is_dummy_VID(it_mapping->bridge_associated_VID))
+			{
+				continue;
+			}
 			IPACMERR("The bridge %s was added before with vlan id %d\n", data->bridge_name,
 				it_mapping->bridge_associated_VID);
 			goto fail;

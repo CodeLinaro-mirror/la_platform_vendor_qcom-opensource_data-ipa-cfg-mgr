@@ -14854,7 +14854,7 @@ int IPACM_Lan::install_ipv4_icmp_flt_rule()
 
 		flt_rule->rules = (uint64_t)flt_rule_entry;
 
-		prio[idx][IPA_IP_v4]++;
+		prio[j][IPA_IP_v4]++;
 		flt_rule->commit = 1;
 		flt_rule->ep = rx_prop->rx[idx].src_pipe;
 		flt_rule->global = false;
@@ -14950,7 +14950,7 @@ int IPACM_Lan::install_ipv6_icmp_flt_rule()
 		flt_rule->num_rules = NUM_RULES;
 		flt_rule->flt_rule_size = sizeof(struct ipa_flt_rule_add_v2);
 
-		prio[idx][IPA_IP_v6]++;
+		prio[j][IPA_IP_v6]++;
 		flt_rule_entry->rule.retain_hdr = 1;
 		flt_rule_entry->rule.to_uc = 0;
 		flt_rule_entry->rule.eq_attrib_type = 0;
@@ -18464,7 +18464,7 @@ int IPACM_Lan::add_tcp_syn_flt_rule(ipa_ip_type iptype)
 			IPACMDBG_H("Install rules at idx %d\n", idx);
 		}
 
-		prio[idx][iptype]++;
+		prio[j][iptype]++;
 		memset(m_pFilteringTable, 0, len);
 
 		m_pFilteringTable->commit = 1;

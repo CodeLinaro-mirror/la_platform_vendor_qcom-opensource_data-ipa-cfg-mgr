@@ -6753,6 +6753,11 @@ int IPACM_Wlan::handle_down_evt()
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
 	struct wan_ioctl_lan_client_info *client_info;
 #endif
+#ifdef FEATURE_STATIC_POLICY
+	ipacm_event_vlan_pdn *wandown_vlan_data;
+	ipacm_cmd_q_data evt_data;
+	int if_index = 0;
+#endif
 
 	IPACMDBG_H("WLAN ip-type: %d \n", ip_type);
 
@@ -7116,9 +7121,29 @@ fail:
 		{
 			IPACMERR("failed to delete static policy rules for v4.\n");
 		}
+
+		if_index = IPACM_Iface::ipacmcfg->iface_table[ipa_if_num].netlink_interface_index;
+
+		wandown_vlan_data = (ipacm_event_vlan_pdn *)malloc(sizeof(ipacm_event_vlan_pdn));
+		if(wandown_vlan_data == NULL)
+		{
+			IPACMERR("Unable to allocate memory\n");
+			res = IPACM_FAILURE;
+			goto end;
+		}
+		memset(wandown_vlan_data, 0, sizeof(ipacm_event_vlan_pdn));
+		wandown_vlan_data->iptype = IPA_IP_MAX;
+		wandown_vlan_data->VlanID = IPA_STATIC_POLICY_VLAN_ID + if_index;
+
+		evt_data.event = IPA_HANDLE_LAN_VLAN_PDN_DOWN_STATIC;
+		evt_data.evt_data = (void *)wandown_vlan_data;
+		IPACM_EvtDispatcher::PostEvt(&evt_data);
+		IPACMDBG_H("Posted event IPA_HANDLE_LAN_VLAN_PDN_DOWN_STATIC with "
+			"iptype %d and vlan_id:%d\n", wandown_vlan_data->iptype,
+			wandown_vlan_data->VlanID);
 	}
 #endif
-
+end:
 	for (i = 0; i < num_wifi_client; i++)
 	{
 		if(get_client_memptr(wlan_client, i)->p_hdr_info != NULL)
@@ -7450,7 +7475,7 @@ void IPACM_Wlan::HandleNeighIpAddrDelEvt(int clt_indx)
 		CtList->HandleNeighIpAddrDelEvt(get_client_memptr(wlan_client, clt_indx)->v4_addr);
 	}
 
-	if(IPACM_Iface::ipacmcfg->wlan_vlan_mpdn_enabled)
+	if(IPACM_Iface::ipacmcfg->wlan_vlan_mpdn_enabled || IPACM_Iface::ipacmcfg->ipacm_static_policy_enable)
 	{
 		for (auto it = rt_hdl_v6_list[clt_indx].begin(); it != rt_hdl_v6_list[clt_indx].end();++it)
 		{

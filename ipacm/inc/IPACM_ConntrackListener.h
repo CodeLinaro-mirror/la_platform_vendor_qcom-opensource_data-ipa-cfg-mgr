@@ -184,7 +184,11 @@ private:
 	void HandleVlanUp(void *);
 	void HandleVlanDown(void *);
 	void HandleVlanUpV6(void *);
-        void HandleVlanDownV6(void *);
+	void HandleVlanDownV6(void *);
+#ifdef FEATURE_STATIC_POLICY
+	void HandleInterfaceDown_StaticPolicy(void *);
+	void HandleInterfaceDownV6_StaticPolicy(void *);
+#endif
 #endif
 	void TriggerWANUp(void *);
 	void TriggerWANUp_v6(const ipacm_event_iface_up* evt_data);

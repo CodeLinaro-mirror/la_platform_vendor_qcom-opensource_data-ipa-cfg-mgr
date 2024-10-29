@@ -2696,7 +2696,8 @@ int IPACM_Wlan::handle_wlan_client_init_ex(ipacm_event_data_wlan_ex *data, bool 
 
 #ifdef FEATURE_STATIC_POLICY
 			//if IPACM is in static policy mode, we will install rules later based on conntrack evt
-			if (IPACM_Wan::isWanUP(ipa_if_num) && !IPACM_Iface::ipacmcfg->ipacm_static_policy_enable)
+			if (IPACM_Wan::isWanUP(ipa_if_num) ||
+				(IPACM_Iface::ipacmcfg->ipacm_static_policy_enable && IPACM_Wan::isVlanWanUP()))
 #else
 			if (IPACM_Wan::isWanUP(ipa_if_num))
 #endif
@@ -2721,7 +2722,8 @@ int IPACM_Wlan::handle_wlan_client_init_ex(ipacm_event_data_wlan_ex *data, bool 
 				}
 			}
 #ifdef FEATURE_STATIC_POLICY
-			if(IPACM_Wan::isWanUP_V6(ipa_if_num) && !IPACM_Iface::ipacmcfg->ipacm_static_policy_enable)
+			if(IPACM_Wan::isWanUP_V6(ipa_if_num) ||
+				(IPACM_Iface::ipacmcfg->ipacm_static_policy_enable && IPACM_Wan::isVlanWanUP_V6()))
 #else
 			if(IPACM_Wan::isWanUP_V6(ipa_if_num))
 #endif
@@ -5556,7 +5558,8 @@ int IPACM_Wlan::handle_lan_client_connect(uint8_t *mac_addr)
 			goto fail;
 		}
 		free(client_info);
-		if (IPACM_Wan::isWanUP(ipa_if_num))
+		if (IPACM_Wan::isWanUP(ipa_if_num) ||
+			(IPACM_Iface::ipacmcfg->ipacm_static_policy_enable && IPACM_Wan::isVlanWanUP()))
 		{
 			if(IPACM_Wan::backhaul_is_sta_mode == false)
 			{
@@ -5575,7 +5578,8 @@ int IPACM_Wlan::handle_lan_client_connect(uint8_t *mac_addr)
 				get_client_memptr(wlan_client, wlan_index)->ipv4_ul_rules_set = true;
 			}
 		}
-		if(IPACM_Wan::isWanUP_V6(ipa_if_num))
+		if(IPACM_Wan::isWanUP_V6(ipa_if_num) ||
+			(IPACM_Iface::ipacmcfg->ipacm_static_policy_enable && IPACM_Wan::isVlanWanUP_V6()))
 		{
 			if(IPACM_Wan::backhaul_is_sta_mode == false)
 			{

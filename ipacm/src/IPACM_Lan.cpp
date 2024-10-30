@@ -2144,6 +2144,13 @@ int IPACM_Lan::handle_vlan_pdn_up(ipacm_event_vlan_pdn *data, bool set_mux)
 {
 	int ret;
 
+	/* checking instance ip_type */
+	if((data->iptype != ip_type) && (ip_type != IPA_IP_MAX))
+	{
+		IPACMERR("inconsistent iptype. iptype = %d, instance ip_type = %d\n", data->iptype, ip_type);
+		return IPACM_FAILURE;
+	}
+
 	if(is_vlan_offload_disabled)
 	{
 		/* only cache mux id, once backhaul changes back to LTE we will install UL rules*/
@@ -4021,6 +4028,12 @@ int IPACM_Lan::handle_eth_client_ipaddr(ipacm_event_data_all *data)
 					 data->mac_addr[4],
 					 data->mac_addr[5]);
 	memset(&data_all, 0, sizeof(ipacm_event_data_all));
+	/* checking instance ip_type */
+	if((data->iptype != ip_type) && (ip_type != IPA_IP_MAX))
+	{
+		IPACMERR("inconsistent iptype. iptype = %d, instance ip_type = %d\n", data->iptype, ip_type);
+		return IPACM_FAILURE;
+	}
 #ifdef FEATURE_VLAN_MPDN
 	if(is_vlan_event(data->iface_name))
 	{

@@ -505,10 +505,14 @@ static int get_eogre_tunnel_details(struct ifinfomsg* ifi, int len, int type)
 	{
 		iptype = IPA_IP_v4;
 	}
-
-	if(!strcmp(IPACM_Iface::ipacmcfg->eogre_tunnel_name, "gre6t-gretap2"))
+	else if(!strcmp(IPACM_Iface::ipacmcfg->eogre_tunnel_name, "gre6t-gretap2"))
 	{
 		iptype = IPA_IP_v6;
+	}
+	else
+	{
+		IPACMERR("Unexpected eogre tunnel name %s\n", IPACM_Iface::ipacmcfg->eogre_tunnel_name);
+		return IPACM_FAILURE;
 	}
 
 	if (!attrib[IFLA_LINKINFO])

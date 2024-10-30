@@ -629,13 +629,15 @@ int IPACM_Wan::del_ipsec_wan_dl_rt_rules(enum ipa_ip_type iptype)
 
 	if (iptype == IPA_IP_v6) {
 		IPACMDBG_H("Delete default IPsec v6 routing rules\n");
-		for (rt_idx = MAX_DEFAULT_IPSEC_v4_ROUTE_RULES; rt_idx < MAX_DEFAULT_IPSEC_v6_ROUTE_RULES; rt_idx++)
+		for (rt_idx = 0; rt_idx < MAX_DEFAULT_IPSEC_v6_ROUTE_RULES; rt_idx++)
 		{
-			if (m_routing.DeleteRoutingHdl(dft_ipsec_rt_rule_hdl[rt_idx], iptype) == false)
+			IPACMDBG_H("Delete default IPsec v6 routing handle = %d\n", dft_ipsec_rt_rule_hdl[rt_idx + MAX_DEFAULT_IPSEC_v4_ROUTE_RULES]);
+			if (m_routing.DeleteRoutingHdl(dft_ipsec_rt_rule_hdl[rt_idx + MAX_DEFAULT_IPSEC_v4_ROUTE_RULES], iptype) == false)
 			{
 				IPACMERR("IPv6 IPsec Routing rule(idx:0x%x) deletion failed!\n", rt_idx);
 				return IPACM_FAILURE;
 			}
+			dft_ipsec_rt_rule_hdl[rt_idx + MAX_DEFAULT_IPSEC_v4_ROUTE_RULES] = 0;
 		}
 	} else {
 		IPACMDBG_H("Delete default IPsec v4 routing rules\n");
@@ -646,6 +648,7 @@ int IPACM_Wan::del_ipsec_wan_dl_rt_rules(enum ipa_ip_type iptype)
 				IPACMERR("IPv4 IPsec Routing rule(idx:0x%x) deletion failed!\n", rt_idx);
 				return IPACM_FAILURE;
 			}
+			dft_ipsec_rt_rule_hdl[rt_idx] = 0;
 		}
 	}
 
@@ -720,6 +723,7 @@ int IPACM_Wan::add_ipsec_wan_dl_rt_rules(ipacm_event_data_addr *data,
 		for (rt_idx = 0; rt_idx < MAX_DEFAULT_IPSEC_v6_ROUTE_RULES; rt_idx++)
 		{
 			dft_ipsec_rt_rule_hdl[MAX_DEFAULT_IPSEC_v4_ROUTE_RULES + rt_idx] = rt_rule->rules[rt_idx].rt_rule_hdl;
+			IPACMDBG_H("Add default IPsec v6 routing handle = %d\n", dft_ipsec_rt_rule_hdl[rt_idx + MAX_DEFAULT_IPSEC_v4_ROUTE_RULES]);
 		}
 	} else {
 		for (rt_idx = 0; rt_idx < MAX_DEFAULT_IPSEC_v4_ROUTE_RULES; rt_idx++)
@@ -915,7 +919,7 @@ int IPACM_Wan::handle_addr_evt(ipacm_event_data_addr *data)
 				dft_rt_rule_hdl[MAX_DEFAULT_v4_ROUTE_RULES + 2*num_dft_rt_v6],
 				dft_rt_rule_hdl[MAX_DEFAULT_v4_ROUTE_RULES + 2*num_dft_rt_v6+1],num_dft_rt_v6);
 #ifdef FEATURE_IPA_IPSEC
-		if(m_is_sta_mode == Q6_WAN) {
+		if(m_is_sta_mode == Q6_WAN && is_global_ipv6_addr(data->ipv6_addr)) {
 			res = add_ipsec_wan_dl_rt_rules(data, hdr.hdl);
 			if (res == IPACM_FAILURE)
 				goto fail;
@@ -1127,6 +1131,7 @@ int IPACM_Wan::handle_addr_evt(ipacm_event_data_addr *data)
 						res = IPACM_FAILURE;
 						goto fail;
 					}
+					dft_rt_rule_hdl[0] = 0;
 #ifdef FEATURE_IPA_IPSEC
 					/* Delete default IPsec v4 RT rules */
 					IPACMDBG_H("Delete IPsec default v4 routing rules\n");
@@ -1328,7 +1333,7 @@ int IPACM_Wan::handle_addr_del_evt(ipacm_event_data_addr *data)
 	{
 		num_v6_value = num_dft_rt_v6;
 		/* Check the address deleted. */
-		for (num_ipv6_addr=0; num_ipv6_addr<num_v6_value; num_ipv6_addr++)
+		for (num_ipv6_addr = 0; num_ipv6_addr < MAX_DEFAULT_v6_ROUTE_RULES; num_ipv6_addr++)
 		{
 			if((ipv6_addr[num_ipv6_addr][0] == data->ipv6_addr[0]) &&
 			(ipv6_addr[num_ipv6_addr][1] == data->ipv6_addr[1]) &&
@@ -1344,6 +1349,7 @@ int IPACM_Wan::handle_addr_del_evt(ipacm_event_data_addr *data)
 						res = IPACM_FAILURE;
 						goto fail;
 					}
+					dft_rt_rule_hdl[MAX_DEFAULT_v4_ROUTE_RULES+2*num_ipv6_addr+i] = 0;
 				}
 #ifdef FEATURE_VLAN_MPDN
 				if ((data->ipv6_addr[0] == ipv6_prefix[0]) && (data->ipv6_addr[1] == ipv6_prefix[1]))
@@ -7013,6 +7019,7 @@ int IPACM_Wan::handle_down_evt()
 			res = IPACM_FAILURE;
 			goto fail;
 		}
+		dft_rt_rule_hdl[0] = 0;
 #ifdef FEATURE_IPA_IPSEC
 		/* Delete default IPsec v4 RT rules */
 		IPACMDBG_H("Delete IPsec default v4 routing rules\n");
@@ -7038,6 +7045,7 @@ int IPACM_Wan::handle_down_evt()
 				res = IPACM_FAILURE;
 				goto fail;
 			}
+			dft_rt_rule_hdl[MAX_DEFAULT_v4_ROUTE_RULES+i] = 0;
 		}
 #ifdef FEATURE_IPA_IPSEC
 		/* Delete default IPsec v6 RT rules */
@@ -7455,6 +7463,7 @@ int IPACM_Wan::handle_down_evt_ex()
 			res = IPACM_FAILURE;
 			goto fail;
 		}
+		dft_rt_rule_hdl[0] = 0;
 #ifdef FEATURE_IPA_IPSEC
 		/* Delete default IPsec v4 RT rules */
 		IPACMDBG_H("Delete IPsec default v4 routing rules\n");
@@ -7689,6 +7698,7 @@ int IPACM_Wan::handle_down_evt_ex()
 			}
 		}
 
+		IPACMDBG_H("Delete dft v6 rt rule\n");
 		for (i = 0; i < 2*num_dft_rt_v6; i++)
 		{
 			if (m_routing.DeleteRoutingHdl(dft_rt_rule_hdl[MAX_DEFAULT_v4_ROUTE_RULES+i], IPA_IP_v6) == false)
@@ -7697,6 +7707,15 @@ int IPACM_Wan::handle_down_evt_ex()
 				res = IPACM_FAILURE;
 				goto fail;
 			}
+			dft_rt_rule_hdl[MAX_DEFAULT_v4_ROUTE_RULES+i] = 0;
+		}
+		/* Delete default IPsec v6 RT rules */
+		IPACMDBG_H("Delete IPsec default v6 routing rules\n");
+		if (del_ipsec_wan_dl_rt_rules(IPA_IP_v6) == IPACM_FAILURE)
+		{
+			IPACMERR("Routing old IPsec RT rules deletion failed!\n");
+			res = IPACM_FAILURE;
+			goto fail;
 		}
 	}
 	if (ip_type == IPA_IP_MAX)
@@ -7975,6 +7994,7 @@ int IPACM_Wan::handle_down_evt_ex()
 			res = IPACM_FAILURE;
 			goto fail;
 		}
+		dft_rt_rule_hdl[0] = 0;
 #ifdef FEATURE_IPA_IPSEC
 		/* Delete default IPsec v4 RT rules */
 		IPACMDBG_H("Delete IPsec default v4 routing rules\n");
@@ -7986,6 +8006,7 @@ int IPACM_Wan::handle_down_evt_ex()
 		}
 #endif
 
+		IPACMDBG_H("Delete dft v6 rt rule\n");
 		for (i = 0; i < 2*num_dft_rt_v6; i++)
 		{
 			if (m_routing.DeleteRoutingHdl(dft_rt_rule_hdl[MAX_DEFAULT_v4_ROUTE_RULES+i], IPA_IP_v6) == false)
@@ -7994,7 +8015,17 @@ int IPACM_Wan::handle_down_evt_ex()
 				res = IPACM_FAILURE;
 				goto fail;
 			}
+			dft_rt_rule_hdl[MAX_DEFAULT_v4_ROUTE_RULES+i] = 0;
 		}
+		/* Delete default IPsec v6 RT rules */
+		IPACMDBG_H("Delete IPsec default v6 routing rules\n");
+		if (del_ipsec_wan_dl_rt_rules(IPA_IP_v6) == IPACM_FAILURE)
+		{
+			IPACMERR("Routing old IPsec RT rules deletion failed!\n");
+			res = IPACM_FAILURE;
+			goto fail;
+		}
+
 	}
 
 	/* check software routing fl rule hdl */

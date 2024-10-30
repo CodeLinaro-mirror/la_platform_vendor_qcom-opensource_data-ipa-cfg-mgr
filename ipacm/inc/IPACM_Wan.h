@@ -369,7 +369,8 @@ public:
 		for(int i = 0; i < IPA_MAX_NUM_SW_PDNS; i++)
 		{
 			if(ipv6_to_iface[i].ipv6_prefix[0] == v6_addr[0] &&
-				ipv6_to_iface[i].ipv6_prefix[1] == v6_addr[1])
+				ipv6_to_iface[i].ipv6_prefix[1] == v6_addr[1] &&
+				((v6_addr[0] != 0) && (v6_addr[1] != 0)))
 			{
 				IPACMDBG_H("v6 prefix mached pdn %s\n", ipv6_to_iface[i].pIface->dev_name);
 				return true;

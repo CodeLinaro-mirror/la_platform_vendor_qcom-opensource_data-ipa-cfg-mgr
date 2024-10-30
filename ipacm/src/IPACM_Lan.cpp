@@ -2936,6 +2936,13 @@ int IPACM_Lan::handle_vlan_pdn_up(ipacm_event_vlan_pdn *data, bool set_mux)
 {
 	int ret = IPACM_SUCCESS;
 
+	/* checking instance ip_type */
+	if((data->iptype != ip_type) && (ip_type != IPA_IP_MAX))
+	{
+		IPACMERR("inconsistent iptype. iptype = %d, instance ip_type = %d\n", data->iptype, ip_type);
+		return IPACM_FAILURE;
+	}
+
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
 	/* Install filter rules for the client. */
 	if(IPACM_Iface::ipacmcfg->ipacm_lan_stats_enable == true)
@@ -2948,7 +2955,6 @@ int IPACM_Lan::handle_vlan_pdn_up(ipacm_event_vlan_pdn *data, bool set_mux)
 		}
 	}
 #endif
-
 
 	/* check only add static UL filter rule once */
 	if(data->iptype == IPA_IP_v6)
@@ -5279,7 +5285,6 @@ int IPACM_Lan::handle_eth_client_ipaddr(ipacm_event_data_all *data)
 		IPACMERR("inconsistent iptype. iptype = %d, instance ip_type = %d\n", data->iptype, ip_type);
 		return IPACM_FAILURE;
 	}
-
 #ifdef FEATURE_VLAN_MPDN
 	if(is_vlan_event(data->iface_name))
 	{

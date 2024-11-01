@@ -26,8 +26,8 @@
  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * Changes from Qualcomm Innovation Center, Inc. are provided under the following license:
- * Copyright (c) 2023-2025 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Changes from Qualcomm Technologies, Inc. are provided under the following license:
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  * SPDX-License-Identifier: BSD-3-Clause-Clear.
  */
 /*!
@@ -51,6 +51,7 @@
 #include <ifaddrs.h>
 #include <string.h>
 #include <errno.h>
+#include "IPACM_Netlink.h"
 
 IPACM_Config *IPACM_Config::pInstance = NULL;
 const char *IPACM_Config::DEVICE_NAME = "/dev/ipa";
@@ -1672,6 +1673,13 @@ void IPACM_Config::add_vlan_iface(ipa_ioc_vlan_iface_info *data)
 	IPACM_EvtDispatcher::PostEvt(&evt_data);
 
 #endif
+	/* Sending Getneigh to receive missing neighbor in case if missed early */
+	IPACMDBG_H("Query Getneigh for vlan ifaces\n");
+	ipa_nl_query_newneigh(AF_BRIDGE);
+	IPACMDBG_H("Query Getneigh for v4\n");
+	ipa_nl_query_newneigh(AF_INET);
+	IPACMDBG_H("Query Getneigh for v6\n");
+	ipa_nl_query_newneigh(AF_INET6);
 	return;
 }
 

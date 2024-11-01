@@ -7450,7 +7450,7 @@ void IPACM_Wlan::HandleNeighIpAddrDelEvt(int clt_indx)
 		CtList->HandleNeighIpAddrDelEvt(get_client_memptr(wlan_client, clt_indx)->v4_addr);
 	}
 
-	if(IPACM_Iface::ipacmcfg->wlan_vlan_mpdn_enabled)
+	if(IPACM_Iface::ipacmcfg->wlan_vlan_mpdn_enabled || IPACM_Iface::ipacmcfg->ipacm_static_policy_enable)
 	{
 		for (auto it = rt_hdl_v6_list[clt_indx].begin(); it != rt_hdl_v6_list[clt_indx].end();++it)
 		{

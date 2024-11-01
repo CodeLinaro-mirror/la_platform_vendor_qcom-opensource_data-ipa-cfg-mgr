@@ -465,11 +465,12 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 						data_vlan->bridge = neighbor_client[i].bridge;
 						memcpy(&data_vlan->data_all, data_all, sizeof(ipacm_event_data_all));
 						free(data_all);
+						data_all = NULL;
 						evt_data.evt_data = (void *)data_vlan;
 #endif
 						IPACM_EvtDispatcher::PostEvt(&evt_data);
 						IPACMDBG_H("Posted event %d, with %s for ipv4 client re-connect\n",
-								evt_data.event, data_all->iface_name);
+							evt_data.event, data_vlan->data_all.iface_name);
 
 					}
 				}

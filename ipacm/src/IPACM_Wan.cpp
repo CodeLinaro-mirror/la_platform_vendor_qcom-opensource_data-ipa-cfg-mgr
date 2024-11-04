@@ -2668,9 +2668,141 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 		}
 	}
 	break;
+
+		case IPA_HANDLE_LAN_VLAN_PDN_DOWN_STATIC:
+		{
+			IPACMDBG_H("Received IPA_HANDLE_LAN_VLAN_PDN_DOWN_STATIC event:%s\n", dev_name);
+			ipacm_event_vlan_pdn *vlandown = (ipacm_event_vlan_pdn *)param;
+			int j = 0, k = 0;
+
+			if(vlandown == NULL)
+			{
+				IPACMERR("Invalid lanvlandown data\n");
+				return;
+			}
+			if(vlandown->iptype == IPA_IP_v4)
+			{
+				IPACMDBG_H("Received IPA_HANDLE_LAN_VLAN_PDN_DOWN_STATIC event for IPv4\n");
+
+				if(modem_ipv4_pdn_index < 0 || modem_ipv4_pdn_index >= IPA_MAX_NUM_SW_PDNS)
+				{
+					IPACMDBG_H("modem_ipv4_pdn_index:%d not valid\n", modem_ipv4_pdn_index);
+					return;
+				}
+
+				for(j = 0; j < IPA_MAX_NUM_SW_PDNS; j++)
+				{
+					if(ipv4_to_iface[modem_ipv4_pdn_index].associated_VIDs[j] == vlandown->VlanID)
+					{
+						IPACMDBG_H("removing v4 pdn entry in %d with IP:0x%X, vid:%d and vid_cnt:%d\n",
+							j, ipv4_to_iface[modem_ipv4_pdn_index].ipv4_addr,
+							ipv4_to_iface[modem_ipv4_pdn_index].associated_VIDs[j],
+							ipv4_to_iface[modem_ipv4_pdn_index].VID_cnt);
+						ipv4_to_iface[modem_ipv4_pdn_index].associated_VIDs[j] = 0;
+						ipv4_to_iface[modem_ipv4_pdn_index].VID_cnt--;
+						break;
+					}
+				}
+				for(k = j; k < IPA_MAX_NUM_SW_PDNS - 1; k++)
+				{
+					ipv4_to_iface[modem_ipv4_pdn_index].associated_VIDs[k] =
+						ipv4_to_iface[modem_ipv4_pdn_index].associated_VIDs[k+1];
+				}
+				ipv4_to_iface[modem_ipv4_pdn_index].associated_VIDs[k] = 0;
+			}
+			else if(vlandown->iptype == IPA_IP_v6)
+			{
+				IPACMDBG_H("Received IPA_HANDLE_LAN_VLAN_PDN_DOWN_STATIC event for IPv6\n");
+
+				if(modem_ipv6_pdn_index < 0 || modem_ipv6_pdn_index >= IPA_MAX_NUM_SW_PDNS)
+				{
+					IPACMDBG_H("modem_ipv6_pdn_index:%d not valid\n", modem_ipv6_pdn_index);
+					return;
+				}
+
+				for(j = 0; j < IPA_MAX_NUM_SW_PDNS; j++)
+				{
+					if(ipv6_to_iface[modem_ipv6_pdn_index].associated_VIDs[j] == vlandown->VlanID)
+					{
+						IPACMDBG_H("removing v6 pdn entry in %d with prefix:0x%08x%08x, vid:%d and vid_cnt:%d\n",
+							j, ipv6_to_iface[modem_ipv6_pdn_index].ipv6_prefix[0],
+							ipv6_to_iface[modem_ipv6_pdn_index].ipv6_prefix[1],
+							ipv6_to_iface[modem_ipv6_pdn_index].associated_VIDs[j],
+							ipv6_to_iface[modem_ipv6_pdn_index].VID_cnt);
+						ipv6_to_iface[modem_ipv6_pdn_index].associated_VIDs[j] = 0;
+						ipv6_to_iface[modem_ipv6_pdn_index].VID_cnt--;
+						break;
+					}
+				}
+				for(k = j; k < IPA_MAX_NUM_SW_PDNS - 1; k++)
+				{
+					ipv6_to_iface[modem_ipv6_pdn_index].associated_VIDs[k] =
+						ipv6_to_iface[modem_ipv6_pdn_index].associated_VIDs[k+1];
+				}
+				ipv6_to_iface[modem_ipv6_pdn_index].associated_VIDs[k] = 0;
+			}
+			else if(vlandown->iptype == IPA_IP_MAX)
+			{
+				IPACMDBG_H("Received IPA_HANDLE_LAN_VLAN_PDN_DOWN_STATIC event for IPV4 and IPv6\n");
+
+				if(modem_ipv4_pdn_index < 0 || modem_ipv4_pdn_index >= IPA_MAX_NUM_SW_PDNS)
+				{
+					IPACMDBG_H("modem_ipv4_pdn_index:%d not valid\n", modem_ipv4_pdn_index);
+					return;
+				}
+
+				for(j = 0; j < IPA_MAX_NUM_SW_PDNS; j++)
+				{
+					if(ipv4_to_iface[modem_ipv4_pdn_index].associated_VIDs[j] == vlandown->VlanID)
+					{
+						IPACMDBG_H("removing v4 pdn entry in %d with IP:0x%X, vid:%d and vid_cnt:%d\n",
+							j, ipv4_to_iface[modem_ipv4_pdn_index].ipv4_addr,
+							ipv4_to_iface[modem_ipv4_pdn_index].associated_VIDs[j],
+							ipv4_to_iface[modem_ipv4_pdn_index].VID_cnt);
+						ipv4_to_iface[modem_ipv4_pdn_index].associated_VIDs[j] = 0;
+						ipv4_to_iface[modem_ipv4_pdn_index].VID_cnt--;
+						break;
+					}
+				}
+				for(k = j; k < IPA_MAX_NUM_SW_PDNS - 1; k++)
+				{
+					ipv4_to_iface[modem_ipv4_pdn_index].associated_VIDs[k] =
+						ipv4_to_iface[modem_ipv4_pdn_index].associated_VIDs[k+1];
+				}
+				ipv4_to_iface[modem_ipv4_pdn_index].associated_VIDs[k] = 0;
+
+				if(modem_ipv6_pdn_index < 0 || modem_ipv6_pdn_index >= IPA_MAX_NUM_SW_PDNS)
+				{
+					IPACMDBG_H("modem_ipv6_pdn_index:%d not valid\n", modem_ipv6_pdn_index);
+					return;
+				}
+
+				for(j = 0; j < IPA_MAX_NUM_SW_PDNS; j++)
+				{
+					if(ipv6_to_iface[modem_ipv6_pdn_index].associated_VIDs[j] == vlandown->VlanID)
+					{
+						IPACMDBG_H("removing v6 pdn entry in %d with prefix:0x%08x%08x, vid:%d and vid_cnt:%d\n",
+							j, ipv6_to_iface[modem_ipv6_pdn_index].ipv6_prefix[0],
+							ipv6_to_iface[modem_ipv6_pdn_index].ipv6_prefix[1],
+							ipv6_to_iface[modem_ipv6_pdn_index].associated_VIDs[j],
+							ipv6_to_iface[modem_ipv6_pdn_index].VID_cnt);
+						ipv6_to_iface[modem_ipv6_pdn_index].associated_VIDs[j] = 0;
+						ipv6_to_iface[modem_ipv6_pdn_index].VID_cnt--;
+						break;
+					}
+				}
+				for(k = j; k < IPA_MAX_NUM_SW_PDNS - 1; k++)
+				{
+					ipv6_to_iface[modem_ipv6_pdn_index].associated_VIDs[k] =
+						ipv6_to_iface[modem_ipv6_pdn_index].associated_VIDs[k+1];
+				}
+				ipv6_to_iface[modem_ipv6_pdn_index].associated_VIDs[k] = 0;
+			}
+		}
+		break;
 #endif
 
-	default:
+		default:
 		break;
 	}
 

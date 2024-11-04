@@ -3350,6 +3350,9 @@ int IPACM_Lan::check_vlan_PDNUp(enum ipa_ip_type iptype)
 int IPACM_Lan::handle_vlan_pdn_up(ipacm_event_vlan_pdn *data, bool set_mux)
 {
 	int ret = IPACM_SUCCESS;
+#ifdef FEATURE_STATIC_POLICY
+	int if_index;
+#endif
 
 	if(is_vlan_offload_disabled)
 	{
@@ -10935,6 +10938,11 @@ int IPACM_Lan::handle_down_evt()
 	list<l2tp_client_info>::iterator it;
 	ipacm_cmd_q_data evt_data;
 	ipacm_event_data_all *data_all;
+#ifdef FEATURE_STATIC_POLICY
+	ipacm_event_vlan_pdn *wandown_vlan_data;
+	int if_index = 0;
+#endif
+
 	IPACMDBG_H("lan handle_down_evt\n ");
 
 	if (rx_prop == NULL){
@@ -11491,9 +11499,29 @@ fail:
 		{
 			IPACMERR("failed to delete static policy rules.\n");
 		}
+
+		if_index = IPACM_Iface::ipacmcfg->iface_table[ipa_if_num].netlink_interface_index;
+
+		wandown_vlan_data = (ipacm_event_vlan_pdn *)malloc(sizeof(ipacm_event_vlan_pdn));
+		if(wandown_vlan_data == NULL)
+		{
+			IPACMERR("Unable to allocate memory\n");
+			res = IPACM_FAILURE;
+			goto end;
+		}
+		memset(wandown_vlan_data, 0, sizeof(ipacm_event_vlan_pdn));
+		wandown_vlan_data->iptype = IPA_IP_MAX;
+		wandown_vlan_data->VlanID = IPA_STATIC_POLICY_VLAN_ID + if_index;
+
+		evt_data.event = IPA_HANDLE_LAN_VLAN_PDN_DOWN_STATIC;
+		evt_data.evt_data = (void *)wandown_vlan_data;
+		IPACM_EvtDispatcher::PostEvt(&evt_data);
+		IPACMDBG_H("Posted event IPA_HANDLE_LAN_VLAN_PDN_DOWN_STATIC with "
+			"iptype %d and vlan_id:%d\n", wandown_vlan_data->iptype,
+			wandown_vlan_data->VlanID);
 	}
 #endif
-
+end:
 	neigh_cache.clear();
 	/* check software routing fl rule hdl */
 	if (softwarerouting_act == true && rx_prop != NULL)

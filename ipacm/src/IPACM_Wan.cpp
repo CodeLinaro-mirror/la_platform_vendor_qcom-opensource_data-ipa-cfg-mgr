@@ -7841,6 +7841,7 @@ int IPACM_Wan::handle_down_evt_ex()
 			}
 			dft_rt_rule_hdl[MAX_DEFAULT_v4_ROUTE_RULES+i] = 0;
 		}
+#ifdef FEATURE_IPA_IPSEC
 		/* Delete default IPsec v6 RT rules */
 		IPACMDBG_H("Delete IPsec default v6 routing rules\n");
 		if (del_ipsec_wan_dl_rt_rules(IPA_IP_v6) == IPACM_FAILURE)
@@ -7849,6 +7850,7 @@ int IPACM_Wan::handle_down_evt_ex()
 			res = IPACM_FAILURE;
 			goto fail;
 		}
+#endif
 	}
 	if (ip_type == IPA_IP_MAX)
 	{
@@ -8149,6 +8151,7 @@ int IPACM_Wan::handle_down_evt_ex()
 			}
 			dft_rt_rule_hdl[MAX_DEFAULT_v4_ROUTE_RULES+i] = 0;
 		}
+#ifdef FEATURE_IPA_IPSEC
 		/* Delete default IPsec v6 RT rules */
 		IPACMDBG_H("Delete IPsec default v6 routing rules\n");
 		if (del_ipsec_wan_dl_rt_rules(IPA_IP_v6) == IPACM_FAILURE)
@@ -8157,6 +8160,7 @@ int IPACM_Wan::handle_down_evt_ex()
 			res = IPACM_FAILURE;
 			goto fail;
 		}
+#endif
 
 	}
 

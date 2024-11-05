@@ -8209,57 +8209,38 @@ fail:
 #ifdef FEATURE_IPA_IPSEC
 int IPACM_Wan::installWanPostIpsecRt(ipa_ip_type ipType)
 {
-	int i, num_rules, len = 0, res = IPACM_SUCCESS;
+	const int NUM_RT6_RULES = 6;
+	bool commit_delete = false;
+	int i, num_rules, res = IPACM_SUCCESS;
 	uint32_t qmapHdrHdl;
-#ifdef FEATURE_VLAN_MPDN
-	struct ipacm_pdn_flt_rule *flt_rules;
-#else
-	struct ipa_flt_rule_add *flt_rules;
-#endif
-	struct ipa_ioc_del_rt_rule *rt_rule_del = NULL;
 	struct ipa_ioc_add_rt_rule *rt_rule = NULL;
 	struct ipa_rt_rule_add *rt_rule_entry = NULL;
 
 	/* Clean old rules without commiting them */
 	if (num_ipsec_post_pol_rt[ipType] > 0)
 	{
-		len = (sizeof(struct ipa_ioc_del_rt_rule)) + (num_ipsec_post_pol_rt[ipType] * sizeof(struct ipa_rt_rule_del));
-		rt_rule_del = (struct ipa_ioc_del_rt_rule *)malloc(len);
-		if (rt_rule_del == NULL)
-		{
-			IPACMERR("unable to allocate memory for del route rule\n");
-			return IPACM_FAILURE;
-		}
-
-		memset(rt_rule_del, 0, len);
-		rt_rule_del->commit = 0;
-		rt_rule_del->num_hdls = num_ipsec_post_pol_rt[ipType];
-		rt_rule_del->ip = ipType;
-
-		for (i = 0; i < num_ipsec_post_pol_rt[ipType]; i++)
+		for (int i = 0; i < num_ipsec_post_pol_rt[ipType]; i++)
 		{
 			IPACMDBG_H("Deleting Route hdl:(0x%x) with ip type: %d\n", ipsec_post_pol_rt_hdls[ipType][i], ipType);
-			if (false == m_routing.DeleteRoutingHdl(ipsec_post_pol_rt_hdls[ipType][i], ipType))
+			if (false == m_routing.DeleteRoutingHdl(ipsec_post_pol_rt_hdls[ipType][i], ipType, 0))
 			{
 				IPACMERR("Routing rule deletion failed!\n");
-				res = IPACM_FAILURE;
-				goto end;
+				return IPACM_FAILURE;
 			}
 			ipsec_post_pol_rt_hdls[ipType][i] = -1;
 		}
 		num_ipsec_post_pol_rt[ipType] = 0;
+		commit_delete = true;
 	}
 
 	num_rules = (ipType == IPA_IP_v4) ? IPACM_Wan::num_v4_flt_rule : IPACM_Wan::num_v6_flt_rule;
 
 	/* Nothing to be done, if there are no DL exception rules. */
-	if (num_rules == 0) {
+	/* Only commit, if there were deleted rules */
+	if (commit_delete && num_rules == 0) {
 		IPACMDBG_H("No DL rules yet. Just commit the deletion.\n");
-		/* Only commit, if there were deleted rules */
-		if (len)
-			m_routing.Commit(ipType);
-		res = IPACM_SUCCESS;
-		goto end;
+		m_routing.Commit(ipType);
+		return IPACM_SUCCESS;
 	}
 
 	qmapHdrHdl = GetQCMAPhdrOfFirstRmnet(ipType);
@@ -8272,7 +8253,7 @@ int IPACM_Wan::installWanPostIpsecRt(ipa_ip_type ipType)
 
 	rt_rule = (struct ipa_ioc_add_rt_rule *)
 		calloc(1, sizeof(struct ipa_ioc_add_rt_rule) +
-			num_rules * sizeof(struct ipa_rt_rule_add));
+			NUM_RT6_RULES * sizeof(struct ipa_rt_rule_add));
 	if (!rt_rule)
 	{
 		IPACMERR("Error allocating ipa_ioc_add_rt_rule memory.\n");
@@ -8282,31 +8263,181 @@ int IPACM_Wan::installWanPostIpsecRt(ipa_ip_type ipType)
 
 	rt_rule->commit = 1;
 	rt_rule->ip = ipType;
+	rt_rule->num_rules = 0;
+
+	/* Frag (same for IPv4 and IPv6) */
+	rt_rule_entry = &rt_rule->rules[rt_rule->num_rules++];
+	memset(rt_rule_entry, 0, sizeof(*rt_rule_entry));
+	rt_rule_entry->rule.hdr_hdl = qmapHdrHdl;
+	rt_rule_entry->rule.dst = IPA_CLIENT_IPSEC_APPS_WAN_CONS;
+	rt_rule_entry->at_rear = false;
+	rt_rule_entry->rule.hashable = false; /* metadata + non 5-tuple */
+	rt_rule_entry->rule.attrib.attrib_mask = IPA_FLT_FRAGMENT|IPA_FLT_META_DATA;
+	rt_rule_entry->rule.attrib.meta_data = META_IS_IPSEC;
+	rt_rule_entry->rule.attrib.meta_data_mask = META_IPSEC_MASK;
+
+	IPACMDBG_H("rt_rule_entry->rule.attrib.attrib_mask = 0x%X\n", rt_rule_entry->rule.attrib.attrib_mask);
 
 	switch (ipType) {
 	case IPA_IP_v4:
 		strlcpy(rt_rule->rt_tbl_name, IPACM_Iface::ipacmcfg->rt_tbl_lan_v4.name,
 			sizeof(rt_rule->rt_tbl_name));
-		/* Since we don't use NAT in the the IPsec topology,
-		   we must add the TCP syn rule for IPv4 as well. Therefore 1 more rule in IPv4 */
-#ifdef FEATURE_VLAN_MPDN
-		flt_rules = IPACM_Wan::pdn_flt_rule_v4;
-		rt_rule->num_rules = num_rules - 1 + 1;
-#else
-		flt_rules = IPACM_Wan::flt_rule_v4;
-		rt_rule->num_rules = num_rules + 1;
-#endif
+
+		/* Multicast */
+		rt_rule_entry = &rt_rule->rules[rt_rule->num_rules++];
+		memset(rt_rule_entry, 0, sizeof(*rt_rule_entry));
+		rt_rule_entry->rule.hdr_hdl = qmapHdrHdl;
+		rt_rule_entry->rule.dst = IPA_CLIENT_IPSEC_APPS_WAN_CONS;
+		rt_rule_entry->at_rear = false;
+		rt_rule_entry->rule.hashable = true;
+		rt_rule_entry->rule.attrib.attrib_mask = IPA_FLT_DST_ADDR|IPA_FLT_META_DATA;
+		rt_rule_entry->rule.attrib.u.v4.dst_addr_mask = 0xF0000000;
+		rt_rule_entry->rule.attrib.u.v4.dst_addr = 0xE0000000;
+		rt_rule_entry->rule.attrib.meta_data = META_IS_IPSEC;
+		rt_rule_entry->rule.attrib.meta_data_mask = META_IPSEC_MASK;
+
+		IPACMDBG_H("rt_rule_entry->rule.attrib.attrib_mask = 0x%X\n", rt_rule_entry->rule.attrib.attrib_mask);
+
+		/* Broadcast */
+		rt_rule_entry = &rt_rule->rules[rt_rule->num_rules++];
+		memset(rt_rule_entry, 0, sizeof(*rt_rule_entry));
+		rt_rule_entry->rule.hdr_hdl = qmapHdrHdl;
+		rt_rule_entry->rule.dst = IPA_CLIENT_IPSEC_APPS_WAN_CONS;
+		rt_rule_entry->at_rear = false;
+		rt_rule_entry->rule.hashable = true;
+		rt_rule_entry->rule.attrib.attrib_mask = IPA_FLT_DST_ADDR|IPA_FLT_META_DATA;
+		rt_rule_entry->rule.attrib.u.v4.dst_addr_mask = 0xFFFFFFFF;
+		rt_rule_entry->rule.attrib.u.v4.dst_addr = 0xFFFFFFFF;
+		rt_rule_entry->rule.attrib.meta_data = META_IS_IPSEC;
+		rt_rule_entry->rule.attrib.meta_data_mask = META_IPSEC_MASK;
+
+		IPACMDBG_H("rt_rule_entry->rule.attrib.attrib_mask = 0x%X\n", rt_rule_entry->rule.attrib.attrib_mask);
+
+		/* TCP syn */
+		rt_rule_entry = &rt_rule->rules[rt_rule->num_rules++];
+		memset(rt_rule_entry, 0, sizeof(*rt_rule_entry));
+		rt_rule_entry->rule.hdr_hdl = qmapHdrHdl;
+		rt_rule_entry->rule.dst = IPA_CLIENT_IPSEC_APPS_WAN_CONS;
+		rt_rule_entry->at_rear = false;
+		rt_rule_entry->rule.hashable = false; /* metadata + non 5-tuple */
+		rt_rule_entry->rule.attrib.attrib_mask = IPA_FLT_PROTOCOL|IPA_FLT_TCP_SYN|IPA_FLT_META_DATA;
+		rt_rule_entry->rule.attrib.u.v4.protocol = IPACM_FIREWALL_IPPROTO_TCP;
+		rt_rule_entry->rule.attrib.meta_data = META_IS_IPSEC;
+		rt_rule_entry->rule.attrib.meta_data_mask = META_IPSEC_MASK;
+
+		IPACMDBG_H("rt_rule_entry->rule.attrib.attrib_mask = 0x%X\n", rt_rule_entry->rule.attrib.attrib_mask);
+
+		/* ICMP */
+		rt_rule_entry = &rt_rule->rules[rt_rule->num_rules++];
+		memset(rt_rule_entry, 0, sizeof(*rt_rule_entry));
+		rt_rule_entry->rule.hdr_hdl = qmapHdrHdl;
+		rt_rule_entry->rule.dst = IPA_CLIENT_IPSEC_APPS_WAN_CONS;
+		rt_rule_entry->at_rear = false;
+		rt_rule_entry->rule.hashable = true;
+		rt_rule_entry->rule.attrib.attrib_mask = IPA_FLT_PROTOCOL|IPA_FLT_META_DATA;
+		rt_rule_entry->rule.attrib.u.v4.protocol = IPACM_FIREWALL_IPPROTO_ICMP;
+		rt_rule_entry->rule.attrib.meta_data = META_IS_IPSEC;
+		rt_rule_entry->rule.attrib.meta_data_mask = META_IPSEC_MASK;
+
+		IPACMDBG_H("rt_rule_entry->rule.attrib.attrib_mask = 0x%X\n", rt_rule_entry->rule.attrib.attrib_mask);
+
 		break;
+
 	case IPA_IP_v6:
 		strlcpy(rt_rule->rt_tbl_name, IPACM_Iface::ipacmcfg->rt_tbl_wan_v6.name,
 			sizeof(rt_rule->rt_tbl_name));
-#ifdef FEATURE_VLAN_MPDN
-		flt_rules = IPACM_Wan::pdn_flt_rule_v6;
-		rt_rule->num_rules = num_rules - 1;
-#else
-		flt_rules = IPACM_Wan::flt_rule_v6;
-		rt_rule->num_rules = num_rules;
-#endif
+
+		/* Multicast */
+		rt_rule_entry = &rt_rule->rules[rt_rule->num_rules++];
+		memset(rt_rule_entry, 0, sizeof(*rt_rule_entry));
+		rt_rule_entry->rule.hdr_hdl = qmapHdrHdl;
+		rt_rule_entry->rule.dst = IPA_CLIENT_IPSEC_APPS_WAN_CONS;
+		rt_rule_entry->at_rear = false;
+		rt_rule_entry->rule.hashable = true;
+		rt_rule_entry->rule.attrib.attrib_mask = IPA_FLT_DST_ADDR|IPA_FLT_META_DATA;
+		rt_rule_entry->rule.attrib.u.v6.dst_addr_mask[0] = 0xFF000000;
+		rt_rule_entry->rule.attrib.u.v6.dst_addr_mask[1] = 0x00000000;
+		rt_rule_entry->rule.attrib.u.v6.dst_addr_mask[2] = 0x00000000;
+		rt_rule_entry->rule.attrib.u.v6.dst_addr_mask[3] = 0x00000000;
+		rt_rule_entry->rule.attrib.u.v6.dst_addr[0] = 0xFF000000;
+		rt_rule_entry->rule.attrib.u.v6.dst_addr[1] = 0x00000000;
+		rt_rule_entry->rule.attrib.u.v6.dst_addr[2] = 0x00000000;
+		rt_rule_entry->rule.attrib.u.v6.dst_addr[3] = 0x00000000;
+		rt_rule_entry->rule.attrib.meta_data = META_IS_IPSEC;
+		rt_rule_entry->rule.attrib.meta_data_mask = META_IPSEC_MASK;
+
+		IPACMDBG_H("rt_rule_entry->rule.attrib.attrib_mask = 0x%X\n", rt_rule_entry->rule.attrib.attrib_mask);
+
+		/* fe80::/10 Link-Scoped Unicast */
+		rt_rule_entry = &rt_rule->rules[rt_rule->num_rules++];
+		memset(rt_rule_entry, 0, sizeof(*rt_rule_entry));
+		rt_rule_entry->rule.hdr_hdl = qmapHdrHdl;
+		rt_rule_entry->rule.dst = IPA_CLIENT_IPSEC_APPS_WAN_CONS;
+		rt_rule_entry->at_rear = false;
+		rt_rule_entry->rule.hashable = true;
+		rt_rule_entry->rule.attrib.attrib_mask = IPA_FLT_DST_ADDR|IPA_FLT_META_DATA;
+		rt_rule_entry->rule.attrib.u.v6.dst_addr_mask[0] = 0xFFC00000;
+		rt_rule_entry->rule.attrib.u.v6.dst_addr_mask[1] = 0x00000000;
+		rt_rule_entry->rule.attrib.u.v6.dst_addr_mask[2] = 0x00000000;
+		rt_rule_entry->rule.attrib.u.v6.dst_addr_mask[3] = 0x00000000;
+		rt_rule_entry->rule.attrib.u.v6.dst_addr[0] = 0xFE800000;
+		rt_rule_entry->rule.attrib.u.v6.dst_addr[1] = 0x00000000;
+		rt_rule_entry->rule.attrib.u.v6.dst_addr[2] = 0x00000000;
+		rt_rule_entry->rule.attrib.u.v6.dst_addr[3] = 0x00000000;
+		rt_rule_entry->rule.attrib.meta_data = META_IS_IPSEC;
+		rt_rule_entry->rule.attrib.meta_data_mask = META_IPSEC_MASK;
+
+		IPACMDBG_H("rt_rule_entry->rule.attrib.attrib_mask = 0x%X\n", rt_rule_entry->rule.attrib.attrib_mask);
+
+		/* fec0::/10 Reserved by IETF */
+		rt_rule_entry = &rt_rule->rules[rt_rule->num_rules++];
+		memset(rt_rule_entry, 0, sizeof(*rt_rule_entry));
+		rt_rule_entry->rule.hdr_hdl = qmapHdrHdl;
+		rt_rule_entry->rule.dst = IPA_CLIENT_IPSEC_APPS_WAN_CONS;
+		rt_rule_entry->at_rear = false;
+		rt_rule_entry->rule.hashable = true;
+		rt_rule_entry->rule.attrib.attrib_mask = IPA_FLT_DST_ADDR|IPA_FLT_META_DATA;
+		rt_rule_entry->rule.attrib.u.v6.dst_addr_mask[0] = 0xFFC00000;
+		rt_rule_entry->rule.attrib.u.v6.dst_addr_mask[1] = 0x00000000;
+		rt_rule_entry->rule.attrib.u.v6.dst_addr_mask[2] = 0x00000000;
+		rt_rule_entry->rule.attrib.u.v6.dst_addr_mask[3] = 0x00000000;
+		rt_rule_entry->rule.attrib.u.v6.dst_addr[0] = 0xFEC00000;
+		rt_rule_entry->rule.attrib.u.v6.dst_addr[1] = 0x00000000;
+		rt_rule_entry->rule.attrib.u.v6.dst_addr[2] = 0x00000000;
+		rt_rule_entry->rule.attrib.u.v6.dst_addr[3] = 0x00000000;
+		rt_rule_entry->rule.attrib.meta_data = META_IS_IPSEC;
+		rt_rule_entry->rule.attrib.meta_data_mask = META_IPSEC_MASK;
+
+		IPACMDBG_H("rt_rule_entry->rule.attrib.attrib_mask = 0x%X\n", rt_rule_entry->rule.attrib.attrib_mask);
+
+		/* TCP syn */
+		rt_rule_entry = &rt_rule->rules[rt_rule->num_rules++];
+		memset(rt_rule_entry, 0, sizeof(*rt_rule_entry));
+		rt_rule_entry->rule.hdr_hdl = qmapHdrHdl;
+		rt_rule_entry->rule.dst = IPA_CLIENT_IPSEC_APPS_WAN_CONS;
+		rt_rule_entry->at_rear = false;
+		rt_rule_entry->rule.hashable = false; /* metadata + non 5-tuple */
+		rt_rule_entry->rule.attrib.attrib_mask = IPA_FLT_NEXT_HDR|IPA_FLT_TCP_SYN|IPA_FLT_META_DATA;
+		rt_rule_entry->rule.attrib.u.v6.next_hdr = IPACM_FIREWALL_IPPROTO_TCP;
+		rt_rule_entry->rule.attrib.meta_data = META_IS_IPSEC;
+		rt_rule_entry->rule.attrib.meta_data_mask = META_IPSEC_MASK;
+
+		IPACMDBG_H("rt_rule_entry->rule.attrib.attrib_mask = 0x%X\n", rt_rule_entry->rule.attrib.attrib_mask);
+
+		/* ICMP */
+		rt_rule_entry = &rt_rule->rules[rt_rule->num_rules++];
+		memset(rt_rule_entry, 0, sizeof(*rt_rule_entry));
+		rt_rule_entry->rule.hdr_hdl = qmapHdrHdl;
+		rt_rule_entry->rule.dst = IPA_CLIENT_IPSEC_APPS_WAN_CONS;
+		rt_rule_entry->at_rear = false;
+		rt_rule_entry->rule.hashable = true;
+		rt_rule_entry->rule.attrib.attrib_mask = IPA_FLT_NEXT_HDR|IPA_FLT_META_DATA;
+		rt_rule_entry->rule.attrib.u.v6.next_hdr = IPACM_FIREWALL_IPPROTO_ICMP;
+		rt_rule_entry->rule.attrib.meta_data = META_IS_IPSEC;
+		rt_rule_entry->rule.attrib.meta_data_mask = META_IPSEC_MASK;
+
+		IPACMDBG_H("rt_rule_entry->rule.attrib.attrib_mask = 0x%X\n", rt_rule_entry->rule.attrib.attrib_mask);
+
 		break;
 	default:
 		IPACMERR("Invalid IP type: %d\n", ipType);
@@ -8317,76 +8448,6 @@ int IPACM_Wan::installWanPostIpsecRt(ipa_ip_type ipType)
 	IPACMDBG_H("rt_tbl_name = %s num_rules = %d\n",
 		rt_rule->rt_tbl_name, rt_rule->num_rules);
 
-	for (i = 0; i < rt_rule->num_rules; i++) {
-		rt_rule_entry = &rt_rule->rules[i];
-		rt_rule_entry->rule.hdr_hdl = qmapHdrHdl;
-		rt_rule_entry->rule.dst = IPA_CLIENT_IPSEC_APPS_WAN_CONS;
-		rt_rule_entry->at_rear = false;
-		rt_rule_entry->rule.hashable = true;
-
-#ifdef FEATURE_VLAN_MPDN
-		/* Copy the rule attrib from FLT rule to RT rule */
-		IPACMDBG_H("flt_rules[%d].flt_rule.rule.attrib.attrib_mask = 0x%X\n",
-			i, flt_rules[i].flt_rule.rule.attrib.attrib_mask);
-		memcpy(&rt_rule_entry->rule.attrib, &flt_rules[i].flt_rule.rule.attrib,
-			sizeof(rt_rule_entry->rule.attrib));
-
-		/* Fix TCP SYN rules translation */
-		if (flt_rules[i].flt_rule.rule.eq_attrib.protocol_eq == IPACM_FIREWALL_IPPROTO_TCP)
-		{
-#else
-		/* Copy the rule attrib from FLT rule to RT rule */
-		IPACMDBG_H("flt_rules[%d].rule.attrib.attrib_mask = 0x%X\n",
-			i, flt_rules[i].rule.attrib.attrib_mask);
-		memcpy(&rt_rule_entry->rule.attrib, &flt_rules[i].rule.attrib,
-			sizeof(rt_rule_entry->rule.attrib));
-
-		/* Fix TCP SYN rules translation */
-		if (flt_rules[i].rule.eq_attrib.protocol_eq == IPACM_FIREWALL_IPPROTO_TCP)
-		{
-#endif
-			if (ipType == IPA_IP_v4)
-			{
-				rt_rule_entry->rule.attrib.u.v4.protocol = IPACM_FIREWALL_IPPROTO_TCP;
-				rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_PROTOCOL|IPA_FLT_TCP_SYN;
-			}
-			else
-			{
-				rt_rule_entry->rule.attrib.u.v6.next_hdr = IPACM_FIREWALL_IPPROTO_TCP;
-				rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_NEXT_HDR|IPA_FLT_TCP_SYN;
-			}
-			rt_rule_entry->rule.hashable = false;
-		}
-
-		/* Frag rules must be non-hashable */
-		if (rt_rule_entry->rule.attrib.attrib_mask & IPA_FLT_FRAGMENT)
-			rt_rule_entry->rule.hashable = false;
-
-		rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_META_DATA;
-		rt_rule_entry->rule.attrib.meta_data = META_IS_IPSEC;
-		rt_rule_entry->rule.attrib.meta_data_mask = META_IPSEC_MASK;
-
-		IPACMDBG_H("rt_rule_entry->rule.attrib.attrib_mask = 0x%X\n",
-			rt_rule_entry->rule.attrib.attrib_mask);
-	}
-
-	/* Since we don't use NAT in the the IPsec topology, we must add the TCP syn rule for IPv4 as well */
-	if (ipType == IPA_IP_v4) {
-		rt_rule_entry = &rt_rule->rules[rt_rule->num_rules - 1];
-		memset(rt_rule_entry, 0, sizeof(*rt_rule_entry));
-		rt_rule_entry->rule.hdr_hdl = qmapHdrHdl;
-		rt_rule_entry->rule.dst = IPA_CLIENT_IPSEC_APPS_WAN_CONS;
-		rt_rule_entry->at_rear = false;
-		rt_rule_entry->rule.hashable = false;
-		rt_rule_entry->rule.attrib.attrib_mask =
-			IPA_FLT_PROTOCOL|IPA_FLT_TCP_SYN|IPA_FLT_META_DATA;
-		rt_rule_entry->rule.attrib.u.v4.protocol = IPACM_FIREWALL_IPPROTO_TCP;
-		rt_rule_entry->rule.attrib.meta_data = META_IS_IPSEC;
-		rt_rule_entry->rule.attrib.meta_data_mask = META_IS_IPSEC;
-
-		IPACMDBG_H("rt_rule_entry->rule.attrib.attrib_mask = 0x%X\n",
-			rt_rule_entry->rule.attrib.attrib_mask);
-	}
 
 	if (false == m_routing.AddRoutingRule(rt_rule))
 	{
@@ -8407,8 +8468,6 @@ int IPACM_Wan::installWanPostIpsecRt(ipa_ip_type ipType)
 	num_ipsec_post_pol_rt[ipType] = rt_rule->num_rules;
 
 end:
-	if (rt_rule_del)
-		free(rt_rule_del);
 	if (rt_rule)
 		free(rt_rule);
 	return res;

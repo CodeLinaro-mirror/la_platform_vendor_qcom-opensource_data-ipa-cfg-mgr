@@ -520,8 +520,8 @@ public:
 	/*
 	 * The FLT rules that we send to Q6 via QMI are being skipped by IPsec packets.
 	 * Therefore we have to add these rules after IPsec DL policying. Since the policying is done
-	 * In 3rd round filtering table, the copied rules have to go to the DL routing table.
-	 * This method translates all QMI IPv4 and IPv6 rules into routing rules and installs them.
+	 * In 3rd round filtering table, the rules have to go to the DL routing table.
+	 * This method creates all routing rules for an IP type and installs them.
 	 *
 	 * @ipType: IP type
 	 */

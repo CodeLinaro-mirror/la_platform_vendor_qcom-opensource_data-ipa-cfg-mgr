@@ -699,7 +699,7 @@ void IPACM_Wlan::event_callback(ipa_cm_event_id event, void *param)
 			if(ip_type == IPA_IP_v6 || ip_type == IPA_IP_MAX)
 			{
 				IPACMERR("IPV6 %x %x.\n", data_wan->ipv6_prefix[0], data_wan->ipv6_prefix[1]);
-				if(handle_neigh_cache_ops(POST_NEIGH_CLIENT_IP_ADDR_EVT, data_wan->ipv6_prefix) == IPACM_SUCCESS)
+				if(handle_neigh_cache_ops(POST_NEIGH_CLIENT_IP_ADD_EVT, data_wan->ipv6_prefix) == IPACM_SUCCESS)
 				{
 					IPACMDBG_H("Posted Neighbor event from neigh cache with prefix 0x%08x:%08x\n",
 						data_wan->ipv6_prefix[0],data_wan->ipv6_prefix[1]);
@@ -787,7 +787,7 @@ void IPACM_Wlan::event_callback(ipa_cm_event_id event, void *param)
 				IPACM_Lan::handle_wan_up(IPA_IP_v6);
 			}
 
-			if(handle_neigh_cache_ops(POST_NEIGH_CLIENT_IP_ADDR_EVT, data_wan->ipv6_prefix) == IPACM_SUCCESS)
+			if(handle_neigh_cache_ops(POST_NEIGH_CLIENT_IP_ADD_EVT, data_wan->ipv6_prefix) == IPACM_SUCCESS)
 			{
 				IPACMDBG_H("Posted Neighbor event from neigh cache with prefix 0x%08x:%08x\n",
 					data_wan->ipv6_prefix[0],data_wan->ipv6_prefix[1]);
@@ -3868,6 +3868,7 @@ int IPACM_Wlan::handle_wlan_vlan_neighbor(ipacm_event_data_all *data)
 	std::list <ipacm_event_data_all>::iterator it;
 	uint16_t vlan_id = 0;
 	uint8_t priority = 0;
+	ipacm_bridge *bridge = NULL;
 
 	IPACMDBG_H("\n");
 	memset(&data_all, 0, sizeof(ipacm_event_data_all));
@@ -3892,7 +3893,8 @@ int IPACM_Wlan::handle_wlan_vlan_neighbor(ipacm_event_data_all *data)
 #endif
 	data_vlan = (ipacm_event_new_neigh_vlan *)data;
 
-	if(data_vlan->bridge == NULL && data_vlan->data_all.iptype == IPA_IP_v4)
+	bridge = IPACM_Iface::ipacmcfg->get_vlan_bridge_from_vid(vlan_id);
+	if(!bridge && data_vlan->data_all.iptype == IPA_IP_v4)
 	{
 		IPACMERR("Got v4 Neighbor with no bridge return\n");
 		return IPACM_FAILURE;
@@ -3917,7 +3919,7 @@ int IPACM_Wlan::handle_wlan_vlan_neighbor(ipacm_event_data_all *data)
 		}
 		else if(data_vlan->data_all.iptype == IPA_IP_v4)
 		{
-			add_vlan_private_subnet(data_vlan->bridge);
+			add_vlan_private_subnet(bridge);
 		}
 	}
 

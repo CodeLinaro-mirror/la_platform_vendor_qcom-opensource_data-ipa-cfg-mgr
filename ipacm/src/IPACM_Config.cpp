@@ -2295,6 +2295,25 @@ ipacm_bridge *IPACM_Config::get_vlan_bridge(char *name)
 
 ipacm_bridge *IPACM_Config::get_vlan_bridge_from_vid(uint16_t vlan_id)
 {
+	IPACMDBG_H("Getting VLAN Bridge from VID: %d\n", vlan_id);
+	if(is_dummy_VID(vlan_id))
+	{
+		ipa_bridge_vlan_mapping_info mapping_info = {};
+		mapping_info.vlan_id = vlan_id;
+		if(get_bridge_vlan_mapping(&mapping_info, true))
+			return NULL;
+
+		// Now get the actual bridge using the bridge name directly
+		ipacm_bridge* bridge = get_vlan_bridge(mapping_info.bridge_name);
+		if(bridge)
+		{
+			IPACMDBG_H("Found bridge %s for dummy VID %d\n",
+				mapping_info.bridge_name, vlan_id);
+			return bridge;
+		}
+		return NULL;
+	}
+
 	for(int i = 0; i < IPA_MAX_NUM_BRIDGES; i++)
 	{
 		if(vlan_id == IPACM_Iface::ipacmcfg->vlan_bridges[i].associate_VID)

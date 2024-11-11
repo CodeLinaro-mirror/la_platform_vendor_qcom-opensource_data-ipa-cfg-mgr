@@ -26,8 +26,8 @@ WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
 OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
 IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-Changes from Qualcomm Innovation Center are provided under the following license
-Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+Changes from Qualcomm Technologies, Inc. are provided under the following license:
+Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
 SPDX-License-Identifier: BSD-3-Clause-Clear
 */
 /*!
@@ -53,10 +53,8 @@ SPDX-License-Identifier: BSD-3-Clause-Clear
 #include "IPACM_Listener.h"
 #include "IPACM_Iface.h"
 
-
 using std::string;
-
-
+using std::list;
 
 /* Support 32 softap + 32 vlan eth + 32 usb vlan + 10 wifi-backhaul */
 #define IPA_MAX_NUM_NEIGHBOR_CLIENTS  150
@@ -81,14 +79,21 @@ public:
 
 	IPACM_Neighbor();
 
-	void event_callback(ipa_cm_event_id event,
-											void *data);
+	void event_callback(ipa_cm_event_id event, void *data);
 
 	void post_phys_iface_event(const char *iface_name, int ipa_if_num, int if_idx);
 
-	void update_neigh_cache();
+	void handle_neighbor_add_del(ipa_cm_event_id event, void *param);
+	void handle_v4_neighbor(ipa_cm_event_id event, ipacm_event_data_all *data, int ipa_interface_index);
+	void handle_v6_neighbor(ipa_cm_event_id event, ipacm_event_data_all *data, int ipa_interface_index);
+	void add_neighbor_client(ipa_neighbor_client* element);
 	int parse_bridge_info(int index, struct ipa_bridge_vlan_mapping_info *data);
 	int parse_bridge_name(int index, struct ipa_bridge_vlan_mapping_info *data);
+	void handle_neigh_clients_ops(ipacm_neigh_cache_ops_type ops, void* data,
+				bool post_data = false, ipa_ip_type iptype = IPA_IP_v4);
+	bool validate_bridge_vid(char* iface_name, const ipacm_bridge* expected_bridge,
+					uint16_t& out_vlan_id);
+
 private:
 
 	/**
@@ -100,55 +105,12 @@ private:
 	 */
 	static string expandIpv4(unsigned int ip) {
 		string ipString = std::to_string((ip >> 24u) & 0xffu);
-		ipString += "." + std::to_string((ip >> 16u) & 0xfu);
+		ipString += "." + std::to_string((ip >> 16u) & 0xffu);
 		ipString += "." + std::to_string((ip >> 8u) & 0xffu);
 		ipString += "." + std::to_string(ip & 0xffu);
 		return ipString;
 	}
-	/**
-	 * Clean neighbor client information cached corresponding to a
-	 * Linux interface index.
-	 *
-	 * @param interfaceIndex Linux interface index of the client to
-	 *      		 be cleaned from cache
-	 */
-	void cleanCache(const uint8_t interfaceIndex) {
-		ipacm_event_data_all *eventData = nullptr;
-		ipacm_cmd_q_data eventsQItem;
 
-		IPACMERR("interfaceIndex = %d\n", interfaceIndex);
-		for (int i = 0; i < num_neighbor_client; i++) {
-			IPACMERR("iface_name = %s, iface_index = %d, v4_addr = %s, ipa_if_num = %d\n", neighbor_client[i].iface_name,
-				neighbor_client[i].iface_index, expandIpv4(neighbor_client[i].v4_addr).c_str(),
-				neighbor_client[i].ipa_if_num);
-			if (neighbor_client[i].iface_index == interfaceIndex) {
-				eventData = (ipacm_event_data_all *)malloc(sizeof(*eventData));
-				if (eventData == NULL)
-				{
-					IPACMERR("[ALERT] malloc failed: i = %d, Not sending IPA_DEL_NEIGH_EVENT\n", i);
-					continue;
-				}
-				memset(eventData, 0, sizeof(*eventData));
-				memcpy(eventData->mac_addr, neighbor_client[i].mac_addr, sizeof(eventData->mac_addr));
-				eventData->if_index = neighbor_client[i].iface_index;
-				strlcpy(eventData->iface_name, neighbor_client[i].iface_name, sizeof(eventData->iface_name));
-				if (neighbor_client[i].v4_addr) {
-					eventData->iptype = IPA_IP_v4;
-					eventData->ipv4_addr = neighbor_client[i].v4_addr;
-				}
-				eventsQItem.event = IPA_DEL_NEIGH_EVENT;
-				eventsQItem.evt_data = eventData;
-				IPACMERR("Posting %s\n", IPACM_Iface::ipacmcfg->getEventName(eventsQItem.event));
-				IPACM_EvtDispatcher::PostEvt(&eventsQItem);
-			}
-		}
-	}
-
-	int num_neighbor_client;
-
-	int circular_index;
-
-	ipa_neighbor_client neighbor_client[IPA_MAX_NUM_NEIGHBOR_CLIENTS];
-
+	std::list<ipa_neighbor_client> neighbor_client;
 };
 #endif /* IPACM_NEIGHBOR_H */

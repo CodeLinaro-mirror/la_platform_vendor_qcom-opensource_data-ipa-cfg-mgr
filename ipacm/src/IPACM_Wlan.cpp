@@ -675,7 +675,7 @@ void IPACM_Wlan::event_callback(ipa_cm_event_id event, void *param)
 			if(ip_type == IPA_IP_v6 || ip_type == IPA_IP_MAX)
 			{
 				IPACM_LOG(IPACM_LOG_ERR, "IPV6 %x %x.\n", data_wan->ipv6_prefix[0], data_wan->ipv6_prefix[1]);
-				if(handle_neigh_cache_ops(POST_NEIGH_CLIENT_IP_ADDR_EVT, data_wan->ipv6_prefix) == IPACM_SUCCESS)
+				if(handle_neigh_cache_ops(POST_NEIGH_CLIENT_IP_ADD_EVT, data_wan->ipv6_prefix) == IPACM_SUCCESS)
 				{
 					IPACM_LOG(IPACM_LOG_DEBUG, "Posted Neighbor event from neigh cache with prefix 0x%08x:%08x\n",
 						data_wan->ipv6_prefix[0],data_wan->ipv6_prefix[1]);
@@ -767,7 +767,7 @@ void IPACM_Wlan::event_callback(ipa_cm_event_id event, void *param)
 				IPACM_Lan::handle_wan_up(IPA_IP_v6);
 			}
 
-			if(handle_neigh_cache_ops(POST_NEIGH_CLIENT_IP_ADDR_EVT, data_wan->ipv6_prefix) == IPACM_SUCCESS)
+			if(handle_neigh_cache_ops(POST_NEIGH_CLIENT_IP_ADD_EVT, data_wan->ipv6_prefix) == IPACM_SUCCESS)
 			{
 				IPACM_LOG(IPACM_LOG_DEBUG, "Posted Neighbor event from neigh cache with prefix 0x%08x:%08x\n",
 					data_wan->ipv6_prefix[0],data_wan->ipv6_prefix[1]);
@@ -3900,12 +3900,12 @@ bool IPACM_Wlan::is_guest_ap()
 #ifdef FEATURE_VLAN_MPDN
 int IPACM_Wlan::handle_wlan_vlan_neighbor(ipacm_event_data_all *data)
 {
-	ipacm_event_new_neigh_vlan *data_vlan;
 	bool new_prefix = false;
 	ipacm_event_data_all data_all;
 	std::list <ipacm_event_data_all>::iterator it;
 	uint16_t vlan_id = 0;
 	uint8_t priority = 0;
+	ipacm_bridge *bridge = NULL;
 
 	memset(&data_all, 0, sizeof(ipacm_event_data_all));
 #ifdef IPA_VLAN_PRIORITY
@@ -3927,19 +3927,18 @@ int IPACM_Wlan::handle_wlan_vlan_neighbor(ipacm_event_data_all *data)
 #else
 	IPACM_LOG(IPACM_LOG_INFO, "VLAN IF %s got client, vlan id %d \n", data->iface_name, vlan_id);
 #endif
-	data_vlan = (ipacm_event_new_neigh_vlan *)data;
-
-	if(data_vlan->bridge == NULL && data_vlan->data_all.iptype == IPA_IP_v4)
+	bridge = IPACM_Iface::ipacmcfg->get_vlan_bridge_from_vid(vlan_id);
+	if(!bridge && data->iptype == IPA_IP_v4)
 	{
 		IPACM_LOG(IPACM_LOG_ERR, "Got v4 Neighbor with no bridge return\n");
 		return IPACM_FAILURE;
 	}
 	if(IPACM_Iface::ipacmcfg->ipacm_mpdn_enable) {
-		if(data_vlan->data_all.iptype == IPA_IP_v6)
+		if(data->iptype == IPA_IP_v6)
 		{
-			if(IPACM_Wan::is_global_ipv6_addr(data_vlan->data_all.ipv6_addr))
+			if(IPACM_Wan::is_global_ipv6_addr(data->ipv6_addr))
 			{
-				if (!IPACM_Wan::isWan_active_with_prefix(data_vlan->data_all.ipv6_addr))
+				if (!IPACM_Wan::isWan_active_with_prefix(data->ipv6_addr))
 				{
 					if(handle_neigh_cache_ops(NEIGH_CLIENT_ADD, data) != IPACM_SUCCESS)
 					{
@@ -3949,12 +3948,12 @@ int IPACM_Wlan::handle_wlan_vlan_neighbor(ipacm_event_data_all *data)
 				}
 
 				/* add ipv6 prefix */
-				new_prefix = IPACM_Iface::ipacmcfg->add_vlan_ipv6_prefix(data_vlan->data_all.ipv6_addr, ipa_if_num, vlan_id);
+				new_prefix = IPACM_Iface::ipacmcfg->add_vlan_ipv6_prefix(data->ipv6_addr, ipa_if_num, vlan_id);
 			}
 		}
-		else if(data_vlan->data_all.iptype == IPA_IP_v4)
+		else if(data->iptype == IPA_IP_v4)
 		{
-			add_vlan_private_subnet(data_vlan->bridge);
+			add_vlan_private_subnet(bridge);
 		}
 	}
 
@@ -3981,7 +3980,7 @@ int IPACM_Wlan::handle_wlan_vlan_neighbor(ipacm_event_data_all *data)
 		if(new_prefix || ((data->iptype == IPA_IP_v6) && IPACM_Iface::ipacmcfg->is_offload_ipv6_prefix(data->ipv6_addr)))
 		{
 			ipacm_cmd_q_data evt_data;
-			ipacm_event_route_vlan *data;
+			ipacm_event_route_vlan *route_evt_data;
 
 			check_vlan_PDNUp(IPA_IP_v6);
 
@@ -3990,32 +3989,32 @@ int IPACM_Wlan::handle_wlan_vlan_neighbor(ipacm_event_data_all *data)
 						new_prefix,
 						IPACM_Wan::backhaul_ipv6_prefix[0],
 						IPACM_Wan::backhaul_ipv6_prefix[1],
-						data_vlan->data_all.ipv6_addr[0],
-						data_vlan->data_all.ipv6_addr[1]);
+						data->ipv6_addr[0],
+						data->ipv6_addr[1]);
 
 			evt_data.event = IPA_ROUTE_ADD_VLAN_PDN_EVENT;
-			data = (ipacm_event_route_vlan *)malloc(sizeof(ipacm_event_route_vlan));
-			if(!data)
+			route_evt_data = (ipacm_event_route_vlan *)malloc(sizeof(ipacm_event_route_vlan));
+			if(!route_evt_data)
 			{
 				IPACM_LOG(IPACM_LOG_ERR, "couldn't allocate memory for new vlan pdn event\n");
 				return IPACM_FAILURE;
 			}
-			memset(data, 0, sizeof(ipacm_event_route_vlan));
+			memset(route_evt_data, 0, sizeof(ipacm_event_route_vlan));
 
 			uint32_t ip4_addr;
-			if(get_wlan_client_ip4_addr(data_vlan->data_all.mac_addr, ip4_addr, vlan_id) == IPACM_SUCCESS) {
+			if(get_wlan_client_ip4_addr(data->mac_addr, ip4_addr, vlan_id) == IPACM_SUCCESS) {
 				IPACM_LOG(IPACM_LOG_DEBUG, "ipv4 address 0x%X is valid, generate IPA_ROUTE_ADD_VLAN_PDN_EVENT v4 as well\n", ip4_addr);
-				data->iptype = IPA_IP_MAX;
-				data->wan_ipv4_addr = IPA_DUMMY_PREFIX;
+				route_evt_data->iptype = IPA_IP_MAX;
+				route_evt_data->wan_ipv4_addr = IPA_DUMMY_PREFIX;
 			}
 			else {
-				data->iptype = IPA_IP_v6;
+				route_evt_data->iptype = IPA_IP_v6;
 				IPACM_LOG(IPACM_LOG_ERR, "ipv4 address is not valid, don't generate IPA_ROUTE_ADD_VLAN_PDN_EVENT v4\n");
 			}
-			data->VlanID = vlan_id;
-			data->wan_ipv6_prefix[0] = data_vlan->data_all.ipv6_addr[0];
-			data->wan_ipv6_prefix[1] = data_vlan->data_all.ipv6_addr[1];
-			evt_data.evt_data = data;
+			route_evt_data->VlanID = vlan_id;
+			route_evt_data->wan_ipv6_prefix[0] = data->ipv6_addr[0];
+			route_evt_data->wan_ipv6_prefix[1] = data->ipv6_addr[1];
+			evt_data.evt_data = route_evt_data;
 			IPACM_EvtDispatcher::PostEvt(&evt_data);
 		}
 

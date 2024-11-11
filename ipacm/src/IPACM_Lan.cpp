@@ -1084,7 +1084,7 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 				}
 			}
 
-			if(handle_neigh_cache_ops(POST_NEIGH_CLIENT_IP_ADDR_EVT, data_wan->ipv6_prefix) == IPACM_SUCCESS)
+			if(handle_neigh_cache_ops(POST_NEIGH_CLIENT_IP_ADD_EVT, data_wan->ipv6_prefix) == IPACM_SUCCESS)
 			{
 				IPACM_LOG(IPACM_LOG_DEBUG, "Posted Neighbor event from neigh cache with prefix 0x%08x:%08x\n",
 					data_wan->ipv6_prefix[0],data_wan->ipv6_prefix[1]);
@@ -1762,7 +1762,7 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 
 			if(ip_type == IPA_IP_v6 || ip_type == IPA_IP_MAX)
 			{
-				if(handle_neigh_cache_ops(POST_NEIGH_CLIENT_IP_ADDR_EVT, data_wan->ipv6_prefix, data_wan->vlanID) == IPACM_SUCCESS)
+				if(handle_neigh_cache_ops(POST_NEIGH_CLIENT_IP_ADD_EVT, data_wan->ipv6_prefix, data_wan->vlanID) == IPACM_SUCCESS)
 				{
 					IPACM_LOG(IPACM_LOG_DEBUG, "Posted Neighbor event from neigh cache with prefix 0x%08x:%08x\n",
 					data_wan->ipv6_prefix[0],data_wan->ipv6_prefix[1]);
@@ -2381,7 +2381,7 @@ int IPACM_Lan::handle_neigh_cache_ops(ipacm_neigh_cache_ops_type ops, void *data
 		}
 		break;
 
-	case POST_NEIGH_CLIENT_IP_ADDR_EVT:
+	case POST_NEIGH_CLIENT_IP_ADD_EVT:
 		{
 			if(data == NULL)
 			{
@@ -2566,7 +2566,6 @@ int IPACM_Lan::del_ul_flt_rules(enum ipa_ip_type iptype)
 #ifdef FEATURE_VLAN_MPDN
 int IPACM_Lan::handle_vlan_neighbor(ipacm_event_data_all *data)
 {
-	ipacm_event_new_neigh_vlan *data_vlan;
 	uint16_t vlan_id = 0;
 	uint8_t priority = 0;
 	ipacm_event_data_all data_all;
@@ -2604,31 +2603,24 @@ int IPACM_Lan::handle_vlan_neighbor(ipacm_event_data_all *data)
 	IPACM_LOG(IPACM_LOG_DEBUG, "VLAN IF %s got client, vlan id %d \n", data->iface_name, vlan_id);
 #endif
 	data->vlanID = vlan_id;
-	data_vlan = (ipacm_event_new_neigh_vlan *)data;
-
-	if(!data_vlan->bridge && data_vlan->data_all.iptype == IPA_IP_v4)
-	{
-		IPACM_LOG(IPACM_LOG_DEBUG, "non bridged VLAN interface for v4 %s, ignoring\n", data->iface_name);
-		return IPACM_FAILURE;
-	}
 
 	bridge = IPACM_Iface::ipacmcfg->get_vlan_bridge_from_vid(vlan_id);
-	if(!bridge && data_vlan->data_all.iptype == IPA_IP_v4)
+	if(!bridge && data->iptype == IPA_IP_v4)
 	{
 		IPACM_LOG(IPACM_LOG_DEBUG, "non bridged VLAN interface for v4 %s, ignoring\n", data->iface_name);
 		return IPACM_FAILURE;
 	}
-	if(data_vlan->data_all.iptype == IPA_IP_v6 || data_vlan->data_all.iptype == IPA_IP_MAX)
+	if(data->iptype == IPA_IP_v6 || data->iptype == IPA_IP_MAX)
 	{
 		is_ula_ipv6_addr = IPACM_Iface::ipacmcfg->is_unique_local_ipv6_addr(data->ipv6_addr);
 	}
 
 	if(IPACM_Iface::ipacmcfg->ipacm_mpdn_enable) {
-		if(data_vlan->data_all.iptype == IPA_IP_v6)
+		if(data->iptype == IPA_IP_v6)
 		{
-			if(IPACM_Wan::is_global_ipv6_addr(data_vlan->data_all.ipv6_addr))
+			if(IPACM_Wan::is_global_ipv6_addr(data->ipv6_addr))
 			{
-				if (!IPACM_Wan::isWan_active_with_prefix(data_vlan->data_all.ipv6_addr) &&
+				if (!IPACM_Wan::isWan_active_with_prefix(data->ipv6_addr) &&
 					!(IPACM_Iface::ipacmcfg->ipv6_nat_enable && is_ula_ipv6_addr))
 				{
 					if(handle_neigh_cache_ops(NEIGH_CLIENT_ADD, data) != IPACM_SUCCESS)
@@ -2639,10 +2631,10 @@ int IPACM_Lan::handle_vlan_neighbor(ipacm_event_data_all *data)
 				}
 
 				/* add ipv6 prefix */
-				IPACM_Iface::ipacmcfg->add_vlan_ipv6_prefix(data_vlan->data_all.ipv6_addr, ipa_if_num, vlan_id);
+				IPACM_Iface::ipacmcfg->add_vlan_ipv6_prefix(data->ipv6_addr, ipa_if_num, vlan_id);
 			}
 		}
-		else if(data_vlan->data_all.iptype == IPA_IP_v4)
+		else if(data->iptype == IPA_IP_v4)
 		{
 			/* This is to avoid installing IPA private subnet Filter rules in case of
 			 * IPPT without NAT scenario to avoid packets taking SW path because we
@@ -2710,7 +2702,7 @@ int IPACM_Lan::handle_vlan_neighbor(ipacm_event_data_all *data)
 			return IPACM_FAILURE;
 		}
 
-		if(data_vlan->data_all.iptype == IPA_IP_v4)
+		if(data->iptype == IPA_IP_v4)
 		{
 			IPACM_LOG(IPACM_LOG_DEBUG, "construct ETH header and route rules \n");
 			/* Associate with IP and construct RT-rule */
@@ -2721,9 +2713,9 @@ int IPACM_Lan::handle_vlan_neighbor(ipacm_event_data_all *data)
 		}
 		else
 		{
-			if(((get_client_memptr(eth_client, eth_index)->client_backhaul_prefix[0] == data_vlan->data_all.ipv6_addr[0]) &&
-			   (get_client_memptr(eth_client, eth_index)->client_backhaul_prefix[1] == data_vlan->data_all.ipv6_addr[1]))||
-			   !IPACM_Wan::is_global_ipv6_addr(data_vlan->data_all.ipv6_addr))
+			if(((get_client_memptr(eth_client, eth_index)->client_backhaul_prefix[0] == data->ipv6_addr[0]) &&
+			   (get_client_memptr(eth_client, eth_index)->client_backhaul_prefix[1] == data->ipv6_addr[1]))||
+			   !IPACM_Wan::is_global_ipv6_addr(data->ipv6_addr))
 			{
 				IPACM_LOG(IPACM_LOG_DEBUG, "construct ETH header and route rules \n");
 				if(handle_eth_client_ipaddr(data) == IPACM_FAILURE)
@@ -2753,7 +2745,7 @@ int IPACM_Lan::handle_vlan_neighbor(ipacm_event_data_all *data)
 		return IPACM_FAILURE;
 	}
 
-	if(data_vlan->data_all.iptype == IPA_IP_v4)
+	if(data->iptype == IPA_IP_v4)
 	{
 		IPACM_LOG(IPACM_LOG_DEBUG, "construct ETH header and route rules \n");
 		/* Associate with IP and construct RT-rule */
@@ -2764,9 +2756,9 @@ int IPACM_Lan::handle_vlan_neighbor(ipacm_event_data_all *data)
 	}
 	else
 	{
-		if(((get_client_memptr(eth_client, eth_index)->client_backhaul_prefix[0] == data_vlan->data_all.ipv6_addr[0]) &&
-			  (get_client_memptr(eth_client, eth_index)->client_backhaul_prefix[1] == data_vlan->data_all.ipv6_addr[1]))||
-			  !IPACM_Wan::is_global_ipv6_addr(data_vlan->data_all.ipv6_addr))
+		if(((get_client_memptr(eth_client, eth_index)->client_backhaul_prefix[0] == data->ipv6_addr[0]) &&
+			  (get_client_memptr(eth_client, eth_index)->client_backhaul_prefix[1] == data->ipv6_addr[1]))||
+			  !IPACM_Wan::is_global_ipv6_addr(data->ipv6_addr))
 		{
 			IPACM_LOG(IPACM_LOG_DEBUG, "construct ETH header and route rules \n");
 			if(handle_eth_client_ipaddr(data) == IPACM_FAILURE)
@@ -2809,16 +2801,16 @@ int IPACM_Lan::handle_vlan_neighbor(ipacm_event_data_all *data)
 		if(!IPACM_Iface::ipacmcfg->check_l2tp_iface(data->iface_name))
 #endif
 	{
-		if(data_vlan->data_all.iptype == IPA_IP_v4)
+		if(data->iptype == IPA_IP_v4)
 		{
 			handle_eth_client_route_rule(data->mac_addr, data->iptype, vlan_id);
 			install_all_qos_route_rule(data->mac_addr, vlan_id, NULL);
 		}
 		else
 		{
-			if(((get_client_memptr(eth_client, eth_index)->client_backhaul_prefix[0] == data_vlan->data_all.ipv6_addr[0]) &&
-			   (get_client_memptr(eth_client, eth_index)->client_backhaul_prefix[1] == data_vlan->data_all.ipv6_addr[1]))||
-			   !IPACM_Wan::is_global_ipv6_addr(data_vlan->data_all.ipv6_addr))
+			if(((get_client_memptr(eth_client, eth_index)->client_backhaul_prefix[0] == data->ipv6_addr[0]) &&
+			   (get_client_memptr(eth_client, eth_index)->client_backhaul_prefix[1] == data->ipv6_addr[1]))||
+			   !IPACM_Wan::is_global_ipv6_addr(data->ipv6_addr))
 			{
 				IPACM_LOG(IPACM_LOG_DEBUG, "Neighbor received after conntrack. Installing Route rules now...\n");
 				handle_eth_client_route_rule(data->mac_addr, data->iptype, vlan_id);

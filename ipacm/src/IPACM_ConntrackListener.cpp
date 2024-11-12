@@ -266,6 +266,7 @@ void IPACM_ConntrackListener::event_callback(ipa_cm_event_id evt,
 	 case IPA_HANDLE_LAN_VLAN_PDN_DOWN_STATIC:
 	 		{
 				IPACMDBG_H("Received IPA_HANDLE_LAN_VLAN_PDN_DOWN_STATIC event\n");
+#ifdef FEATURE_STATIC_POLICY
 				const ipacm_event_vlan_pdn* vlandown = static_cast<const ipacm_event_vlan_pdn*>(data);
 				if(vlandown == NULL)
 				{
@@ -288,6 +289,7 @@ void IPACM_ConntrackListener::event_callback(ipa_cm_event_id evt,
 					HandleInterfaceDown_StaticPolicy(data);
 					HandleInterfaceDownV6_StaticPolicy(data);
 				}
+#endif
 			}
 			break;
 

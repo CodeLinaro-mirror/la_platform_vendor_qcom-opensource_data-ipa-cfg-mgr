@@ -217,7 +217,11 @@ IPACM_Wan::IPACM_Wan(int iface_index,
 	{
 		IPACM_SYSLOG("The new WAN interface is modem.\n");
 		is_default_gateway = false;
-		query_ext_prop();
+		if(query_ext_prop()!= IPACM_SUCCESS)
+		{
+			IPACMERR("Failed to get external properties.\n");
+			return;
+		}
 	}
 	else
 	{

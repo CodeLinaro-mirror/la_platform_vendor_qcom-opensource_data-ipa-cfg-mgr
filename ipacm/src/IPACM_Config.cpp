@@ -1531,7 +1531,6 @@ void IPACM_Config::del_bridge_vlan_mapping(uint16_t *data, uint16_t *vlan_id)
 			IPACMDBG_H("Found the bridge mapping (%s->%d)\n",
 				it_mapping->bridge_iface_name,
 				it_mapping->bridge_associated_VID);
-			m_bridge_vlan_mapping.erase(it_mapping);
 
 			ret = ipa_get_if_name(iface_name, it_mapping->bridge_if_index);
 
@@ -1542,6 +1541,7 @@ void IPACM_Config::del_bridge_vlan_mapping(uint16_t *data, uint16_t *vlan_id)
 					it_mapping->bridge_iface_name);
 				bridge->associate_VID = 0;
 			}
+			m_bridge_vlan_mapping.erase(it_mapping);
 			break;
 		}
 	}
@@ -2553,7 +2553,6 @@ void IPACM_Config::del_l2tp_vlan_mapping(l2tp_session_info *data)
 		{
 			l2tp_bridge_vlan = it->l2tp_bridge_vlan_id;
 			m_l2tp_vlan_mapping.erase(it);
-			it--;
 			DelNatIfaces(data->l2tp_iface_name);
 			if(num_ipa_l2tp_session > 0)
 			{
@@ -2897,7 +2896,7 @@ void IPACM_Config::add_dummy_vlan_mapping(char *bridge_iface, char* client_iface
 	int ent_exist = 0;
 	ipa_vlan_iface_info vlan_info;
 	uint16_t vlan_id;
-	uint8_t priority;
+	uint8_t priority = 0;
 
 	if(IPACM_Iface::ipacmcfg->is_added_vlan_iface(client_iface))
 	{

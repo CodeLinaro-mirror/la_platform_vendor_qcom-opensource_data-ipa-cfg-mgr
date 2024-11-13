@@ -25,6 +25,10 @@
  * WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *
+ * Changes from Qualcomm Innovation Center, Inc. are provided under the following license:
+ * Copyright (c) 2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear.
  */
 /*!
 		@file
@@ -198,7 +202,11 @@ IPACM_Wan::IPACM_Wan(int iface_index,
 	{
 		IPACMDBG_H("The new WAN interface is modem.\n");
 		is_default_gateway = false;
-		query_ext_prop();
+		if(query_ext_prop()!= IPACM_SUCCESS)
+		{
+			IPACMERR("Failed to get external properties.\n");
+			return;
+		}
 	}
 	else
 	{

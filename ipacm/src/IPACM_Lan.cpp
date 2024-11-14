@@ -11879,8 +11879,8 @@ int IPACM_Lan::handle_uplink_filter_rule(ipacm_ext_prop *prop, ipa_ip_type iptyp
 #ifdef FEATURE_IPA_V3
 			flt_rule_entry.rule.hashable = prop->prop[cnt].is_rule_hashable;
 			flt_rule_entry.rule.rule_id = prop->prop[cnt].rule_id;
-			/* Skip Metadata equation for WLAN VLAN scenarios to handle XLAT. */
-			if (!idx && rx_prop->rx[idx].attrib.attrib_mask & IPA_FLT_META_DATA) { //turn on meta-data equation
+			/* Skip Metadata equation for WLAN VLAN and static policy scenarios to handle XLAT. */
+			if (!idx && rx_prop->rx[idx].attrib.attrib_mask & IPA_FLT_META_DATA && !(static_policy && is_xlat)) { //turn on meta-data equation
 				flt_rule_entry.rule.eq_attrib.rule_eq_bitmap |= (1 << 9);
 				flt_rule_entry.rule.eq_attrib.metadata_meq32_present = 1;
 				flt_rule_entry.rule.eq_attrib.metadata_meq32.offset = 0;

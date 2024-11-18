@@ -749,6 +749,18 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 
 #endif
 #ifdef FEATURE_VLAN_MPDN
+						if(IPACM_Iface::ipacmcfg->IP_Forwarding_config.privateIPForwarding_enable)
+						{
+							IPACMDBG_H("privateIPForwarding,is wan_up %d, iptype %d\n",
+									IPACM_Wan::isWanUP(ipa_if_num),data->iptype);
+							if(IPACM_Wan::isWanUP(ipa_if_num))
+							{
+								if(install_ip_specific_filter_rule(IPA_IP_v4) == IPACM_FAILURE)
+								{
+									IPACMERR("Failed to add exception rule for specific ip.\n");
+								}
+							}
+						}
 						/* VLAN IFACES don't care about default route */
 						if(!(IPACM_Iface::ipacmcfg->iface_in_vlan_mode(dev_name)))
 #endif
@@ -1058,12 +1070,15 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 					false, false,false);
 				if(!ret){
 					IPACMDBG_H("Private IP forward, UL rules installed\n");
+					modem_ul_v4_set = true;
 				}
 				else{
 					IPACMDBG_H("Private IP forward, UL rules installation error\n");
+					modem_ul_v4_set = false;
 				}
 			}
 		}
+		IPACMDBG_H("ip-type: %d modem_ul_v4_set: %d, modem_ul_v6_set %d\n", ip_type, modem_ul_v4_set, modem_ul_v6_set);
 		/* VLAN IFACES don't care about default route */
 		if((IPACM_Iface::ipacmcfg->iface_in_vlan_mode(dev_name)) &&
 			(IPACM_Iface::ipacmcfg->ipacm_mpdn_enable == TRUE))
@@ -3116,6 +3131,23 @@ int IPACM_Lan::handle_vlan_pdn_up(ipacm_event_vlan_pdn *data, bool set_mux)
 		/*install MTU rule */
 		modify_private_subnet();
 
+		/* Re-Install Exception rule before modem rules */
+		if(IPACM_Iface::ipacmcfg->IP_Forwarding_config.privateIPForwarding_enable &&
+				IPACM_Iface::ipacmcfg->vlan_pdnUp_after_sent_pif_to_uc)
+		{
+			IPACM_Iface::ipacmcfg->vlan_pdnUp_after_sent_pif_to_uc = false;
+			IPACMDBG_H("PIF: ip-type: %d modem_ul_v4_set: %d, modem_ul_v6_set %d\n", data->iptype, modem_ul_v4_set, modem_ul_v6_set);
+			/* Delete Ul Flt rule to avoid reinstall */
+			IPACMDBG_H("Del Ul flt Rule IP_v4, vlan_pdnUp_after_sent_pif_to_uc %d"
+					" And Install Exception Rule..\n",
+					IPACM_Iface::ipacmcfg->vlan_pdnUp_after_sent_pif_to_uc);
+			del_ul_flt_rules(IPA_IP_v4);
+
+			if(install_ip_specific_filter_rule(IPA_IP_v4) == IPACM_FAILURE)
+			{
+				IPACMERR("Failed to add exception rule for specific ip.\n");
+			}
+		}
 		/* for the first PDN install UL filtering rules */
 		if(modem_ul_v4_set == false)
 		{
@@ -4393,6 +4425,7 @@ int IPACM_Lan::handle_wan_up_ex(ipacm_ext_prop *ext_prop, ipa_ip_type iptype, ui
 		IPACMDBG_H("ip-type: %d modem_ul_v4_set: %d, modem_ul_v6_set %d\n",
 			iptype, modem_ul_v4_set, modem_ul_v6_set);
 	}
+	IPACMDBG_H("ip-type: %d modem_ul_v4_set: %d, modem_ul_v6_set %d\n", iptype, modem_ul_v4_set, modem_ul_v6_set);
 
 #if defined(FEATURE_IPACM_PER_CLIENT_STATS) || defined(IPA_WDI_AST_UPDATE)
 	/* Install filter rules for the client. */
@@ -18144,18 +18177,21 @@ int IPACM_Lan::install_ip_specific_filter_rule(enum ipa_ip_type iptype)
 	{
 		IPACMERR("Invalid IP type passed to function\n");
 		ret = IPACM_FAILURE;
+		goto end;
 	}
 
 	if(IPACM_Iface :: ipacmcfg->IP_Forwarding_config.excep_ipv4_addr == 0)
 	{
 		IPACMERR("Invalid src IP passed to function\n");
 		ret = IPACM_FAILURE;
+		goto end;
 	}
-	IPACMDBG_H("Attempting to install src address [%x] based exception filter rule: iptype(%d)\n",IPACM_Iface :: ipacmcfg->IP_Forwarding_config.excep_ipv4_addr,iptype);
+	IPACMDBG_H("Attempting to install dst address [%x] based exception filter rule: iptype(%d)\n",IPACM_Iface :: ipacmcfg->IP_Forwarding_config.excep_ipv4_addr,iptype);
 	if(ip_excp_v4_rule_set == true)
 	{
-		IPACMDBG_H("Already installed src address [%x] based exception filter rule: iptype(%d)\n",IPACM_Iface :: ipacmcfg->IP_Forwarding_config.excep_ipv4_addr,iptype);
+		IPACMDBG_H("Already installed dst address [%x] based exception filter rule: iptype(%d)\n",IPACM_Iface :: ipacmcfg->IP_Forwarding_config.excep_ipv4_addr,iptype);
 		ret = IPACM_SUCCESS;
+		goto end;
 	}
 
 	len = sizeof(ipa_ioc_add_flt_rule) +(NUM_RULES * sizeof(ipa_flt_rule_add));
@@ -18205,7 +18241,7 @@ int IPACM_Lan::install_ip_specific_filter_rule(enum ipa_ip_type iptype)
 	ip_excp_v4_rule_set = true;
 	IPACM_Iface::ipacmcfg->increaseFltRuleCount( rx_prop->rx[0].src_pipe, iptype, pFilteringTable->num_rules);
 	num_wan_ul_fl_rule_v4 += pFilteringTable->num_rules;
-	IPACMDBG_H("Successfully constructed (%d) exception rule for specific src ip.\n",pFilteringTable->num_rules);
+	IPACMDBG_H("Successfully constructed (%d) exception rule for specific dst ip.\n",pFilteringTable->num_rules);
 end:
 	free(pFilteringTable);
 

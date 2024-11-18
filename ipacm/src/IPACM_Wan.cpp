@@ -1009,6 +1009,15 @@ int IPACM_Wan::handle_addr_evt(ipacm_event_data_addr *data)
 				if(IPACM_Iface::ipacmcfg->IP_Forwarding_config.privateIPForwarding_enable){
 					IPACM_Wan::send_config_to_uc();
 					if(IPACM_Wan::sent_private_ip_mux_id_to_uc){
+						/* Adding VLAN route vlan_id and mux id */
+						uint8_t vlan_id = IPACM_Iface::ipacmcfg->IP_Forwarding_config.vlan;
+						if(vlan_id != 0)
+						{
+							IPACM_Iface::ipacmcfg->vlan_pdnUp_after_sent_pif_to_uc = true;
+							handle_route_add_vlan_pdn_evt(IPA_IP_v4, vlan_id);
+							IPACMDBG_H("privateIPForwarding:SendRoute ADD (%d)  for vlan: %d for v4 mux_up..\n",
+									IPACM_Iface::ipacmcfg->vlan_pdnUp_after_sent_pif_to_uc, vlan_id);
+						}
 						if ( config_wan_firewall_rule(IPA_IP_v4) != IPACM_SUCCESS )
 						{
 							IPACMERR(
@@ -3227,6 +3236,18 @@ int IPACM_Wan::handle_route_add_evt(ipa_ip_type iptype)
 		evt_data.event = IPA_HANDLE_WAN_UP;
 		evt_data.evt_data = (void *)wanup_data;
 		IPACM_EvtDispatcher::PostEvt(&evt_data);
+		/*To handle vlan config when privateipforward2 is enabled and only Default pdn is up*/
+		if(IPACM_Iface::ipacmcfg->IP_Forwarding_config.privateIPForwarding_enable)
+		{
+			uint8_t vlan_id = IPACM_Iface::ipacmcfg->IP_Forwarding_config.vlan;
+			IPACMDBG_H("privateIPForwarding: Default Route ADD (%d) for vlan: %d for v4 mux_up..\n",
+					IPACM_Iface::ipacmcfg->vlan_pdnUp_after_sent_pif_to_uc, vlan_id);
+			if(vlan_id != 0)
+			{
+				IPACM_Iface::ipacmcfg->vlan_pdnUp_after_sent_pif_to_uc = true;
+				handle_route_add_vlan_pdn_evt(IPA_IP_v4, vlan_id);
+			}
+		}
 	}
 	else
 	{

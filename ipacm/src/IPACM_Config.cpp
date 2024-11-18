@@ -956,10 +956,11 @@ skip_fnr_alloc:
 	}
 	IP_Forwarding_config.excep_ipv4_addr = cfg->private_IP_conf.excep_ipv4_addr;
 	IP_Forwarding_config.excep_ipv4_addr_mask = cfg->private_IP_conf.excep_ipv4_addr_mask;
-	
+
 	IPACMDBG_H("Private IP forwarding Config: enable:%d, vlan:%d, iface:%s,bridge: %s, bridge_net_mask: %x, exception_ip_address: %x, exception_ip_address_mask: %x\n",
-			IP_Forwarding_config.privateIPForwarding_enable,IP_Forwarding_config.vlan,IP_Forwarding_config.interface_name, IP_Forwarding_config.bridge_name, 
+			IP_Forwarding_config.privateIPForwarding_enable,IP_Forwarding_config.vlan,IP_Forwarding_config.interface_name, IP_Forwarding_config.bridge_name,
 			IP_Forwarding_config.bridge_net_mask, IP_Forwarding_config.excep_ipv4_addr,IP_Forwarding_config.excep_ipv4_addr_mask);
+	vlan_pdnUp_after_sent_pif_to_uc = false;
 
 
 fail:

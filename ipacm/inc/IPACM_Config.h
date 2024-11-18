@@ -397,6 +397,9 @@ public:
 	}forwarding_config;
 	forwarding_config IP_Forwarding_config;
 
+	/*To send vpan pdn up evt to lan class*/
+	bool vlan_pdnUp_after_sent_pif_to_uc;
+
 	ipa_ipgre_info ipgre_info;
 	typedef struct pmipv6_status
 	{

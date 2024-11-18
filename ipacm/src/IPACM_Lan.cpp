@@ -11880,12 +11880,14 @@ int IPACM_Lan::handle_uplink_filter_rule(ipacm_ext_prop *prop, ipa_ip_type iptyp
 			flt_rule_entry.rule.hashable = prop->prop[cnt].is_rule_hashable;
 			flt_rule_entry.rule.rule_id = prop->prop[cnt].rule_id;
 			/* Skip Metadata equation for WLAN VLAN and static policy scenarios to handle XLAT. */
-			if (!idx && rx_prop->rx[idx].attrib.attrib_mask & IPA_FLT_META_DATA && !(static_policy && is_xlat)) { //turn on meta-data equation
+			if (!idx && rx_prop->rx[idx].attrib.attrib_mask & IPA_FLT_META_DATA &&
+				!(IPACM_Iface::ipacmcfg->ipacm_static_policy_enable && prop->prop[cnt].is_xlat_rule)) { //turn on meta-data equation
 				flt_rule_entry.rule.eq_attrib.rule_eq_bitmap |= (1 << 9);
 				flt_rule_entry.rule.eq_attrib.metadata_meq32_present = 1;
 				flt_rule_entry.rule.eq_attrib.metadata_meq32.offset = 0;
 				flt_rule_entry.rule.eq_attrib.metadata_meq32.value |= rx_prop->rx[idx].attrib.meta_data;
 				flt_rule_entry.rule.eq_attrib.metadata_meq32.mask |= rx_prop->rx[idx].attrib.meta_data_mask;
+				IPACMDBG_H("turn on meta-data equation with value 0x%x\n", rx_prop->rx[idx].attrib.meta_data);
 			}
 #endif
 
@@ -13852,13 +13854,15 @@ int IPACM_Lan::install_uplink_filter_rule_per_client_v2
 			}
 		}
 
-		if(rx_prop->rx[0].attrib.attrib_mask & IPA_FLT_META_DATA)	//turn on meta-data equation
+		if(rx_prop->rx[0].attrib.attrib_mask & IPA_FLT_META_DATA &&
+			!(IPACM_Iface::ipacmcfg->ipacm_static_policy_enable && prop->prop[cnt].is_xlat_rule)) //turn on meta-data equation
 		{
 			flt_rule_entry.rule.eq_attrib.rule_eq_bitmap |= (1<<9);
 			flt_rule_entry.rule.eq_attrib.metadata_meq32_present = 1;
 			flt_rule_entry.rule.eq_attrib.metadata_meq32.offset = 0;
 			flt_rule_entry.rule.eq_attrib.metadata_meq32.value |= rx_prop->rx[0].attrib.meta_data;
 			flt_rule_entry.rule.eq_attrib.metadata_meq32.mask |= rx_prop->rx[0].attrib.meta_data_mask;
+			IPACMDBG_H("turn on meta-data equation with value 0x%x\n", rx_prop->rx[0].attrib.meta_data);
 		}
 #if defined IPA_FLTRT_TTL_UPDATE && defined IPA_TTL_UPDATE_OFFLOAD
 		if (IPACM_Iface::ipacmcfg->ttlHwSupport()) {
@@ -14154,14 +14158,50 @@ int IPACM_Lan::install_uplink_filter_rule_per_client
 		/* Handle XLAT configuration */
 		if ((iptype == IPA_IP_v4) && prop->prop[cnt].is_xlat_rule && (xlat_mux_id != 0))
 		{
-			/* fill the value of meta-data */
-			value = xlat_mux_id;
-			flt_rule_entry.rule.eq_attrib.metadata_meq32_present = 1;
-			flt_rule_entry.rule.eq_attrib.metadata_meq32.offset = 0;
-			flt_rule_entry.rule.eq_attrib.metadata_meq32.value = (value & 0xFF) << 16;
-			flt_rule_entry.rule.eq_attrib.metadata_meq32.mask = 0x00FF0000;
-			IPACMDBG_H("xlat meta-data is modified for rule: %d has rule_id %d with xlat_mux_id: %d\n",
-					index, prop->prop[cnt].rule_id, xlat_mux_id);
+			/* for static policy, xlat rules will be installed with src_addr = XLAT PDN subnet */
+			if (IPACM_Iface::ipacmcfg->ipacm_static_policy_enable)
+			{
+				int meq32_n = flt_rule_entry.rule.eq_attrib.num_offset_meq_32;
+
+				//check if over max meq32 equatipons
+				if (meq32_n + 1 > IPA_IPFLTR_NUM_MEQ_32_EQNS)
+				{
+					IPACMERR("Can't add another meq_32 equation to this rule: %d index %d\n", cnt, index);
+					continue;
+				}
+				flt_rule_entry.rule.eq_attrib.offset_meq_32[meq32_n].offset = 12;  //SRC ADDR
+				flt_rule_entry.rule.eq_attrib.offset_meq_32[meq32_n].value =  0xC0000000;  //XLAT PDN
+				flt_rule_entry.rule.eq_attrib.offset_meq_32[meq32_n].mask = 0xFFFFFF00;
+
+				//Add the bitmap that will point to the new meq32 eq
+				if (meq32_n == 0)
+					flt_rule_entry.rule.eq_attrib.rule_eq_bitmap |= (1<<5);
+				else
+					flt_rule_entry.rule.eq_attrib.rule_eq_bitmap |= (1<<6);
+
+				flt_rule_entry.rule.eq_attrib.num_offset_meq_32++;
+
+				//clear metadata bit
+				flt_rule_entry.rule.eq_attrib.rule_eq_bitmap &= ~(1<<9);
+				flt_rule_entry.rule.eq_attrib.metadata_meq32_present = 0;
+
+				//change to pass to route since NATting is already done on 1st pass
+				flt_rule_entry.rule.action = IPA_PASS_TO_ROUTING;
+
+				IPACMDBG_H("xlat meta-data is modified for rule: %d has index %d with src subnet: 0x%X\n",
+						   cnt, index, flt_rule_entry.rule.eq_attrib.offset_meq_32[meq32_n].value);
+			}
+			else
+			{
+				/* fill the value of meta-data */
+				value = xlat_mux_id;
+				flt_rule_entry.rule.eq_attrib.metadata_meq32_present = 1;
+				flt_rule_entry.rule.eq_attrib.metadata_meq32.offset = 0;
+				flt_rule_entry.rule.eq_attrib.metadata_meq32.value = (value & 0xFF) << 16;
+				flt_rule_entry.rule.eq_attrib.metadata_meq32.mask = 0x00FF0000;
+				IPACMDBG_H("xlat meta-data is modified for rule: %d has rule_id %d with xlat_mux_id: %d\n",
+						index, prop->prop[cnt].rule_id, xlat_mux_id);
+			}
 		}
 		IPACMDBG_H("rule: %d has rule_id %d\n",
 				index, prop->prop[cnt].rule_id);
@@ -14170,13 +14210,15 @@ int IPACM_Lan::install_uplink_filter_rule_per_client
 			(get_client_memptr(eth_client, clnt_indx)->lan_stats_idx << 5) | 0x200;
 		IPACMDBG_H("Modified rule: %d has rule_id %d\n",
 			index, flt_rule_entry.rule.rule_id);
-		if(rx_prop->rx[0].attrib.attrib_mask & IPA_FLT_META_DATA)	//turn on meta-data equation
+		if(rx_prop->rx[0].attrib.attrib_mask & IPA_FLT_META_DATA &&
+			!(IPACM_Iface::ipacmcfg->ipacm_static_policy_enable && prop->prop[cnt].is_xlat_rule)) //turn on meta-data equation
 		{
 			flt_rule_entry.rule.eq_attrib.rule_eq_bitmap |= (1<<9);
 			flt_rule_entry.rule.eq_attrib.metadata_meq32_present = 1;
 			flt_rule_entry.rule.eq_attrib.metadata_meq32.offset = 0;
 			flt_rule_entry.rule.eq_attrib.metadata_meq32.value |= rx_prop->rx[0].attrib.meta_data;
 			flt_rule_entry.rule.eq_attrib.metadata_meq32.mask |= rx_prop->rx[0].attrib.meta_data_mask;
+			IPACMDBG_H("turn on meta-data equation with value 0x%x\n", rx_prop->rx[0].attrib.meta_data);
 		}
 #if defined IPA_FLTRT_TTL_UPDATE && defined IPA_TTL_UPDATE_OFFLOAD
 		if (IPACM_Iface::ipacmcfg->ttlHwSupport()) {

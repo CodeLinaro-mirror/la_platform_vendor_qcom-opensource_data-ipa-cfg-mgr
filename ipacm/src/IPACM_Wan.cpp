@@ -4720,27 +4720,30 @@ int IPACM_Wan::config_dft_firewall_rules_ex(struct ipa_flt_rule_add *rules, int 
 /* only install ipv4 DL firewall on modem endpoint when UL_FIREWALL FR not there */
 		if (IPACM_Iface::ipacmcfg->ipacm_socksv5_enable != TRUE)
 		{
-#ifndef FEATURE_IPACM_UL_FIREWALL
+#ifdef FEATURE_IPACM_UL_FIREWALL
+			if(IPACM_Iface::ipacmcfg->IP_Forwarding_config.privateIPForwarding_enable)
+			{
 #ifdef FEATURE_VLAN_MPDN
 			/* firewall rules for all PDNs which are up */
-			for (uint32_t i = 0; i < offloaded_pdns_count_v4; ++i)
-			{
-				IPACM_Wan* curr_interface = offloaded_pdns_v4[i].second->pIface;
-				IPACMDBG_H("adding firewall rules for iface %s\n", curr_interface->dev_name);
-				res = add_firewall_rules_ex(*offloaded_pdns_v4[i].first, iptype, curr_interface->ext_prop->ext[0].mux_id,
-					curr_interface->rx_prop->rx[0].attrib, rules, IPA_MAX_FLT_RULE - offloaded_pdns_count_v4, pos);
+				for (uint32_t i = 0; i < offloaded_pdns_count_v4; ++i)
+				{
+					IPACM_Wan* curr_interface = offloaded_pdns_v4[i].second->pIface;
+					IPACMDBG_H("adding firewall rules for iface %s\n", curr_interface->dev_name);
+					res = add_firewall_rules_ex(*offloaded_pdns_v4[i].first, iptype, curr_interface->ext_prop->ext[0].mux_id,
+						curr_interface->rx_prop->rx[0].attrib, rules, IPA_MAX_FLT_RULE - offloaded_pdns_count_v4, pos);
+					if (res != IPACM_SUCCESS)
+					{
+						return res;
+					}
+				}
+#else
+				res = add_firewall_rules_ex(firewall_config, iptype, rx_prop->rx[0].attrib, rules, IPA_MAX_FLT_RULE - 1, pos);
 				if (res != IPACM_SUCCESS)
 				{
 					return res;
 				}
-			}
-#else
-			res = add_firewall_rules_ex(firewall_config, iptype, rx_prop->rx[0].attrib, rules, IPA_MAX_FLT_RULE - 1, pos);
-			if (res != IPACM_SUCCESS)
-			{
-				return res;
-			}
 #endif
+			}
 #endif //FEATURE_IPACM_UL_FIREWALL
 		}
 #ifdef FEATURE_EoGRE
@@ -10932,8 +10935,17 @@ int IPACM_Wan::add_firewall_rules_ex(const IPACM_firewall_conf_t& firewall_confi
 
 			if (firewall_config.rule_action_accept)
 			{
-				flt_rule_entry.rule.action = IPA_PASS_TO_DST_NAT;
-				rt_tbl_name = ipacmcfg->rt_tbl_lan_v4.name;
+				if(IPACM_Iface::ipacmcfg->IP_Forwarding_config.privateIPForwarding_enable)
+				{
+					flt_rule_entry.rule.action = IPA_PASS_TO_ROUTING;
+					rt_tbl_name = ipacmcfg->rt_tbl_wan_dl.name;
+					IPACMDBG_H("privateIPForwarding: v4 Firewall: rt table name :%s \n",rt_tbl_name);
+				}
+				else
+				{
+					flt_rule_entry.rule.action = IPA_PASS_TO_DST_NAT;
+					rt_tbl_name = ipacmcfg->rt_tbl_lan_v4.name;
+				}
 			}
 			else
 			{
@@ -10966,9 +10978,18 @@ int IPACM_Wan::add_firewall_rules_ex(const IPACM_firewall_conf_t& firewall_confi
 
 			if (firewall_config.rule_action_accept)
 			{
-				flt_rule_entry.rule.action =
-					IPACM_Iface::ipacmcfg->IsIpv6CTEnabled() ? IPA_PASS_TO_DST_NAT : IPA_PASS_TO_ROUTING;
-				rt_tbl_name = ipacmcfg->rt_tbl_wan_v6.name;
+				if(IPACM_Iface::ipacmcfg->IP_Forwarding_config.privateIPForwarding_enable)
+				{
+					flt_rule_entry.rule.action = IPA_PASS_TO_ROUTING;
+					rt_tbl_name = ipacmcfg->rt_tbl_wan_dl.name;
+					IPACMDBG_H("privateIPForwarding: v6 Firewall: rt table name :%s \n",rt_tbl_name);
+				}
+				else
+				{
+					flt_rule_entry.rule.action =
+						IPACM_Iface::ipacmcfg->IsIpv6CTEnabled() ? IPA_PASS_TO_DST_NAT : IPA_PASS_TO_ROUTING;
+					rt_tbl_name = ipacmcfg->rt_tbl_wan_v6.name;
+				}
 			}
 			else
 			{

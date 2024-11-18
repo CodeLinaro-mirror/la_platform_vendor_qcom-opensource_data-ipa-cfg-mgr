@@ -5387,10 +5387,25 @@ int IPACM_Lan::handle_eth_client_route_rule(uint8_t *mac_addr, ipa_ip_type iptyp
 				rt_rule_entry->rule.attrib.u.v4.dst_addr_mask = 0xFFFFFFFF;
 				if(IPACM_Iface::ipacmcfg->IP_Forwarding_config.privateIPForwarding_enable && strstr(dev_name,IPACM_Iface::ipacmcfg->IP_Forwarding_config.interface_name)){
 					//Make it a catchall rule, if its a neighbour of the configured index
-					rt_rule_entry->rule.attrib.u.v4.dst_addr = 0;
-					rt_rule_entry->rule.attrib.u.v4.dst_addr_mask = 0;
-					rt_rule_entry->at_rear = 1;
+					IPACMDBG_H("PIF: Compare?: vlan %d, vlan_id %d \n",
+						IPACM_Iface::ipacmcfg->IP_Forwarding_config.vlan,
+						get_client_memptr(eth_client, eth_index)->vlan_id);
+					if((!IPACM_Iface::ipacmcfg->IP_Forwarding_config.vlan) ||
+							(IPACM_Iface::ipacmcfg->IP_Forwarding_config.vlan ==
+							 get_client_memptr(eth_client, eth_index)->vlan_id))
+					{
+						rt_rule_entry->rule.attrib.u.v4.dst_addr = 0;
+						rt_rule_entry->rule.attrib.u.v4.dst_addr_mask = 0;
+						rt_rule_entry->at_rear = 1;
+						IPACMDBG_H("PIF: Matched : vlan %d, vlan_id %d \n",
+								IPACM_Iface::ipacmcfg->IP_Forwarding_config.vlan,
+								get_client_memptr(eth_client, eth_index)->vlan_id);
+					}
+					IPACMDBG_H("PIF: ifacename %s, devname %s \n",
+							IPACM_Iface::ipacmcfg->IP_Forwarding_config.interface_name, dev_name);
 				}
+				IPACMDBG_H("PIF: Received Eth Client ipv4-addr:0x%x, construct RT rule at rear %d.\n",
+						get_client_memptr(eth_client, eth_index)->v4_addr, rt_rule_entry->at_rear);
 
 				if (IPACM_Iface::ipacmcfg->GetIPAVer() >= IPA_HW_v4_0)
 				{

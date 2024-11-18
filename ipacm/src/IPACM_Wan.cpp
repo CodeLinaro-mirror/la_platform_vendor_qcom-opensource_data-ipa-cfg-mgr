@@ -901,6 +901,20 @@ int IPACM_Wan::handle_addr_evt(ipacm_event_data_addr *data)
 				}
 				else
 				{
+					IPACMDBG_H("IPPT or IP Collision : Received wan ipv4-addr:0x%x\n",
+						data->ipv4_addr);
+					if(IPACM_Iface::ipacmcfg->IP_Forwarding_config.privateIPForwarding_enable &&
+							ip_pass_pdn_info.enable)
+					{
+						/* Delete Wan v4 RT rule */
+						IPACMDBG_H("PIF: IPPT, Delete WAN v4 routing rules\n");
+						if (m_routing.DeleteRoutingHdl(dft_rt_rule_hdl[0], IPA_IP_v4) == false)
+						{
+							IPACMERR("PIF: Old WAN Routing rule deletion failed!\n");
+							res = IPACM_FAILURE;
+							goto fail;
+						}
+					}
 					/* In IPPT or IP Collision mode don't replace the wan-ip RT rule to dummy ipv4 */
 					/*Store the public ip address when in passthrough mode which will be used when wan is down.*/
 					if (m_is_sta_mode == Q6_WAN)
@@ -910,7 +924,8 @@ int IPACM_Wan::handle_addr_evt(ipacm_event_data_addr *data)
 						public_wan_v4_addr_set = true;
 						IPACMDBG_H("Received wan ipv4-addr:0x%x\n",data->ipv4_addr);
 						IPACMDBG_H("In Passthrough mode, Storing previous wan ipv4-addr:0x%x\n",public_wan_v4_addr);
-						return IPACM_SUCCESS;
+						if(!IPACM_Iface::ipacmcfg->IP_Forwarding_config.privateIPForwarding_enable)
+							return IPACM_SUCCESS;
 					}
 				}
 #if defined(FEATURE_SOCKSv5) && defined (IPA_SOCKV5_EVENT_MAX)

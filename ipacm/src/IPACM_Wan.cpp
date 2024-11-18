@@ -4621,6 +4621,12 @@ int IPACM_Wan::config_dft_firewall_rules_ex(struct ipa_flt_rule_add *rules, int 
 				isDefaultGatewayIfaceUp(ipv4_to_iface[i].pIface),
 				ipv4_to_iface[i].wan_up_vlan);
 
+			IPACMDBG_H("DEV_NAME %s\n",ipv4_to_iface[i].pIface->dev_name);
+			if(strlen(ipv4_to_iface[i].pIface->dev_name) == 0)
+			{
+				IPACMDBG_H("Empty dev_name\n");
+				continue;
+			}
 			IPACM_firewall_conf_t* curr_pdn_firewall_config =
 				get_curr_pdn_firewall_config(firewall_config, ipv4_to_iface[i].pIface->dev_name);
 			IPACMDBG_H("ipacm_socksv5_enable %d\n", IPACM_Iface::ipacmcfg->ipacm_socksv5_enable)
@@ -4661,7 +4667,12 @@ int IPACM_Wan::config_dft_firewall_rules_ex(struct ipa_flt_rule_add *rules, int 
 				ipv6_to_iface[i].pIface->dev_name,
 				isDefaultGatewayIfaceUp_v6(ipv6_to_iface[i].pIface),
 				ipv6_to_iface[i].wan_up_vlan_v6);
-
+                        IPACMDBG_H("DEV_NAME %s\n",ipv6_to_iface[i].pIface->dev_name);
+			if(strlen(ipv6_to_iface[i].pIface->dev_name) == 0)
+			{
+				IPACMDBG_H("Empty dev_name\n");
+				continue;
+			}
 			IPACM_firewall_conf_t* curr_pdn_firewall_config =
 				get_curr_pdn_firewall_config(firewall_config, ipv6_to_iface[i].pIface->dev_name);
 			if (curr_pdn_firewall_config != NULL)

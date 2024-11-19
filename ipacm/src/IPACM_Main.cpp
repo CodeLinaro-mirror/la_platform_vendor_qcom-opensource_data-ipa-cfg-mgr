@@ -1108,7 +1108,7 @@ static void IPACM_Signals_handler(int sig, siginfo_t *info, void *extra)
 		if(sig == SIGTERM)
 		{
 			IPACMERR("IPACM gracefully requested to quit by PID %d, complying\n", info->si_pid);
-			exit(-1);
+			exit(0);
 		}
 
 		/* restore to default signal handler so core dump is generated from original fault point */

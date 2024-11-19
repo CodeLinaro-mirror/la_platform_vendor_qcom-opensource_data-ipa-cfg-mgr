@@ -1696,7 +1696,7 @@ void IPACM_ConntrackListener::HandleInterfaceDown_StaticPolicy(void *in_param)
 					break;
 				}
 			}
-			for(k = j; k < IPA_MAX_NUM_HW_PDNS - 1; k++)
+			for(k = j; k < (IPA_MAX_NUM_SW_PDNS - 1); k++)
 			{
 				vlan_pdns[i].associated_VIDs[k] = vlan_pdns[i].associated_VIDs[k+1];
 			}
@@ -1737,7 +1737,7 @@ void IPACM_ConntrackListener::HandleInterfaceDownV6_StaticPolicy(void *in_param)
 					break;
 				}
 			}
-			for(k = j; k < IPA_MAX_NUM_HW_PDNS - 1; k++)
+			for(k = j; k < (IPA_MAX_NUM_SW_PDNS - 1); k++)
 			{
 				v6_vlan_pdns[i].associated_VIDs[k] = v6_vlan_pdns[i].associated_VIDs[k+1];
 			}

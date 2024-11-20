@@ -7800,7 +7800,8 @@ int IPACM_Wan::handle_down_evt_ex()
 			memset(ipv4_to_iface[modem_ipv4_pdn_index].associated_VIDs, 0, sizeof(ipv4_to_iface[modem_ipv4_pdn_index].associated_VIDs));
 			ipv4_to_iface[modem_ipv4_pdn_index].VID_cnt = 0;
 
-			num_offloaded_pdns--;
+			if(num_offloaded_pdns)
+				num_offloaded_pdns--;
 			IPACMDBG_H("now num offloaded PDNs is %d\n", num_offloaded_pdns);
 
 			vlandown_data = (ipacm_event_vlan_pdn *)malloc(sizeof(ipacm_event_vlan_pdn));
@@ -7972,7 +7973,7 @@ int IPACM_Wan::handle_down_evt_ex()
 			ipv6_to_iface[modem_ipv6_pdn_index].VID_cnt = 0;
 
 			/* Xlat cfg offload pdn count is updated during v4 handling */
-			if (!xlat_cfg)
+			if (!xlat_cfg && num_offloaded_pdns)
 				num_offloaded_pdns--;
 
 			IPACMDBG_H("now num offloaded PDNs is %d\n", num_offloaded_pdns);
@@ -8220,7 +8221,8 @@ int IPACM_Wan::handle_down_evt_ex()
 				ipv6_to_iface[modem_ipv6_pdn_index].VID_cnt = 0;
 			}
 
-			num_offloaded_pdns--;
+			if(num_offloaded_pdns)
+				num_offloaded_pdns--;
 			IPACMDBG_H("now num offloaded PDNs is %d\n", num_offloaded_pdns);
 
 			vlandown_data->VlanID = associated_VID;
@@ -10633,7 +10635,8 @@ flt_rule_entry.rule.attrib.u.v4.dst_addr_mask = 0x00000000;
 			else
 #endif
 			{
-				if (firewall_config.firewall_enable)
+				if (firewall_config.firewall_enable &&
+						!IPACM_Iface::ipacmcfg->IP_Forwarding_config.privateIPForwarding_enable)
 				{
 					if (firewall_config.rule_action_accept)
 					{
@@ -10658,6 +10661,7 @@ flt_rule_entry.rule.attrib.u.v4.dst_addr_mask = 0x00000000;
 					flt_rule_entry.rule.action = IPA_PASS_TO_ROUTING;
 #endif
 					rt_tbl_name = ipacmcfg->rt_tbl_wan_v6.name;
+					IPACMDBG_H("PIF enabled\n");
 				}
 			}
 		}

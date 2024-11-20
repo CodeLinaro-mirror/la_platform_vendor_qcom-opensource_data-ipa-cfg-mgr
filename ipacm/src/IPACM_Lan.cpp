@@ -9429,6 +9429,13 @@ void IPACM_Lan::configure_v6_ul_firewall(void)
 	IPACM_firewall_conf_t *firewall_config = NULL;
 	int default_vid = 0, ret;
 
+	/* Don't Install Firewall rule for v6 when private IP forward is enabled */
+	if(IPACM_Iface::ipacmcfg->IP_Forwarding_config.privateIPForwarding_enable)
+	{
+		IPACMDBG_H("Ignore IPA_FIREWALL_CHANGE_EVENT when PIF Enabled for iptype (%d)\n",ip_type);
+		return;
+	}
+
 	if (IPACM_Iface::ipacmcfg->ipv6_nat_enable)
 	{
 		IPACMDBG_H("IPv6 NAT is enable. Don't configure firewall rule\n");

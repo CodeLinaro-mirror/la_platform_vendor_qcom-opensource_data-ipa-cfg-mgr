@@ -5307,6 +5307,32 @@ int IPACM_Lan::handle_eth_hdr_init(uint8_t *mac_addr, ipacm_bridge *bridge, uint
 		memset(get_client_memptr(eth_client, num_eth_client)->wan_ul_fl_rule_hdl_v4, 0, MAX_WAN_UL_FILTER_RULES * sizeof(uint32_t));
 		memset(get_client_memptr(eth_client, num_eth_client)->wan_ul_fl_rule_hdl_v6, 0, MAX_WAN_UL_FILTER_RULES * sizeof(uint32_t));
 #endif
+#ifdef FEATURE_STATIC_POLICY
+		memset(get_client_memptr(eth_client, num_eth_client)->dscp_hpc_hdr_hdl_v4,
+			0,
+			IPA_UC_MAX_PDN_DSCP_VAL * sizeof(uint32_t));
+		memset(get_client_memptr(eth_client, num_eth_client)->dscp_hpc_hdr_hdl_v6,
+			0,
+			IPA_UC_MAX_PDN_DSCP_VAL * sizeof(uint32_t));
+		memset(get_client_memptr(eth_client, num_eth_client)->dscp_route_rule_set_v4,
+			0,
+			IPA_UC_MAX_PDN_DSCP_VAL * sizeof(bool));
+		memset(get_client_memptr(eth_client, num_eth_client)->dscp_ipv4_hpc_set,
+			0,
+			IPA_UC_MAX_PDN_DSCP_VAL * sizeof(bool));
+		memset(get_client_memptr(eth_client, num_eth_client)->dscp_ipv6_hpc_set,
+			0,
+			IPA_UC_MAX_PDN_DSCP_VAL * sizeof(bool));
+		memset(get_client_memptr(eth_client, num_eth_client)->dscp_ipv4_hpc_count,
+			0,
+			IPA_UC_MAX_PDN_DSCP_VAL * sizeof(int));
+		memset(get_client_memptr(eth_client, num_eth_client)->dscp_ipv6_hpc_count,
+			0,
+			IPA_UC_MAX_PDN_DSCP_VAL * sizeof(int));
+		memset(get_client_memptr(eth_client, num_eth_client)->dscp_eth_rt_hdl,
+			0,
+			IPA_UC_MAX_PDN_DSCP_VAL * sizeof(eth_client_rt_hdl));
+#endif
 		clnt_indx = num_eth_client;
 		num_eth_client++;
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
@@ -6159,7 +6185,8 @@ int IPACM_Lan::handle_pdn_dscp_eth_client_route_rule(uint8_t *mac_addr,
 					[IPACM_Iface::ipacmcfg->pdn_dscp_table[i].mux_id] = true;
 				IPACMDBG_H("v4 hpc header handle for mux_id %d:(0x%x)\n",
 					IPACM_Iface::ipacmcfg->pdn_dscp_table[i].mux_id,
-					get_client_memptr(eth_client, eth_index)->dscp_hpc_hdr_hdl_v4[i]);
+					get_client_memptr(eth_client, eth_index)->dscp_hpc_hdr_hdl_v4
+					[IPACM_Iface::ipacmcfg->pdn_dscp_table[i].mux_id]);
 			}
 
 			if(iptype == IPA_IP_v6 && IPACM_Iface::ipacmcfg->pdn_dscp_table[i].status == 2 &&
@@ -6199,7 +6226,8 @@ int IPACM_Lan::handle_pdn_dscp_eth_client_route_rule(uint8_t *mac_addr,
 					[IPACM_Iface::ipacmcfg->pdn_dscp_table[i].mux_id] = true;
 				IPACMDBG_H("v6 hpc header handle for mux_id %d:(0x%x)\n",
 					IPACM_Iface::ipacmcfg->pdn_dscp_table[i].mux_id,
-					get_client_memptr(eth_client, eth_index)->dscp_hpc_hdr_hdl_v6[i]);
+					get_client_memptr(eth_client, eth_index)->dscp_hpc_hdr_hdl_v6
+					[IPACM_Iface::ipacmcfg->pdn_dscp_table[i].mux_id]);
 			}
 
 			if(iptype == IPA_IP_v4 && IPACM_Iface::ipacmcfg->pdn_dscp_table[i].status == 2
@@ -7856,6 +7884,9 @@ int IPACM_Lan::delete_pdn_dscp_eth_rtrules(ipa_ip_type iptype, uint32_t trigger,
 					if(get_client_memptr(eth_client, i)->dscp_ipv4_hpc_count[mux_id] == 0 &&
 						get_client_memptr(eth_client, i)->dscp_ipv4_hpc_set[mux_id] == true)
 					{
+						IPACMDBG_H("v4 proc_ctx handle passed:(0x%x)\n",
+							get_client_memptr(eth_client, i)->dscp_hpc_hdr_hdl_v4[mux_id]);
+
 						if(m_header.DeleteHeaderProcCtx(get_client_memptr(eth_client, i)->dscp_hpc_hdr_hdl_v4[mux_id]) == false)
 						{
 							IPACMERR("Failed to delete PDN<->DSCP hdr_proc_ctx for v4\n");
@@ -7895,7 +7926,10 @@ int IPACM_Lan::delete_pdn_dscp_eth_rtrules(ipa_ip_type iptype, uint32_t trigger,
 					}
 					if(get_client_memptr(eth_client, i)->dscp_ipv6_hpc_count[mux_id] == 0 &&
 						get_client_memptr(eth_client, i)->dscp_ipv6_hpc_set[mux_id] == true)
-						{
+					{
+						IPACMDBG_H("v6 proc_ctx handle passed:(0x%x)\n",
+							get_client_memptr(eth_client, i)->dscp_hpc_hdr_hdl_v6[mux_id]);
+
 						if(m_header.DeleteHeaderProcCtx(get_client_memptr(eth_client, i)->dscp_hpc_hdr_hdl_v6[mux_id]) == false)
 						{
 							IPACMERR("Failed to delete PDN<->DSCP hdr_proc_ctx for v6\n");
@@ -7903,7 +7937,7 @@ int IPACM_Lan::delete_pdn_dscp_eth_rtrules(ipa_ip_type iptype, uint32_t trigger,
 						}
 						get_client_memptr(eth_client, i)->dscp_hpc_hdr_hdl_v6[mux_id] = 0;
 						get_client_memptr(eth_client, i)->dscp_ipv6_hpc_set[mux_id] = false;
-				}
+					}
 				}
 
 			}
@@ -7942,6 +7976,10 @@ int IPACM_Lan::delete_pdn_dscp_eth_rtrules(ipa_ip_type iptype, uint32_t trigger,
 					get_client_memptr(eth_client, clnt_idx)->dscp_ipv4_hpc_set
 						[IPACM_Iface::ipacmcfg->pdn_dscp_table[j].mux_id] == true)
 				{
+					IPACMDBG_H("v4 proc_ctx handle passed:(0x%x)\n",
+						get_client_memptr(eth_client, clnt_idx)->dscp_hpc_hdr_hdl_v4
+							[IPACM_Iface::ipacmcfg->pdn_dscp_table[j].mux_id]);
+
 					if(m_header.DeleteHeaderProcCtx(get_client_memptr(eth_client, clnt_idx)->dscp_hpc_hdr_hdl_v4
 							[IPACM_Iface::ipacmcfg->pdn_dscp_table[j].mux_id]) == false)
 					{
@@ -7985,8 +8023,7 @@ int IPACM_Lan::delete_pdn_dscp_eth_rtrules(ipa_ip_type iptype, uint32_t trigger,
 							it->second.dscp_pdn_hdl_v6[tx_index].dscp_ipv6_hpc_set
 								[IPACM_Iface::ipacmcfg->pdn_dscp_table[j].mux_id] = false;
 							get_client_memptr(eth_client, clnt_idx)->dscp_ipv6_hpc_count
-								[IPACM_Iface::ipacmcfg->pdn_dscp_table
-								[IPACM_Iface::ipacmcfg->pdn_dscp_table[j].mux_id].mux_id]--;
+								[IPACM_Iface::ipacmcfg->pdn_dscp_table[j].mux_id]--;
 						}
 					}
 				}
@@ -7995,6 +8032,10 @@ int IPACM_Lan::delete_pdn_dscp_eth_rtrules(ipa_ip_type iptype, uint32_t trigger,
 					get_client_memptr(eth_client, clnt_idx)->dscp_ipv6_hpc_set
 						[IPACM_Iface::ipacmcfg->pdn_dscp_table[j].mux_id] == true)
 				{
+					IPACMDBG_H("v6 proc_ctx handle passed:(0x%x)\n",
+						get_client_memptr(eth_client, clnt_idx)->dscp_hpc_hdr_hdl_v6
+							[IPACM_Iface::ipacmcfg->pdn_dscp_table[j].mux_id]);
+
 					if(m_header.DeleteHeaderProcCtx(get_client_memptr(eth_client, clnt_idx)->dscp_hpc_hdr_hdl_v6
 						[IPACM_Iface::ipacmcfg->pdn_dscp_table[j].mux_id]) == false)
 					{
@@ -10633,6 +10674,7 @@ int IPACM_Lan::handle_eth_client_down_evt(uint8_t *mac_addr, uint16_t vlan_id, i
 		if (m_header.DeleteHeaderHdl(get_client_memptr(eth_client, clt_indx)->hdr_hdl_v4)
 				== false)
 		{
+			IPACMERR("unable to delete v4 header rules for index: %d\n", clt_indx);
 			return IPACM_FAILURE;
 		}
 		get_client_memptr(eth_client, clt_indx)->ipv4_header_set = false;
@@ -10643,6 +10685,7 @@ int IPACM_Lan::handle_eth_client_down_evt(uint8_t *mac_addr, uint16_t vlan_id, i
 		if (m_header.DeleteHeaderHdl(get_client_memptr(eth_client, clt_indx)->hdr_hdl_v6)
 				== false)
 		{
+			IPACMERR("unable to delete v6 header rules for index: %d\n", clt_indx);
 			return IPACM_FAILURE;
 		}
 		get_client_memptr(eth_client, clt_indx)->ipv6_header_set = false;
@@ -10806,6 +10849,32 @@ int IPACM_Lan::handle_eth_client_down_evt(uint8_t *mac_addr, uint16_t vlan_id, i
 			get_client_memptr(eth_client, clt_indx + 1)->index_populated;
 #endif //IPA_HW_FNR_STATS
 #endif
+#ifdef FEATURE_STATIC_POLICY
+		memcpy(get_client_memptr(eth_client, clt_indx)->dscp_hpc_hdr_hdl_v4,
+			get_client_memptr(eth_client, clt_indx + 1)->dscp_hpc_hdr_hdl_v4,
+			IPA_UC_MAX_PDN_DSCP_VAL * sizeof(uint32_t));
+		memcpy(get_client_memptr(eth_client, clt_indx)->dscp_hpc_hdr_hdl_v6,
+			get_client_memptr(eth_client, clt_indx + 1)->dscp_hpc_hdr_hdl_v6,
+			IPA_UC_MAX_PDN_DSCP_VAL * sizeof(uint32_t));
+		memcpy(get_client_memptr(eth_client, clt_indx)->dscp_route_rule_set_v4,
+			get_client_memptr(eth_client, clt_indx + 1)->dscp_route_rule_set_v4,
+			IPA_UC_MAX_PDN_DSCP_VAL * sizeof(bool));
+		memcpy(get_client_memptr(eth_client, clt_indx)->dscp_ipv4_hpc_set,
+			get_client_memptr(eth_client, clt_indx + 1)->dscp_ipv4_hpc_set,
+			IPA_UC_MAX_PDN_DSCP_VAL * sizeof(bool));
+		memcpy(get_client_memptr(eth_client, clt_indx)->dscp_ipv6_hpc_set,
+			get_client_memptr(eth_client, clt_indx + 1)->dscp_ipv6_hpc_set,
+			IPA_UC_MAX_PDN_DSCP_VAL * sizeof(bool));
+		memcpy(get_client_memptr(eth_client, clt_indx)->dscp_ipv4_hpc_count,
+			get_client_memptr(eth_client, clt_indx + 1)->dscp_ipv4_hpc_count,
+			IPA_UC_MAX_PDN_DSCP_VAL * sizeof(int));
+		memcpy(get_client_memptr(eth_client, clt_indx)->dscp_ipv6_hpc_count,
+			get_client_memptr(eth_client, clt_indx + 1)->dscp_ipv6_hpc_count,
+			IPA_UC_MAX_PDN_DSCP_VAL * sizeof(int));
+		memcpy(get_client_memptr(eth_client, clt_indx)->dscp_eth_rt_hdl,
+			get_client_memptr(eth_client, clt_indx + 1)->dscp_eth_rt_hdl,
+			IPA_UC_MAX_PDN_DSCP_VAL * sizeof(eth_client_rt_hdl));
+#endif
 	}
 	/* Clean up the last entry */
 	rt_hdl_v6_list[num_eth_client_tmp - 1].clear();
@@ -10819,6 +10888,32 @@ int IPACM_Lan::handle_eth_client_down_evt(uint8_t *mac_addr, uint16_t vlan_id, i
 #endif
 	memset(get_client_memptr(eth_client, clt_indx)->wan_ul_fl_rule_hdl_v4, 0, MAX_WAN_UL_FILTER_RULES * sizeof(uint32_t));
 	memset(get_client_memptr(eth_client, clt_indx)->wan_ul_fl_rule_hdl_v6, 0, MAX_WAN_UL_FILTER_RULES * sizeof(uint32_t));
+#endif
+#ifdef FEATURE_STATIC_POLICY
+	memset(get_client_memptr(eth_client, clt_indx)->dscp_hpc_hdr_hdl_v4,
+		0,
+		IPA_UC_MAX_PDN_DSCP_VAL * sizeof(uint32_t));
+	memset(get_client_memptr(eth_client, clt_indx)->dscp_hpc_hdr_hdl_v6,
+		0,
+		IPA_UC_MAX_PDN_DSCP_VAL * sizeof(uint32_t));
+	memset(get_client_memptr(eth_client, clt_indx)->dscp_route_rule_set_v4,
+		0,
+		IPA_UC_MAX_PDN_DSCP_VAL * sizeof(bool));
+	memset(get_client_memptr(eth_client, clt_indx)->dscp_ipv4_hpc_set,
+		0,
+		IPA_UC_MAX_PDN_DSCP_VAL * sizeof(bool));
+	memset(get_client_memptr(eth_client, clt_indx)->dscp_ipv6_hpc_set,
+		0,
+		IPA_UC_MAX_PDN_DSCP_VAL * sizeof(bool));
+	memset(get_client_memptr(eth_client, clt_indx)->dscp_ipv4_hpc_count,
+		0,
+		IPA_UC_MAX_PDN_DSCP_VAL * sizeof(int));
+	memset(get_client_memptr(eth_client, clt_indx)->dscp_ipv6_hpc_count,
+		0,
+		IPA_UC_MAX_PDN_DSCP_VAL * sizeof(int));
+	memset(get_client_memptr(eth_client, clt_indx)->dscp_eth_rt_hdl,
+		0,
+		IPA_UC_MAX_PDN_DSCP_VAL * sizeof(eth_client_rt_hdl));
 #endif
 	IPACMDBG_H(" %d eth client deleted successfully \n", num_eth_client);
 	num_eth_client = num_eth_client - 1;

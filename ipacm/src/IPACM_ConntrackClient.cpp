@@ -102,8 +102,18 @@ int IPACM_ConntrackClient::IPAConntrackEventCB
 	uint16_t sport = 0;
 	uint16_t dport = 0;
 	IPACM_Config *config_instance = NULL;
+	u_int8_t  protocol, tcp_state;
+	protocol = nfct_get_attr_u8(ct, ATTR_REPL_L4PROTO);
+	if((protocol == IPPROTO_TCP))
+		tcp_state = nfct_get_attr_u8(ct, ATTR_TCP_STATE);
+	IPACMDBG("Event callback called with msgtype is :%d\n",type);
 
-	IPACMDBG("Event callback called with msgtype: %d\n",type);
+	/*Avoiding processing tcp contracks if state is not establish, fin_wait, if not distory msg type*/
+	if((protocol == IPPROTO_TCP) && ((tcp_state != TCP_CONNTRACK_ESTABLISHED) && (tcp_state != TCP_CONNTRACK_FIN_WAIT) && (NFCT_T_DESTROY != type)))
+	{
+		IPACMDBG("unexpected conntracks recieving protocol = %d  msg_type = %d\n", protocol,  type);
+		goto IGNORE;
+	}
 
 	/* Retrieve ip type */
 	ip_type = nfct_get_attr_u8(ct, ATTR_REPL_L3PROTO);
@@ -111,7 +121,8 @@ int IPACM_ConntrackClient::IPAConntrackEventCB
 	sport = ntohs(sport);
 	dport = nfct_get_attr_u16(ct, ATTR_ORIG_PORT_DST);
 	dport = ntohs(dport);
-        /* Avoid processing conntrack with DNS 53 port */
+
+	/* Avoid processing conntrack with DNS 53 port */
 	if(dport == 53 || sport == 53)
 	{
 		IPACMDBG("iptype: %d: sport: %d: dport: %d\n", ip_type, sport, dport);

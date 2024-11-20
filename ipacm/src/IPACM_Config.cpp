@@ -1013,19 +1013,20 @@ void IPACM_Config::update_config_private_forwarding(bool reset){
 	}
 	fread(file_buf, 100, 1, fp);
 	fclose(fp);
-		if(strstr(IP_Forwarding_config.interface_name, "0")){
-			eth_iface_no = 1;
-		}
-		else if(strstr(IP_Forwarding_config.interface_name, "1")){
-			eth_iface_no = 2;
-		}
-		if(IP_Forwarding_config.vlan)
-			snprintf(cmd, 200, "echo \"ipforward%dvlan:%s\r\n\" > /etc/data/ipa_config.txt",eth_iface_no,IP_Forwarding_config.interface_name);
-		else
-			snprintf(cmd, 200, "echo \"ipforward%d\n\r\" > /etc/data/ipa_config.txt",eth_iface_no);
-		system(cmd);
-		IPACMDBG_H("Executed system command\n");
-		IPACMDBG_H("Private IP Forward FR Active with vlan_id %d\n", IP_Forwarding_config.vlan);
+	IPACMDBG_H("Read from ipa_config.txt : %s\n", file_buf);
+	if(strstr(IP_Forwarding_config.interface_name, "0")){
+		eth_iface_no = 1;
+	}
+	else if(strstr(IP_Forwarding_config.interface_name, "1")){
+		eth_iface_no = 2;
+	}
+	if(IP_Forwarding_config.vlan)
+		snprintf(cmd, 200, "echo \"ipforward%dvlan:%s\r\n\" > /etc/data/ipa_config.txt",eth_iface_no,IP_Forwarding_config.interface_name);
+	else
+		snprintf(cmd, 200, "echo \"ipforward%d\n\r\" > /etc/data/ipa_config.txt",eth_iface_no);
+	system(cmd);
+	IPACMDBG_H("Executed system command [%s]\n",cmd);
+	IPACMDBG_H("Private IP Forward FR Active with vlan_id %d\n", IP_Forwarding_config.vlan);
 }
 
 void IPACM_Config::update_bridge_vlan_details_private_forwarding(uint32_t ip_addr)

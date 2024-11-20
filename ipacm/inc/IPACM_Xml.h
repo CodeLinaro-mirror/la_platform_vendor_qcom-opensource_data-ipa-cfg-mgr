@@ -412,7 +412,7 @@ typedef struct
 typedef struct
 {
 	bool privateIPForwarding_enable;
-	uint8_t vlan; //0, if APN 1 or untagged traffic has to be accelerated, and the vlan ID, if tagged traffic, and that vlan has to be accelerated
+	uint16_t vlan; //0, if APN 1 or untagged traffic has to be accelerated, and the vlan ID, if tagged traffic, and that vlan has to be accelerated
 	char interface_name[IPA_IFACE_NAME_LEN];
 	char bridge_name[IPA_IFACE_NAME_LEN];
 	uint32_t bridge_net_mask;

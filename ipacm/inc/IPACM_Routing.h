@@ -70,7 +70,7 @@ public:
 	bool GetRoutingTable(struct ipa_ioc_get_rt_tbl *routingTable);
 
 	bool DeviceNodeIsOpened();
-	bool DeleteRoutingHdl(uint32_t rt_rule_hdl, ipa_ip_type ip);
+	bool DeleteRoutingHdl(uint32_t rt_rule_hdl, ipa_ip_type ip, uint8_t commit = 1);
 
 	bool ModifyRoutingRule(struct ipa_ioc_mdfy_rt_rule *);
 

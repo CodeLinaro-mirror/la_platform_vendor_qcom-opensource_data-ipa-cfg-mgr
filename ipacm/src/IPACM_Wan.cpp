@@ -3645,6 +3645,25 @@ int IPACM_Wan::handle_route_add_evt(ipa_ip_type iptype)
 		if(m_is_sta_mode == Q6_WAN)
 		{
 			config_wan_firewall_rule(IPA_IP_v4);
+
+#ifdef FEATURE_IPA_IPSEC
+			memset(&wan_state, 0, sizeof(wan_state));
+			fd_wwan_ioctl = open(WWAN_QMI_IOCTL_DEVICE_NAME, O_RDWR);
+			if(fd_wwan_ioctl < 0)
+			{
+				IPACMERR("FailFailed to open %s.\n", WWAN_QMI_IOCTL_DEVICE_NAME);
+				free(rt_rule);
+				return IPACM_FAILURE;
+			}
+			IPACMDBG_H("send WAN_IOC_NOTIFY_WAN_STATE up to IPA_PM\n");
+			wan_state.up = true;
+			memcpy(wan_state.upstreamIface, dev_name, sizeof(wan_state.upstreamIface));
+			if(ioctl(fd_wwan_ioctl, WAN_IOC_NOTIFY_WAN_STATE, &wan_state))
+			{
+				IPACMERR("Failed to send WAN_IOC_NOTIFY_WAN_STATE as up %d\n ", wan_state.up);
+			}
+			close(fd_wwan_ioctl);
+#endif
 			install_wan_filtering_rule(false);
 #ifdef FEATURE_VLAN_MPDN
 			if(isVlanWanUP())
@@ -3743,6 +3762,25 @@ int IPACM_Wan::handle_route_add_evt(ipa_ip_type iptype)
 		if(m_is_sta_mode == Q6_WAN)
 		{
 			config_wan_firewall_rule(IPA_IP_v6);
+
+#ifdef FEATURE_IPA_IPSEC
+			memset(&wan_state, 0, sizeof(wan_state));
+			fd_wwan_ioctl = open(WWAN_QMI_IOCTL_DEVICE_NAME, O_RDWR);
+			if(fd_wwan_ioctl < 0)
+			{
+				IPACMERR("FailFailed to open %s.\n", WWAN_QMI_IOCTL_DEVICE_NAME);
+				free(rt_rule);
+				return IPACM_FAILURE;
+			}
+			IPACMDBG_H("send WAN_IOC_NOTIFY_WAN_STATE up to IPA_PM\n");
+			wan_state.up = true;
+			memcpy(wan_state.upstreamIface, dev_name, sizeof(wan_state.upstreamIface));
+			if(ioctl(fd_wwan_ioctl, WAN_IOC_NOTIFY_WAN_STATE, &wan_state))
+			{
+				IPACMERR("Failed to send WAN_IOC_NOTIFY_WAN_STATE as up %d\n ", wan_state.up);
+			}
+			close(fd_wwan_ioctl);
+#endif
 			install_wan_filtering_rule(false);
 		}
 		else

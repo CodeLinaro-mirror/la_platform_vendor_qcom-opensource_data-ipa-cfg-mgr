@@ -147,6 +147,7 @@ typedef struct _ipa_eth_client
 	bool dscp_ipv6_hpc_set[IPA_UC_MAX_PDN_DSCP_VAL];
 	int dscp_ipv4_hpc_count[IPA_UC_MAX_PDN_DSCP_VAL];
 	int dscp_ipv6_hpc_count[IPA_UC_MAX_PDN_DSCP_VAL];
+	eth_client_rt_hdl dscp_eth_rt_hdl[IPA_UC_MAX_PDN_DSCP_VAL];
 #endif
 	int if_index;
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
@@ -185,10 +186,8 @@ typedef struct _ipa_eth_client
 #ifdef IPA_IOCTL_SET_EXT_ROUTER_MODE
 	uint32_t ext_router_prefix_rt_hdl;
 #endif
+	//Keep below structure as last declaration.
 	eth_client_rt_hdl eth_rt_hdl[0]; /* depends on number of tx properties */
-#ifdef FEATURE_STATIC_POLICY
-	eth_client_rt_hdl dscp_eth_rt_hdl[IPA_UC_MAX_PDN_DSCP_VAL];
-#endif
 }ipa_eth_client;
 
 #ifdef FEATURE_IPACM_UL_FIREWALL

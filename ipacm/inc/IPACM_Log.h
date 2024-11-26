@@ -68,6 +68,13 @@ extern "C"
 
 #define IPACM_LOG_COLLECTION_FILE "/var/run/data/ipa/ipacm_log.txt"
 
+typedef struct ipacm_log_file_metadata_s {
+	long int write_addr;
+} ipacm_log_file_metadata_t;
+
+#define IPACMLOG_BUF_SZ_AFTER_CRASH_STR     1000
+#define IPACMLOG_RECENT_BUF_TO_SYNC         4096
+
 typedef struct ipacm_log_buffer_s {
 	char	user_data[MAX_BUF_LEN];
 } ipacm_log_buffer_t;
@@ -89,6 +96,7 @@ static char dmesg_cmd[MAX_BUF_LEN];
 static char timestamp_buf[TimeStamp_buff_len];
 char *get_time_string(char *buffer, int TimeStamp_len);
 void ipacm_log_dump(char ipacm_log_data[]);
+void log_ipacm_crash_info(const char *crash_str);
 int log_init();
 
 

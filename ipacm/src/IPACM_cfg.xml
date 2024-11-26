@@ -190,7 +190,8 @@
 			<IPACMMPDNEnabled>1</IPACMMPDNEnabled>
 		</IPACMMPDN>
 		<IPACMLog>
+			<IPACMfileQuota>30</IPACMfileQuota>
 			<IPACMfilevar>0</IPACMfilevar>
-		</IPACMLog>
+        </IPACMLog>
 	</IPACM>
 </system>

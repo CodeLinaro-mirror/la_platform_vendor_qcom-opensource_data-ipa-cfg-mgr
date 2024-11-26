@@ -2113,7 +2113,8 @@ void IPACM_ConntrackListener::ProcessCTV6Message(void *param)
 	}
 	else if((IPPROTO_UDP == l4proto && NFCT_T_DESTROY == evt_data->type) ||
 					(IPPROTO_TCP == l4proto &&
-					 nfct_get_attr_u8(ct, ATTR_TCP_STATE) == TCP_CONNTRACK_FIN_WAIT))
+					 (nfct_get_attr_u8(ct, ATTR_TCP_STATE) == TCP_CONNTRACK_FIN_WAIT ||
+					  nfct_get_attr_u8(ct, ATTR_TCP_STATE) == TCP_CONNTRACK_CLOSE)))
 	{
 			p_lan2lan->handle_del_connection(&lan2lan_conn);
 	}
@@ -2878,9 +2879,10 @@ int IPACM_ConntrackListener::AddORDeleteNatEntry(const nat_entry_bundle *input, 
 			}
 		}
 		else if (TCP_CONNTRACK_FIN_WAIT == tcp_state ||
+				   TCP_CONNTRACK_CLOSE == tcp_state ||
 				   input->type == NFCT_T_DESTROY)
 		{
-			IPACMDBG("TCP state TCP_CONNTRACK_FIN_WAIT(%d) "
+			IPACMDBG("TCP state (TCP_CONNTRACK_FIN_WAIT or TCP_CONNTRACK_CLOSE) (%d) "
 					 "or type NFCT_T_DESTROY(%d)\n", tcp_state, input->type);
 
 			nat_inst->DeleteEntry(input->rule);
@@ -3299,7 +3301,8 @@ void IPACM_ConntrackListener::HandleLan2Lan(struct nf_conntrack *ct,
 	}
 	else if ((IPPROTO_UDP == rule->protocol && NFCT_T_DESTROY == type) ||
 			   (IPPROTO_TCP == rule->protocol &&
-				nfct_get_attr_u8(ct, ATTR_TCP_STATE) == TCP_CONNTRACK_FIN_WAIT))
+				(nfct_get_attr_u8(ct, ATTR_TCP_STATE) == TCP_CONNTRACK_FIN_WAIT ||
+				 nfct_get_attr_u8(ct, ATTR_TCP_STATE) == TCP_CONNTRACK_CLOSE)))
 	{
 		p_lan2lan->handle_del_connection(&lan2lan_conn);
 	}

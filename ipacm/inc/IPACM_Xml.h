@@ -239,6 +239,7 @@ if (!(a)) {                                                 \
 #define OEMFirewallFlatFile_IPv6_TAG      "OEMFirewallFlatFile_IPv6"
 
 #define IPACMLOG_TAG                         "IPACMLog"
+#define IPACMFILEQUOTA_TAG                   "IPACMfileQuota"
 #define IPACMFILEVAR_TAG                     "IPACMfilevar"
 
 /*---------------------------------------------------------------------------
@@ -367,7 +368,8 @@ typedef struct  _IPACM_conf_t
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
 	bool lan_stats_enable;
 #endif
-	int max_file_size;
+	uint32_t max_file_size;
+	uint8_t max_file_size_quota;
 	bool ipv6_nat_enable;
 	int ipacm_l2tp_enable;
 	bool ipacm_mpdn_enable;

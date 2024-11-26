@@ -25,6 +25,10 @@
  * WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *
+ * Changes from Qualcomm Technologies, Inc. are provided under the following license:
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 /*!
   @file
@@ -599,7 +603,19 @@ static int ipacm_cfg_xml_parse_tree
 							config->ipacm_l2tp_enable = atoi(content_buf);
 						}
 				}
-
+				else if (0 == IPACM_util_icmp_string((char*)xml_node->name, IPACMFILEQUOTA_TAG))
+				{
+					IPACMDBG_H("inside ipacm_logging Quota\n");
+					content = IPACM_read_content_element(xml_node);
+					if (content!= NULL)
+					{
+						if(atoi(content)!=0)
+						{
+							config->max_file_size_quota = atoi(content);
+						}
+						IPACMDBG_H("max_fileszQuota %d \n",config->max_file_size_quota);
+					}
+				}
 				else if (0 == IPACM_util_icmp_string((char*)xml_node->name, IPACMFILEVAR_TAG))
 				{		IPACMDBG_H("inside ipacm_logging \n");
 						content = IPACM_read_content_element(xml_node);

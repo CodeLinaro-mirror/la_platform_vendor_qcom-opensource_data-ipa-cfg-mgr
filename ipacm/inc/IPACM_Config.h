@@ -54,6 +54,17 @@
 #else
 #include <list>
 #endif
+#include <set>
+#include <map>
+#include <algorithm>
+#include <string>
+#include <libgen.h>
+#include <sys/statvfs.h>
+
+#define IPACM_DEF_LOG_FILE_SIZE_QUOTA    30
+
+using std::string;
+using std::set;
 
 typedef struct
 {
@@ -107,7 +118,7 @@ class IPACM_Config
 {
 public:
 
-	int max_file_size;
+	uint32_t max_file_size;
 
 	/* IPACM ipa_client map to rm_resource*/
 	ipa_rm_resource_name ipa_client_rm_map_tbl[IPA_CLIENT_MAX];

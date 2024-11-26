@@ -409,6 +409,11 @@ int IPACM_Config::Init(void)
 	char	IPACM_config_file[IPA_MAX_FILE_LEN];
 	IPACM_conf_t	*cfg;
 
+	struct statvfs stat;
+	ulong available_partition_size_bytes = 0;
+	char ipacm_log_file[] = IPACM_LOG_COLLECTION_FILE;
+	char *ipacm_log_dir = NULL;
+
 	cfg = (IPACM_conf_t *)malloc(sizeof(IPACM_conf_t));
 	if(cfg == NULL)
 	{
@@ -454,7 +459,38 @@ int IPACM_Config::Init(void)
 		goto fail;
 	}
 
-	max_file_size = cfg->max_file_size;
+	if(cfg->max_file_size_quota > 100)
+	{
+		IPACMDBG_H("Invalid Quota Set[%d], changing to default[%d]\n",
+				cfg->max_file_size_quota, IPACM_DEF_LOG_FILE_SIZE_QUOTA);
+		cfg->max_file_size_quota = IPACM_DEF_LOG_FILE_SIZE_QUOTA;
+	}
+	ipacm_log_dir = dirname(ipacm_log_file);
+
+	/* Read the available partition size */
+	if (statvfs(ipacm_log_dir, &stat) != 0) {
+		IPACMDBG_H("Failed to get available partition size\n");
+		max_file_size = 0;
+	}
+	else
+	{
+		available_partition_size_bytes = stat.f_bavail * stat.f_frsize;
+
+		IPACMDBG_H("Setting file size to min of APS[%lu], max_filesz[%lu], \
+				Based on Quota[%lu] \n", available_partition_size_bytes,
+				cfg->max_file_size, (ulong)((available_partition_size_bytes *
+						cfg->max_file_size_quota) /100));
+
+		/* Conerting from ulong to unit32_t, since uint32_t can hold a
+		 * file size value upto 4GB. So, shouldn't affect here as the file
+		 * size configured will usually be less than that.
+		 */
+		max_file_size = (uint32_t)std::min({(ulong)(cfg->max_file_size),
+				(ulong)(available_partition_size_bytes),
+				(ulong)((available_partition_size_bytes *
+						cfg->max_file_size_quota) / 100)});
+	}
+	IPACMDBG_H("max_file_size %d \n", max_file_size);
 
 	log_init();
 

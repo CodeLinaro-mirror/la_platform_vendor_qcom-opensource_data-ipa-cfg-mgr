@@ -235,7 +235,8 @@
 			<IPACMMSGFLTEnable>0</IPACMMSGFLTEnable>
 		</IPACMMSGFLT>
 		<IPACMLog>
-                        <IPACMfilevar>0</IPACMfilevar>
-                </IPACMLog>
+			<IPACMfileQuota>30</IPACMfileQuota>
+			<IPACMfilevar>0</IPACMfilevar>
+        </IPACMLog>
 	</IPACM>
 </system>

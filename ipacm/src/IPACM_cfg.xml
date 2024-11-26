@@ -216,6 +216,7 @@
 			<IPACMQOSEnabled>0</IPACMQOSEnabled>
 		</IPACMQOS>
 		<IPACMLog>
+			<IPACMfileQuota>30</IPACMfileQuota>
 			<IPACMfilevar>0</IPACMfilevar>
     		</IPACMLog>
 		<IPACMMSGFLT>

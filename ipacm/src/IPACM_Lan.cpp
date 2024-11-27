@@ -11350,8 +11350,6 @@ int IPACM_Lan::eth_bridge_add_hdr_proc_ctx(ipa_hdr_l2_type peer_l2_hdr_type, uin
 #endif
 			{
 				IPACM_SYSLOG("Unable to find VLAN ID for Dev %s\n", peer_dev_name);
-				res = IPACM_FAILURE;
-				goto end;
 			}
 		}
 

@@ -1188,6 +1188,20 @@ void* ipa_driver_msg_notifier(void *param)
 
 			break;
 
+		case IPA_ENABLE_ETH_PDU_MODE_EVENT:
+			IPACMDBG_H("Received IPA_ENABLE_ETH_PDU_MODE_EVENT\n");
+
+			if (IPACM_Iface::ipacmcfg->eth_pdu_enabled)
+			{
+				IPACMERR("eth pdu already enabled\n");
+				break;
+			}
+
+			IPACM_Iface::ipacmcfg->eth_pdu_enabled = true;
+			evt_data.event    = IPA_IPACM_DISABLE;
+
+			break;
+
 		default:
 			IPACMDBG_H("Unhandled message type: %d\n", event_hdr.msg_type);
 			continue;

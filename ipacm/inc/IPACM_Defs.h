@@ -27,7 +27,7 @@ OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
 IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 Changes from Qualcomm Innovation Center are provided under the following license:
-Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+Copyright (c) 2023-2024 Qualcomm Innovation Center, Inc. All rights reserved.
 SPDX-License-Identifier: BSD-3-Clause-Clear
 */
 /*!
@@ -330,6 +330,7 @@ typedef enum
 	IPA_HANDLE_MACSEC_DEL,                    /* ipa_macsec_map */
 	IPA_ADD_BRIDGE_VLAN_PHY_INTF,
 	IPA_ADD_BRIDGE_VLAN_BR_INTF,
+	IPA_IPACM_DISABLE,                        /* void */
 	IPACM_EVENT_MAX
 } ipa_cm_event_id;
 

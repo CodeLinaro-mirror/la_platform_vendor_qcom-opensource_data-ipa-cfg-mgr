@@ -1516,9 +1516,12 @@ static int ipa_nl_decode_nlmsg
 							IPACM_Iface::iface_addr_query(msg_ptr->nl_neigh_info.master_interface_index, false, &if_ipv4_addr, &if_ipipv4_addr_mask);
 							vlan_bridge_data.bridge_ipv4 = if_ipv4_addr;
 							vlan_bridge_data.subnet_mask = if_ipipv4_addr_mask;
-							config->add_dummy_vlan_mapping(master_dev_name,
-															data_all->iface_name, msg_ptr->nl_neigh_info.metainfo.ndm_ifindex);
-							config->add_bridge_vlan_mapping(&vlan_bridge_data);
+							if(strncmp(master_dev_name, BRIDGE_0, strlen(master_dev_name)) != 0)
+							{
+								config->add_dummy_vlan_mapping(master_dev_name,
+									data_all->iface_name, msg_ptr->nl_neigh_info.metainfo.ndm_ifindex);
+								config->add_bridge_vlan_mapping(&vlan_bridge_data);
+							}
 						}
 					}
 				}

@@ -1921,17 +1921,24 @@ static int ipa_nl_decode_nlmsg
 							if(config->check_l2tp_iface(data_all->iface_name))
 							{
 								config->add_l2tp_dummy_vlan_mapping(master_dev_name, data_all->iface_name,
-																msg_ptr->nl_neigh_info.metainfo.ndm_ifindex);
+																	msg_ptr->nl_neigh_info.metainfo.ndm_ifindex);
+								config->add_bridge_vlan_mapping(&vlan_bridge_data);
+								vlan_bridge_data.status = 1;
+								config->add_bridge_vlan_mapping(&vlan_bridge_data);
 							}
 							else
 #endif
 							{
-								config->add_dummy_vlan_mapping(master_dev_name,
-															data_all->iface_name, msg_ptr->nl_neigh_info.metainfo.ndm_ifindex);
+								/* Currently we support dummy VLAN logic only on On-Demand Bridge */
+								if(strncmp(master_dev_name, BRIDGE_0, strlen(master_dev_name)) != 0)
+								{
+									config->add_dummy_vlan_mapping(master_dev_name,
+																data_all->iface_name, msg_ptr->nl_neigh_info.metainfo.ndm_ifindex);
+									config->add_bridge_vlan_mapping(&vlan_bridge_data);
+									vlan_bridge_data.status = 1;
+									config->add_bridge_vlan_mapping(&vlan_bridge_data);
+								}
 							}
-							config->add_bridge_vlan_mapping(&vlan_bridge_data);
-							vlan_bridge_data.status = 1;
-							config->add_bridge_vlan_mapping(&vlan_bridge_data);
 						}
 					}
 				}

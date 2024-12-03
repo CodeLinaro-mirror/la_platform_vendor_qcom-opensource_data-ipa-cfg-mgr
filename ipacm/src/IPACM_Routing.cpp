@@ -285,7 +285,7 @@ bool IPACM_Routing::PutRoutingTable(uint32_t routingTableHandle)
 	return true;
 }
 
-bool IPACM_Routing::DeleteRoutingHdl(uint32_t rt_rule_hdl, ipa_ip_type ip)
+bool IPACM_Routing::DeleteRoutingHdl(uint32_t rt_rule_hdl, ipa_ip_type ip, uint8_t commit)
 {
 	const uint8_t NUM_RULES = 1;
 	struct ipa_ioc_del_rt_rule *rt_rule;
@@ -308,7 +308,7 @@ bool IPACM_Routing::DeleteRoutingHdl(uint32_t rt_rule_hdl, ipa_ip_type ip)
 	}
 
 	memset(rt_rule, 0, len);
-	rt_rule->commit = 1;
+	rt_rule->commit = commit;
 	rt_rule->num_hdls = NUM_RULES;
 	rt_rule->ip = ip;
 

@@ -695,6 +695,7 @@ int IPACM_IfaceManager::create_iface_instance(ipacm_ifacemgr_data *param)
 					if(is_sta_mode == Q6_WAN)
 					{
 						IPACM_EvtDispatcher::registr(IPA_PDN_MUX_ID_UPDATE, w);
+						IPACM_EvtDispatcher::registr(IPA_HANDLE_LAN_VLAN_PDN_DOWN_STATIC, w);
 					}
 #endif
 					if(is_sta_mode == WLAN_WAN)

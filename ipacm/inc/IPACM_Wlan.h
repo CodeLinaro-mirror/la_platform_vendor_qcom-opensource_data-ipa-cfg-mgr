@@ -115,6 +115,7 @@ typedef struct _ipa_wlan_client
 	bool dscp_ipv6_hpc_set[IPA_UC_MAX_PDN_DSCP_VAL];
 	int dscp_ipv4_hpc_count[IPA_UC_MAX_PDN_DSCP_VAL];
 	int dscp_ipv6_hpc_count[IPA_UC_MAX_PDN_DSCP_VAL];
+	wlan_client_rt_hdl dscp_wifi_rt_hdl[IPA_UC_MAX_PDN_DSCP_VAL];
 #endif
 	bool power_save_set;
 	bool is_vlan;
@@ -144,10 +145,8 @@ typedef struct _ipa_wlan_client
 	uint32_t lan2lan_fl_rule_hdl_v4;
 	/* store ipv6 LAN2LAN filter rule handle when ast update is needed. */
 	uint32_t lan2lan_fl_rule_hdl_v6;
+	//Keep below structure as last declaration.
 	wlan_client_rt_hdl wifi_rt_hdl[0]; /* depends on number of tx properties */
-#ifdef FEATURE_STATIC_POLICY
-	wlan_client_rt_hdl dscp_wifi_rt_hdl[IPA_UC_MAX_PDN_DSCP_VAL];
-#endif
 }ipa_wlan_client;
 
 typedef struct _ipa_wlan_primary_client

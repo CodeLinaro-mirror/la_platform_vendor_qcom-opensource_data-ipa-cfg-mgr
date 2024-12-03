@@ -25,6 +25,11 @@ BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
 WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
 OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
 IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+*
+* Changes from Qualcomm Innovation Center are provided under the following license:
+* Copyright (c) 2024 Qualcomm Innovation Center, Inc. All rights reserved.
+* SPDX-License-Identifier: BSD-3-Clause-Clear
 */
 #include <unistd.h>
 #include <sys/ioctl.h>
@@ -210,6 +215,8 @@ bool IPACM_Header::DeleteHeaderProcCtx(uint32_t hdl)
 {
 	int len, ret;
 	struct ipa_ioc_del_hdr_proc_ctx* pHeaderTable = NULL;
+
+	IPACMDBG("proc_ctx handle passed:(0x%x)\n", hdl);
 
 	if (hdl == 0)
 	{

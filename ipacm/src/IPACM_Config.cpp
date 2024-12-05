@@ -50,6 +50,7 @@
 #include <fcntl.h>
 #include <string.h>
 #include <errno.h>
+#include <array>
 
 IPACM_Config *IPACM_Config::pInstance = NULL;
 const char *IPACM_Config::DEVICE_NAME = "/dev/ipa";

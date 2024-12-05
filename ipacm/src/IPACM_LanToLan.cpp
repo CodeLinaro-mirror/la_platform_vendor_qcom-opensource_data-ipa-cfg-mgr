@@ -46,6 +46,7 @@ IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <stdlib.h>
 #include "IPACM_LanToLan.h"
 #include "IPACM_Wlan.h"
+#include <array>
 
 #define __stringify(x...) #x
 

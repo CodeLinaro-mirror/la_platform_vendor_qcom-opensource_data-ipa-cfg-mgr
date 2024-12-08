@@ -25,6 +25,11 @@ BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
 WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
 OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
 IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+
+Changes from Qualcomm Innovation Center, Inc. are provided under the following license:
+Copyright (c) 2025 Qualcomm Innovation Center, Inc. All rights reserved.
+SPDX-License-Identifier: BSD-3-Clause-Clear
 */
 #include <unistd.h>
 #include <sys/ioctl.h>
@@ -225,7 +230,7 @@ bool IPACM_Header::DeleteHeaderProcCtx(uint32_t hdl)
 	pHeaderTable->hdl[0].hdl = hdl;
 
 	ret = ioctl(m_fd, IPA_IOC_DEL_HDR_PROC_CTX, pHeaderTable);
-	if(ret != 0)
+	if(ret != 0 || pHeaderTable->hdl[0].status != 0)
 	{
 		IPACMERR("Failed to delete hdr proc ctx: return value %d, status %d\n",
 			ret, pHeaderTable->hdl[0].status);

@@ -576,18 +576,31 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 			}
 #endif
 
-#ifdef FEATURE_ETH_BRIDGE_LE
-			if(rx_prop != NULL)
+			if (rx_prop != NULL)
 			{
+				if(IPACM_Iface::ipacmcfg->GetIPAVer() >= IPA_HW_None &&
+					IPACM_Iface::ipacmcfg->GetIPAVer() < IPA_HW_v4_0)
+				{
+					/* Delete corresponding ipa_rm_resource_name of RX-endpoint after delete all IPV4V6 FT-rule */
+					IPACMDBG_H("dev %s delete producer dependency\n", dev_name);
+					IPACMDBG_H("depend Got pipe %d rm index : %d \n",rx_prop->rx[0].src_pipe,
+						IPACM_Iface::ipacmcfg->ipa_client_rm_map_tbl[rx_prop->rx[0].src_pipe]);
+						IPACM_Iface::ipacmcfg->DelRmDepend(IPACM_Iface::ipacmcfg->ipa_client_rm_map_tbl[rx_prop->rx[0].src_pipe]);
+					IPACMDBG_H("Finished delete dependency \n ");
+				}
+#ifndef FEATURE_ETH_BRIDGE_LE
 				free(rx_prop);
 				rx_prop = NULL;
+#endif
 			}
-			if(tx_prop != NULL)
+
+#ifndef FEATURE_ETH_BRIDGE_LE
+			if (tx_prop != NULL)
 			{
 				free(tx_prop);
 				tx_prop = NULL;
 			}
-			if(iface_query != NULL)
+			if (iface_query != NULL)
 			{
 				free(iface_query);
 				iface_query = NULL;
@@ -3639,8 +3652,6 @@ int IPACM_Lan::handle_addr_evt(ipacm_event_data_addr *data)
 #endif
 			install_ipv6_icmp_flt_rule();
 
-			/* populate the flt rule offset for eth bridge */
-			eth_bridge_flt_rule_offset[0][data->iptype] = ipv6_icmp_flt_rule_hdl[0][0];
 #ifdef FEATURE_L2TP
 			if (IPACM_Iface::ipacmcfg->ipacm_l2tp_enable == IPACM_L2TP)
 			{
@@ -3661,6 +3672,7 @@ int IPACM_Lan::handle_addr_evt(ipacm_event_data_addr *data)
 					IPACMDBG_H("Iface is not Special iface, no need to install v6 rules on 2nd rx pipe\n", num_dft_rt_v6);
 					continue;
 				}
+				eth_bridge_flt_rule_offset[j][IPA_IP_v6] = ipv6_icmp_flt_rule_hdl[j][0];
 				/* populate the mtu_rule_offset */
 				if (m_ipv6_default_filterting_rules_count[j] && m_ipv6_default_filterting_rules_count[j] <= (IPV6_DEFAULT_FILTERTING_RULES + IPV6_DEFAULT_LAN_FILTERTING_RULES))
 				{
@@ -7642,39 +7654,13 @@ fail:
 		free(odu_route_rule_v6_hdl);
 		odu_route_rule_v6_hdl = NULL;
 	}
-	if (rx_prop != NULL)
-	{
-		if(IPACM_Iface::ipacmcfg->GetIPAVer() >= IPA_HW_None && IPACM_Iface::ipacmcfg->GetIPAVer() < IPA_HW_v4_0)
-		{
-			/* Delete corresponding ipa_rm_resource_name of RX-endpoint after delete all IPV4V6 FT-rule */
-			IPACMDBG_H("dev %s delete producer dependency\n", dev_name);
-			IPACMDBG_H("depend Got pipe %d rm index : %d \n", rx_prop->rx[0].src_pipe, IPACM_Iface::ipacmcfg->ipa_client_rm_map_tbl[rx_prop->rx[0].src_pipe]);
-			IPACM_Iface::ipacmcfg->DelRmDepend(IPACM_Iface::ipacmcfg->ipa_client_rm_map_tbl[rx_prop->rx[0].src_pipe]);
-			IPACMDBG_H("Finished delete dependency \n ");
-		}
-#ifndef FEATURE_ETH_BRIDGE_LE
-		free(rx_prop);
-		rx_prop = NULL;
-#endif
-	}
 
 	if (eth_client != NULL)
 	{
 		free(eth_client);
 		eth_client = NULL;
 	}
-#ifndef FEATURE_ETH_BRIDGE_LE
-	if (tx_prop != NULL)
-	{
-		free(tx_prop);
-		tx_prop = NULL;
-	}
-	if (iface_query != NULL)
-	{
-		free(iface_query);
-		iface_query = NULL;
-	}
-#endif
+
 	is_active = false;
 	post_del_self_evt();
 
@@ -10768,6 +10754,38 @@ void IPACM_Lan::post_del_self_evt()
 
 	IPACMDBG_H("Posting event IPA_LAN_DELETE_SELF\n");
 	IPACM_EvtDispatcher::PostEvt(&evt);
+
+	if (rx_prop != NULL)
+	{
+		if(IPACM_Iface::ipacmcfg->GetIPAVer() >= IPA_HW_None &&
+			IPACM_Iface::ipacmcfg->GetIPAVer() < IPA_HW_v4_0)
+		{
+			/* Delete corresponding ipa_rm_resource_name of RX-endpoint after delete all IPV4V6 FT-rule */
+			IPACMDBG_H("dev %s add producer dependency\n", dev_name);
+			IPACMDBG_H("depend Got pipe %d rm index : %d \n", rx_prop->rx[0].src_pipe,
+				IPACM_Iface::ipacmcfg->ipa_client_rm_map_tbl[rx_prop->rx[0].src_pipe]);
+			IPACM_Iface::ipacmcfg->DelRmDepend(IPACM_Iface::ipacmcfg->ipa_client_rm_map_tbl[rx_prop->rx[0].src_pipe]);
+		}
+#ifndef FEATURE_ETH_BRIDGE_LE
+		free(rx_prop);
+		rx_prop = NULL;
+#endif
+	}
+
+#ifndef FEATURE_ETH_BRIDGE_LE
+	if (tx_prop != NULL)
+	{
+		free(tx_prop);
+		tx_prop = NULL;
+	}
+
+	if (iface_query != NULL)
+	{
+		free(iface_query);
+		iface_query = NULL;
+	}
+#endif
+
 }
 
 /*handle reset usb-client rt-rules */

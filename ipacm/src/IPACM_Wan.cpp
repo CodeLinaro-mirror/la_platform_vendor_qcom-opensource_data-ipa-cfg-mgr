@@ -1288,7 +1288,7 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 					{
 						IPACM_Iface::iface_addr_query(data->if_index, false, &data->ipv4_addr);
 						/* checking if xlat pdn or not with 0xc0000000 range */
-						if((data->ipv4_addr & 0xc0000000) && (m_is_sta_mode == Q6_WAN))
+						if (((data->ipv4_addr & 0xffffff00) == 0xc0000000) && (m_is_sta_mode == Q6_WAN))
  						{
  							is_xlat = true;
  							if (modem_ipv4_pdn_index != -1)

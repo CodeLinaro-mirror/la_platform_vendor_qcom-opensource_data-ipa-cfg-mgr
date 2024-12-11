@@ -437,6 +437,14 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 						}
 
 						evt_data.event = IPA_NEIGH_CLIENT_IP_ADDR_ADD_EVENT;
+#ifdef FEATURE_VLAN_MPDN
+						data_vlan = (ipacm_event_new_neigh_vlan *)malloc(sizeof(ipacm_event_new_neigh_vlan));
+						if (data_vlan == NULL)
+						{
+							IPACMERR("Unable to allocate memory\n");
+							return;
+						}
+#endif
 						data_all = (ipacm_event_data_all *)malloc(sizeof(ipacm_event_data_all));
 						if (data_all == NULL)
 						{
@@ -453,9 +461,17 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 						memcpy(data_all->iface_name, neighbor_client[i].iface_name,
 								sizeof(data_all->iface_name));
 						evt_data.evt_data = (void *)data_all;
+#ifdef FEATURE_VLAN_MPDN
+						data_vlan->bridge = neighbor_client[i].bridge;
+						memcpy(&data_vlan->data_all, data_all, sizeof(ipacm_event_data_all));
+						free(data_all);
+						data_all = NULL;
+						evt_data.evt_data = (void *)data_vlan;
+#endif
 						IPACM_EvtDispatcher::PostEvt(&evt_data);
 						IPACMDBG_H("Posted event %d, with %s for ipv4 client re-connect\n",
-								evt_data.event, data_all->iface_name);
+							evt_data.event, data_vlan->data_all.iface_name);
+
 					}
 				}
 			}

@@ -94,6 +94,7 @@ IPACM_ConntrackListener::IPACM_ConntrackListener() :
 #ifdef FEATURE_VLAN_MPDN
 	 IPACM_EvtDispatcher::registr(IPA_HANDLE_WAN_VLAN_PDN_UP, this);
 	 IPACM_EvtDispatcher::registr(IPA_HANDLE_WAN_VLAN_PDN_DOWN, this);
+	 IPACM_EvtDispatcher::registr(IPA_HANDLE_LAN_VLAN_PDN_DOWN_STATIC, this);
 #endif
 	 IPACM_EvtDispatcher::registr(IPA_PROCESS_CT_MESSAGE, this);
 	 IPACM_EvtDispatcher::registr(IPA_PROCESS_CT_MESSAGE_V6, this);
@@ -261,6 +262,36 @@ void IPACM_ConntrackListener::event_callback(ipa_cm_event_id evt,
 			}
 			break;
 #endif
+
+	 case IPA_HANDLE_LAN_VLAN_PDN_DOWN_STATIC:
+	 		{
+				IPACMDBG_H("Received IPA_HANDLE_LAN_VLAN_PDN_DOWN_STATIC event\n");
+#ifdef FEATURE_STATIC_POLICY
+				const ipacm_event_vlan_pdn* vlandown = static_cast<const ipacm_event_vlan_pdn*>(data);
+				if(vlandown == NULL)
+				{
+					IPACMERR("Invalid lanvlandown data\n");
+					return;
+				}
+				if(vlandown->iptype == IPA_IP_v4)
+				{
+					IPACMDBG_H("Received IPA_HANDLE_LAN_VLAN_PDN_DOWN_STATIC event for IPv4\n");
+					HandleInterfaceDown_StaticPolicy(data);
+				}
+				else if(vlandown->iptype == IPA_IP_v6)
+				{
+					IPACMDBG_H("Received IPA_HANDLE_LAN_VLAN_PDN_DOWN_STATIC event for IPv6\n");
+					HandleInterfaceDownV6_StaticPolicy(data);
+				}
+				else if(vlandown->iptype == IPA_IP_MAX)
+				{
+					IPACMDBG_H("Received IPA_HANDLE_LAN_VLAN_PDN_DOWN_STATIC event for IPV4 and IPv6\n");
+					HandleInterfaceDown_StaticPolicy(data);
+					HandleInterfaceDownV6_StaticPolicy(data);
+				}
+#endif
+			}
+			break;
 
 	 case IPA_HANDLE_IP_PASS_PDN_INFO_UPDATE_EVENT:
 			IPACMDBG_H("Received IPA_HANDLE_IP_PASS_PDN_INFO_UPDATE_EVENT event\n");
@@ -1631,6 +1662,90 @@ void IPACM_ConntrackListener::HandleVlanDownV6(void *in_param)
 		}
 	}
 }
+
+#ifdef FEATURE_STATIC_POLICY
+void IPACM_ConntrackListener::HandleInterfaceDown_StaticPolicy(void *in_param)
+{
+	ipacm_event_vlan_pdn *vlandown_data = (ipacm_event_vlan_pdn *)in_param;
+	int j = 0, k = 0;
+
+	IPACMDBG_H("Recevied below information during v4 interface down,");
+	IPACMDBG_H("iptype: %d, vlan_id:%d\n",
+		vlandown_data->iptype,
+		vlandown_data->VlanID);
+
+	if(nat_inst == NULL)
+	{
+		IPACMERR(" no nat_inst\n");
+		return;
+	}
+
+	if((vlandown_data->iptype == IPA_IP_v4) ||
+		(vlandown_data->iptype == IPA_IP_MAX))
+	{
+		for(int i = 0; i < IPA_MAX_NUM_HW_PDNS; i++)
+		{
+			for(j = 0; j < IPA_MAX_NUM_SW_PDNS; j++)
+			{
+				if(vlan_pdns[i].associated_VIDs[j] == vlandown_data->VlanID)
+				{
+					IPACMDBG_H("removing v4 pdn entry in %d with IP:0x%X with vid:%d and vid_cnt:%d\n",
+						i, vlan_pdns[i].public_ip, vlan_pdns[i].associated_VIDs[j], vlan_pdns[i].VID_cnt);
+					vlan_pdns[i].associated_VIDs[j] = 0;
+					vlan_pdns[i].VID_cnt--;
+					break;
+				}
+			}
+			for(k = j; k < (IPA_MAX_NUM_SW_PDNS - 1); k++)
+			{
+				vlan_pdns[i].associated_VIDs[k] = vlan_pdns[i].associated_VIDs[k+1];
+			}
+			vlan_pdns[i].associated_VIDs[k] = 0;
+		}
+	}
+}
+
+void IPACM_ConntrackListener::HandleInterfaceDownV6_StaticPolicy(void *in_param)
+{
+	ipacm_event_vlan_pdn *vlandown_data = (ipacm_event_vlan_pdn *)in_param;
+	int j = 0, k = 0;
+
+	IPACMDBG_H("Received below information during v6 interface down,");
+	IPACMDBG_H("iptype: %d, vlan_id:%d\n",
+		vlandown_data->iptype,
+		vlandown_data->VlanID);
+
+	if(ipv6ct_inst == NULL)
+	{
+		IPACMERR(" no ipv6ct_inst\n");
+		return;
+	}
+
+	if((vlandown_data->iptype == IPA_IP_v6) ||
+		(vlandown_data->iptype == IPA_IP_MAX))
+	{
+		for(int i = 0; i < IPA_MAX_NUM_HW_PDNS; i++)
+		{
+			for(j = 0; j < IPA_MAX_NUM_SW_PDNS; j++)
+			{
+				if(v6_vlan_pdns[i].associated_VIDs[j] == vlandown_data->VlanID)
+				{
+					IPACMDBG_H("removing v6 pdn entry with vid:%d and vid_cnt:%d\n",
+						v6_vlan_pdns[i].associated_VIDs[j], v6_vlan_pdns[i].VID_cnt);
+					v6_vlan_pdns[i].associated_VIDs[j] = 0;
+					v6_vlan_pdns[i].VID_cnt--;
+					break;
+				}
+			}
+			for(k = j; k < (IPA_MAX_NUM_SW_PDNS - 1); k++)
+			{
+				v6_vlan_pdns[i].associated_VIDs[k] = v6_vlan_pdns[i].associated_VIDs[k+1];
+			}
+			v6_vlan_pdns[i].associated_VIDs[k] = 0;
+		}
+	}
+}
+#endif
 #endif
 
 void IPACM_ConntrackListener::TriggerWANDown(uint32_t wan_addr)

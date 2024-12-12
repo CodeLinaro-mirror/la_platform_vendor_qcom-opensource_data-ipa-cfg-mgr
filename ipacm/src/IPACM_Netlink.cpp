@@ -3189,13 +3189,22 @@ int  ipa_nl_query_getlink(int af_family)
 	recv_nl_msg.msg_controllen = 0;
 	recv_nl_msg.msg_flags = 0;
 	ipa_nl_link_info_t nl_link_info;
-	ipa_nl_msg_t *msg_ptr = (ipa_nl_msg_t *)calloc(1, sizeof(ipa_nl_msg_t));
+	ipa_nl_msg_t *msg_ptr = NULL;
 
 	if (sendmsg(sk_info.sk_fd, (struct msghdr *) &req_nl_msg, 0) <= 0)
 	{
 		IPACMDBG("QCMAP:Netlink Query to Kernel failed errno:%d",errno,0,0);
-		return -1;
+		return IPACM_FAILURE;
 	}
+
+	msg_ptr = (ipa_nl_msg_t *)calloc(1, sizeof(ipa_nl_msg_t));
+
+	if(msg_ptr == NULL)
+	{
+		IPACMERR("Failed malloc for msg_ptr\n");
+		return IPACM_FAILURE;
+	}
+
 	while(1)
 	{
 		if ((ret_val = recvmsg(sk_info.sk_fd, &recv_nl_msg, 0)) < 0)
@@ -3265,7 +3274,12 @@ int  ipa_nl_query_getlink(int af_family)
 	}
 	if (sk_info.sk_fd > 0)
 		close(sk_info.sk_fd);
-	return 0;
+	if(msg_ptr != NULL)
+	{
+		free(msg_ptr);
+		msg_ptr = NULL;
+	}
+	return IPACM_SUCCESS;
 }
 
 int ipa_nl_query_ip_addr_info(int af_family)
@@ -3373,7 +3387,7 @@ int ipa_nl_query_newneigh(int af_family, char* dev_name)
 	struct msghdr msg;
 	struct nlmsghdr *h = NULL;
 	struct iovec iov;
-	ipa_nl_msg_t  *msg_ptr = (ipa_nl_msg_t*)calloc(1, sizeof(ipa_nl_msg_t));
+	ipa_nl_msg_t  *msg_ptr = NULL;
 	nl_sock = socket(AF_NETLINK, SOCK_RAW, NETLINK_ROUTE);
 
 	if (nl_sock < 0)
@@ -3381,7 +3395,12 @@ int ipa_nl_query_newneigh(int af_family, char* dev_name)
 		IPACMERR("Failed to open netlink socket");
 		return IPACM_FAILURE;
 	}
-
+	msg_ptr = (ipa_nl_msg_t*)calloc(1, sizeof(ipa_nl_msg_t));
+	if(msg_ptr == NULL)
+	{
+		IPACMERR("Failed malloc for msg_ptr\n");
+		return IPACM_FAILURE;
+	}
 	memset(&nl_request, 0, sizeof(nl_request));
 	memset(&nladdr, 0, sizeof(sockaddr_nl));
 	memset(&msg, 0, sizeof(msghdr));
@@ -3416,6 +3435,12 @@ int ipa_nl_query_newneigh(int af_family, char* dev_name)
 	if(msglen <= 0)
 	{
 		IPACMERR("NL route recv error\n");
+		if(msg_ptr != NULL)
+		{
+			free(msg_ptr);
+			msg_ptr = NULL;
+		}
+		return IPACM_FAILURE;
 	}
 
 	h = (struct nlmsghdr *)buf;
@@ -3454,10 +3479,16 @@ int ipa_nl_query_newneigh(int af_family, char* dev_name)
 	}
 	IPACMDBG("End\n");
 	close(nl_sock);
-	free(buf);
-	buf = NULL;
-	free(msg_ptr);
-	msg_ptr = NULL;
+	if(buf != NULL)
+	{
+		free(buf);
+		buf = NULL;
+	}
+	if(msg_ptr != NULL)
+	{
+		free(msg_ptr);
+		msg_ptr = NULL;
+	}
 	return 1;
 }
 

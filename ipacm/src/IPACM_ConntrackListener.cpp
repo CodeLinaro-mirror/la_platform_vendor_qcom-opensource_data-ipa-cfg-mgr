@@ -2092,7 +2092,7 @@ int v4_conntrack_callback(enum nf_conntrack_msg_type type, struct nf_conntrack *
 		}
 		return NFCT_CB_STOLEN;
 	}
-	return NFCT_CB_STOLEN;
+	return NFCT_CB_CONTINUE;
 }
 
 int v6_conntracks_callback(enum nf_conntrack_msg_type type,struct nf_conntrack *ct,void *data)
@@ -2187,7 +2187,7 @@ int v6_conntracks_callback(enum nf_conntrack_msg_type type,struct nf_conntrack *
 		return NFCT_CB_STOLEN;
 	}
 
-	return NFCT_CB_STOLEN;
+	return NFCT_CB_CONTINUE;
 }
 
 void IPACM_ConntrackListener::query_conntracks(int af_family, uint32_t ipv4_addr,

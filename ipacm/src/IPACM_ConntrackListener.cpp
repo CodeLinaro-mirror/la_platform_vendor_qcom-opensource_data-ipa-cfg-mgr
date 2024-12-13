@@ -918,8 +918,10 @@ void IPACM_ConntrackListener::HandleIPPassPDNInfoUpdate(void *in_param)
 				ip_pass_enable_default_pdn = pdn_data->ip_pass_enable;
 				ip_pass_skip_nat_default_pdn = pdn_data->ip_pass_skip_nat;
 				if (pdn_data->ip_pass_enable && !pdn_data->ip_pass_skip_nat)
+				{
 					nat_inst->DelDummyNatEntries(wan_ipaddr);
 					query_conntracks(AF_INET, wan_ipaddr, 0);
+				}
 		}
 	}
 	return;

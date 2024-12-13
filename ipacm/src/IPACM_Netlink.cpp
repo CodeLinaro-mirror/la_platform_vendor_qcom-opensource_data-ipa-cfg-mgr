@@ -3214,6 +3214,28 @@ int ipa_nl_query_newneigh(int af_family)
 	msg_ptr = NULL;
 	return 1;
 }
+
+int ipa_query_active_feature()
+{
+	int fd = -1;
+
+	if ((fd = open(IPA_DEVICE_NAME, O_RDWR)) < 0) {
+		IPACMERR("Failed opening %s.\n", IPA_DEVICE_NAME);
+		return IPACM_FAILURE;
+	}
+
+	if (ioctl(fd, IPA_IOC_QUERY_CACHED_DRIVER_MSG, 1) < 0) {
+		IPACMERR("IOCTL IPA_IOC_QUERY_CACHED_DRIVER_MSG call failed: %s \n",
+			strerror(errno));
+		close(fd);
+		return IPACM_FAILURE;
+	}
+
+	IPACMDBG_H("send IPA_IOC_QUERY_CACHED_DRIVER_MSG \n");
+	close(fd);
+	return IPACM_SUCCESS;
+}
+
 void ipa_query_nl_getevents()
 {
 	IPACMDBG_H("Querying the netlink events\n");
@@ -3229,12 +3251,13 @@ void ipa_query_nl_getevents()
 	ipa_nl_query_ip_addr_info(AF_INET6);
 	IPACMDBG("Send GETADDR is completed\n");
 	ipa_nl_query_newneigh(AF_BRIDGE);
-	ipa_nl_query_newneigh(AF_INET);
 	ipa_nl_query_newneigh(AF_INET6);
+	ipa_nl_query_newneigh(AF_INET);
 	IPACMDBG("Send GETNEIGH is completed\n");
 	ipa_nl_send_getroute(IPA_IP_v6);
 	ipa_nl_send_getroute(IPA_IP_v4);
 	IPACMDBG("Send GETROUTE is completed\n");
 	pthread_mutex_unlock(&nl_lock);
+	ipa_query_active_feature();
 	IPACMDBG_DMESG("IPACM process started, ipa path is re-established\n");
 }

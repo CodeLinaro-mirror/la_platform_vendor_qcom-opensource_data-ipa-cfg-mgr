@@ -29,7 +29,7 @@
  *
  * Changes from Qualcomm Innovation Center are provided under the following license:
  *
- * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2025 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted (subject to the limitations in the
@@ -1746,7 +1746,7 @@ int IPACM_Lan::handle_l2tp_neigh(ipacm_event_data_all *data)
 		)
 	{
 		int index;
-
+		l2tp_vlan_mapping_info info;
 		index = get_eth_client_index(data->mac_addr);
 		if(index != IPACM_INVALID_INDEX)
 		{
@@ -1760,7 +1760,21 @@ int IPACM_Lan::handle_l2tp_neigh(ipacm_event_data_all *data)
 			index = num_eth_client;
 			memset(get_client_memptr(eth_client, index), 0, eth_client_len);
 		}
-
+		if(IPACM_Iface::ipacmcfg->get_vlan_l2tp_mapping(data->iface_name, info) == IPACM_FAILURE)
+		{
+			IPACMERR("Fail to get vlan-l2tp mapping.\n");
+			return IPACM_FAILURE;
+		}
+		if((info.vlan_client_mac[0] == 0) && (info.vlan_client_mac[1] == 0) &&
+			(info.vlan_client_mac[2] == 0) && (info.vlan_client_mac[3] == 0) &&
+		 	(info.vlan_client_mac[4] == 0) && (info.vlan_client_mac[5] == 0))
+		{
+			IPACMDBG_H("Query Getneigh for v4\n");
+			ipa_nl_query_newneigh(AF_INET6, dev_name);
+			IPACMDBG_H("Query Getneigh for v6\n");
+			ipa_nl_query_newneigh(AF_INET, dev_name);
+			return IPACM_FAILURE;
+		}
 		if(num_eth_client >= IPA_MAX_NUM_ETH_CLIENTS)
 		{
 			IPACMERR("Reached maximum number(%d) of eth clients\n", IPA_MAX_NUM_ETH_CLIENTS);

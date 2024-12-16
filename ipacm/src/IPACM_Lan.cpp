@@ -29,7 +29,7 @@
  *
  * Changes from Qualcomm Innovation Center are provided under the following license:
  *
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted (subject to the limitations in the
@@ -752,6 +752,13 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 					}
 
 				}
+				/* Sending Getneigh to receive missing neighbor in case if missed early */
+				IPACMDBG_H("Query Getneigh for physical ifaces\n");
+				ipa_nl_query_newneigh(AF_BRIDGE);
+				IPACMDBG_H("Query Getneigh for v4\n");
+				ipa_nl_query_newneigh(AF_INET);
+				IPACMDBG_H("Query Getneigh for v6\n");
+				ipa_nl_query_newneigh(AF_INET6);
 			}
 		}
 		break;

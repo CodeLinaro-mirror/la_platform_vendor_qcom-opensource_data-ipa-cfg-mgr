@@ -27,7 +27,7 @@ OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
 IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 Changes from Qualcomm Innovation Center are provided under the following license:
-Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+Copyright (c) 2023-2024 Qualcomm Innovation Center, Inc. All rights reserved.
 SPDX-License-Identifier: BSD-3-Clause-Clear
 */
 /*!
@@ -223,6 +223,12 @@ typedef struct
 	ipa_nl_route_info_t      nl_route_info;
 } ipa_nl_msg_t;
 
+typedef struct {
+    struct nlmsghdr nlh;
+    struct rtmsg rtm;
+    struct ndmsg nd;
+} nl_request_t;
+
 /* Initialization routine for listener on NetLink sockets interface */
 int ipa_nl_listener_init
 (
@@ -240,6 +246,11 @@ int mask_v6(int index, uint32_t *mask);
 
 /*  get ipa interface name */
 int ipa_get_if_name(char *if_name, int if_index);
+
+int ipa_nl_send_getroute(ipa_ip_type ip_type);
+
+int ipa_nl_query_newneigh(int af_family);
+
 
 #ifdef __cplusplus
 }

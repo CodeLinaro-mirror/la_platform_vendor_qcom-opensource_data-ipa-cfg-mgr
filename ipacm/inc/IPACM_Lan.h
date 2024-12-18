@@ -28,7 +28,7 @@ IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  * Changes from Qualcomm Innovation Center are provided under the following license:
  *
- * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2025 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted (subject to the limitations in the
@@ -479,6 +479,7 @@ public:
 	bool ip_excp_v4_rule_set;
 	int install_ip_specific_filter_rule(enum ipa_ip_type iptype);
 	/* install UL filter rule from Q6 */
+	int handle_v6_xlat_ul_flt_rule(ipacm_ext_prop *prop, ipa_ip_type iptype, uint8_t pdn_mux_id, bool is_xlat = false);
 #ifdef FEATURE_VLAN_MPDN
 	virtual int handle_uplink_filter_rule(ipacm_ext_prop *prop, ipa_ip_type iptype, uint8_t pdn_mux_id, bool notif_only, bool is_xlat = false,
 	bool ast_update = false, bool isPmipv6 = false, bool is_eogre_rules = false);
@@ -506,7 +507,7 @@ public:
 	virtual int config_dft_firewall_rules_ul(
 		IPACM_firewall_conf_t* firewall_conf,
 		ul_firewall_t *ul_firewall,
-		int vid);
+		int vid,bool is_xlat = false);
 
 	/* Config WL UL firewall filter rules on LTE BH (FW on Q6 routing table) */
 	virtual int config_dft_firewall_rules_ul_ex(
@@ -548,7 +549,8 @@ public:
 	virtual int delete_uplink_filter_rule_ul(ul_firewall_t *ul_firewall);
 
 	/* delete UL firewall rules, to be sent to Q6 side*/
-	virtual int disable_dft_firewall_rules_ul_ex(int vid);
+	virtual int disable_dft_firewall_rules_ul_ex(int vid, bool is_xlat =
+false);
 #endif
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
 

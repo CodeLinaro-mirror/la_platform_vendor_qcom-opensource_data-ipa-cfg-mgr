@@ -1192,11 +1192,13 @@ void IPACM_LanToLan_Iface::add_client_rt_rule(peer_iface_info *peer_info, client
 {
 	int i, num_rt_rule = 0;
 	uint32_t rt_rule_hdl[MAX_NUM_PROP];
-	ipa_hdr_l2_type peer_l2_hdr_type;
+	ipa_hdr_l2_type peer_l2_hdr_type,other_iface_peer_l2_hdr_type;
+	list<peer_iface_info>::iterator itr;
 #ifdef FEATURE_VLAN_MPDN
 	std::array<uint8_t, 6> mac = {0};
 	std::map<std::array<uint8_t, 6>, int >::iterator it;
 #endif
+	bool mac_found = 0;
 
 	if (peer_info->peer->m_is_svap_iface) {
 		peer_l2_hdr_type = peer_info->peer->get_iface_pointer()->tx_prop->tx[2].hdr_l2_type;
@@ -1219,6 +1221,32 @@ void IPACM_LanToLan_Iface::add_client_rt_rule(peer_iface_info *peer_info, client
 			/* check if peer already has rt rule for this mac address */
 			it = peer_info->mac_rt_rule_ref.find(mac);
 			if(it != peer_info->mac_rt_rule_ref.end())
+			{
+				IPACMDBG_H("return mac ref found on self\n");
+				return;
+			}
+
+			IPACMDBG_H("peer_l2_hdr_type %d\n",peer_l2_hdr_type);
+			for (itr = m_peer_iface_info.begin();
+				itr != m_peer_iface_info.end(); itr++)
+			{
+				if (itr->peer->m_is_svap_iface) {
+					other_iface_peer_l2_hdr_type = itr->peer->get_iface_pointer()->tx_prop->tx[2].hdr_l2_type;
+				}
+				else {
+					other_iface_peer_l2_hdr_type = itr->peer->get_iface_pointer()->tx_prop->tx[0].hdr_l2_type;
+				}
+				IPACMDBG_H("peer_l2_hdr_type %d other_iface_peer_l2_hdr_type %d\n",peer_l2_hdr_type,other_iface_peer_l2_hdr_type);
+				it = (*itr).mac_rt_rule_ref.find(mac);
+				if(it != (*itr).mac_rt_rule_ref.end() && peer_l2_hdr_type == other_iface_peer_l2_hdr_type)
+				{
+					mac_found = 1;
+					break;
+				}
+			}
+
+			/* Only special interface can have same mac address twice, one for eth_to_eth and other for 802_to_eth */
+			if(mac_found == 1)
 			{
 				/* mac address already has rt rules, increase ref cnt and copy rt rules handles for future deletion*/
 				(it->second)++;
@@ -1899,7 +1927,7 @@ void IPACM_LanToLan_Iface::del_client_rt_rule(peer_iface_info *peer, client_info
 				return;
 			}
 
-			IPACMDBG_H("ref count is now %d, peer %p, mac 0x[%X][%X][%X][%X][%X][%X]\n", it->second, peer,
+			IPACMDBG_H("ref count is now %d, peer %s, mac 0x[%X][%X][%X][%X][%X][%X]\n", it->second, peer->peer->get_iface_pointer()->dev_name,
 				client->mac_addr[0], client->mac_addr[1], client->mac_addr[2],
 				client->mac_addr[3], client->mac_addr[4], client->mac_addr[5]);
 			(it->second)--;
@@ -2540,6 +2568,12 @@ void IPACM_LanToLan_Iface::handle_client_add(uint8_t *mac, bool is_l2tp_client, 
 			else
 				l2_hdr_type = it_peer_info->peer->get_iface_pointer()->rx_prop->rx[0].hdr_l2_type;
 
+			if(l2_hdr_type >= IPA_HDR_L2_MAX || l2_hdr_type < 0)
+			{
+				IPACMDBG_H("Invalid l2_hdr_type: %d\n", l2_hdr_type);
+				return;
+			}
+			IPACMDBG_H("l2_hdr_type : %d flag : %d \n",l2_hdr_type,flag[l2_hdr_type]  );
 			/* make sure add routing rule only once for each peer l2 header type */
 			if(flag[l2_hdr_type] == false)
 			{
@@ -2609,6 +2643,7 @@ list<client_info>::iterator IPACM_LanToLan_Iface::handle_client_del(uint8_t *mac
 	bool flag[IPA_HDR_L2_MAX];
 	std::array<uint8_t, 6> mac1;
 	std::map<std::array<uint8_t, 6>, int >::iterator it;
+	ipa_hdr_l2_type l2_hdr_type;
 
 #ifdef FEATURE_VLAN_MPDN
 	if((vlan_id && !m_is_vlan) || (!vlan_id && m_is_vlan))
@@ -2643,11 +2678,21 @@ list<client_info>::iterator IPACM_LanToLan_Iface::handle_client_del(uint8_t *mac
 			for(it_peer_info = m_peer_iface_info.begin(); it_peer_info != m_peer_iface_info.end();
 				it_peer_info++)
 			{
-				IPACMDBG_H("Delete client filtering rule on peer interface.\n");
+				IPACMDBG_H("This is %s and m_support_inter_iface_offload %d has peer: %s\n",this->get_iface_pointer()->dev_name,m_support_intra_iface_offload,it_peer_info->peer->get_iface_pointer()->dev_name);
 				it_peer_info->peer->del_one_client_flt_rule(this, &(*it_client));
 
+				if (it_peer_info->peer->is_svap_iface() || it_peer_info->peer->is_ap_iface_vlan_enabled())
+					l2_hdr_type = it_peer_info->peer->get_iface_pointer()->rx_prop->rx[2].hdr_l2_type;
+				else
+					l2_hdr_type = it_peer_info->peer->get_iface_pointer()->rx_prop->rx[0].hdr_l2_type;
+
+				if(l2_hdr_type >= IPA_HDR_L2_MAX || l2_hdr_type < 0)
+				{
+					IPACMDBG_H("Invalid l2_hdr_type: %d\n", l2_hdr_type);
+				}
+				IPACMDBG_H("l2_hdr_type : %d flag : %d \n",l2_hdr_type,flag[l2_hdr_type] );
 				/* make sure to delete routing rule only once for each peer l2 header type */
-				if(flag[it_peer_info->peer->get_iface_pointer()->tx_prop->tx[0].hdr_l2_type] == false)
+				if(flag[l2_hdr_type] == false)
 				{
 					std::copy(std::begin(it_client->mac_addr), std::end(it_client->mac_addr), std::begin(mac1));
 					it = it_peer_info->mac_rt_rule_ref.find(mac1);
@@ -2664,7 +2709,7 @@ list<client_info>::iterator IPACM_LanToLan_Iface::handle_client_del(uint8_t *mac
 							hdr_proc_ctx_for_l2tp = 0;
 						}
 #endif
-						flag[it_peer_info->peer->get_iface_pointer()->tx_prop->tx[0].hdr_l2_type] = true;
+						flag[l2_hdr_type] = true;
 					}
 					else
 					{
@@ -2898,19 +2943,19 @@ void IPACM_LanToLan_Iface::print_data_structure_info()
 	IPACMDBG_H("There are %d peer interfaces in total.\n", m_peer_iface_info.size());
 	for(it_peer = m_peer_iface_info.begin(); it_peer != m_peer_iface_info.end(); it_peer++)
 	{
-		print_peer_info(&(*it_peer));
+		print_peer_info(&(*it_peer),false);
 	}
 
 	if(m_support_intra_iface_offload)
 	{
 		IPACMDBG_H("This interface supports intra-interface communication, printing info:\n");
-		print_peer_info(&m_intra_interface_info);
+		print_peer_info(&m_intra_interface_info,true);
 	}
 
 	return;
 }
 
-void IPACM_LanToLan_Iface::print_peer_info(peer_iface_info *peer_info)
+void IPACM_LanToLan_Iface::print_peer_info(peer_iface_info *peer_info , bool intra)
 {
 	list<flt_rule_info>::iterator it_flt;
 	list<rt_rule_info>::iterator it_rt;
@@ -2937,6 +2982,16 @@ void IPACM_LanToLan_Iface::print_peer_info(peer_iface_info *peer_info)
 				IPACMDBG_H("IPv6 l2tp flt rule handle: %d\n", *it_flt_hdl);
 		}
 		IPACMDBG_H("L2tp second pass flt rule: %d\n", it_flt->l2tp_second_pass_flt_rule_hdl);
+	}
+
+	if(intra == false)
+	{
+		for (const auto &pair : peer_info->mac_rt_rule_ref) {
+				IPACMDBG_H("ref list mac MAC 0x[%X][%X][%X][%X][%X][%X] key %d\n",
+				pair.first[0], pair.first[1], pair.first[2],
+				pair.first[3], pair.first[4], pair.first[5],
+				pair.second);
+		}
 	}
 
 	return;

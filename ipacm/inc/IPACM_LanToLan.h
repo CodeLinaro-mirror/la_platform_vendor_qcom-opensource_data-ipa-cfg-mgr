@@ -252,7 +252,7 @@ private:
 
 	void del_hdr_proc_ctx_vlan(ipa_hdr_l2_type peer_l2_type, uint16_t vlan_id);
 
-	void print_peer_info(peer_iface_info *peer_info);
+	void print_peer_info(peer_iface_info *peer_info , bool intra);
 
 };
 

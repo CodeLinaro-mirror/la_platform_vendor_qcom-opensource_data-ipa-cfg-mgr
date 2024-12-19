@@ -388,7 +388,7 @@ public:
 	typedef struct private_IP_Forwarding_Config
 	{
 		bool privateIPForwarding_enable;
-		uint8_t vlan; //0, if APN 1 or untagged traffic has to be accelerated, and the vlan ID, if tagged traffic, and that vlan has to be accelerated
+		uint16_t vlan; //0, if APN 1 or untagged traffic has to be accelerated, and the vlan ID, if tagged traffic, and that vlan has to be accelerated
 		char interface_name[IPA_IFACE_NAME_LEN];
 		char bridge_name[IPA_IFACE_NAME_LEN];
 		uint32_t bridge_net_mask;
@@ -396,6 +396,9 @@ public:
 		uint32_t excep_ipv4_addr_mask;
 	}forwarding_config;
 	forwarding_config IP_Forwarding_config;
+
+	/*To send vpan pdn up evt to lan class*/
+	bool vlan_pdnUp_after_sent_pif_to_uc;
 
 	ipa_ipgre_info ipgre_info;
 	typedef struct pmipv6_status

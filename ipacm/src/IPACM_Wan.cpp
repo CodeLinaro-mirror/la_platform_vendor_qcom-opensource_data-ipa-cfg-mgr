@@ -549,6 +549,11 @@ int IPACM_Wan::Getv6addrByName(char* pdn_name, uint32_t* ipv6_addr)
 {
 	for(int i = 0; i < IPA_MAX_NUM_SW_PDNS; i++)
 	{
+		if(ipv6_to_iface[i].pIface == NULL)
+		{
+			IPACMERR("PDN %s is down\n", pdn_name);
+			continue;
+		}
 		if(strncmp(pdn_name, ipv6_to_iface[i].pIface->dev_name, sizeof(pdn_name)) == 0)
 		{
 			memcpy(ipv6_addr, ipv6_to_iface[i].pIface->m_ipv6_addr, sizeof(ipv6_to_iface[i].pIface->m_ipv6_addr));
@@ -901,6 +906,20 @@ int IPACM_Wan::handle_addr_evt(ipacm_event_data_addr *data)
 				}
 				else
 				{
+					IPACMDBG_H("IPPT or IP Collision : Received wan ipv4-addr:0x%x\n",
+						data->ipv4_addr);
+					if(IPACM_Iface::ipacmcfg->IP_Forwarding_config.privateIPForwarding_enable &&
+							ip_pass_pdn_info.enable)
+					{
+						/* Delete Wan v4 RT rule */
+						IPACMDBG_H("PIF: IPPT, Delete WAN v4 routing rules\n");
+						if (m_routing.DeleteRoutingHdl(dft_rt_rule_hdl[0], IPA_IP_v4) == false)
+						{
+							IPACMERR("PIF: Old WAN Routing rule deletion failed!\n");
+							res = IPACM_FAILURE;
+							goto fail;
+						}
+					}
 					/* In IPPT or IP Collision mode don't replace the wan-ip RT rule to dummy ipv4 */
 					/*Store the public ip address when in passthrough mode which will be used when wan is down.*/
 					if (m_is_sta_mode == Q6_WAN)
@@ -910,7 +929,8 @@ int IPACM_Wan::handle_addr_evt(ipacm_event_data_addr *data)
 						public_wan_v4_addr_set = true;
 						IPACMDBG_H("Received wan ipv4-addr:0x%x\n",data->ipv4_addr);
 						IPACMDBG_H("In Passthrough mode, Storing previous wan ipv4-addr:0x%x\n",public_wan_v4_addr);
-						return IPACM_SUCCESS;
+						if(!IPACM_Iface::ipacmcfg->IP_Forwarding_config.privateIPForwarding_enable)
+							return IPACM_SUCCESS;
 					}
 				}
 #if defined(FEATURE_SOCKSv5) && defined (IPA_SOCKV5_EVENT_MAX)
@@ -1006,23 +1026,6 @@ int IPACM_Wan::handle_addr_evt(ipacm_event_data_addr *data)
 				num_ipv4_modem_pdn++;
 				IPACMDBG_H("Now the number of modem ipv4 pdn is %d.\n", num_ipv4_modem_pdn);
 				init_fl_rule_ex(data->iptype);
-				if(IPACM_Iface::ipacmcfg->IP_Forwarding_config.privateIPForwarding_enable){
-					IPACM_Wan::send_config_to_uc();
-					if(IPACM_Wan::sent_private_ip_mux_id_to_uc){
-						if ( config_wan_firewall_rule(IPA_IP_v4) != IPACM_SUCCESS )
-						{
-							IPACMERR(
-								"config_wan_firewall_rule failed\n");
-							goto fail;
-						}
-						if ( install_wan_filtering_rule(false) != IPACM_SUCCESS )
-						{
-							IPACMERR(
-								"install_wan_filtering_rule failed\n");
-							goto fail;
-						}
-					}
-				}
 				if (is_xlat)
 					IPACM_Wan::ipv4_to_iface[modem_ipv4_pdn_index].is_xlat = true;
 			}
@@ -1052,6 +1055,41 @@ int IPACM_Wan::handle_addr_evt(ipacm_event_data_addr *data)
 		}
 
 		IPACMDBG_H("Received wan ipv4-addr:0x%x\n",wan_v4_addr);
+		if(IPACM_Iface::ipacmcfg->IP_Forwarding_config.privateIPForwarding_enable)
+		{
+			IPACMDBG_H("PIF: VID_cnt this pdn is %d.\n", ipv4_to_iface[modem_ipv4_pdn_index].VID_cnt);
+			/* Adding VLAN route vlan_id and mux id */
+			if (ipv4_to_iface[modem_ipv4_pdn_index].VID_cnt > 0)
+			{
+				IPACMDBG_H("PIF: Send VID  %d to uC\n", ipv4_to_iface[modem_ipv4_pdn_index].associated_VIDs[ipv4_to_iface[modem_ipv4_pdn_index].VID_cnt - 1]);
+				uint16_t vlan_id = IPACM_Iface::ipacmcfg->IP_Forwarding_config.vlan;
+				if(vlan_id != 0)
+				{
+					if(ipv4_to_iface[modem_ipv4_pdn_index].associated_VIDs[ipv4_to_iface[modem_ipv4_pdn_index].VID_cnt - 1] == vlan_id)
+					{
+						IPACM_Iface::ipacmcfg->vlan_pdnUp_after_sent_pif_to_uc = true;
+					}
+				}
+
+				handle_route_add_vlan_pdn_evt(IPA_IP_v4,ipv4_to_iface[modem_ipv4_pdn_index].associated_VIDs[ipv4_to_iface[modem_ipv4_pdn_index].VID_cnt - 1]);
+			}
+			IPACM_Wan::send_config_to_uc();
+			IPACMDBG_H("PIF: sent_private_ip_mux_id_to_uc %d, vlan_pdnUp_after_sent_pif_to_uc %d .\n",
+					IPACM_Wan::sent_private_ip_mux_id_to_uc, IPACM_Iface::ipacmcfg->vlan_pdnUp_after_sent_pif_to_uc);
+			if(IPACM_Wan::sent_private_ip_mux_id_to_uc)
+			{
+				if ( config_wan_firewall_rule(IPA_IP_v4) != IPACM_SUCCESS )
+				{
+					IPACMERR("config_wan_firewall_rule failed\n");
+					goto fail;
+				}
+				if ( install_wan_filtering_rule(false) != IPACM_SUCCESS )
+				{
+					IPACMERR("install_wan_filtering_rule failed\n");
+					goto fail;
+				}
+			}
+		}
 	}
 
 	IPACMDBG_H("number of v6 default route rules %d\n", num_dft_rt_v6);
@@ -1070,7 +1108,8 @@ int IPACM_Wan::handle_addr_evt(ipacm_event_data_addr *data)
 	IPACMDBG_H("Posting IPA_HANDLE_NEW_NEIGH_EVENT event:%d\n", evt_data.event);
 	IPACM_EvtDispatcher::PostEvt(&evt_data);
 fail:
-	free(rt_rule);
+	if(rt_rule)
+		free(rt_rule);
 
 	return res;
 }
@@ -2696,6 +2735,19 @@ int IPACM_Wan::handle_route_add_vlan_pdn_evt(ipa_ip_type iptype, uint16_t vlan_i
 			IPACMDBG_H("new V4 PDN, need full config\n");
 			FullConfig = true;
 		}
+		/* Safety check for vlan-pdn mux mapping */
+		if(IPACM_Iface::ipacmcfg->IP_Forwarding_config.privateIPForwarding_enable)
+		{
+			for(int j = 0; j < ipv4_to_iface[modem_ipv4_pdn_index].VID_cnt; j++)
+			{
+				if(IPACM_Wan::ipv4_to_iface[modem_ipv4_pdn_index].associated_VIDs[j] == vlan_id)
+				{
+					IPACMERR("PIF: vlan_id %d Already mapped with pdn %s \n", vlan_id, IPACM_Wan::ipv4_to_iface[modem_ipv4_pdn_index].pIface->dev_name);
+					return IPACM_FAILURE;
+				}
+
+			}
+		}
 
 		ipv4_to_iface[modem_ipv4_pdn_index].wan_up_vlan = true;
 		if (ipv4_to_iface[modem_ipv4_pdn_index].VID_cnt < IPA_MAX_NUM_SW_PDNS)
@@ -3226,6 +3278,18 @@ int IPACM_Wan::handle_route_add_evt(ipa_ip_type iptype)
 		evt_data.event = IPA_HANDLE_WAN_UP;
 		evt_data.evt_data = (void *)wanup_data;
 		IPACM_EvtDispatcher::PostEvt(&evt_data);
+		/*To handle vlan config when privateipforward2 is enabled and only Default pdn is up*/
+		if(IPACM_Iface::ipacmcfg->IP_Forwarding_config.privateIPForwarding_enable)
+		{
+			uint8_t vlan_id = IPACM_Iface::ipacmcfg->IP_Forwarding_config.vlan;
+			IPACMDBG_H("privateIPForwarding: Default Route ADD (%d) for vlan: %d for v4 mux_up..\n",
+					IPACM_Iface::ipacmcfg->vlan_pdnUp_after_sent_pif_to_uc, vlan_id);
+			if(vlan_id != 0)
+			{
+				IPACM_Iface::ipacmcfg->vlan_pdnUp_after_sent_pif_to_uc = true;
+				handle_route_add_vlan_pdn_evt(IPA_IP_v4, vlan_id);
+			}
+		}
 	}
 	else
 	{
@@ -4599,6 +4663,12 @@ int IPACM_Wan::config_dft_firewall_rules_ex(struct ipa_flt_rule_add *rules, int 
 				isDefaultGatewayIfaceUp(ipv4_to_iface[i].pIface),
 				ipv4_to_iface[i].wan_up_vlan);
 
+			IPACMDBG_H("DEV_NAME %s\n",ipv4_to_iface[i].pIface->dev_name);
+			if(strlen(ipv4_to_iface[i].pIface->dev_name) == 0)
+			{
+				IPACMDBG_H("Empty dev_name\n");
+				continue;
+			}
 			IPACM_firewall_conf_t* curr_pdn_firewall_config =
 				get_curr_pdn_firewall_config(firewall_config, ipv4_to_iface[i].pIface->dev_name);
 			IPACMDBG_H("ipacm_socksv5_enable %d\n", IPACM_Iface::ipacmcfg->ipacm_socksv5_enable)
@@ -4639,7 +4709,12 @@ int IPACM_Wan::config_dft_firewall_rules_ex(struct ipa_flt_rule_add *rules, int 
 				ipv6_to_iface[i].pIface->dev_name,
 				isDefaultGatewayIfaceUp_v6(ipv6_to_iface[i].pIface),
 				ipv6_to_iface[i].wan_up_vlan_v6);
-
+                        IPACMDBG_H("DEV_NAME %s\n",ipv6_to_iface[i].pIface->dev_name);
+			if(strlen(ipv6_to_iface[i].pIface->dev_name) == 0)
+			{
+				IPACMDBG_H("Empty dev_name\n");
+				continue;
+			}
 			IPACM_firewall_conf_t* curr_pdn_firewall_config =
 				get_curr_pdn_firewall_config(firewall_config, ipv6_to_iface[i].pIface->dev_name);
 			if (curr_pdn_firewall_config != NULL)
@@ -4698,27 +4773,30 @@ int IPACM_Wan::config_dft_firewall_rules_ex(struct ipa_flt_rule_add *rules, int 
 /* only install ipv4 DL firewall on modem endpoint when UL_FIREWALL FR not there */
 		if (IPACM_Iface::ipacmcfg->ipacm_socksv5_enable != TRUE)
 		{
-#ifndef FEATURE_IPACM_UL_FIREWALL
+#ifdef FEATURE_IPACM_UL_FIREWALL
+			if(IPACM_Iface::ipacmcfg->IP_Forwarding_config.privateIPForwarding_enable)
+			{
 #ifdef FEATURE_VLAN_MPDN
 			/* firewall rules for all PDNs which are up */
-			for (uint32_t i = 0; i < offloaded_pdns_count_v4; ++i)
-			{
-				IPACM_Wan* curr_interface = offloaded_pdns_v4[i].second->pIface;
-				IPACMDBG_H("adding firewall rules for iface %s\n", curr_interface->dev_name);
-				res = add_firewall_rules_ex(*offloaded_pdns_v4[i].first, iptype, curr_interface->ext_prop->ext[0].mux_id,
-					curr_interface->rx_prop->rx[0].attrib, rules, IPA_MAX_FLT_RULE - offloaded_pdns_count_v4, pos);
+				for (uint32_t i = 0; i < offloaded_pdns_count_v4; ++i)
+				{
+					IPACM_Wan* curr_interface = offloaded_pdns_v4[i].second->pIface;
+					IPACMDBG_H("adding firewall rules for iface %s\n", curr_interface->dev_name);
+					res = add_firewall_rules_ex(*offloaded_pdns_v4[i].first, iptype, curr_interface->ext_prop->ext[0].mux_id,
+						curr_interface->rx_prop->rx[0].attrib, rules, IPA_MAX_FLT_RULE - offloaded_pdns_count_v4, pos);
+					if (res != IPACM_SUCCESS)
+					{
+						return res;
+					}
+				}
+#else
+				res = add_firewall_rules_ex(firewall_config, iptype, rx_prop->rx[0].attrib, rules, IPA_MAX_FLT_RULE - 1, pos);
 				if (res != IPACM_SUCCESS)
 				{
 					return res;
 				}
-			}
-#else
-			res = add_firewall_rules_ex(firewall_config, iptype, rx_prop->rx[0].attrib, rules, IPA_MAX_FLT_RULE - 1, pos);
-			if (res != IPACM_SUCCESS)
-			{
-				return res;
-			}
 #endif
+			}
 #endif //FEATURE_IPACM_UL_FIREWALL
 		}
 #ifdef FEATURE_EoGRE
@@ -7749,7 +7827,8 @@ int IPACM_Wan::handle_down_evt_ex()
 			memset(ipv4_to_iface[modem_ipv4_pdn_index].associated_VIDs, 0, sizeof(ipv4_to_iface[modem_ipv4_pdn_index].associated_VIDs));
 			ipv4_to_iface[modem_ipv4_pdn_index].VID_cnt = 0;
 
-			num_offloaded_pdns--;
+			if(num_offloaded_pdns)
+				num_offloaded_pdns--;
 			IPACMDBG_H("now num offloaded PDNs is %d\n", num_offloaded_pdns);
 
 			vlandown_data = (ipacm_event_vlan_pdn *)malloc(sizeof(ipacm_event_vlan_pdn));
@@ -7921,7 +8000,7 @@ int IPACM_Wan::handle_down_evt_ex()
 			ipv6_to_iface[modem_ipv6_pdn_index].VID_cnt = 0;
 
 			/* Xlat cfg offload pdn count is updated during v4 handling */
-			if (!xlat_cfg)
+			if (!xlat_cfg && num_offloaded_pdns)
 				num_offloaded_pdns--;
 
 			IPACMDBG_H("now num offloaded PDNs is %d\n", num_offloaded_pdns);
@@ -8169,7 +8248,8 @@ int IPACM_Wan::handle_down_evt_ex()
 				ipv6_to_iface[modem_ipv6_pdn_index].VID_cnt = 0;
 			}
 
-			num_offloaded_pdns--;
+			if(num_offloaded_pdns)
+				num_offloaded_pdns--;
 			IPACMDBG_H("now num offloaded PDNs is %d\n", num_offloaded_pdns);
 
 			vlandown_data->VlanID = associated_VID;
@@ -10538,7 +10618,9 @@ flt_rule_entry.rule.attrib.u.v4.dst_addr_mask = 0x00000000;
 					rt_tbl_name = ipacmcfg->rt_tbl_lan_v4.name;
 				}
 			}
-			if(IPACM_Iface::ipacmcfg->IP_Forwarding_config.privateIPForwarding_enable && IPACM_Wan::sent_private_ip_mux_id_to_uc){
+			/* In case of private IP, If Offloaded PDN is not up then
+			 * install dft_wan_cons rule for other non-offload PDNs */
+			if(IPACM_Iface::ipacmcfg->IP_Forwarding_config.privateIPForwarding_enable){
 				flt_rule_entry.rule.action = IPA_PASS_TO_ROUTING;
 				IPACMDBG_H("Private IP forward, mux ID DL rule: curr_iface muxid:%d, xml mux id:%d \n",muxid,IPACM_Wan::uc_mux_vlan_info.map_entries[0].mux_id);
 				if(muxid == IPACM_Wan::uc_mux_vlan_info.map_entries[0].mux_id){
@@ -10582,7 +10664,8 @@ flt_rule_entry.rule.attrib.u.v4.dst_addr_mask = 0x00000000;
 			else
 #endif
 			{
-				if (firewall_config.firewall_enable)
+				if (firewall_config.firewall_enable &&
+						!IPACM_Iface::ipacmcfg->IP_Forwarding_config.privateIPForwarding_enable)
 				{
 					if (firewall_config.rule_action_accept)
 					{
@@ -10607,6 +10690,7 @@ flt_rule_entry.rule.attrib.u.v4.dst_addr_mask = 0x00000000;
 					flt_rule_entry.rule.action = IPA_PASS_TO_ROUTING;
 #endif
 					rt_tbl_name = ipacmcfg->rt_tbl_wan_v6.name;
+					IPACMDBG_H("PIF enabled\n");
 				}
 			}
 		}
@@ -10910,8 +10994,17 @@ int IPACM_Wan::add_firewall_rules_ex(const IPACM_firewall_conf_t& firewall_confi
 
 			if (firewall_config.rule_action_accept)
 			{
-				flt_rule_entry.rule.action = IPA_PASS_TO_DST_NAT;
-				rt_tbl_name = ipacmcfg->rt_tbl_lan_v4.name;
+				if(IPACM_Iface::ipacmcfg->IP_Forwarding_config.privateIPForwarding_enable)
+				{
+					flt_rule_entry.rule.action = IPA_PASS_TO_ROUTING;
+					rt_tbl_name = ipacmcfg->rt_tbl_wan_dl.name;
+					IPACMDBG_H("privateIPForwarding: v4 Firewall: rt table name :%s \n",rt_tbl_name);
+				}
+				else
+				{
+					flt_rule_entry.rule.action = IPA_PASS_TO_DST_NAT;
+					rt_tbl_name = ipacmcfg->rt_tbl_lan_v4.name;
+				}
 			}
 			else
 			{
@@ -10944,9 +11037,18 @@ int IPACM_Wan::add_firewall_rules_ex(const IPACM_firewall_conf_t& firewall_confi
 
 			if (firewall_config.rule_action_accept)
 			{
-				flt_rule_entry.rule.action =
-					IPACM_Iface::ipacmcfg->IsIpv6CTEnabled() ? IPA_PASS_TO_DST_NAT : IPA_PASS_TO_ROUTING;
-				rt_tbl_name = ipacmcfg->rt_tbl_wan_v6.name;
+				if(IPACM_Iface::ipacmcfg->IP_Forwarding_config.privateIPForwarding_enable)
+				{
+					flt_rule_entry.rule.action = IPA_PASS_TO_ROUTING;
+					rt_tbl_name = ipacmcfg->rt_tbl_wan_dl.name;
+					IPACMDBG_H("privateIPForwarding: v6 Firewall: rt table name :%s \n",rt_tbl_name);
+				}
+				else
+				{
+					flt_rule_entry.rule.action =
+						IPACM_Iface::ipacmcfg->IsIpv6CTEnabled() ? IPA_PASS_TO_DST_NAT : IPA_PASS_TO_ROUTING;
+					rt_tbl_name = ipacmcfg->rt_tbl_wan_v6.name;
+				}
 			}
 			else
 			{
@@ -12703,12 +12805,13 @@ void IPACM_Wan::send_config_to_uc(){
 	bool res;
 	uint8_t mux_id = 0;
 	int fd, ret = 0;
-	uint8_t vlan_id = IPACM_Iface::ipacmcfg->IP_Forwarding_config.vlan;
+	uint16_t vlan_id = IPACM_Iface::ipacmcfg->IP_Forwarding_config.vlan;
 	res=IPACM_Wan::GetMuxID_For_Private_IP_Forwarding(vlan_id,&mux_id);
 	if(IPACM_Wan::sent_private_ip_mux_id_to_uc){
-		//If default route changed, then we will have to resend the mux ID
-		if(vlan_id==0 && IPACM_Wan::uc_mux_vlan_info.map_entries[0].mux_id != mux_id){
+		//If default route changed or pdn toggled, then we will have to resend the mux ID
+		if(IPACM_Wan::uc_mux_vlan_info.map_entries[0].mux_id != mux_id){
 			//Then we have to resend the mux ID mapping
+			IPACMDBG("Re-Send IOCTL to uC, vlan(%d) with mux(%d)\n", vlan_id, mux_id);
 		}
 		else{
 			IPACMDBG("Already sent IOCTL to uC\n");

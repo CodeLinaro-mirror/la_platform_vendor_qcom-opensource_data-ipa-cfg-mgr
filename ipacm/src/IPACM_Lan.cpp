@@ -749,6 +749,18 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 
 #endif
 #ifdef FEATURE_VLAN_MPDN
+						if(IPACM_Iface::ipacmcfg->IP_Forwarding_config.privateIPForwarding_enable)
+						{
+							IPACMDBG_H("privateIPForwarding,is wan_up %d, iptype %d\n",
+									IPACM_Wan::isWanUP(ipa_if_num),data->iptype);
+							if(IPACM_Wan::isWanUP(ipa_if_num))
+							{
+								if(install_ip_specific_filter_rule(IPA_IP_v4) == IPACM_FAILURE)
+								{
+									IPACMERR("Failed to add exception rule for specific ip.\n");
+								}
+							}
+						}
 						/* VLAN IFACES don't care about default route */
 						if(!(IPACM_Iface::ipacmcfg->iface_in_vlan_mode(dev_name)))
 #endif
@@ -887,13 +899,16 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 					}
 
 #ifdef FEATURE_EoGRE
-					if ( IPACM_Iface::ipacmcfg->eogre_enabled )
+					if (IPACM_Iface::ipacmcfg->eogre_enabled)
 					{
 						IPACMDBG_H(
 							"A previous gre enable needs to be undone, then redone. "
 							"Need to call gre_down followed by an gre_up\n");
-						gre_down();
-						gre_up(); //this is where its getting reset. He is calling this for every new IPA_ADD because instance is not ipv4 right away
+						if(IPACM_Iface::ipacmcfg->tunnel_feature != SINGLE_TAG_FEATURE)
+						{
+							gre_down();
+							gre_up(); //this is where its getting reset. He is calling this for every new IPA_ADD because instance is not ipv4 right away
+						}
 					}
 #endif
 #ifdef FEATURE_PMIPV6
@@ -1055,12 +1070,15 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 					false, false,false);
 				if(!ret){
 					IPACMDBG_H("Private IP forward, UL rules installed\n");
+					modem_ul_v4_set = true;
 				}
 				else{
 					IPACMDBG_H("Private IP forward, UL rules installation error\n");
+					modem_ul_v4_set = false;
 				}
 			}
 		}
+		IPACMDBG_H("ip-type: %d modem_ul_v4_set: %d, modem_ul_v6_set %d\n", ip_type, modem_ul_v4_set, modem_ul_v6_set);
 		/* VLAN IFACES don't care about default route */
 		if((IPACM_Iface::ipacmcfg->iface_in_vlan_mode(dev_name)) &&
 			(IPACM_Iface::ipacmcfg->ipacm_mpdn_enable == TRUE))
@@ -1308,7 +1326,7 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 
 	case IPA_NEIGH_CLIENT_IP_ADDR_ADD_EVENT:
 		{
-			int eth_index;
+			int eth_index, clnt_indx;
 			tether_client_info client_info;
 #if defined(FEATURE_IPACM_PER_CLIENT_STATS) && defined(IPA_HW_FNR_STATS)
 			int retval;
@@ -1369,6 +1387,42 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 				memcpy(client_info.iface, dev_name, IPA_IFACE_NAME_LEN);
 				IPACM_Iface::ipacmcfg->update_client_info(data->mac_addr, &client_info, true);
 
+				/* construct ETH full header
+				 * Still we are handling during NEWNEIGHT on bridge
+				 * if fail on nenwigh on physical during
+				 * IPA_LAN_CLIENT_ADD_EVENT to mainitain LAN client */
+
+				if (handle_eth_hdr_init(data->mac_addr) == IPACM_SUCCESS)
+				{
+					if(IPACM_Iface::ipacmcfg->mac_addr_in_blacklist(data->mac_addr) == false)
+					{
+						IPACMDBG_H("Posting IPA_ETH_BRIDGE_CLIENT_ADD for"
+							"Static IP MAC:0x%x iface_name: %s\n",
+							data->mac_addr,data->iface_name);
+						eth_bridge_post_event(IPA_ETH_BRIDGE_CLIENT_ADD,
+							IPA_IP_MAX,data->mac_addr, NULL, data->iface_name);
+					}
+					else
+						IPACMDBG_H("Client is blacklisted for mac base filtering,"
+								"avoid adding to lan2lan offload \n");
+
+				}
+				else
+				{
+					clnt_indx = get_eth_client_index(data->mac_addr);
+					if (clnt_indx != IPACM_INVALID_INDEX)
+					{
+						IPACMERR("eth client is found/attached already with"
+							"index %d \n", clnt_indx);
+					}
+					else
+					{
+						IPACMERR("Failed to create header and No event "
+							"IPA_ETH_BRIDGE_CLIENT_ADD posted.\n");
+						return;
+					}
+				}
+				IPACMDBG_H("construct ETH header and route rules \n");
 				/* Associate with IP and construct RT-rule */
 				if (handle_eth_client_ipaddr(data) == IPACM_FAILURE)
 				{
@@ -1825,13 +1879,6 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 		{
 			IPACMDBG_H("Received and will process an IPA_HANDLE_EoGRE_UP\n");
 			gre_up();
-			if (IPACM_Iface::ipacmcfg->tunnel_feature == SINGLE_TAG_FEATURE)
-			{
-				evt_data.event = IPA_WAN_HANDLE_EoGRE_UP;
-				evt_data.evt_data = 0;
-				IPACMDBG_H("Posting event: IPA_WAN_HANDLE_EoGRE_UP.\n");
-				IPACM_EvtDispatcher::PostEvt(&evt_data);
-			}
 		}
 		break;
 
@@ -3097,7 +3144,10 @@ int IPACM_Lan::handle_vlan_pdn_up(ipacm_event_vlan_pdn *data, bool set_mux)
 		if(num_dft_rt_v6 == 1 && modem_ul_v6_set == FALSE)
 		{
 			ret = handle_uplink_filter_rule(IPACM_Iface::ipacmcfg->GetExtProp(IPA_IP_v6), data->iptype, data->mux_id, false);
-			modem_ul_v6_set = !!num_wan_ul_fl_rule_v6;
+			if(ret != IPACM_FAILURE)
+                        {
+                                modem_ul_v6_set = !!num_wan_ul_fl_rule_v6;
+                        }
 		}
 		/* for the next PDNs only notify modem about new MUX IDs */
 		else
@@ -3117,11 +3167,31 @@ int IPACM_Lan::handle_vlan_pdn_up(ipacm_event_vlan_pdn *data, bool set_mux)
 		/*install MTU rule */
 		modify_private_subnet();
 
+		/* Re-Install Exception rule before modem rules */
+		if(IPACM_Iface::ipacmcfg->IP_Forwarding_config.privateIPForwarding_enable &&
+				IPACM_Iface::ipacmcfg->vlan_pdnUp_after_sent_pif_to_uc)
+		{
+			IPACM_Iface::ipacmcfg->vlan_pdnUp_after_sent_pif_to_uc = false;
+			IPACMDBG_H("PIF: ip-type: %d modem_ul_v4_set: %d, modem_ul_v6_set %d\n", data->iptype, modem_ul_v4_set, modem_ul_v6_set);
+			/* Delete Ul Flt rule to avoid reinstall */
+			IPACMDBG_H("Del Ul flt Rule IP_v4, vlan_pdnUp_after_sent_pif_to_uc %d"
+					" And Install Exception Rule..\n",
+					IPACM_Iface::ipacmcfg->vlan_pdnUp_after_sent_pif_to_uc);
+			del_ul_flt_rules(IPA_IP_v4);
+
+			if(install_ip_specific_filter_rule(IPA_IP_v4) == IPACM_FAILURE)
+			{
+				IPACMERR("Failed to add exception rule for specific ip.\n");
+			}
+		}
 		/* for the first PDN install UL filtering rules */
 		if(modem_ul_v4_set == false)
 		{
 			ret = handle_uplink_filter_rule(IPACM_Iface::ipacmcfg->GetExtProp(IPA_IP_v4), data->iptype, data->mux_id, false, true);
-			modem_ul_v4_set = !!num_wan_ul_fl_rule_v4;
+			if(ret != IPACM_FAILURE)
+			{
+				modem_ul_v4_set = !!num_wan_ul_fl_rule_v4;
+			}
 		}
 		/* for the next PDNs only notify modem about new MUX IDs */
 		else
@@ -4269,14 +4339,27 @@ int IPACM_Lan::handle_wan_up_ex(ipacm_ext_prop *ext_prop, ipa_ip_type iptype, ui
 			}
 #ifdef FEATURE_VLAN_MPDN
 			notif_only = false;
-			if(IPACM_Iface::ipacmcfg->eogre_enabled &&
-			(IPACM_Iface::ipacmcfg->tunnel_feature == SINGLE_TAG_FEATURE) &&
-			!IPACM_Iface::ipacmcfg->tunnel_idx.size() && iptype ==
-			IPACM_Iface::ipacmcfg->eogre_info.iptype)
+			if (IPACM_Iface::ipacmcfg->eogre_enabled &&
+				IPACM_Iface::ipacmcfg->tunnel_feature == SINGLE_TAG_FEATURE)
 			{
-				gre_up();
+				for(int i=0;i<IPACM_Iface::ipacmcfg->tunnel_idx.size();i++)
+				{
+					int t_id = IPACM_Iface::ipacmcfg->tunnel_idx[i];
+					if (iptype == IPACM_Iface::ipacmcfg->tunnel_idx_map[t_id].iptype &&
+						!IPACM_Iface::ipacmcfg->tunnel_idx_map[t_id].modem_eogre_ul_v6_set)
+					{
+						IPACM_Iface::ipacmcfg->eogre_info.iptype = iptype;
+						memcpy(IPACM_Iface::ipacmcfg->eogre_info.ipv6_src,IPACM_Iface::ipacmcfg->tunnel_idx_map[t_id].ipv6_src,sizeof(IPACM_Iface::ipacmcfg->eogre_info.ipv6_src));
+						memcpy(IPACM_Iface::ipacmcfg->eogre_info.ipv6_dst,IPACM_Iface::ipacmcfg->tunnel_idx_map[t_id].ipv6_dst,sizeof(IPACM_Iface::ipacmcfg->eogre_info.ipv6_dst));
+						IPACM_Iface::ipacmcfg->eogre_info.num_exceptions = t_id;
+						IPACM_LOG_IP_ADDR("The eogre src address (host order) on conversion from input:",IPA_IP_v6,&IPACM_Iface::ipacmcfg->eogre_info.ipv6_src);
+						IPACM_LOG_IP_ADDR("The eogre dst address (host order) on conversion from input:",IPA_IP_v6,&IPACM_Iface::ipacmcfg->eogre_info.ipv6_dst);
+						gre_up();
+					}
+				}
 			}
-			ret = handle_uplink_filter_rule(ext_prop, iptype, xlat_mux_id, false, true, ast_update);
+			if(!modem_ul_v6_set)
+				ret = handle_uplink_filter_rule(ext_prop, iptype, xlat_mux_id, false, true, ast_update);
 #else
 			ret = handle_uplink_filter_rule(ext_prop, iptype, xlat_mux_id, ast_update);
 #endif
@@ -4321,14 +4404,27 @@ int IPACM_Lan::handle_wan_up_ex(ipacm_ext_prop *ext_prop, ipa_ip_type iptype, ui
 #ifdef FEATURE_VLAN_MPDN
 			/* for v4, always install the rules like before */
 			notif_only = false;
-			if(IPACM_Iface::ipacmcfg->eogre_enabled &&
-			(IPACM_Iface::ipacmcfg->tunnel_feature == SINGLE_TAG_FEATURE) &&
-			(iptype == IPACM_Iface::ipacmcfg->eogre_info.iptype) &&
-			!IPACM_Iface::ipacmcfg->tunnel_idx.size())
+			if (IPACM_Iface::ipacmcfg->eogre_enabled &&
+				IPACM_Iface::ipacmcfg->tunnel_feature == SINGLE_TAG_FEATURE)
 			{
-				gre_up();
+				for(int i=0;i<IPACM_Iface::ipacmcfg->tunnel_idx.size();i++)
+				{
+					int t_id = IPACM_Iface::ipacmcfg->tunnel_idx[i];
+					if (iptype == IPACM_Iface::ipacmcfg->tunnel_idx_map[t_id].iptype &&
+						!IPACM_Iface::ipacmcfg->tunnel_idx_map[t_id].modem_eogre_ul_v4_set)
+					{
+						IPACM_Iface::ipacmcfg->eogre_info.iptype = iptype;
+						IPACM_Iface::ipacmcfg->ipgre_info.ipv4_src=IPACM_Iface::ipacmcfg->tunnel_idx_map[t_id].ipv4_src;
+                                                IPACM_Iface::ipacmcfg->ipgre_info.ipv4_dst=IPACM_Iface::ipacmcfg->tunnel_idx_map[t_id].ipv4_dst;
+						IPACM_Iface::ipacmcfg->eogre_info.num_exceptions = t_id;
+						IPACM_LOG_IP_ADDR("The eogre src address (host order) on conversion from input:",IPA_IP_v6,&IPACM_Iface::ipacmcfg->eogre_info.ipv6_src);
+						IPACM_LOG_IP_ADDR("The eogre dst address (host order) on conversion from input:",IPA_IP_v6,&IPACM_Iface::ipacmcfg->eogre_info.ipv6_dst);
+						gre_up();
+					}
+				}
 			}
-			ret = handle_uplink_filter_rule(ext_prop, iptype, xlat_mux_id, false, true, ast_update);
+			if(!modem_ul_v4_set)
+				ret = handle_uplink_filter_rule(ext_prop, iptype, xlat_mux_id, false, true, ast_update);
 #else
 			ret = handle_uplink_filter_rule(ext_prop, iptype, xlat_mux_id, ast_update);
 #endif
@@ -4365,6 +4461,7 @@ int IPACM_Lan::handle_wan_up_ex(ipacm_ext_prop *ext_prop, ipa_ip_type iptype, ui
 		IPACMDBG_H("ip-type: %d modem_ul_v4_set: %d, modem_ul_v6_set %d\n",
 			iptype, modem_ul_v4_set, modem_ul_v6_set);
 	}
+	IPACMDBG_H("ip-type: %d modem_ul_v4_set: %d, modem_ul_v6_set %d\n", iptype, modem_ul_v4_set, modem_ul_v6_set);
 
 #if defined(FEATURE_IPACM_PER_CLIENT_STATS) || defined(IPA_WDI_AST_UPDATE)
 	/* Install filter rules for the client. */
@@ -5326,10 +5423,25 @@ int IPACM_Lan::handle_eth_client_route_rule(uint8_t *mac_addr, ipa_ip_type iptyp
 				rt_rule_entry->rule.attrib.u.v4.dst_addr_mask = 0xFFFFFFFF;
 				if(IPACM_Iface::ipacmcfg->IP_Forwarding_config.privateIPForwarding_enable && strstr(dev_name,IPACM_Iface::ipacmcfg->IP_Forwarding_config.interface_name)){
 					//Make it a catchall rule, if its a neighbour of the configured index
-					rt_rule_entry->rule.attrib.u.v4.dst_addr = 0;
-					rt_rule_entry->rule.attrib.u.v4.dst_addr_mask = 0;
-					rt_rule_entry->at_rear = 1;
+					IPACMDBG_H("PIF: Compare?: vlan %d, vlan_id %d \n",
+						IPACM_Iface::ipacmcfg->IP_Forwarding_config.vlan,
+						get_client_memptr(eth_client, eth_index)->vlan_id);
+					if((!IPACM_Iface::ipacmcfg->IP_Forwarding_config.vlan) ||
+							(IPACM_Iface::ipacmcfg->IP_Forwarding_config.vlan ==
+							 get_client_memptr(eth_client, eth_index)->vlan_id))
+					{
+						rt_rule_entry->rule.attrib.u.v4.dst_addr = 0;
+						rt_rule_entry->rule.attrib.u.v4.dst_addr_mask = 0;
+						rt_rule_entry->at_rear = 1;
+						IPACMDBG_H("PIF: Matched : vlan %d, vlan_id %d \n",
+								IPACM_Iface::ipacmcfg->IP_Forwarding_config.vlan,
+								get_client_memptr(eth_client, eth_index)->vlan_id);
+					}
+					IPACMDBG_H("PIF: ifacename %s, devname %s \n",
+							IPACM_Iface::ipacmcfg->IP_Forwarding_config.interface_name, dev_name);
 				}
+				IPACMDBG_H("PIF: Received Eth Client ipv4-addr:0x%x, construct RT rule at rear %d.\n",
+						get_client_memptr(eth_client, eth_index)->v4_addr, rt_rule_entry->at_rear);
 
 				if (IPACM_Iface::ipacmcfg->GetIPAVer() >= IPA_HW_v4_0)
 				{
@@ -7003,7 +7115,20 @@ int IPACM_Lan::handle_down_evt()
 	if(IPACM_Iface::ipacmcfg->eogre_enabled)
 	{
 		IPACMDBG_H("gre is enabled, need to clean up gre rules.\n");
-		gre_down();
+		if (IPACM_Iface::ipacmcfg->eogre_enabled &&
+				IPACM_Iface::ipacmcfg->tunnel_feature == SINGLE_TAG_FEATURE)
+		{
+			for (auto it = IPACM_Iface::ipacmcfg->tunnel_idx.begin(); it != IPACM_Iface::ipacmcfg->tunnel_idx.end(); )
+			{
+				IPACM_Iface::ipacmcfg->eogre_info.num_exceptions = *it;
+				IPACMERR("tunnel id %d\n",IPACM_Iface::ipacmcfg->eogre_info.num_exceptions);
+				gre_down();
+			}
+		}
+		else
+		{
+			gre_down();
+		}
 	}
 #endif
 	if ((ipa_if_cate == WLAN_IF) && (is_if_svap || is_wlan_if_vlan) && (rx_prop && rx_prop->num_rx_props > 2)) {
@@ -9339,6 +9464,13 @@ void IPACM_Lan::configure_v6_ul_firewall(void)
 {
 	IPACM_firewall_conf_t *firewall_config = NULL;
 	int default_vid = 0, ret;
+
+	/* Don't Install Firewall rule for v6 when private IP forward is enabled */
+	if(IPACM_Iface::ipacmcfg->IP_Forwarding_config.privateIPForwarding_enable)
+	{
+		IPACMDBG_H("Ignore IPA_FIREWALL_CHANGE_EVENT when PIF Enabled for iptype (%d)\n",ip_type);
+		return;
+	}
 
 	if (IPACM_Iface::ipacmcfg->ipv6_nat_enable)
 	{
@@ -15839,6 +15971,15 @@ void IPACM_Lan::gre_up(bool isPmipv6)/*Reusing Gre function for PMIP, with isPmi
 
 #endif
 	}
+        if (IPACM_Iface::ipacmcfg->tunnel_feature == SINGLE_TAG_FEATURE)
+	{
+		ipacm_cmd_q_data evt_data;
+		memset(&evt_data, 0, sizeof(evt_data));
+		evt_data.event = IPA_WAN_HANDLE_EoGRE_UP;
+		evt_data.evt_data = 0;
+		IPACMDBG_H("Posting event: IPA_WAN_HANDLE_EoGRE_UP.\n");
+		IPACM_EvtDispatcher::PostEvt(&evt_data);
+	}
 	IPACMDBG("Finished handling gre_up\n");
 }
 
@@ -16133,7 +16274,7 @@ void IPACM_Lan::gre_down(bool isPmipv6)
 	install_ipv6_prefix_flt_rule(IPACM_Wan::backhaul_ipv6_prefix);
 #endif
 	/* multi tunnel */
-	if (IPACM_Iface::ipacmcfg->tunnel_feature == SINGLE_TAG_FEATURE)
+	if (IPACM_Iface::ipacmcfg->tunnel_feature == SINGLE_TAG_FEATURE && !IPACM_Iface::ipacmcfg->eogre_enabled)
 	{
 		/*Check if tunnel_idx present then delete*/
 		IPACMDBG_H(" Try search tunnel_id : %d\n", tunel_id);
@@ -17080,7 +17221,14 @@ int IPACM_Lan::gre_make_hdr_rmv_ctx(
 		"Attempting to create \"header remove\" context "
 		"(outer ip(%d) header) for downlink gre traffic.\n",
 		iptype);
-
+	if (IPACM_Iface::ipacmcfg->tunnel_feature == SINGLE_TAG_FEATURE)
+	{
+		if(IPACM_Iface::ipacmcfg->tunnel_idx_map[ipgre_info.num_exceptions].gre_route_data[iptype].proc_ctx_gre_rmv_hdl != 0)
+		{
+			IPACMERR("Already Added gre rmv proc ctx\n");
+			return IPACM_SUCCESS;
+		}
+	}
 	/*
 	 * Make "header remove" process context...
 	 */
@@ -17275,6 +17423,11 @@ int IPACM_Lan::gre_make_header_rmv_rt_rule(
 		{
 			IPACMERR("Can't create a \"header remove\" route rule without a context.\n");
 			return IPACM_FAILURE;
+		}
+		if (IPACM_Iface::ipacmcfg->tunnel_idx_map[tunel_id].gre_route_data[iptype].rt_gre_rmv_hdl != 0)
+		{
+			IPACMERR("Already Added RT rule\n");
+			return IPACM_SUCCESS;
 		}
 	}
 	else
@@ -18082,18 +18235,21 @@ int IPACM_Lan::install_ip_specific_filter_rule(enum ipa_ip_type iptype)
 	{
 		IPACMERR("Invalid IP type passed to function\n");
 		ret = IPACM_FAILURE;
+		goto end;
 	}
 
 	if(IPACM_Iface :: ipacmcfg->IP_Forwarding_config.excep_ipv4_addr == 0)
 	{
 		IPACMERR("Invalid src IP passed to function\n");
 		ret = IPACM_FAILURE;
+		goto end;
 	}
-	IPACMDBG_H("Attempting to install src address [%x] based exception filter rule: iptype(%d)\n",IPACM_Iface :: ipacmcfg->IP_Forwarding_config.excep_ipv4_addr,iptype);
+	IPACMDBG_H("Attempting to install dst address [%x] based exception filter rule: iptype(%d)\n",IPACM_Iface :: ipacmcfg->IP_Forwarding_config.excep_ipv4_addr,iptype);
 	if(ip_excp_v4_rule_set == true)
 	{
-		IPACMDBG_H("Already installed src address [%x] based exception filter rule: iptype(%d)\n",IPACM_Iface :: ipacmcfg->IP_Forwarding_config.excep_ipv4_addr,iptype);
+		IPACMDBG_H("Already installed dst address [%x] based exception filter rule: iptype(%d)\n",IPACM_Iface :: ipacmcfg->IP_Forwarding_config.excep_ipv4_addr,iptype);
 		ret = IPACM_SUCCESS;
+		goto end;
 	}
 
 	len = sizeof(ipa_ioc_add_flt_rule) +(NUM_RULES * sizeof(ipa_flt_rule_add));
@@ -18143,7 +18299,7 @@ int IPACM_Lan::install_ip_specific_filter_rule(enum ipa_ip_type iptype)
 	ip_excp_v4_rule_set = true;
 	IPACM_Iface::ipacmcfg->increaseFltRuleCount( rx_prop->rx[0].src_pipe, iptype, pFilteringTable->num_rules);
 	num_wan_ul_fl_rule_v4 += pFilteringTable->num_rules;
-	IPACMDBG_H("Successfully constructed (%d) exception rule for specific src ip.\n",pFilteringTable->num_rules);
+	IPACMDBG_H("Successfully constructed (%d) exception rule for specific dst ip.\n",pFilteringTable->num_rules);
 end:
 	free(pFilteringTable);
 

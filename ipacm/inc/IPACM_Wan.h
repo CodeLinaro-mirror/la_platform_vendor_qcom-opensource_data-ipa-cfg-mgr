@@ -536,19 +536,33 @@ public:
 	{
 		if(!IPACM_Wan::wan_up)
 			return false;
+
+		IPACMDBG_H("Try Get Mux-Id for Vid [ %d ] \n", vlan_id);
 		for(int i = 0; i < IPA_MAX_NUM_SW_PDNS; i++)
 		{
 			if(IPACM_Wan::ipv4_to_iface[i].ipv4_addr)
 			{
 				if(vlan_id == 0 && ipv4_to_iface[i].pIface->is_default_gateway)
 				{
+					/* vlan_id 0 for non vlan offload */
+					IPACMDBG_H("PIF matched Non Vlan pdn %s\n", ipv4_to_iface[i].pIface->dev_name);
 					*mux_id = IPACM_Wan::ipv4_to_iface[i].pIface->ext_prop->ext[0].mux_id;
 					return true;
 				}
-				else if(vlan_id > 0 && !ipv4_to_iface[i].pIface->is_default_gateway)
+				else /* vlan_id > 0 for vlan offload */
 				{
-					*mux_id = IPACM_Wan::ipv4_to_iface[i].pIface->ext_prop->ext[0].mux_id;
-					return true;
+					if(vlan_id > 0 && !ipv4_to_iface[i].pIface->is_default_gateway)
+					{
+						for(int j = 0; j < ipv4_to_iface[i].VID_cnt; j++)
+						{
+							if(IPACM_Wan::ipv4_to_iface[i].associated_VIDs[j] == vlan_id)
+							{
+								IPACMDBG_H("PIF matched Vlan pdn %s\n", ipv4_to_iface[i].pIface->dev_name);
+								*mux_id = IPACM_Wan::ipv4_to_iface[i].pIface->ext_prop->ext[0].mux_id;
+								return true;
+							}
+						}
+					}
 				}
 			}
 		}

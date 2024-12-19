@@ -27,7 +27,7 @@ OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
 IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 Changes from Qualcomm Innovation Center are provided under the following license
-Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+Copyright (c) 2023-2024 Qualcomm Innovation Center, Inc. All rights reserved.
 SPDX-License-Identifier: BSD-3-Clause-Clear,
 */
 /*!
@@ -895,14 +895,16 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 							evt_data.event = IPA_NEIGH_CLIENT_IP_ADDR_ADD_EVENT;
 						else
 							evt_data.event = IPA_NEIGH_CLIENT_IP_ADDR_DEL_EVENT;
-						data_all = (ipacm_event_data_all *)malloc(sizeof(ipacm_event_data_all));
-						if (data_all == NULL)
+						data_vlan = (ipacm_event_new_neigh_vlan *)malloc(sizeof(ipacm_event_new_neigh_vlan));
+						if (data_vlan == NULL)
 						{
 							IPACMERR("Unable to allocate memory\n");
 							return;
 						}
-						memcpy(data_all, data, sizeof(ipacm_event_data_all));
-						evt_data.evt_data = (void *)data_all;
+						memcpy(&data_vlan->data_all, data, sizeof(ipacm_event_data_all));
+						data_vlan->bridge = NULL;
+						evt_data.evt_data = (void *)data_vlan;
+						data_all = (ipacm_event_data_all *)data_vlan;
 						IPACM_EvtDispatcher::PostEvt(&evt_data);
 						IPACMDBG_H("Posted event %d with %s for ipv6 (%d)\n",
 							evt_data.event, data_all->iface_name, data_all->iptype);

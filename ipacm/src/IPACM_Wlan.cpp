@@ -26,7 +26,7 @@
  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * Changes from Qualcomm Innovation Center are provided under the following license:
+ * Changes from Qualcomm Innovation Center, Inc. are provided under the following license:
  *
  * Copyright (c) 2022-2025 Qualcomm Innovation Center, Inc. All rights reserved.
  *
@@ -2759,17 +2759,18 @@ int IPACM_Wlan::handle_wlan_client_init_ex(ipacm_event_data_wlan_ex *data, bool 
 					if (IPACM_Iface::ipacmcfg->hw_fnr_stats_support)
 					{
 						ext_prop = IPACM_Iface::ipacmcfg->GetExtProp(IPA_IP_v4);
-						install_uplink_filter_rule_per_client_v2(ext_prop, IPA_IP_v4, IPACM_Wan::getXlat_Mux_Id(), get_client_memptr(wlan_client, wlan_index)->mac,
+						res = install_uplink_filter_rule_per_client_v2(ext_prop, IPA_IP_v4, IPACM_Wan::getXlat_Mux_Id(), get_client_memptr(wlan_client, wlan_index)->mac,
 							get_client_memptr(wlan_client, wlan_index)->ul_cnt_idx, NULL, false, get_client_memptr(wlan_client, wlan_index)->ta_peer_id);
 					}
 					else
 #endif //IPA_HW_FNR_STATS
 					{
 						ext_prop = IPACM_Iface::ipacmcfg->GetExtProp(IPA_IP_v4);
-						install_uplink_filter_rule_per_client(ext_prop, IPA_IP_v4, IPACM_Wan::getXlat_Mux_Id(), get_client_memptr(wlan_client, wlan_index)->mac,
+						res = install_uplink_filter_rule_per_client(ext_prop, IPA_IP_v4, IPACM_Wan::getXlat_Mux_Id(), get_client_memptr(wlan_client, wlan_index)->mac,
 							get_client_memptr(wlan_client, wlan_index)->ta_peer_id);
 					}
-					get_client_memptr(wlan_client, wlan_index)->ipv4_ul_rules_set = true;
+					if(res == IPACM_SUCCESS)
+						get_client_memptr(wlan_client, wlan_index)->ipv4_ul_rules_set = true;
 				}
 			}
 #ifdef FEATURE_STATIC_POLICY
@@ -2785,17 +2786,18 @@ int IPACM_Wlan::handle_wlan_client_init_ex(ipacm_event_data_wlan_ex *data, bool 
 					if (IPACM_Iface::ipacmcfg->hw_fnr_stats_support)
 					{
 						ext_prop = IPACM_Iface::ipacmcfg->GetExtProp(IPA_IP_v6);
-						install_uplink_filter_rule_per_client_v2(ext_prop, IPA_IP_v6, 0, get_client_memptr(wlan_client, wlan_index)->mac,
+						res = install_uplink_filter_rule_per_client_v2(ext_prop, IPA_IP_v6, 0, get_client_memptr(wlan_client, wlan_index)->mac,
 							get_client_memptr(wlan_client, wlan_index)->ul_cnt_idx, NULL, false, get_client_memptr(wlan_client, wlan_index)->ta_peer_id);
 					}
 					else
 #endif //IPA_HW_FNR_STATS
 					{
 						ext_prop = IPACM_Iface::ipacmcfg->GetExtProp(IPA_IP_v6);
-						install_uplink_filter_rule_per_client(ext_prop, IPA_IP_v6, 0, get_client_memptr(wlan_client, wlan_index)->mac,
+						res = install_uplink_filter_rule_per_client(ext_prop, IPA_IP_v6, 0, get_client_memptr(wlan_client, wlan_index)->mac,
 							get_client_memptr(wlan_client, wlan_index)->ta_peer_id);
 					}
-					get_client_memptr(wlan_client, wlan_index)->ipv6_ul_rules_set = true;
+					if(res == IPACM_SUCCESS)
+						get_client_memptr(wlan_client, wlan_index)->ipv6_ul_rules_set = true;
 				}
 			}
 		}
@@ -2810,17 +2812,18 @@ int IPACM_Wlan::handle_wlan_client_init_ex(ipacm_event_data_wlan_ex *data, bool 
 					if (IPACM_Iface::ipacmcfg->hw_fnr_stats_support)
 					{
 						ext_prop = IPACM_Iface::ipacmcfg->GetExtProp(IPA_IP_v4);
-						install_uplink_filter_rule_per_client_v2(ext_prop, IPA_IP_v4, IPACM_Wan::getXlat_Mux_Id(), get_client_memptr(wlan_client, wlan_index)->mac,
+						res = install_uplink_filter_rule_per_client_v2(ext_prop, IPA_IP_v4, IPACM_Wan::getXlat_Mux_Id(), get_client_memptr(wlan_client, wlan_index)->mac,
 							get_client_memptr(wlan_client, wlan_index)->ul_cnt_idx, NULL, false, get_client_memptr(wlan_client, wlan_index)->ta_peer_id);
 					}
 					else
 #endif //IPA_HW_FNR_STATS
 					{
 						ext_prop = IPACM_Iface::ipacmcfg->GetExtProp(IPA_IP_v4);
-						install_uplink_filter_rule_per_client(ext_prop, IPA_IP_v4, IPACM_Wan::getXlat_Mux_Id(), get_client_memptr(wlan_client, wlan_index)->mac,
+						res = install_uplink_filter_rule_per_client(ext_prop, IPA_IP_v4, IPACM_Wan::getXlat_Mux_Id(), get_client_memptr(wlan_client, wlan_index)->mac,
 							get_client_memptr(wlan_client, wlan_index)->ta_peer_id);
 					}
-					get_client_memptr(wlan_client, wlan_index)->ipv4_ul_rules_set = true;
+					if(res == IPACM_SUCCESS)
+						get_client_memptr(wlan_client, wlan_index)->ipv4_ul_rules_set = true;
 				}
 			}
 			if(IPACM_Wan::isWanUP_V6(ipa_if_num))
@@ -2831,17 +2834,18 @@ int IPACM_Wlan::handle_wlan_client_init_ex(ipacm_event_data_wlan_ex *data, bool 
 					if (IPACM_Iface::ipacmcfg->hw_fnr_stats_support)
 					{
 						ext_prop = IPACM_Iface::ipacmcfg->GetExtProp(IPA_IP_v6);
-						install_uplink_filter_rule_per_client_v2(ext_prop, IPA_IP_v6, 0, get_client_memptr(wlan_client, wlan_index)->mac,
+						res = install_uplink_filter_rule_per_client_v2(ext_prop, IPA_IP_v6, 0, get_client_memptr(wlan_client, wlan_index)->mac,
 							get_client_memptr(wlan_client, wlan_index)->ul_cnt_idx, NULL, false, get_client_memptr(wlan_client, wlan_index)->ta_peer_id);
 					}
 					else
 #endif //IPA_HW_FNR_STATS
 					{
 						ext_prop = IPACM_Iface::ipacmcfg->GetExtProp(IPA_IP_v6);
-						install_uplink_filter_rule_per_client(ext_prop, IPA_IP_v6, 0, get_client_memptr(wlan_client, wlan_index)->mac,
+						res = install_uplink_filter_rule_per_client(ext_prop, IPA_IP_v6, 0, get_client_memptr(wlan_client, wlan_index)->mac,
 							get_client_memptr(wlan_client, wlan_index)->ta_peer_id);
 					}
-					get_client_memptr(wlan_client, wlan_index)->ipv6_ul_rules_set = true;
+					if(res == IPACM_SUCCESS)
+						get_client_memptr(wlan_client, wlan_index)->ipv6_ul_rules_set = true;
 				}
 			}
 		}
@@ -6666,6 +6670,7 @@ int IPACM_Wlan::handle_wlan_client_down_evt(uint8_t *mac_addr, uint16_t vlan_id)
 	get_client_memptr(wlan_client, clt_indx)->lan_stats_idx = -1;
 	memset(get_client_memptr(wlan_client, clt_indx)->wan_ul_fl_rule_hdl_v4, 0, MAX_WAN_UL_FILTER_RULES * sizeof(uint32_t));
 	memset(get_client_memptr(wlan_client, clt_indx)->wan_ul_fl_rule_hdl_v6, 0, MAX_WAN_UL_FILTER_RULES * sizeof(uint32_t));
+	IPACMDBG_H("wifi index %d client rules, handles deleted  successfully of total %d clients \n", clt_indx, num_wifi_client_tmp);
 #endif
 
 	for (; clt_indx < num_wifi_client_tmp - 1; clt_indx++)
@@ -6722,10 +6727,14 @@ int IPACM_Wlan::handle_wlan_client_down_evt(uint8_t *mac_addr, uint16_t vlan_id)
 			get_client_memptr(wlan_client, clt_indx + 1)->wan_ul_fl_rule_hdl_v4,
 			MAX_WAN_UL_FILTER_RULES * sizeof(uint32_t));
 		memcpy(get_client_memptr(wlan_client, clt_indx)->wan_ul_fl_rule_hdl_v6,
-			get_client_memptr(wlan_client, clt_indx + 1)->wan_ul_fl_rule_hdl_v6,
-			MAX_WAN_UL_FILTER_RULES * sizeof(uint32_t));
+				get_client_memptr(wlan_client, clt_indx + 1)->wan_ul_fl_rule_hdl_v6,
+				MAX_WAN_UL_FILTER_RULES * sizeof(uint32_t));
 		get_client_memptr(wlan_client, clt_indx)->lan_stats_idx =
 			get_client_memptr(wlan_client, clt_indx + 1)->lan_stats_idx;
+		get_client_memptr(wlan_client, clt_indx)->ipv4_ul_rules_set =
+			get_client_memptr(wlan_client, (clt_indx + 1))->ipv4_ul_rules_set;
+		get_client_memptr(wlan_client, clt_indx)->ipv6_ul_rules_set =
+			get_client_memptr(wlan_client, (clt_indx + 1))->ipv6_ul_rules_set;
 #ifdef IPA_HW_FNR_STATS
 		get_client_memptr(wlan_client, clt_indx)->ul_cnt_idx =
 			get_client_memptr(wlan_client, clt_indx + 1)->ul_cnt_idx;
@@ -6772,8 +6781,6 @@ int IPACM_Wlan::handle_wlan_client_down_evt(uint8_t *mac_addr, uint16_t vlan_id)
 	get_client_memptr(wlan_client, clt_indx)->dl_cnt_idx = -1;
 	get_client_memptr(wlan_client, clt_indx)->index_populated = false;
 #endif
-	memset(get_client_memptr(wlan_client, clt_indx)->wan_ul_fl_rule_hdl_v4, 0, MAX_WAN_UL_FILTER_RULES * sizeof(uint32_t));
-	memset(get_client_memptr(wlan_client, clt_indx)->wan_ul_fl_rule_hdl_v6, 0, MAX_WAN_UL_FILTER_RULES * sizeof(uint32_t));
 #endif
 #ifdef FEATURE_STATIC_POLICY
 	memset(get_client_memptr(wlan_client, clt_indx)->dscp_hpc_hdr_hdl_v4,
@@ -8171,7 +8178,7 @@ int IPACM_Wlan::install_uplink_filter_rule_per_client
 	if (rx_prop == NULL)
 	{
 		IPACMDBG_H("No rx properties registered for iface %s\n", dev_name);
-		return IPACM_SUCCESS;
+		return IPACM_FAILURE;
 	}
 
 	if (is_if_svap && (rx_prop && rx_prop->num_rx_props > 2)) {
@@ -8183,7 +8190,7 @@ int IPACM_Wlan::install_uplink_filter_rule_per_client
 	if(prop == NULL || prop->num_ext_props <= 0)
 	{
 		IPACMDBG_H("No extended property.\n");
-		return IPACM_SUCCESS;
+		return IPACM_FAILURE;
 	}
 
 	clnt_indx = get_wlan_client_index(mac_addr);
@@ -8539,7 +8546,7 @@ int IPACM_Wlan::install_uplink_filter_rule_per_client_v2
 	if (rx_prop == NULL)
 	{
 		IPACMDBG_H("No rx properties registered for iface %s\n", dev_name);
-		return IPACM_SUCCESS;
+		return IPACM_FAILURE;
 	}
 
 	if (is_if_svap && (rx_prop && rx_prop->num_rx_props > 2)) {
@@ -8567,7 +8574,7 @@ int IPACM_Wlan::install_uplink_filter_rule_per_client_v2
 		if(prop == NULL || prop->num_ext_props <= 0)
 		{
 			IPACMDBG_H("No extended property.\n");
-			return IPACM_SUCCESS;
+			return IPACM_FAILURE;
 		}
 		if (prop->num_ext_props > MAX_WAN_UL_FILTER_RULES)
 		{

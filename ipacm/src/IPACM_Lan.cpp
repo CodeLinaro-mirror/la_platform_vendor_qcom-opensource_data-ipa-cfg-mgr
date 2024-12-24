@@ -13610,6 +13610,8 @@ int IPACM_Lan::eth_bridge_add_flt_rule(uint8_t *mac, uint32_t rt_tbl_hdl, ipa_ip
 		if(!vlan_id)
 		{
 			IPACMERR("got vlan id 0 for vlan iface %s\n", dev_name);
+			res = IPACM_FAILURE;
+			goto end;
 		}
 		flt_rule_entry.rule.attrib.attrib_mask |= IPA_FLT_VLAN_ID;
 		flt_rule_entry.rule.attrib.vlan_id = vlan_id;

@@ -27,7 +27,7 @@
 * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 *
 * Changes from Qualcomm Innovation Center are provided under the following license:
-* Copyright (c) 2023-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+* Copyright (c) 2023-2025 Qualcomm Innovation Center, Inc. All rights reserved.
 * SPDX-License-Identifier: BSD-3-Clause-Clear
 */
 /*!
@@ -598,7 +598,7 @@ int IPACM_Iface::query_iface_property(void)
 
 	fd = open(DEVICE_NAME, O_RDWR);
 	IPACMDBG("iface query-property \n");
-	if (0 == fd)
+	if (fd < 0)
 	{
 		IPACMERR("Failed opening %s.\n", DEVICE_NAME);
 		return IPACM_FAILURE;

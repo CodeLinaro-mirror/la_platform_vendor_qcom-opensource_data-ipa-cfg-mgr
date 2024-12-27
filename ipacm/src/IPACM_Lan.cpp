@@ -3475,7 +3475,7 @@ int IPACM_Lan::notify_flt_removed(uint8_t mux_id)
 	int fd, idx = 0;
 
 	fd = open(IPA_DEVICE_NAME, O_RDWR);
-	if(0 == fd)
+	if(fd < 0)
 	{
 		IPACMERR("Failed opening %s.\n", IPA_DEVICE_NAME);
 		return IPACM_FAILURE;
@@ -3484,6 +3484,7 @@ int IPACM_Lan::notify_flt_removed(uint8_t mux_id)
 	if (rx_prop == NULL)
 	{
 		IPACMERR("Rx prop is NULL, return\n");
+		close(fd);
 		return IPACM_SUCCESS;
 	}
 
@@ -4272,7 +4273,7 @@ int IPACM_Lan::handle_wan_up_ex(ipacm_ext_prop *ext_prop, ipa_ip_type iptype, ui
 	{
 		/* give mux ID of the default PDN to IPA-driver for WLAN/LAN pkts */
 		fd = open(IPA_DEVICE_NAME, O_RDWR);
-		if (0 == fd)
+		if (fd < 0)
 		{
 			IPACMDBG_H("Failed opening %s.\n", IPA_DEVICE_NAME);
 			return IPACM_FAILURE;
@@ -8491,7 +8492,7 @@ int IPACM_Lan::config_dft_firewall_rules_ul_ex(IPACM_firewall_conf_t* firewall_c
 	}
 
 	fd = open(IPA_DEVICE_NAME, O_RDWR);
-	if (0 == fd)
+	if (fd < 0)
 	{
 		IPACMERR("Failed opening %s.\n", IPA_DEVICE_NAME);
 		return IPACM_FAILURE;
@@ -15219,7 +15220,7 @@ int IPACM_Lan::handle_mpdn_ul_xlat_filter_rule(ipacm_ext_prop * prop,
 	}
 
 	fd = open(IPA_DEVICE_NAME, O_RDWR);
-	if (0 == fd)
+	if (fd < 0)
 	{
 		IPACMERR("Failed opening %s.\n", IPA_DEVICE_NAME);
 		ret = IPACM_FAILURE;
@@ -15300,7 +15301,6 @@ int IPACM_Lan::handle_mpdn_ul_xlat_filter_rule(ipacm_ext_prop * prop,
 				flt_rule_entry.rule.attrib.attrib_mask |= IPA_FLT_VLAN_ID;
 				flt_rule_entry.rule.attrib.vlan_id = vlan_id;
 				/* Construct eq */
-				int fd;
 				ipa_ioc_generate_flt_eq flt_eq;
 
 				/* generate eq */
@@ -15309,19 +15309,11 @@ int IPACM_Lan::handle_mpdn_ul_xlat_filter_rule(ipacm_ext_prop * prop,
 				flt_eq.ip = iptype;
 
 				if (flt_rule_entry.rule.attrib.attrib_mask) {
-					fd = open(IPA_DEVICE_NAME, O_RDWR);
-					if (fd < 0) {
-						IPACMERR("Failed opening %s.\n", IPA_DEVICE_NAME);
-						return IPACM_FAILURE;
-					}
-
 					if (0 != ioctl(fd, IPA_IOC_GENERATE_FLT_EQ, &flt_eq)) { //define and cpy attribute to this struct
 						IPACMERR("Failed to get eq_attrib\n");
 						close(fd);
 						return IPACM_FAILURE;
 					}
-					close(fd);
-
 					/* Disable the Q6 based rules */
 					flt_rule_entry.rule.eq_attrib.metadata_meq32_present = 0;
 					/* zero the meta compare bit, flip all bits, this will set only 9th bit to zero */
@@ -15471,7 +15463,8 @@ int IPACM_Lan::handle_mpdn_ul_xlat_filter_rule(ipacm_ext_prop * prop,
 fail:
 	if (pFilteringTable != NULL)
 		free(pFilteringTable);
-	close(fd);
+	if(fd)
+		close(fd);
 	return ret;
 }
 

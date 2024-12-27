@@ -27,7 +27,7 @@
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  * Changes from Qualcomm Innovation Center, Inc. are provided under the following license:
- * Copyright (c) 2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2024-2025 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 #include <stdio.h>
@@ -667,7 +667,7 @@ void* IPACM_ConntrackClient::TCPRegisterWithConnTrack(void *)
 		return NULL;
 	}
 
-	IPACMDBG("Exit from tcp thread\n");
+	IPACM_SYSLOG("Exit from tcp thread\n");
 
 	/* destroy the filter.. this will not detach the filter */
 	nfct_filter_destroy(pClient->tcp_filter);
@@ -776,7 +776,7 @@ ctcatch:
 		goto ctcatch;
 	}
 
-	IPACMDBG("Exit from udp thread with ret: %d\n", ret);
+	IPACM_SYSLOG("Exit from udp thread with ret: %d\n", ret);
 
 	/* destroy the filter.. this will not detach the filter */
 	nfct_filter_destroy(pClient->udp_filter);

@@ -185,7 +185,7 @@ IPACM_Wan::IPACM_Wan(int iface_index,
 	{
 		wan_route_rule_v4_hdl = (uint32_t *)calloc(iface_query->num_tx_props, sizeof(uint32_t));
 		wan_route_rule_v6_hdl = (uint32_t *)calloc(iface_query->num_tx_props, sizeof(uint32_t));
-		IPACMDBG_H("IPACM->IPACM_Wan(%d) constructor: Tx:%d\n", ipa_if_num, iface_query->num_tx_props);
+		IPACM_SYSLOG("IPACM->IPACM_Wan(%d) constructor: Tx:%d\n", ipa_if_num, iface_query->num_tx_props);
 	}
 	m_is_sta_mode = is_sta_mode;
 
@@ -249,19 +249,19 @@ IPACM_Wan::IPACM_Wan(int iface_index,
 
 	if(m_is_sta_mode == Q6_WAN)
 	{
-		IPACMDBG_H("The new WAN interface is modem.\n");
+		IPACM_SYSLOG("The new WAN interface is modem.\n");
 		is_default_gateway = false;
 		query_ext_prop();
 	}
 	else
 	{
-		IPACMDBG_H("The new WAN interface is WLAN STA.\n");
+		IPACM_SYSLOG("The new WAN interface is WLAN STA.\n");
 	}
 
 	m_fd_ipa = open(IPA_DEVICE_NAME, O_RDWR);
 	if(0 == m_fd_ipa)
 	{
-		IPACMERR("Failed to open %s\n",IPA_DEVICE_NAME);
+		IPACM_SYSLOG("Failed to open %s\n",IPA_DEVICE_NAME);
 	}
 	if(iface_query != NULL)
 	{
@@ -273,14 +273,14 @@ IPACM_Wan::IPACM_Wan(int iface_index,
 			close(m_fd_ipa);
 			return;
 		}
-		IPACMDBG_H("index:%d constructor: Tx properties:%d\n", iface_index, iface_query->num_tx_props);
+		IPACM_SYSLOG("index:%d constructor: Tx properties:%d\n", iface_index, iface_query->num_tx_props);
 	}
 #ifdef FEATURE_IPACM_UL_FIREWALL
 	m_fd_ipa_ul = m_fd_ipa;
 #endif //FEATURE_IPACM_UL_FIREWALL
 	if(IPACM_Iface::ipacmcfg->iface_table[ipa_if_num].if_cat == EMBMS_IF)
 	{
-		IPACMDBG(" IPACM->IPACM_Wan_eMBMS(%d)\n", ipa_if_num);
+		IPACM_SYSLOG(" IPACM->IPACM_Wan_eMBMS(%d)\n", ipa_if_num);
 		embms_is_on = true;
 		install_wan_filtering_rule(false);
 		if(IPACM_Iface::ipacmcfg->GetIPAVer() >= IPA_HW_None && IPACM_Iface::ipacmcfg->GetIPAVer() < IPA_HW_v4_0)
@@ -296,7 +296,7 @@ IPACM_Wan::IPACM_Wan(int iface_index,
 	}
 	else
 	{
-		IPACMDBG(" IPACM->IPACM_Wan(%d)\n", ipa_if_num);
+		IPACM_SYSLOG(" IPACM->IPACM_Wan(%d)\n", ipa_if_num);
 	}
 
 	return;
@@ -336,7 +336,7 @@ int IPACM_Wan::GetMuxByVid(uint16_t vlan_id, uint8_t *mux_id, ipa_ip_type iptype
 		{
 			if (!(IPACM_Wan::ipv4_to_iface[i].pIface))
 			{
-				IPACMERR("couldn't find MUX for VID %d\n", vlan_id);
+				IPACM_SYSLOG("couldn't find MUX for VID %d\n", vlan_id);
 				continue;
 			}
 			if(IPACM_Wan::ipv4_to_iface[i].ipv4_addr)
@@ -364,7 +364,7 @@ int IPACM_Wan::GetMuxByVid(uint16_t vlan_id, uint8_t *mux_id, ipa_ip_type iptype
 		{
 			if(!(IPACM_Wan::ipv6_to_iface[i].pIface))
 			{
-				IPACMERR("couldn't find MUX for VID %d\n", vlan_id);
+				IPACM_SYSLOG("couldn't find MUX for VID %d\n", vlan_id);
 				continue;
 			}
 			if(IPACM_Wan::ipv6_to_iface[i].ipv6_prefix[0] || IPACM_Wan::ipv6_to_iface[i].ipv6_prefix[1])
@@ -389,7 +389,7 @@ int IPACM_Wan::GetMuxByVid(uint16_t vlan_id, uint8_t *mux_id, ipa_ip_type iptype
 			}
 		}
 	}
-	IPACMERR("couldn't find MUX for VID %d\n", vlan_id);
+	IPACM_SYSLOG("couldn't find MUX for VID %d\n", vlan_id);
 	return IPACM_FAILURE;
 }
 
@@ -426,7 +426,7 @@ int IPACM_Wan::GetMTUByVid(uint16_t *mtu, uint16_t vlan_id, ipa_ip_type iptype)
 			}
 		}
 	}
-	IPACMERR("couldn't find MTU for VID %d for ip_type %d\n", vlan_id, iptype);
+	IPACM_SYSLOG("couldn't find MTU for VID %d for ip_type %d\n", vlan_id, iptype);
 	*mtu = DEFAULT_MTU_SIZE;
 	return IPACM_FAILURE;
 }
@@ -449,7 +449,7 @@ bool IPACM_Wan::is_xlat_by_vid(uint16_t vlan_id)
 			}
 		}
 	}
-	IPACMERR("couldn't find MUX xlat info for VID %d\n", vlan_id);
+	IPACM_SYSLOG("couldn't find MUX xlat info for VID %d\n", vlan_id);
 	return false;
 }
 
@@ -460,7 +460,7 @@ bool IPACM_Wan::is_xlat_by_ipv4(uint32_t ipv4_addr)
 		if(IPACM_Wan::ipv4_to_iface[i].ipv4_addr == ipv4_addr)
 			return IPACM_Wan::ipv4_to_iface[i].is_xlat;
 	}
-	IPACMERR("couldn't find MUX xlat info for ipv4 0x%x\n", ipv4_addr);
+	IPACM_SYSLOG("couldn't find MUX xlat info for ipv4 0x%x\n", ipv4_addr);
 	return false;
 }
 
@@ -472,7 +472,7 @@ int IPACM_Wan::get_vid_index_for_iface_v6(ipacm_ipv6_wan_iface iface, uint16_t v
 			return i;
 	}
 
-	IPACMDBG("couldn't find VID %d\n in VID array", vlan_id);
+	IPACM_SYSLOG("couldn't find VID %d\n in VID array", vlan_id);
 	return IPACM_FAILURE;
 }
 
@@ -493,7 +493,7 @@ int IPACM_Wan::handle_addr_evt(ipacm_event_data_addr *data)
 	memset(&hdr, 0, sizeof(hdr));
 	if(tx_prop == NULL || rx_prop == NULL)
 	{
-		IPACMDBG_H("Either tx or rx property is NULL, return.\n");
+		IPACM_SYSLOG("Either tx or rx property is NULL, return.\n");
 		return IPACM_SUCCESS;
 	}
 
@@ -509,7 +509,7 @@ int IPACM_Wan::handle_addr_evt(ipacm_event_data_addr *data)
 			   (ipv6_addr[num_ipv6_addr][2] == data->ipv6_addr[2]) &&
 			   (ipv6_addr[num_ipv6_addr][3] == data->ipv6_addr[3]))
 			{
-				IPACMDBG_H("find matched ipv6 address, index:%d \n", num_ipv6_addr);
+				IPACM_SYSLOG("find matched ipv6 address, index:%d \n", num_ipv6_addr);
 				return IPACM_SUCCESS;
 				break;
 			}
@@ -520,7 +520,7 @@ int IPACM_Wan::handle_addr_evt(ipacm_event_data_addr *data)
 
 		if (!rt_rule)
 		{
-			IPACMERR("Error Locate ipa_ioc_add_rt_rule memory...\n");
+			IPACM_SYSLOG("Error Locate ipa_ioc_add_rt_rule memory...\n");
 			return IPACM_FAILURE;
 		}
 
@@ -584,13 +584,13 @@ int IPACM_Wan::handle_addr_evt(ipacm_event_data_addr *data)
 		strlcpy(rt_rule->rt_tbl_name, IPACM_Iface::ipacmcfg->rt_tbl_wan_v6.name, sizeof(rt_rule->rt_tbl_name));
 		if (false == m_routing.AddRoutingRule(rt_rule))
 		{
-			IPACMERR("Routing rule addition failed!\n");
+			IPACM_SYSLOG("Routing rule addition failed!\n");
 			res = IPACM_FAILURE;
 			goto fail;
 		}
 		else if (rt_rule_entry->status)
 		{
-			IPACMERR("rt rule adding failed. Result=%d\n", rt_rule_entry->status);
+			IPACM_SYSLOG("rt rule adding failed. Result=%d\n", rt_rule_entry->status);
 			res = rt_rule_entry->status;
 			goto fail;
 		}
@@ -614,7 +614,7 @@ int IPACM_Wan::handle_addr_evt(ipacm_event_data_addr *data)
 					{
 						/* add this prefix to no_offload_ipv6_prefix */
 						IPACM_Iface::ipacmcfg->add_no_offload_ipv6_prefix(ipv6_prefix);
-						IPACMERR("No Free index available.!\n");
+						IPACM_SYSLOG("No Free index available.!\n");
 						res = IPACM_FAILURE;
 						goto fail;
 					}
@@ -623,12 +623,12 @@ int IPACM_Wan::handle_addr_evt(ipacm_event_data_addr *data)
 				memcpy(ipv6_to_iface[modem_ipv6_pdn_index].ipv6_prefix, data->ipv6_addr, sizeof(uint32_t) * 2);
 				ipv6_to_iface[modem_ipv6_pdn_index].pIface = this;
 				IPACM_Iface::ipacmcfg->add_no_offload_ipv6_prefix(ipv6_to_iface[modem_ipv6_pdn_index].ipv6_prefix);
-				IPACMDBG_H("index %d prefix: 0x%08x%08x\n", modem_ipv6_pdn_index,
+				IPACM_SYSLOG("index %d prefix: 0x%08x%08x\n", modem_ipv6_pdn_index,
 				ipv6_to_iface[modem_ipv6_pdn_index].ipv6_prefix[0],
 				ipv6_to_iface[modem_ipv6_pdn_index].ipv6_prefix[1]);
 
 				num_ipv6_modem_pdn++;
-				IPACMDBG_H("Now the number of modem ipv6 pdn is %d.\n", num_ipv6_modem_pdn);
+				IPACM_SYSLOG("Now the number of modem ipv6 pdn is %d.\n", num_ipv6_modem_pdn);
 
 			}
 			else if(m_is_sta_mode == WLAN_WAN)
@@ -640,7 +640,7 @@ int IPACM_Wan::handle_addr_evt(ipacm_event_data_addr *data)
 					{
 						// add this prefix to no_offload_ipv6_prefix
 						IPACM_Iface::ipacmcfg->add_no_offload_ipv6_prefix(ipv6_prefix);
-						IPACMERR("No Free index available.!\n");
+						IPACM_SYSLOG("No Free index available.!\n");
 						res = IPACM_FAILURE;
 						goto fail;
 					}
@@ -657,7 +657,7 @@ int IPACM_Wan::handle_addr_evt(ipacm_event_data_addr *data)
 				{
 					if(header_set_v6 && !sta_bridge_v6_rules_installed)
 					{
-						IPACMDBG_H("Received first V6 WAN client on WLAN STA Bridge iface\n");
+						IPACM_SYSLOG("Received first V6 WAN client on WLAN STA Bridge iface\n");
 						handle_route_add_vlan_pdn_evt(IPA_IP_v6, IPACM_Iface::ipacmcfg->sta_bridge.vlan_id);
 						sta_bridge_v6_rules_installed = true;
 					}
@@ -725,7 +725,7 @@ int IPACM_Wan::handle_addr_evt(ipacm_event_data_addr *data)
 
 				if (m_filtering.AddFilteringRule(flt_rule) == false)
 				{
-					IPACMERR("Error Adding Filtering rule, aborting...\n");
+					IPACM_SYSLOG("Error Adding Filtering rule, aborting...\n");
 					free(flt_rule);
 					res = IPACM_FAILURE;
 					goto fail;
@@ -734,7 +734,7 @@ int IPACM_Wan::handle_addr_evt(ipacm_event_data_addr *data)
 				{
 					IPACM_Iface::ipacmcfg->increaseFltRuleCount(rx_prop->rx[0].src_pipe, IPA_IP_v6, 1);
 					ipv6_dest_flt_rule_hdl[num_ipv6_dest_flt_rule] = flt_rule->rules[0].flt_rule_hdl;
-					IPACMDBG_H("IPv6 dest filter rule %d HDL:0x%x\n", num_ipv6_dest_flt_rule, ipv6_dest_flt_rule_hdl[num_ipv6_dest_flt_rule]);
+					IPACM_SYSLOG("IPv6 dest filter rule %d HDL:0x%x\n", num_ipv6_dest_flt_rule, ipv6_dest_flt_rule_hdl[num_ipv6_dest_flt_rule]);
 					num_ipv6_dest_flt_rule++;
 					free(flt_rule);
 				}
@@ -762,17 +762,17 @@ int IPACM_Wan::handle_addr_evt(ipacm_event_data_addr *data)
 			/* check iface ipv4 same or not */
 			if(data->ipv4_addr == wan_v4_addr)
 			{
-				IPACMDBG_H("Already setup device (%s) ipv4 and it didn't change(0x%x)\n", dev_name, data->ipv4_addr);
+				IPACM_SYSLOG("Already setup device (%s) ipv4 and it didn't change(0x%x)\n", dev_name, data->ipv4_addr);
 				return IPACM_SUCCESS;
 			}
 			else
 			{
 				IPACMDBG_H(" device (%s) ipv4 addr is changed\n", dev_name);
 				/* Delete default v4 RT rule */
-				IPACMDBG_H("Delete default v4 routing rules\n");
+				IPACM_SYSLOG("Delete default v4 routing rules\n");
 				if (m_routing.DeleteRoutingHdl(dft_rt_rule_hdl[0], IPA_IP_v4) == false)
 				{
-					IPACMERR("Routing old RT rule deletion failed!\n");
+					IPACM_SYSLOG("Routing old RT rule deletion failed!\n");
 					res = IPACM_FAILURE;
 					goto fail;
 				}
@@ -802,7 +802,7 @@ int IPACM_Wan::handle_addr_evt(ipacm_event_data_addr *data)
 
 		if (!rt_rule)
 		{
-			IPACMERR("Error Locate ipa_ioc_add_rt_rule memory...\n");
+			IPACM_SYSLOG("Error Locate ipa_ioc_add_rt_rule memory...\n");
 			return IPACM_FAILURE;
 		}
 
@@ -816,7 +816,7 @@ int IPACM_Wan::handle_addr_evt(ipacm_event_data_addr *data)
 			hdr.name[IPA_RESOURCE_NAME_MAX-1] = '\0';
 			if(m_header.GetHeaderHandle(&hdr) == false)
 			{
-				IPACMERR("Failed to get QMAP header.\n");
+				IPACM_SYSLOG("Failed to get QMAP header.\n");
 				return IPACM_FAILURE;
 			}
 			rt_rule_entry->rule.hdr_hdl = hdr.hdl;
@@ -837,18 +837,18 @@ int IPACM_Wan::handle_addr_evt(ipacm_event_data_addr *data)
 #endif
 		if (false == m_routing.AddRoutingRule(rt_rule))
 		{
-			IPACMERR("Routing rule addition failed!\n");
+			IPACM_SYSLOG("Routing rule addition failed!\n");
 			res = IPACM_FAILURE;
 			goto fail;
 		}
 		else if (rt_rule_entry->status)
 		{
-			IPACMERR("rt rule adding failed. Result=%d\n", rt_rule_entry->status);
+			IPACM_SYSLOG("rt rule adding failed. Result=%d\n", rt_rule_entry->status);
 			res = rt_rule_entry->status;
 			goto fail;
 		}
 		dft_rt_rule_hdl[0] = rt_rule_entry->rt_rule_hdl;
-		IPACMDBG_H("ipv4 wan iface rt-rule hdll=0x%x\n", dft_rt_rule_hdl[0]);
+		IPACM_SYSLOG("ipv4 wan iface rt-rule hdll=0x%x\n", dft_rt_rule_hdl[0]);
 			/* initial multicast/broadcast/fragment filter rule */
 
 		/* only do one time */
@@ -861,7 +861,7 @@ int IPACM_Wan::handle_addr_evt(ipacm_event_data_addr *data)
 				modem_ipv4_pdn_index = getFreePDNIndex_V4();
 				if (modem_ipv4_pdn_index == -1)
 				{
-					IPACMERR("No Free index available.!\n");
+					IPACM_SYSLOG("No Free index available.!\n");
 					res = IPACM_FAILURE;
 					goto fail;
 				}
@@ -869,7 +869,7 @@ int IPACM_Wan::handle_addr_evt(ipacm_event_data_addr *data)
 				ipv4_to_iface[modem_ipv4_pdn_index].pIface = this;
 #endif
 				num_ipv4_modem_pdn++;
-				IPACMDBG_H("Now the number of modem ipv4 pdn is %d.\n", num_ipv4_modem_pdn);
+				IPACM_SYSLOG("Now the number of modem ipv4 pdn is %d.\n", num_ipv4_modem_pdn);
 				init_fl_rule_ex(data->iptype);
 				if (is_xlat)
 					IPACM_Wan::ipv4_to_iface[modem_ipv4_pdn_index].is_xlat = true;
@@ -880,13 +880,13 @@ int IPACM_Wan::handle_addr_evt(ipacm_event_data_addr *data)
 
 				if (wlan_ipv4_pdn_index == -1)
 				{
-					IPACMERR("No Free index available.!\n");
+					IPACM_SYSLOG("No Free index available.!\n");
 					res = IPACM_FAILURE;
 					goto fail;
 				}
 				ipv4_to_iface[wlan_ipv4_pdn_index].ipv4_addr = data->ipv4_addr;
 				ipv4_to_iface[wlan_ipv4_pdn_index].pIface = this;
-				IPACMDBG_H("Wlan ipv4 pdn is %d.\n", wlan_ipv4_pdn_index);
+				IPACM_SYSLOG("Wlan ipv4 pdn is %d.\n", wlan_ipv4_pdn_index);
 
 				init_fl_rule(data->iptype);
 
@@ -895,7 +895,7 @@ int IPACM_Wan::handle_addr_evt(ipacm_event_data_addr *data)
 				{
 					if(header_set_v4 && !sta_bridge_v4_rules_installed)
 					{
-						IPACMDBG_H("Received first V4 WAN client on WLAN STA Bridge iface\n");
+						IPACM_SYSLOG("Received first V4 WAN client on WLAN STA Bridge iface\n");
 						handle_route_add_vlan_pdn_evt(IPA_IP_v4, IPACM_Iface::ipacmcfg->sta_bridge.vlan_id);
 						sta_bridge_v4_rules_installed = true;
 					}
@@ -910,11 +910,11 @@ int IPACM_Wan::handle_addr_evt(ipacm_event_data_addr *data)
 			curr_wan_ip = data->ipv4_addr;
 			public_wan_v4_addr = wan_v4_addr;
 			public_wan_v4_addr_set = true;
-			IPACMDBG_H("In Passthrough mode, Storing previous wan ipv4-addr:0x%x\n",public_wan_v4_addr);
+			IPACM_SYSLOG("In Passthrough mode, Storing previous wan ipv4-addr:0x%x\n",public_wan_v4_addr);
 		}
 		else
 		{
-			IPACMDBG_H("Not in passthrough mode, reset previous wan ipv4-addr:0x%x\n",public_wan_v4_addr);
+			IPACM_SYSLOG("Not in passthrough mode, reset previous wan ipv4-addr:0x%x\n",public_wan_v4_addr);
 			public_wan_v4_addr = 0;
 			public_wan_v4_addr_set = false;
 		}
@@ -922,10 +922,10 @@ int IPACM_Wan::handle_addr_evt(ipacm_event_data_addr *data)
 		wan_v4_addr = data->ipv4_addr;
 		wan_v4_addr_set = true;
 
-		IPACMDBG_H("Received wan ipv4-addr:0x%x\n",wan_v4_addr);
+		IPACM_SYSLOG("Received wan ipv4-addr:0x%x\n",wan_v4_addr);
 	}
 
-	IPACMDBG_H("number of default route rules %d\n", num_dft_rt_v6);
+	IPACM_SYSLOG("number of default route rules %d\n", num_dft_rt_v6);
 
 fail:
 	free(rt_rule);
@@ -953,7 +953,7 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 					handle_down_evt();
 					/* reset the STA-iface category to unknown */
 					IPACM_Iface::ipacmcfg->iface_table[ipa_if_num].if_cat = UNKNOWN_IF;
-					IPACMDBG_H("IPA_WAN_STA (%s):ipa_index (%d) instance close \n", IPACM_Iface::ipacmcfg->iface_table[ipa_if_num].iface_name, ipa_if_num);
+					IPACM_SYSLOG("IPA_WAN_STA (%s):ipa_index (%d) instance close \n", IPACM_Iface::ipacmcfg->iface_table[ipa_if_num].iface_name, ipa_if_num);
 					IPACM_Iface::ipacmcfg->DelNatIfaces(dev_name); // delete NAT-iface
 					delete this;
 					return;
@@ -972,7 +972,7 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 				is_xlat = true;
 				if (modem_ipv4_pdn_index != -1)
 					IPACM_Wan::ipv4_to_iface[modem_ipv4_pdn_index].is_xlat = true;
-				IPACMDBG_H("WAN-LTE (%s) link up, iface: %d is_xlat: %d \n",
+					IPACM_SYSLOG("WAN-LTE (%s) link up, iface: %d is_xlat: %d during IPA_WAN_XLAT_CONNECT_EVENT\n",
 						IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].iface_name,data->if_index, is_xlat);
 			}
 			break;
@@ -982,8 +982,8 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 			if ( (IPACM_Iface::ipacmcfg->iface_table[ipa_if_num].if_cat == ipa_if_cate) &&
 					(m_is_sta_mode ==ECM_WAN))
 			{
-				IPACMDBG_H("Received IPA_CFG_CHANGE_EVENT and category did not change(wan_mode:%d)\n", m_is_sta_mode);
-				IPACMDBG_H("Now the cradle wan mode is %d.\n", IPACM_Iface::ipacmcfg->iface_table[ipa_if_num].if_mode);
+				IPACM_SYSLOG("Received IPA_CFG_CHANGE_EVENT and category did not change(wan_mode:%d)\n", m_is_sta_mode);
+				IPACM_SYSLOG("Now the cradle wan mode is %d.\n", IPACM_Iface::ipacmcfg->iface_table[ipa_if_num].if_mode);
 				if(is_default_gateway == true)
 				{
 					if(backhaul_is_wan_bridge[ECM_WAN] == false && IPACM_Iface::ipacmcfg->iface_table[ipa_if_num].if_mode == BRIDGE)
@@ -1004,7 +1004,7 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 					/* post wan mode change event to LAN/WLAN */
 					if(IPACM_Wan::wan_up == true)
 					{
-						IPACMDBG_H("This interface is default GW.\n");
+						IPACM_SYSLOG("This interface is default GW.\n");
 						ipacm_cmd_q_data evt_data;
 						memset(&evt_data, 0, sizeof(evt_data));
 
@@ -1041,7 +1041,7 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 			else if ( (IPACM_Iface::ipacmcfg->iface_table[ipa_if_num].if_cat != ipa_if_cate) &&
 					(m_is_sta_mode ==ECM_WAN))
 			{
-				IPACMDBG_H("Received IPA_CFG_CHANGE_EVENT and category changed(wan_mode:%d)\n", m_is_sta_mode);
+				IPACM_SYSLOG("Received IPA_CFG_CHANGE_EVENT and category changed(wan_mode:%d)\n", m_is_sta_mode);
 				/* posting link-up event for cradle use-case */
 				ipacm_cmd_q_data evt_data;
 				memset(&evt_data, 0, sizeof(evt_data));
@@ -1082,7 +1082,7 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 				ipa_interface_index = IPACM_Iface::iface_ipa_index_query(if_index);
 				if (ipa_interface_index == ipa_if_num)
 				{
-					IPACMDBG_H("In passthrough mode, mapping complete: WAN-LTE (%s) link up, iface: %d\n",
+					IPACM_SYSLOG("In passthrough mode, mapping complete: WAN-LTE (%s) link up, iface: %d\n",
 							IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].iface_name,
 							ipa_if_num);
 				}
@@ -1116,7 +1116,7 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 						IPACM_Iface::ipacmcfg->del_mux_id_mapping(&info);
 #endif //defined(FEATURE_SOCKSv5) && defined (IPA_SOCKV5_EVENT_MAX)
 						handle_down_evt_ex();
-						IPACMDBG_H("IPA_WAN_Q6 (%s):ipa_index (%d) instance close \n", IPACM_Iface::ipacmcfg->iface_table[ipa_if_num].iface_name, ipa_if_num);
+						IPACM_SYSLOG("IPA_WAN_Q6 (%s):ipa_index (%d) instance close \n", IPACM_Iface::ipacmcfg->iface_table[ipa_if_num].iface_name, ipa_if_num);
 						IPACM_Iface::ipacmcfg->DelNatIfaces(dev_name); // delete NAT-iface
 						delete this;
 						return;
@@ -1126,7 +1126,7 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 					IPACMDBG_H("Received IPA_LINK_DOWN_EVENT(wan_mode:%d)\n", m_is_sta_mode);
 					/* delete previous instance */
 					handle_down_evt();
-					IPACMDBG_H("IPA_WAN_CRADLE (%s):ipa_index (%d) instance close \n", IPACM_Iface::ipacmcfg->iface_table[ipa_if_num].iface_name, ipa_if_num);
+					IPACM_SYSLOG("IPA_WAN_CRADLE (%s):ipa_index (%d) instance close \n", IPACM_Iface::ipacmcfg->iface_table[ipa_if_num].iface_name, ipa_if_num);
 					IPACM_Iface::ipacmcfg->DelNatIfaces(dev_name); // delete NAT-iface
 					delete this;
 					return;
@@ -1147,13 +1147,13 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 						data->ipv6_addr[0] == 0 && data->ipv6_addr[1] == 0 &&
 					  data->ipv6_addr[2] == 0 && data->ipv6_addr[3] == 0) )
 			{
-				IPACMDBG_H("Invalid address, ignore IPA_ADDR_ADD_EVENT event\n");
+				IPACM_SYSLOG("Invalid address, ignore IPA_ADDR_ADD_EVENT event\n");
 				return;
 			}
 
 			if (ipa_interface_index == ipa_if_num)
 			{
-				IPACMDBG_H("Get IPA_ADDR_ADD_EVENT: IF ip type %d, incoming ip type %d\n", ip_type, data->iptype);
+				IPACM_SYSLOG("Get IPA_ADDR_ADD_EVENT: IF ip type %d, incoming ip type %d\n", ip_type, data->iptype);
 				/* check v4 not setup before, v6 can have 2 iface ip */
 				if( (data->iptype == IPA_IP_v4)
 				    || ((data->iptype==IPA_IP_v6) && (num_dft_rt_v6!=MAX_DEFAULT_v6_ROUTE_RULES)))
@@ -1188,7 +1188,7 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 						wanup_data->ipv6_prefix[0] = data->ipv6_addr[0];
 						wanup_data->ipv6_prefix[1] = data->ipv6_addr[1];
 						IPACMDBG_H("Posting IPA_HANDLE_WAN_ADDR_ADD_V6 with below information:\n");
-						IPACMDBG_H("if_name:%s ipv6 prefix: 0x%08x%08x mux_id %d\n", wanup_data->ifname,
+						IPACM_SYSLOG("if_name:%s ipv6 prefix: 0x%08x%08x mux_id %d\n", wanup_data->ifname,
 							wanup_data->ipv6_prefix[0], wanup_data->ipv6_prefix[1], wanup_data->mux_id);
 						memset(&evt_data, 0, sizeof(evt_data));
 						evt_data.event = IPA_HANDLE_WAN_ADDR_ADD_V6;
@@ -1200,7 +1200,7 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 					{
 						if((IPACM_Iface::ipacmcfg->ipacm_mpdn_enable) && (associated_VID != 0))
 						{
-							IPACMDBG_H("PDN already associated with VLAN ID via V6 address (0x[%X][%X]), add V4 vlan pdn\n",
+							IPACM_SYSLOG("PDN already associated with VLAN ID via V6 address (0x[%X][%X]), add V4 vlan pdn\n",
 								ipv6_prefix[0], ipv6_prefix[1]);
 
 							/* in case of ip passthrough we receive a link local address and shouldn't add a vlan v4 pdn */
@@ -1224,10 +1224,9 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 							vlan_data->VlanID = associated_VID;
 							vlan_data->wan_ipv4_addr = data->ipv4_addr;
 							evt_data.evt_data = vlan_data;
-							IPACMDBG_H("sending IPA_ROUTE_ADD_VLAN_PDN_EVENT vlan id %d, iptype %d,\n",
+							IPACM_SYSLOG("sending IPA_ROUTE_ADD_VLAN_PDN_EVENT vlan id %d, iptype %d pdn ip 0x%X\n",
 								vlan_data->VlanID,
-								vlan_data->iptype);
-							IPACMDBG_H("pdn ip 0x%X\n", data->ipv4_addr);
+								vlan_data->iptype, data->ipv4_addr);
 
 							IPACM_EvtDispatcher::PostEvt(&evt_data);
 						}
@@ -1244,7 +1243,7 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 			ipa_interface_index = iface_ipa_index_query(data->if_index);
 			if (ipa_interface_index == ipa_if_num)
 			{
-				IPACMDBG_H("Received IPA_WAN_UPSTREAM_ROUTE_ADD_EVENT (Android) for ip-type (%d)\n", data->iptype);
+				IPACM_SYSLOG("Received IPA_WAN_UPSTREAM_ROUTE_ADD_EVENT (Android) for ip-type (%d)\n", data->iptype);
 				/* The special below condition is to handle default gateway */
 				if ((data->iptype == IPA_IP_v4) && (ip_type == IPA_IP_v4 || ip_type == IPA_IP_MAX))
 				{
@@ -1262,13 +1261,13 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 				{
 					if(ipv6_prefix[0] == 0 && ipv6_prefix[1] == 0)
 					{
-						IPACMDBG_H("IPv6 default route comes earlier than global IP, ignore.\n");
+						IPACM_SYSLOG("IPv6 default route comes earlier than global IP, ignore.\n");
 						return;
 					}
 
 					if (active_v6 == false)
 					{
-						IPACMDBG_H("\n get default v6 route (dst:00.00.00.00) upstream\n");
+						IPACM_SYSLOG("\n get default v6 route (dst:00.00.00.00) upstream\n");
 						handle_route_add_evt(data->iptype);
 					}
 #ifdef FEATURE_IPA_ANDROID
@@ -1282,7 +1281,7 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 				if ((data->iptype == IPA_IP_v4) && (active_v4 == true))
 				{
 					IPACMDBG_H("Received v4 IPA_WAN_UPSTREAM_ROUTE_ADD_EVENT for other iface (%s)\n", IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].iface_name);
-					IPACMDBG_H("need clean default v4 route (dst:0.0.0.0) for old iface (%s)\n", dev_name);
+					IPACM_SYSLOG("need clean default v4 route (dst:0.0.0.0) for old iface (%s)\n", dev_name);
 //					wan_v4_addr_gw_set = false; /* android requires CnE change too */
 					if(m_is_sta_mode == Q6_WAN)
 					{
@@ -1299,7 +1298,7 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 				else if ((data->iptype == IPA_IP_v6) && (active_v6 == true))
 				{
 				    IPACMDBG_H("Received v6 IPA_WAN_UPSTREAM_ROUTE_ADD_EVENT for other iface (%s)\n", IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].iface_name);
-					IPACMDBG_H("need clean default v6 route for old iface (%s)\n", dev_name);
+					IPACM_SYSLOG("need clean default v6 route for old iface (%s)\n", dev_name);
 					if(m_is_sta_mode == Q6_WAN)
 					{
 						del_wan_firewall_rule(IPA_IP_v6);
@@ -1322,10 +1321,10 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 			ipa_interface_index = iface_ipa_index_query(data->if_index);
 			if (ipa_interface_index == ipa_if_num)
 			{
-				IPACMDBG_H("Received IPA_WAN_UPSTREAM_ROUTE_DEL_EVENT\n");
+				IPACM_SYSLOG("Received IPA_WAN_UPSTREAM_ROUTE_DEL_EVENT\n");
 				if ((data->iptype == IPA_IP_v4) && (active_v4 == true))
 				{
-					IPACMDBG_H("get del default v4 route (dst:0.0.0.0)\n");
+					IPACM_SYSLOG("get del default v4 route (dst:0.0.0.0)\n");
 //					wan_v4_addr_gw_set = false; /* android requires CnE change too */
 #ifdef FEATURE_IPA_ANDROID
 					/* using ipa_if_index, not netdev_index */
@@ -1333,7 +1332,7 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 					/* no any ipv4 tether iface support*/
 					if(IPACM_Wan::ipa_if_num_tether_v4_total != 0)
 					{
-						IPACMDBG_H("still have tether ipv4 client on upsteam iface\n");
+						IPACM_SYSLOG("still have tether ipv4 client on upsteam iface\n");
 						return;
 					}
 #endif
@@ -1357,7 +1356,7 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 					/* no any ipv6 tether iface support*/
 					if(IPACM_Wan::ipa_if_num_tether_v6_total != 0)
 					{
-						IPACMDBG_H("still have tether ipv6 client on upsteam iface\n");
+						IPACM_SYSLOG("still have tether ipv6 client on upsteam iface\n");
 						return;
 					}
 #endif
@@ -1402,10 +1401,8 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 
 			if (ipa_interface_index == ipa_if_num)
 			{
-				IPACMDBG_H("Received IPA_ROUTE_ADD_EVENT\n");
-				IPACMDBG_H("ipv4 addr 0x%x\n", data->ipv4_addr);
-				IPACMDBG_H("ipv4 addr mask 0x%x\n", data->ipv4_addr_mask);
-
+				IPACM_SYSLOG("IPA_ROUTE_ADD_EVENT: ipv4 addr: 0x%x mask: 0x%x\n", data->ipv4_addr, data->ipv4_addr_mask);
+				
 				/* The special below condition is to handle default gateway */
 				if ((data->iptype == IPA_IP_v4) && (!data->ipv4_addr) && (!data->ipv4_addr_mask) && (active_v4 == false)
 					&& (ip_type == IPA_IP_v4 || ip_type == IPA_IP_MAX))
@@ -1429,14 +1426,14 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 				{
 					if(ipv6_prefix[0] == 0 && ipv6_prefix[1] == 0)
 					{
-						IPACMDBG_H("IPv6 default route comes earlier than global IP, ignore.\n");
+						IPACM_SYSLOG("IPv6 default route comes earlier than global IP, ignore.\n");
 						return;
 					}
 
 					IPACMDBG_H("\n get default v6 route (dst:00.00.00.00)\n");
-					IPACMDBG_H(" IPV6 dst: %08x:%08x:%08x:%08x \n",
+					IPACM_SYSLOG(" IPV6 dst: %08x:%08x:%08x:%08x \n",
 							data->ipv6_addr[0], data->ipv6_addr[1], data->ipv6_addr[2], data->ipv6_addr[3]);
-					IPACMDBG_H(" IPV6 gateway: %08x:%08x:%08x:%08x \n",
+					IPACM_SYSLOG(" IPV6 gateway: %08x:%08x:%08x:%08x \n",
 							data->ipv6_addr_gw[0], data->ipv6_addr_gw[1], data->ipv6_addr_gw[2], data->ipv6_addr_gw[3]);
 					wan_v6_addr_gw[0] = data->ipv6_addr_gw[0];
 					wan_v6_addr_gw[1] = data->ipv6_addr_gw[1];
@@ -1452,9 +1449,8 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 			{
 				if ((data->iptype == IPA_IP_v4) && (!data->ipv4_addr) && (!data->ipv4_addr_mask) && (active_v4 == true))
 				{
-					IPACMDBG_H("Received v4 IPA_ROUTE_ADD_EVENT for other iface (%s)\n", IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].iface_name);
-					IPACMDBG_H("ipv4 addr 0x%x\n", data->ipv4_addr);
-					IPACMDBG_H("ipv4 addr mask 0x%x\n", data->ipv4_addr_mask);
+					IPACM_SYSLOG("IPA_ROUTE_ADD_EVENT iface: ipv4 addr: 0x%x mask: 0x%x iface : %s \n",
+							data->ipv4_addr, data->ipv4_addr_mask, IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].iface_name);
 					IPACMDBG_H("need clean default v4 route (dst:0.0.0.0) for old iface (%s)\n", dev_name);
 					wan_v4_addr_gw_set = false;
 					if(m_is_sta_mode == Q6_WAN)
@@ -1471,7 +1467,7 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 				}
 				else if ((data->iptype == IPA_IP_v6) && (!data->ipv6_addr[0]) && (!data->ipv6_addr[1]) && (!data->ipv6_addr[2]) && (!data->ipv6_addr[3]) && (active_v6 == true))
 				{
-				    IPACMDBG_H("Received v6 IPA_ROUTE_ADD_EVENT for other iface (%s)\n", IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].iface_name);
+					IPACMDBG_H("Received v6 IPA_ROUTE_ADD_EVENT for other iface (%s)\n", IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].iface_name);
 					IPACMDBG_H("need clean default v6 route for old iface (%s)\n", dev_name);
 					if(m_is_sta_mode == Q6_WAN)
 					{
@@ -1505,10 +1501,8 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 
 			if (ipa_interface_index == ipa_if_num)
 			{
-				IPACMDBG_H("Received IPA_WLAN_GW_ADDR_ADD_EVENT\n");
-				IPACMDBG_H("ipv4 addr 0x%x\n", data->ipv4_addr_gw);
-				IPACMDBG_H("ipv6 addr 0x%x 0x%x 0x%x 0x%x\n", data->ipv6_addr_gw[0], data->ipv6_addr_gw[1],
-					data->ipv6_addr_gw[2], data->ipv6_addr_gw[3]);
+				IPACM_SYSLOG("Received IPA_WLAN_GW_ADDR_ADD_EVENT ipv4 addr:0x%x ipv6 addr:0x%x 0x%x 0x%x 0x%x\n",
+						 data->ipv4_addr_gw, data->ipv6_addr_gw[0], data->ipv6_addr_gw[1], data->ipv6_addr_gw[2], data->ipv6_addr_gw[3]);
 				if(m_is_sta_mode == WLAN_WAN && !data->is_default_backhaul_gw)
 				{
 					IPACMDBG_H("GW info for WLAN Iface\n");
@@ -1559,12 +1553,12 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 				{
 					IPACMDBG_H("Received event for v4 & v6, handled v4 part\n");
 					if (wan_v4_addr_set) {
-						IPACMDBG_H("wan instance has public v4 address 0x%X add v4 event\n", wan_v4_addr);
+						IPACM_SYSLOG("wan instance has public v4 address 0x%X add v4 event\n", wan_v4_addr);
 						/* IPA_IP_MAX doesn't come with valid ipv4 address as LAN instance doesn't know this info */
 						data->wan_ipv4_addr = wan_v4_addr;
 						check_vlan_pdn(IPA_IP_v4, data);
 					} else
-						IPACMDBG_H("wan instance doesn't have public v4 address no need to add v4 event\n");
+						IPACM_SYSLOG("wan instance doesn't have public v4 address no need to add v4 event\n");
 				}
 				if(data->wan_ipv6_prefix[0] == IPA_DUMMY_PREFIX)
 				{
@@ -1575,7 +1569,7 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 						IPACM_Iface::ipacmcfg->add_vlan_ipv6_prefix(ipv6_to_iface[modem_ipv6_pdn_index].ipv6_prefix, ipa_if_num, data->VlanID);
 						check_vlan_pdn(IPA_IP_v6, data);
 					} else if (is_xlat){
-						IPACMDBG_H("wan instance doesnt have global v6 address but is_xlat : %d\n",is_xlat);
+						IPACM_SYSLOG("wan instance doesnt have global v6 address but is_xlat : %d\n",is_xlat);
 						prefix[0] = IPA_DUMMY_PREFIX;
 						prefix[1] = IPA_DUMMY_PREFIX;
 						IPACM_Iface::ipacmcfg->add_vlan_ipv6_prefix(prefix, ipa_if_num, data->VlanID);
@@ -1597,7 +1591,7 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 				IPACMDBG_H("Received IPA_ROUTE_DEL_EVENT\n");
 				if ((data->iptype == IPA_IP_v4) && (!data->ipv4_addr) && (!data->ipv4_addr_mask) && (active_v4 == true))
 				{
-					IPACMDBG_H("get del default v4 route (dst:0.0.0.0)\n");
+					IPACM_SYSLOG("get del default v4 route (dst:0.0.0.0)\n");
 					wan_v4_addr_gw_set = false;
 					if(m_is_sta_mode == Q6_WAN)
 					{
@@ -1657,8 +1651,7 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 				{
 					if (data->iptype == IPA_IP_v4 && data->ipv4_addr == wan_v4_addr)
 					{
-						IPACMDBG_H("Ignore IPA_NEIGH_CLIENT_IP_ADDR_ADD_EVENT in STA mode\n");
-						IPACMDBG_H("for its own ipv4 address\n");
+						IPACM_SYSLOG("IPV4: Ignore IPA_NEIGH_CLIENT_IP_ADDR_ADD_EVENT in STA mode\n");
 						return;
 					}
 					else if (data->iptype == IPA_IP_v6)
@@ -1670,21 +1663,20 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 								(ipv6_addr[num_ipv6_addr][2] == data->ipv6_addr[2]) &&
 								(ipv6_addr[num_ipv6_addr][3] == data->ipv6_addr[3]))
 							{
-								IPACMDBG_H("Ignore IPA_NEIGH_CLIENT_IP_ADDR_ADD_EVENT in STA mode\n");
-								IPACMDBG_H("for its own ipv6 address\n");
+								IPACMDBG_H("IPv6: Ignore IPA_NEIGH_CLIENT_IP_ADDR_ADD_EVENT in STA mode\n");
 								return;
 							}
 						}
 					}
 				}
 
-				IPACMDBG_H("wan-iface got client \n");
+				IPACM_SYSLOG("wan-iface got client \n");
 				/* first construc WAN-client full header */
 				if(memcmp(data->mac_addr,
 						invalid_mac,
 						sizeof(data->mac_addr)) == 0)
 				{
-					IPACMDBG_H("Received invalid Client MAC %02x:%02x:%02x:%02x:%02x:%02x\n",
+					IPACM_SYSLOG("Received invalid Client MAC %02x:%02x:%02x:%02x:%02x:%02x\n",
 					 data->mac_addr[0], data->mac_addr[1], data->mac_addr[2],
 					 data->mac_addr[3], data->mac_addr[4], data->mac_addr[5]);
 					return;
@@ -1722,7 +1714,7 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 		break;
 
 	case IPA_SW_ROUTING_ENABLE:
-		IPACMDBG_H("Received IPA_SW_ROUTING_ENABLE\n");
+		IPACM_SYSLOG("Received IPA_SW_ROUTING_ENABLE\n");
 		/* handle software routing enable event */
 		if(m_is_sta_mode == Q6_WAN)
 		{
@@ -1735,7 +1727,7 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 		break;
 
 	case IPA_SW_ROUTING_DISABLE:
-		IPACMDBG_H("Received IPA_SW_ROUTING_DISABLE\n");
+		IPACM_SYSLOG("Received IPA_SW_ROUTING_DISABLE\n");
 		/* handle software routing disable event */
 		if(m_is_sta_mode == Q6_WAN)
 		{
@@ -1750,7 +1742,7 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 		break;
 
 	case IPA_FIREWALL_CHANGE_EVENT:
-		IPACMDBG_H("Received IPA_FIREWALL_CHANGE_EVENT\n");
+		IPACM_SYSLOG("Received IPA_FIREWALL_CHANGE_EVENT\n");
 
 		if(m_is_sta_mode == Q6_WAN)
 		{
@@ -1823,7 +1815,7 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 		case IPA_WLAN_SWITCH_TO_SCC:
 			if(IPACM_Wan::backhaul_is_sta_mode == true)
 			{
-				IPACMDBG_H("Received IPA_WLAN_SWITCH_TO_SCC\n");
+				IPACM_SYSLOG("Received IPA_WLAN_SWITCH_TO_SCC\n");
 				if(ip_type == IPA_IP_MAX)
 				{
 					handle_wlan_SCC_MCC_switch(true, IPA_IP_v4);
@@ -1852,7 +1844,7 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 
 			if(IPACM_Wan::backhaul_is_sta_mode == true)
 			{
-				IPACMDBG_H("Received IPA_WLAN_SWITCH_TO_MCC\n");
+				IPACM_SYSLOG("Received IPA_WLAN_SWITCH_TO_MCC\n");
 				if(ip_type == IPA_IP_MAX)
 				{
 					handle_wlan_SCC_MCC_switch(false, IPA_IP_v4);
@@ -1888,9 +1880,9 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 #endif
 #ifdef FEATURE_SOCKSv5
 	case IPA_UPDATE_SOCKSv5_v6_CONN:
-		IPACMDBG_H(" Received IPA_UPDATE_SOCKSv5_v6_CONN\n");
+		IPACM_SYSLOG(" Received IPA_UPDATE_SOCKSv5_v6_CONN\n");
 	case IPA_HANDLE_SOCKSv5_UP:
-		IPACMDBG_H(" Received IPA_HANDLE_SOCKSv5_UP\n");
+		IPACM_SYSLOG(" Received IPA_HANDLE_SOCKSv5_UP\n");
 		/* handle IPA_HANDLE_SOCKSv5_UP event */
 		if(m_is_sta_mode == Q6_WAN)
 		{
@@ -1900,7 +1892,7 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 		break;
 	case IPA_HANDLE_SOCKSv5_DOWN:
 		{
-			IPACMDBG_H("Received IPA_HANDLE_SOCKSv5_DOWN\n");
+			IPACM_SYSLOG("Received IPA_HANDLE_SOCKSv5_DOWN\n");
 			/* handle IPA_HANDLE_SOCKSv5_DOWN event */
 			if(m_is_sta_mode == Q6_WAN)
 			{
@@ -1949,9 +1941,7 @@ int IPACM_Wan::check_vlan_pdn(ipa_ip_type iptype, ipacm_event_route_vlan *data, 
 
 	memset(&evt_data, 0, sizeof(evt_data));
 
-	IPACMDBG_H("iptype: %d\n", iptype);
-
-	IPACMDBG_H("num_offloaded_pdns: %d\n", num_offloaded_pdns);
+	IPACM_SYSLOG("iptype: %d num_offloaded_pdns: %d\n",iptype, num_offloaded_pdns);
 
 	if(data == NULL)
 	{
@@ -1985,14 +1975,13 @@ int IPACM_Wan::check_vlan_pdn(ipa_ip_type iptype, ipacm_event_route_vlan *data, 
 					}
 				}
 				pending_VID_STA.push_back(data->VlanID);
-				IPACMDBG_H("Added vlan_id: %d as pending_VID_STA\n", data->VlanID);
+				IPACM_SYSLOG("Added vlan_id: %d as pending_VID_STA\n", data->VlanID);
 			}
 			return IPACM_SUCCESS;
 		}
 	}
 
-	IPACMDBG_H("Process IPA_ROUTE_ADD_VLAN_PDN_EVENT for iptype: %d\n", iptype);
-	IPACMDBG_H("data->wan_ipv6_prefix: 0x%08x%08x\n", data->wan_ipv6_prefix[0], data->wan_ipv6_prefix[1]);
+	IPACM_SYSLOG("IPA_ROUTE_ADD_VLAN_PDN_EVENT data->wan_ipv6_prefix: 0x%08x%08x\n", data->wan_ipv6_prefix[0], data->wan_ipv6_prefix[1]);
 	IPACMDBG_H("ipv6_prefix: 0x%08x%08x\n", ipv6_prefix[0], ipv6_prefix[1]);
 
 	if (iptype == IPA_IP_v6 || iptype == IPA_IP_MAX)
@@ -2000,10 +1989,10 @@ int IPACM_Wan::check_vlan_pdn(ipa_ip_type iptype, ipacm_event_route_vlan *data, 
 		if(((data->wan_ipv6_prefix[0] == ipv6_prefix[0]) &&
 			(data->wan_ipv6_prefix[1] == ipv6_prefix[1])) || v4_only_xlat)
 		{
-			IPACMDBG_H("received v6 IPA_ROUTE_ADD_VLAN_PDN_EVENT for VID %d, %d\n", data->VlanID, ipa_if_num);
+			IPACM_SYSLOG("received v6 IPA_ROUTE_ADD_VLAN_PDN_EVENT for VID %d, %d\n", data->VlanID, ipa_if_num);
 
 			IPACMDBG_H("num_offloaded_pdns: %d\n", num_offloaded_pdns);
-			IPACMDBG_H("data->wan_ipv6_prefix: 0x%08x%08x\n", data->wan_ipv6_prefix[0], data->wan_ipv6_prefix[1]);
+			IPACM_SYSLOG("data->wan_ipv6_prefix: 0x%08x%08x\n", data->wan_ipv6_prefix[0], data->wan_ipv6_prefix[1]);
 
 			if (m_is_sta_mode == WLAN_WAN)
 			{
@@ -2016,7 +2005,7 @@ int IPACM_Wan::check_vlan_pdn(ipa_ip_type iptype, ipacm_event_route_vlan *data, 
 					{
 						if (IPACM_Wan::ipv6_to_iface[wlan_ipv6_pdn_index].associated_VIDs[vlan_idx] == data->VlanID)
 						{
-							IPACMDBG_H("VlanID found in associated_VIDs in STA BH\n");
+							IPACM_SYSLOG("VlanID found in associated_VIDs in STA BH\n");
 							is_vlan_wlan_associated = true;
 							wlan_vlan_idx = vlan_idx;
 							break;
@@ -2032,7 +2021,7 @@ int IPACM_Wan::check_vlan_pdn(ipa_ip_type iptype, ipacm_event_route_vlan *data, 
 						{
 							if(ipv6_to_iface[pdn_idx].associated_VIDs[vlan_idx] == data->VlanID)
 							{
-								IPACMDBG_H("VlanID found in associated_VIDs in LTE BH\n");
+								IPACM_SYSLOG("VlanID found in associated_VIDs in LTE BH\n");
 								is_vlan_modem_associated = true;
 								modem_vlan_v6_pdn_index = pdn_idx;
 								modem_vlan_idx = vlan_idx;
@@ -2044,7 +2033,7 @@ int IPACM_Wan::check_vlan_pdn(ipa_ip_type iptype, ipacm_event_route_vlan *data, 
 
 				if(!is_vlan_wlan_associated && is_vlan_modem_associated)
 				{
-					IPACMDBG_H("Backhaul switch from LTE to STA - V6\n");
+					IPACM_SYSLOG("Backhaul switch from LTE to STA - V6\n");
 
 					vlandown_data = (ipacm_event_vlan_pdn *)malloc(sizeof(ipacm_event_vlan_pdn));
 					if(vlandown_data == NULL)
@@ -2055,7 +2044,7 @@ int IPACM_Wan::check_vlan_pdn(ipa_ip_type iptype, ipacm_event_route_vlan *data, 
 
 					if(GetMuxByVid(data->VlanID, &mux_id, IPA_IP_v6))
 					{
-						IPACMDBG_H("no v6 vlan up PDN for vlan Id %d\n", data->VlanID);
+						IPACM_SYSLOG("no v6 vlan up PDN for vlan Id %d\n", data->VlanID);
 						free(vlandown_data);
 						return IPACM_SUCCESS;
 					}
@@ -2066,8 +2055,8 @@ int IPACM_Wan::check_vlan_pdn(ipa_ip_type iptype, ipacm_event_route_vlan *data, 
 					ipv6_to_iface[modem_vlan_v6_pdn_index].VID_cnt--;
 					vlandown_data ->mux_id = mux_id;
 
-					IPACMDBG_H("Posting IPA_HANDLE_WAN_VLAN_PDN_DOWN with below information:\n");
-					IPACMDBG_H("iptype V6, VlanID %d, mux_id %d, if num %d\n", vlandown_data->VlanID, vlandown_data->mux_id, ipa_if_num);
+					IPACM_SYSLOG("Posting IPA_HANDLE_WAN_VLAN_PDN_DOWN with below information:\n");
+					IPACM_SYSLOG("iptype V6, VlanID %d, mux_id %d, if num %d\n", vlandown_data->VlanID, vlandown_data->mux_id, ipa_if_num);
 
 					evt_data.event = IPA_HANDLE_WAN_VLAN_PDN_DOWN;
 					evt_data.evt_data = (void *)vlandown_data;
@@ -2096,8 +2085,8 @@ int IPACM_Wan::check_vlan_pdn(ipa_ip_type iptype, ipacm_event_route_vlan *data, 
 
 					associated_VID = data->VlanID;
 
-					IPACMDBG_H("Posting IPA_HANDLE_WAN_VLAN_PDN_UP (v6) with below info:\n");
-					IPACMDBG_H("iptype IPA_IP_v6, VlanID %d, mux_id %d, if num %d\n",
+					IPACM_SYSLOG("Posting IPA_HANDLE_WAN_VLAN_PDN_UP (v6) with below info:\n");
+					IPACM_SYSLOG("iptype IPA_IP_v6, VlanID %d, mux_id %d, if num %d\n",
 							wanup_vlan_data->VlanID, wanup_vlan_data->mux_id, ipa_if_num);
 					evt_data.event = IPA_HANDLE_WAN_VLAN_PDN_UP;
 					evt_data.evt_data = (void *)wanup_vlan_data;
@@ -2105,7 +2094,7 @@ int IPACM_Wan::check_vlan_pdn(ipa_ip_type iptype, ipacm_event_route_vlan *data, 
 				}
 				else
 				{
-					IPACMDBG_H("Not a BH switch\n");
+					IPACM_SYSLOG("Not a BH switch\n");
 
 					/* vlan already associate with STA, abort re-add */
 					if(is_vlan_wlan_associated)
@@ -2126,11 +2115,11 @@ int IPACM_Wan::check_vlan_pdn(ipa_ip_type iptype, ipacm_event_route_vlan *data, 
 					{
 						if(num_offloaded_pdns >= IPA_MAX_NUM_HW_PDNS)
 						{
-							IPACMERR("number of offloaded PDNs %d can't add more than %d, ignoring\n", num_offloaded_pdns, IPA_MAX_NUM_HW_PDNS);
+							IPACM_SYSLOG("number of offloaded PDNs %d can't add more than %d, ignoring\n", num_offloaded_pdns, IPA_MAX_NUM_HW_PDNS);
 							return IPACM_FAILURE;
 						}
 						num_offloaded_pdns++;
-						IPACMDBG_H("this is a new PDN, num of offloaded PDN increased to %d\n", num_offloaded_pdns);
+						IPACM_SYSLOG("this is a new PDN, num of offloaded PDN increased to %d\n", num_offloaded_pdns);
 					}
 				}
 			}
@@ -2171,7 +2160,7 @@ int IPACM_Wan::check_vlan_pdn(ipa_ip_type iptype, ipacm_event_route_vlan *data, 
 
 				if(is_vlan_wlan_associated && !is_vlan_modem_associated)
 				{
-					IPACMDBG_H("Backhaul switch from STA to LTE - V6\n");
+					IPACM_SYSLOG("Backhaul switch from STA to LTE - V6\n");
 
 					vlandown_data = (ipacm_event_vlan_pdn *)malloc(sizeof(ipacm_event_vlan_pdn));
 					if(vlandown_data == NULL)
@@ -2187,8 +2176,8 @@ int IPACM_Wan::check_vlan_pdn(ipa_ip_type iptype, ipacm_event_route_vlan *data, 
 					ipv6_to_iface[wlan_vlan_v6_pdn_index].VID_cnt--;
 					vlandown_data ->mux_id = 0;
 
-					IPACMDBG_H("Posting IPA_HANDLE_WAN_VLAN_PDN_DOWN with below information:\n");
-					IPACMDBG_H("iptype V6, VlanID %d, mux_id %d, if num %d\n", vlandown_data->VlanID, vlandown_data->mux_id, ipa_if_num);
+					IPACM_SYSLOG("Posting IPA_HANDLE_WAN_VLAN_PDN_DOWN with below information:\n");
+					IPACM_SYSLOG("iptype V6, VlanID %d, mux_id %d, if num %d\n", vlandown_data->VlanID, vlandown_data->mux_id, ipa_if_num);
 
 					evt_data.event = IPA_HANDLE_WAN_VLAN_PDN_DOWN;
 					evt_data.evt_data = (void *)vlandown_data;
@@ -2224,8 +2213,8 @@ int IPACM_Wan::check_vlan_pdn(ipa_ip_type iptype, ipacm_event_route_vlan *data, 
 					wanup_vlan_data->mux_id = mux_id;
 					associated_VID = data->VlanID;
 
-					IPACMDBG_H("Posting IPA_HANDLE_WAN_VLAN_PDN_UP (v6) with below info:\n");
-					IPACMDBG_H("iptype IPA_IP_v6, VlanID %d, mux_id %d, if num %d\n",
+					IPACM_SYSLOG("Posting IPA_HANDLE_WAN_VLAN_PDN_UP (v6) with below info:\n");
+					IPACM_SYSLOG("iptype IPA_IP_v6, VlanID %d, mux_id %d, if num %d\n",
 							wanup_vlan_data->VlanID, wanup_vlan_data->mux_id, ipa_if_num);
 					evt_data.event = IPA_HANDLE_WAN_VLAN_PDN_UP;
 					evt_data.evt_data = (void *)wanup_vlan_data;
@@ -2263,7 +2252,7 @@ int IPACM_Wan::check_vlan_pdn(ipa_ip_type iptype, ipacm_event_route_vlan *data, 
 									{
 										if (pdn_idx != modem_ipv4_pdn_index)
 										{
-											IPACMERR("VID (%d) already mapped to v4 PDN %d, can't map to v4 PDN %d\n",data->VlanID, pdn_idx, modem_ipv4_pdn_index);
+											IPACM_SYSLOG("VID (%d) already mapped to v4 PDN %d, can't map to v4 PDN %d\n",data->VlanID, pdn_idx, modem_ipv4_pdn_index);
 											return IPACM_FAILURE;
 										}
 									}
@@ -2276,11 +2265,11 @@ int IPACM_Wan::check_vlan_pdn(ipa_ip_type iptype, ipacm_event_route_vlan *data, 
 					{
 						if(num_offloaded_pdns >= IPA_MAX_NUM_HW_PDNS)
 						{
-							IPACMERR("number of offloaded PDNs %d can't add more than %d, ignoring\n", num_offloaded_pdns, IPA_MAX_NUM_HW_PDNS);
+							IPACM_SYSLOG("number of offloaded PDNs %d can't add more than %d, ignoring\n", num_offloaded_pdns, IPA_MAX_NUM_HW_PDNS);
 							return IPACM_FAILURE;
 						}
 						num_offloaded_pdns++;
-						IPACMDBG_H("this is a new PDN, num of offloaded PDN increased to %d\n", num_offloaded_pdns);
+						IPACM_SYSLOG("this is a new PDN, num of offloaded PDN increased to %d\n", num_offloaded_pdns);
 					}
 				}
 			}
@@ -2298,7 +2287,7 @@ int IPACM_Wan::check_vlan_pdn(ipa_ip_type iptype, ipacm_event_route_vlan *data, 
 		if(data->wan_ipv4_addr == wan_v4_addr)
 		{
 			new_pdn = true;
-			IPACMDBG_H("received v4 IPA_ROUTE_ADD_VLAN_PDN_EVENT for VID %d, %d\n", data->VlanID, ipa_if_num);
+			IPACM_SYSLOG("received v4 IPA_ROUTE_ADD_VLAN_PDN_EVENT for VID %d, %d\n", data->VlanID, ipa_if_num);
 
 			IPACMDBG_H("num_offloaded_pdns: %d\n", num_offloaded_pdns);
 
@@ -2342,7 +2331,7 @@ int IPACM_Wan::check_vlan_pdn(ipa_ip_type iptype, ipacm_event_route_vlan *data, 
 
 				if(!is_vlan_wlan_associated && is_vlan_modem_associated)
 				{
-					IPACMDBG_H("Backhaul switch LTE to STA - V4\n");
+					IPACM_SYSLOG("Backhaul switch LTE to STA - V4\n");
 
 					vlandown_data = (ipacm_event_vlan_pdn *)malloc(sizeof(ipacm_event_vlan_pdn));
 					if(vlandown_data == NULL)
@@ -2366,8 +2355,8 @@ int IPACM_Wan::check_vlan_pdn(ipa_ip_type iptype, ipacm_event_route_vlan *data, 
 					ipv4_to_iface[modem_vlan_v4_pdn_index].VID_cnt--;
 					vlandown_data ->mux_id = mux_id;
 
-					IPACMDBG_H("Posting IPA_HANDLE_WAN_VLAN_PDN_DOWN with below information:\n");
-					IPACMDBG_H("iptype V4, VlanID %d, mux_id %d, if num %d\n", vlandown_data->VlanID, vlandown_data->mux_id, ipa_if_num);
+					IPACM_SYSLOG("Posting IPA_HANDLE_WAN_VLAN_PDN_DOWN with below information:\n");
+					IPACM_SYSLOG("iptype V4, VlanID %d, mux_id %d, if num %d\n", vlandown_data->VlanID, vlandown_data->mux_id, ipa_if_num);
 
 					evt_data.event = IPA_HANDLE_WAN_VLAN_PDN_DOWN;
 					evt_data.evt_data = (void *)vlandown_data;
@@ -2395,8 +2384,8 @@ int IPACM_Wan::check_vlan_pdn(ipa_ip_type iptype, ipacm_event_route_vlan *data, 
 					wanup_vlan_data->mux_id = 0;
 					associated_VID = data->VlanID;
 
-					IPACMDBG_H("Posting IPA_HANDLE_WAN_VLAN_PDN_UP (v4) with below info:\n");
-					IPACMDBG_H("iptype IPA_IP_v4, VlanID %d, mux_id %d, if num %d\n",
+					IPACM_SYSLOG("Posting IPA_HANDLE_WAN_VLAN_PDN_UP (v4) with below info:\n");
+					IPACM_SYSLOG("iptype IPA_IP_v4, VlanID %d, mux_id %d, if num %d\n",
 							wanup_vlan_data->VlanID, wanup_vlan_data->mux_id, ipa_if_num);
 					evt_data.event = IPA_HANDLE_WAN_VLAN_PDN_UP;
 					evt_data.evt_data = (void *)wanup_vlan_data;
@@ -2426,11 +2415,11 @@ int IPACM_Wan::check_vlan_pdn(ipa_ip_type iptype, ipacm_event_route_vlan *data, 
 					{
 						if(num_offloaded_pdns >= IPA_MAX_NUM_HW_PDNS)
 						{
-							IPACMERR("number of offloaded PDNs %d can't add more than %d, ignoring\n", num_offloaded_pdns, IPA_MAX_NUM_HW_PDNS);
+							IPACM_SYSLOG("number of offloaded PDNs %d can't add more than %d, ignoring\n", num_offloaded_pdns, IPA_MAX_NUM_HW_PDNS);
 							return IPACM_FAILURE;
 						}
 						num_offloaded_pdns++;
-						IPACMDBG_H("this is a new PDN, num of offloaded PDN increased to %d\n", num_offloaded_pdns);
+						IPACM_SYSLOG("this is a new PDN, num of offloaded PDN increased to %d\n", num_offloaded_pdns);
 					}
 				}
 			}
@@ -2472,7 +2461,7 @@ int IPACM_Wan::check_vlan_pdn(ipa_ip_type iptype, ipacm_event_route_vlan *data, 
 
 				if(is_vlan_wlan_associated && !is_vlan_modem_associated)
 				{
-					IPACMDBG_H("Backhaul switch from STA to LTE - V4\n");
+					IPACM_SYSLOG("Backhaul switch from STA to LTE - V4\n");
 
 					vlandown_data = (ipacm_event_vlan_pdn *)malloc(sizeof(ipacm_event_vlan_pdn));
 					if(vlandown_data == NULL)
@@ -2489,8 +2478,8 @@ int IPACM_Wan::check_vlan_pdn(ipa_ip_type iptype, ipacm_event_route_vlan *data, 
 					ipv4_to_iface[wlan_vlan_v4_pdn_index].VID_cnt--;
 					vlandown_data ->mux_id = 0;
 
-					IPACMDBG_H("Posting IPA_HANDLE_WAN_VLAN_PDN_DOWN with below information:\n");
-					IPACMDBG_H("iptype V4, VlanID %d, mux_id %d, if num %d\n", vlandown_data->VlanID, vlandown_data->mux_id, ipa_if_num);
+					IPACM_SYSLOG("Posting IPA_HANDLE_WAN_VLAN_PDN_DOWN with below information:\n");
+					IPACM_SYSLOG("iptype V4, VlanID %d, mux_id %d, if num %d\n", vlandown_data->VlanID, vlandown_data->mux_id, ipa_if_num);
 
 					evt_data.event = IPA_HANDLE_WAN_VLAN_PDN_DOWN;
 					evt_data.evt_data = (void *)vlandown_data;
@@ -2523,8 +2512,8 @@ int IPACM_Wan::check_vlan_pdn(ipa_ip_type iptype, ipacm_event_route_vlan *data, 
 					wanup_vlan_data->mux_id = mux_id;
 					associated_VID = data->VlanID;
 
-					IPACMDBG_H("Posting IPA_HANDLE_WAN_VLAN_PDN_UP (v6) with below info:\n");
-					IPACMDBG_H("iptype IPA_IP_v4, VlanID %d, mux_id %d, if num %d\n",
+					IPACM_SYSLOG("Posting IPA_HANDLE_WAN_VLAN_PDN_UP (v6) with below info:\n");
+					IPACM_SYSLOG("iptype IPA_IP_v4, VlanID %d, mux_id %d, if num %d\n",
 							wanup_vlan_data->VlanID, wanup_vlan_data->mux_id, ipa_if_num);
 					evt_data.event = IPA_HANDLE_WAN_VLAN_PDN_UP;
 					evt_data.evt_data = (void *)wanup_vlan_data;
@@ -2562,7 +2551,7 @@ int IPACM_Wan::check_vlan_pdn(ipa_ip_type iptype, ipacm_event_route_vlan *data, 
 									{
 										if (pdn_idx != modem_ipv6_pdn_index)
 										{
-											IPACMERR("VID (%d) already mapped to v6 PDN %d, can't map to v6 PDN %d\n",data->VlanID, pdn_idx, modem_ipv6_pdn_index);
+											IPACM_SYSLOG("VID (%d) already mapped to v6 PDN %d, can't map to v6 PDN %d\n",data->VlanID, pdn_idx, modem_ipv6_pdn_index);
 											return IPACM_FAILURE;
 										}
 									}
@@ -2575,11 +2564,11 @@ int IPACM_Wan::check_vlan_pdn(ipa_ip_type iptype, ipacm_event_route_vlan *data, 
 					{
 						if(num_offloaded_pdns >= IPA_MAX_NUM_HW_PDNS)
 						{
-							IPACMERR("number of offloaded PDNs %d can't add more than %d, ignoring\n", num_offloaded_pdns, IPA_MAX_NUM_HW_PDNS);
+							IPACM_SYSLOG("number of offloaded PDNs %d can't add more than %d, ignoring\n", num_offloaded_pdns, IPA_MAX_NUM_HW_PDNS);
 							return IPACM_FAILURE;
 						}
 						num_offloaded_pdns++;
-						IPACMDBG_H("this is a new PDN, num of offloaded PDN increased to %d\n", num_offloaded_pdns);
+						IPACM_SYSLOG("this is a new PDN, num of offloaded PDN increased to %d\n", num_offloaded_pdns);
 					}
 				}
 			}
@@ -2610,7 +2599,7 @@ int IPACM_Wan::handle_route_add_vlan_pdn_evt(ipa_ip_type iptype, uint16_t vlan_i
 	/* assume all tx-property uses the same header name for v4 or v6*/
 	if(tx_prop == NULL)
 	{
-		IPACMDBG_H("No tx properties, ignore new vlan PDN event\n");
+		IPACM_SYSLOG("No tx properties, ignore new vlan PDN event\n");
 		return IPACM_FAILURE;
 	}
 
@@ -2688,7 +2677,7 @@ int IPACM_Wan::handle_route_add_vlan_pdn_evt(ipa_ip_type iptype, uint16_t vlan_i
 					return IPACM_FAILURE;
 				}
 				wan_route_rule_v6_hdl[tx_index] = rt_rule_entry->rt_rule_hdl;
-				IPACMDBG_H("Set ipv6 wan-route rule hdl for v6_lan_table:0x%x,tx:%d,ip-type: %d \n",
+				IPACM_SYSLOG("Set ipv6 wan-route rule hdl for v6_lan_table:0x%x,tx:%d,ip-type: %d \n",
 					wan_route_rule_v6_hdl[tx_index],
 					tx_index,
 					iptype);
@@ -2697,14 +2686,14 @@ int IPACM_Wan::handle_route_add_vlan_pdn_evt(ipa_ip_type iptype, uint16_t vlan_i
 			del_dft_firewall_rules(IPA_IP_v6);
 			config_dft_firewall_rules(IPA_IP_v6);
 			FullConfig = false;
-			IPACMDBG_H("new VLAN PDN prefix is 0x%08x%08x.\n", ipv6_prefix[0], ipv6_prefix[1]);
+			IPACM_SYSLOG("new VLAN PDN prefix is 0x%08x%08x.\n", ipv6_prefix[0], ipv6_prefix[1]);
 			ipv6_to_iface[wlan_ipv6_pdn_index].wan_up_vlan_v6 = true;
 			if (ipv6_to_iface[wlan_ipv6_pdn_index].VID_cnt < IPA_MAX_NUM_SW_PDNS)
 			{
 				ipv6_to_iface[wlan_ipv6_pdn_index].associated_VIDs[ipv6_to_iface[wlan_ipv6_pdn_index].VID_cnt] = vlan_id;
 				ipv6_to_iface[wlan_ipv6_pdn_index].VID_cnt++;
 				IPACM_Wan::wlan_v6_vlan_index = wlan_ipv6_pdn_index;
-				IPACMDBG_H("IPACM_Wan::wlan_v6_vlan_index: %d\n", IPACM_Wan::wlan_v6_vlan_index);
+				IPACM_SYSLOG("IPACM_Wan::wlan_v6_vlan_index: %d\n", IPACM_Wan::wlan_v6_vlan_index);
 			}
 			ipacm_event_vlan_pdn *wanup_vlan_data;
 
@@ -2722,8 +2711,7 @@ int IPACM_Wan::handle_route_add_vlan_pdn_evt(ipa_ip_type iptype, uint16_t vlan_i
 			wanup_vlan_data->mux_id = 0;
 			associated_VID = vlan_id;
 
-			IPACMDBG_H("Posting IPA_HANDLE_WAN_VLAN_PDN_UP (v6) with below info:\n");
-			IPACMDBG_H("iptype IPA_IP_v6, VlanID %d, mux_id %d, if num %d\n",
+			IPACM_SYSLOG("Posting IPA_HANDLE_WAN_VLAN_PDN_UP iptype IPA_IP_v6, VlanID %d, mux_id %d, if num %d\n",
 					vlan_id, wanup_vlan_data->mux_id, ipa_if_num);
 			evt_data.event = IPA_HANDLE_WAN_VLAN_PDN_UP;
 			evt_data.evt_data = (void *)wanup_vlan_data;
@@ -2737,7 +2725,7 @@ int IPACM_Wan::handle_route_add_vlan_pdn_evt(ipa_ip_type iptype, uint16_t vlan_i
 			}
 			else
 			{
-				IPACMDBG_H("v6 PDN is up, create default rt rule\n");
+				IPACM_SYSLOG("v6 PDN is up, create default rt rule\n");
 				FullConfig = true;
 
 				/* add a catch-all rule in wan dl routing table */
@@ -2752,7 +2740,7 @@ int IPACM_Wan::handle_route_add_vlan_pdn_evt(ipa_ip_type iptype, uint16_t vlan_i
 				hdr.name[IPA_RESOURCE_NAME_MAX - 1] = '\0';
 				if(m_header.GetHeaderHandle(&hdr) == false)
 				{
-					IPACMERR("Failed to get QMAP header.\n");
+					IPACM_SYSLOG("Failed to get QMAP header.\n");
 					return IPACM_FAILURE;
 				}
 				rt_rule_entry->rule.hdr_hdl = hdr.hdl;
@@ -2777,7 +2765,7 @@ int IPACM_Wan::handle_route_add_vlan_pdn_evt(ipa_ip_type iptype, uint16_t vlan_i
 					return IPACM_FAILURE;
 				}
 				wan_route_rule_v6_hdl_a5 = rt_rule_entry->rt_rule_hdl;
-				IPACMDBG_H("Set ipv6 wan-route rule hdl for v6_wan_table:0x%x,tx:%d,ip-type: %d \n",
+				IPACM_SYSLOG("Set ipv6 wan-route rule hdl for v6_wan_table:0x%x,tx:%d,ip-type: %d \n",
 						wan_route_rule_v6_hdl_a5, 0, iptype);
 
 				free(rt_rule);
@@ -2788,7 +2776,7 @@ int IPACM_Wan::handle_route_add_vlan_pdn_evt(ipa_ip_type iptype, uint16_t vlan_i
 				modem_ipv6_pdn_index = getFreePDNIndex_V6();
 				if (modem_ipv6_pdn_index == -1)
 				{
-					IPACMERR("No Free index available.!\n");
+					IPACM_SYSLOG("No Free index available.!\n");
 					return IPACM_FAILURE;
 				}
 
@@ -2806,7 +2794,7 @@ int IPACM_Wan::handle_route_add_vlan_pdn_evt(ipa_ip_type iptype, uint16_t vlan_i
 			config_wan_firewall_rule(IPA_IP_v6);
 			install_wan_filtering_rule(false);
 
-			IPACMDBG_H("new VLAN PDN prefix is 0x%08x%08x.\n", ipv6_prefix[0], ipv6_prefix[1]);
+			IPACM_SYSLOG("new VLAN PDN prefix is 0x%08x%08x.\n", ipv6_prefix[0], ipv6_prefix[1]);
 
 			ipacm_event_vlan_pdn *wanup_vlan_data;
 			wanup_vlan_data = (ipacm_event_vlan_pdn *)malloc(sizeof(ipacm_event_vlan_pdn));
@@ -2823,14 +2811,13 @@ int IPACM_Wan::handle_route_add_vlan_pdn_evt(ipa_ip_type iptype, uint16_t vlan_i
 				wanup_vlan_data->mux_id = ext_prop->ext[0].mux_id;
 			associated_VID = vlan_id;
 
-			IPACMDBG_H("Posting IPA_HANDLE_WAN_VLAN_PDN_UP (v6) with below information:\n");
 			if(ext_prop == NULL)
 			{
-				IPACMDBG_H("iptype IPA_IP_v6, VlanID %d, if num %d\n", vlan_id, ipa_if_num);
+				IPACM_SYSLOG("Posting IPA_HANDLE_WAN_VLAN_PDN_UP iptype IPA_IP_v6, VlanID %d, if num %d\n", vlan_id, ipa_if_num);
 			}
 			else
 			{
-				IPACMDBG_H("iptype IPA_IP_v6, VlanID %d, mux_id %d, if num %d\n", vlan_id, ext_prop->ext[0].mux_id, ipa_if_num);
+				IPACM_SYSLOG("Posting IPA_HANDLE_WAN_VLAN_PDN_UP iptype IPA_IP_v6, VlanID %d, mux_id %d, if num %d\n", vlan_id, ext_prop->ext[0].mux_id, ipa_if_num);
 			}
 
 			evt_data.event = IPA_HANDLE_WAN_VLAN_PDN_UP;
@@ -2842,7 +2829,7 @@ int IPACM_Wan::handle_route_add_vlan_pdn_evt(ipa_ip_type iptype, uint16_t vlan_i
 	{
 		if(m_is_sta_mode == WLAN_WAN)
 		{
-			IPACMDBG_H(" WAN instance is in STA mode header_set_v4 %d \n", header_set_v4);
+			IPACM_SYSLOG(" WAN instance is in STA mode header_set_v4 %d \n", header_set_v4);
 			//Construct STA header 1st
 
 			if((iptype==IPA_IP_v4) && (header_set_v4 != true))
@@ -2891,7 +2878,7 @@ int IPACM_Wan::handle_route_add_vlan_pdn_evt(ipa_ip_type iptype, uint16_t vlan_i
 					return IPACM_FAILURE;
 				}
 				wan_route_rule_v4_hdl[tx_index] = rt_rule_entry->rt_rule_hdl;
-				IPACMDBG_H("Got ipv4 wan-route rule hdl:0x%x,tx:%d,ip-type: %d \n",
+				IPACM_SYSLOG("Got ipv4 wan-route rule hdl:0x%x,tx:%d,ip-type: %d \n",
 					wan_route_rule_v4_hdl[tx_index],
 					tx_index,
 					iptype);
@@ -2906,7 +2893,7 @@ int IPACM_Wan::handle_route_add_vlan_pdn_evt(ipa_ip_type iptype, uint16_t vlan_i
 				ipv4_to_iface[wlan_ipv4_pdn_index].associated_VIDs[ipv4_to_iface[wlan_ipv4_pdn_index].VID_cnt] = vlan_id;
 				ipv4_to_iface[wlan_ipv4_pdn_index].VID_cnt++;
 				IPACM_Wan::wlan_v4_vlan_index = wlan_ipv4_pdn_index;
-				IPACMDBG_H("IPACM_Wan::wlan_v4_vlan_index: %d\n", IPACM_Wan::wlan_v4_vlan_index);
+				IPACM_SYSLOG("IPACM_Wan::wlan_v4_vlan_index: %d\n", IPACM_Wan::wlan_v4_vlan_index);
 			}
 			ipacm_event_vlan_pdn *wanup_vlan_data;
 
@@ -2922,8 +2909,7 @@ int IPACM_Wan::handle_route_add_vlan_pdn_evt(ipa_ip_type iptype, uint16_t vlan_i
 			wanup_vlan_data->iptype = IPA_IP_v4;
 			wanup_vlan_data->VlanID = vlan_id;
 			wanup_vlan_data->ipv4_addr = wan_v4_addr;
-			IPACMDBG_H("Posting IPA_HANDLE_WAN_VLAN_PDN_UP with below information:\n");
-			IPACMDBG_H("iptype IPA_IP_v4, VlanID %d, mux_id %d, if num %d\n", vlan_id, wanup_vlan_data->mux_id, ipa_if_num);
+			IPACM_SYSLOG("Posting IPA_HANDLE_WAN_VLAN_PDN_UP iptype IPA_IP_v4, VlanID %d, mux_id %d, if num %d\n", vlan_id, wanup_vlan_data->mux_id, ipa_if_num);
 			evt_data.event = IPA_HANDLE_WAN_VLAN_PDN_UP;
 			evt_data.evt_data = (void *)wanup_vlan_data;
 			IPACM_EvtDispatcher::PostEvt(&evt_data);
@@ -2969,14 +2955,13 @@ int IPACM_Wan::handle_route_add_vlan_pdn_evt(ipa_ip_type iptype, uint16_t vlan_i
 				IPACMDBG_H("xlat config enabled\n");
 			}
 
-			IPACMDBG_H("Posting IPA_HANDLE_WAN_VLAN_PDN_UP with below information:\n");
 			if(ext_prop == NULL)
 			{
-				IPACMDBG_H("iptype IPA_IP_v4, VlanID %d, if num %d\n", vlan_id, ipa_if_num);
+				IPACM_SYSLOG("Posting IPA_HANDLE_WAN_VLAN_PDN_UP iptype IPA_IP_v4, VlanID %d, if num %d\n", vlan_id, ipa_if_num);
 			}
 			else
 			{
-				IPACMDBG_H("iptype IPA_IP_v4, VlanID %d, mux_id %d, if num %d\n", vlan_id, ext_prop->ext[0].mux_id, ipa_if_num);
+				IPACM_SYSLOG("Posting IPA_HANDLE_WAN_VLAN_PDN_UP iptype IPA_IP_v4, VlanID %d, mux_id %d, if num %d\n", vlan_id, ext_prop->ext[0].mux_id, ipa_if_num);
 			}
 			evt_data.event = IPA_HANDLE_WAN_VLAN_PDN_UP;
 			evt_data.evt_data = (void *)wanup_vlan_data;
@@ -3011,7 +2996,7 @@ int IPACM_Wan::handle_route_add_vlan_pdn_evt(ipa_ip_type iptype, uint16_t vlan_i
 					IPACMERR("Failed to open %s.\n", WWAN_QMI_IOCTL_DEVICE_NAME);
 					return false;
 				}
-				IPACMDBG_H("send WAN_IOC_NOTIFY_WAN_STATE up to IPA_PM\n");
+				IPACM_SYSLOG("send WAN_IOC_NOTIFY_WAN_STATE up to IPA_PM\n");
 				wan_state.up = true;
 				if(ioctl(fd_wwan_ioctl, WAN_IOC_NOTIFY_WAN_STATE, &wan_state))
 				{
@@ -3100,7 +3085,7 @@ int IPACM_Wan::handle_route_add_evt(ipa_ip_type iptype)
 	struct wan_ioctl_notify_wan_state wan_state;
 	int fd_wwan_ioctl;
 	memset(&wan_state, 0, sizeof(wan_state));
-	IPACMDBG_H("ip-type:%d\n", iptype);
+	IPACM_SYSLOG("ip-type:%d\n", iptype);
 
 	/* copy header from tx-property, see if partial or not */
 	/* assume all tx-property uses the same header name for v4 or v6*/
@@ -3112,7 +3097,7 @@ int IPACM_Wan::handle_route_add_evt(ipa_ip_type iptype)
 	}
 
 	is_default_gateway = true;
-	IPACMDBG_H("Default route is added to iface %s.\n", dev_name);
+	IPACM_SYSLOG("Default route is added to iface %s.\n", dev_name);
 
 	if(IPACM_Iface::ipacmcfg->iface_table[ipa_if_num].if_mode == BRIDGE)
 	{
@@ -3143,7 +3128,7 @@ int IPACM_Wan::handle_route_add_evt(ipa_ip_type iptype)
 	else
 	{
 		IPACM_Wan::backhaul_is_sta_mode	= false;
-		IPACMDBG_H("reset backhaul to LTE \n");
+		IPACM_SYSLOG("reset backhaul to LTE \n");
 
 		if (iface_query != NULL && iface_query->num_ext_props > 0)
 		{
@@ -3434,8 +3419,7 @@ int IPACM_Wan::handle_route_add_evt(ipa_ip_type iptype)
 		{
 			wanup_data->is_sta = false;
 		}
-		IPACMDBG_H("Posting IPA_HANDLE_WAN_UP with below information:\n");
-		IPACMDBG_H("if_name:%s, ipv4_address:0x%x, is sta mode:%d\n",
+		IPACM_SYSLOG("Posting IPA_HANDLE_WAN_UP  if_name:%s, ipv4_address:0x%x, is sta mode:%d\n",
 				wanup_data->ifname, wanup_data->ipv4_addr, wanup_data->is_sta);
 		memset(&evt_data, 0, sizeof(evt_data));
 
@@ -3466,7 +3450,7 @@ int IPACM_Wan::handle_route_add_evt(ipa_ip_type iptype)
 	else
 	{
 		memcpy(backhaul_ipv6_prefix, ipv6_prefix, sizeof(backhaul_ipv6_prefix));
-		IPACMDBG_H("Setup backhaul ipv6 prefix to be 0x%08x%08x.\n", backhaul_ipv6_prefix[0], backhaul_ipv6_prefix[1]);
+		IPACM_SYSLOG("Setup backhaul ipv6 prefix to be 0x%08x%08x.\n", backhaul_ipv6_prefix[0], backhaul_ipv6_prefix[1]);
 
 		IPACM_Wan::wan_up_v6 = true;
 		active_v6 = true;
@@ -3498,10 +3482,9 @@ int IPACM_Wan::handle_route_add_evt(ipa_ip_type iptype)
 #ifdef FEATURE_VLAN_MPDN
 		IPACM_Iface::ipacmcfg->add_vlan_ipv6_prefix(wanup_data->ipv6_prefix, ipa_if_num, associated_VID);
 #endif
-		IPACMDBG_H("Posting IPA_HANDLE_WAN_UP_V6 with below information:\n");
-		IPACMDBG_H("if_name:%s, is sta mode: %d\n", wanup_data->ifname, wanup_data->is_sta);
-		IPACMDBG_H("ipv6 prefix: 0x%08x%08x.\n", ipv6_prefix[0], ipv6_prefix[1]);
-		IPACMDBG_H("ipv6 addr: 0x%08x%08x%08x%08x\n", m_ipv6_addr[0], m_ipv6_addr[1], m_ipv6_addr[2], m_ipv6_addr[3]);
+		IPACM_SYSLOG(" IPA_HANDLE_WAN_UP_V6: if_name:%s, is sta mode: %d\n", wanup_data->ifname, wanup_data->is_sta);
+		IPACM_SYSLOG("ipv6 prefix: 0x%08x%08x.\n", ipv6_prefix[0], ipv6_prefix[1]);
+		IPACM_SYSLOG("ipv6 addr: 0x%08x%08x%08x%08x\n", m_ipv6_addr[0], m_ipv6_addr[1], m_ipv6_addr[2], m_ipv6_addr[3]);
 		memset(&evt_data, 0, sizeof(evt_data));
 		evt_data.event = IPA_HANDLE_WAN_UP_V6;
 		evt_data.evt_data = (void *)wanup_data;
@@ -3576,8 +3559,7 @@ int IPACM_Wan::post_wan_up_tether_evt(ipa_ip_type iptype, int ipa_if_num_tether)
 	{
 		wanup_data->is_sta = false;
 	}
-	IPACMDBG_H("Posting IPA_HANDLE_WAN_UP_TETHER with below information:\n");
-	IPACMDBG_H("tether_if_name:%s, is sta mode:%d\n",
+	IPACM_SYSLOG("Posting IPA_HANDLE_WAN_UP_TETHER tether_if_name:%s, is sta mode:%d\n",
 			IPACM_Iface::ipacmcfg->iface_table[ipa_if_num_tether].iface_name, wanup_data->is_sta);
 	memset(&evt_data, 0, sizeof(evt_data));
 
@@ -3634,8 +3616,7 @@ int IPACM_Wan::post_wan_down_tether_evt(ipa_ip_type iptype, int ipa_if_num_tethe
 	{
 		wandown_data->is_sta = false;
 	}
-	IPACMDBG_H("Posting IPA_HANDLE_WAN_DOWN_TETHER with below information:\n");
-	IPACMDBG_H("tether_if_name:%s, is sta mode:%d\n",
+	IPACM_SYSLOG("Posting IPA_HANDLE_WAN_DOWN_TETHER tether_if_name:%s, is sta mode:%d\n",
 			IPACM_Iface::ipacmcfg->iface_table[ipa_if_num_tether].iface_name, wandown_data->is_sta);
 	memset(&evt_data, 0, sizeof(evt_data));
 
@@ -3663,7 +3644,7 @@ int IPACM_Wan::post_wan_down_tether_evt(ipa_ip_type iptype, int ipa_if_num_tethe
 			IPACM_Wan::ipa_if_num_tether_v4[j-1] = IPACM_Wan::ipa_if_num_tether_v4[j];
 		}
 		IPACM_Wan::ipa_if_num_tether_v4_total--;
-		IPACMDBG_H("Now the total num of ipa_if_num_tether_v4_total is %d on wan-iface(%s)\n",
+		IPACM_SYSLOG("Now the total num of ipa_if_num_tether_v4_total is %d on wan-iface(%s)\n",
 			IPACM_Wan::ipa_if_num_tether_v4_total,
 			IPACM_Iface::ipacmcfg->iface_table[ipa_if_num].iface_name);
 	}
@@ -3691,7 +3672,7 @@ int IPACM_Wan::post_wan_down_tether_evt(ipa_ip_type iptype, int ipa_if_num_tethe
 			IPACM_Wan::ipa_if_num_tether_v6[j-1] = IPACM_Wan::ipa_if_num_tether_v6[j];
 		}
 		IPACM_Wan::ipa_if_num_tether_v6_total--;
-		IPACMDBG_H("Now the total num of ipa_if_num_tether_v6_total is %d on wan-iface(%s)\n",
+		IPACM_SYSLOG("Now the total num of ipa_if_num_tether_v6_total is %d on wan-iface(%s)\n",
 			IPACM_Wan::ipa_if_num_tether_v6_total,
 			IPACM_Iface::ipacmcfg->iface_table[ipa_if_num].iface_name);
 	}
@@ -3708,7 +3689,7 @@ int IPACM_Wan::handle_sta_header_add_evt()
 	int res = IPACM_SUCCESS, index = IPACM_INVALID_INDEX;
 	if((header_set_v4 == true) || (header_set_v6 == true))
 	{
-		IPACMDBG_H("Already add STA full header\n");
+		IPACM_SYSLOG("Already add STA full header\n");
 		return IPACM_SUCCESS;
 	}
 
@@ -3721,7 +3702,7 @@ int IPACM_Wan::handle_sta_header_add_evt()
 	if (index != IPACM_INVALID_INDEX)
 	{
 		IPACMDBG_H("Matched client index: %d\n", index);
-		IPACMDBG_H("Received Client MAC %02x:%02x:%02x:%02x:%02x:%02x\n",
+		IPACM_SYSLOG("Received Client MAC %02x:%02x:%02x:%02x:%02x:%02x\n",
 				 get_client_memptr(wan_client, index)->mac[0],
 				 get_client_memptr(wan_client, index)->mac[1],
 				 get_client_memptr(wan_client, index)->mac[2],
@@ -3751,13 +3732,13 @@ int IPACM_Wan::handle_sta_header_add_evt()
 		}
 		else
 		{
-			IPACMERR(" wan-client got ipv6 however didn't construct complete ipv6 header \n");
+			IPACM_SYSLOG(" wan-client got ipv6 however didn't construct complete ipv6 header \n");
 			return IPACM_FAILURE;
 		}
 	}
 	else
 	{
-		IPACMDBG_H(" currently can't find matched wan-client's MAC-addr, waiting for header construction\n");
+		IPACM_SYSLOG(" currently can't find matched wan-client's MAC-addr, waiting for header construction\n");
 		res = IPACM_SUCCESS;
 	}
 
@@ -3773,8 +3754,7 @@ int IPACM_Wan::handle_sta_header_add_evt()
 		index = get_wan_client_index_ipv6(wan_v6_addr_gw);
 		if (index != IPACM_INVALID_INDEX)
 		{
-			IPACMDBG_H("Matched client index: %d\n", index);
-			IPACMDBG_H("Received Client MAC %02x:%02x:%02x:%02x:%02x:%02x\n",
+			IPACM_SYSLOG (" Matched client index: %d received Client MAC %02x:%02x:%02x:%02x:%02x:%02x\n", index,
 					 get_client_memptr(wan_client, index)->mac[0],
 					 get_client_memptr(wan_client, index)->mac[1],
 					 get_client_memptr(wan_client, index)->mac[2],
@@ -3786,7 +3766,7 @@ int IPACM_Wan::handle_sta_header_add_evt()
 			{
 				hdr_hdl_sta_v6 = get_client_memptr(wan_client, index)->hdr_hdl_v6;
 				header_set_v6 = true;
-				IPACMDBG_H("add full ipv6 header hdl: (%x)\n", get_client_memptr(wan_client, index)->hdr_hdl_v6);
+				IPACM_SYSLOG("add full ipv6 header hdl: (%x)\n", get_client_memptr(wan_client, index)->hdr_hdl_v6);
 				/* store external_ap's MAC */
 				memcpy(ext_router_mac_addr, get_client_memptr(wan_client, index)->mac, sizeof(ext_router_mac_addr));
 			}
@@ -3800,7 +3780,7 @@ int IPACM_Wan::handle_sta_header_add_evt()
 			{
 				hdr_hdl_sta_v4 = get_client_memptr(wan_client, index)->hdr_hdl_v4;
 				header_set_v4 = true;
-				IPACMDBG_H("add full ipv4 header hdl: (%x)\n", get_client_memptr(wan_client, index)->hdr_hdl_v4);
+				IPACM_SYSLOG("add full ipv4 header hdl: (%x)\n", get_client_memptr(wan_client, index)->hdr_hdl_v4);
 			}
 			else
 			{
@@ -3848,13 +3828,13 @@ int IPACM_Wan::handle_sta_header_add_evt()
 	{
 		if(header_set_v4 && !sta_bridge_v4_rules_installed && (wlan_ipv4_pdn_index != -1))
 		{
-			IPACMDBG_H("Received first V4 WAN client on WLAN STA Bridge iface\n");
+			IPACM_SYSLOG("Received first V4 WAN client on WLAN STA Bridge iface\n");
 			handle_route_add_vlan_pdn_evt(IPA_IP_v4, IPACM_Iface::ipacmcfg->sta_bridge.vlan_id);
 			sta_bridge_v4_rules_installed = true;
 		}
 		if(header_set_v6 && !sta_bridge_v6_rules_installed && (wlan_ipv6_pdn_index != -1))
 		{
-			IPACMDBG_H("Received first V6 WAN client on WLAN STA Bridge iface\n");
+			IPACM_SYSLOG("Received first V6 WAN client on WLAN STA Bridge iface\n");
 			handle_route_add_vlan_pdn_evt(IPA_IP_v6, IPACM_Iface::ipacmcfg->sta_bridge.vlan_id);
 			sta_bridge_v6_rules_installed = true;
 		}
@@ -3990,7 +3970,7 @@ int IPACM_Wan::add_tcp_syn_flt_rule(ipa_ip_type iptype)
 	else
 	{
 		IPACM_Iface::ipacmcfg->increaseFltRuleCount(rx_prop->rx[0].src_pipe, iptype, 1);
-		IPACMDBG_H("flt rule hdl0=0x%x, status=0x%x\n", m_pFilteringTable->rules[0].flt_rule_hdl,
+		IPACM_SYSLOG("flt rule hdl0=0x%x, status=0x%x\n", m_pFilteringTable->rules[0].flt_rule_hdl,
 								 m_pFilteringTable->rules[0].status);
 	}
 	tcp_syn_fl_hdl[iptype] =  m_pFilteringTable->rules[0].flt_rule_hdl;
@@ -4044,7 +4024,7 @@ int IPACM_Wan::add_dhcp_flt_rule(ipa_ip_type iptype)
 	else
 	{
 		IPACM_Iface::ipacmcfg->increaseFltRuleCount(rx_prop->rx[0].src_pipe, iptype, 1);
-		IPACMDBG_H("flt rule hdl0=0x%x, status=0x%x\n", m_pFilteringTable->rules[0].flt_rule_hdl,
+		IPACM_SYSLOG("flt rule hdl0=0x%x, status=0x%x\n", m_pFilteringTable->rules[0].flt_rule_hdl,
 								 m_pFilteringTable->rules[0].status);
 	}
 	dhcp_wan_fl_hdl =  m_pFilteringTable->rules[0].flt_rule_hdl;
@@ -4104,7 +4084,7 @@ int IPACM_Wan::add_icmp_sta_bridge_flt_rule(ipa_ip_type iptype)
 	else
 	{
 		IPACM_Iface::ipacmcfg->increaseFltRuleCount(rx_prop->rx[0].src_pipe, iptype, 1);
-		IPACMDBG_H("flt rule hdl0=0x%x, status=0x%x\n", m_pFilteringTable->rules[0].flt_rule_hdl,
+		IPACM_SYSLOG("flt rule hdl0=0x%x, status=0x%x\n", m_pFilteringTable->rules[0].flt_rule_hdl,
 								m_pFilteringTable->rules[0].status);
 	}
 	icmp_wan_fl_hdl[iptype] =  m_pFilteringTable->rules[0].flt_rule_hdl;
@@ -4167,7 +4147,7 @@ int IPACM_Wan::add_sta_bridge_flt_expt_rule()
 	else
 	{
 		IPACM_Iface::ipacmcfg->increaseFltRuleCount(rx_prop->rx[0].src_pipe, IPA_IP_v4, 1);
-		IPACMDBG_H("flt rule hdl0=0x%x, status=0x%x\n", m_pFilteringTable->rules[0].flt_rule_hdl,
+		IPACM_SYSLOG("flt rule hdl0=0x%x, status=0x%x\n", m_pFilteringTable->rules[0].flt_rule_hdl,
 							m_pFilteringTable->rules[0].status);
 	}
 	sta_bridge_flt_hdl =  m_pFilteringTable->rules[0].flt_rule_hdl;
@@ -4309,7 +4289,7 @@ int IPACM_Wan::config_dft_firewall_rules(ipa_ip_type iptype)
 			IPACM_Iface::ipacmcfg->increaseFltRuleCount(rx_prop->rx[0].src_pipe, IPA_IP_v6, 1);
 			ipv6_frag_firewall_flt_rule_hdl = m_pFilteringTable->rules[0].flt_rule_hdl;
 			is_ipv6_frag_firewall_flt_rule_installed = true;
-			IPACMDBG_H("Installed IPv6 frag firewall rule, handle %d.\n", ipv6_frag_firewall_flt_rule_hdl);
+			IPACM_SYSLOG("Installed IPv6 frag firewall rule, handle %d.\n", ipv6_frag_firewall_flt_rule_hdl);
 		}
 	}
 
@@ -4410,7 +4390,7 @@ int IPACM_Wan::config_dft_firewall_rules(ipa_ip_type iptype)
 			else
 			{
 				IPACM_Iface::ipacmcfg->increaseFltRuleCount(rx_prop->rx[0].src_pipe, IPA_IP_v4, 1);
-				IPACMDBG_H("flt rule hdl0=0x%x, status=0x%x\n", m_pFilteringTable->rules[0].flt_rule_hdl, m_pFilteringTable->rules[0].status);
+				IPACM_SYSLOG("flt rule hdl0=0x%x, status=0x%x\n", m_pFilteringTable->rules[0].flt_rule_hdl, m_pFilteringTable->rules[0].status);
 			}
 
 			/* copy filter hdls */
@@ -4498,7 +4478,7 @@ int IPACM_Wan::config_dft_firewall_rules(ipa_ip_type iptype)
 						{
 							IPACM_Iface::ipacmcfg->increaseFltRuleCount(rx_prop->rx[0].src_pipe, IPA_IP_v4, 1);
 							/* save v4 firewall filter rule handler */
-							IPACMDBG_H("flt rule hdl0=0x%x, status=0x%x\n",
+							IPACM_SYSLOG("flt rule hdl0=0x%x, status=0x%x\n",
 											 m_pFilteringTable->rules[rule_v4].flt_rule_hdl,
 											 m_pFilteringTable->rules[rule_v4].status);
 							firewall_hdl_v4[rule_v4] = m_pFilteringTable->rules[0].flt_rule_hdl;
@@ -4522,7 +4502,7 @@ int IPACM_Wan::config_dft_firewall_rules(ipa_ip_type iptype)
 						{
 							IPACM_Iface::ipacmcfg->increaseFltRuleCount(rx_prop->rx[0].src_pipe, IPA_IP_v4, 1);
 							/* save v4 firewall filter rule handler */
-							IPACMDBG_H("flt rule hdl0=0x%x, status=0x%x\n",
+							IPACM_SYSLOG("flt rule hdl0=0x%x, status=0x%x\n",
 											 m_pFilteringTable->rules[rule_v4].flt_rule_hdl,
 											 m_pFilteringTable->rules[rule_v4].status);
 							firewall_hdl_v4[rule_v4] = m_pFilteringTable->rules[0].flt_rule_hdl;
@@ -4546,7 +4526,7 @@ int IPACM_Wan::config_dft_firewall_rules(ipa_ip_type iptype)
 						{
 							IPACM_Iface::ipacmcfg->increaseFltRuleCount(rx_prop->rx[0].src_pipe, IPA_IP_v4, 1);
 							/* save v4 firewall filter rule handler */
-							IPACMDBG_H("flt rule hdl0=0x%x, status=0x%x\n",
+							IPACM_SYSLOG("flt rule hdl0=0x%x, status=0x%x\n",
 											 m_pFilteringTable->rules[rule_v4].flt_rule_hdl,
 											 m_pFilteringTable->rules[rule_v4].status);
 							firewall_hdl_v4[rule_v4] = m_pFilteringTable->rules[0].flt_rule_hdl;
@@ -4622,7 +4602,7 @@ int IPACM_Wan::config_dft_firewall_rules(ipa_ip_type iptype)
 			else
 			{
 				IPACM_Iface::ipacmcfg->increaseFltRuleCount(rx_prop->rx[0].src_pipe, IPA_IP_v4, 1);
-				IPACMDBG_H("flt rule hdl0=0x%x, status=0x%x\n", m_pFilteringTable->rules[0].flt_rule_hdl, m_pFilteringTable->rules[0].status);
+				IPACM_SYSLOG("flt rule hdl0=0x%x, status=0x%x\n", m_pFilteringTable->rules[0].flt_rule_hdl, m_pFilteringTable->rules[0].status);
 			}
 
 			/* copy filter hdls */
@@ -4669,7 +4649,7 @@ int IPACM_Wan::config_dft_firewall_rules(ipa_ip_type iptype)
 			else
 			{
 				IPACM_Iface::ipacmcfg->increaseFltRuleCount(rx_prop->rx[0].src_pipe, IPA_IP_v6, 1);
-				IPACMDBG_H("flt rule hdl0=0x%x, status=0x%x\n", m_pFilteringTable->rules[0].flt_rule_hdl, m_pFilteringTable->rules[0].status);
+				IPACM_SYSLOG("flt rule hdl0=0x%x, status=0x%x\n", m_pFilteringTable->rules[0].flt_rule_hdl, m_pFilteringTable->rules[0].status);
 			}
 			/* copy filter hdls */
 			dft_wan_fl_hdl[2] = m_pFilteringTable->rules[0].flt_rule_hdl;
@@ -4760,7 +4740,7 @@ int IPACM_Wan::config_dft_firewall_rules(ipa_ip_type iptype)
 			else
 			{
 				IPACM_Iface::ipacmcfg->increaseFltRuleCount(rx_prop->rx[0].src_pipe, IPA_IP_v6, 1);
-				IPACMDBG_H("flt rule hdl0=0x%x, status=0x%x\n", m_pFilteringTable->rules[0].flt_rule_hdl, m_pFilteringTable->rules[0].status);
+				IPACM_SYSLOG("flt rule hdl0=0x%x, status=0x%x\n", m_pFilteringTable->rules[0].flt_rule_hdl, m_pFilteringTable->rules[0].status);
 			}
 
 			/* copy filter hdls */
@@ -4851,7 +4831,7 @@ int IPACM_Wan::config_dft_firewall_rules(ipa_ip_type iptype)
 							{
 								IPACM_Iface::ipacmcfg->increaseFltRuleCount(rx_prop->rx[0].src_pipe, IPA_IP_v6, 1);
 								/* save v4 firewall filter rule handler */
-								IPACMDBG_H("flt rule hdl0=0x%x, status=0x%x\n", m_pFilteringTable->rules[0].flt_rule_hdl, m_pFilteringTable->rules[0].status);
+								IPACM_SYSLOG("flt rule hdl0=0x%x, status=0x%x\n", m_pFilteringTable->rules[0].flt_rule_hdl, m_pFilteringTable->rules[0].status);
 								firewall_hdl_v6[rule_v6] = m_pFilteringTable->rules[0].flt_rule_hdl;
 								num_firewall_v6++;
 								rule_v6++;
@@ -4870,7 +4850,7 @@ int IPACM_Wan::config_dft_firewall_rules(ipa_ip_type iptype)
 							{
 								IPACM_Iface::ipacmcfg->increaseFltRuleCount(rx_prop->rx[0].src_pipe, IPA_IP_v6, 1);
 								/* save v6 firewall filter rule handler */
-								IPACMDBG_H("flt rule hdl0=0x%x, status=0x%x\n", m_pFilteringTable->rules[0].flt_rule_hdl, m_pFilteringTable->rules[0].status);
+								IPACM_SYSLOG("flt rule hdl0=0x%x, status=0x%x\n", m_pFilteringTable->rules[0].flt_rule_hdl, m_pFilteringTable->rules[0].status);
 								firewall_hdl_v6[rule_v6] = m_pFilteringTable->rules[0].flt_rule_hdl;
 								num_firewall_v6++;
 								rule_v6++;
@@ -4889,7 +4869,7 @@ int IPACM_Wan::config_dft_firewall_rules(ipa_ip_type iptype)
 							{
 								IPACM_Iface::ipacmcfg->increaseFltRuleCount(rx_prop->rx[0].src_pipe, IPA_IP_v6, 1);
 								/* save v6 firewall filter rule handler */
-								IPACMDBG_H("flt rule hdl0=0x%x, status=0x%x\n", m_pFilteringTable->rules[0].flt_rule_hdl, m_pFilteringTable->rules[0].status);
+								IPACM_SYSLOG("flt rule hdl0=0x%x, status=0x%x\n", m_pFilteringTable->rules[0].flt_rule_hdl, m_pFilteringTable->rules[0].status);
 								firewall_hdl_v6[rule_v6] = m_pFilteringTable->rules[0].flt_rule_hdl;
 								num_firewall_v6++;
 								rule_v6++;
@@ -4926,7 +4906,7 @@ int IPACM_Wan::config_dft_firewall_rules(ipa_ip_type iptype)
 			else
 			{
 				IPACM_Iface::ipacmcfg->increaseFltRuleCount(rx_prop->rx[0].src_pipe, IPA_IP_v6, 1);
-				IPACMDBG_H("flt rule hdl0=0x%x, status=0x%x\n", m_pFilteringTable->rules[0].flt_rule_hdl, m_pFilteringTable->rules[0].status);
+				IPACM_SYSLOG("flt rule hdl0=0x%x, status=0x%x\n", m_pFilteringTable->rules[0].flt_rule_hdl, m_pFilteringTable->rules[0].status);
 			}
 			/* copy filter hdls */
 			dft_wan_fl_hdl[2] = m_pFilteringTable->rules[0].flt_rule_hdl;
@@ -5001,7 +4981,7 @@ int IPACM_Wan::config_dft_firewall_rules(ipa_ip_type iptype)
 			else
 			{
 				IPACM_Iface::ipacmcfg->increaseFltRuleCount(rx_prop->rx[0].src_pipe, IPA_IP_v6, 1);
-				IPACMDBG_H("flt rule hdl0=0x%x, status=0x%x\n", m_pFilteringTable->rules[0].flt_rule_hdl, m_pFilteringTable->rules[0].status);
+				IPACM_SYSLOG("flt rule hdl0=0x%x, status=0x%x\n", m_pFilteringTable->rules[0].flt_rule_hdl, m_pFilteringTable->rules[0].status);
 			}
 			/* copy filter hdls*/
 			dft_wan_fl_hdl[1] = m_pFilteringTable->rules[0].flt_rule_hdl;
@@ -5129,7 +5109,7 @@ int IPACM_Wan::config_dft_firewall_rules_ex(struct ipa_flt_rule_add *rules, int 
 			}
 		}
 	}
-	IPACMDBG_H("found %d v4 pdns in firewall file\n", offloaded_pdns_count_v4);
+	IPACM_SYSLOG("found %d v4 pdns in firewall file\n", offloaded_pdns_count_v4);
 
 	uint32_t offloaded_pdns_count_v6 = 0;
 	std::pair<IPACM_firewall_conf_t*, ipacm_ipv6_wan_iface*> offloaded_pdns_v6[IPA_MAX_NUM_HW_PDNS];
@@ -5156,7 +5136,7 @@ int IPACM_Wan::config_dft_firewall_rules_ex(struct ipa_flt_rule_add *rules, int 
 			}
 		}
 	}
-	IPACMDBG_H("found %d v6 pdns in firewall file\n", offloaded_pdns_count_v6);
+	IPACM_SYSLOG("found %d v6 pdns in firewall file\n", offloaded_pdns_count_v6);
 #endif
 
 	/* add IPv6 frag rule when firewall is enabled*/
@@ -5234,7 +5214,7 @@ int IPACM_Wan::config_dft_firewall_rules_ex(struct ipa_flt_rule_add *rules, int 
 				return IPACM_FAILURE;
 			}
 
-			IPACMDBG_H("adding default rule for iface %s\n", curr_interface->dev_name);
+			IPACM_SYSLOG("adding default rule for iface %s\n", curr_interface->dev_name);
 			res = add_catchup_all_filtering_rule_each_pdn(*offloaded_pdns_v4[i].first, iptype,
 				curr_interface->rx_prop->rx[0].attrib, rules[pos].flt_rule, pos);
 			if (res != IPACM_SUCCESS)
@@ -5275,7 +5255,7 @@ int IPACM_Wan::config_dft_firewall_rules_ex(struct ipa_flt_rule_add *rules, int 
 		for(uint32_t i = 0; i < offloaded_pdns_count_v6; ++i)
 		{
 			IPACM_Wan* curr_interface = offloaded_pdns_v6[i].second->pIface;
-			IPACMDBG_H("adding firewall rules for iface %s ip-type %d\n", curr_interface->dev_name, iptype);
+			IPACM_SYSLOG("adding firewall rules for iface %s ip-type %d\n", curr_interface->dev_name, iptype);
 			if(m_is_sta_mode == Q6_WAN && curr_interface->ext_prop != NULL)
 				res = add_firewall_rules_ex(*offloaded_pdns_v6[i].first, iptype, curr_interface->ext_prop->ext[0].mux_id,
 					curr_interface->rx_prop->rx[0].attrib, rules, IPA_MAX_FLT_RULE - offloaded_pdns_count_v6, pos);
@@ -5316,7 +5296,7 @@ int IPACM_Wan::config_dft_firewall_rules_ex(struct ipa_flt_rule_add *rules, int 
 		for (uint32_t i = 0; i < offloaded_pdns_count_v6; ++i)
 		{
 			IPACM_Wan* curr_interface = offloaded_pdns_v6[i].second->pIface;
-			IPACMDBG_H("adding default rule for iface %s ip-type %d\n", curr_interface->dev_name, iptype);
+			IPACM_SYSLOG("adding default rule for iface %s ip-type %d\n", curr_interface->dev_name, iptype);
 			/* for ipv6 nat case this shall be the 2nd pass catch all rule to send to v6 LAN RT table*/
 			res = add_catchup_all_filtering_rule_each_pdn(*offloaded_pdns_v6[i].first, iptype,
 				curr_interface->rx_prop->rx[0].attrib, rules[pos].flt_rule, pos);
@@ -5521,7 +5501,7 @@ int IPACM_Wan::set_pdn_num_fw_rules_by_vid(int vid, int num_fw_rules)
 		return IPACM_SUCCESS;
 	}
 #endif
-	IPACMERR("couldn't find match for vid %d\n", vid);
+	IPACM_SYSLOG("couldn't find match for vid %d\n", vid);
 	return IPACM_FAILURE;
 }
 
@@ -5555,7 +5535,7 @@ int IPACM_Wan::get_pdn_num_fw_rules_by_vid(int vid, int *num_fw_rules)
 		return IPACM_SUCCESS;
 	}
 #endif
-	IPACMERR("couldn't find match for vid %d\n", vid);
+	IPACM_SYSLOG("couldn't find match for vid %d\n", vid);
 	return IPACM_FAILURE;
 }
 
@@ -5589,7 +5569,7 @@ int IPACM_Wan::GetV6PrefixByVid(int vid, uint32_t *v6_prefix)
 			}
 		}
 	}
-	IPACMERR("couldn't find match for vid %d\n", vid);
+	IPACM_SYSLOG("couldn't find match for vid %d\n", vid);
 	return IPACM_FAILURE;
 }
 
@@ -5613,7 +5593,7 @@ int IPACM_Wan::GetV6MTUByPrefix(uint16_t *mtu, uint32_t *v6_prefix)
 			}
 		}
 	}
-	IPACMERR("couldn't find MTU for v6_prefix 0x[%X][%X]\n", v6_prefix[0],  v6_prefix[1]);
+	IPACM_SYSLOG("couldn't find MTU for v6_prefix 0x[%X][%X]\n", v6_prefix[0],  v6_prefix[1]);
 	*mtu = DEFAULT_MTU_SIZE;
 	return IPACM_FAILURE;
 }
@@ -5661,7 +5641,7 @@ IPACM_firewall_conf_t* IPACM_Wan::get_default_profile_firewall_conf_ul(int *defa
 			if(!strcmp(firewall_mpdn_config_ul.pdns[idx].net_dev,
 				ipv6_to_iface[i].pIface->dev_name))
 			{
-				IPACMDBG("found %s dev in index %d, VID %d\n",
+				IPACM_SYSLOG("found %s dev in index %d, VID %d\n",
 					firewall_mpdn_config_ul.pdns[idx].net_dev,
 					i,
 					ipv6_to_iface[i].associated_VIDs[0]);
@@ -5697,7 +5677,7 @@ IPACM_firewall_conf_t* IPACM_Wan::get_firewall_conf_by_vid_ul(int vid)
 					if(!strcmp(firewall_mpdn_config_ul.pdns[j].net_dev,
 						ipv6_to_iface[i].pIface->dev_name))
 					{
-						IPACMDBG("found %s dev in index %d\n",
+						IPACM_SYSLOG("found %s dev in index %d\n",
 							firewall_mpdn_config_ul.pdns[j].net_dev, j);
 						return &firewall_mpdn_config_ul.pdns[j];
 					}
@@ -5943,7 +5923,7 @@ int IPACM_Wan::add_icmp_alg_rules(struct ipa_flt_rule_add *rules, int rule_offse
 	}
 
 fail:
-	IPACMDBG_H("Constructed %d ICMP/ALG rules for ip type %d\n", num_rules, iptype);
+	IPACM_SYSLOG("Constructed %d ICMP/ALG rules for ip type %d\n", num_rules, iptype);
 		return res;
 }
 
@@ -5986,7 +5966,7 @@ int IPACM_Wan::query_ext_prop()
 			return ret;
 		}
 
-		IPACMDBG_H("Wan interface has %d tx props, %d rx props and %d ext props\n",
+		IPACM_SYSLOG("Wan interface has %d tx props, %d rx props and %d ext props\n",
 				iface_query->num_tx_props, iface_query->num_rx_props, iface_query->num_ext_props);
 
 		for (cnt = 0; cnt < ext_prop->num_ext_props; cnt++)
@@ -6025,7 +6005,7 @@ int IPACM_Wan::config_wan_firewall_rule(ipa_ip_type iptype)
 	}
 #endif
 
-	IPACMDBG_H("Configure WAN DL firewall rules.\n");
+	IPACM_SYSLOG("Configure WAN DL firewall rules.\n");
 
 	if(iptype == IPA_IP_v4)
 	{
@@ -6085,7 +6065,7 @@ int IPACM_Wan::config_wan_firewall_rule(ipa_ip_type iptype)
 			res = IPACM_FAILURE;
 			goto fail;
 		}
-		IPACMDBG_H("Succeded in constructing ICMP/ALG rules for ip type %d\n", iptype);
+		IPACM_SYSLOG("Succeded in constructing ICMP/ALG rules for ip type %d\n", iptype);
 
 #ifdef FEATURE_VLAN_MPDN
 		if(IPACM_FAILURE == config_dft_firewall_rules_ex(pdn_flt_rule_v6, IPACM_Wan::num_v6_flt_rule, IPA_IP_v6))
@@ -6097,7 +6077,7 @@ int IPACM_Wan::config_wan_firewall_rule(ipa_ip_type iptype)
 			res = IPACM_FAILURE;
 			goto fail;
 		}
-		IPACMDBG_H("Succeded in constructing firewall rules for ip type %d\n", iptype);
+		IPACM_SYSLOG("Succeded in constructing firewall rules for ip type %d\n", iptype);
 	}
 	else
 	{
@@ -6465,7 +6445,7 @@ int IPACM_Wan::add_dft_filtering_rule(struct ipa_flt_rule_add *rules, int rule_o
 		 */
 		IPACM_Wan::ipv6_mpdn_default_filterting_rules_count = m_ipv6_default_filterting_rules_count;
 #endif
-		IPACMDBG_H("Constructed %d default filtering rules for ip type %d\n",
+		IPACM_SYSLOG("Constructed %d default filtering rules for ip type %d\n",
 			m_ipv6_default_filterting_rules_count, iptype);
 	}
 
@@ -6562,7 +6542,7 @@ int IPACM_Wan::del_dft_firewall_rules(ipa_ip_type iptype, bool wan_up_vlan)
 		if((dhcp_wan_fl_hdl != 0) &&
 			 m_filtering.DeleteFilteringHdls(&dhcp_wan_fl_hdl, IPA_IP_v4, 1) == false)
 		{
-			IPACMERR("Error Deleting DHCP Filtering rule, aborting...\n");
+			IPACM_SYSLOG("Error Deleting DHCP Filtering rule, aborting...\n");
 			return IPACM_FAILURE;
 		}
 		dhcp_wan_fl_hdl = 0;
@@ -6570,7 +6550,7 @@ int IPACM_Wan::del_dft_firewall_rules(ipa_ip_type iptype, bool wan_up_vlan)
 		if((icmp_wan_fl_hdl[IPA_IP_v4] != 0) &&
                     m_filtering.DeleteFilteringHdls(&icmp_wan_fl_hdl[IPA_IP_v4], IPA_IP_v4, 1) == false)
 		{
-			IPACMERR("Error Deleting ICMP Filtering rule, aborting...\n");
+			IPACM_SYSLOG("Error Deleting ICMP Filtering rule, aborting...\n");
 			return IPACM_FAILURE;
 		}
 		icmp_wan_fl_hdl[IPA_IP_v4] = 0;
@@ -6578,7 +6558,7 @@ int IPACM_Wan::del_dft_firewall_rules(ipa_ip_type iptype, bool wan_up_vlan)
 		if((tcp_syn_fl_hdl[IPA_IP_v4] != 0) &&
 		    m_filtering.DeleteFilteringHdls(&tcp_syn_fl_hdl[IPA_IP_v4], IPA_IP_v4, 1) == false)
 		{
-			IPACMERR("Error Deleting TCP SYN V4 Filtering rule, aborting...\n");
+			IPACM_SYSLOG("Error Deleting TCP SYN V4 Filtering rule, aborting...\n");
 			return IPACM_FAILURE;
 		}
 		tcp_syn_fl_hdl[IPA_IP_v4] = 0;
@@ -6586,14 +6566,14 @@ int IPACM_Wan::del_dft_firewall_rules(ipa_ip_type iptype, bool wan_up_vlan)
 		if((sta_bridge_flt_hdl != 0) &&
 			 m_filtering.DeleteFilteringHdls(&sta_bridge_flt_hdl, IPA_IP_v4, 1) == false)
 		{
-			IPACMERR("Error Deleting sta bridge Filtering rule, aborting...\n");
+			IPACM_SYSLOG("Error Deleting sta bridge Filtering rule, aborting...\n");
 			return IPACM_FAILURE;
 		}
 		sta_bridge_flt_hdl = 0;
 
 		if (m_filtering.DeleteFilteringHdls(&dft_wan_fl_hdl[0], IPA_IP_v4, 1) == false)
 		{
-			IPACMERR("Error Deleting Filtering rules, aborting...\n");
+			IPACM_SYSLOG("Error Deleting Filtering rules, aborting...\n");
 			return IPACM_FAILURE;
 		}
 		dft_wan_fl_hdl[0] = 0;
@@ -6622,7 +6602,7 @@ int IPACM_Wan::del_dft_firewall_rules(ipa_ip_type iptype, bool wan_up_vlan)
 			if (m_filtering.DeleteFilteringHdls(firewall_hdl_v6,
 																					IPA_IP_v6, num_firewall_v6) == false)
 			{
-				IPACMERR("Error Deleting Filtering rules, aborting...\n");
+				IPACM_SYSLOG("Error Deleting Filtering rules, aborting...\n");
 				return IPACM_FAILURE;
 			}
 			IPACM_Iface::ipacmcfg->decreaseFltRuleCount(rx_prop->rx[0].src_pipe, IPA_IP_v6, num_firewall_v6);
@@ -6636,7 +6616,7 @@ int IPACM_Wan::del_dft_firewall_rules(ipa_ip_type iptype, bool wan_up_vlan)
 		{
 			if(m_filtering.DeleteFilteringHdls(&ipv6_ula_prefix_hdl, IPA_IP_v6, 1) == false)
 			{
-				IPACMERR("Error Deleting Filtering rules, aborting...\n");
+				IPACM_SYSLOG("Error Deleting Filtering rules, aborting...\n");
 				return IPACM_FAILURE;
 			}
 			IPACM_Iface::ipacmcfg->decreaseFltRuleCount(rx_prop->rx[0].src_pipe, IPA_IP_v6, 1);
@@ -6661,7 +6641,7 @@ int IPACM_Wan::del_dft_firewall_rules(ipa_ip_type iptype, bool wan_up_vlan)
 		{
 			if (m_filtering.DeleteFilteringHdls(&ipv6_frag_firewall_flt_rule_hdl, IPA_IP_v6, 1) == false)
 			{
-				IPACMERR("Error deleting IPv6 frag filtering rules.\n");
+				IPACM_SYSLOG("Error deleting IPv6 frag filtering rules.\n");
 				return IPACM_FAILURE;
 			}
 			is_ipv6_frag_firewall_flt_rule_installed = false;
@@ -6687,7 +6667,7 @@ int IPACM_Wan::handle_route_del_evt(ipa_ip_type iptype, bool wan_up_vlan)
 		return IPACM_SUCCESS;
 	}
 	is_default_gateway = false;
-	IPACMDBG_H("Default route is deleted to iface %s.\n", dev_name);
+	IPACM_SYSLOG("Default route is deleted to iface %s.\n", dev_name);
 
 	// Delete route rule in case of default route or if vlan is up on-demand PDN
 	if (((iptype == IPA_IP_v4) && (active_v4 == true)) ||
@@ -6721,7 +6701,7 @@ int IPACM_Wan::handle_route_del_evt(ipa_ip_type iptype, bool wan_up_vlan)
 			}
 			else
 			{
-		    	IPACMDBG_H("Tx:%d, ip-type: %d match ip-type: %d, RT-rule deleted\n", tx_index, tx_prop->tx[tx_index].ip,iptype);
+		    	IPACM_SYSLOG("Tx:%d, ip-type: %d match ip-type: %d, RT-rule deleted\n", tx_index, tx_prop->tx[tx_index].ip,iptype);
 
 				if (m_routing.DeleteRoutingHdl(wan_route_rule_v6_hdl[tx_index], IPA_IP_v6) == false)
 				{
@@ -6770,7 +6750,7 @@ int IPACM_Wan::handle_route_del_evt(ipa_ip_type iptype, bool wan_up_vlan)
 			evt_data.event = IPA_HANDLE_WAN_DOWN;
 			evt_data.evt_data = (void *)wandown_data;
 			/* Insert IPA_HANDLE_WAN_DOWN to command queue */
-			IPACMDBG_H("posting IPA_HANDLE_WAN_DOWN for IPv4 (%d.%d.%d.%d) \n",
+			IPACM_SYSLOG("posting IPA_HANDLE_WAN_DOWN for IPv4 (%d.%d.%d.%d) \n",
 					(unsigned char)(wandown_data->ipv4_addr),
 					(unsigned char)(wandown_data->ipv4_addr >> 8),
 					(unsigned char)(wandown_data->ipv4_addr >> 16),
@@ -6807,7 +6787,7 @@ int IPACM_Wan::handle_route_del_evt(ipa_ip_type iptype, bool wan_up_vlan)
 			evt_data.event = IPA_HANDLE_WAN_DOWN_V6;
 			evt_data.evt_data = (void *)wandown_data;
 			/* Insert IPA_HANDLE_WAN_DOWN to command queue */
-			IPACMDBG_H("posting IPA_HANDLE_WAN_DOWN for IPv6 with prefix 0x%08x%08x\n", ipv6_prefix[0], ipv6_prefix[1]);
+			IPACM_SYSLOG("posting IPA_HANDLE_WAN_DOWN for IPv6 with prefix 0x%08x%08x\n", ipv6_prefix[0], ipv6_prefix[1]);
 			IPACM_EvtDispatcher::PostEvt(&evt_data);
 			IPACMDBG_H("setup wan_up_v6/active_v6= false \n");
 			IPACM_Wan::wan_up_v6 = false;
@@ -6846,7 +6826,7 @@ int IPACM_Wan::handle_route_del_evt_ex(ipa_ip_type iptype)
 		return IPACM_SUCCESS;
 	}
 
-	IPACMDBG_H("Default route is deleted to iface %s.\n", dev_name);
+	IPACM_SYSLOG("Default route is deleted to iface %s.\n", dev_name);
 
 	if (((iptype == IPA_IP_v4) && (active_v4 == true)) ||
 		((iptype == IPA_IP_v6) && (active_v6 == true)))
@@ -6938,7 +6918,7 @@ int IPACM_Wan::handle_route_del_evt_ex(ipa_ip_type iptype)
 			evt_data.event = IPA_HANDLE_WAN_DOWN;
 			evt_data.evt_data = (void *)wandown_data;
 			/* Insert IPA_HANDLE_WAN_DOWN to command queue */
-			IPACMDBG_H("posting IPA_HANDLE_WAN_DOWN for IPv4 with address: 0x%x\n", wan_v4_addr);
+			IPACM_SYSLOG("posting IPA_HANDLE_WAN_DOWN for IPv4 with address: 0x%x\n", wan_v4_addr);
 			IPACM_EvtDispatcher::PostEvt(&evt_data);
 
 			IPACMDBG_H("setup wan_up/active_v4= false \n");
@@ -6976,7 +6956,7 @@ int IPACM_Wan::handle_route_del_evt_ex(ipa_ip_type iptype)
 #endif
 			evt_data.event = IPA_HANDLE_WAN_DOWN_V6;
 			evt_data.evt_data = (void *)wandown_data;
-			IPACMDBG_H("posting IPA_HANDLE_WAN_DOWN_V6 for IPv6 with prefix 0x%08x%08x\n", wandown_data->ipv6_addr[0], wandown_data->ipv6_addr[1]);
+			IPACM_SYSLOG("posting IPA_HANDLE_WAN_DOWN_V6 for IPv6 with prefix 0x%08x%08x\n", wandown_data->ipv6_addr[0], wandown_data->ipv6_addr[1]);
 			IPACM_EvtDispatcher::PostEvt(&evt_data);
 
 			IPACMDBG_H("setup wan_up_v6/active_v6= false \n");
@@ -7192,7 +7172,7 @@ int IPACM_Wan::config_socksv5_rules(ipa_ioc_add_flt_rule *pFilteringTable_v6)
 	flt_rule_entry.rule.attrib.u.v6.dst_addr[1] = htonl(IPACM_Iface::ipacmcfg->socksv5_client_v6_addr[1]);
 	flt_rule_entry.rule.attrib.u.v6.dst_addr[2] = htonl(IPACM_Iface::ipacmcfg->socksv5_client_v6_addr[2]);
 	flt_rule_entry.rule.attrib.u.v6.dst_addr[3] = htonl(IPACM_Iface::ipacmcfg->socksv5_client_v6_addr[3]);
-	IPACMDBG_H(" socksv5_client_v6_addr: 0x%X:%X:%X:%X \n", IPACM_Iface::ipacmcfg->socksv5_client_v6_addr[0],
+	IPACM_SYSLOG(" socksv5_client_v6_addr: 0x%X:%X:%X:%X \n", IPACM_Iface::ipacmcfg->socksv5_client_v6_addr[0],
 	IPACM_Iface::ipacmcfg->socksv5_client_v6_addr[1], IPACM_Iface::ipacmcfg->socksv5_client_v6_addr[2], IPACM_Iface::ipacmcfg->socksv5_client_v6_addr[3]);
 
 	flt_rule_entry.rule.attrib.attrib_mask |= IPA_FLT_NEXT_HDR;
@@ -7246,12 +7226,12 @@ int IPACM_Wan::config_socksv5_rules(ipa_ioc_add_flt_rule *pFilteringTable_v6)
 						sizeof(flt_rule_entry.rule.eq_attrib));
 			if (pdn_ipv6_in_use_chk <= IPACM_Iface::ipacmcfg->total_pdn_ipv6_in_use)
 			{
-				IPACMDBG_H(" pdn_ipv6_in_use_chk %d,total %d\n", pdn_ipv6_in_use_chk, IPACM_Iface::ipacmcfg->total_pdn_ipv6_in_use);
+				IPACM_SYSLOG(" pdn_ipv6_in_use_chk %d,total %d\n", pdn_ipv6_in_use_chk, IPACM_Iface::ipacmcfg->total_pdn_ipv6_in_use);
 				memcpy(&(pFilteringTable_v6->rules[pdn_ipv6_in_use_chk]), &flt_rule_entry, sizeof(struct ipa_flt_rule_add));
 			}
 			else
 			{
-				IPACMERR("pdn_ipv6_in_use_chk %d > total %d, not adding rule\n", pdn_ipv6_in_use_chk, IPACM_Iface::ipacmcfg->total_pdn_ipv6_in_use);
+				IPACM_SYSLOG("pdn_ipv6_in_use_chk %d > total %d, not adding rule\n", pdn_ipv6_in_use_chk, IPACM_Iface::ipacmcfg->total_pdn_ipv6_in_use);
 			}
 		}
 	}
@@ -7287,9 +7267,8 @@ int IPACM_Wan::handle_down_evt()
 
 	IPACMDBG_H("ip_type: %d\n", ip_type);
 
-	IPACMDBG_H("wlan_ipv4_pdn_index: %d ipv4_to_iface[wlan_ipv4_pdn_index].wan_up_vlan :%d\n", wlan_ipv4_pdn_index, ipv4_to_iface[wlan_ipv4_pdn_index].wan_up_vlan);
-
-	IPACMDBG_H(" STA wan ipv4-addr:0x%x\n", wan_v4_addr);
+	IPACM_SYSLOG("wlan_ipv4_pdn_index: %d ipv4_to_iface[wlan_ipv4_pdn_index].wan_up_vlan :%d STA wan ipv4-addr:0x%x\n",
+			 wlan_ipv4_pdn_index, ipv4_to_iface[wlan_ipv4_pdn_index].wan_up_vlan, wan_v4_addr);
 
 	if(ipv4_to_iface[wlan_ipv4_pdn_index].wan_up_vlan && ipv6_to_iface[wlan_ipv6_pdn_index].wan_up_vlan_v6)
 	{
@@ -7334,8 +7313,8 @@ int IPACM_Wan::handle_down_evt()
 		ipv6_to_iface[wlan_ipv6_pdn_index].VID_cnt = 0;
 		vlandown_data->mux_id = 0;
 
-		IPACMDBG_H("Posting IPA_HANDLE_WAN_VLAN_PDN_DOWN with below information:\n");
-		IPACMDBG_H("iptype V4 V6, VlanID %d, mux_id %d, if num %d\n", vlandown_data->VlanID, vlandown_data->mux_id, ipa_if_num);
+		IPACM_SYSLOG("Posting IPA_HANDLE_WAN_VLAN_PDN_DOWN  iptype V4 V6, VlanID %d, mux_id %d, if num %d\n",
+				vlandown_data->VlanID, vlandown_data->mux_id, ipa_if_num);
 
 		evt_data.event = IPA_HANDLE_WAN_VLAN_PDN_DOWN;
 		evt_data.evt_data = (void *)vlandown_data;
@@ -7380,8 +7359,8 @@ int IPACM_Wan::handle_down_evt()
 		ipv6_to_iface[wlan_ipv6_pdn_index].VID_cnt = 0;
 		vlandown_data->mux_id = 0;
 
-		IPACMDBG_H("Posting IPA_HANDLE_WAN_VLAN_PDN_DOWN (v6) with below information:\n");
-		IPACMDBG_H("iptype IPA_IP_v6, VlanID %d, mux_id %d, if num %d\n", vlandown_data->VlanID, vlandown_data->mux_id, ipa_if_num);
+		IPACM_SYSLOG("Posting IPA_HANDLE_WAN_VLAN_PDN_DOWN (v6) iptype IPA_IP_v6, VlanID %d, mux_id %d, if num %d\n",
+				vlandown_data->VlanID, vlandown_data->mux_id, ipa_if_num);
 
 		evt_data.event = IPA_HANDLE_WAN_VLAN_PDN_DOWN;
 		evt_data.evt_data = (void *)vlandown_data;
@@ -7426,8 +7405,8 @@ int IPACM_Wan::handle_down_evt()
 		ipv4_to_iface[wlan_ipv4_pdn_index].VID_cnt = 0;
 		vlandown_data->mux_id = 0;
 
-		IPACMDBG_H("Posting IPA_HANDLE_WAN_VLAN_PDN_DOWN with below information:\n");
-		IPACMDBG_H("iptype IPA_IP_v4, VlanID %d, mux_id %d, if num %d\n", vlandown_data->VlanID, vlandown_data->mux_id, ipa_if_num);
+		IPACM_SYSLOG("Posting IPA_HANDLE_WAN_VLAN_PDN_DOWN iptype IPA_IP_v4, VlanID %d, mux_id %d, if num %d\n",
+				vlandown_data->VlanID, vlandown_data->mux_id, ipa_if_num);
 
 		evt_data.event = IPA_HANDLE_WAN_VLAN_PDN_DOWN;
 		evt_data.evt_data = (void *)vlandown_data;
@@ -7447,7 +7426,7 @@ int IPACM_Wan::handle_down_evt()
 			del_dft_firewall_rules(IPA_IP_v4);
 		}
 		handle_route_del_evt(IPA_IP_v4);
-		IPACMDBG_H("Delete default v4 routing rules\n");
+		IPACM_SYSLOG("Delete default v4 routing rules\n");
 	}
 
 	if (active_v6)
@@ -7457,13 +7436,13 @@ int IPACM_Wan::handle_down_evt()
 			del_dft_firewall_rules(IPA_IP_v6);
 		}
 		handle_route_del_evt(IPA_IP_v6);
-		IPACMDBG_H("Delete default v6 routing rules\n");
+		IPACM_SYSLOG("Delete default v6 routing rules\n");
 	}
 
 	/* Delete default v4 RT rule */
 	if (ip_type != IPA_IP_v6)
 	{
-		IPACMDBG_H("Delete default v4 routing rules\n");
+		IPACM_SYSLOG("Delete default v4 routing rules\n");
 		if (m_routing.DeleteRoutingHdl(dft_rt_rule_hdl[0], IPA_IP_v4) == false)
 		{
 		   IPACMERR("Routing rule deletion failed!\n");
@@ -7478,7 +7457,7 @@ int IPACM_Wan::handle_down_evt()
 	/* delete default v6 RT rule */
 	if (ip_type != IPA_IP_v4)
 	{
-		IPACMDBG_H("Delete default v6 routing rules\n");
+		IPACM_SYSLOG("Delete default v6 routing rules\n");
 		/* May have multiple ipv6 iface-routing rules*/
 		for (i = 0; i < 2*num_dft_rt_v6; i++)
 		{
@@ -7565,7 +7544,7 @@ int IPACM_Wan::handle_down_evt()
 				goto fail;
 			}
 			IPACM_Iface::ipacmcfg->decreaseFltRuleCount(rx_prop->rx[0].src_pipe, IPA_IP_v4, IPV4_DEFAULT_FILTERTING_RULES);
-			IPACMDBG_H("finished delete default v4 filtering rules\n ");
+			IPACM_SYSLOG("finished delete default v4 filtering rules\n ");
 		}
 	}
 
@@ -7594,7 +7573,7 @@ int IPACM_Wan::handle_down_evt()
 			}
 			IPACM_Iface::ipacmcfg->decreaseFltRuleCount(rx_prop->rx[0].src_pipe, IPA_IP_v6, num_ipv6_dest_flt_rule);
 		}
-		IPACMDBG_H("finished delete default v6 filtering rules\n ");
+		IPACM_SYSLOG("finished delete default v6 filtering rules\n ");
 	}
 	if(hdr_proc_hdl_dummy_v6)
 	{
@@ -7690,7 +7669,7 @@ int IPACM_Wan::handle_down_evt_ex()
 	if(ip_type == IPA_IP_v4)
 	{
 		num_ipv4_modem_pdn--;
-		IPACMDBG_H("Now the number of modem ipv4 pdn is %d.\n", num_ipv4_modem_pdn);
+		IPACM_SYSLOG("Now the number of modem ipv4 pdn is %d [%s].\n", num_ipv4_modem_pdn, dev_name);
 #ifdef FEATURE_VLAN_MPDN
 		if(ipv4_to_iface[modem_ipv4_pdn_index].wan_up_vlan)
 		{
@@ -7703,7 +7682,7 @@ int IPACM_Wan::handle_down_evt_ex()
 			ipv4_to_iface[modem_ipv4_pdn_index].VID_cnt = 0;
 
 			num_offloaded_pdns--;
-			IPACMDBG_H("now num offloaded PDNs is %d\n", num_offloaded_pdns);
+			IPACM_SYSLOG("now num offloaded PDNs is %d\n", num_offloaded_pdns);
 
 			vlandown_data = (ipacm_event_vlan_pdn *)malloc(sizeof(ipacm_event_vlan_pdn));
 			if(vlandown_data == NULL)
@@ -7719,8 +7698,8 @@ int IPACM_Wan::handle_down_evt_ex()
 			vlandown_data->ipv4_addr = wan_v4_addr;
 			vlandown_data->mux_id = ext_prop->ext[0].mux_id;
 
-			IPACMDBG_H("Posting IPA_HANDLE_WAN_VLAN_PDN_DOWN with below information:\n");
-			IPACMDBG_H("iptype IPA_IP_v4, VlanID %d, mux_id %d, if num %d\n", associated_VID, ext_prop->ext[0].mux_id, ipa_if_num);
+			IPACM_SYSLOG("Posting IPA_HANDLE_WAN_VLAN_PDN_DOWN iptype IPA_IP_v4, VlanID %d, mux_id %d, if num %d\n",
+					associated_VID, ext_prop->ext[0].mux_id, ipa_if_num);
 
 			evt_data.event = IPA_HANDLE_WAN_VLAN_PDN_DOWN;
 			evt_data.evt_data = (void *)vlandown_data;
@@ -7834,7 +7813,7 @@ int IPACM_Wan::handle_down_evt_ex()
 		/* only when the last ipv4 modem interface goes down, delete ipv4 default flt rules*/
 		if(num_ipv4_modem_pdn == 0)
 		{
-			IPACMDBG_H("Now the number of modem ipv4 interface is 0, delete default flt rules.\n");
+			IPACM_SYSLOG("Now the number of modem ipv4 interface is 0, delete default flt rules.\n");
 			IPACM_Wan::num_v4_flt_rule = 0;
 #ifdef FEATURE_VLAN_MPDN
 			memset(IPACM_Wan::pdn_flt_rule_v4, 0, IPA_MAX_FLT_RULE * sizeof(struct ipacm_pdn_flt_rule));
@@ -7857,7 +7836,7 @@ int IPACM_Wan::handle_down_evt_ex()
 		{
 			num_ipv6_modem_pdn--;
 		}
-		IPACMDBG_H("Now the number of modem ipv6 pdn is %d.\n", num_ipv6_modem_pdn);
+		IPACM_SYSLOG("Now the number of modem ipv6 pdn is %d.\n", num_ipv6_modem_pdn);
 		/* only when default gw goes down we post WAN_DOWN event*/
 
 #ifdef FEATURE_VLAN_MPDN
@@ -7876,11 +7855,11 @@ int IPACM_Wan::handle_down_evt_ex()
 			if (!xlat_cfg)
 				num_offloaded_pdns--;
 
-			IPACMDBG_H("now num offloaded PDNs is %d\n", num_offloaded_pdns);
+			IPACM_SYSLOG("now num offloaded PDNs is %d\n", num_offloaded_pdns);
 
 			if(!isVlanWanUP_V6())
 			{
-				IPACMDBG_H("ip-type %d: default v6 wan RT-rule deleted\n", ip_type);
+				IPACM_SYSLOG("ip-type %d: default v6 wan RT-rule deleted\n", ip_type);
 				if(m_routing.DeleteRoutingHdl(wan_route_rule_v6_hdl_a5, IPA_IP_v6) == false)
 				{
 					IPACMDBG_H("IP-family:%d, Routing rule(hdl:0x%x) deletion failed!\n", IPA_IP_v6, wan_route_rule_v6_hdl_a5);
@@ -7905,8 +7884,8 @@ int IPACM_Wan::handle_down_evt_ex()
 			vlandown_data->VlanID = ipv6_to_iface[modem_ipv6_pdn_index].associated_VIDs[0];
 			vlandown_data->mux_id = ext_prop->ext[0].mux_id;
 
-			IPACMDBG_H("Posting IPA_HANDLE_WAN_VLAN_PDN_DOWN (v6) with below information:\n");
-			IPACMDBG_H("iptype IPA_IP_v6, VlanID %d, mux_id %d, if num %d\n", vlandown_data->VlanID, ext_prop->ext[0].mux_id, ipa_if_num);
+			IPACM_SYSLOG("Posting IPA_HANDLE_WAN_VLAN_PDN_DOWN (v6) iptype IPA_IP_v6, VlanID %d, mux_id %d, if num %d\n",
+					vlandown_data->VlanID, ext_prop->ext[0].mux_id, ipa_if_num);
 
 			evt_data.event = IPA_HANDLE_WAN_VLAN_PDN_DOWN;
 			evt_data.evt_data = (void *)vlandown_data;
@@ -8010,7 +7989,7 @@ int IPACM_Wan::handle_down_evt_ex()
 		/* only when the last ipv6 modem interface goes down, delete ipv6 default flt rules*/
 		if(num_ipv6_modem_pdn == 0)
 		{
-			IPACMDBG_H("Now the number of modem ipv6 interface is 0, delete default flt rules.\n");
+			IPACM_SYSLOG("Now the number of modem ipv6 interface is 0, delete default flt rules.\n");
 			IPACM_Wan::num_v6_flt_rule = 0;
 #ifdef FEATURE_VLAN_MPDN
 			IPACM_Wan::ipv6_mpdn_default_filterting_rules_count = 0;
@@ -8034,10 +8013,10 @@ int IPACM_Wan::handle_down_evt_ex()
 	if (ip_type == IPA_IP_MAX)
 	{
 		num_ipv4_modem_pdn--;
-		IPACMDBG_H("Now the number of modem ipv4 pdn is %d.\n", num_ipv4_modem_pdn);
+		IPACM_SYSLOG("Now the number of modem ipv4 pdn is %d.\n", num_ipv4_modem_pdn);
 		if (num_dft_rt_v6 > 1)
 			num_ipv6_modem_pdn--;
-		IPACMDBG_H("Now the number of modem ipv6 pdn is %d.\n", num_ipv6_modem_pdn);
+		IPACM_SYSLOG("Now the number of modem ipv6 pdn is %d.\n", num_ipv6_modem_pdn);
 
 #ifdef FEATURE_VLAN_MPDN
 		IPACM_Iface::ipacmcfg->del_vlan_ipv6_prefix(ipv6_prefix, -1);
@@ -8090,13 +8069,12 @@ int IPACM_Wan::handle_down_evt_ex()
 			}
 
 			num_offloaded_pdns--;
-			IPACMDBG_H("now num offloaded PDNs is %d\n", num_offloaded_pdns);
+			IPACM_SYSLOG("now num offloaded PDNs is %d\n", num_offloaded_pdns);
 
 			vlandown_data->VlanID = associated_VID;
 			vlandown_data->mux_id = ext_prop->ext[0].mux_id;
 
-			IPACMDBG_H("Posting IPA_HANDLE_WAN_VLAN_PDN_DOWN with below information:\n");
-			IPACMDBG_H("iptype %d, VlanID %d, mux_id %d, if num %d\n", vlandown_data->iptype, vlandown_data->VlanID, ext_prop->ext[0].mux_id, ipa_if_num);
+			IPACM_SYSLOG("Posting IPA_HANDLE_WAN_VLAN_PDN_DOWN iptype %d, VlanID %d, mux_id %d, if num %d\n", vlandown_data->iptype, vlandown_data->VlanID, ext_prop->ext[0].mux_id, ipa_if_num);
 
 			evt_data.event = IPA_HANDLE_WAN_VLAN_PDN_DOWN;
 			evt_data.evt_data = (void *)vlandown_data;
@@ -8214,7 +8192,7 @@ int IPACM_Wan::handle_down_evt_ex()
 			for (i=0; i < tether_total; i++)
 			{
 				post_wan_down_tether_evt(IPA_IP_v4, ipa_if_num_tether_tmp[i]);
-				IPACMDBG_H("post_wan_down_tether_v4 iface(%d: %s)\n",
+				IPACM_SYSLOG("post_wan_down_tether_v4 iface(%d: %s)\n",
 					i, IPACM_Iface::ipacmcfg->iface_table[ipa_if_num_tether_tmp[i]].iface_name);
 			}
 #endif
@@ -8238,7 +8216,7 @@ int IPACM_Wan::handle_down_evt_ex()
 			for (i=0; i < tether_total; i++)
 			{
 				post_wan_down_tether_evt(IPA_IP_v6, ipa_if_num_tether_tmp[i]);
-				IPACMDBG_H("post_wan_down_tether_v6 iface(%d: %s)\n",
+				IPACM_SYSLOG("post_wan_down_tether_v6 iface(%d: %s)\n",
 					i, IPACM_Iface::ipacmcfg->iface_table[ipa_if_num_tether_tmp[i]].iface_name);
 			}
 #endif
@@ -8250,7 +8228,7 @@ int IPACM_Wan::handle_down_evt_ex()
 		/* only when the last ipv4 modem interface goes down, delete ipv4 default flt rules*/
 		if(num_ipv4_modem_pdn == 0)
 		{
-			IPACMDBG_H("Now the number of modem ipv4 interface is 0, delete default flt rules.\n");
+			IPACM_SYSLOG("Now the number of modem ipv4 interface is 0, delete default flt rules.\n");
 			IPACM_Wan::num_v4_flt_rule = 0;
 #ifdef FEATURE_VLAN_MPDN
 			memset(IPACM_Wan::pdn_flt_rule_v4, 0, IPA_MAX_FLT_RULE * sizeof(struct ipacm_pdn_flt_rule));
@@ -8262,7 +8240,7 @@ int IPACM_Wan::handle_down_evt_ex()
 		/* only when the last ipv6 modem interface goes down, delete ipv6 default flt rules*/
 		if(num_ipv6_modem_pdn == 0)
 		{
-			IPACMDBG_H("Now the number of modem ipv6 interface is 0, delete default flt rules.\n");
+			IPACM_SYSLOG("Now the number of modem ipv6 interface is 0, delete default flt rules.\n");
 			IPACM_Wan::num_v6_flt_rule = 0;
 #ifdef FEATURE_VLAN_MPDN
 			memset(IPACM_Wan::pdn_flt_rule_v6, 0, IPA_MAX_FLT_RULE * sizeof(struct ipacm_pdn_flt_rule));
@@ -8365,7 +8343,7 @@ int IPACM_Wan::install_wan_filtering_rule(bool is_sw_routing, bool is_socksv5_en
 		IPACMDBG("\n");
 		if (softwarerouting_act == true)
 		{
-			IPACMDBG("already setup software_routing rule for (%s)iface ip-family %d\n",
+			IPACM_SYSLOG("already setup software_routing rule for (%s)iface ip-family %d\n",
 								IPACM_Iface::ipacmcfg->iface_table[ipa_if_num].iface_name, ip_type);
 			return IPACM_SUCCESS;
 		}
@@ -8389,7 +8367,7 @@ int IPACM_Wan::install_wan_filtering_rule(bool is_sw_routing, bool is_socksv5_en
 		/* use the default PDN mux ID */
 		mux_id_v4[0] = IPACM_Iface::ipacmcfg->GetQmapId();
 #endif
-		IPACMDBG_H("Total number of WAN DL filtering rule for IPv4 is 1\n");
+		IPACM_SYSLOG("Total number of WAN DL filtering rule for IPv4 is 1\n");
 
 		pFilteringTable_v4->commit = 1;
 		pFilteringTable_v4->ep = rx_prop->rx[0].src_pipe;
@@ -8478,7 +8456,7 @@ int IPACM_Wan::install_wan_filtering_rule(bool is_sw_routing, bool is_socksv5_en
 		rt_tbl_idx.ip = IPA_IP_v6;
 		if(ioctl(m_fd_ipa, IPA_IOC_QUERY_RT_TBL_INDEX, &rt_tbl_idx) < 0)
 		{
-			IPACMERR("Failed to get routing table index from name\n");
+			IPACM_SYSLOG("Failed to get routing table index from name\n");
 			res = IPACM_FAILURE;
 			goto fail;
 		}
@@ -8525,7 +8503,7 @@ int IPACM_Wan::install_wan_filtering_rule(bool is_sw_routing, bool is_socksv5_en
 			len = sizeof(struct ipa_ioc_add_flt_rule) + IPACM_Wan::num_v4_flt_rule * sizeof(struct ipa_flt_rule_add);
 			pFilteringTable_v4 = (struct ipa_ioc_add_flt_rule*)malloc(len);
 
-			IPACMDBG_H("Total number of WAN DL filtering rule for IPv4 is %d\n", IPACM_Wan::num_v4_flt_rule);
+			IPACM_SYSLOG("Total number of WAN DL filtering rule for IPv4 is %d\n", IPACM_Wan::num_v4_flt_rule);
 
 			if (pFilteringTable_v4 == NULL)
 			{
@@ -8575,7 +8553,7 @@ int IPACM_Wan::install_wan_filtering_rule(bool is_sw_routing, bool is_socksv5_en
 			mux_id_v6 = (uint8_t*)malloc(num_v6_flt_rule_socksv5_sum * sizeof(uint8_t));
 			if(mux_id_v6 == NULL)
 			{
-				IPACMERR("Error allocate mux_id_v6 memory...\n");
+				IPACM_SYSLOG("Error allocate mux_id_v6 memory...\n");
 				pthread_mutex_unlock(&IPACM_Iface::ipacmcfg->socksv5_lock);
 				res = IPACM_FAILURE;
 				goto fail;
@@ -8583,7 +8561,7 @@ int IPACM_Wan::install_wan_filtering_rule(bool is_sw_routing, bool is_socksv5_en
 #endif
 			len = sizeof(struct ipa_ioc_add_flt_rule) + num_v6_flt_rule_socksv5_sum * sizeof(struct ipa_flt_rule_add);
 			pFilteringTable_v6 = (struct ipa_ioc_add_flt_rule*)malloc(len);
-			IPACMDBG_H("Total number of WAN DL filtering rule for IPv6 is wan_flt:%d + socksv5_v6:%d, total %d\n",
+			IPACM_SYSLOG("Total number of WAN DL filtering rule for IPv6 is wan_flt:%d + socksv5_v6:%d, total %d\n",
 				IPACM_Wan::num_v6_flt_rule, IPACM_Iface::ipacmcfg->total_pdn_ipv6_in_use,
 				num_v6_flt_rule_socksv5_sum);
 			if (pFilteringTable_v6 == NULL)
@@ -8602,7 +8580,7 @@ int IPACM_Wan::install_wan_filtering_rule(bool is_sw_routing, bool is_socksv5_en
 			/* configure socksv5 DL ipv6 client filter rule*/
 			if (config_socksv5_rules(pFilteringTable_v6))
 			{
-				IPACMERR("config_socksv5_rules failed\n");
+				IPACM_SYSLOG("config_socksv5_rules failed\n");
 				pthread_mutex_unlock(&IPACM_Iface::ipacmcfg->socksv5_lock);
 				res = IPACM_FAILURE;
 				goto fail;
@@ -8643,7 +8621,7 @@ int IPACM_Wan::install_wan_filtering_rule(bool is_sw_routing, bool is_socksv5_en
 				len = sizeof(struct ipa_ioc_add_flt_rule) + IPACM_Wan::num_v4_flt_rule * sizeof(struct ipa_flt_rule_add);
 				pFilteringTable_v4 = (struct ipa_ioc_add_flt_rule*)malloc(len);
 
-				IPACMDBG_H("Total number of WAN DL filtering rule for IPv4 is %d\n", IPACM_Wan::num_v4_flt_rule);
+				IPACM_SYSLOG("Total number of WAN DL filtering rule for IPv4 is %d\n", IPACM_Wan::num_v4_flt_rule);
 
 				if (pFilteringTable_v4 == NULL)
 				{
@@ -8655,7 +8633,7 @@ int IPACM_Wan::install_wan_filtering_rule(bool is_sw_routing, bool is_socksv5_en
 				mux_id_v4 = (uint8_t*)malloc(IPACM_Wan::num_v4_flt_rule * sizeof(uint8_t));
 				if(mux_id_v4 == NULL)
 				{
-					IPACMERR("Error allocate mux_id_v4 memory...\n");
+					IPACM_SYSLOG("Error allocate mux_id_v4 memory...\n");
 					res = IPACM_FAILURE;
 					goto fail;
 				}
@@ -8684,7 +8662,7 @@ int IPACM_Wan::install_wan_filtering_rule(bool is_sw_routing, bool is_socksv5_en
 				len = sizeof(struct ipa_ioc_add_flt_rule) + IPACM_Wan::num_v6_flt_rule * sizeof(struct ipa_flt_rule_add);
 				pFilteringTable_v6 = (struct ipa_ioc_add_flt_rule*)malloc(len);
 
-				IPACMDBG_H("Total number of WAN DL filtering rule for IPv6 is %d\n", IPACM_Wan::num_v6_flt_rule);
+				IPACM_SYSLOG("Total number of WAN DL filtering rule for IPv6 is %d\n", IPACM_Wan::num_v6_flt_rule);
 
 				if (pFilteringTable_v6 == NULL)
 				{
@@ -8697,7 +8675,7 @@ int IPACM_Wan::install_wan_filtering_rule(bool is_sw_routing, bool is_socksv5_en
 				mux_id_v6 = (uint8_t*)malloc(IPACM_Wan::num_v6_flt_rule * sizeof(uint8_t));
 				if(mux_id_v6 == NULL)
 				{
-					IPACMERR("Error allocate mux_id_v6 memory...\n");
+					IPACM_SYSLOG("Error allocate mux_id_v6 memory...\n");
 					res = IPACM_FAILURE;
 					goto fail;
 				}
@@ -8726,7 +8704,7 @@ int IPACM_Wan::install_wan_filtering_rule(bool is_sw_routing, bool is_socksv5_en
 			/* allocate ipv4 filtering table */
 			len = sizeof(struct ipa_ioc_add_flt_rule) + (1 + IPACM_Wan::num_v4_flt_rule) * sizeof(struct ipa_flt_rule_add);
 			pFilteringTable_v4 = (struct ipa_ioc_add_flt_rule*)malloc(len);
-			IPACMDBG_H("Total number of WAN DL filtering rule for IPv4 is %d\n", IPACM_Wan::num_v4_flt_rule + 1);
+			IPACM_SYSLOG("Total number of WAN DL filtering rule for IPv4 is %d\n", IPACM_Wan::num_v4_flt_rule + 1);
 			if (pFilteringTable_v4 == NULL)
 			{
 				IPACMERR("Error Locate ipa_flt_rule_add memory...\n");
@@ -8737,7 +8715,7 @@ int IPACM_Wan::install_wan_filtering_rule(bool is_sw_routing, bool is_socksv5_en
 			mux_id_v4 = (uint8_t*)malloc((IPACM_Wan::num_v4_flt_rule + 1) * sizeof(uint8_t));
 			if(mux_id_v4 == NULL)
 			{
-				IPACMERR("Error allocate mux_id_v4 memory...\n");
+				IPACM_SYSLOG("Error allocate mux_id_v4 memory...\n");
 				res = IPACM_FAILURE;
 				goto fail;
 			}
@@ -8751,7 +8729,7 @@ int IPACM_Wan::install_wan_filtering_rule(bool is_sw_routing, bool is_socksv5_en
 			/* allocate ipv6 filtering table */
 			len = sizeof(struct ipa_ioc_add_flt_rule) + (1 + IPACM_Wan::num_v6_flt_rule) * sizeof(struct ipa_flt_rule_add);
 			pFilteringTable_v6 = (struct ipa_ioc_add_flt_rule*)malloc(len);
-			IPACMDBG_H("Total number of WAN DL filtering rule for IPv6 is %d\n", IPACM_Wan::num_v6_flt_rule + 1);
+			IPACM_SYSLOG("Total number of WAN DL filtering rule for IPv6 is %d\n", IPACM_Wan::num_v6_flt_rule + 1);
 			if (pFilteringTable_v6 == NULL)
 			{
 				IPACMERR("Error Locate ipa_flt_rule_add memory...\n");
@@ -8817,7 +8795,7 @@ int IPACM_Wan::install_wan_filtering_rule(bool is_sw_routing, bool is_socksv5_en
 	if(false == m_filtering.AddWanDLFilteringRule(pFilteringTable_v4, pFilteringTable_v6, mux_id))
 #endif
 	{
-		IPACMERR("Failed to install WAN DL filtering table.\n");
+		IPACM_SYSLOG("Failed to install WAN DL filtering table.\n");
 		res = IPACM_FAILURE;
 		goto fail;
 	}
@@ -8936,14 +8914,14 @@ int IPACM_Wan::handle_wan_hdr_init(uint8_t *mac_addr, bool gw_addr)
 	/* add header to IPA */
 	if (num_wan_client >= IPA_MAX_NUM_WAN_CLIENTS)
 	{
-		IPACMERR("Reached maximum number(%d) of eth clients\n", IPA_MAX_NUM_WAN_CLIENTS);
+		IPACM_SYSLOG("Reached maximum number(%d) of eth clients\n", IPA_MAX_NUM_WAN_CLIENTS);
 		return IPACM_FAILURE;
 	}
 
 	/* Reserve entry for storing the GW address. */
 	if ((num_wan_client >= (IPA_MAX_NUM_WAN_CLIENTS - 1)) && !gw_addr)
 	{
-		IPACMERR("Reached maximum number(%d) of eth clients without GW address\n", num_wan_client);
+		IPACM_SYSLOG("Reached maximum number(%d) of eth clients without GW address\n", num_wan_client);
 		return IPACM_FAILURE;
 	}
 
@@ -8957,7 +8935,7 @@ int IPACM_Wan::handle_wan_hdr_init(uint8_t *mac_addr, bool gw_addr)
 					 mac_addr[0], mac_addr[1], mac_addr[2],
 					 mac_addr[3], mac_addr[4], mac_addr[5]);
 
-	IPACMDBG_H("stored MAC %02x:%02x:%02x:%02x:%02x:%02x\n",
+	IPACM_SYSLOG("stored MAC %02x:%02x:%02x:%02x:%02x:%02x\n",
 					 get_client_memptr(wan_client, num_wan_client)->mac[0],
 					 get_client_memptr(wan_client, num_wan_client)->mac[1],
 					 get_client_memptr(wan_client, num_wan_client)->mac[2],
@@ -8999,7 +8977,7 @@ int IPACM_Wan::handle_wan_hdr_init(uint8_t *mac_addr, bool gw_addr)
 								IPACMDBG_H("header eth2_ofst_valid: %d, eth2_ofst: %d\n", sCopyHeader.is_eth2_ofst_valid, sCopyHeader.eth2_ofst);
 								if (sCopyHeader.hdr_len > IPA_HDR_MAX_SIZE)
 								{
-									IPACMERR("header oversize\n");
+									IPACM_SYSLOG("header oversize\n");
 									res = IPACM_FAILURE;
 									goto fail;
 								}
@@ -9038,7 +9016,7 @@ int IPACM_Wan::handle_wan_hdr_init(uint8_t *mac_addr, bool gw_addr)
 								pHeaderDescriptor->hdr[0].name[IPA_RESOURCE_NAME_MAX-1] = '\0';
 								if (strlcat(pHeaderDescriptor->hdr[0].name, IPA_WAN_PARTIAL_HDR_NAME_v4, sizeof(pHeaderDescriptor->hdr[0].name)) > IPA_RESOURCE_NAME_MAX)
 								{
-									IPACMERR(" header name construction failed exceed length (%d)\n", strlen(pHeaderDescriptor->hdr[0].name));
+									IPACM_SYSLOG(" header name construction failed exceed length (%d)\n", strlen(pHeaderDescriptor->hdr[0].name));
 									res = IPACM_FAILURE;
 									goto fail;
 								}
@@ -9065,7 +9043,7 @@ int IPACM_Wan::handle_wan_hdr_init(uint8_t *mac_addr, bool gw_addr)
 					 }
 
 					get_client_memptr(wan_client, num_wan_client)->hdr_hdl_v4 = pHeaderDescriptor->hdr[0].hdr_hdl;
-					IPACMDBG_H("eth-client(%d) v4 full header name:%s header handle:(0x%x)\n",
+					IPACM_SYSLOG("eth-client(%d) v4 full header name:%s header handle:(0x%x)\n",
 												 num_wan_client,
 												 pHeaderDescriptor->hdr[0].name,
 												 get_client_memptr(wan_client, num_wan_client)->hdr_hdl_v4);
@@ -9161,7 +9139,7 @@ int IPACM_Wan::handle_wan_hdr_init(uint8_t *mac_addr, bool gw_addr)
 				}
 
 				get_client_memptr(wan_client, num_wan_client)->hdr_hdl_v6 = pHeaderDescriptor->hdr[0].hdr_hdl;
-				IPACMDBG_H("eth-client(%d) v6 full header name:%s header handle:(0x%x)\n",
+				IPACM_SYSLOG("eth-client(%d) v6 full header name:%s header handle:(0x%x)\n",
 						 num_wan_client,
 						 pHeaderDescriptor->hdr[0].name,
 									 get_client_memptr(wan_client, num_wan_client)->hdr_hdl_v6);
@@ -9180,7 +9158,7 @@ int IPACM_Wan::handle_wan_hdr_init(uint8_t *mac_addr, bool gw_addr)
 		num_wan_client++;
 		header_name_count++; //keep increasing header_name_count
 		res = IPACM_SUCCESS;
-		IPACMDBG_H("eth client number: %d\n", num_wan_client);
+		IPACM_SYSLOG("eth client number: %d\n", num_wan_client);
 	}
 	else
 	{
@@ -9198,8 +9176,8 @@ int IPACM_Wan::handle_wan_client_ipaddr(ipacm_event_data_all *data)
 	int clnt_indx;
 	int v6_num;
 
-	IPACMDBG_H("number of wan clients: %d\n", num_wan_client);
-	IPACMDBG_H(" event MAC %02x:%02x:%02x:%02x:%02x:%02x\n",
+	IPACM_SYSLOG("number of wan clients: %d,event MAC %02x:%02x:%02x:%02x:%02x:%02x\n",
+					 num_wan_client,
 					 data->mac_addr[0],
 					 data->mac_addr[1],
 					 data->mac_addr[2],
@@ -9238,7 +9216,7 @@ int IPACM_Wan::handle_wan_client_ipaddr(ipacm_event_data_all *data)
 			   }
 			   else
 			   {
-					IPACMDBG_H("ipv4 addr for client:%d is changed \n", clnt_indx);
+					IPACM_SYSLOG("ipv4 addr for client:%d is changed \n", clnt_indx);
 					/* Del NAT rules before ipv4 RT rules are delete */
 					CtList->HandleSTAClientDelEvt(get_client_memptr(wan_client, clnt_indx)->v4_addr);
 					delete_wan_rtrules(clnt_indx,IPA_IP_v4);
@@ -9260,7 +9238,7 @@ int IPACM_Wan::handle_wan_client_ipaddr(ipacm_event_data_all *data)
 		/* check if all 0 not valid ipv6 address */
 		if (data->ipv6_addr[0] || data->ipv6_addr[1] || data->ipv6_addr[2] || data->ipv6_addr[3])
 		{
-			IPACMDBG_H("ipv6 address: 0x%x:%x:%x:%x\n", data->ipv6_addr[0], data->ipv6_addr[1], data->ipv6_addr[2], data->ipv6_addr[3]);
+			IPACM_SYSLOG("ipv6 address: 0x%x:%x:%x:%x\n", data->ipv6_addr[0], data->ipv6_addr[1], data->ipv6_addr[2], data->ipv6_addr[3]);
 			if (get_client_memptr(wan_client, clnt_indx)->ipv6_set < IPV6_NUM_ADDR)
 			{
 
@@ -9291,7 +9269,7 @@ int IPACM_Wan::handle_wan_client_ipaddr(ipacm_event_data_all *data)
 			}
 			else
 			{
-				IPACMDBG_H("Already got 3 ipv6 addr for client:%d\n", clnt_indx);
+				IPACM_SYSLOG("Already got 3 ipv6 addr for client:%d\n", clnt_indx);
 				return IPACM_FAILURE; /* not setup the RT rules*/
 			}
 		}
@@ -9315,7 +9293,7 @@ int IPACM_Wan::handle_wan_client_route_rule(uint8_t *mac_addr, ipa_ip_type iptyp
 		return IPACM_SUCCESS;
 	}
 
-	IPACMDBG_H("Received mac_addr MAC %02x:%02x:%02x:%02x:%02x:%02x\n",
+	IPACM_SYSLOG("Received mac_addr MAC %02x:%02x:%02x:%02x:%02x:%02x\n",
 			mac_addr[0], mac_addr[1], mac_addr[2],
 			mac_addr[3], mac_addr[4], mac_addr[5]);
 
@@ -9467,7 +9445,7 @@ int IPACM_Wan::handle_wan_client_route_rule(uint8_t *mac_addr, ipa_ip_type iptyp
 					}
 
 					get_client_memptr(wan_client, wan_index)->wan_rt_hdl[tx_index].wan_rt_rule_hdl_v6[v6_num] = rt_rule->rules[0].rt_rule_hdl;
-					IPACMDBG_H("tx:%d, rt rule hdl=%x ip-type: %d\n", tx_index,
+					IPACM_SYSLOG("tx:%d, rt rule hdl=%x ip-type: %d\n", tx_index,
 							get_client_memptr(wan_client, wan_index)->wan_rt_hdl[tx_index].wan_rt_rule_hdl_v6[v6_num], iptype);
 
 					/*Copy same rule to v6 WAN RT TBL*/
@@ -9498,7 +9476,7 @@ int IPACM_Wan::handle_wan_client_route_rule(uint8_t *mac_addr, ipa_ip_type iptyp
 					}
 
 					get_client_memptr(wan_client, wan_index)->wan_rt_hdl[tx_index].wan_rt_rule_hdl_v6_wan[v6_num] = rt_rule->rules[0].rt_rule_hdl;
-					IPACMDBG_H("tx:%d, rt rule hdl=%x ip-type: %d\n", tx_index,
+					IPACM_SYSLOG("tx:%d, rt rule hdl=%x ip-type: %d\n", tx_index,
 							get_client_memptr(wan_client, wan_index)->wan_rt_hdl[tx_index].wan_rt_rule_hdl_v6_wan[v6_num], iptype);
 				}
 			}
@@ -9972,13 +9950,13 @@ int IPACM_Wan::add_dummy_rx_hdr()
 	pHeaderProcTable->proc_ctx[0].hdr_hdl = hdr_hdl_dummy_v6;
 	if (m_header.AddHeaderProcCtx(pHeaderProcTable) == false)
 	{
-		IPACMERR("Adding dummy hhdr_proc_hdl failed with status: %d\n", pHeaderProcTable->proc_ctx[0].status);
+		IPACM_SYSLOG("Adding dummy hhdr_proc_hdl failed with status: %d\n", pHeaderProcTable->proc_ctx[0].status);
 		return IPACM_FAILURE;
 	}
 	else
 	{
 		hdr_proc_hdl_dummy_v6 = pHeaderProcTable->proc_ctx[0].proc_ctx_hdl;
-		IPACMDBG_H("dummy hhdr_proc_hdl is added successfully. (0x%x)\n", hdr_proc_hdl_dummy_v6);
+		IPACM_SYSLOG("dummy hhdr_proc_hdl is added successfully. (0x%x)\n", hdr_proc_hdl_dummy_v6);
 	}
 	return IPACM_SUCCESS;
 }
@@ -10007,7 +9985,7 @@ void IPACM_Wan::handle_l2tp_client_add(char *iface_name)
 	install_l2tp_flt_rule(flt_rule_v6, m_ipv6_default_filterting_rules_count, iface_name);
 #endif
 	IPACM_Wan::num_v6_flt_rule++;
-	IPACMDBG_H("Now num of v6 dl flt rule is %d.\n", IPACM_Wan::num_v6_flt_rule);
+	IPACM_SYSLOG("Now num of v6 dl flt rule is %d.\n", IPACM_Wan::num_v6_flt_rule);
 	return;
 }
 
@@ -10062,7 +10040,7 @@ void IPACM_Wan::handle_l2tp_client_del(char *iface_name)
 	}
 
 	IPACM_Wan::num_v6_flt_rule--;
-	IPACMDBG_H("Now the num of v6 dl flt rule is %d.\n", IPACM_Wan::num_v6_flt_rule);
+	IPACM_SYSLOG("Now the num of v6 dl flt rule is %d.\n", IPACM_Wan::num_v6_flt_rule);
 	return;
 }
 #ifdef FEATURE_VLAN_MPDN
@@ -10078,7 +10056,7 @@ void IPACM_Wan::install_l2tp_flt_rule(ipa_flt_rule_add* rules, int rule_offset, 
 
 	if(IPACM_Iface::ipacmcfg->get_vlan_l2tp_mapping(iface_name, info) == IPACM_FAILURE)
 	{
-		IPACMERR("Failed to find vlan-l2tp mapping.\n");
+		IPACM_SYSLOG("Failed to find vlan-l2tp mapping.\n");
 		return;
 	}
 
@@ -10211,7 +10189,7 @@ int IPACM_Wan::add_ipv6_nat_ula_prefix_flt_rule(ipa_ioc_add_flt_rule *m_pFilteri
 	else
 	{
 		IPACM_Iface::ipacmcfg->increaseFltRuleCount(rx_prop->rx[0].src_pipe, IPA_IP_v6, 1);
-		IPACMDBG_H("flt rule hdl0=0x%x, status=0x%x\n", m_pFilteringTable->rules[0].flt_rule_hdl, m_pFilteringTable->rules[0].status);
+		IPACM_SYSLOG("flt rule hdl0=0x%x, status=0x%x\n", m_pFilteringTable->rules[0].flt_rule_hdl, m_pFilteringTable->rules[0].status);
 	}
 	/* copy filter hdl */
 	ipv6_ula_prefix_hdl = m_pFilteringTable->rules[0].flt_rule_hdl;
@@ -10299,10 +10277,10 @@ int IPACM_Wan::add_ipv6_nat_ula_prefix_flt_rule_ex(
 	memcpy(&flt_rule_entry.rule.eq_attrib, &flt_eq.eq_attrib, sizeof(flt_rule_entry.rule.eq_attrib));
 #ifdef FEATURE_VLAN_MPDN
 	memcpy(&(rules[fltr_rule_number].flt_rule), &flt_rule_entry, sizeof(struct ipa_flt_rule_add));
-	IPACMDBG_H("Filter rule attrib mask: 0x%x\n", rules[fltr_rule_number].flt_rule.rule.attrib.attrib_mask);
+	IPACM_SYSLOG("Filter rule attrib mask: 0x%x\n", rules[fltr_rule_number].flt_rule.rule.attrib.attrib_mask);
 #else
 	memcpy(&(rules[fltr_rule_number]), &flt_rule_entry, sizeof(struct ipa_flt_rule_add));
-	IPACMDBG_H("Filter rule attrib mask: 0x%x\n", rules[fltr_rule_number].rule.attrib.attrib_mask);
+	IPACM_SYSLOG("Filter rule attrib mask: 0x%x\n", rules[fltr_rule_number].rule.attrib.attrib_mask);
 #endif
 
 	++(*num_flt_rule);
@@ -10459,7 +10437,7 @@ int IPACM_Wan::add_catchup_all_filtering_rule_each_pdn(const IPACM_firewall_conf
 
 	memcpy(&flt_rule_entry.rule.eq_attrib, &flt_eq.eq_attrib, sizeof(flt_rule_entry.rule.eq_attrib));
 	memcpy(&flt_rule_add, &flt_rule_entry, sizeof(struct ipa_flt_rule_add));
-	IPACMDBG_H("Filter rule attrib mask: 0x%x\n", flt_rule_add.rule.attrib.attrib_mask);
+	IPACM_SYSLOG("Filter rule attrib mask: 0x%x\n", flt_rule_add.rule.attrib.attrib_mask);
 
 	++(*num_firewall);
 	++(*num_flt_rule);
@@ -10507,7 +10485,7 @@ int IPACM_Wan::add_ipv6_frag_filtering_rule_ex(const struct ipa_rule_attrib& rx_
 	}
 
 	flt_rule_entry.rule.rt_tbl_idx = rt_tbl_idx.idx;
-	IPACMDBG_H("IPv6 frag flt rule uses routing table index %d\n", rt_tbl_idx.idx);
+	IPACM_SYSLOG("IPv6 frag flt rule uses routing table index %d\n", rt_tbl_idx.idx);
 
 	flt_rule_entry.rule.attrib.attrib_mask |= rx_prop_attrib.attrib_mask;
 	flt_rule_entry.rule.attrib.meta_data_mask = rx_prop_attrib.meta_data_mask;
@@ -10687,10 +10665,10 @@ int IPACM_Wan::add_firewall_rules_ex(const IPACM_firewall_conf_t& firewall_confi
 #ifdef FEATURE_VLAN_MPDN
 			rules[pos].mux_id = curr_mux_id;
 			memcpy(&(rules[pos].flt_rule), &flt_rule_entry, sizeof(struct ipa_flt_rule_add));
-			IPACMDBG_H("Filter rule attrib mask: 0x%x\n", rules[pos].flt_rule.rule.attrib.attrib_mask);
+			IPACM_SYSLOG("Filter rule attrib mask: 0x%x\n", rules[pos].flt_rule.rule.attrib.attrib_mask);
 #else
 			memcpy(&(rules[pos]), &flt_rule_entry, sizeof(struct ipa_flt_rule_add));
-			IPACMDBG_H("Filter rule attrib mask: 0x%x\n", rules[pos].rule.attrib.attrib_mask);
+			IPACM_SYSLOG("Filter rule attrib mask: 0x%x\n", rules[pos].rule.attrib.attrib_mask);
 #endif
 			++pos;
 			++(*num_firewall);
@@ -10712,10 +10690,10 @@ int IPACM_Wan::add_firewall_rules_ex(const IPACM_firewall_conf_t& firewall_confi
 #ifdef FEATURE_VLAN_MPDN
 			rules[pos].mux_id = curr_mux_id;
 			memcpy(&(rules[pos].flt_rule), &flt_rule_entry, sizeof(struct ipa_flt_rule_add));
-			IPACMDBG_H("Filter rule attrib mask: 0x%x\n", rules[pos].flt_rule.rule.attrib.attrib_mask);
+			IPACM_SYSLOG("Filter rule attrib mask: 0x%x\n", rules[pos].flt_rule.rule.attrib.attrib_mask);
 #else
 			memcpy(&(rules[pos]), &flt_rule_entry, sizeof(struct ipa_flt_rule_add));
-			IPACMDBG_H("Filter rule attrib mask: 0x%x\n", rules[pos].rule.attrib.attrib_mask);
+			IPACM_SYSLOG("Filter rule attrib mask: 0x%x\n", rules[pos].rule.attrib.attrib_mask);
 #endif
 			++pos;
 			++(*num_firewall);
@@ -10743,10 +10721,10 @@ int IPACM_Wan::add_firewall_rules_ex(const IPACM_firewall_conf_t& firewall_confi
 #ifdef FEATURE_VLAN_MPDN
 			rules[pos].mux_id = curr_mux_id;
 			memcpy(&(rules[pos].flt_rule), &flt_rule_entry, sizeof(struct ipa_flt_rule_add));
-			IPACMDBG_H("Filter rule attrib mask: 0x%x\n", rules[pos].flt_rule.rule.attrib.attrib_mask);
+			IPACM_SYSLOG("Filter rule attrib mask: 0x%x\n", rules[pos].flt_rule.rule.attrib.attrib_mask);
 #else
 			memcpy(&(rules[pos]), &flt_rule_entry, sizeof(struct ipa_flt_rule_add));
-			IPACMDBG_H("Filter rule attrib mask: 0x%x\n", rules[pos].rule.attrib.attrib_mask);
+			IPACM_SYSLOG("Filter rule attrib mask: 0x%x\n", rules[pos].rule.attrib.attrib_mask);
 #endif
 			++pos;
 			++(*num_firewall);
@@ -10763,7 +10741,7 @@ int IPACM_Wan::query_mtu_size()
 
 	fd = socket(AF_INET, SOCK_DGRAM, 0);
 	if ( fd < 0 ) {
-		IPACMERR("ipacm: socket open failed [%d]\n", fd);
+		IPACM_SYSLOG("ipacm: socket open failed [%d]\n", fd);
 		return IPACM_FAILURE;
 	}
 
@@ -10779,7 +10757,7 @@ int IPACM_Wan::query_mtu_size()
 	IPACMDBG_H("mtu=[%d]\n", if_mtu.ifr_mtu);
 	if (if_mtu.ifr_mtu < DEFAULT_MTU_SIZE) {
 		mtu_size = if_mtu.ifr_mtu;
-		IPACMDBG_H("replaced mtu=[%d] for (%s)\n", mtu_size, dev_name);
+		IPACM_SYSLOG("replaced mtu=[%d] for (%s)\n", mtu_size, dev_name);
 	}
 
 	close(fd);

@@ -25,6 +25,10 @@ BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
 WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
 OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
 IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+Changes from Qualcomm Innovation Center, Inc. are provided under the following license:
+Copyright (c) 2022-2025 Qualcomm Innovation Center, Inc. All rights reserved.
+SPDX-License-Identifier: BSD-3-Clause-Clear
 */
 /*!
 	@file
@@ -58,6 +62,7 @@ extern "C"
 
 #define MAX_BUF_LEN 256
 #define TimeStamp_buff_len 30
+#define MAX_BUF_LEN_NEW 300
 
 #ifdef FEATURE_IPA_ANDROID
 #define IPACMLOG_FILE "/dev/socket/ipacm_log_file"
@@ -82,7 +87,7 @@ bool is_kernel_version_newer_than(
 void ipacm_log_send( void * user_data);
 
 static char buffer_send[MAX_BUF_LEN];
-static char dmesg_cmd[MAX_BUF_LEN];
+static char dmesg_cmd[MAX_BUF_LEN_NEW];
 
 static char timestamp_buf[TimeStamp_buff_len];
 char *get_time_string(char *buffer, int TimeStamp_len);
@@ -93,8 +98,8 @@ char *get_time_string(char *buffer, int TimeStamp_len);
 		snprintf(buffer_send,MAX_BUF_LEN,"%s:%d %s: " fmt, __FILE__,  __LINE__, __FUNCTION__, ##__VA_ARGS__); \
 		ipacm_log_send (buffer_send); \
 		printf("%s:%d %s() " fmt, __FILE__,  __LINE__, __FUNCTION__, ##__VA_ARGS__); \
-		memset(dmesg_cmd, 0, MAX_BUF_LEN); \
-		snprintf(dmesg_cmd, MAX_BUF_LEN, "echo %s > /dev/kmsg", buffer_send); \
+		memset(dmesg_cmd, 0, MAX_BUF_LEN_NEW); \
+		snprintf(dmesg_cmd, MAX_BUF_LEN_NEW, "echo \'%s\'  > /dev/kmsg", buffer_send); \
 		system(dmesg_cmd); \
 	} while (0);
 #ifdef DEBUG
@@ -118,6 +123,14 @@ char *get_time_string(char *buffer, int TimeStamp_len);
 		snprintf(buffer_send,MAX_BUF_LEN,"%s:%d %s() " fmt, __FILE__,  __LINE__, __FUNCTION__, ##__VA_ARGS__); \
 		ipacm_log_send (buffer_send); \
 		printf("%s %s:%d %s() " fmt, get_time_string(timestamp_buf, TimeStamp_buff_len), __FILE__,  __LINE__, __FUNCTION__, ##__VA_ARGS__); \
+	} while (0);
+#define IPACM_SYSLOG(fmt, ...) \
+	do { \
+		memset(buffer_send, 0, MAX_BUF_LEN); \
+		snprintf(buffer_send,MAX_BUF_LEN,"%s:%d %s() " fmt, __FILE__,  __LINE__, __FUNCTION__, ##__VA_ARGS__); \
+		syslog(LOG_USER,"%s",buffer_send); \
+		printf("%s %s:%d %s() " fmt, get_time_string(timestamp_buf, TimeStamp_buff_len), __FILE__,  __LINE__, __FUNCTION__, ##__VA_ARGS__); \
+		ipacm_log_send (buffer_send); \
 	} while (0);
 #else
 #define PERROR(fmt)   perror(fmt)

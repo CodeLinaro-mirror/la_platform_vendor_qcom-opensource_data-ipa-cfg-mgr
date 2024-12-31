@@ -955,7 +955,7 @@ static int ipa_nl_decode_nlmsg
 {
 	char dev_name[IF_NAME_LEN]={0};
 	char master_dev_name[IF_NAME_LEN]={0};
-	int ret_val, mask_value, mask_index, mask_value_v6;
+	int ret_val, mask_value, mask_index, mask_value_v6, ipa_interface_index;
 	struct nlmsghdr *nlh = (struct nlmsghdr *)buffer;
 
 	uint32_t if_ipv4_addr =0, if_ipipv4_addr_mask =0, temp =0, if_ipv4_addr_gw =0;
@@ -1116,6 +1116,21 @@ static int ipa_nl_decode_nlmsg
 					IPACM_EvtDispatcher::PostEvt(&evt_data);
 				}
 
+				ipa_interface_index = IPACM_Iface::iface_ipa_index_query(msg_ptr->nl_link_info.metainfo.ifi_index);
+				if (ipa_interface_index != IPACM_FAILURE)
+				{
+					if (IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].ifi_flags != msg_ptr->nl_link_info.metainfo.ifi_flags)
+
+					{
+						IPACMDBG("Change in ifi_flags process event\n");
+						IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].ifi_flags = msg_ptr->nl_link_info.metainfo.ifi_flags;
+					}
+					else
+					{
+						IPACMDBG("No change in ifi_flags return\n");
+						return IPACM_SUCCESS;
+					}
+				}
 				/* Add IPACM support for ECM plug-in/plug_out */
 				/*--------------------------------------------------------------------------
                    Check if the interface is running.If its a RTM_NEWLINK and the interface

@@ -60,6 +60,10 @@
  * IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
  * OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *
+ * Changes from Qualcomm Innovation Center are provided under the following license:
+ * Copyright (c) 2025 Qualcomm Innovation Center, Inc. All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 /*!
 		@file
@@ -1993,8 +1997,8 @@ int IPACM_Wan::check_vlan_pdn(ipa_ip_type iptype, ipacm_event_route_vlan *data, 
 
 	if (iptype == IPA_IP_v6 || iptype == IPA_IP_MAX)
 	{
-		if((data->wan_ipv6_prefix[0] == ipv6_prefix[0]) &&
-			(data->wan_ipv6_prefix[1] == ipv6_prefix[1]))
+		if(((data->wan_ipv6_prefix[0] == ipv6_prefix[0]) &&
+			(data->wan_ipv6_prefix[1] == ipv6_prefix[1])) || v4_only_xlat)
 		{
 			IPACMDBG_H("received v6 IPA_ROUTE_ADD_VLAN_PDN_EVENT for VID %d, %d\n", data->VlanID, ipa_if_num);
 

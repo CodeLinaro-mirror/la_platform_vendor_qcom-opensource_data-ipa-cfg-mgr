@@ -28,7 +28,7 @@
  *
  * Changes from Qualcomm Innovation Center are provided under the following license:
  *
- * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2025 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted (subject to the limitations in the
@@ -4339,6 +4339,7 @@ void IPACM_Config::add_qos_params_info(ipa_ioc_qos_config *data)
 		   (data->protocol == it_qos_params->ip_tup.protocol) &&
 		   (data->dscp == it_qos_params->dscp) &&
 		   (data->pcp == it_qos_params->pcp) &&
+		   (data->dscp_mark_val == it_qos_params->dscp_mark_val) &&
 		   !memcmp(it_qos_params->dst_mac_addr, data->dst_mac_addr, sizeof(new_qos_info.dst_mac_addr)) &&
 		   !memcmp(it_qos_params->ip_tup.src_v6_ip_addr, data->src_v6_ip_addr, sizeof(data->src_v6_ip_addr)) &&
 		   !memcmp(it_qos_params->ip_tup.dst_v6_ip_addr, data->dst_v6_ip_addr, sizeof(data->dst_v6_ip_addr))
@@ -4418,6 +4419,7 @@ void IPACM_Config::add_qos_params_info(ipa_ioc_qos_config *data)
 
 	new_qos_info.dscp = data->dscp;
 	new_qos_info.pcp = data->pcp;
+	new_qos_info.dscp_mark_val = data->dscp_mark_val;
 
 	m_qos_params.push_front(new_qos_info);
 	pthread_mutex_unlock(&qos_param_list_lock);

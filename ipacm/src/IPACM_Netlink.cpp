@@ -789,6 +789,7 @@ static int ipa_nl_decode_nlmsg
 			IPACMDBG("\nGOT RTM_NEWLINK event\n");
 			msg_ptr->type = nlh->nlmsg_type;
 			msg_ptr->link_event = true;
+			memset(&(msg_ptr->nl_link_info), 0, sizeof((msg_ptr->nl_link_info)));
 			if (IPACM_SUCCESS != ipa_nl_decode_rtm_link(buffer, buflen, &(msg_ptr->nl_link_info))) {
 				IPACMERR("Failed to decode rtm link message\n");
 				return IPACM_FAILURE;
@@ -1697,6 +1698,12 @@ static int ipa_nl_decode_nlmsg
 			}
 			IPACMDBG("Neighbour event with interface index %d master interface index %d family %d\n", msg_ptr->nl_neigh_info.metainfo.ndm_ifindex, msg_ptr->nl_neigh_info.master_interface_index, msg_ptr->nl_neigh_info.attr_info.local_addr.ss_family);
 
+			if(msg_ptr->nl_neigh_info.metainfo.ndm_state == NUD_NOARP)
+			{
+				IPACMDBG_H("RTM_NEWNEIGH received with NOARP. Ignoring\n");
+				return IPACM_SUCCESS;;
+			}
+
 			if((msg_ptr->nl_neigh_info.metainfo.ndm_ifindex != 0) && (msg_ptr->nl_neigh_info.master_interface_index == 0) &&
 								(msg_ptr->nl_neigh_info.attr_info.local_addr.ss_family != 0))
 			{
@@ -1787,7 +1794,7 @@ static int ipa_nl_decode_nlmsg
 			/* Add support to replace src-mac as bridge0 mac */
 			if((msg_ptr->nl_neigh_info.metainfo.ndm_family == AF_BRIDGE) &&
 				(msg_ptr->nl_neigh_info.metainfo.ndm_state == NUD_PERMANENT))
-		    {
+		   	{
 				/* Posting IPA_BRIDGE_LINK_UP_EVENT event */
 				evt_data.event = IPA_BRIDGE_LINK_UP_EVENT;
 				IPACMDBG_H("posting IPA_BRIDGE_LINK_UP_EVENT (%s):index:%d \n",
@@ -1795,7 +1802,7 @@ static int ipa_nl_decode_nlmsg
 								 data_all->if_index);
 			}
 			else
-		    {
+		   	{
 				/* Posting new_neigh events for all LAN/WAN clients */
 				evt_data.event = IPA_NEW_NEIGH_EVENT;
 				IPACMDBG_H("posting IPA_NEW_NEIGH_EVENT (%s):index:%d ip-family: %d\n",

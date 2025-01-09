@@ -610,7 +610,7 @@ int IPACM_Iface::query_iface_property(void)
 
 	fd = open(DEVICE_NAME, O_RDWR);
 	IPACMDBG("iface query-property \n");
-	if (0 == fd)
+	if (fd < 0)
 	{
 		IPACMERR("Failed opening %s.\n", DEVICE_NAME);
 		return IPACM_FAILURE;

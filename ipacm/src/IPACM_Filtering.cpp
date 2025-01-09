@@ -644,6 +644,7 @@ bool IPACM_Filtering::AddWanDLFilteringRule(struct ipa_ioc_add_flt_rule const *r
 		if(!mux_id_v4)
 		{
 			IPACMERR("got NULL v4 mux IDs array\n");
+			close(fd_wwan_ioctl);
 			return false;
 		}
 #endif
@@ -656,6 +657,7 @@ bool IPACM_Filtering::AddWanDLFilteringRule(struct ipa_ioc_add_flt_rule const *r
 		if(!mux_id_v6)
 		{
 			IPACMERR("got NULL v6 mux IDs array\n");
+			close(fd_wwan_ioctl);
 			return false;
 		}
 #endif

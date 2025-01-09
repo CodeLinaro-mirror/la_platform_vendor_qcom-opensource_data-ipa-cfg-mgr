@@ -291,6 +291,7 @@ void IPACM_Wlan::event_callback(ipa_cm_event_id event, void *param)
 						return;
 					}
 					IPACM_Iface::ipacmcfg->dscp_pcp_config_cache.add = 0;
+					close(m_fd);
 				}
 				handle_down_evt();
 				/* reset the AP-iface category to unknown */
@@ -4814,7 +4815,7 @@ int IPACM_Wlan::config_dft_firewall_rules_ul_ex(IPACM_firewall_conf_t* firewall_
 	}
 
 	fd = open(IPA_DEVICE_NAME, O_RDWR);
-	if (0 == fd)
+	if (fd < 0)
 	{
 		IPACMERR("Failed opening %s.\n", IPA_DEVICE_NAME);
 		return IPACM_FAILURE;
@@ -5944,12 +5945,14 @@ int IPACM_Wlan::delete_uplink_filter_rule_per_client
 	if (clnt_indx == IPACM_INVALID_INDEX)
 	{
 		IPACMERR("eth client not found/attached \n");
+		close(fd);
 		return IPACM_FAILURE;
 	}
 
 	if (get_client_memptr(wlan_client, clnt_indx)->lan_stats_idx == -1 && !ast_update_needed())
 	{
 		IPACMERR("Invalid LAN Stats idx for ethernet client:%d \n", clnt_indx);
+		close(fd);
 		return IPACM_FAILURE;
 	}
 
@@ -5968,6 +5971,7 @@ int IPACM_Wlan::delete_uplink_filter_rule_per_client
 #ifdef IPA_V6_UL_WL_FIREWALL_HANDLE
 		IPACMERR("IPACM_MAX_V6_UL_WL_FIREWALL_ENTRIES %d\n", IPACM_MAX_V6_UL_WL_FIREWALL_ENTRIES);
 #endif
+		close(fd);
 		return IPACM_FAILURE;
 	}
 
@@ -6002,7 +6006,7 @@ int IPACM_Wlan::delete_uplink_filter_rule_per_client
 #endif
 		get_client_memptr(wlan_client, clnt_indx)->ipv6_ul_rules_set = false;
 	}
-
+	close(fd);
 	return IPACM_SUCCESS;
 
 }

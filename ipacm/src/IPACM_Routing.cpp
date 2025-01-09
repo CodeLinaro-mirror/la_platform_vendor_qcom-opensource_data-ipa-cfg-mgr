@@ -53,7 +53,7 @@ const char *IPACM_Routing::DEVICE_NAME = "/dev/ipa";
 IPACM_Routing::IPACM_Routing()
 {
 	m_fd = open(DEVICE_NAME, O_RDWR);
-	if (0 == m_fd)
+	if (m_fd < 0)
 	{
 		IPACMERR("Failed opening %s.\n", DEVICE_NAME);
 	}

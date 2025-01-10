@@ -25,6 +25,11 @@ BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
 WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
 OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
 IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+Changes from Qualcomm Innovation Center are provided under the following license:
+Copyright (c) 2025 Qualcomm Innovation Center, Inc. All rights reserved.
+SPDX-License-Identifier: BSD-3-Clause-Clear
+
 */
 /*!
 	@file
@@ -56,6 +61,7 @@ typedef struct _iface_instances
 {
     /* Linux interface id */
 	int ipa_if_index;
+	char iface_name[IPA_IFACE_NAME_LEN];
 	IPACM_Listener *obj;
 	_iface_instances *next;
 }  iface_instances;
@@ -79,9 +85,9 @@ private:
 	int create_iface_instance(ipacm_ifacemgr_data *);
 
     /* api to register instances */
-	int registr(int ipa_if_index, IPACM_Listener *obj);
+	int registr(char *iface_name, int ipa_if_index, IPACM_Listener *obj);
 
-	int SearchInstance(int ipa_if_index);
+	int SearchInstance(ipacm_ifacemgr_data *param);
 
 	static iface_instances *head;
 

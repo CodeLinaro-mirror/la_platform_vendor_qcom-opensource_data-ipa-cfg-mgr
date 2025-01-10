@@ -27,7 +27,7 @@ OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
 IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 Changes from Qualcomm Innovation Center are provided under the following license:
-Copyright (c) 2023-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+Copyright (c) 2023-2025 Qualcomm Innovation Center, Inc. All rights reserved.
 SPDX-License-Identifier: BSD-3-Clause-Clear
 */
 /*!
@@ -461,6 +461,7 @@ typedef struct _ipacm_event_data_all
 	uint32_t  ipv6_addr[4];
 	uint8_t mac_addr[IPA_MAC_ADDR_SIZE];
 	char iface_name[IPA_IFACE_NAME_LEN];
+	bool is_mld_enabled;
 } ipacm_event_data_all;
 
 typedef struct _ipacm_event_new_neigh_vlan
@@ -540,10 +541,12 @@ typedef struct _ipacm_event_data_mac
 	int if_index;
 	int ipa_if_cate;
 	uint8_t mac_addr[IPA_MAC_ADDR_SIZE];
+	char iface_name[IPA_IFACE_NAME_LEN];
 } ipacm_event_data_mac;
 
 typedef struct
 {
+	char iface_name[IPA_IFACE_NAME_LEN];
 	int if_index;
 	uint8_t num_of_attribs;
 	struct ipa_wlan_hdr_attrib_val attribs[0];
@@ -643,11 +646,13 @@ typedef enum
 typedef struct _ipacm_ifacemgr_data
 {
 	int if_index;
+	int ipa_interface_index;
 	ipacm_wan_iface_type if_type;
 	uint8_t mac_addr[IPA_MAC_ADDR_SIZE];
 #ifdef IPA_WDI_AST_UPDATE
 	bool ast_update;
 #endif
+	char iface_name[IPA_IFACE_NAME_LEN];
 }ipacm_ifacemgr_data;
 
 struct ipa_vlan_iface_info

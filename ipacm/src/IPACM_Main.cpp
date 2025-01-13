@@ -164,6 +164,15 @@ int ipa_get_if_index(char *if_name, int *if_index);
 int ipa_reset();
 int ipa_query_driver_event();
 #endif
+ipa_nl_sk_info_t sk_info;
+
+/* start netlink query socket thread*/
+void* netlink_events_query(void *param)
+{
+	IPACMDBG_H("ipa_query_nl_getevents started\n");
+	ipa_query_nl_getevents();
+	return NULL;
+}
 
 /* start netlink socket monitor*/
 void* netlink_start(void *param)
@@ -175,7 +184,7 @@ void* netlink_start(void *param)
 	ret_val = ipa_nl_listener_init(NETLINK_ROUTE, (RTMGRP_IPV4_ROUTE | RTMGRP_IPV6_ROUTE | RTMGRP_LINK |
 																										RTMGRP_IPV4_IFADDR | RTMGRP_IPV6_IFADDR | RTMGRP_NEIGH |
 																										RTNLGRP_IPV6_PREFIX),
-																 &sk_fdset, ipa_nl_recv_msg);
+																 &sk_fdset, ipa_nl_recv_msg, &sk_info);
 
 	if (ret_val != IPACM_SUCCESS)
 	{
@@ -501,6 +510,7 @@ void* ipa_driver_msg_notifier(void *param)
 			if (data_ex == NULL)
 			{
 				IPACMERR("unable to allocate memory for event data\n");
+				free(event_ex);
 				return NULL;
 			}
 			data_ex->num_of_attribs = event_ex->num_of_attribs;
@@ -1092,12 +1102,13 @@ static void IPACM_Signals_handler(int sig, siginfo_t *info, void *extra)
 		fflush(stdout);
 
 		free(messages);
-
+		close(sk_info.sk_fd); /* closing netlink socket */
 		/* got regular kill <PID>, kill -9 <PID> generates SIGKILL that cannot be handled by a signal handler */
+		IPACMDBG_DMESG("IPACM process stoped, So ipa path is broken");
 		if(sig == SIGTERM)
 		{
 			IPACMERR("IPACM gracefully requested to quit by PID %d, complying\n", info->si_pid);
-			exit(-1);
+			exit(0);
 		}
 
 		/* restore to default signal handler so core dump is generated from original fault point */
@@ -1171,7 +1182,7 @@ int main(int argc, char **argv)
 	pthread_t netlink_thread = 0, monitor_thread = 0, ipa_driver_thread = 0;
 	pthread_t cmd_queue_thread = 0;
 	pthread_t l2tp_thread = 0;
-
+	pthread_t netlinks_query_thread = 0;
 	/* check if ipacm is already running or not */
 	ipa_is_ipacm_running();
 	IPACMDBG_H("In main()\n");
@@ -1188,6 +1199,8 @@ int main(int argc, char **argv)
 
 	IPACMDBG_H("RESET IPA-HW rules\n");
 	ipa_reset();
+	IPACMDBG_H("RESET completed\n");
+
 #endif
 
 #ifdef IPA_HW_FNR_STATS
@@ -1284,8 +1297,6 @@ int main(int argc, char **argv)
 		}
 	}
 
-	neigh->update_neigh_cache();
-
 	if (IPACM_SUCCESS == l2tp_thread)
 	{
 		ret = pthread_create(&l2tp_thread, NULL, l2tp_process, NULL);
@@ -1300,7 +1311,20 @@ int main(int argc, char **argv)
 			IPACMERR("unable to set thread name for l2tp_thrad\n");
 		}
 	}
-
+	if (IPACM_SUCCESS == netlinks_query_thread)
+	{
+		ret = pthread_create(&netlinks_query_thread, NULL, netlink_events_query, NULL);
+		if (IPACM_SUCCESS != ret)
+		{
+			IPACMERR("unable to create netlink thread\n");
+			return ret;
+		}
+		IPACMDBG_H("created netlink_events_query thread\n");
+		if(pthread_setname_np(netlinks_query_thread, "netlinks_query_thread") != 0)
+		{
+			IPACMERR("unable to set thread name\n");
+		}
+	}
 	/* Create Conntrack listener threads here to support on-demand PDNs connections before WAN is up */
 	CtList->CreateConnTrackThreads();
 
@@ -1309,6 +1333,7 @@ int main(int argc, char **argv)
 	pthread_join(monitor_thread, NULL);
 	pthread_join(ipa_driver_thread, NULL);
    	pthread_join(l2tp_thread, NULL);
+	pthread_join(netlinks_query_thread, NULL);
 
 	return IPACM_SUCCESS;
 }

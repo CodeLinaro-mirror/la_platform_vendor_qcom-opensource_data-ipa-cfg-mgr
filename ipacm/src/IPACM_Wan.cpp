@@ -1285,7 +1285,20 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 					IPACMDBG_H("Got IPA_ADDR_ADD_EVENT ip-family:%d, v6 num: %d \n",data->iptype,num_dft_rt_v6);
 
 					if (data->iptype == IPA_IP_v4)
+					{
 						IPACM_Iface::iface_addr_query(data->if_index, false, &data->ipv4_addr);
+						/* checking if xlat pdn or not with 0xc0000000 range */
+						if (((data->ipv4_addr & 0xffffff00) == 0xc0000000) && (m_is_sta_mode == Q6_WAN))
+ 						{
+ 							is_xlat = true;
+ 							if (modem_ipv4_pdn_index != -1)
+ 							{
+ 								IPACM_Wan::ipv4_to_iface[modem_ipv4_pdn_index].is_xlat = true;
+ 							}
+ 							IPACMDBG_H("WAN-LTE (%s) link up, iface: %d is_xlat: %d \n",
+ 							IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].iface_name,data->if_index, is_xlat);
+ 						}
+					}
 
 					handle_addr_evt(data);
 					/* checking if SW-RT_enable */
@@ -2371,15 +2384,16 @@ void IPACM_Wan::post_wan_vlan_pdn_event(ipa_ip_type iptype, int pdn_idx, int vla
 		return;
 	}
 
+	if(pdn_idx < 0 || vlan_idx < 0 || vlan_id <= 0)
+	{
+		IPACMERR("Wrong param pdn_idx:%d, vlan_idx:%d, vlan_id:%d\n", pdn_idx, vlan_idx, vlan_id);
+		return;
+	}
+
 	vlan_data = (ipacm_event_vlan_pdn *)malloc(sizeof(ipacm_event_vlan_pdn));
 	if(vlan_data == NULL)
 	{
 		IPACMERR("vlan_data allocation failed\n");
-		return;
-	}
-	if(pdn_idx < 0 || vlan_idx < 0 || vlan_id <= 0)
-	{
-		IPACMERR("Wrong param pdn_idx:%d, vlan_idx:%d, vlan_id:%d\n", pdn_idx, vlan_idx, vlan_id);
 		return;
 	}
 	memset(vlan_data, 0, sizeof(ipacm_event_vlan_pdn));
@@ -4544,6 +4558,7 @@ int IPACM_Wan::config_dft_firewall_rules(ipa_ip_type iptype)
 	ipa_ioc_add_flt_rule_after *m_pFilteringTableafter = NULL;
 	struct ipa_flt_rule_add flt_rule_entry;
 	int i, rule_v4 = 0, rule_v6 = 0, len;
+	int res = IPACM_SUCCESS;
 #ifdef FEATURE_IPACM_UL_FIREWALL
 	int rule_v4_ul = 0, rule_v6_ul = 0;
 #endif //FEATURE_IPACM_UL_FIREWALL
@@ -4681,8 +4696,8 @@ int IPACM_Wan::config_dft_firewall_rules(ipa_ip_type iptype)
 		if (false == m_filtering.AddFilteringRule(m_pFilteringTable))
 		{
 			IPACMERR("Error Adding RuleTable(0) to Filtering, aborting...\n");
-			free(m_pFilteringTable);
-			return IPACM_FAILURE;
+			res = IPACM_FAILURE;
+			goto fail;
 		}
 		else
 		{
@@ -4723,8 +4738,8 @@ int IPACM_Wan::config_dft_firewall_rules(ipa_ip_type iptype)
 			if (false == m_routing.GetRoutingTable(&IPACM_Iface::ipacmcfg->rt_tbl_lan_v4))
 			{
 				IPACMERR("m_routing.GetRoutingTable(rt_tbl_lan_v4) Failed.\n");
-				free(m_pFilteringTable);
-				return IPACM_FAILURE;
+				res = IPACM_FAILURE;
+				goto fail;
 			}
 
 			flt_rule_entry.flt_rule_hdl = -1;
@@ -4788,8 +4803,8 @@ int IPACM_Wan::config_dft_firewall_rules(ipa_ip_type iptype)
 				if (false == m_filtering.AddFilteringRuleAfter(m_pFilteringTableafter))
 				{
 					IPACMERR("Error Adding RuleTable(0) to Filtering, aborting...\n");
-					free(m_pFilteringTableafter);
-					return IPACM_FAILURE;
+					res = IPACM_FAILURE;
+					goto fail;
 				}
 				else
 				{
@@ -4806,8 +4821,8 @@ int IPACM_Wan::config_dft_firewall_rules(ipa_ip_type iptype)
 				if (false == m_filtering.AddFilteringRule(m_pFilteringTable))
 				{
 					IPACMERR("Error Adding RuleTable(0) to Filtering, aborting...\n");
-					free(m_pFilteringTable);
-					return IPACM_FAILURE;
+					res = IPACM_FAILURE;
+					goto fail;
 				}
 				else
 				{
@@ -4833,8 +4848,8 @@ int IPACM_Wan::config_dft_firewall_rules(ipa_ip_type iptype)
 			if (false == m_routing.GetRoutingTable(&IPACM_Iface::ipacmcfg->rt_tbl_lan_v4))
 			{
 				IPACMERR("m_routing.GetRoutingTable(&rt_tbl_lan_v4=0x%p) Failed.\n", &IPACM_Iface::ipacmcfg->rt_tbl_lan_v4);
-				free(m_pFilteringTable);
-				return IPACM_FAILURE;
+				res = IPACM_FAILURE;
+				goto fail;
 			}
 			IPACMDBG_H("Routing handle for wan routing table:0x%x\n", IPACM_Iface::ipacmcfg->rt_tbl_lan_v4.hdl);
 
@@ -4894,8 +4909,8 @@ int IPACM_Wan::config_dft_firewall_rules(ipa_ip_type iptype)
 						if (false == m_filtering.AddFilteringRule(m_pFilteringTable))
 						{
 							IPACMERR("Error Adding RuleTable(0) to Filtering, aborting...\n");
-							free(m_pFilteringTable);
-							return IPACM_FAILURE;
+							res = IPACM_FAILURE;
+							goto fail;
 						}
 						else
 						{
@@ -4918,8 +4933,8 @@ int IPACM_Wan::config_dft_firewall_rules(ipa_ip_type iptype)
 						if (false == m_filtering.AddFilteringRule(m_pFilteringTable))
 						{
 							IPACMERR("Error Adding RuleTable(0) to Filtering, aborting...\n");
-							free(m_pFilteringTable);
-							return IPACM_FAILURE;
+							res = IPACM_FAILURE;
+							goto fail;
 						}
 						else
 						{
@@ -4942,8 +4957,8 @@ int IPACM_Wan::config_dft_firewall_rules(ipa_ip_type iptype)
 						if (false == m_filtering.AddFilteringRule(m_pFilteringTable))
 						{
 							IPACMERR("Error Adding RuleTable(0) to Filtering, aborting...\n");
-							free(m_pFilteringTable);
-							return IPACM_FAILURE;
+							res = IPACM_FAILURE;
+							goto fail;
 						}
 						else
 						{
@@ -5026,8 +5041,8 @@ int IPACM_Wan::config_dft_firewall_rules(ipa_ip_type iptype)
 			if (false == m_filtering.AddFilteringRule(m_pFilteringTable))
 			{
 				IPACMERR("Error Adding RuleTable(0) to Filtering, aborting...\n");
-				free(m_pFilteringTable);
-				return IPACM_FAILURE;
+				res = IPACM_FAILURE;
+				goto fail;
 			}
 			else
 			{
@@ -5086,8 +5101,8 @@ int IPACM_Wan::config_dft_firewall_rules(ipa_ip_type iptype)
 				if (false == m_filtering.AddFilteringRuleAfter(m_pFilteringTableafter))
 				{
 					IPACMERR("Error Adding RuleTable(0) to Filtering, aborting...\n");
-					free(m_pFilteringTableafter);
-					return IPACM_FAILURE;
+					res = IPACM_FAILURE;
+					goto fail;
 				}
 				else
 				{
@@ -5104,8 +5119,8 @@ int IPACM_Wan::config_dft_firewall_rules(ipa_ip_type iptype)
 				if (false == m_filtering.AddFilteringRule(m_pFilteringTable))
 				{
 					IPACMERR("Error Adding Filtering rules, aborting...\n");
-					free(m_pFilteringTable);
-					return IPACM_FAILURE;
+					res = IPACM_FAILURE;
+					goto fail;
 				}
 				else
 				{
@@ -5123,8 +5138,8 @@ int IPACM_Wan::config_dft_firewall_rules(ipa_ip_type iptype)
 			if (false == m_routing.GetRoutingTable(&IPACM_Iface::ipacmcfg->rt_tbl_wan_v6)) //rt_tbl_wan_v6 rt_tbl_v6
 			{
 				IPACMERR("m_routing.GetRoutingTable(rt_tbl_wan_v6) Failed.\n");
-				free(m_pFilteringTable);
-				return IPACM_FAILURE;
+				res = IPACM_FAILURE;
+				goto fail;
 			}
 
 			flt_rule_entry.flt_rule_hdl = -1;
@@ -5201,8 +5216,8 @@ int IPACM_Wan::config_dft_firewall_rules(ipa_ip_type iptype)
 				if (false == m_filtering.AddFilteringRuleAfter(m_pFilteringTableafter))
 				{
 					IPACMERR("Error Adding RuleTable(0) to Filtering, aborting...\n");
-					free(m_pFilteringTableafter);
-					return IPACM_FAILURE;
+					res = IPACM_FAILURE;
+					goto fail;
 				}
 				else
 				{
@@ -5219,8 +5234,8 @@ int IPACM_Wan::config_dft_firewall_rules(ipa_ip_type iptype)
 				if (false == m_filtering.AddFilteringRule(m_pFilteringTable))
 				{
 					IPACMERR("Error Adding Filtering rules, aborting...\n");
-					free(m_pFilteringTable);
-					return IPACM_FAILURE;
+					res = IPACM_FAILURE;
+					goto fail;
 				}
 				else
 				{
@@ -5244,8 +5259,8 @@ int IPACM_Wan::config_dft_firewall_rules(ipa_ip_type iptype)
 			if (false == m_routing.GetRoutingTable(&IPACM_Iface::ipacmcfg->rt_tbl_wan_v6))
 			{
 				IPACMERR("m_routing.GetRoutingTable(rt_tbl_wan_v6) Failed.\n");
-				free(m_pFilteringTable);
-				return IPACM_FAILURE;
+				res = IPACM_FAILURE;
+				goto fail;
 			}
 #ifdef FEATURE_FIREWALL_DISABLE
 			if (firewall_config.firewall_enable == true)
@@ -5309,8 +5324,8 @@ int IPACM_Wan::config_dft_firewall_rules(ipa_ip_type iptype)
 							if (false == m_filtering.AddFilteringRule(m_pFilteringTable))
 							{
 								IPACMERR("Error Adding Filtering rules, aborting...\n");
-								free(m_pFilteringTable);
-								return IPACM_FAILURE;
+								res = IPACM_FAILURE;
+								goto fail;
 							}
 							else
 							{
@@ -5328,8 +5343,8 @@ int IPACM_Wan::config_dft_firewall_rules(ipa_ip_type iptype)
 							if (false == m_filtering.AddFilteringRule(m_pFilteringTable))
 							{
 								IPACMERR("Error Adding Filtering rules, aborting...\n");
-								free(m_pFilteringTable);
-								return IPACM_FAILURE;
+								res = IPACM_FAILURE;
+								goto fail;
 							}
 							else
 							{
@@ -5347,8 +5362,8 @@ int IPACM_Wan::config_dft_firewall_rules(ipa_ip_type iptype)
 							if (false == m_filtering.AddFilteringRule(m_pFilteringTable))
 							{
 								IPACMERR("Error Adding Filtering rules, aborting...\n");
-								free(m_pFilteringTable);
-								return IPACM_FAILURE;
+								res = IPACM_FAILURE;
+								goto fail;
 							}
 							else
 							{
@@ -5386,8 +5401,8 @@ int IPACM_Wan::config_dft_firewall_rules(ipa_ip_type iptype)
 			if (false == m_filtering.AddFilteringRule(m_pFilteringTable))
 			{
 				IPACMERR("Error Adding Filtering rules, aborting...\n");
-				free(m_pFilteringTable);
-				return IPACM_FAILURE;
+				res = IPACM_FAILURE;
+				goto fail;
 			}
 			else
 			{
@@ -5468,8 +5483,8 @@ int IPACM_Wan::config_dft_firewall_rules(ipa_ip_type iptype)
 			if (false == m_filtering.AddFilteringRule(m_pFilteringTable))
 			{
 				IPACMERR("Error Adding Filtering rules, aborting...\n");
-				free(m_pFilteringTable);
-				return IPACM_FAILURE;
+				res = IPACM_FAILURE;
+				goto fail;
 			}
 			else
 			{
@@ -5480,6 +5495,8 @@ int IPACM_Wan::config_dft_firewall_rules(ipa_ip_type iptype)
 			dft_wan_fl_hdl[1] = m_pFilteringTable->rules[0].flt_rule_hdl;
 		}
 	}
+
+fail:
 	if (m_pFilteringTableafter != NULL)
 	{
 		free(m_pFilteringTableafter);
@@ -5488,7 +5505,7 @@ int IPACM_Wan::config_dft_firewall_rules(ipa_ip_type iptype)
 	{
 		free(m_pFilteringTable);
 	}
-	return IPACM_SUCCESS;
+	return res;
 }
 
 #ifdef FEATURE_VLAN_MPDN

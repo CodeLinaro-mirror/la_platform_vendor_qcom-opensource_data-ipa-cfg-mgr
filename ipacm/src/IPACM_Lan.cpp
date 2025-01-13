@@ -808,6 +808,13 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 					}
 
 				}
+				/* Sending Getneigh to receive missing neighbor in case if missed early */
+				IPACMDBG_H("Query Getneigh for physical ifaces\n");
+				ipa_nl_query_newneigh(AF_BRIDGE, dev_name);
+				IPACMDBG_H("Query Getneigh for v4\n");
+				ipa_nl_query_newneigh(AF_INET, dev_name);
+				IPACMDBG_H("Query Getneigh for v6\n");
+				ipa_nl_query_newneigh(AF_INET6, dev_name);
 			}
 		}
 		break;
@@ -3742,16 +3749,6 @@ int IPACM_Lan::handle_addr_evt(ipacm_event_data_addr *data)
 #endif
 			install_ipv6_icmp_flt_rule();
 
-#ifdef FEATURE_L2TP
-			if (IPACM_Iface::ipacmcfg->ipacm_l2tp_enable == IPACM_L2TP ||
-					IPACM_Iface::ipacmcfg->ipacm_l2tp_enable == IPACM_L2TP_E2E)
-			{
-#ifdef IPA_L2TP_TUNNEL_UDP
-				if (ipa_if_cate == ODU_IF)
-					add_l2tp_udp_dflt_flt_rules(l2tp_udp_dflt_flt_rule_hdl);
-#endif
-			}
-#endif
 			eth_bridge_post_event(IPA_ETH_BRIDGE_IFACE_UP, IPA_IP_v6, NULL, NULL, NULL);
 
 			init_fl_rule(data->iptype);
@@ -3763,6 +3760,16 @@ int IPACM_Lan::handle_addr_evt(ipacm_event_data_addr *data)
 				/* populate the mtu_rule_offset */
 				mtu_flt_rule_offset[j][data->iptype] = dft_v6fl_rule_hdl[j][m_ipv6_default_filterting_rules_count[j] - 1];
 			}
+#ifdef FEATURE_L2TP
+			if (IPACM_Iface::ipacmcfg->ipacm_l2tp_enable == IPACM_L2TP ||
+					IPACM_Iface::ipacmcfg->ipacm_l2tp_enable == IPACM_L2TP_E2E)
+			{
+#ifdef IPA_L2TP_TUNNEL_UDP
+				if (ipa_if_cate == ODU_IF)
+					add_l2tp_udp_dflt_flt_rules(l2tp_udp_dflt_flt_rule_hdl);
+#endif
+			}
+#endif
 		}
 		num_dft_rt_v6++;
 		IPACMDBG_H("number of default route rules %d\n", num_dft_rt_v6);
@@ -9234,6 +9241,7 @@ int IPACM_Lan::config_wan_frag_firewall_rule_ul_ex(ul_firewall_t *ul_firewall, i
 	if(IPACM_Wan::GetV6PrefixByVid(vid, v6_prefix))
 	{
 		IPACMERR("couldn't get v6 prefix for vid %d\n", vid);
+		free(m_pFilteringTable);
 		return IPACM_FAILURE;
 	}
 	flt_rule_entry.rule.attrib.attrib_mask |= IPA_FLT_SRC_ADDR;
@@ -12389,7 +12397,8 @@ int IPACM_Lan::modify_ipv6_prefix_flt_rule()
 		if (pFilteringTable->num_rules > IPA_MAX_IPV6_NO_OFFLOAD_PREFIX_FLT_RULE + IPA_MAX_MTU_ENTRIES)
 		{
 			IPACMERR("Number of rules crossed the maximum available space");
-			return IPACM_FAILURE;
+			res = IPACM_FAILURE;
+			goto fail;
 		}
 		pFilteringTable->ep = rx_prop->rx[idx].src_pipe;
 		pFilteringTable->add_after_hdl = mtu_flt_rule_offset[j][IPA_IP_v6];
@@ -13271,7 +13280,8 @@ int IPACM_Lan::eth_bridge_add_hdr_proc_ctx(ipa_hdr_l2_type peer_l2_hdr_type, uin
 			if(IPACM_Iface::ipacmcfg->get_bridge_vlan_mapping(&mapping_info, true))
 			{
 				IPACMERR("Unable to find Bridge for Dummy VLAN ID %d\n", vlan_id);
-				return IPACM_FAILURE;
+				res = IPACM_FAILURE;
+				goto end;
 			}
 			vlan_id = 0;
 		}
@@ -13600,6 +13610,8 @@ int IPACM_Lan::eth_bridge_add_flt_rule(uint8_t *mac, uint32_t rt_tbl_hdl, ipa_ip
 		if(!vlan_id)
 		{
 			IPACMERR("got vlan id 0 for vlan iface %s\n", dev_name);
+			res = IPACM_FAILURE;
+			goto end;
 		}
 		flt_rule_entry.rule.attrib.attrib_mask |= IPA_FLT_VLAN_ID;
 		flt_rule_entry.rule.attrib.vlan_id = vlan_id;
@@ -14372,6 +14384,7 @@ int IPACM_Lan::add_l2tp_flt_rule(ipa_ip_type iptype, uint8_t *dst_mac, uint32_t 
 	if(m_routing.GetRoutingTable(&rt_tbl) == false)
 	{
 		IPACMERR("Failed to get routing table.\n");
+		free(pFilteringTable);
 		return IPACM_FAILURE;
 	}
 

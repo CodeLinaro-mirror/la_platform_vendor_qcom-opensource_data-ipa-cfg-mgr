@@ -28,7 +28,7 @@
  *
  * Changes from Qualcomm Innovation Center are provided under the following license:
  *
- * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2025 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted (subject to the limitations in the
@@ -1832,12 +1832,37 @@ end:
 				return;
 			}
 
+			// Delete respective header processing contexts
+			if (qos_param->qos_client_list[i].dscp_hpc_hdl_v4)
+			{
+				IPACMDBG_H("Deleting dscp v4 hpc 0x%x\n", qos_param->qos_client_list[i].dscp_hpc_hdl_v4);
+				if (m_header.DeleteHeaderProcCtx(qos_param->qos_client_list[i].dscp_hpc_hdl_v4)
+					== false)
+				{
+					IPACMERR("Failed to delete qos dscp hpc v4 hdl 0x%x\n",
+					qos_param->qos_client_list[i].dscp_hpc_hdl_v4);
+					return;
+				}
+			}
+
 			IPACMDBG_H("QOS is v6 set %d hdl %d\n",
 					qos_param->qos_client_list[i].route_rule_set_v6,
 					qos_param->qos_client_list[i].qos_rt_rule_hdl_v6);
-				if (qos_param->qos_client_list[i].route_rule_set_v6 &&
+			if (qos_param->qos_client_list[i].route_rule_set_v6 &&
 					(m_routing.DeleteRoutingHdl(qos_param->qos_client_list[i].qos_rt_rule_hdl_v6, IPA_IP_v6) == false))
 					return;
+
+			if (qos_param->qos_client_list[i].dscp_hpc_hdl_v6)
+			{
+				IPACMDBG_H("Deleting dscp v6 hpc 0x%x\n", qos_param->qos_client_list[i].dscp_hpc_hdl_v6);
+				if (m_header.DeleteHeaderProcCtx(qos_param->qos_client_list[i].dscp_hpc_hdl_v6)
+					== false)
+				{
+					IPACMERR("Failed to delete qos dscp hpc v6 hdl 0x%x\n",
+					qos_param->qos_client_list[i].dscp_hpc_hdl_v6);
+					return;
+				}
+			}
 		}
 
 		break;
@@ -10648,6 +10673,7 @@ int IPACM_Wlan::handle_wlan_qos_route_rule(uint8_t *client_mac,
 		hdr_proc_ctx_table = (ipa_ioc_add_hdr_proc_ctx *)malloc(size);
 		if (hdr_proc_ctx_table == NULL) {
 			IPACMERR("Failed to allocate memory for hdr_proc_ctx.\n");
+			free(rt_rule);
 			return IPACM_FAILURE;
 		}
 
@@ -10840,6 +10866,7 @@ int IPACM_Wlan::handle_wlan_qos_route_rule(uint8_t *client_mac,
 					IPACMERR("ioctl IPA_IOC_ADD_HDR_PROC_CTX for dscp marking failed: %d\n",
 						hdr_proc_ctx_table->proc_ctx[0].status);
 					free(hdr_proc_ctx_table);
+					free(rt_rule);
 					return IPACM_FAILURE;
 				}
 
@@ -10889,8 +10916,6 @@ int IPACM_Wlan::handle_wlan_qos_route_rule(uint8_t *client_mac,
 					memcpy(&rt_rule_entry->rule.attrib,
 						&tx_prop->tx[tx_index].attrib,
 						sizeof(rt_rule_entry->rule.attrib));
-					rt_rule_entry->rule.hdr_hdl =
-						get_client_memptr(wlan_client, wlan_index)->hdr_hdl_v6;
 
 					if ((ipv6_addr[0] || ipv6_addr[1] || ipv6_addr[2] ||
 						ipv6_addr[3]))
@@ -11016,6 +11041,30 @@ int IPACM_Wlan::handle_wlan_qos_route_rule(uint8_t *client_mac,
 #ifdef FEATURE_IPA_V3
 					rt_rule_entry->rule.hashable = true;
 #endif
+					memset(hdr_proc_ctx_table, 0, size);
+					hdr_proc_ctx_table->commit = 1;
+					hdr_proc_ctx_table->num_proc_ctxs = 1;
+					hdr_proc_ctx = &hdr_proc_ctx_table->proc_ctx[0];
+					hdr_proc_ctx->type = IPA_HDR_PROC_MARK_DSCP;
+
+					hdr_proc_ctx->pdn_dscp_params.valid = 1;
+					hdr_proc_ctx->pdn_dscp_params.dscp_val = qos_param->dscp_mark_val;
+
+					hdr_proc_ctx->hdr_hdl = get_client_memptr(wlan_client, wlan_index)->hdr_hdl_v6;
+					IPACMDBG_H("hdr_proc_ctx->hdr_hdl v6 0x%x\n", hdr_proc_ctx->hdr_hdl);
+
+					if (m_header.AddHeaderProcCtx(hdr_proc_ctx_table) == false ||
+						hdr_proc_ctx_table->proc_ctx[0].status != 0) {
+						IPACMERR("ioctl IPA_IOC_ADD_HDR_PROC_CTX for dscp marking failed: %d\n",
+							hdr_proc_ctx_table->proc_ctx[0].status);
+						free(hdr_proc_ctx_table);
+						free(rt_rule);
+						return IPACM_FAILURE;
+					}
+
+					rt_rule_entry->rule.hdr_proc_ctx_hdl = hdr_proc_ctx_table->proc_ctx[0].proc_ctx_hdl;
+					IPACMDBG_H("rt->hdr_proc_ctx_hdl v6 0x%x\n", rt_rule_entry->rule.hdr_proc_ctx_hdl);
+
 					if (false == m_routing.AddRoutingRule(rt_rule))
 					{
 						IPACMERR("Routing rule addition failed!\n");
@@ -11023,8 +11072,11 @@ int IPACM_Wlan::handle_wlan_qos_route_rule(uint8_t *client_mac,
 						return IPACM_FAILURE;
 					}
 
+					/* copy ipv6 RT hdl */
+					memset(&new_client_info, 0 , sizeof(new_client_info));
 					new_client_info.qos_rt_rule_hdl_v6 = rt_rule->rules[0].rt_rule_hdl;
 					new_client_info.route_rule_set_v6 = true;
+					new_client_info.dscp_hpc_hdl_v6 = rt_rule_entry->rule.hdr_proc_ctx_hdl;
 
 					new_client_info.v6_ip_addr[0] =
 						rt_rule_entry->rule.attrib.u.v6.dst_addr[0];
@@ -11129,6 +11181,7 @@ int IPACM_Wlan::handle_wlan_qos_route_rule_ext_v2(uint8_t *client_mac,
 		hdr_proc_ctx_table = (ipa_ioc_add_hdr_proc_ctx *)malloc(size);
 		if (hdr_proc_ctx_table == NULL) {
 			IPACMERR("Failed to allocate memory for hdr_proc_ctx.\n");
+			free(rt_rule);
 			return IPACM_FAILURE;
 		}
 
@@ -11335,6 +11388,7 @@ int IPACM_Wlan::handle_wlan_qos_route_rule_ext_v2(uint8_t *client_mac,
 					IPACMERR("ioctl IPA_IOC_ADD_HDR_PROC_CTX for dscp marking failed: %d\n",
 						hdr_proc_ctx_table->proc_ctx[0].status);
 					free(hdr_proc_ctx_table);
+					free(rt_rule);
 					return IPACM_FAILURE;
 				}
 
@@ -11384,8 +11438,6 @@ int IPACM_Wlan::handle_wlan_qos_route_rule_ext_v2(uint8_t *client_mac,
 					memcpy(&rt_rule_entry->rule.attrib,
 						&tx_prop->tx[tx_index].attrib,
 						sizeof(rt_rule_entry->rule.attrib));
-					rt_rule_entry->rule.hdr_hdl =
-						get_client_memptr(wlan_client, wlan_index)->hdr_hdl_v6;
 
 					rt_rule_entry->rule.enable_stats = true;
 					rt_rule_entry->rule.cnt_idx =
@@ -11516,6 +11568,30 @@ int IPACM_Wlan::handle_wlan_qos_route_rule_ext_v2(uint8_t *client_mac,
 #ifdef FEATURE_IPA_V3
 					rt_rule_entry->rule.hashable = true;
 #endif
+					memset(hdr_proc_ctx_table, 0, size);
+					hdr_proc_ctx_table->commit = 1;
+					hdr_proc_ctx_table->num_proc_ctxs = 1;
+					hdr_proc_ctx = &hdr_proc_ctx_table->proc_ctx[0];
+					hdr_proc_ctx->type = IPA_HDR_PROC_MARK_DSCP;
+
+					hdr_proc_ctx->pdn_dscp_params.valid = 1;
+					hdr_proc_ctx->pdn_dscp_params.dscp_val = qos_param->dscp_mark_val;
+
+					hdr_proc_ctx->hdr_hdl = get_client_memptr(wlan_client, wlan_index)->hdr_hdl_v6;
+					IPACMDBG_H("hdr_proc_ctx->hdr_hdl v6 0x%x\n", hdr_proc_ctx->hdr_hdl);
+
+					if (m_header.AddHeaderProcCtx(hdr_proc_ctx_table) == false ||
+						hdr_proc_ctx_table->proc_ctx[0].status != 0) {
+						IPACMERR("ioctl IPA_IOC_ADD_HDR_PROC_CTX for dscp marking failed: %d\n",
+							hdr_proc_ctx_table->proc_ctx[0].status);
+						free(hdr_proc_ctx_table);
+						free(rt_rule);
+						return IPACM_FAILURE;
+					}
+
+					rt_rule_entry->rule.hdr_proc_ctx_hdl = hdr_proc_ctx_table->proc_ctx[0].proc_ctx_hdl;
+					IPACMDBG_H("rt->hdr_proc_ctx_hdl v6 0x%x\n", rt_rule_entry->rule.hdr_proc_ctx_hdl);
+
 					if (false == m_routing.AddRoutingRuleExt_v2(rt_rule))
 					{
 						IPACMERR("Routing rule addition failed!\n");
@@ -11523,8 +11599,11 @@ int IPACM_Wlan::handle_wlan_qos_route_rule_ext_v2(uint8_t *client_mac,
 						return IPACM_FAILURE;
 					}
 
+					/* copy ipv6 RT hdl */
+					memset(&new_client_info, 0 , sizeof(new_client_info));
 					new_client_info.qos_rt_rule_hdl_v6 = ((struct ipa_rt_rule_add_ext_v2 *)rt_rule->rules)[0].rt_rule_hdl;
 					new_client_info.route_rule_set_v6 = true;
+					new_client_info.dscp_hpc_hdl_v6 = rt_rule_entry->rule.hdr_proc_ctx_hdl;
 
 					new_client_info.v6_ip_addr[0] =
 						rt_rule_entry->rule.attrib.u.v6.dst_addr[0];
@@ -11887,6 +11966,20 @@ int IPACM_Wlan::delete_wlan_client_info_from_qos(uint8_t *client_mac,
 						it_qos_client->qos_rt_rule_hdl_v4);
 					return IPACM_FAILURE;
 				}
+
+				// Delete respective header processing contexts
+				IPACMDBG_H("Deleting dscp v4 hpc 0x%x\n", it_qos_client->dscp_hpc_hdl_v4);
+				if (it_qos_client->dscp_hpc_hdl_v4)
+				{
+					if (m_header.DeleteHeaderProcCtx(it_qos_client->dscp_hpc_hdl_v4)
+						== false)
+					{
+						IPACMERR("Failed to delete qos dscp hpc v4 hdl 0x%x\n",
+						it_qos_client->qos_rt_rule_hdl_v4);
+						return IPACM_FAILURE;
+					}
+				}
+
 				it_qos_client =
 					qos_param->qos_client_list.erase(it_qos_client);
 				qos_param->client_cnt--;
@@ -11927,6 +12020,19 @@ int IPACM_Wlan::delete_wlan_client_info_from_qos(uint8_t *client_mac,
 								it_qos_client->qos_rt_rule_hdl_v6);
 							return IPACM_FAILURE;
 						}
+
+						IPACMDBG_H("Deleting dscp v6 hpc 0x%x\n", it_qos_client->dscp_hpc_hdl_v6);
+						if (it_qos_client->dscp_hpc_hdl_v6)
+						{
+							if (m_header.DeleteHeaderProcCtx(it_qos_client->dscp_hpc_hdl_v6)
+								== false)
+							{
+								IPACMERR("Failed to delete qos dscp hpc v6 hdl 0x%x\n",
+								it_qos_client->qos_rt_rule_hdl_v6);
+								return IPACM_FAILURE;
+							}
+						}
+
 						it_qos_client =
 							qos_param->qos_client_list.erase(it_qos_client);
 						qos_param->client_cnt--;
@@ -11957,6 +12063,19 @@ int IPACM_Wlan::delete_wlan_client_info_from_qos(uint8_t *client_mac,
 							it_qos_client->qos_rt_rule_hdl_v6);
 						return IPACM_FAILURE;
 					}
+
+					IPACMDBG_H("Deleting dscp v6 hpc 0x%x\n", it_qos_client->dscp_hpc_hdl_v6);
+					if (it_qos_client->dscp_hpc_hdl_v6)
+					{
+						if (m_header.DeleteHeaderProcCtx(it_qos_client->dscp_hpc_hdl_v6)
+							== false)
+						{
+							IPACMERR("Failed to delete qos dscp hpc v6 hdl 0x%x\n",
+							it_qos_client->qos_rt_rule_hdl_v6);
+							return IPACM_FAILURE;
+						}
+					}
+
 					it_qos_client =
 						qos_param->qos_client_list.erase(it_qos_client);
 					qos_param->client_cnt--;
@@ -12043,9 +12162,9 @@ int IPACM_Wlan::delete_all_wlan_client_info_from_qos(list<qos_param_info>::itera
 			ret = IPACM_FAILURE;
 		}
 
-		if (it_qos_client->dscp_hpc_hdl_v6[0])
+		if (it_qos_client->dscp_hpc_hdl_v6)
 		{
-			if (m_header.DeleteHeaderProcCtx(it_qos_client->dscp_hpc_hdl_v6[0])
+			if (m_header.DeleteHeaderProcCtx(it_qos_client->dscp_hpc_hdl_v6)
 					== false)
 			{
 				IPACMERR("Failed to delete qos dscp hpc v6 hdl 0x%x\n",

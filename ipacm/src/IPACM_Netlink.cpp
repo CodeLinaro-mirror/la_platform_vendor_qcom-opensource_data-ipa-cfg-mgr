@@ -27,7 +27,7 @@ OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
 IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 Changes from Qualcomm Innovation Center are provided under the following license:
-Copyright (c) 2023-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+Copyright (c) 2023-2025 Qualcomm Innovation Center, Inc. All rights reserved.
 SPDX-License-Identifier: BSD-3-Clause-Clear
 */
 /*!
@@ -2378,6 +2378,25 @@ int recv_genl_msg(struct nl_msg *msg,void *arg)
 			IPACM_Iface::ipacmcfg->del_l2tp_vlan_mapping(&session_info);
 			break;
 
+		case L2TP_CMD_TUNNEL_GET:
+			IPACMDBG_H("kernel_tunnel Get\n");
+			tunnel_info.l2tp_tunnel_id = l2tp_attr_info.tunnel_id;
+			tunnel_info.tunnel_type = l2tp_attr_info.encap_type ? IPA_L2TP_TUNNEL_IP :
+				IPA_L2TP_TUNNEL_UDP;
+			tunnel_info.src_port = l2tp_attr_info.src_port;
+			tunnel_info.dst_port = l2tp_attr_info.dst_port;
+			memcpy(tunnel_info.src_ipv6_addr, l2tp_attr_info.src_ipv6_addr, 4*sizeof(uint32_t));
+			memcpy(tunnel_info.dst_ipv6_addr, l2tp_attr_info.dst_ipv6_addr, 4*sizeof(uint32_t));
+			IPACM_Iface::ipacmcfg->add_l2tp_tunnel_info(&tunnel_info);
+			break;
+		case L2TP_CMD_SESSION_GET:
+			IPACMDBG_H("kernel_session Get\n");
+			strlcpy(session_info.l2tp_iface_name, l2tp_attr_info.l2tp_iface_name,
+					sizeof(session_info.l2tp_iface_name));
+			session_info.l2tp_session_id = l2tp_attr_info.session_id;
+			session_info.l2tp_tunnel_id = l2tp_attr_info.tunnel_id;
+			IPACM_Iface::ipacmcfg->add_l2tp_vlan_mapping(&session_info);
+			break;
 		default:
 			ret = NL_SKIP;
 	}
@@ -3409,6 +3428,81 @@ int ipa_nl_query_newneigh(int af_family, char* dev_name)
 	msg_ptr = NULL;
 	return 1;
 }
+
+int l2tp_nl_tunnel_get(int l2tpcmd)
+{
+	struct nl_msg *msg;
+	struct nl_cb *cb;
+	int result = -EPROTONOSUPPORT;
+	enum nl_cb_kind cb_kind = NL_CB_DEFAULT;
+	int flags = NLM_F_DUMP;
+	static struct nl_sock *nl_sock;
+	static int nl_family;
+
+	IPACMDBG("l2tp_nl_tunnel_get\n");
+
+	nl_sock = nl_socket_alloc();
+	if (!nl_sock) {
+		IPACMERR("nl_handle_alloc");
+		return 1;
+	}
+
+	if (nl_connect(nl_sock, NETLINK_GENERIC) < 0) {
+		IPACMERR("nl_connect");
+		return 1;
+	}
+
+	nl_family = genl_ctrl_resolve(nl_sock, L2TP_GENL_NAME);
+
+	cb = nl_cb_alloc(cb_kind);
+	if (!cb) {
+		return 1;
+	}
+
+	nl_cb_set(cb, NL_CB_VALID, NL_CB_CUSTOM, recv_genl_msg, NULL);
+
+	msg = nlmsg_alloc();
+	flags = NLM_F_REQUEST|NLM_F_DUMP;
+	genlmsg_put(msg, NL_AUTO_PID, NL_AUTO_SEQ, nl_family, 0, flags,
+							    l2tpcmd, L2TP_GENL_VERSION);
+	nl_send_auto_complete(nl_sock, msg);
+	nlmsg_free(msg);
+	result = nl_recvmsgs(nl_sock, cb);
+	if (result > 0) {
+		result = nl_wait_for_ack(nl_sock);
+	}
+
+	if (result > 0) {
+		result = 0;
+	}
+	nl_cb_put(cb);
+out:
+	IPACMERR("End\n");
+	nl_socket_free(nl_sock);
+	return result;
+}
+
+int ipa_query_active_feature()
+{
+	int fd = -1;
+
+	if ((fd = open(IPA_DEVICE_NAME, O_RDWR)) < 0) {
+		IPACMERR("Failed opening %s.\n", IPA_DEVICE_NAME);
+		return IPACM_FAILURE;
+	}
+
+	if (ioctl(fd, IPA_IOC_QUERY_CACHED_DRIVER_MSG, 1) < 0) {
+		IPACMERR("IOCTL IPA_IOC_QUERY_CACHED_DRIVER_MSG call failed: %s \n",
+			strerror(errno));
+		close(fd);
+		return IPACM_FAILURE;
+	}
+
+	IPACMDBG_H("send IPA_IOC_QUERY_CACHED_DRIVER_MSG \n");
+	close(fd);
+	return IPACM_SUCCESS;
+}
+
 void ipa_query_nl_getevents()
 {
 	IPACMDBG_H("Querying the netlink events\n");
@@ -3423,13 +3517,21 @@ void ipa_query_nl_getevents()
 	ipa_nl_query_ip_addr_info(AF_INET);
 	ipa_nl_query_ip_addr_info(AF_INET6);
 	IPACMDBG("Send GETADDR is completed\n");
+	if((IPACM_Iface::ipacmcfg->ipacm_l2tp_enable == IPACM_L2TP) ||
+		(IPACM_Iface::ipacmcfg->ipacm_l2tp_enable == IPACM_L2TP_E2E))
+	{
+		IPACMDBG("Send L2tp tunnels info\n");
+		l2tp_nl_tunnel_get(L2TP_CMD_TUNNEL_GET);
+		l2tp_nl_tunnel_get(L2TP_CMD_SESSION_GET);
+	}
 	ipa_nl_query_newneigh(AF_BRIDGE);
-	ipa_nl_query_newneigh(AF_INET);
 	ipa_nl_query_newneigh(AF_INET6);
+	ipa_nl_query_newneigh(AF_INET);
 	IPACMDBG("Send GETNEIGH is completed\n");
 	ipa_nl_send_getroute(IPA_IP_v6);
 	ipa_nl_send_getroute(IPA_IP_v4);
 	IPACMDBG("Send GETROUTE is completed\n");
 	pthread_mutex_unlock(&nl_lock);
+	ipa_query_active_feature();
 	IPACMDBG_DMESG("IPACM process started, ipa path is re-established\n");
 }

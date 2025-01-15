@@ -560,9 +560,29 @@ void IPACM_LanToLan::handle_new_iface_up(IPACM_LanToLan_Iface *new_iface, IPACM_
 	char lan_rt_tbl_name_for_rt_svap[IPA_IP_MAX][IPA_RESOURCE_NAME_MAX];
 	ipa_hdr_l2_type exist_iface_hdr, new_iface_hdr;
 
-	IPACMDBG_H("DEBUG: Num of tx props %d\n",new_iface->get_iface_pointer()->tx_prop->num_tx_props);
+	if (new_iface == NULL || exist_iface == NULL)
+	{
+		IPACMERR("Either new_iface or exist_iface is Invalid\n");
+		return;
+	}
 
-	if (new_iface->is_svap_iface() || new_iface->is_ap_iface_vlan_enabled())
+	if(!new_iface->get_iface_pointer() ||
+			!exist_iface->get_iface_pointer() ||
+			strlen(new_iface->get_iface_pointer()->dev_name) == 0 ||
+			strlen(exist_iface->get_iface_pointer()->dev_name) == 0)
+	{
+		IPACMERR("Incorrect iface pointer, dev name passed!\n");
+		return;
+	}
+	else
+	{
+		IPACMDBG_H("Populate peer info between: new_iface %s, existing iface %s\n",
+				new_iface->get_iface_pointer()->dev_name,
+				exist_iface->get_iface_pointer()->dev_name);
+	}
+	IPACMDBG_H("Num of tx props %d\n",new_iface->get_iface_pointer()->tx_prop->num_tx_props);
+
+	if ((new_iface->is_svap_iface() || new_iface->is_ap_iface_vlan_enabled()))
 	{
 		if(new_iface->get_iface_pointer()->tx_prop->num_tx_props > 2)
 		{
@@ -579,9 +599,9 @@ void IPACM_LanToLan::handle_new_iface_up(IPACM_LanToLan_Iface *new_iface, IPACM_
 		new_iface_hdr = new_iface->get_iface_pointer()->tx_prop->tx[0].hdr_l2_type;
 	}
 
-	if (exist_iface->is_svap_iface() || exist_iface->is_ap_iface_vlan_enabled())
+	if ((exist_iface->is_svap_iface() || exist_iface->is_ap_iface_vlan_enabled()))
 	{
-		if(new_iface->get_iface_pointer()->tx_prop->num_tx_props > 2)
+		if(exist_iface->get_iface_pointer()->tx_prop->num_tx_props > 2)
 		{
 			exist_iface_hdr = exist_iface->get_iface_pointer()->tx_prop->tx[2].hdr_l2_type;
 		}
@@ -596,9 +616,6 @@ void IPACM_LanToLan::handle_new_iface_up(IPACM_LanToLan_Iface *new_iface, IPACM_
 		exist_iface_hdr = exist_iface->get_iface_pointer()->tx_prop->tx[0].hdr_l2_type;
 
 	}
-
-	IPACMDBG_H("Populate peer info between: new_iface %s, existing iface %s\n", new_iface->get_iface_pointer()->dev_name,
-		exist_iface->get_iface_pointer()->dev_name);
 
 	/* populate the routing table information */
 	snprintf(rt_tbl_name_for_flt[IPA_IP_v4], IPA_RESOURCE_NAME_MAX, "eth_v4_%s_to_%s",

@@ -755,12 +755,15 @@ int IPACM_Config::Init(void)
 		}
 		if (ipacm_alloc_fnr_counters(&fnr_counters, m_fd))
 		{
-			IPACMERR("Failed to allocate fnr counters.\n");
-			goto fail;
-		} else
-			IPACMDBG_H("Allocating fnr counters :  Done\n");
-
-		hw_fnr_stats_support = true;
+			IPACMERR("Failed to allocate fnr counters. Try Realloc"
+				"Again  In main()\n");
+		}
+		else
+		{
+			hw_fnr_stats_support = true;
+			IPACMDBG_H("Allocating fnr counters :  Done (%d)\n",
+				hw_fnr_stats_support);
+		}
 	}
 skip_fnr_alloc:
 #endif //IPA_HW_FNR_STATS

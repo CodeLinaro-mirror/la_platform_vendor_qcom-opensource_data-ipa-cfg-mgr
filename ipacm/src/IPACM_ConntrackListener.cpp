@@ -2024,9 +2024,13 @@ bool is_dns_port(struct nf_conntrack *ct)
 {
 	uint16_t ssport,sdport,rsport, rdport;
 	ssport = nfct_get_attr_u16(ct, ATTR_ORIG_PORT_SRC);
+	ssport = ntohs(ssport);
 	sdport = nfct_get_attr_u16(ct, ATTR_ORIG_PORT_DST);
+	sdport = ntohs(sdport);
 	rsport = nfct_get_attr_u16(ct, ATTR_REPL_PORT_SRC);
+	rsport = ntohs(rsport);
 	rdport = nfct_get_attr_u16(ct, ATTR_REPL_PORT_DST);
+	rdport = ntohs(rdport);
 	if(ssport == 53 || sdport == 53 ||  rdport == 53 || rsport == 53)
 	{
 		IPACMDBG(" DNS port return\n");

@@ -1265,9 +1265,13 @@ void IPACM_Wlan::event_callback(ipa_cm_event_id event, void *param)
 		}
 	}
 	break;
-
 #endif
-
+	case IPA_HANDLE_LAN_WAN_EXT_PROP_CHANGE:
+	{
+		IPACMDBG_H("Received IPA_HANDLE_LAN_WAN_EXT_PROP_CHANGE\n");
+		IPACM_Lan::modify_uplink_filter_rules();
+	}
+	break;
 	default:
 		break;
 	}

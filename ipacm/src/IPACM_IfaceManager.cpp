@@ -276,6 +276,7 @@ int IPACM_IfaceManager::create_iface_instance(ipacm_ifacemgr_data *param)
 					lan->delete_iface();
 					return IPACM_FAILURE;
 				}
+				IPACM_EvtDispatcher::registr(IPA_HANDLE_LAN_WAN_EXT_PROP_CHANGE, lan);
 				IPACM_EvtDispatcher::registr(IPA_ADDR_ADD_EVENT, lan);
 				/*lan2lan ipa offload with static IP*/
 				IPACM_EvtDispatcher::registr(IPA_LAN_CLIENT_ADD_EVENT, lan);
@@ -338,6 +339,7 @@ int IPACM_IfaceManager::create_iface_instance(ipacm_ifacemgr_data *param)
 					ETH->delete_iface();
 					return IPACM_FAILURE;
 				}
+				IPACM_EvtDispatcher::registr(IPA_HANDLE_LAN_WAN_EXT_PROP_CHANGE, ETH);
 				IPACM_EvtDispatcher::registr(IPA_ADDR_ADD_EVENT, ETH);
 				/*lan2lan ipa offload with static IP*/
 				IPACM_EvtDispatcher::registr(IPA_LAN_CLIENT_ADD_EVENT, ETH);
@@ -383,6 +385,7 @@ int IPACM_IfaceManager::create_iface_instance(ipacm_ifacemgr_data *param)
 						odu->delete_iface();
 						return IPACM_FAILURE;
 					}
+					IPACM_EvtDispatcher::registr(IPA_HANDLE_LAN_WAN_EXT_PROP_CHANGE, odu);
 					IPACM_EvtDispatcher::registr(IPA_ADDR_ADD_EVENT, odu);
 					/*lan2lan ipa offload with static IP*/
 					IPACM_EvtDispatcher::registr(IPA_LAN_CLIENT_ADD_EVENT, odu);
@@ -467,6 +470,7 @@ int IPACM_IfaceManager::create_iface_instance(ipacm_ifacemgr_data *param)
 					wl->delete_iface();
 					return IPACM_FAILURE;
 				}
+				IPACM_EvtDispatcher::registr(IPA_HANDLE_LAN_WAN_EXT_PROP_CHANGE, wl);
 				IPACM_EvtDispatcher::registr(IPA_ADDR_ADD_EVENT, wl);
 				/*lan2lan ipa offload with static IP*/
 				IPACM_EvtDispatcher::registr(IPA_LAN_CLIENT_ADD_EVENT, wl);
@@ -571,6 +575,10 @@ int IPACM_IfaceManager::create_iface_instance(ipacm_ifacemgr_data *param)
 					IPACM_EvtDispatcher::registr(IPA_ROUTE_ADD_EVENT, w);
 					IPACM_EvtDispatcher::registr(IPA_ROUTE_DEL_EVENT, w);
 					IPACM_EvtDispatcher::registr(IPA_WLAN_GW_ADDR_ADD_EVENT, w);
+					if(is_sta_mode == Q6_WAN)
+					{
+						IPACM_EvtDispatcher::registr(IPA_HANDLE_WAN_EXT_PROP_CHANGE, w);
+					}
 #endif /* not defined(FEATURE_IPA_ANDROID)*/
 #ifdef FEATURE_VLAN_MPDN
 					IPACM_EvtDispatcher::registr(IPA_ROUTE_ADD_VLAN_PDN_EVENT, w);

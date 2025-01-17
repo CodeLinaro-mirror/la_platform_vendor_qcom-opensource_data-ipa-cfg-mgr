@@ -1910,6 +1910,36 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 		}
 		break;
 #endif
+	case IPA_HANDLE_WAN_EXT_PROP_CHANGE:
+		{
+			IPACMDBG_H("Received IPA_HANDLE_WAN_EXT_PROP_CHANGE\n");
+			if(m_is_sta_mode == Q6_WAN)
+			{
+				if(iface_query != NULL)
+				{
+					free(iface_query);
+					iface_query = NULL;
+				}
+				if(rx_prop != NULL)
+				{
+					free(rx_prop);
+					rx_prop = NULL;
+				}
+				if(tx_prop != NULL)
+				{
+					free(tx_prop);
+					tx_prop = NULL;
+				}
+				if(ext_prop != NULL)
+				{
+					free(ext_prop);
+					ext_prop = NULL;
+				}
+				query_iface_property();
+				query_ext_prop();
+			}
+		}
+		break;
 	default:
 		break;
 	}
@@ -5950,6 +5980,7 @@ fail:
 int IPACM_Wan::query_ext_prop()
 {
 	int fd, ret = IPACM_SUCCESS, cnt;
+	ipacm_cmd_q_data evt_data;
 
 	if (iface_query->num_ext_props > 0)
 	{
@@ -6004,8 +6035,13 @@ int IPACM_Wan::query_ext_prop()
 
 		if(IPACM_Wan::is_ext_prop_set == false)
 		{
+			memset(&evt_data, 0, sizeof(evt_data));
 			IPACM_Iface::ipacmcfg->SetExtProp(ext_prop);
 			IPACM_Wan::is_ext_prop_set = true;
+			evt_data.event = IPA_HANDLE_LAN_WAN_EXT_PROP_CHANGE;
+			evt_data.evt_data = NULL;
+			IPACMDBG_H("Posting event:%d\n", evt_data.event);
+			IPACM_EvtDispatcher::PostEvt(&evt_data);
 		}
 		close(fd);
 	}

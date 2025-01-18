@@ -2265,7 +2265,6 @@ void IPACM_Config::handle_vlan_client_info(ipacm_event_data_all *data)
 
 	for(it_l2tp_gw = l2tp_session_gw_info.begin(); it_l2tp_gw != l2tp_session_gw_info.end(); it_l2tp_gw++)
 	{
-
 		IPACMDBG_H("GW vlan client iface: %s GW IPv6 address: 0x%08x%08x%08x%08x\n", it_l2tp_gw->client_iface_name,
 		it_l2tp_gw->client_ipv6_gw_addr[0], it_l2tp_gw->client_ipv6_gw_addr[1], it_l2tp_gw->client_ipv6_gw_addr[2], it_l2tp_gw->client_ipv6_gw_addr[3]);
 		/* checking if gw is populated or not, if populated updating mac to gw list */
@@ -2276,13 +2275,8 @@ void IPACM_Config::handle_vlan_client_info(ipacm_event_data_all *data)
 			{
 				IPACMDBG_H("Already GW info is updated , now mac is updating\n");
 				memcpy(it_l2tp_gw->client_mac, data->mac_addr, sizeof(data->mac_addr));
-				break;
 			}
 		}
-	}
-	if(it_l2tp_gw == l2tp_session_gw_info.end())
-	{
-		IPACMERR("GW info is not populated\n");
 	}
 
 #ifdef FEATURE_L2TP
@@ -2295,6 +2289,20 @@ void IPACM_Config::handle_vlan_client_info(ipacm_event_data_all *data)
 				IPACMDBG_H("Found vlan iface in l2tp mapping list: %s, l2tp iface: %s\n", it_mapping->vlan_iface_name,
 					it_mapping->l2tp_iface_name);
 				memcpy(it_mapping->vlan_client_mac, data->mac_addr, sizeof(it_mapping->vlan_client_mac));
+			}
+                        for(it_l2tp_gw = l2tp_session_gw_info.begin(); it_l2tp_gw != l2tp_session_gw_info.end(); it_l2tp_gw++)
+			{
+				IPACMDBG_H("GW vlan client iface: %s GW IPv6 address: 0x%08x%08x%08x%08x\n", it_l2tp_gw->client_iface_name,
+					it_l2tp_gw->client_ipv6_gw_addr[0], it_l2tp_gw->client_ipv6_gw_addr[1], it_l2tp_gw->client_ipv6_gw_addr[2], it_l2tp_gw->client_ipv6_gw_addr[3]);
+				/* checking if gw is populated or not, if populated updating mac to gw list */
+				if(!(memcmp(it_l2tp_gw->client_iface_name, data->iface_name,sizeof(data->iface_name))) &&
+					!(memcmp(it_l2tp_gw->client_ipv6_gw_addr, data->ipv6_addr, sizeof(data->ipv6_addr))) &&
+					!(memcmp(it_mapping->vlan_client_ipv6_addr, it_l2tp_gw->client_ipv6_addr, sizeof(it_l2tp_gw->client_ipv6_addr))))
+				{
+					IPACMDBG_H("Got the neighour for %s vlan iface GW, with proper v6 address So copying the mac.\n",
+						it_mapping->l2tp_iface_name);
+					memcpy(it_mapping->vlan_client_mac, data->mac_addr, sizeof(data->mac_addr));
+				}
 			}
 		}
 	}

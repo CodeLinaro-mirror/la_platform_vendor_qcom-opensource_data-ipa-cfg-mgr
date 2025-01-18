@@ -684,7 +684,7 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 						if(IPACM_Iface::ipacmcfg->ipacm_mpdn_enable == TRUE)
 						{
 							bridge = IPACM_Iface::ipacmcfg->get_vlan_bridge(data->iface_name);
-							if(!bridge)
+							if(!bridge && event == IPA_NEW_NEIGH_EVENT)
 							{
 								IPACMDBG("couldn't find the bridge %s, trying to add\n", data->iface_name);
 								/* since we know that this is a bridge, let's try to add */

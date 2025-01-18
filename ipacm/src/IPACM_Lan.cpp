@@ -27,7 +27,7 @@
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  * Changes from Qualcomm Innovation Center, Inc. are provided under the following license:
  *
- * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2025 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted (subject to the limitations in the
@@ -13371,6 +13371,7 @@ int IPACM_Lan::install_l2tp_udp_dl_hdr_proc_ctx(int client_idx, uint16_t vlan_id
 int IPACM_Lan::install_l2tp_udp_dl_rules(ipacm_event_data_all *data, int index, ipa_ip_type iptype)
 {
 	l2tp_vlan_mapping_info info;
+	uint8_t mac_addr[6]={0};
 
 	if(tx_prop == NULL)
 	{
@@ -13383,7 +13384,21 @@ int IPACM_Lan::install_l2tp_udp_dl_rules(ipacm_event_data_all *data, int index, 
 		IPACMERR("Fail to get vlan-l2tp mapping.\n");
 		return IPACM_FAILURE;
 	}
-
+	if((info.vlan_id == 0 || info.vlan_id >= L2TP_BRIDGE_VLAN_ID_START) ||
+		(memcmp(mac_addr, info.vlan_client_mac, sizeof(info.vlan_client_mac)) == 0) ||
+		(info.vlan_iface_ipv6_addr[0] == 0 && info.vlan_iface_ipv6_addr[1] == 0 &&
+		info.vlan_iface_ipv6_addr[2] == 0 && info.vlan_iface_ipv6_addr[3] == 0) ||
+		(info.vlan_client_ipv6_addr[0] == 0 && info.vlan_client_ipv6_addr[1] == 0 &&
+		info.vlan_client_ipv6_addr[2] == 0 && info.vlan_client_ipv6_addr[3] == 0))
+	{
+		IPACMERR("Error in params\n");
+		IPACMERR("Vlan id : %d, mac : %02x:%02x:%02x:%02x:%02x:%02x\n", info.vlan_id, info.vlan_client_mac[0],
+			info.vlan_client_mac[1],info.vlan_client_mac[2],info.vlan_client_mac[3],info.vlan_client_mac[4],info.vlan_client_mac[5]);
+		IPACMERR("client v6 addr: 0x%08x:%08x:%08x:%08x and iface v6 addr 0x%08x:%08x:%08x:%08x\n", info.vlan_client_ipv6_addr[0],
+			info.vlan_client_ipv6_addr[1],info.vlan_client_ipv6_addr[2],info.vlan_client_ipv6_addr[3],info.vlan_iface_ipv6_addr[0],
+			info.vlan_iface_ipv6_addr[1],info.vlan_iface_ipv6_addr[2],info.vlan_iface_ipv6_addr[3]);
+		return IPACM_FAILURE;
+	}
 	is_l2tp_iface = true;
 
 	/* =========== install hdr template (Outer VLAN Header(18) + IPv6(40) + UDP(8) + L2TP(16) + inner ETH header(14) = 96 bytes) =========

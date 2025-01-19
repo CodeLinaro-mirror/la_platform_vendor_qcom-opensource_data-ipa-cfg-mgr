@@ -29,7 +29,7 @@
  *
  * Changes from Qualcomm Innovation Center are provided under the following license:
  *
- * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2025 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted (subject to the limitations in the
@@ -884,7 +884,10 @@ void IPACM_ConntrackListener::HandleIPPassPDNInfoUpdate(void *in_param)
 				ip_pass_enable_default_pdn = pdn_data->ip_pass_enable;
 				ip_pass_skip_nat_default_pdn = pdn_data->ip_pass_skip_nat;
 				if (pdn_data->ip_pass_enable && !pdn_data->ip_pass_skip_nat)
+				{
 					nat_inst->DelDummyNatEntries(wan_ipaddr);
+					query_conntracks(AF_INET, wan_ipaddr, 0);
+				}
 		}
 	}
 	return;

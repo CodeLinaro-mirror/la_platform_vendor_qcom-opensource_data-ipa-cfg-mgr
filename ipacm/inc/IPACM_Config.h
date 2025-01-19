@@ -61,7 +61,7 @@
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE
  *
  * Changes from Qualcomm Innovation Center, Inc. are provided under the following license:
- * Copyright (c) 2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2024-2025 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear.
  */
 /*!
@@ -155,6 +155,7 @@ typedef struct
 
 	/* Store vlan ID */
 	uint16_t vlan_id;
+	int if_index;
 } ipacm_ip_pass_mpdn_info;
 
 #if defined(FEATURE_IPACM_PER_CLIENT_STATS) && defined(IPA_HW_FNR_STATS)
@@ -591,7 +592,7 @@ public:
 		return ret;
 	}
 
-	void ip_pass_config_update(ipa_ioc_pdn_config *pdn_config);
+	void ip_pass_config_update(ipa_ioc_pdn_config *pdn_config, int if_index);
 
 	const char* getEventName(ipa_cm_event_id event_id);
 

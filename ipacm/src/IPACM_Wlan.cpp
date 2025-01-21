@@ -1540,6 +1540,18 @@ end:
 	}
 	break;
 
+	case IPA_PREFIX_CHANGE_EVENT:
+	{
+		ipacm_event_data_fid *data = (ipacm_event_data_fid *)param;
+
+		IPACMDBG_H("Received IPA_PREFIX_CHANGE_EVENT\n");
+		if(ipa_if_num != data->if_index)
+			modify_ipv6_prefix_flt_rule();
+		else
+			IPACMDBG_H("matching if index, ignoring. ipa_if_num:%d\n", ipa_if_num);
+	}
+	break;
+
 	case IPA_HANDLE_WAN_VLAN_PDN_UP:
 	{
 		ipacm_event_vlan_pdn *data = (ipacm_event_vlan_pdn *)param;

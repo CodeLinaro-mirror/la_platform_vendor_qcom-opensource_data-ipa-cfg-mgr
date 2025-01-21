@@ -65,7 +65,7 @@ uint32_t IPACM_Iface::odu_subnet_fl_rule_hdl[IPA_IP_MAX];
 
 IPACM_Config *IPACM_Iface::ipacmcfg = IPACM_Config::GetInstance();
 
-IPACM_Iface::IPACM_Iface(char *iface_name, int iface_index)
+IPACM_Iface::IPACM_Iface(char *iface_name, int iface_index, bool ppp_iface)
 {
 	ip_type = IPACM_IP_NULL; /* initially set invalid */
 	num_dft_rt_v6 = 0;
@@ -88,6 +88,31 @@ IPACM_Iface::IPACM_Iface(char *iface_name, int iface_index)
 		memcpy(dev_name, IPACM_Iface::ipacmcfg->iface_table[iface_index].iface_name,
 		sizeof(IPACM_Iface::ipacmcfg->iface_table[iface_index].iface_name));
 	}
+
+#ifdef FEATURE_PPPOE
+	if((ppp_iface) &&
+		(virtual_iface = IPACM_Iface::ipacmcfg->iface_table[iface_index].virtual_iface))
+	{
+		is_ppp_iface = ppp_iface;
+		for (int i = 0; i < MAX_NUM_PPPOE_MPDN; i++)
+		{
+			if((IPACM_Iface::ipacmcfg->pppoe_mpdn_table[i].status == 1 ||
+				IPACM_Iface::ipacmcfg->pppoe_mpdn_table[i].status == 2) &&
+				!(strncmp(IPACM_Iface::ipacmcfg->pppoe_mpdn_table[i].pppoe_dev_name,
+					dev_name,
+					sizeof(dev_name))))
+			{
+				strlcpy(IPACM_Iface::ipacmcfg->iface_table[iface_index].phy_dev_name,
+					IPACM_Iface::ipacmcfg->pppoe_mpdn_table[i].phy_dev_name,
+					sizeof(IPACM_Iface::ipacmcfg->pppoe_mpdn_table[i].phy_dev_name));
+				memcpy(phy_dev_name, IPACM_Iface::ipacmcfg->iface_table[iface_index].phy_dev_name,
+					sizeof(IPACM_Iface::ipacmcfg->iface_table[iface_index].phy_dev_name));
+				break;
+			}
+		}
+	}
+#endif
+
 	if (virtual_iface = IPACM_Iface::ipacmcfg->iface_table[iface_index].virtual_iface)
 	{
 		memcpy(phy_dev_name, IPACM_Iface::ipacmcfg->iface_table[iface_index].phy_dev_name,
@@ -753,16 +778,37 @@ int IPACM_Iface::init_fl_rule(
 	struct ipa_ioc_add_flt_rule *m_pFilteringTable =
 		(struct ipa_ioc_add_flt_rule *) buf;
 
-    /* ADD corresponding ipa_rm_resource_name of RX-endpoint before adding all IPV4V6 FT-rules */
-	if((IPACM_Iface::ipacmcfg->iface_table[ipa_if_num].if_cat== WAN_IF) || (IPACM_Iface::ipacmcfg->iface_table[ipa_if_num].if_cat== EMBMS_IF))
+	if(IPACM_Iface::ipacmcfg->iface_table[ipa_if_num].if_cat == WAN_IF &&
+		iptype == IPA_IP_v4 && IPACM_Wan::num_ipv4_sta_pdn != 1)
 	{
-		IPACMDBG_H(" NOT add producer dependency on dev %s with registered rx-prop cat:%d \n", dev_name, IPACM_Iface::ipacmcfg->iface_table[ipa_if_num].if_cat);
-		if(IPACM_Iface::ipacmcfg->eth_wan_iface_table_idx == ipa_if_num && IPACM_Iface::ipacmcfg->iface_table[ipa_if_num].if_cat == WAN_IF)
+		IPACMDBG_H("dev_name: %s num_ipv4_sta_pdn:%d not equal to 1.\n",
+			dev_name, IPACM_Wan::num_ipv4_sta_pdn);
+		return IPACM_SUCCESS;
+	}
+
+	if(IPACM_Iface::ipacmcfg->iface_table[ipa_if_num].if_cat == WAN_IF &&
+		iptype == IPA_IP_v6 && IPACM_Wan::num_ipv6_sta_pdn != 1)
+	{
+		IPACMDBG_H("dev_name: %s num_ipv6_sta_pdn:%d not equal to 1.\n",
+			dev_name, IPACM_Wan::num_ipv6_sta_pdn);
+		return IPACM_SUCCESS;
+	}
+
+    /* ADD corresponding ipa_rm_resource_name of RX-endpoint before adding all IPV4V6 FT-rules */
+	if((IPACM_Iface::ipacmcfg->iface_table[ipa_if_num].if_cat== WAN_IF) ||
+		(IPACM_Iface::ipacmcfg->iface_table[ipa_if_num].if_cat== EMBMS_IF))
+	{
+		if((IPACM_Iface::ipacmcfg->eth_wan_pppoe_enable ||
+			IPACM_Iface::ipacmcfg->eth_vlan_wan_enable) &&
+			IPACM_Iface::ipacmcfg->get_eth_vlan_wan_up(ipa_if_num) == IPACM_SUCCESS &&
+			IPACM_Iface::ipacmcfg->iface_table[ipa_if_num].if_cat == WAN_IF)
 		{
-			/*Avoid installing default rules for ETH WAN VLAN case as it is already installed in LAN case*/
-			IPACMDBG_H("Avoid installing default rules for ETH WAN VLAN case\n");
-			return res;
+			/*Avoid installing default rules for ETH WAN VLANs case as it is already installed in LAN case*/
+			IPACMDBG_H("Avoid installing default rules for ETH WAN VLANs case\n");
+			return IPACM_SUCCESS;
 		}
+		IPACMDBG_H(" NOT add producer dependency on dev %s with registered rx-prop cat:%d \n", dev_name,
+			IPACM_Iface::ipacmcfg->iface_table[ipa_if_num].if_cat);
 	}
 	else
 	{

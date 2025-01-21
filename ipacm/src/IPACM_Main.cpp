@@ -282,6 +282,9 @@ void* ipa_driver_msg_notifier(void *param)
 #ifdef FEATURE_STATIC_POLICY
 	ipa_ioc_pdn_dscp_map_info *pdn_dscp_info = NULL;
 #endif
+#ifdef FEATURE_PPPOE
+	ipa_ioc_pppoe_info *pppoe_info = NULL;
+#endif
 #ifdef IPA_IOC_SET_MAC_FLT
 	ipa_ioc_mac_client_list_type *event_mac_flt = NULL;
 #endif
@@ -639,25 +642,40 @@ void* ipa_driver_msg_notifier(void *param)
 			}
 			evt_data.event = IPA_USB_LINK_UP_EVENT;
 			evt_data.evt_data = data_fid;
+			ipa_nl_send_getroute(IPA_IP_v4);
+			ipa_nl_send_getroute(IPA_IP_v6);
 			break;
 
 		case ECM_DISCONNECT:
 			memcpy(&event_ecm, buffer + sizeof(struct ipa_msg_meta), sizeof(struct ipa_ecm_msg));
 			IPACMDBG_H("Received ECM_DISCONNECT name: %s\n",event_ecm.name);
-			if(IPACM_Iface::ipacmcfg->eth_wan_iface_table_idx >= 0 &&
-				strstr(event_ecm.name, ETH_INTF))
+
+			if(IPACM_Iface::ipacmcfg->eth_wan_pppoe_enable ||
+				IPACM_Iface::ipacmcfg->eth_vlan_wan_enable)
 			{
-				data_fid2 = (ipacm_event_data_fid *)malloc(sizeof(ipacm_event_data_fid));
-				if(data_fid2 == NULL)
+				for(int i=0; i < MAX_NUM_PPPOE_MPDN; i++)
 				{
-					IPACMERR("unable to allocate memory for event_ecm data_fid\n");
-					return NULL;
+					if(IPACM_Iface::ipacmcfg->eth_wan_iface_table_idx[i] >= 0 &&
+						strncmp(
+							IPACM_Iface::ipacmcfg->iface_table[IPACM_Iface::ipacmcfg->eth_wan_iface_table_idx[i]].phy_dev_name,
+							event_ecm.name, sizeof(event_ecm.name)) == 0)
+					{
+						data_fid2 = (ipacm_event_data_fid *)malloc(sizeof(ipacm_event_data_fid));
+						if(data_fid2 == NULL)
+						{
+							IPACMERR("unable to allocate memory for event_ecm data_fid\n");
+							return NULL;
+						}
+						data_fid2->if_index =
+							IPACM_Iface::ipacmcfg->iface_table[IPACM_Iface::ipacmcfg->eth_wan_iface_table_idx[i]].netlink_interface_index;
+						evt_data.event = IPA_LINK_DOWN_EVENT;
+						evt_data.evt_data = data_fid2;
+						IPACMDBG_H("Posting IPA_LINK_DOWN_EVENT event %d for ETH VLAN iface:%d dev_name:%s\n",
+							evt_data.event, data_fid2->if_index,
+							IPACM_Iface::ipacmcfg->iface_table[IPACM_Iface::ipacmcfg->eth_wan_iface_table_idx[i]].iface_name);
+						IPACM_EvtDispatcher::PostEvt(&evt_data);
+					}
 				}
-				data_fid2->if_index = IPACM_Iface::ipacmcfg->iface_table[IPACM_Iface::ipacmcfg->eth_wan_iface_table_idx].netlink_interface_index;
-				evt_data.event = IPA_LINK_DOWN_EVENT;
-				evt_data.evt_data = data_fid2;
-				IPACMDBG_H("Posting event %d for ETH VLAN iface:%d\n", evt_data.event, data_fid2->if_index);
-				IPACM_EvtDispatcher::PostEvt(&evt_data);
 			}
 			memset(&evt_data, 0, sizeof(evt_data));
 			data_fid = (ipacm_event_data_fid *)malloc(sizeof(ipacm_event_data_fid));
@@ -1458,6 +1476,28 @@ void* ipa_driver_msg_notifier(void *param)
 				IPACM_Iface::ipacmcfg->flush_qos_params_info(qos_param);
 			}
 			continue;
+
+#ifdef FEATURE_PPPOE
+		case IPA_PPPOE_ADD_MAPPING_EVENT:
+			pppoe_info = (ipa_ioc_pppoe_info *)
+				(buffer + sizeof(struct ipa_msg_meta));
+			IPACMDBG_H("Received IPA_PPPOE_ADD_MAPPING_EVENT dev_name: %s "
+				"vlan_id: %d pppoe_dev_name: %s enable: %d\n",
+				pppoe_info->dev_name, pppoe_info->vlan_id, pppoe_info->pppoe_dev_name,
+				pppoe_info->add);
+			if(pppoe_info->add)
+			{
+				IPACM_Iface::ipacmcfg->pppoe_config_update(pppoe_info, pppoe_info->add, 0, NULL);
+				IPACM_Iface::ipacmcfg->get_pppoe_session_info(pppoe_info->dev_name);
+				ipa_nl_send_getroute(IPA_IP_v4);
+				ipa_nl_send_getroute(IPA_IP_v6);
+			}
+			else if(!pppoe_info->add)
+			{
+				IPACM_Iface::ipacmcfg->pppoe_config_update(pppoe_info, pppoe_info->add, 0, NULL);
+			}
+			continue;
+#endif
 
 		default:
 			IPACMDBG_H("Unhandled message type: %d\n", event_hdr.msg_type);

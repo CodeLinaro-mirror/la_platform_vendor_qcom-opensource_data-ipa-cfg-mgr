@@ -173,6 +173,7 @@ const char *ipacm_event_name[] = {
 	__stringify(IPA_ROUTE_ADD_VLAN_PDN_EVENT),             /* ipacm_event_route_vlan */
 	__stringify(IPA_HANDLE_WAN_VLAN_PDN_UP),               /* ipacm_event_vlan_pdn */
 	__stringify(IPA_HANDLE_WAN_VLAN_PDN_DOWN),             /* ipacm_event_vlan_pdn */
+	__stringify(IPA_HANDLE_LAN_VLAN_PDN_DOWN_STATIC),      /* ipacm_event_vlan_pdn */
 	__stringify(IPA_NOTIFY_VLAN_UP),                       /* NULL */
 #endif
 #ifdef FEATURE_SOCKSv5
@@ -213,9 +214,15 @@ const char *ipacm_event_name[] = {
 	__stringify(IPA_HANDLE_IPSEC_UL_FLT_DEL),              /* Handle IPsec UL policy flt delete */
 	__stringify(IPA_IPSEC_LAN_CLIENT_ROUTE_ADD_EVENT),     /* Internal event for a new LAN client route */
 #endif
+#ifdef FEATURE_STATIC_POLICY
+	__stringify(IPA_PDN_DSCP_UPDATE_EVENT),                /* ipacm_event_pdn_dscp_info */
+	__stringify(IPA_PDN_MUX_ID_UPDATE),                    /* ipacm_event_pdn_mux_info */
+#endif
 	__stringify(IPA_QOS_RULE_ADD_EVENT),                   /* ipacm_qos_rule_add_event */
 	__stringify(IPA_QOS_RULE_DEL_EVENT),                   /* ipacm_qos_rule_del_event */
 	__stringify(IPA_QOS_RULE_FLUSH_EVENT),                 /* ipacm_qos_rule_flush_event */
+	__stringify(IPA_HANDLE_NEW_NEIGH_EVENT),               /* ipacm_event_data_fid */
+	__stringify(IPA_WAN_GW_ADDR_ADD_EVENT),                /* ipacm_event_data_addr */
 	__stringify(IPACM_EVENT_MAX)
 };
 
@@ -243,7 +250,6 @@ IPACM_Config::IPACM_Config()
 	ipacm_odu_router_mode = false;
 	ipa_num_wlan_guest_ap = 0;
 
-	eth_wan_iface_table_idx = -1;
 	ipa_num_ipa_interfaces = 0;
 	ipa_num_private_subnet = 0;
 	ipa_num_alg_ports = 0;
@@ -261,6 +267,8 @@ IPACM_Config::IPACM_Config()
 	ipacm_socksv5_enable = false;
 	ipacm_flt_enable = 0;
 	ipacm_qos_enable = false;
+	eth_wan_pppoe_enable = false;
+	eth_vlan_wan_enable = false;
 
 	memset(&rt_tbl_default_v4, 0, sizeof(rt_tbl_default_v4));
 	memset(&rt_tbl_lan_v4, 0, sizeof(rt_tbl_lan_v4));
@@ -304,6 +312,11 @@ IPACM_Config::IPACM_Config()
 	}
 	pthread_mutex_init(&pdn_dscp_lock, NULL);
 #endif
+#ifdef FEATURE_PPPOE
+	memset(pppoe_mpdn_table, 0, sizeof(pppoe_mpdn_table));
+	pthread_mutex_init(&pppoe_map_lock, NULL);
+#endif
+	memset(eth_wan_iface_table_idx, -1, sizeof(eth_wan_iface_table_idx));
 	memset(&sw_flt_list, 0, sizeof(ipa_sw_flt_list_type));
 
 	pthread_mutex_init(&ip_pass_mpdn_lock, NULL);
@@ -596,9 +609,14 @@ reread:
 
 	/* Construct IPACM Iface table */
 	ipa_num_ipa_interfaces = cfg->iface_config.num_iface_entries;
-	/* Reserve iface index for ETH WAN VLAN iface in the end of table */
-	eth_wan_iface_table_idx = ipa_num_ipa_interfaces;
-	ipa_num_ipa_interfaces++;
+
+	/* Reserve iface index for ETH WAN VLAN ifaces in the end of table */
+	for (i = 0; i < MAX_NUM_PPPOE_MPDN; i++)
+	{
+		eth_wan_iface_table_idx[i] = ipa_num_ipa_interfaces;
+		ipa_num_ipa_interfaces++;
+	}
+
 	if (iface_table != NULL)
 	{
 		free(iface_table);
@@ -636,12 +654,15 @@ reread:
 			IPACMDBG_H("ipa_virtual_iface_name(%s) \n", ipa_virtual_iface_name);
 		}
 	}
-	if(eth_wan_iface_table_idx >= 0)
+
+	for (i = 0; i < MAX_NUM_PPPOE_MPDN; i++)
 	{
-		iface_table[eth_wan_iface_table_idx].if_cat = WAN_IF;
-		iface_table[eth_wan_iface_table_idx].if_mode = ROUTER;
-		strlcpy(iface_table[eth_wan_iface_table_idx].phy_dev_name,
-			ETH_INTF, sizeof(iface_table[eth_wan_iface_table_idx].iface_name));
+		if(eth_wan_iface_table_idx[i] >= 0)
+		{
+			iface_table[eth_wan_iface_table_idx[i]].if_cat = WAN_IF;
+			iface_table[eth_wan_iface_table_idx[i]].if_mode = ROUTER;
+			iface_table[eth_wan_iface_table_idx[i]].virtual_iface = true;
+		}
 	}
 
 	/* Construct IPACM ALG table */
@@ -756,6 +777,15 @@ skip_fnr_alloc:
 	ipacm_static_policy_dscp_mark_mode = cfg->static_policy_dscp_mark_mode;
 #endif
 	ipacm_qos_enable = cfg->qos_mode;
+
+	eth_wan_pppoe_enable = cfg->eth_wan_pppoe_enable;
+	IPACMDBG_H("eth_wan_pppoe_enable: %d\n", eth_wan_pppoe_enable);
+
+	eth_vlan_wan_enable = cfg->eth_vlan_wan_enable;
+	IPACMDBG_H("eth_vlan_wan_enable: %d\n", eth_vlan_wan_enable);
+
+	eth_lan_wan_iface_name = cfg->eth_lan_wan_iface_name;
+	IPACMDBG_H("eth_lan_wan_iface_name: %s\n", eth_lan_wan_iface_name);
 
 	if (ipacm_mpdn_enable == TRUE && ipacm_l2tp_enable != IPACM_L2TP_DISABLE)
 	{
@@ -2781,6 +2811,87 @@ fail:
 }
 #endif
 
+#ifdef FEATURE_PPPOE
+void IPACM_Config::pppoe_config_update(ipa_ioc_pppoe_info *pppoe_config, uint8_t to_add, uint8_t session_id, uint8_t *mac_addr)
+{
+	int indx;
+
+	if(pthread_mutex_lock(&pppoe_map_lock) != 0)
+	{
+		IPACMERR("Unable to lock the mutex\n");
+		return;
+	}
+	if(to_add == 1)
+	{
+		indx = get_free_pppoe_pdn_index(pppoe_config->pppoe_dev_name);
+		if (indx < MAX_NUM_PPPOE_MPDN)
+		{
+			IPACMDBG_H("Add PPPoE config mapping: table_index %d, pppoe_dev_name: "
+				"%s dev_name:%s vlan_id: %u status: %u\n",
+				indx, pppoe_config->pppoe_dev_name, pppoe_config->dev_name,
+				pppoe_config->vlan_id, pppoe_mpdn_table[indx].status);
+			strlcpy(pppoe_mpdn_table[indx].pppoe_dev_name,
+				pppoe_config->pppoe_dev_name, IPA_RESOURCE_NAME_MAX);
+			strlcpy(pppoe_mpdn_table[indx].phy_dev_name,
+				pppoe_config->dev_name, IPA_RESOURCE_NAME_MAX);
+			pppoe_mpdn_table[indx].vlan_id = pppoe_config->vlan_id;
+			pppoe_mpdn_table[indx].status = 1;
+		}
+		else
+			IPACMERR("PPPoE supports only 8 PDNs\n");
+	}
+	else if(to_add == 0)
+	{
+	   indx = get_pppoe_pdn_index(pppoe_config->pppoe_dev_name);
+		if (indx < MAX_NUM_PPPOE_MPDN)
+		{
+			/* Reset the configuration */
+			IPACMDBG("Delete PPPoE config mapping: table_index: %d pppoe_dev_name: "
+				"%s dev_name:%s vlan_id: %u\n",
+				indx, pppoe_config->pppoe_dev_name, pppoe_config->dev_name,
+				pppoe_config->vlan_id);
+			memset(pppoe_mpdn_table[indx].pppoe_dev_name, 0, IPA_RESOURCE_NAME_MAX);
+			memset(pppoe_mpdn_table[indx].phy_dev_name, 0, IPA_RESOURCE_NAME_MAX);
+			pppoe_mpdn_table[indx].vlan_id = 0;
+			pppoe_mpdn_table[indx].status = 0;
+			pppoe_mpdn_table[indx].session_id = 0;
+			memset(pppoe_mpdn_table[indx].mac_addr,
+				0, sizeof(pppoe_mpdn_table[indx].mac_addr));
+		}
+		else
+			IPACMERR("PPPoe PDN not found\n");
+	}
+	else if(to_add == 2)
+	{
+		indx = get_pppoe_pdn_index(pppoe_config->pppoe_dev_name);
+		if (indx < MAX_NUM_PPPOE_MPDN)
+		{
+			pppoe_mpdn_table[indx].session_id = session_id;
+			memcpy(pppoe_mpdn_table[indx].mac_addr,
+						mac_addr,
+						sizeof(pppoe_mpdn_table[indx].mac_addr));
+			pppoe_mpdn_table[indx].status = 2;
+			IPACMDBG_H("Update PPPoE config mapping: table_index %d, pppoe_dev_name: " \
+				"%s dev_name:%s vlan_id: %u session_id: %u status: %u\n",
+				indx, pppoe_mpdn_table[indx].pppoe_dev_name, pppoe_mpdn_table[indx].phy_dev_name,
+				pppoe_mpdn_table[indx].vlan_id, pppoe_mpdn_table[indx].session_id,
+				pppoe_mpdn_table[indx].status);
+			IPACMDBG_H("MAC %02x:%02x:%02x:%02x:%02x:%02x\n",
+				pppoe_mpdn_table[indx].mac_addr[0],
+				pppoe_mpdn_table[indx].mac_addr[1],
+				pppoe_mpdn_table[indx].mac_addr[2],
+				pppoe_mpdn_table[indx].mac_addr[3],
+				pppoe_mpdn_table[indx].mac_addr[4],
+				pppoe_mpdn_table[indx].mac_addr[5]);
+		}
+		else
+			IPACMERR("PPPoe PDN not found\n");
+	}
+
+	pthread_mutex_unlock(&pppoe_map_lock);
+}
+#endif
+
 #if defined(FEATURE_SOCKSv5) && defined (IPA_SOCKV5_EVENT_MAX)
 void IPACM_Config::update_socksv5_client_v6_addr(uint32_t* ipv6_addr)
 {
@@ -4621,3 +4732,189 @@ void IPACM_Config::flush_qos_params_info(ipa_ioc_qos_config *data)
 	IPACMDBG_H("Flushed qos params list size now :%d \n", m_qos_params.size());
 	return;
 }
+
+#ifdef FEATURE_PPPOE
+void IPACM_Config::get_pppoe_session_info(const char *pppoe_dev_name)
+{
+	FILE *fp = NULL;
+	char *tok = NULL, *ptr = NULL;
+	char *params[MAX_PPPOE_PARAM_CNT] = { NULL };
+	char pppoe_row[MAX_PPPOE_PARAM_CNT] = {0}, cmd[IPA_SYS_CMD_LEN] = {0}, cmd_pppoe_row[MAX_PPPOE_ROW_LEN] = {0};
+	int i;
+
+	snprintf(cmd, IPA_SYS_CMD_LEN, "cat /proc/net/pppoe > %s", IPA_PPPOE_TABLE);
+	system(cmd);
+
+	fp = fopen(IPA_PPPOE_TABLE, "r");
+	if (fp == NULL)
+	{
+		IPACMERR("can't open pppoe file\n");
+		return;
+	}
+
+	while (fgets(pppoe_row, MAX_PPPOE_ROW_LEN, fp) != NULL)
+	{
+		snprintf(cmd_pppoe_row, MAX_PPPOE_ROW_LEN, "Id");
+		if (strstr(pppoe_row,cmd_pppoe_row))
+		{
+			continue;
+		}
+
+		/*parse the fdb entry*/
+		tok = strtok_r(pppoe_row, " ", &ptr);
+		for (i = 0; (tok != NULL) && i < MAX_PPPOE_PARAM_CNT; ++i )
+		{
+			params[i] = tok;
+			tok = strtok_r(NULL, " ", &ptr);
+		}
+		IPACMDBG_H("%s %s %s\n", params[0], params[1], params[2]);
+		update_pppoe_session_info(pppoe_dev_name, params);
+	}
+	fclose(fp);
+}
+
+void IPACM_Config::update_pppoe_session_info(const char *pppoe_dev_name, char *params[MAX_PPPOE_PARAM_CNT])
+{
+	char *end_ptr = NULL, *is_vlan = NULL, *copy_param = NULL, *phy_name = NULL, *ptr = NULL;
+	uint16_t vlan_id = 0, session_id = 0;
+	ipa_ioc_pppoe_info *pppoe_config;
+	char phy_dev_name[IPA_RESOURCE_NAME_MAX];
+	uint8_t mac_addr[6] = {0};
+	int tmp_var[IPA_MAC_ADDR_SIZE];
+
+	IPACMDBG_H("session_info: %s mac_addr: %s eth_intf_name: %s\n",
+		params[0], params[1], params[2]);
+
+	pppoe_config = (ipa_ioc_pppoe_info *)malloc(sizeof(ipa_ioc_pppoe_info));
+	if (pppoe_config == NULL)
+	{
+		IPACMERR("Memory allocation failed for pppoe_config\n");
+		return;
+	}
+
+	session_id = strtol(params[0], &end_ptr, 16);
+	if (*end_ptr != '\0')
+	{
+        IPACMDBG_H("Conversion error: %s\n", end_ptr);
+		return;
+    }
+	else
+	{
+		session_id = session_id >> 8;
+		IPACMDBG_H("session_id: %u\n", session_id);
+	}
+
+	is_vlan = strstr(params[2], ".");
+	if (is_vlan != NULL)
+	{
+		copy_param = strdup(params[2]);
+		if(copy_param != NULL)
+		{
+			phy_name = strtok_r(copy_param, ".", &ptr);
+			vlan_id = atoi(strtok_r(NULL, ".", &ptr));
+			strlcpy(phy_dev_name, phy_name, sizeof(phy_dev_name));
+			free(copy_param);
+		}
+		else
+		{
+			IPACMERR("strdup to copy_param failed!\n");
+		}
+	}
+	else
+	{
+		strlcpy(phy_dev_name, params[2], sizeof(phy_dev_name));
+		vlan_id = 0;
+	}
+
+	if( IPA_MAC_ADDR_SIZE != sscanf( params[1], "%x:%x:%x:%x:%x:%x%*c",
+		&tmp_var[0], &tmp_var[1], &tmp_var[2],
+		&tmp_var[3], &tmp_var[4], &tmp_var[5] ) )
+	{
+		IPACMERR("couldnt parse the mac address\n");
+		return;
+	}
+	else
+	{
+		for (int j = 0 ; j < IPA_MAC_ADDR_SIZE; j++)
+		{
+			mac_addr[j] = (uint8_t)tmp_var[j];
+		}
+	}
+
+	IPACMDBG_H("parsed_session_info session_id: %u eth_phy_name: %s vlan_id: %u\n",
+		session_id, phy_dev_name, vlan_id);
+
+	strlcpy(pppoe_config->pppoe_dev_name, pppoe_dev_name, IPA_RESOURCE_NAME_MAX);
+	pppoe_config_update(pppoe_config, 2, session_id, mac_addr);
+}
+
+int IPACM_Config::get_pppoe_vlan_id(char *pppoe_dev_name, uint16_t *vlan_id)
+{
+	int ret = IPACM_FAILURE;
+
+	if(pthread_mutex_lock(&pppoe_map_lock) != 0)
+	{
+		IPACMERR("Unable to lock the mutex\n");
+		return IPACM_FAILURE;
+	}
+
+	for(int i=0; i<MAX_NUM_PPPOE_MPDN; i++)
+	{
+		if(strncmp(pppoe_mpdn_table[i].pppoe_dev_name, pppoe_dev_name,
+			sizeof(pppoe_mpdn_table[i].pppoe_dev_name)) == 0)
+		{
+			IPACMDBG_H("Found pppoe iface in pppoe list: %s with vlan id: %d\n",
+				pppoe_mpdn_table[i].pppoe_dev_name);
+			*vlan_id = pppoe_mpdn_table[i].vlan_id;
+			ret = IPACM_SUCCESS;
+			break;
+		}
+	}
+
+	pthread_mutex_unlock(&pppoe_map_lock);
+
+	return ret;
+}
+
+int IPACM_Config::get_pppoe_indx(char *pppoe_dev_name)
+{
+	int ret = IPACM_FAILURE;
+
+	if(pthread_mutex_lock(&pppoe_map_lock) != 0)
+	{
+		IPACMERR("Unable to lock the mutex\n");
+		return IPACM_FAILURE;
+	}
+
+	for(int i=0; i<MAX_NUM_PPPOE_MPDN; i++)
+	{
+		if(strncmp(pppoe_mpdn_table[i].pppoe_dev_name, pppoe_dev_name,
+			sizeof(pppoe_mpdn_table[i].pppoe_dev_name)) == 0)
+		{
+			IPACMDBG_H("Found pppoe iface in pppoe list: %s at indx: %d\n",
+				pppoe_mpdn_table[i].pppoe_dev_name, i);
+			pthread_mutex_unlock(&pppoe_map_lock);
+			return i;
+		}
+	}
+
+	pthread_mutex_unlock(&pppoe_map_lock);
+
+	return ret;
+}
+#endif
+
+int IPACM_Config::get_eth_vlan_wan_up(int ipa_if_num)
+{
+	for(int i=0; i<MAX_NUM_PPPOE_MPDN; i++)
+	{
+		if(eth_wan_iface_table_idx[i] == ipa_if_num)
+		{
+			IPACMDBG_H("get_eth_vlan_wan_up success\n");
+			return IPACM_SUCCESS;
+		}
+	}
+	IPACMDBG_H("get_eth_vlan_wan_up fail\n");
+	return IPACM_FAILURE;
+}
+

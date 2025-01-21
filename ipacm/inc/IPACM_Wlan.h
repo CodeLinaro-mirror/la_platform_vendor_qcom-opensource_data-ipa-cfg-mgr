@@ -163,7 +163,7 @@ class IPACM_Wlan : public IPACM_Lan
 
 public:
 
-	IPACM_Wlan(char *iface_name, int iface_index, bool    ast_update = false);
+	IPACM_Wlan(char *iface_name, int iface_index, bool ast_update = false, bool is_ppp_iface = false);
 	virtual ~IPACM_Wlan(void);
 
 	static int total_num_wifi_clients;

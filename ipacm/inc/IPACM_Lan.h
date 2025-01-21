@@ -309,7 +309,7 @@ class IPACM_Lan : public IPACM_Iface
 {
 public:
 
-	IPACM_Lan(char *iface_name, int iface_index);
+	IPACM_Lan(char *iface_name, int iface_index, bool is_ppp_iface = false);
 	~IPACM_Lan();
 
 	/* store lan's wan-up filter rule handlers up to IPA_MAX_NUM_OFFLOAD_VLANS */

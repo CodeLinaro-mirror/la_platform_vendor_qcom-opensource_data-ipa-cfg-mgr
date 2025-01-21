@@ -105,7 +105,7 @@ ipa_lan_client_idx IPACM_Wlan::inactive_lan_client_index[IPA_MAX_NUM_HW_PATH_CLI
 
 extern char *ipa_l2_hdr_type[];
 
-IPACM_Wlan::IPACM_Wlan(char *iface_name, int iface_index, bool ast_update_needed) : IPACM_Lan(iface_name, iface_index), ipv6ct_inst(Ipv6ct::GetInstance())
+IPACM_Wlan::IPACM_Wlan(char *iface_name, int iface_index, bool ast_update_needed, bool is_ppp_iface) : IPACM_Lan(iface_name, iface_index, is_ppp_iface), ipv6ct_inst(Ipv6ct::GetInstance())
 {
 	int i = 0;
 #define WLAN_AMPDU_DEFAULT_FILTER_RULES 3

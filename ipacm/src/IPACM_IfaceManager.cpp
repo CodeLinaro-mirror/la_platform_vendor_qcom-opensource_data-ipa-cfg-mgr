@@ -145,6 +145,9 @@ void IPACM_IfaceManager::event_callback(ipa_cm_event_id event, void *param)
 				IPACMDBG_H("WAN-usb (%s) link up, iface: %d: \n", IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].iface_name, evt_data->if_index);
 				ifmgr_data.if_index = evt_data->if_index;
 				ifmgr_data.if_type = ECM_WAN;
+#ifdef FEATURE_PPPOE
+				ifmgr_data.is_ppp_iface = evt_data->is_ppp_iface;
+#endif
 				create_iface_instance(&ifmgr_data);
 			}
 			else
@@ -298,7 +301,7 @@ int IPACM_IfaceManager::create_iface_instance(ipacm_ifacemgr_data *param)
 		case LAN_IF:
 			{
 				IPACMDBG_H("Creating Lan interface\n");
-				IPACM_Lan *lan = new IPACM_Lan(param->iface_name, ipa_interface_index);
+				IPACM_Lan *lan = new IPACM_Lan(param->iface_name, ipa_interface_index, param->is_ppp_iface);
 				if (lan->rx_prop == NULL && lan->tx_prop == NULL)
 				{
 					/* close the netdev instance if IPA not support*/
@@ -372,7 +375,7 @@ int IPACM_IfaceManager::create_iface_instance(ipacm_ifacemgr_data *param)
 		case ETH_IF:
 			{
 				IPACMDBG_H("Creating ETH interface in router mode\n");
-				IPACM_Lan *ETH = new IPACM_Lan(param->iface_name, ipa_interface_index);
+				IPACM_Lan *ETH = new IPACM_Lan(param->iface_name, ipa_interface_index, param->is_ppp_iface);
 				if (ETH->rx_prop == NULL && ETH->tx_prop == NULL)
 				{
 					/* close the netdev instance if IPA not support*/
@@ -432,7 +435,7 @@ int IPACM_IfaceManager::create_iface_instance(ipacm_ifacemgr_data *param)
 				if(IPACM_Iface::ipacmcfg->ipacm_odu_router_mode == true)
 				{
 					IPACMDBG_H("Creating ODU interface in router mode\n");
-					IPACM_Lan *odu = new IPACM_Lan(param->iface_name, ipa_interface_index);
+					IPACM_Lan *odu = new IPACM_Lan(param->iface_name, ipa_interface_index, param->is_ppp_iface);
 					if (odu->rx_prop == NULL && odu->tx_prop == NULL)
 					{
 						/* close the netdev instance if IPA not support*/
@@ -538,7 +541,7 @@ int IPACM_IfaceManager::create_iface_instance(ipacm_ifacemgr_data *param)
 		case WLAN_IF:
 			{
 				IPACMDBG_H("Creating WLan interface\n");
-				IPACM_Wlan *wl = new IPACM_Wlan(param->iface_name, ipa_interface_index, ast_update);
+				IPACM_Wlan *wl = new IPACM_Wlan(param->iface_name, ipa_interface_index, ast_update, param->is_ppp_iface);
 				if (wl->rx_prop == NULL && wl->tx_prop == NULL)
 				{
 					/* reset the AP-iface category to unknown */
@@ -628,7 +631,7 @@ int IPACM_IfaceManager::create_iface_instance(ipacm_ifacemgr_data *param)
 					IPACM_Wan *w;
 					if(is_sta_mode == WLAN_WAN)
 					{
-						w = new IPACM_Wan(ipa_interface_index, is_sta_mode, param->mac_addr);
+						w = new IPACM_Wan(ipa_interface_index, is_sta_mode, param->mac_addr, param->is_ppp_iface);
 						if (w->rx_prop == NULL && w->tx_prop == NULL)
 						{
 							/* reset the AP-iface category to unknown */
@@ -640,13 +643,21 @@ int IPACM_IfaceManager::create_iface_instance(ipacm_ifacemgr_data *param)
 					}
 					else
 					{
-						w = new IPACM_Wan(ipa_interface_index, is_sta_mode, NULL);
+						w = new IPACM_Wan(ipa_interface_index, is_sta_mode, NULL, param->is_ppp_iface);
 						if (w->rx_prop == NULL && w->tx_prop == NULL)
 						{
 							/* close the netdev instance if IPA not support*/
 							w->delete_iface();
 							return IPACM_FAILURE;
 						}
+#ifdef FEATURE_PPPOE
+						if(param->is_ppp_iface &&
+							IPACM_Iface::ipacmcfg->eth_wan_pppoe_enable)
+						{
+							IPACM_Iface::ipacmcfg->get_pppoe_session_info
+								(IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].iface_name);
+						}
+#endif
 					}
 #ifdef FEATURE_EoGRE
 					IPACM_EvtDispatcher::registr(IPA_HANDLE_EoGRE_UP, w);
@@ -745,7 +756,7 @@ int IPACM_IfaceManager::create_iface_instance(ipacm_ifacemgr_data *param)
 		case EMBMS_IF:
 			{
 				IPACMDBG("Creating Wan-eMBSM interface\n");
-				IPACM_Wan *embms = new IPACM_Wan(ipa_interface_index, is_sta_mode, NULL);
+				IPACM_Wan *embms = new IPACM_Wan(ipa_interface_index, is_sta_mode, NULL, param->is_ppp_iface);
 				if (embms->rx_prop == NULL && embms->tx_prop == NULL)
 				{
 					/* close the netdev instance if IPA not support*/

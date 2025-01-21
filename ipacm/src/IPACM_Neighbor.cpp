@@ -510,7 +510,7 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 #endif
 #ifdef FEATURE_VLAN_MPDN
 			/* for vlan wan iface need to handle neighbors so condition should fail if vlan wan iface index matches */
-			if((IPACM_FAILURE != ipa_interface_index && IPACM_Iface::ipacmcfg->eth_wan_iface_table_idx != ipa_interface_index) &&
+			if((IPACM_FAILURE != ipa_interface_index && IPACM_Iface::ipacmcfg->get_eth_vlan_wan_up(ipa_interface_index) == IPACM_FAILURE) &&
                        ((IPACM_Iface::ipacmcfg->ipacm_mpdn_enable == TRUE) ||
 				(IPACM_Iface::ipacmcfg->ipacm_emesh_enable == TRUE && IPACM_Iface::ipacmcfg->ipacm_emesh_mode >= 2)))
 			{

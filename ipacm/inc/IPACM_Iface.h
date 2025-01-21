@@ -202,11 +202,13 @@ public:
 	ipa_ioc_query_intf_tx_props *tx_prop;
 	ipa_ioc_query_intf_rx_props *rx_prop;
 
+	bool is_ppp_iface;
+
 	virtual int handle_down_evt() = 0;
 
 	virtual int handle_addr_evt(ipacm_event_data_addr *data) = 0;
 
-	IPACM_Iface(char *iface_name, int iface_index);
+	IPACM_Iface(char *iface_name, int iface_index, bool is_ppp_iface = false);
 
 	virtual void event_callback(ipa_cm_event_id event, void *data) = 0;
 

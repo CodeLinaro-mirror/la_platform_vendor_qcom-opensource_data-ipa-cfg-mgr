@@ -70,6 +70,7 @@ extern "C"
 #define STR_RNDIS0_IFACE "rndis0"
 #define STR_ECM_IFACE "ecm"
 #define STR_ECM0_IFACE "ecm0"
+#define ETH_PHY_IFACE_LEN 5
 
 #define IF_NAME_LEN 16
 #define IPA_MAX_FILE_LEN  64
@@ -201,6 +202,11 @@ extern "C"
 
 #define IPA_DUMMY_PREFIX 0xFFFFFFFF
 #define IPA_MAX_NUM_PROPS 5
+
+#define ETH_INTF "eth0"
+#define ETH1_INTF "eth1"
+#define RNDIS_INTF "rndis0"
+#define ECM_INTF "ecm0"
 
 #ifndef __ss_aligntype
 #define __ss_aligntype unsigned long int
@@ -511,6 +517,7 @@ typedef struct _ipacm_event_data_fid
 	bool ast_update;
 #endif
 	bool mlo_enabled;
+	bool is_ppp_iface;
 } ipacm_event_data_fid;
 
 typedef struct
@@ -663,6 +670,7 @@ typedef struct _ipacm_ifacemgr_data
 	bool ast_update;
 #endif
 	char iface_name[IPA_IFACE_NAME_LEN];
+	bool is_ppp_iface;
 }ipacm_ifacemgr_data;
 
 struct ipa_vlan_iface_info

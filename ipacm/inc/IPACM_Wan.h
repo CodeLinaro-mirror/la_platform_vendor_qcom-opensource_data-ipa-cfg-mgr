@@ -183,7 +183,8 @@ typedef struct pppoe_hdr_s
 #define PPPOE_SESSION_ID_IDX	1
 #define PPPOE_PAYLOAD_LEN_IDX	2
 #define PPPOE_PROTOCOL_ID_IDX	3
-#define PPPOE_PROTOCOL_TYPE	0x0021
+#define PPPOE_PROTOCOL_V4_TYPE	0x0021
+#define PPPOE_PROTOCOL_V6_TYPE	0x0057
 #define PPPOE_SESSION_ETH_TYPE	0x8864
 #endif
 /* wan iface */
@@ -215,7 +216,9 @@ public:
 	/* IPACM interface name */
 	static char wan_up_dev_name[IF_NAME_LEN];
 	static uint32_t curr_wan_ip;
-	IPACM_Wan(int, ipacm_wan_iface_type, uint8_t *);
+	static int num_ipv4_sta_pdn;
+	static int num_ipv6_sta_pdn;
+	IPACM_Wan(int, ipacm_wan_iface_type, uint8_t *, bool is_ppp_iface = true);
 	virtual ~IPACM_Wan();
 #ifdef FEATURE_IPACM_UL_FIREWALL
 	/* IPACM firewall Configuration file*/
@@ -230,6 +233,7 @@ public:
 	uint32_t v4_p_ctx_2use;
 	uint32_t v6_p_ctx_2use;
 	int pppoe_make_hdr_add_ctx(enum ipa_ip_type iptype);
+	int pppoe_del_hdr_proc_ctx(enum ipa_ip_type ip_type);
 #endif
 #ifdef FEATURE_VLAN_MPDN
 	static int get_v6_pdn_firewall_configs(
@@ -625,6 +629,9 @@ private:
 
 	static uint32_t wan_route_rule_lan_v6_hdl_a5;
 	static uint32_t wan_route_rule_wan_v6_hdl_a5;
+
+	static uint32_t pppoe_route_rule_hdl_v4;
+	static uint32_t pppoe_route_rule_hdl_v6;
 
 	static int num_ipv4_modem_pdn;
 

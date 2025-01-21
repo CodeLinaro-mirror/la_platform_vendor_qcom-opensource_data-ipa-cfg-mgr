@@ -695,6 +695,10 @@ static int ipa_nl_decode_rtm_link
 						link_info->link_type = IPA_LINK_TYPE_MACSEC;
 						IPACMDBG("Recived NEW_LINK for macsec type interface with interface index %d\n",
 									link_info->metainfo.ifi_index);
+					} else if (strcmp(intf_type, "ppp") == 0) {
+						link_info->link_type = IPA_LINK_TYPE_PPP;
+						IPACMDBG("Received NEW_LINK for ppp type interface with interface index %d\n",
+							link_info->metainfo.ifi_index);
 					}
 				}
 			}
@@ -762,6 +766,11 @@ static int ipa_nl_decode_rtm_addr
 			addr_info->attr_info.prefix_addr.ss_family = addr_info->metainfo.ifa_family;
 			IPACM_NL_COPY_ADDR( addr_info, prefix_addr );
 			addr_info->attr_info.param_mask |= IPA_NLA_PARAM_PREFIXADDR;
+			break;
+		case IFA_LOCAL:
+			addr_info->attr_info.local_addr.ss_family = addr_info->metainfo.ifa_family;
+			IPACM_NL_COPY_ADDR( addr_info, local_addr );
+			addr_info->attr_info.param_mask |= IPA_NLA_PARAM_LOCALADDR;
 			break;
 		default:
 			break;
@@ -911,6 +920,7 @@ static int ipa_nl_decode_rtm_route
 				}
 			}
 			break;
+
 		case RTA_TABLE:
 			IPACMDBG("Handling RTA TABLE from netlink\n");
 			memcpy(&route_info->attr_info.table_id,
@@ -982,6 +992,7 @@ static int ipa_nl_decode_nlmsg
 	ipa_mtu_info *mtu_info;
 	IPACM_Config* config = NULL;
 	int idx = 0;
+	int instance_found = 0;
 
 	memset(nullMac, 0, sizeof(nullMac));
 	memset(&vlan_info, 0, sizeof(vlan_info));
@@ -1081,6 +1092,9 @@ static int ipa_nl_decode_nlmsg
 					}
 					data_fid->if_index = msg_ptr->nl_link_info.metainfo.ifi_index;
 					strlcpy(data_fid->iface_name, dev_name, sizeof(data_fid->iface_name));
+					if (msg_ptr->nl_link_info.link_type == IPA_LINK_TYPE_PPP) {
+						data_fid->is_ppp_iface = true;
+					}
 					if (msg_ptr->nl_link_info.vlan_id) {
 						memset(&vlan_info, 0, sizeof(ipa_vlan_iface_info));
 						strlcpy(vlan_info.name, msg_ptr->nl_link_info.name, IPA_RESOURCE_NAME_MAX);
@@ -1154,6 +1168,9 @@ static int ipa_nl_decode_nlmsg
 						return IPACM_FAILURE;
 					}
 					data_fid->if_index = msg_ptr->nl_link_info.metainfo.ifi_index;
+					if (msg_ptr->nl_link_info.link_type == IPA_LINK_TYPE_PPP) {
+						data_fid->is_ppp_iface = true;
+					}
 
 					IPACMDBG("Got a usb link_up event (Interface %s, %d) \n", dev_name,
 						msg_ptr->nl_link_info.metainfo.ifi_index);
@@ -1213,6 +1230,9 @@ static int ipa_nl_decode_nlmsg
 
 					data_fid->if_index = msg_ptr->nl_link_info.metainfo.ifi_index;
 					strlcpy(data_fid->iface_name, dev_name, sizeof(data_fid->iface_name));
+					if (msg_ptr->nl_link_info.link_type == IPA_LINK_TYPE_PPP) {
+						data_fid->is_ppp_iface = true;
+					}
 					/*--------------------------------------------------------------------------
 						Post LAN iface (ECM) link down event
 					---------------------------------------------------------------------------*/
@@ -1313,6 +1333,10 @@ static int ipa_nl_decode_nlmsg
 				}
 
 				data_fid->if_index = msg_ptr->nl_link_info.metainfo.ifi_index;
+				if (msg_ptr->nl_link_info.link_type == IPA_LINK_TYPE_PPP)
+				{
+					data_fid->is_ppp_iface = true;
+				}
 				strlcpy(data_fid->iface_name, dev_name, sizeof(data_fid->iface_name));
 
 				IPACMDBG_H("posting IPA_LINK_DOWN_EVENT with if idnex:%d\n",
@@ -1341,6 +1365,14 @@ static int ipa_nl_decode_nlmsg
 			}
 			else
 			{
+				IPACMDBG("msg_type: %d\n", nlh->nlmsg_type);
+				IPACMDBG("ifa_family: %d\n", msg_ptr->nl_addr_info.metainfo.ifa_family);
+				IPACMDBG("ifa_prefixlen: %d\n", msg_ptr->nl_addr_info.metainfo.ifa_prefixlen);
+				IPACMDBG("ifa_flags: %d\n", msg_ptr->nl_addr_info.metainfo.ifa_flags);
+				IPACMDBG("ifa_scope: %d\n", msg_ptr->nl_addr_info.metainfo.ifa_scope);
+				IPACMDBG("ifa_index: %d\n", msg_ptr->nl_addr_info.metainfo.ifa_index);
+				IPACMDBG("param_mask: 0x%x\n", msg_ptr->nl_addr_info.attr_info.param_mask);
+
 				ret_val = ipa_get_if_name(dev_name, msg_ptr->nl_addr_info.metainfo.ifa_index);
 				if(ret_val != IPACM_SUCCESS)
 				{
@@ -1378,6 +1410,25 @@ static int ipa_nl_decode_nlmsg
 					data_addr->ipv4_addr_mask = prefix_len;
 
 				}
+
+				if(AF_INET6 == msg_ptr->nl_addr_info.attr_info.local_addr.ss_family &&
+					IPACM_Iface::ipacmcfg->eth_wan_pppoe_enable)
+				{
+					IPACM_NL_REPORT_ADDR( "IFA_ADDRESS:", msg_ptr->nl_addr_info.attr_info.local_addr );
+					IPACM_EVENT_COPY_ADDR_v6( data_addr->ipv6_addr, msg_ptr->nl_addr_info.attr_info.local_addr);
+					data_addr->iptype = IPA_IP_v6;
+					data_addr->ipv6_addr[0] = ntohl(data_addr->ipv6_addr[0]);
+					data_addr->ipv6_addr[1] = ntohl(data_addr->ipv6_addr[1]);
+					data_addr->ipv6_addr[2] = ntohl(data_addr->ipv6_addr[2]);
+					data_addr->ipv6_addr[3] = ntohl(data_addr->ipv6_addr[3]);
+					IPACMDBG("Posting IPA_ADDR_ADD_EVENT with if index:%d, ipv6 addr:0x%x:%x:%x:%x\n",
+								data_addr->if_index,
+								data_addr->ipv6_addr[0],
+								data_addr->ipv6_addr[1],
+								data_addr->ipv6_addr[2],
+								data_addr->ipv6_addr[3]);
+				}
+
 				if(nlh->nlmsg_type == RTM_NEWADDR)
 				{
 					evt_data.event = IPA_ADDR_ADD_EVENT;
@@ -1512,7 +1563,10 @@ static int ipa_nl_decode_nlmsg
 				  (msg_ptr->nl_route_info.metainfo.rtm_protocol == RTPROT_RA) ||
 				  (msg_ptr->nl_route_info.metainfo.rtm_protocol == RTPROT_STATIC))&&
 				 ((msg_ptr->nl_route_info.metainfo.rtm_scope == RT_SCOPE_UNIVERSE)||
-				 (msg_ptr->nl_route_info.metainfo.rtm_scope == RT_SCOPE_LINK)))
+				 (msg_ptr->nl_route_info.metainfo.rtm_scope == RT_SCOPE_LINK)) &&
+				 (IPACM_Iface::ipacmcfg->eth_wan_pppoe_enable ||
+				 IPACM_Iface::ipacmcfg->eth_vlan_wan_enable ||
+				 (msg_ptr->nl_route_info.metainfo.rtm_table == RT_TABLE_MAIN)))
 			{
 				IPACMDBG("\n GOT RTM_NEWROUTE event\n");
 
@@ -1586,19 +1640,66 @@ static int ipa_nl_decode_nlmsg
 						data_addr->ipv4_addr_gw = ntohl(if_ipv4_addr_gw);
 						data_addr->ipv4_addr_mask = ntohl(if_ipipv4_addr_mask);
 
-						if(msg_ptr->nl_route_info.metainfo.rtm_table == RT_TABLE_COMPAT &&
-							msg_ptr->nl_route_info.attr_info.param_mask & IPA_RTA_PARAM_GATEWAY &&
-							strstr(dev_name, ETH_INTF) && IPACM_Iface::ipacmcfg->is_added_vlan_iface(dev_name))
+						if(msg_ptr->nl_route_info.attr_info.param_mask & IPA_RTA_PARAM_GATEWAY &&
+							(IPACM_Iface::ipacmcfg->eth_wan_pppoe_enable ||
+							IPACM_Iface::ipacmcfg->eth_vlan_wan_enable))
 						{
 							data_fid = (ipacm_event_data_fid *)malloc(sizeof(ipacm_event_data_fid));
 							if(data_fid == NULL)
 							{
 								IPACMERR("unable to allocate memory for event_ecm data_fid\n");
+								free(data_addr);
 								return IPACM_FAILURE;
 							}
-							strlcpy(IPACM_Iface::ipacmcfg->iface_table[IPACM_Iface::ipacmcfg->eth_wan_iface_table_idx].iface_name,
-								dev_name, sizeof(IPACM_Iface::ipacmcfg->iface_table[IPACM_Iface::ipacmcfg->eth_wan_iface_table_idx].iface_name));
-							IPACM_Iface::ipacmcfg->iface_table[IPACM_Iface::ipacmcfg->eth_wan_iface_table_idx].virtual_iface = true;
+
+							for (instance_found = IPACM_Iface::ipacmcfg->ipa_num_ipa_interfaces - MAX_NUM_PPPOE_MPDN;
+								instance_found < IPACM_Iface::ipacmcfg->ipa_num_ipa_interfaces; instance_found++)
+							{
+								if(strcmp(
+									IPACM_Iface::ipacmcfg->iface_table[instance_found].iface_name, dev_name) == 0)
+								{
+									break;
+								}
+							}
+
+							if(instance_found < IPACM_Iface::ipacmcfg->ipa_num_ipa_interfaces)
+							{
+								IPACMDBG_H("Found devname:%s at iface_idx: %d\n", dev_name, instance_found);
+								goto process;
+							}
+
+							for (instance_found = IPACM_Iface::ipacmcfg->ipa_num_ipa_interfaces - MAX_NUM_PPPOE_MPDN;
+								instance_found < IPACM_Iface::ipacmcfg->ipa_num_ipa_interfaces; instance_found++)
+							{
+								if(strlen(IPACM_Iface::ipacmcfg->iface_table[instance_found].iface_name) == 0)
+								{
+									IPACMDBG_H("Found empty slot at iface_idx: %d\n", instance_found);
+									break;
+								}
+							}
+
+							if(instance_found == IPACM_Iface::ipacmcfg->ipa_num_ipa_interfaces)
+							{
+								IPACMERR("Max number of supported Eth vlan interfaces are reached.\n");
+								free(data_addr);
+								free(data_fid);
+								break;
+							}
+
+							strlcpy(IPACM_Iface::ipacmcfg->iface_table[instance_found].iface_name,
+								dev_name, sizeof(IPACM_Iface::ipacmcfg->iface_table[instance_found].iface_name));
+							IPACM_Iface::ipacmcfg->iface_table[instance_found].virtual_iface = true;
+process:
+
+							if(strstr(dev_name, "pppoe"))
+							{
+								data_fid->is_ppp_iface = true;
+							}
+							if(!strstr(dev_name, "pppoe"))
+							{
+								strlcpy(IPACM_Iface::ipacmcfg->iface_table[instance_found].phy_dev_name,
+									dev_name, ETH_PHY_IFACE_LEN);
+							}
 
 							data_fid->if_index = msg_ptr->nl_route_info.attr_info.oif_index;
 							evt_data.event = IPA_USB_LINK_UP_EVENT;
@@ -1609,15 +1710,19 @@ static int ipa_nl_decode_nlmsg
 						if(msg_ptr->nl_route_info.metainfo.rtm_table == RT_TABLE_MAIN)
 						{
 							evt_data.event = IPA_ROUTE_ADD_EVENT;
+							evt_data.evt_data = data_addr;
 							IPACMDBG_H("Posting IPA_ROUTE_ADD_EVENT with if index:%d, ipv4 addr:0x%x, mask: 0x%x and gw: 0x%x\n",
 										 data_addr->if_index,
 										 data_addr->ipv4_addr,
 										 data_addr->ipv4_addr_mask,
 										 data_addr->ipv4_addr_gw);
 						}
-						else if(msg_ptr->nl_route_info.metainfo.rtm_table == RT_TABLE_COMPAT)
+						else if(msg_ptr->nl_route_info.metainfo.rtm_table != RT_TABLE_MAIN &&
+							(IPACM_Iface::ipacmcfg->eth_wan_pppoe_enable ||
+							IPACM_Iface::ipacmcfg->eth_vlan_wan_enable))
 						{
 							evt_data.event = IPA_WAN_GW_ADDR_ADD_EVENT;
+							evt_data.evt_data = data_addr;
 							IPACMDBG_H("Posting IPA_WAN_GW_ADDR_ADD_EVENT with if index:%d, ipv4 addr:0x%x, mask: 0x%x and gw: 0x%x\n",
 										data_addr->if_index,
 										data_addr->ipv4_addr,
@@ -1639,7 +1744,10 @@ static int ipa_nl_decode_nlmsg
 				  (msg_ptr->nl_route_info.metainfo.rtm_protocol == RTPROT_STATIC) ||
 				  (msg_ptr->nl_route_info.metainfo.rtm_protocol == RTPROT_KERNEL))&&
 				 ((msg_ptr->nl_route_info.metainfo.rtm_scope == RT_SCOPE_UNIVERSE)||
-				 (msg_ptr->nl_route_info.metainfo.rtm_scope == RT_SCOPE_LINK)))
+				 (msg_ptr->nl_route_info.metainfo.rtm_scope == RT_SCOPE_LINK)) &&
+				 (IPACM_Iface::ipacmcfg->eth_wan_pppoe_enable ||
+				 IPACM_Iface::ipacmcfg->eth_vlan_wan_enable ||
+				 (msg_ptr->nl_route_info.metainfo.rtm_table == RT_TABLE_MAIN)))
 			{
 				IPACMDBG("\n GOT valid v6-RTM_NEWROUTE event\n");
 				ret_val = ipa_get_if_name(dev_name, msg_ptr->nl_route_info.attr_info.oif_index);
@@ -1721,6 +1829,7 @@ static int ipa_nl_decode_nlmsg
 					if(data_addr == NULL)
 					{
 						IPACMERR("unable to allocate memory for event data_addr\n");
+						free(data_addr);
 						return IPACM_FAILURE;
 					}
 
@@ -1756,18 +1865,65 @@ static int ipa_nl_decode_nlmsg
 					data_addr->ipv6_addr_gw[3] = ntohl(data_addr->ipv6_addr_gw[3]);
 					IPACM_NL_REPORT_ADDR( " ", msg_ptr->nl_route_info.attr_info.gateway_addr);
 
-					if(msg_ptr->nl_route_info.metainfo.rtm_table == RT_TABLE_COMPAT &&
-							strstr(dev_name, ETH_INTF) && IPACM_Iface::ipacmcfg->is_added_vlan_iface(dev_name))
+					if(IPACM_Iface::ipacmcfg->eth_wan_pppoe_enable ||
+						IPACM_Iface::ipacmcfg->eth_vlan_wan_enable)
 					{
 						data_fid = (ipacm_event_data_fid *)malloc(sizeof(ipacm_event_data_fid));
 						if(data_fid == NULL)
 						{
 							IPACMERR("unable to allocate memory for event_ecm data_fid\n");
+							free(data_addr);
 							return IPACM_FAILURE;
 						}
-						strlcpy(IPACM_Iface::ipacmcfg->iface_table[IPACM_Iface::ipacmcfg->eth_wan_iface_table_idx].iface_name,
-							dev_name, sizeof(IPACM_Iface::ipacmcfg->iface_table[IPACM_Iface::ipacmcfg->eth_wan_iface_table_idx].iface_name));
-						IPACM_Iface::ipacmcfg->iface_table[IPACM_Iface::ipacmcfg->eth_wan_iface_table_idx].virtual_iface = true;
+
+						for (instance_found = IPACM_Iface::ipacmcfg->ipa_num_ipa_interfaces - MAX_NUM_PPPOE_MPDN;
+							instance_found < IPACM_Iface::ipacmcfg->ipa_num_ipa_interfaces; instance_found++)
+						{
+							if(strcmp(
+								IPACM_Iface::ipacmcfg->iface_table[instance_found].iface_name, dev_name) == 0)
+							{
+								break;
+							}
+						}
+
+						if(instance_found < IPACM_Iface::ipacmcfg->ipa_num_ipa_interfaces)
+						{
+							IPACMDBG_H("Found devname:%s at iface_idx: %d\n", dev_name, instance_found);
+							goto process_v6;
+						}
+
+						for (instance_found = IPACM_Iface::ipacmcfg->ipa_num_ipa_interfaces - MAX_NUM_PPPOE_MPDN;
+							instance_found < IPACM_Iface::ipacmcfg->ipa_num_ipa_interfaces; instance_found++)
+						{
+							if(strlen(IPACM_Iface::ipacmcfg->iface_table[instance_found].iface_name) == 0)
+							{
+								IPACMDBG_H("Found empty slot at iface_idx: %d\n", instance_found);
+								break;
+							}
+						}
+
+						if(instance_found == IPACM_Iface::ipacmcfg->ipa_num_ipa_interfaces)
+						{
+							IPACMERR("Max number of supported Eth vlan interfaces are reached.\n");
+							free(data_addr);
+							free(data_fid);
+							break;
+						}
+
+process_v6:
+						if(strstr(dev_name, "pppoe"))
+						{
+							data_fid->is_ppp_iface = true;
+						}
+						if(!strstr(dev_name, "pppoe"))
+						{
+							strlcpy(IPACM_Iface::ipacmcfg->iface_table[instance_found].phy_dev_name,
+								dev_name, ETH_PHY_IFACE_LEN);
+						}
+
+						strlcpy(IPACM_Iface::ipacmcfg->iface_table[instance_found].iface_name,
+							dev_name, sizeof(IPACM_Iface::ipacmcfg->iface_table[instance_found].iface_name));
+						IPACM_Iface::ipacmcfg->iface_table[instance_found].virtual_iface = true;
 
 						data_fid->if_index = msg_ptr->nl_route_info.attr_info.oif_index;
 						evt_data.event = IPA_USB_LINK_UP_EVENT;
@@ -1781,7 +1937,9 @@ static int ipa_nl_decode_nlmsg
 						IPACMDBG("Posting IPA_ROUTE_ADD_EVENT with if index:%d, ipv6 address\n",
 									data_addr->if_index);
 					}
-					else if(msg_ptr->nl_route_info.metainfo.rtm_table == RT_TABLE_COMPAT)
+					else if(msg_ptr->nl_route_info.metainfo.rtm_table != RT_TABLE_MAIN &&
+						(IPACM_Iface::ipacmcfg->eth_wan_pppoe_enable ||
+						IPACM_Iface::ipacmcfg->eth_vlan_wan_enable))
 					{
 						evt_data.event = IPA_WAN_GW_ADDR_ADD_EVENT;
 						IPACMDBG("Posting IPA_WAN_GW_ADDR_ADD_EVENT with if index:%d, ipv6 address\n",
@@ -2476,6 +2634,8 @@ int ipa_nl_send_getroute(ipa_ip_type ip_type)
 	struct iovec iov;
 	char dev_name[IF_NAME_LEN]={0};
 	int mask_value, mask_index, mask_value_v6;
+	int instance_found = 0;
+	ipacm_event_data_all *data_all;
 
 	nl_sock = socket(AF_NETLINK, SOCK_RAW, NETLINK_ROUTE);
 
@@ -2563,7 +2723,10 @@ int ipa_nl_send_getroute(ipa_ip_type ip_type)
 			  (nl_route_info_get_route.metainfo.rtm_protocol == RTPROT_RA) ||
 			  (nl_route_info_get_route.metainfo.rtm_protocol == RTPROT_STATIC))&&
 			 ((nl_route_info_get_route.metainfo.rtm_scope == RT_SCOPE_UNIVERSE)||
-			 (nl_route_info_get_route.metainfo.rtm_scope == RT_SCOPE_LINK)))
+			 (nl_route_info_get_route.metainfo.rtm_scope == RT_SCOPE_LINK))&&
+			 (IPACM_Iface::ipacmcfg->eth_wan_pppoe_enable ||
+			 IPACM_Iface::ipacmcfg->eth_vlan_wan_enable ||
+			 (nl_route_info_get_route.metainfo.rtm_table == RT_TABLE_MAIN)))
 		{
 
 			if(nl_route_info_get_route.attr_info.param_mask & IPA_RTA_PARAM_DST)
@@ -2636,19 +2799,66 @@ int ipa_nl_send_getroute(ipa_ip_type ip_type)
 					data_addr->ipv4_addr_gw = ntohl(if_ipv4_addr_gw);
 					data_addr->ipv4_addr_mask = ntohl(if_ipipv4_addr_mask);
 
-					if(nl_route_info_get_route.metainfo.rtm_table == RT_TABLE_COMPAT &&
-						nl_route_info_get_route.attr_info.param_mask & IPA_RTA_PARAM_GATEWAY &&
-						strstr(dev_name, ETH_INTF) && IPACM_Iface::ipacmcfg->is_added_vlan_iface(dev_name))
+					if(nl_route_info_get_route.attr_info.param_mask & IPA_RTA_PARAM_GATEWAY &&
+						(IPACM_Iface::ipacmcfg->eth_wan_pppoe_enable  ||
+						IPACM_Iface::ipacmcfg->eth_vlan_wan_enable))
 					{
 						data_fid = (ipacm_event_data_fid *)malloc(sizeof(ipacm_event_data_fid));
 						if(data_fid == NULL)
 						{
 							IPACMERR("unable to allocate memory for event_ecm data_fid\n");
+							free(data_addr);
 							return IPACM_FAILURE;
 						}
-						strlcpy(IPACM_Iface::ipacmcfg->iface_table[IPACM_Iface::ipacmcfg->eth_wan_iface_table_idx].iface_name,
-							dev_name, sizeof(IPACM_Iface::ipacmcfg->iface_table[IPACM_Iface::ipacmcfg->eth_wan_iface_table_idx].iface_name));
-						IPACM_Iface::ipacmcfg->iface_table[IPACM_Iface::ipacmcfg->eth_wan_iface_table_idx].virtual_iface = true;
+
+						for (instance_found = IPACM_Iface::ipacmcfg->ipa_num_ipa_interfaces - MAX_NUM_PPPOE_MPDN;
+							instance_found < IPACM_Iface::ipacmcfg->ipa_num_ipa_interfaces; instance_found++)
+						{
+							if(strcmp(
+								IPACM_Iface::ipacmcfg->iface_table[instance_found].iface_name, dev_name) == 0)
+							{
+								break;
+							}
+						}
+
+						if(instance_found < IPACM_Iface::ipacmcfg->ipa_num_ipa_interfaces)
+						{
+							IPACMDBG_H("Found devname:%s at iface_idx: %d\n", dev_name, instance_found);
+							goto proces_getroute;
+						}
+
+						for (instance_found = IPACM_Iface::ipacmcfg->ipa_num_ipa_interfaces - MAX_NUM_PPPOE_MPDN;
+							instance_found < IPACM_Iface::ipacmcfg->ipa_num_ipa_interfaces; instance_found++)
+						{
+							if(strlen(IPACM_Iface::ipacmcfg->iface_table[instance_found].iface_name) == 0)
+							{
+								IPACMDBG_H("Found empty slot at iface_idx: %d\n", instance_found);
+								break;
+							}
+						}
+
+						if(instance_found == IPACM_Iface::ipacmcfg->ipa_num_ipa_interfaces)
+						{
+							IPACMERR("Max number of supported Eth vlan interfaces are reached.\n");
+							free(data_addr);
+							free(data_fid);
+							break;
+						}
+
+						strlcpy(IPACM_Iface::ipacmcfg->iface_table[instance_found].iface_name,
+							dev_name, sizeof(IPACM_Iface::ipacmcfg->iface_table[instance_found].iface_name));
+						IPACM_Iface::ipacmcfg->iface_table[instance_found].virtual_iface = true;
+
+proces_getroute:
+						if(strstr(dev_name, "pppoe"))
+						{
+							data_fid->is_ppp_iface = true;
+						}
+						if(!strstr(dev_name, "pppoe"))
+						{
+							strlcpy(IPACM_Iface::ipacmcfg->iface_table[instance_found].phy_dev_name,
+								dev_name, ETH_PHY_IFACE_LEN);
+						}
 
 						data_fid->if_index = nl_route_info_get_route.attr_info.oif_index;
 						evt_data.event = IPA_USB_LINK_UP_EVENT;
@@ -2658,16 +2868,22 @@ int ipa_nl_send_getroute(ipa_ip_type ip_type)
 
 					if(nl_route_info_get_route.metainfo.rtm_table == RT_TABLE_MAIN)
 					{
+						memset(&evt_data, 0, sizeof(ipacm_cmd_q_data));
 						evt_data.event = IPA_ROUTE_ADD_EVENT;
+						evt_data.evt_data = data_addr;
 						IPACMDBG_H("Posting IPA_ROUTE_ADD_EVENT with if index:%d, ipv4 addr:0x%x, mask: 0x%x and gw: 0x%x\n",
-									data_addr->if_index,
-									data_addr->ipv4_addr,
-									data_addr->ipv4_addr_mask,
-									data_addr->ipv4_addr_gw);
+									 data_addr->if_index,
+									 data_addr->ipv4_addr,
+									 data_addr->ipv4_addr_mask,
+									 data_addr->ipv4_addr_gw);
 					}
-					else if(nl_route_info_get_route.metainfo.rtm_table == RT_TABLE_COMPAT)
+					else if(nl_route_info_get_route.metainfo.rtm_table != RT_TABLE_MAIN &&
+						(IPACM_Iface::ipacmcfg->eth_wan_pppoe_enable  ||
+						IPACM_Iface::ipacmcfg->eth_vlan_wan_enable))
 					{
+						memset(&evt_data, 0, sizeof(ipacm_cmd_q_data));
 						evt_data.event = IPA_WAN_GW_ADDR_ADD_EVENT;
+						evt_data.evt_data = data_addr;
 						IPACMDBG_H("Posting IPA_WAN_GW_ADDR_ADD_EVENT with if index:%d, ipv4 addr:0x%x, mask: 0x%x and gw: 0x%x\n",
 									data_addr->if_index,
 									data_addr->ipv4_addr,
@@ -2680,7 +2896,6 @@ int ipa_nl_send_getroute(ipa_ip_type ip_type)
 					/* finish command queue */
 				}
 			}
-
 		}
 
 		/* ipv6 routing table */
@@ -2692,7 +2907,9 @@ int ipa_nl_send_getroute(ipa_ip_type ip_type)
 			  (nl_route_info_get_route.metainfo.rtm_protocol == RTPROT_KERNEL))&&
 			 ((nl_route_info_get_route.metainfo.rtm_scope == RT_SCOPE_UNIVERSE)||
 			 (nl_route_info_get_route.metainfo.rtm_scope == RT_SCOPE_LINK))&&
-			 (nl_route_info_get_route.metainfo.rtm_table == RT_TABLE_MAIN))
+			 (IPACM_Iface::ipacmcfg->eth_wan_pppoe_enable ||
+			 IPACM_Iface::ipacmcfg->eth_vlan_wan_enable  ||
+			 (nl_route_info_get_route.metainfo.rtm_table == RT_TABLE_MAIN)))
 		{
 			IPACMDBG("\n GOT valid v6-RTM_NEWROUTE event\n");
 			ret_val = ipa_get_if_name(dev_name, nl_route_info_get_route.attr_info.oif_index);
@@ -2701,7 +2918,7 @@ int ipa_nl_send_getroute(ipa_ip_type ip_type)
 				IPACMERR("Error while getting interface name\n");
 				goto error;
 			}
-		
+
 			if(nl_route_info_get_route.attr_info.param_mask & IPA_RTA_PARAM_DST)
 			{
 				IPACM_NL_REPORT_ADDR( "Route ADD DST:", nl_route_info_get_route.attr_info.dst_addr );
@@ -2709,7 +2926,7 @@ int ipa_nl_send_getroute(ipa_ip_type ip_type)
 								 nl_route_info_get_route.metainfo.rtm_dst_len,
 								 nl_route_info_get_route.attr_info.priority,
 								 dev_name);
-		
+
 				/* insert to command queue */
 				data_addr = (ipacm_event_data_addr *)malloc(sizeof(ipacm_event_data_addr));
 				if(data_addr == NULL)
@@ -2717,14 +2934,14 @@ int ipa_nl_send_getroute(ipa_ip_type ip_type)
 					IPACMERR("unable to allocate memory for event data_addr\n");
 					goto error;
 				}
-		
-				 IPACM_EVENT_COPY_ADDR_v6( data_addr->ipv6_addr, nl_route_info_get_route.attr_info.dst_addr);
-		
+
+				IPACM_EVENT_COPY_ADDR_v6( data_addr->ipv6_addr, nl_route_info_get_route.attr_info.dst_addr);
+
 				data_addr->ipv6_addr[0] = ntohl(data_addr->ipv6_addr[0]);
 				data_addr->ipv6_addr[1] = ntohl(data_addr->ipv6_addr[1]);
 				data_addr->ipv6_addr[2] = ntohl(data_addr->ipv6_addr[2]);
 				data_addr->ipv6_addr[3] = ntohl(data_addr->ipv6_addr[3]);
-		
+
 				mask_value_v6 = nl_route_info_get_route.metainfo.rtm_dst_len;
 				for(mask_index = 0; mask_index < 4; mask_index++)
 				{
@@ -2739,23 +2956,24 @@ int ipa_nl_send_getroute(ipa_ip_type ip_type)
 						mask_value_v6 = 0;
 					}
 				}
-		
+
 				IPACMDBG("ADD IPV6 MASK %d: %08x:%08x:%08x:%08x \n",
 								nl_route_info_get_route.metainfo.rtm_dst_len,
 								 data_addr->ipv6_addr_mask[0],
 								 data_addr->ipv6_addr_mask[1],
 								 data_addr->ipv6_addr_mask[2],
 								 data_addr->ipv6_addr_mask[3]);
-		
+
 				data_addr->ipv6_addr_mask[0] = ntohl(data_addr->ipv6_addr_mask[0]);
 				data_addr->ipv6_addr_mask[1] = ntohl(data_addr->ipv6_addr_mask[1]);
 				data_addr->ipv6_addr_mask[2] = ntohl(data_addr->ipv6_addr_mask[2]);
 				data_addr->ipv6_addr_mask[3] = ntohl(data_addr->ipv6_addr_mask[3]);
-		
+
+				memset(&evt_data, 0, sizeof(ipacm_cmd_q_data));
 				evt_data.event = IPA_ROUTE_ADD_EVENT;
 				data_addr->if_index = nl_route_info_get_route.attr_info.oif_index;
 				data_addr->iptype = IPA_IP_v6;
-		
+
 				IPACMDBG("Posting IPA_ROUTE_ADD_EVENT with if index:%d, ipv6 addr\n",
 								 data_addr->if_index);
 				evt_data.evt_data = data_addr;
@@ -2768,7 +2986,7 @@ int ipa_nl_send_getroute(ipa_ip_type ip_type)
 				IPACMDBG(" metric %d, dev %s\n",
 								 nl_route_info_get_route.attr_info.priority,
 								 dev_name);
-		
+
 				/* insert to command queue */
 				data_addr = (ipacm_event_data_addr *)malloc(sizeof(ipacm_event_data_addr));
 				if(data_addr == NULL)
@@ -2776,7 +2994,7 @@ int ipa_nl_send_getroute(ipa_ip_type ip_type)
 					IPACMERR("unable to allocate memory for event data_addr\n");
 					goto error;
 				}
-		
+
 				if(nl_route_info_get_route.attr_info.param_mask & IPA_RTA_PARAM_PRIORITY)
 				{
 					IPACMDBG_H("ip -6 route add default dev %s metric %d\n",
@@ -2787,16 +3005,16 @@ int ipa_nl_send_getroute(ipa_ip_type ip_type)
 				{
 					IPACMDBG_H("ip -6 route add default dev %s\n", dev_name);
 				}
-		
+
 				IPACM_EVENT_COPY_ADDR_v6( data_addr->ipv6_addr, nl_route_info_get_route.attr_info.dst_addr);
-		
+
 				data_addr->ipv6_addr[0]=ntohl(data_addr->ipv6_addr[0]);
 				data_addr->ipv6_addr[1]=ntohl(data_addr->ipv6_addr[1]);
 				data_addr->ipv6_addr[2]=ntohl(data_addr->ipv6_addr[2]);
 				data_addr->ipv6_addr[3]=ntohl(data_addr->ipv6_addr[3]);
-		
+
 				IPACM_EVENT_COPY_ADDR_v6( data_addr->ipv6_addr_mask, nl_route_info_get_route.attr_info.dst_addr);
-		
+
 				data_addr->ipv6_addr_mask[0]=ntohl(data_addr->ipv6_addr_mask[0]);
 				data_addr->ipv6_addr_mask[1]=ntohl(data_addr->ipv6_addr_mask[1]);
 				data_addr->ipv6_addr_mask[2]=ntohl(data_addr->ipv6_addr_mask[2]);
@@ -2809,36 +3027,85 @@ int ipa_nl_send_getroute(ipa_ip_type ip_type)
 				data_addr->ipv6_addr_gw[3] = ntohl(data_addr->ipv6_addr_gw[3]);
 				IPACM_NL_REPORT_ADDR( " ", nl_route_info_get_route.attr_info.gateway_addr);
 
-				if(nl_route_info_get_route.metainfo.rtm_table == RT_TABLE_COMPAT &&
-						strstr(dev_name, ETH_INTF) && IPACM_Iface::ipacmcfg->is_added_vlan_iface(dev_name))
+				if(IPACM_Iface::ipacmcfg->eth_wan_pppoe_enable ||
+					IPACM_Iface::ipacmcfg->eth_vlan_wan_enable)
 				{
 					data_fid = (ipacm_event_data_fid *)malloc(sizeof(ipacm_event_data_fid));
 					if(data_fid == NULL)
 					{
 						IPACMERR("unable to allocate memory for event_ecm data_fid\n");
+						free(data_addr);
 						return IPACM_FAILURE;
 					}
-					strlcpy(IPACM_Iface::ipacmcfg->iface_table[IPACM_Iface::ipacmcfg->eth_wan_iface_table_idx].iface_name,
-						dev_name, sizeof(IPACM_Iface::ipacmcfg->iface_table[IPACM_Iface::ipacmcfg->eth_wan_iface_table_idx].iface_name));
-					IPACM_Iface::ipacmcfg->iface_table[IPACM_Iface::ipacmcfg->eth_wan_iface_table_idx].virtual_iface = true;
 
+					for (instance_found = IPACM_Iface::ipacmcfg->ipa_num_ipa_interfaces - MAX_NUM_PPPOE_MPDN;
+						instance_found < IPACM_Iface::ipacmcfg->ipa_num_ipa_interfaces; instance_found++)
+					{
+						if(strcmp(
+							IPACM_Iface::ipacmcfg->iface_table[instance_found].iface_name, dev_name) == 0)
+						{
+							break;
+						}
+					}
+
+					if(instance_found < IPACM_Iface::ipacmcfg->ipa_num_ipa_interfaces)
+					{
+						IPACMDBG_H("Found devname:%s at iface_idx: %d\n", dev_name, instance_found);
+						goto process_getroute_v6;
+					}
+
+					for (instance_found = IPACM_Iface::ipacmcfg->ipa_num_ipa_interfaces - MAX_NUM_PPPOE_MPDN;
+						instance_found < IPACM_Iface::ipacmcfg->ipa_num_ipa_interfaces; instance_found++)
+					{
+						if(strlen(IPACM_Iface::ipacmcfg->iface_table[instance_found].iface_name) == 0)
+						{
+							IPACMDBG_H("Found empty slot at iface_idx: %d\n", instance_found);
+							break;
+						}
+					}
+
+					if(instance_found == IPACM_Iface::ipacmcfg->ipa_num_ipa_interfaces)
+					{
+						IPACMERR("Max number of supported Eth vlan interfaces are reached.\n");
+						free(data_addr);
+						free(data_fid);
+						break;
+					}
+
+process_getroute_v6:
+					if(strstr(dev_name, "pppoe"))
+					{
+						data_fid->is_ppp_iface = true;
+					}
+					if(!strstr(dev_name, "pppoe"))
+					{
+						strlcpy(IPACM_Iface::ipacmcfg->iface_table[instance_found].phy_dev_name,
+							dev_name, ETH_PHY_IFACE_LEN);
+					}
+
+					strlcpy(IPACM_Iface::ipacmcfg->iface_table[instance_found].iface_name,
+						dev_name, sizeof(IPACM_Iface::ipacmcfg->iface_table[instance_found].iface_name));
+					IPACM_Iface::ipacmcfg->iface_table[instance_found].virtual_iface = true;
 					data_fid->if_index = nl_route_info_get_route.attr_info.oif_index;
+					memset(&evt_data, 0, sizeof(ipacm_cmd_q_data));
 					evt_data.event = IPA_USB_LINK_UP_EVENT;
 					evt_data.evt_data = data_fid;
 					IPACM_EvtDispatcher::PostEvt(&evt_data);
 				}
-				data_addr->if_index = nl_route_info_get_route.attr_info.oif_index;
-
 
 				if(nl_route_info_get_route.metainfo.rtm_table == RT_TABLE_MAIN)
 				{
 					evt_data.event = IPA_ROUTE_ADD_EVENT;
+					data_addr->if_index = nl_route_info_get_route.attr_info.oif_index;
 					IPACMDBG("Posting IPA_ROUTE_ADD_EVENT with if index:%d, ipv6 address\n",
 								data_addr->if_index);
 				}
-				else if(nl_route_info_get_route.metainfo.rtm_table == RT_TABLE_COMPAT)
+				else if(nl_route_info_get_route.metainfo.rtm_table != RT_TABLE_MAIN &&
+						(IPACM_Iface::ipacmcfg->eth_wan_pppoe_enable ||
+						IPACM_Iface::ipacmcfg->eth_vlan_wan_enable))
 				{
 					evt_data.event = IPA_WAN_GW_ADDR_ADD_EVENT;
+					data_addr->if_index = nl_route_info_get_route.attr_info.oif_index;
 					IPACMDBG("Posting IPA_WAN_GW_ADDR_ADD_EVENT with if index:%d, ipv6 address\n",
 								data_addr->if_index);
 				}

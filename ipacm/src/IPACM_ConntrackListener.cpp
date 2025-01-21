@@ -1884,7 +1884,8 @@ void IPACM_ConntrackListener::TriggerWANDown_v6(const uint32_t* ipv6_addr)
 	WanUp_v6 = false;
 	Ipv6IpAddress wan_addr;
 	wan_addr.CreateFromArray(ipv6_addr, false);
-
+	IPACMDBG_H("TriggerWANDown_v6 for IPv6 with prefix 0x%08x%08x\n",
+		ipv6_addr[0], ipv6_addr[1]);
 #ifndef FEATURE_SOCKSv5
 	if (wan_addr != wan_ipaddr_v6)
 	{

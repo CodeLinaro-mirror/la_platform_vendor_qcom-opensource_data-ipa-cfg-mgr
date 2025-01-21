@@ -710,5 +710,12 @@
 		<IPACMQOS>
 			<IPACMQOSEnabled>0</IPACMQOSEnabled>
 		</IPACMQOS>
+		<IPACMPPPOE>
+			<IPACMPPPOEEnabled>0</IPACMPPPOEEnabled>
+		</IPACMPPPOE>
+		<IPACMIPOEEthVlanWan>
+			<IPOEEthVlanWanEnabled>0</IPOEEthVlanWanEnabled>
+			<IPOEVlanLanWanIface>eth0</IPOEVlanLanWanIface>
+		</IPACMIPOEEthVlanWan>
 	</IPACM>
 </system>

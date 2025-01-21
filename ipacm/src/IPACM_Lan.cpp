@@ -123,7 +123,7 @@ ipa_lan_client_idx IPACM_Lan::inactive_lan_client_index_odu[IPA_MAX_NUM_HW_PATH_
 #define LAN2LAN_RULE_ID 1
 #define IPA_NS_TABLE IPA_TMP_DIR"/ipa_ns_table.txt"
 
-IPACM_Lan::IPACM_Lan(char *iface_name, int iface_index) : IPACM_Iface(iface_name, iface_index)
+IPACM_Lan::IPACM_Lan(char *iface_name, int iface_index, bool is_ppp_iface) : IPACM_Iface(iface_name, iface_index, is_ppp_iface)
 {
 	sIface = false;
 	num_eth_client = 0;
@@ -1267,7 +1267,8 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 			ipacm_event_data_all *data = (ipacm_event_data_all *)param;
 			ipa_interface_index = iface_ipa_index_query(data->if_index);
 			IPACMDBG_H("Received IPA_NEIGH_CLIENT_IP_ADDR_ADD_EVENT event \n");
-			IPACMDBG_H("check iface %s category: %d\n", dev_name, ipa_if_cate);
+			IPACMDBG_H("check iface:%s category:%d ipa_if_num:%d\n",
+				dev_name, ipa_if_cate, ipa_if_num);
 			if (ipa_interface_index == ipa_if_num && ipa_if_cate == ODU_IF)
 			{
 				IPACMDBG_H("ODU iface got v4-ip \n");
@@ -4022,7 +4023,7 @@ int IPACM_Lan::handle_wan_down(bool is_sta_mode, uint8_t mux_id, uint16_t vid)
 		}
 	}
 	/* clean MTU rules if needed */
-	if(ipa_if_cate == ODU_IF && strncmp(dev_name, ETH_INTF, sizeof(dev_name)) == 0 &&
+	if(ipa_if_cate == ODU_IF && strncmp(dev_name, IPACM_Iface::ipacmcfg->eth_lan_wan_iface_name, sizeof(dev_name)) == 0 &&
 		num_wan_subnet_rules == 0)
 	{
 		IPACM_Iface::odu_subnet_fl_rule_hdl[IPA_IP_v4] = 0;
@@ -11935,7 +11936,7 @@ int IPACM_Lan::handle_down_evt()
 			}
 #endif
 		}
-		if(ipa_if_cate == ODU_IF && strncmp(dev_name, ETH_INTF, sizeof(dev_name)))
+		if(ipa_if_cate == ODU_IF && strncmp(dev_name, IPACM_Iface::ipacmcfg->eth_lan_wan_iface_name, sizeof(dev_name)))
 		{
 			memset(IPACM_Iface::odu_subnet_fl_rule_hdl, 0, IPA_IP_MAX);
 		}
@@ -15366,7 +15367,7 @@ int IPACM_Lan::handle_wan_down_v6(bool is_sta_mode, bool is_support_mpdn, uint16
 	if (is_support_mpdn == true)
 	{
 		modify_ipv6_prefix_flt_rule();
-		if(ipa_if_cate == ODU_IF && strncmp(dev_name, ETH_INTF, sizeof(dev_name)) == 0 &&
+		if(ipa_if_cate == ODU_IF && strncmp(dev_name, IPACM_Iface::ipacmcfg->eth_lan_wan_iface_name, sizeof(dev_name)) == 0 &&
 			num_wan_prefix_rules == 0)
 		{
 			IPACM_Iface::odu_subnet_fl_rule_hdl[IPA_IP_v6] = 0;
@@ -16146,7 +16147,7 @@ int IPACM_Lan::modify_private_subnet(bool eogre_enabled)
 			IPACMDBG("Adding filter hdl:(0x%x)\n", private_fl_rule_hdl[j][i]);
 		}
 
-		if(ipa_if_cate == ODU_IF && strncmp(dev_name, ETH_INTF, sizeof(dev_name)) == 0 &&
+		if(ipa_if_cate == ODU_IF && strncmp(dev_name, IPACM_Iface::ipacmcfg->eth_lan_wan_iface_name, sizeof(dev_name)) == 0 &&
 			num_wan_subnet_rules[j] > 0)
 		{
 			IPACM_Iface::odu_subnet_fl_rule_hdl[IPA_IP_v4] = private_fl_rule_hdl[j][num_wan_subnet_rules[j] - 1];
@@ -16506,7 +16507,7 @@ int IPACM_Lan::modify_ipv6_prefix_flt_rule(bool eogre_enabled)
 		for (i = 0; i < num_wan_prefix_rules[j]; i++)
 			ipv6_prefix_flt_rule_hdl[j][i] = pFilteringTable->rules[i].flt_rule_hdl;
 
-		if(ipa_if_cate == ODU_IF && strncmp(dev_name, ETH_INTF, sizeof(dev_name)) == 0 &&
+		if(ipa_if_cate == ODU_IF && strncmp(dev_name, IPACM_Iface::ipacmcfg->eth_lan_wan_iface_name, sizeof(dev_name)) == 0 &&
 			num_wan_prefix_rules[j] > 0)
 		{
 			IPACM_Iface::odu_subnet_fl_rule_hdl[IPA_IP_v6] = ipv6_prefix_flt_rule_hdl[j][num_wan_prefix_rules[j] - 1];

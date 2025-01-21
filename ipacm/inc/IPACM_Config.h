@@ -113,7 +113,17 @@ typedef struct _ipa_rm_client
 
 #define MAX_NUM_EXT_PROPS 25
 #define MAX_NUM_IP_PASS_MPDN 15
+#define MAX_NUM_PPPOE_MPDN 8
 #define EOGRE_PROTOCOL_TYPE 0x6558
+#define IPA_TMP_DIR "/tmp/data_ipa"
+
+#ifdef FEATURE_PPPOE
+#define IPA_PPPOE_TABLE IPA_TMP_DIR"/ipa_pppoe_table.txt"
+#define MAX_PPPOE_ROW_LEN 200
+#define MAX_PPPOE_PARAM_CNT 3
+#define MAX_PPPOE_PARAM_LEN 50
+#define IPA_SYS_CMD_LEN 200
+#endif
 
 /* used to hold extended properties */
 typedef struct
@@ -182,6 +192,32 @@ typedef struct
 	/* Store dscp_value */
 	uint8_t dscp_val;
 }ipacm_pdn_dscp_info;
+#endif
+
+#ifdef FEATURE_PPPOE
+/* used to store the PPPoE PDN info */
+typedef struct
+{
+	/* Store the status of the entry
+         * status = 1 when PPPoE pdn name, eth phy name and vlan id are stored.
+         * status = 2 when session id is updated and entry is valid now.*/
+	uint8_t status;
+
+	/* Store PPPoE interface name */
+	char pppoe_dev_name[IPA_RESOURCE_NAME_MAX];
+
+	/* Store eth physical interface name */
+	char phy_dev_name[IPA_RESOURCE_NAME_MAX];
+
+	/* Store vlan ID */
+	uint16_t vlan_id;
+
+	/* Store PPPoE session ID */
+	uint16_t session_id;
+
+	/* Store mac address of the gateway STA WAN client */
+	uint8_t mac_addr[IPA_MAC_ADDR_SIZE];
+} ipacm_pppoe_mpdn_info;
 #endif
 
 #if defined(FEATURE_IPACM_PER_CLIENT_STATS) && defined(IPA_HW_FNR_STATS)
@@ -418,8 +454,8 @@ public:
 	/* Store the bridge iface names */
 	char ipa_virtual_iface_name[IPA_IFACE_NAME_LEN];
 
-	/* ETH WAN iface index */
-	int eth_wan_iface_table_idx;
+	/* ETH WAN iface indices */
+	int eth_wan_iface_table_idx[MAX_NUM_PPPOE_MPDN];
 
 	/* Store the number of interface IPACM read from XML file */
 	int ipa_num_ipa_interfaces;
@@ -445,6 +481,11 @@ public:
 #ifdef FEATURE_STATIC_POLICY
 	ipacm_pdn_dscp_info pdn_dscp_table[IPA_UC_MAX_PDN_DSCP_VAL];
 	pthread_mutex_t pdn_dscp_lock;
+#endif
+
+#ifdef FEATURE_PPPOE
+	ipacm_pppoe_mpdn_info pppoe_mpdn_table[MAX_NUM_PPPOE_MPDN];
+	pthread_mutex_t pppoe_map_lock;
 #endif
 
 	pthread_mutex_t ip_pass_mpdn_lock;
@@ -522,6 +563,13 @@ public:
          * Mode 1 - uc uses proc params */
 	uint32_t ipacm_static_policy_dscp_mark_mode;
 #endif
+
+	/* Indicates whether PPPOE mode is enabled on WAN interface*/
+	bool eth_wan_pppoe_enable;
+	/* Indicates whether Eth VLAN mode is enabled on WAN interface*/
+	bool eth_vlan_wan_enable;
+	/* Indicates the interface on which Eth VLAN LAN-WAN mode is enabled*/
+	const char* eth_lan_wan_iface_name;
 
 #ifdef FEATURE_EoGRE
 	ipa_ipgre_info eogre_info;
@@ -641,6 +689,15 @@ public:
 	void get_vlan_mode_ifaces();
 #endif
 
+	int get_eth_vlan_wan_up(int ipa_if_num);
+
+#ifdef FEATURE_PPPOE
+	uint16_t pppoe_get_session_id(const char *pppoe_dev_name);
+	void get_pppoe_session_info(const char *pppoe_dev_name);
+	void update_pppoe_session_info(const char *pppoe_dev_name, char *params[MAX_PPPOE_PARAM_CNT]);
+	int get_pppoe_vlan_id(char *pppoe_dev_name, uint16_t *vlan_id);
+	int get_pppoe_indx(char *pppoe_dev_name);
+#endif
 	bool is_svap_related(const char *phy_inf);
 
 #if defined(FEATURE_SOCKSv5) && defined(IPA_SOCKV5_EVENT_MAX)
@@ -732,6 +789,67 @@ public:
 
 		return indx;
 	}
+
+#ifdef FEATURE_PPPOE
+	inline int get_free_pppoe_pdn_index(char *pppoe_dev_name)
+	{
+		int indx;
+
+		/* Check if the entry already exists for this iface. */
+		for (indx=0; indx < MAX_NUM_PPPOE_MPDN; indx++)
+		{
+			if ((pppoe_mpdn_table[indx].status == 1 ||
+				pppoe_mpdn_table[indx].status == 2) &&
+				strncmp(pppoe_dev_name,
+						pppoe_mpdn_table[indx].pppoe_dev_name,
+						sizeof(pppoe_mpdn_table[indx].pppoe_dev_name)) == 0)
+			{
+				IPACMDBG("Interface (%s) is already present in PPPoE table\n", pppoe_dev_name);
+				return MAX_NUM_PPPOE_MPDN;
+			}
+		}
+
+		for (indx=0; indx < MAX_NUM_PPPOE_MPDN; indx++)
+			if (!pppoe_mpdn_table[indx].status)
+				return indx;
+
+		return indx;
+	}
+
+	inline int get_pppoe_pdn_index(char *pppoe_dev_name)
+	{
+		int indx;
+
+		for (indx=0; indx < MAX_NUM_PPPOE_MPDN; indx++)
+		{
+			if ((pppoe_mpdn_table[indx].status == 1 ||
+				pppoe_mpdn_table[indx].status == 2) &&
+				strncmp(pppoe_dev_name,
+						pppoe_mpdn_table[indx].pppoe_dev_name,
+						sizeof(pppoe_mpdn_table[indx].pppoe_dev_name)) == 0)
+				return indx;
+		}
+		return indx;
+	}
+
+	inline uint16_t pppoe_get_session_id(char *pppoe_dev_name)
+	{
+		int indx;
+		if(!pppoe_dev_name)
+			return 0;
+		for(indx=0; indx < MAX_NUM_PPPOE_MPDN; indx++)
+		{
+			if(strcmp(pppoe_mpdn_table[indx].pppoe_dev_name, pppoe_dev_name) == 0)
+			{
+				IPACMDBG("PPPoe dev %s session_id found %d\n",
+						pppoe_dev_name, pppoe_mpdn_table[indx].session_id);
+				return pppoe_mpdn_table[indx].session_id;
+			}
+		}
+		IPACMERR("PPPoe devname %s not found\n", pppoe_dev_name);
+		return 0;
+	}
+#endif
 
 #ifdef FEATURE_STATIC_POLICY
 	inline int get_free_pdn_dscp_index(char *pdn_name)
@@ -894,6 +1012,10 @@ public:
 	void ip_pass_config_update(ipa_ioc_pdn_config *pdn_config);
 
 	void ip_collision_config_update(ipa_ioc_pdn_config *pdn_config);
+
+#ifdef FEATURE_PPPOE
+	void pppoe_config_update(ipa_ioc_pppoe_info *pppoe_config, uint8_t to_add, uint8_t session_id = 0, uint8_t *mac_addr = NULL);
+#endif
 
 #ifdef FEATURE_STATIC_POLICY
 	void pdn_dscp_config_update(ipa_ioc_pdn_dscp_map_info *pdn_dscp_config);
@@ -1570,10 +1692,12 @@ private:
 	string getNameForVlanQuery(const string &interfaceName) {
 		IPACMDBG("interfaceName = %s\n", interfaceName.c_str());
 		for (int i = 0; i < ipa_num_ipa_interfaces; i++) {
-			if (string(interfaceName).rfind(string(iface_table[i].iface_name), 0) == 0 && iface_table[i].virtual_iface) {
+			if (string(iface_table[i].iface_name).length() != 0 && string(interfaceName).rfind(string(iface_table[i].iface_name), 0) == 0 &&
+				iface_table[i].virtual_iface) {
 				return string(iface_table[i].phy_dev_name);
 			}
 		}
+		IPACMDBG_H("passed string %s\n", interfaceName.c_str());
 		return interfaceName;
 	}
 	/**
@@ -1588,14 +1712,19 @@ private:
 	ipa_ifi_dev_name_t* getMacsecInterface(const int interfaceIndex) const {
 		if (!iface_table)
 			return nullptr;
-		/* eth_wan_iface_table_idx reserved for ETH VLAN WAN instance */
-		for (int i = 0; i < ipa_num_ipa_interfaces; i++) {
-			if(iface_table[i].netlink_interface_index == interfaceIndex &&
-				i == eth_wan_iface_table_idx)
+		/* eth_wan_iface_table_idx reserved for ETH VLAN WAN instances*/
+		for (int i = 0; i < ipa_num_ipa_interfaces; i++)
+		{
+			for (int j = 0; j < MAX_NUM_PPPOE_MPDN; j++)
 			{
-				return nullptr;
+				if(iface_table[i].netlink_interface_index == interfaceIndex &&
+					i == eth_wan_iface_table_idx[j])
+				{
+					return nullptr;
+				}
 			}
 		}
+
 		auto it = std::find_if(iface_table, iface_table + ipa_num_ipa_interfaces,
 			[interfaceIndex](const decltype(iface_table[0])& item) {
 				IPACMDBG("iface_name:%s, phy_dev_name:%s, virtual_iface:%d, netlink_interface_index:%d\n", item.iface_name,

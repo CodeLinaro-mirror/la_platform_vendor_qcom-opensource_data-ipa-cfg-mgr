@@ -3905,6 +3905,7 @@ void IPACM_Config::delete_qos_params_info(ipa_ioc_qos_config *data)
 			qos_param = (qos_delete_param_info *)malloc(sizeof(qos_delete_param_info) + it_qos_params->qos_client_list.size() * sizeof(qos_client_info));
 			if (qos_param == NULL)
 			{
+				pthread_mutex_unlock(&qos_param_list_lock);
 				IPACMERR("Unable to allocate memory\n");
 				return;
 			}
@@ -3966,6 +3967,7 @@ void IPACM_Config::flush_qos_params_info(ipa_ioc_qos_config *data)
 		qos_param = (qos_delete_param_info *)malloc(sizeof(qos_delete_param_info) + it_qos_params->qos_client_list.size() * sizeof(qos_client_info));
 		if (qos_param == NULL)
 		{
+			pthread_mutex_unlock(&qos_param_list_lock);
 			IPACMERR("Unable to allocate memory\n");
 			return;
 		}

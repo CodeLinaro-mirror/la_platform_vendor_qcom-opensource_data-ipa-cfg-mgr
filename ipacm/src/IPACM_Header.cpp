@@ -28,7 +28,7 @@ IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 *
 * Changes from Qualcomm Innovation Center are provided under the following license:
-* Copyright (c) 2024 Qualcomm Innovation Center, Inc. All rights reserved.
+* Copyright (c) 2024-2025 Qualcomm Innovation Center, Inc. All rights reserved.
 * SPDX-License-Identifier: BSD-3-Clause-Clear
 */
 #include <unistd.h>
@@ -238,7 +238,7 @@ bool IPACM_Header::DeleteHeaderProcCtx(uint32_t hdl)
 	pHeaderTable->hdl[0].hdl = hdl;
 
 	ret = ioctl(m_fd, IPA_IOC_DEL_HDR_PROC_CTX, pHeaderTable);
-	if(ret != 0)
+	if(ret != 0 || pHeaderTable->hdl[0].status != 0)
 	{
 		IPACMERR("Failed to delete hdr proc ctx: return value %d, status %d\n",
 			ret, pHeaderTable->hdl[0].status);

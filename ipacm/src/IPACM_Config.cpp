@@ -243,6 +243,7 @@ IPACM_Config::IPACM_Config()
 	ipacm_odu_router_mode = false;
 	ipa_num_wlan_guest_ap = 0;
 
+	eth_wan_iface_table_idx = -1;
 	ipa_num_ipa_interfaces = 0;
 	ipa_num_private_subnet = 0;
 	ipa_num_alg_ports = 0;
@@ -595,6 +596,9 @@ reread:
 
 	/* Construct IPACM Iface table */
 	ipa_num_ipa_interfaces = cfg->iface_config.num_iface_entries;
+	/* Reserve iface index for ETH WAN VLAN iface in the end of table */
+	eth_wan_iface_table_idx = ipa_num_ipa_interfaces;
+	ipa_num_ipa_interfaces++;
 	if (iface_table != NULL)
 	{
 		free(iface_table);
@@ -632,7 +636,13 @@ reread:
 			IPACMDBG_H("ipa_virtual_iface_name(%s) \n", ipa_virtual_iface_name);
 		}
 	}
-
+	if(eth_wan_iface_table_idx >= 0)
+	{
+		iface_table[eth_wan_iface_table_idx].if_cat = WAN_IF;
+		iface_table[eth_wan_iface_table_idx].if_mode = ROUTER;
+		strlcpy(iface_table[eth_wan_iface_table_idx].phy_dev_name,
+			ETH_INTF, sizeof(iface_table[eth_wan_iface_table_idx].iface_name));
+	}
 
 	/* Construct IPACM ALG table */
 	ipa_num_alg_ports = cfg->alg_config.num_alg_entries;

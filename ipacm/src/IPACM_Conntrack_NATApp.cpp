@@ -27,7 +27,7 @@ OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
 IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 Changes from Qualcomm Innovation Center are provided under the following license:
-Copyright (c) 2023-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+Copyright (c) 2023-2025 Qualcomm Innovation Center, Inc. All rights reserved.
 SPDX-License-Identifier: BSD-3-Clause-Clear
 */
 #include "IPACM_Conntrack_NATApp.h"
@@ -202,13 +202,13 @@ int NatApp::AddPdn(uint32_t pub_ip, uint8_t mux_id, bool is_sta, bool ip_pass)
 		/* create the NAT table, the PDN will be stored in index 0 */
 		if(is_sta)
 		{
-			/* This function stores pub_ip at pdn[0]. 
+			/* This function stores pub_ip at pdn[0].
 			 * We don't want that for non STA PDNs*/
 			ret = ipa_nat_add_ipv4_tbl(pub_ip, mem_type, max_entries, &nat_table_hdl);
 		}
 		else
 		{
-			ret = ipa_nat_add_ipv4_tbl(0, mem_type, max_entries, &nat_table_hdl);
+			ret = ipa_nat_add_ipv4_tbl(pub_ip, mem_type, max_entries, &nat_table_hdl);
 		}
 		if(ret)
 		{
@@ -217,16 +217,15 @@ int NatApp::AddPdn(uint32_t pub_ip, uint8_t mux_id, bool is_sta, bool ip_pass)
 		}
 		IPACMDBG_H("succeesfully created NAT table for ip 0x%X\n", pub_ip);
 		entry.src_metadata = GenerateMetdata(mux_id);
-		pdn_index = 1;
-#ifdef FEATURE_DUAL_BACKHAUL
+		pdn_index = 0;
+
 		if(is_sta)
 		{
-			pdn_index = 0;
+			IPACMDBG_H("got pdn index %d\n", pdn_index);
 			entry.src_metadata = 0;
 			entry.is_sta = true;
 			IPACMDBG_H("attempting second backhaul ADDPDN\n");
 		}
-#endif
 
 		/* modify PDN 0 so it will hold the mux ID in the src metadata field */
 		ret = ipa_nat_modify_pdn(nat_table_hdl, pdn_index, &entry);
@@ -242,15 +241,17 @@ int NatApp::AddPdn(uint32_t pub_ip, uint8_t mux_id, bool is_sta, bool ip_pass)
 #ifdef FEATURE_DUAL_BACKHAUL
 		if(is_sta)
 		{
-			pdn_index=0;
-			entry.public_ip = pub_ip;
-			entry.src_metadata = 0;
-			entry.is_sta = true;
-			IPACMDBG_H("attempting second backhaul modify ADDPDN\n");
-			ret = ipa_nat_alloc_pdn(&entry, &pdn_index);
-			if(ret){
-				IPACMERR("unable to modify PDN 0 entry Error:%d\n", ret);
-				return ret;
+			if(ipa_nat_get_pdn_index(pub_ip, &pdn_index) < 0)
+			{
+				entry.public_ip = pub_ip;
+				entry.src_metadata = 0;
+				entry.is_sta = true;
+				IPACMDBG_H("attempting second backhaul modify ADDPDN\n");
+				ret = ipa_nat_alloc_pdn(&entry, &pdn_index);
+				if(ret){
+					IPACMERR("unable to modify PDN 0 entry Error:%d\n", ret);
+					return ret;
+				}
 			}
 		}
 		else
@@ -466,7 +467,7 @@ int NatApp::RemovePdn(uint32_t pub_ip)
 		IPACMERR("pdn doesn't exist on pdn table\n");
 		return IPACM_FAILURE;
 	}
-
+	IPACMDBG_H("pdn ip found at pdn_index:%d\n", pdn_index);
 	/* remove all PDN entries */
 	for(int cnt = 0; cnt < max_entries; cnt++)
 	{
@@ -711,6 +712,8 @@ int NatApp::AddEntry(const nat_table_entry *rule, bool isVlan)
 
 	if(rule->private_ip == 0 ||
 		 rule->target_ip == 0 ||
+		 rule->private_port == 0  ||
+		 rule->target_port == 0 ||
 		 rule->protocol == 0)
 	{
 		IPACMERR("Invalid Connection, ignoring it\n");
@@ -997,7 +1000,7 @@ void NatApp::UpdateUDPTimeStamp()
 			IPACMDBG("\n");
 			if(ipa_nat_query_timestamp(nat_table_hdl, cache[cnt].rule_hdl, &ts) < 0)
 			{
-				IPACMERR("unable to retrieve timeout for rule hanle: %d\n", cache[cnt].rule_hdl);
+				IPACMERR("unable to retrieve timeout for rule handle: %d\n", cache[cnt].rule_hdl);
 				continue;
 			}
 

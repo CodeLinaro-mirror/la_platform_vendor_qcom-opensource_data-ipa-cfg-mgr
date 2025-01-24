@@ -262,6 +262,7 @@ void* ipa_driver_msg_notifier(void *param)
 	ipacm_cmd_q_data evt_data;
 	ipacm_event_data_mac *data = NULL;
 	ipacm_event_data_fid *data_fid = NULL;
+	ipacm_event_data_fid *data_fid2 = NULL;
 	ipacm_event_data_iptype *data_iptype = NULL;
 	ipacm_event_data_wlan_ex *data_ex;
 	ipa_get_data_stats_resp_msg_v01 *data_tethering_stats = NULL;
@@ -319,7 +320,7 @@ void* ipa_driver_msg_notifier(void *param)
 
 	while (1)
 	{
-		IPACMDBG_H("Waiting for nofications from IPA driver \n");
+		IPACMDBG_H("Waiting for notifications from IPA driver \n");
 		memset(buffer, 0, sizeof(buffer));
 		memset(&evt_data, 0, sizeof(evt_data));
 		memset(&new_neigh_evt, 0, sizeof(ipacm_cmd_q_data));
@@ -643,6 +644,22 @@ void* ipa_driver_msg_notifier(void *param)
 		case ECM_DISCONNECT:
 			memcpy(&event_ecm, buffer + sizeof(struct ipa_msg_meta), sizeof(struct ipa_ecm_msg));
 			IPACMDBG_H("Received ECM_DISCONNECT name: %s\n",event_ecm.name);
+			if(IPACM_Iface::ipacmcfg->eth_wan_iface_table_idx >= 0 &&
+				strstr(event_ecm.name, ETH_INTF))
+			{
+				data_fid2 = (ipacm_event_data_fid *)malloc(sizeof(ipacm_event_data_fid));
+				if(data_fid2 == NULL)
+				{
+					IPACMERR("unable to allocate memory for event_ecm data_fid\n");
+					return NULL;
+				}
+				data_fid2->if_index = IPACM_Iface::ipacmcfg->iface_table[IPACM_Iface::ipacmcfg->eth_wan_iface_table_idx].netlink_interface_index;
+				evt_data.event = IPA_LINK_DOWN_EVENT;
+				evt_data.evt_data = data_fid2;
+				IPACMDBG_H("Posting event %d for ETH VLAN iface:%d\n", evt_data.event, data_fid2->if_index);
+				IPACM_EvtDispatcher::PostEvt(&evt_data);
+			}
+			memset(&evt_data, 0, sizeof(evt_data));
 			data_fid = (ipacm_event_data_fid *)malloc(sizeof(ipacm_event_data_fid));
 			if(data_fid == NULL)
 			{

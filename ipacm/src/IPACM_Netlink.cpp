@@ -27,7 +27,7 @@ OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
 IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 Changes from Qualcomm Innovation Center are provided under the following license:
-Copyright (c) 2023-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+Copyright (c) 2023-2025 Qualcomm Innovation Center, Inc. All rights reserved.
 SPDX-License-Identifier: BSD-3-Clause-Clear
 */
 /*!
@@ -911,6 +911,14 @@ static int ipa_nl_decode_rtm_route
 				}
 			}
 			break;
+		case RTA_TABLE:
+			IPACMDBG("Handling RTA TABLE from netlink\n");
+			memcpy(&route_info->attr_info.table_id,
+                                                 RTA_DATA(rtah),
+                                                 sizeof(route_info->attr_info.table_id));
+			route_info->attr_info.param_mask |= IPA_RTA_PARAM_TABLE;
+			IPACMDBG("Table id is %d\n",route_info->attr_info.table_id);
+			break;
 
 		default:
 			break;
@@ -972,6 +980,8 @@ static int ipa_nl_decode_nlmsg
 	struct ipa_macsec_map macsec_map, *macsec_map_data;
 	ipacm_event_mtu_info *mtu_event = NULL;
 	ipa_mtu_info *mtu_info;
+	IPACM_Config* config = NULL;
+	int idx = 0;
 
 	memset(nullMac, 0, sizeof(nullMac));
 	memset(&vlan_info, 0, sizeof(vlan_info));
@@ -1502,8 +1512,7 @@ static int ipa_nl_decode_nlmsg
 				  (msg_ptr->nl_route_info.metainfo.rtm_protocol == RTPROT_RA) ||
 				  (msg_ptr->nl_route_info.metainfo.rtm_protocol == RTPROT_STATIC))&&
 				 ((msg_ptr->nl_route_info.metainfo.rtm_scope == RT_SCOPE_UNIVERSE)||
-				 (msg_ptr->nl_route_info.metainfo.rtm_scope == RT_SCOPE_LINK))&&
-				 (msg_ptr->nl_route_info.metainfo.rtm_table == RT_TABLE_MAIN))
+				 (msg_ptr->nl_route_info.metainfo.rtm_scope == RT_SCOPE_LINK)))
 			{
 				IPACMDBG("\n GOT RTM_NEWROUTE event\n");
 
@@ -1571,18 +1580,50 @@ static int ipa_nl_decode_nlmsg
 						IPACM_EVENT_COPY_ADDR_v4( if_ipipv4_addr_mask, msg_ptr->nl_route_info.attr_info.dst_addr);
 						IPACM_EVENT_COPY_ADDR_v4( if_ipv4_addr_gw, msg_ptr->nl_route_info.attr_info.gateway_addr);
 
-						evt_data.event = IPA_ROUTE_ADD_EVENT;
 						data_addr->if_index = msg_ptr->nl_route_info.attr_info.oif_index;
 						data_addr->iptype = IPA_IP_v4;
 						data_addr->ipv4_addr = ntohl(if_ipv4_addr);
 						data_addr->ipv4_addr_gw = ntohl(if_ipv4_addr_gw);
 						data_addr->ipv4_addr_mask = ntohl(if_ipipv4_addr_mask);
 
-            IPACMDBG_H("Posting IPA_ROUTE_ADD_EVENT with if index:%d, ipv4 addr:0x%x, mask: 0x%x and gw: 0x%x\n",
+						if(msg_ptr->nl_route_info.metainfo.rtm_table == RT_TABLE_COMPAT &&
+							msg_ptr->nl_route_info.attr_info.param_mask & IPA_RTA_PARAM_GATEWAY &&
+							strstr(dev_name, ETH_INTF) && IPACM_Iface::ipacmcfg->is_added_vlan_iface(dev_name))
+						{
+							data_fid = (ipacm_event_data_fid *)malloc(sizeof(ipacm_event_data_fid));
+							if(data_fid == NULL)
+							{
+								IPACMERR("unable to allocate memory for event_ecm data_fid\n");
+								return IPACM_FAILURE;
+							}
+							strlcpy(IPACM_Iface::ipacmcfg->iface_table[IPACM_Iface::ipacmcfg->eth_wan_iface_table_idx].iface_name,
+								dev_name, sizeof(IPACM_Iface::ipacmcfg->iface_table[IPACM_Iface::ipacmcfg->eth_wan_iface_table_idx].iface_name));
+							IPACM_Iface::ipacmcfg->iface_table[IPACM_Iface::ipacmcfg->eth_wan_iface_table_idx].virtual_iface = true;
+
+							data_fid->if_index = msg_ptr->nl_route_info.attr_info.oif_index;
+							evt_data.event = IPA_USB_LINK_UP_EVENT;
+							evt_data.evt_data = data_fid;
+							IPACM_EvtDispatcher::PostEvt(&evt_data);
+						}
+
+						if(msg_ptr->nl_route_info.metainfo.rtm_table == RT_TABLE_MAIN)
+						{
+							evt_data.event = IPA_ROUTE_ADD_EVENT;
+							IPACMDBG_H("Posting IPA_ROUTE_ADD_EVENT with if index:%d, ipv4 addr:0x%x, mask: 0x%x and gw: 0x%x\n",
 										 data_addr->if_index,
 										 data_addr->ipv4_addr,
 										 data_addr->ipv4_addr_mask,
 										 data_addr->ipv4_addr_gw);
+						}
+						else if(msg_ptr->nl_route_info.metainfo.rtm_table == RT_TABLE_COMPAT)
+						{
+							evt_data.event = IPA_WAN_GW_ADDR_ADD_EVENT;
+							IPACMDBG_H("Posting IPA_WAN_GW_ADDR_ADD_EVENT with if index:%d, ipv4 addr:0x%x, mask: 0x%x and gw: 0x%x\n",
+										data_addr->if_index,
+										data_addr->ipv4_addr,
+										data_addr->ipv4_addr_mask,
+										data_addr->ipv4_addr_gw);
+						}
 						evt_data.evt_data = data_addr;
 						IPACM_EvtDispatcher::PostEvt(&evt_data);
 						/* finish command queue */
@@ -1598,8 +1639,7 @@ static int ipa_nl_decode_nlmsg
 				  (msg_ptr->nl_route_info.metainfo.rtm_protocol == RTPROT_STATIC) ||
 				  (msg_ptr->nl_route_info.metainfo.rtm_protocol == RTPROT_KERNEL))&&
 				 ((msg_ptr->nl_route_info.metainfo.rtm_scope == RT_SCOPE_UNIVERSE)||
-				 (msg_ptr->nl_route_info.metainfo.rtm_scope == RT_SCOPE_LINK))&&
-				 (msg_ptr->nl_route_info.metainfo.rtm_table == RT_TABLE_MAIN))
+				 (msg_ptr->nl_route_info.metainfo.rtm_scope == RT_SCOPE_LINK)))
 			{
 				IPACMDBG("\n GOT valid v6-RTM_NEWROUTE event\n");
 				ret_val = ipa_get_if_name(dev_name, msg_ptr->nl_route_info.attr_info.oif_index);
@@ -1716,12 +1756,41 @@ static int ipa_nl_decode_nlmsg
 					data_addr->ipv6_addr_gw[3] = ntohl(data_addr->ipv6_addr_gw[3]);
 					IPACM_NL_REPORT_ADDR( " ", msg_ptr->nl_route_info.attr_info.gateway_addr);
 
-					evt_data.event = IPA_ROUTE_ADD_EVENT;
+					if(msg_ptr->nl_route_info.metainfo.rtm_table == RT_TABLE_COMPAT &&
+							strstr(dev_name, ETH_INTF) && IPACM_Iface::ipacmcfg->is_added_vlan_iface(dev_name))
+					{
+						data_fid = (ipacm_event_data_fid *)malloc(sizeof(ipacm_event_data_fid));
+						if(data_fid == NULL)
+						{
+							IPACMERR("unable to allocate memory for event_ecm data_fid\n");
+							return IPACM_FAILURE;
+						}
+						strlcpy(IPACM_Iface::ipacmcfg->iface_table[IPACM_Iface::ipacmcfg->eth_wan_iface_table_idx].iface_name,
+							dev_name, sizeof(IPACM_Iface::ipacmcfg->iface_table[IPACM_Iface::ipacmcfg->eth_wan_iface_table_idx].iface_name));
+						IPACM_Iface::ipacmcfg->iface_table[IPACM_Iface::ipacmcfg->eth_wan_iface_table_idx].virtual_iface = true;
+
+						data_fid->if_index = msg_ptr->nl_route_info.attr_info.oif_index;
+						evt_data.event = IPA_USB_LINK_UP_EVENT;
+						evt_data.evt_data = data_fid;
+						IPACM_EvtDispatcher::PostEvt(&evt_data);
+					}
+
+					if(msg_ptr->nl_route_info.metainfo.rtm_table == RT_TABLE_MAIN)
+					{
+						evt_data.event = IPA_ROUTE_ADD_EVENT;
+						IPACMDBG("Posting IPA_ROUTE_ADD_EVENT with if index:%d, ipv6 address\n",
+									data_addr->if_index);
+					}
+					else if(msg_ptr->nl_route_info.metainfo.rtm_table == RT_TABLE_COMPAT)
+					{
+						evt_data.event = IPA_WAN_GW_ADDR_ADD_EVENT;
+						IPACMDBG("Posting IPA_WAN_GW_ADDR_ADD_EVENT with if index:%d, ipv6 address\n",
+									data_addr->if_index);
+					}
+
 					data_addr->if_index = msg_ptr->nl_route_info.attr_info.oif_index;
 					data_addr->iptype = IPA_IP_v6;
 
-					IPACMDBG("posting IPA_ROUTE_ADD_EVENT with if index:%d, ipv6 address\n",
-									 data_addr->if_index);
 					evt_data.evt_data = data_addr;
 					IPACM_EvtDispatcher::PostEvt(&evt_data);
 					/* finish command queue */
@@ -2392,6 +2461,7 @@ int ipa_nl_send_getroute(ipa_ip_type ip_type)
 {
 
 	ipacm_event_data_addr *data_addr = NULL;
+	ipacm_event_data_fid *data_fid = NULL;
 	int ret_val = IPACM_FAILURE, dump_intr = 0, msglen = 0, nl_sock = 0;
 	ipacm_cmd_q_data evt_data;
 	uint32_t ipv4_addr = 0, ipv4_addr_mask = 0, temp = 0, ipv4_addr_gw = 0;
@@ -2493,8 +2563,7 @@ int ipa_nl_send_getroute(ipa_ip_type ip_type)
 			  (nl_route_info_get_route.metainfo.rtm_protocol == RTPROT_RA) ||
 			  (nl_route_info_get_route.metainfo.rtm_protocol == RTPROT_STATIC))&&
 			 ((nl_route_info_get_route.metainfo.rtm_scope == RT_SCOPE_UNIVERSE)||
-			 (nl_route_info_get_route.metainfo.rtm_scope == RT_SCOPE_LINK))&&
-			 (nl_route_info_get_route.metainfo.rtm_table == RT_TABLE_MAIN))
+			 (nl_route_info_get_route.metainfo.rtm_scope == RT_SCOPE_LINK)))
 		{
 
 			if(nl_route_info_get_route.attr_info.param_mask & IPA_RTA_PARAM_DST)
@@ -2556,23 +2625,56 @@ int ipa_nl_send_getroute(ipa_ip_type ip_type)
 						IPACMERR("unable to allocate memory for event data_addr\n");
 						goto error;
 					}
-		
+
 					IPACM_EVENT_COPY_ADDR_v4( if_ipv4_addr, nl_route_info_get_route.attr_info.dst_addr);
 					IPACM_EVENT_COPY_ADDR_v4( if_ipipv4_addr_mask, nl_route_info_get_route.attr_info.dst_addr);
 					IPACM_EVENT_COPY_ADDR_v4( if_ipv4_addr_gw, nl_route_info_get_route.attr_info.gateway_addr);
-		
-					evt_data.event = IPA_ROUTE_ADD_EVENT;
+
 					data_addr->if_index = nl_route_info_get_route.attr_info.oif_index;
 					data_addr->iptype = IPA_IP_v4;
 					data_addr->ipv4_addr = ntohl(if_ipv4_addr);
 					data_addr->ipv4_addr_gw = ntohl(if_ipv4_addr_gw);
 					data_addr->ipv4_addr_mask = ntohl(if_ipipv4_addr_mask);
-		
-					IPACMDBG_H("Posting IPA_ROUTE_ADD_EVENT with if index:%d, ipv4 addr:0x%x, mask: 0x%x and gw: 0x%x\n",
-									 data_addr->if_index,
-									 data_addr->ipv4_addr,
-									 data_addr->ipv4_addr_mask,
-									 data_addr->ipv4_addr_gw);
+
+					if(nl_route_info_get_route.metainfo.rtm_table == RT_TABLE_COMPAT &&
+						nl_route_info_get_route.attr_info.param_mask & IPA_RTA_PARAM_GATEWAY &&
+						strstr(dev_name, ETH_INTF) && IPACM_Iface::ipacmcfg->is_added_vlan_iface(dev_name))
+					{
+						data_fid = (ipacm_event_data_fid *)malloc(sizeof(ipacm_event_data_fid));
+						if(data_fid == NULL)
+						{
+							IPACMERR("unable to allocate memory for event_ecm data_fid\n");
+							return IPACM_FAILURE;
+						}
+						strlcpy(IPACM_Iface::ipacmcfg->iface_table[IPACM_Iface::ipacmcfg->eth_wan_iface_table_idx].iface_name,
+							dev_name, sizeof(IPACM_Iface::ipacmcfg->iface_table[IPACM_Iface::ipacmcfg->eth_wan_iface_table_idx].iface_name));
+						IPACM_Iface::ipacmcfg->iface_table[IPACM_Iface::ipacmcfg->eth_wan_iface_table_idx].virtual_iface = true;
+
+						data_fid->if_index = nl_route_info_get_route.attr_info.oif_index;
+						evt_data.event = IPA_USB_LINK_UP_EVENT;
+						evt_data.evt_data = data_fid;
+						IPACM_EvtDispatcher::PostEvt(&evt_data);
+					}
+
+					if(nl_route_info_get_route.metainfo.rtm_table == RT_TABLE_MAIN)
+					{
+						evt_data.event = IPA_ROUTE_ADD_EVENT;
+						IPACMDBG_H("Posting IPA_ROUTE_ADD_EVENT with if index:%d, ipv4 addr:0x%x, mask: 0x%x and gw: 0x%x\n",
+									data_addr->if_index,
+									data_addr->ipv4_addr,
+									data_addr->ipv4_addr_mask,
+									data_addr->ipv4_addr_gw);
+					}
+					else if(nl_route_info_get_route.metainfo.rtm_table == RT_TABLE_COMPAT)
+					{
+						evt_data.event = IPA_WAN_GW_ADDR_ADD_EVENT;
+						IPACMDBG_H("Posting IPA_WAN_GW_ADDR_ADD_EVENT with if index:%d, ipv4 addr:0x%x, mask: 0x%x and gw: 0x%x\n",
+									data_addr->if_index,
+									data_addr->ipv4_addr,
+									data_addr->ipv4_addr_mask,
+									data_addr->ipv4_addr_gw);
+					}
+
 					evt_data.evt_data = data_addr;
 					IPACM_EvtDispatcher::PostEvt(&evt_data);
 					/* finish command queue */
@@ -2699,20 +2801,49 @@ int ipa_nl_send_getroute(ipa_ip_type ip_type)
 				data_addr->ipv6_addr_mask[1]=ntohl(data_addr->ipv6_addr_mask[1]);
 				data_addr->ipv6_addr_mask[2]=ntohl(data_addr->ipv6_addr_mask[2]);
 				data_addr->ipv6_addr_mask[3]=ntohl(data_addr->ipv6_addr_mask[3]);
-		
+
 				IPACM_EVENT_COPY_ADDR_v6( data_addr->ipv6_addr_gw, nl_route_info_get_route.attr_info.gateway_addr);
 				data_addr->ipv6_addr_gw[0] = ntohl(data_addr->ipv6_addr_gw[0]);
 				data_addr->ipv6_addr_gw[1] = ntohl(data_addr->ipv6_addr_gw[1]);
 				data_addr->ipv6_addr_gw[2] = ntohl(data_addr->ipv6_addr_gw[2]);
 				data_addr->ipv6_addr_gw[3] = ntohl(data_addr->ipv6_addr_gw[3]);
 				IPACM_NL_REPORT_ADDR( " ", nl_route_info_get_route.attr_info.gateway_addr);
-		
-				evt_data.event = IPA_ROUTE_ADD_EVENT;
+
+				if(nl_route_info_get_route.metainfo.rtm_table == RT_TABLE_COMPAT &&
+						strstr(dev_name, ETH_INTF) && IPACM_Iface::ipacmcfg->is_added_vlan_iface(dev_name))
+				{
+					data_fid = (ipacm_event_data_fid *)malloc(sizeof(ipacm_event_data_fid));
+					if(data_fid == NULL)
+					{
+						IPACMERR("unable to allocate memory for event_ecm data_fid\n");
+						return IPACM_FAILURE;
+					}
+					strlcpy(IPACM_Iface::ipacmcfg->iface_table[IPACM_Iface::ipacmcfg->eth_wan_iface_table_idx].iface_name,
+						dev_name, sizeof(IPACM_Iface::ipacmcfg->iface_table[IPACM_Iface::ipacmcfg->eth_wan_iface_table_idx].iface_name));
+					IPACM_Iface::ipacmcfg->iface_table[IPACM_Iface::ipacmcfg->eth_wan_iface_table_idx].virtual_iface = true;
+
+					data_fid->if_index = nl_route_info_get_route.attr_info.oif_index;
+					evt_data.event = IPA_USB_LINK_UP_EVENT;
+					evt_data.evt_data = data_fid;
+					IPACM_EvtDispatcher::PostEvt(&evt_data);
+				}
 				data_addr->if_index = nl_route_info_get_route.attr_info.oif_index;
+
+
+				if(nl_route_info_get_route.metainfo.rtm_table == RT_TABLE_MAIN)
+				{
+					evt_data.event = IPA_ROUTE_ADD_EVENT;
+					IPACMDBG("Posting IPA_ROUTE_ADD_EVENT with if index:%d, ipv6 address\n",
+								data_addr->if_index);
+				}
+				else if(nl_route_info_get_route.metainfo.rtm_table == RT_TABLE_COMPAT)
+				{
+					evt_data.event = IPA_WAN_GW_ADDR_ADD_EVENT;
+					IPACMDBG("Posting IPA_WAN_GW_ADDR_ADD_EVENT with if index:%d, ipv6 address\n",
+								data_addr->if_index);
+				}
+
 				data_addr->iptype = IPA_IP_v6;
-		
-				IPACMDBG("posting IPA_ROUTE_ADD_EVENT with if index:%d, ipv6 address\n",
-								 data_addr->if_index);
 				evt_data.evt_data = data_addr;
 				IPACM_EvtDispatcher::PostEvt(&evt_data);
 				/* finish command queue */

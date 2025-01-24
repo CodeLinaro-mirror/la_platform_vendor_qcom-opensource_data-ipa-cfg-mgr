@@ -60,6 +60,8 @@ const char *IPACM_Iface::DEVICE_NAME = "/dev/ipa";
 IPACM_Routing IPACM_Iface::m_routing;
 IPACM_Filtering IPACM_Iface::m_filtering;
 IPACM_Header IPACM_Iface::m_header;
+uint32_t IPACM_Iface::odu_subnet_fl_rule_hdl[IPA_IP_MAX];
+
 
 IPACM_Config *IPACM_Iface::ipacmcfg = IPACM_Config::GetInstance();
 
@@ -755,6 +757,12 @@ int IPACM_Iface::init_fl_rule(
 	if((IPACM_Iface::ipacmcfg->iface_table[ipa_if_num].if_cat== WAN_IF) || (IPACM_Iface::ipacmcfg->iface_table[ipa_if_num].if_cat== EMBMS_IF))
 	{
 		IPACMDBG_H(" NOT add producer dependency on dev %s with registered rx-prop cat:%d \n", dev_name, IPACM_Iface::ipacmcfg->iface_table[ipa_if_num].if_cat);
+		if(IPACM_Iface::ipacmcfg->eth_wan_iface_table_idx == ipa_if_num && IPACM_Iface::ipacmcfg->iface_table[ipa_if_num].if_cat == WAN_IF)
+		{
+			/*Avoid installing default rules for ETH WAN VLAN case as it is already installed in LAN case*/
+			IPACMDBG_H("Avoid installing default rules for ETH WAN VLAN case\n");
+			return res;
+		}
 	}
 	else
 	{

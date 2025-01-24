@@ -27,7 +27,7 @@ OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
 IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 Changes from Qualcomm Innovation Center are provided under the following license:
-Copyright (c) 2023-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+Copyright (c) 2023-2025 Qualcomm Innovation Center, Inc. All rights reserved.
 SPDX-License-Identifier: BSD-3-Clause-Clear
 */
 #ifndef IPACM_CONNTRACK_NATAPP_H
@@ -58,9 +58,6 @@ extern "C"
 #define IPACM_GRE_FULL_FILE_NAME_NEW  "/proc/sys/net/netfilter/nf_conntrack_gre_timeout_stream"
 
 #endif
-
-#define ipv6prefixmatch(X,Y) \
-	((((X >> 32) == *Y) && ((X & 0x00000000FFFFFFFF) == *(Y+1))) ? 1 : 0)
 
 #define ipv6prefixmatch(X,Y) \
 	((((X >> 32) == *Y) && ((X & 0x00000000FFFFFFFF) == *(Y+1))) ? 1 : 0)
@@ -714,7 +711,7 @@ public:
 	static NatApp* GetInstance();
 
 #ifdef FEATURE_VLAN_MPDN
-	int AddPdn(uint32_t pub_ip, uint8_t mux_id, bool is_sta, bool ip_pass);
+	int AddPdn(uint32_t pub_ip, uint8_t mux_id, bool is_sta, bool ip_pass = false);
 	int RemovePdn(uint32_t pub_ip);
 #endif
 	bool ChkForDupGRE(const nat_table_entry *);

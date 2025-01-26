@@ -90,6 +90,28 @@ typedef struct _wlan_client_rt_hdl
 	uint32_t wifi_rt_rule_hdl_v4;
 }wlan_client_rt_hdl;
 
+struct ap_dflt_rules{
+	int iface_cnt[IPA_IP_MAX];
+	int src_pipe;
+	uint32_t eth_bridge_flt_rule_hdl[IPA_MAX_NUM_PROPS][IPA_IP_MAX];
+	uint32_t mtu_flt_rule_hdl[IPA_MAX_NUM_PROPS][IPA_IP_MAX];
+	uint32_t tcp_syn_flt_rule_hdl[IPA_MAX_NUM_PROPS][IPA_IP_MAX];
+	uint32_t ipv4_icmp_flt_rule_hdl[IPA_MAX_NUM_PROPS][NUM_IPV4_ICMP_FLT_RULE];
+	uint32_t dft_v4fl_rule_hdl[IPA_MAX_NUM_PROPS][IPV4_DEFAULT_FILTERTING_RULES];
+	uint8_t m_ipv4_default_filterting_rules_count[IPA_MAX_NUM_PROPS];
+	uint32_t ipv6_icmp_flt_rule_hdl[IPA_MAX_NUM_PROPS][NUM_IPV6_ICMP_FLT_RULE];
+	uint32_t dft_v6fl_rule_hdl[IPA_MAX_NUM_PROPS][IPV6_DEFAULT_FILTERTING_RULES + IPV6_DEFAULT_LAN_FILTERTING_RULES];
+	uint8_t m_ipv6_default_filterting_rules_count[IPA_MAX_NUM_PROPS];
+	uint32_t private_flt_rule_hdl[IPA_MAX_NUM_PROPS][IPA_MAX_PRIVATE_SUBNET_ENTRIES + IPA_MAX_MTU_ENTRIES];
+	bool wan_private_flt_rules_present,wan_private_v6flt_rules_present;
+#ifdef FEATURE_VLAN_MPDN
+	uint32_t ipv6_prefix_flt_rule_hdl[IPA_MAX_NUM_PROPS][IPA_MAX_IPV6_NO_OFFLOAD_PREFIX_FLT_RULE + IPA_MAX_MTU_ENTRIES];
+#else
+	uint32_t ipv6_prefix_flt_rule_hdl[IPA_MAX_NUM_PROPS][IPA_MAX_IPV6_PREFIX_FLT_RULE + IPA_MAX_MTU_ENTRIES];
+#endif
+
+};
+
 typedef struct _ipa_wlan_client
 {
 	ipacm_event_data_wlan_ex* p_hdr_info;
@@ -184,6 +206,7 @@ public:
 
 	bool is_vlan_iface();
 	int handle_wlan_del_ipv6_addr(ipacm_event_data_all *data);
+	static struct ap_dflt_rules wlan_ap_dflt_rules[MAX_SUPPORTED_WLAN_PIPES];
 
 
 #if defined(FEATURE_IPACM_PER_CLIENT_STATS) || defined(IPA_WDI_AST_UPDATE)

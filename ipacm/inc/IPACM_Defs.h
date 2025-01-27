@@ -277,6 +277,8 @@ typedef enum
 	IPA_WLAN_GW_ADDR_ADD_EVENT,               /* ipacm_event_data_addr */
 	IPA_LAN_CLIENT_ADD_EVENT,		  /* Add MAC based rule for lan2lan offload with static-ip */
 	IPA_LAN_CLIENT_DEL_EVENT,		  /* Del MAC based rule for lan2lan offload with static-ip */
+	IPA_HANDLE_WAN_EXT_PROP_CHANGE,           /* NULL */
+	IPA_HANDLE_LAN_WAN_EXT_PROP_CHANGE,       /* NULL */
 	IPACM_EVENT_MAX
 } ipa_cm_event_id;
 

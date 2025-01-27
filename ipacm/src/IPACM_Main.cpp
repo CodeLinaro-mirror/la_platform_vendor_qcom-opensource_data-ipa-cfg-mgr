@@ -103,6 +103,7 @@
 #include "IPACM_ConntrackListener.h"
 #include "IPACM_ConntrackClient.h"
 #include "IPACM_Netlink.h"
+#include "IPACM_Wan.h"
 
 /* not defined(FEATURE_IPA_ANDROID)*/
 #ifndef FEATURE_IPA_ANDROID
@@ -1025,6 +1026,14 @@ void* ipa_driver_msg_notifier(void *param)
 			IPACMDBG_H("Posting IPA_WLAN_GW_ADDR_ADD_EVENT event\n");
 			evt_data.event = IPA_WLAN_GW_ADDR_ADD_EVENT;
 			evt_data.evt_data = data_addr;
+			break;
+
+		case WAN_EXT_PROP_CHANGE_EVENT:
+			/* Send event to query tx prop again */
+			IPACMDBG_H("Received WAN_EXT_PROP_CHANGE_EVENT\n");
+			IPACM_Wan::is_ext_prop_set = false;
+			evt_data.event = IPA_HANDLE_WAN_EXT_PROP_CHANGE;
+			evt_data.evt_data = NULL;
 			break;
 
 		default:

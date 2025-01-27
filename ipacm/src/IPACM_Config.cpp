@@ -148,15 +148,19 @@ const char *ipacm_event_name[] = {
 #endif
 #ifdef FEATURE_SOCKSv5
 	__stringify(IPA_HANDLE_SOCKSv5_UP),                    /* ipacm_event_connection */
+	__stringify(IPA_HANDLE_SOCKSv5_READY),                 /* ipacm_event_connection */
 	__stringify(IPA_HANDLE_SOCKSv5_DOWN),                  /* NULL */
 	__stringify(IPA_ADD_SOCKSv5_CONN),                     /* ipa_socksv5_msg */
 	__stringify(IPA_DEL_SOCKSv5_CONN),                     /* ipa_socksv5_msg */
+	__stringify(IPA_UPDATE_SOCKSv5_v6_CONN),               /* NULL */
 #endif
 	__stringify(IPA_HANDLE_MACSEC_ADD),                    /* Handle macsec map add event */
 	__stringify(IPA_HANDLE_MACSEC_DEL),
 	__stringify(IPA_WLAN_GW_ADDR_ADD_EVENT),		/* ipacm_event_data_addr */
 	__stringify(IPA_LAN_CLIENT_ADD_EVENT),                /* ipa lan2lan offload for static ip */
 	__stringify(IPA_LAN_CLIENT_DEL_EVENT),                /* ipa lan2lan offload for static ip */
+	__stringify(IPA_HANDLE_WAN_EXT_PROP_CHANGE),          /* NULL */
+	__stringify(IPA_HANDLE_LAN_WAN_EXT_PROP_CHANGE),      /* NULL */
 	__stringify(IPACM_EVENT_MAX),
 };
 
@@ -1175,6 +1179,10 @@ int IPACM_Config::SetExtProp(ipa_ioc_query_intf_ext_props *prop)
 
 	num = prop->num_ext_props;
 	ext_prop_v4.num_v4_xlat_props = 0;
+	ext_prop_v4.num_ext_props = 0;
+	ext_prop_v6.num_ext_props = 0;
+	memset(&ext_prop_v4, 0, sizeof(ext_prop_v4));
+	memset(&ext_prop_v6, 0, sizeof(ext_prop_v6));
 	for(i=0; i<num; i++)
 	{
 		if(prop->ext[i].ip == IPA_IP_v4)

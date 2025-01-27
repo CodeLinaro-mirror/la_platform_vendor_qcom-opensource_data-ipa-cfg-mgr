@@ -316,6 +316,7 @@ public:
 #endif
 
 	virtual int del_ul_flt_rules(enum ipa_ip_type iptype);
+	int modify_uplink_filter_rules();
 
 #ifdef FEATURE_IPACM_UL_FIREWALL
 	/* configure UL firewalls for all PDNs relevant for this LAN */

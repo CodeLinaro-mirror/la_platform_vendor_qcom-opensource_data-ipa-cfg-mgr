@@ -1651,6 +1651,10 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 			physDevName[0] = '\0';
 		}
 		break;
+	case IPA_HANDLE_LAN_WAN_EXT_PROP_CHANGE:
+		IPACMDBG_H("Received IPA_HANDLE_LAN_WAN_EXT_PROP_CHANGE\n");
+		modify_uplink_filter_rules();
+		break;
 	default:
 		break;
 	}
@@ -14627,5 +14631,95 @@ int IPACM_Lan::delete_mdpn_ul_xlat_filter_rule(int mux_id)
 fail:
 	return ret;
 }
-
 #endif
+
+int IPACM_Lan::modify_uplink_filter_rules()
+{
+	int xlat_pdn_ctx_id = 0;
+	int i = 0;
+
+	if(IPACM_Iface::ipacmcfg->iface_in_vlan_mode(dev_name)||IPACM_Iface::ipacmcfg->is_added_vlan_iface(dev_name))
+	{
+		/* delete rules once for each iptype */
+		if(is_any_mux_up(IPA_IP_v4))
+		{
+			if(del_ul_flt_rules(IPA_IP_v4))
+			{
+				return IPACM_FAILURE;
+			}
+		}
+
+		if(is_any_mux_up(IPA_IP_v6))
+		{
+			if(del_ul_flt_rules(IPA_IP_v6))
+			{
+				return IPACM_FAILURE;
+			}
+		}
+
+		/* notify once per each mux ID per each ip type */
+		for(int i = 0; i < IPA_MAX_NUM_HW_PDNS; i++)
+		{
+			if(v4_mux_up[i].mux_id)
+			{
+				IPACMDBG_H("notifying flt removed for mux %d, ipv4\n", v4_mux_up[i].mux_id);
+				notify_flt_removed(v4_mux_up[i].mux_id);
+				xlat_pdn_ctx_id = get_pdn_xlat_ctx(v4_mux_up[i].mux_id, 0);
+				if (xlat_pdn_ctx_id != -1)
+				{
+					if (delete_mdpn_ul_xlat_filter_rule(v4_mux_up[i].mux_id)) //need to remove all associated with the mux
+					{
+						IPACMDBG_H("Failed to delete xlat rules \n");
+					}
+					remove_pdn_xlat_ctx(v4_mux_up[i].mux_id);
+				}
+				v4_mux_up[i].mux_id = 0;
+				v4_mux_up[i].VID_cnt = 0;
+				memset(v4_mux_up[i].associated_VIDs, 0, sizeof(v4_mux_up[i].associated_VIDs[0]) * IPA_MAX_NUM_SW_PDNS);
+			}
+
+			if(v6_mux_up[i].mux_id)
+			{
+				IPACMDBG_H("notifying flt removed for mux %d, ipv6\n", v6_mux_up[i].mux_id);
+				notify_flt_removed(v6_mux_up[i].mux_id);
+				v6_mux_up[i].mux_id = 0;
+				v6_mux_up[i].VID_cnt = 0;
+				memset(v6_mux_up[i].associated_VIDs, 0, sizeof(v6_mux_up[i].associated_VIDs[0]) * IPA_MAX_NUM_SW_PDNS);
+			}
+		}
+
+		/* Installing rules back */
+		check_vlan_PDNUp(IPA_IP_v4);
+		check_vlan_PDNUp(IPA_IP_v6);
+	}
+	else
+	{
+		IPACMDBG("Backhaul sta_mode: %d\n", IPACM_Wan::backhaul_is_sta_mode);
+		if(IPACM_Wan::backhaul_is_sta_mode == false)
+		{
+			/* delete wan filter rule */
+			if(IPACM_Wan::isWanUP(ipa_if_num) && rx_prop != NULL)
+			{
+				handle_wan_down(false);
+			}
+
+			if(IPACM_Wan::isWanUP_V6(ipa_if_num) && rx_prop != NULL)
+			{
+				handle_wan_down_v6(false);
+			}
+
+			/* Installing rules back */
+			if(IPACM_Wan::isWanUP(ipa_if_num) && rx_prop != NULL)
+			{
+				handle_wan_up_ex(IPACM_Iface::ipacmcfg->GetExtProp(IPA_IP_v4), IPA_IP_v4,
+					IPACM_Wan::getXlat_Mux_Id());
+			}
+			if(IPACM_Wan::isWanUP_V6(ipa_if_num) && rx_prop != NULL)
+			{
+				handle_wan_up_ex(IPACM_Iface::ipacmcfg->GetExtProp(IPA_IP_v6), IPA_IP_v6,
+					IPACM_Wan::getXlat_Mux_Id());
+			}
+		}
+	}
+	return IPACM_SUCCESS;
+}

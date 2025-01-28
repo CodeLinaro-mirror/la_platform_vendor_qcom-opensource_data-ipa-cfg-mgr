@@ -164,7 +164,28 @@ struct ipacm_pdn_flt_rule
 	struct ipa_flt_rule_add flt_rule;
 	uint8_t mux_id;
 };
+#ifdef FEATURE_PPPOE
+/*
+ * PPPoE header..
+ * 1st word: version + type
+ * 2nd word: session id
+ * 3rd word: payload length
+ * 4th word: protocol type
+ */
+typedef struct pppoe_hdr_s
+{
+	uint16_t words[4];
+} pppoe_hdr_t;
 
+/*
+ *  * Where things reside in the struct above...
+ *   */
+#define PPPOE_SESSION_ID_IDX	1
+#define PPPOE_PAYLOAD_LEN_IDX	2
+#define PPPOE_PROTOCOL_ID_IDX	3
+#define PPPOE_PROTOCOL_TYPE	0x0021
+#define PPPOE_SESSION_ETH_TYPE	0x8864
+#endif
 /* wan iface */
 class IPACM_Wan : public IPACM_Iface
 {
@@ -205,7 +226,11 @@ public:
 	static int read_firewall_filter_rules_ul(void);
 
 	static bool check_dft_firewall_rules_attr_mask_ul(IPACM_firewall_conf_t *firewall_config);
-
+#ifdef FEATURE_PPPOE
+	uint32_t v4_p_ctx_2use;
+	uint32_t v6_p_ctx_2use;
+	int pppoe_make_hdr_add_ctx(enum ipa_ip_type iptype);
+#endif
 #ifdef FEATURE_VLAN_MPDN
 	static int get_v6_pdn_firewall_configs(
 		std::pair<IPACM_firewall_conf_t*, ipacm_ipv6_wan_iface*> wan_firewall_pair[],

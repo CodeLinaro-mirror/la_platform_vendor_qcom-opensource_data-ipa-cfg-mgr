@@ -2544,7 +2544,7 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 #ifdef FEATURE_DUAL_BACKHAUL
 				if (data->iptype == IPA_IP_v4)
 				{
-					IPACM_Iface::ipacmcfg->second_backhaul_info.gateway_ipv4 = 
+					IPACM_Iface::ipacmcfg->second_backhaul_info.gateway_ipv4 =
 									data->ipv4_addr;
 					IPACMDBG_H("DEBUG_FR second_backhaul_info_gateway_ipv4 \
 						0x%x\n", IPACM_Iface::ipacmcfg->
@@ -4726,6 +4726,7 @@ int IPACM_Wan::handle_route_add_evt(ipa_ip_type iptype)
 
 	if (iptype == IPA_IP_v6)
 	{
+		IPACMDBG_H("WAN rt rule iptype %d.m_is_sta_mode %d \n", iptype, m_is_sta_mode);
 		strlcpy(rt_rule->rt_tbl_name, IPACM_Iface::ipacmcfg->rt_tbl_wan_v6.name, sizeof(rt_rule->rt_tbl_name));
 		memset(rt_rule_entry, 0, sizeof(struct ipa_rt_rule_add));
 		rt_rule_entry->at_rear = true;
@@ -10849,7 +10850,7 @@ int IPACM_Wan::handle_dual_backhaul_disable()
 int IPACM_Wan::handle_wan_hdr_init(uint8_t *mac_addr, bool gw_addr)
 {
 
-#define WAN_IFACE_INDEX_LEN 2
+#define WAN_IFACE_INDEX_LEN 10
 
 	int res = IPACM_SUCCESS, len = 0;
 	char index[WAN_IFACE_INDEX_LEN];
@@ -10857,6 +10858,7 @@ int IPACM_Wan::handle_wan_hdr_init(uint8_t *mac_addr, bool gw_addr)
 	struct ipa_ioc_add_hdr *pHeaderDescriptor = NULL;
 	uint32_t cnt;
 	int clnt_indx;
+	uint16_t session_id;
 
 	clnt_indx = get_wan_client_index(mac_addr);
 
@@ -10941,6 +10943,24 @@ int IPACM_Wan::handle_wan_hdr_init(uint8_t *mac_addr, bool gw_addr)
 									memcpy(pHeaderDescriptor->hdr[0].hdr,
 												 sCopyHeader.hdr,
 												 sCopyHeader.hdr_len);
+#ifdef FEATURE_PPPOE
+									/*Non-VLAN PPPoE*/
+									if(IPACM_Iface::ipacmcfg->eth_wan_pppoe_enable == true && is_ppp_iface)
+									{
+										session_id = IPACM_Iface::ipacmcfg->pppoe_get_session_id(dev_name);
+										sCopyHeader.hdr_len = 22;
+										pHeaderDescriptor->hdr[0].hdr[12] = (PPPOE_SESSION_ETH_TYPE >> 8) & 0xFF;
+										pHeaderDescriptor->hdr[0].hdr[13] = PPPOE_SESSION_ETH_TYPE & 0xFF;
+										pHeaderDescriptor->hdr[0].hdr[14] = 0x11;
+										pHeaderDescriptor->hdr[0].hdr[15] = 0x00;
+										pHeaderDescriptor->hdr[0].hdr[16] = (session_id >> 8) & 0xFF;
+										pHeaderDescriptor->hdr[0].hdr[17] = session_id & 0xFF;
+										pHeaderDescriptor->hdr[0].hdr[18] = 0x00;/* Payload length 2bytes update by uC */
+										pHeaderDescriptor->hdr[0].hdr[19] = 0x00;
+										pHeaderDescriptor->hdr[0].hdr[20] = (PPPOE_PROTOCOL_TYPE >> 8) & 0xFF;/* PPPoE protocol 2bytes size */
+										pHeaderDescriptor->hdr[0].hdr[21] = PPPOE_PROTOCOL_TYPE & 0xFF;
+									}
+#endif
 									if(sta_vlan_id > 0)
 									{
 											sCopyHeader.hdr_len = 18;
@@ -10952,7 +10972,26 @@ int IPACM_Wan::handle_wan_hdr_init(uint8_t *mac_addr, bool gw_addr)
 											/* Update Ether Type to 0x800.*/
 											pHeaderDescriptor->hdr[0].hdr[16] = 0x08;
 											pHeaderDescriptor->hdr[0].hdr[17] = 0x00;
+#ifdef FEATURE_PPPOE
+											/*PPPoE*/
+											if(IPACM_Iface::ipacmcfg->eth_wan_pppoe_enable == true && is_ppp_iface)
+											{
+												session_id = IPACM_Iface::ipacmcfg->pppoe_get_session_id(dev_name);
+												sCopyHeader.hdr_len = 26;
+												pHeaderDescriptor->hdr[0].hdr[16] = (PPPOE_SESSION_ETH_TYPE >> 8) & 0xFF;
+												pHeaderDescriptor->hdr[0].hdr[17] = PPPOE_SESSION_ETH_TYPE & 0xFF;
+												pHeaderDescriptor->hdr[0].hdr[18] = 0x11;
+												pHeaderDescriptor->hdr[0].hdr[19] = 0x00;
+												pHeaderDescriptor->hdr[0].hdr[20] = (session_id >> 8) & 0xFF;
+												pHeaderDescriptor->hdr[0].hdr[21] = session_id & 0xFF;
+												pHeaderDescriptor->hdr[0].hdr[22] = 0x00;/* Payload length 2bytes update by uC */
+												pHeaderDescriptor->hdr[0].hdr[23] = 0x00;
+												pHeaderDescriptor->hdr[0].hdr[24] = (PPPOE_PROTOCOL_TYPE >> 8) & 0xFF;/* PPPoE protocol 2bytes size */
+												pHeaderDescriptor->hdr[0].hdr[25] = PPPOE_PROTOCOL_TYPE & 0xFF;
+											}
+#endif
 									}
+									IPACMDBG_H("v4 sta_vlan_id %d \n",sta_vlan_id);
 								}
 
 								/* copy client mac_addr to partial header */
@@ -10978,7 +11017,7 @@ int IPACM_Wan::handle_wan_hdr_init(uint8_t *mac_addr, bool gw_addr)
 								memset(pHeaderDescriptor->hdr[0].name, 0,
 											 sizeof(pHeaderDescriptor->hdr[0].name));
 
-								snprintf(index,sizeof(index), "%d", ipa_if_num);
+								snprintf(index,sizeof(index), "%d_", ipa_if_num);
 								strlcpy(pHeaderDescriptor->hdr[0].name, index, sizeof(pHeaderDescriptor->hdr[0].name));
 								pHeaderDescriptor->hdr[0].name[IPA_RESOURCE_NAME_MAX-1] = '\0';
 								if (strlcat(pHeaderDescriptor->hdr[0].name, IPA_WAN_PARTIAL_HDR_NAME_v4, sizeof(pHeaderDescriptor->hdr[0].name)) > IPA_RESOURCE_NAME_MAX)
@@ -10988,7 +11027,7 @@ int IPACM_Wan::handle_wan_hdr_init(uint8_t *mac_addr, bool gw_addr)
 									goto fail;
 								}
 
-								snprintf(index,sizeof(index), "%d", header_name_count);
+								snprintf(index,sizeof(index), "_%d", header_name_count);
 								if (strlcat(pHeaderDescriptor->hdr[0].name, index, sizeof(pHeaderDescriptor->hdr[0].name)) > IPA_RESOURCE_NAME_MAX)
 								{
 									IPACMERR(" header name construction failed exceed length (%d)\n", strlen(pHeaderDescriptor->hdr[0].name));
@@ -11008,7 +11047,7 @@ int IPACM_Wan::handle_wan_hdr_init(uint8_t *mac_addr, bool gw_addr)
 						res = IPACM_FAILURE;
 						goto fail;
 					 }
-
+					IPACMDBG_H("v4 pHeaderDescriptor->hdr[0].hdr_hdl : %x\n",pHeaderDescriptor->hdr[0].hdr_hdl);
 					get_client_memptr(wan_client, num_wan_client)->hdr_hdl_v4 = pHeaderDescriptor->hdr[0].hdr_hdl;
 					IPACMDBG_H("eth-client(%d) v4 full header name:%s header handle:(0x%x)\n",
 												 num_wan_client,
@@ -11054,6 +11093,24 @@ int IPACM_Wan::handle_wan_hdr_init(uint8_t *mac_addr, bool gw_addr)
 					memcpy(pHeaderDescriptor->hdr[0].hdr,
 							sCopyHeader.hdr,
 							sCopyHeader.hdr_len);
+#ifdef FEATURE_PPPOE
+					/*Non-VLAN PPPoE*/
+					if(IPACM_Iface::ipacmcfg->eth_wan_pppoe_enable == true && is_ppp_iface)
+					{
+						session_id = IPACM_Iface::ipacmcfg->pppoe_get_session_id(dev_name);
+						sCopyHeader.hdr_len = 22;
+						pHeaderDescriptor->hdr[0].hdr[12] = (PPPOE_SESSION_ETH_TYPE >> 8) & 0xFF;
+						pHeaderDescriptor->hdr[0].hdr[13] = PPPOE_SESSION_ETH_TYPE & 0xFF;
+						pHeaderDescriptor->hdr[0].hdr[14] = 0x11;
+						pHeaderDescriptor->hdr[0].hdr[15] = 0x00;
+						pHeaderDescriptor->hdr[0].hdr[16] = (session_id >> 8) & 0xFF;
+						pHeaderDescriptor->hdr[0].hdr[17] = session_id & 0xFF;
+						pHeaderDescriptor->hdr[0].hdr[18] = 0x00;/* Payload length 2bytes update by uC */
+						pHeaderDescriptor->hdr[0].hdr[19] = 0x00;
+						pHeaderDescriptor->hdr[0].hdr[20] = (PPPOE_PROTOCOL_TYPE >> 8) & 0xFF;/* PPPoE protocol 2bytes size */
+						pHeaderDescriptor->hdr[0].hdr[21] = PPPOE_PROTOCOL_TYPE & 0xFF;
+					}
+#endif
 					if(sta_vlan_id > 0)
 					{
 						sCopyHeader.hdr_len = 18;
@@ -11065,7 +11122,26 @@ int IPACM_Wan::handle_wan_hdr_init(uint8_t *mac_addr, bool gw_addr)
 						/* Update Ether Type to 0x86dd.*/
 						pHeaderDescriptor->hdr[0].hdr[16] = 0x86;
 						pHeaderDescriptor->hdr[0].hdr[17] = 0xdd;
+#ifdef FEATURE_PPPOE
+						/*PPPoE*/
+						if(IPACM_Iface::ipacmcfg->eth_wan_pppoe_enable == true && is_ppp_iface)
+						{
+							session_id = IPACM_Iface::ipacmcfg->pppoe_get_session_id(dev_name);
+							sCopyHeader.hdr_len = 26;
+							pHeaderDescriptor->hdr[0].hdr[16] = (PPPOE_SESSION_ETH_TYPE >> 8) & 0xFF;
+							pHeaderDescriptor->hdr[0].hdr[17] = PPPOE_SESSION_ETH_TYPE & 0xFF;
+							pHeaderDescriptor->hdr[0].hdr[18] = 0x11;
+							pHeaderDescriptor->hdr[0].hdr[19] = 0x00;
+							pHeaderDescriptor->hdr[0].hdr[20] = (session_id >> 8) & 0xFF;
+							pHeaderDescriptor->hdr[0].hdr[21] = session_id & 0xFF;
+							pHeaderDescriptor->hdr[0].hdr[22] = 0x00;/* Payload length 2bytes update by uC */
+							pHeaderDescriptor->hdr[0].hdr[23] = 0x00;
+							pHeaderDescriptor->hdr[0].hdr[24] = (PPPOE_PROTOCOL_TYPE >> 8) & 0xFF;/* PPPoE protocol 2bytes size */
+							pHeaderDescriptor->hdr[0].hdr[25] = PPPOE_PROTOCOL_TYPE & 0xFF;
+						}
+#endif
 					}
+					IPACMDBG_H("v6 sta_vlan_id %d \n",sta_vlan_id);
 				}
 
 				/* copy client mac_addr to partial header */
@@ -11087,7 +11163,7 @@ int IPACM_Wan::handle_wan_hdr_init(uint8_t *mac_addr, bool gw_addr)
 				memset(pHeaderDescriptor->hdr[0].name, 0,
 					 sizeof(pHeaderDescriptor->hdr[0].name));
 
-				snprintf(index,sizeof(index), "%d", ipa_if_num);
+				snprintf(index,sizeof(index), "%d_", ipa_if_num);
 				strlcpy(pHeaderDescriptor->hdr[0].name, index, sizeof(pHeaderDescriptor->hdr[0].name));
 				pHeaderDescriptor->hdr[0].name[IPA_RESOURCE_NAME_MAX-1] = '\0';
 				if (strlcat(pHeaderDescriptor->hdr[0].name, IPA_WAN_PARTIAL_HDR_NAME_v6, sizeof(pHeaderDescriptor->hdr[0].name)) > IPA_RESOURCE_NAME_MAX)
@@ -11096,7 +11172,7 @@ int IPACM_Wan::handle_wan_hdr_init(uint8_t *mac_addr, bool gw_addr)
 					res = IPACM_FAILURE;
 					goto fail;
 				}
-				snprintf(index,sizeof(index), "%d", header_name_count);
+				snprintf(index,sizeof(index), "_%d", header_name_count);
 				if (strlcat(pHeaderDescriptor->hdr[0].name, index, sizeof(pHeaderDescriptor->hdr[0].name)) > IPA_RESOURCE_NAME_MAX)
 				{
 					IPACMERR(" header name construction failed exceed length (%d)\n", strlen(pHeaderDescriptor->hdr[0].name));
@@ -11116,7 +11192,7 @@ int IPACM_Wan::handle_wan_hdr_init(uint8_t *mac_addr, bool gw_addr)
 					res = IPACM_FAILURE;
 					goto fail;
 				}
-
+				IPACMDBG_H("v6 pHeaderDescriptor->hdr[0].hdr_hdl : %x\n",pHeaderDescriptor->hdr[0].hdr_hdl);
 				get_client_memptr(wan_client, num_wan_client)->hdr_hdl_v6 = pHeaderDescriptor->hdr[0].hdr_hdl;
 				IPACMDBG_H("eth-client(%d) v6 full header name:%s header handle:(0x%x)\n",
 						 num_wan_client,
@@ -11129,7 +11205,15 @@ int IPACM_Wan::handle_wan_hdr_init(uint8_t *mac_addr, bool gw_addr)
 
 			}
 		}
-		/* initialize wifi client*/
+#ifdef FEATURE_PPPOE
+			/* Construct PPPoE ProcCtx */
+			if(IPACM_Iface::ipacmcfg->eth_wan_pppoe_enable == true)
+			{
+				pppoe_make_hdr_add_ctx(IPA_IP_v4);
+				pppoe_make_hdr_add_ctx(IPA_IP_v6);
+			}
+#endif
+		/* initialize STA-WAN client*/
 		get_client_memptr(wan_client, num_wan_client)->route_rule_set_v4 = false;
 		get_client_memptr(wan_client, num_wan_client)->route_rule_set_v6 = 0;
 		get_client_memptr(wan_client, num_wan_client)->ipv4_set = false;
@@ -11329,7 +11413,6 @@ int IPACM_Wan::handle_wan_client_route_rule(uint8_t *mac_addr, ipa_ip_type iptyp
 
 			rt_rule_entry = &rt_rule->rules[0];
 			rt_rule_entry->at_rear = 0;
-
 			if (iptype == IPA_IP_v4)
 			{
 				IPACMDBG_H("client index(%d):ipv4 address: 0x%x\n", wan_index,
@@ -11355,10 +11438,24 @@ int IPACM_Wan::handle_wan_client_route_rule(uint8_t *mac_addr, ipa_ip_type iptyp
 				memcpy(&rt_rule_entry->rule.attrib,
 						&tx_prop->tx[tx_index].attrib,
 						sizeof(rt_rule_entry->rule.attrib));
-				rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_DST_ADDR;
-				rt_rule_entry->rule.hdr_hdl = get_client_memptr(wan_client, wan_index)->hdr_hdl_v4;
-				rt_rule_entry->rule.attrib.u.v4.dst_addr = get_client_memptr(wan_client, wan_index)->v4_addr;
-				rt_rule_entry->rule.attrib.u.v4.dst_addr_mask = 0xFFFFFFFF;
+#ifdef FEATURE_PPPOE
+				if(IPACM_Iface::ipacmcfg->eth_wan_pppoe_enable == true)
+				{
+					rt_rule_entry->rule.hdr_proc_ctx_hdl = v4_p_ctx_2use;
+					IPACMDBG_H("v4 rt_rule_entry->rule.hdr_proc_ctx_hdl %x\n",rt_rule_entry->rule.hdr_proc_ctx_hdl);
+					rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_SRC_ADDR;
+					/*With Wan IP*/
+					rt_rule_entry->rule.attrib.u.v4.src_addr = wan_v4_addr;
+					rt_rule_entry->rule.attrib.u.v4.src_addr_mask = 0xFFFFFFFF;
+				}
+				else
+#endif
+				{
+					rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_DST_ADDR;
+					rt_rule_entry->rule.hdr_hdl = get_client_memptr(wan_client, wan_index)->hdr_hdl_v4;
+					rt_rule_entry->rule.attrib.u.v4.dst_addr = get_client_memptr(wan_client, wan_index)->v4_addr;
+					rt_rule_entry->rule.attrib.u.v4.dst_addr_mask = 0xFFFFFFFF;
+				}
 #ifdef FEATURE_IPA_V3
 				rt_rule_entry->rule.hashable = true;
 #endif
@@ -11407,16 +11504,40 @@ int IPACM_Wan::handle_wan_client_route_rule(uint8_t *mac_addr, ipa_ip_type iptyp
 						rt_rule_entry->rule.dst = tx_prop->tx[tx_index].dst_pipe;
 					}
 					memset(&rt_rule_entry->rule.attrib, 0, sizeof(rt_rule_entry->rule.attrib));
-					rt_rule_entry->rule.hdr_hdl = get_client_memptr(wan_client, wan_index)->hdr_hdl_v6;;
-					rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_DST_ADDR;
-					rt_rule_entry->rule.attrib.u.v6.dst_addr[0] = it->first[0];
-					rt_rule_entry->rule.attrib.u.v6.dst_addr[1] = it->first[1];
-					rt_rule_entry->rule.attrib.u.v6.dst_addr[2] = it->first[2];
-					rt_rule_entry->rule.attrib.u.v6.dst_addr[3] = it->first[3];
-					rt_rule_entry->rule.attrib.u.v6.dst_addr_mask[0] = 0xFFFFFFFF;
-					rt_rule_entry->rule.attrib.u.v6.dst_addr_mask[1] = 0xFFFFFFFF;
-					rt_rule_entry->rule.attrib.u.v6.dst_addr_mask[2] = 0xFFFFFFFF;
-					rt_rule_entry->rule.attrib.u.v6.dst_addr_mask[3] = 0xFFFFFFFF;
+#ifdef FEATURE_PPPOE
+					if(IPACM_Iface::ipacmcfg->eth_wan_pppoe_enable == true)
+					{
+						rt_rule_entry->rule.hdr_proc_ctx_hdl = v6_p_ctx_2use;
+						IPACMDBG_H("v6 rt_rule_entry->rule.hdr_proc_ctx_hdl %x\n",rt_rule_entry->rule.hdr_proc_ctx_hdl);
+						rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_SRC_ADDR;
+						if(active_v6)
+						{
+							rt_rule_entry->rule.attrib.u.v6.src_addr[0] = m_ipv6_addr[0];
+							rt_rule_entry->rule.attrib.u.v6.src_addr[1] = m_ipv6_addr[1];
+							rt_rule_entry->rule.attrib.u.v6.src_addr[2] = m_ipv6_addr[2];
+							rt_rule_entry->rule.attrib.u.v6.src_addr[3] = m_ipv6_addr[3];
+							rt_rule_entry->rule.attrib.u.v6.src_addr_mask[0] = 0xFFFFFFFF;
+							rt_rule_entry->rule.attrib.u.v6.src_addr_mask[1] = 0xFFFFFFFF;
+							rt_rule_entry->rule.attrib.u.v6.src_addr_mask[2] = 0xFFFFFFFF;
+							rt_rule_entry->rule.attrib.u.v6.src_addr_mask[3] = 0xFFFFFFFF;
+						}
+						else
+							IPACMERR("V6 Is not Up Yet!!!(%d)\n",active_v6);
+					}
+					else
+#endif
+					{
+						rt_rule_entry->rule.hdr_hdl = get_client_memptr(wan_client, wan_index)->hdr_hdl_v6;
+						rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_DST_ADDR;
+						rt_rule_entry->rule.attrib.u.v6.dst_addr[0] = it->first[0];
+						rt_rule_entry->rule.attrib.u.v6.dst_addr[1] = it->first[1];
+						rt_rule_entry->rule.attrib.u.v6.dst_addr[2] = it->first[2];
+						rt_rule_entry->rule.attrib.u.v6.dst_addr[3] = it->first[3];
+						rt_rule_entry->rule.attrib.u.v6.dst_addr_mask[0] = 0xFFFFFFFF;
+						rt_rule_entry->rule.attrib.u.v6.dst_addr_mask[1] = 0xFFFFFFFF;
+						rt_rule_entry->rule.attrib.u.v6.dst_addr_mask[2] = 0xFFFFFFFF;
+						rt_rule_entry->rule.attrib.u.v6.dst_addr_mask[3] = 0xFFFFFFFF;
+					}
 #ifdef FEATURE_IPA_V3
 					rt_rule_entry->rule.hashable = true;
 #endif
@@ -13149,3 +13270,56 @@ int IPACM_Wan::eogre_notify_wan_state(
 }
 
 #endif /* #ifdef FEATURE_EoGRE */
+
+#ifdef FEATURE_PPPOE
+int IPACM_Wan::pppoe_make_hdr_add_ctx(enum ipa_ip_type iptype)
+{
+	IPACMDBG_H("Attempting to create \"header add\" context for PPPoE UL routing\n");
+	/*
+	 * Make "header add" process context...
+	 */
+	static const int NUM_OF_PROC_CTX = 1;
+	uint8_t buf[
+		sizeof(struct ipa_ioc_add_hdr_proc_ctx) +
+		(NUM_OF_PROC_CTX * sizeof(struct ipa_hdr_proc_ctx_add)) ];
+
+	memset(buf, 0, sizeof(buf));
+
+	struct ipa_ioc_add_hdr_proc_ctx *procCtxTable =
+		(struct ipa_ioc_add_hdr_proc_ctx *) buf;
+
+	struct ipa_hdr_proc_ctx_add *procCtx = &(procCtxTable->proc_ctx[0]);
+
+	// init proc ctx table
+	procCtxTable->commit        = true;
+	procCtxTable->num_proc_ctxs = NUM_OF_PROC_CTX;
+	// init proc_ctx common fields
+	procCtx->proc_ctx_hdl = -1; // return value
+	procCtx->status       = -1; // Return parameter
+
+	procCtx->type         = IPA_HDR_PROC_PPPOE_HEADER_ADD;
+	if (iptype == IPA_IP_v4)
+		procCtx->hdr_hdl = get_client_memptr(wan_client, num_wan_client)->hdr_hdl_v4;
+	else
+		procCtx->hdr_hdl = get_client_memptr(wan_client, num_wan_client)->hdr_hdl_v6;
+
+	IPACMDBG_H("procCtx->hdr_hdl %x\n",procCtx->hdr_hdl);
+
+	if ( m_header.AddHeaderProcCtx(procCtxTable) == true )
+	{
+		IPACMDBG_H(
+			"PPPoE header context successfully installed, hdl %d\n",procCtx->proc_ctx_hdl);
+		if (iptype == IPA_IP_v4)
+			v4_p_ctx_2use = procCtx->proc_ctx_hdl;
+		else
+			v6_p_ctx_2use = procCtx->proc_ctx_hdl;
+	}
+	else
+	{
+		IPACMERR("AddHeaderProcCtx failed\n");
+		return IPACM_FAILURE;
+	}
+
+	return IPACM_SUCCESS;
+}
+#endif /*#ifdef FEATURE_PPPOE*/

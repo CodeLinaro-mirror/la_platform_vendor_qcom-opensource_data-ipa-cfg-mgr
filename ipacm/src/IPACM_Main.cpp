@@ -1745,6 +1745,13 @@ int main(int argc, char **argv)
 	ipa_reset();
 #endif
 
+#ifdef IPA_HW_FNR_STATS
+	IPACM_Iface::ipacmcfg->alloc_fnr_counter();
+	IPACMDBG_H("Reallocation FNR Counter: Done\n");
+#endif
+
+
+
 	IPACM_IfaceManager *ifacemgr = new IPACM_IfaceManager();
 	IPACM_Neighbor *neigh = new IPACM_Neighbor();
 
@@ -1972,9 +1979,6 @@ int ipa_reset()
 		IPACMERR("IOCTL IPA_IOC_CLEANUP call failed: %s \n",
 			strerror(errno));
 	}
-	IPACM_Config* config = IPACM_Config::GetInstance();
-	IPACMDBG_H("config->hw_fnr_stats_support %d\n",config->hw_fnr_stats_support);
-	config->hw_fnr_stats_support = false;
 	IPACMDBG_H("send IPA_IOC_CLEANUP \n");
 	close(fd);
 	return IPACM_SUCCESS;

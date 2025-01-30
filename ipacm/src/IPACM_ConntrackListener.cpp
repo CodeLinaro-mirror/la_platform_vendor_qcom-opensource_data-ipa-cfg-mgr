@@ -2083,6 +2083,11 @@ int v4_conntrack_callback(enum nf_conntrack_msg_type type, struct nf_conntrack *
 		nfct_snprintf(buf, sizeof(buf), ct, type, NFCT_O_PLAIN, NFCT_OF_TIME);
 		IPACMDBG("%s\n", buf);
 		ct_data = (ipacm_ct_evt_data *)malloc(sizeof(ipacm_ct_evt_data));
+		if(!ct_data)
+		{
+			IPACMERR("Unable to allocate memory for ct_data\n");
+			return NFCT_CB_CONTINUE;
+		}
 		memset(&evt_data, 0, sizeof(evt_data));
 		ct_data->ct = ct;
   		ct_data->type = type;
@@ -2175,6 +2180,11 @@ int v6_conntracks_callback(enum nf_conntrack_msg_type type,struct nf_conntrack *
 		nfct_snprintf(buf, sizeof(buf), ct, type, NFCT_O_PLAIN, NFCT_OF_TIME);
 		IPACMDBG("%s\n", buf);
 		ct_data = (ipacm_ct_evt_data *)malloc(sizeof(ipacm_ct_evt_data));
+		if(!ct_data)
+		{
+			IPACMERR("Unable to allocate memory for ct_data\n");
+			return NFCT_CB_CONTINUE;
+		}
 		memset(&evt_data, 0, sizeof(evt_data));
 		memset(ct_data, 0, sizeof(ipacm_ct_evt_data));
 

@@ -445,6 +445,8 @@ int IPACM_ConntrackListener::CheckNatIface(int if_index, bool *NatIface)
 	int fd = 0, len = 0, cnt, i;
 	struct ifreq ifr;
 	*NatIface = false;
+	char* char_idx = NULL;
+	char iface_name[IPA_IFACE_NAME_LEN] = {0};
 
 	IPACMDBG("Received interface index %d", if_index);
 
@@ -501,14 +503,31 @@ int IPACM_ConntrackListener::CheckNatIface(int if_index, bool *NatIface)
 
 	for (i = 0; i < NatIfaceCnt; i++)
 	{
+		strlcpy(iface_name, pNatIfaces[i].iface_name, IPA_IFACE_NAME_LEN);
+		char_idx =  strstr(iface_name, "_");
 		if (strncmp(ifr.ifr_name,
-					pNatIfaces[i].iface_name,
-					sizeof(pNatIfaces[i].iface_name)) == 0)
+			pNatIfaces[i].iface_name,
+			sizeof(pNatIfaces[i].iface_name)) == 0)
 		{
 			IPACMDBG_H("Nat iface (%s), entry (%d), dont cache",
 						pNatIfaces[i].iface_name, i);
 			*NatIface = true;
 			return IPACM_SUCCESS;
+		}
+		else if(char_idx)
+		{
+			/*condition for stitched mlo iface*/
+			char_idx[0] = '\0';
+			IPACMDBG_H("truncated iface name %s\n", iface_name);
+			if (strncmp(ifr.ifr_name,
+				iface_name,
+				sizeof(iface_name)) == 0)
+			{
+				IPACMDBG_H("Nat iface (%s), entry (%d), dont cache\n",
+					pNatIfaces[i].iface_name, i);
+				*NatIface = true;
+				return IPACM_SUCCESS;
+			}
 		}
 	}
 

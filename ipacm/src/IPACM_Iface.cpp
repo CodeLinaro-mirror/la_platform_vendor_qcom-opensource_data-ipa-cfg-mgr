@@ -63,7 +63,7 @@ IPACM_Header IPACM_Iface::m_header;
 
 IPACM_Config *IPACM_Iface::ipacmcfg = IPACM_Config::GetInstance();
 
-IPACM_Iface::IPACM_Iface(int iface_index)
+IPACM_Iface::IPACM_Iface(char *iface_name, int iface_index)
 {
 	ip_type = IPACM_IP_NULL; /* initially set invalid */
 	num_dft_rt_v6 = 0;
@@ -77,9 +77,15 @@ IPACM_Iface::IPACM_Iface(int iface_index)
 	tx_prop = NULL;
 	rx_prop = NULL;
 
-	memcpy(dev_name, IPACM_Iface::ipacmcfg->iface_table[iface_index].iface_name,
+	if((iface_name != NULL) && (strstr(iface_name, "wlan")))
+	{
+		memcpy(dev_name, iface_name, sizeof(iface_name));
+	}
+	else
+	{
+		memcpy(dev_name, IPACM_Iface::ipacmcfg->iface_table[iface_index].iface_name,
 		sizeof(IPACM_Iface::ipacmcfg->iface_table[iface_index].iface_name));
-
+	}
 	if (virtual_iface = IPACM_Iface::ipacmcfg->iface_table[iface_index].virtual_iface)
 	{
 		memcpy(phy_dev_name, IPACM_Iface::ipacmcfg->iface_table[iface_index].phy_dev_name,

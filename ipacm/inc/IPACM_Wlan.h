@@ -28,7 +28,7 @@
  *
  * Changes from Qualcomm Innovation Center are provided under the following license:
  *
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022, 2025 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted (subject to the limitations in the
@@ -163,7 +163,7 @@ class IPACM_Wlan : public IPACM_Lan
 
 public:
 
-	IPACM_Wlan(int iface_index, bool    ast_update = false);
+	IPACM_Wlan(char *iface_name, int iface_index, bool    ast_update = false);
 	virtual ~IPACM_Wlan(void);
 
 	static int total_num_wifi_clients;

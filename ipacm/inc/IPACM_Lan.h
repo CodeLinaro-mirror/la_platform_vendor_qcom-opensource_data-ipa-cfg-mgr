@@ -28,7 +28,7 @@ IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  * Changes from Qualcomm Innovation Center are provided under the following license:
  *
- * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2025 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted (subject to the limitations in the
@@ -301,7 +301,7 @@ class IPACM_Lan : public IPACM_Iface
 {
 public:
 
-	IPACM_Lan(int iface_index);
+	IPACM_Lan(char *iface_name, int iface_index);
 	~IPACM_Lan();
 
 	/* store lan's wan-up filter rule handlers */

@@ -27,7 +27,7 @@
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  * Changes from Qualcomm Innovation Center are provided under the following license
- * Copyright (c) 2023-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2023-2025 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 /*!
@@ -368,7 +368,14 @@ void* ipa_driver_msg_notifier(void *param)
 				IPACMERR("unable to allocate memory for event_wlan data_fid\n");
 				goto done;
 			}
-			ipa_get_if_index(event_wlan->name, &(data_fid->if_index));
+			memset(data_fid,0,sizeof(ipacm_event_data_fid));
+			strlcpy(data_fid->iface_name, event_wlan->name, IPA_IFACE_NAME_LEN);
+			if(IPACM_FAILURE == ipa_get_if_index(event_wlan->name, &(data_fid->if_index))){
+				data_fid->if_index = event_wlan->if_index;
+				IPACMDBG_H("Using WLAN_AP_CONNECT if_index: %d\n",event_wlan->if_index);
+			}
+			data_fid->mlo_enabled = event_wlan->mld_enabled;
+			IPACMDBG_H("AP MLO enabled %d",event_wlan->mld_enabled);
 			evt_data.event = IPA_WLAN_AP_LINK_UP_EVENT;
 #ifdef IPA_WDI_AST_UPDATE
 			data_fid->ast_update = event_wlan->ast_update;
@@ -388,6 +395,8 @@ void* ipa_driver_msg_notifier(void *param)
 				IPACMERR("unable to allocate memory for event_wlan data_fid\n");
 				goto done;
 			}
+			memset(data_fid,0,sizeof(ipacm_event_data_fid));
+			strlcpy(data_fid->iface_name, event_wlan->name, IPA_IFACE_NAME_LEN);
 			if(IPACM_FAILURE == ipa_get_if_index(event_wlan->name, &(data_fid->if_index)))
 			{
 				data_fid->if_index = event_wlan->if_index;
@@ -476,18 +485,28 @@ void* ipa_driver_msg_notifier(void *param)
 			}
 			memcpy(event_ex, buffer + sizeof(struct ipa_msg_meta), length);
 			data_ex = (ipacm_event_data_wlan_ex *)malloc(sizeof(ipacm_event_data_wlan_ex) + event_ex_o.num_of_attribs * sizeof(ipa_wlan_hdr_attrib_val));
-		    if (data_ex == NULL)
-		    {
+			if (data_ex == NULL)
+			{
 				IPACMERR("unable to allocate memory for event data\n");
-		    	goto done;
-		    }
+				goto done;
+			}
+			memset(data_ex,0,sizeof(ipacm_event_data_wlan_ex) + event_ex_o.num_of_attribs * sizeof(ipa_wlan_hdr_attrib_val));
 			data_ex->num_of_attribs = event_ex->num_of_attribs;
-
 			memcpy(data_ex->attribs,
 						event_ex->attribs,
 						event_ex->num_of_attribs * sizeof(ipa_wlan_hdr_attrib_val));
+			strlcpy(data_ex->iface_name, event_ex->name, IPA_IFACE_NAME_LEN);
+			if(IPACM_FAILURE == ipa_get_if_index(event_ex->name, &(data_ex->if_index)))
+			{
+				/*send base interface in neigh and stiched interface in iface class*/
+				char* char_idx =  strstr(event_ex->name, "_");
+				if (char_idx) {
+					char_idx[0] = '\0';
+					IPACMDBG_H("truncated iface name %s\n", event_ex->name);
+				}
+				ipa_get_if_index(event_ex->name, &(data_ex->if_index));
+			}
 
-			ipa_get_if_index(event_ex->name, &(data_ex->if_index));
 			IPACMDBG_H("Received interface index %d for interface name %s\n",data_ex->if_index, event_ex->name);
 			evt_data.event = IPA_WLAN_CLIENT_ADD_EVENT_EX;
 			evt_data.evt_data = data_ex;
@@ -545,6 +564,7 @@ void* ipa_driver_msg_notifier(void *param)
 				IPACMERR("unable to allocate memory for event_wlan data\n");
 				goto done;
 			}
+			strlcpy(data->iface_name, event_wlan->name, IPA_IFACE_NAME_LEN);
 			if(IPACM_FAILURE == ipa_get_if_index(event_wlan->name, &(data->if_index)))
 			{
 				data->if_index = event_wlan->if_index;

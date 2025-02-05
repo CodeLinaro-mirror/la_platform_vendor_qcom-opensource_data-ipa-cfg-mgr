@@ -120,7 +120,7 @@ ipa_lan_client_idx IPACM_Lan::inactive_lan_client_index_odu[IPA_MAX_NUM_HW_PATH_
 #define MAX_IPNS_ROW_LEN 200
 #define MAX_IPNS_PARAM_CNT 5
 #define MAX_IPNS_PARAM_LEN 50
-
+#define LAN2LAN_RULE_ID 1
 #define IPA_NS_TABLE IPA_TMP_DIR"/ipa_ns_table.txt"
 
 IPACM_Lan::IPACM_Lan(int iface_index) : IPACM_Iface(iface_index)
@@ -16935,6 +16935,7 @@ int IPACM_Lan::eth_bridge_add_flt_rule(uint8_t *mac, uint32_t rt_tbl_hdl, ipa_ip
 	flt_rule_entry.rule.eq_attrib_type = 0;
 	flt_rule_entry.rule.rt_tbl_hdl = rt_tbl_hdl;
 	flt_rule_entry.rule.hashable = true;
+	flt_rule_entry.rule.rule_id = LAN2LAN_RULE_ID;
 
 	flt_rule_entry.rule.max_prio = fixed_mac_prio_val[idx][iptype];
 	memcpy(&flt_rule_entry.rule.attrib, &rx_prop->rx[idx].attrib, sizeof(flt_rule_entry.rule.attrib));

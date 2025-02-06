@@ -441,6 +441,7 @@ typedef struct
 	int netlink_interface_index;
 	bool is_wlan_if_vlan;
 	bool is_spcl_if;
+	unsigned int ifi_flags;
 } ipa_ifi_dev_name_t;
 
 typedef struct

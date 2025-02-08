@@ -268,7 +268,7 @@ int ipa_nl_route_receive(int fd, struct msghdr *msg, int flags);
 int ipa_nl_send_getroute(ipa_ip_type ip_type);
 int ipa_nl_query_newneigh(int af_family);
 void ipa_query_nl_getevents();
-static pthread_mutex_t nl_lock = PTHREAD_MUTEX_INITIALIZER;
+static bool nl_lock = false;
 
 #ifdef __cplusplus
 }

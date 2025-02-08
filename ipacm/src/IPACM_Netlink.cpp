@@ -262,6 +262,7 @@ static int ipa_nl_sock_listener_start
 {
 	int i, ret;
 	IPACMDBG("Starting the netlink thread\n");
+	nl_lock = true;
 	while(true)
 	{
 	    for(i = 0; i < sk_fd_set->num_fd; i++ )
@@ -2296,10 +2297,7 @@ int ipa_nl_listener_init
 
 	memset(sk_info, 0, sizeof(ipa_nl_sk_info_t));
 	IPACMDBG_H("Entering IPA NL listener init\n");
-	if(pthread_mutex_lock(&nl_lock) != 0)
-	{
-		IPACMERR("Unable to lock the mutex\n");
-	}
+
 	if(ipa_nl_open_socket(sk_info, nl_type, nl_groups) == IPACM_SUCCESS)
 	{
 		IPACMDBG_H("IPA Open netlink socket succeeds\n");
@@ -2307,7 +2305,6 @@ int ipa_nl_listener_init
 	else
 	{
 		IPACMERR("Netlink socket open failed\n");
-		pthread_mutex_unlock(&nl_lock);
 		return IPACM_FAILURE;
 	}
 
@@ -2318,10 +2315,8 @@ int ipa_nl_listener_init
 	{
 		IPACMERR("cannot add nl routing sock for reading\n");
 		close(sk_info->sk_fd);
-		pthread_mutex_unlock(&nl_lock);
 		return IPACM_FAILURE;
 	}
-	pthread_mutex_unlock(&nl_lock);
 	ret_val = ipa_nl_sock_listener_start(sk_fdset);
 
 	if(ret_val != IPACM_SUCCESS)
@@ -3238,12 +3233,8 @@ int ipa_query_active_feature()
 
 void ipa_query_nl_getevents()
 {
+	while(!nl_lock);
 	IPACMDBG_H("Querying the netlink events\n");
-	if(pthread_mutex_lock(&nl_lock) != 0)
-  	{
-  		IPACMERR("Unable to lock the mutex\n");
-  		return;
-  	}
 	IPACMDBG("Handling ipacm_restart\n");
 	ipa_nl_query_getlink(AF_PACKET);
 	IPACMDBG("Send GETLINK is completed\n");
@@ -3257,7 +3248,6 @@ void ipa_query_nl_getevents()
 	ipa_nl_send_getroute(IPA_IP_v6);
 	ipa_nl_send_getroute(IPA_IP_v4);
 	IPACMDBG("Send GETROUTE is completed\n");
-	pthread_mutex_unlock(&nl_lock);
 	ipa_query_active_feature();
 	IPACMDBG_DMESG("IPACM process started, ipa path is re-established\n");
 }

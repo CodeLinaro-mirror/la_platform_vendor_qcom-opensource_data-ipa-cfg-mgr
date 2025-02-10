@@ -59,6 +59,10 @@ IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  * IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
  * OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *
+ * Changes from Qualcomm Innovation Center, Inc. are provided under the following license:
+ * Copyright (c) 2025 Qualcomm Innovation Center, Inc. All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 /*!
 	@file
@@ -232,9 +236,14 @@ int log_init() {
 	IPACM_Config* config;
 	struct stat st = {0};
 	bool is_exist = false;
-	config = IPACM_Config::GetInstance();
 	dump_file = IPACM_LOG_COLLECTION_FILE;
 	ipacm_log_file_metadata_t metadata;
+	config = IPACM_Config::GetInstance();
+	if(!config)
+	{
+		printf("unable to retrieve config instance\n");
+		return IPACM_FAILURE;
+	}
 
 	memset(&metadata, '\0', sizeof(ipacm_log_file_metadata_t));
 	if(log_init_done)

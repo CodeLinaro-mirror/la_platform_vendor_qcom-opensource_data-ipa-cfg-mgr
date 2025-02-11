@@ -63,6 +63,7 @@ public:
 	bool AddFilteringRule_v2(struct ipa_ioc_add_flt_rule_v2 const *ruleTable);
 #endif
 	bool AddFilteringRuleAfter(struct ipa_ioc_add_flt_rule_after const *ruleTable);
+	bool AddFilteringRuleAfter_v2(struct ipa_ioc_add_flt_rule_after_v2 const *ruleTable);
 	bool DeleteFilteringRule(struct ipa_ioc_del_flt_rule *ruleTable);
 	bool Commit(enum ipa_ip_type ip);
 	bool Reset(enum ipa_ip_type ip);

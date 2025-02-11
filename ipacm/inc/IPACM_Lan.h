@@ -358,6 +358,8 @@ public:
 
 	virtual int handle_wan_up(ipa_ip_type ip_type, uint16_t vlan_id = 0);
 
+	virtual int handle_wan_up_v2(ipa_ip_type iptype, uint16_t vlan_id, uint8_t *mac_addr, uint8_t ul_cnt_idx);
+
 	/* configure filter rule for wan_up event*/
 	virtual int handle_wan_up_ex(ipacm_ext_prop* ext_prop, ipa_ip_type iptype, uint8_t xlat_mux_id);
 

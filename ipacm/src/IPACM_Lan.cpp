@@ -442,7 +442,7 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 				}
 			}
 #endif
-
+#ifdef FEATURE_ETH_BRIDGE_LE
 			if (rx_prop != NULL)
 			{
 				if(IPACM_Iface::ipacmcfg->GetIPAVer() >= IPA_HW_None &&
@@ -455,13 +455,10 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 						IPACM_Iface::ipacmcfg->DelRmDepend(IPACM_Iface::ipacmcfg->ipa_client_rm_map_tbl[rx_prop->rx[0].src_pipe]);
 					IPACMDBG_H("Finished delete dependency \n ");
 				}
-#ifndef FEATURE_ETH_BRIDGE_LE
+
 				free(rx_prop);
 				rx_prop = NULL;
-#endif
 			}
-
-#ifndef FEATURE_ETH_BRIDGE_LE
 			if (tx_prop != NULL)
 			{
 				free(tx_prop);

@@ -587,7 +587,7 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 				}
 			}
 #endif
-
+#ifdef FEATURE_ETH_BRIDGE_LE
 			if (rx_prop != NULL)
 			{
 				if(IPACM_Iface::ipacmcfg->GetIPAVer() >= IPA_HW_None &&
@@ -600,13 +600,10 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 						IPACM_Iface::ipacmcfg->DelRmDepend(IPACM_Iface::ipacmcfg->ipa_client_rm_map_tbl[rx_prop->rx[0].src_pipe]);
 					IPACMDBG_H("Finished delete dependency \n ");
 				}
-#ifndef FEATURE_ETH_BRIDGE_LE
+
 				free(rx_prop);
 				rx_prop = NULL;
-#endif
 			}
-
-#ifndef FEATURE_ETH_BRIDGE_LE
 			if (tx_prop != NULL)
 			{
 				free(tx_prop);
@@ -4870,6 +4867,8 @@ int IPACM_Lan::handle_eth_hdr_init(uint8_t *mac_addr, ipacm_bridge *bridge, uint
 			if(isVlan && !bridge)
 			{
 				IPACMERR("vlan with NULL bridge\n");
+				free(hdr_proc_ctx_table);
+				hdr_proc_ctx_table = NULL;
 				return IPACM_FAILURE;
 			}
 #endif
@@ -4879,6 +4878,8 @@ int IPACM_Lan::handle_eth_hdr_init(uint8_t *mac_addr, ipacm_bridge *bridge, uint
 		pHeaderDescriptor = (struct ipa_ioc_add_hdr *)calloc(1, len);
 		if (pHeaderDescriptor == NULL)
 		{
+			free(hdr_proc_ctx_table);
+			hdr_proc_ctx_table = NULL;
 			IPACMERR("calloc failed to allocate pHeaderDescriptor\n");
 			return IPACM_FAILURE;
 		}
@@ -5483,9 +5484,13 @@ int IPACM_Lan::handle_eth_hdr_init(uint8_t *mac_addr, ipacm_bridge *bridge, uint
 	}
 	else
 	{
+		free(hdr_proc_ctx_table);
+		hdr_proc_ctx_table = NULL;
 		return res;
 	}
 fail:
+	free(hdr_proc_ctx_table);
+	hdr_proc_ctx_table = NULL;
 	free(pHeaderDescriptor);
 	return res;
 }

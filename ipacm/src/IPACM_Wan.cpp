@@ -2479,6 +2479,8 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 		ipa_interface_index = iface_ipa_index_query(data->if_index);
 		bool post_mtu_update_event = false;
 
+		IPACMDBG_H("Received IPA_MTU_SET for interface (%s) IP type %d\n", mtu_info->if_name, mtu_info->ip_type);
+
 		if (ipa_interface_index == ipa_if_num)
 		{
 			IPACMDBG_H("Received IPA_MTU_SET for interface (%d)\n",
@@ -2543,6 +2545,11 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 				/* finish command queue */
 				IPACMDBG_H("Posting IPA_MTU_UPDATE event\n");
 				IPACM_EvtDispatcher::PostEvt(&evt_data);
+
+				if(0 != ioctl(m_fd_ipa, IPA_IOC_SET_IPTYPE_MTU, mtu_info))
+				{
+					IPACMERR("ioctl to IPA driver failed for setting the MTU\n");
+				}
 			}
 		}
 	}

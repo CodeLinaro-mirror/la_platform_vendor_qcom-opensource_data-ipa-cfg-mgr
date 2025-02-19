@@ -176,6 +176,18 @@ void IPACM_IfaceManager::event_callback(ipa_cm_event_id event, void *param)
 				strlcpy(ifmgr_data.iface_name, evt_data->iface_name, sizeof(ifmgr_data.iface_name));
 				create_iface_instance(&ifmgr_data);
 			}
+			else if(evt_data->mlo_enabled && IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].if_cat == WLAN_IF)
+			{
+				IPACMDBG_H("WLAN AP (%s) link up, iface: %d: ipa_if: %d\n",
+					evt_data->iface_name,evt_data->if_index,ipa_interface_index);
+				ifmgr_data.if_index = evt_data->if_index;
+				ifmgr_data.if_type = Q6_WAN;
+#ifdef IPA_WDI_AST_UPDATE
+				ifmgr_data.ast_update = evt_data->ast_update;
+#endif
+				strlcpy(ifmgr_data.iface_name, evt_data->iface_name, sizeof(ifmgr_data.iface_name));
+				create_iface_instance(&ifmgr_data);
+			}
 			else
 			{
 				IPACMDBG_H("iface %s already up and act as %d mode: \n",IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].iface_name,IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].if_cat);

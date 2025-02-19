@@ -889,6 +889,7 @@ void IPACM_Wlan::event_callback(ipa_cm_event_id event, void *param)
 					}
 					if (data->attribs[i].attrib_type == WLAN_HDR_ATTRIB_MAC_ADDR)
 					{
+						IPACMDBG_H("Will post IPA_ETH_BRIDGE_CLIENT_ADD\n");
 						if(IPACM_Iface::ipacmcfg->mac_addr_in_blacklist(data->attribs[i].u.mac_addr) == false)
 						{
 							eth_bridge_post_event(IPA_ETH_BRIDGE_CLIENT_ADD, IPA_IP_MAX, data->attribs[i].u.mac_addr, NULL, dev_name);

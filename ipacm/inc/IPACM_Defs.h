@@ -504,6 +504,7 @@ typedef struct _ipacm_event_data_fid
 #ifdef IPA_WDI_AST_UPDATE
 	bool ast_update;
 #endif
+	bool mlo_enabled;
 } ipacm_event_data_fid;
 
 typedef struct

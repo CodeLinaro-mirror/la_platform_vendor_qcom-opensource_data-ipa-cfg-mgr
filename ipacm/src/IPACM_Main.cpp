@@ -375,6 +375,7 @@ void* ipa_driver_msg_notifier(void *param)
 							"%s_%d_%d", event_wlan->name,event_wlan->instance_id,
 							event_wlan->vdev_id);
 			}
+			data_fid->mlo_enabled = event_wlan->mld_enabled;
 			evt_data.event = IPA_WLAN_AP_LINK_UP_EVENT;
 #ifdef IPA_WDI_AST_UPDATE
 			data_fid->ast_update = event_wlan->ast_update;

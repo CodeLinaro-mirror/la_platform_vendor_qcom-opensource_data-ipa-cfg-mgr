@@ -717,5 +717,8 @@
 			<IPOEEthVlanWanEnabled>0</IPOEEthVlanWanEnabled>
 			<IPOEVlanLanWanIface>eth0</IPOEVlanLanWanIface>
 		</IPACMIPOEEthVlanWan>
+		<MultiVlanBridgeConfig>
+			<MultiVlanOnBridgeEnable>0</MultiVlanOnBridgeEnable>
+		</MultiVlanBridgeConfig>
 	</IPACM>
 </system>

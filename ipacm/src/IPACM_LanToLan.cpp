@@ -68,6 +68,10 @@ IPACM_LanToLan_Iface::IPACM_LanToLan_Iface(IPACM_Lan *p_iface)
 	m_support_inter_iface_offload = true;
 	m_support_intra_iface_offload = false;
 	m_intra_interface_info.is_vlan_peer = false;
+	if(IPACM_Iface::ipacmcfg->multi_vlan_bridge_config_enable == 1)
+	{
+		m_support_intra_iface_offload = true;
+	}
 	m_is_l2tp_iface = false;
 	m_is_svap_iface = false;
 #ifdef FEATURE_VLAN_MPDN
@@ -408,6 +412,15 @@ void IPACM_LanToLan::handle_iface_up(ipacm_event_eth_bridge *data)
 			/* add client specific filtering rule on new interface for matching vlan ids*/
 			if (!front_iface.get_m_support_ast_update())
 				front_iface.add_all_inter_interface_client_flt_rule(data->iptype, Ids);
+
+			if(IPACM_Iface::ipacmcfg->multi_vlan_bridge_config_enable == 1)
+			{
+				/* populate the intra-interface information */
+				if(front_iface.get_m_support_intra_iface_offload())
+				{
+					front_iface.handle_intra_interface_info();
+				}
+			}
 
 			/* handle cached client add event */
 			handle_cached_client_add_event(front_iface.get_iface_pointer());
@@ -1244,11 +1257,18 @@ void IPACM_LanToLan_Iface::add_client_rt_rule(peer_iface_info *peer_info, client
 	std::map<std::array<uint8_t, 6>, int >::iterator it;
 #endif
 	int mac_found = 0;
+	uint32_t hdr_proc_ctx_hdl = 0;
 
 	if (!peer_info || !peer_info->peer || !client) {
 		IPACMDBG_H("Invalid peer or client info\n");
 		return;
 	}
+
+	IPACMDBG_H("dev_name: %s \n", this->get_iface_pointer()->dev_name);
+	IPACMDBG_H("client_vlan_id: %d\n", client->vlan_id);
+	IPACMDBG_H("peer_info->peer->m_is_svap_iface: %d\n", peer_info->peer->m_is_svap_iface);
+	IPACMDBG_H("peer_info->peer->m_is_sIface: %d\n", peer_info->peer->m_is_sIface);
+	IPACMDBG_H("peer_info->is_vlan_peer: %d\n", peer_info->is_vlan_peer);
 
 	if (peer_info->peer->m_is_svap_iface || (peer_info->peer->m_is_sIface && peer_info->is_vlan_peer))
 	{
@@ -1410,27 +1430,68 @@ void IPACM_LanToLan_Iface::add_client_rt_rule(peer_iface_info *peer_info, client
 	}
 	else
 	{
-		IPACMDBG_H("This is for intra interface communication.\n");
-		m_p_iface->eth_bridge_add_rt_rule(client->mac_addr, peer_info->rt_tbl_name_for_rt[IPA_IP_v4], hdr_proc_ctx_for_intra_interface,
-			peer_l2_hdr_type, IPA_IP_v4, rt_rule_hdl, &num_rt_rule);
+		IPACMDBG_H("This is for intra interface communication for client"
+			"wih mac 0x[%X][%X][%X][%X][%X][%X] vlan_id: %d\n",
+			client->mac_addr[0], client->mac_addr[1], client->mac_addr[2], client->mac_addr[3],
+			client->mac_addr[4], client->mac_addr[5], client->mac_addr[6], client->vlan_id);
 
-		client->intra_iface_rt_rule_hdl.num_hdl[IPA_IP_v4] = num_rt_rule;
-		IPACMDBG_H("Number of IPv4 routing rule is %d.\n", num_rt_rule);
-		for(i=0; i<num_rt_rule; i++)
+		if(IPACM_Iface::ipacmcfg->multi_vlan_bridge_config_enable == 0)
 		{
-			IPACMDBG_H("Routing rule %d handle %d\n", i, rt_rule_hdl[i]);
-			client->intra_iface_rt_rule_hdl.rule_hdl[IPA_IP_v4][i] = rt_rule_hdl[i];
+			IPACMDBG_H("This is for intra interface communication.\n");
+			m_p_iface->eth_bridge_add_rt_rule(client->mac_addr, peer_info->rt_tbl_name_for_rt[IPA_IP_v4],
+				hdr_proc_ctx_for_intra_interface, peer_l2_hdr_type,
+				IPA_IP_v4, rt_rule_hdl, &num_rt_rule);
+
+			client->intra_iface_rt_rule_hdl.num_hdl[IPA_IP_v4] = num_rt_rule;
+			IPACMDBG_H("Number of IPv4 routing rule is %d.\n", num_rt_rule);
+			for(i=0; i<num_rt_rule; i++)
+			{
+				IPACMDBG_H("Routing rule %d handle %d\n", i, rt_rule_hdl[i]);
+				client->intra_iface_rt_rule_hdl.rule_hdl[IPA_IP_v4][i] = rt_rule_hdl[i];
+			}
+
+			m_p_iface->eth_bridge_add_rt_rule(client->mac_addr, peer_info->rt_tbl_name_for_rt[IPA_IP_v6],
+				hdr_proc_ctx_for_intra_interface, peer_l2_hdr_type,
+				IPA_IP_v6, rt_rule_hdl, &num_rt_rule);
+
+			client->intra_iface_rt_rule_hdl.num_hdl[IPA_IP_v6] = num_rt_rule;
+			IPACMDBG_H("Number of IPv6 routing rule is %d.\n", num_rt_rule);
+			for(i=0; i<num_rt_rule; i++)
+			{
+				IPACMDBG_H("Routing rule %d handle %d\n", i, rt_rule_hdl[i]);
+				client->intra_iface_rt_rule_hdl.rule_hdl[IPA_IP_v6][i] = rt_rule_hdl[i];
+			}
 		}
-
-		m_p_iface->eth_bridge_add_rt_rule(client->mac_addr, peer_info->rt_tbl_name_for_rt[IPA_IP_v6], hdr_proc_ctx_for_intra_interface,
-			peer_l2_hdr_type, IPA_IP_v6, rt_rule_hdl, &num_rt_rule);
-
-		client->intra_iface_rt_rule_hdl.num_hdl[IPA_IP_v6] = num_rt_rule;
-		IPACMDBG_H("Number of IPv6 routing rule is %d.\n", num_rt_rule);
-		for(i=0; i<num_rt_rule; i++)
+		else if(IPACM_Iface::ipacmcfg->multi_vlan_bridge_config_enable == 1)
 		{
-			IPACMDBG_H("Routing rule %d handle %d\n", i, rt_rule_hdl[i]);
-			client->intra_iface_rt_rule_hdl.rule_hdl[IPA_IP_v6][i] = rt_rule_hdl[i];
+			m_p_iface->eth_bridge_add_hdr_proc_ctx(m_p_iface->tx_prop->tx[0].hdr_l2_type,
+				&hdr_proc_ctx_hdl, client->vlan_id);
+			client->hdr_proc_ctx_intra_interface = hdr_proc_ctx_hdl;
+			IPACMDBG_H("Hdr proc ctx for intra-interface communication hdl: %d\n", hdr_proc_ctx_hdl);
+
+			m_p_iface->eth_bridge_add_rt_rule(client->mac_addr, peer_info->rt_tbl_name_for_rt[IPA_IP_v4],
+				client->hdr_proc_ctx_intra_interface,
+				peer_l2_hdr_type, IPA_IP_v4, rt_rule_hdl, &num_rt_rule);
+
+			client->intra_iface_rt_rule_hdl.num_hdl[IPA_IP_v4] = num_rt_rule;
+			IPACMDBG_H("Number of IPv4 routing rule is %d.\n", num_rt_rule);
+			for(i=0; i<num_rt_rule; i++)
+			{
+				IPACMDBG_H("Routing rule %d handle %d\n", i, rt_rule_hdl[i]);
+				client->intra_iface_rt_rule_hdl.rule_hdl[IPA_IP_v4][i] = rt_rule_hdl[i];
+			}
+
+			m_p_iface->eth_bridge_add_rt_rule(client->mac_addr, peer_info->rt_tbl_name_for_rt[IPA_IP_v6],
+				client->hdr_proc_ctx_intra_interface,
+				peer_l2_hdr_type, IPA_IP_v6, rt_rule_hdl, &num_rt_rule);
+
+			client->intra_iface_rt_rule_hdl.num_hdl[IPA_IP_v6] = num_rt_rule;
+			IPACMDBG_H("Number of IPv6 routing rule is %d.\n", num_rt_rule);
+			for(i=0; i<num_rt_rule; i++)
+			{
+				IPACMDBG_H("Routing rule %d handle %d\n", i, rt_rule_hdl[i]);
+				client->intra_iface_rt_rule_hdl.rule_hdl[IPA_IP_v6][i] = rt_rule_hdl[i];
+			}
 		}
 	}
 
@@ -2086,22 +2147,48 @@ void IPACM_LanToLan_Iface::del_client_rt_rule(peer_iface_info *peer, client_info
 	}
 	else
 	{
-		IPACMDBG_H("Delete routing rules for intra interface communication.\n");
-		num_rules = client->intra_iface_rt_rule_hdl.num_hdl[IPA_IP_v4];
-		for(i = 0; i < num_rules; i++)
+		if(IPACM_Iface::ipacmcfg->multi_vlan_bridge_config_enable == 0)
 		{
-			m_p_iface->eth_bridge_del_rt_rule(client->intra_iface_rt_rule_hdl.rule_hdl[IPA_IP_v4][i], IPA_IP_v4);
-			IPACMDBG_H("IPv4 rt rule %d is deleted.\n", client->intra_iface_rt_rule_hdl.rule_hdl[IPA_IP_v4][i]);
-		}
-		client->intra_iface_rt_rule_hdl.num_hdl[IPA_IP_v4] = 0;
+			IPACMDBG_H("Delete routing rules for intra interface communication.\n");
+			num_rules = client->intra_iface_rt_rule_hdl.num_hdl[IPA_IP_v4];
+			for(i = 0; i < num_rules; i++)
+			{
+				m_p_iface->eth_bridge_del_rt_rule(client->intra_iface_rt_rule_hdl.rule_hdl[IPA_IP_v4][i], IPA_IP_v4);
+				IPACMDBG_H("IPv4 rt rule %d is deleted.\n", client->intra_iface_rt_rule_hdl.rule_hdl[IPA_IP_v4][i]);
+			}
+			client->intra_iface_rt_rule_hdl.num_hdl[IPA_IP_v4] = 0;
 
-		num_rules = client->intra_iface_rt_rule_hdl.num_hdl[IPA_IP_v6];
-		for(i = 0; i < num_rules; i++)
-		{
-			m_p_iface->eth_bridge_del_rt_rule(client->intra_iface_rt_rule_hdl.rule_hdl[IPA_IP_v6][i], IPA_IP_v6);
-			IPACMDBG_H("IPv6 rt rule %d is deleted.\n", client->intra_iface_rt_rule_hdl.rule_hdl[IPA_IP_v6][i]);
+			num_rules = client->intra_iface_rt_rule_hdl.num_hdl[IPA_IP_v6];
+			for(i = 0; i < num_rules; i++)
+			{
+				m_p_iface->eth_bridge_del_rt_rule(client->intra_iface_rt_rule_hdl.rule_hdl[IPA_IP_v6][i], IPA_IP_v6);
+					IPACMDBG_H("IPv6 rt rule %d is deleted.\n", client->intra_iface_rt_rule_hdl.rule_hdl[IPA_IP_v6][i]);
+			}
+			client->intra_iface_rt_rule_hdl.num_hdl[IPA_IP_v6] = 0;
 		}
-		client->intra_iface_rt_rule_hdl.num_hdl[IPA_IP_v6] = 0;
+		else if(IPACM_Iface::ipacmcfg->multi_vlan_bridge_config_enable == 1)
+		{
+			IPACMDBG_H("Delete routing rules for intra interface communication.\n");
+			num_rules = client->intra_iface_rt_rule_hdl.num_hdl[IPA_IP_v4];
+			for(i = 0; i < num_rules; i++)
+			{
+				m_p_iface->eth_bridge_del_rt_rule(client->intra_iface_rt_rule_hdl.rule_hdl[IPA_IP_v4][i], IPA_IP_v4);
+				IPACMDBG_H("IPv4 rt rule %d is deleted.\n", client->intra_iface_rt_rule_hdl.rule_hdl[IPA_IP_v4][i]);
+			}
+			client->intra_iface_rt_rule_hdl.num_hdl[IPA_IP_v4] = 0;
+
+			num_rules = client->intra_iface_rt_rule_hdl.num_hdl[IPA_IP_v6];
+			for(i = 0; i < num_rules; i++)
+			{
+				m_p_iface->eth_bridge_del_rt_rule(client->intra_iface_rt_rule_hdl.rule_hdl[IPA_IP_v6][i], IPA_IP_v6);
+					IPACMDBG_H("IPv6 rt rule %d is deleted.\n", client->intra_iface_rt_rule_hdl.rule_hdl[IPA_IP_v6][i]);
+			}
+			client->intra_iface_rt_rule_hdl.num_hdl[IPA_IP_v6] = 0;
+
+			IPACMDBG_H("Delete hdr_proc_ctx: %d for intra interface communication.\n",
+				client->hdr_proc_ctx_intra_interface);
+			m_p_iface->eth_bridge_del_hdr_proc_ctx(client->hdr_proc_ctx_intra_interface);
+		}
 	}
 
 	return;
@@ -3089,6 +3176,12 @@ void IPACM_LanToLan_Iface::print_data_structure_info()
 
 		if(m_support_intra_iface_offload)
 		{
+			if(IPACM_Iface::ipacmcfg->multi_vlan_bridge_config_enable == 1)
+			{
+				IPACMDBG_H("client hdr_proc_ctx handle: %d:\n",
+					it_client->hdr_proc_ctx_intra_interface);
+			}
+
 			IPACMDBG_H("Printing routing rule info for intra-interface communication.\n");
 			IPACMDBG_H("Number of IPv4 routing rules is %d, handles:\n", it_client->intra_iface_rt_rule_hdl.num_hdl[IPA_IP_v4]);
 			for(j = 0; j < it_client->intra_iface_rt_rule_hdl.num_hdl[IPA_IP_v4]; j++)

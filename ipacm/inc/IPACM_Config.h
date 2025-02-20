@@ -564,12 +564,14 @@ public:
 	uint32_t ipacm_static_policy_dscp_mark_mode;
 #endif
 
-	/* Indicates whether PPPOE mode is enabled on WAN interface*/
+	/* Indicates whether PPPOE mode is enabled on WAN interface */
 	bool eth_wan_pppoe_enable;
-	/* Indicates whether Eth VLAN mode is enabled on WAN interface*/
+	/* Indicates whether Eth VLAN mode is enabled on WAN interface */
 	bool eth_vlan_wan_enable;
-	/* Indicates the interface on which Eth VLAN LAN-WAN mode is enabled*/
+	/* Indicates the interface on which Eth VLAN LAN-WAN mode is enabled */
 	const char* eth_lan_wan_iface_name;
+	/* Indicates whether Multi VLAN to Single Bridge mode is enabled */
+	bool multi_vlan_bridge_config_enable;
 
 #ifdef FEATURE_EoGRE
 	ipa_ipgre_info eogre_info;
@@ -677,7 +679,7 @@ public:
 	std::list<bridge_vlan_mapping_info> m_bridge_vlan_mapping;
 	void add_bridge_vlan_mapping(ipa_bridge_vlan_mapping_info *data);
 	void del_bridge_vlan_mapping(uint16_t *data);
-	int get_bridge_vlan_mapping(ipa_bridge_vlan_mapping_info *data);
+	int get_bridge_vlan_mapping(ipa_bridge_vlan_mapping_info_new *data);
 	uint16_t get_bridge_vlan_mapping_from_subnet(uint32_t ipv4_subnet);
 	void add_vlan_bridge(ipacm_event_data_all * data_all);
 	ipacm_bridge *get_vlan_bridge(char *name);

@@ -273,13 +273,14 @@ void ipacm_log_dump(char* ipacm_log_data)
 		return;
 	}
         FILE_LOCK();
+	/* Adding +1 to incorporate null character */
 	input_len = strlen(ipacm_log_data) + 1;
 
-        if(((char*)write_addr+input_len) > (char*)mmap_addr+ max_filesize)
+        if(((char*)write_addr+input_len) > (char*)mmap_addr + max_filesize - 1)
 	{
 		write_addr = mmap_addr;
 	}
-	snprintf((char*)write_addr, input_len + 1, "%s\n", ipacm_log_data);
+	snprintf((char*)write_addr, input_len, "%s", ipacm_log_data);
 	write_addr = (char*)write_addr + (input_len - 1); //start of line
 	FILE_UNLOCK();
 }

@@ -21887,13 +21887,54 @@ int IPACM_Lan::eth_bridge_get_vlan_hdr_template_hdl(uint32_t* hdr_hdl, uint16_t 
 	struct ipa_ioc_add_hdr hdr;
 	uint8_t hdr_len;
 	struct ipa_ioc_add_hdr *pHeaderDescriptor = NULL;
-	int len = 0;
+	int len = 0, idx = 0, j = 0;
+
+	if(rx_prop != NULL)
+	{
+		IPACMDBG_H("ipa_if_cate %d, is_if_svap %d, is_wlan_if_vlan %d, rx_prop->num_rx_props %d \n", ipa_if_cate, is_if_svap, is_wlan_if_vlan, rx_prop->num_rx_props);
+		for (j = 0; j < rx_prop->num_rx_props / 2 && j < IPA_MAX_NUM_PROPS; j++){
+			/* Easymesh vlan/svap pipe condition need to install for in 2nd handle in array  and idx 2*/
+			if ((ipa_if_cate == WLAN_IF) && (is_if_svap || is_wlan_if_vlan) && (rx_prop->num_rx_props > 2)) {
+				if (j != 1) {
+					IPACMDBG_H("Interface is WLAN Svap or w-vlan, dont install rules on pipe %d..... continue\n", idx);
+					continue;
+				} else {
+					idx = 2;
+					IPACMDBG_H("Interface is WLAN Svap or vlan, install rules on Rx1 pipe at idx %d \n", idx);
+				} /* Easymesh Not Vlan pipe condition need to install for 1st handle of array and idx 0 */
+			} else if ((ipa_if_cate == WLAN_IF) && (rx_prop->num_rx_props > 2)){
+				if (j == 0) {
+					idx = 0;
+				} else {
+					IPACMDBG_H("Interface is non vlan, dont install rule with index 2\n");
+					continue;
+				}
+			} else {
+				idx = j * 2;
+				IPACMDBG_H("Install rules at idx %d\n", idx);
+			}
+
+			if (IPACM_Iface::ipacmcfg->getFltRuleCount(rx_prop->rx[idx].src_pipe, IPA_IP_v4) != 0) {
+				IPACMDBG_DMESG("### WARNING ### num ipv4 flt rules on client %d is not expected: %d expected value: 0",
+						rx_prop->rx[idx].src_pipe, IPACM_Iface::ipacmcfg->getFltRuleCount(rx_prop->rx[idx].src_pipe, IPA_IP_v4));
+			}
+			if (IPACM_Iface::ipacmcfg->getFltRuleCount(rx_prop->rx[idx].src_pipe, IPA_IP_v6) != 0) {
+				IPACMDBG_DMESG("### WARNING ### num ipv6 flt rules on client %d is not expected: %d expected value: 0",
+						rx_prop->rx[idx].src_pipe, IPACM_Iface::ipacmcfg->getFltRuleCount(rx_prop->rx[idx].src_pipe, IPA_IP_v6));
+			}
+		}
+	}
+	else
+	{
+		IPACMERR("NULL rx_prop.\n");
+		return IPACM_FAILURE;
+	}
 
 	memset(&hdr, 0, sizeof(hdr));
 	memset(&sCopyHeader, 0, sizeof(sCopyHeader));
 	memcpy(sCopyHeader.name,
-				tx_prop->tx[2].hdr_name,
-				sizeof(sCopyHeader.name));
+			tx_prop->tx[idx].hdr_name,
+			sizeof(sCopyHeader.name));
 
 	IPACMDBG_H("header name: %s\n", sCopyHeader.name);
 	if (m_header.CopyHeader(&sCopyHeader) == false)

@@ -1530,8 +1530,9 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 						wan_v6_is_default_gw = false;
 						IPACMDBG_H("adding header, dev (%s) ip-type(%d), default gw (%x)\n", dev_name,data->iptype, wan_v4_addr_gw);
 					}
-					if ((data->iptype == IPA_IP_v6 || data->iptype == IPA_IP_MAX) &&  wan_v6_addr_gw_set != true &&
-						(data->ipv6_addr_gw[0] != 0) && (data->ipv6_addr_gw[1] != 0) && (data->ipv6_addr_gw[2] != 0) && (data->ipv6_addr_gw[3] != 0))
+					IPACMDBG_H("in IPA_WLAN_GW_ADDR_ADD_EVENT %d  \n", wan_v6_addr_gw_set );
+					if ((data->iptype == IPA_IP_v6 || data->iptype == IPA_IP_MAX) &&  (wan_v6_addr_gw_set != true) &&
+						(data->ipv6_addr_gw[0] != 0) || (data->ipv6_addr_gw[1] != 0) || (data->ipv6_addr_gw[2] != 0) || (data->ipv6_addr_gw[3] != 0))
 					{
 
 						IPACMDBG_H(" IPV6 gateway: %08x:%08x:%08x:%08x \n",
@@ -2200,6 +2201,12 @@ void IPACM_Wan::post_wan_vlan_pdn_event(ipa_ip_type iptype, int pdn_idx, int vla
 							ipv4_to_iface[pdn_idx].pIface->wan_route_rule_v4_hdl[tx_index] = 0;
 						}
 					}
+					else
+					{
+						IPACMDBG_H("IP-family:%d, Routing rule(hdl:0x%x) deletion successful for tx_index %d!\n",
+							IPA_IP_v4, wan_route_rule_v4_hdl[tx_index], tx_index);
+						wan_route_rule_v4_hdl[tx_index] = 0;
+					}
 				}
 			}
 			vlan_data->mux_id = mux_id;
@@ -2358,13 +2365,21 @@ int IPACM_Wan::handle_vlan_backhaul_switch_v6(ipacm_event_route_vlan *data, bool
 			if(vlan_info->v6_association == Q6_WAN)
 			{
 				IPACMDBG_H("Backhaul switch from LTE to STA - V6\n");
-				if(ipv6_to_iface[vlan_info->v6_idx[Q6_WAN]].wan_up_vlan_v6)
+				if(ipv6_to_iface[vlan_info->v6_idx[Q6_WAN]].wan_up_vlan_v6 && vlan_info->v6_vlan_idx[Q6_WAN] >= 0)
 				{
 					post_wan_vlan_pdn_event(IPA_IP_v6, vlan_info->v6_idx[Q6_WAN],
 							 vlan_info->v6_vlan_idx[Q6_WAN], data->VlanID, false);
-					if(ipv4_to_iface[vlan_info->v4_idx[Q6_WAN]].wan_up_vlan)
+					if(vlan_info->v4_association == Q6_WAN && ipv4_to_iface[vlan_info->v4_idx[Q6_WAN]].wan_up_vlan &&
+						vlan_info->v4_vlan_idx[Q6_WAN] >= 0)
 						post_wan_vlan_pdn_event(IPA_IP_v4, vlan_info->v4_idx[Q6_WAN],
 							 vlan_info->v4_vlan_idx[Q6_WAN], data->VlanID, false);
+					if((vlan_info->v4_idx[Q6_WAN] == -1 || ((vlan_info->v4_idx[Q6_WAN] >= 0) &&
+				   	ipv4_to_iface[vlan_info->v4_idx[Q6_WAN]].wan_up_vlan == false)) &&
+				   	((vlan_info->v6_idx[Q6_WAN] >= 0) && ipv6_to_iface[vlan_info->v6_idx[Q6_WAN]].wan_up_vlan_v6 == false))
+					{
+					   	num_offloaded_pdns--;
+						IPACMDBG_H("Num of offloaded PDN decreased to %d\n", num_offloaded_pdns);
+					}
 				}
 				else
 				{
@@ -2380,7 +2395,9 @@ int IPACM_Wan::handle_vlan_backhaul_switch_v6(ipacm_event_route_vlan *data, bool
 			{
 				IPACMDBG("iface already has v4 vlan association, not new\n");
 			}
-			else if(vlan_info->v4_idx[WLAN_WAN] == -1 && vlan_info->v6_idx[WLAN_WAN] == -1)
+			else if(wlan_ipv4_pdn_index && vlan_info->v4_idx[WLAN_WAN] == -1 && vlan_info->v6_idx[WLAN_WAN] == -1
+			&& (wlan_ipv4_pdn_index == -1 || ((wlan_ipv4_pdn_index >= 0) && ipv4_to_iface[wlan_ipv4_pdn_index].wan_up_vlan == false)) &&
+			((wlan_ipv6_pdn_index >= 0) && ipv6_to_iface[wlan_ipv6_pdn_index].wan_up_vlan_v6 == false))
 			{
 				if(num_offloaded_pdns >= IPA_MAX_NUM_HW_PDNS)
 				{
@@ -2400,13 +2417,23 @@ int IPACM_Wan::handle_vlan_backhaul_switch_v6(ipacm_event_route_vlan *data, bool
 			if(vlan_info->v6_association == WLAN_WAN)
 			{
 				IPACMDBG_H("Backhaul switch from STA to LTE - V6\n");
-				if(ipv6_to_iface[vlan_info->v6_idx[WLAN_WAN]].wan_up_vlan_v6)
+				if(ipv6_to_iface[vlan_info->v6_idx[WLAN_WAN]].wan_up_vlan_v6 &&
+					vlan_info->v6_vlan_idx[vlan_info->v6_association] >= 0)
 				{
 					post_wan_vlan_pdn_event(IPA_IP_v6, vlan_info->v6_idx[WLAN_WAN],
 							 vlan_info->v6_vlan_idx[WLAN_WAN], data->VlanID, false);
-					if(ipv4_to_iface[vlan_info->v4_idx[WLAN_WAN]].wan_up_vlan)
+					if(vlan_info->v4_idx[vlan_info->v6_association] >= 0 && ipv4_to_iface[vlan_info->v4_idx[WLAN_WAN]].wan_up_vlan
+					&& vlan_info->v4_vlan_idx[vlan_info->v6_association] >= 0)
 						post_wan_vlan_pdn_event(IPA_IP_v4, vlan_info->v4_idx[WLAN_WAN],
 							 vlan_info->v4_vlan_idx[WLAN_WAN], data->VlanID, false);
+					if((vlan_info->v4_idx[vlan_info->v6_association] == -1 || ((vlan_info->v4_idx[vlan_info->v6_association] >= 0) &&
+					ipv4_to_iface[vlan_info->v4_idx[vlan_info->v6_association]].wan_up_vlan == false)) &&
+					 ((vlan_info->v6_idx[vlan_info->v6_association] >= 0) &&
+					 ipv6_to_iface[vlan_info->v6_idx[vlan_info->v6_association]].wan_up_vlan_v6 == false))
+					{
+						num_offloaded_pdns--;
+						IPACMDBG_H("Num of offloaded PDN decreased to %d\n", num_offloaded_pdns);
+					}
 				}
 				else
 				{
@@ -2517,13 +2544,21 @@ int IPACM_Wan::handle_vlan_backhaul_switch_v4(ipacm_event_route_vlan *data)
 			if(vlan_info->v4_association == Q6_WAN)
 			{
 				IPACMDBG_H("Backhaul switch from LTE to STA - V4\n");
-				if(ipv4_to_iface[vlan_info->v4_idx[Q6_WAN]].wan_up_vlan)
+				if(ipv4_to_iface[vlan_info->v4_idx[Q6_WAN]].wan_up_vlan && vlan_info->v4_vlan_idx[Q6_WAN] >= 0)
 				{
 					post_wan_vlan_pdn_event(IPA_IP_v4, vlan_info->v4_idx[Q6_WAN],
 						 vlan_info->v4_vlan_idx[Q6_WAN], data->VlanID, false);
-					if(ipv6_to_iface[vlan_info->v6_idx[Q6_WAN]].wan_up_vlan_v6)
+					if(vlan_info->v6_association == Q6_WAN && ipv6_to_iface[vlan_info->v6_idx[Q6_WAN]].wan_up_vlan_v6 &&
+						vlan_info->v6_vlan_idx[Q6_WAN] >= 0)
 						post_wan_vlan_pdn_event(IPA_IP_v6, vlan_info->v6_idx[Q6_WAN],
 						 vlan_info->v6_vlan_idx[Q6_WAN], data->VlanID, false);
+					if(((vlan_info->v4_idx[Q6_WAN] >= 0) && ipv4_to_iface[vlan_info->v4_idx[Q6_WAN]].wan_up_vlan == false) &&
+					(vlan_info->v6_idx[Q6_WAN] == -1 || ((vlan_info->v6_idx[Q6_WAN] >= 0) &&
+					ipv6_to_iface[vlan_info->v6_idx[Q6_WAN]].wan_up_vlan_v6 == false)))
+					{
+						num_offloaded_pdns--;
+						IPACMDBG_H("Num of offloaded PDN decreased to %d\n", num_offloaded_pdns);
+					}
 				}
 				else
 				{
@@ -2539,7 +2574,9 @@ int IPACM_Wan::handle_vlan_backhaul_switch_v4(ipacm_event_route_vlan *data)
 			{
 				IPACMDBG("iface already has v6 vlan association, not new\n");		
 			}
-			else if(vlan_info->v4_idx[WLAN_WAN] == -1 && vlan_info->v6_idx[WLAN_WAN] == -1)
+			else if(vlan_info->v4_idx[WLAN_WAN] == -1 && vlan_info->v6_idx[WLAN_WAN] == -1  &&
+				((wlan_ipv4_pdn_index >= 0) && ipv4_to_iface[wlan_ipv4_pdn_index].wan_up_vlan == false) &&
+				(wlan_ipv6_pdn_index == -1 || ((wlan_ipv6_pdn_index >= 0) && ipv6_to_iface[wlan_ipv6_pdn_index].wan_up_vlan_v6 == false)))
 			{
 				if(num_offloaded_pdns >= IPA_MAX_NUM_HW_PDNS)
 				{
@@ -2559,13 +2596,24 @@ int IPACM_Wan::handle_vlan_backhaul_switch_v4(ipacm_event_route_vlan *data)
 			if(vlan_info->v4_association == WLAN_WAN)
 			{
 				IPACMDBG_H("Backhaul switch from STA to LTE - V4\n");
-				if(ipv4_to_iface[vlan_info->v4_idx[WLAN_WAN]].wan_up_vlan)
+				if(ipv4_to_iface[vlan_info->v4_idx[WLAN_WAN]].wan_up_vlan &&
+					vlan_info->v4_vlan_idx[vlan_info->v4_association] >= 0)
 				{
 					post_wan_vlan_pdn_event(IPA_IP_v4, vlan_info->v4_idx[WLAN_WAN],
 							 vlan_info->v4_vlan_idx[WLAN_WAN], data->VlanID, false);
-					if(ipv6_to_iface[vlan_info->v6_idx[WLAN_WAN]].wan_up_vlan_v6)
+					if(vlan_info->v6_idx[vlan_info->v4_association] >= 0 &&
+					 ipv6_to_iface[vlan_info->v6_idx[vlan_info->v4_association]].wan_up_vlan_v6 &&
+					 vlan_info->v6_vlan_idx[vlan_info->v4_association] >= 0)
 						post_wan_vlan_pdn_event(IPA_IP_v6, vlan_info->v6_idx[WLAN_WAN],
-							 vlan_info->v6_vlan_idx[WLAN_WAN], data->VlanID, false);
+						 vlan_info->v6_vlan_idx[WLAN_WAN], data->VlanID, false);
+					if(((vlan_info->v4_idx[vlan_info->v4_association] >= 0) &&
+					ipv4_to_iface[vlan_info->v4_idx[vlan_info->v4_association]].wan_up_vlan == false) &&
+					(vlan_info->v6_idx[vlan_info->v4_association] == -1 || ((vlan_info->v6_idx[vlan_info->v4_association] >= 0) &&
+					ipv6_to_iface[vlan_info->v6_idx[vlan_info->v4_association]].wan_up_vlan_v6 == false)))
+					{
+						num_offloaded_pdns--;
+						IPACMDBG_H("Num of offloaded PDN decreased to %d\n", num_offloaded_pdns);
+					}
 				}
 				else
 				{
@@ -2589,7 +2637,9 @@ int IPACM_Wan::handle_vlan_backhaul_switch_v4(ipacm_event_route_vlan *data)
 						 vlan_info->v6_idx[Q6_WAN], modem_ipv4_pdn_index);
 				goto fail;
 			}
-			else if(vlan_info->v4_idx[Q6_WAN] == -1 && vlan_info->v6_idx[Q6_WAN] == -1)
+			else if(vlan_info->v4_idx[Q6_WAN] == -1 && vlan_info->v6_idx[Q6_WAN] == -1 &&
+				((modem_ipv4_pdn_index >= 0) && ipv4_to_iface[modem_ipv4_pdn_index].wan_up_vlan == false) &&
+				(modem_ipv6_pdn_index == -1 || ((modem_ipv6_pdn_index >= 0) && ipv6_to_iface[modem_ipv6_pdn_index].wan_up_vlan_v6 == false)))
 			{
 				if(num_offloaded_pdns >= IPA_MAX_NUM_HW_PDNS)
 				{

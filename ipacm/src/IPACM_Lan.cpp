@@ -2536,6 +2536,11 @@ int IPACM_Lan::handle_eth_client_mac_flt_route_rule(ipa_ip_type ip_type, int clt
 						}
 					}
 #endif
+					memset(&data, 0, sizeof(data));
+					data.ipv4_addr = get_client_memptr(eth_client, clt_index)->v4_addr,
+					data.if_index =  get_client_memptr(eth_client, clt_index)->if_index;
+					data.iptype = IPA_IP_v4;
+					CtList->HandleNeighIpAddrAddEvt(&data);
 				}
 				else
 #endif //IPA_HW_FNR_STATS
@@ -2545,6 +2550,11 @@ int IPACM_Lan::handle_eth_client_mac_flt_route_rule(ipa_ip_type ip_type, int clt
 						IPACMERR("unable to add v4 route rules for index: %d\n", clt_index);
 						return IPACM_FAILURE;
 					}
+					memset(&data, 0, sizeof(data));
+					data.ipv4_addr = get_client_memptr(eth_client, clt_index)->v4_addr,
+					data.if_index =  get_client_memptr(eth_client, clt_index)->if_index;
+					data.iptype = IPA_IP_v4;
+					CtList->HandleNeighIpAddrAddEvt(&data);
 				}
 			}
 #endif
@@ -2571,6 +2581,18 @@ int IPACM_Lan::handle_eth_client_mac_flt_route_rule(ipa_ip_type ip_type, int clt
 							IPA_IP_v6, 0, 0, 0, 0, temp_ipv6);
 					}
 				}
+				for (auto it = rt_hdl_v6_list[clt_index].begin(); it != rt_hdl_v6_list[clt_index].end(); ++it)
+				{
+					memset(&data, 0, sizeof(data));
+					std::copy(std::begin(it->first), std::end(it->first), std::begin(data.ipv6_addr));
+					data.if_index =  get_client_memptr(eth_client, clt_index)->if_index;
+					data.iptype = IPA_IP_v6;
+					if(IPACM_Iface::ipacmcfg->ipacm_mpdn_enable)
+					{
+						CtList->HandleNeighIpAddrAddEvt_v6(&data);
+					}
+				}
+
 #endif
 			}
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
@@ -2600,6 +2622,17 @@ int IPACM_Lan::handle_eth_client_mac_flt_route_rule(ipa_ip_type ip_type, int clt
 						}
 					}
 #endif
+					for (auto it = rt_hdl_v6_list[clt_index].begin(); it != rt_hdl_v6_list[clt_index].end(); ++it)
+					{
+						memset(&data, 0, sizeof(data));
+						std::copy(std::begin(it->first), std::end(it->first), std::begin(data.ipv6_addr));
+						data.if_index =  get_client_memptr(eth_client, clt_index)->if_index;
+						data.iptype = IPA_IP_v6;
+						if(IPACM_Iface::ipacmcfg->ipacm_mpdn_enable)
+						{
+							CtList->HandleNeighIpAddrAddEvt_v6(&data);
+						}
+					}
 				}
 				else
 #endif //IPA_HW_FNR_STATS
@@ -2608,6 +2641,17 @@ int IPACM_Lan::handle_eth_client_mac_flt_route_rule(ipa_ip_type ip_type, int clt
 					{
 						IPACMERR("unbale to add v4 route rules for index: %d\n", clt_index);
 						return IPACM_FAILURE;
+					}
+					for (auto it = rt_hdl_v6_list[clt_index].begin(); it != rt_hdl_v6_list[clt_index].end(); ++it)
+					{
+						memset(&data, 0, sizeof(data));
+						std::copy(std::begin(it->first), std::end(it->first), std::begin(data.ipv6_addr));
+						data.if_index =  get_client_memptr(eth_client, clt_index)->if_index;
+						data.iptype = IPA_IP_v6;
+						if(IPACM_Iface::ipacmcfg->ipacm_mpdn_enable)
+						{
+							CtList->HandleNeighIpAddrAddEvt_v6(&data);
+						}
 					}
 				}
 			}

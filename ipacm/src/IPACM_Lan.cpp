@@ -2508,7 +2508,7 @@ int IPACM_Lan::handle_vlan_neighbor(ipacm_event_data_all *data)
 					break;
 				}
 			}
-			if(!skip_nat_set)
+			if(!skip_nat_set && bridge->bridge_netmask != 0 && bridge->bridge_ipv4_addr != 0)
 			{
 				add_vlan_private_subnet(bridge);
 			}

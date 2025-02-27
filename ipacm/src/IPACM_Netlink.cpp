@@ -1703,7 +1703,19 @@ static int ipa_nl_decode_nlmsg
 				IPACMDBG_H("RTM_NEWNEIGH received with NOARP. Ignoring\n");
 				return IPACM_SUCCESS;;
 			}
-
+			if((msg_ptr->nl_neigh_info.attr_info.lladdr_hwaddr.sa_data[0] == 0x33) &&
+				(msg_ptr->nl_neigh_info.attr_info.lladdr_hwaddr.sa_data[1] == 0x33))
+			{
+				IPACMDBG_H("RTM_NEWNEIGH received with ipv6 brodcast mac address. So Ignoring\n");
+				return IPACM_SUCCESS;;
+			}
+        		if((msg_ptr->nl_neigh_info.attr_info.lladdr_hwaddr.sa_data[0] == 0x01) &&
+                           (msg_ptr->nl_neigh_info.attr_info.lladdr_hwaddr.sa_data[1] == 0x00) &&
+				(msg_ptr->nl_neigh_info.attr_info.lladdr_hwaddr.sa_data[2] == 0x5e))
+			{
+				IPACMDBG_H("RTM_NEWNEIGH received with ipv4 brodcast mac address. So Ignoring\n");
+				return IPACM_SUCCESS;;
+			}
 			if((msg_ptr->nl_neigh_info.metainfo.ndm_ifindex != 0) && (msg_ptr->nl_neigh_info.master_interface_index == 0) &&
 								(msg_ptr->nl_neigh_info.attr_info.local_addr.ss_family != 0))
 			{
@@ -1837,6 +1849,19 @@ static int ipa_nl_decode_nlmsg
 			{
 			  IPACMDBG_H("RTM_DELNEIGH received with NULL MAC\n");
 			  return IPACM_SUCCESS;
+			}
+			if((msg_ptr->nl_neigh_info.attr_info.lladdr_hwaddr.sa_data[0] == 0x33) &&
+				(msg_ptr->nl_neigh_info.attr_info.lladdr_hwaddr.sa_data[1] == 0x33))
+			{
+				IPACMDBG_H("RTM_DELNEIGH received with ipv6 brodcast mac address. So Ignoring\n");
+				return IPACM_SUCCESS;;
+			}
+        		if((msg_ptr->nl_neigh_info.attr_info.lladdr_hwaddr.sa_data[0] == 0x01) &&
+                           (msg_ptr->nl_neigh_info.attr_info.lladdr_hwaddr.sa_data[1] == 0x00) &&
+				(msg_ptr->nl_neigh_info.attr_info.lladdr_hwaddr.sa_data[2] == 0x5e))
+			{
+				IPACMDBG_H("RTM_DELNEIGH received with ipv4 brodcast mac address. So Ignoring\n");
+				return IPACM_SUCCESS;;
 			}
 
 			/* insert to command queue */

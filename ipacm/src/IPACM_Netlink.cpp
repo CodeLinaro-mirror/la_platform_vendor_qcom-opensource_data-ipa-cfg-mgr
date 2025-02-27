@@ -1445,6 +1445,20 @@ static int ipa_nl_decode_nlmsg
 				IPACMDBG("\n GOT RTM_NEWNEIGH event (%s) ip %d\n",dev_name,msg_ptr->nl_neigh_info.attr_info.local_addr.ss_family);
 			}
 
+			if((msg_ptr->nl_neigh_info.attr_info.lladdr_hwaddr.sa_data[0] == 0x33) &&
+				(msg_ptr->nl_neigh_info.attr_info.lladdr_hwaddr.sa_data[1] == 0x33))
+			{
+				IPACMDBG_H("RTM_NEWNEIGH received with ipv6 brodcast mac address. So Ignoring\n");
+				return IPACM_SUCCESS;;
+			}
+        		if((msg_ptr->nl_neigh_info.attr_info.lladdr_hwaddr.sa_data[0] == 0x01) &&
+                           (msg_ptr->nl_neigh_info.attr_info.lladdr_hwaddr.sa_data[1] == 0x00) &&
+				(msg_ptr->nl_neigh_info.attr_info.lladdr_hwaddr.sa_data[2] == 0x5e))
+			{
+				IPACMDBG_H("RTM_NEWNEIGH received with ipv4 brodcast mac address. So Ignoring\n");
+				return IPACM_SUCCESS;;
+			}
+
 			// This check is to  prevent handling of netlink messages with NULL MAC addr
 			if(!(memcmp(msg_ptr->nl_neigh_info.attr_info.lladdr_hwaddr.sa_data,
 						nullMac,sizeof(nullMac))))
@@ -1578,6 +1592,19 @@ static int ipa_nl_decode_nlmsg
 			{
 			  IPACMDBG_H("RTM_DELNEIGH received with NULL MAC\n");
 			  goto next_msg;
+			}
+			if((msg_ptr->nl_neigh_info.attr_info.lladdr_hwaddr.sa_data[0] == 0x33) &&
+				(msg_ptr->nl_neigh_info.attr_info.lladdr_hwaddr.sa_data[1] == 0x33))
+			{
+				IPACMDBG_H("RTM_DELNEIGH received with ipv6 brodcast mac address. So Ignoring\n");
+				return IPACM_SUCCESS;;
+			}
+        		if((msg_ptr->nl_neigh_info.attr_info.lladdr_hwaddr.sa_data[0] == 0x01) &&
+                           (msg_ptr->nl_neigh_info.attr_info.lladdr_hwaddr.sa_data[1] == 0x00) &&
+				(msg_ptr->nl_neigh_info.attr_info.lladdr_hwaddr.sa_data[2] == 0x5e))
+			{
+				IPACMDBG_H("RTM_DELNEIGH received with ipv4 brodcast mac address. So Ignoring\n");
+				return IPACM_SUCCESS;;
 			}
 
 			/* insert to command queue */
@@ -2367,5 +2394,3 @@ int mask_v6(int index, uint32_t *mask)
 
 	}
 }
-
-

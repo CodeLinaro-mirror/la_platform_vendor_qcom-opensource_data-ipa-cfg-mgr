@@ -121,6 +121,7 @@ const char *ipacm_event_name[] = {
 	__stringify(IPA_LAN_CLIENT_DISCONNECT_EVENT),          /* ipacm_event_data_mac */
 	__stringify(IPA_LAN_CLIENT_UPDATE_EVENT),              /* ipacm_event_data_mac */
 #endif
+	__stringify(IPA_WAN_GW_ADDR_ADD_EVENT),                /* ipacm_event_data_addr */
 	__stringify(IPA_EXTERNAL_EVENT_MAX),
 	__stringify(IPA_HANDLE_WAN_UP),                        /* ipacm_event_iface_up  */
 	__stringify(IPA_HANDLE_WAN_DOWN),                      /* ipacm_event_iface_up  */
@@ -171,7 +172,6 @@ const char *ipacm_event_name[] = {
 	__stringify(IPA_ADD_BRIDGE_VLAN_BR_INTF),              /* Handle vlan-bridge details add for bridge interface. */
 	__stringify(IPA_HANDLE_MACSEC_ADD),                    /* ipa_macsec_map. */
 	__stringify(IPA_HANDLE_MACSEC_DEL),                    /* ipa_macsec_map. */
-	__stringify(IPA_WAN_GW_ADDR_ADD_EVENT),                /* ipacm_event_data_addr */
 	__stringify(IPA_CLEAN_NEIGHBOR_CACHE),                 /* ipacm_event_data_all */
 	__stringify(IPA_LAN_CLIENT_ADD_EVENT),                 /* ipa lan2lan offload for static ip */
 	__stringify(IPA_LAN_CLIENT_DEL_EVENT),                 /* ipa lan2lan offload for static ip */

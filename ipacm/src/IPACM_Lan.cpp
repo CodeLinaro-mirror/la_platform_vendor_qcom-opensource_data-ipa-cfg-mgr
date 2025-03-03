@@ -2415,6 +2415,7 @@ int IPACM_Lan::handle_vlan_neighbor(ipacm_event_data_all *data)
        int retval;
 #endif
        int skip_nat_set = 0;
+       ipacm_bridge *bridge;
 
 	IPACMDBG_H("\n");
 	memset(&data_all, 0, sizeof(ipacm_event_data_all));
@@ -2444,9 +2445,10 @@ int IPACM_Lan::handle_vlan_neighbor(ipacm_event_data_all *data)
 	data->vlanID = vlan_id;
 	data_vlan = (ipacm_event_new_neigh_vlan *)data;
 
-	if(!data_vlan->bridge && data_vlan->data_all.iptype == IPA_IP_v4)
+	bridge = IPACM_Iface::ipacmcfg->get_vlan_bridge_from_vid(vlan_id);
+	if(!bridge && data_vlan->data_all.iptype == IPA_IP_v4)
 	{
-		IPACMDBG_H("non bridged VLAN interface for v4 %s, ignoring\n", data->iface_name);
+		IPACMDBG_H("bridge is NULL with vlan (%s) vid (%d), ignoring!\n", data->iface_name, vlan_id);
 		return IPACM_FAILURE;
 	}
 
@@ -2487,7 +2489,7 @@ int IPACM_Lan::handle_vlan_neighbor(ipacm_event_data_all *data)
 			}
 			if(!skip_nat_set)
 			{
-				add_vlan_private_subnet(data_vlan->bridge);
+				add_vlan_private_subnet(bridge);
 			}
 		}
 #ifdef IPA_L2TP_TUNNEL_UDP
@@ -2501,7 +2503,7 @@ int IPACM_Lan::handle_vlan_neighbor(ipacm_event_data_all *data)
 			}
 			else
 			{
-				handle_eth_hdr_init(data->mac_addr, data_vlan->bridge, vlan_id, true);
+				handle_eth_hdr_init(data->mac_addr, bridge, vlan_id, true);
 			}
 		}
 #else
@@ -2513,7 +2515,7 @@ int IPACM_Lan::handle_vlan_neighbor(ipacm_event_data_all *data)
 		}
 		else
 		{
-			handle_eth_hdr_init(data->mac_addr, data_vlan->bridge, vlan_id, true, priority);
+			handle_eth_hdr_init(data->mac_addr, bridge, vlan_id, true, priority);
 		}
 #endif
 	}

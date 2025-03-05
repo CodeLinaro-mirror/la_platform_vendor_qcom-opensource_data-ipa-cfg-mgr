@@ -8215,8 +8215,8 @@ int IPACM_Lan::handle_qos_route_rule(uint8_t *client_mac, uint16_t client_vlan_i
 			IPACMDBG_H("Qos params, sport_start %d sport_end %d dport_start %d, dport_end %d, \n",
 					 qos_param->ip_tup.sport_start, qos_param->ip_tup.sport_end, qos_param->ip_tup.dport_start, qos_param->ip_tup.dport_end);
 
-			IPACMDBG_H("Qos params, protocol %d, src_ip_addr 0x%x, dst_ip_addr 0x%x \n",
-					 qos_param->ip_tup.protocol, qos_param->ip_tup.src_ip_addr, qos_param->ip_tup.dst_ip_addr);
+			IPACMDBG_H("Qos params, protocol %d, src_ip_addr 0x%x, dst_ip_addr 0x%x, dscp %d \n",
+					 qos_param->ip_tup.protocol, qos_param->ip_tup.src_ip_addr, qos_param->ip_tup.dst_ip_addr, qos_param->dscp);
 			IPACMERR("Qos params, src ipv6 addr: 0x%x:%x:%x:%x, dst ipv6 addr:0x%x:%x:%x:%x\n",
 				qos_param->ip_tup.src_v6_ip_addr[0],
 				qos_param->ip_tup.src_v6_ip_addr[1],
@@ -8326,9 +8326,9 @@ int IPACM_Lan::handle_qos_route_rule(uint8_t *client_mac, uint16_t client_vlan_i
 
 				if (qos_param->dscp)
 				{
-					rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_TOS;
-					rt_rule_entry->rule.attrib.tos_value = qos_param->dscp;
-					rt_rule_entry->rule.attrib.tos_mask = 0xFF;
+					rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_TOS_MASKED;
+					rt_rule_entry->rule.attrib.tos_value = qos_param->dscp << 2;
+					rt_rule_entry->rule.attrib.tos_mask = 0xFC;
 				}
 
 				if (qos_param->pcp)
@@ -8535,9 +8535,9 @@ int IPACM_Lan::handle_qos_route_rule(uint8_t *client_mac, uint16_t client_vlan_i
 
 					if (qos_param->dscp)
 					{
-						rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_TOS;
-						rt_rule_entry->rule.attrib.tos_value = qos_param->dscp;
-						rt_rule_entry->rule.attrib.tos_mask = 0xFF;
+						rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_TOS_MASKED;
+						rt_rule_entry->rule.attrib.tos_value = qos_param->dscp << 2;
+						rt_rule_entry->rule.attrib.tos_mask = 0xFC;
 					}
 
 					if (qos_param->pcp)
@@ -8741,8 +8741,8 @@ int IPACM_Lan::handle_qos_route_rule_ext_v2(uint8_t *client_mac,
 				qos_param->ip_tup.dport_end);
 
 			IPACMDBG_H("Qos params, protocol %d, src_ip_addr 0x%x, dst_ip_addr"
-				" 0x%x \n", qos_param->ip_tup.protocol,
-				qos_param->ip_tup.src_ip_addr, qos_param->ip_tup.dst_ip_addr);
+				" 0x%x , dscp %d\n", qos_param->ip_tup.protocol,
+				qos_param->ip_tup.src_ip_addr, qos_param->ip_tup.dst_ip_addr, qos_param->dscp);
 
 			IPACMERR("Qos params, src ipv6 addr: 0x%x:%x:%x:%x, dst ipv6 addr:0x%x:%x:%x:%x\n",
 				qos_param->ip_tup.src_v6_ip_addr[0],
@@ -8871,9 +8871,9 @@ int IPACM_Lan::handle_qos_route_rule_ext_v2(uint8_t *client_mac,
 
 				if (qos_param->dscp)
 				{
-					rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_TOS;
-					rt_rule_entry->rule.attrib.tos_value = qos_param->dscp;
-					rt_rule_entry->rule.attrib.tos_mask = 0xFF;
+					rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_TOS_MASKED;
+					rt_rule_entry->rule.attrib.tos_value = qos_param->dscp << 2;
+					rt_rule_entry->rule.attrib.tos_mask = 0xFC;
 				}
 
 				if (qos_param->pcp)
@@ -9088,9 +9088,9 @@ int IPACM_Lan::handle_qos_route_rule_ext_v2(uint8_t *client_mac,
 
 					if (qos_param->dscp)
 					{
-						rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_TOS;
-						rt_rule_entry->rule.attrib.tos_value = qos_param->dscp;
-						rt_rule_entry->rule.attrib.tos_mask = 0xFF;
+						rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_TOS_MASKED;
+						rt_rule_entry->rule.attrib.tos_value = qos_param->dscp << 2;
+						rt_rule_entry->rule.attrib.tos_mask = 0xFC;
 					}
 
 					if (qos_param->pcp)

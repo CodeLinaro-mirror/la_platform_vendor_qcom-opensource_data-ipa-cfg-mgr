@@ -3529,10 +3529,13 @@ bool IPACM_Config::client_in_stats_cache(uint8_t *mac_addr)
 	memcpy(mac_a,mac_addr,IPA_MAC_ADDR_SIZE);
 	std::copy(std::begin(mac_a), std::end(mac_a), std::begin(mac));
 
+	/* In case of pipe disconnect and connect, we need to read this cache again.
+	   Since qcmap add this mac info only once, we should not delete it here.
+	   This info should be deleted only when explicitly called using
+	   IPA_PER_CLIENT_STATS_DISCONNECT_EVENT */
 	if (mac_addrs_stats_cache.count(mac))
 	{
 		is_enable = true;
-		mac_addrs_stats_cache.erase(mac);
 	}
 	else
 	{

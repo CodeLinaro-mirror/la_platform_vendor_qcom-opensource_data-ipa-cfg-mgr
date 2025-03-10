@@ -244,6 +244,7 @@ typedef enum
 	IPA_LAN_CLIENT_DISCONNECT_EVENT,          /* ipacm_event_data_mac */
 	IPA_LAN_CLIENT_UPDATE_EVENT,              /* ipacm_event_data_mac */
 #endif
+	IPA_WAN_GW_ADDR_ADD_EVENT,                /* ipacm_event_data_addr */
 	IPA_EXTERNAL_EVENT_MAX,
 
 	IPA_HANDLE_WAN_UP,                        /* ipacm_event_iface_up  */
@@ -295,7 +296,6 @@ typedef enum
 	IPA_ADD_BRIDGE_VLAN_BR_INTF,
 	IPA_HANDLE_MACSEC_ADD,                    /* ipa_macsec_map */
 	IPA_HANDLE_MACSEC_DEL,                    /* ipa_macsec_map */
-	IPA_WAN_GW_ADDR_ADD_EVENT,                /* ipacm_event_data_addr */
 	IPA_CLEAN_NEIGHBOR_CACHE,                 /* ipacm_event_data_all */
 	IPA_LAN_CLIENT_ADD_EVENT,                 /* Add MAC based rule for lan2lan offload with static-ip */
 	IPA_LAN_CLIENT_DEL_EVENT,                 /* Del MAC based rule for lan2lan offload with static-ip */

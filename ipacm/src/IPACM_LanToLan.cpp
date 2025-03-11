@@ -28,7 +28,7 @@ IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 Changes from Qualcomm Innovation Center, Inc. are provided under the following license:
 
-Copyright (c) 2022,2024 Qualcomm Innovation Center, Inc. All rights reserved.
+Copyright (c) 2022-2025 Qualcomm Innovation Center, Inc. All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted (subject to the limitations in the
@@ -1209,13 +1209,12 @@ void IPACM_LanToLan_Iface::add_client_rt_rule(peer_iface_info *peer_info, client
 {
 	int i, num_rt_rule = 0;
 	uint32_t rt_rule_hdl[MAX_NUM_PROP];
-	ipa_hdr_l2_type peer_l2_hdr_type,other_iface_peer_l2_hdr_type;
+	ipa_hdr_l2_type peer_l2_hdr_type;
 	list<peer_iface_info>::iterator itr;
 #ifdef FEATURE_VLAN_MPDN
 	std::array<uint8_t, 6> mac = {0};
 	std::map<std::array<uint8_t, 6>, int >::iterator it;
 #endif
-	bool mac_found = 0;
 
 	if (peer_info->peer->m_is_svap_iface) {
 		peer_l2_hdr_type = peer_info->peer->get_iface_pointer()->tx_prop->tx[2].hdr_l2_type;
@@ -1238,32 +1237,6 @@ void IPACM_LanToLan_Iface::add_client_rt_rule(peer_iface_info *peer_info, client
 			/* check if peer already has rt rule for this mac address */
 			it = peer_info->mac_rt_rule_ref.find(mac);
 			if(it != peer_info->mac_rt_rule_ref.end())
-			{
-				IPACMDBG_H("return mac ref found on self\n");
-				return;
-			}
-
-			IPACMDBG_H("peer_l2_hdr_type %d\n",peer_l2_hdr_type);
-			for (itr = m_peer_iface_info.begin();
-				itr != m_peer_iface_info.end(); itr++)
-			{
-				if (itr->peer->m_is_svap_iface) {
-					other_iface_peer_l2_hdr_type = itr->peer->get_iface_pointer()->tx_prop->tx[2].hdr_l2_type;
-				}
-				else {
-					other_iface_peer_l2_hdr_type = itr->peer->get_iface_pointer()->tx_prop->tx[0].hdr_l2_type;
-				}
-				IPACMDBG_H("peer_l2_hdr_type %d other_iface_peer_l2_hdr_type %d\n",peer_l2_hdr_type,other_iface_peer_l2_hdr_type);
-				it = (*itr).mac_rt_rule_ref.find(mac);
-				if(it != (*itr).mac_rt_rule_ref.end() && peer_l2_hdr_type == other_iface_peer_l2_hdr_type)
-				{
-					mac_found = 1;
-					break;
-				}
-			}
-
-			/* Only special interface can have same mac address twice, one for eth_to_eth and other for 802_to_eth */
-			if(mac_found == 1)
 			{
 				/* mac address already has rt rules, increase ref cnt and copy rt rules handles for future deletion*/
 				(it->second)++;
@@ -1313,7 +1286,6 @@ void IPACM_LanToLan_Iface::add_client_rt_rule(peer_iface_info *peer_info, client
 
 		if (is_svap_iface() || is_ap_iface_vlan_enabled()) {
 			IPACMDBG_H("Perform delayed add_hdr_proc_ctx for svap/vlan-wlan clients \n");
-			increment_ref_cnt_peer_l2_hdr_type(peer_l2_hdr_type);
 			add_hdr_proc_ctx_vlan(peer_l2_hdr_type, client->vlan_id);
 		}
 
@@ -1978,7 +1950,6 @@ void IPACM_LanToLan_Iface::del_client_rt_rule(peer_iface_info *peer, client_info
 
 			if (is_svap_iface() || is_ap_iface_vlan_enabled()) {
 				IPACMDBG_H("Perform del_hdr_proc_ctx_vlan for svap\vlan-wlan clients \n");
-				decrement_ref_cnt_peer_l2_hdr_type(peer_l2_hdr_type);
 				del_hdr_proc_ctx_vlan(peer_l2_hdr_type, client->vlan_id);
 			}
 #ifdef FEATURE_L2TP
@@ -2035,10 +2006,22 @@ void IPACM_LanToLan_Iface::handle_down_event()
 {
 	list<peer_iface_info>::iterator it_own_peer_info, it_other_iface_peer_info, it_other_mac_iface;
 	IPACM_LanToLan_Iface *other_iface;
-	ipa_hdr_l2_type iface_l2_hdr_type, peer_l2_hdr_type;
+	ipa_hdr_l2_type iface_l2_hdr_type, peer_l2_hdr_type, own_hdr_type, it_other_iface_peer_hdr_type;
 	memset(&iface_l2_hdr_type,0,sizeof(iface_l2_hdr_type));
 	memset(&peer_l2_hdr_type,0,sizeof(peer_l2_hdr_type));
+	memset(&own_hdr_type,0,sizeof(own_hdr_type));
+	memset(&it_other_iface_peer_hdr_type,0,sizeof(it_other_iface_peer_hdr_type));
+
 	/* clear inter-interface rules */
+	if (is_svap_iface() || is_ap_iface_vlan_enabled())
+	{
+		own_hdr_type = this->get_iface_pointer()->tx_prop->tx[2].hdr_l2_type;
+	}
+	else
+	{
+		own_hdr_type = this->get_iface_pointer()->tx_prop->tx[0].hdr_l2_type;
+	}
+
 	if(m_support_inter_iface_offload)
 	{
 		for(it_own_peer_info = m_peer_iface_info.begin();
@@ -2148,18 +2131,37 @@ void IPACM_LanToLan_Iface::handle_down_event()
 								else
 									flag = true;
 
+								if (it_other_mac_iface->peer->is_svap_iface() || it_other_mac_iface->peer->is_ap_iface_vlan_enabled())
+								{
+									it_other_iface_peer_hdr_type = it_other_mac_iface->peer->get_iface_pointer()->tx_prop->tx[2].hdr_l2_type;
+								}
+								else
+								{
+									it_other_iface_peer_hdr_type = it_other_mac_iface->peer->get_iface_pointer()->tx_prop->tx[0].hdr_l2_type;
+								}
+								if ((it_other_iface_peer_hdr_type >= IPA_HDR_L2_MAX) || (it_other_iface_peer_hdr_type < 0))
+								{
+									IPACMDBG_H("Invalid peer_l2_hdr_type: %d\n", it_other_iface_peer_hdr_type);
+									return;
+								}
+
+								if (it_other_iface_peer_hdr_type != own_hdr_type)
+								{
+									IPACMDBG_H("l2 header mismatch\n");
+									continue;
+								}
+
 								if(it_other_mac_iface->peer != this &&
 									it_other_mac_iface->mac_rt_rule_ref.empty() && flag)
 								{
 									IPACMDBG_H("mac list is not empty copying the mac for iface name %s\n",
 										it_other_mac_iface->peer->get_iface_pointer()->dev_name);
 									it_other_mac_iface->mac_rt_rule_ref.insert(std::make_pair(mac, (it->second)));
+									break;
 								}
-
 							}
 						}
 					}
-
 					other_iface->clear_all_flt_rule_for_one_peer_iface(&(*it_other_iface_peer_info));
 					other_iface->clear_all_rt_rule_for_one_peer_iface(&(*it_other_iface_peer_info));
 					/* remove the peer info from the list */
@@ -2522,8 +2524,8 @@ void IPACM_LanToLan_Iface::handle_new_iface_up(char rt_tbl_name_for_flt[][IPA_RE
 	}
 
 	/* Skip adding hdr proc ctx for svap iface, will be performed during client add */
-	if (!is_svap_iface() || !is_ap_iface_vlan_enabled()) {
-		increment_ref_cnt_peer_l2_hdr_type(peer_l2_hdr_type);
+	increment_ref_cnt_peer_l2_hdr_type(peer_l2_hdr_type);
+	if (!is_svap_iface() && !is_ap_iface_vlan_enabled()) {
 		add_hdr_proc_ctx(peer_l2_hdr_type);
 	}
 
@@ -2663,7 +2665,7 @@ list<client_info>::iterator IPACM_LanToLan_Iface::handle_client_del(uint8_t *mac
 	ipa_hdr_l2_type l2_hdr_type;
 
 #ifdef FEATURE_VLAN_MPDN
-	if((vlan_id && !m_is_vlan) || (!vlan_id && m_is_vlan))
+	if(((vlan_id && !m_is_vlan) || (!vlan_id && m_is_vlan)) && !m_is_svap_iface)
 	{
 		IPACMDBG_H("vlan client (%d) and vlan mode(%d) mismatch, return\n", vlan_id, m_is_vlan);
 		return m_client_info.end();

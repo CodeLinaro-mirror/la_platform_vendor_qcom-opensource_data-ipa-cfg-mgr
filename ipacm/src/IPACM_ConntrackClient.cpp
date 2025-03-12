@@ -106,9 +106,6 @@ int IPACM_ConntrackClient::IPAConntrackEventCB
 	uint16_t sport = 0;
 	uint16_t dport = 0;
 	IPACM_Config *config_instance = NULL;
-	uint16_t sport = 0;
-	uint16_t dport = 0;
-	IPACM_Config *config_instance = NULL;
 	u_int8_t  protocol, tcp_state;
 	protocol = nfct_get_attr_u8(ct, ATTR_REPL_L4PROTO);
 	if((protocol == IPPROTO_TCP))

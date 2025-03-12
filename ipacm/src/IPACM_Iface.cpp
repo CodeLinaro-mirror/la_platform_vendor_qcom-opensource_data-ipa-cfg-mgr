@@ -78,6 +78,7 @@ IPACM_Iface::IPACM_Iface(char *iface_name, int iface_index, bool ppp_iface)
 	iface_query = NULL;
 	tx_prop = NULL;
 	rx_prop = NULL;
+	is_ppp_iface = false;
 
 	if((iface_name != NULL) && (strstr(iface_name, "wlan")))
 	{
@@ -119,8 +120,9 @@ IPACM_Iface::IPACM_Iface(char *iface_name, int iface_index, bool ppp_iface)
 			sizeof(IPACM_Iface::ipacmcfg->iface_table[iface_index].phy_dev_name));
 	}
 
-	IPACMDBG_H("dev_name: %s virtual_iface: %s phy_dev_name: %s \n",
-		   dev_name, (virtual_iface) ? "true" : "false", phy_dev_name);
+	IPACMDBG_H("dev_name: %s virtual_iface: %s phy_dev_name: %s is_ppp_iface: %d\n",
+		   dev_name, (virtual_iface) ? "true" : "false", phy_dev_name,
+		   is_ppp_iface);
 
 	memset(dft_v4fl_rule_hdl, 0, sizeof(dft_v4fl_rule_hdl));
 	memset(dft_v6fl_rule_hdl, 0, sizeof(dft_v6fl_rule_hdl));

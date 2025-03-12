@@ -994,6 +994,19 @@ static int ipacm_cfg_xml_parse_tree
 							config->ipacm_socksv5_enable = atoi(content);
 						}
 				}
+				else if (0 == IPACM_util_icmp_string((char*)xml_node->name, IPACMFILEQUOTA_TAG))
+				{
+					IPACMDBG_H("inside ipacm_logging Quota\n");
+					content = IPACM_read_content_element(xml_node);
+					if (content!= NULL)
+					{
+						if(atoi(content)!=0)
+						{
+							config->max_file_size_quota = atoi(content);
+						}
+						IPACMDBG_H("max_fileszQuota %d \n",config->max_file_size_quota);
+					}
+				}
 				else if (0 == IPACM_util_icmp_string((char*)xml_node->name, IPACMFILEVAR_TAG))
 				{		IPACMDBG_H("inside ipacm_logging \n");
 						content = IPACM_read_content_element(xml_node);

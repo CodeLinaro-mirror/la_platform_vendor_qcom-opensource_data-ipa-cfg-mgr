@@ -58,6 +58,11 @@ extern "C"
 	( strcasesame(mem_type, "HYBRID" ) || \
 	  strcasesame(mem_type, "SRAM" ) )
 
+#define CT_SRAM_IN_USE() \
+	( strcasesame(ct_mem_type, "HYBRID" ) || \
+	  strcasesame(ct_mem_type, "SRAM" ) )
+
+
 /* NatApp class Implementation */
 NatApp *NatApp::pInstance = NULL;
 
@@ -3299,6 +3304,21 @@ void NatBase::UpdateTcpUdpTimeStamps(bool& isTcpUdpTimeoutUpToDate)
 	IPACMDBG_H("\n");
 	int ret;
 	uint32_t timestamp;
+	bool keep_awake;
+
+	keep_awake = ( m_maxEntries && CT_SRAM_IN_USE() && ipa_ct_is_sram_supported() );
+
+	if ( keep_awake )
+	{
+		IPACMDBG("Voting clock on\n");
+
+		if ( ipa_nat_vote_clock(IPA_APP_CLK_VOTE) != 0 )
+		{
+			IPACMERR("Voting clock on failed\n");
+			return;
+		}
+	}
+
 
 	for (int cnt = 0; cnt < m_maxEntries; ++cnt)
 	{
@@ -3336,6 +3356,17 @@ void NatBase::UpdateTcpUdpTimeStamps(bool& isTcpUdpTimeoutUpToDate)
 		curr.m_timestamp = timestamp;
 		IPACMDBG("Updated time stamp successfully\n");
 	}
+
+	if ( keep_awake )
+	{
+		IPACMDBG("Voting clock off\n");
+
+		if ( ipa_nat_vote_clock(IPA_APP_CLK_DEVOTE) != 0 )
+		{
+			IPACMERR("Voting clock off failed\n");
+		}
+	}
+
 	IPACMDBG_H("return\n");
 }
 

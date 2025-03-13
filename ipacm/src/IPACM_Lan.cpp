@@ -120,7 +120,7 @@ ipa_lan_client_idx IPACM_Lan::inactive_lan_client_index_odu[IPA_MAX_NUM_HW_PATH_
 #define MAX_IPNS_ROW_LEN 200
 #define MAX_IPNS_PARAM_CNT 5
 #define MAX_IPNS_PARAM_LEN 50
-
+#define LAN2LAN_RULE_ID 1
 #define IPA_NS_TABLE IPA_TMP_DIR"/ipa_ns_table.txt"
 
 IPACM_Lan::IPACM_Lan(int iface_index) : IPACM_Iface(iface_index)
@@ -587,7 +587,7 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 				}
 			}
 #endif
-
+#ifdef FEATURE_ETH_BRIDGE_LE
 			if (rx_prop != NULL)
 			{
 				if(IPACM_Iface::ipacmcfg->GetIPAVer() >= IPA_HW_None &&
@@ -600,13 +600,10 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 						IPACM_Iface::ipacmcfg->DelRmDepend(IPACM_Iface::ipacmcfg->ipa_client_rm_map_tbl[rx_prop->rx[0].src_pipe]);
 					IPACMDBG_H("Finished delete dependency \n ");
 				}
-#ifndef FEATURE_ETH_BRIDGE_LE
+
 				free(rx_prop);
 				rx_prop = NULL;
-#endif
 			}
-
-#ifndef FEATURE_ETH_BRIDGE_LE
 			if (tx_prop != NULL)
 			{
 				free(tx_prop);
@@ -2091,12 +2088,37 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 					return;
 				}
 
+				// Delete respective header processing contexts
+				if (qos_param->qos_client_list[i].dscp_hpc_hdl_v4)
+				{
+					IPACMDBG_H("Deleting dscp v4 hpc 0x%x\n", qos_param->qos_client_list[i].dscp_hpc_hdl_v4);
+					if (m_header.DeleteHeaderProcCtx(qos_param->qos_client_list[i].dscp_hpc_hdl_v4)
+						== false)
+					{
+						IPACMERR("Failed to delete qos dscp hpc v4 hdl 0x%x\n",
+						qos_param->qos_client_list[i].dscp_hpc_hdl_v4);
+						return;
+					}
+				}
+
 				IPACMDBG_H("QOS is v6 set %d hdl %d\n",
 					qos_param->qos_client_list[i].route_rule_set_v6,
 					qos_param->qos_client_list[i].qos_rt_rule_hdl_v6);
 				if (qos_param->qos_client_list[i].route_rule_set_v6 &&
 					(m_routing.DeleteRoutingHdl(qos_param->qos_client_list[i].qos_rt_rule_hdl_v6, IPA_IP_v6) == false))
 					return;
+
+				if (qos_param->qos_client_list[i].dscp_hpc_hdl_v6)
+				{
+					IPACMDBG_H("Deleting dscp v6 hpc 0x%x\n", qos_param->qos_client_list[i].dscp_hpc_hdl_v6);
+					if (m_header.DeleteHeaderProcCtx(qos_param->qos_client_list[i].dscp_hpc_hdl_v6)
+						== false)
+					{
+						IPACMERR("Failed to delete qos dscp hpc v6 hdl 0x%x\n",
+						qos_param->qos_client_list[i].dscp_hpc_hdl_v6);
+						return;
+					}
+				}
 			}
 
 			break;
@@ -2495,6 +2517,11 @@ int IPACM_Lan::handle_eth_client_mac_flt_route_rule(ipa_ip_type ip_type, int clt
 						}
 					}
 #endif
+					memset(&data, 0, sizeof(data));
+					data.ipv4_addr = get_client_memptr(eth_client, clt_index)->v4_addr,
+					data.if_index =  get_client_memptr(eth_client, clt_index)->if_index;
+					data.iptype = IPA_IP_v4;
+					CtList->HandleNeighIpAddrAddEvt(&data);
 				}
 				else
 #endif //IPA_HW_FNR_STATS
@@ -2504,6 +2531,11 @@ int IPACM_Lan::handle_eth_client_mac_flt_route_rule(ipa_ip_type ip_type, int clt
 						IPACMERR("unable to add v4 route rules for index: %d\n", clt_index);
 						return IPACM_FAILURE;
 					}
+					memset(&data, 0, sizeof(data));
+					data.ipv4_addr = get_client_memptr(eth_client, clt_index)->v4_addr,
+					data.if_index =  get_client_memptr(eth_client, clt_index)->if_index;
+					data.iptype = IPA_IP_v4;
+					CtList->HandleNeighIpAddrAddEvt(&data);
 				}
 			}
 #endif
@@ -2530,6 +2562,18 @@ int IPACM_Lan::handle_eth_client_mac_flt_route_rule(ipa_ip_type ip_type, int clt
 							IPA_IP_v6, 0, 0, 0, 0, temp_ipv6);
 					}
 				}
+				for (auto it = rt_hdl_v6_list[clt_index].begin(); it != rt_hdl_v6_list[clt_index].end(); ++it)
+				{
+					memset(&data, 0, sizeof(data));
+					std::copy(std::begin(it->first), std::end(it->first), std::begin(data.ipv6_addr));
+					data.if_index =  get_client_memptr(eth_client, clt_index)->if_index;
+					data.iptype = IPA_IP_v6;
+					if(IPACM_Iface::ipacmcfg->ipacm_mpdn_enable)
+					{
+						CtList->HandleNeighIpAddrAddEvt_v6(&data);
+					}
+				}
+
 #endif
 			}
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
@@ -2559,6 +2603,17 @@ int IPACM_Lan::handle_eth_client_mac_flt_route_rule(ipa_ip_type ip_type, int clt
 						}
 					}
 #endif
+					for (auto it = rt_hdl_v6_list[clt_index].begin(); it != rt_hdl_v6_list[clt_index].end(); ++it)
+					{
+						memset(&data, 0, sizeof(data));
+						std::copy(std::begin(it->first), std::end(it->first), std::begin(data.ipv6_addr));
+						data.if_index =  get_client_memptr(eth_client, clt_index)->if_index;
+						data.iptype = IPA_IP_v6;
+						if(IPACM_Iface::ipacmcfg->ipacm_mpdn_enable)
+						{
+							CtList->HandleNeighIpAddrAddEvt_v6(&data);
+						}
+					}
 				}
 				else
 #endif //IPA_HW_FNR_STATS
@@ -2567,6 +2622,17 @@ int IPACM_Lan::handle_eth_client_mac_flt_route_rule(ipa_ip_type ip_type, int clt
 					{
 						IPACMERR("unbale to add v4 route rules for index: %d\n", clt_index);
 						return IPACM_FAILURE;
+					}
+					for (auto it = rt_hdl_v6_list[clt_index].begin(); it != rt_hdl_v6_list[clt_index].end(); ++it)
+					{
+						memset(&data, 0, sizeof(data));
+						std::copy(std::begin(it->first), std::end(it->first), std::begin(data.ipv6_addr));
+						data.if_index =  get_client_memptr(eth_client, clt_index)->if_index;
+						data.iptype = IPA_IP_v6;
+						if(IPACM_Iface::ipacmcfg->ipacm_mpdn_enable)
+						{
+							CtList->HandleNeighIpAddrAddEvt_v6(&data);
+						}
 					}
 				}
 			}
@@ -3710,7 +3776,7 @@ int IPACM_Lan::notify_flt_removed(uint8_t mux_id)
 	int j = 0;
 
 	fd = open(IPA_DEVICE_NAME, O_RDWR);
-	if(0 == fd)
+	if(fd < 0)
 	{
 		IPACMERR("Failed opening %s.\n", IPA_DEVICE_NAME);
 		return IPACM_FAILURE;
@@ -3719,6 +3785,7 @@ int IPACM_Lan::notify_flt_removed(uint8_t mux_id)
 	if (rx_prop == NULL)
 	{
 		IPACMERR("Rx prop is NULL, return\n");
+		close(fd);
 		return IPACM_SUCCESS;
 	}
 
@@ -4567,7 +4634,7 @@ int IPACM_Lan::handle_wan_up_ex(ipacm_ext_prop *ext_prop, ipa_ip_type iptype, ui
 	{
 		/* give mux ID of the default PDN to IPA-driver for WLAN/LAN pkts */
 		fd = open(IPA_DEVICE_NAME, O_RDWR);
-		if (0 == fd)
+		if (fd < 0)
 		{
 			IPACMDBG_H("Failed opening %s.\n", IPA_DEVICE_NAME);
 			return IPACM_FAILURE;
@@ -4804,6 +4871,8 @@ int IPACM_Lan::handle_eth_hdr_init(uint8_t *mac_addr, ipacm_bridge *bridge, uint
 
 	IPACMDBG_H("ETH client number: %d\n", num_eth_client);
 
+	memset(get_client_memptr(eth_client, num_eth_client), 0, sizeof(ipa_eth_client));
+
 	memcpy(get_client_memptr(eth_client, num_eth_client)->mac,
 				 mac_addr,
 				 sizeof(get_client_memptr(eth_client, num_eth_client)->mac));
@@ -4845,6 +4914,8 @@ int IPACM_Lan::handle_eth_hdr_init(uint8_t *mac_addr, ipacm_bridge *bridge, uint
 			if(isVlan && !bridge)
 			{
 				IPACMERR("vlan with NULL bridge\n");
+				free(hdr_proc_ctx_table);
+				hdr_proc_ctx_table = NULL;
 				return IPACM_FAILURE;
 			}
 #endif
@@ -4854,6 +4925,8 @@ int IPACM_Lan::handle_eth_hdr_init(uint8_t *mac_addr, ipacm_bridge *bridge, uint
 		pHeaderDescriptor = (struct ipa_ioc_add_hdr *)calloc(1, len);
 		if (pHeaderDescriptor == NULL)
 		{
+			free(hdr_proc_ctx_table);
+			hdr_proc_ctx_table = NULL;
 			IPACMERR("calloc failed to allocate pHeaderDescriptor\n");
 			return IPACM_FAILURE;
 		}
@@ -5458,9 +5531,13 @@ int IPACM_Lan::handle_eth_hdr_init(uint8_t *mac_addr, ipacm_bridge *bridge, uint
 	}
 	else
 	{
+		free(hdr_proc_ctx_table);
+		hdr_proc_ctx_table = NULL;
 		return res;
 	}
 fail:
+	free(hdr_proc_ctx_table);
+	hdr_proc_ctx_table = NULL;
 	free(pHeaderDescriptor);
 	return res;
 }
@@ -8284,6 +8361,7 @@ int IPACM_Lan::handle_qos_route_rule(uint8_t *client_mac, uint16_t client_vlan_i
 					hdr_proc_ctx_table = (ipa_ioc_add_hdr_proc_ctx *)malloc(size);
 					if (hdr_proc_ctx_table == NULL) {
 						IPACMERR("Failed to allocate memory for hdr_proc_ctx.\n");
+						free(rt_rule);
 						return IPACM_FAILURE;
 					}
 					memset(hdr_proc_ctx_table, 0, size);
@@ -8303,6 +8381,7 @@ int IPACM_Lan::handle_qos_route_rule(uint8_t *client_mac, uint16_t client_vlan_i
 						IPACMERR("ioctl IPA_IOC_ADD_HDR_PROC_CTX for dscp marking failed: %d\n",
 							hdr_proc_ctx_table->proc_ctx[0].status);
 						free(hdr_proc_ctx_table);
+						free(rt_rule);
 						return IPACM_FAILURE;
 					}
 				}
@@ -8335,6 +8414,7 @@ int IPACM_Lan::handle_qos_route_rule(uint8_t *client_mac, uint16_t client_vlan_i
 				new_client_info.qos_rt_rule_hdl_v4 = rt_rule->rules[0].rt_rule_hdl;
 				new_client_info.route_rule_set_v4 = true;
 				new_client_info.v4_ip_addr = rt_rule_entry->rule.attrib.u.v4.dst_addr;
+				new_client_info.dscp_hpc_hdl_v4 = rt_rule_entry->rule.hdr_proc_ctx_hdl;
 
 				memcpy(new_client_info.mac, get_client_memptr(eth_client, eth_index)->mac, IPA_MAC_ADDR_SIZE);
 
@@ -8362,8 +8442,6 @@ int IPACM_Lan::handle_qos_route_rule(uint8_t *client_mac, uint16_t client_vlan_i
 					memcpy(&rt_rule_entry->rule.attrib,
 						&tx_prop->tx[tx_index].attrib,
 						sizeof(rt_rule_entry->rule.attrib));
-					rt_rule_entry->rule.hdr_hdl =
-						get_client_memptr(eth_client, eth_index)->hdr_hdl_v6;
 
 					if ((ipv6_addr[0] || ipv6_addr[1] || ipv6_addr[2] ||
 						ipv6_addr[3]))
@@ -8489,6 +8567,47 @@ int IPACM_Lan::handle_qos_route_rule(uint8_t *client_mac, uint16_t client_vlan_i
 #ifdef FEATURE_IPA_V3
 					rt_rule_entry->rule.hashable = true;
 #endif
+					if (qos_param->dscp_mark_val)
+					{
+						int size = sizeof(ipa_ioc_add_hdr_proc_ctx) + sizeof(ipa_hdr_proc_ctx_add);
+						hdr_proc_ctx_table = (ipa_ioc_add_hdr_proc_ctx *)malloc(size);
+						if (hdr_proc_ctx_table == NULL) {
+							IPACMERR("Failed to allocate memory for hdr_proc_ctx.\n");
+							free(rt_rule);
+							return IPACM_FAILURE;
+						}
+						memset(hdr_proc_ctx_table, 0, size);
+						hdr_proc_ctx_table->commit = 1;
+						hdr_proc_ctx_table->num_proc_ctxs = 1;
+						hdr_proc_ctx = &hdr_proc_ctx_table->proc_ctx[0];
+						hdr_proc_ctx->type = IPA_HDR_PROC_MARK_DSCP;
+
+						hdr_proc_ctx->pdn_dscp_params.valid = 1;
+						hdr_proc_ctx->pdn_dscp_params.dscp_val = qos_param->dscp_mark_val;
+
+						hdr_proc_ctx->hdr_hdl = get_client_memptr(eth_client, eth_index)->hdr_hdl_v6;
+						IPACMDBG_H("hdr_proc_ctx->hdr_hdl v6 0x%x\n", hdr_proc_ctx->hdr_hdl);
+
+						if (m_header.AddHeaderProcCtx(hdr_proc_ctx_table) == false ||
+							hdr_proc_ctx_table->proc_ctx[0].status != 0) {
+							IPACMERR("ioctl IPA_IOC_ADD_HDR_PROC_CTX for v6 dscp marking failed: %d\n",
+								hdr_proc_ctx_table->proc_ctx[0].status);
+							free(hdr_proc_ctx_table);
+							free(rt_rule);
+							return IPACM_FAILURE;
+						}
+					}
+
+					if (qos_param->dscp_mark_val)
+					{
+						rt_rule_entry->rule.hdr_proc_ctx_hdl = hdr_proc_ctx_table->proc_ctx[0].proc_ctx_hdl;
+						IPACMDBG_H("rt->hdr_proc_ctx_hdl v6 0x%x\n", rt_rule_entry->rule.hdr_proc_ctx_hdl);
+					}
+					else
+					{
+						rt_rule_entry->rule.hdr_hdl = get_client_memptr(eth_client, eth_index)->hdr_hdl_v6;
+					}
+
 					if (false == m_routing.AddRoutingRule(rt_rule))
 					{
 						IPACMERR("Routing rule addition failed!\n");
@@ -8498,6 +8617,7 @@ int IPACM_Lan::handle_qos_route_rule(uint8_t *client_mac, uint16_t client_vlan_i
 
 					new_client_info.qos_rt_rule_hdl_v6 = rt_rule->rules[0].rt_rule_hdl;
 					new_client_info.route_rule_set_v6 = true;
+					new_client_info.dscp_hpc_hdl_v6 = rt_rule_entry->rule.hdr_proc_ctx_hdl;
 
 					new_client_info.v6_ip_addr[0] =
 						rt_rule_entry->rule.attrib.u.v6.dst_addr[0];
@@ -8541,6 +8661,8 @@ int IPACM_Lan::handle_qos_route_rule_ext_v2(uint8_t *client_mac,
 	uint8_t zero_mac_array[IPA_MAC_ADDR_SIZE] = { 0 };
 	int v6_num = 0;
 	uint64_t rules, size = 0;
+	struct ipa_ioc_add_hdr_proc_ctx *hdr_proc_ctx_table = NULL;
+	struct ipa_hdr_proc_ctx_add *hdr_proc_ctx = NULL;
 
 	if(tx_prop == NULL)
 	{
@@ -8778,14 +8900,52 @@ int IPACM_Lan::handle_qos_route_rule_ext_v2(uint8_t *client_mac,
 					IPACMERR("QOS param PCP no action from IPA \n");
 				}
 
+				if (qos_param->dscp_mark_val)
+				{
+					int size = sizeof(ipa_ioc_add_hdr_proc_ctx) + sizeof(ipa_hdr_proc_ctx_add);
+					hdr_proc_ctx_table = (ipa_ioc_add_hdr_proc_ctx *)malloc(size);
+					if (hdr_proc_ctx_table == NULL) {
+						IPACMERR("Failed to allocate memory for hdr_proc_ctx.\n");
+						free(rt_rule);
+						return IPACM_FAILURE;
+					}
+					memset(hdr_proc_ctx_table, 0, size);
+					hdr_proc_ctx_table->commit = 1;
+					hdr_proc_ctx_table->num_proc_ctxs = 1;
+					hdr_proc_ctx = &hdr_proc_ctx_table->proc_ctx[0];
+					hdr_proc_ctx->type = IPA_HDR_PROC_MARK_DSCP;
+
+					hdr_proc_ctx->pdn_dscp_params.valid = 1;
+					hdr_proc_ctx->pdn_dscp_params.dscp_val = qos_param->dscp_mark_val;
+
+					hdr_proc_ctx->hdr_hdl = get_client_memptr(eth_client, eth_index)->hdr_hdl_v4;
+					IPACMDBG_H("hdr_proc_ctx->hdr_hdl v4 0x%x\n", hdr_proc_ctx->hdr_hdl);
+
+					if (m_header.AddHeaderProcCtx(hdr_proc_ctx_table) == false ||
+						hdr_proc_ctx_table->proc_ctx[0].status != 0) {
+						IPACMERR("ioctl IPA_IOC_ADD_HDR_PROC_CTX for dscp marking failed: %d\n",
+							hdr_proc_ctx_table->proc_ctx[0].status);
+						free(hdr_proc_ctx_table);
+						free(rt_rule);
+						return IPACM_FAILURE;
+					}
+				}
+
+				if (qos_param->dscp_mark_val)
+				{
+					rt_rule_entry->rule.hdr_proc_ctx_hdl = hdr_proc_ctx_table->proc_ctx[0].proc_ctx_hdl;
+					IPACMDBG_H("rt->hdr_proc_ctx_hdl v4 0x%x\n", rt_rule_entry->rule.hdr_proc_ctx_hdl);
+				}
+				else
+				{
+					rt_rule_entry->rule.hdr_hdl = get_client_memptr(eth_client, eth_index)->hdr_hdl_v4;
+					IPACMDBG_H("rt->hdr_hdl v4 0x%x\n", rt_rule_entry->rule.hdr_hdl);
+				}
+
 				if (IPACM_Iface::ipacmcfg->GetIPAVer() >= IPA_HW_v4_0)
 				{
 					rt_rule_entry->rule.hashable = true;
 				}
-
-
-				rt_rule_entry->rule.hdr_hdl = get_client_memptr(eth_client, eth_index)->hdr_hdl_v4;
-				IPACMDBG_H("rt->hdr_hdl v4 0x%x\n", rt_rule_entry->rule.hdr_hdl);
 
 				if (false == m_routing.AddRoutingRuleExt_v2(rt_rule))
 				{
@@ -8800,6 +8960,7 @@ int IPACM_Lan::handle_qos_route_rule_ext_v2(uint8_t *client_mac,
 				new_client_info.qos_rt_rule_hdl_v4 = ((struct ipa_rt_rule_add_ext_v2 *)rt_rule->rules)[0].rt_rule_hdl;
 				new_client_info.route_rule_set_v4 = true;
 				new_client_info.v4_ip_addr = rt_rule_entry->rule.attrib.u.v4.dst_addr;
+				new_client_info.dscp_hpc_hdl_v4 = rt_rule_entry->rule.hdr_proc_ctx_hdl;
 
 				memcpy(new_client_info.mac,
 					get_client_memptr(eth_client, eth_index)->mac, IPA_MAC_ADDR_SIZE);
@@ -8829,8 +8990,6 @@ int IPACM_Lan::handle_qos_route_rule_ext_v2(uint8_t *client_mac,
 					memcpy(&rt_rule_entry->rule.attrib,
 						&tx_prop->tx[tx_index].attrib,
 						sizeof(rt_rule_entry->rule.attrib));
-					rt_rule_entry->rule.hdr_hdl =
-						get_client_memptr(eth_client, eth_index)->hdr_hdl_v6;
 
 					rt_rule_entry->rule.enable_stats = true;
 					rt_rule_entry->rule.cnt_idx =
@@ -8961,6 +9120,48 @@ int IPACM_Lan::handle_qos_route_rule_ext_v2(uint8_t *client_mac,
 #ifdef FEATURE_IPA_V3
 					rt_rule_entry->rule.hashable = true;
 #endif
+
+					if (qos_param->dscp_mark_val)
+					{
+						int size = sizeof(ipa_ioc_add_hdr_proc_ctx) + sizeof(ipa_hdr_proc_ctx_add);
+						hdr_proc_ctx_table = (ipa_ioc_add_hdr_proc_ctx *)malloc(size);
+						if (hdr_proc_ctx_table == NULL) {
+							IPACMERR("Failed to allocate memory for hdr_proc_ctx.\n");
+							free(rt_rule);
+							return IPACM_FAILURE;
+						}
+						memset(hdr_proc_ctx_table, 0, size);
+						hdr_proc_ctx_table->commit = 1;
+						hdr_proc_ctx_table->num_proc_ctxs = 1;
+						hdr_proc_ctx = &hdr_proc_ctx_table->proc_ctx[0];
+						hdr_proc_ctx->type = IPA_HDR_PROC_MARK_DSCP;
+
+						hdr_proc_ctx->pdn_dscp_params.valid = 1;
+						hdr_proc_ctx->pdn_dscp_params.dscp_val = qos_param->dscp_mark_val;
+
+						hdr_proc_ctx->hdr_hdl = get_client_memptr(eth_client, eth_index)->hdr_hdl_v6;
+						IPACMDBG_H("hdr_proc_ctx->hdr_hdl v6 0x%x\n", hdr_proc_ctx->hdr_hdl);
+
+						if (m_header.AddHeaderProcCtx(hdr_proc_ctx_table) == false ||
+							hdr_proc_ctx_table->proc_ctx[0].status != 0) {
+							IPACMERR("ioctl IPA_IOC_ADD_HDR_PROC_CTX for v6 dscp marking failed: %d\n",
+								hdr_proc_ctx_table->proc_ctx[0].status);
+							free(hdr_proc_ctx_table);
+							free(rt_rule);
+							return IPACM_FAILURE;
+						}
+					}
+
+					if (qos_param->dscp_mark_val)
+					{
+						rt_rule_entry->rule.hdr_proc_ctx_hdl = hdr_proc_ctx_table->proc_ctx[0].proc_ctx_hdl;
+						IPACMDBG_H("rt->hdr_proc_ctx_hdl v6 0x%x\n", rt_rule_entry->rule.hdr_proc_ctx_hdl);
+					}
+					else
+					{
+						rt_rule_entry->rule.hdr_hdl = get_client_memptr(eth_client, eth_index)->hdr_hdl_v6;
+					}
+
 					if (false == m_routing.AddRoutingRuleExt_v2(rt_rule))
 					{
 						IPACMERR("Routing rule addition failed!\n");
@@ -8970,6 +9171,7 @@ int IPACM_Lan::handle_qos_route_rule_ext_v2(uint8_t *client_mac,
 
 					new_client_info.qos_rt_rule_hdl_v6 = ((struct ipa_rt_rule_add_ext_v2 *)rt_rule->rules)[0].rt_rule_hdl;
 					new_client_info.route_rule_set_v6 = true;
+					new_client_info.dscp_hpc_hdl_v6 = rt_rule_entry->rule.hdr_proc_ctx_hdl;
 
 					new_client_info.v6_ip_addr[0] =
 						rt_rule_entry->rule.attrib.u.v6.dst_addr[0];
@@ -9299,6 +9501,20 @@ int IPACM_Lan::delete_client_info_from_qos(uint8_t *client_mac,
 						it_qos_client->qos_rt_rule_hdl_v4);
 					return IPACM_FAILURE;
 				}
+
+				// Delete respective header processing contexts
+				IPACMDBG_H("Deleting dscp v4 hpc 0x%x\n", it_qos_client->dscp_hpc_hdl_v4);
+				if (it_qos_client->dscp_hpc_hdl_v4)
+				{
+					if (m_header.DeleteHeaderProcCtx(it_qos_client->dscp_hpc_hdl_v4)
+						== false)
+					{
+						IPACMERR("Failed to delete qos dscp hpc v4 hdl 0x%x\n",
+						it_qos_client->qos_rt_rule_hdl_v4);
+						return IPACM_FAILURE;
+					}
+				}
+
 				it_qos_client =
 					qos_param->qos_client_list.erase(it_qos_client);
 				qos_param->client_cnt--;
@@ -9338,6 +9554,19 @@ int IPACM_Lan::delete_client_info_from_qos(uint8_t *client_mac,
 								it_qos_client->qos_rt_rule_hdl_v6);
 							return IPACM_FAILURE;
 						}
+
+						IPACMDBG_H("Deleting dscp v6 hpc 0x%x\n", it_qos_client->dscp_hpc_hdl_v6);
+						if (it_qos_client->dscp_hpc_hdl_v6)
+						{
+							if (m_header.DeleteHeaderProcCtx(it_qos_client->dscp_hpc_hdl_v6)
+								== false)
+							{
+								IPACMERR("Failed to delete qos dscp hpc v6 hdl 0x%x\n",
+								it_qos_client->qos_rt_rule_hdl_v6);
+								return IPACM_FAILURE;
+							}
+						}
+
 						it_qos_client =
 							qos_param->qos_client_list.erase(it_qos_client);
 						qos_param->client_cnt--;
@@ -9368,6 +9597,19 @@ int IPACM_Lan::delete_client_info_from_qos(uint8_t *client_mac,
 							it_qos_client->qos_rt_rule_hdl_v6);
 						return IPACM_FAILURE;
 					}
+
+					IPACMDBG_H("Deleting dscp v6 hpc 0x%x\n", it_qos_client->dscp_hpc_hdl_v6);
+					if (it_qos_client->dscp_hpc_hdl_v6)
+					{
+						if (m_header.DeleteHeaderProcCtx(it_qos_client->dscp_hpc_hdl_v6)
+							== false)
+						{
+							IPACMERR("Failed to delete qos dscp hpc v6 hdl 0x%x\n",
+							it_qos_client->qos_rt_rule_hdl_v6);
+							return IPACM_FAILURE;
+						}
+					}
+
 					it_qos_client =
 						qos_param->qos_client_list.erase(it_qos_client);
 					qos_param->client_cnt--;
@@ -9429,6 +9671,19 @@ int IPACM_Lan::delete_all_client_info_from_qos(list<qos_param_info>::iterator qo
 			ret =  IPACM_FAILURE;
 		}
 
+		// Delete respective header processing contexts
+		IPACMDBG_H("Deleting dscp v4 hpc 0x%x\n", it_qos_client->dscp_hpc_hdl_v4);
+		if (it_qos_client->dscp_hpc_hdl_v4)
+		{
+			if (m_header.DeleteHeaderProcCtx(it_qos_client->dscp_hpc_hdl_v4)
+					== false)
+			{
+				IPACMERR("Failed to delete qos dscp hpc v4 hdl 0x%x\n",
+				it_qos_client->qos_rt_rule_hdl_v4);
+				return IPACM_FAILURE;
+			}
+		}
+
 		IPACMDBG_H("Delete client rule from is v6 set %d for hdl %d\n",
 				   it_qos_client->route_rule_set_v6,
 				   it_qos_client->qos_rt_rule_hdl_v6);
@@ -9437,6 +9692,18 @@ int IPACM_Lan::delete_all_client_info_from_qos(list<qos_param_info>::iterator qo
 			(m_routing.DeleteRoutingHdl(it_qos_client->qos_rt_rule_hdl_v6, IPA_IP_v6) == false)) {
 			IPACMERR("Failed to delete v6 qos routing rule hdl %d\n", it_qos_client->qos_rt_rule_hdl_v6);
 			ret = IPACM_FAILURE;
+		}
+
+		IPACMDBG_H("Deleting dscp v6 hpc 0x%x\n", it_qos_client->dscp_hpc_hdl_v6);
+		if (it_qos_client->dscp_hpc_hdl_v6)
+		{
+			if (m_header.DeleteHeaderProcCtx(it_qos_client->dscp_hpc_hdl_v6)
+					== false)
+			{
+				IPACMERR("Failed to delete qos dscp hpc v6 hdl 0x%x\n",
+				it_qos_client->qos_rt_rule_hdl_v6);
+				return IPACM_FAILURE;
+			}
 		}
 
 		it_qos_client = qos_param->qos_client_list.erase(it_qos_client);
@@ -9996,7 +10263,10 @@ int IPACM_Lan::handle_eth_client_route_rule_ext_v2(uint8_t *mac_addr, ipa_ip_typ
 				IPACMDBG_H("rt rule entry enable stats = %d, dl cnt index = %u\n", rt_rule_entry->rule.enable_stats, rt_rule_entry->rule.cnt_idx);
 			} /* end of for loop */
 		} /* end of tx loop */
-		get_client_memptr(eth_client, eth_index)->route_rule_set_v6 = get_client_memptr(eth_client, eth_index)->ipv6_set;
+		if (iptype == IPA_IP_v6)
+		{
+			get_client_memptr(eth_client, eth_index)->route_rule_set_v6 = get_client_memptr(eth_client, eth_index)->ipv6_set;
+		}
 		free((void *)rt_rule->rules);
 		free(rt_rule);
 	}
@@ -12622,8 +12892,10 @@ int IPACM_Lan::config_dft_firewall_rules_ul_ex(IPACM_firewall_conf_t* firewall_c
 			return IPACM_SUCCESS;
 		}
 
+
 		fd = open(IPA_DEVICE_NAME, O_RDWR);
-		if (0 == fd) {
+		if (fd < 0)
+		{
 			IPACMERR("Failed opening %s.\n", IPA_DEVICE_NAME);
 			return IPACM_FAILURE;
 		}
@@ -16974,6 +17246,7 @@ int IPACM_Lan::eth_bridge_add_flt_rule(uint8_t *mac, uint32_t rt_tbl_hdl, ipa_ip
 	flt_rule_entry.rule.eq_attrib_type = 0;
 	flt_rule_entry.rule.rt_tbl_hdl = rt_tbl_hdl;
 	flt_rule_entry.rule.hashable = true;
+	flt_rule_entry.rule.rule_id = LAN2LAN_RULE_ID;
 
 	flt_rule_entry.rule.max_prio = fixed_mac_prio_val[idx][iptype];
 	memcpy(&flt_rule_entry.rule.attrib, &rx_prop->rx[idx].attrib, sizeof(flt_rule_entry.rule.attrib));
@@ -19604,7 +19877,7 @@ int IPACM_Lan::handle_mpdn_ul_xlat_filter_rule(ipacm_ext_prop * prop,
 	}
 
 	fd = open(IPA_DEVICE_NAME, O_RDWR);
-	if (0 == fd)
+	if (fd < 0)
 	{
 		IPACMERR("Failed opening %s.\n", IPA_DEVICE_NAME);
 		ret = IPACM_FAILURE;
@@ -19841,7 +20114,8 @@ int IPACM_Lan::handle_mpdn_ul_xlat_filter_rule(ipacm_ext_prop * prop,
 fail:
 	if (pFilteringTable != NULL)
 		free(pFilteringTable);
-	close(fd);
+	if(fd)
+		close(fd);
 	return ret;
 }
 

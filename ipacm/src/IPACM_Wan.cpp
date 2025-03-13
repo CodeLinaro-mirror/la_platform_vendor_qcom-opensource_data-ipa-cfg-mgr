@@ -27,7 +27,7 @@
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  * Changes from Qualcomm Innovation Center are provided under the following license:
- * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2025 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 /*!
@@ -283,7 +283,7 @@ IPACM_Wan::IPACM_Wan(int iface_index,
 	}
 
 	m_fd_ipa = open(IPA_DEVICE_NAME, O_RDWR);
-	if(0 == m_fd_ipa)
+	if(m_fd_ipa < 0)
 	{
 		IPACMERR("Failed to open %s\n",IPA_DEVICE_NAME);
 	}
@@ -354,6 +354,8 @@ IPACM_Wan::~IPACM_Wan()
 
 	IPACM_EvtDispatcher::deregistr(this);
 	IPACM_IfaceManager::deregistr(this);
+	if(m_fd_ipa)
+		close(m_fd_ipa);
 	return;
 }
 
@@ -1311,7 +1313,8 @@ int IPACM_Wan::handle_addr_evt(ipacm_event_data_addr *data)
 	IPACMDBG_H("Posting IPA_HANDLE_NEW_NEIGH_EVENT event:%d\n", evt_data.event);
 	IPACM_EvtDispatcher::PostEvt(&evt_data);
 fail:
-	free(rt_rule);
+	if(rt_rule)
+		free(rt_rule);
 
 	return res;
 }
@@ -5840,7 +5843,7 @@ int IPACM_Wan::query_ext_prop()
 	{
 		fd = open(IPA_DEVICE_NAME, O_RDWR);
 		IPACMDBG_H("iface query-property \n");
-		if (0 == fd)
+		if (fd < 0)
 		{
 			IPACMERR("Failed opening %s.\n", IPA_DEVICE_NAME);
 			return IPACM_FAILURE;
@@ -5852,6 +5855,7 @@ int IPACM_Wan::query_ext_prop()
 		if(ext_prop == NULL)
 		{
 			IPACMERR("Unable to allocate memory.\n");
+			close(fd);
 			return IPACM_FAILURE;
 		}
 		memcpy(ext_prop->name, dev_name,

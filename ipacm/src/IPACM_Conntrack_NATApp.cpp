@@ -1920,9 +1920,7 @@ NatEntryBase::NatEntryBase(ipa_ip_type type) :
 	m_uc_activation_index(0),
 	m_ucp(0),
 	m_s(0)
-{
-	IPACMDBG_H("%d \n", type);
-}
+{}
 
 NatEntryBase::~NatEntryBase() {}
 

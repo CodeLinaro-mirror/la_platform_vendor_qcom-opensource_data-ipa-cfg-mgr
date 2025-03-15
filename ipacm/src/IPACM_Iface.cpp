@@ -768,7 +768,7 @@ int IPACM_Iface::init_fl_rule(
 	const char *dev_wlan1="wlan1";
 	const char *dev_ecm0="ecm0";
 	int idx = 0, j;
-
+	IPACMDBG_H("dev_name: %s iptype %d\n", dev_name, iptype);
 	len = (iptype == IPA_IP_v4) ?
 		IPV4_DEFAULT_FILTERTING_RULES :
 		IPV6_DEFAULT_FILTERTING_RULES;

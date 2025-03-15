@@ -1488,6 +1488,7 @@ void* ipa_driver_msg_notifier(void *param)
 			{
 				IPACM_Iface::ipacmcfg->pppoe_config_update(pppoe_info, pppoe_info->add, 0, NULL);
 				IPACM_Iface::ipacmcfg->get_pppoe_session_info(pppoe_info->dev_name);
+				IPACMDBG_H("Got ppp pdn config, Get Routes for v4 and v6\n");
 				ipa_nl_send_getroute(IPA_IP_v4);
 				ipa_nl_send_getroute(IPA_IP_v6);
 			}

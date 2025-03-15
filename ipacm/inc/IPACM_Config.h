@@ -808,16 +808,22 @@ public:
 						pppoe_mpdn_table[indx].pppoe_dev_name,
 						sizeof(pppoe_mpdn_table[indx].pppoe_dev_name)) == 0)
 			{
-				IPACMDBG("Interface (%s) is already present in PPPoE table\n", pppoe_dev_name);
-				return MAX_NUM_PPPOE_MPDN;
+				IPACMDBG("Interface (%s) is already present in PPPoE table at index %d\n", pppoe_dev_name, indx);
+				return indx;
+			}
+		}
+		/* Get free index */
+		for (indx=0; indx < MAX_NUM_PPPOE_MPDN; indx++)
+		{
+			if (!pppoe_mpdn_table[indx].status)
+			{
+				IPACMDBG("Got free index %d for %s \n", indx, pppoe_dev_name);
+				return indx;
 			}
 		}
 
-		for (indx=0; indx < MAX_NUM_PPPOE_MPDN; indx++)
-			if (!pppoe_mpdn_table[indx].status)
-				return indx;
-
-		return indx;
+		IPACMDBG("No free index %d. Reached to MAX\n", indx);
+		return MAX_NUM_PPPOE_MPDN;
 	}
 
 	inline int get_pppoe_pdn_index(char *pppoe_dev_name)
@@ -827,13 +833,19 @@ public:
 		for (indx=0; indx < MAX_NUM_PPPOE_MPDN; indx++)
 		{
 			if ((pppoe_mpdn_table[indx].status == 1 ||
-				pppoe_mpdn_table[indx].status == 2) &&
-				strncmp(pppoe_dev_name,
+				pppoe_mpdn_table[indx].status == 2))
+				{
+					if(strncmp(pppoe_dev_name,
 						pppoe_mpdn_table[indx].pppoe_dev_name,
 						sizeof(pppoe_mpdn_table[indx].pppoe_dev_name)) == 0)
-				return indx;
+						{
+							IPACMDBG("Got pdn %s at index %d \n", pppoe_dev_name, indx);
+							return indx;
+						}
+				}
 		}
-		return indx;
+		IPACMDBG("No pdn %s stored.\n", pppoe_dev_name);
+		return MAX_NUM_PPPOE_MPDN;
 	}
 
 	inline uint16_t pppoe_get_session_id(char *pppoe_dev_name)

@@ -824,6 +824,7 @@ static int ipa_nl_decode_nlmsg
 	ipa_bridge_vlan_mapping_info vlan_bridge_data;
 	int ret_val, mask_value, mask_index, mask_value_v6;
 	struct nlmsghdr *nlh = (struct nlmsghdr *)buffer;
+	ipacm_event_route_vlan *vlan_rt_data;
 
 	uint32_t if_ipv4_addr =0, if_ipipv4_addr_mask =0, temp =0, if_ipv4_addr_gw =0;
 	uint8_t nullMac[IPA_MAC_ADDR_SIZE];
@@ -2102,13 +2103,37 @@ static int ipa_nl_decode_nlmsg
 					if(msg_ptr->nl_neigh_info.master_interface_index &&
 						ipa_get_if_name(master_dev_name, msg_ptr->nl_neigh_info.master_interface_index) == IPACM_SUCCESS)
 					{
-						memset(&vlan_bridge_data, 0, sizeof(vlan_bridge_data));
-						vlan_bridge_data.vlan_id = DUMMY_VLAN_ID_BASE + msg_ptr->nl_neigh_info.metainfo.ndm_ifindex;
-						strlcpy(vlan_bridge_data.bridge_name, master_dev_name, IF_NAME_LEN);
-						vlan_bridge_data.master_if_index = msg_ptr->nl_neigh_info.master_interface_index;
-						config->del_dummy_vlan_mapping(master_dev_name,
-														data_all->iface_name, msg_ptr->nl_neigh_info.metainfo.ndm_ifindex);
-						config->del_bridge_vlan_mapping((uint16_t *)&(vlan_bridge_data.master_if_index), &(vlan_bridge_data.vlan_id));
+						if(strncmp(master_dev_name, BRIDGE_0, strlen(master_dev_name)) != 0)
+						{
+							IPACMDBG_H("[Dummy] Deleing neigh iface < %s > idx[%d] m_idx[%d]\n",
+									dev_name, msg_ptr->nl_neigh_info.metainfo.ndm_ifindex, msg_ptr->nl_neigh_info.master_interface_index);
+							uint16_t if_idx = 0;
+							memset(&vlan_bridge_data, 0, sizeof(vlan_bridge_data));
+							vlan_bridge_data.vlan_id = DUMMY_VLAN_ID_BASE + msg_ptr->nl_neigh_info.metainfo.ndm_ifindex;
+							if_idx = (uint16_t)msg_ptr->nl_neigh_info.master_interface_index;
+							strlcpy(vlan_bridge_data.bridge_name, master_dev_name, IF_NAME_LEN);
+							config->del_dummy_vlan_mapping(master_dev_name,
+															data_all->iface_name, msg_ptr->nl_neigh_info.metainfo.ndm_ifindex);
+							config->del_bridge_vlan_mapping(&if_idx, &(vlan_bridge_data.vlan_id));
+
+							vlan_rt_data = (ipacm_event_route_vlan *)malloc(sizeof(ipacm_event_route_vlan));
+							if(vlan_rt_data == NULL)
+							{
+								IPACMERR("Failed to allocate memory.\n");
+								return IPACM_FAILURE;
+							}
+							memset(vlan_rt_data, 0, sizeof(ipacm_event_route_vlan));
+							memset(&evt_data, 0, sizeof(ipacm_cmd_q_data));
+
+							vlan_rt_data->VlanID = DUMMY_VLAN_ID_BASE + msg_ptr->nl_neigh_info.metainfo.ndm_ifindex;
+
+							evt_data.evt_data = vlan_rt_data;
+							evt_data.event = IPA_DUMMY_VLAN_DOWN_EVENT;
+
+							IPACMDBG_H("Posting event %s with vlan_id: %d\n",
+								IPACM_Iface::ipacmcfg->getEventName(evt_data.event), vlan_rt_data->VlanID);
+							IPACM_EvtDispatcher::PostEvt(&evt_data);
+						}
 					}
 				}
 			}

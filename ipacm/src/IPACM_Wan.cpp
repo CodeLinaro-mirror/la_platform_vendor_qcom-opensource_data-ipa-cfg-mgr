@@ -1823,6 +1823,66 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 		break;
 #endif
 
+	case IPA_DUMMY_VLAN_DOWN_EVENT:
+	{
+		IPACMDBG("Received IPA_DUMMY_VLAN_DOWN_EVENT event\n");
+		int vlan_idx = 0;
+		int v4_pdn_index = -1;
+		int v6_pdn_index = -1;
+		bool vlan_pdn_up = false;
+		ipacm_event_route_vlan *vlandown_data = (ipacm_event_route_vlan *)param;
+		if(vlandown_data->VlanID)
+		{
+			if(m_is_sta_mode == Q6_WAN)
+			{
+				v4_pdn_index = modem_ipv4_pdn_index;
+				v6_pdn_index = modem_ipv6_pdn_index;
+			}
+			else if(m_is_sta_mode == WLAN_WAN )
+			{
+				v4_pdn_index = sta_ipv4_pdn_index;
+				v6_pdn_index = sta_ipv6_pdn_index;
+			}
+			if((v6_pdn_index >= 0) && (ipv6_to_iface[v6_pdn_index].wan_up_vlan_v6))
+			{
+				for(vlan_idx = 0; vlan_idx < ipv6_to_iface[v6_pdn_index].VID_cnt; vlan_idx++)
+				{
+					if(IPACM_Wan::ipv6_to_iface[v6_pdn_index].associated_VIDs[vlan_idx] == vlandown_data->VlanID)
+					{
+						vlan_pdn_up = true;
+						post_wan_vlan_pdn_event(IPA_IP_v6, v6_pdn_index, vlan_idx, vlandown_data->VlanID, false);
+						break;
+					}
+				}
+			}
+			if((v4_pdn_index >= 0) && (ipv4_to_iface[v4_pdn_index].wan_up_vlan))
+			{
+				for(vlan_idx = 0; vlan_idx < ipv4_to_iface[v4_pdn_index].VID_cnt; vlan_idx++)
+				{
+					if(IPACM_Wan::ipv4_to_iface[v4_pdn_index].associated_VIDs[vlan_idx] == vlandown_data->VlanID)
+					{
+						vlan_pdn_up = true;
+						post_wan_vlan_pdn_event(IPA_IP_v4, v4_pdn_index, vlan_idx, vlandown_data->VlanID, false);
+						break;
+					}
+				}
+			}
+		}
+		if(vlan_pdn_up)
+		{
+			if((v6_pdn_index == -1 && IPACM_Wan::ipv4_to_iface[v4_pdn_index].wan_up_vlan == false)||
+				(v4_pdn_index == -1 && IPACM_Wan::ipv6_to_iface[v6_pdn_index].wan_up_vlan_v6 == false)||
+				(v6_pdn_index >= 0 && v4_pdn_index >= 0 && IPACM_Wan::ipv4_to_iface[v4_pdn_index].wan_up_vlan == false &&
+				IPACM_Wan::ipv6_to_iface[v6_pdn_index].wan_up_vlan_v6 == false))
+			{
+				if(num_offloaded_pdns)
+					num_offloaded_pdns--;
+				IPACMDBG_H("Num of offloaded PDN decreased to %d\n", num_offloaded_pdns);
+			}
+		}
+	}
+	break;
+
 	case IPA_ROUTE_DEL_EVENT:
 		{
 			ipacm_event_data_addr *data = (ipacm_event_data_addr *)param;

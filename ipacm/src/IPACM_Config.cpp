@@ -177,7 +177,8 @@ const char *ipacm_event_name[] = {
 	__stringify(IPA_QOS_RULE_ADD_EVENT),                   /* ipacm_qos_rule_add_event */
 	__stringify(IPA_QOS_RULE_DEL_EVENT),                   /* ipacm_qos_rule_del_event */
 	__stringify(IPA_QOS_RULE_FLUSH_EVENT),                 /* ipacm_qos_rule_flush_event */
-	__stringify(IPACM_EVENT_MAX)
+	__stringify(IPA_DUMMY_VLAN_DOWN_EVENT),              /* ipacm_event_route_vlan */
+	__stringify(IPACM_EVENT_MAX),
 };
 
 IPACM_Config::IPACM_Config()

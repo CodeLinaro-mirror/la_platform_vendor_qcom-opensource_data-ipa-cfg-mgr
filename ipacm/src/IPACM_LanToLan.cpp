@@ -2756,7 +2756,8 @@ void IPACM_LanToLan_Iface::increment_ref_cnt_peer_l2_hdr_type(ipa_hdr_l2_type pe
 
 void IPACM_LanToLan_Iface::decrement_ref_cnt_peer_l2_hdr_type(ipa_hdr_l2_type peer_l2_type)
 {
-	ref_cnt_peer_l2_hdr_type[peer_l2_type]--;
+	if(ref_cnt_peer_l2_hdr_type[peer_l2_type])
+		ref_cnt_peer_l2_hdr_type[peer_l2_type]--;
 	IPACM_SYSLOG("Now the ref_cnt of peer l2 hdr type %s is %d.\n", ipa_l2_hdr_type[peer_l2_type],
 		ref_cnt_peer_l2_hdr_type[peer_l2_type]);
 

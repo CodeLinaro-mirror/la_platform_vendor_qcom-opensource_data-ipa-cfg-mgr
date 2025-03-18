@@ -170,6 +170,14 @@ public:
 	static IPACM_firewall_conf_t* get_curr_pdn_firewall_config(IPACM_firewall_t &firewall_configs, const char* dev_name);
 	static int get_wlan_v4_index();
 	static int get_wlan_v6_index();
+	/*
+	 * iptype: IPA_IP_v4 or IPA_IP_v6
+	 * pdn_idx: Index in ipv4_to_iface or ipv6_to_iface
+	 * vlan_idx: Index in associated_VIDs of ipv4_to_iface[pdn_idx] or ipv6_to_iface[pdn_idx]
+	 * vlan_id: VLAN ID
+	 * vlan_up: True to post IPA_HANDLE_WAN_VLAN_PDN_UP. False to post IPA_HANDLE_WAN_VLAN_PDN_DOWN
+	 */
+	void post_wan_vlan_pdn_event(ipa_ip_type iptype, int pdn_idx, int vlan_idx, uint16_t vlan_id, bool vlan_up);
 #endif
 	static bool isWanUP(int ipa_if_num_tether)
 	{

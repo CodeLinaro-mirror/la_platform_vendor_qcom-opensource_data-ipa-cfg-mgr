@@ -607,6 +607,8 @@ int IPACM_IfaceManager::create_iface_instance(ipacm_ifacemgr_data *param)
 						IPACM_EvtDispatcher::registr(IPA_LINK_DOWN_EVENT, w);
 					}
 
+					IPACM_EvtDispatcher::registr(IPA_DUMMY_VLAN_DOWN_EVENT, w);
+
 					IPACMDBG_H("ipa_WAN (%s):ipa_index (%d) instance open/registr ok\n", w->dev_name, w->ipa_if_num);
 					registr(ipa_interface_index, w);
 					/* solve the new_addr comes earlier issue */

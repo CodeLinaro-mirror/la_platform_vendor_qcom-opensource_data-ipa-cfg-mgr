@@ -17429,11 +17429,15 @@ int IPACM_Lan::eth_bridge_add_rt_rule(uint8_t *mac, char *rt_tbl_name, uint32_t 
 	{
 		if(tx_prop->tx[i].ip == iptype)
 		{
-			if (IPACM_Iface::ipacmcfg->ipacm_emesh_enable && IPACM_Iface::ipacmcfg->ipacm_emesh_mode >= 2) {
+			if ((IPACM_Iface::ipacmcfg->ipacm_emesh_enable && IPACM_Iface::ipacmcfg->ipacm_emesh_mode >= 2) || ipa_if_cate == WLAN_IF) {
 				if (is_if_svap || is_wlan_if_vlan) {
 					if (i < IPA_IP_v4_VLAN) continue;
 				} else {
-					if (i >= IPA_IP_v4_VLAN) continue;
+					if (i >= IPA_IP_v4_VLAN)
+					{
+						IPACMDBG_H("non vlan iface has vlan properties skip adding rule.");
+						continue;
+					}
 				}
 			}
 

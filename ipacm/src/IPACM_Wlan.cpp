@@ -6732,9 +6732,11 @@ int IPACM_Wlan::handle_wlan_client_down_evt(uint8_t *mac_addr, uint16_t vlan_id)
 				continue;
 			}
 #endif
-
-			get_client_memptr(wlan_client, clt_indx)->wifi_rt_hdl[tx_index].wifi_rt_rule_hdl_v4 =
-				 get_client_memptr(wlan_client, (clt_indx + 1))->wifi_rt_hdl[tx_index].wifi_rt_rule_hdl_v4;
+			if(tx_index == IPA_IP_v4_VLAN || tx_index == IPA_IP_v4)
+			{
+				get_client_memptr(wlan_client, clt_indx)->wifi_rt_hdl[tx_index].wifi_rt_rule_hdl_v4 =
+				 	get_client_memptr(wlan_client, (clt_indx + 1))->wifi_rt_hdl[tx_index].wifi_rt_rule_hdl_v4;
+			}
 		}
 		get_client_memptr(wlan_client, clt_indx)->ta_peer_id = get_client_memptr(wlan_client, (clt_indx + 1))->ta_peer_id;
 		get_client_memptr(wlan_client, clt_indx)->vlan_id = get_client_memptr(wlan_client, (clt_indx + 1))->vlan_id;

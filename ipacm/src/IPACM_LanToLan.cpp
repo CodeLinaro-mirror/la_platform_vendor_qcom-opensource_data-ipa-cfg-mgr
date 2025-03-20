@@ -2279,9 +2279,9 @@ void IPACM_LanToLan_Iface::handle_down_event()
 						for(it = it_other_iface_peer_info->mac_rt_rule_ref.begin();
 							it != it_other_iface_peer_info->mac_rt_rule_ref.end(); it++)
 						{
-							IPACMDBG_H("Found  mac 0x[%X][%X][%X][%X][%X][%X] with hdr ref cnt is %d\n",
+							IPACMDBG_H("Found  mac 0x[%X][%X][%X][%X][%X][%X] with mac ref cnt is %d\n",
 								it->first[0],it->first[1],it->first[2],it->first[3],it->first[4],it->first[5],
-							ref_cnt_peer_l2_hdr_type[it_other_iface_peer_info->peer->get_iface_pointer()->tx_prop->tx[0].hdr_l2_type]);
+								it->second);
 							std::copy(std::begin(it->first), std::end(it->first), std::begin(mac));
 							mac_addr[0]= mac[0];
 							mac_addr[1]= mac[1];
@@ -2322,10 +2322,9 @@ void IPACM_LanToLan_Iface::handle_down_event()
 									continue;
 								}
 
-								if(it_other_mac_iface->peer != this &&
-									it_other_mac_iface->mac_rt_rule_ref.empty() && flag)
+								if(it_other_mac_iface->peer != this && flag)
 								{
-									IPACMDBG_H("mac list is empty copying the mac for iface name %s\n",
+									IPACMDBG_H("copying the mac ref for iface name %s\n",
 										it_other_mac_iface->peer->get_iface_pointer()->dev_name);
 									it_other_mac_iface->mac_rt_rule_ref.insert(std::make_pair(mac, (it->second)));
 									break;

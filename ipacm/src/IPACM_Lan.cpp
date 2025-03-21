@@ -16812,11 +16812,15 @@ int IPACM_Lan::install_ipv6_prefix_flt_rule(uint32_t* prefix)
 			IPACM_Iface::ipacmcfg->increaseFltRuleCount(rx_prop->rx[idx].src_pipe,
 				IPA_IP_v6, IPv6_PREFIX_DEFAULT_PDN_RULE_NUM);
 			ipv6_prefix_flt_rule_hdl[j][0] = flt_rule->rules[0].flt_rule_hdl;
-			IPACMDBG_H("IPv6 prefix filter rule HDL:0x%x\n", ipv6_prefix_flt_rule_hdl[j][0]);
+			num_wan_prefix_rules[j]++;
+			IPACMDBG_H("IPv6 prefix filter rule HDL:0x%x num_wan_prefix_rules: %d\n",
+				ipv6_prefix_flt_rule_hdl[j][0], num_wan_prefix_rules[j]);
 			if (rule_cnt > 1)
 			{
 				ipv6_prefix_flt_rule_hdl[j][1] = flt_rule->rules[1].flt_rule_hdl;
-				IPACMDBG_H("IPv6 prefix MTU filter rule HDL:0x%x\n", ipv6_prefix_flt_rule_hdl[j][1]);
+				num_wan_prefix_rules[j]++;
+				IPACMDBG_H("IPv6 prefix MTU filter rule HDL:0x%x num_wan_prefix_rules: %d\n",
+					ipv6_prefix_flt_rule_hdl[j][1], num_wan_prefix_rules[j]);
 			}
 			free(flt_rule);
 		}
@@ -16861,6 +16865,8 @@ void IPACM_Lan::delete_ipv6_prefix_flt_rule()
 			IPACMERR("Failed to delete ipv6 prefix flt rule.\n");
 			return;
 		}
+		num_wan_prefix_rules[j]--;
+		IPACMDBG_H("num_wan_prefix_rules: %d\n", num_wan_prefix_rules[j]);
 		IPACM_Iface::ipacmcfg->decreaseFltRuleCount(rx_prop->rx[idx].src_pipe, IPA_IP_v6, IPv6_PREFIX_DEFAULT_PDN_RULE_NUM);
 	}
 	return;

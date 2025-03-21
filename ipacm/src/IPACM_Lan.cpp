@@ -10263,8 +10263,12 @@ int IPACM_Lan::install_uplink_filter_rule_per_client_v2
 
 fail:
 
-	free((void *)pFilteringTable->rules);
-	free(pFilteringTable);
+	if(pFilteringTable)
+	{
+		if(pFilteringTable->rules)
+			free((void *)pFilteringTable->rules);
+		free(pFilteringTable);
+	}
 	close(fd);
 	return ret;
 }

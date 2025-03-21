@@ -29,7 +29,7 @@ OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
 IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 Changes from Qualcomm Innovation Center are provided under the following license:
-Copyright (c) 2023-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+Copyright (c) 2023-2025 Qualcomm Innovation Center, Inc. All rights reserved.
 SPDX-License-Identifier: BSD-3-Clause-Clear
 */
 /*!
@@ -689,5 +689,17 @@ struct ip_tuple {
 		uint16_t vlan_count;
 		uint16_t vlan_id;
 };
+
+typedef enum {
+	IPACM_CMD_QUEUE_THREAD,
+	IPACM_NETLINK_THREAD,
+#ifndef FEATURE_IPA_ANDROID
+	IPACM_MONITOR_THREAD,
+#endif
+	IPACM_IPA_DRIVER_THREAD,
+	IPACM_L2TP_THREAD,
+	IPACM_NETLINKS_QUERY_THREAD,
+	IPACM_CHILD_THREADS_MAX
+}ipacm_child_thread_names;
 
 #endif /* IPA_CM_DEFS_H */

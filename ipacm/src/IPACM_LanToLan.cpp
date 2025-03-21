@@ -391,7 +391,7 @@ void IPACM_LanToLan::handle_iface_up(ipacm_event_eth_bridge *data)
 			/* add header processing context for peer VLAN interfaces */
 			for(it = ++m_iface.begin(); it != m_iface.end(); it++)
 			{
-				if (IPACM_Iface::ipacmcfg->ipacm_emesh_enable && !it->get_is_vlan() && !front_iface.is_svap_iface() &&
+				if (!IPACM_Iface::ipacmcfg->multi_vlan_bridge_config_enable && !it->get_is_vlan() && !front_iface.is_svap_iface() &&
 						!front_iface.is_ap_iface_vlan_enabled() && !front_iface.is_spcl_iface())
 				{
 					IPACMDBG_H("iface %s is non VLAN iface - skipping\n", it->get_iface_pointer()->dev_name);
@@ -436,7 +436,7 @@ void IPACM_LanToLan::handle_iface_up(ipacm_event_eth_bridge *data)
 			{
 #ifdef FEATURE_VLAN_MPDN
 				/* non VLAN case - currently no support for non vlan <-> vlan offload */
-				if(IPACM_Iface::ipacmcfg->ipacm_emesh_enable && it->get_is_vlan() &&
+				if(!IPACM_Iface::ipacmcfg->multi_vlan_bridge_config_enable && it->get_is_vlan() &&
 						!it->is_svap_iface() && !it->is_spcl_iface())
 					continue;
 #endif

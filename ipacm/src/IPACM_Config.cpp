@@ -161,6 +161,7 @@ const char *ipacm_event_name[] = {
 	__stringify(IPA_LAN_CLIENT_DEL_EVENT),                /* ipa lan2lan offload for static ip */
 	__stringify(IPA_HANDLE_WAN_EXT_PROP_CHANGE),          /* NULL */
 	__stringify(IPA_HANDLE_LAN_WAN_EXT_PROP_CHANGE),      /* NULL */
+	__stringify(IPA_DUMMY_VLAN_DOWN_EVENT),              /* ipacm_event_route_vlan */
 	__stringify(IPACM_EVENT_MAX),
 };
 

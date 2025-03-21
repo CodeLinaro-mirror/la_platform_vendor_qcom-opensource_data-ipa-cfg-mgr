@@ -1191,6 +1191,9 @@ error:
 void IPACM_ConntrackListener::HandleVlanDown(void *in_param)
 {
 	ipacm_event_vlan_pdn *vlanup_data = (ipacm_event_vlan_pdn *)in_param;
+	bool remove_pdn = false;
+	int i, j;
+
 	IPACMDBG_H("Recevied below information during VLAN DOWN up,\n");
 	IPACMDBG_H("IPType: %d, vlan_id:%d, mux id %d\n",
 		vlanup_data->iptype,
@@ -1205,7 +1208,37 @@ void IPACM_ConntrackListener::HandleVlanDown(void *in_param)
 	if((vlanup_data->iptype == IPA_IP_v4) ||
 		(vlanup_data->iptype == IPA_IP_MAX))
 	{
-		/* VLAN PDN down is triggered only on LINK_DOWN, we can safely remove the PDN */
+		if(vlanup_data->VlanID > 0)
+		{
+			for(i = 0; i < IPA_MAX_NUM_HW_PDNS; i++)
+			{
+				if(vlan_pdns[i].public_ip == vlanup_data->ipv4_addr)
+				{
+					for(j = 0; j < IPA_MAX_NUM_SW_PDNS; j++)
+					{
+						if(vlan_pdns[i].associated_VIDs[j] == vlanup_data->VlanID)
+						{
+							IPACMDBG_H("Clearing VID %d from PDN with IP %d\n", vlanup_data->VlanID, vlanup_data->ipv4_addr);
+							vlan_pdns[i].associated_VIDs[j] = 0;
+							vlan_pdns[i].VID_cnt--;
+							if(vlan_pdns[i].VID_cnt == 0)
+							{
+								remove_pdn = true;
+								break;
+							}
+							else
+							{
+								IPACMDBG_H("VLAN PDN is up, return\n");
+								return;
+							}
+						}
+					}
+					if(remove_pdn == true)
+						break;
+				}
+			}
+		}
+
 		IPACMDBG_H("removing PDN ipv4 address 0x%X\n", vlanup_data->ipv4_addr);
 		nat_inst->RemovePdn(vlanup_data->ipv4_addr);
 

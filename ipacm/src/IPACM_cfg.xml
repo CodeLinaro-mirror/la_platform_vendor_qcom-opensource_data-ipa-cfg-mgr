@@ -607,6 +607,16 @@
 		    </ALG>
 			<ALG>
   			   <Protocol>TCP</Protocol>
+  			   <Port>4500</Port>
+			   <Description>IPSEC</Description>
+		    </ALG>
+			<ALG>
+  			   <Protocol>UDP</Protocol>
+  			   <Port>4500</Port>
+			   <Description>IPSEC</Description>
+		    </ALG>
+			<ALG>
+  			   <Protocol>TCP</Protocol>
   			   <Port>1723</Port>
 			   <Description>PPTP</Description>
 		    </ALG>

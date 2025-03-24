@@ -26,9 +26,9 @@
  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * Changes from Qualcomm Innovation Center, Inc. are provided under the following license:
- * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
- * SPDX-License-Identifier: BSD-3-Clause-Clear.
+ * Changes from Qualcomm Technologies, Inc. are provided under the following license:
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 /*!
 		@file
@@ -6553,8 +6553,6 @@ int IPACM_Wan::handle_down_evt_ex()
 			ipacm_event_vlan_pdn *vlandown_data;
 
 			ipv6_to_iface[modem_ipv6_pdn_index].wan_up_vlan_v6 = false;
-			memset(ipv6_to_iface[modem_ipv6_pdn_index].associated_VIDs, 0, sizeof(ipv6_to_iface[modem_ipv6_pdn_index].associated_VIDs));
-			ipv6_to_iface[modem_ipv6_pdn_index].VID_cnt = 0;
 
 			/* Xlat cfg offload pdn count is updated during v4 handling */
 			if (!xlat_cfg)
@@ -6596,6 +6594,8 @@ int IPACM_Wan::handle_down_evt_ex()
 			evt_data.evt_data = (void *)vlandown_data;
 
 			IPACM_EvtDispatcher::PostEvt(&evt_data);
+			memset(ipv6_to_iface[modem_ipv6_pdn_index].associated_VIDs, 0, sizeof(ipv6_to_iface[modem_ipv6_pdn_index].associated_VIDs));
+			ipv6_to_iface[modem_ipv6_pdn_index].VID_cnt = 0;
 
 			/* in also default gateway, DL filtering rules will be reconfigured later */
 			if(!is_default_gateway)

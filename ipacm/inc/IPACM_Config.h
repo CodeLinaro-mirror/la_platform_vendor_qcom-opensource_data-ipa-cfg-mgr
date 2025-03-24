@@ -28,7 +28,7 @@
  *
  * Changes from Qualcomm Innovation Center are provided under the following license:
  *
- * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2025 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted (subject to the limitations in the
@@ -322,6 +322,7 @@ struct qos_client_info
 	uint8_t mac[IPA_MAC_ADDR_SIZE];
 	uint32_t qos_rt_rule_hdl_v4;
 	uint32_t qos_rt_rule_hdl_v6;
+	int client_iface;
 
 	uint32_t dscp_hpc_hdl_v4;
 	uint32_t dscp_hpc_hdl_v6;

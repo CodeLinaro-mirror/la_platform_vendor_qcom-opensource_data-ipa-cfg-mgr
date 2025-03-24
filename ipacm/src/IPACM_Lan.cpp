@@ -587,7 +587,7 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 				}
 			}
 #endif
-
+#ifdef FEATURE_ETH_BRIDGE_LE
 			if (rx_prop != NULL)
 			{
 				if(IPACM_Iface::ipacmcfg->GetIPAVer() >= IPA_HW_None &&
@@ -600,13 +600,10 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 						IPACM_Iface::ipacmcfg->DelRmDepend(IPACM_Iface::ipacmcfg->ipa_client_rm_map_tbl[rx_prop->rx[0].src_pipe]);
 					IPACMDBG_H("Finished delete dependency \n ");
 				}
-#ifndef FEATURE_ETH_BRIDGE_LE
+
 				free(rx_prop);
 				rx_prop = NULL;
-#endif
 			}
-
-#ifndef FEATURE_ETH_BRIDGE_LE
 			if (tx_prop != NULL)
 			{
 				free(tx_prop);
@@ -2520,6 +2517,11 @@ int IPACM_Lan::handle_eth_client_mac_flt_route_rule(ipa_ip_type ip_type, int clt
 						}
 					}
 #endif
+					memset(&data, 0, sizeof(data));
+					data.ipv4_addr = get_client_memptr(eth_client, clt_index)->v4_addr,
+					data.if_index =  get_client_memptr(eth_client, clt_index)->if_index;
+					data.iptype = IPA_IP_v4;
+					CtList->HandleNeighIpAddrAddEvt(&data);
 				}
 				else
 #endif //IPA_HW_FNR_STATS
@@ -2529,6 +2531,11 @@ int IPACM_Lan::handle_eth_client_mac_flt_route_rule(ipa_ip_type ip_type, int clt
 						IPACMERR("unable to add v4 route rules for index: %d\n", clt_index);
 						return IPACM_FAILURE;
 					}
+					memset(&data, 0, sizeof(data));
+					data.ipv4_addr = get_client_memptr(eth_client, clt_index)->v4_addr,
+					data.if_index =  get_client_memptr(eth_client, clt_index)->if_index;
+					data.iptype = IPA_IP_v4;
+					CtList->HandleNeighIpAddrAddEvt(&data);
 				}
 			}
 #endif
@@ -2555,6 +2562,18 @@ int IPACM_Lan::handle_eth_client_mac_flt_route_rule(ipa_ip_type ip_type, int clt
 							IPA_IP_v6, 0, 0, 0, 0, temp_ipv6);
 					}
 				}
+				for (auto it = rt_hdl_v6_list[clt_index].begin(); it != rt_hdl_v6_list[clt_index].end(); ++it)
+				{
+					memset(&data, 0, sizeof(data));
+					std::copy(std::begin(it->first), std::end(it->first), std::begin(data.ipv6_addr));
+					data.if_index =  get_client_memptr(eth_client, clt_index)->if_index;
+					data.iptype = IPA_IP_v6;
+					if(IPACM_Iface::ipacmcfg->ipacm_mpdn_enable)
+					{
+						CtList->HandleNeighIpAddrAddEvt_v6(&data);
+					}
+				}
+
 #endif
 			}
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
@@ -2584,6 +2603,17 @@ int IPACM_Lan::handle_eth_client_mac_flt_route_rule(ipa_ip_type ip_type, int clt
 						}
 					}
 #endif
+					for (auto it = rt_hdl_v6_list[clt_index].begin(); it != rt_hdl_v6_list[clt_index].end(); ++it)
+					{
+						memset(&data, 0, sizeof(data));
+						std::copy(std::begin(it->first), std::end(it->first), std::begin(data.ipv6_addr));
+						data.if_index =  get_client_memptr(eth_client, clt_index)->if_index;
+						data.iptype = IPA_IP_v6;
+						if(IPACM_Iface::ipacmcfg->ipacm_mpdn_enable)
+						{
+							CtList->HandleNeighIpAddrAddEvt_v6(&data);
+						}
+					}
 				}
 				else
 #endif //IPA_HW_FNR_STATS
@@ -2592,6 +2622,17 @@ int IPACM_Lan::handle_eth_client_mac_flt_route_rule(ipa_ip_type ip_type, int clt
 					{
 						IPACMERR("unbale to add v4 route rules for index: %d\n", clt_index);
 						return IPACM_FAILURE;
+					}
+					for (auto it = rt_hdl_v6_list[clt_index].begin(); it != rt_hdl_v6_list[clt_index].end(); ++it)
+					{
+						memset(&data, 0, sizeof(data));
+						std::copy(std::begin(it->first), std::end(it->first), std::begin(data.ipv6_addr));
+						data.if_index =  get_client_memptr(eth_client, clt_index)->if_index;
+						data.iptype = IPA_IP_v6;
+						if(IPACM_Iface::ipacmcfg->ipacm_mpdn_enable)
+						{
+							CtList->HandleNeighIpAddrAddEvt_v6(&data);
+						}
 					}
 				}
 			}
@@ -4873,6 +4914,8 @@ int IPACM_Lan::handle_eth_hdr_init(uint8_t *mac_addr, ipacm_bridge *bridge, uint
 			if(isVlan && !bridge)
 			{
 				IPACMERR("vlan with NULL bridge\n");
+				free(hdr_proc_ctx_table);
+				hdr_proc_ctx_table = NULL;
 				return IPACM_FAILURE;
 			}
 #endif
@@ -4882,6 +4925,8 @@ int IPACM_Lan::handle_eth_hdr_init(uint8_t *mac_addr, ipacm_bridge *bridge, uint
 		pHeaderDescriptor = (struct ipa_ioc_add_hdr *)calloc(1, len);
 		if (pHeaderDescriptor == NULL)
 		{
+			free(hdr_proc_ctx_table);
+			hdr_proc_ctx_table = NULL;
 			IPACMERR("calloc failed to allocate pHeaderDescriptor\n");
 			return IPACM_FAILURE;
 		}
@@ -5486,9 +5531,13 @@ int IPACM_Lan::handle_eth_hdr_init(uint8_t *mac_addr, ipacm_bridge *bridge, uint
 	}
 	else
 	{
+		free(hdr_proc_ctx_table);
+		hdr_proc_ctx_table = NULL;
 		return res;
 	}
 fail:
+	free(hdr_proc_ctx_table);
+	hdr_proc_ctx_table = NULL;
 	free(pHeaderDescriptor);
 	return res;
 }
@@ -8185,8 +8234,8 @@ int IPACM_Lan::handle_qos_route_rule(uint8_t *client_mac, uint16_t client_vlan_i
 			IPACMDBG_H("Qos params, sport_start %d sport_end %d dport_start %d, dport_end %d, \n",
 					 qos_param->ip_tup.sport_start, qos_param->ip_tup.sport_end, qos_param->ip_tup.dport_start, qos_param->ip_tup.dport_end);
 
-			IPACMDBG_H("Qos params, protocol %d, src_ip_addr 0x%x, dst_ip_addr 0x%x \n",
-					 qos_param->ip_tup.protocol, qos_param->ip_tup.src_ip_addr, qos_param->ip_tup.dst_ip_addr);
+			IPACMDBG_H("Qos params, protocol %d, src_ip_addr 0x%x, dst_ip_addr 0x%x, dscp %d \n",
+					 qos_param->ip_tup.protocol, qos_param->ip_tup.src_ip_addr, qos_param->ip_tup.dst_ip_addr, qos_param->dscp);
 			IPACMERR("Qos params, src ipv6 addr: 0x%x:%x:%x:%x, dst ipv6 addr:0x%x:%x:%x:%x\n",
 				qos_param->ip_tup.src_v6_ip_addr[0],
 				qos_param->ip_tup.src_v6_ip_addr[1],
@@ -8296,9 +8345,9 @@ int IPACM_Lan::handle_qos_route_rule(uint8_t *client_mac, uint16_t client_vlan_i
 
 				if (qos_param->dscp)
 				{
-					rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_TOS;
-					rt_rule_entry->rule.attrib.tos_value = qos_param->dscp;
-					rt_rule_entry->rule.attrib.tos_mask = 0xFF;
+					rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_TOS_MASKED;
+					rt_rule_entry->rule.attrib.tos_value = qos_param->dscp << 2;
+					rt_rule_entry->rule.attrib.tos_mask = 0xFC;
 				}
 
 				if (qos_param->pcp)
@@ -8505,9 +8554,9 @@ int IPACM_Lan::handle_qos_route_rule(uint8_t *client_mac, uint16_t client_vlan_i
 
 					if (qos_param->dscp)
 					{
-						rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_TOS;
-						rt_rule_entry->rule.attrib.tos_value = qos_param->dscp;
-						rt_rule_entry->rule.attrib.tos_mask = 0xFF;
+						rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_TOS_MASKED;
+						rt_rule_entry->rule.attrib.tos_value = qos_param->dscp << 2;
+						rt_rule_entry->rule.attrib.tos_mask = 0xFC;
 					}
 
 					if (qos_param->pcp)
@@ -8711,8 +8760,8 @@ int IPACM_Lan::handle_qos_route_rule_ext_v2(uint8_t *client_mac,
 				qos_param->ip_tup.dport_end);
 
 			IPACMDBG_H("Qos params, protocol %d, src_ip_addr 0x%x, dst_ip_addr"
-				" 0x%x \n", qos_param->ip_tup.protocol,
-				qos_param->ip_tup.src_ip_addr, qos_param->ip_tup.dst_ip_addr);
+				" 0x%x , dscp %d\n", qos_param->ip_tup.protocol,
+				qos_param->ip_tup.src_ip_addr, qos_param->ip_tup.dst_ip_addr, qos_param->dscp);
 
 			IPACMERR("Qos params, src ipv6 addr: 0x%x:%x:%x:%x, dst ipv6 addr:0x%x:%x:%x:%x\n",
 				qos_param->ip_tup.src_v6_ip_addr[0],
@@ -8841,9 +8890,9 @@ int IPACM_Lan::handle_qos_route_rule_ext_v2(uint8_t *client_mac,
 
 				if (qos_param->dscp)
 				{
-					rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_TOS;
-					rt_rule_entry->rule.attrib.tos_value = qos_param->dscp;
-					rt_rule_entry->rule.attrib.tos_mask = 0xFF;
+					rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_TOS_MASKED;
+					rt_rule_entry->rule.attrib.tos_value = qos_param->dscp << 2;
+					rt_rule_entry->rule.attrib.tos_mask = 0xFC;
 				}
 
 				if (qos_param->pcp)
@@ -9058,9 +9107,9 @@ int IPACM_Lan::handle_qos_route_rule_ext_v2(uint8_t *client_mac,
 
 					if (qos_param->dscp)
 					{
-						rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_TOS;
-						rt_rule_entry->rule.attrib.tos_value = qos_param->dscp;
-						rt_rule_entry->rule.attrib.tos_mask = 0xFF;
+						rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_TOS_MASKED;
+						rt_rule_entry->rule.attrib.tos_value = qos_param->dscp << 2;
+						rt_rule_entry->rule.attrib.tos_mask = 0xFC;
 					}
 
 					if (qos_param->pcp)

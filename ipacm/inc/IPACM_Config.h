@@ -1209,6 +1209,7 @@ public:
 		ipacm_cmd_q_data evt_data;
 		ipacm_event_data_fid *data_fid;
 		uint32_t subnet_mask = ~0;
+		ipacm_bridge *bridge = NULL;
 		for(int cnt = 0; cnt < ipa_num_private_subnet; cnt++)
 		{
 			if(private_subnet_table[cnt].subnet_addr == ip_addr)
@@ -1233,6 +1234,24 @@ public:
 				IPACMERR("unable to allocate memory for event data_fid\n");
 				return IPACM_FAILURE;
 			}
+
+			if(multi_vlan_bridge_config_enable)
+			{
+				bridge = get_vlan_bridge(ipa_virtual_iface_name);
+				if(bridge)
+				{
+					IPACMERR("IPACM private subnet_addr entry(%d) name:%s\n", ipa_num_private_subnet,
+						ipa_virtual_iface_name);
+					IPACMDBG("Updated bridge private subnet_addr as: 0x%x \n", ip_addr);
+					bridge->bridge_ipv4_addr = ip_addr;
+					bridge->bridge_netmask = ipv4_addr_mask;
+				}
+				else
+				{
+					IPACMERR("bridge %s not up\n", ipa_virtual_iface_name);
+				}
+			}
+
 			data_fid->if_index = ipa_if_index; // already ipa index, not fid index
 			evt_data.event = IPA_PRIVATE_SUBNET_CHANGE_EVENT;
 			evt_data.evt_data = data_fid;

@@ -1371,15 +1371,34 @@ public:
 	/* do not offload this pdn until we get route add\ new vlan neighbor */
 	inline bool add_no_offload_ipv6_prefix(uint32_t *prefix)
 	{
+
+		if(prefix == NULL)
+		{
+			IPACMERR("Null prefix passed\n");
+			return false;
+		}
+
+		IPACMDBG("prefix 0x[%X][%X] to add in no offload list\n", prefix[0], prefix[1]);
+
 		/* prefix shouldn't be present in offload list - this is a bug */
 		for(int i = 0; i < num_ipv6_prefixes; i++)
 		{
 			if((prefix[0] == ipa_ipv6_prefixes[i].addr[0]) && (prefix[1] == ipa_ipv6_prefixes[i].addr[1]))
 			{
-				IPACMERR("prefix 0x[%X][%X] already exists in offload list\n", prefix[0], prefix[1]);
+				IPACMERR("prefix 0x[%X][%X] already exists in offload list at %d\n", prefix[0], prefix[1],i);
 				return false;
 			}
 		}
+		/* Check if no offload prefix already present in no offload list*/
+		for(int i = 0; i < num_no_offload_ipv6_prefix; i++)
+		{
+			if((prefix[0] == ipa_no_offload_ipv6_prefixes[i][0]) && (prefix[1] == ipa_no_offload_ipv6_prefixes[i][1]))
+			{
+				IPACMERR("prefix 0x[%X][%X] already exists in no offload list at %d\n", prefix[0], prefix[1],i);
+				return false;
+			}
+		}
+		/* Add in no offload list */
 		if (num_no_offload_ipv6_prefix < IPA_MAX_IPV6_NO_OFFLOAD_PREFIX_FLT_RULE )
 		{
 			ipa_no_offload_ipv6_prefixes[num_no_offload_ipv6_prefix][0] = prefix[0];
@@ -1393,7 +1412,8 @@ public:
 			return false;
 		}
 
-		IPACMDBG("added no offload v6 prefix 0x[%X][%X]\n", prefix[0], prefix[1]);
+		IPACMDBG("added no offload v6 prefix 0x[%X][%X], now number of no offload pdn %d\n",
+			prefix[0], prefix[1],num_no_offload_ipv6_prefix);
 
 		/* tell all LAN interfaces that we have a change in v6 prefixes */
 		SendPrefixChangeEvent(-1);
@@ -1406,6 +1426,14 @@ public:
 		int i = 0;
 		int no_offload_temp = num_no_offload_ipv6_prefix;
 		bool updated_reserved_slot = false;
+
+		if(prefix == NULL)
+		{
+			IPACMERR("Null prefix passed\n");
+			return false;
+		}
+
+		IPACMDBG("prefix 0x[%X][%X] to add in offload list\n", prefix[0], prefix[1]);
 
 		/* check for duplication */
 		for(i = 0; i < num_ipv6_prefixes; i++)
@@ -1458,9 +1486,10 @@ public:
 				/* Update the vlan id if prefix already saved but vlan id not associated
 				 * e.g Wlan for default pdn reserves a slot with vlan id 0, then eth vlan
 				 * for default pdn associates with vlan id */
-				IPACMDBG_H("Updating vlan id %d for prefix 0x[%X][%X] \n", vlan_id, prefix[0], prefix[1]);
+				IPACMDBG_H("Updating vlan id %d for prefix 0x[%X][%X] \n", ipa_ipv6_prefixes[i].vlan_id, ipa_ipv6_prefixes[i].addr[0], ipa_ipv6_prefixes[i].addr[1]);
 				ipa_ipv6_prefixes[i].vlan_id = vlan_id;
 				updated_reserved_slot =true;
+				IPACMDBG_H("Updated vlan id %d v6 prefix 0x[%X][%X] for vlan id %d\n",ipa_ipv6_prefixes[i].vlan_id, prefix[0], prefix[1]);
 			}
 		}
 
@@ -1486,6 +1515,15 @@ public:
 	inline int del_vlan_ipv6_prefix(uint32_t* prefix, int ipa_if_num, bool reserve_slot = false)
 	{
 		int i = 0;
+
+		if(prefix == NULL)
+		{
+			IPACMERR("Null prefix passed\n");
+			return false;
+		}
+
+		IPACMDBG("prefix 0x[%X][%X] to del offload list\n", prefix[0], prefix[1]);
+
 		for(i = 0; i < num_ipv6_prefixes; i++)
 		{
 			if((prefix[0] == ipa_ipv6_prefixes[i].addr[0]) && (prefix[1] == ipa_ipv6_prefixes[i].addr[1]))

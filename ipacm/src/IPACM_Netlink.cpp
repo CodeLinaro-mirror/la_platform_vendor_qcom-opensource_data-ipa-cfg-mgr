@@ -3463,42 +3463,51 @@ int ipa_nl_query_newneigh(int af_family, char* dev_name)
 
 int l2tp_nl_tunnel_get(int l2tpcmd)
 {
-	struct nl_msg *msg;
-	struct nl_cb *cb;
+	struct nl_msg *msg = NULL;
+	struct nl_cb *cb = NULL;
 	int result = -EPROTONOSUPPORT;
 	enum nl_cb_kind cb_kind = NL_CB_DEFAULT;
 	int flags = NLM_F_DUMP;
-	static struct nl_sock *nl_sock;
+	static struct nl_sock *nl_sock = NULL;
 	static int nl_family;
 
 	IPACMDBG("l2tp_nl_tunnel_get\n");
 
 	nl_sock = nl_socket_alloc();
 	if (!nl_sock) {
-		IPACMERR("nl_handle_alloc");
-		return 1;
+		IPACMERR("nl_handle_alloc is failed");
+		return IPACM_FAILURE;
 	}
 
 	if (nl_connect(nl_sock, NETLINK_GENERIC) < 0) {
-		IPACMERR("nl_connect");
-		return 1;
+		IPACMERR("nl_connect is failed");
+		result = IPACM_FAILURE;
+		goto out;
 	}
 
 	nl_family = genl_ctrl_resolve(nl_sock, L2TP_GENL_NAME);
 
+	msg = nlmsg_alloc();
+
+	if(!msg)
+	{
+		IPACMERR("Failed to allocated netlink message");
+		result = IPACM_FAILURE;
+		goto out;
+	}
+
 	cb = nl_cb_alloc(cb_kind);
 	if (!cb) {
-		return 1;
+		result = IPACM_FAILURE;
+		goto out;
 	}
 
 	nl_cb_set(cb, NL_CB_VALID, NL_CB_CUSTOM, recv_genl_msg, NULL);
 
-	msg = nlmsg_alloc();
 	flags = NLM_F_REQUEST|NLM_F_DUMP;
 	genlmsg_put(msg, NL_AUTO_PID, NL_AUTO_SEQ, nl_family, 0, flags,
 							    l2tpcmd, L2TP_GENL_VERSION);
 	nl_send_auto_complete(nl_sock, msg);
-	nlmsg_free(msg);
 	result = nl_recvmsgs(nl_sock, cb);
 	if (result > 0) {
 		result = nl_wait_for_ack(nl_sock);
@@ -3510,6 +3519,10 @@ int l2tp_nl_tunnel_get(int l2tpcmd)
 	nl_cb_put(cb);
 out:
 	IPACMERR("End\n");
+	if(msg)
+	{
+		nlmsg_free(msg);
+	}
 	nl_socket_free(nl_sock);
 	return result;
 }

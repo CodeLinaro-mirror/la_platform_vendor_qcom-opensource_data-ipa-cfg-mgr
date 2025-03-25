@@ -61,7 +61,7 @@
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  * Changes from Qualcomm Innovation Center, Inc. are provided under the following license:
- * Copyright (c) 2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2024-2025 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear.
  */
  /*!
@@ -1008,7 +1008,6 @@ void* ipa_driver_msg_notifier(void *param)
 							 pdn_info->u.passthrough_cfg.client_mac_addr[5]);
 
 			/* Update IP Passthrough config. */
-			IPACM_Iface::ipacmcfg->ip_pass_config_update(pdn_info);
 			evt_data.event = IPA_IP_PASS_UPDATE_EVENT;
 			ip_pass_pdn_data = (ipacm_event_ip_pass_pdn_info *)malloc(sizeof(ipacm_event_ip_pass_pdn_info));
 			if(!ip_pass_pdn_data)
@@ -1016,12 +1015,13 @@ void* ipa_driver_msg_notifier(void *param)
 				IPACMERR("unable to allocate memory for pdn_config\n");
 				return NULL;
 			}
+			ipa_get_if_index(pdn_info->dev_name, &(ip_pass_pdn_data->if_index));
+			IPACM_Iface::ipacmcfg->ip_pass_config_update(pdn_info, ip_pass_pdn_data->if_index);
 			ip_pass_pdn_data->skip_nat = pdn_info->u.passthrough_cfg.skip_nat;
 			ip_pass_pdn_data->pdn_ip_addr = htonl(pdn_info->u.passthrough_cfg.pdn_ip_addr);
 			ip_pass_pdn_data->VlanID = pdn_info->u.passthrough_cfg.vlan_id;
 			ip_pass_pdn_data->enable = pdn_info->enable;
 			evt_data.evt_data = ip_pass_pdn_data;
-			ipa_get_if_index(pdn_info->dev_name, &(ip_pass_pdn_data->if_index));
 			break;
 
 		case IPA_QOS_PARAM_ADD_EVENT:
@@ -1452,7 +1452,7 @@ int ipa_query_driver_event()
 		return IPACM_FAILURE;
 	}
 
-	if (ioctl(fd, IPA_IOC_QUERY_CACHED_DRIVER_MSG) < 0) {
+	if (ioctl(fd, IPA_IOC_QUERY_CACHED_DRIVER_MSG, 0) < 0) {
 		IPACMERR("IOCTL IPA_IOC_QUERY_CACHED_DRIVER_MSG call failed: %s \n",
 			strerror(errno));
 		close(fd);

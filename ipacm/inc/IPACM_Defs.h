@@ -148,7 +148,7 @@ extern "C"
 #define IPACM_MAC_FLT 1
 #define IPACM_SW_FLT 2
 
-#define IPA_MAX_VLAN_PER_BRIDGE 2
+#define IPA_MAX_VLAN_PER_BRIDGE 3
 
 /*---------------------------------------------------------------------------
 										Return values indicating error status

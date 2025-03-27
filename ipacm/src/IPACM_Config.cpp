@@ -2957,6 +2957,9 @@ void IPACM_Config::pppoe_config_update(ipa_ioc_pppoe_info *pppoe_config, uint8_t
 {
 	int indx;
 
+	if(pppoe_config != NULL)
+		IPACMDBG_H("config to_add(%d) for pppoe_dev_name %s\n",to_add, pppoe_config->pppoe_dev_name);
+	
 	if(pthread_mutex_lock(&pppoe_map_lock) != 0)
 	{
 		IPACMERR("Unable to lock the mutex\n");
@@ -4889,6 +4892,9 @@ void IPACM_Config::get_pppoe_session_info(const char *pppoe_dev_name)
 	snprintf(cmd, IPA_SYS_CMD_LEN, "cat /proc/net/pppoe > %s", IPA_PPPOE_TABLE);
 	system(cmd);
 
+	if(pppoe_dev_name != NULL)
+		IPACMDBG_H("Get session info for pppoe_dev_name %s\n",pppoe_dev_name);
+	
 	fp = fopen(IPA_PPPOE_TABLE, "r");
 	if (fp == NULL)
 	{
@@ -4926,6 +4932,9 @@ void IPACM_Config::update_pppoe_session_info(const char *pppoe_dev_name, char *p
 	uint8_t mac_addr[6] = {0};
 	int tmp_var[IPA_MAC_ADDR_SIZE];
 
+	if(pppoe_dev_name != NULL)
+		IPACMDBG_H("Update session info for pppoe_dev_name %s\n",pppoe_dev_name);
+	
 	IPACMDBG_H("session_info: %s mac_addr: %s eth_intf_name: %s\n",
 		params[0], params[1], params[2]);
 
@@ -4989,6 +4998,7 @@ void IPACM_Config::update_pppoe_session_info(const char *pppoe_dev_name, char *p
 		session_id, phy_dev_name, vlan_id);
 
 	strlcpy(pppoe_config->pppoe_dev_name, pppoe_dev_name, IPA_RESOURCE_NAME_MAX);
+	IPACMDBG_H("Update config for pppoe_dev_name %s\n",pppoe_config->pppoe_dev_name);
 	pppoe_config_update(pppoe_config, 2, session_id, mac_addr);
 }
 

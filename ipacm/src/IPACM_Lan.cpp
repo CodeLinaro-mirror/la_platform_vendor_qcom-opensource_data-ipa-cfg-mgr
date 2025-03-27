@@ -2521,7 +2521,7 @@ int IPACM_Lan::handle_vlan_neighbor(ipacm_event_data_all *data)
 			}
 			else
 			{
-				handle_eth_hdr_init(data->mac_addr, bridge, vlan_id, true);
+				handle_eth_hdr_init(data->mac_addr, bridge, vlan_id, true, priority);
 			}
 		}
 #else

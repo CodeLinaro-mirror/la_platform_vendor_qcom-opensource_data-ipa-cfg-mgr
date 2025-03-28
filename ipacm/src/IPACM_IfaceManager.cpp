@@ -598,20 +598,21 @@ int IPACM_IfaceManager::create_iface_instance(ipacm_ifacemgr_data *param)
 					IPACM_EvtDispatcher::registr(IPA_HANDLE_SOCKSv5_DOWN, w);
 					IPACM_EvtDispatcher::registr(IPA_UPDATE_SOCKSv5_v6_CONN, w);
 #endif
+					IPACM_EvtDispatcher::registr(IPA_DUMMY_VLAN_DOWN_EVENT, w);
 					if(is_sta_mode == WLAN_WAN)
 					{
 #ifndef FEATURE_IPA_ANDROID
 						IPACM_EvtDispatcher::registr(IPA_WLAN_SWITCH_TO_SCC, w);
 						IPACM_EvtDispatcher::registr(IPA_WLAN_SWITCH_TO_MCC, w);
 #endif
+						/* IPA_WLAN_LINK_DOWN_EVENT should be always last for WLAN WAN */
 						IPACM_EvtDispatcher::registr(IPA_WLAN_LINK_DOWN_EVENT, w); // for STA mode
 					}
 					else
 					{
+						/* IPA_IPA_LINK_DOWN_EVENT should be always last for WWAN */
 						IPACM_EvtDispatcher::registr(IPA_LINK_DOWN_EVENT, w);
 					}
-
-					IPACM_EvtDispatcher::registr(IPA_DUMMY_VLAN_DOWN_EVENT, w);
 
 					IPACMDBG_H("ipa_WAN (%s):ipa_index (%d) instance open/registr ok\n", w->dev_name, w->ipa_if_num);
 					registr(ipa_interface_index, w);

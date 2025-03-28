@@ -26,39 +26,9 @@
  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * Changes from Qualcomm Innovation Center, Inc. are provided under the following license:
- *
- * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
- *
- * Redistribution and use in source and binary forms, with or without
- * modification, are permitted (subject to the limitations in the
- * disclaimer below) provided that the following conditions are met:
- *
- *   * Redistributions of source code must retain the above copyright
- *     notice, this list of conditions and the following disclaimer.
- *
- *   * Redistributions in binary form must reproduce the above
- *     copyright notice, this list of conditions and the following
- *     disclaimer in the documentation and/or other materials provided
- *     with the distribution.
- *
- *   * Neither the name of Qualcomm Innovation Center, Inc. nor the names of its
- *     contributors may be used to endorse or promote products derived
- *     from this software without specific prior written permission.
- *
- * NO EXPRESS OR IMPLIED LICENSES TO ANY PARTY'S PATENT RIGHTS ARE
- * GRANTED BY THIS LICENSE. THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT
- * HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED
- * WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
- * MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
- * IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR
- * ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
- * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE
- * GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
- * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER
- * IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
- * OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
- * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ * Changes from Qualcomm Technologies, Inc. are provided under the following license:
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear.
  */
 /*!
 		@file
@@ -5983,13 +5953,12 @@ int IPACM_Wan::handle_down_evt_ex()
 		num_ipv4_modem_pdn--;
 		IPACMDBG_H("Now the number of modem ipv4 pdn is %d.\n", num_ipv4_modem_pdn);
 #ifdef FEATURE_VLAN_MPDN
-		if(ipv4_to_iface[modem_ipv4_pdn_index].wan_up_vlan)
+		if((modem_ipv4_pdn_index >= 0) && ipv4_to_iface[modem_ipv4_pdn_index].wan_up_vlan)
 		{
 			ipacm_cmd_q_data evt_data;
 			ipacm_event_vlan_pdn *vlandown_data;
 
 			ipv4_to_iface[modem_ipv4_pdn_index].wan_up_vlan = false;
-			ipv4_to_iface[modem_ipv4_pdn_index].is_xlat = false;
 			memset(ipv4_to_iface[modem_ipv4_pdn_index].associated_VIDs, 0, sizeof(ipv4_to_iface[modem_ipv4_pdn_index].associated_VIDs));
 			ipv4_to_iface[modem_ipv4_pdn_index].VID_cnt = 0;
 			num_offloaded_pdns--;
@@ -6037,10 +6006,12 @@ int IPACM_Wan::handle_down_evt_ex()
 				install_wan_filtering_rule(false);
 			}
 		}
-
-		ipv4_to_iface[modem_ipv4_pdn_index].ipv4_addr = 0;
-		ipv4_to_iface[modem_ipv4_pdn_index].pIface = NULL;
-
+		if(modem_ipv4_pdn_index >= 0)
+		{
+			ipv4_to_iface[modem_ipv4_pdn_index].ipv4_addr = 0;
+			ipv4_to_iface[modem_ipv4_pdn_index].pIface = NULL;
+			ipv4_to_iface[modem_ipv4_pdn_index].is_xlat = false;
+		}
 		/* if no PDN is up, remove rm dependencies */
 		if(!isVlanWanUP() && !isVlanWanUP_V6() && !wan_up && !wan_up_v6)
 		{
@@ -6214,8 +6185,11 @@ int IPACM_Wan::handle_down_evt_ex()
 				install_wan_filtering_rule(false);
 			}
 		}
-		memset(&ipv6_to_iface[modem_ipv6_pdn_index].ipv6_prefix, 0, sizeof(uint32_t) * 2);
-		ipv6_to_iface[modem_ipv6_pdn_index].pIface = NULL;
+		if(modem_ipv6_pdn_index >= 0)
+		{
+			memset(&ipv6_to_iface[modem_ipv6_pdn_index].ipv6_prefix, 0, sizeof(uint32_t) * 2);
+			ipv6_to_iface[modem_ipv6_pdn_index].pIface = NULL;
+		}
 
 		/* if no PDN is up, remove rm dependencies */
 		if(!isVlanWanUP() && !isVlanWanUP_V6() && !wan_up && !wan_up_v6)
@@ -6331,8 +6305,8 @@ int IPACM_Wan::handle_down_evt_ex()
 #ifdef FEATURE_VLAN_MPDN
 		IPACM_Iface::ipacmcfg->del_vlan_ipv6_prefix(ipv6_prefix, -1);
 
-		if(ipv4_to_iface[modem_ipv4_pdn_index].wan_up_vlan ||
-			ipv6_to_iface[modem_ipv6_pdn_index].wan_up_vlan_v6)
+		if((modem_ipv4_pdn_index >= 0 && ipv4_to_iface[modem_ipv4_pdn_index].wan_up_vlan) ||
+			(modem_ipv6_pdn_index >= 0 && ipv6_to_iface[modem_ipv6_pdn_index].wan_up_vlan_v6))
 		{
 			ipacm_cmd_q_data evt_data;
 			ipacm_event_vlan_pdn *vlandown_data;
@@ -6391,12 +6365,18 @@ int IPACM_Wan::handle_down_evt_ex()
 
 			IPACM_EvtDispatcher::PostEvt(&evt_data);
 		}
+		if(modem_ipv4_pdn_index >= 0)
+		{
+			ipv4_to_iface[modem_ipv4_pdn_index].ipv4_addr = 0;
+			ipv4_to_iface[modem_ipv4_pdn_index].pIface = NULL;
+			ipv4_to_iface[modem_ipv4_pdn_index].is_xlat = false;
 
-		ipv4_to_iface[modem_ipv4_pdn_index].ipv4_addr = 0;
-		ipv4_to_iface[modem_ipv4_pdn_index].pIface = NULL;
-		memset(&ipv6_to_iface[modem_ipv6_pdn_index].ipv6_prefix, 0, sizeof(uint32_t) * 2);
-		ipv6_to_iface[modem_ipv6_pdn_index].pIface = NULL;
-
+		}
+		if(modem_ipv6_pdn_index >= 0)
+		{
+			memset(&ipv6_to_iface[modem_ipv6_pdn_index].ipv6_prefix, 0, sizeof(uint32_t) * 2);
+			ipv6_to_iface[modem_ipv6_pdn_index].pIface = NULL;
+		}
 		if(!isVlanWanUP())
 		{
 			if(IPACM_Iface::ipacmcfg->GetIPAVer() >= IPA_HW_None && IPACM_Iface::ipacmcfg->GetIPAVer() < IPA_HW_v4_0)

@@ -522,7 +522,7 @@ void IPACM_Wlan::event_callback(ipa_cm_event_id event, void *param)
 			IPACMDBG_H("Received IPA_HANDLE_WAN_VLAN_PDN_UP for VID %d, iptype %d\n",
 				data->VlanID,
 				data->iptype);
-			if(is_vlan_IF(data->VlanID)  || IPACM_Iface::ipacmcfg->is_dummy_VID(data->VlanID))
+			if(is_vlan_IF(data->VlanID))
 			{
 				if(data->iptype == IPA_IP_v6)
 				{

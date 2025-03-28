@@ -15372,8 +15372,7 @@ int IPACM_Lan::handle_wan_down_v6(bool is_sta_mode, bool is_support_mpdn, uint16
 	if (is_support_mpdn == true)
 	{
 		modify_ipv6_prefix_flt_rule();
-		if(ipa_if_cate == ODU_IF && strncmp(dev_name, IPACM_Iface::ipacmcfg->eth_lan_wan_iface_name, sizeof(dev_name)) == 0 &&
-			num_wan_prefix_rules == 0)
+		if(ipa_if_cate == ODU_IF && strncmp(dev_name, IPACM_Iface::ipacmcfg->eth_lan_wan_iface_name, sizeof(dev_name)) == 0 )
 		{
 			IPACM_Iface::odu_subnet_fl_rule_hdl[IPA_IP_v6] = 0;
 		}

@@ -217,6 +217,9 @@ typedef struct
 
 	/* Store mac address of the gateway STA WAN client */
 	uint8_t mac_addr[IPA_MAC_ADDR_SIZE];
+
+	/* storing iface_index for iface table */
+	uint32_t iface_index;
 } ipacm_pppoe_mpdn_info;
 #endif
 

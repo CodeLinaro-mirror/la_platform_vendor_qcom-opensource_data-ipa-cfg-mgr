@@ -2956,6 +2956,7 @@ fail:
 void IPACM_Config::pppoe_config_update(ipa_ioc_pppoe_info *pppoe_config, uint8_t to_add, uint8_t session_id, uint8_t *mac_addr)
 {
 	int indx;
+	int iface_table_index;
 
 	if(pppoe_config != NULL)
 		IPACMDBG_H("config to_add(%d) for pppoe_dev_name %s\n",to_add, pppoe_config->pppoe_dev_name);
@@ -2995,6 +2996,8 @@ void IPACM_Config::pppoe_config_update(ipa_ioc_pppoe_info *pppoe_config, uint8_t
 				"%s dev_name:%s vlan_id: %u\n",
 				indx, pppoe_config->pppoe_dev_name, pppoe_config->dev_name,
 				pppoe_config->vlan_id);
+			iface_table_index = pppoe_mpdn_table[indx].iface_index;
+			memset(IPACM_Iface::ipacmcfg->iface_table[iface_table_index].phy_dev_name,0,IPA_IFACE_NAME_LEN);
 			memset(pppoe_mpdn_table[indx].pppoe_dev_name, 0, IPA_RESOURCE_NAME_MAX);
 			memset(pppoe_mpdn_table[indx].phy_dev_name, 0, IPA_RESOURCE_NAME_MAX);
 			pppoe_mpdn_table[indx].vlan_id = 0;

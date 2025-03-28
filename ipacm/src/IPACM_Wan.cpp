@@ -7405,7 +7405,6 @@ int IPACM_Wan::handle_down_evt_ex()
 			ipacm_event_vlan_pdn *vlandown_data;
 
 			ipv4_to_iface[modem_ipv4_pdn_index].wan_up_vlan = false;
-			ipv4_to_iface[modem_ipv4_pdn_index].is_xlat = false;
 			memset(ipv4_to_iface[modem_ipv4_pdn_index].associated_VIDs, 0, sizeof(ipv4_to_iface[modem_ipv4_pdn_index].associated_VIDs));
 			ipv4_to_iface[modem_ipv4_pdn_index].VID_cnt = 0;
 			if(modem_ipv6_pdn_index == -1)
@@ -7454,10 +7453,12 @@ int IPACM_Wan::handle_down_evt_ex()
 				install_wan_filtering_rule(false);
 			}
 		}
-
-		ipv4_to_iface[modem_ipv4_pdn_index].ipv4_addr = 0;
-		ipv4_to_iface[modem_ipv4_pdn_index].pIface = NULL;
-
+		if(modem_ipv4_pdn_index >= 0)
+		{
+			ipv4_to_iface[modem_ipv4_pdn_index].ipv4_addr = 0;
+			ipv4_to_iface[modem_ipv4_pdn_index].pIface = NULL;
+			ipv4_to_iface[modem_ipv4_pdn_index].is_xlat = false;
+		}
 		/* if no PDN is up, remove rm dependencies */
 		if(!isVlanWanUP() && !isVlanWanUP_V6() && !wan_up && !wan_up_v6)
 		{
@@ -7639,8 +7640,11 @@ int IPACM_Wan::handle_down_evt_ex()
 				install_wan_filtering_rule(false);
 			}
 		}
-		memset(&ipv6_to_iface[modem_ipv6_pdn_index].ipv6_prefix, 0, sizeof(uint32_t) * 2);
-		ipv6_to_iface[modem_ipv6_pdn_index].pIface = NULL;
+		if(modem_ipv6_pdn_index >= 0)
+		{
+			memset(&ipv6_to_iface[modem_ipv6_pdn_index].ipv6_prefix, 0, sizeof(uint32_t) * 2);
+			ipv6_to_iface[modem_ipv6_pdn_index].pIface = NULL;
+		}
 
 		/* if no PDN is up, remove rm dependencies */
 		if(!isVlanWanUP() && !isVlanWanUP_V6() && !wan_up && !wan_up_v6)
@@ -7756,8 +7760,8 @@ int IPACM_Wan::handle_down_evt_ex()
 #ifdef FEATURE_VLAN_MPDN
 		IPACM_Iface::ipacmcfg->del_vlan_ipv6_prefix(ipv6_prefix, -1);
 
-		if(ipv4_to_iface[modem_ipv4_pdn_index].wan_up_vlan ||
-			ipv6_to_iface[modem_ipv6_pdn_index].wan_up_vlan_v6)
+		if((modem_ipv4_pdn_index >= 0 && ipv4_to_iface[modem_ipv4_pdn_index].wan_up_vlan) ||
+			(modem_ipv6_pdn_index >= 0 && ipv6_to_iface[modem_ipv6_pdn_index].wan_up_vlan_v6))
 		{
 			ipacm_cmd_q_data evt_data;
 			ipacm_event_vlan_pdn *vlandown_data;
@@ -7820,12 +7824,18 @@ int IPACM_Wan::handle_down_evt_ex()
 
 			IPACM_EvtDispatcher::PostEvt(&evt_data);
 		}
+		if(modem_ipv4_pdn_index >= 0)
+		{
+			ipv4_to_iface[modem_ipv4_pdn_index].ipv4_addr = 0;
+			ipv4_to_iface[modem_ipv4_pdn_index].pIface = NULL;
+			ipv4_to_iface[modem_ipv4_pdn_index].is_xlat = false;
 
-		ipv4_to_iface[modem_ipv4_pdn_index].ipv4_addr = 0;
-		ipv4_to_iface[modem_ipv4_pdn_index].pIface = NULL;
-		memset(&ipv6_to_iface[modem_ipv6_pdn_index].ipv6_prefix, 0, sizeof(uint32_t) * 2);
-		ipv6_to_iface[modem_ipv6_pdn_index].pIface = NULL;
-
+		}
+		if(modem_ipv6_pdn_index >= 0)
+		{
+			memset(&ipv6_to_iface[modem_ipv6_pdn_index].ipv6_prefix, 0, sizeof(uint32_t) * 2);
+			ipv6_to_iface[modem_ipv6_pdn_index].pIface = NULL;
+		}
 		if(!isVlanWanUP())
 		{
 			if(IPACM_Iface::ipacmcfg->GetIPAVer() >= IPA_HW_None && IPACM_Iface::ipacmcfg->GetIPAVer() < IPA_HW_v4_0)

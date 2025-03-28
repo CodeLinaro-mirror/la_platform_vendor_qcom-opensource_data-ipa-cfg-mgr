@@ -17365,8 +17365,12 @@ int IPACM_Lan::eth_bridge_add_hdr_proc_ctx(ipa_hdr_l2_type peer_l2_hdr_type, uin
 	}
 
 	hdl[0] = pHeaderProcTable->proc_ctx[0].proc_ctx_hdl;
-	vlan_hdr_hdl = pHeaderProcTable->proc_ctx[0].hdr_hdl;
 
+	if (vlan_id)
+	{
+		IPACMERR("vlan_hdr_hdl: %d\n", pHeaderProcTable->proc_ctx[0].hdr_hdl);
+		vlan_hdr_hdl = pHeaderProcTable->proc_ctx[0].hdr_hdl;
+	}
 end:
 	free(pHeaderProcTable);
 	return res;
@@ -17750,11 +17754,14 @@ int IPACM_Lan::eth_bridge_del_rt_rule(uint32_t rt_rule_hdl, ipa_ip_type iptype)
 /* delete header processing context */
 int IPACM_Lan::eth_bridge_del_hdr_proc_ctx(uint32_t hdr_proc_ctx_hdl)
 {
+	IPACMDBG_H("hdr_proc_ctx_hdl: %d\n", hdr_proc_ctx_hdl);
 	if(m_header.DeleteHeaderProcCtx(hdr_proc_ctx_hdl) == false)
 	{
 		IPACMERR("Failed to delete hdr proc ctx.\n");
 		return IPACM_FAILURE;
 	}
+
+	IPACMDBG_H("vlan_hdr_hdl: %d\n", vlan_hdr_hdl);
 	if (vlan_hdr_hdl != 0)
 	{
 		if(m_header.DeleteHeaderHdl(vlan_hdr_hdl) == false)

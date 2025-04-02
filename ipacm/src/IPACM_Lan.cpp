@@ -22481,7 +22481,7 @@ int IPACM_Lan::install_default_qos_rt_rules(uint8_t *client_mac, uint16_t client
 		else
 			rt_rule_entry->rule.hdr_hdl = get_client_memptr(eth_client, eth_index)->hdr_hdl_v6;
 
-		if ((ipv6_addr[0] || ipv6_addr[1] || ipv6_addr[2] ||
+		if (ipv6_addr && (ipv6_addr[0] || ipv6_addr[1] || ipv6_addr[2] ||
 						ipv6_addr[3]))
 		{
 			rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_DST_ADDR;

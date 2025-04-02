@@ -27,7 +27,7 @@
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  * Changes from Qualcomm Innovation Center are provided under the following license:
- * Copyright (c) 2023-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2023-2025 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
@@ -1700,7 +1700,8 @@ void IPACM_ConntrackListener::HandleInterfaceDown_StaticPolicy(void *in_param)
 			{
 				vlan_pdns[i].associated_VIDs[k] = vlan_pdns[i].associated_VIDs[k+1];
 			}
-			vlan_pdns[i].associated_VIDs[k] = 0;
+			if(k < IPA_MAX_NUM_SW_PDNS)
+				vlan_pdns[i].associated_VIDs[k] = 0;
 		}
 	}
 }

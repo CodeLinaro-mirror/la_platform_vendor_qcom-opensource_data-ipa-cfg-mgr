@@ -27,7 +27,7 @@
  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * Changes from Qualcomm Innovation Center are provided under the following license:
+ * Changes from Qualcomm Innovation Center, Inc. are provided under the following license:
  *
  * Copyright (c) 2022-2025 Qualcomm Innovation Center, Inc. All rights reserved.
  *
@@ -1089,6 +1089,7 @@ static void IPACM_Signals_handler(int sig, siginfo_t *info, void *extra)
 	case SIGBUS:
 	case SIGABRT:
 	case SIGTERM:
+		log_ipacm_crash_info("IPACM EXIT ABNORMALLY !!!!!");
 		p = (ucontext_t *)extra;
 		IPACM_SYSLOG("siginfo address=%x\n", info->si_addr);
 #ifdef config_compat

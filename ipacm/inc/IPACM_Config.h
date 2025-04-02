@@ -26,8 +26,8 @@
  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * Changes from Qualcomm Innovation Center are provided under the following license:
- * Copyright (c) 2023-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Changes from Qualcomm Innovation Center, Inc. are provided under the following license:
+ * Copyright (c) 2023-2025 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear.
  */
 /*!
@@ -56,6 +56,15 @@
 #include <set>
 #include <map>
 #include <algorithm>
+#include <string>
+#include <libgen.h>
+#include <sys/statvfs.h>
+
+#define IPACM_DEF_LOG_FILE_SIZE_QUOTA    30
+
+using std::string;
+using std::set;
+
 typedef struct
 {
   char iface_name[IPA_IFACE_NAME_LEN];
@@ -108,7 +117,7 @@ class IPACM_Config
 {
 public:
 
-	int max_file_size;
+	uint32_t max_file_size;
 
 	/* IPACM ipa_client map to rm_resource*/
 	ipa_rm_resource_name ipa_client_rm_map_tbl[IPA_CLIENT_MAX];

@@ -71,6 +71,8 @@ extern "C"
 #define KERNEL_VER_FILE "/tmp/kernel_ver.txt"
 #endif /* defined(NOT FEATURE_IPA_ANDROID)*/
 
+#define IPACM_LOG_COLLECTION_FILE "/var/run/data/ipa/ipacm_log.txt"
+
 typedef struct ipacm_log_buffer_s {
 	char	user_data[MAX_BUF_LEN];
 } ipacm_log_buffer_t;
@@ -91,16 +93,22 @@ static char dmesg_cmd[MAX_BUF_LEN_NEW];
 
 static char timestamp_buf[TimeStamp_buff_len];
 char *get_time_string(char *buffer, int TimeStamp_len);
+void ipacm_log_dump(char ipacm_log_data[]);
+int log_init();
+
 
 #define IPACMDBG_DMESG(fmt, ...) \
 	do { \
 		memset(buffer_send, 0, MAX_BUF_LEN); \
-		snprintf(buffer_send,MAX_BUF_LEN,"%s:%d %s: " fmt, __FILE__,  __LINE__, __FUNCTION__, ##__VA_ARGS__); \
+		snprintf(buffer_send,MAX_BUF_LEN,"%s :%d %s: " fmt, __FILE__,  __LINE__, __FUNCTION__, ##__VA_ARGS__); \
 		ipacm_log_send (buffer_send); \
 		printf("%s:%d %s() " fmt, __FILE__,  __LINE__, __FUNCTION__, ##__VA_ARGS__); \
 		memset(dmesg_cmd, 0, MAX_BUF_LEN_NEW); \
 		snprintf(dmesg_cmd, MAX_BUF_LEN_NEW, "echo \'%s\'  > /dev/kmsg", buffer_send); \
 		system(dmesg_cmd); \
+		memset(buffer_send, 0, MAX_BUF_LEN); \
+		snprintf(buffer_send, MAX_BUF_LEN," %s %s:%d %s(): " fmt, get_time_string(timestamp_buf, TimeStamp_buff_len), __FILE__,  __LINE__, __FUNCTION__, ##__VA_ARGS__); \
+		ipacm_log_dump(buffer_send); \
 	} while (0);
 #ifdef DEBUG
 #define PERROR(fmt) \
@@ -116,6 +124,9 @@ char *get_time_string(char *buffer, int TimeStamp_len);
 		snprintf(buffer_send,MAX_BUF_LEN,"ERROR: %s:%d %s() " fmt, __FILE__,  __LINE__, __FUNCTION__, ##__VA_ARGS__); \
 		ipacm_log_send (buffer_send); \
 		printf("ERROR: %s %s:%d %s() " fmt, get_time_string(timestamp_buf, TimeStamp_buff_len), __FILE__,  __LINE__, __FUNCTION__, ##__VA_ARGS__); \
+		memset(buffer_send, 0, MAX_BUF_LEN); \
+		snprintf(buffer_send, MAX_BUF_LEN," %s %s:%d %s(): " fmt, get_time_string(timestamp_buf, TimeStamp_buff_len), __FILE__,  __LINE__, __FUNCTION__, ##__VA_ARGS__); \
+		ipacm_log_dump(buffer_send); \
 	} while (0);
 #define IPACMDBG_H(fmt, ...) \
 	do { \
@@ -123,6 +134,9 @@ char *get_time_string(char *buffer, int TimeStamp_len);
 		snprintf(buffer_send,MAX_BUF_LEN,"%s:%d %s() " fmt, __FILE__,  __LINE__, __FUNCTION__, ##__VA_ARGS__); \
 		ipacm_log_send (buffer_send); \
 		printf("%s %s:%d %s() " fmt, get_time_string(timestamp_buf, TimeStamp_buff_len), __FILE__,  __LINE__, __FUNCTION__, ##__VA_ARGS__); \
+		memset(buffer_send, 0, MAX_BUF_LEN); \
+		snprintf(buffer_send, MAX_BUF_LEN," %s %s:%d %s(): " fmt, get_time_string(timestamp_buf, TimeStamp_buff_len), __FILE__,  __LINE__, __FUNCTION__, ##__VA_ARGS__); \
+		ipacm_log_dump(buffer_send); \
 	} while (0);
 #define IPACM_SYSLOG(fmt, ...) \
 	do { \
@@ -137,8 +151,15 @@ char *get_time_string(char *buffer, int TimeStamp_len);
 #define IPACMERR(fmt, ...)   printf("ERR: %s %s:%d %s() " fmt, get_time_string(timestamp_buf, TimeStamp_buff_len), __FILE__,  __LINE__, __FUNCTION__, ##__VA_ARGS__);
 #define IPACMDBG_H(fmt, ...) printf("%s %s:%d %s() " fmt, get_time_string(timestamp_buf, TimeStamp_buff_len), __FILE__,  __LINE__, __FUNCTION__, ##__VA_ARGS__);
 #endif
-#define IPACMDBG(fmt, ...)	printf("%s %s:%d %s() " fmt, get_time_string(timestamp_buf, TimeStamp_buff_len), __FILE__,  __LINE__, __FUNCTION__, ##__VA_ARGS__);
-#define IPACMLOG(fmt, ...)  printf(fmt, ##__VA_ARGS__);
+#define IPACMDBG(fmt, ...)  printf(" %s %s:%d %s() " fmt, get_time_string(timestamp_buf, TimeStamp_buff_len), __FILE__,  __LINE__, __FUNCTION__, ##__VA_ARGS__); \
+			    memset(buffer_send, 0, MAX_BUF_LEN); \
+                	    snprintf(buffer_send, MAX_BUF_LEN," %s %s:%d %s(): " fmt, get_time_string(timestamp_buf, TimeStamp_buff_len), __FILE__,  __LINE__, __FUNCTION__, ##__VA_ARGS__); \
+			    ipacm_log_dump(buffer_send);
+
+#define IPACMLOG(fmt, ...)  printf(fmt, ##__VA_ARGS__); \
+			    memset(buffer_send, 0, MAX_BUF_LEN); \
+                	    snprintf(buffer_send, MAX_BUF_LEN," %s %s:%d %s(): " fmt, get_time_string(timestamp_buf, TimeStamp_buff_len), __FILE__,  __LINE__, __FUNCTION__, ##__VA_ARGS__); \
+			    ipacm_log_dump(buffer_send);
 
 inline void get_kernel_version(char *kernel_ver)
 {

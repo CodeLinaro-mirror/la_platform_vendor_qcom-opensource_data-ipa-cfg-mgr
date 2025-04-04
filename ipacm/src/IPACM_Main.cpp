@@ -641,8 +641,6 @@ void* ipa_driver_msg_notifier(void *param)
 			}
 			evt_data.event = IPA_USB_LINK_UP_EVENT;
 			evt_data.evt_data = data_fid;
-			ipa_nl_send_getroute(IPA_IP_v4);
-			ipa_nl_send_getroute(IPA_IP_v6);
 			break;
 
 		case ECM_DISCONNECT:

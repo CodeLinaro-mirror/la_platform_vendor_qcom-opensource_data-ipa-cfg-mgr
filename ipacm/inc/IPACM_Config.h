@@ -1219,6 +1219,19 @@ public:
 		return NULL;
 	}
 
+	inline ipa_private_subnet *getPrivateSubnetByIfIndex(int ipa_if_index)
+	{
+		for(int cnt = 0; cnt < ipa_num_private_subnet; cnt++)
+		{
+			if(private_subnet_table[cnt].if_index == ipa_if_index)
+			{
+				return &private_subnet_table[cnt];
+			}
+		}
+
+		return NULL;
+	}
+
 	inline bool AddPrivateSubnet(uint32_t ip_addr, uint32_t ipv4_addr_mask, int ipa_if_index)
 	{
 		ipacm_cmd_q_data evt_data;
@@ -1250,21 +1263,18 @@ public:
 				return IPACM_FAILURE;
 			}
 
-			if(multi_vlan_bridge_config_enable)
+			bridge = get_vlan_bridge(ipa_virtual_iface_name);
+			if(bridge)
 			{
-				bridge = get_vlan_bridge(ipa_virtual_iface_name);
-				if(bridge)
-				{
-					IPACMERR("IPACM private subnet_addr entry(%d) name:%s\n", ipa_num_private_subnet,
-						ipa_virtual_iface_name);
-					IPACMDBG("Updated bridge private subnet_addr as: 0x%x \n", ip_addr);
-					bridge->bridge_ipv4_addr = ip_addr;
-					bridge->bridge_netmask = ipv4_addr_mask;
-				}
-				else
-				{
-					IPACMERR("bridge %s not up\n", ipa_virtual_iface_name);
-				}
+				IPACMERR("IPACM private subnet_addr entry(%d) name:%s\n", ipa_num_private_subnet,
+					ipa_virtual_iface_name);
+				IPACMDBG("Updated bridge private subnet_addr as: 0x%x \n", ip_addr);
+				bridge->bridge_ipv4_addr = ip_addr;
+				bridge->bridge_netmask = ipv4_addr_mask;
+			}
+			else
+			{
+				IPACMERR("bridge %s not up\n", ipa_virtual_iface_name);
 			}
 
 			data_fid->if_index = ipa_if_index; // already ipa index, not fid index

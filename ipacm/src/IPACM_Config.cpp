@@ -2308,13 +2308,25 @@ process:
 				found = 0;
 			}
 
+process_new:
+
 			IPACMDBG("bridge (%s) mask 0x%X, address 0x%X\n", data_all->iface_name,
 				mapping_info.subnet_mask,
 				mapping_info.bridge_ipv4);
 
-process_new:
 			vlan_bridges[i].bridge_netmask = mapping_info.subnet_mask;
 			vlan_bridges[i].bridge_ipv4_addr = mapping_info.bridge_ipv4;
+
+			if(default_bridge &&
+				IPACM_Iface::ipacmcfg->getPrivateSubnetByIfIndex(data_all->if_index) != NULL)
+			{
+				vlan_bridges[i].bridge_ipv4_addr = IPACM_Iface::ipacmcfg->getPrivateSubnetByIfIndex(data_all->if_index)->subnet_addr;
+				vlan_bridges[i].bridge_netmask = IPACM_Iface::ipacmcfg->getPrivateSubnetByIfIndex(data_all->if_index)->subnet_mask;
+				IPACMDBG("bridge (%s) mask 0x%X, address 0x%X\n", data_all->iface_name,
+					vlan_bridges[i].bridge_netmask,
+					vlan_bridges[i].bridge_ipv4_addr);
+			}
+
 			strlcpy(vlan_bridges[i].bridge_name, data_all->iface_name, IF_NAME_LEN);
 
 			fd = socket(AF_INET, SOCK_DGRAM, 0);

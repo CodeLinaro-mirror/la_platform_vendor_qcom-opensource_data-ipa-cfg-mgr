@@ -1115,6 +1115,7 @@ int IPACM_Wan::handle_addr_evt(ipacm_event_data_addr *data)
 				del_dft_firewall_rules(IPA_IP_v6);
 				config_dft_firewall_rules(IPA_IP_v6);
 			}
+			IPACMDBG_H("odu_subnet_fl_rule_hdl: %d\n", IPACM_Iface::odu_subnet_fl_rule_hdl[IPA_IP_v6]);
 			if(rx_prop != NULL
 				&& num_ipv6_dest_flt_rule < MAX_DEFAULT_v6_ROUTE_RULES)
 			{

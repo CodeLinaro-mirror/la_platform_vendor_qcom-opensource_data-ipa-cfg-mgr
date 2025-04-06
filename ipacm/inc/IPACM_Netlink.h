@@ -27,7 +27,7 @@ OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
 IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 Changes from Qualcomm Innovation Center are provided under the following license:
-Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+Copyright (c) 2023-2024 Qualcomm Innovation Center, Inc. All rights reserved.
 SPDX-License-Identifier: BSD-3-Clause-Clear
 */
 /*!
@@ -63,6 +63,9 @@ SPDX-License-Identifier: BSD-3-Clause-Clear
 #include <netlink/object-api.h>
 #include <netlink/cache.h>
 #include <string.h>
+#include <arpa/inet.h>
+#include <net/if_arp.h>
+
 #include "IPACM_Defs.h"
 
 #define MAX_NUM_OF_FD 10
@@ -244,8 +247,9 @@ typedef struct
 }ipa_nl_l2tp_info_t;
 
 typedef struct {
-    struct nlmsghdr nlh;
-    struct rtmsg rtm;
+	struct nlmsghdr nlh;
+	struct rtmsg rtm;
+	struct ndmsg nd;
 } nl_request_t;
 
 /* Initialization routine for listener on NetLink sockets interface */
@@ -254,8 +258,22 @@ int ipa_nl_listener_init
 	 unsigned int nl_type,
 	 unsigned int nl_groups,
 	 ipa_nl_sk_fd_set_info_t *sk_fdset,
-	 ipa_sock_thrd_fd_read_f read_f
+	 ipa_sock_thrd_fd_read_f read_f,
+	 ipa_nl_sk_info_t *sk_info
+
 	 );
+
+typedef struct
+{
+	int                 sk_fd;       /* socket descriptor */
+	struct sockaddr_nl  sk_addr_loc; /*  stores socket parameters */
+} ipa_sk_info_t;
+
+typedef struct
+{
+    struct nlmsghdr hdr;
+    struct rtgenmsg gen;
+}ipa_nl_req_type;
 
 void *l2tp_nl_process(void *param);
 
@@ -268,8 +286,14 @@ int mask_v6(int index, uint32_t *mask);
 
 /*  get ipa interface name */
 int ipa_get_if_name(char *if_name, int if_index);
-
+int ipa_nl_route_recvmsg(int fd, struct msghdr *msg, char **result);
+int ipa_nl_query_ip_addr_info(int);
+int ipa_nl_query_getlink(int);
+int ipa_nl_route_receive(int fd, struct msghdr *msg, int flags);
 int ipa_nl_send_getroute(ipa_ip_type ip_type);
+int ipa_nl_query_newneigh(int af_family, char* dev_name = NULL);
+void ipa_query_nl_getevents();
+static pthread_mutex_t nl_lock = PTHREAD_MUTEX_INITIALIZER;
 
 #ifdef __cplusplus
 }

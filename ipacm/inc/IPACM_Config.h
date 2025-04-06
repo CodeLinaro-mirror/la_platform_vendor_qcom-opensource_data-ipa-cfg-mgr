@@ -61,7 +61,7 @@
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE
  *
  * Changes from Qualcomm Innovation Center, Inc. are provided under the following license:
- * Copyright (c) 2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2024-2025 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear.
  */
 /*!
@@ -92,7 +92,10 @@
 #include <map>
 #include <algorithm>
 #include <string>
+#include <libgen.h>
+#include <sys/statvfs.h>
 
+#define IPACM_DEF_LOG_FILE_SIZE_QUOTA    30
 
 using std::string;
 using std::set;
@@ -152,6 +155,7 @@ typedef struct
 
 	/* Store vlan ID */
 	uint16_t vlan_id;
+	int if_index;
 } ipacm_ip_pass_mpdn_info;
 
 #if defined(FEATURE_IPACM_PER_CLIENT_STATS) && defined(IPA_HW_FNR_STATS)
@@ -225,7 +229,7 @@ class IPACM_Config
 {
 public:
 
-	int max_file_size;
+	uint32_t max_file_size;
 
 	/* IPACM ipa_client map to rm_resource*/
 	ipa_rm_resource_name ipa_client_rm_map_tbl[IPA_CLIENT_MAX];
@@ -588,7 +592,7 @@ public:
 		return ret;
 	}
 
-	void ip_pass_config_update(ipa_ioc_pdn_config *pdn_config);
+	void ip_pass_config_update(ipa_ioc_pdn_config *pdn_config, int if_index);
 
 	const char* getEventName(ipa_cm_event_id event_id);
 

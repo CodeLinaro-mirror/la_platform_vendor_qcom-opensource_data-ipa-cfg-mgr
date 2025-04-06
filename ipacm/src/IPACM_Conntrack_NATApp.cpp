@@ -92,6 +92,11 @@ extern "C"
 	  strcasesame(mem_type, "SRAM" ) )
 
 /* NatApp class Implementation. */
+#define CT_SRAM_IN_USE() \
+	( strcasesame(ct_mem_type, "HYBRID" ) || \
+	  strcasesame(ct_mem_type, "SRAM" ) )
+
+
 NatApp *NatApp::pInstance = NULL;
 
 bool NatApp::kernel_ver_updated = false;
@@ -327,24 +332,30 @@ int NatApp::AddPdn(uint32_t pub_ip, uint8_t mux_id, bool is_sta, bool ip_pass)
 			nat_rule.s = cache[cnt].s;
 			nat_rule.pdn_index = pdn_index;
 			cache[cnt].pdn_index = pdn_index;
-
-			if(ipa_nat_add_ipv4_rule(nat_table_hdl, &nat_rule, &cache[cnt].rule_hdl) < 0)
+			if(cache[cnt].sw_allow)
 			{
-				IPACMERR("unable to add the rule delete from cache\n");
-				memset(&cache[cnt], 0, sizeof(cache[cnt]));
-				curCnt--;
-				continue;
+				IPACMDBG("SW allow entry so not adding to HW\n");
 			}
-			IPACMDBG("cache entry %d rule handle %d\n", cnt, cache[cnt].rule_hdl);
-			cache[cnt].enabled = true;
+			else
+			{
+				if(ipa_nat_add_ipv4_rule(nat_table_hdl, &nat_rule, &cache[cnt].rule_hdl) < 0)
+				{
+					IPACMERR("unable to add the rule delete from cache\n");
+					memset(&cache[cnt], 0, sizeof(cache[cnt]));
+					curCnt--;
+					continue;
+				}
+				IPACMDBG("cache entry %d rule handle %d\n", cnt, cache[cnt].rule_hdl);
+				cache[cnt].enabled = true;
 
-			IPACMDBG("new pdn added below rule successfully\n");
-			iptodot("Private IP", nat_rule.private_ip);
-			iptodot("Target IP", nat_rule.target_ip);
-			IPACMDBG("Private Port:%d \t Target Port: %d\n", nat_rule.private_port, nat_rule.target_port);
-			IPACMDBG("Public Port:%d\n", nat_rule.public_port);
-			IPACMDBG("protocol: %d\n", nat_rule.protocol);
-			IPACMDBG("pdn index: %d\n", nat_rule.pdn_index);
+				IPACMDBG("new pdn added below rule successfully\n");
+				iptodot("Private IP", nat_rule.private_ip);
+				iptodot("Target IP", nat_rule.target_ip);
+				IPACMDBG("Private Port:%d \t Target Port: %d\n", nat_rule.private_port, nat_rule.target_port);
+				IPACMDBG("Public Port:%d\n", nat_rule.public_port);
+				IPACMDBG("protocol: %d\n", nat_rule.protocol);
+				IPACMDBG("pdn index: %d\n", nat_rule.pdn_index);
+			}
 		}
 
 	}
@@ -1697,6 +1708,10 @@ void NatApp::CacheEntry(const nat_table_entry *rule)
 			cache[cnt].uc_activation_index = rule->uc_activation_index;
 			cache[cnt].ucp = rule->ucp;
 			cache[cnt].s = rule->s;
+			if(ChkSWAllow(rule))
+			{
+				cache[cnt].sw_allow = true;
+			}
 #ifdef FEATURE_VLAN_MPDN
 			cache[cnt].pdn_index = rule->pdn_index;
 #endif
@@ -1959,9 +1974,7 @@ NatEntryBase::NatEntryBase(ipa_ip_type type) :
 	m_uc_activation_index(0),
 	m_ucp(0),
 	m_s(0)
-{
-	IPACMDBG_H("%d \n", type);
-}
+{}
 
 NatEntryBase::~NatEntryBase() {}
 
@@ -3418,6 +3431,21 @@ void NatBase::UpdateTcpUdpTimeStamps(bool& isTcpUdpTimeoutUpToDate)
 	IPACMDBG_H("\n");
 	int ret;
 	uint32_t timestamp;
+	bool keep_awake;
+
+	keep_awake = ( m_maxEntries && CT_SRAM_IN_USE() && ipa_ct_is_sram_supported() );
+
+	if ( keep_awake )
+	{
+		IPACMDBG("Voting clock on\n");
+
+		if ( ipa_nat_vote_clock(IPA_APP_CLK_VOTE) != 0 )
+		{
+			IPACMERR("Voting clock on failed\n");
+			return;
+		}
+	}
+
 
 	for (int cnt = 0; cnt < m_maxEntries; ++cnt)
 	{
@@ -3455,6 +3483,17 @@ void NatBase::UpdateTcpUdpTimeStamps(bool& isTcpUdpTimeoutUpToDate)
 		curr.m_timestamp = timestamp;
 		IPACMDBG("Updated time stamp successfully\n");
 	}
+
+	if ( keep_awake )
+	{
+		IPACMDBG("Voting clock off\n");
+
+		if ( ipa_nat_vote_clock(IPA_APP_CLK_DEVOTE) != 0 )
+		{
+			IPACMERR("Voting clock off failed\n");
+		}
+	}
+
 	IPACMDBG_H("return\n");
 }
 

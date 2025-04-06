@@ -28,7 +28,7 @@
  *
  * Changes from Qualcomm Innovation Center are provided under the following license:
  *
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted (subject to the limitations in the
@@ -250,6 +250,7 @@ public:
 	bool IsVlanIPv4(uint32_t ipv4_address, uint16_t *VlanId);
 #endif
 	bool IsVlanIPv6(const Ipv6IpAddress& ip, uint16_t *VlanId);
+	void query_conntracks(int af_family, uint32_t ipv4_addr, uint32_t *ipv6_addr);
 };
 
 extern IPACM_ConntrackListener *CtList;

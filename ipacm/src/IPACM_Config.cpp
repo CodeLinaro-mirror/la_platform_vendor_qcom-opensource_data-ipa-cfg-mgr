@@ -28,7 +28,7 @@
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  * Changes from Qualcomm Innovation Center are provided under the following license:
- * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2025 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear.
  */
 /*!
@@ -529,6 +529,11 @@ int IPACM_Config::Init(void)
 	char	IPACM_config_file[IPA_MAX_FILE_LEN];
 	IPACM_conf_t	*cfg;
 
+	struct statvfs stat;
+	ulong available_partition_size_bytes = 0;
+	char ipacm_log_file[] = IPACM_LOG_COLLECTION_FILE;
+	char *ipacm_log_dir = NULL;
+
 	cfg = (IPACM_conf_t *)malloc(sizeof(IPACM_conf_t));
 	if(cfg == NULL)
 	{
@@ -573,9 +578,40 @@ int IPACM_Config::Init(void)
 		goto fail;
 	}
 
-        max_file_size = cfg->max_file_size;
+	if(cfg->max_file_size_quota > 100)
+	{
+		IPACMDBG_H("Invalid Quota Set[%d], changing to default[%d]\n",
+				cfg->max_file_size_quota, IPACM_DEF_LOG_FILE_SIZE_QUOTA);
+		cfg->max_file_size_quota = IPACM_DEF_LOG_FILE_SIZE_QUOTA;
+	}
+	ipacm_log_dir = dirname(ipacm_log_file);
 
-        log_init();
+	/* Read the available partition size */
+	if (statvfs(ipacm_log_dir, &stat) != 0) {
+		IPACMDBG_H("Failed to get available partition size\n");
+		max_file_size = 0;
+	}
+	else
+	{
+		available_partition_size_bytes = stat.f_bavail * stat.f_frsize;
+
+		IPACMDBG_H("Setting file size to min of APS[%lu], max_filesz[%lu], \
+				Based on Quota[%lu] \n", available_partition_size_bytes,
+				cfg->max_file_size, (ulong)((available_partition_size_bytes *
+						cfg->max_file_size_quota) /100));
+
+		/* Conerting from ulong to unit32_t, since uint32_t can hold a
+		 * file size value upto 4GB. So, shouldn't affect here as the file
+		 * size configured will usually be less than that.
+		 */
+		max_file_size = (uint32_t)std::min({(ulong)(cfg->max_file_size),
+				(ulong)(available_partition_size_bytes),
+				(ulong)((available_partition_size_bytes *
+						cfg->max_file_size_quota) / 100)});
+	}
+	IPACMDBG_H("max_file_size %d \n", max_file_size);
+
+	log_init();
 
 	/* Construct IPACM Iface table */
 	ipa_num_ipa_interfaces = cfg->iface_config.num_iface_entries;
@@ -1425,12 +1461,15 @@ void IPACM_Config::add_bridge_vlan_mapping(ipa_bridge_vlan_mapping_info *data)
 	{
 		if(it_mapping->bridge_if_index == data->master_if_index)
 		{
-	                if(is_dummy_VID(data->vlan_id))
-                        {
-                                if((data->vlan_id != it_mapping->bridge_associated_VID) || !is_dummy_VID(it_mapping->bridge_associated_VID))
-                                {
-                                        continue;
-                                }
+	        	if(is_dummy_VID(data->vlan_id))
+			{
+				if((data->vlan_id != it_mapping->bridge_associated_VID) || !is_dummy_VID(it_mapping->bridge_associated_VID))
+            			{
+                			continue;
+                		}
+			} else if(is_dummy_VID(it_mapping->bridge_associated_VID))
+			{
+				continue;
 			}
 
 			if((data->status == 1) && (it_mapping->status != 1))
@@ -1820,6 +1859,14 @@ void IPACM_Config::add_vlan_iface(ipa_vlan_iface_info *data)
 	IPACM_EvtDispatcher::PostEvt(&evt_data);
 
 #endif
+	/* Sending Getneigh to receive missing neighbor in case if missed early */
+	IPACMDBG_H("Query Getneigh for physical ifaces\n");
+	ipa_nl_query_newneigh(AF_BRIDGE, data->name);
+	IPACMDBG_H("Query Getneigh for v4\n");
+	ipa_nl_query_newneigh(AF_INET, data->name);
+	IPACMDBG_H("Query Getneigh for v6\n");
+	ipa_nl_query_newneigh(AF_INET6, data->name);
+
 	return;
 }
 
@@ -3605,7 +3652,7 @@ bool IPACM_Config::delMacsecMap(struct ipa_macsec_map *macsecMap) {
 	return true;
 }
 
-void IPACM_Config::ip_pass_config_update(ipa_ioc_pdn_config *pdn_config)
+void IPACM_Config::ip_pass_config_update(ipa_ioc_pdn_config *pdn_config, int if_index)
 {
 	int indx;
 	int bridge_index;
@@ -3636,7 +3683,7 @@ void IPACM_Config::ip_pass_config_update(ipa_ioc_pdn_config *pdn_config)
 			strlcpy(ip_pass_mpdn_table[indx].dev_name,
 					pdn_config->dev_name, IPA_RESOURCE_NAME_MAX);
 			ip_pass_mpdn_table[indx].is_default_pdn = pdn_config->default_pdn;
-
+			ip_pass_mpdn_table[indx].if_index  = if_index;
 			/* This is to avoid installing IPA private subnet Filter rules in case of
 			 * IPPT without NAT scenario to avoid packets taking SW path because we
 			 * are installing private subnet rules with public IP assigned to bridge
@@ -3690,6 +3737,7 @@ void IPACM_Config::ip_pass_config_update(ipa_ioc_pdn_config *pdn_config)
 			ip_pass_mpdn_table[indx].ip_pass_pdn_ip_addr = false;
 			memset(ip_pass_mpdn_table[indx].dev_name, 0, IPA_RESOURCE_NAME_MAX);
 			ip_pass_mpdn_table[indx].is_default_pdn = false;
+			ip_pass_mpdn_table[indx].if_index = 0;
 		}
 		else
 			IPACMERR("IP Passthrough PDN not found\n");
@@ -3894,6 +3942,7 @@ void IPACM_Config::delete_qos_params_info(ipa_ioc_qos_config *data)
 			qos_param = (qos_delete_param_info *)malloc(sizeof(qos_delete_param_info) + it_qos_params->qos_client_list.size() * sizeof(qos_client_info));
 			if (qos_param == NULL)
 			{
+				pthread_mutex_unlock(&qos_param_list_lock);
 				IPACMERR("Unable to allocate memory\n");
 				return;
 			}
@@ -3955,6 +4004,7 @@ void IPACM_Config::flush_qos_params_info(ipa_ioc_qos_config *data)
 		qos_param = (qos_delete_param_info *)malloc(sizeof(qos_delete_param_info) + it_qos_params->qos_client_list.size() * sizeof(qos_client_info));
 		if (qos_param == NULL)
 		{
+			pthread_mutex_unlock(&qos_param_list_lock);
 			IPACMERR("Unable to allocate memory\n");
 			return;
 		}

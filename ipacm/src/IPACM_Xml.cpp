@@ -665,7 +665,6 @@ static int ipacm_cfg_xml_parse_tree
 	int str_size = 0;
 	char* content = NULL;
 	struct ether_addr *eth_addr = NULL;
-	char content_buf[MAX_XML_STR_LEN];
 
 	if (NULL == xml_node)
 		return ret_val;
@@ -995,6 +994,19 @@ static int ipacm_cfg_xml_parse_tree
 							config->ipacm_socksv5_enable = atoi(content);
 						}
 				}
+				else if (0 == IPACM_util_icmp_string((char*)xml_node->name, IPACMFILEQUOTA_TAG))
+				{
+					IPACMDBG_H("inside ipacm_logging Quota\n");
+					content = IPACM_read_content_element(xml_node);
+					if (content!= NULL)
+					{
+						if(atoi(content)!=0)
+						{
+							config->max_file_size_quota = atoi(content);
+						}
+						IPACMDBG_H("max_fileszQuota %d \n",config->max_file_size_quota);
+					}
+				}
 				else if (0 == IPACM_util_icmp_string((char*)xml_node->name, IPACMFILEVAR_TAG))
 				{		IPACMDBG_H("inside ipacm_logging \n");
 						content = IPACM_read_content_element(xml_node);
@@ -1038,20 +1050,16 @@ static int ipacm_cfg_xml_parse_tree
 					content = IPACM_read_content_element(xml_node);
 					if (content)
 					{
-						str_size = strlen(content);
-						memset(content_buf, 0, sizeof(content_buf));
-						memcpy(content_buf, (void *)content, str_size);
-						if (atoi(content_buf))
+						if (atoi(content))
 						{
 							config->qos_mode = true;
-							IPACMDBG_H("QOS mode enabled %d buf(%d)\n", config->qos_mode, atoi(content_buf));
+							IPACMDBG_H("QOS mode enabled %d buf(%d)\n", config->qos_mode, atoi(content));
 						}
 						else
 						{
 							config->qos_mode = false;
-							IPACMDBG_H("QOS mode disabled %d buf(%d)\n", config->qos_mode, atoi(content_buf));
+							IPACMDBG_H("QOS mode disabled %d buf(%d)\n", config->qos_mode, atoi(content));
 						}
-					} else {
 					}
 				}
 			}

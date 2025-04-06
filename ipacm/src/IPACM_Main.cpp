@@ -61,7 +61,7 @@
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  * Changes from Qualcomm Innovation Center, Inc. are provided under the following license:
- * Copyright (c) 2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2024-2025 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear.
  */
  /*!
@@ -153,6 +153,35 @@
 #ifdef FEATURE_IPACM_RESTART
 #define IPA_READY_QCMAP_NOTIFIER_FILE "/var/run/data/monitor/ipacmd.pid"
 #endif
+
+void* netlink_start(void *param);
+#ifndef FEATURE_IPA_ANDROID
+void* firewall_monitor(void *param);
+#endif
+void* ipa_driver_msg_notifier(void *param);
+void* l2tp_process(void *param);
+void* netlink_events_query(void *param);
+
+typedef void*(*ipacm_t_func_type)(void*);
+
+struct ipacm_thread_info
+{
+	pthread_t tid;
+	ipacm_t_func_type t_func;
+	const char* t_name;
+};
+
+ipacm_thread_info ipacm_child_threads[IPACM_CHILD_THREADS_MAX] = {
+	{0, MessageQueue::Process, "IPACM_CMD_QUEUE"},
+	{0, netlink_start, "IPACM_NETLINK"},
+#ifndef FEATURE_IPA_ANDROID
+	{0, firewall_monitor, "IPACM_MONITOR"},
+#endif
+	{0, ipa_driver_msg_notifier, "IPACM_IPA_DRVR"},
+	{0, l2tp_process, "IPACM_L2TP"},
+	{0, netlink_events_query, "IPACM_NTLNK_QRY"}
+};
+
 IPACM_Neighbor *neigh = NULL;
 
 uint32_t ipacm_event_stats[IPACM_EVENT_MAX];
@@ -164,10 +193,21 @@ int ipa_get_if_index(char *if_name, int *if_index);
 int ipa_reset();
 int ipa_query_driver_event();
 #endif
+ipa_nl_sk_info_t sk_info;
+
+/* start netlink query socket thread*/
+void* netlink_events_query(void *param)
+{
+	pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, NULL);
+	IPACMDBG_H("ipa_query_nl_getevents started\n");
+	ipa_query_nl_getevents();
+	return NULL;
+}
 
 /* start netlink socket monitor*/
 void* netlink_start(void *param)
 {
+	pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, NULL);
 	ipa_nl_sk_fd_set_info_t sk_fdset;
 	int ret_val = 0;
 	memset(&sk_fdset, 0, sizeof(ipa_nl_sk_fd_set_info_t));
@@ -175,7 +215,7 @@ void* netlink_start(void *param)
 	ret_val = ipa_nl_listener_init(NETLINK_ROUTE, (RTMGRP_IPV4_ROUTE | RTMGRP_IPV6_ROUTE | RTMGRP_LINK |
 																										RTMGRP_IPV4_IFADDR | RTMGRP_IPV6_IFADDR | RTMGRP_NEIGH |
 																										RTNLGRP_IPV6_PREFIX),
-																 &sk_fdset, ipa_nl_recv_msg);
+																 &sk_fdset, ipa_nl_recv_msg, &sk_info);
 
 	if (ret_val != IPACM_SUCCESS)
 	{
@@ -189,6 +229,7 @@ void* netlink_start(void *param)
 /* start firewall-rule monitor*/
 void* firewall_monitor(void *param)
 {
+	pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, NULL);
 	int length;
 	int wd, wd1;
 	char buffer[INOTIFY_BUF_LEN];
@@ -295,6 +336,7 @@ void* firewall_monitor(void *param)
 /* start IPACM wan-driver notifier */
 void* ipa_driver_msg_notifier(void *param)
 {
+	pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, NULL);
 	int length, fd, cnt;
 
 #ifdef FEATURE_IPACM_RESTART
@@ -966,7 +1008,6 @@ void* ipa_driver_msg_notifier(void *param)
 							 pdn_info->u.passthrough_cfg.client_mac_addr[5]);
 
 			/* Update IP Passthrough config. */
-			IPACM_Iface::ipacmcfg->ip_pass_config_update(pdn_info);
 			evt_data.event = IPA_IP_PASS_UPDATE_EVENT;
 			ip_pass_pdn_data = (ipacm_event_ip_pass_pdn_info *)malloc(sizeof(ipacm_event_ip_pass_pdn_info));
 			if(!ip_pass_pdn_data)
@@ -974,12 +1015,13 @@ void* ipa_driver_msg_notifier(void *param)
 				IPACMERR("unable to allocate memory for pdn_config\n");
 				return NULL;
 			}
+			ipa_get_if_index(pdn_info->dev_name, &(ip_pass_pdn_data->if_index));
+			IPACM_Iface::ipacmcfg->ip_pass_config_update(pdn_info, ip_pass_pdn_data->if_index);
 			ip_pass_pdn_data->skip_nat = pdn_info->u.passthrough_cfg.skip_nat;
 			ip_pass_pdn_data->pdn_ip_addr = htonl(pdn_info->u.passthrough_cfg.pdn_ip_addr);
 			ip_pass_pdn_data->VlanID = pdn_info->u.passthrough_cfg.vlan_id;
 			ip_pass_pdn_data->enable = pdn_info->enable;
 			evt_data.evt_data = ip_pass_pdn_data;
-			ipa_get_if_index(pdn_info->dev_name, &(ip_pass_pdn_data->if_index));
 			break;
 
 		case IPA_QOS_PARAM_ADD_EVENT:
@@ -1044,6 +1086,7 @@ static void IPACM_Signals_handler(int sig, siginfo_t *info, void *extra)
 	void *array[MAX_IPACM_TRACE_STACK];
 	int size, i;
 	char **messages;
+	void* res = NULL;
 
 	IPACMERR("Received Signal: %d %s\n", sig, strsignal(sig));
 	memset(&evt_data, 0, sizeof(evt_data));
@@ -1066,6 +1109,7 @@ static void IPACM_Signals_handler(int sig, siginfo_t *info, void *extra)
 	case SIGBUS:
 	case SIGABRT:
 	case SIGTERM:
+		log_ipacm_crash_info("IPACM EXIT ABNORMALLY !!!!!");
 		p = (ucontext_t *)extra;
 		IPACMERR("siginfo address=%x\n", info->si_addr);
 		/*
@@ -1092,12 +1136,30 @@ static void IPACM_Signals_handler(int sig, siginfo_t *info, void *extra)
 		fflush(stdout);
 
 		free(messages);
-
+		close(sk_info.sk_fd); /* closing netlink socket */
 		/* got regular kill <PID>, kill -9 <PID> generates SIGKILL that cannot be handled by a signal handler */
+		IPACMDBG_DMESG("IPACM process stoped, So ipa path is broken\n");
+
 		if(sig == SIGTERM)
 		{
 			IPACMERR("IPACM gracefully requested to quit by PID %d, complying\n", info->si_pid);
-			exit(-1);
+
+			for (int t_itr = 0; t_itr < IPACM_CHILD_THREADS_MAX; t_itr++)
+			{
+				if (IPACM_SUCCESS != pthread_cancel(ipacm_child_threads[t_itr].tid))
+				{
+					IPACMERR("unable to cancel %s THREAD",ipacm_child_threads[t_itr].t_name);
+				}
+				else
+				{
+					pthread_join(ipacm_child_threads[t_itr].tid, &res);
+					if(res == PTHREAD_CANCELED)
+					{
+						IPACMDBG("%s THREAD cancelled sucessfully\n",ipacm_child_threads[t_itr].t_name);
+					}
+				}
+			}
+			exit(0);
 		}
 
 		/* restore to default signal handler so core dump is generated from original fault point */
@@ -1157,6 +1219,7 @@ void RegisterForSignals(bool default_handler)
 
 void *l2tp_process(void *param)
 {
+	pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, NULL);
 	return l2tp_nl_process(param);
 }
 
@@ -1167,10 +1230,6 @@ int main(int argc, char **argv)
 #ifdef FEATURE_IPACM_RESTART
 	FILE *fp = NULL;
 #endif
-
-	pthread_t netlink_thread = 0, monitor_thread = 0, ipa_driver_thread = 0;
-	pthread_t cmd_queue_thread = 0;
-	pthread_t l2tp_thread = 0;
 
 	/* check if ipacm is already running or not */
 	ipa_is_ipacm_running();
@@ -1188,6 +1247,8 @@ int main(int argc, char **argv)
 
 	IPACMDBG_H("RESET IPA-HW rules\n");
 	ipa_reset();
+	IPACMDBG_H("RESET completed\n");
+
 #endif
 
 #ifdef IPA_HW_FNR_STATS
@@ -1221,94 +1282,28 @@ int main(int argc, char **argv)
 
 	RegisterForSignals(false);
 
-	if (IPACM_SUCCESS == cmd_queue_thread)
+	for(int t_itr = 0; t_itr< IPACM_CHILD_THREADS_MAX; t_itr++)
 	{
-		ret = pthread_create(&cmd_queue_thread, NULL, MessageQueue::Process, NULL);
-		if (IPACM_SUCCESS != ret)
+		if(0 == ipacm_child_threads[t_itr].tid)
 		{
-			IPACMERR("unable to command queue thread\n");
-			return ret;
-		}
-		IPACMDBG_H("created command queue thread\n");
-		if(pthread_setname_np(cmd_queue_thread, "cmd queue process") != 0)
-		{
-			IPACMERR("unable to set thread name\n");
+			ret = pthread_create(&ipacm_child_threads[t_itr].tid, NULL, ipacm_child_threads[t_itr].t_func, NULL);
+			if (IPACM_SUCCESS != ret) {
+				IPACMERR("Unable to create %s THREAD\n", ipacm_child_threads[t_itr].t_name);
+				return ret;
+			}
+			IPACMDBG_H("Created thread %s THREAD\n", ipacm_child_threads[t_itr].t_name);
+			if(pthread_setname_np(ipacm_child_threads[t_itr].tid, ipacm_child_threads[t_itr].t_name) != IPACM_SUCCESS) {
+				IPACMERR("Unable to set thread name for %s THREAD\n", ipacm_child_threads[t_itr].t_name);
+			}
 		}
 	}
-
-	if (IPACM_SUCCESS == netlink_thread)
-	{
-		ret = pthread_create(&netlink_thread, NULL, netlink_start, NULL);
-		if (IPACM_SUCCESS != ret)
-		{
-			IPACMERR("unable to create netlink thread\n");
-			return ret;
-		}
-		IPACMDBG_H("created netlink thread\n");
-		if(pthread_setname_np(netlink_thread, "netlink socket") != 0)
-		{
-			IPACMERR("unable to set thread name\n");
-		}
-	}
-
-	/* Enable Firewall support only on MDM targets */
-#ifndef FEATURE_IPA_ANDROID
-	if (IPACM_SUCCESS == monitor_thread)
-	{
-		ret = pthread_create(&monitor_thread, NULL, firewall_monitor, NULL);
-		if (IPACM_SUCCESS != ret)
-		{
-			IPACMERR("unable to create monitor thread\n");
-			return ret;
-		}
-		IPACMDBG_H("created firewall monitor thread\n");
-		if(pthread_setname_np(monitor_thread, "firewall cfg process") != 0)
-		{
-			IPACMERR("unable to set thread name\n");
-		}
-	}
-#endif
-
-	if (IPACM_SUCCESS == ipa_driver_thread)
-	{
-		ret = pthread_create(&ipa_driver_thread, NULL, ipa_driver_msg_notifier, NULL);
-		if (IPACM_SUCCESS != ret)
-		{
-			IPACMERR("unable to create ipa_driver_wlan thread\n");
-			return ret;
-		}
-		IPACMDBG_H("created ipa_driver_wlan thread\n");
-		if(pthread_setname_np(ipa_driver_thread, "ipa driver ntfy") != 0)
-		{
-			IPACMERR("unable to set thread name\n");
-		}
-	}
-
-	neigh->update_neigh_cache();
-
-	if (IPACM_SUCCESS == l2tp_thread)
-	{
-		ret = pthread_create(&l2tp_thread, NULL, l2tp_process, NULL);
-		if (IPACM_SUCCESS != ret)
-		{
-			IPACMERR("unable to start l2tp_thread\n");
-			return ret;
-		}
-		IPACMDBG_H("l2tp_thread created\n");
-		if(pthread_setname_np(cmd_queue_thread, "l2tp_thread") != 0)
-		{
-			IPACMERR("unable to set thread name for l2tp_thrad\n");
-		}
-	}
-
 	/* Create Conntrack listener threads here to support on-demand PDNs connections before WAN is up */
 	CtList->CreateConnTrackThreads();
 
-	pthread_join(cmd_queue_thread, NULL);
-	pthread_join(netlink_thread, NULL);
-	pthread_join(monitor_thread, NULL);
-	pthread_join(ipa_driver_thread, NULL);
-   	pthread_join(l2tp_thread, NULL);
+	for(int t_itr = 0; t_itr< IPACM_CHILD_THREADS_MAX; t_itr++)
+	{
+		pthread_join(ipacm_child_threads[t_itr].tid, NULL);
+	}
 
 	return IPACM_SUCCESS;
 }
@@ -1457,7 +1452,7 @@ int ipa_query_driver_event()
 		return IPACM_FAILURE;
 	}
 
-	if (ioctl(fd, IPA_IOC_QUERY_CACHED_DRIVER_MSG) < 0) {
+	if (ioctl(fd, IPA_IOC_QUERY_CACHED_DRIVER_MSG, 0) < 0) {
 		IPACMERR("IOCTL IPA_IOC_QUERY_CACHED_DRIVER_MSG call failed: %s \n",
 			strerror(errno));
 		close(fd);

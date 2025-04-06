@@ -29,7 +29,7 @@
  *
  * Changes from Qualcomm Innovation Center are provided under the following license:
  *
- * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2025 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted (subject to the limitations in the
@@ -530,7 +530,7 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 				}
 			}
 #endif
-
+#ifdef FEATURE_ETH_BRIDGE_LE
 			if (rx_prop != NULL)
 			{
 				if(IPACM_Iface::ipacmcfg->GetIPAVer() >= IPA_HW_None &&
@@ -543,13 +543,10 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 						IPACM_Iface::ipacmcfg->DelRmDepend(IPACM_Iface::ipacmcfg->ipa_client_rm_map_tbl[rx_prop->rx[0].src_pipe]);
 					IPACMDBG_H("Finished delete dependency \n ");
 				}
-#ifndef FEATURE_ETH_BRIDGE_LE
+
 				free(rx_prop);
 				rx_prop = NULL;
-#endif
 			}
-
-#ifndef FEATURE_ETH_BRIDGE_LE
 			if (tx_prop != NULL)
 			{
 				free(tx_prop);
@@ -808,6 +805,13 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 					}
 
 				}
+				/* Sending Getneigh to receive missing neighbor in case if missed early */
+				IPACMDBG_H("Query Getneigh for physical ifaces\n");
+				ipa_nl_query_newneigh(AF_BRIDGE, dev_name);
+				IPACMDBG_H("Query Getneigh for v4\n");
+				ipa_nl_query_newneigh(AF_INET, dev_name);
+				IPACMDBG_H("Query Getneigh for v6\n");
+				ipa_nl_query_newneigh(AF_INET6, dev_name);
 			}
 		}
 		break;
@@ -1739,7 +1743,7 @@ int IPACM_Lan::handle_l2tp_neigh(ipacm_event_data_all *data)
 		)
 	{
 		int index;
-
+		l2tp_vlan_mapping_info info;
 		index = get_eth_client_index(data->mac_addr);
 		if(index != IPACM_INVALID_INDEX)
 		{
@@ -1753,7 +1757,21 @@ int IPACM_Lan::handle_l2tp_neigh(ipacm_event_data_all *data)
 			index = num_eth_client;
 			memset(get_client_memptr(eth_client, index), 0, eth_client_len);
 		}
-
+		if(IPACM_Iface::ipacmcfg->get_vlan_l2tp_mapping(data->iface_name, info) == IPACM_FAILURE)
+		{
+			IPACMERR("Fail to get vlan-l2tp mapping.\n");
+			return IPACM_FAILURE;
+		}
+		if((info.vlan_client_mac[0] == 0) && (info.vlan_client_mac[1] == 0) &&
+			(info.vlan_client_mac[2] == 0) && (info.vlan_client_mac[3] == 0) &&
+		 	(info.vlan_client_mac[4] == 0) && (info.vlan_client_mac[5] == 0))
+		{
+			IPACMDBG_H("Query Getneigh for v4\n");
+			ipa_nl_query_newneigh(AF_INET6, dev_name);
+			IPACMDBG_H("Query Getneigh for v6\n");
+			ipa_nl_query_newneigh(AF_INET, dev_name);
+			return IPACM_FAILURE;
+		}
 		if(num_eth_client >= IPA_MAX_NUM_ETH_CLIENTS)
 		{
 			IPACMERR("Reached maximum number(%d) of eth clients\n", IPA_MAX_NUM_ETH_CLIENTS);
@@ -2042,7 +2060,7 @@ int IPACM_Lan::add_socksv5_flt_rule(ipa_socksv5_msg *data_event_conn)
 					goto end;
 				}
 
-				for (i = 0; i < k; i++)
+				for (i = 0; i < pFilteringTable->num_rules; i++)
 				{
 					socksv5_flt_hdl_v6[num_socksv5_flt++] = pFilteringTable->rules[i].flt_rule_hdl;
 				}
@@ -2415,6 +2433,7 @@ int IPACM_Lan::handle_vlan_neighbor(ipacm_event_data_all *data)
        int retval;
 #endif
        int skip_nat_set = 0;
+       ipacm_bridge *bridge;
 
 	IPACMDBG_H("\n");
 	memset(&data_all, 0, sizeof(ipacm_event_data_all));
@@ -2444,9 +2463,10 @@ int IPACM_Lan::handle_vlan_neighbor(ipacm_event_data_all *data)
 	data->vlanID = vlan_id;
 	data_vlan = (ipacm_event_new_neigh_vlan *)data;
 
-	if(!data_vlan->bridge && data_vlan->data_all.iptype == IPA_IP_v4)
+	bridge = IPACM_Iface::ipacmcfg->get_vlan_bridge_from_vid(vlan_id);
+	if(!bridge && data_vlan->data_all.iptype == IPA_IP_v4)
 	{
-		IPACMDBG_H("non bridged VLAN interface for v4 %s, ignoring\n", data->iface_name);
+		IPACMDBG_H("bridge is NULL with vlan (%s) vid (%d), ignoring!\n", data->iface_name, vlan_id);
 		return IPACM_FAILURE;
 	}
 
@@ -2487,7 +2507,7 @@ int IPACM_Lan::handle_vlan_neighbor(ipacm_event_data_all *data)
 			}
 			if(!skip_nat_set)
 			{
-				add_vlan_private_subnet(data_vlan->bridge);
+				add_vlan_private_subnet(bridge);
 			}
 		}
 #ifdef IPA_L2TP_TUNNEL_UDP
@@ -2501,7 +2521,7 @@ int IPACM_Lan::handle_vlan_neighbor(ipacm_event_data_all *data)
 			}
 			else
 			{
-				handle_eth_hdr_init(data->mac_addr, data_vlan->bridge, vlan_id, true);
+				handle_eth_hdr_init(data->mac_addr, bridge, vlan_id, true, priority);
 			}
 		}
 #else
@@ -2513,7 +2533,7 @@ int IPACM_Lan::handle_vlan_neighbor(ipacm_event_data_all *data)
 		}
 		else
 		{
-			handle_eth_hdr_init(data->mac_addr, data_vlan->bridge, vlan_id, true, priority);
+			handle_eth_hdr_init(data->mac_addr, bridge, vlan_id, true, priority);
 		}
 #endif
 	}
@@ -6229,6 +6249,11 @@ int IPACM_Lan::if_client_qos_rule_needed(uint8_t * client_mac,
 			return ret;
 		}
 
+		if (!ipv6_addr)
+		{
+			IPACMDBG_H("NULL IPv6 addr received, cannot install.\n");
+			return ret;
+		}
 		if (it_qos_client->v6_ip_addr[0] &&
 			it_qos_client->v6_ip_addr[0] == ipv6_addr[0] &&
 			it_qos_client->v6_ip_addr[1] == ipv6_addr[1] &&
@@ -6330,12 +6355,14 @@ int IPACM_Lan::install_all_qos_route_rule(uint8_t * client_mac,
 
 	if (false == m_routing.Commit(IPA_IP_v4))
 	{
+		pthread_mutex_unlock(&IPACM_Iface::ipacmcfg->qos_param_list_lock);
 		IPACMERR("QOS Routing rule v4 commit failed!\n");
 		return IPACM_FAILURE;
 	}
 
 	if (false == m_routing.Commit(IPA_IP_v6))
 	{
+		pthread_mutex_unlock(&IPACM_Iface::ipacmcfg->qos_param_list_lock);
 		IPACMERR("QOS Routing rule v6 commit failed!\n");
 		return IPACM_FAILURE;
 	}
@@ -13600,6 +13627,8 @@ int IPACM_Lan::eth_bridge_add_flt_rule(uint8_t *mac, uint32_t rt_tbl_hdl, ipa_ip
 		if(!vlan_id)
 		{
 			IPACMERR("got vlan id 0 for vlan iface %s\n", dev_name);
+			res = IPACM_FAILURE;
+			goto end;
 		}
 		flt_rule_entry.rule.attrib.attrib_mask |= IPA_FLT_VLAN_ID;
 		flt_rule_entry.rule.attrib.vlan_id = vlan_id;
@@ -17227,7 +17256,7 @@ fail:
 
 int IPACM_Lan::install_default_qos_rt_rules(uint8_t *client_mac, uint16_t client_vlan_id, enum ipa_ip_type iptype)
 {
-	struct ipa_ioc_add_rt_rule *rt_rule;
+	struct ipa_ioc_add_rt_rule *rt_rule = NULL;
 	struct ipa_rt_rule_add *rt_rule_entry;
 	const int NUM_RULES = 1;
 	int res = IPACM_SUCCESS;
@@ -17397,6 +17426,10 @@ int IPACM_Lan::install_default_qos_rt_rules(uint8_t *client_mac, uint16_t client
 	IPACMDBG_H("finish route/filter rule ip-type: %d, res(%d)\n", iptype, res);
 
 fail:
-	free(rt_rule);
+	if(rt_rule)
+        {
+		free(rt_rule);
+		rt_rule = NULL;
+        }
 	return res;
 }

@@ -163,6 +163,7 @@ public:
 #endif
 	uint16_t associated_VID;
 	/* once STA up, need associated pending VID to STA-WAN */
+	std::list<uint16_t> pending_VID_STA_v6;
 	std::list<uint16_t> pending_VID_STA;
 #endif
 	static uint16_t mtu_default_wan;

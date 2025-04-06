@@ -153,6 +153,9 @@ int log_init();
 		syslog(LOG_USER,"%s",buffer_send); \
 		printf("%s %s:%d %s() " fmt, get_time_string(timestamp_buf, TimeStamp_buff_len), __FILE__,  __LINE__, __FUNCTION__, ##__VA_ARGS__); \
 		ipacm_log_send (buffer_send); \
+		memset(buffer_send, 0, MAX_BUF_LEN); \
+		snprintf(buffer_send, MAX_BUF_LEN," %s %s:%d %s(): " fmt, get_time_string(timestamp_buf, TimeStamp_buff_len), __FILE__,  __LINE__, __FUNCTION__, ##__VA_ARGS__); \
+		ipacm_log_dump(buffer_send); \
 	} while (0);
 #else
 #define PERROR(fmt)   perror(fmt)

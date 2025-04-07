@@ -4210,9 +4210,12 @@ int IPACM_Wan::handle_route_add_vlan_pdn_evt(ipa_ip_type iptype, uint16_t vlan_i
 			/* Need to take different routing table when two STA ifaces same time */
 			strlcpy(rt_rule->rt_tbl_name, IPACM_Iface::ipacmcfg->rt_tbl_v6.name, sizeof(rt_rule->rt_tbl_name));
 			IPACMDBG_H(" WAN table created %s \n", rt_rule->rt_tbl_name);
-
-			/* use the STA-header handler */
-			rt_rule_entry->rule.hdr_hdl = hdr_hdl_sta_v6;
+			if (IPACM_Iface::ipacmcfg->eth_wan_pppoe_enable ){
+				rt_rule_entry->rule.hdr_proc_ctx_hdl = v6_p_ctx_2use;
+			} else {
+				/* use the STA-header handler */
+				rt_rule_entry->rule.hdr_hdl = hdr_hdl_sta_v6;
+			}
 
 			for (int tx_index = 0; tx_index < iface_query->num_tx_props; tx_index++)
 			{
@@ -4237,16 +4240,27 @@ int IPACM_Wan::handle_route_add_vlan_pdn_evt(ipa_ip_type iptype, uint16_t vlan_i
 					memcpy(&rt_rule_entry->rule.attrib,
 						&tx_prop->tx[tx_index].attrib,
 						sizeof(rt_rule_entry->rule.attrib));
-
-					rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_DST_ADDR;
-					rt_rule_entry->rule.attrib.u.v6.dst_addr[0] = 0;
-					rt_rule_entry->rule.attrib.u.v6.dst_addr[1] = 0;
-					rt_rule_entry->rule.attrib.u.v6.dst_addr[2] = 0;
-					rt_rule_entry->rule.attrib.u.v6.dst_addr[3] = 0;
-					rt_rule_entry->rule.attrib.u.v6.dst_addr_mask[0] = 0;
-					rt_rule_entry->rule.attrib.u.v6.dst_addr_mask[1] = 0;
-					rt_rule_entry->rule.attrib.u.v6.dst_addr_mask[2] = 0;
-					rt_rule_entry->rule.attrib.u.v6.dst_addr_mask[3] = 0;
+					if (IPACM_Iface::ipacmcfg->eth_wan_pppoe_enable ){
+						rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_SRC_ADDR;
+						rt_rule_entry->rule.attrib.u.v6.src_addr[0] = ipv6_prefix[0];
+						rt_rule_entry->rule.attrib.u.v6.src_addr[1] = ipv6_prefix[1];
+						rt_rule_entry->rule.attrib.u.v6.src_addr[2] = 0x00000000;
+						rt_rule_entry->rule.attrib.u.v6.src_addr[3] = 0x00000000;
+						rt_rule_entry->rule.attrib.u.v6.src_addr_mask[0] = 0xFFFFFFFF;
+						rt_rule_entry->rule.attrib.u.v6.src_addr_mask[1] = 0xFFFFFFFF;
+						rt_rule_entry->rule.attrib.u.v6.src_addr_mask[2] = 0x00000000;
+						rt_rule_entry->rule.attrib.u.v6.src_addr_mask[3] = 0x00000000;
+					} else {
+						rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_DST_ADDR;
+						rt_rule_entry->rule.attrib.u.v6.dst_addr[0] = 0;
+						rt_rule_entry->rule.attrib.u.v6.dst_addr[1] = 0;
+						rt_rule_entry->rule.attrib.u.v6.dst_addr[2] = 0;
+						rt_rule_entry->rule.attrib.u.v6.dst_addr[3] = 0;
+						rt_rule_entry->rule.attrib.u.v6.dst_addr_mask[0] = 0;
+						rt_rule_entry->rule.attrib.u.v6.dst_addr_mask[1] = 0;
+						rt_rule_entry->rule.attrib.u.v6.dst_addr_mask[2] = 0;
+						rt_rule_entry->rule.attrib.u.v6.dst_addr_mask[3] = 0;
+					}
 #ifdef FEATURE_IPA_V3
 					rt_rule_entry->rule.hashable = true;
 #endif
@@ -4718,7 +4732,7 @@ int IPACM_Wan::handle_route_add_evt(ipa_ip_type iptype)
 	rt_rule_entry = &rt_rule->rules[0];
 	rt_rule_entry->at_rear = true;
 
-	if(m_is_sta_mode != Q6_WAN)
+	if(m_is_sta_mode != Q6_WAN && !IPACM_Iface::ipacmcfg->eth_wan_pppoe_enable)
 	{
 		IPACMDBG_H(" WAN instance is in STA mode \n");
 		for (tx_index = 0; tx_index < iface_query->num_tx_props; tx_index++)

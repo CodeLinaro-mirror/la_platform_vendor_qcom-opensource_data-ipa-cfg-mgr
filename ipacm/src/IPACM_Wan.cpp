@@ -27,7 +27,7 @@
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  * Changes from Qualcomm Innovation Center are provided under the following license:
- * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2025 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 /*!
@@ -151,7 +151,7 @@ int bool_dual_backhaul = 0;
 
 IPACM_Wan::IPACM_Wan(int iface_index,
 	ipacm_wan_iface_type is_sta_mode,
-	uint8_t *mac_addr) : IPACM_Iface(iface_index)
+	uint8_t *mac_addr) : IPACM_Iface(NULL, iface_index)
 {
 	num_firewall_v4 = 0;
 	num_firewall_v6 = 0;

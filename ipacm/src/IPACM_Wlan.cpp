@@ -105,7 +105,8 @@ ipa_lan_client_idx IPACM_Wlan::inactive_lan_client_index[IPA_MAX_NUM_HW_PATH_CLI
 
 extern char *ipa_l2_hdr_type[];
 
-IPACM_Wlan::IPACM_Wlan(int iface_index, bool ast_update_needed) : IPACM_Lan(iface_index), ipv6ct_inst(Ipv6ct::GetInstance())
+IPACM_Wlan::IPACM_Wlan(char *iface_name, int iface_index, bool ast_update_needed) :
+		IPACM_Lan(iface_name, iface_index), ipv6ct_inst(Ipv6ct::GetInstance())
 {
 	int i = 0;
 #define WLAN_AMPDU_DEFAULT_FILTER_RULES 3
@@ -282,12 +283,13 @@ void IPACM_Wlan::event_callback(ipa_cm_event_id event, void *param)
 		IPACMDBG_H("Received IPA_IPACM_DISABLE, treat as IPA_WLAN_LINK_DOWN_EVENT\n");
 	case IPA_WLAN_LINK_DOWN_EVENT:
 		{
+			ipacm_event_data_fid *data = (ipacm_event_data_fid *)param;
 			if (event != IPA_IPACM_DISABLE)
 			{
-				ipacm_event_data_fid *data = (ipacm_event_data_fid *)param;
 				ipa_interface_index = iface_ipa_index_query(data->if_index);
 			}
-			if (ipa_interface_index == ipa_if_num || event == IPA_IPACM_DISABLE)
+			if (((ipa_interface_index == ipa_if_num) && (!strncmp(data->iface_name,dev_name,
+										strlen(dev_name)))) || event == IPA_IPACM_DISABLE)
 			{
 				IPACMDBG_H("Received IPA_WLAN_LINK_DOWN_EVENT\n");
 				if (is_svap_iface() &&
@@ -347,7 +349,7 @@ void IPACM_Wlan::event_callback(ipa_cm_event_id event, void *param)
 	case IPA_LAN_DELETE_SELF:
 	{
 		ipacm_event_data_fid *data = (ipacm_event_data_fid *)param;
-		if(data->if_index == ipa_if_num)
+		if((data->if_index == ipa_if_num) && (!strncmp(data->iface_name, dev_name, strlen(dev_name))))
 		{
 			IPACMDBG_H("Now the number of wlan AP iface is %d\n", IPACM_Wlan::num_wlan_ap_iface);
 
@@ -875,7 +877,8 @@ void IPACM_Wlan::event_callback(ipa_cm_event_id event, void *param)
 			ipacm_event_data_wlan_ex *data = (ipacm_event_data_wlan_ex *)param;
 			ipa_interface_index = iface_ipa_index_query(data->if_index);
 			bool delay_init = false;
-			if (ipa_interface_index == ipa_if_num)
+			if ((ipa_interface_index == ipa_if_num) &&
+						(strncmp(data->iface_name, dev_name, strlen(dev_name))== 0))
 			{
 				int i;
 				for(i=0; i<data->num_of_attribs; i++)
@@ -888,7 +891,7 @@ void IPACM_Wlan::event_callback(ipa_cm_event_id event, void *param)
 					{
 						if(IPACM_Iface::ipacmcfg->mac_addr_in_blacklist(data->attribs[i].u.mac_addr) == false)
 						{
-							eth_bridge_post_event(IPA_ETH_BRIDGE_CLIENT_ADD, IPA_IP_MAX, data->attribs[i].u.mac_addr, NULL, NULL);
+							eth_bridge_post_event(IPA_ETH_BRIDGE_CLIENT_ADD, IPA_IP_MAX, data->attribs[i].u.mac_addr, NULL, dev_name);
 							break;
 						}
 						else
@@ -922,7 +925,8 @@ void IPACM_Wlan::event_callback(ipa_cm_event_id event, void *param)
 			ipacm_event_data_mac *data = (ipacm_event_data_mac *)param;
 			int clnt_indx;
 			ipa_interface_index = iface_ipa_index_query(data->if_index);
-			if (ipa_interface_index == ipa_if_num)
+			if ((ipa_interface_index == ipa_if_num) &&
+							(!strncmp(data->iface_name, dev_name, strlen(dev_name))))
 			{
 				IPACMDBG_H("Received IPA_WLAN_CLIENT_DEL_EVENT\n");
 				if (!is_vlan_iface())
@@ -935,12 +939,12 @@ void IPACM_Wlan::event_callback(ipa_cm_event_id event, void *param)
 							IPACMERR("wlan client not found/attached \n");
 							return;
 						}
-						eth_bridge_post_event(IPA_ETH_BRIDGE_CLIENT_DEL, IPA_IP_MAX, data->mac_addr, NULL, NULL,
+						eth_bridge_post_event(IPA_ETH_BRIDGE_CLIENT_DEL, IPA_IP_MAX, data->mac_addr, NULL, dev_name,
 							get_client_memptr(wlan_client, clnt_indx)->vlan_id);
 					}
 					else
 					{
-						eth_bridge_post_event(IPA_ETH_BRIDGE_CLIENT_DEL, IPA_IP_MAX, data->mac_addr, NULL, NULL);
+						eth_bridge_post_event(IPA_ETH_BRIDGE_CLIENT_DEL, IPA_IP_MAX, data->mac_addr, NULL, dev_name);
 					}
 					/* clear wlan mac flt rules */
 					if(IPACM_Iface::ipacmcfg->mac_addr_in_blacklist(data->mac_addr))
@@ -1104,7 +1108,8 @@ void IPACM_Wlan::event_callback(ipa_cm_event_id event, void *param)
 #endif
 
 			/* Ignore physical iface handling for VLAN ifaces. */
-			if (ipa_interface_index == ipa_if_num && !is_vlan_iface())
+			if (ipa_interface_index == ipa_if_num && !is_vlan_iface() &&
+							(!strncmp(data->iface_name, dev_name, strlen(dev_name))) )
 			{
 				IPACMDBG_H("Received IPA_NEIGH_CLIENT_IP_ADDR_ADD_EVENT\n");
 				/* add to tether-client-lists */
@@ -1215,7 +1220,7 @@ void IPACM_Wlan::event_callback(ipa_cm_event_id event, void *param)
 				if (IPACM_Iface::ipacmcfg->ipacm_emesh_enable &&
 				    IPACM_Iface::ipacmcfg->ipacm_emesh_mode >=
 					    2 && (strstr(data->iface_name,"ath") ||
-						strstr(data->iface_name,"wlan") )) {
+						strstr(data->iface_name,"wlan"))) {
 					handle_wlan_r2_subnet(new_neigh_data);
 				}
 			}
@@ -7581,23 +7586,23 @@ void IPACM_Wlan::eth_bridge_handle_wlan_mode_switch()
 	/* ====== post events to mimic WLAN interface goes down/up when AP mode is changing ====== */
 
 	/* first post IFACE_DOWN event */
-	eth_bridge_post_event(IPA_ETH_BRIDGE_IFACE_DOWN, IPA_IP_MAX, NULL, NULL, NULL);
+	eth_bridge_post_event(IPA_ETH_BRIDGE_IFACE_DOWN, IPA_IP_MAX, NULL, NULL, dev_name);
 
 	/* then post IFACE_UP event */
 	if(ip_type == IPA_IP_v4 || ip_type == IPA_IP_MAX)
 	{
-		eth_bridge_post_event(IPA_ETH_BRIDGE_IFACE_UP, IPA_IP_v4, NULL, NULL, NULL);
+		eth_bridge_post_event(IPA_ETH_BRIDGE_IFACE_UP, IPA_IP_v4, NULL, NULL, dev_name);
 	}
 	if(ip_type == IPA_IP_v6 || ip_type == IPA_IP_MAX)
 	{
-		eth_bridge_post_event(IPA_ETH_BRIDGE_IFACE_UP, IPA_IP_v6, NULL, NULL, NULL);
+		eth_bridge_post_event(IPA_ETH_BRIDGE_IFACE_UP, IPA_IP_v6, NULL, NULL, dev_name);
 	}
 
 	/* at last post CLIENT_ADD event */
 	for(i = 0; i < num_wifi_client; i++)
 	{
 		eth_bridge_post_event(IPA_ETH_BRIDGE_CLIENT_ADD, IPA_IP_MAX,
-			get_client_memptr(wlan_client, i)->mac, NULL, NULL);
+			get_client_memptr(wlan_client, i)->mac, NULL, dev_name);
 	}
 
 	return;

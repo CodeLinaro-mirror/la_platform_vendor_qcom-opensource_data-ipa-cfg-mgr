@@ -302,7 +302,7 @@ class IPACM_Lan : public IPACM_Iface
 {
 public:
 
-	IPACM_Lan(int iface_index);
+	IPACM_Lan(char *iface_name, int iface_index);
 	~IPACM_Lan();
 
 	/* store lan's wan-up filter rule handlers */

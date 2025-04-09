@@ -375,7 +375,12 @@ void* ipa_driver_msg_notifier(void *param)
 							"%s_%d_%d", event_wlan->name,event_wlan->instance_id,
 							event_wlan->vdev_id);
 			}
+			else
+			{
+				strlcpy(data_fid->iface_name, event_wlan->name, sizeof(data_fid->iface_name));
+			}
 			data_fid->mlo_enabled = event_wlan->mld_enabled;
+			IPACMDBG("Posting event with %s\n", data_fid->iface_name);
 			evt_data.event = IPA_WLAN_AP_LINK_UP_EVENT;
 #ifdef IPA_WDI_AST_UPDATE
 			data_fid->ast_update = event_wlan->ast_update;
@@ -405,7 +410,11 @@ void* ipa_driver_msg_notifier(void *param)
 				snprintf(data_fid->iface_name, sizeof(event_wlan->name),
 							"%s_%d_%d", event_wlan->name,event_wlan->instance_id, event_wlan->vdev_id);
 			}
-
+			else
+			{
+				strlcpy(data_fid->iface_name, event_wlan->name, sizeof(data_fid->iface_name));
+			}
+			IPACMDBG("Posting event with %s\n", data_fid->iface_name);
 			evt_data.event = IPA_WLAN_LINK_DOWN_EVENT;
 			evt_data.evt_data = data_fid;
 			break;
@@ -512,10 +521,16 @@ void* ipa_driver_msg_notifier(void *param)
 
 			ipa_get_if_index(event_ex->name, &(data_ex->if_index));
 			if(strstr(event_ex->name, "mld"))
-					snprintf(data_ex->iface_name, sizeof(event_ex->name),
-						"%s_%d_%d", event_ex->name,event_ex->instance_id, event_ex->vdev_id);
+			{
+				snprintf(data_ex->iface_name, sizeof(event_ex->name),
+					"%s_%d_%d", event_ex->name,event_ex->instance_id, event_ex->vdev_id);
+			}
+			else
+			{
+				strlcpy(data_ex->iface_name, event_ex->name, sizeof(data_ex->iface_name));
+			}
 
-			IPACMDBG_H("Received interface index %d for interface name %s\n",data_ex->if_index, event_ex->name);
+			IPACMDBG_H("Received interface index %d for interface name %s\n",data_ex->if_index, data_ex->iface_name);
 			evt_data.event = IPA_WLAN_CLIENT_ADD_EVENT_EX;
 			evt_data.evt_data = data_ex;
 
@@ -571,9 +586,15 @@ void* ipa_driver_msg_notifier(void *param)
 			}
 
 			if(strstr(event_wlan->name, "mld"))
-				snprintf(data->iface_name, sizeof(event_ex->name),
+			{
+				snprintf(data->iface_name, sizeof(data->iface_name),
 					"%s_%d_%d", event_wlan->name,event_wlan->instance_id, event_wlan->vdev_id);
-
+			}
+			else
+			{
+				strlcpy(data->iface_name, event_wlan->name, sizeof(data->iface_name));
+			}
+			IPACMDBG("Posting with %s\n", data->iface_name);
 			memcpy(data->mac_addr,
 						 event_wlan->mac_addr,
 						 sizeof(event_wlan->mac_addr));

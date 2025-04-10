@@ -3555,7 +3555,7 @@ int IPACM_Lan::handle_wan_up(ipa_ip_type ip_type, uint16_t vlan_id)
 				flt_rule_entry.rule.action = IPA_PASS_TO_SRC_NAT;
 			}
 #ifdef FEATURE_IPA_V3
-			flt_rule_entry.rule.hashable = true;
+			flt_rule_entry.rule.hashable = false;
 #endif
 			flt_rule_entry.rule.rt_tbl_hdl = IPACM_Iface::ipacmcfg->rt_tbl_wan_v4.hdl;
 
@@ -3709,7 +3709,7 @@ int IPACM_Lan::handle_wan_up(ipa_ip_type ip_type, uint16_t vlan_id)
 				}
 
 #ifdef FEATURE_IPA_V3
-			flt_rule_entry.rule.hashable = true;
+			flt_rule_entry.rule.hashable = false;
 #endif
 			flt_rule_entry.rule.rt_tbl_hdl = IPACM_Iface::ipacmcfg->rt_tbl_v6.hdl;
 

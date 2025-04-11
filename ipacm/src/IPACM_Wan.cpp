@@ -8481,7 +8481,7 @@ int IPACM_Wan::installWanPostIpsecRt(ipa_ip_type ipType)
 		rt_rule_entry->at_rear = false;
 		rt_rule_entry->rule.hashable = true;
 		rt_rule_entry->rule.attrib.attrib_mask = IPA_FLT_NEXT_HDR|IPA_FLT_META_DATA;
-		rt_rule_entry->rule.attrib.u.v6.next_hdr = IPACM_FIREWALL_IPPROTO_ICMP;
+		rt_rule_entry->rule.attrib.u.v6.next_hdr = (uint8_t)IPACM_FIREWALL_IPPROTO_ICMP6;
 		rt_rule_entry->rule.attrib.meta_data = META_IS_IPSEC;
 		rt_rule_entry->rule.attrib.meta_data_mask = META_IPSEC_MASK;
 

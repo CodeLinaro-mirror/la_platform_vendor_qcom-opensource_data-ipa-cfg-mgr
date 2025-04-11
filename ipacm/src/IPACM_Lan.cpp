@@ -16276,6 +16276,11 @@ int IPACM_Lan::modify_ipv6_prefix_flt_rule(bool eogre_enabled)
 		}
 
 		if (IPACM_Iface::ipacmcfg->num_ipv6_prefixes == 0 && IPACM_Iface::ipacmcfg->num_no_offload_ipv6_prefix == 0) {
+			if(ipa_if_cate == ODU_IF && strncmp(dev_name, IPACM_Iface::ipacmcfg->eth_lan_wan_iface_name, sizeof(dev_name)) == 0 && m_ipv6_default_filterting_rules_count[j] > 0)
+			{
+				IPACM_Iface::odu_subnet_fl_rule_hdl[IPA_IP_v6] = dft_v6fl_rule_hdl[j][m_ipv6_default_filterting_rules_count[j] - 1];
+				IPACMDBG_H("odu_subnet_fl_rule_hdl: %d\n", IPACM_Iface::odu_subnet_fl_rule_hdl[IPA_IP_v6]);
+			}
 #ifdef FEATURE_EoGRE
 			if (IPACM_Iface::ipacmcfg->eogre_enabled) {
 				IPACMDBG("GRE is enabled, need to configure v6 MTU \n");
@@ -16516,6 +16521,7 @@ int IPACM_Lan::modify_ipv6_prefix_flt_rule(bool eogre_enabled)
 			num_wan_prefix_rules[j] > 0)
 		{
 			IPACM_Iface::odu_subnet_fl_rule_hdl[IPA_IP_v6] = ipv6_prefix_flt_rule_hdl[j][num_wan_prefix_rules[j] - 1];
+			IPACMDBG_H("odu_subnet_fl_rule_hdl: %d\n", IPACM_Iface::odu_subnet_fl_rule_hdl[IPA_IP_v6]);
 		}
 
 		if(pFilteringTable != NULL)

@@ -2652,6 +2652,7 @@ int IPACM_Lan::handle_vlan_neighbor(ipacm_event_data_all *data)
 		if(data_vlan->data_all.iptype == IPA_IP_v4)
 		{
 			handle_eth_client_route_rule(data->mac_addr, data->iptype, vlan_id);
+			install_all_qos_route_rule(data->mac_addr, vlan_id, NULL);
 		}
 		else
 		{
@@ -2668,9 +2669,9 @@ int IPACM_Lan::handle_vlan_neighbor(ipacm_event_data_all *data)
 			{
 				IPACMDBG_H("Neighbor received after conntrack. Installing Route rules now...\n");
 				handle_eth_client_route_rule(data->mac_addr, data->iptype, vlan_id);
+				install_all_qos_route_rule(data->mac_addr, vlan_id, data->ipv6_addr);
 			}
 		}
-		install_all_qos_route_rule(data->mac_addr, vlan_id, data->ipv6_addr);
 	}
 
 	if(IPACM_Iface::ipacmcfg->ipacm_mpdn_enable)

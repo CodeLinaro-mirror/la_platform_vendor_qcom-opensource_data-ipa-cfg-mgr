@@ -26,9 +26,9 @@
  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * Changes from Qualcomm Innovation Center are provided under the following license:
- * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
- * SPDX-License-Identifier: BSD-3-Clause-Clear.
+ * Changes from Qualcomm Technologies, Inc. are provided under the following license:
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 /*!
 	@file
@@ -92,6 +92,7 @@ extern "C"
 #define IPA_IF_SOCKSv5_NAME  "IPACM_SOCKSv5"
 #define IPA_EoGRE_HDR_NAME   "IPACM_EoGRE_v%d"
 #define IPA_GRE_HDR_NAME   "IPACM_GRE_v%d"
+#define IPA_IPOGRE_HDR_NAME   "IPACM_GRE_v%d%d"
 #define IPA_GRE_C_HDR_NAME   "IPACM_GRE_C_v%d"
 #define IPA_MPLSoGRE_HDR_NAME "IPACM_MPLSoGRE_v%d"
 #define IPA_SCTag_HDR_NAME    "IPACM_SCTag_v%d"
@@ -341,6 +342,12 @@ typedef enum
 #ifdef FEATURE_PMIPV6
 	IPA_HANDLE_GRE_UP,                      /* ipa_ipgre_info */
 	IPA_HANDLE_GRE_DOWN,                    /* ipa_ipgre_info */
+#endif
+#ifdef FEATURE_IPoGRE
+	IPA_HANDLE_IPOGRE_UP,                      /* ipa_ipgre_info */
+	IPA_HANDLE_IPOGRE_DOWN,                    /* ipa_ipgre_info */
+	IPA_WAN_HANDLE_IPOGRE_UP,
+	IPA_WAN_HANDLE_IPOGRE_DOWN,
 #endif
 	IPA_HANDLE_MACSEC_ADD,                    /* ipa_macsec_map */
 	IPA_HANDLE_MACSEC_DEL,                    /* ipa_macsec_map */

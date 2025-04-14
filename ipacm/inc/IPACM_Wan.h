@@ -25,40 +25,10 @@ BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
 WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
 OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
 IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- *
- * Changes from Qualcomm Innovation Center are provided under the following license:
- *
- * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
- *
- * Redistribution and use in source and binary forms, with or without
- * modification, are permitted (subject to the limitations in the
- * disclaimer below) provided that the following conditions are met:
- *
- *     * Redistributions of source code must retain the above copyright
- *       notice, this list of conditions and the following disclaimer.
- *
- *     * Redistributions in binary form must reproduce the above
- *       copyright notice, this list of conditions and the following
- *       disclaimer in the documentation and/or other materials provided
- *       with the distribution.
- *
- *     * Neither the name of Qualcomm Innovation Center, Inc. nor the names of its
- *       contributors may be used to endorse or promote products derived
- *       from this software without specific prior written permission.
- *
- * NO EXPRESS OR IMPLIED LICENSES TO ANY PARTY'S PATENT RIGHTS ARE
- * GRANTED BY THIS LICENSE. THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT
- * HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED
- * WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
- * MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
- * IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR
- * ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
- * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE
- * GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
- * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER
- * IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
- * OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
- * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE
+
+ * Changes from Qualcomm Technologies, Inc. are provided under the following license:
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
 */
 /*!
 	@file
@@ -271,7 +241,8 @@ public:
 		ipa_ipgre_info& ipgre_info);
 
 	void ipgre_clear_route_data(
-		enum ipa_ip_type             iptype);
+		enum ipa_ip_type             iptype,
+		int tunnel_id = 0xFF);
 #endif
 
 	/* IPACM interface name */
@@ -656,7 +627,7 @@ public:
 	int insert_frag_rule_dl(ipa_ip_type iptype, const struct ipa_rule_attrib& rx_prop_attrib,
 	struct ipa_flt_rule_add&      flt_rule_add,
 	int                           fltr_rule_number);
-#ifdef FEATURE_PMIPV6
+#if defined(FEATURE_IPoGRE) || defined(FEATURE_PMIPV6)
 	void gre_up();
 
 	void gre_down();
@@ -672,6 +643,8 @@ public:
 #endif
 	static const uint8_t v4_gre_header[];
 	static const uint8_t v6_gre_header[];
+	static const uint8_t v4_ipogre_header[];
+	static const uint8_t v6_ipogre_header[];
 	static int GetMuxByAddr(
 		enum ipa_ip_type iptype,
 		void*            addr,
@@ -1049,8 +1022,7 @@ private:
 	int add_catchup_all_filtering_rule_each_pdn(const IPACM_firewall_conf_t& firewall_config, ipa_ip_type iptype,
 		const struct ipa_rule_attrib& rx_prop_attrib, struct ipa_flt_rule_add& flt_rule_add, int fltr_rule_number, bool isPmipv6 = false, uint8_t muxid=0);
 	int add_dl_untagged_catchup_filtering_rule_each_pdn(const IPACM_firewall_conf_t& firewall_config, ipa_ip_type iptype,
-		const struct ipa_rule_attrib& rx_prop_attrib, struct ipa_flt_rule_add& flt_rule_add, int fltr_rule_number, bool isPmipv6 = false);
-
+		const struct ipa_rule_attrib& rx_prop_attrib, struct ipa_flt_rule_add& flt_rule_add, int fltr_rule_number, bool isPmipv6 = false,uint32_t rmnet_v4_addr = 0);
 #ifdef FEATURE_EoGRE
 	int config_eogre_dl_rules_ex(struct ipacm_pdn_flt_rule *rules,
 				int rule_offset, ipa_ip_type iptype,
@@ -1063,7 +1035,12 @@ private:
 		struct ipa_flt_rule_add &flt_rule_add, int fltr_rule_number,
 		uint8_t tunnel_id = 0xFF);
 #endif
-
+#ifdef FEATURE_IPoGRE
+	int config_ipogre_dl_rules_ex(struct ipacm_pdn_flt_rule *rules,
+				int rule_offset, ipa_ip_type iptype);
+	int add_dl_untagged_catchup_ipogre_rule(ipa_ip_type iptype,
+		const struct ipa_rule_attrib& rx_prop_attrib, struct ipa_flt_rule_add& flt_rule_add, int fltr_rule_number, bool isPmipv6 = false);
+#endif
 #ifdef FEATURE_IPV6_NAT
 #ifdef FEATURE_VLAN_MPDN
 	int add_ipv6_nat_ula_prefix_flt_rule_ex(const struct ipa_rule_attrib& rx_prop_attrib,

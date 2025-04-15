@@ -5113,7 +5113,7 @@ int IPACM_Lan::handle_eth_hdr_init(uint8_t *mac_addr, ipacm_bridge *bridge, uint
 	struct ipa_hdr_proc_ctx_add *hdr_proc_ctx = NULL;
 	int size = 0;
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
-	struct wan_ioctl_lan_client_info *client_info;
+	struct wan_ioctl_lan_client_info_v2 *client_info;
 	ipacm_ext_prop* ext_prop;
 	int max_clients = (IPACM_Iface::ipacmcfg->ipacm_lan_stats_enable) ? IPA_MAX_NUM_HW_PATH_CLIENTS:
 		IPA_MAX_NUM_ETH_CLIENTS;
@@ -5705,14 +5705,14 @@ int IPACM_Lan::handle_eth_hdr_init(uint8_t *mac_addr, ipacm_bridge *bridge, uint
 			get_client_memptr(eth_client, clnt_indx)->lan_stats_idx != -1)
 		{
 			/* Store the client info at WAN driver. */
-			client_info = (struct wan_ioctl_lan_client_info *)malloc(sizeof(struct wan_ioctl_lan_client_info));
+			client_info = (struct wan_ioctl_lan_client_info_v2 *)malloc(sizeof(struct wan_ioctl_lan_client_info_v2));
 			if (client_info == NULL)
 			{
 				IPACMERR("Unable to allocate memory\n");
 				res = IPACM_FAILURE;
 				goto fail;
 			}
-			memset(client_info, 0, sizeof(struct wan_ioctl_lan_client_info));
+			memset(client_info, 0, sizeof(struct wan_ioctl_lan_client_info_v2));
 			if (ipa_if_cate == LAN_IF)
 			{
 				client_info->device_type = IPACM_CLIENT_DEVICE_TYPE_USB;
@@ -5756,10 +5756,10 @@ int IPACM_Lan::handle_eth_hdr_init(uint8_t *mac_addr, ipacm_bridge *bridge, uint
 					res = IPACM_FAILURE;
 					goto fail;
 				}
-				client_info->ul_cnt_idx = cnt_idx;
-				client_info->dl_cnt_idx = cnt_idx + 1;
-				get_client_memptr(eth_client, clnt_indx)->ul_cnt_idx = client_info->ul_cnt_idx;
-				get_client_memptr(eth_client, clnt_indx)->dl_cnt_idx = client_info->dl_cnt_idx;
+				client_info->wan_cnt_idx = cnt_idx;
+				client_info->lan_cnt_idx = cnt_idx + 1;
+				get_client_memptr(eth_client, clnt_indx)->ul_cnt_idx = client_info->wan_cnt_idx;
+				get_client_memptr(eth_client, clnt_indx)->dl_cnt_idx = client_info->wan_cnt_idx;
 				get_client_memptr(eth_client, clnt_indx)->index_populated = true;
 			}
 #endif //IPA_HW_FNR_STATS
@@ -10072,7 +10072,7 @@ int IPACM_Lan::handle_lan_client_connect(uint8_t *mac_addr)
 {
 	int eth_index, res = IPACM_SUCCESS;
 	ipacm_ext_prop* ext_prop;
-	struct wan_ioctl_lan_client_info *client_info;
+	struct wan_ioctl_lan_client_info_v2 *client_info;
 #ifdef IPA_HW_FNR_STATS
 	uint8_t cnt_idx;
 #endif //IPA_HW_FNR_STATS
@@ -10108,14 +10108,14 @@ int IPACM_Lan::handle_lan_client_connect(uint8_t *mac_addr)
 
 	if (IPACM_Iface::ipacmcfg->ipacm_lan_stats_enable == true)
 	{
-		client_info = (struct wan_ioctl_lan_client_info *)malloc(sizeof(struct wan_ioctl_lan_client_info));
+		client_info = (struct wan_ioctl_lan_client_info_v2 *)malloc(sizeof(struct wan_ioctl_lan_client_info_v2));
 		if (client_info == NULL)
 		{
 			IPACMERR("Unable to allocate memory\n");
 			res = IPACM_FAILURE;
 			goto fail;
 		}
-		memset(client_info, 0, sizeof(struct wan_ioctl_lan_client_info));
+		memset(client_info, 0, sizeof(struct wan_ioctl_lan_client_info_v2));
 		if (ipa_if_cate == LAN_IF)
 		{
 			client_info->device_type = IPACM_CLIENT_DEVICE_TYPE_USB;
@@ -10162,13 +10162,17 @@ int IPACM_Lan::handle_lan_client_connect(uint8_t *mac_addr)
 				res = IPACM_FAILURE;
 				goto fail;
 			}
-			client_info->ul_cnt_idx = cnt_idx;
-			client_info->dl_cnt_idx = cnt_idx + 1;
+			client_info->wan_cnt_idx = cnt_idx;
+			client_info->lan_cnt_idx = cnt_idx + 1;
 			/* Store this in the client specific strcuture */
-			get_client_memptr(eth_client, eth_index)->dl_cnt_idx = client_info->dl_cnt_idx;
-			get_client_memptr(eth_client, eth_index)->ul_cnt_idx = client_info->ul_cnt_idx;
+			get_client_memptr(eth_client, eth_index)->dl_cnt_idx = client_info->wan_cnt_idx;
+			get_client_memptr(eth_client, eth_index)->ul_cnt_idx = client_info->wan_cnt_idx;
 			get_client_memptr(eth_client, eth_index)->index_populated = true;
-			IPACMDBG_H("Got lan connect event. UL/DL indices set %u, %u\n", client_info->ul_cnt_idx, client_info->dl_cnt_idx);
+			IPACMDBG_H("Got lan connect event. UL/DL indices set %u, %u wan_cnt_idx: %u lan_cnt_idx: %u\n",
+				get_client_memptr(eth_client, eth_index)->ul_cnt_idx,
+				get_client_memptr(eth_client, eth_index)->dl_cnt_idx,
+				client_info->wan_cnt_idx,
+				client_info->lan_cnt_idx);
 		}
 #endif //IPA_HW_FNR_STATS
 		if (set_lan_client_info(client_info))
@@ -11227,7 +11231,7 @@ int IPACM_Lan::handle_eth_client_down_evt(uint8_t *mac_addr, uint16_t vlan_id, i
 	int num_eth_client_tmp = num_eth_client;
 	int num_v6;
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
-	struct wan_ioctl_lan_client_info *client_info;
+	struct wan_ioctl_lan_client_info_v2 *client_info;
 #endif
 	int j = 0, idx = 0;
 
@@ -11359,13 +11363,13 @@ int IPACM_Lan::handle_eth_client_down_evt(uint8_t *mac_addr, uint16_t vlan_id, i
 	if (get_client_memptr(eth_client, clt_indx)->lan_stats_idx != -1)
 	{
 		/* Clear the lan client info. */
-		client_info = (struct wan_ioctl_lan_client_info *)malloc(sizeof(struct wan_ioctl_lan_client_info));
+		client_info = (struct wan_ioctl_lan_client_info_v2 *)malloc(sizeof(struct wan_ioctl_lan_client_info_v2));
 		if (client_info == NULL)
 		{
 			IPACMERR("Unable to allocate memory\n");
 			return IPACM_FAILURE;
 		}
-		memset(client_info, 0, sizeof(struct wan_ioctl_lan_client_info));
+		memset(client_info, 0, sizeof(struct wan_ioctl_lan_client_info_v2));
 		if (ipa_if_cate == LAN_IF)
 		{
 			client_info->device_type = IPACM_CLIENT_DEVICE_TYPE_USB;
@@ -11394,14 +11398,14 @@ int IPACM_Lan::handle_eth_client_down_evt(uint8_t *mac_addr, uint16_t vlan_id, i
 #ifdef IPA_HW_FNR_STATS
 		if (IPACM_Iface::ipacmcfg->hw_fnr_stats_support)
 		{
-			client_info->ul_cnt_idx = get_client_memptr(eth_client, clt_indx)->ul_cnt_idx;
-			client_info->dl_cnt_idx = get_client_memptr(eth_client, clt_indx)->dl_cnt_idx;
+			client_info->wan_cnt_idx = get_client_memptr(eth_client, clt_indx)->ul_cnt_idx;
+			client_info->lan_cnt_idx = get_client_memptr(eth_client, clt_indx)->ul_cnt_idx + 1;
 			get_client_memptr(eth_client, clt_indx)->ul_cnt_idx = -1;
 			get_client_memptr(eth_client, clt_indx)->dl_cnt_idx = -1;
 			get_client_memptr(eth_client, clt_indx)->index_populated = false;
 			pthread_mutex_lock(&IPACM_Iface::ipacmcfg->cnt_idx_lock);
-			if (IPACM_Iface::ipacmcfg->reset_cnt_idx(client_info->ul_cnt_idx, false))
-				IPACMERR("Failed to reset counter index %u\n", client_info->ul_cnt_idx);
+			if (IPACM_Iface::ipacmcfg->reset_cnt_idx(client_info->wan_cnt_idx, false))
+				IPACMERR("Failed to reset counter index %u\n", client_info->wan_cnt_idx);
 			pthread_mutex_unlock(&IPACM_Iface::ipacmcfg->cnt_idx_lock);
 		}
 #endif //IPA_HW_FNR_STATS
@@ -11709,7 +11713,7 @@ int IPACM_Lan::handle_down_evt()
 	int res = IPACM_SUCCESS, idx = 0;
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
 /* Link down event */
-	struct wan_ioctl_lan_client_info *client_info;
+	struct wan_ioctl_lan_client_info_v2 *client_info;
 #endif
 	list<l2tp_client_info>::iterator it;
 	ipacm_cmd_q_data evt_data;
@@ -12119,7 +12123,7 @@ fail:
 			if (get_client_memptr(eth_client, i)->lan_stats_idx != -1)
 			{
 				/* Clear the lan client info. */
-				client_info = (struct wan_ioctl_lan_client_info *)malloc(sizeof(struct wan_ioctl_lan_client_info));
+				client_info = (struct wan_ioctl_lan_client_info_v2 *)malloc(sizeof(struct wan_ioctl_lan_client_info_v2));
 				if (client_info == NULL)
 				{
 					IPACMERR("Unable to allocate memory\n");
@@ -12127,7 +12131,7 @@ fail:
 				}
 				else
 				{
-					memset(client_info, 0, sizeof(struct wan_ioctl_lan_client_info));
+					memset(client_info, 0, sizeof(struct wan_ioctl_lan_client_info_v2));
 					if (ipa_if_cate == LAN_IF)
 					{
 						client_info->device_type = IPACM_CLIENT_DEVICE_TYPE_USB;
@@ -12156,14 +12160,14 @@ fail:
 #ifdef IPA_HW_FNR_STATS
 					if (IPACM_Iface::ipacmcfg->hw_fnr_stats_support)
 					{
-						client_info->ul_cnt_idx = get_client_memptr(eth_client, i)->ul_cnt_idx;
-						client_info->dl_cnt_idx = get_client_memptr(eth_client, i)->dl_cnt_idx;
+						client_info->wan_cnt_idx = get_client_memptr(eth_client, i)->ul_cnt_idx;
+						client_info->lan_cnt_idx = get_client_memptr(eth_client, i)->ul_cnt_idx + 1;
 						get_client_memptr(eth_client, i)->ul_cnt_idx = -1;
 						get_client_memptr(eth_client, i)->dl_cnt_idx = -1;
 						get_client_memptr(eth_client, i)->index_populated = false;
 						pthread_mutex_lock(&IPACM_Iface::ipacmcfg->cnt_idx_lock);
-						if (IPACM_Iface::ipacmcfg->reset_cnt_idx(client_info->ul_cnt_idx, false))
-							IPACMERR("Failed to reset counter index %u\n", client_info->ul_cnt_idx);
+						if (IPACM_Iface::ipacmcfg->reset_cnt_idx(client_info->wan_cnt_idx, false))
+							IPACMERR("Failed to reset counter index %u\n", client_info->wan_cnt_idx);
 						pthread_mutex_unlock(&IPACM_Iface::ipacmcfg->cnt_idx_lock);
 					}
 #endif //IPA_HW_FNR_STATS
@@ -15331,7 +15335,7 @@ int IPACM_Lan::delete_uplink_filter_rule
 }
 
 /* Set lan client info. */
-int IPACM_Lan::set_lan_client_info(struct wan_ioctl_lan_client_info *client_info)
+int IPACM_Lan::set_lan_client_info(struct wan_ioctl_lan_client_info_v2 *client_info)
 {
 	int ret = IPACM_SUCCESS;
 	int fd_wwan_ioctl;
@@ -15354,7 +15358,7 @@ int IPACM_Lan::set_lan_client_info(struct wan_ioctl_lan_client_info *client_info
 		return IPACM_FAILURE;
 	}
 
-	ret = ioctl(fd_wwan_ioctl, WAN_IOC_SET_LAN_CLIENT_INFO, client_info);
+	ret = ioctl(fd_wwan_ioctl, WAN_IOC_SET_LAN_CLIENT_INFO_V2, client_info);
 	if (ret != 0)
 	{
 		IPACMERR("Failed to set client info %p\n ", client_info);
@@ -15365,7 +15369,7 @@ int IPACM_Lan::set_lan_client_info(struct wan_ioctl_lan_client_info *client_info
 }
 
 /* Clear lan client info. */
-int IPACM_Lan::clear_lan_client_info(struct wan_ioctl_lan_client_info *client_info)
+int IPACM_Lan::clear_lan_client_info(struct wan_ioctl_lan_client_info_v2 *client_info)
 {
 	int ret = IPACM_SUCCESS;
 	int fd_wwan_ioctl;
@@ -15388,7 +15392,7 @@ int IPACM_Lan::clear_lan_client_info(struct wan_ioctl_lan_client_info *client_in
 		return IPACM_FAILURE;
 	}
 
-	ret = ioctl(fd_wwan_ioctl, WAN_IOC_CLEAR_LAN_CLIENT_INFO, client_info);
+	ret = ioctl(fd_wwan_ioctl, WAN_IOC_CLEAR_LAN_CLIENT_INFO_V2, client_info);
 	if (ret != 0)
 	{
 		IPACMERR("Failed to set client info %p\n ", client_info);

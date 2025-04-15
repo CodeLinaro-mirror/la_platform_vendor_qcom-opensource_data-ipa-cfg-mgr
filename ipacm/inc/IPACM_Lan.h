@@ -591,10 +591,10 @@ public:
 	);
 
 	/* set lan client info. */
-	virtual int set_lan_client_info(struct wan_ioctl_lan_client_info *client_info);
+	virtual int set_lan_client_info(struct wan_ioctl_lan_client_info_v2 *client_info);
 
 	/* set lan client info. */
-	virtual int clear_lan_client_info(struct wan_ioctl_lan_client_info *client_info);
+	virtual int clear_lan_client_info(struct wan_ioctl_lan_client_info_v2 *client_info);
 
 	/* Enable per client stats. */
 	virtual int enable_per_client_stats(bool *status);

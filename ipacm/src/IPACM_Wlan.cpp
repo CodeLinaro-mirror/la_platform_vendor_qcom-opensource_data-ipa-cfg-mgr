@@ -1034,8 +1034,6 @@ int IPACM_Wlan::handle_wlan_client_init_ex(ipacm_event_data_wlan_ex *data)
 		}
 
 		evt_size = sizeof(ipacm_event_data_wlan_ex) + data->num_of_attribs * sizeof(struct ipa_wlan_hdr_attrib_val);
-		get_client_memptr(wlan_client, num_wifi_client)->p_hdr_info = (ipacm_event_data_wlan_ex*)malloc(evt_size);
-		memcpy(get_client_memptr(wlan_client, num_wifi_client)->p_hdr_info, data, evt_size);
 
 		/* copy partial header for v4*/
 		for (cnt=0; cnt<tx_prop->num_tx_props; cnt++)
@@ -2660,7 +2658,6 @@ int IPACM_Wlan::handle_wlan_client_down_evt(uint8_t *mac_addr)
 	get_client_memptr(wlan_client, clt_indx)->ipv6_header_set = false;
 	get_client_memptr(wlan_client, clt_indx)->route_rule_set_v4 = false;
 	get_client_memptr(wlan_client, clt_indx)->route_rule_set_v6 = 0;
-	free(get_client_memptr(wlan_client, clt_indx)->p_hdr_info);
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
 	get_client_memptr(wlan_client, clt_indx)->ipv4_ul_rules_set = false;
 	get_client_memptr(wlan_client, clt_indx)->ipv6_ul_rules_set = false;
@@ -2709,7 +2706,6 @@ int IPACM_Wlan::handle_wlan_client_down_evt(uint8_t *mac_addr)
 
 	for (; clt_indx < num_wifi_client_tmp - 1; clt_indx++)
 	{
-		get_client_memptr(wlan_client, clt_indx)->p_hdr_info = get_client_memptr(wlan_client, (clt_indx + 1))->p_hdr_info;
 
 		memcpy(get_client_memptr(wlan_client, clt_indx)->mac,
 					 get_client_memptr(wlan_client, (clt_indx + 1))->mac,
@@ -3076,13 +3072,6 @@ fail:
 	}
 	IPACMDBG_H("finished delete software-routing filtering rules\n ");
 
-	for (i = 0; i < num_wifi_client; i++)
-	{
-		if(get_client_memptr(wlan_client, i)->p_hdr_info != NULL)
-		{
-			free(get_client_memptr(wlan_client, i)->p_hdr_info);
-		}
-	}
 	if(wlan_client != NULL)
 	{
 		free(wlan_client);

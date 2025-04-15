@@ -27,39 +27,9 @@
  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * Changes from Qualcomm Innovation Center are provided under the following license:
- *
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
- *
- * Redistribution and use in source and binary forms, with or without
- * modification, are permitted (subject to the limitations in the
- * disclaimer below) provided that the following conditions are met:
- *
- *   * Redistributions of source code must retain the above copyright
- *     notice, this list of conditions and the following disclaimer.
- *
- *   * Redistributions in binary form must reproduce the above
- *     copyright notice, this list of conditions and the following
- *     disclaimer in the documentation and/or other materials provided
- *     with the distribution.
- *
- *   * Neither the name of Qualcomm Innovation Center, Inc. nor the names of its
- *     contributors may be used to endorse or promote products derived
- *     from this software without specific prior written permission.
- *
- * NO EXPRESS OR IMPLIED LICENSES TO ANY PARTY'S PATENT RIGHTS ARE
- * GRANTED BY THIS LICENSE. THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT
- * HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED
- * WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
- * MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
- * IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR
- * ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
- * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE
- * GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
- * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER
- * IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
- * OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
- * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ * Changes from Qualcomm Technologies, Inc. are provided under the following license:
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 /*!
 		@file
@@ -2552,6 +2522,7 @@ int IPACM_Wan::handle_route_add_vlan_pdn_evt(ipa_ip_type iptype, uint16_t vlan_i
 	ipacm_cmd_q_data evt_data;
 	bool FullConfig = false;
 	uint32_t tx_index = 0;
+	int ret = IPACM_SUCCESS;
 
 	/* copy header from tx-property, see if partial or not */
 	/* assume all tx-property uses the same header name for v4 or v6*/
@@ -2586,7 +2557,8 @@ int IPACM_Wan::handle_route_add_vlan_pdn_evt(ipa_ip_type iptype, uint16_t vlan_i
 			{
 				header_partial_default_wan_v6 = true;
 				IPACMDBG_H("STA ipv6-header haven't constructed \n");
-				return IPACM_SUCCESS;
+				ret = IPACM_SUCCESS;
+				goto fail;
 			}
 			strlcpy(rt_rule->rt_tbl_name, IPACM_Iface::ipacmcfg->rt_tbl_v6.name, sizeof(rt_rule->rt_tbl_name));
 			IPACMDBG_H(" WAN table created %s \n", rt_rule->rt_tbl_name);
@@ -2631,8 +2603,8 @@ int IPACM_Wan::handle_route_add_vlan_pdn_evt(ipa_ip_type iptype, uint16_t vlan_i
 				if (false == m_routing.AddRoutingRule(rt_rule))
 				{
 					IPACMERR("Routing rule addition failed!\n");
-					free(rt_rule);
-					return IPACM_FAILURE;
+					ret = IPACM_FAILURE;
+					goto fail;
 				}
 				wan_route_rule_v6_hdl[tx_index] = rt_rule_entry->rt_rule_hdl;
 				IPACMDBG_H("Set ipv6 wan-route rule hdl for v6_lan_table:0x%x,tx:%d,ip-type: %d \n",
@@ -2659,7 +2631,8 @@ int IPACM_Wan::handle_route_add_vlan_pdn_evt(ipa_ip_type iptype, uint16_t vlan_i
 			if(wanup_vlan_data == NULL)
 			{
 				IPACMERR("Unable to allocate memory\n");
-				return IPACM_FAILURE;
+				ret = IPACM_FAILURE;
+				goto fail;
 			}
 			memset(wanup_vlan_data, 0, sizeof(ipacm_event_vlan_pdn));
 
@@ -2699,7 +2672,8 @@ int IPACM_Wan::handle_route_add_vlan_pdn_evt(ipa_ip_type iptype, uint16_t vlan_i
 				if(m_header.GetHeaderHandle(&hdr) == false)
 				{
 					IPACMERR("Failed to get QMAP header.\n");
-					return IPACM_FAILURE;
+					ret = IPACM_FAILURE;
+					goto fail;
 				}
 				rt_rule_entry->rule.hdr_hdl = hdr.hdl;
 				rt_rule_entry->rule.dst = IPA_CLIENT_APPS_WAN_CONS;
@@ -2719,14 +2693,12 @@ int IPACM_Wan::handle_route_add_vlan_pdn_evt(ipa_ip_type iptype, uint16_t vlan_i
 				if(false == m_routing.AddRoutingRule(rt_rule))
 				{
 					IPACMERR("Routing rule addition failed!\n");
-					free(rt_rule);
-					return IPACM_FAILURE;
+					ret = IPACM_FAILURE;
+					goto fail;
 				}
 				wan_route_rule_v6_hdl_a5 = rt_rule_entry->rt_rule_hdl;
 				IPACMDBG_H("Set ipv6 wan-route rule hdl for v6_wan_table:0x%x,tx:%d,ip-type: %d \n",
 						wan_route_rule_v6_hdl_a5, 0, iptype);
-
-				free(rt_rule);
 			}
 
 			/* Xlat case pdn_index might not be populated*/
@@ -2735,7 +2707,8 @@ int IPACM_Wan::handle_route_add_vlan_pdn_evt(ipa_ip_type iptype, uint16_t vlan_i
 				if (modem_ipv6_pdn_index == -1)
 				{
 					IPACMERR("No Free index available.!\n");
-					return IPACM_FAILURE;
+					ret = IPACM_FAILURE;
+					goto fail;
 				}
 
 				ipv6_to_iface[modem_ipv6_pdn_index].pIface = this;
@@ -2759,7 +2732,8 @@ int IPACM_Wan::handle_route_add_vlan_pdn_evt(ipa_ip_type iptype, uint16_t vlan_i
 			if(wanup_vlan_data == NULL)
 			{
 				IPACMERR("Unable to allocate memory\n");
-				return IPACM_FAILURE;
+				ret = IPACM_FAILURE;
+				goto fail;
 			}
 			memset(wanup_vlan_data, 0, sizeof(ipacm_event_vlan_pdn));
 
@@ -2795,7 +2769,8 @@ int IPACM_Wan::handle_route_add_vlan_pdn_evt(ipa_ip_type iptype, uint16_t vlan_i
 			{
 				header_partial_default_wan_v4 = true;
 				IPACMDBG_H("STA ipv4-header haven't constructed \n");
-				return IPACM_SUCCESS;
+				ret = IPACM_SUCCESS;
+				goto fail;
 			}
 
 			for (tx_index = 0; tx_index < iface_query->num_tx_props; tx_index++)
@@ -2833,8 +2808,8 @@ int IPACM_Wan::handle_route_add_vlan_pdn_evt(ipa_ip_type iptype, uint16_t vlan_i
 				if (false == m_routing.AddRoutingRule(rt_rule))
 				{
 					IPACMERR("Routing rule addition failed!\n");
-					free(rt_rule);
-					return IPACM_FAILURE;
+					ret = IPACM_FAILURE;
+					goto fail;
 				}
 				wan_route_rule_v4_hdl[tx_index] = rt_rule_entry->rt_rule_hdl;
 				IPACMDBG_H("Got ipv4 wan-route rule hdl:0x%x,tx:%d,ip-type: %d \n",
@@ -2860,7 +2835,8 @@ int IPACM_Wan::handle_route_add_vlan_pdn_evt(ipa_ip_type iptype, uint16_t vlan_i
 			if(wanup_vlan_data == NULL)
 			{
 				IPACMERR("Unable to allocate memory\n");
-				return IPACM_FAILURE;
+				ret = IPACM_FAILURE;
+				goto fail;
 			}
 			memset(wanup_vlan_data, 0, sizeof(ipacm_event_vlan_pdn));
 			wanup_vlan_data->mux_id = 0;
@@ -2896,7 +2872,8 @@ int IPACM_Wan::handle_route_add_vlan_pdn_evt(ipa_ip_type iptype, uint16_t vlan_i
 			if(wanup_vlan_data == NULL)
 			{
 				IPACMERR("Unable to allocate memory\n");
-				return IPACM_FAILURE;
+				ret = IPACM_FAILURE;
+				goto fail;
 			}
 			memset(wanup_vlan_data, 0, sizeof(ipacm_event_vlan_pdn));
 
@@ -2954,7 +2931,8 @@ int IPACM_Wan::handle_route_add_vlan_pdn_evt(ipa_ip_type iptype, uint16_t vlan_i
 				if(fd_wwan_ioctl < 0)
 				{
 					IPACMERR("Failed to open %s.\n", WWAN_QMI_IOCTL_DEVICE_NAME);
-					return false;
+					ret = IPACM_FAILURE;
+					goto fail;
 				}
 				IPACMDBG_H("send WAN_IOC_NOTIFY_WAN_STATE up to IPA_PM\n");
 				wan_state.up = true;
@@ -2973,7 +2951,10 @@ int IPACM_Wan::handle_route_add_vlan_pdn_evt(ipa_ip_type iptype, uint16_t vlan_i
 		IPACMDBG_H("don't AddRmDepend, a PDN is already up\n");
 	}
 
-	return IPACM_SUCCESS;
+fail:
+	if(rt_rule)
+		free(rt_rule);
+	return ret;
 }
 
 IPACM_firewall_conf_t* IPACM_Wan::get_curr_pdn_firewall_config(IPACM_firewall_t &firewall_configs, const char* curr_dev_name)

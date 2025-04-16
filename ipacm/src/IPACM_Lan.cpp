@@ -11382,8 +11382,18 @@ int IPACM_Lan::modify_ipv6_prefix_flt_rule(bool eogre_enabled)
 		{
 			if(IPACM_Iface::ipacmcfg->tunnel_feature != SINGLE_TAG_FEATURE)
 			{
-				/* mtu_v4_new = mtu_v4 - 4(gre) - 4(MPLS) - 14(eth) - 20(outer ipv4) */
-				mtu[0] = IPACM_Wan::GetGREMTU(IPA_IP_v6) - 30 - IPV6_HEADER_SIZE;
+				if(IPACM_Iface::ipacmcfg->eogre_info.ipv6_option_hdr_enabled)
+				{	/* mtu_v6_new = mtu_v4 - 4(gre) - 4(MPLS) - 14(eth) -8 (options) - 40(outer ipv4) */
+					mtu[0] = IPACM_Wan::GetGREMTU(IPA_IP_v6) - 30 - IPV6_HEADER_SIZE;
+					IPACMDBG_H("MTU is  with options%d\n", mtu[0]);
+				}
+				else
+				{
+					/* mtu_v6_new = mtu_v4 - 4(gre) - 4(MPLS) - 14(eth) - 40(outer ipv4) */
+					mtu[0] = IPACM_Wan::GetGREMTU(IPA_IP_v6) - 22 - IPV6_HEADER_SIZE;
+					IPACMDBG_H("MTU is without options %d\n", mtu[0]);
+				}
+
 			}
 			else
 			{

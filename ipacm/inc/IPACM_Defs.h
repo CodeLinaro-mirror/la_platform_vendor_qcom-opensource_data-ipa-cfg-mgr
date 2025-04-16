@@ -125,7 +125,7 @@ extern "C"
 #define RMNET_IFACE_NAME          "qmapmux"
 #else
 #define BRIDGE_IFACE_NAME         "br-lan"
-#define RMNET_IFACE_NAME          "rmnet_data"
+#define RMNET_IFACE_NAME          "qmapmux"
 #endif
 
 #ifndef FEATURE_IPA_V3

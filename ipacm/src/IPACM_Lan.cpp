@@ -15193,7 +15193,8 @@ void IPACM_Lan::post_del_self_evt()
 	memset(fid, 0, sizeof(ipacm_event_data_fid));
 	memset(&evt, 0, sizeof(ipacm_cmd_q_data));
 
-	strlcpy(fid->iface_name, dev_name, strlen(dev_name));
+	/*Using IPA_IFACE_NAME_LEN as dev_name variable is of 32 byte size. */
+	strlcpy(fid->iface_name, dev_name, IPA_IFACE_NAME_LEN);
 	fid->if_index = ipa_if_num;
 
 	evt.evt_data = (void*)fid;

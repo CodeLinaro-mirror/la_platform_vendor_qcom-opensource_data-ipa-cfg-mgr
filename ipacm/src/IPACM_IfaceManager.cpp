@@ -786,7 +786,7 @@ int IPACM_IfaceManager::registr(char *iface_name, int ipa_if_index, IPACM_Listen
 	{
 		memset(nw, '\0',sizeof(nw));
 		nw->ipa_if_index = ipa_if_index;
-		strlcpy(nw->iface_name, iface_name, strlen(iface_name));
+		strlcpy(nw->iface_name, iface_name, IPA_IFACE_NAME_LEN);
 		nw->obj = obj;
 		nw->next = NULL;
 	}
@@ -852,7 +852,7 @@ int IPACM_IfaceManager::SearchInstance(ipacm_ifacemgr_data *param)
 
 	while(tmp != NULL)
 	{
-		if((param->ipa_interface_index == tmp->ipa_if_index) && (!strncmp(tmp->iface_name, param->iface_name,strlen(param->iface_name))))
+		if((param->ipa_interface_index == tmp->ipa_if_index) && (!strncmp(tmp->iface_name, param->iface_name, IPA_IFACE_NAME_LEN)))
 		{
 			IPACMDBG_H("Find existed iface-instance name: %s\n",
 								IPACM_Iface::ipacmcfg->iface_table[param->ipa_interface_index].iface_name);

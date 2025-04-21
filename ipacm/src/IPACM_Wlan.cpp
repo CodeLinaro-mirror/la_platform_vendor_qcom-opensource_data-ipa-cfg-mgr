@@ -10801,7 +10801,10 @@ int IPACM_Wlan::handle_wlan_qos_route_rule(uint8_t *client_mac,
 				memcpy(&rt_rule_entry->rule.attrib,
 					&tx_prop->tx[tx_index].attrib,
 					sizeof(rt_rule_entry->rule.attrib));
-
+				if (IPACM_Iface::ipacmcfg->GetIPAVer() >= IPA_HW_v4_0)
+				{
+					rt_rule_entry->rule.hashable = true;
+				}
 				//Client ip is required to differentiate different clients, else hdr collision will happen
 				rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_DST_ADDR;
 				rt_rule_entry->rule.attrib.u.v4.dst_addr =
@@ -10875,6 +10878,7 @@ int IPACM_Wlan::handle_wlan_qos_route_rule(uint8_t *client_mac,
 
 				if (qos_param->dscp)
 				{
+					rt_rule_entry->rule.hashable = false;
 					rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_TOS_MASKED;
 					rt_rule_entry->rule.attrib.tos_value = qos_param->dscp << 2;
 					rt_rule_entry->rule.attrib.tos_mask = 0xFC;
@@ -10883,11 +10887,6 @@ int IPACM_Wlan::handle_wlan_qos_route_rule(uint8_t *client_mac,
 				if (qos_param->pcp)
 				{
 					IPACMERR("QOS param PCP no action from IPA \n");
-				}
-
-				if (IPACM_Iface::ipacmcfg->GetIPAVer() >= IPA_HW_v4_0)
-				{
-					rt_rule_entry->rule.hashable = true;
 				}
 
 				memset(hdr_proc_ctx_table, 0, size);
@@ -10958,7 +10957,8 @@ int IPACM_Wlan::handle_wlan_qos_route_rule(uint8_t *client_mac,
 					memcpy(&rt_rule_entry->rule.attrib,
 						&tx_prop->tx[tx_index].attrib,
 						sizeof(rt_rule_entry->rule.attrib));
-
+					if (IPACM_Iface::ipacmcfg->GetIPAVer() >= IPA_HW_v4_0)
+						rt_rule_entry->rule.hashable = true;
 					if ((ipv6_addr[0] || ipv6_addr[1] || ipv6_addr[2] ||
 						ipv6_addr[3]))
 					{
@@ -11070,6 +11070,7 @@ int IPACM_Wlan::handle_wlan_qos_route_rule(uint8_t *client_mac,
 
 					if (qos_param->dscp)
 					{
+						rt_rule_entry->rule.hashable = false;
 						rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_TOS_MASKED;
 						rt_rule_entry->rule.attrib.tos_value = qos_param->dscp << 2;
 						rt_rule_entry->rule.attrib.tos_mask = 0xFC;
@@ -11080,9 +11081,6 @@ int IPACM_Wlan::handle_wlan_qos_route_rule(uint8_t *client_mac,
 						IPACMERR("QOS param PCP no v6 route rule action from IPA \n");
 					}
 
-#ifdef FEATURE_IPA_V3
-					rt_rule_entry->rule.hashable = true;
-#endif
 					memset(hdr_proc_ctx_table, 0, size);
 					hdr_proc_ctx_table->commit = 1;
 					hdr_proc_ctx_table->num_proc_ctxs = 1;
@@ -11321,7 +11319,10 @@ int IPACM_Wlan::handle_wlan_qos_route_rule_ext_v2(uint8_t *client_mac,
 				memcpy(&rt_rule_entry->rule.attrib,
 					&tx_prop->tx[tx_index].attrib,
 					sizeof(rt_rule_entry->rule.attrib));
-
+				if (IPACM_Iface::ipacmcfg->GetIPAVer() >= IPA_HW_v4_0)
+				{
+					rt_rule_entry->rule.hashable = true;
+				}
 				rt_rule_entry->rule.enable_stats = true;
 				rt_rule_entry->rule.cnt_idx =
 					get_client_memptr(wlan_client, wlan_index)->dl_cnt_idx;
@@ -11400,6 +11401,7 @@ int IPACM_Wlan::handle_wlan_qos_route_rule_ext_v2(uint8_t *client_mac,
 
 				if (qos_param->dscp)
 				{
+					rt_rule_entry->rule.hashable = false;
 					rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_TOS_MASKED;
 					rt_rule_entry->rule.attrib.tos_value = qos_param->dscp << 2;
 					rt_rule_entry->rule.attrib.tos_mask = 0xFC;
@@ -11408,11 +11410,6 @@ int IPACM_Wlan::handle_wlan_qos_route_rule_ext_v2(uint8_t *client_mac,
 				if (qos_param->pcp)
 				{
 					IPACMERR("QOS param PCP no action from IPA \n");
-				}
-
-				if (IPACM_Iface::ipacmcfg->GetIPAVer() >= IPA_HW_v4_0)
-				{
-					rt_rule_entry->rule.hashable = true;
 				}
 
 				memset(hdr_proc_ctx_table, 0, size);
@@ -11483,7 +11480,8 @@ int IPACM_Wlan::handle_wlan_qos_route_rule_ext_v2(uint8_t *client_mac,
 					memcpy(&rt_rule_entry->rule.attrib,
 						&tx_prop->tx[tx_index].attrib,
 						sizeof(rt_rule_entry->rule.attrib));
-
+					if (IPACM_Iface::ipacmcfg->GetIPAVer() >= IPA_HW_v4_0)
+						rt_rule_entry->rule.hashable = true;
 					rt_rule_entry->rule.enable_stats = true;
 					rt_rule_entry->rule.cnt_idx =
 						get_client_memptr(wlan_client, wlan_index)->dl_cnt_idx;
@@ -11599,7 +11597,8 @@ int IPACM_Wlan::handle_wlan_qos_route_rule_ext_v2(uint8_t *client_mac,
 					}
 
 					if (qos_param->dscp)
-					{
+					{					
+						rt_rule_entry->rule.hashable = false;
 						rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_TOS_MASKED;
 						rt_rule_entry->rule.attrib.tos_value = qos_param->dscp << 2;
 						rt_rule_entry->rule.attrib.tos_mask = 0xFC;
@@ -11610,9 +11609,6 @@ int IPACM_Wlan::handle_wlan_qos_route_rule_ext_v2(uint8_t *client_mac,
 						IPACMERR("QOS param PCP no v6 route rule action from IPA \n");
 					}
 
-#ifdef FEATURE_IPA_V3
-					rt_rule_entry->rule.hashable = true;
-#endif
 					memset(hdr_proc_ctx_table, 0, size);
 					hdr_proc_ctx_table->commit = 1;
 					hdr_proc_ctx_table->num_proc_ctxs = 1;

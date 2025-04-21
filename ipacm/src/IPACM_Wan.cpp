@@ -4732,7 +4732,7 @@ int IPACM_Wan::handle_route_add_evt(ipa_ip_type iptype)
 	rt_rule_entry = &rt_rule->rules[0];
 	rt_rule_entry->at_rear = true;
 
-	if(m_is_sta_mode != Q6_WAN && !IPACM_Iface::ipacmcfg->eth_wan_pppoe_enable)
+	if(m_is_sta_mode != Q6_WAN)
 	{
 		IPACMDBG_H(" WAN instance is in STA mode \n");
 		for (tx_index = 0; tx_index < iface_query->num_tx_props; tx_index++)

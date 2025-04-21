@@ -28,7 +28,7 @@ IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  * Changes from Qualcomm Innovation Center are provided under the following license:
  *
- * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2025 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted (subject to the limitations in the
@@ -302,7 +302,7 @@ class IPACM_Lan : public IPACM_Iface
 {
 public:
 
-	IPACM_Lan(int iface_index);
+	IPACM_Lan(char *iface_name, int iface_index);
 	~IPACM_Lan();
 
 	/* store lan's wan-up filter rule handlers */
@@ -1591,14 +1591,13 @@ private:
 
 	inline int delete_eth_qos_ack_rules(int clt_indx, ipa_ip_type iptype)
 	{
-		uint32_t tx_index;
 		uint32_t rt_hdl;
 		int num_v6 = 0;
 		std::array<uint32_t, 4> ipv6_address;
 
 		if(iptype == IPA_IP_v4)
 		{
-			IPACMDBG_H("Delete client index %d ipv4 RT-rules for tx:%d\n", clt_indx, tx_index);
+			IPACMDBG_H("Delete client index %d ipv4 RT-rules\n", clt_indx);
 			rt_hdl = get_client_memptr(eth_client, clt_indx)->dft_qos_ack_v4;
 
 			if(m_routing.DeleteRoutingHdl(rt_hdl, IPA_IP_v4) == false)

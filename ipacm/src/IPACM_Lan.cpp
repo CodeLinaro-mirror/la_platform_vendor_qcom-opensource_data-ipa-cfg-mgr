@@ -123,7 +123,7 @@ ipa_lan_client_idx IPACM_Lan::inactive_lan_client_index_odu[IPA_MAX_NUM_HW_PATH_
 #define LAN2LAN_RULE_ID 1
 #define IPA_NS_TABLE IPA_TMP_DIR"/ipa_ns_table.txt"
 
-IPACM_Lan::IPACM_Lan(int iface_index) : IPACM_Iface(iface_index)
+IPACM_Lan::IPACM_Lan(char *iface_name, int iface_index) : IPACM_Iface(iface_name, iface_index)
 {
 	sIface = false;
 	num_eth_client = 0;
@@ -15193,6 +15193,8 @@ void IPACM_Lan::post_del_self_evt()
 	memset(fid, 0, sizeof(ipacm_event_data_fid));
 	memset(&evt, 0, sizeof(ipacm_cmd_q_data));
 
+	/*Using IPA_IFACE_NAME_LEN as dev_name variable is of 32 byte size. */
+	strlcpy(fid->iface_name, dev_name, IPA_IFACE_NAME_LEN);
 	fid->if_index = ipa_if_num;
 
 	evt.evt_data = (void*)fid;
@@ -22481,7 +22483,7 @@ int IPACM_Lan::install_default_qos_rt_rules(uint8_t *client_mac, uint16_t client
 		else
 			rt_rule_entry->rule.hdr_hdl = get_client_memptr(eth_client, eth_index)->hdr_hdl_v6;
 
-		if ((ipv6_addr[0] || ipv6_addr[1] || ipv6_addr[2] ||
+		if (ipv6_addr && (ipv6_addr[0] || ipv6_addr[1] || ipv6_addr[2] ||
 						ipv6_addr[3]))
 		{
 			rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_DST_ADDR;

@@ -8369,6 +8369,11 @@ int IPACM_Lan::handle_qos_route_rule(uint8_t *client_mac, uint16_t client_vlan_i
 				rt_rule_entry->rule.attrib.u.v4.dst_addr = get_client_memptr(eth_client, eth_index)->v4_addr;
 				rt_rule_entry->rule.attrib.u.v4.dst_addr_mask = 0xffffffff;
 
+				if (IPACM_Iface::ipacmcfg->GetIPAVer() >= IPA_HW_v4_0)
+				{
+					rt_rule_entry->rule.hashable = true;
+				}
+
 				// IP Tuple
 				if (qos_param->ip_tup.src_ip_addr)
 				{
@@ -8427,6 +8432,7 @@ int IPACM_Lan::handle_qos_route_rule(uint8_t *client_mac, uint16_t client_vlan_i
 
 				if (qos_param->dscp)
 				{
+					rt_rule_entry->rule.hashable = false;
 					rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_TOS_MASKED;
 					rt_rule_entry->rule.attrib.tos_value = qos_param->dscp << 2;
 					rt_rule_entry->rule.attrib.tos_mask = 0xFC;
@@ -8478,11 +8484,6 @@ int IPACM_Lan::handle_qos_route_rule(uint8_t *client_mac, uint16_t client_vlan_i
 					rt_rule_entry->rule.hdr_hdl = get_client_memptr(eth_client, eth_index)->hdr_hdl_v4;
 				}
 
-				if (IPACM_Iface::ipacmcfg->GetIPAVer() >= IPA_HW_v4_0)
-				{
-					rt_rule_entry->rule.hashable = true;
-				}
-
 				if (false == m_routing.AddRoutingRule(rt_rule))
 				{
 					IPACMERR("Routing rule addition failed!\n");
@@ -8525,7 +8526,8 @@ int IPACM_Lan::handle_qos_route_rule(uint8_t *client_mac, uint16_t client_vlan_i
 					memcpy(&rt_rule_entry->rule.attrib,
 						&tx_prop->tx[tx_index].attrib,
 						sizeof(rt_rule_entry->rule.attrib));
-
+					if (IPACM_Iface::ipacmcfg->GetIPAVer() >= IPA_HW_v4_0)
+						rt_rule_entry->rule.hashable = true;
 					if ((ipv6_addr[0] || ipv6_addr[1] || ipv6_addr[2] ||
 						ipv6_addr[3]))
 					{
@@ -8637,6 +8639,7 @@ int IPACM_Lan::handle_qos_route_rule(uint8_t *client_mac, uint16_t client_vlan_i
 
 					if (qos_param->dscp)
 					{
+						rt_rule_entry->rule.hashable = false;
 						rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_TOS_MASKED;
 						rt_rule_entry->rule.attrib.tos_value = qos_param->dscp << 2;
 						rt_rule_entry->rule.attrib.tos_mask = 0xFC;
@@ -8647,9 +8650,6 @@ int IPACM_Lan::handle_qos_route_rule(uint8_t *client_mac, uint16_t client_vlan_i
 						IPACMERR("QOS param PCP no v6 route rule action from IPA \n");
 					}
 
-#ifdef FEATURE_IPA_V3
-					rt_rule_entry->rule.hashable = true;
-#endif
 					if (qos_param->dscp_mark_val)
 					{
 						int size = sizeof(ipa_ioc_add_hdr_proc_ctx) + sizeof(ipa_hdr_proc_ctx_add);
@@ -8896,7 +8896,10 @@ int IPACM_Lan::handle_qos_route_rule_ext_v2(uint8_t *client_mac,
 				memcpy(&rt_rule_entry->rule.attrib,
 					&tx_prop->tx[tx_index].attrib,
 					sizeof(rt_rule_entry->rule.attrib));
-					
+				if (IPACM_Iface::ipacmcfg->GetIPAVer() >= IPA_HW_v4_0)
+				{
+					rt_rule_entry->rule.hashable = true;
+				}
 				rt_rule_entry->rule.enable_stats = true;
 				rt_rule_entry->rule.cnt_idx =
 					get_client_memptr(eth_client, eth_index)->dl_cnt_idx;
@@ -8975,6 +8978,7 @@ int IPACM_Lan::handle_qos_route_rule_ext_v2(uint8_t *client_mac,
 
 				if (qos_param->dscp)
 				{
+					rt_rule_entry->rule.hashable = false;
 					rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_TOS_MASKED;
 					rt_rule_entry->rule.attrib.tos_value = qos_param->dscp << 2;
 					rt_rule_entry->rule.attrib.tos_mask = 0xFC;
@@ -9027,11 +9031,6 @@ int IPACM_Lan::handle_qos_route_rule_ext_v2(uint8_t *client_mac,
 					IPACMDBG_H("rt->hdr_hdl v4 0x%x\n", rt_rule_entry->rule.hdr_hdl);
 				}
 
-				if (IPACM_Iface::ipacmcfg->GetIPAVer() >= IPA_HW_v4_0)
-				{
-					rt_rule_entry->rule.hashable = true;
-				}
-
 				if (false == m_routing.AddRoutingRuleExt_v2(rt_rule))
 				{
 					IPACMERR("Routing rule addition failed!\n");
@@ -9076,7 +9075,8 @@ int IPACM_Lan::handle_qos_route_rule_ext_v2(uint8_t *client_mac,
 					memcpy(&rt_rule_entry->rule.attrib,
 						&tx_prop->tx[tx_index].attrib,
 						sizeof(rt_rule_entry->rule.attrib));
-
+					if (IPACM_Iface::ipacmcfg->GetIPAVer() >= IPA_HW_v4_0)
+						rt_rule_entry->rule.hashable = true;
 					rt_rule_entry->rule.enable_stats = true;
 					rt_rule_entry->rule.cnt_idx =
 						get_client_memptr(eth_client, eth_index)->dl_cnt_idx;
@@ -9193,6 +9193,7 @@ int IPACM_Lan::handle_qos_route_rule_ext_v2(uint8_t *client_mac,
 
 					if (qos_param->dscp)
 					{
+						rt_rule_entry->rule.hashable = false;
 						rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_TOS_MASKED;
 						rt_rule_entry->rule.attrib.tos_value = qos_param->dscp << 2;
 						rt_rule_entry->rule.attrib.tos_mask = 0xFC;
@@ -9202,10 +9203,6 @@ int IPACM_Lan::handle_qos_route_rule_ext_v2(uint8_t *client_mac,
 					{
 						IPACMERR("QOS param PCP no v6 route rule action from IPA \n");
 					}
-
-#ifdef FEATURE_IPA_V3
-					rt_rule_entry->rule.hashable = true;
-#endif
 
 					if (qos_param->dscp_mark_val)
 					{

@@ -347,6 +347,7 @@ void* ipa_driver_msg_notifier(void *param)
 #endif
 	struct ipa_ioc_qos_config *qos_param;
 	struct ipa_macsec_map *macsecMap = NULL;
+	char* char_idx = NULL;
 
 	fd = open(IPA_DRIVER, O_RDWR);
 	if (fd < 0)
@@ -537,7 +538,7 @@ void* ipa_driver_msg_notifier(void *param)
 			if(IPACM_FAILURE == ipa_get_if_index(event_ex->name, &(data_ex->if_index)))
 			{
 				/*send base interface in neigh and stiched interface in iface class*/
-				char* char_idx =  strstr(event_ex->name, "_");
+				char_idx =  strstr(event_ex->name, "_");
 				if (char_idx) {
 					char_idx[0] = '\0';
 					IPACMDBG_H("truncated iface name %s\n", event_ex->name);
@@ -608,12 +609,33 @@ void* ipa_driver_msg_notifier(void *param)
 				data->if_index = event_wlan->if_index;
 				IPACMDBG_H("Using WLAN_CLIENT_DISCONNECT if_index: %d\n",event_wlan->if_index);
 			}
-
+			IPACMDBG("Posting with %s\n", data->iface_name);
 			memcpy(data->mac_addr,
 						 event_wlan->mac_addr,
 						 sizeof(event_wlan->mac_addr));
 			evt_data.event = IPA_WLAN_CLIENT_DEL_EVENT;
 			evt_data.evt_data = data;
+			new_neigh_data = (ipacm_event_data_all*)malloc(sizeof(ipacm_event_data_all));
+			if(new_neigh_data == NULL)
+			{
+				IPACMERR("Failed to allocate memory.\n");
+				free(data);
+				goto done;
+			}
+			memset(new_neigh_data, 0, sizeof(ipacm_event_data_all));
+			strlcpy(new_neigh_data->iface_name, data->iface_name, IPA_IFACE_NAME_LEN);
+			/*send base interface in neigh and stiched interface in iface class*/
+			char_idx = strstr(new_neigh_data->iface_name, "_");
+			if (char_idx)
+			{
+				char_idx[0] = '\0';
+				IPACMDBG_H("truncated iface name %s\n", new_neigh_data->iface_name);
+			}
+			new_neigh_data->iptype = IPA_IP_v6;
+			memcpy(new_neigh_data->mac_addr, event_wlan->mac_addr, sizeof(new_neigh_data->mac_addr));
+			new_neigh_data->if_index = data->if_index;
+			new_neigh_evt.evt_data = (void*)new_neigh_data;
+			new_neigh_evt.event = IPA_DEL_NEIGH_EVENT;
 			break;
 
 		case WLAN_CLIENT_POWER_SAVE_MODE:
@@ -1539,7 +1561,7 @@ void* ipa_driver_msg_notifier(void *param)
 		/* push new_neighbor with netdev device internally */
 		if(new_neigh_data != NULL)
 		{
-			IPACMDBG_H("Internally post event IPA_NEW_NEIGH_EVENT\n");
+			IPACMDBG_H("Internally post event IPA_NEW_NEIGH/DEL_NEIGH_EVENT\n");
 			IPACM_EvtDispatcher::PostEvt(&new_neigh_evt);
 		}
 	}

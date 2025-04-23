@@ -495,6 +495,13 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 			{
 				IPACMDBG_H("Received IPA_DEL_NEIGH_EVENT\n");
 			}
+			/* Do not process IPA_NEW/DEL_NEIGH_EVENT for mld it will be taken care
+			 with ath from wlan client connect and disconnect */
+			if (strncmp(data->iface_name, MLD_IFACE_NAME, strlen(MLD_IFACE_NAME)) == 0)
+			{
+				IPACMERR("Donot process physical neigh with MLD iface:%s\n", data->iface_name);
+				break;
+			}
 			strlcpy(wds_ext_iface, data->iface_name, sizeof(data->iface_name));
 			char_idx = strstr(wds_ext_iface,".sta");
 

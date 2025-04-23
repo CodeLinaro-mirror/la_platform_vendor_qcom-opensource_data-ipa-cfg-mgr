@@ -1055,6 +1055,7 @@ static int ipa_nl_decode_nlmsg
 			msg_ptr->type = nlh->nlmsg_type;
 			msg_ptr->link_event = true;
 			IPACMDBG("entering rtm decode\n");
+			memset(&(msg_ptr->nl_link_info), 0, sizeof((msg_ptr->nl_link_info)));
 			if (IPACM_SUCCESS != ipa_nl_decode_rtm_link(buffer, buflen, &(msg_ptr->nl_link_info))) {
 				IPACMERR("Failed to decode rtm link message\n");
 				return IPACM_FAILURE;
@@ -1142,6 +1143,7 @@ static int ipa_nl_decode_nlmsg
 
 		case RTM_NEWADDR:
 			IPACMDBG("\nGOT RTM_NEWADDR event\n");
+			memset(&(msg_ptr->nl_addr_info), 0, sizeof((msg_ptr->nl_addr_info)));
 			if (IPACM_SUCCESS != ipa_nl_decode_rtm_addr(buffer, buflen, &(msg_ptr->nl_addr_info))) {
 				IPACMERR("Failed to decode rtm addr message\n");
 				return IPACM_FAILURE;
@@ -1221,13 +1223,14 @@ static int ipa_nl_decode_nlmsg
 				else
 				{
 					free(data_addr);
-				}	
+				}
 
 			}
 			break;
 
 		case RTM_DELADDR:
 			IPACMDBG("\nGOT RTM_DELADDR event\n");
+			memset(&(msg_ptr->nl_addr_info), 0, sizeof((msg_ptr->nl_addr_info)));
 			if (IPACM_SUCCESS != ipa_nl_decode_rtm_addr(buffer, buflen, &(msg_ptr->nl_addr_info))) {
 				IPACMERR("Failed to decode rtm addr message\n");
 				return IPACM_FAILURE;
@@ -1267,6 +1270,7 @@ static int ipa_nl_decode_nlmsg
 			break;
 		case RTM_NEWROUTE:
 			IPACMDBG("\nGOT RTM_NEWROUTE event\n");
+			memset(&(msg_ptr->nl_route_info), 0, sizeof((msg_ptr->nl_route_info)));
 			if (IPACM_SUCCESS != ipa_nl_decode_rtm_route(buffer, buflen, &(msg_ptr->nl_route_info))) {
 				IPACMERR("Failed to decode rtm route message\n");
 				return IPACM_FAILURE;
@@ -1571,6 +1575,7 @@ static int ipa_nl_decode_nlmsg
 
 		case RTM_DELROUTE:
 			IPACMDBG("\nGOT RTM_DELROUTE event\n");
+			memset(&(msg_ptr->nl_route_info), 0, sizeof((msg_ptr->nl_route_info)));
 			if (IPACM_SUCCESS != ipa_nl_decode_rtm_route(buffer, buflen, &(msg_ptr->nl_route_info))) {
 				IPACMERR("Failed to decode rtm route message\n");
 				return IPACM_FAILURE;
@@ -1785,10 +1790,20 @@ static int ipa_nl_decode_nlmsg
 
 		case RTM_NEWNEIGH:
 			IPACMDBG("\nGOT RTM_NEWNEIGH event\n");
+			memset(&(msg_ptr->nl_neigh_info), 0, sizeof((msg_ptr->nl_neigh_info)));
 			if (IPACM_SUCCESS != ipa_nl_decode_rtm_neigh(buffer, buflen, &(msg_ptr->nl_neigh_info))) {
 				IPACMERR("Failed to decode rtm neighbor message\n");
 				return IPACM_FAILURE;
 			}
+
+			IPACMDBG("NDA_LLADDR:MAC %02x:%02x:%02x:%02x:%02x:%02x\n",
+				(unsigned char)(msg_ptr->nl_neigh_info.attr_info.lladdr_hwaddr).sa_data[0],
+				(unsigned char)(msg_ptr->nl_neigh_info.attr_info.lladdr_hwaddr).sa_data[1],
+				(unsigned char)(msg_ptr->nl_neigh_info.attr_info.lladdr_hwaddr).sa_data[2],
+				(unsigned char)(msg_ptr->nl_neigh_info.attr_info.lladdr_hwaddr).sa_data[3],
+				(unsigned char)(msg_ptr->nl_neigh_info.attr_info.lladdr_hwaddr).sa_data[4],
+				(unsigned char)(msg_ptr->nl_neigh_info.attr_info.lladdr_hwaddr).sa_data[5]);
+
 			ret_val = ipa_get_if_name(dev_name, msg_ptr->nl_neigh_info.metainfo.ndm_ifindex);
 			if(ret_val != IPACM_SUCCESS)
 			{
@@ -1801,23 +1816,27 @@ static int ipa_nl_decode_nlmsg
 			}
 			IPACMDBG("Neighbour event with interface index %d master interface index %d family %d\n", msg_ptr->nl_neigh_info.metainfo.ndm_ifindex, msg_ptr->nl_neigh_info.master_interface_index, msg_ptr->nl_neigh_info.attr_info.local_addr.ss_family);
 
-			if(msg_ptr->nl_neigh_info.metainfo.ndm_state == NUD_NOARP)
+			if(((msg_ptr->nl_neigh_info.attr_info.local_addr.ss_family == AF_INET) ||
+				(msg_ptr->nl_neigh_info.attr_info.local_addr.ss_family == AF_INET6)) &&
+				(msg_ptr->nl_neigh_info.metainfo.ndm_state == NUD_NOARP))
 			{
 				IPACMDBG_H("RTM_NEWNEIGH received with NOARP. Ignoring\n");
-				return IPACM_SUCCESS;;
+				return IPACM_SUCCESS;
 			}
+			IPACMDBG_H("RTM_NEWNEIGH received with state[%02X]\n", msg_ptr->nl_neigh_info.metainfo.ndm_state);
+
 			if((msg_ptr->nl_neigh_info.attr_info.lladdr_hwaddr.sa_data[0] == 0x33) &&
 				(msg_ptr->nl_neigh_info.attr_info.lladdr_hwaddr.sa_data[1] == 0x33))
 			{
 				IPACMDBG_H("RTM_NEWNEIGH received with ipv6 brodcast mac address. So Ignoring\n");
-				return IPACM_SUCCESS;;
+				return IPACM_SUCCESS;
 			}
         		if((msg_ptr->nl_neigh_info.attr_info.lladdr_hwaddr.sa_data[0] == 0x01) &&
                            (msg_ptr->nl_neigh_info.attr_info.lladdr_hwaddr.sa_data[1] == 0x00) &&
 				(msg_ptr->nl_neigh_info.attr_info.lladdr_hwaddr.sa_data[2] == 0x5e))
 			{
 				IPACMDBG_H("RTM_NEWNEIGH received with ipv4 brodcast mac address. So Ignoring\n");
-				return IPACM_SUCCESS;;
+				return IPACM_SUCCESS;
 			}
 			if((msg_ptr->nl_neigh_info.metainfo.ndm_ifindex != 0) && (msg_ptr->nl_neigh_info.master_interface_index == 0) &&
 								(msg_ptr->nl_neigh_info.attr_info.local_addr.ss_family != 0))
@@ -1888,15 +1907,6 @@ static int ipa_nl_decode_nlmsg
 			IPACMDBG_H("ss_family = %d\n", msg_ptr->nl_neigh_info.attr_info.local_addr.ss_family);
 		        data_all->iptype = IPA_IP_v6;
 		    }
-
-		    IPACMDBG("NDA_LLADDR:MAC %02x:%02x:%02x:%02x:%02x:%02x\n",
-		     (unsigned char)(msg_ptr->nl_neigh_info.attr_info.lladdr_hwaddr).sa_data[0],
-		     (unsigned char)(msg_ptr->nl_neigh_info.attr_info.lladdr_hwaddr).sa_data[1],
-		     (unsigned char)(msg_ptr->nl_neigh_info.attr_info.lladdr_hwaddr).sa_data[2],
-		     (unsigned char)(msg_ptr->nl_neigh_info.attr_info.lladdr_hwaddr).sa_data[3],
-		     (unsigned char)(msg_ptr->nl_neigh_info.attr_info.lladdr_hwaddr).sa_data[4],
-		     (unsigned char)(msg_ptr->nl_neigh_info.attr_info.lladdr_hwaddr).sa_data[5]);
-
 
 		    memcpy(data_all->mac_addr,
 		    			 msg_ptr->nl_neigh_info.attr_info.lladdr_hwaddr.sa_data,
@@ -1978,10 +1988,20 @@ static int ipa_nl_decode_nlmsg
 
 		case RTM_DELNEIGH:
 			IPACMDBG("\nGOT RTM_DELNEIGH event\n");
+			memset(&(msg_ptr->nl_neigh_info), 0, sizeof((msg_ptr->nl_neigh_info)));
 			if (IPACM_SUCCESS != ipa_nl_decode_rtm_neigh(buffer, buflen, &(msg_ptr->nl_neigh_info))) {
 				IPACMERR("Failed to decode rtm neighbor message\n");
 				return IPACM_FAILURE;
 			}
+
+			IPACMDBG("NDA_LLADDR:MAC %02x:%02x:%02x:%02x:%02x:%02x\n",
+				(unsigned char)(msg_ptr->nl_neigh_info.attr_info.lladdr_hwaddr).sa_data[0],
+				(unsigned char)(msg_ptr->nl_neigh_info.attr_info.lladdr_hwaddr).sa_data[1],
+				(unsigned char)(msg_ptr->nl_neigh_info.attr_info.lladdr_hwaddr).sa_data[2],
+				(unsigned char)(msg_ptr->nl_neigh_info.attr_info.lladdr_hwaddr).sa_data[3],
+				(unsigned char)(msg_ptr->nl_neigh_info.attr_info.lladdr_hwaddr).sa_data[4],
+				(unsigned char)(msg_ptr->nl_neigh_info.attr_info.lladdr_hwaddr).sa_data[5]);
+
 			ret_val = ipa_get_if_name(dev_name, msg_ptr->nl_neigh_info.metainfo.ndm_ifindex);
 			if(ret_val != IPACM_SUCCESS)
 			{
@@ -2004,14 +2024,14 @@ static int ipa_nl_decode_nlmsg
 				(msg_ptr->nl_neigh_info.attr_info.lladdr_hwaddr.sa_data[1] == 0x33))
 			{
 				IPACMDBG_H("RTM_DELNEIGH received with ipv6 brodcast mac address. So Ignoring\n");
-				return IPACM_SUCCESS;;
+				return IPACM_SUCCESS;
 			}
         		if((msg_ptr->nl_neigh_info.attr_info.lladdr_hwaddr.sa_data[0] == 0x01) &&
                            (msg_ptr->nl_neigh_info.attr_info.lladdr_hwaddr.sa_data[1] == 0x00) &&
 				(msg_ptr->nl_neigh_info.attr_info.lladdr_hwaddr.sa_data[2] == 0x5e))
 			{
 				IPACMDBG_H("RTM_DELNEIGH received with ipv4 brodcast mac address. So Ignoring\n");
-				return IPACM_SUCCESS;;
+				return IPACM_SUCCESS;
 			}
 
 			/* insert to command queue */
@@ -2048,14 +2068,6 @@ static int ipa_nl_decode_nlmsg
 			{
 				data_all->iptype = IPA_IP_v6;
 			}
-
-		    IPACMDBG("NDA_LLADDR:MAC %02x:%02x:%02x:%02x:%02x:%02x\n",
-		     (unsigned char)(msg_ptr->nl_neigh_info.attr_info.lladdr_hwaddr).sa_data[0],
-		     (unsigned char)(msg_ptr->nl_neigh_info.attr_info.lladdr_hwaddr).sa_data[1],
-		     (unsigned char)(msg_ptr->nl_neigh_info.attr_info.lladdr_hwaddr).sa_data[2],
-		     (unsigned char)(msg_ptr->nl_neigh_info.attr_info.lladdr_hwaddr).sa_data[3],
-		     (unsigned char)(msg_ptr->nl_neigh_info.attr_info.lladdr_hwaddr).sa_data[4],
-		     (unsigned char)(msg_ptr->nl_neigh_info.attr_info.lladdr_hwaddr).sa_data[5]);
 
 			memcpy(data_all->mac_addr,
 						 msg_ptr->nl_neigh_info.attr_info.lladdr_hwaddr.sa_data,

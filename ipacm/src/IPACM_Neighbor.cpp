@@ -1188,6 +1188,18 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 								/* VLAN interface && not the same iface name */
 								if(IPACM_Iface::ipacmcfg->ipacm_mpdn_enable == TRUE && IPACM_FAILURE == ipa_interface_index)
 								{
+									/*If neighbor event is recieved as part of netlink with mld, then to update the stitched
+									  interface details received as part of NEW_NEIGH from WLAN_CLIENT_ADD_EX event. */
+									if((strstr(neighbor_client[i].iface_name,"mld") && (!strchr(neighbor_client[i].iface_name, '_')))
+															&& (strstr(data->iface_name,"mld") && strchr(data->iface_name, '_')))
+									{
+										IPACMDBG("Updating the iface name with stitched iface name %s %s\n",
+														neighbor_client[i].iface_name, data->iface_name);
+
+										strlcpy(neighbor_client[i].iface_name, data->iface_name,
+														sizeof(neighbor_client[i].iface_name));
+
+									}
 									/* for this case we cached the neigh event from bridgeX where it won't have iface_name */
 									if(strcmp(neighbor_client[i].iface_name, IPA_NO_IFACE_NAME) == 0)
 									{

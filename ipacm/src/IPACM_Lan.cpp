@@ -11255,7 +11255,7 @@ int IPACM_Lan::install_uplink_filter_rule_per_client_v2
 	}
 
 	len = sizeof(struct ipa_ioc_add_flt_rule_v2);
-	pFilteringTable = (struct ipa_ioc_add_flt_rule_v2*)malloc(len);
+	pFilteringTable = (struct ipa_ioc_add_flt_rule_v2*)calloc(1, len);
 	if (pFilteringTable == NULL)
 	{
 		IPACMERR("Error Locate ipa_flt_rule_add memory...\n");

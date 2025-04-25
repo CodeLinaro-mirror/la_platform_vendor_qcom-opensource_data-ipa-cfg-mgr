@@ -11055,7 +11055,7 @@ void IPACM_Lan::post_del_self_evt()
 /*handle reset usb-client rt-rules */
 int IPACM_Lan::handle_lan_client_reset_rt(ipa_ip_type iptype, uint16_t vlan_id)
 {
-	int i, res = IPACM_SUCCESS;
+	int i, j, res = IPACM_SUCCESS;
 
 	/* clean eth-client routing rules */
 	IPACMDBG_H("left %d eth clients need to be deleted \n ", num_eth_client);
@@ -11091,6 +11091,10 @@ int IPACM_Lan::handle_lan_client_reset_rt(ipa_ip_type iptype, uint16_t vlan_id)
 			}
 			else
 			{
+				for (j = 0; j < get_client_memptr(eth_client, i)->ipv6_set; ++j)
+				{
+					CtList->HandleNeighIpAddrDelEvt_v6(Ipv6IpAddress(get_client_memptr(eth_client, i)->v6_addr[j], false));
+				}
 				get_client_memptr(eth_client, i)->ipv6_set = 0;
 				memset(get_client_memptr(eth_client, i)->client_backhaul_prefix, 0, 2 * sizeof(uint32_t));
 				memset(get_client_memptr(eth_client, i)->v6_addr, 0, IPV6_NUM_ADDR * 4 * sizeof(uint32_t));
@@ -11104,6 +11108,10 @@ int IPACM_Lan::handle_lan_client_reset_rt(ipa_ip_type iptype, uint16_t vlan_id)
 			}
 			else
 			{
+				for (j = 0; j < get_client_memptr(eth_client, i)->ipv6_set; ++j)
+				{
+					CtList->HandleNeighIpAddrDelEvt_v6(Ipv6IpAddress(get_client_memptr(eth_client, i)->v6_addr[j], false));
+				}
 				get_client_memptr(eth_client, i)->ipv6_set = 0;
 				memset(get_client_memptr(eth_client, i)->client_backhaul_prefix, 0, 2 * sizeof(uint32_t));
 				memset(get_client_memptr(eth_client, i)->v6_addr, 0, IPV6_NUM_ADDR * 4 * sizeof(uint32_t));

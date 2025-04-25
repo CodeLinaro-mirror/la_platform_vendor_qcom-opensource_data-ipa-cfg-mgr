@@ -1464,6 +1464,7 @@ error:
 void IPACM_ConntrackListener::HandleVlanDown(void *in_param)
 {
 	ipacm_event_vlan_pdn *vlanup_data = (ipacm_event_vlan_pdn *)in_param;
+	bool remove_pdn = false;
 	IPACMDBG_H("Recevied below information during VLAN DOWN up,\n");
 	IPACMDBG_H("IPType: %d, vlan_id:%d, mux id %d\n",
 		vlanup_data->iptype,
@@ -1478,7 +1479,37 @@ void IPACM_ConntrackListener::HandleVlanDown(void *in_param)
 	if((vlanup_data->iptype == IPA_IP_v4) ||
 		(vlanup_data->iptype == IPA_IP_MAX))
 	{
-		/* VLAN PDN down is triggered only on LINK_DOWN, we can safely remove the PDN */
+		if(vlanup_data->VlanID > 0)
+		{
+			/* If handle vlan down with last vlan for pdn then remove pdn */
+			for(int i = 0; i < IPA_MAX_NUM_HW_PDNS; i++)
+			{
+				if(vlan_pdns[i].public_ip == vlanup_data->ipv4_addr)
+				{
+					for(int j = 0; j < IPA_MAX_NUM_SW_PDNS; j++)
+					{
+						if(vlan_pdns[i].associated_VIDs[j] == vlanup_data->VlanID)
+						{
+							vlan_pdns[i].associated_VIDs[j] = 0;
+							vlan_pdns[i].VID_cnt--;
+							if(vlan_pdns[i].VID_cnt == 0)
+							{
+								remove_pdn = true;
+								break;
+							}
+							else
+							{
+								IPACMDBG_H("VLAN PDN is up, return\n");
+								return;
+							}
+						}
+					}
+					if(remove_pdn == true)
+						break;
+				}
+			}
+		}
+
 		IPACMDBG_H("removing PDN ipv4 address 0x%X\n", vlanup_data->ipv4_addr);
 		nat_inst->RemovePdn(vlanup_data->ipv4_addr);
 
@@ -1500,6 +1531,7 @@ void IPACM_ConntrackListener::HandleVlanDown(void *in_param)
 void IPACM_ConntrackListener::HandleVlanDownV6(void *in_param)
 {
 	ipacm_event_vlan_pdn *vlandown_data = (ipacm_event_vlan_pdn *)in_param;
+	bool delete_table = false;
 	IPACMDBG_H("Received below information during VLAN PDN down,\n");
 	IPACMDBG_H("IPType: %d, vlan_id:%d, mux id %d\n",
 		vlandown_data->iptype,
@@ -1520,6 +1552,37 @@ void IPACM_ConntrackListener::HandleVlanDownV6(void *in_param)
 		return;
 	}
 
+	if(vlandown_data->VlanID > 0)
+	{
+		/* If handle vlan down is with last vlan for pdn then remove table */
+		for(int i = 0; i < IPA_MAX_NUM_HW_PDNS; i++)
+		{
+			if((v6_vlan_pdns[i].ipv6_prefix[0] == vlandown_data->ipv6_prefix[0]) &&
+				(v6_vlan_pdns[i].ipv6_prefix[1] == vlandown_data->ipv6_prefix[1]))
+			{
+				for(int j = 0; j < IPA_MAX_NUM_SW_PDNS; j++)
+				{
+					if(v6_vlan_pdns[i].associated_VIDs[j] == vlandown_data->VlanID)
+					{
+						v6_vlan_pdns[i].associated_VIDs[j] = 0;
+						v6_vlan_pdns[i].VID_cnt--;
+						if(v6_vlan_pdns[i].VID_cnt == 0)
+						{
+							delete_table = true;
+							break;
+						}
+						else
+						{
+							IPACMDBG_H("V6 VLAN PDN is up, return\n");
+							return;
+						}
+					}
+				}
+				if(delete_table == true)
+					break;
+			}
+		}
+	}
 	/* Delete VLAN PDN cache */
 	for(int i = 0; i < IPA_MAX_NUM_HW_PDNS; i++)
 	{

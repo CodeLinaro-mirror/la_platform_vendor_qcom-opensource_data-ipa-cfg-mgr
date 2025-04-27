@@ -2155,16 +2155,24 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 					wan_v4_addr_gw_set = false;
 					if(m_is_sta_mode == Q6_WAN)
 					{
-						del_wan_firewall_rule(IPA_IP_v4);
-						install_wan_filtering_rule(false);
 						handle_route_del_evt_ex(IPA_IP_v4);
+						del_wan_firewall_rule(IPA_IP_v4);
+						if(isVlanWanUP())
+						{
+							config_wan_firewall_rule(IPA_IP_v4);
+						}
+						install_wan_filtering_rule(false);
 
 						if(is_xlat && active_v6 == true)
 						{
 							IPACMDBG_H("XLAT enabled: Delete IPv6 routing table dev (%s)\n", dev_name);
-							del_wan_firewall_rule(IPA_IP_v6);
-							install_wan_filtering_rule(false);
 							handle_route_del_evt_ex(IPA_IP_v6);
+							del_wan_firewall_rule(IPA_IP_v6);
+							if(isVlanWanUP_V6())
+							{
+								config_wan_firewall_rule(IPA_IP_v6);
+							}
+							install_wan_filtering_rule(false);
 						}
 					}
 					else
@@ -2182,9 +2190,13 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 						if (is_xlat && active_v4 == true) {
 							IPACMDBG_H("xlat v4 pdn active, dont post WAN_DOWN_V6\n");
 						} else {
-							del_wan_firewall_rule(IPA_IP_v6);
-							install_wan_filtering_rule(false);
 							handle_route_del_evt_ex(IPA_IP_v6);
+							del_wan_firewall_rule(IPA_IP_v6);
+							if(isVlanWanUP_V6())
+							{
+								config_wan_firewall_rule(IPA_IP_v6);
+							}
+							install_wan_filtering_rule(false);
 						}
 					}
 					else

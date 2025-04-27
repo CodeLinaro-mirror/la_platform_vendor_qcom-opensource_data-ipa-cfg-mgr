@@ -27,7 +27,7 @@
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  * Changes from Qualcomm Innovation Center are provided under the following license:
- * Copyright (c) 2023-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2023-2025 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 /*!
@@ -207,7 +207,13 @@ static int ipacm_cfg_xml_parse_tree
 						IPACM_util_icmp_string((char*)xml_node->name, PUBLIC_IP_SUPPORT_TAG) == 0 ||
 						IPACM_util_icmp_string((char*)xml_node->name, IPACM_WLAN_VLAN_MPDN) == 0 ||
 						IPACM_util_icmp_string((char*)xml_node->name, Static_Policy_TAG) == 0 ||
-						IPACM_util_icmp_string((char*)xml_node->name, IPACM_QOS_TAG) == 0)
+						IPACM_util_icmp_string((char*)xml_node->name, IPACM_QOS_TAG) == 0 ||
+#ifdef FEATURE_PPPOE
+						IPACM_util_icmp_string((char*)xml_node->name, PPPOE_TAG) == 0 ||
+#endif
+						IPACM_util_icmp_string((char*)xml_node->name, Eth_Vlan_Wan_TAG) == 0 ||
+						IPACM_util_icmp_string((char*)xml_node->name, Multi_Vlan_Bridge_Config_TAG) == 0 ||
+						IPACM_util_icmp_string((char*)xml_node->name, IPACMLOG_TAG) == 0)
 				{
 					if (0 == IPACM_util_icmp_string((char*)xml_node->name, IFACE_TAG))
 					{
@@ -709,6 +715,22 @@ static int ipacm_cfg_xml_parse_tree
 							config->ipacm_l2tp_enable = atoi(content_buf);
 						}
 				}
+
+				else if (0 == IPACM_util_icmp_string((char*)xml_node->name, IPACMFILEVAR_TAG))
+				{		IPACMDBG_H("inside ipacm_logging \n");
+						content = IPACM_read_content_element(xml_node);
+						if (content)
+						{
+							str_size = strlen(content);
+							memset(content_buf, 0, sizeof(content_buf));
+							memcpy(content_buf, (void *)content, str_size);
+							if(atoi(content_buf)!=0)
+							{
+								config->max_file_size = atoi(content_buf);
+								IPACMDBG_H("max_filesz %d \n",config->max_file_size);
+							}
+						}
+				}
 				else if (IPACM_util_icmp_string((char*)xml_node->name, IPACM_MPDN_Enable_TAG) == 0)
 				{
 						IPACMDBG_H("inside enable MPDN\n");
@@ -885,6 +907,93 @@ static int ipacm_cfg_xml_parse_tree
 							IPACMDBG_H("QOS mode disabled %d buf(%d)\n", config->qos_mode, atoi(content_buf));
 						}
 					} else {
+					}
+				}
+#ifdef FEATURE_PPPOE
+				else if (IPACM_util_icmp_string((char*)xml_node->name, PPPOE_Enabled) == 0)
+				{
+					IPACMDBG_H("inside enable PPPOE Mode-XML\n");
+					content = IPACM_read_content_element(xml_node);
+					if (content)
+					{
+						str_size = strlen(content);
+						memset(content_buf, 0, sizeof(content_buf));
+						memcpy(content_buf, (void *)content, str_size);
+						content_buf[MAX_XML_STR_LEN-1] = '\0';
+						if (atoi(content_buf))
+						{
+							config->eth_wan_pppoe_enable = true;
+						}
+						else
+						{
+							config->eth_wan_pppoe_enable = false;
+						}
+						IPACMDBG_H("PPPOE enable: %d buf(%d)\n", config->eth_wan_pppoe_enable, atoi(content_buf));
+					}
+				}
+#endif
+				else if (IPACM_util_icmp_string((char*)xml_node->name, Eth_Vlan_Wan_Enabled) == 0)
+				{
+					IPACMDBG_H("inside enable Eth VLAN WAN Mode-XML\n");
+					content = IPACM_read_content_element(xml_node);
+					if (content)
+					{
+						str_size = strlen(content);
+						memset(content_buf, 0, sizeof(content_buf));
+						memcpy(content_buf, (void *)content, str_size);
+						content_buf[MAX_XML_STR_LEN-1] = '\0';
+						if (atoi(content_buf))
+						{
+							config->eth_vlan_wan_enable = true;
+						}
+						else
+						{
+							config->eth_vlan_wan_enable = false;
+						}
+						IPACMDBG_H("Eth VLAN WAN enable: %d buf(%d)\n", config->eth_vlan_wan_enable, atoi(content_buf));
+					}
+				}
+				else if (IPACM_util_icmp_string((char*)xml_node->name, Eth_Vlan_Wan_Iface_Name) == 0)
+				{
+					IPACMDBG_H("inside enable Eth VLAN WAN Iface Name-XML\n");
+					content = IPACM_read_content_element(xml_node);
+					if (content)
+					{
+						str_size = strlen(content);
+						memset(content_buf, 0, sizeof(content_buf));
+						memcpy(content_buf, (void *)content, str_size);
+						content_buf[MAX_XML_STR_LEN-1] = '\0';
+						if (0 == strncasecmp(content_buf, ETH_INTF, str_size))
+						{
+							config->eth_lan_wan_iface_name = ETH_INTF;
+						}
+						else if (0 == strncasecmp(content_buf, ETH1_INTF, str_size))
+						{
+							config->eth_lan_wan_iface_name = ETH1_INTF;
+						}
+						IPACMDBG_H("Eth VLAN WAN Iface Name: %s\n", config->eth_lan_wan_iface_name);
+					}
+				}
+				else if (IPACM_util_icmp_string((char*)xml_node->name, Multi_Vlan_Bridge_Config_Enable) == 0)
+				{
+					IPACMDBG_H("inside enable multi_vlan_bridge_config-XML\n");
+					content = IPACM_read_content_element(xml_node);
+					if (content)
+					{
+						str_size = strlen(content);
+						memset(content_buf, 0, sizeof(content_buf));
+						memcpy(content_buf, (void *)content, str_size);
+						content_buf[MAX_XML_STR_LEN-1] = '\0';
+						if (atoi(content_buf) == 1)
+						{
+							config->multi_vlan_bridge_config_enable = 1;
+						}
+						else
+						{
+							config->multi_vlan_bridge_config_enable = 0;
+						}
+						IPACMDBG_H("multi_vlan_bridge_config_enable: %d buf(%d)\n", config->multi_vlan_bridge_config_enable,
+							atoi(content_buf));
 					}
 				}
 			}

@@ -1,4 +1,4 @@
-/* 
+/*
 Copyright (c) 2013,2019, The Linux Foundation. All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -25,7 +25,13 @@ BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
 WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
 OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
 IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+
+Changes from Qualcomm Innovation Center are provided under the following license:
+Copyright (c) 2025 Qualcomm Innovation Center, Inc. All rights reserved.
+SPDX-License-Identifier: BSD-3-Clause-Clear
 */
+
 /*!
 	@file
 	IPACM_log.cpp
@@ -43,13 +49,48 @@ IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <sys/socket.h>
 #include <sys/types.h>
 #include <fcntl.h>
+#include <pthread.h>
 #include <unistd.h>
 #include <asm/types.h>
 #include <linux/if.h>
 #include <sys/un.h>
+#include <sys/stat.h>
 #include <errno.h>
 #include <IPACM_Defs.h>
+#include <time.h>
+#include <sys/time.h>
+#include <sys/mman.h>
 
+char* dump_file = 0;
+void* mmap_addr = NULL;
+void* write_addr = 0;
+int max_filesize = 0;
+int log_init_done = 0;
+pthread_mutex_t file_lock;
+
+#define FILE_LOCK()   \
+    do \
+    { \
+        if(0 != pthread_mutex_lock(&file_lock)) \
+        { \
+                perror("File lock acquired failed\n"); \
+		exit(EXIT_FAILURE); \
+        }\
+    } \
+    while(0)
+
+#define FILE_UNLOCK()   \
+    do \
+    { \
+        if(0 != pthread_mutex_unlock(&file_lock)) \
+        { \
+                perror("File lock release failed\n"); \
+                exit(EXIT_FAILURE);\
+        }\
+    } \
+    while(0)
+
+int log_fd = -1;
 void logmessage(int log_level)
 {
 	return;
@@ -127,12 +168,119 @@ void ipacm_log_send( void * user_data)
 
 	memcpy(ipacm_log_buffer.user_data, user_data, MAX_BUF_LEN);
 
-	//printf("send : %s\n", ipacm_log_buffer.user_data);
-	if ((numBytes = sendto(ipacm_log_sockfd, (void *)&ipacm_log_buffer, sizeof(ipacm_log_buffer.user_data), 0,
+        if ((numBytes = sendto(ipacm_log_sockfd, (void *)&ipacm_log_buffer, sizeof(ipacm_log_buffer.user_data), 0,
 			(struct sockaddr *)&ipacmlog_socket, len)) == -1)
 	{
 		printf("Send Failed(%d) %s \n",errno,strerror(errno));
 		return;
 	}
 	return;
+}
+
+char *get_time_string(char *buffer, int len)
+{
+   struct timeval tv;
+   struct tm *tm;
+   unsigned long long milliseconds = 0;
+   char timestamp_buf[TimeStamp_buff_len];
+
+   if (!buffer || len <= 0)
+     return NULL;
+
+   gettimeofday(&tv, NULL);
+   tm = localtime(&tv.tv_sec);
+
+   if (!tm)
+     return NULL;
+
+   milliseconds = (tv.tv_sec * 1000LL) + (tv.tv_usec / 1000);
+
+   strftime(timestamp_buf, 30, "%H:%M:%S", tm);
+   snprintf(buffer, len, "%s%lld", timestamp_buf, milliseconds);
+
+   return buffer;
+}
+/* IPACM logging initilation*/
+int log_init(int file_size) {
+        int ret = 0;
+        int trunc_ret = -1;
+        dump_file = IPACM_LOG_COLLECTION_FILE;
+
+        if(max_filesize != file_size)
+        {
+            if(log_init_done)
+            {
+                FILE_LOCK();
+                munmap(mmap_addr, max_filesize);
+                close(log_fd);
+                remove(dump_file);
+                log_fd = -1;
+                log_init_done = 0;
+                FILE_UNLOCK();
+            }
+
+            max_filesize = file_size;
+            if(0 == max_filesize)
+            {
+                printf("Logging disabled\n");
+                return 0; // means disable logging
+            }
+        }
+        else
+        {
+            return 0;
+        }
+
+        log_fd = open(dump_file, O_RDWR|O_CREAT|O_TRUNC, 0644);
+        if (log_fd < 0) {
+                perror("Logger file open failed :%s\n");
+		return -errno;
+	}
+
+        trunc_ret = ftruncate(log_fd, max_filesize);
+        if(0 > trunc_ret)
+        {
+		perror("Ftruncate failed\n");
+		return -errno;
+	}
+
+	if(pthread_mutex_init(&file_lock, NULL) != 0)
+	{
+		perror("\n mutex init has failed\n");
+		return -errno;
+	}
+
+        mmap_addr = mmap(NULL, max_filesize, PROT_READ|PROT_WRITE, MAP_SHARED, log_fd, 0);
+
+        if((void*)-1 == mmap_addr || NULL == mmap_addr)
+        {
+                perror("Mmap failed\n");
+		return -errno;
+        }
+
+	write_addr = mmap_addr;
+	memset(mmap_addr,' ', max_filesize);
+
+	/* Now log init is complete */
+	log_init_done = 1;
+        return 0;
+}
+void ipacm_log_dump(char* ipacm_log_data)
+{
+        int input_len = 0;
+	if(!log_init_done)
+	{
+		return;
+	}
+        FILE_LOCK();
+	/* Adding +1 to incorporate null character */
+	input_len = strlen(ipacm_log_data) + 1;
+
+        if(((char*)write_addr+input_len) > (char*)mmap_addr + max_filesize - 1)
+	{
+		write_addr = mmap_addr;
+	}
+	snprintf((char*)write_addr, input_len, "%s", ipacm_log_data);
+	write_addr = (char*)write_addr + (input_len - 1); //start of line
+	FILE_UNLOCK();
 }

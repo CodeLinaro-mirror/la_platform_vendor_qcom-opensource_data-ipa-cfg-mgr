@@ -27,7 +27,7 @@
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  * Changes from Qualcomm Innovation Center are provided under the following license
- * Copyright (c) 2023-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2023-2025 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 /*!
@@ -104,7 +104,6 @@
 #define IPA_DRIVER_WLAN_BUF_LEN     (IPA_DRIVER_PIPE_STATS_EVENT_SIZE + IPA_DRIVER_WLAN_META_MSG)
 
 uint32_t ipacm_event_stats[IPACM_EVENT_MAX];
-bool ipacm_logging = true;
 
 void ipa_is_ipacm_running(void);
 int ipa_get_if_index(char *if_name, int *if_index);
@@ -262,6 +261,7 @@ void* ipa_driver_msg_notifier(void *param)
 	ipacm_cmd_q_data evt_data;
 	ipacm_event_data_mac *data = NULL;
 	ipacm_event_data_fid *data_fid = NULL;
+	ipacm_event_data_fid *data_fid2 = NULL;
 	ipacm_event_data_iptype *data_iptype = NULL;
 	ipacm_event_data_wlan_ex *data_ex;
 	ipa_get_data_stats_resp_msg_v01 *data_tethering_stats = NULL;
@@ -280,6 +280,9 @@ void* ipa_driver_msg_notifier(void *param)
 	ipa_ioc_pdn_config *pdn_info = NULL;
 #ifdef FEATURE_STATIC_POLICY
 	ipa_ioc_pdn_dscp_map_info *pdn_dscp_info = NULL;
+#endif
+#ifdef FEATURE_PPPOE
+	ipa_ioc_pppoe_info *pppoe_info = NULL;
 #endif
 #ifdef IPA_IOC_SET_MAC_FLT
 	ipa_ioc_mac_client_list_type *event_mac_flt = NULL;
@@ -319,7 +322,7 @@ void* ipa_driver_msg_notifier(void *param)
 
 	while (1)
 	{
-		IPACMDBG_H("Waiting for nofications from IPA driver \n");
+		IPACMDBG_H("Waiting for notifications from IPA driver \n");
 		memset(buffer, 0, sizeof(buffer));
 		memset(&evt_data, 0, sizeof(evt_data));
 		memset(&new_neigh_evt, 0, sizeof(ipacm_cmd_q_data));
@@ -368,7 +371,14 @@ void* ipa_driver_msg_notifier(void *param)
 				IPACMERR("unable to allocate memory for event_wlan data_fid\n");
 				goto done;
 			}
-			ipa_get_if_index(event_wlan->name, &(data_fid->if_index));
+			memset(data_fid,0,sizeof(ipacm_event_data_fid));
+			strlcpy(data_fid->iface_name, event_wlan->name, IPA_IFACE_NAME_LEN);
+			if(IPACM_FAILURE == ipa_get_if_index(event_wlan->name, &(data_fid->if_index))){
+				data_fid->if_index = event_wlan->if_index;
+				IPACMDBG_H("Using WLAN_AP_CONNECT if_index: %d\n",event_wlan->if_index);
+			}
+			data_fid->mlo_enabled = event_wlan->mld_enabled;
+			IPACMDBG_H("AP MLO enabled %d",event_wlan->mld_enabled);
 			evt_data.event = IPA_WLAN_AP_LINK_UP_EVENT;
 #ifdef IPA_WDI_AST_UPDATE
 			data_fid->ast_update = event_wlan->ast_update;
@@ -388,6 +398,8 @@ void* ipa_driver_msg_notifier(void *param)
 				IPACMERR("unable to allocate memory for event_wlan data_fid\n");
 				goto done;
 			}
+			memset(data_fid,0,sizeof(ipacm_event_data_fid));
+			strlcpy(data_fid->iface_name, event_wlan->name, IPA_IFACE_NAME_LEN);
 			if(IPACM_FAILURE == ipa_get_if_index(event_wlan->name, &(data_fid->if_index)))
 			{
 				data_fid->if_index = event_wlan->if_index;
@@ -476,18 +488,28 @@ void* ipa_driver_msg_notifier(void *param)
 			}
 			memcpy(event_ex, buffer + sizeof(struct ipa_msg_meta), length);
 			data_ex = (ipacm_event_data_wlan_ex *)malloc(sizeof(ipacm_event_data_wlan_ex) + event_ex_o.num_of_attribs * sizeof(ipa_wlan_hdr_attrib_val));
-		    if (data_ex == NULL)
-		    {
+			if (data_ex == NULL)
+			{
 				IPACMERR("unable to allocate memory for event data\n");
-		    	goto done;
-		    }
+				goto done;
+			}
+			memset(data_ex,0,sizeof(ipacm_event_data_wlan_ex) + event_ex_o.num_of_attribs * sizeof(ipa_wlan_hdr_attrib_val));
 			data_ex->num_of_attribs = event_ex->num_of_attribs;
-
 			memcpy(data_ex->attribs,
 						event_ex->attribs,
 						event_ex->num_of_attribs * sizeof(ipa_wlan_hdr_attrib_val));
+			strlcpy(data_ex->iface_name, event_ex->name, IPA_IFACE_NAME_LEN);
+			if(IPACM_FAILURE == ipa_get_if_index(event_ex->name, &(data_ex->if_index)))
+			{
+				/*send base interface in neigh and stiched interface in iface class*/
+				char* char_idx =  strstr(event_ex->name, "_");
+				if (char_idx) {
+					char_idx[0] = '\0';
+					IPACMDBG_H("truncated iface name %s\n", event_ex->name);
+				}
+				ipa_get_if_index(event_ex->name, &(data_ex->if_index));
+			}
 
-			ipa_get_if_index(event_ex->name, &(data_ex->if_index));
 			IPACMDBG_H("Received interface index %d for interface name %s\n",data_ex->if_index, event_ex->name);
 			evt_data.event = IPA_WLAN_CLIENT_ADD_EVENT_EX;
 			evt_data.evt_data = data_ex;
@@ -545,6 +567,7 @@ void* ipa_driver_msg_notifier(void *param)
 				IPACMERR("unable to allocate memory for event_wlan data\n");
 				goto done;
 			}
+			strlcpy(data->iface_name, event_wlan->name, IPA_IFACE_NAME_LEN);
 			if(IPACM_FAILURE == ipa_get_if_index(event_wlan->name, &(data->if_index)))
 			{
 				data->if_index = event_wlan->if_index;
@@ -623,6 +646,35 @@ void* ipa_driver_msg_notifier(void *param)
 		case ECM_DISCONNECT:
 			memcpy(&event_ecm, buffer + sizeof(struct ipa_msg_meta), sizeof(struct ipa_ecm_msg));
 			IPACMDBG_H("Received ECM_DISCONNECT name: %s\n",event_ecm.name);
+
+			if(IPACM_Iface::ipacmcfg->eth_wan_pppoe_enable ||
+				IPACM_Iface::ipacmcfg->eth_vlan_wan_enable)
+			{
+				for(int i=0; i < MAX_NUM_PPPOE_MPDN; i++)
+				{
+					if(IPACM_Iface::ipacmcfg->eth_wan_iface_table_idx[i] >= 0 &&
+						strncmp(
+							IPACM_Iface::ipacmcfg->iface_table[IPACM_Iface::ipacmcfg->eth_wan_iface_table_idx[i]].phy_dev_name,
+							event_ecm.name, sizeof(event_ecm.name)) == 0)
+					{
+						data_fid2 = (ipacm_event_data_fid *)malloc(sizeof(ipacm_event_data_fid));
+						if(data_fid2 == NULL)
+						{
+							IPACMERR("unable to allocate memory for event_ecm data_fid\n");
+							return NULL;
+						}
+						data_fid2->if_index =
+							IPACM_Iface::ipacmcfg->iface_table[IPACM_Iface::ipacmcfg->eth_wan_iface_table_idx[i]].netlink_interface_index;
+						evt_data.event = IPA_LINK_DOWN_EVENT;
+						evt_data.evt_data = data_fid2;
+						IPACMDBG_H("Posting IPA_LINK_DOWN_EVENT event %d for ETH VLAN iface:%d dev_name:%s\n",
+							evt_data.event, data_fid2->if_index,
+							IPACM_Iface::ipacmcfg->iface_table[IPACM_Iface::ipacmcfg->eth_wan_iface_table_idx[i]].iface_name);
+						IPACM_EvtDispatcher::PostEvt(&evt_data);
+					}
+				}
+			}
+			memset(&evt_data, 0, sizeof(evt_data));
 			data_fid = (ipacm_event_data_fid *)malloc(sizeof(ipacm_event_data_fid));
 			if(data_fid == NULL)
 			{
@@ -1422,6 +1474,29 @@ void* ipa_driver_msg_notifier(void *param)
 			}
 			continue;
 
+#ifdef FEATURE_PPPOE
+		case IPA_PPPOE_ADD_MAPPING_EVENT:
+			pppoe_info = (ipa_ioc_pppoe_info *)
+				(buffer + sizeof(struct ipa_msg_meta));
+			IPACMDBG_H("Received IPA_PPPOE_ADD_MAPPING_EVENT dev_name: %s "
+				"vlan_id: %d pppoe_dev_name: %s enable: %d\n",
+				pppoe_info->dev_name, pppoe_info->vlan_id, pppoe_info->pppoe_dev_name,
+				pppoe_info->add);
+			if(pppoe_info->add)
+			{
+				IPACM_Iface::ipacmcfg->pppoe_config_update(pppoe_info, pppoe_info->add, 0, NULL);
+				IPACM_Iface::ipacmcfg->get_pppoe_session_info(pppoe_info->pppoe_dev_name);
+				IPACMDBG_H("Got ppp pdn config, Get Routes for v4 and v6\n");
+				ipa_nl_send_getroute(IPA_IP_v4);
+				ipa_nl_send_getroute(IPA_IP_v6);
+			}
+			else if(!pppoe_info->add)
+			{
+				IPACM_Iface::ipacmcfg->pppoe_config_update(pppoe_info, pppoe_info->add, 0, NULL);
+			}
+			continue;
+#endif
+
 		default:
 			IPACMDBG_H("Unhandled message type: %d\n", event_hdr.msg_type);
 			continue;
@@ -1578,7 +1653,6 @@ int main(int argc, char **argv)
 
 	/* check if ipacm is already running or not */
 	ipa_is_ipacm_running();
-
 	IPACMDBG_H("In main()\n");
 	IPACM_IfaceManager *ifacemgr = new IPACM_IfaceManager();
 	IPACM_Neighbor *neigh = new IPACM_Neighbor();

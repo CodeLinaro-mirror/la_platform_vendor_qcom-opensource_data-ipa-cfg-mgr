@@ -27,7 +27,7 @@
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  * Changes from Qualcomm Innovation Center are provided under the following license:
- * Copyright (c) 2023-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2023-2025 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 /*!
@@ -239,6 +239,8 @@ if (!(a)) {                                                 \
 
 #define IPACM_WLAN_VLAN_MPDN                 "IPACMVLANMPDN"
 #define IPACM_Wlan_Vlan_Mpdn_Enabled         "IPACMVlanMpdnEnabled"
+#define IPACMLOG_TAG                         "IPACMLog"
+#define IPACMFILEVAR_TAG                     "IPACMfilevar"
 
 #define Static_Policy_TAG                    "PolicyBasedRouting"
 #define Static_Policy_Enabled                "StaticPolicyEnabled"
@@ -254,6 +256,18 @@ if (!(a)) {                                                 \
 #define EoGRE_v6options_TAG                  "IPACMEoGRE"
 #define EoGRE_v6options_enable_TAG           "IPACMv6optEnabled"
 #endif
+
+#ifdef FEATURE_PPPOE
+#define PPPOE_TAG                            "IPACMPPPOE"
+#define PPPOE_Enabled                        "IPACMPPPOEEnabled"
+#endif
+
+#define Eth_Vlan_Wan_TAG                     "IPACMIPOEEthVlanWan"
+#define Eth_Vlan_Wan_Enabled                 "IPOEEthVlanWanEnabled"
+#define Eth_Vlan_Wan_Iface_Name              "IPOEVlanLanWanIface"
+
+#define Multi_Vlan_Bridge_Config_TAG         "MultiVlanBridgeConfig"
+#define Multi_Vlan_Bridge_Config_Enable      "MultiVlanOnBridgeEnable"
 
 /*---------------------------------------------------------------------------
       IP protocol numbers - use in dss_socket() to identify protocols.
@@ -395,6 +409,7 @@ typedef struct  _IPACM_conf_t
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
 	bool lan_stats_enable;
 #endif
+	int max_file_size;
 	bool ipv6_nat_enable;
 	int ipacm_l2tp_enable;
 	bool ipacm_mpdn_enable;
@@ -414,6 +429,10 @@ typedef struct  _IPACM_conf_t
 #ifdef FEATURE_STATIC_POLICY
 	uint32_t static_policy_dscp_mark_mode;
 #endif
+	bool eth_wan_pppoe_enable;
+	bool eth_vlan_wan_enable;
+	const char* eth_lan_wan_iface_name;
+	bool multi_vlan_bridge_config_enable;
 } IPACM_conf_t;
 
 typedef struct _IPACM_conf_ext_t

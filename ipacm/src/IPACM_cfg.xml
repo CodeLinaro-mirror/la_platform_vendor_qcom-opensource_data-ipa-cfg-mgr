@@ -710,5 +710,18 @@
 		<IPACMQOS>
 			<IPACMQOSEnabled>0</IPACMQOSEnabled>
 		</IPACMQOS>
+		<IPACMPPPOE>
+			<IPACMPPPOEEnabled>0</IPACMPPPOEEnabled>
+		</IPACMPPPOE>
+		<IPACMIPOEEthVlanWan>
+			<IPOEEthVlanWanEnabled>0</IPOEEthVlanWanEnabled>
+			<IPOEVlanLanWanIface>eth0</IPOEVlanLanWanIface>
+		</IPACMIPOEEthVlanWan>
+		<MultiVlanBridgeConfig>
+			<MultiVlanOnBridgeEnable>0</MultiVlanOnBridgeEnable>
+		</MultiVlanBridgeConfig>
+		<IPACMLog>
+			<IPACMfilevar>2097152</IPACMfilevar>
+		</IPACMLog>
 	</IPACM>
 </system>

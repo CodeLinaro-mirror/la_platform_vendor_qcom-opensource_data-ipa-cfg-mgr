@@ -584,6 +584,13 @@ void* ipa_driver_msg_notifier(void *param)
 				data->if_index = event_wlan->if_index;
 				IPACMDBG_H("Using WLAN_CLIENT_DISCONNECT if_index: %d\n",event_wlan->if_index);
 			}
+			new_neigh_data = (ipacm_event_data_all*)malloc(sizeof(ipacm_event_data_all));
+			if(new_neigh_data == NULL)
+			{
+				IPACMERR("Failed to allocate memory.\n");
+				goto done;
+			}
+			memset(new_neigh_data, 0, sizeof(ipacm_event_data_all));
 
 			if(strstr(event_wlan->name, "mld"))
 			{
@@ -594,6 +601,13 @@ void* ipa_driver_msg_notifier(void *param)
 			{
 				strlcpy(data->iface_name, event_wlan->name, sizeof(data->iface_name));
 			}
+			strlcpy(new_neigh_data->iface_name, data->iface_name, IPA_IFACE_NAME_LEN);
+			new_neigh_data->iptype = IPA_IP_v6;
+			memcpy(new_neigh_data->mac_addr, event_wlan->mac_addr, sizeof(new_neigh_data->mac_addr));
+			new_neigh_data->if_index = data->if_index;
+			new_neigh_evt.evt_data = (void*)new_neigh_data;
+			new_neigh_evt.event = IPA_DEL_NEIGH_EVENT;
+
 			IPACMDBG("Posting with %s\n", data->iface_name);
 			memcpy(data->mac_addr,
 						 event_wlan->mac_addr,
@@ -1476,7 +1490,7 @@ void* ipa_driver_msg_notifier(void *param)
 		/* push new_neighbor with netdev device internally */
 		if(new_neigh_data != NULL)
 		{
-			IPACMDBG_H("Internally post event IPA_NEW_NEIGH_EVENT\n");
+			IPACMDBG_H("Internally post event IPA_NEW_NEIGH/DEL_NEIGH_EVENT\n");
 			IPACM_EvtDispatcher::PostEvt(&new_neigh_evt);
 		}
 	}

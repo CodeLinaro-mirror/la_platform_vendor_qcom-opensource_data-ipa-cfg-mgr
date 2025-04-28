@@ -154,6 +154,12 @@ typedef struct _ipa_eth_client
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
 	bool ipv4_ul_rules_set;
 	bool ipv6_ul_rules_set;
+	bool ipv4_sta_ul_rules_set;
+	bool ipv6_sta_ul_rules_set;
+	/* store ipv4 UL filter rule handle for STA Backhaul*/
+	uint32_t sta_ul_fl_rule_hdl_v4;
+	/* store ipv6 UL filter rule handle for STA Backhaul*/
+	uint32_t sta_ul_fl_rule_hdl_v6;
 	/* store ipv4 UL filter rule handlers from Q6*/
 	uint32_t wan_ul_fl_rule_hdl_v4[IPA_MAX_NUM_PROPS][MAX_WAN_UL_FILTER_RULES];
 	/* store ipv6 UL filter rule handlers from Q6*/
@@ -586,11 +592,26 @@ public:
 		ipa_ip_type iptype
 	);
 
-	/* Delet UL filter rule from Q6 per client */
+	/* Delete UL filter rule from Q6 per client */
 	virtual int delete_uplink_filter_rule_per_client
 	(
 		ipa_ip_type iptype,
 		uint8_t *mac_addr
+	);
+
+	/* Delete UL filter rule for STA backhaul for speciifc vlan id or all clients */
+	virtual int delete_sta_uplink_filter_rule
+	(
+		ipa_ip_type iptype,
+		uint16_t vid
+	);
+
+	/* Delete UL filter rule for STA backhaul per client */
+	virtual int delete_sta_uplink_filter_rule_per_client
+	(
+		ipa_ip_type iptype,
+		uint8_t *mac_addr,
+		uint16_t vlan_id
 	);
 
 	/* set lan client info. */

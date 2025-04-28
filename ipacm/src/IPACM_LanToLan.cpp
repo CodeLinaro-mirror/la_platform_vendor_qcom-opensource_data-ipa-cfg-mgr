@@ -67,6 +67,7 @@ IPACM_LanToLan_Iface::IPACM_LanToLan_Iface(IPACM_Lan *p_iface)
 	memset(m_is_ip_addr_assigned, 0, sizeof(m_is_ip_addr_assigned));
 	m_support_inter_iface_offload = true;
 	m_support_intra_iface_offload = false;
+	m_intra_interface_info.peer = NULL;
 	m_intra_interface_info.is_vlan_peer = false;
 	if(IPACM_Iface::ipacmcfg->multi_vlan_bridge_config_enable == 1)
 	{
@@ -3218,10 +3219,22 @@ void IPACM_LanToLan_Iface::print_peer_info(peer_iface_info *peer_info , bool int
 	list<rt_rule_info>::iterator it_rt;
 	list<uint32_t>::iterator it_flt_hdl;
 
-	if(peer_info == NULL) {
+	if(peer_info == NULL)
+	{
 		IPACMERR("Peer info with NULL pointer\n");
 		return;
 	}
+	if(peer_info->peer == NULL)
+	{
+		IPACMERR("Peer info peer with NULL pointer\n");
+		return;
+	}
+	if(peer_info->peer->m_p_iface == NULL)
+	{
+		IPACMERR("Peer info m_p_iface with NULL pointer\n");
+		return;
+	}
+
 	IPACMDBG_H("Printing peer info for iface %s:\n", peer_info->peer->m_p_iface->dev_name);
 
 	IPACMDBG_H("There are %zu flt info in total.\n", peer_info->flt_rule.size());

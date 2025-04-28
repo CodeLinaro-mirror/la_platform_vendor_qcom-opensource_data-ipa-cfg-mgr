@@ -119,6 +119,9 @@ extern "C"
 #define DEFAULT_BRIDGE_IFACE_NAME "brlan0"
 #define BRIDGE_IFACE_NAME         "brlan"
 #define RMNET_IFACE_NAME          "qmapmux"
+#elif defined(FEATURE_PRPLWRT)
+#define BRIDGE_IFACE_NAME         "br-lan"
+#define RMNET_IFACE_NAME          "qmapmux"
 #else
 #define BRIDGE_IFACE_NAME         "br-lan"
 #define RMNET_IFACE_NAME          "rmnet_data"

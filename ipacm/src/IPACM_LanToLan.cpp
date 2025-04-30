@@ -2041,7 +2041,9 @@ void IPACM_LanToLan_Iface::del_client_rt_rule(peer_iface_info *peer, client_info
 	std::map<std::array<uint8_t, 6>, int >::iterator it;
 #endif
 
-	if(peer == NULL)
+	if(peer == NULL || peer->peer == NULL ||
+		peer->peer->get_iface_pointer() == NULL ||
+		peer->peer->get_iface_pointer()->tx_prop == NULL)
 	{
 		IPACMERR("Failure null peer passed\n");
 		return;
@@ -2537,7 +2539,17 @@ void IPACM_LanToLan_Iface::clear_all_rt_rule_for_one_peer_iface(peer_iface_info 
 	ipa_hdr_l2_type peer_l2_type = IPA_HDR_L2_NONE;
 
 	IPACMDBG_H("peer->is_vlan_peer :%d\n", peer->is_vlan_peer);
-	if (peer->is_vlan_peer)
+
+	if(peer == NULL || peer->peer == NULL ||
+		peer->peer->get_iface_pointer() == NULL ||
+		peer->peer->get_iface_pointer()->tx_prop == NULL)
+	{
+		IPACMERR("Invalid peer pointer!");
+		return;
+	}
+
+	if (peer->is_vlan_peer &&
+		peer->peer->get_iface_pointer()->tx_prop->num_tx_props > 2)
 		peer_l2_type = peer->peer->get_iface_pointer()
 				       ->tx_prop->tx[2]
 				       .hdr_l2_type;

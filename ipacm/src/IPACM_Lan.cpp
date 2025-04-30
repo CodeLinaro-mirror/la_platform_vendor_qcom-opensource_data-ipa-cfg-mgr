@@ -3762,16 +3762,6 @@ int IPACM_Lan::handle_addr_evt(ipacm_event_data_addr *data)
 #endif
 			install_ipv6_icmp_flt_rule();
 
-#ifdef FEATURE_L2TP
-			if (IPACM_Iface::ipacmcfg->ipacm_l2tp_enable == IPACM_L2TP ||
-					IPACM_Iface::ipacmcfg->ipacm_l2tp_enable == IPACM_L2TP_E2E)
-			{
-#ifdef IPA_L2TP_TUNNEL_UDP
-				if (ipa_if_cate == ODU_IF)
-					add_l2tp_udp_dflt_flt_rules(l2tp_udp_dflt_flt_rule_hdl);
-#endif
-			}
-#endif
 			eth_bridge_post_event(IPA_ETH_BRIDGE_IFACE_UP, IPA_IP_v6, NULL, NULL, NULL);
 
 			init_fl_rule(data->iptype);
@@ -3783,6 +3773,16 @@ int IPACM_Lan::handle_addr_evt(ipacm_event_data_addr *data)
 				/* populate the mtu_rule_offset */
 				mtu_flt_rule_offset[j][data->iptype] = dft_v6fl_rule_hdl[j][m_ipv6_default_filterting_rules_count[j] - 1];
 			}
+#ifdef FEATURE_L2TP
+			if (IPACM_Iface::ipacmcfg->ipacm_l2tp_enable == IPACM_L2TP ||
+					IPACM_Iface::ipacmcfg->ipacm_l2tp_enable == IPACM_L2TP_E2E)
+			{
+#ifdef IPA_L2TP_TUNNEL_UDP
+				if (ipa_if_cate == ODU_IF)
+					add_l2tp_udp_dflt_flt_rules(l2tp_udp_dflt_flt_rule_hdl);
+#endif
+			}
+#endif
 		}
 		num_dft_rt_v6++;
 		IPACMDBG_H("number of default route rules %d\n", num_dft_rt_v6);

@@ -25,6 +25,10 @@
  * WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *
+ * Changes from Qualcomm Technologies, Inc. are provided under the following license:
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 #include <errno.h>
 #include <pthread.h>
@@ -360,15 +364,17 @@ int ipa_nati_del_ipv4_rule(
 	return ret;
 }
 
-int ipa_nati_query_timestamp(
+int ipa_nati_query_timestamp_redirect(
 	uint32_t  tbl_hdl,
 	uint32_t  rule_hdl,
-	uint32_t* time_stamp)
+	uint32_t* time_stamp,
+	uint32_t* redirect)
 {
 	arb_t* args[] = {
 		(arb_t*) tbl_hdl,
 		(arb_t*) rule_hdl,
 		(arb_t*) time_stamp,
+		(arb_t*) redirect,
 	};
 
 	int ret;
@@ -2094,15 +2100,16 @@ static int _smGetTmStmp(
 	uint32_t  tbl_hdl    = (uint32_t)  args[0];
 	uint32_t  rule_hdl   = (uint32_t)  args[1];
 	uint32_t* time_stamp = (uint32_t*) args[2];
+	uint32_t* redirect = (uint32_t*) args[3];
 
 	int ret;
 
 	IPADBG("In\n");
 
-	IPADBG("tbl_hdl(0x%08X) rule_hdl(%u) time_stamp_ptr(%p)\n",
-		   tbl_hdl, rule_hdl, time_stamp);
+	IPADBG("tbl_hdl(0x%08X) rule_hdl(%u) time_stamp_ptr(%p) redirect(%p)\n",
+		   tbl_hdl, rule_hdl, time_stamp, redirect);
 
-	ret = ipa_NATI_query_timestamp(tbl_hdl, rule_hdl, time_stamp);
+	ret = ipa_NATI_query_timestamp_redirect(tbl_hdl, rule_hdl, time_stamp, redirect);
 
 	if ( ret == 0 )
 	{
@@ -2144,6 +2151,7 @@ static int _smGetTmStmpHybrid(
 	uint32_t  tbl_hdl       = (uint32_t)  args[0];
 	uint32_t  orig_rule_hdl = (uint32_t)  args[1];
 	uint32_t* time_stamp    = (uint32_t*) args[2];
+	uint32_t* redirect      = (uint32_t*) args[3];
 
 	uint32_t  new_rule_hdl;
 
@@ -2165,6 +2173,7 @@ static int _smGetTmStmpHybrid(
 			         nati_obj_ptr->ddr_tbl_hdl,
 			(arb_t*) new_rule_hdl,
 			(arb_t*) time_stamp,
+			(arb_t*) redirect,
 		};
 
 		ret = _smGetTmStmp(nati_obj_ptr, trigger, new_args);

@@ -5347,7 +5347,7 @@ int IPACM_Wan::handle_sta_header_add_evt()
 		}
 		else if(m_is_sta_mode == Q6_WAN)
 		{
-			IPACMDBG_H(" currently can't find matched wan-client's MAC-addr, waiting for header construction\n");
+			IPACMDBG_H("currently can't find matched wan-client's MAC-addr, waiting for header construction\n");
 			res = IPACM_SUCCESS;
 		}
 	}
@@ -5383,19 +5383,20 @@ int IPACM_Wan::handle_sta_header_add_evt()
 				}
 				else
 				{
-					IPACMERR(" wan-client got ipv6 however didn't construct complete ipv4 header \n");
+					IPACMERR("wan-client got ipv6 however didn't construct complete ipv4 header \n");
 					return IPACM_FAILURE;
 				}
-			}
-			if(get_client_memptr(wan_client, index)->ipv4_header_set)
-			{
-				hdr_hdl_sta_v4 = get_client_memptr(wan_client, index)->hdr_hdl_v4;
-				header_set_v4 = true;
-				IPACMDBG_H("add full ipv4 header hdl: (%x)\n", get_client_memptr(wan_client, index)->hdr_hdl_v4);
+
+				if(get_client_memptr(wan_client, index)->ipv4_header_set)
+				{
+					hdr_hdl_sta_v4 = get_client_memptr(wan_client, index)->hdr_hdl_v4;
+					header_set_v4 = true;
+					IPACMDBG_H("add full ipv4 header hdl: (%x)\n", get_client_memptr(wan_client, index)->hdr_hdl_v4);
+				}
 			}
 			else
 			{
-				IPACMDBG_H(" currently can't find matched wan-client's MAC-addr, waiting for header construction\n");
+				IPACMDBG_H("currently can't find matched wan-client's MAC-addr, waiting for header construction\n");
 				res = IPACM_SUCCESS;
 			}
 		}

@@ -490,13 +490,13 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 			{
 				IPACMDBG_H("Received IPA_DEL_NEIGH_EVENT\n");
 			}
-			strlcpy(wds_ext_iface, data->iface_name, strlen(data->iface_name));
+			strlcpy(wds_ext_iface, data->iface_name, sizeof(data->iface_name));
 			char_idx = strstr(wds_ext_iface,".sta");
 
 			if (char_idx && !IPACM_Iface::ipacmcfg->iface_in_vlan_mode(data->iface_name))
 			{
 				char_idx[0] = '\0';
-				strlcpy(data->iface_name, wds_ext_iface, strlen(wds_ext_iface));
+				strlcpy(data->iface_name, wds_ext_iface, sizeof(wds_ext_iface));
 				IPACMDBG_H("Truncated interface name to handle wds-ext non vlan scenario %s\n", wds_ext_iface);
 				IPACM_Iface::ipa_get_if_index(data->iface_name, (int *)&data->if_index);
 			}

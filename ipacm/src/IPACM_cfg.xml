@@ -761,6 +761,12 @@
 		<MultiVlanBridgeConfig>
 			<MultiVlanOnBridgeEnable>0</MultiVlanOnBridgeEnable>
 		</MultiVlanBridgeConfig>
+		<InterBridgeLanToLanConfig>
+			<InterBridgeLanToLanEnable>0</InterBridgeLanToLanEnable>
+		</InterBridgeLanToLanConfig>
+		<LAN2LANStats>
+			<EnableLAN2LANStats>0</EnableLAN2LANStats>
+		</LAN2LANStats>
 		<IPACMMSGFLT>
 			<IPACMMSGFLTEnable>0</IPACMMSGFLTEnable>
 		</IPACMMSGFLT>

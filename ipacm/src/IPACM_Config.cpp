@@ -72,6 +72,7 @@ const char *IPACM_Config::DEVICE_NAME_ODU = "/dev/odu_ipa_bridge";
 #endif
 #define MAX_RETRIES 15
 #define MAX_LINE_LEN 256
+#define MAX_BUFF_LEN 128
 const char *ipacm_event_name[] = {
 	__stringify(IPA_CFG_CHANGE_EVENT),                     /* NULL */
 	__stringify(IPA_PRIVATE_SUBNET_CHANGE_EVENT),          /* ipacm_event_data_fid */
@@ -220,6 +221,8 @@ IPACM_Config::IPACM_Config()
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
 	ipacm_lan_stats_enable = false;
 	ipacm_lan_stats_enable_set = false;
+	ipacm_lan2lan_stats_enable = false;
+	ipacm_lan2lan_stats_enable_set = false;
 	pthread_mutex_init(&stats_client_info_lock, NULL);
 #ifdef IPA_HW_FNR_STATS
 	memset(&fnr_counters, 0, sizeof(fnr_counters));
@@ -251,7 +254,11 @@ IPACM_Config::IPACM_Config()
 	ipacm_qos_enable = false;
 	eth_wan_pppoe_enable = false;
 	eth_vlan_wan_enable = false;
+	rt_tbl_inter_l2l_v4_set = false;
+	rt_tbl_inter_l2l_v6_set = false;
 
+	memset(&rt_tbl_inter_l2l_v4, 0, sizeof(rt_tbl_inter_l2l_v4));
+	memset(&rt_tbl_inter_l2l_v6, 0, sizeof(rt_tbl_inter_l2l_v6));
 	memset(&rt_tbl_default_v4, 0, sizeof(rt_tbl_default_v4));
 	memset(&rt_tbl_lan_v4, 0, sizeof(rt_tbl_lan_v4));
 	memset(&rt_tbl_wan_v4, 0, sizeof(rt_tbl_wan_v4));
@@ -806,6 +813,13 @@ reread:
 		ipacm_lan_stats_enable_set = true;
 		IPACMDBG_H("ipacm_lan_stats_enable %d. \n", ipacm_lan_stats_enable);
 	}
+	if (!ipacm_lan2lan_stats_enable_set)
+	{
+		/* Read the configuration only once. */
+		ipacm_lan2lan_stats_enable = cfg->lan2lan_stats_enable;
+		ipacm_lan2lan_stats_enable_set = true;
+		IPACMDBG_H("ipacm_lan2lan_stats_enable %d. \n", ipacm_lan2lan_stats_enable);
+	}
 #ifdef IPA_HW_FNR_STATS
 	if(ipacm_lan_stats_enable && (GetIPAVer(true) >= IPA_HW_v4_5)) {
 		if (hw_fnr_stats_support == true) {
@@ -849,6 +863,9 @@ skip_fnr_alloc:
 
 	multi_vlan_bridge_config_enable = cfg->multi_vlan_bridge_config_enable;
 	IPACMDBG_H("multi_vlan_bridge_config_enable: %d\n", multi_vlan_bridge_config_enable);
+
+	inter_bridge_lantolan_config_enable = cfg->inter_bridge_lantolan_config_enable;
+	IPACMDBG_H("inter_bridge_lantolan_config_enable: %d\n", inter_bridge_lantolan_config_enable);
 
 	eth_wan_br_wan_enable = false;
 	IPACMDBG_H("eth_wan_br_wan_enable: %d\n", eth_wan_br_wan_enable);
@@ -926,6 +943,12 @@ skip_fnr_alloc:
 
 	rt_tbl_lan_v4.ip = IPA_IP_v4;
 	strlcpy(rt_tbl_lan_v4.name, V4_LAN_ROUTE_TABLE_NAME, sizeof(rt_tbl_lan_v4.name));
+
+	rt_tbl_inter_l2l_v4.ip = IPA_IP_v4;
+	strlcpy(rt_tbl_inter_l2l_v4.name, V4_LAN2LAN_ROUTE_TABLE_NAME, sizeof(rt_tbl_inter_l2l_v4.name));
+
+	rt_tbl_inter_l2l_v6.ip = IPA_IP_v6;
+	strlcpy(rt_tbl_inter_l2l_v6.name, V6_LAN2LAN_ROUTE_TABLE_NAME, sizeof(rt_tbl_inter_l2l_v6.name));
 
 	rt_tbl_wan_v4.ip = IPA_IP_v4;
 	strlcpy(rt_tbl_wan_v4.name, V4_WAN_ROUTE_TABLE_NAME, sizeof(rt_tbl_wan_v4.name));
@@ -5328,3 +5351,156 @@ int IPACM_Config::get_eth_vlan_wan_up(int ipa_if_num)
 	return IPACM_FAILURE;
 }
 
+ipacm_iface_type IPACM_Config::get_iface_category(const char *dev_name)
+{
+	int instance_found;
+	for (instance_found = 0; instance_found < IPACM_Iface::ipacmcfg->ipa_num_ipa_interfaces; instance_found++)
+	{
+		if(strncmp(IPACM_Iface::ipacmcfg->iface_table[instance_found].iface_name, dev_name,
+			sizeof(IPACM_Iface::ipacmcfg->iface_table[instance_found].iface_name) == 0))
+		{
+			IPACMDBG_H("Got Iface category.\n");
+			return IPACM_Iface::ipacmcfg->iface_table[instance_found].if_cat;
+		}
+	}
+	IPACMDBG_H("Iface not found.\n");
+	return UNKNOWN_IF;
+}
+
+int IPACM_Config::get_master_interface_index(const char *interface_name)
+{
+	char command[MAX_LINE_LEN] = {0};
+	char buffer[MAX_BUFF_LEN] = {0};
+	FILE *fp;
+	int index = -1;
+
+	// Construct the command to get the master interface index
+	snprintf(command, sizeof(command), "cat /sys/class/net/%s/master/ifindex 2>/dev/null", interface_name);
+
+	// Open the command for reading
+	fp = popen(command, "r");
+	if (fp == NULL) {
+		IPACMERR("failed popen\n");
+		return IPACM_FAILURE;
+	}
+
+	// Read the output
+	if (fgets(buffer, sizeof(buffer), fp) != NULL) {
+		index = atoi(buffer);
+	}
+
+	// Close the file pointer
+	pclose(fp);
+	IPACMDBG("interface name %s has master interface index %d \n", interface_name, index);
+	return index;
+}
+
+
+int IPACM_Config::get_bridge_info_iface(char *iface,
+		struct ipa_bridge_vlan_mapping_info *data)
+{
+	int fd;
+	struct ifreq ifrr;
+	struct sockaddr_in *ipaddr = NULL;
+	int ifindex = 0;
+	int master_index = 0;
+
+	IPACMDBG("Get bridge info for interface name %s \n", iface);
+
+	master_index = get_master_interface_index(iface);
+
+	if(master_index < 0)
+	{
+		IPACMERR("unable to get master index\n");
+		return IPACM_FAILURE;
+	}
+
+	fd = socket(AF_INET, SOCK_DGRAM, 0);
+	if (fd < 0) {
+		IPACMERR("unable to open socket\n");
+		return IPACM_FAILURE;
+	}
+
+	IPACMDBG("Interface %s has Master interface index %d\n", iface, master_index);
+	memset(&ifrr, 0, sizeof(struct ifreq));
+	ifrr.ifr_ifindex = master_index;
+
+	if (ioctl(fd, SIOCGIFNAME, &ifrr) == -1) {
+		IPACMERR("unable to open socket \n");
+		close(fd);
+		return IPACM_FAILURE;
+	}
+	strlcpy(data->bridge_name, ifrr.ifr_name, IPA_RESOURCE_NAME_MAX);
+	IPACMDBG("Interface %s associated with bridge iface name %s\n", iface, data->bridge_name);
+	ifrr.ifr_ifindex = 0;
+	if (ioctl(fd, SIOCGIFADDR, &ifrr) == -1) {
+		IPACMERR("unable to open socket \n");
+		close(fd);
+		return IPACM_FAILURE;
+	}
+	ipaddr = (struct sockaddr_in *)&ifrr.ifr_addr;
+	data->bridge_ipv4 = ntohl(ipaddr->sin_addr.s_addr);
+
+	IPACMDBG("Interface %s associated with bridge ipaddr 0x%x\n", iface, data->bridge_ipv4);
+
+	memset(&ifrr, 0, sizeof(struct ifreq));
+	strlcpy(ifrr.ifr_name, data->bridge_name, IFNAMSIZ);
+	ifrr.ifr_addr.sa_family = AF_INET;
+
+	if (ioctl(fd, SIOCGIFNETMASK, &ifrr) == -1) {
+		IPACMERR("unable to open socket\n");
+		close(fd);
+		return IPACM_FAILURE;
+	}
+	ipaddr = (struct sockaddr_in *)&ifrr.ifr_netmask;
+	data->subnet_mask = ntohl((unsigned int)ipaddr->sin_addr.s_addr);
+	IPACMDBG("Interface %s associated with bridge subnet 0x%x\n", iface, data->subnet_mask);
+	close(fd);
+
+	return IPACM_SUCCESS;
+}
+
+int IPACM_Config::get_bridge_info_iface_wlan_mld(const char *interface_name, struct ipa_bridge_vlan_mapping_info *data)
+{
+	char command[256] = {0};
+	char buffer[200] = {0};
+	FILE *fp;
+	const char *mld_prefix = "mld dev: ";
+	char mld_device[16] = {0};
+	char *mld_start = NULL;
+
+	// Construct the command to get the master interface index
+	snprintf(command, sizeof(command), "cfg80211tool %s get_mldev_params 2>/dev/null", interface_name);
+
+	// Open the command for reading
+	fp = popen(command, "r");
+	if (fp == NULL) {
+		IPACMERR("failed popen\n");
+		return IPACM_FAILURE;
+	}
+
+	// Read the output
+	if (fgets(buffer, sizeof(buffer), fp) != NULL) {
+		mld_start = strstr(buffer, mld_prefix);
+		if (mld_start) {
+			mld_start += strlen(mld_prefix);
+			sscanf(mld_start, "%s", mld_device);
+			IPACMDBG("MLD Device: %s\n", mld_device);
+		} else {
+			IPACMERR("MLD Device not found.\n");
+			pclose(fp);
+			return IPACM_FAILURE;
+		}
+	}
+
+	// Close the file pointer
+	pclose(fp);
+
+	if(get_bridge_info_iface(mld_device,data) != IPACM_SUCCESS)
+	{
+		IPACMERR("failed to query bridge details\n");
+		return IPACM_FAILURE;
+	}
+
+	return IPACM_SUCCESS;
+}

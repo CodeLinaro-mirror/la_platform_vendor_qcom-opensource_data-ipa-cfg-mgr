@@ -62,6 +62,7 @@ struct ipa_neighbor_client
 	int ipa_if_num;
 	/* add support for handling L2TP clients which associated with eth0 vlan interface */
 	char iface_name[IPA_IFACE_NAME_LEN];
+	uint16_t master_interface_index;
 #ifdef FEATURE_VLAN_MPDN
 	ipacm_bridge *bridge;
 #endif

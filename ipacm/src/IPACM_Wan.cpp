@@ -6834,11 +6834,20 @@ int IPACM_Wan::get_pdn_num_fw_rules_by_vid(int vid, int *num_fw_rules)
 #ifdef FEATURE_VLAN_MPDN
 int IPACM_Wan::GetV6PrefixByVid(int vid, uint32_t *v6_prefix)
 {
+	IPACMDBG_H("Query prefix for vlan_id %d and  Default v6 perfix is 0x[%X][%X]\n", vid, backhaul_ipv6_prefix[0], backhaul_ipv6_prefix[1]);
 	if(!vid)
 	{
-		v6_prefix[0] = backhaul_ipv6_prefix[0];
-		v6_prefix[1] = backhaul_ipv6_prefix[1];
-		return IPACM_SUCCESS;
+		if(backhaul_ipv6_prefix[0] == 0 && backhaul_ipv6_prefix[1] == 0)
+		{
+			IPACMERR("Zero prefix queried. return.\n");
+			return IPACM_FAILURE;
+		}
+		else
+		{
+			v6_prefix[0] = backhaul_ipv6_prefix[0];
+			v6_prefix[1] = backhaul_ipv6_prefix[1];
+			return IPACM_SUCCESS;
+		}
 	}
 
 	for(int i = 0; i < IPA_MAX_NUM_SW_PDNS; i++)
@@ -6854,9 +6863,18 @@ int IPACM_Wan::GetV6PrefixByVid(int vid, uint32_t *v6_prefix)
 						ipv6_to_iface[i].associated_VIDs[j],
 						ipv6_to_iface[i].pIface->ipv6_prefix[0],
 						ipv6_to_iface[i].pIface->ipv6_prefix[1]);
-					v6_prefix[0] = ipv6_to_iface[i].pIface->ipv6_prefix[0];
-					v6_prefix[1] = ipv6_to_iface[i].pIface->ipv6_prefix[1];
-					return IPACM_SUCCESS;
+					if (ipv6_to_iface[i].pIface->ipv6_prefix[0] == 0 &&
+						ipv6_to_iface[i].pIface->ipv6_prefix[1] == 0)
+					{
+						IPACMERR("Zero prefix queried. return.\n");
+						return IPACM_FAILURE;
+					}
+					else
+					{
+						v6_prefix[0] = ipv6_to_iface[i].pIface->ipv6_prefix[0];
+						v6_prefix[1] = ipv6_to_iface[i].pIface->ipv6_prefix[1];
+						return IPACM_SUCCESS;
+					}
 				}
 			}
 		}

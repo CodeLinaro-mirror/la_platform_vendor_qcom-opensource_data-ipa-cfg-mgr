@@ -232,6 +232,8 @@ if (!(a)) {                                                 \
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
 #define LAN_Stats_TAG                        "LANStats"
 #define LAN_Stats_Enable_TAG                 "EnableLANStats"
+#define LAN2LAN_Stats_TAG                    "LAN2LANStats"
+#define LAN2LAN_Stats_Enable_TAG             "EnableLAN2LANStats"
 #endif
 
 #define IPACM_IPV6NAT_TAG                     "IPACMIPV6NAT"
@@ -289,6 +291,11 @@ if (!(a)) {                                                 \
 
 #define Multi_Vlan_Bridge_Config_TAG         "MultiVlanBridgeConfig"
 #define Multi_Vlan_Bridge_Config_Enable      "MultiVlanOnBridgeEnable"
+
+#define Inter_Bridge_LanToLan_Config_TAG     "InterBridgeLanToLanConfig"
+#define Inter_Bridge_LanToLan_Config_Enable  "InterBridgeLanToLanEnable"
+
+
 
 /*---------------------------------------------------------------------------
       IP protocol numbers - use in dss_socket() to identify protocols.
@@ -462,6 +469,7 @@ typedef struct  _IPACM_conf_t
 	bool qos_mode;
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
 	bool lan_stats_enable;
+	bool lan2lan_stats_enable;
 #endif
 	int max_file_size;
 	bool ipv6_nat_enable;
@@ -489,6 +497,7 @@ typedef struct  _IPACM_conf_t
 	const char* eth_lan_wan_iface_name;
 	bool multi_vlan_bridge_config_enable;
 	bool msgflt_enable;
+	bool inter_bridge_lantolan_config_enable;
 } IPACM_conf_t;
 
 typedef struct _IPACM_conf_ext_t

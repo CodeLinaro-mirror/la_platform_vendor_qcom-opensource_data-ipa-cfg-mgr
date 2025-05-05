@@ -748,13 +748,6 @@ int IPACM_Iface::query_iface_property(void)
 	/* Add Natting iface to IPACM_Config if there is  Rx/Tx property */
 	if (rx_prop != NULL || tx_prop != NULL)
 	{
-		/* Skip vlan properties for non vlan wlan iface */
-		if(WLAN_IF == ipa_if_cate && (!is_if_svap && !is_wlan_if_vlan))
-		{
-			iface_query->num_rx_props = iface_query->num_tx_props = 2;
-			rx_prop->num_rx_props = tx_prop->num_tx_props = 2;
-			IPACMDBG_H("Setting iface properties to 2 for non vlan iface\n");
-		}
 		IPACMDBG_H(" Has rx/tx properties registered for iface %s, add for NATTING \n", dev_name);
         IPACM_Iface::ipacmcfg->AddNatIfaces(dev_name);
 	}

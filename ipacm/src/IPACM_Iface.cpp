@@ -788,20 +788,25 @@ int IPACM_Iface::init_fl_rule(
 	struct ipa_ioc_add_flt_rule *m_pFilteringTable =
 		(struct ipa_ioc_add_flt_rule *) buf;
 
-	if(IPACM_Iface::ipacmcfg->iface_table[ipa_if_num].if_cat == WAN_IF &&
-		iptype == IPA_IP_v4 && IPACM_Wan::num_ipv4_sta_pdn != 1)
+	/* Avoid checking num of sta pdn, because there could be race cond in
+	 * addr evt for base Wan interfaces ie: eth1 and pppoe waneth */
+	if(!IPACM_Iface::ipacmcfg->eth_wan_pppoe_enable)
 	{
-		IPACMDBG_H("dev_name: %s num_ipv4_sta_pdn:%d not equal to 1.\n",
-			dev_name, IPACM_Wan::num_ipv4_sta_pdn);
-		return IPACM_SUCCESS;
-	}
+		if(IPACM_Iface::ipacmcfg->iface_table[ipa_if_num].if_cat == WAN_IF &&
+			iptype == IPA_IP_v4 && IPACM_Wan::num_ipv4_sta_pdn != 1)
+		{
+			IPACMDBG_H("dev_name: %s num_ipv4_sta_pdn:%d not equal to 1.\n",
+				dev_name, IPACM_Wan::num_ipv4_sta_pdn);
+			return IPACM_SUCCESS;
+		}
 
-	if(IPACM_Iface::ipacmcfg->iface_table[ipa_if_num].if_cat == WAN_IF &&
-		iptype == IPA_IP_v6 && IPACM_Wan::num_ipv6_sta_pdn != 1)
-	{
-		IPACMDBG_H("dev_name: %s num_ipv6_sta_pdn:%d not equal to 1.\n",
-			dev_name, IPACM_Wan::num_ipv6_sta_pdn);
-		return IPACM_SUCCESS;
+		if(IPACM_Iface::ipacmcfg->iface_table[ipa_if_num].if_cat == WAN_IF &&
+			iptype == IPA_IP_v6 && IPACM_Wan::num_ipv6_sta_pdn != 1)
+		{
+			IPACMDBG_H("dev_name: %s num_ipv6_sta_pdn:%d not equal to 1.\n",
+				dev_name, IPACM_Wan::num_ipv6_sta_pdn);
+			return IPACM_SUCCESS;
+		}
 	}
 
     /* ADD corresponding ipa_rm_resource_name of RX-endpoint before adding all IPV4V6 FT-rules */

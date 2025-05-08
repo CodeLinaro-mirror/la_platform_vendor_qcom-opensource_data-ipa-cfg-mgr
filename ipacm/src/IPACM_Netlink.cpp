@@ -1118,7 +1118,6 @@ static int ipa_nl_decode_nlmsg
 					IPACMDBG("Deleting the bridge<->vlan mapping entry with intterface index %d\n", msg_ptr->nl_link_info.metainfo.ifi_index);
 					uint16_t vlan_master_interface_index = msg_ptr->nl_link_info.metainfo.ifi_index;
 					IPACM_Iface::ipacmcfg->del_bridge_vlan_mapping(&vlan_master_interface_index);
-					return IPACM_SUCCESS;
 				}
 
 				/* post link down to command queue */

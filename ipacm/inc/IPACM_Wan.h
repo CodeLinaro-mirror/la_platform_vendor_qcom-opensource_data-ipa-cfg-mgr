@@ -73,7 +73,6 @@ typedef struct _wan_client_rt_hdl
 
 typedef struct _ipa_wan_client
 {
-	ipacm_event_data_wlan_ex* p_hdr_info;
 	uint8_t mac[IPA_MAC_ADDR_SIZE];
 	uint32_t v4_addr;
 	uint32_t v6_addr[IPV6_NUM_ADDR][4];

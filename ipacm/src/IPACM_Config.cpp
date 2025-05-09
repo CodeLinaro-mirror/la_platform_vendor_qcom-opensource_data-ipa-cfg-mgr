@@ -49,6 +49,12 @@ const char *IPACM_Config::DEVICE_NAME_ODU = "/dev/odu_ipa_bridge";
 
 #define __stringify(x...) #x
 
+#ifdef FEATURE_IPA_ANDROID
+#define IPACM_CONFIG_FILE "/etc/IPACM_cfg.xml"
+#else
+#define IPACM_CONFIG_FILE "/etc/data/ipa/IPACM_cfg.xml"
+#endif
+
 const char *ipacm_event_name[] = {
 	__stringify(IPA_CFG_CHANGE_EVENT),                     /* NULL */
 	__stringify(IPA_PRIVATE_SUBNET_CHANGE_EVENT),          /* ipacm_event_data_fid */
@@ -191,11 +197,7 @@ int IPACM_Config::Init(void)
 		IPACMERR("Failed opening %s.\n", DEVICE_NAME);
 	}
 
-#ifdef FEATURE_IPA_ANDROID
-	strncpy(IPACM_config_file, "/etc/IPACM_cfg.xml", sizeof(IPACM_config_file));
-#else
-	strncpy(IPACM_config_file, "/data/misc/ipa/IPACM_cfg.xml", sizeof(IPACM_config_file));
-#endif
+	strlcpy(IPACM_config_file, IPACM_CONFIG_FILE, sizeof(IPACM_config_file));
 
 	IPACMDBG_H("\n IPACM XML file is %s \n", IPACM_config_file);
 	if (IPACM_SUCCESS == ipacm_read_cfg_xml(IPACM_config_file, cfg))

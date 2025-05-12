@@ -509,7 +509,6 @@ ctcatch:
 	if((ret == -1) && (errno != ENOMSG) && (errno != ENOBUFS))
 	{
 		IPACMERR("(%d)(%d)(%s)\n", ret, errno, strerror(errno));
-		return NULL;
 	}
 	else
 	{
@@ -600,7 +599,6 @@ ctcatch:
 	if((ret == -1) && (errno != ENOMSG) && (errno != EILSEQ) && (errno != ENOBUFS))
 	{
 		IPACMDBG("(%d)(%d)(%s)\n", ret, errno, strerror(errno));
-		return NULL;
 	}
 	else
 	{

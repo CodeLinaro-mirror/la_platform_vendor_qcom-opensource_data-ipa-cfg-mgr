@@ -26,10 +26,10 @@ WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
 OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
 IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 *
-* Changes from Qualcomm Innovation Center, Inc. are provided under the following license:
-* Copyright (c) 2025 Qualcomm Innovation Center, Inc. All rights reserved.
-* SPDX-License-Identifier: BSD-3-Clause-Clear.
- */
+* Changes from Qualcomm Technologies, Inc. are provided under the following license:
+* Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+* SPDX-License-Identifier: BSD-3-Clause-Clear
+*/
 /*!
 	@file
 	IPACM_log.cpp
@@ -63,7 +63,7 @@ IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 char* dump_file = 0;
 void* mmap_addr = NULL;
 void* write_addr = 0;
-uint32_t max_filesize = 0;
+int64_t max_filesize = 0;
 int log_init_done = 0;
 pthread_mutex_t file_lock;
 
@@ -239,7 +239,7 @@ int log_init() {
 	}
 	if(is_exist == false)
 	{
-		trunc_ret = ftruncate(log_fd, max_filesize);
+		trunc_ret = ftruncate(log_fd, (off_t)max_filesize);
 		if(0 > trunc_ret)
 		{
 			perror("Ftruncate failed\n");

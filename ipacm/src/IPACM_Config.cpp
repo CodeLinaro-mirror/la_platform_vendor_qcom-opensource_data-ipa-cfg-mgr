@@ -432,7 +432,8 @@ int IPACM_Config::Init(void)
 	IPACM_conf_t	*cfg;
 
 	struct statvfs stat;
-	ulong available_partition_size_bytes = 0;
+	int64_t available_partition_size_bytes = 0;
+	int64_t quota_allowed_size_bytes = 0;
 	char ipacm_log_file[] = IPACM_LOG_COLLECTION_FILE;
 	char *ipacm_log_dir = NULL;
 
@@ -496,23 +497,21 @@ int IPACM_Config::Init(void)
 	}
 	else
 	{
-		available_partition_size_bytes = stat.f_bavail * stat.f_frsize;
 
-		IPACMDBG_H("Setting file size to min of APS[%lu], max_filesz[%lu], \
-				Based on Quota[%lu] \n", available_partition_size_bytes,
-				cfg->max_file_size, (ulong)((available_partition_size_bytes *
-						cfg->max_file_size_quota) /100));
+		if (stat.f_frsize != 0 && (stat.f_bavail > (INT64_MAX / stat.f_frsize)))
+			available_partition_size_bytes = INT64_MAX;
+		else
+			available_partition_size_bytes = (int64_t)(stat.f_bavail * stat.f_frsize);
 
-		/* Conerting from ulong to unit32_t, since uint32_t can hold a
-		 * file size value upto 4GB. So, shouldn't affect here as the file
-		 * size configured will usually be less than that.
-		 */
-		max_file_size = (uint32_t)std::min({(ulong)(cfg->max_file_size),
-				(ulong)(available_partition_size_bytes),
-				(ulong)((available_partition_size_bytes *
-						cfg->max_file_size_quota) / 100)});
+		quota_allowed_size_bytes = (int64_t)((double)available_partition_size_bytes *
+                                     ((double)cfg->max_file_size_quota / 100.0));
+
+		IPACMDBG_H("APS[%lld Bytes], Configuring file size to min of max_filesz[%lld Bytes] & quota_allowed_size[%lld Bytes] \n",
+				available_partition_size_bytes, cfg->max_file_size, quota_allowed_size_bytes);
+
+		max_file_size = std::min({cfg->max_file_size, quota_allowed_size_bytes});
 	}
-	IPACMDBG_H("max_file_size %d \n", max_file_size);
+	IPACMDBG_H("max_file_size %lld\n", max_file_size);
 
 	log_init();
 

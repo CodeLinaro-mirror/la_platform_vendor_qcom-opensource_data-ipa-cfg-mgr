@@ -1818,9 +1818,9 @@ static int ipa_nl_decode_nlmsg
 
 			if(((msg_ptr->nl_neigh_info.attr_info.local_addr.ss_family == AF_INET) ||
 				(msg_ptr->nl_neigh_info.attr_info.local_addr.ss_family == AF_INET6)) &&
-				(msg_ptr->nl_neigh_info.metainfo.ndm_state == NUD_NOARP))
+				(msg_ptr->nl_neigh_info.metainfo.ndm_state != NUD_REACHABLE) && (msg_ptr->nl_neigh_info.metainfo.ndm_state != NUD_PERMANENT))
 			{
-				IPACMDBG_H("RTM_NEWNEIGH received with NOARP. Ignoring\n");
+				IPACMDBG_H("RTM_NEWNEIGH received with wrong netlink state. So Ignoring\n");
 				return IPACM_SUCCESS;
 			}
 			IPACMDBG_H("RTM_NEWNEIGH received with state[%02X]\n", msg_ptr->nl_neigh_info.metainfo.ndm_state);

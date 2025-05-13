@@ -686,10 +686,10 @@ private:
 
 	int del_dft_firewall_rules(ipa_ip_type iptype, bool wan_up_vlan = false);
 
-	int handle_down_evt();
+	int handle_down_evt(ipa_ip_type iptype);
 
 	/*handle wan-iface down event */
-	int handle_down_evt_ex();
+	int handle_down_evt_ex(ipa_ip_type iptype);
 
 	/* wan default route/filter rule delete */
 	int handle_route_del_evt_ex(ipa_ip_type iptype);
@@ -754,8 +754,8 @@ private:
 	/* construct dummy ethernet header */
 	int add_dummy_rx_hdr();
 
-	void HandleSTAClientDelEvt(const ipa_wan_client* client);
-	
+	void HandleSTAClientDelEvt(const ipa_wan_client* client, ipa_ip_type iptype = IPA_IP_MAX);
+
 	int add_catchup_all_filtering_rule_each_pdn(const IPACM_firewall_conf_t& firewall_config, ipa_ip_type iptype,
 		const struct ipa_rule_attrib& rx_prop_attrib, struct ipa_flt_rule_add& flt_rule_add, int fltr_rule_number);
 	int add_ipv6_frag_filtering_rule_ex(const struct ipa_rule_attrib& rx_prop_attrib,

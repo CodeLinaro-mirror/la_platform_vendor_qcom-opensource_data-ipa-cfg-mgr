@@ -870,64 +870,6 @@ fail:
 	return res;
 }
 
-/* handle del_address event */
-int IPACM_Wan::handle_addr_del_evt(ipacm_event_data_addr *data)
-{
-	uint32_t num_ipv6_addr, num_v6_value;
-	int res = IPACM_SUCCESS;
-	int i = 0;
-
-	if (tx_prop == NULL || rx_prop == NULL)
-	{
-		IPACMDBG_H("Either tx or rx property is NULL, return.\n");
-		return IPACM_SUCCESS;
-	}
-
-	if (data->iptype == IPA_IP_v6)
-	{
-		num_v6_value = num_dft_rt_v6;
-		/* Check the address deleted. */
-		for (num_ipv6_addr=0; num_ipv6_addr<num_v6_value; num_ipv6_addr++)
-		{
-			if((ipv6_addr[num_ipv6_addr][0] == data->ipv6_addr[0]) &&
-			(ipv6_addr[num_ipv6_addr][1] == data->ipv6_addr[1]) &&
-			(ipv6_addr[num_ipv6_addr][2] == data->ipv6_addr[2]) &&
-			(ipv6_addr[num_ipv6_addr][3] == data->ipv6_addr[3]))
-			{
-				IPACMDBG_H("find matched ipv6 address, index:%d \n", num_ipv6_addr);
-				for (i = 0; i < MAX_DEFAULT_v6_ROUTE_RULES; i++)
-				{
-					if (m_routing.DeleteRoutingHdl(dft_rt_rule_hdl[MAX_DEFAULT_v4_ROUTE_RULES+2*num_ipv6_addr+i], IPA_IP_v6) == false)
-					{
-						IPACMERR("Routing rule deletion failed!\n");
-						res = IPACM_FAILURE;
-						goto fail;
-					}
-				}
-#ifdef FEATURE_VLAN_MPDN
-				if ((data->ipv6_addr[0] == ipv6_prefix[0]) && (data->ipv6_addr[1] == ipv6_prefix[1]))
-				{
-					IPACMDBG_H("Del vlan ipv6_prefix:0x%x%x\n", ipv6_prefix[0], ipv6_prefix[1]);
-					if (is_xlat)
-						IPACM_Iface::ipacmcfg->del_vlan_ipv6_prefix(ipv6_prefix, -1, true);
-					else
-						IPACM_Iface::ipacmcfg->del_vlan_ipv6_prefix(ipv6_prefix, -1);
-				}
-#endif
-				if (num_dft_rt_v6 > 0)
-					num_dft_rt_v6--;
-				IPACMDBG_H("v6 num: %d\n",num_dft_rt_v6);
-			}
-		}
-	}
-	else
-	{
-		IPACMDBG_H("IPv4 addr del evt is not handled.\n");
-	}
-fail:
-	return res;
-}
-
 void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 {
 	int if_index = 0;
@@ -944,7 +886,7 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 				if (ipa_interface_index == ipa_if_num)
 				{
 					IPACMDBG_H("Received IPA_WLAN_LINK_DOWN_EVENT\n");
-					handle_down_evt();
+					handle_down_evt(IPA_IP_MAX);
 					/* reset the STA-iface category to unknown */
 					IPACM_Iface::ipacmcfg->iface_table[ipa_if_num].if_cat = UNKNOWN_IF;
 					IPACM_SYSLOG("IPA_WAN_STA (%s):ipa_index (%d) instance close \n", IPACM_Iface::ipacmcfg->iface_table[ipa_if_num].iface_name, ipa_if_num);
@@ -1057,7 +999,7 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 				IPACM_EvtDispatcher::PostEvt(&evt_data);
 
 				/* delete previous instance */
-				handle_down_evt();
+				handle_down_evt(IPA_IP_MAX);
 				IPACM_Iface::ipacmcfg->DelNatIfaces(dev_name); // delete NAT-iface
 				delete this;
 				return;
@@ -1101,7 +1043,7 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 				if(m_is_sta_mode == Q6_WAN)
 				{
 						IPACMDBG_H("Received IPA_LINK_DOWN_EVENT\n");
-						handle_down_evt_ex();
+						handle_down_evt_ex(IPA_IP_MAX);
 						IPACMDBG_H("IPA_WAN_Q6 (%s):ipa_index (%d) instance close \n", IPACM_Iface::ipacmcfg->iface_table[ipa_if_num].iface_name, ipa_if_num);
 #if defined(FEATURE_SOCKSv5) && defined (IPA_SOCKV5_EVENT_MAX)
 						info.ipv4_addr = wan_v4_addr;
@@ -1119,7 +1061,7 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 				{
 					IPACMDBG_H("Received IPA_LINK_DOWN_EVENT(wan_mode:%d)\n", m_is_sta_mode);
 					/* delete previous instance */
-					handle_down_evt();
+					handle_down_evt(IPA_IP_MAX);
 					IPACM_SYSLOG("IPA_WAN_CRADLE (%s):ipa_index (%d) instance close \n", IPACM_Iface::ipacmcfg->iface_table[ipa_if_num].iface_name, ipa_if_num);
 					IPACM_Iface::ipacmcfg->DelNatIfaces(dev_name); // delete NAT-iface
 					delete this;
@@ -1158,6 +1100,12 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 						IPACM_Iface::iface_addr_query(data->if_index, false, &data->ipv4_addr);
 
 					handle_addr_evt(data);
+					if(iface_query != NULL && (!wan_route_rule_v4_hdl || !wan_route_rule_v6_hdl))
+					{
+						/* In the case where address might have been deleted and added back */
+						wan_route_rule_v4_hdl = (uint32_t *)calloc(iface_query->num_tx_props, sizeof(uint32_t));
+						wan_route_rule_v6_hdl = (uint32_t *)calloc(iface_query->num_tx_props, sizeof(uint32_t));
+					}
 					/* checking if SW-RT_enable */
 					if (IPACM_Iface::ipacmcfg->ipa_sw_rt_enable == true &&
 							m_is_sta_mode != Q6_WAN)
@@ -1249,7 +1197,10 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 			{
 				IPACMDBG_H("Get IPA_ADDR_DEL_EVENT: IF ip type %d, incoming ip type %d\n", ip_type, data->iptype);
 				IPACMDBG_H("v6 num: %d\n",num_dft_rt_v6);
-				handle_addr_del_evt(data);
+				if(m_is_sta_mode == Q6_WAN)
+					handle_down_evt_ex(data->iptype);
+				else if(m_is_sta_mode == WLAN_WAN)
+					handle_down_evt(data->iptype);
 			}
 		}
 		break;
@@ -7236,10 +7187,11 @@ int IPACM_Wan::config_dft_embms_rules(ipa_ioc_add_flt_rule *pFilteringTable_v4, 
 
 
 /*for STA mode: handle wan-iface down event */
-int IPACM_Wan::handle_down_evt()
+int IPACM_Wan::handle_down_evt(ipa_ip_type arg_ip_type)
 {
 	int res = IPACM_SUCCESS;
 	int i;
+	bool del_v4 = false, del_v6 = false;
 
 	IPACMDBG_H(" wan handle_down_evt \n");
 	if(IPACM_Iface::ipacmcfg->GetIPAVer() >= IPA_HW_None && IPACM_Iface::ipacmcfg->GetIPAVer() < IPA_HW_v4_0)
@@ -7253,19 +7205,25 @@ int IPACM_Wan::handle_down_evt()
 		}
 	}
 	/* no iface address up, directly close iface*/
-	if (ip_type == IPACM_IP_NULL)
+	if (arg_ip_type == IPACM_IP_NULL)
 	{
 		goto fail;
 	}
 
-	/*Post v4 Vlan PDN_DOWN event if associated*/
+	IPACMDBG_H("ip_type: %d\n", arg_ip_type);
+	if((arg_ip_type == IPA_IP_v4) || (arg_ip_type == IPA_IP_MAX))
+		del_v4 = true;
+	if((arg_ip_type == IPA_IP_v6) || (arg_ip_type == IPA_IP_MAX))
+		del_v6 = true;
 
-	IPACMDBG_H("ip_type: %d\n", ip_type);
+	IPACM_SYSLOG("wlan_ipv4_pdn_index: %d ipv4_to_iface[wlan_ipv4_pdn_index].wan_up_vlan :%d\n", wlan_ipv4_pdn_index, ipv4_to_iface[wlan_ipv4_pdn_index].wan_up_vlan);
+	IPACM_SYSLOG("wlan_ipv6_pdn_index: %d wan_up_vlan :%d STA wan ipv6-addr:%08x:%08x:%08x:%08x\n",
+		wlan_ipv6_pdn_index, ipv4_to_iface[wlan_ipv6_pdn_index].wan_up_vlan,
+		ipv6_addr[0], ipv6_addr[1], ipv6_addr[2], ipv6_addr[3]);
 
-	IPACM_SYSLOG("wlan_ipv4_pdn_index: %d ipv4_to_iface[wlan_ipv4_pdn_index].wan_up_vlan :%d STA wan ipv4-addr:0x%x\n",
-			 wlan_ipv4_pdn_index, ipv4_to_iface[wlan_ipv4_pdn_index].wan_up_vlan, wan_v4_addr);
+	IPACM_SYSLOG(" STA wan ipv4-addr:0x%x\n", wan_v4_addr);
 
-	if(ipv4_to_iface[wlan_ipv4_pdn_index].wan_up_vlan && ipv6_to_iface[wlan_ipv6_pdn_index].wan_up_vlan_v6)
+	if((del_v4 && del_v6) && ipv4_to_iface[wlan_ipv4_pdn_index].wan_up_vlan && ipv6_to_iface[wlan_ipv6_pdn_index].wan_up_vlan_v6)
 	{
 		ipacm_cmd_q_data evt_data;
 		ipacm_event_vlan_pdn *vlandown_data;
@@ -7318,7 +7276,7 @@ int IPACM_Wan::handle_down_evt()
 
 		IPACM_EvtDispatcher::PostEvt(&evt_data);
 	}
-	else if(ipv6_to_iface[wlan_ipv6_pdn_index].wan_up_vlan_v6)
+	else if((del_v6) && ipv6_to_iface[wlan_ipv6_pdn_index].wan_up_vlan_v6)
 	{
 		ipacm_cmd_q_data evt_data;
 		ipacm_event_vlan_pdn *vlandown_data;
@@ -7364,7 +7322,7 @@ int IPACM_Wan::handle_down_evt()
 
 		IPACM_EvtDispatcher::PostEvt(&evt_data);
 	}
-	else if (ipv4_to_iface[wlan_ipv4_pdn_index].wan_up_vlan)
+	else if ((del_v4) && ipv4_to_iface[wlan_ipv4_pdn_index].wan_up_vlan)
 	{
 
 		ipacm_cmd_q_data evt_data;
@@ -7416,31 +7374,19 @@ int IPACM_Wan::handle_down_evt()
 		IPACMDBG_H("Not Any vlan is Up..:\n");
 	}
 
-	/* make sure default routing rules and firewall rules are deleted*/
-	if (active_v4)
+	if(del_v4)
 	{
-		if (rx_prop != NULL)
+		if (active_v4)
 		{
-			del_dft_firewall_rules(IPA_IP_v4);
+			if (rx_prop != NULL)
+			{
+				del_dft_firewall_rules(IPA_IP_v4);
+			}
+			handle_route_del_evt(IPA_IP_v4);
+			IPACM_SYSLOG("Delete default v4 routing rules\n");
 		}
-		handle_route_del_evt(IPA_IP_v4);
-		IPACM_SYSLOG("Delete default v4 routing rules\n");
-	}
 
-	if (active_v6)
-	{
-		if (rx_prop != NULL)
-		{
-			del_dft_firewall_rules(IPA_IP_v6);
-		}
-		handle_route_del_evt(IPA_IP_v6);
-		IPACM_SYSLOG("Delete default v6 routing rules\n");
-	}
-
-	/* Delete default v4 RT rule */
-	if (ip_type != IPA_IP_v6)
-	{
-		IPACM_SYSLOG("Delete default v4 routing rules\n");
+		IPACMDBG_H("Delete default v4 routing rules\n");
 		if (m_routing.DeleteRoutingHdl(dft_rt_rule_hdl[0], IPA_IP_v4) == false)
 		{
 		   IPACMERR("Routing rule deletion failed!\n");
@@ -7451,12 +7397,42 @@ int IPACM_Wan::handle_down_evt()
 		ipv4_to_iface[wlan_ipv4_pdn_index].is_xlat = false;
 		ipv4_to_iface[wlan_ipv4_pdn_index].pIface = NULL;
 		wlan_ipv4_pdn_index = -1;
+		for(i = 0; i < num_wan_client; i++)
+		{
+			HandleSTAClientDelEvt(get_client_memptr(wan_client, i), IPA_IP_v4);
+			if(delete_wan_rtrules(i, IPA_IP_v4))
+			{
+				IPACMERR("unbale to delete wan-client v4 route rules for index %d\n", i);
+				res = IPACM_FAILURE;
+				goto fail;
+			}
+		}
+
+		if((rx_prop!= NULL) && (dft_v4fl_rule_hdl[0] != 0))
+		{
+			if (m_filtering.DeleteFilteringHdls(dft_v4fl_rule_hdl,
+				IPA_IP_v4,
+				IPV4_DEFAULT_FILTERTING_RULES) == false)
+			{
+				IPACMERR("Error Delete Filtering rules, aborting...\n");
+				res = IPACM_FAILURE;
+				goto fail;
+			}
+			IPACM_Iface::ipacmcfg->decreaseFltRuleCount(rx_prop->rx[0].src_pipe, IPA_IP_v4,
+									 IPV4_DEFAULT_FILTERTING_RULES);
+									 IPACMDBG_H("finished delete default v4 filtering rules\n ");
+		}
 	}
 
-	/* delete default v6 RT rule */
-	if (ip_type != IPA_IP_v4)
+	if(del_v6)
 	{
-		IPACM_SYSLOG("Delete default v6 routing rules\n");
+		if(active_v6)
+		{
+			if(rx_prop != NULL)
+				del_dft_firewall_rules(IPA_IP_v6);
+			handle_route_del_evt(IPA_IP_v6);
+			IPACM_SYSLOG("Delete default v6 routing rules\n");
+		}
 		/* May have multiple ipv6 iface-routing rules*/
 		for (i = 0; i < 2*num_dft_rt_v6; i++)
 		{
@@ -7472,34 +7448,76 @@ int IPACM_Wan::handle_down_evt()
 		ipv6_to_iface[wlan_ipv6_pdn_index].pIface = NULL;
 		memset(&ipv6_to_iface[wlan_ipv6_pdn_index].ipv6_prefix, 0, sizeof(uint32_t) * 2);
 		wlan_ipv6_pdn_index = -1;
+
+		/* clean wan-client header, routing rules */
+		IPACMDBG_H("left %d wan clients need to be deleted \n ", num_wan_client);
+		num_dft_rt_v6--;
+
+		for(int num_ipv6_addr=0; num_ipv6_addr < num_dft_rt_v6; num_ipv6_addr++)
+		{
+			IPACMDBG_H("deleting the ipv6 address, index:%d \n", num_ipv6_addr);
+			IPACMDBG_H("ipv6 addr: 0x%08x%%08x%08x08x\n",ipv6_addr[num_ipv6_addr][0],ipv6_addr[num_ipv6_addr][1],
+				ipv6_addr[num_ipv6_addr][2],ipv6_addr[num_ipv6_addr][3])
+			ipv6_addr[num_dft_rt_v6][0] = 0;
+			ipv6_addr[num_dft_rt_v6][1] = 0;
+			ipv6_addr[num_dft_rt_v6][2] = 0;
+			ipv6_addr[num_dft_rt_v6][3] = 0;
+		}
+
+	for(i = 0; i < num_wan_client; i++)
+	{
+		HandleSTAClientDelEvt(get_client_memptr(wan_client, i), IPA_IP_v6);
+		if(delete_wan_rtrules(i, IPA_IP_v6))
+		{
+			IPACMERR("unbale to delete wan-client v6 route rules for index %d\n", i);
+			res = IPACM_FAILURE;
+			goto fail;
+		}
 	}
 
+	if(rx_prop != NULL)
+	{
+		if (dft_v6fl_rule_hdl[0] != 0)
+		{
+			if (!m_filtering.DeleteFilteringHdls(dft_v6fl_rule_hdl, IPA_IP_v6,
+							m_ipv6_default_filterting_rules_count))
+			{
+				IPACMERR("ErrorDeleting Filtering rule, aborting...\n");
+				res = IPACM_FAILURE;
+				goto fail;
+			}
+			memset(dft_v6fl_rule_hdl, 0, m_ipv6_default_filterting_rules_count * sizeof(uint32_t));
+			IPACM_Iface::ipacmcfg->decreaseFltRuleCount(
+				rx_prop->rx[0].src_pipe, IPA_IP_v6, m_ipv6_default_filterting_rules_count);
+		}
 
+		if(num_ipv6_dest_flt_rule > 0 && num_ipv6_dest_flt_rule <= MAX_DEFAULT_v6_ROUTE_RULES)
+		{
+			if(m_filtering.DeleteFilteringHdls(ipv6_dest_flt_rule_hdl, IPA_IP_v6,
+								num_ipv6_dest_flt_rule) == false)
+			{
+				IPACMERR("Failed to delete ipv6 dest flt rules.\n");
+				res = IPACM_FAILURE;
+				goto fail;
+			}
+			memset(ipv6_dest_flt_rule_hdl, 0, num_ipv6_dest_flt_rule* sizeof(uint32_t));
+			IPACM_Iface::ipacmcfg->decreaseFltRuleCount(rx_prop->rx[0].src_pipe,
+							IPA_IP_v6, num_ipv6_dest_flt_rule);
+		}
+	}
+	IPACMDBG_H("finished delete default v6 filtering rules\n ");
+}
+
+if(del_v4 && del_v6)
+{
 	/* clean wan-client header, routing rules */
 	IPACMDBG_H("left %d wan clients need to be deleted \n ", num_wan_client);
+
 	for (i = 0; i < num_wan_client; i++)
 	{
-		/* Del NAT rules before RT rules are delete */
-		HandleSTAClientDelEvt(get_client_memptr(wan_client, i));
-
-		if (delete_wan_rtrules(i, IPA_IP_v4))
-		{
-			IPACMERR("unbale to delete wan-client v4 route rules for index %d\n", i);
-			res = IPACM_FAILURE;
-			goto fail;
-		}
-
-		if (delete_wan_rtrules(i, IPA_IP_v6))
-		{
-			IPACMERR("unbale to delete ecm-client v6 route rules for index %d\n", i);
-			res = IPACM_FAILURE;
-			goto fail;
-		}
-
 		IPACMDBG_H("Delete %d client header\n", num_wan_client);
 
-
-		if (get_client_memptr(wan_client, i)->ipv4_header_set == true)
+		if (del_v4 && (get_client_memptr(wan_client, i)->ipv4_header_set == true))
 		{
 			if (m_header.DeleteHeaderHdl(get_client_memptr(wan_client, i)->hdr_hdl_v4)
 				== false)
@@ -7509,7 +7527,7 @@ int IPACM_Wan::handle_down_evt()
 			}
 		}
 
-		if (get_client_memptr(wan_client, i)->ipv6_header_set == true)
+		if (del_v6 && (get_client_memptr(wan_client, i)->ipv6_header_set == true))
 		{
 			if (m_header.DeleteHeaderHdl(get_client_memptr(wan_client, i)->hdr_hdl_v6)
 				== false)
@@ -7518,61 +7536,6 @@ int IPACM_Wan::handle_down_evt()
 				goto fail;
 			}
 		}
-	} /* end of for loop */
-
-	/* free the edm clients cache */
-	IPACMDBG_H("Free wan clients cache\n");
-
-	/* check software routing fl rule hdl */
-	if (softwarerouting_act == true)
-	{
-		handle_software_routing_disable();
-	}
-
-	/* free dft ipv4 filter rule handlers if any */
-	if (ip_type != IPA_IP_v6 && rx_prop != NULL)
-	{
-		if (dft_v4fl_rule_hdl[0] != 0)
-		{
-			if (m_filtering.DeleteFilteringHdls(dft_v4fl_rule_hdl,
-				IPA_IP_v4,
-				IPV4_DEFAULT_FILTERTING_RULES) == false)
-			{
-				IPACMERR("Error Delete Filtering rules, aborting...\n");
-				res = IPACM_FAILURE;
-				goto fail;
-			}
-			IPACM_Iface::ipacmcfg->decreaseFltRuleCount(rx_prop->rx[0].src_pipe, IPA_IP_v4, IPV4_DEFAULT_FILTERTING_RULES);
-			IPACM_SYSLOG("finished delete default v4 filtering rules\n ");
-		}
-	}
-
-	/* free dft ipv6 filter rule handlers if any */
-	if (ip_type != IPA_IP_v4 && rx_prop != NULL)
-	{
-		if (dft_v6fl_rule_hdl[0] != 0)
-		{
-			if (!m_filtering.DeleteFilteringHdls(dft_v6fl_rule_hdl, IPA_IP_v6, m_ipv6_default_filterting_rules_count))
-			{
-				IPACMERR("ErrorDeleting Filtering rule, aborting...\n");
-				res = IPACM_FAILURE;
-				goto fail;
-			}
-			IPACM_Iface::ipacmcfg->decreaseFltRuleCount(
-				rx_prop->rx[0].src_pipe, IPA_IP_v6, m_ipv6_default_filterting_rules_count);
-		}
-
-		if(num_ipv6_dest_flt_rule > 0 && num_ipv6_dest_flt_rule <= MAX_DEFAULT_v6_ROUTE_RULES)
-		{
-			if(m_filtering.DeleteFilteringHdls(ipv6_dest_flt_rule_hdl,  IPA_IP_v6, num_ipv6_dest_flt_rule) == false)
-			{
-				IPACMERR("Failed to delete ipv6 dest flt rules.\n");
-				res = IPACM_FAILURE;
-				goto fail;
-			}
-			IPACM_Iface::ipacmcfg->decreaseFltRuleCount(rx_prop->rx[0].src_pipe, IPA_IP_v6, num_ipv6_dest_flt_rule);
-		}
-		IPACM_SYSLOG("finished delete default v6 filtering rules\n ");
 	}
 	if(hdr_proc_hdl_dummy_v6)
 	{
@@ -7585,49 +7548,64 @@ int IPACM_Wan::handle_down_evt()
 	}
 	if(hdr_hdl_dummy_v6)
 	{
-		if (m_header.DeleteHeaderHdl(hdr_hdl_dummy_v6) == false)
+		if(m_header.DeleteHeaderHdl(hdr_hdl_dummy_v6) == false)
 		{
 			IPACMERR("Failed to delete hdr_hdl_dummy_v6\n");
 			res = IPACM_FAILURE;
 			goto fail;
 		}
 	}
+}
+
+	/* free the edm clients cache */
+	IPACMDBG_H("Free wan clients cache\n");
+
+	/* check software routing fl rule hdl */
+	if (softwarerouting_act == true)
+	{
+		handle_software_routing_disable();
+	}
+
 fail:
-	if (tx_prop != NULL)
+	if(del_v4 && del_v6)
 	{
-		free(tx_prop);
-		tx_prop = NULL;
+		if (tx_prop != NULL)
+		{
+			free(tx_prop);
+			tx_prop = NULL;
+		}
+		if (rx_prop != NULL)
+		{
+			free(rx_prop);
+			rx_prop = NULL;
+		}
+		if (iface_query != NULL)
+		{
+			free(iface_query);
+			iface_query = NULL;
+		}
+		if(wan_client != NULL)
+		{
+			free(wan_client);
+			wan_client = NULL;
+			num_wan_client = 0;
+		}
 	}
-	if (rx_prop != NULL)
-	{
-		free(rx_prop);
-		rx_prop = NULL;
-	}
-	if (iface_query != NULL)
-	{
-		free(iface_query);
-		iface_query = NULL;
-	}
-	if (wan_route_rule_v4_hdl != NULL)
+	if (del_v4 && (wan_route_rule_v4_hdl != NULL))
 	{
 		free(wan_route_rule_v4_hdl);
 		wan_route_rule_v4_hdl = NULL;
 	}
-	if (wan_route_rule_v6_hdl != NULL)
+	if (del_v6 && (wan_route_rule_v6_hdl != NULL))
 	{
 		free(wan_route_rule_v6_hdl);
 		wan_route_rule_v6_hdl = NULL;
-	}
-	if (wan_client != NULL)
-	{
-		free(wan_client);
-		wan_client = NULL;
 	}
 	close(m_fd_ipa);
 	return res;
 }
 
-int IPACM_Wan::handle_down_evt_ex()
+int IPACM_Wan::handle_down_evt_ex(ipa_ip_type iptype)
 {
 	int res = IPACM_SUCCESS;
 	int i, tether_total;
@@ -7635,7 +7613,7 @@ int IPACM_Wan::handle_down_evt_ex()
 	uint32_t dummy_prefix[2];
 	bool xlat_cfg = false;
 
-	IPACMDBG_H(" wan handle_down_evt \n");
+	IPACMDBG_H(" wan handle_down_evt ip type = %d \n", iptype);
 
 	/* free ODU filter rule handlers */
 	if(IPACM_Iface::ipacmcfg->iface_table[ipa_if_num].if_cat == EMBMS_IF)
@@ -7660,12 +7638,12 @@ int IPACM_Wan::handle_down_evt_ex()
 	}
 
 	/* no iface address up, directly close iface*/
-	if (ip_type == IPACM_IP_NULL)
+	if (iptype == IPACM_IP_NULL)
 	{
 		goto fail;
 	}
 
-	if(ip_type == IPA_IP_v4)
+	if(iptype == IPA_IP_v4)
 	{
 		num_ipv4_modem_pdn--;
 		IPACM_SYSLOG("Now the number of modem ipv4 pdn is %d [%s].\n", num_ipv4_modem_pdn, dev_name);
@@ -7772,7 +7750,7 @@ int IPACM_Wan::handle_down_evt_ex()
 		}
 		else
 		{
-			IPACMDBG_H("not deleting rm depend for default rt, a v4 VLAN PDN is still up, iptype %d\n", ip_type);
+			IPACMDBG_H("not deleting rm depend for default rt, a v4 VLAN PDN is still up, iptype %d\n", iptype);
 		}
 #endif
 		/* only when default gw goes down we post WAN_DOWN event*/
@@ -7833,7 +7811,7 @@ int IPACM_Wan::handle_down_evt_ex()
 			goto fail;
 		}
 	}
-	if(ip_type == IPA_IP_v6 || xlat_cfg)
+	if(iptype == IPA_IP_v6 || xlat_cfg)
 	{
 		if(num_dft_rt_v6 > 1)
 		{
@@ -7865,6 +7843,10 @@ int IPACM_Wan::handle_down_evt_ex()
 				{
 					IPACMDBG_H("IP-family:%d, Routing rule(hdl:0x%x) deletion failed!\n", IPA_IP_v6, wan_route_rule_v6_hdl_a5);
 					return IPACM_FAILURE;
+				}
+				else
+				{
+					wan_route_rule_v6_hdl_a5 = 0;
 				}
 			}
 			else
@@ -7952,7 +7934,7 @@ int IPACM_Wan::handle_down_evt_ex()
 		}
 		else
 		{
-			IPACMDBG_H("not deleting rm depend for default rt, a v6 VLAN PDN is still up, iptype %d\n", ip_type);
+			IPACMDBG_H("not deleting rm depend for default rt, a v6 VLAN PDN is still up, iptype %d\n", iptype);
 		}
 #endif
 		if(is_default_gateway == true)
@@ -8016,11 +7998,12 @@ int IPACM_Wan::handle_down_evt_ex()
 			}
 		}
 	}
-	if (ip_type == IPA_IP_MAX)
+	if (iptype == IPA_IP_MAX)
 	{
-		num_ipv4_modem_pdn--;
+		if(num_ipv4_modem_pdn >= 0 )
+			num_ipv4_modem_pdn--;
 		IPACM_SYSLOG("Now the number of modem ipv4 pdn is %d.\n", num_ipv4_modem_pdn);
-		if (num_dft_rt_v6 > 1)
+		if ((num_dft_rt_v6 > 1) && (num_ipv6_modem_pdn >= 0 ))
 			num_ipv6_modem_pdn--;
 		IPACM_SYSLOG("Now the number of modem ipv6 pdn is %d.\n", num_ipv6_modem_pdn);
 
@@ -8140,7 +8123,7 @@ int IPACM_Wan::handle_down_evt_ex()
 		}
 		else
 		{
-			IPACMDBG_H("not deleting rm depend for default rt, a v4 VLAN PDN is still up, iptype %d\n", ip_type);
+			IPACMDBG_H("not deleting rm depend for default rt, a v4 VLAN PDN is still up, iptype %d\n", iptype);
 		}
 
 		if(!isVlanWanUP_V6())
@@ -8181,7 +8164,7 @@ int IPACM_Wan::handle_down_evt_ex()
 		}
 		else
 		{
-			IPACMDBG_H("not deleting rm depend for default rt, a v6 VLAN PDN is still up, iptype %d\n", ip_type);
+			IPACMDBG_H("not deleting rm depend for default rt, a v6 VLAN PDN is still up, iptype %d\n", iptype);
 		}
 #endif
 		/* only when default gw goes down we post WAN_DOWN event*/
@@ -8290,42 +8273,45 @@ int IPACM_Wan::handle_down_evt_ex()
 	}
 
 fail:
-	if (tx_prop != NULL)
+	if(iptype == IPA_IP_MAX)
 	{
-		free(tx_prop);
-		tx_prop = NULL;
+		if (tx_prop != NULL)
+		{
+			free(tx_prop);
+			tx_prop = NULL;
+		}
+		if (rx_prop != NULL)
+		{
+			free(rx_prop);
+			rx_prop = NULL;
+		}
+		if (ext_prop != NULL)
+		{
+			free(ext_prop);
+			ext_prop = NULL;
+		}
+		if (iface_query != NULL)
+		{
+			free(iface_query);
+			iface_query = NULL;
+		}
+		if (wan_client != NULL)
+		{
+			free(wan_client);
+			wan_client = NULL;
+		}
+		close(m_fd_ipa);
 	}
-	if (rx_prop != NULL)
-	{
-		free(rx_prop);
-		rx_prop = NULL;
-	}
-	if (ext_prop != NULL)
-	{
-		free(ext_prop);
-		ext_prop = NULL;
-	}
-	if (iface_query != NULL)
-	{
-		free(iface_query);
-		iface_query = NULL;
-	}
-	if (wan_route_rule_v4_hdl != NULL)
+	if ((iptype == IPA_IP_v4 || iptype == IPA_IP_MAX) && wan_route_rule_v4_hdl != NULL)
 	{
 		free(wan_route_rule_v4_hdl);
 		wan_route_rule_v4_hdl = NULL;
 	}
-	if (wan_route_rule_v6_hdl != NULL)
+	if ((iptype == IPA_IP_v6 || iptype == IPA_IP_MAX) && wan_route_rule_v6_hdl != NULL)
 	{
 		free(wan_route_rule_v6_hdl);
 		wan_route_rule_v6_hdl = NULL;
 	}
-	if (wan_client != NULL)
-	{
-		free(wan_client);
-		wan_client = NULL;
-	}
-	close(m_fd_ipa);
 	return res;
 }
 
@@ -10001,16 +9987,19 @@ void IPACM_Wan::install_l2tp_flt_rule(ipa_flt_rule_add* rules, int rule_offset, 
 }
 #endif
 
-void IPACM_Wan::HandleSTAClientDelEvt(const ipa_wan_client* client)
+void IPACM_Wan::HandleSTAClientDelEvt(const ipa_wan_client* client, ipa_ip_type iptype)
 {
-	if (client->ipv4_set == true)
+	if (((iptype == IPA_IP_v4) || (iptype == IPA_IP_MAX)) && (client->ipv4_set == true))
 	{
 		CtList->HandleSTAClientDelEvt(client->v4_addr);
 	}
 
-	for (int i = 0; i < client->ipv6_set; ++i)
+	if((iptype == IPA_IP_v6) || (iptype == IPA_IP_MAX))
 	{
-		CtList->HandleSTAClientDelEvt_v6(Ipv6IpAddress(client->v6_addr[i], false));
+		for (int i = 0; i < client->ipv6_set; ++i)
+		{
+			CtList->HandleSTAClientDelEvt_v6(Ipv6IpAddress(client->v6_addr[i], false));
+		}
 	}
 }
 

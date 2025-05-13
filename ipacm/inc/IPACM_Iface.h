@@ -112,7 +112,7 @@ public:
 	ipa_ioc_query_intf_tx_props *tx_prop;
 	ipa_ioc_query_intf_rx_props *rx_prop;
 
-	virtual int handle_down_evt() = 0;
+	virtual int handle_down_evt(ipa_ip_type iptype) = 0;
 
 	virtual int handle_addr_evt(ipacm_event_data_addr *data) = 0;
 

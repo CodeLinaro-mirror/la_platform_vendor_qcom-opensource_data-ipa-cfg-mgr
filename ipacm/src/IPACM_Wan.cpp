@@ -988,7 +988,9 @@ int IPACM_Wan::handle_addr_evt(ipacm_event_data_addr *data)
 				goto fail;
 		}
 #endif
-		/* add default filtering rules when wan-iface get global v6-prefix */
+		IPACMDBG_H("Now the number of modem ipv6 pdn is %d, num_dft_rt_v6 %d.\n", num_ipv6_modem_pdn, num_dft_rt_v6);
+		/* add default filtering rules when wan-iface get global v6-prefix,
+		 */
 		if (num_dft_rt_v6 == 1)
 		{
 			if(m_is_sta_mode == Q6_WAN)
@@ -1001,6 +1003,16 @@ int IPACM_Wan::handle_addr_evt(ipacm_event_data_addr *data)
 			{
 				num_ipv6_sta_pdn++;
 				IPACMDBG_H("Now the number of STA ipv6 pdn is %d.\n", num_ipv6_sta_pdn);
+				init_fl_rule(data->iptype);
+			}
+		}
+
+		/* Add default filtering rules when wan-iface get link local when eth_wan_pppoe_enable */
+		if(!is_global_ipv6_addr(data->ipv6_addr) && IPACM_Iface::ipacmcfg->eth_wan_pppoe_enable)
+		{
+			if(m_is_sta_mode != Q6_WAN)
+			{
+				IPACMDBG_H("Add dft rule with link local addr handling, Now the number of STA ipv6 pdn is %d.\n", num_ipv6_sta_pdn);
 				init_fl_rule(data->iptype);
 			}
 		}

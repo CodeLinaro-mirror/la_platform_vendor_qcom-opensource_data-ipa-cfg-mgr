@@ -321,7 +321,7 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 			if (ipa_interface_index == ipa_if_num)
 			{
 				IPACMDBG_H("Received IPA_LINK_DOWN_EVENT\n");
-				handle_down_evt();
+				handle_down_evt(IPA_IP_MAX);
 				IPACM_Iface::ipacmcfg->DelNatIfaces(dev_name); // delete NAT-iface
 				return;
 			}
@@ -334,7 +334,7 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 			{
 				IPACMDBG_H("Received IPA_CFG_CHANGE_EVENT and category changed\n");
 				/* delete previous instance */
-				handle_down_evt();
+				handle_down_evt(IPA_IP_MAX);
 				IPACM_Iface::ipacmcfg->DelNatIfaces(dev_name); // delete NAT-iface
 				is_mode_switch = true; // need post internal usb-link up event
 				return;
@@ -5933,7 +5933,7 @@ int IPACM_Lan::handle_vlan_phys_if_down()
 #endif
 
 /*handle LAN iface down event*/
-int IPACM_Lan::handle_down_evt()
+int IPACM_Lan::handle_down_evt(ipa_ip_type arg_ip_type)
 {
 	int i;
 	int res = IPACM_SUCCESS;
@@ -6012,7 +6012,7 @@ int IPACM_Lan::handle_down_evt()
 #endif
 
 	/* no iface address up, directly close iface*/
-	if (ip_type == IPACM_IP_NULL)
+	if (arg_ip_type == IPACM_IP_NULL)
 	{
 		goto fail;
 	}
@@ -6045,7 +6045,7 @@ int IPACM_Lan::handle_down_evt()
 	}
 
 	/* Delete v4 filtering rules */
-	if (ip_type != IPA_IP_v6 && rx_prop != NULL)
+	if (arg_ip_type != IPA_IP_v6 && rx_prop != NULL)
 	{
 		if(m_filtering.DeleteFilteringHdls(ipv4_icmp_flt_rule_hdl, IPA_IP_v4, NUM_IPV4_ICMP_FLT_RULE) == false)
 		{
@@ -6150,7 +6150,7 @@ int IPACM_Lan::handle_down_evt()
 	}
 	IPACMDBG_H("Finished delete default iface ipv4 filtering rules \n ");
 	/* Delete v6 filtering rules */
-	if (ip_type != IPA_IP_v4 && rx_prop != NULL)
+	if (arg_ip_type != IPA_IP_v4 && rx_prop != NULL)
 	{
 		if(m_filtering.DeleteFilteringHdls(ipv6_icmp_flt_rule_hdl, IPA_IP_v6, NUM_IPV6_ICMP_FLT_RULE) == false)
 		{
@@ -6224,7 +6224,7 @@ int IPACM_Lan::handle_down_evt()
 	}
 	IPACMDBG_H("Finished delete default iface ipv6 filtering rules \n ");
 
-	if (ip_type != IPA_IP_v6)
+	if (arg_ip_type != IPA_IP_v6)
 	{
 		if (m_routing.DeleteRoutingHdl(dft_rt_rule_hdl[0], IPA_IP_v4)
 				== false)
@@ -6237,7 +6237,7 @@ int IPACM_Lan::handle_down_evt()
 	IPACMDBG_H("Finished delete default iface ipv4 rules \n ");
 
 	/* delete default v6 routing rule */
-	if (ip_type != IPA_IP_v4)
+	if (arg_ip_type != IPA_IP_v4)
 	{
 		/* may have multiple ipv6 iface-RT rules*/
 		for (i = 0; i < 2*num_dft_rt_v6; i++)
@@ -6271,7 +6271,7 @@ int IPACM_Lan::handle_down_evt()
 
 /* Delete private subnet*/
 #ifdef FEATURE_IPA_ANDROID
-	if (ip_type != IPA_IP_v6)
+	if (arg_ip_type != IPA_IP_v6)
 	{
 		IPACMDBG_H("current IPACM private subnet_addr number(%d)\n", IPACM_Iface::ipacmcfg->ipa_num_private_subnet);
 		IPACMDBG_H(" Delete IPACM private subnet_addr as: 0x%x \n", if_ipv4_subnet);

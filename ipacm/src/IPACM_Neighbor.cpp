@@ -381,7 +381,7 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 							}
 						}
 						/* Cache the neighbor event from bridgeX as well if physical netdev can't find */
-						if (i == num_neighbor_client_temp)
+						if ((i == num_neighbor_client_temp) && (event == IPA_NEW_NEIGH_EVENT))
 						{
 							IPACMDBG_H("Cant find ipv4 neighbor client with MAC %02x:%02x:%02x:%02x:%02x:%02x\n",
 								data->mac_addr[0], data->mac_addr[1], data->mac_addr[2],
@@ -833,7 +833,7 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 												IPACMERR("failed to get iface vlan ID, skipping\n");
 												continue;
 											}
-											if(neighbor_client[i].bridge->associate_VID != vlan_id)
+											if(neighbor_client[i].bridge && (neighbor_client[i].bridge->associate_VID != vlan_id))
 											{
 												IPACMDBG("client bridge vid mismatch (%d)(%d), skip\n",
 													vlan_id, neighbor_client[i].bridge->associate_VID);

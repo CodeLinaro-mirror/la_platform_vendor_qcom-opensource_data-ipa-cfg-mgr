@@ -6895,8 +6895,8 @@ int IPACM_Wlan::handle_down_evt()
 {
 	int res = IPACM_SUCCESS, i, num_private_subnet_fl_rule, idx = 0;
 	int wlan_pipe_index;
-	uint32_t tcp_syn_filter_rule_hdl;
-	uint32_t *private_flt_rule_hdl;
+	uint32_t tcp_syn_filter_rule_hdl = 0;
+	uint32_t *private_flt_rule_hdl = NULL;
 	bool skip_flt_rule_del= false;
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
 	struct wan_ioctl_lan_client_info *client_info;

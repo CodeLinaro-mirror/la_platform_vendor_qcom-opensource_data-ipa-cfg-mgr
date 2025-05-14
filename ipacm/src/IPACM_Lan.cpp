@@ -11450,8 +11450,8 @@ int IPACM_Lan::handle_down_evt()
 	ipacm_event_vlan_pdn *wandown_vlan_data;
 	int if_index = 0;
 #endif
-	uint32_t tcp_syn_filter_rule_hdl;
-	uint32_t *private_flt_rule_hdl;
+	uint32_t tcp_syn_filter_rule_hdl = 0;
+	uint32_t *private_flt_rule_hdl = NULL;
 
 	IPACMDBG_H("lan handle_down_evt\n ");
 
@@ -15155,7 +15155,7 @@ int IPACM_Lan::handle_wan_down_v6(bool is_sta_mode, bool is_support_mpdn)
 {
 	int idx = 0;
 	int j,wlan_pipe_index;
-	uint32_t *dft_filter_rule_hdl;
+	uint32_t *dft_filter_rule_hdl =  NULL;
 	if (rx_prop == NULL)
 	{
 		IPACMERR("Rx prop is NULL, return\n");
@@ -15221,6 +15221,11 @@ int IPACM_Lan::handle_wan_down_v6(bool is_sta_mode, bool is_support_mpdn)
 					dft_filter_rule_hdl = dft_v6fl_rule_hdl[j];
 				}
 			}
+			if (dft_filter_rule_hdl == NULL){
+				IPACMERR("dft_filter_rule_hdl is NULL,rules deleted already \n");
+				goto fail;
+			}
+
 			if (!m_filtering.DeleteFilteringHdls(dft_filter_rule_hdl, IPA_IP_v6, 1)) {
 				IPACMERR("Error Deleting last default flt rule, aborting...\n");
 				return IPACM_FAILURE;
@@ -15230,6 +15235,7 @@ int IPACM_Lan::handle_wan_down_v6(bool is_sta_mode, bool is_support_mpdn)
 		}
 	}
 
+fail:
 #ifdef FEATURE_IPA_IPSEC
 	return handleIpsecUlFltDelAll(IPA_IP_v6);
 #else
@@ -15731,8 +15737,8 @@ int IPACM_Lan::modify_private_subnet(bool eogre_enabled)
 	int mtu_rule_idx = IPACM_Iface::ipacmcfg->ipa_num_private_subnet;
 	int idx = 0,wlan_pipe_index;
 	int is_if_eth_ezmesh = false;
-	uint32_t *private_flt_rule_hdl;
-	uint32_t *dft_v4flt_rule_hdl;
+	uint32_t *private_flt_rule_hdl =  NULL;
+	uint32_t *dft_v4flt_rule_hdl = NULL;
 
 	if(ip_type == IPA_IP_v6)
 	{
@@ -15816,8 +15822,7 @@ int IPACM_Lan::modify_private_subnet(bool eogre_enabled)
 		 else
 			dft_v4flt_rule_hdl = dft_v4fl_rule_hdl[j];
 
-
-		if (dft_v4fl_rule_hdl[0] == 0  && eogre_enabled == false)
+		if (dft_v4flt_rule_hdl[0] == 0  && eogre_enabled == false)
 		{
 			IPACMERR("install v4 default rules first.Subnet + MTU rule will be installed later\n");
 			return IPACM_FAILURE;
@@ -16062,7 +16067,7 @@ int IPACM_Lan::modify_ipv6_prefix_flt_rule(bool eogre_enabled)
 	int mtu_rule_idx = IPACM_Iface::ipacmcfg->num_ipv6_prefixes +
 						IPACM_Iface::ipacmcfg->num_no_offload_ipv6_prefix;
 	int j,wlan_pipe_index;
-	uint32_t *private_flt_rule_hdl;
+	uint32_t *private_flt_rule_hdl =  NULL;
 
 	if(rx_prop == NULL)
 	{
@@ -16736,7 +16741,7 @@ void IPACM_Lan::delete_ipv6_prefix_flt_rule()
 {
 	int idx = 0;
 	int j = 0,wlan_pipe_index;
-	uint32_t *prefix_flt_rule_hdl;
+	uint32_t *prefix_flt_rule_hdl = NULL;
 
 	if (rx_prop == NULL)
 	{
@@ -16775,13 +16780,18 @@ void IPACM_Lan::delete_ipv6_prefix_flt_rule()
 					}else if(IPACM_Wlan::wlan_ap_dflt_rules[wlan_pipe_index].iface_cnt[IPA_IP_v6] > 1 ){
 						IPACMDBG_H("Iface is still present\n");
 						return;
-					} else {
-						prefix_flt_rule_hdl = ipv6_prefix_flt_rule_hdl[j];
-						break;
 					}
 				}
 			}
+		} else {
+			prefix_flt_rule_hdl = ipv6_prefix_flt_rule_hdl[j];
 		}
+
+		if (prefix_flt_rule_hdl == NULL) {
+			IPACMERR("prefix_flt_rule_hdl is NULL.rules deleted already \n");
+			return;
+		}
+
 
 		if (m_filtering.DeleteFilteringHdls(prefix_flt_rule_hdl, IPA_IP_v6, IPv6_PREFIX_DEFAULT_PDN_RULE_NUM) == false) {
 			IPACMERR("Failed to delete ipv6 prefix flt rule.\n");
@@ -20548,7 +20558,7 @@ int IPACM_Lan::delete_icmp_filter_rule(
 {
 	int idx = 0;
 	int j = 0,wlan_pipe_index;
-	uint32_t *icmp_flt_rule_hdl;
+	uint32_t *icmp_flt_rule_hdl = NULL;
 	if ( ! VALID_IPA_IP_TYPE(iptype) )
 	{
 		IPACMERR("Bad iptype(%u)\n", iptype);
@@ -20595,8 +20605,12 @@ int IPACM_Lan::delete_icmp_filter_rule(
 					icmp_flt_rule_hdl = ipv4_icmp_flt_rule_hdl[j];
 				}
 			}
-				IPACMDBG_H("Attempting to delete v4 icmp filter rule.\n");
+				if (icmp_flt_rule_hdl == NULL){
+				IPACMERR("NULL v4 icmp filter rule hdl passed,rules deleted already...\n");
+				return IPACM_SUCCESS;
+				}
 
+				IPACMDBG_H("Attempting to delete v4 icmp filter rule.\n");
 				if (m_filtering.DeleteFilteringHdls(
 						icmp_flt_rule_hdl, IPA_IP_v4, NUM_IPV4_ICMP_FLT_RULE) == true) {
 					IPACMDBG_H("Deleted v4 icmp filter rule successfully.\n");
@@ -20623,6 +20637,10 @@ int IPACM_Lan::delete_icmp_filter_rule(
 					icmp_flt_rule_hdl = ipv6_icmp_flt_rule_hdl[j];
 				}
 			}
+				if (icmp_flt_rule_hdl == NULL){
+				IPACMERR("NULL v6 icmp filter rule hdl passed. rules deleted already \n");
+				return IPACM_SUCCESS;
+				}
 				IPACMDBG_H("Attempting to delete v6 icmp filter rule.\n");
 
 				if (m_filtering.DeleteFilteringHdls(

@@ -6042,7 +6042,11 @@ int IPACM_Lan::handle_eth_client_route_rule_ext_v2(uint8_t *mac_addr, ipa_ip_typ
 				IPACMDBG_H("rt rule entry enable stats = %d, dl cnt index = %u\n", rt_rule_entry->rule.enable_stats, rt_rule_entry->rule.cnt_idx);
 			} /* end of for loop */
 		} /* end of tx loop */
-		get_client_memptr(eth_client, eth_index)->route_rule_set_v6 = get_client_memptr(eth_client, eth_index)->ipv6_set;
+		if(iptype == IPA_IP_v6)
+		{
+			get_client_memptr(eth_client, eth_index)->route_rule_set_v6 =
+				get_client_memptr(eth_client, eth_index)->ipv6_set;
+		}
 		free((void *)rt_rule->rules);
 		free(rt_rule);
 	}
@@ -11378,8 +11382,18 @@ int IPACM_Lan::modify_ipv6_prefix_flt_rule(bool eogre_enabled)
 		{
 			if(IPACM_Iface::ipacmcfg->tunnel_feature != SINGLE_TAG_FEATURE)
 			{
-				/* mtu_v4_new = mtu_v4 - 4(gre) - 4(MPLS) - 14(eth) - 20(outer ipv4) */
-				mtu[0] = IPACM_Wan::GetGREMTU(IPA_IP_v6) - 30 - IPV6_HEADER_SIZE;
+				if(IPACM_Iface::ipacmcfg->eogre_info.ipv6_option_hdr_enabled)
+				{	/* mtu_v6_new = mtu_v4 - 4(gre) - 4(MPLS) - 14(eth) -8 (options) - 40(outer ipv4) */
+					mtu[0] = IPACM_Wan::GetGREMTU(IPA_IP_v6) - 30 - IPV6_HEADER_SIZE;
+					IPACMDBG_H("MTU is  with options%d\n", mtu[0]);
+				}
+				else
+				{
+					/* mtu_v6_new = mtu_v4 - 4(gre) - 4(MPLS) - 14(eth) - 40(outer ipv4) */
+					mtu[0] = IPACM_Wan::GetGREMTU(IPA_IP_v6) - 22 - IPV6_HEADER_SIZE;
+					IPACMDBG_H("MTU is without options %d\n", mtu[0]);
+				}
+
 			}
 			else
 			{

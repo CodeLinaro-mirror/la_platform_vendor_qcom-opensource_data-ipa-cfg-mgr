@@ -738,7 +738,7 @@ int IPACM_Iface::init_fl_rule(
 	const char *dev_wlan0="wlan0";
 	const char *dev_wlan1="wlan1";
 	const char *dev_ecm0="ecm0";
-	int idx = 0, j;
+	int idx = 0, j,wlan_pipe_index;
 
 	len = (iptype == IPA_IP_v4) ?
 		IPV4_DEFAULT_FILTERTING_RULES :
@@ -816,6 +816,15 @@ int IPACM_Iface::init_fl_rule(
 		memset(buf, 0, sizeof(buf));
 		memset(&flt_rule_entry, 0, sizeof(struct ipa_flt_rule_add));
 
+		if(ipa_if_cate == WLAN_IF){
+			for(wlan_pipe_index=0;wlan_pipe_index<MAX_SUPPORTED_WLAN_PIPES;wlan_pipe_index++){
+				if(IPACM_Wlan::wlan_ap_dflt_rules[wlan_pipe_index].src_pipe == rx_prop->rx[idx].src_pipe &&
+					IPACM_Wlan::wlan_ap_dflt_rules[wlan_pipe_index].iface_cnt[iptype] == 1 ){
+					break;
+				}
+			}
+		}
+
 		/* construct ipa_ioc_add_flt_rule with default filter rules */
 		if(eogre_enabled)
 		{
@@ -853,9 +862,11 @@ int IPACM_Iface::init_fl_rule(
 			flt_rule_entry.rule.hashable = false;
 #endif
 			IPACMDBG_H("rx property attrib mask:0x%x\n", rx_prop->rx[idx].attrib.attrib_mask);
-			memcpy(&flt_rule_entry.rule.attrib,
-				   &rx_prop->rx[idx].attrib,
-				   sizeof(flt_rule_entry.rule.attrib));
+			if(ipa_if_cate != WLAN_IF){
+				memcpy(&flt_rule_entry.rule.attrib,
+					&rx_prop->rx[idx].attrib,
+					sizeof(flt_rule_entry.rule.attrib));
+			}
 
 			flt_rule_entry.rule.attrib.attrib_mask |= IPA_FLT_FRAGMENT;
 			memcpy(
@@ -867,9 +878,13 @@ int IPACM_Iface::init_fl_rule(
 				IPACMDBG_H("Installing frag, mcast, and bcast rules\n");
 
 				/* Configuring Multicast Filtering Rule */
-				memcpy(&flt_rule_entry.rule.attrib,
-					   &rx_prop->rx[idx].attrib,
-					   sizeof(flt_rule_entry.rule.attrib));
+				if(ipa_if_cate != WLAN_IF){
+					memcpy(&flt_rule_entry.rule.attrib,
+						&rx_prop->rx[idx].attrib,
+						sizeof(flt_rule_entry.rule.attrib));
+				} else {
+					flt_rule_entry.rule.attrib.attrib_mask &= ~((uint32_t)IPA_FLT_FRAGMENT);
+				}
 				flt_rule_entry.rule.attrib.attrib_mask |= IPA_FLT_DST_ADDR;
 				flt_rule_entry.rule.attrib.u.v4.dst_addr_mask = 0xF0000000;
 				flt_rule_entry.rule.attrib.u.v4.dst_addr = 0xE0000000;
@@ -908,9 +923,16 @@ int IPACM_Iface::init_fl_rule(
 				IPACM_Iface::ipacmcfg->increaseFltRuleCount(
 					rx_prop->rx[idx].src_pipe, IPA_IP_v4, m_ipv4_default_filterting_rules_count[j]);
 
+				if(ipa_if_cate == WLAN_IF && wlan_pipe_index<MAX_SUPPORTED_WLAN_PIPES ){
+					IPACM_Wlan::wlan_ap_dflt_rules[wlan_pipe_index].m_ipv4_default_filterting_rules_count[j] = m_ipv4_default_filterting_rules_count[j];
+				}
+
 				/* copy filter hdls */
 				for (int i = 0; i < m_ipv4_default_filterting_rules_count[j]; i++) {
 					if (m_pFilteringTable->rules[i].status == 0) {
+						if(ipa_if_cate == WLAN_IF && wlan_pipe_index < MAX_SUPPORTED_WLAN_PIPES){
+							IPACM_Wlan::wlan_ap_dflt_rules[wlan_pipe_index].dft_v4fl_rule_hdl[j][i] = m_pFilteringTable->rules[i].flt_rule_hdl;
+						}
 						dft_v4fl_rule_hdl[j][i] = m_pFilteringTable->rules[i].flt_rule_hdl;
 						IPACMDBG_H("Default v4 filter Rule %d HDL:0x%x\n", i, dft_v4fl_rule_hdl[j][i]);
 					} else {
@@ -950,7 +972,10 @@ int IPACM_Iface::init_fl_rule(
 			flt_rule_entry.at_rear = false;
 			flt_rule_entry.rule.hashable = false;
 #endif
-			memcpy(&flt_rule_entry.rule.attrib, &rx_prop->rx[idx].attrib, sizeof(flt_rule_entry.rule.attrib));
+			if(ipa_if_cate != WLAN_IF){
+				memcpy(&flt_rule_entry.rule.attrib, &rx_prop->rx[idx].attrib, sizeof(flt_rule_entry.rule.attrib));
+			}
+
 			flt_rule_entry.rule.attrib.attrib_mask |= IPA_FLT_FRAGMENT;
 			memcpy(
 				&(m_pFilteringTable->rules[m_ipv6_default_filterting_rules_count[j]]),
@@ -966,9 +991,14 @@ int IPACM_Iface::init_fl_rule(
 				IPACMDBG_H("Installing %s%s rules\n", rule_set, rule_set_ex);
 
 				/* Configuring Multicast Filtering Rule */
-				memcpy(&flt_rule_entry.rule.attrib,
-					   &rx_prop->rx[idx].attrib,
-					   sizeof(flt_rule_entry.rule.attrib));
+				if(ipa_if_cate != WLAN_IF){
+					memcpy(&flt_rule_entry.rule.attrib,
+						&rx_prop->rx[idx].attrib,
+						sizeof(flt_rule_entry.rule.attrib));
+				} else {
+					flt_rule_entry.rule.attrib.attrib_mask &= ~((uint32_t)IPA_FLT_FRAGMENT);
+				}
+
 				flt_rule_entry.rule.attrib.attrib_mask |= IPA_FLT_DST_ADDR;
 				flt_rule_entry.rule.attrib.u.v6.dst_addr_mask[0] = 0xFF000000;
 				flt_rule_entry.rule.attrib.u.v6.dst_addr_mask[1] = 0x00000000;
@@ -1105,10 +1135,16 @@ int IPACM_Iface::init_fl_rule(
 				} else {
 					IPACM_Iface::ipacmcfg->increaseFltRuleCount(
 						rx_prop->rx[idx].src_pipe, IPA_IP_v6, m_ipv6_default_filterting_rules_count[j]);
+					if(ipa_if_cate == WLAN_IF && wlan_pipe_index<MAX_SUPPORTED_WLAN_PIPES ){
+						IPACM_Wlan::wlan_ap_dflt_rules[wlan_pipe_index].m_ipv6_default_filterting_rules_count[j] = m_ipv6_default_filterting_rules_count[j];
+					}
 
 					/* copy filter hdls */
 					for (int i = 0; i < m_ipv6_default_filterting_rules_count[j]; ++i) {
 						if (m_pFilteringTable->rules[i].status == 0) {
+							if(ipa_if_cate == WLAN_IF && wlan_pipe_index<MAX_SUPPORTED_WLAN_PIPES){
+								IPACM_Wlan::wlan_ap_dflt_rules[wlan_pipe_index].dft_v6fl_rule_hdl[j][i] = m_pFilteringTable->rules[i].flt_rule_hdl;
+							}
 							dft_v6fl_rule_hdl[j][i] =
 								m_pFilteringTable->rules[i].flt_rule_hdl;
 							IPACMDBG_H(
@@ -1227,7 +1263,9 @@ int IPACM_Iface::delete_dflt_filter_rules(
 	ipa_ip_type iptype )
 {
 	int idx = 0;
-	int j = 0;
+	int j = 0,wlan_pipe_index;
+	uint32_t *dft_filter_rule_hdl;
+	int rules_count = 0;
 
 	if ( ! VALID_IPA_IP_TYPE(iptype) )
 	{
@@ -1257,59 +1295,88 @@ int IPACM_Iface::delete_dflt_filter_rules(
 			IPACMDBG_H("Install rules at idx %d\n", idx);
 		}
 
+			if (ipa_if_cate == WLAN_IF) {
+				for(wlan_pipe_index=0;wlan_pipe_index<MAX_SUPPORTED_WLAN_PIPES;wlan_pipe_index++){
+					if(IPACM_Wlan::wlan_ap_dflt_rules[wlan_pipe_index].src_pipe == rx_prop->rx[idx].src_pipe){
+						break;
+					}
+				}
+			}
+
 		if (iptype == IPA_IP_v4) {
-			if (dft_v4fl_rule_hdl[j][0] && m_ipv4_default_filterting_rules_count[j]) {
-				IPACMDBG_H(
-					"Attempting to delete %u default v4 filter rules.\n",
-					m_ipv4_default_filterting_rules_count[j]);
+			if (ipa_if_cate == WLAN_IF && wlan_pipe_index<MAX_SUPPORTED_WLAN_PIPES && IPACM_Wlan::wlan_ap_dflt_rules[wlan_pipe_index].dft_v4fl_rule_hdl[j] != NULL) {
+				dft_filter_rule_hdl = IPACM_Wlan::wlan_ap_dflt_rules[wlan_pipe_index].dft_v4fl_rule_hdl[j];
+				rules_count = IPACM_Wlan::wlan_ap_dflt_rules[wlan_pipe_index].m_ipv4_default_filterting_rules_count[j];
+			}
+			else {
+				if (dft_v4fl_rule_hdl[j][0] && m_ipv4_default_filterting_rules_count[j]) {
+					dft_filter_rule_hdl = dft_v4fl_rule_hdl[j];
+					rules_count = m_ipv4_default_filterting_rules_count[j];
+				}
+			}
+
+
 
 				if (m_filtering.DeleteFilteringHdls(
-						dft_v4fl_rule_hdl[j],
+						dft_filter_rule_hdl,
 						IPA_IP_v4,
-						m_ipv4_default_filterting_rules_count[j]) == true) {
+						rules_count) == true) {
 					IPACMDBG_H("Deleted default v4 filter rules successfully.\n");
 					IPACM_Iface::ipacmcfg->decreaseFltRuleCount(
 						rx_prop->rx[idx].src_pipe,
 						IPA_IP_v4,
-						m_ipv4_default_filterting_rules_count[j]);
-					if (m_ipv4_default_filterting_rules_count[j] < IPV4_DEFAULT_FILTERTING_RULES) {
+						rules_count);
+					if (rules_count < IPV4_DEFAULT_FILTERTING_RULES) {
 						memset(
-							dft_v4fl_rule_hdl[j],
+							dft_filter_rule_hdl,
 							0,
-							m_ipv4_default_filterting_rules_count[j] * sizeof(uint32_t));
+							rules_count * sizeof(uint32_t));
+					}
+					if (ipa_if_cate == WLAN_IF && wlan_pipe_index < MAX_SUPPORTED_WLAN_PIPES){
+						IPACM_Wlan::wlan_ap_dflt_rules[wlan_pipe_index].m_ipv4_default_filterting_rules_count[j] = 0;
 					}
 					m_ipv4_default_filterting_rules_count[j] = 0;
 				} else {
 					IPACMERR("Error Deleting Filtering Rules...\n");
 					return IPACM_FAILURE;
 				}
-			}
 		} else { /* iptype == IPA_IP_v6 */
-			if (dft_v6fl_rule_hdl[j][0] && m_ipv6_default_filterting_rules_count[j]) {
+			if (ipa_if_cate == WLAN_IF && wlan_pipe_index<MAX_SUPPORTED_WLAN_PIPES  && IPACM_Wlan::wlan_ap_dflt_rules[wlan_pipe_index].dft_v6fl_rule_hdl[j] != NULL) {
+				dft_filter_rule_hdl = IPACM_Wlan::wlan_ap_dflt_rules[wlan_pipe_index].dft_v6fl_rule_hdl[j];
+				rules_count = IPACM_Wlan::wlan_ap_dflt_rules[wlan_pipe_index].m_ipv6_default_filterting_rules_count[j];
+			} else{
+				if (dft_v6fl_rule_hdl[j][0] && m_ipv6_default_filterting_rules_count[j]) {
+					dft_filter_rule_hdl = dft_v6fl_rule_hdl[j];
+					rules_count = m_ipv6_default_filterting_rules_count[j];
+				}
+			}
 				IPACMDBG_H(
 					"Attempting to delete %u default v6 filter rules.\n",
-					m_ipv6_default_filterting_rules_count[j]);
+					rules_count);
 
 				if (m_filtering.DeleteFilteringHdls(
-						dft_v6fl_rule_hdl[j],
+						dft_filter_rule_hdl,
 						IPA_IP_v6,
-						m_ipv6_default_filterting_rules_count[j]) == true) {
+						rules_count) == true) {
 					IPACMDBG_H("Deleted default v6 filter rules successfully.\n");
 					IPACM_Iface::ipacmcfg->decreaseFltRuleCount(
 						rx_prop->rx[idx].src_pipe,
 						IPA_IP_v6,
-						m_ipv6_default_filterting_rules_count[j]);
+						rules_count);
 					memset(
-						dft_v6fl_rule_hdl[j],
+						dft_filter_rule_hdl,
 						0,
-						m_ipv6_default_filterting_rules_count[j] * sizeof(uint32_t));
-					m_ipv6_default_filterting_rules_count[j] = 0;
+						rules_count * sizeof(uint32_t));
+					if (ipa_if_cate == WLAN_IF && wlan_pipe_index < MAX_SUPPORTED_WLAN_PIPES){
+						IPACM_Wlan::wlan_ap_dflt_rules[wlan_pipe_index].m_ipv6_default_filterting_rules_count[j] = 0;
+					}
+					else
+						m_ipv6_default_filterting_rules_count[j] = 0;
 				} else {
 					IPACMERR("Error Deleting Filtering Rules...\n");
 					return IPACM_FAILURE;
 				}
 			}
-		}
 	}
 
 	return IPACM_SUCCESS;

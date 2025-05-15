@@ -104,6 +104,8 @@ ipa_lan_client_idx IPACM_Wlan::inactive_lan_client_index[IPA_MAX_NUM_HW_PATH_CLI
 #endif
 
 extern char *ipa_l2_hdr_type[];
+ap_dflt_rules IPACM_Wlan::wlan_ap_dflt_rules[MAX_SUPPORTED_WLAN_PIPES];
+
 
 IPACM_Wlan::IPACM_Wlan(char *iface_name, int iface_index, bool ast_update_needed) :
 		IPACM_Lan(iface_name, iface_index), ipv6ct_inst(Ipv6ct::GetInstance())
@@ -6892,6 +6894,10 @@ int IPACM_Wlan::handle_wlan_primary_client_down_evt(uint8_t *mac_addr)
 int IPACM_Wlan::handle_down_evt()
 {
 	int res = IPACM_SUCCESS, i, num_private_subnet_fl_rule, idx = 0;
+	int wlan_pipe_index;
+	uint32_t tcp_syn_filter_rule_hdl;
+	uint32_t *private_flt_rule_hdl;
+	bool skip_flt_rule_del= false;
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
 	struct wan_ioctl_lan_client_info *client_info;
 #endif
@@ -6920,6 +6926,35 @@ int IPACM_Wlan::handle_down_evt()
 		idx = 2;
 		IPACMDBG_H("Interface is WLAN Svap or vlan, install rules on Rx pipe at idx %d \n", idx);
 	}
+
+	for(wlan_pipe_index=0;wlan_pipe_index<MAX_SUPPORTED_WLAN_PIPES;wlan_pipe_index++){
+		if(wlan_ap_dflt_rules[wlan_pipe_index].src_pipe == rx_prop->rx[idx].src_pipe ){
+			if (wlan_ap_dflt_rules[wlan_pipe_index].iface_cnt[ip_type] == 0 ) {
+					IPACMDBG_H(" rules already deleted \n");
+					return IPACM_SUCCESS;
+				}
+			if (ip_type == IPA_IP_MAX) {
+				if (wlan_ap_dflt_rules[wlan_pipe_index].iface_cnt[IPA_IP_v4] == 0 &&
+					wlan_ap_dflt_rules[wlan_pipe_index].iface_cnt[IPA_IP_v6] == 0) {
+					IPACMDBG_H(" rules already deleted \n");
+					return IPACM_SUCCESS;
+				}
+				wlan_ap_dflt_rules[wlan_pipe_index].iface_cnt[IPA_IP_v4]--;
+				wlan_ap_dflt_rules[wlan_pipe_index].iface_cnt[IPA_IP_v6]--;
+			}
+			else{
+				wlan_ap_dflt_rules[wlan_pipe_index].iface_cnt[ip_type]--;
+			}
+
+			if(wlan_ap_dflt_rules[wlan_pipe_index].iface_cnt[IPA_IP_v4] > 0 &&
+				wlan_ap_dflt_rules[wlan_pipe_index].iface_cnt[IPA_IP_v6] > 0 ) {
+				IPACMDBG_H(" Iface is disconnected \n");
+				skip_flt_rule_del = true;
+			}
+			break;
+		}
+	}
+
 #ifdef FEATURE_VLAN_MPDN
 	if(IPACM_Iface::ipacmcfg->ipacm_static_policy_enable)
 	{
@@ -6951,7 +6986,7 @@ int IPACM_Wlan::handle_down_evt()
 	IPACMDBG_H("finished deleting wan filtering rules\n ");
 
 	/* Delete v4 filtering rules */
-	if (ip_type != IPA_IP_v6 && rx_prop != NULL)
+	if (ip_type != IPA_IP_v6 && rx_prop != NULL && !skip_flt_rule_del)
 	{
 		/* delete IPv4 icmp filter rules */
 		res = delete_icmp_filter_rule(IPA_IP_v4);
@@ -6967,10 +7002,16 @@ int IPACM_Wlan::handle_down_evt()
 			IPACMERR("delete_dflt_filter_rules failed\n");
 			goto fail;
 		}
+		if (ipa_if_cate == WLAN_IF && wlan_pipe_index<MAX_SUPPORTED_WLAN_PIPES ) {
+			private_flt_rule_hdl = wlan_ap_dflt_rules[wlan_pipe_index].private_flt_rule_hdl[idx/2];
+		}
+		else {
+			private_flt_rule_hdl = private_fl_rule_hdl[idx/2];
+		}
 
 		/* delete private-ipv4 filter rules */
 #if defined(FEATURE_IPA_ANDROID) || defined(FEATURE_VLAN_MPDN)
-		if(m_filtering.DeleteFilteringHdls(private_fl_rule_hdl[idx/2], IPA_IP_v4, IPA_MAX_PRIVATE_SUBNET_ENTRIES + IPA_MAX_MTU_ENTRIES) == false)
+		if(m_filtering.DeleteFilteringHdls(private_flt_rule_hdl, IPA_IP_v4, IPA_MAX_PRIVATE_SUBNET_ENTRIES + IPA_MAX_MTU_ENTRIES) == false)
 		{
 			IPACMERR("Error deleting private subnet IPv4 flt rules.\n");
 			res = IPACM_FAILURE;
@@ -6980,7 +7021,7 @@ int IPACM_Wlan::handle_down_evt()
 #else
 		num_private_subnet_fl_rule = IPACM_Iface::ipacmcfg->ipa_num_private_subnet > (IPA_MAX_PRIVATE_SUBNET_ENTRIES + IPA_MAX_MTU_ENTRIES)?
 			(IPA_MAX_PRIVATE_SUBNET_ENTRIES + IPA_MAX_MTU_ENTRIES): IPACM_Iface::ipacmcfg->ipa_num_private_subnet;
-		if(m_filtering.DeleteFilteringHdls(private_fl_rule_hdl[idx/2], IPA_IP_v4, num_private_subnet_fl_rule) == false)
+		if(m_filtering.DeleteFilteringHdls(private_flt_rule_hdl, IPA_IP_v4, num_private_subnet_fl_rule) == false)
 		{
 			IPACMERR("Error deleting private subnet flt rules, aborting...\n");
 			res = IPACM_FAILURE;
@@ -6989,8 +7030,13 @@ int IPACM_Wlan::handle_down_evt()
 		IPACM_Iface::ipacmcfg->decreaseFltRuleCount(rx_prop->rx[idx].src_pipe, IPA_IP_v4, num_private_subnet_fl_rule);
 #endif
 		IPACMDBG_H("Deleted private subnet v4 filter rules successfully.\n");
+		if (ipa_if_cate == WLAN_IF && wlan_pipe_index<MAX_SUPPORTED_WLAN_PIPES ) {
+			tcp_syn_filter_rule_hdl = wlan_ap_dflt_rules[wlan_pipe_index].tcp_syn_flt_rule_hdl[idx/2][IPA_IP_v4];
+		}else {
+			tcp_syn_filter_rule_hdl = tcp_syn_flt_rule_hdl[idx/2][IPA_IP_v4];
+		}
 
-		if(m_filtering.DeleteFilteringHdls(&tcp_syn_flt_rule_hdl[idx/2][IPA_IP_v4], IPA_IP_v4, 1) == false)
+		if(m_filtering.DeleteFilteringHdls(&tcp_syn_filter_rule_hdl, IPA_IP_v4, 1) == false)
 		{
 			IPACMERR("Error deleting tcp syn flt rule, aborting...\n");
 			res = IPACM_FAILURE;
@@ -7001,7 +7047,7 @@ int IPACM_Wlan::handle_down_evt()
 	}
 
 	/* Delete v6 filtering rules */
-	if (ip_type != IPA_IP_v4 && rx_prop != NULL)
+	if (ip_type != IPA_IP_v4 && rx_prop != NULL && !skip_flt_rule_del)
 	{
 		/* delete icmp filter rules */
 		res = delete_icmp_filter_rule(IPA_IP_v6);
@@ -7018,7 +7064,13 @@ int IPACM_Wlan::handle_down_evt()
 			goto fail;
 		}
 
-		if(m_filtering.DeleteFilteringHdls(&tcp_syn_flt_rule_hdl[idx/2][IPA_IP_v6], IPA_IP_v6, 1) == false)
+		if (ipa_if_cate == WLAN_IF && wlan_pipe_index<MAX_SUPPORTED_WLAN_PIPES ) {
+			tcp_syn_filter_rule_hdl = wlan_ap_dflt_rules[wlan_pipe_index].tcp_syn_flt_rule_hdl[idx/2][IPA_IP_v6];
+		} else {
+			tcp_syn_filter_rule_hdl = tcp_syn_flt_rule_hdl[idx/2][IPA_IP_v6];
+		}
+
+		if(m_filtering.DeleteFilteringHdls(&tcp_syn_filter_rule_hdl, IPA_IP_v6, 1) == false)
 		{
 			IPACMERR("Error deleting tcp syn flt rule, aborting...\n");
 			res = IPACM_FAILURE;
@@ -10705,6 +10757,16 @@ int IPACM_Wlan::handle_wlan_qos_route_rule(uint8_t *client_mac,
 
 		for (tx_index = 0; tx_index < iface_query->num_tx_props; tx_index++)
 		{
+#ifdef IPA_HDR_L2_802_1Q_AST
+			/* skip to the next tx index if the client type and hdr_l2_type are not matching */
+			if ((get_client_memptr(wlan_client, wlan_index)->is_vlan &&
+					(tx_prop->tx[tx_index].hdr_l2_type != IPA_HDR_L2_802_1Q_AST && tx_prop->tx[tx_index].hdr_l2_type != IPA_HDR_L2_802_1Q)) ||
+					(!get_client_memptr(wlan_client, wlan_index)->is_vlan &&
+					(tx_prop->tx[tx_index].hdr_l2_type == IPA_HDR_L2_802_1Q_AST || tx_prop->tx[tx_index].hdr_l2_type == IPA_HDR_L2_802_1Q)))
+			{
+				continue;
+			}
+#endif
 			if (iptype != tx_prop->tx[tx_index].ip)
 			{
 				IPACMDBG_H("Tx:%d, ip-type: %d conflict ip-type: %d no RT-rule"
@@ -10727,9 +10789,9 @@ int IPACM_Wlan::handle_wlan_qos_route_rule(uint8_t *client_mac,
 					tx_prop->tx[tx_index].tc_bmap);
 
 			IPACMDBG_H("Qos params, sport_start %d sport_end %d dport_start %d"
-				", dport_end %d, \n", qos_param->ip_tup.sport_start,
+				", dport_end %d, dscp_mark %d\n", qos_param->ip_tup.sport_start,
 				qos_param->ip_tup.sport_end, qos_param->ip_tup.dport_start,
-				qos_param->ip_tup.dport_end);
+				qos_param->ip_tup.dport_end, qos_param->dscp_mark_val);
 
 			IPACMDBG_H("Qos params, protocol %d, src_ip_addr 0x%x, dst_ip_addr"
 				" 0x%x, dscp %d\n", qos_param->ip_tup.protocol,
@@ -10909,15 +10971,16 @@ int IPACM_Wlan::handle_wlan_qos_route_rule(uint8_t *client_mac,
 				new_client_info.route_rule_set_v4 = true;
 				new_client_info.v4_ip_addr = rt_rule_entry->rule.attrib.u.v4.dst_addr;
 				new_client_info.dscp_hpc_hdl_v4 = rt_rule_entry->rule.hdr_proc_ctx_hdl;
+				new_client_info.client_iface = ipa_if_num;
 
 				memcpy(new_client_info.mac,
 					get_client_memptr(wlan_client, wlan_index)->mac, IPA_MAC_ADDR_SIZE);
 
 				qos_param->qos_client_list.push_front(new_client_info);
 				qos_param->client_cnt++;
-				IPACMDBG_H("tx:%d, rt rule hdl=%x ip-type: %d client cnt %d\n",
+				IPACMDBG_H("tx:%d, rt rule hdl=%x ip-type: %d client cnt %d, iface %d\n",
 					tx_index, new_client_info.qos_rt_rule_hdl_v4, iptype,
-					qos_param->client_cnt);
+					qos_param->client_cnt, new_client_info.client_iface);
 			}
 			else
 			{
@@ -11099,6 +11162,7 @@ int IPACM_Wlan::handle_wlan_qos_route_rule(uint8_t *client_mac,
 					new_client_info.qos_rt_rule_hdl_v6 = rt_rule->rules[0].rt_rule_hdl;
 					new_client_info.route_rule_set_v6 = true;
 					new_client_info.dscp_hpc_hdl_v6 = rt_rule_entry->rule.hdr_proc_ctx_hdl;
+					new_client_info.client_iface = ipa_if_num;
 
 					new_client_info.v6_ip_addr[0] =
 						rt_rule_entry->rule.attrib.u.v6.dst_addr[0];
@@ -11113,8 +11177,9 @@ int IPACM_Wlan::handle_wlan_qos_route_rule(uint8_t *client_mac,
 						get_client_memptr(wlan_client, wlan_index)->mac,
 						IPA_MAC_ADDR_SIZE);
 
-					IPACMDBG_H("tx:%d, rt rule hdl=%x ip-type: %d\n", tx_index,
-							   new_client_info.qos_rt_rule_hdl_v6, iptype);
+					IPACMDBG_H("tx:%d, rt rule hdl=%x ip-type: %d iface %d\n", tx_index,
+							   new_client_info.qos_rt_rule_hdl_v6, iptype,
+							   new_client_info.client_iface);
 					qos_param->qos_client_list.push_front(new_client_info);
 					qos_param->client_cnt++;
 				}
@@ -11431,15 +11496,16 @@ int IPACM_Wlan::handle_wlan_qos_route_rule_ext_v2(uint8_t *client_mac,
 				new_client_info.route_rule_set_v4 = true;
 				new_client_info.v4_ip_addr = rt_rule_entry->rule.attrib.u.v4.dst_addr;
 				new_client_info.dscp_hpc_hdl_v4 = rt_rule_entry->rule.hdr_proc_ctx_hdl;
+				new_client_info.client_iface = ipa_if_num;
 
 				memcpy(new_client_info.mac,
 					get_client_memptr(wlan_client, wlan_index)->mac, IPA_MAC_ADDR_SIZE);
 
 				qos_param->qos_client_list.push_front(new_client_info);
 				qos_param->client_cnt++;
-				IPACMDBG_H("tx:%d, rt rule hdl=%x ip-type: %d client cnt %d\n",
+				IPACMDBG_H("tx:%d, rt rule hdl=%x ip-type: %d client cnt %d iface %d\n",
 					tx_index, new_client_info.qos_rt_rule_hdl_v4, iptype,
-					qos_param->client_cnt);
+					qos_param->client_cnt, new_client_info.client_iface);
 			}
 			else
 			{
@@ -11626,6 +11692,7 @@ int IPACM_Wlan::handle_wlan_qos_route_rule_ext_v2(uint8_t *client_mac,
 					new_client_info.qos_rt_rule_hdl_v6 = ((struct ipa_rt_rule_add_ext_v2 *)rt_rule->rules)[0].rt_rule_hdl;
 					new_client_info.route_rule_set_v6 = true;
 					new_client_info.dscp_hpc_hdl_v6 = rt_rule_entry->rule.hdr_proc_ctx_hdl;
+					new_client_info.client_iface = ipa_if_num;
 
 					new_client_info.v6_ip_addr[0] =
 						rt_rule_entry->rule.attrib.u.v6.dst_addr[0];
@@ -11640,8 +11707,8 @@ int IPACM_Wlan::handle_wlan_qos_route_rule_ext_v2(uint8_t *client_mac,
 						get_client_memptr(wlan_client, wlan_index)->mac,
 						IPA_MAC_ADDR_SIZE);
 
-					IPACMDBG_H("tx:%d, rt rule hdl=%x ip-type: %d\n", tx_index,
-							   new_client_info.qos_rt_rule_hdl_v6, iptype);
+					IPACMDBG_H("tx:%d, rt rule hdl=%x ip-type: %d iface %d\n", tx_index,
+							   new_client_info.qos_rt_rule_hdl_v6, iptype, new_client_info.client_iface);
 					qos_param->qos_client_list.push_front(new_client_info);
 					qos_param->client_cnt++;
 				}
@@ -12148,6 +12215,13 @@ int IPACM_Wlan::delete_all_wlan_client_info_from_qos(list<qos_param_info>::itera
 	for (it_qos_client = qos_param->qos_client_list.begin();
 		it_qos_client != qos_param->qos_client_list.end(); )
 	{
+		if (it_qos_client->client_iface != ipa_if_num)
+		{
+			IPACMDBG("client associated to 0x%d current iface %d ..continue ..\n",
+				it_qos_client->client_iface, ipa_if_num);
+			++it_qos_client;
+			continue;
+		}
 		//Delete the respective route handles
 		IPACMDBG_H("Delete client rule from is v4 set %d for hdl %d\n",
 				   it_qos_client->route_rule_set_v4,

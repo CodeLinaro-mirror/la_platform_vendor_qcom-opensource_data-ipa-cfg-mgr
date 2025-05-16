@@ -3799,7 +3799,6 @@ bool IPACM_Config::client_in_stats_cache(uint8_t *mac_addr)
 	if (mac_addrs_stats_cache.count(mac))
 	{
 		is_enable = true;
-		mac_addrs_stats_cache.erase(mac);
 	}
 	else
 	{

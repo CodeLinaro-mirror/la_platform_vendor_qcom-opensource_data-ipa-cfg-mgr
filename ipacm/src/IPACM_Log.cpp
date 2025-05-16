@@ -301,7 +301,7 @@ void ipacm_log_dump(char* ipacm_log_data)
 
 	if(((char*)write_addr+input_len) > (char*)mmap_addr + max_filesize - 1)
 	{
-		write_addr = mmap_addr;
+		write_addr = mmap_addr + (sizeof(ipacm_log_file_metadata_t) + 1);
 	}
 	snprintf((char*)write_addr, input_len, "%s", ipacm_log_data);
 	write_addr = (char*)write_addr + (input_len - 1); //start of line

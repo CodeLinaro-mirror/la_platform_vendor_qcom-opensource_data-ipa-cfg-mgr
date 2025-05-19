@@ -15223,68 +15223,72 @@ int IPACM_Lan::delete_uplink_filter_rule_per_client
 		return IPACM_FAILURE;
 	}
 
-	for (j = 0; j < rx_prop->num_rx_props && j < IPA_MAX_NUM_PROPS * 2; j++)
+	if (((iptype == IPA_IP_v4) && get_client_memptr(eth_client, clnt_indx)->ipv4_ul_rules_set) ||
+		((iptype == IPA_IP_v6) && get_client_memptr(eth_client, clnt_indx)->ipv6_ul_rules_set))
 	{
-		if (iptype != rx_prop->rx[j].ip)
+		for (j = 0; j < rx_prop->num_rx_props && j < IPA_MAX_NUM_PROPS * 2; j++)
 		{
-			IPACMDBG("Not matching ip %d, rx ip type, continue to next rx prop %d\n",
-				iptype, j, rx_prop->rx[j].ip);
-			continue;
-		}
+			if (iptype != rx_prop->rx[j].ip)
+			{
+				IPACMDBG("Not matching ip %d, rx ip type, continue to next rx prop %d\n",
+					iptype, j, rx_prop->rx[j].ip);
+				continue;
+			}
 
-		idx = j;
-		IPACMDBG_H("Delete rules at rx idx %d\n", idx);
+			idx = j;
+			IPACMDBG_H("Delete rules at rx idx %d\n", idx);
 
 
 #ifndef IPA_V6_UL_WL_FIREWALL_HANDLE
-		if (((iptype == IPA_IP_v4) && num_wan_ul_fl_rule_v4[idx/2] > MAX_WAN_UL_FILTER_RULES) ||
-			((iptype == IPA_IP_v6) && num_wan_ul_fl_rule_v6[idx/2] > MAX_WAN_UL_FILTER_RULES))
+			if (((iptype == IPA_IP_v4) && num_wan_ul_fl_rule_v4[idx/2] > MAX_WAN_UL_FILTER_RULES) ||
+				((iptype == IPA_IP_v6) && num_wan_ul_fl_rule_v6[idx/2] > MAX_WAN_UL_FILTER_RULES))
 #else
-		if (((iptype == IPA_IP_v4) && num_wan_ul_fl_rule_v4[idx/2] > MAX_WAN_UL_FILTER_RULES) ||
-			((iptype == IPA_IP_v6) && num_wan_ul_fl_rule_v6[idx/2] > IPACM_MAX_V6_UL_WL_FIREWALL_ENTRIES))
+			if (((iptype == IPA_IP_v4) && num_wan_ul_fl_rule_v4[idx/2] > MAX_WAN_UL_FILTER_RULES) ||
+				((iptype == IPA_IP_v6) && num_wan_ul_fl_rule_v6[idx/2] > IPACM_MAX_V6_UL_WL_FIREWALL_ENTRIES))
 #endif
-		{
-			IPACMERR("number of wan_ul_fl_rule_v4 (%d)/wan_ul_fl_rule_v6 (%d) > MAX_WAN_UL_FILTER_RULES (%d), aborting...\n",
-				num_wan_ul_fl_rule_v4[idx/2],
-				num_wan_ul_fl_rule_v6[idx/2],
-				MAX_WAN_UL_FILTER_RULES);
+			{
+				IPACMERR("number of wan_ul_fl_rule_v4 (%d)/wan_ul_fl_rule_v6 (%d) > MAX_WAN_UL_FILTER_RULES (%d), aborting...\n",
+					num_wan_ul_fl_rule_v4[idx/2],
+					num_wan_ul_fl_rule_v6[idx/2],
+					MAX_WAN_UL_FILTER_RULES);
 #ifdef IPA_V6_UL_WL_FIREWALL_HANDLE
-			IPACMERR("IPACM_MAX_V6_UL_WL_FIREWALL_ENTRIES %d\n", IPACM_MAX_V6_UL_WL_FIREWALL_ENTRIES);
+				IPACMERR("IPACM_MAX_V6_UL_WL_FIREWALL_ENTRIES %d\n", IPACM_MAX_V6_UL_WL_FIREWALL_ENTRIES);
 #endif
-			close(fd);
-			return IPACM_FAILURE;
-		}
-
-		if ((iptype == IPA_IP_v4) && get_client_memptr(eth_client, clnt_indx)->ipv4_ul_rules_set)
-		{
-			IPACMDBG_H("Del (%d) num of v4 UL rules for cliend idx:%d\n", num_wan_ul_fl_rule_v4[idx/2], clnt_indx);
-			if (m_filtering.DeleteFilteringHdls(get_client_memptr(eth_client, clnt_indx)->wan_ul_fl_rule_hdl_v4[idx/2],
-					iptype, num_wan_ul_fl_rule_v4[idx/2]) == false)
-			{
-				IPACMERR("Error Deleting RuleTable(1) to Filtering, aborting...\n");
 				close(fd);
 				return IPACM_FAILURE;
 			}
-			memset(get_client_memptr(eth_client, clnt_indx)->wan_ul_fl_rule_hdl_v4[idx/2], 0, MAX_WAN_UL_FILTER_RULES * sizeof(uint32_t));
-			get_client_memptr(eth_client, clnt_indx)->ipv4_ul_rules_set = false;
-		}
 
-		if ((iptype == IPA_IP_v6) && get_client_memptr(eth_client, clnt_indx)->ipv6_ul_rules_set)
-		{
-			IPACMDBG_H("Del (%d) num of v6 UL rules for cliend idx:%d\n", num_wan_ul_fl_rule_v6[idx/2], clnt_indx);
-			if (m_filtering.DeleteFilteringHdls(get_client_memptr(eth_client, clnt_indx)->wan_ul_fl_rule_hdl_v6[idx/2],
-					iptype, num_wan_ul_fl_rule_v6[idx/2]) == false)
+			if (iptype == IPA_IP_v4)
 			{
-				IPACMERR("Error Deleting RuleTable(1) to Filtering, aborting...\n");
-				close(fd);
-				return IPACM_FAILURE;
+				IPACMDBG_H("Del (%d) num of v4 UL rules for cliend idx:%d\n", num_wan_ul_fl_rule_v4[idx/2], clnt_indx);
+				if (m_filtering.DeleteFilteringHdls(get_client_memptr(eth_client, clnt_indx)->wan_ul_fl_rule_hdl_v4[idx/2],
+						iptype, num_wan_ul_fl_rule_v4[idx/2]) == false)
+				{
+					IPACMERR("Error Deleting RuleTable(1) to Filtering, aborting...\n");
+					close(fd);
+					return IPACM_FAILURE;
+				}
+				memset(get_client_memptr(eth_client, clnt_indx)->wan_ul_fl_rule_hdl_v4[idx/2], 0, MAX_WAN_UL_FILTER_RULES * sizeof(uint32_t));
+				get_client_memptr(eth_client, clnt_indx)->ipv4_ul_rules_set = false;
 			}
+
+			if (iptype == IPA_IP_v6)
+			{
+				IPACMDBG_H("Del (%d) num of v6 UL rules for cliend idx:%d\n", num_wan_ul_fl_rule_v6[idx/2], clnt_indx);
+				if (m_filtering.DeleteFilteringHdls(get_client_memptr(eth_client, clnt_indx)->wan_ul_fl_rule_hdl_v6[idx/2],
+						iptype, num_wan_ul_fl_rule_v6[idx/2]) == false)
+				{
+					IPACMERR("Error Deleting RuleTable(1) to Filtering, aborting...\n");
+					close(fd);
+					return IPACM_FAILURE;
+				}
 #ifndef IPA_V6_UL_WL_FIREWALL_HANDLE
-			memset(get_client_memptr(eth_client, clnt_indx)->wan_ul_fl_rule_hdl_v6[idx/2], 0, MAX_WAN_UL_FILTER_RULES * sizeof(uint32_t));
+				memset(get_client_memptr(eth_client, clnt_indx)->wan_ul_fl_rule_hdl_v6[idx/2], 0, MAX_WAN_UL_FILTER_RULES * sizeof(uint32_t));
 #else
-			memset(get_client_memptr(eth_client, clnt_indx)->wan_ul_fl_rule_hdl_v6[idx/2], 0, IPACM_MAX_V6_UL_WL_FIREWALL_ENTRIES * sizeof(uint32_t));
+				memset(get_client_memptr(eth_client, clnt_indx)->wan_ul_fl_rule_hdl_v6[idx/2], 0, IPACM_MAX_V6_UL_WL_FIREWALL_ENTRIES * sizeof(uint32_t));
 #endif
-			get_client_memptr(eth_client, clnt_indx)->ipv6_ul_rules_set = false;
+				get_client_memptr(eth_client, clnt_indx)->ipv6_ul_rules_set = false;
+			}
 		}
 	}
 	close(fd);

@@ -15155,7 +15155,7 @@ int IPACM_Lan::handle_wan_down_v6(bool is_sta_mode, bool is_support_mpdn)
 {
 	int idx = 0;
 	int j,wlan_pipe_index;
-	uint32_t *dft_filter_rule_hdl =  NULL;
+	uint32_t *dft_filter_rule_hdl = NULL;
 	if (rx_prop == NULL)
 	{
 		IPACMERR("Rx prop is NULL, return\n");

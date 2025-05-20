@@ -91,11 +91,11 @@ typedef struct _wlan_client_rt_hdl
 }wlan_client_rt_hdl;
 
 struct ap_dflt_rules{
-	int iface_cnt[IPA_IP_MAX];
+	int iface_cnt[IPA_IP_MAX_WLAN];
 	int src_pipe;
-	uint32_t eth_bridge_flt_rule_hdl[IPA_MAX_NUM_PROPS][IPA_IP_MAX];
-	uint32_t mtu_flt_rule_hdl[IPA_MAX_NUM_PROPS][IPA_IP_MAX];
-	uint32_t tcp_syn_flt_rule_hdl[IPA_MAX_NUM_PROPS][IPA_IP_MAX];
+	uint32_t eth_bridge_flt_rule_hdl[IPA_MAX_NUM_PROPS][IPA_IP_MAX_WLAN];
+	uint32_t mtu_flt_rule_hdl[IPA_MAX_NUM_PROPS][IPA_IP_MAX_WLAN];
+	uint32_t tcp_syn_flt_rule_hdl[IPA_MAX_NUM_PROPS][IPA_IP_MAX_WLAN];
 	uint32_t ipv4_icmp_flt_rule_hdl[IPA_MAX_NUM_PROPS][NUM_IPV4_ICMP_FLT_RULE];
 	uint32_t dft_v4fl_rule_hdl[IPA_MAX_NUM_PROPS][IPV4_DEFAULT_FILTERTING_RULES];
 	uint8_t m_ipv4_default_filterting_rules_count[IPA_MAX_NUM_PROPS];

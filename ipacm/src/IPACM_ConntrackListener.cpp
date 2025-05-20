@@ -1762,7 +1762,10 @@ void IPACM_ConntrackListener::HandleInterfaceDownV6_StaticPolicy(void *in_param)
 			{
 				v6_vlan_pdns[i].associated_VIDs[k] = v6_vlan_pdns[i].associated_VIDs[k+1];
 			}
-			v6_vlan_pdns[i].associated_VIDs[k] = 0;
+			if(k < IPA_MAX_NUM_SW_PDNS)
+			{
+				v6_vlan_pdns[i].associated_VIDs[k] = 0;
+			}
 		}
 	}
 }

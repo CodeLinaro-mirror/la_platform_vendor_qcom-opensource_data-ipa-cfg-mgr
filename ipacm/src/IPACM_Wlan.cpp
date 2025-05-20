@@ -6928,7 +6928,7 @@ int IPACM_Wlan::handle_down_evt()
 	}
 
 	for(wlan_pipe_index=0;wlan_pipe_index<MAX_SUPPORTED_WLAN_PIPES;wlan_pipe_index++){
-		if(wlan_ap_dflt_rules[wlan_pipe_index].src_pipe == rx_prop->rx[idx].src_pipe ){
+		if(rx_prop && wlan_ap_dflt_rules[wlan_pipe_index].src_pipe == rx_prop->rx[idx].src_pipe ){
 			if (wlan_ap_dflt_rules[wlan_pipe_index].iface_cnt[ip_type] == 0 ) {
 					IPACMDBG_H(" rules already deleted \n");
 					return IPACM_SUCCESS;

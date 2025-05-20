@@ -79,17 +79,17 @@ IPACM_Iface::IPACM_Iface(char *iface_name, int iface_index)
 
 	if((iface_name != NULL) && (strstr(iface_name, "mld")))
 	{
-		memcpy(dev_name, iface_name, sizeof(iface_name));
+		strlcpy(dev_name, iface_name, IF_NAME_LEN);
 	}
 	else
 	{
-		memcpy(dev_name, IPACM_Iface::ipacmcfg->iface_table[iface_index].iface_name,
-			sizeof(IPACM_Iface::ipacmcfg->iface_table[iface_index].iface_name));
+		strlcpy(dev_name, IPACM_Iface::ipacmcfg->iface_table[iface_index].iface_name,
+			IF_NAME_LEN);
 	}
 	if (virtual_iface = IPACM_Iface::ipacmcfg->iface_table[iface_index].virtual_iface)
 	{
-		memcpy(phy_dev_name, IPACM_Iface::ipacmcfg->iface_table[iface_index].phy_dev_name,
-			sizeof(IPACM_Iface::ipacmcfg->iface_table[iface_index].phy_dev_name));
+		strlcpy(phy_dev_name, IPACM_Iface::ipacmcfg->iface_table[iface_index].phy_dev_name,
+			IF_NAME_LEN);
 	}
 
 	IPACMDBG_H("dev_name: %s virtual_iface: %s phy_dev_name: %s \n",

@@ -3051,7 +3051,7 @@ void IPACM_LanToLan_Iface::del_hdr_proc_ctx_vlan(ipa_hdr_l2_type peer_l2_type, u
 	if(hpc_hdl)
 	{
 		m_p_iface->eth_bridge_del_hdr_proc_ctx(hpc_hdl);
-		IPACMDBG_H("Hdr proc ctx with hdl %d is deleted.\n", hdr_proc_ctx_for_inter_interface[peer_l2_type]);
+		IPACMDBG_H("Hdr proc ctx with hdl %d is deleted.\n", hpc_hdl);
 		del_wlan_svap_hpc_hdl(vlan_id, peer_l2_type, &hpc_hdl);
 	}
 	return;

@@ -7173,6 +7173,28 @@ fail:
 #endif
 		IPACMDBG_H("Delete %d out of %d client header\n", i,  num_wifi_client);
 
+		if (get_client_memptr(wlan_client, i)->ipv4_hpc_set == true)
+		{
+			IPACMDBG_H("Deleting proc_ctx v4 handle %d\n",get_client_memptr(wlan_client, i)->hpc_hdr_hdl_v4);
+			if (m_header.DeleteHeaderProcCtx(get_client_memptr(wlan_client, i)->hpc_hdr_hdl_v4)
+					== false)
+			{
+				return IPACM_FAILURE;
+			}
+			get_client_memptr(wlan_client, i)->ipv4_hpc_set = false;
+		}
+
+		if (get_client_memptr(wlan_client, i)->ipv6_hpc_set == true)
+		{
+			IPACMDBG_H("Deleting proc_ctx v6 handle %d\n",get_client_memptr(wlan_client, i)->hpc_hdr_hdl_v6);
+			if (m_header.DeleteHeaderProcCtx(get_client_memptr(wlan_client, i)->hpc_hdr_hdl_v6)
+					== false)
+			{
+				return IPACM_FAILURE;
+			}
+			get_client_memptr(wlan_client, i)->ipv6_hpc_set = false;
+		}
+
 		if(get_client_memptr(wlan_client, i)->ipv4_header_set == true)
 		{
 			if (m_header.DeleteHeaderHdl(get_client_memptr(wlan_client, i)->hdr_hdl_v4)

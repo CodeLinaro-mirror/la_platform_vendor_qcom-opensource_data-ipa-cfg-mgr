@@ -1133,7 +1133,8 @@ int IPACM_Wan::handle_addr_evt(ipacm_event_data_addr *data)
 			{
 				if(IPACM_Iface::ipacmcfg->get_eth_vlan_wan_up(ipa_if_num) == IPACM_SUCCESS &&
 					IPACM_Iface::ipacmcfg->iface_table[ipa_if_num].if_cat == WAN_IF &&
-					IPACM_Iface::odu_subnet_fl_rule_hdl[IPA_IP_v6])
+					IPACM_Iface::odu_subnet_fl_rule_hdl[IPA_IP_v6] &&
+					(IPACM_Iface::ipacmcfg->eth_vlan_wan_enable == true))
 				{
 					len = sizeof(struct ipa_ioc_add_flt_rule_after) + sizeof(struct ipa_flt_rule_add);
 					flt_rule_after = (struct ipa_ioc_add_flt_rule_after *)calloc(1, len);
@@ -1186,7 +1187,8 @@ int IPACM_Wan::handle_addr_evt(ipacm_event_data_addr *data)
 
 				if(IPACM_Iface::ipacmcfg->get_eth_vlan_wan_up(ipa_if_num) == IPACM_SUCCESS &&
 					IPACM_Iface::ipacmcfg->iface_table[ipa_if_num].if_cat == WAN_IF &&
-					IPACM_Iface::odu_subnet_fl_rule_hdl[IPA_IP_v6])
+					IPACM_Iface::odu_subnet_fl_rule_hdl[IPA_IP_v6] &&
+					(IPACM_Iface::ipacmcfg->eth_vlan_wan_enable == true))
 				{
 					memcpy(&(flt_rule_after->rules[0]), &flt_rule_entry, sizeof(struct ipa_flt_rule_add));
 					if (m_filtering.AddFilteringRuleAfter(flt_rule_after) == false)
@@ -1489,7 +1491,7 @@ int IPACM_Wan::handle_addr_del_evt(ipacm_event_data_addr *data)
 		return IPACM_SUCCESS;
 	}
 
-	if (data->iptype == IPA_IP_v6)
+	if (data->iptype == IPA_IP_v6 && m_is_sta_mode == Q6_WAN)
 	{
 		num_v6_value = num_dft_rt_v6;
 		/* Check the address deleted. */
@@ -1527,9 +1529,58 @@ int IPACM_Wan::handle_addr_del_evt(ipacm_event_data_addr *data)
 			}
 		}
 	}
-	else
+	else if (data->iptype == IPA_IP_v4)
 	{
-		IPACMDBG_H("IPv4 addr del evt is not handled.\n");
+		if (m_is_sta_mode == Q6_WAN)
+		{
+			IPACMDBG_H("IPv4 addr del evt is not handled.\n");
+		}
+		else
+		{
+			if(wan_v4_addr_set)
+			{
+				/* Delete default v4 RT rule */
+				IPACMDBG_H("Delete default v4 routing rules\n");
+				if (m_routing.DeleteRoutingHdl(dft_rt_rule_hdl[0],
+					IPA_IP_v4) == false)
+				{
+					IPACMERR("Routing old RT rule deletion failed!\n");
+					res = IPACM_FAILURE;
+					goto fail;
+				}
+				dft_rt_rule_hdl[0] = 0;
+#ifdef FEATURE_IPA_IPSEC
+				/* Delete default IPsec v4 RT rules */
+				IPACMDBG_H("Delete IPsec default v4 routing rules\n");
+				if (del_ipsec_wan_dl_rt_rules(IPA_IP_v4) == IPACM_FAILURE)
+				{
+					IPACMERR("Routing old IPsec RT rules deletion failed!\n");
+					res = IPACM_FAILURE;
+					goto fail;
+				}
+#endif
+				ipv4_to_iface[sta_ipv4_pdn_index].ipv4_addr = 0;
+				ipv4_to_iface[sta_ipv4_pdn_index].pIface = NULL;
+				ipv4_to_iface[sta_ipv4_pdn_index].wan_up_vlan = false;
+				sta_ipv4_pdn_index = -1;
+				num_ipv4_sta_pdn--;
+				public_wan_v4_addr = 0;
+				public_wan_v4_addr_set = false;
+				wan_v4_addr = 0;
+				wan_v4_addr_set = false;
+
+				if (rx_prop != NULL && num_ipv4_sta_pdn == 0)
+				{
+					res = delete_dflt_filter_rules(IPA_IP_v4);
+					if (res == IPACM_FAILURE)
+					{
+						IPACMERR("delete_dflt_filter_rules failed\n");
+						goto fail;
+					}
+				}
+			}
+			IPACM_Iface::iface_addr_query(data->if_index);
+		}
 	}
 fail:
 	return res;

@@ -94,6 +94,7 @@ const char *IPACM_Config::DEVICE_NAME_ODU = "/dev/odu_ipa_bridge";
 #define IPACM_CONFIG_EXT_FILE "/etc/data/ipa/IPACM_cfg_ext.xml"
 #endif
 #define MAX_RETRIES 15
+#define MAX_LINE_LEN 256
 const char *ipacm_event_name[] = {
 	__stringify(IPA_CFG_CHANGE_EVENT),                     /* NULL */
 	__stringify(IPA_PRIVATE_SUBNET_CHANGE_EVENT),          /* ipacm_event_data_fid */
@@ -794,6 +795,9 @@ skip_fnr_alloc:
 
 	multi_vlan_bridge_config_enable = cfg->multi_vlan_bridge_config_enable;
 	IPACMDBG_H("multi_vlan_bridge_config_enable: %d\n", multi_vlan_bridge_config_enable);
+
+	eth_wan_br_wan_enable = false;
+	IPACMDBG_H("eth_wan_br_wan_enable: %d\n", eth_wan_br_wan_enable);
 
 	if (ipacm_mpdn_enable == TRUE && ipacm_l2tp_enable != IPACM_L2TP_DISABLE)
 	{
@@ -5079,6 +5083,65 @@ int IPACM_Config::get_pppoe_indx(char *pppoe_dev_name)
 
 	return ret;
 }
+
+int IPACM_Config::get_phy_name_from_bridge_iface(const char *p_dev_name, char phy_name[ETH_PHY_IFACE_LEN])
+{
+	FILE* fp;
+	char line[MAX_LINE_LEN];
+	bool found = false;
+	char *last_word = NULL, *word = NULL, *ptr = NULL;
+
+	if(p_dev_name == NULL)
+	{
+		IPACMERR("Null dev_name passed.\n");
+		return IPACM_FAILURE;
+	}
+
+	fp = popen("brctl show", "r");
+	if (fp == NULL)
+	{
+		IPACMERR("Error opening pipe.\n");
+		return IPACM_FAILURE;
+	}
+
+	while (fgets(line, sizeof(line), fp))
+	{
+		if (strstr(line, p_dev_name) != nullptr)
+		{
+			word = strtok_r(line, " \t\n", &ptr);
+			while (word != NULL)
+			{
+				last_word = word;
+				word = strtok_r(NULL, " \t\n", &ptr);
+			}
+			if (last_word)
+			{
+				IPACMDBG_H("Last word: %s\n", last_word);
+				strlcpy(phy_name, last_word, ETH_PHY_IFACE_LEN - 1);
+				IPACMDBG_H("Copy phy_name: %s\n", phy_name);
+				phy_name[ETH_PHY_IFACE_LEN - 1] = '\0';  // Ensure null-termination
+				IPACMDBG_H("phy_name: %s\n", phy_name);
+				found = true;
+				break;
+			}
+			else
+			{
+				IPACMERR("No words found.\n");
+			}
+		}
+	}
+
+	pclose(fp);
+
+	if (!found)
+	{
+		IPACMERR("Interface %s is not associated with any phy_name.\n", p_dev_name);
+		return IPACM_FAILURE;
+	}
+
+	return IPACM_SUCCESS;
+}
+
 #endif
 
 int IPACM_Config::get_eth_vlan_wan_up(int ipa_if_num)

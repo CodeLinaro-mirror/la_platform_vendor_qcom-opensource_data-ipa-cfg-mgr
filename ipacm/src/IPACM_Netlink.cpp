@@ -993,6 +993,7 @@ static int ipa_nl_decode_nlmsg
 	IPACM_Config* config = NULL;
 	int idx = 0;
 	int instance_found = 0;
+	char phy_dev[ETH_PHY_IFACE_LEN] = { 0 };
 
 	memset(nullMac, 0, sizeof(nullMac));
 	memset(&vlan_info, 0, sizeof(vlan_info));
@@ -1583,6 +1584,13 @@ static int ipa_nl_decode_nlmsg
 				 (msg_ptr->nl_route_info.metainfo.rtm_table == RT_TABLE_MAIN)))
 			{
 				IPACMDBG("\n GOT RTM_NEWROUTE event\n");
+				/* br-wan mode Enable*/
+				if(strstr(dev_name, "br-ethwan")||
+					strstr(dev_name, "br-wanpppoe"))
+				{
+					IPACMDBG("GOT RTM_NEWROUTE event, br-wan enabled %d \n", IPACM_Iface::ipacmcfg->eth_wan_br_wan_enable);
+					IPACM_Iface::ipacmcfg->eth_wan_br_wan_enable = true;
+				}
 
 				if(msg_ptr->nl_route_info.attr_info.param_mask & IPA_RTA_PARAM_DST)
 				{
@@ -1634,7 +1642,7 @@ static int ipa_nl_decode_nlmsg
 					{
 						IPACM_NL_REPORT_ADDR( "route add default gw \n", msg_ptr->nl_route_info.attr_info.gateway_addr );
 						IPACMDBG_H("dev %s \n", dev_name);
-						IPACM_NL_REPORT_ADDR( "dstIP:", msg_ptr->nl_route_info.attr_info.dst_addr );
+						IPACM_NL_REPORT_ADDR( "dstIP: \n", msg_ptr->nl_route_info.attr_info.dst_addr );
 
 						/* insert to command queue */
 						data_addr = (ipacm_event_data_addr *)malloc(sizeof(ipacm_event_data_addr));
@@ -1656,7 +1664,8 @@ static int ipa_nl_decode_nlmsg
 
 						if(msg_ptr->nl_route_info.attr_info.param_mask & IPA_RTA_PARAM_GATEWAY &&
 							(IPACM_Iface::ipacmcfg->eth_wan_pppoe_enable ||
-							IPACM_Iface::ipacmcfg->eth_vlan_wan_enable))
+							IPACM_Iface::ipacmcfg->eth_vlan_wan_enable ||
+							IPACM_Iface::ipacmcfg->eth_wan_br_wan_enable))
 						{
 							data_fid = (ipacm_event_data_fid *)malloc(sizeof(ipacm_event_data_fid));
 							if(data_fid == NULL)
@@ -1713,12 +1722,43 @@ process:
 							{
 								data_fid->is_ppp_iface = false;
 							}
-							if(!strstr(dev_name, "pppoe"))
+							if(!strstr(dev_name, "pppoe") && !strstr(dev_name, "br-ethwan"))
 							{
+								IPACMDBG_H("No br-wan mode Enabled, wan dev name %s \n", dev_name);
 								strlcpy(IPACM_Iface::ipacmcfg->iface_table[instance_found].phy_dev_name,
 									dev_name, ETH_PHY_IFACE_LEN);
 							}
+							else
+							{
+								/*
+								 *  get phy interface name from
+								 *  root@OpenWrt:/# brctl show
+								 *  bridge name     bridge id               STP enabled     interfaces
+								 *  br-ethwan101    7fff.00557bb57df7       no              eth1
+								 *  br-lan          7fff.00557bb57df8       no              eth0
+								 */
+								IPACMDBG_H("br-wan_iface %s \n", dev_name);
+								if(strstr(dev_name, "br-ethwan") ||
+									strstr(dev_name, "br-wanpppoe"))
+								{
+									IPACMDBG_H("br-wan mode Enabled, wan dev name %s get phy name !! \n", dev_name);
+									IPACM_Iface::ipacmcfg->get_phy_name_from_bridge_iface(dev_name, phy_dev);
+									if(phy_dev != NULL)
+									{
+										IPACMDBG_H("wan dev name %s associated phy_name %s \n", dev_name, phy_dev);
+										strlcpy(IPACM_Iface::ipacmcfg->iface_table[instance_found].phy_dev_name, phy_dev, ETH_PHY_IFACE_LEN);
+									}
+									else
+									{
+										IPACMERR("Failed to get associated phy_name for wan dev name %s\n", dev_name);
+										free(data_fid);
+										return IPACM_FAILURE;
+									}
+								}
+							}
 
+							IPACMDBG_H("wan dev name %s associated phy_name %s \n", dev_name,
+									IPACM_Iface::ipacmcfg->iface_table[instance_found].phy_dev_name);
 							data_fid->if_index = msg_ptr->nl_route_info.attr_info.oif_index;
 							evt_data.event = IPA_USB_LINK_UP_EVENT;
 							evt_data.evt_data = data_fid;
@@ -1773,6 +1813,13 @@ process:
 				{
 					IPACMERR("Error while getting interface name\n");
 					return IPACM_FAILURE;
+				}
+				/* br-wan mode Enable*/
+				if(strstr(dev_name, "br-ethwan")||
+					strstr(dev_name, "br-wanpppoe"))
+				{
+					IPACMDBG("\n GOT RTM_NEWROUTE event, br-wan enabled %d \n", IPACM_Iface::ipacmcfg->eth_wan_br_wan_enable);
+					IPACM_Iface::ipacmcfg->eth_wan_br_wan_enable = true;
 				}
 
 				if(msg_ptr->nl_route_info.attr_info.param_mask & IPA_RTA_PARAM_DST)
@@ -1864,17 +1911,17 @@ process:
 
 					IPACM_EVENT_COPY_ADDR_v6( data_addr->ipv6_addr, msg_ptr->nl_route_info.attr_info.dst_addr);
 
-                    data_addr->ipv6_addr[0]=ntohl(data_addr->ipv6_addr[0]);
-                    data_addr->ipv6_addr[1]=ntohl(data_addr->ipv6_addr[1]);
-                    data_addr->ipv6_addr[2]=ntohl(data_addr->ipv6_addr[2]);
-                    data_addr->ipv6_addr[3]=ntohl(data_addr->ipv6_addr[3]);
+					data_addr->ipv6_addr[0]=ntohl(data_addr->ipv6_addr[0]);
+					data_addr->ipv6_addr[1]=ntohl(data_addr->ipv6_addr[1]);
+					data_addr->ipv6_addr[2]=ntohl(data_addr->ipv6_addr[2]);
+					data_addr->ipv6_addr[3]=ntohl(data_addr->ipv6_addr[3]);
 
 					IPACM_EVENT_COPY_ADDR_v6( data_addr->ipv6_addr_mask, msg_ptr->nl_route_info.attr_info.dst_addr);
 
 					data_addr->ipv6_addr_mask[0]=ntohl(data_addr->ipv6_addr_mask[0]);
-                    data_addr->ipv6_addr_mask[1]=ntohl(data_addr->ipv6_addr_mask[1]);
-                    data_addr->ipv6_addr_mask[2]=ntohl(data_addr->ipv6_addr_mask[2]);
-                    data_addr->ipv6_addr_mask[3]=ntohl(data_addr->ipv6_addr_mask[3]);
+					data_addr->ipv6_addr_mask[1]=ntohl(data_addr->ipv6_addr_mask[1]);
+					data_addr->ipv6_addr_mask[2]=ntohl(data_addr->ipv6_addr_mask[2]);
+					data_addr->ipv6_addr_mask[3]=ntohl(data_addr->ipv6_addr_mask[3]);
 
 					IPACM_EVENT_COPY_ADDR_v6( data_addr->ipv6_addr_gw, msg_ptr->nl_route_info.attr_info.gateway_addr);
 					data_addr->ipv6_addr_gw[0] = ntohl(data_addr->ipv6_addr_gw[0]);
@@ -1884,7 +1931,8 @@ process:
 					IPACM_NL_REPORT_ADDR( " ", msg_ptr->nl_route_info.attr_info.gateway_addr);
 
 					if(IPACM_Iface::ipacmcfg->eth_wan_pppoe_enable ||
-						IPACM_Iface::ipacmcfg->eth_vlan_wan_enable)
+						IPACM_Iface::ipacmcfg->eth_vlan_wan_enable ||
+						IPACM_Iface::ipacmcfg->eth_wan_br_wan_enable )
 					{
 						data_fid = (ipacm_event_data_fid *)malloc(sizeof(ipacm_event_data_fid));
 						if(data_fid == NULL)
@@ -1927,7 +1975,9 @@ process:
 							free(data_fid);
 							break;
 						}
-
+						strlcpy(IPACM_Iface::ipacmcfg->iface_table[instance_found].iface_name,
+							dev_name, sizeof(IPACM_Iface::ipacmcfg->iface_table[instance_found].iface_name));
+						IPACM_Iface::ipacmcfg->iface_table[instance_found].virtual_iface = true;
 process_v6:
 						if(strstr(dev_name, "pppoe"))
 						{
@@ -1938,16 +1988,43 @@ process_v6:
 							data_fid->is_ppp_iface = false;
 						}
 
-						if(!strstr(dev_name, "pppoe"))
+						if(!strstr(dev_name, "pppoe") && !strstr(dev_name, "br-ethwan"))
 						{
+							IPACMDBG_H("No br-wan mode Enabled, wan dev name %s \n", dev_name);
 							strlcpy(IPACM_Iface::ipacmcfg->iface_table[instance_found].phy_dev_name,
 								dev_name, ETH_PHY_IFACE_LEN);
 						}
+						else
+						{
+							/*
+							 *  get phy interface name from
+							 *  root@OpenWrt:/# brctl show
+							 *  bridge name     bridge id               STP enabled     interfaces
+							 *  br-ethwan101    7fff.00557bb57df7       no              eth1
+							 *  br-lan          7fff.00557bb57df8       no              eth0
+							 */
+							IPACMDBG_H("br-wan_iface %s \n", dev_name);
+							if(strstr(dev_name, "br-ethwan") ||
+								strstr(dev_name, "br-wanpppoe"))
+							{
+								IPACMDBG_H("br-wan mode Enabled, wan dev name %s get phy name !! \n", dev_name);
+								IPACM_Iface::ipacmcfg->get_phy_name_from_bridge_iface(dev_name, phy_dev);
+								if(phy_dev != NULL)
+								{
+									IPACMDBG_H("wan dev name %s associated phy_name %s \n", dev_name, phy_dev);
+									strlcpy(IPACM_Iface::ipacmcfg->iface_table[instance_found].phy_dev_name, phy_dev, ETH_PHY_IFACE_LEN);
+								}
+								else
+								{
+									IPACMERR("Failed to get associated phy_name for wan dev name %s\n", dev_name);
+									free(data_fid);
+									return IPACM_FAILURE;
+								}
+							}
+						}
 
-						strlcpy(IPACM_Iface::ipacmcfg->iface_table[instance_found].iface_name,
-							dev_name, sizeof(IPACM_Iface::ipacmcfg->iface_table[instance_found].iface_name));
-						IPACM_Iface::ipacmcfg->iface_table[instance_found].virtual_iface = true;
-
+						IPACMDBG_H("wan dev name %s associated phy_name %s \n", dev_name,
+							IPACM_Iface::ipacmcfg->iface_table[instance_found].phy_dev_name);
 						data_fid->if_index = msg_ptr->nl_route_info.attr_info.oif_index;
 						evt_data.event = IPA_USB_LINK_UP_EVENT;
 						evt_data.evt_data = data_fid;

@@ -67,6 +67,7 @@ IPACM_LanToLan_Iface::IPACM_LanToLan_Iface(IPACM_Lan *p_iface)
 	memset(m_is_ip_addr_assigned, 0, sizeof(m_is_ip_addr_assigned));
 	m_support_inter_iface_offload = true;
 	m_support_intra_iface_offload = false;
+	m_intra_interface_info.peer = NULL;
 	m_intra_interface_info.is_vlan_peer = false;
 	if(IPACM_Iface::ipacmcfg->multi_vlan_bridge_config_enable == 1)
 	{
@@ -2040,7 +2041,9 @@ void IPACM_LanToLan_Iface::del_client_rt_rule(peer_iface_info *peer, client_info
 	std::map<std::array<uint8_t, 6>, int >::iterator it;
 #endif
 
-	if(peer == NULL)
+	if(peer == NULL || peer->peer == NULL ||
+		peer->peer->get_iface_pointer() == NULL ||
+		peer->peer->get_iface_pointer()->tx_prop == NULL)
 	{
 		IPACMERR("Failure null peer passed\n");
 		return;
@@ -2279,9 +2282,9 @@ void IPACM_LanToLan_Iface::handle_down_event()
 						for(it = it_other_iface_peer_info->mac_rt_rule_ref.begin();
 							it != it_other_iface_peer_info->mac_rt_rule_ref.end(); it++)
 						{
-							IPACMDBG_H("Found  mac 0x[%X][%X][%X][%X][%X][%X] with hdr ref cnt is %d\n",
+							IPACMDBG_H("Found  mac 0x[%X][%X][%X][%X][%X][%X] with mac ref cnt is %d\n",
 								it->first[0],it->first[1],it->first[2],it->first[3],it->first[4],it->first[5],
-							ref_cnt_peer_l2_hdr_type[it_other_iface_peer_info->peer->get_iface_pointer()->tx_prop->tx[0].hdr_l2_type]);
+								it->second);
 							std::copy(std::begin(it->first), std::end(it->first), std::begin(mac));
 							mac_addr[0]= mac[0];
 							mac_addr[1]= mac[1];
@@ -2322,10 +2325,9 @@ void IPACM_LanToLan_Iface::handle_down_event()
 									continue;
 								}
 
-								if(it_other_mac_iface->peer != this &&
-									it_other_mac_iface->mac_rt_rule_ref.empty() && flag)
+								if(it_other_mac_iface->peer != this && flag)
 								{
-									IPACMDBG_H("mac list is empty copying the mac for iface name %s\n",
+									IPACMDBG_H("copying the mac ref for iface name %s\n",
 										it_other_mac_iface->peer->get_iface_pointer()->dev_name);
 									it_other_mac_iface->mac_rt_rule_ref.insert(std::make_pair(mac, (it->second)));
 									break;
@@ -2537,7 +2539,17 @@ void IPACM_LanToLan_Iface::clear_all_rt_rule_for_one_peer_iface(peer_iface_info 
 	ipa_hdr_l2_type peer_l2_type = IPA_HDR_L2_NONE;
 
 	IPACMDBG_H("peer->is_vlan_peer :%d\n", peer->is_vlan_peer);
-	if (peer->is_vlan_peer)
+
+	if(peer == NULL || peer->peer == NULL ||
+		peer->peer->get_iface_pointer() == NULL ||
+		peer->peer->get_iface_pointer()->tx_prop == NULL)
+	{
+		IPACMERR("Invalid peer pointer!");
+		return;
+	}
+
+	if (peer->is_vlan_peer &&
+		peer->peer->get_iface_pointer()->tx_prop->num_tx_props > 2)
 		peer_l2_type = peer->peer->get_iface_pointer()
 				       ->tx_prop->tx[2]
 				       .hdr_l2_type;
@@ -3039,7 +3051,7 @@ void IPACM_LanToLan_Iface::del_hdr_proc_ctx_vlan(ipa_hdr_l2_type peer_l2_type, u
 	if(hpc_hdl)
 	{
 		m_p_iface->eth_bridge_del_hdr_proc_ctx(hpc_hdl);
-		IPACMDBG_H("Hdr proc ctx with hdl %d is deleted.\n", hdr_proc_ctx_for_inter_interface[peer_l2_type]);
+		IPACMDBG_H("Hdr proc ctx with hdl %d is deleted.\n", hpc_hdl);
 		del_wlan_svap_hpc_hdl(vlan_id, peer_l2_type, &hpc_hdl);
 	}
 	return;
@@ -3219,10 +3231,22 @@ void IPACM_LanToLan_Iface::print_peer_info(peer_iface_info *peer_info , bool int
 	list<rt_rule_info>::iterator it_rt;
 	list<uint32_t>::iterator it_flt_hdl;
 
-	if(peer_info == NULL) {
+	if(peer_info == NULL)
+	{
 		IPACMERR("Peer info with NULL pointer\n");
 		return;
 	}
+	if(peer_info->peer == NULL)
+	{
+		IPACMERR("Peer info peer with NULL pointer\n");
+		return;
+	}
+	if(peer_info->peer->m_p_iface == NULL)
+	{
+		IPACMERR("Peer info m_p_iface with NULL pointer\n");
+		return;
+	}
+
 	IPACMDBG_H("Printing peer info for iface %s:\n", peer_info->peer->m_p_iface->dev_name);
 
 	IPACMDBG_H("There are %zu flt info in total.\n", peer_info->flt_rule.size());
@@ -3465,12 +3489,12 @@ void IPACM_LanToLan_Iface::handle_l2tp_disable()
 }
 #endif
 
-uint32_t IPACM_LanToLan_Iface::add_wlan_svap_hpc_hdl(uint16_t vlan_id, ipa_hdr_l2_type peer_l2_type, uint32_t* hpc_hdl)
+int IPACM_LanToLan_Iface::add_wlan_svap_hpc_hdl(uint16_t vlan_id, ipa_hdr_l2_type peer_l2_type, uint32_t* hpc_hdl)
 {
-	uint32_t ret_hdl = 0;
 
 	if (num_of_wlan_svap_hpc_hdls >= MAX_SVAP_VLAN) {
 		IPACMDBG_H("Max number of entries %d, cannot add more \n", num_of_wlan_svap_hpc_hdls);
+		return IPACM_FAILURE;
 	}
 
 	for (int i = 0; i < num_of_wlan_svap_hpc_hdls; i++) {
@@ -3479,7 +3503,7 @@ uint32_t IPACM_LanToLan_Iface::add_wlan_svap_hpc_hdl(uint16_t vlan_id, ipa_hdr_l
 		{
 			IPACMDBG_H("Entry with vlan_id %d and peer %d, already exists\n", vlan_id, peer_l2_type);
 			wlan_svap_hpc_hdls[i].hpc_hdr_hdl = hpc_hdl[0];
-			break;
+			return IPACM_SUCCESS;
 		}
 	}
 
@@ -3491,15 +3515,15 @@ uint32_t IPACM_LanToLan_Iface::add_wlan_svap_hpc_hdl(uint16_t vlan_id, ipa_hdr_l
 
 	num_of_wlan_svap_hpc_hdls++;
 
-	return ret_hdl;
+	return IPACM_SUCCESS;
 }
 
-uint32_t IPACM_LanToLan_Iface::del_wlan_svap_hpc_hdl(uint16_t vlan_id, ipa_hdr_l2_type peer_l2_type, uint32_t* hpc_hdl)
+int IPACM_LanToLan_Iface::del_wlan_svap_hpc_hdl(uint16_t vlan_id, ipa_hdr_l2_type peer_l2_type, uint32_t* hpc_hdl)
 {
-	uint32_t ret_hdl = 0;
 
 	if (num_of_wlan_svap_hpc_hdls <= 0) {
 		IPACMDBG_H("No entries present, %d entries to delete \n", num_of_wlan_svap_hpc_hdls);
+		return IPACM_FAILURE;
 	}
 
 	for (int i = 0; i < num_of_wlan_svap_hpc_hdls; i++) {
@@ -3507,19 +3531,23 @@ uint32_t IPACM_LanToLan_Iface::del_wlan_svap_hpc_hdl(uint16_t vlan_id, ipa_hdr_l
 			wlan_svap_hpc_hdls[i].peer_l2_type == peer_l2_type)
 		{
 			IPACMDBG_H("Entry with vlan_id %d and peer %d, exists, delete entry\n", vlan_id, peer_l2_type);
-			wlan_svap_hpc_hdls[i].hpc_hdr_hdl = 0;
-			wlan_svap_hpc_hdls[i].vlan_id = 0;
-			wlan_svap_hpc_hdls[i].peer_l2_type = IPA_HDR_L2_NONE;
-			break;
+			for(int k = i; k < num_of_wlan_svap_hpc_hdls - 1; k++)
+			{
+				wlan_svap_hpc_hdls[k].hpc_hdr_hdl = wlan_svap_hpc_hdls[k+1].hpc_hdr_hdl ;
+				wlan_svap_hpc_hdls[k].vlan_id = wlan_svap_hpc_hdls[k+1].vlan_id;
+				wlan_svap_hpc_hdls[k].peer_l2_type = wlan_svap_hpc_hdls[k+1].peer_l2_type;
+			}
+			num_of_wlan_svap_hpc_hdls--;
+			wlan_svap_hpc_hdls[num_of_wlan_svap_hpc_hdls].hpc_hdr_hdl = 0;
+			wlan_svap_hpc_hdls[num_of_wlan_svap_hpc_hdls].vlan_id = 0;
+			wlan_svap_hpc_hdls[num_of_wlan_svap_hpc_hdls].peer_l2_type = IPA_HDR_L2_NONE;
+			return IPACM_SUCCESS;
 		}
 	}
 
-	// Entry not found create a new one
+	// Entry not found
 	IPACMDBG_H("Entry with vlan_id %d and peer %d, absent, nothing to delete\n", vlan_id, peer_l2_type);
-
-	num_of_wlan_svap_hpc_hdls--;
-
-	return ret_hdl;
+	return IPACM_SUCCESS;
 }
 
 uint32_t IPACM_LanToLan_Iface::is_entry_present_wlan_svap_hpc_hdl(uint16_t vlan_id, ipa_hdr_l2_type peer_l2_type)

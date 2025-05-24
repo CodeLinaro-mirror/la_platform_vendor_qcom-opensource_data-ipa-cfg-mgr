@@ -92,7 +92,7 @@ int IPACM_Wlan::num_wlan_ap_iface = 0;
 #define BSSTYPE_SVAP 72
 #define VLAN_TPID_SIZE 2
 #define VLAN_VID_MASK 0x0FFF
-
+#define NUM_TX_PROPS 4
 #ifndef IPA_LAN_RX_HDR_NAME
 #define IPA_LAN_RX_HDR_NAME "ipa_lan_hdr"
 #endif
@@ -3442,8 +3442,19 @@ int IPACM_Wlan::handle_wlan_client_route_rule(uint8_t *mac_addr, ipa_ip_type ipt
 					IPACMDBG_H("tx:%d, rt rule hdl=%x ip-type: %d\n", tx_index,
 							it->second.hdl_v6[tx_index].rt_rule_hdl_v6_wan, iptype);
 					/* mark as route_rule_set_v6 = true*/
-					if (tx_index + 1 == iface_query->num_tx_props)
+					/* In case of easymesh enabled and client is not vlan, will get 4 tx props
+					 * but last 2 props will be for vlan and rule won't be installed for that
+					 * so make sure to update route_rule_set_v6 in that case as well*/
+					if(IPACM_Iface::ipacmcfg->ipacm_emesh_enable && iface_query->num_tx_props == NUM_TX_PROPS && !get_client_memptr(wlan_client, wlan_index)->is_vlan)
+					{
+						if (tx_index + 1 == iface_query->num_tx_props - 2 )
+							it->second.route_rule_set_v6 = true;
+					}
+					else
+					{
+						if (tx_index + 1 == iface_query->num_tx_props)
 						it->second.route_rule_set_v6 = true;
+					}
 				} /* v6 map loop */
 			} /* ipv6 handling */
 		} /* end of for loop */
@@ -6732,9 +6743,11 @@ int IPACM_Wlan::handle_wlan_client_down_evt(uint8_t *mac_addr, uint16_t vlan_id)
 				continue;
 			}
 #endif
-
-			get_client_memptr(wlan_client, clt_indx)->wifi_rt_hdl[tx_index].wifi_rt_rule_hdl_v4 =
-				 get_client_memptr(wlan_client, (clt_indx + 1))->wifi_rt_hdl[tx_index].wifi_rt_rule_hdl_v4;
+			if(tx_index == IPA_IP_v4_VLAN || tx_index == IPA_IP_v4)
+			{
+				get_client_memptr(wlan_client, clt_indx)->wifi_rt_hdl[tx_index].wifi_rt_rule_hdl_v4 =
+				 	get_client_memptr(wlan_client, (clt_indx + 1))->wifi_rt_hdl[tx_index].wifi_rt_rule_hdl_v4;
+			}
 		}
 		get_client_memptr(wlan_client, clt_indx)->ta_peer_id = get_client_memptr(wlan_client, (clt_indx + 1))->ta_peer_id;
 		get_client_memptr(wlan_client, clt_indx)->vlan_id = get_client_memptr(wlan_client, (clt_indx + 1))->vlan_id;
@@ -7159,6 +7172,28 @@ fail:
 		}
 #endif
 		IPACMDBG_H("Delete %d out of %d client header\n", i,  num_wifi_client);
+
+		if (get_client_memptr(wlan_client, i)->ipv4_hpc_set == true)
+		{
+			IPACMDBG_H("Deleting proc_ctx v4 handle %d\n",get_client_memptr(wlan_client, i)->hpc_hdr_hdl_v4);
+			if (m_header.DeleteHeaderProcCtx(get_client_memptr(wlan_client, i)->hpc_hdr_hdl_v4)
+					== false)
+			{
+				return IPACM_FAILURE;
+			}
+			get_client_memptr(wlan_client, i)->ipv4_hpc_set = false;
+		}
+
+		if (get_client_memptr(wlan_client, i)->ipv6_hpc_set == true)
+		{
+			IPACMDBG_H("Deleting proc_ctx v6 handle %d\n",get_client_memptr(wlan_client, i)->hpc_hdr_hdl_v6);
+			if (m_header.DeleteHeaderProcCtx(get_client_memptr(wlan_client, i)->hpc_hdr_hdl_v6)
+					== false)
+			{
+				return IPACM_FAILURE;
+			}
+			get_client_memptr(wlan_client, i)->ipv6_hpc_set = false;
+		}
 
 		if(get_client_memptr(wlan_client, i)->ipv4_header_set == true)
 		{
@@ -10801,7 +10836,10 @@ int IPACM_Wlan::handle_wlan_qos_route_rule(uint8_t *client_mac,
 				memcpy(&rt_rule_entry->rule.attrib,
 					&tx_prop->tx[tx_index].attrib,
 					sizeof(rt_rule_entry->rule.attrib));
-
+				if (IPACM_Iface::ipacmcfg->GetIPAVer() >= IPA_HW_v4_0)
+				{
+					rt_rule_entry->rule.hashable = true;
+				}
 				//Client ip is required to differentiate different clients, else hdr collision will happen
 				rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_DST_ADDR;
 				rt_rule_entry->rule.attrib.u.v4.dst_addr =
@@ -10875,6 +10913,7 @@ int IPACM_Wlan::handle_wlan_qos_route_rule(uint8_t *client_mac,
 
 				if (qos_param->dscp)
 				{
+					rt_rule_entry->rule.hashable = false;
 					rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_TOS_MASKED;
 					rt_rule_entry->rule.attrib.tos_value = qos_param->dscp << 2;
 					rt_rule_entry->rule.attrib.tos_mask = 0xFC;
@@ -10883,11 +10922,6 @@ int IPACM_Wlan::handle_wlan_qos_route_rule(uint8_t *client_mac,
 				if (qos_param->pcp)
 				{
 					IPACMERR("QOS param PCP no action from IPA \n");
-				}
-
-				if (IPACM_Iface::ipacmcfg->GetIPAVer() >= IPA_HW_v4_0)
-				{
-					rt_rule_entry->rule.hashable = true;
 				}
 
 				memset(hdr_proc_ctx_table, 0, size);
@@ -10958,7 +10992,8 @@ int IPACM_Wlan::handle_wlan_qos_route_rule(uint8_t *client_mac,
 					memcpy(&rt_rule_entry->rule.attrib,
 						&tx_prop->tx[tx_index].attrib,
 						sizeof(rt_rule_entry->rule.attrib));
-
+					if (IPACM_Iface::ipacmcfg->GetIPAVer() >= IPA_HW_v4_0)
+						rt_rule_entry->rule.hashable = true;
 					if ((ipv6_addr[0] || ipv6_addr[1] || ipv6_addr[2] ||
 						ipv6_addr[3]))
 					{
@@ -11070,6 +11105,7 @@ int IPACM_Wlan::handle_wlan_qos_route_rule(uint8_t *client_mac,
 
 					if (qos_param->dscp)
 					{
+						rt_rule_entry->rule.hashable = false;
 						rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_TOS_MASKED;
 						rt_rule_entry->rule.attrib.tos_value = qos_param->dscp << 2;
 						rt_rule_entry->rule.attrib.tos_mask = 0xFC;
@@ -11080,9 +11116,6 @@ int IPACM_Wlan::handle_wlan_qos_route_rule(uint8_t *client_mac,
 						IPACMERR("QOS param PCP no v6 route rule action from IPA \n");
 					}
 
-#ifdef FEATURE_IPA_V3
-					rt_rule_entry->rule.hashable = true;
-#endif
 					memset(hdr_proc_ctx_table, 0, size);
 					hdr_proc_ctx_table->commit = 1;
 					hdr_proc_ctx_table->num_proc_ctxs = 1;
@@ -11321,7 +11354,10 @@ int IPACM_Wlan::handle_wlan_qos_route_rule_ext_v2(uint8_t *client_mac,
 				memcpy(&rt_rule_entry->rule.attrib,
 					&tx_prop->tx[tx_index].attrib,
 					sizeof(rt_rule_entry->rule.attrib));
-
+				if (IPACM_Iface::ipacmcfg->GetIPAVer() >= IPA_HW_v4_0)
+				{
+					rt_rule_entry->rule.hashable = true;
+				}
 				rt_rule_entry->rule.enable_stats = true;
 				rt_rule_entry->rule.cnt_idx =
 					get_client_memptr(wlan_client, wlan_index)->dl_cnt_idx;
@@ -11400,6 +11436,7 @@ int IPACM_Wlan::handle_wlan_qos_route_rule_ext_v2(uint8_t *client_mac,
 
 				if (qos_param->dscp)
 				{
+					rt_rule_entry->rule.hashable = false;
 					rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_TOS_MASKED;
 					rt_rule_entry->rule.attrib.tos_value = qos_param->dscp << 2;
 					rt_rule_entry->rule.attrib.tos_mask = 0xFC;
@@ -11408,11 +11445,6 @@ int IPACM_Wlan::handle_wlan_qos_route_rule_ext_v2(uint8_t *client_mac,
 				if (qos_param->pcp)
 				{
 					IPACMERR("QOS param PCP no action from IPA \n");
-				}
-
-				if (IPACM_Iface::ipacmcfg->GetIPAVer() >= IPA_HW_v4_0)
-				{
-					rt_rule_entry->rule.hashable = true;
 				}
 
 				memset(hdr_proc_ctx_table, 0, size);
@@ -11483,7 +11515,8 @@ int IPACM_Wlan::handle_wlan_qos_route_rule_ext_v2(uint8_t *client_mac,
 					memcpy(&rt_rule_entry->rule.attrib,
 						&tx_prop->tx[tx_index].attrib,
 						sizeof(rt_rule_entry->rule.attrib));
-
+					if (IPACM_Iface::ipacmcfg->GetIPAVer() >= IPA_HW_v4_0)
+						rt_rule_entry->rule.hashable = true;
 					rt_rule_entry->rule.enable_stats = true;
 					rt_rule_entry->rule.cnt_idx =
 						get_client_memptr(wlan_client, wlan_index)->dl_cnt_idx;
@@ -11599,7 +11632,8 @@ int IPACM_Wlan::handle_wlan_qos_route_rule_ext_v2(uint8_t *client_mac,
 					}
 
 					if (qos_param->dscp)
-					{
+					{					
+						rt_rule_entry->rule.hashable = false;
 						rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_TOS_MASKED;
 						rt_rule_entry->rule.attrib.tos_value = qos_param->dscp << 2;
 						rt_rule_entry->rule.attrib.tos_mask = 0xFC;
@@ -11610,9 +11644,6 @@ int IPACM_Wlan::handle_wlan_qos_route_rule_ext_v2(uint8_t *client_mac,
 						IPACMERR("QOS param PCP no v6 route rule action from IPA \n");
 					}
 
-#ifdef FEATURE_IPA_V3
-					rt_rule_entry->rule.hashable = true;
-#endif
 					memset(hdr_proc_ctx_table, 0, size);
 					hdr_proc_ctx_table->commit = 1;
 					hdr_proc_ctx_table->num_proc_ctxs = 1;

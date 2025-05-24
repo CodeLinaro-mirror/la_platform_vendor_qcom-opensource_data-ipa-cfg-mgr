@@ -988,7 +988,9 @@ int IPACM_Wan::handle_addr_evt(ipacm_event_data_addr *data)
 				goto fail;
 		}
 #endif
-		/* add default filtering rules when wan-iface get global v6-prefix */
+		IPACMDBG_H("Now the number of modem ipv6 pdn is %d, num_dft_rt_v6 %d.\n", num_ipv6_modem_pdn, num_dft_rt_v6);
+		/* add default filtering rules when wan-iface get global v6-prefix,
+		 */
 		if (num_dft_rt_v6 == 1)
 		{
 			if(m_is_sta_mode == Q6_WAN)
@@ -1001,6 +1003,16 @@ int IPACM_Wan::handle_addr_evt(ipacm_event_data_addr *data)
 			{
 				num_ipv6_sta_pdn++;
 				IPACMDBG_H("Now the number of STA ipv6 pdn is %d.\n", num_ipv6_sta_pdn);
+				init_fl_rule(data->iptype);
+			}
+		}
+
+		/* Add default filtering rules when wan-iface get link local when eth_wan_pppoe_enable */
+		if(!is_global_ipv6_addr(data->ipv6_addr) && IPACM_Iface::ipacmcfg->eth_wan_pppoe_enable)
+		{
+			if(m_is_sta_mode != Q6_WAN)
+			{
+				IPACMDBG_H("Add dft rule with link local addr handling, Now the number of STA ipv6 pdn is %d.\n", num_ipv6_sta_pdn);
 				init_fl_rule(data->iptype);
 			}
 		}
@@ -1121,7 +1133,8 @@ int IPACM_Wan::handle_addr_evt(ipacm_event_data_addr *data)
 			{
 				if(IPACM_Iface::ipacmcfg->get_eth_vlan_wan_up(ipa_if_num) == IPACM_SUCCESS &&
 					IPACM_Iface::ipacmcfg->iface_table[ipa_if_num].if_cat == WAN_IF &&
-					IPACM_Iface::odu_subnet_fl_rule_hdl[IPA_IP_v6])
+					IPACM_Iface::odu_subnet_fl_rule_hdl[IPA_IP_v6] &&
+					(IPACM_Iface::ipacmcfg->eth_vlan_wan_enable == true))
 				{
 					len = sizeof(struct ipa_ioc_add_flt_rule_after) + sizeof(struct ipa_flt_rule_add);
 					flt_rule_after = (struct ipa_ioc_add_flt_rule_after *)calloc(1, len);
@@ -1174,7 +1187,8 @@ int IPACM_Wan::handle_addr_evt(ipacm_event_data_addr *data)
 
 				if(IPACM_Iface::ipacmcfg->get_eth_vlan_wan_up(ipa_if_num) == IPACM_SUCCESS &&
 					IPACM_Iface::ipacmcfg->iface_table[ipa_if_num].if_cat == WAN_IF &&
-					IPACM_Iface::odu_subnet_fl_rule_hdl[IPA_IP_v6])
+					IPACM_Iface::odu_subnet_fl_rule_hdl[IPA_IP_v6] &&
+					(IPACM_Iface::ipacmcfg->eth_vlan_wan_enable == true))
 				{
 					memcpy(&(flt_rule_after->rules[0]), &flt_rule_entry, sizeof(struct ipa_flt_rule_add));
 					if (m_filtering.AddFilteringRuleAfter(flt_rule_after) == false)
@@ -1477,7 +1491,7 @@ int IPACM_Wan::handle_addr_del_evt(ipacm_event_data_addr *data)
 		return IPACM_SUCCESS;
 	}
 
-	if (data->iptype == IPA_IP_v6)
+	if (data->iptype == IPA_IP_v6 && m_is_sta_mode == Q6_WAN)
 	{
 		num_v6_value = num_dft_rt_v6;
 		/* Check the address deleted. */
@@ -1515,9 +1529,58 @@ int IPACM_Wan::handle_addr_del_evt(ipacm_event_data_addr *data)
 			}
 		}
 	}
-	else
+	else if (data->iptype == IPA_IP_v4)
 	{
-		IPACMDBG_H("IPv4 addr del evt is not handled.\n");
+		if (m_is_sta_mode == Q6_WAN)
+		{
+			IPACMDBG_H("IPv4 addr del evt is not handled.\n");
+		}
+		else
+		{
+			if(wan_v4_addr_set)
+			{
+				/* Delete default v4 RT rule */
+				IPACMDBG_H("Delete default v4 routing rules\n");
+				if (m_routing.DeleteRoutingHdl(dft_rt_rule_hdl[0],
+					IPA_IP_v4) == false)
+				{
+					IPACMERR("Routing old RT rule deletion failed!\n");
+					res = IPACM_FAILURE;
+					goto fail;
+				}
+				dft_rt_rule_hdl[0] = 0;
+#ifdef FEATURE_IPA_IPSEC
+				/* Delete default IPsec v4 RT rules */
+				IPACMDBG_H("Delete IPsec default v4 routing rules\n");
+				if (del_ipsec_wan_dl_rt_rules(IPA_IP_v4) == IPACM_FAILURE)
+				{
+					IPACMERR("Routing old IPsec RT rules deletion failed!\n");
+					res = IPACM_FAILURE;
+					goto fail;
+				}
+#endif
+				ipv4_to_iface[sta_ipv4_pdn_index].ipv4_addr = 0;
+				ipv4_to_iface[sta_ipv4_pdn_index].pIface = NULL;
+				ipv4_to_iface[sta_ipv4_pdn_index].wan_up_vlan = false;
+				sta_ipv4_pdn_index = -1;
+				num_ipv4_sta_pdn--;
+				public_wan_v4_addr = 0;
+				public_wan_v4_addr_set = false;
+				wan_v4_addr = 0;
+				wan_v4_addr_set = false;
+
+				if (rx_prop != NULL && num_ipv4_sta_pdn == 0)
+				{
+					res = delete_dflt_filter_rules(IPA_IP_v4);
+					if (res == IPACM_FAILURE)
+					{
+						IPACMERR("delete_dflt_filter_rules failed\n");
+						goto fail;
+					}
+				}
+			}
+			IPACM_Iface::iface_addr_query(data->if_index);
+		}
 	}
 fail:
 	return res;
@@ -3633,6 +3696,15 @@ int IPACM_Wan::handle_vlan_backhaul_switch_v6(ipacm_event_route_vlan *data, bool
 		IPACMDBG_H("num_offloaded_pdns: %d\n", num_offloaded_pdns);
 		IPACMDBG_H("data->wan_ipv6_prefix: 0x%08x%08x\n", data->wan_ipv6_prefix[0], data->wan_ipv6_prefix[1]);
 
+		vlan_info = (ipacm_vlan_association_info *)malloc(sizeof(ipacm_vlan_association_info));
+		if(vlan_info == NULL)
+		{
+			IPACMERR("Unable to allocate memory\n");
+			return IPACM_FAILURE;
+		}
+		memset(vlan_info, -1, sizeof(ipacm_vlan_association_info));
+		vlan_info->vlan_id = data->VlanID;
+
 		if(IPACM_Iface::ipacmcfg->ipacm_static_policy_enable)
 		{
 			if((modem_ipv4_pdn_index >= 0) &&
@@ -3643,14 +3715,6 @@ int IPACM_Wan::handle_vlan_backhaul_switch_v6(ipacm_event_route_vlan *data, bool
 			goto v6_skip;
 		}
 
-		vlan_info = (ipacm_vlan_association_info *)malloc(sizeof(ipacm_vlan_association_info));
-		if(vlan_info == NULL)
-		{
-			IPACMERR("Unable to allocate memory\n");
-			return IPACM_FAILURE;
-		}
-		memset(vlan_info, -1, sizeof(ipacm_vlan_association_info));
-		vlan_info->vlan_id = data->VlanID;
 		get_vlan_association_info(vlan_info);
 
 		if (m_is_sta_mode == WLAN_WAN)
@@ -3881,6 +3945,15 @@ int IPACM_Wan::handle_vlan_backhaul_switch_v4(ipacm_event_route_vlan *data)
 	{
 		IPACMDBG_H("received v4 IPA_ROUTE_ADD_VLAN_PDN_EVENT for VID %d, wan %s, if %d\n", data->VlanID, dev_name, ipa_if_num);
 
+		vlan_info = (ipacm_vlan_association_info *)malloc(sizeof(ipacm_vlan_association_info));
+		if(vlan_info == NULL)
+		{
+			IPACMERR("Unable to allocate memory\n");
+			return IPACM_FAILURE;
+		}
+		memset(vlan_info, -1, sizeof(ipacm_vlan_association_info));
+		vlan_info->vlan_id = data->VlanID;
+
 		if(IPACM_Iface::ipacmcfg->ipacm_static_policy_enable)
 		{
 			if((modem_ipv6_pdn_index >= 0) &&
@@ -3891,14 +3964,6 @@ int IPACM_Wan::handle_vlan_backhaul_switch_v4(ipacm_event_route_vlan *data)
 			goto v4_skip;
 		}
 
-		vlan_info = (ipacm_vlan_association_info *)malloc(sizeof(ipacm_vlan_association_info));
-		if(vlan_info == NULL)
-		{
-			IPACMERR("Unable to allocate memory\n");
-			return IPACM_FAILURE;
-		}
-		memset(vlan_info, -1, sizeof(ipacm_vlan_association_info));
-		vlan_info->vlan_id = data->VlanID;
 		get_vlan_association_info(vlan_info);
 
 		if (m_is_sta_mode == WLAN_WAN)
@@ -4732,7 +4797,7 @@ int IPACM_Wan::handle_route_add_evt(ipa_ip_type iptype)
 	rt_rule_entry = &rt_rule->rules[0];
 	rt_rule_entry->at_rear = true;
 
-	if(m_is_sta_mode != Q6_WAN && !IPACM_Iface::ipacmcfg->eth_wan_pppoe_enable)
+	if(m_is_sta_mode != Q6_WAN)
 	{
 		IPACMDBG_H(" WAN instance is in STA mode \n");
 		for (tx_index = 0; tx_index < iface_query->num_tx_props; tx_index++)
@@ -5347,7 +5412,7 @@ int IPACM_Wan::handle_sta_header_add_evt()
 		}
 		else if(m_is_sta_mode == Q6_WAN)
 		{
-			IPACMDBG_H(" currently can't find matched wan-client's MAC-addr, waiting for header construction\n");
+			IPACMDBG_H("currently can't find matched wan-client's MAC-addr, waiting for header construction\n");
 			res = IPACM_SUCCESS;
 		}
 	}
@@ -5383,19 +5448,20 @@ int IPACM_Wan::handle_sta_header_add_evt()
 				}
 				else
 				{
-					IPACMERR(" wan-client got ipv6 however didn't construct complete ipv4 header \n");
+					IPACMERR("wan-client got ipv6 however didn't construct complete ipv4 header \n");
 					return IPACM_FAILURE;
 				}
-			}
-			if(get_client_memptr(wan_client, index)->ipv4_header_set)
-			{
-				hdr_hdl_sta_v4 = get_client_memptr(wan_client, index)->hdr_hdl_v4;
-				header_set_v4 = true;
-				IPACMDBG_H("add full ipv4 header hdl: (%x)\n", get_client_memptr(wan_client, index)->hdr_hdl_v4);
+
+				if(get_client_memptr(wan_client, index)->ipv4_header_set)
+				{
+					hdr_hdl_sta_v4 = get_client_memptr(wan_client, index)->hdr_hdl_v4;
+					header_set_v4 = true;
+					IPACMDBG_H("add full ipv4 header hdl: (%x)\n", get_client_memptr(wan_client, index)->hdr_hdl_v4);
+				}
 			}
 			else
 			{
-				IPACMDBG_H(" currently can't find matched wan-client's MAC-addr, waiting for header construction\n");
+				IPACMDBG_H("currently can't find matched wan-client's MAC-addr, waiting for header construction\n");
 				res = IPACM_SUCCESS;
 			}
 		}

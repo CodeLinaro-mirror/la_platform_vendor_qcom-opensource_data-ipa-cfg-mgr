@@ -676,10 +676,9 @@ int IPACM_IfaceManager::create_iface_instance(ipacm_ifacemgr_data *param)
 						IPACM_EvtDispatcher::registr(IPA_NETWORK_STATS_UPDATE_EVENT, w);
 					}
 #else/* defined(FEATURE_IPA_ANDROID) */
-					if(is_sta_mode == Q6_WAN)
-					{
-						IPACM_EvtDispatcher::registr(IPA_ADDR_DEL_EVENT, w);
-					}
+
+					IPACM_EvtDispatcher::registr(IPA_ADDR_DEL_EVENT, w);
+
 					IPACM_EvtDispatcher::registr(IPA_ROUTE_ADD_EVENT, w);
 					IPACM_EvtDispatcher::registr(IPA_ROUTE_DEL_EVENT, w);
 					IPACM_EvtDispatcher::registr(IPA_WAN_GW_ADDR_ADD_EVENT, w);

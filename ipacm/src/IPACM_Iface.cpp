@@ -748,6 +748,13 @@ int IPACM_Iface::query_iface_property(void)
 	/* Add Natting iface to IPACM_Config if there is  Rx/Tx property */
 	if (rx_prop != NULL || tx_prop != NULL)
 	{
+		/* Skip vlan properties for non vlan wlan iface */
+		if(WLAN_IF == ipa_if_cate && (!is_if_svap && !is_wlan_if_vlan))
+		{
+			iface_query->num_rx_props = iface_query->num_tx_props = 2;
+			rx_prop->num_rx_props = tx_prop->num_tx_props = 2;
+			IPACMDBG_H("Setting iface properties to 2 for non vlan iface\n");
+		}
 		IPACMDBG_H(" Has rx/tx properties registered for iface %s, add for NATTING \n", dev_name);
         IPACM_Iface::ipacmcfg->AddNatIfaces(dev_name);
 	}
@@ -781,20 +788,25 @@ int IPACM_Iface::init_fl_rule(
 	struct ipa_ioc_add_flt_rule *m_pFilteringTable =
 		(struct ipa_ioc_add_flt_rule *) buf;
 
-	if(IPACM_Iface::ipacmcfg->iface_table[ipa_if_num].if_cat == WAN_IF &&
-		iptype == IPA_IP_v4 && IPACM_Wan::num_ipv4_sta_pdn != 1)
+	/* Avoid checking num of sta pdn, because there could be race cond in
+	 * addr evt for base Wan interfaces ie: eth1 and pppoe waneth */
+	if(!IPACM_Iface::ipacmcfg->eth_wan_pppoe_enable)
 	{
-		IPACMDBG_H("dev_name: %s num_ipv4_sta_pdn:%d not equal to 1.\n",
-			dev_name, IPACM_Wan::num_ipv4_sta_pdn);
-		return IPACM_SUCCESS;
-	}
+		if(IPACM_Iface::ipacmcfg->iface_table[ipa_if_num].if_cat == WAN_IF &&
+			iptype == IPA_IP_v4 && IPACM_Wan::num_ipv4_sta_pdn != 1)
+		{
+			IPACMDBG_H("dev_name: %s num_ipv4_sta_pdn:%d not equal to 1.\n",
+				dev_name, IPACM_Wan::num_ipv4_sta_pdn);
+			return IPACM_SUCCESS;
+		}
 
-	if(IPACM_Iface::ipacmcfg->iface_table[ipa_if_num].if_cat == WAN_IF &&
-		iptype == IPA_IP_v6 && IPACM_Wan::num_ipv6_sta_pdn != 1)
-	{
-		IPACMDBG_H("dev_name: %s num_ipv6_sta_pdn:%d not equal to 1.\n",
-			dev_name, IPACM_Wan::num_ipv6_sta_pdn);
-		return IPACM_SUCCESS;
+		if(IPACM_Iface::ipacmcfg->iface_table[ipa_if_num].if_cat == WAN_IF &&
+			iptype == IPA_IP_v6 && IPACM_Wan::num_ipv6_sta_pdn != 1)
+		{
+			IPACMDBG_H("dev_name: %s num_ipv6_sta_pdn:%d not equal to 1.\n",
+				dev_name, IPACM_Wan::num_ipv6_sta_pdn);
+			return IPACM_SUCCESS;
+		}
 	}
 
     /* ADD corresponding ipa_rm_resource_name of RX-endpoint before adding all IPV4V6 FT-rules */

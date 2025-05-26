@@ -433,7 +433,7 @@ int IPACM_Iface::iface_ipa_index_query
 	IPACMDBG_H("Received interface name %s\n", ifr.ifr_name);
 	move_pos = strchr(ifr.ifr_name, '.');
 
-#ifdef FEATURE_RDKB
+#if defined(FEATURE_RDKB) || defined(FEATURE_PRPLWRT)
 	if (strstr(ifr.ifr_name, RMNET_IFACE_NAME) && str_idx < strlen(ifr.ifr_name) && move_pos != NULL)
 	{
 		ifr.ifr_name[str_idx] = 'X';

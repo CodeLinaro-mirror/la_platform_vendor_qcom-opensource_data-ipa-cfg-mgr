@@ -25,10 +25,10 @@ BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
 WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
 OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
 IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-
-Changes from Qualcomm Innovation Center are provided under the following license
-Copyright (c) 2023-2024 Qualcomm Innovation Center, Inc. All rights reserved.
-SPDX-License-Identifier: BSD-3-Clause-Clear,
+*
+* Changes from Qualcomm Technologies, Inc. are provided under the following license:
+* Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+* SPDX-License-Identifier: BSD-3-Clause-Clear
 */
 /*!
 	@file
@@ -512,11 +512,10 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 				/* find the client */
 				/* Post IPA_LAN_CLIENT_ADD_EVENT to Handle race Condition in RTM_NEWNEIGH on physical iface and ECM_CONNECT */
 
-				if ((neighbor_client[i].iface_index == data->if_index) &&
-						neighbor_client[i].v4_addr != 0) /* not 0.0.0.0 */
+				if ((neighbor_client[i].iface_index == data->if_index))
 				{
-					IPACMDBG_H("Neighbor if_index: %d, ipa_if_index = %d, name = %s, ip4_addr = 0x%x\n", neighbor_client[i].iface_index,
-							neighbor_client[i].ipa_if_num, neighbor_client[i].iface_name, neighbor_client[i].v4_addr);
+					IPACMDBG_H("Neighbor if_index: %d, ipa_if_index = %d, name = %s\n", neighbor_client[i].iface_index,
+							neighbor_client[i].ipa_if_num, neighbor_client[i].iface_name);
 					if(!IPACM_Iface::ipacmcfg->is_added_vlan_iface(neighbor_client[i].iface_name))
 					{
 						/* check if getting real netdev name yet */
@@ -536,7 +535,6 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 						memset(data_all,0,sizeof(ipacm_event_data_all));
 						data_all->iptype = IPA_IP_v4;
 						data_all->if_index = neighbor_client[i].iface_index;
-						data_all->ipv4_addr = neighbor_client[i].v4_addr; /* use previous ipv4 address, i.e: 0.0.0.0 */
 						memcpy(data_all->mac_addr, neighbor_client[i].mac_addr, sizeof(data_all->mac_addr));
 						memcpy(data_all->iface_name, neighbor_client[i].iface_name, sizeof(data_all->iface_name));
 						evt_data.evt_data = (void *)data_all;

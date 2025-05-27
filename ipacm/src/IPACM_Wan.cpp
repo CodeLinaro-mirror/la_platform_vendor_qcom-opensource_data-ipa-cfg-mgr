@@ -2669,17 +2669,21 @@ int IPACM_Wan::check_vlan_pdn(ipa_ip_type iptype, ipacm_event_route_vlan *data, 
 		{
 			header_partial_default_wan_v6 = true;
 			IPACMDBG_H("STA ipv6-header haven't constructed \n");
-			/* Adding pending vid to pending-STA-VID list */
-			for(it = pending_VID_STA_v6.begin(); it != pending_VID_STA_v6.end(); ++it)
+			if((data->wan_ipv6_prefix[0] == ipv6_prefix[0]) &&
+				(data->wan_ipv6_prefix[1] == ipv6_prefix[1]))
 			{
-				if (data->VlanID == *it)
+				/* Adding pending vid to pending-STA-VID list */
+				for(it = pending_VID_STA_v6.begin(); it != pending_VID_STA_v6.end(); ++it)
 				{
-					IPACMDBG_H("Already added vlan_id: %d as pending_VID_STA_v6 \n", data->VlanID);
-					 return IPACM_SUCCESS;
+					if (data->VlanID == *it)
+					{
+						IPACMDBG_H("Already added vlan_id: %d as pending_VID_STA_v6 \n", data->VlanID);
+						return IPACM_SUCCESS;
+					}
 				}
+				pending_VID_STA_v6.push_back(data->VlanID);
+				IPACMDBG_H("Added vlan_id: %d as pending_VID_STA_v6\n", data->VlanID);
 			}
-			pending_VID_STA_v6.push_back(data->VlanID);
-			IPACMDBG_H("Added vlan_id: %d as pending_VID_STA_v6\n", data->VlanID);
 			return IPACM_SUCCESS;
 		}
 	}

@@ -3056,7 +3056,7 @@ else {
 			modem_ul_v6_set[j] = false;
 		}
 	}
-
+	IPACMDBG_H("modem_ul_v6_set: %d, modem_ul_v4_set: %d\n", modem_ul_v6_set, modem_ul_v4_set);
 	return IPACM_SUCCESS;
 }
 
@@ -3069,6 +3069,10 @@ int IPACM_Lan::handle_vlan_neighbor(ipacm_event_data_all *data)
 	std::list <ipacm_event_data_all>::iterator it;
 	ipacm_bridge *bridge;
 	int skip_nat_set = 0;
+#ifdef FEATURE_IPACM_PER_CLIENT_STATS
+       int eth_index = 0;
+       int retval;
+#endif
 	IPACMDBG_H("\n");
 
 	if (IPACM_Iface::ipacmcfg->get_vlan_id(data->iface_name, &vlan_id))
@@ -3181,6 +3185,27 @@ int IPACM_Lan::handle_vlan_neighbor(ipacm_event_data_all *data)
 		return IPACM_FAILURE;
 	}
 
+#ifdef FEATURE_IPACM_PER_CLIENT_STATS
+#ifdef IPA_HW_FNR_STATS
+	if(IPACM_Iface::ipacmcfg->ipacm_lan_stats_enable == true)
+	{
+		eth_index = get_eth_client_index(data->mac_addr);
+		IPACMDBG_H("hw_fnr_stats_support = %d,index_populated = %d\n",IPACM_Iface::ipacmcfg->hw_fnr_stats_support,get_client_memptr(eth_client,eth_index)->index_populated);
+		if(IPACM_Iface::ipacmcfg->hw_fnr_stats_support == true && get_client_memptr(eth_client,eth_index)->index_populated == true)
+		{
+			IPACMDBG_H("Per Client DL indices = %d\n", get_client_memptr(eth_client, eth_index)->dl_cnt_idx);
+			retval = handle_eth_client_route_rule_ext_v2(data->mac_addr, data->iptype,get_client_memptr(eth_client, eth_index)->dl_cnt_idx);
+			IPACMDBG_H("Route install retval = %d\n", retval);
+		}
+		else
+		{
+			IPACMDBG_H("No Route install with NEIGH as no DL indices\n");
+			return IPACM_SUCCESS;
+		}
+	}
+	else
+#endif
+#endif
 	/* TODO for VLAN: Need to return success above and handle the ext router info here */
 
 	handle_eth_client_route_rule(data->mac_addr, data->iptype, vlan_id);
@@ -3437,6 +3462,19 @@ int IPACM_Lan::handle_vlan_pdn_up(ipacm_event_vlan_pdn *data, bool set_mux)
 		return IPACM_SUCCESS;
 	}
 
+#ifdef FEATURE_IPACM_PER_CLIENT_STATS
+	/* Install filter rules for the client. */
+	if(IPACM_Iface::ipacmcfg->ipacm_lan_stats_enable == true)
+	{
+		IPACMDBG_H("feature enabled, enabling per-client stats\n");
+		if(enable_per_client_stats(&IPACM_Iface::ipacmcfg->ipacm_lan_stats_enable))
+		{
+			IPACMERR("Failed to enable per client stats %d\n", IPACM_Iface::ipacmcfg->ipacm_lan_stats_enable);
+			return IPACM_FAILURE;
+		}
+	}
+#endif
+
 	/* check only add static UL filter rule once */
 	if(data->iptype == IPA_IP_v6)
 	{
@@ -3542,6 +3580,15 @@ int IPACM_Lan::handle_vlan_pdn_up(ipacm_event_vlan_pdn *data, bool set_mux)
 			}
 		}
 	}
+#ifdef FEATURE_IPACM_PER_CLIENT_STATS
+	/* Install filter rules for the client. */
+	if (IPACM_Iface::ipacmcfg->ipacm_lan_stats_enable == true && data->mux_id != 0)
+	{
+		IPACMDBG_H("install per client filter rules mux_id: %d, iptype %d\n", data->mux_id, data->iptype);
+		ret = install_uplink_filter_rule(IPACM_Iface::ipacmcfg->GetExtProp(data->iptype), data->iptype, data->mux_id);
+	}
+#endif
+
 
 	if (ret == IPACM_SUCCESS)
 	{
@@ -10150,9 +10197,14 @@ int IPACM_Lan::handle_lan_client_connect(uint8_t *mac_addr)
 		{
 			client_info->ul_src_pipe = rx_prop->rx[0].src_pipe;
 		}
+		IPACMDBG_H("client_info->client_idx :%d \n", client_info->client_idx);
+		IPACMDBG_H("client_info->ul_src_pipe :%d \n", client_info->ul_src_pipe);
+		IPACMDBG_H("client_info->hdr_len :%d \n", client_info->hdr_len);
+		IPACMDBG_H("client_info->device_type :%d \n", client_info->device_type);
 #ifdef IPA_HW_FNR_STATS
 		/* Set UL and DL cnt_idx based on version check */
-		if (IPACM_Iface::ipacmcfg->hw_fnr_stats_support && !get_client_memptr(eth_client, eth_index)->index_populated) {
+		if (IPACM_Iface::ipacmcfg->hw_fnr_stats_support && !get_client_memptr(eth_client, eth_index)->index_populated)
+		{
 			pthread_mutex_lock(&IPACM_Iface::ipacmcfg->cnt_idx_lock);
 			cnt_idx = IPACM_Iface::ipacmcfg->get_free_cnt_idx();
 			pthread_mutex_unlock(&IPACM_Iface::ipacmcfg->cnt_idx_lock);
@@ -14580,6 +14632,10 @@ int IPACM_Lan::install_uplink_filter_rule_per_client_v2
 				offset_meq_128->offset = -8;
 			}
 #endif
+			else if(rx_prop->rx[0].hdr_l2_type == IPA_HDR_L2_802_1Q)
+			{
+				offset_meq_128->offset = -12;
+			}
 			else
 			{
 				offset_meq_128->offset = -16;
@@ -14944,6 +15000,10 @@ int IPACM_Lan::install_uplink_filter_rule_per_client
 				offset_meq_128->offset = -8;
 			}
 #endif
+			else if(rx_prop->rx[0].hdr_l2_type == IPA_HDR_L2_802_1Q)
+			{
+				offset_meq_128->offset = -12;
+			}
 			else
 			{
 				offset_meq_128->offset = -16;

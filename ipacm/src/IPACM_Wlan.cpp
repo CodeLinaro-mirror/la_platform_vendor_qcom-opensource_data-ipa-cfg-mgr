@@ -2315,7 +2315,7 @@ int IPACM_Wlan::handle_wlan_client_init_ex(ipacm_event_data_wlan_ex *data, bool 
 	int wlan_index;
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
 	ipacm_ext_prop* ext_prop;
-	struct wan_ioctl_lan_client_info *client_info;
+	struct wan_ioctl_lan_client_info_v2 *client_info;
 	int cnt_idx;
 #endif
 	int max_clients = IPA_MAX_NUM_WIFI_CLIENTS;
@@ -2704,14 +2704,14 @@ int IPACM_Wlan::handle_wlan_client_init_ex(ipacm_event_data_wlan_ex *data, bool 
 		if (IPACM_Iface::ipacmcfg->ipacm_lan_stats_enable == true &&
 			get_client_memptr(wlan_client, wlan_index)->lan_stats_idx != -1)
 		{
-			client_info = (struct wan_ioctl_lan_client_info *)malloc(sizeof(struct wan_ioctl_lan_client_info));
+			client_info = (struct wan_ioctl_lan_client_info_v2 *)malloc(sizeof(struct wan_ioctl_lan_client_info_v2));
 			if (client_info == NULL)
 			{
 				IPACMERR("Unable to allocate memory\n");
 				res = IPACM_FAILURE;
 				goto fail;
 			}
-			memset(client_info, 0, sizeof(struct wan_ioctl_lan_client_info));
+			memset(client_info, 0, sizeof(struct wan_ioctl_lan_client_info_v2));
 			client_info->device_type = IPACM_CLIENT_DEVICE_TYPE_WLAN;
 			memcpy(client_info->mac,
 					get_client_memptr(wlan_client, wlan_index)->mac,
@@ -2723,9 +2723,9 @@ int IPACM_Wlan::handle_wlan_client_init_ex(ipacm_event_data_wlan_ex *data, bool 
 #ifdef IPA_HW_FNR_STATS
 			IPACMERR("Client counter index (%d) ul/ul = (%d/%d) dl/dl = (%d/%d)\n",
 				get_client_memptr(wlan_client, wlan_index)->index_populated,
-				client_info->ul_cnt_idx,
+				client_info->wan_cnt_idx,
 				get_client_memptr(wlan_client, wlan_index)->ul_cnt_idx,
-				client_info->dl_cnt_idx,
+				client_info->wan_cnt_idx,
 				get_client_memptr(wlan_client, wlan_index)->dl_cnt_idx);
 			if (IPACM_Iface::ipacmcfg->hw_fnr_stats_support && !get_client_memptr(wlan_client, wlan_index)->index_populated)
 			{
@@ -2738,10 +2738,11 @@ int IPACM_Wlan::handle_wlan_client_init_ex(ipacm_event_data_wlan_ex *data, bool 
 					res = IPACM_FAILURE;
 					goto fail;
 				}
-				get_client_memptr(wlan_client, wlan_index)->ul_cnt_idx = cnt_idx;
-				get_client_memptr(wlan_client, wlan_index)->dl_cnt_idx = cnt_idx + 1;
-				client_info->ul_cnt_idx = get_client_memptr(wlan_client, wlan_index)->ul_cnt_idx;
-				client_info->dl_cnt_idx = get_client_memptr(wlan_client, wlan_index)->dl_cnt_idx;
+
+				client_info->wan_cnt_idx = cnt_idx;
+				client_info->lan_cnt_idx = cnt_idx + 1;
+				get_client_memptr(wlan_client, wlan_index)->ul_cnt_idx = client_info->wan_cnt_idx;
+				get_client_memptr(wlan_client, wlan_index)->dl_cnt_idx = client_info->wan_cnt_idx;
 				get_client_memptr(wlan_client, wlan_index)->index_populated = true;
 			}
 #endif //IPA_HW_FNR_STATS
@@ -5567,7 +5568,7 @@ int IPACM_Wlan::handle_lan_client_connect(uint8_t *mac_addr)
 {
 	int wlan_index, res = IPACM_SUCCESS;
 	ipacm_ext_prop* ext_prop;
-	struct wan_ioctl_lan_client_info *client_info;
+	struct wan_ioctl_lan_client_info_v2 *client_info;
 #ifdef FEATURE_STATIC_POLICY
 	uint32_t temp_ipv6[4] = {0};
 #endif
@@ -5602,14 +5603,14 @@ int IPACM_Wlan::handle_lan_client_connect(uint8_t *mac_addr)
 
 	if (IPACM_Iface::ipacmcfg->ipacm_lan_stats_enable == true)
 	{
-		client_info = (struct wan_ioctl_lan_client_info *)malloc(sizeof(struct wan_ioctl_lan_client_info));
+		client_info = (struct wan_ioctl_lan_client_info_v2 *)malloc(sizeof(struct wan_ioctl_lan_client_info_v2));
 		if (client_info == NULL)
 		{
 			IPACMERR("Unable to allocate memory\n");
 			res = IPACM_FAILURE;
 			goto fail;
 		}
-		memset(client_info, 0, sizeof(struct wan_ioctl_lan_client_info));
+		memset(client_info, 0, sizeof(struct wan_ioctl_lan_client_info_v2));
 		client_info->device_type = IPACM_CLIENT_DEVICE_TYPE_WLAN;
 		memcpy(client_info->mac,
 				get_client_memptr(wlan_client, wlan_index)->mac,
@@ -5621,9 +5622,9 @@ int IPACM_Wlan::handle_lan_client_connect(uint8_t *mac_addr)
 #ifdef IPA_HW_FNR_STATS
 		IPACMERR("Client counter index (%d) ul/ul = (%d/%d) dl/dl = (%d/%d)\n",
 			get_client_memptr(wlan_client, wlan_index)->index_populated,
-			client_info->ul_cnt_idx,
+			client_info->wan_cnt_idx,
 			get_client_memptr(wlan_client, wlan_index)->ul_cnt_idx,
-			client_info->dl_cnt_idx,
+			client_info->wan_cnt_idx,
 			get_client_memptr(wlan_client, wlan_index)->dl_cnt_idx);
 		if (IPACM_Wan::ipacmcfg->hw_fnr_stats_support && !get_client_memptr(wlan_client, wlan_index)->index_populated) {
 			pthread_mutex_lock(&IPACM_Wan::ipacmcfg->cnt_idx_lock);
@@ -5635,12 +5636,17 @@ int IPACM_Wlan::handle_lan_client_connect(uint8_t *mac_addr)
 				res = IPACM_FAILURE;
 				goto fail;
 			}
-			client_info->ul_cnt_idx = cnt_idx;
-			client_info->dl_cnt_idx = cnt_idx + 1;
+			client_info->wan_cnt_idx = cnt_idx;
+			client_info->lan_cnt_idx = cnt_idx + 1;
 			/* maintain a copy of this in IPACM_Config so that we can use it later if requried */
-			get_client_memptr(wlan_client, wlan_index)->dl_cnt_idx = client_info->dl_cnt_idx;
-			get_client_memptr(wlan_client, wlan_index)->ul_cnt_idx = client_info->ul_cnt_idx;
+			get_client_memptr(wlan_client, wlan_index)->dl_cnt_idx = client_info->wan_cnt_idx;
+			get_client_memptr(wlan_client, wlan_index)->ul_cnt_idx = client_info->wan_cnt_idx;
 			get_client_memptr(wlan_client, wlan_index)->index_populated = true;
+			IPACMDBG_H("Got lan connect event. UL/DL indices set %u, %u wan_cnt_idx: %u lan_cnt_idx: %u\n",
+				get_client_memptr(wlan_client, wlan_index)->ul_cnt_idx,
+				get_client_memptr(wlan_client, wlan_index)->dl_cnt_idx,
+				client_info->wan_cnt_idx,
+				client_info->lan_cnt_idx);
 		}
 #endif //IPA_HW_FNR_STATS
 		if (rx_prop)
@@ -6491,7 +6497,7 @@ int IPACM_Wlan::handle_wlan_client_down_evt(uint8_t *mac_addr, uint16_t vlan_id)
 	int num_wifi_client_tmp = num_wifi_client;
 	int num_v6;
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
-	struct wan_ioctl_lan_client_info *client_info;
+	struct wan_ioctl_lan_client_info_v2 *client_info;
 #endif
 	std::list <ipacm_event_data_all>::iterator it;
 
@@ -6662,13 +6668,13 @@ int IPACM_Wlan::handle_wlan_client_down_evt(uint8_t *mac_addr, uint16_t vlan_id)
 	if (get_client_memptr(wlan_client, clt_indx)->lan_stats_idx != -1)
 	{
 		/* Clear the lan client info. */
-		client_info = (struct wan_ioctl_lan_client_info *)malloc(sizeof(struct wan_ioctl_lan_client_info));
+		client_info = (struct wan_ioctl_lan_client_info_v2 *)malloc(sizeof(struct wan_ioctl_lan_client_info_v2));
 		if (client_info == NULL)
 		{
 			IPACMERR("Unable to allocate memory\n");
 			return IPACM_FAILURE;
 		}
-		memset(client_info, 0, sizeof(struct wan_ioctl_lan_client_info));
+		memset(client_info, 0, sizeof(struct wan_ioctl_lan_client_info_v2));
 		client_info->device_type = IPACM_CLIENT_DEVICE_TYPE_WLAN;
 		memcpy(client_info->mac,
 				get_client_memptr(wlan_client, clt_indx)->mac,
@@ -6677,16 +6683,16 @@ int IPACM_Wlan::handle_wlan_client_down_evt(uint8_t *mac_addr, uint16_t vlan_id)
 		client_info->client_idx = get_client_memptr(wlan_client, clt_indx)->lan_stats_idx;
 		client_info->ul_src_pipe = (enum ipa_client_type) IPA_CLIENT_MAX;
 #ifdef IPA_HW_FNR_STATS
-		client_info->ul_cnt_idx = get_client_memptr(wlan_client, clt_indx)->ul_cnt_idx;
-		client_info->dl_cnt_idx = get_client_memptr(wlan_client, clt_indx)->dl_cnt_idx;
+		client_info->wan_cnt_idx = get_client_memptr(wlan_client, clt_indx)->ul_cnt_idx;
+		client_info->lan_cnt_idx = get_client_memptr(wlan_client, clt_indx)->ul_cnt_idx + 1;
 		if (IPACM_Iface::ipacmcfg->hw_fnr_stats_support)
 		{
 			get_client_memptr(wlan_client, clt_indx)->ul_cnt_idx = -1;
 			get_client_memptr(wlan_client, clt_indx)->dl_cnt_idx = -1;
 			get_client_memptr(wlan_client, clt_indx)->index_populated = false;
 			pthread_mutex_lock(&IPACM_Wan::ipacmcfg->cnt_idx_lock);
-			if (IPACM_Wan::ipacmcfg->reset_cnt_idx(client_info->ul_cnt_idx, false))
-				IPACMERR("Failed to reset counter index %u\n", client_info->ul_cnt_idx);
+			if (IPACM_Wan::ipacmcfg->reset_cnt_idx(client_info->wan_cnt_idx, false))
+				IPACMERR("Failed to reset counter index %u\n", client_info->wan_cnt_idx);
 			pthread_mutex_unlock(&IPACM_Wan::ipacmcfg->cnt_idx_lock);
 		}
 #endif //IPA_HW_FNR_STATS
@@ -6912,7 +6918,7 @@ int IPACM_Wlan::handle_down_evt()
 {
 	int res = IPACM_SUCCESS, i, num_private_subnet_fl_rule, idx = 0;
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
-	struct wan_ioctl_lan_client_info *client_info;
+	struct wan_ioctl_lan_client_info_v2 *client_info;
 #endif
 #ifdef FEATURE_STATIC_POLICY
 	ipacm_event_vlan_pdn *wandown_vlan_data;
@@ -7234,7 +7240,7 @@ fail:
 		if (get_client_memptr(wlan_client, i)->lan_stats_idx != -1)
 		{
 			/* Clear the lan client info. */
-			client_info = (struct wan_ioctl_lan_client_info *)malloc(sizeof(struct wan_ioctl_lan_client_info));
+			client_info = (struct wan_ioctl_lan_client_info_v2 *)malloc(sizeof(struct wan_ioctl_lan_client_info_v2));
 			if (client_info == NULL)
 			{
 				IPACMERR("Unable to allocate memory\n");
@@ -7242,7 +7248,7 @@ fail:
 			}
 			else
 			{
-				memset(client_info, 0, sizeof(struct wan_ioctl_lan_client_info));
+				memset(client_info, 0, sizeof(struct wan_ioctl_lan_client_info_v2));
 				client_info->device_type = IPACM_CLIENT_DEVICE_TYPE_WLAN;
 				memcpy(client_info->mac,
 						get_client_memptr(wlan_client, i)->mac,
@@ -7253,14 +7259,14 @@ fail:
 #ifdef IPA_HW_FNR_STATS
 				if (IPACM_Wan::ipacmcfg->hw_fnr_stats_support)
 				{
-					client_info->ul_cnt_idx = get_client_memptr(wlan_client, i)->ul_cnt_idx;
-					client_info->dl_cnt_idx = get_client_memptr(wlan_client, i)->dl_cnt_idx;
+					client_info->wan_cnt_idx = get_client_memptr(wlan_client, i)->ul_cnt_idx;
+					client_info->lan_cnt_idx = get_client_memptr(wlan_client, i)->ul_cnt_idx + 1;
 					get_client_memptr(wlan_client, i)->ul_cnt_idx = -1;
 					get_client_memptr(wlan_client, i)->dl_cnt_idx = -1;
 					get_client_memptr(wlan_client, i)->index_populated = false;
 					pthread_mutex_lock(&IPACM_Wan::ipacmcfg->cnt_idx_lock);
-					if (IPACM_Wan::ipacmcfg->reset_cnt_idx(client_info->ul_cnt_idx, false))
-						IPACMERR("Failed to reset counter index = %u\n", client_info->ul_cnt_idx);
+					if (IPACM_Wan::ipacmcfg->reset_cnt_idx(client_info->wan_cnt_idx, false))
+						IPACMERR("Failed to reset counter index = %u\n", client_info->wan_cnt_idx);
 					pthread_mutex_unlock(&IPACM_Wan::ipacmcfg->cnt_idx_lock);
 				}
 #endif //IPA_HW_FNR_STATS

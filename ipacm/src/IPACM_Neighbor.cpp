@@ -1453,7 +1453,7 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 													continue;
 												}
 											}
-											else if(neighbor_client[i].bridge->associate_VID != vlan_id)
+											else if(neighbor_client[i].bridge && neighbor_client[i].bridge->associate_VID != vlan_id)
 											{
 												IPACMDBG("client bridge vid mismatch (%d)(%d), skip\n",
 													vlan_id, neighbor_client[i].bridge->associate_VID);

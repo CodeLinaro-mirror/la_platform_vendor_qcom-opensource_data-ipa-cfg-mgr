@@ -1,0 +1,6 @@
+soong_namespace {
+  imports: [
+            "device/qcom/monaco",
+            "vendor/qcom/proprietary/monaco",
+    ],
+}

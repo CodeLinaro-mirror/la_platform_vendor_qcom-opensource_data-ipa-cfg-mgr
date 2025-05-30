@@ -123,6 +123,30 @@ typedef struct _eth_client_rt_hdl
 	uint32_t eth_rt_rule_hdl_v4;
 }eth_client_rt_hdl;
 
+typedef struct rule_id_hdl_map
+{
+	uint32_t flt_hdl;
+	uint16_t rule_id;
+}rule_id_hdl_map;
+
+typedef struct pdn_context
+{
+	int pdn_mux_id;
+	uint16_t associated_VIDs[IPA_MAX_NUM_SW_PDNS];
+	uint32_t active_vlan_count;
+	uint32_t wan_mpdn_ul_xlat_fl_rule_hdl_v4[IPA_MAX_NUM_PROPS][MAX_WAN_UL_FILTER_RULES];
+	uint32_t num_wan_mpdn_ul_xlat_fl_rule_v4[IPA_MAX_NUM_PROPS];
+}pdn_context;
+
+typedef struct _xlat_context
+{
+	rule_id_hdl_map ul_rule_id_hdl_map[IPA_MAX_NUM_PROPS][MAX_WAN_UL_FILTER_RULES];
+
+	/* PDN's for which UL filter installed */
+	pdn_context active_pdn_list[IPA_MAX_NUM_HW_PDNS];
+	uint32_t active_pdn_count;
+}xlat_context;
+
 typedef struct _ipa_eth_client
 {
 	uint8_t mac[IPA_MAC_ADDR_SIZE];
@@ -154,6 +178,7 @@ typedef struct _ipa_eth_client
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
 	bool ipv4_ul_rules_set;
 	bool ipv6_ul_rules_set;
+	bool ipv4_xlat_ul_rules_set;
 	bool ipv4_sta_ul_rules_set;
 	bool ipv6_sta_ul_rules_set;
 	/* store ipv4 UL filter rule handle for STA Backhaul*/
@@ -194,6 +219,7 @@ typedef struct _ipa_eth_client
 #ifdef IPA_IOCTL_SET_EXT_ROUTER_MODE
 	uint32_t ext_router_prefix_rt_hdl;
 #endif
+	xlat_context xlat_ctx;
 	//Keep below structure as last declaration.
 	eth_client_rt_hdl eth_rt_hdl[0]; /* depends on number of tx properties */
 }ipa_eth_client;
@@ -222,30 +248,6 @@ typedef struct ipa_lan_client_idx
 	int ipa_if_num;
 }ipa_lan_client_idx;
 #endif
-
-typedef struct rule_id_hdl_map
-{
-	uint32_t flt_hdl;
-	uint16_t rule_id;
-}rule_id_hdl_map;
-
-typedef struct pdn_context
-{
-	int pdn_mux_id;
-	uint16_t associated_VIDs[IPA_MAX_NUM_SW_PDNS];
-	uint32_t active_vlan_count;
-	uint32_t wan_mpdn_ul_xlat_fl_rule_hdl_v4[IPA_MAX_NUM_PROPS][MAX_WAN_UL_FILTER_RULES];
-	uint32_t num_wan_mpdn_ul_xlat_fl_rule_v4[IPA_MAX_NUM_PROPS];
-}pdn_context;
-
-typedef struct _xlat_context
-{
-	rule_id_hdl_map ul_rule_id_hdl_map[IPA_MAX_NUM_PROPS][MAX_WAN_UL_FILTER_RULES];
-
-	/* PDN's for which UL filter installed */
-	pdn_context active_pdn_list[IPA_MAX_NUM_HW_PDNS];
-	uint32_t active_pdn_count;
-}xlat_context;
 
 typedef struct _ipacm_vlan_sta_info
 {
@@ -482,11 +484,17 @@ public:
 
 	/* install UL filter rule from Q6 */
 #ifdef FEATURE_VLAN_MPDN
-	virtual int handle_uplink_filter_rule(ipacm_ext_prop *prop, ipa_ip_type iptype, uint8_t pdn_mux_id, bool notif_only, bool is_xlat = false, bool ast_update = false, bool static_policy = false);
+	virtual int handle_uplink_filter_rule(ipacm_ext_prop *prop, ipa_ip_type iptype, uint8_t pdn_mux_id,
+		bool notif_only, bool is_xlat = false, bool ast_update = false, bool static_policy = false);
 
 	virtual int handle_mpdn_ul_xlat_filter_rule(ipacm_ext_prop *prop, ipa_ip_type iptype, int pdn_mux_id, uint16_t vlan_id);
 
+	virtual int handle_mpdn_ul_xlat_filter_rule_per_client(int client_num,ipacm_ext_prop *prop,
+		ipa_ip_type iptype, int pdn_mux_id, uint16_t vlan_id);
+
 	virtual int delete_mdpn_ul_xlat_filter_rule(int mux_id);
+
+	virtual int delete_mdpn_ul_xlat_filter_rule_per_client(int client_num, int mux_id);
 #else
 	virtual int handle_uplink_filter_rule(ipacm_ext_prop* prop, ipa_ip_type iptype, uint8_t xlat_mux_id, bool ast_update = false);
 #endif
@@ -573,6 +581,7 @@ public:
 		uint8_t xlat_mux_id,
 		uint8_t *mac_addr,
 		uint8_t ul_cnt_idx,
+		uint16_t vlan_id,
 		ipa_ioc_add_flt_rule *fw_q6_rules = NULL,
 		bool isFirewall = false
 	);
@@ -583,7 +592,9 @@ public:
 	(
 		ipacm_ext_prop* prop,
 		ipa_ip_type iptype,
-		uint8_t xlat_mux_id
+		uint8_t xlat_mux_id,
+		bool is_xlat = false,
+		uint16_t vlan_id = 0
 	);
 
 	/* Delete UL filter rule from Q6 for all clients */
@@ -596,7 +607,8 @@ public:
 	virtual int delete_uplink_filter_rule_per_client
 	(
 		ipa_ip_type iptype,
-		uint8_t *mac_addr
+		uint8_t *mac_addr,
+		uint16_t vlan_id
 	);
 
 	/* Delete UL filter rule for STA backhaul for speciifc vlan id or all clients */
@@ -1263,6 +1275,48 @@ protected:
 		IPACMDBG_H("Max number of pdns reached, can't add pdn to ctx!\n");
 	}
 
+	inline void add_pdn_xlat_ctx_per_client(int client_num, int pdn_mux_id, uint16_t vid)
+	{
+		//check if mux_id was already added but need to add VLAN
+		for (int i = 0; i < IPA_MAX_NUM_HW_PDNS; ++i)
+		{
+			if (get_client_memptr(eth_client, client_num)->xlat_ctx.active_pdn_list[i].pdn_mux_id == pdn_mux_id)
+			{
+				for (int j = 0; j < IPA_MAX_NUM_SW_PDNS; ++j)
+				{
+					if (get_client_memptr(eth_client, client_num)->xlat_ctx.active_pdn_list[i].associated_VIDs[j] == 0) //add to the first empty
+					{
+						get_client_memptr(eth_client, client_num)->xlat_ctx.active_pdn_list[i].associated_VIDs[j] = vid;
+						get_client_memptr(eth_client, client_num)->xlat_ctx.active_pdn_list[i].active_vlan_count++;
+
+						IPACMDBG_H("Updating pdn with vlan id %d to xlat ctx mux id %d total active xlat pdn:%d vlan count %d\n",
+							vid, pdn_mux_id, get_client_memptr(eth_client, client_num)->xlat_ctx.active_pdn_count,
+							get_client_memptr(eth_client, client_num)->xlat_ctx.active_pdn_list[i].active_vlan_count);
+						return;
+					}
+				}
+			}
+		}
+
+		//Mux ID is new, add to the first open spot
+		for (int i = 0; i < IPA_MAX_NUM_HW_PDNS; ++i)
+		{
+			if (get_client_memptr(eth_client, client_num)->xlat_ctx.active_pdn_list[i].pdn_mux_id == 0)
+			{
+				get_client_memptr(eth_client, client_num)->xlat_ctx.active_pdn_list[i].pdn_mux_id = pdn_mux_id;
+				get_client_memptr(eth_client, client_num)->xlat_ctx.active_pdn_count++;
+				get_client_memptr(eth_client, client_num)->xlat_ctx.active_pdn_list[i].associated_VIDs[0] = vid;
+				get_client_memptr(eth_client, client_num)->xlat_ctx.active_pdn_list[i].active_vlan_count++;
+				IPACMDBG_H("Adding new pdn with vlan id %d to xlat ctx mux id %d total active xlat pdn:%d\n",
+					vid, pdn_mux_id, get_client_memptr(eth_client, client_num)->xlat_ctx.active_pdn_count);
+				return;
+			}
+		}
+
+		//neither case passed, which means pdn list is full
+		IPACMDBG_H("Max number of pdns reached, can't add pdn to ctx!\n");
+	}
+
 	inline void remove_pdn_xlat_ctx(int pdn_mux_id)
 	{
 		for (int i = 0; i < IPA_MAX_NUM_HW_PDNS ; ++i)
@@ -1275,6 +1329,25 @@ protected:
 				xlat_ctx.active_pdn_list[i].active_vlan_count = 0;
 				IPACMDBG_H("Removing pdn from xlat ctx mux id %d total active xlat pdn:%d\n",
 					pdn_mux_id, xlat_ctx.active_pdn_count);
+				return;
+			}
+		}
+		IPACMDBG_H("Pdn not found in ctx!\n");
+	}
+
+	inline void remove_pdn_xlat_ctx_per_client(int client_num, int pdn_mux_id)
+	{
+		for (int i = 0; i < IPA_MAX_NUM_HW_PDNS ; ++i)
+		{
+			if (get_client_memptr(eth_client, client_num)->xlat_ctx.active_pdn_list[i].pdn_mux_id == pdn_mux_id)
+			{
+				get_client_memptr(eth_client, client_num)->xlat_ctx.active_pdn_list[i].pdn_mux_id = 0;
+				get_client_memptr(eth_client, client_num)->xlat_ctx.active_pdn_count--;
+				memset(get_client_memptr(eth_client, client_num)->xlat_ctx.active_pdn_list[i].associated_VIDs, 0, IPA_MAX_NUM_SW_PDNS *
+					sizeof(get_client_memptr(eth_client, client_num)->xlat_ctx.active_pdn_list[i].associated_VIDs[0]));
+				get_client_memptr(eth_client, client_num)->xlat_ctx.active_pdn_list[i].active_vlan_count = 0;
+				IPACMDBG_H("Removing pdn from client_num: %d xlat ctx mux id %d total active xlat pdn:%d\n",
+					client_num, pdn_mux_id, get_client_memptr(eth_client, client_num)->xlat_ctx.active_pdn_count);
 				return;
 			}
 		}
@@ -1298,6 +1371,32 @@ protected:
 			}
 		}
 		IPACMDBG_H("PDN not found in ctx for mux id %d, vid %d\n", pdn_mux_id, vid);
+		return IPACM_FAILURE;
+	}
+
+	inline int get_pdn_xlat_ctx_per_client(int client_num, int pdn_mux_id, uint16_t vid)
+	{
+		for (int i = 0; i < IPA_MAX_NUM_HW_PDNS ; ++i)
+		{
+			if (get_client_memptr(eth_client, client_num)->xlat_ctx.active_pdn_list[i].pdn_mux_id == pdn_mux_id)
+			{
+				IPACMDBG("mux: %d %d vlan_count: %d vlan_id:%d\n", get_client_memptr(eth_client, client_num)->xlat_ctx.active_pdn_list[i].pdn_mux_id,
+					pdn_mux_id, get_client_memptr(eth_client, client_num)->xlat_ctx.active_pdn_list[i].active_vlan_count,
+					get_client_memptr(eth_client, client_num)->vlan_id);
+				for (int j = 0; j < get_client_memptr(eth_client, client_num)->xlat_ctx.active_pdn_list[i].active_vlan_count; ++j)
+				{
+					IPACMDBG("vid: %d\n",
+						get_client_memptr(eth_client, client_num)->xlat_ctx.active_pdn_list[i].associated_VIDs[j]);
+					if (vid == 0 || get_client_memptr(eth_client, client_num)->xlat_ctx.active_pdn_list[i].associated_VIDs[j] == vid)
+						//vid == 0 means we care only for the mux id not the vlan
+					{
+						IPACMDBG_H("got xlat ctx %d for mux id %d, vid %d\n", i, pdn_mux_id, vid);
+						return i;
+					}
+				}
+			}
+		}
+		IPACMDBG_H("PDN not found in ctx for client_num: %d mux id %d, vid %d\n", client_num, pdn_mux_id, vid);
 		return IPACM_FAILURE;
 	}
 

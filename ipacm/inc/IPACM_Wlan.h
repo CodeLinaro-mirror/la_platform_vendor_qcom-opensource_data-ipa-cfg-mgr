@@ -210,6 +210,7 @@ public:
 		uint8_t xlat_mux_id,
 		uint8_t *mac_addr,
 		uint8_t ul_cnt_idx,
+		uint16_t vlan_id,
 		ipa_ioc_add_flt_rule *fw_q6_rules = NULL,
 		bool isFirewall = false,
 		uint16_t ta_peer_id = 0

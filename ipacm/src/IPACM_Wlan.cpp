@@ -1307,7 +1307,6 @@ void IPACM_Wlan::event_callback(ipa_cm_event_id event, void *param)
 						}
 #endif
 						install_all_wlan_qos_route_rule(data->mac_addr, 0);
-						HandleNeighIpAddrAddEvt(data);
 					}
 					else
 #endif //IPA_HW_FNR_STATS
@@ -1316,7 +1315,6 @@ void IPACM_Wlan::event_callback(ipa_cm_event_id event, void *param)
 						{
 							handle_wlan_client_route_rule_ext(data->mac_addr, data->iptype);
 							install_all_wlan_qos_route_rule(data->mac_addr, 0);
-							HandleNeighIpAddrAddEvt(data);
 						}
 					}
 				}
@@ -2280,6 +2278,18 @@ int IPACM_Wlan::handle_wlan_client_mac_flt_route_rule(ipa_ip_type ip_type, int c
 					}
 				}
 #endif
+				for (auto it = rt_hdl_v6_list[clt_index].begin();
+					it != rt_hdl_v6_list[clt_index].end();++it)
+				{
+					memset(&data, 0, sizeof(data));
+					data.if_index = get_client_memptr(wlan_client, clt_index)->if_index;
+					data.iptype = IPA_IP_v6;
+					data.ipv6_addr[0] = it->first[0];
+					data.ipv6_addr[1] = it->first[1];
+					data.ipv6_addr[2] = it->first[2];
+					data.ipv6_addr[3] = it->first[3];
+					CtList->HandleNeighIpAddrAddEvt_v6(&data);
+				}
 			}
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
 			else
@@ -2895,8 +2905,7 @@ int IPACM_Wlan::handle_wlan_client_init_ex(ipacm_event_data_wlan_ex *data, bool 
 
 #ifdef FEATURE_STATIC_POLICY
 			//if IPACM is in static policy mode, we will install rules later based on conntrack evt
-			if (IPACM_Wan::isWanUP(ipa_if_num) ||
-				(IPACM_Iface::ipacmcfg->ipacm_static_policy_enable && IPACM_Wan::isVlanWanUP()))
+			if (IPACM_Wan::isWanUP(ipa_if_num) || IPACM_Wan::isVlanWanUP())
 #else
 			if (IPACM_Wan::isWanUP(ipa_if_num))
 #endif
@@ -2908,7 +2917,8 @@ int IPACM_Wlan::handle_wlan_client_init_ex(ipacm_event_data_wlan_ex *data, bool 
 					{
 						ext_prop = IPACM_Iface::ipacmcfg->GetExtProp(IPA_IP_v4);
 						res = install_uplink_filter_rule_per_client_v2(ext_prop, IPA_IP_v4, IPACM_Wan::getXlat_Mux_Id(), get_client_memptr(wlan_client, wlan_index)->mac,
-							get_client_memptr(wlan_client, wlan_index)->ul_cnt_idx, NULL, false, get_client_memptr(wlan_client, wlan_index)->ta_peer_id);
+							get_client_memptr(wlan_client, wlan_index)->ul_cnt_idx, get_client_memptr(wlan_client, wlan_index)->vlan_id,
+							NULL, false, get_client_memptr(wlan_client, wlan_index)->ta_peer_id);
 					}
 					else
 #endif //IPA_HW_FNR_STATS
@@ -2930,8 +2940,7 @@ int IPACM_Wlan::handle_wlan_client_init_ex(ipacm_event_data_wlan_ex *data, bool 
 				}
 			}
 #ifdef FEATURE_STATIC_POLICY
-			if(IPACM_Wan::isWanUP_V6(ipa_if_num) ||
-				(IPACM_Iface::ipacmcfg->ipacm_static_policy_enable && IPACM_Wan::isVlanWanUP_V6()))
+			if(IPACM_Wan::isWanUP_V6(ipa_if_num) || IPACM_Wan::isVlanWanUP_V6())
 #else
 			if(IPACM_Wan::isWanUP_V6(ipa_if_num))
 #endif
@@ -2943,7 +2952,8 @@ int IPACM_Wlan::handle_wlan_client_init_ex(ipacm_event_data_wlan_ex *data, bool 
 					{
 						ext_prop = IPACM_Iface::ipacmcfg->GetExtProp(IPA_IP_v6);
 						res = install_uplink_filter_rule_per_client_v2(ext_prop, IPA_IP_v6, 0, get_client_memptr(wlan_client, wlan_index)->mac,
-							get_client_memptr(wlan_client, wlan_index)->ul_cnt_idx, NULL, false, get_client_memptr(wlan_client, wlan_index)->ta_peer_id);
+							get_client_memptr(wlan_client, wlan_index)->ul_cnt_idx, get_client_memptr(wlan_client, wlan_index)->vlan_id,
+							NULL, false, get_client_memptr(wlan_client, wlan_index)->ta_peer_id);
 					}
 					else
 #endif //IPA_HW_FNR_STATS
@@ -2977,7 +2987,8 @@ int IPACM_Wlan::handle_wlan_client_init_ex(ipacm_event_data_wlan_ex *data, bool 
 					{
 						ext_prop = IPACM_Iface::ipacmcfg->GetExtProp(IPA_IP_v4);
 						res = install_uplink_filter_rule_per_client_v2(ext_prop, IPA_IP_v4, IPACM_Wan::getXlat_Mux_Id(), get_client_memptr(wlan_client, wlan_index)->mac,
-							get_client_memptr(wlan_client, wlan_index)->ul_cnt_idx, NULL, false, get_client_memptr(wlan_client, wlan_index)->ta_peer_id);
+							get_client_memptr(wlan_client, wlan_index)->ul_cnt_idx, get_client_memptr(wlan_client, wlan_index)->vlan_id,
+							NULL, false, get_client_memptr(wlan_client, wlan_index)->ta_peer_id);
 					}
 					else
 #endif //IPA_HW_FNR_STATS
@@ -3007,7 +3018,8 @@ int IPACM_Wlan::handle_wlan_client_init_ex(ipacm_event_data_wlan_ex *data, bool 
 					{
 						ext_prop = IPACM_Iface::ipacmcfg->GetExtProp(IPA_IP_v6);
 						res = install_uplink_filter_rule_per_client_v2(ext_prop, IPA_IP_v6, 0, get_client_memptr(wlan_client, wlan_index)->mac,
-							get_client_memptr(wlan_client, wlan_index)->ul_cnt_idx, NULL, false, get_client_memptr(wlan_client, wlan_index)->ta_peer_id);
+							get_client_memptr(wlan_client, wlan_index)->ul_cnt_idx, get_client_memptr(wlan_client, wlan_index)->vlan_id,
+							NULL, false, get_client_memptr(wlan_client, wlan_index)->ta_peer_id);
 					}
 					else
 #endif //IPA_HW_FNR_STATS
@@ -5822,8 +5834,7 @@ int IPACM_Wlan::handle_lan_client_connect(uint8_t *mac_addr)
 			goto fail;
 		}
 		free(client_info);
-		if (IPACM_Wan::isWanUP(ipa_if_num) ||
-			(IPACM_Iface::ipacmcfg->ipacm_static_policy_enable && IPACM_Wan::isVlanWanUP()))
+		if (IPACM_Wan::isWanUP(ipa_if_num) || IPACM_Wan::isVlanWanUP())
 		{
 			if(IPACM_Wan::backhaul_is_sta_mode == false)
 			{
@@ -5832,7 +5843,9 @@ int IPACM_Wlan::handle_lan_client_connect(uint8_t *mac_addr)
 				if (IPACM_Wan::ipacmcfg->hw_fnr_stats_support)
 					install_uplink_filter_rule_per_client_v2(ext_prop, IPA_IP_v4, IPACM_Wan::getXlat_Mux_Id(),
 						get_client_memptr(wlan_client, wlan_index)->mac,
-						get_client_memptr(wlan_client, wlan_index)->ul_cnt_idx, NULL, false,
+						get_client_memptr(wlan_client, wlan_index)->ul_cnt_idx,
+						get_client_memptr(wlan_client, wlan_index)->vlan_id,
+						NULL, false,
 						get_client_memptr(wlan_client, wlan_index)->ta_peer_id);
 				else
 #endif //IPA_HW_FNR_STATS
@@ -5850,8 +5863,7 @@ int IPACM_Wlan::handle_lan_client_connect(uint8_t *mac_addr)
 					get_client_memptr(wlan_client, wlan_index)->ipv4_sta_ul_rules_set = true;
 			}
 		}
-		if(IPACM_Wan::isWanUP_V6(ipa_if_num) ||
-			(IPACM_Iface::ipacmcfg->ipacm_static_policy_enable && IPACM_Wan::isVlanWanUP_V6()))
+		if(IPACM_Wan::isWanUP_V6(ipa_if_num) || IPACM_Wan::isVlanWanUP_V6())
 		{
 			if(IPACM_Wan::backhaul_is_sta_mode == false)
 			{
@@ -5859,7 +5871,8 @@ int IPACM_Wlan::handle_lan_client_connect(uint8_t *mac_addr)
 #ifdef IPA_HW_FNR_STATS
 				if (IPACM_Wan::ipacmcfg->hw_fnr_stats_support)
 					install_uplink_filter_rule_per_client_v2(ext_prop, IPA_IP_v6, 0, get_client_memptr(wlan_client, wlan_index)->mac,
-							get_client_memptr(wlan_client, wlan_index)->ul_cnt_idx, NULL, false,
+							get_client_memptr(wlan_client, wlan_index)->ul_cnt_idx, get_client_memptr(wlan_client, wlan_index)->vlan_id,
+							NULL, false,
 							get_client_memptr(wlan_client, wlan_index)->ta_peer_id);
 				else
 #endif //IPA_HW_FNR_STATS
@@ -8259,6 +8272,7 @@ int IPACM_Wlan::config_dft_firewall_rules_ul_ex(IPACM_firewall_conf_t* firewall_
 		install_uplink_filter_rule_per_client_v2(ext_prop, IPA_IP_v6, IPACM_Wan::getXlat_Mux_Id(),
 			get_client_memptr(wlan_client, wlan_idx)->mac,
 			get_client_memptr(wlan_client, wlan_idx)->ul_cnt_idx,
+			get_client_memptr(wlan_client, wlan_idx)->vlan_id,
 			pFilteringTable, true);
 	}
 	/************************/
@@ -8789,6 +8803,7 @@ int IPACM_Wlan::install_uplink_filter_rule_per_client_v2
 	uint8_t xlat_mux_id,
 	uint8_t *mac_addr,
 	uint8_t ul_cnt_idx,
+	uint16_t vlan_id,
 	ipa_ioc_add_flt_rule *fw_q6_rules,
 	bool isFirewall,
 	uint16_t ta_peer_id
@@ -8859,7 +8874,7 @@ int IPACM_Wlan::install_uplink_filter_rule_per_client_v2
 		total_rules = total_rules + v6_xlat_ul_rules;
 		IPACMDBG("Need %d additional XLAT rules\n", v6_xlat_ul_rules);
 	}
-	clnt_indx = get_wlan_client_index(mac_addr);
+	clnt_indx = get_wlan_client_index(mac_addr, vlan_id);
 
 	if (clnt_indx == IPACM_INVALID_INDEX)
 	{
@@ -9221,7 +9236,8 @@ int IPACM_Wlan::install_uplink_filter_rule
 				if (hw_fnr_stats_support)
 				{
 					ret = install_uplink_filter_rule_per_client_v2(prop, iptype, xlat_mux_id, get_client_memptr(wlan_client, i)->mac,
-						get_client_memptr(wlan_client, i)->ul_cnt_idx, NULL, false, get_client_memptr(wlan_client, i)->ta_peer_id);
+						get_client_memptr(wlan_client, i)->ul_cnt_idx, get_client_memptr(wlan_client, i)->vlan_id,
+						NULL, false, get_client_memptr(wlan_client, i)->ta_peer_id);
 					IPACMDBG_H("fnr : IPA_IP_v4 xlat_mux_id: %d, modem_ul_v4_set %d, ul cnt idx = %d\n", xlat_mux_id,
 						get_client_memptr(wlan_client, i)->ipv4_ul_rules_set, get_client_memptr(wlan_client, i)->ul_cnt_idx);
 				}
@@ -9242,7 +9258,8 @@ int IPACM_Wlan::install_uplink_filter_rule
 				if (hw_fnr_stats_support)
 				{
 					ret = install_uplink_filter_rule_per_client_v2(prop, iptype, xlat_mux_id, get_client_memptr(wlan_client, i)->mac,
-							get_client_memptr(wlan_client, i)->ul_cnt_idx, NULL, false, get_client_memptr(wlan_client, i)->ta_peer_id);
+							get_client_memptr(wlan_client, i)->ul_cnt_idx, get_client_memptr(wlan_client, i)->vlan_id,
+							NULL, false, get_client_memptr(wlan_client, i)->ta_peer_id);
 					IPACMDBG_H("IPA_IP_v6 num_dft_rt_v6 %d xlat_mux_id: %d modem_ul_v6_set: %d, ul_cnt_idx = %d\n", num_dft_rt_v6, xlat_mux_id,
 						get_client_memptr(wlan_client, i)->ipv6_ul_rules_set, get_client_memptr(wlan_client, i)->ul_cnt_idx);
 				}
@@ -10511,8 +10528,11 @@ int IPACM_Wlan::handle_wlan_vlan_neighbor(ipacm_event_new_neigh_vlan *param) {
 
 	install_all_wlan_qos_route_rule(data->mac_addr, vlan_id, data->ipv6_addr);
 
-	/* Add NAT rules after ipv4 RT rules are set */
-	HandleNeighIpAddrAddEvt(data);
+	if (IPACM_Iface::ipacmcfg->ipacm_lan_stats_enable == false)
+	{
+		/* Add NAT rules after ipv4 RT rules are set */
+		HandleNeighIpAddrAddEvt(data);
+	}
 
 	if(IPACM_Iface::ipacmcfg->wlan_vlan_mpdn_enabled) {
 		/* Special handling for VLAN clients in IP passthrough mode.

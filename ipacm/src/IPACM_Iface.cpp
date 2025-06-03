@@ -77,7 +77,7 @@ IPACM_Iface::IPACM_Iface(char *iface_name, int iface_index)
 	tx_prop = NULL;
 	rx_prop = NULL;
 
-	if((iface_name != NULL) && (strstr(iface_name, "mld")))
+	if((iface_name != NULL) && (strstr(iface_name, "mld") || strstr(iface_name, "wlan")))
 	{
 		strlcpy(dev_name, iface_name, IF_NAME_LEN);
 	}

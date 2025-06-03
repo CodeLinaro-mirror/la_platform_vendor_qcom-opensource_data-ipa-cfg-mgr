@@ -309,6 +309,7 @@ void* ipa_driver_msg_notifier(void *param)
 #endif
 	struct ipa_ioc_qos_config *qos_param;
 	struct ipa_macsec_map *macsecMap = NULL;
+	char iface_name[IPA_RESOURCE_NAME_MAX];
 
 	fd = open(IPA_DRIVER, O_RDWR);
 	if (fd < 0)
@@ -368,8 +369,12 @@ void* ipa_driver_msg_notifier(void *param)
 				IPACMERR("unable to allocate memory for event_wlan data_fid\n");
 				goto done;
 			}
-			ipa_get_if_index(event_wlan->name, &(data_fid->if_index));
-			if(event_wlan->mld_enabled)
+			memset(data_fid,0,sizeof(ipacm_event_data_fid));
+			if(IPACM_FAILURE == ipa_get_if_index(event_wlan->name, &(data_fid->if_index))){
+				data_fid->if_index = event_wlan->if_index;
+				IPACMDBG_H("Using WLAN_AP_CONNECT if_index: %d\n",event_wlan->if_index);
+			}
+			if(event_wlan->mld_enabled && strstr(event_wlan->name,"mld"))
 			{
 				snprintf(data_fid->iface_name, sizeof(event_wlan->name),
 							"%s_%d_%d", event_wlan->name,event_wlan->instance_id,
@@ -380,6 +385,7 @@ void* ipa_driver_msg_notifier(void *param)
 				strlcpy(data_fid->iface_name, event_wlan->name, sizeof(data_fid->iface_name));
 			}
 			data_fid->mlo_enabled = event_wlan->mld_enabled;
+			IPACMDBG_H("AP MLO enabled %d",event_wlan->mld_enabled);
 			IPACMDBG("Posting event with %s\n", data_fid->iface_name);
 			evt_data.event = IPA_WLAN_AP_LINK_UP_EVENT;
 #ifdef IPA_WDI_AST_UPDATE
@@ -400,12 +406,13 @@ void* ipa_driver_msg_notifier(void *param)
 				IPACMERR("unable to allocate memory for event_wlan data_fid\n");
 				goto done;
 			}
+			memset(data_fid,0,sizeof(ipacm_event_data_fid));
 			if(IPACM_FAILURE == ipa_get_if_index(event_wlan->name, &(data_fid->if_index)))
 			{
 				data_fid->if_index = event_wlan->if_index;
 				IPACMDBG_H("Using WLAN_AP_DISCONNECT if_index: %d\n",event_wlan->if_index);
 			}
-			if(event_wlan->mld_enabled)
+			if(event_wlan->mld_enabled && strstr(event_wlan->name,"mld"))
 			{
 				snprintf(data_fid->iface_name, sizeof(event_wlan->name),
 							"%s_%d_%d", event_wlan->name,event_wlan->instance_id, event_wlan->vdev_id);
@@ -498,8 +505,8 @@ void* ipa_driver_msg_notifier(void *param)
 			}
 			memcpy(event_ex, buffer + sizeof(struct ipa_msg_meta), length);
 			data_ex = (ipacm_event_data_wlan_ex *)malloc(sizeof(ipacm_event_data_wlan_ex) + event_ex_o.num_of_attribs * sizeof(ipa_wlan_hdr_attrib_val));
-		    if (data_ex == NULL)
-		    {
+			if (data_ex == NULL)
+			{
 				IPACMERR("unable to allocate memory for event data\n");
 		    	goto done;
 		    }
@@ -519,7 +526,17 @@ void* ipa_driver_msg_notifier(void *param)
 						event_ex->attribs,
 						event_ex->num_of_attribs * sizeof(ipa_wlan_hdr_attrib_val));
 
-			ipa_get_if_index(event_ex->name, &(data_ex->if_index));
+			if(IPACM_FAILURE == ipa_get_if_index(event_ex->name, &(data_ex->if_index)))
+			{
+				/* Condition for hmt mlo */
+				strlcpy(iface_name,event_ex->name,sizeof(iface_name));
+				char* char_idx =  strstr(iface_name, "_");
+				if (char_idx) {
+					char_idx[0] = '\0';
+					IPACMDBG_H("truncated iface name %s\n", iface_name);
+				}
+				ipa_get_if_index(iface_name, &(data_ex->if_index));
+			}
 			if(strstr(event_ex->name, "mld"))
 			{
 				snprintf(data_ex->iface_name, sizeof(event_ex->name),

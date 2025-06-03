@@ -590,7 +590,7 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 										{
 											vlan_id = mapping_info.vlan_id;
 										}
-										if (vlan_id > 0)
+										if (vlan_id > 0  && vlan_id < DUMMY_VLAN_ID_BASE)
 										{
 											handle_wan_up(IPA_IP_v4, vlan_id);
 										}
@@ -646,7 +646,7 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 										{
 											vlan_id = mapping_info.vlan_id;
 										}
-										if (vlan_id > 0)
+										if (vlan_id > 0  && vlan_id < DUMMY_VLAN_ID_BASE)
 										{
 											handle_wan_up(IPA_IP_v6, vlan_id);
 										}
@@ -843,7 +843,7 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 					{
 						vlan_id = mapping_info.vlan_id;
 					}
-					if (vlan_id > 0)
+					if (vlan_id > 0 && vlan_id < DUMMY_VLAN_ID_BASE)
 					{
 						handle_wan_up(IPA_IP_v4, vlan_id);
 					}
@@ -919,7 +919,7 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 					{
 						vlan_id = mapping_info.vlan_id;
 					}
-					if (vlan_id > 0)
+					if (vlan_id > 0 && vlan_id < DUMMY_VLAN_ID_BASE)
 					{
 						handle_wan_up(IPA_IP_v6, vlan_id);
 					}
@@ -1484,7 +1484,7 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 			IPACM_SYSLOG("Received IPA_HANDLE_WAN_VLAN_PDN_DOWN for VID %d, iptype %d\n",
 				data->VlanID,
 				data->iptype);
-			if(is_vlan_IF(data->VlanID))
+			if(is_vlan_IF(data->VlanID) || IPACM_Iface::ipacmcfg->is_dummy_VID(data->VlanID))
 			{
 #ifdef FEATURE_IPACM_UL_FIREWALL
 				if(data->iptype == IPA_IP_v6)
@@ -10614,6 +10614,10 @@ int IPACM_Lan::eth_bridge_add_hdr_proc_ctx(ipa_hdr_l2_type peer_l2_hdr_type, uin
 		/*Extract VID from br0 if non-vlan on default or extract from respective bridge */
 		if(!IPACM_Iface::ipacmcfg->get_bridge_vlan_mapping(&mapping_info))
 		{
+			if(vlan_id <= 0 || vlan_id > DUMMY_VLAN_ID_BASE)
+			{
+				IPACMERR("Unable to find Bridge for %s\n", mapping_info.bridge_name);
+			}
 			vlan_id = mapping_info.vlan_id;
 		}
 

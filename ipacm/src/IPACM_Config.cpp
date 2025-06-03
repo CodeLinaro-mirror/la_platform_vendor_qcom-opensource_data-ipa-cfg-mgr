@@ -25,6 +25,10 @@
  * WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *
+ * Changes from Qualcomm Technologies, Inc. are provided under the following license:
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 /*!
 		@file
@@ -405,6 +409,11 @@ int IPACM_Config::Init(void)
 	char	IPACM_config_file[IPA_MAX_FILE_LEN];
 	IPACM_conf_t	*cfg;
 
+	struct statvfs stat;
+	ulong available_partition_size_bytes = 0;
+	char ipacm_log_file[] = IPACM_LOG_COLLECTION_FILE;
+	char *ipacm_log_dir = NULL;
+
 	cfg = (IPACM_conf_t *)malloc(sizeof(IPACM_conf_t));
 	if(cfg == NULL)
 	{
@@ -449,6 +458,41 @@ int IPACM_Config::Init(void)
 		ret = IPACM_FAILURE;
 		goto fail;
 	}
+
+	if(cfg->max_file_size_quota > 100)
+	{
+		IPACMDBG_H("Invalid Quota Set[%d], changing to default[%d]\n",
+				cfg->max_file_size_quota, IPACM_DEF_LOG_FILE_SIZE_QUOTA);
+		cfg->max_file_size_quota = IPACM_DEF_LOG_FILE_SIZE_QUOTA;
+	}
+	ipacm_log_dir = dirname(ipacm_log_file);
+
+	/* Read the available partition size */
+	if (statvfs(ipacm_log_dir, &stat) != 0) {
+		IPACMDBG_H("Failed to get available partition size\n");
+		max_file_size = 0;
+	}
+	else
+	{
+		available_partition_size_bytes = stat.f_bavail * stat.f_frsize;
+
+		IPACMDBG_H("Setting file size to min of APS[%lu], max_filesz[%lu], \
+				Based on Quota[%lu] \n", available_partition_size_bytes,
+				cfg->max_file_size, (ulong)((available_partition_size_bytes *
+						cfg->max_file_size_quota) /100));
+
+		/* Conerting from ulong to unit32_t, since uint32_t can hold a
+		 * file size value upto 4GB. So, shouldn't affect here as the file
+		 * size configured will usually be less than that.
+		 */
+		max_file_size = (uint32_t)std::min({(ulong)(cfg->max_file_size),
+				(ulong)(available_partition_size_bytes),
+				(ulong)((available_partition_size_bytes *
+						cfg->max_file_size_quota) / 100)});
+	}
+	IPACMDBG_H("max_file_size %d \n", max_file_size);
+
+	log_init();
 
 	/* Construct IPACM Iface table */
 	ipa_num_ipa_interfaces = cfg->iface_config.num_iface_entries;
@@ -822,7 +866,7 @@ int IPACM_Config::AddNatIfaces(char *dev_name)
 		}
 	}
 
-	IPACMDBG_H("Add iface %s to NAT-ifaces, origin it has %d nat ifaces\n",
+	IPACM_SYSLOG("Add iface %s to NAT-ifaces, origin it has %d nat ifaces\n",
 					          dev_name, ipa_nat_iface_entries);
 	ipa_nat_iface_entries++;
 
@@ -841,7 +885,7 @@ int IPACM_Config::AddNatIfaces(char *dev_name)
 int IPACM_Config::DelNatIfaces(char *dev_name)
 {
 	int i = 0;
-	IPACMDBG_H("Del iface %s from NAT-ifaces, origin it has %d nat ifaces\n",
+	IPACM_SYSLOG("Del iface %s from NAT-ifaces, origin it has %d nat ifaces\n",
 					 dev_name, ipa_nat_iface_entries);
 
 	for (i = 0; i < ipa_nat_iface_entries; i++)
@@ -1127,7 +1171,7 @@ int IPACM_Config::SetExtProp(ipa_ioc_query_intf_ext_props *prop)
 		}
 	}
 
-	IPACMDBG_H("Set extended property succeeded.\n");
+	IPACM_SYSLOG("Set extended property succeeded.\n");
 
 	return IPACM_SUCCESS;
 }
@@ -1245,7 +1289,7 @@ void IPACM_Config::add_bridge_vlan_mapping(ipa_ioc_bridge_vlan_mapping_info *dat
 	new_mapping.lan2lan_sw = data->lan2lan_sw;
 
 	m_bridge_vlan_mapping.push_front(new_mapping);
-	IPACMDBG_H("added bridge %s with VID %d, lan2lan_sw=%d\n", data->bridge_name, data->vlan_id, data->lan2lan_sw);
+	IPACM_SYSLOG("added bridge %s with VID %d, lan2lan_sw=%d\n", data->bridge_name, data->vlan_id, data->lan2lan_sw);
 
 	pthread_mutex_unlock(&vlan_l2tp_lock);
 
@@ -1269,7 +1313,7 @@ void IPACM_Config::del_bridge_vlan_mapping(ipa_ioc_bridge_vlan_mapping_info *dat
 	list<bridge_vlan_mapping_info>::iterator it_mapping;
 	ipacm_bridge *bridge = NULL;
 
-	IPACMDBG_H("deleting bridge vlan mapping (%s)->(%d)\n",
+	IPACM_SYSLOG("deleting bridge vlan mapping (%s)->(%d)\n",
 		data->bridge_name,
 		data->vlan_id);
 
@@ -1444,6 +1488,7 @@ void IPACM_Config::add_vlan_iface(ipa_ioc_vlan_iface_info *data)
 	new_vlan_info.vlan_id = data->vlan_id;
 	m_vlan_iface.push_front(new_vlan_info);
 	pthread_mutex_unlock(&vlan_l2tp_lock);
+	IPACM_SYSLOG("Added VLAN iface %s success\n", data->name);
 #ifdef FEATURE_VLAN_MPDN
 	if (IPACM_Iface::ipacmcfg->ipacm_mpdn_enable == TRUE)
 	{
@@ -1522,6 +1567,7 @@ void IPACM_Config::del_vlan_iface(ipa_ioc_vlan_iface_info *data)
 		{
 			IPACMDBG_H("Found the vlan interface\n");
 			m_vlan_iface.erase(it_vlan);
+			IPACM_SYSLOG("Del VLAN iface %s success\n", it_vlan->vlan_iface_name);
 			break;
 		}
 	}
@@ -1616,7 +1662,7 @@ void IPACM_Config::handle_vlan_iface_info(ipacm_event_data_addr *data)
 					if(strncmp(it_mapping->vlan_iface_name, it_vlan->vlan_iface_name,
 						sizeof(it_mapping->vlan_iface_name)) == 0)
 					{
-						IPACMDBG_H("Found the l2tp-vlan mapping: l2tp %s\n", it_mapping->l2tp_iface_name);
+						IPACM_SYSLOG("Found the l2tp-vlan mapping: l2tp %s\n", it_mapping->l2tp_iface_name);
 						memcpy(it_mapping->vlan_iface_ipv6_addr, data->ipv6_addr,
 							sizeof(it_mapping->vlan_iface_ipv6_addr));
 					}
@@ -1666,6 +1712,13 @@ void IPACM_Config::handle_vlan_client_info(ipacm_event_data_all *data)
 			}
 			memcpy(it_vlan->vlan_client_mac, data->mac_addr, sizeof(it_vlan->vlan_client_mac));
 			memcpy(it_vlan->vlan_client_ipv6_addr, data->ipv6_addr, sizeof(it_vlan->vlan_client_ipv6_addr));
+			IPACM_SYSLOG("Incoming vlan client iface: %s IPv6 address: 0x%08x%08x%08x%08x MAC address: 0x%02x::%02x::%02x::%02x::%02x::%02x\n",
+				data->iface_name, data->ipv6_addr[0],
+				data->ipv6_addr[1], data->ipv6_addr[2], data->ipv6_addr[3],
+				data->mac_addr[0], data->mac_addr[1],
+				data->mac_addr[2], data->mac_addr[3],
+				data->mac_addr[4], data->mac_addr[5]);
+
 			break;
 		}
 	}
@@ -1676,7 +1729,7 @@ void IPACM_Config::handle_vlan_client_info(ipacm_event_data_all *data)
 		{
 			if(strncmp(it_mapping->vlan_iface_name, data->iface_name, sizeof(it_mapping->vlan_iface_name)) == 0)
 			{
-				IPACMDBG_H("Found vlan iface in l2tp mapping list: %s, l2tp iface: %s\n", it_mapping->vlan_iface_name,
+				IPACM_SYSLOG("Found vlan iface in l2tp mapping list: %s, l2tp iface: %s\n", it_mapping->vlan_iface_name,
 					it_mapping->l2tp_iface_name);
 				memcpy(it_mapping->vlan_client_mac, data->mac_addr, sizeof(it_mapping->vlan_client_mac));
 				memcpy(it_mapping->vlan_client_ipv6_addr, data->ipv6_addr, sizeof(it_mapping->vlan_client_ipv6_addr));
@@ -1804,7 +1857,7 @@ void IPACM_Config::add_vlan_bridge(ipacm_event_data_all *data_all)
 					data_all->iface_name);
 			}
 			close(fd);
-			IPACMDBG_H("added bridge named %s, MAC %02x:%02x:%02x:%02x:%02x:%02x\n",
+			IPACM_SYSLOG("added bridge named %s, MAC %02x:%02x:%02x:%02x:%02x:%02x\n",
 				IPACM_Iface::ipacmcfg->vlan_bridges[i].bridge_name,
 				IPACM_Iface::ipacmcfg->vlan_bridges[i].bridge_mac[0],
 				IPACM_Iface::ipacmcfg->vlan_bridges[i].bridge_mac[1],
@@ -1995,7 +2048,7 @@ void IPACM_Config::add_l2tp_vlan_mapping(ipa_ioc_l2tp_vlan_mapping_info *data)
 		sizeof(new_mapping.vlan_iface_name));
 	new_mapping.l2tp_session_id = data->l2tp_session_id;
 #ifdef IPA_L2TP_TUNNEL_UDP
-	IPACMDBG_H("L2tp tunnel type %d: Source Port: %d Dest Port: %d MTU: %d\n",
+	IPACM_SYSLOG("L2tp tunnel type %d: Source Port: %d Dest Port: %d MTU: %d\n",
 	data->tunnel_type, data->src_port, data->dst_port, data->mtu);
 	new_mapping.tunnel_type = data->tunnel_type;
 	if (new_mapping.tunnel_type == IPA_L2TP_TUNNEL_UDP)
@@ -2049,7 +2102,7 @@ void IPACM_Config::del_l2tp_vlan_mapping(ipa_ioc_l2tp_vlan_mapping_info *data)
 			{
 				m_l2tp_vlan_mapping.erase(it);
 				DelNatIfaces(data->l2tp_iface_name);
-				IPACMDBG_H("Del l2tp iface %s to nat ifaces.\n", data->l2tp_iface_name);
+				IPACM_SYSLOG("Del l2tp iface %s to nat ifaces.\n", data->l2tp_iface_name);
 			}
 			else
 			{
@@ -2241,7 +2294,7 @@ void IPACM_Config::add_socksv5_conn(ipa_socksv5_msg *add_socksv5_info)
 	memset(&new_mapping, 0, sizeof(new_mapping));
 	memcpy(&new_mapping.conn_info, add_socksv5_info, sizeof(new_mapping.conn_info));
 
-	IPACMDBG_H("ipv4 0x%X it_mapping:0x%X\n",
+	IPACM_SYSLOG("ipv4 0x%X it_mapping:0x%X\n",
 				new_mapping.conn_info.dl_in.ipv4_dst);
 
 	socksv5_conn.push_front(new_mapping);
@@ -2280,6 +2333,7 @@ void IPACM_Config::del_socksv5_conn(uint32_t *socksv5_handle)
 			/* push event for v6-ct to delete the entry */
 			post_socksv5_evt(&(it_mapping->conn_info), false);
 			socksv5_conn.erase(it_mapping);
+			IPACM_SYSLOG("deleted the socksv5 conn handle %d\n", *socksv5_handle);
 			break;
 		}
 	}
@@ -2326,7 +2380,7 @@ void IPACM_Config::add_mux_id_mapping(rmnet_mux_id_info *add_mux_id_info)
 	memset(&new_mapping, 0, sizeof(new_mapping));
 	memcpy(&new_mapping, add_mux_id_info, sizeof(new_mapping));
 
-	IPACMDBG_H("ipv4 0x%X map to muxd:0x%d\n",
+	IPACM_SYSLOG("ipv4 0x%X map to muxd:0x%d\n",
 				new_mapping.ipv4_addr,
 				new_mapping.mux_id);
 
@@ -2357,8 +2411,8 @@ void IPACM_Config::del_mux_id_mapping(rmnet_mux_id_info *del_mux_id_info)
 	{
 		if (del_mux_id_info->ipv4_addr == it_mapping->ipv4_addr)
 		{
-			IPACMDBG_H("Del this mapping with muxd %d\n",
-			it_mapping->mux_id);
+			IPACM_SYSLOG("Del IPV4 0x%X mapping with muxd %d\n",
+					del_mux_id_info->ipv4_addr, it_mapping->mux_id);
 			mux_id_mapping.erase(it_mapping);
 			break;
 		}

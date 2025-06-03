@@ -25,6 +25,10 @@
  * WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *
+ * Changes from Qualcomm Innovation Center, Inc. are provided under the following license:
+ * Copyright (c) 2025 Qualcomm Innovation Center, Inc. All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear.
  */
 /*!
   @file
@@ -180,7 +184,8 @@ static int ipacm_cfg_xml_parse_tree
 						IPACM_util_icmp_string((char*)xml_node->name, IPACM_L2TP_TAG) == 0 ||
 						IPACM_util_icmp_string((char*)xml_node->name, IPACM_MPDN_TAG) == 0 ||
 						IPACM_util_icmp_string((char*)xml_node->name, IPACM_SOCKSv5_TAG) == 0 ||
-						IPACM_util_icmp_string((char*)xml_node->name, IP_PassthroughFlag_TAG) == 0)
+						IPACM_util_icmp_string((char*)xml_node->name, IP_PassthroughFlag_TAG) == 0 ||
+						IPACM_util_icmp_string((char*)xml_node->name, IPACMLOG_TAG) == 0)
 				{
 					if (0 == IPACM_util_icmp_string((char*)xml_node->name, IFACE_TAG))
 					{
@@ -596,6 +601,34 @@ static int ipacm_cfg_xml_parse_tree
 							memset(content_buf, 0, sizeof(content_buf));
 							memcpy(content_buf, (void *)content, str_size);
 							config->ipacm_l2tp_enable = atoi(content_buf);
+						}
+				}
+				else if (0 == IPACM_util_icmp_string((char*)xml_node->name, IPACMFILEQUOTA_TAG))
+				{
+					IPACMDBG_H("inside ipacm_logging Quota\n");
+					content = IPACM_read_content_element(xml_node);
+					if (content!= NULL)
+					{
+						if(atoi(content)!=0)
+						{
+							config->max_file_size_quota = atoi(content);
+						}
+						IPACMDBG_H("max_fileszQuota %d \n",config->max_file_size_quota);
+					}
+				}
+				else if (0 == IPACM_util_icmp_string((char*)xml_node->name, IPACMFILEVAR_TAG))
+				{		IPACMDBG_H("inside ipacm_logging \n");
+						content = IPACM_read_content_element(xml_node);
+						if (content)
+						{
+							str_size = strlen(content);
+							memset(content_buf, 0, sizeof(content_buf));
+							memcpy(content_buf, (void *)content, str_size);
+							if(atoi(content_buf)!=0)
+							{
+								config->max_file_size = atoi(content_buf);
+								IPACMDBG_H("max_filesz %d \n",config->max_file_size);
+							}
 						}
 				}
 				else if (IPACM_util_icmp_string((char*)xml_node->name, IPACM_MPDN_Enable_TAG) == 0)

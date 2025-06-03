@@ -26,6 +26,10 @@
  * WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *
+ * Changes from Qualcomm Innovation Center, Inc. are provided under the following license:
+ * Copyright (c) 2025 Qualcomm Innovation Center, Inc. All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear.
  */
 /*!
 	@file
@@ -50,6 +54,17 @@
 #else
 #include <list>
 #endif
+#include <set>
+#include <map>
+#include <algorithm>
+#include <string>
+#include <libgen.h>
+#include <sys/statvfs.h>
+
+#define IPACM_DEF_LOG_FILE_SIZE_QUOTA    30
+
+using std::string;
+using std::set;
 
 typedef struct
 {
@@ -102,6 +117,8 @@ struct ipa_prefix_info {
 class IPACM_Config
 {
 public:
+
+	uint32_t max_file_size;
 
 	/* IPACM ipa_client map to rm_resource*/
 	ipa_rm_resource_name ipa_client_rm_map_tbl[IPA_CLIENT_MAX];

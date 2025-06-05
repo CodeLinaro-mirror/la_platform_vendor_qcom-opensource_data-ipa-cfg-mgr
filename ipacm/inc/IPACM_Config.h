@@ -26,39 +26,9 @@
  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * Changes from Qualcomm Innovation Center are provided under the following license:
- *
- * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
- *
- * Redistribution and use in source and binary forms, with or without
- * modification, are permitted (subject to the limitations in the
- * disclaimer below) provided that the following conditions are met:
- *
- *     * Redistributions of source code must retain the above copyright
- *       notice, this list of conditions and the following disclaimer.
- *
- *     * Redistributions in binary form must reproduce the above
- *       copyright notice, this list of conditions and the following
- *       disclaimer in the documentation and/or other materials provided
- *       with the distribution.
- *
- *     * Neither the name of Qualcomm Innovation Center, Inc. nor the names of its
- *       contributors may be used to endorse or promote products derived
- *       from this software without specific prior written permission.
- *
- * NO EXPRESS OR IMPLIED LICENSES TO ANY PARTY'S PATENT RIGHTS ARE
- * GRANTED BY THIS LICENSE. THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT
- * HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED
- * WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
- * MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
- * IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR
- * ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
- * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE
- * GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
- * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER
- * IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
- * OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
- * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE
+ * Changes from Qualcomm Technologies, Inc. are provided under the following license:
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 /*!
 	@file
@@ -412,7 +382,78 @@ public:
 		uint32_t pmip_gre_key;
 	}pmipv6_status;
 	pmipv6_status pmip_details;
+#ifdef FEATURE_IPoGRE
+	typedef struct ipgre_route_data_s
+	{
+		uint32_t ul_header_hdl;
+		uint32_t dl_header_hdl;
+		uint32_t proc_ctx_gre_add_hdl;
+		uint32_t proc_ctx_gre_rmv_hdl;
+		uint32_t rt_gre_add_hdl[MAX_FLOW_PER_IPOGRE_TUNNEL];
+		uint32_t rt_gre_rmv_hdl;
+		uint32_t rt_tbl_hdl;
+		uint32_t flt_gre_1st_pass_hdl;
+		uint32_t ul_header_hdl_c;
+		uint32_t rt_gre_add_hdl_cache[MAX_FLOW_PER_IPOGRE_TUNNEL];
+	} ipgre_route_data_t;
 
+	typedef struct ipa_ipogre_flow_info_cache
+	{
+		bool del[MAX_FLOW_PER_IPOGRE_TUNNEL];
+		int num_flows;
+	} ipa_ipogre_flow_info_cache;
+
+	typedef struct v4_tunnel_endpoint {
+		uint32_t ipv4_src;
+		uint32_t ipv4_dst;
+	} v4_tunnel_endpoint;
+
+	typedef struct v6_tunnel_endpoint {
+		uint32_t ipv6_src[4];
+		uint32_t ipv6_dst[4];
+	} v6_tunnel_endpoint;
+
+	typedef union ipogre_tunnel_endpoint {
+		v4_tunnel_endpoint v4_ip;
+		v6_tunnel_endpoint v6_ip;
+	} ipogre_tunnel_endpoint;
+
+	typedef struct ipgre_tunnel_id_info {
+		enum ipa_ip_type iptype;
+		ipogre_tunnel_endpoint tunnel_endpoint;
+		ipgre_route_data_t gre_route_data[IPA_IP_MAX];
+		char gre_rt_tbl_name_ul[IPA_RESOURCE_NAME_MAX];
+		char gre_rt_tbl_name_dl[IPA_RESOURCE_NAME_MAX];
+		char tunnel_name[IPA_IFACE_NAME_LEN];
+		bool ipogre_enabled;
+		bool ipogre_up;
+		bool ipogre_tunnel_setup;
+		bool ipogre_gre_event_posted;
+		bool ipogre_up_wan;
+		uint32_t ipgre_key;
+		struct ipa_ipogre_flow_info flows[MAX_FLOW_PER_IPOGRE_TUNNEL];
+		ipa_ipogre_flow_info_cache flows_cache_info;
+		int num_flows;
+		uint32_t flow_hdl[2][MAX_FLOW_PER_IPOGRE_TUNNEL];
+		uint32_t flow_hdl_cache[2][MAX_FLOW_PER_IPOGRE_TUNNEL];
+		uint32_t ipgre_wan_ul_fl_rule_hdl_v4[MAX_WAN_UL_FILTER_RULES];
+		uint8_t num_wan_ul_ipgre_fl_rule_v4;
+		bool modem_ipgre_ul_v4_set;
+		uint32_t ipgre_wan_ul_fl_rule_hdl_v6[MAX_WAN_UL_FILTER_RULES];
+		uint8_t num_wan_ul_ipgre_fl_rule_v6;
+		bool modem_ipgre_ul_v6_set;
+		bool tunnel_up;
+		uint32_t Tunnel_id;
+		struct ipa_ipogre_flow_info flows_cache[MAX_FLOW_PER_IPOGRE_TUNNEL];
+	} ipgre_tunnel_id_info_s;
+	struct ipa_ioc_ipogre_info ipogre_info;
+	/*Vector to keep track of tunnel idx*/
+	bool tunnels[MAX_TUNNEL_SUPPORT];
+	ipgre_tunnel_id_info_s ipogre_tunnel_idx_map[MAX_TUNNEL_SUPPORT];
+	int num_tunnels;
+	int get_free_tunnel_id();
+#endif
+	bool ipogre_enabled;
 	bool eth_pdu_enabled;
 
 #ifdef FEATURE_VLAN_MPDN

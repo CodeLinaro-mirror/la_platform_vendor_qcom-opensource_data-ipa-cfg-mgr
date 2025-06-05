@@ -60,9 +60,9 @@ IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
 OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
 IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE
 */
-/*Changes from Qualcomm Innovation Center are provided under the following license:
-
-Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+/*
+Changes from Qualcomm Technologies, Inc. are provided under the following license:
+Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
 SPDX-License-Identifier: BSD-3-Clause-Clear*/
 /*!
 	@file
@@ -332,6 +332,10 @@ int IPACM_IfaceManager::create_iface_instance(ipacm_ifacemgr_data *param)
 				IPACM_EvtDispatcher::registr(IPA_HANDLE_GRE_UP, lan);
 				IPACM_EvtDispatcher::registr(IPA_HANDLE_GRE_DOWN, lan);
 #endif
+#ifdef FEATURE_IPoGRE
+				IPACM_EvtDispatcher::registr(IPA_WAN_HANDLE_IPOGRE_UP, lan);
+				IPACM_EvtDispatcher::registr(IPA_WAN_HANDLE_IPOGRE_DOWN, lan);
+#endif
 #ifdef FEATURE_IPA_ANDROID
 				IPACM_EvtDispatcher::registr(IPA_HANDLE_WAN_UP_TETHER, lan);
 				IPACM_EvtDispatcher::registr(IPA_HANDLE_WAN_UP_V6_TETHER, lan);
@@ -445,6 +449,10 @@ int IPACM_IfaceManager::create_iface_instance(ipacm_ifacemgr_data *param)
 #ifdef FEATURE_PMIPV6
 					IPACM_EvtDispatcher::registr(IPA_HANDLE_GRE_UP, odu);
 					IPACM_EvtDispatcher::registr(IPA_HANDLE_GRE_DOWN, odu);
+#endif
+#ifdef FEATURE_IPoGRE
+					IPACM_EvtDispatcher::registr(IPA_WAN_HANDLE_IPOGRE_UP, odu);
+					IPACM_EvtDispatcher::registr(IPA_WAN_HANDLE_IPOGRE_DOWN, odu);
 #endif
 #ifdef IPA_MTU_EVENT_MAX
 					IPACM_EvtDispatcher::registr(IPA_MTU_UPDATE, odu);
@@ -645,6 +653,10 @@ int IPACM_IfaceManager::create_iface_instance(ipacm_ifacemgr_data *param)
 						IPACM_EvtDispatcher::registr(IPA_HANDLE_EoGRE_UP, w);
 						IPACM_EvtDispatcher::registr(IPA_HANDLE_EoGRE_DOWN, w);
 					}
+#endif
+#ifdef FEATURE_IPoGRE
+					IPACM_EvtDispatcher::registr(IPA_HANDLE_IPOGRE_UP,w);
+					IPACM_EvtDispatcher::registr(IPA_HANDLE_IPOGRE_DOWN,w);
 #endif
 #ifdef FEATURE_PMIPV6
 					IPACM_EvtDispatcher::registr(IPA_HANDLE_GRE_UP, w);

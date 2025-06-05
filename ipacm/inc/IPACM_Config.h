@@ -482,6 +482,13 @@ public:
 		ipacm_cmd_q_data evt_data;
 		ipacm_event_data_fid *data_fid;
 		uint32_t subnet_mask = ~0;
+
+		if(0 == ip_addr)
+		{
+			IPACMDBG("Invalid IPACM private subnet_addr as: 0x%x in entry(%d) \n", ip_addr, ipa_num_private_subnet);
+			return false;
+		}
+
 		for(int cnt = 0; cnt < ipa_num_private_subnet; cnt++)
 		{
 			if(private_subnet_table[cnt].subnet_addr == ip_addr)

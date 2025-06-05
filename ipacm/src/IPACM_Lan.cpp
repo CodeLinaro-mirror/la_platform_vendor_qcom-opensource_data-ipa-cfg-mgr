@@ -17738,7 +17738,7 @@ int IPACM_Lan::handle_mpdn_ul_xlat_filter_rule(ipacm_ext_prop * prop,
 		{
 			if (prev == 0)
 				/* add the XLAT rule after the dynamic subnet/MTU rules */
-				pFilteringTable->add_after_hdl = private_fl_rule_hdl[0][num_wan_subnet_rules[0] - 1];
+				pFilteringTable->add_after_hdl = private_fl_rule_hdl[j][num_wan_subnet_rules[j] - 1];
 			else
 				pFilteringTable->add_after_hdl = xlat_ctx.ul_rule_id_hdl_map[j][prev - 1].flt_hdl;
 

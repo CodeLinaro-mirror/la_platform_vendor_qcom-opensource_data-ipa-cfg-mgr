@@ -3661,6 +3661,10 @@ int IPACM_Lan::handle_addr_evt(ipacm_event_data_addr *data)
 		}
 		
 		eth_bridge_post_event(IPA_ETH_BRIDGE_IFACE_UP, IPA_IP_v4, NULL, NULL, NULL);
+#if defined(FEATURE_VLAN_MPDN)
+		/* Post IPA_ETH_BRIDGE_ADD_VLAN_ID event for all vlan-interfaces that are created before physical netdev. */
+		IPACM_Iface::ipacmcfg->post_eth_bridge_add_vlan_id_event(data->iface_name);
+#endif
 	}
 	else
 	{

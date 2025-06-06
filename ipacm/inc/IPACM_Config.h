@@ -269,6 +269,7 @@ public:
 	bool is_added_vlan_iface(char *iface_name);
 	bool iface_in_vlan_mode(const char * phys_iface_name);
 	int get_iface_vlan_ids(char *phys_iface_name, uint16_t *Ids);
+	void post_eth_bridge_add_vlan_id_event(const char *iface_name);
 	int get_vlan_id(char *iface_name, uint16_t *vlan_id);
 	void get_vlan_mode_ifaces();
 #endif

@@ -1803,6 +1803,44 @@ void IPACM_Config::handle_vlan_client_info(ipacm_event_data_all *data)
 
 #ifdef FEATURE_VLAN_MPDN
 
+void IPACM_Config::post_eth_bridge_add_vlan_id_event(const char *iface_name)
+{
+    list<vlan_iface_info>::iterator it_vlan;
+    ipacm_cmd_q_data eth_bridge_evt;
+    ipacm_event_eth_bridge *evt_data_eth_bridge = NULL;
+
+    if(NULL == iface_name)
+    {
+        IPACMERR("Invalid iface name received.\n");
+        return;
+    }
+    for(it_vlan = m_vlan_iface.begin(); it_vlan != m_vlan_iface.end(); it_vlan++)
+    {
+        if (strstr(it_vlan->vlan_iface_name, iface_name))
+        {
+            evt_data_eth_bridge = (ipacm_event_eth_bridge*)malloc(sizeof(*evt_data_eth_bridge));
+            if(evt_data_eth_bridge == NULL)
+            {
+                IPACMERR("Failed to allocate memory.\n");
+                return;
+            }
+            memset(&eth_bridge_evt, 0, sizeof(ipacm_cmd_q_data));
+            memset(evt_data_eth_bridge, 0, sizeof(*evt_data_eth_bridge));
+
+            memcpy(evt_data_eth_bridge->iface_name, it_vlan->vlan_iface_name,
+                    sizeof(evt_data_eth_bridge->iface_name));
+
+            evt_data_eth_bridge->VlanID = it_vlan->vlan_id;
+
+            eth_bridge_evt.evt_data = (void*)evt_data_eth_bridge;
+            eth_bridge_evt.event = IPA_ETH_BRIDGE_ADD_VLAN_ID;
+            IPACMDBG("Posting event IPA_ETH_BRIDGE_ADD_VLAN_ID for Iface[%s][%s], vid[%d], posting event\n",
+                    iface_name, it_vlan->vlan_iface_name, it_vlan->vlan_id);
+            IPACM_EvtDispatcher::PostEvt(&eth_bridge_evt);
+        }
+    }
+}
+
 void IPACM_Config::get_vlan_mode_ifaces()
 {
 	struct ipa_ioc_get_vlan_mode vlan_mode;

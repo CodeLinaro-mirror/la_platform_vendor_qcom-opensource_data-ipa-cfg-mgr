@@ -577,7 +577,8 @@ public:
 	const char* eth_lan_wan_iface_name;
 	/* Indicates whether Multi VLAN to Single Bridge mode is enabled */
 	bool multi_vlan_bridge_config_enable;
-
+	/* br-wan mode flag */
+	bool eth_wan_br_wan_enable;
 #ifdef FEATURE_EoGRE
 	ipa_ipgre_info eogre_info;
 	bool           eogre_enabled;
@@ -704,6 +705,7 @@ public:
 	void update_pppoe_session_info(const char *pppoe_dev_name, char *params[MAX_PPPOE_PARAM_CNT]);
 	int get_pppoe_vlan_id(char *pppoe_dev_name, uint16_t *vlan_id);
 	int get_pppoe_indx(char *pppoe_dev_name);
+	int get_phy_name_from_bridge_iface(const char *p_dev_name, char phy_name[ETH_PHY_IFACE_LEN]);
 #endif
 	bool is_svap_related(const char *phy_inf);
 

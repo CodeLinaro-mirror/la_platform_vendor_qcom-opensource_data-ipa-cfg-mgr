@@ -3063,8 +3063,12 @@ int IPACM_Lan::handle_addr_evt(ipacm_event_data_addr *data)
 			/* populate the flt rule offset for mtu_offset (offset = broadcast rule)*/
 			mtu_flt_rule_offset[j][data->iptype] = dft_v4fl_rule_hdl[j][IPV4_DEFAULT_FILTERTING_RULES - 1];
 		}
-		
+
 		eth_bridge_post_event(IPA_ETH_BRIDGE_IFACE_UP, IPA_IP_v4, NULL, NULL, NULL);
+#if defined(FEATURE_VLAN_MPDN)
+		/* Post IPA_ETH_BRIDGE_ADD_VLAN_ID event for all vlan-interfaces that are created before physical netdev. */
+		IPACM_Iface::ipacmcfg->post_eth_bridge_add_vlan_id_event(data->iface_name);
+#endif
 	}
 	else
 	{

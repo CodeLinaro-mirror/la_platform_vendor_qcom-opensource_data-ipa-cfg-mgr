@@ -499,6 +499,46 @@
 			   <WlanMode>full</WlanMode>
 			</Iface>
 			<Iface>
+			   <Name>ath4</Name>
+			   <Category>UNKNOWN</Category>
+			   <WlanMode>full</WlanMode>
+			</Iface>
+			<Iface>
+			   <Name>ath5</Name>
+			   <Category>UNKNOWN</Category>
+			   <WlanMode>full</WlanMode>
+			</Iface>
+			<Iface>
+			   <Name>ath6</Name>
+			   <Category>UNKNOWN</Category>
+			   <WlanMode>full</WlanMode>
+			</Iface>
+			<Iface>
+			   <Name>ath7</Name>
+			   <Category>UNKNOWN</Category>
+			   <WlanMode>full</WlanMode>
+			</Iface>
+			<Iface>
+			   <Name>ath8</Name>
+			   <Category>UNKNOWN</Category>
+			   <WlanMode>full</WlanMode>
+			</Iface>
+			<Iface>
+			   <Name>ath9</Name>
+			   <Category>UNKNOWN</Category>
+			   <WlanMode>full</WlanMode>
+			</Iface>
+			<Iface>
+			   <Name>ath10</Name>
+			   <Category>UNKNOWN</Category>
+			   <WlanMode>full</WlanMode>
+			</Iface>
+			<Iface>
+			   <Name>ath20</Name>
+			   <Category>UNKNOWN</Category>
+			   <WlanMode>full</WlanMode>
+			</Iface>
+			<Iface>
 			   <Name>eth0</Name>
 			   <Category>ODU</Category>
 			</Iface>

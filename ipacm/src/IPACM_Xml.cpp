@@ -248,7 +248,9 @@ static int ipacm_cfg_xml_parse_tree
 						IPACM_util_icmp_string((char*)xml_node->name, GRE_Server_Subnet_TAG) == 0 ||
 						IPACM_util_icmp_string((char*)xml_node->name, PUBLIC_IP_SUPPORT_TAG) == 0 ||
 						IPACM_util_icmp_string((char*)xml_node->name, IPACM_WLAN_VLAN_MPDN) == 0 ||
-						IPACM_util_icmp_string((char*)xml_node->name, PrivateIPForwarding_TAG) == 0)
+						IPACM_util_icmp_string((char*)xml_node->name, PrivateIPForwarding_TAG) == 0 ||
+						IPACM_util_icmp_string((char*)xml_node->name, ETHERTYPE_TAG) == 0 ||
+						IPACM_util_icmp_string((char*)xml_node->name, TYPE_TAG) == 0)
 				{
 					/* IP GRE SERVER IPv4 */
 					if (IPACM_util_icmp_string((char*)xml_node->name, GRE_Server_TAG) == 0)
@@ -339,6 +341,12 @@ static int ipacm_cfg_xml_parse_tree
 					{
 						/* increase iface entry number */
 						config->alg_config.num_alg_entries++;
+					}
+
+					if (0 == IPACM_util_icmp_string((char*)xml_node->name, TYPE_TAG))
+					{
+						/* increase iface entry number */
+						config->ethtype_config.num_entries++;
 					}
 					/* go to child */
 					ret_val = ipacm_cfg_xml_parse_tree(xml_node->children, config);
@@ -714,6 +722,21 @@ static int ipacm_cfg_xml_parse_tree
 						config->alg_config.alg_entries[config->alg_config.num_alg_entries - 1].port
 							 = atoi(content_buf);
 						IPACMDBG_H("port %d\n", config->alg_config.alg_entries[config->alg_config.num_alg_entries - 1].port);
+					}
+				}
+				else if (IPACM_util_icmp_string((char*)xml_node->name, VALUE_TAG) == 0)
+				{
+					content = IPACM_read_content_element(xml_node);
+					if (content)
+					{
+						///char* content2 = (char*)malloc(strlen(content) + 3);
+						//sprintf(content2, "0x%s", content);
+						str_size = strlen(content);
+						memset(content_buf, 0, sizeof(content_buf));
+						memcpy(content_buf, (void *)content, str_size);
+						config->ethtype_config.types[config->ethtype_config.num_entries - 1]
+							 = strtol(content_buf,NULL, 0);
+						IPACMDBG_H("value %d\n", config->ethtype_config.types[config->ethtype_config.num_entries - 1]);
 					}
 				}
 				else if (IPACM_util_icmp_string((char*)xml_node->name, NAT_MaxEntries_TAG) == 0)

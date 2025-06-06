@@ -101,6 +101,7 @@ extern "C"
 
 #define IPA_MAX_IFACE_ENTRIES (26 + IPA_MAX_ACTIVE_WLAN_IFACE) /* current: 15 rmnet + 14 wlan + bridge+ eth+ rndis + ecm.*/
 #define IPA_MAX_ALG_ENTRIES 20
+#define NUM_ETHERTYPE_FLT_RULE 20
 #define IPA_MAX_RM_ENTRY 9
 #define IPA_MAX_IPGRE_ENTRY 10
 #define IPA_MAX_IPGRE_SUBNET_ENTRY 2

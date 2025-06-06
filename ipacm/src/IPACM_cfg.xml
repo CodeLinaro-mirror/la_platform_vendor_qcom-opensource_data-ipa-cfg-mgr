@@ -441,6 +441,68 @@
 				<Description>DHCP</Description>
 		    </ALG>
 		</IPACMALG>
+		<IPACMETH>
+			<TYPE>
+				<VALUE></VALUE>
+			</TYPE>
+			<TYPE>
+				<VALUE></VALUE>
+			</TYPE>
+			<TYPE>
+				<VALUE></VALUE>
+			</TYPE>
+			<TYPE>
+				<VALUE></VALUE>
+			</TYPE>
+			<TYPE>
+				<VALUE></VALUE>
+			</TYPE>
+			<TYPE>
+				<VALUE></VALUE>
+			</TYPE>
+			<TYPE>
+				<VALUE></VALUE>
+			</TYPE>
+			<TYPE>
+				<VALUE></VALUE>
+			</TYPE>
+			<TYPE>
+				<VALUE></VALUE>
+			</TYPE>
+			<TYPE>
+				<VALUE></VALUE>
+			</TYPE>
+			<TYPE>
+				<VALUE></VALUE>
+			</TYPE>
+			<TYPE>
+				<VALUE></VALUE>
+			</TYPE>
+			<TYPE>
+				<VALUE></VALUE>
+			</TYPE>
+			<TYPE>
+				<VALUE></VALUE>
+			</TYPE>
+			<TYPE>
+				<VALUE></VALUE>
+			</TYPE>
+			<TYPE>
+				<VALUE></VALUE>
+			</TYPE>
+			<TYPE>
+				<VALUE></VALUE>
+			</TYPE>
+			<TYPE>
+				<VALUE></VALUE>
+			</TYPE>
+			<TYPE>
+				<VALUE></VALUE>
+			</TYPE>
+			<TYPE>
+				<VALUE></VALUE>
+			</TYPE>
+		</IPACMETH>
 		<IPACMNAT>
 			<MaxNatEntries>4000</MaxNatEntries>
 			<NatTableType>HYBRID</NatTableType>
@@ -467,6 +529,6 @@
 		</IPACMVLANMPDN>
 		<IPACMLog>
                         <IPACMfilevar>2097152</IPACMfilevar>
-                </IPACMLog>
+		</IPACMLog>
 	</IPACM>
 </system>

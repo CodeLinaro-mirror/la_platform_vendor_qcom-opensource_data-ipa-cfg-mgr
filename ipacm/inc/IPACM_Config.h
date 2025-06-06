@@ -205,7 +205,7 @@ public:
 
 	/* Store interested ALG port from XML file */
 	ipacm_alg *alg_table;
-
+	uint16_t *ethertype_table;
 	/* Store private subnet configuration from XML file */
 	ipa_private_subnet private_subnet_table[IPA_MAX_PRIVATE_SUBNET_ENTRIES + IPA_MAX_MTU_ENTRIES];
 
@@ -236,7 +236,7 @@ public:
 	int ipa_num_private_subnet;
 
 	int ipa_num_alg_ports;
-
+	int num_ethertypes;
 	const char* ipa_nat_memtype;
 	int ipa_nat_max_entries;
 	int ipa_ipv6ct_max_entries;

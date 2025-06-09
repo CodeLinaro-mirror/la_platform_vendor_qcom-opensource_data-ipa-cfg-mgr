@@ -2996,6 +2996,7 @@ void IPACM_Config::add_dummy_vlan_mapping(char *bridge_iface, char* client_iface
 			memset(&vlan_info, 0, sizeof(vlan_info));
 			strlcpy(vlan_info.name, client_iface, sizeof(vlan_info.name));
 			vlan_info.vlan_id = DUMMY_VLAN_ID_BASE + if_index;
+			vlan_info.vlan_interface_index = if_index;
 			IPACM_Iface::ipacmcfg->add_vlan_iface(&vlan_info);
 			IPACMDBG_H("New Non-Vlan Mapping Created for %s with VID %d\n", vlan_info.name, vlan_info.vlan_id);
 		}
@@ -3018,6 +3019,7 @@ void IPACM_Config::del_dummy_vlan_mapping(char *bridge_iface, char* client_iface
 			memset(&vlan_info, 0, sizeof(vlan_info));
 			strlcpy(vlan_info.name, client_iface, sizeof(vlan_info.name));
 			vlan_info.vlan_id = DUMMY_VLAN_ID_BASE + if_index;
+			vlan_info.vlan_interface_index = if_index;
 			IPACM_Iface::ipacmcfg->del_vlan_iface(&vlan_info);
 		}
 	}

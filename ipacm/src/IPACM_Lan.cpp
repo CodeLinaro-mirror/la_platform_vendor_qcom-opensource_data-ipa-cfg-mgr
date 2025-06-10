@@ -1,6 +1,5 @@
 /*
  * Copyright (c) 2013-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -29,7 +28,7 @@
  *
  * Changes from Qualcomm Innovation Center are provided under the following license:
  *
- * Copyright (c) 2022-2025 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted (subject to the limitations in the
@@ -9547,10 +9546,20 @@ int IPACM_Lan::handle_uplink_filter_rule(ipacm_ext_prop *prop, ipa_ip_type iptyp
 
 		}
 #endif
+		/* Clean-up each QoS rx-pipe */
+		if (rulesPtr){
+			free(rulesPtr);
+			rulesPtr = NULL;
+			pFilteringTable.rules = NULL;
+		}
 	}
 fail:
 finish_notif:
-	free(rulesPtr);
+	if (rulesPtr){
+		free(rulesPtr);
+		rulesPtr = NULL;
+		pFilteringTable.rules = NULL;
+	}
 	close(fd);
 	return ret;
 }

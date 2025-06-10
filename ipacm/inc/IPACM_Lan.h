@@ -1526,6 +1526,7 @@ private:
 	inline int set_mux_down(uint8_t mux_id, ipa_ip_type iptype, uint16_t vid)
 	{
 		ipacm_mux_struct *mux = v4_mux_up;
+		bool found = false;
 
 		if(mux_id == 0)
 		{
@@ -1554,12 +1555,21 @@ private:
 				if(mux[i].VID_cnt == 0 || vid == 0)
 				{
 					memset(&mux[i], 0, sizeof(mux[i]));
-					IPACMDBG_H("successfully removed mux id %d for dev %s, i = %d, iptype %d, VID_cnt = %d\n", mux_id, dev_name, i, iptype, mux[i].VID_cnt);
-					return IPACM_SUCCESS;
+					IPACMDBG_H("successfully removed mux id %d for dev %s, i = %d, iptype %d, VID_cnt = %d\n",
+						mux_id, dev_name, i, iptype, mux[i].VID_cnt);
+					found = true;
+					if(IPACM_Iface::ipacmcfg->ipacm_lan_stats_enable == false)
+					{
+						return IPACM_SUCCESS;
+					}
 				}
 			}
 		}
 
+		if(found == true)
+		{
+			return IPACM_SUCCESS;
+		}
 		IPACMERR("could not find mux %d or associated vid %d, iptype %d\n", mux_id, vid, iptype);
 		return IPACM_FAILURE;
 	}

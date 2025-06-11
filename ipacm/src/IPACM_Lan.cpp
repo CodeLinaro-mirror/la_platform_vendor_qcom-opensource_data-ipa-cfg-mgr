@@ -26,9 +26,9 @@
  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * Changes from Qualcomm Innovation Center are provided under the following license:
- *
- * Copyright (c) 2022-2025 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Changes from Qualcomm Technologies, Inc. are provided under the following license:
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted (subject to the limitations in the
@@ -4222,6 +4222,7 @@ int IPACM_Lan::handle_wan_down(bool is_sta_mode, uint8_t mux_id, uint16_t vid)
 	int idx = 0, i = 0, j = 0;
 
 	IPACMDBG_H("Received handle_wan_down is_sta_mode %d, ipa_if_cate  %d \n",is_sta_mode, ipa_if_cate);
+	IPACMDBG_H("dev_name %s \n", dev_name);
 	if (rx_prop == NULL)
 	{
 		IPACMERR("Rx prop is NULL, return\n");

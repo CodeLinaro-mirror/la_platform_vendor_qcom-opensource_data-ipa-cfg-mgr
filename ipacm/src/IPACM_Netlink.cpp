@@ -26,9 +26,10 @@ WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
 OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
 IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-Changes from Qualcomm Innovation Center are provided under the following license:
-Copyright (c) 2023-2025 Qualcomm Innovation Center, Inc. All rights reserved.
+Changes from Qualcomm Technologies, Inc. are provided under the following license:
+Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
 SPDX-License-Identifier: BSD-3-Clause-Clear
+
 */
 /*!
 	@file
@@ -1722,6 +1723,7 @@ process:
 							{
 								data_fid->is_ppp_iface = false;
 							}
+							IPACMDBG_H("is_ppp_iface %d \n", data_fid->is_ppp_iface);
 							if(!strstr(dev_name, "pppoe") && !strstr(dev_name, "br-ethwan"))
 							{
 								IPACMDBG_H("No br-wan mode Enabled, wan dev name %s \n", dev_name);
@@ -1759,6 +1761,7 @@ process:
 
 							IPACMDBG_H("wan dev name %s associated phy_name %s \n", dev_name,
 									IPACM_Iface::ipacmcfg->iface_table[instance_found].phy_dev_name);
+							IPACMDBG("Posting IPA_USB_LINK_UP_EVENT with for dev_name %s \n", dev_name);
 							data_fid->if_index = msg_ptr->nl_route_info.attr_info.oif_index;
 							evt_data.event = IPA_USB_LINK_UP_EVENT;
 							evt_data.evt_data = data_fid;
@@ -1769,11 +1772,11 @@ process:
 						{
 							evt_data.event = IPA_ROUTE_ADD_EVENT;
 							evt_data.evt_data = data_addr;
-							IPACMDBG_H("Posting IPA_ROUTE_ADD_EVENT with if index:%d, ipv4 addr:0x%x, mask: 0x%x and gw: 0x%x\n",
-										 data_addr->if_index,
-										 data_addr->ipv4_addr,
-										 data_addr->ipv4_addr_mask,
-										 data_addr->ipv4_addr_gw);
+							IPACMDBG_H("Posting IPA_ROUTE_ADD_EVENT with dev_name %s if index:%d, ipv4 addr:0x%x, mask: 0x%x and gw: 0x%x\n",
+								 dev_name, data_addr->if_index,
+								 data_addr->ipv4_addr,
+								 data_addr->ipv4_addr_mask,
+								 data_addr->ipv4_addr_gw);
 						}
 						else if(msg_ptr->nl_route_info.metainfo.rtm_table != RT_TABLE_MAIN &&
 							(IPACM_Iface::ipacmcfg->eth_wan_pppoe_enable ||
@@ -1781,11 +1784,11 @@ process:
 						{
 							evt_data.event = IPA_WAN_GW_ADDR_ADD_EVENT;
 							evt_data.evt_data = data_addr;
-							IPACMDBG_H("Posting IPA_WAN_GW_ADDR_ADD_EVENT with if index:%d, ipv4 addr:0x%x, mask: 0x%x and gw: 0x%x\n",
-										data_addr->if_index,
-										data_addr->ipv4_addr,
-										data_addr->ipv4_addr_mask,
-										data_addr->ipv4_addr_gw);
+							IPACMDBG_H("Posting IPA_WAN_GW_ADDR_ADD_EVENT with dev_name %s if index:%d, ipv4 addr:0x%x, mask: 0x%x and gw: 0x%x\n",
+								dev_name, data_addr->if_index,
+								data_addr->ipv4_addr,
+								data_addr->ipv4_addr_mask,
+								data_addr->ipv4_addr_gw);
 						}
 						evt_data.evt_data = data_addr;
 						IPACM_EvtDispatcher::PostEvt(&evt_data);
@@ -1987,7 +1990,7 @@ process_v6:
 						{
 							data_fid->is_ppp_iface = false;
 						}
-
+						IPACMDBG_H("is_ppp_iface %d \n", data_fid->is_ppp_iface);
 						if(!strstr(dev_name, "pppoe") && !strstr(dev_name, "br-ethwan"))
 						{
 							IPACMDBG_H("No br-wan mode Enabled, wan dev name %s \n", dev_name);
@@ -2025,6 +2028,7 @@ process_v6:
 
 						IPACMDBG_H("wan dev name %s associated phy_name %s \n", dev_name,
 							IPACM_Iface::ipacmcfg->iface_table[instance_found].phy_dev_name);
+						IPACMDBG("Posting IPA_USB_LINK_UP_EVENT with for dev_name %s \n", dev_name);
 						data_fid->if_index = msg_ptr->nl_route_info.attr_info.oif_index;
 						evt_data.event = IPA_USB_LINK_UP_EVENT;
 						evt_data.evt_data = data_fid;
@@ -2034,16 +2038,16 @@ process_v6:
 					if(msg_ptr->nl_route_info.metainfo.rtm_table == RT_TABLE_MAIN)
 					{
 						evt_data.event = IPA_ROUTE_ADD_EVENT;
-						IPACMDBG("Posting IPA_ROUTE_ADD_EVENT with if index:%d, ipv6 address\n",
-									data_addr->if_index);
+						IPACMDBG("Posting IPA_ROUTE_ADD_EVENT with dev_name %s if index:%d, ipv6 address\n",
+							dev_name, data_addr->if_index);
 					}
 					else if(msg_ptr->nl_route_info.metainfo.rtm_table != RT_TABLE_MAIN &&
 						(IPACM_Iface::ipacmcfg->eth_wan_pppoe_enable ||
 						IPACM_Iface::ipacmcfg->eth_vlan_wan_enable))
 					{
 						evt_data.event = IPA_WAN_GW_ADDR_ADD_EVENT;
-						IPACMDBG("Posting IPA_WAN_GW_ADDR_ADD_EVENT with if index:%d, ipv6 address\n",
-									data_addr->if_index);
+						IPACMDBG("Posting IPA_WAN_GW_ADDR_ADD_EVENT with dev_name %s if index:%d, ipv6 address\n",
+							dev_name, data_addr->if_index);
 					}
 
 					data_addr->if_index = msg_ptr->nl_route_info.attr_info.oif_index;
@@ -2879,8 +2883,8 @@ int ipa_nl_send_getroute(ipa_ip_type ip_type)
 				{
 					IPACM_NL_REPORT_ADDR( "route add default gw \n", nl_route_info_get_route.attr_info.gateway_addr );
 					IPACMDBG_H("dev %s \n", dev_name);
-					IPACM_NL_REPORT_ADDR( "dstIP:", nl_route_info_get_route.attr_info.dst_addr );
-		
+					IPACM_NL_REPORT_ADDR( "dstIP:\n", nl_route_info_get_route.attr_info.dst_addr );
+
 					/* insert to command queue */
 					data_addr = (ipacm_event_data_addr *)malloc(sizeof(ipacm_event_data_addr));
 					if(data_addr == NULL)
@@ -3025,7 +3029,7 @@ proces_getroute:
 
 			if(nl_route_info_get_route.attr_info.param_mask & IPA_RTA_PARAM_DST)
 			{
-				IPACM_NL_REPORT_ADDR( "Route ADD DST:", nl_route_info_get_route.attr_info.dst_addr );
+				IPACM_NL_REPORT_ADDR( "Route ADD DST:\n", nl_route_info_get_route.attr_info.dst_addr );
 				IPACMDBG("%d, metric %d, dev %s\n",
 								 nl_route_info_get_route.metainfo.rtm_dst_len,
 								 nl_route_info_get_route.attr_info.priority,
@@ -3086,7 +3090,7 @@ proces_getroute:
 			}
 			if(nl_route_info_get_route.attr_info.param_mask & IPA_RTA_PARAM_GATEWAY)
 			{
-				IPACM_NL_REPORT_ADDR( "Route ADD ::/0  Next Hop:", nl_route_info_get_route.attr_info.gateway_addr );
+				IPACM_NL_REPORT_ADDR( "Route ADD ::/0  Next Hop:\n", nl_route_info_get_route.attr_info.gateway_addr );
 				IPACMDBG(" metric %d, dev %s\n",
 								 nl_route_info_get_route.attr_info.priority,
 								 dev_name);

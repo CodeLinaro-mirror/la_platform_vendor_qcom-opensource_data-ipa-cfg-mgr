@@ -26,9 +26,9 @@
  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * Changes from Qualcomm Innovation Center are provided under the following license:
- *
- * Copyright (c) 2022-2025 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Changes from Qualcomm Technologies, Inc. are provided under the following license:
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted (subject to the limitations in the
@@ -2978,14 +2978,14 @@ fail:
 #endif
 
 #ifdef FEATURE_PPPOE
-void IPACM_Config::pppoe_config_update(ipa_ioc_pppoe_info *pppoe_config, uint8_t to_add, uint8_t session_id, uint8_t *mac_addr)
+void IPACM_Config::pppoe_config_update(ipa_ioc_pppoe_info *pppoe_config, uint8_t to_add, uint16_t session_id, uint8_t *mac_addr)
 {
 	int indx;
 	int iface_table_index;
 
 	if(pppoe_config != NULL)
 		IPACMDBG_H("config to_add(%d) for pppoe_dev_name %s\n",to_add, pppoe_config->pppoe_dev_name);
-	
+
 	if(pthread_mutex_lock(&pppoe_map_lock) != 0)
 	{
 		IPACMERR("Unable to lock the mutex\n");
@@ -4908,20 +4908,21 @@ void IPACM_Config::flush_qos_params_info(ipa_ioc_qos_config *data)
 }
 
 #ifdef FEATURE_PPPOE
-void IPACM_Config::get_pppoe_session_info(const char *pppoe_dev_name)
+void IPACM_Config::get_pppoe_session_info(const char *pppoe_dev_name, uint16_t vlan_id)
 {
 	FILE *fp = NULL;
-	char *tok = NULL, *ptr = NULL;
+	char *tok = NULL, *ptr = NULL, *lastVid = NULL;
 	char *params[MAX_PPPOE_PARAM_CNT] = { NULL };
 	char pppoe_row[MAX_PPPOE_PARAM_CNT] = {0}, cmd[IPA_SYS_CMD_LEN] = {0}, cmd_pppoe_row[MAX_PPPOE_ROW_LEN] = {0};
 	int i;
+	uint16_t vid;
 
 	snprintf(cmd, IPA_SYS_CMD_LEN, "cat /proc/net/pppoe > %s", IPA_PPPOE_TABLE);
 	system(cmd);
 
 	if(pppoe_dev_name != NULL)
 		IPACMDBG_H("Get session info for pppoe_dev_name %s\n",pppoe_dev_name);
-	
+
 	fp = fopen(IPA_PPPOE_TABLE, "r");
 	if (fp == NULL)
 	{
@@ -4945,7 +4946,30 @@ void IPACM_Config::get_pppoe_session_info(const char *pppoe_dev_name)
 			tok = strtok_r(NULL, " ", &ptr);
 		}
 		IPACMDBG_H("%s %s %s\n", params[0], params[1], params[2]);
-		update_pppoe_session_info(pppoe_dev_name, params);
+		/* Compare the pppoe dev associated vid and passed vlan_id,
+		 * If match then update session info */
+		lastVid = strrchr(params[2], '.');
+		if((lastVid != NULL) && (lastVid + 1 != NULL))
+		{
+			IPACMDBG_H("Got vid after last dot: %s\n", lastVid + 1);
+			vid = atoi(lastVid + 1);
+			IPACMDBG_H("Compare vid and vlan_id? if need to update session info!\n", vid, vlan_id);
+			if(vid == vlan_id)
+			{
+				IPACMDBG_H("Update session info for pppoe_dev_name %s associated vid %d, passed vid %d\n",pppoe_dev_name, vid, vlan_id);
+				update_pppoe_session_info(pppoe_dev_name, params);
+				IPACMERR("Break Here.\n");
+				break;
+			}
+			else
+			{
+				IPACMDBG_H("Don't Update session info for pppoe_dev_name %s associated vid %d, unmatched passed vid %d\n",pppoe_dev_name, vid, vlan_id);
+			}
+		}
+		else
+		{
+			IPACMERR("No mapped session found in /proc/net/pppoe\n");
+		}
 	}
 	fclose(fp);
 }
@@ -4975,13 +4999,12 @@ void IPACM_Config::update_pppoe_session_info(const char *pppoe_dev_name, char *p
 	session_id = strtol(params[0], &end_ptr, 16);
 	if (*end_ptr != '\0')
 	{
-        IPACMDBG_H("Conversion error: %s\n", end_ptr);
+		IPACMDBG_H("Conversion error: %s\n", end_ptr);
 		return;
-    }
+	}
 	else
 	{
-		session_id = session_id >> 8;
-		IPACMDBG_H("session_id: %u\n", session_id);
+		IPACMDBG_H("session_id:  %x\n", session_id);
 	}
 
 	is_vlan = strstr(params[2], ".");
@@ -5117,7 +5140,7 @@ int IPACM_Config::get_phy_name_from_bridge_iface(const char *p_dev_name, char ph
 			if (last_word)
 			{
 				IPACMDBG_H("Last word: %s\n", last_word);
-				strlcpy(phy_name, last_word, ETH_PHY_IFACE_LEN - 1);
+				strlcpy(phy_name, last_word, ETH_PHY_IFACE_LEN);
 				IPACMDBG_H("Copy phy_name: %s\n", phy_name);
 				phy_name[ETH_PHY_IFACE_LEN - 1] = '\0';  // Ensure null-termination
 				IPACMDBG_H("phy_name: %s\n", phy_name);

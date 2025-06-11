@@ -26,8 +26,8 @@
  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * Changes from Qualcomm Innovation Center are provided under the following license
- * Copyright (c) 2023-2025 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Changes from Qualcomm Technologies, Inc. are provided under the following license:
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 /*!
@@ -1485,7 +1485,7 @@ void* ipa_driver_msg_notifier(void *param)
 			if(pppoe_info->add)
 			{
 				IPACM_Iface::ipacmcfg->pppoe_config_update(pppoe_info, pppoe_info->add, 0, NULL);
-				IPACM_Iface::ipacmcfg->get_pppoe_session_info(pppoe_info->pppoe_dev_name);
+				IPACM_Iface::ipacmcfg->get_pppoe_session_info(pppoe_info->pppoe_dev_name, pppoe_info->vlan_id);
 				IPACMDBG_H("Got ppp pdn config, Get Routes for v4 and v6\n");
 				ipa_nl_send_getroute(IPA_IP_v4);
 				ipa_nl_send_getroute(IPA_IP_v6);

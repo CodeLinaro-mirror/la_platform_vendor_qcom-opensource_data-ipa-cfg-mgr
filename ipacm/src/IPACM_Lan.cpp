@@ -5999,6 +5999,13 @@ int IPACM_Lan::handle_qos_route_rule(uint8_t *client_mac, uint16_t client_vlan_i
 					rt_rule_entry->rule.hdr_hdl =
 						get_client_memptr(eth_client, eth_index)->hdr_hdl_v6;
 
+					if (!ipv6_addr)
+					{
+						IPACMDBG_H("NULL IPv6 addr received, cannot install.\n");
+						free(rt_rule);
+						return IPACM_FAILURE;
+					}
+
 					if ((ipv6_addr[0] || ipv6_addr[1] || ipv6_addr[2] ||
 						ipv6_addr[3]))
 					{
@@ -6422,6 +6429,7 @@ int IPACM_Lan::handle_qos_route_rule_ext_v2(uint8_t *client_mac,
 				if (false == m_routing.AddRoutingRuleExt_v2(rt_rule))
 				{
 					IPACMERR("Routing rule addition failed!\n");
+					free((void*)rt_rule->rules);
 					free(rt_rule);
 					return IPACM_FAILURE;
 				}
@@ -6468,6 +6476,14 @@ int IPACM_Lan::handle_qos_route_rule_ext_v2(uint8_t *client_mac,
 					rt_rule_entry->rule.cnt_idx =
 						get_client_memptr(eth_client, eth_index)->dl_cnt_idx;
 					IPACMDBG_H("eth_client v6 dl index (%d) \n", rt_rule_entry->rule.cnt_idx);
+
+					if (!ipv6_addr)
+					{
+						IPACMDBG_H("NULL IPv6 addr received, cannot install.\n");
+						free((void*)rt_rule->rules);
+						free(rt_rule);
+						return IPACM_FAILURE;
+					}
 
 					if ((ipv6_addr[0] || ipv6_addr[1] || ipv6_addr[2] ||
 						ipv6_addr[3]))
@@ -6596,6 +6612,7 @@ int IPACM_Lan::handle_qos_route_rule_ext_v2(uint8_t *client_mac,
 					if (false == m_routing.AddRoutingRuleExt_v2(rt_rule))
 					{
 						IPACMERR("Routing rule addition failed!\n");
+						free((void*)rt_rule->rules);
 						free(rt_rule);
 						return IPACM_FAILURE;
 					}
@@ -6623,7 +6640,7 @@ int IPACM_Lan::handle_qos_route_rule_ext_v2(uint8_t *client_mac,
 				}
 			}
 		} /* end of for loop */
-
+		free((void*)rt_rule->rules);
 		free(rt_rule);
 	}
 	return IPACM_SUCCESS;
@@ -8157,6 +8174,12 @@ int IPACM_Lan::handle_eth_client_down_evt(uint8_t *mac_addr, uint16_t vlan_id, i
 	int j = 0, idx = 0;
 
 	IPACMDBG_H("total client: %d\n", num_eth_client_tmp);
+
+	if (rx_prop == NULL)
+	{
+		IPACMERR("Rx prop is NULL, return\n");
+		return IPACM_SUCCESS;
+	}
 
 	clt_indx = get_eth_client_index(mac_addr, vlan_id);
 	if (clt_indx == IPACM_INVALID_INDEX)
@@ -13655,7 +13678,6 @@ int IPACM_Lan::handle_tethering_stats_event(ipa_get_data_stats_resp_msg_v01 *dat
 		return IPACM_FAILURE;
 	}
 
-
 	ul_pipe_found = false;
 	dl_pipe_found = false;
 	num_ul_packets = 0;
@@ -13721,12 +13743,9 @@ int IPACM_Lan::handle_tethering_stats_event(ipa_get_data_stats_resp_msg_v01 *dat
 	if (ul_pipe_found || dl_pipe_found)
 	{
 		IPACMDBG_H("Update IPA_TETHERING_STATS_UPDATE_EVENT, TX(P%lu/B%lu) RX(P%lu/B%lu) DEV(%s) to LTE(%s) \n",
-					num_ul_packets,
-						num_ul_bytes,
-							num_dl_packets,
-								num_dl_bytes,
-									dev_name,
-										IPACM_Wan::wan_up_dev_name);
+				num_ul_packets, num_ul_bytes, num_dl_packets, num_dl_bytes,
+				dev_name, IPACM_Wan::wan_up_dev_name);
+
 		fp = fopen(IPA_PIPE_STATS_FILE_NAME, "w");
 		if ( fp == NULL )
 		{
@@ -13735,13 +13754,8 @@ int IPACM_Lan::handle_tethering_stats_event(ipa_get_data_stats_resp_msg_v01 *dat
 			return IPACM_FAILURE;
 		}
 
-		fprintf(fp, PIPE_STATS,
-				dev_name,
-					IPACM_Wan::wan_up_dev_name,
-						num_ul_bytes,
-						num_ul_packets,
-							    num_dl_bytes,
-							num_dl_packets);
+		fprintf(fp, PIPE_STATS, dev_name, IPACM_Wan::wan_up_dev_name,
+			num_ul_bytes, num_ul_packets, num_dl_bytes, num_dl_packets);
 		fclose(fp);
 	}
 	return IPACM_SUCCESS;

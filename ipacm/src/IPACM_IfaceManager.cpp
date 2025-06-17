@@ -710,7 +710,7 @@ int IPACM_IfaceManager::registr(char *iface_name, int ipa_if_index, IPACM_Listen
 
 int IPACM_IfaceManager::deregistr(IPACM_Listener *param)
 {
-	iface_instances *tmp = head,*tmp1,*prev = head;
+	iface_instances *tmp = head,*tmp1,*prev = NULL;
 
 	while(tmp != NULL)
 	{
@@ -735,7 +735,7 @@ int IPACM_IfaceManager::deregistr(IPACM_Listener *param)
 		}
 		else
 		{
-			prev = tmp;
+			prev = tmp; /*Only update prev when we don't remove the current node*/
 			tmp = tmp->next;
 		}
 	}

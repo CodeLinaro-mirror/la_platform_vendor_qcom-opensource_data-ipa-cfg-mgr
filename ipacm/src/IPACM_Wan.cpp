@@ -966,6 +966,12 @@ int IPACM_Wan::handle_addr_evt(ipacm_event_data_addr *data)
 					{
 						ipacm_event_ip_pass_pdn_info *ip_pass_pdn_data;
 						ip_pass_pdn_data = (ipacm_event_ip_pass_pdn_info *)malloc(sizeof(ipacm_event_ip_pass_pdn_info));
+						if(!ip_pass_pdn_data)
+						{
+							IPACMERR("Error allocating memory for ip_pass_pdn_data\n");
+							res = IPACM_FAILURE;
+							goto fail;
+						}
 						curr_wan_ip = data->ipv4_addr;
 						public_wan_v4_addr = IPACM_Iface::ipacmcfg->ip_pass_mpdn_table[indx].ip_pass_pdn_ip_addr;
 						public_wan_v4_addr_set = true;
@@ -976,6 +982,13 @@ int IPACM_Wan::handle_addr_evt(ipacm_event_data_addr *data)
 						{
 							ipacm_event_data_addr *data_addr = NULL;
 							data_addr = (ipacm_event_data_addr *)malloc(sizeof(ipacm_event_data_addr));
+							if(!data_addr)
+							{
+								IPACMERR("Error allocating memory for data_addr\n");
+								free(ip_pass_pdn_data);
+								res = IPACM_FAILURE;
+								goto fail;
+							}
 							memset(data_addr, 0, sizeof(ipacm_event_data_addr));
 							evt_data.event = IPA_ROUTE_ADD_EVENT;
 							data_addr->if_index = IPACM_Iface::ipacmcfg->ip_pass_mpdn_table[indx].if_index;
@@ -2226,9 +2239,9 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 	case IPA_ROUTE_DEL_L2TP_VLAN_EVENT:
 		{
 			IPACMDBG("Received IPA_ROUTE_DEL_L2TP_VLAN_EVENT event\n");
-			int vlan_idx;
-			int v4_pdn_index;
-			int v6_pdn_index;
+			int vlan_idx = 0;
+			int v4_pdn_index = 0;
+			int v6_pdn_index = 0;
 			bool vlan_pdn_up = false;
 			ipacm_event_route_vlan *vlandown_data = (ipacm_event_route_vlan *)param;
 			if(vlandown_data->VlanID)
@@ -2767,12 +2780,6 @@ int IPACM_Wan::handle_vlan_backhaul_switch_v6(ipacm_event_route_vlan *data, bool
 		(data->wan_ipv6_prefix[1] == ipv6_prefix[1]) || v4_only_xlat)
 	{
 		IPACMDBG_H("received v6 IPA_ROUTE_ADD_VLAN_PDN_EVENT for VID %d, %d\n", data->VlanID, ipa_if_num);
-
-		IPACMDBG_H("received v6 IPA_ROUTE_ADD_VLAN_PDN_EVENT for VID %d, wan %s, %d with prefix %x:%x\n",
-				data->VlanID, dev_name, ipa_if_num,
-				IPACM_Wan::ipv6_to_iface[modem_ipv6_pdn_index].ipv6_prefix[0],
-				IPACM_Wan::ipv6_to_iface[modem_ipv6_pdn_index].ipv6_prefix[1]);
-
 		IPACMDBG_H("num_offloaded_pdns: %d\n", num_offloaded_pdns);
 		IPACMDBG_H("data->wan_ipv6_prefix: 0x%08x%08x\n", data->wan_ipv6_prefix[0], data->wan_ipv6_prefix[1]);
 

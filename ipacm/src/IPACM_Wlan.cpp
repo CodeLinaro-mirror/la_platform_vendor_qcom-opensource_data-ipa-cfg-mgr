@@ -6929,10 +6929,12 @@ int IPACM_Wlan::handle_down_evt()
 
 	for(wlan_pipe_index=0;wlan_pipe_index<MAX_SUPPORTED_WLAN_PIPES;wlan_pipe_index++){
 		if(rx_prop && wlan_ap_dflt_rules[wlan_pipe_index].src_pipe == rx_prop->rx[idx].src_pipe ){
-			if (wlan_ap_dflt_rules[wlan_pipe_index].iface_cnt[ip_type] == 0 ) {
-					IPACMDBG_H(" rules already deleted \n");
-					return IPACM_SUCCESS;
-				}
+
+			IPACMDBG("wlan_pipe_index %d src_pipe %d ipv4 iface cnt %d ipv6 iface cnt %d\n",
+							wlan_pipe_index, rx_prop->rx[idx].src_pipe,
+							wlan_ap_dflt_rules[wlan_pipe_index].iface_cnt[IPA_IP_v4],
+							wlan_ap_dflt_rules[wlan_pipe_index].iface_cnt[IPA_IP_v6]);
+
 			if (ip_type == IPA_IP_MAX) {
 				if (wlan_ap_dflt_rules[wlan_pipe_index].iface_cnt[IPA_IP_v4] == 0 &&
 					wlan_ap_dflt_rules[wlan_pipe_index].iface_cnt[IPA_IP_v6] == 0) {
@@ -6942,8 +6944,12 @@ int IPACM_Wlan::handle_down_evt()
 				wlan_ap_dflt_rules[wlan_pipe_index].iface_cnt[IPA_IP_v4]--;
 				wlan_ap_dflt_rules[wlan_pipe_index].iface_cnt[IPA_IP_v6]--;
 			}
-			else{
+			else if ((ip_type < IPA_IP_MAX) && (wlan_ap_dflt_rules[wlan_pipe_index].iface_cnt[ip_type] > 0)) {
 				wlan_ap_dflt_rules[wlan_pipe_index].iface_cnt[ip_type]--;
+			}
+			else {
+				IPACMDBG("No default rules initialized ip_type %d src pipe %d index %d\n",
+						ip_type, rx_prop->rx[idx].src_pipe, wlan_pipe_index);
 			}
 
 			if(wlan_ap_dflt_rules[wlan_pipe_index].iface_cnt[IPA_IP_v4] > 0 &&

@@ -1053,7 +1053,6 @@ static int ipa_nl_decode_nlmsg
 				ret_val = ipa_get_if_name(dev_name, msg_ptr->nl_link_info.metainfo.ifi_index);
 				if (ret_val != IPACM_SUCCESS) {
 					IPACMERR("Error while getting interface name\n");
-					return IPACM_FAILURE;
 				}
 
 				if (msg_ptr->nl_link_info.link_type == IPA_LINK_TYPE_VLAN) {
@@ -1201,8 +1200,6 @@ static int ipa_nl_decode_nlmsg
 					ret_val = ipa_get_if_name(dev_name, msg_ptr->nl_link_info.metainfo.ifi_index);
 					if (ret_val != IPACM_SUCCESS) {
 						IPACMERR("Error while getting interface name\n");
-						free(data_fid);
-						return IPACM_FAILURE;
 					}
 					IPACMDBG_H("Got a usb link_down event (Interface %s) \n", dev_name);
 

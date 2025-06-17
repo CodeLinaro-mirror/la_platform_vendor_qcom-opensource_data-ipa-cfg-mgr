@@ -8667,7 +8667,7 @@ int IPACM_Wan::handle_down_evt_ex()
 					memset(vlandown_data, 0, sizeof(ipacm_event_vlan_pdn));
 
 					vlandown_data->iptype = IPA_IP_v4;
-					vlandown_data->VlanID = associated_VID; //this should just be array
+					vlandown_data->VlanID = 0; //PDN goes down
 					vlandown_data->ipv4_addr = (public_wan_v4_addr_set) ? public_wan_v4_addr : wan_v4_addr;
 					vlandown_data->mux_id = ext_prop->ext[0].mux_id;
 					vlandown_data->VlanID =
@@ -8694,7 +8694,7 @@ int IPACM_Wan::handle_down_evt_ex()
 				memset(vlandown_data, 0, sizeof(ipacm_event_vlan_pdn));
 
 				vlandown_data->iptype = IPA_IP_v4;
-				vlandown_data->VlanID = associated_VID; //this should just be array
+				vlandown_data->VlanID = 0; //PDN goes down
 				vlandown_data->ipv4_addr = (public_wan_v4_addr_set) ? public_wan_v4_addr : wan_v4_addr;
 				vlandown_data->mux_id = ext_prop->ext[0].mux_id;
 				evt_data.event = IPA_HANDLE_WAN_VLAN_PDN_DOWN;
@@ -8913,8 +8913,7 @@ int IPACM_Wan::handle_down_evt_ex()
 
 					vlandown_data->iptype = IPA_IP_v6;
 					vlandown_data->mux_id = ext_prop->ext[0].mux_id;
-					vlandown_data->VlanID =
-						ipv6_to_iface[modem_ipv6_pdn_index].associated_VIDs[i];
+					vlandown_data->VlanID = 0; //PDN goes down
 					vlandown_data->ipv6_prefix[0] = ipv6_to_iface[modem_ipv6_pdn_index].ipv6_prefix[0];
 					vlandown_data->ipv6_prefix[1] = ipv6_to_iface[modem_ipv6_pdn_index].ipv6_prefix[1];
 					IPACMDBG_H("Posting IPA_HANDLE_WAN_VLAN_PDN_DOWN with below information:\n");
@@ -8940,7 +8939,7 @@ int IPACM_Wan::handle_down_evt_ex()
 				memset(vlandown_data, 0, sizeof(ipacm_event_vlan_pdn));
 
 				vlandown_data->iptype = IPA_IP_v6;
-				vlandown_data->VlanID = associated_VID; //this should just be array
+				vlandown_data->VlanID = 0; //PDN goes down
 				vlandown_data->mux_id = ext_prop->ext[0].mux_id;
 				vlandown_data->ipv6_prefix[0] = ipv6_to_iface[modem_ipv6_pdn_index].ipv6_prefix[0];
 				vlandown_data->ipv6_prefix[1] = ipv6_to_iface[modem_ipv6_pdn_index].ipv6_prefix[1];
@@ -9167,7 +9166,7 @@ int IPACM_Wan::handle_down_evt_ex()
 			num_offloaded_pdns--;
 			IPACMDBG_H("now num offloaded PDNs is %d\n", num_offloaded_pdns);
 
-			vlandown_data->VlanID = associated_VID; /* Wan is down. setting this value to 0, to delete all rules. */
+			vlandown_data->VlanID = 0; /* Wan is down. setting this value to 0, to delete all rules. */
 			vlandown_data->mux_id = ext_prop->ext[0].mux_id;
 
 			IPACMDBG_H("Posting IPA_HANDLE_WAN_VLAN_PDN_DOWN with below information:\n");

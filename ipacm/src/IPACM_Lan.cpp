@@ -12939,12 +12939,6 @@ int IPACM_Lan::modify_ipv6_prefix_flt_rule()
 			return IPACM_FAILURE;
 		}
 
-		/* not supported for wlan vlan for now */
-		if (ipa_if_cate == WLAN_IF)
-		{
-			IPACMERR("not supported for wlan vlan\n");
-			return IPACM_SUCCESS;
-		}
 
 		if (dft_v6fl_rule_hdl[j][0] == 0)
 		{
@@ -12979,7 +12973,7 @@ int IPACM_Lan::modify_ipv6_prefix_flt_rule()
 		/* for MPDN case, need to query VLAN and mtus */
 		if (IPACM_Iface::ipacmcfg->ipacm_mpdn_enable)
 		{
-			if (IPACM_Wan::isWanUP_V6(ipa_if_num) || (IPACM_Iface::ipacmcfg->iface_in_vlan_mode(dev_name) && IPACM_Wan::isVlanWanUP_V6()))
+			if (IPACM_Wan::isWanUP_V6(ipa_if_num) || (IPACM_Iface::ipacmcfg->iface_in_vlan_mode(dev_name) && IPACM_Wan::isVlanWanUP_V6(true)))
 			{
 				for (i = 0; i < IPACM_Iface::ipacmcfg->num_ipv6_prefixes; i++)
 				{
@@ -13040,6 +13034,23 @@ int IPACM_Lan::modify_ipv6_prefix_flt_rule()
 			flt_rule.rule.attrib.u.v6.dst_addr_mask[1] = 0xFFFFFFFF;
 			flt_rule.rule.attrib.u.v6.dst_addr_mask[2] = 0x0;
 			flt_rule.rule.attrib.u.v6.dst_addr_mask[3] = 0x0;
+			if(!vid[i] || IPACM_Iface::ipacmcfg->is_dummy_VID(vid[i]))
+			{
+				flt_rule.rule.attrib.attrib_mask |= IPA_FLT_SRC_ADDR;
+				flt_rule.rule.attrib.u.v6.src_addr[0] = IPACM_Iface::ipacmcfg->ipa_ipv6_prefixes[i].addr[0];
+				flt_rule.rule.attrib.u.v6.src_addr[1] = IPACM_Iface::ipacmcfg->ipa_ipv6_prefixes[i].addr[1];
+				flt_rule.rule.attrib.u.v6.src_addr[2] = 0x0;
+				flt_rule.rule.attrib.u.v6.src_addr[3] = 0x0;
+				flt_rule.rule.attrib.u.v6.src_addr_mask[0] = 0xFFFFFFFF;
+				flt_rule.rule.attrib.u.v6.src_addr_mask[1] = 0xFFFFFFFF;
+				flt_rule.rule.attrib.u.v6.src_addr_mask[2] = 0x0;
+				flt_rule.rule.attrib.u.v6.src_addr_mask[3] = 0x0;
+			}
+			else
+			{
+			flt_rule.rule.attrib.attrib_mask |= IPA_FLT_VLAN_ID;
+			flt_rule.rule.attrib.vlan_id = vid[i];
+			}
 			memcpy(&(pFilteringTable->rules[i]), &flt_rule, sizeof(struct ipa_flt_rule_add));
 			IPACMDBG_H(" IPACM v6 prefix as: 0x[%X][%X] entry(%d)\n",
 					   flt_rule.rule.attrib.u.v6.dst_addr[0],
@@ -13050,16 +13061,16 @@ int IPACM_Lan::modify_ipv6_prefix_flt_rule()
 			{
 				memcpy(&flt_rule.rule.attrib, &rx_prop->rx[idx].attrib, sizeof(flt_rule.rule.attrib));
 
-				if (!vid[i])
+				if (!vid[i] || IPACM_Iface::ipacmcfg->is_dummy_VID(vid[i]))
 				{
-					flt_rule.rule.attrib.u.v6.src_addr[3] = IPACM_Iface::ipacmcfg->ipa_ipv6_prefixes[i].addr[0];
-					flt_rule.rule.attrib.u.v6.src_addr[2] = IPACM_Iface::ipacmcfg->ipa_ipv6_prefixes[i].addr[1];
-					flt_rule.rule.attrib.u.v6.src_addr[1] = 0x0;
-					flt_rule.rule.attrib.u.v6.src_addr[0] = 0x0;
-					flt_rule.rule.attrib.u.v6.src_addr_mask[3] = 0xFFFFFFFF;
-					flt_rule.rule.attrib.u.v6.src_addr_mask[2] = 0xFFFFFFFF;
-					flt_rule.rule.attrib.u.v6.src_addr_mask[1] = 0x0;
-					flt_rule.rule.attrib.u.v6.src_addr_mask[0] = 0x0;
+					flt_rule.rule.attrib.u.v6.src_addr[0] = IPACM_Iface::ipacmcfg->ipa_ipv6_prefixes[i].addr[0];
+					flt_rule.rule.attrib.u.v6.src_addr[1] = IPACM_Iface::ipacmcfg->ipa_ipv6_prefixes[i].addr[1];
+					flt_rule.rule.attrib.u.v6.src_addr[2] = 0x0;
+					flt_rule.rule.attrib.u.v6.src_addr[3] = 0x0;
+					flt_rule.rule.attrib.u.v6.src_addr_mask[0] = 0xFFFFFFFF;
+					flt_rule.rule.attrib.u.v6.src_addr_mask[1] = 0xFFFFFFFF;
+					flt_rule.rule.attrib.u.v6.src_addr_mask[2] = 0x0;
+					flt_rule.rule.attrib.u.v6.src_addr_mask[3] = 0x0;
 					flt_rule.rule.attrib.attrib_mask &= ~IPA_FLT_DST_ADDR;
 					flt_rule.rule.attrib.attrib_mask |= IPA_FLT_SRC_ADDR;
 				} else

@@ -26,9 +26,9 @@
  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * Changes from Qualcomm Innovation Center, Inc. are provided under the following license:
- *
- * Copyright (c) 2022-2025 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Changes from Qualcomm Technologies, Inc. are provided under the following license:
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted (subject to the limitations in the
@@ -9186,6 +9186,11 @@ int IPACM_Wlan::install_uplink_filter_rule_per_client_v2
 			//change old rule to pass to route and non hashable
 			flt_rule_entry.rule.action = IPA_PASS_TO_ROUTING;
 			flt_rule_entry.rule.hashable = false;
+			flt_rule_entry.rule.eq_attrib.rule_eq_bitmap &= ~(1<<9);
+			flt_rule_entry.rule.eq_attrib.metadata_meq32_present = 0;
+			flt_rule_entry.rule.eq_attrib.metadata_meq32.offset = 0;
+			flt_rule_entry.rule.eq_attrib.metadata_meq32.value = 0;
+			flt_rule_entry.rule.eq_attrib.metadata_meq32.mask = 0;
 
 			//add the eth header equation for v4 to the old rule
 			int meq32_n = flt_rule_entry.rule.eq_attrib.num_offset_meq_32;

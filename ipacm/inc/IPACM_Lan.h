@@ -383,7 +383,7 @@ public:
 	void gre_up(bool isPmipv6=false,bool ipogre_enabled=false);
 	int gre_add_tunnel_flow_rule();
 	static bool ipogre_flow_already_installed(int flow_number,bool from_wan = false);
-	void gre_down(bool isPmipv6=false);
+	void gre_down(bool isPmipv6=false,bool ipogre_link_down=false);
 
 	int gre_do_rt_work(
 		ipa_ipgre_info& ipgre_info);

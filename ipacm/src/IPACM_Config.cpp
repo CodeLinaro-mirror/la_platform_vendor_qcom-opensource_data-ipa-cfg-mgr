@@ -3933,6 +3933,7 @@ bool IPACM_Config::is_svap_related(const char* phy_inf) {
 	if (char_idx = strstr(if_name, "_"))
 	{
 		char_idx[0] = '\0';
+		IPACMDBG_H("truncated mlo base iface name %s\n", if_name);
 	}
 
 	snprintf(cmd, 200, "cfg80211tool_mesh %s get_MapBSSType| awk -F ':' '{print $2}' > /tmp/data_ipa/ipa_vap.txt", if_name);
@@ -4180,6 +4181,7 @@ bool IPACM_Config::IsWlanIfVlan(const char *event_iface_name) {
 	if (char_idx = strstr(if_name, "_"))
 	{
 		char_idx[0] = '\0';
+		IPACMDBG_H("truncated mlo base iface name %s\n", if_name);
 	}
 
 	/* check if the AP iface already exists or not*/

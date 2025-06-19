@@ -77,19 +77,19 @@ IPACM_Iface::IPACM_Iface(char *iface_name, int iface_index)
 	tx_prop = NULL;
 	rx_prop = NULL;
 
-	if((iface_name != NULL) && (strstr(iface_name, "mld")))
+	if((iface_name != NULL) && (strstr(iface_name, "mld") || strstr(iface_name, "wlan")))
 	{
-		memcpy(dev_name, iface_name, sizeof(iface_name));
+		strlcpy(dev_name, iface_name, IF_NAME_LEN);
 	}
 	else
 	{
-		memcpy(dev_name, IPACM_Iface::ipacmcfg->iface_table[iface_index].iface_name,
-			sizeof(IPACM_Iface::ipacmcfg->iface_table[iface_index].iface_name));
+		strlcpy(dev_name, IPACM_Iface::ipacmcfg->iface_table[iface_index].iface_name,
+			IF_NAME_LEN);
 	}
 	if (virtual_iface = IPACM_Iface::ipacmcfg->iface_table[iface_index].virtual_iface)
 	{
-		memcpy(phy_dev_name, IPACM_Iface::ipacmcfg->iface_table[iface_index].phy_dev_name,
-			sizeof(IPACM_Iface::ipacmcfg->iface_table[iface_index].phy_dev_name));
+		strlcpy(phy_dev_name, IPACM_Iface::ipacmcfg->iface_table[iface_index].phy_dev_name,
+			IF_NAME_LEN);
 	}
 
 	IPACMDBG_H("dev_name: %s virtual_iface: %s phy_dev_name: %s \n",
@@ -1264,7 +1264,7 @@ int IPACM_Iface::delete_dflt_filter_rules(
 {
 	int idx = 0;
 	int j = 0,wlan_pipe_index;
-	uint32_t *dft_filter_rule_hdl;
+	uint32_t *dft_filter_rule_hdl = NULL;
 	int rules_count = 0;
 
 	if ( ! VALID_IPA_IP_TYPE(iptype) )
@@ -1315,6 +1315,10 @@ int IPACM_Iface::delete_dflt_filter_rules(
 				}
 			}
 
+			if (dft_filter_rule_hdl == NULL) {
+				IPACMERR(" NULL filter rule hdl passed.rules deleted already \n");
+				return IPACM_SUCCESS;
+			}
 
 
 				if (m_filtering.DeleteFilteringHdls(
@@ -1349,6 +1353,10 @@ int IPACM_Iface::delete_dflt_filter_rules(
 					dft_filter_rule_hdl = dft_v6fl_rule_hdl[j];
 					rules_count = m_ipv6_default_filterting_rules_count[j];
 				}
+			}
+			if (dft_filter_rule_hdl == NULL) {
+				IPACMERR(" NULL filter rule hdl passed, rules deleted already \n");
+				return IPACM_SUCCESS;
 			}
 				IPACMDBG_H(
 					"Attempting to delete %u default v6 filter rules.\n",

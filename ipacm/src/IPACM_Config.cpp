@@ -4908,14 +4908,14 @@ void IPACM_Config::flush_qos_params_info(ipa_ioc_qos_config *data)
 }
 
 #ifdef FEATURE_PPPOE
-void IPACM_Config::get_pppoe_session_info(const char *pppoe_dev_name, uint16_t vlan_id)
+void IPACM_Config::get_pppoe_session_info(const char *pppoe_dev_name, const char *phy_dev_name, uint16_t vlan_id)
 {
 	FILE *fp = NULL;
 	char *tok = NULL, *ptr = NULL, *lastVid = NULL;
 	char *params[MAX_PPPOE_PARAM_CNT] = { NULL };
 	char pppoe_row[MAX_PPPOE_PARAM_CNT] = {0}, cmd[IPA_SYS_CMD_LEN] = {0}, cmd_pppoe_row[MAX_PPPOE_ROW_LEN] = {0};
 	int i;
-	uint16_t vid;
+	uint16_t vid = 0;
 
 	snprintf(cmd, IPA_SYS_CMD_LEN, "cat /proc/net/pppoe > %s", IPA_PPPOE_TABLE);
 	system(cmd);
@@ -4968,7 +4968,29 @@ void IPACM_Config::get_pppoe_session_info(const char *pppoe_dev_name, uint16_t v
 		}
 		else
 		{
-			IPACMERR("No mapped session found in /proc/net/pppoe\n");
+			if(phy_dev_name != NULL)
+				IPACMDBG_H("Update session info for pppoe_dev_name %s associated phy %s vlan_id %d \n",pppoe_dev_name, phy_dev_name, vlan_id);
+
+			if(phy_dev_name != NULL && vlan_id == 0)
+			{
+				if(strstr(params[2], phy_dev_name))
+				{
+					IPACMDBG_H("Update session info for pppoe_dev_name %s associated vid %d, passed vid %d\n",pppoe_dev_name, vid, vlan_id);
+					update_pppoe_session_info(pppoe_dev_name, params);
+				}
+				else
+				{
+					IPACMERR("No session found in /proc/net/pppoe\n");
+				}
+			}
+			else if(phy_dev_name == NULL && vlan_id == 0)
+			{
+				IPACMERR(" Null phy dev and vlan id 0 passed, No session found in /proc/net/pppoe\n");
+			}
+			else
+			{
+				IPACMERR("No mapped session found in /proc/net/pppoe\n");
+			}
 		}
 	}
 	fclose(fp);

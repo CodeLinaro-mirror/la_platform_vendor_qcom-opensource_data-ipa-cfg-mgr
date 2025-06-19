@@ -269,6 +269,7 @@ int IPACM_IfaceManager::create_iface_instance(ipacm_ifacemgr_data *param)
 {
 	int if_index = param->if_index;
 	ipacm_wan_iface_type is_sta_mode = param->if_type;
+	uint16_t sta_vlan_id = 0;
 
 	int ipa_interface_index;
 	ipa_interface_index = IPACM_Iface::iface_ipa_index_query(if_index);
@@ -656,8 +657,19 @@ int IPACM_IfaceManager::create_iface_instance(ipacm_ifacemgr_data *param)
 						if(param->is_ppp_iface &&
 							IPACM_Iface::ipacmcfg->eth_wan_pppoe_enable)
 						{
+							if(IPACM_Iface::ipacmcfg->get_pppoe_vlan_id(IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].iface_name,
+								&sta_vlan_id))
+							{
+								IPACMERR("failed to get iface vlan ID\n");
+							}
+							IPACMDBG_H("Update PPPoE config even if ioctl received or not: pppoe_dev_name: %s phy_dev_name:%s vlan_id: %d \n",
+								IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].iface_name,
+								IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].phy_dev_name, sta_vlan_id);
+
 							IPACM_Iface::ipacmcfg->get_pppoe_session_info
-								(IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].iface_name);
+								(IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].iface_name,
+								IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].phy_dev_name,
+								sta_vlan_id);
 						}
 #endif
 					}

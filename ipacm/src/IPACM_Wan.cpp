@@ -2265,7 +2265,14 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 					   data->ipv6_addr[1] == wan_v6_addr_gw[1] &&
 					   data->ipv6_addr[2] == wan_v6_addr_gw[2] &&
 					   data->ipv6_addr[3] == wan_v6_addr_gw[3])
+					{
 					   	gw_addr = true;
+					}
+					else if(data->ipv6_addr[0] == LINK_LOCAL_IPV6)
+					{
+						IPACMDBG("Ignore neighbor event handling with link local address\n");
+						return;
+					}
 				}
 
 				handle_wan_hdr_init(data->mac_addr, gw_addr);

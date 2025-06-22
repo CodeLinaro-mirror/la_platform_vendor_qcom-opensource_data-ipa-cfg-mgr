@@ -26,9 +26,9 @@
  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * Changes from Qualcomm Innovation Center are provided under the following license:
- *
- * Copyright (c) 2022-2025 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Changes from Qualcomm Technologies, Inc. are provided under the following license:
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted (subject to the limitations in the
@@ -701,7 +701,7 @@ public:
 
 #ifdef FEATURE_PPPOE
 	uint16_t pppoe_get_session_id(const char *pppoe_dev_name);
-	void get_pppoe_session_info(const char *pppoe_dev_name);
+	void get_pppoe_session_info(const char *pppoe_dev_name, uint16_t vlan_id = 0);
 	void update_pppoe_session_info(const char *pppoe_dev_name, char *params[MAX_PPPOE_PARAM_CNT]);
 	int get_pppoe_vlan_id(char *pppoe_dev_name, uint16_t *vlan_id);
 	int get_pppoe_indx(char *pppoe_dev_name);
@@ -1035,7 +1035,7 @@ public:
 	void ip_collision_config_update(ipa_ioc_pdn_config *pdn_config);
 
 #ifdef FEATURE_PPPOE
-	void pppoe_config_update(ipa_ioc_pppoe_info *pppoe_config, uint8_t to_add, uint8_t session_id = 0, uint8_t *mac_addr = NULL);
+	void pppoe_config_update(ipa_ioc_pppoe_info *pppoe_config, uint8_t to_add, uint16_t session_id = 0, uint8_t *mac_addr = NULL);
 #endif
 
 #ifdef FEATURE_STATIC_POLICY

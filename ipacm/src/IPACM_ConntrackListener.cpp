@@ -28,7 +28,7 @@
  *
  * Changes from Qualcomm Technologies, Inc. are provided under the following license:
  * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
- * SPDX-License-Identifier: BSD-3-Clause-Clear.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 #include <sys/ioctl.h>
 #include <net/if.h>
@@ -915,6 +915,7 @@ void IPACM_ConntrackListener::HandleVlanUp(void *in_param)
 					IPACMDBG_H("found existing PDN entry in %d, but got new VLAN id. Adding vlan %d to the entry\n", i, vlanup_data->VlanID);
 					vlan_pdns[i].associated_VIDs[vlan_pdns[i].VID_cnt] = vlanup_data->VlanID;
 					IPACMDBG_H("found existing PDN entry in %d \n", i);
+					vlan_pdns[i].VID_cnt++;
 					return;
 				}
 			}

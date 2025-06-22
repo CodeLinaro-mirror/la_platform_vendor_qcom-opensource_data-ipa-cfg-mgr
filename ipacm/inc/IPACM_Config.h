@@ -544,6 +544,17 @@ public:
 				return false;
 			}
 		}
+
+		/* prefix shouldn't be present in offload list - this is a bug */
+		for(int i = 0; i < num_no_offload_ipv6_prefix; i++)
+		{
+			if((prefix[0] == ipa_no_offload_ipv6_prefixes[i][0]) && (prefix[1] == ipa_no_offload_ipv6_prefixes[i][1]))
+			{
+				IPACMERR("prefix 0x[%X][%X] already exists in no offload list\n", ipa_no_offload_ipv6_prefixes[i][0], ipa_no_offload_ipv6_prefixes[i][1]);
+				return false;
+			}
+		}
+
 		if (num_no_offload_ipv6_prefix < IPA_MAX_IPV6_NO_OFFLOAD_PREFIX_FLT_RULE )
 		{
 			ipa_no_offload_ipv6_prefixes[num_no_offload_ipv6_prefix][0] = prefix[0];
@@ -647,7 +658,30 @@ public:
 		SendPrefixChangeEvent(ipa_if_num);
 		return true;
 	}
-
+	/* remove from prefixes list if needed and notify LAN objects to modify rules*/
+	inline int del_vlan_no_offload_ipv6_prefix(uint32_t* prefix, int ipa_if_num)
+	{
+		int i;
+		/* remove from no offload list */
+		for(i = 0; i < num_no_offload_ipv6_prefix; i++)
+		{
+			if((prefix[0] == ipa_no_offload_ipv6_prefixes[i][0]) && (prefix[1] == ipa_no_offload_ipv6_prefixes[i][1]))
+			{
+				for(; i < (num_no_offload_ipv6_prefix - 1); i++)
+				{
+					ipa_no_offload_ipv6_prefixes[i][0] = ipa_no_offload_ipv6_prefixes[i + 1][0];
+					ipa_no_offload_ipv6_prefixes[i][1] = ipa_no_offload_ipv6_prefixes[i + 1][1];
+				}
+				num_no_offload_ipv6_prefix--;
+				IPACMDBG_H("removed prefix 0x[%X][%X] from no offload list\n", prefix[1], prefix[2]);
+				/* tell other LAN interfaces that we have a change in v6 prefixes */
+				SendPrefixChangeEvent(ipa_if_num);
+				return IPACM_SUCCESS;
+			}
+		}
+		IPACMERR("couldn't find prefix 0x[%X][%X] in either no offload nor offload list\n", prefix[0], prefix[1]);
+		return IPACM_FAILURE;
+	}
 	/* remove from prefixes list if needed and notify LAN objects to modify rules*/
 	inline int del_vlan_ipv6_prefix(uint32_t* prefix, int ipa_if_num, bool reserve_slot = false)
 	{

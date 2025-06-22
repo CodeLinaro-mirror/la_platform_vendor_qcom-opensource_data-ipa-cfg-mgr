@@ -1222,6 +1222,7 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 
 	case IPA_NEIGH_CLIENT_IP_ADDR_DEL_EVENT:
 		{
+			uint32_t ipv6_no_offloaded_prefix[2];
 			ipacm_event_data_all *data = (ipacm_event_data_all *)param;
 			ipa_interface_index = iface_ipa_index_query(data->if_index);
 
@@ -1262,6 +1263,15 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 					if (data->iptype == IPA_IP_v6)
 					{
 						handle_del_ipv6_addr(data);
+						if(IPACM_Wan::is_global_ipv6_addr(data->ipv6_addr))
+						{
+							if (!IPACM_Wan::isWan_active_with_prefix(data->ipv6_addr))
+							{
+								memset(&ipv6_no_offloaded_prefix, 0, sizeof(ipv6_no_offloaded_prefix));
+								memcpy(&ipv6_no_offloaded_prefix, data->ipv6_addr, sizeof(ipv6_no_offloaded_prefix));
+								IPACM_Iface::ipacmcfg->del_vlan_no_offload_ipv6_prefix(ipv6_no_offloaded_prefix, -1);
+							}
+						}
 						return;
 					}
 #ifdef FEATURE_VLAN_MPDN
@@ -1878,6 +1888,7 @@ int IPACM_Lan::handle_vlan_neighbor(ipacm_event_data_all *data)
 	bool new_prefix = false;
 	ipacm_event_data_all data_all;
 	std::list <ipacm_event_data_all>::iterator it;
+	uint32_t ipv6_no_offloaded_prefix[2];
 
 	IPACMDBG_H("\n");
 
@@ -1928,6 +1939,9 @@ int IPACM_Lan::handle_vlan_neighbor(ipacm_event_data_all *data)
 							IPACMDBG_H("Caching v6 addr : 0x%08x:%08x:%08x:%08x mac 0x%x%x%x%x%x%x\n",
 								data_all.ipv6_addr[0], data_all.ipv6_addr[1], data_all.ipv6_addr[2], data_all.ipv6_addr[3],
 								data_all.mac_addr[0], data_all.mac_addr[1], data_all.mac_addr[2], data_all.mac_addr[3], data_all.mac_addr[4], data_all.mac_addr[5]);
+							memset(&ipv6_no_offloaded_prefix, 0, sizeof(ipv6_no_offloaded_prefix));
+							memcpy(&ipv6_no_offloaded_prefix, data_all.ipv6_addr, sizeof(ipv6_no_offloaded_prefix));
+							IPACM_Iface::ipacmcfg->add_no_offload_ipv6_prefix(ipv6_no_offloaded_prefix);
 						}
 					}
 					return IPACM_FAILURE;

@@ -413,6 +413,7 @@ void IPACM_LanToLan::handle_iface_up(ipacm_event_eth_bridge *data)
 void IPACM_LanToLan::handle_client_cross_proc_ctx(ipacm_event_eth_bridge *data)
 {
 	list<IPACM_LanToLan_Iface>::iterator it, it1;
+	list<struct client_cross_proc_ctx>::iterator mac_itr;
 #ifdef FEATURE_VLAN_MPDN
 	bool IsVlan = (IPACM_Iface::ipacmcfg->ipacm_mpdn_enable &&
 		IPACM_Iface::ipacmcfg->iface_in_vlan_mode(data->p_iface->dev_name));
@@ -421,6 +422,7 @@ void IPACM_LanToLan::handle_client_cross_proc_ctx(ipacm_event_eth_bridge *data)
 	int i;
 	ipa_bridge_vlan_mapping_info mapping_info;
 	bool client_found = false;
+	bool is_present = false;
 #endif
 
 	IPACMDBG_H("Interface name: %s IP type: %d\n", data->p_iface->dev_name, data->iptype);
@@ -484,8 +486,17 @@ void IPACM_LanToLan::handle_client_cross_proc_ctx(ipacm_event_eth_bridge *data)
 			{
 				if(it1->get_iface_pointer() == data->p_iface)
 					continue;
-
-				if(!front_iface.get_is_vlan() && it1->get_is_vlan() && front_iface.m_is_cross_proc_ctx_handled == false)
+				if(front_iface.m_is_cross_proc_ctx_handled == true)
+				{
+					for(mac_itr = front_iface.m_is_cross_proc_ctx_client_handled.begin();mac_itr != front_iface.m_is_cross_proc_ctx_client_handled.end();mac_itr++)
+					{
+						if(!memcmp(data->mac_addr, mac_itr->mac_addr, sizeof(data->mac_addr)))
+						is_present = true;
+						IPACMERR("client RT rules already handled for mac %x:%x:%x:%x:%x:%x\n", data->mac_addr[0],data->mac_addr[1],data->mac_addr[2],data->mac_addr[3],data->mac_addr[4],data->mac_addr[5]);
+						return;
+					}
+				}
+				if(!front_iface.get_is_vlan() && it1->get_is_vlan() &&  (front_iface.m_is_cross_proc_ctx_handled == false || (front_iface.m_is_cross_proc_ctx_handled == true && is_present == false)))
 				{
 					if(IPACM_Iface::ipacmcfg->get_iface_vlan_ids(it1->get_iface_pointer()->dev_name, cl_Ids))
 					{
@@ -523,15 +534,31 @@ void IPACM_LanToLan::handle_client_cross_proc_ctx(ipacm_event_eth_bridge *data)
 					}
 				}
 			}
-
-			if(front_iface.m_is_cross_proc_ctx_handled == false && client_found == true)
+			if(front_iface.m_is_cross_proc_ctx_handled == true)
 			{
+				for(mac_itr = front_iface.m_is_cross_proc_ctx_client_handled.begin();mac_itr != front_iface.m_is_cross_proc_ctx_client_handled.end();mac_itr++)
+				{
+					if(!memcmp(data->mac_addr, mac_itr->mac_addr, sizeof(data->mac_addr)))
+					is_present = true;
+					IPACMERR("client RT rules already handled for mac %x:%x:%x:%x:%x:%x\n", data->mac_addr[0],data->mac_addr[1],data->mac_addr[2],data->mac_addr[3],data->mac_addr[4],data->mac_addr[5]);
+					return;
+				}
+			}
+
+			if(is_present == false && client_found == true)
+			{
+				struct client_cross_proc_ctx client_cross_proc_ctx_info;
 				/* add client specific filtering rule on new interface for matching vlan ids*/
 				front_iface.add_all_inter_interface_client_flt_rule(IPA_IP_v4, Ids);
 				front_iface.add_all_inter_interface_client_flt_rule(IPA_IP_v6, Ids);
-				front_iface.m_is_cross_proc_ctx_handled = true;
-				IPACMDBG("Updating the m_is_cross_proc_ctx_handled to %d for %s\n",
-						front_iface.m_is_cross_proc_ctx_handled, front_iface.get_iface_pointer()->dev_name);
+				memcmp(client_cross_proc_ctx_info.mac_addr, data->mac_addr, sizeof(data->mac_addr));
+				front_iface.m_is_cross_proc_ctx_client_handled.push_front(client_cross_proc_ctx_info);
+				if(front_iface.m_is_cross_proc_ctx_handled != true)
+					front_iface.m_is_cross_proc_ctx_handled = true;
+				IPACMDBG("Updating the m_is_cross_proc_ctx_client_handled to %x:%x:%x:%x:%x:%x for %s\n",
+						data->mac_addr[0],data->mac_addr[1],data->mac_addr[2],
+						data->mac_addr[3],data->mac_addr[4],data->mac_addr[5],
+						front_iface.get_iface_pointer()->dev_name);
 			}
 			break;
 #endif //FEATURE_VLAN_MPDN
@@ -567,11 +594,11 @@ void IPACM_LanToLan::handle_iface_down(ipacm_event_eth_bridge *data)
 	it_target_iface->handle_down_event();
 	IPACM_LanToLan_Iface &front_iface = (*it_target_iface);
 	if(!front_iface.get_is_vlan() &&
-		front_iface.m_is_cross_proc_ctx_handled == true)
+		!front_iface.m_is_cross_proc_ctx_client_handled.empty())
 	{
-		front_iface.m_is_cross_proc_ctx_handled = false;
-		IPACMDBG("Updating the m_is_cross_proc_ctx_handled to %d for %s\n",
-				front_iface.m_is_cross_proc_ctx_handled, front_iface.get_iface_pointer()->dev_name);
+		front_iface.m_is_cross_proc_ctx_client_handled.clear();
+		IPACMDBG("Updating the m_is_cross_proc_ctx__client_handled for %s\n",
+				 front_iface.get_iface_pointer()->dev_name);
 	}
 	m_iface.erase(it_target_iface);
 #ifdef FEATURE_L2TP
@@ -1818,6 +1845,7 @@ void IPACM_LanToLan_Iface::del_client_flt_rule(peer_iface_info *peer, client_inf
 					{
 						m_p_iface->eth_bridge_del_flt_rule(it_flt->flt_rule_hdl[IPA_IP_v6], IPA_IP_v6);
 						IPACMDBG_H("Deleted IPv6 flt rule %d.\n", it_flt->flt_rule_hdl[IPA_IP_v6]);
+						it_flt->flt_rule_hdl[IPA_IP_v6] = 0;
 					}
 				}
 			}
@@ -1894,6 +1922,7 @@ void IPACM_LanToLan_Iface::del_client_rt_rule(peer_iface_info *peer, client_info
 			{
 				m_p_iface->eth_bridge_del_rt_rule(client->inter_iface_rt_rule_hdl[peer_l2_hdr_type].rule_hdl[IPA_IP_v6][i], IPA_IP_v6);
 				IPACMDBG_H("IPv6 rt rule %d is deleted.\n", client->inter_iface_rt_rule_hdl[peer_l2_hdr_type].rule_hdl[IPA_IP_v6][i]);
+				client->inter_iface_rt_rule_hdl[peer_l2_hdr_type].rule_hdl[IPA_IP_v6][i] = 0;
 			}
 			client->inter_iface_rt_rule_hdl[peer_l2_hdr_type].num_hdl[IPA_IP_v6] = 0;
 #ifdef FEATURE_L2TP
@@ -1994,6 +2023,7 @@ void IPACM_LanToLan_Iface::handle_down_event()
 				it_own_peer_info->peer->ref_cnt_peer_l2_hdr_type[m_p_iface->tx_prop->tx[0].hdr_l2_type] == 0)
 			{
 				it_own_peer_info->peer->m_is_cross_proc_ctx_handled = false;
+				it_own_peer_info->peer->m_is_cross_proc_ctx_client_handled.clear();
 				IPACMDBG("Updating the m_is_cross_proc_ctx_handled to %d for %s\n",
 						it_own_peer_info->peer->m_is_cross_proc_ctx_handled,
 						it_own_peer_info->peer->m_p_iface->dev_name);
@@ -2349,7 +2379,11 @@ void IPACM_LanToLan_Iface::install_iface_cross_proc_ctx(IPACM_LanToLan_Iface *pe
 	{
 		IPACMDBG_H("Adding header Proc Context\n");
 		increment_ref_cnt_peer_l2_hdr_type(peer_l2_hdr_type);
-		add_hdr_proc_ctx(peer_l2_hdr_type, peer_iface->m_p_iface->dev_name);
+		if((ref_cnt_peer_l2_hdr_type[peer_l2_hdr_type] == 1))
+		{
+			add_hdr_proc_ctx(peer_l2_hdr_type, peer_iface->m_p_iface->dev_name);
+			IPACMDBG_H("Added header Proc Context for %s\n", peer_iface->m_p_iface->dev_name);
+		}
 	}
 
 	return;
@@ -2459,11 +2493,12 @@ void IPACM_LanToLan_Iface::handle_client_add(uint8_t *mac, bool is_l2tp_client, 
 list<client_info>::iterator IPACM_LanToLan_Iface::handle_client_del(uint8_t *mac, uint16_t vlan_id)
 {
 	list<client_info>::iterator it_client;
+	list<flt_rule_info>::iterator it_flt;
 	list<peer_iface_info>::iterator it_peer_info;
 	bool flag[IPA_HDR_L2_MAX];
 
 #ifdef FEATURE_VLAN_MPDN
-	if((vlan_id && !m_is_vlan) || (!vlan_id && m_is_vlan))
+	if(((vlan_id < 4096) && !m_is_vlan) || (!vlan_id && m_is_vlan))
 	{
 		IPACMDBG_H("vlan client (%d) and vlan mode(%d) mismatch, return\n", vlan_id, m_is_vlan);
 		return m_client_info.end();

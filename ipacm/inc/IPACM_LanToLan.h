@@ -26,8 +26,8 @@ WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
 OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
 IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-Changes from Qualcomm Innovation Center, Inc. are provided under the following license:
-Copyright (c) 2024 Qualcomm Innovation Center, Inc. All rights reserved.
+Changes from Qualcomm Technologies, Inc. are provided under the following license:
+Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
 SPDX-License-Identifier: BSD-3-Clause-Clear
 
 */
@@ -113,6 +113,11 @@ struct peer_iface_info
 #endif
 };
 
+
+struct client_cross_proc_ctx
+{
+	uint8_t mac_addr[6];
+};
 class IPACM_LanToLan_Iface
 {
 public:
@@ -177,6 +182,7 @@ public:
 	void set_is_vlan(bool is_vlan) { m_is_vlan = is_vlan; }
 	bool get_is_vlan() { return m_is_vlan; };
 #endif
+	list<struct client_cross_proc_ctx> m_is_cross_proc_ctx_client_handled;
 	bool m_is_cross_proc_ctx_handled;
 private:
 

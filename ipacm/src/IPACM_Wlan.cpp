@@ -866,6 +866,19 @@ void IPACM_Wlan::event_callback(ipa_cm_event_id event, void *param)
 					eth_bridge_post_event(IPA_ETH_BRIDGE_CLIENT_DEL, IPA_IP_MAX, data->mac_addr, NULL, NULL, vlan_id);
 				}
 				handle_wlan_client_down_evt(data->mac_addr);
+#ifdef IPA_VLAN_PRIORITY
+				if(IPACM_Iface::ipacmcfg->get_vlan_id(dev_name, &vlan_id, &priority))
+#else
+				if(IPACM_Iface::ipacmcfg->get_vlan_id(dev_name, &vlan_id))
+#endif
+				{
+					IPACMERR("Unable to find VLAN ID for Dev %s\n", dev_name);
+					eth_bridge_post_event(IPA_ETH_BRIDGE_CLIENT_DEL, IPA_IP_MAX, data->mac_addr, NULL, NULL);
+				}
+				else
+				{
+					eth_bridge_post_event(IPA_ETH_BRIDGE_CLIENT_DEL, IPA_IP_MAX, data->mac_addr, NULL, NULL, vlan_id);
+				}
 			}
 		}
 		break;
@@ -3891,7 +3904,6 @@ int IPACM_Wlan::handle_wlan_vlan_neighbor(ipacm_event_data_all *data)
 			IPACM_EvtDispatcher::PostEvt(&evt_data);
 		}
 
-		eth_bridge_post_event(IPA_ETH_BRIDGE_CLIENT_ADD, IPA_IP_MAX, data->mac_addr, NULL, data->iface_name, vlan_id);
 	}
 
 	return IPACM_SUCCESS;

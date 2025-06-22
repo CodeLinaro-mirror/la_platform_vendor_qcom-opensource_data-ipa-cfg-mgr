@@ -3977,7 +3977,6 @@ int IPACM_Wlan::handle_wlan_vlan_neighbor(ipacm_event_data_all *data)
 			IPACM_EvtDispatcher::PostEvt(&evt_data);
 		}
 
-		eth_bridge_post_event(IPA_ETH_BRIDGE_CLIENT_ADD, IPA_IP_MAX, data->mac_addr, NULL, data->iface_name, vlan_id);
 	}
 
 	return IPACM_SUCCESS;

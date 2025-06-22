@@ -112,6 +112,11 @@ struct peer_iface_info
 #endif
 };
 
+
+struct client_cross_proc_ctx
+{
+	uint8_t mac_addr[6];
+};
 class IPACM_LanToLan_Iface
 {
 public:
@@ -176,6 +181,7 @@ public:
 	void set_is_vlan(bool is_vlan) { m_is_vlan = is_vlan; }
 	bool get_is_vlan() { return m_is_vlan; };
 #endif
+	list<struct client_cross_proc_ctx> m_is_cross_proc_ctx_client_handled;
 	bool m_is_cross_proc_ctx_handled;
 private:
 

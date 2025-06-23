@@ -1592,6 +1592,7 @@ int IPACM_Config::get_bridge_vlan_mapping(ipa_bridge_vlan_mapping_info *data, bo
 				data->bridge_ipv4 = it_mapping->bridge_ipv4;
 				data->subnet_mask = it_mapping->subnet_mask;
 				data->lan2lan_sw = it_mapping->lan2lan_sw;
+				data->master_if_index = it_mapping->bridge_if_index;
 				ret = IPACM_SUCCESS;
 
 				if(is_dummy_VID(it_mapping->bridge_associated_VID))
@@ -1608,6 +1609,7 @@ int IPACM_Config::get_bridge_vlan_mapping(ipa_bridge_vlan_mapping_info *data, bo
 				data->bridge_ipv4 = it_mapping->bridge_ipv4;
 				data->subnet_mask = it_mapping->subnet_mask;
 				data->lan2lan_sw = it_mapping->lan2lan_sw;
+				data->master_if_index = it_mapping->bridge_if_index;
 				ret = IPACM_SUCCESS;
 				break;
 			}

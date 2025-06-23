@@ -26,8 +26,8 @@ WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
 OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
 IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-Changes from Qualcomm Innovation Center are provided under the following license:
-Copyright (c) 2023-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+Changes from Qualcomm Technologies, Inc. are provided under the following license:
+Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
 SPDX-License-Identifier: BSD-3-Clause-Clear
 */
 /*!
@@ -46,6 +46,11 @@ SPDX-License-Identifier: BSD-3-Clause-Clear
 #include <sys/ioctl.h>
 #include <netinet/in.h>
 #include <net/if.h>
+
+#include <stdlib.h>
+#include <errno.h>
+#include <linux/rtnetlink.h>
+
 #include "IPACM_CmdQueue.h"
 #include "IPACM_Defs.h"
 #include "IPACM_Netlink.h"
@@ -53,6 +58,7 @@ SPDX-License-Identifier: BSD-3-Clause-Clear
 #include "IPACM_Log.h"
 #include "IPACM_Iface.h"
 #include "IPACM_Config.h"
+#include <sys/socket.h>
 
 #ifdef FEATURE_EoGRE
 #include <linux/ip.h>
@@ -255,7 +261,7 @@ static int ipa_nl_sock_listener_start
 	 )
 {
 	int i, ret;
-
+	IPACMDBG("Starting the netlink thread\n");
 	while(true)
 	{
 	    for(i = 0; i < sk_fd_set->num_fd; i++ )
@@ -1058,7 +1064,9 @@ static int ipa_nl_decode_nlmsg
 					}
 				}
 
-				if (IFF_UP & msg_ptr->nl_link_info.metainfo.ifi_change) {
+				if ((IFF_UP & msg_ptr->nl_link_info.metainfo.ifi_change) ||
+					(!memcmp(dev_name,"rmnet_data", 10) &&
+					(msg_ptr->nl_link_info.metainfo.ifi_type == ARPHRD_RAWIP))) {
 					IPACMDBG("GOT useful newlink event\n");
 
 					IPACMDBG_H("New Interface %s  with IP-family: %d \n",
@@ -2280,36 +2288,40 @@ int ipa_nl_listener_init
 	 unsigned int nl_type,
 	 unsigned int nl_groups,
 	 ipa_nl_sk_fd_set_info_t *sk_fdset,
-	 ipa_sock_thrd_fd_read_f read_f
+	 ipa_sock_thrd_fd_read_f read_f,
+	 ipa_nl_sk_info_t *sk_info
 	 )
 {
-	ipa_nl_sk_info_t sk_info;
 	int ret_val;
 
-	memset(&sk_info, 0, sizeof(ipa_nl_sk_info_t));
+	memset(sk_info, 0, sizeof(ipa_nl_sk_info_t));
 	IPACMDBG_H("Entering IPA NL listener init\n");
-
-	if(ipa_nl_open_socket(&sk_info, nl_type, nl_groups) == IPACM_SUCCESS)
+	if(pthread_mutex_lock(&nl_lock) != 0)
+	{
+		IPACMERR("Unable to lock the mutex\n");
+	}
+	if(ipa_nl_open_socket(sk_info, nl_type, nl_groups) == IPACM_SUCCESS)
 	{
 		IPACMDBG_H("IPA Open netlink socket succeeds\n");
 	}
 	else
 	{
 		IPACMERR("Netlink socket open failed\n");
+		pthread_mutex_unlock(&nl_lock);
 		return IPACM_FAILURE;
 	}
 
 	/* Add NETLINK socket to the list of sockets that the listener
 					 thread should listen on. */
 
-	if(ipa_nl_addfd_map(sk_fdset, sk_info.sk_fd, read_f) != IPACM_SUCCESS)
+	if(ipa_nl_addfd_map(sk_fdset, sk_info->sk_fd, read_f) != IPACM_SUCCESS)
 	{
 		IPACMERR("cannot add nl routing sock for reading\n");
-		close(sk_info.sk_fd);
+		close(sk_info->sk_fd);
+		pthread_mutex_unlock(&nl_lock);
 		return IPACM_FAILURE;
 	}
-
-	/* Start the socket listener thread */
+	pthread_mutex_unlock(&nl_lock);
 	ret_val = ipa_nl_sock_listener_start(sk_fdset);
 
 	if(ret_val != IPACM_SUCCESS)
@@ -2476,7 +2488,7 @@ int ipa_nl_send_getroute(ipa_ip_type ip_type)
 			IPACMERR("Netlink message error");
 			goto error;
 		}
-
+		memset(&nl_route_info_get_route, 0, sizeof(ipa_nl_route_info_t));
 		ipa_nl_decode_rtm_route((char*)h,msglen,&nl_route_info_get_route);
 		IPACMDBG("In case RTM_GETROUTE\n");
 		IPACMDBG("rtm_type: %d\n", nl_route_info_get_route.metainfo.rtm_type);
@@ -2615,8 +2627,8 @@ int ipa_nl_send_getroute(ipa_ip_type ip_type)
 					IPACMERR("unable to allocate memory for event data_addr\n");
 					goto error;
 				}
-		
-				 IPACM_EVENT_COPY_ADDR_v6( data_addr->ipv6_addr, nl_route_info_get_route.attr_info.dst_addr);
+				memset(data_addr,0,sizeof(ipacm_event_data_addr));
+				IPACM_EVENT_COPY_ADDR_v6( data_addr->ipv6_addr, nl_route_info_get_route.attr_info.dst_addr);
 		
 				data_addr->ipv6_addr[0] = ntohl(data_addr->ipv6_addr[0]);
 				data_addr->ipv6_addr[1] = ntohl(data_addr->ipv6_addr[1]);
@@ -2685,7 +2697,7 @@ int ipa_nl_send_getroute(ipa_ip_type ip_type)
 				{
 					IPACMDBG_H("ip -6 route add default dev %s\n", dev_name);
 				}
-		
+				memset(data_addr,0,sizeof(ipacm_event_data_addr));
 				IPACM_EVENT_COPY_ADDR_v6( data_addr->ipv6_addr, nl_route_info_get_route.attr_info.dst_addr);
 		
 				data_addr->ipv6_addr[0]=ntohl(data_addr->ipv6_addr[0]);
@@ -2713,6 +2725,7 @@ int ipa_nl_send_getroute(ipa_ip_type ip_type)
 		
 				IPACMDBG("posting IPA_ROUTE_ADD_EVENT with if index:%d, ipv6 address\n",
 								 data_addr->if_index);
+
 				evt_data.evt_data = data_addr;
 				IPACM_EvtDispatcher::PostEvt(&evt_data);
 				/* finish command queue */
@@ -2829,4 +2842,399 @@ int mask_v6(int index, uint32_t *mask)
 	}
 }
 
+int ipa_open_nl_getlink_socket
+(
+ ipa_sk_info_t   *sk_info,
+ int               protocol,
+ unsigned int      grps
+ )
+{
+	int                  *p_sk_fd;
+	struct sockaddr_nl   *p_sk_addr_loc ;
 
+	//ds_assert(sk_info != NULL);
+
+	p_sk_fd = &(sk_info->sk_fd);
+	p_sk_addr_loc = &(sk_info->sk_addr_loc);
+
+	/*--------------------------------------------------------------------------
+	  Open netlink socket for specified protocol
+	  ---------------------------------------------------------------------------*/
+	if ((*p_sk_fd = socket(AF_NETLINK, SOCK_RAW, protocol)) < 0)
+	{
+		IPACMDBG("Cannot open netlink socket errno: %d", errno,0,0);
+		return -1;
+	}
+
+	/*--------------------------------------------------------------------------
+	  Initialize socket parameters to 0
+	  --------------------------------------------------------------------------*/
+	memset(p_sk_addr_loc, 0, sizeof(struct sockaddr_nl));
+
+	/*-------------------------------------------------------------------------
+	  Populate socket parameters
+	  --------------------------------------------------------------------------*/
+	p_sk_addr_loc->nl_family = AF_NETLINK;
+	p_sk_addr_loc->nl_pid = 0;
+	p_sk_addr_loc->nl_groups = grps;
+
+	/*-------------------------------------------------------------------------
+	  128    Bind socket to receive the netlink events for the required groups
+	  129  --------------------------------------------------------------------------*/
+
+	if( bind( *p_sk_fd,
+				(struct sockaddr *)p_sk_addr_loc,
+				sizeof(struct sockaddr_nl) ) < 0)
+	{
+
+		IPACMDBG("Socket bind failed %s- Make sure no-one has opened a NL socket"
+				" with\n", strerror(errno));
+		close(*p_sk_fd);
+		return 0;
+	}
+	return 0;
+}
+
+int  ipa_nl_query_getlink(int af_family)
+{
+	ipa_sk_info_t   sk_info;
+	struct sockaddr_nl req_nl_addr, recv_nl_addr;
+	struct msghdr req_nl_msg, recv_nl_msg;
+	ipa_nl_req_type    nl_req;
+	char dev_name[IF_NAME_LEN];
+
+	struct iovec recv_iovec, req_iovec;
+	char buff[8124] = {0};
+	unsigned int ret_val = 0;
+	struct nlmsghdr *nl_hdr = NULL;
+	struct ifinfomsg *iface_info = NULL;
+	int ret;
+
+	memset(&req_nl_msg, 0, sizeof(req_nl_msg));
+	memset(&req_nl_addr, 0, sizeof(req_nl_addr));
+	memset(&nl_req, 0, sizeof(nl_req));
+	memset(&sk_info, 0, sizeof(sk_info));
+
+	if (ipa_open_nl_getlink_socket(&sk_info, NETLINK_ROUTE, RTMGRP_LINK) != 0)
+	{
+		IPACMDBG("Failed to open the netlink socket", 0, 0, 0);
+		return -1;
+	}
+
+	req_nl_addr.nl_family = AF_NETLINK;
+	nl_req.hdr.nlmsg_len = NLMSG_LENGTH(sizeof(struct rtgenmsg));
+	nl_req.hdr.nlmsg_type = RTM_GETLINK;
+	nl_req.hdr.nlmsg_flags = NLM_F_REQUEST | NLM_F_DUMP;
+	nl_req.hdr.nlmsg_seq = 1;
+	nl_req.hdr.nlmsg_pid = 0;
+	nl_req.gen.rtgen_family =  AF_PACKET;
+
+	req_iovec.iov_base = &nl_req;
+	req_iovec.iov_len = nl_req.hdr.nlmsg_len;
+	req_nl_msg.msg_iov = &req_iovec;
+	req_nl_msg.msg_iovlen = 1;
+	req_nl_msg.msg_name = &req_nl_addr;
+	req_nl_msg.msg_namelen = sizeof(req_nl_addr);
+	memset(&recv_nl_msg, 0, sizeof(recv_nl_msg));
+	memset(&recv_iovec, 0, sizeof(recv_iovec));
+
+	recv_iovec.iov_base = (void*)buff;
+	recv_iovec.iov_len = sizeof(buff);
+
+	recv_nl_msg.msg_name = (void*)&recv_nl_addr;
+	recv_nl_msg.msg_namelen = sizeof(recv_nl_addr);
+	recv_nl_msg.msg_iov = &recv_iovec;
+	recv_nl_msg.msg_iovlen = 1;
+	recv_nl_msg.msg_control = NULL;
+	recv_nl_msg.msg_controllen = 0;
+	recv_nl_msg.msg_flags = 0;
+	ipa_nl_link_info_t nl_link_info;
+	ipa_nl_msg_t *msg_ptr = (ipa_nl_msg_t *)calloc(1, sizeof(ipa_nl_msg_t));
+
+	if (sendmsg(sk_info.sk_fd, (struct msghdr *) &req_nl_msg, 0) <= 0)
+	{
+		IPACMDBG("QCMAP:Netlink Query to Kernel failed errno:%d",errno,0,0);
+		return -1;
+	}
+	while(1)
+	{
+		if ((ret_val = recvmsg(sk_info.sk_fd, &recv_nl_msg, 0)) < 0)
+		{
+			IPACMDBG("Error in reading from netlink socket errno:%d", errno, 0, 0);
+			break;
+		}
+		IPACMDBG("No of bytes recevied:%d", ret_val);
+		if ((nl_hdr = (struct nlmsghdr*)buff) == NULL)
+		{
+			IPACMDBG("nl_hdr is NULL", 0, 0, 0);
+			break;
+		}
+		if (nl_hdr->nlmsg_type == NLMSG_DONE)
+		{
+			IPACMDBG("Received NLMSG_DONE\n");
+			break;
+		}
+
+		while(NLMSG_OK(nl_hdr, ret_val))
+		{
+			if (nl_hdr->nlmsg_type == NLMSG_DONE)
+			{
+				IPACMDBG("Received NLMSG_DONE\n");
+				break;
+			}
+			if (nl_hdr->nlmsg_type == NLMSG_ERROR)
+			{
+				IPACMDBG("Error in received netlink msg :%u", nl_hdr->nlmsg_type, 0, 0);
+				break;
+			}
+			if ((iface_info = (struct ifinfomsg*)NLMSG_DATA (nl_hdr))==NULL)
+			{
+				IPACMDBG("Interface info from netlink message is NULL\n");
+				nl_hdr = NLMSG_NEXT(nl_hdr, ret_val);
+				continue;
+			}
+			ret =  ipa_get_if_name(dev_name,
+					iface_info->ifi_index);
+			if(ret != 0)
+			{
+				IPACMDBG("Error while getting interface index\n");
+				ret = 0;
+				nl_hdr = NLMSG_NEXT(nl_hdr, ret_val);
+				continue;
+			}
+			if(!strcmp(dev_name,"lo") || !strcmp(dev_name,"ip_vti0") || !strcmp(dev_name,"ip6_vti0")
+					|| !strcmp(dev_name,"sit0") || !strcmp(dev_name,"can0"))
+			{
+				nl_hdr = NLMSG_NEXT(nl_hdr, ret_val);
+				continue;
+			}
+
+			if (nl_hdr->nlmsg_type == RTM_NEWLINK)
+			{
+				if(iface_info->ifi_flags & IFF_UP)
+				{
+					if (ipa_nl_decode_nlmsg((const char*)nl_hdr, ret_val, msg_ptr)) {
+						IPACMERR("Failed to decode rtm link message\n");
+						nl_hdr = NLMSG_NEXT(nl_hdr, ret_val);
+						continue;
+					}
+				}
+			}
+			nl_hdr = NLMSG_NEXT(nl_hdr, ret_val);
+		}
+	}
+	if (sk_info.sk_fd > 0)
+		close(sk_info.sk_fd);
+	return 0;
+}
+
+int ipa_nl_query_ip_addr_info(int af_family)
+{
+	int msglen = 0, nl_sock = 0;
+	ssize_t msgsent_len = 0;
+	char *buf = NULL;
+	nl_request_t nl_request;
+	struct sockaddr_nl nladdr;
+	struct msghdr msg;
+	struct nlmsghdr *h = NULL;
+	struct iovec iov;
+
+	nl_sock = socket(AF_NETLINK, SOCK_RAW, NETLINK_ROUTE);
+
+	if (nl_sock < 0)
+	{
+		IPACMERR("Failed to open netlink socket");
+		return IPACM_FAILURE;
+	}
+	IPACM_Config* config = NULL;
+	config = IPACM_Config::GetInstance();
+	ipa_nl_msg_t  *msg_ptr = (ipa_nl_msg_t*)calloc(1, sizeof(ipa_nl_msg_t));//msg_ptr2;
+	memset(&nl_request, 0, sizeof(nl_request));
+	memset(&nladdr, 0, sizeof(sockaddr_nl));
+	memset(&msg, 0, sizeof(msghdr));
+	memset(&iov, 0, sizeof(iovec));
+
+	nl_request.nlh.nlmsg_type = RTM_GETADDR;
+	nl_request.nlh.nlmsg_flags = NLM_F_REQUEST | NLM_F_DUMP;
+	nl_request.nlh.nlmsg_len = sizeof(nl_request);
+	nl_request.nlh.nlmsg_seq = time(NULL);
+	nl_request.nlh.nlmsg_pid = 0;
+
+
+	nl_request.rtm.rtm_family = af_family;
+
+	msgsent_len = send(nl_sock, &nl_request, sizeof(nl_request), 0);
+
+	msg = {
+		.msg_name = &nladdr,
+		.msg_namelen = sizeof(nladdr),
+		.msg_iov = &iov,
+		.msg_iovlen = 1,
+	};
+
+	msglen = ipa_nl_route_recvmsg(nl_sock, &msg, &buf);
+
+	if(msglen <= 0)
+	{
+		PERROR("NL route recv error\n");
+	}
+
+	h = (struct nlmsghdr *)buf;
+
+	IPACMDBG("Route msg_len : %d\n", msglen);
+
+	while (NLMSG_OK(h, msglen))
+	{
+		if (h->nlmsg_flags & NLM_F_DUMP_INTR)
+		{
+			IPACMERR("Dump was interrupted\n");
+			break;
+		}
+
+		if (nladdr.nl_pid != 0)
+		{
+			h = NLMSG_NEXT(h, msglen);
+			continue;
+		}
+		if (h->nlmsg_type == NLMSG_DONE)
+		{
+			IPACMDBG("Received NLMSG_DONE", 0, 0, 0);
+			break;
+		}
+		if (h->nlmsg_type == NLMSG_ERROR)
+		{
+			IPACMERR("Netlink message error");
+			break;
+		}
+		if (ipa_nl_decode_nlmsg((const char*)h, msglen, msg_ptr)) {
+			IPACMERR("Failed to decode rtm link message\n");
+			h = NLMSG_NEXT(h, msglen);
+			continue;
+		}
+
+		h = NLMSG_NEXT(h, msglen);
+	}
+	close(nl_sock);
+	free(buf);
+	buf = NULL;
+	free(msg_ptr);
+	msg_ptr = NULL;
+	return 0;
+}
+
+int ipa_nl_query_newneigh(int af_family)
+{
+	IPACMDBG("entered ipa_nl_send_getneigh \n");
+	int ret_val = IPACM_FAILURE, msglen = 0, nl_sock = 0;
+	ssize_t msgsent_len = 0;
+	char *buf = NULL;
+	nl_request_t nl_request;
+	struct sockaddr_nl nladdr;
+	struct msghdr msg;
+	struct nlmsghdr *h = NULL;
+	struct iovec iov;
+	ipa_nl_msg_t  *msg_ptr = (ipa_nl_msg_t*)calloc(1, sizeof(ipa_nl_msg_t));
+	nl_sock = socket(AF_NETLINK, SOCK_RAW, NETLINK_ROUTE);
+
+	if (nl_sock < 0)
+	{
+		IPACMERR("Failed to open netlink socket");
+		return IPACM_FAILURE;
+	}
+
+	memset(&nl_request, 0, sizeof(nl_request));
+	memset(&nladdr, 0, sizeof(sockaddr_nl));
+	memset(&msg, 0, sizeof(msghdr));
+	memset(&iov, 0, sizeof(iovec));
+
+	nl_request.nlh.nlmsg_type = RTM_GETNEIGH;
+	nl_request.nlh.nlmsg_flags = NLM_F_REQUEST | NLM_F_DUMP;
+	nl_request.nd.ndm_state = NUD_REACHABLE;
+	nl_request.nd.ndm_flags = NTF_MASTER|NTF_SELF;
+	nl_request.nlh.nlmsg_len = sizeof(nl_request_t);
+	nl_request.nlh.nlmsg_seq = 1;
+	nl_request.nlh.nlmsg_pid = 0;
+	nl_request.rtm.rtm_family = af_family;
+
+	msgsent_len = send(nl_sock, &nl_request, sizeof(nl_request), 0);
+
+	msg = {
+		.msg_name = &nladdr,
+		.msg_namelen = sizeof(nladdr),
+		.msg_iov = &iov,
+		.msg_iovlen = 1,
+	};
+
+	msglen = ipa_nl_route_recvmsg(nl_sock, &msg, &buf);
+
+	if(msglen <= 0)
+	{
+		IPACMERR("NL route recv error\n");
+	}
+
+	h = (struct nlmsghdr *)buf;
+	while (NLMSG_OK(h, msglen))
+	{
+		if (h->nlmsg_flags & NLM_F_DUMP_INTR)
+		{
+			IPACMERR("Dump was interrupted\n");
+			break;
+		}
+		if (h->nlmsg_flags & NLMSG_OVERRUN || !h->nlmsg_flags)
+		{
+			IPACMERR("Dump was overun\n");
+			break;
+		}
+		if(h->nlmsg_type == NLMSG_DONE)
+			break;
+		if (nladdr.nl_pid != 0)
+		{
+			h = NLMSG_NEXT(h, msglen);
+			continue;
+		}
+
+		if (h->nlmsg_type == NLMSG_ERROR)
+		{
+			IPACMERR("Netlink message error");
+			break;
+		}
+
+		if (ipa_nl_decode_nlmsg((const char*)h, msglen, msg_ptr)) {
+			IPACMERR("Failed to decode rtm link message\n");
+			h = NLMSG_NEXT(h, msglen);
+			continue;
+		}
+		h = NLMSG_NEXT(h, msglen);
+	}
+	IPACMDBG("End\n");
+	close(nl_sock);
+	free(buf);
+	buf = NULL;
+	free(msg_ptr);
+	msg_ptr = NULL;
+	return 1;
+}
+void ipa_query_nl_getevents()
+{
+	IPACMDBG_H("Querying the netlink events\n");
+	if(pthread_mutex_lock(&nl_lock) != 0)
+  	{
+  		IPACMERR("Unable to lock the mutex\n");
+  		return;
+  	}
+	IPACMDBG("Handling ipacm_restart\n");
+	ipa_nl_query_getlink(AF_PACKET);
+	IPACMDBG("Send GETLINK is completed\n");
+	ipa_nl_query_ip_addr_info(AF_INET);
+	ipa_nl_query_ip_addr_info(AF_INET6);
+	IPACMDBG("Send GETADDR is completed\n");
+	ipa_nl_query_newneigh(AF_BRIDGE);
+	ipa_nl_query_newneigh(AF_INET);
+	ipa_nl_query_newneigh(AF_INET6);
+	IPACMDBG("Send GETNEIGH is completed\n");
+	ipa_nl_send_getroute(IPA_IP_v6);
+	ipa_nl_send_getroute(IPA_IP_v4);
+	IPACMDBG("Send GETROUTE is completed\n");
+	pthread_mutex_unlock(&nl_lock);
+	IPACMDBG_DMESG("IPACM process started, ipa path is re-established\n");
+}

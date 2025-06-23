@@ -2176,56 +2176,6 @@ static int ipa_nl_decode_nlmsg
 						msg_ptr->nl_neigh_info.attr_info.local_addr.ss_family);
 				evt_data.evt_data = data_all;
 				IPACM_EvtDispatcher::PostEvt(&evt_data);
-				/* finish command queue */
-
-				config = IPACM_Config::GetInstance();
-
-				/* Remove Dummy VLAN Mapping for Non-Vlan Ifaces */
-				idx = IPACM_Iface::iface_ipa_index_query(msg_ptr->nl_neigh_info.metainfo.ndm_ifindex);
-				if((config != NULL) && ((idx != INVALID_IFACE && config->iface_table[idx].if_cat != WAN_IF &&
-								!config->iface_in_vlan_mode(dev_name)) || config->check_l2tp_iface(data_all->iface_name)))
-				{
-					if((msg_ptr->nl_neigh_info.metainfo.ndm_ifindex != msg_ptr->nl_neigh_info.master_interface_index))
-					{
-						memset(master_dev_name,0,IF_NAME_LEN);
-						if(msg_ptr->nl_neigh_info.master_interface_index &&
-								ipa_get_if_name(master_dev_name, msg_ptr->nl_neigh_info.master_interface_index) == IPACM_SUCCESS)
-						{
-							if(strncmp(master_dev_name, BRIDGE_0, strlen(master_dev_name)) != 0)
-							{
-								IPACMDBG_H("[Dummy] Deleing neigh iface < %s > idx[%d] m_idx[%d]\n",
-										dev_name, msg_ptr->nl_neigh_info.metainfo.ndm_ifindex, msg_ptr->nl_neigh_info.master_interface_index);
-								uint16_t if_idx = 0;
-								memset(&vlan_bridge_data, 0, sizeof(vlan_bridge_data));
-								vlan_bridge_data.vlan_id = DUMMY_VLAN_ID_BASE + msg_ptr->nl_neigh_info.metainfo.ndm_ifindex;
-								if_idx = (uint16_t)msg_ptr->nl_neigh_info.master_interface_index;
-								strlcpy(vlan_bridge_data.bridge_name, master_dev_name, IF_NAME_LEN);
-								config->del_dummy_vlan_mapping(master_dev_name,
-										data_all->iface_name, msg_ptr->nl_neigh_info.metainfo.ndm_ifindex);
-								config->del_bridge_vlan_mapping(&if_idx, &(vlan_bridge_data.vlan_id));
-
-								vlan_rt_data = (ipacm_event_route_vlan *)malloc(sizeof(ipacm_event_route_vlan));
-								if(vlan_rt_data == NULL)
-								{
-									IPACMERR("Failed to allocate memory.\n");
-									ret_val = -ENOMEM;
-									goto fail;
-								}
-								memset(vlan_rt_data, 0, sizeof(ipacm_event_route_vlan));
-								memset(&evt_data, 0, sizeof(ipacm_cmd_q_data));
-
-								vlan_rt_data->VlanID = DUMMY_VLAN_ID_BASE + msg_ptr->nl_neigh_info.metainfo.ndm_ifindex;
-
-								evt_data.evt_data = vlan_rt_data;
-								evt_data.event = IPA_DUMMY_VLAN_DOWN_EVENT;
-
-								IPACMDBG_H("Posting event %s with vlan_id: %d\n",
-										IPACM_Iface::ipacmcfg->getEventName(evt_data.event), vlan_rt_data->VlanID);
-								IPACM_EvtDispatcher::PostEvt(&evt_data);
-							}
-						}
-					}
-				}
 				break;
 
 			default:

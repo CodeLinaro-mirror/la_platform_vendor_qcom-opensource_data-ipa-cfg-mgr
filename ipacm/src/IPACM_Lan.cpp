@@ -9957,13 +9957,13 @@ int IPACM_Lan::handle_lan_client_connect(uint8_t *mac_addr)
 	eth_index = get_eth_client_index(mac_addr);
 	if (eth_index == IPACM_INVALID_INDEX)
 	{
-		IPACMDBG_H("wlan client not found/attached \n");
+		IPACMDBG_H("lan client not found/attached \n");
 		return IPACM_SUCCESS;
 	}
 
 	if (get_client_memptr(eth_client, eth_index)->lan_stats_idx != -1)
 	{
-		IPACMDBG_H("wlan client already has lan_stats index. \n");
+		IPACMDBG_H("lan client already has lan_stats index. \n");
 		return IPACM_FAILURE;
 	}
 

@@ -519,13 +519,21 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
                        ((IPACM_Iface::ipacmcfg->ipacm_mpdn_enable == TRUE) ||
 				(IPACM_Iface::ipacmcfg->ipacm_emesh_enable == TRUE && IPACM_Iface::ipacmcfg->ipacm_emesh_mode >= 2)))
 			{
-				if(IPACM_Iface::ipacmcfg->iface_in_vlan_mode(data->iface_name) && !IPACM_Iface::ipacmcfg->IsSpclIface(data->iface_name))
+				if(IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].if_cat == WAN_IF &&
+					IPACM_Iface::ipacmcfg->eth_wan_pppoe_enable)
+				{
+					IPACMDBG_H("Allowing non VLAN WAN ifaces in PPPoE mode\n");
+					goto process;
+				}
+				if(IPACM_Iface::ipacmcfg->iface_in_vlan_mode(data->iface_name) &&
+					!IPACM_Iface::ipacmcfg->IsSpclIface(data->iface_name))
 				{
 					IPACMDBG_H("ignoring physical IFACE neighbor event in VLAN mode\n");
 					break;
 				}
 			}
 #endif
+process:
 			IPACMDBG("Got Neighbor event with ip_type: %d: iface_name: %s \n", data->iptype, data->iface_name);
 			if (data->iptype == IPA_IP_v4)
 			{

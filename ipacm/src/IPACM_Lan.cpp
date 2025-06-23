@@ -1366,10 +1366,14 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 		{
 			ipacm_event_data_all *data = (ipacm_event_data_all *)param;
 			uint16_t vlan_id = 0;
+			if(IPACM_Iface::ipacmcfg->iface_in_vlan_mode(dev_name) && is_vlan_event(data->iface_name) && IPACM_Iface::ipacmcfg->get_vlan_id(data->iface_name, &vlan_id))
+			{
+				IPACMERR("failed to get iface vlan ID\n");
+			}
 			ipa_interface_index = iface_ipa_index_query(data->if_index);
 			IPACMDBG_H("Received IPA_LAN_CLIENT_DEL_EVENT event \n");
 			IPACMDBG_H("check iface %s category: %d\n", dev_name, ipa_if_cate);
-			if(ipa_interface_index == ipa_if_num)
+			if(ipa_interface_index == ipa_if_num || (IPACM_Iface::ipacmcfg->iface_in_vlan_mode(dev_name) && is_vlan_event(data->iface_name)))
 			{
 				/* clear mac flt rules for client if any */
 				if(IPACM_Iface::ipacmcfg->mac_addr_in_blacklist(data->mac_addr))

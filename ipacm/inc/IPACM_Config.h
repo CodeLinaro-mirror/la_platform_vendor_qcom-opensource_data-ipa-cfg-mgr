@@ -113,7 +113,7 @@ typedef struct _ipa_rm_client
 
 #define MAX_NUM_EXT_PROPS 25
 #define MAX_NUM_IP_PASS_MPDN 15
-#define MAX_NUM_PPPOE_MPDN 8
+#define MAX_NUM_PPPOE_MPDN 9      /* 8 pppoe pdn over vlan + 1 dhcp pdn over vlan */
 #define EOGRE_PROTOCOL_TYPE 0x6558
 #define IPA_TMP_DIR "/tmp/data_ipa"
 

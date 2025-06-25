@@ -6999,53 +6999,6 @@ int IPACM_Wan::add_dft_filtering_rule(struct ipa_flt_rule_add *rules, int rule_o
 			&flt_rule_entry, sizeof(struct ipa_flt_rule_add));
 #endif
 
-
-		/* Always adding tcp syn SW-exception rule for MSS clamping support */
-		IPACMDBG_H("Add TCP sync rules\n");
-		memset(&flt_rule_entry, 0, sizeof(struct ipa_flt_rule_add));
-
-		flt_rule_entry.at_rear = true;
-		flt_rule_entry.flt_rule_hdl = -1;
-		flt_rule_entry.status = -1;
-
-		flt_rule_entry.rule.retain_hdr = 1;
-		flt_rule_entry.rule.to_uc = 0;
-		flt_rule_entry.rule.action = IPA_PASS_TO_ROUTING;
-		flt_rule_entry.rule.rt_tbl_idx = rt_tbl_idx.idx;
-		flt_rule_entry.rule.eq_attrib_type = 1;
-
-		flt_rule_entry.rule.eq_attrib.rule_eq_bitmap = 0;
-
-		flt_rule_entry.rule.eq_attrib.rule_eq_bitmap |= (1<<1);
-		flt_rule_entry.rule.eq_attrib.protocol_eq_present = 1;
-		flt_rule_entry.rule.eq_attrib.protocol_eq = IPACM_FIREWALL_IPPROTO_TCP;
-
-		flt_rule_entry.rule.eq_attrib.rule_eq_bitmap |= (1<<8);
-		flt_rule_entry.rule.eq_attrib.num_ihl_offset_meq_32 = 1;
-		flt_rule_entry.rule.eq_attrib.ihl_offset_meq_32[0].offset = 12;
-
-		/* add TCP SYN rule*/
-		flt_rule_entry.rule.eq_attrib.ihl_offset_meq_32[0].value = (((uint32_t)1)<<TCP_SYN_SHIFT);
-		flt_rule_entry.rule.eq_attrib.ihl_offset_meq_32[0].mask = (((uint32_t)1)<<TCP_SYN_SHIFT);
-		memcpy(&(rules[rule_offset + m_ipv6_default_filterting_rules_count[0]++]),
-			&flt_rule_entry, sizeof(struct ipa_flt_rule_add));
-
-#if defined(FEATURE_IPA_ANDROID) || defined(FEATURE_SOCKSv5)
-		IPACMDBG_H("Add TCP other ctrl rules\n");
-
-		/* add TCP FIN rule*/
-		flt_rule_entry.rule.eq_attrib.ihl_offset_meq_32[0].value = (((uint32_t)1)<<TCP_FIN_SHIFT);
-		flt_rule_entry.rule.eq_attrib.ihl_offset_meq_32[0].mask = (((uint32_t)1)<<TCP_FIN_SHIFT);
-		memcpy(&(rules[rule_offset + m_ipv6_default_filterting_rules_count[0]++]),
-			&flt_rule_entry, sizeof(struct ipa_flt_rule_add));
-
-		/* add TCP RST rule*/
-		flt_rule_entry.rule.eq_attrib.ihl_offset_meq_32[0].value = (((uint32_t)1)<<TCP_RST_SHIFT);
-		flt_rule_entry.rule.eq_attrib.ihl_offset_meq_32[0].mask = (((uint32_t)1)<<TCP_RST_SHIFT);
-		memcpy(&(rules[rule_offset + m_ipv6_default_filterting_rules_count[0]++]),
-			&flt_rule_entry, sizeof(struct ipa_flt_rule_add));
-#endif
-
 		IPACM_Wan::num_v6_flt_rule += m_ipv6_default_filterting_rules_count[0];
 #ifdef FEATURE_VLAN_MPDN
 		/**

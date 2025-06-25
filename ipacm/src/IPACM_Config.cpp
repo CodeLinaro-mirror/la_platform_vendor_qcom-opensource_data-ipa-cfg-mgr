@@ -531,7 +531,7 @@ int IPACM_Config::Init(void)
 
 	struct statvfs stat;
 	ulong available_partition_size_bytes = 0;
-	char ipacm_log_file[] = IPACM_LOG_COLLECTION_FILE;
+	char ipacm_log_file[IPA_MAX_FILE_LEN] = IPACM_LOG_COLLECTION_FILE;
 	char *ipacm_log_dir = NULL;
 
 	cfg = (IPACM_conf_t *)malloc(sizeof(IPACM_conf_t));
@@ -3600,10 +3600,11 @@ bool IPACM_Config::insertOrAssignMacsecMap(struct ipa_macsec_map *macsecMap) {
 	ipacm_cmd_q_data eventItem;
 	ipacm_event_data_all *eventData;
 
-	IPACMERR("macsecMap->macsec_name=%s, macsecMap->phy_name=%s\n", macsecMap->macsec_name, macsecMap->phy_name);
-
 	if (!macsecMap)
 		return false;
+
+	IPACMERR("macsecMap->macsec_name=%s, macsecMap->phy_name=%s\n", macsecMap->macsec_name, macsecMap->phy_name);
+
 	/* first check if we have macsec iface entry or not */
 	if (IPACM_Iface::ipa_get_if_index(macsecMap->macsec_name, &netlinkIdx) == IPACM_SUCCESS &&
 	    (ifaceTableIdx = IPACM_Iface::iface_ipa_index_query(netlinkIdx)) != INVALID_IFACE) {
@@ -3652,10 +3653,11 @@ bool IPACM_Config::delMacsecMap(struct ipa_macsec_map *macsecMap) {
 	ipacm_cmd_q_data eventItem;
 	ipacm_event_data_all *eventData;
 
-	IPACMERR("macsecMap->macsec_name=%s, macsecMap->phy_name=%s\n", macsecMap->macsec_name, macsecMap->phy_name);
-
 	if (!macsecMap)
 		return false;
+
+	IPACMERR("macsecMap->macsec_name=%s, macsecMap->phy_name=%s\n", macsecMap->macsec_name, macsecMap->phy_name);
+
 	if (IPACM_Iface::ipa_get_if_index(macsecMap->macsec_name, &netlinkIdx) != IPACM_SUCCESS) {
 		if (IPACM_Iface::ipa_get_if_index(macsecMap->phy_name, &netlinkIdx) != IPACM_SUCCESS) {
 			IPACMERR("macsec name and physical name not found in the Linux kernel\n");

@@ -17659,12 +17659,37 @@ int IPACM_Lan::handle_mpdn_ul_xlat_filter_rule(ipacm_ext_prop * prop,
 				/* Rule ID of replicate is same as Q6 rule I.D */
 				flt_index.rule_id_ex[idx_q6] = prop->prop[cnt].rule_id;
 
-				value = vlan_id;
-				flt_rule_entry.rule.eq_attrib.rule_eq_bitmap |= (1<<9);
-				flt_rule_entry.rule.eq_attrib.metadata_meq32_present = 1;
-				flt_rule_entry.rule.eq_attrib.metadata_meq32.offset = 0;
-				flt_rule_entry.rule.eq_attrib.metadata_meq32.value = (value & 0xFFF)<<16;
-				flt_rule_entry.rule.eq_attrib.metadata_meq32.mask = 0x0FFF0000;
+
+				if(!IPACM_Iface::ipacmcfg->is_dummy_VID(vlan_id))
+				{
+					value = vlan_id;
+					flt_rule_entry.rule.eq_attrib.rule_eq_bitmap |= (1<<9);
+					flt_rule_entry.rule.eq_attrib.metadata_meq32_present = 1;
+					flt_rule_entry.rule.eq_attrib.metadata_meq32.offset = 0;
+					flt_rule_entry.rule.eq_attrib.metadata_meq32.value = (value & 0xFFF)<<16;
+					flt_rule_entry.rule.eq_attrib.metadata_meq32.mask = 0x0FFF0000;
+				}
+				else
+				{
+					/* For Dummy VID based ifaces add 1st Pass flt with source subnet range */
+					mapping_info.vlan_id = vlan_id;
+					if(IPACM_Iface::ipacmcfg->get_bridge_vlan_mapping(&mapping_info, true))
+					{
+						IPACMERR("Unable to find Bridge for Dummy VLAN ID %d\n", vlan_id);
+						return IPACM_FAILURE;
+					}
+
+					/*Unset metadata eq bit and set mq32 eq bit*/
+					flt_rule_entry.rule.eq_attrib.rule_eq_bitmap = flt_rule_entry.rule.eq_attrib.rule_eq_bitmap & ~(1<<9);
+					flt_rule_entry.rule.eq_attrib.metadata_meq32_present = 0;
+					flt_rule_entry.rule.eq_attrib.rule_eq_bitmap |= 0x20<<flt_rule_entry.rule.eq_attrib.num_offset_meq_32;
+					flt_rule_entry.rule.eq_attrib.offset_meq_32[flt_rule_entry.rule.eq_attrib.num_offset_meq_32].offset = 12;
+					flt_rule_entry.rule.eq_attrib.offset_meq_32[flt_rule_entry.rule.eq_attrib.num_offset_meq_32].value =
+						mapping_info.bridge_ipv4 & mapping_info.subnet_mask;
+					flt_rule_entry.rule.eq_attrib.offset_meq_32[flt_rule_entry.rule.eq_attrib.num_offset_meq_32].mask =
+						mapping_info.subnet_mask;
+					flt_rule_entry.rule.eq_attrib.num_offset_meq_32 ++;
+				}
 
 				/* start with prev = curr = 0
 				 * find smallest q6 rule id greater than current xlat filter's rule id,

@@ -28,7 +28,7 @@ IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  * Changes from Qualcomm Innovation Center are provided under the following license:
  *
- * Copyright (c) 2022, 2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted (subject to the limitations in the
@@ -396,7 +396,7 @@ public:
 		return xlat_mux_id;
 	}
 
-	static bool check_client_ipv4_with_pdn_ipv4(uint32_t client_ip, uint8_t vlan_id)
+	static bool check_client_ipv4_with_pdn_ipv4(uint32_t client_ip, uint16_t vlan_id)
 	{
 		for(int i = 0; i < IPA_MAX_NUM_SW_PDNS; i++)
 		{
@@ -413,6 +413,8 @@ public:
 					{
 						if(IPACM_Wan::ipv4_to_iface[i].associated_VIDs[j] == vlan_id)
 						{
+							IPACMDBG("vlan %d i %d j %d ip: 0x%x\n",
+										IPACM_Wan::ipv4_to_iface[i].associated_VIDs[j], i,j, client_ip);
 							return true;
 						}
 					}

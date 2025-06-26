@@ -130,9 +130,9 @@ static int ipa_nl_open_socket
 	 )
 {
 	int *p_sk_fd;
-	int buf_size = 6669999, sendbuff=0, res;
-	struct sockaddr_nl *p_sk_addr_loc;
-	socklen_t optlen;
+	int buf_size = 6669999, sendbuff=0, res = IPACM_SUCCESS;
+	struct sockaddr_nl *p_sk_addr_loc = NULL;
+	socklen_t optlen = 0;
 
 	p_sk_fd = &(sk_info->sk_fd);
 	p_sk_addr_loc = &(sk_info->sk_addr_loc);
@@ -140,21 +140,23 @@ static int ipa_nl_open_socket
 	/* Open netlink socket for specified protocol */
 	if((*p_sk_fd = socket(AF_NETLINK, SOCK_RAW, protocol)) < 0)
 	{
-		IPACM_SYSLOG("cannot open netlink socket\n");
-		return IPACM_FAILURE;
+		res = errno;
+		IPACM_SYSLOG("Socket open failed %s  with\n", strerror(errno));
+		return -res;
 	}
 
 	optlen = sizeof(sendbuff);
 	res = getsockopt(*p_sk_fd, SOL_SOCKET, SO_SNDBUF, &sendbuff, &optlen);
 
-	if(res == -1) {
-		IPACM_SYSLOG("Error getsockopt one");
+	if(res < 0) {
+		IPACM_SYSLOG("err: %s in getsockopt",strerror(errno));
 	} else {
 		IPACMDBG("orignal send buffer size = %d\n", sendbuff);
 	}
+
 	IPACMDBG("sets the send buffer to %d\n", buf_size);
-	if (setsockopt(*p_sk_fd, SOL_SOCKET, SO_RCVBUF, &buf_size, sizeof(int)) == -1) {
-    IPACMERR("Error setting socket opts\n");
+	if (setsockopt(*p_sk_fd, SOL_SOCKET, SO_RCVBUF, &buf_size, sizeof(int)) < 0) {
+		IPACMERR("err: %s in setting sockopt\n", strerror(errno));
 	}
 
 	/* Initialize socket addresses to null */
@@ -162,7 +164,7 @@ static int ipa_nl_open_socket
 
 	/* Populate local socket address using specified groups */
 	p_sk_addr_loc->nl_family = AF_NETLINK;
-	p_sk_addr_loc->nl_pid = getpid();
+	p_sk_addr_loc->nl_pid = 0;
 	p_sk_addr_loc->nl_groups = grps;
 
 	/* Bind socket to the local address, i.e. specified groups. This ensures
@@ -173,8 +175,13 @@ static int ipa_nl_open_socket
 					(struct sockaddr *)p_sk_addr_loc,
 					sizeof(struct sockaddr_nl)) < 0)
 	{
-		IPACMERR("Socket bind failed\n");
-		return IPACM_FAILURE;
+		res = errno;
+		IPACMDBG("Socket bind failed with err %s\n", strerror(errno));
+		/* close the socket before returning the error */
+		close(*p_sk_fd);
+		*p_sk_fd = -1;
+		p_sk_fd = NULL;
+		return -res;
 	}
 
 	return IPACM_SUCCESS;
@@ -226,7 +233,7 @@ static int ipa_nl_sock_listener_start
 
 		if((ret = select(sk_fd_set->max_fd + 1, &(sk_fd_set->fdset), NULL, NULL, NULL)) < 0)
 		{
-			IPACMERR("ipa_nl select failed\n");
+			IPACMERR("err: %s in select\n",strerror(errno));
 		}
 		else
 		{
@@ -1701,7 +1708,7 @@ int ipa_get_if_name
 
 	if((fd = socket(AF_INET, SOCK_DGRAM, 0)) < 0)
 	{
-		IPACM_SYSLOG("get interface name socket create failed \n");
+		IPACM_SYSLOG("err: %s in open socket for iface name\n",strerror(errno));
 		return IPACM_FAILURE;
 	}
 

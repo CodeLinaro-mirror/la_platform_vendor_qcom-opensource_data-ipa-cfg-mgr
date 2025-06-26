@@ -431,7 +431,7 @@ public:
 		return xlat_mux_id;
 	}
 
-	static bool check_client_ipv4_with_pdn_ipv4(uint32_t client_ip, uint8_t vlan_id)
+	static bool check_client_ipv4_with_pdn_ipv4(uint32_t client_ip, uint16_t vlan_id)
 	{
 		for(int i = 0; i < IPA_MAX_NUM_SW_PDNS; i++)
 		{
@@ -448,6 +448,8 @@ public:
 					{
 						if(IPACM_Wan::ipv4_to_iface[i].associated_VIDs[j] == vlan_id)
 						{
+							IPACMDBG("vlan %d i %d j %d ip: 0x%x\n",
+										IPACM_Wan::ipv4_to_iface[i].associated_VIDs[j], i,j, client_ip);
 							return true;
 						}
 					}

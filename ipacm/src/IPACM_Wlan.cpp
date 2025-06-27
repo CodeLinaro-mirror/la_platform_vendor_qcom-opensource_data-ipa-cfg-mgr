@@ -27,38 +27,10 @@
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  * Changes from Qualcomm Technologies, Inc. are provided under the following license:
+ *
  * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  *
- * Redistribution and use in source and binary forms, with or without
- * modification, are permitted (subject to the limitations in the
- * disclaimer below) provided that the following conditions are met:
- *
- *     * Redistributions of source code must retain the above copyright
- *       notice, this list of conditions and the following disclaimer.
- *
- *     * Redistributions in binary form must reproduce the above
- *       copyright notice, this list of conditions and the following
- *       disclaimer in the documentation and/or other materials provided
- *       with the distribution.
- *
- *     * Neither the name of Qualcomm Innovation Center, Inc. nor the names of its
- *       contributors may be used to endorse or promote products derived
- *       from this software without specific prior written permission.
- *
- * NO EXPRESS OR IMPLIED LICENSES TO ANY PARTY'S PATENT RIGHTS ARE
- * GRANTED BY THIS LICENSE. THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT
- * HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED
- * WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
- * MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
- * IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR
- * ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
- * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE
- * GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
- * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER
- * IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
- * OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
- * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE
  */
 /*!
 	@file
@@ -8157,6 +8129,10 @@ int IPACM_Wlan::config_dft_firewall_rules_ul_ex(IPACM_firewall_conf_t* firewall_
 					if(firewall_conf->extd_firewall_entries[i].IPV6NatEnabledfw)
 						continue;
 #endif
+					// if sw-allowed then do not replicate rules here
+					if(firewall_conf->extd_firewall_entries[i].SWAllowed_ex)
+						continue;
+
 					memset(&flt_rule_entry_fw, 0, sizeof(struct ipa_flt_rule_add));
 					flt_rule_entry_fw.at_rear = 1;
 					flt_rule_entry_fw.flt_rule_hdl = -1;
@@ -8379,15 +8355,15 @@ void IPACM_Wlan::configure_v6_ul_firewall_wlan()
 		return;
 	}
 
-	/*Drop rules: First of all clear LAN pipe frag, catch all and FW rules if installed */
-	delete_uplink_filter_rule_ul(&iface_ul_firewall);
-
 	/* now read XML and rebuild FW for all PDNs */
 	if(IPACM_Wan::read_firewall_filter_rules_ul())
 	{
 		IPACMERR("failed configuring UL firewall\n");
 		return;
 	}
+
+	/*Drop rules: First of all clear LAN pipe frag, catch all and FW rules if installed */
+	delete_uplink_filter_rule_ul(&iface_ul_firewall);
 
 #ifdef IPA_V6_UL_WL_FIREWALL_HANDLE
 	/* Delete Q6 UL rules of clients */
@@ -8429,6 +8405,11 @@ void IPACM_Wlan::configure_v6_ul_firewall_wlan()
 		{
 			IPACMDBG_H("default profile firewall is disabled, disable Q6 firewall\n");
 			disable_dft_firewall_rules_ul_ex_per_wlan_client(default_vid);
+		}
+
+		if(firewall_config->SWAllowed)
+		{
+			config_sw_allow_excep_flt_rules_ul(firewall_config, &iface_ul_firewall, default_vid);
 		}
 	}
 #ifdef FEATURE_VLAN_MPDN

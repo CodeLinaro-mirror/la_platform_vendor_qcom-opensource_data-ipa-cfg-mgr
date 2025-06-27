@@ -27,38 +27,10 @@
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  * Changes from Qualcomm Technologies, Inc. are provided under the following license:
+ *
  * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  *
- * Redistribution and use in source and binary forms, with or without
- * modification, are permitted (subject to the limitations in the
- * disclaimer below) provided that the following conditions are met:
- *
- *     * Redistributions of source code must retain the above copyright
- *       notice, this list of conditions and the following disclaimer.
- *
- *     * Redistributions in binary form must reproduce the above
- *       copyright notice, this list of conditions and the following
- *       disclaimer in the documentation and/or other materials provided
- *       with the distribution.
- *
- *     * Neither the name of Qualcomm Innovation Center, Inc. nor the names of its
- *       contributors may be used to endorse or promote products derived
- *       from this software without specific prior written permission.
- *
- * NO EXPRESS OR IMPLIED LICENSES TO ANY PARTY'S PATENT RIGHTS ARE
- * GRANTED BY THIS LICENSE. THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT
- * HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED
- * WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
- * MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
- * IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR
- * ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
- * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE
- * GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
- * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER
- * IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
- * OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
- * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE
  */
 /*!
 		@file
@@ -93,12 +65,19 @@ const char *IPACM_Config::DEVICE_NAME_ODU = "/dev/odu_ipa_bridge";
 #define IPACM_CONFIG_FILE "/etc/data/ipa/IPACM_cfg.xml"
 #define IPACM_CONFIG_EXT_FILE "/etc/data/ipa/IPACM_cfg_ext.xml"
 #endif
+#ifdef DATA_CONFIG_DIR_PATH
+#define IPACM_SWALLOW_FILE DATA_CONFIG_DIR_PATH"/ipa/ipa_filter_cfg.xml"
+#else
+#define IPACM_SWALLOW_FILE "/etc/data/ipa/ipa_filter_cfg.xml"
+#endif
 #define MAX_RETRIES 15
 #define MAX_LINE_LEN 256
 const char *ipacm_event_name[] = {
 	__stringify(IPA_CFG_CHANGE_EVENT),                     /* NULL */
 	__stringify(IPA_PRIVATE_SUBNET_CHANGE_EVENT),          /* ipacm_event_data_fid */
 	__stringify(IPA_FIREWALL_CHANGE_EVENT),                /* NULL */
+	__stringify(IPA_SWALLOW_CHANGE_EVENT),                 /* NULL */
+	__stringify(IPA_SWALLOW_PDN_UPDATE),                   /* NULL */
 	__stringify(IPA_LINK_UP_EVENT),                        /* ipacm_event_data_fid */
 	__stringify(IPA_LINK_DOWN_EVENT),                      /* ipacm_event_data_fid */
 	__stringify(IPA_USB_LINK_UP_EVENT),                    /* ipacm_event_data_fid */
@@ -232,6 +211,7 @@ IPACM_Config::IPACM_Config()
 	iface_table = NULL;
 	alg_table = NULL;
 	pNatIfaces = NULL;
+	sw_filter_cfg = NULL;
 	memset(&ipa_client_rm_map_tbl, 0, sizeof(ipa_client_rm_map_tbl));
 	memset(&ipa_rm_tbl, 0, sizeof(ipa_rm_tbl));
 	ipa_rm_a2_check=0;
@@ -540,6 +520,73 @@ bail:
 
 #endif //IPA_HW_FNR_STATS
 
+int IPACM_Config::ReadSwAllow(void)
+{
+	/* Read IPACM Config file */
+	char IPACM_swallow_file[IPA_MAX_FILE_LEN];
+	IPACM_swallow_t *cfg;
+	ipacm_cmd_q_data evt_data;
+
+	cfg = (IPACM_swallow_t *)calloc(1, sizeof(IPACM_swallow_t));
+
+	if(cfg == NULL)
+	{
+		IPACMERR("Could not allocate cfg\n");
+		return IPACM_FAILURE;
+	}
+
+	strlcpy(IPACM_swallow_file, IPACM_SWALLOW_FILE, sizeof(IPACM_swallow_file));
+
+	IPACMDBG_H("\n IPACM XML file is %s \n", IPACM_swallow_file);
+	if (IPACM_SUCCESS == IPACM_read_swallow_xml(IPACM_swallow_file, cfg))
+	{
+		IPACMDBG_H("\n IPACM XML read OK \n");
+
+		if(sw_filter_cfg == NULL)
+			sw_filter_cfg = (IPACM_swallow_t *)calloc(1, sizeof(IPACM_swallow_t));
+
+		if(sw_filter_cfg == NULL)
+		{
+			IPACMERR("Could not allocate swallow cfg\n");
+			free(cfg);
+			return IPACM_FAILURE;
+		}
+		else if(!IPACM_Iface::ipacmcfg->ipacm_msgflt_enable)
+		{
+			IPACMERR("msg filtering feature is not enabled\n");
+			free(cfg);
+			free(sw_filter_cfg);
+			cfg = NULL;
+			sw_filter_cfg = NULL;
+			return IPACM_FAILURE;
+		}
+
+		memset(sw_filter_cfg, 0, sizeof(IPACM_swallow_t));
+		memcpy(sw_filter_cfg, cfg, sizeof(IPACM_swallow_t));
+		free(cfg);
+
+		/* Fetch PDN index for the sw allow pdns */
+		evt_data.event = IPA_SWALLOW_PDN_UPDATE;
+		evt_data.evt_data = NULL;
+
+		/* Insert IPA_SWALLOW_PDN_UPDATE to command queue */
+		IPACM_EvtDispatcher::PostEvt(&evt_data);
+
+		return IPACM_SUCCESS;
+	}
+	else
+	{
+		IPACMERR("\n IPACM XML read failed \n");
+		if(sw_filter_cfg)
+		{
+			free(sw_filter_cfg);
+			sw_filter_cfg = NULL;
+		}
+		free(cfg);
+		return IPACM_FAILURE;
+	}
+}
+
 int IPACM_Config::Init(void)
 {
 	static bool already_reset = false;
@@ -744,6 +791,9 @@ reread:
 	/* Get the VLAN MPDN suppport config info from XML */
 	wlan_vlan_mpdn_enabled = cfg->wlan_vlan_mpdn_enable;
 	IPACMDBG_H("VLAN MPDN support config %d\n", wlan_vlan_mpdn_enabled);
+
+	ipacm_msgflt_enable = cfg->msgflt_enable;
+	IPACMDBG_H("ipacm_msgflt_feature_enable %d\n", ipacm_msgflt_enable);
 
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
 	if (!ipacm_lan_stats_enable_set)

@@ -27,38 +27,10 @@
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  * Changes from Qualcomm Technologies, Inc. are provided under the following license:
+ *
  * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  *
- * Redistribution and use in source and binary forms, with or without
- * modification, are permitted (subject to the limitations in the
- * disclaimer below) provided that the following conditions are met:
- *
- *     * Redistributions of source code must retain the above copyright
- *       notice, this list of conditions and the following disclaimer.
- *
- *     * Redistributions in binary form must reproduce the above
- *       copyright notice, this list of conditions and the following
- *       disclaimer in the documentation and/or other materials provided
- *       with the distribution.
- *
- *     * Neither the name of Qualcomm Innovation Center, Inc. nor the names of its
- *       contributors may be used to endorse or promote products derived
- *       from this software without specific prior written permission.
- *
- * NO EXPRESS OR IMPLIED LICENSES TO ANY PARTY'S PATENT RIGHTS ARE
- * GRANTED BY THIS LICENSE. THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT
- * HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED
- * WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
- * MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
- * IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR
- * ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
- * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE
- * GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
- * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER
- * IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
- * OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
- * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE
  */
 /*!
 	@file
@@ -14367,12 +14339,16 @@ int IPACM_Lan::config_dft_firewall_rules_ul_ex(IPACM_firewall_conf_t* firewall_c
 						// in ipv6_nat_enable=false case, ignore the firewall rules if it's specific to v6nat
 						if (firewall_conf->extd_firewall_entries[j].IPV6NatEnabledfw) continue;
 #endif
-						memset(&flt_rule_entry_fw, 0, sizeof(struct ipa_flt_rule_add));
-						flt_rule_entry_fw.at_rear = 1;
-						flt_rule_entry_fw.flt_rule_hdl = -1;
-						flt_rule_entry_fw.status = -1;
-						flt_rule_entry_fw.rule.hashable = true;
-						flt_rule_entry_fw.rule.eq_attrib_type = 1;
+					// if sw-allowed then do not add rule here
+					if(firewall_conf->extd_firewall_entries[j].SWAllowed_ex)
+						continue;
+
+					memset(&flt_rule_entry_fw, 0, sizeof(struct ipa_flt_rule_add));
+					flt_rule_entry_fw.at_rear = 1;
+					flt_rule_entry_fw.flt_rule_hdl = -1;
+					flt_rule_entry_fw.status = -1;
+					flt_rule_entry_fw.rule.hashable = true;
+					flt_rule_entry_fw.rule.eq_attrib_type = 1;
 
 						flt_rule_entry.rule.rt_tbl_hdl =
 							IPACM_Iface::ipacmcfg->rt_tbl_wan_v6.hdl;
@@ -14902,6 +14878,16 @@ int IPACM_Lan::config_dft_firewall_rules_ul(IPACM_firewall_conf_t* firewall_conf
 
 			IPACMDBG_H("Catch all rule to drop all in excep path\n");
 
+
+#ifdef FEATURE_IPV6_NAT
+			// in ipv6_nat_enable=false case, ignore the firewall rules if it's specific to v6nat
+			if(firewall_conf->extd_firewall_entries[i].IPV6NatEnabledfw)
+				continue;
+#endif
+			// if sw-allowed then do not add rule here
+			if(firewall_conf->extd_firewall_entries[j].SWAllowed_ex)
+				continue;
+
 			memset(&flt_rule_entry, 0, sizeof(struct ipa_flt_rule_add));
 			flt_rule_entry.at_rear = false;
 			flt_rule_entry.flt_rule_hdl = -1;
@@ -14954,6 +14940,10 @@ int IPACM_Lan::config_dft_firewall_rules_ul(IPACM_firewall_conf_t* firewall_conf
 				// in ipv6_nat_enable=false case, ignore the firewall rules if it's specific to v6nat
 				if (firewall_conf->extd_firewall_entries[i].IPV6NatEnabledfw) continue;
 #endif
+			// if sw-allowed then do not add rules here
+			if(firewall_conf->extd_firewall_entries[i].SWAllowed_ex)
+				continue;
+
 				memset(&flt_rule_entry, 0, sizeof(struct ipa_flt_rule_add));
 				flt_rule_entry.at_rear = false;
 				flt_rule_entry.flt_rule_hdl = -1;
@@ -15106,6 +15096,199 @@ fail:
 	return res;
 }
 
+/* Configure and install UL firewall rules, to be installed on client side */
+int IPACM_Lan::config_sw_allow_excep_flt_rules_ul(IPACM_firewall_conf_t* firewall_conf,
+				ul_firewall_t *ul_firewall, int vid)
+{
+	struct ipa_flt_rule_add flt_rule_entry;
+	int len = 0, i,idx=0,j;
+	int res = IPACM_SUCCESS;
+
+	if (rx_prop == NULL)
+	{
+		IPACMDBG_H("No rx properties registered for iface %s\n", dev_name);
+		return IPACM_SUCCESS;
+	}
+
+#ifdef FEATURE_VLAN_MPDN
+	uint32_t v6_prefix[2];
+	if(IPACM_Wan::GetV6PrefixByVid(vid, v6_prefix))
+	{
+		IPACMERR("couldn't get v6 prefix for vid %d\n", vid);
+		return IPACM_FAILURE;
+	}
+#endif
+
+	/* construct ipa_ioc_add_flt_rule with N firewall rules */
+	ipa_ioc_add_flt_rule *m_pFilteringTable = NULL;
+	len = sizeof(struct ipa_ioc_add_flt_rule) + 1 * sizeof(struct ipa_flt_rule_add);
+	m_pFilteringTable = (struct ipa_ioc_add_flt_rule *)calloc(1, len);
+
+	if (!m_pFilteringTable)
+	{
+		IPACMERR("Error Locate ipa_flt_rule_add memory...\n");
+		return IPACM_FAILURE;
+	}
+	for (j = 0; j < rx_prop->num_rx_props / 2 && j < IPA_MAX_NUM_PROPS; j++) {
+
+		if ((ipa_if_cate == WLAN_IF) && (is_if_svap || is_wlan_if_vlan) && (rx_prop->num_rx_props > 2)) {
+			if (j != 1) {
+				IPACMDBG_H("Interface is WLAN Svap or w-vlan, dont install rules on pipe %d..... continue\n", idx);
+				continue;
+			} else {
+				idx = 2;
+				IPACMDBG_H("Interface is WLAN Svap or vlan, install rules on Rx1 pipe at idx %d \n", idx);
+			} /* Easymesh Not Vlan pipe condition need to install for 1st handle of array and idx 0 */
+		} else if ((ipa_if_cate == WLAN_IF) && (rx_prop->num_rx_props > 2)){
+			if (j == 0) {
+				idx = 0;
+			} else {
+				IPACMDBG_H("Interface is non vlan, dont install rule with index 2\n");
+				continue;
+			}
+		} else {
+			idx = j * 2;
+			IPACMDBG_H("Install rules at idx %d\n", idx);
+		}
+
+	if (false == m_routing.GetRoutingTable(&IPACM_Iface::ipacmcfg->rt_tbl_wan_v6))
+	{
+		IPACMERR("m_routing.GetRoutingTable(rt_tbl_wan_v6) Failed.\n");
+		res = IPACM_FAILURE;
+		goto fail;
+	}
+
+	if(ul_firewall->num_ul_firewall_installed[j] >= IPACM_MAX_FIREWALL_ENTRIES)
+	{
+		IPACMERR("reached MAX num of UL FW rules for ep, skipping pdn firewall (vid %d)\n", vid);
+		res = IPACM_FAILURE;
+		goto fail;
+	}
+
+	memset(m_pFilteringTable, 0, len);
+	m_pFilteringTable->commit = 1;
+	m_pFilteringTable->ep = rx_prop->rx[0].src_pipe;
+	m_pFilteringTable->global = false;
+	m_pFilteringTable->ip = IPA_IP_v6;
+	m_pFilteringTable->num_rules = (uint8_t)1;
+
+	for (i = 0; i < firewall_conf->num_extd_firewall_entries; i++)
+	{
+		if(ul_firewall->num_ul_firewall_installed[j] >= (IPACM_MAX_FIREWALL_ENTRIES - 1))
+		{
+			IPACMERR("reached MAX num of UL FW rules for ep, breaking\n");
+			break;
+		}
+		if (firewall_conf->extd_firewall_entries[i].ip_vsn == 6 &&
+			firewall_conf->extd_firewall_entries[i].firewall_direction ==
+			IPACM_MSGR_UL_FIREWALL)
+		{
+
+#ifdef FEATURE_IPV6_NAT
+			// in ipv6_nat_enable=false case, ignore the firewall rules if it's specific to v6nat
+			if(firewall_conf->extd_firewall_entries[i].IPV6NatEnabledfw)
+				continue;
+#endif
+			memset(&flt_rule_entry, 0, sizeof(struct ipa_flt_rule_add));
+			flt_rule_entry.at_rear = false;
+			flt_rule_entry.flt_rule_hdl = -1;
+			flt_rule_entry.status = -1;
+
+			if(firewall_conf->extd_firewall_entries[i].SWAllowed_ex == true)
+			{
+				flt_rule_entry.rule.action = IPA_PASS_TO_EXCEPTION;
+			}
+			else
+			{
+				continue;
+			}
+
+			flt_rule_entry.rule.hashable = true;
+
+			flt_rule_entry.rule.rt_tbl_hdl = IPACM_Iface::ipacmcfg->rt_tbl_wan_v6.hdl;
+			memcpy(&flt_rule_entry.rule.attrib,
+			&firewall_conf->extd_firewall_entries[i].attrib,
+			sizeof(struct ipa_rule_attrib));
+
+			flt_rule_entry.rule.attrib.attrib_mask |= rx_prop->rx[0].attrib.attrib_mask;
+			flt_rule_entry.rule.attrib.meta_data_mask = rx_prop->rx[0].attrib.meta_data_mask;
+			flt_rule_entry.rule.attrib.meta_data = rx_prop->rx[0].attrib.meta_data;
+#ifdef FEATURE_VLAN_MPDN
+			flt_rule_entry.rule.attrib.attrib_mask |= IPA_FLT_SRC_ADDR;
+			flt_rule_entry.rule.attrib.u.v6.src_addr[0] = v6_prefix[0];
+			flt_rule_entry.rule.attrib.u.v6.src_addr[1] = v6_prefix[1];
+			flt_rule_entry.rule.attrib.u.v6.src_addr[2] = 0x0;
+			flt_rule_entry.rule.attrib.u.v6.src_addr[3] = 0x0;
+			flt_rule_entry.rule.attrib.u.v6.src_addr_mask[0] = 0xFFFFFFFF;
+			flt_rule_entry.rule.attrib.u.v6.src_addr_mask[1] = 0xFFFFFFFF;
+			flt_rule_entry.rule.attrib.u.v6.src_addr_mask[2] = 0x0;
+			flt_rule_entry.rule.attrib.u.v6.src_addr_mask[3] = 0x0;
+#endif
+
+			/* check if the rule is define as TCP/UDP */
+			if (firewall_conf->extd_firewall_entries[i].attrib.u.v6.next_hdr == IPACM_FIREWALL_IPPROTO_TCP_UDP)
+			{
+				/* insert TCP rule*/
+				flt_rule_entry.rule.attrib.u.v6.next_hdr = IPACM_FIREWALL_IPPROTO_TCP;
+				memcpy(&(m_pFilteringTable->rules[0]), &flt_rule_entry, sizeof(struct ipa_flt_rule_add));
+				if (false == m_filtering.AddFilteringRule(m_pFilteringTable))
+				{
+					IPACMERR("Error Adding Filtering rules, aborting...\n");
+					res = IPACM_FAILURE;
+					goto fail;
+				}
+				else
+				{
+					IPACM_Iface::ipacmcfg->increaseFltRuleCount(m_pFilteringTable->ep, IPA_IP_v6, 1);
+					/* save v4 firewall filter rule handler */
+					IPACMDBG_H("flt rule hdl0=0x%x, status=0x%x\n", m_pFilteringTable->rules[0].flt_rule_hdl, m_pFilteringTable->rules[0].status);
+					ul_firewall->ul_firewall_handle[j][ul_firewall->num_ul_firewall_installed[j]++] = m_pFilteringTable->rules[0].flt_rule_hdl;
+				}
+
+				/* insert UDP rule*/
+				flt_rule_entry.rule.attrib.u.v6.next_hdr = IPACM_FIREWALL_IPPROTO_UDP;
+				memcpy(&(m_pFilteringTable->rules[0]), &flt_rule_entry, sizeof(struct ipa_flt_rule_add));
+				if (false == m_filtering.AddFilteringRule(m_pFilteringTable))
+				{
+					IPACMERR("Error Adding Filtering rules, aborting...\n");
+					res = IPACM_FAILURE;
+					goto fail;
+				}
+				else
+				{
+					IPACM_Iface::ipacmcfg->increaseFltRuleCount(m_pFilteringTable->ep, IPA_IP_v6, 1);
+					/* save v6 firewall filter rule handler */
+					IPACMDBG_H("flt rule hdl0=0x%x, status=0x%x\n", m_pFilteringTable->rules[0].flt_rule_hdl, m_pFilteringTable->rules[0].status);
+					ul_firewall->ul_firewall_handle[j][ul_firewall->num_ul_firewall_installed[j]++] = m_pFilteringTable->rules[0].flt_rule_hdl;
+				}
+			}
+			else
+			{
+				memcpy(&(m_pFilteringTable->rules[0]), &flt_rule_entry, sizeof(struct ipa_flt_rule_add));
+				if (false == m_filtering.AddFilteringRule(m_pFilteringTable))
+				{
+					IPACMERR("Error Adding Filtering rules, aborting...\n");
+					res = IPACM_FAILURE;
+					goto fail;
+				}
+				else
+				{
+					IPACM_Iface::ipacmcfg->increaseFltRuleCount(m_pFilteringTable->ep, IPA_IP_v6, 1);
+					/* save v6 firewall filter rule handler */
+					IPACMDBG_H("flt rule hdl0=0x%x, status=0x%x\n", m_pFilteringTable->rules[0].flt_rule_hdl, m_pFilteringTable->rules[0].status);
+					ul_firewall->ul_firewall_handle[j][ul_firewall->num_ul_firewall_installed[j]++] = m_pFilteringTable->rules[0].flt_rule_hdl;
+				}
+			}
+		}
+	} /* end of firewall ipv6 filter rule add for loop*/
+    }
+fail:
+	if(m_pFilteringTable != NULL)
+	{
+		free(m_pFilteringTable);
+	}
+	return res;
+}
 int IPACM_Lan::configure_v6_ul_firewall_one_profile(IPACM_firewall_conf_t* firewall_conf, bool isDefault, int vid)
 {
 	bool q6_firewall = false;
@@ -15171,15 +15354,15 @@ void IPACM_Lan::configure_v6_ul_firewall(void)
 		return;
 	}
 
-	/* first of all clear LAN pipe frag, catch all and FW rules if installed */
-	delete_uplink_filter_rule_ul(&iface_ul_firewall);
-
 	/* now read XML and rebuild FW for all PDNs */
 	if(IPACM_Wan::read_firewall_filter_rules_ul())
 	{
 		IPACMERR("failed configuring UL firewall\n");
 		return;
 	}
+
+	/* first of all clear LAN pipe frag, catch all and FW rules if installed */
+	delete_uplink_filter_rule_ul(&iface_ul_firewall);
 
 #ifdef IPA_V6_UL_WL_FIREWALL_HANDLE
 	/* Delete Q6 UL rules */
@@ -15237,6 +15420,12 @@ void IPACM_Lan::configure_v6_ul_firewall(void)
 			IPACMDBG_H("default profile firewall is disabled, disable Q6 firewall\n");
 			disable_dft_firewall_rules_ul_ex(default_vid);
 		}
+
+		if(firewall_config->SWAllowed)
+		{
+			IPACMDBG_H("default profile SWAllowed enabled\n");
+			config_sw_allow_excep_flt_rules_ul(firewall_config, &iface_ul_firewall, default_vid);
+		}
 	}
 #ifdef FEATURE_VLAN_MPDN
 	uint16_t Ids[IPA_MAX_NUM_OFFLOAD_VLANS];
@@ -15274,6 +15463,11 @@ void IPACM_Lan::configure_v6_ul_firewall(void)
 			{
 				IPACMDBG_H("firewall is disabled for VID %d, disable Q6 firewall\n",Ids[i]);
 				disable_dft_firewall_rules_ul_ex(Ids[i]);
+			}
+
+			if(firewall_config->SWAllowed)
+			{
+				config_sw_allow_excep_flt_rules_ul(firewall_config, &iface_ul_firewall, Ids[i]);
 			}
 		}
 	}

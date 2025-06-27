@@ -26,9 +26,11 @@
  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * Changes from Qualcomm Innovation Center are provided under the following license:
- * Copyright (c) 2023-2025 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Changes from Qualcomm Technologies, Inc. are provided under the following license:
+ *
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
+ *
  */
 
 #include <sys/ioctl.h>
@@ -113,6 +115,7 @@ IPACM_ConntrackListener::IPACM_ConntrackListener() :
 	 IPACM_EvtDispatcher::registr(IPA_IPPT_SW_FLT_LIST_UPDATE_EVENT, this);
 #endif
 	 IPACM_EvtDispatcher::registr(IPA_MOVE_NAT_TBL_EVENT, this);
+	 IPACM_EvtDispatcher::registr(IPA_SWALLOW_CHANGE_EVENT, this);
 
 #ifdef CT_OPT
 	 p_lan2lan = IPACM_LanToLan::getLan2LanInstance();
@@ -418,6 +421,13 @@ void IPACM_ConntrackListener::event_callback(ipa_cm_event_id evt,
 		 IPACMDBG_H("Received IPA_MOVE_NAT_TBL_EVENT event\n");
 		 HandleNatTableMove(data);
 		 break;
+
+	 case IPA_SWALLOW_CHANGE_EVENT:
+		 IPACMDBG("Received IPA_SWALLOW_CHANGE_EVENT event\n");
+		 nat_inst->HandleSWAllowEntries();
+		 ipv6ct_inst->HandleSWAllowEntries();
+		 break;
+
 	 default:
 			IPACMDBG("Ignore cmd %d\n", evt);
 			break;
@@ -4310,6 +4320,7 @@ void IPACM_ConntrackListener::ProcessGREMsg(
 	 }
 #else
 	 AddORDeleteNatEntry(&nat_entry, NULL);
+	 nat_inst->HandleSwAllowEntries(NULL, false);
 #endif
 	 return;
 }

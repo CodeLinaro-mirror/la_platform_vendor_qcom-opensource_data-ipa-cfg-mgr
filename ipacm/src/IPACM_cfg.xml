@@ -760,6 +760,9 @@
 		<MultiVlanBridgeConfig>
 			<MultiVlanOnBridgeEnable>0</MultiVlanOnBridgeEnable>
 		</MultiVlanBridgeConfig>
+		<IPACMMSGFLT>
+			<IPACMMSGFLTEnable>0</IPACMMSGFLTEnable>
+		</IPACMMSGFLT>
 		<IPACMLog>
 			<IPACMfilevar>2097152</IPACMfilevar>
 		</IPACMLog>

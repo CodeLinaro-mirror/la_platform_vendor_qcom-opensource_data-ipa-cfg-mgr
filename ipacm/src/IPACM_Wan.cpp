@@ -4881,7 +4881,6 @@ int IPACM_Wan::handle_route_add_evt(ipa_ip_type iptype)
 				{
 					if (IPACM_Iface::ipacmcfg->eth_wan_pppoe_enable)
 					{
-						rt_rule_entry->at_rear = false;
 						rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_SRC_ADDR;
 						rt_rule_entry->rule.attrib.u.v4.src_addr = wan_v4_addr;
 						rt_rule_entry->rule.attrib.u.v4.src_addr_mask = 0xFFFFFFFF;
@@ -4914,7 +4913,6 @@ int IPACM_Wan::handle_route_add_evt(ipa_ip_type iptype)
 				{
 					if (IPACM_Iface::ipacmcfg->eth_wan_pppoe_enable)
 					{
-						rt_rule_entry->at_rear = false;
 						rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_SRC_ADDR;
 						rt_rule_entry->rule.attrib.u.v6.src_addr[0] = ipv6_prefix[0];
 						rt_rule_entry->rule.attrib.u.v6.src_addr[1] = ipv6_prefix[1];
@@ -8555,6 +8553,16 @@ int IPACM_Wan::handle_down_evt()
 			}
 		}
 
+#ifdef FEATURE_PPPOE
+			if(IPACM_Iface::ipacmcfg->eth_wan_pppoe_enable && is_ppp_iface)
+			{
+				if(v4_p_ctx_2use != 0)
+					pppoe_del_hdr_proc_ctx(IPA_IP_v4);
+				if(v6_p_ctx_2use != 0)
+					pppoe_del_hdr_proc_ctx(IPA_IP_v6);
+			}
+#endif
+
 		IPACMDBG_H("Delete %d out of %d client header\n", i,  num_wan_client);
 
 		if (get_client_memptr(wan_client, i)->ipv4_header_set == true)
@@ -8597,13 +8605,6 @@ int IPACM_Wan::handle_down_evt()
 
 	/* free the edm clients cache */
 	IPACMDBG_H("Free wan clients cache\n");
-
-#ifdef FEATURE_PPPOE
-	if(IPACM_Iface::ipacmcfg->eth_wan_pppoe_enable && is_ppp_iface)
-	{
-		pppoe_del_hdr_proc_ctx(ip_type);
-	}
-#endif
 
 	/* check software routing fl rule hdl */
 	if (softwarerouting_act == true)

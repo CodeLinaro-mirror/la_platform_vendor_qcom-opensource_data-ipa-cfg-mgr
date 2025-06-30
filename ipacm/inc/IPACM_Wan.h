@@ -86,6 +86,9 @@ typedef struct _ipa_wan_client
 	int ipv6_set;
 	bool ipv4_header_set;
 	bool ipv6_header_set;
+	uint32_t sta_hdr_proc_hdl_v4;
+	uint32_t sta_hdr_proc_hdl_v6;
+	bool sta_hdr_proc_ctx_set;
 	bool power_save_set;
 	wan_client_rt_hdl wan_rt_hdl[0]; /* depends on number of tx properties */
 }ipa_wan_client;
@@ -572,6 +575,8 @@ private:
 	uint32_t *wan_route_rule_v6_hdl;
 	uint32_t hdr_hdl_sta_v4;
 	uint32_t hdr_hdl_sta_v6;
+	uint32_t proc_hdl_sta_v4;
+	uint32_t proc_hdl_sta_v6;
 	uint32_t firewall_hdl_v4[IPACM_MAX_FIREWALL_ENTRIES];
 	uint32_t firewall_hdl_v6[IPACM_MAX_FIREWALL_ENTRIES];
 	uint32_t dft_wan_fl_hdl[IPA_NUM_DEFAULT_WAN_FILTER_RULES];
@@ -596,6 +601,8 @@ private:
 	bool active_v6;
 	bool header_set_v4;
 	bool header_set_v6;
+	bool hdr_proc_set_v4;
+	bool hdr_proc_set_v6;
 	bool header_partial_default_wan_v4;
 	bool header_partial_default_wan_v6;
 	uint8_t ext_router_mac_addr[IPA_MAC_ADDR_SIZE];

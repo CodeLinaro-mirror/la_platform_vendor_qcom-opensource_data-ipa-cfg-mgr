@@ -386,7 +386,7 @@ int IPACM_ConntrackListener::CheckNatIface(int if_index, bool *NatIface)
 		pConfig = IPACM_Config::GetInstance();
 		if (pConfig == NULL)
 		{
-			IPACMERR("Unable to get Config instance\n");
+			IPACM_SYSLOG("Unable to get Config instance\n");
 			return IPACM_FAILURE;
 		}
 	}
@@ -404,14 +404,14 @@ int IPACM_ConntrackListener::CheckNatIface(int if_index, bool *NatIface)
 	pNatIfaces = (NatIfaces *)malloc(len);
 	if (pNatIfaces == NULL)
 	{
-		IPACMERR("Unable to allocate memory for non nat ifaces\n");
+		IPACM_SYSLOG("Unable to allocate memory for non nat ifaces\n");
 		return IPACM_FAILURE;
 	}
 
 	memset(pNatIfaces, 0, len);
 	if (pConfig->GetNatIfaces(NatIfaceCnt, pNatIfaces) != 0)
 	{
-		IPACMERR("Unable to retrieve non nat ifaces\n");
+		IPACM_SYSLOG("Unable to retrieve non nat ifaces\n");
 		return IPACM_FAILURE;
 	}
 
@@ -419,6 +419,7 @@ int IPACM_ConntrackListener::CheckNatIface(int if_index, bool *NatIface)
 	if ((fd = socket(AF_INET, SOCK_DGRAM, 0)) < 0)
 	{
 		PERROR("get interface name socket create failed");
+		IPACM_SYSLOG("get interface name socket create failed\n");
 		return IPACM_FAILURE;
 	}
 
@@ -427,6 +428,7 @@ int IPACM_ConntrackListener::CheckNatIface(int if_index, bool *NatIface)
 	if (ioctl(fd, SIOCGIFNAME, &ifr) < 0)
 	{
 		PERROR("call_ioctl_on_dev: ioctl failed:");
+		IPACM_SYSLOG("call_ioctl_on_dev: ioctl failed:\n");
 		close(fd);
 		return IPACM_FAILURE;
 	}
@@ -517,7 +519,7 @@ void IPACM_ConntrackListener::HandleNonNatIPAddr_v4(
 				if (nonnat_iface_ipv4_addr[cnt] == 0)
 				{
 					nonnat_iface_ipv4_addr[cnt] = data->ipv4_addr;
-					IPACMDBG("Add ip addr to non nat list (%d) ", cnt);
+					IPACM_SYSLOG("Add ip addr to non nat list (%d) ", cnt);
 					iptodot("with ipv4 address", nonnat_iface_ipv4_addr[cnt]);
 
 					/* Add dummy nat rule for non nat ifaces */
@@ -634,7 +636,7 @@ void IPACM_ConntrackListener::HandleNeighIpAddrAddEvt(
 					pConfig = IPACM_Config::GetInstance();
 					if (pConfig == NULL)
 					{
-						IPACMERR("Unable to get Config instance\n");
+						IPACM_SYSLOG("Unable to get Config instance\n");
 						return;
 					}
 				}
@@ -642,14 +644,14 @@ void IPACM_ConntrackListener::HandleNeighIpAddrAddEvt(
 				if(pConfig->get_vlan_id(data->iface_name, &nat_clients[i].vlan_id) == IPACM_SUCCESS)
 				{
 					nat_clients[i].is_vlan_client = true;
-					IPACMDBG_H("client %d: vlan iface %s has vlan id %d ", i, data->iface_name, nat_clients[i].vlan_id);
+					IPACM_SYSLOG("client %d: vlan iface %s has vlan id %d ", i, data->iface_name, nat_clients[i].vlan_id);
 					iptodot("and ip data->ipv4_addr", data->ipv4_addr);
 				}
 				else
 				{
 					nat_clients[i].is_vlan_client = false;
 					nat_clients[i].vlan_id = 0;
-					IPACMDBG_H("client %d: iface %s is not a vlan iface\n", i, data->iface_name);
+					IPACM_SYSLOG("client %d: iface %s is not a vlan iface\n", i, data->iface_name);
 				}
 #endif
 				IPACMDBG_H("for iface %s: ", data->iface_name);
@@ -685,7 +687,7 @@ void IPACM_ConntrackListener::HandleNeighIpAddrAddEvt(
 							{
 								if(nat_clients[i].vlan_id == vlan_pdns[pdn_idx].associated_VIDs[vlan_idx])
 								{
-									IPACMDBG_H("vlan pdn already up for ");
+									IPACM_SYSLOG("vlan pdn already up for ");
 									iptodot("ip", public_ip);
 									return;
 								}
@@ -697,7 +699,7 @@ void IPACM_ConntrackListener::HandleNeighIpAddrAddEvt(
 					{
 						iptodot("vlan client ip", data->ipv4_addr);
 						iptodot("pdn ip", public_ip);
-						IPACMERR("can't add more PDN, already got max \n");
+						IPACM_SYSLOG("can't add more PDN, already got max \n");
 						return;
 					}
 
@@ -720,7 +722,7 @@ void IPACM_ConntrackListener::HandleNeighIpAddrAddEvt(
 						vlan_data->wan_ipv6_prefix[0]=IPA_DUMMY_PREFIX;
 					}
 					evt_data.evt_data = vlan_data;
-					IPACMDBG_H("sending IPA_ROUTE_ADD_VLAN_PDN_EVENT vlan id %d, iptype %d,\n",
+					IPACM_SYSLOG("sending IPA_ROUTE_ADD_VLAN_PDN_EVENT vlan id %d, iptype %d,\n",
 						vlan_data->VlanID,
 						vlan_data->iptype);
 					iptodot("pdn ip", public_ip);
@@ -788,7 +790,7 @@ bool IPACM_ConntrackListener::IsVlanIPv4(uint32_t ipv4_address, uint16_t *VlanId
 		{
 			if(nat_clients[i].is_vlan_client)
 			{
-				IPACMDBG_H("ipv4 address belong to vlan iface with id %d\n", nat_clients[i].vlan_id)
+				IPACM_SYSLOG("ipv4 address belong to vlan iface with id %d\n", nat_clients[i].vlan_id);
 				*VlanId = nat_clients[i].vlan_id;
 				return true;
 			}
@@ -821,7 +823,7 @@ void IPACM_ConntrackListener::HandleNeighIpAddrDelEvt(
 	{
 		if (nat_clients[cnt].nat_iface_ipv4_addr == ipv4_addr)
 		{
-			IPACMDBG("Reseting ct nat iface, entry (%d) ", cnt);
+			IPACM_SYSLOG("Reseting ct nat iface, entry (%d) ", cnt);
 			iptodot("with ipv4 address", nat_clients[cnt].nat_iface_ipv4_addr);
 			nat_clients[cnt].nat_iface_ipv4_addr = 0;
 #ifdef FEATURE_VLAN_MPDN
@@ -859,7 +861,7 @@ void IPACM_ConntrackListener::HandleNeighIpAddrDelEvt_v6(const IpAddress& ip)
 	ipv6ct_inst->FlushTempEntries(ip, false, false, false);
 	ipv6ct_inst->DelEntriesOnClntDiscon(ip);
 
-	IPACMDBG_H("Successfully deleted NAT interface\n");
+	IPACM_SYSLOG("Successfully deleted NAT interface\n");
 }
 
 #ifdef FEATURE_VLAN_MPDN
@@ -868,7 +870,7 @@ void IPACM_ConntrackListener::HandleVlanUp(void *in_param)
 	ipacm_event_vlan_pdn *vlanup_data = (ipacm_event_vlan_pdn *)in_param;
 	int available_idx = -1;;
 	IPACMDBG_H("Received below information during VLAN PDN up,\n");
-	IPACMDBG_H("IPType: %d, vlan_id:%d, mux id %d\n",
+	IPACM_SYSLOG("IPType: %d, vlan_id:%d, mux id %d\n",
 		vlanup_data->iptype,
 		vlanup_data->VlanID,
 		vlanup_data->mux_id);
@@ -882,7 +884,7 @@ void IPACM_ConntrackListener::HandleVlanUp(void *in_param)
 	if(num_vlan_pdns >= IPA_MAX_NUM_HW_PDNS)
 		return;
 
-	IPACMDBG_H("ipv4 address for new PDN 0x%X\n", vlanup_data->ipv4_addr);
+	IPACM_SYSLOG("ipv4 address for new PDN 0x%X\n", vlanup_data->ipv4_addr);
 	if(!vlanup_data->ipv4_addr)
 	{
 		IPACMERR("ipv4 address is invalid, iptype %d\n", vlanup_data->iptype);
@@ -926,6 +928,8 @@ void IPACM_ConntrackListener::HandleVlanUp(void *in_param)
 			{
 				IPACMDBG_H("found empty PDN entry in 0 index num_vlan_pdns %d\n", num_vlan_pdns);
 				vlan_pdns[0].VID_cnt = 0;
+				IPACM_SYSLOG("found existing PDN entry in 0, but got new VLAN id. Adding vlan %d to the entry\n", vlanup_data->VlanID);
+				IPACM_SYSLOG("num_vlan_pdns %d\n", num_vlan_pdns);
 				vlan_pdns[0].public_ip = vlanup_data->ipv4_addr;
 				vlan_pdns[0].associated_VIDs[vlan_pdns[0].VID_cnt] = vlanup_data->VlanID;
 				vlan_pdns[0].VID_cnt++;
@@ -1212,7 +1216,7 @@ void IPACM_ConntrackListener::HandleVlanDown(void *in_param)
 					{
 						if(vlan_pdns[i].associated_VIDs[j] == vlanup_data->VlanID)
 						{
-							IPACMDBG_H("Clearing VID %d from PDN with IP %d\n", vlanup_data->VlanID, vlanup_data->ipv4_addr);
+							IPACM_SYSLOG("Clearing VID %d from PDN with IP %d\n", vlanup_data->VlanID, vlanup_data->ipv4_addr);
 							vlan_pdns[i].associated_VIDs[j] = 0;
 							vlan_pdns[i].VID_cnt--;
 							if(vlan_pdns[i].VID_cnt == 0)
@@ -1222,7 +1226,7 @@ void IPACM_ConntrackListener::HandleVlanDown(void *in_param)
 							}
 							else
 							{
-								IPACMDBG_H("VLAN PDN is up, return\n");
+								IPACM_SYSLOG("VLAN PDN is up, return\n");
 								return;
 							}
 						}
@@ -1240,7 +1244,7 @@ void IPACM_ConntrackListener::HandleVlanDown(void *in_param)
 		{
 			if(vlan_pdns[i].public_ip == vlanup_data->ipv4_addr)
 			{
-				IPACMDBG_H("removing pdn entry in %d\n", i);
+				IPACM_SYSLOG("removing pdn entry in %d\n", i);
 				vlan_pdns[i].public_ip = 0;
 				memset(vlan_pdns[i].associated_VIDs, 0, IPA_MAX_NUM_SW_PDNS * sizeof(vlan_pdns[i].associated_VIDs[0]));
 				vlan_pdns[i].VID_cnt = 0;
@@ -1822,7 +1826,7 @@ bool IPACM_ConntrackListener::AddIface(
 				if (rule->private_ip == nonnat_iface_ipv4_addr[cnt] ||
 					rule->target_ip == nonnat_iface_ipv4_addr[cnt])
 				{
-					IPACMDBG("matched non_nat_iface_ipv4_addr entry(%d)\n", cnt);
+					IPACM_SYSLOG("matched non_nat_iface_ipv4_addr entry(%d)\n", cnt);
 					iptodot("AddIface(): Non Nat entry match with ip addr",
 							nonnat_iface_ipv4_addr[cnt]);
 
@@ -1832,7 +1836,7 @@ bool IPACM_ConntrackListener::AddIface(
 				}
 			}
 		}
-		IPACMDBG_H("Not mtaching with non-nat ifaces\n");
+		IPACM_SYSLOG("Not mtaching with non-nat ifaces\n");
 	}
 	else
 		IPACMDBG("In STA mode, don't compare against non nat ifaces\n");
@@ -2408,12 +2412,12 @@ void IPACM_ConntrackListener::ProcessTCPorUDPMsg(
 			{
 				iptodot("vlan client ip", repl_src_ip);
 				iptodot("pdn ip",orig_dst_ip)
-				IPACMERR("src NAT: can't add more PDN, already got max \n");
+				IPACM_SYSLOG("src NAT: can't add more PDN, already got max num_vlan_pdns: %d\n", num_vlan_pdns);
 				return;
 			}
 			iptodot("vlan client ip", repl_src_ip);
 			iptodot("pdn ip", orig_dst_ip);
-			IPACMDBG_H("IsVlanUp %d\n", nat_entry.IsVlanUp);
+			IPACM_SYSLOG("vlan client ip: (0x%x) pdn ip: (0x%x) IsVlanUp %d\n", repl_src_ip, orig_dst_ip, nat_entry.IsVlanUp);
 		}
 		public_ip = orig_dst_ip;
 #endif
@@ -2448,12 +2452,12 @@ void IPACM_ConntrackListener::ProcessTCPorUDPMsg(
 			{
 				iptodot("vlan client ip", orig_src_ip);
 				iptodot("pdn ip",repl_dst_ip)
-				IPACMERR("dst NAT: can't add more PDN, already got max \n");
+				IPACM_SYSLOG("dst NAT: can't add more PDN, already got max num_vlan_pdns: %d\n", num_vlan_pdns);
 				return;
 			}
 			iptodot("vlan client ip ", orig_src_ip);
 			iptodot("pdn ip ", repl_dst_ip)
-			IPACMDBG_H("IsVlanUp %d\n", nat_entry.IsVlanUp);
+			IPACM_SYSLOG("vlan client ip: (0x%x) pdn ip: (0x%x) IsVlanUp %d\n",orig_src_ip, repl_dst_ip, nat_entry.IsVlanUp);
 		}
 		public_ip = repl_dst_ip;
 #endif
@@ -2586,7 +2590,7 @@ void IPACM_ConntrackListener::ProcessTCPorUDPMsg(
 			}
 		}
 		evt_data.evt_data = data;
-		IPACMDBG_H("sending IPA_ROUTE_ADD_VLAN_PDN_EVENT vlan id %d, iptype %d,\n",
+		IPACM_SYSLOG("sending IPA_ROUTE_ADD_VLAN_PDN_EVENT vlan id %d, iptype %d,\n",
 				data->VlanID,
 			 	data->iptype);
 		iptodot("pdn ip", public_ip);

@@ -46,7 +46,9 @@ IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "IPACM_Filtering.h"
 #include <IPACM_Log.h>
 #include "IPACM_Defs.h"
-
+#include <string>
+#include <cstring>
+#include <sstream>
 
 const char *IPACM_Filtering::DEVICE_NAME = "/dev/ipa";
 
@@ -263,6 +265,7 @@ bool IPACM_Filtering::AddFilteringRule_v2(struct ipa_ioc_add_flt_rule_v2 const *
 	int i;
 	int num_rules = ruleTable->num_rules;
 	int cnt;
+	std::stringstream ss;
 
 	IPACMDBG_H("Printing filter add attributes\n");
 	IPACMDBG_H("ip type: %d\n", ruleTable->ip);
@@ -273,6 +276,7 @@ bool IPACM_Filtering::AddFilteringRule_v2(struct ipa_ioc_add_flt_rule_v2 const *
 	{
 		IPACMDBG("Filter rule:%d attrib mask: 0x%x\n", cnt,
 				((struct ipa_flt_rule_add_v2  *)ruleTable->rules)[cnt].rule.attrib.attrib_mask);
+		ss << "0x" << std::hex << ((struct ipa_flt_rule_add_v2  *)ruleTable->rules)[cnt].rule.attrib.attrib_mask << " ";
 	}
 
 	retval = ioctl(fd, IPA_IOC_ADD_FLT_RULE_V2, ruleTable);
@@ -305,6 +309,7 @@ bool IPACM_Filtering::AddFilteringRule_v2(struct ipa_ioc_add_flt_rule_v2 const *
 bool IPACM_Filtering::AddFilteringRule(struct ipa_ioc_add_flt_rule const *ruleTable)
 {
 	int retval = 0;
+	std::stringstream ss;
 
 	IPACMDBG("Printing filter add attributes\n");
 	IPACMDBG("ip type: %d\n", ruleTable->ip);
@@ -317,11 +322,13 @@ bool IPACM_Filtering::AddFilteringRule(struct ipa_ioc_add_flt_rule const *ruleTa
 		{
 			IPACMDBG_H("Filter rule : %d eq attrib mask : 0x%x\n",
 				cnt, ruleTable->rules[cnt].rule.eq_attrib.rule_eq_bitmap);
+			ss << "0x" << std::hex << ruleTable->rules[cnt].rule.eq_attrib.rule_eq_bitmap << " ";
 		}
 		else
 		{
 			IPACMDBG("Filter rule:%d attrib mask: 0x%x\n", cnt,
 				ruleTable->rules[cnt].rule.attrib.attrib_mask);
+			ss << "0x" << std::hex << ruleTable->rules[cnt].rule.attrib.attrib_mask << " ";
 		}
 	}
 
@@ -351,7 +358,8 @@ bool IPACM_Filtering::AddFilteringRule(struct ipa_ioc_add_flt_rule const *ruleTa
 		}
 	}
 
-	IPACMDBG("Added Filtering rule %p\n", ruleTable);
+	IPACM_SYSLOG("Added %d IP %d flt rule(s) on ep: %d Attrib masks: %s. rule: %p\n",
+			 ruleTable->num_rules, ruleTable->ip, ruleTable->ep, (ss.str()).c_str(), ruleTable);
 	return true;
 }
 
@@ -359,12 +367,21 @@ bool IPACM_Filtering::AddFilteringRuleAfter(struct ipa_ioc_add_flt_rule_after co
 {
 #ifdef FEATURE_IPA_V3
 	int retval = 0;
+	std::stringstream ss;
 
 	IPACMDBG("Printing filter add attributes\n");
 	IPACMDBG("ip type: %d\n", ruleTable->ip);
 	IPACMDBG("Number of rules: %d\n", ruleTable->num_rules);
 	IPACMDBG("End point: %d\n", ruleTable->ep);
 	IPACMDBG("commit value: %d\n", ruleTable->commit);
+
+	for (int cnt=0; cnt<ruleTable->num_rules; cnt++)
+	{
+		if (ruleTable->rules[cnt].rule.eq_attrib_type)
+			ss << "0x" << std::hex << ruleTable->rules[cnt].rule.eq_attrib.rule_eq_bitmap << " ";
+                else
+			ss << "0x" << std::hex << ruleTable->rules[cnt].rule.attrib.attrib_mask << " ";
+	}
 
 	retval = ioctl(fd, IPA_IOC_ADD_FLT_RULE_AFTER, ruleTable);
 
@@ -382,7 +399,8 @@ bool IPACM_Filtering::AddFilteringRuleAfter(struct ipa_ioc_add_flt_rule_after co
 		IPACMERR("Failed adding Filtering rule %p\n", ruleTable);
 		return false;
 	}
-	IPACMDBG("Added Filtering rule %p\n", ruleTable);
+	IPACM_SYSLOG("Added %d IP %d flt rule(s) on ep: %d Attrib masks: %s. rule: %p\n",
+			ruleTable->num_rules, ruleTable->ip, ruleTable->ep, (ss.str()).c_str(), ruleTable);
 #endif
 	return true;
 }
@@ -493,7 +511,6 @@ bool IPACM_Filtering::DeleteFilteringHdls
 
 fail:
 	free(flt_rule);
-
 	return res;
 }
 

@@ -343,12 +343,12 @@ public:
 		if(iptype == IPA_IP_v4)
 		{
 			flt_rule_count_v4[index] += increment;
-			IPACMDBG_H("Now num of v4 flt rules on client %d is %d.\n", index, flt_rule_count_v4[index]);
+			IPACM_SYSLOG("Now num of v4 flt rules on client %d is %d.\n", index, flt_rule_count_v4[index]);
 		}
 		else
 		{
 			flt_rule_count_v6[index] += increment;
-			IPACMDBG_H("Now num of v6 flt rules on client %d is %d.\n", index, flt_rule_count_v6[index]);
+			IPACM_SYSLOG("Now num of v6 flt rules on client %d is %d.\n", index, flt_rule_count_v6[index]);
 		}
 		return;
 	}
@@ -363,12 +363,12 @@ public:
 		if(iptype == IPA_IP_v4)
 		{
 			flt_rule_count_v4[index] -= decrement;
-			IPACMDBG_H("Now num of v4 flt rules on client %d is %d.\n", index, flt_rule_count_v4[index]);
+			IPACM_SYSLOG("Now num of v4 flt rules on client %d is %d.\n", index, flt_rule_count_v4[index]);
 		}
 		else
 		{
 			flt_rule_count_v6[index] -= decrement;
-			IPACMDBG_H("Now num of v6 flt rules on client %d is %d.\n", index, flt_rule_count_v6[index]);
+			IPACM_SYSLOG("Now num of v6 flt rules on client %d is %d.\n", index, flt_rule_count_v6[index]);
 		}
 		return;
 	}

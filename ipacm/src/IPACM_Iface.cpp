@@ -706,7 +706,6 @@ int IPACM_Iface::query_iface_property(void)
 /*Configure the initial filter rules */
 int IPACM_Iface::init_fl_rule(ipa_ip_type iptype)
 {
-
 	int res = IPACM_SUCCESS, len = 0;
 	struct ipa_flt_rule_add flt_rule_entry;
 	ipa_ioc_add_flt_rule *m_pFilteringTable;
@@ -838,6 +837,7 @@ int IPACM_Iface::init_fl_rule(ipa_ip_type iptype)
 					IPACMERR("Failed adding default v4 Filtering rule %d\n", i);
 				}
 			}
+			IPACM_SYSLOG("Added IPv4 default filter rules for %s\n", dev_name);
 		}
 	}
 	else
@@ -1024,6 +1024,7 @@ int IPACM_Iface::init_fl_rule(ipa_ip_type iptype)
 					IPACMERR("Failing adding v6 default IPV6 rule %d\n", i);
 				}
 			}
+			IPACM_SYSLOG("Added IPv6 default filter rules for %s\n", dev_name);
 		}
 	}
 

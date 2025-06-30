@@ -95,8 +95,6 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 	ipacm_bridge* dummy_vlan_bridge = NULL;
 	ipa_ioc_bridge_vlan_mapping_info mapping_info;
 
-	IPACM_SYSLOG("Recieved event %d\n", event);
-
 	memset(&mapping_info, 0, sizeof(mapping_info));
 	switch (event)
 	{
@@ -286,8 +284,8 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 								if (IPACM_FAILURE == ipa_interface_index) {
 									IPACMERR("not supported iface id: %d\n", data_all->if_index);
 								} else {
-									IPACM_SYSLOG("Posted event %d, with %s for ipv4 client re-connect\n",
-										evt_data.event,
+									IPACM_SYSLOG("Posted event %s, with %s for ipv4 client re-connect\n",
+										IPACM_Iface::ipacmcfg->getEventName(evt_data.event),
 										data_all->iface_name);
 								}
 							}
@@ -310,7 +308,9 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 				/* find the client MAC */
 				if (neighbor_client[i].iface_index == data->if_index)
 				{
-					IPACM_SYSLOG("Neighbor if_index: %d, ipa_if_index = %d, name =  %s, ip4_addr = 0x%x Clean %d-st Cached client-MAC %02x:%02x:%02x:%02x:%02x:%02x\n, total client: %d\n",
+					IPACM_SYSLOG("LINK_DOWN: Neighbor if_index: %d, ipa_if_index = %d,"
+						     "name =  %s, ip4_addr = 0x%x Clean %d-st "
+						     "Cached client-MAC %02x:%02x:%02x:%02x:%02x:%02x\n, total client: %d\n",
 					neighbor_client[i].iface_index,neighbor_client[i].ipa_if_num, neighbor_client[i].iface_name,
 					neighbor_client[i].v4_addr, i,
 					neighbor_client[i].mac_addr[0],
@@ -532,8 +532,9 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 									sizeof(data_all->iface_name));
 							evt_data.evt_data = (void *)data_all;
 							IPACM_EvtDispatcher::PostEvt(&evt_data);
-							IPACM_SYSLOG("Posted event %d, with %s for ipv4 client re-connect\n",
-									evt_data.event, data_all->iface_name);
+							IPACM_SYSLOG("Posted event %s, with %s for ipv4 client re-connect\n",
+									IPACM_Iface::ipacmcfg->getEventName(evt_data.event),
+									data_all->iface_name);
 						}
 					}
 				}
@@ -575,7 +576,8 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 			{
 				if (data->ipv4_addr != 0) /* not 0.0.0.0 */
 				{
-					IPACM_SYSLOG("Got Neighbor event with ipv4 address: 0x%x \n", data->ipv4_addr);
+					IPACM_SYSLOG("Got V4 Neighbor event with ipv4 address: 0x%x on iface: %s\n",
+								data->ipv4_addr, data->iface_name);
 					/* check if ipv4 address is link local(169.254.xxx.xxx) */
 					if ((data->ipv4_addr & IPV4_ADDR_LINKLOCAL_MASK) == IPV4_ADDR_LINKLOCAL)
 					{
@@ -624,7 +626,7 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 									{
 										if(neighbor_client[i].bridge != bridge)
 										{
-											IPACMDBG_H("client (dev %s) already associated with a different bridge %s->%s, keep looking for same MAC\n",
+											IPACM_SYSLOG("client (dev %s) already associated with a different bridge %s->%s, keep looking for same MAC\n",
 												neighbor_client[i].iface_name,
 												neighbor_client[i].bridge->bridge_name,
 												bridge->bridge_name);
@@ -751,12 +753,14 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 #ifndef FEATURE_VLAN_MPDN
 									IPACMERR("not supported iface id: %d\n", data_all->if_index);
 #else
-									IPACM_SYSLOG("Posted event %d with %s for ipv4\n",
-										evt_data.event, data->iface_name);
+									IPACM_SYSLOG("Posted event %s with %s for ipv4\n",
+										IPACM_Iface::ipacmcfg->getEventName(evt_data.event),
+										data->iface_name);
 #endif
 								} else {
-									IPACM_SYSLOG("Posted event %d with %s for ipv4\n",
-										evt_data.event, data->iface_name);
+									IPACM_SYSLOG("Posted event %s with %s for ipv4\n",
+										IPACM_Iface::ipacmcfg->getEventName(evt_data.event),
+										data->iface_name);
 								}
 								break;
 							}
@@ -943,7 +947,7 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 										}
 									}
 #endif
-									IPACMDBG_H("Clean %d-st Cached client-MAC %02x:%02x:%02x:%02x:%02x:%02x\n, total client: %d\n",
+									IPACM_SYSLOG("Clean %d-st Cached client-MAC %02x:%02x:%02x:%02x:%02x:%02x\n, total client: %d\n",
 												i,
 												neighbor_client[i].mac_addr[0],
 												neighbor_client[i].mac_addr[1],
@@ -979,7 +983,7 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 #endif
 
 									num_neighbor_client--;
-									IPACMDBG_H(" total number of left cased clients: %d\n", num_neighbor_client);
+									IPACM_SYSLOG(" total number of left cased clients: %d\n", num_neighbor_client);
 									/* check if getting real netdev name yet */
 									if(strcmp(data->iface_name, IPA_NO_IFACE_NAME) == 0)
 									{
@@ -996,7 +1000,9 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 									memcpy(data_all, data, sizeof(ipacm_event_data_all));
 									evt_data.evt_data = (void *)data_all;
 									IPACM_EvtDispatcher::PostEvt(&evt_data);
-									IPACM_SYSLOG("Posted event %s with %s for ipv4\n",IPACM_Iface::ipacmcfg->getEventName(evt_data.event), data->iface_name);
+									IPACM_SYSLOG("Posted event %s with %s for ipv4\n",
+										IPACM_Iface::ipacmcfg->getEventName(evt_data.event),
+										data->iface_name);
 									break;
 								}
 							}
@@ -1018,8 +1024,9 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 						memcpy(data_all, data, sizeof(ipacm_event_data_all));
 						evt_data.evt_data = (void *)data_all;
 						IPACM_EvtDispatcher::PostEvt(&evt_data);
-						IPACM_SYSLOG("Posted event %d with %s for ipv4\n",
-							evt_data.event, data->iface_name);
+						IPACM_SYSLOG("Posted event %s with %s for ipv4\n",
+							IPACM_Iface::ipacmcfg->getEventName(evt_data.event),
+							data->iface_name);
 					}
 				}
 			}
@@ -1179,12 +1186,14 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 #if !defined(FEATURE_VLAN_MPDN) && !defined(FEATURE_L2TP)
 									IPACM_SYSLOG("not supported iface id: %d\n", data_all->if_index);
 #else
-									IPACM_SYSLOG("Posted event %d, with %s for ipv6\n",
-										evt_data.event, data->iface_name);
+									IPACM_SYSLOG("Posted event %s, with %s for ipv6\n",
+										IPACM_Iface::ipacmcfg->getEventName(evt_data.event),
+										data->iface_name);
 #endif
 								} else {
-									IPACM_SYSLOG("Posted event %d with %s for ipv6\n",
-										evt_data.event, data->iface_name);
+									IPACM_SYSLOG("Posted event %s with %s for ipv6\n",
+										IPACM_Iface::ipacmcfg->getEventName(evt_data.event),
+										data->iface_name);
 								}
 								break;
 							}
@@ -1206,8 +1215,9 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 						memcpy(data_all, data, sizeof(ipacm_event_data_all));
 						evt_data.evt_data = (void *)data_all;
 						IPACM_EvtDispatcher::PostEvt(&evt_data);
-						IPACM_SYSLOG("Posted event %d with %s for ipv6 (%d)\n",
-							evt_data.event, data_all->iface_name, data_all->iptype);
+						IPACM_SYSLOG("Posted event %s for %s with iptype (%d)\n",
+							IPACM_Iface::ipacmcfg->getEventName(evt_data.event),
+							data_all->iface_name, data_all->iptype);
 					}
 				}
 				else
@@ -1383,14 +1393,15 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 									evt_data.evt_data = (void *)data_all;
 #endif
 									IPACM_EvtDispatcher::PostEvt(&evt_data);
-									IPACM_SYSLOG("Posted event %d with %s for ipv4\n",
-										evt_data.event, data_all->iface_name);
+									IPACM_SYSLOG("Posted event %s with %s for ipv4\n",
+										IPACM_Iface::ipacmcfg->getEventName(evt_data.event),
+										data_all->iface_name);
 								}
 							}
 							/* delete cache neighbor entry */
 							if (event == IPA_DEL_NEIGH_EVENT)
 							{
-								IPACMDBG_H("Clean %d-st Cached client-MAC %02x:%02x:%02x:%02x:%02x:%02x\n, total client: %d\n",
+								IPACM_SYSLOG("Clean %d-st Cached client-MAC %02x:%02x:%02x:%02x:%02x:%02x\n, total client: %d\n",
 										i,
 										neighbor_client[i].mac_addr[0],
 										neighbor_client[i].mac_addr[1],
@@ -1424,7 +1435,7 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 									neighbor_client[i].bridge = NULL;
 #endif
 								num_neighbor_client--;
-								IPACMDBG_H(" total number of left cased clients: %d\n", num_neighbor_client);
+								IPACM_SYSLOG(" total number of left cased clients: %d\n", num_neighbor_client);
 
 								//IPA_LAN_CLIENT_DEL_EVENT
 								//IPV6
@@ -1444,7 +1455,9 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 								memcpy(data_all, data, sizeof(ipacm_event_data_all));
 								evt_data.evt_data = (void *)data_all;
 								IPACM_EvtDispatcher::PostEvt(&evt_data);
-								IPACM_SYSLOG("Posted event %s with %s for ipv6\n",IPACM_Iface::ipacmcfg->getEventName(evt_data.event), data->iface_name);
+								IPACM_SYSLOG("Posted event %s with %s for ipv6\n",
+									  IPACM_Iface::ipacmcfg->getEventName(evt_data.event),
+										 data->iface_name);
 							}
 							break;
 						}
@@ -1516,13 +1529,15 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 									memcpy(data_all, data, sizeof(ipacm_event_data_all));
 									evt_data.evt_data = (void *)data_all;
 									IPACM_EvtDispatcher::PostEvt(&evt_data);
-									IPACM_SYSLOG("Posted event %s with %s for ipv6 \n",IPACM_Iface::ipacmcfg->getEventName(evt_data.event), data->iface_name);
+									IPACM_SYSLOG("Posted event %s with %s for ipv6 \n",
+										IPACM_Iface::ipacmcfg->getEventName(evt_data.event),
+										data->iface_name);
 								}
 								return;
 							}
 							else
 							{
-								IPACMERR("error:  neighbor client oversize! recycle %d-st entry ! \n", circular_index);
+								IPACM_SYSLOG("error:  neighbor client oversize! recycle %d-st entry ! \n", circular_index);
 								memcpy(neighbor_client[circular_index].mac_addr,
 											data->mac_addr,
 											sizeof(data->mac_addr));
@@ -1700,7 +1715,7 @@ void IPACM_Neighbor::update_neigh_cache()
 
 		if(IPACM_Iface::ipa_get_if_index(rdev_name, &query_ifindex))
 		{
-			IPACMERR("Error while getting interface index for %s device\n", rdev_name);
+			IPACM_SYSLOG("Error while getting interface index for %s device\n", rdev_name);
 			continue;
 		}
 		query_ipa_if_num = IPACM_Iface::iface_ipa_index_query(query_ifindex);
@@ -1726,7 +1741,7 @@ void IPACM_Neighbor::update_neigh_cache()
 		{
 			if(IPACM_Iface::ipacmcfg->iface_in_vlan_mode(rdev_name))
 			{
-				IPACMDBG_H("ignoring physical IFACE neighbor event in VLAN mode\n");
+				IPACM_SYSLOG("ignoring physical IFACE neighbor event in VLAN mode\n");
 				continue;
 			}
 		}
@@ -1737,7 +1752,7 @@ void IPACM_Neighbor::update_neigh_cache()
 			(IPACM_Iface::ipacmcfg->iface_in_vlan_mode(rdev_name)) &&
 			!(IPACM_Iface::ipacmcfg->is_added_vlan_iface(rdev_name)))
 		{
-			IPACMDBG_H("not added VLAN interface %s, ignoring\n", rdev_name);
+			IPACM_SYSLOG("not added VLAN interface %s, ignoring\n", rdev_name);
 			continue;
 		}
 #endif
@@ -1758,7 +1773,7 @@ void IPACM_Neighbor::update_neigh_cache()
 			neighbor_client[num_neighbor_client].v4_addr = 0;
 			strlcpy(neighbor_client[num_neighbor_client].iface_name,
 				rdev_name, sizeof(neighbor_client[num_neighbor_client].iface_name));
-			IPACMDBG_H("Cache client MAC %02x:%02x:%02x:%02x:%02x:%02x\n, total client: %d\n",
+			IPACM_SYSLOG("Cache client MAC %02x:%02x:%02x:%02x:%02x:%02x\n, total client: %d\n",
 						neighbor_client[num_neighbor_client].mac_addr[0],
 						neighbor_client[num_neighbor_client].mac_addr[1],
 						neighbor_client[num_neighbor_client].mac_addr[2],
@@ -1783,7 +1798,7 @@ void IPACM_Neighbor::update_neigh_cache()
 #endif
 			strlcpy(neighbor_client[circular_index].iface_name,
 				rdev_name, sizeof(neighbor_client[circular_index].iface_name));\
-			IPACMDBG_H("Copy client MAC %02x:%02x:%02x:%02x:%02x:%02x, total client: %d, circular %d\n",
+			IPACM_SYSLOG("Copy client MAC %02x:%02x:%02x:%02x:%02x:%02x, total client: %d, circular %d\n",
 							neighbor_client[circular_index].mac_addr[0],
 							neighbor_client[circular_index].mac_addr[1],
 							neighbor_client[circular_index].mac_addr[2],
@@ -1836,7 +1851,7 @@ void IPACM_Neighbor::post_phys_iface_event(const char *iface_name, int ipa_if_nu
 	data_fid->if_index = phys_if_idx;
 	evt_data.event = IPA_USB_LINK_UP_EVENT;
 	evt_data.evt_data = data_fid;
-	IPACMDBG_H("Posting usb IPA_LINK_UP_EVENT with if index: %d iface_name : %s\n",
+	IPACM_SYSLOG("Posting usb IPA_LINK_UP_EVENT with if index: %d iface_name : %s\n",
 						 data_fid->if_index, iface_name);
 	IPACM_EvtDispatcher::PostEvt(&evt_data);
 }

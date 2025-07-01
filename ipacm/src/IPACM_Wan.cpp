@@ -2158,19 +2158,15 @@ void IPACM_Wan::post_wan_vlan_pdn_event(ipa_ip_type iptype, int pdn_idx, int vla
 						if (m_routing.DeleteRoutingHdl(ipv4_to_iface[pdn_idx].pIface->wan_route_rule_v4_hdl[tx_index],
 											 IPA_IP_v4) == false)
 						{
-							IPACMDBG_H("IP-family:%d, Routing rule(hdl:0x%x) deletion failed with tx_index %d!\n",
-								IPA_IP_v4, ipv4_to_iface[pdn_idx].pIface->wan_route_rule_v4_hdl[tx_index], tx_index);
+							IPACMDBG_H("iptype V4, Routing rule(hdl:0x%x) deletion failed with tx_index %d!\n",
+								ipv4_to_iface[pdn_idx].pIface->wan_route_rule_v4_hdl[tx_index], tx_index);
 						}
 						else
 						{
+							IPACMDBG_H("iptype V4, Routing rule(hdl:0x%x) deletion successful for tx_index %d!\n",
+								    wan_route_rule_v4_hdl[tx_index], tx_index);
 							ipv4_to_iface[pdn_idx].pIface->wan_route_rule_v4_hdl[tx_index] = 0;
 						}
-					}
-					else
-					{
-						IPACMDBG_H("IP-family:%d, Routing rule(hdl:0x%x) deletion successful for tx_index %d!\n",
-							IPA_IP_v4, wan_route_rule_v4_hdl[tx_index], tx_index);
-						wan_route_rule_v4_hdl[tx_index] = 0;
 					}
 				}
 			}

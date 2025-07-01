@@ -12182,6 +12182,31 @@ int IPACM_Lan::handle_eth_client_down_evt(uint8_t *mac_addr, uint16_t vlan_id, i
 		get_client_memptr(eth_client, clt_indx)->ext_router_prefix_rt_hdl = 0; //do we need or will it be cleared automatically?
 	}
 
+	IPACMDBG_H("Deleting proc_ctx v4 handle %d\n",get_client_memptr(eth_client, clt_indx)->hpc_hdr_hdl_v4);
+	if (get_client_memptr(eth_client, clt_indx)->ipv4_hpc_set)
+	{
+		if (m_header.DeleteHeaderProcCtx(get_client_memptr(eth_client, clt_indx)->hpc_hdr_hdl_v4) == false)
+		{
+			IPACMERR("unable to delete v4 header hpc rules for index: %d\n", clt_indx);
+			return IPACM_FAILURE;
+		}
+		get_client_memptr(eth_client, clt_indx)->ipv4_hpc_set = false;
+		IPACMDBG("v4 hpc deleted\n");
+	}
+
+	IPACMDBG_H("Deleting proc_ctx v6 handle %d\n",get_client_memptr(eth_client, clt_indx)->hpc_hdr_hdl_v6);
+	if (get_client_memptr(eth_client, clt_indx)->ipv6_hpc_set)
+	{
+		if (m_header.DeleteHeaderProcCtx(get_client_memptr(eth_client, clt_indx)->hpc_hdr_hdl_v6) == false)
+		{
+			IPACMERR("unable to delete v6 header hpc rules for index: %d\n", clt_indx);
+			return IPACM_FAILURE;
+		}
+		get_client_memptr(eth_client, clt_indx)->ipv6_hpc_set = false;
+		IPACMDBG("v6 hpc deleted\n");
+	}
+
+
 	/* Delete eth client header */
 	if(get_client_memptr(eth_client, clt_indx)->ipv4_header_set == true)
 	{
@@ -13022,6 +13047,17 @@ fail:
 			}
 #endif
 
+			if (get_client_memptr(eth_client, i)->hpc_hdr_hdl_v4)
+			{
+				IPACMDBG_H("Deleting proc_ctx v4 handle %d\n",get_client_memptr(eth_client, i)->hpc_hdr_hdl_v4);
+				if (m_header.DeleteHeaderProcCtx(get_client_memptr(eth_client, i)->hpc_hdr_hdl_v4)
+						== false)
+				{
+					return IPACM_FAILURE;
+				}
+				get_client_memptr(eth_client, i)->ipv4_hpc_set = false;
+			}
+
 			IPACMDBG_H("Delete %d out of %d client header\n", i,  num_eth_client);
 
 			if(get_client_memptr(eth_client, i)->ipv4_header_set == true)
@@ -13032,6 +13068,18 @@ fail:
 					res = IPACM_FAILURE;
 				}
 			}
+
+			if (get_client_memptr(eth_client, i)->ipv6_hpc_set == true)
+			{
+				IPACMDBG_H("Deleting proc_ctx v6 handle %d\n",get_client_memptr(eth_client, i)->hpc_hdr_hdl_v6);
+				if (m_header.DeleteHeaderProcCtx(get_client_memptr(eth_client, i)->hpc_hdr_hdl_v6)
+						== false)
+				{
+					return IPACM_FAILURE;
+				}
+				get_client_memptr(eth_client, i)->ipv6_hpc_set = false;
+			}
+
 
 			if(get_client_memptr(eth_client, i)->ipv6_header_set == true)
 			{

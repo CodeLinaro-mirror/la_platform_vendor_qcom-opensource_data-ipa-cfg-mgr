@@ -1,6 +1,5 @@
 /*
  * Copyright (c) 2013-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -27,43 +26,9 @@
  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * Changes from Qualcomm Innovation Center are provided under the following license:
- *
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
- *
- * Redistribution and use in source and binary forms, with or without
- * modification, are permitted (subject to the limitations in the
- * disclaimer below) provided that the following conditions are met:
- *
- *   * Redistributions of source code must retain the above copyright
- *     notice, this list of conditions and the following disclaimer.
- *
- *   * Redistributions in binary form must reproduce the above
- *     copyright notice, this list of conditions and the following
- *     disclaimer in the documentation and/or other materials provided
- *     with the distribution.
- *
- *   * Neither the name of Qualcomm Innovation Center, Inc. nor the names of its
- *     contributors may be used to endorse or promote products derived
- *     from this software without specific prior written permission.
- *
- * NO EXPRESS OR IMPLIED LICENSES TO ANY PARTY'S PATENT RIGHTS ARE
- * GRANTED BY THIS LICENSE. THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT
- * HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED
- * WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
- * MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
- * IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR
- * ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
- * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE
- * GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
- * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER
- * IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
- * OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
- * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- *
- * Changes from Qualcomm Innovation Center are provided under the following license:
- * Copyright (c) 2025 Qualcomm Innovation Center, Inc. All rights reserved.
- * SPDX-License-Identifier: BSD-3-Clause-Clear
+ * Changes from Qualcomm Technologies, Inc. are provided under the following license:
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear.
  */
 /*!
 		@file
@@ -2314,9 +2279,11 @@ int IPACM_Wan::check_vlan_pdn(ipa_ip_type iptype, ipacm_event_route_vlan *data, 
 				pending_VID_STA.push_back(data->VlanID);
 				IPACM_SYSLOG("Added vlan_id: %d as pending_VID_STA\n", data->VlanID);
 			}
-			return IPACM_SUCCESS;
+			/*incase ipv4 return */
+			if(iptype==IPA_IP_v4 )
+				return IPACM_SUCCESS;
 		}
-		else if((iptype==IPA_IP_v6 || iptype == IPA_IP_MAX) && (header_set_v6 != true))
+		if((iptype==IPA_IP_v6 || iptype == IPA_IP_MAX) && (header_set_v6 != true))
 		{
 			header_partial_default_wan_v6 = true;
 			IPACMDBG_H("STA ipv6-header haven't constructed \n");
@@ -2466,7 +2433,6 @@ int IPACM_Wan::check_vlan_pdn(ipa_ip_type iptype, ipacm_event_route_vlan *data, 
 					{
 						IPACMDBG("iface already has v4 vlan association, not new\n");
 						new_pdn = false;
-
 					}
 
 					if(new_pdn && ipv6_to_iface[wlan_ipv6_pdn_index].VID_cnt == 0)
@@ -2766,7 +2732,6 @@ int IPACM_Wan::check_vlan_pdn(ipa_ip_type iptype, ipacm_event_route_vlan *data, 
 					{
 						IPACMDBG("iface already has v6 vlan association, not new\n");
 						new_pdn = false;
-
 					}
 
 					if(new_pdn && ipv4_to_iface[wlan_vlan_v4_pdn_index].VID_cnt == 0)
@@ -7709,7 +7674,7 @@ int IPACM_Wan::handle_down_evt()
 		memset(vlandown_data, 0, sizeof(ipacm_event_vlan_pdn));
 		vlandown_data->iptype = IPA_IP_MAX;
 		vlandown_data->ipv4_addr = wan_v4_addr;
-		vlandown_data->VlanID = ipv6_to_iface[wlan_ipv6_pdn_index].associated_VIDs[0];
+		vlandown_data->VlanID = 0;
 		memset(ipv4_to_iface[wlan_ipv4_pdn_index].associated_VIDs, 0, sizeof(ipv4_to_iface[wlan_ipv4_pdn_index].associated_VIDs));
 		ipv4_to_iface[wlan_ipv4_pdn_index].VID_cnt = 0;
 		memset(ipv6_to_iface[wlan_ipv6_pdn_index].associated_VIDs, 0, sizeof(ipv6_to_iface[wlan_ipv6_pdn_index].associated_VIDs));
@@ -7757,7 +7722,7 @@ int IPACM_Wan::handle_down_evt()
 		memset(vlandown_data, 0, sizeof(ipacm_event_vlan_pdn));
 
 		vlandown_data->iptype = IPA_IP_v6;
-		vlandown_data->VlanID = ipv6_to_iface[wlan_ipv6_pdn_index].associated_VIDs[0];
+		vlandown_data->VlanID = 0;
 		memset(ipv6_to_iface[wlan_ipv6_pdn_index].associated_VIDs, 0, sizeof(ipv6_to_iface[wlan_ipv6_pdn_index].associated_VIDs));
 		ipv6_to_iface[wlan_ipv6_pdn_index].VID_cnt = 0;
 		vlandown_data->mux_id = 0;
@@ -7802,7 +7767,7 @@ int IPACM_Wan::handle_down_evt()
 		memset(vlandown_data, 0, sizeof(ipacm_event_vlan_pdn));
 
 		vlandown_data->iptype = IPA_IP_v4;
-		vlandown_data->VlanID = associated_VID;
+		vlandown_data->VlanID = 0;
 		vlandown_data->ipv4_addr = wan_v4_addr;
 		memset(ipv4_to_iface[wlan_ipv4_pdn_index].associated_VIDs, 0, sizeof(ipv4_to_iface[wlan_ipv4_pdn_index].associated_VIDs));
 		ipv4_to_iface[wlan_ipv4_pdn_index].VID_cnt = 0;
@@ -8098,7 +8063,7 @@ int IPACM_Wan::handle_down_evt_ex()
 			memset(vlandown_data, 0, sizeof(ipacm_event_vlan_pdn));
 
 			vlandown_data->iptype = IPA_IP_v4;
-			vlandown_data->VlanID = associated_VID;
+			vlandown_data->VlanID = 0;
 			vlandown_data->ipv4_addr = wan_v4_addr;
 			vlandown_data->mux_id = ext_prop->ext[0].mux_id;
 
@@ -8285,7 +8250,7 @@ int IPACM_Wan::handle_down_evt_ex()
 			memset(vlandown_data, 0, sizeof(ipacm_event_vlan_pdn));
 
 			vlandown_data->iptype = IPA_IP_v6;
-			vlandown_data->VlanID = ipv6_to_iface[modem_ipv6_pdn_index].associated_VIDs[0];
+			vlandown_data->VlanID = 0;
 			vlandown_data->mux_id = ext_prop->ext[0].mux_id;
 
 			IPACM_SYSLOG("Posting IPA_HANDLE_WAN_VLAN_PDN_DOWN (v6) iptype IPA_IP_v6, VlanID %d, mux_id %d, if num %d\n",
@@ -8450,7 +8415,7 @@ int IPACM_Wan::handle_down_evt_ex()
 			{
 				vlandown_data->iptype = IPA_IP_MAX;
 				vlandown_data->ipv4_addr = wan_v4_addr;
-				vlandown_data->VlanID = ipv6_to_iface[modem_ipv6_pdn_index].associated_VIDs[0];
+				vlandown_data->VlanID = 0;
 				ipv4_to_iface[modem_ipv4_pdn_index].wan_up_vlan = false;
 				memset(ipv4_to_iface[modem_ipv4_pdn_index].associated_VIDs, 0, sizeof(ipv4_to_iface[modem_ipv4_pdn_index].associated_VIDs));
 				ipv4_to_iface[modem_ipv4_pdn_index].VID_cnt = 0;
@@ -8463,7 +8428,7 @@ int IPACM_Wan::handle_down_evt_ex()
 			{
 				vlandown_data->iptype = IPA_IP_v4;
 				vlandown_data->ipv4_addr = wan_v4_addr;
-				vlandown_data->VlanID = associated_VID;
+				vlandown_data->VlanID = 0;
 				ipv4_to_iface[modem_ipv4_pdn_index].wan_up_vlan = false;
 				memset(ipv4_to_iface[modem_ipv4_pdn_index].associated_VIDs, 0, sizeof(ipv4_to_iface[modem_ipv4_pdn_index].associated_VIDs));
 				ipv4_to_iface[modem_ipv4_pdn_index].VID_cnt = 0;
@@ -8471,7 +8436,7 @@ int IPACM_Wan::handle_down_evt_ex()
 			else
 			{
 				vlandown_data->iptype = IPA_IP_v6;
-				vlandown_data->VlanID = ipv6_to_iface[modem_ipv6_pdn_index].associated_VIDs[0];
+				vlandown_data->VlanID = 0;
 				ipv6_to_iface[modem_ipv6_pdn_index].wan_up_vlan_v6 = false;
 				memset(ipv6_to_iface[modem_ipv6_pdn_index].associated_VIDs, 0, sizeof(ipv6_to_iface[modem_ipv6_pdn_index].associated_VIDs));
 				ipv6_to_iface[modem_ipv6_pdn_index].VID_cnt = 0;
@@ -8482,7 +8447,6 @@ int IPACM_Wan::handle_down_evt_ex()
 				IPACM_SYSLOG("now num offloaded PDNs is %d\n", num_offloaded_pdns);
 			}
 
-			vlandown_data->VlanID = associated_VID;
 			vlandown_data->mux_id = ext_prop->ext[0].mux_id;
 
 			IPACM_SYSLOG("Posting IPA_HANDLE_WAN_VLAN_PDN_DOWN iptype %d, VlanID %d, mux_id %d, if num %d\n", vlandown_data->iptype, vlandown_data->VlanID, ext_prop->ext[0].mux_id, ipa_if_num);

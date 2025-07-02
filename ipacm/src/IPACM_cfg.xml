@@ -196,7 +196,7 @@
 		    </ALG>
 		</IPACMALG>
 		<IPACMNAT>
-			<MaxNatEntries>500</MaxNatEntries>
+			<MaxNatEntries>2048</MaxNatEntries>
 			<NatTableType>HYBRID</NatTableType>
 		</IPACMNAT>
 		<IPACMIPV6CT>

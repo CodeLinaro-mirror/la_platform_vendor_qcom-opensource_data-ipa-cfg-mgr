@@ -2697,10 +2697,12 @@ int IPACM_Wan::check_vlan_pdn(ipa_ip_type iptype, ipacm_event_route_vlan *data, 
 				pending_VID_STA.push_back(data->VlanID);
 				IPACMDBG_H("Added vlan_id: %d as pending_VID_STA\n", data->VlanID);
 			}
-			return IPACM_SUCCESS;
+			/*incase ipv4 return */
+			if(iptype==IPA_IP_v4 )
+				return IPACM_SUCCESS;
 
 		}
-		else if((iptype==IPA_IP_v6 || iptype == IPA_IP_MAX) && (header_set_v6 != true))
+		if((iptype==IPA_IP_v6 || iptype == IPA_IP_MAX) && (header_set_v6 != true))
 		{
 			header_partial_default_wan_v6 = true;
 			IPACMDBG_H("STA ipv6-header haven't constructed \n");
@@ -2778,7 +2780,7 @@ int IPACM_Wan::check_vlan_pdn(ipa_ip_type iptype, ipacm_event_route_vlan *data, 
 								{
 									IPACMERR("VID (%d) already mapped to v4 PDN %d\n",
 											data->VlanID, wlan_ipv6_pdn_index);
-									return IPACM_FAILURE;
+									break;
 								}
 							}
 						}
@@ -2924,7 +2926,7 @@ int IPACM_Wan::check_vlan_pdn(ipa_ip_type iptype, ipacm_event_route_vlan *data, 
 								{
 									IPACMERR("VID (%d) already mapped to v6 PDN %d, can't map to v6 PDN %d\n",
 											data->VlanID, pdn_idx, wlan_ipv6_pdn_index);
-									return IPACM_FAILURE;
+									break;
 								}
 							}
 						}
@@ -7678,7 +7680,7 @@ int IPACM_Wan::handle_down_evt_ex(ipa_ip_type iptype)
 			memset(vlandown_data, 0, sizeof(ipacm_event_vlan_pdn));
 
 			vlandown_data->iptype = IPA_IP_v4;
-			vlandown_data->VlanID = associated_VID;
+			vlandown_data->VlanID = 0;
 			vlandown_data->ipv4_addr = wan_v4_addr;
 			vlandown_data->mux_id = ext_prop->ext[0].mux_id;
 
@@ -7869,7 +7871,7 @@ int IPACM_Wan::handle_down_evt_ex(ipa_ip_type iptype)
 			memset(vlandown_data, 0, sizeof(ipacm_event_vlan_pdn));
 
 			vlandown_data->iptype = IPA_IP_v6;
-			vlandown_data->VlanID = ipv6_to_iface[modem_ipv6_pdn_index].associated_VIDs[0];
+			vlandown_data->VlanID = 0;
 			vlandown_data->mux_id = ext_prop->ext[0].mux_id;
 
 			IPACM_SYSLOG("Posting IPA_HANDLE_WAN_VLAN_PDN_DOWN (v6) iptype IPA_IP_v6, VlanID %d, mux_id %d, if num %d\n",
@@ -8035,7 +8037,7 @@ int IPACM_Wan::handle_down_evt_ex(ipa_ip_type iptype)
 			{
 				vlandown_data->iptype = IPA_IP_MAX;
 				vlandown_data->ipv4_addr = wan_v4_addr;
-				vlandown_data->VlanID = ipv6_to_iface[modem_ipv6_pdn_index].associated_VIDs[0];
+				vlandown_data->VlanID = 0;
 				ipv4_to_iface[modem_ipv4_pdn_index].wan_up_vlan = false;
 				memset(ipv4_to_iface[modem_ipv4_pdn_index].associated_VIDs, 0, sizeof(ipv4_to_iface[modem_ipv4_pdn_index].associated_VIDs));
 				ipv4_to_iface[modem_ipv4_pdn_index].VID_cnt = 0;
@@ -8048,7 +8050,7 @@ int IPACM_Wan::handle_down_evt_ex(ipa_ip_type iptype)
 			{
 				vlandown_data->iptype = IPA_IP_v4;
 				vlandown_data->ipv4_addr = wan_v4_addr;
-				vlandown_data->VlanID = associated_VID;
+				vlandown_data->VlanID = 0;
 				ipv4_to_iface[modem_ipv4_pdn_index].wan_up_vlan = false;
 				memset(ipv4_to_iface[modem_ipv4_pdn_index].associated_VIDs, 0, sizeof(ipv4_to_iface[modem_ipv4_pdn_index].associated_VIDs));
 				ipv4_to_iface[modem_ipv4_pdn_index].VID_cnt = 0;
@@ -8056,7 +8058,7 @@ int IPACM_Wan::handle_down_evt_ex(ipa_ip_type iptype)
 			else
 			{
 				vlandown_data->iptype = IPA_IP_v6;
-				vlandown_data->VlanID = ipv6_to_iface[modem_ipv6_pdn_index].associated_VIDs[0];
+				vlandown_data->VlanID = 0;
 				ipv6_to_iface[modem_ipv6_pdn_index].wan_up_vlan_v6 = false;
 				memset(ipv6_to_iface[modem_ipv6_pdn_index].associated_VIDs, 0, sizeof(ipv6_to_iface[modem_ipv6_pdn_index].associated_VIDs));
 				ipv6_to_iface[modem_ipv6_pdn_index].VID_cnt = 0;
@@ -8068,7 +8070,6 @@ int IPACM_Wan::handle_down_evt_ex(ipa_ip_type iptype)
 				IPACM_SYSLOG("now num offloaded PDNs is %d\n", num_offloaded_pdns);
 			}
 
-			vlandown_data->VlanID = associated_VID;
 			vlandown_data->mux_id = ext_prop->ext[0].mux_id;
 
 			IPACM_SYSLOG("Posting IPA_HANDLE_WAN_VLAN_PDN_DOWN iptype %d, VlanID %d, mux_id %d, if num %d\n", vlandown_data->iptype, vlandown_data->VlanID, ext_prop->ext[0].mux_id, ipa_if_num);

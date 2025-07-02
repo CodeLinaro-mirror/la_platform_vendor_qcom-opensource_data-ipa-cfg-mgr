@@ -4043,6 +4043,7 @@ void IPACM_Config::flush_qos_params_info(ipa_ioc_qos_config *data)
 	IPACMDBG_H("qos iface: %s vlan id: %d\n", data->dev_name, data->dir);
 	for (it_qos_params = m_qos_params.begin(); it_qos_params != m_qos_params.end(); )
 	{
+		i = 0; // reset the value for each qos param
 		IPACMDBG_H("Flusing the qos parameters \n");
 		//Send qos rule del event
 		evt_data.event = IPA_QOS_RULE_DEL_EVENT;
@@ -4063,6 +4064,11 @@ void IPACM_Config::flush_qos_params_info(ipa_ioc_qos_config *data)
 			qos_param->qos_client_list[i].route_rule_set_v4 = it_qos_client->route_rule_set_v4;
 			qos_param->qos_client_list[i].route_rule_set_v6 = it_qos_client->route_rule_set_v6;
 
+			IPACMDBG_H("Index i: %d stored v4 hdl %d v6 hdl %d v4_set %d, v6_set %d\n", i,
+			it_qos_client->qos_rt_rule_hdl_v4,
+			it_qos_client->qos_rt_rule_hdl_v6,
+			it_qos_client->route_rule_set_v4,
+			it_qos_client->route_rule_set_v6);
 			i++;
 		}
 

@@ -26,13 +26,20 @@
  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * Changes from Qualcomm Innovation Center are provided under the following license:
- * Copyright (c) 2023-2025 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Changes from Qualcomm Technologies, Inc. are provided under the following license:
+ *
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
 #include <sys/ioctl.h>
 #include <net/if.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <string.h>
+#include <errno.h>
+#include <libnetfilter_conntrack/libnetfilter_conntrack.h>
+#include <libnetfilter_conntrack/libnetfilter_conntrack_tcp.h>
 
 #include "IPACM_ConntrackListener.h"
 #include "IPACM_ConntrackClient.h"
@@ -917,6 +924,8 @@ void IPACM_ConntrackListener::HandleNeighIpAddrAddEvt(
 				iptodot("client ip", data->ipv4_addr);
 				nat_inst->FlushTempEntries(data->ipv4_addr, true);
 			}
+			IPACMDBG("Flushing ipv4 conntrack entries\n");
+			query_conntracks(AF_INET, data->ipv4_addr, 0);
 		}
 	}
 	return;
@@ -966,6 +975,7 @@ void IPACM_ConntrackListener::HandleIPPassPDNInfoUpdate(void *in_param)
 				ip_pass_skip_nat_default_pdn = pdn_data->ip_pass_skip_nat;
 				if (pdn_data->ip_pass_enable && !pdn_data->ip_pass_skip_nat)
 					nat_inst->DelDummyNatEntries(wan_ipaddr);
+					query_conntracks(AF_INET, wan_ipaddr, 0);
 		}
 	}
 	return;
@@ -1105,6 +1115,8 @@ void IPACM_ConntrackListener::HandleNeighIpAddrAddEvt_v6(ipacm_event_data_all *d
 				ipv6ct_inst->ResetPwrSaveIf(ip);
 				ipv6ct_inst->FlushTempEntries(ip, true, false, false);
 			}
+			IPACMDBG("Flushing ipv6 conntrack entries\n");
+			query_conntracks(AF_INET6, 0, data->ipv6_addr);
 		}
 	}
 
@@ -1522,6 +1534,9 @@ void IPACM_ConntrackListener::TriggerWANUp(void *in_param)
 
 	 IPACMDBG("creating nat threads\n");
 	 CreateNatThreads();
+	 IPACMDBG("sri Flushing ipv4 conntrack entries\n");
+	 query_conntracks(AF_INET, wan_ipaddr, 0);
+	 IPACMDBG_H("return\n");
 }
 
 void IPACM_ConntrackListener::TriggerWANUp_v6(const ipacm_event_iface_up* evt_data)
@@ -1560,7 +1575,8 @@ void IPACM_ConntrackListener::TriggerWANUp_v6(const ipacm_event_iface_up* evt_da
 	CreateNatThreads();
 #endif
 	WanUp_v6 = true;
-
+	IPACMDBG("sri Flushing ipv6 conntrack entries\n");
+	query_conntracks(AF_INET, 0, const_cast<uint32_t*>(evt_data->ipv6_addr));
 	IPACMDBG_H("return\n");
 }
 
@@ -2190,6 +2206,244 @@ void IPACM_ConntrackListener::ProcessCTMessage(void *param)
 	 /* Cleanup item that was allocated during the original CT callback */
 	 nfct_destroy(evt_data->ct);
 	 return;
+}
+
+bool is_dns_port(struct nf_conntrack *ct)
+{
+	uint16_t ssport,sdport,rsport, rdport;
+	ssport = nfct_get_attr_u16(ct, ATTR_ORIG_PORT_SRC);
+	ssport = ntohs(ssport);
+	sdport = nfct_get_attr_u16(ct, ATTR_ORIG_PORT_DST);
+	sdport = ntohs(sdport);
+	rsport = nfct_get_attr_u16(ct, ATTR_REPL_PORT_SRC);
+	rsport = ntohs(rsport);
+	rdport = nfct_get_attr_u16(ct, ATTR_REPL_PORT_DST);
+	rdport = ntohs(rdport);
+	if(ssport == 53 || sdport == 53 ||  rdport == 53 || rsport == 53)
+	{
+		IPACMDBG(" DNS port return\n");
+		return true;
+	}
+	return false;
+}
+
+int v4_conntrack_callback(enum nf_conntrack_msg_type type, struct nf_conntrack *ct, void *data)
+{
+	char buf[1024];
+  	unsigned int out_flags;
+	ipacm_cmd_q_data evt_data;
+  	ipacm_ct_evt_data *ct_data;
+
+	uint32_t *addr = (uint32_t*)data, orig_src_ip, repl_src_ip, private_ip, orig_dst_ip, repl_dst_ip;
+
+	if(data == NULL)
+	{
+		IPACMDBG(" data pointer is NULL\n");
+		return NFCT_CB_CONTINUE;
+	}
+
+	if(is_dns_port(ct))
+	{
+		IPACMDBG(" DNS port return\n");
+		return NFCT_CB_CONTINUE;
+	}
+  	out_flags = (NFCT_OF_SHOW_LAYER3 | NFCT_OF_TIME | NFCT_OF_ID);
+  	nfct_snprintf(buf, sizeof(buf), ct,
+		type, NFCT_O_PLAIN, out_flags);
+  	IPACMDBG("\n%s\n", buf);
+
+	private_ip = *addr;
+	IPACMDBG(" ip addr: %x\n", private_ip);
+	orig_src_ip =(nfct_get_attr_u32(ct, ATTR_ORIG_IPV4_SRC));
+	repl_src_ip = nfct_get_attr_u32(ct, ATTR_REPL_IPV4_SRC);
+	orig_dst_ip = nfct_get_attr_u32(ct, ATTR_ORIG_IPV4_DST);
+	repl_dst_ip = nfct_get_attr_u32(ct, ATTR_REPL_IPV4_DST);
+	orig_src_ip = ntohl(orig_src_ip);
+	repl_src_ip = ntohl(repl_src_ip);
+	orig_dst_ip = ntohl(orig_dst_ip);
+	repl_dst_ip = ntohl(repl_dst_ip);
+
+	IPACMDBG(" src ip: %x  , dst ip: %x   private ip = %x ,  %d \n",
+		orig_src_ip,repl_src_ip,private_ip,
+		(private_ip != orig_src_ip || private_ip!=repl_src_ip));
+
+	IPACMDBG("sri ori_dst : %x, repl_dst : %x \n", orig_dst_ip, repl_dst_ip);
+
+	if((private_ip == orig_src_ip) || (private_ip == repl_src_ip) || (private_ip == orig_dst_ip) || (private_ip == repl_dst_ip))
+	{
+ 		out_flags = (NFCT_OF_SHOW_LAYER3 | NFCT_OF_TIME | NFCT_OF_ID);
+		nfct_snprintf(buf, sizeof(buf), ct, type, NFCT_O_PLAIN, NFCT_OF_TIME);
+		IPACMDBG("%s\n", buf);
+		ct_data = (ipacm_ct_evt_data *)malloc(sizeof(ipacm_ct_evt_data));
+		if(!ct_data)
+		{
+			IPACMERR("Unable to allocate memory for ct_data\n");
+			return NFCT_CB_CONTINUE;
+		}
+		memset(&evt_data, 0, sizeof(evt_data));
+		ct_data->ct = ct;
+  		ct_data->type = type;
+		evt_data.event = IPA_PROCESS_CT_MESSAGE;
+		evt_data.evt_data = (void *)ct_data;
+		if(0 != IPACM_EvtDispatcher::PostEvt(&evt_data))
+		{
+			IPACMERR("Error sending Conntrack message to processing thread!\n");
+			free(ct_data);
+			nfct_destroy(ct);
+			return NFCT_CB_CONTINUE;
+		}
+		return NFCT_CB_STOLEN;
+	}
+	return NFCT_CB_CONTINUE;
+}
+
+int v6_conntracks_callback(enum nf_conntrack_msg_type type,struct nf_conntrack *ct,void *data)
+{
+	struct nfct_attr_grp_ipv6 orig_params;
+	struct nfct_attr_grp_ipv6 repl_params;
+	ipacm_cmd_q_data evt_data;
+  	ipacm_ct_evt_data *ct_data;
+	char buf[1024];
+	uint32_t ipv6_link_local_prefix = 0xFE800000;
+	uint32_t ipv6_link_local_prefix_mask = 0xFFC00000;
+
+	if(data == NULL)
+	{
+		IPACMDBG(" data pointer is NULL\n");
+		return NFCT_CB_CONTINUE;
+	}
+
+	if(is_dns_port(ct))
+	{
+		IPACMDBG(" DNS port return\n");
+		return NFCT_CB_CONTINUE;
+	}
+
+	nfct_get_attr_grp(ct, ATTR_GRP_ORIG_IPV6, (void *)&orig_params);
+	nfct_get_attr_grp(ct, ATTR_GRP_REPL_IPV6, (void *)&repl_params);
+	orig_params.src[0] = ntohl(orig_params.src[0]);
+	orig_params.src[1] = ntohl(orig_params.src[1]);
+	orig_params.src[2] = ntohl(orig_params.src[2]);
+	orig_params.src[3] = ntohl(orig_params.src[3]);
+
+	repl_params.dst[0] = ntohl(repl_params.dst[0]);
+	repl_params.dst[1] = ntohl(repl_params.dst[1]);
+	repl_params.dst[2] = ntohl(repl_params.dst[2]);
+	repl_params.dst[3] = ntohl(repl_params.dst[3]);
+
+	orig_params.dst[0] = ntohl(orig_params.dst[0]);
+	orig_params.dst[1] = ntohl(orig_params.dst[1]);
+	orig_params.dst[2] = ntohl(orig_params.dst[2]);
+	orig_params.dst[3] = ntohl(orig_params.dst[3]);
+
+	repl_params.src[0] = ntohl(repl_params.src[0]);
+	repl_params.src[1] = ntohl(repl_params.src[1]);
+	repl_params.src[2] = ntohl(repl_params.src[2]);
+	repl_params.src[3] = ntohl(repl_params.src[3]);
+
+	if(((orig_params.src[0] & ipv6_link_local_prefix_mask) ==
+	(ipv6_link_local_prefix & ipv6_link_local_prefix_mask))||
+	((repl_params.src[0] & ipv6_link_local_prefix_mask) ==
+	(ipv6_link_local_prefix & ipv6_link_local_prefix_mask)))
+	{
+		IPACMDBG(" link local conntrack return\n");
+		return NFCT_CB_CONTINUE;
+	}
+	uint32_t *ip = (uint32_t*)data;
+	IPACMDBG("ipv6 add = 0x%08x%08x%08x%08x \n", ip[0],ip[1],ip[2],ip[3]);
+	IPACMDBG("\n Orig src_v6_addr: 0x%08x%08x%08x%08x\n",
+		orig_params.src[0], orig_params.src[1], orig_params.src[2], orig_params.src[3]);
+	IPACMDBG("\n Orig dst_v6_addr: 0x%08x%08x%08x%08x\n",
+		orig_params.dst[0], orig_params.dst[1], orig_params.dst[2], orig_params.dst[3]);
+	IPACMDBG("\n repl src_v6_addr: 0x%08x%08x%08x%08x\n",
+		repl_params.src[0], repl_params.src[1], repl_params.src[2], repl_params.src[3]);
+	IPACMDBG("\n dst_v6_addr: 0x%08x%08x%08x%08x\n",
+		repl_params.dst[0], repl_params.dst[1], repl_params.dst[2], repl_params.dst[3]);
+	IPACMDBG(" \n %d    %d  %d   %d \n", !memcmp(orig_params.src, ip, sizeof(orig_params.src)),
+		!memcmp(repl_params.dst, ip, sizeof(repl_params.dst)),
+		!memcmp(orig_params.dst, ip, sizeof(orig_params.dst)),
+		!memcmp(repl_params.src, ip, sizeof(repl_params.src)));
+
+
+	if(((!memcmp(orig_params.src, ip, sizeof(orig_params.src)/2)) &&
+	(!memcmp(repl_params.dst, ip, sizeof(repl_params.dst)/2))) ||
+	((!memcmp(orig_params.dst, ip, sizeof(orig_params.dst)/2)) &&
+	(!memcmp(repl_params.src, ip, sizeof(repl_params.src)/2))))
+	{
+		nfct_snprintf(buf, sizeof(buf), ct, type, NFCT_O_PLAIN, NFCT_OF_TIME);
+		IPACMDBG("%s\n", buf);
+		ct_data = (ipacm_ct_evt_data *)malloc(sizeof(ipacm_ct_evt_data));
+		if(!ct_data)
+		{
+			IPACMERR("Unable to allocate memory for ct_data\n");
+			return NFCT_CB_CONTINUE;
+		}
+		memset(&evt_data, 0, sizeof(evt_data));
+		memset(ct_data, 0, sizeof(ipacm_ct_evt_data));
+
+		ct_data->ct = ct;
+  		ct_data->type = type;
+		evt_data.event = IPA_PROCESS_CT_MESSAGE_V6;
+		evt_data.evt_data = (void *)ct_data;
+		if(0 != IPACM_EvtDispatcher::PostEvt(&evt_data))
+		{
+			IPACMERR("Error sending Conntrack message to processing thread!\n");
+			free(ct_data);
+			return NFCT_CB_CONTINUE;
+	  	}
+		return NFCT_CB_STOLEN;
+	}
+
+	return NFCT_CB_CONTINUE;
+}
+
+void IPACM_ConntrackListener::query_conntracks(int af_family, uint32_t ipv4_addr,
+	uint32_t *ipv6_addr)
+{
+	int ret;
+	struct nfct_handle *handle;
+	struct nf_conntrack *ct;
+	int family = af_family;
+	ct = nfct_new();
+
+	if (!ct) {
+		IPACMERR("nfct_new failed");
+		return;
+	}
+
+	handle = nfct_open(CONNTRACK, 0);
+
+	if (!handle) {
+		IPACMERR("nfct_open failed");
+		nfct_destroy(ct);
+		return ;
+	}
+
+	if(family == AF_INET)
+	{
+		nfct_callback_register(handle, NFCT_T_ALL, v4_conntrack_callback, &ipv4_addr);
+		IPACMDBG("quering ipv4 conntracks\n");
+	}
+	else
+	{
+		nfct_callback_register(handle, NFCT_T_ALL, v6_conntracks_callback, ipv6_addr);
+		IPACMDBG("quering ipv6 conntracks\n");
+	}
+
+	ret = nfct_query(handle, NFCT_Q_DUMP, &family);
+
+	if (ret == -1)
+	{
+		IPACMERR("(%d)(%s)\n", ret, strerror(errno));
+	}
+	else
+	{
+		IPACMDBG("(OK)\n");
+	}
+
+	nfct_destroy(ct);
+	nfct_close(handle);
+	return;
 }
 
 void IPACM_ConntrackListener::ProcessCTMessage_v6(const ipacm_ct_evt_data* evt_data, NatEntryBase& entry)

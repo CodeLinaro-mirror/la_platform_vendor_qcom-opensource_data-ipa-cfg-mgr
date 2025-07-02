@@ -256,6 +256,7 @@ public:
 	bool IsVlanIPv4(uint32_t ipv4_address, uint16_t *VlanId);
 #endif
 	bool IsVlanIPv6(const Ipv6IpAddress& ip, uint16_t *VlanId);
+	void query_conntracks(int af_family, uint32_t ipv4_addr, uint32_t *ipv6_addr);
 };
 
 extern IPACM_ConntrackListener *CtList;

@@ -2697,10 +2697,12 @@ int IPACM_Wan::check_vlan_pdn(ipa_ip_type iptype, ipacm_event_route_vlan *data, 
 				pending_VID_STA.push_back(data->VlanID);
 				IPACMDBG_H("Added vlan_id: %d as pending_VID_STA\n", data->VlanID);
 			}
-			return IPACM_SUCCESS;
+			/*incase ipv4 return */
+			if(iptype==IPA_IP_v4 )
+				return IPACM_SUCCESS;
 
 		}
-		else if((iptype==IPA_IP_v6 || iptype == IPA_IP_MAX) && (header_set_v6 != true))
+		if((iptype==IPA_IP_v6 || iptype == IPA_IP_MAX) && (header_set_v6 != true))
 		{
 			header_partial_default_wan_v6 = true;
 			IPACMDBG_H("STA ipv6-header haven't constructed \n");
@@ -2778,7 +2780,7 @@ int IPACM_Wan::check_vlan_pdn(ipa_ip_type iptype, ipacm_event_route_vlan *data, 
 								{
 									IPACMERR("VID (%d) already mapped to v4 PDN %d\n",
 											data->VlanID, wlan_ipv6_pdn_index);
-									return IPACM_FAILURE;
+									break;
 								}
 							}
 						}
@@ -2924,7 +2926,7 @@ int IPACM_Wan::check_vlan_pdn(ipa_ip_type iptype, ipacm_event_route_vlan *data, 
 								{
 									IPACMERR("VID (%d) already mapped to v6 PDN %d, can't map to v6 PDN %d\n",
 											data->VlanID, pdn_idx, wlan_ipv6_pdn_index);
-									return IPACM_FAILURE;
+									break;
 								}
 							}
 						}

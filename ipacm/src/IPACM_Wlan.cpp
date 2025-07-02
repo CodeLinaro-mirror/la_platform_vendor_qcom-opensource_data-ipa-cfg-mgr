@@ -27,8 +27,8 @@
  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * Changes from Qualcomm Innovation Center are provided under the following license:
- * Copyright (c) 2024-2025 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Changes from Qualcomm Technologies, Inc. are provided under the following license:
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  * SPDX-License-Identifier: BSD-3-Clause-Clear.
  */
 /*!
@@ -554,7 +554,7 @@ void IPACM_Wlan::event_callback(ipa_cm_event_id event, void *param)
 			IPACM_SYSLOG("Received IPA_HANDLE_WAN_VLAN_PDN_UP for VID %d, iptype %d\n",
 				data->VlanID,
 				data->iptype);
-			if(is_vlan_IF(data->VlanID))
+			if(is_vlan_IF(data->VlanID) && (data->VlanID > DUMMY_VLAN_ID_BASE))
 			{
 				if(data->iptype == IPA_IP_v6)
 				{
@@ -598,7 +598,8 @@ void IPACM_Wlan::event_callback(ipa_cm_event_id event, void *param)
 			IPACM_SYSLOG("Received IPA_HANDLE_WAN_VLAN_PDN_DOWN for VID %d, iptype %d\n",
 				data->VlanID,
 				data->iptype);
-			if(is_vlan_IF(data->VlanID))
+			/*data->vlanID is 0 we are deleting all PDN assossiate vlans and clearing the all vlan info*/
+			if(!data->VlanID || is_vlan_IF(data->VlanID))
 			{
 #ifdef FEATURE_IPACM_UL_FIREWALL
 				if(data->iptype == IPA_IP_v6)
@@ -3856,10 +3857,9 @@ int IPACM_Wlan::handle_wlan_vlan_neighbor(ipacm_event_data_all *data)
 		* if this is the first time we have this global ipv6 prefix (or this
 		* is the default pdn prefix) we can notify WAN that it is a v6 vlan pdn
 		*/
-		if(new_prefix ||
-			((IPACM_Wan::backhaul_ipv6_prefix[0] || IPACM_Wan::backhaul_ipv6_prefix[1]) &&
-				(IPACM_Wan::backhaul_ipv6_prefix[0] == data_vlan->data_all.ipv6_addr[0]) &&
-				(IPACM_Wan::backhaul_ipv6_prefix[1] == data_vlan->data_all.ipv6_addr[1])))
+		/* Posting the IPA_ROUTE_ADD_VLAN_PDN_EVENT for wlan incase of wlan interface goes down/up
+		once neigh is recieved */
+		if(new_prefix || IPACM_Iface::ipacmcfg->is_offload_ipv6_prefix(data->ipv6_addr))
 		{
 			ipacm_cmd_q_data evt_data;
 			ipacm_event_route_vlan *data;

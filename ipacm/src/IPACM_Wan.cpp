@@ -1474,6 +1474,7 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 						wan_v4_is_default_gw = false;
 						wan_v4_addr_gw = data->ipv4_addr_gw;
 						wan_v4_addr_gw_set = true;
+						wan_v6_is_default_gw = false;
 						IPACMDBG_H("adding header, dev (%s) ip-type(%d), default gw (%x)\n", dev_name,data->iptype, wan_v4_addr_gw);
 					}
 					if ((data->iptype == IPA_IP_v6 || data->iptype == IPA_IP_MAX) &&
@@ -1487,6 +1488,7 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 						wan_v6_addr_gw[2] = data->ipv6_addr_gw[2];
 						wan_v6_addr_gw[3] = data->ipv6_addr_gw[3];
 						wan_v6_addr_gw_set = true;
+						wan_v4_is_default_gw = false;
 						wan_v6_is_default_gw = false;
 					}
 				}
@@ -2721,6 +2723,8 @@ int IPACM_Wan::check_vlan_pdn(ipa_ip_type iptype, ipacm_event_route_vlan *data, 
 		}
 	}
 	IPACMDBG_H("Process IPA_ROUTE_ADD_VLAN_PDN_EVENT for iptype: %d\n", iptype);
+	IPACMDBG_H("data->wan_ipv6_prefix: 0x%08x%08x\n", data->wan_ipv6_prefix[0], data->wan_ipv6_prefix[1]);
+	IPACMDBG_H("ipv6_prefix: 0x%08x%08x\n", ipv6_prefix[0], ipv6_prefix[1]);
 
 	if (iptype == IPA_IP_v6 || iptype == IPA_IP_MAX)
 	{
@@ -4258,7 +4262,7 @@ int IPACM_Wan::handle_sta_header_add_evt()
 		else
 		{
 			IPACMDBG_H(" currently can't find matched wan-client's MAC-addr, waiting for header construction\n");
-			return IPACM_SUCCESS;
+			res = IPACM_SUCCESS;
 		}
 	}
 

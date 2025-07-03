@@ -1194,6 +1194,8 @@ private:
 						return IPACM_SUCCESS;
 					}
 				}
+				IPACMERR("maximum allowed number of vlans are associated to the mux %d\n", mux_id);
+				return IPACM_FAILURE;
 			}
 		}
 

@@ -1502,8 +1502,10 @@ int IPACM_Wan::handle_addr_del_evt(ipacm_event_data_addr *data)
 {
 	uint32_t num_ipv6_addr, num_v6_value;
 	int res = IPACM_SUCCESS;
-	int i = 0;
+	int i = 0, j = 0;
+	uint8_t vid_cnt_v4 = 0;
 
+	IPACMDBG_H("Received handle_addr_del_evt. dev_name: %s, data->iptype %d\n", dev_name, data->iptype);
 	if (tx_prop == NULL || rx_prop == NULL)
 	{
 		IPACMDBG_H("Either tx or rx property is NULL, return.\n");
@@ -1580,8 +1582,53 @@ int IPACM_Wan::handle_addr_del_evt(ipacm_event_data_addr *data)
 #endif
 				ipv4_to_iface[sta_ipv4_pdn_index].ipv4_addr = 0;
 				ipv4_to_iface[sta_ipv4_pdn_index].pIface = NULL;
-				ipv4_to_iface[sta_ipv4_pdn_index].wan_up_vlan = false;
-				sta_ipv4_pdn_index = -1;
+				/* Handle race condition, if addr del received prior to handle_down_evt or if any pdn addr del happens */
+				/* then post VLAN DOWN for every assoviated vlan from here*/
+				if (sta_ipv4_pdn_index >= 0 && ipv4_to_iface[sta_ipv4_pdn_index].wan_up_vlan)
+				{
+					ipacm_cmd_q_data evt_data;
+					ipacm_event_vlan_pdn *vlandown_data;
+
+					IPACMDBG_H(" STA addr del ipv4-addr:0x%x\n", wan_v4_addr);
+					IPACMDBG_H("sta_ipv4_pdn_index: %d ipv4_to_iface[sta_ipv4_pdn_index].wan_up_vlan :%d\n", sta_ipv4_pdn_index, ipv4_to_iface[sta_ipv4_pdn_index].wan_up_vlan);
+					ipv4_to_iface[sta_ipv4_pdn_index].wan_up_vlan = false;
+					wan_v4_is_default_gw = true;
+					if (sta_ipv6_pdn_index == -1)
+						num_offloaded_pdns--;
+
+					vlandown_data = (ipacm_event_vlan_pdn *)malloc(sizeof(ipacm_event_vlan_pdn));
+					if(vlandown_data == NULL)
+					{
+						IPACMERR("Unable to allocate memory\n");
+						res = IPACM_FAILURE;
+						goto fail;
+					}
+					memset(vlandown_data, 0, sizeof(ipacm_event_vlan_pdn));
+
+					vlandown_data->iptype = IPA_IP_v4;
+
+					/* Wan is down. post vlan pdn down evt for every associated vlans. */
+					vid_cnt_v4 = ipv4_to_iface[sta_ipv4_pdn_index].VID_cnt;
+					IPACMDBG_H("V4 Wan Down received for %s has associated vid count %d. \n", dev_name, vid_cnt_v4);
+					for(j = 0; j < vid_cnt_v4; j++)
+					{
+						vlandown_data->VlanID = ipv4_to_iface[sta_ipv4_pdn_index].associated_VIDs[j];
+						vlandown_data->ipv4_addr = wan_v4_addr;
+						ipv4_to_iface[sta_ipv4_pdn_index].VID_cnt--;
+						vlandown_data->mux_id = 0;
+						ipv4_to_iface[sta_ipv4_pdn_index].associated_VIDs[j] = 0;
+
+						IPACMDBG_H("Posting IPA_HANDLE_WAN_VLAN_PDN_DOWN with below information:\n");
+						IPACMDBG_H("iptype IPA_IP_v4, VlanID %d, mux_id %d, if num %d\n", vlandown_data->VlanID, vlandown_data->mux_id, ipa_if_num);
+						evt_data.event = IPA_HANDLE_WAN_VLAN_PDN_DOWN;
+						evt_data.evt_data = (void *)vlandown_data;
+						IPACM_EvtDispatcher::PostEvt(&evt_data);
+					}
+				}
+				else
+				{
+					IPACMDBG_H("Not Any vlan is Up..:\n");
+				}
 				num_ipv4_sta_pdn--;
 				public_wan_v4_addr = 0;
 				public_wan_v4_addr_set = false;
@@ -8330,7 +8377,9 @@ int IPACM_Wan::handle_down_evt()
 			num_ipv6_sta_pdn--;
 		IPACMDBG_H("Now the number of STA ipv6 pdn is %d.\n", num_ipv6_sta_pdn);
 	}
-	IPACMDBG_H("handle_down_evt: sta_ipv4_pdn_index: %d sta_ipv6_pdn_index: %d\n", sta_ipv4_pdn_index, sta_ipv6_pdn_index);
+	IPACMDBG_H("handle_down_evt: sta_ipv4_pdn_index: %d wan_up_vlan %d, sta_ipv6_pdn_index: %d wan_up_vlan_v6 %d\n",
+		sta_ipv4_pdn_index, ipv4_to_iface[sta_ipv4_pdn_index].wan_up_vlan,
+		sta_ipv6_pdn_index, ipv6_to_iface[sta_ipv6_pdn_index].wan_up_vlan_v6);
 	if(ipv4_to_iface[sta_ipv4_pdn_index].wan_up_vlan && ipv6_to_iface[sta_ipv6_pdn_index].wan_up_vlan_v6 && (ip_type == IPA_IP_MAX))
 	{
 		ipacm_cmd_q_data evt_data;

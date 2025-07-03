@@ -1462,6 +1462,8 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 			{
 				IPACM_SYSLOG("Received IPA_WLAN_GW_ADDR_ADD_EVENT\n");
 				IPACM_SYSLOG("ipv4 addr 0x%x\n", data->ipv4_addr_gw);
+				IPACMDBG_H("ipv6 addr 0x%x 0x%x 0x%x 0x%x\n", data->ipv6_addr_gw[0], data->ipv6_addr_gw[1],
+					data->ipv6_addr_gw[2], data->ipv6_addr_gw[3]);
 				if(m_is_sta_mode == WLAN_WAN && !data->is_default_backhaul_gw)
 				{
 					IPACMDBG_H("GW info for WLAN Iface\n");
@@ -1475,7 +1477,7 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 						IPACMDBG_H("adding header, dev (%s) ip-type(%d), default gw (%x)\n", dev_name,data->iptype, wan_v4_addr_gw);
 					}
 					if ((data->iptype == IPA_IP_v6 || data->iptype == IPA_IP_MAX) &&
-						(data->ipv6_addr_gw[0] != 0) && (data->ipv6_addr_gw[1] != 0) && (data->ipv6_addr_gw[2] != 0) && (data->ipv6_addr_gw[3] != 0))
+						(data->ipv6_addr_gw[0] != 0) || (data->ipv6_addr_gw[1] != 0) || (data->ipv6_addr_gw[2] != 0) || (data->ipv6_addr_gw[3] != 0))
 					{
 
 						IPACMDBG_H(" IPV6 gateway: %08x:%08x:%08x:%08x \n",
@@ -2675,7 +2677,6 @@ int IPACM_Wan::check_vlan_pdn(ipa_ip_type iptype, ipacm_event_route_vlan *data, 
 	if (m_is_sta_mode !=Q6_WAN)
 	{
 		IPACMDBG_H("STA backhaul\n");
-		IPACM_Wan::backhaul_is_sta_mode = true;
 		if((iptype==IPA_IP_v4 || iptype == IPA_IP_MAX) && (header_set_v4 != true))
 		{
 			header_partial_default_wan_v4 = true;
@@ -3266,7 +3267,6 @@ int IPACM_Wan::handle_route_add_vlan_pdn_evt(ipa_ip_type iptype, uint16_t vlan_i
 		{
 			IPACM_SYSLOG(" WAN instance is in STA mode header_set_v4 %d \n", header_set_v4);
 			//Construct STA header 1st
-			IPACM_Wan::backhaul_is_sta_mode	= true;
 
 			if((iptype==IPA_IP_v4) && (header_set_v4 != true))
 			{
@@ -6802,6 +6802,7 @@ int IPACM_Wan::handle_route_del_evt(ipa_ip_type iptype, bool wan_up_vlan)
 		if(wan_up_vlan)
 		{
 			IPACMDBG_H("Don't post IPA_HANDLE_WAN_DOWN event if vlan id on demand PDN\n");
+			IPACM_Iface::ipacmcfg->del_vlan_ipv6_prefix(ipv6_prefix, -1);
 			return IPACM_SUCCESS;
 		}
 		ipacm_event_iface_up *wandown_data;

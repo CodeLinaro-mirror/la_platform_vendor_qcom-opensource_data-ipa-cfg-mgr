@@ -60,9 +60,9 @@
  * OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-/*Changes from Qualcomm Innovation Center, Inc. are provided under the following license:
-
-Copyright (c) 2023-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+/*
+Changes from Qualcomm Technologies, Inc. are provided under the following license:
+Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
 SPDX-License-Identifier: BSD-3-Clause-Clear*/
 /*!
 	@file
@@ -1587,7 +1587,141 @@ void* ipa_driver_msg_notifier(void *param)
 			evt_data.event    = IPA_IPACM_DISABLE;
 
 			break;
+#ifdef FEATURE_IPoGRE
+		case IPA_IPOGRE_NOTIFY_EVENT:{
+			ipa_ioc_ipogre_info new_ipogre_info;
+			memcpy(&new_ipogre_info,
+				buffer + sizeof(struct ipa_msg_meta),
+				sizeof(ipa_ioc_ipogre_info));
+			IPACM_Config* conf = IPACM_Config::GetInstance();
 
+			for(int i = 0; i < conf->tunnel_idx.size(); i++)
+			{
+				IPACMERR("IPoGRE\n");
+				if(new_ipogre_info.ipogre_tunnel_info.iptype == IPA_IP_v4)
+				{
+					/* Convert tunnel src and dst to proer format,check i == 0 */
+					/* so that conversion happens only once in case multiple tunnels are there */
+					if(i == 0)
+					{
+						IPACM_Iface::addr2host(IPA_IP_v4, &new_ipogre_info.ipogre_tunnel_info.ipv4_src);
+						IPACM_Iface::addr2host(IPA_IP_v4, &new_ipogre_info.ipogre_tunnel_info.ipv4_dst);
+					}
+					if(new_ipogre_info.ipogre_tunnel_info.ipv4_src == conf->ipogre_tunnel_idx_map[conf->tunnel_idx[i]].tunnel_endpoint.v4_ip.ipv4_src
+						&& new_ipogre_info.ipogre_tunnel_info.ipv4_dst == conf->ipogre_tunnel_idx_map[conf->tunnel_idx[i]].tunnel_endpoint.v4_ip.ipv4_dst)
+					{
+							IPACM_Iface::ipacmcfg->ipgre_info.iptype =
+								conf->ipogre_tunnel_idx_map[conf->tunnel_idx[i]].iptype;
+
+							IPACM_Iface::ipacmcfg->ipgre_info.ipv4_src =
+								new_ipogre_info.ipogre_tunnel_info.ipv4_src;
+
+							IPACM_Iface::ipacmcfg->ipgre_info.ipv4_dst =
+								conf->ipogre_tunnel_idx_map[conf->tunnel_idx[i]].tunnel_endpoint.v4_ip.ipv4_dst;
+
+							IPACM_Iface::ipacmcfg->ipgre_info.num_exceptions =
+								conf->tunnel_idx[i];
+
+							conf->ipogre_tunnel_idx_map[conf->tunnel_idx[i]].num_flows =
+								new_ipogre_info.ipa_ipogre_num_flow;
+
+							memcpy(conf->ipogre_tunnel_idx_map[conf->tunnel_idx[i]].flows,
+								new_ipogre_info.ipogre_flow_info,sizeof(new_ipogre_info));
+
+							IPACM_Iface::ipacmcfg->ipgre_info.iptype =
+								conf->ipogre_tunnel_idx_map[conf->tunnel_idx[i]].iptype;
+
+							IPACM_Iface::ipacmcfg->ipgre_info.num_exceptions =
+								conf->tunnel_idx[i];
+
+							conf->ipogre_tunnel_idx_map[conf->tunnel_idx[i]].Tunnel_id =
+								new_ipogre_info.ipogre_tunnel_info.tunnel_id;
+
+							IPACM_Iface::ipacmcfg->ipogre_enabled = true;
+							IPACMDBG_H("ipogre enabled %d\n",
+								IPACM_Iface::ipacmcfg->ipogre_enabled);
+							IPACMDBG_H("Number of flows %d\n",
+								conf->ipogre_tunnel_idx_map[conf->tunnel_idx[i]].num_flows);
+							IPACMDBG_H("Number of cache flow %d %d\n",
+								conf->tunnel_idx[i],
+								conf->ipogre_tunnel_idx_map[conf->tunnel_idx[i]].flows_cache_info.num_flows);
+							evt_data.event    = IPA_HANDLE_IPOGRE_UP;
+							evt_data.evt_data = 0;
+							break;
+					}
+				}
+				else if(new_ipogre_info.ipogre_tunnel_info.iptype == IPA_IP_v6)
+				{
+					if(i==0)
+					{
+						IPACM_Iface::addr2host(IPA_IP_v6, &new_ipogre_info.ipogre_tunnel_info.ipv6_src);
+						IPACM_Iface::addr2host(IPA_IP_v6, &new_ipogre_info.ipogre_tunnel_info.ipv6_dst);
+					}
+					IPACMDBG_H("GRE info v6: src addr:0x%x:%x:%x:%x \n",new_ipogre_info.ipogre_tunnel_info.ipv6_src[0],
+										new_ipogre_info.ipogre_tunnel_info.ipv6_src[1],
+										new_ipogre_info.ipogre_tunnel_info.ipv6_src[2],
+										new_ipogre_info.ipogre_tunnel_info.ipv6_src[3]);
+					IPACMDBG_H("GRE info v6 dst addr:0x%x:%x:%x:%x \n",new_ipogre_info.ipogre_tunnel_info.ipv6_dst[0],
+										new_ipogre_info.ipogre_tunnel_info.ipv6_dst[1],
+										new_ipogre_info.ipogre_tunnel_info.ipv6_dst[2],
+										new_ipogre_info.ipogre_tunnel_info.ipv6_dst[3]);
+
+					if((new_ipogre_info.ipogre_tunnel_info.ipv6_src[0] == conf->ipogre_tunnel_idx_map[conf->tunnel_idx[i]].tunnel_endpoint.v6_ip.ipv6_src[0] &&
+						new_ipogre_info.ipogre_tunnel_info.ipv6_src[1] == conf->ipogre_tunnel_idx_map[conf->tunnel_idx[i]].tunnel_endpoint.v6_ip.ipv6_src[1] &&
+						new_ipogre_info.ipogre_tunnel_info.ipv6_src[2] == conf->ipogre_tunnel_idx_map[conf->tunnel_idx[i]].tunnel_endpoint.v6_ip.ipv6_src[2] &&
+						new_ipogre_info.ipogre_tunnel_info.ipv6_src[3] == conf->ipogre_tunnel_idx_map[conf->tunnel_idx[i]].tunnel_endpoint.v6_ip.ipv6_src[3]) &&
+						(new_ipogre_info.ipogre_tunnel_info.ipv6_dst[0] == conf->ipogre_tunnel_idx_map[conf->tunnel_idx[i]].tunnel_endpoint.v6_ip.ipv6_dst[0] &&
+						new_ipogre_info.ipogre_tunnel_info.ipv6_dst[1] == conf->ipogre_tunnel_idx_map[conf->tunnel_idx[i]].tunnel_endpoint.v6_ip.ipv6_dst[1] &&
+						new_ipogre_info.ipogre_tunnel_info.ipv6_dst[2] == conf->ipogre_tunnel_idx_map[conf->tunnel_idx[i]].tunnel_endpoint.v6_ip.ipv6_dst[2] &&
+						new_ipogre_info.ipogre_tunnel_info.ipv6_dst[3] == conf->ipogre_tunnel_idx_map[conf->tunnel_idx[i]].tunnel_endpoint.v6_ip.ipv6_dst[3]))
+					{
+
+						IPACMDBG_H("ipogre enabled num flows %d\n", new_ipogre_info.ipa_ipogre_num_flow);
+						IPACM_Iface::ipacmcfg->ipgre_info.iptype =
+							conf->ipogre_tunnel_idx_map[conf->tunnel_idx[i]].iptype;
+
+						IPACM_Iface::ipacmcfg->ipgre_info.num_exceptions =
+							conf->tunnel_idx[i];
+
+						memcpy(IPACM_Iface::ipacmcfg->ipgre_info.ipv6_src,
+							conf->ipogre_tunnel_idx_map[conf->tunnel_idx[i]].tunnel_endpoint.v6_ip.ipv6_src,
+							sizeof(conf->ipogre_tunnel_idx_map[conf->tunnel_idx[i]].tunnel_endpoint.v6_ip.ipv6_src));
+
+						memcpy(IPACM_Iface::ipacmcfg->ipgre_info.ipv6_dst,
+							conf->ipogre_tunnel_idx_map[conf->tunnel_idx[i]].tunnel_endpoint.v6_ip.ipv6_dst,
+							sizeof(conf->ipogre_tunnel_idx_map[conf->tunnel_idx[i]].tunnel_endpoint.v6_ip.ipv6_dst));
+
+						conf->ipogre_tunnel_idx_map[conf->tunnel_idx[i]].num_flows =
+							new_ipogre_info.ipa_ipogre_num_flow;
+
+						memcpy(conf->ipogre_tunnel_idx_map[conf->tunnel_idx[i]].flows,
+							new_ipogre_info.ipogre_flow_info,
+							sizeof(ipa_ipogre_flow_info)*MAX_FLOW_PER_IPOGRE_TUNNEL);
+
+						IPACM_Iface::ipacmcfg->ipgre_info.iptype =
+							conf->ipogre_tunnel_idx_map[conf->tunnel_idx[i]].iptype;
+
+						IPACM_Iface::ipacmcfg->ipgre_info.num_exceptions =
+							conf->tunnel_idx[i];
+
+						conf->ipogre_tunnel_idx_map[conf->tunnel_idx[i]].Tunnel_id =
+							new_ipogre_info.ipogre_tunnel_info.tunnel_id;
+
+						IPACM_Iface::ipacmcfg->ipogre_enabled = true;
+						IPACMDBG_H("ipogre enabled  %d\n", IPACM_Iface::ipacmcfg->ipogre_enabled);
+						IPACMDBG_H("Number of flows %d\n",
+							conf->ipogre_tunnel_idx_map[conf->tunnel_idx[i]].num_flows);
+						IPACMDBG_H("Number of cache flow %d %d\n",
+							conf->tunnel_idx[i], conf->ipogre_tunnel_idx_map[conf->tunnel_idx[i]].flows_cache_info.num_flows);
+						evt_data.event    = IPA_HANDLE_IPOGRE_UP;
+						evt_data.evt_data = 0;
+						break;
+					}
+				}
+			}
+			break;
+		}
+#endif
 		default:
 			IPACMDBG_H("Unhandled message type: %d\n", event_hdr.msg_type);
 			continue;

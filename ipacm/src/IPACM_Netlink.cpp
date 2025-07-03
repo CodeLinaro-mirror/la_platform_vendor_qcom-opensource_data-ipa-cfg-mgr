@@ -26,9 +26,9 @@ WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
 OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
 IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
-/*Changes from Qualcomm Innovation Center are provided under the following license:
-
-Copyright (c) 2023-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+/*
+Changes from Qualcomm Technologies, Inc. are provided under the following license:
+Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
 SPDX-License-Identifier: BSD-3-Clause-Clear*/
 /*!
 	@file
@@ -53,7 +53,7 @@ SPDX-License-Identifier: BSD-3-Clause-Clear*/
 #include "IPACM_Config.h"
 #include "IPACM_Config.h"
 
-#ifdef FEATURE_PMIPV6
+#ifdef FEATURE_IPoGRE || FEATURE_PMIPV6
 #include <linux/ip.h>
 #include <linux/if_tunnel.h>
 #include <IPACM_Iface.h>
@@ -126,30 +126,37 @@ int find_mask(int ip_v4_last, int *mask_value);
                     (unsigned char)(ip_addr >> 16) ,                        \
                     (unsigned char)(ip_addr >> 24));
 
-#ifdef FEATURE_PMIPV6
+#ifdef FEATURE_IPoGRE || FEATURE_PMIPV6
 #define parse_gre(attrib, max, rta) \
-        (getAttr((attrib), (max), (struct rtattr*)RTA_DATA(rta), RTA_PAYLOAD(rta), 0,true))
+	(getAttr((attrib), (max), (struct rtattr*)RTA_DATA(rta), RTA_PAYLOAD(rta), 0,true))
 
 static void getAttr(struct rtattr *attrib[], int max, struct rtattr *rta, int len,unsigned short flags, bool flag)
 {
-    memset(attrib, 0, sizeof(struct rtattr *) * (max + 1));
-    unsigned short type;
-    while (RTA_OK(rta, len)) {
-        if(flag)
-        {
-          type=  rta->rta_type & ~flags;
-          if ((type <= max) && (!attrib[type]))
-			attrib[type] = rta;
-        }
-        else{
-            if (rta->rta_type <= max) {
-                attrib[rta->rta_type] = rta;
-            }
-        }
-        rta = RTA_NEXT(rta,len);
-    }
+	memset(attrib, 0, sizeof(struct rtattr *) * (max + 1));
+	unsigned short type;
+	while (RTA_OK(rta, len))
+	{
+		if(flag)
+		{
+			type=  rta->rta_type & ~flags;
+			if ((type <= max) && (!attrib[type]))
+			{
+				attrib[type] = rta;
+			}
+                }
+		else
+                {
+			if (rta->rta_type <= max)
+			{
+				attrib[rta->rta_type] = rta;
+			}
+		}
+		rta = RTA_NEXT(rta,len);
+	}
 }
 #endif
+
+
 
 /* Opens a netlink socket*/
 static int ipa_nl_open_socket
@@ -456,7 +463,7 @@ error:
 	return IPACM_FAILURE;
 }
 
-#ifdef FEATURE_PMIPV6
+#ifdef FEATURE_IPoGRE || FEATURE_PMIPV6
 static int populate_gre_details(struct ifinfomsg* ifi, int len, int type){
 	struct rtattr *attrib[IFLA_MAX + 1];
     struct rtattr *linkinfo[IFLA_INFO_MAX+1];
@@ -468,11 +475,6 @@ static int populate_gre_details(struct ifinfomsg* ifi, int len, int type){
 	struct in6_addr daddr6;
 	enum ipa_ip_type iptype;
 	pConfig = IPACM_Config::GetInstance();
-	if (pConfig == NULL)
-	{
-		IPACMERR("Unable to get Config instance \n");
-		return IPACM_FAILURE;
-	}
 	if(type==778){
 		iptype=IPA_IP_v4;
 	}
@@ -481,9 +483,17 @@ static int populate_gre_details(struct ifinfomsg* ifi, int len, int type){
 	}
 	IPACMDBG("IFI max: %d IFLA_MAX, %d len\n",IFLA_MAX,len);
 	getAttr(attrib, IFLA_MAX, IFLA_RTA(ifi), len,0,false);  // get attributes
+	int t_id = pConfig->get_free_tunnel_id();
     if (attrib[IFLA_IFNAME]) {  // validation
         IPACMDBG("ifname %s \n",(char*)RTA_DATA(attrib[IFLA_IFNAME]));
-		strlcpy(pConfig->pmip_details.tunnel_name, (char*)RTA_DATA(attrib[IFLA_IFNAME]), IPA_IFACE_NAME_LEN);
+		if(pConfig->pmip_details.pmipv6_enabled)
+		{
+			strlcpy(pConfig->pmip_details.tunnel_name, (char*)RTA_DATA(attrib[IFLA_IFNAME]), IPA_IFACE_NAME_LEN);
+		}
+		else
+		{
+			strlcpy(pConfig->ipogre_tunnel_idx_map[t_id].tunnel_name, (char*)RTA_DATA(attrib[IFLA_IFNAME]), IPA_IFACE_NAME_LEN);
+		}
     }
 	if (!attrib[IFLA_LINKINFO]){
 		IPACMDBG("No Link info\n");
@@ -500,43 +510,105 @@ static int populate_gre_details(struct ifinfomsg* ifi, int len, int type){
 			parse_gre(greinfo, IFLA_GRE_MAX,
 				linkinfo[IFLA_INFO_DATA]);
 			IPACMDBG("Nested2\n");
-
-			ipa_ipgre_info ipgre_info  = pConfig->ipgre_info;
-			ipgre_info.iptype=iptype;
+			ipa_ipgre_info ipgre_info;
+			if(pConfig->pmip_details.pmipv6_enabled)
+			{
+				ipgre_info  = pConfig->ipgre_info;
+				ipgre_info.iptype=iptype;
+			}
+			else
+			{
+				pConfig->ipogre_tunnel_idx_map[t_id].iptype = iptype;
+			}
 			if(iptype == IPA_IP_v4){
 				if (greinfo[IFLA_GRE_LOCAL])
 				saddr = *(__u32 *)RTA_DATA(greinfo[IFLA_GRE_LOCAL]);
 
 				if (greinfo[IFLA_GRE_REMOTE])
 					daddr = *(__u32 *)RTA_DATA(greinfo[IFLA_GRE_REMOTE]);
-
-				ipgre_info.ipv4_src=ntohl(saddr);
-				ipgre_info.ipv4_dst=ntohl(daddr);
-				pConfig->pmip_details.pmip_gre_key= *(__u32 *)RTA_DATA(greinfo[IFLA_GRE_IKEY]);
-				IPACMDBG("GRE info, src addr: %x, dst addr %x, link %d\n", ipgre_info.ipv4_src,ipgre_info.ipv4_dst,link);
+				if(pConfig->pmip_details.pmipv6_enabled)
+				{
+					ipgre_info.ipv4_src=ntohl(saddr);
+					ipgre_info.ipv4_dst=ntohl(daddr);
+					pConfig->pmip_details.pmip_gre_key= *(__u32 *)RTA_DATA(greinfo[IFLA_GRE_IKEY]);
+					IPACMDBG("GRE info, src addr: %x, dst addr %x, link %d\n", ipgre_info.ipv4_src,ipgre_info.ipv4_dst,link);
+				}
+				else
+				{
+					pConfig->ipogre_tunnel_idx_map[t_id].tunnel_endpoint.v4_ip.ipv4_src=ntohl(saddr);
+					pConfig->ipogre_tunnel_idx_map[t_id].tunnel_endpoint.v4_ip.ipv4_dst=ntohl(daddr);
+					for(int i = 0; i < pConfig->tunnel_idx.size(); i++)
+					{
+						if(pConfig->ipogre_tunnel_idx_map[t_id].tunnel_endpoint.v4_ip.ipv4_src == pConfig->ipogre_tunnel_idx_map[pConfig->tunnel_idx[i]].tunnel_endpoint.v4_ip.ipv4_src &&
+								pConfig->ipogre_tunnel_idx_map[t_id].tunnel_endpoint.v4_ip.ipv4_dst == pConfig->ipogre_tunnel_idx_map[pConfig->tunnel_idx[i]].tunnel_endpoint.v4_ip.ipv4_dst)
+							{
+								memset(&pConfig->ipogre_tunnel_idx_map[t_id],0,sizeof(pConfig->ipogre_tunnel_idx_map[t_id]));
+								pConfig->tunnels[t_id] = false;
+								return IPACM_SUCCESS;
+							}
+					}
+					pConfig->num_tunnels++;
+					pConfig->tunnel_idx.push_back(t_id);
+					IPACMDBG("GRE info, src addr: %x, dst addr %x, link %d\n", pConfig->ipogre_tunnel_idx_map[t_id].tunnel_endpoint.v4_ip.ipv4_src,pConfig->ipogre_tunnel_idx_map[t_id].tunnel_endpoint.v4_ip.ipv4_dst,link);
+				}
 			}
 			else{
 				if (greinfo[IFLA_GRE_LOCAL])
 					memcpy(&saddr6, (struct nlattr  *)RTA_DATA(greinfo[IFLA_GRE_LOCAL]), sizeof(saddr6));
 				if (greinfo[IFLA_GRE_REMOTE])
 					memcpy(&daddr6, (struct nlattr  *)RTA_DATA(greinfo[IFLA_GRE_REMOTE]), sizeof(daddr6));
-
-				memcpy(&ipgre_info.ipv6_src,&saddr6,sizeof(saddr6));
-				memcpy(&ipgre_info.ipv6_dst,&daddr6,sizeof(daddr6));
-
-				IPACM_Iface::addr2host(IPA_IP_v6, &ipgre_info.ipv6_src);
-				IPACM_Iface::addr2host(IPA_IP_v6, &ipgre_info.ipv6_dst);
-				pConfig->pmip_details.pmip_gre_key= *(__u32 *)RTA_DATA(greinfo[IFLA_GRE_IKEY]);
-
+				if(pConfig->pmip_details.pmipv6_enabled)
+				{
+					memcpy(&ipgre_info.ipv6_src,&saddr6,sizeof(saddr6));
+					memcpy(&ipgre_info.ipv6_dst,&daddr6,sizeof(daddr6));
+					IPACM_Iface::addr2host(IPA_IP_v6, &ipgre_info.ipv6_src);
+					IPACM_Iface::addr2host(IPA_IP_v6, &ipgre_info.ipv6_dst);
+					pConfig->pmip_details.pmip_gre_key= *(__u32 *)RTA_DATA(greinfo[IFLA_GRE_IKEY]);
+				}
+				else
+				{
+					memcpy(&pConfig->ipogre_tunnel_idx_map[t_id].tunnel_endpoint.v6_ip.ipv6_src,&saddr6,sizeof(saddr6));
+					memcpy(&pConfig->ipogre_tunnel_idx_map[t_id].tunnel_endpoint.v6_ip.ipv6_dst,&daddr6,sizeof(daddr6));
+					IPACM_Iface::addr2host(IPA_IP_v6, &pConfig->ipogre_tunnel_idx_map[t_id].tunnel_endpoint.v6_ip.ipv6_src);
+					IPACM_Iface::addr2host(IPA_IP_v6, &pConfig->ipogre_tunnel_idx_map[t_id].tunnel_endpoint.v6_ip.ipv6_dst);
+					for(int i = 0; i < pConfig->tunnel_idx.size(); i++)
+					{
+						if(pConfig->ipogre_tunnel_idx_map[t_id].tunnel_endpoint.v6_ip.ipv6_src[0] == pConfig->ipogre_tunnel_idx_map[pConfig->tunnel_idx[i]].tunnel_endpoint.v6_ip.ipv6_src[0] &&
+						pConfig->ipogre_tunnel_idx_map[t_id].tunnel_endpoint.v6_ip.ipv6_src[1] == pConfig->ipogre_tunnel_idx_map[pConfig->tunnel_idx[i]].tunnel_endpoint.v6_ip.ipv6_src[1] &&
+						pConfig->ipogre_tunnel_idx_map[t_id].tunnel_endpoint.v6_ip.ipv6_src[2] == pConfig->ipogre_tunnel_idx_map[pConfig->tunnel_idx[i]].tunnel_endpoint.v6_ip.ipv6_src[2] &&
+						pConfig->ipogre_tunnel_idx_map[t_id].tunnel_endpoint.v6_ip.ipv6_src[3] == pConfig->ipogre_tunnel_idx_map[pConfig->tunnel_idx[i]].tunnel_endpoint.v6_ip.ipv6_src[3] &&
+						pConfig->ipogre_tunnel_idx_map[t_id].tunnel_endpoint.v6_ip.ipv6_dst[0] == pConfig->ipogre_tunnel_idx_map[pConfig->tunnel_idx[i]].tunnel_endpoint.v6_ip.ipv6_dst[0] &&
+						pConfig->ipogre_tunnel_idx_map[t_id].tunnel_endpoint.v6_ip.ipv6_dst[1] == pConfig->ipogre_tunnel_idx_map[pConfig->tunnel_idx[i]].tunnel_endpoint.v6_ip.ipv6_dst[1] &&
+						pConfig->ipogre_tunnel_idx_map[t_id].tunnel_endpoint.v6_ip.ipv6_dst[2] == pConfig->ipogre_tunnel_idx_map[pConfig->tunnel_idx[i]].tunnel_endpoint.v6_ip.ipv6_dst[2] &&
+						pConfig->ipogre_tunnel_idx_map[t_id].tunnel_endpoint.v6_ip.ipv6_dst[3] == pConfig->ipogre_tunnel_idx_map[pConfig->tunnel_idx[i]].tunnel_endpoint.v6_ip.ipv6_dst[3])
+						{
+							pConfig->tunnels[t_id] = false;
+							IPACMDBG_H("DEBUG GRE info v6: src addr:0x%x:%x:%x:%x\n",
+							pConfig->ipogre_tunnel_idx_map[t_id].tunnel_endpoint.v6_ip.ipv6_src[0],pConfig->ipogre_tunnel_idx_map[t_id].tunnel_endpoint.v6_ip.ipv6_src[1],pConfig->ipogre_tunnel_idx_map[t_id].tunnel_endpoint.v6_ip.ipv6_src[2],pConfig->ipogre_tunnel_idx_map[t_id].tunnel_endpoint.v6_ip.ipv6_src[3]);
+							IPACMDBG_H("DEBUG GRE info v6: dst addr:0x%x:%x:%x:%x\n",
+							pConfig->ipogre_tunnel_idx_map[t_id].tunnel_endpoint.v6_ip.ipv6_dst[0],pConfig->ipogre_tunnel_idx_map[t_id].tunnel_endpoint.v6_ip.ipv6_dst[1],pConfig->ipogre_tunnel_idx_map[t_id].tunnel_endpoint.v6_ip.ipv6_dst[2],pConfig->ipogre_tunnel_idx_map[t_id].tunnel_endpoint.v6_ip.ipv6_dst[3]);
+							IPACMDBG_H("DEBUG GRE info stored v6: src addr:0x%x:%x:%x:%x\n",
+							pConfig->ipogre_tunnel_idx_map[pConfig->tunnel_idx[i]].tunnel_endpoint.v6_ip.ipv6_src[0],pConfig->ipogre_tunnel_idx_map[pConfig->tunnel_idx[i]].tunnel_endpoint.v6_ip.ipv6_src[1],pConfig->ipogre_tunnel_idx_map[pConfig->tunnel_idx[i]].tunnel_endpoint.v6_ip.ipv6_src[2],pConfig->ipogre_tunnel_idx_map[pConfig->tunnel_idx[i]].tunnel_endpoint.v6_ip.ipv6_src[3]);
+							IPACMDBG_H("DEBUG GRE info stored v6: dst addr:0x%x:%x:%x:%x\n",
+							pConfig->ipogre_tunnel_idx_map[pConfig->tunnel_idx[i]].tunnel_endpoint.v6_ip.ipv6_dst[0],pConfig->ipogre_tunnel_idx_map[pConfig->tunnel_idx[i]].tunnel_endpoint.v6_ip.ipv6_dst[1],pConfig->ipogre_tunnel_idx_map[pConfig->tunnel_idx[i]].tunnel_endpoint.v6_ip.ipv6_dst[2],pConfig->ipogre_tunnel_idx_map[pConfig->tunnel_idx[i]].tunnel_endpoint.v6_ip.ipv6_dst[3]);
+							memset(&pConfig->ipogre_tunnel_idx_map[t_id],0,sizeof(pConfig->ipogre_tunnel_idx_map[t_id]));
+							IPACMDBG_H("DEBUG GRE i %d\n",pConfig->tunnel_idx[i])
+							return IPACM_SUCCESS;
+						}
+					}
+					pConfig->num_tunnels++;
+					pConfig->tunnel_idx.push_back(t_id);
+					IPACMDBG_H("GRE info v6: src addr:0x%x:%x:%x:%x, dst addr:0x%x:%x:%x:%x \n",
+							saddr6.s6_addr32[0],saddr6.s6_addr32[1],saddr6.s6_addr32[2],saddr6.s6_addr32[3],daddr6.s6_addr32[0],daddr6.s6_addr32[1],daddr6.s6_addr32[2],daddr6.s6_addr32[3]);
+					IPACMDBG_H("GRE info v6: src addr:0x%x:%x:%x:%x, dst addr:0x%x:%x:%x:%x \n",
+							saddr6.s6_addr32[0],saddr6.s6_addr32[1],saddr6.s6_addr32[2],saddr6.s6_addr32[3],pConfig->ipogre_tunnel_idx_map[t_id].tunnel_endpoint.v6_ip.ipv6_dst[0],pConfig->ipogre_tunnel_idx_map[t_id].tunnel_endpoint.v6_ip.ipv6_dst[1],pConfig->ipogre_tunnel_idx_map[t_id].tunnel_endpoint.v6_ip.ipv6_dst[2],pConfig->ipogre_tunnel_idx_map[t_id].tunnel_endpoint.v6_ip.ipv6_dst[3]);
+				}
 				IPACMDBG_H("GRE info v6: src addr:0x%x:%x:%x:%x, dst addr:0x%x:%x:%x:%x \n",
 							saddr6.s6_addr32[0],saddr6.s6_addr32[1],saddr6.s6_addr32[2],saddr6.s6_addr32[3],daddr6.s6_addr32[0],daddr6.s6_addr32[1],daddr6.s6_addr32[2],daddr6.s6_addr32[3]);
 			}
-
-			memcpy(&(pConfig->ipgre_info),&ipgre_info,sizeof(ipa_ipgre_info));
-			IPACMDBG("GRE info, src addr: %x, dst addr %x, link %d\n", ipgre_info.ipv4_src,ipgre_info.ipv4_dst,link);
-			pConfig->pmip_details.pmipv6_tunnel_setup = true;
 			if(pConfig->pmip_details.pmipv6_enabled)
 			{
+				pConfig->pmip_details.pmipv6_tunnel_setup = true;
 				/* Send GRE UP event */
 				ipacm_cmd_q_data evt_data;
 				evt_data.event    = IPA_HANDLE_GRE_UP;
@@ -564,11 +636,6 @@ static int tunnel_delete(struct ifinfomsg* ifi, int len, int type)
 	struct in6_addr daddr6;
 	enum ipa_ip_type iptype;
 	pConfig = IPACM_Config::GetInstance();
-	if (pConfig == NULL)
-	{
-		IPACMERR("Unable to get Config instance \n");
-		return IPACM_FAILURE;
-	}
 	if(type==778)
 	{
 		iptype=IPA_IP_v4;
@@ -599,6 +666,61 @@ static int tunnel_delete(struct ifinfomsg* ifi, int len, int type)
 					IPACMDBG_H("Posting IPA_HANDLE_GRE_DOWN \n");
 					IPACM_EvtDispatcher::PostEvt(&evt_data);
 				}
+			}
+		}
+	}
+	return IPACM_SUCCESS;
+}
+
+static int ipogre_tunnel_delete(struct ifinfomsg* ifi, int len, int type)
+{
+	struct rtattr *attrib[IFLA_MAX + 1];
+    struct rtattr *linkinfo[IFLA_INFO_MAX+1];
+    struct rtattr *greinfo[IFLA_GRE_MAX + 1];
+	unsigned saddr = 0;
+	unsigned daddr = 0;
+	unsigned link =0;
+	struct in6_addr saddr6;
+	struct in6_addr daddr6;
+	enum ipa_ip_type iptype;
+	pConfig = IPACM_Config::GetInstance();
+	if(type==778)
+	{
+		iptype=IPA_IP_v4;
+	}
+	else
+	{
+		iptype=IPA_IP_v6;
+	}
+	IPACMDBG("IFI max: %d IFLA_MAX, %d len\n",IFLA_MAX,len);
+	getAttr(attrib, IFLA_MAX, IFLA_RTA(ifi), len,0,false);
+	if (attrib[IFLA_IFNAME])
+	{
+		IPACMDBG("Tunnel Delete: ifname %s \n",(char*)RTA_DATA(attrib[IFLA_IFNAME]));
+		for(int i=0;i<pConfig->num_tunnels;i++)
+		{
+			if(strncmp(pConfig->ipogre_tunnel_idx_map[i].tunnel_name, (char*)RTA_DATA(attrib[IFLA_IFNAME]), strlen(pConfig->ipogre_tunnel_idx_map[i].tunnel_name)) == 0)
+			{
+				if(pConfig->ipogre_tunnel_idx_map[i].iptype == IPA_IP_v4)
+				{
+						IPACM_Iface::ipacmcfg->ipgre_info.iptype = pConfig->ipogre_tunnel_idx_map[i].iptype;
+						IPACM_Iface::ipacmcfg->ipgre_info.ipv4_src =  pConfig->ipogre_tunnel_idx_map[i].tunnel_endpoint.v4_ip.ipv4_src;
+						IPACM_Iface::ipacmcfg->ipgre_info.ipv4_dst =  pConfig->ipogre_tunnel_idx_map[i].tunnel_endpoint.v4_ip.ipv4_dst;
+						IPACM_Iface::ipacmcfg->ipgre_info.num_exceptions = i;
+				}
+				else if(pConfig->ipogre_tunnel_idx_map[i].iptype == IPA_IP_v6)
+				{
+					IPACM_Iface::ipacmcfg->ipgre_info.iptype = pConfig->ipogre_tunnel_idx_map[i].iptype;
+					IPACM_Iface::ipacmcfg->ipgre_info.num_exceptions = i;
+					memcpy(IPACM_Iface::ipacmcfg->ipgre_info.ipv6_src,pConfig->ipogre_tunnel_idx_map[i].tunnel_endpoint.v6_ip.ipv6_src,sizeof(pConfig->ipogre_tunnel_idx_map[i].tunnel_endpoint.v6_ip.ipv6_src));
+					memcpy(IPACM_Iface::ipacmcfg->ipgre_info.ipv6_dst,pConfig->ipogre_tunnel_idx_map[i].tunnel_endpoint.v6_ip.ipv6_dst,sizeof(pConfig->ipogre_tunnel_idx_map[i].tunnel_endpoint.v6_ip.ipv6_dst));
+				}
+				/* Send GRE DOWN event */
+				ipacm_cmd_q_data evt_data;
+				evt_data.event    = IPA_HANDLE_IPOGRE_DOWN;
+				evt_data.evt_data = 0;
+				IPACMDBG_H("Posting IPA_HANDLE_GRE_DOWN \n");
+				IPACM_EvtDispatcher::PostEvt(&evt_data);
 			}
 		}
 	}
@@ -839,13 +961,13 @@ static int ipa_nl_decode_nlmsg
 				IPACMDBG("RTM_NEWLINK, ifi_index:%d\n", msg_ptr->nl_link_info.metainfo.ifi_index);
 				IPACMDBG("RTM_NEWLINK, family:%d\n", msg_ptr->nl_link_info.metainfo.ifi_family);
 				IPACMDBG("RTM_NEWLINK, type:%d\n", msg_ptr->nl_link_info.metainfo.ifi_type);
-
+				IPACMDBG("RTM_NEWLINK, type:%d\n", msg_ptr->nl_link_info.metainfo.ifi_type);
 				/* RTM_NEWLINK event with AF_BRIDGE family should be ignored in Android
 				   but this should be processed in case of MDM for Ehernet interface.
 				*/
-#ifdef FEATURE_PMIPV6
+#ifdef FEATURE_IPoGRE || FEATURE_PMIPV6
 
-				// struct nlmsghdr *h;
+							// struct nlmsghdr *h;
 
 				struct ifinfomsg *ifi2;
 
@@ -861,7 +983,6 @@ static int ipa_nl_decode_nlmsg
 								//post GRE UP event
 								}
 					}
-					return IPACM_SUCCESS; // No need to further process this event.
 				}
 
 #endif
@@ -997,14 +1118,16 @@ static int ipa_nl_decode_nlmsg
 				/* RTM_NEWLINK event with AF_BRIDGE family should be ignored in Android
 				   but this should be processed in case of MDM for Ehernet interface.
 				*/
-#ifdef FEATURE_PMIPV6
+#ifdef FEATURE_IPoGRE || FEATURE_PMIPV6
 				struct ifinfomsg *ifi2;
 				if(msg_ptr->nl_link_info.metainfo.ifi_type == 778 || msg_ptr->nl_link_info.metainfo.ifi_type == 823 || msg_ptr->nl_link_info.metainfo.ifi_type == 769)
 				{//GRE tunnel
 						ifi2 = (struct ifinfomsg*) NLMSG_DATA(nlh);
-						tunnel_delete(ifi2, nlh->nlmsg_len,msg_ptr->nl_link_info.metainfo.ifi_type);
+						if(pConfig->pmip_details.pmipv6_enabled)
+							tunnel_delete(ifi2, nlh->nlmsg_len,msg_ptr->nl_link_info.metainfo.ifi_type);
+						else
+							ipogre_tunnel_delete(ifi2, nlh->nlmsg_len,msg_ptr->nl_link_info.metainfo.ifi_type);
 						IPACMDBG("Tunnel Delete Done\n");
-						return IPACM_SUCCESS; //No need to further process this event
 				}
 #endif
 #ifdef FEATURE_IPA_ANDROID

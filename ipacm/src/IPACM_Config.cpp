@@ -26,39 +26,9 @@
  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * Changes from Qualcomm Innovation Center are provided under the following license:
- *
- * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
- *
- * Redistribution and use in source and binary forms, with or without
- * modification, are permitted (subject to the limitations in the
- * disclaimer below) provided that the following conditions are met:
- *
- *     * Redistributions of source code must retain the above copyright
- *       notice, this list of conditions and the following disclaimer.
- *
- *     * Redistributions in binary form must reproduce the above
- *       copyright notice, this list of conditions and the following
- *       disclaimer in the documentation and/or other materials provided
- *       with the distribution.
- *
- *     * Neither the name of Qualcomm Innovation Center, Inc. nor the names of its
- *       contributors may be used to endorse or promote products derived
- *       from this software without specific prior written permission.
- *
- * NO EXPRESS OR IMPLIED LICENSES TO ANY PARTY'S PATENT RIGHTS ARE
- * GRANTED BY THIS LICENSE. THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT
- * HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED
- * WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
- * MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
- * IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR
- * ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
- * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE
- * GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
- * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER
- * IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
- * OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
- * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE
+ * Changes from Qualcomm Technologies, Inc. are provided under the following license:
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 /*!
 		@file
@@ -202,6 +172,12 @@ const char *ipacm_event_name[] = {
 	__stringify(IPA_WAN_HANDLE_EoGRE_DOWN),                    /* Handle eogre disable event. */
 #endif
 	__stringify(IPA_DSCP_PCP_CONFIG_CHANGE_EVENT),         /* NULL */
+#ifdef FEATURE_IPoGRE
+	__stringify(IPA_HANDLE_IPOGRE_UP),                      /* Handle ipogre enable event. */
+	__stringify(IPA_HANDLE_IPOGRE_DOWN),                    /* Handle ipogre disable event. */
+	__stringify(IPA_WAN_HANDLE_IPOGRE_UP),                  /* Handle ipogre enable event. */
+	__stringify(IPA_WAN_HANDLE_IPOGRE_DOWN),                /* Handle ipogre disable event. */
+#endif
 #ifdef FEATURE_PMIPV6
 	__stringify(IPA_HANDLE_GRE_UP),                      /* Handle gre enable event. */
 	__stringify(IPA_HANDLE_GRE_DOWN),                    /* Handle gre disable event. */
@@ -313,6 +289,13 @@ IPACM_Config::IPACM_Config()
 #ifdef FEATURE_PMIPV6
 	memset(&ipgre_info, 0, sizeof(ipgre_info));
 	memset(&pmip_details, 0, sizeof(pmip_details));
+#endif
+#ifdef FEATURE_IPoGRE
+	memset(&ipogre_info, 0, sizeof(ipogre_info));
+	memset(&ipogre_tunnel_idx_map, 0, sizeof(ipogre_tunnel_idx_map));
+	memset(tunnels, false, sizeof(tunnels));
+	ipogre_enabled  = false;
+	num_tunnels = 0;
 #endif
 	memset(&IP_Forwarding_config, 0, sizeof(IP_Forwarding_config));
 	ext_router_mode = IPA_PREFIX_DISABLED;
@@ -974,6 +957,20 @@ IPACM_Config* IPACM_Config::GetInstance()
 	}
 
 	return pInstance;
+}
+int IPACM_Config::get_free_tunnel_id()
+{
+	int i;
+
+	for (i=0; i < MAX_TUNNEL_SUPPORT; i++) {
+		if (tunnels[i] ==  false) {
+			tunnels[i] = true;
+			IPACMDBG_H("Returned free index = %d\n", i);
+			return i;
+		}
+	}
+	IPACMERR("No free/unused index found.\n");
+	return IPACM_FAILURE;
 }
 void IPACM_Config::update_config_private_forwarding(bool reset){
 	char cmd[200] = { 0 };

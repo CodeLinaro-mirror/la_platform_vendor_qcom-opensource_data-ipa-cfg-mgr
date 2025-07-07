@@ -5411,6 +5411,13 @@ int IPACM_Lan::handle_eth_client_ipaddr(ipacm_event_data_all *data)
 							get_client_memptr(eth_client, clnt_indx)->gre_nat_set = true;
 						}
 					}
+					if(IPACM_Iface::ipacmcfg->ipogre_enabled && IPACM_Iface::ipacmcfg->hw_fnr_stats_support)
+					{
+						if(!get_client_memptr(eth_client, clnt_indx)->route_rule_set_v4_ipogre)
+						{
+							handle_eth_client_route_rule(get_client_memptr(eth_client, clnt_indx)->mac,IPA_IP_v4,0);
+						}
+					}
 					return IPACM_FAILURE;
 				}
 				else
@@ -5571,7 +5578,9 @@ int IPACM_Lan::handle_eth_client_route_rule(uint8_t *mac_addr, ipa_ip_type iptyp
 			 && get_client_memptr(eth_client, eth_index)->ipv4_set == true)
 			|| (iptype == IPA_IP_v6
 		            && get_client_memptr(eth_client, eth_index)->route_rule_set_v6 < get_client_memptr(eth_client, eth_index)->ipv6_set
-					))
+					) || (iptype == IPA_IP_v4 && IPACM_Iface::ipacmcfg->ipogre_enabled && IPACM_Iface::ipacmcfg->hw_fnr_stats_support && get_client_memptr(eth_client, eth_index)->route_rule_set_v4_ipogre == false)
+					|| (iptype == IPA_IP_v6 && IPACM_Iface::ipacmcfg->ipogre_enabled && IPACM_Iface::ipacmcfg->hw_fnr_stats_support && get_client_memptr(eth_client, eth_index)->route_rule_set_v6_ipogre < get_client_memptr(eth_client, eth_index)->ipv6_set)
+					)
 	{
 		if(IPACM_Iface::ipacmcfg->GetIPAVer() >= IPA_HW_None && IPACM_Iface::ipacmcfg->GetIPAVer() < IPA_HW_v4_0)
 		{
@@ -5655,7 +5664,24 @@ int IPACM_Lan::handle_eth_client_route_rule(uint8_t *mac_addr, ipa_ip_type iptyp
 				{
 					rt_rule_entry->rule.hashable = true;
 				}
-
+				if(IPACM_Iface::ipacmcfg->ipogre_enabled && IPACM_Iface::ipacmcfg->hw_fnr_stats_support)
+				{
+					rt_rule_entry->rule.attrib.meta_data = IPOGRE_METADATA_VALUE;
+					rt_rule_entry->rule.attrib.meta_data_mask = IPOGRE_METADATA_MASK;
+					rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_META_DATA;
+					if (false == m_routing.AddRoutingRule(rt_rule))
+					{
+						IPACMERR("Routing rule addition failed!\n");
+						free(rt_rule);
+						return IPACM_FAILURE;
+					}
+					get_client_memptr(eth_client, eth_index)->eth_rt_hdl[tx_index].eth_rt_rule_hdl_v4_ipogre =
+					rt_rule->rules[0].rt_rule_hdl;
+					IPACMDBG_H("tx:%d, rt rule hdl=%x ip-type: %d\n", tx_index,
+						get_client_memptr(eth_client, eth_index)->eth_rt_hdl[tx_index].eth_rt_rule_hdl_v4_ipogre, iptype);
+					get_client_memptr(eth_client, eth_index)->route_rule_set_v4_ipogre = true;
+					continue;
+				}
 				if (false == m_routing.AddRoutingRule(rt_rule))
 				{
 					IPACMERR("Routing rule addition failed!\n");
@@ -5678,7 +5704,8 @@ int IPACM_Lan::handle_eth_client_route_rule(uint8_t *mac_addr, ipa_ip_type iptyp
 						IPACMDBG("client(%d): v6 addr : 0x%08x:%08x:%08x:%08x, v6_set already (%d)\n",
 						eth_index, it->first[0], it->first[1], it->first[2], it->first[3],
 						it->second.route_rule_set_v6);
-						continue;
+						if(!(IPACM_Iface::ipacmcfg->ipogre_enabled && IPACM_Iface::ipacmcfg->hw_fnr_stats_support && it->second.route_rule_set_v6_ipogre == false))
+							continue;
 					}
 
 					IPACMDBG_H("client-index(%d): v6 header handle:(0x%x), v6 addr : 0x%08x:%08x:%08x:%08x\n",
@@ -5707,6 +5734,58 @@ int IPACM_Lan::handle_eth_client_route_rule(uint8_t *mac_addr, ipa_ip_type iptyp
 #ifdef FEATURE_IPA_V3
 					rt_rule_entry->rule.hashable = true;
 #endif
+					if(IPACM_Iface::ipacmcfg->ipogre_enabled && IPACM_Iface::ipacmcfg->hw_fnr_stats_support)
+					{
+						rt_rule_entry->rule.attrib.meta_data = IPOGRE_METADATA_VALUE;
+						rt_rule_entry->rule.attrib.meta_data_mask = IPOGRE_METADATA_MASK;
+						rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_META_DATA;
+						if (false == m_routing.AddRoutingRule(rt_rule))
+						{
+							IPACMERR("Routing rule addition failed!\n");
+							free(rt_rule);
+							return IPACM_FAILURE;
+						}
+						it->second.hdl_v6[tx_index].rt_rule_hdl_v6_ipogre = rt_rule->rules[0].rt_rule_hdl;
+						IPACMDBG_H("tx:%d, rt rule hdl=%x ip-type: %d\n", tx_index,
+						it->second.hdl_v6[tx_index].rt_rule_hdl_v6_ipogre, iptype);
+
+						/*Copy same rule to v6 WAN RT TBL*/
+						strlcpy(rt_rule->rt_tbl_name, IPACM_Iface::ipacmcfg->rt_tbl_wan_v6.name, sizeof(rt_rule->rt_tbl_name));
+						rt_rule->rt_tbl_name[IPA_RESOURCE_NAME_MAX - 1] = '\0';
+						/* Downlink traffic from Wan iface, directly through IPA */
+						rt_rule_entry->rule.dst = tx_prop->tx[tx_index].dst_pipe;
+						memcpy(&rt_rule_entry->rule.attrib,
+							&tx_prop->tx[tx_index].attrib,
+							sizeof(rt_rule_entry->rule.attrib));
+						rt_rule_entry->rule.hdr_hdl = get_client_memptr(eth_client, eth_index)->hdr_hdl_v6;
+						rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_DST_ADDR;
+						rt_rule_entry->rule.attrib.u.v6.dst_addr[0] = it->first[0];
+						rt_rule_entry->rule.attrib.u.v6.dst_addr[1] = it->first[1];
+						rt_rule_entry->rule.attrib.u.v6.dst_addr[2] = it->first[2];
+						rt_rule_entry->rule.attrib.u.v6.dst_addr[3] = it->first[3];
+						rt_rule_entry->rule.attrib.u.v6.dst_addr_mask[0] = 0xFFFFFFFF;
+						rt_rule_entry->rule.attrib.u.v6.dst_addr_mask[1] = 0xFFFFFFFF;
+						rt_rule_entry->rule.attrib.u.v6.dst_addr_mask[2] = 0xFFFFFFFF;
+						rt_rule_entry->rule.attrib.u.v6.dst_addr_mask[3] = 0xFFFFFFFF;
+#ifdef FEATURE_IPA_V3
+						rt_rule_entry->rule.hashable = true;
+#endif
+						if (false == m_routing.AddRoutingRule(rt_rule))
+						{
+							IPACMERR("Routing rule addition failed!\n");
+							free(rt_rule);
+							return IPACM_FAILURE;
+						}
+
+						it->second.hdl_v6[tx_index].rt_rule_hdl_v6_wan_ipogre = rt_rule->rules[0].rt_rule_hdl;
+						IPACMDBG_H("tx:%d, rt rule hdl=%x ip-type: %d\n", tx_index,
+							it->second.hdl_v6[tx_index].rt_rule_hdl_v6_wan, iptype);
+						/* mark as route_rule_set_v6 = true*/
+						if (tx_index + 1 == iface_query->num_tx_props)
+							it->second.route_rule_set_v6_ipogre = true;
+						get_client_memptr(eth_client, eth_index)->route_rule_set_v6_ipogre = get_client_memptr(eth_client, eth_index)->ipv6_set;
+						continue;
+					}
 					if (false == m_routing.AddRoutingRule(rt_rule))
 					{
 						IPACMERR("Routing rule addition failed!\n");
@@ -6053,7 +6132,7 @@ int IPACM_Lan::handle_eth_client_route_rule_ext_v2(uint8_t *mac_addr, ipa_ip_typ
 			 && get_client_memptr(eth_client, eth_index)->ipv4_set == true)
 			|| (iptype == IPA_IP_v6
 		            && get_client_memptr(eth_client, eth_index)->route_rule_set_v6 < get_client_memptr(eth_client, eth_index)->ipv6_set
-					))
+					) || (iptype == IPA_IP_v6 && IPACM_Iface::ipacmcfg->ipogre_enabled && IPACM_Iface::ipacmcfg->hw_fnr_stats_support && get_client_memptr(eth_client, eth_index)->route_rule_set_v6_ipogre < get_client_memptr(eth_client, eth_index)->ipv6_set))
 	{
 		if(IPACM_Iface::ipacmcfg->GetIPAVer() >= IPA_HW_None && IPACM_Iface::ipacmcfg->GetIPAVer() < IPA_HW_v4_0)
 		{
@@ -6123,6 +6202,10 @@ int IPACM_Lan::handle_eth_client_route_rule_ext_v2(uint8_t *mac_addr, ipa_ip_typ
 				rt_rule_entry->rule.hashable = true;
 				rt_rule_entry->rule_id = 0;
 				IPACMDBG_H("Add v4 route rule table %s\n", rt_rule->rt_tbl_name);
+				if(IPACM_Iface::ipacmcfg->ipogre_enabled)
+				{
+					handle_eth_client_route_rule(mac_addr, iptype, 0);
+				}
 			    if (false == m_routing.AddRoutingRuleExt_v2(rt_rule))
 				{
 					IPACMERR("Routing rule addition failed!\n");
@@ -6181,6 +6264,10 @@ int IPACM_Lan::handle_eth_client_route_rule_ext_v2(uint8_t *mac_addr, ipa_ip_typ
 					rt_rule_entry->rule.hashable = true;
 					rt_rule_entry->rule_id = 0;
 					IPACMERR("Add v6 route rule table nanme = %s\n", rt_rule->rt_tbl_name);
+					if(IPACM_Iface::ipacmcfg->ipogre_enabled)
+					{
+						handle_eth_client_route_rule(mac_addr, iptype, 0);
+					}
 					if (false == m_routing.AddRoutingRuleExt_v2(rt_rule))
 					{
 						IPACMERR("Routing rule addition failed!\n");

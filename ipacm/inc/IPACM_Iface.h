@@ -111,10 +111,13 @@ using std::vector;
 struct client_rt_hdl_v6 {
 	uint32_t rt_rule_hdl_v6;
 	uint32_t rt_rule_hdl_v6_wan;
+	uint32_t rt_rule_hdl_v6_ipogre;
+	uint32_t rt_rule_hdl_v6_wan_ipogre;
 };
 
 struct handleTypeV6 {
 	bool route_rule_set_v6{false};
+	bool route_rule_set_v6_ipogre{false};
 	vector<client_rt_hdl_v6> hdl_v6{};
 
 	handleTypeV6(size_t n) {

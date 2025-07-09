@@ -118,6 +118,8 @@ IPACM_Lan::IPACM_Lan(int iface_index) : IPACM_Iface(iface_index)
 	modem_ul_v6_set = false;
 	memset(ipv6_prefix, 0, sizeof(ipv6_prefix));
 
+	vlan_hdr_hdl = 0;
+
 #ifdef FEATURE_VLAN_MPDN
 	dummy_prefix_installed = false;
 	is_vlan_offload_disabled = false;
@@ -970,6 +972,7 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 				IPACMDBG_H("construct ETH header and route rules \n");
 				IPACMDBG_H("Posting IPA_ETH_BRIDGE_CLIENT_ADD for Static IP MaC:0x%x iface_name: %s\n",data->mac_addr,data->iface_name);
 				eth_bridge_post_event(IPA_ETH_BRIDGE_CLIENT_ADD, IPA_IP_MAX, data->mac_addr, NULL, data->iface_name);
+				eth_bridge_post_event(IPA_CLIENT_CROSS_PRC_CTX, IPA_IP_MAX, data->mac_addr, NULL, data->iface_name, NULL);
 				IPACMDBG_H("Handled IPA_LAN_CLIENT_ADD_EVENT event \n");
 			}
 		}
@@ -10025,6 +10028,12 @@ ipa_hdr_proc_type IPACM_Lan::eth_bridge_get_hdr_proc_type(ipa_hdr_l2_type t1,
 			return IPA_HDR_PROC_ETHII_TO_ETHII;
 		if(t2 == IPA_HDR_L2_802_3)
 			return IPA_HDR_PROC_ETHII_TO_802_3;
+		/* support non-vlan -> vlan */
+		if(t2 == IPA_HDR_L2_802_1Q) {
+			generic_params.input_ethhdr_negative_offset = 14;
+			generic_params.output_ethhdr_negative_offset = 18;
+			return IPA_HDR_PROC_ETHII_TO_ETHII_EX;
+		}
 		break;
 	case IPA_HDR_L2_802_3:
 		if(t2 == IPA_HDR_L2_ETHERNET_II)
@@ -10036,6 +10045,12 @@ ipa_hdr_proc_type IPACM_Lan::eth_bridge_get_hdr_proc_type(ipa_hdr_l2_type t1,
 		if(t2 == IPA_HDR_L2_802_1Q) {
 			generic_params.input_ethhdr_negative_offset = 18;
 			generic_params.output_ethhdr_negative_offset = 18;
+			return IPA_HDR_PROC_ETHII_TO_ETHII_EX;
+		}
+		/* support non-vlan -> vlan */
+		if(t2 == IPA_HDR_L2_ETHERNET_II) {
+			generic_params.input_ethhdr_negative_offset = 18;
+			generic_params.output_ethhdr_negative_offset = 14;
 			return IPA_HDR_PROC_ETHII_TO_ETHII_EX;
 		}
 		break;
@@ -10065,6 +10080,67 @@ int IPACM_Lan::eth_bridge_get_hdr_template_hdl(uint32_t* hdr_hdl)
 	}
 
 	*hdr_hdl = hdr.hdl;
+	return IPACM_SUCCESS;
+}
+
+int IPACM_Lan::eth_bridge_get_vlan_hdr_template_hdl(uint32_t* hdr_hdl, uint16_t vlan_id)
+{
+	struct ipa_ioc_copy_hdr sCopyHeader;
+	struct ipa_ioc_add_hdr hdr;
+	uint8_t hdr_len;
+	struct ipa_ioc_add_hdr *pHeaderDescriptor = NULL;
+	int len = 0;
+
+	memset(&hdr, 0, sizeof(hdr));
+	memset(&sCopyHeader, 0, sizeof(sCopyHeader));
+	memcpy(sCopyHeader.name,
+				tx_prop->tx[0].hdr_name,
+				sizeof(sCopyHeader.name));
+
+	IPACMDBG_H("header name: %s\n", sCopyHeader.name);
+	if (m_header.CopyHeader(&sCopyHeader) == false)
+	{
+		PERROR("ioctl copy header failed");
+		return IPACM_FAILURE;
+	}
+
+	IPACMDBG_H("header length: %d, partial: %d\n", sCopyHeader.hdr_len, sCopyHeader.is_partial);
+
+	hdr_len = sCopyHeader.hdr_len;
+	len = sizeof(struct ipa_ioc_add_hdr) + (1 * sizeof(struct ipa_hdr_add));
+		pHeaderDescriptor = (struct ipa_ioc_add_hdr *)calloc(1, len);
+		if (pHeaderDescriptor == NULL)
+	{
+			IPACMERR("calloc failed to allocate pHeaderDescriptor\n");
+			return IPACM_FAILURE;
+	}
+	pHeaderDescriptor->hdr[0].hdr_len = sCopyHeader.hdr_len;
+	memcpy(pHeaderDescriptor->hdr[0].hdr,
+					sCopyHeader.hdr,
+					pHeaderDescriptor->hdr[0].hdr_len);
+	pHeaderDescriptor->num_hdrs = 1;
+	pHeaderDescriptor->hdr[0].type = sCopyHeader.type;
+	pHeaderDescriptor->hdr[0].hdr_hdl = -1;
+	pHeaderDescriptor->hdr[0].is_partial = sCopyHeader.is_partial;
+	pHeaderDescriptor->hdr[0].status = -1;
+	pHeaderDescriptor->hdr[0].hdr[hdr_len - 3] = (uint8_t)vlan_id & 0xFF;
+	pHeaderDescriptor->hdr[0].hdr[hdr_len - 4] = (uint8_t)(vlan_id >> 8) & 0xFF;
+	memset(pHeaderDescriptor->hdr[0].name, 0,
+					 sizeof(pHeaderDescriptor->hdr[0].name));
+	snprintf(pHeaderDescriptor->hdr[0].name, sizeof(pHeaderDescriptor->hdr[0].name),
+		"eth0_ipv4_vlan%d", vlan_id);
+	if(m_header.AddHeader(pHeaderDescriptor) == false ||
+			pHeaderDescriptor->hdr[0].status != 0)
+	{
+		IPACMERR("ioctl IPA_IOC_ADD_HDR failed: %d\n", pHeaderDescriptor->hdr[0].status);
+		free(pHeaderDescriptor);
+		return IPACM_FAILURE;
+	}
+
+	*hdr_hdl = pHeaderDescriptor->hdr[0].hdr_hdl;
+	vlan_hdr_hdl = pHeaderDescriptor->hdr[0].hdr_hdl;
+
+	free(pHeaderDescriptor);
 	return IPACM_SUCCESS;
 }
 
@@ -10372,12 +10448,14 @@ void IPACM_Lan::eth_bridge_post_event(ipa_cm_event_id evt, ipa_ip_type iptype, u
 }
 
 /* add header processing context and return handle to lan2lan controller */
-int IPACM_Lan::eth_bridge_add_hdr_proc_ctx(ipa_hdr_l2_type peer_l2_hdr_type, uint32_t *hdl)
+int IPACM_Lan::eth_bridge_add_hdr_proc_ctx(ipa_hdr_l2_type peer_l2_hdr_type, uint32_t *hdl, char* peer_dev_name)
 {
 	int len, res = IPACM_SUCCESS;
 	uint32_t hdr_template;
 	ipa_ioc_add_hdr_proc_ctx* pHeaderProcTable = NULL;
-
+	ipa_ioc_bridge_vlan_mapping_info mapping_info;
+	uint16_t vlan_id = 0;
+	int priority = 0;
 	if(tx_prop == NULL)
 	{
 		IPACMERR("No tx prop.\n");
@@ -10399,7 +10477,52 @@ int IPACM_Lan::eth_bridge_add_hdr_proc_ctx(ipa_hdr_l2_type peer_l2_hdr_type, uin
 		eth_bridge_get_hdr_proc_type(peer_l2_hdr_type,
 			tx_prop->tx[0].hdr_l2_type,
 			pHeaderProcTable->proc_ctx[0].generic_params);
-	eth_bridge_get_hdr_template_hdl(&hdr_template);
+
+	/* non-vlan -> vlan */
+	if (tx_prop->tx[0].hdr_l2_type == IPA_HDR_L2_802_1Q &&
+		peer_l2_hdr_type == IPA_HDR_L2_ETHERNET_II)
+	{
+		if(peer_dev_name != NULL)
+		{
+#ifdef IPA_VLAN_PRIORITY
+			if(IPACM_Iface::ipacmcfg->get_vlan_id(peer_dev_name, &vlan_id, &priority))
+#else
+			if(IPACM_Iface::ipacmcfg->get_vlan_id(peer_dev_name, &vlan_id))
+#endif
+			{
+				IPACMDBG("Unable to find VLAN ID for Dev %s\n", peer_dev_name);
+			}
+		}
+
+		memset(&mapping_info, 0, sizeof(mapping_info));
+
+		/*Query the bridge for dummy_vid iface and extract actual vid from that bridge */
+		if(vlan_id > 0 && IPACM_Iface::ipacmcfg->is_dummy_VID(vlan_id))
+		{
+			mapping_info.vlan_id = vlan_id;
+			IPACMDBG_H("Query Bridge for Dummy VID %d\n", vlan_id);
+			if(IPACM_Iface::ipacmcfg->get_bridge_vlan_mapping(&mapping_info, true))
+			{
+				IPACMERR("Unable to find Bridge for Dummy VLAN ID %d\n", vlan_id);
+				return IPACM_FAILURE;
+			}
+			vlan_id = 0;
+		}
+		else
+			strlcpy(mapping_info.bridge_name, "bridge0", IF_NAME_LEN);
+
+		/*Extract VID from br0 if non-vlan on default or extract from respective bridge */
+		if(!IPACM_Iface::ipacmcfg->get_bridge_vlan_mapping(&mapping_info))
+		{
+			vlan_id = mapping_info.vlan_id;
+		}
+
+		eth_bridge_get_vlan_hdr_template_hdl(&hdr_template, vlan_id);
+	}
+	else
+	{
+		eth_bridge_get_hdr_template_hdl(&hdr_template);
+	}
 	pHeaderProcTable->proc_ctx[0].hdr_hdl = hdr_template;
 	if (m_header.AddHeaderProcCtx(pHeaderProcTable) == false)
 	{
@@ -10707,10 +10830,7 @@ int IPACM_Lan::eth_bridge_add_flt_rule(uint8_t *mac, uint32_t rt_tbl_hdl, ipa_ip
 		if(!vlan_id)
 		{
 			IPACMERR("got vlan id 0 for vlan iface %s\n", dev_name);
-			res = IPACM_FAILURE;
-			goto end;
 		}
-
 		flt_rule_entry.rule.attrib.attrib_mask |= IPA_FLT_VLAN_ID;
 		flt_rule_entry.rule.attrib.vlan_id = vlan_id;
 	}
@@ -10763,6 +10883,18 @@ int IPACM_Lan::eth_bridge_del_hdr_proc_ctx(uint32_t hdr_proc_ctx_hdl)
 		IPACM_SYSLOG("Failed to delete hdr proc ctx.\n");
 		return IPACM_FAILURE;
 	}
+	if (vlan_hdr_hdl != 0)
+	{
+		if(m_header.DeleteHeaderHdl(vlan_hdr_hdl) == false)
+		{
+			IPACMERR("Failed to delete vlan hdr\n");
+			return IPACM_FAILURE;
+		}
+		vlan_hdr_hdl = 0;
+	}
+	else
+		IPACMDBG_H("vlan hdr is invalid!");
+
 	return IPACM_SUCCESS;
 }
 
@@ -13233,6 +13365,7 @@ int IPACM_Lan::handle_mpdn_ul_xlat_filter_rule(ipacm_ext_prop * prop,
 	int i, cnt, entry_idx = 0, prev =0, curr =0, pos, idx_q6 = 0;
 	uint16_t value = 0, mask = 0;
 	int xlat_pdn_ctx_id;
+	ipa_ioc_bridge_vlan_mapping_info mapping_info;
 
 	IPACMDBG_H("Set modem UL flt rules for xlat mode in MPDN config\n");
 
@@ -13329,12 +13462,30 @@ int IPACM_Lan::handle_mpdn_ul_xlat_filter_rule(ipacm_ext_prop * prop,
 			/* Rule ID of replicate is same as Q6 rule I.D */
 			flt_index.rule_id[idx_q6] = prop->prop[cnt].rule_id;
 
-			value = vlan_id;
-			flt_rule_entry.rule.eq_attrib.rule_eq_bitmap |= (1<<9);
-			flt_rule_entry.rule.eq_attrib.metadata_meq32_present = 1;
-			flt_rule_entry.rule.eq_attrib.metadata_meq32.offset = 0;
-			flt_rule_entry.rule.eq_attrib.metadata_meq32.value = (value & 0xFFF)<<16;
-			flt_rule_entry.rule.eq_attrib.metadata_meq32.mask = 0x0FFF0000;
+			if(!IPACM_Iface::ipacmcfg->is_dummy_VID(vlan_id))
+			{
+				value = vlan_id;
+				flt_rule_entry.rule.eq_attrib.rule_eq_bitmap |= (1<<9);
+				flt_rule_entry.rule.eq_attrib.metadata_meq32_present = 1;
+				flt_rule_entry.rule.eq_attrib.metadata_meq32.offset = 0;
+				flt_rule_entry.rule.eq_attrib.metadata_meq32.value = (value & 0xFFF)<<16;
+				flt_rule_entry.rule.eq_attrib.metadata_meq32.mask = 0x0FFF0000;
+			}
+			else
+			{
+				/* For Dummy VID based ifaces add 1st Pass flt with source subnet range */
+				mapping_info.vlan_id = vlan_id;
+				if(IPACM_Iface::ipacmcfg->get_bridge_vlan_mapping(&mapping_info, true))
+				{
+					IPACMERR("Unable to find Bridge for Dummy VLAN ID %d\n", vlan_id);
+					return IPACM_FAILURE;
+				}
+				flt_rule_entry.rule.eq_attrib.rule_eq_bitmap |= 0x20<<flt_rule_entry.rule.eq_attrib.num_offset_meq_32;
+				flt_rule_entry.rule.eq_attrib.offset_meq_32[flt_rule_entry.rule.eq_attrib.num_offset_meq_32].offset = 12;
+				flt_rule_entry.rule.eq_attrib.offset_meq_32[flt_rule_entry.rule.eq_attrib.num_offset_meq_32].value = mapping_info.bridge_ipv4 & mapping_info.subnet_mask;
+				flt_rule_entry.rule.eq_attrib.offset_meq_32[flt_rule_entry.rule.eq_attrib.num_offset_meq_32].mask = mapping_info.subnet_mask;
+				flt_rule_entry.rule.eq_attrib.num_offset_meq_32 ++;
+			}
 
 			/* start with prev = curr = 0
 			 * find smallest q6 rule id greater than current xlat filter's rule id,

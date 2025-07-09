@@ -67,6 +67,7 @@ IPACM_LanToLan_Iface::IPACM_LanToLan_Iface(IPACM_Lan *p_iface)
 	m_support_inter_iface_offload = true;
 	m_support_intra_iface_offload = false;
 	m_is_l2tp_iface = false;
+	m_is_cross_proc_ctx_handled = false;
 #ifdef FEATURE_VLAN_MPDN
 	m_is_vlan = false;
 #endif
@@ -101,6 +102,7 @@ IPACM_LanToLan::IPACM_LanToLan()
 	IPACM_EvtDispatcher::registr(IPA_ETH_BRIDGE_IFACE_DOWN, this);
 	IPACM_EvtDispatcher::registr(IPA_ETH_BRIDGE_CLIENT_ADD, this);
 	IPACM_EvtDispatcher::registr(IPA_ETH_BRIDGE_CLIENT_DEL, this);
+	IPACM_EvtDispatcher::registr(IPA_CLIENT_CROSS_PRC_CTX, this);
 	IPACM_EvtDispatcher::registr(IPA_ETH_BRIDGE_WLAN_SCC_MCC_SWITCH, this);
 #ifdef FEATURE_VLAN_MPDN
 	IPACM_EvtDispatcher::registr(IPA_ETH_BRIDGE_ADD_VLAN_ID, this);
@@ -204,6 +206,12 @@ void IPACM_LanToLan::event_callback(ipa_cm_event_id event, void* param)
 		{
 			eth_bridge_data = (ipacm_event_eth_bridge*)param;
 			handle_vlan_id_del(eth_bridge_data);
+			break;
+		}
+		case IPA_CLIENT_CROSS_PRC_CTX:
+		{
+			eth_bridge_data = (ipacm_event_eth_bridge*)param;
+			handle_client_cross_proc_ctx(eth_bridge_data);
 			break;
 		}
 #endif
@@ -339,8 +347,7 @@ void IPACM_LanToLan::handle_iface_up(ipacm_event_eth_bridge *data)
 			{
 				if(!it->get_is_vlan())
 				{
-					IPACMDBG_H("iface %s is non VLAN iface - skipping\n", it->get_iface_pointer()->dev_name);
-					continue;
+					IPACMDBG_H("iface %s is non VLAN iface - support offload now\n", it->get_iface_pointer()->dev_name);
 				}
 
 				/* add peer info only when both interfaces support inter-interface communication */
@@ -369,11 +376,9 @@ void IPACM_LanToLan::handle_iface_up(ipacm_event_eth_bridge *data)
 		{
 			for(it = ++m_iface.begin(); it != m_iface.end(); it++)
 			{
-#ifdef FEATURE_VLAN_MPDN
-				/* non VLAN case - currently no support for non vlan <-> vlan offload */
+				/* non vlan <-> vlan offload now */
 				if(it->get_is_vlan())
-					continue;
-#endif
+					IPACMDBG_H("vlan to non VLAN iface - support offload now\n");
 				/* add peer info only when both interfaces support inter-interface communication */
 				if(it->get_m_support_inter_iface_offload())
 				{
@@ -397,6 +402,73 @@ void IPACM_LanToLan::handle_iface_up(ipacm_event_eth_bridge *data)
 
 		/* handle cached client add event */
 		handle_cached_client_add_event(front_iface.get_iface_pointer());
+	}
+	return;
+}
+
+void IPACM_LanToLan::handle_client_cross_proc_ctx(ipacm_event_eth_bridge *data)
+{
+	list<IPACM_LanToLan_Iface>::iterator it, it1;
+#ifdef FEATURE_VLAN_MPDN
+	bool IsVlan = (IPACM_Iface::ipacmcfg->ipacm_mpdn_enable &&
+		IPACM_Iface::ipacmcfg->iface_in_vlan_mode(data->p_iface->dev_name));
+#endif
+
+	IPACMDBG_H("Interface name: %s IP type: %d\n", data->p_iface->dev_name, data->iptype);
+#ifdef FEATURE_VLAN_MPDN
+	if(IsVlan)
+	{
+		IPACMDBG_H("Vlan iface\n");
+		return;
+	}
+#endif
+
+	for(it = m_iface.begin(); it != m_iface.end(); it++)
+	{
+		if(it->get_iface_pointer() == data->p_iface)
+		{
+			IPACMDBG_H("Found the interface.\n");
+
+			IPACM_LanToLan_Iface &front_iface = (*it);
+#ifdef FEATURE_VLAN_MPDN
+
+			/* add header processing context for peer VLAN interfaces */
+			for(it1 = m_iface.begin(); it1 != m_iface.end(); it1++)
+			{
+				if(it1->get_iface_pointer() == data->p_iface)
+					continue;
+
+				if(!front_iface.get_is_vlan() && it1->get_is_vlan() && front_iface.m_is_cross_proc_ctx_handled == false)
+				{
+					/* add peer info only when both interfaces support inter-interface communication */
+					if(it1->get_m_support_inter_iface_offload())
+					{
+						IPACMDBG_H("Handle peer info between: new_iface %s, existing iface %s\n", front_iface.get_iface_pointer()->dev_name,
+							it1->get_iface_pointer()->dev_name);
+
+						/* populate hdr_proc_ctx and routing table handle */
+						it1->install_iface_cross_proc_ctx(&front_iface);
+
+						front_iface.install_iface_cross_proc_ctx(&(*it1));
+
+						/* add client specific routing rule on existing interface - regardless of vlan id*/
+						it1->add_client_rt_rule_for_new_iface();
+					}
+				}
+			}
+
+			if(front_iface.m_is_cross_proc_ctx_handled == false)
+			{
+				/* add client specific filtering rule on new interface for matching vlan ids*/
+				front_iface.add_all_inter_interface_client_flt_rule(IPA_IP_v4);
+				front_iface.add_all_inter_interface_client_flt_rule(IPA_IP_v6);
+				front_iface.m_is_cross_proc_ctx_handled = true;
+				IPACMDBG("Updating the m_is_cross_proc_ctx_handled to %d for %s\n",
+						front_iface.m_is_cross_proc_ctx_handled, front_iface.get_iface_pointer()->dev_name);
+			}
+			break;
+#endif //FEATURE_VLAN_MPDN
+		}
 	}
 	return;
 }
@@ -426,6 +498,14 @@ void IPACM_LanToLan::handle_iface_down(ipacm_event_eth_bridge *data)
 	}
 
 	it_target_iface->handle_down_event();
+	IPACM_LanToLan_Iface &front_iface = (*it_target_iface);
+	if(!front_iface.get_is_vlan() &&
+		front_iface.m_is_cross_proc_ctx_handled == true)
+	{
+		front_iface.m_is_cross_proc_ctx_handled = false;
+		IPACMDBG("Updating the m_is_cross_proc_ctx_handled to %d for %s\n",
+				front_iface.m_is_cross_proc_ctx_handled, front_iface.get_iface_pointer()->dev_name);
+	}
 	m_iface.erase(it_target_iface);
 #ifdef FEATURE_L2TP
 	if(IPACM_Iface::ipacmcfg->ipacm_l2tp_enable == IPACM_L2TP)
@@ -563,7 +643,7 @@ void IPACM_LanToLan::handle_vlan_id_del(ipacm_event_eth_bridge *data)
 
 void IPACM_LanToLan::handle_client_add(ipacm_event_eth_bridge *data)
 {
-	list<IPACM_LanToLan_Iface>::iterator it_iface;
+	list<IPACM_LanToLan_Iface>::iterator it_iface, it_peer_iface;
 	list<l2tp_vlan_mapping_info>::iterator it_mapping;
 	l2tp_vlan_mapping_info *mapping_info = NULL;
 	bool is_l2tp_client = false;
@@ -606,13 +686,27 @@ void IPACM_LanToLan::handle_client_add(ipacm_event_eth_bridge *data)
 						return;
 					}
 				}
-				else if(data->VlanID)
+				else if(data->VlanID && !IPACM_Iface::ipacmcfg->is_dummy_VID(data->VlanID))
 				{
 					IPACMERR("got event with vlan id for non VLAN IF");
 					return;
 				}
 			}
 #endif //FEATURE_VLAN_MPDN
+			for(it_peer_iface = m_iface.begin(); it_peer_iface != m_iface.end(); it_peer_iface++)
+			{
+				if(it_peer_iface->get_iface_pointer() == data->p_iface)
+					continue;
+				if(it_iface->get_is_vlan() && !it_peer_iface->get_is_vlan() && it_peer_iface->m_is_cross_proc_ctx_handled == false)
+				{
+					IPACM_LanToLan_Iface &front_iface = (*it_peer_iface);
+					/* populate hdr_proc_ctx and routing table handle */
+					it_iface->install_iface_cross_proc_ctx(&front_iface);
+					front_iface.m_is_cross_proc_ctx_handled = true;
+					IPACMDBG("Updating the m_is_cross_proc_ctx_handled to %d for %s\n",
+							front_iface.m_is_cross_proc_ctx_handled, front_iface.get_iface_pointer()->dev_name);
+				}
+			}
 			it_iface->handle_client_add(data->mac_addr, is_l2tp_client, mapping_info, data->VlanID);
 			break;
 		}
@@ -1016,6 +1110,8 @@ void IPACM_LanToLan_Iface::add_all_inter_interface_client_flt_rule_one_vlan_id(i
 {
 	list<peer_iface_info>::iterator it_iface;
 	list<client_info>::iterator it_client;
+	ipa_ioc_bridge_vlan_mapping_info mapping_info;
+	uint16_t client_br_vid = 0;
 
 	/* go over all peers (must be vlan interfaces) */
 	for(it_iface = m_peer_iface_info.begin(); it_iface != m_peer_iface_info.end(); it_iface++)
@@ -1025,7 +1121,25 @@ void IPACM_LanToLan_Iface::add_all_inter_interface_client_flt_rule_one_vlan_id(i
 		/* look for specific client with this vlan id */
 		for(it_client = it_iface->peer->m_client_info.begin(); it_client != it_iface->peer->m_client_info.end(); it_client++)
 		{
-			if (vlan_id == it_client->vlan_id)
+			/*Query the bridge for dummy_vid iface and extract actual vid from that bridge */
+			if(IPACM_Iface::ipacmcfg->is_dummy_VID(it_client->vlan_id))
+			{
+				mapping_info.vlan_id = it_client->vlan_id;
+				IPACMDBG_H("Query Bridge for Dummy VID %d\n", it_client->vlan_id);
+				if(IPACM_Iface::ipacmcfg->get_bridge_vlan_mapping(&mapping_info, true))
+				{
+					IPACMERR("Unable to find Bridge for Dummy VLAN ID %d\n", it_client->vlan_id);
+					continue;
+				}
+				if(IPACM_Iface::ipacmcfg->get_bridge_vlan_mapping(&mapping_info))
+				{
+					IPACMDBG_H("Unable to find actual VID for br %s!\n", mapping_info.bridge_name);
+					continue;
+				}
+				client_br_vid = mapping_info.vlan_id;
+				IPACMDBG_H("Found the VLAN-ID %d.\n", client_br_vid);
+			}
+			if (vlan_id == it_client->vlan_id || (client_br_vid && vlan_id == client_br_vid))
 				add_client_flt_rule(&(*it_iface), &(*it_client), iptype);
 		}
 	}
@@ -1035,6 +1149,8 @@ void IPACM_LanToLan_Iface::del_all_inter_interface_client_flt_rule_one_vlan_id(u
 {
 	list<peer_iface_info>::iterator it_iface;
 	list<client_info>::iterator it_client;
+	ipa_ioc_bridge_vlan_mapping_info mapping_info;
+	uint16_t client_br_vid = 0;
 
 	/* go over all peers (must be vlan interfaces) */
 	for(it_iface = m_peer_iface_info.begin(); it_iface != m_peer_iface_info.end(); it_iface++)
@@ -1044,7 +1160,25 @@ void IPACM_LanToLan_Iface::del_all_inter_interface_client_flt_rule_one_vlan_id(u
 		/* look for specific client with this vlan id */
 		for(it_client = it_iface->peer->m_client_info.begin(); it_client != it_iface->peer->m_client_info.end(); it_client++)
 		{
-			if(vlan_id == it_client->vlan_id)
+			/*Query the bridge for dummy_vid iface and extract actual vid from that bridge */
+			if(IPACM_Iface::ipacmcfg->is_dummy_VID(it_client->vlan_id))
+			{
+				mapping_info.vlan_id = it_client->vlan_id;
+				IPACMDBG_H("Query Bridge for Dummy VID %d\n", it_client->vlan_id);
+				if(IPACM_Iface::ipacmcfg->get_bridge_vlan_mapping(&mapping_info, true))
+				{
+					IPACMERR("Unable to find Bridge for Dummy VLAN ID %d\n", it_client->vlan_id);
+					continue;
+				}
+				if(IPACM_Iface::ipacmcfg->get_bridge_vlan_mapping(&mapping_info))
+				{
+					IPACMDBG_H("Unable to find actual VID for br %s!\n", mapping_info.bridge_name);
+					continue;
+				}
+				client_br_vid = mapping_info.vlan_id;
+				IPACMDBG_H("Found the VLAN-ID %d.\n", client_br_vid);
+			}
+			if(vlan_id == it_client->vlan_id || (client_br_vid && vlan_id == client_br_vid))
 				del_client_flt_rule(&(*it_iface), &(*it_client));
 		}
 	}
@@ -1055,6 +1189,8 @@ void IPACM_LanToLan_Iface::add_all_inter_interface_client_flt_rule(ipa_ip_type i
 {
 	list<peer_iface_info>::iterator it_iface;
 	list<client_info>::iterator it_client;
+	ipa_ioc_bridge_vlan_mapping_info mapping_info;
+	uint16_t client_br_vid = 0;
 #ifdef FEATURE_VLAN_MPDN
 	if(m_is_vlan && !Ids)
 	{
@@ -1071,9 +1207,27 @@ void IPACM_LanToLan_Iface::add_all_inter_interface_client_flt_rule(ipa_ip_type i
 			if(Ids)
 			{
 				int i;
+				/*Query the bridge for dummy_vid iface and extract actual vid from that bridge */
+				if(IPACM_Iface::ipacmcfg->is_dummy_VID(it_client->vlan_id))
+				{
+					mapping_info.vlan_id = it_client->vlan_id;
+					IPACMDBG_H("Query Bridge for Dummy VID %d\n", it_client->vlan_id);
+					if(IPACM_Iface::ipacmcfg->get_bridge_vlan_mapping(&mapping_info, true))
+					{
+						IPACMERR("Unable to find Bridge for Dummy VLAN ID %d\n", it_client->vlan_id);
+						continue;
+					}
+					if(IPACM_Iface::ipacmcfg->get_bridge_vlan_mapping(&mapping_info))
+					{
+						IPACMDBG_H("Unable to find actual VID for br %s!\n", mapping_info.bridge_name);
+						continue;
+					}
+					client_br_vid = mapping_info.vlan_id;
+					IPACMDBG_H("Found the VLAN-ID %d.\n", client_br_vid);
+				}
 				for(i = 0; i < IPA_MAX_NUM_OFFLOAD_VLANS; i++)
 				{
-					if(Ids[i] == it_client->vlan_id)
+					if(Ids[i] == it_client->vlan_id || (client_br_vid && Ids[i] == client_br_vid))
 					{
 						IPACM_SYSLOG("vlan id %d match\n", Ids[i]);
 						break;
@@ -1139,6 +1293,8 @@ void IPACM_LanToLan_Iface::add_client_flt_rule(peer_iface_info *peer, client_inf
 	list<uint32_t> flt_rule_hdls = std::list<uint32_t>();
 	flt_rule_info new_flt_info;
 	ipa_ioc_get_rt_tbl rt_tbl;
+	ipa_ioc_bridge_vlan_mapping_info mapping_info;
+	uint16_t peer_vlan_id = 0;
 
 	if(m_is_l2tp_iface && iptype == IPA_IP_v4)
 	{
@@ -1157,11 +1313,10 @@ void IPACM_LanToLan_Iface::add_client_flt_rule(peer_iface_info *peer, client_inf
 #ifdef FEATURE_VLAN_MPDN
 	if(m_is_vlan)
 	{
+		/* non vlan <-> vlan offload now */
 		if(!client->vlan_id)
-		{
-			IPACMERR("VLAN IFACE and non VLAN client\n");
-			return;
-		}
+			IPACMDBG_H("vlan to non VLAN iface - support offload now\n");
+
 		if(it_flt != peer->flt_rule.end())
 		{
 			if(it_flt->flt_rule_hdl[iptype]) {
@@ -1184,18 +1339,21 @@ void IPACM_LanToLan_Iface::add_client_flt_rule(peer_iface_info *peer, client_inf
 		}
 
 		int i;
-		for(i = 0; i < IPA_MAX_NUM_OFFLOAD_VLANS; i++)
+		if(client->vlan_id && !IPACM_Iface::ipacmcfg->is_dummy_VID(client->vlan_id))
 		{
-			if(Ids[i] == client->vlan_id)
+			for(i = 0; i < IPA_MAX_NUM_OFFLOAD_VLANS; i++)
 			{
-				IPACMDBG_H("found vlan Id %d for dev %s, adding vlan client flt rule\n", Ids[i], get_iface_pointer()->dev_name);
-				break;
+				if(Ids[i] == client->vlan_id)
+				{
+					IPACMDBG_H("found vlan Id %d for dev %s, adding vlan client flt rule\n", Ids[i], get_iface_pointer()->dev_name);
+					break;
+				}
 			}
-		}
-		if(i >= IPA_MAX_NUM_OFFLOAD_VLANS)
-		{
-			IPACMDBG_H("client vlan Id %d doesn't match with iface %s VLAN ID list\n", client->vlan_id, get_iface_pointer()->dev_name);
-			return;
+			if(i >= IPA_MAX_NUM_OFFLOAD_VLANS)
+			{
+				IPACMDBG_H("client vlan Id %d doesn't match with iface %s VLAN ID list\n", client->vlan_id, get_iface_pointer()->dev_name);
+				return;
+			}
 		}
 	}
 #endif //FEATURE_VLAN_MPDN
@@ -1270,8 +1428,36 @@ void IPACM_LanToLan_Iface::add_client_flt_rule(peer_iface_info *peer, client_inf
 				return;
 			}
 
-			m_p_iface->eth_bridge_add_flt_rule(client->mac_addr, rt_tbl.hdl,
-				iptype, &flt_rule_hdl, client->vlan_id);
+			memset(&mapping_info, 0, sizeof(mapping_info));
+			/*Query the bridge for dummy_vid iface and extract actual vid from that bridge */
+			if(IPACM_Iface::ipacmcfg->is_dummy_VID(client->vlan_id))
+			{
+				mapping_info.vlan_id = client->vlan_id;
+				IPACMDBG_H("Query Bridge for Dummy VID %d\n", client->vlan_id);
+				if(IPACM_Iface::ipacmcfg->get_bridge_vlan_mapping(&mapping_info, true))
+				{
+					IPACMERR("Unable to find Bridge for Dummy VLAN ID %d\n", client->vlan_id);
+					return;
+				}
+			}
+			else
+				strlcpy(mapping_info.bridge_name, "bridge0", IF_NAME_LEN);
+
+			/*Extract VID from br0 if non-vlan on default or extract from respective bridge */
+			if(!IPACM_Iface::ipacmcfg->get_bridge_vlan_mapping(&mapping_info))
+			{
+				peer_vlan_id = mapping_info.vlan_id;
+				IPACMDBG_H("Found the VLAN-ID %d.\n", peer_vlan_id);
+			}
+			IPACMDBG_H("Client VLAN-ID %d.\n", client->vlan_id);
+
+			if(peer_vlan_id != 0 && (client->vlan_id == 0 || IPACM_Iface::ipacmcfg->is_dummy_VID(client->vlan_id)))
+				m_p_iface->eth_bridge_add_flt_rule(client->mac_addr, rt_tbl.hdl,
+					iptype, &flt_rule_hdl, peer_vlan_id);
+			else
+				m_p_iface->eth_bridge_add_flt_rule(client->mac_addr, rt_tbl.hdl,
+					iptype, &flt_rule_hdl, client->vlan_id);
+
 			IPACMDBG_H("Installed flt rule for IP type %d: handle %d\n", iptype, flt_rule_hdl);
 		}
 	}
@@ -1562,6 +1748,15 @@ void IPACM_LanToLan_Iface::handle_down_event()
 			IPACMDBG_H("Clear rt rules and hdr proc ctx and release rt table on target interface.\n");
 			clear_all_rt_rule_for_one_peer_iface(&(*it_own_peer_info));
 			del_hdr_proc_ctx(it_own_peer_info->peer->get_iface_pointer()->tx_prop->tx[0].hdr_l2_type);
+			if(get_is_vlan() && !it_own_peer_info->peer->get_is_vlan() &&
+				it_own_peer_info->peer->m_is_cross_proc_ctx_handled == true &&
+				it_own_peer_info->peer->ref_cnt_peer_l2_hdr_type[m_p_iface->tx_prop->tx[0].hdr_l2_type] == 0)
+			{
+				it_own_peer_info->peer->m_is_cross_proc_ctx_handled = false;
+				IPACMDBG("Updating the m_is_cross_proc_ctx_handled to %d for %s\n",
+						it_own_peer_info->peer->m_is_cross_proc_ctx_handled,
+						it_own_peer_info->peer->m_p_iface->dev_name);
+			}
 		}
 		m_peer_iface_info.clear();
 	}
@@ -1872,11 +2067,33 @@ void IPACM_LanToLan_Iface::handle_new_iface_up(char rt_tbl_name_for_flt[][IPA_RE
 	memcpy(new_peer.rt_tbl_name_for_flt[IPA_IP_v6], rt_tbl_name_for_flt[IPA_IP_v6], IPA_RESOURCE_NAME_MAX);
 
 	peer_l2_hdr_type = peer_iface->m_p_iface->tx_prop->tx[0].hdr_l2_type;
-	increment_ref_cnt_peer_l2_hdr_type(peer_l2_hdr_type);
-	add_hdr_proc_ctx(peer_l2_hdr_type);
+	/* Avoid Installing Proc Context for Dummy VLAN mapped Non-Vlan Ifaces */
+	if (!(m_is_vlan && peer_l2_hdr_type == IPA_HDR_L2_ETHERNET_II))
+	{
+		IPACMDBG_H("Adding header Proc Context\n");
+		increment_ref_cnt_peer_l2_hdr_type(peer_l2_hdr_type);
+		add_hdr_proc_ctx(peer_l2_hdr_type);
+	}
 
 	/* push the new peer_iface_info into the list */
 	m_peer_iface_info.push_front(new_peer);
+
+	return;
+}
+
+void IPACM_LanToLan_Iface::install_iface_cross_proc_ctx(IPACM_LanToLan_Iface *peer_iface)
+{
+	ipa_hdr_l2_type peer_l2_hdr_type;
+	list<peer_iface_info>::iterator it_iface;
+
+	peer_l2_hdr_type = peer_iface->m_p_iface->tx_prop->tx[0].hdr_l2_type;
+
+	if(m_is_vlan && peer_l2_hdr_type == IPA_HDR_L2_ETHERNET_II)
+	{
+		IPACMDBG_H("Adding header Proc Context\n");
+		increment_ref_cnt_peer_l2_hdr_type(peer_l2_hdr_type);
+		add_hdr_proc_ctx(peer_l2_hdr_type, peer_iface->m_p_iface->dev_name);
+	}
 
 	return;
 }
@@ -2061,13 +2278,13 @@ list<client_info>::iterator IPACM_LanToLan_Iface::handle_client_del(uint8_t *mac
 	return m_client_info.end();
 }
 
-void IPACM_LanToLan_Iface::add_hdr_proc_ctx(ipa_hdr_l2_type peer_l2_type)
+void IPACM_LanToLan_Iface::add_hdr_proc_ctx(ipa_hdr_l2_type peer_l2_type, char* peer_dev_name)
 {
 	uint32_t hdr_proc_ctx_hdl;
 
 	if(ref_cnt_peer_l2_hdr_type[peer_l2_type] == 1)
 	{
-		m_p_iface->eth_bridge_add_hdr_proc_ctx(peer_l2_type, &hdr_proc_ctx_hdl);
+		m_p_iface->eth_bridge_add_hdr_proc_ctx(peer_l2_type, &hdr_proc_ctx_hdl, peer_dev_name);
 		hdr_proc_ctx_for_inter_interface[peer_l2_type] = hdr_proc_ctx_hdl;
 		IPACM_SYSLOG("Installed inter-interface hdr proc ctx on iface %s: handle %d\n", m_p_iface->dev_name, hdr_proc_ctx_hdl);
 	}
@@ -2081,6 +2298,7 @@ void IPACM_LanToLan_Iface::del_hdr_proc_ctx(ipa_hdr_l2_type peer_l2_type)
 		m_p_iface->eth_bridge_del_hdr_proc_ctx(hdr_proc_ctx_for_inter_interface[peer_l2_type]);
 		IPACM_SYSLOG("Hdr proc ctx with hdl %d is deleted.\n", hdr_proc_ctx_for_inter_interface[peer_l2_type]);
 	}
+
 	return;
 }
 
@@ -2097,6 +2315,7 @@ void IPACM_LanToLan_Iface::print_data_structure_info()
 	IPACMDBG_H("Support inter interface offload? %d\n", m_support_inter_iface_offload);
 	IPACMDBG_H("Support intra interface offload? %d\n", m_support_intra_iface_offload);
 	IPACMDBG_H("Is l2tp interface? %d\n", m_is_l2tp_iface);
+	IPACMDBG_H("Is Cross Proc Ctx Handled? %d\n", m_is_cross_proc_ctx_handled);
 #ifdef FEATURE_VLAN_MPDN
 	IPACMDBG_H("is_vlan ? %d\n", m_is_vlan);
 #endif

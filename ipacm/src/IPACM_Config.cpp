@@ -66,6 +66,8 @@ const char *IPACM_Config::DEVICE_NAME_ODU = "/dev/odu_ipa_bridge";
 #endif
 #endif
 
+#define BRIDGE_0 "bridge0"
+
 const char *ipacm_event_name[] = {
 	__stringify(IPA_CFG_CHANGE_EVENT),                     /* NULL */
 	__stringify(IPA_PRIVATE_SUBNET_CHANGE_EVENT),          /* ipacm_event_data_fid */
@@ -682,7 +684,6 @@ skip_fnr_alloc:
 	socksv5_conn.clear();
 	mux_id_mapping.clear();
 #endif
-
 	/* Construct the routing table ictol name in iface static member*/
 	rt_tbl_default_v4.ip = IPA_IP_v4;
 	strlcpy(rt_tbl_default_v4.name, V4_DEFAULT_ROUTE_TABLE_NAME, sizeof(rt_tbl_default_v4.name));
@@ -2010,6 +2011,7 @@ int IPACM_Config::get_vlan_id(char *iface_name, uint16_t *vlan_id)
 
 	return ret;
 }
+
 #endif
 
 #if defined(FEATURE_L2TP)
@@ -2143,7 +2145,78 @@ int IPACM_Config::get_vlan_l2tp_mapping(char *client_iface, l2tp_vlan_mapping_in
 	pthread_mutex_unlock(&vlan_l2tp_lock);
 	return IPACM_FAILURE;
 }
+
 #endif
+/* Add dummy vlan mapping for the non vlan clients on on-demand bridge*/
+void IPACM_Config::add_dummy_vlan_mapping(char *bridge_iface, char* client_iface, int if_index)
+{
+	int ent_exist = 0;
+	ipa_ioc_vlan_iface_info vlan_info;
+	uint16_t vlan_id;
+	uint8_t priority;
+
+	if(IPACM_Iface::ipacmcfg->is_added_vlan_iface(client_iface))
+	{
+
+#ifdef IPA_VLAN_PRIORITY
+		IPACM_Iface::ipacmcfg->get_vlan_id(client_iface, &vlan_id, &priority);
+#else
+		IPACM_Iface::ipacmcfg->get_vlan_id(client_iface, &vlan_id);
+#endif
+
+		if(strncmp(bridge_iface, BRIDGE_0,
+				strlen(bridge_iface)) == 0)
+		{
+			/* If existing vlan is found but the bridge iface
+			 * is now which is brigde 0 then
+			 * we need to delete the mapping
+			 */
+			IPACMDBG_H("Existing Non-Vlan Client %s now moved back to bridge : %s. Deleting from vlan list\n", client_iface, bridge_iface);
+			memset(&vlan_info, 0, sizeof(vlan_info));
+			strlcpy(vlan_info.name, client_iface, sizeof(vlan_info.name));
+			vlan_info.vlan_id = vlan_id;
+			IPACM_Iface::ipacmcfg->del_vlan_iface(&vlan_info);
+		}
+		else
+		{
+			IPACMDBG_H("Existing Non-Vlan Client %s now moved to bridge %s Dummy vlan-Id %d\n", client_iface,
+					bridge_iface, vlan_id);
+		}
+		ent_exist = 1;
+	}
+
+	if(!ent_exist)
+	{
+		if(strncmp(bridge_iface, BRIDGE_0,
+					strlen(bridge_iface)) == 0)
+		{
+			IPACMDBG_H("Neigh recevied for bridge0 client...Ignoring!\n");
+		}
+		else
+		{
+			/* When ent_exist is 0 then it means
+			 * there is no entry in non vlan iface list
+			 * if ent_exist is  1 then it means non
+			 * iface list contains iface.
+			 */
+			memset(&vlan_info, 0, sizeof(vlan_info));
+			strlcpy(vlan_info.name, client_iface, sizeof(vlan_info.name));
+			vlan_info.vlan_id = DUMMY_VLAN_ID_BASE + if_index;
+			IPACM_Iface::ipacmcfg->add_vlan_iface(&vlan_info);
+			IPACMDBG_H("New Non-Vlan Mapping Created for %s with VID %d\n", vlan_info.name, vlan_info.vlan_id);
+		}
+	}
+
+	return;
+}
+
+bool IPACM_Config::is_dummy_VID(uint16_t vid)
+{
+	if(vid > DUMMY_VLAN_ID_BASE)
+		return true;
+
+	return false;
+}
 
 #if defined(FEATURE_SOCKSv5) && defined (IPA_SOCKV5_EVENT_MAX)
 void IPACM_Config::add_socksv5_conn(ipa_socksv5_msg *add_socksv5_info)

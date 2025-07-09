@@ -702,6 +702,7 @@ int IPACM_IfaceManager::create_iface_instance(ipacm_ifacemgr_data *param)
 #endif /* not defined(FEATURE_IPA_ANDROID)*/
 #ifdef FEATURE_VLAN_MPDN
 					IPACM_EvtDispatcher::registr(IPA_ROUTE_ADD_VLAN_PDN_EVENT, w);
+					IPACM_EvtDispatcher::registr(IPA_ROUTE_DEL_VLAN_PDN_EVENT, w);
 #endif
 #ifdef FEATURE_IPv6CT_DISABLED
 					IPACM_EvtDispatcher::registr(IPA_FIREWALL_CHANGE_EVENT, w);

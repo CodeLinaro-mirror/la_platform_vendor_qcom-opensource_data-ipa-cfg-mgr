@@ -473,6 +473,9 @@ public:
 	/* nat_iface_lock */
 	pthread_mutex_t nat_iface_lock;
 
+	/* get_vlan_association_lock */
+	pthread_mutex_t get_vlan_association_lock;
+
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
 	bool ipacm_lan_stats_enable;
 	bool ipacm_lan_stats_enable_set;

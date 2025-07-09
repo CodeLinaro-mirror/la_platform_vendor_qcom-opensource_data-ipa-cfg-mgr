@@ -1613,6 +1613,7 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 		{
 			ipacm_event_data_all *data = (ipacm_event_data_all *)param;
 			ipa_interface_index = iface_ipa_index_query(data->if_index);
+			ipacm_bridge *bridge;
 
 			IPACMDBG_H("Received IPA_NEIGH_CLIENT_IP_ADDR_DEL_EVENT event for ip_type: %d \n", data->iptype);
 			IPACMDBG_H("check iface %s category: %d\n", dev_name, ipa_if_cate);
@@ -1665,6 +1666,33 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 								data->iface_name);
 							return;
 						}
+						IPACMDBG_H("Get bridge info with vlan (%s) vid (%d)\n", data->iface_name, vlan_id);
+						bridge = IPACM_Iface::ipacmcfg->get_vlan_bridge_from_vid(vlan_id);
+						if (!bridge)
+						{
+							IPACMDBG_H("bridge is NULL with vlan (%s) vid (%d), ignoring!\n", data->iface_name, vlan_id);
+						}
+						else
+						{
+							IPACMDBG_H("Del bridge subnet with vlan (%s) vid (%d)\n", data->iface_name, vlan_id);
+							del_vlan_private_subnet(bridge);
+						}
+						IPACMDBG("Process DEL NEIGH For vlan_id %d \n", vlan_id, data->iptype);
+						/* generate IPA_ROUTE_DEL_VLAN_PDN_EVENT for v4 PDN as v6 PDN already has associated vlan*/
+						ipacm_cmd_q_data del_evt_data;
+						ipacm_event_route_vlan *del_vlan_data;
+						del_evt_data.event = IPA_ROUTE_DEL_VLAN_PDN_EVENT;
+						del_vlan_data = (ipacm_event_route_vlan *)malloc(sizeof(ipacm_event_route_vlan));
+						if(!del_vlan_data)
+						{
+							IPACMERR("couldn't allocate memory for new vlan pdn event\n");
+							return;
+						}
+						del_vlan_data->iptype = data->iptype;
+						del_vlan_data->VlanID = vlan_id;
+						del_evt_data.evt_data = del_vlan_data;
+						IPACMDBG_H("sending IPA_ROUTE_DEL_VLAN_PDN_EVENT vlan id %d, iptype %d,\n", del_vlan_data->VlanID, del_vlan_data->iptype);
+						IPACM_EvtDispatcher::PostEvt(&del_evt_data);
 					}
 #endif
 					/* Delete QOS rules. */
@@ -4747,7 +4775,8 @@ int IPACM_Lan::add_vlan_private_subnet(ipacm_bridge *bridge)
 		return IPACM_SUCCESS;
 	}
 
-	IPACMDBG_H("(%s) handle_vlan_private_subnet (0x%X & 0x%X)\n",
+	IPACMDBG_H("dev_name (%s) --> (%s) add_vlan_private_subnet (0x%X & 0x%X)\n",
+		dev_name,
 		bridge->bridge_name,
 		bridge->bridge_netmask,
 		bridge->bridge_ipv4_addr);
@@ -4798,6 +4827,77 @@ int IPACM_Lan::add_vlan_private_subnet(ipacm_bridge *bridge)
 	IPACM_EvtDispatcher::PostEvt(&evt_data);
 
 	return IPACM_SUCCESS;
+}
+
+int IPACM_Lan::del_vlan_private_subnet(ipacm_bridge * bridge)
+{
+	int i, cnt;
+	ipacm_event_data_fid *data_fid;
+	ipacm_cmd_q_data evt_data;
+
+	if(rx_prop == NULL)
+	{
+		IPACMDBG_H("No rx properties registered for iface %s\n", dev_name);
+		return IPACM_SUCCESS;
+	}
+
+	IPACMDBG_H("Bridge del_vlan_private_subnet (0x%X & 0x%X)\n",
+		bridge->bridge_name,
+		bridge->bridge_netmask,
+		bridge->bridge_ipv4_addr);
+
+	IPACMDBG("current num private subnets %d\n", IPACM_Iface::ipacmcfg->ipa_num_private_subnet);
+	for(i = 0; i < IPACM_Iface::ipacmcfg->ipa_num_private_subnet; i++)
+	{
+		IPACMDBG_H("searching for private subnet already added for (0x%X & 0x%X)\n",
+			IPACM_Iface::ipacmcfg->private_subnet_table[i].subnet_mask,
+			IPACM_Iface::ipacmcfg->private_subnet_table[i].subnet_addr);
+
+		if((IPACM_Iface::ipacmcfg->private_subnet_table[i].subnet_mask &
+			IPACM_Iface::ipacmcfg->private_subnet_table[i].subnet_addr) ==
+			(bridge->bridge_netmask & bridge->bridge_ipv4_addr))
+		{
+			IPACMDBG_H("(%s) has private subnet Found (0x%X & 0x%X)\n",
+				bridge->bridge_name,
+				IPACM_Iface::ipacmcfg->private_subnet_table[i].subnet_mask,
+				IPACM_Iface::ipacmcfg->private_subnet_table[i].subnet_addr);
+		}
+	}
+
+	for(cnt = 0; cnt < IPACM_Iface::ipacmcfg->ipa_num_private_subnet; cnt++)
+	{
+		if((IPACM_Iface::ipacmcfg->private_subnet_table[cnt].subnet_mask &
+			IPACM_Iface::ipacmcfg->private_subnet_table[cnt].subnet_addr) ==
+			(bridge->bridge_netmask & bridge->bridge_ipv4_addr))
+			{
+				IPACMDBG("Found private subnet_addr as: 0x%x in entry(%d) \n", bridge->bridge_ipv4_addr, cnt);
+				for(; cnt < IPACM_Iface::ipacmcfg->ipa_num_private_subnet - 1; cnt++)
+				{
+					IPACM_Iface::ipacmcfg->private_subnet_table[cnt].subnet_addr = IPACM_Iface::ipacmcfg->private_subnet_table[cnt + 1].subnet_addr;
+					IPACM_Iface::ipacmcfg->private_subnet_table[cnt].subnet_mask = IPACM_Iface::ipacmcfg->private_subnet_table[cnt + 1].subnet_mask;
+					IPACM_Iface::ipacmcfg->private_subnet_table[cnt].if_index = IPACM_Iface::ipacmcfg->private_subnet_table[cnt + 1].if_index;
+				}
+				IPACM_Iface::ipacmcfg->ipa_num_private_subnet = IPACM_Iface::ipacmcfg->ipa_num_private_subnet - 1;
+
+				/* IPACM private subnet set changes */
+				data_fid = (ipacm_event_data_fid *)malloc(sizeof(ipacm_event_data_fid));
+				if(data_fid == NULL)
+				{
+					IPACMERR("unable to allocate memory for event data_fid\n");
+					return IPACM_FAILURE;
+				}
+				data_fid->if_index = ipa_if_num; // already ipa index, not find index
+				evt_data.event = IPA_PRIVATE_SUBNET_CHANGE_EVENT;
+				evt_data.evt_data = data_fid;
+
+				/* Insert IPA_PRIVATE_SUBNET_CHANGE_EVENT to command queue */
+				IPACM_EvtDispatcher::PostEvt(&evt_data);
+				IPACMDBG("After Del num private subnets %d\n", IPACM_Iface::ipacmcfg->ipa_num_private_subnet);
+				return IPACM_SUCCESS;
+			}
+	}
+	IPACMDBG("can't find private subnet_addr as: 0x%x \n", bridge->bridge_ipv4_addr);
+	return IPACM_FAILURE;
 }
 #endif
 

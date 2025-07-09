@@ -1658,7 +1658,7 @@ void IPACM_ConntrackListener::HandleVlanDown(void *in_param)
 							}
 							else
 							{
-								IPACM_LOG(IPACM_LOG_DEBUG, "VLAN PDN is up, return\n");
+								IPACM_LOG(IPACM_LOG_DEBUG, "v4 VLAN PDN is up, return VID_cnt %d\n", vlan_pdns[i].VID_cnt);
 								return;
 							}
 						}
@@ -1735,7 +1735,7 @@ void IPACM_ConntrackListener::HandleVlanDownV6(void *in_param)
 						}
 						else
 						{
-							IPACM_LOG(IPACM_LOG_DEBUG, "V6 VLAN PDN is up, return\n");
+							IPACM_LOG(IPACM_LOG_DEBUG, "v6 VLAN PDN is up, return VID_cnt %d\n", v6_vlan_pdns[i].VID_cnt);
 							return;
 						}
 					}

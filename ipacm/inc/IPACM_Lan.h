@@ -232,7 +232,6 @@ public:
 	bool dummy_prefix_installed;
 	bool is_vlan_offload_disabled;
 #endif
-
 	std::list <ipacm_event_data_all> neigh_cache;
 
 	/* LAN-iface's callback function */
@@ -260,6 +259,7 @@ public:
 	int add_dummy_ipv6_prefix_flt_rule();
 	int modify_ipv6_prefix_flt_rule();
 	int handle_backhaul_switch_vlan_mode(bool to_sta);
+	bool is_vlan_IF(uint16_t vlan_id);
 #endif
 
 	/* handle new_address event*/
@@ -1194,6 +1194,8 @@ private:
 						return IPACM_SUCCESS;
 					}
 				}
+				IPACMERR("maximum allowed number of vlans are associated to the mux %d\n", mux_id);
+				return IPACM_FAILURE;
 			}
 		}
 
@@ -1411,10 +1413,10 @@ private:
 	int handle_odu_route_del();
 
 	/*handle lan iface down event*/
-	int handle_down_evt();
+	int handle_down_evt(ipa_ip_type iptype);
 
 	/*handle reset usb-client rt-rules */
-	int handle_lan_client_reset_rt(ipa_ip_type iptype);
+	int handle_lan_client_reset_rt(ipa_ip_type iptype, uint16_t vlan_id = 0);
 
 #ifdef FEATURE_IPACM_UL_FIREWALL
 	void change_to_network_order(ipa_ip_type iptype, ipa_rule_attrib* attrib);
@@ -1434,7 +1436,6 @@ private:
 #endif
 #ifdef FEATURE_VLAN_MPDN
 	int handle_vlan_neighbor(ipacm_event_data_all *data);
-	bool is_vlan_IF(uint16_t vlan_id);
 	int handle_vlan_phys_if_down();
 #endif
 

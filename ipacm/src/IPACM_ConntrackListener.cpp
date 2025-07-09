@@ -1,6 +1,5 @@
 /*
  * Copyright (c) 2013-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -27,39 +26,9 @@
  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * Changes from Qualcomm Innovation Center are provided under the following license:
- *
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
- *
- * Redistribution and use in source and binary forms, with or without
- * modification, are permitted (subject to the limitations in the
- * disclaimer below) provided that the following conditions are met:
- *
- *   * Redistributions of source code must retain the above copyright
- *     notice, this list of conditions and the following disclaimer.
- *
- *   * Redistributions in binary form must reproduce the above
- *     copyright notice, this list of conditions and the following
- *     disclaimer in the documentation and/or other materials provided
- *     with the distribution.
- *
- *   * Neither the name of Qualcomm Innovation Center, Inc. nor the names of its
- *     contributors may be used to endorse or promote products derived
- *     from this software without specific prior written permission.
- *
- * NO EXPRESS OR IMPLIED LICENSES TO ANY PARTY'S PATENT RIGHTS ARE
- * GRANTED BY THIS LICENSE. THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT
- * HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED
- * WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
- * MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
- * IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR
- * ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
- * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE
- * GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
- * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER
- * IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
- * OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
- * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ * Changes from Qualcomm Technologies, Inc. are provided under the following license:
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 #include <sys/ioctl.h>
 #include <net/if.h>
@@ -946,6 +915,7 @@ void IPACM_ConntrackListener::HandleVlanUp(void *in_param)
 					IPACMDBG_H("found existing PDN entry in %d, but got new VLAN id. Adding vlan %d to the entry\n", i, vlanup_data->VlanID);
 					vlan_pdns[i].associated_VIDs[vlan_pdns[i].VID_cnt] = vlanup_data->VlanID;
 					IPACMDBG_H("found existing PDN entry in %d \n", i);
+					vlan_pdns[i].VID_cnt++;
 					return;
 				}
 			}
@@ -1155,6 +1125,9 @@ error:
 void IPACM_ConntrackListener::HandleVlanDown(void *in_param)
 {
 	ipacm_event_vlan_pdn *vlanup_data = (ipacm_event_vlan_pdn *)in_param;
+	bool remove_pdn = false;
+	int i, j;
+
 	IPACMDBG_H("Recevied below information during VLAN DOWN up,\n");
 	IPACMDBG_H("IPType: %d, vlan_id:%d, mux id %d\n",
 		vlanup_data->iptype,
@@ -1169,7 +1142,37 @@ void IPACM_ConntrackListener::HandleVlanDown(void *in_param)
 	if((vlanup_data->iptype == IPA_IP_v4) ||
 		(vlanup_data->iptype == IPA_IP_MAX))
 	{
-		/* VLAN PDN down is triggered only on LINK_DOWN, we can safely remove the PDN */
+		if(vlanup_data->VlanID > 0)
+		{
+			for(i = 0; i < IPA_MAX_NUM_HW_PDNS; i++)
+			{
+				if(vlan_pdns[i].public_ip == vlanup_data->ipv4_addr)
+				{
+					for(j = 0; j < IPA_MAX_NUM_SW_PDNS; j++)
+					{
+						if(vlan_pdns[i].associated_VIDs[j] == vlanup_data->VlanID)
+						{
+							IPACMDBG_H("Clearing VID %d from PDN with IP %d\n", vlanup_data->VlanID, vlanup_data->ipv4_addr);
+							vlan_pdns[i].associated_VIDs[j] = 0;
+							vlan_pdns[i].VID_cnt--;
+							if(vlan_pdns[i].VID_cnt == 0)
+							{
+								remove_pdn = true;
+								break;
+							}
+							else
+							{
+								IPACMDBG_H("VLAN PDN is up, return\n");
+								return;
+							}
+						}
+					}
+					if(remove_pdn == true)
+						break;
+				}
+			}
+		}
+
 		IPACMDBG_H("removing PDN ipv4 address 0x%X\n", vlanup_data->ipv4_addr);
 		nat_inst->RemovePdn(vlanup_data->ipv4_addr);
 
@@ -2478,7 +2481,12 @@ void IPACM_ConntrackListener::ProcessTCPorUDPMsg(
 		 rule.private_port = rule.public_port;
 	 }
 
-	 CheckSTAClient(&rule, &nat_entry.isTempEntry);
+	/* Add support for STA with vlan client */
+	if (isStaMode && nat_entry.isVlan)
+	{
+		nat_entry.IsVlanUp = true;
+	}
+	CheckSTAClient(&rule, &nat_entry.isTempEntry);
 	 nat_entry.rule = &rule;
 #ifdef FEATURE_VLAN_MPDN
 	AddORDeleteNatEntry(&nat_entry, &SendVlanEvent);

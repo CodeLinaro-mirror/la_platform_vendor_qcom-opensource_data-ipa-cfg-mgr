@@ -170,6 +170,14 @@ public:
 	static IPACM_firewall_conf_t* get_curr_pdn_firewall_config(IPACM_firewall_t &firewall_configs, const char* dev_name);
 	static int get_wlan_v4_index();
 	static int get_wlan_v6_index();
+	/*
+	 * iptype: IPA_IP_v4 or IPA_IP_v6
+	 * pdn_idx: Index in ipv4_to_iface or ipv6_to_iface
+	 * vlan_idx: Index in associated_VIDs of ipv4_to_iface[pdn_idx] or ipv6_to_iface[pdn_idx]
+	 * vlan_id: VLAN ID
+	 * vlan_up: True to post IPA_HANDLE_WAN_VLAN_PDN_UP. False to post IPA_HANDLE_WAN_VLAN_PDN_DOWN
+	 */
+	void post_wan_vlan_pdn_event(ipa_ip_type iptype, int pdn_idx, int vlan_idx, uint16_t vlan_id, bool vlan_up);
 #endif
 	static bool isWanUP(int ipa_if_num_tether)
 	{
@@ -646,6 +654,9 @@ private:
 	/* handle new_address event */
 	int handle_addr_evt(ipacm_event_data_addr *data);
 
+	/* handle del_address event */
+	int handle_addr_del_evt(ipacm_event_data_addr *data);
+
 	/* wan default route/filter rule configuration */
 	int handle_route_add_evt(ipa_ip_type iptype);
 
@@ -675,10 +686,10 @@ private:
 
 	int del_dft_firewall_rules(ipa_ip_type iptype, bool wan_up_vlan = false);
 
-	int handle_down_evt();
+	int handle_down_evt(ipa_ip_type iptype);
 
 	/*handle wan-iface down event */
-	int handle_down_evt_ex();
+	int handle_down_evt_ex(ipa_ip_type iptype);
 
 	/* wan default route/filter rule delete */
 	int handle_route_del_evt_ex(ipa_ip_type iptype);
@@ -743,8 +754,8 @@ private:
 	/* construct dummy ethernet header */
 	int add_dummy_rx_hdr();
 
-	void HandleSTAClientDelEvt(const ipa_wan_client* client);
-	
+	void HandleSTAClientDelEvt(const ipa_wan_client* client, ipa_ip_type iptype = IPA_IP_MAX);
+
 	int add_catchup_all_filtering_rule_each_pdn(const IPACM_firewall_conf_t& firewall_config, ipa_ip_type iptype,
 		const struct ipa_rule_attrib& rx_prop_attrib, struct ipa_flt_rule_add& flt_rule_add, int fltr_rule_number);
 	int add_ipv6_frag_filtering_rule_ex(const struct ipa_rule_attrib& rx_prop_attrib,

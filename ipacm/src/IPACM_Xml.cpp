@@ -26,9 +26,9 @@
  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * Changes from Qualcomm Innovation Center, Inc. are provided under the following license:
- * Copyright (c) 2025 Qualcomm Innovation Center, Inc. All rights reserved.
- * SPDX-License-Identifier: BSD-3-Clause-Clear.
+ * Changes from Qualcomm Technologies, Inc. are provided under the following license:
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 /*!
   @file
@@ -613,7 +613,7 @@ static int ipacm_cfg_xml_parse_tree
 						{
 							config->max_file_size_quota = atoi(content);
 						}
-						IPACMDBG_H("max_fileszQuota %d \n",config->max_file_size_quota);
+						IPACMDBG_H("max_fileszQuota %u \n",config->max_file_size_quota);
 					}
 				}
 				else if (0 == IPACM_util_icmp_string((char*)xml_node->name, IPACMFILEVAR_TAG))
@@ -626,8 +626,13 @@ static int ipacm_cfg_xml_parse_tree
 							memcpy(content_buf, (void *)content, str_size);
 							if(atoi(content_buf)!=0)
 							{
-								config->max_file_size = atoi(content_buf);
-								IPACMDBG_H("max_filesz %d \n",config->max_file_size);
+								config->max_file_size = strtoll(content, NULL, 10);
+								if(config->max_file_size < 0)
+								{
+									IPACMDBG_H("Invalid file size configured %lld\n",config->max_file_size);
+									config->max_file_size = 0;
+								}
+								IPACMDBG_H("max_filesz %lld\n",config->max_file_size);
 							}
 						}
 				}

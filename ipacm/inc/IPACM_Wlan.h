@@ -28,7 +28,7 @@
  *
  * Changes from Qualcomm Technologies, Inc. are provided under the following license:
  * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
- * SPDX-License-Identifier: BSD-3-Clause-Clear
+ * SPDX-License-Identifier: BSD-3-Clause-Clear.
  */
 /*!
 		@file
@@ -563,7 +563,7 @@ private:
 	int handle_wlan_client_down_evt(uint8_t *mac_addr);
 
 	/*handle wlan iface down event*/
-	int handle_down_evt();
+	int handle_down_evt(ipa_ip_type iptype);
 
 	/*handle reset wifi-client rt-rules */
 	int handle_wlan_client_reset_rt(ipa_ip_type iptype);

@@ -301,6 +301,7 @@ int IPACM_IfaceManager::create_iface_instance(ipacm_ifacemgr_data *param)
 				IPACM_EvtDispatcher::registr(IPA_PREFIX_CHANGE_EVENT, lan);
 				IPACM_EvtDispatcher::registr(IPA_HANDLE_WAN_VLAN_PDN_UP, lan);
 				IPACM_EvtDispatcher::registr(IPA_HANDLE_WAN_VLAN_PDN_DOWN, lan);
+				IPACM_EvtDispatcher::registr(IPA_NOTIFY_VLAN_UP, lan);
 #endif
 #ifdef FEATURE_IPA_ANDROID
 				IPACM_EvtDispatcher::registr(IPA_TETHERING_STATS_UPDATE_EVENT, lan);
@@ -391,6 +392,7 @@ int IPACM_IfaceManager::create_iface_instance(ipacm_ifacemgr_data *param)
 					IPACM_EvtDispatcher::registr(IPA_HANDLE_WAN_VLAN_PDN_DOWN, odu);
 					IPACM_EvtDispatcher::registr(IPA_PRIVATE_SUBNET_CHANGE_EVENT, odu); 	// register for IPA_PRIVATE_SUBNET_CHANGE_EVENT event
 					IPACM_EvtDispatcher::registr(IPA_CFG_CHANGE_EVENT, odu); 				// register for IPA_CFG_CHANGE event
+					IPACM_EvtDispatcher::registr(IPA_NOTIFY_VLAN_UP, odu);
 #endif
 #ifdef FEATURE_SOCKSv5
 						IPACM_EvtDispatcher::registr(IPA_HANDLE_SOCKSv5_READY, odu);
@@ -481,8 +483,12 @@ int IPACM_IfaceManager::create_iface_instance(ipacm_ifacemgr_data *param)
 #ifdef FEATURE_ETH_BRIDGE_LE
 				IPACM_EvtDispatcher::registr(IPA_CFG_CHANGE_EVENT, wl);
 #endif
-				IPACM_EvtDispatcher::registr(IPA_CRADLE_WAN_MODE_SWITCH, wl);
-				IPACM_EvtDispatcher::registr(IPA_WLAN_LINK_DOWN_EVENT, wl);
+#ifdef FEATURE_VLAN_MPDN
+				IPACM_EvtDispatcher::registr(IPA_HANDLE_WAN_VLAN_PDN_UP, wl);
+				IPACM_EvtDispatcher::registr(IPA_HANDLE_WAN_VLAN_PDN_DOWN, wl);
+				IPACM_EvtDispatcher::registr(IPA_HANDLE_WAN_ADDR_ADD_V6, wl);
+				IPACM_EvtDispatcher::registr(IPA_NOTIFY_VLAN_UP, wl);
+#endif
 #ifndef FEATURE_IPA_ANDROID
 				IPACM_EvtDispatcher::registr(IPA_WLAN_SWITCH_TO_SCC, wl);
 				IPACM_EvtDispatcher::registr(IPA_WLAN_SWITCH_TO_MCC, wl);
@@ -494,11 +500,10 @@ int IPACM_IfaceManager::create_iface_instance(ipacm_ifacemgr_data *param)
 #else
 				IPACM_EvtDispatcher::registr(IPA_TETHERING_STATS_UPDATE_EVENT, wl);
 #endif
+				IPACM_EvtDispatcher::registr(IPA_CRADLE_WAN_MODE_SWITCH, wl);
+				IPACM_EvtDispatcher::registr(IPA_WLAN_LINK_DOWN_EVENT, wl);
 				/* IPA_LAN_DELETE_SELF should be always last */
 				IPACM_EvtDispatcher::registr(IPA_LAN_DELETE_SELF, wl);
-				IPACM_EvtDispatcher::registr(IPA_HANDLE_WAN_VLAN_PDN_UP, wl);
-				IPACM_EvtDispatcher::registr(IPA_HANDLE_WAN_VLAN_PDN_DOWN, wl);
-				IPACM_EvtDispatcher::registr(IPA_HANDLE_WAN_ADDR_ADD_V6, wl);
 				IPACMDBG_H("ipa_WLAN (%s):ipa_index (%d) instance open/registr ok\n", wl->dev_name, wl->ipa_if_num);
 				registr(ipa_interface_index, wl);
 				/* solve the new_addr comes earlier issue */
@@ -537,6 +542,7 @@ int IPACM_IfaceManager::create_iface_instance(ipacm_ifacemgr_data *param)
 						IPACM_EvtDispatcher::registr(IPA_NETWORK_STATS_UPDATE_EVENT, w);
 					};
 #else/* defined(FEATURE_IPA_ANDROID) */
+					IPACM_EvtDispatcher::registr(IPA_ADDR_DEL_EVENT, w);
 					IPACM_EvtDispatcher::registr(IPA_ROUTE_ADD_EVENT, w);
 					IPACM_EvtDispatcher::registr(IPA_ROUTE_DEL_EVENT, w);
 					IPACM_EvtDispatcher::registr(IPA_WLAN_GW_ADDR_ADD_EVENT, w);
@@ -562,16 +568,19 @@ int IPACM_IfaceManager::create_iface_instance(ipacm_ifacemgr_data *param)
 					IPACM_EvtDispatcher::registr(IPA_HANDLE_SOCKSv5_DOWN, w);
 
 #endif
+					IPACM_EvtDispatcher::registr(IPA_DUMMY_VLAN_DOWN_EVENT, w);
 					if(is_sta_mode == WLAN_WAN)
 					{
 #ifndef FEATURE_IPA_ANDROID
 						IPACM_EvtDispatcher::registr(IPA_WLAN_SWITCH_TO_SCC, w);
 						IPACM_EvtDispatcher::registr(IPA_WLAN_SWITCH_TO_MCC, w);
 #endif
+						/* IPA_WLAN_LINK_DOWN_EVENT should be always last for WLAN WAN */
 						IPACM_EvtDispatcher::registr(IPA_WLAN_LINK_DOWN_EVENT, w); // for STA mode
 					}
 					else
 					{
+						/* IPA_IPA_LINK_DOWN_EVENT should be always last for WWAN */
 						IPACM_EvtDispatcher::registr(IPA_LINK_DOWN_EVENT, w);
 					}
 

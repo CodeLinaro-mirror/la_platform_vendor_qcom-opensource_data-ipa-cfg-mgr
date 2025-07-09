@@ -1570,6 +1570,9 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 		{
 			ipacm_event_data_all *data = (ipacm_event_data_all *)param;
 			ipa_interface_index = iface_ipa_index_query(data->if_index);
+			uint16_t vlan_id = 0;
+			ipacm_cmd_q_data del_evt_data;
+			ipacm_event_route_vlan *del_vlan_data;
 
 			IPACMDBG_H("Received IPA_NEIGH_CLIENT_IP_ADDR_DEL_EVENT event for ip_type: %d \n", data->iptype);
 			IPACMDBG_H("check iface %s category: %d\n", dev_name, ipa_if_cate);
@@ -1603,8 +1606,6 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 					(ipa_interface_index == ipa_if_num)
 					)
 				{
-					uint16_t vlan_id = 0;
-
 					if (data->iptype == IPA_IP_v6)
 					{
 						handle_del_ipv6_addr(data);
@@ -1622,6 +1623,21 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 								data->iface_name);
 							return;
 						}
+						IPACMDBG("Process DEL NEIGH For vlan_id %d \n", vlan_id, data->iptype);
+						/* generate IPA_ROUTE_DEL_VLAN_PDN_EVENT for v4 PDN as v6 PDN already has associated vlan*/
+						del_evt_data.event = IPA_ROUTE_DEL_VLAN_PDN_EVENT;
+						del_vlan_data = (ipacm_event_route_vlan *)malloc(sizeof(ipacm_event_route_vlan));
+						if(!del_vlan_data)
+						{
+							IPACMERR("couldn't allocate memory for new vlan pdn event\n");
+							return;
+						}
+						memset(del_vlan_data, 0, sizeof(ipacm_event_route_vlan));
+						del_vlan_data->iptype = data->iptype;
+						del_vlan_data->VlanID = vlan_id;
+						del_evt_data.evt_data = del_vlan_data;
+						IPACMDBG_H("sending IPA_ROUTE_DEL_VLAN_PDN_EVENT vlan id %d, iptype %d,\n", del_vlan_data->VlanID, del_vlan_data->iptype);
+						IPACM_EvtDispatcher::PostEvt(&del_evt_data);
 					}
 #endif
 					/* Delete QOS rules. */
@@ -3292,7 +3308,7 @@ int IPACM_Lan::handle_vlan_neighbor(ipacm_event_data_all *data)
 			}
 			if(!skip_nat_set)
 			{
-				add_vlan_private_subnet(bridge);
+				IPACMDBG_H("Skip Adding vlan private subnet to the array!! \n");
 			}
 		}
 		skip_nat_set = 0;
@@ -4696,7 +4712,8 @@ int IPACM_Lan::add_vlan_private_subnet(ipacm_bridge *bridge)
 		return IPACM_SUCCESS;
 	}
 
-	IPACMDBG_H("(%s) handle_vlan_private_subnet (0x%X & 0x%X)\n",
+	IPACMDBG_H("dev_name (%s) --> (%s) add_vlan_private_subnet (0x%X & 0x%X)\n",
+		dev_name,
 		bridge->bridge_name,
 		bridge->bridge_netmask,
 		bridge->bridge_ipv4_addr);

@@ -150,7 +150,8 @@ const char *ipacm_event_name[] = {
 #endif
 #ifdef FEATURE_VLAN_MPDN
 	__stringify(IPA_PREFIX_CHANGE_EVENT),                  /* ipacm_event_data_fid */
-	__stringify(IPA_ROUTE_ADD_VLAN_PDN_EVENT),             /* ipacm_event_route_vlan */
+	__stringify(IPA_ROUTE_ADD_VLAN_PDN_EVENT),             /* ipacm_event_route_add_vlan */
+	__stringify(IPA_ROUTE_DEL_VLAN_PDN_EVENT),             /* ipacm_event_route_del_vlan */
 	__stringify(IPA_HANDLE_WAN_VLAN_PDN_UP),               /* ipacm_event_vlan_pdn */
 	__stringify(IPA_HANDLE_WAN_VLAN_PDN_DOWN),             /* ipacm_event_vlan_pdn */
 	__stringify(IPA_HANDLE_LAN_VLAN_PDN_DOWN_STATIC),      /* ipacm_event_vlan_pdn */
@@ -306,6 +307,7 @@ IPACM_Config::IPACM_Config()
 	pthread_mutex_init(&vlan_l2tp_lock, NULL);
 #endif
 	pthread_mutex_init(&nat_iface_lock, NULL);
+	pthread_mutex_init(&get_vlan_association_lock, NULL);
 	pthread_mutex_init(&qos_param_list_lock, NULL);
 	pthread_mutex_init(&qos_param_list_lock, NULL);
 	IPACMDBG_H(" create IPACM_Config constructor\n");

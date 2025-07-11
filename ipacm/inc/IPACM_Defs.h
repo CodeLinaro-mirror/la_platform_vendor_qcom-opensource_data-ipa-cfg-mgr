@@ -378,6 +378,7 @@ typedef struct
 	uint32_t subnet_addr;
 	uint32_t subnet_mask;
 	int if_index;
+	bool isCollisionSubnet;
 } ipa_private_subnet;
 
 

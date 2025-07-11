@@ -28,7 +28,8 @@
  *
  * Changes from Qualcomm Technologies, Inc. are provided under the following license:
  * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
- * SPDX-License-Identifier: BSD-3-Clause-Clear
+ * SPDX-License-Identifier: BSD-3-Clause-Clear.
+ *
  */
 /*!
 		@file
@@ -4085,6 +4086,193 @@ void IPACM_Config::ip_pass_config_update(ipa_ioc_pdn_config *pdn_config, int if_
 			IPACMERR("IP Passthrough PDN not found\n");
 	}
 	pthread_mutex_unlock(&ip_pass_mpdn_lock);
+}
+
+/**
+ * Retrieves the interface index associated with a given VLAN ID.
+ * Iterates through the configured VLAN interface list to locate the entry
+ * matching the provided VLAN identifier. Obtains the interface index
+ * using ipa_get_if_index() and returns it to the caller.
+ *
+ * @param vlan_id  VLAN identifier to resolve.
+ * @return int     Interface index on success; 0(default) if VLAN ID not found; -1 on lookup fail.
+*/
+int IPACM_Config::ipa_get_if_idx_by_vid (uint16_t vlan_id)
+{
+	int if_index = 0;
+
+	for(auto it_vlan = m_vlan_iface.begin(); it_vlan != m_vlan_iface.end(); it_vlan++)
+	{
+		if(it_vlan->vlan_id == vlan_id)
+		{
+			if(IPACM_Iface::ipa_get_if_index(it_vlan->vlan_iface_name, &(if_index)))
+			{
+				IPACMDBG_H("Error getting interface index\n");
+				return -1;
+			}
+			break;
+		}
+	}
+	IPACMDBG_H("Found interface index as %d for vid %d\n", if_index, vlan_id);
+	return if_index;
+}
+
+/**
+ * Disable collision handling for the given device name.
+ * Removes the device entry from the collision map and posts a
+ * IPA_PRIVATE_SUBNET_CHANGE_EVENT for all matching interfaces.
+ * Allocated event payload memory is owned and freed by the event dispatcher.
+ *
+ * @param dev_name  Device/interface name (must be non-null and non-empty).
+*/
+void IPACM_Config::disable_collision(const char* dev_name)
+{
+	ipacm_event_data_fid* data_fid = nullptr;
+	ipacm_cmd_q_data evt_data{};
+
+	if (dev_name == nullptr || dev_name[0] == '\0') {
+		IPACMERR("Invalid dev_name parameter\n");
+		return;
+	}
+
+	if (pthread_mutex_lock(&ip_collision_lock) != 0) {
+		IPACMERR("Unable to lock collision mutex\n");
+		return;
+	}
+
+	std::string key(dev_name);
+	auto it = ip_collision_map.find(key);
+	if (it == ip_collision_map.end()) {
+		IPACMERR("dev_name not found in ip_collision_map: %s\n", key.c_str());
+		pthread_mutex_unlock(&ip_collision_lock);
+		return;
+	}
+
+	int idx = it->second;
+	IPACMDBG_H("idx from ip_collision_map[dev_name] = %d\n", idx);
+	IPACMDBG_H("ipa_num_private_subnet count = %d\n", ipa_num_private_subnet);
+
+	ip_collision_map.erase(it);
+	pthread_mutex_unlock(&ip_collision_lock);
+
+	for (int i = 0; i < ipa_num_private_subnet; i++) {
+		IPACMDBG_H("if_idx from private_subnet_table[i].if_index = %d\n", private_subnet_table[i].if_index);
+		if(private_subnet_table[i].if_index == idx)
+		{
+			data_fid = (ipacm_event_data_fid *)malloc(sizeof(ipacm_event_data_fid));
+			if(data_fid == NULL) {
+				IPACMERR("Failed malloc for data_fid\n");
+				return;
+			}
+			memset(data_fid, 0, (sizeof(ipacm_event_data_fid)));
+			data_fid->if_index = idx;
+
+			evt_data.event = IPA_PRIVATE_SUBNET_CHANGE_EVENT;
+			evt_data.evt_data = data_fid;
+
+			IPACMDBG_H("Posting IPA_PRIVATE_SUBNET_CHANGE_EVENT with if_index: %d\n", idx);
+			IPACMDBG_H("Posting event:%d\n", evt_data.event);
+
+			if (IPACM_EvtDispatcher::PostEvt(&evt_data) != IPACM_SUCCESS)
+			{
+				IPACMERR("PostEvt failed, cleaning up allocated memory\n");
+				free(data_fid);
+				data_fid = NULL;
+			}
+		}
+	}
+	return;
+}
+
+/**
+ * Detects and handles IP collisions between the given WAN IP/mask and configured private subnets.
+ * On the first detected collision, marks the subnet, resolves the interface index, posts an
+ * IPA_PRIVATE_SUBNET_CHANGE_EVENT (the event dispatcher assumes ownership of the payload),
+ * and updates the device→if_index mapping in ip_collision_map under mutex protection.
+ *
+ * @param dev_name  Device/interface name (must be non-null and non-empty).
+ * @param wan_ip    WAN IPv4 address in host byte order.
+ * @param wan_mask  WAN IPv4 subnet mask in host byte order.
+ * @return true if a collision was detected and handled; false otherwise.
+ */
+bool IPACM_Config::detect_and_handle_collision(const char* dev_name, uint32_t wan_ip, uint32_t wan_mask)
+{
+	uint16_t vid = 0;
+	int if_index = 0;
+	ipacm_event_data_fid *data_fid = NULL;
+
+	if (dev_name == nullptr || dev_name[0] == '\0') {
+		IPACMERR("Invalid dev_name parameter\n");
+		return false;
+	}
+
+	IPACMDBG_H("IP Collision processing started for dev_name: %s\n Input wan_ip: 0x%x (%d.%d.%d.%d), wan_mask: 0x%x\n ipa_num_private_subnet count = %d\n",
+		dev_name, wan_ip, (wan_ip >> 24) & 0xFF, (wan_ip >> 16) & 0xFF, (wan_ip >> 8) & 0xFF, wan_ip & 0xFF, wan_mask, ipa_num_private_subnet);
+
+	for (int i = 0; i < ipa_num_private_subnet; i++) {
+		const auto& entry = private_subnet_table[i];
+
+		IPACMDBG_H("Checking subnet: 0x%x, mask: 0x%x against wan_ip: 0x%x, wan_mask: 0x%x\n",
+				entry.subnet_addr, entry.subnet_mask, wan_ip, wan_mask);
+
+		if (!is_ips_in_collision(entry.subnet_addr, entry.subnet_mask, wan_ip, wan_mask)) {
+			continue;
+		}
+
+		IPACMDBG_H("Collision detected for subnet: 0x%x, mask: 0x%x (wan_ip: 0x%x)\n",
+				entry.subnet_addr, entry.subnet_mask, wan_ip);
+
+		private_subnet_table[i].isCollisionSubnet = true;
+
+		vid = get_bridge_vlan_mapping_from_subnet(entry.subnet_addr);
+		if_index = ipa_get_if_idx_by_vid(vid);
+
+		ipacm_cmd_q_data evt_data{};
+		data_fid = (ipacm_event_data_fid *)malloc(sizeof(ipacm_event_data_fid));
+		if(data_fid == NULL) {
+			IPACMERR("Failed malloc for data_fid\n");
+			return false;
+		}
+		memset(data_fid, 0, (sizeof(ipacm_event_data_fid)));
+
+		if (if_index != -1) {
+			data_fid->if_index = if_index;
+		}
+		else {
+			IPACMERR("Failed to resolve if_index for vid: %u (subnet: 0x%x)\n", vid, entry.subnet_addr);
+			// If if_index resolution failed, still queue the event with default if_index 0;
+		}
+
+		if (pthread_mutex_lock(&ip_collision_lock) != 0) {
+			IPACMERR("Unable to lock collision mutex to update ip_collision_map\n");
+			free(data_fid);
+			return false;
+		}
+
+		ip_collision_map[std::string(dev_name)] = if_index;
+
+		if (pthread_mutex_unlock(&ip_collision_lock) != 0) {
+			IPACMERR("Unable to unlock collision mutex after updating ip_collision_map\n");
+		}
+
+		evt_data.event    = IPA_PRIVATE_SUBNET_CHANGE_EVENT;
+		evt_data.evt_data = data_fid;
+
+		IPACMDBG_H("Posting IPA_PRIVATE_SUBNET_CHANGE_EVENT with if_index: %d\n", if_index);
+		IPACMDBG_H("Posting event: %d\n", evt_data.event);
+
+		if (IPACM_EvtDispatcher::PostEvt(&evt_data) != IPACM_SUCCESS) {
+			IPACMERR("PostEvt failed (if_index: %d). Cleaning up payload.\n", if_index);
+			free(data_fid);
+			evt_data.evt_data = nullptr;
+			return false;
+		}
+
+		return true;
+	}
+
+	IPACMDBG_H("No collision detected for WAN IP: 0x%x\n", wan_ip);
+	return false;
 }
 
 void IPACM_Config::add_qos_params_info(ipa_ioc_qos_config *data)

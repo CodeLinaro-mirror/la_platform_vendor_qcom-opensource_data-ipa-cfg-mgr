@@ -4,15 +4,15 @@
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
  * met:
- *  * Redistributions of source code must retain the above copyright
- *    notice, this list of conditions and the following disclaimer.
- *  * Redistributions in binary form must reproduce the above
- *    copyright notice, this list of conditions and the following
- *    disclaimer in the documentation and/or other materials provided
- *    with the distribution.
- *  * Neither the name of The Linux Foundation nor the names of its
- *    contributors may be used to endorse or promote products derived
- *    from this software without specific prior written permission.
+ *    * Redistributions of source code must retain the above copyright
+ *      notice, this list of conditions and the following disclaimer.
+ *    * Redistributions in binary form must reproduce the above
+ *      copyright notice, this list of conditions and the following
+ *      disclaimer in the documentation and/or other materials provided
+ *      with the distribution.
+ *    * Neither the name of The Linux Foundation nor the names of its
+ *      contributors may be used to endorse or promote products derived
+ *      from this software without specific prior written permission.
  *
  * THIS SOFTWARE IS PROVIDED "AS IS" AND ANY EXPRESS OR IMPLIED
  * WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
@@ -28,7 +28,7 @@
  *
  * Changes from Qualcomm Technologies, Inc. are provided under the following license:
  * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
- * SPDX-License-Identifier: BSD-3-Clause-Clear
+ * SPDX-License-Identifier: BSD-3-Clause-Clear.
  */
 /*!
   @file
@@ -495,7 +495,14 @@ void IPACM_Iface::iface_addr_query
 							IPACMDBG_H("current_ip4_addr: (0x%x)\n", (*curr_ip4_addr));
 							IPACMDBG_H("iface ip4 address: (0x%x)\n", ntohl(iface_ipv4.s_addr));
 
-							*curr_ip4_addr = ntohl(iface_ipv4.s_addr);
+							/* This is to handle race condition in collision case.
+							 * RTM_NEWADDR for collision IP is received before WAN
+							 * interface is created. While handling this NEWADDR, the
+							 * interface already has the dummy address.*/
+
+							if(!IPACM_Iface::ipacmcfg->is_ip_collision_enabled(ifa->ifa_name))
+								*curr_ip4_addr = ntohl(iface_ipv4.s_addr);
+
 							freeifaddrs(myaddrs);
 							return;
 						}

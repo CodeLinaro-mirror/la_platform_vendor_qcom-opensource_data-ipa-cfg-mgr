@@ -1194,6 +1194,8 @@ private:
 						return IPACM_SUCCESS;
 					}
 				}
+				IPACMERR("maximum allowed number of vlans are associated to the mux %d\n", mux_id);
+				return IPACM_FAILURE;
 			}
 		}
 
@@ -1411,10 +1413,10 @@ private:
 	int handle_odu_route_del();
 
 	/*handle lan iface down event*/
-	int handle_down_evt();
+	int handle_down_evt(ipa_ip_type iptype);
 
 	/*handle reset usb-client rt-rules */
-	int handle_lan_client_reset_rt(ipa_ip_type iptype);
+	int handle_lan_client_reset_rt(ipa_ip_type iptype, uint16_t vlan_id = 0);
 
 #ifdef FEATURE_IPACM_UL_FIREWALL
 	void change_to_network_order(ipa_ip_type iptype, ipa_rule_attrib* attrib);

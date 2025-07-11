@@ -195,7 +195,7 @@ void IPACM_Wlan::event_callback(ipa_cm_event_id event, void *param)
 			if (ipa_interface_index == ipa_if_num)
 			{
 				IPACM_SYSLOG("Received IPA_WLAN_LINK_DOWN_EVENT\n");
-				handle_down_evt();
+				handle_down_evt(IPA_IP_MAX);
 				/* reset the AP-iface category to unknown */
 				IPACM_Iface::ipacmcfg->iface_table[ipa_if_num].if_cat = UNKNOWN_IF;
 				IPACM_Iface::ipacmcfg->DelNatIfaces(dev_name); // delete NAT-iface
@@ -315,7 +315,8 @@ void IPACM_Wlan::event_callback(ipa_cm_event_id event, void *param)
 					handle_private_subnet(data->iptype);
 #endif
 
-					if (IPACM_Wan::isWanUP(ipa_if_num))
+					if(IPACM_Wan::isWanUP(ipa_if_num) &&
+						!IPACM_Iface::ipacmcfg->is_added_vlan_iface(dev_name))
 					{
 						if(data->iptype == IPA_IP_v4 || data->iptype == IPA_IP_MAX)
 						{
@@ -334,7 +335,8 @@ void IPACM_Wlan::event_callback(ipa_cm_event_id event, void *param)
 #ifdef FEATURE_IPACM_UL_FIREWALL
 					IPACM_Wan::read_firewall_filter_rules_ul();
 #endif //FEATURE_IPACM_UL_FIREWALL
-					if(IPACM_Wan::isWanUP_V6(ipa_if_num)) /* Modem v6 call is UP?*/
+					if(IPACM_Wan::isWanUP_V6(ipa_if_num) &&
+						!IPACM_Iface::ipacmcfg->is_added_vlan_iface(dev_name))
 					{
 						if(data->iptype == IPA_IP_v6)
 						{
@@ -536,8 +538,7 @@ void IPACM_Wlan::event_callback(ipa_cm_event_id event, void *param)
 				   IPA_ADDR_ADD_EVENT event, which wouldn't have
 				   correct mux_id and re-install them in
 				   handle_vlan_pdn_up */
-				if(IPACM_Iface::ipacmcfg->is_added_vlan_iface(dev_name) &&
-					(IPACM_Wan::backhaul_is_sta_mode == false))
+				if(IPACM_Iface::ipacmcfg->is_added_vlan_iface(dev_name))
 				{
 					if((data->iptype == IPA_IP_v4) && IPACM_Wan::isWanUP(ipa_if_num))
 						handle_wan_down(false, IPACM_Wan::getXlat_Mux_Id());
@@ -1242,16 +1243,27 @@ void IPACM_Wlan::event_callback(ipa_cm_event_id event, void *param)
 	case IPA_NOTIFY_VLAN_UP:
 	{
 		IPACMDBG_H("Received IPA_NOTIFY_VLAN_UP\n");
-		if (IPACM_Iface::ipacmcfg->is_added_vlan_iface(dev_name))
+		uint8_t mux_id = 0;
+		vlan_data = (ipacm_event_data_vlan *)param;
+		if (is_vlan_IF(vlan_data->vlan_id))
 		{
 			/* Remove the modem flt rules installed as part of
 			   IPA_ADDR_ADD_EVENT event, which wouldn't have
 			   correct mux_id and re-install them in
 			   handle_vlan_pdn_up in check_vlan_PDNUp*/
-			if(IPACM_Wan::isWanUP(ipa_if_num))
-				handle_wan_down(false, IPACM_Wan::getXlat_Mux_Id());
-			if(IPACM_Wan::isWanUP_V6(ipa_if_num))
-				handle_wan_down_v6(false);
+			if(IPACM_Wan::backhaul_is_sta_mode == false)
+			{
+				if(IPACM_Wan::isWanUP(ipa_if_num) &&
+				   (IPACM_FAILURE == IPACM_Wan::GetMuxByVid(vlan_data->vlan_id, &mux_id, IPA_IP_v4)))
+				{
+					handle_wan_down(false, IPACM_Wan::getXlat_Mux_Id());
+				}
+				if(IPACM_Wan::isWanUP_V6(ipa_if_num) &&
+				   (IPACM_FAILURE == IPACM_Wan::GetMuxByVid(vlan_data->vlan_id, &mux_id, IPA_IP_v6)))
+				{
+					handle_wan_down_v6(false);
+				}
+			}
 			if(IPACM_Wan::isVlanWanUP())
 			{
 				IPACMDBG_H("Check any missed v4 VLAN handling in v4 new ADDR\n");
@@ -3065,25 +3077,26 @@ int IPACM_Wlan::handle_wlan_client_down_evt(uint8_t *mac_addr)
 }
 
 /*handle wlan iface down event*/
-int IPACM_Wlan::handle_down_evt()
+int IPACM_Wlan::handle_down_evt(ipa_ip_type arg_ip_type)
 {
-	int res = IPACM_SUCCESS, i, num_private_subnet_fl_rule;
+	int res = IPACM_SUCCESS, i, num_private_subnet_fl_rule, num_v6;
+	std::list <ipacm_event_data_all>::iterator it;
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
 	struct wan_ioctl_lan_client_info *client_info;
 #endif
 
-	IPACMDBG_H("WLAN ip-type: %d \n", ip_type);
+	IPACMDBG_H("WLAN ip-type: %d \n", arg_ip_type);
 
 #ifdef FEATURE_IPACM_UL_FIREWALL
 	/* Clear IPv6 UL firewall rules: LAN pipe frag, catch all and FW rules if installed */
-	 if (ip_type != IPA_IP_v4)
+	 if (arg_ip_type != IPA_IP_v4)
 	 	IPACM_Lan::delete_uplink_filter_rule_ul(&iface_ul_firewall);
 #endif
 
 	/* no iface address up, directly close iface*/
-	if (ip_type == IPACM_IP_NULL)
+	if (arg_ip_type == IPACM_IP_NULL)
 	{
-		IPACMERR("Invalid iptype: 0x%x\n", ip_type);
+		IPACMERR("Invalid iptype: 0x%x\n", arg_ip_type);
 		goto fail;
 	}
 
@@ -3102,7 +3115,7 @@ int IPACM_Wlan::handle_down_evt()
 	IPACM_SYSLOG("finished deleting wan filtering rules\n ");
 
 	/* Delete v4 filtering rules */
-	if (ip_type != IPA_IP_v6 && rx_prop != NULL)
+	if (arg_ip_type != IPA_IP_v6 && rx_prop != NULL)
 	{
 		/* delete IPv4 icmp filter rules */
 		if(m_filtering.DeleteFilteringHdls(ipv4_icmp_flt_rule_hdl, IPA_IP_v4, NUM_IPV4_ICMP_FLT_RULE) == false)
@@ -3156,7 +3169,7 @@ int IPACM_Wlan::handle_down_evt()
 	}
 
 	/* Delete v6 filtering rules */
-	if (ip_type != IPA_IP_v4 && rx_prop != NULL)
+	if (arg_ip_type != IPA_IP_v4 && rx_prop != NULL)
 	{
 		/* delete icmp filter rules */
 		if(m_filtering.DeleteFilteringHdls(ipv6_icmp_flt_rule_hdl, IPA_IP_v6, NUM_IPV6_ICMP_FLT_RULE) == false)
@@ -3193,7 +3206,7 @@ int IPACM_Wlan::handle_down_evt()
 	IPACM_SYSLOG("finished delete filtering rules\n ");
 
 	/* Delete default v4 RT rule */
-	if (ip_type != IPA_IP_v6)
+	if (arg_ip_type != IPA_IP_v6)
 	{
 		IPACMDBG_H("Delete default v4 routing rules\n");
 		if (m_routing.DeleteRoutingHdl(dft_rt_rule_hdl[0], IPA_IP_v4)
@@ -3206,7 +3219,7 @@ int IPACM_Wlan::handle_down_evt()
 	}
 
 	/* Delete default v6 RT rule */
-	if (ip_type != IPA_IP_v4)
+	if (arg_ip_type != IPA_IP_v4)
 	{
 		IPACMDBG_H("Delete default v6 routing rules\n");
 		/* May have multiple ipv6 iface-RT rules */
@@ -3230,7 +3243,7 @@ int IPACM_Wlan::handle_down_evt()
 
 	/* Delete private subnet*/
 #ifdef FEATURE_IPA_ANDROID
-	if (ip_type != IPA_IP_v6)
+	if (arg_ip_type != IPA_IP_v6)
 	{
 		IPACMDBG_H("current IPACM private subnet_addr number(%d)\n", IPACM_Iface::ipacmcfg->ipa_num_private_subnet);
 		IPACMDBG_H(" Delete IPACM private subnet_addr as: 0x%x \n", if_ipv4_subnet);
@@ -3427,6 +3440,34 @@ fail:
 			get_client_memptr(wlan_client, i)->lan_stats_idx = -1;
 		}
 #endif
+		for(num_v6=0;num_v6 < get_client_memptr(wlan_client, i)->ipv6_set;num_v6++)
+		{
+			for (it = neigh_cache.begin(); it != neigh_cache.end(); ++it)
+			{
+				if( it->ipv6_addr[0] == get_client_memptr(wlan_client, i)->v6_addr[num_v6][0] &&
+					it->ipv6_addr[1] == get_client_memptr(wlan_client, i)->v6_addr[num_v6][1] &&
+					it->ipv6_addr[2] == get_client_memptr(wlan_client, i)->v6_addr[num_v6][2] &&
+					it->ipv6_addr[3] == get_client_memptr(wlan_client, i)->v6_addr[num_v6][3])
+				{
+					neigh_cache.erase(it);
+					break;
+				}
+			}
+		}
+		for(num_v6=0;num_v6 < get_client_memptr(wlan_client, i)->ipv6_set;num_v6++)
+		{
+			get_client_memptr(wlan_client, i)->v6_addr[num_v6][0] = 0;
+			get_client_memptr(wlan_client, i)->v6_addr[num_v6][1] = 0;
+			get_client_memptr(wlan_client, i)->v6_addr[num_v6][2] = 0;
+			get_client_memptr(wlan_client, i)->v6_addr[num_v6][3] = 0;
+		}
+		/* Reset ip_set to 0*/
+		get_client_memptr(wlan_client, i)->ipv4_set = false;
+		get_client_memptr(wlan_client, i)->ipv6_set = 0;
+		get_client_memptr(wlan_client, i)->ipv4_header_set = false;
+		get_client_memptr(wlan_client, i)->ipv6_header_set = false;
+		get_client_memptr(wlan_client, i)->route_rule_set_v4 = false;
+		get_client_memptr(wlan_client, i)->route_rule_set_v6 = 0;
 	} /* end of for loop */
 
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS

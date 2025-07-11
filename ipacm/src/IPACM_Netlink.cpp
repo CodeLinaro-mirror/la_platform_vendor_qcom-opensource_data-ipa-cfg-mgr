@@ -836,7 +836,15 @@ static int ipa_nl_decode_nlmsg
 			break;
 
 		case RTM_NEWADDR:
-			IPACMDBG("\n GOT RTM_NEWADDR event\n");
+		case RTM_DELADDR:
+			if(nlh->nlmsg_type == RTM_NEWADDR)
+			{
+				IPACMDBG("\n GOT RTM_NEWADDR event\n");
+			}
+			else
+			{
+				IPACMDBG("\n GOT RTM_DELADDR event\n");
+			}
 			if(IPACM_SUCCESS != ipa_nl_decode_rtm_addr(buffer, buflen, &(msg_ptr->nl_addr_info)))
 			{
 				IPACM_SYSLOG("Failed to decode rtm addr message\n");
@@ -879,28 +887,51 @@ static int ipa_nl_decode_nlmsg
 
 				}
 
-				evt_data.event = IPA_ADDR_ADD_EVENT;
+				if(nlh->nlmsg_type == RTM_NEWADDR)
+				{
+					evt_data.event = IPA_ADDR_ADD_EVENT;
+				}
+				else
+				{
+					evt_data.event = IPA_ADDR_DEL_EVENT;
+				}
 				data_addr->if_index = msg_ptr->nl_addr_info.metainfo.ifa_index;
 				strlcpy(data_addr->iface_name, dev_name, sizeof(data_addr->iface_name));
 				if(AF_INET6 == msg_ptr->nl_addr_info.attr_info.prefix_addr.ss_family)
 				{
-					IPACM_SYSLOG("Posting IPA_ADDR_ADD_EVENT with if index:%d, ipv6 addr:0x%x:%x:%x:%x\n",
+					if(nlh->nlmsg_type == RTM_NEWADDR)
+					{
+						IPACM_SYSLOG("Posting IPA_ADDR_ADD_EVENT with if index:%d, ipv6 addr:0x%x:%x:%x:%x\n",
 								 data_addr->if_index,
 								 data_addr->ipv6_addr[0],
 								 data_addr->ipv6_addr[1],
 								 data_addr->ipv6_addr[2],
 								 data_addr->ipv6_addr[3]);
-				}
-				else if(AF_INET == msg_ptr->nl_addr_info.attr_info.prefix_addr.ss_family)
-				{
-					IPACM_SYSLOG("Posting IPA_ADDR_ADD_EVENT with if index:%d, ipv4 addr:0x%x\n",
+					}
+					else
+					{
+						IPACM_SYSLOG("Posting IPA_ADDR_DEL_EVENT with if index:%d, ipv6 addr:0x%x:%x:%x:%x\n",
 								 data_addr->if_index,
-								 data_addr->ipv4_addr);
+								 data_addr->ipv6_addr[0],
+								 data_addr->ipv6_addr[1],
+								 data_addr->ipv6_addr[2],
+								 data_addr->ipv6_addr[3]);
+					}
 				}
 				else
 				{
-					free(data_addr);
-					return IPACM_FAILURE;
+					if(nlh->nlmsg_type == RTM_NEWADDR)
+					{
+						IPACMDBG("Posting IPA_ADDR_ADD_EVENT with if index:%d, ipv4 addr:0x%x\n",
+								 data_addr->if_index,
+								 data_addr->ipv4_addr);
+					}
+					else
+					{
+						IPACMDBG("Posting IPA_ADDR_DEL_EVENT with if index:%d, ipv4 addr:0x%x\n",
+								 data_addr->if_index,
+								 data_addr->ipv4_addr);
+					}
 				}
 				evt_data.evt_data = data_addr;
 				IPACM_EvtDispatcher::PostEvt(&evt_data);

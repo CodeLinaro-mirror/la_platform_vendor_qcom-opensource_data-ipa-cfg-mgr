@@ -142,6 +142,7 @@ const char *ipacm_event_name[] = {
 	__stringify(IPA_ROUTE_ADD_VLAN_PDN_EVENT),             /* ipacm_event_route_vlan */
 	__stringify(IPA_HANDLE_WAN_VLAN_PDN_UP),               /* ipacm_event_vlan_pdn */
 	__stringify(IPA_HANDLE_WAN_VLAN_PDN_DOWN),             /* ipacm_event_vlan_pdn */
+	__stringify(IPA_NOTIFY_VLAN_UP),                       /* ipacm_event_data_vlan */
 #endif
 #ifdef FEATURE_SOCKSv5
 	__stringify(IPA_HANDLE_SOCKSv5_UP),                    /* ipacm_event_connection */
@@ -152,6 +153,7 @@ const char *ipacm_event_name[] = {
 	__stringify(IPA_WLAN_GW_ADDR_ADD_EVENT),		/* ipacm_event_data_addr */
 	__stringify(IPA_LAN_CLIENT_ADD_EVENT),                /* ipa lan2lan offload for static ip */
 	__stringify(IPA_LAN_CLIENT_DEL_EVENT),                /* ipa lan2lan offload for static ip */
+	__stringify(IPA_DUMMY_VLAN_DOWN_EVENT),              /* ipacm_event_route_vlan */
 	__stringify(IPACM_EVENT_MAX),
 };
 
@@ -1274,12 +1276,16 @@ void IPACM_Config::add_bridge_vlan_mapping(ipa_ioc_bridge_vlan_mapping_info *dat
 	{
 		if(strncmp(data->bridge_name, it_mapping->bridge_iface_name, sizeof(data->bridge_name)) == 0)
 		{
-			if(!is_dummy_VID(data->vlan_id))
+			if(is_dummy_VID(data->vlan_id))
 			{
-				IPACMERR("The bridge %s was added before with vlan id %d\n", data->bridge_name,
-					it_mapping->bridge_associated_VID);
-				goto fail;
+				if((data->vlan_id != it_mapping->bridge_associated_VID) || !is_dummy_VID(it_mapping->bridge_associated_VID))
+				{
+					continue;
+				}
 			}
+			IPACMERR("The bridge %s was added before with vlan id %d\n", data->bridge_name,
+				it_mapping->bridge_associated_VID);
+			goto fail;
 		}
 	}
 
@@ -1328,8 +1334,9 @@ void IPACM_Config::del_bridge_vlan_mapping(ipa_ioc_bridge_vlan_mapping_info *dat
 
 	for(it_mapping = m_bridge_vlan_mapping.begin(); it_mapping != m_bridge_vlan_mapping.end(); it_mapping++)
 	{
-		if(strncmp(data->bridge_name, it_mapping->bridge_iface_name, sizeof(data->bridge_name)) == 0)
-		{
+		if((strncmp(data->bridge_name, it_mapping->bridge_iface_name, sizeof(data->bridge_name)) == 0) &&
+		 (it_mapping->bridge_associated_VID == data->vlan_id))
+		 {
 			IPACMDBG_H("Found the bridge mapping (%s->%d)\n",
 				data->bridge_name,
 				it_mapping->bridge_associated_VID);
@@ -1367,9 +1374,6 @@ int IPACM_Config::get_bridge_vlan_mapping(ipa_ioc_bridge_vlan_mapping_info *data
 		{
 			if(strncmp(data->bridge_name, it_mapping->bridge_iface_name, sizeof(data->bridge_name)) == 0)
 			{
-				if(is_dummy_VID(it_mapping->bridge_associated_VID))
-					continue;
-
 				IPACMDBG_H("Found the bridge mapping (%s->%d)\n",
 					data->bridge_name,
 					it_mapping->bridge_associated_VID);
@@ -1379,6 +1383,8 @@ int IPACM_Config::get_bridge_vlan_mapping(ipa_ioc_bridge_vlan_mapping_info *data
 				data->subnet_mask = it_mapping->subnet_mask;
 				data->lan2lan_sw = it_mapping->lan2lan_sw;
 				ret = IPACM_SUCCESS;
+				if(is_dummy_VID(it_mapping->bridge_associated_VID))
+					continue;
 				break;
 			}
 		}
@@ -1474,6 +1480,8 @@ void IPACM_Config::add_vlan_iface(ipa_ioc_vlan_iface_info *data)
 {
 	list<vlan_iface_info>::iterator it_vlan;
 	vlan_iface_info new_vlan_info;
+	ipacm_cmd_q_data evt_data;
+	ipacm_event_data_vlan *vlan_data;
 
 	if(pthread_mutex_lock(&vlan_l2tp_lock) != 0)
 	{
@@ -1544,6 +1552,23 @@ void IPACM_Config::add_vlan_iface(ipa_ioc_vlan_iface_info *data)
 			IPACM_Iface::ipacmcfg->getEventName(eth_bridge_evt.event));
 		IPACM_EvtDispatcher::PostEvt(&eth_bridge_evt);
 	}
+	/*
+	 * Call IPA_NOTIFY_VLAN_UP which will allow LAN to check if VLAN PDN is up.
+	 * This will handle scenario where add_vlan_iface is received after
+	 * LAN IPA_NEW_ADDR have already been processed.
+	 */
+	vlan_data = (ipacm_event_data_vlan *)malloc(sizeof(*vlan_data));
+	if(vlan_data == NULL)
+	{
+		IPACMERR("Failed to allocate memory.\n");
+		return;
+	}
+	vlan_data->vlan_id = data->vlan_id;
+	evt_data.event = IPA_NOTIFY_VLAN_UP;
+	evt_data.evt_data = (void*)vlan_data;
+	IPACMDBG_H("Posting IPA_NOTIFY_VLAN_UP event!\n", evt_data.event);
+	IPACM_EvtDispatcher::PostEvt(&evt_data);
+
 #endif
 	return;
 }
@@ -2234,6 +2259,27 @@ void IPACM_Config::add_dummy_vlan_mapping(char *bridge_iface, char* client_iface
 			vlan_info.vlan_id = DUMMY_VLAN_ID_BASE + if_index;
 			IPACM_Iface::ipacmcfg->add_vlan_iface(&vlan_info);
 			IPACMDBG_H("New Non-Vlan Mapping Created for %s with VID %d\n", vlan_info.name, vlan_info.vlan_id);
+		}
+	}
+
+	return;
+}
+
+/* Add dummy vlan mapping for the non vlan clients on on-demand bridge*/
+void IPACM_Config::del_dummy_vlan_mapping(char *bridge_iface, char* client_iface, int if_index)
+{
+	ipa_ioc_vlan_iface_info vlan_info;
+
+	if(IPACM_Iface::ipacmcfg->is_added_vlan_iface(client_iface))
+	{
+		if(strncmp(bridge_iface, BRIDGE_0,
+				strlen(bridge_iface)) != 0)
+		{
+			IPACMDBG_H("Found dummy mapping for : %s with vid : %d. Deleting from vlan list\n", client_iface, DUMMY_VLAN_ID_BASE + if_index);
+			memset(&vlan_info, 0, sizeof(vlan_info));
+			strlcpy(vlan_info.name, client_iface, sizeof(vlan_info.name));
+			vlan_info.vlan_id = DUMMY_VLAN_ID_BASE + if_index;
+			IPACM_Iface::ipacmcfg->del_vlan_iface(&vlan_info);
 		}
 	}
 

@@ -442,11 +442,11 @@ void* ipa_driver_msg_notifier(void *param)
 			}
 			memcpy(event_ex, buffer + sizeof(struct ipa_msg_meta), length);
 			data_ex = (ipacm_event_data_wlan_ex *)malloc(sizeof(ipacm_event_data_wlan_ex) + event_ex_o.num_of_attribs * sizeof(ipa_wlan_hdr_attrib_val));
-		    if (data_ex == NULL)
-		    {
+			if (data_ex == NULL)
+			{
 				IPACM_SYSLOG("unable to allocate memory for event data\n");
-		    	return NULL;
-		    }
+				return NULL;
+			}
 			data_ex->num_of_attribs = event_ex->num_of_attribs;
 
 			memcpy(data_ex->attribs,
@@ -456,38 +456,6 @@ void* ipa_driver_msg_notifier(void *param)
 			ipa_get_if_index(event_ex->name, &(data_ex->if_index));
 			evt_data.event = IPA_WLAN_CLIENT_ADD_EVENT_EX;
 			evt_data.evt_data = data_ex;
-
-			/* Construct new_neighbor msg with netdev device internally */
-			new_neigh_data = (ipacm_event_data_all*)malloc(sizeof(ipacm_event_data_all));
-			if(new_neigh_data == NULL)
-			{
-				IPACMERR("Failed to allocate memory.\n");
-				return NULL;
-			}
-			memset(new_neigh_data, 0, sizeof(ipacm_event_data_all));
-			strlcpy(new_neigh_data->iface_name, event_ex->name, sizeof(new_neigh_data->iface_name));
-			new_neigh_data->iptype = IPA_IP_v6;
-			for(cnt = 0; cnt < event_ex->num_of_attribs; cnt++)
-			{
-				if(event_ex->attribs[cnt].attrib_type == WLAN_HDR_ATTRIB_MAC_ADDR)
-				{
-					memcpy(new_neigh_data->mac_addr, event_ex->attribs[cnt].u.mac_addr, sizeof(new_neigh_data->mac_addr));
-					IPACMDBG_H("Mac Address %02x:%02x:%02x:%02x:%02x:%02x\n",
-								 event_ex->attribs[cnt].u.mac_addr[0], event_ex->attribs[cnt].u.mac_addr[1], event_ex->attribs[cnt].u.mac_addr[2],
-								 event_ex->attribs[cnt].u.mac_addr[3], event_ex->attribs[cnt].u.mac_addr[4], event_ex->attribs[cnt].u.mac_addr[5]);
-				}
-				else if(event_ex->attribs[cnt].attrib_type == WLAN_HDR_ATTRIB_STA_ID)
-				{
-					IPACMDBG_H("Wlan client id %d\n",event_ex->attribs[cnt].u.sta_id);
-				}
-				else
-				{
-					IPACMDBG_H("Wlan message has unexpected type!\n");
-				}
-			}
-			new_neigh_data->if_index = data_ex->if_index;
-			new_neigh_evt.evt_data = (void*)new_neigh_data;
-			new_neigh_evt.event = IPA_NEW_NEIGH_EVENT;
 			free(event_ex);
 			break;
 

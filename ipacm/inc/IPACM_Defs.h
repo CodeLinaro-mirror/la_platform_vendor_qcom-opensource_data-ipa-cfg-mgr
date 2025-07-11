@@ -249,6 +249,7 @@ typedef enum
 	IPA_ROUTE_ADD_VLAN_PDN_EVENT,             /* ipacm_event_route_vlan */
 	IPA_HANDLE_WAN_VLAN_PDN_UP,               /* ipacm_event_vlan_pdn */
 	IPA_HANDLE_WAN_VLAN_PDN_DOWN,             /* ipacm_event_vlan_pdn */
+	IPA_NOTIFY_VLAN_UP,                       /* ipacm_event_data_vlan */
 #endif
 #ifdef FEATURE_SOCKSv5
 	IPA_HANDLE_SOCKSv5_UP,                    /* ipacm_event_connection */
@@ -260,6 +261,7 @@ typedef enum
 	IPA_WLAN_GW_ADDR_ADD_EVENT,               /* ipacm_event_data_addr */
 	IPA_LAN_CLIENT_ADD_EVENT,		  /* Add MAC based rule for lan2lan offload with static-ip */
 	IPA_LAN_CLIENT_DEL_EVENT,		  /* Del MAC based rule for lan2lan offload with static-ip */
+	IPA_DUMMY_VLAN_DOWN_EVENT,               /* ipacm_event_route_vlan */
 	IPACM_EVENT_MAX
 } ipa_cm_event_id;
 
@@ -375,6 +377,11 @@ typedef struct
 {
 	ipacm_iface_type if_cat;
 } ipacm_event_data_if_cat;
+
+typedef struct
+{
+	uint16_t vlan_id;
+} ipacm_event_data_vlan;
 
 typedef struct _ipacm_event_data_iptype
 {

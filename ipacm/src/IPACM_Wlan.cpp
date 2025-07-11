@@ -180,6 +180,7 @@ void IPACM_Wlan::event_callback(ipa_cm_event_id event, void *param)
 	ipacm_event_iface_up_tehter* data_wan_tether;
 	list <ipacm_event_data_all>::iterator it;
 	ipacm_event_data_all *data_all=NULL;
+	ipacm_event_data_vlan *vlan_data = NULL;
 	ipacm_cmd_q_data evt_data;
 	uint16_t vlan_id = 0;
 	uint8_t priority = 0;
@@ -366,7 +367,7 @@ void IPACM_Wlan::event_callback(ipa_cm_event_id event, void *param)
 #endif //FEATURE_IPACM_UL_FIREWALL
 					IPACM_SYSLOG("Finished checking wan_up\n");
 
-					if (IPACM_Iface::ipacmcfg->is_added_vlan_iface(dev_name))
+					if(IPACM_Iface::ipacmcfg->is_added_vlan_iface(dev_name))
 					{
 						if(data->iptype == IPA_IP_v4)
 						{
@@ -379,7 +380,6 @@ void IPACM_Wlan::event_callback(ipa_cm_event_id event, void *param)
 							check_vlan_PDNUp(IPA_IP_v6);
 						}
 					}
-
 					/* checking if SW-RT_enable */
 					if (IPACM_Iface::ipacmcfg->ipa_sw_rt_enable == true)
 					{
@@ -522,7 +522,7 @@ void IPACM_Wlan::event_callback(ipa_cm_event_id event, void *param)
 			IPACMDBG_H("Received IPA_HANDLE_WAN_VLAN_PDN_UP for VID %d, iptype %d\n",
 				data->VlanID,
 				data->iptype);
-			if(IPACM_Iface::ipacmcfg->is_dummy_VID(data->VlanID))
+			if(is_vlan_IF(data->VlanID))
 			{
 				if(data->iptype == IPA_IP_v6)
 				{
@@ -531,6 +531,18 @@ void IPACM_Wlan::event_callback(ipa_cm_event_id event, void *param)
 #ifdef FEATURE_IPACM_UL_FIREWALL
 					configure_v6_ul_firewall();
 #endif
+				}
+				/* Remove the modem flt rules installed as part of
+				   IPA_ADDR_ADD_EVENT event, which wouldn't have
+				   correct mux_id and re-install them in
+				   handle_vlan_pdn_up */
+				if(IPACM_Iface::ipacmcfg->is_added_vlan_iface(dev_name) &&
+					(IPACM_Wan::backhaul_is_sta_mode == false))
+				{
+					if((data->iptype == IPA_IP_v4) && IPACM_Wan::isWanUP(ipa_if_num))
+						handle_wan_down(false, IPACM_Wan::getXlat_Mux_Id());
+					if((data->iptype == IPA_IP_v6) && IPACM_Wan::isWanUP_V6(ipa_if_num))
+						handle_wan_down_v6(false);
 				}
 				if(is_mux_up(data->mux_id, data->iptype, data->VlanID))
 				{
@@ -554,7 +566,7 @@ void IPACM_Wlan::event_callback(ipa_cm_event_id event, void *param)
 			IPACMDBG_H("Received IPA_HANDLE_WAN_VLAN_PDN_DOWN for VID %d, iptype %d\n",
 				data->VlanID,
 				data->iptype);
-			if(IPACM_Iface::ipacmcfg->is_dummy_VID(data->VlanID))
+			if(!data->VlanID || is_vlan_IF(data->VlanID))
 			{
 #ifdef FEATURE_IPACM_UL_FIREWALL
 				if(data->iptype == IPA_IP_v6)
@@ -845,6 +857,19 @@ void IPACM_Wlan::event_callback(ipa_cm_event_id event, void *param)
 			{
 				IPACM_SYSLOG("Received IPA_WLAN_CLIENT_DEL_EVENT\n");
 				handle_wlan_client_down_evt(data->mac_addr);
+#ifdef IPA_VLAN_PRIORITY
+				if(IPACM_Iface::ipacmcfg->get_vlan_id(dev_name, &vlan_id, &priority))
+#else
+				if(IPACM_Iface::ipacmcfg->get_vlan_id(dev_name, &vlan_id))
+#endif
+				{
+					IPACMERR("Unable to find VLAN ID for Dev %s\n", dev_name);
+					eth_bridge_post_event(IPA_ETH_BRIDGE_CLIENT_DEL, IPA_IP_MAX, data->mac_addr, NULL, NULL);
+				}
+				else
+				{
+					eth_bridge_post_event(IPA_ETH_BRIDGE_CLIENT_DEL, IPA_IP_MAX, data->mac_addr, NULL, NULL, vlan_id);
+				}
 			}
 		}
 		break;
@@ -865,10 +890,12 @@ void IPACM_Wlan::event_callback(ipa_cm_event_id event, void *param)
 #endif
 				{
 					IPACMERR("Unable to find VLAN ID for Dev %s\n", data->iface_name);
-					return;
+					eth_bridge_post_event(IPA_ETH_BRIDGE_CLIENT_ADD, IPA_IP_MAX, data->mac_addr, NULL, NULL);
 				}
-
-				eth_bridge_post_event(IPA_ETH_BRIDGE_CLIENT_ADD, IPA_IP_MAX, data->mac_addr, NULL, NULL, vlan_id);
+				else
+				{
+					eth_bridge_post_event(IPA_ETH_BRIDGE_CLIENT_ADD, IPA_IP_MAX, data->mac_addr, NULL, NULL, vlan_id);
+				}
 				eth_bridge_post_event(IPA_CLIENT_CROSS_PRC_CTX, IPA_IP_MAX, data->mac_addr, NULL, data->iface_name, NULL);
 			}
 		}
@@ -880,19 +907,21 @@ void IPACM_Wlan::event_callback(ipa_cm_event_id event, void *param)
 		IPACMDBG_H("Received IPA_LAN_CLIENT_DEL_EVENT\n");
 		ipa_interface_index = iface_ipa_index_query(data->if_index);
 		IPACMDBG_H("check iface %s category: %d\n", dev_name, ipa_if_cate);
+		if(ipa_interface_index == ipa_if_num)
+		{
 #ifdef IPA_VLAN_PRIORITY
-		if(IPACM_Iface::ipacmcfg->get_vlan_id(data->iface_name, &vlan_id, &priority))
+			if(IPACM_Iface::ipacmcfg->get_vlan_id(data->iface_name, &vlan_id, &priority))
 #else
-		if(IPACM_Iface::ipacmcfg->get_vlan_id(data->iface_name, &vlan_id))
+			if(IPACM_Iface::ipacmcfg->get_vlan_id(data->iface_name, &vlan_id))
 #endif
-		{
-			IPACMERR("Unable to find VLAN ID for Dev %s\n", data->iface_name);
-			return;
-		}
-
-		if (ipa_interface_index == ipa_if_num)
-		{
-			eth_bridge_post_event(IPA_ETH_BRIDGE_CLIENT_DEL, IPA_IP_MAX, data->mac_addr, NULL, NULL, vlan_id);
+			{
+				IPACMERR("Unable to find VLAN ID for Dev %s\n", data->iface_name);
+				eth_bridge_post_event(IPA_ETH_BRIDGE_CLIENT_DEL, IPA_IP_MAX, data->mac_addr, NULL, NULL);
+			}
+			else
+			{
+				eth_bridge_post_event(IPA_ETH_BRIDGE_CLIENT_DEL, IPA_IP_MAX, data->mac_addr, NULL, NULL, vlan_id);
+			}
 		}
 	}
 	break;
@@ -1206,6 +1235,33 @@ void IPACM_Wlan::event_callback(ipa_cm_event_id event, void *param)
 		{
 			IPACM_SYSLOG("Received IPA_LAN_CLIENT_UPDATE_EVENT\n");
 			IPACM_Wlan::handle_lan_client_connect(data->mac_addr);
+		}
+	}
+	break;
+
+	case IPA_NOTIFY_VLAN_UP:
+	{
+		IPACMDBG_H("Received IPA_NOTIFY_VLAN_UP\n");
+		if (IPACM_Iface::ipacmcfg->is_added_vlan_iface(dev_name))
+		{
+			/* Remove the modem flt rules installed as part of
+			   IPA_ADDR_ADD_EVENT event, which wouldn't have
+			   correct mux_id and re-install them in
+			   handle_vlan_pdn_up in check_vlan_PDNUp*/
+			if(IPACM_Wan::isWanUP(ipa_if_num))
+				handle_wan_down(false, IPACM_Wan::getXlat_Mux_Id());
+			if(IPACM_Wan::isWanUP_V6(ipa_if_num))
+				handle_wan_down_v6(false);
+			if(IPACM_Wan::isVlanWanUP())
+			{
+				IPACMDBG_H("Check any missed v4 VLAN handling in v4 new ADDR\n");
+				check_vlan_PDNUp(IPA_IP_v4);
+			}
+			if (IPACM_Wan::isVlanWanUP_V6())
+			{
+				IPACMDBG_H("Check any missed v6 VLAN handling in v6 new ADDR\n");
+				check_vlan_PDNUp(IPA_IP_v6);
+			}
 		}
 	}
 	break;
@@ -3189,57 +3245,54 @@ int IPACM_Wlan::handle_down_evt()
 
 	neigh_cache.clear();
 
-	if (IPACM_Iface::ipacmcfg->is_added_vlan_iface(dev_name))
+	/* remove modem UL rules and notify */
+	if(is_any_mux_up(IPA_IP_v4))
 	{
-		/* remove modem UL rules and notify */
-		if(is_any_mux_up(IPA_IP_v4))
+		ipacm_event_vlan_pdn *data_vlan = (ipacm_event_vlan_pdn *)malloc(sizeof(ipacm_event_vlan_pdn));
+
+		if (data_vlan == NULL)
 		{
-			ipacm_event_vlan_pdn *data_vlan = (ipacm_event_vlan_pdn *)malloc(sizeof(ipacm_event_vlan_pdn));
-
-			if (data_vlan == NULL)
-			{
-				IPACMERR("Unable to allocate memory\n");
-				res = IPACM_FAILURE;
-				goto fail;
-			}
-
-			IPACMDBG_H("MUX is up for V4\n");
-			for(int i = 0; i < IPA_MAX_NUM_HW_PDNS; i++)
-			{
-				if(v4_mux_up[i].mux_id)
-				{
-					data_vlan->mux_id = v4_mux_up[i].mux_id;
-					data_vlan->iptype = IPA_IP_v4;
-					IPACMDBG_H("mux %d up, delete v4 flt rules\n", v4_mux_up[i].mux_id);
-					handle_vlan_pdn_down(data_vlan);
-				}
-			}
-			free(data_vlan);
+			IPACMERR("Unable to allocate memory\n");
+			res = IPACM_FAILURE;
+			goto fail;
 		}
-		if(is_any_mux_up(IPA_IP_v6))
+
+		IPACMDBG_H("MUX is up for V4\n");
+		for(int i = 0; i < IPA_MAX_NUM_HW_PDNS; i++)
 		{
-			ipacm_event_vlan_pdn *data_vlan = (ipacm_event_vlan_pdn *)malloc(sizeof(ipacm_event_vlan_pdn));
-
-			if (data_vlan == NULL)
+			if(v4_mux_up[i].mux_id)
 			{
-				IPACMERR("Unable to allocate memory\n");
-				res = IPACM_FAILURE;
-				goto fail;
+				data_vlan->mux_id = v4_mux_up[i].mux_id;
+				data_vlan->iptype = IPA_IP_v4;
+				IPACMDBG_H("mux %d up, delete v4 flt rules\n", v4_mux_up[i].mux_id);
+				handle_vlan_pdn_down(data_vlan);
 			}
-
-			IPACMDBG_H("MUX is up for V6\n");
-			for(int i = 0; i < IPA_MAX_NUM_HW_PDNS; i++)
-			{
-				if(v6_mux_up[i].mux_id)
-				{
-					data_vlan->mux_id = v6_mux_up[i].mux_id;
-					data_vlan->iptype = IPA_IP_v6;
-					IPACMDBG_H("mux %d up, delete v6 flt rules\n", v6_mux_up[i].mux_id);
-					handle_vlan_pdn_down(data_vlan);
-				}
-			}
-			free(data_vlan);
 		}
+		free(data_vlan);
+	}
+	if(is_any_mux_up(IPA_IP_v6))
+	{
+		ipacm_event_vlan_pdn *data_vlan = (ipacm_event_vlan_pdn *)malloc(sizeof(ipacm_event_vlan_pdn));
+
+		if (data_vlan == NULL)
+		{
+			IPACMERR("Unable to allocate memory\n");
+			res = IPACM_FAILURE;
+			goto fail;
+		}
+
+		IPACMDBG_H("MUX is up for V6\n");
+		for(int i = 0; i < IPA_MAX_NUM_HW_PDNS; i++)
+		{
+			if(v6_mux_up[i].mux_id)
+			{
+				data_vlan->mux_id = v6_mux_up[i].mux_id;
+				data_vlan->iptype = IPA_IP_v6;
+				IPACMDBG_H("mux %d up, delete v6 flt rules\n", v6_mux_up[i].mux_id);
+				handle_vlan_pdn_down(data_vlan);
+			}
+		}
+		free(data_vlan);
 	}
 
 	/* Remove STA case UL rules */
@@ -3813,7 +3866,6 @@ int IPACM_Wlan::handle_wlan_vlan_neighbor(ipacm_event_data_all *data)
 			IPACM_EvtDispatcher::PostEvt(&evt_data);
 		}
 
-		eth_bridge_post_event(IPA_ETH_BRIDGE_CLIENT_ADD, IPA_IP_MAX, data->mac_addr, NULL, data->iface_name, vlan_id);
 	}
 
 	return IPACM_SUCCESS;

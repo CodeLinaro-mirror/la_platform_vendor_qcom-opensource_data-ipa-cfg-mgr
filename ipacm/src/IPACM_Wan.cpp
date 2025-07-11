@@ -1507,6 +1507,66 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 		break;
 #endif
 
+	case IPA_DUMMY_VLAN_DOWN_EVENT:
+	{
+		IPACMDBG("Received IPA_DUMMY_VLAN_DOWN_EVENT event\n");
+		int vlan_idx = 0;
+		int v4_pdn_index = -1;
+		int v6_pdn_index = -1;
+		bool vlan_pdn_up = false;
+		ipacm_event_route_vlan *vlandown_data = (ipacm_event_route_vlan *)param;
+		if(vlandown_data->VlanID)
+		{
+			if(m_is_sta_mode == Q6_WAN)
+			{
+				v4_pdn_index = modem_ipv4_pdn_index;
+				v6_pdn_index = modem_ipv6_pdn_index;
+			}
+			else if(m_is_sta_mode == WLAN_WAN )
+			{
+				v4_pdn_index = wlan_ipv4_pdn_index;
+				v6_pdn_index = wlan_ipv6_pdn_index;
+			}
+			if((v6_pdn_index >= 0) && (ipv6_to_iface[v6_pdn_index].wan_up_vlan_v6))
+			{
+				for(vlan_idx = 0; vlan_idx < ipv6_to_iface[v6_pdn_index].VID_cnt; vlan_idx++)
+				{
+					if(IPACM_Wan::ipv6_to_iface[v6_pdn_index].associated_VIDs[vlan_idx] == vlandown_data->VlanID)
+					{
+						vlan_pdn_up = true;
+						post_wan_vlan_pdn_event(IPA_IP_v6, v6_pdn_index, vlan_idx, vlandown_data->VlanID, false);
+						break;
+					}
+				}
+			}
+			if((v4_pdn_index >= 0) && (ipv4_to_iface[v4_pdn_index].wan_up_vlan))
+			{
+				for(vlan_idx = 0; vlan_idx < ipv4_to_iface[v4_pdn_index].VID_cnt; vlan_idx++)
+				{
+					if(IPACM_Wan::ipv4_to_iface[v4_pdn_index].associated_VIDs[vlan_idx] == vlandown_data->VlanID)
+					{
+						vlan_pdn_up = true;
+						post_wan_vlan_pdn_event(IPA_IP_v4, v4_pdn_index, vlan_idx, vlandown_data->VlanID, false);
+						break;
+					}
+				}
+			}
+		}
+		if(vlan_pdn_up)
+		{
+			if((v6_pdn_index == -1 && IPACM_Wan::ipv4_to_iface[v4_pdn_index].wan_up_vlan == false)||
+				(v4_pdn_index == -1 && IPACM_Wan::ipv6_to_iface[v6_pdn_index].wan_up_vlan_v6 == false)||
+				(v6_pdn_index >= 0 && v4_pdn_index >= 0 && IPACM_Wan::ipv4_to_iface[v4_pdn_index].wan_up_vlan == false &&
+				IPACM_Wan::ipv6_to_iface[v6_pdn_index].wan_up_vlan_v6 == false))
+			{
+				if(num_offloaded_pdns)
+					num_offloaded_pdns--;
+				IPACMDBG_H("Num of offloaded PDN decreased to %d\n", num_offloaded_pdns);
+			}
+		}
+	}
+	break;
+
 	case IPA_ROUTE_DEL_EVENT:
 		{
 			ipacm_event_data_addr *data = (ipacm_event_data_addr *)param;
@@ -2311,6 +2371,258 @@ int IPACM_Wan::vlan_pdn_backhaul_switch_check(ipa_ip_type iptype, ipacm_event_ro
 	}
 	return ret;
 }
+/*
+ * iptype: IPA_IP_v4 or IPA_IP_v6
+ * pdn_idx: Index in ipv4_to_iface or ipv6_to_iface
+ * vlan_idx: Index in associated_VIDs of ipv4_to_iface[pdn_idx] or ipv6_to_iface[pdn_idx]
+ * vlan_id: VLAN ID
+ * vlan_up: True to post IPA_HANDLE_WAN_VLAN_PDN_UP. False to post IPA_HANDLE_WAN_VLAN_PDN_DOWN
+ */
+void IPACM_Wan::post_wan_vlan_pdn_event(ipa_ip_type iptype, int pdn_idx, int vlan_idx, uint16_t vlan_id, bool vlan_up)
+{
+	uint8_t mux_id = 0;
+	int idx = vlan_idx + 1;
+	ipacm_cmd_q_data evt_data;
+	ipacm_event_vlan_pdn *vlan_data = NULL;
+
+	if((vlan_idx < 0) || (vlan_idx >= IPA_MAX_NUM_SW_PDNS))
+	{
+		IPACMERR("Invalid VLAN Index\n");
+		return;
+	}
+
+	if(pdn_idx < 0 || vlan_idx < 0 || vlan_id <= 0)
+	{
+		IPACMERR("Wrong param pdn_idx:%d, vlan_idx:%d, vlan_id:%d\n", pdn_idx, vlan_idx, vlan_id);
+		return;
+	}
+
+	vlan_data = (ipacm_event_vlan_pdn *)malloc(sizeof(ipacm_event_vlan_pdn));
+	if(vlan_data == NULL)
+	{
+		IPACMERR("vlan_data allocation failed\n");
+		return;
+	}
+	memset(vlan_data, 0, sizeof(ipacm_event_vlan_pdn));
+	vlan_data->VlanID = vlan_id;
+
+	if(!vlan_up)
+	{
+		/* currently only support all vlans moved to WIFI not backhaul concurrency */
+		if(iptype == IPA_IP_v6)
+		{
+			GetMuxByVid(vlan_id, &mux_id, IPA_IP_v6);
+			ipv6_to_iface[pdn_idx].associated_VIDs[vlan_idx] = 0;
+			while(idx < IPA_MAX_NUM_SW_PDNS && ipv6_to_iface[pdn_idx].associated_VIDs[idx] != 0)
+			{
+				ipv6_to_iface[pdn_idx].associated_VIDs[vlan_idx] =
+						ipv6_to_iface[pdn_idx].associated_VIDs[idx];
+				ipv6_to_iface[pdn_idx].associated_VIDs[idx] = 0;
+				idx++;
+				vlan_idx++;
+			}
+			ipv6_to_iface[pdn_idx].VID_cnt--;
+			if(ipv6_to_iface[pdn_idx].VID_cnt == 0)
+				ipv6_to_iface[pdn_idx].wan_up_vlan_v6 = false;
+
+			if((ipv6_to_iface[pdn_idx].pIface && ipv6_to_iface[pdn_idx].pIface->m_is_sta_mode == WLAN_WAN ||
+				ipv6_to_iface[pdn_idx].pIface->m_is_sta_mode == ECM_WAN) &&
+				!ipv6_to_iface[pdn_idx].wan_up_vlan_v6 &&
+				!(IPACM_Wan::backhaul_is_sta_mode == true && wan_up_v6))
+			{
+				for(int tx_index = 0; tx_index < iface_query->num_tx_props; tx_index++)
+				{
+					if(IPA_IP_v6 == tx_prop->tx[tx_index].ip)
+					{
+						if (m_routing.DeleteRoutingHdl(ipv6_to_iface[pdn_idx].pIface->wan_route_rule_v6_hdl[tx_index],
+											 IPA_IP_v6) == false)
+						{
+							IPACMDBG_H("IP-family:%d, Routing rule(hdl:0x%x) deletion failed with tx_index %d!\n",
+								IPA_IP_v6, ipv6_to_iface[pdn_idx].pIface->wan_route_rule_v6_hdl[tx_index], tx_index);
+						}
+						else
+						{
+							ipv6_to_iface[pdn_idx].pIface->wan_route_rule_v6_hdl[tx_index] = 0;
+						}
+					}
+				}
+			}
+
+			if((ipv6_to_iface[pdn_idx].pIface && ipv6_to_iface[pdn_idx].pIface->m_is_sta_mode == Q6_WAN) &&
+				!isVlanWanUP_V6() && !(IPACM_Wan::backhaul_is_sta_mode == false && wan_up_v6))
+			{
+				if(wan_route_rule_v6_hdl_a5)
+				{
+					IPACMDBG_H("ip-type %d: default v6 wan RT-rule deleted\n", ip_type);
+					if(m_routing.DeleteRoutingHdl(wan_route_rule_v6_hdl_a5, IPA_IP_v6) == false)
+					{
+						IPACMDBG_H("IP-family:%d, Routing rule(hdl:0x%x) deletion failed!\n", IPA_IP_v6, wan_route_rule_v6_hdl_a5);
+					}
+					else
+					{
+						wan_route_rule_v6_hdl_a5 = 0;
+					}
+				}
+			}
+			else
+			{
+				IPACMDBG_H("not deleting default v6 RT rule, default route or vlan v6 PDN is up\n");
+			}
+			vlan_data->mux_id = mux_id;
+			vlan_data->iptype = IPA_IP_v6;
+
+			IPACMDBG_H("Posting IPA_HANDLE_WAN_VLAN_PDN_DOWN (V6) with below information:\n");
+			IPACMDBG_H("iptype V6, VlanID %d, mux_id %d, if num %d\n",
+						vlan_data->VlanID, vlan_data->mux_id, ipa_if_num);
+		}
+
+		else if(iptype == IPA_IP_v4)
+		{
+			GetMuxByVid(vlan_id, &mux_id, IPA_IP_v4);
+			ipv4_to_iface[pdn_idx].associated_VIDs[vlan_idx] = 0;
+			while(idx < IPA_MAX_NUM_SW_PDNS && ipv4_to_iface[pdn_idx].associated_VIDs[idx] != 0)
+			{
+				ipv4_to_iface[pdn_idx].associated_VIDs[vlan_idx] =
+					ipv4_to_iface[pdn_idx].associated_VIDs[idx];
+				ipv4_to_iface[pdn_idx].associated_VIDs[idx] = 0;
+				idx++;
+				vlan_idx++;
+			}
+			ipv4_to_iface[pdn_idx].VID_cnt--;
+			if(ipv4_to_iface[pdn_idx].VID_cnt == 0)
+				ipv4_to_iface[pdn_idx].wan_up_vlan = false;
+
+			if((ipv4_to_iface[pdn_idx].pIface && ipv4_to_iface[pdn_idx].pIface->m_is_sta_mode == WLAN_WAN ||
+				ipv4_to_iface[pdn_idx].pIface->m_is_sta_mode == ECM_WAN) &&
+				!ipv4_to_iface[pdn_idx].wan_up_vlan &&
+				!(IPACM_Wan::backhaul_is_sta_mode == true && wan_up))
+			{
+				for(int tx_index = 0; tx_index < iface_query->num_tx_props; tx_index++)
+				{
+					if(IPA_IP_v4 == tx_prop->tx[tx_index].ip)
+					{
+						if (m_routing.DeleteRoutingHdl(ipv4_to_iface[pdn_idx].pIface->wan_route_rule_v4_hdl[tx_index],
+											 IPA_IP_v4) == false)
+						{
+							IPACMDBG_H("IP-family:%d, Routing rule(hdl:0x%x) deletion failed with tx_index %d!\n",
+								IPA_IP_v4, ipv4_to_iface[pdn_idx].pIface->wan_route_rule_v4_hdl[tx_index], tx_index);
+						}
+						else
+						{
+							ipv4_to_iface[pdn_idx].pIface->wan_route_rule_v4_hdl[tx_index] = 0;
+						}
+					}
+				}
+			}
+			vlan_data->mux_id = mux_id;
+			vlan_data->iptype = IPA_IP_v4;
+			vlan_data->ipv4_addr = ipv4_to_iface[pdn_idx].ipv4_addr;
+
+			IPACMDBG_H("Posting IPA_HANDLE_WAN_VLAN_PDN_DOWN (V4) with below information:\n");
+			IPACMDBG_H("iptype V4, VlanID %d, mux_id %d, if num %d\n",
+					vlan_data->VlanID, vlan_data->mux_id, ipa_if_num);
+		}
+		evt_data.event = IPA_HANDLE_WAN_VLAN_PDN_DOWN;
+		evt_data.evt_data = (void *)vlan_data;
+
+		IPACM_EvtDispatcher::PostEvt(&evt_data);
+	}
+	else
+	{
+		if(iptype == IPA_IP_v6)
+		{
+			IPACMDBG_H("new VLAN PDN prefix is 0x%08x%08x.\n", ipv6_prefix[0], ipv6_prefix[1]);
+			ipv6_to_iface[pdn_idx].wan_up_vlan_v6 = true;
+			if (ipv6_to_iface[pdn_idx].VID_cnt < IPA_MAX_NUM_SW_PDNS)
+			{
+				ipv6_to_iface[pdn_idx].associated_VIDs[vlan_idx] = vlan_id;
+				ipv6_to_iface[pdn_idx].VID_cnt++;
+				ipv6_to_iface[pdn_idx].pIface = this;
+			}
+			else
+			{
+				IPACMERR("Exceeded maximum supported VLAN IDs\n");
+				free(vlan_data);
+				return;
+			}
+			vlan_data->iptype = IPA_IP_v6;
+			if(m_is_sta_mode == WLAN_WAN)
+			{
+				vlan_data->mux_id = 0;
+				IPACM_Wan::wlan_v6_vlan_index = pdn_idx;
+				IPACMDBG_H("IPACM_Wan::wlan_v6_vlan_index: %d\n", IPACM_Wan::wlan_v6_vlan_index);
+			}
+			else
+			{
+				if(ext_prop != NULL)
+					vlan_data->mux_id = ext_prop->ext[0].mux_id;
+				if (is_xlat && ipv6_to_iface[pdn_idx].ipv6_prefix[0] && ipv6_to_iface[pdn_idx].ipv6_prefix[1])
+				{
+					IPACM_Iface::ipacmcfg->add_vlan_ipv6_prefix(ipv6_to_iface[modem_ipv6_pdn_index].ipv6_prefix, ipa_if_num, vlan_id);
+				}
+				else if (is_xlat)
+				{
+					ipv6_to_iface[pdn_idx].ipv6_prefix[0] = IPA_DUMMY_PREFIX;
+					ipv6_to_iface[pdn_idx].ipv6_prefix[1] = IPA_DUMMY_PREFIX;
+					IPACMDBG_H("XLAT case, new VLAN PDN prefix is 0x%08x%08x.\n",
+							ipv6_to_iface[pdn_idx].ipv6_prefix[0],
+							ipv6_to_iface[pdn_idx].ipv6_prefix[1]);
+				}
+			}
+
+			IPACMDBG_H("Posting IPA_HANDLE_WAN_VLAN_PDN_UP (V6) with below info:\n");
+			IPACMDBG_H("iptype IPA_IP_v6, VlanID %d, mux_id %d, if num %d\n",
+					vlan_id, vlan_data->mux_id, ipa_if_num);
+		}
+
+		else if(iptype == IPA_IP_v4)
+		{
+			ipv4_to_iface[pdn_idx].wan_up_vlan = true;
+			if (ipv4_to_iface[pdn_idx].VID_cnt < IPA_MAX_NUM_SW_PDNS)
+			{
+				ipv4_to_iface[pdn_idx].associated_VIDs[vlan_idx] = vlan_id;
+				ipv4_to_iface[pdn_idx].VID_cnt++;
+				ipv4_to_iface[pdn_idx].pIface = this;
+			}
+			else
+			{
+				IPACMERR("Exceeded maximum supported VLAN IDs\n");
+				free(vlan_data);
+				return;
+			}
+			vlan_data->iptype = IPA_IP_v4;
+			if(m_is_sta_mode == WLAN_WAN)
+			{
+				vlan_data->ipv4_addr = wan_v4_addr;
+				vlan_data->mux_id = 0;
+				IPACM_Wan::wlan_v4_vlan_index = pdn_idx;
+				IPACMDBG_H("IPACM_Wan::wlan_v4_vlan_index: %d\n", IPACM_Wan::wlan_v4_vlan_index);
+			}
+			else
+			{
+				vlan_data->ipv4_addr = (public_wan_v4_addr_set) ?
+					public_wan_v4_addr : wan_v4_addr;
+				if(ext_prop != NULL)
+					vlan_data->mux_id = ext_prop->ext[0].mux_id;
+				/* send xlat configuration for installing uplink rules */
+				if (is_xlat)
+				{
+					vlan_data->is_xlat = true;
+					ipv4_to_iface[modem_ipv4_pdn_index].is_xlat=true;
+					IPACMDBG_H("xlat config enabled\n");
+				}
+			}
+
+			IPACMDBG_H("Posting IPA_HANDLE_WAN_VLAN_PDN_UP (V4) with below information:\n");
+			IPACMDBG_H("iptype IPA_IP_v4, VlanID %d, mux_id %d, if num %d\n", vlan_id,
+					 vlan_data->mux_id, ipa_if_num);
+		}
+		evt_data.event = IPA_HANDLE_WAN_VLAN_PDN_UP;
+		evt_data.evt_data = (void *)vlan_data;
+
+		IPACM_EvtDispatcher::PostEvt(&evt_data);
+	}
+}
 int IPACM_Wan::check_vlan_pdn(ipa_ip_type iptype, ipacm_event_route_vlan *data, bool v4_only_xlat)
 {
 	int pdn_idx = 0, vlan_idx= 0, ret = IPACM_FAILURE;
@@ -2357,17 +2669,21 @@ int IPACM_Wan::check_vlan_pdn(ipa_ip_type iptype, ipacm_event_route_vlan *data, 
 		{
 			header_partial_default_wan_v6 = true;
 			IPACMDBG_H("STA ipv6-header haven't constructed \n");
-			/* Adding pending vid to pending-STA-VID list */
-			for(it = pending_VID_STA_v6.begin(); it != pending_VID_STA_v6.end(); ++it)
+			if((data->wan_ipv6_prefix[0] == ipv6_prefix[0]) &&
+				(data->wan_ipv6_prefix[1] == ipv6_prefix[1]))
 			{
-				if (data->VlanID == *it)
+				/* Adding pending vid to pending-STA-VID list */
+				for(it = pending_VID_STA_v6.begin(); it != pending_VID_STA_v6.end(); ++it)
 				{
-					IPACMDBG_H("Already added vlan_id: %d as pending_VID_STA_v6 \n", data->VlanID);
-					 return IPACM_SUCCESS;
+					if (data->VlanID == *it)
+					{
+						IPACMDBG_H("Already added vlan_id: %d as pending_VID_STA_v6 \n", data->VlanID);
+						return IPACM_SUCCESS;
+					}
 				}
+				pending_VID_STA_v6.push_back(data->VlanID);
+				IPACMDBG_H("Added vlan_id: %d as pending_VID_STA_v6\n", data->VlanID);
 			}
-			pending_VID_STA_v6.push_back(data->VlanID);
-			IPACMDBG_H("Added vlan_id: %d as pending_VID_STA_v6\n", data->VlanID);
 			return IPACM_SUCCESS;
 		}
 	}

@@ -232,7 +232,6 @@ public:
 	bool dummy_prefix_installed;
 	bool is_vlan_offload_disabled;
 #endif
-
 	std::list <ipacm_event_data_all> neigh_cache;
 
 	/* LAN-iface's callback function */
@@ -260,6 +259,7 @@ public:
 	int add_dummy_ipv6_prefix_flt_rule();
 	int modify_ipv6_prefix_flt_rule();
 	int handle_backhaul_switch_vlan_mode(bool to_sta);
+	bool is_vlan_IF(uint16_t vlan_id);
 #endif
 
 	/* handle new_address event*/
@@ -1110,6 +1110,7 @@ private:
 
 	/* get partial header (header template of hdr proc ctx) */
 	int eth_bridge_get_hdr_template_hdl(uint32_t* hdr_hdl);
+	int eth_bridge_get_vlan_hdr_template_hdl(uint32_t* hdr_hdl, uint16_t vlan_id);
 
 
 	/* dynamically allocate lan iface's unicast routing rule structure */
@@ -1139,6 +1140,9 @@ private:
 	bool ipv6_header_set;
 
 	bool is_l2tp_iface;
+
+	uint32_t vlan_hdr_hdl;
+
 #ifdef FEATURE_L2TP
 	uint32_t l2tp_ul_dummy_hdr_hdl; /* 4-byte dummy header */
 
@@ -1430,7 +1434,6 @@ private:
 #endif
 #ifdef FEATURE_VLAN_MPDN
 	int handle_vlan_neighbor(ipacm_event_data_all *data);
-	bool is_vlan_IF(uint16_t vlan_id);
 	int handle_vlan_phys_if_down();
 #endif
 

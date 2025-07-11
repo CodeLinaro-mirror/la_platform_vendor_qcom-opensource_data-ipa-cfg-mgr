@@ -118,6 +118,8 @@ IPACM_Lan::IPACM_Lan(int iface_index) : IPACM_Iface(iface_index)
 	modem_ul_v6_set = false;
 	memset(ipv6_prefix, 0, sizeof(ipv6_prefix));
 
+	vlan_hdr_hdl = 0;
+
 #ifdef FEATURE_VLAN_MPDN
 	dummy_prefix_installed = false;
 	is_vlan_offload_disabled = false;
@@ -305,8 +307,10 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 	ipacm_event_iface_up_tehter* data_wan_tether;
 	list <ipacm_event_data_all>::iterator it;
 	ipacm_event_data_all *data_all=NULL;
+	ipacm_event_data_vlan *vlan_data = NULL;
 	ipacm_cmd_q_data evt_data;
 	int clnt_indx;
+	ipa_ioc_bridge_vlan_mapping_info mapping_info;
 
 	switch (event)
 	{
@@ -524,9 +528,10 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 					if( ((data->iptype != ip_type) && (ip_type != IPA_IP_MAX))
 						|| ((data->iptype==IPA_IP_v6) && (num_dft_rt_v6!=MAX_DEFAULT_v6_ROUTE_RULES)))
 					{
-						IPACM_SYSLOG("Got IPA_ADDR_ADD_EVENT ip-family:%d, v6 num %d: \n",data->iptype,num_dft_rt_v6);
+						IPACM_SYSLOG("Got IPA_ADDR_ADD_EVENT ip-family:%d, v6 num %d, LAN ip_type:%d \n",data->iptype,num_dft_rt_v6, ip_type);
 						if(handle_addr_evt(data) == IPACM_FAILURE)
 						{
+							IPACMDBG_H("failed handle_addr_evt for ip-family:%d\n",data->iptype);
 							return;
 						}
 #if defined(FEATURE_IPA_ANDROID) || defined(FEATURE_VLAN_MPDN) || defined(FEATURE_L2TP)
@@ -561,20 +566,41 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 						}
 
 #endif
-#ifdef FEATURE_VLAN_MPDN
-						/* VLAN IFACES don't care about default route */
-						if(!(IPACM_Iface::ipacmcfg->iface_in_vlan_mode(dev_name)))
-#endif
+						/* add support for handling default route to WIFI backhaul on vlan case Need to protect with xml entry */
+						if(IPACM_Wan::isWanUP(ipa_if_num))
 						{
-							if(IPACM_Wan::isWanUP(ipa_if_num))
+							if(data->iptype == IPA_IP_v4 || data->iptype == IPA_IP_MAX)
 							{
-								if(data->iptype == IPA_IP_v4 || data->iptype == IPA_IP_MAX)
+								if(IPACM_Wan::backhaul_is_sta_mode == false)
 								{
-									if(IPACM_Wan::backhaul_is_sta_mode == false)
+									if(!IPACM_Iface::ipacmcfg->iface_in_vlan_mode(dev_name))
 									{
 										ext_prop = IPACM_Iface::ipacmcfg->GetExtProp(IPA_IP_v4);
 										handle_wan_up_ex(ext_prop, IPA_IP_v4,
 											IPACM_Wan::getXlat_Mux_Id());
+									}
+								}
+								else
+								{
+									if(IPACM_Iface::ipacmcfg->iface_in_vlan_mode(dev_name))
+									{
+										uint16_t vlan_id;
+										memset(&mapping_info, 0, sizeof(mapping_info));
+
+										strlcpy(mapping_info.bridge_name, "bridge0", IF_NAME_LEN);
+										if(!IPACM_Iface::ipacmcfg->get_bridge_vlan_mapping(&mapping_info))
+										{
+											vlan_id = mapping_info.vlan_id;
+										}
+										if (vlan_id > 0  && vlan_id < DUMMY_VLAN_ID_BASE)
+										{
+											handle_wan_up(IPA_IP_v4, vlan_id);
+										}
+										else
+										{
+											IPACMDBG_H("Recieved invalid vid %d", vlan_id);
+											return;
+										}
 									}
 									else
 									{
@@ -587,28 +613,50 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 						else
 							check_vlan_PDNUp(IPA_IP_v4);
 
-						/* VLAN IFACES don't care about default route */
-						if(!(IPACM_Iface::ipacmcfg->iface_in_vlan_mode(dev_name)))
-#endif
+						/* add support for handling default route to WIFI backhaul on vlan case Need to protect with xml entry */
+						if(IPACM_Wan::isWanUP_V6(ipa_if_num)) /* Modem v6 call is UP?*/
 						{
-							if(IPACM_Wan::isWanUP_V6(ipa_if_num)) /* Modem v6 call is UP?*/
-							{
 #ifdef FEATURE_IPACM_UL_FIREWALL
-								if(data->iptype == IPA_IP_v6)
-									configure_v6_ul_firewall();
+							if(data->iptype == IPA_IP_v6)
+								configure_v6_ul_firewall();
 #endif //FEATURE_IPACM_UL_FIREWALL
-								if((data->iptype == IPA_IP_v6 || data->iptype == IPA_IP_MAX) && num_dft_rt_v6 == 1)
-								{
-									memcpy(ipv6_prefix, IPACM_Wan::backhaul_ipv6_prefix, sizeof(ipv6_prefix));
+							if((data->iptype == IPA_IP_v6 || data->iptype == IPA_IP_MAX) && num_dft_rt_v6 == 1)
+							{
+								memcpy(ipv6_prefix, IPACM_Wan::backhaul_ipv6_prefix, sizeof(ipv6_prefix));
 #ifdef FEATURE_VLAN_MPDN
-									modify_ipv6_prefix_flt_rule();
+								modify_ipv6_prefix_flt_rule();
 #else
-									install_ipv6_prefix_flt_rule(data_wan->ipv6_prefix);
+								install_ipv6_prefix_flt_rule(data_wan->ipv6_prefix);
 #endif
-									if(IPACM_Wan::backhaul_is_sta_mode == false)
+								if(IPACM_Wan::backhaul_is_sta_mode == false)
+								{
+									if(!IPACM_Iface::ipacmcfg->iface_in_vlan_mode(dev_name))
 									{
 										ext_prop = IPACM_Iface::ipacmcfg->GetExtProp(IPA_IP_v6);
 										handle_wan_up_ex(ext_prop, IPA_IP_v6, 0);
+									}
+								}
+								else
+								{
+									if(IPACM_Iface::ipacmcfg->iface_in_vlan_mode(dev_name))
+									{
+										uint16_t vlan_id;
+										memset(&mapping_info, 0, sizeof(mapping_info));
+
+										strlcpy(mapping_info.bridge_name, "bridge0", IF_NAME_LEN);
+										if(!IPACM_Iface::ipacmcfg->get_bridge_vlan_mapping(&mapping_info))
+										{
+											vlan_id = mapping_info.vlan_id;
+										}
+										if (vlan_id > 0  && vlan_id < DUMMY_VLAN_ID_BASE)
+										{
+											handle_wan_up(IPA_IP_v6, vlan_id);
+										}
+										else
+										{
+											IPACMDBG_H("Recieved invalid vid %d", vlan_id);
+											return;
+										}
 									}
 									else
 									{
@@ -616,15 +664,10 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 									}
 								}
 							}
-#ifdef FEATURE_IPACM_UL_FIREWALL
-							else
-								IPACMDBG_H("WAN v6 is not UP\n");
-#endif //FEATURE_IPACM_UL_FIREWALL
 						}
-#ifdef FEATURE_VLAN_MPDN
+#endif //FEATURE_IPACM_UL_FIREWALL#ifdef FEATURE_VLAN_MPDN
 						else
 							check_vlan_PDNUp(IPA_IP_v6);
-#endif
 
 						/* Post event to NAT */
 						if (post_lan_up_event(data))
@@ -783,12 +826,40 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 		{
 			if(data_wan->is_sta == false)
 			{
-				ext_prop = IPACM_Iface::ipacmcfg->GetExtProp(IPA_IP_v4);
-				handle_wan_up_ex(ext_prop, IPA_IP_v4, data_wan->xlat_mux_id);
+				if(!IPACM_Iface::ipacmcfg->iface_in_vlan_mode(dev_name))
+				{
+					ext_prop = IPACM_Iface::ipacmcfg->GetExtProp(IPA_IP_v4);
+					handle_wan_up_ex(ext_prop, IPA_IP_v4, data_wan->xlat_mux_id);
+				}
 			}
 			else
 			{
-				handle_wan_up(IPA_IP_v4);
+				/* add support for handling default route to WIFI backhaul on vlan case Need to protect with xml entry */
+				if(IPACM_Iface::ipacmcfg->iface_in_vlan_mode(dev_name))
+				{
+					uint16_t vlan_id;
+					memset(&mapping_info, 0, sizeof(mapping_info));
+
+					strlcpy(mapping_info.bridge_name, "bridge0", IF_NAME_LEN);
+					if(!IPACM_Iface::ipacmcfg->get_bridge_vlan_mapping(&mapping_info))
+					{
+						vlan_id = mapping_info.vlan_id;
+					}
+					if (vlan_id > 0 && vlan_id < DUMMY_VLAN_ID_BASE)
+					{
+						handle_wan_up(IPA_IP_v4, vlan_id);
+					}
+					else
+					{
+						IPACMDBG_H("Recieved invalid vid %d", vlan_id);
+						return;
+					}
+					IPACMDBG_H("Recieved vid %d", vlan_id);
+				}
+				else
+				{
+					handle_wan_up(IPA_IP_v4);
+				}
 			}
 		}
 		break;
@@ -831,43 +902,70 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 #endif
 			if(data_wan->is_sta == false)
 			{
-				ext_prop = IPACM_Iface::ipacmcfg->GetExtProp(IPA_IP_v6);
-				handle_wan_up_ex(ext_prop, IPA_IP_v6, 0);
+				if(!IPACM_Iface::ipacmcfg->iface_in_vlan_mode(dev_name))
+				{
+					ext_prop = IPACM_Iface::ipacmcfg->GetExtProp(IPA_IP_v6);
+					handle_wan_up_ex(ext_prop, IPA_IP_v6, 0);
+				}
 			}
 			else
 			{
-				handle_wan_up(IPA_IP_v6);
-			}
-
-			it = neigh_cache.begin();
-			while (it != neigh_cache.end())
-			{
-				if (it->ipv6_addr[0] == data_wan->ipv6_prefix[0] && it->ipv6_addr[1] == data_wan->ipv6_prefix[1])
+				/* add support for handling default route to WIFI backhaul on vlan case Need to protect with xml entry */
+				if(IPACM_Iface::ipacmcfg->iface_in_vlan_mode(dev_name))
 				{
-					evt_data.event = IPA_NEIGH_CLIENT_IP_ADDR_ADD_EVENT;
-					data_all = (ipacm_event_data_all *)malloc(sizeof(ipacm_event_data_all));
-					if (data_all == NULL)
+					uint16_t vlan_id;
+					memset(&mapping_info, 0, sizeof(mapping_info));
+
+					strlcpy(mapping_info.bridge_name, "bridge0", IF_NAME_LEN);
+					if(!IPACM_Iface::ipacmcfg->get_bridge_vlan_mapping(&mapping_info))
 					{
-						IPACM_SYSLOG("Unable to allocate memory\n");
-						break;
+						vlan_id = mapping_info.vlan_id;
 					}
-					memset(data_all, 0, sizeof(ipacm_event_data_all));
-					data_all->iptype = IPA_IP_v6;
-					data_all->if_index = it->if_index;
-					memcpy(data_all->ipv6_addr,it->ipv6_addr, 4*sizeof(uint32_t));
-					memcpy(data_all->mac_addr, it->mac_addr, IPA_MAC_ADDR_SIZE);
-					memcpy(data_all->iface_name, it->iface_name, IPA_IFACE_NAME_LEN);
-					evt_data.evt_data = (void *)data_all;
-					IPACM_EvtDispatcher::PostEvt(&evt_data);
-					IPACMDBG_H("Posted event %d, with %s for ipv6 client\n",
-						evt_data.event, data_all->iface_name);
-					IPACMDBG_H("v6 addr : 0x%08x:%08x:%08x:%08x mac : 0x%x%x%x%x%x%x\n",
-						it->ipv6_addr[0], it->ipv6_addr[1], it->ipv6_addr[2], it->ipv6_addr[3],
-						it->mac_addr[0], it->mac_addr[1], it->mac_addr[2], it->mac_addr[3], it->mac_addr[4], it->mac_addr[5]);
-					it = neigh_cache.erase(it);
+					if (vlan_id > 0 && vlan_id < DUMMY_VLAN_ID_BASE)
+					{
+						handle_wan_up(IPA_IP_v6, vlan_id);
+					}
+					else
+					{
+						IPACMDBG_H("Recieved invalid vid %d", vlan_id);
+						return;
+					}
 				}
 				else
-					it++;
+				{
+					handle_wan_up(IPA_IP_v6);
+				}
+
+				it = neigh_cache.begin();
+				while (it != neigh_cache.end())
+				{
+					if (it->ipv6_addr[0] == data_wan->ipv6_prefix[0] && it->ipv6_addr[1] == data_wan->ipv6_prefix[1])
+					{
+						evt_data.event = IPA_NEIGH_CLIENT_IP_ADDR_ADD_EVENT;
+						data_all = (ipacm_event_data_all *)malloc(sizeof(ipacm_event_data_all));
+						if (data_all == NULL)
+						{
+							IPACM_SYSLOG("Unable to allocate memory\n");
+							break;
+						}
+						memset(data_all, 0, sizeof(ipacm_event_data_all));
+						data_all->iptype = IPA_IP_v6;
+						data_all->if_index = it->if_index;
+						memcpy(data_all->ipv6_addr,it->ipv6_addr, 4*sizeof(uint32_t));
+						memcpy(data_all->mac_addr, it->mac_addr, IPA_MAC_ADDR_SIZE);
+						memcpy(data_all->iface_name, it->iface_name, IPA_IFACE_NAME_LEN);
+						evt_data.evt_data = (void *)data_all;
+						IPACM_EvtDispatcher::PostEvt(&evt_data);
+						IPACMDBG_H("Posted event %d, with %s for ipv6 client\n",
+							evt_data.event, data_all->iface_name);
+						IPACMDBG_H("v6 addr : 0x%08x:%08x:%08x:%08x mac : 0x%x%x%x%x%x%x\n",
+							it->ipv6_addr[0], it->ipv6_addr[1], it->ipv6_addr[2], it->ipv6_addr[3],
+							it->mac_addr[0], it->mac_addr[1], it->mac_addr[2], it->mac_addr[3], it->mac_addr[4], it->mac_addr[5]);
+						it = neigh_cache.erase(it);
+					}
+					else
+						it++;
+				}
 			}
 		}
 		break;
@@ -884,10 +982,15 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 #ifdef FEATURE_VLAN_MPDN
 		/* VLAN IFACES don't care about default route */
 		if((IPACM_Iface::ipacmcfg->iface_in_vlan_mode(dev_name)) &&
-			(IPACM_Iface::ipacmcfg->ipacm_mpdn_enable == TRUE))
+			(IPACM_Iface::ipacmcfg->ipacm_mpdn_enable == TRUE||
+			IPACM_Wan::isVlanWanUP()))
 		{
-			IPACMDBG_H("IF %s is vlan IF, ignoring IPA_HANDLE_WAN_DOWN\n", dev_name);
-			return;
+			/* add support for handling default route to WIFI backhaul on vlan case Need to protect with xml entry */
+			IPACMDBG_H("IF %s is vlan IF\n", dev_name);
+			if(data_wan->is_sta == false)
+			{
+				return;
+			}
 		}
 #endif
 		/* if dummy vlan present for iface, don't handle via default route */
@@ -916,10 +1019,15 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 #ifdef FEATURE_VLAN_MPDN
 		/* VLAN IFACES don't care about default route */
 		if((IPACM_Iface::ipacmcfg->iface_in_vlan_mode(dev_name)) &&
-			(IPACM_Iface::ipacmcfg->ipacm_mpdn_enable == TRUE))
+		((IPACM_Iface::ipacmcfg->ipacm_mpdn_enable == TRUE) ||
+			IPACM_Wan::isVlanWanUP_V6()))
 		{
-			IPACMDBG_H("IF %s is vlan IF, ignoring IPA_HANDLE_WAN_DOWN_V6", dev_name);
-			return;
+			/* add support for handling default route to WIFI backhaul on vlan case Need to protect with xml entry */
+			IPACMDBG_H("IF %s is vlan IF\n", dev_name);
+			if(data_wan->is_sta == false)
+			{
+				return;
+			}
 		}
 #endif
 		/* if dummy vlan present for iface, don't handle via default route */
@@ -1003,7 +1111,7 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 #endif //IPA_HW_FNR_STATS
 			ipacm_event_data_all *data = (ipacm_event_data_all *)param;
 			ipa_interface_index = iface_ipa_index_query(data->if_index);
-			IPACMDBG_H("Recieved IPA_NEIGH_CLIENT_IP_ADDR_ADD_EVENT event \n");
+			IPACMDBG_H("Received IPA_NEIGH_CLIENT_IP_ADDR_ADD_EVENT event \n");
 			IPACMDBG_H("check iface %s category: %d\n", dev_name, ipa_if_cate);
 			if (ipa_interface_index == ipa_if_num && ipa_if_cate == ODU_IF)
 			{
@@ -1389,6 +1497,25 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 				}
 #endif
 				handle_vlan_pdn_down(data);
+			}
+		}
+		break;
+	case IPA_NOTIFY_VLAN_UP:
+		{
+			IPACMDBG_H("Received IPA_NOTIFY_VLAN_UP\n");
+			vlan_data = (ipacm_event_data_vlan *)param;
+			if(is_vlan_IF(vlan_data->vlan_id))
+			{
+				if(IPACM_Wan::isVlanWanUP())
+				{
+					IPACMDBG_H("Check any missed v4 VLAN handling in v4 new ADDR\n");
+					check_vlan_PDNUp(IPA_IP_v4);
+				}
+				if (IPACM_Wan::isVlanWanUP_V6())
+				{
+					IPACMDBG_H("Check any missed v6 VLAN handling in v6 new ADDR\n");
+					check_vlan_PDNUp(IPA_IP_v6);
+				}
 			}
 		}
 		break;
@@ -2664,13 +2791,13 @@ int IPACM_Lan::handle_addr_evt(ipacm_event_data_addr *data)
 	    /* check if see that v6-addr already or not*/
 	    for(num_ipv6_addr=0;num_ipv6_addr<num_dft_rt_v6;num_ipv6_addr++)
 	    {
-            if((ipv6_addr[num_ipv6_addr][0] == data->ipv6_addr[0]) &&
-	           (ipv6_addr[num_ipv6_addr][1] == data->ipv6_addr[1]) &&
-	           (ipv6_addr[num_ipv6_addr][2] == data->ipv6_addr[2]) &&
-	           (ipv6_addr[num_ipv6_addr][3] == data->ipv6_addr[3]))
-            {
+        	if((ipv6_addr[num_ipv6_addr][0] == data->ipv6_addr[0]) &&
+			(ipv6_addr[num_ipv6_addr][1] == data->ipv6_addr[1]) &&
+			(ipv6_addr[num_ipv6_addr][2] == data->ipv6_addr[2]) &&
+			(ipv6_addr[num_ipv6_addr][3] == data->ipv6_addr[3]))
+			{
+				IPACMDBG_H("ipv6_addr already added\n");
 				return IPACM_FAILURE;
-				break;
 	        }
 	    }
 
@@ -3137,6 +3264,11 @@ int IPACM_Lan::handle_wan_up(ipa_ip_type ip_type, uint16_t vid)
 					 &rx_prop->rx[0].attrib,
 					 sizeof(flt_rule_entry.rule.attrib));
 
+		if (vid > 0)
+		{
+			flt_rule_entry.rule.attrib.attrib_mask |= IPA_FLT_VLAN_ID;
+			flt_rule_entry.rule.attrib.vlan_id = vid;
+		}
 		flt_rule_entry.rule.attrib.attrib_mask |= IPA_FLT_DST_ADDR;
 #ifdef FEATURE_VLAN_MPDN
 		if ((vid > 0) && !IPACM_Iface::ipacmcfg->is_dummy_VID(vid))
@@ -3276,6 +3408,11 @@ int IPACM_Lan::handle_wan_up(ipa_ip_type ip_type, uint16_t vid)
 			flt_rule_entry.rule.attrib.vlan_id = vid;
 		}
 #endif
+		if (vid > 0)
+		{
+			flt_rule_entry.rule.attrib.attrib_mask |= IPA_FLT_VLAN_ID;
+			flt_rule_entry.rule.attrib.vlan_id = vid;
+		}
 		flt_rule_entry.rule.attrib.u.v6.dst_addr_mask[0] = 0x00000000;
 		flt_rule_entry.rule.attrib.u.v6.dst_addr_mask[1] = 0x00000000;
 		flt_rule_entry.rule.attrib.u.v6.dst_addr_mask[2] = 0x00000000;
@@ -10012,6 +10149,12 @@ ipa_hdr_proc_type IPACM_Lan::eth_bridge_get_hdr_proc_type(ipa_hdr_l2_type t1,
 			return IPA_HDR_PROC_ETHII_TO_ETHII;
 		if(t2 == IPA_HDR_L2_802_3)
 			return IPA_HDR_PROC_ETHII_TO_802_3;
+		/* support non-vlan -> vlan */
+		if(t2 == IPA_HDR_L2_802_1Q) {
+			generic_params.input_ethhdr_negative_offset = 14;
+			generic_params.output_ethhdr_negative_offset = 18;
+			return IPA_HDR_PROC_ETHII_TO_ETHII_EX;
+		}
 		break;
 	case IPA_HDR_L2_802_3:
 		if(t2 == IPA_HDR_L2_ETHERNET_II)
@@ -10023,6 +10166,12 @@ ipa_hdr_proc_type IPACM_Lan::eth_bridge_get_hdr_proc_type(ipa_hdr_l2_type t1,
 		if(t2 == IPA_HDR_L2_802_1Q) {
 			generic_params.input_ethhdr_negative_offset = 18;
 			generic_params.output_ethhdr_negative_offset = 18;
+			return IPA_HDR_PROC_ETHII_TO_ETHII_EX;
+		}
+		/* support non-vlan -> vlan */
+		if(t2 == IPA_HDR_L2_ETHERNET_II) {
+			generic_params.input_ethhdr_negative_offset = 18;
+			generic_params.output_ethhdr_negative_offset = 14;
 			return IPA_HDR_PROC_ETHII_TO_ETHII_EX;
 		}
 		break;
@@ -10052,6 +10201,67 @@ int IPACM_Lan::eth_bridge_get_hdr_template_hdl(uint32_t* hdr_hdl)
 	}
 
 	*hdr_hdl = hdr.hdl;
+	return IPACM_SUCCESS;
+}
+
+int IPACM_Lan::eth_bridge_get_vlan_hdr_template_hdl(uint32_t* hdr_hdl, uint16_t vlan_id)
+{
+	struct ipa_ioc_copy_hdr sCopyHeader;
+	struct ipa_ioc_add_hdr hdr;
+	uint8_t hdr_len;
+	struct ipa_ioc_add_hdr *pHeaderDescriptor = NULL;
+	int len = 0;
+
+	memset(&hdr, 0, sizeof(hdr));
+	memset(&sCopyHeader, 0, sizeof(sCopyHeader));
+	memcpy(sCopyHeader.name,
+				tx_prop->tx[0].hdr_name,
+				sizeof(sCopyHeader.name));
+
+	IPACMDBG_H("header name: %s\n", sCopyHeader.name);
+	if (m_header.CopyHeader(&sCopyHeader) == false)
+	{
+		PERROR("ioctl copy header failed");
+		return IPACM_FAILURE;
+	}
+
+	IPACMDBG_H("header length: %d, partial: %d\n", sCopyHeader.hdr_len, sCopyHeader.is_partial);
+
+	hdr_len = sCopyHeader.hdr_len;
+	len = sizeof(struct ipa_ioc_add_hdr) + (1 * sizeof(struct ipa_hdr_add));
+		pHeaderDescriptor = (struct ipa_ioc_add_hdr *)calloc(1, len);
+		if (pHeaderDescriptor == NULL)
+	{
+			IPACMERR("calloc failed to allocate pHeaderDescriptor\n");
+			return IPACM_FAILURE;
+	}
+	pHeaderDescriptor->hdr[0].hdr_len = sCopyHeader.hdr_len;
+	memcpy(pHeaderDescriptor->hdr[0].hdr,
+					sCopyHeader.hdr,
+					pHeaderDescriptor->hdr[0].hdr_len);
+	pHeaderDescriptor->num_hdrs = 1;
+	pHeaderDescriptor->hdr[0].type = sCopyHeader.type;
+	pHeaderDescriptor->hdr[0].hdr_hdl = -1;
+	pHeaderDescriptor->hdr[0].is_partial = sCopyHeader.is_partial;
+	pHeaderDescriptor->hdr[0].status = -1;
+	pHeaderDescriptor->hdr[0].hdr[hdr_len - 3] = (uint8_t)vlan_id & 0xFF;
+	pHeaderDescriptor->hdr[0].hdr[hdr_len - 4] = (uint8_t)(vlan_id >> 8) & 0xFF;
+	memset(pHeaderDescriptor->hdr[0].name, 0,
+					 sizeof(pHeaderDescriptor->hdr[0].name));
+	snprintf(pHeaderDescriptor->hdr[0].name, sizeof(pHeaderDescriptor->hdr[0].name),
+		"eth0_ipv4_vlan%d", vlan_id);
+	if(m_header.AddHeader(pHeaderDescriptor) == false ||
+			pHeaderDescriptor->hdr[0].status != 0)
+	{
+		IPACMERR("ioctl IPA_IOC_ADD_HDR failed: %d\n", pHeaderDescriptor->hdr[0].status);
+		free(pHeaderDescriptor);
+		return IPACM_FAILURE;
+	}
+
+	*hdr_hdl = pHeaderDescriptor->hdr[0].hdr_hdl;
+	vlan_hdr_hdl = pHeaderDescriptor->hdr[0].hdr_hdl;
+
+	free(pHeaderDescriptor);
 	return IPACM_SUCCESS;
 }
 
@@ -10366,8 +10576,7 @@ int IPACM_Lan::eth_bridge_add_hdr_proc_ctx(ipa_hdr_l2_type peer_l2_hdr_type, uin
 	ipa_ioc_add_hdr_proc_ctx* pHeaderProcTable = NULL;
 	ipa_ioc_bridge_vlan_mapping_info mapping_info;
 	uint16_t vlan_id = 0;
-	uint8_t priority = 0;
-
+	int priority = 0;
 	if(tx_prop == NULL)
 	{
 		IPACMERR("No tx prop.\n");
@@ -10402,8 +10611,7 @@ int IPACM_Lan::eth_bridge_add_hdr_proc_ctx(ipa_hdr_l2_type peer_l2_hdr_type, uin
 			if(IPACM_Iface::ipacmcfg->get_vlan_id(peer_dev_name, &vlan_id))
 #endif
 			{
-				IPACMERR("Unable to find VLAN ID for Dev %s\n", peer_dev_name);
-				return IPACM_FAILURE;
+				IPACMDBG("Unable to find VLAN ID for Dev %s\n", peer_dev_name);
 			}
 		}
 
@@ -10427,6 +10635,10 @@ int IPACM_Lan::eth_bridge_add_hdr_proc_ctx(ipa_hdr_l2_type peer_l2_hdr_type, uin
 		/*Extract VID from br0 if non-vlan on default or extract from respective bridge */
 		if(!IPACM_Iface::ipacmcfg->get_bridge_vlan_mapping(&mapping_info))
 		{
+			if(vlan_id <= 0 || vlan_id > DUMMY_VLAN_ID_BASE)
+			{
+				IPACMERR("Unable to find Bridge for %s\n", mapping_info.bridge_name);
+			}
 			vlan_id = mapping_info.vlan_id;
 		}
 
@@ -10743,10 +10955,7 @@ int IPACM_Lan::eth_bridge_add_flt_rule(uint8_t *mac, uint32_t rt_tbl_hdl, ipa_ip
 		if(!vlan_id)
 		{
 			IPACMERR("got vlan id 0 for vlan iface %s\n", dev_name);
-			res = IPACM_FAILURE;
-			goto end;
 		}
-
 		flt_rule_entry.rule.attrib.attrib_mask |= IPA_FLT_VLAN_ID;
 		flt_rule_entry.rule.attrib.vlan_id = vlan_id;
 	}
@@ -10799,6 +11008,18 @@ int IPACM_Lan::eth_bridge_del_hdr_proc_ctx(uint32_t hdr_proc_ctx_hdl)
 		IPACM_SYSLOG("Failed to delete hdr proc ctx.\n");
 		return IPACM_FAILURE;
 	}
+	if (vlan_hdr_hdl != 0)
+	{
+		if(m_header.DeleteHeaderHdl(vlan_hdr_hdl) == false)
+		{
+			IPACMERR("Failed to delete vlan hdr\n");
+			return IPACM_FAILURE;
+		}
+		vlan_hdr_hdl = 0;
+	}
+	else
+		IPACMDBG_H("vlan hdr is invalid!");
+
 	return IPACM_SUCCESS;
 }
 

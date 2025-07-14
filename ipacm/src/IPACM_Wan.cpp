@@ -7234,7 +7234,28 @@ int IPACM_Wan::handle_route_del_evt_ex(ipa_ip_type iptype)
 	}
 
 	IPACMDBG_H("Default route is deleted to iface %s.\n", dev_name);
+		if(IPACM_Iface::ipacmcfg->ipogre_enabled)
+	{
 
+			IPACMDBG_H("call gre down\n");
+			for(int i=0;i<IPACM_Iface::ipacmcfg->tunnel_idx.size();i++)
+			{
+				IPACMDBG_H("call gre down per tunnel\n");
+				if(IPACM_Iface::ipacmcfg->ipogre_tunnel_idx_map[IPACM_Iface::ipacmcfg->tunnel_idx[i]].iptype == IPA_IP_v4)
+				{
+					memcpy(&IPACM_Iface::ipacmcfg->ipgre_info.ipv4_src,&IPACM_Iface::ipacmcfg->ipogre_tunnel_idx_map[IPACM_Iface::ipacmcfg->tunnel_idx[i]].tunnel_endpoint.v4_ip.ipv4_src,sizeof(IPACM_Iface::ipacmcfg->ipgre_info.ipv4_src));
+					memcpy(&IPACM_Iface::ipacmcfg->ipgre_info.ipv4_dst,&IPACM_Iface::ipacmcfg->ipogre_tunnel_idx_map[IPACM_Iface::ipacmcfg->tunnel_idx[i]].tunnel_endpoint.v4_ip.ipv4_dst,sizeof(IPACM_Iface::ipacmcfg->ipgre_info.ipv4_dst));
+				}
+				else
+				{
+					memcpy(&IPACM_Iface::ipacmcfg->ipgre_info.ipv6_src,&IPACM_Iface::ipacmcfg->ipogre_tunnel_idx_map[IPACM_Iface::ipacmcfg->tunnel_idx[i]].tunnel_endpoint.v6_ip.ipv6_src,sizeof(IPACM_Iface::ipacmcfg->ipgre_info.ipv6_src));
+					memcpy(&IPACM_Iface::ipacmcfg->ipgre_info.ipv6_dst,&IPACM_Iface::ipacmcfg->ipogre_tunnel_idx_map[IPACM_Iface::ipacmcfg->tunnel_idx[i]].tunnel_endpoint.v6_ip.ipv6_dst,sizeof(IPACM_Iface::ipacmcfg->ipgre_info.ipv6_dst));
+				}
+				IPACM_Iface::ipacmcfg->ipgre_info.iptype = IPACM_Iface::ipacmcfg->ipogre_tunnel_idx_map[IPACM_Iface::ipacmcfg->tunnel_idx[i]].iptype;
+				IPACM_Iface::ipacmcfg->ipgre_info.num_exceptions = IPACM_Iface::ipacmcfg->tunnel_idx[i];
+				gre_down();
+			}
+	}
 	if (((iptype == IPA_IP_v4) && (active_v4 == true)) ||
 		((iptype == IPA_IP_v6) && (active_v6 == true)))
 	{

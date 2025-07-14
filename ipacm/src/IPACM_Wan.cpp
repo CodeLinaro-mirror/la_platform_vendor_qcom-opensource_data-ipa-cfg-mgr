@@ -4360,9 +4360,12 @@ int IPACM_Wan::handle_route_add_vlan_pdn_evt(ipa_ip_type iptype, uint16_t vlan_i
 			/* Need to take different routing table when two STA ifaces same time */
 			strlcpy(rt_rule->rt_tbl_name, IPACM_Iface::ipacmcfg->rt_tbl_v6.name, sizeof(rt_rule->rt_tbl_name));
 			IPACMDBG_H(" WAN table created %s \n", rt_rule->rt_tbl_name);
-			if (IPACM_Iface::ipacmcfg->eth_wan_pppoe_enable ){
+			if (IPACM_Iface::ipacmcfg->eth_wan_pppoe_enable && is_ppp_iface)
+			{
 				rt_rule_entry->rule.hdr_proc_ctx_hdl = v6_p_ctx_2use;
-			} else {
+			}
+			else
+			{
 				/* use the STA-header handler */
 				if(hdr_proc_set_v6 == true)
 				{

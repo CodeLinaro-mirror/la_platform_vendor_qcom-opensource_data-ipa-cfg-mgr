@@ -1033,7 +1033,7 @@ private:
 		ipa_ip_type iptype,
 		const struct ipa_rule_attrib &rx_prop_attrib,
 		struct ipa_flt_rule_add &flt_rule_add, int fltr_rule_number,
-		uint8_t tunnel_id = 0xFF);
+		uint8_t tunnel_id = 0xFF, bool frag=false);
 #endif
 #ifdef FEATURE_IPoGRE
 	int config_ipogre_dl_rules_ex(struct ipacm_pdn_flt_rule *rules,

@@ -3921,12 +3921,19 @@ int IPACM_Lan::add_vlan_private_subnet(ipacm_bridge *bridge)
 		return IPACM_SUCCESS;
 	}
 
+	if(bridge == NULL)
+	{
+		IPACMDBG_H("bridge info is invalid\n");
+		return IPACM_FAILURE;
+	}
+
 	IPACMDBG_H("(%s) handle_vlan_private_subnet (0x%X & 0x%X)\n",
 		bridge->bridge_name,
 		bridge->bridge_netmask,
 		bridge->bridge_ipv4_addr);
 
-	if((bridge->bridge_netmask == 0) && (bridge->bridge_ipv4_addr & bridge->bridge_netmask == 0))
+	/* checking bridge_ipv4_addr should be enough */
+	if((bridge->bridge_netmask == 0) && ((bridge->bridge_ipv4_addr & bridge->bridge_netmask) == 0))
 	{
 		IPACMERR("Invalid subnet or Mask: 0x%X\n", bridge->bridge_ipv4_addr & bridge->bridge_netmask);
 		return IPACM_FAILURE;

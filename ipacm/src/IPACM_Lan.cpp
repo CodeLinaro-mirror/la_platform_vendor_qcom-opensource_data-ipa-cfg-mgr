@@ -3278,6 +3278,7 @@ bool IPACM_Lan::is_vlan_IF(uint16_t vlan_id)
 {
 	char vlan_iface_name[IPA_RESOURCE_NAME_MAX];
 	char vlan_suffix[6];
+	char *char_idx = NULL;
 
 #ifdef FEATURE_SOCKSv5
 	/* handle socksv5 MPDN logic */
@@ -3291,6 +3292,13 @@ bool IPACM_Lan::is_vlan_IF(uint16_t vlan_id)
 	/* concatenate the vlan id to the IF name and check iface exists */
 	snprintf(vlan_suffix, sizeof(vlan_suffix), ".%d", vlan_id);
 	strlcpy(vlan_iface_name, dev_name, sizeof(vlan_iface_name));
+
+	if (char_idx = strstr(vlan_iface_name, "_"))
+	{
+		char_idx[0] = '\0';
+		IPACMDBG_H("truncated mlo base iface name %s\n", vlan_iface_name);
+	}
+
 	if(strlcat(vlan_iface_name, vlan_suffix, sizeof(vlan_iface_name)) > IPA_RESOURCE_NAME_MAX)
 	{
 		IPACMERR("vlan IF name construction failed exceed length (%zu)\n", strlen(vlan_iface_name));

@@ -4224,6 +4224,12 @@ int IPACM_Config::SetWlanVlanAp(char *event_iface_name) {
 		IPACMDBG_H("truncated iface name %s\n", if_name);
 	}
 
+	char_idx =  strrchr(if_name, '_');
+	if (char_idx) {
+		char_idx[0] = '\0';
+		IPACMDBG_H("truncated iface name %s\n", if_name);
+	}
+
 	/* check if the AP iface already exists or not*/
 	ret = IPACM_Iface::ipa_get_if_index(if_name, &(if_index));
 	if (ret != IPACM_SUCCESS) {

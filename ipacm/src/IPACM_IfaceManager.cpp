@@ -654,6 +654,9 @@ int IPACM_IfaceManager::create_iface_instance(ipacm_ifacemgr_data *param)
 					IPACM_EvtDispatcher::registr(IPA_HANDLE_WAN_DOWN, w);
 					IPACM_EvtDispatcher::registr(IPA_HANDLE_WAN_UP, w);
 #endif
+					IPACM_EvtDispatcher::registr(IPA_QOS_RULE_ADD_EVENT, w);
+					IPACM_EvtDispatcher::registr(IPA_QOS_RULE_DEL_EVENT, w);
+
 					IPACM_EvtDispatcher::registr(IPA_ADDR_ADD_EVENT, w);
 #ifdef FEATURE_IPA_ANDROID
 					IPACM_EvtDispatcher::registr(IPA_WAN_UPSTREAM_ROUTE_ADD_EVENT, w);

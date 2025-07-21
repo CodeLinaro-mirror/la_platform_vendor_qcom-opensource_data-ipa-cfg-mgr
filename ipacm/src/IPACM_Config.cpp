@@ -4325,12 +4325,6 @@ void IPACM_Config::add_qos_params_info(ipa_ioc_qos_config *data)
 	qos_param_info new_qos_info = { 0 };
 	ipacm_cmd_q_data evt_data;
 
-	if (data->dir == 1)
-	{
-		IPACMDBG_H("UL qos add params requested, no actions from ipa, dir : %d \n",data->dir);
-		return;
-	}
-
 	if(pthread_mutex_lock(&qos_param_list_lock) != 0)
 	{
 		IPACMERR("Unable to lock the mutex\n");
@@ -4484,12 +4478,6 @@ void IPACM_Config::delete_qos_params_info(ipa_ioc_qos_config *data)
 	ipacm_cmd_q_data evt_data;
 	list<qos_client_info>::iterator it_qos_client;
 	int i = 0;
-
-	if (data->dir == 1)
-	{
-		IPACMDBG_H("UL qos delete params requested, no actions from ipa, dir : %d \n",data->dir);
-		return;
-	}
 
 	if(pthread_mutex_lock(&qos_param_list_lock) != 0)
 	{

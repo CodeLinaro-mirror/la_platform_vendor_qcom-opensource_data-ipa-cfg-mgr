@@ -2328,6 +2328,20 @@ bool IPACM_Config::is_added_vlan_iface(char *iface_name)
 	return ret;
 }
 
+/*
+ *FUNCTION
+ *  IPACM_Config::iface_in_vlan_mode
+ *
+ * @brief Check if a network interface is in VLAN mode.
+ *
+ * This function determines whether the specified physical network interface
+ * is operating in VLAN mode by checking its name against a list of known
+ * VLAN-capable interface types.
+ *
+ * @param phys_iface_name The name of the physical interface to check.
+ *
+ * @return true if the interface is in VLAN mode, false otherwise.
+ */
 bool IPACM_Config::iface_in_vlan_mode(const char *phys_iface_name)
 {
 
@@ -2366,9 +2380,9 @@ bool IPACM_Config::iface_in_vlan_mode(const char *phys_iface_name)
 	}
 
 #ifdef IPA_VLAN_IF_WLAN
-	if(strstr(phys_iface_name, "ath"))
+	if(strstr(phys_iface_name, "ath") || strstr(phys_iface_name, "wlan"))
 	{
-		IPACMDBG("ath vlan mode %d\n", vlan_devices[IPA_VLAN_IF_WLAN]);
+		IPACMDBG("ath/wlan vlan mode %d\n", vlan_devices[IPA_VLAN_IF_WLAN]);
 		return (vlan_devices[IPA_VLAN_IF_WLAN] ||
 					((IPACM_Iface::ipacmcfg->ipacm_emesh_enable && IPACM_Iface::ipacmcfg->ipacm_emesh_mode >= 2) &&
 					is_svap_related(phys_iface_name)) ||

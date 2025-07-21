@@ -121,6 +121,7 @@ const char *ipacm_event_name[] = {
 	__stringify(IPA_LAN_CLIENT_DISCONNECT_EVENT),          /* ipacm_event_data_mac */
 	__stringify(IPA_LAN_CLIENT_UPDATE_EVENT),              /* ipacm_event_data_mac */
 #endif
+	__stringify(IPA_WAN_GW_ADDR_ADD_EVENT),                /* ipacm_event_data_addr */
 	__stringify(IPA_EXTERNAL_EVENT_MAX),
 	__stringify(IPA_HANDLE_WAN_UP),                        /* ipacm_event_iface_up  */
 	__stringify(IPA_HANDLE_WAN_DOWN),                      /* ipacm_event_iface_up  */
@@ -171,7 +172,6 @@ const char *ipacm_event_name[] = {
 	__stringify(IPA_ADD_BRIDGE_VLAN_BR_INTF),              /* Handle vlan-bridge details add for bridge interface. */
 	__stringify(IPA_HANDLE_MACSEC_ADD),                    /* ipa_macsec_map. */
 	__stringify(IPA_HANDLE_MACSEC_DEL),                    /* ipa_macsec_map. */
-	__stringify(IPA_WAN_GW_ADDR_ADD_EVENT),                /* ipacm_event_data_addr */
 	__stringify(IPA_CLEAN_NEIGHBOR_CACHE),                 /* ipacm_event_data_all */
 	__stringify(IPA_LAN_CLIENT_ADD_EVENT),                 /* ipa lan2lan offload for static ip */
 	__stringify(IPA_LAN_CLIENT_DEL_EVENT),                 /* ipa lan2lan offload for static ip */
@@ -396,7 +396,7 @@ int IPACM_Config::reset_cnt_idx(int index, bool reset_all)
 	return IPACM_SUCCESS;
 }
 
-int IPACM_Config::ipacm_alloc_fnr_counters(struct ipa_ioc_flt_rt_counter_alloc *fnr_counters, const int fd)
+int IPACM_Config::ipacm_alloc_fnr_counters(struct ipa_ioc_flt_rt_counter_alloc *fnr_counters)
 {
 	int i, ret = 0;
 	int nfd = open(DEVICE_NAME, O_RDWR);
@@ -531,7 +531,7 @@ int IPACM_Config::Init(void)
 
 	struct statvfs stat;
 	ulong available_partition_size_bytes = 0;
-	char ipacm_log_file[] = IPACM_LOG_COLLECTION_FILE;
+	char ipacm_log_file[IPA_MAX_FILE_LEN] = IPACM_LOG_COLLECTION_FILE;
 	char *ipacm_log_dir = NULL;
 
 	cfg = (IPACM_conf_t *)malloc(sizeof(IPACM_conf_t));
@@ -743,7 +743,7 @@ int IPACM_Config::Init(void)
 			IPACMERR("FnR counter allocated already, skip dup allocation\n");
 			goto skip_fnr_alloc;
 		}
-		if (ipacm_alloc_fnr_counters(&fnr_counters, m_fd))
+		if (ipacm_alloc_fnr_counters(&fnr_counters))
 		{
 			IPACMERR("Failed to allocate fnr counters. Try Realloc Again  In main()\n");
 		} else {
@@ -1403,19 +1403,27 @@ const char* IPACM_Config::getEventName(ipa_cm_event_id event_id)
 
 enum ipa_hw_type IPACM_Config::GetIPAVer(bool get)
 {
-	int ret;
+	int ret, fd;
 
 	if(ver != IPA_HW_None)
 		return ver;
 
-	ret = ioctl(m_fd, IPA_IOC_GET_HW_VERSION, &ver);
+	fd = open(DEVICE_NAME, O_RDWR);
+
+	if (fd < 0) {
+		IPACMERR("fnr: Failed to open /dev/ipa\n");
+		return IPA_HW_None;
+	}
+	ret = ioctl(fd, IPA_IOC_GET_HW_VERSION, &ver);
 	if(ret != 0)
 	{
 		IPACMERR("Failed to get IPA version with error %d.\n", ret);
 		ver = IPA_HW_None;
+		close(fd);
 		return IPA_HW_None;
 	}
 	IPACMDBG_H("IPA version is %d.\n", ver);
+	close(fd);
 	return ver;
 }
 
@@ -1568,7 +1576,6 @@ void IPACM_Config::del_bridge_vlan_mapping(uint16_t *data, uint16_t *vlan_id)
 			IPACMDBG_H("Found the bridge mapping (%s->%d)\n",
 				it_mapping->bridge_iface_name,
 				it_mapping->bridge_associated_VID);
-			m_bridge_vlan_mapping.erase(it_mapping);
 
 			ret = ipa_get_if_name(iface_name, it_mapping->bridge_if_index);
 
@@ -1579,6 +1586,7 @@ void IPACM_Config::del_bridge_vlan_mapping(uint16_t *data, uint16_t *vlan_id)
 					it_mapping->bridge_iface_name);
 				bridge->associate_VID = 0;
 			}
+			m_bridge_vlan_mapping.erase(it_mapping);
 			break;
 		}
 	}
@@ -2082,6 +2090,44 @@ void IPACM_Config::handle_vlan_client_info(ipacm_event_data_all *data)
 #endif
 
 #ifdef FEATURE_VLAN_MPDN
+
+void IPACM_Config::post_eth_bridge_add_vlan_id_event(const char *iface_name)
+{
+    list<vlan_iface_info>::iterator it_vlan;
+    ipacm_cmd_q_data eth_bridge_evt;
+    ipacm_event_eth_bridge *evt_data_eth_bridge = NULL;
+
+    if(NULL == iface_name)
+    {
+        IPACMERR("Invalid iface name received.\n");
+        return;
+    }
+    for(it_vlan = m_vlan_iface.begin(); it_vlan != m_vlan_iface.end(); it_vlan++)
+    {
+        if (strstr(it_vlan->vlan_iface_name, iface_name))
+        {
+            evt_data_eth_bridge = (ipacm_event_eth_bridge*)malloc(sizeof(*evt_data_eth_bridge));
+            if(evt_data_eth_bridge == NULL)
+            {
+                IPACMERR("Failed to allocate memory.\n");
+                return;
+            }
+            memset(&eth_bridge_evt, 0, sizeof(ipacm_cmd_q_data));
+            memset(evt_data_eth_bridge, 0, sizeof(*evt_data_eth_bridge));
+
+            memcpy(evt_data_eth_bridge->iface_name, it_vlan->vlan_iface_name,
+                    sizeof(evt_data_eth_bridge->iface_name));
+
+            evt_data_eth_bridge->VlanID = it_vlan->vlan_id;
+
+            eth_bridge_evt.evt_data = (void*)evt_data_eth_bridge;
+            eth_bridge_evt.event = IPA_ETH_BRIDGE_ADD_VLAN_ID;
+            IPACMDBG("Posting event IPA_ETH_BRIDGE_ADD_VLAN_ID for Iface[%s][%s], vid[%d], posting event\n",
+                    iface_name, it_vlan->vlan_iface_name, it_vlan->vlan_id);
+            IPACM_EvtDispatcher::PostEvt(&eth_bridge_evt);
+        }
+    }
+}
 
 void IPACM_Config::get_vlan_mode_ifaces()
 {
@@ -2598,7 +2644,6 @@ void IPACM_Config::del_l2tp_vlan_mapping(l2tp_session_info *data)
 		{
 			l2tp_bridge_vlan = it->l2tp_bridge_vlan_id;
 			m_l2tp_vlan_mapping.erase(it);
-			it--;
 			DelNatIfaces(data->l2tp_iface_name);
 			if(num_ipa_l2tp_session > 0)
 			{
@@ -2942,7 +2987,7 @@ void IPACM_Config::add_dummy_vlan_mapping(char *bridge_iface, char* client_iface
 	int ent_exist = 0;
 	ipa_vlan_iface_info vlan_info;
 	uint16_t vlan_id;
-	uint8_t priority;
+	uint8_t priority = 0;
 
 	if(IPACM_Iface::ipacmcfg->is_added_vlan_iface(client_iface))
 	{
@@ -2992,6 +3037,7 @@ void IPACM_Config::add_dummy_vlan_mapping(char *bridge_iface, char* client_iface
 			memset(&vlan_info, 0, sizeof(vlan_info));
 			strlcpy(vlan_info.name, client_iface, sizeof(vlan_info.name));
 			vlan_info.vlan_id = DUMMY_VLAN_ID_BASE + if_index;
+			vlan_info.vlan_interface_index = if_index;
 			IPACM_Iface::ipacmcfg->add_vlan_iface(&vlan_info);
 			IPACMDBG_H("New Non-Vlan Mapping Created for %s with VID %d\n", vlan_info.name, vlan_info.vlan_id);
 		}
@@ -3014,6 +3060,7 @@ void IPACM_Config::del_dummy_vlan_mapping(char *bridge_iface, char* client_iface
 			memset(&vlan_info, 0, sizeof(vlan_info));
 			strlcpy(vlan_info.name, client_iface, sizeof(vlan_info.name));
 			vlan_info.vlan_id = DUMMY_VLAN_ID_BASE + if_index;
+			vlan_info.vlan_interface_index = if_index;
 			IPACM_Iface::ipacmcfg->del_vlan_iface(&vlan_info);
 		}
 	}
@@ -3480,7 +3527,7 @@ void IPACM_Config::alloc_fnr_counter(void)
 		if (hw_fnr_stats_support == true) {
 			IPACMERR("FnR counter allocated already, skip dup allocation\n");
 		}
-		if (ipacm_alloc_fnr_counters(&fnr_counters, m_fd))
+		if (ipacm_alloc_fnr_counters(&fnr_counters))
 		{
 			IPACMERR("Failed to allocate fnr counters.\n");
 		} else {
@@ -3531,10 +3578,13 @@ bool IPACM_Config::client_in_stats_cache(uint8_t *mac_addr)
 	memcpy(mac_a,mac_addr,IPA_MAC_ADDR_SIZE);
 	std::copy(std::begin(mac_a), std::end(mac_a), std::begin(mac));
 
+	/* In case of pipe disconnect and connect, we need to read this cache again.
+	   Since qcmap add this mac info only once, we should not delete it here.
+	   This info should be deleted only when explicitly called using
+	   IPA_PER_CLIENT_STATS_DISCONNECT_EVENT */
 	if (mac_addrs_stats_cache.count(mac))
 	{
 		is_enable = true;
-		mac_addrs_stats_cache.erase(mac);
 	}
 	else
 	{
@@ -3550,10 +3600,11 @@ bool IPACM_Config::insertOrAssignMacsecMap(struct ipa_macsec_map *macsecMap) {
 	ipacm_cmd_q_data eventItem;
 	ipacm_event_data_all *eventData;
 
-	IPACMERR("macsecMap->macsec_name=%s, macsecMap->phy_name=%s\n", macsecMap->macsec_name, macsecMap->phy_name);
-
 	if (!macsecMap)
 		return false;
+
+	IPACMERR("macsecMap->macsec_name=%s, macsecMap->phy_name=%s\n", macsecMap->macsec_name, macsecMap->phy_name);
+
 	/* first check if we have macsec iface entry or not */
 	if (IPACM_Iface::ipa_get_if_index(macsecMap->macsec_name, &netlinkIdx) == IPACM_SUCCESS &&
 	    (ifaceTableIdx = IPACM_Iface::iface_ipa_index_query(netlinkIdx)) != INVALID_IFACE) {
@@ -3602,10 +3653,11 @@ bool IPACM_Config::delMacsecMap(struct ipa_macsec_map *macsecMap) {
 	ipacm_cmd_q_data eventItem;
 	ipacm_event_data_all *eventData;
 
-	IPACMERR("macsecMap->macsec_name=%s, macsecMap->phy_name=%s\n", macsecMap->macsec_name, macsecMap->phy_name);
-
 	if (!macsecMap)
 		return false;
+
+	IPACMERR("macsecMap->macsec_name=%s, macsecMap->phy_name=%s\n", macsecMap->macsec_name, macsecMap->phy_name);
+
 	if (IPACM_Iface::ipa_get_if_index(macsecMap->macsec_name, &netlinkIdx) != IPACM_SUCCESS) {
 		if (IPACM_Iface::ipa_get_if_index(macsecMap->phy_name, &netlinkIdx) != IPACM_SUCCESS) {
 			IPACMERR("macsec name and physical name not found in the Linux kernel\n");

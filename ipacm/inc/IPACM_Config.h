@@ -458,6 +458,7 @@ public:
 	bool is_added_vlan_iface(char *iface_name);
 	bool iface_in_vlan_mode(const char * interfaceName);
 	int get_iface_vlan_ids(char *phys_iface_name, uint16_t *Ids);
+	void post_eth_bridge_add_vlan_id_event(const char *iface_name);
 #ifdef IPA_VLAN_PRIORITY
 	int get_vlan_id(char *iface_name, uint16_t *vlan_id, uint8_t *priority = NULL);
 #else
@@ -490,7 +491,7 @@ public:
 #endif //defined(FEATURE_SOCKSv5) && defined (IPA_SOCKV5_EVENT_MAX)
 
 #if defined(FEATURE_IPACM_PER_CLIENT_STATS) && defined(IPA_HW_FNR_STATS)
-	int ipacm_alloc_fnr_counters(struct ipa_ioc_flt_rt_counter_alloc *fnr_counters, const int fd);
+	int ipacm_alloc_fnr_counters(struct ipa_ioc_flt_rt_counter_alloc *fnr_counters);
 	int reset_cnt_idx(int index, bool reset_all);
 	int get_free_cnt_idx(void);
 	int ipacm_reset_hw_fnr_counters(const uint8_t start_id, const uint8_t end_id);
@@ -759,6 +760,13 @@ public:
 		ipacm_cmd_q_data evt_data;
 		ipacm_event_data_fid *data_fid;
 		uint32_t subnet_mask = ~0;
+
+		if((0 == ip_addr) || (ipv4_addr_mask ==0))
+		{
+			IPACMDBG("Invalid IPACM private subnet_addr as: 0x%x in entry(%d) \n", ip_addr, ipa_num_private_subnet);
+			return false;
+		}
+
 		for(int cnt = 0; cnt < ipa_num_private_subnet; cnt++)
 		{
 			if(private_subnet_table[cnt].subnet_addr == ip_addr)
@@ -837,7 +845,7 @@ public:
 		ipacm_event_data_fid *data_fid;
 		for(int cnt = 0; cnt < ipa_num_private_subnet; cnt++)
 		{
-			if(private_subnet_table[cnt].if_index == ipa_if_index)
+			if(ipa_if_index && private_subnet_table[cnt].if_index == ipa_if_index)
 			{
 				IPACMDBG("Found private subnet_addr as: 0x%x in entry(%d) \n", private_subnet_table[cnt].subnet_addr, cnt);
 				for(; cnt < ipa_num_private_subnet - 1; cnt++)

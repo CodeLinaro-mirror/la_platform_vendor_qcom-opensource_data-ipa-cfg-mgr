@@ -1,35 +1,35 @@
 /*
-Copyright (c) 2013-2020, The Linux Foundation. All rights reserved.
-
-Redistribution and use in source and binary forms, with or without
-modification, are permitted provided that the following conditions are
-met:
-* Redistributions of source code must retain the above copyright
-  notice, this list of conditions and the following disclaimer.
-* Redistributions in binary form must reproduce the above
-  copyright notice, this list of conditions and the following
-  disclaimer in the documentation and/or other materials provided
-  with the distribution.
-* Neither the name of The Linux Foundation nor the names of its
-  contributors may be used to endorse or promote products derived
-  from this software without specific prior written permission.
-
-THIS SOFTWARE IS PROVIDED "AS IS" AND ANY EXPRESS OR IMPLIED
-WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
-MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NON-INFRINGEMENT
-ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS
-BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
-SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR
-BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
-WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
-OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
-IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-
-Changes from Qualcomm Innovation Center are provided under the following license:
-Copyright (c) 2023-2025 Qualcomm Innovation Center, Inc. All rights reserved.
-SPDX-License-Identifier: BSD-3-Clause-Clear
-*/
+ * Copyright (c) 2013-2020, The Linux Foundation. All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions are
+ * met:
+ * Redistributions of source code must retain the above copyright
+ *   notice, this list of conditions and the following disclaimer.
+ * Redistributions in binary form must reproduce the above
+ *   copyright notice, this list of conditions and the following
+ *   disclaimer in the documentation and/or other materials provided
+ *   with the distribution.
+ * Neither the name of The Linux Foundation nor the names of its
+ *   contributors may be used to endorse or promote products derived
+ *   from this software without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED "AS IS" AND ANY EXPRESS OR IMPLIED
+ * WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
+ * MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NON-INFRINGEMENT
+ * ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS
+ * BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR
+ * BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
+ * WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
+ * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
+ * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *
+ * Changes from Qualcomm Technologies, Inc. are provided under the following license:
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear.
+ */
 /*!
 	@file
 	IPACM_Netlink.cpp
@@ -141,9 +141,9 @@ static int ipa_nl_open_socket
 	 unsigned int grps
 	 )
 {
-	int buf_size = 6669999, sendbuff=0, res;
-	struct sockaddr_nl *p_sk_addr_loc;
-	socklen_t optlen;
+	int buf_size = 6669999, sendbuff=0, res = IPACM_SUCCESS;
+	struct sockaddr_nl *p_sk_addr_loc = NULL;
+	socklen_t optlen = 0;
 
 	p_sk_fd = &(sk_info->sk_fd);
 	p_sk_addr_loc = &(sk_info->sk_addr_loc);
@@ -151,21 +151,23 @@ static int ipa_nl_open_socket
 	/* Open netlink socket for specified protocol */
 	if((*p_sk_fd = socket(AF_NETLINK, SOCK_RAW, protocol)) < 0)
 	{
-		IPACMERR("cannot open netlink socket\n");
-		return IPACM_FAILURE;
+		res = errno;
+		IPACMDBG("Socket open failed %s  with\n", strerror(errno));
+		return -res;
 	}
 
 	optlen = sizeof(sendbuff);
 	res = getsockopt(*p_sk_fd, SOL_SOCKET, SO_SNDBUF, &sendbuff, &optlen);
 
-	if(res == -1) {
-		IPACMDBG("Error getsockopt one");
+	if(res < 0) {
+		IPACMDBG("err: %s in getsockopt",strerror(errno));
 	} else {
 		IPACMDBG("orignal send buffer size = %d\n", sendbuff);
 	}
+
 	IPACMDBG("sets the send buffer to %d\n", buf_size);
-	if (setsockopt(*p_sk_fd, SOL_SOCKET, SO_RCVBUF, &buf_size, sizeof(int)) == -1) {
-    IPACMERR("Error setting socket opts\n");
+	if (setsockopt(*p_sk_fd, SOL_SOCKET, SO_RCVBUF, &buf_size, sizeof(int)) < 0) {
+		IPACMERR("err: %s in setting sockopt\n", strerror(errno));
 	}
 
 	/* Initialize socket addresses to null */
@@ -173,7 +175,7 @@ static int ipa_nl_open_socket
 
 	/* Populate local socket address using specified groups */
 	p_sk_addr_loc->nl_family = AF_NETLINK;
-	p_sk_addr_loc->nl_pid = getpid();
+	p_sk_addr_loc->nl_pid = 0;
 	p_sk_addr_loc->nl_groups = grps;
 
 	/* Bind socket to the local address, i.e. specified groups. This ensures
@@ -184,8 +186,13 @@ static int ipa_nl_open_socket
 					(struct sockaddr *)p_sk_addr_loc,
 					sizeof(struct sockaddr_nl)) < 0)
 	{
-		IPACMERR("Socket bind failed\n");
-		return IPACM_FAILURE;
+		res = errno;
+		IPACMDBG("Socket bind failed with err %s\n", strerror(errno));
+		/* close the socket before returning the error */
+		close(*p_sk_fd);
+		*p_sk_fd = -1;
+		p_sk_fd = NULL;
+		return -res;
 	}
 
 	return IPACM_SUCCESS;
@@ -228,6 +235,7 @@ static int ipa_nl_sock_listener_start
 {
 	int i, ret;
 	IPACMDBG("Starting the netlink thread\n");
+	nl_lock = true;
 	while(true)
 	{
 	    for(i = 0; i < sk_fd_set->num_fd; i++ )
@@ -237,7 +245,7 @@ static int ipa_nl_sock_listener_start
 
 		if((ret = select(sk_fd_set->max_fd + 1, &(sk_fd_set->fdset), NULL, NULL, NULL)) < 0)
 		{
-			IPACMERR("ipa_nl select failed\n");
+			IPACMERR("err: %s in select\n",strerror(errno));
 		}
 		else
 		{
@@ -446,8 +454,8 @@ static int ipa_nl_decode_rtm_link
 )
 {
 	struct rtattr *attrib, *nested_attr, *vlan_attr;
-	struct rtattr *device_link_info[IFLA_INFO_MAX + 1] = {};
-	struct rtattr *vlan_link_info_data_attrs[IFLA_VLAN_MAX+1] = {};
+	struct rtattr *device_link_info[IFLA_INFO_MAX + 1] = {0};
+	struct rtattr *vlan_link_info_data_attrs[IFLA_VLAN_MAX+1] = {0};
 	struct ifinfomsg *ifm;
 	int len, nest_len, vlan_len;
 	char *intf_type = NULL;
@@ -1054,6 +1062,7 @@ static int ipa_nl_decode_nlmsg
 			msg_ptr->type = nlh->nlmsg_type;
 			msg_ptr->link_event = true;
 			IPACMDBG("entering rtm decode\n");
+			memset(&(msg_ptr->nl_link_info), 0, sizeof((msg_ptr->nl_link_info)));
 			if (IPACM_SUCCESS != ipa_nl_decode_rtm_link(buffer, buflen, &(msg_ptr->nl_link_info))) {
 				IPACMERR("Failed to decode rtm link message\n");
 				return IPACM_FAILURE;
@@ -1116,7 +1125,6 @@ static int ipa_nl_decode_nlmsg
 					IPACMDBG("Deleting the bridge<->vlan mapping entry with intterface index %d\n", msg_ptr->nl_link_info.metainfo.ifi_index);
 					uint16_t vlan_master_interface_index = msg_ptr->nl_link_info.metainfo.ifi_index;
 					IPACM_Iface::ipacmcfg->del_bridge_vlan_mapping(&vlan_master_interface_index);
-					return IPACM_SUCCESS;
 				}
 
 				/* post link down to command queue */
@@ -1141,6 +1149,7 @@ static int ipa_nl_decode_nlmsg
 
 		case RTM_NEWADDR:
 			IPACMDBG("\nGOT RTM_NEWADDR event\n");
+			memset(&(msg_ptr->nl_addr_info), 0, sizeof((msg_ptr->nl_addr_info)));
 			if (IPACM_SUCCESS != ipa_nl_decode_rtm_addr(buffer, buflen, &(msg_ptr->nl_addr_info))) {
 				IPACMERR("Failed to decode rtm addr message\n");
 				return IPACM_FAILURE;
@@ -1220,13 +1229,14 @@ static int ipa_nl_decode_nlmsg
 				else
 				{
 					free(data_addr);
-				}	
+				}
 
 			}
 			break;
 
 		case RTM_DELADDR:
 			IPACMDBG("\nGOT RTM_DELADDR event\n");
+			memset(&(msg_ptr->nl_addr_info), 0, sizeof((msg_ptr->nl_addr_info)));
 			if (IPACM_SUCCESS != ipa_nl_decode_rtm_addr(buffer, buflen, &(msg_ptr->nl_addr_info))) {
 				IPACMERR("Failed to decode rtm addr message\n");
 				return IPACM_FAILURE;
@@ -1266,6 +1276,7 @@ static int ipa_nl_decode_nlmsg
 			break;
 		case RTM_NEWROUTE:
 			IPACMDBG("\nGOT RTM_NEWROUTE event\n");
+			memset(&(msg_ptr->nl_route_info), 0, sizeof((msg_ptr->nl_route_info)));
 			if (IPACM_SUCCESS != ipa_nl_decode_rtm_route(buffer, buflen, &(msg_ptr->nl_route_info))) {
 				IPACMERR("Failed to decode rtm route message\n");
 				return IPACM_FAILURE;
@@ -1570,6 +1581,7 @@ static int ipa_nl_decode_nlmsg
 
 		case RTM_DELROUTE:
 			IPACMDBG("\nGOT RTM_DELROUTE event\n");
+			memset(&(msg_ptr->nl_route_info), 0, sizeof((msg_ptr->nl_route_info)));
 			if (IPACM_SUCCESS != ipa_nl_decode_rtm_route(buffer, buflen, &(msg_ptr->nl_route_info))) {
 				IPACMERR("Failed to decode rtm route message\n");
 				return IPACM_FAILURE;
@@ -1784,10 +1796,20 @@ static int ipa_nl_decode_nlmsg
 
 		case RTM_NEWNEIGH:
 			IPACMDBG("\nGOT RTM_NEWNEIGH event\n");
+			memset(&(msg_ptr->nl_neigh_info), 0, sizeof((msg_ptr->nl_neigh_info)));
 			if (IPACM_SUCCESS != ipa_nl_decode_rtm_neigh(buffer, buflen, &(msg_ptr->nl_neigh_info))) {
 				IPACMERR("Failed to decode rtm neighbor message\n");
 				return IPACM_FAILURE;
 			}
+
+			IPACMDBG("NDA_LLADDR:MAC %02x:%02x:%02x:%02x:%02x:%02x\n",
+				(unsigned char)(msg_ptr->nl_neigh_info.attr_info.lladdr_hwaddr).sa_data[0],
+				(unsigned char)(msg_ptr->nl_neigh_info.attr_info.lladdr_hwaddr).sa_data[1],
+				(unsigned char)(msg_ptr->nl_neigh_info.attr_info.lladdr_hwaddr).sa_data[2],
+				(unsigned char)(msg_ptr->nl_neigh_info.attr_info.lladdr_hwaddr).sa_data[3],
+				(unsigned char)(msg_ptr->nl_neigh_info.attr_info.lladdr_hwaddr).sa_data[4],
+				(unsigned char)(msg_ptr->nl_neigh_info.attr_info.lladdr_hwaddr).sa_data[5]);
+
 			ret_val = ipa_get_if_name(dev_name, msg_ptr->nl_neigh_info.metainfo.ndm_ifindex);
 			if(ret_val != IPACM_SUCCESS)
 			{
@@ -1800,23 +1822,27 @@ static int ipa_nl_decode_nlmsg
 			}
 			IPACMDBG("Neighbour event with interface index %d master interface index %d family %d\n", msg_ptr->nl_neigh_info.metainfo.ndm_ifindex, msg_ptr->nl_neigh_info.master_interface_index, msg_ptr->nl_neigh_info.attr_info.local_addr.ss_family);
 
-			if(msg_ptr->nl_neigh_info.metainfo.ndm_state == NUD_NOARP)
+			if(((msg_ptr->nl_neigh_info.attr_info.local_addr.ss_family == AF_INET) ||
+				(msg_ptr->nl_neigh_info.attr_info.local_addr.ss_family == AF_INET6)) &&
+				(msg_ptr->nl_neigh_info.metainfo.ndm_state == NUD_NOARP))
 			{
 				IPACMDBG_H("RTM_NEWNEIGH received with NOARP. Ignoring\n");
-				return IPACM_SUCCESS;;
+				return IPACM_SUCCESS;
 			}
+			IPACMDBG_H("RTM_NEWNEIGH received with state[%02X]\n", msg_ptr->nl_neigh_info.metainfo.ndm_state);
+
 			if((msg_ptr->nl_neigh_info.attr_info.lladdr_hwaddr.sa_data[0] == 0x33) &&
 				(msg_ptr->nl_neigh_info.attr_info.lladdr_hwaddr.sa_data[1] == 0x33))
 			{
 				IPACMDBG_H("RTM_NEWNEIGH received with ipv6 brodcast mac address. So Ignoring\n");
-				return IPACM_SUCCESS;;
+				return IPACM_SUCCESS;
 			}
         		if((msg_ptr->nl_neigh_info.attr_info.lladdr_hwaddr.sa_data[0] == 0x01) &&
                            (msg_ptr->nl_neigh_info.attr_info.lladdr_hwaddr.sa_data[1] == 0x00) &&
 				(msg_ptr->nl_neigh_info.attr_info.lladdr_hwaddr.sa_data[2] == 0x5e))
 			{
 				IPACMDBG_H("RTM_NEWNEIGH received with ipv4 brodcast mac address. So Ignoring\n");
-				return IPACM_SUCCESS;;
+				return IPACM_SUCCESS;
 			}
 			if((msg_ptr->nl_neigh_info.metainfo.ndm_ifindex != 0) && (msg_ptr->nl_neigh_info.master_interface_index == 0) &&
 								(msg_ptr->nl_neigh_info.attr_info.local_addr.ss_family != 0))
@@ -1887,15 +1913,6 @@ static int ipa_nl_decode_nlmsg
 			IPACMDBG_H("ss_family = %d\n", msg_ptr->nl_neigh_info.attr_info.local_addr.ss_family);
 		        data_all->iptype = IPA_IP_v6;
 		    }
-
-		    IPACMDBG("NDA_LLADDR:MAC %02x:%02x:%02x:%02x:%02x:%02x\n",
-		     (unsigned char)(msg_ptr->nl_neigh_info.attr_info.lladdr_hwaddr).sa_data[0],
-		     (unsigned char)(msg_ptr->nl_neigh_info.attr_info.lladdr_hwaddr).sa_data[1],
-		     (unsigned char)(msg_ptr->nl_neigh_info.attr_info.lladdr_hwaddr).sa_data[2],
-		     (unsigned char)(msg_ptr->nl_neigh_info.attr_info.lladdr_hwaddr).sa_data[3],
-		     (unsigned char)(msg_ptr->nl_neigh_info.attr_info.lladdr_hwaddr).sa_data[4],
-		     (unsigned char)(msg_ptr->nl_neigh_info.attr_info.lladdr_hwaddr).sa_data[5]);
-
 
 		    memcpy(data_all->mac_addr,
 		    			 msg_ptr->nl_neigh_info.attr_info.lladdr_hwaddr.sa_data,
@@ -1977,10 +1994,20 @@ static int ipa_nl_decode_nlmsg
 
 		case RTM_DELNEIGH:
 			IPACMDBG("\nGOT RTM_DELNEIGH event\n");
+			memset(&(msg_ptr->nl_neigh_info), 0, sizeof((msg_ptr->nl_neigh_info)));
 			if (IPACM_SUCCESS != ipa_nl_decode_rtm_neigh(buffer, buflen, &(msg_ptr->nl_neigh_info))) {
 				IPACMERR("Failed to decode rtm neighbor message\n");
 				return IPACM_FAILURE;
 			}
+
+			IPACMDBG("NDA_LLADDR:MAC %02x:%02x:%02x:%02x:%02x:%02x\n",
+				(unsigned char)(msg_ptr->nl_neigh_info.attr_info.lladdr_hwaddr).sa_data[0],
+				(unsigned char)(msg_ptr->nl_neigh_info.attr_info.lladdr_hwaddr).sa_data[1],
+				(unsigned char)(msg_ptr->nl_neigh_info.attr_info.lladdr_hwaddr).sa_data[2],
+				(unsigned char)(msg_ptr->nl_neigh_info.attr_info.lladdr_hwaddr).sa_data[3],
+				(unsigned char)(msg_ptr->nl_neigh_info.attr_info.lladdr_hwaddr).sa_data[4],
+				(unsigned char)(msg_ptr->nl_neigh_info.attr_info.lladdr_hwaddr).sa_data[5]);
+
 			ret_val = ipa_get_if_name(dev_name, msg_ptr->nl_neigh_info.metainfo.ndm_ifindex);
 			if(ret_val != IPACM_SUCCESS)
 			{
@@ -2003,14 +2030,14 @@ static int ipa_nl_decode_nlmsg
 				(msg_ptr->nl_neigh_info.attr_info.lladdr_hwaddr.sa_data[1] == 0x33))
 			{
 				IPACMDBG_H("RTM_DELNEIGH received with ipv6 brodcast mac address. So Ignoring\n");
-				return IPACM_SUCCESS;;
+				return IPACM_SUCCESS;
 			}
         		if((msg_ptr->nl_neigh_info.attr_info.lladdr_hwaddr.sa_data[0] == 0x01) &&
                            (msg_ptr->nl_neigh_info.attr_info.lladdr_hwaddr.sa_data[1] == 0x00) &&
 				(msg_ptr->nl_neigh_info.attr_info.lladdr_hwaddr.sa_data[2] == 0x5e))
 			{
 				IPACMDBG_H("RTM_DELNEIGH received with ipv4 brodcast mac address. So Ignoring\n");
-				return IPACM_SUCCESS;;
+				return IPACM_SUCCESS;
 			}
 
 			/* insert to command queue */
@@ -2047,14 +2074,6 @@ static int ipa_nl_decode_nlmsg
 			{
 				data_all->iptype = IPA_IP_v6;
 			}
-
-		    IPACMDBG("NDA_LLADDR:MAC %02x:%02x:%02x:%02x:%02x:%02x\n",
-		     (unsigned char)(msg_ptr->nl_neigh_info.attr_info.lladdr_hwaddr).sa_data[0],
-		     (unsigned char)(msg_ptr->nl_neigh_info.attr_info.lladdr_hwaddr).sa_data[1],
-		     (unsigned char)(msg_ptr->nl_neigh_info.attr_info.lladdr_hwaddr).sa_data[2],
-		     (unsigned char)(msg_ptr->nl_neigh_info.attr_info.lladdr_hwaddr).sa_data[3],
-		     (unsigned char)(msg_ptr->nl_neigh_info.attr_info.lladdr_hwaddr).sa_data[4],
-		     (unsigned char)(msg_ptr->nl_neigh_info.attr_info.lladdr_hwaddr).sa_data[5]);
 
 			memcpy(data_all->mac_addr,
 						 msg_ptr->nl_neigh_info.attr_info.lladdr_hwaddr.sa_data,
@@ -2181,7 +2200,7 @@ int ipa_get_if_name
 
 	if((fd = socket(AF_INET, SOCK_DGRAM, 0)) < 0)
 	{
-		IPACMERR("get interface name socket create failed: %d \n", errno);
+		IPACMERR("err: %s in open socket for iface name\n",strerror(errno));
 		return IPACM_FAILURE;
 	}
 
@@ -2214,21 +2233,43 @@ int ipa_nl_listener_init
 	 )
 {
 	int ret_val;
+	int max_retries = 10;
+	int retry_delay = 2000;
+	int retry_count = 0;
 
 	memset(sk_info, 0, sizeof(ipa_nl_sk_info_t));
 	IPACMDBG_H("Entering IPA NL listener init\n");
-	if(pthread_mutex_lock(&nl_lock) != 0)
-  	{
-  		IPACMERR("Unable to lock the mutex\n");
-  	}
-	if(ipa_nl_open_socket(sk_info, nl_type, nl_groups) == IPACM_SUCCESS)
+
+	if(ipa_nl_open_socket(sk_info, nl_type, nl_groups) >= 0)
 	{
 		IPACMDBG_H("IPA Open netlink socket succeeds\n");
 	}
 	else
 	{
 		IPACMERR("Netlink socket open failed\n");
-		return IPACM_FAILURE;
+		while (retry_count < max_retries) {
+			memset(sk_info, 0, sizeof(ipa_nl_sk_info_t));
+			if (ipa_nl_open_socket(sk_info, nl_type, nl_groups) >= 0) {
+				IPACMDBG_H("IPA Open netlink socket succeeds\n");
+				break;
+			} else {
+				IPACMERR("Netlink socket open failed\n");
+				retry_count++;
+				if (retry_count < max_retries) {
+					IPACMDBG("Retrying in %d ms...\n", retry_delay);
+					usleep(retry_delay * 1000);
+				} else {
+					IPACMERR("Exceeded maximum retry attempts\n");
+					break;
+				}
+			}
+		}
+
+		if (retry_count == max_retries) {
+			IPACMERR("Exceeded maximum retry attempts\n");
+			close(sk_info->sk_fd);
+			return IPACM_FAILURE;
+		}
 	}
 
 	/* Add NETLINK socket to the list of sockets that the listener
@@ -2240,7 +2281,6 @@ int ipa_nl_listener_init
 		close(sk_info->sk_fd);
 		return IPACM_FAILURE;
 	}
-	pthread_mutex_unlock(&nl_lock);
 	ret_val = ipa_nl_sock_listener_start(sk_fdset);
 
 	if(ret_val != IPACM_SUCCESS)
@@ -3091,6 +3131,7 @@ int ipa_open_nl_getlink_socket
 {
 	int                  *p_sk_fd;
 	struct sockaddr_nl   *p_sk_addr_loc ;
+	int ret = 0;
 
 	//ds_assert(sk_info != NULL);
 
@@ -3102,8 +3143,9 @@ int ipa_open_nl_getlink_socket
 	  ---------------------------------------------------------------------------*/
 	if ((*p_sk_fd = socket(AF_NETLINK, SOCK_RAW, protocol)) < 0)
 	{
-		IPACMDBG("Cannot open netlink socket errno: %d", errno,0,0);
-		return -1;
+		ret = errno;
+		IPACMDBG("Socket open failed %s \n", strerror(errno));
+		return ret;
 	}
 
 	/*--------------------------------------------------------------------------
@@ -3126,13 +3168,13 @@ int ipa_open_nl_getlink_socket
 				(struct sockaddr *)p_sk_addr_loc,
 				sizeof(struct sockaddr_nl) ) < 0)
 	{
-
+		ret = errno;
 		IPACMDBG("Socket bind failed %s- Make sure no-one has opened a NL socket"
 				" with\n", strerror(errno));
 		close(*p_sk_fd);
-		return 0;
+		return ret;
 	}
-	return 0;
+	return ret;
 }
 
 int  ipa_nl_query_getlink(int af_family)
@@ -3189,13 +3231,22 @@ int  ipa_nl_query_getlink(int af_family)
 	recv_nl_msg.msg_controllen = 0;
 	recv_nl_msg.msg_flags = 0;
 	ipa_nl_link_info_t nl_link_info;
-	ipa_nl_msg_t *msg_ptr = (ipa_nl_msg_t *)calloc(1, sizeof(ipa_nl_msg_t));
+	ipa_nl_msg_t *msg_ptr = NULL;
 
 	if (sendmsg(sk_info.sk_fd, (struct msghdr *) &req_nl_msg, 0) <= 0)
 	{
 		IPACMDBG("QCMAP:Netlink Query to Kernel failed errno:%d",errno,0,0);
-		return -1;
+		return IPACM_FAILURE;
 	}
+
+	msg_ptr = (ipa_nl_msg_t *)calloc(1, sizeof(ipa_nl_msg_t));
+
+	if(msg_ptr == NULL)
+	{
+		IPACMERR("Failed malloc for msg_ptr\n");
+		return IPACM_FAILURE;
+	}
+
 	while(1)
 	{
 		if ((ret_val = recvmsg(sk_info.sk_fd, &recv_nl_msg, 0)) < 0)
@@ -3265,7 +3316,12 @@ int  ipa_nl_query_getlink(int af_family)
 	}
 	if (sk_info.sk_fd > 0)
 		close(sk_info.sk_fd);
-	return 0;
+	if(msg_ptr != NULL)
+	{
+		free(msg_ptr);
+		msg_ptr = NULL;
+	}
+	return IPACM_SUCCESS;
 }
 
 int ipa_nl_query_ip_addr_info(int af_family)
@@ -3373,7 +3429,7 @@ int ipa_nl_query_newneigh(int af_family, char* dev_name)
 	struct msghdr msg;
 	struct nlmsghdr *h = NULL;
 	struct iovec iov;
-	ipa_nl_msg_t  *msg_ptr = (ipa_nl_msg_t*)calloc(1, sizeof(ipa_nl_msg_t));
+	ipa_nl_msg_t  *msg_ptr = NULL;
 	nl_sock = socket(AF_NETLINK, SOCK_RAW, NETLINK_ROUTE);
 
 	if (nl_sock < 0)
@@ -3381,7 +3437,12 @@ int ipa_nl_query_newneigh(int af_family, char* dev_name)
 		IPACMERR("Failed to open netlink socket");
 		return IPACM_FAILURE;
 	}
-
+	msg_ptr = (ipa_nl_msg_t*)calloc(1, sizeof(ipa_nl_msg_t));
+	if(msg_ptr == NULL)
+	{
+		IPACMERR("Failed malloc for msg_ptr\n");
+		return IPACM_FAILURE;
+	}
 	memset(&nl_request, 0, sizeof(nl_request));
 	memset(&nladdr, 0, sizeof(sockaddr_nl));
 	memset(&msg, 0, sizeof(msghdr));
@@ -3416,6 +3477,12 @@ int ipa_nl_query_newneigh(int af_family, char* dev_name)
 	if(msglen <= 0)
 	{
 		IPACMERR("NL route recv error\n");
+		if(msg_ptr != NULL)
+		{
+			free(msg_ptr);
+			msg_ptr = NULL;
+		}
+		return IPACM_FAILURE;
 	}
 
 	h = (struct nlmsghdr *)buf;
@@ -3454,10 +3521,16 @@ int ipa_nl_query_newneigh(int af_family, char* dev_name)
 	}
 	IPACMDBG("End\n");
 	close(nl_sock);
-	free(buf);
-	buf = NULL;
-	free(msg_ptr);
-	msg_ptr = NULL;
+	if(buf != NULL)
+	{
+		free(buf);
+		buf = NULL;
+	}
+	if(msg_ptr != NULL)
+	{
+		free(msg_ptr);
+		msg_ptr = NULL;
+	}
 	return 1;
 }
 
@@ -3550,12 +3623,8 @@ int ipa_query_active_feature()
 
 void ipa_query_nl_getevents()
 {
+	while(!nl_lock);
 	IPACMDBG_H("Querying the netlink events\n");
-	if(pthread_mutex_lock(&nl_lock) != 0)
-  	{
-  		IPACMERR("Unable to lock the mutex\n");
-  		return;
-  	}
 	IPACMDBG("Handling ipacm_restart\n");
 	ipa_nl_query_getlink(AF_PACKET);
 	IPACMDBG("Send GETLINK is completed\n");
@@ -3576,7 +3645,6 @@ void ipa_query_nl_getevents()
 	ipa_nl_send_getroute(IPA_IP_v6);
 	ipa_nl_send_getroute(IPA_IP_v4);
 	IPACMDBG("Send GETROUTE is completed\n");
-	pthread_mutex_unlock(&nl_lock);
 	ipa_query_active_feature();
 	IPACMDBG_DMESG("IPACM process started, ipa path is re-established\n");
 }

@@ -1,6 +1,5 @@
 /*
 Copyright (c) 2014-2020, The Linux Foundation. All rights reserved.
-Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are
@@ -26,10 +25,10 @@ BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
 WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
 OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
 IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-
- * Changes from Qualcomm Innovation Center are provided under the following license:
- * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
- * SPDX-License-Identifier: BSD-3-Clause-Clear
+*
+* Changes from Qualcomm Technologies, Inc. are provided under the following license:
+* Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+* SPDX-License-Identifier: BSD-3-Clause-Clear
 */
 /*!
 	@file
@@ -1597,23 +1596,41 @@ void IPACM_LanToLan_Iface::add_client_flt_rule(peer_iface_info *peer, client_inf
 			if(IPACM_Iface::ipacmcfg->is_dummy_VID(client->vlan_id))
 			{
 				mapping_info.vlan_id = client->vlan_id;
-				IPACMDBG_H("Query Bridge for Dummy VID %d\n", client->vlan_id);
+				IPACMDBG_H("Query Bridge for Dummy VID %u\n", client->vlan_id);
 				if(IPACM_Iface::ipacmcfg->get_bridge_vlan_mapping(&mapping_info, true))
 				{
-					IPACMERR("Unable to find Bridge for Dummy VLAN ID %d\n", client->vlan_id);
+					IPACMERR("Unable to find Bridge for Dummy VLAN ID %u\n", client->vlan_id);
 					return;
+				}
+
+				if(!IPACM_Iface::ipacmcfg->get_bridge_vlan_mapping(&mapping_info))
+				{
+					peer_vlan_id = mapping_info.vlan_id;
+					IPACMDBG_H("Found the VLAN-ID %u.\n", peer_vlan_id);
 				}
 			}
 			else
-				strlcpy(mapping_info.bridge_name, "bridge0", IF_NAME_LEN);
-
-			/*Extract VID from br0 if non-vlan on default or extract from respective bridge */
-			if(!IPACM_Iface::ipacmcfg->get_bridge_vlan_mapping(&mapping_info))
 			{
+				/*Extract VID from respective bridge */
+				snprintf(mapping_info.bridge_name, IF_NAME_LEN, "bridge%u", client->vlan_id);
+				if(IPACM_Iface::ipacmcfg->get_bridge_vlan_mapping(&mapping_info))
+				{
+					IPACMDBG_H("VLAN mapping not found with %s. Checking with bridge0\n", mapping_info.bridge_name);
+
+					/*Extract VID from bridge0 if not found with respective bridge */
+					memset(&mapping_info, 0, sizeof(mapping_info));
+					strlcpy(mapping_info.bridge_name, "bridge0", IF_NAME_LEN);
+					if(IPACM_Iface::ipacmcfg->get_bridge_vlan_mapping(&mapping_info))
+					{
+						IPACMDBG_H("VLAN mapping not found with bridge0.\n");
+					}
+				}
+
 				peer_vlan_id = mapping_info.vlan_id;
-				IPACMDBG_H("Found the VLAN-ID %d.\n", peer_vlan_id);
+				IPACMDBG_H("Peer VLAN-ID %u with %s.\n", peer_vlan_id, mapping_info.bridge_name);
 			}
-			IPACMDBG_H("Client VLAN-ID %d.\n", client->vlan_id);
+
+			IPACMDBG_H("Client VLAN-ID %u.\n", client->vlan_id);
 
 			/* For non vlan iface with dummy vid retreive actual vid as the peer vid to compare */
 			if(!m_is_vlan)

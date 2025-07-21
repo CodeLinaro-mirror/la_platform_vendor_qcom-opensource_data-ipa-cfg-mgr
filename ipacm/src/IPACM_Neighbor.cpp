@@ -248,6 +248,11 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 
 									evt_data.event = IPA_NEIGH_CLIENT_IP_ADDR_ADD_EVENT;
 									data_vlan = (ipacm_event_new_neigh_vlan *)malloc(sizeof(ipacm_event_new_neigh_vlan));
+									if(data_vlan == NULL)
+									{
+										IPACMERR("Unable to allocate memory\n");
+										return;
+									}
 
 									data_all = &data_vlan->data_all;
 									if (data_all == NULL)
@@ -266,7 +271,7 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 										sizeof(data_all->iface_name));
 
 #ifdef FEATURE_VLAN_MPDN
-									ipacm_bridge *bridge;
+									ipacm_bridge *bridge = NULL;
 									if (IPACM_Iface::ipacmcfg->ipacm_mpdn_enable == TRUE)
 									{
 										/* Get the bridge interface info */
@@ -558,6 +563,11 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 							{
 								evt_data.event = IPA_NEIGH_CLIENT_IP_ADDR_ADD_EVENT;
 								data_vlan = (ipacm_event_new_neigh_vlan *)malloc(sizeof(ipacm_event_new_neigh_vlan));
+								if(data_vlan == NULL)
+								{
+									IPACMERR("Unable to allocate memory\n");
+									return;
+								}
 
 								data_all = &data_vlan->data_all;
 								if (data_all == NULL)
@@ -577,7 +587,7 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 									sizeof(data_all->iface_name));
 
 #ifdef FEATURE_VLAN_MPDN
-								ipacm_bridge *bridge;
+								ipacm_bridge *bridge = NULL;
 								if (IPACM_Iface::ipacmcfg->ipacm_mpdn_enable == TRUE)
 								{
 									/* Get the bridge interface info */
@@ -682,7 +692,7 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 #endif
 					{
 #ifdef FEATURE_VLAN_MPDN
-						ipacm_bridge *bridge;
+						ipacm_bridge *bridge = NULL;
 						if(IPACM_Iface::ipacmcfg->ipacm_mpdn_enable == TRUE)
 						{
 							bridge = IPACM_Iface::ipacmcfg->get_vlan_bridge(data->iface_name);
@@ -1207,7 +1217,7 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 #endif
 					{
 #ifdef FEATURE_VLAN_MPDN
-						ipacm_bridge *bridge;
+						ipacm_bridge *bridge = NULL;
 						if(IPACM_Iface::ipacmcfg->ipacm_mpdn_enable == TRUE)
 						{
 							bridge = IPACM_Iface::ipacmcfg->get_vlan_bridge(data->iface_name);

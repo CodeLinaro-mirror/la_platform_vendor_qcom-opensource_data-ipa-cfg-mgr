@@ -855,6 +855,12 @@ private:
 	int handle_dual_backhaul_disable();
 #endif
 
+	int install_ul_qos_route_rules(ipa_ip_type iptype);
+	int handle_ul_qos_route_rule(ipa_ip_type iptype, list<qos_param_info>::iterator qos_param);
+	int delete_all_UL_info_from_qos(list<qos_param_info>::iterator qos_param, ipa_ip_type iptype);
+	int delete_all_UL_qos_rules(ipa_ip_type iptype);
+	uint32_t get_u8_bitmap_from_tc(uint8_t traffic_class);
+
 	/* handle new_address event */
 	int handle_addr_evt(ipacm_event_data_addr *data);
 

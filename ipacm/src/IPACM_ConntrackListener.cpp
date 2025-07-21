@@ -46,6 +46,10 @@
 #include "IPACM_Iface.h"
 #include "IPACM_Wan.h"
 
+#define STC_MARK_MASK 0xf
+#define STC_MARK_WHITELIST 0x3
+
+static int stc_mark_shift = 16;
 void ParseCTV6Message(struct nf_conntrack *ct);
 
 IPACM_ConntrackListener::IPACM_ConntrackListener() :
@@ -2735,6 +2739,8 @@ int IPACM_ConntrackListener::AddORDeleteNatEntry(const nat_entry_bundle *input, 
 {
 	u_int8_t tcp_state;
 	u_int64_t pkt_count = 0;
+	uint32_t connmark = 0;
+	bool connmark_match = false;
 
 	if (nat_inst == NULL)
 	{
@@ -2766,6 +2772,18 @@ int IPACM_ConntrackListener::AddORDeleteNatEntry(const nat_entry_bundle *input, 
 	IPACMDBG("isVlan %d, IsVlanUp %d\n", input->isVlan, input->IsVlanUp);
 #endif
 
+	if (nfct_attr_is_set(input->ct, ATTR_MARK))
+	{
+		connmark = (nfct_get_attr_u32(input->ct, ATTR_MARK)) &
+			(STC_MARK_MASK << stc_mark_shift);
+		if (!(!connmark || connmark == (STC_MARK_WHITELIST << stc_mark_shift)))
+		{
+			IPACMDBG_H("Ignore the event, mark: 0x%x\n", connmark);
+			return IPACM_SUCCESS;
+		}
+		connmark_match = true;
+	}
+
 	pkt_count = nfct_get_attr_u64(input->ct, ATTR_ORIG_COUNTER_PACKETS) +
 				nfct_get_attr_u64(input->ct, ATTR_REPL_COUNTER_PACKETS);
 
@@ -2773,9 +2791,18 @@ int IPACM_ConntrackListener::AddORDeleteNatEntry(const nat_entry_bundle *input, 
 	{
 		tcp_state = nfct_get_attr_u8(input->ct, ATTR_TCP_STATE);
 
-		if ((TCP_CONNTRACK_ESTABLISHED == tcp_state) && (input->type != NFCT_T_DESTROY)
-                   && (((pkt_threshld != 0) && (pkt_count >= pkt_threshld)) ||
-                    (pkt_threshld == 0)))
+		if (TCP_CONNTRACK_FIN_WAIT == tcp_state ||
+				   input->type == NFCT_T_DESTROY)
+		{
+			IPACMDBG("TCP state TCP_CONNTRACK_FIN_WAIT(%d) "
+					 "or type NFCT_T_DESTROY(%d)\n", tcp_state, input->type);
+
+			nat_inst->DeleteEntry(input->rule);
+			nat_inst->DeleteTempEntry(input->rule);
+		}
+		else if ((TCP_CONNTRACK_ESTABLISHED == tcp_state || connmark_match) &&
+			(input->type != NFCT_T_DESTROY) && (((pkt_threshld != 0) &&
+			(pkt_count >= pkt_threshld)) || (pkt_threshld == 0)))
 		{
 			IPACMDBG("TCP state TCP_CONNTRACK_ESTABLISHED(%d)\n", tcp_state);
 #ifdef FEATURE_VLAN_MPDN
@@ -2813,15 +2840,6 @@ int IPACM_ConntrackListener::AddORDeleteNatEntry(const nat_entry_bundle *input, 
 			{
 				nat_inst->AddEntry(input->rule);
 			}
-		}
-		else if (TCP_CONNTRACK_FIN_WAIT == tcp_state ||
-				   input->type == NFCT_T_DESTROY)
-		{
-			IPACMDBG("TCP state TCP_CONNTRACK_FIN_WAIT(%d) "
-					 "or type NFCT_T_DESTROY(%d)\n", tcp_state, input->type);
-
-			nat_inst->DeleteEntry(input->rule);
-			nat_inst->DeleteTempEntry(input->rule);
 		}
 		else
 		{
@@ -2978,6 +2996,8 @@ int IPACM_ConntrackListener::AddORDeleteNatEntry_v6(const ipacm_ct_evt_data* evt
 	const NatEntryBase& entry, bool isTempEntry, bool *sendVlanEvent)
 {
 	IPACMDBG_H("\n");
+	uint32_t connmark = 0;
+	bool connmark_match = false;
 
 	if(!sendVlanEvent)
 	{
@@ -2988,11 +3008,31 @@ int IPACM_ConntrackListener::AddORDeleteNatEntry_v6(const ipacm_ct_evt_data* evt
 	uint64_t pkt_count = nfct_get_attr_u64(evt_data->ct, ATTR_ORIG_COUNTER_PACKETS) +
 		nfct_get_attr_u64(evt_data->ct, ATTR_REPL_COUNTER_PACKETS);
 
+	if (nfct_attr_is_set(evt_data->ct, ATTR_MARK))
+	{
+		connmark = (nfct_get_attr_u32(evt_data->ct, ATTR_MARK)) &
+			(STC_MARK_MASK << stc_mark_shift);
+		if (!(!connmark || connmark == (STC_MARK_WHITELIST << stc_mark_shift)))
+		{
+			IPACMDBG_H("Ignore the event, mark: 0x%x\n", connmark);
+			return IPACM_SUCCESS;
+		}
+		connmark_match = true;
+	}
+
 	if (IPPROTO_TCP == entry.m_protocol)
 	{
 		uint8_t tcp_state = nfct_get_attr_u8(evt_data->ct, ATTR_TCP_STATE);
 
-		if (TCP_CONNTRACK_ESTABLISHED == tcp_state && pkt_count >= pkt_threshld && (evt_data->type != NFCT_T_DESTROY))
+		if (TCP_CONNTRACK_FIN_WAIT == tcp_state || evt_data->type == NFCT_T_DESTROY)
+		{
+			IPACMDBG_H("TCP state TCP_CONNTRACK_FIN_WAIT(%d) or type NFCT_T_DESTROY(%d)\n", tcp_state, evt_data->type);
+
+			ipv6ct_inst->DeleteEntry(entry);
+			ipv6ct_inst->DeleteTempEntry(entry);
+		}
+		else if ((TCP_CONNTRACK_ESTABLISHED == tcp_state || connmark_match) &&
+			pkt_count >= pkt_threshld && (evt_data->type != NFCT_T_DESTROY))
 		{
 			IPACMDBG_H("TCP state TCP_CONNTRACK_ESTABLISHED(%d)\n", tcp_state);
 
@@ -3032,13 +3072,6 @@ int IPACM_ConntrackListener::AddORDeleteNatEntry_v6(const ipacm_ct_evt_data* evt
 					ipv6ct_inst->AddEntry(entry);
 				}
 			}
-		}
-		else if (TCP_CONNTRACK_FIN_WAIT == tcp_state || evt_data->type == NFCT_T_DESTROY)
-		{
-			IPACMDBG_H("TCP state TCP_CONNTRACK_FIN_WAIT(%d) or type NFCT_T_DESTROY(%d)\n", tcp_state, evt_data->type);
-
-			ipv6ct_inst->DeleteEntry(entry);
-			ipv6ct_inst->DeleteTempEntry(entry);
 		}
 		else
 		{

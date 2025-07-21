@@ -747,6 +747,7 @@ struct bridge_vlan_mapping_info
 	uint32_t subnet_mask;
 	uint8_t bridge_if_index;
 	uint8_t status;
+	uint8_t bridge_mac[IPA_MAC_ADDR_SIZE];
 };
 
 struct l2tp_client_info

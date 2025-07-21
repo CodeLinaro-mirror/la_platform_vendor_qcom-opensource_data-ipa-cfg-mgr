@@ -610,6 +610,7 @@ public:
 #ifdef FEATURE_VLAN_MPDN
 	std::list<bridge_vlan_mapping_info> m_bridge_vlan_mapping;
 	void add_bridge_vlan_mapping(ipa_bridge_vlan_mapping_info *data);
+	int get_bridge_vlan_mapping_from_vid(ipacm_bridge *data, uint16_t vlan_id);
 	void del_bridge_vlan_mapping(uint16_t *data);
 	int get_bridge_vlan_mapping(ipa_bridge_vlan_mapping_info_new *data);
 	uint16_t get_bridge_vlan_mapping_from_subnet(uint32_t ipv4_subnet);

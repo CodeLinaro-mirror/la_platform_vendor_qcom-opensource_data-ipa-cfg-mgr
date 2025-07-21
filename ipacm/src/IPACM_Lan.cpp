@@ -409,6 +409,10 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 	uint8_t dscp_val;
 #endif
 
+	uint16_t vlan_id = 0;
+	ipacm_bridge bridge;
+	memset(&bridge, 0, sizeof(bridge));
+
 	switch (event)
 	{
 	case IPA_IPACM_DISABLE:
@@ -1219,6 +1223,45 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 					IPACMDBG_H("Client is blacklisted for mac based filtering, avoid adding to lan2lan offload \n");
 
 				IPACMDBG_H("Handled IPA_LAN_CLIENT_ADD_EVENT event ip-type:%d\n",data->iptype);
+			}
+			else if(IPACM_Iface::ipacmcfg->iface_in_vlan_mode(dev_name) && is_vlan_event(data->iface_name))
+			{
+				if (IPACM_Iface::ipacmcfg->get_vlan_id(data->iface_name, &vlan_id))
+				{
+					if(!IPACM_Iface::ipacmcfg->is_added_vlan_iface(data->iface_name))
+					{
+						IPACMDBG_H("ignoring neighbor of not added IF %s \n", data->iface_name);
+						return;
+					}
+					IPACMERR("failed getting vlan ID of iface %s \n", data->iface_name);
+					return;
+				}
+
+				/* get bridge from vlan id */
+				if(IPACM_Iface::ipacmcfg->get_bridge_vlan_mapping_from_vid(&bridge, vlan_id) == IPACM_SUCCESS)
+				{
+					IPACMDBG_H("got vlan mapping\n");
+				}
+				else
+				{
+					IPACMDBG_H("bridge is NULL with vlan (%s) vid (%d), ignoring!\n", data->iface_name, vlan_id);
+					IPACMERR("failed getting vlan mapping\n");
+					return;
+				}
+
+				if(handle_eth_hdr_init(data->mac_addr, &bridge, vlan_id, true) == IPACM_FAILURE)
+				{
+					IPACMERR("Failed to create header and No event IPA_ETH_BRIDGE_CLIENT_ADD posted.\n");
+					return;
+				}
+				IPACMDBG_H("construct ETH header and route rules \n");
+				if(IPACM_Iface::ipacmcfg->multi_vlan_bridge_config_enable == 1 &&
+					IPACM_Iface::ipacmcfg->mac_addr_in_blacklist(data->mac_addr) == false)
+				{
+					IPACMDBG_H("Posting IPA_ETH_BRIDGE_CLIENT_ADD for Static IP MAC:0x%x iface_name: %s\n",data->mac_addr,data->iface_name);
+					eth_bridge_post_event(IPA_ETH_BRIDGE_CLIENT_ADD, IPA_IP_MAX, data->mac_addr,
+						NULL, data->iface_name, vlan_id);
+				}
 			}
 		}
 		break;

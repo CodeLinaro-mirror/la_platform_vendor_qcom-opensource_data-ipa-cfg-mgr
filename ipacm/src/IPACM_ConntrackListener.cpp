@@ -1,6 +1,5 @@
 /*
  * Copyright (c) 2013-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -27,39 +26,9 @@
  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * Changes from Qualcomm Innovation Center are provided under the following license:
- *
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
- *
- * Redistribution and use in source and binary forms, with or without
- * modification, are permitted (subject to the limitations in the
- * disclaimer below) provided that the following conditions are met:
- *
- *   * Redistributions of source code must retain the above copyright
- *     notice, this list of conditions and the following disclaimer.
- *
- *   * Redistributions in binary form must reproduce the above
- *     copyright notice, this list of conditions and the following
- *     disclaimer in the documentation and/or other materials provided
- *     with the distribution.
- *
- *   * Neither the name of Qualcomm Innovation Center, Inc. nor the names of its
- *     contributors may be used to endorse or promote products derived
- *     from this software without specific prior written permission.
- *
- * NO EXPRESS OR IMPLIED LICENSES TO ANY PARTY'S PATENT RIGHTS ARE
- * GRANTED BY THIS LICENSE. THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT
- * HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED
- * WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
- * MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
- * IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR
- * ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
- * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE
- * GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
- * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER
- * IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
- * OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
- * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ * Changes from Qualcomm Technologies, Inc. are provided under the following license:
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear.
  */
 #include <sys/ioctl.h>
 #include <net/if.h>
@@ -712,7 +681,7 @@ void IPACM_ConntrackListener::HandleNeighIpAddrAddEvt(
 						/* check if we already got vlan_pdn_up event for this ip */
 						if(vlan_pdns[pdn_idx].public_ip == public_ip)
 						{
-							for(vlan_idx = 0; vlan_idx < vlan_pdns[pdn_idx].VID_cnt; vlan_idx++)
+							for(vlan_idx = 0; vlan_idx < IPA_MAX_NUM_HW_PDNS; vlan_idx++)
 							{
 								if(nat_clients[i].vlan_id == vlan_pdns[pdn_idx].associated_VIDs[vlan_idx])
 								{
@@ -897,6 +866,7 @@ void IPACM_ConntrackListener::HandleNeighIpAddrDelEvt_v6(const IpAddress& ip)
 void IPACM_ConntrackListener::HandleVlanUp(void *in_param)
 {
 	ipacm_event_vlan_pdn *vlanup_data = (ipacm_event_vlan_pdn *)in_param;
+	int available_idx = -1;;
 	IPACMDBG_H("Received below information during VLAN PDN up,\n");
 	IPACMDBG_H("IPType: %d, vlan_id:%d, mux id %d\n",
 		vlanup_data->iptype,
@@ -929,22 +899,33 @@ void IPACM_ConntrackListener::HandleVlanUp(void *in_param)
 		else
 		{
 			if(vlan_pdns[0].public_ip == vlanup_data->ipv4_addr) {
-				for(int i = 0; i < vlan_pdns[0].VID_cnt; i++)
+				available_idx = -1;
+				for(int i = 0; i < IPA_MAX_NUM_HW_PDNS; i++)
 				{
 					if (vlanup_data->VlanID == vlan_pdns[0].associated_VIDs[i])
 					{
 						IPACMDBG_H("found existing PDN entry in 0, with vlan %d\n", vlanup_data->VlanID);
 						return;
 					}
+					else if((vlan_pdns[0].associated_VIDs[i] == 0) && (available_idx == -1))
+					{
+						available_idx = i;
+					}
 				}
-				IPACMDBG_H("found existing PDN entry in 0, but got new VLAN id. Adding vlan %d to the entry\n", vlanup_data->VlanID);
-				vlan_pdns[0].associated_VIDs[vlan_pdns[0].VID_cnt] = vlanup_data->VlanID;
-				vlan_pdns[0].VID_cnt++;
-				return;
+				if (available_idx != -1)
+				{
+					IPACMDBG_H("found existing PDN entry in 0, but got new VLAN id. Adding vlan %d to the entry to pdn vlan index is %d\n",
+						vlanup_data->VlanID, available_idx);
+					vlan_pdns[0].associated_VIDs[available_idx] = vlanup_data->VlanID;
+					vlan_pdns[0].VID_cnt++;
+					IPACMDBG_H("Now no of vlans mapped to PDN entry in 0 is %d\n", vlan_pdns[0].VID_cnt);
+					return;
+				}
 			}
 			if(vlan_pdns[0].public_ip == 0)
 			{
 				IPACMDBG_H("found empty PDN entry in 0 index num_vlan_pdns %d\n", num_vlan_pdns);
+				vlan_pdns[0].VID_cnt = 0;
 				vlan_pdns[0].public_ip = vlanup_data->ipv4_addr;
 				vlan_pdns[0].associated_VIDs[vlan_pdns[0].VID_cnt] = vlanup_data->VlanID;
 				vlan_pdns[0].VID_cnt++;
@@ -969,20 +950,32 @@ void IPACM_ConntrackListener::HandleVlanUp(void *in_param)
 			/* Check if pdn is allocated as well as saved in vlan pdn cache*/
 			for(int i = 1; i < IPA_MAX_NUM_HW_PDNS; i++)
 			{
+				available_idx = -1;
 				if(vlan_pdns[i].public_ip == vlanup_data->ipv4_addr)
 				{
-					for(int j = 0; j < vlan_pdns[i].VID_cnt; j ++)
+					for(int j = 0; j < IPA_MAX_NUM_HW_PDNS; j ++)
 					{
 						if (vlanup_data->VlanID == vlan_pdns[i].associated_VIDs[j])
 						{
 							IPACMDBG_H("found existing PDN entry in %d, with vlan %d\n", i, vlanup_data->VlanID);
 							return;
 						}
+						else if((vlan_pdns[i].associated_VIDs[j] == 0) && (available_idx == -1))
+						{
+							available_idx = j;
+						}
 					}
-					IPACMDBG_H("found existing PDN entry in %d, but got new VLAN id. Adding vlan %d to the entry\n", i, vlanup_data->VlanID);
-					vlan_pdns[i].associated_VIDs[vlan_pdns[i].VID_cnt] = vlanup_data->VlanID;
-					vlan_pdns[i].VID_cnt++;
-					return;
+					if (available_idx != -1)
+					{
+						IPACMDBG_H("found existing PDN entry in %d, "
+							   "but got new VLAN id. Adding vlan %d "
+							   "to the entry to pdn vlan index is %d\n",
+								i, vlanup_data->VlanID, available_idx);
+						vlan_pdns[i].associated_VIDs[available_idx] = vlanup_data->VlanID;
+						vlan_pdns[i].VID_cnt++;
+						IPACMDBG_H("Now no of vlans mapped to PDN entry in 0 is %d\n", vlan_pdns[i].VID_cnt);
+						return;
+					}
 				}
 			}
 
@@ -991,6 +984,7 @@ void IPACM_ConntrackListener::HandleVlanUp(void *in_param)
 				if(vlan_pdns[i].public_ip == 0)
 				{
 					IPACMDBG_H("found empty PDN entry in %d num_vlan_pdns %d\n", i, num_vlan_pdns);
+					vlan_pdns[i].VID_cnt = 0;
 					vlan_pdns[i].public_ip = vlanup_data->ipv4_addr;
 					vlan_pdns[i].associated_VIDs[vlan_pdns[i].VID_cnt] = vlanup_data->VlanID;
 					vlan_pdns[i].VID_cnt++;
@@ -1673,11 +1667,17 @@ void IPACM_ConntrackListener::PostRouteAddVlanPdn(uint32_t public_ip)
 	{
 		/* check if we already got vlan_pdn_up event for this ip */
 		if(vlan_pdns[pdn_idx].public_ip == public_ip)
-		{    
-			IPACMDBG_H("vlan pdn already up for pdn_idx %d", pdn_idx);
-			iptodot("ip", public_ip);
-			return;
-		}    
+		{
+			for(vlan_idx = 0; vlan_idx < IPA_MAX_NUM_HW_PDNS; vlan_idx++)
+			{
+				if(vlan_data->VlanID == vlan_pdns[pdn_idx].associated_VIDs[vlan_idx])
+				{
+					IPACMDBG_H("vlan pdn already up for vlan %d", vlan_data->VlanID);
+					iptodot("ip", public_ip);
+					return;
+				}
+			}
+		}
 	}
 	if((pdn_idx >= IPA_MAX_NUM_HW_PDNS) && (num_vlan_pdns >= IPA_MAX_NUM_HW_PDNS))
 	{
@@ -2392,7 +2392,7 @@ void IPACM_ConntrackListener::ProcessTCPorUDPMsg(
 				/* check if we already got vlan_pdn_up event for this ip */
 				if(vlan_pdns[i].public_ip == orig_dst_ip)
 				{
-					for(vlan_idx = 0; vlan_idx < vlan_pdns[i].VID_cnt; vlan_idx++)
+					for(vlan_idx = 0; vlan_idx < IPA_MAX_NUM_HW_PDNS; vlan_idx++)
 					{
 						if(VlanID == vlan_pdns[i].associated_VIDs[vlan_idx])
 						{
@@ -2431,7 +2431,7 @@ void IPACM_ConntrackListener::ProcessTCPorUDPMsg(
 				/* check if we already got vlan_pdn_up event for this ip */
 				if(vlan_pdns[i].public_ip == repl_dst_ip)
 				{
-					for(vlan_idx = 0; vlan_idx < vlan_pdns[i].VID_cnt; vlan_idx++)
+					for(vlan_idx = 0; vlan_idx < IPA_MAX_NUM_HW_PDNS; vlan_idx++)
 					{
 						if(VlanID == vlan_pdns[i].associated_VIDs[vlan_idx])
 						{

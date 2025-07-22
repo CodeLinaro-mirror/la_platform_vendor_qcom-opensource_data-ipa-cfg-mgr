@@ -28,7 +28,7 @@ IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  * Changes from Qualcomm Innovation Center are provided under the following license:
  *
- * Copyright (c) 2022, 2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted (subject to the limitations in the
@@ -86,6 +86,7 @@ IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #define IPA_NUM_DEFAULT_WAN_FILTER_RULES 3 /*1 for v4, 2 for v6*/
 #define IPA_V2_NUM_DEFAULT_WAN_FILTER_RULE_IPV4 2
 #define XLAT_IP 0xc0000000
+#define LINK_LOCAL_IPV6 0xFE800000
 
 #define NETWORK_STATS "%s %llu %llu %llu %llu"
 #ifdef FEATURE_IPA_ANDROID
@@ -396,7 +397,7 @@ public:
 		return xlat_mux_id;
 	}
 
-	static bool check_client_ipv4_with_pdn_ipv4(uint32_t client_ip, uint8_t vlan_id)
+	static bool check_client_ipv4_with_pdn_ipv4(uint32_t client_ip, uint16_t vlan_id)
 	{
 		for(int i = 0; i < IPA_MAX_NUM_SW_PDNS; i++)
 		{
@@ -413,6 +414,8 @@ public:
 					{
 						if(IPACM_Wan::ipv4_to_iface[i].associated_VIDs[j] == vlan_id)
 						{
+							IPACMDBG("vlan %d i %d j %d ip: 0x%x\n",
+										IPACM_Wan::ipv4_to_iface[i].associated_VIDs[j], i,j, client_ip);
 							return true;
 						}
 					}

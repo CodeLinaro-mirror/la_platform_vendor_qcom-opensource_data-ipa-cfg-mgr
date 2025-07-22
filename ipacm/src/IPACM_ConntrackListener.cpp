@@ -747,7 +747,7 @@ void IPACM_ConntrackListener::HandleNeighIpAddrAddEvt(
 						/* check if we already got vlan_pdn_up event for this ip */
 						if(vlan_pdns[pdn_idx].public_ip == public_ip)
 						{
-							for(vlan_idx = 0; vlan_idx < vlan_pdns[pdn_idx].VID_cnt; vlan_idx++)
+							for(vlan_idx = 0; vlan_idx < IPA_MAX_NUM_HW_PDNS; vlan_idx++)
 							{
 								if(nat_clients[i].vlan_id == vlan_pdns[pdn_idx].associated_VIDs[vlan_idx])
 								{
@@ -1243,6 +1243,8 @@ void IPACM_ConntrackListener::HandleVlanUpV6(void *in_param)
 void IPACM_ConntrackListener::HandleVlanUp(void *in_param)
 {
 	ipacm_event_vlan_pdn *vlanup_data = (ipacm_event_vlan_pdn *)in_param;
+	int available_idx = -1;;
+
 	IPACMDBG_H("Received below information during VLAN PDN up,\n");
 	IPACMDBG_H("IPType: %d, vlan_id:%d, mux id %d\n",
 		vlanup_data->iptype,
@@ -1277,23 +1279,38 @@ void IPACM_ConntrackListener::HandleVlanUp(void *in_param)
 		}
 		else
 		{
-			if(vlan_pdns[0].public_ip == vlanup_data->ipv4_addr) {
-				for(int i = 0; i < vlan_pdns[0].VID_cnt; i++)
+			if(vlan_pdns[0].public_ip == vlanup_data->ipv4_addr)
+			{
+				available_idx = -1;
+				for(int i = 0; i < IPA_MAX_NUM_HW_PDNS; i++)
 				{
 					if (vlanup_data->VlanID == vlan_pdns[0].associated_VIDs[i])
 					{
-						IPACMDBG_H("found existing PDN entry in 0, with vlan %d\n", vlanup_data->VlanID);
+						IPACMDBG_H("found existing PDN entry in 0, with vlan %d\n",
+								vlanup_data->VlanID);
 						return;
 					}
+					else if((vlan_pdns[0].associated_VIDs[i] == 0) && (available_idx == -1))
+					{
+						available_idx = i;
+					}
 				}
-				IPACMDBG_H("found existing PDN entry in 0, but got new VLAN id. Adding vlan %d to the entry\n", vlanup_data->VlanID);
-				vlan_pdns[0].associated_VIDs[vlan_pdns[0].VID_cnt] = vlanup_data->VlanID;
-				vlan_pdns[0].VID_cnt++;
-				return;
+				if (available_idx != -1)
+				{
+					IPACMDBG_H("found existing PDN entry in 0, but got new VLAN id. "
+						   "Adding vlan %d to the entry to pdn vlan index is %d\n",
+						vlanup_data->VlanID, available_idx);
+					vlan_pdns[0].associated_VIDs[available_idx] = vlanup_data->VlanID;
+					vlan_pdns[0].VID_cnt++;
+					IPACMDBG_H("Now no of vlans mapped to PDN entry in 0 is %d\n",
+							vlan_pdns[0].VID_cnt++);
+					return;
+				}
 			}
 			if(vlan_pdns[0].public_ip == 0)
 			{
 				IPACMDBG_H("found empty PDN entry in 0 index num_vlan_pdns %d\n", num_vlan_pdns);
+				vlan_pdns[0].VID_cnt = 0;
 				vlan_pdns[0].public_ip = vlanup_data->ipv4_addr;
 				vlan_pdns[0].associated_VIDs[vlan_pdns[0].VID_cnt] = vlanup_data->VlanID;
 				vlan_pdns[0].VID_cnt++;
@@ -1320,20 +1337,33 @@ void IPACM_ConntrackListener::HandleVlanUp(void *in_param)
 			/* Check if pdn is allocated as well as saved in vlan pdn cache*/
 			for(int i = 1; i < IPA_MAX_NUM_HW_PDNS; i++)
 			{
+				available_idx = -1;
 				if(vlan_pdns[i].public_ip == vlanup_data->ipv4_addr)
 				{
-					for(int j = 0; j < vlan_pdns[i].VID_cnt; j ++)
+					for(int j = 0; j < IPA_MAX_NUM_HW_PDNS; j ++)
 					{
 						if (vlanup_data->VlanID == vlan_pdns[i].associated_VIDs[j])
 						{
-							IPACMDBG_H("found existing PDN entry in %d, with vlan %d\n", i, vlanup_data->VlanID);
+							IPACMDBG_H("found existing PDN entry at idx %d, with vlan %d\n",
+									i, vlanup_data->VlanID);
 							return;
 						}
+						else if((vlan_pdns[i].associated_VIDs[j] == 0) && (available_idx == -1))
+						{
+							available_idx = j;
+						}
 					}
-					IPACMDBG_H("found existing PDN entry in %d, but got new VLAN id. Adding vlan %d to the entry\n", i, vlanup_data->VlanID);
-					vlan_pdns[i].associated_VIDs[vlan_pdns[i].VID_cnt] = vlanup_data->VlanID;
-					vlan_pdns[i].VID_cnt++;
-					return;
+					if (available_idx != -1)
+					{
+						IPACMDBG_H("found existing PDN entry in %d, but got new VLAN id. "
+							   "Adding vlan %d to the entry to pdn vlan index is %d\n",
+								 i, vlanup_data->VlanID, available_idx);
+						vlan_pdns[i].associated_VIDs[available_idx] = vlanup_data->VlanID;
+						vlan_pdns[i].VID_cnt++;
+						IPACMDBG_H("Now no of vlans mapped to PDN entry in 0 is %d\n",
+								vlan_pdns[i].VID_cnt++);
+						return;
+					}
 				}
 			}
 
@@ -1342,6 +1372,7 @@ void IPACM_ConntrackListener::HandleVlanUp(void *in_param)
 				if(vlan_pdns[i].public_ip == 0)
 				{
 					IPACMDBG_H("found empty PDN entry in %d num_vlan_pdns %d\n", i, num_vlan_pdns);
+					vlan_pdns[i].VID_cnt = 0;
 					vlan_pdns[i].public_ip = vlanup_data->ipv4_addr;
 					vlan_pdns[i].associated_VIDs[vlan_pdns[i].VID_cnt] = vlanup_data->VlanID;
 					vlan_pdns[i].VID_cnt++;
@@ -3145,7 +3176,7 @@ void IPACM_ConntrackListener::ProcessTCPorUDPMsg(
 				/* check if we already got vlan_pdn_up event for this ip */
 				if(vlan_pdns[i].public_ip == orig_dst_ip)
 				{
-					for(vlan_idx = 0; vlan_idx < vlan_pdns[i].VID_cnt; vlan_idx++)
+					for(vlan_idx = 0; vlan_idx < IPA_MAX_NUM_HW_PDNS; vlan_idx++)
 					{
 						if(VlanID == vlan_pdns[i].associated_VIDs[vlan_idx])
 						{
@@ -3187,7 +3218,7 @@ void IPACM_ConntrackListener::ProcessTCPorUDPMsg(
 				/* check if we already got vlan_pdn_up event for this ip */
 				if(vlan_pdns[i].public_ip == repl_dst_ip)
 				{
-					for(vlan_idx = 0; vlan_idx < vlan_pdns[i].VID_cnt; vlan_idx++)
+					for(vlan_idx = 0; vlan_idx < IPA_MAX_NUM_HW_PDNS; vlan_idx++)
 					{
 						if(VlanID == vlan_pdns[i].associated_VIDs[vlan_idx])
 						{

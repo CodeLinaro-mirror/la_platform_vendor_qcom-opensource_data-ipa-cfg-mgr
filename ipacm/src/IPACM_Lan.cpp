@@ -622,6 +622,11 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 							}
 						}
 #ifdef FEATURE_VLAN_MPDN
+						if (IPACM_Iface::ipacmcfg->iface_in_vlan_mode(dev_name))
+						{
+							IPACMDBG_H("Checking for V4 VLAN PDN\n");
+							check_vlan_PDNUp(IPA_IP_v4);
+						}
 
 
 #ifdef FEATURE_SOCKSv5
@@ -2173,6 +2178,7 @@ int IPACM_Lan::check_vlan_PDNUp(enum ipa_ip_type iptype)
 	int i = 0;
 	ipacm_event_vlan_pdn vlan_data;
 	uint16_t Ids[IPA_MAX_NUM_OFFLOAD_VLANS];
+	memset(Ids,0, IPA_MAX_NUM_OFFLOAD_VLANS*sizeof(uint16_t));
 	uint8_t cnt = 0;
 
 	if(IPACM_Iface::ipacmcfg->get_iface_vlan_ids(dev_name, Ids))
@@ -9795,7 +9801,7 @@ int IPACM_Lan::handle_wan_down_v6(bool is_sta_mode, bool is_support_mpdn)
 	else
 	{
 		/* currently support only all vlans switch to STA or LTE, not partial vlans */
-		IPACMDBG_H("Deletion of STA BH v6 rule\n");
+		IPACMDBG_H("STA mode - Wan_down(V6)\n");
 		for(i = 0; i < IPA_MAX_NUM_OFFLOAD_VLANS; i++)
 		{
 			if (vlan_sta_info[i].v6_flt_hdl != 0)

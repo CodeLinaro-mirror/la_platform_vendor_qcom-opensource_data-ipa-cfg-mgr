@@ -3328,6 +3328,7 @@ fail:
 int IPACM_Wan::check_vlan_pdn(ipa_ip_type iptype, ipacm_event_route_vlan *data, bool v4_only_xlat)
 {
 	int ret = IPACM_FAILURE;
+	bool v4_hdr_pending = false, v6_hdr_pending = false;
 	std::list<uint16_t>::iterator it;
 
 	IPACMDBG_H("iptype: %d\n", iptype);
@@ -3354,13 +3355,17 @@ int IPACM_Wan::check_vlan_pdn(ipa_ip_type iptype, ipacm_event_route_vlan *data, 
 					if (data->VlanID == *it)
 					{
 						IPACMDBG_H("Already added vlan_id: %d as pending_VID_STA \n", data->VlanID);
-					 	return IPACM_SUCCESS;
+						v4_hdr_pending = true;
+						break;
 					}
 				}
-				pending_VID_STA.push_back(data->VlanID);
-				IPACMDBG_H("Added vlan_id: %d as pending_VID_STA\n", data->VlanID);
+				if(v4_hdr_pending == false)
+				{
+					pending_VID_STA.push_back(data->VlanID);
+					IPACMDBG_H("Added vlan_id: %d as pending_VID_STA\n", data->VlanID);
+					v4_hdr_pending = true;
+				}
 			}
-			return IPACM_SUCCESS;
 		}
 		else if((iptype==IPA_IP_v6 || iptype == IPA_IP_MAX) && (header_set_v6 != true))
 		{
@@ -3375,13 +3380,22 @@ int IPACM_Wan::check_vlan_pdn(ipa_ip_type iptype, ipacm_event_route_vlan *data, 
 					if (data->VlanID == *it)
 					{
 						IPACMDBG_H("Already added vlan_id: %d as pending_VID_STA_v6 \n", data->VlanID);
-						 return IPACM_SUCCESS;
+						v6_hdr_pending = true;
+						break;
 					}
 				}
-				pending_VID_STA_v6.push_back(data->VlanID);
-				IPACMDBG_H("Added vlan_id: %d as pending_VID_STA_v6\n", data->VlanID);
+				if(v6_hdr_pending == false)
+				{
+					pending_VID_STA_v6.push_back(data->VlanID);
+					IPACMDBG_H("Added vlan_id: %d as pending_VID_STA_v6\n", data->VlanID);
+					v6_hdr_pending = true;
+				}
 			}
-			return IPACM_SUCCESS;
+		}
+		if(v4_hdr_pending || v6_hdr_pending)
+		{
+			IPACMDBG_H("STA header haven't constructed \n");
+			return IPACM_FAILURE;
 		}
 	}
 

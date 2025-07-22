@@ -25,40 +25,12 @@ BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
 WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
 OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
 IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- *
- * Changes from Qualcomm Innovation Center are provided under the following license:
- *
- * Copyright (c) 2022, 2024-2025 Qualcomm Innovation Center, Inc. All rights reserved.
- *
- * Redistribution and use in source and binary forms, with or without
- * modification, are permitted (subject to the limitations in the
- * disclaimer below) provided that the following conditions are met:
- *
- *     * Redistributions of source code must retain the above copyright
- *       notice, this list of conditions and the following disclaimer.
- *
- *     * Redistributions in binary form must reproduce the above
- *       copyright notice, this list of conditions and the following
- *       disclaimer in the documentation and/or other materials provided
- *       with the distribution.
- *
- *     * Neither the name of Qualcomm Innovation Center, Inc. nor the names of its
- *       contributors may be used to endorse or promote products derived
- *       from this software without specific prior written permission.
- *
- * NO EXPRESS OR IMPLIED LICENSES TO ANY PARTY'S PATENT RIGHTS ARE
- * GRANTED BY THIS LICENSE. THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT
- * HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED
- * WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
- * MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
- * IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR
- * ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
- * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE
- * GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
- * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER
- * IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
- * OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
- * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE
+
+ Changes from Qualcomm Technologies, Inc. are provided under the following license:
+
+ Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+ SPDX-License-Identifier: BSD-3-Clause-Clear
+
 */
 /*!
 	@file
@@ -114,6 +86,9 @@ typedef struct _ipa_wan_client
 	int ipv6_set;
 	bool ipv4_header_set;
 	bool ipv6_header_set;
+	uint32_t sta_hdr_proc_hdl_v4;
+	uint32_t sta_hdr_proc_hdl_v6;
+	bool sta_hdr_proc_ctx_set;
 	bool power_save_set;
 	wan_client_rt_hdl wan_rt_hdl[0]; /* depends on number of tx properties */
 }ipa_wan_client;
@@ -241,6 +216,8 @@ public:
 		IPACM_firewall_t &firewall_configs);
 
 	static IPACM_firewall_conf_t* get_firewall_conf_by_vid_ul(int vid);
+
+	void set_swallow_pdn_up(void);
 #endif //FEATURE_VLAN_MPDN
 	static IPACM_firewall_conf_t* get_default_profile_firewall_conf_ul(int *default_vid);
 
@@ -454,7 +431,7 @@ public:
 		return xlat_mux_id;
 	}
 
-	static bool check_client_ipv4_with_pdn_ipv4(uint32_t client_ip, uint8_t vlan_id)
+	static bool check_client_ipv4_with_pdn_ipv4(uint32_t client_ip, uint16_t vlan_id)
 	{
 		for(int i = 0; i < IPA_MAX_NUM_SW_PDNS; i++)
 		{
@@ -471,6 +448,8 @@ public:
 					{
 						if(IPACM_Wan::ipv4_to_iface[i].associated_VIDs[j] == vlan_id)
 						{
+							IPACMDBG("vlan %d i %d j %d ip: 0x%x\n",
+										IPACM_Wan::ipv4_to_iface[i].associated_VIDs[j], i,j, client_ip);
 							return true;
 						}
 					}
@@ -598,6 +577,8 @@ private:
 	uint32_t *wan_route_rule_v6_hdl;
 	uint32_t hdr_hdl_sta_v4;
 	uint32_t hdr_hdl_sta_v6;
+	uint32_t proc_hdl_sta_v4;
+	uint32_t proc_hdl_sta_v6;
 	uint32_t firewall_hdl_v4[IPACM_MAX_FIREWALL_ENTRIES];
 	uint32_t firewall_hdl_v6[IPACM_MAX_FIREWALL_ENTRIES];
 	uint32_t dft_wan_fl_hdl[IPA_NUM_DEFAULT_WAN_FILTER_RULES];
@@ -622,6 +603,8 @@ private:
 	bool active_v6;
 	bool header_set_v4;
 	bool header_set_v6;
+	bool hdr_proc_set_v4;
+	bool hdr_proc_set_v6;
 	bool header_partial_default_wan_v4;
 	bool header_partial_default_wan_v6;
 	uint8_t ext_router_mac_addr[IPA_MAC_ADDR_SIZE];

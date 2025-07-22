@@ -26,8 +26,8 @@ WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
 OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
 IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
- * Changes from Qualcomm Innovation Center are provided under the following license:
- * Copyright (c) 2022-2025 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Changes from Qualcomm Technologies, Inc. are provided under the following license:
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
 */
 
@@ -390,29 +390,33 @@ void IPACM_LanToLan::handle_iface_up(ipacm_event_eth_bridge *data)
 			}
 
 			/* add header processing context for peer VLAN interfaces */
-			for(it = ++m_iface.begin(); it != m_iface.end(); it++)
+			/* Install rules only when current iface is supporting inter offload */
+			if(front_iface.get_m_support_inter_iface_offload())
 			{
-				if (!IPACM_Iface::ipacmcfg->multi_vlan_bridge_config_enable && !it->get_is_vlan() && !front_iface.is_svap_iface() &&
-						!front_iface.is_ap_iface_vlan_enabled() && !front_iface.is_spcl_iface())
+				for(it = ++m_iface.begin(); it != m_iface.end(); it++)
 				{
-					IPACMDBG_H("iface %s is non VLAN iface - skipping\n", it->get_iface_pointer()->dev_name);
-					continue;
+					if (!IPACM_Iface::ipacmcfg->multi_vlan_bridge_config_enable && !it->get_is_vlan() && !front_iface.is_svap_iface() &&
+							!front_iface.is_ap_iface_vlan_enabled() && !front_iface.is_spcl_iface())
+					{
+						IPACMDBG_H("iface %s is non VLAN iface - skipping\n", it->get_iface_pointer()->dev_name);
+						continue;
+					}
+
+					/* add peer info only when both interfaces support inter-interface communication */
+					if(it->get_m_support_inter_iface_offload())
+					{
+						/* populate hdr_proc_ctx and routing table handle */
+						handle_new_iface_up(&front_iface, &(*it));
+
+						/* add client specific routing rule on existing interface - regardless of vlan id*/
+						it->add_client_rt_rule_for_new_iface();
+					}
 				}
 
-				/* add peer info only when both interfaces support inter-interface communication */
-				if(it->get_m_support_inter_iface_offload())
-				{
-					/* populate hdr_proc_ctx and routing table handle */
-					handle_new_iface_up(&front_iface, &(*it));
-
-					/* add client specific routing rule on existing interface - regardless of vlan id*/
-					it->add_client_rt_rule_for_new_iface();
-				}
+				/* add client specific filtering rule on new interface for matching vlan ids*/
+				if (!front_iface.get_m_support_ast_update())
+					front_iface.add_all_inter_interface_client_flt_rule(data->iptype, Ids);
 			}
-
-			/* add client specific filtering rule on new interface for matching vlan ids*/
-			if (!front_iface.get_m_support_ast_update())
-				front_iface.add_all_inter_interface_client_flt_rule(data->iptype, Ids);
 
 			if(IPACM_Iface::ipacmcfg->multi_vlan_bridge_config_enable == 1)
 			{
@@ -2117,7 +2121,7 @@ void IPACM_LanToLan_Iface::del_client_rt_rule(peer_iface_info *peer, client_info
 			}
 			client->inter_iface_rt_rule_hdl[peer_l2_hdr_type].num_hdl[IPA_IP_v6] = 0;
 
-			if (is_svap_iface() || is_ap_iface_vlan_enabled() || (is_spcl_iface() &&  client->vlan_id)) {
+			if (m_is_vlan || is_svap_iface() || is_ap_iface_vlan_enabled() || (is_spcl_iface() &&  client->vlan_id)) {
 				IPACMDBG_H("Perform del_hdr_proc_ctx_vlan for svap/spcl clients \n");
 				del_hdr_proc_ctx_vlan(peer_l2_hdr_type, client->vlan_id);
 			}

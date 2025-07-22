@@ -26,9 +26,11 @@ WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
 OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
 IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-Changes from Qualcomm Innovation Center are provided under the following license:
-Copyright (c) 2023-2025 Qualcomm Innovation Center, Inc. All rights reserved.
+Changes from Qualcomm Technologies, Inc. are provided under the following license:
+
+Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
 SPDX-License-Identifier: BSD-3-Clause-Clear
+
 */
 /*!
 	@file
@@ -91,7 +93,7 @@ extern "C"
 #define IPA_IF_SOCKSv5_NAME  "IPACM_SOCKSv5"
 #define IPA_EOGRE_HDR_NAME   "IPACM_EoGRE_v%d"
 
-#define IPA_MAX_ACTIVE_WLAN_IFACE 64 // 64 wlan (4x16 band support)
+#define IPA_MAX_ACTIVE_WLAN_IFACE 72 // 64 wlan (4x16 band support) + 8 extra rdkb supported ifaces
 
 #define IPA_MAX_IFACE_ENTRIES (57 + IPA_MAX_ACTIVE_WLAN_IFACE) /* current: 15 rmnet + 64 wlan + bridge+ eth +
                                                                 * rndis + ecm + 15 rmnet for RDKB + 16mld */
@@ -122,6 +124,9 @@ extern "C"
 #ifdef FEATURE_RDKB
 #define DEFAULT_BRIDGE_IFACE_NAME "brlan0"
 #define BRIDGE_IFACE_NAME         "brlan"
+#define RMNET_IFACE_NAME          "qmapmux"
+#elif defined(FEATURE_PRPLWRT)
+#define BRIDGE_IFACE_NAME         "br-lan"
 #define RMNET_IFACE_NAME          "qmapmux"
 #else
 #define BRIDGE_IFACE_NAME         "br-lan"
@@ -269,6 +274,8 @@ typedef enum
 	IPA_CFG_CHANGE_EVENT,                 /* NULL */
 	IPA_PRIVATE_SUBNET_CHANGE_EVENT,          /* ipacm_event_data_fid */
 	IPA_FIREWALL_CHANGE_EVENT,                /* NULL */
+	IPA_SWALLOW_CHANGE_EVENT,                 /* NULL */
+	IPA_SWALLOW_PDN_UPDATE,                   /* NULL */
 	IPA_LINK_UP_EVENT,                        /* ipacm_event_data_fid */
 	IPA_LINK_DOWN_EVENT,                      /* ipacm_event_data_fid */
 	IPA_USB_LINK_UP_EVENT,                    /* ipacm_event_data_fid */

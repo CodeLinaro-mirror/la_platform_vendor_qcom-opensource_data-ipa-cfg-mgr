@@ -267,7 +267,7 @@ bool IPACM_Filtering::AddFilteringRule_v2(struct ipa_ioc_add_flt_rule_v2 const *
 	int retval = 0;
 	int i;
 	int num_rules = ruleTable->num_rules;
-	int cnt;
+	int cnt = 0;
 
 	IPACMDBG_H("Printing filter add attributes\n");
 	IPACMDBG_H("ip type: %d\n", ruleTable->ip);
@@ -302,6 +302,60 @@ bool IPACM_Filtering::AddFilteringRule_v2(struct ipa_ioc_add_flt_rule_v2 const *
 							 cnt, ((struct ipa_flt_rule_add_v2 *)ruleTable->rules)[cnt].status);
 		}
 	}
+	IPACMDBG("Added Filtering rule %p\n", ruleTable);
+	return true;
+}
+
+bool IPACM_Filtering::AddFilteringRuleAfter_v2(struct ipa_ioc_add_flt_rule_after_v2 const *ruleTable)
+{
+	int retval = 0;
+	int i;
+	int num_rules = ruleTable->num_rules;
+	int cnt;
+
+	IPACMDBG_H("Printing filter add attributes\n");
+	IPACMDBG_H("ip type: %d\n", ruleTable->ip);
+	IPACMDBG_H("Number of rules: %d\n", ruleTable->num_rules);
+	IPACMDBG_H("End point: %d \n", ruleTable->ep);
+	IPACMDBG_H("commit value: %d\n", ruleTable->commit);
+	IPACMDBG("Filter rule attrib mask: 0x%x\n", ((struct ipa_flt_rule_add_v2 *)ruleTable->rules)->rule.attrib.attrib_mask);
+
+	IPACMDBG_H("at_rear=0x%x, hdl=0x%x, status=0x%x\n",
+			((struct ipa_flt_rule_add_v2 *)ruleTable->rules)->at_rear,
+			((struct ipa_flt_rule_add_v2 *)ruleTable->rules)->flt_rule_hdl,
+			((struct ipa_flt_rule_add_v2 *)ruleTable->rules)->status);
+
+	IPACMDBG_H("retain_hdr=0x%x, to_uc=0x%x, action=0x%x,"
+			" rt_tbl_hdl=0x%x, rt_tbl_idx=0x%x,enable_stats=0x%x, cnt_idx=0x%x\n",
+			((struct ipa_flt_rule_add_v2 *)ruleTable->rules)->rule.retain_hdr,
+			((struct ipa_flt_rule_add_v2 *)ruleTable->rules)->rule.to_uc,
+			((struct ipa_flt_rule_add_v2 *)ruleTable->rules)->rule.action,
+			((struct ipa_flt_rule_add_v2 *)ruleTable->rules)->rule.rt_tbl_hdl,
+			((struct ipa_flt_rule_add_v2 *)ruleTable->rules)->rule.rt_tbl_idx,
+			((struct ipa_flt_rule_add_v2 *)ruleTable->rules)->rule.enable_stats,
+			((struct ipa_flt_rule_add_v2 *)ruleTable->rules)->rule.cnt_idx);
+
+	retval = ioctl(fd, IPA_IOC_ADD_FLT_RULE_AFTER_V2, ruleTable);
+	if (retval != 0)
+	{
+		if (((struct ipa_flt_rule_add_v2 *)ruleTable->rules)[cnt].status != 0)
+		{
+			IPACMDBG_H("Adding Filter rule failed with status:%d, retval: %d\n",
+				((struct ipa_flt_rule_add_v2 *)ruleTable->rules)[cnt].status, retval);
+		}
+		return false;
+	}
+
+	if (((struct ipa_flt_rule_add_v2 *)ruleTable->rules)[cnt].status != 0)
+	{
+		IPACMDBG_H("Adding Filter rule failed with status:%d, retval: %d\n",
+			((struct ipa_flt_rule_add_v2 *)ruleTable->rules)[cnt].status, retval);
+		return false;
+	}
+
+	IPACMDBG("Ioctl retval %d\n", retval);
+	IPACMDBG("Adding Filter rule Addition failed with status:%d\n",
+		((struct ipa_flt_rule_add_v2 *)ruleTable->rules)->status);
 	IPACMDBG("Added Filtering rule %p\n", ruleTable);
 	return true;
 }

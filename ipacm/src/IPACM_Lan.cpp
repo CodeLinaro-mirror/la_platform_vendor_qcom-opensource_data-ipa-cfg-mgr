@@ -587,8 +587,6 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 							}
 						}
 #ifdef FEATURE_VLAN_MPDN
-
-
 #ifdef FEATURE_SOCKSv5
 						/* handle socksv5 MPDN logic */
 						else if(!IPACM_Iface::ipacmcfg->ipacm_mpdn_enable)
@@ -858,7 +856,7 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 				/* add support for handling default route to WIFI backhaul on vlan case Need to protect with xml entry */
 				if(IPACM_Iface::ipacmcfg->iface_in_vlan_mode(dev_name))
 				{
-					uint16_t vid[IPA_MAX_NUM_OFFLOAD_VLANS];
+					uint16_t vid[IPA_MAX_NUM_OFFLOAD_VLANS] = {0};
 					if (IPACM_Iface::ipacmcfg->get_iface_vlan_ids(dev_name, vid))
 					{
 						IPACMERR("failed getting vlan ids for iface %s\n", dev_name);
@@ -2211,6 +2209,7 @@ int IPACM_Lan::check_vlan_PDNUp(enum ipa_ip_type iptype)
 	int i = 0;
 	ipacm_event_vlan_pdn vlan_data;
 	uint16_t Ids[IPA_MAX_NUM_OFFLOAD_VLANS];
+	memset(Ids,0, IPA_MAX_NUM_OFFLOAD_VLANS*sizeof(uint16_t));
 	uint8_t cnt = 0;
 
 	if(IPACM_Iface::ipacmcfg->get_iface_vlan_ids(dev_name, Ids))
@@ -2294,7 +2293,7 @@ int IPACM_Lan::check_vlan_PDNUp(enum ipa_ip_type iptype)
 				}
 #endif
 				modify_ipv6_prefix_flt_rule();
-
+				memset(&vlan_data, 0, sizeof(vlan_data));
 				/* create event data and call the handler */
 				memset(&vlan_data, 0, sizeof(vlan_data));
 				vlan_data.iptype = iptype;

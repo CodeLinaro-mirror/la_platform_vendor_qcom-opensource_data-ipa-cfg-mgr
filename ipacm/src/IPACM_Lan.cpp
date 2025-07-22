@@ -584,7 +584,7 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 								{
 									if(IPACM_Iface::ipacmcfg->iface_in_vlan_mode(dev_name))
 									{
-										uint16_t vlan_id;
+										uint16_t vlan_id = 0;
 										memset(&mapping_info, 0, sizeof(mapping_info));
 
 										strlcpy(mapping_info.bridge_name, "bridge0", IF_NAME_LEN);
@@ -610,8 +610,11 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 							}
 						}
 #ifdef FEATURE_VLAN_MPDN
-						else
+						if (IPACM_Iface::ipacmcfg->iface_in_vlan_mode(dev_name))
+						{
+							IPACMDBG_H("Checking for V4 VLAN PDN\n");
 							check_vlan_PDNUp(IPA_IP_v4);
+						}
 
 						/* add support for handling default route to WIFI backhaul on vlan case Need to protect with xml entry */
 						if(IPACM_Wan::isWanUP_V6(ipa_if_num)) /* Modem v6 call is UP?*/
@@ -640,7 +643,7 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 								{
 									if(IPACM_Iface::ipacmcfg->iface_in_vlan_mode(dev_name))
 									{
-										uint16_t vlan_id;
+										uint16_t vlan_id = 0;
 										memset(&mapping_info, 0, sizeof(mapping_info));
 
 										strlcpy(mapping_info.bridge_name, "bridge0", IF_NAME_LEN);
@@ -666,9 +669,11 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 							}
 						}
 #endif //FEATURE_IPACM_UL_FIREWALL#ifdef FEATURE_VLAN_MPDN
-						else
+						if (IPACM_Iface::ipacmcfg->iface_in_vlan_mode(dev_name))
+						{
+							IPACMDBG_H("Checking for V6 VLAN PDN\n");
 							check_vlan_PDNUp(IPA_IP_v6);
-
+						}
 						/* Post event to NAT */
 						if (post_lan_up_event(data))
 						{
@@ -837,7 +842,7 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 				/* add support for handling default route to WIFI backhaul on vlan case Need to protect with xml entry */
 				if(IPACM_Iface::ipacmcfg->iface_in_vlan_mode(dev_name))
 				{
-					uint16_t vlan_id;
+					uint16_t vlan_id = 0;
 					memset(&mapping_info, 0, sizeof(mapping_info));
 
 					strlcpy(mapping_info.bridge_name, "bridge0", IF_NAME_LEN);
@@ -913,7 +918,7 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 				/* add support for handling default route to WIFI backhaul on vlan case Need to protect with xml entry */
 				if(IPACM_Iface::ipacmcfg->iface_in_vlan_mode(dev_name))
 				{
-					uint16_t vlan_id;
+					uint16_t vlan_id = 0;
 					memset(&mapping_info, 0, sizeof(mapping_info));
 
 					strlcpy(mapping_info.bridge_name, "bridge0", IF_NAME_LEN);
@@ -2089,6 +2094,7 @@ int IPACM_Lan::check_vlan_PDNUp(enum ipa_ip_type iptype)
 	int i = 0;
 	ipacm_event_vlan_pdn vlan_data;
 	uint16_t Ids[IPA_MAX_NUM_OFFLOAD_VLANS];
+	memset(Ids,0, IPA_MAX_NUM_OFFLOAD_VLANS*sizeof(uint16_t));
 	uint8_t cnt = 0;
 
 	if(IPACM_Iface::ipacmcfg->get_iface_vlan_ids(dev_name, Ids))
@@ -2112,9 +2118,10 @@ int IPACM_Lan::check_vlan_PDNUp(enum ipa_ip_type iptype)
 					continue;
 				}
 				/* create event data and call the handler */
+				memset(&vlan_data, 0, sizeof(vlan_data));
 				vlan_data.iptype = iptype;
 				vlan_data.mux_id = mux_id;
-
+				vlan_data.VlanID = Ids[i];
 				if(IPACM_Wan::backhaul_is_sta_mode == false)
 				{
 					if (IPACM_Wan::is_xlat_by_vid(Ids[i]))
@@ -2166,11 +2173,11 @@ int IPACM_Lan::check_vlan_PDNUp(enum ipa_ip_type iptype)
 				}
 #endif
 				modify_ipv6_prefix_flt_rule();
-
+				memset(&vlan_data, 0, sizeof(vlan_data));
 				/* create event data and call the handler */
 				vlan_data.iptype = iptype;
 				vlan_data.mux_id = mux_id;
-
+				vlan_data.VlanID = Ids[i];
 				if(handle_vlan_pdn_up(&vlan_data))
 				{
 					IPACM_SYSLOG("failed handling v6 VLAN up for VID %d, dev %s\n",
@@ -2716,17 +2723,20 @@ int IPACM_Lan::handle_wan_down(bool is_sta_mode, uint8_t mux_id, uint16_t vlan_i
 		/* currently support only all vlans switch to STA or LTE, not partial vlans */
 		for(i = 0; i < IPA_MAX_NUM_OFFLOAD_VLANS; i++)
 		{
-			if (vlan_sta_info[i].v4_flt_hdl != 0)
+			if((vlan_id == 0) || (vlan_sta_info[i].vlan_id == vlan_id))
 			{
-				if (m_filtering.DeleteFilteringHdls(&vlan_sta_info[i].v4_flt_hdl, IPA_IP_v4, 1) == false)
+				if (vlan_sta_info[i].v4_flt_hdl != 0)
 				{
-					IPACMERR("Error Deleting RuleTable(1) to Filtering, aborting...\n");
-					return IPACM_FAILURE;
+					if (m_filtering.DeleteFilteringHdls(&vlan_sta_info[i].v4_flt_hdl, IPA_IP_v4, 1) == false)
+					{
+						IPACMERR("Error Deleting RuleTable(1) to Filtering, aborting...\n");
+						return IPACM_FAILURE;
+					}
+					IPACM_Iface::ipacmcfg->decreaseFltRuleCount(rx_prop->rx[0].src_pipe, IPA_IP_v4, 1);
+					vlan_sta_info[i].v4_flt_hdl = 0;
+					if (vlan_sta_info[i].v6_flt_hdl == 0)
+						vlan_sta_info[i].vlan_id = 0;
 				}
-				IPACM_Iface::ipacmcfg->decreaseFltRuleCount(rx_prop->rx[0].src_pipe, IPA_IP_v4, 1);
-				vlan_sta_info[i].v4_flt_hdl = 0;
-				if (vlan_sta_info[i].v6_flt_hdl == 0)
-					vlan_sta_info[i].vlan_id = 0;
 			}
 		}
 	}
@@ -9141,22 +9151,25 @@ int IPACM_Lan::handle_wan_down_v6(bool is_sta_mode, bool is_support_mpdn, uint16
 	else
 	{
 		/* currently support only all vlans switch to STA or LTE, not partial vlans */
-		IPACMDBG_H("Deletion of STA BH v6 rule\n");
+		IPACMDBG_H("STA mode - Wan_down(V6) for vlan Id: %d\n", vlan_id);
 		for(i = 0; i < IPA_MAX_NUM_OFFLOAD_VLANS; i++)
 		{
-			if (vlan_sta_info[i].v6_flt_hdl != 0)
+			if((vlan_id == 0) || (vlan_sta_info[i].vlan_id == vlan_id))
 			{
-				/* STA case reset vlan client ipv6 rt-rules */
-				handle_lan_client_reset_rt(IPA_IP_v6, vlan_sta_info[i].vlan_id);
-				if (m_filtering.DeleteFilteringHdls(&vlan_sta_info[i].v6_flt_hdl, IPA_IP_v6, 1) == false)
+				if (vlan_sta_info[i].v6_flt_hdl != 0)
 				{
-					IPACMERR("Error Deleting RuleTable(1) to Filtering, aborting...\n");
-					return IPACM_FAILURE;
+					/* STA case reset vlan client ipv6 rt-rules */
+					handle_lan_client_reset_rt(IPA_IP_v6, vlan_sta_info[i].vlan_id);
+					if (m_filtering.DeleteFilteringHdls(&vlan_sta_info[i].v6_flt_hdl, IPA_IP_v6, 1) == false)
+					{
+						IPACMERR("Error Deleting RuleTable(1) to Filtering, aborting...\n");
+						return IPACM_FAILURE;
+					}
+					IPACM_Iface::ipacmcfg->decreaseFltRuleCount(rx_prop->rx[0].src_pipe, IPA_IP_v6, 1);
+					vlan_sta_info[i].v6_flt_hdl = 0;
+					if (vlan_sta_info[i].v4_flt_hdl == 0)
+						vlan_sta_info[i].vlan_id = 0;
 				}
-				IPACM_Iface::ipacmcfg->decreaseFltRuleCount(rx_prop->rx[0].src_pipe, IPA_IP_v6, 1);
-				vlan_sta_info[i].v6_flt_hdl = 0;
-				if (vlan_sta_info[i].v4_flt_hdl == 0)
-					vlan_sta_info[i].vlan_id = 0;
 			}
 		}
 		IPACMDBG_H("STA BH v6 rules has been deleted successfully.\n");

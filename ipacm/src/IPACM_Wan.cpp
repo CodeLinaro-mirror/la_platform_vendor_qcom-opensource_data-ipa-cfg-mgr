@@ -2662,7 +2662,7 @@ void IPACM_Wan::post_wan_vlan_pdn_event(ipa_ip_type iptype, int pdn_idx, int vla
 int IPACM_Wan::check_vlan_pdn(ipa_ip_type iptype, ipacm_event_route_vlan *data, bool v4_only_xlat)
 {
 	int pdn_idx = 0, vlan_idx= 0, ret = IPACM_FAILURE;
-	bool new_pdn = true;
+	bool new_pdn = true, v4_hdr_pending = false, v6_hdr_pending = false;
 	bool is_backhaul_switch_fail = false;
 	std::list<uint16_t>::iterator it;
 
@@ -2691,16 +2691,17 @@ int IPACM_Wan::check_vlan_pdn(ipa_ip_type iptype, ipacm_event_route_vlan *data, 
 					if (data->VlanID == *it)
 					{
 						IPACMDBG_H("Already added vlan_id: %d as pending_VID_STA \n", data->VlanID);
-						return IPACM_SUCCESS;
+						v4_hdr_pending = true;
+						break;
 					}
 				}
-				pending_VID_STA.push_back(data->VlanID);
-				IPACMDBG_H("Added vlan_id: %d as pending_VID_STA\n", data->VlanID);
+				if(v4_hdr_pending == false)
+				{
+					pending_VID_STA.push_back(data->VlanID);
+					IPACMDBG_H("Added vlan_id: %d as pending_VID_STA\n", data->VlanID);
+					v4_hdr_pending = true;
+				}
 			}
-			/*incase ipv4 return */
-			if(iptype==IPA_IP_v4 )
-				return IPACM_SUCCESS;
-
 		}
 		if((iptype==IPA_IP_v6 || iptype == IPA_IP_MAX) && (header_set_v6 != true))
 		{
@@ -2715,13 +2716,22 @@ int IPACM_Wan::check_vlan_pdn(ipa_ip_type iptype, ipacm_event_route_vlan *data, 
 					if (data->VlanID == *it)
 					{
 						IPACMDBG_H("Already added vlan_id: %d as pending_VID_STA_v6 \n", data->VlanID);
-						return IPACM_SUCCESS;
+						v6_hdr_pending = true;
+						break;
 					}
 				}
-				pending_VID_STA_v6.push_back(data->VlanID);
-				IPACMDBG_H("Added vlan_id: %d as pending_VID_STA_v6\n", data->VlanID);
+				if(v6_hdr_pending == false)
+				{
+					pending_VID_STA_v6.push_back(data->VlanID);
+					IPACMDBG_H("Added vlan_id: %d as pending_VID_STA_v6\n", data->VlanID);
+					v6_hdr_pending = true;
+				}
 			}
-			return IPACM_SUCCESS;
+		}
+		if(v4_hdr_pending || v6_hdr_pending)
+		{
+			IPACMDBG_H("STA header haven't constructed \n");
+			return IPACM_FAILURE;
 		}
 	}
 	IPACMDBG_H("Process IPA_ROUTE_ADD_VLAN_PDN_EVENT for iptype: %d\n", iptype);

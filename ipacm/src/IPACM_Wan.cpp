@@ -312,7 +312,7 @@ int IPACM_Wan::GetMuxByVid(uint16_t vlan_id, uint8_t *mux_id, ipa_ip_type iptype
 			}
 			if(IPACM_Wan::ipv4_to_iface[i].ipv4_addr)
 			{
-				for(int j = 0; j <  ipv4_to_iface[i].VID_cnt; j++)
+				for(int j = 0; j <  IPA_MAX_NUM_SW_PDNS; j++)
 				{
 					if(IPACM_Wan::ipv4_to_iface[i].associated_VIDs[j] == vlan_id)
 					{
@@ -340,7 +340,7 @@ int IPACM_Wan::GetMuxByVid(uint16_t vlan_id, uint8_t *mux_id, ipa_ip_type iptype
 			}
 			if(IPACM_Wan::ipv6_to_iface[i].ipv6_prefix[0] || IPACM_Wan::ipv6_to_iface[i].ipv6_prefix[1])
 			{
-				for(int j = 0; j < ipv6_to_iface[i].VID_cnt; j++)
+				for(int j = 0; j < IPA_MAX_NUM_SW_PDNS; j++)
 				{
 					if(IPACM_Wan::ipv6_to_iface[i].associated_VIDs[j] == vlan_id)
 					{
@@ -372,7 +372,7 @@ int IPACM_Wan::GetMTUByVid(uint16_t *mtu, uint16_t vlan_id, ipa_ip_type iptype)
 		{
 			if(IPACM_Wan::ipv4_to_iface[i].ipv4_addr)
 			{
-				for(int j = 0; j < ipv4_to_iface[i].VID_cnt; j++)
+				for(int j = 0; j < IPA_MAX_NUM_SW_PDNS; j++)
 				{
 					if(IPACM_Wan::ipv4_to_iface[i].associated_VIDs[j] == vlan_id)
 					{
@@ -386,7 +386,7 @@ int IPACM_Wan::GetMTUByVid(uint16_t *mtu, uint16_t vlan_id, ipa_ip_type iptype)
 		{
 			if(IPACM_Wan::ipv6_to_iface[i].ipv6_prefix[0] || IPACM_Wan::ipv6_to_iface[i].ipv6_prefix[1])
 			{
-				for(int j = 0; j < ipv6_to_iface[i].VID_cnt; j++)
+				for(int j = 0; j < IPA_MAX_NUM_SW_PDNS; j++)
 				{
 					if(IPACM_Wan::ipv6_to_iface[i].associated_VIDs[j] == vlan_id)
 					{
@@ -413,7 +413,7 @@ bool IPACM_Wan::is_xlat_by_vid(uint16_t vlan_id)
 			{
 				return IPACM_Wan::ipv4_to_iface[i].is_xlat;
 			}
-			for(int j = 0; j < ipv4_to_iface[i].VID_cnt; j++)
+			for(int j = 0; j < IPA_MAX_NUM_SW_PDNS; j++)
 			{
 				if(IPACM_Wan::ipv4_to_iface[i].associated_VIDs[j] == vlan_id)
 					return IPACM_Wan::ipv4_to_iface[i].is_xlat;
@@ -437,7 +437,7 @@ bool IPACM_Wan::is_xlat_by_ipv4(uint32_t ipv4_addr)
 
 int IPACM_Wan::get_vid_index_for_iface_v6(ipacm_ipv6_wan_iface iface, uint16_t vlan_id)
 {
-	for(int i = 0; i < iface.VID_cnt;i++)
+	for(int i = 0; i < IPA_MAX_NUM_SW_PDNS;i++)
 	{
 		if(iface.associated_VIDs[i] == vlan_id)
 			return i;
@@ -1860,9 +1860,10 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 			}
 			if((v6_pdn_index >= 0) && (ipv6_to_iface[v6_pdn_index].wan_up_vlan_v6))
 			{
-				for(vlan_idx = 0; vlan_idx < ipv6_to_iface[v6_pdn_index].VID_cnt; vlan_idx++)
+				for(vlan_idx = 0; vlan_idx < IPA_MAX_NUM_SW_PDNS; vlan_idx++)
 				{
-					if(IPACM_Wan::ipv6_to_iface[v6_pdn_index].associated_VIDs[vlan_idx] == vlandown_data->VlanID)
+					if((IPACM_Wan::ipv6_to_iface[v6_pdn_index].associated_VIDs[vlan_idx] != 0) &&
+					   (IPACM_Wan::ipv6_to_iface[v6_pdn_index].associated_VIDs[vlan_idx] == vlandown_data->VlanID))
 					{
 						vlan_pdn_up = true;
 						post_wan_vlan_pdn_event(IPA_IP_v6, v6_pdn_index, vlan_idx, vlandown_data->VlanID, false);
@@ -1872,9 +1873,10 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 			}
 			if((v4_pdn_index >= 0) && (ipv4_to_iface[v4_pdn_index].wan_up_vlan))
 			{
-				for(vlan_idx = 0; vlan_idx < ipv4_to_iface[v4_pdn_index].VID_cnt; vlan_idx++)
+				for(vlan_idx = 0; vlan_idx < IPA_MAX_NUM_SW_PDNS; vlan_idx++)
 				{
-					if(IPACM_Wan::ipv4_to_iface[v4_pdn_index].associated_VIDs[vlan_idx] == vlandown_data->VlanID)
+					if((IPACM_Wan::ipv4_to_iface[v4_pdn_index].associated_VIDs[vlan_idx] != 0) &&
+					   (IPACM_Wan::ipv4_to_iface[v4_pdn_index].associated_VIDs[vlan_idx] == vlandown_data->VlanID))
 					{
 						vlan_pdn_up = true;
 						post_wan_vlan_pdn_event(IPA_IP_v4, v4_pdn_index, vlan_idx, vlandown_data->VlanID, false);
@@ -2507,13 +2509,15 @@ void IPACM_Wan::post_wan_vlan_pdn_event(ipa_ip_type iptype, int pdn_idx, int vla
 		{
 			GetMuxByVid(vlan_id, &mux_id, IPA_IP_v6);
 			ipv6_to_iface[pdn_idx].associated_VIDs[vlan_idx] = 0;
-			while(idx < IPA_MAX_NUM_SW_PDNS && ipv6_to_iface[pdn_idx].associated_VIDs[idx] != 0)
+			for(int i = idx; i < IPA_MAX_NUM_SW_PDNS; i++)
 			{
-				ipv6_to_iface[pdn_idx].associated_VIDs[vlan_idx] =
-						ipv6_to_iface[pdn_idx].associated_VIDs[idx];
-				ipv6_to_iface[pdn_idx].associated_VIDs[idx] = 0;
-				idx++;
-				vlan_idx++;
+				if(ipv6_to_iface[pdn_idx].associated_VIDs[i] != 0)
+				{
+					ipv6_to_iface[pdn_idx].associated_VIDs[vlan_idx] =
+							ipv6_to_iface[pdn_idx].associated_VIDs[i];
+					ipv6_to_iface[pdn_idx].associated_VIDs[i] = 0;
+					vlan_idx++;
+				}
 			}
 			ipv6_to_iface[pdn_idx].VID_cnt--;
 			if(ipv6_to_iface[pdn_idx].VID_cnt == 0)
@@ -2576,13 +2580,15 @@ void IPACM_Wan::post_wan_vlan_pdn_event(ipa_ip_type iptype, int pdn_idx, int vla
 		{
 			GetMuxByVid(vlan_id, &mux_id, IPA_IP_v4);
 			ipv4_to_iface[pdn_idx].associated_VIDs[vlan_idx] = 0;
-			while(idx < IPA_MAX_NUM_SW_PDNS && ipv4_to_iface[pdn_idx].associated_VIDs[idx] != 0)
+			for(int i = idx; i < IPA_MAX_NUM_SW_PDNS; i++)
 			{
-				ipv4_to_iface[pdn_idx].associated_VIDs[vlan_idx] =
-					ipv4_to_iface[pdn_idx].associated_VIDs[idx];
-				ipv4_to_iface[pdn_idx].associated_VIDs[idx] = 0;
-				idx++;
-				vlan_idx++;
+				if(ipv4_to_iface[pdn_idx].associated_VIDs[i] != 0)
+				{
+					ipv4_to_iface[pdn_idx].associated_VIDs[vlan_idx] =
+						ipv4_to_iface[pdn_idx].associated_VIDs[i];
+					ipv4_to_iface[pdn_idx].associated_VIDs[i] = 0;
+					vlan_idx++;
+				}
 			}
 			ipv4_to_iface[pdn_idx].VID_cnt--;
 			if(ipv4_to_iface[pdn_idx].VID_cnt == 0)
@@ -2631,8 +2637,16 @@ void IPACM_Wan::post_wan_vlan_pdn_event(ipa_ip_type iptype, int pdn_idx, int vla
 			ipv6_to_iface[pdn_idx].wan_up_vlan_v6 = true;
 			if (ipv6_to_iface[pdn_idx].VID_cnt < IPA_MAX_NUM_SW_PDNS)
 			{
-				ipv6_to_iface[pdn_idx].associated_VIDs[vlan_idx] = vlan_id;
-				ipv6_to_iface[pdn_idx].VID_cnt++;
+				for(int i = 0; i < IPA_MAX_NUM_SW_PDNS; i++)
+				{
+					if(ipv6_to_iface[pdn_idx].associated_VIDs[i] == 0)
+					{
+						ipv6_to_iface[pdn_idx].associated_VIDs[i] = vlan_id;
+						ipv6_to_iface[pdn_idx].VID_cnt++;
+						IPACMDBG_H("Added vlan id %d at index %d \n", vlan_id, i);
+						break;
+					}
+				}
 				ipv6_to_iface[pdn_idx].pIface = this;
 			}
 			else
@@ -2683,8 +2697,16 @@ void IPACM_Wan::post_wan_vlan_pdn_event(ipa_ip_type iptype, int pdn_idx, int vla
 			ipv4_to_iface[pdn_idx].wan_up_vlan = true;
 			if (ipv4_to_iface[pdn_idx].VID_cnt < IPA_MAX_NUM_SW_PDNS)
 			{
-				ipv4_to_iface[pdn_idx].associated_VIDs[vlan_idx] = vlan_id;
-				ipv4_to_iface[pdn_idx].VID_cnt++;
+				for(int i = 0; i < IPA_MAX_NUM_SW_PDNS; i++)
+				{
+					if(ipv4_to_iface[pdn_idx].associated_VIDs[i] == 0)
+					{
+						ipv4_to_iface[pdn_idx].associated_VIDs[i] = vlan_id;
+						ipv4_to_iface[pdn_idx].VID_cnt++;
+						IPACMDBG_H("Added vlan id %d at index %d \n", vlan_id, i);
+						break;
+					}
+				}
 				ipv4_to_iface[pdn_idx].pIface = this;
 			}
 			else

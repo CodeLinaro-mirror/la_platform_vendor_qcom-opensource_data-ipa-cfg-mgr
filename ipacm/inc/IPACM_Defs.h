@@ -151,7 +151,7 @@ extern "C"
 #ifdef FEATURE_VLAN_MPDN
 /* support default PDN+3 VLAN PDNs */
 /* all PDNs can be non_offload PDNs, but only 4 can be offloaded */
-#define IPA_MAX_IPV6_PREFIX_FLT_RULE IPA_MAX_NUM_HW_PDNS
+#define IPA_MAX_IPV6_PREFIX_FLT_RULE IPA_MAX_NUM_SW_PDNS
 #define IPA_MAX_IPV6_NO_OFFLOAD_PREFIX_FLT_RULE IPA_MAX_NUM_SW_PDNS
 #else
 /* support only default PDN */

@@ -2549,7 +2549,6 @@ void IPACM_Wan::post_wan_vlan_pdn_event(ipa_ip_type iptype, int pdn_idx, int vla
 			}
 			vlan_data->mux_id = mux_id;
 			vlan_data->iptype = IPA_IP_v6;
-
 			IPACMDBG_H("Posting IPA_HANDLE_WAN_VLAN_PDN_DOWN (V6) with below information:\n");
 			IPACMDBG_H("iptype V6, VlanID %d, mux_id %d, if num %d\n",
 						vlan_data->VlanID, vlan_data->mux_id, ipa_if_num);
@@ -7336,7 +7335,7 @@ int IPACM_Wan::handle_down_evt(ipa_ip_type arg_ip_type)
 
 	IPACM_SYSLOG("wlan_ipv4_pdn_index: %d ipv4_to_iface[wlan_ipv4_pdn_index].wan_up_vlan :%d\n", wlan_ipv4_pdn_index, ipv4_to_iface[wlan_ipv4_pdn_index].wan_up_vlan);
 	IPACM_SYSLOG("wlan_ipv6_pdn_index: %d wan_up_vlan :%d STA wan ipv6-addr:%08x:%08x:%08x:%08x\n",
-		wlan_ipv6_pdn_index, ipv4_to_iface[wlan_ipv6_pdn_index].wan_up_vlan,
+		wlan_ipv6_pdn_index, ipv6_to_iface[wlan_ipv6_pdn_index].wan_up_vlan_v6,
 		ipv6_addr[0], ipv6_addr[1], ipv6_addr[2], ipv6_addr[3]);
 
 	IPACM_SYSLOG(" STA wan ipv4-addr:0x%x\n", wan_v4_addr);

@@ -12638,8 +12638,14 @@ int IPACM_Lan::handle_uplink_filter_rule(ipacm_ext_prop *prop, ipa_ip_type iptyp
 		if (notif_only) {
 			IPACMDBG_H("UL filtering rules already installed for %s, only sent notification for modem (mux %d)\n",
 					   dev_name, pdn_mux_id);
+
+			if (pFilteringTable)
+			{
+				free(pFilteringTable);
+				pFilteringTable = NULL;
+			}
 			ret = IPACM_SUCCESS;
-			goto finish_notif;
+			continue;
 		} else {
 			IPACMDBG_H("this is the first PDN for dev %s, commiting modem UL rules, mux %d\n", dev_name, pdn_mux_id);
 		}
@@ -12695,7 +12701,6 @@ int IPACM_Lan::handle_uplink_filter_rule(ipacm_ext_prop *prop, ipa_ip_type iptyp
 		}
 	}
 fail:
-finish_notif:
 	if(pFilteringTable != NULL)
 		free(pFilteringTable);
 	close(fd);

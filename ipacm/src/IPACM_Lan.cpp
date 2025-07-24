@@ -1880,9 +1880,39 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 #endif
 #ifdef FEATURE_IPoGRE
 	case IPA_WAN_HANDLE_IPOGRE_UP:
+	{
 		IPACMDBG_H("Received and will process an IPA_WAN_HANDLE_IPOGRE_UP\n");
+		uint8_t *ipogre_data = (uint8_t *)param;
+		uint8_t tunnel_id = *ipogre_data;
+		IPACMDBG_H("Received and will process an"
+		"IPA_WAN_HANDLE_IPOGRE_DOWN for tunnel %d\n",tunnel_id);
+		if(IPACM_Iface::ipacmcfg->ipogre_tunnel_idx_map[tunnel_id].iptype == IPA_IP_v4)
+		{
+			memcpy(&IPACM_Iface::ipacmcfg->ipgre_info.ipv4_src,
+			&IPACM_Iface::ipacmcfg->ipogre_tunnel_idx_map[tunnel_id].tunnel_endpoint.v4_ip.ipv4_src,
+			sizeof(IPACM_Iface::ipacmcfg->ipgre_info.ipv4_src));
+
+			memcpy(&IPACM_Iface::ipacmcfg->ipgre_info.ipv4_dst,
+			&IPACM_Iface::ipacmcfg->ipogre_tunnel_idx_map[tunnel_id].tunnel_endpoint.v4_ip.ipv4_dst,
+			sizeof(IPACM_Iface::ipacmcfg->ipgre_info.ipv4_dst));
+		}
+		else {
+			memcpy(&IPACM_Iface::ipacmcfg->ipgre_info.ipv6_src,
+			&IPACM_Iface::ipacmcfg->ipogre_tunnel_idx_map[tunnel_id].tunnel_endpoint.v6_ip.ipv6_src,
+			sizeof(IPACM_Iface::ipacmcfg->ipgre_info.ipv6_src));
+
+			memcpy(&IPACM_Iface::ipacmcfg->ipgre_info.ipv6_dst,
+			&IPACM_Iface::ipacmcfg->ipogre_tunnel_idx_map[tunnel_id].tunnel_endpoint.v6_ip.ipv6_dst,
+			sizeof(IPACM_Iface::ipacmcfg->ipgre_info.ipv6_dst));
+		}
+
+		IPACM_Iface::ipacmcfg->ipgre_info.iptype =
+			IPACM_Iface::ipacmcfg->ipogre_tunnel_idx_map[tunnel_id].iptype;
+		IPACM_Iface::ipacmcfg->ipgre_info.num_exceptions =
+			tunnel_id;
 		gre_up(false,true);
 		break;
+	}
 
 	case IPA_WAN_HANDLE_IPOGRE_DOWN:
 	{
@@ -3758,7 +3788,37 @@ int IPACM_Lan::handle_addr_evt(ipacm_event_data_addr *data)
 		install_ipv4_icmp_flt_rule();
 
 		/* initial fragment/multicast/broadcast/filter rule. Fragment has set_rear = false, will be above icmp rule */
-		init_fl_rule(data->iptype);
+		if(IPACM_Iface::ipacmcfg->ipogre_enabled)
+		{
+				if ( delete_dflt_filter_rules(data->iptype) == IPACM_FAILURE )
+			{
+				IPACMERR("delete_dflt_filter_rules failed\n");
+				return IPACM_FAILURE;
+			}
+			/*
+			* The following will install only the frag rule given gre
+			* state.
+			*/
+			if ( init_fl_rule(data->iptype, true) == IPACM_FAILURE )
+			{
+				IPACMERR("init_fl_rule failed\n");
+				return IPACM_FAILURE;
+			}
+			if(IPACM_Iface::ipacmcfg->ipogre_tunnel_idx_map[IPACM_Iface::ipacmcfg->ipgre_info.num_exceptions].tunnel_up)
+			{
+				for(int i=0;i<IPACM_Iface::ipacmcfg->tunnel_idx.size();i++)
+				{
+				IPACMDBG_H("call gre up from addr add\n");
+				IPACM_Iface::ipacmcfg->ipgre_info.iptype = IPACM_Iface::ipacmcfg->ipogre_tunnel_idx_map[IPACM_Iface::ipacmcfg->tunnel_idx[i]].iptype;
+				IPACM_Iface::ipacmcfg->ipgre_info.num_exceptions = IPACM_Iface::ipacmcfg->tunnel_idx[i];
+				gre_add_tunnel_flow_rule();
+				}
+			}
+		}
+		else
+		{
+			init_fl_rule(data->iptype);
+		}
 
 		/* populate the flt rule offset for eth bridge */
 		eth_bridge_flt_rule_offset[data->iptype] = ipv4_icmp_flt_rule_hdl[0];
@@ -3886,7 +3946,27 @@ int IPACM_Lan::handle_addr_evt(ipacm_event_data_addr *data)
 #endif
 			eth_bridge_post_event(IPA_ETH_BRIDGE_IFACE_UP, IPA_IP_v6, NULL, NULL, NULL);
 
-			init_fl_rule(data->iptype);
+			if(IPACM_Iface::ipacmcfg->ipogre_enabled)
+			{
+					if ( delete_dflt_filter_rules(data->iptype) == IPACM_FAILURE )
+				{
+					IPACMERR("delete_dflt_filter_rules failed\n");
+					return IPACM_FAILURE;
+				}
+				/*
+				* The following will install only the frag rule given gre
+				* state.
+				*/
+				if ( init_fl_rule(data->iptype, true) == IPACM_FAILURE )
+				{
+					IPACMERR("init_fl_rule failed\n");
+					return IPACM_FAILURE;
+				}
+			}
+			else
+			{
+				init_fl_rule(data->iptype);
+			}
 
 			/* populate the mtu_rule_offset */
 			if (m_ipv6_default_filterting_rules_count > 0 &&
@@ -4475,6 +4555,16 @@ int IPACM_Lan::handle_wan_up_ex(ipacm_ext_prop *ext_prop, ipa_ip_type iptype, ui
 						gre_up();
 					}
 				}
+			}
+			if(IPACM_Iface::ipacmcfg->ipogre_enabled)
+			{
+				IPACM_Iface::ipacmcfg->link_down = true;
+				ipacm_cmd_q_data evt_data;
+				memset(&evt_data, 0, sizeof(evt_data));
+				evt_data.event = IPA_HANDLE_IPOGRE_UP;
+				evt_data.evt_data = 0;
+				IPACMDBG_H("Posting event: IPA_HANDLE_IPOGRE_UP.\n");
+				IPACM_EvtDispatcher::PostEvt(&evt_data);
 			}
 			if(!modem_ul_v6_set)
 				ret = handle_uplink_filter_rule(ext_prop, iptype, xlat_mux_id, false, true, ast_update);
@@ -5321,6 +5411,13 @@ int IPACM_Lan::handle_eth_client_ipaddr(ipacm_event_data_all *data)
 							get_client_memptr(eth_client, clnt_indx)->gre_nat_set = true;
 						}
 					}
+					if(IPACM_Iface::ipacmcfg->ipogre_enabled && IPACM_Iface::ipacmcfg->hw_fnr_stats_support)
+					{
+						if(!get_client_memptr(eth_client, clnt_indx)->route_rule_set_v4_ipogre)
+						{
+							handle_eth_client_route_rule(get_client_memptr(eth_client, clnt_indx)->mac,IPA_IP_v4,0);
+						}
+					}
 					return IPACM_FAILURE;
 				}
 				else
@@ -5481,7 +5578,9 @@ int IPACM_Lan::handle_eth_client_route_rule(uint8_t *mac_addr, ipa_ip_type iptyp
 			 && get_client_memptr(eth_client, eth_index)->ipv4_set == true)
 			|| (iptype == IPA_IP_v6
 		            && get_client_memptr(eth_client, eth_index)->route_rule_set_v6 < get_client_memptr(eth_client, eth_index)->ipv6_set
-					))
+					) || (iptype == IPA_IP_v4 && IPACM_Iface::ipacmcfg->ipogre_enabled && IPACM_Iface::ipacmcfg->hw_fnr_stats_support && get_client_memptr(eth_client, eth_index)->route_rule_set_v4_ipogre == false)
+					|| (iptype == IPA_IP_v6 && IPACM_Iface::ipacmcfg->ipogre_enabled && IPACM_Iface::ipacmcfg->hw_fnr_stats_support && get_client_memptr(eth_client, eth_index)->route_rule_set_v6_ipogre < get_client_memptr(eth_client, eth_index)->ipv6_set)
+					)
 	{
 		if(IPACM_Iface::ipacmcfg->GetIPAVer() >= IPA_HW_None && IPACM_Iface::ipacmcfg->GetIPAVer() < IPA_HW_v4_0)
 		{
@@ -5565,7 +5664,24 @@ int IPACM_Lan::handle_eth_client_route_rule(uint8_t *mac_addr, ipa_ip_type iptyp
 				{
 					rt_rule_entry->rule.hashable = true;
 				}
-
+				if(IPACM_Iface::ipacmcfg->ipogre_enabled && IPACM_Iface::ipacmcfg->hw_fnr_stats_support)
+				{
+					rt_rule_entry->rule.attrib.meta_data = IPOGRE_METADATA_VALUE;
+					rt_rule_entry->rule.attrib.meta_data_mask = IPOGRE_METADATA_MASK;
+					rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_META_DATA;
+					if (false == m_routing.AddRoutingRule(rt_rule))
+					{
+						IPACMERR("Routing rule addition failed!\n");
+						free(rt_rule);
+						return IPACM_FAILURE;
+					}
+					get_client_memptr(eth_client, eth_index)->eth_rt_hdl[tx_index].eth_rt_rule_hdl_v4_ipogre =
+					rt_rule->rules[0].rt_rule_hdl;
+					IPACMDBG_H("tx:%d, rt rule hdl=%x ip-type: %d\n", tx_index,
+						get_client_memptr(eth_client, eth_index)->eth_rt_hdl[tx_index].eth_rt_rule_hdl_v4_ipogre, iptype);
+					get_client_memptr(eth_client, eth_index)->route_rule_set_v4_ipogre = true;
+					continue;
+				}
 				if (false == m_routing.AddRoutingRule(rt_rule))
 				{
 					IPACMERR("Routing rule addition failed!\n");
@@ -5588,7 +5704,8 @@ int IPACM_Lan::handle_eth_client_route_rule(uint8_t *mac_addr, ipa_ip_type iptyp
 						IPACMDBG("client(%d): v6 addr : 0x%08x:%08x:%08x:%08x, v6_set already (%d)\n",
 						eth_index, it->first[0], it->first[1], it->first[2], it->first[3],
 						it->second.route_rule_set_v6);
-						continue;
+						if(!(IPACM_Iface::ipacmcfg->ipogre_enabled && IPACM_Iface::ipacmcfg->hw_fnr_stats_support && it->second.route_rule_set_v6_ipogre == false))
+							continue;
 					}
 
 					IPACMDBG_H("client-index(%d): v6 header handle:(0x%x), v6 addr : 0x%08x:%08x:%08x:%08x\n",
@@ -5617,6 +5734,58 @@ int IPACM_Lan::handle_eth_client_route_rule(uint8_t *mac_addr, ipa_ip_type iptyp
 #ifdef FEATURE_IPA_V3
 					rt_rule_entry->rule.hashable = true;
 #endif
+					if(IPACM_Iface::ipacmcfg->ipogre_enabled && IPACM_Iface::ipacmcfg->hw_fnr_stats_support)
+					{
+						rt_rule_entry->rule.attrib.meta_data = IPOGRE_METADATA_VALUE;
+						rt_rule_entry->rule.attrib.meta_data_mask = IPOGRE_METADATA_MASK;
+						rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_META_DATA;
+						if (false == m_routing.AddRoutingRule(rt_rule))
+						{
+							IPACMERR("Routing rule addition failed!\n");
+							free(rt_rule);
+							return IPACM_FAILURE;
+						}
+						it->second.hdl_v6[tx_index].rt_rule_hdl_v6_ipogre = rt_rule->rules[0].rt_rule_hdl;
+						IPACMDBG_H("tx:%d, rt rule hdl=%x ip-type: %d\n", tx_index,
+						it->second.hdl_v6[tx_index].rt_rule_hdl_v6_ipogre, iptype);
+
+						/*Copy same rule to v6 WAN RT TBL*/
+						strlcpy(rt_rule->rt_tbl_name, IPACM_Iface::ipacmcfg->rt_tbl_wan_v6.name, sizeof(rt_rule->rt_tbl_name));
+						rt_rule->rt_tbl_name[IPA_RESOURCE_NAME_MAX - 1] = '\0';
+						/* Downlink traffic from Wan iface, directly through IPA */
+						rt_rule_entry->rule.dst = tx_prop->tx[tx_index].dst_pipe;
+						memcpy(&rt_rule_entry->rule.attrib,
+							&tx_prop->tx[tx_index].attrib,
+							sizeof(rt_rule_entry->rule.attrib));
+						rt_rule_entry->rule.hdr_hdl = get_client_memptr(eth_client, eth_index)->hdr_hdl_v6;
+						rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_DST_ADDR;
+						rt_rule_entry->rule.attrib.u.v6.dst_addr[0] = it->first[0];
+						rt_rule_entry->rule.attrib.u.v6.dst_addr[1] = it->first[1];
+						rt_rule_entry->rule.attrib.u.v6.dst_addr[2] = it->first[2];
+						rt_rule_entry->rule.attrib.u.v6.dst_addr[3] = it->first[3];
+						rt_rule_entry->rule.attrib.u.v6.dst_addr_mask[0] = 0xFFFFFFFF;
+						rt_rule_entry->rule.attrib.u.v6.dst_addr_mask[1] = 0xFFFFFFFF;
+						rt_rule_entry->rule.attrib.u.v6.dst_addr_mask[2] = 0xFFFFFFFF;
+						rt_rule_entry->rule.attrib.u.v6.dst_addr_mask[3] = 0xFFFFFFFF;
+#ifdef FEATURE_IPA_V3
+						rt_rule_entry->rule.hashable = true;
+#endif
+						if (false == m_routing.AddRoutingRule(rt_rule))
+						{
+							IPACMERR("Routing rule addition failed!\n");
+							free(rt_rule);
+							return IPACM_FAILURE;
+						}
+
+						it->second.hdl_v6[tx_index].rt_rule_hdl_v6_wan_ipogre = rt_rule->rules[0].rt_rule_hdl;
+						IPACMDBG_H("tx:%d, rt rule hdl=%x ip-type: %d\n", tx_index,
+							it->second.hdl_v6[tx_index].rt_rule_hdl_v6_wan, iptype);
+						/* mark as route_rule_set_v6 = true*/
+						if (tx_index + 1 == iface_query->num_tx_props)
+							it->second.route_rule_set_v6_ipogre = true;
+						get_client_memptr(eth_client, eth_index)->route_rule_set_v6_ipogre = get_client_memptr(eth_client, eth_index)->ipv6_set;
+						continue;
+					}
 					if (false == m_routing.AddRoutingRule(rt_rule))
 					{
 						IPACMERR("Routing rule addition failed!\n");
@@ -5963,7 +6132,7 @@ int IPACM_Lan::handle_eth_client_route_rule_ext_v2(uint8_t *mac_addr, ipa_ip_typ
 			 && get_client_memptr(eth_client, eth_index)->ipv4_set == true)
 			|| (iptype == IPA_IP_v6
 		            && get_client_memptr(eth_client, eth_index)->route_rule_set_v6 < get_client_memptr(eth_client, eth_index)->ipv6_set
-					))
+					) || (iptype == IPA_IP_v6 && IPACM_Iface::ipacmcfg->ipogre_enabled && IPACM_Iface::ipacmcfg->hw_fnr_stats_support && get_client_memptr(eth_client, eth_index)->route_rule_set_v6_ipogre < get_client_memptr(eth_client, eth_index)->ipv6_set))
 	{
 		if(IPACM_Iface::ipacmcfg->GetIPAVer() >= IPA_HW_None && IPACM_Iface::ipacmcfg->GetIPAVer() < IPA_HW_v4_0)
 		{
@@ -6033,6 +6202,10 @@ int IPACM_Lan::handle_eth_client_route_rule_ext_v2(uint8_t *mac_addr, ipa_ip_typ
 				rt_rule_entry->rule.hashable = true;
 				rt_rule_entry->rule_id = 0;
 				IPACMDBG_H("Add v4 route rule table %s\n", rt_rule->rt_tbl_name);
+				if(IPACM_Iface::ipacmcfg->ipogre_enabled)
+				{
+					handle_eth_client_route_rule(mac_addr, iptype, 0);
+				}
 			    if (false == m_routing.AddRoutingRuleExt_v2(rt_rule))
 				{
 					IPACMERR("Routing rule addition failed!\n");
@@ -6091,6 +6264,10 @@ int IPACM_Lan::handle_eth_client_route_rule_ext_v2(uint8_t *mac_addr, ipa_ip_typ
 					rt_rule_entry->rule.hashable = true;
 					rt_rule_entry->rule_id = 0;
 					IPACMERR("Add v6 route rule table nanme = %s\n", rt_rule->rt_tbl_name);
+					if(IPACM_Iface::ipacmcfg->ipogre_enabled)
+					{
+						handle_eth_client_route_rule(mac_addr, iptype, 0);
+					}
 					if (false == m_routing.AddRoutingRuleExt_v2(rt_rule))
 					{
 						IPACMERR("Routing rule addition failed!\n");
@@ -7251,6 +7428,33 @@ int IPACM_Lan::handle_down_evt()
 		{
 			gre_down();
 		}
+	} else if(IPACM_Iface::ipacmcfg->ipogre_enabled) {
+
+			for(int i=0;i<IPACM_Iface::ipacmcfg->tunnel_idx.size();i++)
+			{
+				IPACMDBG_H("call gre down\n");
+				//check wiht this PDN address to only post wan down for this PDN
+				if(IPACM_Iface::ipacmcfg->ipogre_tunnel_idx_map[IPACM_Iface::ipacmcfg->tunnel_idx[i]].iptype == IPA_IP_v4)
+				{
+					memcpy(&IPACM_Iface::ipacmcfg->ipgre_info.ipv4_src,&IPACM_Iface::ipacmcfg->ipogre_tunnel_idx_map[IPACM_Iface::ipacmcfg->tunnel_idx[i]].tunnel_endpoint.v4_ip.ipv4_src,sizeof(IPACM_Iface::ipacmcfg->ipgre_info.ipv4_src));
+					memcpy(&IPACM_Iface::ipacmcfg->ipgre_info.ipv4_dst,&IPACM_Iface::ipacmcfg->ipogre_tunnel_idx_map[IPACM_Iface::ipacmcfg->tunnel_idx[i]].tunnel_endpoint.v4_ip.ipv4_dst,sizeof(IPACM_Iface::ipacmcfg->ipgre_info.ipv4_dst));
+				}
+				else
+				{
+					memcpy(&IPACM_Iface::ipacmcfg->ipgre_info.ipv6_src,&IPACM_Iface::ipacmcfg->ipogre_tunnel_idx_map[IPACM_Iface::ipacmcfg->tunnel_idx[i]].tunnel_endpoint.v6_ip.ipv6_src,sizeof(IPACM_Iface::ipacmcfg->ipgre_info.ipv6_src));
+					memcpy(&IPACM_Iface::ipacmcfg->ipgre_info.ipv6_dst,&IPACM_Iface::ipacmcfg->ipogre_tunnel_idx_map[IPACM_Iface::ipacmcfg->tunnel_idx[i]].tunnel_endpoint.v6_ip.ipv6_dst,sizeof(IPACM_Iface::ipacmcfg->ipgre_info.ipv6_dst));
+				}
+				IPACM_Iface::ipacmcfg->ipgre_info.iptype = IPACM_Iface::ipacmcfg->ipogre_tunnel_idx_map[IPACM_Iface::ipacmcfg->tunnel_idx[i]].iptype;
+				IPACM_Iface::ipacmcfg->ipgre_info.num_exceptions = IPACM_Iface::ipacmcfg->tunnel_idx[i];
+				gre_down(false,true);
+			}
+				IPACM_Iface::ipacmcfg->link_down = true;
+				ipacm_cmd_q_data evt_data;
+				memset(&evt_data, 0, sizeof(evt_data));
+				evt_data.event = IPA_HANDLE_IPOGRE_DOWN;
+				evt_data.evt_data = 0;
+				IPACMDBG_H("Posting event: IPA_HANDLE_IPOGRE_DOWN.\n");
+				IPACM_EvtDispatcher::PostEvt(&evt_data);
 	}
 #endif
 	if ((ipa_if_cate == WLAN_IF) && (is_if_svap || is_wlan_if_vlan) && (rx_prop && rx_prop->num_rx_props > 2)) {
@@ -16071,7 +16275,6 @@ void IPACM_Lan::gre_up(bool isPmipv6,bool ipogre_enabled)/*Reusing Gre function 
 		if(gre_add_tunnel_flow_rule() != 0)
 		{
 			IPACMERR("Error in installing flow rules for the tunnel");
-			return;
 		}
 	}
 #endif
@@ -16262,7 +16465,7 @@ void IPACM_Lan::gre_up(bool isPmipv6,bool ipogre_enabled)/*Reusing Gre function 
 	IPACMDBG("Finished handling gre_up\n");
 }
 
-void IPACM_Lan::gre_down(bool isPmipv6)
+void IPACM_Lan::gre_down(bool isPmipv6,bool ipogre_link_down)
 {
 	int res;
 	ipa_ipgre_info ipgre_info;
@@ -16355,7 +16558,7 @@ void IPACM_Lan::gre_down(bool isPmipv6)
 		else
 			del_ul_flt_rules(iptype);
 		if(!IPACM_Iface::ipacmcfg->ipogre_enabled)
-                {
+		{
 			if ( IPACM_Iface::ip_type == IPA_IP_v4 || IPACM_Iface::ip_type == IPA_IP_MAX )
 			{
 				/*
@@ -16408,7 +16611,7 @@ void IPACM_Lan::gre_down(bool isPmipv6)
 				exceptions.clear();
 			}
 #endif
-                }
+		}
 		/*
 		* Below we'll do two things:
 		*
@@ -16619,6 +16822,20 @@ void IPACM_Lan::gre_down(bool isPmipv6)
 		}
 	}
 	if(IPACM_Iface::ipacmcfg->ipogre_enabled)
+	{
+		IPACM_Iface::ipacmcfg->ipogre_tunnel_idx_map[IPACM_Iface::ipacmcfg->ipgre_info.num_exceptions].tunnel_up = false;
+	}
+	if(IPACM_Iface::ipacmcfg->ipogre_enabled && ipogre_link_down)
+	{
+		memset(IPACM_Iface::ipacmcfg->ipogre_tunnel_idx_map[tunel_id].flows_cache,
+		0,
+		sizeof(IPACM_Iface::ipacmcfg->ipogre_tunnel_idx_map[tunel_id].flows_cache));
+		memset(IPACM_Iface::ipacmcfg->ipogre_tunnel_idx_map[tunel_id].flows_cache_info.del,
+		true,sizeof(sizeof(bool)*MAX_FLOW_PER_IPOGRE_TUNNEL));
+		IPACM_Iface::ipacmcfg->ipogre_tunnel_idx_map[tunel_id].flows_cache_info.num_flows = 0;
+	}
+
+	if(IPACM_Iface::ipacmcfg->ipogre_enabled && !ipogre_link_down)
 	{
 		auto it = find(IPACM_Iface::ipacmcfg->tunnel_idx.begin(), IPACM_Iface::ipacmcfg->tunnel_idx.end(), tunel_id);
 		if (it != IPACM_Iface::ipacmcfg->tunnel_idx.end())
@@ -16994,7 +17211,7 @@ int IPACM_Lan::gre_add_tunnel_flow_rule()
 
 		if ( m_filtering.AddFilteringRuleAfter(pFilteringTable) == false )
 		{
-			IPACMERR("Error adding catchup rul\n");
+			IPACMERR("Error adding catchup rule\n");
 			return IPACM_FAILURE;
 		}
 		IPACM_Iface::ipacmcfg->ipogre_tunnel_idx_map[tunnel_id].flow_hdl[IPACM_Iface::ipacmcfg->ipogre_tunnel_idx_map[tunnel_id].flows[i].iptype][i] = pFilteringTable->rules[0].flt_rule_hdl;

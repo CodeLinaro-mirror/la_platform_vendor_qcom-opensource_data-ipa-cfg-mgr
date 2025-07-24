@@ -455,7 +455,7 @@ public:
 #endif
 	bool ipogre_enabled;
 	bool eth_pdu_enabled;
-
+	bool link_down;
 #ifdef FEATURE_VLAN_MPDN
 	bool vlan_firewall_change_handle;
 

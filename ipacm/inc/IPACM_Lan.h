@@ -93,6 +93,7 @@ struct ipa_lan_rt_rule
 typedef struct _eth_client_rt_hdl
 {
 	uint32_t eth_rt_rule_hdl_v4;
+	uint32_t eth_rt_rule_hdl_v4_ipogre;
 }eth_client_rt_hdl;
 
 typedef struct _ipa_eth_client
@@ -102,7 +103,9 @@ typedef struct _ipa_eth_client
 	uint32_t hdr_hdl_v4;
 	uint32_t hdr_hdl_v6;
 	bool route_rule_set_v4;
+	bool route_rule_set_v4_ipogre;
 	int route_rule_set_v6;
+	int route_rule_set_v6_ipogre;
 	bool ipv4_set;
 	int ipv6_set;
 	bool ipv4_header_set;
@@ -383,7 +386,7 @@ public:
 	void gre_up(bool isPmipv6=false,bool ipogre_enabled=false);
 	int gre_add_tunnel_flow_rule();
 	static bool ipogre_flow_already_installed(int flow_number,bool from_wan = false);
-	void gre_down(bool isPmipv6=false);
+	void gre_down(bool isPmipv6=false,bool ipogre_link_down=false);
 
 	int gre_do_rt_work(
 		ipa_ipgre_info& ipgre_info);
@@ -1542,12 +1545,26 @@ private:
 						return IPACM_FAILURE;
 					}
 				}
+				if((tx_prop->tx[tx_index].ip == IPA_IP_v4) && (get_client_memptr(eth_client, clt_indx)->route_rule_set_v4_ipogre==true)) /* for ipv4 */
+				{
+					IPACMDBG_H("Delete IPOGRE metadata client index %d ipv4 RT-rules for tx:%d\n",clt_indx,tx_index);
+					rt_hdl = get_client_memptr(eth_client, clt_indx)->eth_rt_hdl[tx_index].eth_rt_rule_hdl_v4_ipogre;
+
+					if(m_routing.DeleteRoutingHdl(rt_hdl, IPA_IP_v4) == false)
+					{
+						return IPACM_FAILURE;
+					}
+				}
 		    } /* end of for loop */
 
 		     /* clean the ipv4 RT rules for eth-client:clt_indx */
 		     if(get_client_memptr(eth_client, clt_indx)->route_rule_set_v4==true) /* for ipv4 */
 		     {
 				get_client_memptr(eth_client, clt_indx)->route_rule_set_v4 = false;
+		     }
+			 if(get_client_memptr(eth_client, clt_indx)->route_rule_set_v4_ipogre==true) /* for ipv4 */
+		     {
+				get_client_memptr(eth_client, clt_indx)->route_rule_set_v4_ipogre = false;
 		     }
 		}
 
@@ -1586,6 +1603,38 @@ private:
 						} /* end of tx loop */
 						it->second.route_rule_set_v6 = false;
 						get_client_memptr(eth_client, clt_indx)->route_rule_set_v6 = 0;
+					} /* end of route_rule_set_v6 */
+				} /* end of for loop */
+			}
+			if (get_client_memptr(eth_client, clt_indx)->route_rule_set_v6 != 0)
+			{
+				for (auto it = rt_hdl_v6_list[clt_indx].begin(); it != rt_hdl_v6_list[clt_indx].end();++it)
+				{
+					num_v6 ++;
+					if(it->second.route_rule_set_v6_ipogre == true)
+					{
+						IPACMDBG_H("v6 addr : 0x%08x:%08x:%08x:%08x\n",
+							it->first[0], it->first[1], it->first[2], it->first[3]);
+
+						for(tx_index = 0; tx_index < iface_query->num_tx_props; tx_index++)
+						{
+							if(tx_prop->tx[tx_index].ip == IPA_IP_v6) /* for ipv6 */
+							{
+								IPACMDBG_H("Delete client index %d ipv6 POGRE metadata RT-rules for %d-st ipv6 for tx:%d\n", clt_indx,num_v6,tx_index);
+								rt_hdl = it->second.hdl_v6[tx_index].rt_rule_hdl_v6_ipogre;
+								if(m_routing.DeleteRoutingHdl(rt_hdl, IPA_IP_v6) == false)
+								{
+									return IPACM_FAILURE;
+								}
+								rt_hdl = it->second.hdl_v6[tx_index].rt_rule_hdl_v6_ipogre;
+								if(m_routing.DeleteRoutingHdl(rt_hdl, IPA_IP_v6) == false)
+								{
+									return IPACM_FAILURE;
+								}
+							}
+						} /* end of tx loop */
+						it->second.route_rule_set_v6_ipogre = false;
+						get_client_memptr(eth_client, clt_indx)->route_rule_set_v6_ipogre = 0;
 					} /* end of route_rule_set_v6 */
 				} /* end of for loop */
 			}

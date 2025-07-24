@@ -295,6 +295,7 @@ IPACM_Config::IPACM_Config()
 	memset(&ipogre_tunnel_idx_map, 0, sizeof(ipogre_tunnel_idx_map));
 	memset(tunnels, false, sizeof(tunnels));
 	ipogre_enabled  = false;
+	link_down = false;
 	num_tunnels = 0;
 #endif
 	memset(&IP_Forwarding_config, 0, sizeof(IP_Forwarding_config));

@@ -386,7 +386,7 @@ public:
 	int handleIpsecUlFltAddEvt(struct ipa_ioc_ipsec_ul_flt_attr *uf);
 	int handleIpsecUlFltDelEvt(struct ipa_ioc_ipsec_ul_flt_attr *uf);
 	int handleIpsecUlFltAddAll(enum ipa_ip_type ip);
-	int handleIpsecUlFltDelAll(enum ipa_ip_type ip);
+	int handleIpsecUlFltDelAll(enum ipa_ip_type ip, bool clearConfig = true);
 #endif
 
 	int handle_static_policy_rt_rule_add();

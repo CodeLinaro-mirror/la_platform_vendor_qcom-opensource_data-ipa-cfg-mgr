@@ -4052,6 +4052,15 @@ int IPACM_Lan::handle_addr_evt(ipacm_event_data_addr *data)
 				}
 			}
 		}
+
+#ifdef FEATURE_IPA_IPSEC
+		res = handleIpsecUlFltAddAll(data->iptype);
+		if (res == IPACM_FAILURE) {
+			IPACMERR("handleIpsecUlFltAddAll failed\n");
+			goto fail;
+		}
+#endif
+
 		eth_bridge_post_event(IPA_ETH_BRIDGE_IFACE_UP, IPA_IP_v4, NULL, NULL, NULL);
 	}
 	else
@@ -4215,6 +4224,15 @@ int IPACM_Lan::handle_addr_evt(ipacm_event_data_addr *data)
 					}
 				}
 			}
+
+#ifdef FEATURE_IPA_IPSEC
+			res = handleIpsecUlFltAddAll(data->iptype);
+			if (res == IPACM_FAILURE) {
+				IPACMERR("handleIpsecUlFltAddAll failed\n");
+				goto fail;
+			}
+#endif
+
 			eth_bridge_post_event(IPA_ETH_BRIDGE_IFACE_UP, IPA_IP_v6, NULL, NULL, NULL);
 		}
 		num_dft_rt_v6++;
@@ -11613,6 +11631,14 @@ int IPACM_Lan::handle_down_evt()
 
 		/* Delete v4 default filtering rules */
 		if (ip_type != IPA_IP_v6 && rx_prop != NULL) {
+
+#ifdef FEATURE_IPA_IPSEC
+			res = handleIpsecUlFltDelAll(IPA_IP_v4, false);
+			if (res == IPACM_FAILURE) {
+				IPACMERR("handleIpsecUlFltDelAll failed\n");
+				goto fail;
+			}
+#endif
 			res = delete_icmp_filter_rule(IPA_IP_v4);
 			if (res == IPACM_FAILURE) {
 				IPACMERR("delete_icmp_filter_rule failed\n");
@@ -11665,6 +11691,14 @@ int IPACM_Lan::handle_down_evt()
 
 		/* Delete v6 filtering rules */
 		if (ip_type != IPA_IP_v4 && rx_prop != NULL) {
+
+#ifdef FEATURE_IPA_IPSEC
+			res = handleIpsecUlFltDelAll(IPA_IP_v6, false);
+			if (res == IPACM_FAILURE) {
+				IPACMERR("handleIpsecUlFltDelAll failed\n");
+				goto fail;
+			}
+#endif
 			res = delete_icmp_filter_rule(IPA_IP_v6);
 			if (res == IPACM_FAILURE) {
 				IPACMERR("delete_icmp_filter_rule failed\n");
@@ -22436,7 +22470,7 @@ fail:
 }
 
 /* handle IPsec UL flt delete all */
-int IPACM_Lan::handleIpsecUlFltDelAll(enum ipa_ip_type ip)
+int IPACM_Lan::handleIpsecUlFltDelAll(enum ipa_ip_type ip, bool clearConfig)
 {
 	int res = IPACM_SUCCESS;
 	struct ipa_ioc_del_flt_rule* pFltRule = NULL;
@@ -22483,6 +22517,7 @@ int IPACM_Lan::handleIpsecUlFltDelAll(enum ipa_ip_type ip)
 	}
 	IPACM_Iface::ipacmcfg->decreaseFltRuleCount(rx_prop->rx[idx].src_pipe, ip, pFltRule->num_hdls);
 
+	if (clearConfig)
 	ipsecUlFltHdlList[ip].clear();
 
 	IPACMDBG_H("finished handle_ipsec_ul_flt_del_all. ipsec_ul_flt_hdl_list contains %d entries.\n",

@@ -1,6 +1,5 @@
 /*
  * Copyright (c) 2013-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -26,6 +25,10 @@
  * WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *
+ * Changes from Qualcomm Technologies, Inc. are provided under the following license:
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear.
  */
 /*!
 	@file
@@ -1186,10 +1189,9 @@ int main(int argc, char **argv)
 	IPACMDBG_H("Reallocation FNR Counter: Done\n");
 #endif
 
+	IPACM_IfaceManager *ifacemgr = new IPACM_IfaceManager();
 
 	neigh = new IPACM_Neighbor();
-
-	IPACM_IfaceManager *ifacemgr = new IPACM_IfaceManager();
 
 #ifdef FEATURE_ETH_BRIDGE_LE
 	IPACM_LanToLan* lan2lan = IPACM_LanToLan::get_instance();
@@ -1278,7 +1280,7 @@ int main(int argc, char **argv)
 
 	neigh->update_neigh_cache();
 
-	/* Create Conntrack listener threads here to support on-demand PDN’s connections before WAN is up */
+	/* Create Conntrack listener threads here to support on-demand PDNÂ’s connections before WAN is up */
 	CtList->CreateConnTrackThreads();
 
 	pthread_join(cmd_queue_thread, NULL);

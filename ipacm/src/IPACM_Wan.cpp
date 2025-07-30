@@ -2548,6 +2548,16 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 		break;
 
 #ifdef FEATURE_VLAN_MPDN
+	case IPA_ROUTE_DEL_VLAN_PDN_EVENT:
+		{
+			IPACMDBG_H("Received IPA_ROUTE_DEL_VLAN_PDN_EVENT event\n");
+			ipacm_event_route_vlan *data = (ipacm_event_route_vlan *)param;
+			enum ipa_ip_type iptype = data->iptype;
+
+			check_vlan_pdn(iptype, data, false, true);
+		}
+		break;
+
 	case IPA_ROUTE_ADD_VLAN_PDN_EVENT:
 		{
 			IPACMDBG_H("Received IPA_ROUTE_ADD_VLAN_PDN_EVENT event\n");
@@ -3344,6 +3354,11 @@ void IPACM_Wan::get_vlan_association_info(ipacm_vlan_association_info* vlan_info
 	bool v4_found = false;
 	bool v6_found = false;
 
+	if(pthread_mutex_lock(&IPACM_Iface::ipacmcfg->get_vlan_association_lock) != 0)
+	{
+		IPACMERR("Unable to lock the mutex\n");
+		return;
+	}
 	vlan_info->v6_idx[WLAN_WAN] = IPACM_Wan::get_wan_v6_index(WLAN_WAN);
 	vlan_info->v4_idx[WLAN_WAN] = IPACM_Wan::get_wan_v4_index(WLAN_WAN);
 	vlan_info->v6_idx[ECM_WAN] = IPACM_Wan::get_wan_v6_index(ECM_WAN);
@@ -3461,6 +3476,8 @@ end:
 	IPACMDBG_H("<ECM> VLAN <%d>: V4 -->PDN [%d] VLAN [%d] V6 -->PDN[%d] VLAN[%d]\n",
 			vlan_info->vlan_id, vlan_info->v4_idx[ECM_WAN], vlan_info->v4_vlan_idx[ECM_WAN],
 			vlan_info->v6_idx[ECM_WAN], vlan_info->v6_vlan_idx[ECM_WAN]);
+	pthread_mutex_unlock(&IPACM_Iface::ipacmcfg->get_vlan_association_lock);
+
 	return;
 }
 
@@ -3499,6 +3516,7 @@ void IPACM_Wan::post_wan_vlan_pdn_event(ipa_ip_type iptype, int pdn_idx, int vla
 	memset(vlan_data, 0, sizeof(ipacm_event_vlan_pdn));
 	vlan_data->VlanID = vlan_id;
 
+	IPACMDBG_H("Post wan_vlan_pdn_event  iptype %d, vlan_up %d, vlan_data->VlanID %d \n", iptype, vlan_up, vlan_data->VlanID);
 	if(!vlan_up)
 	{
 		/* currently only support all vlans moved to WIFI not backhaul concurrency */
@@ -4228,22 +4246,103 @@ fail:
 }
 
 /**
- * This is a wrapper function to handle IPA_ROUTE_ADD_VLAN_PDN_EVENT 
+ * This is a wrapper function to handle IPA_ROUTE_ADD_VLAN_PDN_EVENT
  */
-int IPACM_Wan::check_vlan_pdn(ipa_ip_type iptype, ipacm_event_route_vlan *data, bool v4_only_xlat)
+int IPACM_Wan::check_vlan_pdn(ipa_ip_type iptype, ipacm_event_route_vlan *data, bool v4_only_xlat, bool del_vlan_route)
 {
 	int ret = IPACM_FAILURE;
 	std::list<uint16_t>::iterator it;
+	ipacm_vlan_association_info *vlan_info = NULL;
+	bool v4_vlan_found = false;
+	bool v6_vlan_found = false;
+	int pdn_idx = -1;
+	int vlan_idx = -1;
 
 	IPACMDBG_H("iptype: %d\n", iptype);
 	IPACMDBG_H("num_offloaded_pdns: %d\n", num_offloaded_pdns);
 
 	if(data == NULL)
 	{
-		IPACMDBG_H("Received invalid data\n");
+		IPACMERR("Received invalid data\n");
 		return IPACM_FAILURE;
 	}
 
+	if(del_vlan_route == true)
+	{
+		IPACMDBG_H("Process IPA_ROUTE_DEL_VLAN_PDN_EVENT for iptype: %d at wan %s\n", iptype, dev_name);
+		IPACMDBG_H("data->wan_ipv6_prefix: 0x%08x%08x\n", data->wan_ipv6_prefix[0], data->wan_ipv6_prefix[1]);
+		IPACMDBG_H("data->wan_ipv4_addr: 0x%x\n", data->wan_ipv4_addr);
+		IPACMDBG_H("data->VlanID: %d\n", data->VlanID);
+		if(data->VlanID <= 0)
+		{
+			IPACMERR("Invalid vlan id!\n");
+			return IPACM_FAILURE;
+
+		}
+		/* Find vlan-id associated WAN instance*/
+		for(pdn_idx = 0; pdn_idx < IPA_MAX_NUM_SW_PDNS; pdn_idx++)
+		{
+			if(ipv4_to_iface[pdn_idx].wan_up_vlan && ipv4_to_iface[pdn_idx].VID_cnt > 0)
+			{
+				for(vlan_idx = 0; vlan_idx < ipv4_to_iface[pdn_idx].VID_cnt; vlan_idx++)
+				{
+					if(ipv4_to_iface[pdn_idx].associated_VIDs[vlan_idx] == data->VlanID)
+					{
+						v4_vlan_found = true;
+						break;
+					}
+				}
+			}
+			IPACMDBG_H("data->VlanID: %d associated with v4 pdn?  %d \n", data->VlanID, v4_vlan_found);
+
+			if(ipv6_to_iface[pdn_idx].wan_up_vlan_v6 && ipv6_to_iface[pdn_idx].VID_cnt > 0)
+			{
+				for(vlan_idx = 0; vlan_idx < ipv6_to_iface[pdn_idx].VID_cnt; vlan_idx++)
+				{
+					if(ipv6_to_iface[pdn_idx].associated_VIDs[vlan_idx] == data->VlanID)
+					{
+						v6_vlan_found = true;
+						break;
+					}
+				}
+			}
+			IPACMDBG_H("data->VlanID: %d associated with v6 pdn?  %d \n", data->VlanID, v6_vlan_found);
+		}
+		if(v6_vlan_found == true || v4_vlan_found == true)
+		{
+			goto process_del_vlan_route;
+		}
+		else
+		{
+			IPACMERR("Vlan_id %d Not associated with any v4/v6 pdn.\n", data->VlanID);
+			return IPACM_FAILURE;
+		}
+process_del_vlan_route:
+		vlan_info = (ipacm_vlan_association_info *)malloc(sizeof(ipacm_vlan_association_info));
+		if(vlan_info == NULL)
+		{
+			IPACMERR("Unable to allocate memory\n");
+			return IPACM_FAILURE;
+		}
+		IPACMDBG_H(" alloc vlan_info\n");
+		memset(vlan_info, 0, sizeof(ipacm_vlan_association_info));
+		vlan_info->vlan_id = data->VlanID;
+		IPACMDBG_H(" assign vlan id in vlan_info and get vlan association info.\n");
+		get_vlan_association_info(vlan_info);
+		IPACMDBG_H(" Post post_wan_vlan_pdn_event() v4_vlan_found %d v6_vlan_found %d\n", v4_vlan_found, v6_vlan_found);
+		if(v4_vlan_found == true)
+		{
+			post_wan_vlan_pdn_event(IPA_IP_v4, vlan_info->v4_idx[vlan_info->v4_association], vlan_info->v4_vlan_idx[vlan_info->v4_association],
+				data->VlanID, false);
+		}
+		if(v6_vlan_found == true)
+		{
+			post_wan_vlan_pdn_event(IPA_IP_v6, vlan_info->v6_idx[vlan_info->v6_association], vlan_info->v6_vlan_idx[vlan_info->v6_association],
+				data->VlanID, false);
+		}
+		free(vlan_info);
+		return IPACM_SUCCESS;
+	}
 	if (m_is_sta_mode !=Q6_WAN)
 	{
 		IPACMDBG_H("STA backhaul\n");

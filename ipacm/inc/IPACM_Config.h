@@ -473,6 +473,9 @@ public:
 	/* nat_iface_lock */
 	pthread_mutex_t nat_iface_lock;
 
+	/* get_vlan_association_lock */
+	pthread_mutex_t get_vlan_association_lock;
+
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
 	bool ipacm_lan_stats_enable;
 	bool ipacm_lan_stats_enable_set;
@@ -1260,7 +1263,7 @@ public:
 			data_fid->if_index = ipa_if_index; // already ipa index, not fid index
 			evt_data.event = IPA_PRIVATE_SUBNET_CHANGE_EVENT;
 			evt_data.evt_data = data_fid;
-
+			IPACMDBG_H("Posting IPA_PRIVATE_SUBNET_CHANGE_EVENT for if_index %d \n", data_fid->if_index);
 			/* Insert IPA_PRIVATE_SUBNET_CHANGE_EVENT to command queue */
 			IPACM_EvtDispatcher::PostEvt(&evt_data);
 			return true;
@@ -1296,7 +1299,7 @@ public:
 				data_fid->if_index = ipa_if_index; // already ipa index, not fid index
 				evt_data.event = IPA_PRIVATE_SUBNET_CHANGE_EVENT;
 				evt_data.evt_data = data_fid;
-
+				IPACMDBG_H("Posting IPA_PRIVATE_SUBNET_CHANGE_EVENT for if_index %d \n", data_fid->if_index);
 				/* Insert IPA_PRIVATE_SUBNET_CHANGE_EVENT to command queue */
 				IPACM_EvtDispatcher::PostEvt(&evt_data);
 				return true;

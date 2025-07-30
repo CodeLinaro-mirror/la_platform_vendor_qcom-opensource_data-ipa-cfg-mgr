@@ -4012,6 +4012,7 @@ void IPACM_Config::update_client_info(uint8_t *mac_addr, tether_client_info *cli
 						memset(temp2, 0, sizeof(mac_flt_type));
 						temp2->is_blacklist = true;
 						IPACM_Iface::ipacmcfg->mac_flt_lists.insert(std::make_pair(mac, temp2));
+						update_need = true;
 					}
 					break;
 				}
@@ -4044,6 +4045,7 @@ void IPACM_Config::update_client_info(uint8_t *mac_addr, tether_client_info *cli
 						memset(temp2, 0, sizeof(mac_flt_type));
 						temp2->is_blacklist = true;
 						IPACM_Iface::ipacmcfg->mac_flt_lists.insert(std::make_pair(mac, temp2));
+						update_need = true;
 					}
 					break;
 				}

@@ -231,7 +231,7 @@ void IPACM_Wlan::event_callback(ipa_cm_event_id event, void *param)
 				IPACM_Iface::ipacmcfg->DelNatIfaces(dev_name); // delete NAT-iface
 				IPACM_Wlan::total_num_wifi_clients = (IPACM_Wlan::total_num_wifi_clients) - \
                                                                      (num_wifi_client);
-				return;
+				post_del_self_evt();
 			}
 		}
 		break;
@@ -3091,7 +3091,8 @@ int IPACM_Wlan::handle_wlan_client_down_evt(uint8_t *mac_addr)
 /*handle wlan iface down event*/
 int IPACM_Wlan::handle_down_evt(ipa_ip_type arg_ip_type)
 {
-	int res = IPACM_SUCCESS, i, num_private_subnet_fl_rule, num_v6;
+	uint16_t Ids[IPA_MAX_NUM_OFFLOAD_VLANS] = {0};
+	int res = IPACM_SUCCESS, i, num_private_subnet_fl_rule, num_v6, iface_vid = 0;
 	std::list <ipacm_event_data_all>::iterator it;
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
 	struct wan_ioctl_lan_client_info *client_info;
@@ -3127,6 +3128,14 @@ int IPACM_Wlan::handle_down_evt(ipa_ip_type arg_ip_type)
 			handle_wan_down_v6(IPACM_Wan::backhaul_is_sta_mode, false);
 		}
 		IPACM_SYSLOG("finished deleting wan filtering rules\n ");
+	}
+	else
+	{
+		if(IPACM_Iface::ipacmcfg->get_iface_vlan_ids(dev_name, Ids))
+		{
+			IPACM_SYSLOG("failed getting vlan ids for iface %s\n", dev_name);
+			memset(Ids, 0, sizeof(uint16_t)*IPA_MAX_NUM_OFFLOAD_VLANS);
+		}
 	}
 
 	/* Delete v4 filtering rules */
@@ -3216,7 +3225,17 @@ int IPACM_Wlan::handle_down_evt(ipa_ip_type arg_ip_type)
 		}
 		IPACM_Iface::ipacmcfg->decreaseFltRuleCount(rx_prop->rx[0].src_pipe, IPA_IP_v6, 1);
 		IPACMDBG_H("Deleted TCP syn v6 filter rules successfully.\n");
-
+#ifdef FEATURE_VLAN_MPDN
+		if(m_filtering.DeleteFilteringHdls(ipv6_prefix_flt_rule_hdl, IPA_IP_v6,
+			IPA_MAX_IPV6_NO_OFFLOAD_PREFIX_FLT_RULE + IPA_MAX_MTU_ENTRIES) == false)
+		{
+			IPACM_SYSLOG("Error Deleting Filtering, aborting...\n");
+			res = IPACM_FAILURE;
+			goto fail;
+		}
+		IPACMDBG_H("Deleted dummy v6 prefix filter rules successfully.\n");
+		IPACM_Iface::ipacmcfg->decreaseFltRuleCount(rx_prop->rx[0].src_pipe, IPA_IP_v6, IPA_MAX_IPV6_NO_OFFLOAD_PREFIX_FLT_RULE + IPA_MAX_MTU_ENTRIES);
+#endif
 	}
 	IPACM_SYSLOG("finished delete filtering rules\n ");
 
@@ -3273,6 +3292,14 @@ int IPACM_Wlan::handle_down_evt(ipa_ip_type arg_ip_type)
 
 	neigh_cache.clear();
 
+	for(int i = 0; i < IPA_MAX_NUM_HW_PDNS; i++)
+	{
+		if(Ids[i]!=0 && (Ids[i] > DUMMY_VLAN_ID_BASE))
+		{
+			iface_vid = Ids[i];
+			break;
+		}
+	}
 	/* remove modem UL rules and notify */
 	if(is_any_mux_up(IPA_IP_v4))
 	{
@@ -3288,10 +3315,12 @@ int IPACM_Wlan::handle_down_evt(ipa_ip_type arg_ip_type)
 		IPACMDBG_H("MUX is up for V4\n");
 		for(int i = 0; i < IPA_MAX_NUM_HW_PDNS; i++)
 		{
-			if(v4_mux_up[i].mux_id)
+			if(v4_mux_up[i].mux_id && (iface_vid > 0) &&
+			is_mux_up(v4_mux_up[i].mux_id, IPA_IP_v4, iface_vid))
 			{
 				data_vlan->mux_id = v4_mux_up[i].mux_id;
 				data_vlan->iptype = IPA_IP_v4;
+				data_vlan->VlanID = iface_vid;
 				IPACMDBG_H("mux %d up, delete v4 flt rules\n", v4_mux_up[i].mux_id);
 				handle_vlan_pdn_down(data_vlan);
 			}
@@ -3312,10 +3341,12 @@ int IPACM_Wlan::handle_down_evt(ipa_ip_type arg_ip_type)
 		IPACMDBG_H("MUX is up for V6\n");
 		for(int i = 0; i < IPA_MAX_NUM_HW_PDNS; i++)
 		{
-			if(v6_mux_up[i].mux_id)
+			if(v6_mux_up[i].mux_id && (iface_vid > 0) &&
+			is_mux_up(v6_mux_up[i].mux_id, IPA_IP_v6, iface_vid))
 			{
 				data_vlan->mux_id = v6_mux_up[i].mux_id;
 				data_vlan->iptype = IPA_IP_v6;
+				data_vlan->VlanID = iface_vid;
 				IPACMDBG_H("mux %d up, delete v6 flt rules\n", v6_mux_up[i].mux_id);
 				handle_vlan_pdn_down(data_vlan);
 			}
@@ -3341,6 +3372,7 @@ int IPACM_Wlan::handle_down_evt(ipa_ip_type arg_ip_type)
 			data_vlan->mux_id = 0;
 			data_vlan->iptype = IPA_IP_v4;
 			IPACMDBG_H("mux %d up, delete v6 flt rules\n", v6_mux_up[i].mux_id);
+			data_vlan->VlanID = 0;
 			handle_vlan_pdn_down(data_vlan);
 			free(data_vlan);
 		}
@@ -3355,7 +3387,7 @@ int IPACM_Wlan::handle_down_evt(ipa_ip_type arg_ip_type)
 				res = IPACM_FAILURE;
 				goto fail;
 			}
-
+			data_vlan->VlanID = 0;
 			data_vlan->mux_id = 0;
 			data_vlan->iptype = IPA_IP_v6;
 			IPACMDBG_H("mux %d up, delete v6 flt rules\n", v6_mux_up[i].mux_id);
@@ -3510,8 +3542,6 @@ fail:
 	}
 
 	is_active = false;
-	post_del_self_evt();
-
 	return res;
 }
 

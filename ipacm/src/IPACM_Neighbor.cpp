@@ -70,6 +70,7 @@ IPACM_Neighbor::IPACM_Neighbor()
 	IPACM_EvtDispatcher::registr(IPA_NEW_NEIGH_EVENT, this);
 	IPACM_EvtDispatcher::registr(IPA_DEL_NEIGH_EVENT, this);
 	IPACM_EvtDispatcher::registr(IPA_USB_LINK_UP_EVENT, this);
+	IPACM_EvtDispatcher::registr(IPA_LINK_DOWN_EVENT, this);
 
 	return;
 }
@@ -80,8 +81,9 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 #ifdef FEATURE_VLAN_MPDN
 	ipacm_event_new_neigh_vlan *data_vlan = NULL;
 #endif
-	int i, ipa_interface_index;
+	int i, ipa_interface_index, j;
 	ipacm_cmd_q_data evt_data;
+	bool move_elements;
 	int num_neighbor_client_temp = num_neighbor_client;
 
 	IPACMDBG("Recieved event %d\n", event);
@@ -232,6 +234,83 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 			}
 		}
 		break;
+		case IPA_LINK_DOWN_EVENT:
+		{
+			ipacm_event_data_fid *data = (ipacm_event_data_fid *)param;
+			IPACMDBG_H("Received IPA_LINK_DOWN_EVENT at Neighbour if_index :%d \n",data->if_index);
+			move_elements = false;
+			for (i = 0; i < num_neighbor_client_temp; i++)
+			{
+				/* find the client MAC */
+				if (neighbor_client[i].iface_index == data->if_index)
+				{
+					IPACMDBG_H("Neighbor if_index: %d, ipa_if_index = %d, name =  %s, ip4_addr = 0x%x\n",
+					neighbor_client[i].iface_index,neighbor_client[i].ipa_if_num, neighbor_client[i].iface_name,
+					neighbor_client[i].v4_addr);
+					IPACMDBG_H("Clean %d-st Cached client-MAC %02x:%02x:%02x:%02x:%02x:%02x\n, total client: %d\n",
+					i,
+					neighbor_client[i].mac_addr[0],
+					neighbor_client[i].mac_addr[1],
+					neighbor_client[i].mac_addr[2],
+					neighbor_client[i].mac_addr[3],
+					neighbor_client[i].mac_addr[4],
+					neighbor_client[i].mac_addr[5],
+					num_neighbor_client);
+
+					memset(neighbor_client[i].mac_addr, 0, sizeof(neighbor_client[i].mac_addr));
+					neighbor_client[i].iface_index = 0;
+					neighbor_client[i].v4_addr = 0;
+					neighbor_client[i].ipa_if_num = 0;
+					memset(neighbor_client[i].iface_name, 0, sizeof(neighbor_client[i].iface_name));
+#ifdef FEATURE_VLAN_MPDN
+					if(IPACM_Iface::ipacmcfg->ipacm_mpdn_enable == TRUE)
+					neighbor_client[i].bridge = NULL;
+#endif
+					move_elements = true;
+				}
+			}
+
+			j = 0;
+			if (move_elements)
+			{
+				for (i = 0; i < num_neighbor_client_temp; i++)
+				{
+					if ((neighbor_client[i].iface_index != 0) && (j < i))
+					{
+						memcpy(neighbor_client[j].mac_addr,
+								neighbor_client[i].mac_addr,
+									sizeof(neighbor_client[i].mac_addr));
+#ifdef FEATURE_VLAN_MPDN
+						if(IPACM_Iface::ipacmcfg->ipacm_mpdn_enable == TRUE)
+							neighbor_client[j].bridge = neighbor_client[i].bridge;
+#endif
+						neighbor_client[j].iface_index = neighbor_client[i].iface_index;
+						neighbor_client[j].v4_addr = neighbor_client[i].v4_addr;
+						neighbor_client[j].ipa_if_num = neighbor_client[i].ipa_if_num;
+						strlcpy(neighbor_client[j].iface_name, neighbor_client[i].iface_name,
+							sizeof(neighbor_client[i].iface_name));
+						memset(neighbor_client[i].mac_addr, 0, sizeof(neighbor_client[i].mac_addr));
+						neighbor_client[i].iface_index = 0;
+						neighbor_client[i].v4_addr = 0;
+						neighbor_client[i].ipa_if_num = 0;
+						memset(neighbor_client[i].iface_name, 0, sizeof(neighbor_client[i].iface_name));
+#ifdef FEATURE_VLAN_MPDN
+						neighbor_client[i].bridge = NULL;
+#endif
+						j++;
+					}
+					else if (neighbor_client[i].iface_index != 0)
+					{
+						j++;
+					}
+				}
+
+				num_neighbor_client = j;
+			}
+				IPACMDBG_H(" total number of left cased clients: %d\n", num_neighbor_client);
+		}
+		break;
+
 		default:
 		{
 			if (event == IPA_NEW_NEIGH_EVENT)

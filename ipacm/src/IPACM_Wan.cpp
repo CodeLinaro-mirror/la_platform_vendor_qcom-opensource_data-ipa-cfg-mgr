@@ -27,42 +27,8 @@
  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * Changes from Qualcomm Innovation Center are provided under the following license:
- *
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
- *
- * Redistribution and use in source and binary forms, with or without
- * modification, are permitted (subject to the limitations in the
- * disclaimer below) provided that the following conditions are met:
- *
- *   * Redistributions of source code must retain the above copyright
- *     notice, this list of conditions and the following disclaimer.
- *
- *   * Redistributions in binary form must reproduce the above
- *     copyright notice, this list of conditions and the following
- *     disclaimer in the documentation and/or other materials provided
- *     with the distribution.
- *
- *   * Neither the name of Qualcomm Innovation Center, Inc. nor the names of its
- *     contributors may be used to endorse or promote products derived
- *     from this software without specific prior written permission.
- *
- * NO EXPRESS OR IMPLIED LICENSES TO ANY PARTY'S PATENT RIGHTS ARE
- * GRANTED BY THIS LICENSE. THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT
- * HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED
- * WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
- * MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
- * IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR
- * ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
- * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE
- * GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
- * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER
- * IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
- * OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
- * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- *
- * Changes from Qualcomm Innovation Center are provided under the following license:
- * Copyright (c) 2025 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Changes from Qualcomm Technologies, Inc. are provided under the following license:
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 /*!
@@ -3465,6 +3431,12 @@ int IPACM_Wan::handle_route_add_evt(ipa_ip_type iptype)
 		return IPACM_SUCCESS;
 	}
 
+	if(m_is_sta_mode >= IFACE_MAX)
+	{
+		IPACMERR("Invalid STA mode index: %d\n", m_is_sta_mode);
+		return IPACM_FAILURE;
+	}
+
 	is_default_gateway = true;
 	IPACM_SYSLOG("Default route is added to iface %s.\n", dev_name);
 
@@ -4322,6 +4294,12 @@ int IPACM_Wan::add_tcp_syn_flt_rule(ipa_ip_type iptype)
 		return IPACM_FAILURE;
 	}
 
+	if(rx_prop == NULL || rx_prop->num_rx_props <= 0)
+	{
+		IPACMERR("No rx property.\n");
+		return IPACM_FAILURE;
+	}
+
 	m_pFilteringTable->commit = 1;
 	m_pFilteringTable->ep = rx_prop->rx[0].src_pipe;
 	m_pFilteringTable->ip = iptype;
@@ -4384,6 +4362,12 @@ int IPACM_Wan::add_dhcp_flt_rule(ipa_ip_type iptype)
 		return IPACM_FAILURE;
 	}
 
+	if(rx_prop == NULL || rx_prop->num_rx_props <= 0)
+	{
+		IPACMERR("No rx property.\n");
+		return IPACM_FAILURE;
+	}
+
 	m_pFilteringTable->commit = 1;
 	m_pFilteringTable->ep = rx_prop->rx[0].src_pipe;
 	m_pFilteringTable->ip = iptype;
@@ -4435,6 +4419,12 @@ int IPACM_Wan::add_icmp_sta_bridge_flt_rule(ipa_ip_type iptype)
 	if (!m_pFilteringTable)
 	{
 		IPACMERR("Error Locate ipa_flt_rule_add memory...\n");
+		return IPACM_FAILURE;
+	}
+
+	if(rx_prop == NULL || rx_prop->num_rx_props <= 0)
+	{
+		IPACMERR("No rx property.\n");
 		return IPACM_FAILURE;
 	}
 
@@ -4503,6 +4493,12 @@ int IPACM_Wan::add_sta_bridge_flt_expt_rule()
 	if (!m_pFilteringTable)
 	{
 		IPACMERR("Error Locate ipa_flt_rule_add memory...\n");
+		return IPACM_FAILURE;
+	}
+
+	if(rx_prop == NULL || rx_prop->num_rx_props <= 0)
+	{
+		IPACMERR("No rx property.\n");
 		return IPACM_FAILURE;
 	}
 
@@ -10474,6 +10470,11 @@ void IPACM_Wan::install_l2tp_flt_rule(ipa_flt_rule_add* rules, int rule_offset, 
 	if(IPACM_Iface::ipacmcfg->get_vlan_l2tp_mapping(iface_name, info) == IPACM_FAILURE)
 	{
 		IPACM_SYSLOG("Failed to find vlan-l2tp mapping.\n");
+		return;
+	}
+	if(rx_prop == NULL || rx_prop->num_rx_props <= 1)
+	{
+		IPACMERR("No rx property.\n");
 		return;
 	}
 

@@ -26,8 +26,8 @@
  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * Changes from Qualcomm Innovation Center, Inc. are provided under the following license:
- * Copyright (c) 2022-2023, 2025 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Changes from Qualcomm Technologies, Inc. are provided under the following license:
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 /*!
@@ -228,6 +228,7 @@ static int ipacm_cfg_xml_parse_tree
 						str_size = strlen(content);
 						memset(content_buf, 0, sizeof(content_buf));
 						memcpy(content_buf, (void *)content, str_size);
+						content_buf[MAX_XML_STR_LEN-1] = '\0';
 						if (atoi(content_buf))
 						{
 							config->ip_passthrough_mode = true;
@@ -267,6 +268,7 @@ static int ipacm_cfg_xml_parse_tree
 						str_size = strlen(content);
 						memset(content_buf, 0, sizeof(content_buf));
 						memcpy(content_buf, (void *)content, str_size);
+						content_buf[MAX_XML_STR_LEN-1] = '\0';
 						if (atoi(content_buf))
 						{
 							config->lan_stats_enable = true;
@@ -310,6 +312,7 @@ static int ipacm_cfg_xml_parse_tree
 						str_size = strlen(content);
 						memset(content_buf, 0, sizeof(content_buf));
 						memcpy(content_buf, (void *)content, str_size);
+						content_buf[MAX_XML_STR_LEN-1] = '\0';
 						if (atoi(content_buf))
 						{
 							config->odu_embms_enable = true;
@@ -497,6 +500,7 @@ static int ipacm_cfg_xml_parse_tree
 						str_size = strlen(content);
 						memset(content_buf, 0, sizeof(content_buf));
 						memcpy(content_buf, (void *)content, str_size);
+						content_buf[MAX_XML_STR_LEN-1] = '\0';
 						config->alg_config.alg_entries[config->alg_config.num_alg_entries - 1].port
 							 = atoi(content_buf);
 						IPACMDBG_H("port %d\n", config->alg_config.alg_entries[config->alg_config.num_alg_entries - 1].port);
@@ -510,6 +514,7 @@ static int ipacm_cfg_xml_parse_tree
 						str_size = strlen(content);
 						memset(content_buf, 0, sizeof(content_buf));
 						memcpy(content_buf, (void *)content, str_size);
+						content_buf[MAX_XML_STR_LEN-1] = '\0';
 						config->nat_max_entries = atoi(content_buf);
 						IPACMDBG_H("Nat Table Max Entries %d\n", config->nat_max_entries);
 					}
@@ -598,6 +603,7 @@ static int ipacm_cfg_xml_parse_tree
 						str_size = strlen(content);
 						memset(content_buf, 0, sizeof(content_buf));
 						memcpy(content_buf, (void *)content, str_size);
+						content_buf[MAX_XML_STR_LEN-1] = '\0';
 						if (atoi(content_buf))
 						{
 							config->ipv6_nat_enable = true;
@@ -625,6 +631,7 @@ static int ipacm_cfg_xml_parse_tree
 							str_size = strlen(content);
 							memset(content_buf, 0, sizeof(content_buf));
 							memcpy(content_buf, (void *)content, str_size);
+							content_buf[MAX_XML_STR_LEN-1] = '\0';
 							config->ipacm_l2tp_enable = atoi(content_buf);
 						}
 				}
@@ -641,6 +648,7 @@ static int ipacm_cfg_xml_parse_tree
 							str_size = strlen(content);
 							memset(content_buf, 0, sizeof(content_buf));
 							memcpy(content_buf, (void *)content, str_size);
+							content_buf[MAX_XML_STR_LEN-1] = '\0';
 							if (atoi(content_buf))
 							{
 								config->ttl_enable = true;
@@ -666,6 +674,7 @@ static int ipacm_cfg_xml_parse_tree
 							str_size = strlen(content);
 							memset(content_buf, 0, sizeof(content_buf));
 							memcpy(content_buf, (void *)content, str_size);
+							content_buf[MAX_XML_STR_LEN-1] = '\0';
 							if (atoi(content_buf))
 							{
 								config->ttl_vlan = true;
@@ -701,6 +710,7 @@ static int ipacm_cfg_xml_parse_tree
 									str_size = strlen(content);
 									memset(content_buf, 0, sizeof(content_buf));
 									memcpy(content_buf, (void *)content, str_size);
+									content_buf[MAX_XML_STR_LEN-1] = '\0';
 									config->ttlvlanids.vlans[config->ttlvlanids.num_vlanids++] = atoi(content_buf);
 							}
 						}
@@ -730,6 +740,7 @@ static int ipacm_cfg_xml_parse_tree
 							str_size = strlen(content);
 							memset(content_buf, 0, sizeof(content_buf));
 							memcpy(content_buf, (void *)content, str_size);
+							content_buf[MAX_XML_STR_LEN-1] = '\0';
 							if(atoi(content_buf)!=0)
 							{
 								config->max_file_size = atoi(content_buf);
@@ -750,6 +761,7 @@ static int ipacm_cfg_xml_parse_tree
 							str_size = strlen(content);
 							memset(content_buf, 0, sizeof(content_buf));
 							memcpy(content_buf, (void *)content, str_size);
+							content_buf[MAX_XML_STR_LEN-1] = '\0';
 							if (atoi(content_buf))
 							{
 								config->ipacm_mpdn_enable = true;

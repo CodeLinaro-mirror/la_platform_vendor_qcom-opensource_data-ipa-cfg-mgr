@@ -26,9 +26,9 @@ WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
 OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
 IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-* Changes from Qualcomm Innovation Center are provided under the following license:
-* Copyright (c) 2024-2025 Qualcomm Innovation Center, Inc. All rights reserved.
-* SPDX-License-Identifier: BSD-3-Clause-Clear.
+ * Changes from Qualcomm Technologies, Inc. are provided under the following license:
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
 */
 /*!
 	@file
@@ -1535,11 +1535,11 @@ void IPACM_Neighbor::update_neigh_cache()
 
 		for(i = 0; i < MAX_FDB_PARAM_CNT; ++i)
 		{
-			if ((strncmp("dev",params[i], IPA_IFACE_NAME_LEN)==0) && (i < MAX_FDB_PARAM_CNT -1))
+			if (((i < MAX_FDB_PARAM_CNT -1) && strncmp("dev",params[i], IPA_IFACE_NAME_LEN)==0))
 			{
 				strlcpy(rdev_name, params[i+1], IPA_IFACE_NAME_LEN);
 			}
-			else if(strncmp("master",params[i], IPA_IFACE_NAME_LEN)==0)
+			else if((i < MAX_FDB_PARAM_CNT -1) && strncmp("master",params[i], IPA_IFACE_NAME_LEN)==0)
 			{
 				strlcpy(mdev_name, params[i+1], IPA_IFACE_NAME_LEN);
 			}

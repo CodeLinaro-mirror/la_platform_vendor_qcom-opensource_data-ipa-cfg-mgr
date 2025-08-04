@@ -75,8 +75,7 @@ public:
 
 	void post_phys_iface_event(const char *iface_name, int ipa_if_num, int if_idx);
 
-	void update_neigh_cache();
-
+	void update_neigh_cache(const char *iface_name = NULL, uint8_t *mac_addr = {0}, bool is_wlan_client_connect = false);
 private:
 
 	int num_neighbor_client;

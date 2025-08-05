@@ -222,7 +222,7 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 										sizeof(data_all->iface_name));
 
 #ifdef FEATURE_VLAN_MPDN
-									ipacm_bridge *bridge;
+									ipacm_bridge *bridge = NULL;
 									if (IPACM_Iface::ipacmcfg->ipacm_mpdn_enable == TRUE)
 									{
 										/* Get the bridge interface info */
@@ -397,7 +397,7 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 									sizeof(data_all->iface_name));
 
 #ifdef FEATURE_VLAN_MPDN
-								ipacm_bridge *bridge;
+								ipacm_bridge *bridge = NULL;
 								if (IPACM_Iface::ipacmcfg->ipacm_mpdn_enable == TRUE)
 								{
 									if(neighbor_client[i].bridge)
@@ -532,7 +532,7 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 #endif
 					{
 #ifdef FEATURE_VLAN_MPDN
-						ipacm_bridge *bridge;
+						ipacm_bridge *bridge = NULL;
 						if(IPACM_Iface::ipacmcfg->ipacm_mpdn_enable == TRUE)
 						{
 							bridge = IPACM_Iface::ipacmcfg->get_vlan_bridge(data->iface_name);
@@ -970,7 +970,7 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 #endif
 					{
 #ifdef FEATURE_VLAN_MPDN
-						ipacm_bridge *bridge;
+						ipacm_bridge *bridge = NULL;
 						if(IPACM_Iface::ipacmcfg->ipacm_mpdn_enable == TRUE)
 						{
 							bridge = IPACM_Iface::ipacmcfg->get_vlan_bridge(data->iface_name);
@@ -1489,7 +1489,7 @@ void IPACM_Neighbor::update_neigh_cache(const char *iface_name, uint8_t *mac_add
 	int tmp_var[IPA_MAC_ADDR_SIZE];
 	int query_ifindex, query_ipa_if_num, j, i;
 	bool is_phy_iface = false, is_client_cached = false, parse_error = false;
-	ipacm_bridge *bridge;
+	ipacm_bridge *bridge = NULL;
 	char master_dev_name[10];
 	int master_ifindex = -1;
 	uint32_t if_ipv4_addr, if_ipipv4_addr_mask;

@@ -2023,7 +2023,9 @@ int IPACM_Wan::vlan_pdn_backhaul_switch_check(ipa_ip_type iptype, ipacm_event_ro
 
 					if(GetMuxByVid(data->VlanID, &mux_id, IPA_IP_v6))
 					{
-						IPACM_SYSLOG("no v6 vlan up PDN for vlan Id %d\n", data->VlanID); return IPACM_SUCCESS;
+						IPACM_SYSLOG("no v6 vlan up PDN for vlan Id %d\n", data->VlanID);
+						free(vlandown_data);
+						return IPACM_SUCCESS;
 					}
 
 					/* post vlan down for LTE */
@@ -2173,6 +2175,7 @@ int IPACM_Wan::vlan_pdn_backhaul_switch_check(ipa_ip_type iptype, ipacm_event_ro
 					if(GetMuxByVid(data->VlanID, &mux_id, IPA_IP_v6))
 					{
 						IPACMDBG_H("no v6 vlan up PDN for vlan Id %d\n", data->VlanID);
+						free(wanup_vlan_data);
 						return IPACM_SUCCESS;
 					}
 					wanup_vlan_data->iptype = IPA_IP_v6;
@@ -2257,7 +2260,9 @@ int IPACM_Wan::vlan_pdn_backhaul_switch_check(ipa_ip_type iptype, ipacm_event_ro
 
 					if(GetMuxByVid(data->VlanID, &mux_id, IPA_IP_v4))
 					{
-						IPACMDBG_H("no v4 vlan up PDN for vlan Id %d\n", data->VlanID); return IPACM_SUCCESS;
+						IPACMDBG_H("no v4 vlan up PDN for vlan Id %d\n", data->VlanID);
+						free(vlandown_data);
+						return IPACM_SUCCESS;
 					}
 
 					/* post vlan down for LTE */
@@ -2418,6 +2423,7 @@ int IPACM_Wan::vlan_pdn_backhaul_switch_check(ipa_ip_type iptype, ipacm_event_ro
 					if(GetMuxByVid(data->VlanID, &mux_id, IPA_IP_v4))
 					{
 						IPACMDBG_H("no v4 vlan up PDN for vlan Id %d\n", data->VlanID);
+						free(wanup_vlan_data);
 						return IPACM_SUCCESS;
 					}
 					wanup_vlan_data->iptype = IPA_IP_v4;
@@ -8472,7 +8478,8 @@ int IPACM_Wan::install_wan_filtering_rule(bool is_sw_routing)
 		if (pFilteringTable_v4 == NULL)
 		{
 			IPACMERR("Error Locate ipa_flt_rule_add memory...\n");
-			return IPACM_FAILURE;
+			res = IPACM_FAILURE;
+			goto fail;
 		}
 		memset(pFilteringTable_v4, 0, len);
 #ifdef FEATURE_VLAN_MPDN
@@ -8480,7 +8487,8 @@ int IPACM_Wan::install_wan_filtering_rule(bool is_sw_routing)
 		if(mux_id_v4 == NULL)
 		{
 			IPACMERR("Error Locate mux_id_v4 memory...\n");
-			return IPACM_FAILURE;
+			res = IPACM_FAILURE;
+			goto fail;
 		}
 		/* use the default PDN mux ID */
 		mux_id_v4[0] = IPACM_Iface::ipacmcfg->GetQmapId();
@@ -8543,8 +8551,8 @@ int IPACM_Wan::install_wan_filtering_rule(bool is_sw_routing)
 		if (pFilteringTable_v6 == NULL)
 		{
 			IPACMERR("Error Locate ipa_flt_rule_add memory...\n");
-			free(pFilteringTable_v4);
-			return IPACM_FAILURE;
+			res = IPACM_FAILURE;
+			goto fail;
 		}
 		memset(pFilteringTable_v6, 0, len);
 #ifdef FEATURE_VLAN_MPDN
@@ -8552,7 +8560,8 @@ int IPACM_Wan::install_wan_filtering_rule(bool is_sw_routing)
 		if(mux_id_v6 == NULL)
 		{
 			IPACMERR("Error Locate mux_id_v6 memory...\n");
-			return IPACM_FAILURE;
+			res = IPACM_FAILURE;
+			goto fail;
 		}
 		/* use the default PDN mux ID */
 		mux_id_v6[0] = IPACM_Iface::ipacmcfg->GetQmapId();
@@ -8624,7 +8633,8 @@ int IPACM_Wan::install_wan_filtering_rule(bool is_sw_routing)
 				if (pFilteringTable_v4 == NULL)
 				{
 					IPACMERR("Error Locate ipa_flt_rule_add memory...\n");
-					return IPACM_FAILURE;
+					res = IPACM_FAILURE;
+					goto fail;
 				}
 				memset(pFilteringTable_v4, 0, len);
 #ifdef FEATURE_VLAN_MPDN
@@ -8632,7 +8642,8 @@ int IPACM_Wan::install_wan_filtering_rule(bool is_sw_routing)
 				if(mux_id_v4 == NULL)
 				{
 					IPACM_SYSLOG("Error allocate mux_id_v4 memory...\n");
-					return IPACM_FAILURE;
+					res = IPACM_FAILURE;
+					goto fail;
 				}
 #endif
 				pFilteringTable_v4->commit = 1;
@@ -8664,8 +8675,8 @@ int IPACM_Wan::install_wan_filtering_rule(bool is_sw_routing)
 				if (pFilteringTable_v6 == NULL)
 				{
 					IPACMERR("Error Locate ipa_flt_rule_add memory...\n");
-					free(pFilteringTable_v4);
-					return IPACM_FAILURE;
+					res = IPACM_FAILURE;
+					goto fail;
 				}
 				memset(pFilteringTable_v6, 0, len);
 #ifdef FEATURE_VLAN_MPDN
@@ -8673,7 +8684,8 @@ int IPACM_Wan::install_wan_filtering_rule(bool is_sw_routing)
 				if(mux_id_v6 == NULL)
 				{
 					IPACM_SYSLOG("Error allocate mux_id_v6 memory...\n");
-					return IPACM_FAILURE;
+					res = IPACM_FAILURE;
+					goto fail;
 				}
 #endif
 				pFilteringTable_v6->commit = 1;
@@ -8704,7 +8716,8 @@ int IPACM_Wan::install_wan_filtering_rule(bool is_sw_routing)
 			if (pFilteringTable_v4 == NULL)
 			{
 				IPACMERR("Error Locate ipa_flt_rule_add memory...\n");
-				return IPACM_FAILURE;
+				res = IPACM_FAILURE;
+				goto fail;
 			}
 			memset(pFilteringTable_v4, 0, len);
 #ifdef FEATURE_VLAN_MPDN
@@ -8712,7 +8725,8 @@ int IPACM_Wan::install_wan_filtering_rule(bool is_sw_routing)
 			if(mux_id_v4 == NULL)
 			{
 				IPACM_SYSLOG("Error allocate mux_id_v4 memory...\n");
-				return IPACM_FAILURE;
+				res = IPACM_FAILURE;
+				goto fail;
 			}
 #endif
 			pFilteringTable_v4->commit = 1;
@@ -8728,8 +8742,8 @@ int IPACM_Wan::install_wan_filtering_rule(bool is_sw_routing)
 			if (pFilteringTable_v6 == NULL)
 			{
 				IPACMERR("Error Locate ipa_flt_rule_add memory...\n");
-				free(pFilteringTable_v4);
-				return IPACM_FAILURE;
+				res = IPACM_FAILURE;
+				goto fail;
 			}
 			memset(pFilteringTable_v6, 0, len);
 			pFilteringTable_v6->commit = 1;

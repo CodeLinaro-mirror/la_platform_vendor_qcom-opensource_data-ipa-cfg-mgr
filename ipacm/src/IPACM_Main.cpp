@@ -445,6 +445,7 @@ void* ipa_driver_msg_notifier(void *param)
 			if (data_ex == NULL)
 			{
 				IPACM_SYSLOG("unable to allocate memory for event data\n");
+				free(event_ex);
 				return NULL;
 			}
 			data_ex->num_of_attribs = event_ex->num_of_attribs;

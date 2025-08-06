@@ -1318,6 +1318,10 @@ private:
 
 	inline int get_eth_client_index(uint8_t *mac_addr, uint16_t vlan_id = 0)
 	{
+		if(!mac_addr){
+			return IPACM_INVALID_INDEX;
+		}
+
 		int cnt;
 		int num_eth_client_tmp = num_eth_client;
 

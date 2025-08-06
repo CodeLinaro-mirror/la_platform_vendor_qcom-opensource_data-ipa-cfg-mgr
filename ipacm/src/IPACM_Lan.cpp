@@ -6795,7 +6795,8 @@ int IPACM_Lan::if_client_qos_rule_needed(uint8_t * client_mac,
 			return ret;
 		}
 
-		if (ipv6_addr &&
+		if (ipv6_addr != NULL &&
+			it_qos_client->v6_ip_addr[0] &&
 			it_qos_client->v6_ip_addr[0] == ipv6_addr[0] &&
 			it_qos_client->v6_ip_addr[1] == ipv6_addr[1] &&
 			it_qos_client->v6_ip_addr[2] == ipv6_addr[2] &&

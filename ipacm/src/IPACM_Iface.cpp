@@ -428,7 +428,7 @@ void IPACM_Iface::iface_addr_query
 	/* query ipv4/v6 address */
 	if(getifaddrs(&myaddrs) != 0)
 	{
-        	IPACMERR("getifaddrs");
+		IPACMERR("getifaddrs");
 		return ;
 	}
 
@@ -471,11 +471,13 @@ void IPACM_Iface::iface_addr_query
 							IPACMDBG_H("iface ip4 address: (0x%x)\n", ntohl(iface_ipv4.s_addr));
 
 							*curr_ip4_addr = ntohl(iface_ipv4.s_addr);
+							freeifaddrs(myaddrs);
 							return;
 						}
 						else
 						{
 							IPACMDBG_H("curr_ip4_addr is same as iface addr\n");
+							freeifaddrs(myaddrs);
 							return;
 						}
 					}

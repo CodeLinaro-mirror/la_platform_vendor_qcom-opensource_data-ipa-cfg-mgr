@@ -9996,8 +9996,8 @@ int IPACM_Lan::modify_ipv6_prefix_flt_rule()
 	if (pFilteringTable->num_rules > IPA_MAX_IPV6_NO_OFFLOAD_PREFIX_FLT_RULE + IPA_MAX_MTU_ENTRIES)
 	{
 		IPACM_SYSLOG("Number of rules crossed the maximum available space");
-		free(pFilteringTable);
-		return IPACM_FAILURE;
+		res = IPACM_FAILURE;
+		goto fail;
 	}
 	memset(&flt_rule, 0, sizeof(struct ipa_flt_rule_mdfy));
 	flt_rule.status = -1;

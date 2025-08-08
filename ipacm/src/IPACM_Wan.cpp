@@ -8202,6 +8202,8 @@ int IPACM_Wan::handle_down_evt()
 		ipv4_to_iface[sta_ipv4_pdn_index].ipv4_addr = 0;
 		ipv4_to_iface[sta_ipv4_pdn_index].pIface = NULL;
 		sta_ipv4_pdn_index = -1;
+		wan_v4_addr_set = false;
+		wan_v4_addr = 0;
 	}
 
 	/* delete default v6 RT rule */
@@ -8223,8 +8225,8 @@ int IPACM_Wan::handle_down_evt()
 		ipv6_to_iface[sta_ipv6_pdn_index].pIface = NULL;
 		memset(&ipv6_to_iface[sta_ipv6_pdn_index].ipv6_prefix, 0, sizeof(uint32_t) * 2);
 		sta_ipv6_pdn_index = -1;
+		memset(ipv6_addr, 0, sizeof(uint32_t)*(MAX_DEFAULT_v6_ROUTE_RULES*4));
 	}
-
 
 	/* clean wan-client header, routing rules */
 	IPACMDBG_H("left %d wan clients need to be deleted \n ", num_wan_client);

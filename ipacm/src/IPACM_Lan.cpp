@@ -1093,10 +1093,14 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 		{
 			ipacm_event_data_all *data = (ipacm_event_data_all *)param;
 			uint16_t vlan_id = 0;
+			if(IPACM_Iface::ipacmcfg->iface_in_vlan_mode(dev_name) && is_vlan_event(data->iface_name) && IPACM_Iface::ipacmcfg->get_vlan_id(data->iface_name, &vlan_id))
+			{
+				IPACMERR("failed to get iface vlan ID\n");
+			}
 			ipa_interface_index = iface_ipa_index_query(data->if_index);
 			IPACMDBG_H("Received IPA_LAN_CLIENT_DEL_EVENT event \n");
 			IPACMDBG_H("check iface %s category: %d\n", dev_name, ipa_if_cate);
-			if(ipa_interface_index == ipa_if_num)
+			if(ipa_interface_index == ipa_if_num || (IPACM_Iface::ipacmcfg->iface_in_vlan_mode(dev_name) && is_vlan_event(data->iface_name)))
 			{
 				IPACMDBG_H("LAN iface delete client \n");
 				handle_eth_client_down_evt(data->mac_addr, vlan_id, data);
@@ -10708,8 +10712,6 @@ int IPACM_Lan::eth_bridge_add_hdr_proc_ctx(ipa_hdr_l2_type peer_l2_hdr_type, uin
 #endif
 			{
 				IPACMERR("Unable to find VLAN ID for Dev %s\n", peer_dev_name);
-				res = IPACM_FAILURE;
-				goto end;
 			}
 		}
 
@@ -10737,8 +10739,6 @@ int IPACM_Lan::eth_bridge_add_hdr_proc_ctx(ipa_hdr_l2_type peer_l2_hdr_type, uin
 			if(vlan_id <= 0 || vlan_id > DUMMY_VLAN_ID_BASE)
 			{
 				IPACMERR("Unable to find Bridge for %s\n", mapping_info.bridge_name);
-				res = IPACM_FAILURE;
-				goto end;
 			}
 			vlan_id = mapping_info.vlan_id;
 		}

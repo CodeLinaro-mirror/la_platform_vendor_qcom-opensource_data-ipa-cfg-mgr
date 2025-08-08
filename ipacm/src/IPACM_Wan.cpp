@@ -2727,7 +2727,7 @@ void IPACM_Wan::post_wan_vlan_pdn_event(ipa_ip_type iptype, int pdn_idx, int vla
 }
 int IPACM_Wan::check_vlan_pdn(ipa_ip_type iptype, ipacm_event_route_vlan *data, bool v4_only_xlat)
 {
-	int pdn_idx = 0, vlan_idx= 0, ret = IPACM_FAILURE;
+	int pdn_idx = 0, vlan_idx= 0, ret = IPACM_FAILURE, pdn_v4_index = -1, pdn_v6_index = -1;
 	bool new_pdn = true, v4_hdr_pending = false, v6_hdr_pending = false;
 	bool is_backhaul_switch_fail = false;
 	std::list<uint16_t>::iterator it;
@@ -2803,11 +2803,24 @@ int IPACM_Wan::check_vlan_pdn(ipa_ip_type iptype, ipacm_event_route_vlan *data, 
 	IPACMDBG_H("Process IPA_ROUTE_ADD_VLAN_PDN_EVENT for iptype: %d\n", iptype);
 	IPACMDBG_H("data->wan_ipv6_prefix: 0x%08x%08x\n", data->wan_ipv6_prefix[0], data->wan_ipv6_prefix[1]);
 	IPACMDBG_H("ipv6_prefix: 0x%08x%08x\n", ipv6_prefix[0], ipv6_prefix[1]);
-
+	if (m_is_sta_mode == WLAN_WAN)
+	{
+		if(wlan_ipv6_pdn_index >= 0)
+			pdn_v6_index = wlan_ipv6_pdn_index;
+		if(wlan_ipv4_pdn_index >= 0)
+			pdn_v4_index = wlan_ipv4_pdn_index;
+	}
+	else
+	{
+		if(modem_ipv6_pdn_index >= 0)
+			pdn_v6_index = modem_ipv6_pdn_index;
+		if(modem_ipv4_pdn_index >= 0)
+			pdn_v4_index = modem_ipv4_pdn_index;
+	}
 	if (iptype == IPA_IP_v6 || iptype == IPA_IP_MAX)
 	{
-		if(((data->wan_ipv6_prefix[0] == ipv6_prefix[0]) &&
-			(data->wan_ipv6_prefix[1] == ipv6_prefix[1])) || v4_only_xlat)
+		if((((data->wan_ipv6_prefix[0] == ipv6_prefix[0]) &&
+			(data->wan_ipv6_prefix[1] == ipv6_prefix[1])) || v4_only_xlat) && (pdn_v6_index != -1))
 		{
 			IPACMDBG_H("received v6 IPA_ROUTE_ADD_VLAN_PDN_EVENT for VID %d, %d\n", data->VlanID, ipa_if_num);
 
@@ -2818,7 +2831,7 @@ int IPACM_Wan::check_vlan_pdn(ipa_ip_type iptype, ipacm_event_route_vlan *data, 
 			{
 				ret = vlan_pdn_backhaul_switch_check(iptype, data, &is_backhaul_switch_fail);
 
-				if ((IPACM_FAILURE == IPACM_FAILURE) && is_backhaul_switch_fail)
+				if ((ret == IPACM_FAILURE) && is_backhaul_switch_fail)
 				{
 					IPACMDBG_H("BH switch failed\n");
 					return IPACM_FAILURE;
@@ -2956,7 +2969,7 @@ int IPACM_Wan::check_vlan_pdn(ipa_ip_type iptype, ipacm_event_route_vlan *data, 
 	}
 	if (iptype == IPA_IP_v4 || iptype == IPA_IP_MAX)
 	{
-		if(data->wan_ipv4_addr == wan_v4_addr)
+		if((pdn_v4_index != -1) && (data->wan_ipv4_addr == wan_v4_addr))
 		{
 			new_pdn = true;
 			IPACMDBG_H("received v4 IPA_ROUTE_ADD_VLAN_PDN_EVENT for VID %d, %d\n", data->VlanID, ipa_if_num);
@@ -7465,7 +7478,8 @@ int IPACM_Wan::handle_down_evt(ipa_ip_type arg_ip_type)
 
 		ipv4_to_iface[wlan_ipv4_pdn_index].wan_up_vlan = false;
 		wan_v4_is_default_gw = true;
-		if(num_offloaded_pdns > 0)
+
+		if (wlan_ipv6_pdn_index == -1)
 		{
 			num_offloaded_pdns--;
 		}
@@ -7519,6 +7533,8 @@ int IPACM_Wan::handle_down_evt(ipa_ip_type arg_ip_type)
 			res = IPACM_FAILURE;
 			goto fail;
 		}
+		wan_v4_addr_set = false;
+		wan_v4_addr = 0;
 		ipv4_to_iface[wlan_ipv4_pdn_index].ipv4_addr = 0;
 		ipv4_to_iface[wlan_ipv4_pdn_index].is_xlat = false;
 		ipv4_to_iface[wlan_ipv4_pdn_index].pIface = NULL;
@@ -7574,6 +7590,7 @@ int IPACM_Wan::handle_down_evt(ipa_ip_type arg_ip_type)
 		ipv6_to_iface[wlan_ipv6_pdn_index].pIface = NULL;
 		memset(&ipv6_to_iface[wlan_ipv6_pdn_index].ipv6_prefix, 0, sizeof(uint32_t) * 2);
 		wlan_ipv6_pdn_index = -1;
+		memset(ipv6_addr, 0, sizeof(uint32_t)*(MAX_DEFAULT_v6_ROUTE_RULES*4));
 
 		/* clean wan-client header, routing rules */
 		IPACMDBG_H("left %d wan clients need to be deleted \n ", num_wan_client);
@@ -7836,6 +7853,9 @@ int IPACM_Wan::handle_down_evt_ex(ipa_ip_type iptype)
 			ipv4_to_iface[modem_ipv4_pdn_index].ipv4_addr = 0;
 			ipv4_to_iface[modem_ipv4_pdn_index].pIface = NULL;
 			ipv4_to_iface[modem_ipv4_pdn_index].is_xlat = false;
+			wan_v4_addr_set = false;
+			wan_v4_addr = 0;
+
 		}
 		/* if no PDN is up, remove rm dependencies */
 		if(!isVlanWanUP() && !isVlanWanUP_V6() && !wan_up && !wan_up_v6)
@@ -8018,6 +8038,7 @@ int IPACM_Wan::handle_down_evt_ex(ipa_ip_type iptype)
 		if(modem_ipv6_pdn_index >= 0)
 		{
 			memset(&ipv6_to_iface[modem_ipv6_pdn_index].ipv6_prefix, 0, sizeof(uint32_t) * 2);
+			memset(ipv6_addr, 0, sizeof(uint32_t)*(MAX_DEFAULT_v6_ROUTE_RULES*4));
 			ipv6_to_iface[modem_ipv6_pdn_index].pIface = NULL;
 		}
 

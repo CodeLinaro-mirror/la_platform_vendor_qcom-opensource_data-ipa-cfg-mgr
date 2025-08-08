@@ -893,7 +893,7 @@ void IPACM_ConntrackListener::HandleVlanUp(void *in_param)
 						vlanup_data->VlanID, available_idx);
 					vlan_pdns[0].associated_VIDs[available_idx] = vlanup_data->VlanID;
 					vlan_pdns[0].VID_cnt++;
-					IPACMDBG_H("Now no of vlans mapped to PDN entry in 0 is %d\n", vlan_pdns[0].VID_cnt++);
+					IPACMDBG_H("Now no of vlans mapped to PDN entry in 0 is %d\n", vlan_pdns[0].VID_cnt);
 					return;
 				}
 			}
@@ -945,7 +945,7 @@ void IPACM_ConntrackListener::HandleVlanUp(void *in_param)
 						vlanup_data->VlanID, available_idx);
 						vlan_pdns[i].associated_VIDs[available_idx] = vlanup_data->VlanID;
 						vlan_pdns[i].VID_cnt++;
-						IPACMDBG_H("Now no of vlans mapped to PDN entry in 0 is %d\n", vlan_pdns[i].VID_cnt++);
+						IPACMDBG_H("Now no of vlans mapped to PDN entry in %d is %d\n",i, vlan_pdns[i].VID_cnt);
 						return;
 					}
 				}

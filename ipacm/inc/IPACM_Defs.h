@@ -376,15 +376,15 @@ typedef struct
 {
 	uint32_t subnet_addr;
 	uint32_t subnet_mask;
-	uint8_t if_index;
+	int if_index;
 } ipa_private_subnet;
 
 
 typedef struct _ipacm_event_data_all
 {
 	enum ipa_ip_type iptype;
-	uint8_t if_index;
-	uint8_t master_if_index;
+	int if_index;
+	int master_if_index;
 	uint32_t  ipv4_addr;
 	uint32_t  ipv6_addr[4];
 	uint8_t mac_addr[IPA_MAC_ADDR_SIZE];
@@ -497,7 +497,7 @@ typedef struct _ipacm_event_iface_up
 
 typedef struct _ipacm_event_iface_up_tether
 {
-	uint32_t if_index_tether;
+	int if_index_tether;
 	uint32_t ipv6_prefix[2];
 	bool is_sta;
 }ipacm_event_iface_up_tehter;
@@ -617,7 +617,7 @@ struct ipa_bridge_vlan_mapping_info {
 		uint16_t vlan_id;
 		uint32_t bridge_ipv4;
 		uint32_t subnet_mask;
-		uint8_t master_if_index;
+		int master_if_index;
 		uint8_t status;
 };
 
@@ -628,7 +628,7 @@ struct bridge_vlan_mapping_info
 	uint32_t bridge_ipv4;
 	uint32_t subnet_mask;
 	uint8_t lan2lan_sw;
-	uint8_t bridge_if_index;
+	int bridge_if_index;
 	uint8_t status;
 };
 

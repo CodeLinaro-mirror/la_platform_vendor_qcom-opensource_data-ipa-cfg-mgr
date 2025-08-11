@@ -1705,7 +1705,8 @@ static int ipa_nl_decode_nlmsg
 						if(msg_ptr->nl_route_info.attr_info.param_mask & IPA_RTA_PARAM_GATEWAY &&
 							(IPACM_Iface::ipacmcfg->eth_wan_pppoe_enable ||
 							IPACM_Iface::ipacmcfg->eth_vlan_wan_enable ||
-							IPACM_Iface::ipacmcfg->eth_wan_br_wan_enable))
+							IPACM_Iface::ipacmcfg->eth_wan_br_wan_enable ||
+							(msg_ptr->nl_route_info.metainfo.rtm_table == RT_TABLE_MAIN)))
 						{
 							data_fid = (ipacm_event_data_fid *)malloc(sizeof(ipacm_event_data_fid));
 							if(data_fid == NULL)
@@ -1974,7 +1975,8 @@ process:
 
 					if(IPACM_Iface::ipacmcfg->eth_wan_pppoe_enable ||
 						IPACM_Iface::ipacmcfg->eth_vlan_wan_enable ||
-						IPACM_Iface::ipacmcfg->eth_wan_br_wan_enable )
+						IPACM_Iface::ipacmcfg->eth_wan_br_wan_enable ||
+						(msg_ptr->nl_route_info.metainfo.rtm_table == RT_TABLE_MAIN))
 					{
 						data_fid = (ipacm_event_data_fid *)malloc(sizeof(ipacm_event_data_fid));
 						if(data_fid == NULL)
@@ -2944,7 +2946,8 @@ int ipa_nl_send_getroute(ipa_ip_type ip_type)
 
 					if(nl_route_info_get_route.attr_info.param_mask & IPA_RTA_PARAM_GATEWAY &&
 						(IPACM_Iface::ipacmcfg->eth_wan_pppoe_enable  ||
-						IPACM_Iface::ipacmcfg->eth_vlan_wan_enable))
+						IPACM_Iface::ipacmcfg->eth_vlan_wan_enable ||
+						(nl_route_info_get_route.metainfo.rtm_table == RT_TABLE_MAIN)))
 					{
 						data_fid = (ipacm_event_data_fid *)malloc(sizeof(ipacm_event_data_fid));
 						if(data_fid == NULL)
@@ -3175,7 +3178,8 @@ proces_getroute:
 				IPACM_NL_REPORT_ADDR( " ", nl_route_info_get_route.attr_info.gateway_addr);
 
 				if(IPACM_Iface::ipacmcfg->eth_wan_pppoe_enable ||
-					IPACM_Iface::ipacmcfg->eth_vlan_wan_enable)
+					IPACM_Iface::ipacmcfg->eth_vlan_wan_enable ||
+					(nl_route_info_get_route.metainfo.rtm_table == RT_TABLE_MAIN))
 				{
 					data_fid = (ipacm_event_data_fid *)malloc(sizeof(ipacm_event_data_fid));
 					if(data_fid == NULL)

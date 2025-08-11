@@ -682,33 +682,30 @@ void* ipa_driver_msg_notifier(void *param)
 			memcpy(&event_ecm, buffer + sizeof(struct ipa_msg_meta), sizeof(struct ipa_ecm_msg));
 			IPACMDBG_H("Received ECM_DISCONNECT name: %s\n",event_ecm.name);
 
-			if(IPACM_Iface::ipacmcfg->eth_wan_pppoe_enable ||
-				IPACM_Iface::ipacmcfg->eth_vlan_wan_enable)
+			for(int i=0; i < MAX_NUM_PPPOE_MPDN; i++)
 			{
-				for(int i=0; i < MAX_NUM_PPPOE_MPDN; i++)
+				if(IPACM_Iface::ipacmcfg->eth_wan_iface_table_idx[i] >= 0 &&
+					strncmp(
+						IPACM_Iface::ipacmcfg->iface_table[IPACM_Iface::ipacmcfg->eth_wan_iface_table_idx[i]].phy_dev_name,
+						event_ecm.name, sizeof(event_ecm.name)) == 0)
 				{
-					if(IPACM_Iface::ipacmcfg->eth_wan_iface_table_idx[i] >= 0 &&
-						strncmp(
-							IPACM_Iface::ipacmcfg->iface_table[IPACM_Iface::ipacmcfg->eth_wan_iface_table_idx[i]].phy_dev_name,
-							event_ecm.name, sizeof(event_ecm.name)) == 0)
+					data_fid2 = (ipacm_event_data_fid *)malloc(sizeof(ipacm_event_data_fid));
+					if(data_fid2 == NULL)
 					{
-						data_fid2 = (ipacm_event_data_fid *)malloc(sizeof(ipacm_event_data_fid));
-						if(data_fid2 == NULL)
-						{
-							IPACMERR("unable to allocate memory for event_ecm data_fid\n");
-							return NULL;
-						}
-						data_fid2->if_index =
-							IPACM_Iface::ipacmcfg->iface_table[IPACM_Iface::ipacmcfg->eth_wan_iface_table_idx[i]].netlink_interface_index;
-						evt_data.event = IPA_LINK_DOWN_EVENT;
-						evt_data.evt_data = data_fid2;
-						IPACMDBG_H("Posting IPA_LINK_DOWN_EVENT event %d for ETH VLAN iface:%d dev_name:%s\n",
-							evt_data.event, data_fid2->if_index,
-							IPACM_Iface::ipacmcfg->iface_table[IPACM_Iface::ipacmcfg->eth_wan_iface_table_idx[i]].iface_name);
-						IPACM_EvtDispatcher::PostEvt(&evt_data);
+						IPACMERR("unable to allocate memory for event_ecm data_fid\n");
+						return NULL;
 					}
+					data_fid2->if_index =
+						IPACM_Iface::ipacmcfg->iface_table[IPACM_Iface::ipacmcfg->eth_wan_iface_table_idx[i]].netlink_interface_index;
+					evt_data.event = IPA_LINK_DOWN_EVENT;
+					evt_data.evt_data = data_fid2;
+					IPACMDBG_H("Posting IPA_LINK_DOWN_EVENT event %d for ETH VLAN iface:%d dev_name:%s\n",
+						evt_data.event, data_fid2->if_index,
+						IPACM_Iface::ipacmcfg->iface_table[IPACM_Iface::ipacmcfg->eth_wan_iface_table_idx[i]].iface_name);
+					IPACM_EvtDispatcher::PostEvt(&evt_data);
 				}
 			}
+
 			memset(&evt_data, 0, sizeof(evt_data));
 			data_fid = (ipacm_event_data_fid *)malloc(sizeof(ipacm_event_data_fid));
 			if(data_fid == NULL)

@@ -76,7 +76,6 @@ IPACM_Neighbor::IPACM_Neighbor()
 	IPACM_EvtDispatcher::registr(IPA_NEW_NEIGH_EVENT, this);
 	IPACM_EvtDispatcher::registr(IPA_DEL_NEIGH_EVENT, this);
 	IPACM_EvtDispatcher::registr(IPA_USB_LINK_UP_EVENT, this);
-
 	return;
 }
 
@@ -1640,8 +1639,9 @@ void IPACM_Neighbor::update_neigh_cache(const char *iface_name, uint8_t *mac_add
 		}
 #endif
 
-		/* Post USB_LINK_UP event for parent phy netdev intf */
-		if(!is_wlan_client_connect)
+		/* Post USB_LINK_UP event for parent phy netdev intf and added changes to avoid to
+		post the linkup event for wlan*/
+		if(!is_wlan_client_connect && (strncmp(rdev_name, "wlan", WLAN_LEN_LEN)))
 			post_phys_iface_event( rdev_name, query_ipa_if_num, query_ifindex);
 
 		if (is_phy_iface) {

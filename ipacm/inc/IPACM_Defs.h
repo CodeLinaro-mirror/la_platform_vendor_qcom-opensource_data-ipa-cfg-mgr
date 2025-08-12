@@ -261,6 +261,7 @@ typedef enum
 	IPA_LAN_CLIENT_ADD_EVENT,		  /* Add MAC based rule for lan2lan offload with static-ip */
 	IPA_LAN_CLIENT_DEL_EVENT,		  /* Del MAC based rule for lan2lan offload with static-ip */
 	IPA_DUMMY_VLAN_DOWN_EVENT,               /* ipacm_event_route_vlan */
+	IPA_NOTIFY_VLAN_DOWN,                     /* vlan_iface_info */
 	IPACM_EVENT_MAX
 } ipa_cm_event_id;
 

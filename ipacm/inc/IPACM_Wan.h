@@ -132,6 +132,10 @@ typedef struct
 	int v4_vlan_idx[IFACE_MAX];
 	int v6_vlan_idx[IFACE_MAX];
 	uint16_t vlan_id;
+#ifdef FEATURE_PPPOE
+	uint32_t wan_v4_addr;
+	uint32_t ipv6_prefix[2];
+#endif
 }ipacm_vlan_association_info;
 
 struct ipacm_pdn_flt_rule

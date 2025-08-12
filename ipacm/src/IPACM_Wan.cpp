@@ -57,6 +57,7 @@
 #include <IPACM_ConntrackListener.h>
 #include "linux/ipa_qmi_service_v01.h"
 #include <IPACM_Netlink.h>
+#include "IPACM_ConntrackClient.h"
 
 #define META_IS_IPSEC 0x10
 #define META_IPSEC_MASK 0xF0
@@ -3389,6 +3390,11 @@ void IPACM_Wan::get_vlan_association_info(ipacm_vlan_association_info* vlan_info
 				IPACMDBG_H("VlanID found in associated_VIDs in V4 ETH STA BH\n");
 				vlan_info->v4_association = ECM_WAN;
 				vlan_info->v4_vlan_idx[ECM_WAN] = vlan_idx;
+				IPACMDBG_H("Current wan");
+				iptodot("ip", IPACM_Wan::wan_v4_addr);
+				IPACMDBG_H("vlan id %d associated with ",vlan_info->vlan_id);
+				iptodot("ip", ipv4_to_iface[vlan_info->v4_idx[ECM_WAN]].ipv4_addr);
+				vlan_info->wan_v4_addr = ipv4_to_iface[vlan_info->v4_idx[ECM_WAN]].ipv4_addr;
 				v4_found = true;
 				break;
 			}
@@ -3420,6 +3426,9 @@ void IPACM_Wan::get_vlan_association_info(ipacm_vlan_association_info* vlan_info
 				IPACMDBG_H("VlanID found in associated_VIDs in V6 STA BH\n");
 				vlan_info->v6_association = ECM_WAN;
 				vlan_info->v6_vlan_idx[ECM_WAN] = vlan_idx;
+				IPACMDBG_H("vlan id %d associated with ",vlan_info->vlan_id);
+				IPACMDBG_H("Current wan Prefix: 0x%08x%08x\n", IPACM_Wan::ipv6_prefix[0], IPACM_Wan::ipv6_prefix[1]);
+				memcpy(vlan_info->ipv6_prefix, ipv6_to_iface[vlan_info->v6_idx[ECM_WAN]].ipv6_prefix, sizeof(ipv6_to_iface[vlan_info->v6_idx[ECM_WAN]].ipv6_prefix));
 				v6_found = true;
 				goto end;
 			}
@@ -3902,8 +3911,25 @@ int IPACM_Wan::handle_vlan_backhaul_switch_v6(ipacm_event_route_vlan *data, bool
 			}
 			else if(vlan_info->v6_association == ECM_WAN)
 			{
-				IPACMERR("v6 vlan wan is already up for %s, vlan id: %d\n", dev_name, data->VlanID);
-				goto fail;
+				IPACMDBG_H("Check If Inter internal pdn swich happened?\n");
+				if(IPACM_Iface :: ipacmcfg->eth_wan_pppoe_enable == true)
+				{
+					if((data->wan_ipv6_prefix[0] != vlan_info->ipv6_prefix[0]) ||
+						(data->wan_ipv6_prefix[1] != vlan_info->ipv6_prefix[1]))
+					{
+						IPACMDBG_H("Internal Backhaul switch With in ECM_WAN - V6\n");
+						IPACMDBG_H("Previous was with pdn data->wan_ipv6_prefix: 0x%08x%08x\n", vlan_info->ipv6_prefix[0], vlan_info->ipv6_prefix[1]);
+						IPACMDBG_H("Now conntrack with pdn data->wan_ipv6_prefix: 0x%08x%08x\n", data->wan_ipv6_prefix[0], data->wan_ipv6_prefix[1]);
+						post_wan_vlan_pdn_event(IPA_IP_v6, vlan_info->v6_idx[ECM_WAN], vlan_info->v6_vlan_idx[ECM_WAN], data->VlanID, false);
+						if(vlan_info->v4_association == ECM_WAN && ipv4_to_iface[vlan_info->v4_idx[ECM_WAN]].wan_up_vlan && vlan_info->v4_vlan_idx[ECM_WAN] >= 0)
+							post_wan_vlan_pdn_event(IPA_IP_v4, vlan_info->v4_idx[ECM_WAN], vlan_info->v4_vlan_idx[ECM_WAN], data->VlanID, false);
+					}
+				}
+				else
+				{
+					IPACMERR("v6 vlan wan is already up for %s, vlan id: %d\n", dev_name, data->VlanID);
+					goto fail;
+				}
 			}
 			else if(vlan_info->v4_association == ECM_WAN)
 			{
@@ -4151,8 +4177,30 @@ int IPACM_Wan::handle_vlan_backhaul_switch_v4(ipacm_event_route_vlan *data)
 			}
 			else if(vlan_info->v4_association == ECM_WAN)
 			{
-				IPACMERR("v4 vlan wan is already up for %s, vlan id: %d\n", dev_name, data->VlanID);
-				goto fail;
+				IPACMDBG_H("Check If Inter internal pdn swich happened?\n");
+				if(IPACM_Iface :: ipacmcfg->eth_wan_pppoe_enable == true)
+				{
+					if(vlan_info->wan_v4_addr != data->wan_ipv4_addr)
+					{
+						IPACMDBG_H("Internal Backhaul switch With in ECM_WAN - V4\n");
+						IPACMDBG_H("Previous was with pdn ");
+						iptodot("ip", vlan_info->wan_v4_addr);
+						IPACMDBG_H("Now conntrack with pdn ");
+						iptodot("ip", data->wan_ipv4_addr);
+						if(ipv4_to_iface[vlan_info->v4_idx[ECM_WAN]].wan_up_vlan && vlan_info->v4_vlan_idx[ECM_WAN] >= 0)
+						{
+							post_wan_vlan_pdn_event(IPA_IP_v4, vlan_info->v4_idx[ECM_WAN], vlan_info->v4_vlan_idx[ECM_WAN], data->VlanID, false);
+							if(vlan_info->v6_association == ECM_WAN && ipv6_to_iface[vlan_info->v6_idx[ECM_WAN]].wan_up_vlan_v6 &&
+								vlan_info->v6_vlan_idx[ECM_WAN] >= 0)
+								post_wan_vlan_pdn_event(IPA_IP_v6, vlan_info->v6_idx[ECM_WAN],vlan_info->v6_vlan_idx[ECM_WAN], data->VlanID, false);
+						}
+					}
+				}
+				else
+				{
+					IPACMERR("v4 vlan wan is already up for %s, vlan id: %d\n", dev_name, data->VlanID);
+					goto fail;
+				}
 			}
 			else if(vlan_info->v6_association == ECM_WAN)
 			{

@@ -1218,8 +1218,12 @@ int ipa_nati_alloc_pdn(
 			return 0;
 		}
 		/* 0th PDN is reserved for STA*/
-		if(!memcmp((pdns + i), &zero_test, sizeof(ipa_nat_pdn_entry)) && (i != 0))
-		{
+		if (i == 0) {
+			if ((pdn_info->is_sta == true) && (!memcmp((&pdns[0]), &zero_test, sizeof(ipa_nat_pdn_entry)))) {
+				IPADBG("found an empty STA pdn in index 0\n");
+				break;
+			}
+		} else if (!memcmp((pdns + i), &zero_test, sizeof(ipa_nat_pdn_entry))) {
 			IPADBG("found an empty pdn in index %d\n", i);
 			break;
 		}

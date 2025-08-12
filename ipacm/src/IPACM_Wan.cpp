@@ -7224,6 +7224,36 @@ int IPACM_Wan::handle_down_evt()
 	if (ip_type != IPA_IP_v4)
 	{
 		IPACMDBG_H("Delete default v6 routing rules\n");
+		/* In case if VLAN_PDN_UP with STA backahul not done for
+			VLAN due to STA header not created, we still need to clean
+			route rules for that vlan client which is installed during neighbor handling
+		*/
+		if((!header_set_v6)&&  (!pending_VID_STA_v6.empty()))
+		{
+			ipacm_event_vlan_pdn *vlandown_data = NULL;
+			ipacm_cmd_q_data evt_data;
+			std::list<uint16_t>::iterator it;
+			for(it = pending_VID_STA_v6.begin(); it != pending_VID_STA_v6.end(); ++it)
+			{
+				vlandown_data = (ipacm_event_vlan_pdn *)malloc(sizeof(ipacm_event_vlan_pdn));
+				if(!vlandown_data)
+				{
+					IPACMERR("couldn't allocate memory for new vlan pdn event\n");
+					res = IPACM_FAILURE;
+					goto fail;
+				}
+				memset(vlandown_data, 0, sizeof(ipacm_event_vlan_pdn));
+				vlandown_data->iptype = IPA_IP_v6;
+				vlandown_data->VlanID = *it;
+				vlandown_data->mux_id = 0;
+				evt_data.event = IPA_HANDLE_WAN_VLAN_PDN_DOWN;
+				evt_data.evt_data = (void *)vlandown_data;
+				IPACMDBG_H("Posting IPA_HANDLE_WAN_VLAN_PDN_DOWN (v6) iptype IPA_IP_v6, VlanID %d, mux_id %d, if num %d\n",
+					vlandown_data->VlanID, vlandown_data->mux_id, ipa_if_num);
+				IPACM_EvtDispatcher::PostEvt(&evt_data);
+			}
+		}
+
 		/* May have multiple ipv6 iface-routing rules*/
 		for (i = 0; i < 2*num_dft_rt_v6; i++)
 		{
@@ -7339,6 +7369,7 @@ int IPACM_Wan::handle_down_evt()
 			}
 			IPACM_Iface::ipacmcfg->decreaseFltRuleCount(rx_prop->rx[0].src_pipe, IPA_IP_v6, num_ipv6_dest_flt_rule);
 		}
+		IPACM_Iface::ipacmcfg->del_vlan_ipv6_prefix(ipv6_prefix, -1);
 		IPACMDBG_H("finished delete default v6 filtering rules\n ");
 	}
 	if(hdr_proc_hdl_dummy_v6)

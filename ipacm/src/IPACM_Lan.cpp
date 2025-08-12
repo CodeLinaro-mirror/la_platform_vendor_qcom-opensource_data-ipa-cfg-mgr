@@ -314,6 +314,7 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 	ipacm_event_iface_up_tehter* data_wan_tether;
 	list <ipacm_event_data_all>::iterator it;
 	ipacm_event_data_all *data_all=NULL;
+	vlan_iface_info *del_vlan_info = NULL;
 	ipacm_cmd_q_data evt_data;
 	int clnt_indx = 0;
 	ipa_bridge_vlan_mapping_info mapping_info;
@@ -1390,7 +1391,6 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 			}
 		}
 		break;
-#endif
 	case IPA_NOTIFY_VLAN_UP:
 		{
 			IPACMDBG_H("Received IPA_NOTIFY_VLAN_UP\n");
@@ -1403,6 +1403,38 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 			}
 		}
 		break;
+	case IPA_NOTIFY_VLAN_DOWN:
+		{
+			IPACMDBG_H("Received IPA_NOTIFY_VLAN_DOWN\n");
+			del_vlan_info = (vlan_iface_info *)param;
+			if(!del_vlan_info)
+			{
+				IPACMDBG_H("Received empty vlan iface down info\n");
+				return;
+			}
+			if(strstr(del_vlan_info->vlan_iface_name, dev_name))
+			{
+				int cnt;
+				int num_eth_client_tmp = num_eth_client;
+				IPACMDBG_H("%d VLAN iface found on %s iface \n", del_vlan_info->vlan_id,  dev_name);
+				for(cnt = 0; cnt < num_eth_client_tmp; cnt++)
+				{
+					if(get_client_memptr(eth_client, cnt)->vlan_id ==  del_vlan_info->vlan_id)
+					{
+						IPACMDBG_H("deleting vlan %d info with MAC %02x:%02x:%02x:%02x:%02x:%02x\n",del_vlan_info->vlan_id,
+							get_client_memptr(eth_client, cnt)->mac[0],
+							get_client_memptr(eth_client, cnt)->mac[1],
+							get_client_memptr(eth_client, cnt)->mac[2],
+							get_client_memptr(eth_client, cnt)->mac[3],
+							get_client_memptr(eth_client, cnt)->mac[4],
+							get_client_memptr(eth_client, cnt)->mac[5]);
+						handle_eth_client_down_evt(get_client_memptr(eth_client, cnt)->mac, del_vlan_info->vlan_id);
+					}
+				}
+			}
+		}
+		break;
+#endif
 	/* only need for vlan supported lan instance */
 	case IPA_HANDLE_WAN_ADDR_ADD_V6:
 		{
@@ -6942,9 +6974,10 @@ int IPACM_Lan::handle_eth_client_down_evt(uint8_t *mac_addr, uint16_t vlan_id, i
 		return IPACM_SUCCESS;
 	}
 
-	if (get_client_memptr(eth_client, clt_indx)->ipv4_set &&
+	/*for vlan down scenarios data should be NULL*/
+	if ((data != NULL) &&  (get_client_memptr(eth_client, clt_indx)->ipv4_set &&
 		get_client_memptr(eth_client, clt_indx)->v4_addr &&
-		data->ipv4_addr)
+		data->ipv4_addr))
 	{
 		if (data->ipv4_addr != get_client_memptr(eth_client, clt_indx)->v4_addr)
 		{
@@ -10857,6 +10890,7 @@ int IPACM_Lan::enable_per_client_stats(bool *status)
 int IPACM_Lan::handle_wan_down_v6(bool is_sta_mode, bool is_support_mpdn, uint16_t vid)
 {
 	int i = 0;
+	bool vid_present = false;
 
 	if (rx_prop == NULL)
 	{
@@ -10906,9 +10940,21 @@ int IPACM_Lan::handle_wan_down_v6(bool is_sta_mode, bool is_support_mpdn, uint16
 					vlan_sta_info[i].v6_flt_hdl = 0;
 					if (vlan_sta_info[i].v4_flt_hdl == 0)
 						vlan_sta_info[i].vlan_id = 0;
+					vid_present = true;
 				}
 			}
 		}
+
+		/* In case if VLAN_PDN_UP with STA backahul not done for
+		VLAN due to STA header not created, we still need to clean
+		route rules for that vlan client which is installed during neighbor handling */
+		if(!vid_present && vid > 0)
+		{
+			/* STA case reset vlan client ipv6 rt-rules */
+			handle_lan_client_reset_rt(IPA_IP_v6, vid);
+			IPACMDBG_H("STA BH v6 client RT rules has been deleted successfully.\n");
+		}
+
 		IPACMDBG_H("STA BH v6 rules has been deleted successfully.\n");
 	}
 

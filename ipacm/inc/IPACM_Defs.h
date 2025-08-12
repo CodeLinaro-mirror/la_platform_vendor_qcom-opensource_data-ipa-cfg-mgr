@@ -305,6 +305,7 @@ typedef enum
 	IPA_QOS_RULE_DEL_EVENT,                   /* ipacm_qos_rule_del_event */
 	IPA_QOS_RULE_FLUSH_EVENT,                 /* ipacm_qos_rule_flush_event */
 	IPA_DUMMY_VLAN_DOWN_EVENT,               /* ipacm_event_route_vlan */
+	IPA_NOTIFY_VLAN_DOWN,                     /* vlan_iface_info */
 	IPACM_EVENT_MAX
 } ipa_cm_event_id;
 

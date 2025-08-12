@@ -323,6 +323,7 @@ int IPACM_IfaceManager::create_iface_instance(ipacm_ifacemgr_data *param)
 				IPACM_EvtDispatcher::registr(IPA_HANDLE_WAN_VLAN_PDN_UP, lan);
 				IPACM_EvtDispatcher::registr(IPA_HANDLE_WAN_VLAN_PDN_DOWN, lan);
 				IPACM_EvtDispatcher::registr(IPA_NOTIFY_VLAN_UP, lan);
+				IPACM_EvtDispatcher::registr(IPA_NOTIFY_VLAN_DOWN, lan);
 #endif
 #ifdef FEATURE_IPA_ANDROID
 				IPACM_EvtDispatcher::registr(IPA_TETHERING_STATS_UPDATE_EVENT, lan);
@@ -416,6 +417,7 @@ int IPACM_IfaceManager::create_iface_instance(ipacm_ifacemgr_data *param)
 					IPACM_EvtDispatcher::registr(IPA_PRIVATE_SUBNET_CHANGE_EVENT, odu); 	// register for IPA_PRIVATE_SUBNET_CHANGE_EVENT event
 					IPACM_EvtDispatcher::registr(IPA_CFG_CHANGE_EVENT, odu); 				// register for IPA_CFG_CHANGE event
 					IPACM_EvtDispatcher::registr(IPA_NOTIFY_VLAN_UP, odu);
+					IPACM_EvtDispatcher::registr(IPA_NOTIFY_VLAN_DOWN, odu);
 #endif
 #ifdef FEATURE_SOCKSv5
 						IPACM_EvtDispatcher::registr(IPA_HANDLE_SOCKSv5_READY, odu);
@@ -521,6 +523,7 @@ int IPACM_IfaceManager::create_iface_instance(ipacm_ifacemgr_data *param)
 				IPACM_EvtDispatcher::registr(IPA_HANDLE_WAN_VLAN_PDN_DOWN, wl);
 				IPACM_EvtDispatcher::registr(IPA_HANDLE_WAN_ADDR_ADD_V6, wl);
 				IPACM_EvtDispatcher::registr(IPA_NOTIFY_VLAN_UP, wl);
+				IPACM_EvtDispatcher::registr(IPA_NOTIFY_VLAN_DOWN, wl);
 #endif
 #ifndef FEATURE_IPA_ANDROID
 				IPACM_EvtDispatcher::registr(IPA_WLAN_SWITCH_TO_SCC, wl);

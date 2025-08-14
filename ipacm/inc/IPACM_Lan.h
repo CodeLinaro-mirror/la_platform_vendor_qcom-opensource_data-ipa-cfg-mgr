@@ -154,12 +154,12 @@ typedef struct _ipa_eth_client
 	bool ipv4_ul_rules_set;
 	bool ipv6_ul_rules_set;
 	/* store ipv4 UL filter rule handlers from Q6*/
-	uint32_t wan_ul_fl_rule_hdl_v4[MAX_WAN_UL_FILTER_RULES];
+	uint32_t wan_ul_fl_rule_hdl_v4[IPA_MAX_NUM_PROPS][MAX_WAN_UL_FILTER_RULES];
 	/* store ipv6 UL filter rule handlers from Q6*/
 #ifndef IPA_V6_UL_WL_FIREWALL_HANDLE
-	uint32_t wan_ul_fl_rule_hdl_v6[MAX_WAN_UL_FILTER_RULES];
+	uint32_t wan_ul_fl_rule_hdl_v6[IPA_MAX_NUM_PROPS][MAX_WAN_UL_FILTER_RULES];
 #else
-	uint32_t wan_ul_fl_rule_hdl_v6[IPACM_MAX_V6_UL_WL_FIREWALL_ENTRIES];
+	uint32_t wan_ul_fl_rule_hdl_v6[IPA_MAX_NUM_PROPS][IPACM_MAX_V6_UL_WL_FIREWALL_ENTRIES];
 #endif
 	int8_t lan_stats_idx;
 #ifdef IPA_HW_FNR_STATS
@@ -386,7 +386,7 @@ public:
 	int handleIpsecUlFltAddEvt(struct ipa_ioc_ipsec_ul_flt_attr *uf);
 	int handleIpsecUlFltDelEvt(struct ipa_ioc_ipsec_ul_flt_attr *uf);
 	int handleIpsecUlFltAddAll(enum ipa_ip_type ip);
-	int handleIpsecUlFltDelAll(enum ipa_ip_type ip);
+	int handleIpsecUlFltDelAll(enum ipa_ip_type ip, bool clearConfig = true);
 #endif
 
 	int handle_static_policy_rt_rule_add();

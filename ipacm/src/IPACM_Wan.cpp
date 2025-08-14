@@ -7386,6 +7386,7 @@ int IPACM_Wan::handle_down_evt(ipa_ip_type arg_ip_type)
 		if(num_offloaded_pdns > 0)
 		{
 			num_offloaded_pdns--;
+			IPACM_SYSLOG("Now offload PDN count is %d\n", num_offloaded_pdns);
 		}
 		vlandown_data = (ipacm_event_vlan_pdn *)malloc(sizeof(ipacm_event_vlan_pdn));
 		if(vlandown_data == NULL)
@@ -7429,13 +7430,12 @@ int IPACM_Wan::handle_down_evt(ipa_ip_type arg_ip_type)
 		}
 
 		ipv6_to_iface[wlan_ipv6_pdn_index].wan_up_vlan_v6 = false;
-
 		wan_v6_is_default_gw = true;
-		if (wlan_ipv4_pdn_index == -1)
+		if ((wlan_ipv4_pdn_index == -1) || (wlan_ipv4_pdn_index >= 0 && ipv4_to_iface[wlan_ipv4_pdn_index].wan_up_vlan == false))
 		{
 			num_offloaded_pdns--;
+			IPACM_SYSLOG("Now offload PDN count is %d\n", num_offloaded_pdns);
 		}
-
 		vlandown_data = (ipacm_event_vlan_pdn *)malloc(sizeof(ipacm_event_vlan_pdn));
 		if(vlandown_data == NULL)
 		{
@@ -7478,12 +7478,11 @@ int IPACM_Wan::handle_down_evt(ipa_ip_type arg_ip_type)
 
 		ipv4_to_iface[wlan_ipv4_pdn_index].wan_up_vlan = false;
 		wan_v4_is_default_gw = true;
-
-		if (wlan_ipv6_pdn_index == -1)
+		if ((wlan_ipv6_pdn_index == -1) || (wlan_ipv6_pdn_index >= 0 && ipv6_to_iface[wlan_ipv6_pdn_index].wan_up_vlan_v6 == false))
 		{
 			num_offloaded_pdns--;
+			IPACM_SYSLOG("Now offload PDN count is %d\n", num_offloaded_pdns);
 		}
-
 		vlandown_data = (ipacm_event_vlan_pdn *)malloc(sizeof(ipacm_event_vlan_pdn));
 		if(vlandown_data == NULL)
 		{
@@ -7533,8 +7532,6 @@ int IPACM_Wan::handle_down_evt(ipa_ip_type arg_ip_type)
 			res = IPACM_FAILURE;
 			goto fail;
 		}
-		wan_v4_addr_set = false;
-		wan_v4_addr = 0;
 		ipv4_to_iface[wlan_ipv4_pdn_index].ipv4_addr = 0;
 		ipv4_to_iface[wlan_ipv4_pdn_index].is_xlat = false;
 		ipv4_to_iface[wlan_ipv4_pdn_index].pIface = NULL;
@@ -7564,6 +7561,9 @@ int IPACM_Wan::handle_down_evt(ipa_ip_type arg_ip_type)
 									 IPV4_DEFAULT_FILTERTING_RULES);
 									 IPACMDBG_H("finished delete default v4 filtering rules\n ");
 		}
+		wan_v4_addr_set = false;
+		wan_v4_addr = 0;
+		IPACM_Wan::wlan_v4_vlan_index = -1;
 	}
 
 	if(del_v6)
@@ -7620,8 +7620,7 @@ int IPACM_Wan::handle_down_evt(ipa_ip_type arg_ip_type)
 		ipv6_to_iface[wlan_ipv6_pdn_index].pIface = NULL;
 		memset(&ipv6_to_iface[wlan_ipv6_pdn_index].ipv6_prefix, 0, sizeof(uint32_t) * 2);
 		wlan_ipv6_pdn_index = -1;
-		memset(ipv6_addr, 0, sizeof(uint32_t)*(MAX_DEFAULT_v6_ROUTE_RULES*4));
-
+		IPACM_Wan::wlan_v6_vlan_index = -1;
 		/* clean wan-client header, routing rules */
 		IPACMDBG_H("left %d wan clients need to be deleted \n ", num_wan_client);
 		num_dft_rt_v6--;
@@ -7884,9 +7883,6 @@ int IPACM_Wan::handle_down_evt_ex(ipa_ip_type iptype)
 			ipv4_to_iface[modem_ipv4_pdn_index].ipv4_addr = 0;
 			ipv4_to_iface[modem_ipv4_pdn_index].pIface = NULL;
 			ipv4_to_iface[modem_ipv4_pdn_index].is_xlat = false;
-			wan_v4_addr_set = false;
-			wan_v4_addr = 0;
-
 		}
 		/* if no PDN is up, remove rm dependencies */
 		if(!isVlanWanUP() && !isVlanWanUP_V6() && !wan_up && !wan_up_v6)
@@ -8481,6 +8477,8 @@ fail:
 	}
 	if ((iptype == IPA_IP_v4 || iptype == IPA_IP_MAX) && wan_route_rule_v4_hdl != NULL)
 	{
+		wan_v4_addr_set = false;
+		wan_v4_addr = 0;
 		free(wan_route_rule_v4_hdl);
 		wan_route_rule_v4_hdl = NULL;
 	}

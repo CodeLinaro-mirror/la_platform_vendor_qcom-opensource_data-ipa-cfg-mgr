@@ -1474,6 +1474,18 @@ end:
 		if (ipa_interface_index == ipa_if_num)
 		{
 			IPACMDBG_H("Received IPA_LAN_CLIENT_CONNECT_EVENT wlan\n");
+
+			for (int i = 0; i < IPA_MAX_NUM_HW_PATH_CLIENTS; i++)
+			{
+				if (memcmp(active_lan_client_index[i].mac, data->mac_addr, IPA_MAC_ADDR_SIZE) == 0)
+				{
+					IPACMDBG_H("MAC %02x:%02x:%02x:%02x:%02x:%02x has been received already, return\n",
+						data->mac_addr[0], data->mac_addr[1], data->mac_addr[2],
+						data->mac_addr[3], data->mac_addr[4], data->mac_addr[5]);
+					return; // MAC found
+				}
+			}
+
 			/* Check if we can add this to the active list. */
 			/* Active List:- Clients for which index is less than IPA_MAX_NUM_HW_PATH_CLIENTS. */
 			if (get_free_active_lan_stats_index(data->mac_addr, ipa_if_num) == -1)

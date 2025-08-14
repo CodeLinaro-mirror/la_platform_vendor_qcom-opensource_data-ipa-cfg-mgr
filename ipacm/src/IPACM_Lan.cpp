@@ -10873,6 +10873,33 @@ void IPACM_Lan::handle_stats_client_connect(int if_index, uint8_t *mac_addr)
 		IPACMDBG_H("Received IPA_LAN_CLIENT_CONNECT_EVENT dev_name:%s\n", dev_name);
 		/* Check if we can add this to the active list. */
 		/* Active List:- Clients for which index is less than IPA_MAX_NUM_HW_PATH_CLIENTS. */
+		if(is_odu)
+		{
+			for (int i = 0; i < IPA_MAX_NUM_HW_PATH_CLIENTS; i++)
+			{
+				if (memcmp(active_lan_client_index_odu[i].mac, mac_addr, IPA_MAC_ADDR_SIZE) == 0)
+				{
+					IPACMDBG_H("MAC %02x:%02x:%02x:%02x:%02x:%02x has been received already, return\n",
+						mac_addr[0], mac_addr[1], mac_addr[2],
+						mac_addr[3], mac_addr[4], mac_addr[5]);
+					return; // MAC found
+				}
+			}
+		}
+		else
+		{
+			for (int i = 0; i < IPA_MAX_NUM_HW_PATH_CLIENTS; i++)
+			{
+				if (memcmp(active_lan_client_index[i].mac, mac_addr, IPA_MAC_ADDR_SIZE) == 0)
+				{
+					IPACMDBG_H("MAC %02x:%02x:%02x:%02x:%02x:%02x has been received already, return\n",
+						mac_addr[0], mac_addr[1], mac_addr[2],
+						mac_addr[3], mac_addr[4], mac_addr[5]);
+					return; // MAC found
+				}
+			}
+		}
+
 		if (get_free_active_lan_stats_index(mac_addr) == -1)
 		{
 			IPACMDBG_H("Failed to reserve active lan_stats index, try inactive list. \n");

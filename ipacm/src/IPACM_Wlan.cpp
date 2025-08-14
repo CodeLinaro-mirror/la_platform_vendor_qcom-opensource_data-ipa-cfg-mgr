@@ -8994,7 +8994,9 @@ int IPACM_Wlan::install_uplink_filter_rule
 (
 	ipacm_ext_prop* prop,
 	ipa_ip_type iptype,
-	uint8_t xlat_mux_id
+	uint8_t xlat_mux_id,
+	bool is_xlat,
+	uint16_t vlan_id
 )
 {
 	int ret = IPACM_SUCCESS, i=0;

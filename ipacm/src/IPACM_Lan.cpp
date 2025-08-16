@@ -862,8 +862,9 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 					}
 
 #ifdef FEATURE_EoGRE
-					if ( IPACM_Iface::ipacmcfg->eogre_enabled )
+					if ( IPACM_Iface::ipacmcfg->eogre_enabled && strstr(data->iface_name, STR_ETH_IFACE))
 					{
+						IPACMDBG_H("EoGRE is supported on eth iface only\n");
 						IPACMDBG_H(
 							"A previous eogre enable needs to be undone, then redone. "
 							"Need to call eogre_down followed by an eogre_up\n");

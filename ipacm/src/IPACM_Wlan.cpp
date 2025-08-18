@@ -1563,10 +1563,14 @@ end:
 	case IPA_HANDLE_WAN_VLAN_PDN_UP:
 	{
 		ipacm_event_vlan_pdn *data = (ipacm_event_vlan_pdn *)param;
+		char if_name[IPA_IFACE_NAME_LEN] = {0};
+		char *char_idx = NULL;
 
 		IPACMDBG_H("Received IPA_HANDLE_WAN_VLAN_PDN_UP for VID %d, iptype %d\n",
 		   data->VlanID,
 			data->iptype);
+
+		strlcpy(if_name, dev_name, IPA_IFACE_NAME_LEN);
 		if(is_vlan_IF(data->VlanID))
 		{
 			if(data->iptype == IPA_IP_v6)
@@ -1579,9 +1583,13 @@ end:
 			}
 			handle_vlan_pdn_up(data);
 		}
-
+		if (char_idx = strstr(if_name, "_"))
+		{
+			char_idx[0] = '\0';
+			IPACMDBG_H("truncated mlo base iface name %s\n", if_name);
+		}
 		//can add if (IPACM_Iface::ipacmcfg->ipacm_static_policy_enable
-		if(IPACM_Iface::ipa_get_if_index(dev_name, &if_index))
+		if(IPACM_Iface::ipa_get_if_index(if_name, &if_index))
 		{
 			IPACMERR("Error while getting if index for %s device", dev_name);
 			break;
@@ -1709,10 +1717,14 @@ end:
 	case IPA_HANDLE_WAN_VLAN_PDN_DOWN:
 	{
 		ipacm_event_vlan_pdn *data = (ipacm_event_vlan_pdn *)param;
+		char if_name[IPA_IFACE_NAME_LEN] = {0};
+		char *char_idx = NULL;
 
 		IPACMDBG_H("Received IPA_HANDLE_WAN_VLAN_PDN_DOWN for VID %d, iptype %d\n",
 			data->VlanID,
 			data->iptype);
+
+		strlcpy(if_name, dev_name, IPA_IFACE_NAME_LEN);
 		if(is_vlan_IF(data->VlanID))
 		{
 #ifdef FEATURE_IPACM_UL_FIREWALL
@@ -1725,8 +1737,13 @@ end:
 #endif
 			handle_vlan_pdn_down(data);
 		}
+		if (char_idx = strstr(if_name, "_"))
+		{
+			char_idx[0] = '\0';
+			IPACMDBG_H("truncated mlo base iface name %s\n", if_name);
+		}
 
-		if(IPACM_Iface::ipa_get_if_index(dev_name, &if_index))
+		if(IPACM_Iface::ipa_get_if_index(if_name, &if_index))
 		{
 			IPACMERR("Error while getting if index for %s device", dev_name);
 			break;
@@ -9972,10 +9989,18 @@ fail:
 void IPACM_Wlan::update_svap_state() {
 	FILE *fp = NULL;
 	char MapBSSType_row[10] = { 0 }, cmd[200] = { 0 };
+	char vlan_iface_name[IPA_RESOURCE_NAME_MAX];
+	char *char_idx = NULL;
 
 	IPACMDBG_H("dev_name %s\n", dev_name);
+	strlcpy(vlan_iface_name, dev_name, sizeof(vlan_iface_name));
+	if (char_idx = strstr(vlan_iface_name, "_"))
+	{
+		char_idx[0] = '\0';
+		IPACMDBG_H("truncated mlo base iface name %s\n", vlan_iface_name);
+	}
 
-	snprintf(cmd, 200, "cfg80211tool_mesh %s get_MapBSSType| awk -F ':' '{print $2}' > /tmp/data_ipa/ipa_vap.txt", dev_name);
+	snprintf(cmd, 200, "cfg80211tool_mesh %s get_MapBSSType| awk -F ':' '{print $2}' > /tmp/data_ipa/ipa_vap.txt", vlan_iface_name);
 	system(cmd);
 
 	fp = fopen("/tmp/data_ipa/ipa_vap.txt", "r");

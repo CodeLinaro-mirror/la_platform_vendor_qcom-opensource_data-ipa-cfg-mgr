@@ -3674,6 +3674,7 @@ void IPACM_Config::update_client_info(uint8_t *mac_addr, tether_client_info *cli
 						memset(temp2, 0, sizeof(mac_flt_type));
 						temp2->is_blacklist = true;
 						IPACM_Iface::ipacmcfg->mac_flt_lists.insert(std::make_pair(mac, temp2));
+						update_need = true;
 					}
 					break;
 				}
@@ -3706,6 +3707,7 @@ void IPACM_Config::update_client_info(uint8_t *mac_addr, tether_client_info *cli
 						memset(temp2, 0, sizeof(mac_flt_type));
 						temp2->is_blacklist = true;
 						IPACM_Iface::ipacmcfg->mac_flt_lists.insert(std::make_pair(mac, temp2));
+						update_need = true;
 					}
 					break;
 				}
@@ -3797,7 +3799,6 @@ bool IPACM_Config::client_in_stats_cache(uint8_t *mac_addr)
 	if (mac_addrs_stats_cache.count(mac))
 	{
 		is_enable = true;
-		mac_addrs_stats_cache.erase(mac);
 	}
 	else
 	{
@@ -4219,6 +4220,12 @@ int IPACM_Config::SetWlanVlanAp(char *event_iface_name) {
 	IPACMDBG_H("iface %s, event iface %s\n", if_name, event_iface_name);
 
 	char *char_idx =  strrchr(if_name, '.');
+	if (char_idx) {
+		char_idx[0] = '\0';
+		IPACMDBG_H("truncated iface name %s\n", if_name);
+	}
+
+	char_idx =  strrchr(if_name, '_');
 	if (char_idx) {
 		char_idx[0] = '\0';
 		IPACMDBG_H("truncated iface name %s\n", if_name);

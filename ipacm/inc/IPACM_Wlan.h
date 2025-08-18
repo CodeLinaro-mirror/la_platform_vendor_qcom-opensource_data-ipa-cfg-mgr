@@ -231,7 +231,9 @@ public:
 	(
 		ipacm_ext_prop* prop,
 		ipa_ip_type iptype,
-		uint8_t xlat_mux_id
+		uint8_t xlat_mux_id,
+		bool is_xlat = false,
+		uint16_t vlan_id = 0
 	);
 
 	/* Delete UL filter rule from Q6 for all clients */

@@ -16442,9 +16442,18 @@ int IPACM_Lan::install_uplink_filter_rule
 									if (handle_mpdn_ul_xlat_filter_rule_per_client(i, IPACM_Iface::ipacmcfg->GetExtProp(IPA_IP_v4),
 										iptype, xlat_mux_id, vlan_id))
 									{
-										remove_pdn_xlat_ctx_per_client(i, xlat_mux_id);
-										IPACMDBG_H("Failed to install xlat rules\n");
-										return IPACM_FAILURE;
+										if(get_client_memptr(eth_client, i)->ipv4_ul_rules_set)
+										{
+											ret = delete_uplink_filter_rule_per_client(iptype, get_client_memptr(eth_client, i)->mac,
+													get_client_memptr(eth_client, i)->vlan_id);
+											remove_pdn_xlat_ctx_per_client(i, xlat_mux_id);
+											IPACMDBG_H("Failed to install xlat rules\n");
+										}
+										else
+										{
+											remove_pdn_xlat_ctx_per_client(i, xlat_mux_id);
+											IPACMDBG_H("Failed to install xlat rules\n");
+										}
 									}
 							}
 							else
@@ -16478,9 +16487,18 @@ int IPACM_Lan::install_uplink_filter_rule
 									IPACM_Iface::ipacmcfg->GetExtProp(IPA_IP_v4),
 									iptype, xlat_mux_id, vlan_id))
 								{
-									remove_pdn_xlat_ctx_per_client(i, xlat_mux_id);
-									IPACMDBG_H("Failed to install xlat rules\n");
-									return IPACM_FAILURE;
+									if(get_client_memptr(eth_client, i)->ipv4_ul_rules_set)
+									{
+										ret = delete_uplink_filter_rule_per_client(iptype, get_client_memptr(eth_client, i)->mac,
+												get_client_memptr(eth_client, i)->vlan_id);
+										remove_pdn_xlat_ctx_per_client(i, xlat_mux_id);
+										IPACMDBG_H("Failed to install xlat rules\n");
+									}
+									else
+									{
+										remove_pdn_xlat_ctx_per_client(i, xlat_mux_id);
+										IPACMDBG_H("Failed to install xlat rules\n");
+									}
 								}
 								get_client_memptr(eth_client, i)->ipv4_xlat_ul_rules_set = true;
 							}

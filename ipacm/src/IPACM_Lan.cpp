@@ -5192,7 +5192,6 @@ int IPACM_Lan::handle_eth_hdr_init(uint8_t *mac_addr, ipacm_bridge *bridge, uint
 			if (set_lan_client_info(client_info))
 			{
 				res = IPACM_FAILURE;
-				free(client_info);
 				/* Reset the mac from active list. */
 				reset_active_lan_stats_index(get_client_memptr(eth_client, clnt_indx)->lan_stats_idx, mac_addr);
 				/* Add the mac to inactive list. */
@@ -5200,7 +5199,6 @@ int IPACM_Lan::handle_eth_hdr_init(uint8_t *mac_addr, ipacm_bridge *bridge, uint
 				get_client_memptr(eth_client, clnt_indx)->lan_stats_idx = -1;
 				goto fail;
 			}
-			free(client_info);
 			if (IPACM_Wan::isWanUP(ipa_if_num))
 			{
 				if(IPACM_Wan::backhaul_is_sta_mode == false)
@@ -5246,7 +5244,10 @@ int IPACM_Lan::handle_eth_hdr_init(uint8_t *mac_addr, ipacm_bridge *bridge, uint
 		return res;
 	}
 fail:
-	free(pHeaderDescriptor);
+	if(client_info)
+		free(client_info);
+	if(pHeaderDescriptor)
+		free(pHeaderDescriptor);
 	return res;
 }
 

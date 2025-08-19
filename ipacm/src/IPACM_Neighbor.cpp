@@ -862,6 +862,11 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 								IPACM_EvtDispatcher::PostEvt(&evt_data);
 
 								/* ask for replaced iface name*/
+								if(!data_all)
+								{
+									IPACMERR("Unallocated data\n");
+									return;
+								}
 								ipa_interface_index = IPACM_Iface::iface_ipa_index_query(data_all->if_index);
 								/* check for failure return */
 								if (IPACM_FAILURE == ipa_interface_index) {

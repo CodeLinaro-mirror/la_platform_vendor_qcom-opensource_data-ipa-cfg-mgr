@@ -875,11 +875,11 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 									IPACMERR("Unable to allocate memory\n");
 									return;
 								}
+								memset(data_all, 0, sizeof(ipacm_event_data_all));
 								memcpy(data_all, data, sizeof(ipacm_event_data_all));
 								evt_data.evt_data = (void *)data_all;
 #endif
 								IPACM_EvtDispatcher::PostEvt(&evt_data);
-
 								/* ask for replaced iface name*/
 								ipa_interface_index = IPACM_Iface::iface_ipa_index_query(data_all->if_index);
 								/* check for failure return */

@@ -4650,10 +4650,10 @@ int IPACM_Lan::handle_eth_hdr_init(uint8_t *mac_addr, ipacm_bridge *bridge, uint
 	struct ipa_ioc_add_hdr *pHeaderDescriptor = NULL;
 	uint32_t cnt, idx;
 	int clnt_indx;
-	uint8_t *mac_address;
+	uint8_t *mac_address = NULL;
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
-	struct wan_ioctl_lan_client_info *client_info;
-	ipacm_ext_prop* ext_prop;
+	struct wan_ioctl_lan_client_info *client_info = NULL;
+	ipacm_ext_prop* ext_prop = NULL;
 	int max_clients = (IPACM_Iface::ipacmcfg->ipacm_lan_stats_enable) ? IPA_MAX_NUM_HW_PATH_CLIENTS:
 		IPA_MAX_NUM_ETH_CLIENTS;
 #else
@@ -5207,7 +5207,6 @@ int IPACM_Lan::handle_eth_hdr_init(uint8_t *mac_addr, ipacm_bridge *bridge, uint
 			if (set_lan_client_info(client_info))
 			{
 				res = IPACM_FAILURE;
-				free(client_info);
 				/* Reset the mac from active list. */
 				reset_active_lan_stats_index(get_client_memptr(eth_client, clnt_indx)->lan_stats_idx, mac_addr);
 				/* Add the mac to inactive list. */
@@ -5215,7 +5214,6 @@ int IPACM_Lan::handle_eth_hdr_init(uint8_t *mac_addr, ipacm_bridge *bridge, uint
 				get_client_memptr(eth_client, clnt_indx)->lan_stats_idx = -1;
 				goto fail;
 			}
-			free(client_info);
 			if (IPACM_Wan::isWanUP(ipa_if_num))
 			{
 				if(IPACM_Wan::backhaul_is_sta_mode == false)
@@ -5261,7 +5259,10 @@ int IPACM_Lan::handle_eth_hdr_init(uint8_t *mac_addr, ipacm_bridge *bridge, uint
 		return res;
 	}
 fail:
-	free(pHeaderDescriptor);
+	if(client_info != NULL)
+		free(client_info);
+	if(pHeaderDescriptor != NULL)
+		free(pHeaderDescriptor);
 	return res;
 }
 

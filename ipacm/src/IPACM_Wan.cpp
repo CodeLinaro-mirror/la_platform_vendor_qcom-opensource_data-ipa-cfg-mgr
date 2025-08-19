@@ -4159,6 +4159,7 @@ int IPACM_Wan::handle_route_add_evt(ipa_ip_type iptype)
 			if(m_header.GetHeaderHandle(&hdr) == false)
 			{
 				IPACMERR("Failed to get QMAP header.\n");
+				free(rt_rule);
 				return IPACM_FAILURE;
 			}
 			rt_rule_entry->rule.hdr_hdl = hdr.hdl;
@@ -4313,6 +4314,7 @@ int IPACM_Wan::handle_route_add_evt(ipa_ip_type iptype)
 			if(pdn_update == NULL)
 			{
 				IPACMERR("Unable to allocate memory\n");
+				free(rt_rule);
 				return IPACM_FAILURE;
 			}
 			memset(pdn_update, 0, sizeof(ipacm_event_vlan_pdn));
@@ -4394,6 +4396,7 @@ int IPACM_Wan::handle_route_add_evt(ipa_ip_type iptype)
 				if(fd_wwan_ioctl < 0)
 				{
 					IPACMERR("Failed to open %s.\n",WWAN_QMI_IOCTL_DEVICE_NAME);
+					free(rt_rule);
 					return false;
 				}
 				IPACMDBG_H("send WAN_IOC_NOTIFY_WAN_STATE up to IPA_PM\n");

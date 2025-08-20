@@ -2617,7 +2617,8 @@ bool IPACM_Config::iface_in_vlan_mode(const char *interfaceName) {
 		IPACMDBG("eth0 vlan mode %d\n", vlan_devices[IPA_VLAN_IF_ETH0]);
 		IPACMDBG("eth0 vlan spcl mode %d\n", IsSpclIface(nameToCheck.c_str()));
 		return vlan_devices[IPA_VLAN_IF_ETH0] || vlan_devices[IPA_VLAN_IF_EMAC] ||
-			(IPACM_Iface::ipacmcfg->ipacm_emesh_enable && IPACM_Iface::ipacmcfg->ipacm_emesh_mode >= 2 && IsSpclIface(nameToCheck.c_str()));
+			(IPACM_Iface::ipacmcfg->ipacm_emesh_enable && IPACM_Iface::ipacmcfg->ipacm_emesh_mode >= 2 && IsSpclIface(nameToCheck.c_str()))
+			|| (IPACM_Iface::ipacmcfg->eth_wan_pppoe_enable && IsSpclIface(nameToCheck.c_str())) ;
 	}
 	if (strstr(nameToCheck.c_str(), "eth1")) {
 		IPACMDBG("eth1 vlan mode %d\n", vlan_devices[IPA_VLAN_IF_ETH1]);
@@ -4701,6 +4702,15 @@ bool IPACM_Config::IsSpclIface(const char *event_iface_name) {
 	res = IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].is_spcl_if;
 	IPACMDBG_H("%s is Ezmesh AP, vlan enabled special AP %d\n", if_name, res);
 
+	if(res == false)
+	{
+		/* to handle Neighbour events before ECM connect */
+		if(IPACM_Iface::ipacmcfg->eth_wan_pppoe_enable && (strstr(if_name, "eth0") != NULL))
+		{
+			res = true;
+			IPACMDBG_H("%s is pppoe AP, vlan enabled special AP %d\n", if_name, res);
+		}
+	}
 	return res;
 }
 

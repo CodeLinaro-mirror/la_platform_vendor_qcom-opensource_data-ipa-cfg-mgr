@@ -166,6 +166,68 @@ int IPACM_Neighbor::parse_bridge_name(int index, struct ipa_bridge_vlan_mapping_
 
 }
 
+void print_ipacm_bridge(const ipacm_bridge *bridge)
+{
+    if (bridge == NULL) {
+        IPACMDBG("  Bridge: (NULL)\n");
+        return;
+    }
+
+    struct in_addr addr;
+
+    IPACMDBG("  Bridge Name: %s\n", bridge->bridge_name);
+
+    addr.s_addr = bridge->bridge_netmask;
+    IPACMDBG("  Bridge Netmask: %s\n", inet_ntoa(addr));
+
+    addr.s_addr = bridge->bridge_ipv4_addr;
+    IPACMDBG("  Bridge IPv4 Address: %s\n", inet_ntoa(addr));
+
+    IPACMDBG("  Bridge MAC: %02x:%02x:%02x:%02x:%02x:%02x\n",
+           bridge->bridge_mac[0], bridge->bridge_mac[1], bridge->bridge_mac[2],
+           bridge->bridge_mac[3], bridge->bridge_mac[4], bridge->bridge_mac[5]);
+
+    IPACMDBG("  Associated VLAN IDs:\n");
+    for (int i = 0; i < IPA_MAX_VLAN_PER_BRIDGE; ++i) {
+        if (bridge->associate_VID[i] != 0) { // Assuming 0 indicates an unused slot
+            IPACMDBG("    [%d]: %u\n", i, bridge->associate_VID[i]);
+        }
+    }
+}
+
+void IPACM_Neighbor::print_ipa_neighbor_client(const struct ipa_neighbor_client *client)
+{
+    if (client == NULL) {
+        IPACMDBG("Error: ipa_neighbor_client pointer is NULL.\n");
+        return;
+    }
+
+    IPACMDBG("--- ipa_neighbor_client Contents ---\n");
+    IPACMDBG("MAC Address: %02x:%02x:%02x:%02x:%02x:%02x\n",
+           client->mac_addr[0], client->mac_addr[1], client->mac_addr[2],
+           client->mac_addr[3], client->mac_addr[4], client->mac_addr[5]);
+    IPACMDBG("Interface Index: %d\n", client->iface_index);
+
+    // Convert v4_addr to human-readable format (IPv4 dot notation)
+    struct in_addr ip_addr;
+    ip_addr.s_addr = client->v4_addr;
+    IPACMDBG("IPv4 Address: %s\n", inet_ntoa(ip_addr));
+
+    IPACMDBG("IPA Interface Number: %d\n", client->ipa_if_num);
+    IPACMDBG("Interface Name: %s\n", client->iface_name);
+    IPACMDBG("Master Interface Index: %u\n", client->master_interface_index);
+
+#ifdef FEATURE_VLAN_MPDN
+    IPACMDBG("Bridge Pointer: %p\n", (void *)client->bridge);
+    if (client->bridge != NULL) {
+        IPACMDBG("  --- Bridge Details ---\n");
+        print_ipacm_bridge(client->bridge);
+        IPACMDBG("  ----------------------\n");
+    }
+#endif
+    IPACMDBG("------------------------------------\n");
+}
+
 void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 {
 	ipacm_event_data_all *data_all = NULL;
@@ -485,6 +547,12 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 		break;
 		default:
 		{
+			for (int i = 0; i < num_neighbor_client; ++i)
+			{
+				IPACMDBG("--- Client %d ---\n", i + 1);
+				print_ipa_neighbor_client(&neighbor_client[i]);
+				IPACMDBG("\n"); // Add a newline for better separation between clients
+			}
 
 			ipacm_event_data_all *data = (ipacm_event_data_all *)param;
 			if (event == IPA_NEW_NEIGH_EVENT)
@@ -526,7 +594,7 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 					IPACMDBG_H("Allowing non VLAN WAN ifaces in PPPoE mode\n");
 					goto process;
 				}
-				if(IPACM_Iface::ipacmcfg->iface_in_vlan_mode(data->iface_name) &&
+				if (IPACM_Iface::ipacmcfg->iface_in_vlan_mode(data->iface_name) &&
 					!IPACM_Iface::ipacmcfg->IsSpclIface(data->iface_name))
 				{
 					IPACMDBG_H("ignoring physical IFACE neighbor event in VLAN mode\n");
@@ -633,34 +701,46 @@ process:
 									{
 										/* for VLAN interfaces make sure bridge is with correct VID */
 										/* for Special interface allow both vlan and non-vlan clients */
-										if(IPACM_Iface::ipacmcfg->iface_in_vlan_mode(neighbor_client[i].iface_name) && !IPACM_Iface::ipacmcfg->IsSpclIface(neighbor_client[i].iface_name))
+										if(IPACM_Iface::ipacmcfg->iface_in_vlan_mode(neighbor_client[i].iface_name))
 										{
 											uint16_t vlan_id;
 											if(IPACM_Iface::ipacmcfg->get_vlan_id(neighbor_client[i].iface_name, &vlan_id))
 											{
-												IPACMERR("failed to get iface vlan ID, skipping\n");
-												continue;
-											}
-											found = 0;
-											for(int j = 0; j < IPA_MAX_VLAN_PER_BRIDGE; j++)
-											{
-												if(bridge->associate_VID[j] == vlan_id)
+												/* we can get non vlan as well as vlan physical neigh */
+												if(IPACM_Iface::ipacmcfg->IsSpclIface(neighbor_client[i].iface_name) && (strcmp(IPACM_Iface::ipacmcfg->ipa_virtual_iface_name, data->iface_name) == 0))
 												{
-													IPACMDBG("client bridge vid match (%d)(%d),\n",
-													vlan_id, bridge->associate_VID[j]);
-													found = 1;
-													break;
+													vlan_id = 0;
+													IPACMDBG("setting vid to 0\n");
 												}
 												else
 												{
-													IPACMDBG("client bridge vid mismatch (%d)(%d), skip\n",
-														vlan_id, bridge->associate_VID[j]);
+													IPACMERR("failed to get iface vlan ID, skipping\n");
 													continue;
 												}
 											}
-											if(found == 0)
-												continue;
-											IPACMDBG_H("client - bridge vid match (%d)\n", vlan_id);
+											if (!IPACM_Iface::ipacmcfg->IsSpclIface(neighbor_client[i].iface_name) || (IPACM_Iface::ipacmcfg->IsSpclIface(neighbor_client[i].iface_name) && (vlan_id != 0)))
+											{
+												found = 0;
+												for (int j = 0; j < IPA_MAX_VLAN_PER_BRIDGE; j++)
+												{
+													if (bridge->associate_VID[j] == vlan_id)
+													{
+														IPACMDBG("client bridge vid match (%d)(%d),\n",
+																 vlan_id, bridge->associate_VID[j]);
+														found = 1;
+														break;
+													}
+													else
+													{
+														IPACMDBG("client bridge vid mismatch (%d)(%d), skip\n",
+																 vlan_id, bridge->associate_VID[j]);
+														continue;
+													}
+												}
+												if (found == 0)
+													continue;
+												IPACMDBG_H("client - bridge vid match (%d)\n", vlan_id);
+											}
 										}
 									}
 								}
@@ -757,7 +837,7 @@ process:
 							}
 						}
 						/* Cache the neighbor event from bridgeX as well if physical netdev can't find */
-						if (i == num_neighbor_client_temp)
+						if (i == num_neighbor_client_temp && event == IPA_NEW_NEIGH_EVENT)
 						{
 							IPACMDBG_H("Cant find ipv4 neighbor client with MAC %02x:%02x:%02x:%02x:%02x:%02x\n",
 								data->mac_addr[0], data->mac_addr[1], data->mac_addr[2],
@@ -1311,6 +1391,14 @@ process:
 												neighbor_client[i].mac_addr[4],
 												neighbor_client[i].mac_addr[5],
 												num_neighbor_client);
+							if (IPACM_Iface::ipacmcfg->IsSpclIface(data->iface_name))
+							{
+								if ((strcmp(neighbor_client[i].iface_name, data->iface_name) != 0) && (strcmp(neighbor_client[i].iface_name, IPA_NO_IFACE_NAME) != 0))
+								{
+									IPACMDBG_H("doesnt match neigh %s next", neighbor_client[i].iface_name);
+									continue;
+								}
+							}
 							/* check if iface is not bridge interface*/
 #ifdef FEATURE_VLAN_MPDN
 							/* VLAN clients don't have to be on bridge0 */
@@ -1366,41 +1454,61 @@ process:
 										continue;
 									}
 								}
-#endif
-								/* use previous ipv4 first */
-								if(data->if_index != neighbor_client[i].iface_index)
-								{	/* no need to update new kernel intex in case of mld */
-									if (strncmp(data->iface_name, MLD_IFACE_NAME, strlen(MLD_IFACE_NAME)) != 0)
-									{
-										IPACMDBG_H("update new kernel iface index \n");
-										neighbor_client[i].iface_index = data->if_index;
-										strlcpy(neighbor_client[i].iface_name, data->iface_name, sizeof(neighbor_client[i].iface_name));
-									} else {
-										IPACMDBG_H("MLD interface donot update if index and if name\n");
-									}
-								}
-
-								/* check if client associated with previous network interface */
-								if(ipa_interface_index != neighbor_client[i].ipa_if_num)
+								if (!IPACM_Iface::ipacmcfg->IsSpclIface(data->iface_name))
 								{
-									if (strncmp(data->iface_name, MLD_IFACE_NAME, strlen(MLD_IFACE_NAME)) != 0)
-									{
-										/* replacing the updated iface */
-										IPACMDBG_H("client associate to different AP %s\n", data->iface_name);
-										neighbor_client[i].ipa_if_num = ipa_interface_index;
-										strlcpy(neighbor_client[i].iface_name, data->iface_name, sizeof(neighbor_client[i].iface_name));
-									} else {
-										IPACMDBG_H("MLD interface donot update if index and if name\n");
+#endif
+									/* use previous ipv4 first */
+									if (data->if_index != neighbor_client[i].iface_index)
+									{ /* no need to update new kernel intex in case of mld */
+										if (strncmp(data->iface_name, MLD_IFACE_NAME, strlen(MLD_IFACE_NAME)) != 0)
+										{
+											IPACMDBG_H("update new kernel iface index \n");
+											neighbor_client[i].iface_index = data->if_index;
+											strlcpy(neighbor_client[i].iface_name, data->iface_name, sizeof(neighbor_client[i].iface_name));
+										}
+										else
+										{
+											IPACMDBG_H("MLD interface donot update if index and if name\n");
+										}
 									}
-								}
 
+									/* check if client associated with previous network interface */
+									if (ipa_interface_index != neighbor_client[i].ipa_if_num)
+									{
+										if (strncmp(data->iface_name, MLD_IFACE_NAME, strlen(MLD_IFACE_NAME)) != 0)
+										{
+											/* replacing the updated iface */
+											IPACMDBG_H("client associate to different AP %s\n", data->iface_name);
+											neighbor_client[i].ipa_if_num = ipa_interface_index;
+											strlcpy(neighbor_client[i].iface_name, data->iface_name, sizeof(neighbor_client[i].iface_name));
+										}
+										else
+										{
+											IPACMDBG_H("MLD interface donot update if index and if name\n");
+										}
+									}
+#ifdef FEATURE_VLAN_MPDN
+								}
+#endif
 								if (neighbor_client[i].v4_addr != 0) /* not 0.0.0.0 */
 								{
 									/* check if getting real netdev name yet */
 									if(strcmp(neighbor_client[i].iface_name, IPA_NO_IFACE_NAME) == 0)
 									{
-										IPACMERR("client %d name %s not real\n", i, neighbor_client[i].iface_name);
-										return;
+										if (!IPACM_Iface::ipacmcfg->IsSpclIface(data->iface_name))
+										{
+											IPACMERR("client %d name %s not real\n", i, neighbor_client[i].iface_name);
+											return;
+										}
+										else if(data->if_index == neighbor_client[i].iface_index)
+										{
+											IPACMDBG_H("Match if_index:%d client:%d copy name",data->if_index,i);
+											strlcpy(neighbor_client[i].iface_name, data->iface_name, sizeof(neighbor_client[i].iface_name));
+										}
+										else{
+											IPACMDBG_H("if index mismatch continue..\n");
+											continue;
+										}
 									}
 									/* construct IPA_NEIGH_CLIENT_IP_ADDR_ADD_EVENT command and insert to command-queue */
 									if (event == IPA_NEW_NEIGH_EVENT)

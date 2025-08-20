@@ -135,6 +135,7 @@ struct peer_iface_info
 #endif
 	ipa_hdr_l2_type peer_hdr_type;
 	bool is_vlan_peer;
+	ipa_hdr_l2_type eth_vlan_instance;
 };
 
 struct add_iface_mac {
@@ -255,13 +256,13 @@ private:
 	svap_vlan_hpc_hdl wlan_svap_hpc_hdls[MAX_SVAP_VLAN];
 	int num_of_wlan_svap_hpc_hdls;
 
-	void add_one_client_flt_rule(IPACM_LanToLan_Iface *peer_iface, client_info *client);
+	void add_one_client_flt_rule(IPACM_LanToLan_Iface *peer_iface, client_info *client,ipa_hdr_l2_type l2_hdr_type);
 
 	int add_client_flt_rule(peer_iface_info *peer, client_info *client, ipa_ip_type iptype, bool inter_bridge = false);
 
 	int add_peer_bridge_flt_rule(uint32_t bridge_ipv4, uint32_t subnet_mask, ipa_ip_type ip_type, uint32_t *ipv6_prefix);
 	int add_bridge_self_vlan_client(client_info * client, ipa_ip_type ip_type);
-	void del_one_client_flt_rule(IPACM_LanToLan_Iface *peer_iface, client_info *client);
+	void del_one_client_flt_rule(IPACM_LanToLan_Iface *peer_iface, client_info *client, ipa_hdr_l2_type l2_hdr_type);
 
 	void del_client_flt_rule(peer_iface_info *peer, client_info *client);
 

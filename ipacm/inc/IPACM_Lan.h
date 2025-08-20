@@ -1602,7 +1602,8 @@ private:
 								sizeof(get_client_memptr(eth_client, cnt)->mac)) == 0)
 			{
 #ifdef FEATURE_VLAN_MPDN
-				if(vlan_id)
+				/* to handle same mac with vlan id 0 and non zero */
+				if(vlan_id || sIface)
 				{
 					IPACMDBG("VLAN IF MAC match, looking for vlan ID %d, current %d\n", vlan_id,
 						get_client_memptr(eth_client, cnt)->vlan_id);
@@ -1770,9 +1771,9 @@ private:
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
 	/* handle eth client routing rule with rule id*/
 	int handle_eth_client_route_rule_ext(uint8_t *mac_addr, ipa_ip_type iptype);
-	int handle_eth_client_route_rule_ext_lan2lan_v2(uint8_t *mac_addr, ipa_ip_type iptype);
+	int handle_eth_client_route_rule_ext_lan2lan_v2(uint8_t *mac_addr, ipa_ip_type iptype, uint16_t vlan_id = 0);
 #ifdef IPA_HW_FNR_STATS
-	int handle_eth_client_route_rule_ext_v2(uint8_t *mac_addr, ipa_ip_type iptype, uint8_t dl_cnt_idx);
+	int handle_eth_client_route_rule_ext_v2(uint8_t *mac_addr, ipa_ip_type iptype, uint8_t dl_cnt_idx, uint16_t vlan_id = 0);
 #endif //IPA_HW_FNR_STATS
 #endif
 

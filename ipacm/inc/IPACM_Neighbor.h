@@ -27,7 +27,7 @@ OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
 IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 Changes from Qualcomm Innovation Center are provided under the following license
-Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
 SPDX-License-Identifier: BSD-3-Clause-Clear
 */
 /*!
@@ -83,6 +83,7 @@ public:
 	void update_neigh_cache();
 	int parse_bridge_info(int index, struct ipa_bridge_vlan_mapping_info *data);
         int parse_bridge_name(int index, struct ipa_bridge_vlan_mapping_info *data);
+	void print_ipa_neighbor_client(const struct ipa_neighbor_client *client);
 private:
 
 	int num_neighbor_client;

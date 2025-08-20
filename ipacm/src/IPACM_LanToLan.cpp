@@ -726,8 +726,8 @@ void IPACM_LanToLan::handle_new_iface_up(IPACM_LanToLan_Iface *new_iface, IPACM_
 
 			/* add new peer info in both new iface and existing iface */
 			/*new iface <--> exist iface*/ /*for ast non ast*/
-			if (new_iface->is_svap_iface() || new_iface->is_ap_iface_vlan_enabled() || (new_iface->is_spcl_iface() && i)) {
-				if (exist_iface->is_svap_iface() || exist_iface->is_ap_iface_vlan_enabled() || (exist_iface->is_spcl_iface() && i)) {
+			if (new_iface->is_svap_iface() || new_iface->is_ap_iface_vlan_enabled()) {
+				if (exist_iface->is_svap_iface() || exist_iface->is_ap_iface_vlan_enabled()) {
 					/* ath02(svap) <--> ath12 (svap)*/
 					exist_iface->handle_new_iface_up(lan_rt_tbl_name_for_rt_svap, lan_rt_tbl_name_for_rt_svap, new_iface,spcl_vlan_iface);
 					new_iface->handle_new_iface_up(lan_rt_tbl_name_for_flt_svap, lan_rt_tbl_name_for_flt_svap, exist_iface,spcl_vlan_iface);
@@ -738,7 +738,7 @@ void IPACM_LanToLan::handle_new_iface_up(IPACM_LanToLan_Iface *new_iface, IPACM_
 				}
 			} else {
 				/* ath02(svap) <--> ath12 or eth (siface) <--> ath12 */
-				if (exist_iface->is_svap_iface() || exist_iface->is_ap_iface_vlan_enabled() || (exist_iface->is_spcl_iface() && i)) {
+				if (exist_iface->is_svap_iface() || exist_iface->is_ap_iface_vlan_enabled()) {
 					exist_iface->handle_new_iface_up(lan_rt_tbl_name_for_rt_svap, lan_rt_tbl_name_for_rt_svap, new_iface,spcl_vlan_iface);
 					new_iface->handle_new_iface_up(lan_rt_tbl_name_for_flt, lan_rt_tbl_name_for_flt, exist_iface,spcl_vlan_iface);
 				} else {
@@ -1074,7 +1074,7 @@ void IPACM_LanToLan::handle_client_add(ipacm_event_eth_bridge *data)
 	l2tp_vlan_mapping_info *mapping_info = NULL;
 	bool is_l2tp_client = false;
 	list<IPACM_LanToLan_Iface>::iterator it;
-
+	IPACMDBG_H("(%s)*************************>>\n",data->p_iface->dev_name);
 	IPACMDBG_H("Incoming client MAC: 0x%02x%02x%02x%02x%02x%02x, interface: %s\n",
 		data->mac_addr[0], data->mac_addr[1],
 		data->mac_addr[2], data->mac_addr[3], data->mac_addr[4],
@@ -1157,6 +1157,7 @@ void IPACM_LanToLan::handle_client_add(ipacm_event_eth_bridge *data)
 			IPACMDBG_H("Cached client add event has reached maximum number.\n");
 		}
 	}
+	IPACMDBG_H("(%s)*************************<<\n",data->p_iface->dev_name);
 	return;
 }
 
@@ -1518,6 +1519,7 @@ void IPACM_LanToLan_Iface::add_client_rt_rule(peer_iface_info *peer_info, client
 						if(it_clients->vlan_id == client->vlan_id)
 						{
 							IPACMDBG_H("same client with vid %d, skip\n", client->vlan_id);
+							(it->second)--;
 							continue;
 						}
 						num_rt_rule = it_clients->inter_iface_rt_rule_hdl[peer_l2_hdr_type].num_hdl[IPA_IP_v4];
@@ -2281,6 +2283,11 @@ void IPACM_LanToLan_Iface::add_all_inter_interface_client_flt_rule(ipa_ip_type i
 				}
 			}
 #endif
+			if (it_iface->peer->is_spcl_iface() && ((it_client->vlan_id != 0) != it_iface->is_vlan_peer))
+			{
+				IPACMDBG_H("Client has hdr type %d vlan id %d, is_vlan_peer %d continue ...\n", it_iface->peer_hdr_type, it_client->vlan_id, it_iface->is_vlan_peer);
+				continue;
+			}
 			add_client_flt_rule(&(*it_iface), &(*it_client), iptype);
 		}
 	}
@@ -2300,7 +2307,14 @@ void IPACM_LanToLan_Iface::add_all_intra_interface_client_flt_rule(ipa_ip_type i
 	return;
 }
 
-void IPACM_LanToLan_Iface::add_one_client_flt_rule(IPACM_LanToLan_Iface *peer_iface, client_info *client)
+static bool l2_hdr_is_802_1Q(int type) {
+    return type == IPA_HDR_L2_802_1Q || type == IPA_HDR_L2_802_1Q_AST;
+}
+
+static bool l2_hdr_is_ethernet_II(int type) {
+    return type == IPA_HDR_L2_ETHERNET_II || type == IPA_HDR_L2_ETHERNET_II_AST;
+}
+void IPACM_LanToLan_Iface::add_one_client_flt_rule(IPACM_LanToLan_Iface *peer_iface, client_info *client,ipa_hdr_l2_type l2_hdr_type)
 {
 	list<peer_iface_info>::iterator it;
 
@@ -2311,6 +2325,12 @@ void IPACM_LanToLan_Iface::add_one_client_flt_rule(IPACM_LanToLan_Iface *peer_if
 			if (client->vlan_id &&
 				it->peer->is_spcl_iface() && !it->is_vlan_peer) {
 				IPACMDBG_H("Client has hdr type %d vlan id %d, is_vlan_peer %d continue ...\n", it->peer_hdr_type, client->vlan_id, it->is_vlan_peer);
+				continue;
+			}
+			if (is_spcl_iface() && ((l2_hdr_is_802_1Q(l2_hdr_type) && l2_hdr_is_ethernet_II(it->eth_vlan_instance)) ||
+									(l2_hdr_is_ethernet_II(l2_hdr_type) && l2_hdr_is_802_1Q(it->eth_vlan_instance))))
+			{
+				IPACMDBG_H("siface %d find the correct l2 type peer %d\n",l2_hdr_type,it->eth_vlan_instance);
 				continue;
 			}
 			IPACMDBG_H("Found the peer iface info.\n");
@@ -2530,48 +2550,26 @@ int IPACM_LanToLan_Iface::add_client_flt_rule(peer_iface_info *peer, client_info
 							memcpy(rt_tbl.name, IPACM_Iface::ipacmcfg->rt_tbl_inter_l2l_v4.name, sizeof(IPACM_Iface::ipacmcfg->rt_tbl_inter_l2l_v4));
 						else
 							memcpy(rt_tbl.name, peer->rt_tbl_name_for_flt[iptype], sizeof(rt_tbl.name));
+
+						if(m_is_sIface)
+						{
+							memcpy(rt_tbl.name, IPACM_Iface::ipacmcfg->rt_tbl_inter_l2l_v4.name, sizeof(IPACM_Iface::ipacmcfg->rt_tbl_inter_l2l_v4));
+							IPACMDBG_H("Overwriting rt table to inter only if m_is_sIface ? %d \n", m_is_sIface);
+						}
 					}
 					else
 					{
 						memcpy(rt_tbl.name, IPACM_Iface::ipacmcfg->rt_tbl_inter_l2l_v6.name, sizeof(IPACM_Iface::ipacmcfg->rt_tbl_inter_l2l_v6));
 					}
-					if (this->is_spcl_iface())
+					if(m_is_sIface)
 					{
-						pipe_idx_siface = 2;
-						if(peer->peer->pipe_idx)
-						{
-							IPACMDBG_H("Lan2Lan_v2: lan2lan flt already set ignore this %d.\n", peer->peer->pipe_idx);
-							peer->peer->pipe_idx = 0;
-						}
-						if(it_flt != peer->flt_rule.end())
-						{
-							if(it_flt->flt_rule_hdl_siface[iptype])
-							{
-								IPACMDBG_H("Lan2Lan_v2: lan2lan flt already set with hdl %d for mac on vlan pipe install on non vlan.\n", it_flt->flt_rule_hdl_siface[iptype]);
-								pipe_idx_siface = 0;
-								if(it_flt->flt_rule_hdl[iptype])
-								{
-									IPACMDBG_H("Lan2Lan_v2: lan2lan flt already set with hdl %d for this mac ignore this.\n", it_flt->flt_rule_hdl[iptype]);
-									return IPACM_SUCCESS;
-								}
-							}
-						}
-
-						if(pipe_idx_siface == 2)
-						{
-							if(iptype == IPA_IP_v4)
-							{
-								snprintf(rt_tbl.name, IPA_RESOURCE_NAME_MAX, "eth_v4_lan_to_lan_%s",
-								ipa_l2_hdr_type[peer->peer->get_iface_pointer()->rx_prop->rx[2].hdr_l2_type]);
-							}
-							else
-							{
-								snprintf(rt_tbl.name, IPA_RESOURCE_NAME_MAX, "eth_v6_lan_to_lan_%s",
-								ipa_l2_hdr_type[peer->peer->get_iface_pointer()->rx_prop->rx[2].hdr_l2_type]);
-							}
-						}
+						if(client->vlan_id == 0)
+							pipe_idx_siface = 0;
+						else
+							pipe_idx_siface = 2;
 					}
-					IPACMDBG_H("Lan2Lan_v2: This flt rule points to rt tbl %s.\n", rt_tbl.name);
+					IPACMDBG_H("m_is_sIface %d, pipe_idx_siface %d, client->vlan_id %d \n", m_is_sIface, pipe_idx_siface, client->vlan_id);
+					IPACMDBG_H("This flt rule points to rt tbl %s.\n", rt_tbl.name);
 
 					if(IPACM_Iface::m_routing.GetRoutingTable(&rt_tbl) == false)
 					{
@@ -2604,15 +2602,17 @@ int IPACM_LanToLan_Iface::add_client_flt_rule(peer_iface_info *peer, client_info
 					int pipe_idx = 0;
 					/* While add peer interface eth-to_eth rule will be inserted followed by 802_to_eth
 					   hence while poping out 802_to_eth will be popped first hence we install rules on
-					   pipe idx 2 first and then on pipe idx 0 for special interface */
-					if (this->is_spcl_iface())
+					   pipe idx 2 first and then on pipe idx 0 for special interface.	
+					  filter rule was some time indicating to the wrong route due to wrong peer l2 type */
+					if (peer->eth_vlan_instance == IPA_HDR_L2_802_1Q)
 					{
 						pipe_idx = 2;
-						if(peer->peer->pipe_idx){
-							IPACMDBG_H("lan2lan flt already set ignore this %d.\n", peer->peer->pipe_idx);
-							peer->peer->pipe_idx = 0;
-							pipe_idx = 0;
-						}
+						IPACMDBG_H("peer in eth vlan inst\n")
+					}
+					else
+					{
+						pipe_idx = 0;
+						IPACMDBG_H("peer in eth non vlan inst\n")
 					}
 					rt_tbl.ip = iptype;
 					memcpy(rt_tbl.name, peer->rt_tbl_name_for_flt[iptype], sizeof(rt_tbl.name));
@@ -2648,6 +2648,17 @@ int IPACM_LanToLan_Iface::add_client_flt_rule(peer_iface_info *peer, client_info
 				if(pipe_idx_siface == 2 && this->is_spcl_iface())
 				{
 					it_flt->flt_rule_hdl_siface[iptype] = flt_rule_hdl;
+					if (iptype == IPA_IP_v4)
+					{
+						it_flt->bridge_ipv4 = client->bridge_ipv4;
+						it_flt->subnet_mask = client->subnet_mask;
+						bridges.insert({client->bridge_ipv4, client->subnet_mask});
+					}
+					else
+					{
+						memcpy(it_flt->ipv6_prefix, client->ipv6_prefix, sizeof(it_flt->ipv6_prefix));
+						lan_client_v6_prefix.insert({client->ipv6_prefix[0], client->ipv6_prefix[1]});
+					}
 				}
 				else
 				{
@@ -2688,6 +2699,18 @@ int IPACM_LanToLan_Iface::add_client_flt_rule(peer_iface_info *peer, client_info
 			if(pipe_idx_siface == 2 && this->is_spcl_iface())
 			{
 				new_flt_info.flt_rule_hdl_siface[iptype] = flt_rule_hdl;
+				if (iptype == IPA_IP_v4)
+				{
+					new_flt_info.bridge_ipv4 = client->bridge_ipv4;
+					new_flt_info.subnet_mask = client->subnet_mask;
+					bridges.insert({client->bridge_ipv4, client->subnet_mask});
+				}
+				else
+				{
+					IPACMDBG_H("Copy ipv6_prefix to new_flt_info.\n");
+					memcpy(new_flt_info.ipv6_prefix, client->ipv6_prefix, sizeof(new_flt_info.ipv6_prefix));
+					lan_client_v6_prefix.insert({client->ipv6_prefix[0], client->ipv6_prefix[1]});
+				}
 			}
 			else
 			{
@@ -2758,7 +2781,7 @@ int IPACM_LanToLan_Iface::add_client_flt_rule(peer_iface_info *peer, client_info
 	return IPACM_SUCCESS;
 }
 
-void IPACM_LanToLan_Iface::del_one_client_flt_rule(IPACM_LanToLan_Iface *peer_iface, client_info *client)
+void IPACM_LanToLan_Iface::del_one_client_flt_rule(IPACM_LanToLan_Iface *peer_iface, client_info *client,ipa_hdr_l2_type l2_hdr_type)
 {
 	list<peer_iface_info>::iterator it;
 
@@ -2766,6 +2789,12 @@ void IPACM_LanToLan_Iface::del_one_client_flt_rule(IPACM_LanToLan_Iface *peer_if
 	{
 		if(it->peer == peer_iface)
 		{
+			if (is_spcl_iface() && ((l2_hdr_is_802_1Q(l2_hdr_type) && l2_hdr_is_ethernet_II(it->eth_vlan_instance)) ||
+									(l2_hdr_is_ethernet_II(l2_hdr_type) && l2_hdr_is_802_1Q(it->eth_vlan_instance))))
+			{
+				IPACMDBG_H("siface %d find the correct l2 type peer %d\n", l2_hdr_type, it->eth_vlan_instance);
+				continue;
+			}
 			IPACMDBG_H("Found the peer iface info.\n");
 			del_client_flt_rule(&(*it), client);
 			break;
@@ -3111,7 +3140,7 @@ void IPACM_LanToLan_Iface::handle_down_event()
 				return;
 			}
 			IPACMDBG_H("it_own_peer %s\n",it_own_peer_info->peer->get_iface_pointer()->dev_name);
-			if (it_own_peer_info->is_vlan_peer){
+			if (it_own_peer_info->is_vlan_peer && it_own_peer_info->peer->get_iface_pointer()->tx_prop->num_tx_props > 2){
 				it_own_peer_hdr_type = it_own_peer_info->peer->get_iface_pointer()->tx_prop->tx[2].hdr_l2_type;
 			}
 			else {
@@ -3243,7 +3272,6 @@ void IPACM_LanToLan_Iface::handle_down_event()
 					}
 					other_iface->m_peer_iface_info.erase(it_other_iface_peer_info);
 					other_iface->del_hdr_proc_ctx(it_other_iface_peer_hdr_type);
-					break;
 				}
 			}
 
@@ -3679,7 +3707,6 @@ void IPACM_LanToLan_Iface::handle_self_interface_info()
 	memcpy(self.rt_tbl_name_for_rt[IPA_IP_v6], self.rt_tbl_name_for_flt[IPA_IP_v6],
 		IPA_RESOURCE_NAME_MAX);
 	IPACMDBG_H("IPv6 routing table for rt name: %s\n", self.rt_tbl_name_for_rt[IPA_IP_v6]);
-
 	return;
 }
 
@@ -3707,6 +3734,7 @@ void IPACM_LanToLan_Iface::handle_new_iface_up(char rt_tbl_name_for_flt[][IPA_RE
 	{
 		peer_l2_hdr_type = peer_iface->m_p_iface->tx_prop->tx[2].hdr_l2_type;
 		new_peer.is_vlan_peer = true;
+		IPACMDBG_H("Peer is vlan supported\n");
 	}
 	else {
 		peer_l2_hdr_type = peer_iface->m_p_iface->tx_prop->tx[0].hdr_l2_type;
@@ -3726,6 +3754,18 @@ void IPACM_LanToLan_Iface::handle_new_iface_up(char rt_tbl_name_for_flt[][IPA_RE
 	if (spcl_vlan_iface)
 	{
 		new_peer.is_vlan_peer = true;
+	}
+	if(m_is_sIface)
+	{
+		if(spcl_vlan_iface)
+		{
+			new_peer.eth_vlan_instance = IPA_HDR_L2_802_1Q; /* It is an 802_to_x peer */
+			IPACMDBG_H("eth is vlan supported\n");
+		}
+		else{
+			new_peer.eth_vlan_instance = IPA_HDR_L2_ETHERNET_II; /* It is an eth_to_x peer */
+			IPACMDBG_H("eth is non vlan supported\n");
+		}
 	}
 	new_peer.peer_hdr_type = peer_l2_hdr_type;
 	/* push the new peer_iface_info into the list */
@@ -3872,10 +3912,6 @@ void IPACM_LanToLan_Iface::handle_client_add(uint8_t *mac, char *iface_name, boo
 									IPACMERR("Lan2Lan_v2 : Failed to install flt rule.\n");
 								}
 							}
-							if(is_spcl_iface())
-							{
-								add_client_flt_rule(&self, &(*it_client), IPA_IP_v6);
-							}
 							IPACMDBG_H("Lan2Lan_v2_IPA_IP_v6: This %s : Number of peer %d \n", this->get_iface_pointer()->dev_name, m_peer_iface_info.size());
 							for(it_peer_info = m_peer_iface_info.begin(); it_peer_info != m_peer_iface_info.end(); it_peer_info++)
 							{
@@ -3884,6 +3920,18 @@ void IPACM_LanToLan_Iface::handle_client_add(uint8_t *mac, char *iface_name, boo
 							for(it_peer_info = m_peer_iface_info.begin(); it_peer_info != m_peer_iface_info.end(); it_peer_info++)
 							{
 								IPACMDBG_H("Lan2Lan_v2_IPA_IP_v6 : peer %s \n",it_peer_info->peer->get_iface_pointer()->dev_name);
+								/*avoid installing rule 2 times in case of spcl_iface*/
+								if (it_peer_info->peer->is_spcl_iface() && ((it_client->vlan_id && it_peer_info->peer_hdr_type == IPA_HDR_L2_ETHERNET_II) || (it_client->vlan_id == 0 && it_peer_info->peer_hdr_type == IPA_HDR_L2_802_1Q)))
+								{
+									IPACMDBG_H("siface mismatch client vlanid %d and l2 peer type%d \n", it_client->vlan_id, it_peer_info->peer_hdr_type);
+									continue;
+								}
+								if (is_spcl_iface() && ((it_client->vlan_id && it_peer_info->eth_vlan_instance == IPA_HDR_L2_ETHERNET_II) || (it_client->vlan_id == 0 && it_peer_info->eth_vlan_instance == IPA_HDR_L2_802_1Q)))
+								{
+									IPACMDBG_H("siface mismatch client vlanid %d and l2 peer type%d \n", it_client->vlan_id, it_peer_info->eth_vlan_instance);
+									continue;
+								}
+
 								rt_tbl.ip = IPA_IP_v6;
 								memcpy(rt_tbl.name, IPACM_Iface::ipacmcfg->rt_tbl_inter_l2l_v6.name, sizeof(IPACM_Iface::ipacmcfg->rt_tbl_inter_l2l_v6));
 								if(IPACM_Iface::m_routing.GetRoutingTable(&rt_tbl) == false)
@@ -4193,16 +4241,16 @@ void IPACM_LanToLan_Iface::handle_client_add(uint8_t *mac, char *iface_name, boo
 			}
 			IPACMDBG_H("l2_hdr_type : %d flag : %d \n",l2_hdr_type,flag[l2_hdr_type]  );
 			/* make sure add routing rule only once for each peer l2 header type */
-			if(flag[l2_hdr_type] == false || is_spcl_iface())
+			if (flag[l2_hdr_type] == false || is_spcl_iface())
 			{
 				/* add client routing rule for each peer interface */
-				if(front_client.is_l2tp_client == false)
+				if (front_client.is_l2tp_client == false)
 				{
 					IPACMDBG_H("Lan2Lan_v2: Add rt rule for client with %s \n",it_peer_info->peer->get_iface_pointer()->dev_name);
 					add_client_rt_rule(&(*it_peer_info), &front_client);
 				}
 #ifdef FEATURE_L2TP
-				if(IPACM_Iface::ipacmcfg->ipacm_l2tp_enable == IPACM_L2TP)
+				if (IPACM_Iface::ipacmcfg->ipacm_l2tp_enable == IPACM_L2TP)
 				{
 					/* add l2tp rt rules */
 					add_l2tp_client_rt_rule(&(*it_peer_info), &front_client);
@@ -4213,7 +4261,7 @@ void IPACM_LanToLan_Iface::handle_client_add(uint8_t *mac, char *iface_name, boo
 
 			/* add client filtering rule on peer interfaces */
 			if (!it_peer_info->peer->get_m_support_ast_update() && IPACM_Iface::ipacmcfg->inter_bridge_lantolan_config_enable == false)
-				it_peer_info->peer->add_one_client_flt_rule(this, &front_client);
+				it_peer_info->peer->add_one_client_flt_rule(this, &front_client,l2_hdr_type);
 
 #ifdef FEATURE_L2TP
 #ifdef IPA_L2TP_TUNNEL_UDP
@@ -4254,6 +4302,11 @@ void IPACM_LanToLan_Iface::handle_client_add(uint8_t *mac, char *iface_name, boo
 			{
 				rt_tbl.ip = IPA_IP_v4;
 				memcpy(rt_tbl.name, self.rt_tbl_name_for_flt[rt_tbl.ip], sizeof(rt_tbl.name));
+				if(m_is_sIface)
+				{
+					memcpy(rt_tbl.name, IPACM_Iface::ipacmcfg->rt_tbl_inter_l2l_v4.name, sizeof(IPACM_Iface::ipacmcfg->rt_tbl_inter_l2l_v4));
+					IPACMDBG_H("Overwriting v4 rt table to inter only if m_is_sIface ? %d \n", m_is_sIface);
+				}
 				if(IPACM_Iface::m_routing.GetRoutingTable(&rt_tbl) == false)
 				{
 					m_p_iface->add_dummy_routing_rule_lan2lan(rt_tbl.name, rt_tbl.ip);
@@ -4283,10 +4336,6 @@ void IPACM_LanToLan_Iface::handle_client_add(uint8_t *mac, char *iface_name, boo
 						IPACMERR("Lan2Lan_v2 : Failed to install flt rule.\n");
 					}
 				}
-				if(is_spcl_iface())
-				{
-					ret = add_client_flt_rule(&self, &front_client, IPA_IP_v4);
-				}
 
 				IPACMDBG_H("Lan2Lan_v2: This %s : Number of peer %d \n", this->get_iface_pointer()->dev_name, m_peer_iface_info.size());
 				for(it_peer_info = m_peer_iface_info.begin(); it_peer_info != m_peer_iface_info.end(); it_peer_info++)
@@ -4296,6 +4345,17 @@ void IPACM_LanToLan_Iface::handle_client_add(uint8_t *mac, char *iface_name, boo
 				for(it_peer_info = m_peer_iface_info.begin(); it_peer_info != m_peer_iface_info.end(); it_peer_info++)
 				{
 					IPACMDBG_H("Lan2Lan_v2 : peer %s \n",it_peer_info->peer->get_iface_pointer()->dev_name);
+					/*avoid installing rule 2 times in case of spcl_iface*/
+					if (it_peer_info->peer->is_spcl_iface() && ((front_client.vlan_id && it_peer_info->peer_hdr_type == IPA_HDR_L2_ETHERNET_II) || (front_client.vlan_id == 0 && it_peer_info->peer_hdr_type == IPA_HDR_L2_802_1Q)))
+					{
+						IPACMDBG_H("siface mismatch client vlanid %d and l2 peer type%d \n", front_client.vlan_id, it_peer_info->peer_hdr_type);
+						continue;
+					}
+					if (is_spcl_iface() && ((front_client.vlan_id && it_peer_info->eth_vlan_instance == IPA_HDR_L2_ETHERNET_II) || (front_client.vlan_id == 0 && it_peer_info->eth_vlan_instance == IPA_HDR_L2_802_1Q)))
+					{
+						IPACMDBG_H("siface mismatch client vlanid %d and l2 peer type%d \n", front_client.vlan_id, it_peer_info->eth_vlan_instance);
+						continue;
+					}
 					rt_tbl.ip = IPA_IP_v4;
 					memcpy(rt_tbl.name, IPACM_Iface::ipacmcfg->rt_tbl_inter_l2l_v4.name, sizeof(IPACM_Iface::ipacmcfg->rt_tbl_inter_l2l_v4));
 					if(IPACM_Iface::m_routing.GetRoutingTable(&rt_tbl) == false)
@@ -4545,7 +4605,8 @@ void IPACM_LanToLan_Iface::handle_client_add(uint8_t *mac, char *iface_name, boo
 				IPACMDBG_H("Lan2Lan_v2_IPA_IP_v6: vlan_id %d has perfix 0x%x:%x:%x:%x\n", vlan_id, ipv6_prefix_vlanid[0], ipv6_prefix_vlanid[1]);
 				memcpy(front_client.ipv6_prefix, ipv6_prefix_vlanid, sizeof(front_client.ipv6_prefix));
 				rt_tbl.ip = IPA_IP_v6;
-				memcpy(rt_tbl.name, self.rt_tbl_name_for_flt[rt_tbl.ip], sizeof(rt_tbl.name));
+				memcpy(rt_tbl.name, IPACM_Iface::ipacmcfg->rt_tbl_inter_l2l_v6.name, sizeof(IPACM_Iface::ipacmcfg->rt_tbl_inter_l2l_v6));
+
 				if(IPACM_Iface::m_routing.GetRoutingTable(&rt_tbl) == false)
 				{
 					m_p_iface->add_dummy_routing_rule_lan2lan(rt_tbl.name,rt_tbl.ip);
@@ -4576,15 +4637,22 @@ void IPACM_LanToLan_Iface::handle_client_add(uint8_t *mac, char *iface_name, boo
 						IPACMERR("Lan2Lan_v2 : Failed to install flt rule.\n");
 					}
 				}
-				if(is_spcl_iface())
-				{
-					ret = add_client_flt_rule(&self, &front_client, IPA_IP_v6);
-				}
 
 				IPACMDBG_H("Lan2Lan_v2_IPA_IP_v6: This %s : Number of peer %d \n", this->get_iface_pointer()->dev_name, m_peer_iface_info.size());
 				for(it_peer_info = m_peer_iface_info.begin(); it_peer_info != m_peer_iface_info.end(); it_peer_info++)
 				{
 					IPACMDBG_H("Lan2Lan_v2_IPA_IP_v6 : peer %s \n",it_peer_info->peer->get_iface_pointer()->dev_name);
+					/*avoid installing rule 2 times in case of spcl_iface*/
+					if (it_peer_info->peer->is_spcl_iface() && ((front_client.vlan_id && it_peer_info->peer_hdr_type == IPA_HDR_L2_ETHERNET_II) || (front_client.vlan_id == 0 && it_peer_info->peer_hdr_type == IPA_HDR_L2_802_1Q)))
+					{
+						IPACMDBG_H("siface mismatch client vlanid %d and l2 peer type%d \n", front_client.vlan_id, it_peer_info->peer_hdr_type);
+						continue;
+					}
+					if (is_spcl_iface() && ((front_client.vlan_id && it_peer_info->eth_vlan_instance == IPA_HDR_L2_ETHERNET_II) || (front_client.vlan_id == 0 && it_peer_info->eth_vlan_instance == IPA_HDR_L2_802_1Q)))
+					{
+						IPACMDBG_H("siface mismatch client vlanid %d and l2 peer type%d \n", front_client.vlan_id, it_peer_info->eth_vlan_instance);
+						continue;
+					}
 					rt_tbl.ip = IPA_IP_v6;
 					memcpy(rt_tbl.name, IPACM_Iface::ipacmcfg->rt_tbl_inter_l2l_v6.name, sizeof(IPACM_Iface::ipacmcfg->rt_tbl_inter_l2l_v6));
 					if(IPACM_Iface::m_routing.GetRoutingTable(&rt_tbl) == false)
@@ -4964,7 +5032,6 @@ list<client_info>::iterator IPACM_LanToLan_Iface::handle_client_del(uint8_t *mac
 					it_peer_info++)
 				{
 					IPACMDBG_H("This is %s and m_support_inter_iface_offload %d has peer: %s\n",this->get_iface_pointer()->dev_name,m_support_intra_iface_offload,it_peer_info->peer->get_iface_pointer()->dev_name);
-					it_peer_info->peer->del_one_client_flt_rule(this, &(*it_client));
 					if((it_peer_info->peer->is_svap_iface() || it_peer_info->peer->is_ap_iface_vlan_enabled() ||
 						(it_peer_info->peer->is_spcl_iface() && it_peer_info->is_vlan_peer)))
 						l2_hdr_type = it_peer_info->peer->get_iface_pointer()->rx_prop->rx[2].hdr_l2_type;
@@ -4976,6 +5043,7 @@ list<client_info>::iterator IPACM_LanToLan_Iface::handle_client_del(uint8_t *mac
 						IPACMDBG_H("Invalid l2_hdr_type: %d\n", l2_hdr_type);
 					}
 					IPACMDBG_H("l2_hdr_type : %d flag : %d \n",l2_hdr_type,flag[l2_hdr_type] );
+					it_peer_info->peer->del_one_client_flt_rule(this, &(*it_client),l2_hdr_type);
 					/* make sure to delete routing rule only once for each peer l2 header type */
 					if(flag[l2_hdr_type] == false)
 					{

@@ -3087,7 +3087,7 @@ int IPACM_Wan::handle_route_add_vlan_pdn_evt(ipa_ip_type iptype, uint16_t vlan_i
 					iptype);
 			}
 			/* for STA mode: add firewall rules */
-			del_dft_firewall_rules(IPA_IP_v6);
+			del_dft_firewall_rules(IPA_IP_v6, true);
 			config_dft_firewall_rules(IPA_IP_v6);
 			FullConfig = false;
 			IPACM_SYSLOG("new VLAN PDN prefix is 0x%08x%08x.\n", ipv6_prefix[0], ipv6_prefix[1]);
@@ -3307,7 +3307,7 @@ int IPACM_Wan::handle_route_add_vlan_pdn_evt(ipa_ip_type iptype, uint16_t vlan_i
 					iptype);
 			}
 			/* for STA mode: add firewall rules */
-			del_dft_firewall_rules(IPA_IP_v4);
+			del_dft_firewall_rules(IPA_IP_v4, true);
 			config_dft_firewall_rules(IPA_IP_v4);
 			FullConfig = false;
 			ipv4_to_iface[wlan_ipv4_pdn_index].wan_up_vlan = true;
@@ -3851,6 +3851,7 @@ int IPACM_Wan::handle_route_add_evt(ipa_ip_type iptype)
 		}
 		else
 		{
+			del_dft_firewall_rules(IPA_IP_v4);
 			config_dft_firewall_rules(IPA_IP_v4);
 		}
 
@@ -3910,6 +3911,7 @@ int IPACM_Wan::handle_route_add_evt(ipa_ip_type iptype)
 		}
 		else
 		{
+			del_dft_firewall_rules(IPA_IP_v6);
 			config_dft_firewall_rules(IPA_IP_v6);
 		}
 
@@ -7753,20 +7755,6 @@ int IPACM_Wan::handle_down_evt()
 		ipacm_cmd_q_data evt_data;
 		ipacm_event_vlan_pdn *vlandown_data;
 
-		if (rx_prop != NULL)
-		{
-			del_dft_firewall_rules(IPA_IP_v4, true);
-			del_dft_firewall_rules(IPA_IP_v6, true);
-		}
-
-		if(handle_route_del_evt(IPA_IP_v4, true))
-		{
-			IPACMDBG_H("Route Del event for v4 failed\n");
-		}
-		if(handle_route_del_evt(IPA_IP_v6, true))
-		{
-			IPACMDBG_H("Route Del event for v6 failed\n");
-		}
 		ipv4_to_iface[wlan_ipv4_pdn_index].wan_up_vlan = false;
 		ipv6_to_iface[wlan_ipv6_pdn_index].wan_up_vlan_v6 = false;
 
@@ -7808,16 +7796,6 @@ int IPACM_Wan::handle_down_evt()
 		ipacm_cmd_q_data evt_data;
 		ipacm_event_vlan_pdn *vlandown_data;
 
-		if (rx_prop != NULL)
-		{
-			del_dft_firewall_rules(IPA_IP_v6, true);
-		}
-
-		if(handle_route_del_evt(IPA_IP_v6, true))
-		{
-			IPACMDBG_H("Route Del event for v6 failed\n");
-		}
-
 		ipv6_to_iface[wlan_ipv6_pdn_index].wan_up_vlan_v6 = false;
 
 		wan_v6_is_default_gw = true;
@@ -7854,16 +7832,6 @@ int IPACM_Wan::handle_down_evt()
 	{
 		ipacm_cmd_q_data evt_data;
 		ipacm_event_vlan_pdn *vlandown_data;
-
-		if (rx_prop != NULL)
-		{
-			del_dft_firewall_rules(IPA_IP_v4, true);
-		}
-
-		if(handle_route_del_evt(IPA_IP_v4, true))
-		{
-			IPACMDBG_H("Route Del event for v4 failed\n");
-		}
 
 		ipv4_to_iface[wlan_ipv4_pdn_index].wan_up_vlan = false;
 		wan_v4_is_default_gw = true;
@@ -7912,6 +7880,18 @@ int IPACM_Wan::handle_down_evt()
 		handle_route_del_evt(IPA_IP_v4);
 		IPACM_SYSLOG("Delete default v4 routing rules\n");
 	}
+	else if (ip_type == IPA_IP_v4 || ip_type == IPA_IP_MAX)
+	{
+		if (rx_prop != NULL)
+		{
+			del_dft_firewall_rules(IPA_IP_v4, true);
+		}
+		if(handle_route_del_evt(IPA_IP_v4, true))
+		{
+			IPACM_SYSLOG("Route Del event for v4 failed\n");
+		}
+		IPACMDBG_H("Delete default v4 routing rules vlan case\n");
+	}
 
 	if (active_v6)
 	{
@@ -7921,6 +7901,18 @@ int IPACM_Wan::handle_down_evt()
 		}
 		handle_route_del_evt(IPA_IP_v6);
 		IPACM_SYSLOG("Delete default v6 routing rules\n");
+	}
+	else if (ip_type == IPA_IP_v6 || ip_type == IPA_IP_MAX)
+	{
+		if (rx_prop != NULL)
+		{
+			del_dft_firewall_rules(IPA_IP_v6, true);
+		}
+		if(handle_route_del_evt(IPA_IP_v6, true))
+		{
+			 IPACM_SYSLOG("Route Del event for v6 failed\n");
+		}
+		IPACMDBG_H("Delete default v6 routing rules vlan case\n");
 	}
 
 	/* Delete default v4 RT rule */
@@ -7937,6 +7929,7 @@ int IPACM_Wan::handle_down_evt()
 		ipv4_to_iface[wlan_ipv4_pdn_index].is_xlat = false;
 		ipv4_to_iface[wlan_ipv4_pdn_index].pIface = NULL;
 		wlan_ipv4_pdn_index = -1;
+		IPACM_Wan::wlan_v4_vlan_index = -1;
 	}
 
 	/* delete default v6 RT rule */
@@ -7988,6 +7981,7 @@ int IPACM_Wan::handle_down_evt()
 		memset(&ipv6_to_iface[wlan_ipv6_pdn_index].ipv6_prefix, 0, sizeof(uint32_t) * 2);
 		wlan_ipv6_pdn_index = -1;
 		IPACM_Iface::ipacmcfg->del_vlan_ipv6_prefix(ipv6_prefix, -1);
+		IPACM_Wan::wlan_v6_vlan_index = -1;
 	}
 
 

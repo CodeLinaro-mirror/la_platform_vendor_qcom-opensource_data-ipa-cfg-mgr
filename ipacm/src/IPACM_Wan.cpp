@@ -5001,6 +5001,7 @@ int IPACM_Wan::handle_route_add_evt(ipa_ip_type iptype)
 			if(fd_wwan_ioctl < 0)
 			{
 				IPACMERR("FailFailed to open %s.\n", WWAN_QMI_IOCTL_DEVICE_NAME);
+				free(wanup_data);
 				free(rt_rule);
 				return IPACM_FAILURE;
 			}
@@ -5121,6 +5122,7 @@ int IPACM_Wan::handle_route_add_evt(ipa_ip_type iptype)
 			if(fd_wwan_ioctl < 0)
 			{
 				IPACMERR("FailFailed to open %s.\n", WWAN_QMI_IOCTL_DEVICE_NAME);
+				free(wanup_data);
 				free(rt_rule);
 				return IPACM_FAILURE;
 			}
@@ -5661,8 +5663,8 @@ int IPACM_Wan::config_dft_firewall_rules(ipa_ip_type iptype)
 			if (false == m_routing.GetRoutingTable(&IPACM_Iface::ipacmcfg->rt_tbl_lan_v4))
 			{
 				IPACMERR("m_routing.GetRoutingTable(rt_tbl_lan_v4) Failed.\n");
-				free(m_pFilteringTable);
-				return IPACM_FAILURE;
+				res = IPACM_FAILURE;
+				goto fail;
 			}
 			flt_rule_entry.flt_rule_hdl = -1;
 			flt_rule_entry.status = -1;

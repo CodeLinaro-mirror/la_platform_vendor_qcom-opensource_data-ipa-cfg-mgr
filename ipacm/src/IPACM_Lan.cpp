@@ -6745,6 +6745,7 @@ int IPACM_Lan::handle_eth_hdr_init(uint8_t *mac_addr, ipacm_bridge *bridge, uint
 		get_client_memptr(eth_client, num_eth_client)->ipv4_xlat_ul_rules_set = false;
 		get_client_memptr(eth_client, num_eth_client)->ipv4_sta_ul_rules_set = false;
 		get_client_memptr(eth_client, num_eth_client)->ipv6_sta_ul_rules_set = false;
+		IPACMDBG_H("Get Lan Stats Index.\n");
 		get_client_memptr(eth_client, num_eth_client)->lan_stats_idx = get_lan_stats_index(get_client_memptr(eth_client, num_eth_client)->mac);
 		memset(get_client_memptr(eth_client, num_eth_client)->wan_ul_fl_rule_hdl_v4, 0,
 			IPA_MAX_NUM_PROPS * MAX_WAN_UL_FILTER_RULES * sizeof(uint32_t));
@@ -6801,6 +6802,7 @@ int IPACM_Lan::handle_eth_hdr_init(uint8_t *mac_addr, ipacm_bridge *bridge, uint
 				}
 			}
 			/* Store the client info at WAN driver. */
+			IPACMDBG_H("Alloc client info.\n");
 			client_info = (struct wan_ioctl_lan_client_info_v2 *)malloc(sizeof(struct wan_ioctl_lan_client_info_v2));
 			if (client_info == NULL)
 			{
@@ -6857,6 +6859,18 @@ int IPACM_Lan::handle_eth_hdr_init(uint8_t *mac_addr, ipacm_bridge *bridge, uint
 				get_client_memptr(eth_client, clnt_indx)->ul_cnt_idx = client_info->wan_cnt_idx;
 				get_client_memptr(eth_client, clnt_indx)->dl_cnt_idx = client_info->wan_cnt_idx;
 				get_client_memptr(eth_client, clnt_indx)->index_populated = true;
+				IPACMDBG_H("clnt_indx: %d ul_cnt_idx: %d dl_cnt_idx: %d\n", clnt_indx,
+						   get_client_memptr(eth_client, clnt_indx)->ul_cnt_idx,
+						   get_client_memptr(eth_client, clnt_indx)->dl_cnt_idx);
+				if (IPACM_Iface::ipacmcfg->ipacm_lan2lan_stats_enable == true)
+				{
+					get_client_memptr(eth_client, clnt_indx)->l2l_ul_cnt_idx = client_info->lan_cnt_idx;
+					get_client_memptr(eth_client, clnt_indx)->l2l_dl_cnt_idx = client_info->lan_cnt_idx;
+					get_client_memptr(eth_client, clnt_indx)->l2l_index_populated = true;
+					IPACMDBG_H("(ipacm_lan2lan_stats_enable) clnt_indx: %d l2l_ul_cnt_idx: %d l2l_dl_cnt_idx: %d\n", clnt_indx,
+							   get_client_memptr(eth_client, clnt_indx)->l2l_ul_cnt_idx,
+							   get_client_memptr(eth_client, clnt_indx)->l2l_dl_cnt_idx);
+				}
 			}
 #endif //IPA_HW_FNR_STATS
 			if (rx_prop)
@@ -13187,6 +13201,11 @@ int IPACM_Lan::handle_eth_client_down_evt(uint8_t *mac_addr, uint16_t vlan_id, i
 			pthread_mutex_lock(&IPACM_Iface::ipacmcfg->cnt_idx_lock);
 			if (IPACM_Iface::ipacmcfg->reset_cnt_idx(client_info->wan_cnt_idx, false))
 				IPACMERR("Failed to reset counter index %u\n", client_info->wan_cnt_idx);
+			if (IPACM_Iface::ipacmcfg->ipacm_lan2lan_stats_enable == true)
+			{
+				if (IPACM_Iface::ipacmcfg->reset_cnt_idx(client_info->lan_cnt_idx, false))
+					IPACMERR("Failed to reset counter index %u\n", client_info->lan_cnt_idx);
+			}
 			pthread_mutex_unlock(&IPACM_Iface::ipacmcfg->cnt_idx_lock);
 		}
 #endif //IPA_HW_FNR_STATS
@@ -13272,6 +13291,15 @@ int IPACM_Lan::handle_eth_client_down_evt(uint8_t *mac_addr, uint16_t vlan_id, i
 			get_client_memptr(eth_client, clt_indx + 1)->dl_cnt_idx;
 		get_client_memptr(eth_client, clt_indx)->index_populated =
 			get_client_memptr(eth_client, clt_indx + 1)->index_populated;
+		if (IPACM_Iface::ipacmcfg->ipacm_lan2lan_stats_enable == true)
+		{
+			get_client_memptr(eth_client, clt_indx)->l2l_ul_cnt_idx =
+				get_client_memptr(eth_client, clt_indx + 1)->l2l_ul_cnt_idx;
+			get_client_memptr(eth_client, clt_indx)->l2l_dl_cnt_idx =
+				get_client_memptr(eth_client, clt_indx + 1)->l2l_dl_cnt_idx;
+			get_client_memptr(eth_client, clt_indx)->l2l_index_populated =
+				get_client_memptr(eth_client, clt_indx + 1)->l2l_index_populated;
+		}
 #endif //IPA_HW_FNR_STATS
 #endif
 #ifdef FEATURE_STATIC_POLICY
@@ -13310,6 +13338,12 @@ int IPACM_Lan::handle_eth_client_down_evt(uint8_t *mac_addr, uint16_t vlan_id, i
 	get_client_memptr(eth_client, clt_indx)->ul_cnt_idx = -1;
 	get_client_memptr(eth_client, clt_indx)->dl_cnt_idx = -1;
 	get_client_memptr(eth_client, clt_indx)->index_populated = false;
+	if (IPACM_Iface::ipacmcfg->ipacm_lan2lan_stats_enable == true)
+	{
+		get_client_memptr(eth_client, clt_indx)->l2l_ul_cnt_idx = -1;
+		get_client_memptr(eth_client, clt_indx)->l2l_dl_cnt_idx = -1;
+		get_client_memptr(eth_client, clt_indx)->l2l_index_populated = false;
+	}
 #endif
 	memset(get_client_memptr(eth_client, clt_indx)->wan_ul_fl_rule_hdl_v4, 0, MAX_WAN_UL_FILTER_RULES * sizeof(uint32_t));
 	memset(get_client_memptr(eth_client, clt_indx)->wan_ul_fl_rule_hdl_v6, 0, MAX_WAN_UL_FILTER_RULES * sizeof(uint32_t));

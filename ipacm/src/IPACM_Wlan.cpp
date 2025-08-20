@@ -2880,6 +2880,12 @@ int IPACM_Wlan::handle_wlan_client_init_ex(ipacm_event_data_wlan_ex *data, bool 
 		get_client_memptr(wlan_client, num_wifi_client)->ul_cnt_idx = -1;
 		get_client_memptr(wlan_client, num_wifi_client)->dl_cnt_idx = -1;
 		get_client_memptr(wlan_client, num_wifi_client)->index_populated = false;
+		if (IPACM_Iface::ipacmcfg->ipacm_lan2lan_stats_enable == true)
+		{
+			get_client_memptr(wlan_client, num_wifi_client)->l2l_ul_cnt_idx = -1;
+			get_client_memptr(wlan_client, num_wifi_client)->l2l_dl_cnt_idx = -1;
+			get_client_memptr(wlan_client, num_wifi_client)->l2l_index_populated = false;
+		}
 #endif //IPA_HW_FNR_STATS
 #endif
 #ifdef FEATURE_STATIC_POLICY
@@ -2968,6 +2974,18 @@ int IPACM_Wlan::handle_wlan_client_init_ex(ipacm_event_data_wlan_ex *data, bool 
 				get_client_memptr(wlan_client, wlan_index)->ul_cnt_idx = client_info->wan_cnt_idx;
 				get_client_memptr(wlan_client, wlan_index)->dl_cnt_idx = client_info->wan_cnt_idx;
 				get_client_memptr(wlan_client, wlan_index)->index_populated = true;
+				if (IPACM_Iface::ipacmcfg->ipacm_lan2lan_stats_enable == true)
+				{
+					get_client_memptr(wlan_client, wlan_index)->l2l_ul_cnt_idx = client_info->lan_cnt_idx;
+					get_client_memptr(wlan_client, wlan_index)->l2l_dl_cnt_idx = client_info->lan_cnt_idx;
+					get_client_memptr(wlan_client, wlan_index)->l2l_index_populated = true;
+					IPACMERR("(ipacm_lan2lan_stats_enable) Client counter index (%d) ul/ul = (%d/%d) dl/dl = (%d/%d)\n",
+							 get_client_memptr(wlan_client, wlan_index)->l2l_index_populated,
+							 client_info->lan_cnt_idx,
+							 get_client_memptr(wlan_client, wlan_index)->l2l_ul_cnt_idx,
+							 client_info->lan_cnt_idx,
+							 get_client_memptr(wlan_client, wlan_index)->l2l_dl_cnt_idx);
+				}
 			}
 #endif //IPA_HW_FNR_STATS
 			if (rx_prop)
@@ -7783,6 +7801,11 @@ int IPACM_Wlan::handle_wlan_client_down_evt(uint8_t *mac_addr, uint16_t vlan_id)
 			pthread_mutex_lock(&IPACM_Wan::ipacmcfg->cnt_idx_lock);
 			if (IPACM_Wan::ipacmcfg->reset_cnt_idx(client_info->wan_cnt_idx, false))
 				IPACMERR("Failed to reset counter index %u\n", client_info->wan_cnt_idx);
+			if (IPACM_Iface::ipacmcfg->ipacm_lan2lan_stats_enable == true)
+			{
+				if (IPACM_Wan::ipacmcfg->reset_cnt_idx(client_info->lan_cnt_idx, false))
+					IPACMERR("Failed to reset counter index %u\n", client_info->lan_cnt_idx);
+			}
 			pthread_mutex_unlock(&IPACM_Wan::ipacmcfg->cnt_idx_lock);
 		}
 #endif //IPA_HW_FNR_STATS
@@ -7876,6 +7899,15 @@ int IPACM_Wlan::handle_wlan_client_down_evt(uint8_t *mac_addr, uint16_t vlan_id)
 			get_client_memptr(wlan_client, clt_indx + 1)->dl_cnt_idx;
 		get_client_memptr(wlan_client, clt_indx)->index_populated =
 			get_client_memptr(wlan_client, clt_indx + 1)->index_populated;
+		if (IPACM_Iface::ipacmcfg->ipacm_lan2lan_stats_enable == true)
+		{
+			get_client_memptr(wlan_client, clt_indx)->l2l_ul_cnt_idx =
+				get_client_memptr(wlan_client, clt_indx + 1)->l2l_ul_cnt_idx;
+			get_client_memptr(wlan_client, clt_indx)->l2l_dl_cnt_idx =
+				get_client_memptr(wlan_client, clt_indx + 1)->l2l_dl_cnt_idx;
+			get_client_memptr(wlan_client, clt_indx)->l2l_index_populated =
+				get_client_memptr(wlan_client, clt_indx + 1)->l2l_index_populated;
+		}
 #endif //IPA_HW_FNR_STATS
 #endif
 #ifdef FEATURE_STATIC_POLICY
@@ -7914,6 +7946,12 @@ int IPACM_Wlan::handle_wlan_client_down_evt(uint8_t *mac_addr, uint16_t vlan_id)
 	get_client_memptr(wlan_client, clt_indx)->ul_cnt_idx = -1;
 	get_client_memptr(wlan_client, clt_indx)->dl_cnt_idx = -1;
 	get_client_memptr(wlan_client, clt_indx)->index_populated = false;
+	if (IPACM_Iface::ipacmcfg->ipacm_lan2lan_stats_enable == true)
+	{
+		get_client_memptr(wlan_client, clt_indx)->l2l_ul_cnt_idx = -1;
+		get_client_memptr(wlan_client, clt_indx)->l2l_dl_cnt_idx = -1;
+		get_client_memptr(wlan_client, clt_indx)->l2l_index_populated = false;
+	}
 #endif
 #endif
 #ifdef FEATURE_STATIC_POLICY
@@ -8361,6 +8399,11 @@ fail:
 					pthread_mutex_lock(&IPACM_Wan::ipacmcfg->cnt_idx_lock);
 					if (IPACM_Wan::ipacmcfg->reset_cnt_idx(client_info->wan_cnt_idx, false))
 						IPACMERR("Failed to reset counter index = %u\n", client_info->wan_cnt_idx);
+					if (IPACM_Iface::ipacmcfg->ipacm_lan2lan_stats_enable == true)
+					{
+						if (IPACM_Wan::ipacmcfg->reset_cnt_idx(client_info->lan_cnt_idx, false))
+							IPACMERR("Failed to reset counter index = %u\n", client_info->lan_cnt_idx);
+					}
 					pthread_mutex_unlock(&IPACM_Wan::ipacmcfg->cnt_idx_lock);
 				}
 #endif //IPA_HW_FNR_STATS

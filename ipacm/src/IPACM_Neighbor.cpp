@@ -454,6 +454,7 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 						if (data_all == NULL)
 						{
 							IPACMERR("Unable to allocate memory\n");
+							free(data_vlan);
 							return;
 						}
 						memset(data_all,0,sizeof(ipacm_event_data_all));

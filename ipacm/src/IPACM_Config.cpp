@@ -407,6 +407,7 @@ int IPACM_Config::ipacm_reset_hw_fnr_counters(const uint8_t start_id, const uint
 			IPACMERR("IOCTL %d failed\n", IPA_IOC_FNR_COUNTER_QUERY);
 	}
 
+	free((void *)query->stats);
 	free(query);
 fail:
 	close(fd);

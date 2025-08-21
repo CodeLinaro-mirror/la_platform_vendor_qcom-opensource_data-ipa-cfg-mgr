@@ -3965,8 +3965,6 @@ int IPACM_Lan::handle_addr_evt(ipacm_event_data_addr *data)
 		idx = 2;
 		IPACMDBG_H("Interface is WLAN Svap or vlan, install rules on Rx pipe at idx %d \n", idx);
 	}
-	/* Update the IP Type. */
-	config_ip_type(data->iptype);
 
 	if (data->iptype == IPA_IP_v4)
 	{
@@ -3981,8 +3979,14 @@ int IPACM_Lan::handle_addr_evt(ipacm_event_data_addr *data)
 								IPACM_Wlan::wlan_ap_dflt_rules[wlan_pipe_index].iface_cnt[IPA_IP_v4]);
 					break;
 				} else {
-					if(IPACM_Wlan::wlan_ap_dflt_rules[wlan_pipe_index].src_pipe == rx_prop->rx[idx].src_pipe ){
+					if(IPACM_Wlan::wlan_ap_dflt_rules[wlan_pipe_index].src_pipe == rx_prop->rx[idx].src_pipe){
+						if(ip_type != IPA_IP_MAX) {
 						IPACM_Wlan::wlan_ap_dflt_rules[wlan_pipe_index].iface_cnt[IPA_IP_v4]++;
+						IPACMDBG("wlan_pipe_index %d src_pipe %d iface_cnt %d\n",
+								wlan_pipe_index, rx_prop->rx[idx].src_pipe,
+								IPACM_Wlan::wlan_ap_dflt_rules[wlan_pipe_index].iface_cnt[IPA_IP_v4]);
+
+						}
 						IPACMDBG_H("Rules Already installed \n");
 						is_flt_rules_present = true;
 						break;
@@ -4100,8 +4104,13 @@ int IPACM_Lan::handle_addr_evt(ipacm_event_data_addr *data)
 							IPACM_Wlan::wlan_ap_dflt_rules[wlan_pipe_index].iface_cnt[IPA_IP_v6]);
 					break;
 				} else {
-					if(IPACM_Wlan::wlan_ap_dflt_rules[wlan_pipe_index].src_pipe == rx_prop->rx[idx].src_pipe ){
+					if(IPACM_Wlan::wlan_ap_dflt_rules[wlan_pipe_index].src_pipe == rx_prop->rx[idx].src_pipe){
+						if(ip_type != IPA_IP_MAX){
 						IPACM_Wlan::wlan_ap_dflt_rules[wlan_pipe_index].iface_cnt[data->iptype]++;
+						IPACMDBG("wlan_pipe_index %d src_pipe %d iface_cnt %d\n",
+							wlan_pipe_index, rx_prop->rx[idx].src_pipe,
+							IPACM_Wlan::wlan_ap_dflt_rules[wlan_pipe_index].iface_cnt[IPA_IP_v6]);
+						}
 						IPACMDBG_H("Rules Already installed \n");
 						is_flt_rules_present = true;
 						break;
@@ -4249,6 +4258,8 @@ int IPACM_Lan::handle_addr_evt(ipacm_event_data_addr *data)
 		num_dft_rt_v6++;
 		IPACMDBG_H("number of default route rules %d\n", num_dft_rt_v6);
 	}
+	/* Update the IP Type. */
+	config_ip_type(data->iptype);
 
 	IPACMDBG_H("finish route/filter rule ip-type: %d, res(%d)\n", data->iptype, res);
 
@@ -6804,15 +6815,17 @@ int IPACM_Lan::handle_pdn_dscp_eth_client_route_rule(uint8_t *mac_addr,
 					sizeof(rt_rule->rt_tbl_name));
 					rt_rule->rt_tbl_name[IPA_RESOURCE_NAME_MAX - 1] = '\0';
 
-				for (i = 0; i < num_eth_client; i++)
+				idx = 0;
+				for (i = 0; i < num_eth_client&&idx<NUM; i++)
 				{
 					if(get_client_memptr(eth_client, i)->route_rule_set_v4 == false ||
 						get_client_memptr(eth_client, i)->dscp_route_rule_set_v4[mux_id] == true)
 					{
 						continue;
 					}
-					rt_rule_entry = &rt_rule->rules[i];
+					rt_rule_entry = &rt_rule->rules[idx];
 					rt_rule_entry->at_rear = false;
+					idx++;
 					IPACMDBG_H("client index(%d):ipv4 address: 0x%x v4 header handle:(0x%x)\n",
 						i,
 						get_client_memptr(eth_client, i)->v4_addr,

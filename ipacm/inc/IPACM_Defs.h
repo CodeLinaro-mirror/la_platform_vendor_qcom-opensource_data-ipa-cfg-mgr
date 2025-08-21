@@ -142,8 +142,8 @@ extern "C"
 #define IPACM_MAC_FLT 1
 #define IPACM_SW_FLT 2
 
-#define IPOGRE_METADATA_VALUE 0x100000
-#define IPOGRE_METADATA_MASK 0xFF0000
+#define IPOGRE_METADATA_VALUE 0x0100
+#define IPOGRE_METADATA_MASK 0x0000FF00
 /*---------------------------------------------------------------------------
 										Return values indicating error status
 ---------------------------------------------------------------------------*/

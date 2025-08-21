@@ -2413,9 +2413,10 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 #ifdef FEATURE_IPoGRE
 	case IPA_HANDLE_IPOGRE_UP:
 	{
-		if(IPACM_Iface::ipacmcfg->link_down)
+		bool flag_link_down = false;
+		for(int i=0;i<IPACM_Iface::ipacmcfg->tunnel_idx.size();i++)
 		{
-			for(int i=0;i<IPACM_Iface::ipacmcfg->tunnel_idx.size();i++)
+			if(IPACM_Iface::ipacmcfg->ipogre_tunnel_idx_map[IPACM_Iface::ipacmcfg->tunnel_idx[i]].link_down)
 			{
 				IPACMDBG_H("call gre up\n");
 				//check wiht this PDN address to only post wan down for this PDN
@@ -2428,55 +2429,55 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 					}
 					else
 					{
-						break;
+						continue;
 					}
 				}
 				else
 				{
-					if (memcmp(IPACM_Iface::ipacmcfg->ipgre_info.ipv6_src, m_ipv6_addr, sizeof(IPACM_Iface::ipacmcfg->ipgre_info.ipv6_src)) == 0)
+					if (memcmp(IPACM_Iface::ipacmcfg->ipogre_tunnel_idx_map[IPACM_Iface::ipacmcfg->tunnel_idx[i]].tunnel_endpoint.v6_ip.ipv6_src, m_ipv6_addr, sizeof(IPACM_Iface::ipacmcfg->ipgre_info.ipv6_src)) == 0)
 					{
 						memcpy(&IPACM_Iface::ipacmcfg->ipgre_info.ipv6_src,&IPACM_Iface::ipacmcfg->ipogre_tunnel_idx_map[IPACM_Iface::ipacmcfg->tunnel_idx[i]].tunnel_endpoint.v6_ip.ipv6_src,sizeof(IPACM_Iface::ipacmcfg->ipgre_info.ipv6_src));
 						memcpy(&IPACM_Iface::ipacmcfg->ipgre_info.ipv6_dst,&IPACM_Iface::ipacmcfg->ipogre_tunnel_idx_map[IPACM_Iface::ipacmcfg->tunnel_idx[i]].tunnel_endpoint.v6_ip.ipv6_dst,sizeof(IPACM_Iface::ipacmcfg->ipgre_info.ipv6_dst));
 					}
 					else
 					{
-						break;
+						continue;
 					}
-					IPACM_Iface::ipacmcfg->ipgre_info.iptype = IPACM_Iface::ipacmcfg->ipogre_tunnel_idx_map[IPACM_Iface::ipacmcfg->tunnel_idx[i]].iptype;
-					IPACM_Iface::ipacmcfg->ipgre_info.num_exceptions = IPACM_Iface::ipacmcfg->tunnel_idx[i];
-					gre_up();
 				}
+				IPACM_Iface::ipacmcfg->ipgre_info.iptype = IPACM_Iface::ipacmcfg->ipogre_tunnel_idx_map[IPACM_Iface::ipacmcfg->tunnel_idx[i]].iptype;
+				IPACM_Iface::ipacmcfg->ipgre_info.num_exceptions = IPACM_Iface::ipacmcfg->tunnel_idx[i];
+				gre_up();
+				IPACM_Iface::ipacmcfg->ipogre_tunnel_idx_map[IPACM_Iface::ipacmcfg->tunnel_idx[i]].link_down = false;
+				flag_link_down = true;
 			}
-			IPACM_Iface::ipacmcfg->link_down = false;
-			break;
 		}
-		ipa_ipgre_info ipgre_info = IPACM_Iface::ipacmcfg->ipgre_info;
-		if (ipgre_info.iptype == IPA_IP_v4 &&
-			ipgre_info.ipv4_src == wan_v4_addr)
+		if(!flag_link_down)
 		{
-			IPACMDBG_H("Received and will process an IPA_HANDLE_GRE_UP\n");
-			gre_up();
-		}
-		else if (ipgre_info.iptype == IPA_IP_v6 &&
-			memcmp(ipgre_info.ipv6_src, m_ipv6_addr, sizeof(ipgre_info.ipv6_src)) == 0)
-		{
-			IPACMDBG_H("Received and will process an IPA_HANDLE_GRE_UP\n");
-			gre_up();
-		}
-		else {
-			IPACMDBG_H("Received and will process an IPA_HANDLE_GRE_UP for differenct instance\n");
+			ipa_ipgre_info ipgre_info = IPACM_Iface::ipacmcfg->ipgre_info;
+			if ((ipgre_info.iptype == IPA_IP_v4 && ipgre_info.ipv4_src == wan_v4_addr) ||
+				(ipgre_info.iptype == IPA_IP_v6 &&
+				memcmp(ipgre_info.ipv6_src, m_ipv6_addr, sizeof(ipgre_info.ipv6_src)) == 0))
+			{
+				IPACMDBG_H("Received and will process an IPA_HANDLE_GRE_UP\n");
+				gre_up();
+			}
+			else {
+				IPACMDBG_H("Received and will process an IPA_HANDLE_GRE_UP for differenct instance\n");
+			}
 		}
 		break;
 	}
 
 	case IPA_HANDLE_IPOGRE_DOWN:
+	{
 		IPACMDBG_H("Received and will process an IPA_HANDLE_GRE_DOWN\n");
-		if(IPACM_Iface::ipacmcfg->link_down)
+		bool link_down_flag = false;
+		for(int i=0;i<IPACM_Iface::ipacmcfg->tunnel_idx.size();i++)
 		{
-			for(int i=0;i<IPACM_Iface::ipacmcfg->tunnel_idx.size();i++)
+			IPACMDBG_H("call gre down\n");
+			//check wiht this PDN address to only post wan down for this PDN
+			if(IPACM_Iface::ipacmcfg->ipogre_tunnel_idx_map[IPACM_Iface::ipacmcfg->tunnel_idx[i]].link_down)
 			{
-				IPACMDBG_H("call gre down\n");
-				//check wiht this PDN address to only post wan down for this PDN
 				if(IPACM_Iface::ipacmcfg->ipogre_tunnel_idx_map[IPACM_Iface::ipacmcfg->tunnel_idx[i]].iptype == IPA_IP_v4)
 				{
 					memcpy(&IPACM_Iface::ipacmcfg->ipgre_info.ipv4_src,&IPACM_Iface::ipacmcfg->ipogre_tunnel_idx_map[IPACM_Iface::ipacmcfg->tunnel_idx[i]].tunnel_endpoint.v4_ip.ipv4_src,sizeof(IPACM_Iface::ipacmcfg->ipgre_info.ipv4_src));
@@ -2490,14 +2491,16 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 				IPACM_Iface::ipacmcfg->ipgre_info.iptype = IPACM_Iface::ipacmcfg->ipogre_tunnel_idx_map[IPACM_Iface::ipacmcfg->tunnel_idx[i]].iptype;
 				IPACM_Iface::ipacmcfg->ipgre_info.num_exceptions = IPACM_Iface::ipacmcfg->tunnel_idx[i];
 				gre_down();
+				IPACM_Iface::ipacmcfg->ipogre_tunnel_idx_map[IPACM_Iface::ipacmcfg->tunnel_idx[i]].link_down = false;
+				link_down_flag = true;
 			}
-			IPACM_Iface::ipacmcfg->link_down = false;
 		}
-		else
+		if(!link_down_flag)
 		{
 			gre_down();
 		}
 		break;
+	}
 #endif
 	case IPA_IPACM_DISABLE:
 			if(m_is_sta_mode == WLAN_WAN)

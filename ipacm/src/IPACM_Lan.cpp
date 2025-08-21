@@ -4561,7 +4561,10 @@ int IPACM_Lan::handle_wan_up_ex(ipacm_ext_prop *ext_prop, ipa_ip_type iptype, ui
 			}
 			if(IPACM_Iface::ipacmcfg->ipogre_enabled)
 			{
-				IPACM_Iface::ipacmcfg->link_down = true;
+				for(int i=0;i<IPACM_Iface::ipacmcfg->tunnel_idx.size();i++)
+				{
+					IPACM_Iface::ipacmcfg->ipogre_tunnel_idx_map[IPACM_Iface::ipacmcfg->tunnel_idx[i]].link_down = true;
+				}
 				ipacm_cmd_q_data evt_data;
 				memset(&evt_data, 0, sizeof(evt_data));
 				evt_data.event = IPA_HANDLE_IPOGRE_UP;
@@ -7450,8 +7453,8 @@ int IPACM_Lan::handle_down_evt()
 				IPACM_Iface::ipacmcfg->ipgre_info.iptype = IPACM_Iface::ipacmcfg->ipogre_tunnel_idx_map[IPACM_Iface::ipacmcfg->tunnel_idx[i]].iptype;
 				IPACM_Iface::ipacmcfg->ipgre_info.num_exceptions = IPACM_Iface::ipacmcfg->tunnel_idx[i];
 				gre_down(false,true);
+				IPACM_Iface::ipacmcfg->ipogre_tunnel_idx_map[IPACM_Iface::ipacmcfg->tunnel_idx[i]].link_down = true;
 			}
-				IPACM_Iface::ipacmcfg->link_down = true;
 				ipacm_cmd_q_data evt_data;
 				memset(&evt_data, 0, sizeof(evt_data));
 				evt_data.event = IPA_HANDLE_IPOGRE_DOWN;

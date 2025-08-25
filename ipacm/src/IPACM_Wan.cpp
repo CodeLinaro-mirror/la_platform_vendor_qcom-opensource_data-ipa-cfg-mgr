@@ -2038,13 +2038,9 @@ void IPACM_Wan::post_wan_vlan_pdn_event(ipa_ip_type iptype, int pdn_idx, int vla
 	ipacm_cmd_q_data evt_data;
 	ipacm_event_vlan_pdn *vlan_data = NULL;
 
-	if(vlan_idx >= IPA_MAX_NUM_SW_PDNS)
-	{
-		IPACMERR("Invalid VLAN Index\n");
-		return;
-	}
-
-	if(pdn_idx < 0 || vlan_idx < 0 || vlan_id <= 0)
+	if((pdn_idx < 0) || (pdn_idx >= IPA_MAX_NUM_SW_PDNS) ||
+           (vlan_idx < 0) || (vlan_idx >= IPA_MAX_NUM_SW_PDNS) ||
+           (vlan_id <= 0))
 	{
 		IPACMERR("Wrong param pdn_idx:%d, vlan_idx:%d, vlan_id:%d\n", pdn_idx, vlan_idx, vlan_id);
 		return;
@@ -2066,7 +2062,9 @@ void IPACM_Wan::post_wan_vlan_pdn_event(ipa_ip_type iptype, int pdn_idx, int vla
 		{
 			GetMuxByVid(vlan_id, &mux_id, IPA_IP_v6);
 			ipv6_to_iface[pdn_idx].associated_VIDs[vlan_idx] = 0;
-			while(idx < IPA_MAX_NUM_SW_PDNS && ipv6_to_iface[pdn_idx].associated_VIDs[idx] != 0)
+			while((idx < IPA_MAX_NUM_SW_PDNS) &&
+                          (vlan_idx < IPA_MAX_NUM_SW_PDNS - 1) &&
+                          (ipv6_to_iface[pdn_idx].associated_VIDs[idx] != 0))
 			{
 				ipv6_to_iface[pdn_idx].associated_VIDs[vlan_idx] =
 						ipv6_to_iface[pdn_idx].associated_VIDs[idx];
@@ -2135,7 +2133,9 @@ void IPACM_Wan::post_wan_vlan_pdn_event(ipa_ip_type iptype, int pdn_idx, int vla
 		{
 			GetMuxByVid(vlan_id, &mux_id, IPA_IP_v4);
 			ipv4_to_iface[pdn_idx].associated_VIDs[vlan_idx] = 0;
-			while(idx < IPA_MAX_NUM_SW_PDNS && ipv4_to_iface[pdn_idx].associated_VIDs[idx] != 0)
+			while((idx < IPA_MAX_NUM_SW_PDNS) &&
+                          (vlan_idx < IPA_MAX_NUM_SW_PDNS - 1) &&
+                          (ipv4_to_iface[pdn_idx].associated_VIDs[idx] != 0))
 			{
 				ipv4_to_iface[pdn_idx].associated_VIDs[vlan_idx] =
 					ipv4_to_iface[pdn_idx].associated_VIDs[idx];

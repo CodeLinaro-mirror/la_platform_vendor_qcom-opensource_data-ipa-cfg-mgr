@@ -1204,9 +1204,17 @@ int main(int argc, char **argv)
 		IPACMDBG_H("Create ipacmcfg instance\n");
 		IPACM_Iface::ipacmcfg = IPACM_Config::GetInstance();
 	}
+
 #ifdef IPA_HW_FNR_STATS
-	IPACM_Iface::ipacmcfg->alloc_fnr_counter();
-	IPACMDBG_H("Reallocation FNR Counter: Done\n");
+	if (IPACM_Iface::ipacmcfg != NULL)
+	{
+		IPACM_Iface::ipacmcfg->alloc_fnr_counter();
+		IPACMDBG_H("Reallocation FNR Counter: Done\n");
+	}
+	else
+	{
+		IPACMERR("Failed to get IPACM_Config instance\n");
+	}
 #endif
 
 	IPACM_IfaceManager *ifacemgr = new IPACM_IfaceManager();

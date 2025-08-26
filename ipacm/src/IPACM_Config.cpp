@@ -1550,7 +1550,8 @@ void IPACM_Config::add_bridge_vlan_mapping(ipa_bridge_vlan_mapping_info *data)
 	list<bridge_vlan_mapping_info>::iterator it_mapping;
 	ipacm_bridge *bridge = NULL;
 	char iface_name[IPA_IFACE_NAME_LEN] = {0};
-	int ret = IPACM_FAILURE;
+	int ret = IPACM_FAILURE, fd;
+        struct ifreq ifr;
 
 	if(pthread_mutex_lock(&vlan_l2tp_lock) != 0)
 	{
@@ -1638,6 +1639,26 @@ void IPACM_Config::add_bridge_vlan_mapping(ipa_bridge_vlan_mapping_info *data)
 			strlcpy(new_mapping.bridge_iface_name, iface_name,
 				sizeof(new_mapping.bridge_iface_name));
 		}
+
+		fd = socket(AF_INET, SOCK_DGRAM, 0);
+		if (fd < 0) {
+			IPACMERR("get interface name socket create failed\n");
+			goto bail;
+		}
+		memset(&ifr, 0, sizeof(struct ifreq));
+		ifr.ifr_addr.sa_family = AF_INET;
+		strlcpy(ifr.ifr_name, iface_name, sizeof(ifr.ifr_name));
+		if(ioctl(fd, SIOCGIFHWADDR, &ifr) < 0)
+		{
+			IPACMERR("unable to retrieve (%s) bridge MAC\n", ifr.ifr_name);
+			close(fd);
+			goto bail;
+		}
+		memcpy(new_mapping.bridge_mac,
+			ifr.ifr_hwaddr.sa_data,
+			sizeof(new_mapping.bridge_mac));
+		IPACMDBG("got bridge MAC using IOCTL\n");
+		close(fd);
 
 		for(it_mapping = m_bridge_vlan_mapping.begin(); it_mapping != m_bridge_vlan_mapping.end(); it_mapping++)
 		{
@@ -2488,6 +2509,32 @@ ipacm_bridge *IPACM_Config::get_vlan_bridge_from_vid(uint16_t vlan_id)
 	IPACMDBG_H("no bridge with vlan-id %d exists\n", vlan_id);
 	return NULL;
 }
+int IPACM_Config::get_bridge_vlan_mapping_from_vid(ipacm_bridge *data, uint16_t vlan_id)
+{
+	list<bridge_vlan_mapping_info>::iterator it_mapping;
+	int ret = IPACM_FAILURE;
+
+	for(it_mapping = m_bridge_vlan_mapping.begin(); it_mapping != m_bridge_vlan_mapping.end(); it_mapping++)
+	{
+		if(vlan_id == it_mapping->bridge_associated_VID)
+		{
+			IPACMDBG_H("Found the bridge mapping (%s->%d) \n",
+				it_mapping->bridge_iface_name,
+				it_mapping->bridge_associated_VID);
+			data->bridge_ipv4_addr = it_mapping->bridge_ipv4;
+			data->bridge_netmask = it_mapping->subnet_mask;
+			memcpy(data->bridge_mac,it_mapping->bridge_mac,sizeof(data->bridge_mac));
+			strlcpy(data->bridge_name, it_mapping->bridge_iface_name, sizeof(data->bridge_name));
+			data->associate_VID[0] = vlan_id;
+			return IPACM_SUCCESS;
+		}
+	}
+
+	IPACMERR("Bridge mapping is not found\n");
+
+	return ret;
+}
+
 
 bool IPACM_Config::is_added_vlan_iface(char *iface_name)
 {

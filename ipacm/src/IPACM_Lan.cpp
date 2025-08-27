@@ -10227,11 +10227,34 @@ int IPACM_Lan::install_ipv6_prefix_flt_rule(uint32_t* prefix)
 		}
 		else
 		{
-			IPACM_Iface::ipacmcfg->increaseFltRuleCount(rx_prop->rx[0].src_pipe, IPA_IP_v6, 2);
+			if(ipv6_prefix_flt_rule_hdl[0] != 0)
+			{
+				if(m_filtering.DeleteFilteringHdls(&ipv6_prefix_flt_rule_hdl[0], IPA_IP_v6, 1) == false)
+				{
+					IPACM_SYSLOG("Failed to delete old IPv6 prefix flt rule\n");
+				}
+				else
+				{
+					IPACMDBG_H("deleted old IPv6 prefix flt rule\n");
+					ipv6_prefix_flt_rule_hdl[0] = 0;
+				}
+			}
 			ipv6_prefix_flt_rule_hdl[0] = flt_rule->rules[0].flt_rule_hdl;
 			IPACM_SYSLOG("IPv6 prefix filter rule HDL:0x%x\n", ipv6_prefix_flt_rule_hdl[0]);
 			if (rule_cnt > 1)
 			{
+				if(ipv6_prefix_flt_rule_hdl[1] != 0)
+				{
+					if(m_filtering.DeleteFilteringHdls(&ipv6_prefix_flt_rule_hdl[1], IPA_IP_v6, 1) == false)
+					{
+						IPACM_SYSLOG("Failed to delete old IPv6 prefix flt rule\n");
+					}
+					else
+					{
+						IPACMDBG_H("deleted old IPv6 prefix flt rule\n");
+						ipv6_prefix_flt_rule_hdl[1] = 0;
+					}
+				}
 				ipv6_prefix_flt_rule_hdl[1] = flt_rule->rules[1].flt_rule_hdl;
 				IPACM_SYSLOG("IPv6 prefix MTU filter rule HDL:0x%x\n", ipv6_prefix_flt_rule_hdl[1]);
 			}
@@ -10243,11 +10266,13 @@ int IPACM_Lan::install_ipv6_prefix_flt_rule(uint32_t* prefix)
 
 void IPACM_Lan::delete_ipv6_prefix_flt_rule()
 {
-	if(m_filtering.DeleteFilteringHdls(&ipv6_prefix_flt_rule_hdl[0], IPA_IP_v6, IPA_MAX_IPV6_PREFIX_FLT_RULE + IPA_MAX_MTU_ENTRIES) == false)
+	if(m_filtering.DeleteFilteringHdls(&ipv6_prefix_flt_rule_hdl[0], IPA_IP_v6, IPA_MAX_IPV6_NO_OFFLOAD_PREFIX_FLT_RULE + IPA_MAX_MTU_ENTRIES) == false)
 	{
 		IPACM_SYSLOG("Failed to delete ipv6 prefix flt rule.\n");
 		return;
 	}
+	memset(ipv6_prefix_flt_rule_hdl, 0, (IPA_MAX_IPV6_NO_OFFLOAD_PREFIX_FLT_RULE + IPA_MAX_MTU_ENTRIES)  * sizeof(uint32_t));
+	IPACM_SYSLOG("cleared the no of rules is %d\n", IPA_MAX_IPV6_PREFIX_FLT_RULE + IPA_MAX_MTU_ENTRIES);
 	IPACM_Iface::ipacmcfg->decreaseFltRuleCount(rx_prop->rx[0].src_pipe, IPA_IP_v6, IPA_MAX_IPV6_PREFIX_FLT_RULE + IPA_MAX_MTU_ENTRIES);
 	return;
 }

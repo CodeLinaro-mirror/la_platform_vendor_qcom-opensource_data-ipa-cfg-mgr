@@ -3127,6 +3127,20 @@ int IPACM_Wlan::handle_down_evt(ipa_ip_type arg_ip_type)
 			IPACMDBG_H("LAN IF goes down, backhaul type %d\n", IPACM_Wan::backhaul_is_sta_mode);
 			handle_wan_down_v6(IPACM_Wan::backhaul_is_sta_mode, false);
 		}
+		else if(ipv6_prefix_flt_rule_hdl[0] != 0)
+		{
+			if(m_filtering.DeleteFilteringHdls(ipv6_prefix_flt_rule_hdl, IPA_IP_v6,
+				IPA_MAX_IPV6_NO_OFFLOAD_PREFIX_FLT_RULE + IPA_MAX_MTU_ENTRIES) == false)
+			{
+				IPACM_SYSLOG("Error Deleting Filtering, aborting...\n");
+				res = IPACM_FAILURE;
+				goto fail;
+			}
+			IPACMDBG_H("Deleted dummy v6 prefix filter rules successfully.\n");
+			memset(ipv6_prefix_flt_rule_hdl, 0, (IPA_MAX_IPV6_NO_OFFLOAD_PREFIX_FLT_RULE + IPA_MAX_MTU_ENTRIES)  * sizeof(uint32_t));
+			IPACM_SYSLOG("successfully deleted %d dummy v6 rules\n", IPA_MAX_IPV6_PREFIX_FLT_RULE + IPA_MAX_MTU_ENTRIES);
+			IPACM_Iface::ipacmcfg->decreaseFltRuleCount(rx_prop->rx[0].src_pipe, IPA_IP_v6, IPA_MAX_IPV6_NO_OFFLOAD_PREFIX_FLT_RULE + IPA_MAX_MTU_ENTRIES);
+		}
 		IPACM_SYSLOG("finished deleting wan filtering rules\n ");
 	}
 	else
@@ -3226,15 +3240,19 @@ int IPACM_Wlan::handle_down_evt(ipa_ip_type arg_ip_type)
 		IPACM_Iface::ipacmcfg->decreaseFltRuleCount(rx_prop->rx[0].src_pipe, IPA_IP_v6, 1);
 		IPACMDBG_H("Deleted TCP syn v6 filter rules successfully.\n");
 #ifdef FEATURE_VLAN_MPDN
-		if(m_filtering.DeleteFilteringHdls(ipv6_prefix_flt_rule_hdl, IPA_IP_v6,
-			IPA_MAX_IPV6_NO_OFFLOAD_PREFIX_FLT_RULE + IPA_MAX_MTU_ENTRIES) == false)
+		if(IPACM_Iface::ipacmcfg->is_added_vlan_iface(dev_name) && (ipv6_prefix_flt_rule_hdl[0] != 0))
 		{
-			IPACM_SYSLOG("Error Deleting Filtering, aborting...\n");
-			res = IPACM_FAILURE;
-			goto fail;
+			if(m_filtering.DeleteFilteringHdls(ipv6_prefix_flt_rule_hdl, IPA_IP_v6,
+				IPA_MAX_IPV6_NO_OFFLOAD_PREFIX_FLT_RULE + IPA_MAX_MTU_ENTRIES) == false)
+			{
+				IPACM_SYSLOG("Error Deleting Filtering, aborting...\n");
+				res = IPACM_FAILURE;
+				goto fail;
+			}
+			IPACMDBG_H("Deleted dummy v6 prefix filter rules successfully.\n");
+			memset(ipv6_prefix_flt_rule_hdl, 0, (IPA_MAX_IPV6_NO_OFFLOAD_PREFIX_FLT_RULE + IPA_MAX_MTU_ENTRIES)  * sizeof(uint32_t));
+			IPACM_Iface::ipacmcfg->decreaseFltRuleCount(rx_prop->rx[0].src_pipe, IPA_IP_v6, IPA_MAX_IPV6_NO_OFFLOAD_PREFIX_FLT_RULE + IPA_MAX_MTU_ENTRIES);
 		}
-		IPACMDBG_H("Deleted dummy v6 prefix filter rules successfully.\n");
-		IPACM_Iface::ipacmcfg->decreaseFltRuleCount(rx_prop->rx[0].src_pipe, IPA_IP_v6, IPA_MAX_IPV6_NO_OFFLOAD_PREFIX_FLT_RULE + IPA_MAX_MTU_ENTRIES);
 #endif
 	}
 	IPACM_SYSLOG("finished delete filtering rules\n ");

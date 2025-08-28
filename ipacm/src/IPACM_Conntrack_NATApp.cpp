@@ -71,7 +71,8 @@ bool NatApp::kernel_ver_updated = false;
 bool NatApp::is_kernel_ver_upgraded = false;
 
 extern int bool_dual_backhaul;
-
+int cur_nat_entries = 0;
+int cur_ct_entries = 0;
 NatApp::NatApp()
 {
 	max_entries = 0;
@@ -296,6 +297,7 @@ int NatApp::AddPdn(uint32_t pub_ip, uint8_t mux_id, bool is_sta, bool ip_pass, b
 				IPACMERR("STA backhaul: connection using ALG Port, ignore\n");
 				memset(&cache[cnt], 0, sizeof(cache[cnt]));
 				curCnt--;
+				cur_nat_entries--;
 				continue;
 			}
 
@@ -303,6 +305,7 @@ int NatApp::AddPdn(uint32_t pub_ip, uint8_t mux_id, bool is_sta, bool ip_pass, b
 				IPACMERR("IP Pass enabled: connection using dummy Nat, ignore\n");
 				memset(&cache[cnt], 0, sizeof(cache[cnt]));
 				curCnt--;
+				cur_nat_entries--;
 				continue;
 			}
 
@@ -324,6 +327,7 @@ int NatApp::AddPdn(uint32_t pub_ip, uint8_t mux_id, bool is_sta, bool ip_pass, b
 				IPACMERR("unable to add the rule delete from cache\n");
 				memset(&cache[cnt], 0, sizeof(cache[cnt]));
 				curCnt--;
+				cur_nat_entries--;
 				continue;
 			}
 			IPACMDBG("cache entry %d rule handle %d\n", cnt, cache[cnt].rule_hdl);
@@ -395,6 +399,7 @@ int NatApp::AddTable(uint32_t pub_ip, uint8_t mux_id, bool is_sta, bool is_xlat)
 					IPACMERR("STA backhaul: connection using ALG Port, ignore\n");
 					memset(&cache[cnt], 0, sizeof(cache[cnt]));
 					curCnt--;
+					cur_nat_entries--;
 					continue;
 				}
 
@@ -415,6 +420,7 @@ int NatApp::AddTable(uint32_t pub_ip, uint8_t mux_id, bool is_sta, bool is_xlat)
 					IPACMERR("unable to add the rule delete from cache\n");
 					memset(&cache[cnt], 0, sizeof(cache[cnt]));
 					curCnt--;
+					cur_nat_entries--;
 					continue;
 				}
 				IPACMDBG("cache entry %d rule handle %d\n", cnt, cache[cnt].rule_hdl);
@@ -646,6 +652,7 @@ int NatApp::DeleteEntryGRE(const nat_table_entry *rule)
 
 			memset(&cache[cnt], 0, sizeof(cache[cnt]));
 			curCnt--;
+			cur_nat_entries--;
 			break;
 		}
 	}
@@ -691,9 +698,9 @@ int NatApp::DeleteEntry(const nat_table_entry *rule)
 			{
 				IPACMDBG_H("Deleted Nat entry(%d) only from cache\n", cnt);
 			}
-
 			memset(&cache[cnt], 0, sizeof(cache[cnt]));
 			curCnt--;
+			cur_nat_entries--;
 			break;
 		}
 	}
@@ -860,6 +867,7 @@ int NatApp::AddEntry(const nat_table_entry *rule, bool isVlan)
 #endif
 			cache[cnt].ip_pass_entry = rule->ip_pass_entry;
 			curCnt++;
+			cur_nat_entries++;
 		}
 
 	}
@@ -1181,6 +1189,7 @@ int NatApp::ResetPwrSaveIf(uint32_t client_lan_ip)
 				IPACMERR("unable to add the rule delete from cache\n");
 				memset(&cache[cnt], 0, sizeof(cache[cnt]));
 				curCnt--;
+				cur_nat_entries--;
 				continue;
 			}
 
@@ -1463,6 +1472,7 @@ int NatApp::DeleteEntry_port(uint16_t port)
 
 			memset(&cache[cnt], 0, sizeof(cache[cnt]));
 			curCnt--;
+			cur_nat_entries--;
 			break;
 		}
 	}
@@ -1497,6 +1507,7 @@ int NatApp::DelDummyNatEntries(uint32_t ip_addr)
 					IPACMDBG("delete the rule\n");
 					memset(&cache[cnt], 0, sizeof(cache[cnt]));
 					curCnt--;
+					cur_nat_entries--;
 					tmp++;
 				}
 			}
@@ -1536,6 +1547,7 @@ int NatApp::DelEntriesOnSTAClntDiscon(uint32_t ip_addr)
 
 			memset(&cache[cnt], 0, sizeof(cache[cnt]));
 			curCnt--;
+			cur_nat_entries--;
 		}
 	}
 
@@ -1597,6 +1609,7 @@ void NatApp::CacheEntry(const nat_table_entry *rule)
 			cache[cnt].dst_nat = rule->dst_nat;
 			cache[cnt].ip_pass_entry = rule->ip_pass_entry;
 			curCnt++;
+			cur_nat_entries++;
 		}
 
 	}
@@ -2964,6 +2977,7 @@ int NatBase::AddTable(const uint32_t v6_prefix[2])
 					IPACMERR("unable to add the rule delete from cache\n");
 					entry.Clear();
 					--m_curCnt;
+					--cur_ct_entries;
 					continue;
 				}
 				entry.DebugDump("On wan-iface reset added below rule successfully\n");
@@ -3015,6 +3029,7 @@ int NatBase::DeleteTable(const uint32_t v6_prefix[2],int num_v6_vlan_pdns)
 					IPACMERR("unable to delete the rule delete from cache\n");
 					entry.Clear();
 					--m_curCnt;
+					--cur_ct_entries;
 					continue;
 				}
 
@@ -3095,6 +3110,7 @@ int NatBase::AddEntry(const NatEntryBase& entry)
 #endif
 	IPACMDBG_H("\n");
 	++m_curCnt;
+	++cur_ct_entries;
 	IPACMDBG_H("return\n");
 	return 0;
 }
@@ -3158,6 +3174,8 @@ void NatBase::DeleteEntry(const NatEntryBase& entry)
 		}
 	}
 	entryDelete->Clear();
+	--m_curCnt;
+	--cur_ct_entries;
 #endif
 	--m_curCnt;
 
@@ -3190,6 +3208,7 @@ void NatBase::CacheEntry(const NatEntryBase& entry)
 
 	*new_entry = entry;
 	++m_curCnt;
+	++cur_ct_entries;
 	IPACMDBG_H("Cached rule successfully\n");
 }
 
@@ -3475,6 +3494,7 @@ int NatBase::ResetPwrSaveIf(const IpAddress& client_lan_ip)
 			IPACMERR("unable to add the rule delete from cache\n");
 			curr.Clear();
 			--m_curCnt;
+			--cur_ct_entries;
 			continue;
 		}
 		curr.m_enabled = true;
@@ -3569,6 +3589,7 @@ int NatBase::DelEntriesOnSTAClntDiscon(const IpAddress& client_lan_ip)
 
 		curr.Clear();
 		--m_curCnt;
+		--cur_ct_entries;
 	}
 
 	IPACMDBG_H("Deleted %d entries\n", (tmp - m_curCnt));
@@ -3599,6 +3620,7 @@ void NatBase::DelEntriesOnWanDown()
 
 		curr.Clear();
 		--m_curCnt;
+		--cur_ct_entries;
 	}
 
 	IPACMDBG_H("Deleted %d entries\n", (tmp - m_curCnt));

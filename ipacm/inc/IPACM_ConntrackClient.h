@@ -25,6 +25,10 @@
  * WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *
+ * Changes from Qualcomm Technologies, Inc. are provided under the following license:
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear.
  */
 #ifndef IPACM_CONNTRACK_FILTER_H
 #define IPACM_CONNTRACK_FILTER_H
@@ -57,6 +61,9 @@ using namespace std;
 
 #define UDP_TIMEOUT_UPDATE 20
 #define BROADCAST_IPV4_ADDR 0xFFFFFFFF
+
+extern int cur_nat_entries;
+extern int cur_ct_entries;
 
 class IPACM_ConntrackClient
 {

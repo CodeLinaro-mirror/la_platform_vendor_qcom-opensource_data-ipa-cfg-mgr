@@ -1474,6 +1474,7 @@ void IPACM_Config::add_vlan_iface(ipa_ioc_vlan_iface_info *data)
 {
 	list<vlan_iface_info>::iterator it_vlan;
 	vlan_iface_info new_vlan_info;
+	int vlan_iface_index = 0;
 
 	if(pthread_mutex_lock(&vlan_l2tp_lock) != 0)
 	{
@@ -1544,6 +1545,12 @@ void IPACM_Config::add_vlan_iface(ipa_ioc_vlan_iface_info *data)
 		IPACM_EvtDispatcher::PostEvt(&eth_bridge_evt);
 	}
 #endif
+	/* Solve the issue in case NEWADDR comes before VLAN IOCTL */
+	if(IPACM_Iface::ipa_get_if_index(data->name, &vlan_iface_index) == IPACM_SUCCESS)
+	{
+		IPACM_Iface::iface_addr_query(vlan_iface_index, true, NULL);
+	}
+
 	/* Sending Getneigh to receive missing neighbor in case if missed early */
 	IPACMDBG_H("Query Getneigh for vlan ifaces\n");
 	ipa_nl_query_newneigh(AF_BRIDGE);

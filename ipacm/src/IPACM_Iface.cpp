@@ -25,6 +25,10 @@
 * WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
 * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
 * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+*
+* Changes from Qualcomm Technologies, Inc. are provided under the following license:
+* Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+* SPDX-License-Identifier: BSD-3-Clause-Clear
 */
 /*!
   @file
@@ -398,6 +402,8 @@ void IPACM_Iface::iface_addr_query
 	ipacm_cmd_q_data evt_data;
 	ipacm_event_data_addr *data_addr;
 	struct in_addr iface_ipv4;
+	uint32_t ipv6_unique_local_prefix = 0xFD000000;
+	uint32_t ipv6_unique_local_prefix_mask = 0xFF000000;
 
 	/* use linux interface-index to find interface name */
 	if ((fd = socket(AF_INET, SOCK_DGRAM, 0)) < 0)
@@ -517,6 +523,17 @@ void IPACM_Iface::iface_addr_query
 						data_addr->ipv6_addr[2] = ntohl(data_addr->ipv6_addr[2]);
 						data_addr->ipv6_addr[3] = ntohl(data_addr->ipv6_addr[3]);
 						strlcpy(data_addr->iface_name, ifr.ifr_name, sizeof(data_addr->iface_name));
+
+						if(IPACM_Iface::ipacmcfg->is_added_vlan_iface(data_addr->iface_name))
+						{
+							if(((data_addr->ipv6_addr[0] & ipv6_unique_local_prefix_mask) == (ipv6_unique_local_prefix & ipv6_unique_local_prefix_mask)) &&
+								((IPACM_Iface::ipacmcfg->ipacm_l2tp_enable == IPACM_L2TP) ||
+								(IPACM_Iface::ipacmcfg->ipacm_l2tp_enable == IPACM_L2TP_E2E)))
+							{
+								IPACMDBG_H("Got IPv6 new addr event for a vlan iface %s.\n", data_addr->iface_name);
+								IPACM_Iface::ipacmcfg->handle_vlan_iface_info(data_addr);
+							}
+						}
 						IPACMDBG_H("Posting IPA_ADDR_ADD_EVENT with if index:%d, if name:%s, ipv6 addr:0x%x:%x:%x:%x\n",
 							data_addr->if_index,
 							data_addr->iface_name,

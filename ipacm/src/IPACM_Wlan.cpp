@@ -1570,12 +1570,13 @@ end:
 
 			for (int i = 0; i < IPA_MAX_NUM_HW_PATH_CLIENTS; i++)
 			{
-				if (memcmp(active_lan_client_index[i].mac, data->mac_addr, IPA_MAC_ADDR_SIZE) == 0)
+				if (memcmp(IPACM_Wlan::active_lan_client_index[i].mac, data->mac_addr, IPA_MAC_ADDR_SIZE) == 0 &&
+						IPACM_Wlan::active_lan_client_index[i].ipa_if_num == ipa_if_num)
 				{
-					IPACMDBG_H("MAC %02x:%02x:%02x:%02x:%02x:%02x has been received already, return\n",
+					IPACMDBG_H("MAC %02x:%02x:%02x:%02x:%02x:%02x has been received already, goto handle_stats\n",
 						data->mac_addr[0], data->mac_addr[1], data->mac_addr[2],
 						data->mac_addr[3], data->mac_addr[4], data->mac_addr[5]);
-					return; // MAC found
+					goto handle_stats; // MAC found
 				}
 			}
 
@@ -1583,16 +1584,29 @@ end:
 			/* Active List:- Clients for which index is less than IPA_MAX_NUM_HW_PATH_CLIENTS. */
 			if (get_free_active_lan_stats_index(data->mac_addr, ipa_if_num) == -1)
 			{
-					IPACMDBG_H("Failed to reserve active lan_stats index, try inactive list. \n");
-					/* Try to get the inactive index which can be used later. */
+				IPACMDBG_H("Failed to reserve active lan_stats index, try inactive list. \n");
+				for (int i = 0; i < IPA_MAX_NUM_HW_PATH_CLIENTS; i++)
+				{
+					if (memcmp(IPACM_Wlan::inactive_lan_client_index[i].mac, data->mac_addr, IPA_MAC_ADDR_SIZE) == 0
+						&& IPACM_Wlan::inactive_lan_client_index[i].ipa_if_num == ipa_if_num)
+					{
+						IPACMDBG_H("MAC %02x:%02x:%02x:%02x:%02x:%02x has been received already, return\n",
+							data->mac_addr[0], data->mac_addr[1], data->mac_addr[2],
+							data->mac_addr[3], data->mac_addr[4], data->mac_addr[5]);
+						return; // MAC found
+					}
+				}
+
+				/* Try to get the inactive index which can be used later. */
 				if (get_free_inactive_lan_stats_index(data->mac_addr) == -1)
 				{
 					IPACMDBG_H("Failed to reserve inactive lan_stats index, return\n");
 				}
 				return;
 			}
+handle_stats:
 			/* Check if the client is inactive list and remove it*/
-			if (reset_inactive_lan_stats_index(data->mac_addr) == -1)
+			if (reset_inactive_lan_stats_index(data->mac_addr, ipa_if_num) == -1)
 			{
 				IPACMDBG_H("Failed to reset inactive lan_stats index, return\n");
 			}
@@ -5960,7 +5974,7 @@ int IPACM_Wlan::handle_lan_client_disconnect(uint8_t *mac_addr)
 	{
 		IPACMDBG_H("Failed to reset active lan_stats index, try inactive list. \n");
 		/* If it is not in active list, check inactive list and remove it. */
-		if (reset_inactive_lan_stats_index(mac_addr) == -1)
+		if (reset_inactive_lan_stats_index(mac_addr, ipa_if_num) == -1)
 		{
 			IPACMDBG_H("Failed to reserve inactive lan_stats index, return\n");
 		}
@@ -5982,7 +5996,7 @@ int IPACM_Wlan::handle_lan_client_disconnect(uint8_t *mac_addr)
 	}
 
 	/* Remove the mac from inactive list. */
-	if (reset_inactive_lan_stats_index(mac) == IPACM_FAILURE)
+	if (reset_inactive_lan_stats_index(mac, ipa_if_num1) == IPACM_FAILURE)
 	{
 		IPACMDBG_H("Unable to remove the client from inactive list. Check\n");
 	}

@@ -9884,7 +9884,7 @@ void IPACM_Lan::handle_stats_client_connect(int if_index, uint8_t *mac_addr)
 					IPACMDBG_H("MAC %02x:%02x:%02x:%02x:%02x:%02x has been received already, return\n",
 						mac_addr[0], mac_addr[1], mac_addr[2],
 						mac_addr[3], mac_addr[4], mac_addr[5]);
-					return; // MAC found
+					goto handle_stats; // MAC found
 				}
 			}
 		}
@@ -9897,7 +9897,7 @@ void IPACM_Lan::handle_stats_client_connect(int if_index, uint8_t *mac_addr)
 					IPACMDBG_H("MAC %02x:%02x:%02x:%02x:%02x:%02x has been received already, return\n",
 						mac_addr[0], mac_addr[1], mac_addr[2],
 						mac_addr[3], mac_addr[4], mac_addr[5]);
-					return; // MAC found
+					goto handle_stats; // MAC found
 				}
 			}
 		}
@@ -9912,6 +9912,7 @@ void IPACM_Lan::handle_stats_client_connect(int if_index, uint8_t *mac_addr)
 			}
 			return;
 		}
+handle_stats:
 		/* Check if the client is inactive list and remove it*/
 		if (reset_inactive_lan_stats_index(mac_addr) == -1)
 		{

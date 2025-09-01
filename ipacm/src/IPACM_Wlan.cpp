@@ -1482,7 +1482,7 @@ end:
 					IPACMDBG_H("MAC %02x:%02x:%02x:%02x:%02x:%02x has been received already, return\n",
 						data->mac_addr[0], data->mac_addr[1], data->mac_addr[2],
 						data->mac_addr[3], data->mac_addr[4], data->mac_addr[5]);
-					return; // MAC found
+					goto handle_stats; // MAC found
 				}
 			}
 
@@ -1498,6 +1498,7 @@ end:
 				}
 				return;
 			}
+handle_stats:
 			/* Check if the client is inactive list and remove it*/
 			if (reset_inactive_lan_stats_index(data->mac_addr) == -1)
 			{

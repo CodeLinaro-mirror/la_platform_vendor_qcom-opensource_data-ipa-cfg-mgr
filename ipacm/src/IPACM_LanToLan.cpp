@@ -1259,7 +1259,7 @@ void IPACM_LanToLan_Iface::add_client_rt_rule(peer_iface_info *peer_info, client
 	list<peer_iface_info>::iterator itr;
 #ifdef FEATURE_VLAN_MPDN
 	std::array<uint8_t, 6> mac = {0};
-	std::map<std::array<uint8_t, 6>, int >::iterator it;
+	std::map<std::array<uint8_t, 6>, int >::iterator it,it1;
 #endif
 	int mac_found = 0;
 	uint32_t hdr_proc_ctx_hdl = 0;
@@ -1322,8 +1322,8 @@ void IPACM_LanToLan_Iface::add_client_rt_rule(peer_iface_info *peer_info, client
 					mac_ref_peer_l2_hdr_type = itr->peer->get_iface_pointer()->tx_prop->tx[0].hdr_l2_type;
 				}
 				IPACMDBG_H("peer_l2_hdr_type %d mac_ref_peer_l2_hdr_type %d\n",peer_l2_hdr_type,mac_ref_peer_l2_hdr_type);
-				it = (*itr).mac_rt_rule_ref.find(mac);
-				if(it != (*itr).mac_rt_rule_ref.end() && peer_l2_hdr_type == mac_ref_peer_l2_hdr_type)
+				it1 = (*itr).mac_rt_rule_ref.find(mac);
+				if(it1 != (*itr).mac_rt_rule_ref.end() && peer_l2_hdr_type == mac_ref_peer_l2_hdr_type)
 				{
 					if(peer_info->peer->is_spcl_iface())
 					{

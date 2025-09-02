@@ -311,7 +311,7 @@ bool IPACM_Filtering::AddFilteringRuleAfter_v2(struct ipa_ioc_add_flt_rule_after
 	int retval = 0;
 	int i;
 	int num_rules = ruleTable->num_rules;
-	int cnt;
+	int cnt = 0;
 
 	IPACMDBG_H("Printing filter add attributes\n");
 	IPACMDBG_H("ip type: %d\n", ruleTable->ip);

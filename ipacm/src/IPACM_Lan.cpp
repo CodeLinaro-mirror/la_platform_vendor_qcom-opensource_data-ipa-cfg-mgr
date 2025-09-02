@@ -16874,9 +16874,13 @@ int IPACM_Lan::install_ipv6_prefix_flt_rule(uint32_t* prefix)
 		if (mtu > 0)
 		{
 			if (construct_mtu_rule(&flt_rule_entry.rule, IPA_IP_v6, mtu))
-				IPACMERR("Failed to add MTU filtering rule.\n")
+			{
+				IPACMERR("Failed to add MTU filtering rule.\n");
+			}
 			else
+			{
 				memcpy(&(flt_rule->rules[1]), &flt_rule_entry, sizeof(struct ipa_flt_rule_add));
+			}
 		}
 
 		if (m_filtering.AddFilteringRule(flt_rule) == false)

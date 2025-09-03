@@ -1656,6 +1656,12 @@ void IPACM_Neighbor::update_neigh_cache(const char *iface_name, uint8_t *mac_add
 			if ((strncmp("dev",params[i], DEV_LEN)==0) && (i < MAX_FDB_PARAM_CNT -1))
 			{
 				strlcpy(rdev_name, params[i+1], IPA_IFACE_NAME_LEN);
+				/*if we are querying the self neigh for wlan at the time of wlan client connect event,
+				So we can ignore the other self neighs*/
+				if((rdev_name!= NULL) && is_wlan_client_connect && (strncmp(rdev_name, "wlan", WLAN_LEN_LEN)!=0))
+				{
+					continue;
+				}
 			}
 			else if(strncmp("master",params[i], MASTER_LEN)==0)
 			{
@@ -1683,7 +1689,7 @@ void IPACM_Neighbor::update_neigh_cache(const char *iface_name, uint8_t *mac_add
 		}
 		/*IPACM resatrt supports for non default AP*/
 		if(!strncmp(rdev_name, "wlan", WLAN_LEN_LEN) && (strncmp(mdev_name, "bridge0", BRIDGE_LEN+1)
-		&& !strncmp(mdev_name, "bridge", BRIDGE_LEN)) && is_phy_iface)
+		&& !strncmp(mdev_name, "bridge", BRIDGE_LEN)))
 		{
 			/*Add the add dummy vlan mapped to the wlan ap interace
 			and add the dummy vlan to demand bridge mapping if wlan ap interface is

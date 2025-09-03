@@ -922,6 +922,20 @@ void IPACM_LanToLan::handle_cached_client_add_event(IPACM_Lan *p_iface)
 			IPACM_SYSLOG("Found client with MAC: 0x%02x%02x%02x%02x%02x%02x\n", it->mac_addr[0], it->mac_addr[1],
 				it->mac_addr[2], it->mac_addr[3], it->mac_addr[4], it->mac_addr[5]);
 			handle_client_add(&(*it));
+			if((IPACM_Iface::ipacmcfg->is_added_vlan_iface(p_iface->dev_name)))
+			{
+				uint16_t vlan_id = 0;
+				if(IPACM_Iface::ipacmcfg->get_vlan_id(p_iface->dev_name, &vlan_id))
+				{
+					IPACM_SYSLOG("failed to get iface vlan ID, skipping\n");
+					continue;
+				}
+				if((vlan_id > 0) && IPACM_Iface::ipacmcfg->is_dummy_VID(vlan_id))
+				{
+					IPACM_SYSLOG("Adding the cross proc_ctx\n");
+					handle_client_cross_proc_ctx(&(*it));
+				}
+			}
 			it = m_cached_client_add_event.erase(it);
 		}
 		else
@@ -2373,6 +2387,11 @@ void IPACM_LanToLan_Iface::handle_client_add(uint8_t *mac, bool is_l2tp_client, 
 		memset(flag, 0, sizeof(flag));
 		for(it_peer_info = m_peer_iface_info.begin(); it_peer_info != m_peer_iface_info.end(); it_peer_info++)
 		{
+			if((get_is_vlan()) && (!it_peer_info->peer->get_is_vlan()) && (it_peer_info->peer->m_is_cross_proc_ctx_handled == false))
+			{
+				IPACM_SYSLOG("client proc ctx is not valid\n");
+				continue;
+			}
 			/* make sure add routing rule only once for each peer l2 header type */
 			if(flag[it_peer_info->peer->get_iface_pointer()->tx_prop->tx[0].hdr_l2_type] == false)
 			{

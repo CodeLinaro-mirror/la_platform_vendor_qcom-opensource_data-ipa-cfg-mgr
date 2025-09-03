@@ -6072,7 +6072,7 @@ int IPACM_Wan::add_icmp_alg_rules(struct ipa_flt_rule_add *rules, int rule_offse
 					 sizeof(flt_rule_entry.rule.eq_attrib));
 #ifdef FEATURE_VLAN_MPDN
 		num_icmp_rules = 0;
-		for(i = 0; i < IPA_MAX_NUM_SW_PDNS; i++)
+		for(i = 0; i < IPA_MAX_NUM_HW_PDNS; i++)
 		{
 			if(ipv4_to_iface[i].pIface &&
 				(ipv4_to_iface[i].wan_up_vlan || isDefaultGatewayIfaceUp(ipv4_to_iface[i].pIface)))
@@ -6157,7 +6157,7 @@ int IPACM_Wan::add_icmp_alg_rules(struct ipa_flt_rule_add *rules, int rule_offse
 					 sizeof(flt_rule_entry.rule.eq_attrib));
 #ifdef FEATURE_VLAN_MPDN
 		num_icmp_rules = 0;
-		for(i = 0; i < IPA_MAX_NUM_SW_PDNS; i++)
+		for(i = 0; i < IPA_MAX_NUM_HW_PDNS; i++)
 		{
 			if(ipv6_to_iface[i].pIface && (ipv6_to_iface[i].wan_up_vlan_v6 || isDefaultGatewayIfaceUp_v6(ipv6_to_iface[i].pIface)))
 			{

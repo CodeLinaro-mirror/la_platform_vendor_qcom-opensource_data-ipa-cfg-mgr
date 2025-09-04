@@ -1668,17 +1668,12 @@ void IPACM_ConntrackListener::PostRouteAddVlanPdn(uint32_t public_ip)
 		/* check if we already got vlan_pdn_up event for this ip */
 		if(vlan_pdns[pdn_idx].public_ip == public_ip)
 		{
-			for(vlan_idx = 0; vlan_idx < IPA_MAX_NUM_HW_PDNS; vlan_idx++)
-			{
-				if(vlan_data->VlanID == vlan_pdns[pdn_idx].associated_VIDs[vlan_idx])
-				{
-					IPACMDBG_H("vlan pdn already up for vlan %d", vlan_data->VlanID);
-					iptodot("ip", public_ip);
-					return;
-				}
-			}
+			IPACMDBG_H("vlan pdn already up for pdn_idx %d", pdn_idx);
+			iptodot("ip", public_ip);
+			return;
 		}
 	}
+
 	if((pdn_idx >= IPA_MAX_NUM_HW_PDNS) && (num_vlan_pdns >= IPA_MAX_NUM_HW_PDNS))
 	{
 		iptodot("pdn ip", public_ip);

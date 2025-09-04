@@ -5029,6 +5029,7 @@ int IPACM_Lan::handle_wan_up_v2(ipa_ip_type ip_type, uint16_t vlan_id, uint8_t *
 			if (0 == fd)
 			{
 				IPACMDBG_H("Failed opening %s.\n", IPA_DEVICE_NAME);
+				free(m_pFilteringTable);
 				return IPACM_FAILURE;
 			}
 
@@ -5038,6 +5039,7 @@ int IPACM_Lan::handle_wan_up_v2(ipa_ip_type ip_type, uint16_t vlan_id, uint8_t *
 			{
 				IPACMERR("Failed to get routing table index from name\n");
 				close(fd);
+				free(m_pFilteringTable);
 				return IPACM_FAILURE;
 			}
 			close(fd);
@@ -5215,6 +5217,7 @@ int IPACM_Lan::handle_wan_up_v2(ipa_ip_type ip_type, uint16_t vlan_id, uint8_t *
 			if (0 == fd)
 			{
 				IPACMDBG_H("Failed opening %s.\n", IPA_DEVICE_NAME);
+				free(m_pFilteringTable);
 				return IPACM_FAILURE;
 			}
 
@@ -5224,6 +5227,7 @@ int IPACM_Lan::handle_wan_up_v2(ipa_ip_type ip_type, uint16_t vlan_id, uint8_t *
 			{
 				IPACMERR("Failed to get routing table index from name\n");
 				close(fd);
+				free(m_pFilteringTable);
 				return IPACM_FAILURE;
 			}
 			close(fd);
@@ -18420,6 +18424,7 @@ int IPACM_Lan::install_ipv6_prefix_flt_rule(uint32_t* prefix)
 		if (false == m_routing.GetRoutingTable(&IPACM_Iface::ipacmcfg->rt_tbl_default_v6)) {
 			IPACMERR("LAN m_routing.GetRoutingTable(&IPACM_Iface::ipacmcfg->rt_tbl_default_v6=0x%p) Failed.\n",
 						&IPACM_Iface::ipacmcfg->rt_tbl_default_v6);
+			free(flt_rule);
 			return IPACM_FAILURE;
 		}
 

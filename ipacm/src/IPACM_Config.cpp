@@ -3307,7 +3307,7 @@ void IPACM_Config::sw_flt_info(ipa_sw_flt_list_type *sw_flt)
 		{
 			for(i = 0; i < sw_flt_list.num_of_iface && sw_flt_list.num_of_iface <=IPA_MAX_NUM_IFACE_FLT; i++)
 			{
-				if(strncmp(it->second->iface, sw_flt_list.iface[i], sizeof(sw_flt_list.iface[i])) == 0)
+				if(strstr(it->second->iface, sw_flt_list.iface[i]))
 				{
 					std::copy(std::begin(it->first), std::end(it->first), std::begin(mac_addr));
 
@@ -3657,7 +3657,7 @@ void IPACM_Config::update_client_info(uint8_t *mac_addr, tether_client_info *cli
 		{
 			for(i = 0; i < sw_flt_list.num_of_iface && sw_flt_list.num_of_iface <=IPA_MAX_NUM_IFACE_FLT; i++)
 			{
-				if(strncmp(client_info->iface, sw_flt_list.iface[i], sizeof(sw_flt_list.iface[i])) == 0)
+				if(strstr(client_info->iface, sw_flt_list.iface[i]))
 				{
 					/* if client matched the iface_sw_flt, create a node of mac_flt_type
 					   having is_blacklist state as true and insert it into map if not already
@@ -4355,6 +4355,7 @@ void IPACM_Config::add_qos_params_info(ipa_ioc_qos_config *data)
 	{
 		if(strncmp(data->dev_name, it_qos_params->iface_name, sizeof(data->dev_name)) == 0 &&
 		   (data->dir == it_qos_params->dir) &&
+		   (data->flt_cat == it_qos_params->flt_cat) &&
 		   (data->ip_type == it_qos_params->ip_type) &&
 		   (data->traffic_class == it_qos_params->traffic_class) &&
 		   (data->src_ip_addr == it_qos_params->ip_tup.src_ip_addr) &&
@@ -4400,6 +4401,7 @@ void IPACM_Config::add_qos_params_info(ipa_ioc_qos_config *data)
 	new_qos_info.dir = data->dir;
 	new_qos_info.ip_type = data->ip_type;
 	new_qos_info.traffic_class = data->traffic_class;
+	new_qos_info.flt_cat = data->flt_cat;
 
 	new_qos_info.ip_tup.src_ip_addr = data->src_ip_addr;
 	new_qos_info.ip_tup.src_sub_mask = data->src_subnet;
@@ -4456,6 +4458,11 @@ void IPACM_Config::add_qos_params_info(ipa_ioc_qos_config *data)
 			return a.traffic_class > b.traffic_class;
 	});
 
+	m_qos_params.sort(
+		[](const qos_param_info &a, const qos_param_info &b) {
+			return a.flt_cat > b.flt_cat;
+	});
+
 	IPACMDBG_H("Added qos iface: %s vlan id: %d with traffic class :%d \n", data->dev_name, data->dir, data->traffic_class);
 	IPACMDBG_H("qos params list size now :%d \n", m_qos_params.size());
 
@@ -4506,6 +4513,7 @@ void IPACM_Config::delete_qos_params_info(ipa_ioc_qos_config *data)
 	{
 		if(strncmp(data->dev_name, it_qos_params->iface_name, sizeof(data->dev_name)) == 0 &&
 		   (data->dir == it_qos_params->dir) &&
+		   (data->flt_cat == it_qos_params->flt_cat) &&
 		   (data->ip_type == it_qos_params->ip_type) &&
 		   (data->traffic_class == it_qos_params->traffic_class) &&
 		   (data->src_ip_addr == it_qos_params->ip_tup.src_ip_addr) &&

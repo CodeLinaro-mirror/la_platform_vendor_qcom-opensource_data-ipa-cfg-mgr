@@ -1247,6 +1247,11 @@ int main(int argc, char **argv)
 
 #endif
 
+	if(IPACM_Iface::ipacmcfg == NULL)
+	{
+		IPACMDBG_H("Create ipacmcfg instance\n");
+		IPACM_Iface::ipacmcfg = IPACM_Config::GetInstance();
+	}
 #ifdef IPA_HW_FNR_STATS
 	IPACM_Iface::ipacmcfg->alloc_fnr_counter();
 	IPACMDBG_H("Reallocation FNR Counter: Done\n");

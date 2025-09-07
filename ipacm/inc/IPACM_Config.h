@@ -473,6 +473,9 @@ public:
 	/* nat_iface_lock */
 	pthread_mutex_t nat_iface_lock;
 
+	/* get_vlan_association_lock */
+	pthread_mutex_t get_vlan_association_lock;
+
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
 	bool ipacm_lan_stats_enable;
 	bool ipacm_lan_stats_enable_set;
@@ -660,6 +663,7 @@ public:
 #ifdef FEATURE_VLAN_MPDN
 	std::list<bridge_vlan_mapping_info> m_bridge_vlan_mapping;
 	void add_bridge_vlan_mapping(ipa_bridge_vlan_mapping_info *data);
+	int get_bridge_vlan_mapping_from_vid(ipacm_bridge *data, uint16_t vlan_id);
 	void del_bridge_vlan_mapping(uint16_t *data);
 	int get_bridge_vlan_mapping(ipa_bridge_vlan_mapping_info_new *data);
 	uint16_t get_bridge_vlan_mapping_from_subnet(uint32_t ipv4_subnet);
@@ -1260,7 +1264,7 @@ public:
 			data_fid->if_index = ipa_if_index; // already ipa index, not fid index
 			evt_data.event = IPA_PRIVATE_SUBNET_CHANGE_EVENT;
 			evt_data.evt_data = data_fid;
-
+			IPACMDBG_H("Posting IPA_PRIVATE_SUBNET_CHANGE_EVENT for if_index %d \n", data_fid->if_index);
 			/* Insert IPA_PRIVATE_SUBNET_CHANGE_EVENT to command queue */
 			IPACM_EvtDispatcher::PostEvt(&evt_data);
 			return true;
@@ -1296,7 +1300,7 @@ public:
 				data_fid->if_index = ipa_if_index; // already ipa index, not fid index
 				evt_data.event = IPA_PRIVATE_SUBNET_CHANGE_EVENT;
 				evt_data.evt_data = data_fid;
-
+				IPACMDBG_H("Posting IPA_PRIVATE_SUBNET_CHANGE_EVENT for if_index %d \n", data_fid->if_index);
 				/* Insert IPA_PRIVATE_SUBNET_CHANGE_EVENT to command queue */
 				IPACM_EvtDispatcher::PostEvt(&evt_data);
 				return true;

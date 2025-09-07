@@ -150,7 +150,8 @@ const char *ipacm_event_name[] = {
 #endif
 #ifdef FEATURE_VLAN_MPDN
 	__stringify(IPA_PREFIX_CHANGE_EVENT),                  /* ipacm_event_data_fid */
-	__stringify(IPA_ROUTE_ADD_VLAN_PDN_EVENT),             /* ipacm_event_route_vlan */
+	__stringify(IPA_ROUTE_ADD_VLAN_PDN_EVENT),             /* ipacm_event_route_add_vlan */
+	__stringify(IPA_ROUTE_DEL_VLAN_PDN_EVENT),             /* ipacm_event_route_del_vlan */
 	__stringify(IPA_HANDLE_WAN_VLAN_PDN_UP),               /* ipacm_event_vlan_pdn */
 	__stringify(IPA_HANDLE_WAN_VLAN_PDN_DOWN),             /* ipacm_event_vlan_pdn */
 	__stringify(IPA_HANDLE_LAN_VLAN_PDN_DOWN_STATIC),      /* ipacm_event_vlan_pdn */
@@ -306,6 +307,7 @@ IPACM_Config::IPACM_Config()
 	pthread_mutex_init(&vlan_l2tp_lock, NULL);
 #endif
 	pthread_mutex_init(&nat_iface_lock, NULL);
+	pthread_mutex_init(&get_vlan_association_lock, NULL);
 	pthread_mutex_init(&qos_param_list_lock, NULL);
 	pthread_mutex_init(&qos_param_list_lock, NULL);
 	IPACMDBG_H(" create IPACM_Config constructor\n");
@@ -426,6 +428,7 @@ int IPACM_Config::ipacm_reset_hw_fnr_counters(const uint8_t start_id, const uint
 			IPACMERR("IOCTL %lu failed\n", IPA_IOC_FNR_COUNTER_QUERY);
 	}
 
+	free((void *)query->stats);
 	free(query);
 fail:
 	close(fd);
@@ -1548,7 +1551,8 @@ void IPACM_Config::add_bridge_vlan_mapping(ipa_bridge_vlan_mapping_info *data)
 	list<bridge_vlan_mapping_info>::iterator it_mapping;
 	ipacm_bridge *bridge = NULL;
 	char iface_name[IPA_IFACE_NAME_LEN] = {0};
-	int ret = IPACM_FAILURE;
+	int ret = IPACM_FAILURE, fd;
+        struct ifreq ifr;
 
 	if(pthread_mutex_lock(&vlan_l2tp_lock) != 0)
 	{
@@ -1636,6 +1640,26 @@ void IPACM_Config::add_bridge_vlan_mapping(ipa_bridge_vlan_mapping_info *data)
 			strlcpy(new_mapping.bridge_iface_name, iface_name,
 				sizeof(new_mapping.bridge_iface_name));
 		}
+
+		fd = socket(AF_INET, SOCK_DGRAM, 0);
+		if (fd < 0) {
+			IPACMERR("get interface name socket create failed\n");
+			goto bail;
+		}
+		memset(&ifr, 0, sizeof(struct ifreq));
+		ifr.ifr_addr.sa_family = AF_INET;
+		strlcpy(ifr.ifr_name, iface_name, sizeof(ifr.ifr_name));
+		if(ioctl(fd, SIOCGIFHWADDR, &ifr) < 0)
+		{
+			IPACMERR("unable to retrieve (%s) bridge MAC\n", ifr.ifr_name);
+			close(fd);
+			goto bail;
+		}
+		memcpy(new_mapping.bridge_mac,
+			ifr.ifr_hwaddr.sa_data,
+			sizeof(new_mapping.bridge_mac));
+		IPACMDBG("got bridge MAC using IOCTL\n");
+		close(fd);
 
 		for(it_mapping = m_bridge_vlan_mapping.begin(); it_mapping != m_bridge_vlan_mapping.end(); it_mapping++)
 		{
@@ -2486,6 +2510,32 @@ ipacm_bridge *IPACM_Config::get_vlan_bridge_from_vid(uint16_t vlan_id)
 	IPACMDBG_H("no bridge with vlan-id %d exists\n", vlan_id);
 	return NULL;
 }
+int IPACM_Config::get_bridge_vlan_mapping_from_vid(ipacm_bridge *data, uint16_t vlan_id)
+{
+	list<bridge_vlan_mapping_info>::iterator it_mapping;
+	int ret = IPACM_FAILURE;
+
+	for(it_mapping = m_bridge_vlan_mapping.begin(); it_mapping != m_bridge_vlan_mapping.end(); it_mapping++)
+	{
+		if(vlan_id == it_mapping->bridge_associated_VID)
+		{
+			IPACMDBG_H("Found the bridge mapping (%s->%d) \n",
+				it_mapping->bridge_iface_name,
+				it_mapping->bridge_associated_VID);
+			data->bridge_ipv4_addr = it_mapping->bridge_ipv4;
+			data->bridge_netmask = it_mapping->subnet_mask;
+			memcpy(data->bridge_mac,it_mapping->bridge_mac,sizeof(data->bridge_mac));
+			strlcpy(data->bridge_name, it_mapping->bridge_iface_name, sizeof(data->bridge_name));
+			data->associate_VID[0] = vlan_id;
+			return IPACM_SUCCESS;
+		}
+	}
+
+	IPACMERR("Bridge mapping is not found\n");
+
+	return ret;
+}
+
 
 bool IPACM_Config::is_added_vlan_iface(char *iface_name)
 {
@@ -4010,6 +4060,7 @@ void IPACM_Config::update_client_info(uint8_t *mac_addr, tether_client_info *cli
 						memset(temp2, 0, sizeof(mac_flt_type));
 						temp2->is_blacklist = true;
 						IPACM_Iface::ipacmcfg->mac_flt_lists.insert(std::make_pair(mac, temp2));
+						update_need = true;
 					}
 					break;
 				}
@@ -4042,6 +4093,7 @@ void IPACM_Config::update_client_info(uint8_t *mac_addr, tether_client_info *cli
 						memset(temp2, 0, sizeof(mac_flt_type));
 						temp2->is_blacklist = true;
 						IPACM_Iface::ipacmcfg->mac_flt_lists.insert(std::make_pair(mac, temp2));
+						update_need = true;
 					}
 					break;
 				}

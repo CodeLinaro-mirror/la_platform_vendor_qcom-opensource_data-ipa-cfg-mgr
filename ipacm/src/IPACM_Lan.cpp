@@ -413,6 +413,10 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 #endif
 	int res = IPACM_FAILURE;
 
+	uint16_t vlan_id = 0;
+	ipacm_bridge bridge;
+	memset(&bridge, 0, sizeof(bridge));
+
 	switch (event)
 	{
 	case IPA_IPACM_DISABLE:
@@ -1331,6 +1335,45 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 
 				IPACMDBG_H("Handled IPA_LAN_CLIENT_ADD_EVENT event ip-type:%d\n",data->iptype);
 			}
+			else if(IPACM_Iface::ipacmcfg->iface_in_vlan_mode(dev_name) && is_vlan_event(data->iface_name))
+			{
+				if (IPACM_Iface::ipacmcfg->get_vlan_id(data->iface_name, &vlan_id))
+				{
+					if(!IPACM_Iface::ipacmcfg->is_added_vlan_iface(data->iface_name))
+					{
+						IPACMDBG_H("ignoring neighbor of not added IF %s \n", data->iface_name);
+						return;
+					}
+					IPACMERR("failed getting vlan ID of iface %s \n", data->iface_name);
+					return;
+				}
+
+				/* get bridge from vlan id */
+				if(IPACM_Iface::ipacmcfg->get_bridge_vlan_mapping_from_vid(&bridge, vlan_id) == IPACM_SUCCESS)
+				{
+					IPACMDBG_H("got vlan mapping\n");
+				}
+				else
+				{
+					IPACMDBG_H("bridge is NULL with vlan (%s) vid (%d), ignoring!\n", data->iface_name, vlan_id);
+					IPACMERR("failed getting vlan mapping\n");
+					return;
+				}
+
+				if(handle_eth_hdr_init(data->mac_addr, &bridge, vlan_id, true) == IPACM_FAILURE)
+				{
+					IPACMERR("Failed to create header and No event IPA_ETH_BRIDGE_CLIENT_ADD posted.\n");
+					return;
+				}
+				IPACMDBG_H("construct ETH header and route rules \n");
+				if(IPACM_Iface::ipacmcfg->multi_vlan_bridge_config_enable == 1 &&
+					IPACM_Iface::ipacmcfg->mac_addr_in_blacklist(data->mac_addr) == false)
+				{
+					IPACMDBG_H("Posting IPA_ETH_BRIDGE_CLIENT_ADD for Static IP MAC:0x%x iface_name: %s\n",data->mac_addr,data->iface_name);
+					eth_bridge_post_event(IPA_ETH_BRIDGE_CLIENT_ADD, IPA_IP_MAX, data->mac_addr,
+						NULL, data->iface_name, vlan_id);
+				}
+			}
 		}
 		break;
 
@@ -1570,6 +1613,9 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 		{
 			ipacm_event_data_all *data = (ipacm_event_data_all *)param;
 			ipa_interface_index = iface_ipa_index_query(data->if_index);
+			uint16_t vlan_id = 0;
+			ipacm_cmd_q_data del_evt_data;
+			ipacm_event_route_vlan *del_vlan_data;
 
 			IPACMDBG_H("Received IPA_NEIGH_CLIENT_IP_ADDR_DEL_EVENT event for ip_type: %d \n", data->iptype);
 			IPACMDBG_H("check iface %s category: %d\n", dev_name, ipa_if_cate);
@@ -1603,8 +1649,6 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 					(ipa_interface_index == ipa_if_num)
 					)
 				{
-					uint16_t vlan_id = 0;
-
 					if (data->iptype == IPA_IP_v6)
 					{
 						handle_del_ipv6_addr(data);
@@ -1622,6 +1666,21 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 								data->iface_name);
 							return;
 						}
+						IPACMDBG("Process DEL NEIGH For vlan_id %d \n", vlan_id, data->iptype);
+						/* generate IPA_ROUTE_DEL_VLAN_PDN_EVENT for v4 PDN as v6 PDN already has associated vlan*/
+						del_evt_data.event = IPA_ROUTE_DEL_VLAN_PDN_EVENT;
+						del_vlan_data = (ipacm_event_route_vlan *)malloc(sizeof(ipacm_event_route_vlan));
+						if(!del_vlan_data)
+						{
+							IPACMERR("couldn't allocate memory for new vlan pdn event\n");
+							return;
+						}
+						memset(del_vlan_data, 0, sizeof(ipacm_event_route_vlan));
+						del_vlan_data->iptype = data->iptype;
+						del_vlan_data->VlanID = vlan_id;
+						del_evt_data.evt_data = del_vlan_data;
+						IPACMDBG_H("sending IPA_ROUTE_DEL_VLAN_PDN_EVENT vlan id %d, iptype %d,\n", del_vlan_data->VlanID, del_vlan_data->iptype);
+						IPACM_EvtDispatcher::PostEvt(&del_evt_data);
 					}
 #endif
 					/* Delete QOS rules. */
@@ -3300,7 +3359,7 @@ int IPACM_Lan::handle_vlan_neighbor(ipacm_event_data_all *data)
 			}
 			if(!skip_nat_set)
 			{
-				add_vlan_private_subnet(bridge);
+				IPACMDBG_H("Skip Adding vlan private subnet to the array!! \n");
 			}
 		}
 		skip_nat_set = 0;
@@ -4704,7 +4763,8 @@ int IPACM_Lan::add_vlan_private_subnet(ipacm_bridge *bridge)
 		return IPACM_SUCCESS;
 	}
 
-	IPACMDBG_H("(%s) handle_vlan_private_subnet (0x%X & 0x%X)\n",
+	IPACMDBG_H("dev_name (%s) --> (%s) add_vlan_private_subnet (0x%X & 0x%X)\n",
+		dev_name,
 		bridge->bridge_name,
 		bridge->bridge_netmask,
 		bridge->bridge_ipv4_addr);
@@ -10856,6 +10916,33 @@ void IPACM_Lan::handle_stats_client_connect(int if_index, uint8_t *mac_addr)
 		IPACMDBG_H("Received IPA_LAN_CLIENT_CONNECT_EVENT dev_name:%s\n", dev_name);
 		/* Check if we can add this to the active list. */
 		/* Active List:- Clients for which index is less than IPA_MAX_NUM_HW_PATH_CLIENTS. */
+		if(is_odu)
+		{
+			for (int i = 0; i < IPA_MAX_NUM_HW_PATH_CLIENTS; i++)
+			{
+				if (memcmp(active_lan_client_index_odu[i].mac, mac_addr, IPA_MAC_ADDR_SIZE) == 0)
+				{
+					IPACMDBG_H("MAC %02x:%02x:%02x:%02x:%02x:%02x has been received already, return\n",
+						mac_addr[0], mac_addr[1], mac_addr[2],
+						mac_addr[3], mac_addr[4], mac_addr[5]);
+					return; // MAC found
+				}
+			}
+		}
+		else
+		{
+			for (int i = 0; i < IPA_MAX_NUM_HW_PATH_CLIENTS; i++)
+			{
+				if (memcmp(active_lan_client_index[i].mac, mac_addr, IPA_MAC_ADDR_SIZE) == 0)
+				{
+					IPACMDBG_H("MAC %02x:%02x:%02x:%02x:%02x:%02x has been received already, return\n",
+						mac_addr[0], mac_addr[1], mac_addr[2],
+						mac_addr[3], mac_addr[4], mac_addr[5]);
+					return; // MAC found
+				}
+			}
+		}
+
 		if (get_free_active_lan_stats_index(mac_addr) == -1)
 		{
 			IPACMDBG_H("Failed to reserve active lan_stats index, try inactive list. \n");

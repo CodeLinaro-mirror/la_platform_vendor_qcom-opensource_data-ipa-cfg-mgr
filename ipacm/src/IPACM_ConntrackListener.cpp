@@ -1640,7 +1640,7 @@ void IPACM_ConntrackListener::HandleVlanDown(void *in_param)
 							}
 							else
 							{
-								IPACMDBG_H("VLAN PDN is up, return\n");
+								IPACMDBG_H("v4 VLAN PDN is up, return VID_cnt %d\n", vlan_pdns[i].VID_cnt);
 								return;
 							}
 						}
@@ -1717,7 +1717,7 @@ void IPACM_ConntrackListener::HandleVlanDownV6(void *in_param)
 						}
 						else
 						{
-							IPACMDBG_H("V6 VLAN PDN is up, return\n");
+							IPACMDBG_H("v6 VLAN PDN is up, return VID_cnt %d\n", v6_vlan_pdns[i].VID_cnt);
 							return;
 						}
 					}
@@ -2270,15 +2270,9 @@ void IPACM_ConntrackListener::PostRouteAddVlanPdn(uint32_t public_ip)
 		/* check if we already got vlan_pdn_up event for this ip */
 		if(vlan_pdns[pdn_idx].public_ip == public_ip)
 		{
-			for(vlan_idx = 0; vlan_idx < vlan_pdns[pdn_idx].VID_cnt; vlan_idx++)
-			{
-				if(vlan_data->VlanID == vlan_pdns[pdn_idx].associated_VIDs[vlan_idx])
-				{
-					IPACMDBG_H("vlan pdn already up for vlan %d", vlan_data->VlanID);
-					iptodot("ip", public_ip);
-					return;
-				}
-			}
+			IPACMDBG_H("vlan pdn already up for pdn_idx %d", pdn_idx);
+			iptodot("ip", public_ip);
+			return;
 		}
 	}
 

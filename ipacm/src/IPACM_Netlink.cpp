@@ -1206,7 +1206,27 @@ static int ipa_nl_decode_nlmsg
 
 
 					if (msg_ptr->nl_link_info.link_type == IPA_LINK_TYPE_VLAN)
+					{
+						/* generate IPA_ROUTE_DEL_VLAN_PDN_EVENT for v4 PDN as v6 PDN already has associated vlan*/
+						ipacm_cmd_q_data del_evt_data;
+						ipacm_event_route_vlan *del_vlan_data;
+						del_evt_data.event = IPA_ROUTE_DEL_VLAN_PDN_EVENT;
+						del_vlan_data = (ipacm_event_route_vlan *)malloc(sizeof(ipacm_event_route_vlan));
+						if(!del_vlan_data)
+						{
+							IPACMERR("couldn't allocate memory for new vlan pdn event\n");
+							return IPACM_FAILURE;
+						}
+						memset(del_vlan_data, 0, sizeof(ipacm_event_route_vlan));
+						del_vlan_data->iptype = IPA_IP_MAX;
+						del_vlan_data->VlanID = vlan_info.vlan_id;
+						del_evt_data.evt_data = del_vlan_data;
+						IPACMDBG_H("sending IPA_ROUTE_DEL_VLAN_PDN_EVENT vlan id %d, iptype %d,\n", del_vlan_data->VlanID, del_vlan_data->iptype);
+						IPACM_EvtDispatcher::PostEvt(&del_evt_data);
+
+						IPACMDBG("Delete vlan iface For vlan_id %d \n", vlan_info.vlan_id);
 						IPACM_Iface::ipacmcfg->del_vlan_iface(&vlan_info);
+					}
 					if (msg_ptr->nl_link_info.link_type == IPA_LINK_TYPE_MACSEC ||
 						IPACM_Iface::ipacmcfg->populateMacsecMap(msg_ptr->nl_link_info.metainfo.ifi_index,
 						&macsec_map)) {
@@ -1314,7 +1334,29 @@ static int ipa_nl_decode_nlmsg
 				}
 
 				if(msg_ptr->nl_link_info.link_type == IPA_LINK_TYPE_VLAN)
+				{
+					IPACMDBG("Process RTM_DELLINK For vlan_id %d \n", vlan_info.vlan_id);
+
+					/* generate IPA_ROUTE_DEL_VLAN_PDN_EVENT for v4 PDN as v6 PDN already has associated vlan*/
+					ipacm_cmd_q_data del_evt_data;
+					ipacm_event_route_vlan *del_vlan_data;
+					del_evt_data.event = IPA_ROUTE_DEL_VLAN_PDN_EVENT;
+					del_vlan_data = (ipacm_event_route_vlan *)malloc(sizeof(ipacm_event_route_vlan));
+					if(!del_vlan_data)
+					{
+						IPACMERR("couldn't allocate memory for new vlan pdn event\n");
+						return IPACM_FAILURE;
+					}
+					memset(del_vlan_data, 0, sizeof(ipacm_event_route_vlan));
+					del_vlan_data->iptype = IPA_IP_MAX;
+					del_vlan_data->VlanID = vlan_info.vlan_id;
+					del_evt_data.evt_data = del_vlan_data;
+					IPACMDBG_H("sending IPA_ROUTE_DEL_VLAN_PDN_EVENT vlan id %d, iptype %d,\n", del_vlan_data->VlanID, del_vlan_data->iptype);
+					IPACM_EvtDispatcher::PostEvt(&del_evt_data);
+
+					IPACMDBG("Delete vlan iface For vlan_id %d \n", vlan_info.vlan_id);
 					IPACM_Iface::ipacmcfg->del_vlan_iface(&vlan_info);
+				}
 				if (msg_ptr->nl_link_info.link_type == IPA_LINK_TYPE_MACSEC ||
 					IPACM_Iface::ipacmcfg->populateMacsecMap(msg_ptr->nl_link_info.metainfo.ifi_index,
 					&macsec_map)) {
@@ -1663,7 +1705,8 @@ static int ipa_nl_decode_nlmsg
 						if(msg_ptr->nl_route_info.attr_info.param_mask & IPA_RTA_PARAM_GATEWAY &&
 							(IPACM_Iface::ipacmcfg->eth_wan_pppoe_enable ||
 							IPACM_Iface::ipacmcfg->eth_vlan_wan_enable ||
-							IPACM_Iface::ipacmcfg->eth_wan_br_wan_enable))
+							IPACM_Iface::ipacmcfg->eth_wan_br_wan_enable ||
+							(msg_ptr->nl_route_info.metainfo.rtm_table == RT_TABLE_MAIN)))
 						{
 							data_fid = (ipacm_event_data_fid *)malloc(sizeof(ipacm_event_data_fid));
 							if(data_fid == NULL)
@@ -1932,7 +1975,8 @@ process:
 
 					if(IPACM_Iface::ipacmcfg->eth_wan_pppoe_enable ||
 						IPACM_Iface::ipacmcfg->eth_vlan_wan_enable ||
-						IPACM_Iface::ipacmcfg->eth_wan_br_wan_enable )
+						IPACM_Iface::ipacmcfg->eth_wan_br_wan_enable ||
+						(msg_ptr->nl_route_info.metainfo.rtm_table == RT_TABLE_MAIN))
 					{
 						data_fid = (ipacm_event_data_fid *)malloc(sizeof(ipacm_event_data_fid));
 						if(data_fid == NULL)
@@ -2902,7 +2946,8 @@ int ipa_nl_send_getroute(ipa_ip_type ip_type)
 
 					if(nl_route_info_get_route.attr_info.param_mask & IPA_RTA_PARAM_GATEWAY &&
 						(IPACM_Iface::ipacmcfg->eth_wan_pppoe_enable  ||
-						IPACM_Iface::ipacmcfg->eth_vlan_wan_enable))
+						IPACM_Iface::ipacmcfg->eth_vlan_wan_enable ||
+						(nl_route_info_get_route.metainfo.rtm_table == RT_TABLE_MAIN)))
 					{
 						data_fid = (ipacm_event_data_fid *)malloc(sizeof(ipacm_event_data_fid));
 						if(data_fid == NULL)
@@ -3133,7 +3178,8 @@ proces_getroute:
 				IPACM_NL_REPORT_ADDR( " ", nl_route_info_get_route.attr_info.gateway_addr);
 
 				if(IPACM_Iface::ipacmcfg->eth_wan_pppoe_enable ||
-					IPACM_Iface::ipacmcfg->eth_vlan_wan_enable)
+					IPACM_Iface::ipacmcfg->eth_vlan_wan_enable ||
+					(nl_route_info_get_route.metainfo.rtm_table == RT_TABLE_MAIN))
 				{
 					data_fid = (ipacm_event_data_fid *)malloc(sizeof(ipacm_event_data_fid));
 					if(data_fid == NULL)

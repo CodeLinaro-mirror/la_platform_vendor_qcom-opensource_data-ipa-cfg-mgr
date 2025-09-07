@@ -2699,7 +2699,7 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 		{
 			IPACMDBG_H("Received IPA_HANDLE_LAN_VLAN_PDN_DOWN_STATIC event:%s\n", dev_name);
 			ipacm_event_vlan_pdn *vlandown = (ipacm_event_vlan_pdn *)param;
-			int j = 0, k = 0;
+			int j = 0, k = 0, found = 0;
 
 			if(vlandown == NULL)
 			{
@@ -2726,6 +2726,7 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 							ipv4_to_iface[modem_ipv4_pdn_index].VID_cnt);
 						ipv4_to_iface[modem_ipv4_pdn_index].associated_VIDs[j] = 0;
 						ipv4_to_iface[modem_ipv4_pdn_index].VID_cnt--;
+						found = 1;
 						break;
 					}
 				}
@@ -2735,6 +2736,11 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 						ipv4_to_iface[modem_ipv4_pdn_index].associated_VIDs[k+1];
 				}
 				ipv4_to_iface[modem_ipv4_pdn_index].associated_VIDs[k] = 0;
+				if(found == 1 && ipv4_to_iface[modem_ipv4_pdn_index].VID_cnt == 0 && ((modem_ipv6_pdn_index >= 0 &&
+					ipv6_to_iface[modem_ipv6_pdn_index].VID_cnt == 0) || modem_ipv6_pdn_index == -1))
+				{
+					num_offloaded_pdns--;
+				}
 			}
 			else if(vlandown->iptype == IPA_IP_v6)
 			{
@@ -2757,6 +2763,7 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 							ipv6_to_iface[modem_ipv6_pdn_index].VID_cnt);
 						ipv6_to_iface[modem_ipv6_pdn_index].associated_VIDs[j] = 0;
 						ipv6_to_iface[modem_ipv6_pdn_index].VID_cnt--;
+						found = 1;
 						break;
 					}
 				}
@@ -2766,6 +2773,12 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 						ipv6_to_iface[modem_ipv6_pdn_index].associated_VIDs[k+1];
 				}
 				ipv6_to_iface[modem_ipv6_pdn_index].associated_VIDs[k] = 0;
+				if(((modem_ipv4_pdn_index >= 0 && ipv4_to_iface[modem_ipv4_pdn_index].VID_cnt == 0)
+					|| modem_ipv4_pdn_index == -1) && found == 1 &&
+					ipv6_to_iface[modem_ipv6_pdn_index].VID_cnt == 0)
+				{
+					num_offloaded_pdns--;
+				}
 			}
 			else if(vlandown->iptype == IPA_IP_MAX)
 			{
@@ -2774,8 +2787,10 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 				if(modem_ipv4_pdn_index < 0 || modem_ipv4_pdn_index >= IPA_MAX_NUM_SW_PDNS)
 				{
 					IPACMDBG_H("modem_ipv4_pdn_index:%d not valid\n", modem_ipv4_pdn_index);
-					return;
+					goto handle_v6;
 				}
+
+				IPACMDBG_H("dev_name:%s modem_ipv4_pdn_index:%d\n", modem_ipv4_pdn_index);
 
 				for(j = 0; j < IPA_MAX_NUM_SW_PDNS; j++)
 				{
@@ -2787,6 +2802,7 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 							ipv4_to_iface[modem_ipv4_pdn_index].VID_cnt);
 						ipv4_to_iface[modem_ipv4_pdn_index].associated_VIDs[j] = 0;
 						ipv4_to_iface[modem_ipv4_pdn_index].VID_cnt--;
+						found = found || 1;
 						break;
 					}
 				}
@@ -2797,11 +2813,14 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 				}
 				ipv4_to_iface[modem_ipv4_pdn_index].associated_VIDs[k] = 0;
 
+handle_v6:
 				if(modem_ipv6_pdn_index < 0 || modem_ipv6_pdn_index >= IPA_MAX_NUM_SW_PDNS)
 				{
 					IPACMDBG_H("modem_ipv6_pdn_index:%d not valid\n", modem_ipv6_pdn_index);
-					return;
+					goto handle_v4;
 				}
+
+				IPACMDBG_H("dev_name:%s modem_ipv6_pdn_index:%d\n", modem_ipv6_pdn_index);
 
 				for(j = 0; j < IPA_MAX_NUM_SW_PDNS; j++)
 				{
@@ -2814,6 +2833,7 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 							ipv6_to_iface[modem_ipv6_pdn_index].VID_cnt);
 						ipv6_to_iface[modem_ipv6_pdn_index].associated_VIDs[j] = 0;
 						ipv6_to_iface[modem_ipv6_pdn_index].VID_cnt--;
+						found = found || 1;
 						break;
 					}
 				}
@@ -2823,6 +2843,33 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 						ipv6_to_iface[modem_ipv6_pdn_index].associated_VIDs[k+1];
 				}
 				ipv6_to_iface[modem_ipv6_pdn_index].associated_VIDs[k] = 0;
+
+handle_v4:
+				if(found == 0)
+				{
+					IPACMDBG_H("Not found vlan id:%d in PDN %s\n", vlandown->VlanID, dev_name);
+					return;
+				}
+				else if(((modem_ipv4_pdn_index >= 0 && ipv4_to_iface[modem_ipv4_pdn_index].VID_cnt == 0)
+					|| modem_ipv4_pdn_index == -1) && found == 1 &&
+					modem_ipv6_pdn_index >= 0 && ipv6_to_iface[modem_ipv6_pdn_index].VID_cnt == 0)
+				{
+					num_offloaded_pdns--;
+					IPACMDBG_H("dev_name:%s num_offloaded_pdns:%d\n", dev_name, num_offloaded_pdns);
+				}
+				else if(found == 1 && modem_ipv4_pdn_index >= 0 && ipv4_to_iface[modem_ipv4_pdn_index].VID_cnt == 0 &&
+					((modem_ipv6_pdn_index >= 0 && ipv6_to_iface[modem_ipv6_pdn_index].VID_cnt == 0) ||
+					modem_ipv6_pdn_index == -1))
+				{
+					num_offloaded_pdns--;
+					IPACMDBG_H("dev_name:%s num_offloaded_pdns:%d\n", dev_name, num_offloaded_pdns);
+				}
+				else
+				{
+					IPACMDBG_H("dev_name:%s num_offloaded_pdns:%d vlanID:%d modem_ipv4_pdn_index:%d "
+						"modem_ipv6_pdn_index:%d\n",
+						dev_name, num_offloaded_pdns, vlandown->VlanID, modem_ipv4_pdn_index, modem_ipv6_pdn_index);
+				}
 			}
 		}
 		break;

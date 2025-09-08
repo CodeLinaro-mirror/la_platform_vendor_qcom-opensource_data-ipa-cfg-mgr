@@ -11536,10 +11536,15 @@ install_client_rules:
 				}
 				/* Handling for Lan-WAN Case */
 				IPACMDBG_H("backhaul_is_sta_mode: %d\n", IPACM_Wan::backhaul_is_sta_mode);
-				if(!(IPACM_Iface::ipacmcfg->iface_in_vlan_mode(dev_name)))
+				IPACMDBG_H("ipacmcfg->eth_wan_pppoe_enable: %d, sIface: %d \n", IPACM_Iface::ipacmcfg->eth_wan_pppoe_enable, sIface);
+				IPACMDBG_H("ipacmcfg->iface_in_vlan_mode(%s): %d\n", dev_name, IPACM_Iface::ipacmcfg->iface_in_vlan_mode(dev_name));
+				IPACMDBG_H("ipacmcfg->iface_in_vlan_mode_v2(%s): %d\n", dev_name, IPACM_Iface::ipacmcfg->iface_in_vlan_mode_v2(dev_name));
+
+				if (!(IPACM_Iface::ipacmcfg->iface_in_vlan_mode(dev_name)) ||
+					(!(IPACM_Iface::ipacmcfg->iface_in_vlan_mode_v2(dev_name)) && IPACM_Iface::ipacmcfg->eth_wan_pppoe_enable && sIface))
 				{
-					//if IPACM is in static policy mode, we will install rules later based on conntrack evt
-					if(IPACM_Wan::isWanUP(ipa_if_num) ||
+					// if IPACM is in static policy mode, we will install rules later based on conntrack evt
+					if (IPACM_Wan::isWanUP(ipa_if_num) ||
 						(IPACM_Iface::ipacmcfg->ipacm_static_policy_enable && IPACM_Wan::isVlanWanUP()))
 					{
 						if(IPACM_Wan::backhaul_is_sta_mode == false)

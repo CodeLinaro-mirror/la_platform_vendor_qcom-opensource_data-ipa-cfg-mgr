@@ -2658,6 +2658,28 @@ bool IPACM_Config::iface_in_vlan_mode(const char *interfaceName) {
 	return false;
 }
 
+bool IPACM_Config::iface_in_vlan_mode_v2(const char *interfaceName) {
+	IPACMDBG_H("iface %s is getting checked if it is vlan\n", interfaceName);
+	string nameToCheck = getNameForVlanQuery(interfaceName);
+#if IPA_ETH_API_VER >= 2
+	/**
+	 *  Differentiate Dual NIC mode where interface name is either
+	 *  [eth0|eth1] and legacy while where name is always "eth0".
+	 */
+	if (strstr(nameToCheck.c_str(), "eth0")) {
+		IPACMDBG("eth0 vlan mode %d\n", vlan_devices[IPA_VLAN_IF_ETH0]);
+		IPACMDBG("eth0 vlan spcl mode %d\n", IsSpclIface(nameToCheck.c_str()));
+		return vlan_devices[IPA_VLAN_IF_ETH0] || vlan_devices[IPA_VLAN_IF_EMAC];
+	}
+	if (strstr(nameToCheck.c_str(), "eth1")) {
+		IPACMDBG("eth1 vlan mode %d\n", vlan_devices[IPA_VLAN_IF_ETH1]);
+		return vlan_devices[IPA_VLAN_IF_ETH1] || vlan_devices[IPA_VLAN_IF_EMAC];
+	}
+#endif
+	IPACMDBG_H("iface %s did not match any known ifaces\n", nameToCheck.c_str());
+	return false;
+}
+
 int IPACM_Config::get_iface_vlan_ids(char *phys_iface_name, uint16_t *Ids)
 {
 	list<vlan_iface_info>::iterator it_vlan;

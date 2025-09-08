@@ -684,6 +684,7 @@ public:
 	ipacm_bridge *get_vlan_bridge_from_vid(uint16_t vlan_id);
 	bool is_added_vlan_iface(char *iface_name);
 	bool iface_in_vlan_mode(const char * interfaceName);
+	bool iface_in_vlan_mode_v2(const char * interfaceName);
 	int get_iface_vlan_ids(char *phys_iface_name, uint16_t *Ids);
 	int get_vlan_id(char *iface_name, uint16_t *vlan_id);
 	void get_vlan_mode_ifaces();

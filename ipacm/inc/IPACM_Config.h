@@ -26,9 +26,9 @@
  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * Changes from Qualcomm Innovation Center are provided under the following license:
- * Copyright (c) 2023-2024 Qualcomm Innovation Center, Inc. All rights reserved.
- * SPDX-License-Identifier: BSD-3-Clause-Clear.
+ * Changes from Qualcomm Technologies, Inc. are provided under the following license:
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 /*!
 	@file
@@ -314,9 +314,6 @@ public:
 #endif
 
 	const char* getEventName(ipa_cm_event_id event_id);
-
-	void add_dummy_vlan_mapping(char *bridge_iface, char* client_iface, int if_index);
-	bool is_dummy_VID(uint16_t vid);
 
 	inline void increaseFltRuleCount(int index, ipa_ip_type iptype, int increment)
 	{

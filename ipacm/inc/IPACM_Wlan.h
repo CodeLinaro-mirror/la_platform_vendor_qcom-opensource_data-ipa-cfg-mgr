@@ -26,9 +26,9 @@
  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * Changes from Qualcomm Innovation Center are provided under the following license:
- * Copyright (c) 2024 Qualcomm Innovation Center, Inc. All rights reserved.
- * SPDX-License-Identifier: BSD-3-Clause-Clear.
+ * Changes from Qualcomm Technologies, Inc. are provided under the following license:
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 /*!
 		@file
@@ -201,8 +201,6 @@ private:
 	static ipa_lan_client_idx inactive_lan_client_index[IPA_MAX_NUM_HW_PATH_CLIENTS];
 #endif
 
-	int handle_wlan_vlan_neighbor(ipacm_event_data_all *data);
-
 	inline ipa_wlan_client* get_client_memptr(ipa_wlan_client *param, int cnt)
 	{
 	    char *ret = ((char *)param) + (wlan_client_len * cnt);
@@ -238,30 +236,6 @@ private:
 		}
 
 		return IPACM_INVALID_INDEX;
-	}
-
-	inline int get_wlan_client_ip4_addr(uint8_t *mac_addr, uint32_t &ip_addr, uint16_t vlan_id = 0)
-	{
-		int clnt_indx;
-
-		clnt_indx = get_wlan_client_index(mac_addr);
-		if(clnt_indx == IPACM_INVALID_INDEX)
-		{
-			IPACMERR("eth client not found/attached \n");
-			return IPACM_FAILURE;
-		}
-
-		if (get_client_memptr(wlan_client, clnt_indx)->ipv4_set)
-		{
-			ip_addr = get_client_memptr(wlan_client, clnt_indx)->v4_addr;
-			IPACMDBG_H("ip addr is 0x%X\n", ip_addr);
-			return IPACM_SUCCESS;
-		}
-		else
-		{
-			IPACMDBG_H("ipv4 address not set\n");
-			return IPACM_FAILURE;
-		}
 	}
 
 	inline int delete_default_qos_rtrules(int clt_indx, ipa_ip_type iptype)

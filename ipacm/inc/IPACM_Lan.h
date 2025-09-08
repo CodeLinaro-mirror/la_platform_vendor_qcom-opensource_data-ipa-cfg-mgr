@@ -25,41 +25,10 @@ BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
 WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
 OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
 IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- *
- * Changes from Qualcomm Innovation Center are provided under the following license:
- *
- * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
- *
- * Redistribution and use in source and binary forms, with or without
- * modification, are permitted (subject to the limitations in the
- * disclaimer below) provided that the following conditions are met:
- *
- *   * Redistributions of source code must retain the above copyright
- *     notice, this list of conditions and the following disclaimer.
- *
- *   * Redistributions in binary form must reproduce the above
- *     copyright notice, this list of conditions and the following
- *     disclaimer in the documentation and/or other materials provided
- *     with the distribution.
- *
- *   * Neither the name of Qualcomm Innovation Center, Inc. nor the names of its
- *     contributors may be used to endorse or promote products derived
- *     from this software without specific prior written permission.
- *
- * NO EXPRESS OR IMPLIED LICENSES TO ANY PARTY'S PATENT RIGHTS ARE
- * GRANTED BY THIS LICENSE. THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT
- * HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED
- * WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
- * MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
- * IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR
- * ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
- * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE
- * GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
- * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER
- * IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
- * OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
- * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- */
+
+Changes from Qualcomm Technologies, Inc. are provided under the following license:
+Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+SPDX-License-Identifier: BSD-3-Clause-Clear
 /*!
 	@file
 	IPACM_Lan.h
@@ -1084,67 +1053,6 @@ protected:
 		return IPACM_FAILURE;
 	}
 
-public:
-#ifdef FEATURE_VLAN_MPDN
-	inline bool is_mux_up(uint8_t mux_id, ipa_ip_type iptype, uint16_t vid)
-	{
-		ipacm_mux_struct *mux = v4_mux_up;
-
-		if(mux_id == 0)
-			return false;
-		if(iptype == IPA_IP_v6)
-			mux = v6_mux_up;
-
-		for(int i = 0; i < IPA_MAX_NUM_HW_PDNS; i++)
-		{
-			if(mux[i].mux_id == mux_id)
-			{
-				//vid = 0 means just check if mux is up
-				if(vid == 0)
-				{
-						IPACMDBG_H("mux id %d is up for dev %s, iptype %d\n", mux_id, dev_name, iptype);
-						return true;
-				}
-
-				//vlan case
-				for(int j = 0; j < mux[i].VID_cnt; j++)
-				{
-					if(mux[i].associated_VIDs[j] == vid)
-					{
-						IPACMDBG_H("mux id %d is up for dev %s, iptype %d, vid %d, VID_cnt = %d\n", mux_id, dev_name, iptype, vid, mux[i].VID_cnt);
-						return true;
-					}
-				}
-			}
-		}
-		IPACMDBG_H("mux id %d is not up for dev %s iptype %d, vid %d\n", mux_id, dev_name, iptype, vid);
-		return false;
-	}
-	inline bool is_any_mux_up(ipa_ip_type iptype)
-	{
-		ipacm_mux_struct *mux = v4_mux_up;
-		bool res = false;
-
-		if(iptype == IPA_IP_v6)
-			mux = v6_mux_up;
-
-		for(int i = 0; i < IPA_MAX_NUM_HW_PDNS; i++)
-		{
-			if(mux[i].mux_id)
-			{
-				IPACMDBG("mux id %d up for dev %s, i = %d, iptype %d\n", mux[i].mux_id, dev_name, i, iptype);
-				res = true;
-			}
-		}
-
-		if(res)
-			return res;
-
-		IPACMDBG_H("no vlan mux up for dev %s, iptype %d\n", dev_name, iptype);
-		return false;
-	}
-#endif
-
 private:
 
 	/* get hdr proc ctx type given source and destination l2 hdr type */
@@ -1202,6 +1110,46 @@ private:
 		uint16_t associated_VIDs[IPA_MAX_NUM_SW_PDNS] = { };
 		uint8_t VID_cnt = 0;
 	}ipacm_mux_struct;
+
+	ipacm_mux_struct v4_mux_up[IPA_MAX_NUM_HW_PDNS];
+	uint8_t num_v4_mux;
+	ipacm_mux_struct v6_mux_up[IPA_MAX_NUM_HW_PDNS];
+	uint8_t num_v6_mux;
+
+	inline bool is_mux_up(uint8_t mux_id, ipa_ip_type iptype, uint16_t vid)
+	{
+		ipacm_mux_struct *mux = v4_mux_up;
+
+		if(mux_id == 0)
+			return false;
+		if(iptype == IPA_IP_v6)
+			mux = v6_mux_up;
+
+		for(int i = 0; i < IPA_MAX_NUM_HW_PDNS; i++)
+		{
+			if(mux[i].mux_id == mux_id)
+			{
+				//vid = 0 means just check if mux is up
+				if(vid == 0)
+				{
+						IPACMDBG_H("mux id %d is up for dev %s, iptype %d\n", mux_id, dev_name, iptype);
+						return true;
+				}
+
+				//vlan case
+				for(int j = 0; j < mux[i].VID_cnt; j++)
+				{
+					if(mux[i].associated_VIDs[j] == vid)
+					{
+						IPACMDBG_H("mux id %d is up for dev %s, iptype %d, vid %d, VID_cnt = %d\n", mux_id, dev_name, iptype, vid, mux[i].VID_cnt);
+						return true;
+					}
+				}
+			}
+		}
+		IPACMDBG_H("mux id %d is not up for dev %s iptype %d, vid %d\n", mux_id, dev_name, iptype, vid);
+		return false;
+	}
 
 	inline int set_mux_up(uint8_t mux_id, ipa_ip_type iptype, uint16_t vid)
 	{
@@ -1284,6 +1232,30 @@ private:
 
 		IPACMERR("could not find mux %d, iptype %d\n", mux_id, iptype);
 		return IPACM_FAILURE;
+	}
+
+	inline bool is_any_mux_up(ipa_ip_type iptype)
+	{
+		ipacm_mux_struct *mux = v4_mux_up;
+		bool res = false;
+
+		if(iptype == IPA_IP_v6)
+			mux = v6_mux_up;
+
+		for(int i = 0; i < IPA_MAX_NUM_HW_PDNS; i++)
+		{
+			if(mux[i].mux_id)
+			{
+				IPACMDBG("mux id %d up for dev %s, i = %d, iptype %d\n", mux[i].mux_id, dev_name, i, iptype);
+				res = true;
+			}
+		}
+
+		if(res)
+			return res;
+
+		IPACMDBG_H("no vlan mux up for dev %s, iptype %d\n", dev_name, iptype);
+		return false;
 	}
 #endif
 	inline ipa_eth_client* get_client_memptr(ipa_eth_client *param, int cnt)
@@ -1481,22 +1453,14 @@ private:
 #ifdef FEATURE_VLAN_MPDN
 	int handle_vlan_neighbor(ipacm_event_data_all *data);
 	bool is_vlan_IF(uint16_t vlan_id);
+	int handle_vlan_pdn_up(ipacm_event_vlan_pdn *data, bool set_mux = true);
+	int handle_vlan_pdn_down(ipacm_event_vlan_pdn *data);
 	int handle_vlan_phys_if_down();
+	int check_vlan_PDNUp(enum ipa_ip_type iptype);
 #endif
 
 	int construct_mtu_rule(struct ipa_flt_rule *rule, enum ipa_ip_type iptype, uint16_t mtu);
 	int add_mtu_rule_v4_default_pdn();
-
-public:
-#ifdef FEATURE_VLAN_MPDN
-	int handle_vlan_pdn_up(ipacm_event_vlan_pdn *data, bool set_mux = true);
-	int handle_vlan_pdn_down(ipacm_event_vlan_pdn *data);
-	int check_vlan_PDNUp(enum ipa_ip_type iptype);
-	ipacm_mux_struct v4_mux_up[IPA_MAX_NUM_HW_PDNS];
-	uint8_t num_v4_mux;
-	ipacm_mux_struct v6_mux_up[IPA_MAX_NUM_HW_PDNS];
-	uint8_t num_v6_mux;
-#endif
 };
 
 #endif /* IPACM_LAN_H */

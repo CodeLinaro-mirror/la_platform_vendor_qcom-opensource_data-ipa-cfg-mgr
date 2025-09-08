@@ -694,6 +694,12 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 					}
 
 				}
+				IPACMDBG_H("Query Getneigh for physical ifaces\n");
+				ipa_nl_query_newneigh(AF_BRIDGE);
+				IPACMDBG_H("Query v4 neighbors for %s\n", dev_name);
+				ipa_nl_query_newneigh(AF_INET);
+				IPACMDBG_H("Query v6 neighbors for %s\n", dev_name);
+				ipa_nl_query_newneigh(AF_INET6);
 			}
 		}
 		break;

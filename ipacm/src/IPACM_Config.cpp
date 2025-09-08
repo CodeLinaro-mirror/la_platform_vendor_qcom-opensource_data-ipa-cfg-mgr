@@ -44,8 +44,8 @@
 #include <IPACM_Config.h>
 #include <IPACM_Log.h>
 #include <IPACM_Iface.h>
+#include <IPACM_Netlink.h>
 #include <sys/ioctl.h>
-#include <net/if.h>
 #include <fcntl.h>
 #include <string.h>
 #include <errno.h>
@@ -1573,6 +1573,8 @@ void IPACM_Config::add_vlan_iface(ipa_ioc_vlan_iface_info *data)
 	evt_data.evt_data = (void*)vlan_data;
 	IPACMDBG_H("Posting IPA_NOTIFY_VLAN_UP event!\n", evt_data.event);
 	IPACM_EvtDispatcher::PostEvt(&evt_data);
+	/* Sending Getneigh to receive missing neighbor in case if missed early */
+	ipa_nl_query_newneigh(AF_BRIDGE, data->name);
 
 #endif
 	return;

@@ -717,13 +717,13 @@
 		    </ALG>
 		</IPACMALG>
 		<IPACMNAT>
-			<MaxNatEntries>4000</MaxNatEntries>
+			<MaxNatEntries>4096</MaxNatEntries>
 			<NatTableType>HYBRID</NatTableType>
 		</IPACMNAT>
 		<IPACMIPV6CT>
 			<IPv6CTEnabled>1</IPv6CTEnabled>
 			<CTTableType>HYBRID</CTTableType>
-			<MaxIpv6CTEntries>4000</MaxIpv6CTEntries>
+			<MaxIpv6CTEntries>4096</MaxIpv6CTEntries>
 		</IPACMIPV6CT>
 		<IPACMIPV6NAT>
 			<IPV6NATEnabled>0</IPV6NATEnabled>

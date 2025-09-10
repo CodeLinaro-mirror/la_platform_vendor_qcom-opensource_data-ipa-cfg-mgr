@@ -531,7 +531,7 @@ int IPACM_Config::Init(void)
 
 	struct statvfs stat;
 	ulong available_partition_size_bytes = 0;
-	char ipacm_log_file[IPA_MAX_FILE_LEN] = IPACM_LOG_COLLECTION_FILE;
+	char ipacm_log_file[IPA_MAX_FILE_LEN];
 	char *ipacm_log_dir = NULL;
 
 	cfg = (IPACM_conf_t *)malloc(sizeof(IPACM_conf_t));
@@ -584,6 +584,9 @@ int IPACM_Config::Init(void)
 				cfg->max_file_size_quota, IPACM_DEF_LOG_FILE_SIZE_QUOTA);
 		cfg->max_file_size_quota = IPACM_DEF_LOG_FILE_SIZE_QUOTA;
 	}
+
+	memset(ipacm_log_file, '\0', sizeof(ipacm_log_file));
+	strlcpy(ipacm_log_file, IPACM_LOG_COLLECTION_FILE, (sizeof(ipacm_log_file) - 1));
 	ipacm_log_dir = dirname(ipacm_log_file);
 
 	/* Read the available partition size */

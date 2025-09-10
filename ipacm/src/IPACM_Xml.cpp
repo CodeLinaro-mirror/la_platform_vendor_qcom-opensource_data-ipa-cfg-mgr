@@ -1287,6 +1287,26 @@ static int ipacm_cfg_xml_parse_tree
 								   config->ipacm_emesh_mode, atoi(content_buf));
 					}
 				}
+				else if (IPACM_util_icmp_string((char*)xml_node->name, IPACM_Easy_Mesh_Trafficseparation) == 0)
+				{
+					IPACMDBG_H("inside enable traffic separation\n");
+					content = IPACM_read_content_element(xml_node);
+					if (content == NULL)
+					{
+						IPACMERR("Failed to read the content of the tag %s\n", IPACM_Easy_Mesh_Trafficseparation);
+					}
+					else
+					{
+						str_size = strlen(content);
+						memset(content_buf, 0, sizeof(content_buf));
+						memcpy(content_buf, (void *)content, str_size);
+						content_buf[MAX_XML_STR_LEN-1] = '\0';
+						config->ipacm_easy_mesh_traffic_separation_enable = atoi(content_buf);
+						IPACMDBG_H("IPACM Easy mesh traffic separation %d buf(%d)\n",
+								   config->ipacm_easy_mesh_traffic_separation_enable, atoi(content_buf));
+					}
+				}
+
 				else if (IPACM_util_icmp_string((char*)xml_node->name, IPACM_Wlan_Vlan_Mpdn_Enabled) == 0)
 				{
 					IPACMDBG_H("inside enable Vlan Mpdn-XML\n");

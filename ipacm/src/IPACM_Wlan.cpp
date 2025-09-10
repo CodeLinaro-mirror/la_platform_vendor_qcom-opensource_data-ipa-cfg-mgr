@@ -10381,7 +10381,7 @@ void IPACM_Wlan::update_svap_state() {
 		goto end;
 	}
 
-	if (BSSTYPE_SVAP == atoi(MapBSSType_row)) {
+	if (BSSTYPE_SVAP == atoi(MapBSSType_row) && (IPACM_Iface::ipacmcfg->ipacm_easy_mesh_traffic_separation_enable)) {
 		set_svap_iface_mode(true);
 		is_if_svap = true;
 	} else {

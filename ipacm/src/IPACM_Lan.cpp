@@ -4561,16 +4561,22 @@ int IPACM_Lan::handle_wan_up_ex(ipacm_ext_prop *ext_prop, ipa_ip_type iptype, ui
 			}
 			if(IPACM_Iface::ipacmcfg->ipogre_enabled)
 			{
-				for(int i=0;i<IPACM_Iface::ipacmcfg->tunnel_idx.size();i++)
+				IPACMDBG_H("IPoGRE tunnel idx size %d \n",IPACM_Iface::ipacmcfg->tunnel_idx.size());
+				/*Checking tunnel_idx size to make sure only posting IPoGRE UP
+				if tunnel info is received and stored*/
+				if(IPACM_Iface::ipacmcfg->tunnel_idx.size()!=0)
 				{
-					IPACM_Iface::ipacmcfg->ipogre_tunnel_idx_map[IPACM_Iface::ipacmcfg->tunnel_idx[i]].link_down = true;
+					for(int i=0;i<IPACM_Iface::ipacmcfg->tunnel_idx.size();i++)
+					{
+						IPACM_Iface::ipacmcfg->ipogre_tunnel_idx_map[IPACM_Iface::ipacmcfg->tunnel_idx[i]].link_down = true;
+					}
+					ipacm_cmd_q_data evt_data;
+					memset(&evt_data, 0, sizeof(evt_data));
+					evt_data.event = IPA_HANDLE_IPOGRE_UP;
+					evt_data.evt_data = 0;
+					IPACMDBG_H("Posting event: IPA_HANDLE_IPOGRE_UP.\n");
+					IPACM_EvtDispatcher::PostEvt(&evt_data);
 				}
-				ipacm_cmd_q_data evt_data;
-				memset(&evt_data, 0, sizeof(evt_data));
-				evt_data.event = IPA_HANDLE_IPOGRE_UP;
-				evt_data.evt_data = 0;
-				IPACMDBG_H("Posting event: IPA_HANDLE_IPOGRE_UP.\n");
-				IPACM_EvtDispatcher::PostEvt(&evt_data);
 			}
 			if(!modem_ul_v6_set)
 				ret = handle_uplink_filter_rule(ext_prop, iptype, xlat_mux_id, false, true, ast_update);

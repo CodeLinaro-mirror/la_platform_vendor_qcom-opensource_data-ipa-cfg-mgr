@@ -7322,6 +7322,11 @@ int IPACM_Wan::handle_route_del_evt_ex(ipa_ip_type iptype)
 				}
 				else
 				{
+					if (memcmp(IPACM_Iface::ipacmcfg->ipgre_info.ipv6_src, m_ipv6_addr,
+						sizeof(IPACM_Iface::ipacmcfg->ipgre_info.ipv6_src)))
+					{
+						continue;
+					}
 					memcpy(&IPACM_Iface::ipacmcfg->ipgre_info.ipv6_src,&IPACM_Iface::ipacmcfg->ipogre_tunnel_idx_map[IPACM_Iface::ipacmcfg->tunnel_idx[i]].tunnel_endpoint.v6_ip.ipv6_src,sizeof(IPACM_Iface::ipacmcfg->ipgre_info.ipv6_src));
 					memcpy(&IPACM_Iface::ipacmcfg->ipgre_info.ipv6_dst,&IPACM_Iface::ipacmcfg->ipogre_tunnel_idx_map[IPACM_Iface::ipacmcfg->tunnel_idx[i]].tunnel_endpoint.v6_ip.ipv6_dst,sizeof(IPACM_Iface::ipacmcfg->ipgre_info.ipv6_dst));
 				}
@@ -12551,6 +12556,7 @@ int IPACM_Wan::gre_v6_work(
 	{
 		IPACMDBG_H("Deleting v6 modem PMIP DL rules on gre disable.\n");
 
+		IPACM_Iface::ipacmcfg->ipogre_enabled  =false;
 		if ( config_wan_firewall_rule(IPA_IP_v6) != IPACM_SUCCESS )
 		{
 			IPACMERR(
@@ -12558,6 +12564,7 @@ int IPACM_Wan::gre_v6_work(
 			wan_up_v6 = is_default_gateway = false;
 			return IPACM_FAILURE;
 		}
+		IPACM_Iface::ipacmcfg->ipogre_enabled  =true;
 		if ( install_wan_filtering_rule(false) != IPACM_SUCCESS )
 		{
 			IPACMERR(
@@ -13462,6 +13469,19 @@ void IPACM_Wan::ipgre_clear_route_data(
 	{
 		if(IPACM_Iface::ipacmcfg->ipogre_enabled)
 		{
+			for(int i=0;i<MAX_FLOW_PER_IPOGRE_TUNNEL;i++)
+				if ( IPACM_Iface::ipacmcfg->ipogre_tunnel_idx_map[IPACM_Iface::ipacmcfg->ipgre_info.num_exceptions].gre_route_data[iptype].rt_gre_add_hdl[i] )
+				{
+					m_routing.DeleteRoutingHdl(
+						IPACM_Iface::ipacmcfg->ipogre_tunnel_idx_map[IPACM_Iface::ipacmcfg->ipgre_info.num_exceptions].gre_route_data[iptype].rt_gre_add_hdl[i] , IPACM_Iface::ipacmcfg->ipogre_tunnel_idx_map[IPACM_Iface::ipacmcfg->ipgre_info.num_exceptions].flows[i].iptype);
+						IPACM_Iface::ipacmcfg->ipogre_tunnel_idx_map[IPACM_Iface::ipacmcfg->ipgre_info.num_exceptions].gre_route_data[iptype].rt_gre_add_hdl[i] = 0;
+				}
+			if ( IPACM_Iface::ipacmcfg->ipogre_tunnel_idx_map[IPACM_Iface::ipacmcfg->ipgre_info.num_exceptions].gre_route_data[iptype].rt_gre_rmv_hdl )
+			{
+				m_routing.DeleteRoutingHdl(
+					IPACM_Iface::ipacmcfg->ipogre_tunnel_idx_map[IPACM_Iface::ipacmcfg->ipgre_info.num_exceptions].gre_route_data[iptype].rt_gre_rmv_hdl, iptype);
+					IPACM_Iface::ipacmcfg->ipogre_tunnel_idx_map[IPACM_Iface::ipacmcfg->ipgre_info.num_exceptions].gre_route_data[iptype].rt_gre_rmv_hdl = 0;
+			}
 			if ( IPACM_Iface::ipacmcfg->ipogre_tunnel_idx_map[IPACM_Iface::ipacmcfg->ipgre_info.num_exceptions].gre_route_data[iptype].ul_header_hdl )
 			{
 				m_header.DeleteHeaderHdl(
@@ -13487,21 +13507,6 @@ void IPACM_Wan::ipgre_clear_route_data(
 				m_header.DeleteHeaderProcCtx(
 					IPACM_Iface::ipacmcfg->ipogre_tunnel_idx_map[IPACM_Iface::ipacmcfg->ipgre_info.num_exceptions].gre_route_data[iptype].proc_ctx_gre_rmv_hdl);
 				IPACM_Iface::ipacmcfg->ipogre_tunnel_idx_map[IPACM_Iface::ipacmcfg->ipgre_info.num_exceptions].gre_route_data[iptype].proc_ctx_gre_rmv_hdl  = 0;
-			}
-
-			for(int i=0;i<MAX_FLOW_PER_IPOGRE_TUNNEL;i++)
-				if ( IPACM_Iface::ipacmcfg->ipogre_tunnel_idx_map[IPACM_Iface::ipacmcfg->ipgre_info.num_exceptions].gre_route_data[iptype].rt_gre_add_hdl[i] )
-				{
-					m_routing.DeleteRoutingHdl(
-						IPACM_Iface::ipacmcfg->ipogre_tunnel_idx_map[IPACM_Iface::ipacmcfg->ipgre_info.num_exceptions].gre_route_data[iptype].rt_gre_add_hdl[i] , IPACM_Iface::ipacmcfg->ipogre_tunnel_idx_map[IPACM_Iface::ipacmcfg->ipgre_info.num_exceptions].flows[i].iptype);
-					IPACM_Iface::ipacmcfg->ipogre_tunnel_idx_map[IPACM_Iface::ipacmcfg->ipgre_info.num_exceptions].gre_route_data[iptype].rt_gre_add_hdl[i] = 0;
-				}
-
-			if ( IPACM_Iface::ipacmcfg->ipogre_tunnel_idx_map[IPACM_Iface::ipacmcfg->ipgre_info.num_exceptions].gre_route_data[iptype].rt_gre_rmv_hdl )
-			{
-				m_routing.DeleteRoutingHdl(
-					IPACM_Iface::ipacmcfg->ipogre_tunnel_idx_map[IPACM_Iface::ipacmcfg->ipgre_info.num_exceptions].gre_route_data[iptype].rt_gre_rmv_hdl, iptype);
-				IPACM_Iface::ipacmcfg->ipogre_tunnel_idx_map[IPACM_Iface::ipacmcfg->ipgre_info.num_exceptions].gre_route_data[iptype].rt_gre_rmv_hdl = 0;
 			}
 
 			if(IPACM_Iface::ipacmcfg->ipogre_tunnel_idx_map[IPACM_Iface::ipacmcfg->ipgre_info.num_exceptions].gre_route_data[iptype].ul_header_hdl_c){

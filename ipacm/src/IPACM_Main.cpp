@@ -1633,7 +1633,25 @@ void* ipa_driver_msg_notifier(void *param)
 
 							IPACM_Iface::ipacmcfg->ipgre_info.num_exceptions =
 								conf->tunnel_idx[i];
-
+							for(int j = 0;j<conf->tunnel_idx.size(); j++)
+							{
+								if(j!=i)
+								{
+									if(conf->ipogre_tunnel_idx_map[conf->tunnel_idx[j]].Tunnel_id ==
+										new_ipogre_info.ipogre_tunnel_info.tunnel_id)
+									{
+										if(conf->ipogre_tunnel_idx_map[conf->tunnel_idx[j]].Tunnel_id == 1)
+										{
+											new_ipogre_info.ipogre_tunnel_info.tunnel_id = 0;
+										}
+										else
+										{
+											new_ipogre_info.ipogre_tunnel_info.tunnel_id = 1;
+										}
+									}
+								}
+							}
+							IPACMERR("Tunnel id received%d \n",new_ipogre_info.ipogre_tunnel_info.tunnel_id);
 							conf->ipogre_tunnel_idx_map[conf->tunnel_idx[i]].Tunnel_id =
 								new_ipogre_info.ipogre_tunnel_info.tunnel_id;
 
@@ -1704,10 +1722,30 @@ void* ipa_driver_msg_notifier(void *param)
 						IPACM_Iface::ipacmcfg->ipgre_info.num_exceptions =
 							conf->tunnel_idx[i];
 
-						conf->ipogre_tunnel_idx_map[conf->tunnel_idx[i]].Tunnel_id =
-							new_ipogre_info.ipogre_tunnel_info.tunnel_id;
-
+						conf->ipogre_tunnel_idx_map[conf->tunnel_idx[i]].ipogre_enabled  = true;
 						IPACM_Iface::ipacmcfg->ipogre_enabled = true;
+
+						for(int j = 0;j<conf->tunnel_idx.size(); j++)
+						{
+							if(j!=i)
+							{
+								if(conf->ipogre_tunnel_idx_map[conf->tunnel_idx[j]].Tunnel_id ==
+									new_ipogre_info.ipogre_tunnel_info.tunnel_id)
+								{
+									if(conf->ipogre_tunnel_idx_map[conf->tunnel_idx[j]].Tunnel_id == 1)
+									{
+										new_ipogre_info.ipogre_tunnel_info.tunnel_id = 0;
+									}
+									else
+									{
+										new_ipogre_info.ipogre_tunnel_info.tunnel_id = 1;
+									}
+								}
+							}
+						}
+						IPACMDBG_H("Recieved Tunnel id %d\n",new_ipogre_info.ipogre_tunnel_info.tunnel_id);
+						conf->ipogre_tunnel_idx_map[conf->tunnel_idx[i]].Tunnel_id =
+                                                        new_ipogre_info.ipogre_tunnel_info.tunnel_id;
 						IPACMDBG_H("ipogre enabled  %d\n", IPACM_Iface::ipacmcfg->ipogre_enabled);
 						IPACMDBG_H("Number of flows %d\n",
 							conf->ipogre_tunnel_idx_map[conf->tunnel_idx[i]].num_flows);

@@ -26,9 +26,8 @@
 * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
 * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 *
-* Changes from Qualcomm Technologies, Inc. are provided under the following license:
-*
-* Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+* Changes from Qualcomm Innovation Center are provided under the following license:
+* Copyright (c) 2023-2025 Qualcomm Innovation Center, Inc. All rights reserved.
 * SPDX-License-Identifier: BSD-3-Clause-Clear
 */
 /*!
@@ -466,8 +465,7 @@ void IPACM_Iface::iface_addr_query
 (
 	int interface_index,
 	bool post_new_addr_event,
-	uint32_t *curr_ip4_addr,
-	uint32_t *curr_ip4_netmask
+	uint32_t *curr_ip4_addr
 )
 {
 	int fd;
@@ -476,7 +474,6 @@ void IPACM_Iface::iface_addr_query
 	ipacm_cmd_q_data evt_data;
 	ipacm_event_data_addr *data_addr;
 	struct in_addr iface_ipv4;
-	struct in_addr iface_ipv4_netmask;
 
 	/* use linux interface-index to find interface name */
 	if ((fd = socket(AF_INET, SOCK_DGRAM, 0)) < 0)
@@ -523,9 +520,8 @@ void IPACM_Iface::iface_addr_query
 					struct sockaddr_in *s4 = (struct sockaddr_in *)ifa->ifa_addr;
 					struct sockaddr_in *net_mask = (struct sockaddr_in *)ifa->ifa_netmask;
 					IPACMDBG_H("ipv4 address %s\n",inet_ntoa(s4->sin_addr));
-					IPACMDBG_H("ipv4 address netmask %s\n",inet_ntoa(net_mask->sin_addr));
 					iface_ipv4 = s4->sin_addr;
-					iface_ipv4_netmask = net_mask->sin_addr;
+
 					if (curr_ip4_addr != NULL && (post_new_addr_event == false))
 					{
 						if(ntohl(iface_ipv4.s_addr) != (*curr_ip4_addr))
@@ -534,9 +530,6 @@ void IPACM_Iface::iface_addr_query
 							IPACMDBG_H("iface ip4 address: (0x%x)\n", ntohl(iface_ipv4.s_addr));
 
 							*curr_ip4_addr = ntohl(iface_ipv4.s_addr);
-							if (curr_ip4_netmask != NULL)
-								*curr_ip4_netmask = ntohl(iface_ipv4_netmask.s_addr);
-
 							freeifaddrs(myaddrs);
 							return;
 						}

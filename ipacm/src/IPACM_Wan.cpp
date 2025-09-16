@@ -1502,7 +1502,7 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 		qos_param_info *qos_param;
 		qos_param = (qos_param_info *)param;
 
-		if (qos_param->dir != 1)
+		if (qos_param->dir != IPA_QoS_UL_RULE)
 		{
 			IPACMDBG_H("DL qos rule add request on WAN iface, ignoring..\n");
 			return;
@@ -1532,6 +1532,12 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 			qos_delete_param_info *qos_param;
 			qos_param = (qos_delete_param_info *)param;
 			IPACMDBG_H("Received and will process an IPA_QOS_RULE_DEL_EVENT\n");
+
+			if (qos_param->dir != IPA_QoS_UL_RULE)
+			{
+				 IPACMDBG_H("DL qos rule delete request on WAN iface, ignoring..\n");
+				 return;
+			}
 
 			IPACMDBG_H("Deleting %d qos eth clients \n", qos_param->client_cnt);
 
@@ -12290,7 +12296,7 @@ int IPACM_Wan::install_ul_qos_route_rules(ipa_ip_type iptype)
 	for (it_qos_params = IPACM_Iface::ipacmcfg->m_qos_params.begin();
 		it_qos_params != IPACM_Iface::ipacmcfg->m_qos_params.end(); ++it_qos_params)
 	{
-		if (it_qos_params->dir != 1)
+		if (it_qos_params->dir != IPA_QoS_UL_RULE)
 		{
 			IPACMDBG_H("This is not a UL qos rule, continue to next one..\n");
 			continue;

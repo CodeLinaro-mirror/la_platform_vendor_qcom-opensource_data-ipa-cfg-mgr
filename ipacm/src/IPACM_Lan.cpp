@@ -2069,6 +2069,13 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 	case IPA_QOS_RULE_ADD_EVENT:
 		{
 			IPACMDBG_H("Received and will process an IPA_QOS_RULE_ADD_EVENT\n");
+			qos_param_info *qos_param;
+			qos_param = (qos_param_info *)param;
+			if (qos_param->dir != IPA_QoS_DL_RULE)
+			{
+				IPACMDBG_H("UL qos rule add request on LAN iface, ignoring..\n");
+				return;
+			}
 			delete_all_client_qos_rules();
 			for (int cnt = 0; cnt < num_eth_client; cnt++)
 			{
@@ -2084,6 +2091,12 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 			qos_delete_param_info *qos_param;
 			qos_param = (qos_delete_param_info *)param;
 			IPACMDBG_H("Received and will process an IPA_QOS_RULE_DEL_EVENT\n");
+
+			if (qos_param->dir != IPA_QoS_DL_RULE)
+			{
+				IPACMDBG_H("UL qos rule delete request on LAN iface, ignoring..\n");
+				return;
+			}
 
 			IPACMDBG_H("Deleting %d qos eth clients \n", qos_param->client_cnt);
 
@@ -9496,6 +9509,11 @@ int IPACM_Lan::install_all_qos_route_rule(uint8_t * client_mac,
 	for (it_qos_params = IPACM_Iface::ipacmcfg->m_qos_params.begin();
 		it_qos_params != IPACM_Iface::ipacmcfg->m_qos_params.end(); ++it_qos_params)
 	{
+		if (it_qos_params->dir != IPA_QoS_DL_RULE)
+		{
+			IPACMDBG_H("This is not a DL qos rule, continue to next one..\n");
+			continue;
+		}
 		IPACMDBG_H("Individual qos rules with ip type: %d and tc: %d\n",
 			(ipa_ip_type)it_qos_params->ip_type, it_qos_params->traffic_class);
 		IPACMDBG("Install_all_qos_route_rule it_qos_params called start 0x%x\n",

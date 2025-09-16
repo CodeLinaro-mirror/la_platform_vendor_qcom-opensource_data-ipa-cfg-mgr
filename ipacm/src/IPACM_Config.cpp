@@ -4922,6 +4922,7 @@ void IPACM_Config::delete_qos_params_info(ipa_ioc_qos_config *data)
 			qos_param->client_cnt = it_qos_params->qos_client_list.size();
 			for (it_qos_client = it_qos_params->qos_client_list.begin(); it_qos_client != it_qos_params->qos_client_list.end(); ++it_qos_client)
 			{
+				qos_param->dir = data->dir;
 				qos_param->qos_client_list[i].qos_rt_rule_hdl_v4 = it_qos_client->qos_rt_rule_hdl_v4;
 				qos_param->qos_client_list[i].qos_rt_rule_hdl_v6 = it_qos_client->qos_rt_rule_hdl_v6;
 				IPACMDBG("v6 rule to delete wan hdl %d\n",

@@ -26,9 +26,10 @@ WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
 OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
 IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-Changes from Qualcomm Innovation Center are provided under the following license:
-Copyright (c) 2023-2025 Qualcomm Innovation Center, Inc. All rights reserved.
+Changes from Qualcomm Technologies, Inc. are provided under the following license:
+Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
 SPDX-License-Identifier: BSD-3-Clause-Clear
+
 */
 /*!
 	@file
@@ -133,6 +134,7 @@ void IPACM_IfaceManager::event_callback(ipa_cm_event_id event, void *param)
 			IPACMDBG_H("Recieved IPA_USB_LINK_UP_EVENT event: link up %d: \n", evt_data->if_index);
 			ipa_interface_index = IPACM_Iface::iface_ipa_index_query(evt_data->if_index);
 			strlcpy(ifmgr_data.iface_name, IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].iface_name, sizeof(ifmgr_data.iface_name));
+			IPACMDBG_H("Recieved usb link up for: %s \n", ifmgr_data.iface_name);
 			/* check for failure return */
 			if (IPACM_FAILURE == ipa_interface_index) {
 				IPACMERR("IPA_USB_LINK_UP_EVENT: not supported iface id: %d\n", evt_data->if_index);
@@ -267,6 +269,7 @@ int IPACM_IfaceManager::create_iface_instance(ipacm_ifacemgr_data *param)
 {
 	int if_index = param->if_index;
 	ipacm_wan_iface_type is_sta_mode = param->if_type;
+	uint16_t sta_vlan_id = 0;
 
 	int ipa_interface_index;
 	ipa_interface_index = IPACM_Iface::iface_ipa_index_query(if_index);
@@ -654,8 +657,19 @@ int IPACM_IfaceManager::create_iface_instance(ipacm_ifacemgr_data *param)
 						if(param->is_ppp_iface &&
 							IPACM_Iface::ipacmcfg->eth_wan_pppoe_enable)
 						{
+							if(IPACM_Iface::ipacmcfg->get_pppoe_vlan_id(IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].iface_name,
+								&sta_vlan_id))
+							{
+								IPACMERR("failed to get iface vlan ID\n");
+							}
+							IPACMDBG_H("Update PPPoE config even if ioctl received or not: pppoe_dev_name: %s phy_dev_name:%s vlan_id: %d \n",
+								IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].iface_name,
+								IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].phy_dev_name, sta_vlan_id);
+
 							IPACM_Iface::ipacmcfg->get_pppoe_session_info
-								(IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].iface_name);
+								(IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].iface_name,
+								IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].phy_dev_name,
+								sta_vlan_id);
 						}
 #endif
 					}
@@ -685,10 +699,12 @@ int IPACM_IfaceManager::create_iface_instance(ipacm_ifacemgr_data *param)
 #endif /* not defined(FEATURE_IPA_ANDROID)*/
 #ifdef FEATURE_VLAN_MPDN
 					IPACM_EvtDispatcher::registr(IPA_ROUTE_ADD_VLAN_PDN_EVENT, w);
+					IPACM_EvtDispatcher::registr(IPA_ROUTE_DEL_VLAN_PDN_EVENT, w);
 #endif
 #ifdef FEATURE_IPv6CT_DISABLED
 					IPACM_EvtDispatcher::registr(IPA_FIREWALL_CHANGE_EVENT, w);
 #endif
+					IPACM_EvtDispatcher::registr(IPA_SWALLOW_PDN_UPDATE, w);
 					IPACM_EvtDispatcher::registr(IPA_NEIGH_CLIENT_IP_ADDR_ADD_EVENT, w);
 					IPACM_EvtDispatcher::registr(IPA_SW_ROUTING_ENABLE, w);
 					IPACM_EvtDispatcher::registr(IPA_SW_ROUTING_DISABLE, w);

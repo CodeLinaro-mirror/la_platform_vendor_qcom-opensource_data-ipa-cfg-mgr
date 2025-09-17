@@ -26,9 +26,11 @@ WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
 OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
 IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-Changes from Qualcomm Innovation Center are provided under the following license:
-Copyright (c) 2023-2025 Qualcomm Innovation Center, Inc. All rights reserved.
+Changes from Qualcomm Technologies, Inc. are provided under the following license:
+
+Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
 SPDX-License-Identifier: BSD-3-Clause-Clear
+
 */
 /*!
 	@file
@@ -91,7 +93,7 @@ extern "C"
 #define IPA_IF_SOCKSv5_NAME  "IPACM_SOCKSv5"
 #define IPA_EOGRE_HDR_NAME   "IPACM_EoGRE_v%d"
 
-#define IPA_MAX_ACTIVE_WLAN_IFACE 64 // 64 wlan (4x16 band support)
+#define IPA_MAX_ACTIVE_WLAN_IFACE 72 // 64 wlan (4x16 band support) + 8 extra rdkb supported ifaces
 
 #define IPA_MAX_IFACE_ENTRIES (57 + IPA_MAX_ACTIVE_WLAN_IFACE) /* current: 15 rmnet + 64 wlan + bridge+ eth +
                                                                 * rndis + ecm + 15 rmnet for RDKB + 16mld */
@@ -123,6 +125,9 @@ extern "C"
 #define DEFAULT_BRIDGE_IFACE_NAME "brlan0"
 #define BRIDGE_IFACE_NAME         "brlan"
 #define RMNET_IFACE_NAME          "qmapmux"
+#elif defined(FEATURE_PRPLWRT)
+#define BRIDGE_IFACE_NAME         "br-lan"
+#define RMNET_IFACE_NAME          "qmapmux"
 #else
 #define BRIDGE_IFACE_NAME         "br-lan"
 #define RMNET_IFACE_NAME          "rmnet_data"
@@ -149,6 +154,9 @@ extern "C"
 #define IPACM_SW_FLT 2
 
 #define IPA_MAX_VLAN_PER_BRIDGE 3
+
+#define MIN_VLAN_ID 0
+#define MAX_VLAN_ID 4095
 
 /*---------------------------------------------------------------------------
 										Return values indicating error status
@@ -269,6 +277,8 @@ typedef enum
 	IPA_CFG_CHANGE_EVENT,                 /* NULL */
 	IPA_PRIVATE_SUBNET_CHANGE_EVENT,          /* ipacm_event_data_fid */
 	IPA_FIREWALL_CHANGE_EVENT,                /* NULL */
+	IPA_SWALLOW_CHANGE_EVENT,                 /* NULL */
+	IPA_SWALLOW_PDN_UPDATE,                   /* NULL */
 	IPA_LINK_UP_EVENT,                        /* ipacm_event_data_fid */
 	IPA_LINK_DOWN_EVENT,                      /* ipacm_event_data_fid */
 	IPA_USB_LINK_UP_EVENT,                    /* ipacm_event_data_fid */
@@ -343,6 +353,7 @@ typedef enum
 #ifdef FEATURE_VLAN_MPDN
 	IPA_PREFIX_CHANGE_EVENT,                  /* ipacm_event_data_fid */
 	IPA_ROUTE_ADD_VLAN_PDN_EVENT,             /* ipacm_event_route_vlan */
+	IPA_ROUTE_DEL_VLAN_PDN_EVENT,             /* ipacm_event_route_vlan */
 	IPA_HANDLE_WAN_VLAN_PDN_UP,               /* ipacm_event_vlan_pdn */
 	IPA_HANDLE_WAN_VLAN_PDN_DOWN,             /* ipacm_event_vlan_pdn */
 	IPA_HANDLE_LAN_VLAN_PDN_DOWN_STATIC,      /* ipacm_event_vlan_pdn */
@@ -461,15 +472,15 @@ typedef struct
 {
 	uint32_t subnet_addr;
 	uint32_t subnet_mask;
-	uint8_t if_index;
+	int if_index;
 } ipa_private_subnet;
 
 
 typedef struct _ipacm_event_data_all
 {
 	enum ipa_ip_type iptype;
-	uint8_t if_index;
-	uint8_t master_if_index;
+	int if_index;
+	int master_if_index;
 	uint32_t  ipv4_addr;
 	uint32_t  ipv6_addr[4];
 	uint8_t mac_addr[IPA_MAC_ADDR_SIZE];
@@ -584,7 +595,7 @@ typedef struct _ipacm_event_iface_up
 
 typedef struct _ipacm_event_iface_up_tether
 {
-	uint32_t if_index_tether;
+	int if_index_tether;
 	uint32_t ipv6_prefix[2];
 	bool is_sta;
 }ipacm_event_iface_up_tehter;
@@ -724,7 +735,7 @@ struct ipa_bridge_vlan_mapping_info {
 	uint8_t lan2lan_sw;
 	uint32_t bridge_ipv4;
 	uint32_t subnet_mask;
-	uint8_t master_if_index;
+	int master_if_index;
 	uint8_t status;
 	uint16_t vlan_id;
 };
@@ -734,7 +745,7 @@ struct ipa_bridge_vlan_mapping_info_new {
 	uint8_t lan2lan_sw;
 	uint32_t bridge_ipv4;
 	uint32_t subnet_mask;
-	uint8_t master_if_index;
+	int master_if_index;
 	uint8_t status;
 	uint16_t vlan_id[IPA_MAX_VLAN_PER_BRIDGE];
 };
@@ -745,8 +756,9 @@ struct bridge_vlan_mapping_info
 	uint32_t bridge_associated_VID;
 	uint32_t bridge_ipv4;
 	uint32_t subnet_mask;
-	uint8_t bridge_if_index;
+	int bridge_if_index;
 	uint8_t status;
+	uint8_t bridge_mac[IPA_MAC_ADDR_SIZE];
 };
 
 struct l2tp_client_info

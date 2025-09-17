@@ -26,9 +26,11 @@
  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * Changes from Qualcomm Innovation Center are provided under the following license:
- * Copyright (c) 2023-2025 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Changes from Qualcomm Technologies, Inc. are provided under the following license:
+ *
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
+ *
  */
 /*!
   @file
@@ -125,6 +127,7 @@ if (!(a)) {                                                 \
 #define FirewallEnabled_TAG                  "FirewallEnabled"
 #define FirewallPktsAllowed_TAG              "FirewallPktsAllowed"
 #define DefaultNetDev                        "DefaultNetDev"
+#define SWAllow_TAG                          "SWAllowed"
 
 /* Config Ext DSCP PCP entries */
 #define IPACMDSCPPCPCfg_TAG                  "IPACMDSCPPCPConfig"
@@ -133,6 +136,21 @@ if (!(a)) {                                                 \
 #define DSCPPCPMapping_TAG                   "DSCPPCPMapping"
 #define DSCP_TAG                             "DSCP"
 #define PCP_TAG                              "PCP"
+
+/* SWALLOW Config Entries */
+#define IpaPdnCfg_TAG                        "IpaPdnCfg"
+#define Connection_TAG                       "Connection"
+
+#define Protocol_TAG                         "Protocol"
+#define Direction_TAG                        "Direction"
+#define SourceAddress_TAG                    "SourceAddress"
+#define SourceSubnetMask_TAG                 "SourceSubnetMask"
+#define DestinationAddress_TAG               "DestinationAddress"
+#define DestinationSubnetMask_TAG            "DestinationSubnetMask"
+#define SourcePort_TAG                       "SourcePort"
+#define SourcePortRange_TAG                  "SourcePortRange"
+#define DestinationPort_TAG                  "DestinationPort"
+#define DestinationPortRange_TAG             "DestinationPortRange"
 
 #define UNKNOWN_NetDev_TAG                   "UNKNOWN"
 
@@ -256,6 +274,8 @@ if (!(a)) {                                                 \
 #define EoGRE_v6options_TAG                  "IPACMEoGRE"
 #define EoGRE_v6options_enable_TAG           "IPACMv6optEnabled"
 #endif
+#define IPACM_MSGFLT_ENABLE_TAG              "IPACMMSGFLTEnable"
+#define IPACM_MSGFLT_TAG                     "IPACMMSGFLT"
 
 #ifdef FEATURE_PPPOE
 #define PPPOE_TAG                            "IPACMPPPOE"
@@ -323,6 +343,7 @@ typedef struct
 #ifdef FEATURE_IPV6_NAT
 	bool IPV6NatEnabledfw;
 #endif
+	bool SWAllowed_ex;
 } IPACM_extd_firewall_entry_conf_t;
 
 
@@ -342,6 +363,7 @@ typedef struct
 	uint8_t profile;
 	bool rule_action_accept;
 	bool firewall_enable;
+	bool SWAllowed;
 } IPACM_firewall_conf_t;
 
 struct IPACM_firewall_t
@@ -349,6 +371,37 @@ struct IPACM_firewall_t
 	IPACM_firewall_conf_t pdns[IPA_MAX_NUM_SW_PDNS];
 	uint8_t pdn_count;
 	uint8_t default_profile;
+};
+
+/*---------------------------------------------------------------------------
+           Extended SwAllow Entry Configuration.
+---------------------------------------------------------------------------*/
+typedef struct
+{
+	struct ipa_rule_attrib attrib;
+	firewall_ip_version_enum  ip_vsn;
+	uint8_t protocol;
+#ifdef FEATURE_IPACM_UL_FIREWALL
+	IPACM_msgr_firewall_direction direction;
+#endif
+} IPACM_extd_swallow_entry_conf_t;
+
+typedef struct
+{
+	char net_dev[IPA_IFACE_NAME_LEN];
+	IPACM_extd_swallow_entry_conf_t extd_swallow_entries[IPACM_MAX_FIREWALL_ENTRIES];
+	uint8_t num_extd_swallow_entries;
+	bool v4_up;
+	bool v6_up;
+	uint32_t  public_ipv4_addr;
+	uint32_t  ipv6_prefix[2];
+	uint8_t profile;
+} IPACM_swallow_conf_t;
+
+struct IPACM_swallow_t
+{
+	IPACM_swallow_conf_t pdns[IPA_MAX_NUM_SW_PDNS];
+	uint8_t pdn_count;
 };
 
 typedef struct
@@ -433,6 +486,7 @@ typedef struct  _IPACM_conf_t
 	bool eth_vlan_wan_enable;
 	const char* eth_lan_wan_iface_name;
 	bool multi_vlan_bridge_config_enable;
+	bool msgflt_enable;
 } IPACM_conf_t;
 
 typedef struct _IPACM_conf_ext_t
@@ -453,6 +507,13 @@ int ipacm_read_cfg_xml
 (
 	char *xml_file,                              /* Filename and path     */
 	IPACM_conf_t *config                         /* Mobile AP config data */
+);
+
+/* This function read IPACM SWAllow XML and populate the Cfg */
+int IPACM_read_swallow_xml
+(
+	const char *xml_file,                        /* Filename and path */
+	IPACM_swallow_t *swallow_config            /* Mobile AP firewall config data */
 );
 
 /* This function reads QCMAP Firewall XML and store in IPACM Firewall structure */

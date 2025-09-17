@@ -26,39 +26,11 @@
  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * Changes from Qualcomm Innovation Center are provided under the following license:
+ * Changes from Qualcomm Technologies, Inc. are provided under the following license:
  *
- * Copyright (c) 2022-2025 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
  *
- * Redistribution and use in source and binary forms, with or without
- * modification, are permitted (subject to the limitations in the
- * disclaimer below) provided that the following conditions are met:
- *
- *     * Redistributions of source code must retain the above copyright
- *       notice, this list of conditions and the following disclaimer.
- *
- *     * Redistributions in binary form must reproduce the above
- *       copyright notice, this list of conditions and the following
- *       disclaimer in the documentation and/or other materials provided
- *       with the distribution.
- *
- *     * Neither the name of Qualcomm Innovation Center, Inc. nor the names of its
- *       contributors may be used to endorse or promote products derived
- *       from this software without specific prior written permission.
- *
- * NO EXPRESS OR IMPLIED LICENSES TO ANY PARTY'S PATENT RIGHTS ARE
- * GRANTED BY THIS LICENSE. THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT
- * HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED
- * WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
- * MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
- * IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR
- * ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
- * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE
- * GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
- * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER
- * IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
- * OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
- * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE
  */
 /*!
 		@file
@@ -93,11 +65,19 @@ const char *IPACM_Config::DEVICE_NAME_ODU = "/dev/odu_ipa_bridge";
 #define IPACM_CONFIG_FILE "/etc/data/ipa/IPACM_cfg.xml"
 #define IPACM_CONFIG_EXT_FILE "/etc/data/ipa/IPACM_cfg_ext.xml"
 #endif
+#ifdef DATA_CONFIG_DIR_PATH
+#define IPACM_SWALLOW_FILE DATA_CONFIG_DIR_PATH"/ipa/ipa_filter_cfg.xml"
+#else
+#define IPACM_SWALLOW_FILE "/etc/data/ipa/ipa_filter_cfg.xml"
+#endif
 #define MAX_RETRIES 15
+#define MAX_LINE_LEN 256
 const char *ipacm_event_name[] = {
 	__stringify(IPA_CFG_CHANGE_EVENT),                     /* NULL */
 	__stringify(IPA_PRIVATE_SUBNET_CHANGE_EVENT),          /* ipacm_event_data_fid */
 	__stringify(IPA_FIREWALL_CHANGE_EVENT),                /* NULL */
+	__stringify(IPA_SWALLOW_CHANGE_EVENT),                 /* NULL */
+	__stringify(IPA_SWALLOW_PDN_UPDATE),                   /* NULL */
 	__stringify(IPA_LINK_UP_EVENT),                        /* ipacm_event_data_fid */
 	__stringify(IPA_LINK_DOWN_EVENT),                      /* ipacm_event_data_fid */
 	__stringify(IPA_USB_LINK_UP_EVENT),                    /* ipacm_event_data_fid */
@@ -170,7 +150,8 @@ const char *ipacm_event_name[] = {
 #endif
 #ifdef FEATURE_VLAN_MPDN
 	__stringify(IPA_PREFIX_CHANGE_EVENT),                  /* ipacm_event_data_fid */
-	__stringify(IPA_ROUTE_ADD_VLAN_PDN_EVENT),             /* ipacm_event_route_vlan */
+	__stringify(IPA_ROUTE_ADD_VLAN_PDN_EVENT),             /* ipacm_event_route_add_vlan */
+	__stringify(IPA_ROUTE_DEL_VLAN_PDN_EVENT),             /* ipacm_event_route_del_vlan */
 	__stringify(IPA_HANDLE_WAN_VLAN_PDN_UP),               /* ipacm_event_vlan_pdn */
 	__stringify(IPA_HANDLE_WAN_VLAN_PDN_DOWN),             /* ipacm_event_vlan_pdn */
 	__stringify(IPA_HANDLE_LAN_VLAN_PDN_DOWN_STATIC),      /* ipacm_event_vlan_pdn */
@@ -231,6 +212,7 @@ IPACM_Config::IPACM_Config()
 	iface_table = NULL;
 	alg_table = NULL;
 	pNatIfaces = NULL;
+	sw_filter_cfg = NULL;
 	memset(&ipa_client_rm_map_tbl, 0, sizeof(ipa_client_rm_map_tbl));
 	memset(&ipa_rm_tbl, 0, sizeof(ipa_rm_tbl));
 	ipa_rm_a2_check=0;
@@ -325,6 +307,7 @@ IPACM_Config::IPACM_Config()
 	pthread_mutex_init(&vlan_l2tp_lock, NULL);
 #endif
 	pthread_mutex_init(&nat_iface_lock, NULL);
+	pthread_mutex_init(&get_vlan_association_lock, NULL);
 	pthread_mutex_init(&qos_param_list_lock, NULL);
 	pthread_mutex_init(&qos_param_list_lock, NULL);
 	IPACMDBG_H(" create IPACM_Config constructor\n");
@@ -445,6 +428,7 @@ int IPACM_Config::ipacm_reset_hw_fnr_counters(const uint8_t start_id, const uint
 			IPACMERR("IOCTL %lu failed\n", IPA_IOC_FNR_COUNTER_QUERY);
 	}
 
+	free((void *)query->stats);
 	free(query);
 fail:
 	close(fd);
@@ -479,7 +463,8 @@ int IPACM_Config::reset_cnt_idx(int index, bool reset_all)
 	return IPACM_SUCCESS;
 }
 
-int IPACM_Config::ipacm_alloc_fnr_counters(struct ipa_ioc_flt_rt_counter_alloc *fnr_counters, const int fd)
+int IPACM_Config::ipacm_alloc_fnr_counters(struct ipa_ioc_flt_rt_counter_alloc *fnr_counters)
+
 {
 	int i, ret = 0;
 	int nfd = open(DEVICE_NAME, O_RDWR);
@@ -537,6 +522,73 @@ bail:
 }
 
 #endif //IPA_HW_FNR_STATS
+
+int IPACM_Config::ReadSwAllow(void)
+{
+	/* Read IPACM Config file */
+	char IPACM_swallow_file[IPA_MAX_FILE_LEN];
+	IPACM_swallow_t *cfg;
+	ipacm_cmd_q_data evt_data;
+
+	cfg = (IPACM_swallow_t *)calloc(1, sizeof(IPACM_swallow_t));
+
+	if(cfg == NULL)
+	{
+		IPACMERR("Could not allocate cfg\n");
+		return IPACM_FAILURE;
+	}
+
+	strlcpy(IPACM_swallow_file, IPACM_SWALLOW_FILE, sizeof(IPACM_swallow_file));
+
+	IPACMDBG_H("\n IPACM XML file is %s \n", IPACM_swallow_file);
+	if (IPACM_SUCCESS == IPACM_read_swallow_xml(IPACM_swallow_file, cfg))
+	{
+		IPACMDBG_H("\n IPACM XML read OK \n");
+
+		if(sw_filter_cfg == NULL)
+			sw_filter_cfg = (IPACM_swallow_t *)calloc(1, sizeof(IPACM_swallow_t));
+
+		if(sw_filter_cfg == NULL)
+		{
+			IPACMERR("Could not allocate swallow cfg\n");
+			free(cfg);
+			return IPACM_FAILURE;
+		}
+		else if(!IPACM_Iface::ipacmcfg->ipacm_msgflt_enable)
+		{
+			IPACMERR("msg filtering feature is not enabled\n");
+			free(cfg);
+			free(sw_filter_cfg);
+			cfg = NULL;
+			sw_filter_cfg = NULL;
+			return IPACM_FAILURE;
+		}
+
+		memset(sw_filter_cfg, 0, sizeof(IPACM_swallow_t));
+		memcpy(sw_filter_cfg, cfg, sizeof(IPACM_swallow_t));
+		free(cfg);
+
+		/* Fetch PDN index for the sw allow pdns */
+		evt_data.event = IPA_SWALLOW_PDN_UPDATE;
+		evt_data.evt_data = NULL;
+
+		/* Insert IPA_SWALLOW_PDN_UPDATE to command queue */
+		IPACM_EvtDispatcher::PostEvt(&evt_data);
+
+		return IPACM_SUCCESS;
+	}
+	else
+	{
+		IPACMERR("\n IPACM XML read failed \n");
+		if(sw_filter_cfg)
+		{
+			free(sw_filter_cfg);
+			sw_filter_cfg = NULL;
+		}
+		free(cfg);
+		return IPACM_FAILURE;
+	}
+}
 
 int IPACM_Config::Init(void)
 {
@@ -743,6 +795,9 @@ reread:
 	wlan_vlan_mpdn_enabled = cfg->wlan_vlan_mpdn_enable;
 	IPACMDBG_H("VLAN MPDN support config %d\n", wlan_vlan_mpdn_enabled);
 
+	ipacm_msgflt_enable = cfg->msgflt_enable;
+	IPACMDBG_H("ipacm_msgflt_feature_enable %d\n", ipacm_msgflt_enable);
+
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
 	if (!ipacm_lan_stats_enable_set)
 	{
@@ -757,7 +812,7 @@ reread:
 			IPACMERR("FnR counter allocated already, skip dup allocation\n");
 			goto skip_fnr_alloc;
 		}
-		if (ipacm_alloc_fnr_counters(&fnr_counters, m_fd))
+		if (ipacm_alloc_fnr_counters(&fnr_counters))
 		{
 			IPACMERR("Failed to allocate fnr counters.\n");
 			goto fail;
@@ -793,6 +848,9 @@ skip_fnr_alloc:
 
 	multi_vlan_bridge_config_enable = cfg->multi_vlan_bridge_config_enable;
 	IPACMDBG_H("multi_vlan_bridge_config_enable: %d\n", multi_vlan_bridge_config_enable);
+
+	eth_wan_br_wan_enable = false;
+	IPACMDBG_H("eth_wan_br_wan_enable: %d\n", eth_wan_br_wan_enable);
 
 	if (ipacm_mpdn_enable == TRUE && ipacm_l2tp_enable != IPACM_L2TP_DISABLE)
 	{
@@ -1445,19 +1503,27 @@ const char* IPACM_Config::getEventName(ipa_cm_event_id event_id)
 
 enum ipa_hw_type IPACM_Config::GetIPAVer(bool get)
 {
-	int ret;
+	int ret, fd;
 
 	if(!get)
 		return ver;
 
-	ret = ioctl(m_fd, IPA_IOC_GET_HW_VERSION, &ver);
+	fd = open(DEVICE_NAME, O_RDWR);
+
+	if (fd < 0) {
+		IPACMERR("fnr: Failed to open /dev/ipa\n");
+		return IPA_HW_None;
+	}
+	ret = ioctl(fd, IPA_IOC_GET_HW_VERSION, &ver);
 	if(ret != 0)
 	{
 		IPACMERR("Failed to get IPA version with error %d.\n", ret);
 		ver = IPA_HW_None;
+		close(fd);
 		return IPA_HW_None;
 	}
 	IPACMDBG_H("IPA version is %d.\n", ver);
+	close(fd);
 	return ver;
 }
 
@@ -1485,7 +1551,8 @@ void IPACM_Config::add_bridge_vlan_mapping(ipa_bridge_vlan_mapping_info *data)
 	list<bridge_vlan_mapping_info>::iterator it_mapping;
 	ipacm_bridge *bridge = NULL;
 	char iface_name[IPA_IFACE_NAME_LEN] = {0};
-	int ret = IPACM_FAILURE;
+	int ret = IPACM_FAILURE, fd;
+        struct ifreq ifr;
 
 	if(pthread_mutex_lock(&vlan_l2tp_lock) != 0)
 	{
@@ -1573,6 +1640,26 @@ void IPACM_Config::add_bridge_vlan_mapping(ipa_bridge_vlan_mapping_info *data)
 			strlcpy(new_mapping.bridge_iface_name, iface_name,
 				sizeof(new_mapping.bridge_iface_name));
 		}
+
+		fd = socket(AF_INET, SOCK_DGRAM, 0);
+		if (fd < 0) {
+			IPACMERR("get interface name socket create failed\n");
+			goto bail;
+		}
+		memset(&ifr, 0, sizeof(struct ifreq));
+		ifr.ifr_addr.sa_family = AF_INET;
+		strlcpy(ifr.ifr_name, iface_name, sizeof(ifr.ifr_name));
+		if(ioctl(fd, SIOCGIFHWADDR, &ifr) < 0)
+		{
+			IPACMERR("unable to retrieve (%s) bridge MAC\n", ifr.ifr_name);
+			close(fd);
+			goto bail;
+		}
+		memcpy(new_mapping.bridge_mac,
+			ifr.ifr_hwaddr.sa_data,
+			sizeof(new_mapping.bridge_mac));
+		IPACMDBG("got bridge MAC using IOCTL\n");
+		close(fd);
 
 		for(it_mapping = m_bridge_vlan_mapping.begin(); it_mapping != m_bridge_vlan_mapping.end(); it_mapping++)
 		{
@@ -2423,6 +2510,32 @@ ipacm_bridge *IPACM_Config::get_vlan_bridge_from_vid(uint16_t vlan_id)
 	IPACMDBG_H("no bridge with vlan-id %d exists\n", vlan_id);
 	return NULL;
 }
+int IPACM_Config::get_bridge_vlan_mapping_from_vid(ipacm_bridge *data, uint16_t vlan_id)
+{
+	list<bridge_vlan_mapping_info>::iterator it_mapping;
+	int ret = IPACM_FAILURE;
+
+	for(it_mapping = m_bridge_vlan_mapping.begin(); it_mapping != m_bridge_vlan_mapping.end(); it_mapping++)
+	{
+		if(vlan_id == it_mapping->bridge_associated_VID)
+		{
+			IPACMDBG_H("Found the bridge mapping (%s->%d) \n",
+				it_mapping->bridge_iface_name,
+				it_mapping->bridge_associated_VID);
+			data->bridge_ipv4_addr = it_mapping->bridge_ipv4;
+			data->bridge_netmask = it_mapping->subnet_mask;
+			memcpy(data->bridge_mac,it_mapping->bridge_mac,sizeof(data->bridge_mac));
+			strlcpy(data->bridge_name, it_mapping->bridge_iface_name, sizeof(data->bridge_name));
+			data->associate_VID[0] = vlan_id;
+			return IPACM_SUCCESS;
+		}
+	}
+
+	IPACMERR("Bridge mapping is not found\n");
+
+	return ret;
+}
+
 
 bool IPACM_Config::is_added_vlan_iface(char *iface_name)
 {
@@ -2965,14 +3078,14 @@ fail:
 #endif
 
 #ifdef FEATURE_PPPOE
-void IPACM_Config::pppoe_config_update(ipa_ioc_pppoe_info *pppoe_config, uint8_t to_add, uint8_t session_id, uint8_t *mac_addr)
+void IPACM_Config::pppoe_config_update(ipa_ioc_pppoe_info *pppoe_config, uint8_t to_add, uint16_t session_id, uint8_t *mac_addr)
 {
 	int indx;
 	int iface_table_index;
 
 	if(pppoe_config != NULL)
 		IPACMDBG_H("config to_add(%d) for pppoe_dev_name %s\n",to_add, pppoe_config->pppoe_dev_name);
-	
+
 	if(pthread_mutex_lock(&pppoe_map_lock) != 0)
 	{
 		IPACMERR("Unable to lock the mutex\n");
@@ -3947,6 +4060,7 @@ void IPACM_Config::update_client_info(uint8_t *mac_addr, tether_client_info *cli
 						memset(temp2, 0, sizeof(mac_flt_type));
 						temp2->is_blacklist = true;
 						IPACM_Iface::ipacmcfg->mac_flt_lists.insert(std::make_pair(mac, temp2));
+						update_need = true;
 					}
 					break;
 				}
@@ -3979,6 +4093,7 @@ void IPACM_Config::update_client_info(uint8_t *mac_addr, tether_client_info *cli
 						memset(temp2, 0, sizeof(mac_flt_type));
 						temp2->is_blacklist = true;
 						IPACM_Iface::ipacmcfg->mac_flt_lists.insert(std::make_pair(mac, temp2));
+						update_need = true;
 					}
 					break;
 				}
@@ -4895,20 +5010,21 @@ void IPACM_Config::flush_qos_params_info(ipa_ioc_qos_config *data)
 }
 
 #ifdef FEATURE_PPPOE
-void IPACM_Config::get_pppoe_session_info(const char *pppoe_dev_name)
+void IPACM_Config::get_pppoe_session_info(const char *pppoe_dev_name, const char *phy_dev_name, uint16_t vlan_id)
 {
 	FILE *fp = NULL;
-	char *tok = NULL, *ptr = NULL;
+	char *tok = NULL, *ptr = NULL, *lastVid = NULL;
 	char *params[MAX_PPPOE_PARAM_CNT] = { NULL };
 	char pppoe_row[MAX_PPPOE_PARAM_CNT] = {0}, cmd[IPA_SYS_CMD_LEN] = {0}, cmd_pppoe_row[MAX_PPPOE_ROW_LEN] = {0};
 	int i;
+	uint16_t vid = 0;
 
 	snprintf(cmd, IPA_SYS_CMD_LEN, "cat /proc/net/pppoe > %s", IPA_PPPOE_TABLE);
 	system(cmd);
 
 	if(pppoe_dev_name != NULL)
 		IPACMDBG_H("Get session info for pppoe_dev_name %s\n",pppoe_dev_name);
-	
+
 	fp = fopen(IPA_PPPOE_TABLE, "r");
 	if (fp == NULL)
 	{
@@ -4932,7 +5048,52 @@ void IPACM_Config::get_pppoe_session_info(const char *pppoe_dev_name)
 			tok = strtok_r(NULL, " ", &ptr);
 		}
 		IPACMDBG_H("%s %s %s\n", params[0], params[1], params[2]);
-		update_pppoe_session_info(pppoe_dev_name, params);
+		/* Compare the pppoe dev associated vid and passed vlan_id,
+		 * If match then update session info */
+		lastVid = strrchr(params[2], '.');
+		if((lastVid != NULL) && (lastVid + 1 != NULL))
+		{
+			IPACMDBG_H("Got vid after last dot: %s\n", lastVid + 1);
+			vid = atoi(lastVid + 1);
+			IPACMDBG_H("Compare vid and vlan_id? if need to update session info!\n", vid, vlan_id);
+			if(vid == vlan_id)
+			{
+				IPACMDBG_H("Update session info for pppoe_dev_name %s associated vid %d, passed vid %d\n",pppoe_dev_name, vid, vlan_id);
+				update_pppoe_session_info(pppoe_dev_name, params);
+				IPACMERR("Break Here.\n");
+				break;
+			}
+			else
+			{
+				IPACMDBG_H("Don't Update session info for pppoe_dev_name %s associated vid %d, unmatched passed vid %d\n",pppoe_dev_name, vid, vlan_id);
+			}
+		}
+		else
+		{
+			if(phy_dev_name != NULL)
+				IPACMDBG_H("Update session info for pppoe_dev_name %s associated phy %s vlan_id %d \n",pppoe_dev_name, phy_dev_name, vlan_id);
+
+			if(phy_dev_name != NULL && vlan_id == 0)
+			{
+				if(strstr(params[2], phy_dev_name))
+				{
+					IPACMDBG_H("Update session info for pppoe_dev_name %s associated vid %d, passed vid %d\n",pppoe_dev_name, vid, vlan_id);
+					update_pppoe_session_info(pppoe_dev_name, params);
+				}
+				else
+				{
+					IPACMERR("No session found in /proc/net/pppoe\n");
+				}
+			}
+			else if(phy_dev_name == NULL && vlan_id == 0)
+			{
+				IPACMERR(" Null phy dev and vlan id 0 passed, No session found in /proc/net/pppoe\n");
+			}
+			else
+			{
+				IPACMERR("No mapped session found in /proc/net/pppoe\n");
+			}
+		}
 	}
 	fclose(fp);
 }
@@ -4962,13 +5123,12 @@ void IPACM_Config::update_pppoe_session_info(const char *pppoe_dev_name, char *p
 	session_id = strtol(params[0], &end_ptr, 16);
 	if (*end_ptr != '\0')
 	{
-        IPACMDBG_H("Conversion error: %s\n", end_ptr);
+		IPACMDBG_H("Conversion error: %s\n", end_ptr);
 		return;
-    }
+	}
 	else
 	{
-		session_id = session_id >> 8;
-		IPACMDBG_H("session_id: %u\n", session_id);
+		IPACMDBG_H("session_id:  %x\n", session_id);
 	}
 
 	is_vlan = strstr(params[2], ".");
@@ -5070,6 +5230,65 @@ int IPACM_Config::get_pppoe_indx(char *pppoe_dev_name)
 
 	return ret;
 }
+
+int IPACM_Config::get_phy_name_from_bridge_iface(const char *p_dev_name, char phy_name[ETH_PHY_IFACE_LEN])
+{
+	FILE* fp;
+	char line[MAX_LINE_LEN];
+	bool found = false;
+	char *last_word = NULL, *word = NULL, *ptr = NULL;
+
+	if(p_dev_name == NULL)
+	{
+		IPACMERR("Null dev_name passed.\n");
+		return IPACM_FAILURE;
+	}
+
+	fp = popen("brctl show", "r");
+	if (fp == NULL)
+	{
+		IPACMERR("Error opening pipe.\n");
+		return IPACM_FAILURE;
+	}
+
+	while (fgets(line, sizeof(line), fp))
+	{
+		if (strstr(line, p_dev_name) != nullptr)
+		{
+			word = strtok_r(line, " \t\n", &ptr);
+			while (word != NULL)
+			{
+				last_word = word;
+				word = strtok_r(NULL, " \t\n", &ptr);
+			}
+			if (last_word)
+			{
+				IPACMDBG_H("Last word: %s\n", last_word);
+				strlcpy(phy_name, last_word, ETH_PHY_IFACE_LEN);
+				IPACMDBG_H("Copy phy_name: %s\n", phy_name);
+				phy_name[ETH_PHY_IFACE_LEN - 1] = '\0';  // Ensure null-termination
+				IPACMDBG_H("phy_name: %s\n", phy_name);
+				found = true;
+				break;
+			}
+			else
+			{
+				IPACMERR("No words found.\n");
+			}
+		}
+	}
+
+	pclose(fp);
+
+	if (!found)
+	{
+		IPACMERR("Interface %s is not associated with any phy_name.\n", p_dev_name);
+		return IPACM_FAILURE;
+	}
+
+	return IPACM_SUCCESS;
+}
+
 #endif
 
 int IPACM_Config::get_eth_vlan_wan_up(int ipa_if_num)

@@ -26,39 +26,11 @@
  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * Changes from Qualcomm Innovation Center are provided under the following license:
+ * Changes from Qualcomm Technologies, Inc. are provided under the following license:
  *
- * Copyright (c) 2022-2025 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
  *
- * Redistribution and use in source and binary forms, with or without
- * modification, are permitted (subject to the limitations in the
- * disclaimer below) provided that the following conditions are met:
- *
- *     * Redistributions of source code must retain the above copyright
- *       notice, this list of conditions and the following disclaimer.
- *
- *     * Redistributions in binary form must reproduce the above
- *       copyright notice, this list of conditions and the following
- *       disclaimer in the documentation and/or other materials provided
- *       with the distribution.
- *
- *     * Neither the name of Qualcomm Innovation Center, Inc. nor the names of its
- *       contributors may be used to endorse or promote products derived
- *       from this software without specific prior written permission.
- *
- * NO EXPRESS OR IMPLIED LICENSES TO ANY PARTY'S PATENT RIGHTS ARE
- * GRANTED BY THIS LICENSE. THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT
- * HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED
- * WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
- * MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
- * IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR
- * ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
- * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE
- * GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
- * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER
- * IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
- * OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
- * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE
  */
 /*!
 	@file
@@ -113,7 +85,7 @@ typedef struct _ipa_rm_client
 
 #define MAX_NUM_EXT_PROPS 25
 #define MAX_NUM_IP_PASS_MPDN 15
-#define MAX_NUM_PPPOE_MPDN 8
+#define MAX_NUM_PPPOE_MPDN 9      /* 8 pppoe pdn over vlan + 1 dhcp pdn over vlan */
 #define EOGRE_PROTOCOL_TYPE 0x6558
 #define IPA_TMP_DIR "/tmp/data_ipa"
 
@@ -438,6 +410,9 @@ public:
 	ipa_dual_backhaul_info second_backhaul_info;
 #endif
 
+	/* Store Software allow tuple information */
+	IPACM_swallow_t *sw_filter_cfg;
+
 #ifdef FEATURE_VLAN_MPDN
 	int num_ipv6_prefixes;
 	struct ipa_prefix_info ipa_ipv6_prefixes[IPA_MAX_IPV6_PREFIX_FLT_RULE + IPA_MAX_MTU_ENTRIES];
@@ -498,6 +473,9 @@ public:
 	/* nat_iface_lock */
 	pthread_mutex_t nat_iface_lock;
 
+	/* get_vlan_association_lock */
+	pthread_mutex_t get_vlan_association_lock;
+
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
 	bool ipacm_lan_stats_enable;
 	bool ipacm_lan_stats_enable_set;
@@ -509,6 +487,7 @@ public:
 	bool hw_fnr_stats_support;
 #endif //IPA_HW_FNR_STATS
 #endif
+	bool ipacm_msgflt_enable;
 
 	bool ipv6_nat_enable;
 
@@ -577,7 +556,8 @@ public:
 	const char* eth_lan_wan_iface_name;
 	/* Indicates whether Multi VLAN to Single Bridge mode is enabled */
 	bool multi_vlan_bridge_config_enable;
-
+	/* br-wan mode flag */
+	bool eth_wan_br_wan_enable;
 #ifdef FEATURE_EoGRE
 	ipa_ipgre_info eogre_info;
 	bool           eogre_enabled;
@@ -683,6 +663,7 @@ public:
 #ifdef FEATURE_VLAN_MPDN
 	std::list<bridge_vlan_mapping_info> m_bridge_vlan_mapping;
 	void add_bridge_vlan_mapping(ipa_bridge_vlan_mapping_info *data);
+	int get_bridge_vlan_mapping_from_vid(ipacm_bridge *data, uint16_t vlan_id);
 	void del_bridge_vlan_mapping(uint16_t *data);
 	int get_bridge_vlan_mapping(ipa_bridge_vlan_mapping_info_new *data);
 	uint16_t get_bridge_vlan_mapping_from_subnet(uint32_t ipv4_subnet);
@@ -700,10 +681,11 @@ public:
 
 #ifdef FEATURE_PPPOE
 	uint16_t pppoe_get_session_id(const char *pppoe_dev_name);
-	void get_pppoe_session_info(const char *pppoe_dev_name);
+	void get_pppoe_session_info(const char *pppoe_dev_name, const char *phy_dev_name = NULL, uint16_t vlan_id = 0);
 	void update_pppoe_session_info(const char *pppoe_dev_name, char *params[MAX_PPPOE_PARAM_CNT]);
 	int get_pppoe_vlan_id(char *pppoe_dev_name, uint16_t *vlan_id);
 	int get_pppoe_indx(char *pppoe_dev_name);
+	int get_phy_name_from_bridge_iface(const char *p_dev_name, char phy_name[ETH_PHY_IFACE_LEN]);
 #endif
 	bool is_svap_related(const char *phy_inf);
 
@@ -743,7 +725,7 @@ public:
 #endif
 
 #if defined(FEATURE_IPACM_PER_CLIENT_STATS) && defined(IPA_HW_FNR_STATS)
-	int ipacm_alloc_fnr_counters(struct ipa_ioc_flt_rt_counter_alloc *fnr_counters, const int fd);
+	int ipacm_alloc_fnr_counters(struct ipa_ioc_flt_rt_counter_alloc *fnr_counters);
 	int reset_cnt_idx(int index, bool reset_all);
 	int get_free_cnt_idx(void);
 	int ipacm_reset_hw_fnr_counters(const uint8_t start_id, const uint8_t end_id);
@@ -1033,7 +1015,7 @@ public:
 	void ip_collision_config_update(ipa_ioc_pdn_config *pdn_config);
 
 #ifdef FEATURE_PPPOE
-	void pppoe_config_update(ipa_ioc_pppoe_info *pppoe_config, uint8_t to_add, uint8_t session_id = 0, uint8_t *mac_addr = NULL);
+	void pppoe_config_update(ipa_ioc_pppoe_info *pppoe_config, uint8_t to_add, uint16_t session_id = 0, uint8_t *mac_addr = NULL);
 #endif
 
 #ifdef FEATURE_STATIC_POLICY
@@ -1189,6 +1171,8 @@ public:
 
 	int ResetClkVote(void);
 
+	int ReadSwAllow(void);
+
 	int Init(void);
 
 	inline bool isPrivateSubnet(uint32_t ip_addr)
@@ -1280,7 +1264,7 @@ public:
 			data_fid->if_index = ipa_if_index; // already ipa index, not fid index
 			evt_data.event = IPA_PRIVATE_SUBNET_CHANGE_EVENT;
 			evt_data.evt_data = data_fid;
-
+			IPACMDBG_H("Posting IPA_PRIVATE_SUBNET_CHANGE_EVENT for if_index %d \n", data_fid->if_index);
 			/* Insert IPA_PRIVATE_SUBNET_CHANGE_EVENT to command queue */
 			IPACM_EvtDispatcher::PostEvt(&evt_data);
 			return true;
@@ -1316,7 +1300,7 @@ public:
 				data_fid->if_index = ipa_if_index; // already ipa index, not fid index
 				evt_data.event = IPA_PRIVATE_SUBNET_CHANGE_EVENT;
 				evt_data.evt_data = data_fid;
-
+				IPACMDBG_H("Posting IPA_PRIVATE_SUBNET_CHANGE_EVENT for if_index %d \n", data_fid->if_index);
 				/* Insert IPA_PRIVATE_SUBNET_CHANGE_EVENT to command queue */
 				IPACM_EvtDispatcher::PostEvt(&evt_data);
 				return true;

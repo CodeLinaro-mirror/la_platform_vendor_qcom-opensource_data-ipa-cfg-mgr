@@ -236,7 +236,7 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 				if (memcmp(neighbor_client[i].mac_addr, client_mac_addr, sizeof(neighbor_client[i].mac_addr)) == 0)
 				{
 					/* check if iface is not bridge interface*/
-					if (!strstr(IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].iface_name, "br-lan"))
+					if (!strstr(IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].iface_name, BRIDGE_IFACE_NAME))
 					{
 
 
@@ -289,10 +289,14 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 							if (IPACM_Iface::ipacmcfg->ipacm_mpdn_enable == TRUE)
 							{
 								/* Get the bridge interface info */
-								bridge = IPACM_Iface::ipacmcfg->get_vlan_bridge(neighbor_client[i].iface_name);
-								if (!bridge) {
+								if(neighbor_client[i].bridge != NULL)
+								{
+									bridge = neighbor_client[i].bridge;
+								}
+								else
+								{
 									/* get_vlan bridge failed */
-									IPACMERR("couldn't get bridge %s, not sending internal event\n", neighbor_client[i].iface_name);
+									IPACMERR("couldn't get bridge not sending internal event\n");
 									if(new_neigh_vlan_data != NULL)
 									{
 										free(new_neigh_vlan_data);
@@ -450,6 +454,7 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 						if (data_all == NULL)
 						{
 							IPACMERR("Unable to allocate memory\n");
+							free(data_vlan);
 							return;
 						}
 						memset(data_all,0,sizeof(ipacm_event_data_all));
@@ -515,13 +520,21 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
                        ((IPACM_Iface::ipacmcfg->ipacm_mpdn_enable == TRUE) ||
 				(IPACM_Iface::ipacmcfg->ipacm_emesh_enable == TRUE && IPACM_Iface::ipacmcfg->ipacm_emesh_mode >= 2)))
 			{
-				if(IPACM_Iface::ipacmcfg->iface_in_vlan_mode(data->iface_name) && !IPACM_Iface::ipacmcfg->IsSpclIface(data->iface_name))
+				if(IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].if_cat == WAN_IF &&
+					IPACM_Iface::ipacmcfg->eth_wan_pppoe_enable)
+				{
+					IPACMDBG_H("Allowing non VLAN WAN ifaces in PPPoE mode\n");
+					goto process;
+				}
+				if(IPACM_Iface::ipacmcfg->iface_in_vlan_mode(data->iface_name) &&
+					!IPACM_Iface::ipacmcfg->IsSpclIface(data->iface_name))
 				{
 					IPACMDBG_H("ignoring physical IFACE neighbor event in VLAN mode\n");
 					break;
 				}
 			}
 #endif
+process:
 			IPACMDBG("Got Neighbor event with ip_type: %d: iface_name: %s \n", data->iptype, data->iface_name);
 			if (data->iptype == IPA_IP_v4)
 			{

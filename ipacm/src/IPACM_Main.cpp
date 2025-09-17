@@ -26,9 +26,11 @@
  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * Changes from Qualcomm Innovation Center are provided under the following license
- * Copyright (c) 2023-2025 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Changes from Qualcomm Technologies, Inc. are provided under the following license:
+ *
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
+ *
  */
 /*!
 	@file
@@ -82,6 +84,7 @@
 #endif
 #define IPA_DRIVER  "/dev/ipa"
 
+#define IPACM_SWALLOW_FILE_NAME     "ipa_filter_cfg.xml"
 #define IPACM_CFG_FILE_NAME    "IPACM_cfg.xml"
 #define IPACM_CFG_EXT_FILE_NAME    "IPACM_cfg_ext.xml"
 #define IPACM_CFG_EXT_FILE "/etc/data/ipa/IPACM_cfg_ext.xml"
@@ -137,6 +140,7 @@ void* firewall_monitor(void *param)
 	char buffer[INOTIFY_BUF_LEN];
 	int inotify_fd;
 	ipacm_cmd_q_data evt_data;
+	IPACM_Config* config;
 	uint32_t mask = IN_MODIFY | IN_MOVE;
 
 	inotify_fd = inotify_init();
@@ -151,6 +155,21 @@ void* firewall_monitor(void *param)
 	wd = inotify_add_watch(inotify_fd,
 												 IPACM_DIR_NAME,
 												 mask);
+
+	/* Read and store the data on boot up */
+	config = IPACM_Config::GetInstance();
+
+	if(config != NULL)
+	{
+		if(config->ReadSwAllow() != IPACM_SUCCESS)
+		{
+			IPACMERR("ReadSwAllow is failed\n");
+		}
+	}
+	else
+	{
+		IPACMERR("config is not  initialized\n");
+	}
 
 	while (1)
 	{
@@ -178,6 +197,22 @@ void* firewall_monitor(void *param)
 				if (event->mask & IN_ISDIR)
 				{
 					IPACMDBG_H("The directory %s was 0x%x\n", event->name, event->mask);
+				}
+				else if (!strncmp(event->name, IPACM_SWALLOW_FILE_NAME, event->len)) // swallow rule change
+				{
+					IPACMDBG_H("File \"%s\" was 0x%x\n", event->name, event->mask);
+					IPACMDBG_H("The interested file %s .\n", IPACM_SWALLOW_FILE_NAME);
+
+					config = IPACM_Config::GetInstance();
+
+					if(config != NULL && IPACM_Iface::ipacmcfg->ipacm_msgflt_enable)
+					{
+						config->ReadSwAllow();
+					}
+					else
+					{
+						IPACMERR("config is not  initialized\n");
+					}
 				}
 				else if (!strncmp(event->name, IPACM_CFG_FILE_NAME, event->len)) // IPACM_configuration change
 				{
@@ -647,33 +682,30 @@ void* ipa_driver_msg_notifier(void *param)
 			memcpy(&event_ecm, buffer + sizeof(struct ipa_msg_meta), sizeof(struct ipa_ecm_msg));
 			IPACMDBG_H("Received ECM_DISCONNECT name: %s\n",event_ecm.name);
 
-			if(IPACM_Iface::ipacmcfg->eth_wan_pppoe_enable ||
-				IPACM_Iface::ipacmcfg->eth_vlan_wan_enable)
+			for(int i=0; i < MAX_NUM_PPPOE_MPDN; i++)
 			{
-				for(int i=0; i < MAX_NUM_PPPOE_MPDN; i++)
+				if(IPACM_Iface::ipacmcfg->eth_wan_iface_table_idx[i] >= 0 &&
+					strncmp(
+						IPACM_Iface::ipacmcfg->iface_table[IPACM_Iface::ipacmcfg->eth_wan_iface_table_idx[i]].phy_dev_name,
+						event_ecm.name, sizeof(event_ecm.name)) == 0)
 				{
-					if(IPACM_Iface::ipacmcfg->eth_wan_iface_table_idx[i] >= 0 &&
-						strncmp(
-							IPACM_Iface::ipacmcfg->iface_table[IPACM_Iface::ipacmcfg->eth_wan_iface_table_idx[i]].phy_dev_name,
-							event_ecm.name, sizeof(event_ecm.name)) == 0)
+					data_fid2 = (ipacm_event_data_fid *)malloc(sizeof(ipacm_event_data_fid));
+					if(data_fid2 == NULL)
 					{
-						data_fid2 = (ipacm_event_data_fid *)malloc(sizeof(ipacm_event_data_fid));
-						if(data_fid2 == NULL)
-						{
-							IPACMERR("unable to allocate memory for event_ecm data_fid\n");
-							return NULL;
-						}
-						data_fid2->if_index =
-							IPACM_Iface::ipacmcfg->iface_table[IPACM_Iface::ipacmcfg->eth_wan_iface_table_idx[i]].netlink_interface_index;
-						evt_data.event = IPA_LINK_DOWN_EVENT;
-						evt_data.evt_data = data_fid2;
-						IPACMDBG_H("Posting IPA_LINK_DOWN_EVENT event %d for ETH VLAN iface:%d dev_name:%s\n",
-							evt_data.event, data_fid2->if_index,
-							IPACM_Iface::ipacmcfg->iface_table[IPACM_Iface::ipacmcfg->eth_wan_iface_table_idx[i]].iface_name);
-						IPACM_EvtDispatcher::PostEvt(&evt_data);
+						IPACMERR("unable to allocate memory for event_ecm data_fid\n");
+						return NULL;
 					}
+					data_fid2->if_index =
+						IPACM_Iface::ipacmcfg->iface_table[IPACM_Iface::ipacmcfg->eth_wan_iface_table_idx[i]].netlink_interface_index;
+					evt_data.event = IPA_LINK_DOWN_EVENT;
+					evt_data.evt_data = data_fid2;
+					IPACMDBG_H("Posting IPA_LINK_DOWN_EVENT event %d for ETH VLAN iface:%d dev_name:%s\n",
+						evt_data.event, data_fid2->if_index,
+						IPACM_Iface::ipacmcfg->iface_table[IPACM_Iface::ipacmcfg->eth_wan_iface_table_idx[i]].iface_name);
+					IPACM_EvtDispatcher::PostEvt(&evt_data);
 				}
 			}
+
 			memset(&evt_data, 0, sizeof(evt_data));
 			data_fid = (ipacm_event_data_fid *)malloc(sizeof(ipacm_event_data_fid));
 			if(data_fid == NULL)
@@ -1485,7 +1517,7 @@ void* ipa_driver_msg_notifier(void *param)
 			if(pppoe_info->add)
 			{
 				IPACM_Iface::ipacmcfg->pppoe_config_update(pppoe_info, pppoe_info->add, 0, NULL);
-				IPACM_Iface::ipacmcfg->get_pppoe_session_info(pppoe_info->pppoe_dev_name);
+				IPACM_Iface::ipacmcfg->get_pppoe_session_info(pppoe_info->pppoe_dev_name, pppoe_info->dev_name, pppoe_info->vlan_id);
 				IPACMDBG_H("Got ppp pdn config, Get Routes for v4 and v6\n");
 				ipa_nl_send_getroute(IPA_IP_v4);
 				ipa_nl_send_getroute(IPA_IP_v6);

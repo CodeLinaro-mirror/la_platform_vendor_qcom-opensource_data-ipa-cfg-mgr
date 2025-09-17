@@ -1337,7 +1337,7 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 				/* Associate with IP and construct RT-rule */
 				if (handle_eth_client_ipaddr(data) == IPACM_FAILURE)
 				{
-					IPACMERR("Failed handle_eth_client_ipaddr, continue\n");
+					IPACMDBG_H("Failed handle_eth_client_ipaddr, continue\n");
 					return;
 				}
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
@@ -1439,7 +1439,7 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 			eth_index = get_eth_client_index(data->mac_addr);
 			if (eth_index == IPACM_INVALID_INDEX)
 			{
-				IPACMERR("eth client not found/attached \n");
+				IPACMDBG_H("eth client not found/attached \n");
 				return;
 			}
 			get_client_memptr(eth_client, eth_index)->if_index = data->if_index;

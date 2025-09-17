@@ -973,6 +973,8 @@ static int ipa_nl_decode_nlmsg
 	ipacm_event_mtu_info *mtu_event = NULL;
 	ipa_mtu_info *mtu_info;
 
+	struct rtattr *attrib[IFLA_MAX + 1];
+
 	memset(nullMac, 0, sizeof(nullMac));
 	memset(&vlan_info, 0, sizeof(vlan_info));
 	memset(&macsec_map, 0, sizeof(macsec_map));
@@ -1003,21 +1005,29 @@ static int ipa_nl_decode_nlmsg
 #ifdef FEATURE_EoGRE
 				// struct nlmsghdr *h;
 				struct ifinfomsg *ifi2;
-				//ifi_type is 1 for gretap2
-				if (msg_ptr->nl_link_info.metainfo.ifi_type == 1)
+				//ifi_type is 1 for gretap2(both v4 and v6 tunnels)
+				if (IFF_UP & msg_ptr->nl_link_info.metainfo.ifi_flags)
+				{
+					ifi2 = (struct ifinfomsg*) NLMSG_DATA(nlh);
+					getAttr(attrib, IFLA_MAX, IFLA_RTA(ifi2),  nlh->nlmsg_len, 0, false);
+					if (attrib[IFLA_IFNAME])
+					{
+						IPACMDBG("ifname %s \n",(char*)RTA_DATA(attrib[IFLA_IFNAME]));
+						strlcpy(IPACM_Iface::ipacmcfg->eogre_tunnel_name, (char*)RTA_DATA(attrib[IFLA_IFNAME]), IPA_IFACE_NAME_LEN);
+					}
+				}
+				if (msg_ptr->nl_link_info.metainfo.ifi_type == 1 &&
+					(!strcmp(IPACM_Iface::ipacmcfg->eogre_tunnel_name, "gre4t-gretap2") ||
+					 !strcmp(IPACM_Iface::ipacmcfg->eogre_tunnel_name, "gre6t-gretap2")))
 				{
 					//EoGRE tunnel
-					if (IFF_UP & msg_ptr->nl_link_info.metainfo.ifi_flags)
+					if (get_eogre_tunnel_details(ifi2, nlh->nlmsg_len, msg_ptr->nl_link_info.metainfo.ifi_type))
 					{
-						ifi2 = (struct ifinfomsg*) NLMSG_DATA(nlh);
-						if (get_eogre_tunnel_details(ifi2, nlh->nlmsg_len, msg_ptr->nl_link_info.metainfo.ifi_type))
-						{
-							IPACMDBG("Failed to get EoGRE tunnel info\n");
-						}
-						else
-						{
-							IPACMDBG("EoGRE tunnel info populated\n");
-						}
+						IPACMDBG("Failed to get EoGRE tunnel info\n");
+					}
+					else
+					{
+						IPACMDBG("EoGRE tunnel info populated\n");
 					}
 				}
 #endif

@@ -498,7 +498,7 @@ int IPACM_Config::ipacm_alloc_fnr_counters(struct ipa_ioc_flt_rt_counter_alloc *
 	} else
 		IPACMDBG_H("counter reset done\n");
 
-	IPACMERR("Fnr counters allocated. Ret = %d, start id = %u\n", ret, fnr_counters->hw_counter.start_id);
+	IPACMDBG_H("Fnr counters allocated. Ret = %d, start id = %u\n", ret, fnr_counters->hw_counter.start_id);
 	counter_idx = fnr_counters->hw_counter.start_id;
 	memset(cnt_idx, 0xff, sizeof(cnt_idx));
 	if (counter_idx == 0) {
@@ -1483,7 +1483,7 @@ void IPACM_Config::add_bridge_vlan_mapping(ipa_bridge_vlan_mapping_info *data)
 
 	if (data->status == 1)
 	{
-		IPACMERR("No partial entry with vlan got added, Discarding the bridge data update\n");
+		IPACMDBG_H("No partial entry with vlan got added, Discarding the bridge data update, bailing out...\n");
 		goto bail;
 	}
 

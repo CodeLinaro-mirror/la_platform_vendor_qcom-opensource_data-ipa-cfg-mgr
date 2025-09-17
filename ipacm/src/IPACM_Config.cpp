@@ -2064,7 +2064,7 @@ void IPACM_Config::add_vlan_bridge(ipacm_event_data_all *data_all)
 {
 	uint8_t testmac[IPA_MAC_ADDR_SIZE];
 	ipa_ioc_bridge_vlan_mapping_info mapping_info;
-	bool default_bridge = false;
+	bool default_bridge = false, is_mac_empty = true;
 	struct ifreq ifr;
 	int fd;
 
@@ -2117,6 +2117,30 @@ void IPACM_Config::add_vlan_bridge(ipacm_event_data_all *data_all)
 			if(ioctl(fd, SIOCGIFHWADDR, &ifr) < 0)
 			{
 				IPACMERR("unable to retrieve (%s) bridge MAC\n", ifr.ifr_name);
+				vlan_bridges[i].bridge_netmask = 0;
+				vlan_bridges[i].bridge_ipv4_addr = 0;
+				vlan_bridges[i].associate_VID = 0;
+				close(fd);
+				return;
+			}
+			IPACMDBG_H("Brdige MAC received %s with MAC %02x:%02x:%02x:%02x:%02x:%02x\n",
+				ifr.ifr_name,
+				ifr.ifr_hwaddr.sa_data[0],
+				ifr.ifr_hwaddr.sa_data[1],
+				ifr.ifr_hwaddr.sa_data[2],
+				ifr.ifr_hwaddr.sa_data[3],
+				ifr.ifr_hwaddr.sa_data[4],
+				ifr.ifr_hwaddr.sa_data[5]);
+
+			for (int j = 0; j < 6; j++) {
+				if (ifr.ifr_hwaddr.sa_data[j] != 0x00) {
+					is_mac_empty = false;
+					break;
+				}
+			}
+			if(is_mac_empty)
+			{
+				IPACMERR("Got empty MAC ADDRESS\n");
 				vlan_bridges[i].bridge_netmask = 0;
 				vlan_bridges[i].bridge_ipv4_addr = 0;
 				vlan_bridges[i].associate_VID = 0;

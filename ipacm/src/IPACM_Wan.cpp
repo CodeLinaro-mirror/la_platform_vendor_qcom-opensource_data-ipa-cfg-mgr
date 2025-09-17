@@ -2700,7 +2700,7 @@ int IPACM_Wan::check_vlan_pdn(ipa_ip_type iptype, ipacm_event_route_vlan *data, 
 				{
 					if((pdn_idx != wlan_vlan_v4_pdn_index) && ipv4_to_iface[pdn_idx].VID_cnt > 0)
 					{
-						for(vlan_idx = 0; IPA_MAX_NUM_SW_PDNS; vlan_idx++)
+						for(vlan_idx = 0; vlan_idx < IPA_MAX_NUM_SW_PDNS; vlan_idx++)
 						{
 							if((IPACM_Wan::ipv4_to_iface[wlan_ipv4_pdn_index].associated_VIDs[pdn_idx] != 0) &&
 							(IPACM_Wan::ipv4_to_iface[wlan_ipv4_pdn_index].associated_VIDs[pdn_idx] == data->VlanID))

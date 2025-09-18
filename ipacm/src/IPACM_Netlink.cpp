@@ -99,8 +99,8 @@ int find_mask(int ip_v4_last, int *mask_value);
 
 #define NDA_RTA(r)  ((struct rtattr*)(((char*)(r)) + NLMSG_ALIGN(sizeof(struct ndmsg))))
 #define IPACM_LOG_IPV6_ADDR(prefix, ip_addr)                            \
-        IPACM_SYSLOG(prefix);                                               \
-		IPACM_SYSLOG(" IPV6 Address %02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x\n", \
+        IPACMDBG_H(prefix);                                               \
+		IPACMDBG_H(" IPV6 Address %02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x\n", \
                   (int)ip_addr[0],  (int)ip_addr[1],                                                        \
                   (int)ip_addr[2],  (int)ip_addr[3],                                                        \
                   (int)ip_addr[4],  (int)ip_addr[5],                                                        \
@@ -111,8 +111,8 @@ int find_mask(int ip_v4_last, int *mask_value);
                   (int)ip_addr[14], (int)ip_addr[15]);
 
 #define IPACM_LOG_IPV4_ADDR(prefix, ip_addr)                            \
-        IPACM_SYSLOG(prefix);                                               \
-        IPACM_SYSLOG(" IPV4 Address %d.%d.%d.%d\n",                         \
+        IPACMDBG_H(prefix);                                               \
+        IPACMDBG_H(" IPV4 Address %d.%d.%d.%d\n",                         \
                     (unsigned char)(ip_addr),                               \
                     (unsigned char)(ip_addr >> 8),                          \
                     (unsigned char)(ip_addr >> 16) ,                        \
@@ -706,7 +706,9 @@ static int ipa_nl_decode_nlmsg
 
 					if(msg_ptr->nl_link_info.metainfo.ifi_flags & IFF_UP)
 					{
-						IPACM_SYSLOG("Interface %s bring up with IP-family: %d \n", dev_name, msg_ptr->nl_link_info.metainfo.ifi_family);
+						IPACM_SYSLOG("Interface %s with index %d bring up with IP-family: %d\n",
+							 	dev_name, msg_ptr->nl_link_info.metainfo.ifi_index,
+								msg_ptr->nl_link_info.metainfo.ifi_family);
 						/* post link up to command queue */
 						evt_data.event = IPA_LINK_UP_EVENT;
 						IPACMDBG_H("Posting IPA_LINK_UP_EVENT with if index: %d\n",
@@ -714,7 +716,9 @@ static int ipa_nl_decode_nlmsg
 					}
 					else
 					{
-						IPACM_SYSLOG("Interface %s bring down with IP-family: %d \n", dev_name, msg_ptr->nl_link_info.metainfo.ifi_family);
+						IPACM_SYSLOG("Interface %s with index: %d bring down with IP-family: %d \n",
+								dev_name, msg_ptr->nl_link_info.metainfo.ifi_index,
+								msg_ptr->nl_link_info.metainfo.ifi_family);
 						/* post link down to command queue */
 						evt_data.event = IPA_LINK_DOWN_EVENT;
 						IPACMDBG_H("Posting IPA_LINK_DOWN_EVENT with if index: %d\n",
@@ -1128,8 +1132,12 @@ static int ipa_nl_decode_nlmsg
 					data_addr->if_index = msg_ptr->nl_route_info.attr_info.oif_index;
 					data_addr->iptype = IPA_IP_v6;
 
-					IPACM_SYSLOG("Posting IPA_ROUTE_ADD_EVENT with if index:%d, ipv6 addr\n",
-									 data_addr->if_index);
+					IPACM_SYSLOG("Posting IPA_ROUTE_ADD_EVENT with if index:%d, ipv6 addr:0x%x:%x:%x:%x\n",
+									 data_addr->if_index,
+									data_addr->ipv6_addr[0],
+									data_addr->ipv6_addr[1],
+									data_addr->ipv6_addr[2],
+									data_addr->ipv6_addr[3]);
 					evt_data.evt_data = data_addr;
 					IPACM_EvtDispatcher::PostEvt(&evt_data);
 					/* finish command queue */
@@ -1188,8 +1196,10 @@ static int ipa_nl_decode_nlmsg
 					data_addr->if_index = msg_ptr->nl_route_info.attr_info.oif_index;
 					data_addr->iptype = IPA_IP_v6;
 
-					IPACM_SYSLOG("posting IPA_ROUTE_ADD_EVENT with if index:%d, ipv6 address\n",
-									 data_addr->if_index);
+					IPACM_SYSLOG("Posting IPA_ROUTE_ADD_EVENT with if index:%d, ipv6 address: :0x%x:%x:%x:%x\n",
+									data_addr->if_index, data_addr->ipv6_addr[0],
+									data_addr->ipv6_addr[1], data_addr->ipv6_addr[2],
+									data_addr->ipv6_addr[3]);
 					evt_data.evt_data = data_addr;
 					IPACM_EvtDispatcher::PostEvt(&evt_data);
 					/* finish command queue */
@@ -1401,8 +1411,10 @@ static int ipa_nl_decode_nlmsg
 					data_addr->if_index = msg_ptr->nl_route_info.attr_info.oif_index;
 					data_addr->iptype = IPA_IP_v6;
 
-					IPACM_SYSLOG("posting event IPA_ROUTE_DEL_EVENT with if index:%d, ipv4 address\n",
-									 data_addr->if_index);
+					IPACM_SYSLOG("posting event IPA_ROUTE_DEL_EVENT with if index:%d, ipv6 address: :0x%x:%x:%x:%x\n",
+								data_addr->if_index, data_addr->ipv6_addr[0],
+								data_addr->ipv6_addr[1], data_addr->ipv6_addr[2],
+								data_addr->ipv6_addr[3]);
 					evt_data.evt_data = data_addr;
 					IPACM_EvtDispatcher::PostEvt(&evt_data);
 					/* finish command queue */

@@ -677,8 +677,8 @@ ctcatch:
 		goto ctcatch;
 	}
 
-	IPACM_SYSLOG("Exit from tcp thread\n");
-
+	IPACM_SYSLOG("Exit from tcp thread with ret: %d errno: %d (%s)\n",
+		ret, errno, strerror(errno));
 	/* destroy the filter.. this will not detach the filter */
 	nfct_filter_destroy(pClient->tcp_filter);
 	pClient->tcp_filter = NULL;
@@ -786,8 +786,8 @@ ctcatch:
 		goto ctcatch;
 	}
 
-	IPACM_SYSLOG("Exit from udp thread with ret: %d\n", ret);
-
+	IPACM_SYSLOG("Exit from udp thread with ret: %d errno: %d (%s)\n",
+					 ret, errno, strerror(errno));
 	/* destroy the filter.. this will not detach the filter */
 	nfct_filter_destroy(pClient->udp_filter);
 	pClient->udp_filter = NULL;

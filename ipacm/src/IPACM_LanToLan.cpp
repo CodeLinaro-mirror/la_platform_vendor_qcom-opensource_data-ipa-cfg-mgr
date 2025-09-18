@@ -2047,7 +2047,7 @@ void IPACM_LanToLan_Iface::handle_vlan_id_del(uint16_t vlan_id)
 	{
 		if(it_client->vlan_id == vlan_id)
 		{
-			IPACM_SYSLOG("found client with MAC 0x[%X][%X][%X][%X][%X][%X] and vlan id %d, removing\n",
+			IPACM_SYSLOG("Removing client with MAC 0x[%X][%X][%X][%X][%X][%X] and vlan id %d\n",
 				it_client->mac_addr[0], it_client->mac_addr[1], it_client->mac_addr[2],
 				it_client->mac_addr[3], it_client->mac_addr[4], it_client->mac_addr[5],
 				vlan_id);

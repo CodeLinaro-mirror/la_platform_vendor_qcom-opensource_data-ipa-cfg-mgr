@@ -221,8 +221,8 @@ void* firewall_monitor(void *param)
 				}
 				else if (!strncmp(event->name, IPACM_CFG_FILE_NAME, event->len)) // IPACM_configuration change
 				{
-					IPACMDBG_H("File \"%s\" was 0x%x\n", event->name, event->mask);
-					IPACMDBG_H("The interested file %s .\n", IPACM_CFG_FILE_NAME);
+					IPACM_SYSLOG("File \"%s\" was 0x%x\n", event->name, event->mask);
+					IPACM_SYSLOG("The interested file %s .\n", IPACM_CFG_FILE_NAME);
 
 					evt_data.event = IPA_CFG_CHANGE_EVENT;
 					evt_data.evt_data = NULL;
@@ -424,7 +424,7 @@ void* ipa_driver_msg_notifier(void *param)
 			break;
 
 		case WLAN_CLIENT_CONNECT_EX:
-			IPACMDBG_H("Received WLAN_CLIENT_CONNECT_EX\n");
+			IPACM_SYSLOG("Received WLAN_CLIENT_CONNECT_EX\n");
 
 			memcpy(&event_ex_o, buffer + sizeof(struct ipa_msg_meta),sizeof(struct ipa_wlan_msg_ex));
 			if(event_ex_o.num_of_attribs > IPA_DRIVER_WLAN_EVENT_MAX_OF_ATTRIBS)
@@ -549,7 +549,7 @@ void* ipa_driver_msg_notifier(void *param)
 
 #ifdef FEATURE_IPACM_RESTART
 		case IPA_DONE_RESTORE_EVENT:
-			IPACMDBG_H("Received IPA_DONE_RESTORE_EVENT\n");
+			IPACM_SYSLOG("Received IPA_DONE_RESTORE_EVENT\n");
 			fp = fopen(IPA_READY_QCMAP_NOTIFIER_FILE, "w");
 			if (fp == NULL)
 			{
@@ -1108,7 +1108,7 @@ int main(int argc, char **argv)
 	fputs("IPACM started", fp);
 	fclose(fp);
 
-	IPACMDBG_H("RESET IPA-HW rules\n");
+	IPACM_SYSLOG("RESET IPA-HW rules\n");
 	ipa_reset();
 #endif
 
@@ -1321,7 +1321,7 @@ int ipa_get_if_index
 
 	if (ioctl(fd, SIOCGIFINDEX, &ifr) < 0)
 	{
-		IPACMERR("call_ioctl_on_dev: ioctl failed: can't find device %s",if_name);
+		IPACM_SYSLOG("call_ioctl_on_dev: ioctl failed: can't find device %s",if_name);
 		*if_index = -1;
 		close(fd);
 		return IPACM_FAILURE;

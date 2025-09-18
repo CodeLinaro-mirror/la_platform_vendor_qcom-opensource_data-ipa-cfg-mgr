@@ -8748,7 +8748,8 @@ int IPACM_Lan::handle_pdn_dscp_eth_client_route_rule_ext_v2(uint8_t *mac_addr,
 					sizeof(rt_rule->rt_tbl_name));
 					rt_rule->rt_tbl_name[IPA_RESOURCE_NAME_MAX - 1] = '\0';
 
-				for (i = 0; i < num_eth_client; i++)
+				idx = 0;
+				for (i = 0; i < num_eth_client && idx < NUM; i++)
 				{
 					if(get_client_memptr(eth_client, i)->route_rule_set_v4 == false ||
 						get_client_memptr(eth_client, i)->dscp_route_rule_set_v4[mux_id] == true ||
@@ -8796,8 +8797,9 @@ int IPACM_Lan::handle_pdn_dscp_eth_client_route_rule_ext_v2(uint8_t *mac_addr,
 							rt_rule_entry.rule.ttl_update = true;
 					}
 #endif
-					memcpy((void *)rt_rule->rules + (i * sizeof(struct ipa_rt_rule_add_ext_v2)),
+					memcpy((void *)rt_rule->rules + (idx * sizeof(struct ipa_rt_rule_add_ext_v2)),
 						&rt_rule_entry, sizeof(ipa_rt_rule_add_ext_v2));
+					idx++;
 				}
 
 				if (false == m_routing.AddRoutingRuleExt_v2(rt_rule))

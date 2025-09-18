@@ -4239,6 +4239,7 @@ int IPACM_Wlan::handle_pdn_dscp_wlan_client_route_rule(uint8_t *mac_addr,
 					sizeof(rt_rule->rt_tbl_name));
 					rt_rule->rt_tbl_name[IPA_RESOURCE_NAME_MAX - 1] = '\0';
 
+				idx = 0;
 				for (i = 0; i < num_wifi_client; i++)
 				{
 					if(get_client_memptr(wlan_client, i)->route_rule_set_v4 == false ||
@@ -4247,7 +4248,8 @@ int IPACM_Wlan::handle_pdn_dscp_wlan_client_route_rule(uint8_t *mac_addr,
 					{
 						continue;
 					}
-					rt_rule_entry = &rt_rule->rules[i];
+					rt_rule_entry = &rt_rule->rules[idx];
+					idx++;
 					rt_rule_entry->at_rear = false;
 					IPACMDBG_H("client index(%d):ipv4 address: 0x%x v4 header handle:(0x%x)\n",
 						i,
@@ -5185,7 +5187,8 @@ int IPACM_Wlan::handle_pdn_dscp_wlan_client_route_rule_ext_v2(uint8_t *mac_addr,
 					sizeof(rt_rule->rt_tbl_name));
 					rt_rule->rt_tbl_name[IPA_RESOURCE_NAME_MAX - 1] = '\0';
 
-				for (i = 0; i < num_wifi_client; i++)
+				idx = 0;
+				for (i = 0; i < num_wifi_client && idx < NUM; i++)
 				{
 					if(get_client_memptr(wlan_client, i)->route_rule_set_v4 == false ||
 						get_client_memptr(wlan_client, i)->power_save_set == true ||
@@ -5244,8 +5247,9 @@ int IPACM_Wlan::handle_pdn_dscp_wlan_client_route_rule_ext_v2(uint8_t *mac_addr,
 							rt_rule_entry.rule.ttl_update = true;
 					}
 #endif
-					memcpy((void *)rt_rule->rules + (i * sizeof(struct ipa_rt_rule_add_ext_v2)),
+					memcpy((void *)rt_rule->rules + (idx * sizeof(struct ipa_rt_rule_add_ext_v2)),
 						&rt_rule_entry, sizeof(ipa_rt_rule_add_ext_v2));
+					idx++;
 				}
 
 				if (false == m_routing.AddRoutingRuleExt_v2(rt_rule))

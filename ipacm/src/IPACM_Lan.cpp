@@ -12173,10 +12173,10 @@ int IPACM_Lan::handle_eth_client_route_rule_ext_lan2lan_v2(uint8_t *mac_addr, ip
 					}
 
 					/* copy ipv4 RT hdl */
-					get_client_memptr(eth_client, eth_index)->eth_rt_hdl[tx_index].eth_rt_rule_hdl_v4 =
+					get_client_memptr(eth_client, eth_index)->eth_rt_hdl[tx_index].lan2lan_eth_rt_rule_hdl_v4 =
 						((struct ipa_rt_rule_add_ext_v2 *)rt_rule->rules)[0].rt_rule_hdl;
-					IPACMDBG_H("tx:%d, rt rule id=%x ip-type: %d\n", tx_index,
-						rt_rule_entry->rule_id, iptype);
+					IPACMDBG_H("tx:%d, rt rule id=%x ip-type: %d lan2lan_eth_rt_rule_hdl_v4 %u \n", tx_index,
+						rt_rule_entry->rule_id, iptype, get_client_memptr(eth_client, eth_index)->eth_rt_hdl[tx_index].lan2lan_eth_rt_rule_hdl_v4);
 
 					get_client_memptr(eth_client, eth_index)->lan2lan_route_rule_set_v4 = true;
 					/* Add NAT rules after ipv4 RT rules are set */

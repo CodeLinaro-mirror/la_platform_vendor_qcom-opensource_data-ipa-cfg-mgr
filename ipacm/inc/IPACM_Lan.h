@@ -94,6 +94,7 @@ struct ipa_lan_rt_rule
 typedef struct _eth_client_rt_hdl
 {
 	uint32_t eth_rt_rule_hdl_v4;
+	uint32_t lan2lan_eth_rt_rule_hdl_v4;
 }eth_client_rt_hdl;
 
 typedef struct rule_id_hdl_map
@@ -1679,6 +1680,7 @@ private:
 		        if((tx_prop->tx[tx_index].ip == IPA_IP_v4) && (get_client_memptr(eth_client, clt_indx)->route_rule_set_v4==true)) /* for ipv4 */
 				{
 					IPACMDBG_H("Delete client index %d ipv4 RT-rules for tx:%d\n",clt_indx,tx_index);
+					IPACMDBG_H("Had rt rule with ip 0x%x", get_client_memptr(eth_client, clt_indx)->v4_addr);
 					rt_hdl = get_client_memptr(eth_client, clt_indx)->eth_rt_hdl[tx_index].eth_rt_rule_hdl_v4;
 
 					if(m_routing.DeleteRoutingHdl(rt_hdl, IPA_IP_v4) == false)
@@ -1686,8 +1688,23 @@ private:
 						return IPACM_FAILURE;
 					}
 				}
-		    } /* end of for loop */
+				if((tx_prop->tx[tx_index].ip == IPA_IP_v4) && get_client_memptr(eth_client, clt_indx)->lan2lan_route_rule_set_v4==true) /* for ipv4 */
+				{
+					IPACMDBG_H("InteBridge Rt rule: Delete client index %d ipv4 RT-rules for tx:%d\n",clt_indx,tx_index);
+					IPACMDBG_H("Had interBridege rt rule with ip 0x%x", get_client_memptr(eth_client, clt_indx)->v4_addr);
+					rt_hdl = get_client_memptr(eth_client, clt_indx)->eth_rt_hdl[tx_index].lan2lan_eth_rt_rule_hdl_v4;
 
+					if(m_routing.DeleteRoutingHdl(rt_hdl, IPA_IP_v4) == false)
+					{
+							return IPACM_FAILURE;
+					}
+				}
+		    } /* end of for loop */
+			/* clean the interBridge ipv4 RT rules for eth-client:clt_indx */
+			if(get_client_memptr(eth_client, clt_indx)->lan2lan_route_rule_set_v4==true) /* for ipv4 */
+			{
+				get_client_memptr(eth_client, clt_indx)->lan2lan_route_rule_set_v4 = false;
+			}
 		     /* clean the ipv4 RT rules for eth-client:clt_indx */
 		     if(get_client_memptr(eth_client, clt_indx)->route_rule_set_v4==true) /* for ipv4 */
 		     {

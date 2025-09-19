@@ -9649,7 +9649,8 @@ int IPACM_Wlan::handle_wlan_vlan_client_init(int client_idx, ipacm_bridge *bridg
 		pHeaderDescriptor = (struct ipa_ioc_add_hdr *)calloc(1, len);
 		if (pHeaderDescriptor == NULL) {
 			IPACMERR("calloc failed to allocate pHeaderDescriptor\n");
-			return IPACM_FAILURE;
+			res = IPACM_FAILURE;
+			goto fail;
 		}
 
 		if (tx_prop->tx[2].ip == IPA_IP_v4) {
@@ -9664,7 +9665,7 @@ int IPACM_Wlan::handle_wlan_vlan_client_init(int client_idx, ipacm_bridge *bridg
 			if (m_header.CopyHeader(&sCopyHeader) == false) {
 				PERROR("ioctl copy header failed");
 				res = IPACM_FAILURE;
-				goto fail;
+				goto end;
 			}
 
 			IPACMDBG_H("header length: %d, partial: %d\n", sCopyHeader.hdr_len, sCopyHeader.is_partial);
@@ -9672,7 +9673,7 @@ int IPACM_Wlan::handle_wlan_vlan_client_init(int client_idx, ipacm_bridge *bridg
 			if (sCopyHeader.hdr_len > IPA_HDR_MAX_SIZE) {
 				IPACMERR("header oversize\n");
 				res = IPACM_FAILURE;
-				goto fail;
+				goto end;
 			} else {
 				memcpy(pHeaderDescriptor->hdr[0].hdr,
 					   sCopyHeader.hdr,
@@ -9715,13 +9716,13 @@ int IPACM_Wlan::handle_wlan_vlan_client_init(int client_idx, ipacm_bridge *bridg
 			if (strlcat(pHeaderDescriptor->hdr[0].name, IPA_WLAN_PARTIAL_HDR_NAME_v4, sizeof(pHeaderDescriptor->hdr[0].name)) > IPA_RESOURCE_NAME_MAX) {
 				IPACMERR(" header name construction failed exceed length (%zu)\n", strlen(pHeaderDescriptor->hdr[0].name));
 				res = IPACM_FAILURE;
-				goto fail;
+				goto end;
 			}
 			snprintf(index, sizeof(index), "_%d", header_name_count);
 			if (strlcat(pHeaderDescriptor->hdr[0].name, index, sizeof(pHeaderDescriptor->hdr[0].name)) > IPA_RESOURCE_NAME_MAX) {
 				IPACMERR(" header name construction failed exceed length (%zu)\n", strlen(pHeaderDescriptor->hdr[0].name));
 				res = IPACM_FAILURE;
-				goto fail;
+				goto end;
 			}
 
 
@@ -9764,7 +9765,7 @@ int IPACM_Wlan::handle_wlan_vlan_client_init(int client_idx, ipacm_bridge *bridg
 				pHeaderDescriptor->hdr[0].status != 0) {
 				IPACMERR("ioctl IPA_IOC_ADD_HDR failed: %d\n", pHeaderDescriptor->hdr[0].status);
 				res = IPACM_FAILURE;
-				goto fail;
+				goto end;
 			}
 
 			get_client_memptr(wlan_client, client_idx)->hdr_hdl_v4 = pHeaderDescriptor->hdr[0].hdr_hdl;
@@ -9824,14 +9825,14 @@ int IPACM_Wlan::handle_wlan_vlan_client_init(int client_idx, ipacm_bridge *bridg
 			if (m_header.CopyHeader(&sCopyHeader) == false) {
 				PERROR("ioctl copy header failed");
 				res = IPACM_FAILURE;
-				goto fail;
+				goto end;
 			}
 
 			IPACMDBG_H("header length: %d, paritial: %d\n", sCopyHeader.hdr_len, sCopyHeader.is_partial);
 			if (sCopyHeader.hdr_len > IPA_HDR_MAX_SIZE) {
 				IPACMERR("header oversize\n");
 				res = IPACM_FAILURE;
-				goto fail;
+				goto end;
 			} else {
 				memcpy(pHeaderDescriptor->hdr[0].hdr,
 					   sCopyHeader.hdr,
@@ -9878,14 +9879,14 @@ int IPACM_Wlan::handle_wlan_vlan_client_init(int client_idx, ipacm_bridge *bridg
 			if (strlcat(pHeaderDescriptor->hdr[0].name, IPA_WLAN_PARTIAL_HDR_NAME_v6, sizeof(pHeaderDescriptor->hdr[0].name)) > IPA_RESOURCE_NAME_MAX) {
 				IPACMERR(" header name construction failed exceed length (%zu)\n", strlen(pHeaderDescriptor->hdr[0].name));
 				res = IPACM_FAILURE;
-				goto fail;
+				goto end;
 			}
 
 			snprintf(index, sizeof(index), "_%d", header_name_count);
 			if (strlcat(pHeaderDescriptor->hdr[0].name, index, sizeof(pHeaderDescriptor->hdr[0].name)) > IPA_RESOURCE_NAME_MAX) {
 				IPACMERR(" header name construction failed exceed length (%zu)\n", strlen(pHeaderDescriptor->hdr[0].name));
 				res = IPACM_FAILURE;
-				goto fail;
+				goto end;
 			}
 
 			pHeaderDescriptor->hdr[0].hdr_len = sCopyHeader.hdr_len;
@@ -9925,7 +9926,7 @@ int IPACM_Wlan::handle_wlan_vlan_client_init(int client_idx, ipacm_bridge *bridg
 					pHeaderDescriptor->hdr[0].status != 0) {
 					IPACMERR("ioctl IPA_IOC_ADD_HDR failed: %d\n", pHeaderDescriptor->hdr[0].status);
 					res = IPACM_FAILURE;
-					goto fail;
+					goto end;
 				}
 
 				get_client_memptr(wlan_client, client_idx)->hdr_hdl_v6 = pHeaderDescriptor->hdr[0].hdr_hdl;
@@ -11294,6 +11295,7 @@ int IPACM_Wlan::handle_wlan_qos_route_rule_ext_v2(uint8_t *client_mac,
 		if (!rt_rule->rules) {
 			IPACMERR("Failed to allocate memory.\n");
 			free(rt_rule);
+			free(hdr_proc_ctx_table);
 			return IPACM_FAILURE;
 		}
 		rt_rule->rule_add_ext_size = sizeof(struct ipa_rt_rule_add_ext_v2);

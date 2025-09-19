@@ -675,7 +675,7 @@ private:
 			return IPACM_SUCCESS;
 		}
 
-		inline int8_t reset_inactive_lan_stats_index(uint8_t *mac_addr)
+		inline int8_t reset_inactive_lan_stats_index(uint8_t *mac_addr, int ipa_index)
 		{
 			int cnt;
 
@@ -693,7 +693,8 @@ private:
 			{
 				if (memcmp(IPACM_Wlan::inactive_lan_client_index[cnt].mac,
 								mac_addr,
-								IPA_MAC_ADDR_SIZE) == 0)
+								IPA_MAC_ADDR_SIZE) == 0 &&
+					IPACM_Wlan::inactive_lan_client_index[cnt].ipa_if_num == ipa_index)
 				{
 					memset(&IPACM_Wlan::inactive_lan_client_index[cnt], -1, sizeof(ipa_lan_client_idx));
 					return IPACM_SUCCESS;

@@ -10097,10 +10097,10 @@ void IPACM_Lan::handle_stats_client_connect(int if_index, uint8_t *mac_addr)
 			{
 				if (memcmp(active_lan_client_index_odu[i].mac, mac_addr, IPA_MAC_ADDR_SIZE) == 0)
 				{
-					IPACMDBG_H("MAC %02x:%02x:%02x:%02x:%02x:%02x has been received already, return\n",
+					IPACMDBG_H("MAC %02x:%02x:%02x:%02x:%02x:%02x has been received already, goto handle_stats\n",
 						mac_addr[0], mac_addr[1], mac_addr[2],
 						mac_addr[3], mac_addr[4], mac_addr[5]);
-					return; // MAC found
+					goto handle_stats; // MAC found
 				}
 			}
 		}
@@ -10110,10 +10110,10 @@ void IPACM_Lan::handle_stats_client_connect(int if_index, uint8_t *mac_addr)
 			{
 				if (memcmp(active_lan_client_index[i].mac, mac_addr, IPA_MAC_ADDR_SIZE) == 0)
 				{
-					IPACMDBG_H("MAC %02x:%02x:%02x:%02x:%02x:%02x has been received already, return\n",
+					IPACMDBG_H("MAC %02x:%02x:%02x:%02x:%02x:%02x has been received already, goto handle_stats\n",
 						mac_addr[0], mac_addr[1], mac_addr[2],
 						mac_addr[3], mac_addr[4], mac_addr[5]);
-					return; // MAC found
+					goto handle_stats; // MAC found
 				}
 			}
 		}
@@ -10122,12 +10122,40 @@ void IPACM_Lan::handle_stats_client_connect(int if_index, uint8_t *mac_addr)
 		{
 			IPACMDBG_H("Failed to reserve active lan_stats index, try inactive list. \n");
 			/* Try to get the inactive index which can be used later. */
+			if(is_odu)
+			{
+				for (int i = 0; i < IPA_MAX_NUM_HW_PATH_CLIENTS; i++)
+				{
+					if (memcmp(inactive_lan_client_index_odu[i].mac, mac_addr, IPA_MAC_ADDR_SIZE) == 0)
+					{
+						IPACMDBG_H("MAC %02x:%02x:%02x:%02x:%02x:%02x has been received already, return\n",
+							mac_addr[0], mac_addr[1], mac_addr[2],
+							mac_addr[3], mac_addr[4], mac_addr[5]);
+						return; // MAC found
+					}
+				}
+			}
+			else
+			{
+				for (int i = 0; i < IPA_MAX_NUM_HW_PATH_CLIENTS; i++)
+				{
+					if (memcmp(inactive_lan_client_index[i].mac, mac_addr, IPA_MAC_ADDR_SIZE) == 0)
+					{
+						IPACMDBG_H("MAC %02x:%02x:%02x:%02x:%02x:%02x has been received already, return\n",
+							mac_addr[0], mac_addr[1], mac_addr[2],
+							mac_addr[3], mac_addr[4], mac_addr[5]);
+						return; // MAC found
+					}
+				}
+			}
+
 			if (get_free_inactive_lan_stats_index(mac_addr) == -1)
 			{
 				IPACMDBG_H("Failed to reserve inactive lan_stats index, return\n");
 			}
 			return;
 		}
+handle_stats:
 		/* Check if the client is inactive list and remove it*/
 		if (reset_inactive_lan_stats_index(mac_addr) == -1)
 		{

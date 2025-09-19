@@ -26,7 +26,10 @@
  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * Changes from Qualcomm Innovation Center, Inc. are provided under the following license:
+ * Changes from Qualcomm Technologies, Inc. are provided under the following license:
+ *
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
  *
  * Copyright (c) 2022-2025 Qualcomm Innovation Center, Inc. All rights reserved.
  *
@@ -159,6 +162,39 @@ IPACM_Wlan::IPACM_Wlan(char *iface_name, int iface_index, bool ast_update_needed
 			lan_stats_inited = true;
 		}
 #endif
+	/* Update if the interface is SVAP or not if the mesh R2 or greater is enabled */
+	if (IPACM_Iface::ipacmcfg->ipacm_emesh_enable && IPACM_Iface::ipacmcfg->ipacm_emesh_mode >= 2) {
+		update_svap_state();
+		/* Update DSCP PCP mapping if the mesh R3 */
+		if(is_svap_iface() && IPACM_Iface::ipacmcfg->ipacm_emesh_mode >= 3)
+		{
+			add_dscp_pcp_mapping();
+		}
+	}
+	IPACMDBG_H("Svap interface %d for wlan ap index %d\n", is_svap_iface(), wlan_ap_index);
+
+	/* WLAN can send non vlan iface with 4 properties so we are setting it here correctly */
+	if (iface_query != NULL && rx_prop != NULL && tx_prop != NULL)
+	{
+		if (is_svap_iface() || is_vlan_iface())
+		{
+			if (iface_query->num_rx_props >= 4 && iface_query->num_tx_props >= 4)
+			{
+				iface_query->num_rx_props = iface_query->num_tx_props = 4;
+				rx_prop->num_rx_props = tx_prop->num_tx_props = 4;
+				IPACMDBG_H("Setting iface properties to 4 for vlan/svap iface\n");
+			}
+		}
+		else
+		{
+			if (iface_query->num_rx_props >= 2 && iface_query->num_tx_props >= 2)
+			{
+				iface_query->num_rx_props = iface_query->num_tx_props = 2;
+				rx_prop->num_rx_props = tx_prop->num_tx_props = 2;
+				IPACMDBG_H("Setting iface properties to 2 for non vlan/svap iface\n");
+			}
+		}
+	}
 
 	if(iface_query != NULL)
 	{
@@ -211,17 +247,6 @@ IPACM_Wlan::IPACM_Wlan(char *iface_name, int iface_index, bool ast_update_needed
 
 	ast_update = ast_update_needed;
 	IPACMDBG_H ("AST update needed %d\n", ast_update);
-
-	/* Update if the interface is SVAP or not if the mesh R2 or greater is enabled */
-	if (IPACM_Iface::ipacmcfg->ipacm_emesh_enable && IPACM_Iface::ipacmcfg->ipacm_emesh_mode >= 2) {
-		update_svap_state();
-		/* Update DSCP PCP mapping if the mesh R3 */
-		if(is_svap_iface() && IPACM_Iface::ipacmcfg->ipacm_emesh_mode >= 3)
-		{
-			add_dscp_pcp_mapping();
-		}
-	}
-	IPACMDBG_H("Svap interface %d for wlan ap index %d\n", is_svap_iface(), wlan_ap_index);
 
 	/* install dummy rules if AST upate is required */
 	if (ast_update) {

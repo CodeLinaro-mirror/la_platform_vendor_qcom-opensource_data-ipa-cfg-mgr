@@ -16928,6 +16928,7 @@ int IPACM_Lan::install_ipv6_prefix_flt_rule(uint32_t* prefix)
 		if (false == m_routing.GetRoutingTable(&IPACM_Iface::ipacmcfg->rt_tbl_default_v6)) {
 			IPACMERR("LAN m_routing.GetRoutingTable(&IPACM_Iface::ipacmcfg->rt_tbl_default_v6=0x%p) Failed.\n",
 						&IPACM_Iface::ipacmcfg->rt_tbl_default_v6);
+			free(flt_rule);
 			return IPACM_FAILURE;
 		}
 

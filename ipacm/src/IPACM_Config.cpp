@@ -776,6 +776,7 @@ skip_fnr_alloc:
 
 	ipacm_emesh_enable = cfg->ipacm_emesh_enable;
 	ipacm_emesh_mode = cfg->ipacm_emesh_mode;
+	ipacm_easy_mesh_traffic_separation_enable = cfg->ipacm_easy_mesh_traffic_separation_enable;
 
 	ipacm_static_policy_enable = cfg->static_policy_enable;
 #ifdef FEATURE_STATIC_POLICY
@@ -4222,7 +4223,7 @@ bool IPACM_Config::is_svap_related(const char* phy_inf) {
 		goto end;
 	}
 
-	if (72 == atoi(MapBSSType_row)) {
+	if ((72 == atoi(MapBSSType_row)) && (IPACM_Iface::ipacmcfg->ipacm_easy_mesh_traffic_separation_enable)) {
 		is_svap = true;
 	}
 	IPACMDBG_H("get_MapBSSType %d\n", atoi(MapBSSType_row));

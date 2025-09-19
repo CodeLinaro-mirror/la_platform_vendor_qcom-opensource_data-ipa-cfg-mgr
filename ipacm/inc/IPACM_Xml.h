@@ -236,6 +236,7 @@ if (!(a)) {                                                 \
 #define IPACM_EASY_MESH                      "IPACMEMESH"
 #define IPACM_Easy_Mesh_Enabled              "IPACMEMESHEnabled"
 #define IPACM_Easy_Mesh_Mode                 "IPACMEMESHMode"
+#define IPACM_Easy_Mesh_Trafficseparation    "IPACMEMESHTrafficSeparation"
 
 #define IPACM_WLAN_VLAN_MPDN                 "IPACMVLANMPDN"
 #define IPACM_Wlan_Vlan_Mpdn_Enabled         "IPACMVlanMpdnEnabled"
@@ -415,6 +416,7 @@ typedef struct  _IPACM_conf_t
 	bool ipacm_mpdn_enable;
 	bool ipacm_emesh_enable;
 	uint32_t ipacm_emesh_mode;
+	bool ipacm_easy_mesh_traffic_separation_enable;
 	bool ipacm_socksv5_enable;
 	ipacm_gre_conf_t gre_conf;
 #ifdef FEATURE_DUAL_BACKHAUL

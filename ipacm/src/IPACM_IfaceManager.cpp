@@ -311,7 +311,7 @@ int IPACM_IfaceManager::create_iface_instance(ipacm_ifacemgr_data *param)
 				IPACM_EvtDispatcher::registr(IPA_LINK_DOWN_EVENT, lan);
 				/* IPA_LAN_DELETE_SELF should be always last */
 				IPACM_EvtDispatcher::registr(IPA_LAN_DELETE_SELF, lan);
-				IPACMDBG_H("ipa_LAN (%s):ipa_index (%d) instance open/registr ok\n", lan->dev_name, lan->ipa_if_num);
+				IPACM_SYSLOG("ipa_LAN (%s):ipa_index (%d) instance open/registr ok\n", lan->dev_name, lan->ipa_if_num);
 				registr(ipa_interface_index, lan);
 				/* solve the new_addr comes earlier issue */
                                 IPACM_Iface::iface_addr_query(if_index);
@@ -352,7 +352,7 @@ int IPACM_IfaceManager::create_iface_instance(ipacm_ifacemgr_data *param)
 				IPACM_EvtDispatcher::registr(IPA_HANDLE_WAN_ADDR_ADD_V6, ETH);
 				/* IPA_LAN_DELETE_SELF should be always last */
 				IPACM_EvtDispatcher::registr(IPA_LAN_DELETE_SELF, ETH);
-				IPACMDBG_H("ipa_LAN (%s):ipa_index (%d) instance open/registr ok\n", ETH->dev_name, ETH->ipa_if_num);
+				IPACM_SYSLOG("ipa_LAN (%s):ipa_index (%d) instance open/registr ok\n", ETH->dev_name, ETH->ipa_if_num);
 				registr(ipa_interface_index, ETH);
 				/* solve the new_addr comes earlier issue */
 				IPACM_Iface::iface_addr_query(if_index);
@@ -409,7 +409,7 @@ int IPACM_IfaceManager::create_iface_instance(ipacm_ifacemgr_data *param)
 #endif
 					/* IPA_LAN_DELETE_SELF should be always last */
 					IPACM_EvtDispatcher::registr(IPA_LAN_DELETE_SELF, odu);
-					IPACMDBG_H("ipa_LAN (%s):ipa_index (%d) instance open/registr ok\n", odu->dev_name, odu->ipa_if_num);
+					IPACM_SYSLOG("ipa_LAN (%s):ipa_index (%d) instance open/registr ok\n", odu->dev_name, odu->ipa_if_num);
 					registr(ipa_interface_index, odu);
 					/* solve the new_addr comes earlier issue */
 					IPACM_Iface::iface_addr_query(if_index);
@@ -434,7 +434,7 @@ int IPACM_IfaceManager::create_iface_instance(ipacm_ifacemgr_data *param)
 					IPACM_EvtDispatcher::registr(IPA_LINK_DOWN_EVENT, odu);
 					/* IPA_LAN_DELETE_SELF should be always last */
 					IPACM_EvtDispatcher::registr(IPA_LAN_DELETE_SELF, odu);
-					IPACMDBG_H("ipa_LAN (%s):ipa_index (%d) instance open/registr ok\n", odu->dev_name, odu->ipa_if_num);
+					IPACM_SYSLOG("ipa_LAN (%s):ipa_index (%d) instance open/registr ok\n", odu->dev_name, odu->ipa_if_num);
 					registr(ipa_interface_index, odu);
 					/* solve the new_addr comes earlier issue */
 					IPACM_Iface::iface_addr_query(if_index);
@@ -507,7 +507,7 @@ int IPACM_IfaceManager::create_iface_instance(ipacm_ifacemgr_data *param)
 				IPACM_EvtDispatcher::registr(IPA_WLAN_LINK_DOWN_EVENT, wl);
 				/* IPA_LAN_DELETE_SELF should be always last */
 				IPACM_EvtDispatcher::registr(IPA_LAN_DELETE_SELF, wl);
-				IPACMDBG_H("ipa_WLAN (%s):ipa_index (%d) instance open/registr ok\n", wl->dev_name, wl->ipa_if_num);
+				IPACM_SYSLOG("ipa_WLAN (%s):ipa_index (%d) instance open/registr ok\n", wl->dev_name, wl->ipa_if_num);
 				registr(ipa_interface_index, wl);
 				/* solve the new_addr comes earlier issue */
 	            IPACM_Iface::iface_addr_query(if_index);
@@ -587,7 +587,7 @@ int IPACM_IfaceManager::create_iface_instance(ipacm_ifacemgr_data *param)
 						IPACM_EvtDispatcher::registr(IPA_LINK_DOWN_EVENT, w);
 					}
 
-					IPACMDBG_H("ipa_WAN (%s):ipa_index (%d) instance open/registr ok\n", w->dev_name, w->ipa_if_num);
+					IPACM_SYSLOG("ipa_WAN (%s):ipa_index (%d) instance open/registr ok\n", w->dev_name, w->ipa_if_num);
 					registr(ipa_interface_index, w);
 					/* solve the new_addr comes earlier issue */
 					IPACM_Iface::iface_addr_query(if_index);
@@ -705,7 +705,7 @@ int IPACM_IfaceManager::SearchInstance(int ipa_if_index)
 		tmp = tmp->next;
 	}
 
-	IPACMDBG_H("No existed iface-instance name: %s,\n",
+	IPACM_SYSLOG("No existed iface-instance name: %s,\n",
 					 IPACM_Iface::ipacmcfg->iface_table[ipa_if_index].iface_name);
 
 	return IPA_INSTANCE_NOT_FOUND;

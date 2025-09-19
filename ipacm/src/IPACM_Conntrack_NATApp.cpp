@@ -171,6 +171,7 @@ int NatApp::AddPdn(uint32_t pub_ip, uint8_t mux_id, bool is_sta)
 	ipa_nat_pdn_entry entry;
 	uint8_t pdn_index;
 	uint8_t pdn_count = 0;
+	bool new_entry = false;
 	IPACMDBG_H("%s() %d\n", __FUNCTION__, __LINE__);
 
 	entry.dst_metadata = 0;
@@ -184,8 +185,8 @@ int NatApp::AddPdn(uint32_t pub_ip, uint8_t mux_id, bool is_sta)
 		IPACMERR("unable to get pdn count Error:%d\n", ret);
 		return ret;
 	}
-	IPACMDBG_H("is_sta: %d, pdn_count: %d \n",is_sta, pdn_count);
-	IPACMDBG_H("ipv4 address PDN 0x%X\n", pub_ip);
+	IPACM_SYSLOG("is_sta: %d, pdn_count: %d \n",is_sta, pdn_count);
+	IPACM_SYSLOG("ipv4 address PDN 0x%X\n", pub_ip);
 
 	if(!pdn_count)
 	{
@@ -193,10 +194,10 @@ int NatApp::AddPdn(uint32_t pub_ip, uint8_t mux_id, bool is_sta)
 		ret = ipa_nat_add_ipv4_tbl(entry.public_ip, mem_type, max_entries, &nat_table_hdl);
 		if(ret)
 		{
-			IPACMERR("unable to create nat table Error:%d\n", ret);
+			IPACM_SYSLOG("ERROR:unable to create nat table Error:%d\n", ret);
 				return ret;
 		}
-		IPACMDBG_H("succeesfully created NAT table for ip 0x%X\n", pub_ip);
+		IPACM_SYSLOG("succeesfully created NAT table for ip 0x%X\n", pub_ip);
 		entry.public_ip = pub_ip;
 		if(!is_sta)
 		{
@@ -215,9 +216,10 @@ int NatApp::AddPdn(uint32_t pub_ip, uint8_t mux_id, bool is_sta)
 		ret = ipa_nat_modify_pdn(nat_table_hdl, pdn_index, &entry);
 		if(ret)
 		{
-			IPACMERR("unable to modify PDN %d entry Error:%d\n", pdn_index, ret);
+			IPACM_SYSLOG("ERROR:unable to modify PDN %d entry Error:%d\n", pdn_index, ret);
 			return ret;
 		}
+		new_entry = true;
 	}
 	else
 	{
@@ -231,9 +233,10 @@ int NatApp::AddPdn(uint32_t pub_ip, uint8_t mux_id, bool is_sta)
 
 			if(ret)
 			{
-				IPACMERR("unable to modify PDN 0 entry Error:%d\n", ret);
+				IPACM_SYSLOG("unable to modify PDN 0 entry Error:%d\n", ret);
 				return ret;
 			}
+			new_entry = true;
 		}
 		else
 		{
@@ -245,10 +248,11 @@ int NatApp::AddPdn(uint32_t pub_ip, uint8_t mux_id, bool is_sta)
 				ret = ipa_nat_alloc_pdn(&entry, &pdn_index);
 				if(ret)
 				{
-					IPACMERR("couldn't allocate a pdn index\n");
+					IPACM_SYSLOG("ERROR: couldn't allocate a pdn index\n");
 					return ret;
 				}
 				IPACMDBG_H("successfully allocated index %d for ip 0x%X\n", pdn_index, pub_ip);
+				new_entry = true;
 			}
 			else
 			{
@@ -256,7 +260,8 @@ int NatApp::AddPdn(uint32_t pub_ip, uint8_t mux_id, bool is_sta)
 			}
 		}
 	}
-
+	IPACM_SYSLOG("Newly added? %d, pdn_index: %d, is_sta: %d, ipv4 address PDN 0x%X, pdn_count: %d\n",
+			new_entry, pdn_index, entry.is_sta, pub_ip, pdn_count);
 	/* now traverse cache and add the PDN entries */
 	for(cnt = 0; cnt < max_entries; cnt++)
 	{
@@ -294,7 +299,10 @@ int NatApp::AddPdn(uint32_t pub_ip, uint8_t mux_id, bool is_sta)
 			}
 			IPACMDBG("cache entry %d rule handle %d\n", cnt, cache[cnt].rule_hdl);
 			cache[cnt].enabled = true;
-
+			log_nat_syslog(nat_rule.protocol,nat_rule.private_ip,nat_rule.target_ip,\
+						nat_rule.private_port, nat_rule.public_port, \
+						nat_rule.target_port, nat_rule.src_only,\
+						nat_rule.dst_only, cache[cnt].rule_hdl);
 			IPACMDBG("new pdn added below rule successfully\n");
 			iptodot("Private IP", nat_rule.private_ip);
 			iptodot("Target IP", nat_rule.target_ip);
@@ -427,11 +435,10 @@ int NatApp::RemovePdn(uint32_t pub_ip)
 	ret = ipa_nat_get_pdn_index(pub_ip, &pdn_index);
 	if(ret)
 	{
-		IPACMERR("pdn doesn't exist on pdn table\n");
+		IPACM_SYSLOG("pdn doesn't exist on pdn table\n");
 		return IPACM_FAILURE;
 	}
-	IPACMDBG_H("pdn ip found at pdn_index:%d\n",pdn_index);
-
+	IPACM_SYSLOG("pdn ip 0x%x found at pdn_index:%d\n", pub_ip, pdn_index);
 	/* remove all PDN entries */
 	for(int cnt = 0; cnt < max_entries; cnt++)
 	{
@@ -450,14 +457,14 @@ int NatApp::RemovePdn(uint32_t pub_ip)
 	ret = ipa_nat_dealloc_pdn(pdn_index);
 	if(ret)
 	{
-		IPACMERR(" couldn't deallocate PDN in index %d\n",pdn_index);
+		IPACM_SYSLOG("ERROR: couldn't deallocate PDN in index %d Error:%d\n\n",pdn_index, ret);
 		return IPACM_FAILURE;
 	}
 
 	ret = ipa_nat_get_pdn_count(&pdn_cnt);
 	if(ret)
 	{
-		IPACMERR(" couldn't acquire number of PDNs\n");
+		IPACM_SYSLOG(" couldn't acquire number of PDNs\n");
 		return IPACM_FAILURE;
 	}
 
@@ -467,10 +474,10 @@ int NatApp::RemovePdn(uint32_t pub_ip)
 		ret = ipa_nat_del_ipv4_tbl(nat_table_hdl);
 		if(ret)
 		{
-			IPACMERR("unable to delete nat table Error: %d\n", ret);;
+			IPACM_SYSLOG("ERROR:unable to delete nat table Error: %d\n", ret);
 			return ret;
 		}
-
+		IPACM_SYSLOG("NAT table with PDN index: %d and IP: 0x%x deleted\n", pdn_index, pub_ip);
 		Reset();
 	}
 
@@ -560,7 +567,7 @@ int NatApp::DeleteEntry(const nat_table_entry *rule)
 				}
 				else
 				{
-					IPACMDBG_H("Deleted Nat entry(%d) Successfully\n", cnt);
+					IPACM_SYSLOG("Deleted Nat entry(%d) Successfully\n", cnt);
 				}
 			}
 			else
@@ -689,6 +696,10 @@ int NatApp::AddEntry(const nat_table_entry *rule, bool isVlan)
 					IPACMERR("unable to add the rule\n");
 					return -1;
 				}
+				log_nat_syslog(nat_rule.protocol,nat_rule.private_ip,nat_rule.target_ip,\
+						nat_rule.private_port, nat_rule.public_port, \
+						nat_rule.target_port, nat_rule.src_only,\
+						nat_rule.dst_only, cache[cnt].rule_hdl);
 				IPACMDBG_H("cache entry %d rule handle %d\n", cnt, cache[cnt].rule_hdl);
 				cache[cnt].enabled = true;
 			}
@@ -727,10 +738,10 @@ int NatApp::AddEntry(const nat_table_entry *rule, bool isVlan)
 	{
 		IPACMDBG_H("Added rule(%d) successfully handle (%d)\n", cnt, cache[cnt].rule_hdl);
 	}
-  else
-  {
-    IPACMDBG_H("Cached rule(%d) successfully\n", cnt);
-  }
+	else
+	{
+		IPACMDBG_H("Cached rule(%d) successfully\n", cnt);
+	}
 
 	return 0;
 }

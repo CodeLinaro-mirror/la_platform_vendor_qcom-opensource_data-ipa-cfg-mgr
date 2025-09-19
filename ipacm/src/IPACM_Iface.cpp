@@ -83,11 +83,11 @@ IPACM_Iface::IPACM_Iface(char *iface_name, int iface_index, bool ppp_iface)
 
 	if((iface_name != NULL) && (strstr(iface_name, "wlan")))
 	{
-		memcpy(dev_name, iface_name, sizeof(iface_name));
+		strlcpy(dev_name, iface_name, sizeof(iface_name));
 	}
 	else
 	{
-		memcpy(dev_name, IPACM_Iface::ipacmcfg->iface_table[iface_index].iface_name,
+		strlcpy(dev_name, IPACM_Iface::ipacmcfg->iface_table[iface_index].iface_name,
 		sizeof(IPACM_Iface::ipacmcfg->iface_table[iface_index].iface_name));
 	}
 
@@ -106,9 +106,9 @@ IPACM_Iface::IPACM_Iface(char *iface_name, int iface_index, bool ppp_iface)
 			{
 				strlcpy(IPACM_Iface::ipacmcfg->iface_table[iface_index].phy_dev_name,
 					IPACM_Iface::ipacmcfg->pppoe_mpdn_table[i].phy_dev_name,
-					sizeof(IPACM_Iface::ipacmcfg->pppoe_mpdn_table[i].phy_dev_name));
+					sizeof(IPACM_Iface::ipacmcfg->iface_table[iface_index].phy_dev_name));
 				 IPACM_Iface::ipacmcfg->pppoe_mpdn_table[i].iface_index = iface_index ;
-				memcpy(phy_dev_name, IPACM_Iface::ipacmcfg->iface_table[iface_index].phy_dev_name,
+				strlcpy(phy_dev_name, IPACM_Iface::ipacmcfg->iface_table[iface_index].phy_dev_name,
 					sizeof(IPACM_Iface::ipacmcfg->iface_table[iface_index].phy_dev_name));
 				break;
 			}
@@ -118,7 +118,7 @@ IPACM_Iface::IPACM_Iface(char *iface_name, int iface_index, bool ppp_iface)
 
 	if (virtual_iface = IPACM_Iface::ipacmcfg->iface_table[iface_index].virtual_iface)
 	{
-		memcpy(phy_dev_name, IPACM_Iface::ipacmcfg->iface_table[iface_index].phy_dev_name,
+		strlcpy(phy_dev_name, IPACM_Iface::ipacmcfg->iface_table[iface_index].phy_dev_name,
 			sizeof(IPACM_Iface::ipacmcfg->iface_table[iface_index].phy_dev_name));
 	}
 

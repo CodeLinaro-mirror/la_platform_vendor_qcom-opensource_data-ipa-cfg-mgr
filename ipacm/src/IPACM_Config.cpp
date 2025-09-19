@@ -4355,6 +4355,7 @@ void IPACM_Config::add_qos_params_info(ipa_ioc_qos_config *data)
 	{
 		if(strncmp(data->dev_name, it_qos_params->iface_name, sizeof(data->dev_name)) == 0 &&
 		   (data->dir == it_qos_params->dir) &&
+		   (data->flt_cat == it_qos_params->flt_cat) &&
 		   (data->ip_type == it_qos_params->ip_type) &&
 		   (data->traffic_class == it_qos_params->traffic_class) &&
 		   (data->src_ip_addr == it_qos_params->ip_tup.src_ip_addr) &&
@@ -4400,6 +4401,7 @@ void IPACM_Config::add_qos_params_info(ipa_ioc_qos_config *data)
 	new_qos_info.dir = data->dir;
 	new_qos_info.ip_type = data->ip_type;
 	new_qos_info.traffic_class = data->traffic_class;
+	new_qos_info.flt_cat = data->flt_cat;
 
 	new_qos_info.ip_tup.src_ip_addr = data->src_ip_addr;
 	new_qos_info.ip_tup.src_sub_mask = data->src_subnet;
@@ -4456,6 +4458,11 @@ void IPACM_Config::add_qos_params_info(ipa_ioc_qos_config *data)
 			return a.traffic_class > b.traffic_class;
 	});
 
+	m_qos_params.sort(
+		[](const qos_param_info &a, const qos_param_info &b) {
+			return a.flt_cat > b.flt_cat;
+	});
+
 	IPACMDBG_H("Added qos iface: %s vlan id: %d with traffic class :%d \n", data->dev_name, data->dir, data->traffic_class);
 	IPACMDBG_H("qos params list size now :%d \n", m_qos_params.size());
 
@@ -4506,6 +4513,7 @@ void IPACM_Config::delete_qos_params_info(ipa_ioc_qos_config *data)
 	{
 		if(strncmp(data->dev_name, it_qos_params->iface_name, sizeof(data->dev_name)) == 0 &&
 		   (data->dir == it_qos_params->dir) &&
+		   (data->flt_cat == it_qos_params->flt_cat) &&
 		   (data->ip_type == it_qos_params->ip_type) &&
 		   (data->traffic_class == it_qos_params->traffic_class) &&
 		   (data->src_ip_addr == it_qos_params->ip_tup.src_ip_addr) &&

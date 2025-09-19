@@ -1185,7 +1185,7 @@ void* ipa_driver_msg_notifier(void *param)
 			if ( IPACM_Iface::ipacmcfg->eogre_enabled == true )
 			{
 				IPACMERR("Can't enable eogre when it's already enabled\n");
-				goto done;
+				break;
 			}
 
 			/*
@@ -1215,7 +1215,7 @@ void* ipa_driver_msg_notifier(void *param)
 			if ( new_contains_nulls )
 			{
 				IPACMERR("Inbound ipa_ipgre_info on IPA_EoGRE_UP_EVENT is empty/NULL\n");
-				goto done;
+				break;
 			}
 			else /* ( ! new_contains_nulls ) */
 			{
@@ -1228,7 +1228,7 @@ void* ipa_driver_msg_notifier(void *param)
 					{
 						IPACMERR("invalid GRE ipv4 addr, mark ipacmcfg->eogre_enabled = false \n");
 						IPACM_Iface::ipacmcfg->eogre_enabled = false;
-						goto done;
+						break;
 					}
 
 					IPACM_Iface::addr2host(IPA_IP_v4, &new_ipgre_info.ipv4_src);
@@ -1254,7 +1254,7 @@ void* ipa_driver_msg_notifier(void *param)
 					{
 						IPACMERR("invalid GRE ipv6 addr, mark ipacmcfg->eogre_enabled = false \n");
 						IPACM_Iface::ipacmcfg->eogre_enabled = false;
-						goto done;
+						break;
 					}
 
 					IPACM_Iface::addr2host(IPA_IP_v6, &new_ipgre_info.ipv6_src);
@@ -1288,7 +1288,7 @@ void* ipa_driver_msg_notifier(void *param)
 			if ( IPACM_Iface::ipacmcfg->eogre_enabled == false )
 			{
 				IPACMERR("Can't disable eogre when it's already disabled\n");
-				goto done;
+				break;
 			}
 
 			IPACM_Iface::ipacmcfg->eogre_enabled = false;
@@ -1304,7 +1304,7 @@ void* ipa_driver_msg_notifier(void *param)
 			if ( IPACM_Iface::ipacmcfg->eogre_enabled == false )
 			{
 				IPACMERR("eogre tunnel is not up yet, no work need to be done\n");
-				goto done;
+				break;
 			}
 
 			evt_data.event    = IPA_HANDLE_EoGRE_DOWN;

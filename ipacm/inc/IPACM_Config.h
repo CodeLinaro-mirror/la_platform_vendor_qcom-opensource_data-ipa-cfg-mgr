@@ -340,6 +340,7 @@ struct qos_param_info {
 	uint8_t dir;
 	uint8_t ip_type;
 	uint8_t traffic_class;
+	enum ipa_qos_flt_category flt_cat;
 
 	struct ip_tuple ip_tup;
 	uint8_t src_mac_addr[IPA_MAC_ADDR_SIZE];

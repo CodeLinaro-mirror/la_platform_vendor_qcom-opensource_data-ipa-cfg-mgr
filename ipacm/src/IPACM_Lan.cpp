@@ -6789,11 +6789,25 @@ int IPACM_Lan::handle_eth_hdr_init(uint8_t *mac_addr, ipacm_bridge *bridge, uint
 				/* check if already same mac client neighbor recieved populate its counter */
 				if(memcmp(get_client_memptr(eth_client, idx)->mac,
 					get_client_memptr(eth_client, clnt_indx)->mac,IPA_MAC_ADDR_SIZE) == 0 &&
-					get_client_memptr(eth_client, idx)->index_populated == true)
+					(get_client_memptr(eth_client, idx)->index_populated == true ||
+					get_client_memptr(eth_client, idx)->l2l_index_populated == true))
 				{
-					get_client_memptr(eth_client, clnt_indx)->ul_cnt_idx = get_client_memptr(eth_client, idx)->ul_cnt_idx;
-					get_client_memptr(eth_client, clnt_indx)->dl_cnt_idx = get_client_memptr(eth_client, idx)->dl_cnt_idx;
-					get_client_memptr(eth_client, clnt_indx)->index_populated = true;
+					if(get_client_memptr(eth_client, idx)->index_populated == true)
+					{
+						get_client_memptr(eth_client, clnt_indx)->ul_cnt_idx = get_client_memptr(eth_client, idx)->ul_cnt_idx;
+						get_client_memptr(eth_client, clnt_indx)->dl_cnt_idx = get_client_memptr(eth_client, idx)->dl_cnt_idx;
+						get_client_memptr(eth_client, clnt_indx)->index_populated = true;
+					}
+					if(IPACM_Iface::ipacmcfg->ipacm_lan2lan_stats_enable == true &&
+						get_client_memptr(eth_client, idx)->l2l_index_populated == true)
+					{
+						get_client_memptr(eth_client, clnt_indx)->l2l_ul_cnt_idx = get_client_memptr(eth_client, idx)->l2l_ul_cnt_idx;
+						get_client_memptr(eth_client, clnt_indx)->l2l_dl_cnt_idx = get_client_memptr(eth_client, idx)->l2l_dl_cnt_idx;
+						get_client_memptr(eth_client, clnt_indx)->l2l_index_populated = true;
+						IPACMDBG_H("(ipacm_lan2lan_stats_enable) clnt_indx: %d l2l_ul_cnt_idx: %d l2l_dl_cnt_idx: %d\n", clnt_indx,
+							get_client_memptr(eth_client, clnt_indx)->l2l_ul_cnt_idx,
+							get_client_memptr(eth_client, clnt_indx)->l2l_dl_cnt_idx);
+					}
 					header_name_count++; //keep increasing header_name_count
 					res = IPACM_SUCCESS;
 					IPACMDBG_H("header_name_count: %d\n", header_name_count);

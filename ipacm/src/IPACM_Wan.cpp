@@ -3400,7 +3400,7 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 					goto handle_v6;
 				}
 
-				IPACMDBG_H("dev_name:%s modem_ipv4_pdn_index:%d\n", modem_ipv4_pdn_index);
+				IPACMDBG_H("dev_name:%s modem_ipv4_pdn_index:%d\n", dev_name, modem_ipv4_pdn_index);
 
 				for(j = 0; j < IPA_MAX_NUM_SW_PDNS; j++)
 				{
@@ -3430,7 +3430,7 @@ handle_v6:
 					goto handle_v4;
 				}
 
-				IPACMDBG_H("dev_name:%s modem_ipv6_pdn_index:%d\n", modem_ipv6_pdn_index);
+				IPACMDBG_H("dev_name:%s modem_ipv6_pdn_index:%d\n", dev_name, modem_ipv6_pdn_index);
 
 				for(j = 0; j < IPA_MAX_NUM_SW_PDNS; j++)
 				{

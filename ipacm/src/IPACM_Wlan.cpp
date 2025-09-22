@@ -7153,7 +7153,7 @@ int IPACM_Wlan::eth_bridge_add_flt_rule_v2(uint8_t *mac, uint32_t rt_tbl_hdl, ch
 	IPACMDBG_H("Install rule for dev_name %s , inter_bridge ? %d for vlan_id %d \n",dev_name, inter_bridge, vlan_id);
 	IPACMDBG_H("Received client MAC 0x%02x%02x%02x%02x%02x%02x.\n", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
 
-	wlan_index = get_wlan_client_index(mac);
+	wlan_index = get_wlan_client_index(mac, vlan_id);
 	if (wlan_index == IPACM_INVALID_INDEX)
 	{
 		IPACMDBG_H("eth client not found/attached \n");

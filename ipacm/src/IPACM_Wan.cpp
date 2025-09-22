@@ -11827,9 +11827,10 @@ int IPACM_Wan::handle_wan_client_route_rule(uint8_t *mac_addr, ipa_ip_type iptyp
 					}
 					memset(&rt_rule_entry->rule.attrib, 0, sizeof(rt_rule_entry->rule.attrib));
 #ifdef FEATURE_PPPOE
-					if(IPACM_Iface::ipacmcfg->eth_wan_pppoe_enable == true)
+					if(IPACM_Iface::ipacmcfg->eth_wan_pppoe_enable == true  && is_ppp_iface)
 					{
 						rt_rule_entry->rule.hdr_proc_ctx_hdl = v6_p_ctx_2use;
+						IPACMDBG_H("v6 rt_rule_entry->rule.hdr_proc_ctx_hdl %x\n", rt_rule_entry->rule.hdr_proc_ctx_hdl);
 					}
 					else
 #endif

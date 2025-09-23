@@ -2309,7 +2309,6 @@ int IPACM_Wan::check_vlan_pdn(ipa_ip_type iptype, ipacm_event_route_vlan *data, 
 					v4_hdr_pending = true;
 				}
 			}
-			return IPACM_SUCCESS;
 		}
 		if((iptype==IPA_IP_v6 || iptype == IPA_IP_MAX) && (header_set_v6 != true))
 		{

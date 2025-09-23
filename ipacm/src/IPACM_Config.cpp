@@ -1784,8 +1784,20 @@ int IPACM_Config::get_bridge_vlan_mapping(ipa_bridge_vlan_mapping_info_new *data
 				it_mapping->bridge_associated_VID, i);
 			data->vlan_id[i] = it_mapping->bridge_associated_VID;
 			i++;
-			data->bridge_ipv4 = it_mapping->bridge_ipv4;
-			data->subnet_mask = it_mapping->subnet_mask;
+			if(it_mapping->bridge_ipv4 != 0 && it_mapping->subnet_mask != 0)
+			{
+				data->bridge_ipv4 = it_mapping->bridge_ipv4;
+				data->subnet_mask = it_mapping->subnet_mask;
+				IPACMDBG("bridge (%s) mask 0x%X, address 0x%X\n", data->bridge_name,
+					data->bridge_ipv4,
+					data->subnet_mask);
+			}
+			else
+			{
+				IPACMDBG("Address is not assigned yet bridge (%s) mask 0x%X, address 0x%X\n", data->bridge_name,
+					data->bridge_ipv4,
+					data->subnet_mask);
+			}
 			ret = IPACM_SUCCESS;
 		}
 	}

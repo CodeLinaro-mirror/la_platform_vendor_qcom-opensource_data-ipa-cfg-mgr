@@ -437,27 +437,16 @@ public:
 
 	static bool check_client_ipv4_with_pdn_ipv4(uint32_t client_ip, uint16_t vlan_id)
 	{
+		IPACMDBG_H("vlan_id %d \n", vlan_id);
+		IPACMDBG_H("Client IP: 0x%x\n", client_ip);
 		for(int i = 0; i < IPA_MAX_NUM_SW_PDNS; i++)
 		{
+			IPACMDBG_H("IPACM_Wan::ipv4_to_iface[%d].ipv4_addr: 0x%x\n", i, IPACM_Wan::ipv4_to_iface[i].ipv4_addr);
 			if(IPACM_Wan::ipv4_to_iface[i].ipv4_addr &&
 					ipv4_to_iface[i].ipv4_addr == client_ip)
 			{
-				if(vlan_id == 0 && ipv4_to_iface[i].pIface->is_default_gateway)
-				{
-					return true;
-				}
-				else
-				{
-					for(int j = 0; j < ipv4_to_iface[i].VID_cnt; j++)
-					{
-						if(IPACM_Wan::ipv4_to_iface[i].associated_VIDs[j] == vlan_id)
-						{
-							IPACMDBG("vlan %d i %d j %d ip: 0x%x\n",
-										IPACM_Wan::ipv4_to_iface[i].associated_VIDs[j], i,j, client_ip);
-							return true;
-						}
-					}
-				}
+				IPACMDBG_H("Client IP Matched With Wan IP! at index %d \n", i);
+				return true;
 			}
 		}
 		return false;

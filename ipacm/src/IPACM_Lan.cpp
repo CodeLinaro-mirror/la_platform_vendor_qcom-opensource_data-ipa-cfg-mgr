@@ -6807,17 +6807,52 @@ int IPACM_Lan::handle_eth_client_ipaddr(ipacm_event_data_all *data)
 			if (IPACM_Iface::ipacmcfg->is_ip_pass_enabled(device_type,
 				data->mac_addr, vlan_id))
 			{
+				IPACMDBG_H("Client is in Passthrough mode.\n");
 				if (check_neigh_ipv4(data) == IPACM_SUCCESS)
 				{
 					/* Special handling for USB for IPPT NAT-enable */
 					/* In IPPT with collision client IP will be in private subnet
 					   so checking if client IP same as PDN IP before IPPT */
-					if(device_type != IPACM_CLIENT_DEVICE_TYPE_USB &&
-						!IPACM_Wan::check_client_ipv4_with_pdn_ipv4(data->ipv4_addr, vlan_id))
+					if(device_type != IPACM_CLIENT_DEVICE_TYPE_USB)
 					{
-						IPACMDBG_H("Client is in IP passthrough mode, but IP is mismatched with WAN IP: 0x%x\n",
-							data->ipv4_addr);
-						return IPACM_FAILURE;
+						if(!IPACM_Wan::check_client_ipv4_with_pdn_ipv4(data->ipv4_addr, vlan_id))
+						{
+							IPACMDBG_H("Client is in IP passthrough mode, but IP is mismatched with WAN IP: 0x%x\n",
+								data->ipv4_addr);
+							return IPACM_FAILURE;
+						}
+						else
+						{
+							/* Post Route add vlan pdn event again in case of ippt to make sure vlan-pdn is Up */
+							if(vlan_id > 0 && (IPACM_Wan::check_client_ipv4_with_pdn_ipv4(data->ipv4_addr, vlan_id) == true))
+							{
+								ipacm_cmd_q_data ievt_data;
+								ipacm_event_route_vlan *idata;
+								ievt_data.event = IPA_ROUTE_ADD_VLAN_PDN_EVENT;
+								idata = (ipacm_event_route_vlan *)malloc(sizeof(ipacm_event_route_vlan));
+								if (!idata)
+								{
+									IPACMERR("couldn't allocate memory for new vlan pdn event\n");
+									return IPACM_FAILURE;
+								}
+								memset(idata, 0, sizeof(ipacm_event_route_vlan));
+								idata->iptype = IPA_IP_v4;
+								idata->VlanID = vlan_id;
+								idata->wan_ipv4_addr = data->ipv4_addr;
+
+								ievt_data.evt_data = idata;
+								IPACMDBG_H("IPPT : sending IPA_ROUTE_ADD_VLAN_PDN_EVENT vlan id %d, iptype %d,\n",
+										idata->VlanID,
+										idata->iptype);
+								iptodot("ippt client ip", idata->wan_ipv4_addr);
+
+								IPACM_EvtDispatcher::PostEvt(&ievt_data);
+							}
+							else
+							{
+								IPACMDBG_H("Client vlan id %d\n", vlan_id);
+							}
+						}
 					}
 				}
 				else
@@ -6828,6 +6863,7 @@ int IPACM_Lan::handle_eth_client_ipaddr(ipacm_event_data_all *data)
 			}
 			else
 			{
+				IPACMDBG_H("Client is not in Passthrough mode.\n");
 				/* Check if the received address is a valid one. */
 				if (check_neigh_ipv4(data) == IPACM_FAILURE)
 				{

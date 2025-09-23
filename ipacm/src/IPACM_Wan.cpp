@@ -1310,6 +1310,15 @@ int IPACM_Wan::handle_addr_evt(ipacm_event_data_addr *data)
 	evt_data.evt_data = data_fid;
 	IPACMDBG_H("Posting IPA_HANDLE_NEW_NEIGH_EVENT event:%d\n", evt_data.event);
 	IPACM_EvtDispatcher::PostEvt(&evt_data);
+	if(IPACM_Iface::ipacmcfg->eogre_enabled == true &&
+		(data->iptype == IPACM_Iface::ipacmcfg->eogre_info.iptype))
+	{
+		ipacm_cmd_q_data evt_data_eogre;
+		evt_data_eogre.event    = IPA_HANDLE_EoGRE_UP;
+		evt_data_eogre.evt_data = 0;
+		IPACMDBG_H("Posting IPA_HANDLE_EoGRE_UP \n");
+		IPACM_EvtDispatcher::PostEvt(&evt_data_eogre);
+	}
 fail:
 	free(rt_rule);
 

@@ -14998,7 +14998,7 @@ int IPACM_Lan::config_dft_firewall_rules_ul(IPACM_firewall_conf_t* firewall_conf
 				ul_firewall_t *ul_firewall, int vid)
 {
 	struct ipa_flt_rule_add flt_rule_entry;
-	int len = 0, i, idx = 0;
+	int len = 0, i = 0, idx = 0;
 	int res = IPACM_SUCCESS;
 	int j = 0;
 

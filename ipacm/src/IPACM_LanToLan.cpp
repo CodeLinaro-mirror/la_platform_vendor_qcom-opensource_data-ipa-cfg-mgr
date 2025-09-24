@@ -1438,7 +1438,7 @@ void IPACM_LanToLan_Iface::add_client_rt_rule(peer_iface_info *peer_info, client
 		IPACMDBG_H("This is for intra interface communication for client"
 			"wih mac 0x[%X][%X][%X][%X][%X][%X] vlan_id: %d\n",
 			client->mac_addr[0], client->mac_addr[1], client->mac_addr[2], client->mac_addr[3],
-			client->mac_addr[4], client->mac_addr[5], client->mac_addr[6], client->vlan_id);
+			client->mac_addr[4], client->mac_addr[5], client->vlan_id);
 
 		if(IPACM_Iface::ipacmcfg->multi_vlan_bridge_config_enable == 0)
 		{
@@ -2542,7 +2542,15 @@ void IPACM_LanToLan_Iface::clear_all_rt_rule_for_one_peer_iface(peer_iface_info 
 	list<client_info>::iterator it;
 	ipa_hdr_l2_type peer_l2_type = IPA_HDR_L2_NONE;
 
-	IPACMDBG_H("peer->is_vlan_peer :%d\n", peer->is_vlan_peer);
+	if (peer != NULL)
+	{
+		IPACMDBG_H("peer->is_vlan_peer :%d\n", peer->is_vlan_peer);
+	}
+	else
+	{
+		IPACMDBG_H("peer->is_vlan_peer is NULL\n");
+		return;
+	}
 
 	if(peer == NULL || peer->peer == NULL ||
 		peer->peer->get_iface_pointer() == NULL ||

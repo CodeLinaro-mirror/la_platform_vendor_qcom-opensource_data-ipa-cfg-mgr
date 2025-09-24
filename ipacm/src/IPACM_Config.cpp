@@ -3097,8 +3097,14 @@ void IPACM_Config::pppoe_config_update(ipa_ioc_pppoe_info *pppoe_config, uint8_t
 	int iface_table_index;
 
 	if(pppoe_config != NULL)
+	{
 		IPACMDBG_H("config to_add(%d) for pppoe_dev_name %s\n",to_add, pppoe_config->pppoe_dev_name);
-
+	}
+	else
+	{
+		IPACMDBG_H("pppoe config is NULL, returning\n");
+		return;
+	}
 	if(pthread_mutex_lock(&pppoe_map_lock) != 0)
 	{
 		IPACMERR("Unable to lock the mutex\n");
@@ -5016,7 +5022,7 @@ void IPACM_Config::get_pppoe_session_info(const char *pppoe_dev_name, const char
 	FILE *fp = NULL;
 	char *tok = NULL, *ptr = NULL, *lastVid = NULL;
 	char *params[MAX_PPPOE_PARAM_CNT] = { NULL };
-	char pppoe_row[MAX_PPPOE_PARAM_CNT] = {0}, cmd[IPA_SYS_CMD_LEN] = {0}, cmd_pppoe_row[MAX_PPPOE_ROW_LEN] = {0};
+	char pppoe_row[MAX_PPPOE_ROW_LEN] = {0}, cmd[IPA_SYS_CMD_LEN] = {0}, cmd_pppoe_row[MAX_PPPOE_ROW_LEN] = {0};
 	int i;
 	uint16_t vid = 0;
 
@@ -5024,8 +5030,14 @@ void IPACM_Config::get_pppoe_session_info(const char *pppoe_dev_name, const char
 	system(cmd);
 
 	if(pppoe_dev_name != NULL)
+	{
 		IPACMDBG_H("Get session info for pppoe_dev_name %s\n",pppoe_dev_name);
-
+	}
+	else
+	{
+		IPACMDBG_H("pppoe_dev_name is NULL, returning\n");
+		return;
+	}
 	fp = fopen(IPA_PPPOE_TABLE, "r");
 	if (fp == NULL)
 	{
@@ -5109,8 +5121,14 @@ void IPACM_Config::update_pppoe_session_info(const char *pppoe_dev_name, char *p
 	int tmp_var[IPA_MAC_ADDR_SIZE];
 
 	if(pppoe_dev_name != NULL)
+	{
 		IPACMDBG_H("Update session info for pppoe_dev_name %s\n",pppoe_dev_name);
-	
+	}
+	else
+	{
+		IPACMDBG_H("pppoe_dev_name is NULL, returning\n");
+		return;
+	}
 	IPACMDBG_H("session_info: %s mac_addr: %s eth_intf_name: %s\n",
 		params[0], params[1], params[2]);
 
@@ -5139,7 +5157,16 @@ void IPACM_Config::update_pppoe_session_info(const char *pppoe_dev_name, char *p
 		if(copy_param != NULL)
 		{
 			phy_name = strtok_r(copy_param, ".", &ptr);
-			vlan_id = atoi(strtok_r(NULL, ".", &ptr));
+			char *token = strtok_r(NULL, ".", &ptr);
+			if (token != NULL)
+			{
+				vlan_id = atoi(token);
+			}
+			else
+			{
+				free(copy_param);
+				return;
+			}
 			strlcpy(phy_dev_name, phy_name, sizeof(phy_dev_name));
 			free(copy_param);
 		}

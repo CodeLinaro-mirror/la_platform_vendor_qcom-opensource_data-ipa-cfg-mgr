@@ -1984,9 +1984,10 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 		{
 			ipacm_event_vlan_pdn *data = (ipacm_event_vlan_pdn *)param;
 
-			IPACMDBG_H("Received IPA_HANDLE_WAN_VLAN_PDN_DOWN for VID %d, iptype %d\n",
+			IPACMDBG_H("Received IPA_HANDLE_WAN_VLAN_PDN_DOWN for VID %d, iptype %d, mux_id %d\n",
 				data->VlanID,
-				data->iptype);
+				data->iptype,
+				data->mux_id);
 			if(!data->VlanID || is_vlan_IF(data->VlanID))
 			{
 #ifdef FEATURE_IPACM_UL_FIREWALL
@@ -3865,6 +3866,11 @@ int IPACM_Lan::handle_vlan_pdn_down(ipacm_event_vlan_pdn *data)
 {
 	bool notif_only = false;
 	int xlat_pdn_ctx_id;
+
+	IPACMDBG_H("handle_vlan_pdn_down for VID %d, iptype %d, mux_id %d\n",
+		data->VlanID,
+		data->iptype,
+		data->mux_id);
 
 	if(data->iptype == IPA_IP_v4)
 	{

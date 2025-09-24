@@ -8660,6 +8660,9 @@ int IPACM_Wan::handle_down_evt()
 #ifdef FEATURE_DUAL_BACKHAUL
 	bool isSecondBackhaul;
 #endif
+	ipacm_cmd_q_data evt_data;
+	ipacm_event_vlan_pdn *vlandown_data;
+
 	IPACMDBG_H(" wan handle_down_evt, dev_name %s ip_type: %d\n", dev_name, ip_type);
 	if(IPACM_Iface::ipacmcfg->GetIPAVer() >= IPA_HW_None && IPACM_Iface::ipacmcfg->GetIPAVer() < IPA_HW_v4_0)
 	{
@@ -8723,8 +8726,6 @@ int IPACM_Wan::handle_down_evt()
 	}
 	if(sta_ipv4_pdn_index >= 0 && sta_ipv6_pdn_index >= 0 && ipv4_to_iface[sta_ipv4_pdn_index].wan_up_vlan && ipv6_to_iface[sta_ipv6_pdn_index].wan_up_vlan_v6 && (ip_type == IPA_IP_MAX))
 	{
-		ipacm_cmd_q_data evt_data;
-		ipacm_event_vlan_pdn *vlandown_data;
 		IPACMDBG_H(" STA wan down ipv4-addr:0x%x\n", wan_v4_addr);
 		IPACMDBG_H(" STA wan down ipv6_prefix: 0x%08x%08x\n", ipv6_to_iface[sta_ipv6_pdn_index].ipv6_prefix[0], ipv6_to_iface[sta_ipv6_pdn_index].ipv6_prefix[1]);
 
@@ -8738,21 +8739,20 @@ int IPACM_Wan::handle_down_evt()
 		wan_v6_is_default_gw = true;
 		num_offloaded_pdns--;
 
-		vlandown_data = (ipacm_event_vlan_pdn *)malloc(sizeof(ipacm_event_vlan_pdn));
-		if(vlandown_data == NULL)
-		{
-			IPACMERR("Unable to allocate memory\n");
-			res = IPACM_FAILURE;
-			goto fail;
-		}
-
 		/* Wan v4, v6 is down. post vlan pdn down evt for every associated vlans. */
-		memset(vlandown_data, 0, sizeof(ipacm_event_vlan_pdn));
 		/* Wan is down. post vlan pdn down evt for every associated vlans. */
 		vid_cnt_v6 = ipv6_to_iface[sta_ipv6_pdn_index].VID_cnt;
 		IPACMDBG_H("V6 Wan Down received for %s has associated vid count %d. \n", dev_name, vid_cnt_v6);
 		for(j = 0; j < vid_cnt_v6; j++)
 		{
+			vlandown_data = (ipacm_event_vlan_pdn *)malloc(sizeof(ipacm_event_vlan_pdn));
+			if(vlandown_data == NULL)
+			{
+				IPACMERR("Unable to allocate memory\n");
+				res = IPACM_FAILURE;
+				goto fail;
+			}
+			memset(vlandown_data, 0, sizeof(ipacm_event_vlan_pdn));
 			vlandown_data->VlanID = ipv6_to_iface[sta_ipv6_pdn_index].associated_VIDs[j];
 			memcpy(vlandown_data->ipv6_prefix, ipv6_to_iface[sta_ipv6_pdn_index].ipv6_prefix, sizeof(ipv6_to_iface[sta_ipv6_pdn_index].ipv6_prefix));
 			ipv6_to_iface[sta_ipv6_pdn_index].VID_cnt--;
@@ -8767,12 +8767,20 @@ int IPACM_Wan::handle_down_evt()
 
 			IPACM_EvtDispatcher::PostEvt(&evt_data);
 		}
-		memset(vlandown_data, 0, sizeof(ipacm_event_vlan_pdn));
+
 		/* Wan is down. post vlan pdn down evt for every associated vlans. */
 		vid_cnt_v4 = ipv4_to_iface[sta_ipv4_pdn_index].VID_cnt;
 		IPACMDBG_H("V4 Wan Down received for %s has associated vid count %d. \n", dev_name, vid_cnt_v4);
 		for(j = 0; j < vid_cnt_v4; j++)
 		{
+			vlandown_data = (ipacm_event_vlan_pdn *)malloc(sizeof(ipacm_event_vlan_pdn));
+			if(vlandown_data == NULL)
+			{
+				IPACMERR("Unable to allocate memory\n");
+				res = IPACM_FAILURE;
+				goto fail;
+			}
+			memset(vlandown_data, 0, sizeof(ipacm_event_vlan_pdn));
 			vlandown_data->VlanID = ipv4_to_iface[sta_ipv4_pdn_index].associated_VIDs[j];
 			vlandown_data->ipv4_addr = wan_v4_addr;
 			ipv4_to_iface[sta_ipv4_pdn_index].VID_cnt--;
@@ -8788,10 +8796,7 @@ int IPACM_Wan::handle_down_evt()
 	}
 	else if(sta_ipv6_pdn_index >= 0 && ipv6_to_iface[sta_ipv6_pdn_index].wan_up_vlan_v6)
 	{
-		ipacm_cmd_q_data evt_data;
-		ipacm_event_vlan_pdn *vlandown_data;
-
-		IPACMDBG_H(" STA wan down ipv6_prefix: 0x%08x%08x\n", ipv6_to_iface[sta_ipv6_pdn_index].ipv6_prefix[0], ipv6_to_iface[sta_ipv6_pdn_index].ipv6_prefix[1]);
+		IPACMDBG_H("STA wan down ipv6_prefix: 0x%08x%08x\n", ipv6_to_iface[sta_ipv6_pdn_index].ipv6_prefix[0], ipv6_to_iface[sta_ipv6_pdn_index].ipv6_prefix[1]);
 		IPACMDBG_H("sta_ipv6_pdn_index: %d ipv6_to_iface[sta_ipv6_pdn_index].wan_up_vlan_v6 :%d\n", sta_ipv6_pdn_index, ipv6_to_iface[sta_ipv6_pdn_index].wan_up_vlan_v6);
 
 		ipv6_to_iface[sta_ipv6_pdn_index].wan_up_vlan_v6 = false;
@@ -8800,22 +8805,22 @@ int IPACM_Wan::handle_down_evt()
 		if (sta_ipv4_pdn_index == -1)
 			num_offloaded_pdns--;
 
-		vlandown_data = (ipacm_event_vlan_pdn *)malloc(sizeof(ipacm_event_vlan_pdn));
-		if(vlandown_data == NULL)
-		{
-			IPACMERR("Unable to allocate memory\n");
-			res = IPACM_FAILURE;
-			goto fail;
-		}
-		memset(vlandown_data, 0, sizeof(ipacm_event_vlan_pdn));
-
-		vlandown_data->iptype = IPA_IP_v6;
-
 		/* Wan is down. post vlan pdn down evt for every associated vlans. */
 		vid_cnt_v6 = ipv6_to_iface[sta_ipv6_pdn_index].VID_cnt;
 		IPACMDBG_H("V6 Wan Down received for %s has associated vid count %d. \n", dev_name, vid_cnt_v6);
 		for(j = 0; j < vid_cnt_v6; j++)
 		{
+			vlandown_data = (ipacm_event_vlan_pdn *)malloc(sizeof(ipacm_event_vlan_pdn));
+			if(vlandown_data == NULL)
+			{
+				IPACMERR("Unable to allocate memory\n");
+				res = IPACM_FAILURE;
+				goto fail;
+			}
+			memset(vlandown_data, 0, sizeof(ipacm_event_vlan_pdn));
+
+			vlandown_data->iptype = IPA_IP_v6;
+
 			vlandown_data->VlanID = ipv6_to_iface[sta_ipv6_pdn_index].associated_VIDs[j];
 			memcpy(vlandown_data->ipv6_prefix, ipv6_to_iface[sta_ipv6_pdn_index].ipv6_prefix, sizeof(ipv6_to_iface[sta_ipv6_pdn_index].ipv6_prefix));
 			ipv6_to_iface[sta_ipv6_pdn_index].VID_cnt--;
@@ -8843,22 +8848,22 @@ int IPACM_Wan::handle_down_evt()
 		if (sta_ipv6_pdn_index == -1)
 			num_offloaded_pdns--;
 
-		vlandown_data = (ipacm_event_vlan_pdn *)malloc(sizeof(ipacm_event_vlan_pdn));
-		if(vlandown_data == NULL)
-		{
-			IPACMERR("Unable to allocate memory\n");
-			res = IPACM_FAILURE;
-			goto fail;
-		}
-		memset(vlandown_data, 0, sizeof(ipacm_event_vlan_pdn));
-
-		vlandown_data->iptype = IPA_IP_v4;
-
 		/* Wan is down. post vlan pdn down evt for every associated vlans. */
 		vid_cnt_v4 = ipv4_to_iface[sta_ipv4_pdn_index].VID_cnt;
 		IPACMDBG_H("V4 Wan Down received for %s has associated vid count %d. \n", dev_name, vid_cnt_v4);
 		for(j = 0; j < vid_cnt_v4; j++)
 		{
+			vlandown_data = (ipacm_event_vlan_pdn *)malloc(sizeof(ipacm_event_vlan_pdn));
+			if(vlandown_data == NULL)
+			{
+				IPACMERR("Unable to allocate memory\n");
+				res = IPACM_FAILURE;
+				goto fail;
+			}
+			memset(vlandown_data, 0, sizeof(ipacm_event_vlan_pdn));
+
+			vlandown_data->iptype = IPA_IP_v4;
+
 			vlandown_data->VlanID = ipv4_to_iface[sta_ipv4_pdn_index].associated_VIDs[j];
 			vlandown_data->ipv4_addr = wan_v4_addr;
 			ipv4_to_iface[sta_ipv4_pdn_index].VID_cnt--;

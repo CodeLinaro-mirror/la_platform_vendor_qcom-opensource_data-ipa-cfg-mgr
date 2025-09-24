@@ -1747,7 +1747,7 @@ void IPACM_Neighbor::update_neigh_cache(const char *iface_name, uint8_t *mac_add
 		/* Post USB_LINK_UP event for parent phy netdev intf and added changes to avoid to
 		post the linkup event for wlan*/
 
-		if(!is_wlan_client_connect)
+		if(!is_wlan_client_connect && (strncmp(rdev_name, "wlan", WLAN_LEN_LEN)))
 			post_phys_iface_event( rdev_name, query_ipa_if_num, query_ifindex);
 
 		if (is_phy_iface) {

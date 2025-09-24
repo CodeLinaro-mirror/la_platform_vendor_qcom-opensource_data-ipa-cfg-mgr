@@ -1,6 +1,5 @@
 /*
 Copyright (c) 2013-2016, 2018-2019, The Linux Foundation. All rights reserved.
-Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are
@@ -27,9 +26,9 @@ WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
 OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
 IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-* Changes from Qualcomm Innovation Center are provided under the following license:
-* Copyright (c) 2024 Qualcomm Innovation Center, Inc. All rights reserved.
-* SPDX-License-Identifier: BSD-3-Clause-Clear.
+* Changes from Qualcomm Technologies, Inc. are provided under the following license:
+* Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+* SPDX-License-Identifier: BSD-3-Clause-Clear
 */
 /*!
 	@file
@@ -314,6 +313,7 @@ int IPACM_IfaceManager::create_iface_instance(ipacm_ifacemgr_data *param)
 				IPACM_EvtDispatcher::registr(IPA_HANDLE_WAN_VLAN_PDN_UP, lan);
 				IPACM_EvtDispatcher::registr(IPA_HANDLE_WAN_VLAN_PDN_DOWN, lan);
 				IPACM_EvtDispatcher::registr(IPA_NOTIFY_VLAN_UP, lan);
+				IPACM_EvtDispatcher::registr(IPA_NOTIFY_VLAN_DOWN, lan);
 #endif
 #ifdef FEATURE_IPA_ANDROID
 				IPACM_EvtDispatcher::registr(IPA_TETHERING_STATS_UPDATE_EVENT, lan);
@@ -409,6 +409,7 @@ int IPACM_IfaceManager::create_iface_instance(ipacm_ifacemgr_data *param)
 					IPACM_EvtDispatcher::registr(IPA_PRIVATE_SUBNET_CHANGE_EVENT, odu); 	// register for IPA_PRIVATE_SUBNET_CHANGE_EVENT event
 					IPACM_EvtDispatcher::registr(IPA_CFG_CHANGE_EVENT, odu); 				// register for IPA_CFG_CHANGE event
 					IPACM_EvtDispatcher::registr(IPA_NOTIFY_VLAN_UP, odu);
+					IPACM_EvtDispatcher::registr(IPA_NOTIFY_VLAN_DOWN, odu);
 #endif
 #ifdef FEATURE_SOCKSv5
 						IPACM_EvtDispatcher::registr(IPA_HANDLE_SOCKSv5_READY, odu);
@@ -507,6 +508,7 @@ int IPACM_IfaceManager::create_iface_instance(ipacm_ifacemgr_data *param)
 				IPACM_EvtDispatcher::registr(IPA_HANDLE_WAN_VLAN_PDN_DOWN, wl);
 				IPACM_EvtDispatcher::registr(IPA_HANDLE_WAN_ADDR_ADD_V6, wl);
 				IPACM_EvtDispatcher::registr(IPA_NOTIFY_VLAN_UP, wl);
+				IPACM_EvtDispatcher::registr(IPA_NOTIFY_VLAN_DOWN, wl);
 #endif
 #ifndef FEATURE_IPA_ANDROID
 				IPACM_EvtDispatcher::registr(IPA_WLAN_SWITCH_TO_SCC, wl);

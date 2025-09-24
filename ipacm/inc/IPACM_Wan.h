@@ -233,8 +233,6 @@ public:
 	static int GetV6PrefixByVid(int vid, uint32_t *v6_prefix);
 	static int GetV6MTUByPrefix(uint16_t *mtu, uint32_t *v6_prefix);
 	static IPACM_firewall_conf_t* get_curr_pdn_firewall_config(IPACM_firewall_t &firewall_configs, const char* dev_name);
-	static int get_wan_v4_index(ipacm_wan_iface_type sta_mode);
-	static int get_wan_v6_index(ipacm_wan_iface_type sta_mode);
 #endif
 	static bool isWanUP(int ipa_if_num_tether)
 	{
@@ -861,6 +859,8 @@ private:
 
 #ifdef FEATURE_VLAN_MPDN
 	void get_vlan_association_info(ipacm_vlan_association_info* vlan_info);
+	void get_vlan_pdn_associated_info(ipacm_vlan_association_info* vlan_info, ipacm_wan_iface_type sta_mode,
+		int ip_type, bool* v4_found, bool* v6_found);
 	void post_wan_vlan_pdn_event(ipa_ip_type iptype, int pdn_idx, int vlan_idx, uint16_t vlan_id, bool vlan_up);
 	int handle_vlan_backhaul_switch_v4(ipacm_event_route_vlan *data);
 	int handle_vlan_backhaul_switch_v6(ipacm_event_route_vlan *data, bool xlat_cfg = false);

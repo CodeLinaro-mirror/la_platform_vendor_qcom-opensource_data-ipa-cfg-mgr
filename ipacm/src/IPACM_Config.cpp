@@ -26,8 +26,8 @@
  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * Changes from Qualcomm Innovation Center, Inc. are provided under the following license:
- * Copyright (c) 2023-2025 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Changes from Qualcomm Technologies, Inc. are provided under the following license:
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  * SPDX-License-Identifier: BSD-3-Clause-Clear.
  */
 /*!
@@ -162,6 +162,7 @@ const char *ipacm_event_name[] = {
 	__stringify(IPA_HANDLE_WAN_EXT_PROP_CHANGE),          /* NULL */
 	__stringify(IPA_HANDLE_LAN_WAN_EXT_PROP_CHANGE),      /* NULL */
 	__stringify(IPA_DUMMY_VLAN_DOWN_EVENT),              /* ipacm_event_route_vlan */
+	__stringify(IPA_NOTIFY_VLAN_DOWN),                    /* ipacm_event_data_vlan */
 	__stringify(IPACM_EVENT_MAX),
 };
 
@@ -1708,6 +1709,7 @@ void IPACM_Config::restore_vlan_nat_ifaces(const char *phys_iface_name)
 void IPACM_Config::del_vlan_iface(ipa_ioc_vlan_iface_info *data)
 {
 	list<vlan_iface_info>::iterator it_vlan;
+	vlan_iface_info *del_vlan_info = NULL;
 
 	if(pthread_mutex_lock(&vlan_l2tp_lock) != 0)
 	{
@@ -1767,6 +1769,27 @@ void IPACM_Config::del_vlan_iface(ipa_ioc_vlan_iface_info *data)
 	{
 		ipacm_event_eth_bridge *evt_data_eth_bridge;
 		ipacm_cmd_q_data eth_bridge_evt;
+		del_vlan_info = (vlan_iface_info*)malloc(sizeof(*del_vlan_info));
+		if(del_vlan_info == NULL)
+		{
+			IPACMERR("Failed to allocate memory.\n");
+			return;
+		}
+
+		/*
+		 * Call IPA_NOTIFY_VLAN_DOWN to check clear the vlan info
+		 * from LAN class when VLAN is down
+		 */
+		memset(del_vlan_info, 0, sizeof(*del_vlan_info));
+		memcpy(del_vlan_info->vlan_iface_name, data->name,
+			sizeof(del_vlan_info->vlan_iface_name));
+		del_vlan_info->vlan_id = data->vlan_id;
+		eth_bridge_evt.evt_data = (void*)del_vlan_info;
+		eth_bridge_evt.event = IPA_NOTIFY_VLAN_DOWN;
+
+		IPACMDBG_H("Posting event %s\n",
+		IPACM_Iface::ipacmcfg->getEventName(eth_bridge_evt.event));
+		IPACM_EvtDispatcher::PostEvt(&eth_bridge_evt);
 
 		evt_data_eth_bridge = (ipacm_event_eth_bridge*)malloc(sizeof(*evt_data_eth_bridge));
 		if(evt_data_eth_bridge == NULL)

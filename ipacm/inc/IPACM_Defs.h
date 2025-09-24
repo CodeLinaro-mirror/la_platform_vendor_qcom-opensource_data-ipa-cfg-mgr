@@ -1,6 +1,5 @@
 /*
 Copyright (c) 2013-2021, The Linux Foundation. All rights reserved.
-Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are
@@ -27,9 +26,9 @@ WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
 OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
 IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-Changes from Qualcomm Innovation Center, Inc. are provided under the following license:
-Copyright (c) 2024 Qualcomm Innovation Center, Inc. All rights reserved.
-SPDX-License-Identifier: BSD-3-Clause-Clear
+Changes from Qualcomm Technologies, Inc. are provided under the following license:
+Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+SPDX-License-Identifier: BSD-3-Clause-Clear.
 
 */
 /*!
@@ -280,6 +279,7 @@ typedef enum
 	IPA_HANDLE_WAN_EXT_PROP_CHANGE,           /* NULL */
 	IPA_HANDLE_LAN_WAN_EXT_PROP_CHANGE,       /* NULL */
 	IPA_DUMMY_VLAN_DOWN_EVENT,               /* ipacm_event_route_vlan */
+	IPA_NOTIFY_VLAN_DOWN,                     /* vlan_iface_info */
 	IPACM_EVENT_MAX
 } ipa_cm_event_id;
 

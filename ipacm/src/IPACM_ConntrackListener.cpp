@@ -3505,7 +3505,7 @@ void IPACM_ConntrackListener::ProcessTCPorUDPMsg_v6(const ipacm_ct_evt_data* evt
 					((src_ipv6_msb & 0x00000000FFFFFFFF) ==
 						v6_vlan_pdns[i].ipv6_prefix[1]))
 				{
-					for(vlan_idx = 0; vlan_idx < v6_vlan_pdns[i].VID_cnt; vlan_idx++)
+					for(vlan_idx = 0; vlan_idx < IPA_MAX_NUM_SW_PDNS; vlan_idx++)
 					{
 						if(VlanID == v6_vlan_pdns[i].associated_VIDs[vlan_idx])
 						{

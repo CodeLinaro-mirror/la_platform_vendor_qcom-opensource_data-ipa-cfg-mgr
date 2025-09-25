@@ -2415,7 +2415,7 @@ list<client_info>::iterator IPACM_LanToLan_Iface::handle_client_del(uint8_t *mac
 	bool flag[IPA_HDR_L2_MAX];
 
 #ifdef FEATURE_VLAN_MPDN
-	if((vlan_id && !m_is_vlan) || (!vlan_id && m_is_vlan))
+	if(((vlan_id < DUMMY_VLAN_ID_BASE) && !m_is_vlan) || (!vlan_id && m_is_vlan))
 	{
 		IPACM_SYSLOG("vlan client (%d) and vlan mode(%d) mismatch, return\n", vlan_id, m_is_vlan);
 		return m_client_info.end();

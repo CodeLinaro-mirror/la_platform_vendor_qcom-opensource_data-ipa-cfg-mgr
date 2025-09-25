@@ -1,6 +1,5 @@
 /*
 Copyright (c) 2013, 2018-2021, The Linux Foundation. All rights reserved.
-Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are
@@ -61,8 +60,8 @@ IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  * OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * Changes from Qualcomm Innovation Center are provided under the following license:
- * Copyright (c) 2025 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Changes from Qualcomm Technologies, Inc. are provided under the following license:
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  * SPDX-License-Identifier: BSD-3-Clause-Clear.
  */
 /*!
@@ -91,6 +90,7 @@ IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #define IPA_NUM_DEFAULT_WAN_FILTER_RULES 3 /*1 for v4, 2 for v6*/
 #define IPA_V2_NUM_DEFAULT_WAN_FILTER_RULE_IPV4 2
+#define IPA_IPV6_ADDR_WORDS 4
 
 #define NETWORK_STATS "%s %lu %lu %lu %lu"
 #ifdef FEATURE_IPA_ANDROID
@@ -721,7 +721,7 @@ private:
 	}
 
 	int handle_wan_hdr_init(uint8_t *mac_addr, bool gw_addr);
-	int handle_wan_client_ipaddr(ipacm_event_data_all *data);
+	int handle_wan_client_ipaddr(ipacm_event_data_all *data, bool gw_addr);
 	int handle_wan_client_route_rule(uint8_t *mac_addr, ipa_ip_type iptype);
 
 	/* handle new_address event */

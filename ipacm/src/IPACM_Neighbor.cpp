@@ -1312,11 +1312,15 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 #endif
 								is_if_index_change = false;
 								/* use previous ipv4 first */
-								if(data->if_index != neighbor_client[i].iface_index)
+								if((data->if_index != neighbor_client[i].iface_index))
 								{
-									IPACM_SYSLOG("update new kernel iface index \n");
-									is_if_index_change = true;
-									old_if_index = neighbor_client[i].iface_index;
+									IPACM_SYSLOG("update new kernel iface index\n");
+									if(!strncmp(neighbor_client[i].iface_name, data->iface_name, sizeof(neighbor_client[i].iface_name)))
+									{
+										IPACM_SYSLOG("update new kernel iface index for %s\n", data->iface_name);
+										is_if_index_change = true;
+										old_if_index = neighbor_client[i].iface_index;
+									}
 									IPACM_SYSLOG("interface index is changes from %d to %d new kernel iface index\n", old_if_index, data->if_index);
 									neighbor_client[i].iface_index = data->if_index;
 									strlcpy(neighbor_client[i].iface_name, data->iface_name, sizeof(neighbor_client[i].iface_name));

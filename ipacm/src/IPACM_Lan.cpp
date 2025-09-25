@@ -10298,6 +10298,7 @@ int IPACM_Lan::modify_private_subnet()
 			res = IPACM_FAILURE;
 			goto fail;
 		}
+		memset(private_fl_rule_hdl, 0, sizeof(private_fl_rule_hdl));
 		IPACM_Iface::ipacmcfg->decreaseFltRuleCount(rx_prop->rx[0].src_pipe, IPA_IP_v4, num_wan_subnet_rules);
 		num_wan_subnet_rules = 0;
 	}
@@ -10447,6 +10448,7 @@ int IPACM_Lan::modify_private_subnet()
 	if(false == m_filtering.AddFilteringRuleAfter(pFilteringTable))
 	{
 		IPACM_SYSLOG("Failed to modify private subnet filtering rules.\n");
+		num_wan_subnet_rules = 0;
 		res = IPACM_FAILURE;
 		goto fail;
 	}
@@ -10541,6 +10543,7 @@ int IPACM_Lan::modify_ipv6_prefix_flt_rule()
 			res = IPACM_FAILURE;
 			goto fail;
 		}
+		memset(ipv6_prefix_flt_rule_hdl, 0, sizeof(ipv6_prefix_flt_rule_hdl));
 		IPACM_Iface::ipacmcfg->decreaseFltRuleCount(rx_prop->rx[0].src_pipe, IPA_IP_v6, num_wan_prefix_rules);
 		num_wan_prefix_rules = 0;
 	}
@@ -10589,7 +10592,8 @@ int IPACM_Lan::modify_ipv6_prefix_flt_rule()
 	pFilteringTable->num_rules = num_wan_prefix_rules = (uint8_t)IPACM_Iface::ipacmcfg->num_ipv6_prefixes + IPACM_Iface::ipacmcfg->num_no_offload_ipv6_prefix + mtu_rule_cnt;
 	if (pFilteringTable->num_rules > IPA_MAX_IPV6_NO_OFFLOAD_PREFIX_FLT_RULE + IPA_MAX_MTU_ENTRIES)
 	{
-		IPACM_SYSLOG("Number of rules crossed the maximum available space");
+		IPACM_SYSLOG("ERROR: Number of rules crossed the maximum available space");
+		num_wan_prefix_rules = 0;
 		free(pFilteringTable);
 		return IPACM_FAILURE;
 	}
@@ -10681,6 +10685,7 @@ int IPACM_Lan::modify_ipv6_prefix_flt_rule()
 	if(false == m_filtering.AddFilteringRuleAfter(pFilteringTable))
 	{
 		IPACM_SYSLOG("Failed to add prefix filtering rules.\n");
+		num_wan_prefix_rules = 0;
 		res = IPACM_FAILURE;
 		goto fail;
 	}
@@ -10915,6 +10920,8 @@ void IPACM_Lan::delete_ipv6_prefix_flt_rule()
 		IPACM_SYSLOG("Failed to delete ipv6 prefix flt rule.\n");
 		return;
 	}
+	for (int i = 0; i < IPv6_PREFIX_DEFAULT_PDN_RULE_NUM; i++)
+		ipv6_prefix_flt_rule_hdl[i] = 0;
 	IPACM_Iface::ipacmcfg->decreaseFltRuleCount(rx_prop->rx[0].src_pipe, IPA_IP_v6, IPv6_PREFIX_DEFAULT_PDN_RULE_NUM);
 	num_wan_prefix_rules = 0;
 	return;

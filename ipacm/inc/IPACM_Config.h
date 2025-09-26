@@ -97,6 +97,9 @@ typedef struct _ipa_rm_client
 #define IPA_SYS_CMD_LEN 200
 #endif
 
+#define IPA_QoS_DL_RULE 0
+#define IPA_QoS_UL_RULE 1
+
 /* used to hold extended properties */
 typedef struct
 {
@@ -376,6 +379,7 @@ struct qos_param_info {
 };
 
 struct qos_delete_param_info {
+	uint8_t dir;
 	uint32_t client_cnt;
 	qos_client_info qos_client_list[];
 };

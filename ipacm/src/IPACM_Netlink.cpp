@@ -991,91 +991,93 @@ static int ipa_nl_decode_nlmsg
 							evt_data.evt_data = data_fid;
 							IPACM_EvtDispatcher::PostEvt(&evt_data);
 						}
-
-						/* Add IPACM support for ECM plug-in/plug_out */
-						/*--------------------------------------------------------------------------
-						  Check if the interface is running.If its a RTM_NEWLINK and the interface
-						  is running then it means that its a link up event
-						  ---------------------------------------------------------------------------*/
-						if ((msg_ptr->nl_link_info.metainfo.ifi_flags & IFF_RUNNING) &&
-								(msg_ptr->nl_link_info.metainfo.ifi_flags & IFF_LOWER_UP)) {
-							data_fid = (ipacm_event_data_fid *)malloc(sizeof(ipacm_event_data_fid));
-							if (data_fid == NULL) {
-								IPACMERR("unable to allocate memory for event data_fid\n");
-								ret_val = -ENOMEM;
-								goto fail;
-							}
-							data_fid->if_index = msg_ptr->nl_link_info.metainfo.ifi_index;
-
-							IPACMDBG("Got a usb link_up event (Interface %s, %d) \n", dev_name,
-									msg_ptr->nl_link_info.metainfo.ifi_index);
-							strlcpy(data_fid->iface_name, dev_name, sizeof(data_fid->iface_name));
-							if (msg_ptr->nl_link_info.link_type == IPA_LINK_TYPE_VLAN)
-								IPACM_Iface::ipacmcfg->add_vlan_iface(&vlan_info);
+						else
+						{
+							/* Add IPACM support for ECM plug-in/plug_out */
 							/*--------------------------------------------------------------------------
-							  Post LAN iface (ECM) link up event
+							  Check if the interface is running.If its a RTM_NEWLINK and the interface
+							  is running then it means that its a link up event
 							  ---------------------------------------------------------------------------*/
-							evt_data.event = IPA_USB_LINK_UP_EVENT;
-							evt_data.evt_data = data_fid;
-							IPACMDBG_H("Posting usb IPA_LINK_UP_EVENT with if index: %d\n", data_fid->if_index);
-							IPACM_EvtDispatcher::PostEvt(&evt_data);
-						} else if (!(msg_ptr->nl_link_info.metainfo.ifi_flags & IFF_LOWER_UP)) {
-							data_fid = (ipacm_event_data_fid *)malloc(sizeof(ipacm_event_data_fid));
-							if (data_fid == NULL) {
-								IPACMERR("unable to allocate memory for event data_fid\n");
-								ret_val = -ENOMEM;
-								goto fail;
-							}
-
-							ret_val = ipa_get_if_name(dev_name, msg_ptr->nl_link_info.metainfo.ifi_index);
-							if(ret_val != IPACM_SUCCESS)
-							{
-								IPACMERR("Error while getting interface name\n");
-								free(data_fid);
-								goto fail;
-							}
-							IPACMDBG_H("Got a usb link_down event (Interface %s) \n", dev_name);
-
-
-							if (msg_ptr->nl_link_info.link_type == IPA_LINK_TYPE_VLAN)
-								IPACM_Iface::ipacmcfg->del_vlan_iface(&vlan_info);
-							if (msg_ptr->nl_link_info.link_type == IPA_LINK_TYPE_MACSEC) {
-								if (!IPACM_Iface::ipacmcfg->getMacsecMapping(msg_ptr->nl_link_info.metainfo.ifi_index,
-											&macsec_map))
-									IPACMERR("getMacsecMapping failed\n");
-								if (IPACM_Iface::ipacmcfg->delMacsecMap(&macsec_map)) {
-									evt_data.event = IPA_HANDLE_MACSEC_DEL;
-									macsec_map_data = static_cast<decltype(macsec_map_data)>
-										(malloc(sizeof(*macsec_map_data)));
-									if (!macsec_map_data) {
-										IPACMERR("malloc failed\n");
-										ret_val = -ENOMEM;
-										goto fail;
-									}
-									memcpy(macsec_map_data, &macsec_map, sizeof(macsec_map));
-									evt_data.evt_data = macsec_map_data;
-									IPACM_EvtDispatcher::PostEvt(&evt_data);
+							if ((msg_ptr->nl_link_info.metainfo.ifi_flags & IFF_RUNNING) &&
+									(msg_ptr->nl_link_info.metainfo.ifi_flags & IFF_LOWER_UP)) {
+								data_fid = (ipacm_event_data_fid *)malloc(sizeof(ipacm_event_data_fid));
+								if (data_fid == NULL) {
+									IPACMERR("unable to allocate memory for event data_fid\n");
+									ret_val = -ENOMEM;
+									goto fail;
 								}
-							}
-							if (msg_ptr->nl_link_info.metainfo.ifi_family == AF_BRIDGE ||
-									msg_ptr->nl_link_info.metainfo.ifi_family == AF_UNSPEC) {
-								IPACMDBG("Deleting the bridge<->vlan mapping entry with intterface index %d\n",
-										msg_ptr->nl_link_info.metainfo.ifi_index);
-								uint16_t vlan_master_interface_index = msg_ptr->nl_link_info.metainfo.ifi_index;
-								IPACM_Iface::ipacmcfg->del_bridge_vlan_mapping(&vlan_master_interface_index);
-								free(data_fid);
-								goto next_msg;
-							}
+								data_fid->if_index = msg_ptr->nl_link_info.metainfo.ifi_index;
 
-							data_fid->if_index = msg_ptr->nl_link_info.metainfo.ifi_index;
-							strlcpy(data_fid->iface_name, dev_name, sizeof(data_fid->iface_name));
-							/*--------------------------------------------------------------------------
-							  Post LAN iface (ECM) link down event
-							  ---------------------------------------------------------------------------*/
-							evt_data.event = IPA_LINK_DOWN_EVENT;
-							evt_data.evt_data = data_fid;
-							IPACMDBG_H("Posting usb IPA_LINK_DOWN_EVENT with if index: %d\n", data_fid->if_index);
-							IPACM_EvtDispatcher::PostEvt(&evt_data);
+								IPACMDBG("Got a usb link_up event (Interface %s, %d) \n", dev_name,
+										msg_ptr->nl_link_info.metainfo.ifi_index);
+								strlcpy(data_fid->iface_name, dev_name, sizeof(data_fid->iface_name));
+								if (msg_ptr->nl_link_info.link_type == IPA_LINK_TYPE_VLAN)
+									IPACM_Iface::ipacmcfg->add_vlan_iface(&vlan_info);
+								/*--------------------------------------------------------------------------
+								  Post LAN iface (ECM) link up event
+								  ---------------------------------------------------------------------------*/
+								evt_data.event = IPA_USB_LINK_UP_EVENT;
+								evt_data.evt_data = data_fid;
+								IPACMDBG_H("Posting usb IPA_LINK_UP_EVENT with if index: %d\n", data_fid->if_index);
+								IPACM_EvtDispatcher::PostEvt(&evt_data);
+							} else if (!(msg_ptr->nl_link_info.metainfo.ifi_flags & IFF_LOWER_UP)) {
+								data_fid = (ipacm_event_data_fid *)malloc(sizeof(ipacm_event_data_fid));
+								if (data_fid == NULL) {
+									IPACMERR("unable to allocate memory for event data_fid\n");
+									ret_val = -ENOMEM;
+									goto fail;
+								}
+
+								ret_val = ipa_get_if_name(dev_name, msg_ptr->nl_link_info.metainfo.ifi_index);
+								if(ret_val != IPACM_SUCCESS)
+								{
+									IPACMERR("Error while getting interface name\n");
+									free(data_fid);
+									goto fail;
+								}
+								IPACMDBG_H("Got a usb link_down event (Interface %s) \n", dev_name);
+
+
+								if (msg_ptr->nl_link_info.link_type == IPA_LINK_TYPE_VLAN)
+									IPACM_Iface::ipacmcfg->del_vlan_iface(&vlan_info);
+								if (msg_ptr->nl_link_info.link_type == IPA_LINK_TYPE_MACSEC) {
+									if (!IPACM_Iface::ipacmcfg->getMacsecMapping(msg_ptr->nl_link_info.metainfo.ifi_index,
+												&macsec_map))
+										IPACMERR("getMacsecMapping failed\n");
+									if (IPACM_Iface::ipacmcfg->delMacsecMap(&macsec_map)) {
+										evt_data.event = IPA_HANDLE_MACSEC_DEL;
+										macsec_map_data = static_cast<decltype(macsec_map_data)>
+											(malloc(sizeof(*macsec_map_data)));
+										if (!macsec_map_data) {
+											IPACMERR("malloc failed\n");
+											ret_val = -ENOMEM;
+											goto fail;
+										}
+										memcpy(macsec_map_data, &macsec_map, sizeof(macsec_map));
+										evt_data.evt_data = macsec_map_data;
+										IPACM_EvtDispatcher::PostEvt(&evt_data);
+									}
+								}
+								if (msg_ptr->nl_link_info.metainfo.ifi_family == AF_BRIDGE ||
+										msg_ptr->nl_link_info.metainfo.ifi_family == AF_UNSPEC) {
+									IPACMDBG("Deleting the bridge<->vlan mapping entry with intterface index %d\n",
+											msg_ptr->nl_link_info.metainfo.ifi_index);
+									uint16_t vlan_master_interface_index = msg_ptr->nl_link_info.metainfo.ifi_index;
+									IPACM_Iface::ipacmcfg->del_bridge_vlan_mapping(&vlan_master_interface_index);
+									free(data_fid);
+									goto next_msg;
+								}
+
+								data_fid->if_index = msg_ptr->nl_link_info.metainfo.ifi_index;
+								strlcpy(data_fid->iface_name, dev_name, sizeof(data_fid->iface_name));
+								/*--------------------------------------------------------------------------
+								  Post LAN iface (ECM) link down event
+								  ---------------------------------------------------------------------------*/
+								evt_data.event = IPA_LINK_DOWN_EVENT;
+								evt_data.evt_data = data_fid;
+								IPACMDBG_H("Posting usb IPA_LINK_DOWN_EVENT with if index: %d\n", data_fid->if_index);
+								IPACM_EvtDispatcher::PostEvt(&evt_data);
+							}
 						}
 					}
 				}

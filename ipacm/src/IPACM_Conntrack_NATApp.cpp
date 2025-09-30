@@ -920,9 +920,10 @@ bool NatApp::firewall_tuple_match_with_nat(IPACM_extd_swallow_entry_conf_t extd_
 
 void NatApp::HandleSWAllowEntries(void)
 {
-	int i, j, cnt;
+	int i, j, k,cnt;
 	IPACM_swallow_conf_t entry;
 	const nat_table_entry *del_entry;
+	bool pdn_found=false;
 	IPACMDBG("Entry\n");
 
 	if(!IPACM_Iface::ipacmcfg->sw_filter_cfg)
@@ -939,6 +940,29 @@ void NatApp::HandleSWAllowEntries(void)
 	{
 		firewall_compare(&backup_sw_filter_cfg.pdns[i], &sw_filter_cfg.pdns[i]);
 	}
+
+	for(i = 0; i < backup_sw_filter_cfg.pdn_count; i++)
+	{
+		pdn_found = false;
+		for(k = 0; k < sw_filter_cfg.pdn_count; k++)
+		{
+			if (strncmp(backup_sw_filter_cfg.pdns[i].net_dev, sw_filter_cfg.pdns[k].net_dev, IPA_IFACE_NAME_LEN) == 0)
+			{
+				pdn_found = true;
+				break;
+			}
+		}
+
+		if (!pdn_found)
+		{
+			IPACMDBG_H("PDN with netdev '%s' was removed from sw_filter_cfg. Restoring NAT entries.\n",
+					backup_sw_filter_cfg.pdns[i].net_dev);
+			for(j = 0; j < backup_sw_filter_cfg.pdns[i].num_extd_swallow_entries; j++) {
+				restore_nat_for_sw_flt_entries(backup_sw_filter_cfg.pdns[i].extd_swallow_entries[j]);
+			}
+		}
+	}
+
 	for(i = 0; i < sw_filter_cfg.pdn_count; i++)
 	{
 		IPACMDBG("pdn_index_v4 %d\n", sw_filter_cfg.pdns[i].v4_up);

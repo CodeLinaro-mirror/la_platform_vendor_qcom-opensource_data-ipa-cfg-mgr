@@ -3858,7 +3858,8 @@ int IPACM_Wlan::handle_wlan_vlan_neighbor(ipacm_event_data_all *data)
 		*/
 		/* Posting the IPA_ROUTE_ADD_VLAN_PDN_EVENT for wlan incase of wlan interface goes down/up
 		once neigh is recieved */
-		if(new_prefix || IPACM_Iface::ipacmcfg->is_offload_ipv6_prefix(data->ipv6_addr))
+		if(new_prefix || ((data_vlan->data_all.iptype == IPA_IP_v6) &&
+		(IPACM_Iface::ipacmcfg->is_offload_ipv6_prefix(data->ipv6_addr))))
 		{
 			ipacm_cmd_q_data evt_data;
 			ipacm_event_route_vlan *data;

@@ -231,7 +231,7 @@ void IPACM_Wlan::event_callback(ipa_cm_event_id event, void *param)
 				IPACM_Iface::ipacmcfg->DelNatIfaces(dev_name); // delete NAT-iface
 				IPACM_Wlan::total_num_wifi_clients = (IPACM_Wlan::total_num_wifi_clients) - \
                                                                      (num_wifi_client);
-				return;
+				post_del_self_evt();
 			}
 		}
 		break;
@@ -3146,17 +3146,6 @@ int IPACM_Wlan::handle_down_evt()
 			goto fail;
 		}
 		IPACM_Iface::ipacmcfg->decreaseFltRuleCount(rx_prop->rx[0].src_pipe, IPA_IP_v4, NUM_IPV4_ICMP_FLT_RULE);
-		if (dft_v4fl_rule_hdl[0] != 0)
-		{
-			if (m_filtering.DeleteFilteringHdls(dft_v4fl_rule_hdl, IPA_IP_v4, IPV4_DEFAULT_FILTERTING_RULES) == false)
-			{
-				IPACM_SYSLOG("Error Deleting Filtering Rule, aborting...\n");
-				res = IPACM_FAILURE;
-				goto fail;
-			}
-			IPACM_Iface::ipacmcfg->decreaseFltRuleCount(rx_prop->rx[0].src_pipe, IPA_IP_v4, IPV4_DEFAULT_FILTERTING_RULES);
-			IPACMDBG_H("Deleted default v4 filter rules successfully.\n");
-		}
 		/* delete private-ipv4 filter rules */
 #if defined(FEATURE_IPA_ANDROID) || defined(FEATURE_VLAN_MPDN)
 		if(m_filtering.DeleteFilteringHdls(private_fl_rule_hdl, IPA_IP_v4, num_wan_subnet_rules) == false)
@@ -3165,6 +3154,7 @@ int IPACM_Wlan::handle_down_evt()
 			res = IPACM_FAILURE;
 			goto fail;
 		}
+		memset(private_fl_rule_hdl, 0, sizeof(private_fl_rule_hdl));
 		IPACM_Iface::ipacmcfg->decreaseFltRuleCount(rx_prop->rx[0].src_pipe, IPA_IP_v4, num_wan_subnet_rules);
 #else
 		num_private_subnet_fl_rule = IPACM_Iface::ipacmcfg->ipa_num_private_subnet > (IPA_MAX_PRIVATE_SUBNET_ENTRIES + IPA_MAX_MTU_ENTRIES)?
@@ -3200,19 +3190,6 @@ int IPACM_Wlan::handle_down_evt()
 			goto fail;
 		}
 		IPACM_Iface::ipacmcfg->decreaseFltRuleCount(rx_prop->rx[0].src_pipe, IPA_IP_v6, NUM_IPV6_ICMP_FLT_RULE);
-
-		if (dft_v6fl_rule_hdl[0] != 0)
-		{
-			if (!m_filtering.DeleteFilteringHdls(dft_v6fl_rule_hdl, IPA_IP_v6, m_ipv6_default_filterting_rules_count))
-			{
-				IPACM_SYSLOG("Error Adding RuleTable(1) to Filtering, aborting...\n");
-				res = IPACM_FAILURE;
-				goto fail;
-			}
-			IPACM_Iface::ipacmcfg->decreaseFltRuleCount(
-				rx_prop->rx[0].src_pipe, IPA_IP_v6, m_ipv6_default_filterting_rules_count);
-			IPACMDBG_H("Deleted default v6 filter rules successfully.\n");
-		}
 
 		if(m_filtering.DeleteFilteringHdls(&tcp_syn_flt_rule_hdl[IPA_IP_v6], IPA_IP_v6, 1) == false)
 		{
@@ -3299,7 +3276,7 @@ int IPACM_Wlan::handle_down_evt()
 				data_vlan->mux_id = v4_mux_up[i].mux_id;
 				data_vlan->iptype = IPA_IP_v4;
 				IPACM_SYSLOG("mux %d up, delete v4 flt rules\n", v4_mux_up[i].mux_id);
-				handle_vlan_pdn_down(data_vlan);
+				IPACM_Lan::handle_vlan_pdn_down(data_vlan);
 			}
 		}
 		free(data_vlan);
@@ -3323,7 +3300,7 @@ int IPACM_Wlan::handle_down_evt()
 				data_vlan->mux_id = v6_mux_up[i].mux_id;
 				data_vlan->iptype = IPA_IP_v6;
 				IPACM_SYSLOG("mux %d up, delete v6 flt rules\n", v6_mux_up[i].mux_id);
-				handle_vlan_pdn_down(data_vlan);
+				IPACM_Lan::handle_vlan_pdn_down(data_vlan);
 			}
 		}
 		free(data_vlan);
@@ -3347,7 +3324,7 @@ int IPACM_Wlan::handle_down_evt()
 			data_vlan->mux_id = 0;
 			data_vlan->iptype = IPA_IP_v4;
 			IPACM_SYSLOG("mux %d up, delete v6 flt rules\n", v6_mux_up[i].mux_id);
-			handle_vlan_pdn_down(data_vlan);
+			IPACM_Lan::handle_vlan_pdn_down(data_vlan);
 			free(data_vlan);
 		}
 		if((vlan_sta_info[i].vlan_id != 0) && (vlan_sta_info[i].v6_flt_hdl != 0))
@@ -3365,11 +3342,73 @@ int IPACM_Wlan::handle_down_evt()
 			data_vlan->mux_id = 0;
 			data_vlan->iptype = IPA_IP_v6;
 			IPACM_SYSLOG("mux %d up, delete v6 flt rules\n", v6_mux_up[i].mux_id);
-			handle_vlan_pdn_down(data_vlan);
+			IPACM_Lan::handle_vlan_pdn_down(data_vlan);
 			free(data_vlan);
 		}
 	}
 
+	if(ip_type != IPA_IP_v4)
+	{
+		if(num_wan_prefix_rules > 0)
+		{
+			IPACMDBG_H("Delete wan prefix v6 filter rules\n");
+			if(ipv6_prefix_flt_rule_hdl[0] != 0 && m_filtering.DeleteFilteringHdls(ipv6_prefix_flt_rule_hdl, IPA_IP_v6,
+				num_wan_prefix_rules) == false)
+			{
+				IPACMERR("Error Deleting Filtering, aborting...\n");
+				res = IPACM_FAILURE;
+				goto fail;
+			}
+			else
+			{
+				IPACMDBG_H("Deleted %d wan prefix v6 filter rules successfully\n", num_wan_prefix_rules);
+				memset(ipv6_prefix_flt_rule_hdl, 0, sizeof(ipv6_prefix_flt_rule_hdl));
+				IPACM_Iface::ipacmcfg->decreaseFltRuleCount(rx_prop->rx[0].src_pipe, IPA_IP_v6, num_wan_prefix_rules);
+				num_wan_prefix_rules = 0;
+			}
+		}
+		IPACMDBG_H("Deleted default v6 filter rules %d %d \n", m_ipv6_default_filterting_rules_count, dft_v6fl_rule_hdl[0]);
+		if (dft_v6fl_rule_hdl[0] != 0)
+		{
+			if (!m_filtering.DeleteFilteringHdls(dft_v6fl_rule_hdl, IPA_IP_v6, m_ipv6_default_filterting_rules_count))
+			{
+				IPACM_SYSLOG("Error Adding RuleTable(1) to Filtering, aborting...\n");
+				res = IPACM_FAILURE;
+				goto fail;
+			}
+			memset(dft_v6fl_rule_hdl, 0, sizeof(dft_v6fl_rule_hdl));
+			IPACM_Iface::ipacmcfg->decreaseFltRuleCount(
+				rx_prop->rx[0].src_pipe, IPA_IP_v6, m_ipv6_default_filterting_rules_count);
+			IPACMDBG_H("Deleted default v6 filter rules successfully.\n");
+		}
+	}
+	if(ip_type != IPA_IP_v6)
+	{
+		if (dft_v4fl_rule_hdl[0] != 0)
+		{
+			if (m_filtering.DeleteFilteringHdls(dft_v4fl_rule_hdl, IPA_IP_v4, IPV4_DEFAULT_FILTERTING_RULES) == false)
+			{
+				IPACM_SYSLOG("Error Deleting Filtering Rule, aborting...\n");
+				res = IPACM_FAILURE;
+				goto fail;
+			}
+			memset(dft_v4fl_rule_hdl, 0, sizeof(dft_v4fl_rule_hdl));
+			IPACM_Iface::ipacmcfg->decreaseFltRuleCount(rx_prop->rx[0].src_pipe, IPA_IP_v4, IPV4_DEFAULT_FILTERTING_RULES);
+			IPACMDBG_H("Deleted default v4 filter rules successfully.\n");
+		}
+		if(num_wan_subnet_rules > 0)
+		{
+			if(m_filtering.DeleteFilteringHdls(private_fl_rule_hdl, IPA_IP_v4, num_wan_subnet_rules) == false)
+			{
+				IPACM_SYSLOG("ERROR: deleting private subnet IPv4 flt rules failed.\n");
+				res = IPACM_FAILURE;
+				goto fail;
+			}
+			memset(private_fl_rule_hdl, 0, sizeof(private_fl_rule_hdl));
+			IPACM_Iface::ipacmcfg->decreaseFltRuleCount(rx_prop->rx[0].src_pipe, IPA_IP_v4, num_wan_subnet_rules);
+			num_wan_subnet_rules = 0;
+		}
+	}
 fail:
 	/* clean wifi-client header, routing rules */
 	/* clean wifi client rule*/
@@ -3487,7 +3526,6 @@ fail:
 	}
 
 	is_active = false;
-	post_del_self_evt();
 
 	return res;
 }

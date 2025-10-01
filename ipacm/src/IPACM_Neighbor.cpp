@@ -87,9 +87,9 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 #ifdef FEATURE_VLAN_MPDN
 	ipacm_event_new_neigh_vlan *data_vlan = NULL;
 #endif
-	int i, ipa_interface_index, j;
+	int i, ipa_interface_index, j, old_if_index = -1;
 	ipacm_cmd_q_data evt_data;
-	bool move_elements;
+	bool move_elements, is_if_index_change;
 	int num_neighbor_client_temp = num_neighbor_client;
 	char iface_name[IPA_IFACE_NAME_LEN] = {0};
 	ipacm_bridge* dummy_vlan_bridge = NULL;
@@ -1320,10 +1320,18 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 									}
 								}
 #endif
+								is_if_index_change = false;
 								/* use previous ipv4 first */
-								if(data->if_index != neighbor_client[i].iface_index)
+								if((data->if_index != neighbor_client[i].iface_index))
 								{
-									IPACM_SYSLOG("update new kernel iface index \n");
+									IPACM_SYSLOG("update new kernel iface index\n");
+									if(!strncmp(neighbor_client[i].iface_name, data->iface_name, sizeof(neighbor_client[i].iface_name)))
+									{
+										IPACM_SYSLOG("update new kernel iface index for %s\n", data->iface_name);
+										is_if_index_change = true;
+										old_if_index = neighbor_client[i].iface_index;
+									}
+									IPACM_SYSLOG("interface index is changes from %d to %d new kernel iface index\n", old_if_index, data->if_index);
 									neighbor_client[i].iface_index = data->if_index;
 									strlcpy(neighbor_client[i].iface_name, data->iface_name, sizeof(neighbor_client[i].iface_name));
 								}
@@ -1348,6 +1356,26 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 									/* construct IPA_NEIGH_CLIENT_IP_ADDR_ADD_EVENT command and insert to command-queue */
 									if (event == IPA_NEW_NEIGH_EVENT)
 									{
+										/*Seems need to clear the client details from
+										lan class when interface index is changes after post the
+										IPA_NEIGH_CLIENT_IP_ADDR_ADD_EVENT to lan class with
+										old interface index */
+										if(is_if_index_change)
+										{
+											evt_data.event = IPA_LAN_CLIENT_DEL_EVENT;
+											data_all = (ipacm_event_data_all *)malloc(sizeof(ipacm_event_data_all));
+											if (data_all == NULL)
+											{
+												IPACMERR("Unable to allocate memory\n");
+												return;
+											}
+											data->if_index = old_if_index;
+											memcpy(data_all, data, sizeof(ipacm_event_data_all));
+											evt_data.evt_data = (void *)data_all;
+											IPACM_EvtDispatcher::PostEvt(&evt_data);
+											data->if_index = neighbor_client[i].iface_index;
+											IPACM_SYSLOG("new kernel iface index %d\n", data->if_index);
+										}
 										evt_data.event = IPA_LAN_CLIENT_ADD_EVENT;
 										data_all = (ipacm_event_data_all *)malloc(sizeof(ipacm_event_data_all));
 										if (data_all == NULL)
@@ -1607,7 +1635,7 @@ void IPACM_Neighbor::update_neigh_cache(const char *iface_name, uint8_t *mac_add
 	uint8_t mac_addr_fdb[IPA_MAC_ADDR_SIZE] = {0};
 	int tmp_var[IPA_MAC_ADDR_SIZE];
 	int query_ifindex, query_ipa_if_num, j, i;
-	bool is_phy_iface = false, is_client_cached = false, parse_error = false;
+	bool is_phy_iface = false, is_client_cached = false, parse_error = false, is_master_iface = false;
 	ipacm_bridge *bridge;
 	char master_dev_name[10];
 	int master_ifindex = -1;
@@ -1642,16 +1670,23 @@ void IPACM_Neighbor::update_neigh_cache(const char *iface_name, uint8_t *mac_add
 			params[i] = tok;
 			tok = strtok_r(NULL, " ", &ptr);
 		}
-
+		is_master_iface = false;
 		for(i = 0; i < MAX_FDB_PARAM_CNT; ++i)
 		{
 			if ((strncmp("dev",params[i], DEV_LEN)==0) && (i < MAX_FDB_PARAM_CNT -1))
 			{
 				strlcpy(rdev_name, params[i+1], IPA_IFACE_NAME_LEN);
+				/*if we are querying the self neigh for wlan at the time of wlan client connect event,
+				So we can ignore the other self neighs*/
+				if((rdev_name!= NULL) && is_wlan_client_connect && (strncmp(rdev_name, "wlan", WLAN_LEN_LEN)!=0))
+				{
+					continue;
+				}
 			}
 			else if(strncmp("master",params[i], MASTER_LEN)==0)
 			{
 				strlcpy(mdev_name, params[i+1], IPA_IFACE_NAME_LEN);
+				is_master_iface = true;
 			}
 			else if (strstr(params[i],":"))
 			{
@@ -1675,8 +1710,7 @@ void IPACM_Neighbor::update_neigh_cache(const char *iface_name, uint8_t *mac_add
 		}
 
 		/*IPACM resatrt supports for non default AP*/
-		if(!strncmp(rdev_name, "wlan", WLAN_LEN_LEN) && (strncmp(mdev_name, "bridge0", BRIDGE_LEN+1) &&
-		 !strncmp(mdev_name, "bridge", BRIDGE_LEN)) && is_phy_iface)
+		if(!strncmp(rdev_name, "wlan", WLAN_LEN_LEN) && (strncmp(mdev_name, "bridge0", BRIDGE_LEN+1) && !strncmp(mdev_name, "bridge", BRIDGE_LEN)) && is_master_iface)
 		{
 			/*Add the add dummy vlan mapped to the wlan ap interace
 			and add the dummy vlan to demand bridge mapping if wlan ap interface is

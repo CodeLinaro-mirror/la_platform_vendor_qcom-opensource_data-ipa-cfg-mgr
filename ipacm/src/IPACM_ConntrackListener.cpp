@@ -375,9 +375,9 @@ void IPACM_ConntrackListener::event_callback(ipa_cm_event_id evt,
 		IPACMDBG_H("Received IPA_HANDLE_SOCKSv5_DOWN event\n");
 		if (WanUp_v6)
 		{
-			Ipv6IpAddress wan_addr;
-			wan_addr.CreateFromArray(wan_data_local.ipv6_addr, false);
-			TriggerWANDown_v6(wan_addr);
+			wan_data = static_cast<const ipacm_event_iface_up*>(&wan_data_local);
+			static_cast<Ipv6IpAddress&>(wan_ipaddr_v6).CreateFromArray(wan_data->ipv6_addr, false);
+			TriggerWANDown_v6(wan_data->ipv6_addr);
 		}
 		break;
 #endif

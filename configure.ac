@@ -18,6 +18,9 @@ PKG_CHECK_MODULES([LIBXML], [libxml-2.0])
 AC_SUBST([LIBXML_CFLAGS])
 AC_SUBST([LIBXML_LIBS])
 
+CPPFLAGS="${CPPFLAGS} -DFEATURE_IPACM_UL_FIREWALL -DFEATURE_IPACM_PER_CLIENT_STATS -DFEATURE_VLAN_MPDN"
+CFLAGS="${CFLAGS} -DFEATURE_IPACM_UL_FIREWALL -DFEATURE_IPACM_PER_CLIENT_STATS -DFEATURE_VLAN_MPDN"
+
 # Checks for libraries.
 
 AC_ARG_WITH(sanitized-headers,
@@ -49,10 +52,39 @@ fi
 
 AM_CONDITIONAL(USE_GLIB, test "x${with_glib}" = "xyes")
 
+has_libnl_ver=0
+# libnl-2 provides only libnl-2.0.pc file, so we check for separate libnl-genl-3.0.pc
+# pkg-config file just for libnl-3.0 case.
+#
+PKG_CHECK_MODULES([LIBNL], [libnl-3.0 >= 3.0 libnl-genl-3.0 >= 3.0], [has_libnl_ver=3], [
+    PKG_CHECK_MODULES([LIBNL], [libnl-2.0 >= 2.0], [has_libnl_ver=2], [
+            PKG_CHECK_MODULES([LIBNL], [libnl-1], [has_libnl_ver=1], [has_libnl_ver=0])])])
+
+if (test "$has_libnl_ver" -eq 0); then
+         AC_MSG_ERROR(libnl and libnl-genl are required but were not found)
+fi
+
+if (test "$has_libnl_ver" -gt 1); then
+         AC_DEFINE([HAVE_LIBNL20], [1], [Define if you have libnl-2.0 or higher])
+fi
+
+if (test "$has_libnl_ver" -gt 2); then
+         AC_DEFINE([HAVE_LIBNL30], [1], [Define if you have libnl-3.0 or higher])
+fi
+AC_SUBST([LIBNL_CFLAGS])
+
+AC_SUBST([LIBNL_LIBS])
+
 AC_ARG_ENABLE(target,
     [AS_HELP_STRING([--enable-target=TARGET], [Specify the target product to build])],
     [TARGET=$enableval],
     [TARGET=none]
+)
+
+AC_ARG_ENABLE(baseproduct,
+  [AS_HELP_STRING([--enable-baseproduct=BASEPRODUCT], [Specify the base product to build])],
+  [BASEPRODUCT=$enableval],
+  [BASEPRODUCT=none]
 )
 
 if test "x$TARGET" = "xsdx20"; then
@@ -69,22 +101,39 @@ fi
 
 if test "x$TARGET" = "xsdxprairie"; then
     echo "\n UL firewall feature enabled\n"
+    CPPFLAGS="${CPPFLAGS} -DFEATURE_IPACM_UL_FIREWALL -DFEATURE_IPACM_PER_CLIENT_STATS -DFEATURE_VLAN_MPDN -DFEATURE_L2TP -DFEATURE_SOCKSv5 -DFEATURE_IPACM_RESTART"
+    CFLAGS="${CFLAGS} -DFEATURE_IPACM_UL_FIREWALL -DFEATURE_IPACM_PER_CLIENT_STATS -DFEATURE_VLAN_MPDN -DFEATURE_L2TP -DFEATURE_SOCKSv5 -DFEATURE_IPACM_RESTART"
+fi
+
+if test "x$TARGET" = "xsa525"; then
+    echo "\n UL firewall feature enabled\n"
+    CPPFLAGS="${CPPFLAGS} -DFEATURE_IPACM_UL_FIREWALL -DFEATURE_IPACM_PER_CLIENT_STATS -DFEATURE_VLAN_MPDN -DFEATURE_L2TP -DFEATURE_SOCKSv5"
+    CFLAGS="${CFLAGS} -DFEATURE_IPACM_UL_FIREWALL -DFEATURE_IPACM_PER_CLIENT_STATS -DFEATURE_VLAN_MPDN -DFEATURE_L2TP -DFEATURE_SOCKSv5 -DFEATURE_IPACM_RESTART"
+fi
+
+if test "x$TARGET" = "xsa525m"; then
+    echo "\n UL firewall feature enabled\n"
+    CPPFLAGS="${CPPFLAGS} -DFEATURE_IPACM_UL_FIREWALL -DFEATURE_IPACM_PER_CLIENT_STATS -DFEATURE_VLAN_MPDN -DFEATURE_L2TP -DFEATURE_SOCKSv5"
+    CFLAGS="${CFLAGS} -DFEATURE_IPACM_UL_FIREWALL -DFEATURE_IPACM_PER_CLIENT_STATS -DFEATURE_VLAN_MPDN -DFEATURE_L2TP -DFEATURE_SOCKSv5 -DFEATURE_IPACM_RESTART"
+fi
+
+if test "x$TARGET" = "xsa535m"; then
+    echo "\n UL firewall feature enabled\n"
     CPPFLAGS="${CPPFLAGS} -DFEATURE_IPACM_UL_FIREWALL -DFEATURE_IPACM_PER_CLIENT_STATS -DFEATURE_VLAN_MPDN"
-    CFLAGS="${CFLAGS} -DFEATURE_IPACM_UL_FIREWALL -DFEATURE_IPACM_PER_CLIENT_STATS -DFEATURE_VLAN_MPDN"
+    CFLAGS="${CFLAGS} -DFEATURE_IPACM_UL_FIREWALL -DFEATURE_IPACM_PER_CLIENT_STATS -DFEATURE_VLAN_MPDN -DFEATURE_IPACM_RESTART"
 fi
 
-if test "x$TARGET" = "xsdxpinn"; then
-    echo "\n UL firewall feature enabled\n"
-    CPPFLAGS="${CPPFLAGS} -DFEATURE_IPACM_UL_FIREWALL -DFEATURE_IPACM_PER_CLIENT_STATS -DFEATURE_VLAN_MPDN -DFEATURE_RDKB"
-    CFLAGS="${CFLAGS} -DFEATURE_IPACM_UL_FIREWALL -DFEATURE_IPACM_PER_CLIENT_STATS -DFEATURE_VLAN_MPDN -DFEATURE_RDKB"
+if test "x$TARGET" = "xsa510m"; then
+    CPPFLAGS="${CPPFLAGS} -DFEATURE_IPACM_PER_CLIENT_STATS -DFEATURE_VLAN_MPDN -DFEATURE_IPACM_RESTART"
+    CFLAGS="${CFLAGS} -DFEATURE_IPACM_PER_CLIENT_STATS -DFEATURE_VLAN_MPDN -DFEATURE_IPACM_RESTART"
 fi
 
-if test "x$TARGET" = "xsdxlemur"; then
-    echo "\n UL firewall feature enabled\n"
-    CPPFLAGS="${CPPFLAGS} -DFEATURE_IPACM_UL_FIREWALL -DFEATURE_IPACM_PER_CLIENT_STATS -DFEATURE_VLAN_MPDN -DFEATURE_EoGRE"
-    CFLAGS="${CFLAGS} -DFEATURE_IPACM_UL_FIREWALL -DFEATURE_IPACM_PER_CLIENT_STATS -DFEATURE_VLAN_MPDN -DFEATURE_EoGRE"
+if test "x$BASEPRODUCT" = "xauto"; then
+	CPPFLAGS="${CPPFLAGS} -DDATA_CONFIG_DIR_PATH='\"/etc/data\"' -DSYSRW_CONFIG_DIR_PATH='\"/systemrw/data\"'"
+	CFLAGS="${CFLAGS} -DDATA_CONFIG_DIR_PATH='\"/etc/data\"' -DSYSRW_CONFIG_DIR_PATH='\"/systemrw/data\"'"
 fi
-AM_CONDITIONAL(NO_L2TP, test "x$TARGET" = "xsdx20" || test "x$TARGET" = "xsdxpoorwills" || test "x$TARGET" = "xsdxprairie" || test "x$TARGET" = "xsdxlemur" || test "x$TARGET" = "xsdxpinn")
+
+AM_CONDITIONAL(NO_L2TP, test "x$TARGET" = "xsdx20" || test "x$TARGET" = "xsdxpoorwills" || test "x$TARGET" = "xsa535m")
 
 # Checks for header files.
 AC_CHECK_HEADERS([fcntl.h netinet/in.h sys/ioctl.h unistd.h])

@@ -2616,6 +2616,8 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 			handle_down_evt_ex();
 			IPACMDBG_H("IPA_WAN_Q6 (%s):ipa_index (%d) instance close \n", IPACM_Iface::ipacmcfg->iface_table[ipa_if_num].iface_name, ipa_if_num);
 #if defined(FEATURE_SOCKSv5) && defined (IPA_SOCKV5_EVENT_MAX)
+			/* add qmuxd mapping*/
+			rmnet_mux_id_info info;
 			info.ipv4_addr = wan_v4_addr;
 			info.mux_id = ext_prop->ext[0].mux_id;;
 			memcpy(info.iface_name, dev_name, sizeof(dev_name));

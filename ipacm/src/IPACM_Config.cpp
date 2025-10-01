@@ -4016,12 +4016,6 @@ void IPACM_Config::update_client_info(uint8_t *mac_addr, tether_client_info *cli
 
 	if (is_add)
 	{
-		if (!(sw_flt_list.iface_enable || sw_flt_list.mac_enable || sw_flt_list.ipv4_segs_enable))
-		{
-			IPACMDBG("None of SW Filtering is enabled \n");
-			pthread_mutex_unlock(&mac_flt_info_lock);
-			return;
-		}
 		IPACMDBG_H(" Adding client mac %02x:%02x:%02x:%02x:%02x:%02x ip4 0x%X, iface %s\n",
 			 mac_a[0], mac_a[1], mac_a[2],
 			 mac_a[3], mac_a[4], mac_a[5],

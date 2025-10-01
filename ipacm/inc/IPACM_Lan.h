@@ -360,6 +360,7 @@ public:
 #ifdef FEATURE_VLAN_MPDN
 	int add_vlan_private_subnet(ipacm_bridge *bridge);
 	int modify_ipv6_prefix_flt_rule(bool eogre_enabled = false);
+	int del_vlan_private_subnet(ipacm_bridge *bridge);
 	int handle_backhaul_switch_vlan_mode(bool to_sta);
 #endif
 

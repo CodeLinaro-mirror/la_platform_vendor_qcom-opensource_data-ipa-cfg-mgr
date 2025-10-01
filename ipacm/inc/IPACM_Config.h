@@ -1270,7 +1270,7 @@ public:
 			data_fid->if_index = ipa_if_index; // already ipa index, not fid index
 			evt_data.event = IPA_PRIVATE_SUBNET_CHANGE_EVENT;
 			evt_data.evt_data = data_fid;
-			IPACMDBG_H("Posting IPA_PRIVATE_SUBNET_CHANGE_EVENT for if_index %d \n", data_fid->if_index);
+
 			/* Insert IPA_PRIVATE_SUBNET_CHANGE_EVENT to command queue */
 			IPACM_EvtDispatcher::PostEvt(&evt_data);
 			return true;
@@ -1306,7 +1306,7 @@ public:
 				data_fid->if_index = ipa_if_index; // already ipa index, not fid index
 				evt_data.event = IPA_PRIVATE_SUBNET_CHANGE_EVENT;
 				evt_data.evt_data = data_fid;
-				IPACMDBG_H("Posting IPA_PRIVATE_SUBNET_CHANGE_EVENT for if_index %d \n", data_fid->if_index);
+
 				/* Insert IPA_PRIVATE_SUBNET_CHANGE_EVENT to command queue */
 				IPACM_EvtDispatcher::PostEvt(&evt_data);
 				return true;

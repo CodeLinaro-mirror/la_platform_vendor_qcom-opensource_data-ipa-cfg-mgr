@@ -4442,8 +4442,7 @@ int IPACM_Wan::check_vlan_pdn(ipa_ip_type iptype, ipacm_event_route_vlan *data, 
 	ipacm_vlan_association_info *vlan_info = NULL;
 	bool v4_vlan_found = false;
 	bool v6_vlan_found = false;
-	int pdn_idx = -1;
-	int vlan_idx = -1;
+	int pdn_idx, vlan_idx;
 
 	IPACMDBG_H("iptype: %d\n", iptype);
 	IPACMDBG_H("num_offloaded_pdns: %d\n", num_offloaded_pdns);

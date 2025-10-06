@@ -1492,7 +1492,6 @@ void IPACM_Config::del_bridge_vlan_mapping(uint16_t *data)
 			IPACMDBG_H("Found the bridge mapping (%s->%d)\n",
 				it_mapping->bridge_iface_name,
 				it_mapping->bridge_associated_VID);
-			m_bridge_vlan_mapping.erase(it_mapping);
 
 			ret = ipa_get_if_name(iface_name, it_mapping->bridge_if_index);
 
@@ -1503,6 +1502,7 @@ void IPACM_Config::del_bridge_vlan_mapping(uint16_t *data)
 					it_mapping->bridge_iface_name);
 				bridge->associate_VID = 0;
 			}
+			m_bridge_vlan_mapping.erase(it_mapping);
 			break;
 		}
 	}

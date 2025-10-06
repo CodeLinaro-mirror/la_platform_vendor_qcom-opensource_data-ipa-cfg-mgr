@@ -8524,6 +8524,7 @@ int IPACM_Lan::config_wan_frag_firewall_rule_ul_ex(ul_firewall_t *ul_firewall, i
 	if(IPACM_Wan::GetV6PrefixByVid(vid, v6_prefix))
 	{
 		IPACMERR("couldn't get v6 prefix for vid %d\n", vid);
+		free(m_pFilteringTable);
 		return IPACM_FAILURE;
 	}
 	flt_rule_entry.rule.attrib.attrib_mask |= IPA_FLT_SRC_ADDR;
@@ -11631,7 +11632,8 @@ int IPACM_Lan::modify_ipv6_prefix_flt_rule()
 		if (pFilteringTable->num_rules > IPA_MAX_IPV6_NO_OFFLOAD_PREFIX_FLT_RULE + IPA_MAX_MTU_ENTRIES)
 		{
 			IPACMERR("Number of rules crossed the maximum available space");
-			return IPACM_FAILURE;
+			res = IPACM_FAILURE;
+			goto fail;
 		}
 		pFilteringTable->ep = rx_prop->rx[idx].src_pipe;
 		pFilteringTable->add_after_hdl = mtu_flt_rule_offset[j][IPA_IP_v6];
@@ -13575,6 +13577,7 @@ int IPACM_Lan::add_l2tp_flt_rule(ipa_ip_type iptype, uint8_t *dst_mac, uint32_t 
 	if(m_routing.GetRoutingTable(&rt_tbl) == false)
 	{
 		IPACMERR("Failed to get routing table.\n");
+		free(pFilteringTable);
 		return IPACM_FAILURE;
 	}
 

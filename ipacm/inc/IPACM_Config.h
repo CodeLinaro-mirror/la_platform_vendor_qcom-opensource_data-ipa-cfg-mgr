@@ -523,6 +523,8 @@ public:
 	bool ipacm_emesh_enable;
 	uint32_t ipacm_emesh_mode;
 
+	bool ipacm_easy_mesh_traffic_separation_enable;
+
 	/* Indicates whether qos is enabled or not. */
 	bool ipacm_qos_enable;
 

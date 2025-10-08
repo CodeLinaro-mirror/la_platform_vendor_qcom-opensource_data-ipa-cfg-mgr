@@ -2086,7 +2086,7 @@ void IPACM_ConntrackListener::ProcessCTMessage(void *param)
 	 }
 	 else
 	 {
-			ProcessTCPorUDPMsg(evt_data->ct, evt_data->type, l4proto);
+		ProcessTCPorUDPMsg(evt_data->ct, evt_data->type, l4proto);
 	 }
 
 	 if(IPPROTO_GRE == l4proto){
@@ -2323,7 +2323,6 @@ void IPACM_ConntrackListener::query_conntracks(int af_family, uint32_t ipv4_addr
 	{
 		IPACMDBG("(OK)\n");
 	}
-
 	nfct_destroy(ct);
 	nfct_close(handle);
 	return;

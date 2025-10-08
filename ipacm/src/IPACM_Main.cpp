@@ -103,11 +103,20 @@
 #define IPA_DRIVER_WLAN_META_MSG    (sizeof(struct ipa_msg_meta))
 #define IPA_DRIVER_WLAN_BUF_LEN     (IPA_DRIVER_PIPE_STATS_EVENT_SIZE + IPA_DRIVER_WLAN_META_MSG)
 
+#ifdef FEATURE_IPACM_RESTART
+#define IPA_READY_QCMAP_NOTIFIER_FILE "/var/run/data/monitor/ipacmd.pid"
+#endif
+
 uint32_t ipacm_event_stats[IPACM_EVENT_MAX];
 bool ipacm_logging = true;
 
 void ipa_is_ipacm_running(void);
 int ipa_get_if_index(char *if_name, int *if_index);
+
+#ifdef FEATURE_IPACM_RESTART
+int ipa_reset();
+int ipa_query_driver_event();
+#endif
 
 /* start netlink socket monitor*/
 void* netlink_start(void *param)
@@ -246,6 +255,10 @@ void* firewall_monitor(void *param)
 void* ipa_driver_msg_notifier(void *param)
 {
 	int length, fd, cnt;
+
+#ifdef FEATURE_IPACM_RESTART
+	FILE *fp = NULL;
+#endif
 	char buffer[IPA_DRIVER_WLAN_BUF_LEN];
 	struct ipa_msg_meta event_hdr;
 	struct ipa_ecm_msg event_ecm;
@@ -716,6 +729,23 @@ void* ipa_driver_msg_notifier(void *param)
 			evt_data.event = IPA_LINK_DOWN_EVENT;
 			evt_data.evt_data = data_fid;
 			break;
+
+#ifdef FEATURE_IPACM_RESTART
+		case IPA_DONE_RESTORE_EVENT:
+			IPACMDBG_H("Received IPA_DONE_RESTORE_EVENT\n");
+			fp = fopen(IPA_READY_QCMAP_NOTIFIER_FILE, "w");
+			if (fp == NULL)
+			{
+				IPACMERR("can't open IPA ready monitor file\n");
+				break;
+			}
+			if (fputs("IPA event restore done", fp) < 0)
+			{
+				IPACMERR("Failed to write to IPA ready monitor file\n");
+			}
+			fclose(fp);
+			break;
+#endif
 		/* Add for 8994 Android case */
 		case WAN_UPSTREAM_ROUTE_ADD:
 			memcpy(&event_wan, buffer + sizeof(struct ipa_msg_meta), sizeof(struct ipa_wan_msg));
@@ -1550,6 +1580,7 @@ static void IPACM_Signals_handler(int sig, siginfo_t *info, void *extra)
 	case SIGBUS:
 	case SIGABRT:
 	case SIGTERM:
+		{
 		p = (ucontext_t *)extra;
 		IPACMERR("siginfo address=%x\n", info->si_addr);
 		IPACMERR("fault address = 0x%X\n", p->uc_mcontext.fault_address);
@@ -1594,6 +1625,7 @@ static void IPACM_Signals_handler(int sig, siginfo_t *info, void *extra)
 		RegisterForSignals(true);
 		return;
 		break;
+                }
 	default:
 		IPACMERR("unknown signal %d\n", sig);
 		/* restore to default signal handler so core dump is generated from original fault point */
@@ -1655,11 +1687,25 @@ int main(int argc, char **argv)
 	ipa_is_ipacm_running();
 
 	IPACMDBG_H("In main()\n");
+	IPACMERR("debug deleting ipacm.pid file\n");
+	char cmd[200] = {0};
+	snprintf(cmd, 200, "rm -rf /var/run/data/monitor/ipacmd.pid");
+	system(cmd);
+#ifdef FEATURE_IPACM_RESTART
+	IPACMDBG_H("RESET IPA-HW Rules\n");
+	ipa_reset();
+#endif
+
 	IPACM_IfaceManager *ifacemgr = new IPACM_IfaceManager();
 	IPACM_Neighbor *neigh = new IPACM_Neighbor();
 
 #ifdef FEATURE_ETH_BRIDGE_LE
 	IPACM_LanToLan* lan2lan = IPACM_LanToLan::get_instance();
+#endif
+
+#ifdef FEATURE_IPACM_RESTART
+	IPACMDBG_H("RESTORE IPA Clients Event.\n");
+	ipa_query_driver_event();
 #endif
 
 	IPACM_ConntrackClient *cc = IPACM_ConntrackClient::GetInstance();
@@ -1860,3 +1906,51 @@ int ipa_get_if_index
 	close(fd);
 	return IPACM_SUCCESS;
 }
+
+#ifdef FEATURE_IPACM_RESTART
+int ipa_reset()
+{
+	int fd = -1;
+
+	if ((fd = open(IPA_DRIVER, O_RDWR)) < 0)
+	{
+		IPACMERR("Failed opening %s.\n", IPA_DEVICE_NAME);
+		return IPACM_FAILURE;
+	}
+
+	if (ioctl(fd, IPA_IOC_CLEANUP) < 0)
+	{
+		IPACMERR("IOCTL IPA_IOC_CLEANUP call failed: %s \n",
+			strerror(errno));
+		close(fd);
+		return IPACM_FAILURE;
+	}
+
+	IPACMDBG_H("send IPA_IOC_CLEANUP \n");
+	close(fd);
+	return IPACM_SUCCESS;
+}
+
+int ipa_query_driver_event()
+{
+	int fd = -1;
+
+	if ((fd = open(IPA_DRIVER, O_RDWR)) < 0)
+	{
+		IPACMERR("Failed opening %s.\n", IPA_DEVICE_NAME);
+		return IPACM_FAILURE;
+	}
+
+	if (ioctl(fd, IPA_IOC_QUERY_CACHED_DRIVER_MSG) < 0)
+	{
+		IPACMERR("IOCTL IPA_IOC_QUERY_CACHED_DRIVER_MSG call failed: %s\n",
+			strerror(errno));
+		close(fd);
+		return IPACM_FAILURE;
+	}
+
+	IPACMDBG_H("send IPA_IOC_QUERY_CACHED_DRIVER_MSG \n");
+	close(fd);
+	return IPACM_SUCCESS;
+}
+#endif

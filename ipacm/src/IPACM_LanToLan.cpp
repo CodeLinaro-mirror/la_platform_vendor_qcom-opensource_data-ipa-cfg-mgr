@@ -29,7 +29,6 @@ IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 Changes from Qualcomm Technologies, Inc. are provided under the following license:
 Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
 SPDX-License-Identifier: BSD-3-Clause-Clear.
-
 */
 /*!
 	@file
@@ -158,8 +157,14 @@ void IPACM_LanToLan::event_callback(ipa_cm_event_id event, void* param)
 #endif
 	ipacm_event_data_all *vlan_data;
 	eventName = IPACM_Iface::ipacmcfg->getEventName(event);
-	if (eventName != NULL)
-		IPACM_SYSLOG("Get %s event.\n", eventName);
+
+	if((eventName == NULL) || (param == NULL))
+	{
+		IPACMERR("Null parameter or event received. Returning\n");
+		return;
+	}
+
+	IPACMDBG_H("Got %s event.\n", eventName);
 
 	switch(event)
 	{
@@ -290,7 +295,9 @@ void IPACM_LanToLan::handle_iface_up(ipacm_event_eth_bridge *data)
 			return;
 		}
 
-		if(!data->p_iface->tx_prop || !data->p_iface->rx_prop)
+		if(!data->p_iface->tx_prop || !data->p_iface->rx_prop ||
+			(data->p_iface->tx_prop->num_tx_props <= 0) ||
+			(data->p_iface->rx_prop->num_rx_props <= 0))
 		{
 			IPACM_SYSLOG("The interface %s does not have tx_prop or rx_prop.\n", data->p_iface->dev_name);
 			return;
@@ -603,6 +610,27 @@ void IPACM_LanToLan::handle_iface_down(ipacm_event_eth_bridge *data)
 
 void IPACM_LanToLan::handle_new_iface_up(IPACM_LanToLan_Iface *new_iface, IPACM_LanToLan_Iface *exist_iface)
 {
+
+	if (!new_iface ||
+		!new_iface->get_iface_pointer() ||
+		!new_iface->get_iface_pointer()->tx_prop ||
+		(new_iface->get_iface_pointer()->tx_prop->num_tx_props <= 0) ||
+		!new_iface->get_iface_pointer()->tx_prop->tx)
+	{
+		IPACMDBG_H("Invalid new_iface or tx_prop\n");
+		return;
+	}
+
+	if (!exist_iface ||
+		!exist_iface->get_iface_pointer() ||
+		!exist_iface->get_iface_pointer()->tx_prop ||
+		(exist_iface->get_iface_pointer()->tx_prop->num_tx_props <= 0) ||
+		!exist_iface->get_iface_pointer()->tx_prop->tx)
+	{
+		IPACMDBG_H("Invalid exist_iface or tx_prop\n");
+		return;
+	}
+
 	char rt_tbl_name_for_flt[IPA_IP_MAX][IPA_RESOURCE_NAME_MAX];
 	char rt_tbl_name_for_rt[IPA_IP_MAX][IPA_RESOURCE_NAME_MAX];
 
@@ -641,6 +669,12 @@ void IPACM_LanToLan::handle_new_iface_up(IPACM_LanToLan_Iface *new_iface, IPACM_
 #ifdef FEATURE_VLAN_MPDN
 void IPACM_LanToLan::handle_vlan_id_add(ipacm_event_eth_bridge *data)
 {
+	if (!data || !data->iface_name)
+	{
+		IPACMERR("Invalid VLAN add event data\n");
+		return;
+	}
+
 	list<IPACM_LanToLan_Iface>::iterator it;
 
 	IPACM_SYSLOG("got vlan_id add for %s, id %d\n", data->iface_name, data->VlanID);
@@ -678,6 +712,12 @@ void IPACM_LanToLan::handle_vlan_id_add(ipacm_event_eth_bridge *data)
 
 void IPACM_LanToLan::handle_vlan_id_del(ipacm_event_eth_bridge *data)
 {
+	if (!data || !data->iface_name)
+	{
+		IPACMERR("Invalid VLAN del event data\n");
+		return;
+	}
+
 	list<IPACM_LanToLan_Iface>::iterator it_to_del;
 
 	IPACM_SYSLOG("got vlan_id del for %s, id %d\n", data->iface_name, data->VlanID);
@@ -709,6 +749,19 @@ void IPACM_LanToLan::handle_vlan_id_del(ipacm_event_eth_bridge *data)
 
 void IPACM_LanToLan::handle_client_add(ipacm_event_eth_bridge *data)
 {
+	if (!data || !data->p_iface)
+	{
+		IPACMERR("Invalid client add event data\n");
+		return;
+	}
+
+#ifdef FEATURE_L2TP
+	if ((IPACM_Iface::ipacmcfg->ipacm_l2tp_enable == IPACM_L2TP) && !data->iface_name)
+	{
+		IPACMDBG_H("L2TP enabled but iface_name is NULL, treating as non-L2TP client\n");
+	}
+#endif
+
 	list<IPACM_LanToLan_Iface>::iterator it_iface, it_peer_iface;
 	list<l2tp_vlan_mapping_info>::iterator it_mapping;
 	l2tp_vlan_mapping_info *l2tp_mapping_info = NULL;
@@ -720,7 +773,7 @@ void IPACM_LanToLan::handle_client_add(ipacm_event_eth_bridge *data)
 	IPACM_SYSLOG("Incoming client MAC: 0x%02x%02x%02x%02x%02x%02x, interface: %s\n", data->mac_addr[0], data->mac_addr[1],
 		data->mac_addr[2], data->mac_addr[3], data->mac_addr[4], data->mac_addr[5], data->p_iface->dev_name);
 #ifdef FEATURE_L2TP
-	if(IPACM_Iface::ipacmcfg->ipacm_l2tp_enable == IPACM_L2TP)
+	if((IPACM_Iface::ipacmcfg->ipacm_l2tp_enable == IPACM_L2TP) && data->iface_name)
 	{
 		for(it_mapping = IPACM_Iface::ipacmcfg->m_l2tp_vlan_mapping.begin(); it_mapping != IPACM_Iface::ipacmcfg->m_l2tp_vlan_mapping.end(); it_mapping++)
 		{
@@ -1019,6 +1072,12 @@ void IPACM_LanToLan_Iface::add_client_rt_rule(peer_iface_info *peer_info, client
 
 	peer_l2_hdr_type = peer_info->peer->get_iface_pointer()->tx_prop->tx[0].hdr_l2_type;
 
+	if ((peer_l2_hdr_type <= IPA_HDR_L2_NONE) || (peer_l2_hdr_type >= IPA_HDR_L2_MAX))
+	{
+		IPACMERR("Invalid peer L2 type %d\n", peer_l2_hdr_type);
+		return;
+	}
+
 	/* if the peer info is not for intra interface communication */
 	if(peer_info->peer != this)
 	{
@@ -1213,6 +1272,12 @@ void IPACM_LanToLan_Iface::add_l2tp_client_rt_rule(peer_iface_info *peer, client
 #ifdef IPA_L2TP_TUNNEL_UDP
 void IPACM_LanToLan_Iface::add_l2tp_udp_client_rules_new_mapping(peer_iface_info *peer, l2tp_vlan_mapping_info *mapping_info)
 {
+	if (mapping_info == NULL)
+	{
+		IPACMERR("NULL mapping_info, skip adding L2TP UDP rules\n");
+		return;
+	}
+
 	uint32_t l2tp_flt_rule_hdl = 0;
 	list<flt_rule_info>::iterator it_flt;
 
@@ -1536,6 +1601,12 @@ void IPACM_LanToLan_Iface::add_client_flt_rule(peer_iface_info *peer, client_inf
 #ifdef IPA_L2TP_TUNNEL_UDP
 		for(it = m_client_info.begin(); it != m_client_info.end(); it++)
 		{
+			if (it->mapping_info == NULL)
+			{
+				IPACMERR("L2TP mapping_info is NULL for client on iface %s; deferring L2TP UDP flt rule creation\n", m_p_iface->dev_name);
+				continue;
+			}
+
 			if (it->mapping_info->tunnel_type == IPA_L2TP_TUNNEL_IP)
 			{
 #endif
@@ -2233,9 +2304,9 @@ void IPACM_LanToLan_Iface::handle_intra_interface_info()
 {
 	uint32_t hdr_proc_ctx_hdl;
 
-	if(m_p_iface->tx_prop == NULL)
+	if((m_p_iface->tx_prop == NULL) || (m_p_iface->tx_prop->num_tx_props <= 0))
 	{
-		IPACMERR("No tx prop.\n");
+		IPACMERR("No/invalid tx prop for iface %s\n", m_p_iface->dev_name);
 		return;
 	}
 
@@ -2274,6 +2345,13 @@ void IPACM_LanToLan_Iface::handle_new_iface_up(char rt_tbl_name_for_flt[][IPA_RE
 	memcpy(new_peer.rt_tbl_name_for_rt[IPA_IP_v6], rt_tbl_name_for_rt[IPA_IP_v6], IPA_RESOURCE_NAME_MAX);
 	memcpy(new_peer.rt_tbl_name_for_flt[IPA_IP_v4], rt_tbl_name_for_flt[IPA_IP_v4], IPA_RESOURCE_NAME_MAX);
 	memcpy(new_peer.rt_tbl_name_for_flt[IPA_IP_v6], rt_tbl_name_for_flt[IPA_IP_v6], IPA_RESOURCE_NAME_MAX);
+
+	if (!peer_iface || !peer_iface->m_p_iface || !peer_iface->m_p_iface->tx_prop ||
+		 (peer_iface->m_p_iface->tx_prop->num_tx_props <= 0))
+	{
+		IPACMERR("Peer iface has no valid tx props\n");
+		return;
+	}
 
 	peer_l2_hdr_type = peer_iface->m_p_iface->tx_prop->tx[0].hdr_l2_type;
 	/* Avoid Installing Proc Context for Dummy VLAN mapped Non-Vlan Ifaces */
@@ -2379,7 +2457,7 @@ void IPACM_LanToLan_Iface::handle_client_add(uint8_t *mac, bool is_l2tp_client, 
 #ifdef IPA_L2TP_TUNNEL_UDP
 			/* Update the rules for the client with new mapping. */
 			if(IPACM_Iface::ipacmcfg->ipacm_l2tp_enable == IPACM_L2TP && m_is_l2tp_iface &&
-				is_l2tp_client && (mapping_info->tunnel_type == IPA_L2TP_TUNNEL_UDP))
+				is_l2tp_client && mapping_info && (mapping_info->tunnel_type == IPA_L2TP_TUNNEL_UDP))
 			{
 				add_l2tp_udp_client_rules_new_mapping(&(*it_peer_info), mapping_info);
 			}
@@ -2511,6 +2589,7 @@ void IPACM_LanToLan_Iface::del_hdr_proc_ctx(ipa_hdr_l2_type peer_l2_type)
 	{
 		m_p_iface->eth_bridge_del_hdr_proc_ctx(hdr_proc_ctx_for_inter_interface[peer_l2_type]);
 		IPACM_SYSLOG("Hdr proc ctx with hdl %d is deleted.\n", hdr_proc_ctx_for_inter_interface[peer_l2_type]);
+		hdr_proc_ctx_for_inter_interface[peer_l2_type] = 0;
 	}
 
 	return;
@@ -2745,6 +2824,12 @@ bool IPACM_LanToLan_Iface::get_m_support_intra_iface_offload()
 
 void IPACM_LanToLan_Iface::increment_ref_cnt_peer_l2_hdr_type(ipa_hdr_l2_type peer_l2_type)
 {
+	if ((peer_l2_type <= IPA_HDR_L2_NONE) || (peer_l2_type >= IPA_HDR_L2_MAX))
+	{
+		IPACMERR("Invalid peer L2 type %d, cannot increment ref count\n", peer_l2_type);
+		return;
+	}
+
 	ref_cnt_peer_l2_hdr_type[peer_l2_type]++;
 	IPACM_SYSLOG("Now the ref_cnt of peer l2 hdr type %s is %d.\n", ipa_l2_hdr_type[peer_l2_type],
 		ref_cnt_peer_l2_hdr_type[peer_l2_type]);
@@ -2754,6 +2839,12 @@ void IPACM_LanToLan_Iface::increment_ref_cnt_peer_l2_hdr_type(ipa_hdr_l2_type pe
 
 void IPACM_LanToLan_Iface::decrement_ref_cnt_peer_l2_hdr_type(ipa_hdr_l2_type peer_l2_type)
 {
+	if ((peer_l2_type <= IPA_HDR_L2_NONE) || (peer_l2_type >= IPA_HDR_L2_MAX))
+	{
+		IPACMERR("Invalid peer L2 type %d, cannot decrement ref count\n", peer_l2_type);
+		return;
+	}
+
 	if(ref_cnt_peer_l2_hdr_type[peer_l2_type])
 		ref_cnt_peer_l2_hdr_type[peer_l2_type]--;
 	IPACM_SYSLOG("Now the ref_cnt of peer l2 hdr type %s is %d.\n", ipa_l2_hdr_type[peer_l2_type],

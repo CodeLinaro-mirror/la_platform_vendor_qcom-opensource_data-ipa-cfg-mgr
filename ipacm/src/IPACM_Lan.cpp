@@ -6315,6 +6315,8 @@ fail:
 			IPACM_EvtDispatcher::PostEvt(&evt_data);
 		}
 		IPACM_Iface::ipacmcfg->l2tp_client.clear();
+		/* clearing l2tp dummy vlan info from Wan and conntrack class */
+		IPACM_Iface::ipacmcfg->remove_l2tp_vlan_pdn_mapping();
 	}
 #endif
 

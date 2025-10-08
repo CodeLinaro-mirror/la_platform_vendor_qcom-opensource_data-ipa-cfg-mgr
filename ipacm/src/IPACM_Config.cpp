@@ -2431,7 +2431,39 @@ void IPACM_Config::add_l2tp_vlan_mapping(ipa_ioc_l2tp_vlan_mapping_info *data)
 
 	return;
 }
-
+void IPACM_Config::remove_l2tp_vlan_pdn_mapping()
+{
+	list<l2tp_vlan_mapping_info>::iterator it;
+	ipacm_event_route_vlan *vlan_data;
+	ipacm_cmd_q_data vlan_down_evt;
+	if(pthread_mutex_lock(&vlan_l2tp_lock) != 0)
+	{
+		IPACMERR("Unable to lock the mutex\n");
+		return;
+	}
+	for(it = m_l2tp_vlan_mapping.begin(); it != m_l2tp_vlan_mapping.end(); it++)
+	{
+		if (it->l2tp_bridge_vlan_id != 0)
+		{
+			vlan_data = (ipacm_event_route_vlan *)malloc(sizeof(ipacm_event_route_vlan));
+			if(vlan_data == NULL)
+			{
+				IPACMERR("Failed to allocate memory.\n");
+				pthread_mutex_unlock(&vlan_l2tp_lock);
+				return;
+			}
+			memset(vlan_data, 0, sizeof(ipacm_event_route_vlan));
+			memset(&vlan_down_evt, 0, sizeof(ipacm_cmd_q_data));
+			vlan_data->VlanID = it->l2tp_bridge_vlan_id;
+			vlan_down_evt.evt_data = vlan_data;
+			vlan_down_evt.event = IPA_ROUTE_DEL_L2TP_VLAN_EVENT;
+			IPACMDBG_H("Posting event %s with vlan_id: %d\n",
+			IPACM_Iface::ipacmcfg->getEventName(vlan_down_evt.event), vlan_data->VlanID);
+			IPACM_EvtDispatcher::PostEvt(&vlan_down_evt);
+		}
+	}
+	pthread_mutex_unlock(&vlan_l2tp_lock);
+}
 void IPACM_Config::del_l2tp_vlan_mapping(ipa_ioc_l2tp_vlan_mapping_info *data)
 {
 	list<l2tp_vlan_mapping_info>::iterator it;

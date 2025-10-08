@@ -90,18 +90,37 @@ struct client_info
 	l2tp_rt_rule_info l2tp_rt_rule_hdl[IPA_HDR_L2_MAX];
 	uint16_t vlan_id;
 	uint32_t hdr_proc_ctx_intra_interface;
+	char iface_name[IPA_IFACE_NAME_LEN];
+	char iface_bridge_name[IPA_RESOURCE_NAME_MAX];
+	uint32_t bridge_ipv4;
+	uint32_t subnet_mask;
+	uint32_t ipv6_prefix[2];
 };
 
 struct lt2p_flt_rule_hdl{
 	list<uint32_t> flt_rule_hdls;
 };
 
+struct flt_rule_hdl_interbridge
+{
+	ipa_ip_type ip_type;
+	uint32_t flt_rule_hdl;
+	uint32_t bridge_ipv4;
+	uint32_t subnet_mask;
+	uint32_t ipv6_prefix[2];
+};
 struct flt_rule_info
 {
 	client_info *p_client;
 	uint32_t flt_rule_hdl[IPA_IP_MAX];
+	uint32_t bridge_ipv4;
+	uint32_t subnet_mask;
+	//uint32_t flt_rule_hdl_interbdg[IPA_IP_MAX];
+	list<flt_rule_hdl_interbridge> flt_rule_inter_bridge;
+	uint32_t flt_rule_hdl_siface[IPA_IP_MAX]; /*used to store vlan filter handle for siface*/
 	struct lt2p_flt_rule_hdl l2tp_first_pass_flt_rule_hdl[IPA_IP_MAX];	/* L2TP filtering rules are destination MAC based */
 	uint32_t l2tp_second_pass_flt_rule_hdl;
+	uint32_t ipv6_prefix[2];
 };
 
 struct peer_iface_info
@@ -116,6 +135,7 @@ struct peer_iface_info
 #endif
 	ipa_hdr_l2_type peer_hdr_type;
 	bool is_vlan_peer;
+	ipa_hdr_l2_type eth_vlan_instance;
 };
 
 struct add_iface_mac {
@@ -133,12 +153,14 @@ public:
 	void add_client_rt_rule_for_new_iface();
 
 #ifdef FEATURE_VLAN_MPDN
+	void add_self_flt_rule_one_vlan_id(ipa_ip_type iptype, uint16_t vlan_id);
+	void del_self_flt_rule_one_vlan_id(uint16_t vlan_id);
 	void add_all_inter_interface_client_flt_rule_one_vlan_id(ipa_ip_type iptype, uint16_t vlan_id);
 	void del_all_inter_interface_client_flt_rule_one_vlan_id(uint16_t vlan_id);
 	void handle_vlan_id_add(uint16_t vlan_id);
 	void handle_vlan_id_del(uint16_t vlan_id);
 #endif
-
+	void add_inter_interface_client_flt_rule_v2(IPACM_LanToLan_Iface *new_iface, ipa_ip_type iptype, uint16_t *Ids = NULL);
 	void add_all_inter_interface_client_flt_rule(ipa_ip_type iptype, uint16_t *Ids = NULL);
 
 	void add_all_intra_interface_client_flt_rule(ipa_ip_type iptype);
@@ -149,10 +171,12 @@ public:
 
 	void handle_intra_interface_info();
 
+	void handle_self_interface_info();
+
 	void handle_new_iface_up(char rt_tbl_name_for_flt[][IPA_RESOURCE_NAME_MAX], char rt_tbl_name_for_rt[][IPA_RESOURCE_NAME_MAX],
 		IPACM_LanToLan_Iface *peer_iface, int spcl_vlan_iface = 0);
 
-	void handle_client_add(uint8_t *mac, bool is_l2tp_client, l2tp_vlan_mapping_info *mapping_info, uint16_t vlan_id = 0);
+	void handle_client_add(uint8_t *mac, char *iface_name, bool is_l2tp_client, l2tp_vlan_mapping_info *mapping_info, uint16_t vlan_id = 0);
 
 	list<client_info>::iterator handle_client_del(uint8_t *mac, uint16_t vlan_id);
 
@@ -226,14 +250,19 @@ private:
 	/* The following members are for intra-interface communication*/
 	peer_iface_info m_intra_interface_info;
 
+	peer_iface_info self;
+	set<pair<uint32_t, uint32_t>> bridges;
+	set<pair<uint32_t, uint32_t>> lan_client_v6_prefix;
 	svap_vlan_hpc_hdl wlan_svap_hpc_hdls[MAX_SVAP_VLAN];
 	int num_of_wlan_svap_hpc_hdls;
 
-	void add_one_client_flt_rule(IPACM_LanToLan_Iface *peer_iface, client_info *client);
+	void add_one_client_flt_rule(IPACM_LanToLan_Iface *peer_iface, client_info *client,ipa_hdr_l2_type l2_hdr_type);
 
-	void add_client_flt_rule(peer_iface_info *peer, client_info *client, ipa_ip_type iptype);
+	int add_client_flt_rule(peer_iface_info *peer, client_info *client, ipa_ip_type iptype, bool inter_bridge = false);
 
-	void del_one_client_flt_rule(IPACM_LanToLan_Iface *peer_iface, client_info *client);
+	int add_peer_bridge_flt_rule(uint32_t bridge_ipv4, uint32_t subnet_mask, ipa_ip_type ip_type, uint32_t *ipv6_prefix);
+	int add_bridge_self_vlan_client(client_info * client, ipa_ip_type ip_type);
+	void del_one_client_flt_rule(IPACM_LanToLan_Iface *peer_iface, client_info *client, ipa_hdr_l2_type l2_hdr_type);
 
 	void del_client_flt_rule(peer_iface_info *peer, client_info *client);
 

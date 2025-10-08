@@ -94,6 +94,7 @@ struct ipa_lan_rt_rule
 typedef struct _eth_client_rt_hdl
 {
 	uint32_t eth_rt_rule_hdl_v4;
+	uint32_t lan2lan_eth_rt_rule_hdl_v4;
 }eth_client_rt_hdl;
 
 typedef struct rule_id_hdl_map
@@ -130,6 +131,8 @@ typedef struct _ipa_eth_client
 	uint32_t hpc_hdr_hdl_v6;
 	bool route_rule_set_v4;
 	int route_rule_set_v6;
+	bool lan2lan_route_rule_set_v4;
+	int lan2lan_route_rule_set_v6;
 	bool ipv4_set;
 	int ipv6_set;
 	bool ipv4_header_set;
@@ -172,6 +175,9 @@ typedef struct _ipa_eth_client
 	int ul_cnt_idx;
 	int dl_cnt_idx;
 	bool index_populated;
+	int l2l_ul_cnt_idx;
+	int l2l_dl_cnt_idx;
+	bool l2l_index_populated;
 #endif //IPA_HW_FNR_STATS
 #endif
 #ifdef FEATURE_L2TP
@@ -314,6 +320,9 @@ public:
 	int num_wan_subnet_rules[IPA_MAX_NUM_PROPS];
 	/* Number of UL prefix IPv6 rules. */
 	int num_wan_prefix_rules[IPA_MAX_NUM_PROPS];
+
+	uint32_t lan2lan_dummy_route_rule_v4_hdl;
+	uint32_t lan2lan_dummy_route_rule_v6_hdl;
 
 	/* Header length. */
 	uint8_t hdr_len;
@@ -627,12 +636,20 @@ public:
 	int eth_bridge_add_rt_rule(uint8_t *mac, char *rt_tbl_name, uint32_t hdr_proc_ctx_hdl,
 		ipa_hdr_l2_type peer_l2_hdr_type, ipa_ip_type iptype, uint32_t *rt_rule_hdl, int *rt_rule_count);
 
+	/* add routing rule for lan2lan stats and return handle to lan2lan controller */
+	int eth_bridge_add_rt_rule_v2(uint8_t *mac, char *rt_tbl_name, uint32_t hdr_proc_ctx_hdl,
+		ipa_hdr_l2_type peer_l2_hdr_type, ipa_ip_type iptype, uint32_t *rt_rule_hdl, int *rt_rule_count);
+
 	/* modify routing rule*/
 	int eth_bridge_modify_rt_rule(uint8_t *mac, uint32_t hdr_proc_ctx_hdl,
 		ipa_hdr_l2_type peer_l2_hdr_type, ipa_ip_type iptype, uint32_t *rt_rule_hdl, int rt_rule_count);
 
 	/* add filtering rule and return handle to lan2lan controller */
 	int eth_bridge_add_flt_rule(uint8_t *mac, uint32_t rt_tbl_hdl, ipa_ip_type iptype, uint32_t *flt_rule_hdl, uint16_t vlan_id = 0, uint16_t pipe_idx = 0);
+
+	/* add filtering rule for lan2lan stats and return handle to lan2lan controller */
+	int eth_bridge_add_flt_rule_v2(uint8_t *mac, uint32_t rt_tbl_hdl, char *rt_tbl_name, ipa_ip_type iptype, uint32_t *flt_rule_hdl, uint16_t vlan_id = 0,
+		uint16_t pipe_idx = 0, uint32_t client_bridge_ipv4 = 0, uint32_t client_subnet_mask = 0, bool inter_bridge = false, uint32_t *ipv6_prefix = nullptr);
 
 	/* delete filtering rule */
 	int eth_bridge_del_flt_rule(uint32_t flt_rule_hdl, ipa_ip_type iptype);
@@ -718,7 +735,7 @@ public:
 	int add_socksv5_flt_rule(ipacm_event_connection *data_event_conn);
 	int del_socksv5_flt_rule(void);
 #endif
-
+	int add_dummy_routing_rule_lan2lan(char *routingTableName, ipa_ip_type iptype);
 	int install_default_qos_rt_rules(uint8_t *client_mac, uint16_t client_vlan_id, enum ipa_ip_type iptype);
 
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
@@ -1586,7 +1603,8 @@ private:
 								sizeof(get_client_memptr(eth_client, cnt)->mac)) == 0)
 			{
 #ifdef FEATURE_VLAN_MPDN
-				if(vlan_id)
+				/* to handle same mac with vlan id 0 and non zero */
+				if(vlan_id || sIface)
 				{
 					IPACMDBG("VLAN IF MAC match, looking for vlan ID %d, current %d\n", vlan_id,
 						get_client_memptr(eth_client, cnt)->vlan_id);
@@ -1662,6 +1680,7 @@ private:
 		        if((tx_prop->tx[tx_index].ip == IPA_IP_v4) && (get_client_memptr(eth_client, clt_indx)->route_rule_set_v4==true)) /* for ipv4 */
 				{
 					IPACMDBG_H("Delete client index %d ipv4 RT-rules for tx:%d\n",clt_indx,tx_index);
+					IPACMDBG_H("Had rt rule with ip 0x%x", get_client_memptr(eth_client, clt_indx)->v4_addr);
 					rt_hdl = get_client_memptr(eth_client, clt_indx)->eth_rt_hdl[tx_index].eth_rt_rule_hdl_v4;
 
 					if(m_routing.DeleteRoutingHdl(rt_hdl, IPA_IP_v4) == false)
@@ -1669,8 +1688,23 @@ private:
 						return IPACM_FAILURE;
 					}
 				}
-		    } /* end of for loop */
+				if((tx_prop->tx[tx_index].ip == IPA_IP_v4) && get_client_memptr(eth_client, clt_indx)->lan2lan_route_rule_set_v4==true) /* for ipv4 */
+				{
+					IPACMDBG_H("InteBridge Rt rule: Delete client index %d ipv4 RT-rules for tx:%d\n",clt_indx,tx_index);
+					IPACMDBG_H("Had interBridege rt rule with ip 0x%x", get_client_memptr(eth_client, clt_indx)->v4_addr);
+					rt_hdl = get_client_memptr(eth_client, clt_indx)->eth_rt_hdl[tx_index].lan2lan_eth_rt_rule_hdl_v4;
 
+					if(m_routing.DeleteRoutingHdl(rt_hdl, IPA_IP_v4) == false)
+					{
+							return IPACM_FAILURE;
+					}
+				}
+		    } /* end of for loop */
+			/* clean the interBridge ipv4 RT rules for eth-client:clt_indx */
+			if(get_client_memptr(eth_client, clt_indx)->lan2lan_route_rule_set_v4==true) /* for ipv4 */
+			{
+				get_client_memptr(eth_client, clt_indx)->lan2lan_route_rule_set_v4 = false;
+			}
 		     /* clean the ipv4 RT rules for eth-client:clt_indx */
 		     if(get_client_memptr(eth_client, clt_indx)->route_rule_set_v4==true) /* for ipv4 */
 		     {
@@ -1754,8 +1788,9 @@ private:
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
 	/* handle eth client routing rule with rule id*/
 	int handle_eth_client_route_rule_ext(uint8_t *mac_addr, ipa_ip_type iptype);
+	int handle_eth_client_route_rule_ext_lan2lan_v2(uint8_t *mac_addr, ipa_ip_type iptype, uint16_t vlan_id = 0);
 #ifdef IPA_HW_FNR_STATS
-	int handle_eth_client_route_rule_ext_v2(uint8_t *mac_addr, ipa_ip_type iptype, uint8_t dl_cnt_idx);
+	int handle_eth_client_route_rule_ext_v2(uint8_t *mac_addr, ipa_ip_type iptype, uint8_t dl_cnt_idx, uint16_t vlan_id = 0);
 #endif //IPA_HW_FNR_STATS
 #endif
 
@@ -1890,6 +1925,7 @@ public:  //mike why we have 2 public. Why not just move this on top?
 		list<qos_param_info>::iterator qos_param, uint32_t *ipv6_addr = NULL);
 	int delete_all_client_qos_rules();
 	int delete_all_client_info_from_qos(list<qos_param_info>::iterator qos_param);
+	bool is_ipv6_prefix_set();
 };
 
 #endif /* IPACM_LAN_H */

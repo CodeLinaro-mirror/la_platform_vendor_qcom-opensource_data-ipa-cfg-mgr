@@ -101,12 +101,15 @@ typedef struct _ipa_wlan_client
 	uint32_t hpc_hdr_hdl_v6;
 	bool route_rule_set_v4;
 	int route_rule_set_v6;
+	bool lan2lan_route_rule_set_v4;
+	int lan2lan_route_rule_set_v6;
 	bool ipv4_set;
 	int ipv6_set;
 	bool ipv4_header_set;
 	bool ipv6_header_set;
 	bool ipv4_hpc_set;
 	bool ipv6_hpc_set;
+	uint32_t client_backhaul_prefix[2];
 #ifdef FEATURE_STATIC_POLICY
 	uint32_t dscp_hpc_hdr_hdl_v4[IPA_UC_MAX_PDN_DSCP_VAL];
 	uint32_t dscp_hpc_hdr_hdl_v6[IPA_UC_MAX_PDN_DSCP_VAL];
@@ -144,6 +147,9 @@ typedef struct _ipa_wlan_client
 	int ul_cnt_idx;
 	int dl_cnt_idx;
 	bool index_populated;
+	int l2l_ul_cnt_idx;
+	int l2l_dl_cnt_idx;
+	bool l2l_index_populated;
 #endif //IPA_HW_FNR_STATS
 #endif
 	uint16_t ta_peer_id;
@@ -225,6 +231,13 @@ public:
 #endif //IPA_V6_UL_WL_FIREWALL_HANDLE
 
 	int handle_wlan_client_route_rule_ext_v2(uint8_t *mac_addr, ipa_ip_type iptype, uint16_t vlan_id = 0);
+	int handle_wlan_client_route_rule_ext_lan2lan_v2(uint8_t *mac_addr, ipa_ip_type iptype, uint16_t vlan_id = 0);
+	/* add filtering rule for lan2lan stats and return handle to lan2lan controller */
+	int eth_bridge_add_flt_rule_v2(uint8_t *mac, uint32_t rt_tbl_hdl, char *rt_tbl_name, ipa_ip_type iptype, uint32_t *flt_rule_hdl, uint16_t vlan_id = 0,
+		uint16_t pipe_idx = 0, uint32_t client_bridge_ipv4 = 0, uint32_t client_subnet_mask = 0, bool inter_bridge = false, uint32_t *ipv6_prefix = nullptr);
+	/* add routing rule for lan2lan stats and return handle to lan2lan controller */
+	int eth_bridge_add_rt_rule_v2(uint8_t *mac, char *rt_tbl_name, uint32_t hdr_proc_ctx_hdl,
+		ipa_hdr_l2_type peer_l2_hdr_type, ipa_ip_type iptype, uint32_t *rt_rule_hdl, int *rt_rule_count);
 
 	/* install UL filter rule from Q6 for all clients */
 	int install_uplink_filter_rule

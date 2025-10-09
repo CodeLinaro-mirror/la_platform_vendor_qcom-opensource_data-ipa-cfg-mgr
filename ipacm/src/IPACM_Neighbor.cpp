@@ -54,6 +54,7 @@
 #define MAX_FDB_PARAM_CNT 5
 #define MAX_FDB_PARAM_LEN 50
 #define IPA_SYS_CMD_LEN 200
+#define DEV_LEN 3
 #define ETH_INTF "eth0"
 #define ETH1_INTF "eth1"
 #define RNDIS_INTF "rndis0"
@@ -1356,7 +1357,7 @@ void IPACM_Neighbor::update_neigh_cache()
 
 		for(i = 0; i < MAX_FDB_PARAM_CNT; ++i)
 		{
-			if ((strncmp("dev",params[i], IPA_IFACE_NAME_LEN)==0) && (i < MAX_FDB_PARAM_CNT -1))
+			if ((strncmp("dev",params[i], DEV_LEN)==0) && (i < MAX_FDB_PARAM_CNT -1))
 			{
 				strlcpy(rdev_name, params[i+1], IPA_IFACE_NAME_LEN);
 			}

@@ -98,6 +98,7 @@ IPACM_Wlan::IPACM_Wlan(char *iface_name, int iface_index) : IPACM_Lan(iface_name
 	header_name_count = 0;
 	wlan_client = NULL;
 	wlan_client_len = 0;
+	wlan_bridge_idx = -1;
 
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
 		if (lan_stats_inited == false)
@@ -194,6 +195,9 @@ void IPACM_Wlan::event_callback(ipa_cm_event_id event, void *param)
 	ipa_bridge_vlan_mapping_info mapping_info;
 	ipacm_event_route_vlan *vid_data;
 	char master_dev_name[IF_NAME_LEN]={0};
+	uint32_t br_v4_addr =0, br_v4_mask =0;
+	IPACM_Config* config = IPACM_Config::GetInstance();
+	int ret = 0;
 
 	switch (event)
 	{
@@ -1280,6 +1284,47 @@ void IPACM_Wlan::event_callback(ipa_cm_event_id event, void *param)
 		}
 	}
 	break;
+
+	case IPA_WLAN_BRIDGE_UPDATE_EVENT:
+		{
+			IPACMDBG_H("Received IPA_WLAN_BRIDGE_UPDATE_EVENT\n");
+			ipacm_event_data_all *data = (ipacm_event_data_all *)param;
+			ipa_interface_index = iface_ipa_index_query(data->if_index);
+			if((wlan_bridge_idx != data->master_if_index) && (ipa_interface_index == ipa_if_num))
+			{
+				IPACMDBG_H("Received event for index: %d dev_name: %s\n",
+						ipa_interface_index, dev_name);
+				wlan_bridge_idx = data->master_if_index;
+
+				ret = ipa_get_if_name(&master_dev_name[0], data->master_if_index);
+				if(ret == IPACM_SUCCESS)
+				{
+					IPACMDBG_H("Received bridge idx: %d, name: %s\n",
+						data->master_if_index, master_dev_name);
+				}
+				if(strncmp(master_dev_name, BRIDGE_0, strlen(master_dev_name)) == 0)
+				{
+					IPACMERR("Not handling for default bridge\n");
+					return;
+				}
+
+				memset(&mapping_info, 0, sizeof(mapping_info));
+				mapping_info.vlan_id = DUMMY_VLAN_ID_BASE+data->if_index;
+				strlcpy(mapping_info.bridge_name, master_dev_name, IF_NAME_LEN);
+				IPACM_Iface::iface_addr_query(data->master_if_index,
+								false, &br_v4_addr, &br_v4_mask);
+				IPACMDBG_H("Received bridge V4: 0x%x mask: 0x%x\n", br_v4_addr, br_v4_mask);
+				mapping_info.bridge_ipv4 = br_v4_addr;
+				mapping_info.subnet_mask = br_v4_mask;
+				mapping_info.master_if_index = data->master_if_index;
+
+				config->add_dummy_vlan_mapping(&master_dev_name[0], dev_name, data->if_index);
+				config->add_bridge_vlan_mapping(&mapping_info);
+				mapping_info.status = 1;
+				config->add_bridge_vlan_mapping(&mapping_info);
+			}
+		}
+		break;
 
 #endif
 

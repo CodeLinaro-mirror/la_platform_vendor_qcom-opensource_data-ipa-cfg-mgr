@@ -101,7 +101,7 @@ extern "C"
 #define ETH1_INTF "eth1"
 #define RNDIS_INTF "rndis0"
 #define ECM_INTF "ecm0"
-
+#define WLAN_INTF "wlan"
 
 #ifndef FEATURE_IPA_V3
 #define IPA_MAX_FLT_RULE 50
@@ -248,6 +248,7 @@ typedef enum
 	IPA_WAN_GW_ADDR_ADD_EVENT,                /* ipacm_event_data_addr */
 	IPA_EXTERNAL_EVENT_MAX,
 
+	IPA_WLAN_BRIDGE_UPDATE_EVENT,             /* ipacm_event_data_all */
 	IPA_HANDLE_WAN_UP,                        /* ipacm_event_iface_up  */
 	IPA_HANDLE_WAN_DOWN,                      /* ipacm_event_iface_up  */
 	IPA_HANDLE_WAN_UP_V6,                     /* ipacm_event_iface_up */

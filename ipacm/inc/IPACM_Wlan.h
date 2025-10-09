@@ -186,6 +186,7 @@ private:
 	int num_wifi_client;
 
 	int wlan_ap_index;
+	int wlan_bridge_idx;
 
 	static int num_wlan_ap_iface;
 

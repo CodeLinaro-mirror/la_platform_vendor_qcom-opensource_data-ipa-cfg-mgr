@@ -1234,6 +1234,8 @@ private:
 		{
 			if(mux[i].mux_id == 0)
 			{
+				mux[i].VID_cnt = 0;
+				memset(mux[i].associated_VIDs, 0, IPA_MAX_NUM_SW_PDNS*sizeof(uint16_t));
 				mux[i].associated_VIDs[0] = vid;
 				mux[i].VID_cnt++;
 				mux[i].mux_id = mux_id;
@@ -1266,7 +1268,8 @@ private:
 				{
 					for(int j = 0; j < IPA_MAX_NUM_SW_PDNS; j++)
 					{
-						if(mux[i].associated_VIDs[j] == vid)
+						if((mux[i].associated_VIDs[j]!= 0) &&
+						   (mux[i].associated_VIDs[j] == vid))
 						{
 							mux[i].associated_VIDs[j] = 0;
 							mux[i].VID_cnt--;

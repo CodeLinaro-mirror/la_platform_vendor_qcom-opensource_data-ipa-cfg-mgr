@@ -2527,7 +2527,7 @@ int IPACM_Config::get_vlan_l2tp_mapping(char *client_iface, l2tp_vlan_mapping_in
 }
 #endif
 
-void IPACM_Config::ip_pass_config_update(ipa_ioc_pdn_config *pdn_config)
+void IPACM_Config::ip_pass_config_update(ipa_ioc_pdn_config *pdn_config, int if_index)
 {
 	int indx;
 	int bridge_index;
@@ -2558,7 +2558,7 @@ void IPACM_Config::ip_pass_config_update(ipa_ioc_pdn_config *pdn_config)
 			strlcpy(ip_pass_mpdn_table[indx].dev_name,
 			pdn_config->dev_name, IPA_RESOURCE_NAME_MAX);
 			ip_pass_mpdn_table[indx].is_default_pdn = pdn_config->default_pdn;
-
+			ip_pass_mpdn_table[indx].if_index  = if_index;
 			/*	This is to avoid installing IPA private subnet Filter rules in case of
 				IPPT without NAT scenario to avoid packets taking SW path because we
 				are installing private subnet rules with public IP assigned to bridge
@@ -2612,6 +2612,7 @@ void IPACM_Config::ip_pass_config_update(ipa_ioc_pdn_config *pdn_config)
 			ip_pass_mpdn_table[indx].ip_pass_pdn_ip_addr = false;
 			memset(ip_pass_mpdn_table[indx].dev_name, 0, IPA_RESOURCE_NAME_MAX);
 			ip_pass_mpdn_table[indx].is_default_pdn = false;
+			ip_pass_mpdn_table[indx].if_index = 0;
 		}
 		else
 			IPACMERR("IP Passthrough PDN not found\n");

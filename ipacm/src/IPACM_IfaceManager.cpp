@@ -26,8 +26,8 @@ WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
 OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
 IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-Changes from Qualcomm Innovation Center are provided under the following license:
-Copyright (c) 2023-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+Changes from Qualcomm Technologies, Inc. are provided under the following license:
+Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
 SPDX-License-Identifier: BSD-3-Clause-Clear
 */
 /*!
@@ -519,6 +519,7 @@ int IPACM_IfaceManager::create_iface_instance(ipacm_ifacemgr_data *param)
 #endif
 				IPACM_EvtDispatcher::registr(IPA_CRADLE_WAN_MODE_SWITCH, wl);
 				IPACM_EvtDispatcher::registr(IPA_WLAN_LINK_DOWN_EVENT, wl);
+				IPACM_EvtDispatcher::registr(IPA_WLAN_BRIDGE_UPDATE_EVENT, wl);
 				/* IPA_LAN_DELETE_SELF should be always last */
 				IPACM_EvtDispatcher::registr(IPA_LAN_DELETE_SELF, wl);
 				IPACMDBG_H("ipa_WLAN (%s):ipa_index (%d) instance open/registr ok\n", wl->dev_name, wl->ipa_if_num);

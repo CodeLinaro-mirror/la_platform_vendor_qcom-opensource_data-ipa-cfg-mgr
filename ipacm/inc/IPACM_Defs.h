@@ -1,7 +1,5 @@
 /*
 Copyright (c) 2013-2021, The Linux Foundation. All rights reserved.
-Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
-Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are
@@ -28,8 +26,8 @@ WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
 OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
 IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-Changes from Qualcomm Innovation Center are provided under the following license:
-Copyright (c) 2023-2025 Qualcomm Innovation Center, Inc. All rights reserved.
+Changes from Qualcomm Technologies, Inc. are provided under the following license:
+Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
 SPDX-License-Identifier: BSD-3-Clause-Clear
 */
 /*!
@@ -104,7 +102,7 @@ extern "C"
 #define ETH1_INTF "eth1"
 #define RNDIS_INTF "rndis0"
 #define ECM_INTF "ecm0"
-
+#define WLAN_INTF "wlan"
 
 #ifndef FEATURE_IPA_V3
 #define IPA_MAX_FLT_RULE 50
@@ -223,6 +221,7 @@ typedef enum
 	IPA_WLAN_CLIENT_DEL_EVENT,                /* ipacm_event_data_mac */
 	IPA_WLAN_CLIENT_POWER_SAVE_EVENT,         /* ipacm_event_data_mac */
 	IPA_WLAN_CLIENT_RECOVER_EVENT,            /* ipacm_event_data_mac */
+	IPA_WLAN_BRIDGE_UPDATE_EVENT,             /* ipacm_event_data_all */
 	IPA_NEW_NEIGH_EVENT,                      /* ipacm_event_data_all */
 	IPA_DEL_NEIGH_EVENT,                      /* ipacm_event_data_all */
 	IPA_NEIGH_CLIENT_IP_ADDR_ADD_EVENT,       /* ipacm_event_data_all */

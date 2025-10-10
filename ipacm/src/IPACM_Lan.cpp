@@ -714,11 +714,12 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 #endif
 #ifdef FEATURE_VLAN_MPDN
 						/* VLAN IFACES don't care about default route */
-						if(!(IPACM_Iface::ipacmcfg->iface_in_vlan_mode(dev_name)) || sIface)
+						if(!(IPACM_Iface::ipacmcfg->iface_in_vlan_mode(dev_name)) ||
+							(!(IPACM_Iface::ipacmcfg->iface_in_vlan_mode_v2(dev_name)) && IPACM_Iface::ipacmcfg->eth_wan_pppoe_enable && sIface))
 #endif
 						{
-							if(IPACM_Wan::isWanUP(ipa_if_num) &&
-								!IPACM_Iface::ipacmcfg->ipacm_static_policy_enable)
+							if(IPACM_Wan::isWanUP(ipa_if_num) ||
+								((!IPACM_Iface::ipacmcfg->ipacm_static_policy_enable || IPACM_Iface::ipacmcfg->eth_wan_pppoe_enable) && IPACM_Wan::isVlanWanUP()))
 							{
 								if(data->iptype == IPA_IP_v4 || data->iptype == IPA_IP_MAX)
 								{
@@ -797,6 +798,68 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 #endif //FEATURE_SOCKSv5
 						else
 						{
+							/* Scenario to handle if siface is enabled and eth is configured as Vlan but no vlan id passed, install ul flt rule for eth phy non-vlan client */
+							if ((IPACM_Iface::ipacmcfg->iface_in_vlan_mode_v2(dev_name) && IPACM_Iface::ipacmcfg->eth_wan_pppoe_enable && sIface))
+							{
+								if (IPACM_Wan::isWanUP(ipa_if_num) ||
+									((!IPACM_Iface::ipacmcfg->ipacm_static_policy_enable || IPACM_Iface::ipacmcfg->eth_wan_pppoe_enable) && IPACM_Wan::isVlanWanUP()))
+								{
+									if (data->iptype == IPA_IP_v4 || data->iptype == IPA_IP_MAX)
+									{
+										if (IPACM_Wan::backhaul_is_sta_mode == false)
+										{
+											ext_prop = IPACM_Iface::ipacmcfg->GetExtProp(IPA_IP_v4);
+											handle_wan_up_ex(ext_prop, IPA_IP_v4,
+															IPACM_Wan::getXlat_Mux_Id());
+										}
+										else
+										{
+	#ifdef FEATURE_IPACM_PER_CLIENT_STATS
+											/* Install filter rules for the client. */
+											if (IPACM_Iface::ipacmcfg->ipacm_lan_stats_enable == true)
+											{
+												IPACMDBG_H("install per client filter rules for ip_type: %d\n", ip_type);
+
+												for (int i = 0; i < num_eth_client; i++)
+												{
+													if (get_client_memptr(eth_client, i)->ipv4_sta_ul_rules_set == false)
+													{
+														IPACMDBG_H("eth_client idx %d\n", i);
+														IPACMDBG_H("eth_client idx %d ul_cnt_idx %d\n", i,
+																get_client_memptr(eth_client, i)->ul_cnt_idx);
+														IPACMDBG_H("eth_client idx %d dl_cnt_idx %d\n", i,
+																get_client_memptr(eth_client, i)->dl_cnt_idx);
+														IPACMDBG_H("eth_client idx %d ipv4_set %d\n", i,
+																get_client_memptr(eth_client, i)->ipv4_set);
+														IPACMDBG_H("eth_client idx %d v4_addr 0x%x\n", i,
+																get_client_memptr(eth_client, i)->v4_addr);
+														IPACMDBG_H("eth_client mac_addr MAC %02x:%02x:%02x:%02x:%02x:%02x\n",
+																get_client_memptr(eth_client, i)->mac[0], get_client_memptr(eth_client, i)->mac[1],
+																get_client_memptr(eth_client, i)->mac[2], get_client_memptr(eth_client, i)->mac[3],
+																get_client_memptr(eth_client, i)->mac[4], get_client_memptr(eth_client, i)->mac[5]);
+														IPACMDBG_H("eth_client idx %d vlan_id %d \n", i, get_client_memptr(eth_client, i)->vlan_id);
+														if (get_client_memptr(eth_client, i)->vlan_id == 0)
+														{
+															res = handle_wan_up_v2(IPA_IP_v4, get_client_memptr(eth_client, i)->vlan_id,
+																get_client_memptr(eth_client, i)->mac,
+																get_client_memptr(eth_client, i)->ul_cnt_idx);
+															if (res == IPACM_SUCCESS)
+															{
+																get_client_memptr(eth_client, i)->ipv4_sta_ul_rules_set = true;
+															}
+														}
+														else
+															IPACMDBG_H("iface is configured as vlan but vlan also associated Skip adding filter rule for ip_type: %d\n", ip_type);
+													}
+												}
+											}
+											else
+	#endif
+												handle_wan_up(IPA_IP_v4);
+										}
+									}
+								}
+							}
 							if(data->iptype == IPA_IP_v4 || data->iptype == IPA_IP_MAX)
 							{
 								IPACMDBG_H("Checking for V4 VLAN PDN\n");
@@ -804,14 +867,15 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 							}
 						}
 						/* VLAN IFACES don't care about default route */
-						if(!(IPACM_Iface::ipacmcfg->iface_in_vlan_mode(dev_name)))
+						if(!(IPACM_Iface::ipacmcfg->iface_in_vlan_mode(dev_name)) ||
+							(!(IPACM_Iface::ipacmcfg->iface_in_vlan_mode_v2(dev_name)) && IPACM_Iface::ipacmcfg->eth_wan_pppoe_enable && sIface))
 #endif //FEATURE_VLAN_MPDN
 						{
 #ifdef FEATURE_STATIC_POLICY
-							if(IPACM_Wan::isWanUP_V6(ipa_if_num) &&
-								!IPACM_Iface::ipacmcfg->ipacm_static_policy_enable) /* Modem v6 call is UP?*/
+							if(IPACM_Wan::isWanUP_V6(ipa_if_num) ||
+								((!IPACM_Iface::ipacmcfg->ipacm_static_policy_enable || IPACM_Iface::ipacmcfg->eth_wan_pppoe_enable) && IPACM_Wan::isVlanWanUP_V6())) /* Modem v6 call is UP?*/
 #else
-							if(IPACM_Wan::isWanUP_V6(ipa_if_num)) /* Modem v6 call is UP?*/
+							if(IPACM_Wan::isWanUP_V6(ipa_if_num) || IPACM_Wan::isVlanWanUP_V6()) /* Modem v6 call is UP?*/
 #endif
 							{
 #ifdef FEATURE_IPv6CT_DISABLED
@@ -909,6 +973,84 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 #endif //FEATURE_SOCKSv5
 						else
 						{
+							/* Scenario to handle if siface is enabled and eth is configured as Vlan but no vlan id passed, install ul flt rule for eth phy non-vlan client */
+							if ((IPACM_Iface::ipacmcfg->iface_in_vlan_mode_v2(dev_name) && IPACM_Iface::ipacmcfg->eth_wan_pppoe_enable && sIface))
+							{
+#ifdef FEATURE_STATIC_POLICY
+								if (IPACM_Wan::isWanUP_V6(ipa_if_num) ||
+									((!IPACM_Iface::ipacmcfg->ipacm_static_policy_enable || IPACM_Iface::ipacmcfg->eth_wan_pppoe_enable) && IPACM_Wan::isVlanWanUP_V6())) /* Modem v6 call is UP?*/
+#else
+								if (IPACM_Wan::isWanUP_V6(ipa_if_num) || IPACM_Wan::isVlanWanUP_V6()) /* Modem v6 call is UP?*/
+#endif
+								{
+#ifdef FEATURE_IPv6CT_DISABLED
+#ifdef FEATURE_IPACM_UL_FIREWALL
+									if (data->iptype == IPA_IP_v6)
+										configure_v6_ul_firewall();
+#endif // FEATURE_IPACM_UL_FIREWALL
+#endif
+									if ((data->iptype == IPA_IP_v6 || data->iptype == IPA_IP_MAX) && num_dft_rt_v6 == 1)
+									{
+										memcpy(ipv6_prefix, IPACM_Wan::backhaul_ipv6_prefix, sizeof(ipv6_prefix));
+#ifndef FEATURE_VLAN_MPDN
+										install_ipv6_prefix_flt_rule(IPACM_Wan::backhaul_ipv6_prefix);
+#else
+										modify_ipv6_prefix_flt_rule();
+#endif
+										if (IPACM_Wan::backhaul_is_sta_mode == false)
+										{
+											ext_prop = IPACM_Iface::ipacmcfg->GetExtProp(IPA_IP_v6);
+											handle_wan_up_ex(ext_prop, IPA_IP_v6, 0);
+										}
+										else
+										{
+#ifdef FEATURE_IPACM_PER_CLIENT_STATS
+											/* Install filter rules for the client. */
+											if (IPACM_Iface::ipacmcfg->ipacm_lan_stats_enable == true)
+											{
+												IPACMDBG_H("install per client filter rules for ip_type: %d\n", ip_type);
+
+												for (int i = 0; i < num_eth_client; i++)
+												{
+													if (get_client_memptr(eth_client, i)->ipv6_sta_ul_rules_set == false)
+													{
+														IPACMDBG_H("eth_client idx %d\n", i);
+														IPACMDBG_H("eth_client idx %d ul_cnt_idx %d\n", i,
+															get_client_memptr(eth_client, i)->ul_cnt_idx);
+														IPACMDBG_H("eth_client idx %d dl_cnt_idx %d\n", i,
+															get_client_memptr(eth_client, i)->dl_cnt_idx);
+														IPACMDBG_H("eth_client idx %d ipv6_set %d\n", i,
+															get_client_memptr(eth_client, i)->ipv6_set);
+														IPACMDBG_H("eth_client mac_addr MAC %02x:%02x:%02x:%02x:%02x:%02x\n",
+															get_client_memptr(eth_client, i)->mac[0], get_client_memptr(eth_client, i)->mac[1],
+															get_client_memptr(eth_client, i)->mac[2], get_client_memptr(eth_client, i)->mac[3],
+															get_client_memptr(eth_client, i)->mac[4], get_client_memptr(eth_client, i)->mac[5]);
+														IPACMDBG_H("eth_client idx %d vlan_id %d \n", i, get_client_memptr(eth_client, i)->vlan_id);
+														if (get_client_memptr(eth_client, i)->vlan_id == 0)
+														{
+															res = handle_wan_up_v2(IPA_IP_v6, get_client_memptr(eth_client, i)->vlan_id, get_client_memptr(eth_client, i)->mac,
+																	get_client_memptr(eth_client, i)->ul_cnt_idx);
+															if (res == IPACM_SUCCESS)
+															{
+																get_client_memptr(eth_client, i)->ipv6_sta_ul_rules_set = true;
+															}
+														}
+														else
+															IPACMDBG_H("iface is configured as vlan but vlan also associated Skip adding filter rule for ip_type: %d\n", ip_type);
+													}
+												}
+											}
+											else
+#endif
+												handle_wan_up(IPA_IP_v6);
+										}
+									}
+								}
+#ifdef FEATURE_IPACM_UL_FIREWALL
+								else
+									IPACMDBG_H("WAN v6 is not UP\n");
+#endif // FEATURE_IPACM_UL_FIREWALL
+							}
 							IPACMDBG_H("Checking for V6 VLAN PDN\n");
 							check_vlan_PDNUp(IPA_IP_v6);
 						}
@@ -6933,6 +7075,7 @@ handle_wan_up:
 					}
 					else
 					{
+						IPACMDBG_H("Called v4  handle_wan_up_v2.\n");
 						res = handle_wan_up_v2(IPA_IP_v4, get_client_memptr(eth_client, clnt_indx)->vlan_id,
 							get_client_memptr(eth_client, clnt_indx)->mac,
 							get_client_memptr(eth_client, clnt_indx)->ul_cnt_idx);
@@ -6961,6 +7104,7 @@ handle_wan_up:
 					}
 					else
 					{
+						IPACMDBG_H("Called v6  handle_wan_up_v2.\n");
 						handle_wan_up_v2(IPA_IP_v6, get_client_memptr(eth_client, clnt_indx)->vlan_id,
 							get_client_memptr(eth_client, clnt_indx)->mac,
 							get_client_memptr(eth_client, clnt_indx)->ul_cnt_idx);

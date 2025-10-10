@@ -739,6 +739,11 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 									}
 								}
 							}
+							else if(IPACM_Iface::ipacmcfg->ipacm_static_policy_enable)
+							{
+								IPACMDBG_H("Checking for v4 VLAN PDN\n");
+								check_vlan_PDNUp(IPA_IP_v4);
+							}
 						}
 #ifdef FEATURE_VLAN_MPDN
 

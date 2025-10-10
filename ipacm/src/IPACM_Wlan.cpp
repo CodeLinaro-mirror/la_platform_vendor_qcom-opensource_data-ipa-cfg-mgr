@@ -468,6 +468,11 @@ void IPACM_Wlan::event_callback(ipa_cm_event_id event, void *param)
 								}
 							}
 						}
+						else if(IPACM_Iface::ipacmcfg->ipacm_static_policy_enable)
+						{
+							IPACMDBG_H("Checking for v4 VLAN PDN\n");
+							check_vlan_PDNUp(IPA_IP_v4);
+						}
 					}
 #ifdef FEATURE_IPv6CT_DISABLED
 #ifdef FEATURE_IPACM_UL_FIREWALL
@@ -6934,11 +6939,11 @@ int IPACM_Wlan::handle_wlan_primary_client_down_evt(uint8_t *mac_addr)
 /*handle wlan iface down event*/
 int IPACM_Wlan::handle_down_evt()
 {
-	int res = IPACM_SUCCESS, i, num_private_subnet_fl_rule, idx = 0;
+	int res = IPACM_SUCCESS, i, num_private_subnet_fl_rule, idx = 0, j = 0;
 	int wlan_pipe_index;
 	uint32_t tcp_syn_filter_rule_hdl = 0;
 	uint32_t *private_flt_rule_hdl = NULL;
-	bool skip_flt_rule_del= false;
+	bool skip_flt_rule_del= false, process_prefix_rules = false;
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
 	struct wan_ioctl_lan_client_info *client_info;
 #endif
@@ -7109,6 +7114,43 @@ int IPACM_Wlan::handle_down_evt()
 		{
 			IPACMERR("delete_dflt_filter_rules failed\n");
 			goto fail;
+		}
+
+		//to delete v6 prefix based rules in static policy mode
+		if(IPACM_Iface::ipacmcfg->ipacm_static_policy_enable)
+		{
+			for (j = 0; j < rx_prop->num_rx_props / 2 && j < IPA_MAX_NUM_PROPS; j++)
+			{
+				if (ipa_if_cate == WLAN_IF && wlan_pipe_index < MAX_SUPPORTED_WLAN_PIPES)
+				{
+					private_flt_rule_hdl = IPACM_Wlan::wlan_ap_dflt_rules[wlan_pipe_index].ipv6_prefix_flt_rule_hdl[j];
+					process_prefix_rules = true;
+				}
+				else
+				{
+					process_prefix_rules = false;
+				}
+
+				if(process_prefix_rules)
+				{
+					IPACMDBG_H("Deleting total %d default prefix src/dst based v6 filter rules successfully for index %d.\n",
+						num_wan_prefix_rules[j], j);
+
+					if (num_wan_prefix_rules[j] > 0)
+					{
+						if (m_filtering.DeleteFilteringHdls(private_flt_rule_hdl, IPA_IP_v6,
+							num_wan_prefix_rules[j]) == false)
+						{
+							IPACMERR("Error deleting IPv6 prefix based rules\n");
+							res = IPACM_FAILURE;
+							goto fail;
+						}
+						IPACM_Iface::ipacmcfg->decreaseFltRuleCount(rx_prop->rx[idx].src_pipe, IPA_IP_v6, num_wan_prefix_rules[j]);
+						num_wan_prefix_rules[j] = 0;
+						IPACMDBG_H("Deleted prefix src/dst v6 filter rules successfully for index %d.\n", j);
+					}
+				}
+			}
 		}
 
 		if (ipa_if_cate == WLAN_IF && wlan_pipe_index<MAX_SUPPORTED_WLAN_PIPES ) {

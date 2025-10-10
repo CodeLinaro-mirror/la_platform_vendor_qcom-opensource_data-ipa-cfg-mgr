@@ -1641,6 +1641,8 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 							IPACMDBG_H("Route install retval = %d\n", retval);
 						}
 #endif
+						/* Add NAT rules after RT rules are set */
+						HandleNeighIpAddrAddEvt(data);
 					}
 					else
 #endif //IPA_HW_FNR_STATS

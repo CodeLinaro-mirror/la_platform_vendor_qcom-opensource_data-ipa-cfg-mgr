@@ -232,7 +232,7 @@ int ipa_get_if_name(char *if_name, int if_index);
 
 int ipa_nl_send_getroute(ipa_ip_type ip_type);
 
-int ipa_nl_query_newneigh(int af_family);
+int ipa_nl_query_newneigh(int af_family, char* dev_name = NULL);
 
 #ifdef __cplusplus
 }

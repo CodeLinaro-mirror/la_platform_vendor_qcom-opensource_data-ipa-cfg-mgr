@@ -2684,8 +2684,8 @@ int IPACM_Wan::check_vlan_pdn(ipa_ip_type iptype, ipacm_event_route_vlan *data, 
 				{
 					for(vlan_idx = 0; vlan_idx < ipv4_to_iface[wlan_vlan_v4_pdn_index].VID_cnt; vlan_idx++)
 					{
-						if((IPACM_Wan::ipv6_to_iface[wlan_vlan_v6_pdn_index].associated_VIDs[vlan_idx]!= 0) &&
-						(IPACM_Wan::ipv6_to_iface[wlan_vlan_v6_pdn_index].associated_VIDs[vlan_idx] == data->VlanID))
+						if((IPACM_Wan::ipv4_to_iface[wlan_vlan_v4_pdn_index].associated_VIDs[vlan_idx]!= 0) &&
+						(IPACM_Wan::ipv4_to_iface[wlan_vlan_v4_pdn_index].associated_VIDs[vlan_idx] == data->VlanID))
 						{
 							IPACMDBG_H("VlanID found in associated_VIDs in STA BH\n");
 							is_vlan_wlan_associated = true;

@@ -2180,7 +2180,7 @@ error:
 	return IPACM_FAILURE;
 }
 
-int ipa_nl_query_newneigh(int af_family)
+int ipa_nl_query_newneigh(int af_family, char* dev_name)
 {
 	IPACMDBG("ipa_nl_send_getneigh\n");
 	int ret_val = IPACM_FAILURE, msglen = 0, nl_sock = 0;
@@ -2217,6 +2217,12 @@ int ipa_nl_query_newneigh(int af_family)
 	nl_request.nlh.nlmsg_seq = 1;
 	nl_request.nlh.nlmsg_pid = 0;
 	nl_request.rtm.rtm_family = af_family;
+
+	if (dev_name)
+	{
+		IPACMDBG("Query neigh events for iface %s\n", dev_name);
+		nl_request.nd.ndm_ifindex = if_nametoindex(dev_name);
+	}
 
 	msgsent_len = send(nl_sock, &nl_request, sizeof(nl_request), 0);
 

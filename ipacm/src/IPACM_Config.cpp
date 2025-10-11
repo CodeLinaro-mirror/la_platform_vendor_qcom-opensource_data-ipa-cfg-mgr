@@ -1675,11 +1675,11 @@ void IPACM_Config::add_vlan_iface(ipa_ioc_vlan_iface_info *data)
 #endif
 	/* Sending Getneigh to receive missing neighbor in case if missed early */
 	IPACMDBG_H("Query Getneigh for vlan ifaces\n");
-	ipa_nl_query_newneigh(AF_BRIDGE);
+	ipa_nl_query_newneigh(AF_BRIDGE, data->name);
 	IPACMDBG_H("Query Getneigh for v4\n");
-	ipa_nl_query_newneigh(AF_INET);
+	ipa_nl_query_newneigh(AF_INET, data->name);
 	IPACMDBG_H("Query Getneigh for v6\n");
-	ipa_nl_query_newneigh(AF_INET6);
+	ipa_nl_query_newneigh(AF_INET6, data->name);
 	return;
 }
 

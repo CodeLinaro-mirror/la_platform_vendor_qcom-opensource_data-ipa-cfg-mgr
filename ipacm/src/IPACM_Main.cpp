@@ -801,6 +801,8 @@ void* ipa_driver_msg_notifier(void *param)
 			add_bridge_vlan_info.bridge_ipv4,
 			add_bridge_vlan_info.subnet_mask);
 			IPACM_Iface::ipacmcfg->add_bridge_vlan_mapping(&add_bridge_vlan_info);
+			IPACMDBG_H("Query Getneigh for v4\n");
+			ipa_nl_query_newneigh(AF_INET, add_bridge_vlan_info.bridge_name);
 			continue;
 		case DEL_BRIDGE_VLAN_MAPPING:
 			ipa_ioc_bridge_vlan_mapping_info del_bridge_vlan_info;

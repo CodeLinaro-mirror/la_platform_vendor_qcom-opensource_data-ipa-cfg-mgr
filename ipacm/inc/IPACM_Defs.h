@@ -91,7 +91,7 @@ extern "C"
 #define IPA_ODU_HDR_NAME_v4  "IPACM_ODU_v4"
 #define IPA_ODU_HDR_NAME_v6  "IPACM_ODU_v6"
 #define IPA_IF_SOCKSv5_NAME  "IPACM_SOCKSv5"
-#define IPA_EOGRE_HDR_NAME   "IPACM_EoGRE_v%d"
+#define IPA_EoGRE_HDR_NAME   "IPACM_EoGRE_v%d"
 
 #define IPA_MAX_ACTIVE_WLAN_IFACE 72 // 64 wlan (4x16 band support) + 8 extra rdkb supported ifaces
 

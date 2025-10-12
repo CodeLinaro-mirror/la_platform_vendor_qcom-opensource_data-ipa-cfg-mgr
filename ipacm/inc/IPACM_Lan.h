@@ -233,16 +233,17 @@ typedef struct _ipacm_vlan_sta_info
  * Structure for maintaining state associated with eogre route
  * contexts and rules...
  */
-typedef struct eogre_route_data_s
+typedef struct gre_route_data_s
 {
-	uint32_t header_hdl;
-	uint32_t proc_ctx_eogre_add_hdl;
-	uint32_t proc_ctx_eogre_rmv_hdl;
-	uint32_t rt_eogre_add_hdl;
-	uint32_t rt_eogre_rmv_hdl;
+	uint32_t ul_header_hdl;
+	uint32_t dl_header_hdl;
+	uint32_t proc_ctx_gre_add_hdl;
+	uint32_t proc_ctx_gre_rmv_hdl;
+	uint32_t rt_gre_add_hdl;
+	uint32_t rt_gre_rmv_hdl;
 	uint32_t rt_tbl_hdl;
-	uint32_t flt_eogre_1st_pass_hdl;
-} eogre_route_data_t;
+	uint32_t flt_gre_1st_pass_hdl;
+} gre_route_data_t;
 
 /*
  * An IP v4 plus GRE header..
@@ -268,20 +269,25 @@ typedef struct v6_gre_hdr_s
 } v6_gre_hdr_t;
 
 /*
+ * Enough space for :
+ *
+ * -> An IP v6 header (ten 32-bit words),
+ * -> A GRE header (one 32-bit word), and
+ * -> An MPLS header (one 32-bit word).
+ */
+typedef struct v6_gre_hdr_s_nops
+{
+	uint32_t words[11];
+} v6_gre_hdr_t_nops;
+
+/*
  * Where things reside in the struct above...
  */
 #define IPV6_SRC_ADDR_IDX  2
 #define IPV6_DST_ADDR_IDX  6
 #define IPV6_GRE_PROT_IDX 12
-#define IPV6_GRE_PROT     10
+#define IPV6_GRE_PROT_IDX_NOPS    10
 
-/*
- * An IP v6 + GRE header.
- */
-typedef struct v6_eogre_hdr_s
-{
-	uint32_t words[11]; /* 10 words for header + 1 word for gre header */
-} v6_eogre_hdr_t;
 
 #endif /* #ifdef FEATURE_EoGRE */
 
@@ -411,43 +417,43 @@ public:
 	 *   The tunnel may be v6, while the Vlan Ethernet packet's IP
 	 *   type is v4...
 	 */
-	eogre_route_data_t eogre_route_data[IPA_IP_MAX];
+	gre_route_data_t gre_route_data[IPA_IP_MAX];
 
-	void eogre_up();
+	void gre_up();
 
-	void eogre_down();
+	void gre_down();
 
-	int eogre_do_rt_work(
+	int gre_do_rt_work(
 		ipa_ipgre_info& ipgre_info );
 
-	void eogre_route_data_init(
+	void gre_route_data_init(
 		enum ipa_ip_type iptype );
 
-	uint32_t eogre_get_rt_tbl_hdl(
+	uint32_t gre_get_rt_tbl_hdl(
 		enum ipa_ip_type iptype );
 
-	int eogre_make_hdr_for_add_ctx(
+	int gre_make_hdr_for_add_ctx(
 		ipa_ipgre_info& ipgre_info );
 
-	int eogre_make_hdr_add_ctx(
+	int gre_make_hdr_add_ctx(
 		ipa_ipgre_info& ipgre_info,
 		uint32_t        hdr_2use = 0 );
 
-	int eogre_make_hdr_rem_ctx(
+	int gre_make_hdr_rmv_ctx(
 		ipa_ipgre_info& ipgre_info );
 
-	int eogre_make_header_add_rt_rule(
+	int gre_make_header_add_rt_rule(
 		ipa_ipgre_info& ipgre_info,
 		uint32_t        ctx_2use = 0 );
 
-	int eogre_make_header_rem_rt_rule(
+	int gre_make_header_rmv_rt_rule(
 		ipa_ipgre_info& ipgre_info );
 
-	void eogre_clear_route_data(
+	void gre_clear_route_data(
 		enum ipa_ip_type             iptype,
 		ipa_ioc_query_intf_rx_props* rx_prop = 0 );
 
-	int eogre_add_catchup_rule(
+	int gre_add_catchup_rule(
 		enum ipa_ip_type iptype );
 
 	int update_complementary_table(
@@ -1787,7 +1793,9 @@ public:  //mike why we have 2 public. Why not just move this on top?
 #endif
 	int delete_icmp_filter_rule(
 		ipa_ip_type iptype);
-
+	static const uint8_t v4_eogre_header[];
+	static const uint8_t v6_eogre_header[];
+	static const uint8_t v6_eogre_header_nops[];
     uint32_t get_u8_bitmap_from_tc(uint8_t traffic_class);
 	int handle_qos_route_rule(uint8_t *client_mac, uint16_t vlan_id, ipa_ip_type iptype,
 		list<qos_param_info>::iterator qos_param, uint32_t *ipv6_addr = NULL);

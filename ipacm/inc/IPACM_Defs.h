@@ -26,8 +26,9 @@ WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
 OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
 IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-Changes from Qualcomm Innovation Center are provided under the following license:
-Copyright (c) 2023-2025 Qualcomm Innovation Center, Inc. All rights reserved.
+Changes from Qualcomm Technologies, Inc. are provided under the following license:
+
+Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
 SPDX-License-Identifier: BSD-3-Clause-Clear
 */
 /*!
@@ -89,7 +90,7 @@ extern "C"
 #define IPA_ODU_HDR_NAME_v4  "IPACM_ODU_v4"
 #define IPA_ODU_HDR_NAME_v6  "IPACM_ODU_v6"
 #define IPA_IF_SOCKSv5_NAME  "IPACM_SOCKSv5"
-#define IPA_EOGRE_HDR_NAME   "IPACM_EoGRE_v%d"
+#define IPA_EoGRE_HDR_NAME   "IPACM_EoGRE_v%d"
 
 #define IPA_MAX_ACTIVE_WLAN_IFACE 64 // 64 wlan (4x16 band support)
 

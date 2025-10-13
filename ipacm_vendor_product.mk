@@ -22,7 +22,7 @@ BOARD_IPA_LOW_RAM_EXCP_LIST := bengal
 BOARD_IPA_LOW_RAM_EXCP_LIST += monaco
 
 ifeq ($(TARGET_HAS_LOW_RAM),true)
-ifneq (, $(call is-board-platform-in-list2,$(BOARD_IPA_LOW_RAM_EXCP_LIST)))
+ifeq (, $(call is-board-platform-in-list2,$(BOARD_IPA_LOW_RAM_EXCP_LIST)))
 	TARGET_DISABLE_IPACM := true
 endif
 endif

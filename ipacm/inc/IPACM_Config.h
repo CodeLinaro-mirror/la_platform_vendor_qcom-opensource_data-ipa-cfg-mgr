@@ -229,7 +229,7 @@ class IPACM_Config
 {
 public:
 
-	uint32_t max_file_size;
+	int64_t max_file_size;
 
 	/* IPACM ipa_client map to rm_resource*/
 	ipa_rm_resource_name ipa_client_rm_map_tbl[IPA_CLIENT_MAX];

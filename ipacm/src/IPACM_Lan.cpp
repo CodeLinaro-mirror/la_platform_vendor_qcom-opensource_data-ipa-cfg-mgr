@@ -400,6 +400,7 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 	list <ipacm_event_data_all>::iterator it;
 	ipacm_event_data_all *data_all=NULL;
 	ipacm_event_data_vlan *vlan_data = NULL;
+	vlan_iface_info *del_vlan_info = NULL;
 	ipacm_cmd_q_data evt_data;
 	int clnt_indx = 0;
 	ipa_bridge_vlan_mapping_info mapping_info;
@@ -682,8 +683,6 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 							}
 						}
 #ifdef FEATURE_VLAN_MPDN
-
-
 #ifdef FEATURE_SOCKSv5
 						/* handle socksv5 MPDN logic */
 						else if(IPACM_Iface::ipacmcfg->ipacm_socksv5_enable)
@@ -960,7 +959,7 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 				/* add support for handling default route to WIFI backhaul on vlan case Need to protect with xml entry */
 				if(IPACM_Iface::ipacmcfg->iface_in_vlan_mode(dev_name))
 				{
-					uint16_t vid[IPA_MAX_NUM_OFFLOAD_VLANS];
+					uint16_t vid[IPA_MAX_NUM_OFFLOAD_VLANS] = {0};
 					if (IPACM_Iface::ipacmcfg->get_iface_vlan_ids(dev_name, vid))
 					{
 						IPACMERR("failed getting vlan ids for iface %s\n", dev_name);
@@ -1162,10 +1161,14 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 		{
 			ipacm_event_data_all *data = (ipacm_event_data_all *)param;
 			uint16_t vlan_id = 0;
+			if(IPACM_Iface::ipacmcfg->iface_in_vlan_mode(dev_name) && is_vlan_event(data->iface_name) && IPACM_Iface::ipacmcfg->get_vlan_id(data->iface_name, &vlan_id))
+			{
+				IPACMERR("failed to get iface vlan ID\n");
+			}
 			ipa_interface_index = iface_ipa_index_query(data->if_index);
 			IPACMDBG_H("Received IPA_LAN_CLIENT_DEL_EVENT event \n");
 			IPACMDBG_H("check iface %s category: %d\n", dev_name, ipa_if_cate);
-			if(ipa_interface_index == ipa_if_num)
+			if(ipa_interface_index == ipa_if_num || (IPACM_Iface::ipacmcfg->iface_in_vlan_mode(dev_name) && is_vlan_event(data->iface_name)))
 			{
 				IPACMDBG_H("LAN iface delete client \n");
 				handle_eth_client_down_evt(data->mac_addr, vlan_id, data);
@@ -1593,6 +1596,38 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 				check_vlan_PDNUp(IPA_IP_v4);
 				IPACMDBG_H("Check any missed v6 VLAN handling in v6 new ADDR\n");
 				check_vlan_PDNUp(IPA_IP_v6);
+			}
+		}
+		break;
+
+	case IPA_NOTIFY_VLAN_DOWN:
+		{
+			IPACMDBG_H("Received IPA_NOTIFY_VLAN_DOWN\n");
+			del_vlan_info = (vlan_iface_info *)param;
+			if(!del_vlan_info)
+			{
+				IPACMDBG_H("Received empty vlan iface down info\n");
+				return;
+			}
+			if(strstr(del_vlan_info->vlan_iface_name, dev_name))
+			{
+				int cnt;
+				int num_eth_client_tmp = num_eth_client;
+				IPACMDBG_H("%d VLAN iface found on %s iface \n", del_vlan_info->vlan_id,  dev_name);
+				for(cnt = 0; cnt < num_eth_client_tmp; cnt++)
+				{
+					if(get_client_memptr(eth_client, cnt)->vlan_id ==  del_vlan_info->vlan_id)
+					{
+						IPACMDBG_H("deleting vlan %d info with MAC %02x:%02x:%02x:%02x:%02x:%02x\n",del_vlan_info->vlan_id,
+							get_client_memptr(eth_client, cnt)->mac[0],
+							get_client_memptr(eth_client, cnt)->mac[1],
+							get_client_memptr(eth_client, cnt)->mac[2],
+							get_client_memptr(eth_client, cnt)->mac[3],
+							get_client_memptr(eth_client, cnt)->mac[4],
+							get_client_memptr(eth_client, cnt)->mac[5]);
+						handle_eth_client_down_evt(get_client_memptr(eth_client, cnt)->mac, del_vlan_info->vlan_id);
+					}
+				}
 			}
 		}
 		break;
@@ -2652,6 +2687,7 @@ int IPACM_Lan::handle_vlan_neighbor(ipacm_event_data_all *data)
 		if(data_vlan->data_all.iptype == IPA_IP_v4)
 		{
 			handle_eth_client_route_rule(data->mac_addr, data->iptype, vlan_id);
+			install_all_qos_route_rule(data->mac_addr, vlan_id, NULL);
 		}
 		else
 		{
@@ -2668,9 +2704,9 @@ int IPACM_Lan::handle_vlan_neighbor(ipacm_event_data_all *data)
 			{
 				IPACMDBG_H("Neighbor received after conntrack. Installing Route rules now...\n");
 				handle_eth_client_route_rule(data->mac_addr, data->iptype, vlan_id);
+				install_all_qos_route_rule(data->mac_addr, vlan_id, data->ipv6_addr);
 			}
 		}
-		install_all_qos_route_rule(data->mac_addr, vlan_id, data->ipv6_addr);
 	}
 
 	if(IPACM_Iface::ipacmcfg->ipacm_mpdn_enable)
@@ -2805,6 +2841,7 @@ int IPACM_Lan::check_vlan_PDNUp(enum ipa_ip_type iptype)
 	int i = 0;
 	ipacm_event_vlan_pdn vlan_data;
 	uint16_t Ids[IPA_MAX_NUM_OFFLOAD_VLANS];
+	memset(Ids,0, IPA_MAX_NUM_OFFLOAD_VLANS*sizeof(uint16_t));
 	uint8_t cnt = 0;
 
 	if(IPACM_Iface::ipacmcfg->get_iface_vlan_ids(dev_name, Ids))
@@ -2888,7 +2925,7 @@ int IPACM_Lan::check_vlan_PDNUp(enum ipa_ip_type iptype)
 				}
 #endif
 				modify_ipv6_prefix_flt_rule();
-
+				memset(&vlan_data, 0, sizeof(vlan_data));
 				/* create event data and call the handler */
 				memset(&vlan_data, 0, sizeof(vlan_data));
 				vlan_data.iptype = iptype;
@@ -2935,6 +2972,13 @@ int IPACM_Lan::handle_vlan_pdn_up(ipacm_event_vlan_pdn *data, bool set_mux)
 {
 	int ret = IPACM_SUCCESS;
 
+	/* checking instance ip_type */
+	if((data->iptype != ip_type) && (ip_type != IPA_IP_MAX))
+	{
+		IPACMERR("inconsistent iptype. iptype = %d, instance ip_type = %d\n", data->iptype, ip_type);
+		return IPACM_FAILURE;
+	}
+
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
 	/* Install filter rules for the client. */
 	if(IPACM_Iface::ipacmcfg->ipacm_lan_stats_enable == true)
@@ -2947,7 +2991,6 @@ int IPACM_Lan::handle_vlan_pdn_up(ipacm_event_vlan_pdn *data, bool set_mux)
 		}
 	}
 #endif
-
 
 	/* check only add static UL filter rule once */
 	if(data->iptype == IPA_IP_v6)
@@ -4634,11 +4677,11 @@ int IPACM_Lan::handle_eth_hdr_init(uint8_t *mac_addr, ipacm_bridge *bridge, uint
 	struct ipa_ioc_copy_hdr sCopyHeader;
 	struct ipa_ioc_add_hdr *pHeaderDescriptor = NULL;
 	uint32_t cnt, idx;
-	int clnt_indx;
-	uint8_t *mac_address;
+	int clnt_indx = 0;
+	uint8_t *mac_address = NULL;
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
-	struct wan_ioctl_lan_client_info *client_info;
-	ipacm_ext_prop* ext_prop;
+	struct wan_ioctl_lan_client_info *client_info = NULL;
+	ipacm_ext_prop* ext_prop = NULL;
 	int max_clients = (IPACM_Iface::ipacmcfg->ipacm_lan_stats_enable) ? IPA_MAX_NUM_HW_PATH_CLIENTS:
 		IPA_MAX_NUM_ETH_CLIENTS;
 #else
@@ -5192,7 +5235,6 @@ int IPACM_Lan::handle_eth_hdr_init(uint8_t *mac_addr, ipacm_bridge *bridge, uint
 			if (set_lan_client_info(client_info))
 			{
 				res = IPACM_FAILURE;
-				free(client_info);
 				/* Reset the mac from active list. */
 				reset_active_lan_stats_index(get_client_memptr(eth_client, clnt_indx)->lan_stats_idx, mac_addr);
 				/* Add the mac to inactive list. */
@@ -5200,7 +5242,6 @@ int IPACM_Lan::handle_eth_hdr_init(uint8_t *mac_addr, ipacm_bridge *bridge, uint
 				get_client_memptr(eth_client, clnt_indx)->lan_stats_idx = -1;
 				goto fail;
 			}
-			free(client_info);
 			if (IPACM_Wan::isWanUP(ipa_if_num))
 			{
 				if(IPACM_Wan::backhaul_is_sta_mode == false)
@@ -5246,7 +5287,10 @@ int IPACM_Lan::handle_eth_hdr_init(uint8_t *mac_addr, ipacm_bridge *bridge, uint
 		return res;
 	}
 fail:
-	free(pHeaderDescriptor);
+	if(client_info != NULL)
+		free(client_info);
+	if(pHeaderDescriptor)
+		free(pHeaderDescriptor);
 	return res;
 }
 
@@ -5277,7 +5321,6 @@ int IPACM_Lan::handle_eth_client_ipaddr(ipacm_event_data_all *data)
 		IPACMERR("inconsistent iptype. iptype = %d, instance ip_type = %d\n", data->iptype, ip_type);
 		return IPACM_FAILURE;
 	}
-
 #ifdef FEATURE_VLAN_MPDN
 	if(is_vlan_event(data->iface_name))
 	{
@@ -7121,6 +7164,33 @@ void IPACM_Lan::handle_stats_client_connect(int if_index, uint8_t *mac_addr)
 		IPACMDBG_H("Received IPA_LAN_CLIENT_CONNECT_EVENT\n");
 		/* Check if we can add this to the active list. */
 		/* Active List:- Clients for which index is less than IPA_MAX_NUM_HW_PATH_CLIENTS. */
+		if(is_odu)
+		{
+			for (int i = 0; i < IPA_MAX_NUM_HW_PATH_CLIENTS; i++)
+			{
+				if (memcmp(active_lan_client_index_odu[i].mac, mac_addr, IPA_MAC_ADDR_SIZE) == 0)
+				{
+					IPACMDBG_H("MAC %02x:%02x:%02x:%02x:%02x:%02x has been received already, return\n",
+						mac_addr[0], mac_addr[1], mac_addr[2],
+						mac_addr[3], mac_addr[4], mac_addr[5]);
+					return; // MAC found
+				}
+			}
+		}
+		else
+		{
+			for (int i = 0; i < IPA_MAX_NUM_HW_PATH_CLIENTS; i++)
+			{
+				if (memcmp(active_lan_client_index[i].mac, mac_addr, IPA_MAC_ADDR_SIZE) == 0)
+				{
+					IPACMDBG_H("MAC %02x:%02x:%02x:%02x:%02x:%02x has been received already, return\n",
+						mac_addr[0], mac_addr[1], mac_addr[2],
+						mac_addr[3], mac_addr[4], mac_addr[5]);
+					return; // MAC found
+				}
+			}
+		}
+
 		if (get_free_active_lan_stats_index(mac_addr) == -1)
 		{
 			IPACMDBG_H("Failed to reserve active lan_stats index, try inactive list. \n");
@@ -8186,9 +8256,10 @@ int IPACM_Lan::handle_eth_client_down_evt(uint8_t *mac_addr, uint16_t vlan_id, i
 		return IPACM_SUCCESS;
 	}
 
-	if (get_client_memptr(eth_client, clt_indx)->ipv4_set &&
+	/*for vlan down scenarios data should be NULL*/
+	if ((data != NULL) &&  (get_client_memptr(eth_client, clt_indx)->ipv4_set &&
 		get_client_memptr(eth_client, clt_indx)->v4_addr &&
-		data->ipv4_addr)
+		data->ipv4_addr))
 	{
 		if (data->ipv4_addr != get_client_memptr(eth_client, clt_indx)->v4_addr)
 		{
@@ -12201,6 +12272,7 @@ int IPACM_Lan::enable_per_client_stats(bool *status)
 int IPACM_Lan::handle_wan_down_v6(bool is_sta_mode, bool is_support_mpdn, uint16_t vid)
 {
 	int i = 0;
+	bool vid_present = false;
 
 	IPACMDBG_H("Received handle_wan_down_v6 is_sta_mode %d, is_support_mpdn %d, ipa_if_cate  %d \n",is_sta_mode,is_support_mpdn,ipa_if_cate);
 	if (rx_prop == NULL)
@@ -12260,9 +12332,21 @@ int IPACM_Lan::handle_wan_down_v6(bool is_sta_mode, bool is_support_mpdn, uint16
 					vlan_sta_info[i].v6_flt_hdl = 0;
 					if (vlan_sta_info[i].v4_flt_hdl == 0)
 						vlan_sta_info[i].vlan_id = 0;
+					vid_present = true;
 				}
 			}
 		}
+
+		/* In case if VLAN_PDN_UP with STA backahul not done for
+		VLAN due to STA header not created, we still need to clean
+		route rules for that vlan client which is installed during neighbor handling */
+		if(!vid_present && vid > 0)
+		{
+			/* STA case reset vlan client ipv6 rt-rules */
+			handle_lan_client_reset_rt(IPA_IP_v6, vid);
+			IPACMDBG_H("STA BH v6 client RT rules has been deleted successfully.\n");
+		}
+
 		IPACMDBG_H("STA BH v6 rules has been deleted successfully.\n");
 	}
 

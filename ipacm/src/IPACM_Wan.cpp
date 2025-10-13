@@ -1,6 +1,5 @@
 /*
  * Copyright (c) 2013-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -27,43 +26,9 @@
  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * Changes from Qualcomm Innovation Center are provided under the following license:
- *
- * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
- *
- * Redistribution and use in source and binary forms, with or without
- * modification, are permitted (subject to the limitations in the
- * disclaimer below) provided that the following conditions are met:
- *
- *   * Redistributions of source code must retain the above copyright
- *     notice, this list of conditions and the following disclaimer.
- *
- *   * Redistributions in binary form must reproduce the above
- *     copyright notice, this list of conditions and the following
- *     disclaimer in the documentation and/or other materials provided
- *     with the distribution.
- *
- *   * Neither the name of Qualcomm Innovation Center, Inc. nor the names of its
- *     contributors may be used to endorse or promote products derived
- *     from this software without specific prior written permission.
- *
- * NO EXPRESS OR IMPLIED LICENSES TO ANY PARTY'S PATENT RIGHTS ARE
- * GRANTED BY THIS LICENSE. THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT
- * HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED
- * WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
- * MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
- * IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR
- * ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
- * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE
- * GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
- * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER
- * IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
- * OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
- * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- *
- * Changes from Qualcomm Innovation Center, Inc. are provided under the following license:
- * Copyright (c) 2024-2025 Qualcomm Innovation Center, Inc. All rights reserved.
- * SPDX-License-Identifier: BSD-3-Clause-Clear.
+ * Changes from Qualcomm Technologies, Inc. are provided under the following license:
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 /*!
 		@file
@@ -347,7 +312,7 @@ int IPACM_Wan::GetMuxByVid(uint16_t vlan_id, uint8_t *mux_id, ipa_ip_type iptype
 			}
 			if(IPACM_Wan::ipv4_to_iface[i].ipv4_addr)
 			{
-				for(int j = 0; j <  ipv4_to_iface[i].VID_cnt; j++)
+				for(int j = 0; j <  IPA_MAX_NUM_SW_PDNS; j++)
 				{
 					if(IPACM_Wan::ipv4_to_iface[i].associated_VIDs[j] == vlan_id)
 					{
@@ -375,7 +340,7 @@ int IPACM_Wan::GetMuxByVid(uint16_t vlan_id, uint8_t *mux_id, ipa_ip_type iptype
 			}
 			if(IPACM_Wan::ipv6_to_iface[i].ipv6_prefix[0] || IPACM_Wan::ipv6_to_iface[i].ipv6_prefix[1])
 			{
-				for(int j = 0; j < ipv6_to_iface[i].VID_cnt; j++)
+				for(int j = 0; j < IPA_MAX_NUM_SW_PDNS; j++)
 				{
 					if(IPACM_Wan::ipv6_to_iface[i].associated_VIDs[j] == vlan_id)
 					{
@@ -407,7 +372,7 @@ int IPACM_Wan::GetMTUByVid(uint16_t *mtu, uint16_t vlan_id, ipa_ip_type iptype)
 		{
 			if(IPACM_Wan::ipv4_to_iface[i].ipv4_addr)
 			{
-				for(int j = 0; j < ipv4_to_iface[i].VID_cnt; j++)
+				for(int j = 0; j < IPA_MAX_NUM_SW_PDNS; j++)
 				{
 					if(IPACM_Wan::ipv4_to_iface[i].associated_VIDs[j] == vlan_id)
 					{
@@ -421,7 +386,7 @@ int IPACM_Wan::GetMTUByVid(uint16_t *mtu, uint16_t vlan_id, ipa_ip_type iptype)
 		{
 			if(IPACM_Wan::ipv6_to_iface[i].ipv6_prefix[0] || IPACM_Wan::ipv6_to_iface[i].ipv6_prefix[1])
 			{
-				for(int j = 0; j < ipv6_to_iface[i].VID_cnt; j++)
+				for(int j = 0; j < IPA_MAX_NUM_SW_PDNS; j++)
 				{
 					if(IPACM_Wan::ipv6_to_iface[i].associated_VIDs[j] == vlan_id)
 					{
@@ -448,7 +413,7 @@ bool IPACM_Wan::is_xlat_by_vid(uint16_t vlan_id)
 			{
 				return IPACM_Wan::ipv4_to_iface[i].is_xlat;
 			}
-			for(int j = 0; j < ipv4_to_iface[i].VID_cnt; j++)
+			for(int j = 0; j < IPA_MAX_NUM_SW_PDNS; j++)
 			{
 				if(IPACM_Wan::ipv4_to_iface[i].associated_VIDs[j] == vlan_id)
 					return IPACM_Wan::ipv4_to_iface[i].is_xlat;
@@ -472,7 +437,7 @@ bool IPACM_Wan::is_xlat_by_ipv4(uint32_t ipv4_addr)
 
 int IPACM_Wan::get_vid_index_for_iface_v6(ipacm_ipv6_wan_iface iface, uint16_t vlan_id)
 {
-	for(int i = 0; i < iface.VID_cnt;i++)
+	for(int i = 0; i < IPA_MAX_NUM_SW_PDNS;i++)
 	{
 		if(iface.associated_VIDs[i] == vlan_id)
 			return i;
@@ -1872,6 +1837,68 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 		break;
 #endif
 
+	case IPA_DUMMY_VLAN_DOWN_EVENT:
+	{
+		IPACMDBG("Received IPA_DUMMY_VLAN_DOWN_EVENT event\n");
+		int vlan_idx = 0;
+		int v4_pdn_index = -1;
+		int v6_pdn_index = -1;
+		bool vlan_pdn_up = false;
+		ipacm_event_route_vlan *vlandown_data = (ipacm_event_route_vlan *)param;
+		if(vlandown_data->VlanID)
+		{
+			if(m_is_sta_mode == Q6_WAN)
+			{
+				v4_pdn_index = modem_ipv4_pdn_index;
+				v6_pdn_index = modem_ipv6_pdn_index;
+			}
+			else if(m_is_sta_mode == WLAN_WAN )
+			{
+				v4_pdn_index = sta_ipv4_pdn_index;
+				v6_pdn_index = sta_ipv6_pdn_index;
+			}
+			if((v6_pdn_index >= 0) && (ipv6_to_iface[v6_pdn_index].wan_up_vlan_v6))
+			{
+				for(vlan_idx = 0; vlan_idx < IPA_MAX_NUM_SW_PDNS; vlan_idx++)
+				{
+					if((IPACM_Wan::ipv6_to_iface[v6_pdn_index].associated_VIDs[vlan_idx] != 0) &&
+					   (IPACM_Wan::ipv6_to_iface[v6_pdn_index].associated_VIDs[vlan_idx] == vlandown_data->VlanID))
+					{
+						vlan_pdn_up = true;
+						post_wan_vlan_pdn_event(IPA_IP_v6, v6_pdn_index, vlan_idx, vlandown_data->VlanID, false);
+						break;
+					}
+				}
+			}
+			if((v4_pdn_index >= 0) && (ipv4_to_iface[v4_pdn_index].wan_up_vlan))
+			{
+				for(vlan_idx = 0; vlan_idx < IPA_MAX_NUM_SW_PDNS; vlan_idx++)
+				{
+					if((IPACM_Wan::ipv4_to_iface[v4_pdn_index].associated_VIDs[vlan_idx] != 0) &&
+					   (IPACM_Wan::ipv4_to_iface[v4_pdn_index].associated_VIDs[vlan_idx] == vlandown_data->VlanID))
+					{
+						vlan_pdn_up = true;
+						post_wan_vlan_pdn_event(IPA_IP_v4, v4_pdn_index, vlan_idx, vlandown_data->VlanID, false);
+						break;
+					}
+				}
+			}
+		}
+		if(vlan_pdn_up)
+		{
+			if((v6_pdn_index == -1 && IPACM_Wan::ipv4_to_iface[v4_pdn_index].wan_up_vlan == false)||
+				(v4_pdn_index == -1 && IPACM_Wan::ipv6_to_iface[v6_pdn_index].wan_up_vlan_v6 == false)||
+				(v6_pdn_index >= 0 && v4_pdn_index >= 0 && IPACM_Wan::ipv4_to_iface[v4_pdn_index].wan_up_vlan == false &&
+				IPACM_Wan::ipv6_to_iface[v6_pdn_index].wan_up_vlan_v6 == false))
+			{
+				if(num_offloaded_pdns)
+					num_offloaded_pdns--;
+				IPACMDBG_H("Num of offloaded PDN decreased to %d\n", num_offloaded_pdns);
+			}
+		}
+	}
+	break;
+
 	case IPA_ROUTE_DEL_EVENT:
 		{
 			ipacm_event_data_addr *data = (ipacm_event_data_addr *)param;
@@ -2481,13 +2508,15 @@ void IPACM_Wan::post_wan_vlan_pdn_event(ipa_ip_type iptype, int pdn_idx, int vla
 		{
 			GetMuxByVid(vlan_id, &mux_id, IPA_IP_v6);
 			ipv6_to_iface[pdn_idx].associated_VIDs[vlan_idx] = 0;
-			while(idx < IPA_MAX_NUM_SW_PDNS && ipv6_to_iface[pdn_idx].associated_VIDs[idx] != 0)
+			for(int i = idx; i < IPA_MAX_NUM_SW_PDNS; i++)
 			{
-				ipv6_to_iface[pdn_idx].associated_VIDs[vlan_idx] =
-						ipv6_to_iface[pdn_idx].associated_VIDs[idx];
-				ipv6_to_iface[pdn_idx].associated_VIDs[idx] = 0;
-				idx++;
-				vlan_idx++;
+				if(ipv6_to_iface[pdn_idx].associated_VIDs[i] != 0)
+				{
+					ipv6_to_iface[pdn_idx].associated_VIDs[vlan_idx] =
+							ipv6_to_iface[pdn_idx].associated_VIDs[i];
+					ipv6_to_iface[pdn_idx].associated_VIDs[i] = 0;
+					vlan_idx++;
+				}
 			}
 			ipv6_to_iface[pdn_idx].VID_cnt--;
 			if(ipv6_to_iface[pdn_idx].VID_cnt == 0)
@@ -2550,13 +2579,15 @@ void IPACM_Wan::post_wan_vlan_pdn_event(ipa_ip_type iptype, int pdn_idx, int vla
 		{
 			GetMuxByVid(vlan_id, &mux_id, IPA_IP_v4);
 			ipv4_to_iface[pdn_idx].associated_VIDs[vlan_idx] = 0;
-			while(idx < IPA_MAX_NUM_SW_PDNS && ipv4_to_iface[pdn_idx].associated_VIDs[idx] != 0)
+			for(int i = idx; i < IPA_MAX_NUM_SW_PDNS; i++)
 			{
-				ipv4_to_iface[pdn_idx].associated_VIDs[vlan_idx] =
-					ipv4_to_iface[pdn_idx].associated_VIDs[idx];
-				ipv4_to_iface[pdn_idx].associated_VIDs[idx] = 0;
-				idx++;
-				vlan_idx++;
+				if(ipv4_to_iface[pdn_idx].associated_VIDs[i] != 0)
+				{
+					ipv4_to_iface[pdn_idx].associated_VIDs[vlan_idx] =
+						ipv4_to_iface[pdn_idx].associated_VIDs[i];
+					ipv4_to_iface[pdn_idx].associated_VIDs[i] = 0;
+					vlan_idx++;
+				}
 			}
 			ipv4_to_iface[pdn_idx].VID_cnt--;
 			if(ipv4_to_iface[pdn_idx].VID_cnt == 0)
@@ -2605,8 +2636,16 @@ void IPACM_Wan::post_wan_vlan_pdn_event(ipa_ip_type iptype, int pdn_idx, int vla
 			ipv6_to_iface[pdn_idx].wan_up_vlan_v6 = true;
 			if (ipv6_to_iface[pdn_idx].VID_cnt < IPA_MAX_NUM_SW_PDNS)
 			{
-				ipv6_to_iface[pdn_idx].associated_VIDs[vlan_idx] = vlan_id;
-				ipv6_to_iface[pdn_idx].VID_cnt++;
+				for(int i = 0; i < IPA_MAX_NUM_SW_PDNS; i++)
+				{
+					if(ipv6_to_iface[pdn_idx].associated_VIDs[i] == 0)
+					{
+						ipv6_to_iface[pdn_idx].associated_VIDs[i] = vlan_id;
+						ipv6_to_iface[pdn_idx].VID_cnt++;
+						IPACMDBG_H("Added vlan id %d at index %d \n", vlan_id, i);
+						break;
+					}
+				}
 				ipv6_to_iface[pdn_idx].pIface = this;
 			}
 			else
@@ -2657,8 +2696,16 @@ void IPACM_Wan::post_wan_vlan_pdn_event(ipa_ip_type iptype, int pdn_idx, int vla
 			ipv4_to_iface[pdn_idx].wan_up_vlan = true;
 			if (ipv4_to_iface[pdn_idx].VID_cnt < IPA_MAX_NUM_SW_PDNS)
 			{
-				ipv4_to_iface[pdn_idx].associated_VIDs[vlan_idx] = vlan_id;
-				ipv4_to_iface[pdn_idx].VID_cnt++;
+				for(int i = 0; i < IPA_MAX_NUM_SW_PDNS; i++)
+				{
+					if(ipv4_to_iface[pdn_idx].associated_VIDs[i] == 0)
+					{
+						ipv4_to_iface[pdn_idx].associated_VIDs[i] = vlan_id;
+						ipv4_to_iface[pdn_idx].VID_cnt++;
+						IPACMDBG_H("Added vlan id %d at index %d \n", vlan_id, i);
+						break;
+					}
+				}
 				ipv4_to_iface[pdn_idx].pIface = this;
 			}
 			else
@@ -3280,6 +3327,7 @@ fail:
 int IPACM_Wan::check_vlan_pdn(ipa_ip_type iptype, ipacm_event_route_vlan *data, bool v4_only_xlat)
 {
 	int ret = IPACM_FAILURE;
+	bool v4_hdr_pending = false, v6_hdr_pending = false;
 	std::list<uint16_t>::iterator it;
 
 	IPACMDBG_H("iptype: %d\n", iptype);
@@ -3306,15 +3354,19 @@ int IPACM_Wan::check_vlan_pdn(ipa_ip_type iptype, ipacm_event_route_vlan *data, 
 					if (data->VlanID == *it)
 					{
 						IPACMDBG_H("Already added vlan_id: %d as pending_VID_STA \n", data->VlanID);
-					 	return IPACM_SUCCESS;
+						v4_hdr_pending = true;
+						break;
 					}
 				}
-				pending_VID_STA.push_back(data->VlanID);
-				IPACMDBG_H("Added vlan_id: %d as pending_VID_STA\n", data->VlanID);
+				if(v4_hdr_pending == false)
+				{
+					pending_VID_STA.push_back(data->VlanID);
+					IPACMDBG_H("Added vlan_id: %d as pending_VID_STA\n", data->VlanID);
+					v4_hdr_pending = true;
+				}
 			}
-			return IPACM_SUCCESS;
 		}
-		else if((iptype==IPA_IP_v6 || iptype == IPA_IP_MAX) && (header_set_v6 != true))
+		if((iptype==IPA_IP_v6 || iptype == IPA_IP_MAX) && (header_set_v6 != true))
 		{
 			header_partial_default_wan_v6 = true;
 			IPACMDBG_H("STA ipv6-header haven't constructed \n");
@@ -3327,13 +3379,22 @@ int IPACM_Wan::check_vlan_pdn(ipa_ip_type iptype, ipacm_event_route_vlan *data, 
 					if (data->VlanID == *it)
 					{
 						IPACMDBG_H("Already added vlan_id: %d as pending_VID_STA_v6 \n", data->VlanID);
-						 return IPACM_SUCCESS;
+						v6_hdr_pending = true;
+						break;
 					}
 				}
-				pending_VID_STA_v6.push_back(data->VlanID);
-				IPACMDBG_H("Added vlan_id: %d as pending_VID_STA_v6\n", data->VlanID);
+				if(v6_hdr_pending == false)
+				{
+					pending_VID_STA_v6.push_back(data->VlanID);
+					IPACMDBG_H("Added vlan_id: %d as pending_VID_STA_v6\n", data->VlanID);
+					v6_hdr_pending = true;
+				}
 			}
-			return IPACM_SUCCESS;
+		}
+		if(v4_hdr_pending || v6_hdr_pending)
+		{
+			IPACMDBG_H("STA header haven't constructed \n");
+			return IPACM_FAILURE;
 		}
 	}
 
@@ -4025,6 +4086,7 @@ int IPACM_Wan::handle_route_add_evt(ipa_ip_type iptype)
 			if(m_header.GetHeaderHandle(&hdr) == false)
 			{
 				IPACMERR("Failed to get QMAP header.\n");
+				free(rt_rule);
 				return IPACM_FAILURE;
 			}
 			rt_rule_entry->rule.hdr_hdl = hdr.hdl;
@@ -4179,6 +4241,7 @@ int IPACM_Wan::handle_route_add_evt(ipa_ip_type iptype)
 			if(pdn_update == NULL)
 			{
 				IPACMERR("Unable to allocate memory\n");
+				free(rt_rule);
 				return IPACM_FAILURE;
 			}
 			memset(pdn_update, 0, sizeof(ipacm_event_vlan_pdn));
@@ -4260,6 +4323,7 @@ int IPACM_Wan::handle_route_add_evt(ipa_ip_type iptype)
 				if(fd_wwan_ioctl < 0)
 				{
 					IPACMERR("Failed to open %s.\n",WWAN_QMI_IOCTL_DEVICE_NAME);
+					free(rt_rule);
 					return false;
 				}
 				IPACMDBG_H("send WAN_IOC_NOTIFY_WAN_STATE up to IPA_PM\n");
@@ -8103,6 +8167,8 @@ int IPACM_Wan::handle_down_evt()
 		ipv4_to_iface[sta_ipv4_pdn_index].ipv4_addr = 0;
 		ipv4_to_iface[sta_ipv4_pdn_index].pIface = NULL;
 		sta_ipv4_pdn_index = -1;
+		wan_v4_addr_set = false;
+		wan_v4_addr = 0;
 	}
 
 	/* delete default v6 RT rule */
@@ -8124,8 +8190,8 @@ int IPACM_Wan::handle_down_evt()
 		ipv6_to_iface[sta_ipv6_pdn_index].pIface = NULL;
 		memset(&ipv6_to_iface[sta_ipv6_pdn_index].ipv6_prefix, 0, sizeof(uint32_t) * 2);
 		sta_ipv6_pdn_index = -1;
+		memset(ipv6_addr, 0, sizeof(uint32_t)*(MAX_DEFAULT_v6_ROUTE_RULES*4));
 	}
-
 
 	/* clean wan-client header, routing rules */
 	IPACMDBG_H("left %d wan clients need to be deleted \n ", num_wan_client);
@@ -8202,6 +8268,35 @@ int IPACM_Wan::handle_down_evt()
 	/* free dft ipv6 filter rule handlers if any */
 	if (ip_type != IPA_IP_v4 && rx_prop != NULL)
 	{
+		/* In case if VLAN_PDN_UP with STA backahul not done for
+			VLAN due to STA header not created, we still need to clean
+			route rules for that vlan client which is installed during neighbor handling
+		*/
+		if((!header_set_v6)&&  (!pending_VID_STA_v6.empty()))
+		{
+			ipacm_event_vlan_pdn *vlandown_data = NULL;
+			ipacm_cmd_q_data evt_data;
+			std::list<uint16_t>::iterator it;
+			for(it = pending_VID_STA_v6.begin(); it != pending_VID_STA_v6.end(); ++it)
+			{
+				vlandown_data = (ipacm_event_vlan_pdn *)malloc(sizeof(ipacm_event_vlan_pdn));
+				if(!vlandown_data)
+				{
+					IPACMERR("couldn't allocate memory for new vlan pdn event\n");
+					res = IPACM_FAILURE;
+					goto fail;
+				}
+				memset(vlandown_data, 0, sizeof(ipacm_event_vlan_pdn));
+				vlandown_data->iptype = IPA_IP_v6;
+				vlandown_data->VlanID = *it;
+				vlandown_data->mux_id = 0;
+				evt_data.event = IPA_HANDLE_WAN_VLAN_PDN_DOWN;
+				evt_data.evt_data = (void *)vlandown_data;
+				IPACMDBG_H("Posting IPA_HANDLE_WAN_VLAN_PDN_DOWN (v6) iptype IPA_IP_v6, VlanID %d, mux_id %d, if num %d\n",
+					vlandown_data->VlanID, vlandown_data->mux_id, ipa_if_num);
+				IPACM_EvtDispatcher::PostEvt(&evt_data);
+			}
+		}
 		if (dft_v6fl_rule_hdl[0][0] != 0)
 		{
 			if (!m_filtering.DeleteFilteringHdls(dft_v6fl_rule_hdl[0], IPA_IP_v6, m_ipv6_default_filterting_rules_count[0]))
@@ -8226,6 +8321,7 @@ int IPACM_Wan::handle_down_evt()
 			memset(ipv6_dest_flt_rule_hdl, 0, MAX_DEFAULT_v6_ROUTE_RULES*sizeof(uint32_t));
 			num_ipv6_dest_flt_rule = 0;
 		}
+		IPACM_Iface::ipacmcfg->del_vlan_ipv6_prefix(ipv6_prefix, -1);
 		IPACMDBG_H("finished delete default v6 filtering rules\n ");
 	}
 	if(hdr_proc_hdl_dummy_v6)

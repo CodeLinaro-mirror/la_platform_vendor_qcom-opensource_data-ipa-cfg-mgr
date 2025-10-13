@@ -180,7 +180,9 @@ const char *ipacm_event_name[] = {
 	__stringify(IPA_QOS_RULE_ADD_EVENT),                   /* ipacm_qos_rule_add_event */
 	__stringify(IPA_QOS_RULE_DEL_EVENT),                   /* ipacm_qos_rule_del_event */
 	__stringify(IPA_QOS_RULE_FLUSH_EVENT),                 /* ipacm_qos_rule_flush_event */
-	__stringify(IPACM_EVENT_MAX)
+	__stringify(IPA_DUMMY_VLAN_DOWN_EVENT),              /* ipacm_event_route_vlan */
+	__stringify(IPA_NOTIFY_VLAN_DOWN),                    /* ipacm_event_data_vlan */
+	__stringify(IPACM_EVENT_MAX),
 };
 
 IPACM_Config::IPACM_Config()
@@ -530,8 +532,9 @@ int IPACM_Config::Init(void)
 	IPACM_conf_t	*cfg;
 
 	struct statvfs stat;
-	ulong available_partition_size_bytes = 0;
-	char ipacm_log_file[IPA_MAX_FILE_LEN] = IPACM_LOG_COLLECTION_FILE;
+	int64_t available_partition_size_bytes = 0;
+	int64_t quota_allowed_size_bytes = 0;
+	char ipacm_log_file[] = IPACM_LOG_COLLECTION_FILE;
 	char *ipacm_log_dir = NULL;
 
 	cfg = (IPACM_conf_t *)malloc(sizeof(IPACM_conf_t));
@@ -584,6 +587,9 @@ int IPACM_Config::Init(void)
 				cfg->max_file_size_quota, IPACM_DEF_LOG_FILE_SIZE_QUOTA);
 		cfg->max_file_size_quota = IPACM_DEF_LOG_FILE_SIZE_QUOTA;
 	}
+
+	memset(ipacm_log_file, '\0', sizeof(ipacm_log_file));
+	strlcpy(ipacm_log_file, IPACM_LOG_COLLECTION_FILE, (sizeof(ipacm_log_file) - 1));
 	ipacm_log_dir = dirname(ipacm_log_file);
 
 	/* Read the available partition size */
@@ -593,23 +599,21 @@ int IPACM_Config::Init(void)
 	}
 	else
 	{
-		available_partition_size_bytes = stat.f_bavail * stat.f_frsize;
 
-		IPACMDBG_H("Setting file size to min of APS[%lu], max_filesz[%lu], \
-				Based on Quota[%lu] \n", available_partition_size_bytes,
-				cfg->max_file_size, (ulong)((available_partition_size_bytes *
-						cfg->max_file_size_quota) /100));
+		if (stat.f_frsize != 0 && (stat.f_bavail > (INT64_MAX / stat.f_frsize)))
+			available_partition_size_bytes = INT64_MAX;
+		else
+			available_partition_size_bytes = (int64_t)(stat.f_bavail * stat.f_frsize);
 
-		/* Conerting from ulong to unit32_t, since uint32_t can hold a
-		 * file size value upto 4GB. So, shouldn't affect here as the file
-		 * size configured will usually be less than that.
-		 */
-		max_file_size = (uint32_t)std::min({(ulong)(cfg->max_file_size),
-				(ulong)(available_partition_size_bytes),
-				(ulong)((available_partition_size_bytes *
-						cfg->max_file_size_quota) / 100)});
+		quota_allowed_size_bytes = (int64_t)((double)available_partition_size_bytes *
+                                     ((double)cfg->max_file_size_quota / 100.0));
+
+		IPACMDBG_H("APS[%lld Bytes], Configuring file size to min of max_filesz[%lld Bytes] & quota_allowed_size[%lld Bytes] \n",
+				available_partition_size_bytes, cfg->max_file_size, quota_allowed_size_bytes);
+
+		max_file_size = std::min({cfg->max_file_size, quota_allowed_size_bytes});
 	}
-	IPACMDBG_H("max_file_size %d \n", max_file_size);
+	IPACMDBG_H("max_file_size %lld\n", max_file_size);
 
 	log_init();
 
@@ -1621,6 +1625,7 @@ int IPACM_Config::get_bridge_vlan_mapping(ipa_bridge_vlan_mapping_info *data, bo
 				data->bridge_ipv4 = it_mapping->bridge_ipv4;
 				data->subnet_mask = it_mapping->subnet_mask;
 				data->lan2lan_sw = it_mapping->lan2lan_sw;
+				data->master_if_index = it_mapping->bridge_if_index;
 				ret = IPACM_SUCCESS;
 
 				if(is_dummy_VID(it_mapping->bridge_associated_VID))
@@ -1637,6 +1642,7 @@ int IPACM_Config::get_bridge_vlan_mapping(ipa_bridge_vlan_mapping_info *data, bo
 				data->bridge_ipv4 = it_mapping->bridge_ipv4;
 				data->subnet_mask = it_mapping->subnet_mask;
 				data->lan2lan_sw = it_mapping->lan2lan_sw;
+				data->master_if_index = it_mapping->bridge_if_index;
 				ret = IPACM_SUCCESS;
 				break;
 			}
@@ -1912,7 +1918,7 @@ void IPACM_Config::restore_vlan_nat_ifaces(const char *phys_iface_name)
 void IPACM_Config::del_vlan_iface(ipa_vlan_iface_info *data)
 {
 	list<vlan_iface_info>::iterator it_vlan;
-
+	vlan_iface_info *del_vlan_info = NULL;
 	if(pthread_mutex_lock(&vlan_l2tp_lock) != 0)
 	{
 		IPACMERR("Unable to lock the mutex\n");
@@ -1954,6 +1960,27 @@ void IPACM_Config::del_vlan_iface(ipa_vlan_iface_info *data)
 	{
 		ipacm_event_eth_bridge *evt_data_eth_bridge;
 		ipacm_cmd_q_data eth_bridge_evt;
+		del_vlan_info = (vlan_iface_info*)malloc(sizeof(*del_vlan_info));
+		if(del_vlan_info == NULL)
+		{
+			IPACMERR("Failed to allocate memory.\n");
+			return;
+		}
+
+		/*
+		 * Call IPA_NOTIFY_VLAN_DOWN to check clear the vlan info
+		 * from LAN class when VLAN is down
+		 */
+		memset(del_vlan_info, 0, sizeof(*del_vlan_info));
+		memcpy(del_vlan_info->vlan_iface_name, data->name,
+			sizeof(del_vlan_info->vlan_iface_name));
+		del_vlan_info->vlan_id = data->vlan_id;
+		eth_bridge_evt.evt_data = (void*)del_vlan_info;
+		eth_bridge_evt.event = IPA_NOTIFY_VLAN_DOWN;
+
+		IPACMDBG_H("Posting event %s\n",
+			IPACM_Iface::ipacmcfg->getEventName(eth_bridge_evt.event));
+		IPACM_EvtDispatcher::PostEvt(&eth_bridge_evt);
 
 		evt_data_eth_bridge = (ipacm_event_eth_bridge*)malloc(sizeof(*evt_data_eth_bridge));
 		if(evt_data_eth_bridge == NULL)

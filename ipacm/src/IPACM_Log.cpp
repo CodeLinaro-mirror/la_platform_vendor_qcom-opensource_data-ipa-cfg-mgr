@@ -93,7 +93,7 @@ IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 char* dump_file = 0;
 void* mmap_addr = NULL;
 void* write_addr = 0;
-uint32_t max_filesize = 0;
+int64_t max_filesize = 0;
 int log_init_done = 0;
 pthread_mutex_t file_lock;
 
@@ -268,7 +268,7 @@ int log_init() {
 	}
 	if(is_exist == false)
 	{
-		trunc_ret = ftruncate(log_fd, max_filesize);
+		trunc_ret = ftruncate(log_fd, (off_t)max_filesize);
 		if(0 > trunc_ret)
 		{
 			perror("Ftruncate failed\n");

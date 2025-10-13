@@ -101,6 +101,7 @@ extern "C"
 
 #define IPA_MAX_IFACE_ENTRIES (26 + IPA_MAX_ACTIVE_WLAN_IFACE) /* current: 15 rmnet + 14 wlan + bridge+ eth+ rndis + ecm.*/
 #define IPA_MAX_ALG_ENTRIES 20
+#define NUM_ETHERTYPE_FLT_RULE 20
 #define IPA_MAX_RM_ENTRY 9
 #define IPA_MAX_IPGRE_ENTRY 10
 #define IPA_MAX_IPGRE_SUBNET_ENTRY 2
@@ -141,8 +142,8 @@ extern "C"
 #define IPACM_MAC_FLT 1
 #define IPACM_SW_FLT 2
 
-#define IPOGRE_METADATA_VALUE 0x100000
-#define IPOGRE_METADATA_MASK 0xFF0000
+#define IPOGRE_METADATA_VALUE 0x0100
+#define IPOGRE_METADATA_MASK 0x0000FF00
 /*---------------------------------------------------------------------------
 										Return values indicating error status
 ---------------------------------------------------------------------------*/

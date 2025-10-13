@@ -3820,6 +3820,8 @@ int IPACM_Lan::handle_addr_evt(ipacm_event_data_addr *data)
 			init_fl_rule(data->iptype);
 		}
 
+
+		install_ethertype_rules(data->iptype);
 		/* populate the flt rule offset for eth bridge */
 		eth_bridge_flt_rule_offset[data->iptype] = ipv4_icmp_flt_rule_hdl[0];
 		/* populate the flt rule offset for mtu_offset (offset = broadcast rule)*/
@@ -3968,6 +3970,7 @@ int IPACM_Lan::handle_addr_evt(ipacm_event_data_addr *data)
 				init_fl_rule(data->iptype);
 			}
 
+			install_ethertype_rules(data->iptype);
 			/* populate the mtu_rule_offset */
 			if (m_ipv6_default_filterting_rules_count > 0 &&
 				(m_ipv6_default_filterting_rules_count <= (IPV6_DEFAULT_FILTERTING_RULES + IPV6_DEFAULT_LAN_FILTERTING_RULES)))
@@ -4558,13 +4561,22 @@ int IPACM_Lan::handle_wan_up_ex(ipacm_ext_prop *ext_prop, ipa_ip_type iptype, ui
 			}
 			if(IPACM_Iface::ipacmcfg->ipogre_enabled)
 			{
-				IPACM_Iface::ipacmcfg->link_down = true;
-				ipacm_cmd_q_data evt_data;
-				memset(&evt_data, 0, sizeof(evt_data));
-				evt_data.event = IPA_HANDLE_IPOGRE_UP;
-				evt_data.evt_data = 0;
-				IPACMDBG_H("Posting event: IPA_HANDLE_IPOGRE_UP.\n");
-				IPACM_EvtDispatcher::PostEvt(&evt_data);
+				IPACMDBG_H("IPoGRE tunnel idx size %d \n",IPACM_Iface::ipacmcfg->tunnel_idx.size());
+				/*Checking tunnel_idx size to make sure only posting IPoGRE UP
+				if tunnel info is received and stored*/
+				if(IPACM_Iface::ipacmcfg->tunnel_idx.size()!=0)
+				{
+					for(int i=0;i<IPACM_Iface::ipacmcfg->tunnel_idx.size();i++)
+					{
+						IPACM_Iface::ipacmcfg->ipogre_tunnel_idx_map[IPACM_Iface::ipacmcfg->tunnel_idx[i]].link_down = true;
+					}
+					ipacm_cmd_q_data evt_data;
+					memset(&evt_data, 0, sizeof(evt_data));
+					evt_data.event = IPA_HANDLE_IPOGRE_UP;
+					evt_data.evt_data = 0;
+					IPACMDBG_H("Posting event: IPA_HANDLE_IPOGRE_UP.\n");
+					IPACM_EvtDispatcher::PostEvt(&evt_data);
+				}
 			}
 			if(!modem_ul_v6_set)
 				ret = handle_uplink_filter_rule(ext_prop, iptype, xlat_mux_id, false, true, ast_update);
@@ -7447,8 +7459,8 @@ int IPACM_Lan::handle_down_evt()
 				IPACM_Iface::ipacmcfg->ipgre_info.iptype = IPACM_Iface::ipacmcfg->ipogre_tunnel_idx_map[IPACM_Iface::ipacmcfg->tunnel_idx[i]].iptype;
 				IPACM_Iface::ipacmcfg->ipgre_info.num_exceptions = IPACM_Iface::ipacmcfg->tunnel_idx[i];
 				gre_down(false,true);
+				IPACM_Iface::ipacmcfg->ipogre_tunnel_idx_map[IPACM_Iface::ipacmcfg->tunnel_idx[i]].link_down = true;
 			}
-				IPACM_Iface::ipacmcfg->link_down = true;
 				ipacm_cmd_q_data evt_data;
 				memset(&evt_data, 0, sizeof(evt_data));
 				evt_data.event = IPA_HANDLE_IPOGRE_DOWN;
@@ -7465,6 +7477,7 @@ int IPACM_Lan::handle_down_evt()
 	/* Delete v4 default filtering rules */
 	if (ip_type != IPA_IP_v6 && rx_prop != NULL)
 	{
+		res = delete_ethertype_filter_rules(IPA_IP_v4);
 		res = delete_icmp_filter_rule(IPA_IP_v4);
 		if (res == IPACM_FAILURE)
 		{
@@ -7511,6 +7524,7 @@ int IPACM_Lan::handle_down_evt()
 	/* Delete v6 filtering rules */
 	if (ip_type != IPA_IP_v4 && rx_prop != NULL)
 	{
+		res = delete_ethertype_filter_rules(IPA_IP_v6);
 		res = delete_icmp_filter_rule(IPA_IP_v6);
 		if (res == IPACM_FAILURE)
 		{
@@ -14779,6 +14793,79 @@ int IPACM_Lan::add_tcp_syn_flt_rule(ipa_ip_type iptype)
 	return IPACM_SUCCESS;
 }
 
+int IPACM_Lan::install_ethertype_rules(ipa_ip_type iptype)
+{
+	struct ipa_flt_rule_add flt_rule_entry;
+	ipa_ioc_add_flt_rule *m_pFilteringTable;
+	int idx = 0;
+	int len;
+	if(rx_prop == NULL)
+	{
+		IPACMDBG_H("No rx properties registered for iface %s\n", dev_name);
+		return IPACM_SUCCESS;
+	}
+
+	if ((ipa_if_cate == WLAN_IF) && (is_if_svap || is_wlan_if_vlan) && (rx_prop->num_rx_props > 2)) {
+		idx = 2;
+		IPACMDBG_H("Interface is WLAN Svap or vlan, install rules on Rx pipe at idx %d \n", idx);
+	}
+
+	len = sizeof(struct ipa_ioc_add_flt_rule) + sizeof(struct ipa_flt_rule_add);
+	m_pFilteringTable = (struct ipa_ioc_add_flt_rule *)malloc(len);
+	if(!m_pFilteringTable)
+	{
+		PERROR("Not enough memory.\n");
+		return IPACM_FAILURE;
+	}
+	IPACMDBG_H(" ethertype rules %d\n", IPACM_Iface::ipacmcfg->num_ethertypes);
+	for(int i=0;i<IPACM_Iface::ipacmcfg->num_ethertypes;i++)
+	{
+		if(IPACM_Iface::ipacmcfg->ethertype_table[i] == 0)
+			continue;
+		memset(m_pFilteringTable, 0, len);
+		IPACMDBG_H("DEBUG ethertype rules\n");
+		m_pFilteringTable->commit = 1;
+		m_pFilteringTable->ep = rx_prop->rx[idx].src_pipe;
+		m_pFilteringTable->ip = iptype;
+		m_pFilteringTable->num_rules = 1;
+		m_pFilteringTable->global = false;
+		memset(&flt_rule_entry, 0, sizeof(flt_rule_entry));
+		flt_rule_entry.at_rear = false;
+		flt_rule_entry.rule.retain_hdr = 1;
+		flt_rule_entry.flt_rule_hdl = -1;
+		flt_rule_entry.status = -1;
+		flt_rule_entry.rule.action = IPA_PASS_TO_EXCEPTION;
+
+		memcpy(&flt_rule_entry.rule.attrib, &rx_prop->rx[idx].attrib,
+			sizeof(flt_rule_entry.rule.attrib));
+		flt_rule_entry.rule.eq_attrib_type = 1;
+		int meq32_n = flt_rule_entry.rule.eq_attrib.num_offset_meq_32;
+		flt_rule_entry.rule.eq_attrib.offset_meq_32[meq32_n].offset = -4;
+		flt_rule_entry.rule.eq_attrib.offset_meq_32[meq32_n].mask = 0xFFFF;
+		flt_rule_entry.rule.eq_attrib.offset_meq_32[meq32_n].value = IPACM_Iface::ipacmcfg->ethertype_table[i];
+		//Add the bitmap that will point to the new meq32 eq
+		if (meq32_n == 0)
+				flt_rule_entry.rule.eq_attrib.rule_eq_bitmap |= (1<<5);
+			else
+				flt_rule_entry.rule.eq_attrib.rule_eq_bitmap |= (1<<6);
+
+		flt_rule_entry.rule.eq_attrib.num_offset_meq_32++;
+
+		memcpy(&(m_pFilteringTable->rules[0]), &flt_rule_entry, sizeof(flt_rule_entry));
+
+		if ( m_filtering.AddFilteringRule(m_pFilteringTable) == false )
+		{
+				IPACMERR("Error adding catchup rul\n");
+				return IPACM_FAILURE;
+		}
+		ethertype_rule_hdl[iptype][i] = m_pFilteringTable->rules[0].flt_rule_hdl;
+		IPACM_Iface::ipacmcfg->increaseFltRuleCount(rx_prop->rx[idx].src_pipe,
+								iptype, 1);
+	}
+	free(m_pFilteringTable);
+	return IPACM_SUCCESS;
+}
+
 /* add tcp syn flt rule for l2tp interface*/
 int IPACM_Lan::add_tcp_syn_flt_rule_l2tp(ipa_ip_type inner_ip_type)
 {
@@ -15967,6 +16054,43 @@ fail:
 }
 
 #endif
+
+int IPACM_Lan::delete_ethertype_filter_rules(ipa_ip_type iptype)
+{
+	int idx = 0;
+	if(rx_prop == NULL)
+	{
+		IPACMERR("NULL rx_prop\n");
+		return IPACM_FAILURE;
+	}
+
+	if(rx_prop->num_rx_props <= 0)
+	{
+		IPACMERR("0 num 0f rx_prop\n");
+		return IPACM_FAILURE;
+	}
+	if ((ipa_if_cate == WLAN_IF) && (is_if_svap || is_wlan_if_vlan) && (rx_prop && rx_prop->num_rx_props > 2)) {
+		idx = 2;
+		IPACMDBG_H("Interface is WLAN Svap or vlan, delete rules on Rx pipe at idx %d \n", idx);
+	}
+	if(m_filtering.DeleteFilteringHdls(
+				   ethertype_rule_hdl[iptype], iptype, IPACM_Iface::ipacmcfg->num_ethertypes) == true)
+	{
+		IPACMDBG_H("Deleted v6 ethertype filter rule successfully.\n");
+		IPACM_Iface::ipacmcfg->decreaseFltRuleCount(
+				rx_prop->rx[idx].src_pipe, iptype, IPACM_Iface::ipacmcfg->num_ethertypes);
+		memset(
+			ethertype_rule_hdl,
+			0,
+			sizeof(uint32_t) * 2*IPACM_Iface::ipacmcfg->num_ethertypes);
+	}
+	else
+	{
+		IPACMERR("Error deleting v6 ethertype filter rule...\n");
+		return IPACM_FAILURE;
+	}
+	return IPACM_SUCCESS;
+}
 
 int IPACM_Lan::delete_icmp_filter_rule(
 	ipa_ip_type iptype )

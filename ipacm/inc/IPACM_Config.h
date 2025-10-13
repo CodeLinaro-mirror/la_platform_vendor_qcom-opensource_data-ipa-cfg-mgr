@@ -205,7 +205,7 @@ public:
 
 	/* Store interested ALG port from XML file */
 	ipacm_alg *alg_table;
-
+	uint16_t *ethertype_table;
 	/* Store private subnet configuration from XML file */
 	ipa_private_subnet private_subnet_table[IPA_MAX_PRIVATE_SUBNET_ENTRIES + IPA_MAX_MTU_ENTRIES];
 
@@ -236,7 +236,7 @@ public:
 	int ipa_num_private_subnet;
 
 	int ipa_num_alg_ports;
-
+	int num_ethertypes;
 	const char* ipa_nat_memtype;
 	int ipa_nat_max_entries;
 	int ipa_ipv6ct_max_entries;
@@ -445,6 +445,7 @@ public:
 		bool tunnel_up;
 		uint32_t Tunnel_id;
 		struct ipa_ipogre_flow_info flows_cache[MAX_FLOW_PER_IPOGRE_TUNNEL];
+		bool link_down;
 	} ipgre_tunnel_id_info_s;
 	struct ipa_ioc_ipogre_info ipogre_info;
 	/*Vector to keep track of tunnel idx*/
@@ -455,7 +456,6 @@ public:
 #endif
 	bool ipogre_enabled;
 	bool eth_pdu_enabled;
-	bool link_down;
 #ifdef FEATURE_VLAN_MPDN
 	bool vlan_firewall_change_handle;
 

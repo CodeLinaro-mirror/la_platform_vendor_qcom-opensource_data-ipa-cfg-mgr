@@ -198,6 +198,7 @@ IPACM_Config::IPACM_Config()
 	macsec_cache = NULL;
 	macsec_interface_num = 0;
 	alg_table = NULL;
+	ethertype_table = NULL;
 	pNatIfaces = NULL;
 	memset(&ipa_client_rm_map_tbl, 0, sizeof(ipa_client_rm_map_tbl));
 	memset(&ipa_rm_tbl, 0, sizeof(ipa_rm_tbl));
@@ -221,6 +222,7 @@ IPACM_Config::IPACM_Config()
 	ipa_num_ipa_interfaces = 0;
 	ipa_num_private_subnet = 0;
 	ipa_num_alg_ports = 0;
+	num_ethertypes = 0;
 	ipa_nat_memtype = DEFAULT_NAT_MEMTYPE;
 	ipa_nat_max_entries = 0;
 	ipa_ipv6ct_max_entries = 0;
@@ -295,7 +297,6 @@ IPACM_Config::IPACM_Config()
 	memset(&ipogre_tunnel_idx_map, 0, sizeof(ipogre_tunnel_idx_map));
 	memset(tunnels, false, sizeof(tunnels));
 	ipogre_enabled  = false;
-	link_down = false;
 	num_tunnels = 0;
 #endif
 	memset(&IP_Forwarding_config, 0, sizeof(IP_Forwarding_config));
@@ -406,6 +407,7 @@ int IPACM_Config::ipacm_reset_hw_fnr_counters(const uint8_t start_id, const uint
 			IPACMERR("IOCTL %d failed\n", IPA_IOC_FNR_COUNTER_QUERY);
 	}
 
+	free((void *)query->stats);
 	free(query);
 fail:
 	close(fd);
@@ -677,7 +679,13 @@ int IPACM_Config::Init(void)
 		alg_table[i].port = cfg->alg_config.alg_entries[i].port;
 		IPACMDBG_H("IPACM_Config::ipacm_alg[%d] = %d, port=%d\n", i, alg_table[i].protocol, alg_table[i].port);
 	}
-
+	num_ethertypes = cfg->ethtype_config.num_entries;
+	ethertype_table = (uint16_t  *)calloc(num_ethertypes,
+				sizeof(uint16_t));
+	for(int i=0;i<num_ethertypes;i++)
+	{
+		ethertype_table[i] = cfg->ethtype_config.types[i];
+	}
 	ipa_nat_max_entries = cfg->nat_max_entries;
 	IPACMDBG_H("Nat Maximum Entries %d\n", ipa_nat_max_entries);
 

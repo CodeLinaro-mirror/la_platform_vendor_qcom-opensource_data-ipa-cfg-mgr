@@ -282,8 +282,9 @@ if (!(a)) {                                                 \
 #define VLAN_Bridge_subnet_TAG               "VLAN_bridge_subnet"
 #define Alias_Ip_Address_TAG                 "Alias_ip_address"
 #define Alias_Ip_AddrMask_TAG                "Alias_ip_address_mask"
-
-
+#define ETHERTYPE_TAG                        "IPACMETH"
+#define TYPE_TAG                             "TYPE"
+#define VALUE_TAG                            "VALUE"
 // Tunnel Config entries
 #define PMIPv6_Enabled_TAG                   "PMIPV6Enable"
 #define PMIPv6_TAG                           "PMIPV6"
@@ -402,6 +403,12 @@ typedef struct
 
 typedef struct
 {
+	uint8_t num_entries;
+	uint16_t types[NUM_ETHERTYPE_FLT_RULE];
+} ipacm_ethertype_conf_t;
+
+typedef struct
+{
 	bool gre_enable;
 	uint8_t num_ipgre_entries;
 	uint8_t num_ipgre_subnet_entries;
@@ -447,6 +454,7 @@ typedef struct  _IPACM_conf_t
 	ipacm_private_ip_forward_conf_t private_IP_conf;
 	bool public_ip_support_enable;
 	bool wlan_vlan_mpdn_enable;
+	ipacm_ethertype_conf_t ethtype_config;
 } IPACM_conf_t;
 
 typedef struct _IPACM_conf_ext_t

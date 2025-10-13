@@ -752,7 +752,8 @@ protected:
 
 	/* add tcp syn flt rule */
 	int add_tcp_syn_flt_rule(ipa_ip_type iptype);
-
+	int install_ethertype_rules(ipa_ip_type iptype);
+	int delete_ethertype_filter_rules(ipa_ip_type iptype);
 	/* add tcp syn flt rule for l2tp interface*/
 	int add_tcp_syn_flt_rule_l2tp(ipa_ip_type inner_ip_type);
 
@@ -1122,6 +1123,7 @@ protected:
 #endif
 
 	uint32_t ipv4_icmp_flt_rule_hdl[NUM_IPV4_ICMP_FLT_RULE];
+	uint32_t ethertype_rule_hdl[2][NUM_ETHERTYPE_FLT_RULE];
 #ifdef FEATURE_VLAN_MPDN
 	uint32_t ipv6_prefix_flt_rule_hdl[IPA_MAX_IPV6_NO_OFFLOAD_PREFIX_FLT_RULE + IPA_MAX_MTU_ENTRIES];
 #else

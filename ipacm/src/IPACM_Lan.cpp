@@ -3715,7 +3715,7 @@ int IPACM_Lan::check_vlan_PDNUp(enum ipa_ip_type iptype)
 		IPACMERR("failed getting vlan ids for iface %s\n", dev_name);
 		return IPACM_FAILURE;
 	}
-
+	IPACMDBG_H("IPACM_Wan::backhaul_is_sta_mode %d, iptype %d\n", IPACM_Wan::backhaul_is_sta_mode, iptype);
 	if(iptype == IPA_IP_v4)
 	{
 		for(i = 0; i < IPA_MAX_NUM_OFFLOAD_VLANS; i++)
@@ -3725,7 +3725,7 @@ int IPACM_Lan::check_vlan_PDNUp(enum ipa_ip_type iptype)
 			if(Ids[i] != 0)
 			{
 				/* In STA Mode this will return error and continue */
-				if(IPACM_Wan::GetMuxByVid(Ids[i], &mux_id, iptype))
+				if(IPACM_Wan::GetMuxByVid(Ids[i], &mux_id, iptype) && IPACM_Wan::backhaul_is_sta_mode == false)
 				{
 					IPACMDBG_H("no v4 vlan up PDN for Id %d\n", Ids[i]);
 					continue;
@@ -3740,6 +3740,7 @@ int IPACM_Lan::check_vlan_PDNUp(enum ipa_ip_type iptype)
 				{
 					if (IPACM_Wan::is_xlat_by_vid(Ids[i]))
 						vlan_data.is_xlat = true;
+					vlan_data.mux_id = 0;
 				}
 				IPACMDBG_H("Push ipv4 handle_vlan_pdn_up mux:%d, VlanID:%d is_xlat: %d\n",
 					vlan_data.mux_id, vlan_data.VlanID, vlan_data.is_xlat);
@@ -3776,7 +3777,7 @@ int IPACM_Lan::check_vlan_PDNUp(enum ipa_ip_type iptype)
 			if(Ids[i] != 0)
 			{
 				/* In STA Mode this will return error and continue */
-				if(IPACM_Wan::GetMuxByVid(Ids[i], &mux_id, iptype))
+				if(IPACM_Wan::GetMuxByVid(Ids[i], &mux_id, iptype) && IPACM_Wan::backhaul_is_sta_mode == false)
 				{
 					IPACMDBG_H("no v6 vlan up PDN for Id %d\n", Ids[i]);
 					continue;
@@ -3798,6 +3799,10 @@ int IPACM_Lan::check_vlan_PDNUp(enum ipa_ip_type iptype)
 				if (IPACM_Wan::is_xlat_by_vid(Ids[i]))
 					vlan_data.is_xlat = true;
 
+				if(IPACM_Wan::backhaul_is_sta_mode == false)
+				{
+					vlan_data.mux_id = 0;
+				}
 				IPACMDBG_H("Push ipv6 handle_vlan_pdn_up mux:%d, VlanID:%d is_xlat: %d\n",
 					vlan_data.mux_id, vlan_data.VlanID, vlan_data.is_xlat);
 
@@ -6905,10 +6910,11 @@ int IPACM_Lan::handle_eth_hdr_init(uint8_t *mac_addr, ipacm_bridge *bridge, uint
 			free(client_info);
 
 handle_wan_up:
-			if(!(IPACM_Iface::ipacmcfg->iface_in_vlan_mode(dev_name)))
+			if(!(IPACM_Iface::ipacmcfg->iface_in_vlan_mode(dev_name)) ||
+				(!(IPACM_Iface::ipacmcfg->iface_in_vlan_mode_v2(dev_name)) && IPACM_Iface::ipacmcfg->eth_wan_pppoe_enable && sIface))
 			{
 				if (IPACM_Wan::isWanUP(ipa_if_num) ||
-					(IPACM_Iface::ipacmcfg->ipacm_static_policy_enable && IPACM_Wan::isVlanWanUP()))
+					((IPACM_Iface::ipacmcfg->ipacm_static_policy_enable || IPACM_Iface::ipacmcfg->eth_wan_pppoe_enable) && IPACM_Wan::isVlanWanUP()))
 				{
 					if(IPACM_Wan::backhaul_is_sta_mode == false)
 					{
@@ -6937,7 +6943,7 @@ handle_wan_up:
 					}
 				}
 				if (IPACM_Wan::isWanUP_V6(ipa_if_num) ||
-					(IPACM_Iface::ipacmcfg->ipacm_static_policy_enable && IPACM_Wan::isVlanWanUP_V6()))
+					((IPACM_Iface::ipacmcfg->ipacm_static_policy_enable || IPACM_Iface::ipacmcfg->eth_wan_pppoe_enable) && IPACM_Wan::isVlanWanUP_V6()))
 				{
 					if(IPACM_Wan::backhaul_is_sta_mode == false)
 					{
@@ -6967,6 +6973,72 @@ handle_wan_up:
 			}
 			else
 			{
+				/* Scenario to handle if siface is enabled and eth is configured as Vlan but no vlan id passed, install ul flt rule for eth phy non-vlan client */
+				if (((IPACM_Iface::ipacmcfg->iface_in_vlan_mode_v2(dev_name) && get_client_memptr(eth_client, clnt_indx)->vlan_id == 0) &&
+					 IPACM_Iface::ipacmcfg->eth_wan_pppoe_enable && sIface))
+				{
+					// if IPACM is in static policy mode, we will install rules later based on conntrack evt
+					if (IPACM_Wan::isWanUP(ipa_if_num) ||
+						((IPACM_Iface::ipacmcfg->ipacm_static_policy_enable || IPACM_Iface::ipacmcfg->eth_wan_pppoe_enable) && IPACM_Wan::isVlanWanUP()))
+					{
+						if (IPACM_Wan::backhaul_is_sta_mode == false)
+						{
+							ext_prop = IPACM_Iface::ipacmcfg->GetExtProp(IPA_IP_v4);
+#ifdef IPA_HW_FNR_STATS
+							if (IPACM_Iface::ipacmcfg->hw_fnr_stats_support)
+								install_uplink_filter_rule_per_client_v2(ext_prop, IPA_IP_v4, IPACM_Wan::getXlat_Mux_Id(),
+									get_client_memptr(eth_client, clnt_indx)->mac,
+									get_client_memptr(eth_client, clnt_indx)->ul_cnt_idx,
+									get_client_memptr(eth_client, clnt_indx)->vlan_id);
+							else
+#endif // IPA_HW_FNR_STATS
+								install_uplink_filter_rule_per_client(ext_prop, IPA_IP_v4, IPACM_Wan::getXlat_Mux_Id(), get_client_memptr(eth_client, clnt_indx)->mac);
+							get_client_memptr(eth_client, clnt_indx)->ipv4_ul_rules_set = true;
+						}
+						else if (IPACM_Wan::backhaul_is_sta_mode == true)
+						{
+							IPACMDBG_H("IPACM_Wan::backhaul_is_sta_mode %d, iptype %d\n", IPACM_Wan::backhaul_is_sta_mode, IPA_IP_v4);
+							res = handle_wan_up_v2(IPA_IP_v4, get_client_memptr(eth_client, clnt_indx)->vlan_id,
+												   get_client_memptr(eth_client, clnt_indx)->mac, get_client_memptr(eth_client, clnt_indx)->ul_cnt_idx);
+							if (res == IPACM_SUCCESS)
+							{
+								get_client_memptr(eth_client, clnt_indx)->ipv4_sta_ul_rules_set = true;
+							}
+						}
+					}
+#ifdef FEATURE_STATIC_POLICY
+					if (IPACM_Wan::isWanUP_V6(ipa_if_num) ||
+						((IPACM_Iface::ipacmcfg->ipacm_static_policy_enable || IPACM_Iface::ipacmcfg->eth_wan_pppoe_enable) && IPACM_Wan::isVlanWanUP_V6()))
+#else
+					if (IPACM_Wan::isWanUP_V6(ipa_if_num) || IPACM_Wan::isVlanWanUP_V6())
+#endif
+					{
+						IPACMDBG_H("IPACM_Wan::backhaul_is_sta_mode %d\n", IPACM_Wan::backhaul_is_sta_mode);
+						if (IPACM_Wan::backhaul_is_sta_mode == false)
+						{
+							ext_prop = IPACM_Iface::ipacmcfg->GetExtProp(IPA_IP_v6);
+#ifdef IPA_HW_FNR_STATS
+							if (IPACM_Iface::ipacmcfg->hw_fnr_stats_support)
+								install_uplink_filter_rule_per_client_v2(ext_prop, IPA_IP_v6, 0, get_client_memptr(eth_client, clnt_indx)->mac,
+									get_client_memptr(eth_client, clnt_indx)->ul_cnt_idx,
+									get_client_memptr(eth_client, clnt_indx)->vlan_id);
+							else
+#endif // IPA_HW_FNR_STATS
+								install_uplink_filter_rule_per_client(ext_prop, IPA_IP_v6, 0, get_client_memptr(eth_client, clnt_indx)->mac);
+							get_client_memptr(eth_client, clnt_indx)->ipv6_ul_rules_set = true;
+						}
+						if (IPACM_Wan::backhaul_is_sta_mode == true)
+						{
+							IPACMDBG_H("IPACM_Wan::backhaul_is_sta_mode %d, iptype %d\n", IPACM_Wan::backhaul_is_sta_mode, IPA_IP_v6);
+							res = handle_wan_up_v2(IPA_IP_v6, get_client_memptr(eth_client, clnt_indx)->vlan_id,
+									get_client_memptr(eth_client, clnt_indx)->mac, get_client_memptr(eth_client, clnt_indx)->ul_cnt_idx);
+							if (res == IPACM_SUCCESS)
+							{
+								get_client_memptr(eth_client, clnt_indx)->ipv6_sta_ul_rules_set = true;
+							}
+						}
+					}
+				}
 				if(ip_type == IPA_IP_v4 || ip_type == IPA_IP_MAX)
 				{
 					IPACMDBG_H("Checking for V4 VLAN PDN\n");
@@ -11539,13 +11611,13 @@ install_client_rules:
 				IPACMDBG_H("ipacmcfg->eth_wan_pppoe_enable: %d, sIface: %d \n", IPACM_Iface::ipacmcfg->eth_wan_pppoe_enable, sIface);
 				IPACMDBG_H("ipacmcfg->iface_in_vlan_mode(%s): %d\n", dev_name, IPACM_Iface::ipacmcfg->iface_in_vlan_mode(dev_name));
 				IPACMDBG_H("ipacmcfg->iface_in_vlan_mode_v2(%s): %d\n", dev_name, IPACM_Iface::ipacmcfg->iface_in_vlan_mode_v2(dev_name));
-
+				IPACMDBG_H("dev name %s vlan_id %d at eth_index %d\n", dev_name, get_client_memptr(eth_client, eth_index)->vlan_id, eth_index);
 				if (!(IPACM_Iface::ipacmcfg->iface_in_vlan_mode(dev_name)) ||
 					(!(IPACM_Iface::ipacmcfg->iface_in_vlan_mode_v2(dev_name)) && IPACM_Iface::ipacmcfg->eth_wan_pppoe_enable && sIface))
 				{
 					// if IPACM is in static policy mode, we will install rules later based on conntrack evt
 					if (IPACM_Wan::isWanUP(ipa_if_num) ||
-						(IPACM_Iface::ipacmcfg->ipacm_static_policy_enable && IPACM_Wan::isVlanWanUP()))
+						((IPACM_Iface::ipacmcfg->ipacm_static_policy_enable || IPACM_Iface::ipacmcfg->eth_wan_pppoe_enable) && IPACM_Wan::isVlanWanUP()))
 					{
 						if(IPACM_Wan::backhaul_is_sta_mode == false)
 						{
@@ -11574,9 +11646,9 @@ install_client_rules:
 					}
 #ifdef FEATURE_STATIC_POLICY
 					if(IPACM_Wan::isWanUP_V6(ipa_if_num) ||
-						(IPACM_Iface::ipacmcfg->ipacm_static_policy_enable && IPACM_Wan::isVlanWanUP_V6()))
+						((IPACM_Iface::ipacmcfg->ipacm_static_policy_enable || IPACM_Iface::ipacmcfg->eth_wan_pppoe_enable) && IPACM_Wan::isVlanWanUP_V6()))
 #else
-					if(IPACM_Wan::isWanUP_V6(ipa_if_num))
+					if(IPACM_Wan::isWanUP_V6(ipa_if_num) || IPACM_Wan::isVlanWanUP_V6())
 #endif
 					{
 						IPACMDBG_H("IPACM_Wan::backhaul_is_sta_mode %d\n", IPACM_Wan::backhaul_is_sta_mode);
@@ -11607,6 +11679,73 @@ install_client_rules:
 				}
 				else
 				{
+					/* Scenario to handle if siface is enabled and eth is configured as Vlan but no vlan id passed, install ul flt rule for eth phy non-vlan client */
+					if(((IPACM_Iface::ipacmcfg->iface_in_vlan_mode_v2(dev_name) && get_client_memptr(eth_client, eth_index)->vlan_id == 0) &&
+						IPACM_Iface::ipacmcfg->eth_wan_pppoe_enable && sIface))
+					{
+						// if IPACM is in static policy mode, we will install rules later based on conntrack evt
+						if(IPACM_Wan::isWanUP(ipa_if_num) ||
+							((IPACM_Iface::ipacmcfg->ipacm_static_policy_enable || IPACM_Iface::ipacmcfg->eth_wan_pppoe_enable) && IPACM_Wan::isVlanWanUP()))
+						{
+							if(IPACM_Wan::backhaul_is_sta_mode == false)
+							{
+								ext_prop = IPACM_Iface::ipacmcfg->GetExtProp(IPA_IP_v4);
+#ifdef IPA_HW_FNR_STATS
+								if (IPACM_Iface::ipacmcfg->hw_fnr_stats_support)
+									install_uplink_filter_rule_per_client_v2(ext_prop, IPA_IP_v4, IPACM_Wan::getXlat_Mux_Id(),
+										get_client_memptr(eth_client, eth_index)->mac,
+										get_client_memptr(eth_client, eth_index)->ul_cnt_idx,
+										get_client_memptr(eth_client, eth_index)->vlan_id);
+								else
+#endif // IPA_HW_FNR_STATS
+									install_uplink_filter_rule_per_client(ext_prop, IPA_IP_v4, IPACM_Wan::getXlat_Mux_Id(), get_client_memptr(eth_client, eth_index)->mac);
+								get_client_memptr(eth_client, eth_index)->ipv4_ul_rules_set = true;
+							}
+							else if(IPACM_Wan::backhaul_is_sta_mode == true)
+							{
+								IPACMDBG_H("IPACM_Wan::backhaul_is_sta_mode %d, iptype %d\n", IPACM_Wan::backhaul_is_sta_mode, IPA_IP_v4);
+								res = handle_wan_up_v2(IPA_IP_v4, get_client_memptr(eth_client, eth_index)->vlan_id,
+									   get_client_memptr(eth_client, eth_index)->mac, get_client_memptr(eth_client, eth_index)->ul_cnt_idx);
+								if(res == IPACM_SUCCESS)
+								{
+									get_client_memptr(eth_client, eth_index)->ipv4_sta_ul_rules_set = true;
+								}
+							}
+						}
+#ifdef FEATURE_STATIC_POLICY
+						if(IPACM_Wan::isWanUP_V6(ipa_if_num) ||
+							((IPACM_Iface::ipacmcfg->ipacm_static_policy_enable || IPACM_Iface::ipacmcfg->eth_wan_pppoe_enable) && IPACM_Wan::isVlanWanUP_V6()))
+#else
+						if(IPACM_Wan::isWanUP_V6(ipa_if_num) || IPACM_Wan::isVlanWanUP_V6())
+#endif
+						{
+							IPACMDBG_H("IPACM_Wan::backhaul_is_sta_mode %d\n", IPACM_Wan::backhaul_is_sta_mode);
+							if(IPACM_Wan::backhaul_is_sta_mode == false)
+							{
+								ext_prop = IPACM_Iface::ipacmcfg->GetExtProp(IPA_IP_v6);
+#ifdef IPA_HW_FNR_STATS
+								if (IPACM_Iface::ipacmcfg->hw_fnr_stats_support)
+									install_uplink_filter_rule_per_client_v2(ext_prop, IPA_IP_v6, 0, get_client_memptr(eth_client, eth_index)->mac,
+										get_client_memptr(eth_client, eth_index)->ul_cnt_idx,
+										get_client_memptr(eth_client, eth_index)->vlan_id);
+								else
+#endif // IPA_HW_FNR_STATS
+									install_uplink_filter_rule_per_client(ext_prop, IPA_IP_v6, 0, get_client_memptr(eth_client, eth_index)->mac);
+								get_client_memptr(eth_client, eth_index)->ipv6_ul_rules_set = true;
+							}
+							if (IPACM_Wan::backhaul_is_sta_mode == true)
+							{
+								IPACMDBG_H("IPACM_Wan::backhaul_is_sta_mode %d, iptype %d\n", IPACM_Wan::backhaul_is_sta_mode, IPA_IP_v6);
+								res = handle_wan_up_v2(IPA_IP_v6, get_client_memptr(eth_client, eth_index)->vlan_id,
+										get_client_memptr(eth_client, eth_index)->mac, get_client_memptr(eth_client, eth_index)->ul_cnt_idx);
+								if (res == IPACM_SUCCESS)
+								{
+									get_client_memptr(eth_client, eth_index)->ipv6_sta_ul_rules_set = true;
+								}
+							}
+						}
+					}
+
 					if(ip_type == IPA_IP_v4 || ip_type == IPA_IP_MAX)
 					{
 						IPACMDBG_H("Checking for V4 VLAN PDN\n");

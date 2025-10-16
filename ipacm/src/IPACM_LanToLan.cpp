@@ -3137,7 +3137,7 @@ void IPACM_LanToLan_Iface::handle_down_event()
 			if (!it_own_peer_info->peer)
 			{
 				IPACMERR("Invalid it_own_peer_info\n");
-				return;
+				continue;
 			}
 			IPACMDBG_H("it_own_peer %s\n",it_own_peer_info->peer->get_iface_pointer()->dev_name);
 			if (it_own_peer_info->is_vlan_peer && it_own_peer_info->peer->get_iface_pointer()->tx_prop->num_tx_props > 2){
@@ -3150,7 +3150,7 @@ void IPACM_LanToLan_Iface::handle_down_event()
 			if ((it_own_peer_hdr_type >= IPA_HDR_L2_MAX) || (it_own_peer_hdr_type < 0))
 			{
 				IPACMDBG_H("Invalid peer_l2_hdr_type: %d\n", it_own_peer_hdr_type);
-				return;
+				continue;
 			}
 
 			/* decrement reference count of peer l2 header type on both interfaces*/
@@ -3180,8 +3180,7 @@ void IPACM_LanToLan_Iface::handle_down_event()
 			IPACMDBG_H("Clear all flt/rt rules and hdr proc ctx for target interface on peer interfaces %s.\n",
 				it_own_peer_info->peer->get_iface_pointer()->dev_name);
 			for(it_other_iface_peer_info = other_iface->m_peer_iface_info.begin();
-				it_other_iface_peer_info != other_iface->m_peer_iface_info.end();
-				it_other_iface_peer_info++)
+				it_other_iface_peer_info != other_iface->m_peer_iface_info.end();)
 			{
 				if(it_other_iface_peer_info->peer == this)	//found myself in other iface's peer info list
 				{
@@ -3232,7 +3231,7 @@ void IPACM_LanToLan_Iface::handle_down_event()
 								if ((it_other_iface_peer_hdr_type >= IPA_HDR_L2_MAX) || (it_other_iface_peer_hdr_type < 0))
 								{
 									IPACMDBG_H("Invalid peer_l2_hdr_type: %d\n", it_other_iface_peer_hdr_type);
-									return;
+									continue;
 								}
 
 								if ((it_other_iface_peer_hdr_type != own_hdr_type) && !is_spcl_iface())
@@ -3265,13 +3264,17 @@ void IPACM_LanToLan_Iface::handle_down_event()
 						it_other_iface_peer_hdr_type = it_other_iface_peer_info->peer->get_iface_pointer()->tx_prop->tx[0].hdr_l2_type;
 					}
 
+					it_other_iface_peer_info = other_iface->m_peer_iface_info.erase(it_other_iface_peer_info);
 					if ((it_other_iface_peer_hdr_type >= IPA_HDR_L2_MAX) || (it_other_iface_peer_hdr_type < 0))
 					{
 						IPACMDBG_H("Invalid peer_l2_hdr_type: %d\n", it_other_iface_peer_hdr_type);
-						return;
+						continue;
 					}
-					other_iface->m_peer_iface_info.erase(it_other_iface_peer_info);
 					other_iface->del_hdr_proc_ctx(it_other_iface_peer_hdr_type);
+				}
+				else
+				{
+					it_other_iface_peer_info++;
 				}
 			}
 

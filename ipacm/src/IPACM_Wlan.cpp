@@ -632,6 +632,10 @@ void IPACM_Wlan::event_callback(ipa_cm_event_id event, void *param)
 				}
 
 				handle_vlan_pdn_down(data);
+				if(data->iptype == IPA_IP_v6 || data->iptype == IPA_IP_MAX)
+				{
+					neigh_cache.clear();
+				}
 			}
 		}
 		break;

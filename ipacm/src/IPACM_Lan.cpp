@@ -16271,22 +16271,22 @@ int IPACM_Lan::modify_ipv6_prefix_flt_rule(bool eogre_enabled)
 			IPACMDBG_H("Install rules at idx %d\n", idx);
 		}
 
-		if(ipa_if_cate == WLAN_IF){
-			for(wlan_pipe_index=0;wlan_pipe_index<MAX_SUPPORTED_WLAN_PIPES;wlan_pipe_index++){
-				if(IPACM_Wlan::wlan_ap_dflt_rules[wlan_pipe_index].src_pipe == rx_prop->rx[idx].src_pipe ){
-					if(IPACM_Wlan::wlan_ap_dflt_rules[wlan_pipe_index].iface_cnt[IPA_IP_v6] == 1 ){
-						break;
-					}
-					if(IPACM_Wlan::wlan_ap_dflt_rules[wlan_pipe_index].iface_cnt[IPA_IP_v6] >= 1 && IPACM_Wan::isWanUP_V6(ipa_if_num)
-						&& !IPACM_Wlan::wlan_ap_dflt_rules[wlan_pipe_index].wan_private_v6flt_rules_present) {
-							IPACM_Wlan::wlan_ap_dflt_rules[wlan_pipe_index].wan_private_v6flt_rules_present = true;
-						break;
-					} else {
-						IPACMDBG_H("Subnet rule installed\n");
-						return IPACM_SUCCESS;
-					}
+		if (ipa_if_cate == WLAN_IF)
+		{
+			for (wlan_pipe_index=0; wlan_pipe_index < MAX_SUPPORTED_WLAN_PIPES; wlan_pipe_index++)
+			{
+				if (IPACM_Wlan::wlan_ap_dflt_rules[wlan_pipe_index].src_pipe == rx_prop->rx[idx].src_pipe)
+				{
+					IPACMDBG_H("Installing rules for wlan pipe index %d\n", wlan_pipe_index);
+					break;
 				}
 			}
+		}
+
+		if(ipa_if_cate == WLAN_IF && wlan_pipe_index >= MAX_SUPPORTED_WLAN_PIPES)
+		{
+			IPACMERR("wlan_pipe_index %d is not valid\n", wlan_pipe_index);
+			return IPACM_FAILURE;
 		}
 
 		mtu_rule_cnt = i = 0;
@@ -16308,9 +16308,15 @@ int IPACM_Lan::modify_ipv6_prefix_flt_rule(bool eogre_enabled)
 			return IPACM_SUCCESS;
 		}
 
-		if (dft_v6fl_rule_hdl[j][0] == 0 && eogre_enabled == false)
+		if (ipa_if_cate != WLAN_IF && dft_v6fl_rule_hdl[j][0] == 0 && eogre_enabled == false)
 		{
-			IPACMERR("install v6 default rules first.Prefix + MTU rule will be installed later\n");
+			IPACMERR("install v6 default rules first.Prefix + MTU rule will be installed later for LAN\n");
+			return IPACM_FAILURE;
+		}
+		else if (ipa_if_cate == WLAN_IF && IPACM_Wlan::wlan_ap_dflt_rules[wlan_pipe_index].dft_v6fl_rule_hdl[j][IPA_IP_v6] == 0
+			 && eogre_enabled == false)
+		{
+			IPACMERR("install v6 default rules first.Prefix + MTU rule will be installed later for WLAN\n");
 			return IPACM_FAILURE;
 		}
 
@@ -16322,9 +16328,22 @@ int IPACM_Lan::modify_ipv6_prefix_flt_rule(bool eogre_enabled)
 		else
 			private_flt_rule_hdl = ipv6_prefix_flt_rule_hdl[j];
 
-		if (num_wan_prefix_rules[j] > 0) {
+		if (ipa_if_cate == WLAN_IF && IPACM_Wlan::wlan_ap_dflt_rules[wlan_pipe_index].num_wan_prefix_rules[j] > 0) {
 			if (m_filtering.DeleteFilteringHdls(private_flt_rule_hdl, IPA_IP_v6,
-												num_wan_prefix_rules[j]) == false) {
+				IPACM_Wlan::wlan_ap_dflt_rules[wlan_pipe_index].num_wan_prefix_rules[j]) == false)
+			{
+				IPACMERR("Error Deleting Filtering, aborting...\n");
+				return IPACM_FAILURE;
+			}
+			IPACM_Iface::ipacmcfg->decreaseFltRuleCount(rx_prop->rx[idx].src_pipe, IPA_IP_v6,
+				IPACM_Wlan::wlan_ap_dflt_rules[wlan_pipe_index].num_wan_prefix_rules[j]);
+			IPACM_Wlan::wlan_ap_dflt_rules[wlan_pipe_index].num_wan_prefix_rules[j] = 0;
+			num_wan_prefix_rules[j] = 0;
+		}
+		else if (ipa_if_cate != WLAN_IF && num_wan_prefix_rules[j] > 0) {
+			if (m_filtering.DeleteFilteringHdls(private_flt_rule_hdl, IPA_IP_v6,
+				num_wan_prefix_rules[j]) == false)
+			{
 				IPACMERR("Error Deleting Filtering, aborting...\n");
 				return IPACM_FAILURE;
 			}
@@ -16438,7 +16457,11 @@ int IPACM_Lan::modify_ipv6_prefix_flt_rule(bool eogre_enabled)
 			return IPACM_FAILURE;
 		}
 		pFilteringTable->ep = rx_prop->rx[idx].src_pipe;
-		pFilteringTable->add_after_hdl = mtu_flt_rule_offset[j][IPA_IP_v6];
+
+		if(ipa_if_cate != WLAN_IF)
+			pFilteringTable->add_after_hdl = mtu_flt_rule_offset[j][IPA_IP_v6];
+		else
+			pFilteringTable->add_after_hdl = IPACM_Wlan::wlan_ap_dflt_rules[wlan_pipe_index].mtu_flt_rule_hdl[j][IPA_IP_v6];
 
 		/* Make LAN-traffic always go to Apps, use default IPA-RT table */
 		if (false == m_routing.GetRoutingTable(&IPACM_Iface::ipacmcfg->rt_tbl_default_v6)) {
@@ -16567,9 +16590,16 @@ int IPACM_Lan::modify_ipv6_prefix_flt_rule(bool eogre_enabled)
 		/* save the rule hdls */
 		for (i = 0; i < num_wan_prefix_rules[j]; i++){
 			if(ipa_if_cate == WLAN_IF && wlan_pipe_index<MAX_SUPPORTED_WLAN_PIPES)
+			{
 				IPACM_Wlan::wlan_ap_dflt_rules[wlan_pipe_index].ipv6_prefix_flt_rule_hdl[j][i] = pFilteringTable->rules[i].flt_rule_hdl;
+			}
 			else
 				ipv6_prefix_flt_rule_hdl[j][i] = pFilteringTable->rules[i].flt_rule_hdl;
+		}
+
+		if(ipa_if_cate == WLAN_IF && wlan_pipe_index<MAX_SUPPORTED_WLAN_PIPES)
+		{
+			IPACM_Wlan::wlan_ap_dflt_rules[wlan_pipe_index].num_wan_prefix_rules[j] = num_wan_prefix_rules[j];
 		}
 
 		if (pFilteringTable != NULL)
@@ -16578,6 +16608,12 @@ int IPACM_Lan::modify_ipv6_prefix_flt_rule(bool eogre_enabled)
 			pFilteringTable = NULL;
 		}
 	}
+
+	if(ipa_if_cate == WLAN_IF && wlan_pipe_index < MAX_SUPPORTED_WLAN_PIPES)
+	{
+		IPACM_Wlan::wlan_ap_dflt_rules[wlan_pipe_index].wan_private_v6flt_rules_present = true;
+	}
+
 fail:
 	if(pFilteringTable != NULL)
 	{

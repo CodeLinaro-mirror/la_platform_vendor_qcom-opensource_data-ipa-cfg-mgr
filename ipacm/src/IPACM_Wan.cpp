@@ -91,7 +91,7 @@ char IPACM_Wan::wan_up_dev_name[IF_NAME_LEN];
 bool IPACM_Wan::backhaul_is_sta_mode = false;
 bool IPACM_Wan::is_ext_prop_set = false;
 
-uint32_t IPACM_Wan::wan_route_rule_v6_hdl_a5;
+uint32_t IPACM_Wan::wan_route_rule_v6_hdl_a5 = 0;
 
 int IPACM_Wan::num_ipv4_modem_pdn = 0;
 int IPACM_Wan::num_ipv6_modem_pdn = 0;
@@ -2638,33 +2638,36 @@ int IPACM_Wan::handle_route_add_vlan_pdn_evt(ipa_ip_type iptype, uint16_t vlan_i
 				{
 					rt_rule_entry->rule.dst = tx_prop->tx[tx_index].dst_pipe;
 				}
-				memcpy(&rt_rule_entry->rule.attrib,
-					&tx_prop->tx[tx_index].attrib,
-					sizeof(rt_rule_entry->rule.attrib));
-
-				rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_DST_ADDR;
-				rt_rule_entry->rule.attrib.u.v6.dst_addr[0] = 0;
-				rt_rule_entry->rule.attrib.u.v6.dst_addr[1] = 0;
-				rt_rule_entry->rule.attrib.u.v6.dst_addr[2] = 0;
-				rt_rule_entry->rule.attrib.u.v6.dst_addr[3] = 0;
-				rt_rule_entry->rule.attrib.u.v6.dst_addr_mask[0] = 0;
-				rt_rule_entry->rule.attrib.u.v6.dst_addr_mask[1] = 0;
-				rt_rule_entry->rule.attrib.u.v6.dst_addr_mask[2] = 0;
-				rt_rule_entry->rule.attrib.u.v6.dst_addr_mask[3] = 0;
-#ifdef FEATURE_IPA_V3
-				rt_rule_entry->rule.hashable = true;
-#endif
-				if (false == m_routing.AddRoutingRule(rt_rule))
+				if(!wan_route_rule_v6_hdl[tx_index])
 				{
-					IPACMERR("Routing rule addition failed!\n");
-					ret = IPACM_FAILURE;
-					goto fail;
+					memcpy(&rt_rule_entry->rule.attrib,
+						&tx_prop->tx[tx_index].attrib,
+						sizeof(rt_rule_entry->rule.attrib));
+
+					rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_DST_ADDR;
+					rt_rule_entry->rule.attrib.u.v6.dst_addr[0] = 0;
+					rt_rule_entry->rule.attrib.u.v6.dst_addr[1] = 0;
+					rt_rule_entry->rule.attrib.u.v6.dst_addr[2] = 0;
+					rt_rule_entry->rule.attrib.u.v6.dst_addr[3] = 0;
+					rt_rule_entry->rule.attrib.u.v6.dst_addr_mask[0] = 0;
+					rt_rule_entry->rule.attrib.u.v6.dst_addr_mask[1] = 0;
+					rt_rule_entry->rule.attrib.u.v6.dst_addr_mask[2] = 0;
+					rt_rule_entry->rule.attrib.u.v6.dst_addr_mask[3] = 0;
+#ifdef FEATURE_IPA_V3
+					rt_rule_entry->rule.hashable = true;
+#endif
+					if (false == m_routing.AddRoutingRule(rt_rule))
+					{
+						IPACMERR("Routing rule addition failed!\n");
+						ret = IPACM_FAILURE;
+						goto fail;
+					}
+					wan_route_rule_v6_hdl[tx_index] = rt_rule_entry->rt_rule_hdl;
+					IPACMDBG_H("Set ipv6 wan-route rule hdl for v6_lan_table:0x%x,tx:%d,ip-type: %d \n",
+						wan_route_rule_v6_hdl[tx_index],
+						tx_index,
+						iptype);
 				}
-				wan_route_rule_v6_hdl[tx_index] = rt_rule_entry->rt_rule_hdl;
-				IPACMDBG_H("Set ipv6 wan-route rule hdl for v6_lan_table:0x%x,tx:%d,ip-type: %d \n",
-					wan_route_rule_v6_hdl[tx_index],
-					tx_index,
-					iptype);
 			}
 			/* for STA mode: add firewall rules */
 			config_dft_firewall_rules(IPA_IP_v6);
@@ -2708,7 +2711,7 @@ int IPACM_Wan::handle_route_add_vlan_pdn_evt(ipa_ip_type iptype, uint16_t vlan_i
 			{
 				IPACMDBG_H("a v6 PDN is already up, don't create default rt rule\n");
 			}
-			else
+			else if(!wan_route_rule_v6_hdl_a5)
 			{
 				IPACMDBG_H("v6 PDN is up, create default rt rule\n");
 				FullConfig = true;
@@ -2849,27 +2852,30 @@ int IPACM_Wan::handle_route_add_vlan_pdn_evt(ipa_ip_type iptype, uint16_t vlan_i
 				{
 					rt_rule_entry->rule.dst = tx_prop->tx[tx_index].dst_pipe;
 				}
-				memcpy(&rt_rule_entry->rule.attrib,
-					&tx_prop->tx[tx_index].attrib,
-					sizeof(rt_rule_entry->rule.attrib));
-
-				rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_DST_ADDR;
-				rt_rule_entry->rule.attrib.u.v4.dst_addr      = 0;
-				rt_rule_entry->rule.attrib.u.v4.dst_addr_mask = 0;
-#ifdef FEATURE_IPA_V3
-				rt_rule_entry->rule.hashable = true;
-#endif
-				if (false == m_routing.AddRoutingRule(rt_rule))
+				if(!wan_route_rule_v4_hdl[tx_index])
 				{
-					IPACMERR("Routing rule addition failed!\n");
-					ret = IPACM_FAILURE;
-					goto fail;
+					memcpy(&rt_rule_entry->rule.attrib,
+						&tx_prop->tx[tx_index].attrib,
+						sizeof(rt_rule_entry->rule.attrib));
+
+					rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_DST_ADDR;
+					rt_rule_entry->rule.attrib.u.v4.dst_addr      = 0;
+					rt_rule_entry->rule.attrib.u.v4.dst_addr_mask = 0;
+#ifdef FEATURE_IPA_V3
+					rt_rule_entry->rule.hashable = true;
+#endif
+					if (false == m_routing.AddRoutingRule(rt_rule))
+					{
+						IPACMERR("Routing rule addition failed!\n");
+						ret = IPACM_FAILURE;
+						goto fail;
+					}
+					wan_route_rule_v4_hdl[tx_index] = rt_rule_entry->rt_rule_hdl;
+					IPACMDBG_H("Got ipv4 wan-route rule hdl:0x%x,tx:%d,ip-type: %d \n",
+						wan_route_rule_v4_hdl[tx_index],
+						tx_index,
+						iptype);
 				}
-				wan_route_rule_v4_hdl[tx_index] = rt_rule_entry->rt_rule_hdl;
-				IPACMDBG_H("Got ipv4 wan-route rule hdl:0x%x,tx:%d,ip-type: %d \n",
-					wan_route_rule_v4_hdl[tx_index],
-					tx_index,
-					iptype);
 			}
 			/* for STA mode: add firewall rules */
 			config_dft_firewall_rules(IPA_IP_v4);

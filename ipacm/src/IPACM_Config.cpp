@@ -2033,6 +2033,8 @@ void IPACM_Config::add_vlan_bridge(ipacm_event_data_all *data_all)
 
 	strlcpy(mapping_info.bridge_name, data_all->iface_name, IF_NAME_LEN);
 
+	IPACMDBG_H("iface name %s\n", data_all->iface_name);
+
 	for(int i = 0; i < IPA_MAX_NUM_BRIDGES; i++)
 	{
 		if(strcmp(data_all->iface_name, IPACM_Iface::ipacmcfg->vlan_bridges[i].bridge_name) == 0)
@@ -2118,6 +2120,7 @@ void IPACM_Config::add_vlan_bridge(ipacm_event_data_all *data_all)
 			{
 				default_bridge = true;
 			}
+			IPACMDBG("iface_name: %s ipa_virtual_iface_name %s default_bridge %d\n", data_all->iface_name, ipa_virtual_iface_name, default_bridge);
 
 			if(get_bridge_vlan_mapping(&mapping_info))
 			{

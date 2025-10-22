@@ -115,12 +115,18 @@ extern "C"
 #define IPA_DEVICE_NAME "/dev/ipa"
 #define MAX_NUM_PROP 2
 
+
+
 #ifdef FEATURE_RDKB
 #define DEFAULT_BRIDGE_IFACE_NAME "brlan0"
 #define BRIDGE_IFACE_NAME         "brlan"
 #define RMNET_IFACE_NAME          "qmapmux"
 #else
+#ifdef FEATURE_IPACM_AUTO
+#define BRIDGE_IFACE_NAME         "bridge"
+#else
 #define BRIDGE_IFACE_NAME         "br-lan"
+#endif
 #define RMNET_IFACE_NAME          "rmnet_data"
 #endif
 

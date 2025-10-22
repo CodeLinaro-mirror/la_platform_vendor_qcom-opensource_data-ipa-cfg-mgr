@@ -101,7 +101,7 @@ int IPACM_Neighbor::parse_bridge_info(int index, struct ipa_bridge_vlan_mapping_
         }
 
         strlcpy(data->bridge_name, ifrr.ifr_name, IPA_RESOURCE_NAME_MAX);
-	IPACMDBG("Bridge parse interface name%s\n", data->bridge_name);
+	IPACMDBG("Bridge parse interface name: %s\n", data->bridge_name);
 	ifrr.ifr_ifindex = 0;
 
 	if (ioctl(fd, SIOCGIFADDR, &ifrr) == -1)
@@ -519,7 +519,7 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 				}
 			}
 #endif
-			IPACMDBG("Got Neighbor event with ip_type: %d: iface_name: %s \n", data->iptype, data->iface_name);
+			IPACMDBG_H("Got Neighbor event with ip_type: %d: iface_name: %s BRIDGE_IFACE_NAME %s \n", data->iptype, data->iface_name, BRIDGE_IFACE_NAME);
 			if (data->iptype == IPA_IP_v4)
 			{
 				if (data->ipv4_addr != 0) /* not 0.0.0.0 */
@@ -547,7 +547,7 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 						if(IPACM_Iface::ipacmcfg->ipacm_mpdn_enable == TRUE)
 						{
 							/* Try to add new bridge. If bridge exists, renew its mac addr to handle bridge down/up cases*/
-							IPACMDBG("trying to add bridge%s\n", data->iface_name);
+							IPACMDBG_H("trying to add bridge: %s \n", data->iface_name);
 							IPACM_Iface::ipacmcfg->add_vlan_bridge(data);
 							bridge = IPACM_Iface::ipacmcfg->get_vlan_bridge(data->iface_name);
 							if(!bridge)

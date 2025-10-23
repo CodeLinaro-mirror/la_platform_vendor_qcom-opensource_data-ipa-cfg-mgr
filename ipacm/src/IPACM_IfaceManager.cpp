@@ -518,8 +518,8 @@ int IPACM_IfaceManager::create_iface_instance(ipacm_ifacemgr_data *param)
 				IPACM_EvtDispatcher::registr(IPA_TETHERING_STATS_UPDATE_EVENT, wl);
 #endif
 				IPACM_EvtDispatcher::registr(IPA_CRADLE_WAN_MODE_SWITCH, wl);
-				IPACM_EvtDispatcher::registr(IPA_WLAN_LINK_DOWN_EVENT, wl);
 				IPACM_EvtDispatcher::registr(IPA_WLAN_BRIDGE_UPDATE_EVENT, wl);
+				IPACM_EvtDispatcher::registr(IPA_WLAN_LINK_DOWN_EVENT, wl);
 				/* IPA_LAN_DELETE_SELF should be always last */
 				IPACM_EvtDispatcher::registr(IPA_LAN_DELETE_SELF, wl);
 				IPACMDBG_H("ipa_WLAN (%s):ipa_index (%d) instance open/registr ok\n", wl->dev_name, wl->ipa_if_num);
@@ -583,6 +583,7 @@ int IPACM_IfaceManager::create_iface_instance(ipacm_ifacemgr_data *param)
 					IPACM_EvtDispatcher::registr(IPA_CFG_CHANGE_EVENT, w); 		// register for IPA_CFG_CHANGE event
 					IPACM_EvtDispatcher::registr(IPA_WAN_XLAT_CONNECT_EVENT, w);
 					IPACM_EvtDispatcher::registr(IPA_IP_PASS_UPDATE_EVENT, w);
+					IPACM_EvtDispatcher::registr(IPA_DUMMY_VLAN_DOWN_EVENT, w);
 #ifdef FEATURE_L2TP
 					if (IPACM_Iface::ipacmcfg->ipacm_l2tp_enable == IPACM_L2TP_E2E)
 					{
@@ -598,7 +599,6 @@ int IPACM_IfaceManager::create_iface_instance(ipacm_ifacemgr_data *param)
 					IPACM_EvtDispatcher::registr(IPA_HANDLE_SOCKSv5_DOWN, w);
 					IPACM_EvtDispatcher::registr(IPA_UPDATE_SOCKSv5_v6_CONN, w);
 #endif
-					IPACM_EvtDispatcher::registr(IPA_DUMMY_VLAN_DOWN_EVENT, w);
 					if(is_sta_mode == WLAN_WAN)
 					{
 #ifndef FEATURE_IPA_ANDROID

@@ -91,6 +91,10 @@ bool IPACM_Routing::AddRoutingRule(struct ipa_ioc_add_rt_rule *ruleTable)
 			IPACMERR("Invalid dst pipe, Rule:%d  dst_pipe:%d\n", cnt, ruleTable->rules[cnt].rule.dst);
 			isInvalid = true;
 		}
+		else
+		{
+			IPACMDBG_H("Rule:%d  dst_pipe:%d\n", cnt, ruleTable->rules[cnt].rule.dst);
+		}
 	}
 
 	if(isInvalid)
@@ -101,7 +105,7 @@ bool IPACM_Routing::AddRoutingRule(struct ipa_ioc_add_rt_rule *ruleTable)
 	retval = ioctl(m_fd, IPA_IOC_ADD_RT_RULE, ruleTable);
 	if (retval)
 	{
-		IPACMERR("Failed adding routing rule %p\n", ruleTable);
+		IPACMERR("Failed adding routing rule %p errno: %d-%s\n", ruleTable, errno, strerror(errno));
 		return false;
 	}
 
@@ -133,6 +137,10 @@ bool IPACM_Routing::AddRoutingRuleExt(struct ipa_ioc_add_rt_rule_ext *ruleTable)
 			IPACMERR("Invalid dst pipe, Rule:%d  dst_pipe:%d\n", cnt, ruleTable->rules[cnt].rule.dst);
 			isInvalid = true;
 		}
+		else
+		{
+			IPACMDBG_H("Rule:%d  dst_pipe:%d\n", cnt, ruleTable->rules[cnt].rule.dst);
+		}
 	}
 
 	if(isInvalid)
@@ -143,7 +151,7 @@ bool IPACM_Routing::AddRoutingRuleExt(struct ipa_ioc_add_rt_rule_ext *ruleTable)
 	retval = ioctl(m_fd, IPA_IOC_ADD_RT_RULE_EXT, ruleTable);
 	if (retval)
 	{
-		IPACMERR("Failed adding routing rule %p\n", ruleTable);
+		IPACMERR("Failed adding routing rule %p errno: %d-%s\n", ruleTable, errno, strerror(errno));
 		return false;
 	}
 
@@ -183,7 +191,7 @@ bool IPACM_Routing::AddRoutingRuleExt_v2(struct ipa_ioc_add_rt_rule_ext_v2 *rule
 	retval = ioctl(m_fd, IPA_IOC_ADD_RT_RULE_EXT_V2, ruleTable);
 	if (retval)
 	{
-		IPACMERR("Failed adding routing rule %p\n", ruleTable);
+		IPACMERR("Failed adding routing rule %p errno: %d-%s\n", ruleTable, errno, strerror(errno));
 		return false;
 	}
 	for(cnt=0; cnt<ruleTable->num_rules; cnt++)
@@ -206,7 +214,7 @@ bool IPACM_Routing::DeleteRoutingRule(struct ipa_ioc_del_rt_rule *ruleTable)
 	retval = ioctl(m_fd, IPA_IOC_DEL_RT_RULE, ruleTable);
 	if (retval)
 	{
-		IPACMERR("Failed deleting routing rule table %p\n", ruleTable);
+		IPACMERR("Failed deleting routing rule table %p errno: %d-%s\n", ruleTable, errno, strerror(errno));
 		return false;
 	}
 
@@ -223,7 +231,7 @@ bool IPACM_Routing::Commit(enum ipa_ip_type ip)
 	retval = ioctl(m_fd, IPA_IOC_COMMIT_RT, ip);
 	if (retval)
 	{
-		IPACMERR("Failed commiting routing rules.\n");
+		IPACMERR("Failed commiting routing rules errno: %d-%s\n", errno, strerror(errno));
 		return false;
 	}
 
@@ -241,7 +249,7 @@ bool IPACM_Routing::Reset(enum ipa_ip_type ip)
 	retval |= ioctl(m_fd, IPA_IOC_COMMIT_RT, ip);
 	if (retval)
 	{
-		IPACMERR("Failed resetting routing block.\n");
+		IPACMERR("Failed resetting routing block errno: %d-%s\n", errno, strerror(errno));
 		return false;
 	}
 
@@ -258,7 +266,8 @@ bool IPACM_Routing::GetRoutingTable(struct ipa_ioc_get_rt_tbl *routingTable)
 	retval = ioctl(m_fd, IPA_IOC_GET_RT_TBL, routingTable);
 	if (retval)
 	{
-		IPACMERR("IPA_IOCTL_GET_RT_TBL ioctl failed, routingTable =0x%p, retval=0x%x.\n", routingTable, retval);
+		IPACMERR("IPA_IOCTL_GET_RT_TBL ioctl failed, routingTable =0x%p, retval=0x%x errno: %d-%s\n", routingTable, retval,
+			errno, strerror(errno));
 		return false;
 	}
 	IPACMDBG_H("IPA_IOCTL_GET_RT_TBL ioctl issued to IPA routing block.\n");
@@ -277,7 +286,7 @@ bool IPACM_Routing::PutRoutingTable(uint32_t routingTableHandle)
 	retval = ioctl(m_fd, IPA_IOC_PUT_RT_TBL, routingTableHandle);
 	if (retval)
 	{
-		IPACMERR("IPA_IOCTL_PUT_RT_TBL ioctl failed.\n");
+		IPACMERR("IPA_IOCTL_PUT_RT_TBL ioctl failed errno: %d-%s.\n", errno, strerror(errno));
 		return false;
 	}
 
@@ -344,7 +353,7 @@ bool IPACM_Routing::ModifyRoutingRule(struct ipa_ioc_mdfy_rt_rule *mdfyRules)
 	retval = ioctl(m_fd, IPA_IOC_MDFY_RT_RULE, mdfyRules);
 	if (retval)
 	{
-		IPACMERR("Failed modifying routing rules %p\n", mdfyRules);
+		IPACMERR("Failed modifying routing rules %p errno: %d-%s\n", mdfyRules, errno, strerror(errno));
 		return false;
 	}
 

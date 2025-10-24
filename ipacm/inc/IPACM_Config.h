@@ -148,6 +148,7 @@ typedef struct
 
 	/* Store vlan ID */
 	uint16_t vlan_id;
+	int if_index;
 } ipacm_ip_pass_mpdn_info;
 
 /* used to store the PDN info for IP collision */
@@ -889,7 +890,7 @@ public:
 		return ret;
 	}
 
-	void ip_pass_config_update(ipa_ioc_pdn_config *pdn_config);
+	void ip_pass_config_update(ipa_ioc_pdn_config *pdn_config, int if_index);
 
 	void ip_collision_config_update(ipa_ioc_pdn_config *pdn_config);
 

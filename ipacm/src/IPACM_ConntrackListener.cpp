@@ -918,8 +918,10 @@ void IPACM_ConntrackListener::HandleIPPassPDNInfoUpdate(void *in_param)
 				ip_pass_enable_default_pdn = pdn_data->ip_pass_enable;
 				ip_pass_skip_nat_default_pdn = pdn_data->ip_pass_skip_nat;
 				if (pdn_data->ip_pass_enable && !pdn_data->ip_pass_skip_nat)
+				{
 					nat_inst->DelDummyNatEntries(wan_ipaddr);
 					query_conntracks(AF_INET, wan_ipaddr, 0);
+				}
 		}
 	}
 	return;
@@ -2086,7 +2088,7 @@ void IPACM_ConntrackListener::ProcessCTMessage(void *param)
 	 }
 	 else
 	 {
-			ProcessTCPorUDPMsg(evt_data->ct, evt_data->type, l4proto);
+		ProcessTCPorUDPMsg(evt_data->ct, evt_data->type, l4proto);
 	 }
 
 	 if(IPPROTO_GRE == l4proto){
@@ -2323,7 +2325,6 @@ void IPACM_ConntrackListener::query_conntracks(int af_family, uint32_t ipv4_addr
 	{
 		IPACMDBG("(OK)\n");
 	}
-
 	nfct_destroy(ct);
 	nfct_close(handle);
 	return;

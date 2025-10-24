@@ -103,11 +103,29 @@
 #define IPA_DRIVER_WLAN_META_MSG    (sizeof(struct ipa_msg_meta))
 #define IPA_DRIVER_WLAN_BUF_LEN     (IPA_DRIVER_PIPE_STATS_EVENT_SIZE + IPA_DRIVER_WLAN_META_MSG)
 
+#ifdef FEATURE_IPACM_RESTART
+#define IPA_READY_QCMAP_NOTIFIER_FILE "/var/run/data/monitor/ipacmd.pid"
+#endif
+
 uint32_t ipacm_event_stats[IPACM_EVENT_MAX];
 bool ipacm_logging = true;
 
 void ipa_is_ipacm_running(void);
 int ipa_get_if_index(char *if_name, int *if_index);
+
+#ifdef FEATURE_IPACM_RESTART
+int ipa_reset();
+int ipa_query_driver_event();
+#endif
+ipa_nl_sk_info_t sk_info;
+
+/* start netlink query socket thread*/
+void* netlink_events_query(void *param)
+{
+	IPACMDBG_H("ipa_query_nl_getevents started\n");
+	ipa_query_nl_getevents();
+	return NULL;
+}
 
 /* start netlink socket monitor*/
 void* netlink_start(void *param)
@@ -119,7 +137,7 @@ void* netlink_start(void *param)
 	ret_val = ipa_nl_listener_init(NETLINK_ROUTE, (RTMGRP_IPV4_ROUTE | RTMGRP_IPV6_ROUTE | RTMGRP_LINK |
 																										RTMGRP_IPV4_IFADDR | RTMGRP_IPV6_IFADDR | RTMGRP_NEIGH |
 																										RTNLGRP_IPV6_PREFIX),
-																 &sk_fdset, ipa_nl_recv_msg);
+																 &sk_fdset, ipa_nl_recv_msg, &sk_info);
 
 	if (ret_val != IPACM_SUCCESS)
 	{
@@ -246,6 +264,10 @@ void* firewall_monitor(void *param)
 void* ipa_driver_msg_notifier(void *param)
 {
 	int length, fd, cnt;
+
+#ifdef FEATURE_IPACM_RESTART
+	FILE *fp = NULL;
+#endif
 	char buffer[IPA_DRIVER_WLAN_BUF_LEN];
 	struct ipa_msg_meta event_hdr;
 	struct ipa_ecm_msg event_ecm;
@@ -716,6 +738,23 @@ void* ipa_driver_msg_notifier(void *param)
 			evt_data.event = IPA_LINK_DOWN_EVENT;
 			evt_data.evt_data = data_fid;
 			break;
+
+#ifdef FEATURE_IPACM_RESTART
+		case IPA_DONE_RESTORE_EVENT:
+			IPACMDBG_H("Received IPA_DONE_RESTORE_EVENT\n");
+			fp = fopen(IPA_READY_QCMAP_NOTIFIER_FILE, "w");
+			if (fp == NULL)
+			{
+				IPACMERR("can't open IPA ready monitor file\n");
+				break;
+			}
+			if (fputs("IPA event restore done", fp) < 0)
+			{
+				IPACMERR("Failed to write to IPA ready monitor file\n");
+			}
+			fclose(fp);
+			break;
+#endif
 		/* Add for 8994 Android case */
 		case WAN_UPSTREAM_ROUTE_ADD:
 			memcpy(&event_wan, buffer + sizeof(struct ipa_msg_meta), sizeof(struct ipa_wan_msg));
@@ -1018,7 +1057,6 @@ void* ipa_driver_msg_notifier(void *param)
 							 pdn_info->u.passthrough_cfg.client_mac_addr[5]);
 
 			/* Update IP Passthrough config. */
-			IPACM_Iface::ipacmcfg->ip_pass_config_update(pdn_info);
 			evt_data.event = IPA_IP_PASS_UPDATE_EVENT;
 			ip_pass_pdn_data = (ipacm_event_ip_pass_pdn_info *)malloc(sizeof(ipacm_event_ip_pass_pdn_info));
 			if(!ip_pass_pdn_data)
@@ -1026,12 +1064,13 @@ void* ipa_driver_msg_notifier(void *param)
 				IPACMERR("unable to allocate memory for pdn_config\n");
 				goto done;
 			}
+			ipa_get_if_index(pdn_info->dev_name, &(ip_pass_pdn_data->if_index));
+			IPACM_Iface::ipacmcfg->ip_pass_config_update(pdn_info, ip_pass_pdn_data->if_index);
 			ip_pass_pdn_data->skip_nat = pdn_info->u.passthrough_cfg.skip_nat;
 			ip_pass_pdn_data->pdn_ip_addr = htonl(pdn_info->u.passthrough_cfg.pdn_ip_addr);
 			ip_pass_pdn_data->VlanID = pdn_info->u.passthrough_cfg.vlan_id;
 			ip_pass_pdn_data->enable = pdn_info->enable;
 			evt_data.evt_data = ip_pass_pdn_data;
-			ipa_get_if_index(pdn_info->dev_name, &(ip_pass_pdn_data->if_index));
 			break;
 
 		case IPA_PDN_IP_COLLISION_MODE_CONFIG:
@@ -1550,6 +1589,7 @@ static void IPACM_Signals_handler(int sig, siginfo_t *info, void *extra)
 	case SIGBUS:
 	case SIGABRT:
 	case SIGTERM:
+		{
 		p = (ucontext_t *)extra;
 		IPACMERR("siginfo address=%x\n", info->si_addr);
 		IPACMERR("fault address = 0x%X\n", p->uc_mcontext.fault_address);
@@ -1582,8 +1622,9 @@ static void IPACM_Signals_handler(int sig, siginfo_t *info, void *extra)
 		fflush(stdout);
 
 		free(messages);
-
+		close(sk_info.sk_fd); /* closing netlink socket */
 		/* got regular kill <PID>, kill -9 <PID> generates SIGKILL that cannot be handled by a signal handler */
+		IPACMDBG_DMESG("IPACM process stoped, So ipa path is broken");
 		if(sig == SIGTERM)
 		{
 			IPACMERR("IPACM gracefully requested to quit by PID %d, complying\n", info->si_pid);
@@ -1594,6 +1635,7 @@ static void IPACM_Signals_handler(int sig, siginfo_t *info, void *extra)
 		RegisterForSignals(true);
 		return;
 		break;
+                }
 	default:
 		IPACMERR("unknown signal %d\n", sig);
 		/* restore to default signal handler so core dump is generated from original fault point */
@@ -1650,16 +1692,32 @@ int main(int argc, char **argv)
 	int ret;
 	pthread_t netlink_thread = 0, monitor_thread = 0, ipa_driver_thread = 0;
 	pthread_t cmd_queue_thread = 0;
-
+	pthread_t netlinks_query_thread = 0;
 	/* check if ipacm is already running or not */
 	ipa_is_ipacm_running();
 
 	IPACMDBG_H("In main()\n");
+	IPACMERR("debug deleting ipacm.pid file\n");
+	char cmd[200] = {0};
+	snprintf(cmd, 200, "rm -rf /var/run/data/monitor/ipacmd.pid");
+	system(cmd);
+#ifdef FEATURE_IPACM_RESTART
+	IPACMDBG_H("RESET IPA-HW Rules\n");
+	ipa_reset();
+	IPACMDBG_H("RESET completed\n");
+
+#endif
+
 	IPACM_IfaceManager *ifacemgr = new IPACM_IfaceManager();
 	IPACM_Neighbor *neigh = new IPACM_Neighbor();
 
 #ifdef FEATURE_ETH_BRIDGE_LE
 	IPACM_LanToLan* lan2lan = IPACM_LanToLan::get_instance();
+#endif
+
+#ifdef FEATURE_IPACM_RESTART
+	IPACMDBG_H("RESTORE IPA Clients Event.\n");
+	ipa_query_driver_event();
 #endif
 
 	IPACM_ConntrackClient *cc = IPACM_ConntrackClient::GetInstance();
@@ -1737,6 +1795,20 @@ int main(int argc, char **argv)
 		}
 	}
 
+	if (IPACM_SUCCESS == netlinks_query_thread)
+	{
+		ret = pthread_create(&netlinks_query_thread, NULL, netlink_events_query, NULL);
+		if (IPACM_SUCCESS != ret)
+		{
+			IPACMERR("unable to create netlink thread\n");
+			return ret;
+		}
+		IPACMDBG_H("created netlink_events_query thread\n");
+		if(pthread_setname_np(netlinks_query_thread, "netlinks_query_thread") != 0)
+		{
+			IPACMERR("unable to set thread name\n");
+		}
+	}
 	/* Create Conntrack listener threads here to support on-demand PDNs connections before WAN is up */
 	CtList->CreateConnTrackThreads();
 
@@ -1744,6 +1816,8 @@ int main(int argc, char **argv)
 	pthread_join(netlink_thread, NULL);
 	pthread_join(monitor_thread, NULL);
 	pthread_join(ipa_driver_thread, NULL);
+	pthread_join(netlinks_query_thread, NULL);
+
 	return IPACM_SUCCESS;
 }
 
@@ -1860,3 +1934,51 @@ int ipa_get_if_index
 	close(fd);
 	return IPACM_SUCCESS;
 }
+
+#ifdef FEATURE_IPACM_RESTART
+int ipa_reset()
+{
+	int fd = -1;
+
+	if ((fd = open(IPA_DRIVER, O_RDWR)) < 0)
+	{
+		IPACMERR("Failed opening %s.\n", IPA_DEVICE_NAME);
+		return IPACM_FAILURE;
+	}
+
+	if (ioctl(fd, IPA_IOC_CLEANUP) < 0)
+	{
+		IPACMERR("IOCTL IPA_IOC_CLEANUP call failed: %s \n",
+			strerror(errno));
+		close(fd);
+		return IPACM_FAILURE;
+	}
+
+	IPACMDBG_H("send IPA_IOC_CLEANUP \n");
+	close(fd);
+	return IPACM_SUCCESS;
+}
+
+int ipa_query_driver_event()
+{
+	int fd = -1;
+
+	if ((fd = open(IPA_DRIVER, O_RDWR)) < 0)
+	{
+		IPACMERR("Failed opening %s.\n", IPA_DEVICE_NAME);
+		return IPACM_FAILURE;
+	}
+
+	if (ioctl(fd, IPA_IOC_QUERY_CACHED_DRIVER_MSG, 0) < 0)
+	{
+		IPACMERR("IOCTL IPA_IOC_QUERY_CACHED_DRIVER_MSG call failed: %s \n",
+			strerror(errno));
+		close(fd);
+		return IPACM_FAILURE;
+	}
+
+	IPACMDBG_H("send IPA_IOC_QUERY_CACHED_DRIVER_MSG \n");
+	close(fd);
+	return IPACM_SUCCESS;
+}
+#endif

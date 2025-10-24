@@ -148,6 +148,9 @@ int IPACM_Wan::num_ipsec_post_pol_rt[IPA_IP_MAX] = { 0 };
 int bool_dual_backhaul = 0;
 
 #define MOBILE_FIREWALL_FILE "/etc/data/mobileap_firewall.xml"
+/* private ip address and mask */
+#define PRIVATE_IP 0xa9fe0000
+#define PRIVATE_IP_MASK 0xffff0000
 
 IPACM_Wan::IPACM_Wan(int iface_index,
 	ipacm_wan_iface_type is_sta_mode,
@@ -1250,6 +1253,60 @@ int IPACM_Wan::handle_addr_evt(ipacm_event_data_addr *data)
 			/* initial multicast/broadcast/fragment filter rule */
 			if(m_is_sta_mode == Q6_WAN)
 			{
+				int indx;
+				for (indx = 0; indx < MAX_NUM_IP_PASS_MPDN; indx++)
+				{
+					int interface_index = iface_ipa_index_query(IPACM_Iface::ipacmcfg->ip_pass_mpdn_table[indx].if_index);
+					if (IPACM_Iface::ipacmcfg->ip_pass_mpdn_table[indx].valid_entry && (strncmp(dev_name,
+						IPACM_Iface::ipacmcfg->ip_pass_mpdn_table[indx].dev_name,
+						sizeof(IPACM_Iface::ipacmcfg->ip_pass_mpdn_table[indx].dev_name)) == 0) &&
+						(data->ipv4_addr != IPACM_Iface::ipacmcfg->ip_pass_mpdn_table[indx].ip_pass_pdn_ip_addr) &&
+						(interface_index == ipa_if_num) && ((data->ipv4_addr & PRIVATE_IP_MASK) == PRIVATE_IP))
+					{
+						ipacm_event_ip_pass_pdn_info *ip_pass_pdn_data;
+						ip_pass_pdn_data = (ipacm_event_ip_pass_pdn_info *)malloc(sizeof(ipacm_event_ip_pass_pdn_info));
+						curr_wan_ip = data->ipv4_addr;
+						public_wan_v4_addr = IPACM_Iface::ipacmcfg->ip_pass_mpdn_table[indx].ip_pass_pdn_ip_addr;
+						public_wan_v4_addr_set = true;
+						data->ipv4_addr = IPACM_Iface::ipacmcfg->ip_pass_mpdn_table[indx].ip_pass_pdn_ip_addr;
+						memset(ip_pass_pdn_data, 0, sizeof(ipacm_event_ip_pass_pdn_info));
+						if((IPACM_Iface::ipacmcfg->ip_pass_mpdn_table[indx].vlan_id == 0) &&
+							(IPACM_Iface::ipacmcfg->ip_pass_mpdn_table[indx].is_default_pdn))
+						{
+							ipacm_event_data_addr *data_addr = NULL;
+							data_addr = (ipacm_event_data_addr *)malloc(sizeof(ipacm_event_data_addr));
+							if(data_addr == NULL)
+							{
+								IPACMERR("unable to allocate memory for data_addr\n");
+								free(ip_pass_pdn_data);
+								res = IPACM_FAILURE;
+								goto fail;
+							}
+							memset(data_addr, 0, sizeof(ipacm_event_data_addr));
+							evt_data.event = IPA_ROUTE_ADD_EVENT;
+							data_addr->if_index = IPACM_Iface::ipacmcfg->ip_pass_mpdn_table[indx].if_index;
+							data_addr->iptype = IPA_IP_v4;
+							evt_data.evt_data = data_addr;
+							IPACMDBG_H("Posting event:%d\n", evt_data.event);
+							IPACM_EvtDispatcher::PostEvt(&evt_data);
+						}
+
+						ip_pass_pdn_data->if_index = IPACM_Iface::ipacmcfg->ip_pass_mpdn_table[indx].if_index;
+						ip_pass_pdn_data->skip_nat = IPACM_Iface::ipacmcfg->ip_pass_mpdn_table[indx].ip_pass_skip_nat;
+						ip_pass_pdn_data->pdn_ip_addr = IPACM_Iface::ipacmcfg->ip_pass_mpdn_table[indx].ip_pass_pdn_ip_addr;
+						ip_pass_pdn_data->VlanID = IPACM_Iface::ipacmcfg->ip_pass_mpdn_table[indx].vlan_id;
+						ip_pass_pdn_data->enable = true;
+						evt_data.evt_data = ip_pass_pdn_data;
+						evt_data.event = IPA_IP_PASS_UPDATE_EVENT;
+						IPACMDBG_H("Posting event:%d\n", evt_data.event);
+						IPACM_EvtDispatcher::PostEvt(&evt_data);
+						break;
+					}
+				}
+			}
+			/* initial multicast/broadcast/fragment filter rule */
+			if(m_is_sta_mode == Q6_WAN)
+			{
 #ifdef FEATURE_VLAN_MPDN
 				modem_ipv4_pdn_index = getFreePDNIndex_V4();
 				if (modem_ipv4_pdn_index == -1)
@@ -1310,6 +1367,15 @@ int IPACM_Wan::handle_addr_evt(ipacm_event_data_addr *data)
 	evt_data.evt_data = data_fid;
 	IPACMDBG_H("Posting IPA_HANDLE_NEW_NEIGH_EVENT event:%d\n", evt_data.event);
 	IPACM_EvtDispatcher::PostEvt(&evt_data);
+	if(IPACM_Iface::ipacmcfg->eogre_enabled == true &&
+		(data->iptype == IPACM_Iface::ipacmcfg->eogre_info.iptype))
+	{
+		ipacm_cmd_q_data evt_data_eogre;
+		evt_data_eogre.event    = IPA_HANDLE_EoGRE_UP;
+		evt_data_eogre.evt_data = 0;
+		IPACMDBG_H("Posting IPA_HANDLE_EoGRE_UP \n");
+		IPACM_EvtDispatcher::PostEvt(&evt_data_eogre);
+	}
 fail:
 	free(rt_rule);
 
@@ -1628,6 +1694,17 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 					if (data->iptype == IPA_IP_v4)
 					{
 						IPACM_Iface::iface_addr_query(data->if_index, false, &data->ipv4_addr);
+						/* checking if xlat pdn or not with 0xc0000000 range */
+						if (((data->ipv4_addr & 0xffffff00) == 0xc0000000) && (m_is_sta_mode == Q6_WAN))
+ 						{
+ 							is_xlat = true;
+ 							if (modem_ipv4_pdn_index != -1)
+ 							{
+ 								IPACM_Wan::ipv4_to_iface[modem_ipv4_pdn_index].is_xlat = true;
+ 							}
+ 							IPACMDBG_H("WAN-LTE (%s) link up, iface: %d is_xlat: %d \n",
+ 							IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].iface_name,data->if_index, is_xlat);
+ 						}
 
 						IPACMDBG_H("ipv4_addr : 0x%x subnet_mask : 0x%x result: 0x%x xlat_ip : 0x%x\n",
 							data->ipv4_addr, data->ipv4_addr_mask, data->ipv4_addr & data->ipv4_addr_mask, XLAT_IP);
@@ -2004,9 +2081,21 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 			if (ipa_interface_index == ipa_if_num)
 			{
 				IPACMDBG_H("received v4 IPA_IP_PASS_UPDATE_EVENT for wan %s, %d\n", dev_name, ipa_if_num);
-				ip_pass_pdn_info.enable = data->enable;
-				if (ip_pass_pdn_info.enable)
+				if (!ip_pass_pdn_info.enable && data->enable)
 				{
+					/*handle the race condition between private ip assigned before ippt pdn config info recieve*/
+					if((data->pdn_ip_addr != public_wan_v4_addr) && (public_wan_v4_addr == 0) && (curr_wan_ip == 0) &&
+					(public_wan_v4_addr_set == false) && ((wan_v4_addr & PRIVATE_IP_MASK) == PRIVATE_IP))
+					{
+						ipacm_event_data_addr data_addr;
+						data_addr.ipv4_addr = data->pdn_ip_addr;
+						data_addr.iptype = IPA_IP_v4;
+						data_addr.if_index = data->if_index;
+						handle_addr_evt(&data_addr);
+						public_wan_v4_addr = data->pdn_ip_addr;
+						public_wan_v4_addr_set = true;
+					}
+					ip_pass_pdn_info.enable = data->enable;
 					ip_pass_pdn_info.pdn_ip_addr = data->pdn_ip_addr;
 					ip_pass_pdn_info.skip_nat = data->skip_nat;
 					ip_pass_pdn_info.VlanID = data->VlanID;
@@ -2790,7 +2879,7 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 					goto handle_v6;
 				}
 
-				IPACMDBG_H("dev_name:%s modem_ipv4_pdn_index:%d\n", modem_ipv4_pdn_index);
+				IPACMDBG_H("dev_name:%s modem_ipv4_pdn_index:%d\n", dev_name, modem_ipv4_pdn_index);
 
 				for(j = 0; j < IPA_MAX_NUM_SW_PDNS; j++)
 				{
@@ -2820,7 +2909,7 @@ handle_v6:
 					goto handle_v4;
 				}
 
-				IPACMDBG_H("dev_name:%s modem_ipv6_pdn_index:%d\n", modem_ipv6_pdn_index);
+				IPACMDBG_H("dev_name:%s modem_ipv6_pdn_index:%d\n", dev_name, modem_ipv6_pdn_index);
 
 				for(j = 0; j < IPA_MAX_NUM_SW_PDNS; j++)
 				{

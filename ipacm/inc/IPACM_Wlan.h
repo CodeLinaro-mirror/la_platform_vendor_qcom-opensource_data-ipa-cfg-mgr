@@ -801,6 +801,8 @@ private:
 
 	void handle_SCC_MCC_switch(ipa_ip_type);
 
+	int extract_instance_id_from_wlan_iface(char*);
+
 /* functions to handle wlan client mac based filtering */
 	int handle_wlan_mac_flt_event();
 	void delete_wlan_mac_flt_rules();

@@ -1899,7 +1899,7 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 					IPACMDBG_H("Check any missed v4 VLAN handling in v4 new ADDR\n");
 					check_vlan_PDNUp(IPA_IP_v4);
 				}
-				else if (IPACM_Wan::isVlanWanUP_V6() && !modem_ul_v6_set[0])
+				if (IPACM_Wan::isVlanWanUP_V6() && !modem_ul_v6_set[0])
 				{
 					IPACMDBG_H("Check any missed v6 VLAN handling in v6 new ADDR\n");
 					check_vlan_PDNUp(IPA_IP_v6);

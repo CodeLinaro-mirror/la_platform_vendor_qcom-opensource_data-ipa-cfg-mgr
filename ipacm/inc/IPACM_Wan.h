@@ -305,6 +305,7 @@ public:
 				}
 			}
 		}
+		IPACMDBG_H("No v4 vlan WAN is up\n");
 		return false;
 	}
 
@@ -321,6 +322,7 @@ public:
 				}
 			}
 		}
+		IPACMDBG_H("No v6 vlan WAN is up\n");
 		return false;
 	}
 

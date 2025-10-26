@@ -11467,6 +11467,11 @@ int IPACM_Lan::delete_all_client_qos_rules()
 
 	for (it_qos_params = IPACM_Iface::ipacmcfg->m_qos_params.begin(); it_qos_params != IPACM_Iface::ipacmcfg->m_qos_params.end(); ++it_qos_params)
 	{
+		if (it_qos_params->dir != IPA_QoS_DL_RULE)
+		{
+			IPACMDBG_H("This is not a DL qos rule, continue to next one..\n");
+			continue;
+		}
 		delete_all_client_info_from_qos(it_qos_params);
 	}
 

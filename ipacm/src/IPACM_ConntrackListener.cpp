@@ -1688,7 +1688,8 @@ void IPACM_ConntrackListener::HandleVlanDownV6(void *in_param)
 		return;
 	}
 
-	IPACMDBG_H("ipv6 prefix for PDN 0x%08x:%08x\n", vlandown_data->ipv6_prefix[0], vlandown_data->ipv6_prefix[1]);
+	IPACMDBG_H("num_v6_vlan_pdns %d ,ipv6 prefix for PDN 0x%08x:%08x\n", num_v6_vlan_pdns,
+		vlandown_data->ipv6_prefix[0], vlandown_data->ipv6_prefix[1]);
 
 	if(!vlandown_data->ipv6_prefix[0] || !vlandown_data->ipv6_prefix[1])
 	{
@@ -1904,8 +1905,10 @@ void IPACM_ConntrackListener::TriggerWANDown_v6(const uint32_t* ipv6_addr)
 	}
 	wan_addr.DebugDump("Deleting the table with");
 #endif
+	IPACMDBG_H("num_v6_vlan_pdns %d\n", num_v6_vlan_pdns);
 	/* delete entries one by one to insure all uc activation entries gets removed */
-	ipv6ct_inst->DelEntriesOnWanDown();
+	if(num_v6_vlan_pdns == 0)
+		ipv6ct_inst->DelEntriesOnWanDown();
 	ipv6ct_inst->DeleteTable(ipv6_addr, num_v6_vlan_pdns);
 	IPACMDBG_H("return\n");
 }

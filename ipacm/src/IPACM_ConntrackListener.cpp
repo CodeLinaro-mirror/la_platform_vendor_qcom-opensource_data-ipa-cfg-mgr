@@ -769,13 +769,13 @@ bool IPACM_ConntrackListener::IsVlanIPv4(uint32_t ipv4_address, uint16_t *VlanId
 			}
 			else
 			{
-				IPACMDBG_H("not vlan v4 address\n");
+				IPACM_SYSLOG("not vlan v4 address\n");
 				return false;
 			}
 			return false;
 		}
 	}
-	IPACMDBG("couldn't match IP\n");
+	IPACM_SYSLOG("couldn't match IP\n");
 	return false;
 }
 #endif
@@ -1724,7 +1724,7 @@ bool IPACM_ConntrackListener::AddIface(
 
 	if (nat_inst == NULL)
 	{
-		IPACMERR("Nat instance is NULL, unable to check ALG\n");
+		IPACM_SYSLOG("Nat instance is NULL, unable to check ALG\n");
 		return false;
 	}
 
@@ -1760,7 +1760,7 @@ bool IPACM_ConntrackListener::AddIface(
 			if (rule->private_ip == nat_clients[cnt].nat_iface_ipv4_addr ||
 				rule->target_ip == nat_clients[cnt].nat_iface_ipv4_addr)
 			{
-				IPACMDBG("matched nat_clients[%d].nat_iface_ipv4_addr\n", cnt);
+				IPACMDBG_H("matched nat_clients[%d].nat_iface_ipv4_addr\n", cnt);
 				iptodot("AddIface(): Nat entry match with ip addr",
 					nat_clients[cnt].nat_iface_ipv4_addr);
 				return true;
@@ -1792,14 +1792,14 @@ bool IPACM_ConntrackListener::AddIface(
 		IPACM_SYSLOG("Not mtaching with non-nat ifaces\n");
 	}
 	else
-		IPACMDBG("In STA mode, don't compare against non nat ifaces\n");
+		IPACM_SYSLOG("In STA mode, don't compare against non nat ifaces\n");
 
 	if(pConfig == NULL)
 	{
 		pConfig = IPACM_Config::GetInstance();
 		if(pConfig == NULL)
 		{
-			IPACMERR("Unable to get Config instance\n");
+			IPACM_SYSLOG("Unable to get Config instance\n");
 			return false;
 		}
 	}
@@ -1866,14 +1866,14 @@ int IPACM_ConntrackListener::AddORDeleteNatEntry(const nat_entry_bundle *input, 
 			{
 				if(!input->IsVlanUp)
 				{
-					IPACMDBG_H("Send VLAN WAN UP event\n");
+					IPACM_SYSLOG("Send VLAN WAN UP event\n");
 					*sendVlanEvent = true;
 					IPACMDBG_H("vlan Wan is not up, cache connections\n");
 					nat_inst->CacheEntry(input->rule);
 				}
 				else if(input->isTempEntry)
 				{
-					IPACMDBG("TCP: adding temp for vlan\n");
+					IPACM_SYSLOG("TCP: adding temp for vlan\n");
 					nat_inst->AddTempEntry(input->rule);
 				}
 				else
@@ -1885,7 +1885,7 @@ int IPACM_ConntrackListener::AddORDeleteNatEntry(const nat_entry_bundle *input, 
 #endif
 			if (!WanUp)
 			{
-				IPACMDBG("Wan is not up, cache connections\n");
+				IPACM_SYSLOG("Wan is not up, cache connections\n");
 				nat_inst->CacheEntry(input->rule);
 			}
 			else if (input->isTempEntry)
@@ -1926,14 +1926,14 @@ int IPACM_ConntrackListener::AddORDeleteNatEntry(const nat_entry_bundle *input, 
 			{
 				if(!input->IsVlanUp)
 				{
-					IPACMDBG_H("Send VLAN WAN UP event\n");
+					IPACM_SYSLOG("Send VLAN WAN UP event\n");
 					*sendVlanEvent = true;
 					IPACMDBG_H("vlan Wan is not up, cache connections\n");
 					nat_inst->CacheEntry(input->rule);
 				}
 				else if(input->isTempEntry)
 				{
-					IPACMDBG("UDP: adding temp for vlan\n");
+					IPACM_SYSLOG("UDP: adding temp for vlan\n");
 					nat_inst->AddTempEntry(input->rule);
 				}
 				else
@@ -1946,7 +1946,7 @@ int IPACM_ConntrackListener::AddORDeleteNatEntry(const nat_entry_bundle *input, 
 #endif
 			if (!WanUp)
 			{
-				IPACMDBG("Wan is not up, cache connections\n");
+				IPACM_SYSLOG("Wan is not up, cache connections\n");
 				nat_inst->CacheEntry(input->rule);
 			}
 			else if (input->isTempEntry)
@@ -2365,12 +2365,12 @@ void IPACM_ConntrackListener::ProcessTCPorUDPMsg(
 			 {
 				 iptodot("vlan client ip", repl_src_ip);
 				 iptodot("pdn ip",orig_dst_ip)
-				 IPACM_SYSLOG("src NAT: can't add more PDN, already got max num_vlan_pdns: %d\n", num_vlan_pdns);
+				 IPACM_SYSLOG("src NAT: can't add more PDN, clientIP: %d, pdnIp: %d\n", repl_src_ip, orig_dst_ip);
 				 return;
 			 }
 			 iptodot("vlan client ip", repl_src_ip);
 			 iptodot("pdn ip", orig_dst_ip);
-			 IPACM_SYSLOG("vlan client ip: (0x%x) pdn ip: (0x%x) IsVlanUp %d\n", repl_src_ip, orig_dst_ip, nat_entry.IsVlanUp);
+			 IPACM_SYSLOG("IsVlanUp %d, clientIP: %d, pdnIp: %d\n", nat_entry.IsVlanUp, repl_src_ip, orig_dst_ip);
 		}
 		public_ip = orig_dst_ip;
 #endif
@@ -2404,12 +2404,12 @@ void IPACM_ConntrackListener::ProcessTCPorUDPMsg(
 				{
 					iptodot("vlan client ip", orig_src_ip);
 					iptodot("pdn ip",repl_dst_ip)
-					IPACM_SYSLOG("dst NAT: can't add more PDN, already got max num_vlan_pdns: %d\n", num_vlan_pdns);
+					IPACM_SYSLOG("dst NAT: can't add more PDN, clientIP: %d, pdnIp: %d\n", orig_src_ip, repl_dst_ip);
 					return;
 				}
 				iptodot("vlan client ip ", orig_src_ip);
 				iptodot("pdn ip ", repl_dst_ip)
-				IPACM_SYSLOG("vlan client ip: (0x%x) pdn ip: (0x%x) IsVlanUp %d\n",orig_src_ip, repl_dst_ip, nat_entry.IsVlanUp);
+				IPACM_SYSLOG("IsVlanUp %d, clientIP: %d, pdnIp: %d\n", nat_entry.IsVlanUp, orig_src_ip, repl_dst_ip);
 			}
 		}
 		public_ip = repl_dst_ip;
@@ -2505,7 +2505,7 @@ void IPACM_ConntrackListener::ProcessTCPorUDPMsg(
 	 {
 		 if (isStaMode)
 		 {
-			 IPACMDBG("In STA mode, ignore connections destinated to STA interface\n");
+			 IPACM_SYSLOG("In STA mode, ignore connections destinated to STA interface\n");
 			 goto IGNORE;
 		 }
 

@@ -2340,7 +2340,25 @@ int IPACM_Wlan::handle_wlan_mac_flt_conn_disc(uint8_t *mac_addr, bool conn_state
 	}
 	return IPACM_SUCCESS;
 }
+int IPACM_Wlan::extract_instance_id_from_wlan_iface(char ifname[IPA_IFACE_NAME_LEN])
+{
+	char *token = NULL;
+	char *save_ptr = NULL;
+	char iface_name[IPA_IFACE_NAME_LEN] = {0};
 
+	strlcpy(iface_name, ifname, IPA_IFACE_NAME_LEN);
+	token = strtok_r(iface_name, "_", &save_ptr);
+	if ((token != NULL) && (strstr(ifname, "mld"))) {
+		token = strtok_r(NULL, "_", &save_ptr);
+		if(token != NULL)
+		{
+			IPACMDBG("instance id : %s\n",token);
+			return atoi(token);
+		}
+	}
+	IPACMDBG("Not an mld stitched iface %s\n", iface_name);
+	return -1;
+}
 /* handle wifi client initial,copy all partial headers (tx property) */
 int IPACM_Wlan::handle_wlan_client_init_ex(ipacm_event_data_wlan_ex *data, bool delay_init, uint16_t vlan_id)
 {
@@ -2348,6 +2366,7 @@ int IPACM_Wlan::handle_wlan_client_init_ex(ipacm_event_data_wlan_ex *data, bool 
 #define WLAN_IFACE_INDEX_LEN 10
 
 	int res = IPACM_SUCCESS, len = 0, i, evt_size;
+	int instance_id = -1;
 	char index[WLAN_IFACE_INDEX_LEN];
 	struct ipa_ioc_copy_hdr sCopyHeader;
 	struct ipa_ioc_add_hdr *pHeaderDescriptor = NULL;
@@ -2483,7 +2502,15 @@ int IPACM_Wlan::handle_wlan_client_init_ex(ipacm_event_data_wlan_ex *data, bool 
 				memset(pHeaderDescriptor->hdr[0].name, 0,
 							 sizeof(pHeaderDescriptor->hdr[0].name));
 
-				snprintf(index,sizeof(index), "%d_", ipa_if_num);
+				instance_id = extract_instance_id_from_wlan_iface(data->iface_name);
+				if (instance_id != -1)
+				{
+					snprintf(index,sizeof(index), "%d_%d", ipa_if_num, instance_id);
+				}
+				else
+				{
+					snprintf(index,sizeof(index), "%d_", ipa_if_num);
+				}
 				strlcpy(pHeaderDescriptor->hdr[0].name, index, sizeof(pHeaderDescriptor->hdr[0].name));
 				pHeaderDescriptor->hdr[0].name[IPA_RESOURCE_NAME_MAX-1] = '\0';
 
@@ -2621,7 +2648,16 @@ int IPACM_Wlan::handle_wlan_client_init_ex(ipacm_event_data_wlan_ex *data, bool 
 				memset(pHeaderDescriptor->hdr[0].name, 0,
 							 sizeof(pHeaderDescriptor->hdr[0].name));
 
-				snprintf(index,sizeof(index), "%d_", ipa_if_num);
+				instance_id = extract_instance_id_from_wlan_iface(data->iface_name);
+				if (instance_id != -1)
+				{
+					snprintf(index,sizeof(index), "%d_%d", ipa_if_num, instance_id);
+				}
+				else
+				{
+					snprintf(index,sizeof(index), "%d_", ipa_if_num);
+				}
+
 				strlcpy(pHeaderDescriptor->hdr[0].name, index, sizeof(pHeaderDescriptor->hdr[0].name));
 				pHeaderDescriptor->hdr[0].name[IPA_RESOURCE_NAME_MAX-1] = '\0';
 				if (strlcat(pHeaderDescriptor->hdr[0].name, IPA_WLAN_PARTIAL_HDR_NAME_v6, sizeof(pHeaderDescriptor->hdr[0].name)) > IPA_RESOURCE_NAME_MAX)
@@ -9698,6 +9734,7 @@ int IPACM_Wlan::handle_wlan_vlan_client_init(int client_idx, ipacm_bridge *bridg
 	struct ipa_ioc_add_hdr *pHeaderDescriptor = NULL;
 	struct ipa_ioc_copy_hdr sCopyHeader;
 	int size = 0, len = 0;
+	int instance_id = -1;
 	char index[WLAN_IFACE_INDEX_LEN];
 	uint16_t vlan_tci;
 	ipacm_event_data_wlan_ex *data;
@@ -9777,7 +9814,15 @@ int IPACM_Wlan::handle_wlan_vlan_client_init(int client_idx, ipacm_bridge *bridg
 			memset(pHeaderDescriptor->hdr[0].name, 0,
 				   sizeof(pHeaderDescriptor->hdr[0].name));
 
-			snprintf(index, sizeof(index), "%d_", ipa_if_num);
+			instance_id = extract_instance_id_from_wlan_iface(data->iface_name);
+			if (instance_id != -1)
+			{
+				snprintf(index,sizeof(index), "%d_%d", ipa_if_num, instance_id);
+			}
+			else
+			{
+				snprintf(index,sizeof(index), "%d_", ipa_if_num);
+			}
 			strlcpy(pHeaderDescriptor->hdr[0].name, index, sizeof(pHeaderDescriptor->hdr[0].name));
 			pHeaderDescriptor->hdr[0].name[IPA_RESOURCE_NAME_MAX - 1] = '\0';
 
@@ -9937,10 +9982,19 @@ int IPACM_Wlan::handle_wlan_vlan_client_init(int client_idx, ipacm_bridge *bridg
 			pHeaderDescriptor->commit = true;
 			pHeaderDescriptor->num_hdrs = 1;
 
+			instance_id = extract_instance_id_from_wlan_iface(data->iface_name);
+			if (instance_id != -1)
+			{
+				snprintf(index,sizeof(index), "%d_%d", ipa_if_num, instance_id);
+			}
+			else
+			{
+				snprintf(index,sizeof(index), "%d_", ipa_if_num);
+			}
+
 			memset(pHeaderDescriptor->hdr[0].name, 0,
 				   sizeof(pHeaderDescriptor->hdr[0].name));
 
-			snprintf(index, sizeof(index), "%d_", ipa_if_num);
 			strlcpy(pHeaderDescriptor->hdr[0].name, index, sizeof(pHeaderDescriptor->hdr[0].name));
 			pHeaderDescriptor->hdr[0].name[IPA_RESOURCE_NAME_MAX - 1] = '\0';
 

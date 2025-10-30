@@ -97,6 +97,9 @@ typedef struct _ipa_rm_client
 #define IPA_SYS_CMD_LEN 200
 #endif
 
+#define IPA_QoS_DL_RULE 0
+#define IPA_QoS_UL_RULE 1
+
 /* used to hold extended properties */
 typedef struct
 {
@@ -376,6 +379,7 @@ struct qos_param_info {
 };
 
 struct qos_delete_param_info {
+	uint8_t dir;
 	uint32_t client_cnt;
 	qos_client_info qos_client_list[];
 };
@@ -479,6 +483,8 @@ public:
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
 	bool ipacm_lan_stats_enable;
 	bool ipacm_lan_stats_enable_set;
+	bool ipacm_lan2lan_stats_enable;
+	bool ipacm_lan2lan_stats_enable_set;
 #ifdef IPA_HW_FNR_STATS
 	struct ipa_ioc_flt_rt_counter_alloc fnr_counters;
 	/* Setting an index to 1 would mean that it is under use and 0, unused*/
@@ -558,6 +564,8 @@ public:
 	const char* eth_lan_wan_iface_name;
 	/* Indicates whether Multi VLAN to Single Bridge mode is enabled */
 	bool multi_vlan_bridge_config_enable;
+	/* Indicates whether Inter Bridge lantolan is enabled */
+	bool inter_bridge_lantolan_config_enable;
 	/* br-wan mode flag */
 	bool eth_wan_br_wan_enable;
 #ifdef FEATURE_EoGRE
@@ -583,7 +591,9 @@ public:
 	struct ipa_ioc_get_rt_tbl rt_tbl_lan_v4, rt_tbl_wan_v4, rt_tbl_default_v4, rt_tbl_v6, rt_tbl_wan_v6;
 	struct ipa_ioc_get_rt_tbl rt_tbl_wan_dl, rt_tbl_default_v6;
 	struct ipa_ioc_get_rt_tbl rt_tbl_odu_v4, rt_tbl_odu_v6;
-
+	struct ipa_ioc_get_rt_tbl rt_tbl_inter_l2l_v4, rt_tbl_inter_l2l_v6;
+	bool rt_tbl_inter_l2l_v4_set;
+	bool rt_tbl_inter_l2l_v6_set;
 
 	/* Indicates current number of client ipv6 */
 	int ipa_num_clients_ipv6;
@@ -674,11 +684,15 @@ public:
 	ipacm_bridge *get_vlan_bridge_from_vid(uint16_t vlan_id);
 	bool is_added_vlan_iface(char *iface_name);
 	bool iface_in_vlan_mode(const char * interfaceName);
+	bool iface_in_vlan_mode_v2(const char * interfaceName);
 	int get_iface_vlan_ids(char *phys_iface_name, uint16_t *Ids);
 	int get_vlan_id(char *iface_name, uint16_t *vlan_id);
 	void get_vlan_mode_ifaces();
 #endif
-
+	int get_master_interface_index(const char *interface_name);
+	int get_bridge_info_iface(char * iface, struct ipa_bridge_vlan_mapping_info *data);
+	int get_bridge_info_iface_wlan_mld(const char *interface_name ,struct ipa_bridge_vlan_mapping_info *data);
+	ipacm_iface_type get_iface_category(const char *dev_name);
 	int get_eth_vlan_wan_up(int ipa_if_num);
 
 #ifdef FEATURE_PPPOE
@@ -1266,7 +1280,7 @@ public:
 			data_fid->if_index = ipa_if_index; // already ipa index, not fid index
 			evt_data.event = IPA_PRIVATE_SUBNET_CHANGE_EVENT;
 			evt_data.evt_data = data_fid;
-			IPACMDBG_H("Posting IPA_PRIVATE_SUBNET_CHANGE_EVENT for if_index %d \n", data_fid->if_index);
+
 			/* Insert IPA_PRIVATE_SUBNET_CHANGE_EVENT to command queue */
 			IPACM_EvtDispatcher::PostEvt(&evt_data);
 			return true;
@@ -1302,7 +1316,7 @@ public:
 				data_fid->if_index = ipa_if_index; // already ipa index, not fid index
 				evt_data.event = IPA_PRIVATE_SUBNET_CHANGE_EVENT;
 				evt_data.evt_data = data_fid;
-				IPACMDBG_H("Posting IPA_PRIVATE_SUBNET_CHANGE_EVENT for if_index %d \n", data_fid->if_index);
+
 				/* Insert IPA_PRIVATE_SUBNET_CHANGE_EVENT to command queue */
 				IPACM_EvtDispatcher::PostEvt(&evt_data);
 				return true;
@@ -1584,6 +1598,48 @@ public:
 			else
 			{
 				IPACMDBG("no match with [%X][%X]\n", ipa_ipv6_prefixes[i].addr[0], ipa_ipv6_prefixes[i].addr[1]);
+			}
+		}
+		return false;
+	}
+
+	inline bool get_ipv6_prefix_for_vlan_id(uint8_t vlan_id , uint32_t *prefix)
+	{
+		IPACMDBG_H("checking for vlan id %d\n", vlan_id);
+		/*MVLAN PDN is not supported in easymesh so check for default bridge prefix*/
+		if(ipacm_emesh_enable == true && ipacm_emesh_mode >= 2)
+			vlan_id = 0;
+		for(int i = 0; i < num_ipv6_prefixes; i++)
+		{
+			if(vlan_id == ipa_ipv6_prefixes[i].vlan_id)
+			{
+				IPACMDBG_H("prefix 0x[%X][%X] is a known ipv6 prefix for vlan id %d\n",
+					ipa_ipv6_prefixes[i].addr[0], ipa_ipv6_prefixes[i].addr[1], ipa_ipv6_prefixes[i].vlan_id);
+				prefix[0] = ipa_ipv6_prefixes[i].addr[0];
+				prefix[1] = ipa_ipv6_prefixes[i].addr[1];
+				return true;
+			}
+			else
+			{
+				IPACMDBG("no match with vlan id %d\n", ipa_ipv6_prefixes[i].vlan_id);
+			}
+		}
+		return false;
+	}
+
+	inline bool ipv6_prefix_for_vlan_id(uint8_t vlan_id)
+	{
+		IPACMDBG_H("checking for vlan id %d\n", vlan_id);
+		for(int i = 0; i < num_ipv6_prefixes; i++)
+		{
+			if(vlan_id == ipa_ipv6_prefixes[i].vlan_id)
+			{
+				IPACMDBG_H("prefix 0x[%X][%X] is a known ipv6 prefix for vlan id %d\n", ipa_ipv6_prefixes[i].addr[0], ipa_ipv6_prefixes[i].addr[1], ipa_ipv6_prefixes[i].vlan_id);
+				return true;
+			}
+			else
+			{
+				IPACMDBG("no match with vlan id %d\n", ipa_ipv6_prefixes[i].vlan_id);
 			}
 		}
 		return false;

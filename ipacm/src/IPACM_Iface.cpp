@@ -26,9 +26,8 @@
 * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
 * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 *
-* Changes from Qualcomm Technologies, Inc. are provided under the following license:
-*
-* Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+* Changes from Qualcomm Innovation Center are provided under the following license:
+* Copyright (c) 2023-2025 Qualcomm Innovation Center, Inc. All rights reserved.
 * SPDX-License-Identifier: BSD-3-Clause-Clear
 */
 /*!
@@ -83,11 +82,11 @@ IPACM_Iface::IPACM_Iface(char *iface_name, int iface_index, bool ppp_iface)
 
 	if((iface_name != NULL) && (strstr(iface_name, "wlan")))
 	{
-		memcpy(dev_name, iface_name, sizeof(iface_name));
+		strlcpy(dev_name, iface_name, sizeof(iface_name));
 	}
 	else
 	{
-		memcpy(dev_name, IPACM_Iface::ipacmcfg->iface_table[iface_index].iface_name,
+		strlcpy(dev_name, IPACM_Iface::ipacmcfg->iface_table[iface_index].iface_name,
 		sizeof(IPACM_Iface::ipacmcfg->iface_table[iface_index].iface_name));
 	}
 
@@ -106,9 +105,9 @@ IPACM_Iface::IPACM_Iface(char *iface_name, int iface_index, bool ppp_iface)
 			{
 				strlcpy(IPACM_Iface::ipacmcfg->iface_table[iface_index].phy_dev_name,
 					IPACM_Iface::ipacmcfg->pppoe_mpdn_table[i].phy_dev_name,
-					sizeof(IPACM_Iface::ipacmcfg->pppoe_mpdn_table[i].phy_dev_name));
+					sizeof(IPACM_Iface::ipacmcfg->iface_table[iface_index].phy_dev_name));
 				 IPACM_Iface::ipacmcfg->pppoe_mpdn_table[i].iface_index = iface_index ;
-				memcpy(phy_dev_name, IPACM_Iface::ipacmcfg->iface_table[iface_index].phy_dev_name,
+				strlcpy(phy_dev_name, IPACM_Iface::ipacmcfg->iface_table[iface_index].phy_dev_name,
 					sizeof(IPACM_Iface::ipacmcfg->iface_table[iface_index].phy_dev_name));
 				break;
 			}
@@ -118,7 +117,7 @@ IPACM_Iface::IPACM_Iface(char *iface_name, int iface_index, bool ppp_iface)
 
 	if (virtual_iface = IPACM_Iface::ipacmcfg->iface_table[iface_index].virtual_iface)
 	{
-		memcpy(phy_dev_name, IPACM_Iface::ipacmcfg->iface_table[iface_index].phy_dev_name,
+		strlcpy(phy_dev_name, IPACM_Iface::ipacmcfg->iface_table[iface_index].phy_dev_name,
 			sizeof(IPACM_Iface::ipacmcfg->iface_table[iface_index].phy_dev_name));
 	}
 
@@ -466,8 +465,7 @@ void IPACM_Iface::iface_addr_query
 (
 	int interface_index,
 	bool post_new_addr_event,
-	uint32_t *curr_ip4_addr,
-	uint32_t *curr_ip4_netmask
+	uint32_t *curr_ip4_addr
 )
 {
 	int fd;
@@ -476,7 +474,6 @@ void IPACM_Iface::iface_addr_query
 	ipacm_cmd_q_data evt_data;
 	ipacm_event_data_addr *data_addr;
 	struct in_addr iface_ipv4;
-	struct in_addr iface_ipv4_netmask;
 
 	/* use linux interface-index to find interface name */
 	if ((fd = socket(AF_INET, SOCK_DGRAM, 0)) < 0)
@@ -523,9 +520,8 @@ void IPACM_Iface::iface_addr_query
 					struct sockaddr_in *s4 = (struct sockaddr_in *)ifa->ifa_addr;
 					struct sockaddr_in *net_mask = (struct sockaddr_in *)ifa->ifa_netmask;
 					IPACMDBG_H("ipv4 address %s\n",inet_ntoa(s4->sin_addr));
-					IPACMDBG_H("ipv4 address netmask %s\n",inet_ntoa(net_mask->sin_addr));
 					iface_ipv4 = s4->sin_addr;
-					iface_ipv4_netmask = net_mask->sin_addr;
+
 					if (curr_ip4_addr != NULL && (post_new_addr_event == false))
 					{
 						if(ntohl(iface_ipv4.s_addr) != (*curr_ip4_addr))
@@ -534,9 +530,6 @@ void IPACM_Iface::iface_addr_query
 							IPACMDBG_H("iface ip4 address: (0x%x)\n", ntohl(iface_ipv4.s_addr));
 
 							*curr_ip4_addr = ntohl(iface_ipv4.s_addr);
-							if (curr_ip4_netmask != NULL)
-								*curr_ip4_netmask = ntohl(iface_ipv4_netmask.s_addr);
-
 							freeifaddrs(myaddrs);
 							return;
 						}
@@ -746,8 +739,8 @@ int IPACM_Iface::query_iface_property(void)
 		{
 			for (cnt = 0; cnt < rx_prop->num_rx_props; cnt++)
 			{
-				IPACMDBG_H("Rx(%d):attrib-mask:0x%x, ip-type: %d, src_pipe: %d\n",
-								 cnt, rx_prop->rx[cnt].attrib.attrib_mask, rx_prop->rx[cnt].ip, rx_prop->rx[cnt].src_pipe);
+				IPACMDBG_H("Rx(%d):attrib-mask:0x%x, ip-type: %d, src_pipe: %d, bitmap: %d\n",
+								 cnt, rx_prop->rx[cnt].attrib.attrib_mask, rx_prop->rx[cnt].ip, rx_prop->rx[cnt].src_pipe, rx_prop->rx[cnt].tc_bmap);
 			}
 		}
 	}
@@ -755,13 +748,6 @@ int IPACM_Iface::query_iface_property(void)
 	/* Add Natting iface to IPACM_Config if there is  Rx/Tx property */
 	if (rx_prop != NULL || tx_prop != NULL)
 	{
-		/* Skip vlan properties for non vlan wlan iface */
-		if(WLAN_IF == ipa_if_cate && (!is_if_svap && !is_wlan_if_vlan))
-		{
-			iface_query->num_rx_props = iface_query->num_tx_props = 2;
-			rx_prop->num_rx_props = tx_prop->num_tx_props = 2;
-			IPACMDBG_H("Setting iface properties to 2 for non vlan iface\n");
-		}
 		IPACMDBG_H(" Has rx/tx properties registered for iface %s, add for NATTING \n", dev_name);
         IPACM_Iface::ipacmcfg->AddNatIfaces(dev_name);
 	}

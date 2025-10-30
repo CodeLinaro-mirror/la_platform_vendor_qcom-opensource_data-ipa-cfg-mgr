@@ -109,7 +109,7 @@ struct ap_dflt_rules{
 #else
 	uint32_t ipv6_prefix_flt_rule_hdl[IPA_MAX_NUM_PROPS][IPA_MAX_IPV6_PREFIX_FLT_RULE + IPA_MAX_MTU_ENTRIES];
 #endif
-
+	int num_wan_prefix_rules[IPA_MAX_NUM_PROPS];
 };
 
 typedef struct _ipa_wlan_client

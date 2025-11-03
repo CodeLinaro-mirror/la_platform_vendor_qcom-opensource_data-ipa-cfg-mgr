@@ -2676,7 +2676,8 @@ int IPACM_Lan::handle_eth_mac_flt_event()
 				if(get_client_memptr(eth_client, eth_index)->ipv4_set && !it->second->mac_v4_rt_del_flt_set)
 				{
 					/* add a new UL flt rule, del NAT and route rule for client */
-					if(add_mac_flt_blacklist_rule(mac_addr,IPA_IP_v4, &(it->second->mac_v4_flt_rule_hdl)))
+					if(add_mac_flt_blacklist_rule(mac_addr, IPA_IP_v4, &(it->second->mac_v4_flt_rule_hdl),
+						get_client_memptr(eth_client, eth_index)->vlan_id))
 					{
 						IPACMERR("unbale to add mac flt blacklist v4 UL rule for index: %d\n", eth_index);
 						return IPACM_FAILURE;
@@ -2761,7 +2762,7 @@ int IPACM_Lan::handle_eth_mac_flt_event()
 }
 
 /* add_mac_flt_ul_rule add UL rule for mac based filtering on top */
-int IPACM_Lan::add_mac_flt_blacklist_rule(uint8_t *mac_addr, ipa_ip_type iptype, uint32_t *flt_rule_hdl)
+int IPACM_Lan::add_mac_flt_blacklist_rule(uint8_t *mac_addr, ipa_ip_type iptype, uint32_t *flt_rule_hdl, uint16_t vlan_id)
 {
 	IPACMDBG_H(" mac_flt_add_rule \n");
 
@@ -2771,11 +2772,10 @@ int IPACM_Lan::add_mac_flt_blacklist_rule(uint8_t *mac_addr, ipa_ip_type iptype,
 	uint8_t mac_a[6] = {0};
 	std::array<uint8_t, 6> mac = {0};
 	std::map<std::array<uint8_t, 6>, mac_flt_type * >::iterator it;
-	int j = 0,eth_index,vlan_id=0;
+	int j = 0;
 
 	memcpy(mac_a,mac_addr,IPA_MAC_ADDR_SIZE);
 	std::copy(std::begin(mac_a), std::end(mac_a), std::begin(mac));
-	eth_index = get_eth_client_index(mac_addr);
 
 	if (rx_prop == NULL)
 	{
@@ -2843,12 +2843,14 @@ int IPACM_Lan::add_mac_flt_blacklist_rule(uint8_t *mac_addr, ipa_ip_type iptype,
 		flt_rule_entry_v2.rule.action = IPA_PASS_TO_EXCEPTION;
 		flt_rule_entry_v2.rule.hashable = false;
 
-		vlan_id = get_client_memptr(eth_client, eth_index)->vlan_id;
-		IPACMERR(" vlan_id %d \n",vlan_id);
-		if (vlan_id > MIN_VLAN_ID && vlan_id <= MAX_VLAN_ID){
+		IPACMERR("vlan_id %d \n", vlan_id);
+		if (vlan_id > MIN_VLAN_ID && vlan_id <= MAX_VLAN_ID)
+		{
 			flt_rule_entry_v2.rule.attrib.attrib_mask |= IPA_FLT_MAC_SRC_ADDR_802_1Q;
 		}
-		if ( vlan_id == 0 ){
+
+		if (vlan_id == 0)
+		{
 			flt_rule_entry_v2.rule.attrib.attrib_mask |= IPA_FLT_MAC_SRC_ADDR_ETHER_II;
 		}
 		memset(flt_rule_entry_v2.rule.attrib.src_mac_addr_mask, 0xFF, sizeof(flt_rule_entry_v2.rule.attrib.src_mac_addr_mask));
@@ -3143,7 +3145,8 @@ int IPACM_Lan::handle_eth_mac_flt_conn_disc(uint8_t *mac_addr, bool eth_client_c
 			/* install UL and rt rules */
 			if(get_client_memptr(eth_client, eth_index)->ipv4_set && !it->second->mac_v4_rt_del_flt_set)
 			{
-				if(add_mac_flt_blacklist_rule(mac_addr,IPA_IP_v4, &(it->second->mac_v4_flt_rule_hdl)))
+				if(add_mac_flt_blacklist_rule(mac_addr,IPA_IP_v4, &(it->second->mac_v4_flt_rule_hdl),
+					get_client_memptr(eth_client, eth_index)->vlan_id))
 				{
 					IPACMERR("unable to add mac flt blacklist v4 UL rule for index: %d\n", eth_index);
 					return IPACM_FAILURE;

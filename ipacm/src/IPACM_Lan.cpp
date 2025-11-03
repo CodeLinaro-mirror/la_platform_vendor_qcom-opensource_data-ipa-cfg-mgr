@@ -16805,7 +16805,17 @@ int IPACM_Lan::install_uplink_filter_rule_per_client_v2
 			idx = j * 2;
 			IPACMDBG_H("Install rules at idx %d\n", idx);
 		}
-
+		if (sIface && vlan_id && (idx == 0))
+		{
+			IPACMDBG_H("siface install rule at idx 2 vlanid %d skip idx %d \n", vlan_id, idx);
+			continue;
+		}
+		else if (sIface && (vlan_id == 0) && (idx == 2))
+		{
+			IPACMDBG_H("siface install rule at idx 0 for non vlan skip idx %d \n", idx);
+			continue;
+		}
+		IPACMDBG_H("vlan_id %d idx %d\n", vlan_id, idx);
 		index = 0;
 		memset(pFilteringTable, 0, len);
 
@@ -16920,7 +16930,7 @@ int IPACM_Lan::install_uplink_filter_rule_per_client_v2
 				offset_meq_128->offset = -8;
 			}
 #endif
-			else if(rx_prop->rx[0].hdr_l2_type == IPA_HDR_L2_802_1Q)
+			else if(rx_prop->rx[idx].hdr_l2_type == IPA_HDR_L2_802_1Q)
 			{
 				offset_meq_128->offset = -12;
 			}

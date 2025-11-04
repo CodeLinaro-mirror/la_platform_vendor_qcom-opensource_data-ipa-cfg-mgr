@@ -398,7 +398,7 @@ void* ipa_driver_msg_notifier(void *param)
 			}
 			if(event_wlan->mld_enabled && strstr(event_wlan->name,"mld"))
 			{
-				snprintf(data_fid->iface_name, sizeof(event_wlan->name),
+				snprintf(data_fid->iface_name, sizeof(data_fid->iface_name),
 							"%s_%d_%d", event_wlan->name,event_wlan->instance_id,
 							event_wlan->vdev_id);
 			}
@@ -436,7 +436,7 @@ void* ipa_driver_msg_notifier(void *param)
 			}
 			if(event_wlan->mld_enabled && strstr(event_wlan->name,"mld"))
 			{
-				snprintf(data_fid->iface_name, sizeof(event_wlan->name),
+				snprintf(data_fid->iface_name, sizeof(data_fid->iface_name),
 							"%s_%d_%d", event_wlan->name,event_wlan->instance_id, event_wlan->vdev_id);
 			}
 			else

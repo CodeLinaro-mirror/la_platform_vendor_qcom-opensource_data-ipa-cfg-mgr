@@ -69,12 +69,6 @@ int IPACM_Wlan::num_wlan_ap_iface = 0;
 #define IPA_LAN_RX_HDR_NAME "ipa_lan_hdr"
 #endif
 
-#ifdef FEATURE_IPACM_PER_CLIENT_STATS
-bool IPACM_Wlan::lan_stats_inited = false;
-ipa_lan_client_idx IPACM_Wlan::active_lan_client_index[IPA_MAX_NUM_HW_PATH_CLIENTS];
-ipa_lan_client_idx IPACM_Wlan::inactive_lan_client_index[IPA_MAX_NUM_HW_PATH_CLIENTS];
-#endif
-
 extern char *ipa_l2_hdr_type[];
 
 IPACM_Wlan::IPACM_Wlan(char *iface_name, int iface_index, bool ast_update_needed, bool is_ppp_iface) : IPACM_Lan(iface_name, iface_index, is_ppp_iface), ipv6ct_inst(Ipv6ct::GetInstance())
@@ -118,19 +112,6 @@ IPACM_Wlan::IPACM_Wlan(char *iface_name, int iface_index, bool ast_update_needed
 	svap_dummy_route_rule_v4_hdl = 0;
 	svap_dummy_route_rule_v6_hdl = 0;
 
-#ifdef FEATURE_IPACM_PER_CLIENT_STATS
-		if (lan_stats_inited == false)
-		{
-			for (i = 0; i < IPA_MAX_NUM_HW_PATH_CLIENTS; i++)
-			{
-				active_lan_client_index[i].lan_stats_idx = -1;
-				memset(active_lan_client_index[i].mac, 0, IPA_MAC_ADDR_SIZE);
-				inactive_lan_client_index[i].lan_stats_idx = -1;
-				memset(inactive_lan_client_index[i].mac, 0, IPA_MAC_ADDR_SIZE);
-			}
-			lan_stats_inited = true;
-		}
-#endif
 	/* Update if the interface is SVAP or not if the mesh R2 or greater is enabled */
 	if (IPACM_Iface::ipacmcfg->ipacm_emesh_enable && IPACM_Iface::ipacmcfg->ipacm_emesh_mode >= 2) {
 		update_svap_state();
@@ -1654,10 +1635,10 @@ end:
 		{
 			IPACMDBG_H("Received IPA_LAN_CLIENT_CONNECT_EVENT wlan\n");
 
-			for (int i = 0; i < IPA_MAX_NUM_HW_PATH_CLIENTS; i++)
+			for (int i = 0; i < IPA_MAX_NUM_HW_PATH_CLIENTS_V2; i++)
 			{
-				if (memcmp(IPACM_Wlan::active_lan_client_index[i].mac, data->mac_addr, IPA_MAC_ADDR_SIZE) == 0 &&
-						IPACM_Wlan::active_lan_client_index[i].ipa_if_num == ipa_if_num)
+				if (memcmp(IPACM_Iface::ipacmcfg->active_lan_client_index[i].mac, data->mac_addr, IPA_MAC_ADDR_SIZE) == 0 &&
+						IPACM_Iface::ipacmcfg->active_lan_client_index[i].ipa_if_num == ipa_if_num)
 				{
 					IPACMDBG_H("MAC %02x:%02x:%02x:%02x:%02x:%02x has been received already, goto handle_stats\n",
 						data->mac_addr[0], data->mac_addr[1], data->mac_addr[2],
@@ -1667,14 +1648,14 @@ end:
 			}
 
 			/* Check if we can add this to the active list. */
-			/* Active List:- Clients for which index is less than IPA_MAX_NUM_HW_PATH_CLIENTS. */
+			/* Active List:- Clients for which index is less than IPA_MAX_NUM_HW_PATH_CLIENTS_V2. */
 			if (get_free_active_lan_stats_index(data->mac_addr, ipa_if_num) == -1)
 			{
 				IPACMDBG_H("Failed to reserve active lan_stats index, try inactive list. \n");
-				for (int i = 0; i < IPA_MAX_NUM_HW_PATH_CLIENTS; i++)
+				for (int i = 0; i < IPA_MAX_NUM_HW_PATH_CLIENTS_V2; i++)
 				{
-					if (memcmp(IPACM_Wlan::inactive_lan_client_index[i].mac, data->mac_addr, IPA_MAC_ADDR_SIZE) == 0
-						&& IPACM_Wlan::inactive_lan_client_index[i].ipa_if_num == ipa_if_num)
+					if (memcmp(IPACM_Iface::ipacmcfg->inactive_lan_client_index[i].mac, data->mac_addr, IPA_MAC_ADDR_SIZE) == 0
+						&& IPACM_Iface::ipacmcfg->inactive_lan_client_index[i].ipa_if_num == ipa_if_num)
 					{
 						IPACMDBG_H("MAC %02x:%02x:%02x:%02x:%02x:%02x has been received already, return\n",
 							data->mac_addr[0], data->mac_addr[1], data->mac_addr[2],
@@ -2540,9 +2521,9 @@ int IPACM_Wlan::handle_wlan_client_init_ex(ipacm_event_data_wlan_ex *data, bool 
 	struct wan_ioctl_lan_client_info_v2 *client_info;
 	int cnt_idx;
 #endif
-	int max_clients = IPA_MAX_NUM_WIFI_CLIENTS;
+	int max_clients = (IPACM_Iface::ipacmcfg->ipacm_lan_stats_enable) ? IPA_MAX_NUM_HW_PATH_CLIENTS_V2: IPA_MAX_NUM_WIFI_CLIENTS;
 	uint16_t ta_peer_id = 0;
-
+	IPACMDBG_H("WLAN max_clients support %d\n", max_clients);
 	/* start of adding header */
 	IPACMDBG_H("Wifi client number for this iface: %d & total number of wlan clients: %d\n",
                  num_wifi_client,IPACM_Wlan::total_num_wifi_clients);
@@ -5922,13 +5903,11 @@ int IPACM_Wlan::handle_lan_client_connect(uint8_t *mac_addr)
 		client_info->client_idx = get_client_memptr(wlan_client, wlan_index)->lan_stats_idx;
 		client_info->ul_src_pipe = (enum ipa_client_type) IPA_CLIENT_MAX;
 		client_info->hdr_len = hdr_len;
+		IPACMDBG_H("client_info->client_idx :%d \n", client_info->client_idx);
+		IPACMDBG_H("client_info->ul_src_pipe :%d \n", client_info->ul_src_pipe);
+		IPACMDBG_H("client_info->hdr_len :%d \n", client_info->hdr_len);
+		IPACMDBG_H("client_info->device_type :%d \n", client_info->device_type);
 #ifdef IPA_HW_FNR_STATS
-		IPACMERR("Client counter index (%d) ul/ul = (%d/%d) dl/dl = (%d/%d)\n",
-			get_client_memptr(wlan_client, wlan_index)->index_populated,
-			client_info->wan_cnt_idx,
-			get_client_memptr(wlan_client, wlan_index)->ul_cnt_idx,
-			client_info->wan_cnt_idx,
-			get_client_memptr(wlan_client, wlan_index)->dl_cnt_idx);
 		if (IPACM_Wan::ipacmcfg->hw_fnr_stats_support && !get_client_memptr(wlan_client, wlan_index)->index_populated) {
 			pthread_mutex_lock(&IPACM_Wan::ipacmcfg->cnt_idx_lock);
 			cnt_idx = IPACM_Wan::ipacmcfg->get_free_cnt_idx();
@@ -5941,22 +5920,23 @@ int IPACM_Wlan::handle_lan_client_connect(uint8_t *mac_addr)
 			}
 			client_info->wan_cnt_idx = cnt_idx;
 			client_info->lan_cnt_idx = cnt_idx + 1;
+			IPACMDBG("Client got Free index: wan_cnt_idx %d, lan_cnt_idx %d\n", client_info->wan_cnt_idx, client_info->lan_cnt_idx);
 			/* maintain a copy of this in IPACM_Config so that we can use it later if requried */
 			get_client_memptr(wlan_client, wlan_index)->dl_cnt_idx = client_info->wan_cnt_idx;
 			get_client_memptr(wlan_client, wlan_index)->ul_cnt_idx = client_info->wan_cnt_idx;
 			get_client_memptr(wlan_client, wlan_index)->index_populated = true;
-			IPACMDBG_H("Got lan connect event. UL/DL indices set %u, %u wan_cnt_idx: %u lan_cnt_idx: %u\n",
+			IPACMDBG_H("Got lan connect event. WAN UL/DL indices %u, %u\n",
 				get_client_memptr(wlan_client, wlan_index)->ul_cnt_idx,
-				get_client_memptr(wlan_client, wlan_index)->dl_cnt_idx,
-				client_info->wan_cnt_idx,
-				client_info->lan_cnt_idx);
+				get_client_memptr(wlan_client, wlan_index)->dl_cnt_idx);
 			/* Store this in the client specific strcuture */
 			if(IPACM_Iface::ipacmcfg->ipacm_lan2lan_stats_enable == true)
 			{
 				get_client_memptr(wlan_client, wlan_index)->l2l_dl_cnt_idx = client_info->lan_cnt_idx;
 				get_client_memptr(wlan_client, wlan_index)->l2l_ul_cnt_idx = client_info->lan_cnt_idx;
 				get_client_memptr(wlan_client, wlan_index)->l2l_index_populated = true;
-				IPACMDBG_H("(ipacm_lan2lan_stats_enable) Got lan connect event. WAN/LAN UL/DL indices set %u, %u\n", client_info->wan_cnt_idx, client_info->lan_cnt_idx);
+				IPACMDBG_H("(ipacm_lan2lan_stats_enable) Got lan connect event. LAN2LAN UL/DL indices %u, %u\n",
+					get_client_memptr(wlan_client, wlan_index)->l2l_ul_cnt_idx,
+					get_client_memptr(wlan_client, wlan_index)->l2l_dl_cnt_idx);
 			}
 		}
 #endif //IPA_HW_FNR_STATS
@@ -11406,7 +11386,7 @@ int IPACM_Wlan::handle_wlan_vlan_neighbor(ipacm_event_new_neigh_vlan *param) {
 				if (!IPACM_Wan::isWan_active_with_prefix(new_neigh_data->data_all.ipv6_addr) &&
 					!(IPACM_Iface::ipacmcfg->ipv6_nat_enable && is_unique_local_ipv6_addr(data->ipv6_addr)))
 				{
-					if (neigh_cache.size() < 2*IPA_MAX_NUM_HW_PATH_CLIENTS)
+					if (neigh_cache.size() < 2*IPA_MAX_NUM_HW_PATH_CLIENTS_V2)
 					{
 						for (it = neigh_cache.begin(); it != neigh_cache.end(); ++it)
 						{

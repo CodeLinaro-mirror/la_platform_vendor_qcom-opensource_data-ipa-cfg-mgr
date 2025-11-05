@@ -207,7 +207,10 @@ const char *ipacm_event_name[] = {
 	__stringify(IPA_WAN_GW_ADDR_ADD_EVENT),                /* ipacm_event_data_addr */
 	__stringify(IPACM_EVENT_MAX)
 };
-
+#ifdef FEATURE_IPACM_PER_CLIENT_STATS
+	IPACM_Config::ipa_lan_client_idx IPACM_Config::active_lan_client_index[IPA_MAX_NUM_HW_PATH_CLIENTS_V2];
+	IPACM_Config::ipa_lan_client_idx IPACM_Config::inactive_lan_client_index[IPA_MAX_NUM_HW_PATH_CLIENTS_V2];
+#endif
 IPACM_Config::IPACM_Config()
 {
 	iface_table = NULL;
@@ -380,7 +383,7 @@ int IPACM_Config::get_free_cnt_idx(void)
 {
 	int i;
 
-	for (i=0; i < IPA_MAX_FLT_RT_CLIENTS; i++) {
+	for (i=0; i < IPA_MAX_FLT_RT_CLIENTS_V2; i++) {
 		if (cnt_idx[i].in_use ==  false) {
 			cnt_idx[i].in_use = true;
 			/* reset the counter index and counter index + 1 before sending it to client */
@@ -453,13 +456,13 @@ int IPACM_Config::reset_cnt_idx(int index, bool reset_all)
 	int i;
 
 	if (reset_all) {
-		for (i = 0; i < IPA_MAX_FLT_RT_CLIENTS; i++)
+		for (i = 0; i < IPA_MAX_FLT_RT_CLIENTS_V2; i++)
 			cnt_idx[i].in_use = false;
 		ipacm_reset_hw_fnr_counters(fnr_counters.hw_counter.start_id,
 			fnr_counters.hw_counter.start_id +
 				fnr_counters.hw_counter.num_counters - 1);
 	}else {
-		for (i = 0; i <  IPA_MAX_FLT_RT_CLIENTS; i++) {
+		for (i = 0; i <  IPA_MAX_FLT_RT_CLIENTS_V2; i++) {
 			if (cnt_idx[i].counter_index == index &&
 				cnt_idx[i].in_use) {
 				cnt_idx[i].in_use = false;
@@ -482,7 +485,7 @@ int IPACM_Config::ipacm_alloc_fnr_counters(struct ipa_ioc_flt_rt_counter_alloc *
 		return IPACM_FAILURE;
 	}
 
-	fnr_counters->hw_counter.num_counters = IPA_MAX_FLT_RT_CLIENTS * 2;
+	fnr_counters->hw_counter.num_counters = IPA_MAX_FLT_RT_CLIENTS_V2 * 2;
 	fnr_counters->hw_counter.allow_less = false;
 
 	IPACMDBG_H("Allocating %d counters, with start id %d\n", fnr_counters->hw_counter.num_counters,
@@ -511,7 +514,7 @@ int IPACM_Config::ipacm_alloc_fnr_counters(struct ipa_ioc_flt_rt_counter_alloc *
 			ret = IPACM_FAILURE;
 			goto bail;
 	}
-	for (i = 0; i < IPA_MAX_FLT_RT_CLIENTS; i++) {
+	for (i = 0; i < IPA_MAX_FLT_RT_CLIENTS_V2; i++) {
 		if (counter_idx > (fnr_counters->hw_counter.start_id + fnr_counters->hw_counter.num_counters)) {
 			IPACMERR("Counter index not in range. Invalid start id %u, requested counters = %u\n",
 				fnr_counters->hw_counter.start_id, fnr_counters->hw_counter.num_counters);
@@ -866,6 +869,23 @@ skip_fnr_alloc:
 
 	inter_bridge_lantolan_config_enable = cfg->inter_bridge_lantolan_config_enable;
 	IPACMDBG_H("inter_bridge_lantolan_config_enable: %d\n", inter_bridge_lantolan_config_enable);
+
+	/* max num support in HW path for lan stats Clients */
+	IPACMDBG_H("ipacm_max_stats_clients v2: %d\n", IPA_MAX_NUM_HW_PATH_CLIENTS_V2);
+	static bool lan_stats_inited = false;
+#ifdef FEATURE_IPACM_PER_CLIENT_STATS
+	if (lan_stats_inited == false)
+	{
+		for (i = 0; i < IPA_MAX_NUM_HW_PATH_CLIENTS_V2; i++)
+		{
+			active_lan_client_index[i].lan_stats_idx = -1;
+			memset(active_lan_client_index[i].mac, 0, IPA_MAC_ADDR_SIZE);
+			inactive_lan_client_index[i].lan_stats_idx = -1;
+			memset(inactive_lan_client_index[i].mac, 0, IPA_MAC_ADDR_SIZE);
+		}
+		lan_stats_inited = true;
+	}
+#endif
 
 	eth_wan_br_wan_enable = false;
 	IPACMDBG_H("eth_wan_br_wan_enable: %d\n", eth_wan_br_wan_enable);

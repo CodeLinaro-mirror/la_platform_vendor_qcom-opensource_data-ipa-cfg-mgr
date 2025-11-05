@@ -481,14 +481,28 @@ public:
 	pthread_mutex_t get_vlan_association_lock;
 
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
+	/* store each lan client index along with MAC. */
+	typedef struct ipa_lan_client_idx
+	{
+		int8_t lan_stats_idx;
+		uint8_t mac[IPA_MAC_ADDR_SIZE];
+		/* IPACM interface id */
+		int ipa_if_num;
+	} ipa_lan_client_idx;
+
 	bool ipacm_lan_stats_enable;
 	bool ipacm_lan_stats_enable_set;
 	bool ipacm_lan2lan_stats_enable;
 	bool ipacm_lan2lan_stats_enable_set;
+	/* Clients which take HW path/ stats V2. */
+	bool lan_stats_inited;
+	static ipa_lan_client_idx active_lan_client_index[IPA_MAX_NUM_HW_PATH_CLIENTS_V2];
+	/* Clients which take SW path. This will be used as a place holder to move clients back to HW path. */
+	static ipa_lan_client_idx inactive_lan_client_index[IPA_MAX_NUM_HW_PATH_CLIENTS_V2];
 #ifdef IPA_HW_FNR_STATS
 	struct ipa_ioc_flt_rt_counter_alloc fnr_counters;
 	/* Setting an index to 1 would mean that it is under use and 0, unused*/
-	struct cnt_idx cnt_idx[IPA_MAX_FLT_RT_CLIENTS];
+	struct cnt_idx cnt_idx[IPA_MAX_FLT_RT_CLIENTS_V2];
 	pthread_mutex_t cnt_idx_lock;
 	bool hw_fnr_stats_support;
 #endif //IPA_HW_FNR_STATS

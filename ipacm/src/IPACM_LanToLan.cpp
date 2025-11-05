@@ -139,7 +139,7 @@ IPACM_LanToLan_Iface::IPACM_LanToLan_Iface(IPACM_Lan *p_iface)
 		if(IPACM_Iface::ipacmcfg->inter_bridge_lantolan_config_enable == false)
 			m_support_intra_iface_offload = true;
 
-		max_num_clients = MAX_NUM_CLIENT;
+		max_num_clients = (IPACM_Iface::ipacmcfg->ipacm_lan2lan_stats_enable) ? IPA_MAX_NUM_HW_PATH_CLIENTS_V2 : MAX_NUM_CLIENT;
 		m_is_sIface = ((IPACM_Lan *)p_iface)->sIface;
 
 		if (is_spcl_iface()) {
@@ -148,7 +148,7 @@ IPACM_LanToLan_Iface::IPACM_LanToLan_Iface(IPACM_Lan *p_iface)
 	}
 	else
 	{
-		max_num_clients = MAX_NUM_CLIENT;
+		max_num_clients = (IPACM_Iface::ipacmcfg->ipacm_lan2lan_stats_enable) ? IPA_MAX_NUM_HW_PATH_CLIENTS_V2 : MAX_NUM_CLIENT;
 	}
 	if (true == m_support_intra_iface_offload && IPACM_Iface::ipacmcfg->inter_bridge_lantolan_config_enable == false) {
 		m_intra_interface_info.is_vlan_peer = false;
@@ -291,7 +291,7 @@ void IPACM_LanToLan::handle_iface_up(ipacm_event_eth_bridge *data)
 	bool has_l2tp_iface = false;
 #ifdef FEATURE_VLAN_MPDN
 	bool IsVlan = (IPACM_Iface::ipacmcfg->ipacm_mpdn_enable &&
-		IPACM_Iface::ipacmcfg->iface_in_vlan_mode(data->p_iface->dev_name));
+		IPACM_Iface::ipacmcfg->iface_in_vlan_mode_v2(data->p_iface->dev_name));
 	uint16_t Ids[IPA_MAX_NUM_OFFLOAD_VLANS];
 #endif
 
@@ -984,7 +984,7 @@ void IPACM_LanToLan::handle_vlan_id_add(ipacm_event_eth_bridge *data)
 			IPACMDBG("iface %s physical iface %s is found\n",
 				data->iface_name,
 				it->get_iface_pointer()->dev_name);
-			if(!IPACM_Iface::ipacmcfg->iface_in_vlan_mode(it->get_iface_pointer()->dev_name))
+			if(!IPACM_Iface::ipacmcfg->iface_in_vlan_mode_v2(it->get_iface_pointer()->dev_name))
 			{
 				IPACMERR("mismatch, iface not in vlan mode!\n");
 				return;
@@ -1018,7 +1018,7 @@ void IPACM_LanToLan::handle_vlan_id_del(ipacm_event_eth_bridge *data)
 		if(strstr(data->iface_name, it_to_del->get_iface_pointer()->dev_name))
 		{
 			IPACMDBG_H("found physical iface %s for vlan iface %s\n", it_to_del->get_iface_pointer()->dev_name, data->iface_name);
-			if(!IPACM_Iface::ipacmcfg->iface_in_vlan_mode(it_to_del->get_iface_pointer()->dev_name))
+			if(!IPACM_Iface::ipacmcfg->iface_in_vlan_mode_v2(it_to_del->get_iface_pointer()->dev_name))
 			{
 				IPACMERR("mismatch, iface not in vlan mode!\n");
 				return;
@@ -1687,7 +1687,7 @@ void IPACM_LanToLan_Iface::add_client_rt_rule(peer_iface_info *peer_info, client
 				client->mac_addr[0], client->mac_addr[1], client->mac_addr[2],
 				client->mac_addr[3], client->mac_addr[4], client->mac_addr[5]);
 			(del_it->second)--;
-			IPACMDBG_H("reduce to %d", del_it->second);
+			IPACMDBG_H("reduce to %d\n", del_it->second);
 			if(del_it->second)
 			{
 				IPACMDBG_H("ref count still positive, don't delete rt rules\n");
@@ -1950,10 +1950,10 @@ void IPACM_LanToLan_Iface::add_inter_interface_client_flt_rule_v2( IPACM_LanToLa
 		this->get_iface_pointer()->dev_name);
 
 		IPACMDBG_H("Get bridge info for this %s and new_iface %s \n", this->get_iface_pointer()->dev_name, new_iface->get_iface_pointer()->dev_name);
-		IPACMDBG_H("m_is_vlan %d, new_iface in vlan mode %d \n", m_is_vlan, IPACM_Iface::ipacmcfg->iface_in_vlan_mode(new_iface->get_iface_pointer()->dev_name));
+		IPACMDBG_H("m_is_vlan %d, new_iface in vlan mode %d \n", m_is_vlan, IPACM_Iface::ipacmcfg->iface_in_vlan_mode_v2(new_iface->get_iface_pointer()->dev_name));
 
 		/* if this is non-vlan and new_iface is vlan then enable inter_bridge */
-		if(!this->m_is_vlan && IPACM_Iface::ipacmcfg->iface_in_vlan_mode(new_iface->get_iface_pointer()->dev_name))
+		if(!this->m_is_vlan && IPACM_Iface::ipacmcfg->iface_in_vlan_mode_v2(new_iface->get_iface_pointer()->dev_name))
 		{
 			/* Get bridge info fo this */
 			if (IPACM_Iface::ipacmcfg->get_bridge_info_iface(this->get_iface_pointer()->dev_name, &this_bridge_info) != IPACM_SUCCESS)
@@ -2027,7 +2027,7 @@ void IPACM_LanToLan_Iface::add_inter_interface_client_flt_rule_v2( IPACM_LanToLa
 		}
 
 		/* if this is vlan and new_iface is non-vlan then enable inter_bridge */
-		if(this->m_is_vlan && !IPACM_Iface::ipacmcfg->iface_in_vlan_mode(new_iface->get_iface_pointer()->dev_name))
+		if(this->m_is_vlan && !IPACM_Iface::ipacmcfg->iface_in_vlan_mode_v2(new_iface->get_iface_pointer()->dev_name))
 		{
 			/* Get bridge vids info for this */
 			if(IPACM_Iface::ipacmcfg->get_iface_vlan_ids(this->get_iface_pointer()->dev_name, vIds))
@@ -2105,7 +2105,7 @@ void IPACM_LanToLan_Iface::add_inter_interface_client_flt_rule_v2( IPACM_LanToLa
 		}
 
 		/* if this is vlan and new_iface is vlan then enable inter_bridge */
-		if(this->m_is_vlan && IPACM_Iface::ipacmcfg->iface_in_vlan_mode(new_iface->get_iface_pointer()->dev_name))
+		if(this->m_is_vlan && IPACM_Iface::ipacmcfg->iface_in_vlan_mode_v2(new_iface->get_iface_pointer()->dev_name))
 		{
 			/*Get bridge info fo this*/
 			if(IPACM_Iface::ipacmcfg->get_iface_vlan_ids(this->get_iface_pointer()->dev_name, vIds))
@@ -2196,7 +2196,7 @@ void IPACM_LanToLan_Iface::add_inter_interface_client_flt_rule_v2( IPACM_LanToLa
 		}
 
 		/* if this is non-vlan and new_iface is non-vlan then not to enable inter_bridge */
-		if(!this->m_is_vlan && !IPACM_Iface::ipacmcfg->iface_in_vlan_mode(new_iface->get_iface_pointer()->dev_name))
+		if(!this->m_is_vlan && !IPACM_Iface::ipacmcfg->iface_in_vlan_mode_v2(new_iface->get_iface_pointer()->dev_name))
 		{
 			/* Get bridge info for this */
 				if (IPACM_Iface::ipacmcfg->get_bridge_info_iface(this->get_iface_pointer()->dev_name, &this_bridge_info) != IPACM_SUCCESS)
@@ -2768,7 +2768,7 @@ int IPACM_LanToLan_Iface::add_client_flt_rule(peer_iface_info *peer, client_info
 			}
 			it_flt->flt_rule_inter_bridge.push_front(it_intr_brg_flt_rule);
 		}
-		IPACMDBG_H("Lan2Lan_v2: This flt rule for inter_bridge %d, iptype %d flt_rule_hdl %x \n",  inter_bridge, iptype, flt_rule_hdl);
+		IPACMDBG_H("Lan2Lan_v2: This flt rule for inter_bridge %d, iptype %d flt_rule_hdl = %u \n",  inter_bridge, iptype, flt_rule_hdl);
 		IPACMDBG_H("Lan2Lan_v2: This flt rule for m_p_iface %s client->bridge_ipv4 ", m_p_iface->dev_name);
 		iptodot("ip", client->bridge_ipv4);
 		IPACMDBG_H("Lan2Lan_v2: This flt rule for m_p_iface %s client->subnet_mask ", m_p_iface->dev_name);
@@ -3004,7 +3004,7 @@ void IPACM_LanToLan_Iface::del_client_rt_rule(peer_iface_info *peer, client_info
 				client->mac_addr[0], client->mac_addr[1], client->mac_addr[2],
 				client->mac_addr[3], client->mac_addr[4], client->mac_addr[5]);
 			(it->second)--;
-			IPACMDBG_H("reduce to %d", it->second);
+			IPACMDBG_H("reduce to %d\n", it->second);
 			if(it->second)
 			{
 				IPACMDBG_H("ref count still positive, don't delete rt rules\n");
@@ -3887,9 +3887,13 @@ void IPACM_LanToLan_Iface::handle_client_add(uint8_t *mac, char *iface_name, boo
 							IPACMDBG_H("Lan2Lan_v2_IPA_IP_v6: vlan_id %d prefix Queried and Copied to it_client.\n", vlan_id);
 							rt_tbl.ip = IPA_IP_v6;
 							memcpy(rt_tbl.name, self.rt_tbl_name_for_flt[rt_tbl.ip], sizeof(rt_tbl.name));
-							if(IPACM_Iface::m_routing.GetRoutingTable(&rt_tbl) == false)
+							if (IPACM_Iface::m_routing.GetRoutingTable(&rt_tbl) == false)
 							{
-								m_p_iface->add_dummy_routing_rule_lan2lan(rt_tbl.name,rt_tbl.ip);
+								if (IPACM_Iface::ipacmcfg->rt_tbl_inter_l2l_v6_set == false)
+								{
+									m_p_iface->add_dummy_routing_rule_lan2lan(rt_tbl.name, rt_tbl.ip);
+									IPACM_Iface::ipacmcfg->rt_tbl_inter_l2l_v6_set = true;
+								}
 							}
 							IPACMDBG_H("Lan2Lan_v2_IPA_IP_v6:  For Intra bridge offload (v6) flt rule. m_is_vlan %d \n", m_is_vlan);
 							ret = add_client_flt_rule(&self, &(*it_client), IPA_IP_v6);
@@ -3946,7 +3950,7 @@ void IPACM_LanToLan_Iface::handle_client_add(uint8_t *mac, char *iface_name, boo
 									}
 								}
 								/* if this is vlan and peer is non vlan then enable inter_bridge */
-								if(this->m_is_vlan && !IPACM_Iface::ipacmcfg->iface_in_vlan_mode(it_peer_info->peer->get_iface_pointer()->dev_name))
+								if(this->m_is_vlan && !IPACM_Iface::ipacmcfg->iface_in_vlan_mode_v2(it_peer_info->peer->get_iface_pointer()->dev_name))
 								{
 									IPACMDBG_H("Lan2Lan_v2_IPA_IP_v6 :if this is vlan and peer is non vlan then enable inter_bridge\n");
 									/* Get prefix info for this and peer iface */
@@ -3960,7 +3964,7 @@ void IPACM_LanToLan_Iface::handle_client_add(uint8_t *mac, char *iface_name, boo
 										IPACMDBG_H("This has prefix 0x[%X][%X] for vlan id %d\n", this_ipv6_prefix_vlanid[0], this_ipv6_prefix_vlanid[1], vlan_id);
 										memcpy(it_client->ipv6_prefix, this_ipv6_prefix_vlanid, sizeof(it_client->ipv6_prefix));
 									}
-									if(!IPACM_Iface::ipacmcfg->iface_in_vlan_mode(it_peer_info->peer->get_iface_pointer()->dev_name))
+									if(!IPACM_Iface::ipacmcfg->iface_in_vlan_mode_v2(it_peer_info->peer->get_iface_pointer()->dev_name))
 									{
 										vlan_id = 0;
 										if(IPACM_Wan::GetV6PrefixByVid(vlan_id, peer_ipv6_prefix_vlanid))
@@ -4010,7 +4014,7 @@ void IPACM_LanToLan_Iface::handle_client_add(uint8_t *mac, char *iface_name, boo
 								}
 
 								/* if this is non-vlan and peer is vlan then enable inter_bridge */
-								if(!this->m_is_vlan && IPACM_Iface::ipacmcfg->iface_in_vlan_mode(it_peer_info->peer->get_iface_pointer()->dev_name))
+								if(!this->m_is_vlan && IPACM_Iface::ipacmcfg->iface_in_vlan_mode_v2(it_peer_info->peer->get_iface_pointer()->dev_name))
 								{
 									IPACMDBG_H("Lan2Lan_v2_IPA_IP_v6 :if this is non-vlan and peer is vlan then enable inter_bridge\n");
 									/* Get prefix info for this and peer iface */
@@ -4072,7 +4076,7 @@ void IPACM_LanToLan_Iface::handle_client_add(uint8_t *mac, char *iface_name, boo
 								}
 
 								/* if this is vlan and peer is vlan then enable inter_bridge */
-								if(this->m_is_vlan && IPACM_Iface::ipacmcfg->iface_in_vlan_mode(it_peer_info->peer->get_iface_pointer()->dev_name))
+								if(this->m_is_vlan && IPACM_Iface::ipacmcfg->iface_in_vlan_mode_v2(it_peer_info->peer->get_iface_pointer()->dev_name))
 								{
 									IPACMDBG_H("Lan2Lan_v2_IPA_IP_v6 :if this is vlan and peer is vlan then enable inter_bridge\n");
 									/* Get prefix info for this and peer iface */
@@ -4135,7 +4139,7 @@ void IPACM_LanToLan_Iface::handle_client_add(uint8_t *mac, char *iface_name, boo
 								}
 
 								/* if this is non-vlan and peer is non-vlan then not to enable inter_bridge */
-								if(!this->m_is_vlan && !IPACM_Iface::ipacmcfg->iface_in_vlan_mode(it_peer_info->peer->get_iface_pointer()->dev_name))
+								if(!this->m_is_vlan && !IPACM_Iface::ipacmcfg->iface_in_vlan_mode_v2(it_peer_info->peer->get_iface_pointer()->dev_name))
 								{
 									IPACMDBG_H("Lan2Lan_v2_IPA_IP_v6 :Both are on Same bridge : No Need of Inter bridge flt rule. for both nonvlan/non-vlan \n");
 								}
@@ -4312,7 +4316,11 @@ void IPACM_LanToLan_Iface::handle_client_add(uint8_t *mac, char *iface_name, boo
 				}
 				if(IPACM_Iface::m_routing.GetRoutingTable(&rt_tbl) == false)
 				{
-					m_p_iface->add_dummy_routing_rule_lan2lan(rt_tbl.name, rt_tbl.ip);
+					if (IPACM_Iface::ipacmcfg->rt_tbl_inter_l2l_v4_set == false)
+					{
+						m_p_iface->add_dummy_routing_rule_lan2lan(rt_tbl.name, rt_tbl.ip);
+						IPACM_Iface::ipacmcfg->rt_tbl_inter_l2l_v4_set = true;
+					}
 				}
 				IPACMDBG_H(" For Intra bridge offload v4 flt rule. m_is_vlan %d \n", m_is_vlan);
 				ret = add_client_flt_rule(&self, &front_client, IPA_IP_v4);
@@ -4370,7 +4378,7 @@ void IPACM_LanToLan_Iface::handle_client_add(uint8_t *mac, char *iface_name, boo
 						}
 					}
 					/* if this is vlan and peer is non vlan then enable inter_bridge */
-					if(this->m_is_vlan && !IPACM_Iface::ipacmcfg->iface_in_vlan_mode(it_peer_info->peer->get_iface_pointer()->dev_name))
+					if(this->m_is_vlan && !IPACM_Iface::ipacmcfg->iface_in_vlan_mode_v2(it_peer_info->peer->get_iface_pointer()->dev_name))
 					{
 						IPACMDBG_H("if this is vlan and peer is non vlan then enable inter_bridge\n");
 						/* Get bridge info for peer iface */
@@ -4428,7 +4436,7 @@ void IPACM_LanToLan_Iface::handle_client_add(uint8_t *mac, char *iface_name, boo
 					}
 
 					/* if this is non-vlan and peer is vlan then enable inter_bridge */
-					if(!this->m_is_vlan && IPACM_Iface::ipacmcfg->iface_in_vlan_mode(it_peer_info->peer->get_iface_pointer()->dev_name))
+					if(!this->m_is_vlan && IPACM_Iface::ipacmcfg->iface_in_vlan_mode_v2(it_peer_info->peer->get_iface_pointer()->dev_name))
 					{
 						IPACMDBG_H("if this is non-vlan and peer is vlan then enable inter_bridge\n");
 						/* Get bridge info for peer iface */
@@ -4497,7 +4505,7 @@ void IPACM_LanToLan_Iface::handle_client_add(uint8_t *mac, char *iface_name, boo
 					}
 
 					/* if this is vlan and peer is vlan then enable inter_bridge */
-					if(this->m_is_vlan && IPACM_Iface::ipacmcfg->iface_in_vlan_mode(it_peer_info->peer->get_iface_pointer()->dev_name))
+					if(this->m_is_vlan && IPACM_Iface::ipacmcfg->iface_in_vlan_mode_v2(it_peer_info->peer->get_iface_pointer()->dev_name))
 					{
 						IPACMDBG_H("if this is vlan and peer is vlan then enable inter_bridge\n");
 						/* Get bridge info for peer iface */
@@ -4571,7 +4579,7 @@ void IPACM_LanToLan_Iface::handle_client_add(uint8_t *mac, char *iface_name, boo
 					}
 
 					/* if this is non-vlan and peer is non-vlan then not to enable inter_bridge */
-					if(!this->m_is_vlan && !IPACM_Iface::ipacmcfg->iface_in_vlan_mode(it_peer_info->peer->get_iface_pointer()->dev_name))
+					if(!this->m_is_vlan && !IPACM_Iface::ipacmcfg->iface_in_vlan_mode_v2(it_peer_info->peer->get_iface_pointer()->dev_name))
 					{
 						IPACMDBG_H("Both are on Same bridge : No Need of Inter bridge flt rule. \n");
 					}
@@ -4612,7 +4620,11 @@ void IPACM_LanToLan_Iface::handle_client_add(uint8_t *mac, char *iface_name, boo
 
 				if(IPACM_Iface::m_routing.GetRoutingTable(&rt_tbl) == false)
 				{
-					m_p_iface->add_dummy_routing_rule_lan2lan(rt_tbl.name,rt_tbl.ip);
+					if (IPACM_Iface::ipacmcfg->rt_tbl_inter_l2l_v6_set == false)
+					{
+						m_p_iface->add_dummy_routing_rule_lan2lan(rt_tbl.name, rt_tbl.ip);
+						IPACM_Iface::ipacmcfg->rt_tbl_inter_l2l_v6_set = true;
+					}
 				}
 				IPACMDBG_H("Lan2Lan_v2_IPA_IP_v6: For Intra bridge offload (v6) flt rule. m_is_vlan %d \n", m_is_vlan);
 				ret = add_client_flt_rule(&self, &front_client, IPA_IP_v6);
@@ -4667,7 +4679,7 @@ void IPACM_LanToLan_Iface::handle_client_add(uint8_t *mac, char *iface_name, boo
 						}
 					}
 					/* if this is vlan and peer is non vlan then enable inter_bridge */
-					if(this->m_is_vlan && !IPACM_Iface::ipacmcfg->iface_in_vlan_mode(it_peer_info->peer->get_iface_pointer()->dev_name))
+					if(this->m_is_vlan && !IPACM_Iface::ipacmcfg->iface_in_vlan_mode_v2(it_peer_info->peer->get_iface_pointer()->dev_name))
 					{
 						IPACMDBG_H("Lan2Lan_v2_IPA_IP_v6 :if this is vlan and peer is non vlan then enable inter_bridge\n");
 						/* Get prefix info for this and peer iface */
@@ -4680,7 +4692,7 @@ void IPACM_LanToLan_Iface::handle_client_add(uint8_t *mac, char *iface_name, boo
 							}
 							IPACMDBG_H("This has prefix 0x[%X][%X] for vlan id %d\n", this_ipv6_prefix_vlanid[0], this_ipv6_prefix_vlanid[1], vlan_id);
 						}
-						if(!IPACM_Iface::ipacmcfg->iface_in_vlan_mode(it_peer_info->peer->get_iface_pointer()->dev_name))
+						if(!IPACM_Iface::ipacmcfg->iface_in_vlan_mode_v2(it_peer_info->peer->get_iface_pointer()->dev_name))
 						{
 							vlan_id = 0;
 							if(IPACM_Wan::GetV6PrefixByVid(vlan_id, peer_ipv6_prefix_vlanid))
@@ -4733,7 +4745,7 @@ void IPACM_LanToLan_Iface::handle_client_add(uint8_t *mac, char *iface_name, boo
 					}
 
 					/* if this is non-vlan and peer is vlan then enable inter_bridge */
-					if(!this->m_is_vlan && IPACM_Iface::ipacmcfg->iface_in_vlan_mode(it_peer_info->peer->get_iface_pointer()->dev_name))
+					if(!this->m_is_vlan && IPACM_Iface::ipacmcfg->iface_in_vlan_mode_v2(it_peer_info->peer->get_iface_pointer()->dev_name))
 					{
 						IPACMDBG_H("Lan2Lan_v2_IPA_IP_v6 :if this is non-vlan and peer is vlan then enable inter_bridge\n");
 						/* Get prefix info for this and peer iface */
@@ -4801,7 +4813,7 @@ void IPACM_LanToLan_Iface::handle_client_add(uint8_t *mac, char *iface_name, boo
 					}
 
 					/* if this is vlan and peer is vlan then enable inter_bridge */
-					if(this->m_is_vlan && IPACM_Iface::ipacmcfg->iface_in_vlan_mode(it_peer_info->peer->get_iface_pointer()->dev_name))
+					if(this->m_is_vlan && IPACM_Iface::ipacmcfg->iface_in_vlan_mode_v2(it_peer_info->peer->get_iface_pointer()->dev_name))
 					{
 						IPACMDBG_H("Lan2Lan_v2_IPA_IP_v6 :if this is vlan and peer is vlan then enable inter_bridge\n");
 						/* Get prefix info for this and peer iface */
@@ -4870,7 +4882,7 @@ void IPACM_LanToLan_Iface::handle_client_add(uint8_t *mac, char *iface_name, boo
 					}
 
 					/* if this is non-vlan and peer is non-vlan then not to enable inter_bridge */
-					if(!this->m_is_vlan && !IPACM_Iface::ipacmcfg->iface_in_vlan_mode(it_peer_info->peer->get_iface_pointer()->dev_name))
+					if(!this->m_is_vlan && !IPACM_Iface::ipacmcfg->iface_in_vlan_mode_v2(it_peer_info->peer->get_iface_pointer()->dev_name))
 					{
 						IPACMDBG_H("Lan2Lan_v2_IPA_IP_v6 :Both are on Same bridge : No Need of Inter bridge flt rule. for both nonvlan/non-vlan \n");
 					}

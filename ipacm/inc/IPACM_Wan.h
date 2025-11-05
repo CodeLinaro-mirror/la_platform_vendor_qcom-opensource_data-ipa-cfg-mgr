@@ -250,6 +250,7 @@ public:
 		}
 		return false;
 #else
+		IPACMDBG_H("return wan_up %d\n", wan_up);
 		return wan_up;
 #endif
 	}

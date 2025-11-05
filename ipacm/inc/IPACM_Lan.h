@@ -1526,10 +1526,9 @@ private:
 				}
 				if((tx_prop->tx[tx_index].ip == IPA_IP_v4) && get_client_memptr(eth_client, clt_indx)->lan2lan_route_rule_set_v4==true) /* for ipv4 */
 				{
-					IPACMDBG_H("InteBridge Rt rule: Delete client index %d ipv4 RT-rules for tx:%d\n",clt_indx,tx_index);
-					IPACMDBG_H("Had interBridege rt rule with ip 0x%x", get_client_memptr(eth_client, clt_indx)->v4_addr);
 					rt_hdl = get_client_memptr(eth_client, clt_indx)->eth_rt_hdl[tx_index].lan2lan_eth_rt_rule_hdl_v4;
-
+					IPACMDBG_H("InteBridge Rt rule hdl (%u) Delete client index %d ipv4 RT-rules for tx:%d\n", rt_hdl, clt_indx, tx_index);
+					IPACMDBG_H("Had interBridege rt rule with ip 0x%x\n", get_client_memptr(eth_client, clt_indx)->v4_addr);
 					if(m_routing.DeleteRoutingHdl(rt_hdl, IPA_IP_v4) == false)
 					{
 							return IPACM_FAILURE;
@@ -1590,6 +1589,46 @@ private:
 				clt_indx, get_client_memptr(eth_client, clt_indx)->ipv6_set,
 				get_client_memptr(eth_client, clt_indx)->route_rule_set_v6,
 				IPACM_Iface::ipacmcfg->ipa_num_clients_ipv6);
+			if (IPACM_Iface::ipacmcfg->inter_bridge_lantolan_config_enable == true)
+			{
+				IPACMDBG_H("InterBridge : Current %d client has %d ipv6 route_set %d,ipa_num_clients_ipv6:%d\n",
+					clt_indx, get_client_memptr(eth_client, clt_indx)->ipv6_set,
+					get_client_memptr(eth_client, clt_indx)->lan2lan_route_rule_set_v6,
+					IPACM_Iface::ipacmcfg->ipa_num_clients_ipv6);
+				if (!rt_hdl_v6_list[clt_indx].empty())
+				{
+					for (auto it = rt_hdl_v6_list[clt_indx].begin(); it != rt_hdl_v6_list[clt_indx].end(); ++it)
+					{
+						num_v6++;
+						IPACMDBG_H("v6 addr : 0x%08x:%08x:%08x:%08x\n",
+							it->first[0], it->first[1], it->first[2], it->first[3]);
+						for (tx_index = 0; tx_index < iface_query->num_tx_props; tx_index++)
+						{
+							if (tx_prop->tx[tx_index].ip == IPA_IP_v6) /* for ipv6 */
+							{
+								rt_hdl = it->second.hdl_v6[tx_index].rt_rule_hdl_v6_lan2lan;
+
+								if (rt_hdl != 0)
+								{
+									IPACMDBG_H("InterBridge : hdl (%u)Delete client index %d ipv6 rules for %d-st ipv6 for tx:%d\n",
+										rt_hdl, clt_indx, num_v6, tx_index);
+									if (m_routing.DeleteRoutingHdl(rt_hdl, IPA_IP_v6) == false)
+									{
+										return IPACM_FAILURE;
+									}
+									it->second.hdl_v6[tx_index].rt_rule_hdl_v6_lan2lan = 0;
+								}
+							}
+						} /* end of tx loop */
+						it->second.lan2lan_route_rule_set_v6 = false;
+					} /* end of for loop */
+					get_client_memptr(eth_client, clt_indx)->lan2lan_route_rule_set_v6 = 0;
+				}
+				IPACMDBG_H("InterBridge : Current clnt-index:%d ipv6_set= %d, lan2lan_route_rule_set_v6= %d, update ipa_num_clients_ipv6:%d\n",
+					clt_indx, get_client_memptr(eth_client, clt_indx)->ipv6_set,
+					get_client_memptr(eth_client, clt_indx)->lan2lan_route_rule_set_v6,
+					IPACM_Iface::ipacmcfg->ipa_num_clients_ipv6);
+			}
 		}
 		return IPACM_SUCCESS;
 	}

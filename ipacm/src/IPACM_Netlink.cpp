@@ -1447,7 +1447,7 @@ static int ipa_nl_decode_nlmsg
 
 			if(iface_name != NULL)
 			{
-				if(strncmp(iface_name, dev_name, strlen(iface_name)) != 0)
+				if(!strstr(dev_name, iface_name))
 				{
 					IPACMDBG("Skiping this route, since it does not belong to interface %s\n", iface_name);
 					goto fail;

@@ -778,7 +778,7 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 			IPACMDBG_H("Query Getneigh for physical ifaces\n");
 			ipa_nl_query_newneigh(AF_BRIDGE, dev_name);
 			IPACMDBG_H("Query v4 neighbors for %s\n", dev_name);
-			ipa_nl_query_newneigh(AF_INET, "bridge0");
+			ipa_nl_query_newneigh(AF_INET, "bridge");
 		}
 		break;
 #ifdef FEATURE_IPA_ANDROID

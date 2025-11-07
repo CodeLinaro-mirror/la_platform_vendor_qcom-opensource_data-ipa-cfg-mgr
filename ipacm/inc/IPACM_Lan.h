@@ -800,7 +800,7 @@ protected:
 	void HandleNeighIpAddrAddEvt(ipacm_event_data_all *data);
 	virtual void HandleNeighIpAddrDelEvt(int clt_indx);
 
-	int add_mac_flt_blacklist_rule(uint8_t *mac_addr, ipa_ip_type iptype, uint32_t *flt_rule_hdl);
+	int add_mac_flt_blacklist_rule(uint8_t *mac_addr, ipa_ip_type iptype, uint32_t *flt_rule_hdl, uint16_t vlan_id = 0);
 	int del_mac_flt_blacklist_rule(uint32_t flt_rule_hdl, ipa_ip_type iptype);
 
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS

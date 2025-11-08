@@ -14048,6 +14048,12 @@ int IPACM_Wan::handle_ul_qos_route_rule(ipa_ip_type iptype,
 					IPACMERR("QOS param vlan no v6 route rule action from IPA in UL\n");
 				}
 
+				if (qos_param->ip_tup.protocol)
+				{
+					rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_NEXT_HDR;
+					rt_rule_entry->rule.attrib.u.v6.next_hdr = qos_param->ip_tup.protocol;
+				}
+
 				if (qos_param->dscp)
 				{
 					rt_rule_entry->rule.hashable = false;

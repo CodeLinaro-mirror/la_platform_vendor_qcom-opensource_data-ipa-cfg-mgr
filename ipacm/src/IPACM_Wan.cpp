@@ -1976,6 +1976,7 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 			ipa_interface_index = iface_ipa_index_query(data->if_index);
 			ipacm_event_iface_up *wanup_data = NULL;
 			ipacm_cmd_q_data evt_data;
+			uint32_t  ipv4_addr = 0;
 
 			if ( (data->iptype == IPA_IP_v4 && data->ipv4_addr == 0) ||
 					 (data->iptype == IPA_IP_v6 &&
@@ -1983,6 +1984,13 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 					  data->ipv6_addr[2] == 0 && data->ipv6_addr[3] == 0) )
 			{
 				IPACMDBG_H("Invalid address, ignore IPA_ADDR_ADD_EVENT event\n");
+				return;
+			}
+			if ((IPACM_Iface::ipacmcfg->eth_wan_pppoe_enable == false)&&
+					(((data->ipv4_addr&IPV4_ADDR_LINKLOCAL_MASK) == IPV4_ADDR_LINKLOCAL)
+					&& (data->iptype == IPA_IP_v4)))
+			{
+				IPACMDBG("Link local for wan instance is needed for ppoe case to install default rules\n");
 				return;
 			}
 
@@ -1997,7 +2005,12 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 
 					if (data->iptype == IPA_IP_v4)
 					{
+						ipv4_addr = data->ipv4_addr;
 						IPACM_Iface::iface_addr_query(data->if_index, false, &data->ipv4_addr);
+						if ((IPACM_Iface::ipacmcfg->eth_wan_pppoe_enable == false)&& ((data->ipv4_addr&IPV4_ADDR_LINKLOCAL_MASK) == IPV4_ADDR_LINKLOCAL))
+						{
+							data->ipv4_addr = ipv4_addr;
+						}
 
 						IPACMDBG_H("ipv4_addr : 0x%x subnet_mask : 0x%x result: 0x%x xlat_ip : 0x%x\n",
 							data->ipv4_addr, data->ipv4_addr_mask, data->ipv4_addr & data->ipv4_addr_mask, XLAT_IP);
@@ -2104,6 +2117,14 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 				data->ipv6_addr[2] == 0 && data->ipv6_addr[3] == 0) )
 			{
 				IPACMDBG_H("Invalid address, ignore IPA_ADDR_DEL_EVENT event\n");
+				return;
+			}
+
+			if((IPACM_Iface::ipacmcfg->eth_wan_pppoe_enable == false)&&
+					(((data->ipv4_addr&IPV4_ADDR_LINKLOCAL_MASK) == IPV4_ADDR_LINKLOCAL)
+					&& (data->iptype == IPA_IP_v4)))
+			{
+				IPACMDBG("Link local for wan instance is needed for ppoe case to install default rules\n");
 				return;
 			}
 

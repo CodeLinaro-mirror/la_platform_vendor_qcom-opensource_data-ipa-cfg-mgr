@@ -8689,6 +8689,12 @@ int IPACM_Lan::handle_qos_route_rule(uint8_t *client_mac, uint16_t client_vlan_i
 						rt_rule_entry->rule.attrib.dst_port_hi = qos_param->ip_tup.dport_end;
 					}
 
+					if (qos_param->ip_tup.protocol)
+					{
+						rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_NEXT_HDR;
+						rt_rule_entry->rule.attrib.u.v6.next_hdr = qos_param->ip_tup.protocol;
+					}
+
 					if (qos_param->vlan_id)
 					{
 						rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_DST_ADDR;
@@ -9241,6 +9247,12 @@ int IPACM_Lan::handle_qos_route_rule_ext_v2(uint8_t *client_mac,
 						rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_DST_PORT_RANGE;
 						rt_rule_entry->rule.attrib.dst_port_lo = qos_param->ip_tup.dport_start;
 						rt_rule_entry->rule.attrib.dst_port_hi = qos_param->ip_tup.dport_end;
+					}
+
+					if (qos_param->ip_tup.protocol)
+					{
+						rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_NEXT_HDR;
+						rt_rule_entry->rule.attrib.u.v6.next_hdr = qos_param->ip_tup.protocol;
 					}
 
 					if (qos_param->vlan_id)

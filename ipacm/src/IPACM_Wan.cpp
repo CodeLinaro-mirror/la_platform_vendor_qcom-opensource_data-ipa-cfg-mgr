@@ -4406,6 +4406,7 @@ int IPACM_Wan::add_tcp_syn_flt_rule(ipa_ip_type iptype)
 	if(rx_prop == NULL || rx_prop->num_rx_props <= 0)
 	{
 		IPACMERR("No rx property.\n");
+		free(m_pFilteringTable);
 		return IPACM_FAILURE;
 	}
 
@@ -4474,6 +4475,7 @@ int IPACM_Wan::add_dhcp_flt_rule(ipa_ip_type iptype)
 	if(rx_prop == NULL || rx_prop->num_rx_props <= 0)
 	{
 		IPACMERR("No rx property.\n");
+		free(m_pFilteringTable);
 		return IPACM_FAILURE;
 	}
 
@@ -4534,6 +4536,7 @@ int IPACM_Wan::add_icmp_sta_bridge_flt_rule(ipa_ip_type iptype)
 	if(rx_prop == NULL || rx_prop->num_rx_props <= 0)
 	{
 		IPACMERR("No rx property.\n");
+		free(m_pFilteringTable);
 		return IPACM_FAILURE;
 	}
 
@@ -4608,6 +4611,7 @@ int IPACM_Wan::add_sta_bridge_flt_expt_rule()
 	if(rx_prop == NULL || rx_prop->num_rx_props <= 0)
 	{
 		IPACMERR("No rx property.\n");
+		free(m_pFilteringTable);
 		return IPACM_FAILURE;
 	}
 

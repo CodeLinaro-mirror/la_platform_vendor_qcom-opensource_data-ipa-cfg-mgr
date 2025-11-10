@@ -394,8 +394,7 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 				/* find the client */
 				/* Post IPA_LAN_CLIENT_ADD_EVENT to Handle race Condition in RTM_NEWNEIGH on physical iface and ECM_CONNECT */
 
-				if ((neighbor_client[i].ipa_if_num == ipa_interface_index) &&
-						(neighbor_client[i].iface_index == data->if_index))
+				if (neighbor_client[i].ipa_if_num == ipa_interface_index)
 				{
 					IPACMDBG_H("Neighbor if_index: %d, ipa_if_index = %d, name = %s, ip4_addr = 0x%x\n", neighbor_client[i].iface_index,
 							neighbor_client[i].ipa_if_num, neighbor_client[i].iface_name, neighbor_client[i].v4_addr);

@@ -679,7 +679,7 @@ void* IPACM_ConntrackClient::TCPRegisterWithConnTrack(void *)
 	int ret;
 	IPACM_ConntrackClient *pClient;
 	unsigned subscrips = 0;
-	int buf_size = 2097152, recbuff=0, res;
+	int buf_size = 20971520, recbuff=0, res;
 	socklen_t optlen;
 
 	IPACMDBG("\n");
@@ -913,7 +913,7 @@ void* IPACM_ConntrackClient::UDPRegisterWithConnTrack(void *)
 {
 	int ret;
 	IPACM_ConntrackClient *pClient = NULL;
-	int buf_size = 2097152, recbuff=0, res;
+	int buf_size = 20971520, recbuff=0, res;
 	socklen_t optlen;
 
 	IPACMDBG("\n");

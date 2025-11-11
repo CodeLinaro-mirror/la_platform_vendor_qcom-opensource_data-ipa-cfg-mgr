@@ -44,6 +44,7 @@
 #include "IPACM_Log.h"
 
 #define LO_NAME "lo"
+#define IPACM_CONNTRACK_RCVBUF_SIZE (20 * 1024 * 1024)
 
 extern IPACM_EvtDispatcher cm_dis;
 extern void ParseCTMessage(struct nf_conntrack *ct);
@@ -598,7 +599,7 @@ void* IPACM_ConntrackClient::TCPRegisterWithConnTrack(void *)
 	int ret;
 	IPACM_ConntrackClient *pClient;
 	unsigned subscrips = 0;
-	int buf_size = 2097152, recbuff=0, res;
+	int buf_size = IPACM_CONNTRACK_RCVBUF_SIZE, recbuff=0, res;
 	socklen_t optlen;
 
 	IPACMDBG("\n");
@@ -717,7 +718,7 @@ void* IPACM_ConntrackClient::UDPRegisterWithConnTrack(void *)
 {
 	int ret;
 	IPACM_ConntrackClient *pClient = NULL;
-	int buf_size = 2097152, recbuff=0, res;
+	int buf_size = IPACM_CONNTRACK_RCVBUF_SIZE, recbuff=0, res;
 	socklen_t optlen;
 
 	IPACMDBG("\n");

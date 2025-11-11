@@ -1366,9 +1366,16 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 			return;
 		}
 		IPACMDBG_H("Backhaul is sta mode?%d\n", data_wan->is_sta);
+		IPACMDBG_H("IPACM_Wan::isVlanWanUP()?%d\n", IPACM_Wan::isVlanWanUP());
+		IPACMDBG_H("IPACM_Iface::ipacmcfg->iface_in_vlan_mode(dev_name)?%d\n", IPACM_Iface::ipacmcfg->iface_in_vlan_mode(dev_name));
+		IPACMDBG_H("IPACM_Iface::ipacmcfg->iface_in_vlan_mode_v2(dev_name)?%d\n", IPACM_Iface::ipacmcfg->iface_in_vlan_mode_v2(dev_name));
+		IPACMDBG_H("dev_name %s sIface()?%d\n", dev_name, sIface);
+
 #ifdef FEATURE_VLAN_MPDN
-		/* VLAN IFACES don't care about default route */
-		if (IPACM_Iface::ipacmcfg->iface_in_vlan_mode(dev_name) && !sIface &&
+		/* VLAN IFACES don't care about default route
+		 * If interface is VLAN and sIface is DISABLED then dont handle from here
+		 * else in non-vlan and siface case handle here */
+		if (IPACM_Iface::ipacmcfg->iface_in_vlan_mode_v2(dev_name) && !sIface &&
 			(IPACM_Iface::ipacmcfg->ipacm_mpdn_enable == TRUE ||
 			 IPACM_Wan::isVlanWanUP()))
 		{
@@ -1406,13 +1413,20 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 		}
 		/* clean up v6 RT rules*/
 		IPACMDBG_H("Received IPA_WAN_V6_DOWN in LAN-instance and need clean up client IPv6 address \n");
+		IPACMDBG_H("IPACM_Wan::isVlanWanUP_V6()?%d\n", IPACM_Wan::isVlanWanUP_V6());
+		IPACMDBG_H("IPACM_Iface::ipacmcfg->iface_in_vlan_mode(dev_name)?%d\n", IPACM_Iface::ipacmcfg->iface_in_vlan_mode(dev_name));
+		IPACMDBG_H("IPACM_Iface::ipacmcfg->iface_in_vlan_mode_v2(dev_name)?%d\n", IPACM_Iface::ipacmcfg->iface_in_vlan_mode_v2(dev_name));
+		IPACMDBG_H("dev_name %s sIface()?%d\n", dev_name, sIface);
+
 #ifdef FEATURE_VLAN_MPDN
-		/* VLAN IFACES don't care about default route */
-		if(IPACM_Iface::ipacmcfg->iface_in_vlan_mode(dev_name) && !sIface &&
+		/* VLAN IFACES don't care about default route
+		 * If interface is VLAN and sIface is DISABLED then dont handle from here
+		 * else in non-vlan and siface case handle here */
+		if (IPACM_Iface::ipacmcfg->iface_in_vlan_mode_v2(dev_name) && !sIface &&
 			(IPACM_Iface::ipacmcfg->ipacm_mpdn_enable == TRUE ||
-			IPACM_Wan::isVlanWanUP_V6()))
+			 IPACM_Wan::isVlanWanUP_V6()))
 		{
-			IPACMDBG_H("IF %s is vlan IF, ignoring IPA_HANDLE_WAN_DOWN_V6\n", dev_name);
+			IPACMDBG_H("IF %s is vlan IF, ignoring IPA_HANDLE_WAN_DOWN\n", dev_name);
 			return;
 		}
 #endif
@@ -16808,7 +16822,17 @@ int IPACM_Lan::install_uplink_filter_rule_per_client_v2
 			idx = j * 2;
 			IPACMDBG_H("Install rules at idx %d\n", idx);
 		}
-
+		if (sIface && vlan_id && (idx == 0))
+		{
+			IPACMDBG_H("siface install rule at idx 2 vlanid %d skip idx %d \n", vlan_id, idx);
+			continue;
+		}
+		else if (sIface && (vlan_id == 0) && (idx == 2))
+		{
+			IPACMDBG_H("siface install rule at idx 0 for non vlan skip idx %d \n", idx);
+			continue;
+		}
+		IPACMDBG_H("vlan_id %d idx %d\n", vlan_id, idx);
 		index = 0;
 		memset(pFilteringTable, 0, len);
 
@@ -16923,7 +16947,7 @@ int IPACM_Lan::install_uplink_filter_rule_per_client_v2
 				offset_meq_128->offset = -8;
 			}
 #endif
-			else if(rx_prop->rx[0].hdr_l2_type == IPA_HDR_L2_802_1Q)
+			else if(rx_prop->rx[idx].hdr_l2_type == IPA_HDR_L2_802_1Q)
 			{
 				offset_meq_128->offset = -12;
 			}
@@ -18323,7 +18347,8 @@ int IPACM_Lan::handle_lan_client_reset_rt(ipa_ip_type iptype, uint16_t vlan_id)
 	IPACMDBG_H("left %d eth clients need to be deleted \n ", num_eth_client);
 	for (i = 0; i < num_eth_client; i++)
 	{
-		if(iptype == IPA_IP_v6)
+		IPACMDBG_H(" vlan_id %d\n", vlan_id);
+		if(iptype == IPA_IP_v6 && (get_client_memptr(eth_client, i)->vlan_id == vlan_id))
 		{
 			for (auto it = rt_hdl_v6_list[i].begin(); it != rt_hdl_v6_list[i].end();++it)
 			{

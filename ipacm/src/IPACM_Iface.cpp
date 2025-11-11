@@ -556,7 +556,6 @@ void IPACM_Iface::iface_addr_query
 						data_addr->if_index = interface_index;
 						data_addr->ipv4_addr = 	iface_ipv4.s_addr;
 						data_addr->ipv4_addr = ntohl(data_addr->ipv4_addr);
-						data_addr->ipv4_addr = (data_addr->ipv4_addr & ntohl(net_mask->sin_addr.s_addr));
 						data_addr->ipv4_addr_mask = ntohl(net_mask->sin_addr.s_addr);
 						strlcpy(data_addr->iface_name, ifr.ifr_name, sizeof(data_addr->iface_name));
 						IPACMDBG_H("Posting IPA_ADDR_ADD_EVENT with if index:%d, if name:%s, ipv4 addr:0x%x subnet: 0x%x\n",

@@ -90,7 +90,7 @@ char IPACM_Wan::wan_up_dev_name[IF_NAME_LEN];
 bool IPACM_Wan::backhaul_is_sta_mode = false;
 bool IPACM_Wan::is_ext_prop_set = false;
 
-uint32_t IPACM_Wan::wan_route_rule_v6_hdl_a5;
+uint32_t IPACM_Wan::wan_route_rule_v6_hdl_a5 = 0;
 
 int IPACM_Wan::num_ipv4_modem_pdn = 0;
 int IPACM_Wan::num_ipv6_modem_pdn = 0;
@@ -3199,33 +3199,36 @@ int IPACM_Wan::handle_route_add_vlan_pdn_evt(ipa_ip_type iptype, uint16_t vlan_i
 				{
 					rt_rule_entry->rule.dst = tx_prop->tx[tx_index].dst_pipe;
 				}
-				memcpy(&rt_rule_entry->rule.attrib,
-					&tx_prop->tx[tx_index].attrib,
-					sizeof(rt_rule_entry->rule.attrib));
-
-				rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_DST_ADDR;
-				rt_rule_entry->rule.attrib.u.v6.dst_addr[0] = 0;
-				rt_rule_entry->rule.attrib.u.v6.dst_addr[1] = 0;
-				rt_rule_entry->rule.attrib.u.v6.dst_addr[2] = 0;
-				rt_rule_entry->rule.attrib.u.v6.dst_addr[3] = 0;
-				rt_rule_entry->rule.attrib.u.v6.dst_addr_mask[0] = 0;
-				rt_rule_entry->rule.attrib.u.v6.dst_addr_mask[1] = 0;
-				rt_rule_entry->rule.attrib.u.v6.dst_addr_mask[2] = 0;
-				rt_rule_entry->rule.attrib.u.v6.dst_addr_mask[3] = 0;
-#ifdef FEATURE_IPA_V3
-				rt_rule_entry->rule.hashable = true;
-#endif
-				if (false == m_routing.AddRoutingRule(rt_rule))
+				if(!wan_route_rule_v6_hdl[tx_index])
 				{
-					IPACMERR("Routing rule addition failed!\n");
-					ret = IPACM_FAILURE;
-					goto fail;
+					memcpy(&rt_rule_entry->rule.attrib,
+						&tx_prop->tx[tx_index].attrib,
+						sizeof(rt_rule_entry->rule.attrib));
+
+					rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_DST_ADDR;
+					rt_rule_entry->rule.attrib.u.v6.dst_addr[0] = 0;
+					rt_rule_entry->rule.attrib.u.v6.dst_addr[1] = 0;
+					rt_rule_entry->rule.attrib.u.v6.dst_addr[2] = 0;
+					rt_rule_entry->rule.attrib.u.v6.dst_addr[3] = 0;
+					rt_rule_entry->rule.attrib.u.v6.dst_addr_mask[0] = 0;
+					rt_rule_entry->rule.attrib.u.v6.dst_addr_mask[1] = 0;
+					rt_rule_entry->rule.attrib.u.v6.dst_addr_mask[2] = 0;
+					rt_rule_entry->rule.attrib.u.v6.dst_addr_mask[3] = 0;
+	#ifdef FEATURE_IPA_V3
+					rt_rule_entry->rule.hashable = true;
+	#endif
+					if (false == m_routing.AddRoutingRule(rt_rule))
+					{
+						IPACMERR("Routing rule addition failed!\n");
+						ret = IPACM_FAILURE;
+						goto fail;
+					}
+					wan_route_rule_v6_hdl[tx_index] = rt_rule_entry->rt_rule_hdl;
+					IPACM_SYSLOG("Set ipv6 wan-route rule hdl for v6_lan_table:0x%x,tx:%d,ip-type: %d \n",
+							wan_route_rule_v6_hdl[tx_index],
+							tx_index,
+							iptype);
 				}
-				wan_route_rule_v6_hdl[tx_index] = rt_rule_entry->rt_rule_hdl;
-				IPACM_SYSLOG("Set ipv6 wan-route rule hdl for v6_lan_table:0x%x,tx:%d,ip-type: %d \n",
-						wan_route_rule_v6_hdl[tx_index],
-						tx_index,
-						iptype);
 			}
 			/* for STA mode: add firewall rules */
 			del_dft_firewall_rules(IPA_IP_v6, true);
@@ -3278,7 +3281,7 @@ int IPACM_Wan::handle_route_add_vlan_pdn_evt(ipa_ip_type iptype, uint16_t vlan_i
 			{
 				IPACMDBG_H("a v6 PDN is already up, don't create default rt rule\n");
 			}
-			else
+			else if(!wan_route_rule_v6_hdl_a5)
 			{
 				IPACM_SYSLOG("v6 PDN is up, create default rt rule\n");
 				FullConfig = true;
@@ -3425,27 +3428,30 @@ int IPACM_Wan::handle_route_add_vlan_pdn_evt(ipa_ip_type iptype, uint16_t vlan_i
 				{
 					rt_rule_entry->rule.dst = tx_prop->tx[tx_index].dst_pipe;
 				}
-				memcpy(&rt_rule_entry->rule.attrib,
-					&tx_prop->tx[tx_index].attrib,
-					sizeof(rt_rule_entry->rule.attrib));
-
-				rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_DST_ADDR;
-				rt_rule_entry->rule.attrib.u.v4.dst_addr      = 0;
-				rt_rule_entry->rule.attrib.u.v4.dst_addr_mask = 0;
-#ifdef FEATURE_IPA_V3
-				rt_rule_entry->rule.hashable = true;
-#endif
-				if (false == m_routing.AddRoutingRule(rt_rule))
+				if(!wan_route_rule_v4_hdl[tx_index])
 				{
-					IPACMERR("Routing rule addition failed!\n");
-					ret = IPACM_FAILURE;
-					goto fail;
+					memcpy(&rt_rule_entry->rule.attrib,
+						&tx_prop->tx[tx_index].attrib,
+						sizeof(rt_rule_entry->rule.attrib));
+
+					rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_DST_ADDR;
+					rt_rule_entry->rule.attrib.u.v4.dst_addr      = 0;
+					rt_rule_entry->rule.attrib.u.v4.dst_addr_mask = 0;
+#ifdef FEATURE_IPA_V3
+					rt_rule_entry->rule.hashable = true;
+#endif
+					if (false == m_routing.AddRoutingRule(rt_rule))
+					{
+						IPACMERR("Routing rule addition failed!\n");
+						ret = IPACM_FAILURE;
+						goto fail;
+					}
+					wan_route_rule_v4_hdl[tx_index] = rt_rule_entry->rt_rule_hdl;
+					IPACM_SYSLOG("Got ipv4 wan-route rule hdl:0x%x,tx:%d,ip-type: %d \n",
+							wan_route_rule_v4_hdl[tx_index],
+							tx_index,
+							iptype);
 				}
-				wan_route_rule_v4_hdl[tx_index] = rt_rule_entry->rt_rule_hdl;
-				IPACM_SYSLOG("Got ipv4 wan-route rule hdl:0x%x,tx:%d,ip-type: %d \n",
-						wan_route_rule_v4_hdl[tx_index],
-						tx_index,
-						iptype);
 			}
 			/* for STA mode: add firewall rules */
 			del_dft_firewall_rules(IPA_IP_v4, true);
@@ -7519,7 +7525,7 @@ int IPACM_Wan::handle_down_evt(ipa_ip_type arg_ip_type)
 		IPACMDBG_H("Delete default v4 routing rules\n");
 		if (m_routing.DeleteRoutingHdl(dft_rt_rule_hdl[0], IPA_IP_v4) == false)
 		{
-		   IPACMERR("Routing rule deletion failed!\n");
+		   IPACM_SYSLOG("Routing rule deletion failed!\n");
 			res = IPACM_FAILURE;
 			goto fail;
 		}
@@ -7532,7 +7538,7 @@ int IPACM_Wan::handle_down_evt(ipa_ip_type arg_ip_type)
 			HandleSTAClientDelEvt(get_client_memptr(wan_client, i), IPA_IP_v4);
 			if(delete_wan_rtrules(i, IPA_IP_v4))
 			{
-				IPACMERR("unbale to delete wan-client v4 route rules for index %d\n", i);
+				IPACM_SYSLOG("unbale to delete wan-client v4 route rules for index %d\n", i);
 				res = IPACM_FAILURE;
 				goto fail;
 			}
@@ -7544,7 +7550,7 @@ int IPACM_Wan::handle_down_evt(ipa_ip_type arg_ip_type)
 				IPA_IP_v4,
 				IPV4_DEFAULT_FILTERTING_RULES) == false)
 			{
-				IPACMERR("Error Delete Filtering rules, aborting...\n");
+				IPACM_SYSLOG("Error Delete Filtering rules, aborting...\n");
 				res = IPACM_FAILURE;
 				goto fail;
 			}
@@ -7613,7 +7619,7 @@ int IPACM_Wan::handle_down_evt(ipa_ip_type arg_ip_type)
 		{
 			if (m_routing.DeleteRoutingHdl(dft_rt_rule_hdl[MAX_DEFAULT_v4_ROUTE_RULES+i], IPA_IP_v6) == false)
 			{
-				IPACMERR("Routing rule deletion failed!\n");
+				IPACM_SYSLOG("Routing rule deletion failed!\n");
 				res = IPACM_FAILURE;
 				goto fail;
 			}
@@ -7644,7 +7650,7 @@ int IPACM_Wan::handle_down_evt(ipa_ip_type arg_ip_type)
 		HandleSTAClientDelEvt(get_client_memptr(wan_client, i), IPA_IP_v6);
 		if(delete_wan_rtrules(i, IPA_IP_v6))
 		{
-			IPACMERR("unbale to delete wan-client v6 route rules for index %d\n", i);
+			IPACM_SYSLOG("unbale to delete wan-client v6 route rules for index %d\n", i);
 			res = IPACM_FAILURE;
 			goto fail;
 		}
@@ -7657,7 +7663,7 @@ int IPACM_Wan::handle_down_evt(ipa_ip_type arg_ip_type)
 			if (!m_filtering.DeleteFilteringHdls(dft_v6fl_rule_hdl, IPA_IP_v6,
 							m_ipv6_default_filterting_rules_count))
 			{
-				IPACMERR("ErrorDeleting Filtering rule, aborting...\n");
+				IPACM_SYSLOG("ErrorDeleting Filtering rule, aborting...\n");
 				res = IPACM_FAILURE;
 				goto fail;
 			}
@@ -7671,7 +7677,7 @@ int IPACM_Wan::handle_down_evt(ipa_ip_type arg_ip_type)
 			if(m_filtering.DeleteFilteringHdls(ipv6_dest_flt_rule_hdl, IPA_IP_v6,
 								num_ipv6_dest_flt_rule) == false)
 			{
-				IPACMERR("Failed to delete ipv6 dest flt rules.\n");
+				IPACM_SYSLOG("Failed to delete ipv6 dest flt rules.\n");
 				res = IPACM_FAILURE;
 				goto fail;
 			}
@@ -7717,7 +7723,7 @@ if(del_v4 && del_v6)
 	{
 		if(m_header.DeleteHeaderProcCtx(hdr_proc_hdl_dummy_v6) == false)
 		{
-			IPACMERR("Failed to delete hdr_proc_hdl_dummy_v6\n");
+			IPACM_SYSLOG("Failed to delete hdr_proc_hdl_dummy_v6\n");
 			res = IPACM_FAILURE;
 			goto fail;
 		}
@@ -7726,7 +7732,7 @@ if(del_v4 && del_v6)
 	{
 		if(m_header.DeleteHeaderHdl(hdr_hdl_dummy_v6) == false)
 		{
-			IPACMERR("Failed to delete hdr_hdl_dummy_v6\n");
+			IPACM_SYSLOG("Failed to delete hdr_hdl_dummy_v6\n");
 			res = IPACM_FAILURE;
 			goto fail;
 		}

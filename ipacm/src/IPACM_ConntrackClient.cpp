@@ -422,12 +422,6 @@ void IPACM_ConntrackClient::IPA_Conntrack_Filters_Ignore_Ipv6_Addresses(struct n
 	if(config_instance && config_instance->ipv6_nat_enable)
 		return;
 #endif
-	const struct nfct_filter_ipv6 filter_ipv6_private_network_addresses =
-	{
-		{0xfc000000, 0x0, 0x0, 0x0 },
-		{0xfe000000, 0x0, 0x0, 0x0 },
-	};
-	IPA_Conntrack_Filters_Ipv6_Add_Src_Dst_Attr(filter, filter_ipv6_private_network_addresses);
 
 	const struct nfct_filter_ipv6 filter_ipv6_link_local_addresses =
 	{
@@ -435,6 +429,13 @@ void IPACM_ConntrackClient::IPA_Conntrack_Filters_Ignore_Ipv6_Addresses(struct n
 		{0xffc00000, 0x0, 0x0, 0x0},
 	};
 	IPA_Conntrack_Filters_Ipv6_Add_Src_Dst_Attr(filter, filter_ipv6_link_local_addresses);
+
+	const struct nfct_filter_ipv6 filter_ipv6_private_network_addresses =
+	{
+		{0xfc000000, 0x0, 0x0, 0x0 },
+		{0xfe000000, 0x0, 0x0, 0x0 },
+	};
+	IPA_Conntrack_Filters_Ipv6_Add_Src_Dst_Attr(filter, filter_ipv6_private_network_addresses);
 
 	const struct nfct_filter_ipv6 filter_ipv6_site_local_addresses =
 	{
@@ -983,7 +984,8 @@ ctcatch:
 void IPACM_ConntrackClient::UpdateUDPFilters(void *param, bool isWan)
 {
 	static bool isIgnore = false;
-	int ret = 0;
+	static bool isIgnoreBridge = false;
+	int ret = 0, ret_val = -1;
 	IPACM_ConntrackClient *pClient = NULL;
 	int ippt_set = 0;
 
@@ -1006,6 +1008,11 @@ void IPACM_ConntrackClient::UpdateUDPFilters(void *param, bool isWan)
 
 		if(!isIgnore)
 		{
+			IPA_Conntrack_Filters_Ignore_Local_Addrs(pClient->udp_filter);
+			isIgnore = true;
+		}
+		if(!isIgnoreBridge)
+		{
 			for (int i = 0; i < MAX_NUM_IP_PASS_MPDN; i++)
 			{
 				if(IPACM_Iface::ipacmcfg->ip_pass_mpdn_table[i].valid_entry == true)
@@ -1017,10 +1024,13 @@ void IPACM_ConntrackClient::UpdateUDPFilters(void *param, bool isWan)
 			if(!ippt_set)
 			{
 				IPACMDBG_H("IPPT is not set hence proceed for ignoring bridge IP based conntrack\n");
-				IPA_Conntrack_Filters_Ignore_Bridge_Addrs(pClient->udp_filter);
+				ret_val = IPA_Conntrack_Filters_Ignore_Bridge_Addrs(pClient->udp_filter);
 			}
-			IPA_Conntrack_Filters_Ignore_Local_Addrs(pClient->udp_filter);
-			isIgnore = true;
+			if(ret_val == 0)
+			{
+				IPACMDBG_H("Bridge based conntrack negative filtering is applied\n");
+				isIgnoreBridge = true;
+			}
 		}
 	}
 
@@ -1043,7 +1053,8 @@ void IPACM_ConntrackClient::UpdateUDPFilters(void *param, bool isWan)
 void IPACM_ConntrackClient::UpdateTCPFilters(void *param, bool isWan)
 {
 	static bool isIgnore = false;
-	int ret = 0;
+	static bool isIgnoreBridge = false;
+	int ret = 0, ret_val = -1;
 	IPACM_ConntrackClient *pClient = NULL;
 	int ippt_set = 0;
 
@@ -1064,6 +1075,11 @@ void IPACM_ConntrackClient::UpdateTCPFilters(void *param, bool isWan)
 
 		if(!isIgnore)
 		{
+			IPA_Conntrack_Filters_Ignore_Local_Addrs(pClient->tcp_filter);
+			isIgnore = true;
+		}
+		if(!isIgnoreBridge)
+		{
 			for (int i = 0; i < MAX_NUM_IP_PASS_MPDN; i++)
 			{
 				if(IPACM_Iface::ipacmcfg->ip_pass_mpdn_table[i].valid_entry == true)
@@ -1075,10 +1091,13 @@ void IPACM_ConntrackClient::UpdateTCPFilters(void *param, bool isWan)
 			if(!ippt_set)
 			{
 				IPACMDBG_H("IPPT is not set hence proceed for ignoring bridge IP based conntrack\n");
-				IPA_Conntrack_Filters_Ignore_Bridge_Addrs(pClient->tcp_filter);
+				ret_val = IPA_Conntrack_Filters_Ignore_Bridge_Addrs(pClient->tcp_filter);
 			}
-			IPA_Conntrack_Filters_Ignore_Local_Addrs(pClient->tcp_filter);
-			isIgnore = true;
+			if(ret_val == 0)
+			{
+				IPACMDBG_H("Bridge based conntrack negative filtering is applied\n");
+				isIgnoreBridge = true;
+			}
 		}
 	}
 

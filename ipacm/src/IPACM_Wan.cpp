@@ -14364,6 +14364,12 @@ int IPACM_Wan::delete_all_UL_qos_rules(ipa_ip_type iptype)
 
 	for (it_qos_params = IPACM_Iface::ipacmcfg->m_qos_params.begin(); it_qos_params != IPACM_Iface::ipacmcfg->m_qos_params.end(); ++it_qos_params)
 	{
+		if (it_qos_params->dir != IPA_QoS_UL_RULE)
+		{
+			IPACMDBG_H("This is not a UL qos rule, continue to next one..\n");
+			continue;
+		}
+
 		if (it_qos_params->ip_type == iptype)
 		{
 			delete_all_UL_info_from_qos(it_qos_params, iptype);

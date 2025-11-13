@@ -571,6 +571,7 @@ int IPACM_IfaceManager::create_iface_instance(ipacm_ifacemgr_data *param)
 					return IPACM_FAILURE;
 				}
 				IPACM_EvtDispatcher::registr(IPA_ADDR_ADD_EVENT, wl);
+				IPACM_EvtDispatcher::registr(IPA_PREFIX_CHANGE_EVENT, wl);
 #ifdef FEATURE_IPv6CT_DISABLED
 				IPACM_EvtDispatcher::registr(IPA_FIREWALL_CHANGE_EVENT, wl);			// register for Firewall change event
 #endif //FEATURE_IPACM_UL_FIREWALL

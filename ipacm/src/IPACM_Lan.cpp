@@ -16596,14 +16596,6 @@ int IPACM_Lan::modify_ipv6_prefix_flt_rule(bool eogre_enabled)
 			return IPACM_FAILURE;
 		}
 
-		/* not supported for wlan vlan for now */
-		if (ipa_if_cate == WLAN_IF && !is_wlan_if_vlan &&
-					!IPACM_Iface::ipacmcfg->ipacm_static_policy_enable) {
-			IPACMERR("not supported for wlan without vlan in"
-						" non-static policy mode.\n");
-			return IPACM_SUCCESS;
-		}
-
 		if (dft_v6fl_rule_hdl[j][0] == 0 && eogre_enabled == false)
 		{
 			IPACMERR("install v6 default rules first.Prefix + MTU rule will be installed later\n");

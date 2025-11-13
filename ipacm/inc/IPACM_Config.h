@@ -236,6 +236,7 @@ typedef struct {
 struct ipa_prefix_info {
 	uint32_t addr[2];
 	uint16_t vlan_id;
+	bool     is_bridge;
 };
 
 #ifdef FEATURE_IPA_IPSEC
@@ -1476,7 +1477,7 @@ public:
 	}
 
 	/* add to prefixes list if needed and notify LAN objects to modify rules*/
-	inline bool add_vlan_ipv6_prefix(uint32_t *prefix, int ipa_if_num, uint16_t vlan_id)
+	inline bool add_vlan_ipv6_prefix(uint32_t *prefix, int ipa_if_num, uint16_t vlan_id, bool is_bridge = false)
 	{
 		int i = 0;
 		int no_offload_temp = num_no_offload_ipv6_prefix;
@@ -1495,10 +1496,11 @@ public:
 		{
 			if((prefix[0] == ipa_ipv6_prefixes[i].addr[0])
 				&& (prefix[1] == ipa_ipv6_prefixes[i].addr[1])
-				&& (vlan_id == ipa_ipv6_prefixes[i].vlan_id))
+				&& (vlan_id == ipa_ipv6_prefixes[i].vlan_id)
+			    && (is_bridge == ipa_ipv6_prefixes[i].is_bridge))
 			{
-				IPACMDBG_H("prefix 0x[%X][%X] already exists vlan_id inp %d saved %d\n",
-					prefix[0], prefix[1], vlan_id, ipa_ipv6_prefixes[i].vlan_id);
+				IPACMDBG_H("prefix 0x[%X][%X] already exists vlan_id inp %d saved %d\n is_bridge %d",
+					prefix[0], prefix[1], vlan_id, ipa_ipv6_prefixes[i].vlan_id, ipa_ipv6_prefixes[i].is_bridge);
 				return false;
 			}
 		}
@@ -1537,7 +1539,8 @@ public:
 			}
 			else if ((prefix[0] == ipa_ipv6_prefixes[i].addr[0])
 				&& (prefix[1] == ipa_ipv6_prefixes[i].addr[1])
-				&& (ipa_ipv6_prefixes[i].vlan_id ==0)) {
+				&& (ipa_ipv6_prefixes[i].vlan_id ==0)
+				&& (ipa_ipv6_prefixes[i].is_bridge == is_bridge)) {
 				/* Update the vlan id if prefix already saved but vlan id not associated
 				 * e.g Wlan for default pdn reserves a slot with vlan id 0, then eth vlan
 				 * for default pdn associates with vlan id */
@@ -1557,8 +1560,9 @@ public:
 			ipa_ipv6_prefixes[num_ipv6_prefixes].addr[0] = prefix[0];
 			ipa_ipv6_prefixes[num_ipv6_prefixes].addr[1] = prefix[1];
 			ipa_ipv6_prefixes[num_ipv6_prefixes].vlan_id = vlan_id;
+			ipa_ipv6_prefixes[num_ipv6_prefixes].is_bridge = is_bridge;
 			num_ipv6_prefixes++;
-			IPACMDBG("added v6 prefix 0x[%X][%X] for vlan id %d\n", prefix[0], prefix[1], ipa_ipv6_prefixes[i].vlan_id);
+			IPACMDBG("added v6 prefix 0x[%X][%X] for vlan id %d is_bridge: %d\n", prefix[0], prefix[1], ipa_ipv6_prefixes[i].vlan_id, ipa_ipv6_prefixes[i].is_bridge);
 		}
 
 		/* tell other LAN interfaces that we have a change in v6 prefixes */
@@ -1567,7 +1571,7 @@ public:
 	}
 
 	/* remove from prefixes list if needed and notify LAN objects to modify rules*/
-	inline int del_vlan_ipv6_prefix(uint32_t* prefix, int ipa_if_num, bool reserve_slot = false)
+	inline int del_vlan_ipv6_prefix(uint32_t* prefix, int ipa_if_num, bool reserve_slot = false, bool is_bridge = false)
 	{
 		int i = 0;
 
@@ -1581,20 +1585,23 @@ public:
 
 		for(i = 0; i < num_ipv6_prefixes; i++)
 		{
-			if((prefix[0] == ipa_ipv6_prefixes[i].addr[0]) && (prefix[1] == ipa_ipv6_prefixes[i].addr[1]))
+			if((prefix[0] == ipa_ipv6_prefixes[i].addr[0]) && (prefix[1] == ipa_ipv6_prefixes[i].addr[1])
+				&& is_bridge == ipa_ipv6_prefixes[i].is_bridge)
 			{
 				if (reserve_slot) {
 					IPACMDBG_H("Reserve slot for ipa_if_num %d\n", ipa_if_num);
 					ipa_ipv6_prefixes[i].addr[0] = IPA_DUMMY_PREFIX;
 					ipa_ipv6_prefixes[i].addr[1] = IPA_DUMMY_PREFIX;
+					ipa_ipv6_prefixes[i].is_bridge = is_bridge;
 				}
 				else {
+					IPACMDBG_H("prefix installed by is_bridge %d 0x[%X][%X] will be removed\n", is_bridge, prefix[0], prefix[1]);
 					for(; i < (num_ipv6_prefixes - 1); i++)
 					{
-						IPACMDBG_H("prefix 0x[%X][%X] will be removed\n", prefix[0], prefix[1]);
 						ipa_ipv6_prefixes[i].addr[0] = ipa_ipv6_prefixes[i + 1].addr[0];
 						ipa_ipv6_prefixes[i].addr[1] = ipa_ipv6_prefixes[i + 1].addr[1];
 						ipa_ipv6_prefixes[i].vlan_id = ipa_ipv6_prefixes[i + 1].vlan_id;
+						ipa_ipv6_prefixes[i].is_bridge = ipa_ipv6_prefixes[i + 1].is_bridge;
 					}
 					num_ipv6_prefixes--;
 				}

@@ -489,8 +489,7 @@ void IPACM_Wlan::event_callback(ipa_cm_event_id event, void *param)
 						if(data->iptype == IPA_IP_v6)
 						{
 							memcpy(ipv6_prefix, IPACM_Wan::backhaul_ipv6_prefix, sizeof(ipv6_prefix));
-							delete_ipv6_prefix_flt_rule();
-							install_ipv6_prefix_flt_rule(IPACM_Wan::backhaul_ipv6_prefix);
+							modify_ipv6_prefix_flt_rule();
 #ifdef FEATURE_IPv6CT_DISABLED
 #ifdef FEATURE_IPACM_UL_FIREWALL
 #ifdef IPA_V6_UL_WL_FIREWALL_HANDLE
@@ -624,7 +623,7 @@ void IPACM_Wlan::event_callback(ipa_cm_event_id event, void *param)
 			if(ip_type == IPA_IP_v6 || ip_type == IPA_IP_MAX)
 			{
 				memcpy(ipv6_prefix, data_wan_tether->ipv6_prefix, sizeof(ipv6_prefix));
-				install_ipv6_prefix_flt_rule(data_wan_tether->ipv6_prefix);
+				modify_ipv6_prefix_flt_rule();
 				if(data_wan_tether->is_sta == false)
 				{
 					ext_prop = IPACM_Iface::ipacmcfg->GetExtProp(IPA_IP_v6);
@@ -833,8 +832,7 @@ void IPACM_Wlan::event_callback(ipa_cm_event_id event, void *param)
 		if(ip_type == IPA_IP_v6 || ip_type == IPA_IP_MAX)
 		{
 			memcpy(ipv6_prefix, data_wan->ipv6_prefix, sizeof(ipv6_prefix));
-			delete_ipv6_prefix_flt_rule();
-			install_ipv6_prefix_flt_rule(data_wan->ipv6_prefix);
+			modify_ipv6_prefix_flt_rule();
 #ifdef FEATURE_IPv6CT_DISABLED
 #ifdef FEATURE_IPACM_UL_FIREWALL
 			IPACM_Wan::read_firewall_filter_rules_ul();

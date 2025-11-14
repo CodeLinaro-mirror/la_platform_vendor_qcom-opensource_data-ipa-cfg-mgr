@@ -3216,12 +3216,12 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 #endif
 
 #ifdef FEATURE_EoGRE
-	case IPA_HANDLE_EoGRE_UP:
+	case IPA_WAN_HANDLE_EoGRE_UP:
 		IPACMDBG_H("Received and will process an IPA_HANDLE_EoGRE_UP\n");
 		eogre_up();
 		break;
 
-	case IPA_HANDLE_EoGRE_DOWN:
+	case IPA_WAN_HANDLE_EoGRE_DOWN:
 		IPACMDBG_H("Received and will process an IPA_HANDLE_EoGRE_DOWN\n");
 		eogre_down();
 		break;

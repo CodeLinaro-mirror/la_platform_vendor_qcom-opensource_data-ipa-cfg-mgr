@@ -148,6 +148,7 @@ IPACM_Wlan::IPACM_Wlan(char *iface_name, int iface_index, bool ast_update_needed
 
 	if(iface_query != NULL)
 	{
+		IPACMDBG_H("Allocation for wlan max_clients %d \n", IPA_MAX_NUM_WIFI_CLIENTS);
 		wlan_client_len = (sizeof(ipa_wlan_client)) + (iface_query->num_tx_props * sizeof(wlan_client_rt_hdl));
 		wlan_client = (ipa_wlan_client *)calloc(IPA_MAX_NUM_WIFI_CLIENTS, wlan_client_len);
 		if (wlan_client == NULL)

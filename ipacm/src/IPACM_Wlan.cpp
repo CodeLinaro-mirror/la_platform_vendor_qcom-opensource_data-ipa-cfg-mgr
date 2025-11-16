@@ -7350,7 +7350,7 @@ int IPACM_Wlan::eth_bridge_add_rt_rule_v2(uint8_t *mac, char *rt_tbl_name, uint3
 	*rt_rule_count = 0;
 	const int NUM = 1;
 
-	IPACMDBG_H("Wlan dev_name [%s]\n",dev_name);
+	IPACMDBG_H("Wlan dev_name [%s] iptype %d\n",dev_name, iptype);
 	IPACMDBG_H("Received client MAC 0x%02x%02x%02x%02x%02x%02x.\n",
 			mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
 
@@ -7378,8 +7378,7 @@ int IPACM_Wlan::eth_bridge_add_rt_rule_v2(uint8_t *mac, char *rt_tbl_name, uint3
 		IPACMDBG_H("Lan2lan client DL index [%d].\n", dl_cnt_idx);
 	}
 
-	num_rt_rule = each_client_rt_rule_count[iptype];
-	rt_rule_table = (struct ipa_ioc_add_rt_rule_ext_v2 *) calloc(num_rt_rule, sizeof(struct ipa_ioc_add_rt_rule_ext_v2));
+	rt_rule_table = (struct ipa_ioc_add_rt_rule_ext_v2 *) calloc(NUM, sizeof(struct ipa_ioc_add_rt_rule_ext_v2));
 	if (rt_rule_table == NULL)
 	{
 		IPACMERR("Error allocating ipa_ioc_add_rt_rule memory...\n");
@@ -7388,7 +7387,7 @@ int IPACM_Wlan::eth_bridge_add_rt_rule_v2(uint8_t *mac, char *rt_tbl_name, uint3
 	rt_rule_table->rules = (uintptr_t)calloc(NUM, sizeof(struct ipa_rt_rule_add_ext_v2));
 	if (!rt_rule_table->rules) {
 		IPACMERR("Error allocating memory for routing rule\n");
-		free(rt_rule);
+		free(rt_rule_table);
 		return IPACM_FAILURE;
 	}
 
@@ -7397,10 +7396,8 @@ int IPACM_Wlan::eth_bridge_add_rt_rule_v2(uint8_t *mac, char *rt_tbl_name, uint3
 	rt_rule_table->rule_add_ext_size = sizeof(struct ipa_rt_rule_add_ext_v2);
 	strlcpy(rt_rule_table->rt_tbl_name, rt_tbl_name, sizeof(rt_rule_table->rt_tbl_name));
 	rt_rule_table->rt_tbl_name[IPA_RESOURCE_NAME_MAX-1] = 0;
-
-
+	rt_rule_table->num_rules = NUM;
 	IPACMDBG_H("Installing rt table rule %s\n", rt_tbl_name);
-	position = 0;
 	for(i=0; i<iface_query->num_tx_props; i++)
 	{
 		if(tx_prop->tx[i].ip == iptype)
@@ -7411,13 +7408,6 @@ int IPACM_Wlan::eth_bridge_add_rt_rule_v2(uint8_t *mac, char *rt_tbl_name, uint3
 				} else {
 					if (i >= IPA_IP_v4_VLAN) continue;
 				}
-			}
-
-			if(position >= num_rt_rule || position >= MAX_NUM_PROP)
-			{
-				IPACMERR("Number of routing rules already exceeds limit.\n");
-				res = IPACM_FAILURE;
-				goto end;
 			}
 
 			rules = rt_rule_table->rules;
@@ -7440,7 +7430,9 @@ int IPACM_Wlan::eth_bridge_add_rt_rule_v2(uint8_t *mac, char *rt_tbl_name, uint3
 			rt_rule->at_rear = false;
 			rt_rule->status = -1;
 			rt_rule->rt_rule_hdl = -1;
-
+#ifdef FEATURE_IPA_V3
+			rt_rule->rule.hashable = true;
+#endif
 			rt_rule->rule.hdr_hdl = 0;
 			rt_rule->rule.hdr_proc_ctx_hdl = hdr_proc_ctx_hdl;
 			memcpy(&rt_rule->rule.attrib, &tx_prop->tx[i].attrib, sizeof(rt_rule->rule.attrib));
@@ -7475,8 +7467,7 @@ int IPACM_Wlan::eth_bridge_add_rt_rule_v2(uint8_t *mac, char *rt_tbl_name, uint3
 				rt_rule->rule.cnt_idx = dl_cnt_idx;
 				IPACMDBG_H("Install sdt MAC 0x%02x%02x%02x%02x%02x%02x. has lan2lan dl_cnt_idx %d\n", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5], dl_cnt_idx);
 			}
-			position++;
-			rt_rule_table->num_rules = position;
+			/* Add Route Rule one by one , Max iface_query->num_tx_props */
 			if(false == m_routing.AddRoutingRuleExt_v2(rt_rule_table))
 			{
 				IPACMERR("Routing rule addition failed!\n");
@@ -7485,19 +7476,20 @@ int IPACM_Wlan::eth_bridge_add_rt_rule_v2(uint8_t *mac, char *rt_tbl_name, uint3
 			}
 			else
 			{
-				*rt_rule_count = position;
-				rt_rule_hdl[i] = ((struct ipa_rt_rule_add_ext_v2 *)rt_rule_table->rules)[0].rt_rule_hdl;
-				IPACMDBG_H("Lan2Lan_v2_flt_rt : Added rt count %d, with routing hdl = %u\n", position, rt_rule_hdl[i]);
+				rt_rule_hdl[(*rt_rule_count)] = ((struct ipa_rt_rule_add_ext_v2 *)rt_rule_table->rules)[0].rt_rule_hdl;
+				IPACMDBG_H("Lan2Lan_v2_flt_rt : i= %d with routing hdl = %u\n", i, rt_rule_hdl[(*rt_rule_count)]);
+				(*rt_rule_count)++;
 			}
 		}
 	}
+	IPACMDBG_H("Lan2Lan_v2_flt_rt : Total (%d) RT rule installed for iptype %d\n", (*rt_rule_count), iptype);
 end:
-	if (rt_rule)
-	{
-		free(rt_rule);
-	}
 	if (rt_rule_table)
 	{
+		if (rt_rule_table->rules)
+		{
+			free((void *)rt_rule_table->rules);
+		}
 		free(rt_rule_table);
 	}
 	return res;

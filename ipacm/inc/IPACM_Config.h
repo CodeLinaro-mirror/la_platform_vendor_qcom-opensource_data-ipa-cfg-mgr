@@ -214,9 +214,6 @@ public:
 	/* Store private subnet configuration from XML file */
 	ipa_private_subnet private_subnet_table[IPA_MAX_PRIVATE_SUBNET_ENTRIES + IPA_MAX_MTU_ENTRIES];
 
-	/* Store intereseted vlan configuration from XML file */
-	IPACM_vlan_conf_t *vlan_config;
-
 	/* Store Software allow tuple information */
 	IPACM_swallow_t *sw_filter_cfg;
 

@@ -238,13 +238,6 @@ if (!(a)) {                                                 \
 #define IPACM_QOS_ENABLE_TAG                 "IPACMQOSEnabled"
 #define IPACM_QOS_TAG                        "IPACMQOS"
 
-/* VLAN MPDN config file */
-#define IPACM_VLAN_IFACE                    "IPACMVLANIFACES"
-#define IPACM_VLAN_IFACE_ENTRY              "VlanIfaceEntry"
-#define IPACM_VLAN_NAME                     "VlanName"
-#define IPACM_VLAN_ID                       "VlanId"
-#define IPACM_VLAN_OFFLOAD_PATH             "VlanOffloadPath"
-#define IPACM_VLAN_PCP_VALUE                "VlanPcp"
 #define IPACMLOG_TAG                         "IPACMLog"
 #define IPACMFILEQUOTA_TAG                   "IPACMfileQuota"
 #define IPACMFILEVAR_TAG                     "IPACMfilevar"
@@ -392,12 +385,6 @@ typedef struct
 	ipacm_alg alg_entries[IPA_MAX_ALG_ENTRIES];
 } ipacm_alg_conf_t;
 
-typedef struct _IPACM_vlan_conf
-{
-        uint8_t num_vlan_if;
-        ipa_vlan_iface_info vlan_if_cfg[IPA_MAX_IFACE_ENTRIES];
-}IPACM_vlan_conf_t;
-
 typedef struct  _IPACM_conf_t
 {
 	ipacm_iface_conf_t iface_config;
@@ -424,20 +411,12 @@ typedef struct  _IPACM_conf_t
 	int ipacm_l2tp_enable;
 	bool ipacm_mpdn_enable;
 	bool ipacm_socksv5_enable;
-	IPACM_vlan_conf_t vlan_cfg;
 	bool msgflt_enable;
 	bool ipacm_nad2_v6_enable;
 } IPACM_conf_t;
 
 /* This function read IPACM XML configuration*/
 int ipacm_read_cfg_xml
-(
-	char *xml_file,                              /* Filename and path     */
-	IPACM_conf_t *config                         /* Mobile AP config data */
-);
-
-/* This function read IPACM VLAN XML configuration*/
-int ipacm_read_vlan_cfg_xml
 (
 	char *xml_file,                              /* Filename and path     */
 	IPACM_conf_t *config                         /* Mobile AP config data */

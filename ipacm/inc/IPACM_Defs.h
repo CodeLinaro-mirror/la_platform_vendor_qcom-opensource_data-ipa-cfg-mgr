@@ -219,6 +219,22 @@ extern "C"
 #define MUX_ID_DL_METADATA_SHIFT 24
 #endif
 
+/* Congo Metadata Format for sw_prod_classification_cookie
+ * Bits [7:0]: Txct_classify_info_index (8 bits)
+ * Bits [15:8]: L4 Protocol (8 bits)
+ * Bits [18:16]: Bank_id (3 bits)
+ * Bits [19]: vlan_tag (1 bit)
+ * Bits [23:20]: Reserved
+ */
+#define CONGO_TXPKT_CLSSFY_INFO_INDX_MASK  0xFF
+#define CONGO_TXPKT_CLSSFY_INFO_INDX_SHIFT 0
+#define CONGO_L4_PROTOCOL_MASK             0xFF
+#define CONGO_L4_PROTOCOL_SHIFT            8
+#define CONGO_BANK_ID_MASK                 0x7
+#define CONGO_BANK_ID_SHIFT                16
+#define CONGO_VLAN_TAG_MASK                0x1
+#define CONGO_VLAN_TAG_SHIFT               19
+
 #define IPV6_NUM_ADDR 3
 
 /*
@@ -469,6 +485,11 @@ typedef struct _ipacm_event_data_all
 	uint8_t mac_addr[IPA_MAC_ADDR_SIZE];
 	char iface_name[IPA_IFACE_NAME_LEN];
 	bool is_mld_enabled;
+#ifdef WLAN_HDR_ATTRIB_TXPKT_CLSSFY_INFO_INDX
+	/* Store sw cookie information for Congo metadata */
+	uint64_t sw_prod_classification_cookie;
+#endif
+
 } ipacm_event_data_all;
 
 typedef struct _ipacm_event_new_neigh_vlan
@@ -558,6 +579,9 @@ typedef struct
 	int if_index;
 	uint8_t num_of_attribs;
 	struct ipa_wlan_hdr_attrib_val attribs[0];
+#ifdef WLAN_HDR_ATTRIB_TXPKT_CLSSFY_INFO_INDX
+	uint32_t bank_id;
+#endif
 } ipacm_event_data_wlan_ex;
 
 typedef struct _ipacm_event_iface_up

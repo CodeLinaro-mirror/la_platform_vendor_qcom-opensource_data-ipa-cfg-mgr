@@ -87,6 +87,9 @@ typedef struct __nat_client_info
 	bool is_vlan_client;
 	uint16_t vlan_id;
 #endif
+#ifdef WLAN_HDR_ATTRIB_TXPKT_CLSSFY_INFO_INDX
+	uint64_t sw_prod_classification_cookie;
+#endif
 }nat_client_info;
 
 typedef struct __nat_client_v6_info
@@ -95,6 +98,9 @@ typedef struct __nat_client_v6_info
 #ifdef FEATURE_VLAN_MPDN
 	bool is_vlan_client;
 	uint16_t vlan_id;
+#endif
+#ifdef WLAN_HDR_ATTRIB_TXPKT_CLSSFY_INFO_INDX
+	uint64_t sw_prod_classification_cookie;
 #endif
 }nat_client_v6_info;
 

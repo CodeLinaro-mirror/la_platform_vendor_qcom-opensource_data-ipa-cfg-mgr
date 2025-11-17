@@ -167,6 +167,10 @@ typedef struct _ipa_wlan_client
 	uint32_t lan2lan_fl_rule_hdl_v4;
 	/* store ipv6 LAN2LAN filter rule handle when ast update is needed. */
 	uint32_t lan2lan_fl_rule_hdl_v6;
+#ifdef WLAN_HDR_ATTRIB_TXPKT_CLSSFY_INFO_INDX
+	/* Store sw cookie information for Congo metadata */
+	uint64_t sw_prod_classification_cookie;
+#endif
 	//Keep below structure as last declaration.
 	wlan_client_rt_hdl wifi_rt_hdl[0]; /* depends on number of tx properties */
 }ipa_wlan_client;

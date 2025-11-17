@@ -1136,6 +1136,16 @@ void IPACM_Wlan::event_callback(ipa_cm_event_id event, void *param)
 				{
 					return;
 				}
+
+#ifdef WLAN_HDR_ATTRIB_TXPKT_CLSSFY_INFO_INDX
+				if (wlan_index != IPACM_INVALID_INDEX)
+				{
+					data->sw_prod_classification_cookie = get_client_memptr(wlan_client, wlan_index)->sw_prod_classification_cookie;
+					IPACMDBG_H("Populating sw_prod_classification_cookie: 0x%x for client index %d\n",
+						data->sw_prod_classification_cookie, wlan_index);
+				}
+#endif
+
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
 				if (IPACM_Iface::ipacmcfg->ipacm_lan_stats_enable == false)
 #endif
@@ -2126,6 +2136,9 @@ int IPACM_Wlan::handle_wlan_client_mac_flt_route_rule(ipa_ip_type ip_type, int c
 				data.ipv4_addr = get_client_memptr(wlan_client, clt_index)->v4_addr,
 				data.if_index =  get_client_memptr(wlan_client, clt_index)->if_index;
 				data.iptype = IPA_IP_v4;
+#ifdef WLAN_HDR_ATTRIB_TXPKT_CLSSFY_INFO_INDX
+				data.sw_prod_classification_cookie = get_client_memptr(wlan_client, clt_index)->sw_prod_classification_cookie;
+#endif
 				CtList->HandleNeighIpAddrAddEvt(&data);
 			}
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
@@ -2384,6 +2397,11 @@ int IPACM_Wlan::handle_wlan_client_init_ex(ipacm_event_data_wlan_ex *data, bool 
 		get_client_memptr(wlan_client, num_wifi_client)->p_hdr_info = (ipacm_event_data_wlan_ex*)malloc(evt_size);
 		memcpy(get_client_memptr(wlan_client, num_wifi_client)->p_hdr_info, data, evt_size);
 
+#ifdef WLAN_HDR_ATTRIB_TXPKT_CLSSFY_INFO_INDX
+		/* Extract and store sw cookie information from event data */
+		get_client_memptr(wlan_client, num_wifi_client)->sw_prod_classification_cookie = 0;
+#endif
+
 		/* copy partial header for v4*/
 		for (cnt=0; cnt<tx_prop->num_tx_props; cnt++)
 		{
@@ -2459,6 +2477,23 @@ int IPACM_Wlan::handle_wlan_client_init_ex(ipacm_event_data_wlan_ex *data, bool 
 						/* copy ta_peer_id */
 						ta_peer_id =
 							data->attribs[i].u.ta_peer_id;
+					}
+#endif
+#ifdef WLAN_HDR_ATTRIB_TXPKT_CLSSFY_INFO_INDX
+					else if (data->attribs[i].attrib_type == WLAN_HDR_ATTRIB_TXPKT_CLSSFY_INFO_INDX)
+					{
+						/* Format sw_prod_classification_cookie according to Congo metadata format */
+						get_client_memptr(wlan_client, num_wifi_client)->sw_prod_classification_cookie =
+							((data->attribs[i].u.txpkt_classfy_info_indx & CONGO_TXPKT_CLSSFY_INFO_INDX_MASK) << CONGO_TXPKT_CLSSFY_INFO_INDX_SHIFT) |
+							((data->bank_id & CONGO_BANK_ID_MASK) << CONGO_BANK_ID_SHIFT);
+
+						if(vlan_id)
+						{
+							get_client_memptr(wlan_client, num_wifi_client)->sw_prod_classification_cookie |= (CONGO_VLAN_TAG_MASK << CONGO_VLAN_TAG_SHIFT);
+						}
+
+						IPACMDBG_H("Stored sw cookie info: sw_prod_classification_cookie=0x%x\n",
+							get_client_memptr(wlan_client, num_wifi_client)->sw_prod_classification_cookie);
 					}
 #endif
 					else
@@ -2599,6 +2634,23 @@ int IPACM_Wlan::handle_wlan_client_init_ex(ipacm_event_data_wlan_ex *data, bool 
 							data->attribs[i].u.ta_peer_id;
 					}
 #endif
+#ifdef WLAN_HDR_ATTRIB_TXPKT_CLSSFY_INFO_INDX
+					else if (data->attribs[i].attrib_type == WLAN_HDR_ATTRIB_TXPKT_CLSSFY_INFO_INDX)
+					{
+						/* Format sw_prod_classification_cookie according to Congo metadata format */
+						get_client_memptr(wlan_client, num_wifi_client)->sw_prod_classification_cookie =
+							((data->attribs[i].u.txpkt_classfy_info_indx & CONGO_TXPKT_CLSSFY_INFO_INDX_MASK) << CONGO_TXPKT_CLSSFY_INFO_INDX_SHIFT) |
+							((data->bank_id & CONGO_BANK_ID_MASK) << CONGO_BANK_ID_SHIFT);
+
+						if(vlan_id)
+						{
+							get_client_memptr(wlan_client, num_wifi_client)->sw_prod_classification_cookie |= (CONGO_VLAN_TAG_MASK << CONGO_VLAN_TAG_SHIFT);
+						}
+
+						IPACMDBG_H("Stored sw cookie info: sw_prod_classification_cookie=0x%x\n",
+							get_client_memptr(wlan_client, num_wifi_client)->sw_prod_classification_cookie);
+					}
+#endif
 					else
 					{
 						IPACMDBG_H("The attribute type is not expected!\n");
@@ -2723,6 +2775,7 @@ int IPACM_Wlan::handle_wlan_client_init_ex(ipacm_event_data_wlan_ex *data, bool 
 		{
 			get_client_memptr(wlan_client, num_wifi_client)->vlan_id = vlan_id;
 			get_client_memptr(wlan_client, num_wifi_client)->is_vlan = true;
+
 			IPACMDBG_H("Wlan client at index %d is a VLAN client with vlan id: %d\n",
 				num_wifi_client, vlan_id);
 		}
@@ -5985,6 +6038,9 @@ int IPACM_Wlan::handle_wlan_client_route_rule_ext(uint8_t *mac_addr, ipa_ip_type
 				data.if_index = IPACM_Iface::ipacmcfg->iface_table[ipa_if_num].netlink_interface_index;
 				data.iptype = IPA_IP_v4;
 				data.ipv4_addr = get_client_memptr(wlan_client, wlan_index)->v4_addr;
+#ifdef WLAN_HDR_ATTRIB_TXPKT_CLSSFY_INFO_INDX
+				data.sw_prod_classification_cookie = get_client_memptr(wlan_client, wlan_index)->sw_prod_classification_cookie;
+#endif
 				CtList->HandleNeighIpAddrAddEvt(&data);
 			}
 			else
@@ -6305,6 +6361,9 @@ int IPACM_Wlan::handle_wlan_client_route_rule_ext_v2(uint8_t *mac_addr, ipa_ip_t
 				data.if_index = IPACM_Iface::ipacmcfg->iface_table[ipa_if_num].netlink_interface_index;
 				data.iptype = IPA_IP_v4;
 				data.ipv4_addr = get_client_memptr(wlan_client, wlan_index)->v4_addr;
+#ifdef WLAN_HDR_ATTRIB_TXPKT_CLSSFY_INFO_INDX
+				data.sw_prod_classification_cookie = get_client_memptr(wlan_client, wlan_index)->sw_prod_classification_cookie;
+#endif
 				CtList->HandleNeighIpAddrAddEvt(&data);
 			}
 			else

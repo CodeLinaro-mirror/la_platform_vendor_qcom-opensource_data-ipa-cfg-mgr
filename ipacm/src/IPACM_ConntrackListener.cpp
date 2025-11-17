@@ -751,6 +751,12 @@ void IPACM_ConntrackListener::HandleNeighIpAddrAddEvt(
 			if (nat_clients[i].nat_iface_ipv4_addr == 0)
 			{
 				nat_clients[i].nat_iface_ipv4_addr = data->ipv4_addr;
+#ifdef WLAN_HDR_ATTRIB_TXPKT_CLSSFY_INFO_INDX
+				nat_clients[i].sw_prod_classification_cookie = data->sw_prod_classification_cookie;
+
+				IPACMDBG_H("Stored sw_prod_classification_cookie: 0x%llx for client IP 0x%x\n",
+					data->sw_prod_classification_cookie, data->ipv4_addr);
+#endif
 #ifdef FEATURE_VLAN_MPDN
 				if (pConfig == NULL)
 				{
@@ -967,6 +973,15 @@ void IPACM_ConntrackListener::HandleNeighIpAddrAddEvt_v6(ipacm_event_data_all *d
 				&& nat_clients_v6[i].nat_iface_ipv6_addr[2] == 0 && nat_clients_v6[i].nat_iface_ipv6_addr[3] == 0)
 			{
 				memcpy(nat_clients_v6[i].nat_iface_ipv6_addr,data->ipv6_addr,sizeof(data->ipv6_addr));
+
+#ifdef WLAN_HDR_ATTRIB_TXPKT_CLSSFY_INFO_INDX
+				nat_clients_v6[i].sw_prod_classification_cookie = data->sw_prod_classification_cookie;
+
+				IPACMDBG_H("Stored sw_prod_classification_cookie: 0x%llx for client IPv6 0x%08x%08x%08x%08x\n",
+					data->sw_prod_classification_cookie, data->ipv6_addr[0], data->ipv6_addr[1],
+					data->ipv6_addr[2], data->ipv6_addr[3]);
+#endif
+
 #ifdef FEATURE_VLAN_MPDN
 				if (pConfig == NULL)
 				{
@@ -4056,7 +4071,23 @@ void IPACM_ConntrackListener::ProcessTCPorUDPMsg(
 			IPACMDBG_H("ippt_sw_flt port not enabled %d,\n", ippt_sw_flt_list.port_enable);
 	}
 #endif
-	CheckSTAClient(&rule, &nat_entry.isTempEntry);
+	 CheckSTAClient(&rule, &nat_entry.isTempEntry);
+
+#ifdef WLAN_HDR_ATTRIB_TXPKT_CLSSFY_INFO_INDX
+	/* Find and populate txpkt_classfy_info_indx from nat_clients array */
+	for (int i = 0; i < MAX_IFACE_ADDRESS; i++)
+	{
+		if (nat_clients[i].nat_iface_ipv4_addr == rule.private_ip)
+		{
+			rule.sw_prod_classification_cookie = nat_clients[i].sw_prod_classification_cookie;
+			rule.sw_prod_classification_cookie |= (rule.protocol & CONGO_L4_PROTOCOL_MASK) << CONGO_L4_PROTOCOL_SHIFT;
+			IPACMDBG_H("Found sw_prod_classification_cookie: 0x%x for private IP 0x%x, protocol: %d\n",
+				rule.sw_prod_classification_cookie, rule.private_ip, rule.protocol);
+			break;
+		}
+	}
+#endif
+
 	nat_entry.rule = &rule;
 #ifdef FEATURE_VLAN_MPDN
 	AddORDeleteNatEntry(&nat_entry, &SendVlanEvent);
@@ -4128,6 +4159,32 @@ void IPACM_ConntrackListener::ProcessTCPorUDPMsg_v6(const ipacm_ct_evt_data* evt
 	int i = 0;
 
 	struct nf_conntrack *ct = evt_data->ct;
+
+#ifdef WLAN_HDR_ATTRIB_TXPKT_CLSSFY_INFO_INDX
+	/* Find and populate txpkt_classfy_info_indx from nat_clients_v6 array */
+	uint64_t src_ipv6_msb = ((Ipv6IpAddress &)entry.GetClientIp()).GetMsb();
+	uint64_t src_ipv6_lsb = ((Ipv6IpAddress &)entry.GetClientIp()).GetLsb();
+	uint32_t client_ipv6[4];
+	client_ipv6[0] = (uint32_t)(src_ipv6_msb >> 32);
+	client_ipv6[1] = (uint32_t)(src_ipv6_msb & 0xFFFFFFFF);
+	client_ipv6[2] = (uint32_t)(src_ipv6_lsb >> 32);
+	client_ipv6[3] = (uint32_t)(src_ipv6_lsb & 0xFFFFFFFF);
+
+	for (int i = 0; i < MAX_IFACE_ADDRESS; i++)
+	{
+		if (nat_clients_v6[i].nat_iface_ipv6_addr[0] == client_ipv6[0] &&
+			nat_clients_v6[i].nat_iface_ipv6_addr[1] == client_ipv6[1] &&
+			nat_clients_v6[i].nat_iface_ipv6_addr[2] == client_ipv6[2] &&
+			nat_clients_v6[i].nat_iface_ipv6_addr[3] == client_ipv6[3])
+		{
+			entry.sw_prod_classification_cookie = nat_clients_v6[i].sw_prod_classification_cookie;
+			entry.sw_prod_classification_cookie |= (entry.m_protocol & CONGO_L4_PROTOCOL_MASK) << CONGO_L4_PROTOCOL_SHIFT;
+			IPACMDBG_H("Found sw_prod_classification_cookie: 0x%x for private IPv6 0x%08x%08x%08x%08x, protocol: %d\n",
+				entry.sw_prod_classification_cookie, client_ipv6[0], client_ipv6[1], client_ipv6[2], client_ipv6[3], entry.m_protocol);
+			break;
+		}
+	}
+#endif
 
 	if (entry.m_direction != NatEntryBase::DirectionUnknown)
 	{

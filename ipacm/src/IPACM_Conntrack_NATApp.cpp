@@ -692,7 +692,11 @@ int NatApp::DeleteEntry(const nat_table_entry *rule)
 int NatApp::AddEntry(const nat_table_entry *rule, bool isVlan)
 {
 	int cnt = 0;
+#ifdef WLAN_HDR_ATTRIB_TXPKT_CLSSFY_INFO_INDX
+	ipa_nat_ipv4_rule_v2 nat_rule;
+#else
 	ipa_nat_ipv4_rule nat_rule;
+#endif
 #ifdef FEATURE_VLAN_MPDN
 	bool cacheOnly = false;
 	uint8_t pdn_index;
@@ -793,6 +797,13 @@ int NatApp::AddEntry(const nat_table_entry *rule, bool isVlan)
 #ifdef FEATURE_VLAN_MPDN
 			nat_rule.pdn_index = pdn_index;
 #endif
+#ifdef WLAN_HDR_ATTRIB_TXPKT_CLSSFY_INFO_INDX
+		nat_rule.sw_prod_classification_cookie = rule->sw_prod_classification_cookie;
+		IPACMDBG_H("Set sw_prod_classification_cookie: 0x%x\n",
+			nat_rule.sw_prod_classification_cookie);
+		nat_rule.in_allowed = 1;
+		nat_rule.out_allowed = 1;
+#endif
 
 			if(isPwrSaveIf(rule->private_ip) ||
 				 isPwrSaveIf(rule->target_ip)
@@ -816,7 +827,11 @@ int NatApp::AddEntry(const nat_table_entry *rule, bool isVlan)
 			}
 			else
 			{
+#ifdef WLAN_HDR_ATTRIB_TXPKT_CLSSFY_INFO_INDX
+				if(ipa_nat_add_ipv4_rule_v2(nat_table_hdl, &nat_rule, &cache[cnt].rule_hdl) < 0)
+#else
 				if(ipa_nat_add_ipv4_rule(nat_table_hdl, &nat_rule, &cache[cnt].rule_hdl) < 0)
+#endif
 				{
 					IPACMERR("unable to add the rule\n");
 					return -1;
@@ -1880,6 +1895,9 @@ NatEntryBase::NatEntryBase(ipa_ip_type type) :
 	m_uc_activation_index(0),
 	m_ucp(0),
 	m_s(0)
+#ifdef WLAN_HDR_ATTRIB_TXPKT_CLSSFY_INFO_INDX
+	,sw_prod_classification_cookie(0)
+#endif
 {
 	IPACMDBG_H("%d \n", type);
 }
@@ -1907,6 +1925,9 @@ void NatEntryBase::Copy(const NatEntryBase& other)
 	m_ucp = other.m_ucp;
 	m_s = other.m_s;
 	IPACMDBG_H("copied uc activation data: idx %d, ucp:%d s: %d", m_uc_activation_index, m_ucp, m_s);
+#ifdef WLAN_HDR_ATTRIB_TXPKT_CLSSFY_INFO_INDX
+	sw_prod_classification_cookie = other.sw_prod_classification_cookie;
+#endif
 	IPACMDBG_H("return\n");
 }
 
@@ -1922,6 +1943,9 @@ void NatEntryBase::Clear()
 	m_uc_activation_index = 0;
 	m_ucp = false;
 	m_s = false;
+#ifdef WLAN_HDR_ATTRIB_TXPKT_CLSSFY_INFO_INDX
+	sw_prod_classification_cookie = 0;
+#endif
 	IPACMDBG_H("return\n");
 }
 
@@ -2542,7 +2566,11 @@ int Ipv6ctProxy::DoAddEntry(const NatEntryBase& entry, uint32_t& entry_handle,
 	uint32_t& additional_entry_handle, int& uc_act_handle)
 {
 	int ret;
+#ifdef WLAN_HDR_ATTRIB_TXPKT_CLSSFY_INFO_INDX
+	ipa_ipv6ct_rule_v2 rule;
+#else
 	ipa_ipv6ct_rule rule;
+#endif
 
 	IPACMDBG_H("\n");
 	if (entry.m_type != IPA_IP_v6)
@@ -2568,6 +2596,8 @@ int Ipv6ctProxy::DoAddEntry(const NatEntryBase& entry, uint32_t& entry_handle,
 		entry.GetClientIp().DebugDump("client ip");
 		entry.GetTargetIp().DebugDump("target ip");
 
+		memset(&rule, 0, sizeof(rule));
+
 		// using the base class entry reference since object might be ipv6ct or dummy ipv6nat
 		rule.src_ipv6_lsb = ((Ipv6IpAddress &)entry.GetClientIp()).GetLsb();
 		rule.src_ipv6_msb = ((Ipv6IpAddress &)entry.GetClientIp()).GetMsb();
@@ -2583,8 +2613,15 @@ int Ipv6ctProxy::DoAddEntry(const NatEntryBase& entry, uint32_t& entry_handle,
 			rule.s = entry.m_s;
 			IPACMDBG_H("ucp: en %d, idx %d, s %d\n", entry.m_ucp, entry.m_uc_activation_index, entry.m_s);
 		}
+#ifdef WLAN_HDR_ATTRIB_TXPKT_CLSSFY_INFO_INDX
+		rule.sw_prod_classification_cookie = entry.sw_prod_classification_cookie;
+		IPACMDBG_H("Set sw_prod_classification_cookie: 0x%llx\n",
+			rule.sw_prod_classification_cookie);
 
+		ret = ipa_ct_add_ipv6_rule_v2(m_tableHandle, &rule, &entry_handle);
+#else
 		ret = ipa_ct_add_ipv6_rule(m_tableHandle, &rule, &entry_handle);
+#endif
 
 		IPACMDBG("added ipv6CT entry, src_lsb 0x%llX, src_msb 0x%llX, src_port %u, dst_lsb 0x%llX, dst_msb 0x%llX, dst_port %u, dir %d, prot %d, handle %d\n",
 			rule.src_ipv6_lsb, rule.src_ipv6_msb, rule.src_port, rule.dest_ipv6_lsb, rule.dest_ipv6_msb, rule.dest_port, rule.direction_settings, rule.protocol, entry_handle);
@@ -2627,7 +2664,12 @@ int Ipv6ctProxy::DoAddEntry(const NatEntryBase& entry, uint32_t& entry_handle,
 		rule.dest_port = ipv6nat_entry.m_dstPort;
 		rule.protocol = ipv6nat_entry.m_protocol;
 
+#ifdef WLAN_HDR_ATTRIB_TXPKT_CLSSFY_INFO_INDX
+		rule.sw_prod_classification_cookie = entry.sw_prod_classification_cookie;
+		ret = ipa_ct_add_ipv6_rule_v2(m_tableHandle, &rule, &entry_handle);
+#else
 		ret = ipa_ct_add_ipv6_rule(m_tableHandle, &rule, &entry_handle);
+#endif
 		if(ret)
 		{
 			IPACMERR("failed adding outbound rule, bail\n");
@@ -2649,7 +2691,11 @@ int Ipv6ctProxy::DoAddEntry(const NatEntryBase& entry, uint32_t& entry_handle,
 		rule.dest_port = ipv6nat_entry.m_dstPort;
 		rule.protocol = ipv6nat_entry.m_protocol;
 
+#ifdef WLAN_HDR_ATTRIB_TXPKT_CLSSFY_INFO_INDX
+		ret = ipa_ct_add_ipv6_rule_v2(m_tableHandle, &rule, &additional_entry_handle);
+#else
 		ret = ipa_ct_add_ipv6_rule(m_tableHandle, &rule, &additional_entry_handle);
+#endif
 		if(ret)
 		{
 			IPACMERR("failed adding outbound rule, bail\n");

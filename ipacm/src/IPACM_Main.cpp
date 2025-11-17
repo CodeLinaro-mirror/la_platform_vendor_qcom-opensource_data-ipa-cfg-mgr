@@ -547,6 +547,11 @@ void* ipa_driver_msg_notifier(void *param)
 				strlcpy(data_ex->iface_name, event_ex->name, sizeof(data_ex->iface_name));
 			}
 
+#ifdef WLAN_HDR_ATTRIB_TXPKT_CLSSFY_INFO_INDX
+			data_ex->bank_id = event_ex->bank_id;
+			IPACMDBG_H("Stored bank_id %d in new_neigh_data\n",
+							data_ex->bank_id);
+#endif
 			IPACMDBG_H("Received interface index %d for interface name %s\n",data_ex->if_index, data_ex->iface_name);
 			evt_data.event = IPA_WLAN_CLIENT_ADD_EVENT_EX;
 			evt_data.evt_data = data_ex;
@@ -555,6 +560,7 @@ void* ipa_driver_msg_notifier(void *param)
 			new_neigh_data->iptype = IPA_IP_v6;
 			for(cnt = 0; cnt < event_ex->num_of_attribs; cnt++)
 			{
+				IPACMDBG_H("Received attrib cnt %d attrib_type %d\n", cnt ,event_ex->attribs[cnt].attrib_type);
 				if(event_ex->attribs[cnt].attrib_type == WLAN_HDR_ATTRIB_MAC_ADDR)
 				{
 					memcpy(new_neigh_data->mac_addr, event_ex->attribs[cnt].u.mac_addr, sizeof(new_neigh_data->mac_addr));
@@ -566,16 +572,22 @@ void* ipa_driver_msg_notifier(void *param)
 				{
 					IPACMDBG_H("Wlan client id %d\n",event_ex->attribs[cnt].u.sta_id);
 				}
-	#ifdef WLAN_HDR_ATTRIB_TA_PEER_ID
-				else if(event_ex->attribs[cnt].attrib_type == WLAN_HDR_ATTRIB_TA_PEER_ID)
-				{
-					IPACMDBG_H("Wlan ta peer id %d\n",event_ex->attribs[cnt].u.ta_peer_id);
-				}
-	#endif
-				else
-				{
-					IPACMDBG_H("Wlan message has unexpected type!\n");
-				}
+#ifdef WLAN_HDR_ATTRIB_TA_PEER_ID
+			else if(event_ex->attribs[cnt].attrib_type == WLAN_HDR_ATTRIB_TA_PEER_ID)
+			{
+				IPACMDBG_H("Wlan ta peer id %d\n",event_ex->attribs[cnt].u.ta_peer_id);
+			}
+#endif
+#ifdef WLAN_HDR_ATTRIB_TXPKT_CLSSFY_INFO_INDX
+			else if(event_ex->attribs[cnt].attrib_type == WLAN_HDR_ATTRIB_TXPKT_CLSSFY_INFO_INDX)
+			{
+				IPACMDBG_H("Wlan txpkt_classfy_info_indx %d\n",event_ex->attribs[cnt].u.txpkt_classfy_info_indx);
+			}
+#endif
+			else
+			{
+				IPACMDBG_H("Wlan message has unexpected type!\n");
+			}
 			}
 			new_neigh_data->if_index = data_ex->if_index;
 			new_neigh_evt.evt_data = (void*)new_neigh_data;

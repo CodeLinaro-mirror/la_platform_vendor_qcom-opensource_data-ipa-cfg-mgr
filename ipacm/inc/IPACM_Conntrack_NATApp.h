@@ -218,6 +218,10 @@ struct NatEntryBase
 	bool m_s;
 	uint16_t m_uc_activation_index;
 
+#ifdef WLAN_HDR_ATTRIB_TXPKT_CLSSFY_INFO_INDX
+	uint64_t sw_prod_classification_cookie;
+#endif
+
 	bool isVlan;
 	bool IsVlanUp;
 
@@ -307,6 +311,9 @@ typedef struct _nat_table_entry
 	bool src_only;
 	bool dummy_nat;
 	bool ip_pass_entry;
+#ifdef WLAN_HDR_ATTRIB_TXPKT_CLSSFY_INFO_INDX
+	uint64_t sw_prod_classification_cookie;
+#endif
 
 }nat_table_entry;
 

@@ -66,7 +66,6 @@ const char *IPACM_Config::DEVICE_NAME_ODU = "/dev/odu_ipa_bridge";
 #define IPACM_CONFIG_FILE "/etc/data/ipa/IPACM_cfg.xml"
 #endif
 #endif
-#define IPACM_VLAN_CFG_FILE "/etc/data/ipa/IPACM_vlan_cfg.xml"
 #ifdef DATA_CONFIG_DIR_PATH
 #define IPACM_SWALLOW_FILE DATA_CONFIG_DIR_PATH"/ipa/ipa_filter_cfg.xml"
 #else
@@ -188,7 +187,6 @@ IPACM_Config::IPACM_Config()
 	iface_table = NULL;
 	alg_table = NULL;
 	pNatIfaces = NULL;
-	vlan_config = NULL;
 	sw_filter_cfg = NULL;
 	memset(&ipa_client_rm_map_tbl, 0, sizeof(ipa_client_rm_map_tbl));
 	memset(&ipa_rm_tbl, 0, sizeof(ipa_rm_tbl));
@@ -920,33 +918,6 @@ skip_fnr_alloc:
 	IPACMDBG_H(" depend MAP-7 rm index %d to rm index: %d \n", IPA_RM_RESOURCE_ETHERNET_PROD, IPA_RM_RESOURCE_USB_CONS);
 	IPACMDBG_H(" depend MAP-8 rm index %d to rm index: %d \n", IPA_RM_RESOURCE_WLAN_PROD, IPA_RM_RESOURCE_ETHERNET_CONS);
 
-        strlcpy(IPACM_config_file, IPACM_VLAN_CFG_FILE, sizeof(IPACM_config_file));
-
-        IPACMDBG_H("\n IPACM VLAN XML file is %s \n", IPACM_config_file);
-        if (IPACM_SUCCESS == ipacm_read_vlan_cfg_xml(IPACM_config_file, cfg))
-        {
-                IPACMDBG_H("\n IPACM XML read OK \n");
-        }
-        else
-        {
-                IPACMERR("\n IPACM XML read failed \n");
-                ret = IPACM_FAILURE;
-                goto fail;
-        }
-
-	if (vlan_config == NULL)
-	{
-		vlan_config = (IPACM_vlan_conf_t *)calloc(1, sizeof(IPACM_vlan_conf_t));
-
-		if(vlan_config == NULL)
-		{
-			IPACMERR("Unable to allocate vlan_config memory.\n");
-			ret = IPACM_FAILURE;
-			goto fail;
-		}
-
-		memcpy(vlan_config, &(cfg->vlan_cfg), sizeof(IPACM_vlan_conf_t));
-	}
 
 fail:
 	if (cfg != NULL)

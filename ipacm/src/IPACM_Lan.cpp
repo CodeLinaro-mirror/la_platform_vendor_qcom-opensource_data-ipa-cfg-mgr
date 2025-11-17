@@ -15328,8 +15328,7 @@ int IPACM_Lan::enable_per_client_stats(bool *status)
 int IPACM_Lan::handle_wan_down_v6(bool is_sta_mode, bool is_support_mpdn)
 {
 	int idx = 0;
-	int j,wlan_pipe_index;
-	uint32_t *dft_filter_rule_hdl = NULL;
+	int j;
 	if (rx_prop == NULL)
 	{
 		IPACMERR("Rx prop is NULL, return\n");
@@ -15350,13 +15349,6 @@ int IPACM_Lan::handle_wan_down_v6(bool is_sta_mode, bool is_support_mpdn)
 	if(IPACM_Iface::ipacmcfg->ipv6_nat_enable)
 		delete_ipv6_nat_ula_prefix_flt_rule();
 #endif
-	if (ipa_if_cate == WLAN_IF) {
-		for(wlan_pipe_index=0;wlan_pipe_index<MAX_SUPPORTED_WLAN_PIPES;wlan_pipe_index++){
-			if(IPACM_Wlan::wlan_ap_dflt_rules[wlan_pipe_index].src_pipe == rx_prop->rx[idx].src_pipe ){
-				break;
-			}
-		}
-	}
 
 	if(is_sta_mode == false)
 	{
@@ -15388,19 +15380,8 @@ int IPACM_Lan::handle_wan_down_v6(bool is_sta_mode, bool is_support_mpdn)
 				idx = j * 2;
 				IPACMDBG_H("Install rules at idx %d\n", idx);
 			}
-			if (ipa_if_cate == WLAN_IF && wlan_pipe_index<MAX_SUPPORTED_WLAN_PIPES && IPACM_Wlan::wlan_ap_dflt_rules[wlan_pipe_index].dft_v6fl_rule_hdl[j] != NULL) {
-				dft_filter_rule_hdl = IPACM_Wlan::wlan_ap_dflt_rules[wlan_pipe_index].dft_v6fl_rule_hdl[j];
-			} else{
-				if (dft_v6fl_rule_hdl[j][0] && m_ipv6_default_filterting_rules_count[j]) {
-					dft_filter_rule_hdl = dft_v6fl_rule_hdl[j];
-				}
-			}
-			if (dft_filter_rule_hdl == NULL){
-				IPACMERR("dft_filter_rule_hdl is NULL,rules deleted already \n");
-				goto fail;
-			}
 
-			if (!m_filtering.DeleteFilteringHdls(dft_filter_rule_hdl, IPA_IP_v6, 1)) {
+			if (!m_filtering.DeleteFilteringHdls(&dft_v6fl_rule_hdl[j][m_ipv6_default_filterting_rules_count[j]], IPA_IP_v6, 1)) {
 				IPACMERR("Error Deleting last default flt rule, aborting...\n");
 				return IPACM_FAILURE;
 			}
@@ -15409,7 +15390,6 @@ int IPACM_Lan::handle_wan_down_v6(bool is_sta_mode, bool is_support_mpdn)
 		}
 	}
 
-fail:
 #ifdef FEATURE_IPA_IPSEC
 	return handleIpsecUlFltDelAll(IPA_IP_v6);
 #else

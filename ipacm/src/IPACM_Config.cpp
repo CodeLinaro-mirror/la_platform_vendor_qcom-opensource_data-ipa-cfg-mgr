@@ -498,7 +498,7 @@ int IPACM_Config::ipacm_alloc_fnr_counters(struct ipa_ioc_flt_rt_counter_alloc *
 	} else
 		IPACMDBG_H("counter reset done\n");
 
-	IPACMERR("Fnr counters allocated. Ret = %d, start id = %u\n", ret, fnr_counters->hw_counter.start_id);
+	IPACMDBG_H("Fnr counters allocated. Ret = %d, start id = %u\n", ret, fnr_counters->hw_counter.start_id);
 	counter_idx = fnr_counters->hw_counter.start_id;
 	memset(cnt_idx, 0xff, sizeof(cnt_idx));
 	if (counter_idx == 0) {
@@ -717,23 +717,6 @@ reread:
 		ipacm_lan_stats_enable_set = true;
 		IPACMDBG_H("ipacm_lan_stats_enable %d. \n", ipacm_lan_stats_enable);
 	}
-#ifdef IPA_HW_FNR_STATS
-	if(ipacm_lan_stats_enable && (GetIPAVer(true) >= IPA_HW_v4_5)) {
-		if (hw_fnr_stats_support == true) {
-			IPACMERR("FnR counter allocated already, skip dup allocation\n");
-			goto skip_fnr_alloc;
-		}
-		if (ipacm_alloc_fnr_counters(&fnr_counters, m_fd))
-		{
-			IPACMERR("Failed to allocate fnr counters.\n");
-			goto fail;
-		} else
-			IPACMDBG_H("Allocating fnr counters :  Done\n");
-
-		hw_fnr_stats_support = true;
-	}
-skip_fnr_alloc:
-#endif //IPA_HW_FNR_STATS
 #endif
 	ipv6_nat_enable = cfg->ipv6_nat_enable;
 	ipacm_l2tp_enable = cfg->ipacm_l2tp_enable;
@@ -1483,7 +1466,7 @@ void IPACM_Config::add_bridge_vlan_mapping(ipa_bridge_vlan_mapping_info *data)
 
 	if (data->status == 1)
 	{
-		IPACMERR("No partial entry with vlan got added, Discarding the bridge data update\n");
+		IPACMDBG_H("No partial entry with vlan got added, Discarding the bridge data update, bailing out...\n");
 		goto bail;
 	}
 
@@ -4640,3 +4623,21 @@ void IPACM_Config::flush_qos_params_info(ipa_ioc_qos_config *data)
 	IPACMDBG_H("Flushed qos params list size now :%d \n", m_qos_params.size());
 	return;
 }
+#ifdef IPA_HW_FNR_STATS
+
+void IPACM_Config::alloc_fnr_counter(void)
+{
+	if(ipacm_lan_stats_enable) {
+		if (hw_fnr_stats_support == true) {
+			IPACMERR("FnR counter allocated already, skip dup allocation\n");
+		}
+		if (ipacm_alloc_fnr_counters(&fnr_counters, m_fd))
+		{
+			IPACMERR("Failed to allocate fnr counters.\n");
+		} else {
+			IPACMDBG_H("Allocating fnr counters :  Done\n");
+			hw_fnr_stats_support = true;
+		}
+	}
+}
+#endif

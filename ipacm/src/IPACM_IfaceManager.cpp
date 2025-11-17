@@ -90,7 +90,7 @@ void IPACM_IfaceManager::event_callback(ipa_cm_event_id event, void *param)
 			ipa_interface_index = IPACM_Iface::iface_ipa_index_query(data_all->if_index);
 			/* check for failure return */
 			if(IPACM_FAILURE == ipa_interface_index) {
-				IPACMERR("IPA_BRIDGE_LINK_UP_EVENT: not supported iface id: %d\n", data_all->if_index);
+				IPACMDBG_H("IPA_BRIDGE_LINK_UP_EVENT: not supported iface id: %d\n", data_all->if_index);
 				break;
 			}
 			/* check if iface is bridge interface*/
@@ -110,7 +110,7 @@ void IPACM_IfaceManager::event_callback(ipa_cm_event_id event, void *param)
 			ipa_interface_index = IPACM_Iface::iface_ipa_index_query(evt_data->if_index);
 			/* check for failure return */
 			if (IPACM_FAILURE == ipa_interface_index) {
-				IPACMERR("IPA_LINK_UP_EVENT: not supported iface id: %d\n", evt_data->if_index);
+				IPACMDBG_H("IPA_LINK_UP_EVENT: not supported iface id: %d\n", evt_data->if_index);
 				break;
 			}
 			strlcpy(ifmgr_data.iface_name, IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].iface_name, sizeof(ifmgr_data.iface_name));
@@ -133,7 +133,7 @@ void IPACM_IfaceManager::event_callback(ipa_cm_event_id event, void *param)
 			ipa_interface_index = IPACM_Iface::iface_ipa_index_query(evt_data->if_index);
 			/* check for failure return */
 			if (IPACM_FAILURE == ipa_interface_index) {
-				IPACMERR("IPA_USB_LINK_UP_EVENT: not supported iface id: %d\n", evt_data->if_index);
+				IPACMDBG_H("IPA_USB_LINK_UP_EVENT: not supported iface id: %d\n", evt_data->if_index);
 				break;
 			}
 			strlcpy(ifmgr_data.iface_name, IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].iface_name, sizeof(ifmgr_data.iface_name));
@@ -158,7 +158,7 @@ void IPACM_IfaceManager::event_callback(ipa_cm_event_id event, void *param)
 			ipa_interface_index = IPACM_Iface::iface_ipa_index_query(evt_data->if_index);
 			/* check for failure return */
 			if (IPACM_FAILURE == ipa_interface_index) {
-				IPACMERR("IPA_WLAN_AP_LINK_UP_EVENT: not supported iface id: %d\n", evt_data->if_index);
+				IPACMDBG_H("IPA_WLAN_AP_LINK_UP_EVENT: not supported iface id: %d\n", evt_data->if_index);
 				break;
 			}
 			/* change iface category from unknown to WLAN_IF */
@@ -198,7 +198,7 @@ void IPACM_IfaceManager::event_callback(ipa_cm_event_id event, void *param)
 			ipa_interface_index = IPACM_Iface::iface_ipa_index_query(StaData->if_index);
 			/* check for failure return */
 			if (IPACM_FAILURE == ipa_interface_index) {
-				IPACMERR("IPA_WLAN_STA_LINK_UP_EVENT: not supported iface id: %d\n", StaData->if_index);
+				IPACMDBG_H("IPA_WLAN_STA_LINK_UP_EVENT: not supported iface id: %d\n", StaData->if_index);
 				break;
 			}
 			strlcpy(ifmgr_data.iface_name, IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].iface_name, sizeof(ifmgr_data.iface_name));
@@ -228,7 +228,7 @@ void IPACM_IfaceManager::event_callback(ipa_cm_event_id event, void *param)
 			ipa_interface_index = IPACM_Iface::iface_ipa_index_query(evt_data->if_index);
 			/* check for failure return */
 			if (IPACM_FAILURE == ipa_interface_index) {
-				IPACMERR("IPA_WAN_EMBMS_LINK_UP_EVENT: not supported iface id: %d\n", evt_data->if_index);
+				IPACMDBG_H("IPA_WAN_EMBMS_LINK_UP_EVENT: not supported iface id: %d\n", evt_data->if_index);
 				break;
 			}
 			strlcpy(ifmgr_data.iface_name, evt_data->iface_name, sizeof(ifmgr_data.iface_name));

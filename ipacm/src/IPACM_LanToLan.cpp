@@ -2352,7 +2352,7 @@ void IPACM_LanToLan_Iface::add_one_client_flt_rule(IPACM_LanToLan_Iface *peer_if
 int IPACM_LanToLan_Iface::add_client_flt_rule(peer_iface_info *peer, client_info *client, ipa_ip_type iptype, bool inter_bridge)
 {
 	list<flt_rule_info>::iterator it_flt;
-	//list<flt_rule_info>::iterator inter_it_flt;
+	list<flt_rule_hdl_interbridge>::iterator itr_flt_rule_inter_bridge;
 	struct flt_rule_hdl_interbridge it_intr_brg_flt_rule;
 	list<client_info>::iterator it;
 	uint32_t flt_rule_hdl = 0, l2tp_flt_rule_hdl = 0, l2tp_second_pass_flt_rule_hdl = 0;
@@ -2362,6 +2362,8 @@ int IPACM_LanToLan_Iface::add_client_flt_rule(peer_iface_info *peer, client_info
 	list<peer_iface_info>::iterator it_peer;
 	int ret = 0, pipe_idx_siface = 0;
 	struct ipa_bridge_vlan_mapping_info peer_bridge_info;
+	bool intra_rule_exists = false;
+	bool inter_rule_exists = false;
 
 	if(m_is_l2tp_iface && iptype == IPA_IP_v4)
 	{
@@ -2376,7 +2378,7 @@ int IPACM_LanToLan_Iface::add_client_flt_rule(peer_iface_info *peer, client_info
 	IPACMDBG_H("m_is_vlan: %d \n", m_is_vlan);
 	IPACMDBG_H("iptype: %d \n", iptype);
 	IPACMDBG_H("client_vlan_id: %d\n", client->vlan_id);
-	IPACMDBG_H("m_p_iface->dev_name: %s\n", m_p_iface->dev_name);
+	IPACMDBG_H("m_p_iface->dev_name: %s, inter_bridge %d\n", m_p_iface->dev_name, inter_bridge);
 
 	for(it_flt = peer->flt_rule.begin(); it_flt != peer->flt_rule.end(); it_flt++)
 	{
@@ -2399,30 +2401,67 @@ int IPACM_LanToLan_Iface::add_client_flt_rule(peer_iface_info *peer, client_info
 		}
 	}
 #ifdef FEATURE_VLAN_MPDN
-	if(m_is_vlan)
+	if(m_is_vlan || IPACM_Iface::ipacmcfg->inter_bridge_lantolan_config_enable == true)
 	{
-		if(IPACM_Iface::ipacmcfg->inter_bridge_lantolan_config_enable == true)
+		if (IPACM_Iface::ipacmcfg->inter_bridge_lantolan_config_enable == true)
 		{
-			if(iptype == IPA_IP_v6)
+			if (it_flt != peer->flt_rule.end())
 			{
-				if(it_flt != peer->flt_rule.end())
+				if (inter_bridge)
 				{
-					if (it_flt->flt_rule_hdl[iptype] && !is_spcl_iface() &&
-						((it_flt->ipv6_prefix[0] == client->ipv6_prefix[0]) && (it_flt->ipv6_prefix[1] == client->ipv6_prefix[1])) &&
-						(client->vlan_id == it_flt->p_client->vlan_id)) {
-						IPACMDBG_H("Lan2Lan_v2: not adding rule for already found client 0x[%X][%X][%X][%X][%X][%X] vlan %d, iptype %d\n",
-							it_flt->p_client->mac_addr[0], it_flt->p_client->mac_addr[1], it_flt->p_client->mac_addr[2],
-							it_flt->p_client->mac_addr[3], it_flt->p_client->mac_addr[4], it_flt->p_client->mac_addr[5],
-							it_flt->p_client->vlan_id, iptype);
+					// Check for duplicate inter-bridge rules
+					for (itr_flt_rule_inter_bridge = it_flt->flt_rule_inter_bridge.begin();
+						 itr_flt_rule_inter_bridge != it_flt->flt_rule_inter_bridge.end(); itr_flt_rule_inter_bridge++)
+					{
+						if (itr_flt_rule_inter_bridge->ip_type == iptype)
+						{
+							inter_rule_exists = false;
+							if (iptype == IPA_IP_v4)
+							{
+								inter_rule_exists = (((itr_flt_rule_inter_bridge->bridge_ipv4 == client->bridge_ipv4) &&
+									(itr_flt_rule_inter_bridge->subnet_mask == client->subnet_mask)));
+							}
+							else // IPA_IP_v6
+							{
+								inter_rule_exists = (((itr_flt_rule_inter_bridge->ipv6_prefix[0] == client->ipv6_prefix[0]) &&
+									(itr_flt_rule_inter_bridge->ipv6_prefix[1] == client->ipv6_prefix[1])));
+							}
+							if (inter_rule_exists && it_flt->p_client->vlan_id == client->vlan_id)
+							{
+								IPACMDBG_H("Lan2Lan_v2: Inter-bridge rule already exists for client 0x[%X][%X][%X][%X][%X][%X] vlan %d, iptype %d\n",
+									client->mac_addr[0], client->mac_addr[1], client->mac_addr[2],
+									client->mac_addr[3], client->mac_addr[4], client->mac_addr[5],
+									client->vlan_id, iptype);
+								return IPACM_SUCCESS;
+							}
+						}
+					}
+				}
+				else // This is an intra-bridge rule check
+				{
+					intra_rule_exists = false;
+					if (iptype == IPA_IP_v4)
+					{
+						intra_rule_exists = ((it_flt->flt_rule_hdl[iptype] != 0 || it_flt->flt_rule_hdl_siface[iptype] != 0) &&
+							it_flt->bridge_ipv4 == client->bridge_ipv4 && it_flt->subnet_mask == client->subnet_mask &&
+							it_flt->p_client->vlan_id == client->vlan_id);
+					}
+					else // IPA_IP_v6
+					{
+						intra_rule_exists = ((it_flt->flt_rule_hdl[iptype] != 0 || it_flt->flt_rule_hdl_siface[iptype] != 0) &&
+							it_flt->ipv6_prefix[0] == client->ipv6_prefix[0] && it_flt->ipv6_prefix[1] == client->ipv6_prefix[1] &&
+							it_flt->p_client->vlan_id == client->vlan_id);
+					}
+					if (intra_rule_exists)
+					{
+						IPACMDBG_H("Lan2Lan_v2: Intra-bridge rule already exists forclient 0x[%X][%X][%X][%X][%X][%X] vlan %d, iptype %d\n",
+							client->mac_addr[0], client->mac_addr[1], client->mac_addr[2],
+							client->mac_addr[3], client->mac_addr[4], client->mac_addr[5],
+							client->vlan_id, iptype);
 						return IPACM_SUCCESS;
 					}
-
-					IPACMDBG_H("Lan2Lan_v2: flt rule is already present for other iptype (not %d), continue\n", iptype);
 				}
-			}
-			else
-			{
-				IPACMDBG_H("Lan2Lan_v2: flt rule is already present for other iptype (not %d), continue\n", iptype);
+				IPACMDBG_H("Lan2Lan_v2: Client found but different prefix/subnet, continuing to add new rule.\n");
 			}
 		}
 		else
@@ -2568,8 +2607,8 @@ int IPACM_LanToLan_Iface::add_client_flt_rule(peer_iface_info *peer, client_info
 						else
 							pipe_idx_siface = 2;
 					}
-					IPACMDBG_H("m_is_sIface %d, pipe_idx_siface %d, client->vlan_id %d \n", m_is_sIface, pipe_idx_siface, client->vlan_id);
-					IPACMDBG_H("This flt rule points to rt tbl %s.\n", rt_tbl.name);
+					IPACMDBG_H("Lan2Lan_v2: m_is_sIface %d, pipe_idx_siface %d, client->vlan_id %d \n", m_is_sIface, pipe_idx_siface, client->vlan_id);
+					IPACMDBG_H("Lan2Lan_v2: This flt rule points to rt tbl %s.\n", rt_tbl.name);
 
 					if(IPACM_Iface::m_routing.GetRoutingTable(&rt_tbl) == false)
 					{

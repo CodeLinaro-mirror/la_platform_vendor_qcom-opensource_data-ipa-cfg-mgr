@@ -714,13 +714,13 @@ public:
 	static NatApp* GetInstance();
 
 #ifdef FEATURE_VLAN_MPDN
-	int AddPdn(uint32_t pub_ip, uint8_t mux_id, bool is_sta, bool ip_pass);
+	int AddPdn(uint32_t pub_ip, uint8_t mux_id, bool is_sta, bool ip_pass, bool is_xlat = false);
 	int RemovePdn(uint32_t pub_ip);
 #endif
 	bool ChkForDupGRE(const nat_table_entry *);
 	bool isAlgPort(uint8_t, uint16_t);
 
-	int AddTable(uint32_t, uint8_t mux_id, bool is_sta);
+	int AddTable(uint32_t, uint8_t mux_id, bool is_sta, bool is_xlat = false);
 	int DeleteTable(uint32_t);
 	int MoveTable(bool to_ddr);
 

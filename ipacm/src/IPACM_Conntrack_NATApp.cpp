@@ -47,6 +47,7 @@ extern "C"
 
 #define HDR_METADATA_MUX_ID_BMASK 0x00FF0000
 #define HDR_METADATA_MUX_ID_SHFT 0x10
+#define HDR_METADATA_SKIP_UC_BIT 0x80
 
 #define DUAL_BACKHAUL_PDN_COUNT 2
 
@@ -168,12 +169,12 @@ NatApp* NatApp::GetInstance()
 
 uint32_t NatApp::GenerateMetdata(uint8_t mux_id)
 {
-	return (mux_id << HDR_METADATA_MUX_ID_SHFT) & HDR_METADATA_MUX_ID_BMASK;
+	return ((mux_id << HDR_METADATA_MUX_ID_SHFT) & HDR_METADATA_MUX_ID_BMASK);
 }
 
 /* NAT APP related object function definitions */
 #ifdef FEATURE_VLAN_MPDN
-int NatApp::AddPdn(uint32_t pub_ip, uint8_t mux_id, bool is_sta, bool ip_pass)
+int NatApp::AddPdn(uint32_t pub_ip, uint8_t mux_id, bool is_sta, bool ip_pass, bool is_xlat)
 {
 	int ret = IPACM_SUCCESS;
 	int cnt = 0;
@@ -185,6 +186,8 @@ int NatApp::AddPdn(uint32_t pub_ip, uint8_t mux_id, bool is_sta, bool ip_pass)
 
 	entry.dst_metadata = 0;
 	entry.src_metadata = GenerateMetdata(mux_id);
+	if (is_xlat && IPACM_Iface::ipacmcfg->ipacm_static_policy_enable)
+		entry.src_metadata |= HDR_METADATA_SKIP_UC_BIT;
 	entry.public_ip = pub_ip;
 	entry.is_sta = is_sta;
 
@@ -217,6 +220,8 @@ int NatApp::AddPdn(uint32_t pub_ip, uint8_t mux_id, bool is_sta, bool ip_pass)
 		}
 		IPACMDBG_H("succeesfully created NAT table for ip 0x%X\n", pub_ip);
 		entry.src_metadata = GenerateMetdata(mux_id);
+		if (is_xlat && IPACM_Iface::ipacmcfg->ipacm_static_policy_enable)
+			entry.src_metadata |= HDR_METADATA_SKIP_UC_BIT;
 		pdn_index = 1;
 #ifdef FEATURE_DUAL_BACKHAUL
 		if(is_sta)
@@ -236,6 +241,7 @@ int NatApp::AddPdn(uint32_t pub_ip, uint8_t mux_id, bool is_sta, bool ip_pass)
 			IPACMERR("unable to modify PDN 0 entry Error:%d\n", ret);
 			return ret;
 		}
+		IPACMDBG_H("src_metadata 0x%x\n", entry.src_metadata);
 	}
 	else
 	{
@@ -337,7 +343,7 @@ int NatApp::AddPdn(uint32_t pub_ip, uint8_t mux_id, bool is_sta, bool ip_pass)
 	return ret;
 }
 #endif
-int NatApp::AddTable(uint32_t pub_ip, uint8_t mux_id, bool is_sta)
+int NatApp::AddTable(uint32_t pub_ip, uint8_t mux_id, bool is_sta, bool is_xlat)
 {
 	int ret;
 	int cnt = 0;
@@ -366,6 +372,8 @@ int NatApp::AddTable(uint32_t pub_ip, uint8_t mux_id, bool is_sta)
 
 		entry.dst_metadata = 0;
 		entry.src_metadata = GenerateMetdata(mux_id);
+		if (is_xlat && IPACM_Iface::ipacmcfg->ipacm_static_policy_enable)
+			entry.src_metadata |= HDR_METADATA_SKIP_UC_BIT;
 		entry.public_ip = pub_ip;
 		ret = ipa_nat_modify_pdn(nat_table_hdl, 0, &entry);
 		if(ret)

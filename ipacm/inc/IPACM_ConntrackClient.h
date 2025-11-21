@@ -58,6 +58,9 @@ using namespace std;
 #define UDP_TIMEOUT_UPDATE 20
 #define BROADCAST_IPV4_ADDR 0xFFFFFFFF
 
+extern int cur_nat_entries;
+extern int cur_ct_entries;
+
 class IPACM_ConntrackClient
 {
 

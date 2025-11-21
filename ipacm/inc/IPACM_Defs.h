@@ -473,6 +473,7 @@ typedef struct
 	int mux_id;
 	int ipv4_addr;
 	bool is_xlat;
+	uint32_t ipv6_prefix[2];
 }ipacm_event_vlan_pdn;
 
 typedef enum

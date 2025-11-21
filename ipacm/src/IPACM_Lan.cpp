@@ -1563,7 +1563,7 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 					it = neigh_cache.begin();
 					while (it != neigh_cache.end())
 					{
-						if (it->ipv6_addr[0] == data_wan->ipv6_prefix[0] && it->ipv6_addr[1] == data_wan->ipv6_prefix[1])
+						if (it->ipv6_addr[0] == data->ipv6_prefix[0] && it->ipv6_addr[1] == data->ipv6_prefix[1])
 						{
 							/* In both LTE and WLAN down receiving vlan id 0 but as
 							prefix is different clearing neigh cache entry for prefix*/

@@ -88,6 +88,7 @@
 typedef struct _wlan_client_rt_hdl
 {
 	uint32_t wifi_rt_rule_hdl_v4;
+	uint32_t lan2lan_wifi_rt_rule_hdl_v4;
 }wlan_client_rt_hdl;
 
 typedef struct _ipa_wlan_client
@@ -329,14 +330,6 @@ private:
 
 	bool vlan_enabled_ap;
 
-#ifdef FEATURE_IPACM_PER_CLIENT_STATS
-	static bool lan_stats_inited;
-	/* Clients which take HW path. */
-	static ipa_lan_client_idx active_lan_client_index[IPA_MAX_NUM_HW_PATH_CLIENTS];
-	/* Clients which take SW path. */
-	static ipa_lan_client_idx inactive_lan_client_index[IPA_MAX_NUM_HW_PATH_CLIENTS];
-#endif
-
 	inline ipa_wlan_client* get_client_memptr(ipa_wlan_client *param, int cnt)
 	{
 	    char *ret = ((char *)param) + (wlan_client_len * cnt);
@@ -478,25 +471,38 @@ private:
 		if(iptype == IPA_IP_v4)
 		{
 
-		    for(tx_index = 0; tx_index < iface_query->num_tx_props; tx_index++)
-		    {
-		        if((tx_prop->tx[tx_index].ip == IPA_IP_v4) && (get_client_memptr(wlan_client, clt_indx)->route_rule_set_v4==true)) /* for ipv4 */
+			for (tx_index = 0; tx_index < iface_query->num_tx_props; tx_index++)
 			{
-				IPACMDBG_H("Delete client index %d ipv4 Qos rules for tx:%d \n",clt_indx,tx_index);
-				rt_hdl = get_client_memptr(wlan_client, clt_indx)->wifi_rt_hdl[tx_index].wifi_rt_rule_hdl_v4;
-
-				if(m_routing.DeleteRoutingHdl(rt_hdl, IPA_IP_v4) == false)
+				if ((tx_prop->tx[tx_index].ip == IPA_IP_v4) && (get_client_memptr(wlan_client, clt_indx)->route_rule_set_v4 == true)) /* for ipv4 */
 				{
-					return IPACM_FAILURE;
-				}
-			}
-		     } /* end of for loop */
+					IPACMDBG_H("Delete client index %d ipv4 Qos rules for tx:%d \n", clt_indx, tx_index);
+					rt_hdl = get_client_memptr(wlan_client, clt_indx)->wifi_rt_hdl[tx_index].wifi_rt_rule_hdl_v4;
 
-		     /* clean the 4 Qos ipv4 RT rules for client:clt_indx */
-		     if(get_client_memptr(wlan_client, clt_indx)->route_rule_set_v4==true) /* for ipv4 */
-		     {
+					if (m_routing.DeleteRoutingHdl(rt_hdl, IPA_IP_v4) == false)
+					{
+						return IPACM_FAILURE;
+					}
+				}
+				if ((tx_prop->tx[tx_index].ip == IPA_IP_v4) && get_client_memptr(wlan_client, clt_indx)->lan2lan_route_rule_set_v4 == true) /* for ipv4 */
+				{
+					rt_hdl = get_client_memptr(wlan_client, clt_indx)->wifi_rt_hdl[tx_index].lan2lan_wifi_rt_rule_hdl_v4;
+					IPACMDBG_H("InteBridge Rt rule hdl (%u) Delete client index %d ipv4 RT-rules for tx:%d\n", rt_hdl, clt_indx, tx_index);
+					IPACMDBG_H("Had interBridege rt rule with ip 0x%x\n", get_client_memptr(wlan_client, clt_indx)->v4_addr);
+					if (m_routing.DeleteRoutingHdl(rt_hdl, IPA_IP_v4) == false)
+					{
+						return IPACM_FAILURE;
+					}
+				}
+			} /* end of for loop */
+			if (get_client_memptr(wlan_client, clt_indx)->lan2lan_route_rule_set_v4 == true) /* for ipv4 */
+			{
+				get_client_memptr(wlan_client, clt_indx)->lan2lan_route_rule_set_v4 = false;
+			}
+			/* clean the 4 Qos ipv4 RT rules for client:clt_indx */
+			if (get_client_memptr(wlan_client, clt_indx)->route_rule_set_v4 == true) /* for ipv4 */
+			{
 				get_client_memptr(wlan_client, clt_indx)->route_rule_set_v4 = false;
-		     }
+			}
 		}
 
 		if(iptype == IPA_IP_v6)
@@ -533,7 +539,7 @@ private:
 							}
 						} /* end of tx loop */
 						it->second.route_rule_set_v6 = false;
-						get_client_memptr(wlan_client, clt_indx)->route_rule_set_v6 = 0;;
+						get_client_memptr(wlan_client, clt_indx)->route_rule_set_v6 = 0;
 					} /* end of route_rule_set_v6 */
 				} /* end of for loop */
 			}
@@ -541,6 +547,46 @@ private:
 				clt_indx, get_client_memptr(wlan_client, clt_indx)->ipv6_set,
 				get_client_memptr(wlan_client, clt_indx)->route_rule_set_v6,
 				IPACM_Iface::ipacmcfg->ipa_num_clients_ipv6);
+			if (IPACM_Iface::ipacmcfg->inter_bridge_lantolan_config_enable == true)
+			{
+				IPACMDBG_H("InterBridge : Current %d client has %d ipv6 route_set %d,ipa_num_clients_ipv6:%d\n",
+					clt_indx, get_client_memptr(wlan_client, clt_indx)->ipv6_set,
+					get_client_memptr(wlan_client, clt_indx)->lan2lan_route_rule_set_v6,
+					IPACM_Iface::ipacmcfg->ipa_num_clients_ipv6);
+				if (!rt_hdl_v6_list[clt_indx].empty())
+				{
+					for (auto it = rt_hdl_v6_list[clt_indx].begin(); it != rt_hdl_v6_list[clt_indx].end(); ++it)
+					{
+						num_v6++;
+						IPACMDBG_H("v6 addr : 0x%08x:%08x:%08x:%08x\n",
+							it->first[0], it->first[1], it->first[2], it->first[3]);
+						for (tx_index = 0; tx_index < iface_query->num_tx_props; tx_index++)
+						{
+							if (tx_prop->tx[tx_index].ip == IPA_IP_v6) /* for ipv6 */
+							{
+								rt_hdl = it->second.hdl_v6[tx_index].rt_rule_hdl_v6_lan2lan;
+
+								if (rt_hdl != 0)
+								{
+									IPACMDBG_H("InterBridge : hdl (%u)Delete client index %d ipv6 rules for %d-st ipv6 for tx:%d\n",
+										rt_hdl, clt_indx, num_v6, tx_index);
+									if (m_routing.DeleteRoutingHdl(rt_hdl, IPA_IP_v6) == false)
+									{
+										return IPACM_FAILURE;
+									}
+									it->second.hdl_v6[tx_index].rt_rule_hdl_v6_lan2lan = 0;
+								}
+							}
+						} /* end of tx loop */
+						it->second.lan2lan_route_rule_set_v6 = false;
+					} /* end of for loop */
+					get_client_memptr(wlan_client, clt_indx)->lan2lan_route_rule_set_v6 = 0;
+				}
+				IPACMDBG_H("InterBridge : Current clnt-index:%d ipv6_set= %d, lan2lan_route_rule_set_v6= %d, update ipa_num_clients_ipv6:%d\n",
+						   clt_indx, get_client_memptr(wlan_client, clt_indx)->ipv6_set,
+						   get_client_memptr(wlan_client, clt_indx)->lan2lan_route_rule_set_v6,
+						   IPACM_Iface::ipacmcfg->ipa_num_clients_ipv6);
+			}
 		}
 		return IPACM_SUCCESS;
 	}
@@ -548,11 +594,11 @@ private:
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
 		inline bool is_lan_stats_index_available()
 		{
-			int cnt;
+			uint8_t cnt;
 
-			for(cnt = 0; cnt < IPA_MAX_NUM_HW_PATH_CLIENTS; cnt++)
+			for(cnt = 0; cnt < IPA_MAX_NUM_HW_PATH_CLIENTS_V2; cnt++)
 			{
-				if (IPACM_Wlan::active_lan_client_index[cnt].lan_stats_idx == -1) {
+				if (IPACM_Iface::ipacmcfg->active_lan_client_index[cnt].lan_stats_idx == -1) {
 					IPACMDBG_H("Available free index :%d\n", cnt);
 					return true;
 				}
@@ -562,9 +608,9 @@ private:
 			return false;
 		}
 
-		inline int8_t get_free_active_lan_stats_index(uint8_t *mac_addr, int ipa_if_num)
+		inline int get_free_active_lan_stats_index(uint8_t *mac_addr, int ipa_if_num)
 		{
-			int cnt;
+			uint8_t cnt;
 
 			if (!IPACM_Iface::ipacmcfg->ipacm_lan_stats_enable)
 			{
@@ -576,15 +622,13 @@ private:
 					mac_addr[0], mac_addr[1], mac_addr[2],
 					mac_addr[3], mac_addr[4], mac_addr[5]);
 
-			for(cnt = 0; cnt < IPA_MAX_NUM_HW_PATH_CLIENTS; cnt++)
+			for(cnt = 0; cnt < IPA_MAX_NUM_HW_PATH_CLIENTS_V2; cnt++)
 			{
-				if (IPACM_Wlan::active_lan_client_index[cnt].lan_stats_idx == -1) {
+				if (IPACM_Iface::ipacmcfg->active_lan_client_index[cnt].lan_stats_idx == -1) {
 					IPACMDBG_H("Got active lan stats index :%d, reserve it\n", cnt);
-					IPACM_Wlan::active_lan_client_index[cnt].lan_stats_idx = cnt;
-					memcpy(IPACM_Wlan::active_lan_client_index[cnt].mac,
-							mac_addr,
-							IPA_MAC_ADDR_SIZE);
-					IPACM_Wlan::active_lan_client_index[cnt].ipa_if_num = ipa_if_num;
+					IPACM_Iface::ipacmcfg->active_lan_client_index[cnt].lan_stats_idx = cnt;
+					memcpy(IPACM_Iface::ipacmcfg->active_lan_client_index[cnt].mac, mac_addr, IPA_MAC_ADDR_SIZE);
+					IPACM_Iface::ipacmcfg->active_lan_client_index[cnt].ipa_if_num = ipa_if_num;
 					return cnt;
 				}
 			}
@@ -593,9 +637,9 @@ private:
 			return -1;
 		}
 
-		inline int8_t get_free_inactive_lan_stats_index(uint8_t *mac_addr)
+		inline int get_free_inactive_lan_stats_index(uint8_t *mac_addr)
 		{
-			int cnt;
+			uint8_t cnt;
 
 			if (!IPACM_Iface::ipacmcfg->ipacm_lan_stats_enable)
 			{
@@ -607,15 +651,13 @@ private:
 					mac_addr[0], mac_addr[1], mac_addr[2],
 					mac_addr[3], mac_addr[4], mac_addr[5]);
 
-			for(cnt = 0; cnt < IPA_MAX_NUM_HW_PATH_CLIENTS; cnt++)
+			for(cnt = 0; cnt < IPA_MAX_NUM_HW_PATH_CLIENTS_V2; cnt++)
 			{
-				if (IPACM_Wlan::inactive_lan_client_index[cnt].lan_stats_idx == -1) {
+				if (IPACM_Iface::ipacmcfg->inactive_lan_client_index[cnt].lan_stats_idx == -1) {
 					IPACMDBG_H("Got inactive lan stats index :%d, reserve it\n", cnt);
-					IPACM_Wlan::inactive_lan_client_index[cnt].lan_stats_idx = cnt;
-					memcpy(IPACM_Wlan::inactive_lan_client_index[cnt].mac,
-							mac_addr,
-							IPA_MAC_ADDR_SIZE);
-					IPACM_Wlan::inactive_lan_client_index[cnt].ipa_if_num = ipa_if_num;
+					IPACM_Iface::ipacmcfg->inactive_lan_client_index[cnt].lan_stats_idx = cnt;
+					memcpy(IPACM_Iface::ipacmcfg->inactive_lan_client_index[cnt].mac, mac_addr, IPA_MAC_ADDR_SIZE);
+					IPACM_Iface::ipacmcfg->inactive_lan_client_index[cnt].ipa_if_num = ipa_if_num;
 					return cnt;
 				}
 			}
@@ -624,9 +666,9 @@ private:
 			return -1;
 		}
 
-		inline int8_t get_lan_stats_index(uint8_t *mac_addr)
+		inline int get_lan_stats_index(uint8_t *mac_addr)
 		{
-			int cnt;
+			uint8_t cnt;
 
 			if (!IPACM_Iface::ipacmcfg->ipacm_lan_stats_enable)
 			{
@@ -638,16 +680,16 @@ private:
 					mac_addr[0], mac_addr[1], mac_addr[2],
 					mac_addr[3], mac_addr[4], mac_addr[5]);
 
-			for(cnt = 0; cnt < IPA_MAX_NUM_HW_PATH_CLIENTS; cnt++)
+			for(cnt = 0; cnt < IPA_MAX_NUM_HW_PATH_CLIENTS_V2; cnt++)
 			{
-				if ((memcmp(IPACM_Wlan::active_lan_client_index[cnt].mac,
+				if ((memcmp(IPACM_Iface::ipacmcfg->active_lan_client_index[cnt].mac,
 						mac_addr,
 						IPA_MAC_ADDR_SIZE) == 0) &&
-						(IPACM_Wlan::active_lan_client_index[cnt].ipa_if_num
+						(IPACM_Iface::ipacmcfg->active_lan_client_index[cnt].ipa_if_num
 						== ipa_if_num)) {
 					IPACMDBG_H("Got lan stats index :%d, return\n", cnt);
-					IPACM_Wlan::active_lan_client_index[cnt].lan_stats_idx = cnt;
-					memcpy(IPACM_Wlan::active_lan_client_index[cnt].mac,
+					IPACM_Iface::ipacmcfg->active_lan_client_index[cnt].lan_stats_idx = cnt;
+					memcpy(IPACM_Iface::ipacmcfg->active_lan_client_index[cnt].mac,
 							mac_addr,
 							IPA_MAC_ADDR_SIZE);
 					return cnt;
@@ -660,7 +702,7 @@ private:
 
 		inline int get_available_inactive_lan_client(uint8_t *mac_addr, int *ipa_if_num)
 		{
-			int cnt;
+			uint8_t cnt;
 
 			if (!IPACM_Iface::ipacmcfg->ipacm_lan_stats_enable)
 			{
@@ -672,12 +714,12 @@ private:
 					mac_addr[0], mac_addr[1], mac_addr[2],
 					mac_addr[3], mac_addr[4], mac_addr[5]);
 
-			for(cnt = 0; cnt < IPA_MAX_NUM_HW_PATH_CLIENTS; cnt++)
+			for(cnt = 0; cnt < IPA_MAX_NUM_HW_PATH_CLIENTS_V2; cnt++)
 			{
-				if (IPACM_Wlan::inactive_lan_client_index[cnt].lan_stats_idx != -1) {
+				if (IPACM_Iface::ipacmcfg->inactive_lan_client_index[cnt].lan_stats_idx != -1) {
 					IPACMDBG_H("Got inactive lan stats index :%d, return the mac\n", cnt);
-					memcpy(mac_addr, IPACM_Wlan::inactive_lan_client_index[cnt].mac, IPA_MAC_ADDR_SIZE);
-					*ipa_if_num = IPACM_Wlan::inactive_lan_client_index[cnt].ipa_if_num;
+					memcpy(mac_addr, IPACM_Iface::ipacmcfg->inactive_lan_client_index[cnt].mac, IPA_MAC_ADDR_SIZE);
+					*ipa_if_num = IPACM_Iface::ipacmcfg->inactive_lan_client_index[cnt].ipa_if_num;
 					return IPACM_SUCCESS;
 				}
 			}
@@ -686,7 +728,7 @@ private:
 			return IPACM_FAILURE;
 		}
 
-		inline int8_t reset_active_lan_stats_index(int8_t idx, uint8_t *mac_addr)
+		inline int reset_active_lan_stats_index(int8_t idx, uint8_t *mac_addr)
 		{
 			if (!IPACM_Iface::ipacmcfg->ipacm_lan_stats_enable)
 			{
@@ -698,21 +740,21 @@ private:
 					mac_addr[0], mac_addr[1], mac_addr[2],
 					mac_addr[3], mac_addr[4], mac_addr[5]);
 
-			if (idx < 0 || idx >= IPA_MAX_NUM_HW_PATH_CLIENTS ||
-				memcmp(IPACM_Wlan::active_lan_client_index[idx].mac,
+			if (idx < 0 || idx >= IPA_MAX_NUM_HW_PATH_CLIENTS_V2 ||
+				memcmp(IPACM_Iface::ipacmcfg->active_lan_client_index[idx].mac,
 								mac_addr,
 								IPA_MAC_ADDR_SIZE))
 			{
 				IPACMDBG_H("Index :%d invalid\n", idx);
 				return IPACM_FAILURE;
 			}
-			memset(&IPACM_Wlan::active_lan_client_index[idx], -1, sizeof(ipa_lan_client_idx));
+			memset(&IPACM_Iface::ipacmcfg->active_lan_client_index[idx], -1, sizeof(IPACM_Config::ipa_lan_client_idx));
 			return IPACM_SUCCESS;
 		}
 
-		inline int8_t reset_inactive_lan_stats_index(uint8_t *mac_addr, int ipa_index)
+		inline int reset_inactive_lan_stats_index(uint8_t *mac_addr, int ipa_index)
 		{
-			int cnt;
+			uint8_t cnt;
 
 			if (!IPACM_Iface::ipacmcfg->ipacm_lan_stats_enable)
 			{
@@ -724,14 +766,14 @@ private:
 					mac_addr[0], mac_addr[1], mac_addr[2],
 					mac_addr[3], mac_addr[4], mac_addr[5]);
 
-			for(cnt = 0; cnt < IPA_MAX_NUM_HW_PATH_CLIENTS; cnt++)
+			for(cnt = 0; cnt < IPA_MAX_NUM_HW_PATH_CLIENTS_V2; cnt++)
 			{
-				if (memcmp(IPACM_Wlan::inactive_lan_client_index[cnt].mac,
+				if (memcmp(IPACM_Iface::ipacmcfg->inactive_lan_client_index[cnt].mac,
 								mac_addr,
 								IPA_MAC_ADDR_SIZE) == 0 &&
-					IPACM_Wlan::inactive_lan_client_index[cnt].ipa_if_num == ipa_index)
+					IPACM_Iface::ipacmcfg->inactive_lan_client_index[cnt].ipa_if_num == ipa_index)
 				{
-					memset(&IPACM_Wlan::inactive_lan_client_index[cnt], -1, sizeof(ipa_lan_client_idx));
+					memset(&IPACM_Iface::ipacmcfg->inactive_lan_client_index[cnt], -1, sizeof(IPACM_Config::ipa_lan_client_idx));
 					return IPACM_SUCCESS;
 				}
 			}
@@ -740,7 +782,7 @@ private:
 
 		inline void reset_lan_stats_index()
 		{
-			int i;
+			uint8_t i;
 
 			if (!IPACM_Iface::ipacmcfg->ipacm_lan_stats_enable)
 			{
@@ -749,12 +791,12 @@ private:
 			}
 
 			/* Reset everything based on ipa_if_num. */
-			for (i = 0; i < IPA_MAX_NUM_HW_PATH_CLIENTS; i++)
+			for (i = 0; i < IPA_MAX_NUM_HW_PATH_CLIENTS_V2; i++)
 			{
-				if (IPACM_Wlan::active_lan_client_index[i].ipa_if_num == ipa_if_num)
-					memset(&IPACM_Wlan::active_lan_client_index[i], -1, sizeof(ipa_lan_client_idx));
-				if (IPACM_Wlan::inactive_lan_client_index[i].ipa_if_num == ipa_if_num)
-					memset(&IPACM_Wlan::inactive_lan_client_index[i], -1, sizeof(ipa_lan_client_idx));
+				if (IPACM_Iface::ipacmcfg->active_lan_client_index[i].ipa_if_num == ipa_if_num)
+					memset(&IPACM_Iface::ipacmcfg->active_lan_client_index[i], -1, sizeof(IPACM_Config::ipa_lan_client_idx));
+				if (IPACM_Iface::ipacmcfg->inactive_lan_client_index[i].ipa_if_num == ipa_if_num)
+					memset(&IPACM_Iface::ipacmcfg->inactive_lan_client_index[i], -1, sizeof(IPACM_Config::ipa_lan_client_idx));
 			}
 		}
 

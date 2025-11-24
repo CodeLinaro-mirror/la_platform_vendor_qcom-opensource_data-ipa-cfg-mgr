@@ -1461,7 +1461,6 @@ static int ipa_nl_decode_nlmsg
 					IPACM_EVENT_COPY_ADDR_v4( data_addr->ipv4_addr, msg_ptr->nl_addr_info.attr_info.prefix_addr);
 					data_addr->ipv4_addr = ntohl(data_addr->ipv4_addr);
 					prefix_len = ((prefix_len >> (IPV4_SIZE - msg_ptr->nl_addr_info.metainfo.ifa_prefixlen)) << (IPV4_SIZE - msg_ptr->nl_addr_info.metainfo.ifa_prefixlen));
-					data_addr->ipv4_addr = (data_addr->ipv4_addr & prefix_len);
 					data_addr->ipv4_addr_mask = prefix_len;
 
 				}
@@ -3061,14 +3060,13 @@ proces_getroute:
 			 IPACM_Iface::ipacmcfg->eth_vlan_wan_enable  ||
 			 (nl_route_info_get_route.metainfo.rtm_table == RT_TABLE_MAIN)))
 		{
-			IPACMDBG("\n GOT valid v6-RTM_NEWROUTE event\n");
+			IPACMDBG("\n GOT valid v6-RTM_NEWROUTE event, table = %d \n", nl_route_info_get_route.metainfo.rtm_table);
 			ret_val = ipa_get_if_name(dev_name, nl_route_info_get_route.attr_info.oif_index);
 			if(ret_val != IPACM_SUCCESS)
 			{
 				IPACMERR("Error while getting interface name\n");
 				goto error;
 			}
-
 			if(nl_route_info_get_route.attr_info.param_mask & IPA_RTA_PARAM_DST)
 			{
 				IPACM_NL_REPORT_ADDR( "Route ADD DST:\n", nl_route_info_get_route.attr_info.dst_addr );
@@ -3136,7 +3134,6 @@ proces_getroute:
 				IPACMDBG(" metric %d, dev %s\n",
 								 nl_route_info_get_route.attr_info.priority,
 								 dev_name);
-
 				/* insert to command queue */
 				data_addr = (ipacm_event_data_addr *)malloc(sizeof(ipacm_event_data_addr));
 				if(data_addr == NULL)
@@ -3163,18 +3160,32 @@ proces_getroute:
 				data_addr->ipv6_addr[2]=ntohl(data_addr->ipv6_addr[2]);
 				data_addr->ipv6_addr[3]=ntohl(data_addr->ipv6_addr[3]);
 
+				IPACMDBG("ipv6_addr: %08x:%08x:%08x:%08x \n",
+					data_addr->ipv6_addr[0],
+					data_addr->ipv6_addr[1],
+					data_addr->ipv6_addr[2],
+					data_addr->ipv6_addr[3]);
 				IPACM_EVENT_COPY_ADDR_v6( data_addr->ipv6_addr_mask, nl_route_info_get_route.attr_info.dst_addr);
 
 				data_addr->ipv6_addr_mask[0]=ntohl(data_addr->ipv6_addr_mask[0]);
 				data_addr->ipv6_addr_mask[1]=ntohl(data_addr->ipv6_addr_mask[1]);
 				data_addr->ipv6_addr_mask[2]=ntohl(data_addr->ipv6_addr_mask[2]);
 				data_addr->ipv6_addr_mask[3]=ntohl(data_addr->ipv6_addr_mask[3]);
-
+				IPACMDBG("ipv6_addr_mask: %08x:%08x:%08x:%08x \n",
+					data_addr->ipv6_addr_mask[0],
+					data_addr->ipv6_addr_mask[1],
+					data_addr->ipv6_addr_mask[2],
+					data_addr->ipv6_addr_mask[3]);
 				IPACM_EVENT_COPY_ADDR_v6( data_addr->ipv6_addr_gw, nl_route_info_get_route.attr_info.gateway_addr);
 				data_addr->ipv6_addr_gw[0] = ntohl(data_addr->ipv6_addr_gw[0]);
 				data_addr->ipv6_addr_gw[1] = ntohl(data_addr->ipv6_addr_gw[1]);
 				data_addr->ipv6_addr_gw[2] = ntohl(data_addr->ipv6_addr_gw[2]);
 				data_addr->ipv6_addr_gw[3] = ntohl(data_addr->ipv6_addr_gw[3]);
+				IPACMDBG("ipv6_addr_gw: %08x:%08x:%08x:%08x \n",
+					data_addr->ipv6_addr_gw[0],
+					data_addr->ipv6_addr_gw[1],
+					data_addr->ipv6_addr_gw[2],
+					data_addr->ipv6_addr_gw[3]);
 				IPACM_NL_REPORT_ADDR( " ", nl_route_info_get_route.attr_info.gateway_addr);
 
 				if(IPACM_Iface::ipacmcfg->eth_wan_pppoe_enable ||
@@ -3237,7 +3248,7 @@ process_getroute_v6:
 						strlcpy(IPACM_Iface::ipacmcfg->iface_table[instance_found].phy_dev_name,
 							dev_name, ETH_PHY_IFACE_LEN);
 					}
-
+					IPACMDBG("Posting IPA_USB_LINK_UP_EVENT for %s\n", dev_name);
 					strlcpy(IPACM_Iface::ipacmcfg->iface_table[instance_found].iface_name,
 						dev_name, sizeof(IPACM_Iface::ipacmcfg->iface_table[instance_found].iface_name));
 					IPACM_Iface::ipacmcfg->iface_table[instance_found].virtual_iface = true;

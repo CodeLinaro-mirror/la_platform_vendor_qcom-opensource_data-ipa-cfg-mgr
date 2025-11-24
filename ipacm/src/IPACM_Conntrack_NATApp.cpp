@@ -920,9 +920,10 @@ bool NatApp::firewall_tuple_match_with_nat(IPACM_extd_swallow_entry_conf_t extd_
 
 void NatApp::HandleSWAllowEntries(void)
 {
-	int i, j, cnt;
+	int i, j, k,cnt;
 	IPACM_swallow_conf_t entry;
 	const nat_table_entry *del_entry;
+	bool pdn_found=false;
 	IPACMDBG("Entry\n");
 
 	if(!IPACM_Iface::ipacmcfg->sw_filter_cfg)
@@ -939,6 +940,29 @@ void NatApp::HandleSWAllowEntries(void)
 	{
 		firewall_compare(&backup_sw_filter_cfg.pdns[i], &sw_filter_cfg.pdns[i]);
 	}
+
+	for(i = 0; i < backup_sw_filter_cfg.pdn_count; i++)
+	{
+		pdn_found = false;
+		for(k = 0; k < sw_filter_cfg.pdn_count; k++)
+		{
+			if (strncmp(backup_sw_filter_cfg.pdns[i].net_dev, sw_filter_cfg.pdns[k].net_dev, IPA_IFACE_NAME_LEN) == 0)
+			{
+				pdn_found = true;
+				break;
+			}
+		}
+
+		if (!pdn_found)
+		{
+			IPACMDBG_H("PDN with netdev '%s' was removed from sw_filter_cfg. Restoring NAT entries.\n",
+					backup_sw_filter_cfg.pdns[i].net_dev);
+			for(j = 0; j < backup_sw_filter_cfg.pdns[i].num_extd_swallow_entries; j++) {
+				restore_nat_for_sw_flt_entries(backup_sw_filter_cfg.pdns[i].extd_swallow_entries[j]);
+			}
+		}
+	}
+
 	for(i = 0; i < sw_filter_cfg.pdn_count; i++)
 	{
 		IPACMDBG("pdn_index_v4 %d\n", sw_filter_cfg.pdns[i].v4_up);
@@ -1274,6 +1298,7 @@ void NatApp::UpdateUDPTimeStamp()
 	uint32_t ts;
 	bool read_to = false;
 	bool keep_awake;
+	uint32_t redirect;
 
 	keep_awake = ( max_entries && SRAM_IN_USE() && ipa_nat_is_sram_supported() );
 
@@ -1291,14 +1316,21 @@ void NatApp::UpdateUDPTimeStamp()
 	for(cnt = 0; cnt < max_entries; cnt++)
 	{
 		ts = 0;
+		redirect = 0;
 		if(cache[cnt].enabled == true &&
 		   ((cache[cnt].private_ip != cache[cnt].public_ip) ||
 		   		(cache[cnt].ip_pass_entry)))
 		{
 			IPACMDBG("\n");
-			if(ipa_nat_query_timestamp(nat_table_hdl, cache[cnt].rule_hdl, &ts) < 0)
+			if(ipa_nat_query_timestamp_redirect(nat_table_hdl, cache[cnt].rule_hdl, &ts, &redirect) < 0)
 			{
 				IPACMERR("unable to retrieve timeout for rule handle: %d\n", cache[cnt].rule_hdl);
+				continue;
+			}
+
+			if(redirect)
+			{
+				IPACMDBG("Got RST/FIN req for connection, NAT entry redirect flag is %d\n", redirect);
 				continue;
 			}
 

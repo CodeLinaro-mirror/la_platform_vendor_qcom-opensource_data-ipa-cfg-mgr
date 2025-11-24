@@ -674,8 +674,8 @@ int IPACM_IfaceManager::create_iface_instance(ipacm_ifacemgr_data *param)
 #endif
 					}
 #ifdef FEATURE_EoGRE
-					IPACM_EvtDispatcher::registr(IPA_HANDLE_EoGRE_UP, w);
-					IPACM_EvtDispatcher::registr(IPA_HANDLE_EoGRE_DOWN, w);
+					IPACM_EvtDispatcher::registr(IPA_WAN_HANDLE_EoGRE_UP, w);
+					IPACM_EvtDispatcher::registr(IPA_WAN_HANDLE_EoGRE_DOWN, w);
 #endif
 #ifdef FEATURE_DUAL_BACKHAUL
 					IPACM_EvtDispatcher::registr(IPA_HANDLE_WAN_DOWN, w);

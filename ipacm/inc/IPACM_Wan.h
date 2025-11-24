@@ -55,7 +55,7 @@ IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <IPACM_Defs.h>
 #include <IPACM_Xml.h>
 
-#define IPA_NUM_DEFAULT_WAN_FILTER_RULES 3 /*1 for v4, 2 for v6*/
+#define IPA_NUM_DEFAULT_WAN_FILTER_RULES 6 /*best effort pipe-> 0 for v4, 1 for v6, 4 for v6 icmp; QoS pipe-> 2 for v4, 3 for v6, 5 for v6 icmp*/
 #define IPA_V2_NUM_DEFAULT_WAN_FILTER_RULE_IPV4 2
 #define XLAT_IP 0xc0000000
 
@@ -250,6 +250,7 @@ public:
 		}
 		return false;
 #else
+		IPACMDBG_H("return wan_up %d\n", wan_up);
 		return wan_up;
 #endif
 	}
@@ -305,6 +306,7 @@ public:
 				}
 			}
 		}
+		IPACMDBG_H("No v4 vlan WAN is up\n");
 		return false;
 	}
 
@@ -321,6 +323,7 @@ public:
 				}
 			}
 		}
+		IPACMDBG_H("No v6 vlan WAN is up\n");
 		return false;
 	}
 

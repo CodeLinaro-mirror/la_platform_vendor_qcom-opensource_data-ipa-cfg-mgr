@@ -1247,19 +1247,30 @@ process:
 									else
 									{
 										/* for VLAN interfaces make sure bridge is with correct VID */
+										/* for Special interface allow both vlan and non-vlan clients */
 										if(IPACM_Iface::ipacmcfg->iface_in_vlan_mode(neighbor_client[i].iface_name))
 										{
 											uint16_t vlan_id;
 											if(IPACM_Iface::ipacmcfg->get_vlan_id(neighbor_client[i].iface_name, &vlan_id))
 											{
+												/* we can get non vlan as well as vlan physical neigh */
+												if(IPACM_Iface::ipacmcfg->IsSpclIface(neighbor_client[i].iface_name) && (strcmp(IPACM_Iface::ipacmcfg->ipa_virtual_iface_name, data->iface_name) == 0))
+												{
+													vlan_id = 0;
+													IPACMDBG("setting vid to 0\n");
+												}
+												else
+											{
 												IPACMERR("failed to get iface vlan ID, skipping\n");
 												continue;
 											}
-
-											found = 0;
-											for(int j = 0; j < IPA_MAX_VLAN_PER_BRIDGE; j++)
+											}
+											if (!IPACM_Iface::ipacmcfg->IsSpclIface(neighbor_client[i].iface_name) || (IPACM_Iface::ipacmcfg->IsSpclIface(neighbor_client[i].iface_name) && (vlan_id != 0)))
 											{
-												if(bridge->associate_VID[j] == vlan_id)
+											found = 0;
+												for (int j = 0; j < IPA_MAX_VLAN_PER_BRIDGE; j++)
+											{
+													if (bridge->associate_VID[j] == vlan_id)
 												{
 													IPACMDBG("client bridge vid match (%d)(%d),\n",
 													vlan_id, bridge->associate_VID[j]);
@@ -1273,9 +1284,10 @@ process:
 													continue;
 												}
 											}
-											if(found == 0)
+												if (found == 0)
 												continue;
 											IPACMDBG_H("client - bridge vid match (%d)\n", vlan_id);
+											}
 										}
 									}
 								}

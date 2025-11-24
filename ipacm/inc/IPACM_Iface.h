@@ -116,6 +116,7 @@ using std::vector;
 struct client_rt_hdl_v6 {
 	uint32_t rt_rule_hdl_v6;
 	uint32_t rt_rule_hdl_v6_wan;
+	uint32_t rt_rule_hdl_v6_lan2lan;
 };
 
 #ifdef FEATURE_STATIC_POLICY
@@ -129,6 +130,7 @@ struct dscp_pdn_client_rt_hdl_v6 {
 
 struct handleTypeV6 {
 	bool route_rule_set_v6{false};
+	bool lan2lan_route_rule_set_v6{false};
 	vector<client_rt_hdl_v6> hdl_v6{};
 #ifdef FEATURE_STATIC_POLICY
 	vector<dscp_pdn_client_rt_hdl_v6> dscp_pdn_hdl_v6{};

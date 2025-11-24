@@ -348,6 +348,13 @@ typedef struct
 	uint32_t associate_VID;
 }ipacm_bridge;
 
+struct query_nl_conntrack {
+	bool is_ipv4;
+	uint32_t ipv4_addr;
+	bool is_ipv6;
+	uint32_t ipv6_addr[4];
+};
+
 typedef struct
 {
 	struct nf_conntrack *ct;

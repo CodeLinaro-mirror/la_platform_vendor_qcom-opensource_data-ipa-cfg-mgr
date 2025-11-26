@@ -603,6 +603,7 @@ void IPACM_Wlan::event_callback(ipa_cm_event_id event, void *param)
 
 	case IPA_HANDLE_WAN_VLAN_PDN_DOWN:
 		{
+			uint16_t vlan_id = 0;
 			ipacm_event_vlan_pdn *data = (ipacm_event_vlan_pdn *)param;
 
 			if(data == NULL)
@@ -649,6 +650,39 @@ void IPACM_Wlan::event_callback(ipa_cm_event_id event, void *param)
 				}
 
 				handle_vlan_pdn_down(data);
+				if(((data->iptype == IPA_IP_v6 || data->iptype == IPA_IP_MAX)))
+				{
+					it = neigh_cache.begin();
+					while (it != neigh_cache.end())
+					{
+						if ((it->ipv6_addr[0] == data->ipv6_prefix[0]) && (it->ipv6_addr[1] == data->ipv6_prefix[1]))
+						{
+							/* In both LTE and WLAN down receiving vlan id 0 but as
+							prefix is different clearing neigh cache entry for prefix*/
+							if(data->VlanID == 0)
+							{
+								it = neigh_cache.erase(it);
+							}
+							else if(data->VlanID != 0)
+							{
+								vlan_id = 0;
+								if(IPACM_Iface::ipacmcfg->get_vlan_id(it->iface_name, &vlan_id))
+								{
+									IPACMERR("failed to get iface vlan ID\n");
+									it++;
+									continue;
+								}
+
+								if(data->VlanID == vlan_id)
+								{
+									it = neigh_cache.erase(it);
+								}
+							}
+						}
+						else
+							it++;
+					}
+				}
 			}
 		}
 		break;

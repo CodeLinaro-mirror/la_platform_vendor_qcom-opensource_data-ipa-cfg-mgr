@@ -177,10 +177,12 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 #endif
 	int i, j, ret, ipa_interface_index;
 	ipacm_cmd_q_data evt_data;
-	bool move_elements;
+	bool move_elements = false;
+	bool is_if_index_changed = false;
 	int num_neighbor_client_temp = num_neighbor_client;
 	char iface_name[IPA_IFACE_NAME_LEN] = {0};
-	int bridge_index;
+	int bridge_index = 0;
+	int old_if_index = 0;
 	int skip_nat_set = 0;
 	ipacm_bridge* dummy_vlan_bridge = NULL;
 	ipa_bridge_vlan_mapping_info mapping_info;
@@ -480,6 +482,27 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 					neighbor_client[i].mac_addr[4],
 					neighbor_client[i].mac_addr[5],
 					num_neighbor_client);
+					if(neighbor_client[i].v4_addr != 0 && neighbor_client[i].bridge != NULL)
+					{
+						evt_data.event = IPA_LAN_CLIENT_DEL_EVENT;
+						data_all = (ipacm_event_data_all *)malloc(sizeof(ipacm_event_data_all));
+						if (data_all == NULL)
+						{
+							IPACMERR("Unable to allocate memory\n");
+							return;
+						}
+						memset(data_all, 0, sizeof(data_all));
+						data_all->iptype = IPA_IP_v4;
+						data_all->if_index = neighbor_client[i].iface_index ;
+						memcpy(data_all->mac_addr, neighbor_client[i].mac_addr,
+							sizeof(data_all->mac_addr));
+						data_all->ipv4_addr = neighbor_client[i].v4_addr;
+						memcpy(data_all->iface_name, neighbor_client[i].iface_name,
+							sizeof(data_all->iface_name));
+						evt_data.evt_data = (void *)data_all;
+						IPACMDBG_H("Posting event %s\n", IPACM_Iface::ipacmcfg->getEventName(evt_data.event));
+						IPACM_EvtDispatcher::PostEvt(&evt_data);
+					}
 
 					memset(neighbor_client[i].mac_addr, 0, sizeof(neighbor_client[i].mac_addr));
 					neighbor_client[i].iface_index = 0;
@@ -1553,10 +1576,22 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 									}
 								}
 #endif
+								is_if_index_changed = false;
 								/* use previous ipv4 first */
-								if(data->if_index != neighbor_client[i].iface_index)
+								if((data->if_index != neighbor_client[i].iface_index))
 								{
-									IPACMDBG_H("update new kernel iface index \n");
+									IPACMDBG_H("update new kernel iface index\n");
+									if(!strncmp(neighbor_client[i].iface_name, data->iface_name,
+											sizeof(neighbor_client[i].iface_name)))
+									{
+										IPACMDBG("update new kernel iface index for %s\n",
+												data->iface_name);
+										is_if_index_changed = true;
+										old_if_index = neighbor_client[i].iface_index;
+									}
+									IPACMDBG_H("interface index is changes from %d "
+										    "to new kernel iface index %d\n",
+											old_if_index, data->if_index);
 									neighbor_client[i].iface_index = data->if_index;
 									strlcpy(neighbor_client[i].iface_name, data->iface_name, sizeof(neighbor_client[i].iface_name));
 								}
@@ -1581,6 +1616,25 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 									/* construct IPA_NEIGH_CLIENT_IP_ADDR_ADD_EVENT command and insert to command-queue */
 									if (event == IPA_NEW_NEIGH_EVENT)
 									{
+										/* Clearing the client details from lan class,
+										when interface index is changes after post the
+										IPA_NEIGH_CLIENT_IP_ADDR_ADD_EVENT to lan class with
+										old interface index */
+										if(is_if_index_changed)
+										{
+											evt_data.event = IPA_LAN_CLIENT_DEL_EVENT;
+											data_all = (ipacm_event_data_all *)malloc(sizeof(ipacm_event_data_all));
+											if (data_all == NULL)
+											{
+												IPACMERR("Unable to allocate memory\n");
+												return;
+											}
+											memcpy(data_all, data, sizeof(ipacm_event_data_all));
+											data_all->if_index = old_if_index;
+											evt_data.evt_data = (void *)data_all;
+											IPACM_EvtDispatcher::PostEvt(&evt_data);
+											IPACMDBG_H("new kernel iface index %d\n", data->if_index);
+										}
 										evt_data.event = IPA_LAN_CLIENT_ADD_EVENT;
 										data_all = (ipacm_event_data_all *)malloc(sizeof(ipacm_event_data_all));
 										if (data_all == NULL)
@@ -1589,6 +1643,7 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 											return;
 										}
 										memcpy(data_all, data, sizeof(ipacm_event_data_all));
+										data_all->if_index = neighbor_client[i].iface_index;
 										evt_data.evt_data = (void *)data_all;
 										IPACM_EvtDispatcher::PostEvt(&evt_data);
 										evt_data.event = IPA_NEIGH_CLIENT_IP_ADDR_ADD_EVENT;

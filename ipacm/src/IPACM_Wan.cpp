@@ -1406,7 +1406,7 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 
 					/*to handle if we have missed new route and neigh events before
                                         creation of interface*/
-					ipa_nl_send_getroute(data->iptype);
+					ipa_nl_send_getroute(data->iptype, dev_name);
 					ipa_nl_query_newneigh(AF_INET6, dev_name);
 				}
 			}

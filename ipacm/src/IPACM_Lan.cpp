@@ -777,9 +777,7 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 				IPACMDBG_H("Query Getneigh for physical ifaces\n");
 				ipa_nl_query_newneigh(AF_BRIDGE, dev_name);
 				IPACMDBG_H("Query Getneigh for v4\n");
-				ipa_nl_query_newneigh(AF_INET, dev_name);
-				IPACMDBG_H("Query Getneigh for v6\n");
-				ipa_nl_query_newneigh(AF_INET6, dev_name);
+				ipa_nl_query_newneigh(AF_INET, "bridge");
 			}
 		}
 		break;
@@ -3816,7 +3814,7 @@ int IPACM_Lan::handle_addr_evt(ipacm_event_data_addr *data)
 	IPACMDBG_H("finish route/filter rule ip-type: %d, res(%d)\n", data->iptype, res);
 	/*to handle if we have missed new route events before creation
 	  of physical interface in case there is ETH WAN VLAN iface*/
-	ipa_nl_send_getroute(data->iptype);
+	ipa_nl_send_getroute(data->iptype, dev_name);
 
 	/* TODO: get default MTU here instead of using 1500 */
 

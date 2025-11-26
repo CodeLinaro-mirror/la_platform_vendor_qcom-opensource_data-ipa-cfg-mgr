@@ -2648,7 +2648,7 @@ int ipa_nl_route_recvmsg(int fd, struct msghdr *msg, char **result)
 	return len;
 }
 
-int ipa_nl_send_getroute(ipa_ip_type ip_type)
+int ipa_nl_send_getroute(ipa_ip_type ip_type, char * iface_name)
 {
 
 	ipacm_event_data_addr *data_addr = NULL;
@@ -2765,14 +2765,19 @@ int ipa_nl_send_getroute(ipa_ip_type ip_type)
 					IPACMERR("Error while getting interface name\n");
 					goto error;
 				}
-		
+				if((iface_name != NULL) && memcmp(dev_name, iface_name, sizeof(dev_name)))
+				{
+					IPACMERR("iface %s is not matching with  %s dev_name, so skipping the route query\n",iface_name , dev_name);
+					h = NLMSG_NEXT(h, msglen);
+					continue;
+				}
 				IPACM_NL_REPORT_ADDR( "route add -host", nl_route_info_get_route.attr_info.dst_addr );
 				IPACM_NL_REPORT_ADDR( "gw", nl_route_info_get_route.attr_info.gateway_addr );
 				IPACMDBG("dev %s\n",dev_name );
 				/* insert to command queue */
 				IPACM_EVENT_COPY_ADDR_v4( if_ipv4_addr, nl_route_info_get_route.attr_info.dst_addr);
 				temp = (-1);
-		
+
 				evt_data.event = IPA_ROUTE_ADD_EVENT;
 				data_addr = (ipacm_event_data_addr *)malloc(sizeof(ipacm_event_data_addr));
 				if(data_addr == NULL)
@@ -2780,12 +2785,12 @@ int ipa_nl_send_getroute(ipa_ip_type ip_type)
 					IPACMERR("unable to allocate memory for event data_addr\n");
 					goto error;
 				}
-		
+
 				data_addr->if_index = nl_route_info_get_route.attr_info.oif_index;
 				data_addr->iptype = IPA_IP_v4;
 				data_addr->ipv4_addr = ntohl(if_ipv4_addr);
 				data_addr->ipv4_addr_mask = ntohl(if_ipipv4_addr_mask);
-		
+
 				IPACMDBG("Posting IPA_ROUTE_ADD_EVENT with if index:%d, ipv4 address 0x%x, mask:0x%x\n",
 								 data_addr->if_index,
 								 data_addr->ipv4_addr,
@@ -2793,7 +2798,7 @@ int ipa_nl_send_getroute(ipa_ip_type ip_type)
 				evt_data.evt_data = data_addr;
 				IPACM_EvtDispatcher::PostEvt(&evt_data);
 				/* finish command queue */
-		
+
 			}
 			else
 			{
@@ -2807,8 +2812,14 @@ int ipa_nl_send_getroute(ipa_ip_type ip_type)
 				{
 					IPACM_NL_REPORT_ADDR( "route add default gw \n", nl_route_info_get_route.attr_info.gateway_addr );
 					IPACMDBG_H("dev %s \n", dev_name);
+					if((iface_name != NULL) && memcmp(dev_name, iface_name, sizeof(dev_name)))
+					{
+						IPACMERR("iface %s is not matching with  %s dev_name, so skipping the route query\n",iface_name , dev_name);
+						h = NLMSG_NEXT(h, msglen);
+						continue;
+					}
 					IPACM_NL_REPORT_ADDR( "dstIP:", nl_route_info_get_route.attr_info.dst_addr );
-		
+
 					/* insert to command queue */
 					data_addr = (ipacm_event_data_addr *)malloc(sizeof(ipacm_event_data_addr));
 					if(data_addr == NULL)
@@ -2816,7 +2827,7 @@ int ipa_nl_send_getroute(ipa_ip_type ip_type)
 						IPACMERR("unable to allocate memory for event data_addr\n");
 						goto error;
 					}
-		
+
 					IPACM_EVENT_COPY_ADDR_v4( if_ipv4_addr, nl_route_info_get_route.attr_info.dst_addr);
 					IPACM_EVENT_COPY_ADDR_v4( if_ipipv4_addr_mask, nl_route_info_get_route.attr_info.dst_addr);
 					IPACM_EVENT_COPY_ADDR_v4( if_ipv4_addr_gw, nl_route_info_get_route.attr_info.gateway_addr);
@@ -2892,7 +2903,13 @@ int ipa_nl_send_getroute(ipa_ip_type ip_type)
 				IPACMERR("Error while getting interface name\n");
 				goto error;
 			}
-		
+			if((iface_name != NULL) && memcmp(dev_name, iface_name, sizeof(dev_name)))
+			{
+				IPACMERR("iface %s is not matching with  %s dev_name, so skipping the route query\n",iface_name , dev_name);
+				h = NLMSG_NEXT(h, msglen);
+				continue;
+			}
+
 			if(nl_route_info_get_route.attr_info.param_mask & IPA_RTA_PARAM_DST)
 			{
 				IPACM_NL_REPORT_ADDR( "Route ADD DST:", nl_route_info_get_route.attr_info.dst_addr );
@@ -2900,7 +2917,7 @@ int ipa_nl_send_getroute(ipa_ip_type ip_type)
 								 nl_route_info_get_route.metainfo.rtm_dst_len,
 								 nl_route_info_get_route.attr_info.priority,
 								 dev_name);
-		
+
 				/* insert to command queue */
 				data_addr = (ipacm_event_data_addr *)malloc(sizeof(ipacm_event_data_addr));
 				if(data_addr == NULL)
@@ -2915,7 +2932,7 @@ int ipa_nl_send_getroute(ipa_ip_type ip_type)
 				data_addr->ipv6_addr[1] = ntohl(data_addr->ipv6_addr[1]);
 				data_addr->ipv6_addr[2] = ntohl(data_addr->ipv6_addr[2]);
 				data_addr->ipv6_addr[3] = ntohl(data_addr->ipv6_addr[3]);
-		
+
 				mask_value_v6 = nl_route_info_get_route.metainfo.rtm_dst_len;
 				for(mask_index = 0; mask_index < 4; mask_index++)
 				{
@@ -2930,7 +2947,7 @@ int ipa_nl_send_getroute(ipa_ip_type ip_type)
 						mask_value_v6 = 0;
 					}
 				}
-		
+
 				IPACMDBG("ADD IPV6 MASK %d: %08x:%08x:%08x:%08x \n",
 								nl_route_info_get_route.metainfo.rtm_dst_len,
 								 data_addr->ipv6_addr_mask[0],
@@ -2942,11 +2959,11 @@ int ipa_nl_send_getroute(ipa_ip_type ip_type)
 				data_addr->ipv6_addr_mask[1] = ntohl(data_addr->ipv6_addr_mask[1]);
 				data_addr->ipv6_addr_mask[2] = ntohl(data_addr->ipv6_addr_mask[2]);
 				data_addr->ipv6_addr_mask[3] = ntohl(data_addr->ipv6_addr_mask[3]);
-		
+
 				evt_data.event = IPA_ROUTE_ADD_EVENT;
 				data_addr->if_index = nl_route_info_get_route.attr_info.oif_index;
 				data_addr->iptype = IPA_IP_v6;
-		
+
 				IPACMDBG("Posting IPA_ROUTE_ADD_EVENT with if index:%d, ipv6 addr\n",
 								 data_addr->if_index);
 				evt_data.evt_data = data_addr;
@@ -2959,7 +2976,7 @@ int ipa_nl_send_getroute(ipa_ip_type ip_type)
 				IPACMDBG(" metric %d, dev %s\n",
 								 nl_route_info_get_route.attr_info.priority,
 								 dev_name);
-		
+
 				/* insert to command queue */
 				data_addr = (ipacm_event_data_addr *)malloc(sizeof(ipacm_event_data_addr));
 				if(data_addr == NULL)
@@ -2967,7 +2984,7 @@ int ipa_nl_send_getroute(ipa_ip_type ip_type)
 					IPACMERR("unable to allocate memory for event data_addr\n");
 					goto error;
 				}
-		
+
 				if(nl_route_info_get_route.attr_info.param_mask & IPA_RTA_PARAM_PRIORITY)
 				{
 					IPACMDBG_H("ip -6 route add default dev %s metric %d\n",
@@ -2980,19 +2997,19 @@ int ipa_nl_send_getroute(ipa_ip_type ip_type)
 				}
 				memset(data_addr,0,sizeof(ipacm_event_data_addr));
 				IPACM_EVENT_COPY_ADDR_v6( data_addr->ipv6_addr, nl_route_info_get_route.attr_info.dst_addr);
-		
+
 				data_addr->ipv6_addr[0]=ntohl(data_addr->ipv6_addr[0]);
 				data_addr->ipv6_addr[1]=ntohl(data_addr->ipv6_addr[1]);
 				data_addr->ipv6_addr[2]=ntohl(data_addr->ipv6_addr[2]);
 				data_addr->ipv6_addr[3]=ntohl(data_addr->ipv6_addr[3]);
-		
+
 				IPACM_EVENT_COPY_ADDR_v6( data_addr->ipv6_addr_mask, nl_route_info_get_route.attr_info.dst_addr);
-		
+
 				data_addr->ipv6_addr_mask[0]=ntohl(data_addr->ipv6_addr_mask[0]);
 				data_addr->ipv6_addr_mask[1]=ntohl(data_addr->ipv6_addr_mask[1]);
 				data_addr->ipv6_addr_mask[2]=ntohl(data_addr->ipv6_addr_mask[2]);
 				data_addr->ipv6_addr_mask[3]=ntohl(data_addr->ipv6_addr_mask[3]);
-		
+
 				IPACM_EVENT_COPY_ADDR_v6( data_addr->ipv6_addr_gw, nl_route_info_get_route.attr_info.gateway_addr);
 				data_addr->ipv6_addr_gw[0] = ntohl(data_addr->ipv6_addr_gw[0]);
 				data_addr->ipv6_addr_gw[1] = ntohl(data_addr->ipv6_addr_gw[1]);

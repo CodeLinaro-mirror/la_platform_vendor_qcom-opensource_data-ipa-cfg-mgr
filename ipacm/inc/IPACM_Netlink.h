@@ -26,8 +26,8 @@ WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
 OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
 IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-Changes from Qualcomm Innovation Center are provided under the following license:
-Copyright (c) 2023-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+Changes from Qualcomm Technologies, Inc. are provided under the following license:
+Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
 SPDX-License-Identifier: BSD-3-Clause-Clear
 */
 /*!
@@ -290,7 +290,7 @@ int ipa_nl_route_recvmsg(int fd, struct msghdr *msg, char **result);
 int ipa_nl_query_ip_addr_info(int);
 int ipa_nl_query_getlink(int);
 int ipa_nl_route_receive(int fd, struct msghdr *msg, int flags);
-int ipa_nl_send_getroute(ipa_ip_type ip_type);
+int ipa_nl_send_getroute(ipa_ip_type ip_type, char *dev_name = NULL);
 int ipa_nl_query_newneigh(int af_family, char* dev_name = NULL);
 void ipa_query_nl_getevents();
 static bool nl_lock = false;

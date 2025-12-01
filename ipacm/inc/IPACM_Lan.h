@@ -55,6 +55,7 @@ SPDX-License-Identifier: BSD-3-Clause-Clear
 #include "IPACM_Filtering.h"
 #include "IPACM_Config.h"
 #include "IPACM_Conntrack_NATApp.h"
+#include "IPACM_ConntrackClient.h"
 
 #define IPA_WAN_DEFAULT_FILTER_RULE_HANDLES  1
 #define IPA_NUM_ODU_ROUTE_RULES 2
@@ -93,6 +94,7 @@ struct ipa_lan_rt_rule
 typedef struct _eth_client_rt_hdl
 {
 	uint32_t eth_rt_rule_hdl_v4;
+	uint32_t lan2lan_eth_rt_rule_hdl_v4;
 }eth_client_rt_hdl;
 
 typedef struct rule_id_hdl_map
@@ -129,6 +131,8 @@ typedef struct _ipa_eth_client
 	uint32_t hpc_hdr_hdl_v6;
 	bool route_rule_set_v4;
 	int route_rule_set_v6;
+	bool lan2lan_route_rule_set_v4;
+	int lan2lan_route_rule_set_v6;
 	bool ipv4_set;
 	int ipv6_set;
 	bool ipv4_header_set;
@@ -171,6 +175,9 @@ typedef struct _ipa_eth_client
 	int ul_cnt_idx;
 	int dl_cnt_idx;
 	bool index_populated;
+	int l2l_ul_cnt_idx;
+	int l2l_dl_cnt_idx;
+	bool l2l_index_populated;
 #endif //IPA_HW_FNR_STATS
 #endif
 #ifdef FEATURE_L2TP
@@ -208,17 +215,6 @@ typedef struct ul_firewall {
 	uint32_t ul_frag_handle[IPA_MAX_NUM_PROPS];
 #endif
 } ul_firewall_t;
-#endif
-
-#ifdef FEATURE_IPACM_PER_CLIENT_STATS
-/* store each lan client index along with MAC. */
-typedef struct ipa_lan_client_idx
-{
-	int8_t lan_stats_idx;
-	uint8_t mac[IPA_MAC_ADDR_SIZE];
-	/* IPACM interface id */
-	int ipa_if_num;
-}ipa_lan_client_idx;
 #endif
 
 typedef struct _ipacm_vlan_sta_info
@@ -314,14 +310,14 @@ public:
 	/* Number of UL prefix IPv6 rules. */
 	int num_wan_prefix_rules[IPA_MAX_NUM_PROPS];
 
+	uint32_t lan2lan_dummy_route_rule_v4_hdl;
+	uint32_t lan2lan_dummy_route_rule_v6_hdl;
+
 	/* Header length. */
 	uint8_t hdr_len;
 
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
-	/* Clients which take HW path. */
-	ipa_lan_client_idx active_lan_client_index[IPA_MAX_NUM_HW_PATH_CLIENTS];
-	/* Clients which take SW path. This will be used as a place holder to move clients back to HW path. */
-	ipa_lan_client_idx inactive_lan_client_index[IPA_MAX_NUM_HW_PATH_CLIENTS];
+	/* Clients of ODU type */
 	bool is_odu;
 #endif
 #ifdef FEATURE_VLAN_MPDN
@@ -359,6 +355,7 @@ public:
 #ifdef FEATURE_VLAN_MPDN
 	int add_vlan_private_subnet(ipacm_bridge *bridge);
 	int modify_ipv6_prefix_flt_rule(bool eogre_enabled = false);
+	int del_vlan_private_subnet(ipacm_bridge *bridge);
 	int handle_backhaul_switch_vlan_mode(bool to_sta);
 #endif
 
@@ -625,12 +622,20 @@ public:
 	int eth_bridge_add_rt_rule(uint8_t *mac, char *rt_tbl_name, uint32_t hdr_proc_ctx_hdl,
 		ipa_hdr_l2_type peer_l2_hdr_type, ipa_ip_type iptype, uint32_t *rt_rule_hdl, int *rt_rule_count);
 
+	/* add routing rule for lan2lan stats and return handle to lan2lan controller */
+	int eth_bridge_add_rt_rule_v2(uint8_t *mac, char *rt_tbl_name, uint32_t hdr_proc_ctx_hdl,
+		ipa_hdr_l2_type peer_l2_hdr_type, ipa_ip_type iptype, uint32_t *rt_rule_hdl, int *rt_rule_count);
+
 	/* modify routing rule*/
 	int eth_bridge_modify_rt_rule(uint8_t *mac, uint32_t hdr_proc_ctx_hdl,
 		ipa_hdr_l2_type peer_l2_hdr_type, ipa_ip_type iptype, uint32_t *rt_rule_hdl, int rt_rule_count);
 
 	/* add filtering rule and return handle to lan2lan controller */
 	int eth_bridge_add_flt_rule(uint8_t *mac, uint32_t rt_tbl_hdl, ipa_ip_type iptype, uint32_t *flt_rule_hdl, uint16_t vlan_id = 0, uint16_t pipe_idx = 0);
+
+	/* add filtering rule for lan2lan stats and return handle to lan2lan controller */
+	int eth_bridge_add_flt_rule_v2(uint8_t *mac, uint32_t rt_tbl_hdl, char *rt_tbl_name, ipa_ip_type iptype, uint32_t *flt_rule_hdl, uint16_t vlan_id = 0,
+		uint16_t pipe_idx = 0, uint32_t client_bridge_ipv4 = 0, uint32_t client_subnet_mask = 0, bool inter_bridge = false, uint32_t *ipv6_prefix = nullptr);
 
 	/* delete filtering rule */
 	int eth_bridge_del_flt_rule(uint32_t flt_rule_hdl, ipa_ip_type iptype);
@@ -716,16 +721,10 @@ public:
 	int add_socksv5_flt_rule(ipacm_event_connection *data_event_conn);
 	int del_socksv5_flt_rule(void);
 #endif
-
+	int add_dummy_routing_rule_lan2lan(char *routingTableName, ipa_ip_type iptype);
 	int install_default_qos_rt_rules(uint8_t *client_mac, uint16_t client_vlan_id, enum ipa_ip_type iptype);
 
-#ifdef FEATURE_IPACM_PER_CLIENT_STATS
 private:
-	static bool lan_stats_inited;
-	static ipa_lan_client_idx active_lan_client_index_odu[IPA_MAX_NUM_HW_PATH_CLIENTS];
-	/* Clients which take SW path. */
-	static ipa_lan_client_idx inactive_lan_client_index_odu[IPA_MAX_NUM_HW_PATH_CLIENTS];
-#endif
 
 protected:
 
@@ -801,34 +800,20 @@ protected:
 	void HandleNeighIpAddrAddEvt(ipacm_event_data_all *data);
 	virtual void HandleNeighIpAddrDelEvt(int clt_indx);
 
-	int add_mac_flt_blacklist_rule(uint8_t *mac_addr, ipa_ip_type iptype, uint32_t *flt_rule_hdl);
+	int add_mac_flt_blacklist_rule(uint8_t *mac_addr, ipa_ip_type iptype, uint32_t *flt_rule_hdl, uint16_t vlan_id = 0);
 	int del_mac_flt_blacklist_rule(uint32_t flt_rule_hdl, ipa_ip_type iptype);
 
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
 
 	inline bool is_lan_stats_index_available()
 	{
-		int cnt;
+		uint8_t cnt;
 
-		IPACMDBG_H ("Is ODU client? %s\n", is_odu?"Yes":"No");
-		if (is_odu)
+		for(cnt = 0; cnt < IPA_MAX_NUM_HW_PATH_CLIENTS_V2; cnt++)
 		{
-			for(cnt = 0; cnt < IPA_MAX_NUM_HW_PATH_CLIENTS; cnt++)
-			{
-				if (active_lan_client_index_odu[cnt].lan_stats_idx == -1) {
-					IPACMDBG_H("Available free index :%d\n", cnt);
-					return true;
-				}
-			}
-		}
-		else
-		{
-			for(cnt = 0; cnt < IPA_MAX_NUM_HW_PATH_CLIENTS; cnt++)
-			{
-				if (active_lan_client_index[cnt].lan_stats_idx == -1) {
-					IPACMDBG_H("Available free index :%d\n", cnt);
-					return true;
-				}
+			if (IPACM_Iface::ipacmcfg->active_lan_client_index[cnt].lan_stats_idx == -1) {
+				IPACMDBG_H("Available free index :%d\n", cnt);
+				return true;
 			}
 		}
 
@@ -836,9 +821,9 @@ protected:
 		return false;
 	}
 
-	inline int8_t get_free_active_lan_stats_index(uint8_t *mac_addr)
+	inline int get_free_active_lan_stats_index(uint8_t *mac_addr)
 	{
-		int cnt;
+		uint8_t cnt;
 
 		if (!IPACM_Iface::ipacmcfg->ipacm_lan_stats_enable)
 		{
@@ -850,35 +835,14 @@ protected:
 				mac_addr[0], mac_addr[1], mac_addr[2],
 				mac_addr[3], mac_addr[4], mac_addr[5]);
 
-		IPACMDBG_H ("Is ODU client? %s\n", is_odu?"Yes":"No");
-		if (is_odu)
+		for(cnt = 0; cnt < IPA_MAX_NUM_HW_PATH_CLIENTS_V2; cnt++)
 		{
-			for(cnt = 0; cnt < IPA_MAX_NUM_HW_PATH_CLIENTS; cnt++)
-			{
-				if (active_lan_client_index_odu[cnt].lan_stats_idx == -1) {
-					IPACMDBG_H("Got active lan stats index :%d, reserve it\n", cnt);
-					active_lan_client_index_odu[cnt].lan_stats_idx = cnt;
-					memcpy(active_lan_client_index_odu[cnt].mac,
-							mac_addr,
-							IPA_MAC_ADDR_SIZE);
-					active_lan_client_index_odu[cnt].ipa_if_num = ipa_if_num;
-					return cnt;
-				}
-			}
-		}
-		else
-		{
-			for(cnt = 0; cnt < IPA_MAX_NUM_HW_PATH_CLIENTS; cnt++)
-			{
-				if (active_lan_client_index[cnt].lan_stats_idx == -1) {
-					IPACMDBG_H("Got active lan stats index :%d, reserve it\n", cnt);
-					active_lan_client_index[cnt].lan_stats_idx = cnt;
-					memcpy(active_lan_client_index[cnt].mac,
-							mac_addr,
-							IPA_MAC_ADDR_SIZE);
-					active_lan_client_index[cnt].ipa_if_num = ipa_if_num;
-					return cnt;
-				}
+			if (IPACM_Iface::ipacmcfg->active_lan_client_index[cnt].lan_stats_idx == -1) {
+				IPACMDBG_H("Got active lan stats index :%d, reserve it\n", cnt);
+				IPACM_Iface::ipacmcfg->active_lan_client_index[cnt].lan_stats_idx = cnt;
+				memcpy(IPACM_Iface::ipacmcfg->active_lan_client_index[cnt].mac, mac_addr, IPA_MAC_ADDR_SIZE);
+				IPACM_Iface::ipacmcfg->active_lan_client_index[cnt].ipa_if_num = ipa_if_num;
+				return cnt;
 			}
 		}
 
@@ -886,9 +850,9 @@ protected:
 		return -1;
 	}
 
-	inline int8_t get_free_inactive_lan_stats_index(uint8_t *mac_addr)
+	inline int get_free_inactive_lan_stats_index(uint8_t *mac_addr)
 	{
-		int cnt;
+		uint8_t cnt;
 
 		if (!IPACM_Iface::ipacmcfg->ipacm_lan_stats_enable)
 		{
@@ -900,35 +864,15 @@ protected:
 				mac_addr[0], mac_addr[1], mac_addr[2],
 				mac_addr[3], mac_addr[4], mac_addr[5]);
 
-		IPACMDBG_H ("Is ODU client? %s\n", is_odu?"Yes":"No");
-		if (is_odu)
+
+		for(cnt = 0; cnt < IPA_MAX_NUM_HW_PATH_CLIENTS_V2; cnt++)
 		{
-			for(cnt = 0; cnt < IPA_MAX_NUM_HW_PATH_CLIENTS; cnt++)
-			{
-				if (inactive_lan_client_index_odu[cnt].lan_stats_idx == -1) {
-					IPACMDBG_H("Got inactive lan stats index :%d, reserve it\n", cnt);
-					inactive_lan_client_index_odu[cnt].lan_stats_idx = cnt;
-					memcpy(inactive_lan_client_index_odu[cnt].mac,
-							mac_addr,
-							IPA_MAC_ADDR_SIZE);
-					inactive_lan_client_index_odu[cnt].ipa_if_num = ipa_if_num;
-					return cnt;
-				}
-			}
-		}
-		else
-		{
-			for(cnt = 0; cnt < IPA_MAX_NUM_HW_PATH_CLIENTS; cnt++)
-			{
-				if (inactive_lan_client_index[cnt].lan_stats_idx == -1) {
-					IPACMDBG_H("Got inactive lan stats index :%d, reserve it\n", cnt);
-					inactive_lan_client_index[cnt].lan_stats_idx = cnt;
-					memcpy(inactive_lan_client_index[cnt].mac,
-							mac_addr,
-							IPA_MAC_ADDR_SIZE);
-					inactive_lan_client_index[cnt].ipa_if_num = ipa_if_num;
-					return cnt;
-				}
+			if (IPACM_Iface::ipacmcfg->inactive_lan_client_index[cnt].lan_stats_idx == -1) {
+				IPACMDBG_H("Got inactive lan stats index :%d, reserve it\n", cnt);
+				IPACM_Iface::ipacmcfg->inactive_lan_client_index[cnt].lan_stats_idx = cnt;
+				memcpy(IPACM_Iface::ipacmcfg->inactive_lan_client_index[cnt].mac, mac_addr, IPA_MAC_ADDR_SIZE);
+				IPACM_Iface::ipacmcfg->inactive_lan_client_index[cnt].ipa_if_num = ipa_if_num;
+				return cnt;
 			}
 		}
 
@@ -936,9 +880,9 @@ protected:
 		return -1;
 	}
 
-	inline int8_t get_lan_stats_index(uint8_t *mac_addr)
+	inline int get_lan_stats_index(uint8_t *mac_addr)
 	{
-		int cnt;
+		uint8_t cnt;
 
 		if (!IPACM_Iface::ipacmcfg->ipacm_lan_stats_enable)
 		{
@@ -950,43 +894,18 @@ protected:
 				mac_addr[0], mac_addr[1], mac_addr[2],
 				mac_addr[3], mac_addr[4], mac_addr[5]);
 
-		IPACMDBG_H ("Is ODU client? %s\n", is_odu?"Yes":"No");
-		if (is_odu)
+		for(cnt = 0; cnt < IPA_MAX_NUM_HW_PATH_CLIENTS_V2; cnt++)
 		{
-			for(cnt = 0; cnt < IPA_MAX_NUM_HW_PATH_CLIENTS; cnt++)
-			{
-				if ((memcmp(active_lan_client_index_odu[cnt].mac,
+			if ((memcmp(IPACM_Iface::ipacmcfg->active_lan_client_index[cnt].mac, mac_addr, IPA_MAC_ADDR_SIZE) == 0) &&
+					(IPACM_Iface::ipacmcfg->active_lan_client_index[cnt].ipa_if_num == ipa_if_num)) {
+				IPACMDBG_H("Got lan stats index :%d, return\n", cnt);
+				IPACM_Iface::ipacmcfg->active_lan_client_index[cnt].lan_stats_idx = cnt;
+				memcpy(IPACM_Iface::ipacmcfg->active_lan_client_index[cnt].mac,
 						mac_addr,
-						IPA_MAC_ADDR_SIZE) == 0) &&
-						(active_lan_client_index_odu[cnt].ipa_if_num
-						== ipa_if_num)) {
-					IPACMDBG_H("Got lan stats index :%d, return\n", cnt);
-					active_lan_client_index_odu[cnt].lan_stats_idx = cnt;
-					memcpy(active_lan_client_index_odu[cnt].mac,
-							mac_addr,
-							IPA_MAC_ADDR_SIZE);
-					return cnt;
-				}
+						IPA_MAC_ADDR_SIZE);
+				return cnt;
 			}
 		}
-		else
-		{
-			for(cnt = 0; cnt < IPA_MAX_NUM_HW_PATH_CLIENTS; cnt++)
-			{
-				if ((memcmp(active_lan_client_index[cnt].mac,
-						mac_addr,
-						IPA_MAC_ADDR_SIZE) == 0) &&
-						(active_lan_client_index[cnt].ipa_if_num
-						== ipa_if_num)) {
-					IPACMDBG_H("Got lan stats index :%d, return\n", cnt);
-					active_lan_client_index[cnt].lan_stats_idx = cnt;
-					memcpy(active_lan_client_index[cnt].mac,
-							mac_addr,
-							IPA_MAC_ADDR_SIZE);
-					return cnt;
-				}
-			}
-			}
 
 		IPACMDBG_H("index not available\n");
 		return -1;
@@ -994,7 +913,7 @@ protected:
 
 	inline int get_available_inactive_lan_client(uint8_t *mac_addr)
 	{
-		int cnt;
+		uint8_t cnt;
 
 		if (!IPACM_Iface::ipacmcfg->ipacm_lan_stats_enable)
 		{
@@ -1005,27 +924,13 @@ protected:
 		IPACMDBG_H("Received mac_addr MAC %02x:%02x:%02x:%02x:%02x:%02x\n",
 				mac_addr[0], mac_addr[1], mac_addr[2],
 				mac_addr[3], mac_addr[4], mac_addr[5]);
-		IPACMDBG_H ("Is ODU client? %s\n", is_odu?"Yes":"No");
-		if (is_odu)
+
+		for(cnt = 0; cnt < IPA_MAX_NUM_HW_PATH_CLIENTS_V2; cnt++)
 		{
-			for(cnt = 0; cnt < IPA_MAX_NUM_HW_PATH_CLIENTS; cnt++)
-			{
-				if (inactive_lan_client_index_odu[cnt].lan_stats_idx != -1) {
-					IPACMDBG_H("Got inactive lan stats index :%d, return the mac\n", cnt);
-					memcpy(mac_addr, inactive_lan_client_index_odu[cnt].mac, IPA_MAC_ADDR_SIZE);
-					return IPACM_SUCCESS;
-				}
-			}
-		}
-		else
-		{
-			for(cnt = 0; cnt < IPA_MAX_NUM_HW_PATH_CLIENTS; cnt++)
-			{
-				if (inactive_lan_client_index[cnt].lan_stats_idx != -1) {
-					IPACMDBG_H("Got inactive lan stats index :%d, return the mac\n", cnt);
-					memcpy(mac_addr, inactive_lan_client_index[cnt].mac, IPA_MAC_ADDR_SIZE);
-					return IPACM_SUCCESS;
-				}
+			if (IPACM_Iface::ipacmcfg->inactive_lan_client_index[cnt].lan_stats_idx != -1) {
+				IPACMDBG_H("Got inactive lan stats index :%d, return the mac\n", cnt);
+				memcpy(mac_addr, IPACM_Iface::ipacmcfg->inactive_lan_client_index[cnt].mac, IPA_MAC_ADDR_SIZE);
+				return IPACM_SUCCESS;
 			}
 		}
 
@@ -1033,7 +938,7 @@ protected:
 		return IPACM_FAILURE;
 	}
 
-	inline int8_t reset_active_lan_stats_index(int8_t idx, uint8_t *mac_addr)
+	inline int reset_active_lan_stats_index(int8_t idx, uint8_t *mac_addr)
 	{
 		if (!IPACM_Iface::ipacmcfg->ipacm_lan_stats_enable)
 		{
@@ -1045,37 +950,19 @@ protected:
 				mac_addr[0], mac_addr[1], mac_addr[2],
 				mac_addr[3], mac_addr[4], mac_addr[5]);
 
-		IPACMDBG_H ("Is ODU client? %s\n", is_odu?"Yes":"No");
-		if (is_odu)
+		if (idx < 0 || idx >= IPA_MAX_NUM_HW_PATH_CLIENTS_V2 ||
+			memcmp(IPACM_Iface::ipacmcfg->active_lan_client_index[idx].mac, mac_addr, IPA_MAC_ADDR_SIZE))
 		{
-			if (idx < 0 || idx >= IPA_MAX_NUM_HW_PATH_CLIENTS ||
-				memcmp(active_lan_client_index_odu[idx].mac,
-								mac_addr,
-								IPA_MAC_ADDR_SIZE))
-			{
-				IPACMDBG_H("Index :%d invalid\n", idx);
-				return IPACM_FAILURE;
-			}
-			memset(&active_lan_client_index_odu[idx], -1, sizeof(ipa_lan_client_idx));
+			IPACMDBG_H("Index :%d invalid\n", idx);
+			return IPACM_FAILURE;
 		}
-		else
-		{
-			if (idx < 0 || idx >= IPA_MAX_NUM_HW_PATH_CLIENTS ||
-				memcmp(active_lan_client_index[idx].mac,
-								mac_addr,
-								IPA_MAC_ADDR_SIZE))
-			{
-				IPACMDBG_H("Index :%d invalid\n", idx);
-				return IPACM_FAILURE;
-			}
-			memset(&active_lan_client_index[idx], -1, sizeof(ipa_lan_client_idx));
-		}
+		memset(&IPACM_Iface::ipacmcfg->active_lan_client_index[idx], -1, sizeof(IPACM_Config::ipa_lan_client_idx));
 		return IPACM_SUCCESS;
 	}
 
-	inline int8_t reset_inactive_lan_stats_index(uint8_t *mac_addr)
+	inline int reset_inactive_lan_stats_index(uint8_t *mac_addr)
 	{
-		int cnt;
+		uint8_t cnt;
 
 		if (!IPACM_Iface::ipacmcfg->ipacm_lan_stats_enable)
 		{
@@ -1088,30 +975,12 @@ protected:
 				mac_addr[3], mac_addr[4], mac_addr[5]);
 
 		IPACMDBG_H ("Is ODU client? %s\n", is_odu?"Yes":"No");
-		if (is_odu)
+		for(cnt = 0; cnt < IPA_MAX_NUM_HW_PATH_CLIENTS_V2; cnt++)
 		{
-			for(cnt = 0; cnt < IPA_MAX_NUM_HW_PATH_CLIENTS; cnt++)
+			if (memcmp(IPACM_Iface::ipacmcfg->inactive_lan_client_index[cnt].mac, mac_addr, IPA_MAC_ADDR_SIZE) == 0)
 			{
-				if (memcmp(inactive_lan_client_index_odu[cnt].mac,
-								mac_addr,
-								IPA_MAC_ADDR_SIZE) == 0)
-				{
-					memset(&inactive_lan_client_index_odu[cnt], -1, sizeof(ipa_lan_client_idx));
-					return IPACM_SUCCESS;
-				}
-			}
-		}
-		else
-		{
-			for(cnt = 0; cnt < IPA_MAX_NUM_HW_PATH_CLIENTS; cnt++)
-			{
-				if (memcmp(inactive_lan_client_index[cnt].mac,
-								mac_addr,
-								IPA_MAC_ADDR_SIZE) == 0)
-				{
-					memset(&inactive_lan_client_index[cnt], -1, sizeof(ipa_lan_client_idx));
-					return IPACM_SUCCESS;
-				}
+				memset(&IPACM_Iface::ipacmcfg->inactive_lan_client_index[cnt], -1, sizeof(IPACM_Config::ipa_lan_client_idx));
+				return IPACM_SUCCESS;
 			}
 		}
 		return IPACM_FAILURE;
@@ -1119,7 +988,7 @@ protected:
 
 	inline void reset_lan_stats_index()
 	{
-		int i;
+		uint8_t i;
 
 		if (!IPACM_Iface::ipacmcfg->ipacm_lan_stats_enable)
 		{
@@ -1128,26 +997,12 @@ protected:
 		}
 
 		/* Reset everything based on ipa_if_num. */
-		IPACMDBG_H ("Is ODU client? %s\n", is_odu?"Yes":"No");
-		if (is_odu)
+		for (i = 0; i < IPA_MAX_NUM_HW_PATH_CLIENTS_V2; i++)
 		{
-			for (i = 0; i < IPA_MAX_NUM_HW_PATH_CLIENTS; i++)
-			{
-				if (active_lan_client_index_odu[i].ipa_if_num == ipa_if_num)
-					memset(&active_lan_client_index_odu[i], -1, sizeof(ipa_lan_client_idx));
-				if (inactive_lan_client_index_odu[i].ipa_if_num == ipa_if_num)
-					memset(&inactive_lan_client_index_odu[i], -1, sizeof(ipa_lan_client_idx));
-			}
-		}
-		else
-		{
-			for (i = 0; i < IPA_MAX_NUM_HW_PATH_CLIENTS; i++)
-			{
-				if (active_lan_client_index[i].ipa_if_num == ipa_if_num)
-					memset(&active_lan_client_index[i], -1, sizeof(ipa_lan_client_idx));
-				if (inactive_lan_client_index[i].ipa_if_num == ipa_if_num)
-					memset(&inactive_lan_client_index[i], -1, sizeof(ipa_lan_client_idx));
-			}
+			if (IPACM_Iface::ipacmcfg->active_lan_client_index[i].ipa_if_num == ipa_if_num)
+				memset(&IPACM_Iface::ipacmcfg->active_lan_client_index[i], -1, sizeof(IPACM_Config::ipa_lan_client_idx));
+			if (IPACM_Iface::ipacmcfg->inactive_lan_client_index[i].ipa_if_num == ipa_if_num)
+				memset(&IPACM_Iface::ipacmcfg->inactive_lan_client_index[i], -1, sizeof(IPACM_Config::ipa_lan_client_idx));
 		}
 	}
 
@@ -1584,7 +1439,8 @@ private:
 								sizeof(get_client_memptr(eth_client, cnt)->mac)) == 0)
 			{
 #ifdef FEATURE_VLAN_MPDN
-				if(vlan_id)
+				/* to handle same mac with vlan id 0 and non zero */
+				if(vlan_id || sIface)
 				{
 					IPACMDBG("VLAN IF MAC match, looking for vlan ID %d, current %d\n", vlan_id,
 						get_client_memptr(eth_client, cnt)->vlan_id);
@@ -1660,6 +1516,7 @@ private:
 		        if((tx_prop->tx[tx_index].ip == IPA_IP_v4) && (get_client_memptr(eth_client, clt_indx)->route_rule_set_v4==true)) /* for ipv4 */
 				{
 					IPACMDBG_H("Delete client index %d ipv4 RT-rules for tx:%d\n",clt_indx,tx_index);
+					IPACMDBG_H("Had rt rule with ip 0x%x", get_client_memptr(eth_client, clt_indx)->v4_addr);
 					rt_hdl = get_client_memptr(eth_client, clt_indx)->eth_rt_hdl[tx_index].eth_rt_rule_hdl_v4;
 
 					if(m_routing.DeleteRoutingHdl(rt_hdl, IPA_IP_v4) == false)
@@ -1667,8 +1524,22 @@ private:
 						return IPACM_FAILURE;
 					}
 				}
+				if((tx_prop->tx[tx_index].ip == IPA_IP_v4) && get_client_memptr(eth_client, clt_indx)->lan2lan_route_rule_set_v4==true) /* for ipv4 */
+				{
+					rt_hdl = get_client_memptr(eth_client, clt_indx)->eth_rt_hdl[tx_index].lan2lan_eth_rt_rule_hdl_v4;
+					IPACMDBG_H("InteBridge Rt rule hdl (%u) Delete client index %d ipv4 RT-rules for tx:%d\n", rt_hdl, clt_indx, tx_index);
+					IPACMDBG_H("Had interBridege rt rule with ip 0x%x\n", get_client_memptr(eth_client, clt_indx)->v4_addr);
+					if(m_routing.DeleteRoutingHdl(rt_hdl, IPA_IP_v4) == false)
+					{
+							return IPACM_FAILURE;
+					}
+				}
 		    } /* end of for loop */
-
+			/* clean the interBridge ipv4 RT rules for eth-client:clt_indx */
+			if(get_client_memptr(eth_client, clt_indx)->lan2lan_route_rule_set_v4==true) /* for ipv4 */
+			{
+				get_client_memptr(eth_client, clt_indx)->lan2lan_route_rule_set_v4 = false;
+			}
 		     /* clean the ipv4 RT rules for eth-client:clt_indx */
 		     if(get_client_memptr(eth_client, clt_indx)->route_rule_set_v4==true) /* for ipv4 */
 		     {
@@ -1718,6 +1589,46 @@ private:
 				clt_indx, get_client_memptr(eth_client, clt_indx)->ipv6_set,
 				get_client_memptr(eth_client, clt_indx)->route_rule_set_v6,
 				IPACM_Iface::ipacmcfg->ipa_num_clients_ipv6);
+			if (IPACM_Iface::ipacmcfg->inter_bridge_lantolan_config_enable == true)
+			{
+				IPACMDBG_H("InterBridge : Current %d client has %d ipv6 route_set %d,ipa_num_clients_ipv6:%d\n",
+					clt_indx, get_client_memptr(eth_client, clt_indx)->ipv6_set,
+					get_client_memptr(eth_client, clt_indx)->lan2lan_route_rule_set_v6,
+					IPACM_Iface::ipacmcfg->ipa_num_clients_ipv6);
+				if (!rt_hdl_v6_list[clt_indx].empty())
+				{
+					for (auto it = rt_hdl_v6_list[clt_indx].begin(); it != rt_hdl_v6_list[clt_indx].end(); ++it)
+					{
+						num_v6++;
+						IPACMDBG_H("v6 addr : 0x%08x:%08x:%08x:%08x\n",
+							it->first[0], it->first[1], it->first[2], it->first[3]);
+						for (tx_index = 0; tx_index < iface_query->num_tx_props; tx_index++)
+						{
+							if (tx_prop->tx[tx_index].ip == IPA_IP_v6) /* for ipv6 */
+							{
+								rt_hdl = it->second.hdl_v6[tx_index].rt_rule_hdl_v6_lan2lan;
+
+								if (rt_hdl != 0)
+								{
+									IPACMDBG_H("InterBridge : hdl (%u)Delete client index %d ipv6 rules for %d-st ipv6 for tx:%d\n",
+										rt_hdl, clt_indx, num_v6, tx_index);
+									if (m_routing.DeleteRoutingHdl(rt_hdl, IPA_IP_v6) == false)
+									{
+										return IPACM_FAILURE;
+									}
+									it->second.hdl_v6[tx_index].rt_rule_hdl_v6_lan2lan = 0;
+								}
+							}
+						} /* end of tx loop */
+						it->second.lan2lan_route_rule_set_v6 = false;
+					} /* end of for loop */
+					get_client_memptr(eth_client, clt_indx)->lan2lan_route_rule_set_v6 = 0;
+				}
+				IPACMDBG_H("InterBridge : Current clnt-index:%d ipv6_set= %d, lan2lan_route_rule_set_v6= %d, update ipa_num_clients_ipv6:%d\n",
+					clt_indx, get_client_memptr(eth_client, clt_indx)->ipv6_set,
+					get_client_memptr(eth_client, clt_indx)->lan2lan_route_rule_set_v6,
+					IPACM_Iface::ipacmcfg->ipa_num_clients_ipv6);
+			}
 		}
 		return IPACM_SUCCESS;
 	}
@@ -1752,8 +1663,9 @@ private:
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
 	/* handle eth client routing rule with rule id*/
 	int handle_eth_client_route_rule_ext(uint8_t *mac_addr, ipa_ip_type iptype);
+	int handle_eth_client_route_rule_ext_lan2lan_v2(uint8_t *mac_addr, ipa_ip_type iptype, uint16_t vlan_id = 0);
 #ifdef IPA_HW_FNR_STATS
-	int handle_eth_client_route_rule_ext_v2(uint8_t *mac_addr, ipa_ip_type iptype, uint8_t dl_cnt_idx);
+	int handle_eth_client_route_rule_ext_v2(uint8_t *mac_addr, ipa_ip_type iptype, uint8_t dl_cnt_idx, uint16_t vlan_id = 0);
 #endif //IPA_HW_FNR_STATS
 #endif
 
@@ -1888,6 +1800,7 @@ public:  //mike why we have 2 public. Why not just move this on top?
 		list<qos_param_info>::iterator qos_param, uint32_t *ipv6_addr = NULL);
 	int delete_all_client_qos_rules();
 	int delete_all_client_info_from_qos(list<qos_param_info>::iterator qos_param);
+	bool is_ipv6_prefix_set();
 };
 
 #endif /* IPACM_LAN_H */

@@ -26,8 +26,8 @@ WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
 OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
 IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-Changes from Qualcomm Innovation Center are provided under the following license
-Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+Changes from Qualcomm Technologies, Inc. are provided under the following license:
+Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
 SPDX-License-Identifier: BSD-3-Clause-Clear
 */
 /*!
@@ -62,6 +62,7 @@ struct ipa_neighbor_client
 	int ipa_if_num;
 	/* add support for handling L2TP clients which associated with eth0 vlan interface */
 	char iface_name[IPA_IFACE_NAME_LEN];
+	uint16_t master_interface_index;
 #ifdef FEATURE_VLAN_MPDN
 	ipacm_bridge *bridge;
 #endif
@@ -81,7 +82,9 @@ public:
 
 	void update_neigh_cache();
 	int parse_bridge_info(int index, struct ipa_bridge_vlan_mapping_info *data);
-        int parse_bridge_name(int index, struct ipa_bridge_vlan_mapping_info *data);
+	int parse_bridge_name(int index, struct ipa_bridge_vlan_mapping_info *data);
+	void print_ipa_neighbor_client(const struct ipa_neighbor_client *client);
+	void post_del_event(int idx);
 private:
 
 	int num_neighbor_client;

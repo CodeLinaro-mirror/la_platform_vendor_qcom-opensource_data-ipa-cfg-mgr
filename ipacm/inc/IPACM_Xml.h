@@ -232,6 +232,8 @@ if (!(a)) {                                                 \
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
 #define LAN_Stats_TAG                        "LANStats"
 #define LAN_Stats_Enable_TAG                 "EnableLANStats"
+#define LAN2LAN_Stats_TAG                    "LAN2LANStats"
+#define LAN2LAN_Stats_Enable_TAG             "EnableLAN2LANStats"
 #endif
 
 #define IPACM_IPV6NAT_TAG                     "IPACMIPV6NAT"
@@ -254,6 +256,7 @@ if (!(a)) {                                                 \
 #define IPACM_EASY_MESH                      "IPACMEMESH"
 #define IPACM_Easy_Mesh_Enabled              "IPACMEMESHEnabled"
 #define IPACM_Easy_Mesh_Mode                 "IPACMEMESHMode"
+#define IPACM_Easy_Mesh_Trafficseparation    "IPACMEMESHTrafficSeparation"
 
 #define IPACM_WLAN_VLAN_MPDN                 "IPACMVLANMPDN"
 #define IPACM_Wlan_Vlan_Mpdn_Enabled         "IPACMVlanMpdnEnabled"
@@ -288,6 +291,11 @@ if (!(a)) {                                                 \
 
 #define Multi_Vlan_Bridge_Config_TAG         "MultiVlanBridgeConfig"
 #define Multi_Vlan_Bridge_Config_Enable      "MultiVlanOnBridgeEnable"
+
+#define Inter_Bridge_LanToLan_Config_TAG     "InterBridgeLanToLanConfig"
+#define Inter_Bridge_LanToLan_Config_Enable  "InterBridgeLanToLanEnable"
+
+
 
 /*---------------------------------------------------------------------------
       IP protocol numbers - use in dss_socket() to identify protocols.
@@ -461,6 +469,7 @@ typedef struct  _IPACM_conf_t
 	bool qos_mode;
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
 	bool lan_stats_enable;
+	bool lan2lan_stats_enable;
 #endif
 	int max_file_size;
 	bool ipv6_nat_enable;
@@ -468,6 +477,7 @@ typedef struct  _IPACM_conf_t
 	bool ipacm_mpdn_enable;
 	bool ipacm_emesh_enable;
 	uint32_t ipacm_emesh_mode;
+	bool ipacm_easy_mesh_traffic_separation_enable;
 	bool ipacm_socksv5_enable;
 	ipacm_gre_conf_t gre_conf;
 #ifdef FEATURE_DUAL_BACKHAUL
@@ -487,6 +497,7 @@ typedef struct  _IPACM_conf_t
 	const char* eth_lan_wan_iface_name;
 	bool multi_vlan_bridge_config_enable;
 	bool msgflt_enable;
+	bool inter_bridge_lantolan_config_enable;
 } IPACM_conf_t;
 
 typedef struct _IPACM_conf_ext_t

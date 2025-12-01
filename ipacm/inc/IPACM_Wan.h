@@ -26,10 +26,10 @@ WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
 OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
 IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-Changes from Qualcomm Technologies, Inc. are provided under the following license:
+ Changes from Qualcomm Technologies, Inc. are provided under the following license:
 
-Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
-SPDX-License-Identifier: BSD-3-Clause-Clear
+ Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+ SPDX-License-Identifier: BSD-3-Clause-Clear
 
 */
 /*!
@@ -55,7 +55,7 @@ SPDX-License-Identifier: BSD-3-Clause-Clear
 #include <IPACM_Defs.h>
 #include <IPACM_Xml.h>
 
-#define IPA_NUM_DEFAULT_WAN_FILTER_RULES 3 /*1 for v4, 2 for v6*/
+#define IPA_NUM_DEFAULT_WAN_FILTER_RULES 6 /*best effort pipe-> 0 for v4, 1 for v6, 4 for v6 icmp; QoS pipe-> 2 for v4, 3 for v6, 5 for v6 icmp*/
 #define IPA_V2_NUM_DEFAULT_WAN_FILTER_RULE_IPV4 2
 #define XLAT_IP 0xc0000000
 
@@ -233,8 +233,6 @@ public:
 	static int GetV6PrefixByVid(int vid, uint32_t *v6_prefix);
 	static int GetV6MTUByPrefix(uint16_t *mtu, uint32_t *v6_prefix);
 	static IPACM_firewall_conf_t* get_curr_pdn_firewall_config(IPACM_firewall_t &firewall_configs, const char* dev_name);
-	static int get_wan_v4_index(ipacm_wan_iface_type sta_mode);
-	static int get_wan_v6_index(ipacm_wan_iface_type sta_mode);
 #endif
 	static bool isWanUP(int ipa_if_num_tether)
 	{
@@ -252,6 +250,7 @@ public:
 		}
 		return false;
 #else
+		IPACMDBG_H("return wan_up %d\n", wan_up);
 		return wan_up;
 #endif
 	}
@@ -307,6 +306,7 @@ public:
 				}
 			}
 		}
+		IPACMDBG_H("No v4 vlan WAN is up\n");
 		return false;
 	}
 
@@ -323,6 +323,7 @@ public:
 				}
 			}
 		}
+		IPACMDBG_H("No v6 vlan WAN is up\n");
 		return false;
 	}
 
@@ -437,27 +438,16 @@ public:
 
 	static bool check_client_ipv4_with_pdn_ipv4(uint32_t client_ip, uint16_t vlan_id)
 	{
+		IPACMDBG_H("vlan_id %d \n", vlan_id);
+		IPACMDBG_H("Client IP: 0x%x\n", client_ip);
 		for(int i = 0; i < IPA_MAX_NUM_SW_PDNS; i++)
 		{
+			IPACMDBG_H("IPACM_Wan::ipv4_to_iface[%d].ipv4_addr: 0x%x\n", i, IPACM_Wan::ipv4_to_iface[i].ipv4_addr);
 			if(IPACM_Wan::ipv4_to_iface[i].ipv4_addr &&
 					ipv4_to_iface[i].ipv4_addr == client_ip)
 			{
-				if(vlan_id == 0 && ipv4_to_iface[i].pIface->is_default_gateway)
-				{
-					return true;
-				}
-				else
-				{
-					for(int j = 0; j < ipv4_to_iface[i].VID_cnt; j++)
-					{
-						if(IPACM_Wan::ipv4_to_iface[i].associated_VIDs[j] == vlan_id)
-						{
-							IPACMDBG("vlan %d i %d j %d ip: 0x%x\n",
-										IPACM_Wan::ipv4_to_iface[i].associated_VIDs[j], i,j, client_ip);
-							return true;
-						}
-					}
-				}
+				IPACMDBG_H("Client IP Matched With Wan IP! at index %d \n", i);
+				return true;
 			}
 		}
 		return false;
@@ -855,6 +845,12 @@ private:
 	int handle_dual_backhaul_disable();
 #endif
 
+	int install_ul_qos_route_rules(ipa_ip_type iptype);
+	int handle_ul_qos_route_rule(ipa_ip_type iptype, list<qos_param_info>::iterator qos_param);
+	int delete_all_UL_info_from_qos(list<qos_param_info>::iterator qos_param, ipa_ip_type iptype);
+	int delete_all_UL_qos_rules(ipa_ip_type iptype);
+	uint32_t get_u8_bitmap_from_tc(uint8_t traffic_class);
+
 	/* handle new_address event */
 	int handle_addr_evt(ipacm_event_data_addr *data);
 
@@ -866,6 +862,8 @@ private:
 
 #ifdef FEATURE_VLAN_MPDN
 	void get_vlan_association_info(ipacm_vlan_association_info* vlan_info);
+	void get_vlan_pdn_associated_info(ipacm_vlan_association_info* vlan_info, ipacm_wan_iface_type sta_mode,
+		int ip_type, bool* v4_found, bool* v6_found);
 	void post_wan_vlan_pdn_event(ipa_ip_type iptype, int pdn_idx, int vlan_idx, uint16_t vlan_id, bool vlan_up);
 	int handle_vlan_backhaul_switch_v4(ipacm_event_route_vlan *data);
 	int handle_vlan_backhaul_switch_v6(ipacm_event_route_vlan *data, bool xlat_cfg = false);

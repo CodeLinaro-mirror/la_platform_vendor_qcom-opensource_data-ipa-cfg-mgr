@@ -624,6 +624,7 @@ static int ipacm_cfg_xml_parse_tree
 						IPACM_util_icmp_string((char*)xml_node->name, IPACM_IPV6NAT_TAG) == 0 ||
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
 						IPACM_util_icmp_string((char*)xml_node->name, LAN_Stats_TAG) == 0 ||
+						IPACM_util_icmp_string((char*)xml_node->name, LAN2LAN_Stats_TAG) == 0 ||
 #endif
 						IPACM_util_icmp_string((char*)xml_node->name, IPACM_L2TP_TAG) == 0 ||
 						IPACM_util_icmp_string((char*)xml_node->name, IPACM_MPDN_TAG) == 0 ||
@@ -647,6 +648,7 @@ static int ipacm_cfg_xml_parse_tree
 #endif
 						IPACM_util_icmp_string((char*)xml_node->name, Eth_Vlan_Wan_TAG) == 0 ||
 						IPACM_util_icmp_string((char*)xml_node->name, Multi_Vlan_Bridge_Config_TAG) == 0 ||
+						IPACM_util_icmp_string((char*)xml_node->name, Inter_Bridge_LanToLan_Config_TAG) == 0 ||
 						IPACM_util_icmp_string((char*)xml_node->name, IPACM_MSGFLT_TAG) == 0 ||
 						IPACM_util_icmp_string((char*)xml_node->name, IPACMLOG_TAG) == 0)
 				{
@@ -790,6 +792,28 @@ static int ipacm_cfg_xml_parse_tree
 						{
 							config->lan_stats_enable = false;
 							IPACMDBG_H("LAN Stats enable %d buf(%d)\n", config->lan_stats_enable, atoi(content_buf));
+						}
+					}
+				}
+				else if (IPACM_util_icmp_string((char*)xml_node->name, LAN2LAN_Stats_Enable_TAG) == 0)
+				{
+					IPACMDBG_H("inside enable lan2lan statistics\n");
+					content = IPACM_read_content_element(xml_node);
+					if (content)
+					{
+						str_size = strlen(content);
+						memset(content_buf, 0, sizeof(content_buf));
+						memcpy(content_buf, (void *)content, str_size);
+						content_buf[MAX_XML_STR_LEN-1] = '\0';
+						if (atoi(content_buf))
+						{
+							config->lan2lan_stats_enable = true;
+							IPACMDBG_H("LAN2LAN Stats enable %d buf(%d)\n", config->lan2lan_stats_enable, atoi(content_buf));
+						}
+						else
+						{
+							config->lan2lan_stats_enable = false;
+							IPACMDBG_H("LAN2LAN Stats enable %d buf(%d)\n", config->lan2lan_stats_enable, atoi(content_buf));
 						}
 					}
 				}
@@ -1287,6 +1311,26 @@ static int ipacm_cfg_xml_parse_tree
 								   config->ipacm_emesh_mode, atoi(content_buf));
 					}
 				}
+				else if (IPACM_util_icmp_string((char*)xml_node->name, IPACM_Easy_Mesh_Trafficseparation) == 0)
+				{
+					IPACMDBG_H("inside enable traffic separation\n");
+					content = IPACM_read_content_element(xml_node);
+					if (content == NULL)
+					{
+						IPACMERR("Failed to read the content of the tag %s\n", IPACM_Easy_Mesh_Trafficseparation);
+					}
+					else
+					{
+						str_size = strlen(content);
+						memset(content_buf, 0, sizeof(content_buf));
+						memcpy(content_buf, (void *)content, str_size);
+						content_buf[MAX_XML_STR_LEN-1] = '\0';
+						config->ipacm_easy_mesh_traffic_separation_enable = atoi(content_buf);
+						IPACMDBG_H("IPACM Easy mesh traffic separation %d buf(%d)\n",
+								   config->ipacm_easy_mesh_traffic_separation_enable, atoi(content_buf));
+					}
+				}
+
 				else if (IPACM_util_icmp_string((char*)xml_node->name, IPACM_Wlan_Vlan_Mpdn_Enabled) == 0)
 				{
 					IPACMDBG_H("inside enable Vlan Mpdn-XML\n");
@@ -1453,6 +1497,28 @@ static int ipacm_cfg_xml_parse_tree
 							config->multi_vlan_bridge_config_enable = 0;
 						}
 						IPACMDBG_H("multi_vlan_bridge_config_enable: %d buf(%d)\n", config->multi_vlan_bridge_config_enable,
+							atoi(content_buf));
+					}
+				}
+				else if (IPACM_util_icmp_string((char*)xml_node->name, Inter_Bridge_LanToLan_Config_Enable) == 0)
+				{
+					IPACMDBG_H("inside enable inter_bridge_lantolan_config-XML\n");
+					content = IPACM_read_content_element(xml_node);
+					if (content)
+					{
+						str_size = strlen(content);
+						memset(content_buf, 0, sizeof(content_buf));
+						memcpy(content_buf, (void *)content, str_size);
+						content_buf[MAX_XML_STR_LEN-1] = '\0';
+						if (atoi(content_buf) == 1)
+						{
+							config->inter_bridge_lantolan_config_enable = 1;
+						}
+						else
+						{
+							config->inter_bridge_lantolan_config_enable = 0;
+						}
+						IPACMDBG_H("inter_bridge_lantolan_config_enable: %d buf(%d)\n", config->inter_bridge_lantolan_config_enable,
 							atoi(content_buf));
 					}
 				}

@@ -105,6 +105,8 @@ extern "C"
 
 #define V4_DEFAULT_ROUTE_TABLE_NAME  "ipa_dflt_rt"
 #define V4_LAN_ROUTE_TABLE_NAME  "COMRTBLLANv4"
+#define V4_LAN2LAN_ROUTE_TABLE_NAME  "INTER_BRIDGE_L2L_v4_RTBL"
+#define V6_LAN2LAN_ROUTE_TABLE_NAME  "INTER_BRIDGE_L2L_v6_RTBL"
 #define V4_WAN_ROUTE_TABLE_NAME  "WANRTBLv4"
 #define WAN_DL_ROUTE_TABLE_NAME "ipa_dflt_wan_rt"
 #define V6_COMMON_ROUTE_TABLE_NAME  "COMRTBLv6"
@@ -381,6 +383,8 @@ typedef enum
 #ifdef FEATURE_EoGRE
 	IPA_HANDLE_EoGRE_UP,                      /* ipa_ipgre_info */
 	IPA_HANDLE_EoGRE_DOWN,                    /* ipa_ipgre_info */
+	IPA_WAN_HANDLE_EoGRE_UP,
+	IPA_WAN_HANDLE_EoGRE_DOWN,
 #endif
 	IPA_DSCP_PCP_CONFIG_CHANGE_EVENT,         /* ipacm_event_change_dscp_pcp */
 	IPA_HANDLE_MACSEC_ADD,                    /* ipa_macsec_map */

@@ -458,9 +458,21 @@ int NatApp::RemovePdn(uint32_t pub_ip)
 
 	CHK_TBL_HDL();
 
+	IPACMDBG_H("RemovePDN IP: %x\n", pub_ip);
 	ret = ipa_nat_get_pdn_index(pub_ip, &pdn_index);
+	if(ret)
+	{
+		IPACMERR("pdn doesn't exist on pdn table\n");
+		return IPACM_FAILURE;
+	}
 #ifdef FEATURE_DUAL_BACKHAUL
 	ret = ipa_nat_get_pdn_count(&pdn_cnt);
+	if (ret)
+	{
+		IPACMERR(" couldn't acquire number of PDNs\n");
+		return IPACM_FAILURE;
+	}
+	IPACMDBG_H("pdns pdn_cnt:%d\n", pdn_cnt);
 	if(pdn_cnt < DUAL_BACKHAUL_PDN_COUNT && pdn_index == 0 && bool_dual_backhaul == 1)
 	{
 		IPACMDBG_H("only eth is there don't remove any pdn\n");
@@ -468,13 +480,7 @@ int NatApp::RemovePdn(uint32_t pub_ip)
 		return IPACM_FAILURE;
 	}
 #endif
-
 	IPACMDBG_H("RemovePDN  pdn_index:%d, IP: %x\n",pdn_index, pub_ip);
-	if(ret)
-	{
-		IPACMERR("pdn doesn't exist on pdn table\n");
-		return IPACM_FAILURE;
-	}
 	IPACMDBG_H("pdn ip found at pdn_index:%d\n", pdn_index);
 	/* remove all PDN entries */
 	for(int cnt = 0; cnt < max_entries; cnt++)
@@ -1022,7 +1028,7 @@ void NatApp::HandleSWAllowEntries(void)
 /* Add new entry to the nat table on new connection */
 int NatApp::AddEntry(const nat_table_entry *rule, bool isVlan)
 {
-	int cnt = 0;
+	int ret, cnt = 0;
 	ipa_nat_ipv4_rule nat_rule;
 #ifdef FEATURE_VLAN_MPDN
 	bool cacheOnly = false;
@@ -1048,7 +1054,13 @@ int NatApp::AddEntry(const nat_table_entry *rule, bool isVlan)
 #ifdef FEATURE_DUAL_BACKHAUL
 	if(IPACM_Wan::second_backhaul_active && rule->public_ip == IPACM_Wan::second_backhaul_ipv4)
 	{
-		pdn_index = 0;
+		ret = ipa_nat_get_pdn_index(rule->public_ip, &pdn_index);
+		if (ret)
+		{
+			IPACMERR("pdn (0x%x)doesn't exist on pdn table \n", rule->public_ip);
+			return IPACM_FAILURE;
+		}
+
 		IPACMDBG_H("second backhaul addentry\n");
 	}
 	else

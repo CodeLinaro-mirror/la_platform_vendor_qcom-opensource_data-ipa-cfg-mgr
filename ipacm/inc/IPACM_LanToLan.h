@@ -89,6 +89,7 @@ struct client_info
 	l2tp_vlan_mapping_info *mapping_info;
 	l2tp_rt_rule_info l2tp_rt_rule_hdl[IPA_HDR_L2_MAX];
 	uint16_t vlan_id;
+	uint16_t outer_vlan_id;
 };
 
 struct lt2p_flt_rule_hdl{
@@ -129,13 +130,14 @@ public:
 	IPACM_LanToLan_Iface(IPACM_Lan *p_iface);
 	~IPACM_LanToLan_Iface();
 
+	uint8_t double_tagging;
 	void add_client_rt_rule_for_new_iface();
 
 #ifdef FEATURE_VLAN_MPDN
-	void add_all_inter_interface_client_flt_rule_one_vlan_id(ipa_ip_type iptype, uint16_t vlan_id);
+	void add_all_inter_interface_client_flt_rule_one_vlan_id(ipa_ip_type iptype, uint16_t vlan_id, uint16_t outer_vlan_id);
 	void del_all_inter_interface_client_flt_rule_one_vlan_id(uint16_t vlan_id);
-	void handle_vlan_id_add(uint16_t vlan_id);
-	void handle_vlan_id_del(uint16_t vlan_id);
+	void handle_vlan_id_add(ipacm_event_eth_bridge *data);
+	void handle_vlan_id_del(uint16_t vlan_id, uint16_t outer_vlan_id);
 #endif
 
 	void add_all_inter_interface_client_flt_rule(ipa_ip_type iptype, uint16_t *Ids = NULL);
@@ -151,9 +153,9 @@ public:
 	void handle_new_iface_up(char rt_tbl_name_for_flt[][IPA_RESOURCE_NAME_MAX], char rt_tbl_name_for_rt[][IPA_RESOURCE_NAME_MAX],
 		IPACM_LanToLan_Iface *peer_iface, int spcl_vlan_iface = 0);
 
-	void handle_client_add(uint8_t *mac, bool is_l2tp_client, l2tp_vlan_mapping_info *mapping_info, uint16_t vlan_id = 0);
+	void handle_client_add(uint8_t *mac, bool is_l2tp_client, l2tp_vlan_mapping_info *mapping_info, uint16_t vlan_id = 0, uint16_t outer_vlan_id=0);
 
-	list<client_info>::iterator handle_client_del(uint8_t *mac, uint16_t vlan_id);
+	list<client_info>::iterator handle_client_del(uint8_t *mac, uint16_t vlan_id, uint16_t outer_vlan_id);
 
 	void print_data_structure_info();
 
@@ -189,9 +191,9 @@ public:
 	bool is_svap_iface();
 	void set_svap_iface(bool enable);
 
-	int add_wlan_svap_hpc_hdl(uint16_t vlan_id, ipa_hdr_l2_type peer_l2_type, uint32_t* hpc_hdl);
-	int del_wlan_svap_hpc_hdl(uint16_t vlan_id, ipa_hdr_l2_type peer_l2_type, uint32_t* hpc_hdl);
-	uint32_t is_entry_present_wlan_svap_hpc_hdl(uint16_t vlan_id, ipa_hdr_l2_type peer_l2_type);
+	int add_wlan_svap_hpc_hdl(uint16_t vlan_id, ipa_hdr_l2_type peer_l2_type, uint32_t* hpc_hdl,uint16_t outer_vlan_id=0);
+	int del_wlan_svap_hpc_hdl(uint16_t vlan_id, ipa_hdr_l2_type peer_l2_type, uint32_t* hpc_hdl, uint16_t outer_vlan_id);
+	uint32_t is_entry_present_wlan_svap_hpc_hdl(uint16_t vlan_id, ipa_hdr_l2_type peer_l2_type, uint16_t outer_vlan_id=0);
 
 	bool is_ap_iface_vlan_enabled();
 	bool is_spcl_iface();
@@ -252,9 +254,11 @@ private:
 
 	void del_hdr_proc_ctx(ipa_hdr_l2_type peer_l2_type);
 
+	void add_hdr_proc_ctx_double_vlan(ipa_hdr_l2_type peer_l2_type, uint16_t vlan_id, uint16_t outer_vlan_id=0);
+
 	void add_hdr_proc_ctx_vlan(ipa_hdr_l2_type peer_l2_type, uint16_t vlan_id);
 
-	void del_hdr_proc_ctx_vlan(ipa_hdr_l2_type peer_l2_type, uint16_t vlan_id);
+	void del_hdr_proc_ctx_vlan(ipa_hdr_l2_type peer_l2_type, uint16_t vlan_id, uint16_t outer_vlan_id);
 
 	void print_peer_info(peer_iface_info *peer_info , bool intra);
 

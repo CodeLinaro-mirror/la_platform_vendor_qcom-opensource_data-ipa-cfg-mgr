@@ -343,8 +343,9 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 					IPACMERR("Error parsing the bridge name\n");
 					return;
 				}
-				IPACMDBG("Handling IPA_ADD_BRIDGE_VLAN_PHY_INTF event with vlan-id: %d master-interface-index: %d\n", vlan_data.vlan_id, data_all->master_if_index);
+				IPACMDBG("Handling IPA_ADD_BRIDGE_VLAN_PHY_INTF event with vlan-id: %d outer vlan id: %d master-interface-index: %d\n", vlan_data.vlan_id, vlan_data.outer_vlan_id, data_all->master_if_index);
 				add_bridge_vlan_map.vlan_id = vlan_data.vlan_id;
+				add_bridge_vlan_map.outer_vlan_id = vlan_data.outer_vlan_id;
 				add_bridge_vlan_map.master_if_index = data_all->master_if_index;
 				add_bridge_vlan_map.status = 0;
 				IPACM_Iface::ipacmcfg->add_bridge_vlan_mapping(&add_bridge_vlan_map);
@@ -474,6 +475,36 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 							evt_data.event, data_vlan->data_all.iface_name);
 
 					}
+				}
+				else if(IPACM_Iface::ipacmcfg->device_mode && IPACM_Iface::ipacmcfg->device_vlan_mode
+								&& (strstr(neighbor_client[i].iface_name, "eth")))
+				{
+						IPACMDBG_H("Neighbor if_index: %d, ipa_if_index = %d, name = %s, ip4_addr = 0x%x\n", neighbor_client[i].iface_index,
+										neighbor_client[i].ipa_if_num, neighbor_client[i].iface_name, neighbor_client[i].v4_addr);
+						/* check if getting real netdev name yet */
+						if(strcmp(neighbor_client[i].iface_name, IPA_NO_IFACE_NAME) == 0)
+						{
+							IPACMERR("client %d name %s not real\n", i, neighbor_client[i].iface_name);
+							continue;
+						}
+
+						evt_data.event = IPA_LAN_CLIENT_ADD_EVENT;
+						data_all = (ipacm_event_data_all *)malloc(sizeof(ipacm_event_data_all));
+						if (data_all == NULL)
+						{
+							IPACMERR("Unable to allocate memory\n");
+							return;
+						}
+						memset(data_all,0,sizeof(ipacm_event_data_all));
+						data_all->iptype = IPA_IP_v4;
+						data_all->if_index = neighbor_client[i].iface_index;
+						data_all->ipv4_addr = neighbor_client[i].v4_addr; /* use previous ipv4 address, i.e: 0.0.0.0 */
+						memcpy(data_all->mac_addr, neighbor_client[i].mac_addr, sizeof(data_all->mac_addr));
+						memcpy(data_all->iface_name, neighbor_client[i].iface_name, sizeof(data_all->iface_name));
+						evt_data.evt_data = (void *)data_all;
+						IPACM_EvtDispatcher::PostEvt(&evt_data);
+						IPACMDBG_H("Posted event %d, with %s for Static ECM Client\n",evt_data.event, data_all->iface_name);
+
 				}
 			}
 		}
@@ -1329,6 +1360,31 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 										IPACMDBG_H("MLD interface donot update if index and if name\n");
 									}
 								}
+								/* IPA_LAN_CLIENT_ADD_EVENT received with ip type 0*/
+								if(IPACM_Iface::ipacmcfg->device_mode)
+								{
+									/* check if getting real netdev name yet */
+									if(strcmp(data->iface_name, IPA_NO_IFACE_NAME) == 0)
+									{
+										IPACMERR("client %d name %s not real\n", i, data->iface_name);
+										return;
+									}
+									if (event == IPA_NEW_NEIGH_EVENT)
+									{
+										evt_data.event = IPA_LAN_CLIENT_ADD_EVENT;
+										data_all = (ipacm_event_data_all *)malloc(sizeof(ipacm_event_data_all));
+										if (data_all == NULL)
+										{
+											IPACMERR("Unable to allocate memory\n");
+											return;
+										}
+        									memcpy(data_all, data, sizeof(ipacm_event_data_all));
+        									evt_data.evt_data = (void *)data_all;
+        									IPACM_EvtDispatcher::PostEvt(&evt_data);
+        									IPACMDBG_H("Posted event %s with %s for ipv6 \n",IPACM_Iface::ipacmcfg->getEventName(evt_data.event), data->iface_name);
+                                                                        }
+								}
+ 
 
 								if (neighbor_client[i].v4_addr != 0) /* not 0.0.0.0 */
 								{
@@ -1516,6 +1572,7 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 								strlcpy(neighbor_client[num_neighbor_client_temp].iface_name, data->iface_name,
 									sizeof(neighbor_client[num_neighbor_client_temp].iface_name));
 								IPACMDBG_H("Iface name:%s, Ifaceindex:%d, Ifacenum: %d\n", data->iface_name, data->if_index, ipa_interface_index);
+
 								num_neighbor_client++;
 								IPACMDBG_H("Copy client MAC %02x:%02x:%02x:%02x:%02x:%02x, total client: %d\n",
 												neighbor_client[num_neighbor_client_temp].mac_addr[0],

@@ -82,6 +82,12 @@ IPACM_Wlan::IPACM_Wlan(char *iface_name, int iface_index, bool ast_update_needed
 #define WLAN_AMPDU_DEFAULT_FILTER_RULES 3
 
 	wlan_ap_index = IPACM_Wlan::num_wlan_ap_iface;
+	if((IPACM_Iface::ipacmcfg->device_mode) && (IPACM_Iface::ipacmcfg->device_vlan_mode))
+	{
+		IPACMDBG("Instance is vlan enabled %s\n", dev_name);
+		vlan_enabled_ap = true;
+	}
+	is_wlan_if_vlan = vlan_enabled_ap;
 	/* In EM config, we support 14 VAPs in total. */
 	if(wlan_ap_index < 0 || wlan_ap_index >= IPA_MAX_ACTIVE_WLAN_IFACE )
 	{
@@ -113,7 +119,6 @@ IPACM_Wlan::IPACM_Wlan(char *iface_name, int iface_index, bool ast_update_needed
 	wlan_primary_client = NULL;
 	wlan_client_len = 0;
 	svap_iface = false;
-	vlan_enabled_ap = false;
 	svap_dummy_route_rule_v4_hdl = 0;
 	svap_dummy_route_rule_v6_hdl = 0;
 
@@ -1211,7 +1216,7 @@ void IPACM_Wlan::event_callback(ipa_cm_event_id event, void *param)
 			ipacm_event_data_all *data = (ipacm_event_data_all *)param;
 			ipa_interface_index = iface_ipa_index_query(data->if_index);
 
-			IPACMDBG_H("Received IPA_NEIGH_CLIENT_IP_ADDR_DEL_EVENT event for ip_type: %d \n", data->iptype);
+			IPACMDBG_H("Received IPA_NEIGH_CLIENT_IP_ADDR_DEL_EVENT event for ip_type: %d\n", data->iptype);
 			IPACMDBG_H("check iface %s category: %d\n", dev_name, ipa_if_cate);
 
 			if ((IPACM_Iface::ipacmcfg->wlan_vlan_mpdn_enabled == TRUE) &&
@@ -1837,6 +1842,62 @@ handle_stats:
 		}
 		break;
 	}
+
+
+	case IPA_LAN_CLIENT_ADD_EVENT:
+	{
+			ipacm_event_data_all *data = (ipacm_event_data_all *)param;
+			uint16_t vlan_id = 0;
+			IPACMDBG_H("Received IPA_LAN_CLIENT_ADD_EVENT event \n");
+			ipa_interface_index = iface_ipa_index_query(data->if_index);
+			IPACMDBG_H("check iface %s category: %d\n", dev_name, ipa_if_cate);
+			if(IPACM_Iface::ipacmcfg->device_vlan_mode
+							&& IPACM_Iface::ipacmcfg->iface_in_vlan_mode(dev_name) && is_vlan_event(data->iface_name))
+			{
+				if (IPACM_Iface::ipacmcfg->get_vlan_id(data->iface_name, &vlan_id))
+				{
+					if(!IPACM_Iface::ipacmcfg->is_added_vlan_iface(data->iface_name))
+					{
+						IPACMDBG_H("ignoring neighbor of not added IF %s \n", data->iface_name);
+						return;
+					}
+					IPACMERR("failed getting vlan ID of iface %s \n", data->iface_name);
+					return;
+				}
+				IPACMDBG_H("Posting IPA_ETH_BRIDGE_CLIENT_ADD for Static IP MAC:0x%x iface_name: %s\n",data->mac_addr,data->iface_name);
+				eth_bridge_post_event(IPA_ETH_BRIDGE_CLIENT_ADD, IPA_IP_MAX, data->mac_addr,
+								NULL, data->iface_name, vlan_id);
+			}
+	}
+	break;
+
+	case IPA_LAN_CLIENT_DEL_EVENT:
+	{
+			ipacm_event_data_all *data = (ipacm_event_data_all *)param;
+			uint16_t vlan_id;
+			IPACMDBG_H("Received IPA_LAN_CLIENT_DEL_EVENT event \n");
+			ipa_interface_index = iface_ipa_index_query(data->if_index);
+			IPACMDBG_H("check iface %s category: %d\n", dev_name, ipa_if_cate);
+
+			if(IPACM_Iface::ipacmcfg->device_vlan_mode
+							&& IPACM_Iface::ipacmcfg->iface_in_vlan_mode(dev_name) && is_vlan_event(data->iface_name))
+			{
+				if (IPACM_Iface::ipacmcfg->get_vlan_id(data->iface_name, &vlan_id))
+				{
+					if(!IPACM_Iface::ipacmcfg->is_added_vlan_iface(data->iface_name))
+					{
+						IPACMDBG_H("ignoring neighbor of not added IF %s \n", data->iface_name);
+						return;
+					}
+					IPACMERR("failed getting vlan ID of iface %s \n", data->iface_name);
+					return;
+				}
+				IPACMDBG_H("Posting IPA_ETH_BRIDGE_CLIENT_DEL for Static IP MAC:0x%x iface_name: %s\n",data->mac_addr,data->iface_name);
+				eth_bridge_post_event(IPA_ETH_BRIDGE_CLIENT_DEL, IPA_IP_MAX, data->mac_addr,
+								NULL, data->iface_name, vlan_id);
+			}
+	}
+	break;
 
 	case IPA_QOS_RULE_DEL_EVENT:
 	{

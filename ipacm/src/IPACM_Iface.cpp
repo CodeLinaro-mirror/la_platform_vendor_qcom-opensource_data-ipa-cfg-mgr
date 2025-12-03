@@ -133,7 +133,10 @@ int IPACM_Iface::handle_software_routing_enable(void)
 		return IPACM_SUCCESS;
 	}
 
-	if ((ipa_if_cate == WLAN_IF) && (is_if_svap || is_wlan_if_vlan) && (rx_prop->num_rx_props > 2)) {
+	if (((ipa_if_cate == WLAN_IF) && (is_if_svap || is_wlan_if_vlan) && (rx_prop->num_rx_props > 2))
+					|| ((IPACM_Iface::ipacmcfg->device_mode ==DEVMODE_STABRIDGE)
+					&& (IPACM_Iface::ipacmcfg->device_vlan_mode) && strstr(dev_name,"ath")))
+	{
 		idx = 2;
 		IPACMDBG_H("Interface is WLAN Svap or vlan, install rules on Rx1 pipe at idx %d \n", idx);
 	}
@@ -681,12 +684,13 @@ int IPACM_Iface::query_iface_property(void)
 		{
 			for (cnt = 0; cnt < tx_prop->num_tx_props; cnt++)
 			{
-				IPACMDBG_H("Tx(%d):attrib-mask:0x%x, ip-type: %d, dst_pipe: %d, alt_dst_pipe: %d, header: %s, tc_bmap 0x%x\n",
+				IPACMDBG_H("Tx(%d):attrib-mask:0x%x, ip-type: %d, dst_pipe: %d, alt_dst_pipe: %d, header: %s, tc_bmap 0x%x hdr l2 type %d\n",
 						cnt, tx_prop->tx[cnt].attrib.attrib_mask,
 						tx_prop->tx[cnt].ip, tx_prop->tx[cnt].dst_pipe,
 						tx_prop->tx[cnt].alt_dst_pipe,
 						tx_prop->tx[cnt].hdr_name,
-						tx_prop->tx[cnt].tc_bmap);
+						tx_prop->tx[cnt].tc_bmap,
+						tx_prop->tx[cnt].hdr_l2_type);
 
 				if (tx_prop->tx[cnt].dst_pipe == 0)
 				{
@@ -725,8 +729,9 @@ int IPACM_Iface::query_iface_property(void)
 		{
 			for (cnt = 0; cnt < rx_prop->num_rx_props; cnt++)
 			{
-				IPACMDBG_H("Rx(%d):attrib-mask:0x%x, ip-type: %d, src_pipe: %d, bitmap: %d\n",
-								 cnt, rx_prop->rx[cnt].attrib.attrib_mask, rx_prop->rx[cnt].ip, rx_prop->rx[cnt].src_pipe, rx_prop->rx[cnt].tc_bmap);
+				IPACMDBG_H("Rx(%d):attrib-mask:0x%x, ip-type: %d, src_pipe: %d bitmap: %d header: %d\n",
+								 cnt, rx_prop->rx[cnt].attrib.attrib_mask, rx_prop->rx[cnt].ip,
+								 rx_prop->rx[cnt].src_pipe, rx_prop->rx[cnt].tc_bmap, rx_prop->rx[cnt].hdr_l2_type);
 			}
 		}
 	}

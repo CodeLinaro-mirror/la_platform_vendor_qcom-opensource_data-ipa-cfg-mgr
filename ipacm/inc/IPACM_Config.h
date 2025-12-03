@@ -85,7 +85,7 @@ typedef struct _ipa_rm_client
 #define MAX_NUM_EXT_PROPS 25
 #define MAX_NUM_IP_PASS_MPDN 15
 #define EOGRE_PROTOCOL_TYPE 0x6558
-
+#define MAX_VLAN_ID 4094
 #define IPA_QoS_DL_RULE 0
 #define IPA_QoS_UL_RULE 1
 
@@ -591,10 +591,11 @@ public:
 	void update_repeater_iface(char *interface_name);
 	pthread_mutex_t qos_param_list_lock;
 	std::list<qos_param_info> m_qos_params;
+	void parse_outer_tag(char *iface_name, uint16_t *inner, uint16_t *outer);
 	void add_qos_params_info(ipa_ioc_qos_config *data);
 	void delete_qos_params_info(ipa_ioc_qos_config *data);
 	void flush_qos_params_info(ipa_ioc_qos_config *data);
-
+	int get_bridge_vlan_mapping_from_double_vid(ipacm_bridge *data, uint16_t inner_vlan_id, uint16_t outer_vlan_id);
 #ifdef FEATURE_L2TP
 	std::list<l2tp_vlan_mapping_info> m_l2tp_vlan_mapping;
 	std::list<l2tp_client_info> l2tp_client;
@@ -619,6 +620,8 @@ public:
 	ipacm_bridge *get_vlan_bridge_from_vid(uint16_t vlan_id);
 	bool is_added_vlan_iface(char *iface_name);
 	bool iface_in_vlan_mode(const char * interfaceName);
+	uint8_t iface_in_dbl_vlan_mode(const char * interfaceName);
+	int get_double_tagged_vlan_ids(char *phys_iface_name, uint16_t *Id1, uint16_t *Id2);
 	int get_iface_vlan_ids(char *phys_iface_name, uint16_t *Ids);
 	int get_vlan_id(char *iface_name, uint16_t *vlan_id);
 	void extract_mlo_base_iface(char *input_iface);

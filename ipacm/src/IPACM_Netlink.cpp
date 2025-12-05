@@ -719,10 +719,11 @@ static int populate_gre_details(struct ifinfomsg* ifi, int len, int type){
 
 			memcpy(&(pConfig->ipgre_info),&ipgre_info,sizeof(ipa_ipgre_info));
 			IPACMDBG("GRE info, src addr: %x, dst addr %x, link %d\n", ipgre_info.ipv4_src,ipgre_info.ipv4_dst,link);
-			pConfig->pmip_details.pmipv6_tunnel_setup = true;
+
 			if(pConfig->pmip_details.pmipv6_enabled)
 			{
 				/* Send GRE UP event */
+				pConfig->pmip_details.pmipv6_tunnel_setup = true;
 				ipacm_cmd_q_data evt_data;
 				evt_data.event    = IPA_HANDLE_GRE_UP;
 				evt_data.evt_data = 0;
@@ -731,6 +732,19 @@ static int populate_gre_details(struct ifinfomsg* ifi, int len, int type){
 					IPACMDBG_H("Posting usb IPA_HANDLE_GRE_UP \n");
 					IPACM_EvtDispatcher::PostEvt(&evt_data);
 				}
+			}
+			else {
+				if(pConfig->ipogre_enabled == true)
+				{
+					IPACMDBG_H("IPoGRE Already enabled\n");
+					return IPACM_SUCCESS;
+				}
+				pConfig->ipogre_enabled = true;
+				ipacm_cmd_q_data evt_data;
+				evt_data.event    = IPA_HANDLE_IPOGRE_UP;
+				evt_data.evt_data = 0;
+				IPACMDBG_H("Posting IPA_HANDLE_IPOGRE_UP \n");
+				IPACM_EvtDispatcher::PostEvt(&evt_data);
 			}
 		}
 }
@@ -757,7 +771,7 @@ static int tunnel_delete(struct ifinfomsg* ifi, int len, int type)
 	{
 		iptype=IPA_IP_v6;
 	}
-	if(pConfig->pmip_details.pmipv6_tunnel_setup)
+	if(pConfig->pmip_details.pmipv6_tunnel_setup || pConfig->ipogre_enabled)
 	{
 		IPACMDBG("IFI max: %d IFLA_MAX, %d len\n",IFLA_MAX,len);
 		getAttr(attrib, IFLA_MAX, IFLA_RTA(ifi), len,0,false);
@@ -775,6 +789,15 @@ static int tunnel_delete(struct ifinfomsg* ifi, int len, int type)
 					/* Send GRE DOWN event */
 					ipacm_cmd_q_data evt_data;
 					evt_data.event    = IPA_HANDLE_GRE_DOWN;
+					evt_data.evt_data = 0;
+					IPACMDBG_H("Posting IPA_HANDLE_GRE_DOWN \n");
+					IPACM_EvtDispatcher::PostEvt(&evt_data);
+				}
+				else
+				{
+					/* Send GRE DOWN event */
+					ipacm_cmd_q_data evt_data;
+					evt_data.event    = IPA_HANDLE_IPOGRE_DOWN;
 					evt_data.evt_data = 0;
 					IPACMDBG_H("Posting IPA_HANDLE_GRE_DOWN \n");
 					IPACM_EvtDispatcher::PostEvt(&evt_data);
@@ -1169,7 +1192,7 @@ static int ipa_nl_decode_nlmsg
 				// struct nlmsghdr *h;
 				struct ifinfomsg *ifi2;
 				//ifi_type is 1 for gretap2
-				if(msg_ptr->nl_link_info.metainfo.ifi_type == 778 || msg_ptr->nl_link_info.metainfo.ifi_type == 823 || msg_ptr->nl_link_info.metainfo.ifi_type == 769){//GRE tunnel
+			if(msg_ptr->nl_link_info.metainfo.ifi_type == 778 || msg_ptr->nl_link_info.metainfo.ifi_type == 823 || msg_ptr->nl_link_info.metainfo.ifi_type == 769){//GRE tunnel
 					if(IFF_UP & msg_ptr->nl_link_info.metainfo.ifi_flags){
 						ifi2 = (struct ifinfomsg*) NLMSG_DATA(nlh);
 							if(populate_gre_details(ifi2,nlh->nlmsg_len,msg_ptr->nl_link_info.metainfo.ifi_type))
@@ -1449,7 +1472,7 @@ static int ipa_nl_decode_nlmsg
 				/* RTM_NEWLINK event with AF_BRIDGE family should be ignored in Android
 				 *    but this should be processed in case of MDM for Ehernet interface.
 				 */
-#ifdef FEATURE_EoGRE || FEATURE_PMIPV6
+#ifdef FEATURE_EoGRE || FEATURE_PMIPV6 || FEATURE_IPoGRE
 				struct ifinfomsg *ifi2;
 				if(msg_ptr->nl_link_info.metainfo.ifi_type == 778 || msg_ptr->nl_link_info.metainfo.ifi_type == 823 || msg_ptr->nl_link_info.metainfo.ifi_type == 769)
 				{//GRE tunnel

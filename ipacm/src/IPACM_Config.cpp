@@ -184,6 +184,12 @@ const char *ipacm_event_name[] = {
 	__stringify(IPA_WAN_HANDLE_EoGRE_UP),                  /* Handle eogre enable event for WAN. */
 	__stringify(IPA_WAN_HANDLE_EoGRE_DOWN),                /* Handle eogre disable event for WAN. */
 #endif
+#ifdef FEATURE_IPoGRE
+	__stringify(IPA_HANDLE_IPOGRE_UP),                      /* Handle ipogre enable event. */
+	__stringify(IPA_HANDLE_IPOGRE_DOWN),                    /* Handle ipogre disable event. */
+	__stringify(IPA_WAN_HANDLE_IPOGRE_UP),                  /* Handle ipogre enable event. */
+	__stringify(IPA_WAN_HANDLE_IPOGRE_DOWN),                /* Handle ipogre disable event. */
+#endif
 	__stringify(IPA_DSCP_PCP_CONFIG_CHANGE_EVENT),         /* NULL */
 #ifdef FEATURE_PMIPV6
 	__stringify(IPA_HANDLE_GRE_UP),                      /* Handle gre enable event. */
@@ -343,6 +349,11 @@ IPACM_Config::IPACM_Config()
 #ifdef FEATURE_PMIPV6
 	memset(&ipgre_info, 0, sizeof(ipgre_info));
 	memset(&pmip_details, 0, sizeof(pmip_details));
+#endif
+#ifdef FEATURE_IPoGRE
+	memset(&ipgre_info, 0, sizeof(ipgre_info));
+	memset(&ipogre_details, 0, sizeof(ipogre_details));
+	ipogre_enabled  = false;
 #endif
 	ext_router_mode = IPA_PREFIX_DISABLED;
 

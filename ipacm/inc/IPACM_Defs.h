@@ -403,6 +403,12 @@ typedef enum
 	IPA_HANDLE_GRE_UP,                      /* ipa_ipgre_info */
 	IPA_HANDLE_GRE_DOWN,                    /* ipa_ipgre_info */
 #endif
+#ifdef FEATURE_IPoGRE
+	IPA_HANDLE_IPOGRE_UP,                      /* ipa_ipgre_info */
+	IPA_HANDLE_IPOGRE_DOWN,                    /* ipa_ipgre_info */
+	IPA_WAN_HANDLE_IPOGRE_UP,
+	IPA_WAN_HANDLE_IPOGRE_DOWN,
+#endif
 	IPA_HANDLE_MACSEC_ADD,                    /* ipa_macsec_map */
 	IPA_HANDLE_MACSEC_DEL,                    /* ipa_macsec_map */
 	IPA_ADD_BRIDGE_VLAN_PHY_INTF,

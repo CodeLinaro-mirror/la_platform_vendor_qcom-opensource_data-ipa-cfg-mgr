@@ -341,6 +341,10 @@ int IPACM_IfaceManager::create_iface_instance(ipacm_ifacemgr_data *param)
 				IPACM_EvtDispatcher::registr(IPA_HANDLE_GRE_UP, lan);
 				IPACM_EvtDispatcher::registr(IPA_HANDLE_GRE_DOWN, lan);
 #endif
+#ifdef FEATURE_IPoGRE
+				IPACM_EvtDispatcher::registr(IPA_WAN_HANDLE_IPOGRE_UP, lan);
+				IPACM_EvtDispatcher::registr(IPA_WAN_HANDLE_IPOGRE_DOWN, lan);
+#endif
 #ifdef FEATURE_IPA_ANDROID
 				IPACM_EvtDispatcher::registr(IPA_HANDLE_WAN_UP_TETHER, lan);
 				IPACM_EvtDispatcher::registr(IPA_HANDLE_WAN_UP_V6_TETHER, lan);
@@ -471,6 +475,10 @@ int IPACM_IfaceManager::create_iface_instance(ipacm_ifacemgr_data *param)
 #ifdef FEATURE_PMIPV6
 					IPACM_EvtDispatcher::registr(IPA_HANDLE_GRE_UP, odu);
 					IPACM_EvtDispatcher::registr(IPA_HANDLE_GRE_DOWN, odu);
+#endif
+#ifdef FEATURE_IPoGRE
+					IPACM_EvtDispatcher::registr(IPA_WAN_HANDLE_IPOGRE_UP, odu);
+					IPACM_EvtDispatcher::registr(IPA_WAN_HANDLE_IPOGRE_DOWN, odu);
 #endif
 					IPACM_EvtDispatcher::registr(IPA_ADDR_ADD_EVENT, odu);
 					/*lan2lan ipa offload with static IP*/
@@ -718,6 +726,10 @@ int IPACM_IfaceManager::create_iface_instance(ipacm_ifacemgr_data *param)
 #ifdef FEATURE_PMIPV6
 					IPACM_EvtDispatcher::registr(IPA_HANDLE_GRE_UP, w);
 					IPACM_EvtDispatcher::registr(IPA_HANDLE_GRE_DOWN, w);
+#endif
+#ifdef FEATURE_IPoGRE
+					IPACM_EvtDispatcher::registr(IPA_HANDLE_IPOGRE_UP,w);
+					IPACM_EvtDispatcher::registr(IPA_HANDLE_IPOGRE_DOWN,w);
 #endif
 					IPACM_EvtDispatcher::registr(IPA_ADDR_ADD_EVENT, w);
 #ifdef FEATURE_IPA_ANDROID

@@ -82,6 +82,33 @@ const uint8_t IPACM_Wan::v4_gre_header[] = {
 	0x00, 0x00, 0x00, 0x05 //Key hardcoded according to PMIPV6 opensource code for now
 };
 
+const uint8_t IPACM_Wan::v4_ipogre_header[] = {
+	0x45, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x40, 0x00,
+	0x3f, 0x2f, 0x00, 0x00, // 0x2f Protocol (Generic Routing Encapsulation)
+	0x00, 0x00, 0x00, 0x00, // src address here
+	0x00, 0x00, 0x00, 0x00, // dest address here
+	// GRE header here
+	0x00, 0x00, 0x00, 0x00,
+};
+
+const uint8_t IPACM_Wan::v6_ipogre_header[] = {
+	0x60, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x3c, 0x40, // 0x3c Protocol (destination option) hop limit to 64
+	0x00, 0x00, 0x00, 0x00, // src address here
+	0x00, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00, // dest address here
+	0x00, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00,
+	0x2f, 0x00, 0x04, 0x01,
+	0x04, 0x01, 0x01, 0x00,
+	// GRE header here
+	0x00, 0x00, 0x00, 0x00,
+};
+
 const uint8_t IPACM_Wan::v6_gre_header[] = {
 	0x60, 0x00, 0x00, 0x00,
 	0x00, 0x00, 0x2f, 0x40, // 0x3c Protocol (destination option) hop limit to 64
@@ -3341,6 +3368,33 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 
 	case IPA_HANDLE_GRE_DOWN:
 		IPACMDBG_H("Received and will process an IPA_HANDLE_EoGRE_DOWN\n");
+		gre_down();
+		break;
+#endif
+#ifdef FEATURE_IPoGRE
+	case IPA_HANDLE_IPOGRE_UP:
+	{
+		ipa_ipgre_info ipgre_info = IPACM_Iface::ipacmcfg->ipgre_info;
+		if (ipgre_info.iptype == IPA_IP_v4 &&
+			ipgre_info.ipv4_src == wan_v4_addr)
+		{
+			IPACMDBG_H("Received and will process an IPA_HANDLE_GRE_UP\n");
+			gre_up();
+		}
+		else if (ipgre_info.iptype == IPA_IP_v6 &&
+			memcmp(ipgre_info.ipv6_src, m_ipv6_addr, sizeof(ipgre_info.ipv6_src)) == 0)
+		{
+			IPACMDBG_H("Received and will process an IPA_HANDLE_GRE_UP\n");
+			gre_up();
+		}
+		else {
+			IPACMDBG_H("Received and will process an IPA_HANDLE_GRE_UP for differenct instance\n");
+		}
+		break;
+	}
+
+	case IPA_HANDLE_IPOGRE_DOWN:
+		IPACMDBG_H("Received and will process an IPA_HANDLE_GRE_DOWN\n");
 		gre_down();
 		break;
 #endif
@@ -6772,7 +6826,7 @@ int IPACM_Wan::config_dft_firewall_rules_ex(struct ipa_flt_rule_add *rules, int 
 			IPACMDBG_H("adding default rule for iface %s\n", curr_interface->dev_name);
 			res = add_catchup_all_filtering_rule_each_pdn(iptype,
 				curr_interface->rx_prop->rx[0].attrib, rules[pos].flt_rule, pos, isPmipv6);
-			if(isPmipv6 && iptype==IPACM_Iface::ipacmcfg->ipgre_info.iptype)
+			if((isPmipv6 || IPACM_Iface::ipacmcfg->ipogre_enabled) && iptype==IPACM_Iface::ipacmcfg->ipgre_info.iptype)
 			{
 				rules[pos].mux_id = curr_interface->ext_prop->ext[0].mux_id;
 				++pos;
@@ -6842,8 +6896,8 @@ int IPACM_Wan::config_dft_firewall_rules_ex(struct ipa_flt_rule_add *rules, int 
 			IPACMDBG_H("adding default rule for iface %s ip-type %d\n", curr_interface->dev_name, iptype);
 			/* for ipv6 nat case this shall be the 2nd pass catch all rule to send to v6 LAN RT table*/
 			res = add_catchup_all_filtering_rule_each_pdn(iptype,
-				curr_interface->rx_prop->rx[0].attrib, rules[pos].flt_rule, pos);
-			if(isPmipv6)
+				curr_interface->rx_prop->rx[0].attrib, rules[pos].flt_rule, pos,true);
+			if(isPmipv6 || IPACM_Iface::ipacmcfg->ipogre_enabled)
 			{
 				rules[pos].mux_id = curr_interface->ext_prop->ext[0].mux_id;
 				++pos;
@@ -7868,7 +7922,8 @@ int IPACM_Wan::add_dft_filtering_rule(struct ipa_flt_rule_add *rules, int rule_o
 		&flt_rule_entry, sizeof(struct ipa_flt_rule_add));
 #endif
 		IPACM_Wan::num_v4_flt_rule += IPA_V2_NUM_DEFAULT_WAN_FILTER_RULE_IPV4;
-		IPACMDBG_H("Constructed %d default filtering rules for ip type %d\n", IPA_V2_NUM_DEFAULT_WAN_FILTER_RULE_IPV4, iptype);
+		IPACMDBG_H("Constructed DEBUG tcp\n");
+		IPACMDBG_H("Constructed %d default filtering rules for ip type %d\n", IPACM_Wan::num_v4_flt_rule, iptype);
 	}
 	else	/*insert rules for ipv6*/
 	{
@@ -13315,7 +13370,7 @@ int IPACM_Wan::add_catchup_all_filtering_rule_each_pdn(
 		return IPACM_FAILURE;
 	}
 
-#if defined(FEATURE_EoGRE) || defined(FEATURE_PMIPV6)
+#if defined(FEATURE_EoGRE) || defined(FEATURE_PMIPV6) || defined(FEATURE_IPoGRE)
 	ipa_ipgre_info ipgre_info;
 	if(isPmipv6){
 		ipgre_info  = IPACM_Iface::ipacmcfg->ipgre_info;
@@ -13335,8 +13390,8 @@ int IPACM_Wan::add_catchup_all_filtering_rule_each_pdn(
 #else
 	bool compatible_eogre = false;
 #endif
-#ifdef FEATURE_PMIPV6
-	bool           doing_ipgre = IPACM_Iface::ipacmcfg->pmip_details.pmipv6_enabled;
+#ifdef FEATURE_IPoGRE
+	bool           doing_ipgre = isPmipv6;
 	/*
 	 * If we're doing eogre and the iptype in the eogre matches what's
 	 * been passed to this function, we've got relevant eogre work to
@@ -13374,7 +13429,7 @@ int IPACM_Wan::add_catchup_all_filtering_rule_each_pdn(
 	{
 		num_firewall = &num_firewall_v4;
 		num_flt_rule = &num_v4_flt_rule;
-#if defined(FEATURE_EoGRE) || defined(FEATURE_PMIPV6)
+#if defined(FEATURE_EoGRE) || defined(FEATURE_PMIPV6) || defined(FEATURE_IPoGRE)
 		if (compatible_gre || compatible_eogre){
 			flt_rule_entry.rule.attrib.u.v4.dst_addr_mask = 0xFFFFFFFF;
 			flt_rule_entry.rule.attrib.u.v4.dst_addr = ipgre_info.ipv4_src;
@@ -13416,7 +13471,7 @@ flt_rule_entry.rule.attrib.u.v4.dst_addr_mask = 0x00000000;
 					rt_tbl_name = ipacmcfg->rt_tbl_lan_v4.name;
 				}
 		}
-#if defined(FEATURE_EoGRE) || defined(FEATURE_PMIPV6)
+#if defined(FEATURE_EoGRE) || defined(FEATURE_PMIPV6) || defined(FEATURE_IPoGRE)
 			if(isPmipv6 || doing_ipgre)
 			{
 				flt_rule_entry.rule.action = IPA_PASS_TO_ROUTING;
@@ -13459,7 +13514,7 @@ flt_rule_entry.rule.attrib.u.v4.dst_addr_mask = 0x00000000;
 					rt_tbl_name = ipacmcfg->rt_tbl_wan_v6.name;
 			}
 		}
-#if defined(FEATURE_EoGRE) || defined(FEATURE_PMIPV6)
+#if defined(FEATURE_EoGRE) || defined(FEATURE_PMIPV6) || defined(FEATURE_IPoGRE)
 		else /* ( compatible_eogre ) */
 		{
 			memset(
@@ -15354,16 +15409,19 @@ int IPACM_Wan::mape_fmr_route_rule_del(uint32_t ip_addr)
 return IPACM_SUCCESS;
 }
 
-#ifdef FEATURE_PMIPV6
+#ifdef FEATURE_PMIPV6 || FEATURE_IPoGRE
 void IPACM_Wan::gre_up()
 {
-	if(IPACM_Iface::ipacmcfg->pmip_details.pmipv6_up_wan == true){
-		IPACMDBG_H("GRE UP already received once, RT work is done\n");
-		return;
-	}
-	if(IPACM_Iface::ipacmcfg->pmip_details.pmipv6_tunnel_setup == false){
-		IPACMDBG_H("Tunnel info is not yet loaded. Let's wait for tunnel\n");
-		return;
+	if(!IPACM_Iface::ipacmcfg->ipogre_enabled)
+	{
+		if(IPACM_Iface::ipacmcfg->pmip_details.pmipv6_up_wan == true){
+			IPACMDBG_H("GRE UP already received once, RT work is done\n");
+			return;
+		}
+		if(IPACM_Iface::ipacmcfg->pmip_details.pmipv6_tunnel_setup == false){
+			IPACMDBG_H("Tunnel info is not yet loaded. Let's wait for tunnel\n");
+			return;
+		}
 	}
 	ipa_ipgre_info ipgre_info;
 	ipgre_info = IPACM_Iface::ipacmcfg->ipgre_info;
@@ -15414,6 +15472,12 @@ void IPACM_Wan::gre_up()
 		}
 	}
 
+	ipacm_cmd_q_data evt_data;
+	memset(&evt_data, 0, sizeof(evt_data));
+	evt_data.event = IPA_WAN_HANDLE_IPOGRE_UP;
+	evt_data.evt_data = 0;
+	IPACMDBG_H("Posting event: IPA_WAN_HANDLE_EoGRE_UP.\n");
+	IPACM_EvtDispatcher::PostEvt(&evt_data);
 	IPACMDBG_H(
 		"Success with the enable for iptype(%d)\n",
 		iptype);
@@ -15457,6 +15521,11 @@ void IPACM_Wan::gre_down()
 	ipgre_clear_route_data(IPA_IP_v4);
 	ipgre_clear_route_data(IPA_IP_v6);
 
+	ipacm_cmd_q_data evt_data;
+	memset(&evt_data, 0, sizeof(evt_data));
+	evt_data.event = IPA_WAN_HANDLE_IPOGRE_DOWN;
+	IPACMDBG_H("Posting event: IPA_WAN_HANDLE_IPoGRE_DOWN\n");
+	IPACM_EvtDispatcher::PostEvt(&evt_data);
 	IPACMDBG_H(
 		"Success with the disable for iptype(%d)\n",
 		iptype);
@@ -15752,9 +15821,19 @@ int IPACM_Wan::ipgre_make_hdr_for_add_ctx(
 	else
 	{
 		v6_ipgre_hdr_t* hdr = (v6_ipgre_hdr_t*) hdr_data_buf;
-		memcpy(hdr_data_buf, v6_gre_header, sizeof(v6_gre_header));
-		hdr->words[IPV6_GRE_PMIP_PROT_IDX] = htonl(GRE_PROTOCOL_TYPE_v6_WITH_KEY);
-		hdr_data_len = sizeof(v6_gre_header);
+		if(IPACM_Iface::ipacmcfg->ipogre_enabled)
+		{
+			memcpy(hdr_data_buf, v6_ipogre_header, sizeof(v6_ipogre_header));
+			hdr_data_len = sizeof(v6_ipogre_header);
+			hdr->words[IPV6_GRE_PROT_IDX] = htonl(GRE_PROTOCOL_TYPE_v6);
+		}
+		else
+		{
+			memcpy(hdr_data_buf, v6_gre_header, sizeof(v6_gre_header));
+			hdr->words[IPV6_GRE_PMIP_PROT_IDX] = htonl(GRE_PROTOCOL_TYPE_v6_WITH_KEY);
+			hdr_data_len = sizeof(v6_gre_header);
+		}
+
 		memcpy(&(hdr->words[IPV6_SRC_ADDR_IDX]),
 			   &ipgre_info.ipv6_src,
 			   sizeof(ipgre_info.ipv6_src));
@@ -15806,18 +15885,24 @@ int IPACM_Wan::ipgre_make_hdr_for_add_ctx(
 	IPA_GRE_HDR_NAME,
 	( iptype == IPA_IP_v4 )      ? 4                     : 6);
 
-	hdr->type    = IPA_HDR_L2_802_1Q;
+	hdr->type    = IPA_HDR_L2_ETHERNET_II;
 	hdr->hdr_len = hdr_data_len;
 	memcpy(hdr->hdr, hdr_data_buf, hdr->hdr_len);
 
 	if(iptype == IPA_IP_v4)
 	{
 					v4_ipgre_hdr_t* hdr2 = (v4_ipgre_hdr_t*) hdr_data_buf;
-					hdr2->words[IPV4_GRE_PROT_IDX] = htonl(GRE_PROTOCOL_TYPE_v6_WITH_KEY);   //V4  tunnel carrying v6 payload
+					if(IPACM_Iface::ipacmcfg->ipogre_enabled)
+						hdr2->words[IPV4_GRE_PROT_IDX] = htonl(GRE_PROTOCOL_TYPE_v6);
+					else
+						hdr2->words[IPV4_GRE_PROT_IDX] = htonl(GRE_PROTOCOL_TYPE_v6_WITH_KEY);   //V4  tunnel carrying v6 payload
 	}
 	else{
 					v6_ipgre_hdr_t* hdr2 = (v6_ipgre_hdr_t*) hdr_data_buf;
-					hdr2->words[IPV6_GRE_PMIP_PROT_IDX] = htonl(GRE_PROTOCOL_TYPE_v4_WITH_KEY);  //V6 tunnel carrying v4 payload
+					if(IPACM_Iface::ipacmcfg->ipogre_enabled)
+						hdr2->words[IPV6_GRE_PROT_IDX] = htonl(GRE_PROTOCOL_TYPE_v4);
+					else
+						hdr2->words[IPV6_GRE_PROT_IDX] = htonl(GRE_PROTOCOL_TYPE_v4_WITH_KEY);  //V6 tunnel carrying v4 payload
 	}
 
 	hdr_c->is_partial = false;
@@ -15830,7 +15915,7 @@ int IPACM_Wan::ipgre_make_hdr_for_add_ctx(
 	IPA_GRE_C_HDR_NAME,
 	( iptype == IPA_IP_v4 )      ? 4                     : 6);
 
-	hdr_c->type    = IPA_HDR_L2_802_1Q;
+	hdr_c->type    = IPA_HDR_L2_ETHERNET_II;
 	hdr_c->hdr_len = hdr_data_len;
 
 	memcpy(hdr_c->hdr, hdr_data_buf, hdr_c->hdr_len);
@@ -15900,12 +15985,22 @@ int IPACM_Wan::ipgre_make_hdr_add_ctx(
 	IPACMDBG_H("Initialising PMIP proc ctx add\n");
 	procCtx->proc_ctx_hdl = -1; // return value
 	procCtx->status       = -1; // Return parameter
-	procCtx->type         = IPA_HDR_PROC_GRE_HEADER_ADD;
 	procCtx->hdr_hdl      = hdr_2use;
-	procCtx->gre_params.hdr_add_param.eth_hdr_retained = 0;
-	procCtx->gre_params.hdr_add_param.input_ip_version = iptype;
-	procCtx->gre_params.hdr_add_param.output_ip_version =IPACM_Iface::ipacmcfg->ipgre_info.iptype;
-	procCtx->gre_params.hdr_add_param.second_pass = 1;
+	if(IPACM_Iface::ipacmcfg->ipogre_enabled)
+	{
+		procCtx->type         = IPA_HDR_PROC_IPOGRE_HEADER_ADD;
+		procCtx->ipogre_params.hdr_add_param.input_ip_version = iptype;
+		procCtx->ipogre_params.hdr_add_param.output_ip_version =IPACM_Iface::ipacmcfg->ipgre_info.iptype;
+	}
+	else
+	{
+		procCtx->type         = IPA_HDR_PROC_GRE_HEADER_ADD;
+		procCtx->gre_params.hdr_add_param.eth_hdr_retained = 0;
+		procCtx->gre_params.hdr_add_param.input_ip_version = iptype;
+		procCtx->gre_params.hdr_add_param.output_ip_version =IPACM_Iface::ipacmcfg->ipgre_info.iptype;
+		procCtx->gre_params.hdr_add_param.second_pass = 1;
+	}
+
 	if ( m_header.AddHeaderProcCtx(procCtxTable) == true )
 	{
 		IPACMDBG_H(
@@ -15962,9 +16057,19 @@ int IPACM_Wan::ipgre_make_hdr_rmv_ctx(
 	procCtxTable->num_proc_ctxs = NUM_OF_PROC_CTX;
 	procCtx->proc_ctx_hdl = -1; // return value
 	procCtx->status       = -1; // Return parameter
-	procCtx->type         = IPA_HDR_PROC_GRE_HEADER_REMOVE;
-	procCtx->gre_params.hdr_remove_param.hdr_len_remove =
-		( iptype == IPA_IP_v4 ) ? sizeof(v4_gre_header) : sizeof(v6_gre_header);
+	if(IPACM_Iface::ipacmcfg->ipogre_enabled)
+	{
+		procCtx->type         = IPA_HDR_PROC_IPOGRE_HEADER_REMOVE;
+		procCtx->ipogre_params.hdr_remove_param.hdr_len_remove =
+			( iptype == IPA_IP_v4 ) ? sizeof(v4_ipogre_header) : sizeof(v6_ipogre_header);
+	}
+	else
+	{
+		procCtx->type         = IPA_HDR_PROC_GRE_HEADER_REMOVE;
+		procCtx->gre_params.hdr_remove_param.hdr_len_remove =
+			( iptype == IPA_IP_v4 ) ? sizeof(v4_ipogre_header) : sizeof(v6_ipogre_header);
+	}
+
 	if ( m_header.AddHeaderProcCtx(procCtxTable) == true )
 	{
 		IPACMDBG_H(

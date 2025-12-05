@@ -598,7 +598,16 @@ public:
 	}pmipv6_status;
 	pmipv6_status pmip_details;
 
+	bool ipogre_enabled;
 	bool eth_pdu_enabled;
+	typedef struct ipgre_tunnel_id_info {
+		bool ipogre_enabled;
+		bool ipogre_up;
+		bool ipogre_tunnel_setup;
+		bool ipogre_gre_event_posted;
+		bool ipogre_up_wan;
+	}ipgre_tunnel_id_info;
+	ipgre_tunnel_id_info ipogre_details;
 
 #ifdef FEATURE_VLAN_MPDN
 	bool vlan_firewall_change_handle;

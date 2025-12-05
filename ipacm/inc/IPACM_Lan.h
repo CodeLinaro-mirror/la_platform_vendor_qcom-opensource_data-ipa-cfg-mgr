@@ -435,7 +435,7 @@ public:
 	 */
 	gre_route_data_t gre_route_data[IPA_IP_MAX];
 
-	void gre_up(bool isPmipv6=false);
+	void gre_up(bool isPmipv6=false, bool ipogre_enabled=false);
 
 	void gre_down(bool isPmipv6=false);
 
@@ -505,13 +505,13 @@ public:
 #ifdef FEATURE_VLAN_MPDN
 
 	virtual int handle_uplink_filter_rule(ipacm_ext_prop *prop, ipa_ip_type iptype, uint8_t pdn_mux_id,
-		bool notif_only, bool is_xlat = false, bool ast_update = false, bool static_policy = false, bool isPmipv6 = false);
+		bool notif_only, bool is_xlat = false, bool ast_update = false, bool static_policy = false, bool isPmipv6 = false,bool is_ipogre=false);
 
 	virtual int handle_mpdn_ul_xlat_filter_rule(ipacm_ext_prop *prop, ipa_ip_type iptype, int pdn_mux_id, uint16_t vlan_id);
 
 	virtual int delete_mdpn_ul_xlat_filter_rule(int mux_id);
 #else
-	virtual int handle_uplink_filter_rule(ipacm_ext_prop* prop, ipa_ip_type iptype, uint8_t xlat_mux_id, bool ast_update = false, bool isPmipv6=false);
+	virtual int handle_uplink_filter_rule(ipacm_ext_prop* prop, ipa_ip_type iptype, uint8_t xlat_mux_id, bool ast_update = false, bool isPmipv6=false,bool is_ipogre=false);
 #endif
 
 	virtual int del_ul_flt_rules(enum ipa_ip_type iptype);

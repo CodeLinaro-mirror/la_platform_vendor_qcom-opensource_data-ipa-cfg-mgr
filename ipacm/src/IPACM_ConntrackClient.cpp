@@ -26,9 +26,9 @@
  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * Changes from Qualcomm Innovation Center are provided under the following license:
- * Copyright (c) 2023-2024 Qualcomm Innovation Center, Inc. All rights reserved.
- * SPDX-License-Identifier: BSD-3-Clause-Clear.
+ * Changes from Qualcomm Technologies, Inc. are provided under the following license:
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 #include <stdio.h>
 #include <stdlib.h>
@@ -464,9 +464,8 @@ int IPACM_ConntrackClient::IPA_Conntrack_TCP_Filter_Init(void)
 		return -1;
 	}
 
-	ret = nfct_filter_set_logic(pClient->tcp_filter,
-															NFCT_FILTER_L4PROTO,
-															NFCT_FILTER_LOGIC_POSITIVE);
+	ret = nfct_filter_set_logic(pClient->tcp_filter, NFCT_FILTER_L4PROTO,
+					NFCT_FILTER_LOGIC_POSITIVE);
 	if(ret == -1)
 	{
 		IPACMERR("Unable to set filter logic\n");
@@ -481,33 +480,42 @@ int IPACM_ConntrackClient::IPA_Conntrack_TCP_Filter_Init(void)
 	tcp_proto_state.proto = IPPROTO_TCP;
 	tcp_proto_state.state = TCP_CONNTRACK_ESTABLISHED;
 
-	ret = nfct_filter_set_logic(pClient->tcp_filter,
-															NFCT_FILTER_L4PROTO_STATE,
-															NFCT_FILTER_LOGIC_POSITIVE);
+	ret = nfct_filter_set_logic(pClient->tcp_filter, NFCT_FILTER_L4PROTO_STATE,
+					NFCT_FILTER_LOGIC_POSITIVE);
 	if(ret == -1)
 	{
 		IPACMERR("unable to set filter logic\n");
 		return -1;
 	}
-	nfct_filter_add_attr(pClient->tcp_filter,
-											 NFCT_FILTER_L4PROTO_STATE,
-											 &tcp_proto_state);
+	nfct_filter_add_attr(pClient->tcp_filter, NFCT_FILTER_L4PROTO_STATE,
+				&tcp_proto_state);
 
 
 	tcp_proto_state.proto = IPPROTO_TCP;
 	tcp_proto_state.state = TCP_CONNTRACK_FIN_WAIT;
-	ret = nfct_filter_set_logic(pClient->tcp_filter,
-															NFCT_FILTER_L4PROTO_STATE,
-															NFCT_FILTER_LOGIC_POSITIVE);
+	ret = nfct_filter_set_logic(pClient->tcp_filter, NFCT_FILTER_L4PROTO_STATE,
+					NFCT_FILTER_LOGIC_POSITIVE);
 	if(ret == -1)
 	{
 		IPACMERR("unable to set filter logic\n");
 		return -1;
 	}
 
-	nfct_filter_add_attr(pClient->tcp_filter,
-											 NFCT_FILTER_L4PROTO_STATE,
-											 &tcp_proto_state);
+	nfct_filter_add_attr(pClient->tcp_filter, NFCT_FILTER_L4PROTO_STATE,
+							&tcp_proto_state);
+
+	tcp_proto_state.proto = IPPROTO_TCP;
+	tcp_proto_state.state = TCP_CONNTRACK_CLOSE;
+	ret = nfct_filter_set_logic(pClient->tcp_filter, NFCT_FILTER_L4PROTO_STATE,
+					NFCT_FILTER_LOGIC_POSITIVE);
+	if(ret == -1)
+	{
+		IPACMERR("unable to set filter logic\n");
+		return -1;
+	}
+
+	nfct_filter_add_attr(pClient->tcp_filter, NFCT_FILTER_L4PROTO_STATE,
+							&tcp_proto_state);
 
 	IPA_Conntrack_Filters_Ignore_Ipv6_Addresses(pClient->tcp_filter);
 
@@ -526,9 +534,8 @@ int IPACM_ConntrackClient::IPA_Conntrack_UDP_Filter_Init(void)
 		return -1;
 	}
 
-	ret = nfct_filter_set_logic(pClient->udp_filter,
-															NFCT_FILTER_L4PROTO,
-															NFCT_FILTER_LOGIC_POSITIVE);
+	ret = nfct_filter_set_logic(pClient->udp_filter, NFCT_FILTER_L4PROTO,
+					NFCT_FILTER_LOGIC_POSITIVE);
 	if(ret == -1)
 	{
 		IPACMERR("unable to set filter logic\n");

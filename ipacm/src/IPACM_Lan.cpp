@@ -807,9 +807,7 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 				IPACMDBG_H("Query Getneigh for physical ifaces\n");
 				ipa_nl_query_newneigh(AF_BRIDGE, dev_name);
 				IPACMDBG_H("Query Getneigh for v4\n");
-				ipa_nl_query_newneigh(AF_INET, dev_name);
-				IPACMDBG_H("Query Getneigh for v6\n");
-				ipa_nl_query_newneigh(AF_INET6, dev_name);
+				ipa_nl_query_newneigh(AF_INET, "bridge");
 			}
 		}
 		break;
@@ -1559,6 +1557,7 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 		break;
 	case IPA_HANDLE_WAN_VLAN_PDN_DOWN:
 		{
+			uint16_t vlan_id = 0;
 			ipacm_event_vlan_pdn *data = (ipacm_event_vlan_pdn *)param;
 
 			IPACMDBG_H("Received IPA_HANDLE_WAN_VLAN_PDN_DOWN for VID %d, iptype %d\n",
@@ -1582,6 +1581,39 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 				}
 #endif
 				handle_vlan_pdn_down(data);
+				if(((data->iptype == IPA_IP_v6 || data->iptype == IPA_IP_MAX)))
+				{
+					it = neigh_cache.begin();
+					while (it != neigh_cache.end())
+					{
+						if ((it->ipv6_addr[0] == data->ipv6_prefix[0]) && (it->ipv6_addr[1] == data->ipv6_prefix[1]))
+						{
+							/* In both LTE and WLAN down receiving vlan id 0 but as
+							prefix is different clearing neigh cache entry for prefix*/
+							if(data->VlanID == 0)
+							{
+								it = neigh_cache.erase(it);
+							}
+							else if(data->VlanID != 0)
+							{
+								vlan_id = 0;
+								if(IPACM_Iface::ipacmcfg->get_vlan_id(it->iface_name, &vlan_id))
+								{
+									IPACMERR("failed to get iface vlan ID\n");
+									it++;
+									continue;
+								}
+
+								if(data->VlanID == vlan_id)
+								{
+									it = neigh_cache.erase(it);
+								}
+							}
+						}
+						else
+							it++;
+					}
+				}
 			}
 		}
 		break;
@@ -3330,13 +3362,6 @@ int IPACM_Lan::handle_vlan_pdn_down(ipacm_event_vlan_pdn *data)
 			if(is_any_mux_up(IPA_IP_v4) == true)
 				notif_only = true;
 
-			/* if we still have vlan pdns up notify only */
-			if(set_mux_down(data->mux_id, IPA_IP_v6, data->VlanID))
-				return IPACM_FAILURE;
-
-			if(is_any_mux_up(IPA_IP_v6) == true)
-				notif_only_v6 = true;
-
 #ifdef FEATURE_SOCKSv5
 			/* socksv5 case */
 			if (IPACM_Iface::ipacmcfg->ipacm_socksv5_enable &&
@@ -3344,9 +3369,6 @@ int IPACM_Lan::handle_vlan_pdn_down(ipacm_event_vlan_pdn *data)
 				(IPACM_Wan::isWanUP(ipa_if_num) || IPACM_Wan::isVlanWanUP())))
 				notif_only = true;
 #endif //FEATURE_SOCKSv5
-
-			/* prefixes list updated, install rules accordingly */
-			modify_ipv6_prefix_flt_rule();
 
 			/* Clean up MTU rule */
 			modify_private_subnet();
@@ -3371,6 +3393,15 @@ int IPACM_Lan::handle_vlan_pdn_down(ipacm_event_vlan_pdn *data)
 			if(!is_mux_up(data->mux_id, IPA_IP_v4, 0) && notify_flt_removed(data->mux_id))
 				return IPACM_FAILURE;
 
+			/* if we still have vlan pdns up notify only */
+			if(set_mux_down(data->mux_id, IPA_IP_v6, data->VlanID))
+				return IPACM_FAILURE;
+
+			if(is_any_mux_up(IPA_IP_v6) == true)
+				notif_only_v6 = true;
+
+			/* prefixes list updated, install rules accordingly */
+			modify_ipv6_prefix_flt_rule();
 			if(!notif_only_v6)
 			{
 				if(del_ul_flt_rules(IPA_IP_v6))
@@ -3839,7 +3870,7 @@ int IPACM_Lan::handle_addr_evt(ipacm_event_data_addr *data)
 	IPACMDBG_H("finish route/filter rule ip-type: %d, res(%d)\n", data->iptype, res);
 	/*to handle if we have missed new route events before creation
 	  of physical interface in case there is ETH WAN VLAN iface*/
-	ipa_nl_send_getroute(data->iptype);
+	ipa_nl_send_getroute(data->iptype, dev_name);
 
 	/* TODO: get default MTU here instead of using 1500 */
 

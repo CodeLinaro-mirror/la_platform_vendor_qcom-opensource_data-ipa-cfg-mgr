@@ -37,6 +37,8 @@
 #include <errno.h>
 #include <libnetfilter_conntrack/libnetfilter_conntrack.h>
 #include <libnetfilter_conntrack/libnetfilter_conntrack_tcp.h>
+#include <fcntl.h>
+#include <pthread.h>
 
 #include "IPACM_ConntrackListener.h"
 #include "IPACM_ConntrackClient.h"
@@ -45,6 +47,7 @@
 #include "IPACM_Wan.h"
 
 void ParseCTV6Message(struct nf_conntrack *ct);
+void *query_conntracks(void *arguments);
 
 IPACM_ConntrackListener::IPACM_ConntrackListener() :
 	WanUp_v6(false),
@@ -680,6 +683,9 @@ void IPACM_ConntrackListener::HandleNeighIpAddrAddEvt(
 {
 	bool NatIface = false;
 	int i, ret;
+	pthread_t query_ct_thread = 0;
+	struct query_nl_conntrack *query_nl_ct = NULL;
+	void* exit_status;
 
 	ret = CheckNatIface(data->if_index, &NatIface);
 	if (NatIface && ret == IPACM_SUCCESS)
@@ -802,8 +808,22 @@ void IPACM_ConntrackListener::HandleNeighIpAddrAddEvt(
 				nat_inst->FlushTempEntries(data->ipv4_addr, true);
 
 			}
-			IPACMDBG("Flushing ipv4 conntrack entries\n");
-			query_conntracks(AF_INET, data->ipv4_addr, data->ipv6_addr);
+			query_nl_ct = (struct query_nl_conntrack *)calloc(1, sizeof(struct query_nl_conntrack));
+		        if (!query_nl_ct) {
+		            IPACMERR("Failed to allocate memory for query_nl_ct\n");
+		            return;
+		        }
+			query_nl_ct->is_ipv4 = true;
+			query_nl_ct->ipv4_addr = data->ipv4_addr;
+			query_nl_ct->is_ipv6 = false;
+			ret = pthread_create(&query_ct_thread, NULL, query_conntracks, (void*)query_nl_ct);
+			if (ret != 0) {
+				IPACMERR("Failed to create query thread: %d\n", ret);
+				free(query_nl_ct);
+				return;
+			}
+			pthread_detach(query_ct_thread);
+			IPACMDBG("thread detached\n");
 		}
 	}
 	return;
@@ -811,7 +831,12 @@ void IPACM_ConntrackListener::HandleNeighIpAddrAddEvt(
 
 void IPACM_ConntrackListener::HandleIPPassPDNInfoUpdate(void *in_param)
 {
+	pthread_t query_ct_ippass_thread = 0;
+	struct query_nl_conntrack *query_nl_ct = NULL;
+	void* exit_status;
 	ipacm_event_vlan_pdn *pdn_data = (ipacm_event_vlan_pdn *)in_param;
+	int ret = 0;
+
 	IPACMDBG_H("Recevied below information after VLAN PDN up,\n");
 	IPACMDBG_H("PDN IP 0x%x\n", pdn_data->ipv4_addr);
 	IPACMDBG_H("ip_passthrough: %d, ip_pass_dummy_ip:0x%x, ip_pass_skip_nat %d\n",
@@ -854,7 +879,22 @@ void IPACM_ConntrackListener::HandleIPPassPDNInfoUpdate(void *in_param)
 				if (pdn_data->ip_pass_enable && !pdn_data->ip_pass_skip_nat)
 				{
 					nat_inst->DelDummyNatEntries(wan_ipaddr);
-					query_conntracks(AF_INET, wan_ipaddr, 0);
+					query_nl_ct = (struct query_nl_conntrack *)calloc(1, sizeof(struct query_nl_conntrack));
+					if (!query_nl_ct) {
+					    IPACMERR("Failed to allocate memory for query_nl_ct\n");
+					    return;
+					}
+					query_nl_ct->is_ipv4 = true;
+					query_nl_ct->ipv4_addr = pdn_data->ipv4_addr;
+					query_nl_ct->is_ipv6 = false;
+					ret = pthread_create(&query_ct_ippass_thread, NULL, query_conntracks, (void*)query_nl_ct);
+					if (ret != 0) {
+						IPACMERR("Failed to create query thread: %d\n", ret);
+						free(query_nl_ct);
+						return;
+					}
+					pthread_detach(query_ct_ippass_thread);
+					IPACMDBG("thread detached\n");
 				}
 		}
 	}
@@ -863,10 +903,11 @@ void IPACM_ConntrackListener::HandleIPPassPDNInfoUpdate(void *in_param)
 
 void IPACM_ConntrackListener::HandleNeighIpAddrAddEvt_v6(ipacm_event_data_all *data)
 {
-	IPACMDBG_H("\n");
-
 	const IpAddress& ip = Ipv6IpAddress(data->ipv6_addr, false);
-	int i;
+	int i = 0, ret = 0;
+	void* exit_status;
+	pthread_t query_ct_ipv6_thread = 0;
+	struct query_nl_conntrack *query_nl_ct = NULL;
 
 	if (!IsIpv6CTEnabled() || !ip.Valid())
 	{
@@ -877,7 +918,7 @@ void IPACM_ConntrackListener::HandleNeighIpAddrAddEvt_v6(ipacm_event_data_all *d
 	ip.DebugDump("Add NAT interface with following address\n");
 
 	bool NatIface = false;
-	int ret = CheckNatIface(data->if_index, &NatIface);
+	ret = CheckNatIface(data->if_index, &NatIface);
 
 	if (!NatIface || ret != IPACM_SUCCESS)
 	{
@@ -980,8 +1021,23 @@ void IPACM_ConntrackListener::HandleNeighIpAddrAddEvt_v6(ipacm_event_data_all *d
 				ipv6ct_inst->ResetPwrSaveIf(ip);
 				ipv6ct_inst->FlushTempEntries(ip, true, false, false);
 			}
-			IPACMDBG("Flushing ipv6 conntrack entries\n");
-			query_conntracks(AF_INET6, data->ipv4_addr, data->ipv6_addr);
+			query_nl_ct = (struct query_nl_conntrack *)calloc(1, sizeof(struct query_nl_conntrack));
+			if (!query_nl_ct) {
+			    IPACMERR("Failed to allocate memory for query_nl_ct\n");
+			    return;
+			}
+			query_nl_ct->is_ipv4 = false;
+			query_nl_ct->ipv4_addr = 0;
+			query_nl_ct->is_ipv6 = true;
+			memcpy(query_nl_ct->ipv6_addr, data->ipv6_addr, sizeof(data->ipv6_addr));
+			ret = pthread_create(&query_ct_ipv6_thread, NULL, query_conntracks, (void*)query_nl_ct);
+			if (ret != 0) {
+				IPACMERR("Failed to create query thread: %d\n", ret);
+				free(query_nl_ct);
+				return;
+			}
+			pthread_detach(query_ct_ipv6_thread);
+			IPACMDBG("thread detached\n");
 		}
 	}
 
@@ -1303,7 +1359,7 @@ void IPACM_ConntrackListener::HandleVlanUp(void *in_param)
 					vlan_pdns[0].associated_VIDs[available_idx] = vlanup_data->VlanID;
 					vlan_pdns[0].VID_cnt++;
 					IPACMDBG_H("Now no of vlans mapped to PDN entry in 0 is %d\n",
-							vlan_pdns[0].VID_cnt++);
+							vlan_pdns[0].VID_cnt);
 					return;
 				}
 			}
@@ -1361,7 +1417,7 @@ void IPACM_ConntrackListener::HandleVlanUp(void *in_param)
 						vlan_pdns[i].associated_VIDs[available_idx] = vlanup_data->VlanID;
 						vlan_pdns[i].VID_cnt++;
 						IPACMDBG_H("Now no of vlans mapped to PDN entry in 0 is %d\n",
-								vlan_pdns[i].VID_cnt++);
+								vlan_pdns[i].VID_cnt);
 						return;
 					}
 				}
@@ -1976,7 +2032,8 @@ void IPACM_ConntrackListener::ProcessCTV6Message(void *param)
 	}
 	else if((IPPROTO_UDP == l4proto && NFCT_T_DESTROY == evt_data->type) ||
 					(IPPROTO_TCP == l4proto &&
-					 nfct_get_attr_u8(ct, ATTR_TCP_STATE) == TCP_CONNTRACK_FIN_WAIT))
+					 (nfct_get_attr_u8(ct, ATTR_TCP_STATE) == TCP_CONNTRACK_FIN_WAIT ||
+					  nfct_get_attr_u8(ct, ATTR_TCP_STATE) == TCP_CONNTRACK_CLOSE)))
 	{
 			p_lan2lan->handle_del_connection(&lan2lan_conn);
 	}
@@ -2202,18 +2259,31 @@ int v6_conntracks_callback(enum nf_conntrack_msg_type type,struct nf_conntrack *
 	return NFCT_CB_CONTINUE;
 }
 
-void IPACM_ConntrackListener::query_conntracks(int af_family, uint32_t ipv4_addr,
-	uint32_t *ipv6_addr)
+void* query_conntracks(void *arguments)
 {
 	int ret;
 	struct nfct_handle *handle;
 	struct nf_conntrack *ct;
-	int family = af_family;
+	struct query_nl_conntrack *args = (struct query_nl_conntrack *)arguments;
+	int family;
+	IPACMDBG_H("quering ct for ipv4 %d \n",args->is_ipv4);
+	IPACMDBG_H("quering ct for ipv6 %d \n",args->is_ipv6);
+
+	if(args->is_ipv4)
+		family = AF_INET;
+	else if(args->is_ipv6)
+		family = AF_INET6;
+	else
+	{
+		IPACMERR("Invalid address family\n");
+		goto exit;
+	}
+
 	ct = nfct_new();
 
 	if (!ct) {
 		IPACMERR("nfct_new failed");
-		return;
+		goto exit;
 	}
 
 	handle = nfct_open(CONNTRACK, 0);
@@ -2221,18 +2291,20 @@ void IPACM_ConntrackListener::query_conntracks(int af_family, uint32_t ipv4_addr
 	if (!handle) {
 		IPACMERR("nfct_open failed");
 		nfct_destroy(ct);
-		return ;
+		goto exit;
 	}
 
 	if(family == AF_INET)
 	{
-		nfct_callback_register(handle, NFCT_T_ALL, v4_conntrack_callback, &ipv4_addr);
-		IPACMDBG("quering ipv4 conntracks\n");
+		nfct_callback_register(handle, NFCT_T_ALL, v4_conntrack_callback, &args->ipv4_addr);
+		IPACMDBG("quering ipv4 conntracks for 0x%X\n", args->ipv4_addr);
 	}
-	else
+	else if(family == AF_INET6)
 	{
-		nfct_callback_register(handle, NFCT_T_ALL, v6_conntracks_callback, ipv6_addr);
-		IPACMDBG("quering ipv4 conntracks\n");
+		nfct_callback_register(handle, NFCT_T_ALL, v6_conntracks_callback, args->ipv6_addr);
+		IPACMDBG("quering ipv6 conntracks for  0x%08x:%08x:%08x:%08x\n", args->ipv6_addr[0],
+						args->ipv6_addr[1], args->ipv6_addr[2],
+						args->ipv6_addr[3]);
 	}
 
 	ret = nfct_query(handle, NFCT_Q_DUMP, &family);
@@ -2244,7 +2316,18 @@ void IPACM_ConntrackListener::query_conntracks(int af_family, uint32_t ipv4_addr
 
 	nfct_destroy(ct);
 	nfct_close(handle);
-	return;
+
+exit:
+	if(args->is_ipv4)
+		IPACMDBG_H("Exited the conntrack query thread created for IPv4: 0x%X\n", args->ipv4_addr);
+	else if(args->is_ipv6)
+		IPACMDBG("Exited the conntrack query thread created for IPv6: 0x%08x:%08x:%08x:%08x\n", args->ipv6_addr[0],
+						args->ipv6_addr[1], args->ipv6_addr[2],
+						args->ipv6_addr[3]);
+	if(args)
+		free(args);
+	pthread_exit((void*) 0);
+	return 0;
 }
 
 void IPACM_ConntrackListener::ProcessCTMessage_v6(const ipacm_ct_evt_data* evt_data, NatEntryBase& entry)
@@ -2671,9 +2754,10 @@ int IPACM_ConntrackListener::AddORDeleteNatEntry(const nat_entry_bundle *input, 
 			}
 		}
 		else if (TCP_CONNTRACK_FIN_WAIT == tcp_state ||
+				   TCP_CONNTRACK_CLOSE == tcp_state ||
 				   input->type == NFCT_T_DESTROY)
 		{
-			IPACMDBG("TCP state TCP_CONNTRACK_FIN_WAIT(%d) "
+			IPACMDBG("TCP state (TCP_CONNTRACK_FIN_WAIT or TCP_CONNTRACK_CLOSE) (%d) "
 					 "or type NFCT_T_DESTROY(%d)\n", tcp_state, input->type);
 
 			nat_inst->DeleteEntry(input->rule);
@@ -2992,7 +3076,8 @@ void IPACM_ConntrackListener::HandleLan2Lan(struct nf_conntrack *ct,
 	}
 	else if ((IPPROTO_UDP == rule->protocol && NFCT_T_DESTROY == type) ||
 			   (IPPROTO_TCP == rule->protocol &&
-				nfct_get_attr_u8(ct, ATTR_TCP_STATE) == TCP_CONNTRACK_FIN_WAIT))
+				(nfct_get_attr_u8(ct, ATTR_TCP_STATE) == TCP_CONNTRACK_FIN_WAIT ||
+				 nfct_get_attr_u8(ct, ATTR_TCP_STATE) == TCP_CONNTRACK_CLOSE)))
 	{
 		p_lan2lan->handle_del_connection(&lan2lan_conn);
 	}

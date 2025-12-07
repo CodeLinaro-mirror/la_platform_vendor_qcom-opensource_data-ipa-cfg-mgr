@@ -1364,7 +1364,7 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 
 					/*to handle if we have missed new route events before
                                         creation of interface*/
-					ipa_nl_send_getroute(data->iptype);
+					ipa_nl_send_getroute(data->iptype, dev_name);
 				}
 			}
 		}
@@ -8290,6 +8290,7 @@ int IPACM_Wan::handle_down_evt()
 				vlandown_data->iptype = IPA_IP_v6;
 				vlandown_data->VlanID = *it;
 				vlandown_data->mux_id = 0;
+				memcpy(vlandown_data->ipv6_prefix, ipv6_prefix, sizeof(ipv6_prefix));
 				evt_data.event = IPA_HANDLE_WAN_VLAN_PDN_DOWN;
 				evt_data.evt_data = (void *)vlandown_data;
 				IPACMDBG_H("Posting IPA_HANDLE_WAN_VLAN_PDN_DOWN (v6) iptype IPA_IP_v6, VlanID %d, mux_id %d, if num %d\n",

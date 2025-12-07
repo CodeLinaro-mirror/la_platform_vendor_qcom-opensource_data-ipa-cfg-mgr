@@ -1428,6 +1428,7 @@ void IPACM_Config::add_bridge_vlan_mapping(ipa_bridge_vlan_mapping_info *data)
 	ipacm_bridge *bridge = NULL;
 	char iface_name[IPA_IFACE_NAME_LEN] = {0};
 	int ret = IPACM_FAILURE;
+	bool new_entry = false;
 #ifdef IPA_L2TP_TUNNEL_UDP
 	list<l2tp_vlan_mapping_info>::iterator it_l2tp_mapping;
 #endif
@@ -1511,11 +1512,18 @@ void IPACM_Config::add_bridge_vlan_mapping(ipa_bridge_vlan_mapping_info *data)
 				data->bridge_name);
 			bridge->associate_VID = data->vlan_id;
 		}
+		new_entry = true;
 	}
 
 	IPACMDBG_H("added partial Entry with master interface index %d, VID %d\n", data->master_if_index, data->vlan_id);
 bail:
 	pthread_mutex_unlock(&vlan_l2tp_lock);
+	if(new_entry)
+	{
+		IPACMDBG_H("Querying the neighbors fo bridge %s\n",
+				data->bridge_name);
+		ipa_nl_query_newneigh(AF_INET, new_mapping.bridge_iface_name);
+	}
 	return;
 }
 
@@ -1847,10 +1855,6 @@ void IPACM_Config::add_vlan_iface(ipa_vlan_iface_info *data)
 	/* Sending Getneigh to receive missing neighbor in case if missed early */
 	IPACMDBG_H("Query Getneigh for physical ifaces\n");
 	ipa_nl_query_newneigh(AF_BRIDGE, data->name);
-	IPACMDBG_H("Query Getneigh for v4\n");
-	ipa_nl_query_newneigh(AF_INET, data->name);
-	IPACMDBG_H("Query Getneigh for v6\n");
-	ipa_nl_query_newneigh(AF_INET6, data->name);
 
 	return;
 }

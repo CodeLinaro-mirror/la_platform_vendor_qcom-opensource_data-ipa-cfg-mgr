@@ -147,6 +147,7 @@ extern "C"
 #define IPACM_MAC_FLT 1
 #define IPACM_SW_FLT 2
 
+#define IPA_MAX_VLAN_PER_BRIDGE 3
 /*---------------------------------------------------------------------------
 										Return values indicating error status
 ---------------------------------------------------------------------------*/
@@ -425,7 +426,7 @@ typedef struct
 	uint32_t bridge_netmask;
 	uint32_t bridge_ipv4_addr;
 	uint8_t bridge_mac[IPA_MAC_ADDR_SIZE];
-	uint32_t associate_VID;
+	uint32_t associate_VID[IPA_MAX_VLAN_PER_BRIDGE];
 }ipacm_bridge;
 
 typedef struct
@@ -714,6 +715,15 @@ struct ipa_bridge_vlan_mapping_info {
 	uint8_t status;
 };
 
+struct ipa_bridge_vlan_mapping_info_new {
+	char bridge_name[IPA_RESOURCE_NAME_MAX];
+	uint8_t lan2lan_sw;
+	uint32_t bridge_ipv4;
+	uint32_t subnet_mask;
+	uint8_t master_if_index;
+	uint8_t status;
+	uint16_t vlan_id[IPA_MAX_VLAN_PER_BRIDGE];
+};
 struct bridge_vlan_mapping_info
 {
 	char bridge_iface_name[IPA_RESOURCE_NAME_MAX];

@@ -26,9 +26,9 @@
  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * Changes from Qualcomm Innovation Center are provided under the following license:
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
- * SPDX-License-Identifier: BSD-3-Clause-Clear.
+ * Changes from Qualcomm Technologies, Inc. are provided under the following license:
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 /*!
 	@file
@@ -748,6 +748,13 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 					}
 
 				}
+			/* querying the neighbors */
+			IPACMDBG_H("Query Getneigh for physical ifaces\n");
+			ipa_nl_query_newneigh(AF_BRIDGE, dev_name);
+			IPACMDBG_H("Query v4 neighbors for %s\n", dev_name);
+			ipa_nl_query_newneigh(AF_INET, "bridge0");
+			IPACMDBG_H("Query v6 neighbors for %s\n", dev_name);
+			ipa_nl_query_newneigh(AF_INET6, "bridge0");
 			}
 		}
 		break;

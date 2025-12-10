@@ -95,8 +95,17 @@ extern "C"
 
 #define IPA_MAX_ACTIVE_WLAN_IFACE 72 // 64 wlan (4x16 band support) + 8 extra rdkb supported ifaces
 
-#define IPA_MAX_IFACE_ENTRIES (57 + IPA_MAX_ACTIVE_WLAN_IFACE) /* current: 15 rmnet + 64 wlan + bridge+ eth +
-                                                                * rndis + ecm + 15 rmnet for RDKB + 16mld */
+#define IPA_MAX_IFACE_ENTRIES (64 + IPA_MAX_ACTIVE_WLAN_IFACE) /* increased to accommodate total 128 interfaces in XML */
+/* Calculation breakdown:
+* Total interfaces in XML: 128.
+* This macro accommodates:
+*    - 35 non-WLAN fixed interfaces (15 rmnet_data + 15 qmapmuxX + 1 rndis0 + 1 ecm0 + 2 eth + 1 br-lan)
+*    - Up to 64 WLAN/ATH interfaces (IPA_MAX_ACTIVE_WLAN_IFACE = 64). This includes all wlan, ath, and mld interfaces.
+* The '64' in '(64 + IPA_MAX_ACTIVE_WLAN_IFACE)' is the sum of:
+*    - 35 non-WLAN fixed interfaces
+*    - 29 for additional WLAN/ATH/MLD interfaces (buffer for dynamic assignment)
+* Total expected = 64 (from fixed interfaces + buffer) + 64 (IPA_MAX_ACTIVE_WLAN_IFACE) = 128 */
+
 #define IPA_MAX_ALG_ENTRIES 20
 #define IPA_MAX_RM_ENTRY 9
 

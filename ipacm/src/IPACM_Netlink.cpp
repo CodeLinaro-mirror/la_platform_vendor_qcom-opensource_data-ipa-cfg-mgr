@@ -2304,6 +2304,9 @@ int ipa_nl_listener_init
 	 )
 {
 	int ret_val;
+	int max_retries = 5;
+	int retry_delay = 1000;
+	int retry_count = 0;
 
 	memset(sk_info, 0, sizeof(ipa_nl_sk_info_t));
 	IPACMDBG_H("Entering IPA NL listener init\n");
@@ -2315,7 +2318,30 @@ int ipa_nl_listener_init
 	else
 	{
 		IPACMERR("Netlink socket open failed\n");
-		return IPACM_FAILURE;
+		while (retry_count < max_retries) {
+			if (ipa_nl_open_socket(sk_info, nl_type, nl_groups) == IPACM_SUCCESS) {
+				IPACMDBG_H("IPA Open netlink socket succeeds\n");
+				break;
+			} else {
+				IPACMERR("Netlink socket open failed\n");
+				retry_count++;
+				if (retry_count < max_retries) {
+					IPACMDBG("Retrying in %d ms...\n", retry_delay);
+					close(sk_info->sk_fd);
+					usleep(retry_delay * 1000);
+					retry_delay *= 2;
+				} else {
+					IPACMERR("Exceeded maximum retry attempts\n");
+					break;
+				}
+			}
+		}
+
+		if (retry_count == max_retries) {
+			IPACMERR("Exceeded maximum retry attempts\n");
+			close(sk_info->sk_fd);
+			return IPACM_FAILURE;
+		}
 	}
 
 	/* Add NETLINK socket to the list of sockets that the listener

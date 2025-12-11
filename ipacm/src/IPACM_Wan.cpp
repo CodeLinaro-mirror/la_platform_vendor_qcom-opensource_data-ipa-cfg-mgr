@@ -1,9 +1,6 @@
 /*
  * Copyright (c) 2013-2021, The Linux Foundation. All rights reserved.
  *
- * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
- * SPDX-License-Identifier: BSD-3-Clause-Clear
- *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
  * met:
@@ -28,6 +25,10 @@
  * WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *
+ * Changes from Qualcomm Technologies, Inc. are provided under the following license:
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear.
  */
 /*!
 		@file
@@ -1361,9 +1362,10 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 						IPACM_EvtDispatcher::PostEvt(&evt_data);
 					}
 
-					/*to handle if we have missed new route events before
+					/*to handle if we have missed new route and neigh events before
                                         creation of interface*/
 					ipa_nl_send_getroute(data->iptype);
+					ipa_nl_query_newneigh(AF_INET6, dev_name);
 				}
 			}
 		}
@@ -2032,7 +2034,7 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 				handle_wan_hdr_init(data->mac_addr, gw_addr);
 				IPACMDBG_H("construct wan-client header and route rules \n");
 				/* Associate with IP and construct RT-rule */
-				if (handle_wan_client_ipaddr(data) == IPACM_FAILURE)
+				if (handle_wan_client_ipaddr(data, gw_addr) == IPACM_FAILURE)
 				{
 					return;
 				}
@@ -2370,7 +2372,7 @@ void IPACM_Wan::get_vlan_association_info(ipacm_vlan_association_info* vlan_info
 		{
 			if(ipv4_to_iface[vlan_info->v4_idx[ECM_WAN]].associated_VIDs[vlan_idx] == vlan_info->vlan_id)
 			{
-				IPACMDBG_H("VlanID found in associated_VIDs in V4 ETH STA BH\n");
+				IPACMDBG_H("VlanID found in associated_VIDs in V4 WAN STA BH\n");
 				vlan_info->v4_association = ECM_WAN;
 				vlan_info->v4_vlan_idx[ECM_WAN] = vlan_idx;
 				v4_found = true;
@@ -9565,21 +9567,21 @@ int IPACM_Wan::handle_wan_hdr_init(uint8_t *mac_addr, bool gw_addr)
 
 	if (clnt_indx != IPACM_INVALID_INDEX)
 	{
-		IPACMERR("eth client is found/attached already with index %d \n", clnt_indx);
+		IPACMERR("WAN(STA) client is found/attached already with index %d \n", clnt_indx);
 		return IPACM_FAILURE;
 	}
 
 	/* add header to IPA */
 	if (num_wan_client >= IPA_MAX_NUM_WAN_CLIENTS)
 	{
-		IPACMERR("Reached maximum number(%d) of eth clients\n", IPA_MAX_NUM_WAN_CLIENTS);
+		IPACMERR("Reached maximum number(%d) of WAN(STA) clients\n", IPA_MAX_NUM_WAN_CLIENTS);
 		return IPACM_FAILURE;
 	}
 
 	/* Reserve entry for storing the GW address. */
 	if ((num_wan_client >= (IPA_MAX_NUM_WAN_CLIENTS - 1)) && !gw_addr)
 	{
-		IPACMERR("Reached maximum number(%d) of eth clients without GW address\n", num_wan_client);
+		IPACMERR("Reached maximum number(%d) of WAN(STA) clients without GW address\n", num_wan_client);
 		return IPACM_FAILURE;
 	}
 
@@ -9713,7 +9715,7 @@ int IPACM_Wan::handle_wan_hdr_init(uint8_t *mac_addr, bool gw_addr)
 					 }
 
 					get_client_memptr(wan_client, num_wan_client)->hdr_hdl_v4 = pHeaderDescriptor->hdr[0].hdr_hdl;
-					IPACMDBG_H("eth-client(%d) v4 full header name:%s header handle:(0x%x)\n",
+					IPACMDBG_H("wan-client(%d) v4 full header name:%s header handle:(0x%x)\n",
 												 num_wan_client,
 												 pHeaderDescriptor->hdr[0].name,
 												 get_client_memptr(wan_client, num_wan_client)->hdr_hdl_v4);
@@ -9821,7 +9823,7 @@ int IPACM_Wan::handle_wan_hdr_init(uint8_t *mac_addr, bool gw_addr)
 				}
 
 				get_client_memptr(wan_client, num_wan_client)->hdr_hdl_v6 = pHeaderDescriptor->hdr[0].hdr_hdl;
-				IPACMDBG_H("eth-client(%d) v6 full header name:%s header handle:(0x%x)\n",
+				IPACMDBG_H("wan(sta)-client(%d) v6 full header name:%s header handle:(0x%x)\n",
 						 num_wan_client,
 						 pHeaderDescriptor->hdr[0].name,
 									 get_client_memptr(wan_client, num_wan_client)->hdr_hdl_v6);
@@ -9840,7 +9842,7 @@ int IPACM_Wan::handle_wan_hdr_init(uint8_t *mac_addr, bool gw_addr)
 		num_wan_client++;
 		header_name_count++; //keep increasing header_name_count
 		res = IPACM_SUCCESS;
-		IPACMDBG_H("eth client number: %d\n", num_wan_client);
+		IPACMDBG_H("wan(sta) client number: %d\n", num_wan_client);
 	}
 	else
 	{
@@ -9852,111 +9854,111 @@ fail:
 	return res;
 }
 
-/*handle eth client */
-int IPACM_Wan::handle_wan_client_ipaddr(ipacm_event_data_all *data)
+/*handle WAN client */
+int IPACM_Wan::handle_wan_client_ipaddr(ipacm_event_data_all *data, bool gw_addr)
 {
-	int clnt_indx;
-	int v6_num;
+	if (!data)
+	{
+		IPACMERR("Received NULL data ptr");
+		return IPACM_FAILURE;
+	}
 
-	IPACMDBG_H("number of wan clients: %d\n", num_wan_client);
-	IPACMDBG_H(" event MAC %02x:%02x:%02x:%02x:%02x:%02x\n",
-					 data->mac_addr[0],
-					 data->mac_addr[1],
-					 data->mac_addr[2],
-					 data->mac_addr[3],
-					 data->mac_addr[4],
-					 data->mac_addr[5]);
+	IPACMDBG_H("Number of WAN clients: %d\n", num_wan_client);
+	IPACMDBG_H("Event MAC %02x:%02x:%02x:%02x:%02x:%02x\n",
+				data->mac_addr[0], data->mac_addr[1], data->mac_addr[2],
+				data->mac_addr[3], data->mac_addr[4], data->mac_addr[5]);
 
-	clnt_indx = get_wan_client_index(data->mac_addr);
+	int clnt_indx = get_wan_client_index(data->mac_addr);
+	if (clnt_indx == IPACM_INVALID_INDEX)
+	{
+		IPACMERR("WAN client not found/attached\n");
+		return IPACM_FAILURE;
+	}
 
-		if (clnt_indx == IPACM_INVALID_INDEX)
+	auto client = get_client_memptr(wan_client, clnt_indx);
+	IPACMDBG_H("IP type received: %d\n", data->iptype);
+
+	if (data->iptype == IPA_IP_v4)
+	{
+		IPACMDBG_H("IPv4 address: 0x%x\n", data->ipv4_addr);
+		if (data->ipv4_addr == 0)
 		{
-			IPACMERR("wan client not found/attached \n");
+			IPACMDBG_H("Invalid client IPv4 address\n");
 			return IPACM_FAILURE;
 		}
 
-	IPACMDBG_H("Ip-type received %d\n", data->iptype);
-	if (data->iptype == IPA_IP_v4)
-	{
-		IPACMDBG_H("ipv4 address: 0x%x\n", data->ipv4_addr);
-		if (data->ipv4_addr != 0) /* not 0.0.0.0 */
+		if (!client->ipv4_set)
 		{
-			if (get_client_memptr(wan_client, clnt_indx)->ipv4_set == false)
-			{
-				get_client_memptr(wan_client, clnt_indx)->v4_addr = data->ipv4_addr;
-				get_client_memptr(wan_client, clnt_indx)->ipv4_set = true;
-				/* Add NAT rules after ipv4 RT rules are set */
-				CtList->HandleSTAClientAddEvt(data->ipv4_addr);
-			}
-			else
-			{
-			   /* check if client got new IPv4 address*/
-			   if(data->ipv4_addr == get_client_memptr(wan_client, clnt_indx)->v4_addr)
-			   {
-			     IPACMDBG_H("Already setup ipv4 addr for client:%d, ipv4 address didn't change\n", clnt_indx);
-				 return IPACM_FAILURE;
-			   }
-			   else
-			   {
-					IPACMDBG_H("ipv4 addr for client:%d is changed \n", clnt_indx);
-					/* Del NAT rules before ipv4 RT rules are delete */
-					CtList->HandleSTAClientDelEvt(get_client_memptr(wan_client, clnt_indx)->v4_addr);
-					delete_wan_rtrules(clnt_indx,IPA_IP_v4);
-					get_client_memptr(wan_client, clnt_indx)->route_rule_set_v4 = false;
-					get_client_memptr(wan_client, clnt_indx)->v4_addr = data->ipv4_addr;
-					/* Add NAT rules after ipv4 RT rules are set */
-					CtList->HandleSTAClientAddEvt(data->ipv4_addr);
-				}
-			}
+			client->v4_addr = data->ipv4_addr;
+			client->ipv4_set = true;
+			CtList->HandleSTAClientAddEvt(data->ipv4_addr);
+		}
+		else if (data->ipv4_addr != client->v4_addr)
+		{
+			IPACMDBG_H("IPv4 addr for client:%d changed\n", clnt_indx);
+			CtList->HandleSTAClientDelEvt(client->v4_addr);
+			delete_wan_rtrules(clnt_indx, IPA_IP_v4);
+			client->route_rule_set_v4 = false;
+			client->v4_addr = data->ipv4_addr;
+			CtList->HandleSTAClientAddEvt(data->ipv4_addr);
 		}
 		else
 		{
-				IPACMDBG_H("Invalid client IPv4 address \n");
-				return IPACM_FAILURE;
+			IPACMDBG_H("IPv4 addr for client:%d unchanged\n", clnt_indx);
+			return IPACM_FAILURE;
 		}
 	}
-	else
+	else // IPA_IP_v6
 	{
-		/* check if all 0 not valid ipv6 address */
-		if (data->ipv6_addr[0] || data->ipv6_addr[1] || data->ipv6_addr[2] || data->ipv6_addr[3])
+		if (!(data->ipv6_addr[0] || data->ipv6_addr[1] || data->ipv6_addr[2] || data->ipv6_addr[3]))
 		{
-			IPACMDBG_H("ipv6 address: 0x%x:%x:%x:%x\n", data->ipv6_addr[0], data->ipv6_addr[1], data->ipv6_addr[2], data->ipv6_addr[3]);
-			if (get_client_memptr(wan_client, clnt_indx)->ipv6_set < IPV6_NUM_ADDR)
+			return IPACM_FAILURE;
+		}
+
+		IPACMDBG_H("IPv6 address: 0x%x:%x:%x:%x\n",
+					data->ipv6_addr[0], data->ipv6_addr[1],
+					data->ipv6_addr[2], data->ipv6_addr[3]);
+
+		for (int i = 0; i < client->ipv6_set; ++i)
+		{
+			if (memcmp(data->ipv6_addr, client->v6_addr[i], sizeof(data->ipv6_addr)) == 0)
 			{
-
-				for (v6_num = 0; v6_num < get_client_memptr(wan_client, clnt_indx)->ipv6_set; v6_num++)
-				{
-					if (data->ipv6_addr[0] == get_client_memptr(wan_client, clnt_indx)->v6_addr[v6_num][0] &&
-						data->ipv6_addr[1] == get_client_memptr(wan_client, clnt_indx)->v6_addr[v6_num][1] &&
-						data->ipv6_addr[2] == get_client_memptr(wan_client, clnt_indx)->v6_addr[v6_num][2] &&
-						data->ipv6_addr[3] == get_client_memptr(wan_client, clnt_indx)->v6_addr[v6_num][3])
-					{
-						IPACMDBG_H("Already see this ipv6 addr for client:%d\n", clnt_indx);
-						return IPACM_FAILURE; /* not setup the RT rules*/
-					}
-				}
-
-				/*
-				 * The client got new IPv6 address.
-				 * NOTE: The new address doesn't replace the existing one but being added (up to IPV6_NUM_ADDR),
-				 *       so the previous IPv6 addresses of the client will not be deleted.
-				 */
-				get_client_memptr(wan_client, clnt_indx)->v6_addr[get_client_memptr(wan_client, clnt_indx)->ipv6_set][0] = data->ipv6_addr[0];
-				get_client_memptr(wan_client, clnt_indx)->v6_addr[get_client_memptr(wan_client, clnt_indx)->ipv6_set][1] = data->ipv6_addr[1];
-				get_client_memptr(wan_client, clnt_indx)->v6_addr[get_client_memptr(wan_client, clnt_indx)->ipv6_set][2] = data->ipv6_addr[2];
-				get_client_memptr(wan_client, clnt_indx)->v6_addr[get_client_memptr(wan_client, clnt_indx)->ipv6_set][3] = data->ipv6_addr[3];
-				get_client_memptr(wan_client, clnt_indx)->ipv6_set++;
-
-				CtList->HandleSTAClientAddEvt_v6(Ipv6IpAddress(data->ipv6_addr, false));
-			}
-			else
-			{
-				IPACMDBG_H("Already got 3 ipv6 addr for client:%d\n", clnt_indx);
-				return IPACM_FAILURE; /* not setup the RT rules*/
+				IPACMDBG_H("Already seen this IPv6 addr for client:%d\n", clnt_indx);
+				return IPACM_FAILURE;
 			}
 		}
-	}
+		/*
+		* The client got new IPv6 address.
+		* NOTE: The new address doesn't replace the existing one but being added (up to IPV6_NUM_ADDR),
+		* so the previous IPv6 addresses of the client will not be deleted.
+		*/
+		if (client->ipv6_set < IPV6_NUM_ADDR)
+		{
+			for (int i = 0; i < IPA_IPV6_ADDR_WORDS; ++i)
+				client->v6_addr[client->ipv6_set][i] = data->ipv6_addr[i];
+			client->ipv6_set++;
+			CtList->HandleSTAClientAddEvt_v6(Ipv6IpAddress(data->ipv6_addr, false));
+		}
+		else if (gw_addr)
+		{
+			CtList->HandleSTAClientDelEvt_v6(Ipv6IpAddress(client->v6_addr[0], false));
+			delete_wan_rtrules(clnt_indx, IPA_IP_v6);
+			if(client->route_rule_set_v6 == 0){
+				IPACMDBG_H("Successfully deleted wan route rules\n");
+			}
+			IPACMDBG_H("IPv6 capacity exceeded, overwriting first address for GW\n");
 
+			for (int i = 0; i < IPA_IPV6_ADDR_WORDS; ++i)
+				client->v6_addr[0][i] = data->ipv6_addr[i];
+
+			CtList->HandleSTAClientAddEvt_v6(Ipv6IpAddress(data->ipv6_addr, false));
+		}
+		else
+		{
+			IPACMDBG_H("Already got 3 IPv6 addr for client:%d\n", clnt_indx);
+			return IPACM_FAILURE;
+		}
+	}
 	return IPACM_SUCCESS;
 }
 
@@ -10472,7 +10474,7 @@ void IPACM_Wan::handle_wan_client_SCC_MCC_switch(bool isSCCMode, ipa_ip_type ipt
 	return;
 }
 
-/*handle eth client */
+/*handle WAN client */
 int IPACM_Wan::handle_network_stats_update(ipa_get_apn_data_stats_resp_msg_v01 *data)
 {
 	FILE *fp = NULL;

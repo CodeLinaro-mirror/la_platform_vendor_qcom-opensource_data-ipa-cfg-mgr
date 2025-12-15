@@ -507,6 +507,10 @@
 			   <Category>ODU</Category>
 			</Iface>
 			<Iface>
+			   <Name>eth2</Name>
+			   <Category>ODU</Category>
+			</Iface>
+			<Iface>
 			   <Name>br-lan</Name>
 			   <Category>VIRTUAL</Category>
 			</Iface>

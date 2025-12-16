@@ -318,7 +318,7 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 #endif
 					{
 #ifdef FEATURE_VLAN_MPDN
-						ipacm_bridge *bridge;
+						ipacm_bridge *bridge = NULL;
 						if(IPACM_Iface::ipacmcfg->ipacm_mpdn_enable == TRUE)
 						{
 							bridge = IPACM_Iface::ipacmcfg->get_vlan_bridge(data->iface_name);
@@ -721,7 +721,7 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 #endif
 					{
 #ifdef FEATURE_VLAN_MPDN
-						ipacm_bridge *bridge;
+						ipacm_bridge *bridge = NULL;
 						if(IPACM_Iface::ipacmcfg->ipacm_mpdn_enable == TRUE)
 						{
 							bridge = IPACM_Iface::ipacmcfg->get_vlan_bridge(data->iface_name);

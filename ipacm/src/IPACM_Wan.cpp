@@ -661,7 +661,7 @@ bool IPACM_Wan::is_xlat_by_vid(uint16_t vlan_id)
 
 int IPACM_Wan::get_vid_index_for_iface_v6(ipacm_ipv6_wan_iface iface, uint16_t vlan_id)
 {
-	for(int i = 0; i < iface.VID_cnt;i++)
+	for (int i = 0; i < iface.VID_cnt; i++)
 	{
 		if(iface.associated_VIDs[i] == vlan_id)
 			return i;

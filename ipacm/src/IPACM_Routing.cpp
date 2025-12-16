@@ -73,7 +73,7 @@ bool IPACM_Routing::DeviceNodeIsOpened()
 {
 	int res = fcntl(m_fd, F_GETFL);
 
-	if (m_fd > 0 && res >= 0) return true;
+	if (m_fd >= 0 && res >= 0) return true;
 	else return false;
 
 }
@@ -332,16 +332,14 @@ bool IPACM_Routing::DeleteRoutingHdl(uint32_t rt_rule_hdl, ipa_ip_type ip, uint8
 
 	IPACMDBG_H("Deleting Route hdl:(0x%x) with ip type: %d\n", rt_rule_entry->hdl, ip);
 	if ((false == DeleteRoutingRule(rt_rule)) ||
-			(rt_rule_entry->status))
+		(rt_rule_entry->status))
 	{
 		PERROR("Routing rule deletion failed!\n");
-		goto fail;
+
 		res = false;
 	}
 
-fail:
 	free(rt_rule);
-
 	return res;
 }
 

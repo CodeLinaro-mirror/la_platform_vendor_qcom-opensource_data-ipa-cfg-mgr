@@ -2073,6 +2073,7 @@ int IPACM_Wan::handle_route_add_vlan_pdn_evt(ipa_ip_type iptype, uint16_t vlan_i
 			if(wan_sw_allow_data == NULL)
 			{
 				IPACMERR("Unable to allocate memory\n");
+				free(wanup_vlan_data);
 				return IPACM_FAILURE;
 			}
 			memset(wan_sw_allow_data, 0, sizeof(ipacm_event_data_sw_allow));

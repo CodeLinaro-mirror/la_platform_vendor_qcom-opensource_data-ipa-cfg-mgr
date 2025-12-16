@@ -464,6 +464,7 @@ void IPACM_Iface::iface_addr_query
 						else
 						{
 							IPACMDBG_H("curr_ip4_addr is same as iface addr\n");
+							freeifaddrs(myaddrs);
 							return;
 						}
 					}

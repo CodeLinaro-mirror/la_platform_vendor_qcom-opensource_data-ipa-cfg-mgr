@@ -288,9 +288,10 @@ int IPACM_Wan::GetMuxByVid(uint16_t vlan_id, uint8_t *mux_id, ipa_ip_type iptype
 		{
 			if(IPACM_Wan::ipv4_to_iface[i].ipv4_addr)
 			{
-				for(int j = 0; j <  ipv4_to_iface[i].VID_cnt; j++)
+				for(int j = 0; j <  IPA_MAX_NUM_SW_PDNS; j++)
 				{
-					if(IPACM_Wan::ipv4_to_iface[i].associated_VIDs[j] == vlan_id)
+					if((IPACM_Wan::ipv4_to_iface[i].associated_VIDs[j] != 0) &&
+					(IPACM_Wan::ipv4_to_iface[i].associated_VIDs[j] == vlan_id))
 					{
 						*mux_id = IPACM_Wan::ipv4_to_iface[i].pIface->ext_prop->ext[0].mux_id;
 						return IPACM_SUCCESS;
@@ -302,9 +303,10 @@ int IPACM_Wan::GetMuxByVid(uint16_t vlan_id, uint8_t *mux_id, ipa_ip_type iptype
 		{
 			if(IPACM_Wan::ipv6_to_iface[i].ipv6_prefix[0] || IPACM_Wan::ipv6_to_iface[i].ipv6_prefix[1])
 			{
-				for(int j = 0; j < ipv6_to_iface[i].VID_cnt; j++)
+				for(int j = 0; j < IPA_MAX_NUM_SW_PDNS; j++)
 				{
-					if(IPACM_Wan::ipv6_to_iface[i].associated_VIDs[j] == vlan_id)
+					if((IPACM_Wan::ipv6_to_iface[i].associated_VIDs[j] != 0) &&
+					(IPACM_Wan::ipv6_to_iface[i].associated_VIDs[j] == vlan_id))
 					{
 						*mux_id = IPACM_Wan::ipv6_to_iface[i].pIface->ext_prop->ext[0].mux_id;
 						return IPACM_SUCCESS;
@@ -325,9 +327,10 @@ int IPACM_Wan::GetMTUByVid(uint16_t *mtu, uint16_t vlan_id, ipa_ip_type iptype)
 		{
 			if(IPACM_Wan::ipv4_to_iface[i].ipv4_addr)
 			{
-				for(int j = 0; j < ipv4_to_iface[i].VID_cnt; j++)
+				for(int j = 0; j < IPA_MAX_NUM_SW_PDNS; j++)
 				{
-					if(IPACM_Wan::ipv4_to_iface[i].associated_VIDs[j] == vlan_id)
+					if((IPACM_Wan::ipv4_to_iface[i].associated_VIDs[j] != 0) &&
+					(IPACM_Wan::ipv4_to_iface[i].associated_VIDs[j] == vlan_id))
 					{
 						*mtu = IPACM_Wan::ipv4_to_iface[i].pIface->mtu_size;
 						return IPACM_SUCCESS;
@@ -339,9 +342,10 @@ int IPACM_Wan::GetMTUByVid(uint16_t *mtu, uint16_t vlan_id, ipa_ip_type iptype)
 		{
 			if(IPACM_Wan::ipv6_to_iface[i].ipv6_prefix[0] || IPACM_Wan::ipv6_to_iface[i].ipv6_prefix[1])
 			{
-				for(int j = 0; j < ipv6_to_iface[i].VID_cnt; j++)
+				for(int j = 0; j < IPA_MAX_NUM_SW_PDNS; j++)
 				{
-					if(IPACM_Wan::ipv6_to_iface[i].associated_VIDs[j] == vlan_id)
+					if((IPACM_Wan::ipv6_to_iface[i].associated_VIDs[j] != 0) &&
+					(IPACM_Wan::ipv6_to_iface[i].associated_VIDs[j] == vlan_id))
 					{
 						*mtu = IPACM_Wan::ipv6_to_iface[i].pIface->mtu_size;
 						return IPACM_SUCCESS;
@@ -366,9 +370,10 @@ bool IPACM_Wan::is_xlat_by_vid(uint16_t vlan_id)
 			{
 				return IPACM_Wan::ipv4_to_iface[i].is_xlat;
 			}
-			for(int j = 0; j < ipv4_to_iface[i].VID_cnt; j++)
+			for(int j = 0; j < IPA_MAX_NUM_SW_PDNS; j++)
 			{
-				if(IPACM_Wan::ipv4_to_iface[i].associated_VIDs[j] == vlan_id)
+				if((IPACM_Wan::ipv4_to_iface[i].associated_VIDs[j] != 0) &&
+				(IPACM_Wan::ipv4_to_iface[i].associated_VIDs[j] == vlan_id))
 					return IPACM_Wan::ipv4_to_iface[i].is_xlat;
 			}
 		}
@@ -1786,9 +1791,10 @@ int IPACM_Wan::check_vlan_pdn(ipa_ip_type iptype, ipacm_event_route_vlan *data, 
 			IPACMDBG_H("received v6 IPA_ROUTE_ADD_VLAN_PDN_EVENT for VID %d, wan %s, %d\n", data->VlanID, dev_name, ipa_if_num);
 			if ((modem_ipv6_pdn_index != -1) && (ipv6_to_iface[modem_ipv6_pdn_index].wan_up_vlan_v6))
 			{
-				for(pdn_idx = 0; pdn_idx < ipv6_to_iface[modem_ipv6_pdn_index].VID_cnt; pdn_idx++)
+				for(pdn_idx = 0; pdn_idx < IPA_MAX_NUM_SW_PDNS; pdn_idx++)
 				{
-					if(IPACM_Wan::ipv6_to_iface[modem_ipv6_pdn_index].associated_VIDs[pdn_idx] == data->VlanID)
+					if((IPACM_Wan::ipv6_to_iface[modem_ipv6_pdn_index].associated_VIDs[pdn_idx] != 0) &&
+					(IPACM_Wan::ipv6_to_iface[modem_ipv6_pdn_index].associated_VIDs[pdn_idx] == data->VlanID))
 					{
 						IPACMERR("v6 vlan wan is already up for %s vlan %d\n", dev_name, data->VlanID);
 						return IPACM_FAILURE;
@@ -1805,9 +1811,10 @@ int IPACM_Wan::check_vlan_pdn(ipa_ip_type iptype, ipacm_event_route_vlan *data, 
 				{
 					if(IPACM_Wan::ipv4_to_iface[pdn_idx].wan_up_vlan)
 					{
-						for(vlan_idx = 0; vlan_idx < ipv4_to_iface[pdn_idx].VID_cnt; vlan_idx++)
+						for(vlan_idx = 0; vlan_idx < IPA_MAX_NUM_SW_PDNS; vlan_idx++)
 						{
-							if(IPACM_Wan::ipv4_to_iface[pdn_idx].associated_VIDs[vlan_idx] == data->VlanID )
+							if((IPACM_Wan::ipv4_to_iface[pdn_idx].associated_VIDs[vlan_idx] != 0) &&
+								(IPACM_Wan::ipv4_to_iface[pdn_idx].associated_VIDs[vlan_idx] == data->VlanID))
 							{
 								if (pdn_idx != modem_ipv4_pdn_index)
 								{
@@ -1847,9 +1854,10 @@ int IPACM_Wan::check_vlan_pdn(ipa_ip_type iptype, ipacm_event_route_vlan *data, 
 			IPACMDBG_H("received v4 IPA_ROUTE_ADD_VLAN_PDN_EVENT for VID %d, wan %s, %d\n", data->VlanID, dev_name, ipa_if_num);
 			if(ipv4_to_iface[modem_ipv4_pdn_index].wan_up_vlan)
 			{
-				for(pdn_idx = 0; pdn_idx < ipv4_to_iface[modem_ipv4_pdn_index].VID_cnt; pdn_idx++)
+				for(pdn_idx = 0; pdn_idx < IPA_MAX_NUM_SW_PDNS; pdn_idx++)
 				{
-					if(IPACM_Wan::ipv4_to_iface[modem_ipv4_pdn_index].associated_VIDs[pdn_idx] == data->VlanID)
+					if((IPACM_Wan::ipv4_to_iface[modem_ipv4_pdn_index].associated_VIDs[pdn_idx] !=0) &&
+					(IPACM_Wan::ipv4_to_iface[modem_ipv4_pdn_index].associated_VIDs[pdn_idx] == data->VlanID))
 					{
 						IPACMERR("v4 vlan wan is already up for %s vlan %d\n", dev_name, data->VlanID);
 						return IPACM_FAILURE;
@@ -1866,9 +1874,10 @@ int IPACM_Wan::check_vlan_pdn(ipa_ip_type iptype, ipacm_event_route_vlan *data, 
 				{
 					if(IPACM_Wan::ipv6_to_iface[pdn_idx].wan_up_vlan_v6)
 					{
-						for(vlan_idx = 0; vlan_idx < ipv6_to_iface[pdn_idx].VID_cnt; vlan_idx++)
+						for(vlan_idx = 0; vlan_idx < IPA_MAX_NUM_SW_PDNS; vlan_idx++)
 						{
-							if(IPACM_Wan::ipv6_to_iface[pdn_idx].associated_VIDs[vlan_idx] == data->VlanID )
+							if((IPACM_Wan::ipv6_to_iface[pdn_idx].associated_VIDs[vlan_idx] != 0) &&
+							(IPACM_Wan::ipv6_to_iface[pdn_idx].associated_VIDs[vlan_idx] == data->VlanID ))
 							{
 								if (pdn_idx != modem_ipv6_pdn_index)
 								{
@@ -4408,9 +4417,9 @@ int IPACM_Wan::GetV6PrefixByVid(int vid, uint32_t *v6_prefix)
 	{
 		if(ipv6_to_iface[i].pIface && ipv6_to_iface[i].wan_up_vlan_v6)
 		{
-			for(int j = 0; j < ipv6_to_iface[i].VID_cnt; j++)
+			for(int j = 0; j < IPA_MAX_NUM_SW_PDNS; j++)
 			{
-				if((ipv6_to_iface[i].associated_VIDs[j] == vid))
+				if((ipv6_to_iface[i].associated_VIDs[j] != 0) && (ipv6_to_iface[i].associated_VIDs[j] == vid))
 				{
 					IPACMDBG_H("found dev %s, vid %d, v6_prefix 0x[%X][%X]\n",
 						ipv6_to_iface[i].pIface->dev_name,

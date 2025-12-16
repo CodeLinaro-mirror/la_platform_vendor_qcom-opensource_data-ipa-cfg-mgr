@@ -2207,7 +2207,7 @@ int IPACM_Lan::handle_vlan_pdn_up(ipacm_event_vlan_pdn *data, bool set_mux)
 			else
 #endif
 				ret = handle_uplink_filter_rule(IPACM_Iface::ipacmcfg->GetExtProp(IPA_IP_v6), data->iptype, data->mux_id, false);
-			modem_ul_v6_set = !!num_wan_ul_fl_rule_v6;
+				modem_ul_v6_set = !!num_wan_ul_fl_rule_v6;
 		}
 		/* for the next PDNs only notify modem about new MUX IDs */
 		else
@@ -2251,7 +2251,7 @@ int IPACM_Lan::handle_vlan_pdn_up(ipacm_event_vlan_pdn *data, bool set_mux)
 			else
 #endif
 				ret = handle_uplink_filter_rule(IPACM_Iface::ipacmcfg->GetExtProp(IPA_IP_v4), data->iptype, data->mux_id, false, true);
-			modem_ul_v4_set = !!num_wan_ul_fl_rule_v4;
+				modem_ul_v4_set = !!num_wan_ul_fl_rule_v4;
 		}
 		/* for the next PDNs only notify modem about new MUX IDs */
 		else
@@ -2394,12 +2394,6 @@ int IPACM_Lan::handle_vlan_pdn_down(ipacm_event_vlan_pdn *data)
 		if(is_any_mux_up(IPA_IP_v4) == true)
 			notif_only = true;
 
-		/* if we still have vlan pdns up notify only */
-		if(set_mux_down(data->mux_id, IPA_IP_v6))
-			return IPACM_FAILURE;
-
-		if(is_any_mux_up(IPA_IP_v6) == true)
-			notif_only_v6 = true;
 
 #ifdef FEATURE_SOCKSv5
 		/* socksv5 case */
@@ -2408,9 +2402,6 @@ int IPACM_Lan::handle_vlan_pdn_down(ipacm_event_vlan_pdn *data)
 			(IPACM_Wan::isWanUP(ipa_if_num) || IPACM_Wan::isVlanWanUP())))
 			notif_only = true;
 #endif //FEATURE_SOCKSv5
-
-		/* prefixes list updated, install rules accordingly */
-		modify_ipv6_prefix_flt_rule();
 
 		/* Clean up MTU rule */
 		modify_private_subnet();
@@ -2434,6 +2425,14 @@ int IPACM_Lan::handle_vlan_pdn_down(ipacm_event_vlan_pdn *data)
 		/* need to notify once for v4 */
 		if(notify_flt_removed(data->mux_id))
 			return IPACM_FAILURE;
+
+		/* if we still have vlan pdns up notify only */
+		if(set_mux_down(data->mux_id, IPA_IP_v6))
+			return IPACM_FAILURE;
+		if(is_any_mux_up(IPA_IP_v6) == true)
+			notif_only_v6 = true;
+		/* prefixes list updated, install rules accordingly */
+		modify_ipv6_prefix_flt_rule();
 
 		if(!notif_only_v6)
 		{

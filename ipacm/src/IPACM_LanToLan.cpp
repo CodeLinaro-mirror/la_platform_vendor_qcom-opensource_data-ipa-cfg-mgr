@@ -973,11 +973,11 @@ void IPACM_LanToLan::del_mac_addr(ipacm_event_eth_bridge *data, bool iface_down)
 			IPACMDBG_H("deleting the Interface: %s MAC: 0x%02x%02x%02x%02x%02x%02x\n", data->p_iface->dev_name,
 			it_client->mac[0], it_client->mac[1], it_client->mac[2],
 			it_client->mac[3], it_client->mac[4], it_client->mac[5]);
-			add_ifaces_mac.erase(it_client);
 			if(iface_down)
 			{
 				memcpy(data->mac_addr, it_client->mac, sizeof(it_client->mac));
 			}
+			add_ifaces_mac.erase(it_client);
 			handle_client_del(data, true);
 			break;
 		}

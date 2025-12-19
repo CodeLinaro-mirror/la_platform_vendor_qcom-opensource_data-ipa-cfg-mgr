@@ -1196,6 +1196,15 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 											sizeof(neighbor_client[i].iface_name));
 								}
 
+								if((strstr(neighbor_client[i].iface_name,"wlan") && (!strchr(neighbor_client[i].iface_name, '_')))
+										&& (strstr(data->iface_name,"wlan") && strchr(data->iface_name, '_')))
+								{
+									IPACMDBG("Updating the iface name with stitched iface name %s %s\n",
+											neighbor_client[i].iface_name, data->iface_name);
+
+									strlcpy(neighbor_client[i].iface_name, data->iface_name,
+											sizeof(neighbor_client[i].iface_name));
+								}
 								if(IPACM_Iface::ipacmcfg->ipacm_mpdn_enable == TRUE && IPACM_FAILURE == ipa_interface_index)
 								{
 									/* for this case we cached the neigh event from bridgeX where it won't have iface_name */

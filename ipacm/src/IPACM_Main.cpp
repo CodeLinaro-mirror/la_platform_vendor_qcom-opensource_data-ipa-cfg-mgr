@@ -396,7 +396,7 @@ void* ipa_driver_msg_notifier(void *param)
 				data_fid->if_index = event_wlan->if_index;
 				IPACMDBG_H("Using WLAN_AP_CONNECT if_index: %d\n",event_wlan->if_index);
 			}
-			if(event_wlan->mld_enabled && strstr(event_wlan->name,"mld"))
+			if(event_wlan->mld_enabled)
 			{
 				snprintf(data_fid->iface_name, sizeof(event_wlan->name),
 							"%s_%d_%d", event_wlan->name,event_wlan->instance_id,
@@ -434,7 +434,7 @@ void* ipa_driver_msg_notifier(void *param)
 				data_fid->if_index = event_wlan->if_index;
 				IPACMDBG_H("Using WLAN_AP_DISCONNECT if_index: %d\n",event_wlan->if_index);
 			}
-			if(event_wlan->mld_enabled && strstr(event_wlan->name,"mld"))
+			if(event_wlan->mld_enabled)
 			{
 				snprintf(data_fid->iface_name, sizeof(event_wlan->name),
 							"%s_%d_%d", event_wlan->name,event_wlan->instance_id, event_wlan->vdev_id);
@@ -559,7 +559,7 @@ void* ipa_driver_msg_notifier(void *param)
 				}
 				ipa_get_if_index(iface_name, &(data_ex->if_index));
 			}
-			if(strstr(event_ex->name, "mld"))
+			if(event_ex->mld_enabled == true)
 			{
 				snprintf(data_ex->iface_name, sizeof(event_ex->name),
 					"%s_%d_%d", event_ex->name,event_ex->instance_id, event_ex->vdev_id);
@@ -631,7 +631,7 @@ void* ipa_driver_msg_notifier(void *param)
 			}
 			memset(new_neigh_data, 0, sizeof(ipacm_event_data_all));
 
-			if(strstr(event_wlan->name, "mld"))
+			if(event_wlan->mld_enabled == true)
 			{
 				snprintf(data->iface_name, sizeof(data->iface_name),
 					"%s_%d_%d", event_wlan->name,event_wlan->instance_id, event_wlan->vdev_id);

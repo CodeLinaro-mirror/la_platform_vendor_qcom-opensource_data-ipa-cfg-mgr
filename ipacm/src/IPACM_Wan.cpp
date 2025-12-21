@@ -286,7 +286,7 @@ IPACM_Wan::IPACM_Wan(int iface_index,
 	}
 
 	m_fd_ipa = open(IPA_DEVICE_NAME, O_RDWR);
-	if(0 == m_fd_ipa)
+	if(m_fd_ipa < 0)
 	{
 		IPACMERR("Failed to open %s\n",IPA_DEVICE_NAME);
 	}
@@ -357,6 +357,8 @@ IPACM_Wan::~IPACM_Wan()
 
 	IPACM_EvtDispatcher::deregistr(this);
 	IPACM_IfaceManager::deregistr(this);
+	if(m_fd_ipa)
+		close(m_fd_ipa);
 	return;
 }
 
@@ -6002,7 +6004,7 @@ int IPACM_Wan::query_ext_prop()
 	{
 		fd = open(IPA_DEVICE_NAME, O_RDWR);
 		IPACMDBG_H("iface query-property \n");
-		if (0 == fd)
+		if (fd < 0)
 		{
 			IPACMERR("Failed opening %s.\n", IPA_DEVICE_NAME);
 			return IPACM_FAILURE;
@@ -6014,6 +6016,7 @@ int IPACM_Wan::query_ext_prop()
 		if(ext_prop == NULL)
 		{
 			IPACMERR("Unable to allocate memory.\n");
+			close(fd);
 			return IPACM_FAILURE;
 		}
 		memcpy(ext_prop->name, dev_name,

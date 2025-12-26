@@ -701,7 +701,7 @@ public:
 	}
 
 	/* remove from prefixes list if needed and notify LAN objects to modify rules*/
-	inline int del_vlan_ipv6_prefix(uint32_t* prefix, int ipa_if_num, bool reserve_slot = false)
+	inline int del_vlan_ipv6_prefix(uint32_t* prefix, int ipa_if_num, bool reserve_slot = false, int vlan_id = 0)
 	{
 		int i = 0, j = 0, k = 0;
 		int first_zeroed_index = -1;
@@ -720,7 +720,7 @@ public:
 					ipa_ipv6_prefixes[i].addr[0] = IPA_DUMMY_PREFIX;
 					ipa_ipv6_prefixes[i].addr[1] = IPA_DUMMY_PREFIX;
 				}
-				else {
+				else if(((vlan_id != 0) && (vlan_id == ipa_ipv6_prefixes[i].vlan_id)) ||(!vlan_id)) {
 					IPACMDBG_H("prefix 0x[%X][%X] Vlan %d will be removed\n",
 							prefix[0], prefix[1],
 							ipa_ipv6_prefixes[i].vlan_id);

@@ -170,6 +170,8 @@ IPACM_Wan::IPACM_Wan(int iface_index,
 	header_set_v6 = false;
 	header_partial_default_wan_v4 = false;
 	header_partial_default_wan_v6 = false;
+	header_partial_default_wan_vlan_v4 = false;
+	header_partial_default_wan_vlan_v6 = false;
 	sta_bridge_v4_rules_installed = false;
 	sta_bridge_v6_rules_installed = false;
 	hdr_hdl_sta_v4 = 0;
@@ -2085,6 +2087,7 @@ void IPACM_Wan::post_wan_vlan_pdn_event(ipa_ip_type iptype, int pdn_idx, int vla
 			IPACM_SYSLOG("Posting IPA_HANDLE_WAN_VLAN_PDN_DOWN (V6) with below information:\n");
 			IPACM_SYSLOG("iptype V6, VlanID %d, mux_id %d, if num %d\n",
 						vlan_data->VlanID, vlan_data->mux_id, ipa_if_num);
+			IPACM_Iface::ipacmcfg->del_vlan_ipv6_prefix(ipv6_prefix, -1, false, vlan_id);
 		}
 
 		else if(iptype == IPA_IP_v4)
@@ -2286,7 +2289,7 @@ int IPACM_Wan::check_vlan_pdn(ipa_ip_type iptype, ipacm_event_route_vlan *data, 
 		IPACMDBG_H("STA backhaul\n");
 		if((iptype==IPA_IP_v4 || iptype == IPA_IP_MAX) && (header_set_v4 != true))
 		{
-			header_partial_default_wan_v4 = true;
+			header_partial_default_wan_vlan_v4 = true;
 			IPACMDBG_H("STA ipv4-header haven't constructed \n");
 			if(data->wan_ipv4_addr == wan_v4_addr)
 			{
@@ -2310,7 +2313,7 @@ int IPACM_Wan::check_vlan_pdn(ipa_ip_type iptype, ipacm_event_route_vlan *data, 
 		}
 		if((iptype==IPA_IP_v6 || iptype == IPA_IP_MAX) && (header_set_v6 != true))
 		{
-			header_partial_default_wan_v6 = true;
+			header_partial_default_wan_vlan_v6 = true;
 			IPACMDBG_H("STA ipv6-header haven't constructed \n");
 			if((data->wan_ipv6_prefix[0] == ipv6_prefix[0]) &&
 				(data->wan_ipv6_prefix[1] == ipv6_prefix[1]))
@@ -3028,7 +3031,7 @@ int IPACM_Wan::handle_route_add_vlan_pdn_evt(ipa_ip_type iptype, uint16_t vlan_i
 			IPACMDBG_H(" WAN instance is in STA mode \n");
 			if((iptype==IPA_IP_v6) && (header_set_v6 != true))
 			{
-				header_partial_default_wan_v6 = true;
+				header_partial_default_wan_vlan_v6 = true;
 				IPACMDBG_H("STA ipv6-header haven't constructed \n");
 				ret = IPACM_SUCCESS;
 				goto fail;
@@ -3258,7 +3261,7 @@ int IPACM_Wan::handle_route_add_vlan_pdn_evt(ipa_ip_type iptype, uint16_t vlan_i
 
 			if((iptype==IPA_IP_v4) && (header_set_v4 != true))
 			{
-				header_partial_default_wan_v4 = true;
+				header_partial_default_wan_vlan_v4 = true;
 				IPACMDBG_H("STA ipv4-header haven't constructed \n");
 				ret = IPACM_SUCCESS;
 				goto fail;
@@ -4200,7 +4203,7 @@ int IPACM_Wan::handle_sta_header_add_evt()
 	{
 		handle_route_add_evt(IPA_IP_v4);
 	}
-	else if(wlan_ipv4_pdn_index!=-1 && header_set_v4 == true && header_partial_default_wan_v4 == true && !pending_VID_STA.empty())
+	else if(wlan_ipv4_pdn_index!=-1 && header_set_v4 == true && header_partial_default_wan_vlan_v4 == true && !pending_VID_STA.empty())
 	{
 		/* start associate pending_sta_vid to STA-WAN */
 		for(it = pending_VID_STA.begin(); it != pending_VID_STA.end(); ++it)
@@ -4220,7 +4223,7 @@ int IPACM_Wan::handle_sta_header_add_evt()
 			free(data);
 		}
 		pending_VID_STA.clear();
-		header_partial_default_wan_v4 = false;
+		header_partial_default_wan_vlan_v4 = false;
 	}
 
 	/* checking if the ipv6 same as default route */
@@ -4276,7 +4279,7 @@ int IPACM_Wan::handle_sta_header_add_evt()
 	{
 		handle_route_add_evt(IPA_IP_v6);
 	}
-	else if(wlan_ipv6_pdn_index!=-1 && header_set_v6 == true && header_partial_default_wan_v6 == true && !pending_VID_STA_v6.empty())
+	else if(wlan_ipv6_pdn_index!=-1 && header_set_v6 == true && header_partial_default_wan_vlan_v6 == true && !pending_VID_STA_v6.empty())
 	{
 		/* start associate pending_sta_vid to STA-WAN */
 		for(it = pending_VID_STA_v6.begin(); it != pending_VID_STA_v6.end(); ++it)
@@ -4297,7 +4300,7 @@ int IPACM_Wan::handle_sta_header_add_evt()
 			free(data);
 		}
 		pending_VID_STA_v6.clear();
-		header_partial_default_wan_v6 = false;
+		header_partial_default_wan_vlan_v6 = false;
 	}
 
 	if((m_is_sta_mode == WLAN_WAN) && isWan_Bridge_Mode())
@@ -8111,6 +8114,8 @@ int IPACM_Wan::handle_down_evt()
 		}
 	}
 fail:
+	header_partial_default_wan_vlan_v6 = false;
+	header_partial_default_wan_vlan_v4 = false;
 	if (tx_prop != NULL)
 	{
 		free(tx_prop);

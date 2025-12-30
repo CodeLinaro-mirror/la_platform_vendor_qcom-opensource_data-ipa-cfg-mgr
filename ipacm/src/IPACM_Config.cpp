@@ -26,39 +26,11 @@
  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * Changes from Qualcomm Innovation Center are provided under the following license:
+ * Changes from Qualcomm Technologies, Inc. are provided under the following license:
  *
- * Copyright (c) 2022-2025 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
  *
- * Redistribution and use in source and binary forms, with or without
- * modification, are permitted (subject to the limitations in the
- * disclaimer below) provided that the following conditions are met:
- *
- *     * Redistributions of source code must retain the above copyright
- *       notice, this list of conditions and the following disclaimer.
- *
- *     * Redistributions in binary form must reproduce the above
- *       copyright notice, this list of conditions and the following
- *       disclaimer in the documentation and/or other materials provided
- *       with the distribution.
- *
- *     * Neither the name of Qualcomm Innovation Center, Inc. nor the names of its
- *       contributors may be used to endorse or promote products derived
- *       from this software without specific prior written permission.
- *
- * NO EXPRESS OR IMPLIED LICENSES TO ANY PARTY'S PATENT RIGHTS ARE
- * GRANTED BY THIS LICENSE. THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT
- * HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED
- * WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
- * MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
- * IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR
- * ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
- * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE
- * GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
- * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER
- * IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
- * OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
- * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE
  */
 /*!
 		@file
@@ -2313,10 +2285,30 @@ bool IPACM_Config::iface_in_vlan_mode(const char *interfaceName) {
 	return false;
 }
 
+void IPACM_Config::extract_mlo_base_iface(char *iface_name)
+{
+	int length = 0;
+	if(!iface_name)
+		return;
+
+	if(strstr(iface_name, "mld"))
+	{
+		char *mld_bifercate = strchr(iface_name, '_');
+		if(mld_bifercate)
+		{
+			length = mld_bifercate - iface_name;
+			strlcpy(iface_name, iface_name, length);
+			iface_name[length] = '\0';
+		}
+	}
+}
+
 int IPACM_Config::get_iface_vlan_ids(char *phys_iface_name, uint16_t *Ids)
 {
 	list<vlan_iface_info>::iterator it_vlan;
-	int cnt = 0;
+	int length, cnt = 0;
+	char input_iface[IPA_IFACE_NAME_LEN] = {'\0'};
+	strlcpy(input_iface, phys_iface_name, IPA_IFACE_NAME_LEN);
 
 	if(!Ids)
 	{
@@ -2330,11 +2322,14 @@ int IPACM_Config::get_iface_vlan_ids(char *phys_iface_name, uint16_t *Ids)
 		return false;
 	}
 
+	extract_mlo_base_iface(input_iface);
+	IPACMDBG("Extracted iface name %s\n", input_iface);
+
 	for(it_vlan = m_vlan_iface.begin(); it_vlan != m_vlan_iface.end() && cnt < IPA_MAX_NUM_OFFLOAD_VLANS; it_vlan++)
 	{
-		if(strstr(it_vlan->vlan_iface_name, phys_iface_name))
+		if(strstr(it_vlan->vlan_iface_name, input_iface))
 		{
-			IPACMDBG_H("Found vlan iface in vlan list: %s\n", it_vlan->vlan_iface_name);
+			IPACMDBG_H("Found vlan iface in vlan list: %s\n %d", it_vlan->vlan_iface_name, it_vlan->vlan_id);
 			Ids[cnt] = it_vlan->vlan_id;
 			cnt++;
 		}
@@ -2356,17 +2351,22 @@ int IPACM_Config::get_iface_vlan_ids(char *phys_iface_name, uint16_t *Ids)
 int IPACM_Config::get_vlan_id(char *iface_name, uint16_t *vlan_id)
 {
 	list<vlan_iface_info>::iterator it_vlan;
-	int ret = IPACM_FAILURE;
+	int length, ret = IPACM_FAILURE;
 
+	char input_iface[IPA_IFACE_NAME_LEN] = {'\0'};
+	strlcpy(input_iface, iface_name, IPA_IFACE_NAME_LEN);
 	if(pthread_mutex_lock(&vlan_l2tp_lock) != 0)
 	{
 		IPACMERR("Unable to lock the mutex\n");
 		return IPACM_FAILURE;
 	}
 
+	extract_mlo_base_iface(input_iface);
+	IPACMDBG("Extracted iface name %s\n", input_iface);
+
 	for(it_vlan = m_vlan_iface.begin(); it_vlan != m_vlan_iface.end(); it_vlan++)
 	{
-		if(strncmp(it_vlan->vlan_iface_name, iface_name, sizeof(it_vlan->vlan_iface_name)) == 0)
+		if(strncmp(it_vlan->vlan_iface_name, input_iface, sizeof(it_vlan->vlan_iface_name)) == 0)
 		{
 			IPACMDBG_H("Found vlan iface in vlan list: %s\n", it_vlan->vlan_iface_name);
 			*vlan_id = it_vlan->vlan_id;
@@ -3926,7 +3926,7 @@ bool IPACM_Config::is_svap_related(const char* phy_inf) {
 		IPACMDBG_H("truncated mlo base iface name %s\n", if_name);
 	}
 
-	snprintf(cmd, 200, "cfg80211tool_mesh %s get_MapBSSType| awk -F ':' '{print $2}' > /tmp/data_ipa/ipa_vap.txt", if_name);
+	snprintf(cmd, 200, "cfg80211tool_mesh %s:0 get_MapBSSType| awk -F ':' '{print $2}' > /tmp/data_ipa/ipa_vap.txt", if_name);
 	system(cmd);
 
 	fp = fopen("/tmp/data_ipa/ipa_vap.txt", "r");
@@ -4243,10 +4243,11 @@ int IPACM_Config::SetWlanVlanAp(char *event_iface_name) {
 }
 
 bool IPACM_Config::IsSpclIface(const char *event_iface_name) {
-	int ipa_interface_index, if_index;
+	int ipa_interface_index, if_index, length;
 	int ret = IPACM_FAILURE;
 	bool res = false;
 	char if_name[IPA_IFACE_NAME_LEN];
+	char input_iface[IPA_IFACE_NAME_LEN] = {'\0'};
 
 	if (event_iface_name == NULL) {
 		IPACMERR("Invalid input\n");
@@ -4257,14 +4258,18 @@ bool IPACM_Config::IsSpclIface(const char *event_iface_name) {
 	strlcpy(if_name, event_iface_name, IPA_IFACE_NAME_LEN);
 	IPACMDBG_H("iface %s, event iface %s\n", if_name, event_iface_name);
 
+	strlcpy(input_iface, if_name, IPA_IFACE_NAME_LEN);
 	char *char_idx =  strrchr(if_name, '.');
 	if (char_idx) {
 		char_idx[0] = '\0';
 		IPACMDBG_H("truncated iface name %s\n", if_name);
 	}
 
+	extract_mlo_base_iface(input_iface);
+	IPACMDBG("Extracted iface name %s\n", input_iface);
+
 	/* check if the AP iface already exists or not*/
-	ret = IPACM_Iface::ipa_get_if_index(if_name, &(if_index));
+	ret = IPACM_Iface::ipa_get_if_index(input_iface, &(if_index));
 	if (ret != IPACM_SUCCESS) {
 		IPACMERR("Error while getting interface index for %s device", if_name);
 		return IPACM_FAILURE;

@@ -26,39 +26,10 @@
  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * Changes from Qualcomm Innovation Center, Inc. are provided under the following license:
+ * Changes from Qualcomm Innovation Center are provided under the following license:
  *
- * Copyright (c) 2022-2025 Qualcomm Innovation Center, Inc. All rights reserved.
- *
- * Redistribution and use in source and binary forms, with or without
- * modification, are permitted (subject to the limitations in the
- * disclaimer below) provided that the following conditions are met:
- *
- *     * Redistributions of source code must retain the above copyright
- *       notice, this list of conditions and the following disclaimer.
- *
- *     * Redistributions in binary form must reproduce the above
- *       copyright notice, this list of conditions and the following
- *       disclaimer in the documentation and/or other materials provided
- *       with the distribution.
- *
- *     * Neither the name of Qualcomm Innovation Center, Inc. nor the names of its
- *       contributors may be used to endorse or promote products derived
- *       from this software without specific prior written permission.
- *
- * NO EXPRESS OR IMPLIED LICENSES TO ANY PARTY'S PATENT RIGHTS ARE
- * GRANTED BY THIS LICENSE. THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT
- * HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED
- * WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
- * MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
- * IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR
- * ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
- * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE
- * GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
- * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER
- * IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
- * OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
- * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 /*!
 	@file
@@ -1217,8 +1188,7 @@ void IPACM_Wlan::event_callback(ipa_cm_event_id event, void *param)
 			}
 			// easy mesh R2 or vlan case
 			if (IPACM_Iface::ipacmcfg->iface_in_vlan_mode(
-				    data->iface_name) &&
-			    is_vlan_event(data->iface_name)) {
+				    data->iface_name)) {
 				IPACMDBG_H("Client is a vlan wlan client \n");
 				handle_wlan_vlan_neighbor(new_neigh_data);
 			}
@@ -10144,7 +10114,7 @@ void IPACM_Wlan::update_svap_state() {
 		IPACMDBG_H("truncated mlo base iface name %s\n", vlan_iface_name);
 	}
 
-	snprintf(cmd, 200, "cfg80211tool_mesh %s get_MapBSSType| awk -F ':' '{print $2}' > /tmp/data_ipa/ipa_vap.txt", vlan_iface_name);
+	snprintf(cmd, 200, "cfg80211tool_mesh %s:0 get_MapBSSType| awk -F ':' '{print $2}' > /tmp/data_ipa/ipa_vap.txt", vlan_iface_name);
 	system(cmd);
 
 	fp = fopen("/tmp/data_ipa/ipa_vap.txt", "r");
@@ -10278,6 +10248,16 @@ int IPACM_Wlan::handle_wlan_vlan_neighbor(ipacm_event_new_neigh_vlan *param) {
 		get_client_memptr(wlan_client, wlan_index)->is_vlan = true;
 	}
 
+	/*In easymesh with mlo case, as event would be posted with
+	  mldX.vlan-id, below check is to avoid flooding in wrong
+	  instances, as the instances would be with mldX_Y_Z iface name.*/
+	if(wlan_index == IPACM_INVALID_INDEX)
+	{
+		IPACMERR("Cannot find wlan index for client MAC %02x:%02x:%02x:%02x:%02x:%02x \n",
+				 data->mac_addr[0], data->mac_addr[1], data->mac_addr[2],
+				 data->mac_addr[3], data->mac_addr[4], data->mac_addr[5]);
+		return -1;
+	}
 	if (data->iptype == IPA_IP_v4)
 	{
 		client_info.v4_addr = data->ipv4_addr;

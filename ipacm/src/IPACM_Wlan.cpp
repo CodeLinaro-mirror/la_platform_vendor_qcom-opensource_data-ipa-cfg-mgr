@@ -1192,7 +1192,6 @@ void IPACM_Wlan::event_callback(ipa_cm_event_id event, void *param)
 						}
 #endif
 						install_all_wlan_qos_route_rule(data->mac_addr, 0);
-						HandleNeighIpAddrAddEvt(data);
 					}
 					else
 #endif //IPA_HW_FNR_STATS
@@ -1201,7 +1200,6 @@ void IPACM_Wlan::event_callback(ipa_cm_event_id event, void *param)
 						{
 							handle_wlan_client_route_rule_ext(data->mac_addr, data->iptype);
 							install_all_wlan_qos_route_rule(data->mac_addr, 0);
-							HandleNeighIpAddrAddEvt(data);
 						}
 					}
 				}

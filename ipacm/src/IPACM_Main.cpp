@@ -468,6 +468,7 @@ void* ipa_driver_msg_notifier(void *param)
 			if(new_neigh_data == NULL)
 			{
 				IPACMERR("Failed to allocate memory.\n");
+				free(data_ex);
 				return NULL;
 			}
 			memset(new_neigh_data, 0, sizeof(ipacm_event_data_all));

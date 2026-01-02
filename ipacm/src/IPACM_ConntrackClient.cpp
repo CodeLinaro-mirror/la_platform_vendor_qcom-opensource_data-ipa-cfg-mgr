@@ -26,9 +26,9 @@
  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * Changes from Qualcomm Innovation Center, Inc. are provided under the following license:
- * Copyright (c) 2025 Qualcomm Innovation Center, Inc. All rights reserved.
- * SPDX-License-Identifier: BSD-3-Clause-Clear.
+ * Changes from Qualcomm Technologies, Inc. are provided under the following license:
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 #include <stdio.h>
 #include <stdlib.h>
@@ -919,6 +919,12 @@ void IPACM_ConntrackClient::UpdateFilters_v6(ipacm_event_iface_up* data)
 	if (client == NULL)
 	{
 		IPACMERR("unable to retrieve conntrack client instance\n");
+		return;
+	}
+
+	if ((client->udp_filter == NULL) || (client->tcp_filter == NULL))
+	{
+		IPACMERR("udp_filter or tcp_filter pointers NULL\n");
 		return;
 	}
 

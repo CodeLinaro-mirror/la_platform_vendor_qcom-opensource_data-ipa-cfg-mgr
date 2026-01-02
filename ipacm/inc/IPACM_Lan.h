@@ -26,8 +26,8 @@ WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
 OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
 IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-* ​​​​Changes from Qualcomm Innovation Center are provided under the following license:
-* Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+* Changes from Qualcomm Technologies, Inc. are provided under the following license:
+* Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
 * SPDX-License-Identifier: BSD-3-Clause-Clear.
 */
 /*!
@@ -1136,9 +1136,9 @@ private:
 				}
 
 				//vlan case
-				for(int j = 0; j < mux[i].VID_cnt; j++)
+				for(int j = 0; j < IPA_MAX_NUM_HW_PDNS; j++)
 				{
-					if(mux[i].associated_VIDs[j] == vid)
+					if((mux[i].associated_VIDs[j]!=0) && (mux[i].associated_VIDs[j] == vid))
 					{
 						IPACMDBG_H("mux id %d is up for dev %s, iptype %d, vid %d, VID_cnt = %d\n", mux_id, dev_name, iptype, vid, mux[i].VID_cnt);
 						return true;

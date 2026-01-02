@@ -238,6 +238,9 @@ if (!(a)) {                                                 \
 #define IPACMFILEQUOTA_TAG                   "IPACMfileQuota"
 #define IPACMFILEVAR_TAG                     "IPACMfilevar"
 
+/*OEM_IPTABLE TAGS*/
+#define OEMFirewallFlatFile_IPv4_TAG      "OEMFirewallFlatFile_IPv4"
+#define OEMFirewallFlatFile_IPv6_TAG      "OEMFirewallFlatFile_IPv6"
 /*---------------------------------------------------------------------------
       IP protocol numbers - use in dss_socket() to identify protocols.
       Also contains the extension header types for IPv6.

@@ -931,6 +931,11 @@ static int IPACM_firewall_xml_parse_tree(const char *xml_file, xmlNode* xml_node
 					IPACMDBG_H("DefaultNetDev is %s\n", content_buf);
 				}
 			}
+			else if((IPACM_util_icmp_string((char*)xml_node->name, OEMFirewallFlatFile_IPv4_TAG) == 0) ||
+				(IPACM_util_icmp_string((char*)xml_node->name, OEMFirewallFlatFile_IPv6_TAG) == 0))
+			{
+				IPACMDBG_H("Inside OEMFirewallFlatFile Tag\n");
+			}
 			else
 			{
 				if (!firewall_config.pdn_count)

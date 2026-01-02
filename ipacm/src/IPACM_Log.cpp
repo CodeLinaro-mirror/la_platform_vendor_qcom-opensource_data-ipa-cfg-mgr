@@ -28,7 +28,7 @@ IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 *
 * Changes from Qualcomm Technologies, Inc. are provided under the following license:
 * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
-* SPDX-License-Identifier: BSD-3-Clause-Clear.
+* SPDX-License-Identifier: BSD-3-Clause-Clear
 */
 /*!
 	@file
@@ -63,7 +63,7 @@ IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 char* dump_file = 0;
 void* mmap_addr = NULL;
 void* write_addr = 0;
-uint32_t max_filesize = 0;
+int64_t max_filesize = 0;
 int log_init_done = 0;
 pthread_mutex_t file_lock;
 
@@ -238,7 +238,7 @@ int log_init() {
 	}
 	if(is_exist == false)
 	{
-		trunc_ret = ftruncate(log_fd, max_filesize);
+		trunc_ret = ftruncate(log_fd, (off_t)max_filesize);
 		if(0 > trunc_ret)
 		{
 			perror("Ftruncate failed\n");
@@ -288,19 +288,20 @@ int log_init() {
 }
 void ipacm_log_dump(char* ipacm_log_data)
 {
-        int input_len = 0;
+	int input_len = 0;
 	if(!log_init_done)
 	{
 		return;
 	}
-        FILE_LOCK();
+	FILE_LOCK();
+	/* Adding +1 to incorporate null character */
 	input_len = strlen(ipacm_log_data) + 1;
 
-        if(((char*)write_addr+input_len) > (char*)mmap_addr+ max_filesize)
+	if(((char*)write_addr+input_len) > (char*)mmap_addr + max_filesize - 1)
 	{
 		write_addr = mmap_addr + (sizeof(ipacm_log_file_metadata_t) + 1);
 	}
-	snprintf((char*)write_addr, input_len + 1, "%s\n", ipacm_log_data);
+	snprintf((char*)write_addr, input_len, "%s", ipacm_log_data);
 	write_addr = (char*)write_addr + (input_len - 1); //start of line
 	FILE_UNLOCK();
 }

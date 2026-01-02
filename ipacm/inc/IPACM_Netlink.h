@@ -25,6 +25,10 @@ BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
 WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
 OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
 IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+Changes from Qualcomm Technologies, Inc. are provided under the following license:
+Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+SPDX-License-Identifier: BSD-3-Clause-Clear.
 */
 /*!
 	@file
@@ -141,7 +145,11 @@ typedef struct
 	struct ifinfomsg  metainfo;                   /* from header */
 } ipa_nl_link_info_t;
 
-
+typedef struct {
+    struct nlmsghdr nlh;
+    struct rtmsg rtm;
+    struct ndmsg nd;
+} nl_request_t;
 
 typedef struct ipa_nl_addr_info_s {
 	struct ifaddrmsg                metainfo;     /* from header */
@@ -216,6 +224,10 @@ int ipa_nl_recv_msg(int fd);
 /* map mask value for ipv6 */
 int mask_v6(int index, uint32_t *mask);
 
+int ipa_nl_send_getroute(ipa_ip_type ip_type, char*iface_name);
+/*  get ipa interface name from index */
+int ipa_get_if_name(char *if_name, int if_index);
+int ipa_nl_query_newneigh(int af_family, char*iface_name = NULL);
 #ifdef __cplusplus
 }
 #endif

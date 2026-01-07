@@ -93,10 +93,6 @@ int IPACM_Wlan::num_wlan_ap_iface = 0;
 #define VLAN_TPID_SIZE 2
 #define VLAN_VID_MASK 0x0FFF
 
-#ifndef IPA_LAN_RX_HDR_NAME
-#define IPA_LAN_RX_HDR_NAME "ipa_lan_hdr"
-#endif
-
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
 bool IPACM_Wlan::lan_stats_inited = false;
 ipa_lan_client_idx IPACM_Wlan::active_lan_client_index[IPA_MAX_NUM_HW_PATH_CLIENTS];
@@ -1180,6 +1176,7 @@ void IPACM_Wlan::event_callback(ipa_cm_event_id event, void *param)
 						{
 							handle_pdn_dscp_wlan_client_route_rule_ext_v2(get_client_memptr(wlan_client, wlan_index)->mac,
 								IPA_IP_v4, 0);
+							HandleNeighIpAddrAddEvt(data);
 						}
 						else if  (data->iptype == IPA_IP_v6 && IPACM_Iface::ipacmcfg->ipacm_static_policy_enable)
 						{
@@ -1189,6 +1186,7 @@ void IPACM_Wlan::event_callback(ipa_cm_event_id event, void *param)
 								handle_pdn_dscp_wlan_client_route_rule_ext_v2(get_client_memptr(wlan_client, wlan_index)->mac,
 								IPA_IP_v6, 0, temp_ipv6);
 							}
+							HandleNeighIpAddrAddEvt(data);
 						}
 #endif
 						install_all_wlan_qos_route_rule(data->mac_addr, 0);

@@ -16,9 +16,12 @@ SPDX-License-Identifier: BSD-3-Clause-Clear
 #include <stdio.h>
 #include <IPACM_Config.h>
 #include <IPACM_Iface.h>
+#include <IPACM_Defs.h>
+
 class IPACM_Bridge : public IPACM_Listener
 {
 		uint32_t  bridge_ipv4_addr;
+		uint32_t  bridge_ipv6_addr[IPA_IPV6_ADDR_SIZE_IN_WORDS];
 public:
 		IPACM_Bridge();
 		void event_callback(ipa_cm_event_id event, void *data);

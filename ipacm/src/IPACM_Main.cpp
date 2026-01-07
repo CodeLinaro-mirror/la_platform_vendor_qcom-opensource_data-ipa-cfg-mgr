@@ -1708,6 +1708,11 @@ int main(int argc, char **argv)
 
 #endif
 
+#ifdef IPA_HW_FNR_STATS
+	IPACM_Iface::ipacmcfg->alloc_fnr_counter();
+	IPACMDBG_H("Reallocation FNR Counter: Done\n");
+#endif
+
 	IPACM_IfaceManager *ifacemgr = new IPACM_IfaceManager();
 	IPACM_Neighbor *neigh = new IPACM_Neighbor();
 

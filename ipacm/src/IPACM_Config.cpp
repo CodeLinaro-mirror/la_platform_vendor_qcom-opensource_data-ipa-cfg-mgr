@@ -2065,7 +2065,7 @@ void IPACM_Config::add_vlan_bridge(ipacm_event_data_all *data_all)
 {
 	uint8_t testmac[IPA_MAC_ADDR_SIZE];
 	ipa_ioc_bridge_vlan_mapping_info mapping_info;
-	bool default_bridge = false;
+	bool default_bridge = false, is_mac_empty = true;
 	struct ifreq ifr;
 	int fd;
 
@@ -2118,6 +2118,30 @@ void IPACM_Config::add_vlan_bridge(ipacm_event_data_all *data_all)
 			if(ioctl(fd, SIOCGIFHWADDR, &ifr) < 0)
 			{
 				IPACMERR("unable to retrieve (%s) bridge MAC\n", ifr.ifr_name);
+				vlan_bridges[i].bridge_netmask = 0;
+				vlan_bridges[i].bridge_ipv4_addr = 0;
+				vlan_bridges[i].associate_VID = 0;
+				close(fd);
+				return;
+			}
+			IPACMDBG_H("Brdige MAC received %s with MAC %02x:%02x:%02x:%02x:%02x:%02x\n",
+				ifr.ifr_name,
+				ifr.ifr_hwaddr.sa_data[0],
+				ifr.ifr_hwaddr.sa_data[1],
+				ifr.ifr_hwaddr.sa_data[2],
+				ifr.ifr_hwaddr.sa_data[3],
+				ifr.ifr_hwaddr.sa_data[4],
+				ifr.ifr_hwaddr.sa_data[5]);
+
+			for (int j = 0; j < 6; j++) {
+				if (ifr.ifr_hwaddr.sa_data[j] != 0x00) {
+					is_mac_empty = false;
+					break;
+				}
+			}
+			if(is_mac_empty)
+			{
+				IPACMERR("Got empty MAC ADDRESS\n");
 				vlan_bridges[i].bridge_netmask = 0;
 				vlan_bridges[i].bridge_ipv4_addr = 0;
 				vlan_bridges[i].associate_VID = 0;
@@ -2304,6 +2328,20 @@ bool IPACM_Config::is_added_vlan_iface(char *iface_name)
 	return ret;
 }
 
+/*
+ *FUNCTION
+ *  IPACM_Config::iface_in_vlan_mode
+ *
+ * @brief Check if a network interface is in VLAN mode.
+ *
+ * This function determines whether the specified physical network interface
+ * is operating in VLAN mode by checking its name against a list of known
+ * VLAN-capable interface types.
+ *
+ * @param phys_iface_name The name of the physical interface to check.
+ *
+ * @return true if the interface is in VLAN mode, false otherwise.
+ */
 bool IPACM_Config::iface_in_vlan_mode(const char *phys_iface_name)
 {
 
@@ -2342,9 +2380,9 @@ bool IPACM_Config::iface_in_vlan_mode(const char *phys_iface_name)
 	}
 
 #ifdef IPA_VLAN_IF_WLAN
-	if(strstr(phys_iface_name, "ath"))
+	if(strstr(phys_iface_name, "ath") || strstr(phys_iface_name, "wlan"))
 	{
-		IPACMDBG("ath vlan mode %d\n", vlan_devices[IPA_VLAN_IF_WLAN]);
+		IPACMDBG("ath/wlan vlan mode %d\n", vlan_devices[IPA_VLAN_IF_WLAN]);
 		return (vlan_devices[IPA_VLAN_IF_WLAN] ||
 					((IPACM_Iface::ipacmcfg->ipacm_emesh_enable && IPACM_Iface::ipacmcfg->ipacm_emesh_mode >= 2) &&
 					is_svap_related(phys_iface_name)) ||

@@ -97,6 +97,10 @@ IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #endif
 #endif
 
+#ifndef IPA_LAN_RX_HDR_NAME
+#define IPA_LAN_RX_HDR_NAME "ipa_lan_hdr"
+#endif
+
 /* ndc bandwidth ipatetherstats <ifaceIn> <ifaceOut> */
 /* <in->out_bytes> <in->out_pkts> <out->in_bytes> <out->in_pkts */
 

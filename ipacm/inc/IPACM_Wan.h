@@ -922,6 +922,7 @@ private:
 
 	/* wan default route/filter rule configuration */
 	int handle_route_add_evt(ipa_ip_type iptype);
+	int post_pdn_update_event(uint32_t wan_v4_addr);
 
 #ifdef FEATURE_VLAN_MPDN
 	int check_vlan_pdn(ipa_ip_type iptype, ipacm_event_route_vlan *data, bool xlat_cfg = false);

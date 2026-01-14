@@ -25,6 +25,10 @@
  * WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *
+ * Changes from Qualcomm Technologies, Inc. are provided under the following license:
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 #include <errno.h>
 #include <pthread.h>
@@ -360,15 +364,17 @@ int ipa_nati_del_ipv4_rule(
 	return ret;
 }
 
-int ipa_nati_query_timestamp(
+int ipa_nati_query_timestamp_redirect(
 	uint32_t  tbl_hdl,
 	uint32_t  rule_hdl,
-	uint32_t* time_stamp)
+	uint32_t* time_stamp,
+	uint32_t* redirect)
 {
 	arb_t* args[] = {
 		(arb_t*) tbl_hdl,
 		(arb_t*) rule_hdl,
 		(arb_t*) time_stamp,
+		(arb_t*) redirect,
 	};
 
 	int ret;
@@ -1441,7 +1447,7 @@ static int _smAddRuleHybrid(
 	};
 
 	uint32_t orig2new_map, new2orig_map;
-
+	uint32_t* key;
 	int ret;
 
 	IPADBG("In\n");
@@ -1478,6 +1484,44 @@ static int _smAddRuleHybrid(
 		if ( ret == 0 )
 		{
 			ret = ipa_nat_map_add(new2orig_map, *rule_hdl, *rule_hdl);
+		}
+		else
+		{
+			key = rule_hdl;
+
+			/* if ret is -1 means we are failing to add the
+			 * entry to the maps while table switching but the
+			 * rule is added to the HW*/
+
+			/* We will loop till we get the new entry which will be
+			 * returned to ipacm later. Here we are not disturbing
+			 * the current handle(new handle) where the rule is
+			 * actually present.*/
+
+			while(ret == -1)
+			{
+				/* incrementing key value by 2 times tot_slots_in_sram
+				 * will make sure we get unique key value to avoid
+				 * multiple iterations*/
+
+				key = key + 2 * (nati_obj_ptr->tot_slots_in_sram);
+				ret = ipa_nat_map_add(orig2new_map, *key, *rule_hdl);
+			}
+
+			if(ret == 0)
+			{
+				/* While adding to new2origmap no need to place
+				 * any check, We will have unique rule_hdl as key
+				 * in this map as this will signify the empty entry
+				 * index in the table.*/
+
+				ret = ipa_nat_map_add(new2orig_map, *rule_hdl, *key);
+			}
+
+			/* Assigning back the new key to the rule hdl to
+			 * return to ipacm.*/
+
+			rule_hdl = key;
 		}
 	}
 	else
@@ -2094,15 +2138,16 @@ static int _smGetTmStmp(
 	uint32_t  tbl_hdl    = (uint32_t)  args[0];
 	uint32_t  rule_hdl   = (uint32_t)  args[1];
 	uint32_t* time_stamp = (uint32_t*) args[2];
+	uint32_t* redirect = (uint32_t*) args[3];
 
 	int ret;
 
 	IPADBG("In\n");
 
-	IPADBG("tbl_hdl(0x%08X) rule_hdl(%u) time_stamp_ptr(%p)\n",
-		   tbl_hdl, rule_hdl, time_stamp);
+	IPADBG("tbl_hdl(0x%08X) rule_hdl(%u) time_stamp_ptr(%p) redirect(%p)\n",
+		   tbl_hdl, rule_hdl, time_stamp, redirect);
 
-	ret = ipa_NATI_query_timestamp(tbl_hdl, rule_hdl, time_stamp);
+	ret = ipa_NATI_query_timestamp_redirect(tbl_hdl, rule_hdl, time_stamp, redirect);
 
 	if ( ret == 0 )
 	{
@@ -2144,6 +2189,7 @@ static int _smGetTmStmpHybrid(
 	uint32_t  tbl_hdl       = (uint32_t)  args[0];
 	uint32_t  orig_rule_hdl = (uint32_t)  args[1];
 	uint32_t* time_stamp    = (uint32_t*) args[2];
+	uint32_t* redirect      = (uint32_t*) args[3];
 
 	uint32_t  new_rule_hdl;
 
@@ -2165,6 +2211,7 @@ static int _smGetTmStmpHybrid(
 			         nati_obj_ptr->ddr_tbl_hdl,
 			(arb_t*) new_rule_hdl,
 			(arb_t*) time_stamp,
+			(arb_t*) redirect,
 		};
 
 		ret = _smGetTmStmp(nati_obj_ptr, trigger, new_args);

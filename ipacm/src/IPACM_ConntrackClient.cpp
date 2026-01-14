@@ -25,6 +25,10 @@
  * WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *
+ * Changes from Qualcomm Technologies, Inc. are provided under the following license:
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 #include <stdio.h>
 #include <stdlib.h>
@@ -99,12 +103,38 @@ int IPACM_ConntrackClient::IPAConntrackEventCB
 	ipacm_cmd_q_data evt_data;
 	ipacm_ct_evt_data *ct_data;
 	uint8_t ip_type = 0;
+	uint16_t sport = 0;
+	uint16_t dport = 0;
 	IPACM_Config *config_instance = NULL;
 
-	IPACMDBG("Event callback called with msgtype: %d\n",type);
+	u_int8_t  protocol, tcp_state;
+	protocol = nfct_get_attr_u8(ct, ATTR_REPL_L4PROTO);
+	if((protocol == IPPROTO_TCP))
+		tcp_state = nfct_get_attr_u8(ct, ATTR_TCP_STATE);
+	IPACMDBG("Event callback called with msgtype is :%d\n",type);
+
+	/*Avoiding processing of tcp conntracks if state is not established, if not fin_wait, if msg type is not destroy*/
+	if((protocol == IPPROTO_TCP) && ((tcp_state != TCP_CONNTRACK_ESTABLISHED) && (tcp_state != TCP_CONNTRACK_FIN_WAIT) && (NFCT_T_DESTROY != type)))
+	{
+		IPACMDBG("unexpected conntracks recieving protocol = %d  msg_type = %d\n", protocol,  type);
+		goto IGNORE;
+	}
 
 	/* Retrieve ip type */
 	ip_type = nfct_get_attr_u8(ct, ATTR_REPL_L3PROTO);
+
+	sport = nfct_get_attr_u16(ct, ATTR_ORIG_PORT_SRC);
+	sport = ntohs(sport);
+	dport = nfct_get_attr_u16(ct, ATTR_ORIG_PORT_DST);
+	dport = ntohs(dport);
+
+        /* Avoid processing conntrack with DNS 53 port */
+	if(dport == 53 || sport == 53)
+	{
+		IPACMDBG("iptype: %d: sport: %d: dport: %d\n", ip_type, sport, dport);
+		goto IGNORE;
+	}
+	IPACMDBG("iptype: %d\n", ip_type);
 
 #ifndef CT_OPT
 	if(AF_INET6 == ip_type)
@@ -560,6 +590,8 @@ void* IPACM_ConntrackClient::TCPRegisterWithConnTrack(void *)
 	int ret;
 	IPACM_ConntrackClient *pClient;
 	unsigned subscrips = 0;
+	int buf_size = 2097152, recbuff=0, res;
+	socklen_t optlen;
 
 	IPACMDBG("\n");
 
@@ -610,16 +642,50 @@ void* IPACM_ConntrackClient::TCPRegisterWithConnTrack(void *)
 	nfct_callback_register(pClient->tcp_hdl, (nf_conntrack_msg_type) NFCT_T_ALL, IPAConntrackEventCB, NULL);
 #endif
 
+	optlen = sizeof(recbuff);
+	res = getsockopt(nfct_fd(pClient->tcp_hdl), SOL_SOCKET, SO_RCVBUF, &recbuff, &optlen);
+
+	if(res == -1)
+	{
+		IPACMDBG("Error getsockopt (%d)(%s)\n", ret, strerror(errno));
+	}
+	else
+	{
+		IPACMDBG("original receive buffer size = %d\n", recbuff);
+	}
+
+	IPACMDBG("set the receive buffer to %d\n", buf_size);
+
+	if (setsockopt(nfct_fd(pClient->tcp_hdl), SOL_SOCKET, SO_RCVBUFFORCE, &buf_size, sizeof(int)) == -1)
+		IPACMERR("Error setting socket opts (%d)(%s)\n", ret, strerror(errno));
+
+	res = getsockopt(nfct_fd(pClient->tcp_hdl), SOL_SOCKET, SO_RCVBUF, &recbuff, &optlen);
+
+	if(res == -1)
+	{
+		IPACMDBG("Error getsockopt (%d)(%s)\n", ret, strerror(errno));
+	}
+	else
+	{
+		IPACMDBG("new receive buffer size = %d\n", recbuff);
+	}
+
 	/* Block to catch events from net filter connection track */
 	/* nfct_catch() receives conntrack events from kernel-space, by default it
 			 blocks waiting for events. */
 	IPACMDBG("Waiting for events\n");
 
+ctcatch:
 	ret = nfct_catch(pClient->tcp_hdl);
-	if(ret == -1)
+	if((ret == -1) && (errno != ENOMSG) && (errno != ENOBUFS))
 	{
-		IPACMERR("(%d)(%s)\n", ret, strerror(errno));
+		IPACMERR("(%d)(%d)(%s)\n", ret, errno, strerror(errno));
 		return NULL;
+	}
+	else
+	{
+		IPACMDBG("ctcatch ret:%d, errno:%d\n", ret, errno);
+		goto ctcatch;
 	}
 
 	IPACMDBG("Exit from tcp thread\n");
@@ -643,6 +709,8 @@ void* IPACM_ConntrackClient::UDPRegisterWithConnTrack(void *)
 {
 	int ret;
 	IPACM_ConntrackClient *pClient = NULL;
+	int buf_size = 2097152, recbuff=0, res;
+	socklen_t optlen;
 
 	IPACMDBG("\n");
 
@@ -685,17 +753,47 @@ void* IPACM_ConntrackClient::UDPRegisterWithConnTrack(void *)
 			IPAConntrackEventCB,
 			NULL);
 
+	optlen = sizeof(recbuff);
+
+	res = getsockopt(nfct_fd(pClient->udp_hdl), SOL_SOCKET, SO_RCVBUF, &recbuff, &optlen);
+
+	if(res == -1)
+	{
+		IPACMDBG("Error getsockopt (%d)(%s)\n", ret, strerror(errno));
+	}
+	else
+	{
+		IPACMDBG("original receive buffer size = %d\n", recbuff);
+	}
+
+	IPACMDBG("set the receive buffer to %d\n", buf_size);
+
+	if (setsockopt(nfct_fd(pClient->udp_hdl), SOL_SOCKET, SO_RCVBUFFORCE, &buf_size, sizeof(int)) == -1)
+		IPACMERR("Error setting socket opts (%d)(%s)\n", ret, strerror(errno));
+
+	res = getsockopt(nfct_fd(pClient->udp_hdl), SOL_SOCKET, SO_RCVBUF, &recbuff, &optlen);
+
+	if(res == -1)
+	{
+		IPACMDBG("Error getsockopt (%d)(%s)\n", ret, strerror(errno));
+	}
+	else
+	{
+		IPACMDBG("new send receive size = %d\n", recbuff);
+	}
+
+	IPACMDBG("Waiting for events\n");
 	/* Block to catch events from net filter connection track */
 ctcatch:
 	ret = nfct_catch(pClient->udp_hdl);
-	if(ret == -1)
+	if((ret == -1) && (errno != ENOMSG) && (errno != ENOBUFS))
 	{
-		IPACMDBG("(%d)(%s)\n", ret, strerror(errno));
+		IPACMDBG("(%d)(%d)(%s)\n", ret, errno, strerror(errno));
 		return NULL;
 	}
 	else
 	{
-		IPACMDBG("ctcatch ret:%d\n", ret);
+		IPACMDBG("ctcatch ret:%d, errno:%d\n", ret, errno);
 		goto ctcatch;
 	}
 

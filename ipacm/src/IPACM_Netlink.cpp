@@ -1073,7 +1073,7 @@ static int ipa_nl_decode_nlmsg
 				}
 
 				if ((IFF_UP & msg_ptr->nl_link_info.metainfo.ifi_change) ||
-					(!memcmp(dev_name,"rmnet_data", 10) &&
+					((!memcmp(dev_name,"rmnet_data", 10) || !memcmp(dev_name, "qmapmux", 7)) &&
 					(msg_ptr->nl_link_info.metainfo.ifi_type == ARPHRD_RAWIP))) {
 					IPACMDBG("GOT useful newlink event\n");
 

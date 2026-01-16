@@ -1283,6 +1283,7 @@ int NatApp::ResetPwrSaveIf(uint32_t client_lan_ip)
 {
 	int cnt;
 	ipa_nat_ipv4_rule nat_rule;
+	uint8_t pdn_index;
 
 	IPACMDBG_H("Received ip address: 0x%x\n", client_lan_ip);
 
@@ -1319,7 +1320,14 @@ int NatApp::ResetPwrSaveIf(uint32_t client_lan_ip)
 			nat_rule.ucp = cache[cnt].ucp;
 			nat_rule.s = cache[cnt].s;
 #ifdef FEATURE_VLAN_MPDN
-			nat_rule.pdn_index = cache[cnt].pdn_index;
+			if(ipa_nat_get_pdn_index(cache[cnt].public_ip, &pdn_index))
+			{
+				IPACMERR("Unable to extract the pdn index for 0x%x Not deleting the cache entry\n",
+								cache[cnt].public_ip);
+				continue;
+			}
+			IPACMDBG("Extracted pdn index %d for public ip 0x%x\n", pdn_index, cache[cnt].public_ip);
+			nat_rule.pdn_index = pdn_index;
 #endif
 
 			if(ipa_nat_add_ipv4_rule(nat_table_hdl, &nat_rule, &cache[cnt].rule_hdl) < 0)

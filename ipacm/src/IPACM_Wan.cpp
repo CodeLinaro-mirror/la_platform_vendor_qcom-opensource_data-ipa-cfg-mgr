@@ -265,10 +265,17 @@ IPACM_Wan::IPACM_Wan(int iface_index,
 		IPACMDBG(" IPACM->IPACM_Wan(%d)\n", ipa_if_num);
 	}
 
-	if(IPACM_Iface::ipacmcfg->get_vlan_id(dev_name, &sta_vlan_id))
+	if(is_sta_mode != WLAN_WAN)
 	{
-		IPACMERR("failed to get iface vlan ID\n");
+		if(IPACM_Iface::ipacmcfg->get_vlan_id(dev_name, &sta_vlan_id))
+		{
+			IPACMERR("failed to get iface vlan ID\n");
+		}
 	}
+        else
+        {
+                IPACMDBG_H("Skipping VLAN ID retrieval for WLAN_WAN mode on dev %s\n", dev_name);
+        }
 
 	return;
 }

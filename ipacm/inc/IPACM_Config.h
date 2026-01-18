@@ -1,9 +1,6 @@
 /*
  * Copyright (c) 2013-2021 The Linux Foundation. All rights reserved.
  *
- * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
- * SPDX-License-Identifier: BSD-3-Clause-Clear
- *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
  * met:
@@ -28,6 +25,10 @@
  * WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *
+ * Changes from Qualcomm Technologies, Inc. are provided under the following license:
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear.
  */
 /*!
 	@file
@@ -344,6 +345,7 @@ public:
 #if defined(FEATURE_L2TP) || defined(FEATURE_VLAN_MPDN)
 	pthread_mutex_t vlan_l2tp_lock;
 	std::list<vlan_iface_info> m_vlan_iface;
+	std::list<l2tp_client_gw_info>l2tp_session_gw_info;
 
 	struct VlanNamesCompare {
 
@@ -368,6 +370,9 @@ public:
 	void handle_vlan_iface_info(ipacm_event_data_addr *data);
 
 	void handle_vlan_client_info(ipacm_event_data_all *data);
+	void handle_l2tp_client_gw_info(ipacm_event_data_all *data, uint32_t *l2tp_gw_addr = NULL);
+	void del_l2tp_client_gw_info(ipacm_event_data_all *data, uint32_t *l2tp_gw_addr = NULL);
+	void del_l2tp_vlan_client_info(ipacm_event_data_all *data);
 
 	int find_matching_vlan(uint16_t interface_index, struct vlan_iface_info *vlan_data);
 

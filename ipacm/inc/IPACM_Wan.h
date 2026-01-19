@@ -58,7 +58,7 @@
 #define IPA_V2_NUM_DEFAULT_WAN_FILTER_RULE_IPV4 2
 #define IPA_IPV6_ADDR_WORDS 4
 
-#define NETWORK_STATS "%s %lu %lu %lu %lu"
+#define NETWORK_STATS "%." STR(IPA_IFACE_NAME_LEN) "s %" PRIu64 " %" PRIu64 " %" PRIu64 " %" PRIu64 "\n"
 #ifdef FEATURE_IPA_ANDROID
 #define IPA_NETWORK_STATS_FILE_NAME "/data/misc/ipa/network_stats"
 #else

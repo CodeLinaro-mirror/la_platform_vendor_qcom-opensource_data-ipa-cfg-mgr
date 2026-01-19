@@ -13687,7 +13687,7 @@ int IPACM_Lan::handle_tethering_stats_event(ipa_get_data_stats_resp_msg_v01 *dat
 						num_dl_bytes += data->dl_dst_pipe_stats_list[pipe_len].num_ipv4_bytes;
 						num_dl_bytes += data->dl_dst_pipe_stats_list[pipe_len].num_ipv6_bytes;
 						IPACMDBG_H("Got matched dst-pipe (%d) from %d tx props\n", data->dl_dst_pipe_stats_list[pipe_len].pipe_index, cnt);
-						IPACMDBG_H("DL_packets:(%lu) DL_bytes:(%lu) \n", num_dl_packets, num_dl_bytes);
+						IPACMDBG_H("DL_packets:(%" PRIu64 ") DL_bytes:(%" PRIu64 ")\n", num_dl_packets, num_dl_bytes);
 						break;
 					}
 				}
@@ -13714,7 +13714,7 @@ int IPACM_Lan::handle_tethering_stats_event(ipa_get_data_stats_resp_msg_v01 *dat
 						num_ul_bytes += data->ul_src_pipe_stats_list[pipe_len].num_ipv4_bytes;
 						num_ul_bytes += data->ul_src_pipe_stats_list[pipe_len].num_ipv6_bytes;
 						IPACMDBG_H("Got matched dst-pipe (%d) from %d tx props\n", data->ul_src_pipe_stats_list[pipe_len].pipe_index, cnt);
-						IPACMDBG_H("UL_packets:(%lu) UL_bytes:(%lu) \n", num_ul_packets, num_ul_bytes);
+						IPACMDBG_H("UL_packets:(%" PRIu64 ") UL_bytes:(%" PRIu64 ")\n", num_ul_packets, num_ul_bytes);
 						break;
 					}
 				}
@@ -13725,13 +13725,9 @@ int IPACM_Lan::handle_tethering_stats_event(ipa_get_data_stats_resp_msg_v01 *dat
 
 	if (ul_pipe_found || dl_pipe_found)
 	{
-		IPACMDBG_H("Update IPA_TETHERING_STATS_UPDATE_EVENT, TX(P%lu/B%lu) RX(P%lu/B%lu) DEV(%s) to LTE(%s) \n",
-					num_ul_packets,
-						num_ul_bytes,
-							num_dl_packets,
-								num_dl_bytes,
-									dev_name,
-										IPACM_Wan::wan_up_dev_name);
+		IPACMDBG_H("Update IPA_TETHERING_STATS_UPDATE_EVENT, TX(P%" PRIu64 "/B%" PRIu64 ") RX(P%" PRIu64 "/B%" PRIu64 ") DEV(%.*s) to LTE(%.*s)\n",
+					num_ul_packets, num_ul_bytes, num_dl_packets, num_dl_bytes, IPA_IFACE_NAME_LEN, dev_name, IPA_IFACE_NAME_LEN, IPACM_Wan::wan_up_dev_name);
+
 		fp = fopen(IPA_PIPE_STATS_FILE_NAME, "w");
 		if ( fp == NULL )
 		{

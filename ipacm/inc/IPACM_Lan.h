@@ -100,7 +100,7 @@ IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 /* ndc bandwidth ipatetherstats <ifaceIn> <ifaceOut> */
 /* <in->out_bytes> <in->out_pkts> <out->in_bytes> <out->in_pkts */
 
-#define PIPE_STATS "%s %s %lu %lu %lu %lu"
+#define PIPE_STATS "%." STR(IPA_IFACE_NAME_LEN) "s %." STR(IPA_IFACE_NAME_LEN) "s %" PRIu64 " %" PRIu64 " %" PRIu64 " %" PRIu64 "\n"
 #ifdef FEATURE_IPA_ANDROID
 #define IPA_PIPE_STATS_FILE_NAME "/data/misc/ipa/tether_stats"
 #else

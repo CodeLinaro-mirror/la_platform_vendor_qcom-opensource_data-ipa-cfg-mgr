@@ -10559,12 +10559,12 @@ int IPACM_Wan::handle_network_stats_update(ipa_get_apn_data_stats_resp_msg_v01 *
 	{
 		if(data->apn_data_stats_list[apn_index].mux_id == ext_prop->ext[0].mux_id)
 		{
-			IPACMDBG_H("Received IPA_TETHERING_STATS_UPDATE_NETWORK_STATS, MUX ID %d TX (P%lu/B%lu) RX (P%lu/B%lu)\n",
+			IPACMDBG_H("Received IPA_TETHERING_STATS_UPDATE_NETWORK_STATS, MUX ID %d TX (P%" PRIu64 "/B%" PRIu64 ") RX (P%" PRIu64 "/B%" PRIu64 ")\n",
 				data->apn_data_stats_list[apn_index].mux_id,
-					data->apn_data_stats_list[apn_index].num_ul_packets,
-						data->apn_data_stats_list[apn_index].num_ul_bytes,
-							data->apn_data_stats_list[apn_index].num_dl_packets,
-								data->apn_data_stats_list[apn_index].num_dl_bytes);
+				data->apn_data_stats_list[apn_index].num_ul_packets,
+				data->apn_data_stats_list[apn_index].num_ul_bytes,
+				data->apn_data_stats_list[apn_index].num_dl_packets,
+				data->apn_data_stats_list[apn_index].num_dl_bytes);
 			fp = fopen(IPA_NETWORK_STATS_FILE_NAME, "w");
 			if ( fp == NULL )
 			{
@@ -10574,11 +10574,11 @@ int IPACM_Wan::handle_network_stats_update(ipa_get_apn_data_stats_resp_msg_v01 *
 			}
 
 			fprintf(fp, NETWORK_STATS,
-				dev_name,
+					dev_name,
 					data->apn_data_stats_list[apn_index].num_ul_packets,
-						data->apn_data_stats_list[apn_index].num_ul_bytes,
-							data->apn_data_stats_list[apn_index].num_dl_packets,
-								data->apn_data_stats_list[apn_index].num_dl_bytes);
+					data->apn_data_stats_list[apn_index].num_ul_bytes,
+					data->apn_data_stats_list[apn_index].num_dl_packets,
+					data->apn_data_stats_list[apn_index].num_dl_bytes);
 			fclose(fp);
 			break;
 		};

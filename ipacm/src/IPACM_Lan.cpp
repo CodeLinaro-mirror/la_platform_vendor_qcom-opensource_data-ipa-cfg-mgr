@@ -5634,7 +5634,7 @@ int IPACM_Lan::handle_eth_hdr_init(uint8_t *mac_addr, ipacm_bridge *bridge, uint
 			if (IPACM_Wan::isWanUP(ipa_if_num) ||
 				(IPACM_Iface::ipacmcfg->ipacm_static_policy_enable && IPACM_Wan::isVlanWanUP()))
 			{
-				if(IPACM_Wan::backhaul_is_sta_mode == false)
+				if (IPACM_Wan::backhaul_is_sta_mode == false && (ip_type == IPA_IP_v4 || ip_type == IPA_IP_MAX))
 				{
 					ext_prop = IPACM_Iface::ipacmcfg->GetExtProp(IPA_IP_v4);
 #ifdef IPA_HW_FNR_STATS
@@ -5652,7 +5652,7 @@ int IPACM_Lan::handle_eth_hdr_init(uint8_t *mac_addr, ipacm_bridge *bridge, uint
 			if(IPACM_Wan::isWanUP_V6(ipa_if_num) ||
 				(IPACM_Iface::ipacmcfg->ipacm_static_policy_enable && IPACM_Wan::isVlanWanUP_V6()))
 			{
-				if(IPACM_Wan::backhaul_is_sta_mode == false)
+				if (IPACM_Wan::backhaul_is_sta_mode == false && (ip_type == IPA_IP_v6 || ip_type == IPA_IP_MAX))
 				{
 					ext_prop = IPACM_Iface::ipacmcfg->GetExtProp(IPA_IP_v6);
 #ifdef IPA_HW_FNR_STATS

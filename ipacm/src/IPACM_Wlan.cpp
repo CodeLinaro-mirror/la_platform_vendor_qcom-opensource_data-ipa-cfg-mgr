@@ -93,10 +93,6 @@ int IPACM_Wlan::num_wlan_ap_iface = 0;
 #define VLAN_TPID_SIZE 2
 #define VLAN_VID_MASK 0x0FFF
 
-#ifndef IPA_LAN_RX_HDR_NAME
-#define IPA_LAN_RX_HDR_NAME "ipa_lan_hdr"
-#endif
-
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
 bool IPACM_Wlan::lan_stats_inited = false;
 ipa_lan_client_idx IPACM_Wlan::active_lan_client_index[IPA_MAX_NUM_HW_PATH_CLIENTS];
@@ -314,6 +310,7 @@ void IPACM_Wlan::event_callback(ipa_cm_event_id event, void *param)
 					}
 					IPACM_Iface::ipacmcfg
 						->dscp_pcp_config_cache.add = 0;
+					close(m_fd);
 				}
 				handle_down_evt();
 				/* reset the AP-iface category to unknown */
@@ -489,6 +486,7 @@ void IPACM_Wlan::event_callback(ipa_cm_event_id event, void *param)
 						if(data->iptype == IPA_IP_v6)
 						{
 							memcpy(ipv6_prefix, IPACM_Wan::backhaul_ipv6_prefix, sizeof(ipv6_prefix));
+							delete_ipv6_prefix_flt_rule();
 							install_ipv6_prefix_flt_rule(IPACM_Wan::backhaul_ipv6_prefix);
 #ifdef FEATURE_IPv6CT_DISABLED
 #ifdef FEATURE_IPACM_UL_FIREWALL
@@ -759,6 +757,7 @@ void IPACM_Wlan::event_callback(ipa_cm_event_id event, void *param)
 		if(ip_type == IPA_IP_v6 || ip_type == IPA_IP_MAX)
 		{
 			memcpy(ipv6_prefix, data_wan->ipv6_prefix, sizeof(ipv6_prefix));
+			delete_ipv6_prefix_flt_rule();
 			install_ipv6_prefix_flt_rule(data_wan->ipv6_prefix);
 #ifdef FEATURE_IPv6CT_DISABLED
 #ifdef FEATURE_IPACM_UL_FIREWALL
@@ -1177,6 +1176,7 @@ void IPACM_Wlan::event_callback(ipa_cm_event_id event, void *param)
 						{
 							handle_pdn_dscp_wlan_client_route_rule_ext_v2(get_client_memptr(wlan_client, wlan_index)->mac,
 								IPA_IP_v4, 0);
+							HandleNeighIpAddrAddEvt(data);
 						}
 						else if  (data->iptype == IPA_IP_v6 && IPACM_Iface::ipacmcfg->ipacm_static_policy_enable)
 						{
@@ -1186,10 +1186,10 @@ void IPACM_Wlan::event_callback(ipa_cm_event_id event, void *param)
 								handle_pdn_dscp_wlan_client_route_rule_ext_v2(get_client_memptr(wlan_client, wlan_index)->mac,
 								IPA_IP_v6, 0, temp_ipv6);
 							}
+							HandleNeighIpAddrAddEvt(data);
 						}
 #endif
 						install_all_wlan_qos_route_rule(data->mac_addr, 0);
-						HandleNeighIpAddrAddEvt(data);
 					}
 					else
 #endif //IPA_HW_FNR_STATS
@@ -1198,7 +1198,6 @@ void IPACM_Wlan::event_callback(ipa_cm_event_id event, void *param)
 						{
 							handle_wlan_client_route_rule_ext(data->mac_addr, data->iptype);
 							install_all_wlan_qos_route_rule(data->mac_addr, 0);
-							HandleNeighIpAddrAddEvt(data);
 						}
 					}
 				}
@@ -7331,6 +7330,28 @@ fail:
 #endif
 		IPACMDBG_H("Delete %d out of %d client header\n", i,  num_wifi_client);
 
+		if (get_client_memptr(wlan_client, i)->ipv4_hpc_set == true)
+		{
+			IPACMDBG_H("Deleting proc_ctx v4 handle %d\n",get_client_memptr(wlan_client, i)->hpc_hdr_hdl_v4);
+			if (m_header.DeleteHeaderProcCtx(get_client_memptr(wlan_client, i)->hpc_hdr_hdl_v4)
+					== false)
+			{
+				return IPACM_FAILURE;
+			}
+			get_client_memptr(wlan_client, i)->ipv4_hpc_set = false;
+		}
+
+		if (get_client_memptr(wlan_client, i)->ipv6_hpc_set == true)
+		{
+			IPACMDBG_H("Deleting proc_ctx v6 handle %d\n",get_client_memptr(wlan_client, i)->hpc_hdr_hdl_v6);
+			if (m_header.DeleteHeaderProcCtx(get_client_memptr(wlan_client, i)->hpc_hdr_hdl_v6)
+					== false)
+			{
+				return IPACM_FAILURE;
+			}
+			get_client_memptr(wlan_client, i)->ipv6_hpc_set = false;
+		}
+
 		if(get_client_memptr(wlan_client, i)->ipv4_header_set == true)
 		{
 			if (m_header.DeleteHeaderHdl(get_client_memptr(wlan_client, i)->hdr_hdl_v4)
@@ -7865,7 +7886,7 @@ int IPACM_Wlan::config_dft_firewall_rules_ul_ex(IPACM_firewall_conf_t* firewall_
 	}
 
 	fd = open(IPA_DEVICE_NAME, O_RDWR);
-	if (0 == fd)
+	if (fd < 0)
 	{
 		IPACMERR("Failed opening %s.\n", IPA_DEVICE_NAME);
 		return IPACM_FAILURE;
@@ -9211,12 +9232,14 @@ int IPACM_Wlan::delete_uplink_filter_rule_per_client
 	if (clnt_indx == IPACM_INVALID_INDEX)
 	{
 		IPACMERR("eth client not found/attached \n");
+		close(fd);
 		return IPACM_FAILURE;
 	}
 
 	if (get_client_memptr(wlan_client, clnt_indx)->lan_stats_idx == -1 && !ast_update_needed())
 	{
 		IPACMERR("Invalid LAN Stats idx for ethernet client:%d \n", clnt_indx);
+		close(fd);
 		return IPACM_FAILURE;
 	}
 
@@ -9235,6 +9258,7 @@ int IPACM_Wlan::delete_uplink_filter_rule_per_client
 #ifdef IPA_V6_UL_WL_FIREWALL_HANDLE
 		IPACMERR("IPACM_MAX_V6_UL_WL_FIREWALL_ENTRIES %d\n", IPACM_MAX_V6_UL_WL_FIREWALL_ENTRIES);
 #endif
+		close(fd);
 		return IPACM_FAILURE;
 	}
 
@@ -9269,7 +9293,7 @@ int IPACM_Wlan::delete_uplink_filter_rule_per_client
 #endif
 		get_client_memptr(wlan_client, clnt_indx)->ipv6_ul_rules_set = false;
 	}
-
+	close(fd);
 	return IPACM_SUCCESS;
 
 }

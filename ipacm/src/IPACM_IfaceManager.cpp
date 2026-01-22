@@ -113,7 +113,7 @@ void IPACM_IfaceManager::event_callback(ipa_cm_event_id event, void *param)
 				IPACMDBG_H("IPA_LINK_UP_EVENT: not supported iface id: %d\n", evt_data->if_index);
 				break;
 			}
-			strlcpy(ifmgr_data.iface_name, IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].iface_name, sizeof(ifmgr_data.iface_name));
+			strlcpy(ifmgr_data.iface_name, IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].iface_name, IPA_IFACE_NAME_LEN);
 			/* LTE-backhaul */
 			if(IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].if_cat == EMBMS_IF)
 			{
@@ -136,7 +136,7 @@ void IPACM_IfaceManager::event_callback(ipa_cm_event_id event, void *param)
 				IPACMDBG_H("IPA_USB_LINK_UP_EVENT: not supported iface id: %d\n", evt_data->if_index);
 				break;
 			}
-			strlcpy(ifmgr_data.iface_name, IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].iface_name, sizeof(ifmgr_data.iface_name));
+			strlcpy(ifmgr_data.iface_name, IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].iface_name, IPA_IFACE_NAME_LEN);
 			/* check if it's WAN_IF */
 			if(IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].if_cat == WAN_IF)
 			{
@@ -173,7 +173,7 @@ void IPACM_IfaceManager::event_callback(ipa_cm_event_id event, void *param)
 #ifdef IPA_WDI_AST_UPDATE
 				ifmgr_data.ast_update = evt_data->ast_update;
 #endif
-				strlcpy(ifmgr_data.iface_name, evt_data->iface_name, sizeof(ifmgr_data.iface_name));
+				strlcpy(ifmgr_data.iface_name, evt_data->iface_name, IPA_IFACE_NAME_LEN);
 				create_iface_instance(&ifmgr_data);
 			}
 			else if(evt_data->mlo_enabled && IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].if_cat == WLAN_IF)
@@ -185,7 +185,7 @@ void IPACM_IfaceManager::event_callback(ipa_cm_event_id event, void *param)
 #ifdef IPA_WDI_AST_UPDATE
 				ifmgr_data.ast_update = evt_data->ast_update;
 #endif
-				strlcpy(ifmgr_data.iface_name, evt_data->iface_name, sizeof(ifmgr_data.iface_name));
+				strlcpy(ifmgr_data.iface_name, evt_data->iface_name, IPA_IFACE_NAME_LEN);
 				create_iface_instance(&ifmgr_data);
 			}
 			else
@@ -201,7 +201,7 @@ void IPACM_IfaceManager::event_callback(ipa_cm_event_id event, void *param)
 				IPACMDBG_H("IPA_WLAN_STA_LINK_UP_EVENT: not supported iface id: %d\n", StaData->if_index);
 				break;
 			}
-			strlcpy(ifmgr_data.iface_name, IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].iface_name, sizeof(ifmgr_data.iface_name));
+			strlcpy(ifmgr_data.iface_name, IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].iface_name, IPA_IFACE_NAME_LEN);
 			/* change iface category from unknown to WAN_IF */
 			if(IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].if_cat == UNKNOWN_IF)
 			{
@@ -231,7 +231,7 @@ void IPACM_IfaceManager::event_callback(ipa_cm_event_id event, void *param)
 				IPACMDBG_H("IPA_WAN_EMBMS_LINK_UP_EVENT: not supported iface id: %d\n", evt_data->if_index);
 				break;
 			}
-			strlcpy(ifmgr_data.iface_name, evt_data->iface_name, sizeof(ifmgr_data.iface_name));
+			strlcpy(ifmgr_data.iface_name, evt_data->iface_name, IPA_IFACE_NAME_LEN);
 
 			/* change iface category from unknown to EMBMS_IF */
 			if ((IPACM_Iface::ipacmcfg->ipacm_odu_enable == true) && (IPACM_Iface::ipacmcfg->ipacm_odu_embms_enable == true))
@@ -654,6 +654,9 @@ int IPACM_IfaceManager::create_iface_instance(ipacm_ifacemgr_data *param)
 					IPACM_EvtDispatcher::registr(IPA_HANDLE_WAN_DOWN, w);
 					IPACM_EvtDispatcher::registr(IPA_HANDLE_WAN_UP, w);
 #endif
+					IPACM_EvtDispatcher::registr(IPA_QOS_RULE_ADD_EVENT, w);
+					IPACM_EvtDispatcher::registr(IPA_QOS_RULE_DEL_EVENT, w);
+
 					IPACM_EvtDispatcher::registr(IPA_ADDR_ADD_EVENT, w);
 #ifdef FEATURE_IPA_ANDROID
 					IPACM_EvtDispatcher::registr(IPA_WAN_UPSTREAM_ROUTE_ADD_EVENT, w);

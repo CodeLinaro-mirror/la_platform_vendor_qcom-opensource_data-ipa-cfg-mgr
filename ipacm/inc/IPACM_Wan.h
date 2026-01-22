@@ -83,7 +83,7 @@ IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <IPACM_Defs.h>
 #include <IPACM_Xml.h>
 
-#define IPA_NUM_DEFAULT_WAN_FILTER_RULES 3 /*1 for v4, 2 for v6*/
+#define IPA_NUM_DEFAULT_WAN_FILTER_RULES 6 /*best effort pipe-> 0 for v4, 1 for v6, 4 for v6 icmp; QoS pipe-> 2 for v4, 3 for v6, 5 for v6 icmp*/
 #define IPA_V2_NUM_DEFAULT_WAN_FILTER_RULE_IPV4 2
 #define XLAT_IP 0xc0000000
 #define LINK_LOCAL_IPV6 0xFE800000
@@ -798,6 +798,12 @@ private:
 	int handle_dual_backhaul_enable(ipacm_event_data_all *data, bool evt);
 	int handle_dual_backhaul_disable();
 #endif
+
+	int install_ul_qos_route_rules(ipa_ip_type iptype);
+	int handle_ul_qos_route_rule(ipa_ip_type iptype, list<qos_param_info>::iterator qos_param);
+	int delete_all_UL_info_from_qos(list<qos_param_info>::iterator qos_param, ipa_ip_type iptype);
+	int delete_all_UL_qos_rules(ipa_ip_type iptype);
+	uint32_t get_u8_bitmap_from_tc(uint8_t traffic_class);
 
 	/* handle new_address event */
 	int handle_addr_evt(ipacm_event_data_addr *data);

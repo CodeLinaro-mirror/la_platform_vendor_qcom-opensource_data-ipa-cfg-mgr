@@ -1399,9 +1399,9 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 									data->iptype, 0, data->ipv6_addr);
 							}
 							IPACMDBG_H("Route install retval = %d\n", retval);
+							HandleNeighIpAddrAddEvt(data);
 						}
 #endif
-						HandleNeighIpAddrAddEvt(data);
 					}
 					else
 #endif //IPA_HW_FNR_STATS
@@ -1410,7 +1410,6 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 						{
 							handle_eth_client_route_rule_ext(data->mac_addr, data->iptype);
 							install_all_qos_route_rule(data->mac_addr, 0, data->ipv6_addr);
-							HandleNeighIpAddrAddEvt(data);
 						}
 					}
 				}
@@ -2071,6 +2070,13 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 	case IPA_QOS_RULE_ADD_EVENT:
 		{
 			IPACMDBG_H("Received and will process an IPA_QOS_RULE_ADD_EVENT\n");
+			qos_param_info *qos_param;
+			qos_param = (qos_param_info *)param;
+			if (qos_param->dir != IPA_QoS_DL_RULE)
+			{
+				IPACMDBG_H("UL qos rule add request on LAN iface, ignoring..\n");
+				return;
+			}
 			delete_all_client_qos_rules();
 			for (int cnt = 0; cnt < num_eth_client; cnt++)
 			{
@@ -2086,6 +2092,12 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 			qos_delete_param_info *qos_param;
 			qos_param = (qos_delete_param_info *)param;
 			IPACMDBG_H("Received and will process an IPA_QOS_RULE_DEL_EVENT\n");
+
+			if (qos_param->dir != IPA_QoS_DL_RULE)
+			{
+				IPACMDBG_H("UL qos rule delete request on LAN iface, ignoring..\n");
+				return;
+			}
 
 			IPACMDBG_H("Deleting %d qos eth clients \n", qos_param->client_cnt);
 
@@ -3815,7 +3827,7 @@ int IPACM_Lan::notify_flt_removed(uint8_t mux_id)
 	int j = 0;
 
 	fd = open(IPA_DEVICE_NAME, O_RDWR);
-	if(0 == fd)
+	if(fd < 0)
 	{
 		IPACMERR("Failed opening %s.\n", IPA_DEVICE_NAME);
 		return IPACM_FAILURE;
@@ -3824,6 +3836,7 @@ int IPACM_Lan::notify_flt_removed(uint8_t mux_id)
 	if (rx_prop == NULL)
 	{
 		IPACMERR("Rx prop is NULL, return\n");
+		close(fd);
 		return IPACM_SUCCESS;
 	}
 
@@ -4764,7 +4777,7 @@ int IPACM_Lan::handle_wan_up_ex(ipacm_ext_prop *ext_prop, ipa_ip_type iptype, ui
 	{
 		/* give mux ID of the default PDN to IPA-driver for WLAN/LAN pkts */
 		fd = open(IPA_DEVICE_NAME, O_RDWR);
-		if (0 == fd)
+		if (fd < 0)
 		{
 			IPACMDBG_H("Failed opening %s.\n", IPA_DEVICE_NAME);
 			return IPACM_FAILURE;
@@ -8360,7 +8373,8 @@ int IPACM_Lan::handle_qos_route_rule(uint8_t *client_mac, uint16_t client_vlan_i
 				continue;
 			}
 
-			if (tx_prop->tx[tx_index].tc_bmap == 0)
+			//adding tx property count check to differentiate between interfaces
+			if (iface_query->num_tx_props > 2 && tx_prop->tx[tx_index].tc_bmap == 0)
 			{
 				IPACMDBG("Tx:%d with pipe tc 0x%x is not for qos traffic... skip and continue\n",
 					tx_index, tx_prop->tx[tx_index].tc_bmap);
@@ -8385,7 +8399,7 @@ int IPACM_Lan::handle_qos_route_rule(uint8_t *client_mac, uint16_t client_vlan_i
 				qos_param->ip_tup.dst_v6_ip_addr[2],
 				qos_param->ip_tup.dst_v6_ip_addr[3]);
 
-			if (!(tx_prop->tx[tx_index].tc_bmap & get_u8_bitmap_from_tc(qos_param->traffic_class)))
+			if ((iface_query->num_tx_props > 2) && !(tx_prop->tx[tx_index].tc_bmap & get_u8_bitmap_from_tc(qos_param->traffic_class)))
 			{
 				IPACMDBG_H("Pipe Tx:%d, ip-type: %d conflicting traffic class 0x%x with pipe tc 0x%x\n",
 					tx_index, tx_prop->tx[tx_index].ip, qos_param->traffic_class, tx_prop->tx[tx_index].tc_bmap);
@@ -9497,6 +9511,11 @@ int IPACM_Lan::install_all_qos_route_rule(uint8_t * client_mac,
 	for (it_qos_params = IPACM_Iface::ipacmcfg->m_qos_params.begin();
 		it_qos_params != IPACM_Iface::ipacmcfg->m_qos_params.end(); ++it_qos_params)
 	{
+		if (it_qos_params->dir != IPA_QoS_DL_RULE)
+		{
+			IPACMDBG_H("This is not a DL qos rule, continue to next one..\n");
+			continue;
+		}
 		IPACMDBG_H("Individual qos rules with ip type: %d and tc: %d\n",
 			(ipa_ip_type)it_qos_params->ip_type, it_qos_params->traffic_class);
 		IPACMDBG("Install_all_qos_route_rule it_qos_params called start 0x%x\n",
@@ -10446,7 +10465,10 @@ int IPACM_Lan::handle_eth_client_route_rule_ext_v2(uint8_t *mac_addr, ipa_ip_typ
 				IPACMDBG_H("rt rule entry enable stats = %d, dl cnt index = %u\n", rt_rule_entry->rule.enable_stats, rt_rule_entry->rule.cnt_idx);
 			} /* end of for loop */
 		} /* end of tx loop */
-		get_client_memptr(eth_client, eth_index)->route_rule_set_v6 = get_client_memptr(eth_client, eth_index)->ipv6_set;
+		if (iptype == IPA_IP_v6)
+		{
+			get_client_memptr(eth_client, eth_index)->route_rule_set_v6 = get_client_memptr(eth_client, eth_index)->ipv6_set;
+		}
 		free((void *)rt_rule->rules);
 		free(rt_rule);
 	}
@@ -11170,6 +11192,31 @@ int IPACM_Lan::handle_eth_client_down_evt(uint8_t *mac_addr, uint16_t vlan_id, i
 		}
 		get_client_memptr(eth_client, clt_indx)->ext_router_prefix_rt_hdl = 0; //do we need or will it be cleared automatically?
 	}
+
+	IPACMDBG_H("Deleting proc_ctx v4 handle %d\n",get_client_memptr(eth_client, clt_indx)->hpc_hdr_hdl_v4);
+	if (get_client_memptr(eth_client, clt_indx)->ipv4_hpc_set)
+	{
+		if (m_header.DeleteHeaderProcCtx(get_client_memptr(eth_client, clt_indx)->hpc_hdr_hdl_v4) == false)
+		{
+			IPACMERR("unable to delete v4 header hpc rules for index: %d\n", clt_indx);
+			return IPACM_FAILURE;
+		}
+		get_client_memptr(eth_client, clt_indx)->ipv4_hpc_set = false;
+		IPACMDBG("v4 hpc deleted\n");
+	}
+
+	IPACMDBG_H("Deleting proc_ctx v6 handle %d\n",get_client_memptr(eth_client, clt_indx)->hpc_hdr_hdl_v6);
+	if (get_client_memptr(eth_client, clt_indx)->ipv6_hpc_set)
+	{
+		if (m_header.DeleteHeaderProcCtx(get_client_memptr(eth_client, clt_indx)->hpc_hdr_hdl_v6) == false)
+		{
+			IPACMERR("unable to delete v6 header hpc rules for index: %d\n", clt_indx);
+			return IPACM_FAILURE;
+		}
+		get_client_memptr(eth_client, clt_indx)->ipv6_hpc_set = false;
+		IPACMDBG("v6 hpc deleted\n");
+	}
+
 
 	/* Delete eth client header */
 	if(get_client_memptr(eth_client, clt_indx)->ipv4_header_set == true)
@@ -11968,6 +12015,17 @@ fail:
 			}
 #endif
 
+			if (get_client_memptr(eth_client, i)->hpc_hdr_hdl_v4)
+			{
+				IPACMDBG_H("Deleting proc_ctx v4 handle %d\n",get_client_memptr(eth_client, i)->hpc_hdr_hdl_v4);
+				if (m_header.DeleteHeaderProcCtx(get_client_memptr(eth_client, i)->hpc_hdr_hdl_v4)
+						== false)
+				{
+					return IPACM_FAILURE;
+				}
+				get_client_memptr(eth_client, i)->ipv4_hpc_set = false;
+			}
+
 			IPACMDBG_H("Delete %d out of %d client header\n", i,  num_eth_client);
 
 			if(get_client_memptr(eth_client, i)->ipv4_header_set == true)
@@ -11978,6 +12036,18 @@ fail:
 					res = IPACM_FAILURE;
 				}
 			}
+
+			if (get_client_memptr(eth_client, i)->ipv6_hpc_set == true)
+			{
+				IPACMDBG_H("Deleting proc_ctx v6 handle %d\n",get_client_memptr(eth_client, i)->hpc_hdr_hdl_v6);
+				if (m_header.DeleteHeaderProcCtx(get_client_memptr(eth_client, i)->hpc_hdr_hdl_v6)
+						== false)
+				{
+					return IPACM_FAILURE;
+				}
+				get_client_memptr(eth_client, i)->ipv6_hpc_set = false;
+			}
+
 
 			if(get_client_memptr(eth_client, i)->ipv6_header_set == true)
 			{
@@ -13171,8 +13241,10 @@ int IPACM_Lan::config_dft_firewall_rules_ul_ex(IPACM_firewall_conf_t* firewall_c
 			return IPACM_SUCCESS;
 		}
 
+
 		fd = open(IPA_DEVICE_NAME, O_RDWR);
-		if (0 == fd) {
+		if (fd < 0)
+		{
 			IPACMERR("Failed opening %s.\n", IPA_DEVICE_NAME);
 			return IPACM_FAILURE;
 		}
@@ -15328,8 +15400,7 @@ int IPACM_Lan::enable_per_client_stats(bool *status)
 int IPACM_Lan::handle_wan_down_v6(bool is_sta_mode, bool is_support_mpdn)
 {
 	int idx = 0;
-	int j,wlan_pipe_index;
-	uint32_t *dft_filter_rule_hdl = NULL;
+	int j;
 	if (rx_prop == NULL)
 	{
 		IPACMERR("Rx prop is NULL, return\n");
@@ -15350,13 +15421,6 @@ int IPACM_Lan::handle_wan_down_v6(bool is_sta_mode, bool is_support_mpdn)
 	if(IPACM_Iface::ipacmcfg->ipv6_nat_enable)
 		delete_ipv6_nat_ula_prefix_flt_rule();
 #endif
-	if (ipa_if_cate == WLAN_IF) {
-		for(wlan_pipe_index=0;wlan_pipe_index<MAX_SUPPORTED_WLAN_PIPES;wlan_pipe_index++){
-			if(IPACM_Wlan::wlan_ap_dflt_rules[wlan_pipe_index].src_pipe == rx_prop->rx[idx].src_pipe ){
-				break;
-			}
-		}
-	}
 
 	if(is_sta_mode == false)
 	{
@@ -15388,19 +15452,8 @@ int IPACM_Lan::handle_wan_down_v6(bool is_sta_mode, bool is_support_mpdn)
 				idx = j * 2;
 				IPACMDBG_H("Install rules at idx %d\n", idx);
 			}
-			if (ipa_if_cate == WLAN_IF && wlan_pipe_index<MAX_SUPPORTED_WLAN_PIPES && IPACM_Wlan::wlan_ap_dflt_rules[wlan_pipe_index].dft_v6fl_rule_hdl[j] != NULL) {
-				dft_filter_rule_hdl = IPACM_Wlan::wlan_ap_dflt_rules[wlan_pipe_index].dft_v6fl_rule_hdl[j];
-			} else{
-				if (dft_v6fl_rule_hdl[j][0] && m_ipv6_default_filterting_rules_count[j]) {
-					dft_filter_rule_hdl = dft_v6fl_rule_hdl[j];
-				}
-			}
-			if (dft_filter_rule_hdl == NULL){
-				IPACMERR("dft_filter_rule_hdl is NULL,rules deleted already \n");
-				goto fail;
-			}
 
-			if (!m_filtering.DeleteFilteringHdls(dft_filter_rule_hdl, IPA_IP_v6, 1)) {
+			if (!m_filtering.DeleteFilteringHdls(&dft_v6fl_rule_hdl[j][m_ipv6_default_filterting_rules_count[j]], IPA_IP_v6, 1)) {
 				IPACMERR("Error Deleting last default flt rule, aborting...\n");
 				return IPACM_FAILURE;
 			}
@@ -15409,7 +15462,6 @@ int IPACM_Lan::handle_wan_down_v6(bool is_sta_mode, bool is_support_mpdn)
 		}
 	}
 
-fail:
 #ifdef FEATURE_IPA_IPSEC
 	return handleIpsecUlFltDelAll(IPA_IP_v6);
 #else
@@ -20457,7 +20509,7 @@ int IPACM_Lan::handle_mpdn_ul_xlat_filter_rule(ipacm_ext_prop * prop,
 	}
 
 	fd = open(IPA_DEVICE_NAME, O_RDWR);
-	if (0 == fd)
+	if (fd < 0)
 	{
 		IPACMERR("Failed opening %s.\n", IPA_DEVICE_NAME);
 		ret = IPACM_FAILURE;
@@ -20694,7 +20746,8 @@ int IPACM_Lan::handle_mpdn_ul_xlat_filter_rule(ipacm_ext_prop * prop,
 fail:
 	if (pFilteringTable != NULL)
 		free(pFilteringTable);
-	close(fd);
+	if(fd)
+		close(fd);
 	return ret;
 }
 
@@ -22709,10 +22762,22 @@ int IPACM_Lan::handle_static_policy_rt_rule_add()
 	struct ipa_ioc_add_hdr_proc_ctx *procCtxTable =
 		(struct ipa_ioc_add_hdr_proc_ctx *) buf;
 	struct ipa_hdr_proc_ctx_add *procCtx = &(procCtxTable->proc_ctx[0]);
+	struct ipa_ioc_get_hdr hdr;
 
 	// init proc ctx table
 	procCtxTable->commit        = true;
 	procCtxTable->num_proc_ctxs = 1;
+
+	memset(&hdr, 0, sizeof(hdr));
+	strlcpy(hdr.name, IPA_LAN_RX_HDR_NAME, sizeof(IPA_LAN_RX_HDR_NAME));
+	hdr.name[IPA_RESOURCE_NAME_MAX-1] = '\0';
+	if(m_header.GetHeaderHandle(&hdr) == false)
+	{
+		IPACMERR("Failed to get LAN RX header hdl.\n");
+		res = IPACM_FAILURE;
+		return res;
+	}
+	procCtx->hdr_hdl = hdr.hdl;
 
 	// init proc_ctx common fields
 	procCtx->proc_ctx_hdl = -1; // return value

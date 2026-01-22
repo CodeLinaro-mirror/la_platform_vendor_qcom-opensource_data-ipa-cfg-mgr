@@ -25,6 +25,11 @@ BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
 WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
 OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
 IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+Changes from Qualcomm Innovation Center are provided under the following license:
+Copyright (c) 2025 Qualcomm Innovation Center, Inc. All rights reserved.
+SPDX-License-Identifier: BSD-3-Clause-Clear
+
 */
 /*!
 	@file
@@ -53,7 +58,7 @@ const char *IPACM_Routing::DEVICE_NAME = "/dev/ipa";
 IPACM_Routing::IPACM_Routing()
 {
 	m_fd = open(DEVICE_NAME, O_RDWR);
-	if (0 == m_fd)
+	if (m_fd < 0)
 	{
 		IPACMERR("Failed opening %s.\n", DEVICE_NAME);
 	}
@@ -68,7 +73,7 @@ bool IPACM_Routing::DeviceNodeIsOpened()
 {
 	int res = fcntl(m_fd, F_GETFL);
 
-	if (m_fd > 0 && res >= 0) return true;
+	if (m_fd >= 0 && res >= 0) return true;
 	else return false;
 
 }
@@ -330,11 +335,8 @@ bool IPACM_Routing::DeleteRoutingHdl(uint32_t rt_rule_hdl, ipa_ip_type ip, uint8
 			(rt_rule_entry->status))
 	{
 		PERROR("Routing rule deletion failed!\n");
-		goto fail;
 		res = false;
 	}
-
-fail:
 	free(rt_rule);
 
 	return res;

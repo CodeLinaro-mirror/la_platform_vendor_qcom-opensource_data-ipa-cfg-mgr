@@ -710,5 +710,8 @@
 		<IPACMQOS>
 			<IPACMQOSEnabled>0</IPACMQOSEnabled>
 		</IPACMQOS>
+		<IPACMLog>
+			<IPACMfilevar>2097152</IPACMfilevar>
+		</IPACMLog>
 	</IPACM>
 </system>

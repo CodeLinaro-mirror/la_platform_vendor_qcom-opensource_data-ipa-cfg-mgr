@@ -620,7 +620,7 @@ int IPACM_Iface::query_iface_property(void)
 
 	fd = open(DEVICE_NAME, O_RDWR);
 	IPACMDBG("iface query-property \n");
-	if (0 == fd)
+	if (fd < 0)
 	{
 		IPACMERR("Failed opening %s.\n", DEVICE_NAME);
 		return IPACM_FAILURE;
@@ -725,8 +725,8 @@ int IPACM_Iface::query_iface_property(void)
 		{
 			for (cnt = 0; cnt < rx_prop->num_rx_props; cnt++)
 			{
-				IPACMDBG_H("Rx(%d):attrib-mask:0x%x, ip-type: %d, src_pipe: %d\n",
-								 cnt, rx_prop->rx[cnt].attrib.attrib_mask, rx_prop->rx[cnt].ip, rx_prop->rx[cnt].src_pipe);
+				IPACMDBG_H("Rx(%d):attrib-mask:0x%x, ip-type: %d, src_pipe: %d, bitmap: %d\n",
+								 cnt, rx_prop->rx[cnt].attrib.attrib_mask, rx_prop->rx[cnt].ip, rx_prop->rx[cnt].src_pipe, rx_prop->rx[cnt].tc_bmap);
 			}
 		}
 	}

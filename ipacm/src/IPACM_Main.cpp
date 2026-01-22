@@ -108,7 +108,6 @@
 #endif
 
 uint32_t ipacm_event_stats[IPACM_EVENT_MAX];
-bool ipacm_logging = true;
 
 void ipa_is_ipacm_running(void);
 int ipa_get_if_index(char *if_name, int *if_index);
@@ -398,7 +397,7 @@ void* ipa_driver_msg_notifier(void *param)
 			}
 			if(event_wlan->mld_enabled && strstr(event_wlan->name,"mld"))
 			{
-				snprintf(data_fid->iface_name, sizeof(event_wlan->name),
+				snprintf(data_fid->iface_name, sizeof(data_fid->iface_name),
 							"%s_%d_%d", event_wlan->name,event_wlan->instance_id,
 							event_wlan->vdev_id);
 			}
@@ -436,7 +435,7 @@ void* ipa_driver_msg_notifier(void *param)
 			}
 			if(event_wlan->mld_enabled && strstr(event_wlan->name,"mld"))
 			{
-				snprintf(data_fid->iface_name, sizeof(event_wlan->name),
+				snprintf(data_fid->iface_name, sizeof(data_fid->iface_name),
 							"%s_%d_%d", event_wlan->name,event_wlan->instance_id, event_wlan->vdev_id);
 			}
 			else
@@ -1695,7 +1694,6 @@ int main(int argc, char **argv)
 	pthread_t netlinks_query_thread = 0;
 	/* check if ipacm is already running or not */
 	ipa_is_ipacm_running();
-
 	IPACMDBG_H("In main()\n");
 	IPACMERR("debug deleting ipacm.pid file\n");
 	char cmd[200] = {0};

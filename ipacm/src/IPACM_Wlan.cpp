@@ -26,10 +26,11 @@
  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * Changes from Qualcomm Innovation Center are provided under the following license:
+ * Changes from Qualcomm Technologies, Inc. are provided under the following license:
  *
  * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
+ *
  */
 /*!
 	@file
@@ -6981,11 +6982,6 @@ int IPACM_Wlan::handle_down_evt()
 	for(wlan_pipe_index=0;wlan_pipe_index<MAX_SUPPORTED_WLAN_PIPES;wlan_pipe_index++){
 		if(rx_prop && wlan_ap_dflt_rules[wlan_pipe_index].src_pipe == rx_prop->rx[idx].src_pipe ){
 
-			IPACMDBG("wlan_pipe_index %d src_pipe %d ipv4 iface cnt %d ipv6 iface cnt %d\n",
-							wlan_pipe_index, rx_prop->rx[idx].src_pipe,
-							wlan_ap_dflt_rules[wlan_pipe_index].iface_cnt[IPA_IP_v4],
-							wlan_ap_dflt_rules[wlan_pipe_index].iface_cnt[IPA_IP_v6]);
-
 			if (ip_type == IPA_IP_MAX) {
 				if (wlan_ap_dflt_rules[wlan_pipe_index].iface_cnt[IPA_IP_v4] == 0 &&
 					wlan_ap_dflt_rules[wlan_pipe_index].iface_cnt[IPA_IP_v6] == 0) {
@@ -7002,6 +6998,10 @@ int IPACM_Wlan::handle_down_evt()
 				IPACMDBG("No default rules initialized ip_type %d src pipe %d index %d\n",
 						ip_type, rx_prop->rx[idx].src_pipe, wlan_pipe_index);
 			}
+			IPACMDBG("wlan_pipe_index %d src_pipe %d ipv4 iface cnt %d ipv6 iface cnt %d\n",
+							wlan_pipe_index, rx_prop->rx[idx].src_pipe,
+							wlan_ap_dflt_rules[wlan_pipe_index].iface_cnt[IPA_IP_v4],
+							wlan_ap_dflt_rules[wlan_pipe_index].iface_cnt[IPA_IP_v6]);
 
 			if(wlan_ap_dflt_rules[wlan_pipe_index].iface_cnt[IPA_IP_v4] > 0 &&
 				wlan_ap_dflt_rules[wlan_pipe_index].iface_cnt[IPA_IP_v6] > 0 ) {

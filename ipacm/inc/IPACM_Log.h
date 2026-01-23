@@ -55,6 +55,10 @@ extern "C"
 #include <errno.h>
 #include <time.h>
 #include <sys/time.h>
+#include <inttypes.h>  // for PRIu64
+
+#define STR_HELPER(x) #x
+#define STR(x) STR_HELPER(x)
 
 #define MAX_BUF_LEN 256
 #define TimeStamp_buff_len 30

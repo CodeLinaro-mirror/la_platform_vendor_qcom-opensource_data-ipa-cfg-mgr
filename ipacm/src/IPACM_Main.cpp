@@ -125,6 +125,16 @@ int ipa_reset();
 int ipa_query_driver_event();
 #endif
 
+ipa_nl_sk_info_t sk_info;
+
+/* start netlink query socket thread*/
+void* netlink_events_query(void *param)
+{
+	IPACMDBG_H("ipa_query_nl_getevents started\n");
+	ipa_query_nl_getevents();
+	return NULL;
+}
+
 /* start netlink socket monitor*/
 void* netlink_start(void *param)
 {
@@ -135,7 +145,7 @@ void* netlink_start(void *param)
 	ret_val = ipa_nl_listener_init(NETLINK_ROUTE, (RTMGRP_IPV4_ROUTE | RTMGRP_IPV6_ROUTE | RTMGRP_LINK |
 																										RTMGRP_IPV4_IFADDR | RTMGRP_IPV6_IFADDR | RTMGRP_NEIGH |
 																										RTNLGRP_IPV6_PREFIX),
-																 &sk_fdset, ipa_nl_recv_msg);
+																 &sk_fdset, ipa_nl_recv_msg, &sk_info);
 
 	if (ret_val != IPACM_SUCCESS)
 	{
@@ -1087,6 +1097,7 @@ static void IPACM_Signals_handler(int sig, siginfo_t *info, void *extra)
 
 		free(messages);
 
+		close(sk_info.sk_fd); /* closing netlink socket */
 		/* got regular kill <PID>, kill -9 <PID> generates SIGKILL that cannot be handled by a signal handler */
 		if(sig == SIGTERM)
 		{
@@ -1160,6 +1171,7 @@ int main(int argc, char **argv)
 
 	pthread_t netlink_thread = 0, monitor_thread = 0, ipa_driver_thread = 0;
 	pthread_t cmd_queue_thread = 0;
+	pthread_t netlinks_query_thread = 0;
 
 	/* check if ipacm is already running or not */
 	ipa_is_ipacm_running();
@@ -1273,7 +1285,20 @@ int main(int argc, char **argv)
 			IPACMERR("unable to set thread name\n");
 		}
 	}
-
+	if ((IPACM_SUCCESS == netlinks_query_thread) && IPACM_Iface::ipacmcfg->is_ipacm_restart)
+	{
+		ret = pthread_create(&netlinks_query_thread, NULL, netlink_events_query, NULL);
+		if (IPACM_SUCCESS != ret)
+		{
+			IPACMERR("unable to create netlink thread\n");
+			return ret;
+		}
+		IPACMDBG_H("created netlink_events_query thread\n");
+		if(pthread_setname_np(netlinks_query_thread, "netlinks_query_thread") != 0)
+		{
+			IPACMERR("unable to set thread name\n");
+		}
+	}
 	neigh->update_neigh_cache();
 
 	/* Create Conntrack listener threads here to support on-demand PDNs connections before WAN is up */
@@ -1283,6 +1308,8 @@ int main(int argc, char **argv)
 	pthread_join(netlink_thread, NULL);
 	pthread_join(monitor_thread, NULL);
 	pthread_join(ipa_driver_thread, NULL);
+	if(IPACM_Iface::ipacmcfg->is_ipacm_restart)
+		pthread_join(netlinks_query_thread, NULL);
 	return IPACM_SUCCESS;
 }
 
@@ -1343,6 +1370,37 @@ void ipa_is_ipacm_running(void) {
 	}
 	else
 	{
+		char pid_buf[16];
+		int pid_len;
+		pid_t old_pid = 0;
+
+		pid_len = read(fd, pid_buf, sizeof(pid_buf) - 1);
+		if (pid_len > 0)
+		{
+			pid_buf[pid_len] = '\0';
+			old_pid = atoi(pid_buf);
+			if (old_pid != 0 && old_pid != getpid())
+			{
+				IPACM_Iface::ipacmcfg->is_ipacm_restart = true;
+				IPACMDBG_H("IPACM is restarted. Old PID: %d, New PID: %d\n", old_pid, getpid());
+			}
+		}
+
+		if (lseek(fd, 0, SEEK_SET) < 0)
+		{
+			IPACMERR("lseek failed on pid file");
+		}
+
+		if (ftruncate(fd, 0) < 0)
+		{
+			IPACMERR("ftruncate failed on pid file");
+		}
+
+		pid_len = snprintf(pid_buf, sizeof(pid_buf), "%d\n", getpid());
+		if (pid_len > 0 && write(fd, pid_buf, pid_len) != pid_len)
+		{
+			IPACMERR("write failed on pid file");
+		}
 		IPACMERR("PID %d is IPACM main process\n", getpid());
 	}
 

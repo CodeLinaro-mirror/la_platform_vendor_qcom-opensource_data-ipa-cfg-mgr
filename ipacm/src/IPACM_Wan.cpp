@@ -708,6 +708,10 @@ int IPACM_Wan::handle_addr_evt(ipacm_event_data_addr *data)
 					free(flt_rule);
 				}
 			}
+			if(IPACM_Iface::ipacmcfg->is_ipacm_restart)
+			{
+				ipa_nl_send_getroute(IPA_IP_v6, dev_name);
+			}
 		}
 
 	    num_dft_rt_v6++;
@@ -892,6 +896,10 @@ int IPACM_Wan::handle_addr_evt(ipacm_event_data_addr *data)
 		wan_v4_addr_set = true;
 
 		IPACM_SYSLOG("Received wan ipv4-addr:0x%x\n",wan_v4_addr);
+		if((m_is_sta_mode != Q6_WAN) && IPACM_Iface::ipacmcfg->is_ipacm_restart){
+			ipa_nl_query_newneigh(AF_INET, dev_name);
+			ipa_nl_send_getroute(IPA_IP_v4, dev_name);
+		}
 	}
 
 	IPACM_SYSLOG("number of default route rules %d\n", num_dft_rt_v6);
@@ -1130,7 +1138,20 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 					IPACMDBG_H("Got IPA_ADDR_ADD_EVENT ip-family:%d, v6 num: %d \n",data->iptype,num_dft_rt_v6);
 
 					if (data->iptype == IPA_IP_v4)
+					{
 						IPACM_Iface::iface_addr_query(data->if_index, false, &data->ipv4_addr);
+						/* checking if xlat pdn or not with 0xc0000000 range */
+						if (((data->ipv4_addr & 0xffffff00) == 0xc0000000) && (m_is_sta_mode == Q6_WAN))
+ 						{
+ 							is_xlat = true;
+ 							if (modem_ipv4_pdn_index != -1)
+ 							{
+ 								IPACM_Wan::ipv4_to_iface[modem_ipv4_pdn_index].is_xlat = true;
+ 							}
+ 							IPACMDBG_H("WAN-LTE (%s) link up, iface: %d is_xlat: %d \n",
+ 							IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].iface_name,data->if_index, is_xlat);
+ 						}
+					}
 
 					handle_addr_evt(data);
 					/* checking if SW-RT_enable */

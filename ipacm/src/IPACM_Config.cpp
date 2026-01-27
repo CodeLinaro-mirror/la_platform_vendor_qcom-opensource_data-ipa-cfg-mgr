@@ -204,6 +204,7 @@ IPACM_Config::IPACM_Config()
 	ipacm_l2tp_enable = 0;
 	ipacm_mpdn_enable = TRUE;   /* default setting as mpdn enable/l2tp disable */
 	ipacm_socksv5_enable = false;
+	is_ipacm_restart = false;
 
 	memset(&rt_tbl_default_v4, 0, sizeof(rt_tbl_default_v4));
 	memset(&rt_tbl_lan_v4, 0, sizeof(rt_tbl_lan_v4));

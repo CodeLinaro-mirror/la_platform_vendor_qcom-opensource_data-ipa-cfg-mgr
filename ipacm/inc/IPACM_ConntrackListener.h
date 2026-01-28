@@ -216,6 +216,7 @@ public:
 	void HandleSTAClientDelEvt_v6(const IpAddress& ip);
 	void ReadNfConntrackAcct();
 	void HandleIPPassPDNInfoUpdate(void *in_param);
+	void start_query_conntrack_thread(ipa_ip_type iptype, void *ip_addr);
 #ifdef FEATURE_VLAN_MPDN
 	bool IsVlanIPv4(uint32_t ipv4_address, uint16_t *VlanId);
 #endif

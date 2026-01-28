@@ -291,7 +291,7 @@ int ipa_nl_query_ip_addr_info(int);
 int ipa_nl_query_getlink(int);
 int ipa_nl_route_receive(int fd, struct msghdr *msg, int flags);
 int ipa_nl_send_getroute(ipa_ip_type ip_type, char *dev_name = NULL);
-int ipa_nl_query_newneigh(int af_family, char* dev_name = NULL);
+int ipa_nl_query_newneigh(int af_family, char* dev_name = NULL, bool query = false);
 void ipa_query_nl_getevents();
 static bool nl_lock = false;
 

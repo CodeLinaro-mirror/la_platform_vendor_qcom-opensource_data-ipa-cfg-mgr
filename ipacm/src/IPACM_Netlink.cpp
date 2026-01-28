@@ -816,7 +816,8 @@ static int ipa_nl_decode_nlmsg
 	const char   *buffer,
 	unsigned int  buflen,
 	ipa_nl_msg_t  *msg_ptr,
-	char	      *iface_name
+	char	      *iface_name,
+	bool          query = false
 )
 {
 	char dev_name[IF_NAME_LEN] = {0};
@@ -1996,6 +1997,16 @@ static int ipa_nl_decode_nlmsg
 					data_all->ipv6_addr[2]=ntohl(data_all->ipv6_addr[2]);
 					data_all->ipv6_addr[3]=ntohl(data_all->ipv6_addr[3]);
 					data_all->iptype = IPA_IP_v6;
+					if(query)
+					{
+						IPACMDBG("Queried Neighbor V6 address: 0x%x:%x:%x:%x\n",
+							data_all->ipv6_addr[0], data_all->ipv6_addr[1],
+							data_all->ipv6_addr[2], data_all->ipv6_addr[3]);
+						config->queried_v6_list.push_back({data_all->ipv6_addr[0],
+										data_all->ipv6_addr[1],
+										data_all->ipv6_addr[2],
+										data_all->ipv6_addr[3]});
+					}
 				}
 				else if (msg_ptr->nl_neigh_info.attr_info.local_addr.ss_family == AF_INET)
 				{
@@ -2003,6 +2014,11 @@ static int ipa_nl_decode_nlmsg
 					IPACM_EVENT_COPY_ADDR_v4( data_all->ipv4_addr, msg_ptr->nl_neigh_info.attr_info.local_addr);
 					data_all->ipv4_addr = ntohl(data_all->ipv4_addr);
 					data_all->iptype = IPA_IP_v4;
+					if(query)
+					{
+						IPACMDBG("Queried Neighbor V4 address: 0x%x\n", data_all->ipv4_addr);
+						config->queried_v4_list.push_back(data_all->ipv4_addr);
+					}
 				}
 				else
 				{
@@ -2618,8 +2634,7 @@ handle:
 }
 
 
-/* To get dump of routes from kernel in case of RTM_GETROUTE */
-int ipa_nl_route_receive(int fd, struct msghdr *msg, int flags)
+int ipa_nl_receive(int fd, struct msghdr *msg, int flags)
 {
 	int len = 0;
 
@@ -2643,7 +2658,7 @@ int ipa_nl_route_receive(int fd, struct msghdr *msg, int flags)
 	return len;
 }
 
-int ipa_nl_route_recvmsg(int fd, struct msghdr *msg, char **result)
+int ipa_nl_recvmsg(int fd, struct msghdr *msg, char **result)
 {
 	struct iovec *iov = msg->msg_iov;
 	char *buf = NULL;
@@ -2652,7 +2667,7 @@ int ipa_nl_route_recvmsg(int fd, struct msghdr *msg, char **result)
 	iov->iov_base = NULL;
 	iov->iov_len = 0;
 
-	len = ipa_nl_route_receive(fd, msg, MSG_PEEK | MSG_TRUNC);
+	len = ipa_nl_receive(fd, msg, MSG_PEEK | MSG_TRUNC);
 
 	IPACMDBG_DMESG("Netlink route message length : %d\n", len);
 
@@ -2673,7 +2688,7 @@ int ipa_nl_route_recvmsg(int fd, struct msghdr *msg, char **result)
 	iov->iov_base = buf;
 	iov->iov_len = len;
 
-	len = ipa_nl_route_receive(fd, msg, 0);
+	len = ipa_nl_receive(fd, msg, 0);
 
 	if (len < 0)
 	{
@@ -2745,7 +2760,7 @@ int ipa_nl_send_getroute(ipa_ip_type ip_type, char * iface_name)
 		.msg_iovlen = 1,
 	};
 
-	msglen = ipa_nl_route_recvmsg(nl_sock, &msg, &buf);
+	msglen = ipa_nl_recvmsg(nl_sock, &msg, &buf);
 
 	if(msglen <= 0)
 	{
@@ -3460,7 +3475,7 @@ int ipa_nl_query_ip_addr_info(int af_family)
 		.msg_iovlen = 1,
 	};
 
-	msglen = ipa_nl_route_recvmsg(nl_sock, &msg, &buf);
+	msglen = ipa_nl_recvmsg(nl_sock, &msg, &buf);
 
 	if((msglen <= 0) || (nladdr.nl_pid != 0))
 	{
@@ -3488,7 +3503,7 @@ end:
 	return ret_val;
 }
 
-int ipa_nl_query_newneigh(int af_family, char* dev_name)
+int ipa_nl_query_newneigh(int af_family, char* dev_name, bool query)
 {
 	IPACMDBG("entered ipa_nl_send_getneigh \n");
 	int ret_val = IPACM_FAILURE, msglen = 0, nl_sock = 0;
@@ -3542,7 +3557,7 @@ int ipa_nl_query_newneigh(int af_family, char* dev_name)
 		.msg_iovlen = 1,
 	};
 
-	msglen = ipa_nl_route_recvmsg(nl_sock, &msg, &buf);
+	msglen = ipa_nl_recvmsg(nl_sock, &msg, &buf);
 
 	if((msglen <= 0) || (nladdr.nl_pid != 0))
 	{
@@ -3550,7 +3565,8 @@ int ipa_nl_query_newneigh(int af_family, char* dev_name)
 		goto end;
 	}
 
-	ret_val = ipa_nl_decode_nlmsg((const char*)buf, msglen, msg_ptr, dev_name);
+	ret_val = ipa_nl_decode_nlmsg((const char*)buf, msglen, msg_ptr, dev_name, query);
+
 	if (IPACM_SUCCESS != ret_val) {
 		IPACMERR("Failed to decode rtm link message\n");
 		goto end;
@@ -3675,8 +3691,8 @@ void ipa_query_nl_getevents()
 		l2tp_nl_tunnel_get(L2TP_CMD_SESSION_GET);
 	}
 	ipa_nl_query_newneigh(AF_BRIDGE);
-	ipa_nl_query_newneigh(AF_INET6);
-	ipa_nl_query_newneigh(AF_INET);
+	ipa_nl_query_newneigh(AF_INET6, NULL, true);
+	ipa_nl_query_newneigh(AF_INET, NULL, true);
 	IPACMDBG("Send GETNEIGH is completed\n");
 	ipa_nl_send_getroute(IPA_IP_v6);
 	ipa_nl_send_getroute(IPA_IP_v4);

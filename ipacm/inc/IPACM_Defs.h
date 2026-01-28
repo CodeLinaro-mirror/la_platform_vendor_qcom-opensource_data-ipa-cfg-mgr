@@ -192,6 +192,8 @@ extern "C"
 
 #define IPA_MAX_NUM_PROPS 5
 
+extern bool ipacm_restarted;
+
 /*===========================================================================
 										 GLOBAL DEFINITIONS AND DECLARATIONS
 ===========================================================================*/

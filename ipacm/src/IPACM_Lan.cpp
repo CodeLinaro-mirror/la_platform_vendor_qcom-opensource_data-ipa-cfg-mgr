@@ -2473,8 +2473,8 @@ int IPACM_Lan::handle_vlan_neighbor(ipacm_event_data_all *data)
 	uint8_t priority = 0;
 	ipacm_event_data_all data_all;
 	std::list <ipacm_event_data_all>::iterator it;
-#ifdef FEATURE_IPACM_PER_CLIENT_STATS
 	int eth_index = 0;
+#ifdef FEATURE_IPACM_PER_CLIENT_STATS
 	int retval;
 #endif
 	int skip_nat_set = 0;
@@ -2591,6 +2591,13 @@ int IPACM_Lan::handle_vlan_neighbor(ipacm_event_data_all *data)
 		handle_eth_hdr_init(data->mac_addr, NULL, vlan_id, true, priority, is_ula_ipv6_addr);
 	}
 
+	eth_index = get_eth_client_index(data->mac_addr, vlan_id);
+	if (eth_index == IPACM_INVALID_INDEX)
+	{
+		IPACMERR("eth client not found/attached \n");
+		return IPACM_FAILURE;
+	}
+
 #ifdef IPA_L2TP_TUNNEL_UDP
 	if(!IPACM_Iface::ipacmcfg->check_l2tp_iface(data->iface_name))
 	{
@@ -2605,12 +2612,6 @@ int IPACM_Lan::handle_vlan_neighbor(ipacm_event_data_all *data)
 		}
 		else
 		{
-			eth_index = get_eth_client_index(data->mac_addr, vlan_id);
-			if (eth_index == IPACM_INVALID_INDEX)
-			{
-				IPACMERR("eth client not found/attached \n");
-				return IPACM_FAILURE;
-			}
 			if(((get_client_memptr(eth_client, eth_index)->client_backhaul_prefix[0] == data_vlan->data_all.ipv6_addr[0]) &&
 			   (get_client_memptr(eth_client, eth_index)->client_backhaul_prefix[1] == data_vlan->data_all.ipv6_addr[1]))||
 			   !IPACM_Wan::is_global_ipv6_addr(data_vlan->data_all.ipv6_addr))
@@ -2643,12 +2644,6 @@ int IPACM_Lan::handle_vlan_neighbor(ipacm_event_data_all *data)
 	}
 	else
 	{
-		eth_index = get_eth_client_index(data->mac_addr, vlan_id);
-		if (eth_index == IPACM_INVALID_INDEX)
-		{
-			IPACMERR("eth client not found/attached \n");
-			return IPACM_FAILURE;
-		}
 		if(((get_client_memptr(eth_client, eth_index)->client_backhaul_prefix[0] == data_vlan->data_all.ipv6_addr[0]) &&
 			  (get_client_memptr(eth_client, eth_index)->client_backhaul_prefix[1] == data_vlan->data_all.ipv6_addr[1]))||
 			  !IPACM_Wan::is_global_ipv6_addr(data_vlan->data_all.ipv6_addr))
@@ -2673,7 +2668,6 @@ int IPACM_Lan::handle_vlan_neighbor(ipacm_event_data_all *data)
 #ifdef IPA_HW_FNR_STATS
 	if(IPACM_Iface::ipacmcfg->ipacm_lan_stats_enable == true)
 	{
-		eth_index = get_eth_client_index(data->mac_addr);
 		IPACMDBG_H("hw_fnr_stats_support = %d,index_populated = %d\n",IPACM_Iface::ipacmcfg->hw_fnr_stats_support,get_client_memptr(eth_client,eth_index)->index_populated);
 		if(IPACM_Iface::ipacmcfg->hw_fnr_stats_support == true && get_client_memptr(eth_client,eth_index)->index_populated == true)
 		{
@@ -2702,12 +2696,6 @@ int IPACM_Lan::handle_vlan_neighbor(ipacm_event_data_all *data)
 		}
 		else
 		{
-			eth_index = get_eth_client_index(data->mac_addr, vlan_id);
-			if (eth_index == IPACM_INVALID_INDEX)
-			{
-				IPACMERR("eth client not found/attached \n");
-				return IPACM_FAILURE;
-			}
 			if(((get_client_memptr(eth_client, eth_index)->client_backhaul_prefix[0] == data_vlan->data_all.ipv6_addr[0]) &&
 			   (get_client_memptr(eth_client, eth_index)->client_backhaul_prefix[1] == data_vlan->data_all.ipv6_addr[1]))||
 			   !IPACM_Wan::is_global_ipv6_addr(data_vlan->data_all.ipv6_addr))

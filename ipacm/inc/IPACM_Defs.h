@@ -195,6 +195,9 @@ extern "C"
 #if defined(FEATURE_L2TP)
 #define L2TP_BRIDGE_VLAN_ID_START 4096
 #endif
+
+extern bool ipacm_restarted;
+
 /*===========================================================================
 										 GLOBAL DEFINITIONS AND DECLARATIONS
 ===========================================================================*/

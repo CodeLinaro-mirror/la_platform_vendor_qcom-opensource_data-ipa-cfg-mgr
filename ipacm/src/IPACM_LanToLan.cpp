@@ -279,8 +279,8 @@ void IPACM_LanToLan::event_callback(ipa_cm_event_id event, void* param)
 		default:
 			break;
 	}
-
-	print_data_structure_info();
+	if (g_ipacm_logs_enabled)
+		print_data_structure_info();
 	return;
 }
 
@@ -5238,6 +5238,8 @@ void IPACM_LanToLan_Iface::print_data_structure_info()
 	list<client_info>::iterator it_client;
 	int i, j, k;
 
+	if (g_ipacm_logs_enabled)
+		return;
 	if(IPACM_Iface::ipacmcfg->inter_bridge_lantolan_config_enable == true)
 	{
 				IPACMDBG_H("\n");
@@ -5550,6 +5552,8 @@ void IPACM_LanToLan_Iface::print_peer_info(peer_iface_info *peer_info , bool int
 		return;
 	}
 
+	if (g_ipacm_logs_enabled)
+		return;
 	IPACMDBG_H("Printing peer info for iface %s:\n", peer_info->peer->m_p_iface->dev_name);
 
 	IPACMDBG_H("There are %zu flt info in total.\n", peer_info->flt_rule.size());

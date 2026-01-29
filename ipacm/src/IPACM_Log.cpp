@@ -177,29 +177,6 @@ void ipacm_log_send( void * user_data)
 	return;
 }
 
-char *get_time_string(char *buffer, int len)
-{
-   struct timeval tv;
-   struct tm *tm;
-   unsigned long long milliseconds = 0;
-   char timestamp_buf[TimeStamp_buff_len];
-
-   if (!buffer || len <= 0)
-     return NULL;
-
-   gettimeofday(&tv, NULL);
-   tm = localtime(&tv.tv_sec);
-
-   if (!tm)
-     return NULL;
-
-   milliseconds = (tv.tv_sec * 1000LL) + (tv.tv_usec / 1000);
-
-   strftime(timestamp_buf, 30, "%H:%M:%S", tm);
-   snprintf(buffer, len, "%s%lld", timestamp_buf, milliseconds);
-
-   return buffer;
-}
 /* IPACM logging initilation*/
 int log_init(int file_size) {
         int ret = 0;

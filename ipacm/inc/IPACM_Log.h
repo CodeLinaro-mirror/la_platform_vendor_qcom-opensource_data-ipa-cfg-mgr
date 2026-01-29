@@ -59,7 +59,6 @@ extern "C"
 #include <errno.h>
 
 #define MAX_BUF_LEN 256
-#define TimeStamp_buff_len 30
 #ifdef FEATURE_IPA_ANDROID
 #define IPACMLOG_FILE "/dev/socket/ipacm_log_file"
 #else/* defined(FEATURE_IPA_ANDROID) */
@@ -92,8 +91,6 @@ void ipacm_log_send( void * user_data);
 static char buffer_send[MAX_BUF_LEN];
 static char dmesg_cmd[MAX_BUF_LEN];
 
-static char timestamp_buf[TimeStamp_buff_len];
-char *get_time_string(char *buffer, int TimeStamp_len);
 void ipacm_log_dump(char ipacm_log_data[]);
 int log_init(int);
 
@@ -108,7 +105,7 @@ int log_init(int);
 		snprintf(dmesg_cmd, MAX_BUF_LEN, "echo %s > /dev/kmsg", buffer_send); \
 		system(dmesg_cmd); \
 		memset(buffer_send, 0, MAX_BUF_LEN); \
-		snprintf(buffer_send, MAX_BUF_LEN," %s %s:%d %s(): " fmt, get_time_string(timestamp_buf, TimeStamp_buff_len), __FILE__,  __LINE__, __FUNCTION__, ##__VA_ARGS__); \
+		snprintf(buffer_send, MAX_BUF_LEN,"%s:%d %s(): " fmt, __FILE__,  __LINE__, __FUNCTION__, ##__VA_ARGS__); \
 		ipacm_log_dump(buffer_send); \
 	} while (0);
 #ifdef DEBUG
@@ -124,9 +121,9 @@ int log_init(int);
 		memset(buffer_send, 0, MAX_BUF_LEN); \
 		snprintf(buffer_send,MAX_BUF_LEN,"ERROR: %s:%d %s() " fmt, __FILE__,  __LINE__, __FUNCTION__, ##__VA_ARGS__); \
 		ipacm_log_send (buffer_send); \
-		printf("ERROR: %s:%s:%d %s() " fmt, get_time_string(timestamp_buf, TimeStamp_buff_len), __FILE__,  __LINE__, __FUNCTION__, ##__VA_ARGS__); \
+		printf("ERROR: %s:%d %s() " fmt, __FILE__,  __LINE__, __FUNCTION__, ##__VA_ARGS__); \
 		memset(buffer_send, 0, MAX_BUF_LEN); \
-		snprintf(buffer_send, MAX_BUF_LEN," %s %s:%d %s(): " fmt, get_time_string(timestamp_buf, TimeStamp_buff_len), __FILE__,  __LINE__, __FUNCTION__, ##__VA_ARGS__); \
+		snprintf(buffer_send, MAX_BUF_LEN," %s:%d %s(): " fmt, __FILE__,  __LINE__, __FUNCTION__, ##__VA_ARGS__); \
 		ipacm_log_dump(buffer_send); \
 	} while (0);
 #define IPACMDBG_H(fmt, ...) \
@@ -134,9 +131,9 @@ int log_init(int);
 		memset(buffer_send, 0, MAX_BUF_LEN); \
 		snprintf(buffer_send,MAX_BUF_LEN,"%s:%d %s() " fmt, __FILE__,  __LINE__, __FUNCTION__, ##__VA_ARGS__); \
 		ipacm_log_send (buffer_send); \
-		printf("%s %s:%d %s() " fmt, get_time_string(timestamp_buf, TimeStamp_buff_len), __FILE__,  __LINE__, __FUNCTION__, ##__VA_ARGS__); \
+		printf("%s:%d %s() " fmt, __FILE__,  __LINE__, __FUNCTION__, ##__VA_ARGS__); \
 		memset(buffer_send, 0, MAX_BUF_LEN); \
-		snprintf(buffer_send, MAX_BUF_LEN," %s %s:%d %s(): " fmt, get_time_string(timestamp_buf, TimeStamp_buff_len), __FILE__,  __LINE__, __FUNCTION__, ##__VA_ARGS__); \
+		snprintf(buffer_send, MAX_BUF_LEN," %s:%d %s(): " fmt, __FILE__,  __LINE__, __FUNCTION__, ##__VA_ARGS__); \
 		ipacm_log_dump(buffer_send); \
 	} while (0);
 #else
@@ -144,14 +141,14 @@ int log_init(int);
 #define IPACMERR(fmt, ...)   printf("ERR: %s:%d %s() " fmt, __FILE__,  __LINE__, __FUNCTION__, ##__VA_ARGS__);
 #define IPACMDBG_H(fmt, ...) printf("%s:%d %s() " fmt, __FILE__,  __LINE__, __FUNCTION__, ##__VA_ARGS__);
 #endif
-#define IPACMDBG(fmt, ...)	printf("%s %s:%d %s() " fmt, get_time_string(timestamp_buf, TimeStamp_buff_len), __FILE__,  __LINE__, __FUNCTION__, ##__VA_ARGS__); \
+#define IPACMDBG(fmt, ...)	printf("%s:%d %s() " fmt, __FILE__,  __LINE__, __FUNCTION__, ##__VA_ARGS__); \
 		memset(buffer_send, 0, MAX_BUF_LEN); \
-		snprintf(buffer_send, MAX_BUF_LEN," %s %s:%d %s(): " fmt, get_time_string(timestamp_buf, TimeStamp_buff_len), __FILE__,  __LINE__, __FUNCTION__, ##__VA_ARGS__); \
+		snprintf(buffer_send, MAX_BUF_LEN," %s:%d %s(): " fmt, __FILE__,  __LINE__, __FUNCTION__, ##__VA_ARGS__); \
 		ipacm_log_dump(buffer_send);
 
 #define IPACMLOG(fmt, ...)  printf(fmt, ##__VA_ARGS__); \
 		memset(buffer_send, 0, MAX_BUF_LEN); \
-		snprintf(buffer_send, MAX_BUF_LEN," %s %s:%d %s(): " fmt, get_time_string(timestamp_buf, TimeStamp_buff_len), __FILE__,  __LINE__, __FUNCTION__, ##__VA_ARGS__); \
+		snprintf(buffer_send, MAX_BUF_LEN," %s:%d %s(): " fmt, __FILE__,  __LINE__, __FUNCTION__, ##__VA_ARGS__); \
 		ipacm_log_dump(buffer_send);
 
 inline void get_kernel_version(char *kernel_ver)

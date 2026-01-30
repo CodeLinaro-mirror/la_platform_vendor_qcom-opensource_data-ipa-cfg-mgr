@@ -13578,6 +13578,13 @@ int IPACM_Lan::handle_eth_client_down_evt(uint8_t *mac_addr, uint16_t vlan_id, i
 #endif
 
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
+		get_client_memptr(eth_client, clt_indx)->ipv4_ul_rules_set = get_client_memptr(eth_client, (clt_indx + 1))->ipv4_ul_rules_set;
+		get_client_memptr(eth_client, clt_indx)->ipv6_ul_rules_set = get_client_memptr(eth_client, (clt_indx + 1))->ipv6_ul_rules_set;
+		get_client_memptr(eth_client, clt_indx)->ipv4_xlat_ul_rules_set = get_client_memptr(eth_client, (clt_indx + 1))->ipv4_xlat_ul_rules_set;
+		get_client_memptr(eth_client, clt_indx)->ipv4_sta_ul_rules_set = get_client_memptr(eth_client, (clt_indx + 1))->ipv4_sta_ul_rules_set;
+		get_client_memptr(eth_client, clt_indx)->ipv6_sta_ul_rules_set = get_client_memptr(eth_client, (clt_indx + 1))->ipv6_sta_ul_rules_set;
+		get_client_memptr(eth_client, clt_indx)->sta_ul_fl_rule_hdl_v4 = get_client_memptr(eth_client, (clt_indx + 1))->sta_ul_fl_rule_hdl_v4;
+		get_client_memptr(eth_client, clt_indx)->sta_ul_fl_rule_hdl_v6 = get_client_memptr(eth_client, (clt_indx + 1))->sta_ul_fl_rule_hdl_v6;
 		get_client_memptr(eth_client, clt_indx)->lan_stats_idx =
 			get_client_memptr(eth_client, clt_indx + 1)->lan_stats_idx;
 #ifdef IPA_HW_FNR_STATS
@@ -17156,6 +17163,7 @@ int IPACM_Lan::install_uplink_filter_rule_per_client_v2
 				{
 					get_client_memptr(eth_client, clnt_indx)->wan_ul_fl_rule_hdl_v4[idx/2][i] =
 						((struct ipa_flt_rule_add_v2 *)pFilteringTable->rules)[i].flt_rule_hdl;
+					IPACMDBG_H("Installed v4 rule hdl %d\n", ((struct ipa_flt_rule_add_v2 *)pFilteringTable->rules)[i].flt_rule_hdl);
 					if (is_dev_in_vlan_mode && IPACM_Iface::ipacmcfg->ipacm_mpdn_enable)
 					{
 						get_client_memptr(eth_client, clnt_indx)->xlat_ctx.ul_rule_id_hdl_map[j][i].rule_id =
@@ -17176,6 +17184,7 @@ int IPACM_Lan::install_uplink_filter_rule_per_client_v2
 				{
 					get_client_memptr(eth_client, clnt_indx)->wan_ul_fl_rule_hdl_v6[idx/2][i] =
 						((struct ipa_flt_rule_add_v2 *)pFilteringTable->rules)[i].flt_rule_hdl;
+					IPACMDBG_H("Installed v6 rule hdl %d\n", ((struct ipa_flt_rule_add_v2 *)pFilteringTable->rules)[i].flt_rule_hdl);
 					/*Map for dynamic insertion of xlat rules */
 					if (is_dev_in_vlan_mode && IPACM_Iface::ipacmcfg->ipacm_mpdn_enable)
 					{

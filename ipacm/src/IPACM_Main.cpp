@@ -87,10 +87,18 @@
 #define IPACM_SWALLOW_FILE_NAME     "ipa_filter_cfg.xml"
 #define IPACM_CFG_FILE_NAME    "IPACM_cfg.xml"
 #define IPACM_CFG_EXT_FILE_NAME    "IPACM_cfg_ext.xml"
+#ifdef FEATURE_RDKB
+#define IPACM_CFG_EXT_FILE "/systemrw/data/ipa/IPACM_cfg_ext.xml"
+#else
 #define IPACM_CFG_EXT_FILE "/etc/data/ipa/IPACM_cfg_ext.xml"
+#endif
 #ifndef FEATURE_IPA_ANDROID
 #define IPACM_PID_FILE "/var/run/data/ipa/ipacm.pid"
+#ifdef FEATURE_RDKB
+#define IPACM_DIR_NAME     "/systemrw/data/ipa"
+#else
 #define IPACM_DIR_NAME     "/etc/data/ipa"
+#endif
 #else
 #define IPACM_PID_FILE "/data/misc/ipa/ipacm.pid"
 #define IPACM_DIR_NAME     "/data/misc/ipa/"

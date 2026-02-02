@@ -1309,11 +1309,13 @@ int main(int argc, char **argv)
 
 void ipa_is_ipacm_running(void) {
 
-	int fd;
+	int fd, len;
 	struct flock lock;
 	int retval;
+	char buf[32];
+	ssize_t w;
 
-	fd = open(IPACM_PID_FILE, O_RDWR | O_CREAT, 0600);
+	fd = open(IPACM_PID_FILE, O_RDWR | O_CREAT, 0644);
 	if ( fd <= 0 )
 	{
 		IPACM_SYSLOG("Failed to open %s, error is %d - %s\n",
@@ -1328,6 +1330,10 @@ void ipa_is_ipacm_running(void) {
 	 */
 	memset(&lock, 0, sizeof(lock));
 	lock.l_type = F_WRLCK;
+	lock.l_whence = SEEK_SET;  /* lock the entire file */
+	lock.l_start  = 0;
+	lock.l_len    = 0;
+
 	retval = fcntl(fd, F_SETLK, &lock);
 
 	if (retval != 0)
@@ -1344,6 +1350,36 @@ void ipa_is_ipacm_running(void) {
 	else
 	{
 		IPACMERR("PID %d is IPACM main process\n", getpid());
+		if (ftruncate(fd, 0) == -1) {
+			IPACMERR("ftruncate(%s) failed: %d - %s\n", IPACM_PID_FILE, errno, strerror(errno));
+		}
+		else
+		{
+			if (lseek(fd, 0, SEEK_SET) == (off_t)-1)
+			{
+				IPACMERR("lseek(%s) failed: %d - %s\n", IPACM_PID_FILE, errno, strerror(errno));
+			}
+			else
+			{
+				len = snprintf(buf, sizeof(buf), "%ld\n", (long)getpid());
+				if (len < 0 || len >= (int)sizeof(buf))
+				{
+					IPACMERR("snprintf for PID failed while writing %s\n", IPACM_PID_FILE);
+				}
+				else
+				{
+					w = write(fd, buf, (size_t)len);
+					if (w != len)
+					{
+						IPACMERR("write(%s) failed: %d - %s\n", IPACM_PID_FILE, errno, strerror(errno));
+					}
+					else
+					{
+						(void)fsync(fd);
+					}
+				}
+			}
+		}
 	}
 
 	return;

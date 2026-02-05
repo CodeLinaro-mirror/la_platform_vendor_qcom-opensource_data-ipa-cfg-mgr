@@ -982,6 +982,11 @@ void NatApp::UpdateUDPTimeStamp()
 		}
 	}
 
+	if (ipa_nat_timestamp_flush(nat_table_hdl) < 0)
+	{
+		IPACMDBG_H("Flushing timestamp failed for nat table hdl=%u\n", nat_table_hdl);
+	}
+
 	for(cnt = 0; cnt < max_entries; cnt++)
 	{
 		ts = 0;
@@ -2721,6 +2726,11 @@ int Ipv6ctProxy::QueryTimestamp(const NatEntryBase& entry, uint32_t& time_stamp)
 	{
 		IPACMERR("Wrong IP type\n");
 		return -EINVAL;
+	}
+
+	if (ipa_ct_timestamp_flush(m_tableHandle) < 0)
+	{
+		IPACMDBG_H("Flushing timestamp failed for table hdl=%u\n", m_tableHandle);
 	}
 
 	int ret = ipa_ct_query_timestamp(m_tableHandle, entry.m_ruleHandle, &time_stamp);

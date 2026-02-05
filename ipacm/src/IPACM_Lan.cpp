@@ -21690,7 +21690,17 @@ int IPACM_Lan::gre_add_catchup_rule(
 	flt_rule_entry.status                   = -1;
 
 	flt_rule_entry.rule.to_uc               = 1;
-	flt_rule_entry.rule.action              = IPA_PASS_TO_ROUTING;
+	/* NATTING has to happen in UL 1st pass now with RGIP in case of
+	   IPoGRE, so changed rule action has IPA_PASS_TO_SRC_NAT
+	 */
+	if(IPACM_Iface::ipacmcfg->ipogre_enabled == true)
+	{
+		flt_rule_entry.rule.action = IPA_PASS_TO_SRC_NAT;
+	}
+	else
+	{
+		flt_rule_entry.rule.action = IPA_PASS_TO_ROUTING;
+	}
 	flt_rule_entry.rule.rt_tbl_hdl          = gre_get_rt_tbl_hdl(iptype,isPmipv6);
 	flt_rule_entry.rule.attrib.attrib_mask |= IPA_FLT_DST_ADDR;
 
@@ -21792,7 +21802,17 @@ int IPACM_Lan::update_complementary_table(
 		flt_rule->global    = false;
 		flt_rule->ip        = iptype;
 		flt_rule->num_rules = NUM_RULES;
-
+		/* NATTING has to happen in UL 1st pass now with RGIP in case of
+		   IPoGRE, so changed rule action has IPA_PASS_TO_SRC_NAT
+		 */
+		if(IPACM_Iface::ipacmcfg->ipogre_enabled == true)
+		{
+			flt_rule_entry.rule.action = IPA_PASS_TO_SRC_NAT;
+		}
+		else
+		{
+			flt_rule_entry.rule.action = IPA_PASS_TO_ROUTING;
+		}
 		memcpy(
 			&(flt_rule->rules[0]),
 			&flt_rule_entry,

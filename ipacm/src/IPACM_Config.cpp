@@ -177,7 +177,9 @@ const char *ipacm_event_name[] = {
 	__stringify(IPA_HANDLE_IPOGRE_UP),                      /* Handle ipogre enable event. */
 	__stringify(IPA_HANDLE_IPOGRE_DOWN),                    /* Handle ipogre disable event. */
 	__stringify(IPA_WAN_HANDLE_IPOGRE_UP),                  /* Handle ipogre enable event. */
-	__stringify(IPA_WAN_HANDLE_IPOGRE_DOWN),                /* Handle ipogre disable event. */
+	__stringify(IPA_WAN_HANDLE_IPOGRE_DOWN),
+	__stringify(IPA_HANDLE_RGIP_UP),                /* Handle ipogre disable event. */
+	__stringify(IPA_HANDLE_RGIP_DEL),                /* Handle ipogre disable event. */
 #endif
 	__stringify(IPA_DSCP_PCP_CONFIG_CHANGE_EVENT),         /* NULL */
 #ifdef FEATURE_PMIPV6
@@ -283,6 +285,7 @@ IPACM_Config::IPACM_Config()
 #ifdef FEATURE_VLAN_MPDN
 	num_ipv6_prefixes = 0;
 	num_no_offload_ipv6_prefix = 0;
+	rgip_ip = 0;
 	memset(ipa_ipv6_prefixes, 0, sizeof(ipa_ipv6_prefixes));
 	memset(ipa_no_offload_ipv6_prefixes, 0, sizeof(ipa_no_offload_ipv6_prefixes));
 	memset(vlan_bridges, 0, IPA_MAX_NUM_BRIDGES * sizeof(vlan_bridges[0]));

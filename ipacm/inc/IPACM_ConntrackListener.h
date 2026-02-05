@@ -125,6 +125,7 @@ private:
 	bool isCTReg;
 	bool isNatThreadStart;
 	bool WanUp;
+	uint8_t muxid;
 	uint8_t ip_pass_enable_default_pdn;
 	uint32_t ip_pass_dummy_ip_default_pdn;
 	uint8_t ip_pass_skip_nat_default_pdn;
@@ -232,6 +233,7 @@ private:
 public:
 	char wan_ifname[IPA_IFACE_NAME_LEN];
 	uint32_t wan_ipaddr;
+	uint32_t rgip_addr;
 	IpAddress& wan_ipaddr_v6;
 	bool isStaMode;
 	IPACM_ConntrackListener();

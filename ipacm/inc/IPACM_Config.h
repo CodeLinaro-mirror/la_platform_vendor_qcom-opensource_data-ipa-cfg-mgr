@@ -570,7 +570,8 @@ public:
          * Mode 1 - uc uses proc params */
 	uint32_t ipacm_static_policy_dscp_mark_mode;
 #endif
-
+	uint32_t rgip_ip;
+	char rgip_iface_name[IPA_IFACE_NAME_LEN];
 	/* Indicates whether PPPOE mode is enabled on WAN interface */
 	bool eth_wan_pppoe_enable;
 	/* Indicates whether Eth VLAN mode is enabled on WAN interface */

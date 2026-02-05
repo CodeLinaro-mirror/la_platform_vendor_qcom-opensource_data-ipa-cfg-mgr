@@ -9669,7 +9669,10 @@ int IPACM_Wan::handle_down_evt_ex()
 	mtu_v6 = DEFAULT_MTU_SIZE;
 	mtu_v6_set = false;
 #endif
-	gre_down();
+	if(IPACM_Iface::ipacmcfg->ipogre_enabled == true)
+	{
+		gre_down();
+	}
 	if(ip_type == IPA_IP_v4)
 	{
 		num_ipv4_modem_pdn--;
@@ -13475,7 +13478,7 @@ flt_rule_entry.rule.attrib.u.v4.dst_addr_mask = 0x00000000;
 #if defined(FEATURE_EoGRE) || defined(FEATURE_PMIPV6) || defined(FEATURE_IPoGRE)
 			if(isPmipv6 || doing_ipgre)
 			{
-				flt_rule_entry.rule.action = IPA_PASS_TO_ROUTING;
+				flt_rule_entry.rule.action = IPA_PASS_TO_DST_NAT;
 			}
 #endif /* #ifdef FEATURE_EoGRE */
 	}

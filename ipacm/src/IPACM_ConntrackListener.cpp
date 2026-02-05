@@ -89,6 +89,8 @@ IPACM_ConntrackListener::IPACM_ConntrackListener() :
 
 	 IPACM_EvtDispatcher::registr(IPA_HANDLE_WAN_UP, this);
 	 IPACM_EvtDispatcher::registr(IPA_HANDLE_WAN_DOWN, this);
+	 IPACM_EvtDispatcher::registr(IPA_HANDLE_RGIP_UP, this);
+	 IPACM_EvtDispatcher::registr(IPA_HANDLE_RGIP_DEL, this);
 #ifdef FEATURE_SOCKSv5
 	 IPACM_EvtDispatcher::registr(IPA_HANDLE_SOCKSv5_UP, this);
 	 IPACM_EvtDispatcher::registr(IPA_HANDLE_SOCKSv5_DOWN, this);
@@ -229,6 +231,15 @@ void IPACM_ConntrackListener::event_callback(ipa_cm_event_id evt,
 			{
 				TriggerWANUp(data);
 			}
+			/* if WAN UP happens after ipacm has recieved rgip
+			 *  IOCTL,AddPDN is posted if non-zero rgip is stored.
+			 */
+			if(IPACM_Iface::ipacmcfg->rgip_ip)
+			{
+				rgip_addr = IPACM_Iface::ipacmcfg->rgip_ip;
+				nat_inst->AddPdn(rgip_addr, muxid, false,
+					(ip_pass_enable_default_pdn && !ip_pass_skip_nat_default_pdn));
+			}
 			break;
 #ifdef FEATURE_VLAN_MPDN
 	 case IPA_HANDLE_WAN_VLAN_PDN_UP:
@@ -327,6 +338,11 @@ void IPACM_ConntrackListener::event_callback(ipa_cm_event_id evt,
 			if (WanUp)
 			{
 				TriggerWANDown(wan_data->ipv4_addr);
+			}
+			if(IPACM_Iface::ipacmcfg->rgip_ip)
+			{
+				nat_inst->RemovePdn(IPACM_Iface::ipacmcfg->rgip_ip);
+				rgip_addr = 0;
 			}
 			break;
 
@@ -433,6 +449,37 @@ void IPACM_ConntrackListener::event_callback(ipa_cm_event_id evt,
 		 nat_inst->HandleSWAllowEntries();
 		 ipv6ct_inst->HandleSWAllowEntries();
 		 break;
+
+	 case IPA_HANDLE_RGIP_UP:
+		{
+			if(WanUp == false)
+			{
+				IPACMDBG("WAN not up\n");
+				break;
+			}
+			IPACMDBG("Received IPA_HANDLE_RGIP_UP event\n");
+			uint32_t *rgip_data = (uint32_t *)data;
+			rgip_addr = *rgip_data;
+			rgip_addr = ntohl(rgip_addr);
+			nat_inst->AddPdn(rgip_addr, muxid, false,
+				(ip_pass_enable_default_pdn && !ip_pass_skip_nat_default_pdn));
+			break;
+		}
+
+		case IPA_HANDLE_RGIP_DEL:
+		{
+			if(WanUp == false)
+			{
+				IPACMDBG("WAN not up\n");
+				break;
+			}
+			IPACMDBG("Received IPA_HANDLE_RGIP_DEL event\n");
+
+			nat_inst->RemovePdn(IPACM_Iface::ipacmcfg->rgip_ip);
+			IPACM_Iface::ipacmcfg->rgip_ip = 0;
+			rgip_addr = 0;
+			break;
+		}
 
 	 default:
 			IPACMDBG("Ignore cmd %d\n", evt);
@@ -1488,10 +1535,16 @@ void IPACM_ConntrackListener::TriggerWANUp(void *in_param)
 
 	 if(nat_inst != NULL)
 	 {
-	   if (wanup_data->mux_id == 0)
-	   	 mux_id = wanup_data->xlat_mux_id;
-	   else
-	   	 mux_id = wanup_data->mux_id;
+	 if (wanup_data->mux_id == 0)
+	 	 mux_id = wanup_data->xlat_mux_id;
+	 else
+	 {
+	 	 /* muxid is maintained to store mux id of the PDN
+	 	 * to be used for AddPDN with rgip.
+	 	 */
+	 	 mux_id = wanup_data->mux_id;
+	 	 muxid = mux_id;
+	 }
 #ifdef FEATURE_VLAN_MPDN
 	   if(wanup_data->is_sta)
 		nat_inst->AddPdn(wanup_data->ipv4_addr, mux_id, true);
@@ -4033,7 +4086,7 @@ void IPACM_ConntrackListener::ProcessTCPorUDPMsg(
 	 {
 		 IPACMDBG_H("Neither Destination nor Source nat flag Set\n");
 
-		if(orig_src_ip == wan_ipaddr)
+		if(orig_src_ip == wan_ipaddr || orig_src_ip == rgip_addr)
 		{
 			IPACMDBG_H("orig src ip:0x%x equal to wan ip\n",orig_src_ip);
 			status = IPS_SRC_NAT;
@@ -4058,7 +4111,7 @@ void IPACM_ConntrackListener::ProcessTCPorUDPMsg(
 			}
 #endif
 		}
-		else if(orig_dst_ip == wan_ipaddr)
+		else if(orig_dst_ip == wan_ipaddr || orig_dst_ip == rgip_addr)
 		{
 			IPACMDBG_H("orig Dst IP:0x%x equal to wan ip\n",orig_dst_ip);
 			status = IPS_DST_NAT;

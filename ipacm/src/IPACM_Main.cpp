@@ -341,6 +341,8 @@ void* ipa_driver_msg_notifier(void *param)
 	ipacm_event_data_all* new_neigh_data;
 	ipa_ioc_gsb_info *event_gsb = NULL;
 	ipa_ioc_pdn_config *pdn_info = NULL;
+	uint32_t *rgip_v4 = NULL;
+	struct rgip_info *ipv4_src = NULL;
 #ifdef FEATURE_STATIC_POLICY
 	ipa_ioc_pdn_dscp_map_info *pdn_dscp_info = NULL;
 #endif
@@ -1400,7 +1402,32 @@ void* ipa_driver_msg_notifier(void *param)
 
 			continue;
 #endif
+		case IPA_RGIP_ADD_EVENT:
+			IPACMDBG_H("Received an IPA_IPoGRE_RGIP_EVENT\n");
+			rgip_v4 = (uint32_t*) malloc(sizeof(uint32_t));
+			if(rgip_v4 == NULL)
+			{
+				IPACMERR("Memory not assigned to rgip\n");
+				goto done;
+			}
+			ipv4_src = (struct rgip_info *)(buffer + sizeof(struct ipa_msg_meta));
+			IPACMDBG_H("Received IPA_IPoGRE_RGIP_EVENT withrgip iface %s\n",ipv4_src->rgip_iface_name);
+			memcpy(rgip_v4,&ipv4_src->rgip_v4,sizeof(rgip_v4));
+			if(*rgip_v4 == 0)
+			{
+				evt_data.event    = IPA_HANDLE_RGIP_DEL;
+			}
+			else
+			{
+				evt_data.event    = IPA_HANDLE_RGIP_UP;
+				IPACM_Iface::ipacmcfg->rgip_ip = *rgip_v4;
+				IPACM_Iface::ipacmcfg->rgip_ip = ntohl(IPACM_Iface::ipacmcfg->rgip_ip);
+			}
+			evt_data.evt_data = rgip_v4;
 
+			strlcpy(IPACM_Iface::ipacmcfg->rgip_iface_name,ipv4_src->rgip_iface_name, IPA_IFACE_NAME_LEN);
+
+			break;
 		case IPA_MACSEC_ADD_EVENT:
 		case IPA_MACSEC_DEL_EVENT:
 			IPACMDBG_H("Received an %s\n",

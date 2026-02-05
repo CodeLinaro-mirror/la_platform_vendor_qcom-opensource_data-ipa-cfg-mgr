@@ -1518,6 +1518,18 @@ static int ipa_nl_decode_nlmsg
 					strlcpy(macsec_map.phy_name, msg_ptr->nl_link_info.name, sizeof(macsec_map.phy_name));
 				}
 
+#ifdef FEATURE_IPoGRE
+				if (strncmp(dev_name, IPACM_Iface::ipacmcfg->rgip_iface_name, sizeof(IPACM_Iface::ipacmcfg->rgip_iface_name)) == 0)
+				{
+					IPACMDBG_H("RGIP iface %s link down/delete, post IPA_HANDLE_RGIP_DEL\n", dev_name);
+					ipacm_cmd_q_data rgip_evt_data;
+					memset(&rgip_evt_data, 0, sizeof(rgip_evt_data));
+					rgip_evt_data.event = IPA_HANDLE_RGIP_DEL;
+					rgip_evt_data.evt_data = NULL;
+					IPACM_EvtDispatcher::PostEvt(&rgip_evt_data);
+				}
+#endif
+
 				if(msg_ptr->nl_link_info.link_type == IPA_LINK_TYPE_VLAN)
 				{
 					IPACMDBG("Process RTM_DELLINK For vlan_id %d \n", vlan_info.vlan_id);
@@ -1671,9 +1683,42 @@ static int ipa_nl_decode_nlmsg
 				if(nlh->nlmsg_type == RTM_NEWADDR)
 				{
 					evt_data.event = IPA_ADDR_ADD_EVENT;
+#ifdef FEATURE_IPoGRE
+					if ((data_addr->iptype == IPA_IP_v4) && (strncmp(dev_name, IPACM_Iface::ipacmcfg->rgip_iface_name, sizeof(IPACM_Iface::ipacmcfg->rgip_iface_name)) == 0))
+					{
+						IPACMDBG_H("RGIP iface %s addr add, post IPA_HANDLE_RGIP_UP\n", dev_name);
+						ipacm_cmd_q_data rgip_evt_data;
+						uint32_t *rgip_v4 = (uint32_t*) malloc(sizeof(uint32_t));
+						if(rgip_v4 == NULL)
+						{
+							IPACMERR("Memory not assigned to rgip\n");
+						}
+						else
+						{
+							memcpy(rgip_v4,&data_addr->ipv4_addr,sizeof(rgip_v4));
+							memset(&rgip_evt_data, 0, sizeof(rgip_evt_data));
+							rgip_evt_data.event = IPA_HANDLE_RGIP_UP;
+							rgip_evt_data.evt_data = rgip_v4;
+							IPACM_EvtDispatcher::PostEvt(&rgip_evt_data);
+							IPACM_Iface::ipacmcfg->rgip_ip = data_addr->ipv4_addr;
+							IPACM_Iface::ipacmcfg->rgip_ip = ntohl(IPACM_Iface::ipacmcfg->rgip_ip);
+						}
+					}
+#endif
 				}
 				else
 				{
+#ifdef FEATURE_IPoGRE
+					if (strncmp(dev_name, IPACM_Iface::ipacmcfg->rgip_iface_name, sizeof(IPACM_Iface::ipacmcfg->rgip_iface_name)) == 0)
+					{
+						IPACMDBG_H("RGIP iface %s addr deleted, post IPA_HANDLE_RGIP_DEL\n", dev_name);
+						ipacm_cmd_q_data rgip_evt_data;
+						memset(&rgip_evt_data, 0, sizeof(rgip_evt_data));
+						rgip_evt_data.event = IPA_HANDLE_RGIP_DEL;
+						rgip_evt_data.evt_data = NULL;
+						IPACM_EvtDispatcher::PostEvt(&rgip_evt_data);
+					}
+#endif
 					evt_data.event = IPA_ADDR_DEL_EVENT;
 				}
 				data_addr->if_index = msg_ptr->nl_addr_info.metainfo.ifa_index;

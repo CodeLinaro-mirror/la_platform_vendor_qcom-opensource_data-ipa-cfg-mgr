@@ -1357,65 +1357,85 @@ void IPACM_ConntrackListener::HandleVlanUp(void *in_param)
 		IPACMERR("ipv4 address is invalid, iptype %d\n", vlanup_data->iptype);
 		return;
 	}
-
-	IPACMDBG_H("ipv4 address for new PDN 0x%X\n", vlanup_data->ipv4_addr);
-	if(nat_inst->AddPdn(vlanup_data->ipv4_addr, vlanup_data->mux_id,
-		vlanup_data->mux_id ? false : true,
-		(vlanup_data->ip_pass_enable && !vlanup_data->ip_pass_skip_nat)))
+#ifdef FEATURE_DUAL_BACKHAUL
+	if (IPACM_Wan::second_backhaul_active && vlanup_data->mux_id == 0)
 	{
-		IPACMERR("failed adding pdn, num_vlan_pdns %d\n", num_vlan_pdns);
+		IPACMDBG_H("calling add pdn for second backhaul\n");
+		if (nat_inst->AddPdn(vlanup_data->ipv4_addr, vlanup_data->mux_id,
+			true, false))
+		{
+			IPACMERR("failed adding pdn, num_vlan_pdns %d\n", num_vlan_pdns);
+		}
+		else
+		{
+			IPACMDBG_H("PDN table added successfully for STA\n");
+		}
 	}
 	else
 	{
-		/* Check if pdn is allocated as well as saved in vlan pdn cache*/
-		for(int i = 0; i < IPA_MAX_NUM_HW_PDNS; i++)
+#endif
+		IPACMDBG_H("ipv4 address for new PDN 0x%X\n", vlanup_data->ipv4_addr);
+		if (nat_inst->AddPdn(vlanup_data->ipv4_addr, vlanup_data->mux_id,
+			vlanup_data->mux_id ? false : true,
+			(vlanup_data->ip_pass_enable && !vlanup_data->ip_pass_skip_nat)))
 		{
-			if(vlan_pdns[i].public_ip == vlanup_data->ipv4_addr)
+			IPACMERR("failed adding pdn, num_vlan_pdns %d\n", num_vlan_pdns);
+		}
+		else
+		{
+			/* Check if pdn is allocated as well as saved in vlan pdn cache*/
+			for (int i = 0; i < IPA_MAX_NUM_HW_PDNS; i++)
 			{
-				for(int j = 0; j < vlan_pdns[i].VID_cnt; j ++)
+				if (vlan_pdns[i].public_ip == vlanup_data->ipv4_addr)
 				{
-					if (vlanup_data->VlanID == vlan_pdns[i].associated_VIDs[j])
+					for (int j = 0; j < vlan_pdns[i].VID_cnt; j++)
 					{
-						IPACMDBG_H("found existing PDN entry in %d,\
-						with vlan %d\n", i, vlanup_data->VlanID);
-						return;
+						if (vlanup_data->VlanID == vlan_pdns[i].associated_VIDs[j])
+						{
+							IPACMDBG_H("found existing PDN entry in %d,\
+						with vlan %d\n",
+								i, vlanup_data->VlanID);
+							return;
+						}
 					}
-				}
-				IPACMDBG_H("found existing PDN entry in %d, but got \
+					IPACMDBG_H("found existing PDN entry in %d, but got \
 					new VLAN id. Adding vlan %d to the entry\n",
-					i, vlanup_data->VlanID);
-				vlan_pdns[i].associated_VIDs[vlan_pdns[i].VID_cnt] =
-								vlanup_data->VlanID;
-				vlan_pdns[i].VID_cnt++;
-				return;
+						i, vlanup_data->VlanID);
+					vlan_pdns[i].associated_VIDs[vlan_pdns[i].VID_cnt] =
+						vlanup_data->VlanID;
+					vlan_pdns[i].VID_cnt++;
+					return;
+				}
 			}
-		}
 
-		for(int i = 0; i < IPA_MAX_NUM_HW_PDNS; i++)
-		{
-			if(vlan_pdns[i].public_ip == 0)
+			for (int i = 0; i < IPA_MAX_NUM_HW_PDNS; i++)
 			{
-				IPACMDBG_H("found empty PDN entry in %d num_vlan_pdns %d\n",
+				if (vlan_pdns[i].public_ip == 0)
+				{
+					IPACMDBG_H("found empty PDN entry in %d num_vlan_pdns %d\n",
 						i, num_vlan_pdns);
-				vlan_pdns[i].public_ip = vlanup_data->ipv4_addr;
-				vlan_pdns[i].associated_VIDs[vlan_pdns[i].VID_cnt] =
-								vlanup_data->VlanID;
-				vlan_pdns[i].ip_pass_enable = vlanup_data->ip_pass_enable;
-				vlan_pdns[i].ip_pass_dummy_ip =
-					vlanup_data->ip_pass_dummy_ip;
-				vlan_pdns[i].ip_pass_skip_nat =
-					vlanup_data->ip_pass_skip_nat;
-				vlan_pdns[i].VID_cnt++;
-				num_vlan_pdns++;
-				break;
+					vlan_pdns[i].public_ip = vlanup_data->ipv4_addr;
+					vlan_pdns[i].associated_VIDs[vlan_pdns[i].VID_cnt] =
+						vlanup_data->VlanID;
+					vlan_pdns[i].ip_pass_enable = vlanup_data->ip_pass_enable;
+					vlan_pdns[i].ip_pass_dummy_ip =
+						vlanup_data->ip_pass_dummy_ip;
+					vlan_pdns[i].ip_pass_skip_nat =
+						vlanup_data->ip_pass_skip_nat;
+					vlan_pdns[i].VID_cnt++;
+					num_vlan_pdns++;
+					break;
+				}
+			}
+			if (!isNatThreadStart)
+			{
+				IPACMDBG("creating nat threads\n");
+				CreateNatThreads();
 			}
 		}
-		if(!isNatThreadStart)
-		{
-			IPACMDBG("creating nat threads\n");
-			CreateNatThreads();
-		}
+#ifdef FEATURE_DUAL_BACKHAUL
 	}
+#endif
 }
 #endif
 
@@ -2113,7 +2133,8 @@ void IPACM_ConntrackListener::ProcessCTV6Message(void *param)
 	}
 	else if((IPPROTO_UDP == l4proto && NFCT_T_DESTROY == evt_data->type) ||
 					(IPPROTO_TCP == l4proto &&
-					 nfct_get_attr_u8(ct, ATTR_TCP_STATE) == TCP_CONNTRACK_FIN_WAIT))
+					 (nfct_get_attr_u8(ct, ATTR_TCP_STATE) == TCP_CONNTRACK_FIN_WAIT ||
+					  nfct_get_attr_u8(ct, ATTR_TCP_STATE) == TCP_CONNTRACK_CLOSE)))
 	{
 			p_lan2lan->handle_del_connection(&lan2lan_conn);
 	}
@@ -2878,9 +2899,10 @@ int IPACM_ConntrackListener::AddORDeleteNatEntry(const nat_entry_bundle *input, 
 			}
 		}
 		else if (TCP_CONNTRACK_FIN_WAIT == tcp_state ||
+				   TCP_CONNTRACK_CLOSE == tcp_state ||
 				   input->type == NFCT_T_DESTROY)
 		{
-			IPACMDBG("TCP state TCP_CONNTRACK_FIN_WAIT(%d) "
+			IPACMDBG("TCP state (TCP_CONNTRACK_FIN_WAIT or TCP_CONNTRACK_CLOSE) (%d) "
 					 "or type NFCT_T_DESTROY(%d)\n", tcp_state, input->type);
 
 			nat_inst->DeleteEntry(input->rule);
@@ -3299,7 +3321,8 @@ void IPACM_ConntrackListener::HandleLan2Lan(struct nf_conntrack *ct,
 	}
 	else if ((IPPROTO_UDP == rule->protocol && NFCT_T_DESTROY == type) ||
 			   (IPPROTO_TCP == rule->protocol &&
-				nfct_get_attr_u8(ct, ATTR_TCP_STATE) == TCP_CONNTRACK_FIN_WAIT))
+				(nfct_get_attr_u8(ct, ATTR_TCP_STATE) == TCP_CONNTRACK_FIN_WAIT ||
+				 nfct_get_attr_u8(ct, ATTR_TCP_STATE) == TCP_CONNTRACK_CLOSE)))
 	{
 		p_lan2lan->handle_del_connection(&lan2lan_conn);
 	}

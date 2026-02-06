@@ -65,9 +65,6 @@ int IPACM_Wlan::num_wlan_ap_iface = 0;
 #define VLAN_TPID_SIZE 2
 #define VLAN_VID_MASK 0x0FFF
 #define NUM_TX_PROPS 4
-#ifndef IPA_LAN_RX_HDR_NAME
-#define IPA_LAN_RX_HDR_NAME "ipa_lan_hdr"
-#endif
 
 extern char *ipa_l2_hdr_type[];
 
@@ -1338,6 +1335,7 @@ void IPACM_Wlan::event_callback(ipa_cm_event_id event, void *param)
 						{
 							handle_pdn_dscp_wlan_client_route_rule_ext_v2(get_client_memptr(wlan_client, wlan_index)->mac,
 								IPA_IP_v4, 0);
+							HandleNeighIpAddrAddEvt(data);
 						}
 						else if  (data->iptype == IPA_IP_v6 && IPACM_Iface::ipacmcfg->ipacm_static_policy_enable)
 						{
@@ -1347,6 +1345,7 @@ void IPACM_Wlan::event_callback(ipa_cm_event_id event, void *param)
 								handle_pdn_dscp_wlan_client_route_rule_ext_v2(get_client_memptr(wlan_client, wlan_index)->mac,
 								IPA_IP_v6, 0, temp_ipv6);
 							}
+							HandleNeighIpAddrAddEvt(data);
 						}
 #endif
 						install_all_wlan_qos_route_rule(data->mac_addr, 0);
@@ -13702,7 +13701,7 @@ int IPACM_Wlan::handle_wan_up_v2(ipa_ip_type ip_type, uint16_t vlan_id, uint8_t 
 				flt_rule_entry.rule.action = IPA_PASS_TO_SRC_NAT;
 			}
 #ifdef FEATURE_IPA_V3
-			flt_rule_entry.rule.hashable = false;
+			flt_rule_entry.rule.hashable = true;
 #endif
 			flt_rule_entry.rule.rt_tbl_hdl = IPACM_Iface::ipacmcfg->rt_tbl_wan_v4.hdl;
 			flt_rule_entry.rule.rt_tbl_idx = rt_tbl_idx.idx;
@@ -13921,7 +13920,7 @@ int IPACM_Wlan::handle_wan_up_v2(ipa_ip_type ip_type, uint16_t vlan_id, uint8_t 
 			}
 
 #ifdef FEATURE_IPA_V3
-			flt_rule_entry.rule.hashable = false;
+			flt_rule_entry.rule.hashable = true;
 #endif
 			flt_rule_entry.rule.rt_tbl_hdl = IPACM_Iface::ipacmcfg->rt_tbl_v6.hdl;
 			flt_rule_entry.rule.rt_tbl_idx = rt_tbl_idx.idx;

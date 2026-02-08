@@ -570,7 +570,7 @@ void IPACM_Wlan::event_callback(ipa_cm_event_id event, void *param)
 						IPACMDBG_H(
 							"A previous ipogre enable needs to be undone, then redone. "
 							"Need to call gre_down followed by an gre_up\n");
-						gre_down(false);
+						gre_down(false,true);
 						gre_up(false,true);
 					}
 #endif

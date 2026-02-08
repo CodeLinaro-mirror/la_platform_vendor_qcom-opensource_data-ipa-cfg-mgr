@@ -3389,6 +3389,7 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 		}
 		else {
 			IPACMDBG_H("Received and will process an IPA_HANDLE_GRE_UP for differenct instance\n");
+			IPACM_Iface::ipacmcfg->ipogre_enabled = false;
 		}
 		break;
 	}
@@ -16125,9 +16126,6 @@ int IPACM_Wan::ipgre_make_header_add_rt_rule(
 	rt_table->num_rules = NUM_RT_RULE;
 	rt_table->ip        = iptype;
 
-	if(ipgre_get_rt_tbl_hdl(iptype) == -1){
-		IPACMERR("creating RT\n");
-	}
 	snprintf(
 		rt_table->rt_tbl_name,
 		sizeof(rt_table->rt_tbl_name),

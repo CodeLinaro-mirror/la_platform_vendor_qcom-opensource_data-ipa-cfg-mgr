@@ -437,7 +437,7 @@ public:
 
 	void gre_up(bool isPmipv6=false, bool ipogre_enabled=false);
 
-	void gre_down(bool isPmipv6=false);
+	void gre_down(bool isPmipv6=false, bool ipogre_enabled=false);
 
 	int gre_do_rt_work(
 		ipa_ipgre_info& ipgre_info);

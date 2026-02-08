@@ -941,6 +941,14 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 						gre_up(true);
 					}
 #endif
+					if(IPACM_Iface::ipacmcfg->ipogre_enabled)
+					{
+						IPACMDBG_H(
+							"A previous ipogre enable needs to be undone, then redone. "
+							"Need to call gre_down followed by an gre_up\n");
+						gre_down(false,true);
+						gre_up(false,true);
+					}
 					IPACMDBG_H("Finish handling IPA_ADDR_ADD_EVENT for ip-family(%d)\n", data->iptype);
 
 					/* checking if SW-RT_enable */
@@ -2146,7 +2154,7 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 
 	case IPA_WAN_HANDLE_IPOGRE_DOWN:
 		IPACMDBG_H("Received and will process an IPA_HANDLE_GRE_DOWN\n");
-		gre_down();
+		gre_down(false,true);
 		break;
 #endif
 #ifdef FEATURE_PMIPV6
@@ -21330,10 +21338,10 @@ if(isPmipv6 || ipogre_enabled){/*PMIPV6 needs to take care of WAN up before GRE 
 	}
 }
 
-void IPACM_Lan::gre_down(bool isPmipv6)
+void IPACM_Lan::gre_down(bool isPmipv6, bool ipogre_enabled)
 {
 	ipa_ipgre_info ipgre_info;
-	if(IPACM_Iface::ipacmcfg->ipogre_enabled)
+	if(ipogre_enabled)
 		ipgre_info = IPACM_Iface::ipacmcfg->ipgre_info;
 	else
 		ipgre_info = IPACM_Iface::ipacmcfg->eogre_info;
@@ -21498,7 +21506,7 @@ void IPACM_Lan::gre_down(bool isPmipv6)
 				mtu_flt_rule_offset[j][iptype]);
 			}
 		}
-		if(IPACM_Iface::ipacmcfg->ipogre_enabled && IPACM_Wan::isWanUP(ipa_if_num))
+		if(ipogre_enabled && IPACM_Wan::isWanUP(ipa_if_num))
 		{
 			del_ul_flt_rules(iptype);/*Delete the UL rules updated by GRE, and reinsert them normally*/
 #ifdef FEATURE_VLAN_MPDN
@@ -21580,7 +21588,6 @@ void IPACM_Lan::gre_down(bool isPmipv6)
 #endif
 
 	IPACMDBG("finished handling gre_down\n");
-	IPACM_Iface::ipacmcfg->ipogre_enabled = false;
 }
 
 int IPACM_Lan::gre_do_rt_work(

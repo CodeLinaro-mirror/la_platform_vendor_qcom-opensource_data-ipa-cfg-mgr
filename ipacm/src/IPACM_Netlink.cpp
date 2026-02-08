@@ -794,11 +794,12 @@ static int tunnel_delete(struct ifinfomsg* ifi, int len, int type)
 				}
 				else
 				{
+					pConfig->ipogre_enabled = false;
 					/* Send GRE DOWN event */
 					ipacm_cmd_q_data evt_data;
 					evt_data.event    = IPA_HANDLE_IPOGRE_DOWN;
 					evt_data.evt_data = 0;
-					IPACMDBG_H("Posting IPA_HANDLE_GRE_DOWN \n");
+					IPACMDBG_H("Posting IPA_HANDLE_IPOGRE_DOWN \n");
 					IPACM_EvtDispatcher::PostEvt(&evt_data);
 				}
 			}

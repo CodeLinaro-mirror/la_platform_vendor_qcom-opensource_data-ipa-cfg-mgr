@@ -1983,7 +1983,26 @@ process:
 					}
 				}
 			}
+			/* Check for Blackhole route for Prefix Delegation */
+			if((msg_ptr->nl_route_info.metainfo.rtm_family == AF_INET6) &&
+			   (msg_ptr->nl_route_info.metainfo.rtm_type == RTN_BLACKHOLE || msg_ptr->nl_route_info.metainfo.rtm_type == RTN_UNREACHABLE) &&
+			   (msg_ptr->nl_route_info.attr_info.param_mask & IPA_RTA_PARAM_DST))
+			{
+				IPACMDBG_H("Got RTM_NEWROUTE for blackhole route with dst_len %d\n", msg_ptr->nl_route_info.metainfo.rtm_dst_len);
 
+				IPACM_EVENT_COPY_ADDR_v6(IPACM_Iface::ipacmcfg->ipv6_blackhole_prefix, msg_ptr->nl_route_info.attr_info.dst_addr);
+
+				IPACM_Iface::ipacmcfg->ipv6_blackhole_prefix[0] = ntohl(IPACM_Iface::ipacmcfg->ipv6_blackhole_prefix[0]);
+				IPACM_Iface::ipacmcfg->ipv6_blackhole_prefix[1] = ntohl(IPACM_Iface::ipacmcfg->ipv6_blackhole_prefix[1]);
+				IPACM_Iface::ipacmcfg->ipv6_blackhole_prefix[2] = ntohl(IPACM_Iface::ipacmcfg->ipv6_blackhole_prefix[2]);
+				IPACM_Iface::ipacmcfg->ipv6_blackhole_prefix[3] = ntohl(IPACM_Iface::ipacmcfg->ipv6_blackhole_prefix[3]);
+				IPACM_Iface::ipacmcfg->blackhole_valid = true;
+				IPACM_Iface::ipacmcfg->ipv6_blackhole_len = msg_ptr->nl_route_info.metainfo.rtm_dst_len;
+
+				IPACMDBG_H("Stored blackhole prefix 0x%08x%08x%08x%08x\n",
+					IPACM_Iface::ipacmcfg->ipv6_blackhole_prefix[0], IPACM_Iface::ipacmcfg->ipv6_blackhole_prefix[1],
+					IPACM_Iface::ipacmcfg->ipv6_blackhole_prefix[2], IPACM_Iface::ipacmcfg->ipv6_blackhole_prefix[3]);
+                        }
 			/* ipv6 routing table */
 			if((AF_INET6 == msg_ptr->nl_route_info.metainfo.rtm_family) &&
 				(msg_ptr->nl_route_info.metainfo.rtm_type == RTN_UNICAST) &&
@@ -2223,6 +2242,34 @@ process_v6:
 			IPACMDBG("rtm_table: %d\n", msg_ptr->nl_route_info.metainfo.rtm_table);
 			IPACMDBG("rtm_family: %d\n", msg_ptr->nl_route_info.metainfo.rtm_family);
 			IPACMDBG("param_mask: 0x%x\n", msg_ptr->nl_route_info.attr_info.param_mask);
+
+			/* Check for Blackhole route delete for Prefix Delegation */
+			if((msg_ptr->nl_route_info.metainfo.rtm_family == AF_INET6) &&
+			   (msg_ptr->nl_route_info.metainfo.rtm_type == RTN_BLACKHOLE || msg_ptr->nl_route_info.metainfo.rtm_type == RTN_UNREACHABLE) &&
+			   (msg_ptr->nl_route_info.attr_info.param_mask & IPA_RTA_PARAM_DST))
+			{
+				uint32_t ipv6_addr[4];
+				IPACMDBG_H("Got RTM_DELROUTE for blackhole route with dst_len %d\n", msg_ptr->nl_route_info.metainfo.rtm_dst_len);
+				IPACM_EVENT_COPY_ADDR_v6(ipv6_addr, msg_ptr->nl_route_info.attr_info.dst_addr);
+
+				ipv6_addr[0] = ntohl(ipv6_addr[0]);
+				ipv6_addr[1] = ntohl(ipv6_addr[1]);
+				ipv6_addr[2] = ntohl(ipv6_addr[2]);
+				ipv6_addr[3] = ntohl(ipv6_addr[3]);
+
+				if(IPACM_Iface::ipacmcfg->blackhole_valid == true &&
+					IPACM_Iface::ipacmcfg->ipv6_blackhole_len == msg_ptr->nl_route_info.metainfo.rtm_dst_len &&
+					IPACM_Iface::ipacmcfg->ipv6_blackhole_prefix[0] == ipv6_addr[0] &&
+					IPACM_Iface::ipacmcfg->ipv6_blackhole_prefix[1] == ipv6_addr[1] &&
+					IPACM_Iface::ipacmcfg->ipv6_blackhole_prefix[2] == ipv6_addr[2] &&
+					IPACM_Iface::ipacmcfg->ipv6_blackhole_prefix[3] == ipv6_addr[3])
+				{
+					IPACMDBG_H("Delete blackhole prefix\n");
+					IPACM_Iface::ipacmcfg->blackhole_valid = false;
+					memset(IPACM_Iface::ipacmcfg->ipv6_blackhole_prefix, 0, sizeof(IPACM_Iface::ipacmcfg->ipv6_blackhole_prefix));
+					IPACM_Iface::ipacmcfg->ipv6_blackhole_len = 0;
+				}
+			}
 
 			/* take care of route delete of default route & uniroute */
 			if((msg_ptr->nl_route_info.metainfo.rtm_type == RTN_UNICAST) &&

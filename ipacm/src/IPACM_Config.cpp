@@ -255,7 +255,9 @@ IPACM_Config::IPACM_Config()
 	ipacm_qos_enable = false;
 	eth_wan_pppoe_enable = false;
 	eth_vlan_wan_enable = false;
+	blackhole_valid = false;
 
+	memset(ipv6_blackhole_prefix, 0, sizeof(ipv6_blackhole_prefix));
 	memset(&rt_tbl_default_v4, 0, sizeof(rt_tbl_default_v4));
 	memset(&rt_tbl_lan_v4, 0, sizeof(rt_tbl_lan_v4));
 	memset(&rt_tbl_wan_v4, 0, sizeof(rt_tbl_wan_v4));

@@ -7256,9 +7256,6 @@ int IPACM_Wlan::handle_down_evt()
 
 
 
-	eth_bridge_post_event(IPA_ETH_BRIDGE_IFACE_DOWN, IPA_IP_MAX, NULL, NULL, NULL);
-	/* del wlan client mac flt rules if any*/
-	delete_wlan_mac_flt_rules();
 	/* free the wlan clients cache */
 	IPACMDBG_H("Free wlan clients cache\n");
 
@@ -7279,6 +7276,10 @@ int IPACM_Wlan::handle_down_evt()
 
 	neigh_cache.clear();
 fail:
+	eth_bridge_post_event(IPA_ETH_BRIDGE_IFACE_DOWN, IPA_IP_MAX, NULL, NULL, NULL);
+	/* del wlan client mac flt rules if any*/
+	delete_wlan_mac_flt_rules();
+
 	/* clean wifi-client header, routing rules */
 	/* clean wifi client rule*/
 	IPACMDBG_H("left %d wifi clients need to be deleted \n ", num_wifi_client);

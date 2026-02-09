@@ -5257,6 +5257,78 @@ bool IPACM_ConntrackListener::IsIpv6PrivateSubnet(const IpAddress& ip)
 		ret = ip.IsSameSubnet(wan_ipaddr_v6);
 	}
 
+	if(pConfig->blackhole_valid == true)
+	{
+		int len =  pConfig->ipv6_blackhole_len;
+		const Ipv6IpAddress& ipv6 = static_cast<const Ipv6IpAddress&>(ip);
+		uint32_t v6_address[4];
+		/* Note: Assuming incoming ipv6 =  2001:0db8:85a3:0099:1111:2222:3333:4444
+		 * and Blackhole Prefix: 2001:0db8:85a3:0000::/56
+		 * Assuming they are correctly populated into four 32-bit blocks for example:
+		 * v6_address[0] = 0x20010db8
+		 * v6_address[1] = 0x85a30099
+		 * v6_address[2] = 0x11112222
+		 * v6_address[3] = 0x33334444
+		 */
+		v6_address[0] = ipv6.GetMsb();
+		v6_address[2] = ipv6.GetLsb();
+		for (int i = 0; i < 4; ++i)
+		{
+			/* example len = 56
+			* If no bits left to check, it's a match
+			* ITERATION 1 (i=0): len is 56. (Skip)
+			* ITERATION 2 (i=1): len is 24. (Skip)
+			* ITERATION 3 (i=2): len is 0. Condition met! Returns true.
+			*/
+			if (len == 0) {
+				return true;
+			}
+
+			/* Determine how many bits to check in this specific 32-bit block
+			 * ITERATION 1 (i=0): len (56) >= 32, so check_bits = 32
+			 * ITERATION 2 (i=1): len (24) < 32, so check_bits = 24
+			 */
+			int check_bits = (len >= 32) ? 32 : len;
+
+			/* Create mask */
+			uint32_t mask;
+			if (check_bits == 32) {
+				/* ITERATION 1 (i=0): We need the full block. 
+				 * mask = 0xFFFFFFFF
+				 */
+				mask = 0xFFFFFFFFU;
+			} else {
+				/* ITERATION 2 (i=1): check_bits is 24.
+				 * 0xFFFFFFFFU >> 24 = 0x000000FF.
+				 * Bitwise NOT (~) flips it to 0xFFFFFF00.
+				 * mask = 0xFFFFFF00
+				 */
+				mask = ~(0xFFFFFFFFU >> check_bits);
+			}
+
+			/* Compare the masked values
+			 * ITERATION 1 (i=0):
+			 * v6_address[0] & mask: 0x20010db8 & 0xFFFFFFFF = 0x20010db8
+			 * prefix[0] & mask:     0x20010db8 & 0xFFFFFFFF = 0x20010db8
+			 * They match! Continue loop.
+			 *
+			 * ITERATION 2 (i=1):
+			 * v6_address[1] & mask: 0x85a30099 & 0xFFFFFF00 = 0x85a30000
+			 * prefix[1] & mask:     0x85a30000 & 0xFFFFFF00 = 0x85a30000
+			 * They match! Continue loop.
+			 */
+			if ((v6_address[i] & mask) != (pConfig->ipv6_blackhole_prefix[i] & mask)) {
+				return false;
+			}
+
+			/* Decrement length by the bits we just checked (max 32)
+			 * ITERATION 1 (i=0): len = 56 - 32 = 24
+			 * ITERATION 2 (i=1): len = 24 - 24 = 0
+			 */
+			len -= check_bits;
+		}
+		ret = true;
+	}
 	IPACMDBG_H("return\n");
 	return ret;
 }

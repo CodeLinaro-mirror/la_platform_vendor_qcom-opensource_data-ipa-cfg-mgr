@@ -637,6 +637,9 @@ public:
 	bool rt_tbl_inter_l2l_v4_set;
 	bool rt_tbl_inter_l2l_v6_set;
 
+	uint32_t ipv6_blackhole_prefix[4];
+	uint32_t ipv6_blackhole_len;
+	bool blackhole_valid;
 	/* Indicates current number of client ipv6 */
 	int ipa_num_clients_ipv6;
 
@@ -1648,6 +1651,69 @@ public:
 			{
 				IPACMDBG("no match with [%X][%X]\n", ipa_ipv6_prefixes[i].addr[0], ipa_ipv6_prefixes[i].addr[1]);
 			}
+		}
+		int len  = ipv6_blackhole_len;
+		if(blackhole_valid == true)
+		{
+			for (int i = 0; i < 4; ++i) {
+				/* Note: Assuming incoming prefix =  2001:0db8:85a3:0099:1111:2222:3333:4444
+				 * prefix[0] = 0x20010db8
+				 * prefix[1] = 0x85a30099
+				 * and Blackhole Prefix: 2001:0db8:85a3:0000::/56
+				 * example len = 56
+				 * If no bits left to check, it's a match
+				 * ITERATION 1 (i=0): len is 56. (Skip)
+				 * ITERATION 2 (i=1): len is 24. (Skip)
+				 * ITERATION 3 (i=2): len is 0. Condition met! Returns true.
+				 */
+				if (len == 0) {
+					return true;
+				}
+
+				/* Determine how many bits to check in this specific 32-bit block
+				 * ITERATION 1 (i=0): len (56) >= 32, so check_bits = 32
+				 * ITERATION 2 (i=1): len (24) < 32, so check_bits = 24
+				 */
+				int check_bits = (len >= 32) ? 32 : len;
+
+				/* Create mask */
+				uint32_t mask;
+				if (check_bits == 32) {
+					mask = 0xFFFFFFFFU;
+				} else {
+					/* ITERATION 1 (i=0): We need the full block. 
+					 * mask = 0xFFFFFFFF
+					 */
+					mask = ~(0xFFFFFFFFU >> check_bits);
+					/* ITERATION 2 (i=1): check_bits is 24.
+					 * 0xFFFFFFFFU >> 24 = 0x000000FF.
+					 * Bitwise NOT (~) flips it to 0xFFFFFF00.
+					 * mask = 0xFFFFFF00
+					 */
+				}
+
+				/* Compare the masked values
+				 * ITERATION 1 (i=0):
+				 * prefix[0] & mask: 0x20010db8 & 0xFFFFFFFF = 0x20010db8
+				 * ipv6_blackhole_prefix[0] & mask:     0x20010db8 & 0xFFFFFFFF = 0x20010db8
+				 * They match! Continue loop.
+				 *
+				 * ITERATION 2 (i=1):
+				 * prefix[1] & mask: 0x85a30099 & 0xFFFFFF00 = 0x85a30000
+				 * ipv6_blackhole_prefix[1] & mask:     0x85a30000 & 0xFFFFFF00 = 0x85a30000
+				 * They match! Continue loop.
+				 */
+				if ((prefix[i] & mask) != (ipv6_blackhole_prefix[i] & mask)) {
+					return false;
+				}
+
+				/* Decrement length by the bits we just checked (max 32)
+				 * ITERATION 1 (i=0): len = 56 - 32 = 24
+				 * ITERATION 2 (i=1): len = 24 - 24 = 0
+				 */
+				len -= check_bits;
+			}
+			return true;
 		}
 		return false;
 	}

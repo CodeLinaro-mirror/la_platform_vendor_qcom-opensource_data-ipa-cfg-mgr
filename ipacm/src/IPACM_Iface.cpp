@@ -346,12 +346,19 @@ fail:
 	return res;
 }
 
-/* Query ipa_interface_index by given linux interface_index */
-int IPACM_Iface::iface_ipa_index_query
-(
-	 int interface_index
-)
-{
+/**
+ * Get the stored data index inside the configuration table
+ * corresponding to a Linux interface index. Serach by Linux
+ * interface index first and in case it's not found, search by
+ * interface name. In case the interface is virtual (e.g. MACsec
+ * interface), use the physical device name for compariosion.
+ *
+ * @param interfaceIndex : Linux interface index
+ *
+ * @return int Index in the configuration table in case of success,
+ * INVALID_IFACE otherwise.
+ */
+int IPACM_Iface::iface_ipa_index_query(int interface_index) {
 	int fd;
 	int link = INVALID_IFACE;
 	int i = 0;
@@ -424,6 +431,15 @@ int IPACM_Iface::iface_ipa_index_query
 			link = i;
 			IPACM_Iface::ipacmcfg->iface_table[i].netlink_interface_index = interface_index;
 			break;
+		}
+		if (IPACM_Iface::ipacmcfg->iface_table[i].virtual_iface &&
+		    strncmp(ifr.ifr_name, IPACM_Iface::ipacmcfg->iface_table[i].phy_dev_name,
+			sizeof(IPACM_Iface::ipacmcfg->iface_table[i].phy_dev_name)) == 0) {
+			IPACMDBG_H("Linux interface name:%s,index:%d is the lower interface of the MACsec interface name:%s, insed:%d which"
+				" is stored in index %d in IPACM_Iface::ipacmcfg->iface_table\n", ifr.ifr_name, interface_index,
+				IPACM_Iface::ipacmcfg->iface_table[i].iface_name,
+				IPACM_Iface::ipacmcfg->iface_table[i].netlink_interface_index, i);
+			return i;
 		}
 	}
 

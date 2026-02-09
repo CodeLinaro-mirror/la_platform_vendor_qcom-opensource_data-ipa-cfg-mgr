@@ -90,7 +90,7 @@ extern "C"
 #define IPA_IF_SOCKSv5_NAME  "IPACM_SOCKSv5"
 #define IPA_EOGRE_HDR_NAME   "IPACM_EoGRE_v%d"
 
-#define IPA_MAX_ACTIVE_WLAN_IFACE 64 // 64 wlan (4x16 band support)
+#define IPA_MAX_ACTIVE_WLAN_IFACE 112 // 64 wlan (4x16 band support) + 48 extra prpl supported ifaces
 #define MAX_SUPPORTED_WLAN_PIPES 6 // 4 non vlan wlan pipes + 2 vlan pipes
 
 #define IPA_MAX_IFACE_ENTRIES (57 + IPA_MAX_ACTIVE_WLAN_IFACE) /* current: 15 rmnet + 64 wlan + bridge+ eth +

@@ -67,6 +67,7 @@ IPACM_LanToLan_Iface::IPACM_LanToLan_Iface(IPACM_Lan *p_iface)
 	memset(m_is_ip_addr_assigned, 0, sizeof(m_is_ip_addr_assigned));
 	m_support_inter_iface_offload = true;
 	m_support_intra_iface_offload = false;
+	m_intra_interface_info.peer = NULL;
 	m_intra_interface_info.is_vlan_peer = false;
 	m_is_l2tp_iface = false;
 	m_is_svap_iface = false;
@@ -1951,7 +1952,9 @@ void IPACM_LanToLan_Iface::del_client_rt_rule(peer_iface_info *peer, client_info
 	std::map<std::array<uint8_t, 6>, int >::iterator it;
 #endif
 
-	if(peer == NULL)
+	if(peer == NULL || peer->peer == NULL ||
+		peer->peer->get_iface_pointer() == NULL ||
+		peer->peer->get_iface_pointer()->tx_prop == NULL)
 	{
 		IPACMERR("Failure null peer passed\n");
 		return;
@@ -2422,7 +2425,17 @@ void IPACM_LanToLan_Iface::clear_all_rt_rule_for_one_peer_iface(peer_iface_info 
 	ipa_hdr_l2_type peer_l2_type = IPA_HDR_L2_NONE;
 
 	IPACMDBG_H("peer->is_vlan_peer :%d\n", peer->is_vlan_peer);
-	if (peer->is_vlan_peer)
+
+	if(peer == NULL || peer->peer == NULL ||
+		peer->peer->get_iface_pointer() == NULL ||
+		peer->peer->get_iface_pointer()->tx_prop == NULL)
+	{
+		IPACMERR("Invalid peer pointer!");
+		return;
+	}
+
+	if (peer->is_vlan_peer &&
+		peer->peer->get_iface_pointer()->tx_prop->num_tx_props > 2)
 		peer_l2_type = peer->peer->get_iface_pointer()
 				       ->tx_prop->tx[2]
 				       .hdr_l2_type;
@@ -3096,10 +3109,22 @@ void IPACM_LanToLan_Iface::print_peer_info(peer_iface_info *peer_info , bool int
 	list<rt_rule_info>::iterator it_rt;
 	list<uint32_t>::iterator it_flt_hdl;
 
-	if(peer_info == NULL) {
+	if(peer_info == NULL)
+	{
 		IPACMERR("Peer info with NULL pointer\n");
 		return;
 	}
+	if(peer_info->peer == NULL)
+	{
+		IPACMERR("Peer info peer with NULL pointer\n");
+		return;
+	}
+	if(peer_info->peer->m_p_iface == NULL)
+	{
+		IPACMERR("Peer info m_p_iface with NULL pointer\n");
+		return;
+	}
+
 	IPACMDBG_H("Printing peer info for iface %s:\n", peer_info->peer->m_p_iface->dev_name);
 
 	IPACMDBG_H("There are %zu flt info in total.\n", peer_info->flt_rule.size());

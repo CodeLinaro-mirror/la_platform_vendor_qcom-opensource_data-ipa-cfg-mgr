@@ -26,9 +26,9 @@
  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * Changes from Qualcomm Innovation Center, Inc. are provided under the following license:
- *
- * Copyright (c) 2022-2025 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Changes from Qualcomm Technologies, Inc. are provided under the following license:
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted (subject to the limitations in the
@@ -92,10 +92,6 @@ int IPACM_Wlan::num_wlan_ap_iface = 0;
 #define BSSTYPE_SVAP 72
 #define VLAN_TPID_SIZE 2
 #define VLAN_VID_MASK 0x0FFF
-
-#ifndef IPA_LAN_RX_HDR_NAME
-#define IPA_LAN_RX_HDR_NAME "ipa_lan_hdr"
-#endif
 
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
 bool IPACM_Wlan::lan_stats_inited = false;
@@ -1172,6 +1168,7 @@ void IPACM_Wlan::event_callback(ipa_cm_event_id event, void *param)
 						{
 							handle_pdn_dscp_wlan_client_route_rule_ext_v2(get_client_memptr(wlan_client, wlan_index)->mac,
 								IPA_IP_v4, 0);
+							HandleNeighIpAddrAddEvt(data);
 						}
 						else if  (data->iptype == IPA_IP_v6 && IPACM_Iface::ipacmcfg->ipacm_static_policy_enable)
 						{
@@ -1181,6 +1178,7 @@ void IPACM_Wlan::event_callback(ipa_cm_event_id event, void *param)
 								handle_pdn_dscp_wlan_client_route_rule_ext_v2(get_client_memptr(wlan_client, wlan_index)->mac,
 								IPA_IP_v6, 0, temp_ipv6);
 							}
+							HandleNeighIpAddrAddEvt(data);
 						}
 #endif
 						install_all_wlan_qos_route_rule(data->mac_addr, 0);
@@ -2335,7 +2333,25 @@ int IPACM_Wlan::handle_wlan_mac_flt_conn_disc(uint8_t *mac_addr, bool conn_state
 	}
 	return IPACM_SUCCESS;
 }
+int IPACM_Wlan::extract_instance_id_from_wlan_iface(char ifname[IPA_IFACE_NAME_LEN])
+{
+	char *token = NULL;
+	char *save_ptr = NULL;
+	char iface_name[IPA_IFACE_NAME_LEN] = {0};
 
+	strlcpy(iface_name, ifname, IPA_IFACE_NAME_LEN);
+	token = strtok_r(iface_name, "_", &save_ptr);
+	if (token != NULL) {
+		token = strtok_r(NULL, "_", &save_ptr);
+		if(token != NULL)
+		{
+			IPACMDBG("instance id : %s\n",token);
+			return atoi(token);
+		}
+	}
+	IPACMDBG("Not an mld stitched iface %s\n", iface_name);
+	return -1;
+}
 /* handle wifi client initial,copy all partial headers (tx property) */
 int IPACM_Wlan::handle_wlan_client_init_ex(ipacm_event_data_wlan_ex *data, bool delay_init, uint16_t vlan_id)
 {
@@ -2343,6 +2359,7 @@ int IPACM_Wlan::handle_wlan_client_init_ex(ipacm_event_data_wlan_ex *data, bool 
 #define WLAN_IFACE_INDEX_LEN 10
 
 	int res = IPACM_SUCCESS, len = 0, i, evt_size;
+	int instance_id = -1;
 	char index[WLAN_IFACE_INDEX_LEN];
 	struct ipa_ioc_copy_hdr sCopyHeader;
 	struct ipa_ioc_add_hdr *pHeaderDescriptor = NULL;
@@ -2478,7 +2495,15 @@ int IPACM_Wlan::handle_wlan_client_init_ex(ipacm_event_data_wlan_ex *data, bool 
 				memset(pHeaderDescriptor->hdr[0].name, 0,
 							 sizeof(pHeaderDescriptor->hdr[0].name));
 
-				snprintf(index,sizeof(index), "%d_", ipa_if_num);
+				instance_id = extract_instance_id_from_wlan_iface(data->iface_name);
+				if (instance_id != -1)
+				{
+					snprintf(index,sizeof(index), "%d_%d", ipa_if_num, instance_id);
+				}
+				else
+				{
+					snprintf(index,sizeof(index), "%d_", ipa_if_num);
+				}
 				strlcpy(pHeaderDescriptor->hdr[0].name, index, sizeof(pHeaderDescriptor->hdr[0].name));
 				pHeaderDescriptor->hdr[0].name[IPA_RESOURCE_NAME_MAX-1] = '\0';
 
@@ -2616,7 +2641,16 @@ int IPACM_Wlan::handle_wlan_client_init_ex(ipacm_event_data_wlan_ex *data, bool 
 				memset(pHeaderDescriptor->hdr[0].name, 0,
 							 sizeof(pHeaderDescriptor->hdr[0].name));
 
-				snprintf(index,sizeof(index), "%d_", ipa_if_num);
+				instance_id = extract_instance_id_from_wlan_iface(data->iface_name);
+				if (instance_id != -1)
+				{
+					snprintf(index,sizeof(index), "%d_%d", ipa_if_num, instance_id);
+				}
+				else
+				{
+					snprintf(index,sizeof(index), "%d_", ipa_if_num);
+				}
+
 				strlcpy(pHeaderDescriptor->hdr[0].name, index, sizeof(pHeaderDescriptor->hdr[0].name));
 				pHeaderDescriptor->hdr[0].name[IPA_RESOURCE_NAME_MAX-1] = '\0';
 				if (strlcat(pHeaderDescriptor->hdr[0].name, IPA_WLAN_PARTIAL_HDR_NAME_v6, sizeof(pHeaderDescriptor->hdr[0].name)) > IPA_RESOURCE_NAME_MAX)
@@ -8996,6 +9030,11 @@ int IPACM_Wlan::install_uplink_filter_rule_per_client_v2
 			//change old rule to pass to route and non hashable
 			flt_rule_entry.rule.action = IPA_PASS_TO_ROUTING;
 			flt_rule_entry.rule.hashable = false;
+			flt_rule_entry.rule.eq_attrib.rule_eq_bitmap &= ~(1<<9);
+			flt_rule_entry.rule.eq_attrib.metadata_meq32_present = 0;
+			flt_rule_entry.rule.eq_attrib.metadata_meq32.offset = 0;
+			flt_rule_entry.rule.eq_attrib.metadata_meq32.value = 0;
+			flt_rule_entry.rule.eq_attrib.metadata_meq32.mask = 0;
 
 			//add the eth header equation for v4 to the old rule
 			int meq32_n = flt_rule_entry.rule.eq_attrib.num_offset_meq_32;
@@ -9678,6 +9717,7 @@ int IPACM_Wlan::handle_wlan_vlan_client_init(int client_idx, ipacm_bridge *bridg
 	struct ipa_ioc_add_hdr *pHeaderDescriptor = NULL;
 	struct ipa_ioc_copy_hdr sCopyHeader;
 	int size = 0, len = 0;
+	int instance_id = -1;
 	char index[WLAN_IFACE_INDEX_LEN];
 	uint16_t vlan_tci;
 	ipacm_event_data_wlan_ex *data;
@@ -9757,7 +9797,15 @@ int IPACM_Wlan::handle_wlan_vlan_client_init(int client_idx, ipacm_bridge *bridg
 			memset(pHeaderDescriptor->hdr[0].name, 0,
 				   sizeof(pHeaderDescriptor->hdr[0].name));
 
-			snprintf(index, sizeof(index), "%d_", ipa_if_num);
+			instance_id = extract_instance_id_from_wlan_iface(data->iface_name);
+			if (instance_id != -1)
+			{
+				snprintf(index,sizeof(index), "%d_%d", ipa_if_num, instance_id);
+			}
+			else
+			{
+				snprintf(index,sizeof(index), "%d_", ipa_if_num);
+			}
 			strlcpy(pHeaderDescriptor->hdr[0].name, index, sizeof(pHeaderDescriptor->hdr[0].name));
 			pHeaderDescriptor->hdr[0].name[IPA_RESOURCE_NAME_MAX - 1] = '\0';
 
@@ -9917,10 +9965,19 @@ int IPACM_Wlan::handle_wlan_vlan_client_init(int client_idx, ipacm_bridge *bridg
 			pHeaderDescriptor->commit = true;
 			pHeaderDescriptor->num_hdrs = 1;
 
+			instance_id = extract_instance_id_from_wlan_iface(data->iface_name);
+			if (instance_id != -1)
+			{
+				snprintf(index,sizeof(index), "%d_%d", ipa_if_num, instance_id);
+			}
+			else
+			{
+				snprintf(index,sizeof(index), "%d_", ipa_if_num);
+			}
+
 			memset(pHeaderDescriptor->hdr[0].name, 0,
 				   sizeof(pHeaderDescriptor->hdr[0].name));
 
-			snprintf(index, sizeof(index), "%d_", ipa_if_num);
 			strlcpy(pHeaderDescriptor->hdr[0].name, index, sizeof(pHeaderDescriptor->hdr[0].name));
 			pHeaderDescriptor->hdr[0].name[IPA_RESOURCE_NAME_MAX - 1] = '\0';
 

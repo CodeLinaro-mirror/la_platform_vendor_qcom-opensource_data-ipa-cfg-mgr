@@ -3822,7 +3822,7 @@ int IPACM_Lan::notify_flt_removed(uint8_t mux_id)
 	int j = 0;
 
 	fd = open(IPA_DEVICE_NAME, O_RDWR);
-	if(0 == fd)
+	if(fd < 0)
 	{
 		IPACMERR("Failed opening %s.\n", IPA_DEVICE_NAME);
 		return IPACM_FAILURE;
@@ -3831,6 +3831,7 @@ int IPACM_Lan::notify_flt_removed(uint8_t mux_id)
 	if (rx_prop == NULL)
 	{
 		IPACMERR("Rx prop is NULL, return\n");
+		close(fd);
 		return IPACM_SUCCESS;
 	}
 
@@ -4771,7 +4772,7 @@ int IPACM_Lan::handle_wan_up_ex(ipacm_ext_prop *ext_prop, ipa_ip_type iptype, ui
 	{
 		/* give mux ID of the default PDN to IPA-driver for WLAN/LAN pkts */
 		fd = open(IPA_DEVICE_NAME, O_RDWR);
-		if (0 == fd)
+		if (fd < 0)
 		{
 			IPACMDBG_H("Failed opening %s.\n", IPA_DEVICE_NAME);
 			return IPACM_FAILURE;
@@ -13246,8 +13247,10 @@ int IPACM_Lan::config_dft_firewall_rules_ul_ex(IPACM_firewall_conf_t* firewall_c
 			return IPACM_SUCCESS;
 		}
 
+
 		fd = open(IPA_DEVICE_NAME, O_RDWR);
-		if (0 == fd) {
+		if (fd < 0)
+		{
 			IPACMERR("Failed opening %s.\n", IPA_DEVICE_NAME);
 			return IPACM_FAILURE;
 		}
@@ -20473,7 +20476,7 @@ int IPACM_Lan::handle_mpdn_ul_xlat_filter_rule(ipacm_ext_prop * prop,
 	}
 
 	fd = open(IPA_DEVICE_NAME, O_RDWR);
-	if (0 == fd)
+	if (fd < 0)
 	{
 		IPACMERR("Failed opening %s.\n", IPA_DEVICE_NAME);
 		ret = IPACM_FAILURE;
@@ -20710,7 +20713,8 @@ int IPACM_Lan::handle_mpdn_ul_xlat_filter_rule(ipacm_ext_prop * prop,
 fail:
 	if (pFilteringTable != NULL)
 		free(pFilteringTable);
-	close(fd);
+	if(fd)
+		close(fd);
 	return ret;
 }
 

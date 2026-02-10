@@ -2436,10 +2436,6 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 		IPACMDBG_H("Received and will process an IPA_HANDLE_EoGRE_UP\n");
 		IPACM_Iface::ipacmcfg->eogre_enabled = true;
 		eogre_up();
-		evt_data.event    = IPA_WAN_HANDLE_EoGRE_UP;
-		evt_data.evt_data = 0;
-		IPACMDBG_H("Posting event: IPA_WAN_HANDLE_EoGRE_UP.\n");
-		IPACM_EvtDispatcher::PostEvt(&evt_data);
 		break;
 
 	case IPA_HANDLE_EoGRE_DOWN:
@@ -24538,6 +24534,12 @@ void IPACM_Lan::eogre_up()
 	install_ipv6_prefix_flt_rule(IPACM_Wan::backhaul_ipv6_prefix);
 #endif
 
+	ipacm_cmd_q_data evt_data;
+	memset(&evt_data, 0, sizeof(evt_data));
+	evt_data.event = IPA_WAN_HANDLE_EoGRE_UP;
+	evt_data.evt_data = 0;
+	IPACMDBG_H("Posting event: IPA_WAN_HANDLE_EoGRE_UP.\n");
+	IPACM_EvtDispatcher::PostEvt(&evt_data);
 	IPACMDBG("Finished handling eogre_up\n");
 }
 

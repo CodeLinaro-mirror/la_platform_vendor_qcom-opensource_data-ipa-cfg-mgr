@@ -7859,6 +7859,11 @@ int IPACM_Wlan::handle_wlan_client_down_evt(uint8_t *mac_addr, uint16_t vlan_id)
 			get_client_memptr(wlan_client, (clt_indx + 1))->ipv4_sta_ul_rules_set;
 		get_client_memptr(wlan_client, clt_indx)->ipv6_sta_ul_rules_set =
 			get_client_memptr(wlan_client, (clt_indx + 1))->ipv6_sta_ul_rules_set;
+
+		get_client_memptr(wlan_client, clt_indx)->sta_ul_fl_rule_hdl_v4 =
+			get_client_memptr(wlan_client, (clt_indx + 1))->sta_ul_fl_rule_hdl_v4;
+		get_client_memptr(wlan_client, clt_indx)->sta_ul_fl_rule_hdl_v6 =
+			get_client_memptr(wlan_client, (clt_indx + 1))->sta_ul_fl_rule_hdl_v6;
 #ifdef IPA_HW_FNR_STATS
 		get_client_memptr(wlan_client, clt_indx)->ul_cnt_idx =
 			get_client_memptr(wlan_client, clt_indx + 1)->ul_cnt_idx;
@@ -14046,4 +14051,3 @@ int IPACM_Wlan::handle_wan_up_v2(ipa_ip_type ip_type, uint16_t vlan_id, uint8_t 
 	}
 	return IPACM_SUCCESS;
 }
-

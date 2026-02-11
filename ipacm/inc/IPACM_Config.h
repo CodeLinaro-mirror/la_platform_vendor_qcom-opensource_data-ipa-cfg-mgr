@@ -790,10 +790,12 @@ public:
 		for (indx=0; indx < MAX_NUM_IP_PASS_MPDN; indx++)
 		{
 			if (ip_pass_mpdn_table[indx].valid_entry &&
-				(ip_pass_mpdn_table[indx].ip_pass_pdn_ip_addr == ip_addr) &&
+				((ip_addr == 0) || (ip_pass_mpdn_table[indx].ip_pass_pdn_ip_addr == ip_addr)) &&
 				(ip_pass_mpdn_table[indx].ip_pass_dev_type ==
 					pdn_config->u.passthrough_cfg.device_type) &&
-				ip_pass_mpdn_table[indx].vlan_id == pdn_config->u.passthrough_cfg.vlan_id)
+				(ip_pass_mpdn_table[indx].vlan_id == pdn_config->u.passthrough_cfg.vlan_id) &&
+				(strncmp(ip_pass_mpdn_table[indx].dev_name, pdn_config->dev_name,
+					IPA_RESOURCE_NAME_MAX) == 0))
 				return indx;
 		}
 		return indx;

@@ -20096,11 +20096,17 @@ void IPACM_Lan::eth_bridge_post_event(ipa_cm_event_id evt, ipa_ip_type iptype, u
 			mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
 		memcpy(evt_data_eth_bridge->mac_addr, mac, sizeof(evt_data_eth_bridge->mac_addr));
 	}
-	if(iface_name)
+	if (iface_name)
 	{
 		IPACMDBG_H("Iface: %s\n", iface_name);
-		memcpy(evt_data_eth_bridge->iface_name, iface_name,
-			sizeof(evt_data_eth_bridge->iface_name));
+		strlcpy(evt_data_eth_bridge->iface_name, iface_name,
+				sizeof(evt_data_eth_bridge->iface_name));
+	}
+	else
+	{
+		IPACMERR("iface_name is NULL, cannot post event\n");
+		free(evt_data_eth_bridge);
+    	return;
 	}
 	evt_data_eth_bridge->VlanID = VlanID;
 	eth_bridge_evt.evt_data = (void*)evt_data_eth_bridge;

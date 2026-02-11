@@ -1323,7 +1323,7 @@ void IPACM_LanToLan::print_data_structure_info()
 	for(it_event = m_cached_client_add_event.begin(); it_event != m_cached_client_add_event.end(); it_event++)
 	{
 		IPACMDBG_H("Client %d MAC: 0x%02x%02x%02x%02x%02x%02x, interface: %s\n", i, it_event->mac_addr[0], it_event->mac_addr[1], it_event->mac_addr[2],
-			it_event->mac_addr[3], it_event->mac_addr[4], it_event->mac_addr[5], it_event->p_iface->dev_name);
+			it_event->mac_addr[3], it_event->mac_addr[4], it_event->mac_addr[5], it_event->iface_name);
 		i++;
 	}
 

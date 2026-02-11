@@ -1989,7 +1989,7 @@ void IPACM_Config::add_vlan_iface(ipa_vlan_iface_info *data)
 		}
 		memset(evt_data_eth_bridge, 0, sizeof(*evt_data_eth_bridge));
 
-		memcpy(evt_data_eth_bridge->iface_name, data->name,
+		strlcpy(evt_data_eth_bridge->iface_name, data->name,
 			sizeof(evt_data_eth_bridge->iface_name));
 
 		evt_data_eth_bridge->VlanID = data->vlan_id;
@@ -2114,7 +2114,7 @@ void IPACM_Config::del_vlan_iface(ipa_vlan_iface_info *data)
 		}
 		memset(evt_data_eth_bridge, 0, sizeof(*evt_data_eth_bridge));
 
-		memcpy(evt_data_eth_bridge->iface_name, data->name,
+		strlcpy(evt_data_eth_bridge->iface_name, data->name,
 			sizeof(evt_data_eth_bridge->iface_name));
 
 		evt_data_eth_bridge->VlanID = data->vlan_id;

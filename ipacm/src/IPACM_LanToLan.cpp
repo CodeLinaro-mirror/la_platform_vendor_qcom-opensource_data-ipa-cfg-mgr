@@ -139,7 +139,7 @@ IPACM_LanToLan_Iface::IPACM_LanToLan_Iface(IPACM_Lan *p_iface)
 		if(IPACM_Iface::ipacmcfg->inter_bridge_lantolan_config_enable == false)
 			m_support_intra_iface_offload = true;
 
-		max_num_clients = (IPACM_Iface::ipacmcfg->ipacm_lan2lan_stats_enable) ? IPA_MAX_NUM_HW_PATH_CLIENTS_V2 : MAX_NUM_CLIENT;
+		max_num_clients = (IPACM_Iface::ipacmcfg->ipacm_lan_stats_enable) ? IPA_MAX_NUM_HW_PATH_CLIENTS_V2 : MAX_NUM_CLIENT;
 		m_is_sIface = ((IPACM_Lan *)p_iface)->sIface;
 
 		if (is_spcl_iface()) {
@@ -148,7 +148,7 @@ IPACM_LanToLan_Iface::IPACM_LanToLan_Iface(IPACM_Lan *p_iface)
 	}
 	else
 	{
-		max_num_clients = (IPACM_Iface::ipacmcfg->ipacm_lan2lan_stats_enable) ? IPA_MAX_NUM_HW_PATH_CLIENTS_V2 : MAX_NUM_CLIENT;
+		max_num_clients = (IPACM_Iface::ipacmcfg->ipacm_lan_stats_enable) ? IPA_MAX_NUM_HW_PATH_CLIENTS_V2 : MAX_NUM_CLIENT;
 	}
 	if (true == m_support_intra_iface_offload && IPACM_Iface::ipacmcfg->inter_bridge_lantolan_config_enable == false) {
 		m_intra_interface_info.is_vlan_peer = false;

@@ -25,6 +25,12 @@ BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
 WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
 OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
 IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *
+ * Changes from Qualcomm Innovation Center are provided under the following license:
+ *
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
+
 */
 /*!
 	@file
@@ -132,13 +138,12 @@ void IPACM_EvtDispatcher::ProcessEvt(ipacm_cmd_q_data *data)
 		{
 			ipacm_event_stats[data->event]++;
 			tmp1.obj->event_callback(data->event, data->evt_data);
-			IPACMDBG(" Find matched registered events %d\n", data->event);
+			IPACMDBG(" Find matched registered events %d data:%p\n", data->event, data->evt_data);
 		}
 	        tmp = tmp1.next;
 	}
+	IPACMDBG(" Finished process events %d data:%p\n", data->event,data->evt_data);
 
-	IPACMDBG(" Finished process events %d\n", data->event);
-			
 	if(data->evt_data != NULL)
 	{
 		IPACMDBG("free the event:%d data: %p\n", data->event, data->evt_data);

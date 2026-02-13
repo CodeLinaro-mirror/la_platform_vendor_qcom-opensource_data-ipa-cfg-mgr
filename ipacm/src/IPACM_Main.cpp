@@ -1277,11 +1277,6 @@ int main(int argc, char **argv)
 
 	for(int t_itr = 0; t_itr< IPACM_CHILD_THREADS_MAX; t_itr++)
 	{
-		if (strcmp(ipacm_child_threads[t_itr].t_name, "IPACM_NTLNK_QRY") == 0 && !ipacm_restarted)
-		{
-			IPACMDBG("Not creating %s thread on non-restart\n", ipacm_child_threads[t_itr].t_name);
-			continue;
-		}
 		if(0 == ipacm_child_threads[t_itr].tid)
 		{
 			ret = pthread_create(&ipacm_child_threads[t_itr].tid, NULL, ipacm_child_threads[t_itr].t_func, NULL);

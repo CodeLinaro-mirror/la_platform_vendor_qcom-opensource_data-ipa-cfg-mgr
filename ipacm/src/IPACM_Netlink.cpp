@@ -3719,12 +3719,16 @@ void ipa_query_nl_getevents()
 		l2tp_nl_tunnel_get(L2TP_CMD_SESSION_GET);
 	}
 	ipa_nl_query_newneigh(AF_BRIDGE);
-	ipa_nl_query_newneigh(AF_INET6, NULL, true);
-	ipa_nl_query_newneigh(AF_INET, NULL, true);
+	/* Query conntracks only if ipacm is restarted */
+	ipa_nl_query_newneigh(AF_INET6, NULL, ipacm_restarted);
+	ipa_nl_query_newneigh(AF_INET, NULL, ipacm_restarted);
 	IPACMDBG("Send GETNEIGH is completed\n");
 	ipa_nl_send_getroute(IPA_IP_v6);
 	ipa_nl_send_getroute(IPA_IP_v4);
 	IPACMDBG("Send GETROUTE is completed\n");
 	ipa_query_active_feature();
 	IPACMDBG_DMESG("IPACM process started, ipa path is re-established\n");
+	/* Make it false as conntrack query is take care above */
+	if(ipacm_restarted)
+		ipacm_restarted = false;
 }

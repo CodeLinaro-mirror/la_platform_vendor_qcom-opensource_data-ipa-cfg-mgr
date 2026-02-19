@@ -9919,6 +9919,7 @@ int IPACM_Wlan::install_uplink_filter_rule_per_client_v2
 
 	for(cnt=0; cnt < prop->num_ext_props && index < total_rules; cnt++)
 	{
+		SET_FLT_RULE_PRIORITY(flt_rule_entry, total_rules, index);
 		if (isFirewall)
 		{
 			memcpy(&flt_rule_entry.rule.eq_attrib,
@@ -10067,7 +10068,8 @@ int IPACM_Wlan::install_uplink_filter_rule_per_client_v2
 		if (iptype == IPA_IP_v6 && IPACM_Iface::ipacmcfg->IsIpv6CTEnabled() &&
 			prop->prop[cnt].action != IPA_PASS_TO_EXCEPTION)
 		{
-			//duplicate the old rule to new index
+			// duplicate the old rule to new index and update the priority
+			SET_FLT_RULE_PRIORITY(flt_rule_entry, total_rules, index);
 			memcpy((void *)pFilteringTable->rules + (index * sizeof(struct ipa_flt_rule_add_v2)),
 				&flt_rule_entry, sizeof(flt_rule_entry));
 
@@ -10103,7 +10105,8 @@ int IPACM_Wlan::install_uplink_filter_rule_per_client_v2
 
 			flt_rule_entry.rule.eq_attrib.num_offset_meq_32++;
 
-			//overwrite the old rule and increment the rule count
+			// overwrite the old rule and increment the rule count and update the priority to one less than original rule
+			SET_FLT_RULE_PRIORITY(flt_rule_entry, total_rules, index - 1);
 			memcpy((void *)pFilteringTable->rules + ((index -1) * sizeof(struct ipa_flt_rule_add_v2)),
 				&flt_rule_entry, sizeof(flt_rule_entry));
 			index++;

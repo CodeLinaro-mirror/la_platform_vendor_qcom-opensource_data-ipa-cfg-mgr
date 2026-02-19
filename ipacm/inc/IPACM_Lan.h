@@ -74,6 +74,15 @@ SPDX-License-Identifier: BSD-3-Clause-Clear
 #define IPA_LAN_RX_HDR_NAME "ipa_lan_hdr"
 #endif
 
+#define MAX_PRIORITY_FLTR 100
+#define PRIORITY_FLTR_XLAT 80
+
+#define SET_FLT_RULE_PRIORITY(flt_rule, total, idx) \
+    if ((flt_rule).at_rear) \
+    { \
+        (flt_rule).rule.max_prio = MAX_PRIORITY_FLTR - (total) + (idx); \
+    }
+
 /* ndc bandwidth ipatetherstats <ifaceIn> <ifaceOut> */
 /* <in->out_bytes> <in->out_pkts> <out->in_bytes> <out->in_pkts */
 

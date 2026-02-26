@@ -275,6 +275,11 @@ if (!(a)) {                                                 \
 #define PMIPv6_TAG                           "PMIPV6"
 
 
+#define DEVICEMODE                           "DeviceMode"
+#define IPACMDEVICEMODE                      "IPACMDeviceMode"
+#define IPACMVLANMODE                        "Vlan"
+#define IPACMMGMNTVLANID                     "MgmtVlanId"
+
 /*---------------------------------------------------------------------------
       IP protocol numbers - use in dss_socket() to identify protocols.
       Also contains the extension header types for IPv6.
@@ -443,6 +448,10 @@ typedef struct  _IPACM_conf_t
 	bool eth_vlan_wan_enable;
 	const char* eth_lan_wan_iface_name;
 	bool multi_vlan_bridge_config_enable;
+	ipa_device_mode device_mode;
+	bool device_vlan_mode;
+	uint16_t mgmnt_vlan_id;
+
 } IPACM_conf_t;
 
 typedef struct _IPACM_conf_ext_t

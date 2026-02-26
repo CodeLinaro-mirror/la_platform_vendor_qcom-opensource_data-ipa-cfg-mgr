@@ -801,6 +801,9 @@ skip_fnr_alloc:
 	multi_vlan_bridge_config_enable = cfg->multi_vlan_bridge_config_enable;
 	IPACMDBG_H("multi_vlan_bridge_config_enable: %d\n", multi_vlan_bridge_config_enable);
 
+	device_mode = cfg->device_mode;
+	device_vlan_mode = cfg->device_vlan_mode;
+	mgmnt_vlan_id = cfg->mgmnt_vlan_id;
 	if (ipacm_mpdn_enable == TRUE && ipacm_l2tp_enable != IPACM_L2TP_DISABLE)
 	{
 		IPACMERR("Not support both VLAN_MPDN and L2TP are enable \n");
@@ -813,6 +816,9 @@ skip_fnr_alloc:
 	ipacm_gre_autolearn = cfg->gre_conf.gre_autolearn;
 	IPACMDBG_H("ipacm_gre_enable %d. \n", ipacm_gre_enable);
 	IPACMDBG_H("ipacm_gre_autolearn %d. \n", ipacm_gre_autolearn);
+	IPACMDBG_H("device mode %d\n", cfg->device_mode);
+	IPACMDBG_H("device vlan mode %d\n", cfg->device_vlan_mode);
+	IPACMDBG_H("mgmnt vlan id %d\n", cfg->mgmnt_vlan_id);
 	memset(&ipacm_gre_server_ipv4, 0, sizeof(ipacm_gre_server_ipv4));
 
 	memcpy(&ipacm_gre_server_ipv4,

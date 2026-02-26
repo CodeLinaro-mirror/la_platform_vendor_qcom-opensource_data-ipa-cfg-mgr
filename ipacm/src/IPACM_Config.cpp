@@ -207,6 +207,8 @@ const char *ipacm_event_name[] = {
 	__stringify(IPA_QOS_RULE_FLUSH_EVENT),                 /* ipacm_qos_rule_flush_event */
 	__stringify(IPA_HANDLE_NEW_NEIGH_EVENT),               /* ipacm_event_data_fid */
 	__stringify(IPA_WAN_GW_ADDR_ADD_EVENT),                /* ipacm_event_data_addr */
+	__stringify(IPA_MAPE_FMR_RULE),                        /* ipacm_event_data_addr */
+	__stringify(IPA_MAPE_DEL_FMR_RULE),                    /* ipacm_event_data_addr */
 	__stringify(IPACM_EVENT_MAX)
 };
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
@@ -685,6 +687,11 @@ reread:
 		ipa_num_ipa_interfaces++;
 	}
 
+	mape_wan_iface_table_index = ipa_num_ipa_interfaces;
+	ipa_num_ipa_interfaces++;
+	IPACMDBG_H(" mape_wan_iface_table_index %d \n",mape_wan_iface_table_index);
+	IPACMDBG_H(" ipa_num_ipa_interfaces %d \n",ipa_num_ipa_interfaces);
+
 	if (iface_table != NULL)
 	{
 		free(iface_table);
@@ -732,6 +739,14 @@ reread:
 			iface_table[eth_wan_iface_table_idx[i]].virtual_iface = true;
 		}
 	}
+
+	strlcpy(iface_table[mape_wan_iface_table_index].iface_name,"map-mape",strlen("map-mape")+1);
+	IPACMDBG_H(" iface_name %s \n",iface_table[mape_wan_iface_table_index].iface_name);
+	iface_table[mape_wan_iface_table_index].if_cat = WAN_IF;
+	iface_table[mape_wan_iface_table_index].if_mode = ROUTER;
+	iface_table[mape_wan_iface_table_index].virtual_iface = true;
+	memcpy(iface_table[mape_wan_iface_table_index].phy_dev_name, cfg->mape_wan_iface_name, sizeof(iface_table[mape_wan_iface_table_index].phy_dev_name));
+	IPACMDBG_H(" phy_dev_name %s \n",iface_table[mape_wan_iface_table_index].phy_dev_name);
 
 	/* Construct IPACM ALG table */
 	ipa_num_alg_ports = cfg->alg_config.num_alg_entries;
@@ -810,6 +825,8 @@ reread:
 	ipacm_msgflt_enable = cfg->msgflt_enable;
 	IPACMDBG_H("ipacm_msgflt_feature_enable %d\n", ipacm_msgflt_enable);
 
+	mape_enable = cfg->mape_enable;
+	IPACMDBG_H(" mape_enable %d \n",mape_enable);
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
 	if (!ipacm_lan_stats_enable_set)
 	{

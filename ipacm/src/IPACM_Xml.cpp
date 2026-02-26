@@ -650,6 +650,7 @@ static int ipacm_cfg_xml_parse_tree
 						IPACM_util_icmp_string((char*)xml_node->name, Multi_Vlan_Bridge_Config_TAG) == 0 ||
 						IPACM_util_icmp_string((char*)xml_node->name, Inter_Bridge_LanToLan_Config_TAG) == 0 ||
 						IPACM_util_icmp_string((char*)xml_node->name, IPACM_MSGFLT_TAG) == 0 ||
+						IPACM_util_icmp_string((char*)xml_node->name, IPACM_MAPE_TAG) == 0 ||
 						IPACM_util_icmp_string((char*)xml_node->name, IPACMLOG_TAG) == 0)
 				{
 					if (0 == IPACM_util_icmp_string((char*)xml_node->name, IFACE_TAG))
@@ -1520,6 +1521,52 @@ static int ipacm_cfg_xml_parse_tree
 						}
 						IPACMDBG_H("inter_bridge_lantolan_config_enable: %d buf(%d)\n", config->inter_bridge_lantolan_config_enable,
 							atoi(content_buf));
+					}
+				}
+				else if (IPACM_util_icmp_string((char*)xml_node->name, IPACM_MAPE_ENABLE_TAG) == 0)
+				{
+					IPACMDBG_H("inside enable mape feature enable\n");
+					content = IPACM_read_content_element(xml_node);
+					if (content == NULL)
+					{
+						IPACMERR("Failed to read the content of the tag %s\n", IPACM_MAPE_ENABLE_TAG);
+					}
+					else
+					{
+						str_size = strlen(content);
+						memset(content_buf, 0, sizeof(content_buf));
+						memcpy(content_buf, (void *)content, str_size);
+						content_buf[MAX_XML_STR_LEN-1] = '\0';
+						if (atoi(content_buf))
+						{
+							config->mape_enable = true;
+						}
+						else
+						{
+							config->mape_enable = false;
+						}
+						IPACMDBG_H("mape feature enable %d buf(%d)\n",config->mape_enable, atoi(content_buf));
+					}
+				}
+				else if (IPACM_util_icmp_string((char*)xml_node->name, IPACM_MAPE_IFACE_TAG) == 0)
+				{
+					IPACMDBG_H("inside enable MAPE WAN Iface Name-XML\n");
+					content = IPACM_read_content_element(xml_node);
+					if (content)
+					{
+						str_size = strlen(content);
+						memset(content_buf, 0, sizeof(content_buf));
+						memcpy(content_buf, (void *)content, str_size);
+						content_buf[MAX_XML_STR_LEN-1] = '\0';
+						if (0 == strncasecmp(content_buf, ETH_INTF, str_size))
+						{
+							config->mape_wan_iface_name = ETH_INTF;
+						}
+						else if (0 == strncasecmp(content_buf, ETH1_INTF, str_size))
+						{
+							config->mape_wan_iface_name = ETH1_INTF;
+						}
+						IPACMDBG_H("MAPE WAN Iface Name: %s\n", config->mape_wan_iface_name);
 					}
 				}
 			}

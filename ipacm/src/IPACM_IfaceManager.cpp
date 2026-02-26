@@ -661,6 +661,9 @@ int IPACM_IfaceManager::create_iface_instance(ipacm_ifacemgr_data *param)
 						if (w->rx_prop == NULL && w->tx_prop == NULL)
 						{
 							/* close the netdev instance if IPA not support*/
+							if (strcmp(IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].iface_name,"map-mape") == 0){
+								IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].ifi_flags = 0;
+							}
 							w->delete_iface();
 							return IPACM_FAILURE;
 						}
@@ -771,6 +774,10 @@ int IPACM_IfaceManager::create_iface_instance(ipacm_ifacemgr_data *param)
 					else
 					{
 						IPACM_EvtDispatcher::registr(IPA_LINK_DOWN_EVENT, w);
+					}
+					if(is_sta_mode == ECM_WAN) {
+						IPACM_EvtDispatcher::registr(IPA_MAPE_FMR_RULE, w);
+						IPACM_EvtDispatcher::registr(IPA_MAPE_DEL_FMR_RULE, w);
 					}
 
 					IPACMDBG_H("ipa_WAN (%s):ipa_index (%d) instance open/registr ok\n", w->dev_name, w->ipa_if_num);

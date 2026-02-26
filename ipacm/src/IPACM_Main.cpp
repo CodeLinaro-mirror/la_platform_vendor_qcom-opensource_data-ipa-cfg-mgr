@@ -736,6 +736,28 @@ void* ipa_driver_msg_notifier(void *param)
 				}
 			}
 
+			if(IPACM_Iface::ipacmcfg->mape_wan_iface_table_index >= 0 &&
+				strncmp(
+					IPACM_Iface::ipacmcfg->iface_table[IPACM_Iface::ipacmcfg->mape_wan_iface_table_index].phy_dev_name,
+					event_ecm.name, sizeof(event_ecm.name)) == 0)
+			{
+				data_fid2 = (ipacm_event_data_fid *)malloc(sizeof(ipacm_event_data_fid));
+				if(data_fid2 == NULL)
+				{
+					IPACMERR("unable to allocate memory for event_ecm data_fid\n");
+					return NULL;
+				}
+				data_fid2->if_index =
+					IPACM_Iface::ipacmcfg->iface_table[IPACM_Iface::ipacmcfg->mape_wan_iface_table_index].netlink_interface_index;
+				evt_data.event = IPA_LINK_DOWN_EVENT;
+				evt_data.evt_data = data_fid2;
+				IPACMDBG_H("Posting IPA_LINK_DOWN_EVENT event %d for ETH VLAN iface:%d dev_name:%s\n",
+					evt_data.event, data_fid2->if_index,
+					IPACM_Iface::ipacmcfg->iface_table[IPACM_Iface::ipacmcfg->mape_wan_iface_table_index].iface_name);
+				IPACM_Iface::ipacmcfg->iface_table[IPACM_Iface::ipacmcfg->mape_wan_iface_table_index].ifi_flags = 0;
+				IPACM_EvtDispatcher::PostEvt(&evt_data);
+			}
+
 			memset(&evt_data, 0, sizeof(evt_data));
 			data_fid = (ipacm_event_data_fid *)malloc(sizeof(ipacm_event_data_fid));
 			if(data_fid == NULL)

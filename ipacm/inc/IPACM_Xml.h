@@ -295,7 +295,9 @@ if (!(a)) {                                                 \
 #define Inter_Bridge_LanToLan_Config_TAG     "InterBridgeLanToLanConfig"
 #define Inter_Bridge_LanToLan_Config_Enable  "InterBridgeLanToLanEnable"
 
-
+#define IPACM_MAPE_TAG                     "IPACMMAPE"
+#define IPACM_MAPE_ENABLE_TAG              "IPACMMAPEEnable"
+#define IPACM_MAPE_IFACE_TAG               "MAPEPhyIface"
 
 /*---------------------------------------------------------------------------
       IP protocol numbers - use in dss_socket() to identify protocols.
@@ -498,6 +500,8 @@ typedef struct  _IPACM_conf_t
 	bool multi_vlan_bridge_config_enable;
 	bool msgflt_enable;
 	bool inter_bridge_lantolan_config_enable;
+	bool mape_enable;
+	const char* mape_wan_iface_name;
 } IPACM_conf_t;
 
 typedef struct _IPACM_conf_ext_t

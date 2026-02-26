@@ -59,6 +59,9 @@ IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #define IPA_V2_NUM_DEFAULT_WAN_FILTER_RULE_IPV4 3 /*Multicast rule + broadcast rule + tcp syn bit rule */
 #define XLAT_IP 0xc0000000
 
+#define MAX_IPv4_PREFIX_LEN 32
+#define MAX_PREFIX_LEN 64
+
 #define NETWORK_STATS "%s %llu %llu %llu %llu"
 #ifdef FEATURE_IPA_ANDROID
 #define IPA_NETWORK_STATS_FILE_NAME "/data/misc/ipa/network_stats"
@@ -92,6 +95,24 @@ typedef struct _ipa_wan_client
 	bool power_save_set;
 	wan_client_rt_hdl wan_rt_hdl[0]; /* depends on number of tx properties */
 }ipa_wan_client;
+
+typedef struct {
+	int rule_number;
+	int fmr;
+	uint32_t ipv4prefix;
+	uint32_t ipv6prefix[4];
+	int ipv4prefixlen;
+	int ipv6prefixlen;
+	uint8_t ea_len;
+	uint8_t offset;
+	uint8_t psid_len;
+	uint32_t route_rule_hdl;
+} MapeFMR;
+
+struct MapRule {
+	std::vector<MapeFMR> fmr_rules;
+	uint32_t br_ipaddr[4];
+};
 
 class IPACM_Wan;
 
@@ -197,6 +218,16 @@ public:
 	static uint32_t curr_wan_ip;
 	static int num_ipv4_sta_pdn;
 	static int num_ipv6_sta_pdn;
+
+	/* MAPE details */
+	static uint32_t mape_wan_rt_rule_hdl_v6;
+	static uint32_t mape_wan_rt_rule_hdl_v4;
+	static struct MapRule mape_rules;
+	static uint32_t mape_wan_ipv4_addr;
+	static uint32_t mape_wan_ipv6_addr[4];
+	static uint32_t mape_fmr_hdr_hdl;
+	static bool mape_rules_initialized;
+
 	IPACM_Wan(int, ipacm_wan_iface_type, uint8_t *, bool is_ppp_iface = true);
 	virtual ~IPACM_Wan();
 #ifdef FEATURE_IPACM_UL_FIREWALL
@@ -208,12 +239,18 @@ public:
 	static int read_firewall_filter_rules_ul(void);
 
 	static bool check_dft_firewall_rules_attr_mask_ul(IPACM_firewall_conf_t *firewall_config);
-#ifdef FEATURE_PPPOE
 	uint32_t v4_p_ctx_2use;
 	uint32_t v6_p_ctx_2use;
+	uint32_t fmr_proc_ctx_hdl;
+#ifdef FEATURE_PPPOE
 	int pppoe_make_hdr_add_ctx(enum ipa_ip_type iptype);
 	int pppoe_del_hdr_proc_ctx(enum ipa_ip_type ip_type);
 #endif
+	int mape_make_hdr_add_ctx(enum ipa_ip_type iptype);
+	int mape_del_hdr_proc_ctx(enum ipa_ip_type ip_type);
+	int mape_make_fmr_hdr_add_ctx(MapeFMR* fmr_rule);
+	int mape_fmr_route_rule_add(uint32_t ip_addr);
+	int mape_fmr_route_rule_del(uint32_t ip_addr);
 #ifdef FEATURE_VLAN_MPDN
 	static int get_v6_pdn_firewall_configs(
 		std::pair<IPACM_firewall_conf_t*, ipacm_ipv6_wan_iface*> wan_firewall_pair[],
@@ -562,6 +599,8 @@ public:
 	 */
 	static int installWanPostIpsecRt(ipa_ip_type ipType);
 #endif
+	void read_from_mape_rules_file(void);
+	MapeFMR* get_rule_by_ipv4(uint32_t input_ipv4_host_order);
 
 private:
 
@@ -838,6 +877,7 @@ private:
 	}
 
 	int handle_wan_hdr_init(uint8_t *mac_addr, bool gw_addr);
+	int handle_mape_wan_fmr_hdr_init(uint8_t *mac_addr, MapeFMR* fmr_rule);
 	int handle_wan_client_ipaddr(ipacm_event_data_all *data);
 	int handle_wan_client_route_rule(uint8_t *mac_addr, ipa_ip_type iptype);
 #ifdef FEATURE_DUAL_BACKHAUL

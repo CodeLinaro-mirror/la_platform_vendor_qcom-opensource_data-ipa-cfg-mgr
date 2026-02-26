@@ -441,6 +441,12 @@ public:
 	/* ETH WAN iface indices */
 	int eth_wan_iface_table_idx[MAX_NUM_PPPOE_MPDN];
 
+	/*MAPE iface index */
+	int mape_wan_iface_table_index;
+	bool mape_enable;
+	/* MAPE iface name */
+	const char* mape_wan_iface_name;
+
 	/* Store the number of interface IPACM read from XML file */
 	int ipa_num_ipa_interfaces;
 
@@ -614,6 +620,7 @@ public:
 
 	bool isMCC_Mode;
 	pthread_mutex_t mac_flt_info_lock;
+
 	/* map to store whitelisted and blacklisted unique mac adrrs */
 	std::map<std::array<uint8_t, 6>, mac_flt_type *> mac_flt_lists;
 #ifdef IPA_IOC_SET_MAC_FLT
@@ -1864,6 +1871,10 @@ private:
 				{
 					return nullptr;
 				}
+			}
+			if (iface_table[i].netlink_interface_index == interfaceIndex &&
+					i == mape_wan_iface_table_index ){
+				return nullptr;
 			}
 		}
 

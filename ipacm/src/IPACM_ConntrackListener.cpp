@@ -2209,6 +2209,8 @@ IGNORE:
 void IPACM_ConntrackListener::ProcessCTMessage(void *param)
 {
 	 ipacm_ct_evt_data *evt_data = (ipacm_ct_evt_data *)param;
+	 ipacm_cmd_q_data event_data;
+	 ipacm_event_data_addr *data_addr;
 	 u_int8_t l4proto = 0;
 
 #ifdef IPACM_DEBUG
@@ -2231,6 +2233,34 @@ void IPACM_ConntrackListener::ProcessCTMessage(void *param)
 	 }
 	 else
 	 {
+		if(IPACM_Iface::ipacmcfg->mape_enable){
+			if (evt_data->type & NFCT_T_NEW) {
+				data_addr = (ipacm_event_data_addr *)malloc(sizeof(ipacm_event_data_addr));
+				if (data_addr != NULL) {
+					memset(data_addr, 0, sizeof(ipacm_event_data_addr));
+					data_addr->ipv4_addr = ntohl(nfct_get_attr_u32(evt_data->ct, ATTR_ORIG_IPV4_DST));
+					data_addr->iptype = IPA_IP_v4;
+
+					event_data.event = IPA_MAPE_FMR_RULE;
+					event_data.evt_data = (void *)data_addr;
+					IPACMDBG_H(" Posting  IPA_MAPE_FMR_RULE \n");
+					IPACM_EvtDispatcher::PostEvt(&event_data);
+				}
+			}
+			else if (evt_data->type & NFCT_T_DESTROY) {
+				data_addr = (ipacm_event_data_addr *)malloc(sizeof(ipacm_event_data_addr));
+				if (data_addr != NULL) {
+					memset(data_addr, 0, sizeof(ipacm_event_data_addr));
+					data_addr->ipv4_addr = ntohl(nfct_get_attr_u32(evt_data->ct, ATTR_ORIG_IPV4_DST));
+					data_addr->iptype = IPA_IP_v4;
+
+					event_data.event = IPA_MAPE_DEL_FMR_RULE;
+					event_data.evt_data = (void *)data_addr;
+					IPACMDBG_H(" Posting IPA_MAPE_DEL_FMR_RULE \n");
+					IPACM_EvtDispatcher::PostEvt(&event_data);
+				}
+			}
+		}
 			ProcessTCPorUDPMsg(evt_data->ct, evt_data->type, l4proto);
 	 }
 

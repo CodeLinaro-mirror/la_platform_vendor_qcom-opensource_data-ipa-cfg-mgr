@@ -1630,6 +1630,10 @@ static int ipa_nl_decode_nlmsg
 					IPACMDBG("GOT RTM_NEWROUTE event, br-wan enabled %d \n", IPACM_Iface::ipacmcfg->eth_wan_br_wan_enable);
 				}
 
+				if(strcmp(dev_name,"map-mape") == 0){
+					IPACMDBG_H(" Ignoring route on map-mape \n");
+					return IPACM_SUCCESS;
+				}
 				if(msg_ptr->nl_route_info.attr_info.param_mask & IPA_RTA_PARAM_DST)
 				{
 					ret_val = ipa_get_if_name(dev_name, msg_ptr->nl_route_info.attr_info.oif_index);
@@ -2130,6 +2134,11 @@ process_v6:
 						IPACMERR("Error while getting interface name\n");
 						return IPACM_FAILURE;
 					}
+					if(strcmp(dev_name,"map-mape") == 0){
+						IPACMDBG_H(" Ignoring route on map-mape \n");
+						return IPACM_SUCCESS;
+					}
+
 					IPACM_NL_REPORT_ADDR( "route del -host ", msg_ptr->nl_route_info.attr_info.dst_addr);
 					IPACM_NL_REPORT_ADDR( " gw ", msg_ptr->nl_route_info.attr_info.gateway_addr);
 					IPACMDBG("dev %s\n", dev_name);
@@ -2166,6 +2175,11 @@ process_v6:
 					{
 						IPACMERR("Error while getting interface name\n");
 						return IPACM_FAILURE;
+					}
+
+					if(strcmp(dev_name,"map-mape") == 0){
+						IPACMDBG_H(" Ignoring route on map-mape \n");
+						return IPACM_SUCCESS;
 					}
 
 					/* insert to command queue */
@@ -2883,6 +2897,12 @@ int ipa_nl_send_getroute(ipa_ip_type ip_type)
 				IPACM_NL_REPORT_ADDR( "route add -host", nl_route_info_get_route.attr_info.dst_addr );
 				IPACM_NL_REPORT_ADDR( "gw", nl_route_info_get_route.attr_info.gateway_addr );
 				IPACMDBG("dev %s\n",dev_name );
+
+				if(strcmp(dev_name,"map-mape") == 0){
+					IPACMDBG_H(" Ignoring route on map-mape \n");
+					return IPACM_SUCCESS;
+				}
+
 				/* insert to command queue */
 				IPACM_EVENT_COPY_ADDR_v4( if_ipv4_addr, nl_route_info_get_route.attr_info.dst_addr);
 				temp = (-1);
@@ -2922,6 +2942,11 @@ int ipa_nl_send_getroute(ipa_ip_type ip_type)
 					IPACM_NL_REPORT_ADDR( "route add default gw \n", nl_route_info_get_route.attr_info.gateway_addr );
 					IPACMDBG_H("dev %s \n", dev_name);
 					IPACM_NL_REPORT_ADDR( "dstIP:\n", nl_route_info_get_route.attr_info.dst_addr );
+
+					if(strcmp(dev_name,"map-mape") == 0){
+						IPACMDBG_H(" Ignoring route on map-mape \n");
+						return IPACM_SUCCESS;
+					}
 
 					/* insert to command queue */
 					data_addr = (ipacm_event_data_addr *)malloc(sizeof(ipacm_event_data_addr));
@@ -3391,4 +3416,190 @@ int mask_v6(int index, uint32_t *mask)
 	}
 }
 
+int ipa_open_nl_getlink_socket
+(
+ipa_nl_sk_info_t   *sk_info,
+int               protocol,
+unsigned int      grps
+)
+{
+	int                  *p_sk_fd;
+	struct sockaddr_nl   *p_sk_addr_loc ;
+	int ret = 0;
 
+	//ds_assert(sk_info != NULL);
+
+	p_sk_fd = &(sk_info->sk_fd);
+	p_sk_addr_loc = &(sk_info->sk_addr_loc);
+
+	/*--------------------------------------------------------------------------
+	Open netlink socket for specified protocol
+	---------------------------------------------------------------------------*/
+	if ((*p_sk_fd = socket(AF_NETLINK, SOCK_RAW, protocol)) < 0)
+	{
+	ret = errno;
+	IPACMDBG("Socket open failed %s \n", strerror(errno));
+	return ret;
+	}
+
+	/*--------------------------------------------------------------------------
+	Initialize socket parameters to 0
+	--------------------------------------------------------------------------*/
+	memset(p_sk_addr_loc, 0, sizeof(struct sockaddr_nl));
+
+	/*-------------------------------------------------------------------------
+	Populate socket parameters
+	--------------------------------------------------------------------------*/
+	p_sk_addr_loc->nl_family = AF_NETLINK;
+	p_sk_addr_loc->nl_pid = 0;
+	p_sk_addr_loc->nl_groups = grps;
+
+	/*-------------------------------------------------------------------------
+	128    Bind socket to receive the netlink events for the required groups
+	129  --------------------------------------------------------------------------*/
+
+	if( bind( *p_sk_fd,
+			(struct sockaddr *)p_sk_addr_loc,
+			sizeof(struct sockaddr_nl) ) < 0)
+	{
+	ret = errno;
+	IPACMDBG("Socket bind failed %s- Make sure no-one has opened a NL socket"
+			" with\n", strerror(errno));
+	close(*p_sk_fd);
+	return ret;
+	}
+	return ret;
+}
+
+int  ipa_nl_query_getlink(int af_family)
+{
+	ipa_nl_sk_info_t   sk_info;
+	struct sockaddr_nl req_nl_addr, recv_nl_addr;
+	struct msghdr req_nl_msg, recv_nl_msg;
+	ipa_nl_req_type    nl_req;
+	char dev_name[IF_NAME_LEN];
+
+	struct iovec recv_iovec, req_iovec;
+	char buff[8124] = {0};
+	unsigned int ret_val = 0;
+	struct nlmsghdr *nl_hdr = NULL;
+	struct ifinfomsg *iface_info = NULL;
+	int ret;
+
+	memset(&req_nl_msg, 0, sizeof(req_nl_msg));
+	memset(&req_nl_addr, 0, sizeof(req_nl_addr));
+	memset(&nl_req, 0, sizeof(nl_req));
+	memset(&sk_info, 0, sizeof(sk_info));
+
+	if (ipa_open_nl_getlink_socket(&sk_info, NETLINK_ROUTE, RTMGRP_LINK) != 0)
+	{
+		IPACMDBG("Failed to open the netlink socket", 0, 0, 0);
+		return -1;
+	}
+
+	req_nl_addr.nl_family = AF_NETLINK;
+	nl_req.hdr.nlmsg_len = NLMSG_LENGTH(sizeof(struct rtgenmsg));
+	nl_req.hdr.nlmsg_type = RTM_GETLINK;
+	nl_req.hdr.nlmsg_flags = NLM_F_REQUEST | NLM_F_DUMP;
+	nl_req.hdr.nlmsg_seq = 1;
+	nl_req.hdr.nlmsg_pid = 0;
+	nl_req.gen.rtgen_family =  AF_PACKET;
+
+	req_iovec.iov_base = &nl_req;
+	req_iovec.iov_len = nl_req.hdr.nlmsg_len;
+	req_nl_msg.msg_iov = &req_iovec;
+	req_nl_msg.msg_iovlen = 1;
+	req_nl_msg.msg_name = &req_nl_addr;
+	req_nl_msg.msg_namelen = sizeof(req_nl_addr);
+	memset(&recv_nl_msg, 0, sizeof(recv_nl_msg));
+	memset(&recv_iovec, 0, sizeof(recv_iovec));
+
+	recv_iovec.iov_base = (void*)buff;
+	recv_iovec.iov_len = sizeof(buff);
+
+	recv_nl_msg.msg_name = (void*)&recv_nl_addr;
+	recv_nl_msg.msg_namelen = sizeof(recv_nl_addr);
+	recv_nl_msg.msg_iov = &recv_iovec;
+	recv_nl_msg.msg_iovlen = 1;
+	recv_nl_msg.msg_control = NULL;
+	recv_nl_msg.msg_controllen = 0;
+	recv_nl_msg.msg_flags = 0;
+	ipa_nl_link_info_t nl_link_info;
+	ipa_nl_msg_t *msg_ptr = (ipa_nl_msg_t *)calloc(1, sizeof(ipa_nl_msg_t));
+
+	if (sendmsg(sk_info.sk_fd, (struct msghdr *) &req_nl_msg, 0) <= 0)
+	{
+		IPACMDBG("QCMAP:Netlink Query to Kernel failed errno:%d",errno,0,0);
+		return -1;
+	}
+	while(1)
+	{
+		if ((ret_val = recvmsg(sk_info.sk_fd, &recv_nl_msg, 0)) < 0)
+		{
+			IPACMDBG("Error in reading from netlink socket errno:%d", errno, 0, 0);
+			break;
+		}
+		IPACMDBG("No of bytes recevied:%d", ret_val);
+		if ((nl_hdr = (struct nlmsghdr*)buff) == NULL)
+		{
+			IPACMDBG("nl_hdr is NULL", 0, 0, 0);
+			break;
+		}
+		if (nl_hdr->nlmsg_type == NLMSG_DONE)
+		{
+			IPACMDBG("Received NLMSG_DONE\n");
+			break;
+		}
+
+		while(NLMSG_OK(nl_hdr, ret_val))
+		{
+			if (nl_hdr->nlmsg_type == NLMSG_DONE)
+			{
+				IPACMDBG("Received NLMSG_DONE\n");
+				break;
+			}
+			if (nl_hdr->nlmsg_type == NLMSG_ERROR)
+			{
+				IPACMDBG("Error in received netlink msg :%u", nl_hdr->nlmsg_type, 0, 0);
+				break;
+			}
+			if ((iface_info = (struct ifinfomsg*)NLMSG_DATA (nl_hdr))==NULL)
+			{
+				IPACMDBG("Interface info from netlink message is NULL\n");
+				nl_hdr = NLMSG_NEXT(nl_hdr, ret_val);
+				continue;
+			}
+			ret =  ipa_get_if_name(dev_name,
+					iface_info->ifi_index);
+			if(ret != 0)
+			{
+				IPACMDBG("Error while getting interface index\n");
+				ret = 0;
+				nl_hdr = NLMSG_NEXT(nl_hdr, ret_val);
+				continue;
+			}
+			if(!strcmp(dev_name,"lo") || !strcmp(dev_name,"ip_vti0") || !strcmp(dev_name,"ip6_vti0")
+					|| !strcmp(dev_name,"sit0") || !strcmp(dev_name,"can0"))
+			{
+				nl_hdr = NLMSG_NEXT(nl_hdr, ret_val);
+				continue;
+			}
+
+			if (nl_hdr->nlmsg_type == RTM_NEWLINK)
+			{
+				if(iface_info->ifi_flags & IFF_UP)
+				{
+					if (ipa_nl_decode_nlmsg((const char*)nl_hdr, ret_val, msg_ptr)) {
+						IPACMERR("Failed to decode rtm link message\n");
+						nl_hdr = NLMSG_NEXT(nl_hdr, ret_val);
+						continue;
+					}
+				}
+			}
+			nl_hdr = NLMSG_NEXT(nl_hdr, ret_val);
+		}
+	}
+	if (sk_info.sk_fd > 0)
+		close(sk_info.sk_fd);
+	return 0;
+}

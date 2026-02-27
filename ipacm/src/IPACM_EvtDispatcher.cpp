@@ -181,7 +181,7 @@ int IPACM_EvtDispatcher::registr(ipa_cm_event_id event, IPACM_Listener *obj)
 
 int IPACM_EvtDispatcher::deregistr(IPACM_Listener *param)
 {
-	cmd_evts *tmp = head,*tmp1,*prev = head;
+	cmd_evts *tmp = head,*tmp1,*prev = NULL;
 
 	while(tmp != NULL)
 	{
@@ -206,7 +206,7 @@ int IPACM_EvtDispatcher::deregistr(IPACM_Listener *param)
 		}
 		else
 		{
-			prev = tmp;
+			prev = tmp; /*Only update prev when we don't remove the current node*/
 			tmp = tmp->next;
 		}
 	}

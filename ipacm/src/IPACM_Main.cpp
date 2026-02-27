@@ -451,9 +451,8 @@ void* ipa_driver_msg_notifier(void *param)
 				IPACMERR("unable to allocate memory for event_wlan data_fid\n");
 				return NULL;
 			}
-			memcpy(data->mac_addr,
-				 event_wlan->mac_addr,
-				 sizeof(event_wlan->mac_addr));
+			memset(data, 0, sizeof(ipacm_event_data_mac));
+			memcpy(data->mac_addr, event_wlan->mac_addr, sizeof(event_wlan->mac_addr));
 			ipa_get_if_index(event_wlan->name, &(data->if_index));
 			evt_data.event = IPA_WLAN_STA_LINK_UP_EVENT;
 			evt_data.evt_data = data;
@@ -488,9 +487,8 @@ void* ipa_driver_msg_notifier(void *param)
 		    	        IPACMERR("unable to allocate memory for event_wlan data\n");
 		    	        return NULL;
 		        }
-			memcpy(data->mac_addr,
-						 event_wlan->mac_addr,
-						 sizeof(event_wlan->mac_addr));
+			memset(data, 0, sizeof(ipacm_event_data_mac));
+			memcpy(data->mac_addr, event_wlan->mac_addr, sizeof(event_wlan->mac_addr));
 			ipa_get_if_index(event_wlan->name, &(data->if_index));
 		        evt_data.event = IPA_WLAN_CLIENT_ADD_EVENT;
 			evt_data.evt_data = data;
@@ -561,7 +559,7 @@ void* ipa_driver_msg_notifier(void *param)
 				data->if_index = event_wlan->if_index;
 				IPACMDBG_H("Using WLAN_CLIENT_DISCONNECT if_index: %d\n",event_wlan->if_index);
 			}
-
+			memset(data, 0, sizeof(ipacm_event_data_mac));
 			memcpy(data->mac_addr, event_wlan->mac_addr, sizeof(event_wlan->mac_addr));
 			evt_data.event = IPA_WLAN_CLIENT_DEL_EVENT;
 			evt_data.evt_data = data;
@@ -579,9 +577,8 @@ void* ipa_driver_msg_notifier(void *param)
 		    	        IPACMERR("unable to allocate memory for event_wlan data\n");
 		    	        return NULL;
 		        }
-			memcpy(data->mac_addr,
-						 event_wlan->mac_addr,
-						 sizeof(event_wlan->mac_addr));
+			memset(data, 0, sizeof(ipacm_event_data_mac));
+			memcpy(data->mac_addr, event_wlan->mac_addr, sizeof(event_wlan->mac_addr));
 			ipa_get_if_index(event_wlan->name, &(data->if_index));
 			evt_data.event = IPA_WLAN_CLIENT_POWER_SAVE_EVENT;
 			evt_data.evt_data = data;
@@ -599,9 +596,8 @@ void* ipa_driver_msg_notifier(void *param)
 		    	       IPACMERR("unable to allocate memory for event_wlan data\n");
 		    	       return NULL;
 		        }
-			memcpy(data->mac_addr,
-						 event_wlan->mac_addr,
-						 sizeof(event_wlan->mac_addr));
+			memset(data, 0, sizeof(ipacm_event_data_mac));
+			memcpy(data->mac_addr, event_wlan->mac_addr, sizeof(event_wlan->mac_addr));
 			ipa_get_if_index(event_wlan->name, &(data->if_index));
 			evt_data.evt_data = data;
 			evt_data.event = IPA_WLAN_CLIENT_RECOVER_EVENT;
@@ -831,9 +827,8 @@ void* ipa_driver_msg_notifier(void *param)
 				IPACMERR("unable to allocate memory for event data\n");
 				return NULL;
 			}
-			memcpy(data->mac_addr,
-						 event_lan_client.mac,
-						 sizeof(event_lan_client.mac));
+			memset(data, 0, sizeof(ipacm_event_data_mac));
+			memcpy(data->mac_addr, event_lan_client.mac, sizeof(event_lan_client.mac));
 			ipa_get_if_index(event_lan_client.lanIface, &(data->if_index));
 			IPACM_Iface::ipacmcfg->stats_client_info(data->mac_addr, true);
 			evt_data.event = IPA_LAN_CLIENT_CONNECT_EVENT;
@@ -849,9 +844,8 @@ void* ipa_driver_msg_notifier(void *param)
 				IPACMERR("unable to allocate memory for event data\n");
 				return NULL;
 			}
-			memcpy(data->mac_addr,
-						 event_lan_client.mac,
-						 sizeof(event_lan_client.mac));
+			memset(data, 0, sizeof(ipacm_event_data_mac));
+			memcpy(data->mac_addr, event_lan_client.mac, sizeof(event_lan_client.mac));
 			ipa_get_if_index(event_lan_client.lanIface, &(data->if_index));
 			IPACM_Iface::ipacmcfg->stats_client_info(data->mac_addr, false);
 			evt_data.event = IPA_LAN_CLIENT_DISCONNECT_EVENT;
@@ -1002,6 +996,7 @@ void* ipa_driver_msg_notifier(void *param)
 				IPACMERR("unable to allocate memory for pdn_config\n");
 				return NULL;
 			}
+			memset(ip_pass_pdn_data, 0, sizeof(ipacm_event_ip_pass_pdn_info));
 			ipa_get_if_index(pdn_info->dev_name, &(ip_pass_pdn_data->if_index));
 			IPACM_Iface::ipacmcfg->ip_pass_config_update(pdn_info, ip_pass_pdn_data->if_index);
 			ip_pass_pdn_data->skip_nat = pdn_info->u.passthrough_cfg.skip_nat;

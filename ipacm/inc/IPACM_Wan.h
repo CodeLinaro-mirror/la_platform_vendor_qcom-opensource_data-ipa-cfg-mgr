@@ -56,7 +56,7 @@ IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <IPACM_Xml.h>
 
 #define IPA_NUM_DEFAULT_WAN_FILTER_RULES 6 /*best effort pipe-> 0 for v4, 1 for v6, 4 for v6 icmp; QoS pipe-> 2 for v4, 3 for v6, 5 for v6 icmp*/
-#define IPA_V2_NUM_DEFAULT_WAN_FILTER_RULE_IPV4 2
+#define IPA_V2_NUM_DEFAULT_WAN_FILTER_RULE_IPV4 3 /*Multicast rule + broadcast rule + tcp syn bit rule */
 #define XLAT_IP 0xc0000000
 
 #define NETWORK_STATS "%s %llu %llu %llu %llu"

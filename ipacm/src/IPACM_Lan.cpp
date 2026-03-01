@@ -1374,9 +1374,9 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 
 #ifdef FEATURE_VLAN_MPDN
 		/* VLAN IFACES don't care about default route
-		 * If interface is VLAN and sIface is DISABLED then dont handle from here
-		 * else in non-vlan and siface case handle here */
-		if (IPACM_Iface::ipacmcfg->iface_in_vlan_mode_v2(dev_name) && !sIface &&
+		 * If interface is VLAN then dont handle from here
+		 */
+		if (IPACM_Iface::ipacmcfg->iface_in_vlan_mode_v2(dev_name) &&
 			(IPACM_Iface::ipacmcfg->ipacm_mpdn_enable == TRUE ||
 			 IPACM_Wan::isVlanWanUP()))
 		{
@@ -1421,13 +1421,13 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 
 #ifdef FEATURE_VLAN_MPDN
 		/* VLAN IFACES don't care about default route
-		 * If interface is VLAN and sIface is DISABLED then dont handle from here
-		 * else in non-vlan and siface case handle here */
-		if (IPACM_Iface::ipacmcfg->iface_in_vlan_mode_v2(dev_name) && !sIface &&
+		 * If interface is VLAN then dont handle from here
+		 */
+		if (IPACM_Iface::ipacmcfg->iface_in_vlan_mode_v2(dev_name) &&
 			(IPACM_Iface::ipacmcfg->ipacm_mpdn_enable == TRUE ||
 			 IPACM_Wan::isVlanWanUP_V6()))
 		{
-			IPACMDBG_H("IF %s is vlan IF, ignoring IPA_HANDLE_WAN_DOWN\n", dev_name);
+			IPACMDBG_H("IF %s is vlan IF, ignoring IPA_HANDLE_WAN_DOWN_V6\n", dev_name);
 			return;
 		}
 #endif

@@ -13676,6 +13676,8 @@ int IPACM_Lan::handle_eth_client_down_evt(uint8_t *mac_addr, uint16_t vlan_id, i
 		get_client_memptr(eth_client, clt_indx)->client_backhaul_prefix[1] = get_client_memptr(eth_client, (clt_indx + 1))->client_backhaul_prefix[1];
 #endif
 
+		get_client_memptr(eth_client, clt_indx)->xlat_ctx = get_client_memptr(eth_client, clt_indx + 1)->xlat_ctx;
+
 		rt_hdl_v6_list[clt_indx] = rt_hdl_v6_list[clt_indx + 1];
 
 		for (tx_index = 0; tx_index < iface_query->num_tx_props; tx_index++)
@@ -13764,6 +13766,7 @@ int IPACM_Lan::handle_eth_client_down_evt(uint8_t *mac_addr, uint16_t vlan_id, i
 	}
 	/* Clean up the last entry */
 	rt_hdl_v6_list[num_eth_client_tmp - 1].clear();
+	memset(&get_client_memptr(eth_client, clt_indx)->xlat_ctx, 0, sizeof(xlat_context));
 
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
 	get_client_memptr(eth_client, clt_indx)->lan_stats_idx = -1;
@@ -16984,7 +16987,9 @@ int IPACM_Lan::install_uplink_filter_rule_per_client_v2
 		return IPACM_FAILURE;
 	}
 
-	IPACMDBG_H("clnt_indx: %d vlan_id: %d\n", clnt_indx, vlan_id);
+	IPACMDBG_H("clnt_indx: %d vlan_id: %d, MAC %02x:%02x:%02x:%02x:%02x:%02x\n",
+		clnt_indx, vlan_id, mac_addr[0], mac_addr[1], mac_addr[2],
+		mac_addr[3], mac_addr[4], mac_addr[5]);
 
 	if (get_client_memptr(eth_client, clnt_indx)->lan_stats_idx == -1)
 	{
@@ -17795,22 +17800,26 @@ int IPACM_Lan::install_uplink_filter_rule
 							if (get_pdn_xlat_ctx_per_client(i, xlat_mux_id, vlan_id) == IPACM_FAILURE)
 							{
 								add_pdn_xlat_ctx_per_client(i, xlat_mux_id, vlan_id);
-									if (handle_mpdn_ul_xlat_filter_rule_per_client(i, IPACM_Iface::ipacmcfg->GetExtProp(IPA_IP_v4),
-										iptype, xlat_mux_id, vlan_id))
+								if (handle_mpdn_ul_xlat_filter_rule_per_client(i, IPACM_Iface::ipacmcfg->GetExtProp(IPA_IP_v4),
+									iptype, xlat_mux_id, vlan_id))
+								{
+									if (get_client_memptr(eth_client, i)->ipv4_ul_rules_set)
 									{
-										if(get_client_memptr(eth_client, i)->ipv4_ul_rules_set)
-										{
-											ret = delete_uplink_filter_rule_per_client(iptype, get_client_memptr(eth_client, i)->mac,
-													get_client_memptr(eth_client, i)->vlan_id);
-											remove_pdn_xlat_ctx_per_client(i, xlat_mux_id);
-											IPACMDBG_H("Failed to install xlat rules\n");
-										}
-										else
-										{
-											remove_pdn_xlat_ctx_per_client(i, xlat_mux_id);
-											IPACMDBG_H("Failed to install xlat rules\n");
-										}
+										ret = delete_uplink_filter_rule_per_client(iptype, get_client_memptr(eth_client, i)->mac,
+																				   get_client_memptr(eth_client, i)->vlan_id);
+										remove_pdn_xlat_ctx_per_client(i, xlat_mux_id);
+										IPACMDBG_H("Failed to install xlat rules\n");
 									}
+									else
+									{
+										remove_pdn_xlat_ctx_per_client(i, xlat_mux_id);
+										IPACMDBG_H("Failed to install xlat rules\n");
+									}
+								}
+								else
+								{
+									get_client_memptr(eth_client, i)->ipv4_xlat_ul_rules_set = true;
+								}
 							}
 							else
 								IPACMDBG_H("XLAT filter rules already set for PDN : %d, vlan : %d\n",xlat_mux_id, vlan_id);
@@ -17856,7 +17865,10 @@ int IPACM_Lan::install_uplink_filter_rule
 										IPACMDBG_H("Failed to install xlat rules\n");
 									}
 								}
-								get_client_memptr(eth_client, i)->ipv4_xlat_ul_rules_set = true;
+								else
+								{
+									get_client_memptr(eth_client, i)->ipv4_xlat_ul_rules_set = true;
+								}
 							}
 							else
 #endif //IPA_HW_FNR_STATS
@@ -17940,7 +17952,8 @@ int IPACM_Lan::delete_uplink_filter_rule_per_client
 		return IPACM_FAILURE;
 	}
 
-	if (((iptype == IPA_IP_v4) && get_client_memptr(eth_client, clnt_indx)->ipv4_ul_rules_set) ||
+	if (((iptype == IPA_IP_v4) && (get_client_memptr(eth_client, clnt_indx)->ipv4_ul_rules_set ||
+		get_client_memptr(eth_client, clnt_indx)->ipv4_xlat_ul_rules_set)) ||
 		((iptype == IPA_IP_v6) && get_client_memptr(eth_client, clnt_indx)->ipv6_ul_rules_set))
 	{
 		for (j = 0; j < rx_prop->num_rx_props && j < IPA_MAX_NUM_PROPS * 2; j++)
@@ -17977,41 +17990,48 @@ int IPACM_Lan::delete_uplink_filter_rule_per_client
 
 			if (iptype == IPA_IP_v4)
 			{
-				IPACMDBG_H("Del (%d) num of v4 UL rules for client idx:%d\n", num_wan_ul_fl_rule_v4[idx/2], clnt_indx);
-				if (m_filtering.DeleteFilteringHdls(get_client_memptr(eth_client, clnt_indx)->wan_ul_fl_rule_hdl_v4[idx/2],
-						iptype, num_wan_ul_fl_rule_v4[idx/2]) == false)
+				if (get_client_memptr(eth_client, clnt_indx)->ipv4_ul_rules_set)
 				{
-					IPACMERR("Error Deleting RuleTable(1) to Filtering, aborting...\n");
-					close(fd);
-					return IPACM_FAILURE;
-				}
-				memset(get_client_memptr(eth_client, clnt_indx)->wan_ul_fl_rule_hdl_v4[idx/2], 0,
-					MAX_WAN_UL_FILTER_RULES * sizeof(uint32_t));
-
-				for(int i = 0; i < IPA_MAX_NUM_HW_PDNS; i++)
-				{
-					if(v4_mux_up[i].mux_id)
+					IPACMDBG_H("Del (%d) num of v4 UL rules for client idx:%d\n", num_wan_ul_fl_rule_v4[idx/2], clnt_indx);
+					if (m_filtering.DeleteFilteringHdls(get_client_memptr(eth_client, clnt_indx)->wan_ul_fl_rule_hdl_v4[idx/2],
+							iptype, num_wan_ul_fl_rule_v4[idx/2]) == false)
 					{
-						IPACMDBG_H("flt removed for mux %d, ipv4\n", v4_mux_up[i].mux_id);
+						IPACMERR("Error Deleting RuleTable(1) to Filtering, aborting...\n");
+						close(fd);
+						return IPACM_FAILURE;
+					}
+					memset(get_client_memptr(eth_client, clnt_indx)->wan_ul_fl_rule_hdl_v4[idx/2], 0,
+						MAX_WAN_UL_FILTER_RULES * sizeof(uint32_t));
 
-						if(IPACM_Iface::ipacmcfg->ipacm_lan_stats_enable == true)
+					get_client_memptr(eth_client, clnt_indx)->ipv4_ul_rules_set = false;
+				}
+
+				if (get_client_memptr(eth_client, clnt_indx)->ipv4_xlat_ul_rules_set)
+				{
+					for(int i = 0; i < IPA_MAX_NUM_HW_PDNS; i++)
+					{
+						if(v4_mux_up[i].mux_id)
 						{
-							xlat_pdn_ctx_id = get_pdn_xlat_ctx_per_client(clnt_indx,
-								v4_mux_up[i].mux_id, get_client_memptr(eth_client, clnt_indx)->vlan_id);
-							if (xlat_pdn_ctx_id != -1)
+							IPACMDBG_H("flt removed for mux %d, ipv4\n", v4_mux_up[i].mux_id);
+
+							if(IPACM_Iface::ipacmcfg->ipacm_lan_stats_enable == true)
 							{
-								if (delete_mdpn_ul_xlat_filter_rule_per_client(clnt_indx, v4_mux_up[i].mux_id))
-								//need to remove all associated with the mux
+								xlat_pdn_ctx_id = get_pdn_xlat_ctx_per_client(clnt_indx,
+									v4_mux_up[i].mux_id, get_client_memptr(eth_client, clnt_indx)->vlan_id);
+								if (xlat_pdn_ctx_id != -1)
 								{
-									IPACMDBG_H("Failed to delete xlat rules \n");
+									if (delete_mdpn_ul_xlat_filter_rule_per_client(clnt_indx, v4_mux_up[i].mux_id))
+									//need to remove all associated with the mux
+									{
+										IPACMDBG_H("Failed to delete xlat rules \n");
+									}
+									remove_pdn_xlat_ctx_per_client(clnt_indx, v4_mux_up[i].mux_id);
+									get_client_memptr(eth_client, clnt_indx)->ipv4_xlat_ul_rules_set = false;
 								}
-								remove_pdn_xlat_ctx_per_client(clnt_indx, v4_mux_up[i].mux_id);
 							}
 						}
 					}
 				}
-
-				get_client_memptr(eth_client, clnt_indx)->ipv4_ul_rules_set = false;
 			}
 
 			if (iptype == IPA_IP_v6)
@@ -24506,7 +24526,6 @@ int IPACM_Lan::delete_mdpn_ul_xlat_filter_rule_per_client(int client_num, int mu
 			memset(get_client_memptr(eth_client, client_num)->xlat_ctx.active_pdn_list[xlat_pdn_ctx_id].wan_mpdn_ul_xlat_fl_rule_hdl_v4[j],
 				0, MAX_WAN_UL_FILTER_RULES*sizeof(uint32_t));
 			get_client_memptr(eth_client, client_num)->xlat_ctx.active_pdn_list[xlat_pdn_ctx_id].num_wan_mpdn_ul_xlat_fl_rule_v4[j] = 0;
-			get_client_memptr(eth_client, client_num)->ipv4_xlat_ul_rules_set = false;
 		}
 	}
 

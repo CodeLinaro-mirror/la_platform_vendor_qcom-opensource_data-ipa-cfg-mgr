@@ -1641,6 +1641,7 @@ void IPACM_ConntrackListener::HandleVlanDown(void *in_param)
 {
 	ipacm_event_vlan_pdn *vlanup_data = (ipacm_event_vlan_pdn *)in_param;
 	bool remove_pdn = false;
+	bool has_non_vlan_clients = false;
 	IPACMDBG_H("Recevied below information during VLAN DOWN up,\n");
 	IPACMDBG_H("IPType: %d, vlan_id:%d, mux id %d\n",
 		vlanup_data->iptype,
@@ -1683,6 +1684,39 @@ void IPACM_ConntrackListener::HandleVlanDown(void *in_param)
 					if(remove_pdn == true)
 						break;
 				}
+			}
+		}
+
+		/* Check if there are non-VLAN clients using this PDN */
+		if(remove_pdn)
+		{
+			IPACMDBG_H("Checking for non-VLAN clients on PDN 0x%X\n", vlanup_data->ipv4_addr);
+			/* Check if any non-VLAN client exists that could be using this PDN */
+			for(int i = 0; i < MAX_IFACE_ADDRESS; i++)
+			{
+				if(nat_clients[i].nat_iface_ipv4_addr != 0 && !nat_clients[i].is_vlan_client)
+				{
+					/* Non-VLAN clients typically share the same PDN as VLAN clients
+					 * Check if this non-VLAN client could be using this PDN by checking if it's
+					 * in the same subnet or if there are any NAT entries with this public IP
+					 */
+					IPACMDBG_H("Found non-VLAN client at index %d with IP 0x%X, checking PDN usage\n",
+						i, nat_clients[i].nat_iface_ipv4_addr);
+					IPACMDBG_H("Non-VLAN client at index %d is using PDN 0x%X\n",
+						i, vlanup_data->ipv4_addr);
+					has_non_vlan_clients = true;
+					break;
+				}
+			}
+
+			if(has_non_vlan_clients)
+			{
+				IPACMDBG_H("Non-VLAN clients still using PDN 0x%X, not removing PDN\n", vlanup_data->ipv4_addr);
+				return;
+			}
+			else
+			{
+				IPACMDBG_H("No non-VLAN clients using PDN 0x%X, proceeding with PDN removal\n", vlanup_data->ipv4_addr);
 			}
 		}
 
@@ -1866,6 +1900,7 @@ void IPACM_ConntrackListener::HandleInterfaceDownV6_StaticPolicy(void *in_param)
 
 void IPACM_ConntrackListener::TriggerWANDown(uint32_t wan_addr)
 {
+	bool has_vlan_clients = false;
 #ifdef FEATURE_VLAN_MPDN
 	IPACMDBG_H("Removing default ipv4 pdn with");
 #else
@@ -1880,6 +1915,31 @@ void IPACM_ConntrackListener::TriggerWANDown(uint32_t wan_addr)
 	{
 		if(wan_addr == wan_ipaddr)
 		{
+			/* Check if there are VLAN clients using this PDN */
+			IPACMDBG_H("Checking for VLAN clients on PDN 0x%X\n", wan_addr);
+			for(int i = 0; i < MAX_IFACE_ADDRESS; i++)
+			{
+				if(nat_clients[i].nat_iface_ipv4_addr != 0 && nat_clients[i].is_vlan_client)
+				{
+					/* Check if this VLAN client is using the same PDN */
+					IPACMDBG_H("Found VLAN client at index %d with IP 0x%X\n",
+						i, nat_clients[i].nat_iface_ipv4_addr);
+					has_vlan_clients = true;
+					break;
+				}
+			}
+
+			if(has_vlan_clients)
+			{
+				IPACMDBG_H("VLAN clients still using PDN 0x%X, not removing PDN\n", wan_addr);
+				WanUp = false;
+				wan_ipaddr = 0;
+				ip_pass_enable_default_pdn = 0;
+				ip_pass_skip_nat_default_pdn = 0;
+				ip_pass_dummy_ip_default_pdn = 0;
+				return;
+			}
+
 			WanUp = false;
 			wan_ipaddr = 0;
 			ip_pass_enable_default_pdn = 0;

@@ -4202,32 +4202,51 @@ bool IPACM_Config::detect_and_handle_collision(const char* dev_name, uint32_t wa
 	uint16_t vid = 0;
 	int if_index = 0;
 	ipacm_event_data_fid *data_fid = NULL;
+	bool res = false;
 
 	if (dev_name == nullptr || dev_name[0] == '\0') {
 		IPACMERR("Invalid dev_name parameter\n");
 		return false;
 	}
 
-	IPACMDBG_H("IP Collision processing started for dev_name: %s\n Input wan_ip: 0x%x (%d.%d.%d.%d), wan_mask: 0x%x\n ipa_num_private_subnet count = %d\n",
-		dev_name, wan_ip, (wan_ip >> 24) & 0xFF, (wan_ip >> 16) & 0xFF, (wan_ip >> 8) & 0xFF, wan_ip & 0xFF, wan_mask, ipa_num_private_subnet);
+	if(wan_ip == 0 || wan_mask == 0){
+		IPACMDBG_H("Collision detection not initiated for invalid wan_ip, either wan_ip or wan_mask is 0");
+		return false;
+	}
+
+	IPACMDBG_H("IP Collision processing started for dev_name: %s, ipa_num_private_subnet count = %d\n", dev_name, ipa_num_private_subnet);
 
 	for (int i = 0; i < ipa_num_private_subnet; i++) {
 		const auto& entry = private_subnet_table[i];
 
-		IPACMDBG_H("Checking subnet: 0x%x, mask: 0x%x against wan_ip: 0x%x, wan_mask: 0x%x\n",
-				entry.subnet_addr, entry.subnet_mask, wan_ip, wan_mask);
+		IPACMDBG_H("Checking subnet: 0x%x (%d.%d.%d.%d), mask: 0x%x against wan_ip: 0x%x (%d.%d.%d.%d), wan_mask: 0x%x\n", entry.subnet_addr,
+			 (entry.subnet_addr >> 24) & 0xFF, (entry.subnet_addr >> 16) & 0xFF, (entry.subnet_addr >> 8) & 0xFF, entry.subnet_addr & 0xFF, entry.subnet_mask,
+			 wan_ip, (wan_ip >> 24) & 0xFF, (wan_ip >> 16) & 0xFF, (wan_ip >> 8) & 0xFF, wan_ip & 0xFF, wan_mask);
 
 		if (!is_ips_in_collision(entry.subnet_addr, entry.subnet_mask, wan_ip, wan_mask)) {
 			continue;
 		}
 
-		IPACMDBG_H("Collision detected for subnet: 0x%x, mask: 0x%x (wan_ip: 0x%x)\n",
-				entry.subnet_addr, entry.subnet_mask, wan_ip);
+		if (private_subnet_table[i].isCollisionSubnet == true){
+			res = true;
+			continue;
+		}
 
-		private_subnet_table[i].isCollisionSubnet = true;
-
+		IPACMDBG_H("Collision detected for subnet: 0x%x, mask: 0x%x (wan_ip: 0x%x)\n", entry.subnet_addr, entry.subnet_mask, wan_ip);
 		vid = get_bridge_vlan_mapping_from_subnet(entry.subnet_addr);
 		if_index = ipa_get_if_idx_by_vid(vid);
+
+		if (pthread_mutex_lock(&ip_collision_lock) != 0) {
+			IPACMERR("Unable to lock collision mutex to update ip_collision_map\n");
+			return res;
+		}
+
+		private_subnet_table[i].isCollisionSubnet = true;
+		ip_collision_map[std::string(dev_name)] = if_index;
+
+		if (pthread_mutex_unlock(&ip_collision_lock) != 0) {
+			IPACMERR("Unable to unlock collision mutex after updating ip_collision_map\n");
+		}
 
 		ipacm_cmd_q_data evt_data{};
 		data_fid = (ipacm_event_data_fid *)malloc(sizeof(ipacm_event_data_fid));
@@ -4236,25 +4255,12 @@ bool IPACM_Config::detect_and_handle_collision(const char* dev_name, uint32_t wa
 			return false;
 		}
 		memset(data_fid, 0, (sizeof(ipacm_event_data_fid)));
-
 		if (if_index != -1) {
 			data_fid->if_index = if_index;
 		}
 		else {
 			IPACMERR("Failed to resolve if_index for vid: %u (subnet: 0x%x)\n", vid, entry.subnet_addr);
-			// If if_index resolution failed, still queue the event with default if_index 0;
-		}
-
-		if (pthread_mutex_lock(&ip_collision_lock) != 0) {
-			IPACMERR("Unable to lock collision mutex to update ip_collision_map\n");
-			free(data_fid);
-			return false;
-		}
-
-		ip_collision_map[std::string(dev_name)] = if_index;
-
-		if (pthread_mutex_unlock(&ip_collision_lock) != 0) {
-			IPACMERR("Unable to unlock collision mutex after updating ip_collision_map\n");
+			/* If if_index resolution failed, still queue the event with default if_index 0 */
 		}
 
 		evt_data.event    = IPA_PRIVATE_SUBNET_CHANGE_EVENT;
@@ -4274,7 +4280,7 @@ bool IPACM_Config::detect_and_handle_collision(const char* dev_name, uint32_t wa
 	}
 
 	IPACMDBG_H("No collision detected for WAN IP: 0x%x\n", wan_ip);
-	return false;
+	return res;
 }
 
 void IPACM_Config::add_qos_params_info(ipa_ioc_qos_config *data)

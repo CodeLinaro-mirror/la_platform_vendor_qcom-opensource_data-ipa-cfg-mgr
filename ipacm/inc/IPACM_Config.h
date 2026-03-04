@@ -264,7 +264,7 @@ public:
 	pthread_mutex_t ip_pass_mpdn_lock;
 
 	pthread_mutex_t ip_collision_lock;
-	map<string, uint8_t> ip_collision_map;
+	map<string, int> ip_collision_map;
 
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
 	bool ipacm_lan_stats_enable;

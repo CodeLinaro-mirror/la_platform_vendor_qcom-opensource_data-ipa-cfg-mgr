@@ -60,6 +60,8 @@ extern "C"
 #include <linux/rtnetlink.h>
 #include <linux/netlink.h>
 #include <netinet/in.h>
+#include <arpa/inet.h>
+#include <net/if_arp.h>
 #include "IPACM_Defs.h"
 
 #define MAX_NUM_OF_FD 10
@@ -212,13 +214,26 @@ typedef struct {
     struct ndmsg nd;
 } nl_request_t;
 
+typedef struct
+{
+	int                 sk_fd;       /* socket descriptor */
+	struct sockaddr_nl  sk_addr_loc; /*  stores socket parameters */
+} ipa_sk_info_t;
+
+typedef struct
+{
+    struct nlmsghdr hdr;
+    struct rtgenmsg gen;
+}ipa_nl_req_type;
+
 /* Initialization routine for listener on NetLink sockets interface */
 int ipa_nl_listener_init
 (
 	 unsigned int nl_type,
 	 unsigned int nl_groups,
 	 ipa_nl_sk_fd_set_info_t *sk_fdset,
-	 ipa_sock_thrd_fd_read_f read_f
+	 ipa_sock_thrd_fd_read_f read_f,
+	 ipa_nl_sk_info_t *sk_info
 	 );
 
 /*  Virtual function registered to receive incoming messages over the NETLINK routing socket*/
@@ -231,7 +246,8 @@ int ipa_nl_send_getroute(ipa_ip_type ip_type, char*iface_name);
 /*  get ipa interface name from index */
 int ipa_get_if_name(char *if_name, int if_index);
 int ipa_nl_query_newneigh(int af_family, char*iface_name = NULL);
-
+void ipa_query_nl_getevents();
+static pthread_mutex_t nl_lock = PTHREAD_MUTEX_INITIALIZER;
 #ifdef __cplusplus
 }
 #endif

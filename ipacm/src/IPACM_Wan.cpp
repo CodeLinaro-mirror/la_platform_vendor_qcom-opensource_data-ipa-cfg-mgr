@@ -7031,6 +7031,28 @@ int IPACM_Wan::handle_route_del_evt(ipa_ip_type iptype)
 			{
 				memset(IPACM_Wan::wan_up_dev_name, 0, sizeof(IPACM_Wan::wan_up_dev_name));
 			}
+
+			if(m_is_sta_mode != Q6_WAN)
+			{
+				if(hdr_proc_hdl_dummy_v6)
+				{
+					if(m_header.DeleteHeaderProcCtx(hdr_proc_hdl_dummy_v6) == false)
+					{
+						IPACMERR("Failed to delete hdr_proc_hdl_dummy_v6\n");
+						return IPACM_FAILURE;
+					}
+					hdr_proc_hdl_dummy_v6 = 0;
+				}
+				if(hdr_hdl_dummy_v6)
+				{
+					if (m_header.DeleteHeaderHdl(hdr_hdl_dummy_v6) == false)
+					{
+						IPACMERR("Failed to delete hdr_hdl_dummy_v6\n");
+						return IPACM_FAILURE;
+					}
+					hdr_hdl_dummy_v6 = 0;
+				}
+			}
 		}
 	}
 	else

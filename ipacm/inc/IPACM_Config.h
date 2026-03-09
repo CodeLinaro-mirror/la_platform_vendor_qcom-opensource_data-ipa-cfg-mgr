@@ -28,37 +28,9 @@
  *
  * Changes from Qualcomm Innovation Center are provided under the following license:
  *
- * Copyright (c) 2022-2025 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
  *
- * Redistribution and use in source and binary forms, with or without
- * modification, are permitted (subject to the limitations in the
- * disclaimer below) provided that the following conditions are met:
- *
- *     * Redistributions of source code must retain the above copyright
- *       notice, this list of conditions and the following disclaimer.
- *
- *     * Redistributions in binary form must reproduce the above
- *       copyright notice, this list of conditions and the following
- *       disclaimer in the documentation and/or other materials provided
- *       with the distribution.
- *
- *     * Neither the name of Qualcomm Innovation Center, Inc. nor the names of its
- *       contributors may be used to endorse or promote products derived
- *       from this software without specific prior written permission.
- *
- * NO EXPRESS OR IMPLIED LICENSES TO ANY PARTY'S PATENT RIGHTS ARE
- * GRANTED BY THIS LICENSE. THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT
- * HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED
- * WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
- * MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
- * IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR
- * ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
- * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE
- * GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
- * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER
- * IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
- * OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
- * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE
  */
 /*!
 	@file
@@ -643,6 +615,7 @@ public:
 	bool iface_in_vlan_mode(const char * interfaceName);
 	int get_iface_vlan_ids(char *phys_iface_name, uint16_t *Ids);
 	int get_vlan_id(char *iface_name, uint16_t *vlan_id);
+	void extract_mlo_base_iface(char *input_iface);
 	void get_vlan_mode_ifaces();
 #endif
 
@@ -790,10 +763,12 @@ public:
 		for (indx=0; indx < MAX_NUM_IP_PASS_MPDN; indx++)
 		{
 			if (ip_pass_mpdn_table[indx].valid_entry &&
-				(ip_pass_mpdn_table[indx].ip_pass_pdn_ip_addr == ip_addr) &&
+				((ip_addr == 0) || (ip_pass_mpdn_table[indx].ip_pass_pdn_ip_addr == ip_addr)) &&
 				(ip_pass_mpdn_table[indx].ip_pass_dev_type ==
 					pdn_config->u.passthrough_cfg.device_type) &&
-				ip_pass_mpdn_table[indx].vlan_id == pdn_config->u.passthrough_cfg.vlan_id)
+				(ip_pass_mpdn_table[indx].vlan_id == pdn_config->u.passthrough_cfg.vlan_id) &&
+				(strncmp(ip_pass_mpdn_table[indx].dev_name, pdn_config->dev_name,
+					IPA_RESOURCE_NAME_MAX) == 0))
 				return indx;
 		}
 		return indx;

@@ -26,9 +26,10 @@ WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
 OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
 IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-Changes from Qualcomm Innovation Center are provided under the following license
-Copyright (c) 2023-2025 Qualcomm Innovation Center, Inc. All rights reserved.
-SPDX-License-Identifier: BSD-3-Clause-Clear,
+Changes from Qualcomm Innovation Center are provided under the following license:
+
+Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+SPDX-License-Identifier: BSD-3-Clause-Clear
 */
 /*!
 	@file
@@ -1184,16 +1185,11 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 #endif
 							{
 #ifdef FEATURE_VLAN_MPDN
-								/* VLAN interface && not the same iface name */
-								if((strstr(neighbor_client[i].iface_name,"mld") && (!strchr(neighbor_client[i].iface_name, '_')))
-										&& (strstr(data->iface_name,"mld") && strchr(data->iface_name, '_')))
+								if((strstr(data->iface_name, "mld"))&&(strchr(data->iface_name, '.')))
 								{
-									IPACMDBG("Updating the iface name with stitched iface name %s %s\n",
-											neighbor_client[i].iface_name, data->iface_name);
-
-									strlcpy(neighbor_client[i].iface_name, data->iface_name,
-											sizeof(neighbor_client[i].iface_name));
+									strlcpy(neighbor_client[i].iface_name,data->iface_name,sizeof(data->iface_name));
 								}
+								IPACMDBG("Updating to mld vlan iface name %s\n", neighbor_client[i].iface_name);
 
 								if(IPACM_Iface::ipacmcfg->ipacm_mpdn_enable == TRUE && IPACM_FAILURE == ipa_interface_index)
 								{
@@ -1628,15 +1624,6 @@ void IPACM_Neighbor::update_neigh_cache()
 			}
 		}
 
-		/* if this is a vlan interface that was not added we ignore*/
-		if((IPACM_Iface::ipacmcfg->ipacm_mpdn_enable == TRUE) &&
-			(IPACM_FAILURE == query_ipa_if_num) &&
-			(IPACM_Iface::ipacmcfg->iface_in_vlan_mode(rdev_name)) &&
-			!(IPACM_Iface::ipacmcfg->is_added_vlan_iface(rdev_name)))
-		{
-			IPACMDBG_H("not added VLAN interface %s, ignoring\n", rdev_name);
-			continue;
-		}
 #endif
 
 		/*Insert in client list */

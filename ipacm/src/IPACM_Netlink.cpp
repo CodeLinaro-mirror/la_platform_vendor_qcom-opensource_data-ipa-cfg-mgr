@@ -674,6 +674,7 @@ static int ipa_nl_decode_rtm_link
 	struct nlmsghdr *nlh = (struct nlmsghdr *)buffer;
 	char *rta_data = NULL;
 
+	memset(link_info, 0, sizeof(ipa_nl_link_info_t));
 	ifm = (struct ifinfomsg *) NLMSG_DATA(nlh);
 	len = nlh->nlmsg_len - NLMSG_LENGTH(sizeof(struct ifinfomsg));
 	/* Extract the header data */

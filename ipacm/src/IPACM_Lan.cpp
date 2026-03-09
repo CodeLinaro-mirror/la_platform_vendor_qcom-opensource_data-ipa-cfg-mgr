@@ -26,39 +26,11 @@
  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * Changes from Qualcomm Innovation Center are provided under the following license:
+ * Changes from Qualcomm Technologies, Inc. are provided under the following license:
  *
- * Copyright (c) 2022-2025 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
  *
- * Redistribution and use in source and binary forms, with or without
- * modification, are permitted (subject to the limitations in the
- * disclaimer below) provided that the following conditions are met:
- *
- *     * Redistributions of source code must retain the above copyright
- *       notice, this list of conditions and the following disclaimer.
- *
- *     * Redistributions in binary form must reproduce the above
- *       copyright notice, this list of conditions and the following
- *       disclaimer in the documentation and/or other materials provided
- *       with the distribution.
- *
- *     * Neither the name of Qualcomm Innovation Center, Inc. nor the names of its
- *       contributors may be used to endorse or promote products derived
- *       from this software without specific prior written permission.
- *
- * NO EXPRESS OR IMPLIED LICENSES TO ANY PARTY'S PATENT RIGHTS ARE
- * GRANTED BY THIS LICENSE. THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT
- * HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED
- * WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
- * MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
- * IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR
- * ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
- * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE
- * GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
- * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER
- * IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
- * OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
- * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE
  */
 /*!
 	@file
@@ -3984,19 +3956,34 @@ int IPACM_Lan::handle_addr_evt(ipacm_event_data_addr *data)
 		IPACMDBG_H("Interface is WLAN Svap or vlan, install rules on Rx pipe at idx %d \n", idx);
 	}
 
+
 	if (data->iptype == IPA_IP_v4)
 	{
 		if(IPACM_Iface::ipacmcfg->iface_table[ipa_if_num].if_cat== WLAN_IF)
 		{
-			for(wlan_pipe_index=0;wlan_pipe_index<MAX_SUPPORTED_WLAN_PIPES;wlan_pipe_index++){
-				if (IPACM_Wlan::wlan_ap_dflt_rules[wlan_pipe_index].iface_cnt[IPA_IP_v4] == 0 ) {
+			for(wlan_pipe_index=0;wlan_pipe_index<MAX_SUPPORTED_WLAN_PIPES;wlan_pipe_index++) {
+				IPACMDBG(" iface_cnt %d indx %d src pipe %d\n", IPACM_Wlan::wlan_ap_dflt_rules[wlan_pipe_index].iface_cnt[IPA_IP_v4], wlan_pipe_index, IPACM_Wlan::wlan_ap_dflt_rules[wlan_pipe_index].src_pipe);
+				if ((IPACM_Wlan::wlan_ap_dflt_rules[wlan_pipe_index].iface_cnt[IPA_IP_v4] == 0 )
+					       && !IPACM_Wlan::wlan_ap_dflt_rules[wlan_pipe_index].src_pipe) {
 					IPACM_Wlan::wlan_ap_dflt_rules[wlan_pipe_index].src_pipe = rx_prop->rx[idx].src_pipe;
 					IPACM_Wlan::wlan_ap_dflt_rules[wlan_pipe_index].iface_cnt[IPA_IP_v4]++;
 					IPACMDBG("wlan_pipe_index %d src_pipe %d iface_cnt %d\n",
 								wlan_pipe_index, rx_prop->rx[idx].src_pipe,
 								IPACM_Wlan::wlan_ap_dflt_rules[wlan_pipe_index].iface_cnt[IPA_IP_v4]);
 					break;
-				} else {
+				}
+				else if ((rx_prop->rx[idx].src_pipe == IPACM_Wlan::wlan_ap_dflt_rules[wlan_pipe_index].src_pipe) && (IPACM_Wlan::wlan_ap_dflt_rules[wlan_pipe_index].iface_cnt[IPA_IP_v4] == 0)) {
+
+					IPACM_Wlan::wlan_ap_dflt_rules[wlan_pipe_index].iface_cnt[IPA_IP_v4]++;
+					IPACMDBG("v4 rules not present\n");
+					IPACMDBG("wlan_pipe_index %d src_pipe %d iface_cnt %d\n",
+								wlan_pipe_index, rx_prop->rx[idx].src_pipe,
+								IPACM_Wlan::wlan_ap_dflt_rules[wlan_pipe_index].iface_cnt[IPA_IP_v4]);
+					break;
+
+
+				}
+				else {
 					if(IPACM_Wlan::wlan_ap_dflt_rules[wlan_pipe_index].src_pipe == rx_prop->rx[idx].src_pipe){
 						if(ip_type != IPA_IP_MAX) {
 						IPACM_Wlan::wlan_ap_dflt_rules[wlan_pipe_index].iface_cnt[IPA_IP_v4]++;
@@ -4113,15 +4100,26 @@ int IPACM_Lan::handle_addr_evt(ipacm_event_data_addr *data)
 
 		if(IPACM_Iface::ipacmcfg->iface_table[ipa_if_num].if_cat== WLAN_IF)
 		{
-			for(wlan_pipe_index=0;wlan_pipe_index<MAX_SUPPORTED_WLAN_PIPES;wlan_pipe_index++){
-				if (IPACM_Wlan::wlan_ap_dflt_rules[wlan_pipe_index].iface_cnt[IPA_IP_v6] == 0 ) {
+			for(wlan_pipe_index=0;wlan_pipe_index<MAX_SUPPORTED_WLAN_PIPES;wlan_pipe_index++) {
+				if ((IPACM_Wlan::wlan_ap_dflt_rules[wlan_pipe_index].iface_cnt[IPA_IP_v6] == 0 )
+					       && !IPACM_Wlan::wlan_ap_dflt_rules[wlan_pipe_index].src_pipe) {
 					IPACM_Wlan::wlan_ap_dflt_rules[wlan_pipe_index].src_pipe = rx_prop->rx[idx].src_pipe;
 					IPACM_Wlan::wlan_ap_dflt_rules[wlan_pipe_index].iface_cnt[IPA_IP_v6]++;
 					IPACMDBG("wlan_pipe_index %d src_pipe %d iface_cnt %d\n",
 							wlan_pipe_index, rx_prop->rx[idx].src_pipe,
 							IPACM_Wlan::wlan_ap_dflt_rules[wlan_pipe_index].iface_cnt[IPA_IP_v6]);
 					break;
-				} else {
+				}
+				else if ((rx_prop->rx[idx].src_pipe == IPACM_Wlan::wlan_ap_dflt_rules[wlan_pipe_index].src_pipe) && (IPACM_Wlan::wlan_ap_dflt_rules[wlan_pipe_index].iface_cnt[IPA_IP_v6] == 0)) {
+
+					IPACM_Wlan::wlan_ap_dflt_rules[wlan_pipe_index].iface_cnt[IPA_IP_v6]++;
+					IPACMDBG("v4 present but not v6\n");
+					IPACMDBG("wlan_pipe_index %d src_pipe %d iface_cnt %d\n",
+								wlan_pipe_index, rx_prop->rx[idx].src_pipe,
+								IPACM_Wlan::wlan_ap_dflt_rules[wlan_pipe_index].iface_cnt[IPA_IP_v6]);
+					break;
+				}
+			       	else {
 					if(IPACM_Wlan::wlan_ap_dflt_rules[wlan_pipe_index].src_pipe == rx_prop->rx[idx].src_pipe){
 						if(ip_type != IPA_IP_MAX){
 						IPACM_Wlan::wlan_ap_dflt_rules[wlan_pipe_index].iface_cnt[data->iptype]++;
@@ -5634,7 +5632,7 @@ int IPACM_Lan::handle_eth_hdr_init(uint8_t *mac_addr, ipacm_bridge *bridge, uint
 			if (IPACM_Wan::isWanUP(ipa_if_num) ||
 				(IPACM_Iface::ipacmcfg->ipacm_static_policy_enable && IPACM_Wan::isVlanWanUP()))
 			{
-				if(IPACM_Wan::backhaul_is_sta_mode == false)
+				if (IPACM_Wan::backhaul_is_sta_mode == false && (ip_type == IPA_IP_v4 || ip_type == IPA_IP_MAX))
 				{
 					ext_prop = IPACM_Iface::ipacmcfg->GetExtProp(IPA_IP_v4);
 #ifdef IPA_HW_FNR_STATS
@@ -5652,7 +5650,7 @@ int IPACM_Lan::handle_eth_hdr_init(uint8_t *mac_addr, ipacm_bridge *bridge, uint
 			if(IPACM_Wan::isWanUP_V6(ipa_if_num) ||
 				(IPACM_Iface::ipacmcfg->ipacm_static_policy_enable && IPACM_Wan::isVlanWanUP_V6()))
 			{
-				if(IPACM_Wan::backhaul_is_sta_mode == false)
+				if (IPACM_Wan::backhaul_is_sta_mode == false && (ip_type == IPA_IP_v6 || ip_type == IPA_IP_MAX))
 				{
 					ext_prop = IPACM_Iface::ipacmcfg->GetExtProp(IPA_IP_v6);
 #ifdef IPA_HW_FNR_STATS
@@ -11363,6 +11361,12 @@ int IPACM_Lan::handle_eth_client_down_evt(uint8_t *mac_addr, uint16_t vlan_id, i
 		get_client_memptr(eth_client, clt_indx)->ipv6_set = get_client_memptr(eth_client, (clt_indx + 1))->ipv6_set;
 		get_client_memptr(eth_client, clt_indx)->ipv4_header_set = get_client_memptr(eth_client, (clt_indx + 1))->ipv4_header_set;
 		get_client_memptr(eth_client, clt_indx)->ipv6_header_set = get_client_memptr(eth_client, (clt_indx + 1))->ipv6_header_set;
+
+		get_client_memptr(eth_client, clt_indx)->ipv4_hpc_set = get_client_memptr(eth_client, (clt_indx + 1))->ipv4_hpc_set;
+		get_client_memptr(eth_client, clt_indx)->ipv6_hpc_set = get_client_memptr(eth_client, (clt_indx + 1))->ipv6_hpc_set;
+
+		get_client_memptr(eth_client, clt_indx)->hpc_hdr_hdl_v4 = get_client_memptr(eth_client, (clt_indx + 1))->hpc_hdr_hdl_v4;
+		get_client_memptr(eth_client, clt_indx)->hpc_hdr_hdl_v6 = get_client_memptr(eth_client, (clt_indx + 1))->hpc_hdr_hdl_v6;
 
 		get_client_memptr(eth_client, clt_indx)->route_rule_set_v4 = get_client_memptr(eth_client, (clt_indx + 1))->route_rule_set_v4;
 		get_client_memptr(eth_client, clt_indx)->route_rule_set_v6 = get_client_memptr(eth_client, (clt_indx + 1))->route_rule_set_v6;

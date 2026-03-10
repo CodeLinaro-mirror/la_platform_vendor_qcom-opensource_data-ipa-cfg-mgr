@@ -776,7 +776,7 @@ int IPACM_IfaceManager::create_iface_instance(ipacm_ifacemgr_data *param)
 						IPACM_EvtDispatcher::registr(IPA_LINK_DOWN_EVENT, w);
 					}
 					if(is_sta_mode == ECM_WAN) {
-						IPACM_EvtDispatcher::registr(IPA_MAPE_FMR_RULE, w);
+						IPACM_EvtDispatcher::registr(IPA_MAPE_ADD_FMR_RULE, w);
 						IPACM_EvtDispatcher::registr(IPA_MAPE_DEL_FMR_RULE, w);
 					}
 

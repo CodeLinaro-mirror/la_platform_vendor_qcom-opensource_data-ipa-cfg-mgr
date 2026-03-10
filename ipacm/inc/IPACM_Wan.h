@@ -107,6 +107,10 @@ typedef struct {
 	uint8_t offset;
 	uint8_t psid_len;
 	uint32_t route_rule_hdl;
+	uint8_t mac[IPA_MAC_ADDR_SIZE];
+	uint32_t fmr_proc_ctx_hdl;
+	uint32_t mape_fmr_hdr_hdl;
+	int ref_count;
 } MapeFMR;
 
 struct MapRule {
@@ -226,6 +230,7 @@ public:
 	static uint32_t mape_wan_ipv4_addr;
 	static uint32_t mape_wan_ipv6_addr[4];
 	static uint32_t mape_fmr_hdr_hdl;
+	static pthread_mutex_t m_fmr_mutex;
 	static bool mape_rules_initialized;
 
 	IPACM_Wan(int, ipacm_wan_iface_type, uint8_t *, bool is_ppp_iface = true);
@@ -241,7 +246,6 @@ public:
 	static bool check_dft_firewall_rules_attr_mask_ul(IPACM_firewall_conf_t *firewall_config);
 	uint32_t v4_p_ctx_2use;
 	uint32_t v6_p_ctx_2use;
-	uint32_t fmr_proc_ctx_hdl;
 #ifdef FEATURE_PPPOE
 	int pppoe_make_hdr_add_ctx(enum ipa_ip_type iptype);
 	int pppoe_del_hdr_proc_ctx(enum ipa_ip_type ip_type);
@@ -601,6 +605,7 @@ public:
 #endif
 	void read_from_mape_rules_file(void);
 	MapeFMR* get_rule_by_ipv4(uint32_t input_ipv4_host_order);
+	MapeFMR* get_rule_by_ipv6(uint32_t input_ipv6_host_order[4]);
 
 private:
 

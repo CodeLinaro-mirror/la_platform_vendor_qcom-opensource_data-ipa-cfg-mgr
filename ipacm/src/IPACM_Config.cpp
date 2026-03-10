@@ -207,7 +207,7 @@ const char *ipacm_event_name[] = {
 	__stringify(IPA_QOS_RULE_FLUSH_EVENT),                 /* ipacm_qos_rule_flush_event */
 	__stringify(IPA_HANDLE_NEW_NEIGH_EVENT),               /* ipacm_event_data_fid */
 	__stringify(IPA_WAN_GW_ADDR_ADD_EVENT),                /* ipacm_event_data_addr */
-	__stringify(IPA_MAPE_FMR_RULE),                        /* ipacm_event_data_addr */
+	__stringify(IPA_MAPE_ADD_FMR_RULE),                        /* ipacm_event_data_addr */
 	__stringify(IPA_MAPE_DEL_FMR_RULE),                    /* ipacm_event_data_addr */
 	__stringify(IPACM_EVENT_MAX)
 };

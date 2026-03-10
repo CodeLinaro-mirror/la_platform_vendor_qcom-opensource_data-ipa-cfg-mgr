@@ -419,7 +419,7 @@ typedef enum
 	IPA_QOS_RULE_FLUSH_EVENT,                 /* ipacm_qos_rule_flush_event */
 	IPA_HANDLE_NEW_NEIGH_EVENT,               /* ipacm_event_data_fid */
 	IPA_WAN_GW_ADDR_ADD_EVENT,                /* ipacm_event_data_addr */
-	IPA_MAPE_FMR_RULE,                        /* ipacm_event_mape_fmr */
+	IPA_MAPE_ADD_FMR_RULE,                        /* ipacm_event_mape_fmr */
 	IPA_MAPE_DEL_FMR_RULE,                    /* ipacm_event_mape_fmr */
 	IPACM_EVENT_MAX
 } ipa_cm_event_id;

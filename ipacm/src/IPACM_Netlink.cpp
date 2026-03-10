@@ -2900,6 +2900,8 @@ int ipa_nl_send_getroute(ipa_ip_type ip_type)
 
 				if(strcmp(dev_name,"map-mape") == 0){
 					IPACMDBG_H(" Ignoring route on map-mape \n");
+					free(buf);
+					close(nl_sock);
 					return IPACM_SUCCESS;
 				}
 
@@ -2945,6 +2947,8 @@ int ipa_nl_send_getroute(ipa_ip_type ip_type)
 
 					if(strcmp(dev_name,"map-mape") == 0){
 						IPACMDBG_H(" Ignoring route on map-mape \n");
+						free(buf);
+						close(nl_sock);
 						return IPACM_SUCCESS;
 					}
 

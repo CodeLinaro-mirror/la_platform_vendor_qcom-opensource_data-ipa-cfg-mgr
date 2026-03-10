@@ -224,8 +224,8 @@ typedef struct
 } ipa_nl_msg_t;
 
 typedef struct {
-    struct nlmsghdr nlh;
-    struct rtmsg rtm;
+	struct nlmsghdr nlh;
+	struct rtmsg rtm;
 	struct ndmsg nd;
 } nl_request_t;
 

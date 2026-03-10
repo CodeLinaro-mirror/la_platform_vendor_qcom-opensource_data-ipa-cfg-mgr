@@ -113,7 +113,7 @@ int IPACM_Wan::num_ipv6_sta_pdn = 0;
 struct MapRule IPACM_Wan::mape_rules;
 uint32_t IPACM_Wan::mape_wan_ipv4_addr = 0;
 uint32_t IPACM_Wan::mape_wan_ipv6_addr[4] = {0};
-uint32_t IPACM_Wan::mape_fmr_hdr_hdl = 0;
+pthread_mutex_t IPACM_Wan::m_fmr_mutex = PTHREAD_MUTEX_INITIALIZER;
 uint32_t IPACM_Wan::mape_wan_rt_rule_hdl_v6=0;
 uint32_t IPACM_Wan::mape_wan_rt_rule_hdl_v4=0;
 bool IPACM_Wan::mape_rules_initialized=false;
@@ -2314,6 +2314,7 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 		{
 			ipacm_event_data_addr *data = (ipacm_event_data_addr *)param;
 			ipa_interface_index = iface_ipa_index_query(data->if_index);
+			MapeFMR* fmr_rule;
 
 			if (IPACM_Iface::ipacmcfg->mape_enable && (strcmp(dev_name,"map-mape")==0) && !IPACM_Wan::mape_rules_initialized ) {
 				IPACMDBG_H(" MAPE enabled reading from mape rules file \n");
@@ -2446,6 +2447,25 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 						evt_data1.event = IPA_NEIGH_CLIENT_IP_ADDR_ADD_EVENT;
 						evt_data1.evt_data = data_all;
 						IPACM_EvtDispatcher::PostEvt(&evt_data1);
+					}
+				} else if((data->iptype == IPA_IP_v6) && (data->ipv6_addr[0] && data->ipv6_addr[1] && data->ipv6_addr[2] && data->ipv6_addr[3]) && data->ipv6_addr_gw[0]) {
+					fmr_rule = IPACM_Wan::get_rule_by_ipv6(data->ipv6_addr);
+					if (!fmr_rule) {
+						IPACMERR("Failed to get FMR rule for IPv6 address\n");
+					} else {
+						int clnt_indx = get_wan_client_index_ipv6(data->ipv6_addr_gw);
+						IPACMDBG_H("VEERA clnt_indx %d \n",clnt_indx);
+						if (clnt_indx >= 0 && clnt_indx < IPACM_INVALID_INDEX) {
+							ipa_wan_client *client = get_client_memptr(wan_client, clnt_indx);
+							if (client != NULL) {
+								memcpy(fmr_rule->mac, get_client_memptr(wan_client, clnt_indx)->mac, sizeof(fmr_rule->mac));
+								IPACMDBG_H("Route installed with valid MAC: %02x:%02x:%02x:%02x:%02x:%02x\n",
+									fmr_rule->mac[0], fmr_rule->mac[1], fmr_rule->mac[2],
+									fmr_rule->mac[3], fmr_rule->mac[4], fmr_rule->mac[5]);
+							} else {
+								IPACMERR("Failed to get client pointer for index %d\n", clnt_indx);
+							}
+						}
 					}
 				}
 			}
@@ -3546,11 +3566,11 @@ handle_v4:
 		}
 		break;
 #endif
-		case IPA_MAPE_FMR_RULE:
+		case IPA_MAPE_ADD_FMR_RULE:
 		{
 			ipacm_event_data_addr *data = (ipacm_event_data_addr *)param;
 			MapeFMR *fmr_rule;
-				IPACMDBG_H("Received IPA_MAPE_FMR_RULE \n");
+				IPACMDBG_H("Received IPA_MAPE_ADD_FMR_RULE \n");
 			if (IPACM_Iface::ipacmcfg->mape_enable &&
 				(strcmp(dev_name,IPACM_Iface::ipacmcfg->iface_table[IPACM_Iface::ipacmcfg->mape_wan_iface_table_index].phy_dev_name) == 0)){
 				IPACMDBG_H("ipv4 addr 0x%x\n", data->ipv4_addr);
@@ -11949,9 +11969,8 @@ int IPACM_Wan::handle_mape_wan_fmr_hdr_init(uint8_t *mac_addr, MapeFMR* fmr_rule
 		res = IPACM_FAILURE;
 		goto fail;
 	}
-	IPACM_Wan::mape_fmr_hdr_hdl = pHeaderDescriptor->hdr[0].hdr_hdl;
-	IPACMDBG_H("mape_fmr_hdr_hdl : %x\n",IPACM_Wan::mape_fmr_hdr_hdl);
-	//mape_make_fmr_hdr_add_ctx(IPA_IP_v4);
+	fmr_rule->mape_fmr_hdr_hdl = pHeaderDescriptor->hdr[0].hdr_hdl;
+	IPACMDBG_H("mape_fmr_hdr_hdl : %x\n",fmr_rule->mape_fmr_hdr_hdl);
 
 fail:
 	free(pHeaderDescriptor);
@@ -14876,7 +14895,56 @@ MapeFMR* IPACM_Wan::get_rule_by_ipv4(uint32_t input_ipv4_host_order)
 	}
 }
 
-return NULL; // No match
+return NULL;
+}
+
+MapeFMR* IPACM_Wan::get_rule_by_ipv6(uint32_t input_ipv6[4])
+{
+    for (auto &rule : IPACM_Wan::mape_rules.fmr_rules) {
+        uint32_t len = rule.ipv6prefixlen;
+
+        if (len == 0) {
+            IPACMDBG_H("Matched Rule %d: Input matches Prefix ::/0\n", rule.rule_number);
+            return &rule;
+        } else if (len > 128) {
+            IPACMDBG_H("Skipping Rule %d: Invalid IPv6 prefix length %d\n",
+                      rule.rule_number, len);
+            continue;
+        }
+
+        int full_words = len / 32;
+        int remaining_bits = len % 32;
+
+        uint32_t mask = (remaining_bits == 0) ? 0xFFFFFFFF : (~0u) << (32 - remaining_bits);
+
+        bool match = true;
+
+        for (int i = 0; i < full_words; i++) {
+            if (input_ipv6[i] != rule.ipv6prefix[i]) {
+                match = false;
+                break;
+            }
+        }
+
+        if (match && full_words < 4) {
+            if ((input_ipv6[full_words] & mask) != (rule.ipv6prefix[full_words] & mask)) {
+                match = false;
+            }
+        }
+
+        if (match) {
+            IPACMDBG_H("Matched Rule %d: Input matches Prefix %08x:%08x:%08x:%08x/%d\n",
+                      rule.rule_number,
+                      rule.ipv6prefix[0], rule.ipv6prefix[1],
+                      rule.ipv6prefix[2], rule.ipv6prefix[3],
+                      len);
+            return &rule;
+        }
+    }
+
+    IPACMDBG_H("No matching IPv6 rule found for address %08x:%08x:%08x:%08x\n",
+              input_ipv6[0], input_ipv6[1], input_ipv6[2], input_ipv6[3]);
+    return nullptr;
 }
 int IPACM_Wan::mape_make_hdr_add_ctx(enum ipa_ip_type iptype)
 {
@@ -14958,7 +15026,7 @@ int IPACM_Wan::mape_make_fmr_hdr_add_ctx(MapeFMR* fmr_rule)
 	procCtx->proc_ctx_hdl = -1; // return value
 	procCtx->status       = -1; // Return parameter
 	procCtx->type         = IPA_HDR_PROC_MAPE_FMR_HEADER_ADD;
-	procCtx->hdr_hdl = IPACM_Wan::mape_fmr_hdr_hdl;
+	procCtx->hdr_hdl = fmr_rule->mape_fmr_hdr_hdl;
 
 	IPACMDBG_H("procCtx->hdr_hdl %x\n",procCtx->hdr_hdl);
 
@@ -14966,11 +15034,7 @@ int IPACM_Wan::mape_make_fmr_hdr_add_ctx(MapeFMR* fmr_rule)
 	{
 		IPACMDBG_H(
 			"MAPE header context successfully installed, hdl %d\n",procCtx->proc_ctx_hdl);
-		fmr_proc_ctx_hdl = procCtx->proc_ctx_hdl;
-		/*if (iptype == IPA_IP_v4)
-			v4_p_ctx_2use = procCtx->proc_ctx_hdl;
-		else
-			v6_p_ctx_2use = procCtx->proc_ctx_hdl;*/
+		fmr_rule->fmr_proc_ctx_hdl = procCtx->proc_ctx_hdl;
 	}
 	else
 	{
@@ -15030,31 +15094,37 @@ int IPACM_Wan::mape_fmr_route_rule_add(uint32_t ip_addr)
 	const int NUM = 1;
 	MapeFMR* fmr_rule;
 	int index;
+	bool valid_mac=false;
 
 	fmr_rule = IPACM_Wan::get_rule_by_ipv4(ip_addr);
 	if(fmr_rule == NULL){
 		IPACMDBG_H(" fmr_rule not found \n");
 		return IPACM_FAILURE;
 	} else {
+		pthread_mutex_lock(&m_fmr_mutex);
 		if (fmr_rule->route_rule_hdl != 0 ){
-			IPACMDBG_H("Route rule already installed \n");
+			fmr_rule->ref_count++;
+			IPACMDBG_H("rule already installed ref_count %d \n",fmr_rule->ref_count);
+			pthread_mutex_unlock(&m_fmr_mutex);
+			IPACMDBG_H("rule already installed \n");
 			return IPACM_SUCCESS;
 		}
-		index = get_wan_client_index_ipv6(wan_v6_addr_gw);
-		if (index != IPACM_INVALID_INDEX)
-		{
-			IPACMDBG_H("Matched client index: %d\n", index);
-			IPACMDBG_H("Received Client MAC %02x:%02x:%02x:%02x:%02x:%02x\n",
-						get_client_memptr(wan_client, index)->mac[0],
-						get_client_memptr(wan_client, index)->mac[1],
-						get_client_memptr(wan_client, index)->mac[2],
-						get_client_memptr(wan_client, index)->mac[3],
-						get_client_memptr(wan_client, index)->mac[4],
-						get_client_memptr(wan_client, index)->mac[5]);
-			handle_mape_wan_fmr_hdr_init(get_client_memptr(wan_client, index)->mac,fmr_rule);
+		pthread_mutex_unlock(&m_fmr_mutex);
+		IPACMDBG_H("Route installed with valid MAC: %02x:%02x:%02x:%02x:%02x:%02x\n",
+                  fmr_rule->mac[0], fmr_rule->mac[1], fmr_rule->mac[2],
+                  fmr_rule->mac[3], fmr_rule->mac[4], fmr_rule->mac[5]);
+		for (int i = 0; i < 6; i++) {
+			if (fmr_rule->mac[i] != 0) {
+				valid_mac = true;
+			}
 		}
+		if(!valid_mac){
+			IPACMDBG_H(" mac address is not valid \n");
+			return IPACM_SUCCESS;
+		}
+		handle_mape_wan_fmr_hdr_init(fmr_rule->mac,fmr_rule);
 		if(mape_make_fmr_hdr_add_ctx(fmr_rule) != 0 ){
-			IPACMDBG_H("mape fmr  header addition failed \n");
+			IPACMDBG_H(" header addition failed \n");
 			return IPACM_FAILURE;
 		}
 	}
@@ -15064,8 +15134,8 @@ int IPACM_Wan::mape_fmr_route_rule_add(uint32_t ip_addr)
 
 	if (!rt_rule)
 	{
-	IPACMERR("Error Locate ipa_ioc_add_rt_rule memory...\n");
-	return IPACM_FAILURE;
+		IPACMERR("Error Locate ipa_ioc_add_rt_rule memory...\n");
+		return IPACM_FAILURE;
 	}
 
 	rt_rule->commit = 1;
@@ -15081,7 +15151,7 @@ int IPACM_Wan::mape_fmr_route_rule_add(uint32_t ip_addr)
 		&tx_prop->tx[0].attrib,
 		sizeof(rt_rule_entry->rule.attrib));
 
-	rt_rule_entry->rule.hdr_proc_ctx_hdl = fmr_proc_ctx_hdl;
+	rt_rule_entry->rule.hdr_proc_ctx_hdl = fmr_rule->fmr_proc_ctx_hdl;
 	rt_rule_entry->rule.attrib.attrib_mask = IPA_FLT_DST_ADDR;
 	rt_rule_entry->rule.attrib.u.v4.dst_addr      = ip_addr;
 	rt_rule_entry->rule.attrib.u.v4.dst_addr_mask = 0xFFFFFFFF;
@@ -15089,43 +15159,82 @@ int IPACM_Wan::mape_fmr_route_rule_add(uint32_t ip_addr)
 	rt_rule_entry->rule.hashable = true;
 #endif
 
+	pthread_mutex_lock(&m_fmr_mutex);
+	if (fmr_rule->route_rule_hdl != 0) {
+		fmr_rule->ref_count++;
+		free(rt_rule);
+		pthread_mutex_unlock(&m_fmr_mutex);
+		return IPACM_SUCCESS;
+	}
+
 	if (false == m_routing.AddRoutingRule(rt_rule))
 	{
 		IPACMERR("Routing rule addition failed!\n");
 		free(rt_rule);
+		pthread_mutex_unlock(&m_fmr_mutex);
 		return IPACM_FAILURE;
 	}
+
 	fmr_rule->route_rule_hdl = rt_rule->rules[0].rt_rule_hdl;
-	IPACMDBG_H(" route_rule_hdl 0x%x \n",fmr_rule->route_rule_hdl);
+	fmr_rule->ref_count++;
+	IPACMDBG_H("FMR route_rule_hdl 0x%x ref_count %d \n",fmr_rule->route_rule_hdl,fmr_rule->ref_count);
+
+	pthread_mutex_unlock(&m_fmr_mutex);
+	free(rt_rule);
 	IPACMERR("Exit \n");
-return IPACM_SUCCESS;
+	return IPACM_SUCCESS;
 }
 int IPACM_Wan::mape_fmr_route_rule_del(uint32_t ip_addr)
 {
 	MapeFMR* fmr_rule;
+	uint32_t rt_hdl_to_delete = 0;
+	uint32_t ctx_hdl_to_delete = 0;
+	uint32_t hdr_hdl_to_delete = 0;
 
 	fmr_rule = IPACM_Wan::get_rule_by_ipv4(ip_addr);
 	if(fmr_rule == NULL){
-		IPACMDBG_H(" fmr_rule not found \n");
+		IPACMDBG_H("fmr_rule not found \n");
 		return IPACM_FAILURE;
-	} else {
-		if (fmr_rule->route_rule_hdl != 0 ){
-			IPACMDBG_H(" rule already installed \n");
-			return IPACM_SUCCESS;
-		}
 	}
-	if(m_header.DeleteHeaderProcCtx(fmr_proc_ctx_hdl) == false)
-		{
-			IPACMERR("Failed to delete v4 MAPE hdr proc ctx, aborting...\n");
-			return IPACM_FAILURE;
-		}
-	fmr_proc_ctx_hdl = 0;
 
-	if(m_routing.DeleteRoutingHdl(fmr_rule->route_rule_hdl,IPA_IP_v4) == false){
+	pthread_mutex_lock(&m_fmr_mutex);
+
+	if (fmr_rule->ref_count > 0)
+		fmr_rule->ref_count--;
+
+	if(fmr_rule->ref_count == 0){
+		IPACMDBG_H(" FMR ref_count is %d deleting the route rule \n",fmr_rule->ref_count);
+		rt_hdl_to_delete  = fmr_rule->route_rule_hdl;
+		ctx_hdl_to_delete = fmr_rule->fmr_proc_ctx_hdl;
+		hdr_hdl_to_delete = fmr_rule->mape_fmr_hdr_hdl;
+		fmr_rule->route_rule_hdl = 0;
+		fmr_rule->fmr_proc_ctx_hdl = 0;
+		fmr_rule->mape_fmr_hdr_hdl = 0;
+		IPACMDBG_H("route_rule_hdl 0x%x fmr_proc_ctx_hdl 0x%x mape_fmr_hdr_hdl 0x%x\n",
+			rt_hdl_to_delete,ctx_hdl_to_delete,hdr_hdl_to_delete);
+	} else {
+		IPACMDBG_H(" FMR ref_count is %d not deleting the route rule \n",fmr_rule->ref_count);
+		pthread_mutex_unlock(&m_fmr_mutex);
+		return IPACM_FAILURE;
+	}
+	pthread_mutex_unlock(&m_fmr_mutex);
+
+	if(m_routing.DeleteRoutingHdl(rt_hdl_to_delete,IPA_IP_v4) == false){
 		IPACMERR(" Routing rule delete failed \n");
 		return IPACM_FAILURE;
 	}
-	fmr_rule->route_rule_hdl = 0;
-	IPACMDBG_H(" route_rule_hdl 0x%x \n",fmr_rule->route_rule_hdl);
+
+	if(m_header.DeleteHeaderProcCtx(ctx_hdl_to_delete) == false)
+	{
+		IPACMERR("Failed to delete v4 MAPE FMR hdr proc ctx, aborting...\n");
+		return IPACM_FAILURE;
+	}
+
+	if (m_header.DeleteHeaderHdl(hdr_hdl_to_delete)	== false)
+	{
+		IPACMERR("Failed to delete v4 MAPE FMR hdr, aborting...\n");
+		return IPACM_FAILURE;
+	}
+
 return IPACM_SUCCESS;
 }

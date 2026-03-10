@@ -1772,6 +1772,7 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 									data->iptype, 0, data->ipv6_addr);
 							}
 							IPACMDBG_H("Route install retval = %d\n", retval);
+							HandleNeighIpAddrAddEvt(data);
 						}
 #endif
 						/* Add NAT rules after RT rules are set */
@@ -2435,10 +2436,6 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 		IPACMDBG_H("Received and will process an IPA_HANDLE_EoGRE_UP\n");
 		IPACM_Iface::ipacmcfg->eogre_enabled = true;
 		eogre_up();
-		evt_data.event    = IPA_WAN_HANDLE_EoGRE_UP;
-		evt_data.evt_data = 0;
-		IPACMDBG_H("Posting event: IPA_WAN_HANDLE_EoGRE_UP.\n");
-		IPACM_EvtDispatcher::PostEvt(&evt_data);
 		break;
 
 	case IPA_HANDLE_EoGRE_DOWN:
@@ -5475,7 +5472,7 @@ int IPACM_Lan::handle_wan_up_v2(ipa_ip_type ip_type, uint16_t vlan_id, uint8_t *
 				flt_rule_entry.rule.action = IPA_PASS_TO_SRC_NAT;
 			}
 #ifdef FEATURE_IPA_V3
-			flt_rule_entry.rule.hashable = false;
+			flt_rule_entry.rule.hashable = true;
 #endif
 			flt_rule_entry.rule.rt_tbl_hdl = IPACM_Iface::ipacmcfg->rt_tbl_wan_v4.hdl;
 			flt_rule_entry.rule.rt_tbl_idx = rt_tbl_idx.idx;
@@ -5678,7 +5675,7 @@ int IPACM_Lan::handle_wan_up_v2(ipa_ip_type ip_type, uint16_t vlan_id, uint8_t *
 			}
 
 #ifdef FEATURE_IPA_V3
-			flt_rule_entry.rule.hashable = false;
+			flt_rule_entry.rule.hashable = true;
 #endif
 			flt_rule_entry.rule.rt_tbl_hdl = IPACM_Iface::ipacmcfg->rt_tbl_v6.hdl;
 			flt_rule_entry.rule.rt_tbl_idx = rt_tbl_idx.idx;
@@ -13326,6 +13323,31 @@ int IPACM_Lan::handle_eth_client_down_evt(uint8_t *mac_addr, uint16_t vlan_id, i
 		get_client_memptr(eth_client, clt_indx)->ext_router_prefix_rt_hdl = 0; //do we need or will it be cleared automatically?
 	}
 
+	IPACMDBG_H("Deleting proc_ctx v4 handle %d\n",get_client_memptr(eth_client, clt_indx)->hpc_hdr_hdl_v4);
+	if (get_client_memptr(eth_client, clt_indx)->ipv4_hpc_set)
+	{
+		if (m_header.DeleteHeaderProcCtx(get_client_memptr(eth_client, clt_indx)->hpc_hdr_hdl_v4) == false)
+		{
+			IPACMERR("unable to delete v4 header hpc rules for index: %d\n", clt_indx);
+			return IPACM_FAILURE;
+		}
+		get_client_memptr(eth_client, clt_indx)->ipv4_hpc_set = false;
+		IPACMDBG("v4 hpc deleted\n");
+	}
+
+	IPACMDBG_H("Deleting proc_ctx v6 handle %d\n",get_client_memptr(eth_client, clt_indx)->hpc_hdr_hdl_v6);
+	if (get_client_memptr(eth_client, clt_indx)->ipv6_hpc_set)
+	{
+		if (m_header.DeleteHeaderProcCtx(get_client_memptr(eth_client, clt_indx)->hpc_hdr_hdl_v6) == false)
+		{
+			IPACMERR("unable to delete v6 header hpc rules for index: %d\n", clt_indx);
+			return IPACM_FAILURE;
+		}
+		get_client_memptr(eth_client, clt_indx)->ipv6_hpc_set = false;
+		IPACMDBG("v6 hpc deleted\n");
+	}
+
+
 	/* Delete eth client header */
 	if(get_client_memptr(eth_client, clt_indx)->ipv4_header_set == true)
 	{
@@ -13504,6 +13526,12 @@ int IPACM_Lan::handle_eth_client_down_evt(uint8_t *mac_addr, uint16_t vlan_id, i
 		get_client_memptr(eth_client, clt_indx)->ipv4_header_set = get_client_memptr(eth_client, (clt_indx + 1))->ipv4_header_set;
 		get_client_memptr(eth_client, clt_indx)->ipv6_header_set = get_client_memptr(eth_client, (clt_indx + 1))->ipv6_header_set;
 
+		get_client_memptr(eth_client, clt_indx)->ipv4_hpc_set = get_client_memptr(eth_client, (clt_indx + 1))->ipv4_hpc_set;
+		get_client_memptr(eth_client, clt_indx)->ipv6_hpc_set = get_client_memptr(eth_client, (clt_indx + 1))->ipv6_hpc_set;
+
+		get_client_memptr(eth_client, clt_indx)->hpc_hdr_hdl_v4 = get_client_memptr(eth_client, (clt_indx + 1))->hpc_hdr_hdl_v4;
+		get_client_memptr(eth_client, clt_indx)->hpc_hdr_hdl_v6 = get_client_memptr(eth_client, (clt_indx + 1))->hpc_hdr_hdl_v6;
+
 		get_client_memptr(eth_client, clt_indx)->route_rule_set_v4 = get_client_memptr(eth_client, (clt_indx + 1))->route_rule_set_v4;
 		get_client_memptr(eth_client, clt_indx)->route_rule_set_v6 = get_client_memptr(eth_client, (clt_indx + 1))->route_rule_set_v6;
 
@@ -13550,6 +13578,13 @@ int IPACM_Lan::handle_eth_client_down_evt(uint8_t *mac_addr, uint16_t vlan_id, i
 #endif
 
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
+		get_client_memptr(eth_client, clt_indx)->ipv4_ul_rules_set = get_client_memptr(eth_client, (clt_indx + 1))->ipv4_ul_rules_set;
+		get_client_memptr(eth_client, clt_indx)->ipv6_ul_rules_set = get_client_memptr(eth_client, (clt_indx + 1))->ipv6_ul_rules_set;
+		get_client_memptr(eth_client, clt_indx)->ipv4_xlat_ul_rules_set = get_client_memptr(eth_client, (clt_indx + 1))->ipv4_xlat_ul_rules_set;
+		get_client_memptr(eth_client, clt_indx)->ipv4_sta_ul_rules_set = get_client_memptr(eth_client, (clt_indx + 1))->ipv4_sta_ul_rules_set;
+		get_client_memptr(eth_client, clt_indx)->ipv6_sta_ul_rules_set = get_client_memptr(eth_client, (clt_indx + 1))->ipv6_sta_ul_rules_set;
+		get_client_memptr(eth_client, clt_indx)->sta_ul_fl_rule_hdl_v4 = get_client_memptr(eth_client, (clt_indx + 1))->sta_ul_fl_rule_hdl_v4;
+		get_client_memptr(eth_client, clt_indx)->sta_ul_fl_rule_hdl_v6 = get_client_memptr(eth_client, (clt_indx + 1))->sta_ul_fl_rule_hdl_v6;
 		get_client_memptr(eth_client, clt_indx)->lan_stats_idx =
 			get_client_memptr(eth_client, clt_indx + 1)->lan_stats_idx;
 #ifdef IPA_HW_FNR_STATS
@@ -14188,6 +14223,17 @@ fail:
 			}
 #endif
 
+			if (get_client_memptr(eth_client, i)->hpc_hdr_hdl_v4)
+			{
+				IPACMDBG_H("Deleting proc_ctx v4 handle %d\n",get_client_memptr(eth_client, i)->hpc_hdr_hdl_v4);
+				if (m_header.DeleteHeaderProcCtx(get_client_memptr(eth_client, i)->hpc_hdr_hdl_v4)
+						== false)
+				{
+					return IPACM_FAILURE;
+				}
+				get_client_memptr(eth_client, i)->ipv4_hpc_set = false;
+			}
+
 			IPACMDBG_H("Delete %d out of %d client header\n", i,  num_eth_client);
 
 			if(get_client_memptr(eth_client, i)->ipv4_header_set == true)
@@ -14198,6 +14244,18 @@ fail:
 					res = IPACM_FAILURE;
 				}
 			}
+
+			if (get_client_memptr(eth_client, i)->ipv6_hpc_set == true)
+			{
+				IPACMDBG_H("Deleting proc_ctx v6 handle %d\n",get_client_memptr(eth_client, i)->hpc_hdr_hdl_v6);
+				if (m_header.DeleteHeaderProcCtx(get_client_memptr(eth_client, i)->hpc_hdr_hdl_v6)
+						== false)
+				{
+					return IPACM_FAILURE;
+				}
+				get_client_memptr(eth_client, i)->ipv6_hpc_set = false;
+			}
+
 
 			if(get_client_memptr(eth_client, i)->ipv6_header_set == true)
 			{
@@ -17105,6 +17163,7 @@ int IPACM_Lan::install_uplink_filter_rule_per_client_v2
 				{
 					get_client_memptr(eth_client, clnt_indx)->wan_ul_fl_rule_hdl_v4[idx/2][i] =
 						((struct ipa_flt_rule_add_v2 *)pFilteringTable->rules)[i].flt_rule_hdl;
+					IPACMDBG_H("Installed v4 rule hdl %d\n", ((struct ipa_flt_rule_add_v2 *)pFilteringTable->rules)[i].flt_rule_hdl);
 					if (is_dev_in_vlan_mode && IPACM_Iface::ipacmcfg->ipacm_mpdn_enable)
 					{
 						get_client_memptr(eth_client, clnt_indx)->xlat_ctx.ul_rule_id_hdl_map[j][i].rule_id =
@@ -17125,6 +17184,7 @@ int IPACM_Lan::install_uplink_filter_rule_per_client_v2
 				{
 					get_client_memptr(eth_client, clnt_indx)->wan_ul_fl_rule_hdl_v6[idx/2][i] =
 						((struct ipa_flt_rule_add_v2 *)pFilteringTable->rules)[i].flt_rule_hdl;
+					IPACMDBG_H("Installed v6 rule hdl %d\n", ((struct ipa_flt_rule_add_v2 *)pFilteringTable->rules)[i].flt_rule_hdl);
 					/*Map for dynamic insertion of xlat rules */
 					if (is_dev_in_vlan_mode && IPACM_Iface::ipacmcfg->ipacm_mpdn_enable)
 					{
@@ -24483,6 +24543,12 @@ void IPACM_Lan::eogre_up()
 	install_ipv6_prefix_flt_rule(IPACM_Wan::backhaul_ipv6_prefix);
 #endif
 
+	ipacm_cmd_q_data evt_data;
+	memset(&evt_data, 0, sizeof(evt_data));
+	evt_data.event = IPA_WAN_HANDLE_EoGRE_UP;
+	evt_data.evt_data = 0;
+	IPACMDBG_H("Posting event: IPA_WAN_HANDLE_EoGRE_UP.\n");
+	IPACM_EvtDispatcher::PostEvt(&evt_data);
 	IPACMDBG("Finished handling eogre_up\n");
 }
 
@@ -26174,10 +26240,22 @@ int IPACM_Lan::handle_static_policy_rt_rule_add()
 	struct ipa_ioc_add_hdr_proc_ctx *procCtxTable =
 		(struct ipa_ioc_add_hdr_proc_ctx *) buf;
 	struct ipa_hdr_proc_ctx_add *procCtx = &(procCtxTable->proc_ctx[0]);
+	struct ipa_ioc_get_hdr hdr;
 
 	// init proc ctx table
 	procCtxTable->commit        = true;
 	procCtxTable->num_proc_ctxs = 1;
+
+	memset(&hdr, 0, sizeof(hdr));
+	strlcpy(hdr.name, IPA_LAN_RX_HDR_NAME, sizeof(IPA_LAN_RX_HDR_NAME));
+	hdr.name[IPA_RESOURCE_NAME_MAX-1] = '\0';
+	if(m_header.GetHeaderHandle(&hdr) == false)
+	{
+		IPACMERR("Failed to get LAN RX header hdl.\n");
+		res = IPACM_FAILURE;
+		return res;
+	}
+	procCtx->hdr_hdl = hdr.hdl;
 
 	// init proc_ctx common fields
 	procCtx->proc_ctx_hdl = -1; // return value

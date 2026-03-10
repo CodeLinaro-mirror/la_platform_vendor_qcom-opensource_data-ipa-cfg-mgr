@@ -5213,6 +5213,21 @@ void IPACM_Config::get_pppoe_session_info(const char *pppoe_dev_name, const char
 				IPACMERR("No mapped session found in /proc/net/pppoe\n");
 			}
 		}
+		/* br-wan mode Enable with PPPoE backhaul */
+		char *dev_name = params[2];
+		if (dev_name == NULL)
+		{
+			IPACMERR("Invalid dev_name parameter, continue.\n");
+			continue;
+		}
+
+		if (strstr(dev_name, "br-wanpppoe"))
+		{
+			IPACM_Iface::ipacmcfg->eth_wan_br_wan_enable = true;
+			IPACMDBG_H("Got session info for %s br-wan enabled %d\n", dev_name, IPACM_Iface::ipacmcfg->eth_wan_br_wan_enable);
+			IPACMDBG_H("Update session info to pppoe_dev_name %s associated vid %d, passed vid %d\n", pppoe_dev_name, vid, vlan_id);
+			update_pppoe_session_info(pppoe_dev_name, params);
+		}
 	}
 	fclose(fp);
 }

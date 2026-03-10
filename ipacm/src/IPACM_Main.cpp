@@ -87,10 +87,18 @@
 #define IPACM_SWALLOW_FILE_NAME     "ipa_filter_cfg.xml"
 #define IPACM_CFG_FILE_NAME    "IPACM_cfg.xml"
 #define IPACM_CFG_EXT_FILE_NAME    "IPACM_cfg_ext.xml"
+#ifdef FEATURE_RDKB
+#define IPACM_CFG_EXT_FILE "/systemrw/data/ipa/IPACM_cfg_ext.xml"
+#else
 #define IPACM_CFG_EXT_FILE "/etc/data/ipa/IPACM_cfg_ext.xml"
+#endif
 #ifndef FEATURE_IPA_ANDROID
 #define IPACM_PID_FILE "/var/run/data/ipa/ipacm.pid"
+#ifdef FEATURE_RDKB
+#define IPACM_DIR_NAME     "/systemrw/data/ipa"
+#else
 #define IPACM_DIR_NAME     "/etc/data/ipa"
+#endif
 #else
 #define IPACM_PID_FILE "/data/misc/ipa/ipacm.pid"
 #define IPACM_DIR_NAME     "/data/misc/ipa/"
@@ -104,7 +112,7 @@
 #define IPA_DRIVER_WLAN_EVENT_SIZE  (sizeof(struct ipa_wlan_msg_ex)+ IPA_DRIVER_WLAN_EVENT_MAX_OF_ATTRIBS*sizeof(ipa_wlan_hdr_attrib_val))
 #define IPA_DRIVER_PIPE_STATS_EVENT_SIZE  (sizeof(struct ipa_get_data_stats_resp_msg_v01))
 #define IPA_DRIVER_WLAN_META_MSG    (sizeof(struct ipa_msg_meta))
-#define IPA_DRIVER_WLAN_BUF_LEN     (IPA_DRIVER_PIPE_STATS_EVENT_SIZE + IPA_DRIVER_WLAN_META_MSG)
+#define IPA_DRIVER_WLAN_BUF_LEN     (sizeof(struct ipa_sw_flt_list_type))
 
 uint32_t ipacm_event_stats[IPACM_EVENT_MAX];
 

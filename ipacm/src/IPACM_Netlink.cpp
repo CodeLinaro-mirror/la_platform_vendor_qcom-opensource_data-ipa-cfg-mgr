@@ -1623,12 +1623,11 @@ static int ipa_nl_decode_nlmsg
 				 (msg_ptr->nl_route_info.metainfo.rtm_table == RT_TABLE_MAIN)))
 			{
 				IPACMDBG("\n GOT RTM_NEWROUTE event\n");
-				/* br-wan mode Enable*/
-				if(strstr(dev_name, "br-ethwan")||
-					strstr(dev_name, "br-wanpppoe"))
+				/* br-wan mode Enable with DHCP backhaul */
+				if(strstr(dev_name, "br-ethwan"))
 				{
-					IPACMDBG("GOT RTM_NEWROUTE event, br-wan enabled %d \n", IPACM_Iface::ipacmcfg->eth_wan_br_wan_enable);
 					IPACM_Iface::ipacmcfg->eth_wan_br_wan_enable = true;
+					IPACMDBG("GOT RTM_NEWROUTE event, br-wan enabled %d \n", IPACM_Iface::ipacmcfg->eth_wan_br_wan_enable);
 				}
 
 				if(msg_ptr->nl_route_info.attr_info.param_mask & IPA_RTA_PARAM_DST)
@@ -1856,12 +1855,11 @@ process:
 					IPACMERR("Error while getting interface name\n");
 					return IPACM_FAILURE;
 				}
-				/* br-wan mode Enable*/
-				if(strstr(dev_name, "br-ethwan")||
-					strstr(dev_name, "br-wanpppoe"))
+				/* br-wan mode Enable with DHCP backhaul */
+				if(strstr(dev_name, "br-ethwan"))
 				{
-					IPACMDBG("\n GOT RTM_NEWROUTE event, br-wan enabled %d \n", IPACM_Iface::ipacmcfg->eth_wan_br_wan_enable);
 					IPACM_Iface::ipacmcfg->eth_wan_br_wan_enable = true;
+					IPACMDBG("\n GOT v6-RTM_NEWROUTE event, br-wan enabled %d \n", IPACM_Iface::ipacmcfg->eth_wan_br_wan_enable);
 				}
 
 				if(msg_ptr->nl_route_info.attr_info.param_mask & IPA_RTA_PARAM_DST)

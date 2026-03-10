@@ -5525,7 +5525,14 @@ int IPACM_Wan::handle_route_add_evt(ipa_ip_type iptype)
 		evt_data.event = IPA_HANDLE_WAN_UP;
 		evt_data.evt_data = (void *)wanup_data;
 		IPACM_EvtDispatcher::PostEvt(&evt_data);
-
+#ifdef FEATURE_IPA_IPSEC
+		if(m_is_sta_mode == Q6_WAN)
+		{
+			IPACMDBG_H("IpSec : Calling installWanPostIpsecRt(IPA_IP_v4)\n");
+			if (installWanPostIpsecRt(IPA_IP_v4) != IPACM_SUCCESS)
+				IPACMERR("installWanPostIpsecRt(IPA_IP_v4) failed\n");
+		}
+#endif
 		/* This is to handle out-of-order events from Netlink like route events
                    and IPA CLI command received from QCMAP to configure IPPT since
                    we have received RTM_DELROUTE from kernel before to Passthrough
@@ -5625,6 +5632,14 @@ int IPACM_Wan::handle_route_add_evt(ipa_ip_type iptype)
 		evt_data.event = IPA_HANDLE_WAN_UP_V6;
 		evt_data.evt_data = (void *)wanup_data;
 		IPACM_EvtDispatcher::PostEvt(&evt_data);
+#ifdef FEATURE_IPA_IPSEC
+		if(m_is_sta_mode == Q6_WAN)
+		{
+			IPACMDBG_H("IpSec : Calling installWanPostIpsecRt(IPA_IP_v6)\n");
+			if (installWanPostIpsecRt(IPA_IP_v6) != IPACM_SUCCESS)
+				IPACMERR("installWanPostIpsecRt(IPA_IP_v6) failed\n");
+		}
+#endif
 	}
 #ifdef FEATURE_VLAN_MPDN
 	if(FullConfig)
@@ -7619,6 +7634,39 @@ int IPACM_Wan::add_dft_filtering_rule(struct ipa_flt_rule_add *rules, int rule_o
 		memcpy(&(rules[rule_offset + 1]), &flt_rule_entry, sizeof(struct ipa_flt_rule_add));
 #endif
 
+		/* Always adding tcp syn SW-exception rule for MSS clamping support */
+		IPACMDBG_H("Add v4 TCP sync rules\n");
+		memset(&flt_rule_entry, 0, sizeof(struct ipa_flt_rule_add));
+		flt_rule_entry.at_rear = true;
+		flt_rule_entry.flt_rule_hdl = -1;
+		flt_rule_entry.status = -1;
+		flt_rule_entry.rule.hashable = false;
+		flt_rule_entry.rule.retain_hdr = 1;
+		flt_rule_entry.rule.to_uc = 0;
+		flt_rule_entry.rule.action = IPA_PASS_TO_ROUTING;
+		flt_rule_entry.rule.rt_tbl_idx = rt_tbl_idx.idx;
+		flt_rule_entry.rule.eq_attrib_type = 1;
+		flt_rule_entry.rule.eq_attrib.rule_eq_bitmap = 0;
+
+		flt_rule_entry.rule.eq_attrib.rule_eq_bitmap |= (1<<1);
+		flt_rule_entry.rule.eq_attrib.protocol_eq_present = 1;
+		flt_rule_entry.rule.eq_attrib.protocol_eq = IPACM_FIREWALL_IPPROTO_TCP;
+		flt_rule_entry.rule.eq_attrib.rule_eq_bitmap |= (1<<8);
+		flt_rule_entry.rule.eq_attrib.num_ihl_offset_meq_32 = 1;
+		flt_rule_entry.rule.eq_attrib.ihl_offset_meq_32[0].offset = 12;
+
+		/* add TCP SYN rule*/
+		flt_rule_entry.rule.eq_attrib.ihl_offset_meq_32[0].value = (((uint32_t)1)<<TCP_SYN_SHIFT);
+		flt_rule_entry.rule.eq_attrib.ihl_offset_meq_32[0].mask = (((uint32_t)1)<<TCP_SYN_SHIFT);
+
+#ifdef FEATURE_VLAN_MPDN
+		rules[rule_offset + 2].mux_id = 0;
+		memcpy(&(rules[rule_offset + 2].flt_rule),
+		&flt_rule_entry, sizeof(struct ipa_flt_rule_add));
+#else
+		memcpy(&(rules[rule_offset + 2]),
+		&flt_rule_entry, sizeof(struct ipa_flt_rule_add));
+#endif
 		IPACM_Wan::num_v4_flt_rule += IPA_V2_NUM_DEFAULT_WAN_FILTER_RULE_IPV4;
 		IPACMDBG_H("Constructed %d default filtering rules for ip type %d\n", IPA_V2_NUM_DEFAULT_WAN_FILTER_RULE_IPV4, iptype);
 	}
@@ -8278,7 +8326,7 @@ int IPACM_Wan::handle_route_del_evt_ex(ipa_ip_type iptype)
 {
 	ipacm_cmd_q_data evt_data;
 	struct wan_ioctl_notify_wan_state wan_state;
-	int fd_wwan_ioctl;
+	int i, fd_wwan_ioctl;
 	memset(&wan_state, 0, sizeof(wan_state));
 
 	IPACMDBG_H("got handle_route_del_evt_ex with ip-family:%d \n", iptype);
@@ -8412,6 +8460,32 @@ int IPACM_Wan::handle_route_del_evt_ex(ipa_ip_type iptype)
 				memset(IPACM_Wan::wan_up_dev_name, 0, sizeof(IPACM_Wan::wan_up_dev_name));
 				is_default_gateway = false;
 			}
+#ifdef FEATURE_IPA_IPSEC
+			IPACMDBG_H("Cleaning v4 installWanPostIpsecRt()\n");
+			/* Clean old rules without commiting them */
+			if (num_ipsec_post_pol_rt[IPA_IP_v4] > 0)
+			{
+				for (i = 0; i < num_ipsec_post_pol_rt[IPA_IP_v4]; i++)
+				{
+					IPACMDBG_H("Deleting Route hdl:(0x%x) with ip type: %d\n", ipsec_post_pol_rt_hdls[IPA_IP_v4][i], IPA_IP_v4);
+					if (false == m_routing.DeleteRoutingHdl(ipsec_post_pol_rt_hdls[IPA_IP_v4][i], IPA_IP_v4, 0))
+					{
+						IPACMERR("Routing rule deletion failed! at i = %d, continue.\n", i);
+						continue;
+					}
+					ipsec_post_pol_rt_hdls[IPA_IP_v4][i] = -1;
+				}
+				num_ipsec_post_pol_rt[IPA_IP_v4] = 0;
+			}
+
+			/* Delete default IPsec v4 RT rules */
+			IPACMDBG_H("Delete IPsec default v4 routing rules\n");
+			if (del_ipsec_wan_dl_rt_rules(IPA_IP_v4) == IPACM_FAILURE)
+			{
+				IPACMERR("Routing old IPsec RT rules deletion failed!\n");
+				return IPACM_FAILURE;
+			}
+#endif
 		}
 		else
 		{
@@ -8449,6 +8523,32 @@ int IPACM_Wan::handle_route_del_evt_ex(ipa_ip_type iptype)
 				memset(IPACM_Wan::wan_up_dev_name, 0, sizeof(IPACM_Wan::wan_up_dev_name));
 				is_default_gateway = false;
 			}
+#ifdef FEATURE_IPA_IPSEC
+			IPACMDBG_H("Cleaning v6 installWanPostIpsecRt()\n");
+			/* Clean old rules without commiting them */
+			if (num_ipsec_post_pol_rt[IPA_IP_v6] > 0)
+			{
+				for (i = 0; i < num_ipsec_post_pol_rt[IPA_IP_v6]; i++)
+				{
+					IPACMDBG_H("Deleting Route hdl:(0x%x) with ip type: %d\n", ipsec_post_pol_rt_hdls[IPA_IP_v6][i], IPA_IP_v6);
+					if (false == m_routing.DeleteRoutingHdl(ipsec_post_pol_rt_hdls[IPA_IP_v6][i], IPA_IP_v6, 0))
+					{
+						IPACMERR("Routing rule deletion failed! at i = %d, continue.\n", i);
+						continue;
+					}
+					ipsec_post_pol_rt_hdls[IPA_IP_v6][i] = -1;
+				}
+				num_ipsec_post_pol_rt[IPA_IP_v6] = 0;
+			}
+
+			/* Delete default IPsec v6 RT rules */
+			IPACMDBG_H("Delete IPsec default v6 routing rules\n");
+			if (del_ipsec_wan_dl_rt_rules(IPA_IP_v6) == IPACM_FAILURE)
+			{
+				IPACMERR("Routing old IPsec RT rules deletion failed!\n");
+				return IPACM_FAILURE;
+			}
+#endif
 		}
 	}
 	else
@@ -9488,11 +9588,6 @@ int IPACM_Wan::handle_down_evt_ex()
 			memset(IPACM_Wan::flt_rule_v4, 0, IPA_MAX_FLT_RULE * sizeof(struct ipa_flt_rule_add));
 #endif
 			install_wan_filtering_rule(false);
-#ifdef FEATURE_IPA_IPSEC
-			IPACMDBG_H("Calling installWanPostIpsecRt(IPA_IP_v4)\n");
-			if (installWanPostIpsecRt(IPA_IP_v4) != IPACM_SUCCESS)
-				IPACMERR("installWanPostIpsecRt(IPA_IP_v4) failed\n");
-#endif
 		}
 
 		IPACMDBG_H("Delete dft v4 rt rule\n");
@@ -9503,16 +9598,6 @@ int IPACM_Wan::handle_down_evt_ex()
 			goto fail;
 		}
 		dft_rt_rule_hdl[0] = 0;
-#ifdef FEATURE_IPA_IPSEC
-		/* Delete default IPsec v4 RT rules */
-		IPACMDBG_H("Delete IPsec default v4 routing rules\n");
-		if (del_ipsec_wan_dl_rt_rules(IPA_IP_v4) == IPACM_FAILURE)
-		{
-			IPACMERR("Routing old IPsec RT rules deletion failed!\n");
-			res = IPACM_FAILURE;
-			goto fail;
-		}
-#endif
 	}
 	if(ip_type == IPA_IP_v6 || xlat_cfg)
 	{
@@ -9722,11 +9807,6 @@ int IPACM_Wan::handle_down_evt_ex()
 			memset(IPACM_Wan::flt_rule_v6, 0, IPA_MAX_FLT_RULE * sizeof(struct ipa_flt_rule_add));
 #endif
 			install_wan_filtering_rule(false);
-#ifdef FEATURE_IPA_IPSEC
-			IPACMDBG_H("Calling installWanPostIpsecRt(IPA_IP_v6)\n");
-			if (installWanPostIpsecRt(IPA_IP_v6) != IPACM_SUCCESS)
-				IPACMERR("installWanPostIpsecRt(IPA_IP_v6) failed\n");
-#endif
 
 			/* clean the ipv6 wan-route rule hdl for v6_wan_table */
 			if (wan_route_rule_wan_v6_hdl_a5 != 0)
@@ -9752,16 +9832,6 @@ int IPACM_Wan::handle_down_evt_ex()
 			}
 			dft_rt_rule_hdl[MAX_DEFAULT_v4_ROUTE_RULES+i] = 0;
 		}
-#ifdef FEATURE_IPA_IPSEC
-		/* Delete default IPsec v6 RT rules */
-		IPACMDBG_H("Delete IPsec default v6 routing rules\n");
-		if (del_ipsec_wan_dl_rt_rules(IPA_IP_v6) == IPACM_FAILURE)
-		{
-			IPACMERR("Routing old IPsec RT rules deletion failed!\n");
-			res = IPACM_FAILURE;
-			goto fail;
-		}
-#endif
 	}
 	if (ip_type == IPA_IP_MAX)
 	{
@@ -9994,11 +10064,6 @@ int IPACM_Wan::handle_down_evt_ex()
 			memset(IPACM_Wan::flt_rule_v4, 0, IPA_MAX_FLT_RULE * sizeof(struct ipa_flt_rule_add));
 #endif
 			install_wan_filtering_rule(false);
-#ifdef FEATURE_IPA_IPSEC
-			IPACMDBG_H("Calling installWanPostIpsecRt(IPA_IP_v4)\n");
-			if (installWanPostIpsecRt(IPA_IP_v4) != IPACM_SUCCESS)
-				IPACMERR("installWanPostIpsecRt(IPA_IP_v4) failed\n");
-#endif
 		}
 		/* only when the last ipv6 modem interface goes down, delete ipv6 default flt rules*/
 		if(num_ipv6_modem_pdn == 0)
@@ -10011,11 +10076,6 @@ int IPACM_Wan::handle_down_evt_ex()
 			memset(IPACM_Wan::flt_rule_v6, 0, IPA_MAX_FLT_RULE * sizeof(struct ipa_flt_rule_add));
 #endif
 			install_wan_filtering_rule(false);
-#ifdef FEATURE_IPA_IPSEC
-			IPACMDBG_H("Calling installWanPostIpsecRt(IPA_IP_v6)\n");
-			if (installWanPostIpsecRt(IPA_IP_v6) != IPACM_SUCCESS)
-				IPACMERR("installWanPostIpsecRt(IPA_IP_v6) failed\n");
-#endif
 
 			/* clean the ipv6 wan-route rule hdl for v6_wan_table */
 			if (wan_route_rule_wan_v6_hdl_a5 != 0)
@@ -10038,16 +10098,6 @@ int IPACM_Wan::handle_down_evt_ex()
 			goto fail;
 		}
 		dft_rt_rule_hdl[0] = 0;
-#ifdef FEATURE_IPA_IPSEC
-		/* Delete default IPsec v4 RT rules */
-		IPACMDBG_H("Delete IPsec default v4 routing rules\n");
-		if (del_ipsec_wan_dl_rt_rules(IPA_IP_v4) == IPACM_FAILURE)
-		{
-			IPACMERR("Routing old IPsec RT rules deletion failed!\n");
-			res = IPACM_FAILURE;
-			goto fail;
-		}
-#endif
 
 		IPACMDBG_H("Delete dft v6 rt rule\n");
 		for (i = 0; i < 2*num_dft_rt_v6; i++)
@@ -10060,17 +10110,6 @@ int IPACM_Wan::handle_down_evt_ex()
 			}
 			dft_rt_rule_hdl[MAX_DEFAULT_v4_ROUTE_RULES+i] = 0;
 		}
-#ifdef FEATURE_IPA_IPSEC
-		/* Delete default IPsec v6 RT rules */
-		IPACMDBG_H("Delete IPsec default v6 routing rules\n");
-		if (del_ipsec_wan_dl_rt_rules(IPA_IP_v6) == IPACM_FAILURE)
-		{
-			IPACMERR("Routing old IPsec RT rules deletion failed!\n");
-			res = IPACM_FAILURE;
-			goto fail;
-		}
-#endif
-
 	}
 
 	/* check software routing fl rule hdl */
@@ -10872,14 +10911,6 @@ int IPACM_Wan::install_wan_filtering_rule(bool is_sw_routing, bool is_socksv5_en
 		res = IPACM_FAILURE;
 		goto fail;
 	}
-#ifdef FEATURE_IPA_IPSEC
-	IPACMDBG_H("Calling installWanPostIpsecRt(IPA_IP_v4)\n");
-	if (installWanPostIpsecRt(IPA_IP_v4) != IPACM_SUCCESS)
-		IPACMERR("installWanPostIpsecRt(IPA_IP_v4) failed\n");
-	IPACMDBG_H("Calling installWanPostIpsecRt(IPA_IP_v6)\n");
-	if (installWanPostIpsecRt(IPA_IP_v6) != IPACM_SUCCESS)
-		IPACMERR("installWanPostIpsecRt(IPA_IP_v6) failed\n");
-#endif
 
 fail:
 	if(pFilteringTable_v4 != NULL)

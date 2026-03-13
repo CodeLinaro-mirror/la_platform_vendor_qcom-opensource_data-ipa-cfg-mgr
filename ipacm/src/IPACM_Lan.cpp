@@ -20104,9 +20104,7 @@ void IPACM_Lan::eth_bridge_post_event(ipa_cm_event_id evt, ipa_ip_type iptype, u
 	}
 	else
 	{
-		IPACMERR("iface_name is NULL, cannot post event\n");
-		free(evt_data_eth_bridge);
-    	return;
+		IPACMERR("iface_name is NULL, called from address add event\n");
 	}
 	evt_data_eth_bridge->VlanID = VlanID;
 	eth_bridge_evt.evt_data = (void*)evt_data_eth_bridge;

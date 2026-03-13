@@ -115,6 +115,9 @@ typedef struct _ipa_rm_client
 #define MAX_NUM_IP_PASS_MPDN 15
 #define EOGRE_PROTOCOL_TYPE 0x6558
 
+#define IPA_QoS_DL_RULE 0
+#define IPA_QoS_UL_RULE 1
+
 /* used to hold extended properties */
 typedef struct
 {
@@ -368,6 +371,7 @@ struct qos_param_info {
 };
 
 struct qos_delete_param_info {
+	uint8_t dir;
 	uint32_t client_cnt;
 	qos_client_info qos_client_list[];
 };
@@ -376,6 +380,8 @@ struct qos_delete_param_info {
 class IPACM_Config
 {
 public:
+
+	int max_file_size;
 
 	/* IPACM ipa_client map to rm_resource*/
 	ipa_rm_resource_name ipa_client_rm_map_tbl[IPA_CLIENT_MAX];
@@ -785,10 +791,12 @@ public:
 		for (indx=0; indx < MAX_NUM_IP_PASS_MPDN; indx++)
 		{
 			if (ip_pass_mpdn_table[indx].valid_entry &&
-				(ip_pass_mpdn_table[indx].ip_pass_pdn_ip_addr == ip_addr) &&
+				((ip_addr == 0) || (ip_pass_mpdn_table[indx].ip_pass_pdn_ip_addr == ip_addr)) &&
 				(ip_pass_mpdn_table[indx].ip_pass_dev_type ==
 					pdn_config->u.passthrough_cfg.device_type) &&
-				ip_pass_mpdn_table[indx].vlan_id == pdn_config->u.passthrough_cfg.vlan_id)
+				(ip_pass_mpdn_table[indx].vlan_id == pdn_config->u.passthrough_cfg.vlan_id) &&
+				(strncmp(ip_pass_mpdn_table[indx].dev_name, pdn_config->dev_name,
+					IPA_RESOURCE_NAME_MAX) == 0))
 				return indx;
 		}
 		return indx;

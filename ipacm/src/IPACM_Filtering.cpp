@@ -27,7 +27,7 @@ OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
 IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 Changes from Qualcomm Innovation Center are provided under the following license:
-Copyright (c) 2023-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+Copyright (c) 2023-2025 Qualcomm Innovation Center, Inc. All rights reserved.
 SPDX-License-Identifier: BSD-3-Clause-Clear
 */
 /*!
@@ -607,6 +607,7 @@ bool IPACM_Filtering::AddWanDLFilteringRule(struct ipa_ioc_add_flt_rule const *r
 		if(!mux_id_v4)
 		{
 			IPACMERR("got NULL v4 mux IDs array\n");
+			close(fd_wwan_ioctl);
 			return false;
 		}
 #endif
@@ -619,6 +620,7 @@ bool IPACM_Filtering::AddWanDLFilteringRule(struct ipa_ioc_add_flt_rule const *r
 		if(!mux_id_v6)
 		{
 			IPACMERR("got NULL v6 mux IDs array\n");
+			close(fd_wwan_ioctl);
 			return false;
 		}
 #endif

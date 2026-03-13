@@ -64,6 +64,8 @@ typedef enum
    IGNORE_CT,
    VERDCIT_MAX,
 } verdict;
+extern int cur_nat_entries;
+extern int cur_ct_entries;
 
 class IPACM_ConntrackClient
 {

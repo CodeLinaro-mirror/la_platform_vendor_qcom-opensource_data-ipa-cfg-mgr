@@ -310,6 +310,7 @@ void IPACM_Wlan::event_callback(ipa_cm_event_id event, void *param)
 					}
 					IPACM_Iface::ipacmcfg
 						->dscp_pcp_config_cache.add = 0;
+					close(m_fd);
 				}
 				handle_down_evt();
 				/* reset the AP-iface category to unknown */
@@ -463,6 +464,11 @@ void IPACM_Wlan::event_callback(ipa_cm_event_id event, void *param)
 									IPACM_Lan::handle_wan_up(IPA_IP_v4);
 								}
 							}
+						}
+						else if(IPACM_Iface::ipacmcfg->ipacm_static_policy_enable)
+						{
+							IPACMDBG_H("Checking for v4 VLAN PDN\n");
+							check_vlan_PDNUp(IPA_IP_v4);
 						}
 					}
 #ifdef FEATURE_IPv6CT_DISABLED
@@ -1182,7 +1188,6 @@ void IPACM_Wlan::event_callback(ipa_cm_event_id event, void *param)
 						}
 #endif
 						install_all_wlan_qos_route_rule(data->mac_addr, 0);
-						HandleNeighIpAddrAddEvt(data);
 					}
 					else
 #endif //IPA_HW_FNR_STATS
@@ -1191,7 +1196,6 @@ void IPACM_Wlan::event_callback(ipa_cm_event_id event, void *param)
 						{
 							handle_wlan_client_route_rule_ext(data->mac_addr, data->iptype);
 							install_all_wlan_qos_route_rule(data->mac_addr, 0);
-							HandleNeighIpAddrAddEvt(data);
 						}
 					}
 				}
@@ -6968,11 +6972,11 @@ int IPACM_Wlan::handle_wlan_primary_client_down_evt(uint8_t *mac_addr)
 /*handle wlan iface down event*/
 int IPACM_Wlan::handle_down_evt()
 {
-	int res = IPACM_SUCCESS, i, num_private_subnet_fl_rule, idx = 0;
+	int res = IPACM_SUCCESS, i, num_private_subnet_fl_rule, idx = 0, j = 0;
 	int wlan_pipe_index;
 	uint32_t tcp_syn_filter_rule_hdl = 0;
 	uint32_t *private_flt_rule_hdl = NULL;
-	bool skip_flt_rule_del= false;
+	bool skip_flt_rule_del= false, process_prefix_rules = false;
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
 	struct wan_ioctl_lan_client_info *client_info;
 #endif
@@ -7143,6 +7147,43 @@ int IPACM_Wlan::handle_down_evt()
 		{
 			IPACMERR("delete_dflt_filter_rules failed\n");
 			goto fail;
+		}
+
+		//to delete v6 prefix based rules in static policy mode
+		if(IPACM_Iface::ipacmcfg->ipacm_static_policy_enable)
+		{
+			for (j = 0; j < rx_prop->num_rx_props / 2 && j < IPA_MAX_NUM_PROPS; j++)
+			{
+				if (ipa_if_cate == WLAN_IF && wlan_pipe_index < MAX_SUPPORTED_WLAN_PIPES)
+				{
+					private_flt_rule_hdl = IPACM_Wlan::wlan_ap_dflt_rules[wlan_pipe_index].ipv6_prefix_flt_rule_hdl[j];
+					process_prefix_rules = true;
+				}
+				else
+				{
+					process_prefix_rules = false;
+				}
+
+				if(process_prefix_rules)
+				{
+					IPACMDBG_H("Deleting total %d default prefix src/dst based v6 filter rules successfully for index %d.\n",
+						num_wan_prefix_rules[j], j);
+
+					if (num_wan_prefix_rules[j] > 0)
+					{
+						if (m_filtering.DeleteFilteringHdls(private_flt_rule_hdl, IPA_IP_v6,
+							num_wan_prefix_rules[j]) == false)
+						{
+							IPACMERR("Error deleting IPv6 prefix based rules\n");
+							res = IPACM_FAILURE;
+							goto fail;
+						}
+						IPACM_Iface::ipacmcfg->decreaseFltRuleCount(rx_prop->rx[idx].src_pipe, IPA_IP_v6, num_wan_prefix_rules[j]);
+						num_wan_prefix_rules[j] = 0;
+						IPACMDBG_H("Deleted prefix src/dst v6 filter rules successfully for index %d.\n", j);
+					}
+				}
+			}
 		}
 
 		if (ipa_if_cate == WLAN_IF && wlan_pipe_index<MAX_SUPPORTED_WLAN_PIPES ) {
@@ -7843,7 +7884,7 @@ int IPACM_Wlan::config_dft_firewall_rules_ul_ex(IPACM_firewall_conf_t* firewall_
 	}
 
 	fd = open(IPA_DEVICE_NAME, O_RDWR);
-	if (0 == fd)
+	if (fd < 0)
 	{
 		IPACMERR("Failed opening %s.\n", IPA_DEVICE_NAME);
 		return IPACM_FAILURE;
@@ -9194,12 +9235,14 @@ int IPACM_Wlan::delete_uplink_filter_rule_per_client
 	if (clnt_indx == IPACM_INVALID_INDEX)
 	{
 		IPACMERR("eth client not found/attached \n");
+		close(fd);
 		return IPACM_FAILURE;
 	}
 
 	if (get_client_memptr(wlan_client, clnt_indx)->lan_stats_idx == -1 && !ast_update_needed())
 	{
 		IPACMERR("Invalid LAN Stats idx for ethernet client:%d \n", clnt_indx);
+		close(fd);
 		return IPACM_FAILURE;
 	}
 
@@ -9218,6 +9261,7 @@ int IPACM_Wlan::delete_uplink_filter_rule_per_client
 #ifdef IPA_V6_UL_WL_FIREWALL_HANDLE
 		IPACMERR("IPACM_MAX_V6_UL_WL_FIREWALL_ENTRIES %d\n", IPACM_MAX_V6_UL_WL_FIREWALL_ENTRIES);
 #endif
+		close(fd);
 		return IPACM_FAILURE;
 	}
 
@@ -9252,7 +9296,7 @@ int IPACM_Wlan::delete_uplink_filter_rule_per_client
 #endif
 		get_client_memptr(wlan_client, clnt_indx)->ipv6_ul_rules_set = false;
 	}
-
+	close(fd);
 	return IPACM_SUCCESS;
 
 }
@@ -11228,6 +11272,12 @@ int IPACM_Wlan::handle_wlan_qos_route_rule(uint8_t *client_mac,
 						rt_rule_entry->rule.attrib.dst_port_hi = qos_param->ip_tup.dport_end;
 					}
 
+					if (qos_param->ip_tup.protocol)
+					{
+						rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_NEXT_HDR;
+						rt_rule_entry->rule.attrib.u.v6.next_hdr = qos_param->ip_tup.protocol;
+					}
+
 					if (qos_param->vlan_id)
 					{
 						rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_DST_ADDR;
@@ -11754,6 +11804,12 @@ int IPACM_Wlan::handle_wlan_qos_route_rule_ext_v2(uint8_t *client_mac,
 						rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_DST_PORT_RANGE;
 						rt_rule_entry->rule.attrib.dst_port_lo = qos_param->ip_tup.dport_start;
 						rt_rule_entry->rule.attrib.dst_port_hi = qos_param->ip_tup.dport_end;
+					}
+
+					if (qos_param->ip_tup.protocol)
+					{
+						rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_NEXT_HDR;
+						rt_rule_entry->rule.attrib.u.v6.next_hdr = qos_param->ip_tup.protocol;
 					}
 
 					if (qos_param->vlan_id)

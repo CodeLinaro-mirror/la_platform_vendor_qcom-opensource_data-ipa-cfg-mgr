@@ -498,7 +498,7 @@ int IPACM_Config::ipacm_alloc_fnr_counters(struct ipa_ioc_flt_rt_counter_alloc *
 	} else
 		IPACMDBG_H("counter reset done\n");
 
-	IPACMERR("Fnr counters allocated. Ret = %d, start id = %u\n", ret, fnr_counters->hw_counter.start_id);
+	IPACMDBG_H("Fnr counters allocated. Ret = %d, start id = %u\n", ret, fnr_counters->hw_counter.start_id);
 	counter_idx = fnr_counters->hw_counter.start_id;
 	memset(cnt_idx, 0xff, sizeof(cnt_idx));
 	if (counter_idx == 0) {
@@ -593,6 +593,10 @@ reread:
 			goto fail;
 		}
 	}
+
+        max_file_size = cfg->max_file_size;
+
+        log_init(max_file_size);
 
 	/* Construct IPACM Iface table */
 	ipa_num_ipa_interfaces = cfg->iface_config.num_iface_entries;
@@ -1466,7 +1470,7 @@ void IPACM_Config::add_bridge_vlan_mapping(ipa_bridge_vlan_mapping_info *data)
 
 	if (data->status == 1)
 	{
-		IPACMERR("No partial entry with vlan got added, Discarding the bridge data update\n");
+		IPACMDBG_H("No partial entry with vlan got added, Discarding the bridge data update, bailing out...\n");
 		goto bail;
 	}
 
@@ -4321,12 +4325,6 @@ void IPACM_Config::add_qos_params_info(ipa_ioc_qos_config *data)
 	qos_param_info new_qos_info = { 0 };
 	ipacm_cmd_q_data evt_data;
 
-	if (data->dir == 1)
-	{
-		IPACMDBG_H("UL qos add params requested, no actions from ipa, dir : %d \n",data->dir);
-		return;
-	}
-
 	if(pthread_mutex_lock(&qos_param_list_lock) != 0)
 	{
 		IPACMERR("Unable to lock the mutex\n");
@@ -4481,12 +4479,6 @@ void IPACM_Config::delete_qos_params_info(ipa_ioc_qos_config *data)
 	list<qos_client_info>::iterator it_qos_client;
 	int i = 0;
 
-	if (data->dir == 1)
-	{
-		IPACMDBG_H("UL qos delete params requested, no actions from ipa, dir : %d \n",data->dir);
-		return;
-	}
-
 	if(pthread_mutex_lock(&qos_param_list_lock) != 0)
 	{
 		IPACMERR("Unable to lock the mutex\n");
@@ -4530,6 +4522,7 @@ void IPACM_Config::delete_qos_params_info(ipa_ioc_qos_config *data)
 			qos_param->client_cnt = it_qos_params->qos_client_list.size();
 			for (it_qos_client = it_qos_params->qos_client_list.begin(); it_qos_client != it_qos_params->qos_client_list.end(); ++it_qos_client)
 			{
+				qos_param->dir = data->dir;
 				qos_param->qos_client_list[i].qos_rt_rule_hdl_v4 = it_qos_client->qos_rt_rule_hdl_v4;
 				qos_param->qos_client_list[i].qos_rt_rule_hdl_v6 = it_qos_client->qos_rt_rule_hdl_v6;
 				IPACMDBG("v6 rule to delete wan hdl %d\n",

@@ -101,14 +101,13 @@
 #define IPA_DRIVER_WLAN_EVENT_SIZE  (sizeof(struct ipa_wlan_msg_ex)+ IPA_DRIVER_WLAN_EVENT_MAX_OF_ATTRIBS*sizeof(ipa_wlan_hdr_attrib_val))
 #define IPA_DRIVER_PIPE_STATS_EVENT_SIZE  (sizeof(struct ipa_get_data_stats_resp_msg_v01))
 #define IPA_DRIVER_WLAN_META_MSG    (sizeof(struct ipa_msg_meta))
-#define IPA_DRIVER_WLAN_BUF_LEN     (IPA_DRIVER_PIPE_STATS_EVENT_SIZE + IPA_DRIVER_WLAN_META_MSG)
+#define IPA_DRIVER_WLAN_BUF_LEN     (sizeof(struct ipa_sw_flt_list_type))
 
 #ifdef FEATURE_IPACM_RESTART
 #define IPA_READY_QCMAP_NOTIFIER_FILE "/var/run/data/monitor/ipacmd.pid"
 #endif
 
 uint32_t ipacm_event_stats[IPACM_EVENT_MAX];
-bool ipacm_logging = true;
 
 void ipa_is_ipacm_running(void);
 int ipa_get_if_index(char *if_name, int *if_index);
@@ -398,7 +397,7 @@ void* ipa_driver_msg_notifier(void *param)
 			}
 			if(event_wlan->mld_enabled)
 			{
-				snprintf(data_fid->iface_name, sizeof(event_wlan->name),
+				snprintf(data_fid->iface_name, sizeof(data_fid->iface_name),
 							"%s_%d_%d", event_wlan->name,event_wlan->instance_id,
 							event_wlan->vdev_id);
 			}
@@ -436,7 +435,7 @@ void* ipa_driver_msg_notifier(void *param)
 			}
 			if(event_wlan->mld_enabled)
 			{
-				snprintf(data_fid->iface_name, sizeof(event_wlan->name),
+				snprintf(data_fid->iface_name, sizeof(data_fid->iface_name),
 							"%s_%d_%d", event_wlan->name,event_wlan->instance_id, event_wlan->vdev_id);
 			}
 			else
@@ -1695,7 +1694,6 @@ int main(int argc, char **argv)
 	pthread_t netlinks_query_thread = 0;
 	/* check if ipacm is already running or not */
 	ipa_is_ipacm_running();
-
 	IPACMDBG_H("In main()\n");
 	IPACMERR("debug deleting ipacm.pid file\n");
 	char cmd[200] = {0};

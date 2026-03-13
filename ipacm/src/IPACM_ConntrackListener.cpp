@@ -1356,7 +1356,7 @@ void IPACM_ConntrackListener::HandleVlanUp(void *in_param)
 	{
 		IPACMDBG_H("calling add pdn for second backhaul\n");
 		if(nat_inst->AddPdn(vlanup_data->ipv4_addr, vlanup_data->mux_id,
-				true,false))
+				true,false,false))
 		{
 			IPACMERR("failed adding pdn, num_vlan_pdns %d\n", num_vlan_pdns);
 		}
@@ -1369,7 +1369,8 @@ void IPACM_ConntrackListener::HandleVlanUp(void *in_param)
 	{
 #endif
 		if(nat_inst->AddPdn(vlanup_data->ipv4_addr, vlanup_data->mux_id, false,
-			(vlanup_data->ip_pass_enable && !vlanup_data->ip_pass_skip_nat)))
+			(vlanup_data->ip_pass_enable && !vlanup_data->ip_pass_skip_nat),
+			vlanup_data->is_xlat))
 		{
 			IPACMERR("failed adding pdn, num_vlan_pdns %d\n", num_vlan_pdns);
 		}
@@ -1435,6 +1436,7 @@ void IPACM_ConntrackListener::TriggerWANUp(void *in_param)
 {
 	 ipacm_event_iface_up *wanup_data = (ipacm_event_iface_up *)in_param;
 	 uint8_t mux_id;
+	 bool is_xlat = false;
 
 	 IPACMDBG_H("Recevied below information during wanup,\n");
 	 IPACMDBG_H("if_name:%s, ipv4_address:0x%x mux_id:%d, xlat_mux_id:%d\n",
@@ -1481,13 +1483,19 @@ void IPACM_ConntrackListener::TriggerWANUp(void *in_param)
 	 if(nat_inst != NULL)
 	 {
 	   if (wanup_data->mux_id == 0)
+	   {
 	   	 mux_id = wanup_data->xlat_mux_id;
+		 is_xlat = true;
+	   }
 	   else
+	   {
 	   	 mux_id = wanup_data->mux_id;
+	   }
 #ifdef FEATURE_VLAN_MPDN
-		 nat_inst->AddPdn(wanup_data->ipv4_addr, mux_id, isStaMode, (ip_pass_enable_default_pdn && !ip_pass_skip_nat_default_pdn));
+		 nat_inst->AddPdn(wanup_data->ipv4_addr, mux_id, isStaMode,
+		 	(ip_pass_enable_default_pdn && !ip_pass_skip_nat_default_pdn), is_xlat);
 #else
-		 nat_inst->AddTable(wanup_data->ipv4_addr, mux_id, isStaMode);
+		 nat_inst->AddTable(wanup_data->ipv4_addr, mux_id, isStaMode, is_xlat);
 #endif
 	 }
 

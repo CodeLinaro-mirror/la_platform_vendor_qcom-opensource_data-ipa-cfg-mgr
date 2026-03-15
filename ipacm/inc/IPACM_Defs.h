@@ -73,6 +73,7 @@ extern "C"
 #define STR_ECM_IFACE "ecm"
 #define STR_ECM0_IFACE "ecm0"
 #define ETH_PHY_IFACE_LEN 5
+#define MAPE_IFACE_NAME "map-mape"
 
 #define IF_NAME_LEN 16
 #define IPA_MAX_FILE_LEN  64

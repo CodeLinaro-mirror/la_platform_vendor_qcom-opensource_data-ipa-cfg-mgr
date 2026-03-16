@@ -742,6 +742,11 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 #ifdef FEATURE_VLAN_MPDN
 								if(IPACM_Iface::ipacmcfg->ipacm_mpdn_enable == TRUE)
 								{
+									if (!bridge) {
+										IPACMERR("bridge is NULL while MPDN enabled; skipping\n");
+										continue;
+									}
+
 									if(neighbor_client[i].bridge)
 									{
 										if(neighbor_client[i].bridge != bridge)
@@ -774,6 +779,10 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 												mapping_info.vlan_id = vlan_id;
 												IPACM_Iface::ipacmcfg->get_bridge_vlan_mapping(&mapping_info, true);
 												dummy_vlan_bridge = IPACM_Iface::ipacmcfg->get_vlan_bridge(mapping_info.bridge_name);
+												if (!dummy_vlan_bridge) {
+													IPACMERR("failed to get dummy vlan bridge, skipping\n");
+													continue;
+												}
 												if(dummy_vlan_bridge->associate_VID != bridge->associate_VID)
 												{
 													IPACMERR("client bridge dummy vid mismatch (%d)(%d), skip\n",
@@ -1231,6 +1240,11 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 #ifdef FEATURE_VLAN_MPDN
 								if(IPACM_Iface::ipacmcfg->ipacm_mpdn_enable == TRUE)
 								{
+									if (!bridge) {
+										IPACMERR("bridge is NULL while MPDN enabled; skipping\n");
+										continue;
+									}
+
 									if(neighbor_client[i].bridge)
 									{
 										if(neighbor_client[i].bridge != bridge)
@@ -1263,6 +1277,10 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 												mapping_info.vlan_id = vlan_id;
 												IPACM_Iface::ipacmcfg->get_bridge_vlan_mapping(&mapping_info, true);
 												dummy_vlan_bridge = IPACM_Iface::ipacmcfg->get_vlan_bridge(mapping_info.bridge_name);
+												if (!dummy_vlan_bridge) {
+													IPACMERR("failed to get dummy vlan bridge, skipping\n");
+													continue;
+												}
 												if(dummy_vlan_bridge->associate_VID != bridge->associate_VID)
 												{
 													IPACMERR("client bridge dummy vid mismatch (%d)(%d), skip\n",
@@ -1430,6 +1448,10 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 												mapping_info.vlan_id = vlan_id;
 												IPACM_Iface::ipacmcfg->get_bridge_vlan_mapping(&mapping_info, true);
 												dummy_vlan_bridge = IPACM_Iface::ipacmcfg->get_vlan_bridge(mapping_info.bridge_name);
+												if (!dummy_vlan_bridge) {
+													IPACMERR("failed to get dummy vlan bridge, skipping\n");
+													continue;
+												}
 												if(dummy_vlan_bridge->associate_VID != neighbor_client[i].bridge->associate_VID)
 												{
 													IPACMERR("client bridge dummy vid mismatch (%d)(%d), skip\n",

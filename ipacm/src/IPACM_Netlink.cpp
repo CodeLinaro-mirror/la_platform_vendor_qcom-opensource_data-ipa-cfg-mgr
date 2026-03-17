@@ -31,6 +31,10 @@ Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
 SPDX-License-Identifier: BSD-3-Clause-Clear
 
 */
+/*Changes from Qualcomm Innovation Center are provided under the following license:
+
+Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+SPDX-License-Identifier: BSD-3-Clause-Clear*/
 /*!
 	@file
 	IPACM_Netlink.cpp
@@ -62,7 +66,7 @@ SPDX-License-Identifier: BSD-3-Clause-Clear
 
 int ipa_get_if_name(char *if_name, int if_index);
 int find_mask(int ip_v4_last, int *mask_value);
-
+IPACM_Config *pConfig;
 #ifdef FEATURE_IPA_ANDROID
 
 #define IPACM_NL_COPY_ADDR( event_info, element )                                        \
@@ -641,7 +645,169 @@ static int del_eogre_tunnel(struct ifinfomsg* ifi, int len, int type)
 	}
 return IPACM_SUCCESS;
 }
+#endif
+#ifdef FEATURE_PMIPV6
+static int populate_gre_details(struct ifinfomsg* ifi, int len, int type){
+	struct rtattr *attrib[IFLA_MAX + 1];
+    struct rtattr *linkinfo[IFLA_INFO_MAX+1];
+    struct rtattr *greinfo[IFLA_GRE_MAX + 1];
+	unsigned saddr = 0;
+	unsigned daddr = 0;
+	unsigned link =0;
+	struct in6_addr saddr6;
+	struct in6_addr daddr6;
+	enum ipa_ip_type iptype;
+	pConfig = IPACM_Config::GetInstance();
+	if(type==778){
+		iptype=IPA_IP_v4;
+	}
+	else{
+		iptype=IPA_IP_v6;
+	}
+	IPACMDBG("IFI max: %d IFLA_MAX, %d len\n",IFLA_MAX,len);
+	getAttr(attrib, IFLA_MAX, IFLA_RTA(ifi), len,0,false);  // get attributes
+    if (attrib[IFLA_IFNAME]) {  // validation
+        IPACMDBG("ifname %s \n",(char*)RTA_DATA(attrib[IFLA_IFNAME]));
+		strlcpy(pConfig->pmip_details.tunnel_name, (char*)RTA_DATA(attrib[IFLA_IFNAME]), IPA_IFACE_NAME_LEN);
+    }
+	if (!attrib[IFLA_LINKINFO]){
+		IPACMDBG("No Link info\n");
+		return IPACM_FAILURE;
+	}
+	else{
+		parse_gre(linkinfo, IFLA_INFO_MAX, attrib[IFLA_LINKINFO]);
+		IPACMDBG("Nested1\n");
+		if (!linkinfo[IFLA_INFO_DATA]){
+			IPACMDBG("No IFLA_INFO_DATA\n");
+			return IPACM_FAILURE;
+		}
+		else{
+			parse_gre(greinfo, IFLA_GRE_MAX,
+				linkinfo[IFLA_INFO_DATA]);
+			IPACMDBG("Nested2\n");
 
+			ipa_ipgre_info ipgre_info  = pConfig->ipgre_info;
+			ipgre_info.iptype=iptype;
+			if(iptype == IPA_IP_v4){
+				if (greinfo[IFLA_GRE_LOCAL])
+				saddr = *(__u32 *)RTA_DATA(greinfo[IFLA_GRE_LOCAL]);
+
+				if (greinfo[IFLA_GRE_REMOTE])
+					daddr = *(__u32 *)RTA_DATA(greinfo[IFLA_GRE_REMOTE]);
+
+				ipgre_info.ipv4_src=ntohl(saddr);
+				ipgre_info.ipv4_dst=ntohl(daddr);
+				IPACMDBG("GRE info, src addr: %x, dst addr %x, link %d\n", ipgre_info.ipv4_src,ipgre_info.ipv4_dst,link);
+			}
+			else{
+				if (greinfo[IFLA_GRE_LOCAL])
+					memcpy(&saddr6, (struct nlattr  *)RTA_DATA(greinfo[IFLA_GRE_LOCAL]), sizeof(saddr6));
+				if (greinfo[IFLA_GRE_REMOTE])
+					memcpy(&daddr6, (struct nlattr  *)RTA_DATA(greinfo[IFLA_GRE_REMOTE]), sizeof(daddr6));
+
+				memcpy(&ipgre_info.ipv6_src,&saddr6,sizeof(saddr6));
+				memcpy(&ipgre_info.ipv6_dst,&daddr6,sizeof(daddr6));
+
+				IPACM_Iface::addr2host(IPA_IP_v6, &ipgre_info.ipv6_src);
+				IPACM_Iface::addr2host(IPA_IP_v6, &ipgre_info.ipv6_dst);
+
+
+
+				IPACMDBG_H("GRE info v6: src addr:0x%x:%x:%x:%x, dst addr:0x%x:%x:%x:%x \n",
+							saddr6.s6_addr32[0],saddr6.s6_addr32[1],saddr6.s6_addr32[2],saddr6.s6_addr32[3],daddr6.s6_addr32[0],daddr6.s6_addr32[1],daddr6.s6_addr32[2],daddr6.s6_addr32[3]);
+			}
+
+			memcpy(&(pConfig->ipgre_info),&ipgre_info,sizeof(ipa_ipgre_info));
+			IPACMDBG("GRE info, src addr: %x, dst addr %x, link %d\n", ipgre_info.ipv4_src,ipgre_info.ipv4_dst,link);
+
+			if(pConfig->pmip_details.pmipv6_enabled)
+			{
+				/* Send GRE UP event */
+				pConfig->pmip_details.pmipv6_tunnel_setup = true;
+				ipacm_cmd_q_data evt_data;
+				evt_data.event    = IPA_HANDLE_GRE_UP;
+				evt_data.evt_data = 0;
+				if(pConfig->pmip_details.pmipv6_gre_event_posted==false){
+					pConfig->pmip_details.pmipv6_gre_event_posted=true;
+					IPACMDBG_H("Posting usb IPA_HANDLE_GRE_UP \n");
+					IPACM_EvtDispatcher::PostEvt(&evt_data);
+				}
+			}
+			else {
+				if(pConfig->ipogre_enabled == true)
+				{
+					IPACMDBG_H("IPoGRE Already enabled\n");
+					return IPACM_SUCCESS;
+				}
+				pConfig->ipogre_enabled = true;
+				ipacm_cmd_q_data evt_data;
+				evt_data.event    = IPA_HANDLE_IPOGRE_UP;
+				evt_data.evt_data = 0;
+				IPACMDBG_H("Posting IPA_HANDLE_IPOGRE_UP \n");
+				IPACM_EvtDispatcher::PostEvt(&evt_data);
+			}
+		}
+}
+return IPACM_SUCCESS;
+}
+
+static int tunnel_delete(struct ifinfomsg* ifi, int len, int type)
+{
+	struct rtattr *attrib[IFLA_MAX + 1];
+    struct rtattr *linkinfo[IFLA_INFO_MAX+1];
+    struct rtattr *greinfo[IFLA_GRE_MAX + 1];
+	unsigned saddr = 0;
+	unsigned daddr = 0;
+	unsigned link =0;
+	struct in6_addr saddr6;
+	struct in6_addr daddr6;
+	enum ipa_ip_type iptype;
+	pConfig = IPACM_Config::GetInstance();
+	if(type==778)
+	{
+		iptype=IPA_IP_v4;
+	}
+	else
+	{
+		iptype=IPA_IP_v6;
+	}
+	if(pConfig->pmip_details.pmipv6_tunnel_setup || pConfig->ipogre_enabled)
+	{
+		IPACMDBG("IFI max: %d IFLA_MAX, %d len\n",IFLA_MAX,len);
+		getAttr(attrib, IFLA_MAX, IFLA_RTA(ifi), len,0,false);
+		if (attrib[IFLA_IFNAME])
+		{
+			IPACMDBG("Tunnel Delete: ifname %s \n",(char*)RTA_DATA(attrib[IFLA_IFNAME]));
+			if(strncmp(pConfig->pmip_details.tunnel_name, (char*)RTA_DATA(attrib[IFLA_IFNAME]), strlen(pConfig->pmip_details.tunnel_name)) == 0)
+			{
+				IPACMDBG("Tunnel name matched, Cleaning up\n");
+				pConfig->pmip_details.tunnel_name[0]='\0';
+				pConfig->pmip_details.pmipv6_tunnel_setup=false;
+				pConfig->pmip_details.pmipv6_gre_event_posted=false;
+				if(pConfig->pmip_details.pmipv6_enabled)
+				{
+					/* Send GRE DOWN event */
+					ipacm_cmd_q_data evt_data;
+					evt_data.event    = IPA_HANDLE_GRE_DOWN;
+					evt_data.evt_data = 0;
+					IPACMDBG_H("Posting IPA_HANDLE_GRE_DOWN \n");
+					IPACM_EvtDispatcher::PostEvt(&evt_data);
+				}
+				else
+				{
+					pConfig->ipogre_enabled = false;
+					/* Send GRE DOWN event */
+					ipacm_cmd_q_data evt_data;
+					evt_data.event    = IPA_HANDLE_IPOGRE_DOWN;
+					evt_data.evt_data = 0;
+					IPACMDBG_H("Posting IPA_HANDLE_IPOGRE_DOWN \n");
+					IPACM_EvtDispatcher::PostEvt(&evt_data);
+				}
+			}
+		}
+	}
+	return IPACM_SUCCESS;
+}
 #endif
 /* decode the rtm netlink message */
 static int ipa_nl_decode_rtm_link
@@ -1023,11 +1189,24 @@ static int ipa_nl_decode_nlmsg
 				 * Android but this should be processed in case of MDM for
 				 * Ehernet interface.
 				 */
-#ifdef FEATURE_EoGRE
+#ifdef FEATURE_EoGRE || FEATURE_PMIPV6
 				// struct nlmsghdr *h;
 				struct ifinfomsg *ifi2;
 				//ifi_type is 1 for gretap2
-				if (msg_ptr->nl_link_info.metainfo.ifi_type == 1)
+			if(msg_ptr->nl_link_info.metainfo.ifi_type == 778 || msg_ptr->nl_link_info.metainfo.ifi_type == 823 || msg_ptr->nl_link_info.metainfo.ifi_type == 769){//GRE tunnel
+					if(IFF_UP & msg_ptr->nl_link_info.metainfo.ifi_flags){
+						ifi2 = (struct ifinfomsg*) NLMSG_DATA(nlh);
+							if(populate_gre_details(ifi2,nlh->nlmsg_len,msg_ptr->nl_link_info.metainfo.ifi_type))
+								{
+									IPACMDBG("Failed to get GRE info\n");
+								}
+							else{
+								IPACMDBG("GRE info populated\n");
+								//post GRE UP event
+								}
+					}
+				}
+				else if (msg_ptr->nl_link_info.metainfo.ifi_type == 1)
 				{
 					//EoGRE tunnel
 					if (IFF_UP & msg_ptr->nl_link_info.metainfo.ifi_flags)
@@ -1294,8 +1473,14 @@ static int ipa_nl_decode_nlmsg
 				/* RTM_NEWLINK event with AF_BRIDGE family should be ignored in Android
 				 *    but this should be processed in case of MDM for Ehernet interface.
 				 */
-#ifdef FEATURE_EoGRE
+#ifdef FEATURE_EoGRE || FEATURE_PMIPV6 || FEATURE_IPoGRE
 				struct ifinfomsg *ifi2;
+				if(msg_ptr->nl_link_info.metainfo.ifi_type == 778 || msg_ptr->nl_link_info.metainfo.ifi_type == 823 || msg_ptr->nl_link_info.metainfo.ifi_type == 769)
+				{//GRE tunnel
+						ifi2 = (struct ifinfomsg*) NLMSG_DATA(nlh);
+						tunnel_delete(ifi2, nlh->nlmsg_len,msg_ptr->nl_link_info.metainfo.ifi_type);
+						IPACMDBG("Tunnel Delete Done\n");
+				}
 				if(msg_ptr->nl_link_info.metainfo.ifi_type == 1)
 				{
 					ifi2 = (struct ifinfomsg*) NLMSG_DATA(nlh);
@@ -1332,6 +1517,18 @@ static int ipa_nl_decode_nlmsg
 					}
 					strlcpy(macsec_map.phy_name, msg_ptr->nl_link_info.name, sizeof(macsec_map.phy_name));
 				}
+
+#ifdef FEATURE_IPoGRE
+				if (strncmp(dev_name, IPACM_Iface::ipacmcfg->rgip_iface_name, sizeof(IPACM_Iface::ipacmcfg->rgip_iface_name)) == 0)
+				{
+					IPACMDBG_H("RGIP iface %s link down/delete, post IPA_HANDLE_RGIP_DEL\n", dev_name);
+					ipacm_cmd_q_data rgip_evt_data;
+					memset(&rgip_evt_data, 0, sizeof(rgip_evt_data));
+					rgip_evt_data.event = IPA_HANDLE_RGIP_DEL;
+					rgip_evt_data.evt_data = NULL;
+					IPACM_EvtDispatcher::PostEvt(&rgip_evt_data);
+				}
+#endif
 
 				if(msg_ptr->nl_link_info.link_type == IPA_LINK_TYPE_VLAN)
 				{
@@ -1486,9 +1683,42 @@ static int ipa_nl_decode_nlmsg
 				if(nlh->nlmsg_type == RTM_NEWADDR)
 				{
 					evt_data.event = IPA_ADDR_ADD_EVENT;
+#ifdef FEATURE_IPoGRE
+					if ((data_addr->iptype == IPA_IP_v4) && (strncmp(dev_name, IPACM_Iface::ipacmcfg->rgip_iface_name, sizeof(IPACM_Iface::ipacmcfg->rgip_iface_name)) == 0))
+					{
+						IPACMDBG_H("RGIP iface %s addr add, post IPA_HANDLE_RGIP_UP\n", dev_name);
+						ipacm_cmd_q_data rgip_evt_data;
+						uint32_t *rgip_v4 = (uint32_t*) malloc(sizeof(uint32_t));
+						if(rgip_v4 == NULL)
+						{
+							IPACMERR("Memory not assigned to rgip\n");
+						}
+						else
+						{
+							memcpy(rgip_v4,&data_addr->ipv4_addr,sizeof(rgip_v4));
+							memset(&rgip_evt_data, 0, sizeof(rgip_evt_data));
+							rgip_evt_data.event = IPA_HANDLE_RGIP_UP;
+							rgip_evt_data.evt_data = rgip_v4;
+							IPACM_EvtDispatcher::PostEvt(&rgip_evt_data);
+							IPACM_Iface::ipacmcfg->rgip_ip = data_addr->ipv4_addr;
+							IPACM_Iface::ipacmcfg->rgip_ip = ntohl(IPACM_Iface::ipacmcfg->rgip_ip);
+						}
+					}
+#endif
 				}
 				else
 				{
+#ifdef FEATURE_IPoGRE
+					if (strncmp(dev_name, IPACM_Iface::ipacmcfg->rgip_iface_name, sizeof(IPACM_Iface::ipacmcfg->rgip_iface_name)) == 0)
+					{
+						IPACMDBG_H("RGIP iface %s addr deleted, post IPA_HANDLE_RGIP_DEL\n", dev_name);
+						ipacm_cmd_q_data rgip_evt_data;
+						memset(&rgip_evt_data, 0, sizeof(rgip_evt_data));
+						rgip_evt_data.event = IPA_HANDLE_RGIP_DEL;
+						rgip_evt_data.evt_data = NULL;
+						IPACM_EvtDispatcher::PostEvt(&rgip_evt_data);
+					}
+#endif
 					evt_data.event = IPA_ADDR_DEL_EVENT;
 				}
 				data_addr->if_index = msg_ptr->nl_addr_info.metainfo.ifa_index;
@@ -1630,6 +1860,10 @@ static int ipa_nl_decode_nlmsg
 					IPACMDBG("GOT RTM_NEWROUTE event, br-wan enabled %d \n", IPACM_Iface::ipacmcfg->eth_wan_br_wan_enable);
 				}
 
+				if(strcmp(dev_name,"map-mape") == 0){
+					IPACMDBG_H(" Ignoring route on map-mape \n");
+					return IPACM_SUCCESS;
+				}
 				if(msg_ptr->nl_route_info.attr_info.param_mask & IPA_RTA_PARAM_DST)
 				{
 					ret_val = ipa_get_if_name(dev_name, msg_ptr->nl_route_info.attr_info.oif_index);
@@ -1834,7 +2068,26 @@ process:
 					}
 				}
 			}
+			/* Check for Blackhole route for Prefix Delegation */
+			if((msg_ptr->nl_route_info.metainfo.rtm_family == AF_INET6) &&
+			   (msg_ptr->nl_route_info.metainfo.rtm_type == RTN_BLACKHOLE || msg_ptr->nl_route_info.metainfo.rtm_type == RTN_UNREACHABLE) &&
+			   (msg_ptr->nl_route_info.attr_info.param_mask & IPA_RTA_PARAM_DST))
+			{
+				IPACMDBG_H("Got RTM_NEWROUTE for blackhole route with dst_len %d\n", msg_ptr->nl_route_info.metainfo.rtm_dst_len);
 
+				IPACM_EVENT_COPY_ADDR_v6(IPACM_Iface::ipacmcfg->ipv6_blackhole_prefix, msg_ptr->nl_route_info.attr_info.dst_addr);
+
+				IPACM_Iface::ipacmcfg->ipv6_blackhole_prefix[0] = ntohl(IPACM_Iface::ipacmcfg->ipv6_blackhole_prefix[0]);
+				IPACM_Iface::ipacmcfg->ipv6_blackhole_prefix[1] = ntohl(IPACM_Iface::ipacmcfg->ipv6_blackhole_prefix[1]);
+				IPACM_Iface::ipacmcfg->ipv6_blackhole_prefix[2] = ntohl(IPACM_Iface::ipacmcfg->ipv6_blackhole_prefix[2]);
+				IPACM_Iface::ipacmcfg->ipv6_blackhole_prefix[3] = ntohl(IPACM_Iface::ipacmcfg->ipv6_blackhole_prefix[3]);
+				IPACM_Iface::ipacmcfg->blackhole_valid = true;
+				IPACM_Iface::ipacmcfg->ipv6_blackhole_len = msg_ptr->nl_route_info.metainfo.rtm_dst_len;
+
+				IPACMDBG_H("Stored blackhole prefix 0x%08x%08x%08x%08x\n",
+					IPACM_Iface::ipacmcfg->ipv6_blackhole_prefix[0], IPACM_Iface::ipacmcfg->ipv6_blackhole_prefix[1],
+					IPACM_Iface::ipacmcfg->ipv6_blackhole_prefix[2], IPACM_Iface::ipacmcfg->ipv6_blackhole_prefix[3]);
+                        }
 			/* ipv6 routing table */
 			if((AF_INET6 == msg_ptr->nl_route_info.metainfo.rtm_family) &&
 				(msg_ptr->nl_route_info.metainfo.rtm_type == RTN_UNICAST) &&
@@ -2113,6 +2366,34 @@ process_v6:
 			IPACMDBG("rtm_family: %d\n", msg_ptr->nl_route_info.metainfo.rtm_family);
 			IPACMDBG("param_mask: 0x%x\n", msg_ptr->nl_route_info.attr_info.param_mask);
 
+			/* Check for Blackhole route delete for Prefix Delegation */
+			if((msg_ptr->nl_route_info.metainfo.rtm_family == AF_INET6) &&
+			   (msg_ptr->nl_route_info.metainfo.rtm_type == RTN_BLACKHOLE || msg_ptr->nl_route_info.metainfo.rtm_type == RTN_UNREACHABLE) &&
+			   (msg_ptr->nl_route_info.attr_info.param_mask & IPA_RTA_PARAM_DST))
+			{
+				uint32_t ipv6_addr[4];
+				IPACMDBG_H("Got RTM_DELROUTE for blackhole route with dst_len %d\n", msg_ptr->nl_route_info.metainfo.rtm_dst_len);
+				IPACM_EVENT_COPY_ADDR_v6(ipv6_addr, msg_ptr->nl_route_info.attr_info.dst_addr);
+
+				ipv6_addr[0] = ntohl(ipv6_addr[0]);
+				ipv6_addr[1] = ntohl(ipv6_addr[1]);
+				ipv6_addr[2] = ntohl(ipv6_addr[2]);
+				ipv6_addr[3] = ntohl(ipv6_addr[3]);
+
+				if(IPACM_Iface::ipacmcfg->blackhole_valid == true &&
+					IPACM_Iface::ipacmcfg->ipv6_blackhole_len == msg_ptr->nl_route_info.metainfo.rtm_dst_len &&
+					IPACM_Iface::ipacmcfg->ipv6_blackhole_prefix[0] == ipv6_addr[0] &&
+					IPACM_Iface::ipacmcfg->ipv6_blackhole_prefix[1] == ipv6_addr[1] &&
+					IPACM_Iface::ipacmcfg->ipv6_blackhole_prefix[2] == ipv6_addr[2] &&
+					IPACM_Iface::ipacmcfg->ipv6_blackhole_prefix[3] == ipv6_addr[3])
+				{
+					IPACMDBG_H("Delete blackhole prefix\n");
+					IPACM_Iface::ipacmcfg->blackhole_valid = false;
+					memset(IPACM_Iface::ipacmcfg->ipv6_blackhole_prefix, 0, sizeof(IPACM_Iface::ipacmcfg->ipv6_blackhole_prefix));
+					IPACM_Iface::ipacmcfg->ipv6_blackhole_len = 0;
+				}
+			}
+
 			/* take care of route delete of default route & uniroute */
 			if((msg_ptr->nl_route_info.metainfo.rtm_type == RTN_UNICAST) &&
 				 ((msg_ptr->nl_route_info.metainfo.rtm_protocol == RTPROT_BOOT) ||
@@ -2130,6 +2411,11 @@ process_v6:
 						IPACMERR("Error while getting interface name\n");
 						return IPACM_FAILURE;
 					}
+					if(strcmp(dev_name,"map-mape") == 0){
+						IPACMDBG_H(" Ignoring route on map-mape \n");
+						return IPACM_SUCCESS;
+					}
+
 					IPACM_NL_REPORT_ADDR( "route del -host ", msg_ptr->nl_route_info.attr_info.dst_addr);
 					IPACM_NL_REPORT_ADDR( " gw ", msg_ptr->nl_route_info.attr_info.gateway_addr);
 					IPACMDBG("dev %s\n", dev_name);
@@ -2166,6 +2452,11 @@ process_v6:
 					{
 						IPACMERR("Error while getting interface name\n");
 						return IPACM_FAILURE;
+					}
+
+					if(strcmp(dev_name,"map-mape") == 0){
+						IPACMDBG_H(" Ignoring route on map-mape \n");
+						return IPACM_SUCCESS;
 					}
 
 					/* insert to command queue */
@@ -2883,6 +3174,14 @@ int ipa_nl_send_getroute(ipa_ip_type ip_type)
 				IPACM_NL_REPORT_ADDR( "route add -host", nl_route_info_get_route.attr_info.dst_addr );
 				IPACM_NL_REPORT_ADDR( "gw", nl_route_info_get_route.attr_info.gateway_addr );
 				IPACMDBG("dev %s\n",dev_name );
+
+				if(strcmp(dev_name,"map-mape") == 0){
+					IPACMDBG_H(" Ignoring route on map-mape \n");
+					free(buf);
+					close(nl_sock);
+					return IPACM_SUCCESS;
+				}
+
 				/* insert to command queue */
 				IPACM_EVENT_COPY_ADDR_v4( if_ipv4_addr, nl_route_info_get_route.attr_info.dst_addr);
 				temp = (-1);
@@ -2922,6 +3221,13 @@ int ipa_nl_send_getroute(ipa_ip_type ip_type)
 					IPACM_NL_REPORT_ADDR( "route add default gw \n", nl_route_info_get_route.attr_info.gateway_addr );
 					IPACMDBG_H("dev %s \n", dev_name);
 					IPACM_NL_REPORT_ADDR( "dstIP:\n", nl_route_info_get_route.attr_info.dst_addr );
+
+					if(strcmp(dev_name,"map-mape") == 0){
+						IPACMDBG_H(" Ignoring route on map-mape \n");
+						free(buf);
+						close(nl_sock);
+						return IPACM_SUCCESS;
+					}
 
 					/* insert to command queue */
 					data_addr = (ipacm_event_data_addr *)malloc(sizeof(ipacm_event_data_addr));
@@ -3391,4 +3697,190 @@ int mask_v6(int index, uint32_t *mask)
 	}
 }
 
+int ipa_open_nl_getlink_socket
+(
+ipa_nl_sk_info_t   *sk_info,
+int               protocol,
+unsigned int      grps
+)
+{
+	int                  *p_sk_fd;
+	struct sockaddr_nl   *p_sk_addr_loc ;
+	int ret = 0;
 
+	//ds_assert(sk_info != NULL);
+
+	p_sk_fd = &(sk_info->sk_fd);
+	p_sk_addr_loc = &(sk_info->sk_addr_loc);
+
+	/*--------------------------------------------------------------------------
+	Open netlink socket for specified protocol
+	---------------------------------------------------------------------------*/
+	if ((*p_sk_fd = socket(AF_NETLINK, SOCK_RAW, protocol)) < 0)
+	{
+	ret = errno;
+	IPACMDBG("Socket open failed %s \n", strerror(errno));
+	return ret;
+	}
+
+	/*--------------------------------------------------------------------------
+	Initialize socket parameters to 0
+	--------------------------------------------------------------------------*/
+	memset(p_sk_addr_loc, 0, sizeof(struct sockaddr_nl));
+
+	/*-------------------------------------------------------------------------
+	Populate socket parameters
+	--------------------------------------------------------------------------*/
+	p_sk_addr_loc->nl_family = AF_NETLINK;
+	p_sk_addr_loc->nl_pid = 0;
+	p_sk_addr_loc->nl_groups = grps;
+
+	/*-------------------------------------------------------------------------
+	128    Bind socket to receive the netlink events for the required groups
+	129  --------------------------------------------------------------------------*/
+
+	if( bind( *p_sk_fd,
+			(struct sockaddr *)p_sk_addr_loc,
+			sizeof(struct sockaddr_nl) ) < 0)
+	{
+	ret = errno;
+	IPACMDBG("Socket bind failed %s- Make sure no-one has opened a NL socket"
+			" with\n", strerror(errno));
+	close(*p_sk_fd);
+	return ret;
+	}
+	return ret;
+}
+
+int  ipa_nl_query_getlink(int af_family)
+{
+	ipa_nl_sk_info_t   sk_info;
+	struct sockaddr_nl req_nl_addr, recv_nl_addr;
+	struct msghdr req_nl_msg, recv_nl_msg;
+	ipa_nl_req_type    nl_req;
+	char dev_name[IF_NAME_LEN];
+
+	struct iovec recv_iovec, req_iovec;
+	char buff[8124] = {0};
+	unsigned int ret_val = 0;
+	struct nlmsghdr *nl_hdr = NULL;
+	struct ifinfomsg *iface_info = NULL;
+	int ret;
+
+	memset(&req_nl_msg, 0, sizeof(req_nl_msg));
+	memset(&req_nl_addr, 0, sizeof(req_nl_addr));
+	memset(&nl_req, 0, sizeof(nl_req));
+	memset(&sk_info, 0, sizeof(sk_info));
+
+	if (ipa_open_nl_getlink_socket(&sk_info, NETLINK_ROUTE, RTMGRP_LINK) != 0)
+	{
+		IPACMDBG("Failed to open the netlink socket", 0, 0, 0);
+		return -1;
+	}
+
+	req_nl_addr.nl_family = AF_NETLINK;
+	nl_req.hdr.nlmsg_len = NLMSG_LENGTH(sizeof(struct rtgenmsg));
+	nl_req.hdr.nlmsg_type = RTM_GETLINK;
+	nl_req.hdr.nlmsg_flags = NLM_F_REQUEST | NLM_F_DUMP;
+	nl_req.hdr.nlmsg_seq = 1;
+	nl_req.hdr.nlmsg_pid = 0;
+	nl_req.gen.rtgen_family =  AF_PACKET;
+
+	req_iovec.iov_base = &nl_req;
+	req_iovec.iov_len = nl_req.hdr.nlmsg_len;
+	req_nl_msg.msg_iov = &req_iovec;
+	req_nl_msg.msg_iovlen = 1;
+	req_nl_msg.msg_name = &req_nl_addr;
+	req_nl_msg.msg_namelen = sizeof(req_nl_addr);
+	memset(&recv_nl_msg, 0, sizeof(recv_nl_msg));
+	memset(&recv_iovec, 0, sizeof(recv_iovec));
+
+	recv_iovec.iov_base = (void*)buff;
+	recv_iovec.iov_len = sizeof(buff);
+
+	recv_nl_msg.msg_name = (void*)&recv_nl_addr;
+	recv_nl_msg.msg_namelen = sizeof(recv_nl_addr);
+	recv_nl_msg.msg_iov = &recv_iovec;
+	recv_nl_msg.msg_iovlen = 1;
+	recv_nl_msg.msg_control = NULL;
+	recv_nl_msg.msg_controllen = 0;
+	recv_nl_msg.msg_flags = 0;
+	ipa_nl_link_info_t nl_link_info;
+	ipa_nl_msg_t *msg_ptr = (ipa_nl_msg_t *)calloc(1, sizeof(ipa_nl_msg_t));
+
+	if (sendmsg(sk_info.sk_fd, (struct msghdr *) &req_nl_msg, 0) <= 0)
+	{
+		IPACMDBG("QCMAP:Netlink Query to Kernel failed errno:%d",errno,0,0);
+		return -1;
+	}
+	while(1)
+	{
+		if ((ret_val = recvmsg(sk_info.sk_fd, &recv_nl_msg, 0)) < 0)
+		{
+			IPACMDBG("Error in reading from netlink socket errno:%d", errno, 0, 0);
+			break;
+		}
+		IPACMDBG("No of bytes recevied:%d", ret_val);
+		if ((nl_hdr = (struct nlmsghdr*)buff) == NULL)
+		{
+			IPACMDBG("nl_hdr is NULL", 0, 0, 0);
+			break;
+		}
+		if (nl_hdr->nlmsg_type == NLMSG_DONE)
+		{
+			IPACMDBG("Received NLMSG_DONE\n");
+			break;
+		}
+
+		while(NLMSG_OK(nl_hdr, ret_val))
+		{
+			if (nl_hdr->nlmsg_type == NLMSG_DONE)
+			{
+				IPACMDBG("Received NLMSG_DONE\n");
+				break;
+			}
+			if (nl_hdr->nlmsg_type == NLMSG_ERROR)
+			{
+				IPACMDBG("Error in received netlink msg :%u", nl_hdr->nlmsg_type, 0, 0);
+				break;
+			}
+			if ((iface_info = (struct ifinfomsg*)NLMSG_DATA (nl_hdr))==NULL)
+			{
+				IPACMDBG("Interface info from netlink message is NULL\n");
+				nl_hdr = NLMSG_NEXT(nl_hdr, ret_val);
+				continue;
+			}
+			ret =  ipa_get_if_name(dev_name,
+					iface_info->ifi_index);
+			if(ret != 0)
+			{
+				IPACMDBG("Error while getting interface index\n");
+				ret = 0;
+				nl_hdr = NLMSG_NEXT(nl_hdr, ret_val);
+				continue;
+			}
+			if(!strcmp(dev_name,"lo") || !strcmp(dev_name,"ip_vti0") || !strcmp(dev_name,"ip6_vti0")
+					|| !strcmp(dev_name,"sit0") || !strcmp(dev_name,"can0"))
+			{
+				nl_hdr = NLMSG_NEXT(nl_hdr, ret_val);
+				continue;
+			}
+
+			if (nl_hdr->nlmsg_type == RTM_NEWLINK)
+			{
+				if(iface_info->ifi_flags & IFF_UP)
+				{
+					if (ipa_nl_decode_nlmsg((const char*)nl_hdr, ret_val, msg_ptr)) {
+						IPACMERR("Failed to decode rtm link message\n");
+						nl_hdr = NLMSG_NEXT(nl_hdr, ret_val);
+						continue;
+					}
+				}
+			}
+			nl_hdr = NLMSG_NEXT(nl_hdr, ret_val);
+		}
+	}
+	if (sk_info.sk_fd > 0)
+		close(sk_info.sk_fd);
+	return 0;
+}

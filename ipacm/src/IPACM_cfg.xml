@@ -800,6 +800,10 @@
 		<IPACMMSGFLT>
 			<IPACMMSGFLTEnable>0</IPACMMSGFLTEnable>
 		</IPACMMSGFLT>
+		<IPACMMAPE>
+			<IPACMMAPEEnable>0</IPACMMAPEEnable>
+			<MAPEPhyIface>eth0</MAPEPhyIface>
+		</IPACMMAPE>
 		<IPACMLog>
 			<IPACMfilevar>2097152</IPACMfilevar>
 		</IPACMLog>

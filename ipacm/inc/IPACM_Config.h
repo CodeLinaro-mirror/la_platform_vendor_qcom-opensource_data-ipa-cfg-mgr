@@ -529,6 +529,12 @@ public:
 
 	bool isMCC_Mode;
 	pthread_mutex_t mac_flt_info_lock;
+	/*Parameter to identify Apbridge or stabridge mode.*/
+	ipa_device_mode device_mode;
+	/* Parameter to identify Apbridge or stabridge mode is vlan or non-vlan mode.*/
+	bool device_vlan_mode;
+	/* Parameter to know the management vlan id in apbridge or stabridge mode. */
+	uint16_t mgmnt_vlan_id;
 	/* map to store whitelisted and blacklisted unique mac adrrs */
 	std::map<std::array<uint8_t, 6>, mac_flt_type *> mac_flt_lists;
 #ifdef IPA_IOC_SET_MAC_FLT

@@ -773,12 +773,12 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 					}
 
 				}
+				/* querying the neighbors */
+				IPACM_LOG(IPACM_LOG_DEBUG, "Query Getneigh for physical ifaces\n");
+				ipa_nl_query_newneigh(AF_BRIDGE, dev_name);
+				IPACM_LOG(IPACM_LOG_DEBUG, "Query v4 neighbors for %s\n", dev_name);
+				ipa_nl_query_newneigh(AF_INET, "bridge");
 			}
-			/* querying the neighbors */
-			IPACM_LOG(IPACM_LOG_DEBUG, "Query Getneigh for physical ifaces\n");
-			ipa_nl_query_newneigh(AF_BRIDGE, dev_name);
-			IPACM_LOG(IPACM_LOG_DEBUG, "Query v4 neighbors for %s\n", dev_name);
-			ipa_nl_query_newneigh(AF_INET, "bridge");
 		}
 		break;
 #ifdef FEATURE_IPA_ANDROID
@@ -2566,7 +2566,7 @@ int IPACM_Lan::handle_vlan_pdn_down(ipacm_event_vlan_pdn *data)
 	{
 		if(data->mux_id == 0)
 		{
-			if(handle_wan_down_v6(true, data->VlanID))
+			if(handle_wan_down_v6(true, true, data->VlanID))
 			{
 				IPACM_LOG(IPACM_LOG_ERR, "STA flt v6 rule deletion failed\n");
 				return IPACM_FAILURE;
@@ -2643,7 +2643,7 @@ int IPACM_Lan::handle_vlan_pdn_down(ipacm_event_vlan_pdn *data)
 				IPACM_LOG(IPACM_LOG_ERR, "STA flt v4 rule deletion failed\n");
 				return IPACM_FAILURE;
 			}
-			if(handle_wan_down_v6(true, data->VlanID))
+			if(handle_wan_down_v6(true, true, data->VlanID))
 			{
 				IPACM_LOG(IPACM_LOG_ERR, "STA flt v6 rule deletion failed\n");
 				return IPACM_FAILURE;

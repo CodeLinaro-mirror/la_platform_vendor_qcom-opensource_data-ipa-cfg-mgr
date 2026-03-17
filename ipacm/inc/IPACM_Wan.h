@@ -404,6 +404,7 @@ public:
 	ipacm_wan_iface_type m_is_sta_mode;
 	static bool backhaul_is_sta_mode;
 	ipacm_event_ip_pass_pdn_info ip_pass_pdn_info;
+	bool in_collision;
 	static bool is_ext_prop_set;
 	static uint32_t backhaul_ipv6_prefix[2];
 #ifdef FEATURE_IPACM_UL_FIREWALL
@@ -427,6 +428,8 @@ public:
 
 	static bool is_global_ipv6_addr(uint32_t* ipv6_addr);
 	static bool is_link_local_ipv4_addr(uint32_t ipv4_addr);
+	static bool wan_v4_collision_exists(uint32_t lan_ip, uint32_t lan_mask);
+
 #ifdef FEATURE_VLAN_MPDN
 	static ipacm_ipv4_wan_iface ipv4_to_iface[IPA_MAX_NUM_SW_PDNS];
 	static ipacm_ipv6_wan_iface ipv6_to_iface[IPA_MAX_NUM_SW_PDNS];
@@ -456,6 +459,7 @@ private:
 	uint32_t ODU_fl_hdl[IPA_NUM_DEFAULT_WAN_FILTER_RULES];
 	int num_firewall_v4,num_firewall_v6;
 	uint32_t wan_v4_addr;
+	uint32_t wan_v4_mask;
 	uint32_t public_wan_v4_addr;
 	uint32_t wan_v4_addr_gw;
 	uint32_t wan_v6_addr_gw[4];

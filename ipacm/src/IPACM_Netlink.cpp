@@ -454,8 +454,8 @@ static int ipa_nl_decode_rtm_link
 )
 {
 	struct rtattr *attrib, *nested_attr, *vlan_attr;
-	struct rtattr *device_link_info[IFLA_INFO_MAX + 1] = {};
-	struct rtattr *vlan_link_info_data_attrs[IFLA_VLAN_MAX+1] = {};
+	struct rtattr *device_link_info[IFLA_INFO_MAX + 1] = {0};
+	struct rtattr *vlan_link_info_data_attrs[IFLA_VLAN_MAX+1] = {0};
 	struct ifinfomsg *ifm;
 	int len, nest_len, vlan_len;
 	char *intf_type = NULL;

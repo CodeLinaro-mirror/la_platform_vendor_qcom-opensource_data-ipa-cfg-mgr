@@ -28,7 +28,7 @@
  *
  * Changes from Qualcomm Technologies, Inc. are provided under the following license:
  * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
- * SPDX-License-Identifier: BSD-3-Clause-Clear
+ * SPDX-License-Identifier: BSD-3-Clause-Clear.
  */
 /*!
 	@file
@@ -5976,6 +5976,13 @@ int IPACM_Lan::handle_qos_route_rule(uint8_t *client_mac, uint16_t client_vlan_i
 					rt_rule_entry->rule.hdr_hdl =
 						get_client_memptr(eth_client, eth_index)->hdr_hdl_v6;
 
+					if (!ipv6_addr)
+					{
+						IPACMDBG_H("NULL IPv6 addr received, cannot install.\n");
+						free(rt_rule);
+						return IPACM_FAILURE;
+					}
+
 					if ((ipv6_addr[0] || ipv6_addr[1] || ipv6_addr[2] ||
 						ipv6_addr[3]))
 					{
@@ -6399,6 +6406,7 @@ int IPACM_Lan::handle_qos_route_rule_ext_v2(uint8_t *client_mac,
 				if (false == m_routing.AddRoutingRuleExt_v2(rt_rule))
 				{
 					IPACMERR("Routing rule addition failed!\n");
+					free((void*)rt_rule->rules);
 					free(rt_rule);
 					return IPACM_FAILURE;
 				}
@@ -6445,6 +6453,14 @@ int IPACM_Lan::handle_qos_route_rule_ext_v2(uint8_t *client_mac,
 					rt_rule_entry->rule.cnt_idx =
 						get_client_memptr(eth_client, eth_index)->dl_cnt_idx;
 					IPACMDBG_H("eth_client v6 dl index (%d) \n", rt_rule_entry->rule.cnt_idx);
+
+					if (!ipv6_addr)
+					{
+						IPACMDBG_H("NULL IPv6 addr received, cannot install.\n");
+						free((void*)rt_rule->rules);
+						free(rt_rule);
+						return IPACM_FAILURE;
+					}
 
 					if ((ipv6_addr[0] || ipv6_addr[1] || ipv6_addr[2] ||
 						ipv6_addr[3]))
@@ -6573,6 +6589,7 @@ int IPACM_Lan::handle_qos_route_rule_ext_v2(uint8_t *client_mac,
 					if (false == m_routing.AddRoutingRuleExt_v2(rt_rule))
 					{
 						IPACMERR("Routing rule addition failed!\n");
+						free((void*)rt_rule->rules);
 						free(rt_rule);
 						return IPACM_FAILURE;
 					}
@@ -6600,7 +6617,7 @@ int IPACM_Lan::handle_qos_route_rule_ext_v2(uint8_t *client_mac,
 				}
 			}
 		} /* end of for loop */
-
+		free((void*)rt_rule->rules);
 		free(rt_rule);
 	}
 	return IPACM_SUCCESS;
@@ -8161,6 +8178,12 @@ int IPACM_Lan::handle_eth_client_down_evt(uint8_t *mac_addr, uint16_t vlan_id, i
 	int j = 0, idx = 0;
 
 	IPACMDBG_H("total client: %d\n", num_eth_client_tmp);
+
+	if (rx_prop == NULL)
+	{
+		IPACMERR("Rx prop is NULL, return\n");
+		return IPACM_SUCCESS;
+	}
 
 	clt_indx = get_eth_client_index(mac_addr, vlan_id);
 	if (clt_indx == IPACM_INVALID_INDEX)
@@ -12685,9 +12708,10 @@ int IPACM_Lan::modify_private_subnet()
 	struct ipa_flt_rule_add flt_rule;
 	struct ipa_ioc_add_flt_rule_after* pFilteringTable = NULL;
 	int mtu_rule_cnt = 0;
+	int subnet_rule_cnt = 0;
 	uint16_t mtu[IPA_MAX_MTU_ENTRIES] = { };
 	uint16_t vid[IPA_MAX_MTU_ENTRIES] = { };
-	int mtu_rule_idx = IPACM_Iface::ipacmcfg->ipa_num_private_subnet;
+	int mtu_rule_idx = 0;
 
 	if(ip_type == IPA_IP_v6)
 	{
@@ -12710,6 +12734,7 @@ int IPACM_Lan::modify_private_subnet()
 				res = IPACM_FAILURE;
 				goto fail;
 			}
+			memset(private_fl_rule_hdl[j], 0, num_wan_subnet_rules[j] * sizeof(uint32_t));
 			IPACM_Iface::ipacmcfg->decreaseFltRuleCount(rx_prop->rx[idx].src_pipe, IPA_IP_v4, num_wan_subnet_rules[j]);
 			memset(private_fl_rule_hdl[j], 0, (IPA_MAX_PRIVATE_SUBNET_ENTRIES + IPA_MAX_MTU_ENTRIES) * sizeof(uint32_t));
 			num_wan_subnet_rules[j] = 0;
@@ -12785,7 +12810,16 @@ int IPACM_Lan::modify_private_subnet()
 			}
 #endif
 
-			len = sizeof(struct ipa_ioc_add_flt_rule_after) + (IPACM_Iface::ipacmcfg->ipa_num_private_subnet + mtu_rule_cnt) * sizeof(struct ipa_flt_rule_add);
+			for(i = 0; i < (IPACM_Iface::ipacmcfg->ipa_num_private_subnet); i++)
+			{
+				if(!IPACM_Iface::ipacmcfg->private_subnet_table[i].isCollisionSubnet)
+					subnet_rule_cnt++;
+			}
+
+			mtu_rule_idx = subnet_rule_cnt;
+			if(subnet_rule_cnt + mtu_rule_cnt == 0)
+				goto fail;
+			len = sizeof(struct ipa_ioc_add_flt_rule_after) + (subnet_rule_cnt + mtu_rule_cnt) * sizeof(struct ipa_flt_rule_add);
 			pFilteringTable = (struct ipa_ioc_add_flt_rule_after*)malloc(len);
 			if(!pFilteringTable)
 			{
@@ -12796,7 +12830,7 @@ int IPACM_Lan::modify_private_subnet()
 
 			pFilteringTable->commit = 1;
 			pFilteringTable->ip = IPA_IP_v4;
-			pFilteringTable->num_rules = num_wan_subnet_rules[j] = (uint8_t)IPACM_Iface::ipacmcfg->ipa_num_private_subnet + mtu_rule_cnt;
+			pFilteringTable->num_rules = num_wan_subnet_rules[j] = subnet_rule_cnt + mtu_rule_cnt;
 			pFilteringTable->ep = rx_prop->rx[idx].src_pipe;
 			pFilteringTable->add_after_hdl = mtu_flt_rule_offset[j][IPA_IP_v4];
 
@@ -12818,25 +12852,30 @@ int IPACM_Lan::modify_private_subnet()
 			flt_rule.rule.eq_attrib_type = 0;
 			IPACMDBG_H("Private filter rule use table: %s\n", IPACM_Iface::ipacmcfg->rt_tbl_default_v4.name);
 
+		int rule_idx_to_copy = 0;
 		for(i = 0; i < (IPACM_Iface::ipacmcfg->ipa_num_private_subnet); i++)
 		{
-			/* add private subnet rule for ipv4 */
-			if (ipa_if_cate == ODU_IF && IPACM_Iface::ipacmcfg->ipacm_l2tp_enable)
+			/* Don't install private subnet rule for the bridge during collision case */
+			if(!IPACM_Iface::ipacmcfg->private_subnet_table[i].isCollisionSubnet)
 			{
-				flt_rule.rule.action = IPA_PASS_TO_EXCEPTION;
+				/* add private subnet rule for ipv4 */
+				if (ipa_if_cate == ODU_IF && IPACM_Iface::ipacmcfg->ipacm_l2tp_enable)
+				{
+					flt_rule.rule.action = IPA_PASS_TO_EXCEPTION;
+				}
+				else
+				{
+					flt_rule.rule.action = IPA_PASS_TO_ROUTING;
+					flt_rule.rule.rt_tbl_hdl = IPACM_Iface::ipacmcfg->rt_tbl_default_v4.hdl;
+				}
+				flt_rule.rule.eq_attrib_type = 0;
+				memcpy(&flt_rule.rule.attrib, &rx_prop->rx[idx].attrib, sizeof(flt_rule.rule.attrib));
+				flt_rule.rule.attrib.attrib_mask |= IPA_FLT_DST_ADDR;
+				flt_rule.rule.attrib.u.v4.dst_addr_mask = IPACM_Iface::ipacmcfg->private_subnet_table[i].subnet_mask;
+				flt_rule.rule.attrib.u.v4.dst_addr = IPACM_Iface::ipacmcfg->private_subnet_table[i].subnet_addr;
+				memcpy(&(pFilteringTable->rules[rule_idx_to_copy++]), &flt_rule, sizeof(struct ipa_flt_rule_add));
+				IPACMDBG_H(" IPACM private subnet_addr as: 0x%x entry(%d)\n", flt_rule.rule.attrib.u.v4.dst_addr, i);
 			}
-			else
-			{
-				flt_rule.rule.action = IPA_PASS_TO_ROUTING;
-				flt_rule.rule.rt_tbl_hdl = IPACM_Iface::ipacmcfg->rt_tbl_default_v4.hdl;
-			}
-			flt_rule.rule.eq_attrib_type = 0;
-			memcpy(&flt_rule.rule.attrib, &rx_prop->rx[idx].attrib, sizeof(flt_rule.rule.attrib));
-			flt_rule.rule.attrib.attrib_mask |= IPA_FLT_DST_ADDR;
-			flt_rule.rule.attrib.u.v4.dst_addr_mask = IPACM_Iface::ipacmcfg->private_subnet_table[i].subnet_mask;
-			flt_rule.rule.attrib.u.v4.dst_addr = IPACM_Iface::ipacmcfg->private_subnet_table[i].subnet_addr;
-			memcpy(&(pFilteringTable->rules[i]), &flt_rule, sizeof(struct ipa_flt_rule_add));
-			IPACMDBG_H(" IPACM private subnet_addr as: 0x%x entry(%d)\n", flt_rule.rule.attrib.u.v4.dst_addr, i);
 
 			/* add corresponding MTU rule for ipv4 */
 			if (mtu[i] > 0 && mtu[i] < DEFAULT_MTU_SIZE)
@@ -13660,7 +13699,6 @@ int IPACM_Lan::handle_tethering_stats_event(ipa_get_data_stats_resp_msg_v01 *dat
 		return IPACM_FAILURE;
 	}
 
-
 	ul_pipe_found = false;
 	dl_pipe_found = false;
 	num_ul_packets = 0;
@@ -13736,13 +13774,8 @@ int IPACM_Lan::handle_tethering_stats_event(ipa_get_data_stats_resp_msg_v01 *dat
 			return IPACM_FAILURE;
 		}
 
-		fprintf(fp, PIPE_STATS,
-				dev_name,
-					IPACM_Wan::wan_up_dev_name,
-						num_ul_bytes,
-						num_ul_packets,
-							    num_dl_bytes,
-							num_dl_packets);
+		fprintf(fp, PIPE_STATS, dev_name, IPACM_Wan::wan_up_dev_name,
+			num_ul_bytes, num_ul_packets, num_dl_bytes, num_dl_packets);
 		fclose(fp);
 	}
 	return IPACM_SUCCESS;

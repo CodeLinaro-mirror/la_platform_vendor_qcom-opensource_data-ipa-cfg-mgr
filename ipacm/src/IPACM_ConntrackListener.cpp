@@ -54,7 +54,7 @@ IPACM_ConntrackListener::IPACM_ConntrackListener() :
 	nat_iface_ipv6_addr(*(new Ipv6IpAddressesCollection(MAX_IFACE_ADDRESS))),
 	nonnat_iface_ipv6_addr(*(new Ipv6IpAddressesCollection(MAX_IFACE_ADDRESS))),
 	sta_clnt_ipv6_addr(*(new Ipv6IpAddressesCollection(MAX_STA_CLNT_IFACES))),
-	wan_ipaddr_v6(*(new Ipv6IpAddress))
+	wan_ipaddr_v6(*(new Ipv6IpAddress()))
 {
 	 IPACMDBG("\n");
 

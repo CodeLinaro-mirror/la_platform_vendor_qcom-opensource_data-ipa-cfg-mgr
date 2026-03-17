@@ -188,6 +188,7 @@ IPACM_Wan::IPACM_Wan(int iface_index,
 	is_ipv6_frag_firewall_flt_rule_installed = false;
 	mtu_size = DEFAULT_MTU_SIZE;
 	memset(&ip_pass_pdn_info, 0 ,sizeof(ip_pass_pdn_info));
+
 #ifdef FEATURE_IPACM_UL_FIREWALL
 #ifdef FEATURE_VLAN_MPDN
 	num_firewall_v6_ul_pdn = 0;
@@ -844,15 +845,23 @@ int IPACM_Wan::handle_addr_evt(ipacm_event_data_addr *data)
 			else
 			{
 				IPACMDBG_H(" device (%s) ipv4 addr is changed\n", dev_name);
-				/*Don't remove route for WAN IP in IP Passthrough mode
+				/*Don't remove route for WAN IP in Collision mode
 				it may lead to stall as NAT entry is still pointing to
 				default route entry*/
-				if (!ip_pass_pdn_info.enable)
+				if(in_collision)
+				{
+					curr_wan_ip = data->ipv4_addr;
+					public_wan_v4_addr = wan_v4_addr;
+					public_wan_v4_addr_set = true;
+					IPACMDBG_H("Received wan ipv4-addr:0x%x\n",data->ipv4_addr);
+					IPACMDBG_H("In Collision mode, Storing previous wan ipv4-addr:0x%x\n",public_wan_v4_addr);
+					return IPACM_SUCCESS;
+				}
+				if (!ip_pass_pdn_info.enable && !in_collision)
 				{
 					/* Delete default v4 RT rule */
 					IPACMDBG_H("Delete default v4 routing rules\n");
-					if (m_routing.DeleteRoutingHdl(dft_rt_rule_hdl[0],
-									 IPA_IP_v4) == false)
+					if (m_routing.DeleteRoutingHdl(dft_rt_rule_hdl[0], IPA_IP_v4) == false)
 					{
 						IPACMERR("Routing old RT rule deletion failed!\n");
 						res = IPACM_FAILURE;
@@ -862,16 +871,20 @@ int IPACM_Wan::handle_addr_evt(ipacm_event_data_addr *data)
 				else
 				{
 					/* In IPPT or IP Collision mode don't replace the wan-ip RT rule to dummy ipv4 */
-					/*Store the public ip address when in passthrough mode which will be used when wan is down.*/
-					if (m_is_sta_mode == Q6_WAN)
+					/* Store the public ip address when in passthrough mode which will be used when wan is down.*/
+					IPACMDBG_H("Received wan ipv4-addr:0x%x\n",data->ipv4_addr);
+					curr_wan_ip = data->ipv4_addr;
+					public_wan_v4_addr = wan_v4_addr;
+					public_wan_v4_addr_set = true;
+					if ((m_is_sta_mode == Q6_WAN) && ip_pass_pdn_info.enable)
 					{
-						curr_wan_ip = data->ipv4_addr;
-						public_wan_v4_addr = wan_v4_addr;
-						public_wan_v4_addr_set = true;
-						IPACMDBG_H("Received wan ipv4-addr:0x%x\n",data->ipv4_addr);
-						IPACMDBG_H("In Passthrough mode, Storing previous wan ipv4-addr:0x%x\n",public_wan_v4_addr);
-						return IPACM_SUCCESS;
+						IPACMDBG_H("In IPPT mode, Storing previous wan ipv4-addr:0x%x\n",public_wan_v4_addr);
 					}
+					else if (in_collision)
+					{
+						IPACMDBG_H("In Collision mode, Storing previous wan ipv4-addr:0x%x\n",public_wan_v4_addr);
+					}
+					return IPACM_SUCCESS;
 				}
 #if defined(FEATURE_SOCKSv5) && defined (IPA_SOCKV5_EVENT_MAX)
 				if(m_is_sta_mode == Q6_WAN)
@@ -966,6 +979,12 @@ int IPACM_Wan::handle_addr_evt(ipacm_event_data_addr *data)
 					{
 						ipacm_event_ip_pass_pdn_info *ip_pass_pdn_data;
 						ip_pass_pdn_data = (ipacm_event_ip_pass_pdn_info *)malloc(sizeof(ipacm_event_ip_pass_pdn_info));
+						if(!ip_pass_pdn_data)
+						{
+							IPACMERR("Error allocating memory for ip_pass_pdn_data\n");
+							res = IPACM_FAILURE;
+							goto fail;
+						}
 						curr_wan_ip = data->ipv4_addr;
 						public_wan_v4_addr = IPACM_Iface::ipacmcfg->ip_pass_mpdn_table[indx].ip_pass_pdn_ip_addr;
 						public_wan_v4_addr_set = true;
@@ -976,6 +995,13 @@ int IPACM_Wan::handle_addr_evt(ipacm_event_data_addr *data)
 						{
 							ipacm_event_data_addr *data_addr = NULL;
 							data_addr = (ipacm_event_data_addr *)malloc(sizeof(ipacm_event_data_addr));
+							if(!data_addr)
+							{
+								IPACMERR("Error allocating memory for data_addr\n");
+								free(ip_pass_pdn_data);
+								res = IPACM_FAILURE;
+								goto fail;
+							}
 							memset(data_addr, 0, sizeof(ipacm_event_data_addr));
 							evt_data.event = IPA_ROUTE_ADD_EVENT;
 							data_addr->if_index = IPACM_Iface::ipacmcfg->ip_pass_mpdn_table[indx].if_index;
@@ -1038,9 +1064,8 @@ int IPACM_Wan::handle_addr_evt(ipacm_event_data_addr *data)
 		}
 
 		/* Store the public ip address when in passthrough mode which will be used when wan is down. */
-		if ((m_is_sta_mode == Q6_WAN) &&
-			ip_pass_pdn_info.enable &&
-			data->ipv4_addr == ip_pass_pdn_info.pdn_ip_addr)
+		if (((m_is_sta_mode == Q6_WAN) && (ip_pass_pdn_info.enable && data->ipv4_addr == ip_pass_pdn_info.pdn_ip_addr)) ||
+			(in_collision))
 		{
 			curr_wan_ip = data->ipv4_addr;
 			public_wan_v4_addr = wan_v4_addr;
@@ -1055,6 +1080,7 @@ int IPACM_Wan::handle_addr_evt(ipacm_event_data_addr *data)
 		}
 
 		wan_v4_addr = data->ipv4_addr;
+		wan_v4_mask = data->ipv4_addr_mask;
 		wan_v4_addr_set = true;
 
 		IPACMDBG_H("Received wan ipv4-addr:0x%x\n",wan_v4_addr);
@@ -1084,6 +1110,7 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 {
 	int if_index = 0;
 	int ipa_interface_index, cnt;
+	IPACM_Config* config = NULL;
 
 	switch (event)
 	{
@@ -1214,9 +1241,9 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 				delete this;
 				return;
 			}
-			else if (ip_pass_pdn_info.enable)
+			else if (ip_pass_pdn_info.enable || in_collision)
 			{
-				/* In Passthrough mode, config will be updated after WAN is up.
+				/* In Passthrough or Collision mode, config will be updated after WAN is up.
 				 * restore the WAN netdev index.
 				 */
 				if(IPACM_Iface::ipa_get_if_index(dev_name, &(if_index)))
@@ -1250,6 +1277,13 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 #endif
 			if (ipa_interface_index == ipa_if_num)
 			{
+				//Check for IPACM_Cfg flag
+				if(in_collision)
+				{
+					IPACMDBG_H("Disabling IP Collision\n");
+					IPACM_Iface::ipacmcfg->disable_collision(dev_name);
+				}
+
 				if(m_is_sta_mode == Q6_WAN)
 				{
 						IPACMDBG_H("Received IPA_LINK_DOWN_EVENT\n");
@@ -1299,6 +1333,20 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 
 			if (ipa_interface_index == ipa_if_num)
 			{
+				IPACMDBG_H("Checking IP collision for WAN interface %s with IP 0x%x, mask 0x%x\n",
+							dev_name, data->ipv4_addr, data->ipv4_addr_mask);
+
+				// Check for IPACM_cfg flag
+				if (IPACM_Iface::ipacmcfg->detect_and_handle_collision(dev_name,
+							data->ipv4_addr, data->ipv4_addr_mask))
+				{
+					in_collision = true;
+					IPACMDBG_H("IP collision enabled for interface %s\n", dev_name);
+				}
+				else {
+					in_collision = false;
+				}
+
 				IPACMDBG_H("Get IPA_ADDR_ADD_EVENT: IF ip type %d, incoming ip type %d\n", ip_type, data->iptype);
 				/* check v4 not setup before, v6 can have 2 iface ip */
 				if( (data->iptype == IPA_IP_v4)
@@ -2226,9 +2274,9 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 	case IPA_ROUTE_DEL_L2TP_VLAN_EVENT:
 		{
 			IPACMDBG("Received IPA_ROUTE_DEL_L2TP_VLAN_EVENT event\n");
-			int vlan_idx;
-			int v4_pdn_index;
-			int v6_pdn_index;
+			int vlan_idx = 0;
+			int v4_pdn_index = 0;
+			int v6_pdn_index = 0;
 			bool vlan_pdn_up = false;
 			ipacm_event_route_vlan *vlandown_data = (ipacm_event_route_vlan *)param;
 			if(vlandown_data->VlanID)
@@ -2767,12 +2815,6 @@ int IPACM_Wan::handle_vlan_backhaul_switch_v6(ipacm_event_route_vlan *data, bool
 		(data->wan_ipv6_prefix[1] == ipv6_prefix[1]) || v4_only_xlat)
 	{
 		IPACMDBG_H("received v6 IPA_ROUTE_ADD_VLAN_PDN_EVENT for VID %d, %d\n", data->VlanID, ipa_if_num);
-
-		IPACMDBG_H("received v6 IPA_ROUTE_ADD_VLAN_PDN_EVENT for VID %d, wan %s, %d with prefix %x:%x\n",
-				data->VlanID, dev_name, ipa_if_num,
-				IPACM_Wan::ipv6_to_iface[modem_ipv6_pdn_index].ipv6_prefix[0],
-				IPACM_Wan::ipv6_to_iface[modem_ipv6_pdn_index].ipv6_prefix[1]);
-
 		IPACMDBG_H("num_offloaded_pdns: %d\n", num_offloaded_pdns);
 		IPACMDBG_H("data->wan_ipv6_prefix: 0x%08x%08x\n", data->wan_ipv6_prefix[0], data->wan_ipv6_prefix[1]);
 
@@ -3791,6 +3833,36 @@ IPACM_firewall_conf_t* IPACM_Wan::get_curr_pdn_firewall_config(IPACM_firewall_t 
 	return NULL;
 }
 #endif
+
+/**
+ * Checks whether the given LAN IPv4 network collides with any configured WAN IPv4 PDN.
+ * Iterates over all software PDN entries; for each active IPv4 WAN interface, compares
+ * the LAN IP/mask against the WAN IP/mask using is_ips_in_collision(). On the first
+ * detected overlap, logs the collision and returns true.
+ *
+ * @param lan_ip    LAN IPv4 address in host byte order.
+ * @param lan_mask  LAN IPv4 subnet mask in host byte order.
+ * @return true if a collision with any WAN IPv4 interface exists; false otherwise.
+ */
+bool IPACM_Wan::wan_v4_collision_exists(uint32_t lan_ip, uint32_t lan_mask)
+{
+	for (int i = 0; i < IPA_MAX_NUM_SW_PDNS; i++)
+	{
+		IPACM_Wan* piface = ipv4_to_iface[i].pIface;
+		if (piface == nullptr || !piface->wan_v4_addr_set)
+			continue;
+
+		bool collides = IPACM_Iface::ipacmcfg->is_ips_in_collision(
+			lan_ip, lan_mask, piface->wan_v4_addr, piface->wan_v4_mask);
+
+		if (collides)
+		{
+			IPACMERR("Collision detected with WAN iface %s\n", piface->dev_name);
+			return true;
+		}
+	}
+	return false;
+}
 
 /* wan default route/filter rule configuration */
 int IPACM_Wan::handle_route_add_evt(ipa_ip_type iptype)

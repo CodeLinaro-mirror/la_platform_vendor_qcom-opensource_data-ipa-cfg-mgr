@@ -65,6 +65,7 @@
 
 using std::string;
 using std::set;
+using std::map;
 
 
 typedef struct
@@ -260,8 +261,10 @@ public:
 
 	/* Table containing ip_passthrough mpdn info */
 	ipacm_ip_pass_mpdn_info ip_pass_mpdn_table[MAX_NUM_IP_PASS_MPDN];
-
 	pthread_mutex_t ip_pass_mpdn_lock;
+
+	pthread_mutex_t ip_collision_lock;
+	map<string, int> ip_collision_map;
 
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
 	bool ipacm_lan_stats_enable;
@@ -467,6 +470,65 @@ public:
 	int ipacm_reset_hw_fnr_counters(const uint8_t start_id, const uint8_t end_id);
 	void alloc_fnr_counter(void);
 #endif
+
+	int ipa_get_if_idx_by_vid(uint16_t vlan_id);
+	void disable_collision(const char* dev_name);
+	bool detect_and_handle_collision(const char* dev_name, uint32_t wan_ip, uint32_t wan_mask);
+
+	/**
+	 * Determines whether two IPv4 networks (LAN and WAN) collide.
+	 * Performs subnet-based collision detection by comparing each IP
+	 * masked with both LAN and WAN subnet masks. If either network
+	 * overlaps or falls within the other’s subnet range, a collision exists.
+	 *
+	 * @param ip_addr1       first IPv4 address in host byte order.
+	 * @param subnet_mask1   first subnet mask in host byte order.
+	 * @param ip_addr2       second IPv4 address in host byte order.
+	 * @param subnet_mask2   second subnet mask in host byte order.
+	 * @return true  if the LAN and WAN networks overlap; false otherwise.
+	 */
+	inline bool is_ips_in_collision(uint32_t ip_addr1, uint32_t subnet_mask1,
+						uint32_t ip_addr2, uint32_t subnet_mask2)
+	{
+		if ( ((ip_addr1 & subnet_mask1) == (ip_addr2 & subnet_mask1)) ||
+			 ((ip_addr2 & subnet_mask2) == (ip_addr1 & subnet_mask2)) )
+		{
+			return true;
+		}
+		return false;
+	}
+
+	/**
+	 * Returns whether collision tracking is enabled for the given device.
+	 * Looks up the device in ip_collision_map under mutex protection without modifying the map.
+	 * Presence of the key indicates enabled state; alternatively, if your logic depends on
+	 * the stored value, return (value != 0) as needed.
+	 *
+	 * @param dev_name  Device name (must be non-null and non-empty).
+	 * @return true if enabled; false otherwise.
+	 */
+	inline bool is_ip_collision_enabled(const char* dev_name)
+	{
+		bool result = false;
+
+		if (dev_name == nullptr || dev_name[0] == '\0') {
+			IPACMERR("Invalid dev_name parameter\n");
+			return false;
+		}
+		if (pthread_mutex_lock(&ip_collision_lock) != 0) {
+			IPACMERR("Unable to lock collision mutex\n");
+			return false;
+		}
+
+		const std::string key(dev_name);
+		auto it = ip_collision_map.find(key);
+		if (it != ip_collision_map.end()) {
+			result = true;
+		}
+
+		pthread_mutex_unlock(&ip_collision_lock);
+		return result;
+	}
 
 	inline int get_free_ip_pass_pdn_index(char *dev_name)
 	{
@@ -725,7 +787,7 @@ public:
 
 		return false;
 	}
-	inline bool AddPrivateSubnet(uint32_t ip_addr, uint32_t ipv4_addr_mask, int ipa_if_index)
+	inline bool AddPrivateSubnet(uint32_t ip_addr, uint32_t ipv4_addr_mask, int ipa_if_index, bool is_collison_mode = false)
 	{
 		ipacm_cmd_q_data evt_data;
 		ipacm_event_data_fid *data_fid;
@@ -752,6 +814,10 @@ public:
 			private_subnet_table[ipa_num_private_subnet].subnet_addr = ip_addr;
 			private_subnet_table[ipa_num_private_subnet].subnet_mask = ipv4_addr_mask;
 			private_subnet_table[ipa_num_private_subnet].if_index = ipa_if_index;
+
+
+			private_subnet_table[ipa_num_private_subnet].isCollisionSubnet = is_collison_mode;
+
 			ipa_num_private_subnet++;
 
 			/* IPACM private subnet set changes */
@@ -1379,3 +1445,4 @@ private:
 };
 
 #endif /* IPACM_CONFIG */
+

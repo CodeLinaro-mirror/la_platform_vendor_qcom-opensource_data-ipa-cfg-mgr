@@ -941,6 +941,7 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 						gre_up(true);
 					}
 #endif
+#ifdef FEATURE_IPOGRE
 					if(IPACM_Iface::ipacmcfg->ipogre_enabled)
 					{
 						IPACMDBG_H(
@@ -949,6 +950,7 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 						gre_down(false,true);
 						gre_up(false,true);
 					}
+#endif
 					IPACMDBG_H("Finish handling IPA_ADDR_ADD_EVENT for ip-family(%d)\n", data->iptype);
 
 					/* checking if SW-RT_enable */
@@ -4144,10 +4146,12 @@ int IPACM_Lan::handle_wan_down(bool is_sta_mode, uint8_t mux_id, uint16_t vid)
 
 		if (is_sta_mode == false)
 		{
+#ifdef FEATURE_PMIPV6
 			if(IPACM_Iface::ipacmcfg->pmip_details.pmipv6_enabled)/*Delete GRE Filter rules on WAN_DOWN*/
 			{
 				gre_down(true);
 			}
+#endif
 			IPACMDBG_H("LTE mode - Wan_down for mux_id: %d\n", mux_id);
 			if (del_ul_flt_rules(IPA_IP_v4))
 				return IPACM_FAILURE;
@@ -15701,10 +15705,12 @@ int IPACM_Lan::handle_wan_down_v6(bool is_sta_mode, bool is_support_mpdn, uint16
 	if(is_sta_mode == false)
 	{
 		IPACMDBG_H("Deletion of LTE BH v6 rule\n");
+#ifdef FEATURE_PMIPV6
 		if(IPACM_Iface::ipacmcfg->pmip_details.pmipv6_enabled)/*Delete GRE Filter rules on WAN_DOWN*/
 		{
 			gre_down(true);
 		}
+#endif
 		if(del_ul_flt_rules(IPA_IP_v6))
 			return IPACM_FAILURE;
 
@@ -21866,9 +21872,11 @@ uint32_t IPACM_Lan::gre_get_rt_tbl_hdl(
 		IPACMERR("Invalid IP type passed to function\n");
 		return 0;
 	}
+#ifdef FEATURE_PMIPV6
 	if(isPmipv6){
 		return IPACM_Wan::ipgre_get_rt_tbl_hdl(iptype);
 	}
+#endif
 	if ( gre_route_data[iptype].rt_tbl_hdl == 0 )
 	{
 		struct ipa_ioc_get_rt_tbl routing_table;

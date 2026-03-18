@@ -146,8 +146,9 @@ int IPACM_Wan::num_firewall_v6_ul = 0;
 struct ipacm_pdn_flt_rule IPACM_Wan::pdn_flt_rule_v4[IPA_MAX_FLT_RULE];
 struct ipacm_pdn_flt_rule IPACM_Wan::pdn_flt_rule_v6[IPA_MAX_FLT_RULE];
 #endif
-
+#ifdef FEATURE_PMIPV6
 ipgre_route_data_t IPACM_Wan::ipgre_route_data[IPA_IP_MAX];
+#endif
 struct ipa_flt_rule_add IPACM_Wan::flt_rule_v4[IPA_MAX_FLT_RULE];
 struct ipa_flt_rule_add IPACM_Wan::flt_rule_v6[IPA_MAX_FLT_RULE];
 
@@ -471,7 +472,7 @@ IPACM_Wan::~IPACM_Wan()
 		close(m_fd_ipa);
 	return;
 }
-
+#ifdef FEATURE_PMIPV6
 void IPACM_Wan::ipgre_route_data_init(
 	enum ipa_ip_type iptype )
 {
@@ -485,7 +486,7 @@ void IPACM_Wan::ipgre_route_data_init(
 		   0,
 		   sizeof(ipgre_route_data_t));
 }
-
+#endif
 #ifdef FEATURE_VLAN_MPDN
 
 int IPACM_Wan::GetMuxByVid(uint16_t vlan_id, uint8_t *mux_id, ipa_ip_type iptype)
@@ -5691,10 +5692,12 @@ int IPACM_Wan::handle_route_add_evt(ipa_ip_type iptype)
 			close(fd_wwan_ioctl);
 #endif
 			install_wan_filtering_rule(false);
+#ifdef FEATURE_PMIPV6
 			if(IPACM_Iface::ipacmcfg->pmip_details.pmipv6_enabled)
 			{
 				gre_up();
 			}
+#endif
 #ifdef FEATURE_VLAN_MPDN
 			if(isVlanWanUP())
 				FullConfig = false;
@@ -5838,10 +5841,12 @@ int IPACM_Wan::handle_route_add_evt(ipa_ip_type iptype)
 			close(fd_wwan_ioctl);
 #endif
 			install_wan_filtering_rule(false);
+#ifdef FEATURE_PMIPV6
 			if(IPACM_Iface::ipacmcfg->pmip_details.pmipv6_enabled)
 			{
 				gre_up();
 			}
+#endif
 		}
 		else
 		{
@@ -9669,10 +9674,12 @@ int IPACM_Wan::handle_down_evt_ex()
 	mtu_v6 = DEFAULT_MTU_SIZE;
 	mtu_v6_set = false;
 #endif
+#ifdef FEATURE_IPOGRE
 	if(IPACM_Iface::ipacmcfg->ipogre_enabled == true)
 	{
 		gre_down();
 	}
+#endif
 	if(ip_type == IPA_IP_v4)
 	{
 		num_ipv4_modem_pdn--;
@@ -13394,7 +13401,7 @@ int IPACM_Wan::add_catchup_all_filtering_rule_each_pdn(
 #else
 	bool compatible_eogre = false;
 #endif
-#ifdef FEATURE_IPoGRE
+#if defined(FEATURE_EoGRE) || defined(FEATURE_PMIPV6) || defined(FEATURE_IPoGRE)
 	bool           doing_ipgre = isPmipv6;
 	/*
 	 * If we're doing eogre and the iptype in the eogre matches what's
@@ -13474,8 +13481,8 @@ flt_rule_entry.rule.attrib.u.v4.dst_addr_mask = 0x00000000;
 					flt_rule_entry.rule.action = IPA_PASS_TO_DST_NAT;
 					rt_tbl_name = ipacmcfg->rt_tbl_lan_v4.name;
 				}
-		}
 #if defined(FEATURE_EoGRE) || defined(FEATURE_PMIPV6) || defined(FEATURE_IPoGRE)
+		}
 			if(isPmipv6 || doing_ipgre)
 			{
 				flt_rule_entry.rule.action = IPA_PASS_TO_DST_NAT;

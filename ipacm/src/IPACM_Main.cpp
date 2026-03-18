@@ -1402,6 +1402,7 @@ void* ipa_driver_msg_notifier(void *param)
 
 			continue;
 #endif
+#ifdef FEATURE_IPoGRE
 		case IPA_RGIP_ADD_EVENT:
 			IPACMDBG_H("Received an IPA_IPoGRE_RGIP_EVENT\n");
 			rgip_v4 = (uint32_t*) malloc(sizeof(uint32_t));
@@ -1428,6 +1429,7 @@ void* ipa_driver_msg_notifier(void *param)
 			strlcpy(IPACM_Iface::ipacmcfg->rgip_iface_name,ipv4_src->rgip_iface_name, IPA_IFACE_NAME_LEN);
 
 			break;
+#endif
 		case IPA_MACSEC_ADD_EVENT:
 		case IPA_MACSEC_DEL_EVENT:
 			IPACMDBG_H("Received an %s\n",

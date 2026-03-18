@@ -89,8 +89,10 @@ IPACM_ConntrackListener::IPACM_ConntrackListener() :
 
 	 IPACM_EvtDispatcher::registr(IPA_HANDLE_WAN_UP, this);
 	 IPACM_EvtDispatcher::registr(IPA_HANDLE_WAN_DOWN, this);
+#ifdef FEATURE_IPoGRE
 	 IPACM_EvtDispatcher::registr(IPA_HANDLE_RGIP_UP, this);
 	 IPACM_EvtDispatcher::registr(IPA_HANDLE_RGIP_DEL, this);
+#endif
 #ifdef FEATURE_SOCKSv5
 	 IPACM_EvtDispatcher::registr(IPA_HANDLE_SOCKSv5_UP, this);
 	 IPACM_EvtDispatcher::registr(IPA_HANDLE_SOCKSv5_DOWN, this);
@@ -234,12 +236,14 @@ void IPACM_ConntrackListener::event_callback(ipa_cm_event_id evt,
 			/* if WAN UP happens after ipacm has recieved rgip
 			 *  IOCTL,AddPDN is posted if non-zero rgip is stored.
 			 */
+#ifdef FEATURE_IPoGRE
 			if(IPACM_Iface::ipacmcfg->rgip_ip)
 			{
 				rgip_addr = IPACM_Iface::ipacmcfg->rgip_ip;
 				nat_inst->AddPdn(rgip_addr, muxid, false,
 					(ip_pass_enable_default_pdn && !ip_pass_skip_nat_default_pdn));
 			}
+#endif
 			break;
 #ifdef FEATURE_VLAN_MPDN
 	 case IPA_HANDLE_WAN_VLAN_PDN_UP:
@@ -339,11 +343,13 @@ void IPACM_ConntrackListener::event_callback(ipa_cm_event_id evt,
 			{
 				TriggerWANDown(wan_data->ipv4_addr);
 			}
+#ifdef FEATURE_IPoGRE
 			if(IPACM_Iface::ipacmcfg->rgip_ip)
 			{
 				nat_inst->RemovePdn(IPACM_Iface::ipacmcfg->rgip_ip);
 				rgip_addr = 0;
 			}
+#endif
 			break;
 
 	case IPA_HANDLE_WAN_UP_V6:
@@ -449,7 +455,7 @@ void IPACM_ConntrackListener::event_callback(ipa_cm_event_id evt,
 		 nat_inst->HandleSWAllowEntries();
 		 ipv6ct_inst->HandleSWAllowEntries();
 		 break;
-
+#ifdef FEATURE_IPoGRE
 	 case IPA_HANDLE_RGIP_UP:
 		{
 			if(WanUp == false)
@@ -480,7 +486,7 @@ void IPACM_ConntrackListener::event_callback(ipa_cm_event_id evt,
 			rgip_addr = 0;
 			break;
 		}
-
+#endif
 	 default:
 			IPACMDBG("Ignore cmd %d\n", evt);
 			break;

@@ -224,8 +224,9 @@ typedef struct
 } ipa_nl_msg_t;
 
 typedef struct {
-    struct nlmsghdr nlh;
-    struct rtmsg rtm;
+	struct nlmsghdr nlh;
+	struct rtmsg rtm;
+	struct ndmsg nd;
 } nl_request_t;
 
 /* Initialization routine for listener on NetLink sockets interface */
@@ -235,7 +236,13 @@ int ipa_nl_listener_init
 	 unsigned int nl_groups,
 	 ipa_nl_sk_fd_set_info_t *sk_fdset,
 	 ipa_sock_thrd_fd_read_f read_f
-	 );
+	);
+
+typedef struct
+{
+	 struct nlmsghdr hdr;
+	 struct rtgenmsg gen;
+}ipa_nl_req_type;
 
 /*  Virtual function registered to receive incoming messages over the NETLINK routing socket*/
 int ipa_nl_recv_msg(int fd);
@@ -247,7 +254,7 @@ int mask_v6(int index, uint32_t *mask);
 int ipa_get_if_name(char *if_name, int if_index);
 
 int ipa_nl_send_getroute(ipa_ip_type ip_type);
-
+int ipa_nl_query_getlink(int);
 #ifdef __cplusplus
 }
 #endif

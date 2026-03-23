@@ -91,7 +91,10 @@ extern "C"
 #define IPA_ODU_HDR_NAME_v4  "IPACM_ODU_v4"
 #define IPA_ODU_HDR_NAME_v6  "IPACM_ODU_v6"
 #define IPA_IF_SOCKSv5_NAME  "IPACM_SOCKSv5"
-#define IPA_EOGRE_HDR_NAME   "IPACM_EoGRE_v%d"
+#define IPA_EoGRE_HDR_NAME   "IPACM_EoGRE_v%d"
+#define IPA_GRE_HDR_NAME   "IPACM_GRE_v%d"
+#define IPA_GRE_C_HDR_NAME   "IPACM_GRE_C_v%d"
+
 
 #define IPA_MAX_ACTIVE_WLAN_IFACE 72 // 64 wlan (4x16 band support) + 8 extra rdkb supported ifaces
 
@@ -245,6 +248,8 @@ extern "C"
 
 #define IPV6_NUM_ADDR 3
 
+#define IPV6_SIZE 16
+
 /*
  * The following macros allow callers to print the raw bytes making up
  * an address.  No assumptions are made about endianess.
@@ -396,6 +401,18 @@ typedef enum
 	IPA_WAN_HANDLE_EoGRE_DOWN,
 #endif
 	IPA_DSCP_PCP_CONFIG_CHANGE_EVENT,         /* ipacm_event_change_dscp_pcp */
+#ifdef FEATURE_PMIPV6
+	IPA_HANDLE_GRE_UP,                      /* ipa_ipgre_info */
+	IPA_HANDLE_GRE_DOWN,                    /* ipa_ipgre_info */
+#endif
+#ifdef FEATURE_IPoGRE
+	IPA_HANDLE_IPOGRE_UP,                      /* ipa_ipgre_info */
+	IPA_HANDLE_IPOGRE_DOWN,                    /* ipa_ipgre_info */
+	IPA_WAN_HANDLE_IPOGRE_UP,
+	IPA_WAN_HANDLE_IPOGRE_DOWN,
+	IPA_HANDLE_RGIP_UP,
+	IPA_HANDLE_RGIP_DEL,
+#endif
 	IPA_HANDLE_MACSEC_ADD,                    /* ipa_macsec_map */
 	IPA_HANDLE_MACSEC_DEL,                    /* ipa_macsec_map */
 	IPA_ADD_BRIDGE_VLAN_PHY_INTF,
@@ -419,6 +436,8 @@ typedef enum
 	IPA_QOS_RULE_FLUSH_EVENT,                 /* ipacm_qos_rule_flush_event */
 	IPA_HANDLE_NEW_NEIGH_EVENT,               /* ipacm_event_data_fid */
 	IPA_WAN_GW_ADDR_ADD_EVENT,                /* ipacm_event_data_addr */
+	IPA_MAPE_ADD_FMR_RULE,                        /* ipacm_event_mape_fmr */
+	IPA_MAPE_DEL_FMR_RULE,                    /* ipacm_event_mape_fmr */
 	IPACM_EVENT_MAX
 } ipa_cm_event_id;
 

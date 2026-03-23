@@ -489,8 +489,7 @@ void IPACM_Wlan::event_callback(ipa_cm_event_id event, void *param)
 						if(data->iptype == IPA_IP_v6)
 						{
 							memcpy(ipv6_prefix, IPACM_Wan::backhaul_ipv6_prefix, sizeof(ipv6_prefix));
-							delete_ipv6_prefix_flt_rule();
-							install_ipv6_prefix_flt_rule(IPACM_Wan::backhaul_ipv6_prefix);
+							modify_ipv6_prefix_flt_rule();
 #ifdef FEATURE_IPv6CT_DISABLED
 #ifdef FEATURE_IPACM_UL_FIREWALL
 #ifdef IPA_V6_UL_WL_FIREWALL_HANDLE
@@ -564,6 +563,16 @@ void IPACM_Wlan::event_callback(ipa_cm_event_id event, void *param)
 						handle_software_routing_enable();
 					}
 				}
+#if defined(FEATURE_PMIPV6) || defined(FEATURE_IPoGRE)
+					if ( IPACM_Iface::ipacmcfg->pmip_details.pmipv6_enabled || IPACM_Iface::ipacmcfg->ipogre_enabled == true)
+					{
+						IPACMDBG_H(
+							"A previous ipogre enable needs to be undone, then redone. "
+							"Need to call gre_down followed by an gre_up\n");
+						gre_down(false,true);
+						gre_up(false,true);
+					}
+#endif
 			}
 		}
 		break;
@@ -614,7 +623,7 @@ void IPACM_Wlan::event_callback(ipa_cm_event_id event, void *param)
 			if(ip_type == IPA_IP_v6 || ip_type == IPA_IP_MAX)
 			{
 				memcpy(ipv6_prefix, data_wan_tether->ipv6_prefix, sizeof(ipv6_prefix));
-				install_ipv6_prefix_flt_rule(data_wan_tether->ipv6_prefix);
+				modify_ipv6_prefix_flt_rule();
 				if(data_wan_tether->is_sta == false)
 				{
 					ext_prop = IPACM_Iface::ipacmcfg->GetExtProp(IPA_IP_v6);
@@ -823,8 +832,7 @@ void IPACM_Wlan::event_callback(ipa_cm_event_id event, void *param)
 		if(ip_type == IPA_IP_v6 || ip_type == IPA_IP_MAX)
 		{
 			memcpy(ipv6_prefix, data_wan->ipv6_prefix, sizeof(ipv6_prefix));
-			delete_ipv6_prefix_flt_rule();
-			install_ipv6_prefix_flt_rule(data_wan->ipv6_prefix);
+			modify_ipv6_prefix_flt_rule();
 #ifdef FEATURE_IPv6CT_DISABLED
 #ifdef FEATURE_IPACM_UL_FIREWALL
 			IPACM_Wan::read_firewall_filter_rules_ul();
@@ -7859,6 +7867,11 @@ int IPACM_Wlan::handle_wlan_client_down_evt(uint8_t *mac_addr, uint16_t vlan_id)
 			get_client_memptr(wlan_client, (clt_indx + 1))->ipv4_sta_ul_rules_set;
 		get_client_memptr(wlan_client, clt_indx)->ipv6_sta_ul_rules_set =
 			get_client_memptr(wlan_client, (clt_indx + 1))->ipv6_sta_ul_rules_set;
+
+		get_client_memptr(wlan_client, clt_indx)->sta_ul_fl_rule_hdl_v4 =
+			get_client_memptr(wlan_client, (clt_indx + 1))->sta_ul_fl_rule_hdl_v4;
+		get_client_memptr(wlan_client, clt_indx)->sta_ul_fl_rule_hdl_v6 =
+			get_client_memptr(wlan_client, (clt_indx + 1))->sta_ul_fl_rule_hdl_v6;
 #ifdef IPA_HW_FNR_STATS
 		get_client_memptr(wlan_client, clt_indx)->ul_cnt_idx =
 			get_client_memptr(wlan_client, clt_indx + 1)->ul_cnt_idx;
@@ -14046,4 +14059,3 @@ int IPACM_Wlan::handle_wan_up_v2(ipa_ip_type ip_type, uint16_t vlan_id, uint8_t 
 	}
 	return IPACM_SUCCESS;
 }
-

@@ -89,6 +89,8 @@ IPACM_ConntrackListener::IPACM_ConntrackListener() :
 
 	 IPACM_EvtDispatcher::registr(IPA_HANDLE_WAN_UP, this);
 	 IPACM_EvtDispatcher::registr(IPA_HANDLE_WAN_DOWN, this);
+	 IPACM_EvtDispatcher::registr(IPA_HANDLE_RGIP_UP, this);
+	 IPACM_EvtDispatcher::registr(IPA_HANDLE_RGIP_DEL, this);
 #ifdef FEATURE_SOCKSv5
 	 IPACM_EvtDispatcher::registr(IPA_HANDLE_SOCKSv5_UP, this);
 	 IPACM_EvtDispatcher::registr(IPA_HANDLE_SOCKSv5_DOWN, this);
@@ -229,6 +231,15 @@ void IPACM_ConntrackListener::event_callback(ipa_cm_event_id evt,
 			{
 				TriggerWANUp(data);
 			}
+			/* if WAN UP happens after ipacm has recieved rgip
+			 *  IOCTL,AddPDN is posted if non-zero rgip is stored.
+			 */
+			if(IPACM_Iface::ipacmcfg->rgip_ip)
+			{
+				rgip_addr = IPACM_Iface::ipacmcfg->rgip_ip;
+				nat_inst->AddPdn(rgip_addr, muxid, false,
+					(ip_pass_enable_default_pdn && !ip_pass_skip_nat_default_pdn));
+			}
 			break;
 #ifdef FEATURE_VLAN_MPDN
 	 case IPA_HANDLE_WAN_VLAN_PDN_UP:
@@ -327,6 +338,11 @@ void IPACM_ConntrackListener::event_callback(ipa_cm_event_id evt,
 			if (WanUp)
 			{
 				TriggerWANDown(wan_data->ipv4_addr);
+			}
+			if(IPACM_Iface::ipacmcfg->rgip_ip)
+			{
+				nat_inst->RemovePdn(IPACM_Iface::ipacmcfg->rgip_ip);
+				rgip_addr = 0;
 			}
 			break;
 
@@ -433,6 +449,37 @@ void IPACM_ConntrackListener::event_callback(ipa_cm_event_id evt,
 		 nat_inst->HandleSWAllowEntries();
 		 ipv6ct_inst->HandleSWAllowEntries();
 		 break;
+
+	 case IPA_HANDLE_RGIP_UP:
+		{
+			if(WanUp == false)
+			{
+				IPACMDBG("WAN not up\n");
+				break;
+			}
+			IPACMDBG("Received IPA_HANDLE_RGIP_UP event\n");
+			uint32_t *rgip_data = (uint32_t *)data;
+			rgip_addr = *rgip_data;
+			rgip_addr = ntohl(rgip_addr);
+			nat_inst->AddPdn(rgip_addr, muxid, false,
+				(ip_pass_enable_default_pdn && !ip_pass_skip_nat_default_pdn));
+			break;
+		}
+
+		case IPA_HANDLE_RGIP_DEL:
+		{
+			if(WanUp == false)
+			{
+				IPACMDBG("WAN not up\n");
+				break;
+			}
+			IPACMDBG("Received IPA_HANDLE_RGIP_DEL event\n");
+
+			nat_inst->RemovePdn(IPACM_Iface::ipacmcfg->rgip_ip);
+			IPACM_Iface::ipacmcfg->rgip_ip = 0;
+			rgip_addr = 0;
+			break;
+		}
 
 	 default:
 			IPACMDBG("Ignore cmd %d\n", evt);
@@ -1488,10 +1535,16 @@ void IPACM_ConntrackListener::TriggerWANUp(void *in_param)
 
 	 if(nat_inst != NULL)
 	 {
-	   if (wanup_data->mux_id == 0)
-	   	 mux_id = wanup_data->xlat_mux_id;
-	   else
-	   	 mux_id = wanup_data->mux_id;
+	 if (wanup_data->mux_id == 0)
+	 	 mux_id = wanup_data->xlat_mux_id;
+	 else
+	 {
+	 	 /* muxid is maintained to store mux id of the PDN
+	 	 * to be used for AddPDN with rgip.
+	 	 */
+	 	 mux_id = wanup_data->mux_id;
+	 	 muxid = mux_id;
+	 }
 #ifdef FEATURE_VLAN_MPDN
 	   if(wanup_data->is_sta)
 		nat_inst->AddPdn(wanup_data->ipv4_addr, mux_id, true);
@@ -1641,6 +1694,7 @@ void IPACM_ConntrackListener::HandleVlanDown(void *in_param)
 {
 	ipacm_event_vlan_pdn *vlanup_data = (ipacm_event_vlan_pdn *)in_param;
 	bool remove_pdn = false;
+	bool has_non_vlan_clients = false;
 	IPACMDBG_H("Recevied below information during VLAN DOWN up,\n");
 	IPACMDBG_H("IPType: %d, vlan_id:%d, mux id %d\n",
 		vlanup_data->iptype,
@@ -1683,6 +1737,39 @@ void IPACM_ConntrackListener::HandleVlanDown(void *in_param)
 					if(remove_pdn == true)
 						break;
 				}
+			}
+		}
+
+		/* Check if there are non-VLAN clients using this PDN */
+		if(remove_pdn)
+		{
+			IPACMDBG_H("Checking for non-VLAN clients on PDN 0x%X\n", vlanup_data->ipv4_addr);
+			/* Check if any non-VLAN client exists that could be using this PDN */
+			for(int i = 0; i < MAX_IFACE_ADDRESS; i++)
+			{
+				if(nat_clients[i].nat_iface_ipv4_addr != 0 && !nat_clients[i].is_vlan_client)
+				{
+					/* Non-VLAN clients typically share the same PDN as VLAN clients
+					 * Check if this non-VLAN client could be using this PDN by checking if it's
+					 * in the same subnet or if there are any NAT entries with this public IP
+					 */
+					IPACMDBG_H("Found non-VLAN client at index %d with IP 0x%X, checking PDN usage\n",
+						i, nat_clients[i].nat_iface_ipv4_addr);
+					IPACMDBG_H("Non-VLAN client at index %d is using PDN 0x%X\n",
+						i, vlanup_data->ipv4_addr);
+					has_non_vlan_clients = true;
+					break;
+				}
+			}
+
+			if(has_non_vlan_clients)
+			{
+				IPACMDBG_H("Non-VLAN clients still using PDN 0x%X, not removing PDN\n", vlanup_data->ipv4_addr);
+				return;
+			}
+			else
+			{
+				IPACMDBG_H("No non-VLAN clients using PDN 0x%X, proceeding with PDN removal\n", vlanup_data->ipv4_addr);
 			}
 		}
 
@@ -1866,6 +1953,7 @@ void IPACM_ConntrackListener::HandleInterfaceDownV6_StaticPolicy(void *in_param)
 
 void IPACM_ConntrackListener::TriggerWANDown(uint32_t wan_addr)
 {
+	bool has_vlan_clients = false;
 #ifdef FEATURE_VLAN_MPDN
 	IPACMDBG_H("Removing default ipv4 pdn with");
 #else
@@ -1880,6 +1968,31 @@ void IPACM_ConntrackListener::TriggerWANDown(uint32_t wan_addr)
 	{
 		if(wan_addr == wan_ipaddr)
 		{
+			/* Check if there are VLAN clients using this PDN */
+			IPACMDBG_H("Checking for VLAN clients on PDN 0x%X\n", wan_addr);
+			for(int i = 0; i < MAX_IFACE_ADDRESS; i++)
+			{
+				if(nat_clients[i].nat_iface_ipv4_addr != 0 && nat_clients[i].is_vlan_client)
+				{
+					/* Check if this VLAN client is using the same PDN */
+					IPACMDBG_H("Found VLAN client at index %d with IP 0x%X\n",
+						i, nat_clients[i].nat_iface_ipv4_addr);
+					has_vlan_clients = true;
+					break;
+				}
+			}
+
+			if(has_vlan_clients)
+			{
+				IPACMDBG_H("VLAN clients still using PDN 0x%X, not removing PDN\n", wan_addr);
+				WanUp = false;
+				wan_ipaddr = 0;
+				ip_pass_enable_default_pdn = 0;
+				ip_pass_skip_nat_default_pdn = 0;
+				ip_pass_dummy_ip_default_pdn = 0;
+				return;
+			}
+
 			WanUp = false;
 			wan_ipaddr = 0;
 			ip_pass_enable_default_pdn = 0;
@@ -2149,7 +2262,10 @@ IGNORE:
 void IPACM_ConntrackListener::ProcessCTMessage(void *param)
 {
 	 ipacm_ct_evt_data *evt_data = (ipacm_ct_evt_data *)param;
+	 ipacm_cmd_q_data event_data;
+	 ipacm_event_data_addr *data_addr;
 	 u_int8_t l4proto = 0;
+	 uint32_t status = 0,ipv4_addr=0;
 
 #ifdef IPACM_DEBUG
 	 char buf[1024];
@@ -2171,6 +2287,67 @@ void IPACM_ConntrackListener::ProcessCTMessage(void *param)
 	 }
 	 else
 	 {
+			if (IPACM_Iface::ipacmcfg->mape_enable) {
+				status = nfct_get_attr_u32(evt_data->ct, ATTR_STATUS);
+				if(IPS_SRC_NAT & status) {
+					ipv4_addr = ntohl(nfct_get_attr_u32(evt_data->ct, ATTR_ORIG_IPV4_DST));
+				}
+				else if(IPS_DST_NAT & status) {
+					ipv4_addr = ntohl(nfct_get_attr_u32(evt_data->ct, ATTR_ORIG_IPV4_SRC));
+				} else {
+					IPACMDBG_H("Neither SRC_NAT nor DST_NAT status set, skipping MAPE processing \n");
+					goto SKIP_MAPE;
+				}
+				IPACMDBG_H("ipv4_addr 0x%x \n",ipv4_addr);
+				if (evt_data->type & (NFCT_T_NEW | NFCT_T_UPDATE)) {
+					bool post_fmr_evt = false;
+					if (l4proto == IPPROTO_UDP) {
+						if (evt_data->type & NFCT_T_NEW) {
+							post_fmr_evt = true;
+						}
+					}
+					else if (l4proto == IPPROTO_TCP) {
+						uint8_t tcp_state = nfct_get_attr_u8(evt_data->ct, ATTR_TCP_STATE);
+						if (tcp_state == TCP_CONNTRACK_ESTABLISHED) {
+							post_fmr_evt = true;
+						}
+					}
+
+					if (post_fmr_evt) {
+						data_addr = (ipacm_event_data_addr *)malloc(sizeof(ipacm_event_data_addr));
+						if (data_addr != NULL) {
+							memset(data_addr, 0, sizeof(ipacm_event_data_addr));
+							    data_addr->ipv4_addr = ipv4_addr;
+							data_addr->iptype = IPA_IP_v4;
+
+							event_data.event = IPA_MAPE_ADD_FMR_RULE;
+							event_data.evt_data = (void *)data_addr;
+							IPACMDBG_H(" Posting IPA_MAPE_ADD_FMR_RULE \n");
+							if (0 != IPACM_EvtDispatcher::PostEvt(&event_data)) {
+								IPACMERR("Failed to post MAPE FMR event\n");
+								free(data_addr);
+							}
+						}
+					}
+				}
+				else if (evt_data->type & NFCT_T_DESTROY) {
+					data_addr = (ipacm_event_data_addr *)malloc(sizeof(ipacm_event_data_addr));
+					if (data_addr != NULL) {
+						memset(data_addr, 0, sizeof(ipacm_event_data_addr));
+						    data_addr->ipv4_addr = ipv4_addr;
+						data_addr->iptype = IPA_IP_v4;
+
+						event_data.event = IPA_MAPE_DEL_FMR_RULE;
+						event_data.evt_data = (void *)data_addr;
+						IPACMDBG_H(" Posting IPA_MAPE_DEL_FMR_RULE \n");
+						if (0 != IPACM_EvtDispatcher::PostEvt(&event_data)) {
+							IPACMERR("Failed to post MAPE FMR event\n");
+							free(data_addr);
+						}
+					}
+				}
+			}
+SKIP_MAPE:
 			ProcessTCPorUDPMsg(evt_data->ct, evt_data->type, l4proto);
 	 }
 
@@ -3909,7 +4086,7 @@ void IPACM_ConntrackListener::ProcessTCPorUDPMsg(
 	 {
 		 IPACMDBG_H("Neither Destination nor Source nat flag Set\n");
 
-		if(orig_src_ip == wan_ipaddr)
+		if(orig_src_ip == wan_ipaddr || orig_src_ip == rgip_addr)
 		{
 			IPACMDBG_H("orig src ip:0x%x equal to wan ip\n",orig_src_ip);
 			status = IPS_SRC_NAT;
@@ -3934,7 +4111,7 @@ void IPACM_ConntrackListener::ProcessTCPorUDPMsg(
 			}
 #endif
 		}
-		else if(orig_dst_ip == wan_ipaddr)
+		else if(orig_dst_ip == wan_ipaddr || orig_dst_ip == rgip_addr)
 		{
 			IPACMDBG_H("orig Dst IP:0x%x equal to wan ip\n",orig_dst_ip);
 			status = IPS_DST_NAT;
@@ -5080,6 +5257,78 @@ bool IPACM_ConntrackListener::IsIpv6PrivateSubnet(const IpAddress& ip)
 		ret = ip.IsSameSubnet(wan_ipaddr_v6);
 	}
 
+	if(pConfig->blackhole_valid == true)
+	{
+		int len =  pConfig->ipv6_blackhole_len;
+		const Ipv6IpAddress& ipv6 = static_cast<const Ipv6IpAddress&>(ip);
+		uint32_t v6_address[4];
+		/* Note: Assuming incoming ipv6 =  2001:0db8:85a3:0099:1111:2222:3333:4444
+		 * and Blackhole Prefix: 2001:0db8:85a3:0000::/56
+		 * Assuming they are correctly populated into four 32-bit blocks for example:
+		 * v6_address[0] = 0x20010db8
+		 * v6_address[1] = 0x85a30099
+		 * v6_address[2] = 0x11112222
+		 * v6_address[3] = 0x33334444
+		 */
+		v6_address[0] = ipv6.GetMsb();
+		v6_address[2] = ipv6.GetLsb();
+		for (int i = 0; i < 4; ++i)
+		{
+			/* example len = 56
+			* If no bits left to check, it's a match
+			* ITERATION 1 (i=0): len is 56. (Skip)
+			* ITERATION 2 (i=1): len is 24. (Skip)
+			* ITERATION 3 (i=2): len is 0. Condition met! Returns true.
+			*/
+			if (len == 0) {
+				return true;
+			}
+
+			/* Determine how many bits to check in this specific 32-bit block
+			 * ITERATION 1 (i=0): len (56) >= 32, so check_bits = 32
+			 * ITERATION 2 (i=1): len (24) < 32, so check_bits = 24
+			 */
+			int check_bits = (len >= 32) ? 32 : len;
+
+			/* Create mask */
+			uint32_t mask;
+			if (check_bits == 32) {
+				/* ITERATION 1 (i=0): We need the full block. 
+				 * mask = 0xFFFFFFFF
+				 */
+				mask = 0xFFFFFFFFU;
+			} else {
+				/* ITERATION 2 (i=1): check_bits is 24.
+				 * 0xFFFFFFFFU >> 24 = 0x000000FF.
+				 * Bitwise NOT (~) flips it to 0xFFFFFF00.
+				 * mask = 0xFFFFFF00
+				 */
+				mask = ~(0xFFFFFFFFU >> check_bits);
+			}
+
+			/* Compare the masked values
+			 * ITERATION 1 (i=0):
+			 * v6_address[0] & mask: 0x20010db8 & 0xFFFFFFFF = 0x20010db8
+			 * prefix[0] & mask:     0x20010db8 & 0xFFFFFFFF = 0x20010db8
+			 * They match! Continue loop.
+			 *
+			 * ITERATION 2 (i=1):
+			 * v6_address[1] & mask: 0x85a30099 & 0xFFFFFF00 = 0x85a30000
+			 * prefix[1] & mask:     0x85a30000 & 0xFFFFFF00 = 0x85a30000
+			 * They match! Continue loop.
+			 */
+			if ((v6_address[i] & mask) != (pConfig->ipv6_blackhole_prefix[i] & mask)) {
+				return false;
+			}
+
+			/* Decrement length by the bits we just checked (max 32)
+			 * ITERATION 1 (i=0): len = 56 - 32 = 24
+			 * ITERATION 2 (i=1): len = 24 - 24 = 0
+			 */
+			len -= check_bits;
+		}
+		ret = true;
+	}
 	IPACMDBG_H("return\n");
 	return ret;
 }

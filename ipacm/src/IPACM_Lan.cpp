@@ -21887,9 +21887,21 @@ int IPACM_Lan::eogre_make_hdr_rem_ctx(
 	procCtxTable->num_proc_ctxs = NUM_OF_PROC_CTX;
 
 	// init proc_ctx common fields
+	/*
+	 * header is not needed in remove proc_ctx, assigning same handle
+	 * as addition to avoid invalid handle on driver side. Handle
+	 * range starts from one.
+	 */
+	uint32_t hdr_hdl = eogre_route_data[iptype].header_hdl;
+	if (hdr_hdl == 0)
+	{
+		IPACMERR("Header handle is 0, cannot create proc_ctx\n");
+		return IPACM_FAILURE;
+	}
 	procCtx->proc_ctx_hdl = -1; // return value
 	procCtx->status       = -1; // Return parameter
 	procCtx->type         = IPA_HDR_PROC_EoGRE_HEADER_REMOVE;
+	procCtx->hdr_hdl      = hdr_hdl;
 	procCtx->eogre_params.hdr_remove_param.hdr_len_remove =
 		( iptype == IPA_IP_v4 ) ? sizeof(v4_gre_hdr_t) :
 		(IPACM_Iface::ipacmcfg->v6options_enabled == true) ? sizeof(v6_gre_hdr_t) :

@@ -1953,10 +1953,10 @@ int ipa_reset()
 	{
 		IPACMERR("IOCTL IPA_IOC_CLEANUP call failed: %s \n",
 			strerror(errno));
-		close(fd);
-		return IPACM_FAILURE;
 	}
-
+	IPACM_Config* config = IPACM_Config::GetInstance();
+	IPACMDBG_H("config->hw_fnr_stats_support %d\n",config->hw_fnr_stats_support);
+	config->hw_fnr_stats_support = false;
 	IPACMDBG_H("send IPA_IOC_CLEANUP \n");
 	close(fd);
 	return IPACM_SUCCESS;

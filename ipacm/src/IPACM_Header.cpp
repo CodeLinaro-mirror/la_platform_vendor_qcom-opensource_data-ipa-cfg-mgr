@@ -47,7 +47,7 @@ IPACM_Header::IPACM_Header()
 	m_fd = open(DEVICE_NAME, O_RDWR);
 	if (-1 == m_fd)
 	{
-		IPACMERR("Failed to open %s in IPACM_Header test application constructor.\n", DEVICE_NAME);
+		IPACM_LOG(IPACM_LOG_ERR, "Failed to open %s in IPACM_Header test application constructor.\n", DEVICE_NAME);
 	}
 }
 
@@ -75,7 +75,7 @@ bool IPACM_Header::AddHeader(struct ipa_ioc_add_hdr *pHeaderTableToAdd)
 	int nRetVal = 0;
 	//call the Driver ioctl in order to add header
 	nRetVal = ioctl(m_fd, IPA_IOC_ADD_HDR, pHeaderTableToAdd);
-	IPACMDBG("return value: %d\n", nRetVal);
+	IPACM_LOG(IPACM_LOG_DEBUG,"return value: %d\n", nRetVal);
 	return (-1 != nRetVal);
 }
 
@@ -86,7 +86,7 @@ bool IPACM_Header::DeleteHeader(struct ipa_ioc_del_hdr *pHeaderTableToDelete)
 	int nRetVal = 0;
 	//call the Driver ioctl in order to remove header
 	nRetVal = ioctl(m_fd, IPA_IOC_DEL_HDR, pHeaderTableToDelete);
-	IPACMDBG("return value: %d\n", nRetVal);
+	IPACM_LOG(IPACM_LOG_DEBUG,"return value: %d\n", nRetVal);
 	return (-1 != nRetVal);
 }
 
@@ -96,7 +96,7 @@ bool IPACM_Header::Commit()
 {
 	int nRetVal = 0;
 	nRetVal = ioctl(m_fd, IPA_IOC_COMMIT_HDR);
-	IPACMDBG("return value: %d\n", nRetVal);
+	IPACM_LOG(IPACM_LOG_DEBUG,"return value: %d\n", nRetVal);
 	return true;
 }
 
@@ -108,7 +108,7 @@ bool IPACM_Header::Reset()
 
 	nRetVal = ioctl(m_fd, IPA_IOC_RESET_HDR);
 	nRetVal |= ioctl(m_fd, IPA_IOC_COMMIT_HDR);
-	IPACMDBG("return value: %d\n", nRetVal);
+	IPACM_LOG(IPACM_LOG_DEBUG,"return value: %d\n", nRetVal);
 	return true;
 }
 
@@ -123,11 +123,11 @@ bool IPACM_Header::GetHeaderHandle(struct ipa_ioc_get_hdr *pHeaderStruct)
 	retval = ioctl(m_fd, IPA_IOC_GET_HDR, pHeaderStruct);
 	if (retval)
 	{
-		IPACMERR("IPA_IOC_GET_HDR ioctl failed, routingTable =0x%p, retval=0x%x.\n", pHeaderStruct, retval);
+		IPACM_LOG(IPACM_LOG_ERR, "IPA_IOC_GET_HDR ioctl failed, routingTable =0x%p, retval=0x%x.\n", pHeaderStruct, retval);
 		return false;
 	}
 
-	IPACMDBG("IPA_IOC_GET_HDR ioctl issued to IPA header insertion block.\n");
+	IPACM_LOG(IPACM_LOG_DEBUG,"IPA_IOC_GET_HDR ioctl issued to IPA header insertion block.\n");
 	return true;
 }
 
@@ -142,11 +142,11 @@ bool IPACM_Header::CopyHeader(struct ipa_ioc_copy_hdr *pCopyHeaderStruct)
 	retval = ioctl(m_fd, IPA_IOC_COPY_HDR, pCopyHeaderStruct);
 	if (retval)
 	{
-		IPACMERR("IPA_IOC_COPY_HDR ioctl failed, retval=0x%x.\n", retval);
+		IPACM_LOG(IPACM_LOG_ERR, "IPA_IOC_COPY_HDR ioctl failed, retval=0x%x.\n", retval);
 		return false;
 	}
 
-	IPACMDBG("IPA_IOC_COPY_HDR ioctl issued to IPA header insertion block.\n");
+	IPACM_LOG(IPACM_LOG_DEBUG,"IPA_IOC_COPY_HDR ioctl issued to IPA header insertion block.\n");
 	return true;
 }
 
@@ -160,7 +160,7 @@ bool IPACM_Header::DeleteHeaderHdl(uint32_t hdr_hdl)
 
 	if (hdr_hdl == 0)
 	{
-		IPACMERR("Invalid header handle passed. Ignoring it\n");
+		IPACM_LOG(IPACM_LOG_ERR, "Invalid header handle passed. Ignoring it\n");
 		return false;
 	}
 
@@ -168,7 +168,7 @@ bool IPACM_Header::DeleteHeaderHdl(uint32_t hdr_hdl)
 	pHeaderDescriptor = (struct ipa_ioc_del_hdr *)malloc(len);
 	if (pHeaderDescriptor == NULL)
 	{
-		IPACMERR("Unable to allocate memory for del header\n");
+		IPACM_LOG(IPACM_LOG_ERR, "Unable to allocate memory for del header\n");
 		return false;
 	}
 
@@ -180,16 +180,16 @@ bool IPACM_Header::DeleteHeaderHdl(uint32_t hdr_hdl)
 	hd_rule_entry->hdl = hdr_hdl;
 	hd_rule_entry->status = -1;
 
-	IPACMDBG("Deleting Header hdl:(%x)\n", hd_rule_entry->hdl);
+	IPACM_LOG(IPACM_LOG_DEBUG, "Deleting Header hdl:(%x)\n", hd_rule_entry->hdl);
 	if ((false == DeleteHeader(pHeaderDescriptor)) ||
 			(hd_rule_entry->status))
 	{
-	    IPACMERR("Header hdl:(%x) deletion failed!  status: %d\n", hd_rule_entry->hdl,hd_rule_entry->status);
+	    IPACM_LOG(IPACM_LOG_ERR, "Header hdl:(%x) deletion failed!  status: %d\n", hd_rule_entry->hdl,hd_rule_entry->status);
 		res = false;
 		goto fail;
 	}
 
-	IPACMDBG_H("Deleted Header hdl:(%x) successfully\n", hd_rule_entry->hdl);
+	IPACM_LOG(IPACM_LOG_DEBUG, "Deleted Header hdl:(%x) successfully\n", hd_rule_entry->hdl);
 
 fail:
 	free(pHeaderDescriptor);
@@ -215,7 +215,7 @@ bool IPACM_Header::DeleteHeaderProcCtx(uint32_t hdl)
 	pHeaderTable = (struct ipa_ioc_del_hdr_proc_ctx*)malloc(len);
 	if(pHeaderTable == NULL)
 	{
-		IPACMERR("Failed to allocate buffer.\n");
+		IPACM_LOG(IPACM_LOG_ERR, "Failed to allocate buffer.\n");
 		return false;
 	}
 	memset(pHeaderTable, 0, len);
@@ -227,7 +227,7 @@ bool IPACM_Header::DeleteHeaderProcCtx(uint32_t hdl)
 	ret = ioctl(m_fd, IPA_IOC_DEL_HDR_PROC_CTX, pHeaderTable);
 	if(ret != 0)
 	{
-		IPACMERR("Failed to delete hdr proc ctx: return value %d, status %d\n",
+		IPACM_LOG(IPACM_LOG_ERR, "Failed to delete hdr proc ctx: return value %d, status %d\n",
 			ret, pHeaderTable->hdl[0].status);
 	}
 	free(pHeaderTable);

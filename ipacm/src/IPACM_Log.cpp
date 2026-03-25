@@ -65,7 +65,9 @@ void* write_addr = 0;
 int64_t max_filesize = 0;
 int log_init_done = 0;
 pthread_mutex_t file_lock;
-
+#ifdef USE_DLT
+DLT_DECLARE_CONTEXT(ctx);
+#endif
 #define FILE_LOCK()   \
     do \
     { \
@@ -194,7 +196,12 @@ char *get_time_string(char *buffer, int len)
 
    return buffer;
 }
-/* IPACM logging initilation*/
+/* This function initialize IPACM Logging
+ * 	- DLT Logging enablement
+ * 	- File backed Logging enablement
+ * File backed logging use case is to get
+ * IPACM logs from ramdump
+ */
 int log_init() {
 	int flags = 0;
 	int trunc_ret = -1;
@@ -210,6 +217,14 @@ int log_init() {
 		return IPACM_FAILURE;
 	}
 
+	/* DLT logging logic is added as part of log_init
+	 * APP ID name is capped to 4 characters so
+	 * IPACM name cant be used instead using IPA
+	 */
+#ifdef USE_DLT
+	DLT_REGISTER_APP("IPA ", " Qualcomm IPACM ctx ");
+	DLT_REGISTER_CONTEXT(ctx, " GNRL", " General context level in IPACM");
+#endif
 	memset(&metadata, '\0', sizeof(ipacm_log_file_metadata_t));
 	if(log_init_done)
 	{
@@ -290,6 +305,23 @@ int log_init() {
 
 	return 0;
 }
+
+void log_deinit()
+{
+	/* This function is created to avoid code duplication
+	 * in signal handling as well as IPACM main exit
+	 * due to some error
+	 * DLT is connection based we dont need unregister
+	 * but this is good practice to call unregister
+	 * This function can be later reused if needed for other
+	 * logging enhancements.
+	 */
+#ifdef USE_DLT
+	DLT_UNREGISTER_CONTEXT(ctx);
+	DLT_UNREGISTER_APP();
+#endif
+}
+
 void ipacm_log_dump(char* ipacm_log_data)
 {
         int input_len = 0;

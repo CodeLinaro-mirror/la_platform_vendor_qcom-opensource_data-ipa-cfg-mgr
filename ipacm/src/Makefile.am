@@ -39,10 +39,17 @@ requiredlibs =  ${LIBXML_LIB} -lxml2 -lpthread -lnetfilter_conntrack \
 
 AM_CPPFLAGS += "-std=c++0x"
 
+DLT_CFLAGS =
+DLT_LIBS =
+if USE_DLT
+DLT_CFLAGS = -DUSE_DLT @DLTLOG_CFLAGS@
+DLT_LIBS = $(DLTLOG_LIBS)
+endif
+
 if USE_GLIB
 ipacm_CFLAGS  = $(AM_CFLAGS) -DUSE_GLIB @GLIB_CFLAGS@
-ipacm_LDFLAGS = -lpthread @GLIB_LIBS@ $(LIBNL_LIBS)
-ipacm_CPPFLAGS = -DUSE_GLIB $(AM_CFLAGS) $(AM_CPPFLAGS) @GLIB_CFLAGS@ $(LIBNL_CFLAGS)
+ipacm_LDFLAGS = -lpthread @GLIB_LIBS@ $(LIBNL_LIBS) $(DLT_LIBS)
+ipacm_CPPFLAGS = -DUSE_GLIB $(AM_CFLAGS) $(AM_CPPFLAGS) @GLIB_CFLAGS@ $(LIBNL_CFLAGS) $(DLT_CFLAGS)
 else
 ipacm_CFLAGS = $(AM_CFLAGS)
 ipacm_LDFLAGS = -lpthread

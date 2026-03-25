@@ -1141,9 +1141,11 @@ static void IPACM_Signals_handler(int sig, siginfo_t *info, void *extra)
 					}
 				}
 			}
-
+			log_deinit(); // before exit deregister from DLT fmwk
 			exit(0);
 		}
+
+		log_deinit(); // If the case is not SIGTERM then need to invoke here
 
 		/* restore to default signal handler so core dump is generated from original fault point */
 		RegisterForSignals(true);
@@ -1277,7 +1279,7 @@ int main(int argc, char **argv)
 			ret = pthread_create(&ipacm_child_threads[t_itr].tid, NULL, ipacm_child_threads[t_itr].t_func, NULL);
 			if (IPACM_SUCCESS != ret) {
 				IPACMERR("Unable to create %s THREAD\n", ipacm_child_threads[t_itr].t_name);
-				return ret;
+				goto handle_ret;
 			}
 			IPACMDBG_H("Created thread %s THREAD\n", ipacm_child_threads[t_itr].t_name);
 			if(pthread_setname_np(ipacm_child_threads[t_itr].tid, ipacm_child_threads[t_itr].t_name) != IPACM_SUCCESS) {
@@ -1292,8 +1294,9 @@ int main(int argc, char **argv)
 	{
 		pthread_join(ipacm_child_threads[t_itr].tid, NULL);
 	}
-
-	return IPACM_SUCCESS;
+handle_ret:
+	log_deinit();
+	return ret;
 }
 
 /*===========================================================================

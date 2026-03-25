@@ -202,7 +202,7 @@ public:
 		{
 			if (ipa_if_num_tether_v4[i] == ipa_if_num_tether)
 			{
-				IPACMDBG_H("support ipv4 tether_iface(%s)\n",
+				IPACM_LOG(IPACM_LOG_DEBUG, "support ipv4 tether_iface(%s)\n",
 					IPACM_Iface::ipacmcfg->iface_table[ipa_if_num_tether].iface_name);
 				return wan_up;
 				break;
@@ -243,7 +243,7 @@ public:
 			{
 				if(ipv4_to_iface[i].pIface->m_is_sta_mode == Q6_WAN || any_backhaul)
 				{
-					IPACMDBG_H("iface %s is vlan up\n", ipv4_to_iface[i].pIface->dev_name);
+					IPACM_LOG(IPACM_LOG_DEBUG, "iface %s is vlan up\n", ipv4_to_iface[i].pIface->dev_name);
 					return true;
 				}
 			}
@@ -259,7 +259,7 @@ public:
 			{
 				if(ipv6_to_iface[i].pIface->m_is_sta_mode == Q6_WAN || any_backhaul)
 				{
-					IPACMDBG_H("iface %s is vlan up v6\n", ipv6_to_iface[i].pIface->dev_name);
+					IPACM_LOG(IPACM_LOG_DEBUG, "iface %s is vlan up v6\n", ipv6_to_iface[i].pIface->dev_name);
 					return true;
 				}
 			}
@@ -273,7 +273,7 @@ public:
 		{
 			if(!ipv4_to_iface[i].pIface)
 			{
-				IPACMDBG_H("iface index %d is free\n", i);
+				IPACM_LOG(IPACM_LOG_DEBUG, "iface index %d is free\n", i);
 				return i;
 			}
 		}
@@ -286,7 +286,7 @@ public:
 		{
 			if(!ipv6_to_iface[i].pIface)
 			{
-				IPACMDBG_H("iface index %d is free\n", i);
+				IPACM_LOG(IPACM_LOG_DEBUG, "iface index %d is free\n", i);
 				return i;
 			}
 		}
@@ -297,7 +297,7 @@ public:
 	{
 		if(wan_up && iface->is_default_gateway)
 		{
-			IPACMDBG("iface %s, wan_up %d, is_default_gateway %d\n",
+			IPACM_LOG(IPACM_LOG_DEBUG,"iface %s, wan_up %d, is_default_gateway %d\n",
 				iface->dev_name, wan_up, iface->is_default_gateway);
 			return true;
 		}
@@ -308,7 +308,7 @@ public:
 	{
 		if(wan_up_v6 && iface->is_default_gateway)
 		{
-			IPACMDBG("iface %s, wan_up_v6 %d, is_default_gateway %d\n",
+			IPACM_LOG(IPACM_LOG_DEBUG,"iface %s, wan_up_v6 %d, is_default_gateway %d\n",
 				iface->dev_name, wan_up_v6, iface->is_default_gateway);
 			return true;
 		}
@@ -324,7 +324,7 @@ public:
 		{
 			if (ipa_if_num_tether_v6[i] == ipa_if_num_tether)
 			{
-				IPACMDBG_H("support ipv6 tether_iface(%s)\n",
+				IPACM_LOG(IPACM_LOG_DEBUG, "support ipv6 tether_iface(%s)\n",
 					IPACM_Iface::ipacmcfg->iface_table[ipa_if_num_tether].iface_name);
 				return wan_up_v6;
 				break;
@@ -340,28 +340,28 @@ public:
 	{
 		if(v6_addr == NULL)
 		{
-			IPACMERR("IPv6 address is empty.\n");
+			IPACM_LOG(IPACM_LOG_ERR, "IPv6 address is empty.\n");
 			return false;
 		}
 
-		IPACMDBG_H("Received prefix: 0x%08x%08x\n", v6_addr[0], v6_addr[1]);
+		IPACM_LOG(IPACM_LOG_DEBUG, "Received prefix: 0x%08x%08x\n", v6_addr[0], v6_addr[1]);
 
 		for(int i = 0; i < IPA_MAX_NUM_SW_PDNS; i++)
 		{
 			if(ipv6_to_iface[i].ipv6_prefix[0] == v6_addr[0] &&
 				ipv6_to_iface[i].ipv6_prefix[1] == v6_addr[1])
 			{
-				IPACMDBG_H("v6 prefix mached pdn %s\n", ipv6_to_iface[i].pIface->dev_name);
+				IPACM_LOG(IPACM_LOG_DEBUG, "v6 prefix mached pdn %s\n", ipv6_to_iface[i].pIface->dev_name);
 				return true;
 			}
 			else
 			{
-				IPACMDBG_H("index: %d Current prefix: 0x%08x%08x\n", i,
+				IPACM_LOG(IPACM_LOG_DEBUG, "index: %d Current prefix: 0x%08x%08x\n", i,
 					ipv6_to_iface[i].ipv6_prefix[0],
 					ipv6_to_iface[i].ipv6_prefix[1]);
 			}
 		}
-		IPACMDBG_H("V6 prefix didnt match any active wan iface\n");
+		IPACM_LOG(IPACM_LOG_WARN, "V6 prefix didnt match any active wan iface\n");
 		return false;
 	}
 
@@ -523,13 +523,13 @@ private:
 		int cnt;
 		int num_wan_client_tmp = num_wan_client;
 
-		IPACMDBG_H("Passed MAC %02x:%02x:%02x:%02x:%02x:%02x\n",
+		IPACM_LOG(IPACM_LOG_DEBUG, "Passed MAC %02x:%02x:%02x:%02x:%02x:%02x\n",
 						 mac_addr[0], mac_addr[1], mac_addr[2],
 						 mac_addr[3], mac_addr[4], mac_addr[5]);
 
 		for(cnt = 0; cnt < num_wan_client_tmp; cnt++)
 		{
-			IPACMDBG_H("stored MAC %02x:%02x:%02x:%02x:%02x:%02x\n",
+			IPACM_LOG(IPACM_LOG_DEBUG, "stored MAC %02x:%02x:%02x:%02x:%02x:%02x\n",
 							 get_client_memptr(wan_client, cnt)->mac[0],
 							 get_client_memptr(wan_client, cnt)->mac[1],
 							 get_client_memptr(wan_client, cnt)->mac[2],
@@ -541,7 +541,7 @@ private:
 								mac_addr,
 								IPA_MAC_ADDR_SIZE * sizeof(uint8_t)) == 0)
 			{
-				IPACMDBG_H("Matched client index: %d\n", cnt);
+				IPACM_LOG(IPACM_LOG_DEBUG, "Matched client index: %d\n", cnt);
 				return cnt;
 			}
 		}
@@ -554,25 +554,25 @@ private:
 		int cnt;
 		int num_wan_client_tmp = num_wan_client;
 
-		IPACMDBG_H("Passed IPv4 %x\n", ipv4_addr);
+		IPACM_LOG(IPACM_LOG_DEBUG, "Passed IPv4 %x\n", ipv4_addr);
 
 		for(cnt = 0; cnt < num_wan_client_tmp; cnt++)
 		{
 			if (get_client_memptr(wan_client, cnt)->ipv4_set)
 			{
-				IPACMDBG_H("stored IPv4 %x\n", get_client_memptr(wan_client, cnt)->v4_addr);
+				IPACM_LOG(IPACM_LOG_DEBUG, "stored IPv4 %x\n", get_client_memptr(wan_client, cnt)->v4_addr);
 
 				if(ipv4_addr == get_client_memptr(wan_client, cnt)->v4_addr)
 				{
-					IPACMDBG_H("Matched client index: %d\n", cnt);
-					IPACMDBG_H("The MAC is %02x:%02x:%02x:%02x:%02x:%02x\n",
+					IPACM_LOG(IPACM_LOG_DEBUG, "Matched client index: %d\n", cnt);
+					IPACM_LOG(IPACM_LOG_DEBUG, "The MAC is %02x:%02x:%02x:%02x:%02x:%02x\n",
 							get_client_memptr(wan_client, cnt)->mac[0],
 							get_client_memptr(wan_client, cnt)->mac[1],
 							get_client_memptr(wan_client, cnt)->mac[2],
 							get_client_memptr(wan_client, cnt)->mac[3],
 							get_client_memptr(wan_client, cnt)->mac[4],
 							get_client_memptr(wan_client, cnt)->mac[5]);
-					IPACMDBG_H("header set ipv4(%d) ipv6(%d)\n",
+					IPACM_LOG(IPACM_LOG_DEBUG, "header set ipv4(%d) ipv6(%d)\n",
 							get_client_memptr(wan_client, cnt)->ipv4_header_set,
 							get_client_memptr(wan_client, cnt)->ipv6_header_set);
 					return cnt;
@@ -587,7 +587,7 @@ private:
 		int cnt, v6_num;
 		int num_wan_client_tmp = num_wan_client;
 
-		IPACMDBG_H("Get ipv6 address 0x%08x.0x%08x.0x%08x.0x%08x\n", ipv6_addr[0], ipv6_addr[1], ipv6_addr[2], ipv6_addr[3]);
+		IPACM_LOG(IPACM_LOG_DEBUG, "Get ipv6 address 0x%08x.0x%08x.0x%08x.0x%08x\n", ipv6_addr[0], ipv6_addr[1], ipv6_addr[2], ipv6_addr[3]);
 
 		for(cnt = 0; cnt < num_wan_client_tmp; cnt++)
 		{
@@ -596,7 +596,7 @@ private:
 			    for(v6_num=0;v6_num < get_client_memptr(wan_client, cnt)->ipv6_set;v6_num++)
 	            {
 
-					IPACMDBG_H("stored IPv6 0x%08x.0x%08x.0x%08x.0x%08x\n", get_client_memptr(wan_client, cnt)->v6_addr[v6_num][0],
+					IPACM_LOG(IPACM_LOG_DEBUG, "stored IPv6 0x%08x.0x%08x.0x%08x.0x%08x\n", get_client_memptr(wan_client, cnt)->v6_addr[v6_num][0],
 						get_client_memptr(wan_client, cnt)->v6_addr[v6_num][1],
 						get_client_memptr(wan_client, cnt)->v6_addr[v6_num][2],
 						get_client_memptr(wan_client, cnt)->v6_addr[v6_num][3]);
@@ -606,15 +606,15 @@ private:
 					   ipv6_addr[2]== get_client_memptr(wan_client, cnt)->v6_addr[v6_num][2] &&
 					   ipv6_addr[3] == get_client_memptr(wan_client, cnt)->v6_addr[v6_num][3])
 					{
-						IPACMDBG_H("Matched client index: %d\n", cnt);
-						IPACMDBG_H("The MAC is %02x:%02x:%02x:%02x:%02x:%02x\n",
+						IPACM_LOG(IPACM_LOG_DEBUG, "Matched client index: %d\n", cnt);
+						IPACM_LOG(IPACM_LOG_DEBUG, "The MAC is %02x:%02x:%02x:%02x:%02x:%02x\n",
 								get_client_memptr(wan_client, cnt)->mac[0],
 								get_client_memptr(wan_client, cnt)->mac[1],
 								get_client_memptr(wan_client, cnt)->mac[2],
 								get_client_memptr(wan_client, cnt)->mac[3],
 								get_client_memptr(wan_client, cnt)->mac[4],
 								get_client_memptr(wan_client, cnt)->mac[5]);
-						IPACMDBG_H("header set ipv4(%d) ipv6(%d)\n",
+						IPACM_LOG(IPACM_LOG_DEBUG, "header set ipv4(%d) ipv6(%d)\n",
 								get_client_memptr(wan_client, cnt)->ipv4_header_set,
 								get_client_memptr(wan_client, cnt)->ipv6_header_set);
 						return cnt;
@@ -637,7 +637,7 @@ private:
 		     {
 		        if((tx_prop->tx[tx_index].ip == IPA_IP_v4) && (get_client_memptr(wan_client, clt_indx)->route_rule_set_v4==true)) /* for ipv4 */
 			{
-				IPACMDBG_H("Delete client index %d ipv4 Qos rules for tx:%d \n",clt_indx,tx_index);
+				IPACM_LOG(IPACM_LOG_DEBUG, "Delete client index %d ipv4 Qos rules for tx:%d \n",clt_indx,tx_index);
 				rt_hdl = get_client_memptr(wan_client, clt_indx)->wan_rt_hdl[tx_index].wan_rt_rule_hdl_v4;
 
 				if(m_routing.DeleteRoutingHdl(rt_hdl, IPA_IP_v4) == false)
@@ -663,7 +663,7 @@ private:
 				{
 					for(num_v6 =0;num_v6 < get_client_memptr(wan_client, clt_indx)->route_rule_set_v6;num_v6++)
 					{
-						IPACMDBG_H("Delete client index %d ipv6 Qos rules for %d-st ipv6 for tx:%d\n", clt_indx,num_v6,tx_index);
+						IPACM_LOG(IPACM_LOG_DEBUG, "Delete client index %d ipv6 Qos rules for %d-st ipv6 for tx:%d\n", clt_indx,num_v6,tx_index);
 						rt_hdl = get_client_memptr(wan_client, clt_indx)->wan_rt_hdl[tx_index].wan_rt_rule_hdl_v6[num_v6];
 						if(m_routing.DeleteRoutingHdl(rt_hdl, IPA_IP_v6) == false)
 						{

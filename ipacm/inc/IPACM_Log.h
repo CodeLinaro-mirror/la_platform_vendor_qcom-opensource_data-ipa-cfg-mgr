@@ -37,10 +37,8 @@ IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 	Skylar Chang
 
 */
-
 #ifndef IPACM_LOG_H
 #define IPACM_LOG_H
-
 #ifdef __cplusplus
 extern "C"
 {
@@ -57,179 +55,99 @@ extern "C"
 #include <sys/time.h>
 #include <inttypes.h>  // for PRIu64
 
+#ifdef USE_DLT
+#include <dlt/dlt.h>
+	DLT_IMPORT_CONTEXT(ctx);
+#endif
+
 #define STR_HELPER(x) #x
 #define STR(x) STR_HELPER(x)
 
-#define MAX_BUF_LEN 256
-#define TimeStamp_buff_len 30
+#define IPACM_LOG_MAX_BUF_LEN 288
+#define IPACM_LOG_MAX_CORE_BUF_LEN 256
+#define IPACM_LOG_TIMESTAMP_BUF_LEN 30
+#define IPACM_DEF_LOG_LEVEL 2
+#define IPACM_DEF_SYSLOG_ENABLE 1
+
+#define IPACMLOG_BUF_SZ_AFTER_CRASH_STR 1000
+#define IPACMLOG_RECENT_BUF_TO_SYNC 4096
 
 #ifdef FEATURE_IPA_ANDROID
-#define IPACMLOG_FILE "/dev/socket/ipacm_log_file"
-#else/* defined(FEATURE_IPA_ANDROID) */
-#define IPACMLOG_FILE "/dev/socket/data/ipa/ipacm_log_file"
-#define KERNEL_VER_FILE "/tmp/kernel_ver.txt"
-#endif /* defined(NOT FEATURE_IPA_ANDROID)*/
+	#define IPACMLOG_FILE "/dev/socket/ipacm_log_file"
+#else
+	#define IPACMLOG_FILE "/dev/socket/data/ipa/ipacm_log_file"
+	#define KERNEL_VER_FILE "/tmp/kernel_ver.txt"
+#endif
 
 #define IPACM_LOG_COLLECTION_FILE "/var/run/data/ipa/ipacm_log.txt"
 
-#ifdef USE_DLT
-#include <dlt/dlt.h>
-DLT_IMPORT_CONTEXT(ctx);
-#endif
+#define KERNEL_VERSION_4_9 "4.9"
+#define KERNEL_VERSION_LENGTH 16
 
 typedef struct ipacm_log_file_metadata_s {
 	long int write_addr;
 } ipacm_log_file_metadata_t;
 
-#define IPACMLOG_BUF_SZ_AFTER_CRASH_STR     1000
-#define IPACMLOG_RECENT_BUF_TO_SYNC         4096
-
 typedef struct ipacm_log_buffer_s {
-	char	user_data[MAX_BUF_LEN];
+	char user_data[IPACM_LOG_MAX_BUF_LEN];
 } ipacm_log_buffer_t;
 
-#define KERNEL_VERSION_4_9 "4.9"
+enum ipacm_log_level_t {
+	IPACM_LOG_ERR    = 0,
+	IPACM_LOG_WARN   = 1,
+	IPACM_LOG_INFO   = 2,
+	IPACM_LOG_DEBUG  = 3
+};
 
-#define KERNEL_VERSION_LENGTH 16
+inline int  ipacm_global_log_level = IPACM_DEF_LOG_LEVEL;
+inline bool ipacm_syslog_enabled   = IPACM_DEF_SYSLOG_ENABLE;
 
+bool is_kernel_version_newer_than(char* version, const char* cmp_version);
+void get_kernel_version(char* kernel_ver);
 
-bool is_kernel_version_newer_than(
-			char *version,
-			const char *cmp_verison);
-
-void ipacm_log_send( void * user_data);
-
-static char buffer_send[MAX_BUF_LEN];
-static char dmesg_cmd[MAX_BUF_LEN];
-
-static char timestamp_buf[TimeStamp_buff_len];
-char *get_time_string(char *buffer, int TimeStamp_len);
-void ipacm_log_dump(char ipacm_log_data[]);
-void log_ipacm_crash_info(const char *crash_str);
-int log_init();
+char* get_time_string(char* buffer, int TimeStamp_len);
+void ipacm_send_log_to_qxdm(void* user_data);
+void ipacm_send_log_to_file(char* ipacm_log_data);
+void log_ipacm_crash_info(const char* crash_str);
+int  log_init();
 void log_deinit();
 
-/* Below macros are messy and optimizing change is tracked
- * in other fix which is currently on older targets
- * once the change is validated there then it will be
- * updated for this branch
- */
-
-#define IPACMDBG_DMESG(fmt, ...) \
-	do { \
-		memset(buffer_send, 0, MAX_BUF_LEN); \
-		snprintf(buffer_send,MAX_BUF_LEN,"%s :%d %s: " fmt, __FILE__,  __LINE__, __FUNCTION__, ##__VA_ARGS__); \
-		ipacm_log_send (buffer_send); \
-		printf("%s:%d %s() " fmt, __FILE__,  __LINE__, __FUNCTION__, ##__VA_ARGS__); \
-		memset(dmesg_cmd, 0, MAX_BUF_LEN); \
-		snprintf(dmesg_cmd, MAX_BUF_LEN, "echo %s > /dev/kmsg", buffer_send); \
-		system(dmesg_cmd); \
-		memset(buffer_send, 0, MAX_BUF_LEN); \
-		snprintf(buffer_send, MAX_BUF_LEN," %s %s:%d %s(): " fmt, get_time_string(timestamp_buf, TimeStamp_buff_len), __FILE__,  __LINE__, __FUNCTION__, ##__VA_ARGS__); \
-		ipacm_log_dump(buffer_send); \
-	} while (0)
-#ifdef DEBUG
-#define PERROR(fmt) \
-	do { \
-		memset(buffer_send, 0, MAX_BUF_LEN); \
-		snprintf(buffer_send,MAX_BUF_LEN,"%s:%d %s()", __FILE__, __LINE__, __FUNCTION__); \
-		ipacm_log_send (buffer_send); \
-		perror(fmt); \
-	} while (0)
-#ifdef USE_DLT // DLT logs enable checks
-#define IPACMERR(fmt, ...) \
-	do { \
-		memset(buffer_send, 0, MAX_BUF_LEN); \
-		snprintf(buffer_send, MAX_BUF_LEN," %s %s:%d %s(): " fmt, get_time_string(timestamp_buf, TimeStamp_buff_len), __FILE__,  __LINE__, __FUNCTION__, ##__VA_ARGS__); \
-		ipacm_log_dump(buffer_send); \
-		DLT_LOG(ctx, DLT_LOG_ERROR, DLT_CSTRING(buffer_send)); \
-	} while (0)
-#define IPACMDBG_H(fmt, ...) \
-	do { \
-		memset(buffer_send, 0, MAX_BUF_LEN); \
-		snprintf(buffer_send, MAX_BUF_LEN," %s %s:%d %s(): " fmt, get_time_string(timestamp_buf, TimeStamp_buff_len), __FILE__,  __LINE__, __FUNCTION__, ##__VA_ARGS__); \
-		ipacm_log_dump(buffer_send); \
-		DLT_LOG(ctx, DLT_LOG_DEBUG, DLT_CSTRING(buffer_send)); \
-	} while (0)
+#ifdef USE_DLT
+#define IPACM_DLT_LOG(level, msg) \
+	DLT_LOG(ctx, (DltLogLevelType)(level), DLT_CSTRING(msg))
 #else
-#define IPACMERR(fmt, ...) \
-	do { \
-		memset(buffer_send, 0, MAX_BUF_LEN); \
-		snprintf(buffer_send,MAX_BUF_LEN,"ERROR: %s:%d %s() " fmt, __FILE__,  __LINE__, __FUNCTION__, ##__VA_ARGS__); \
-		ipacm_log_send (buffer_send); \
-		printf("ERROR: %s %s:%d %s() " fmt, get_time_string(timestamp_buf, TimeStamp_buff_len), __FILE__,  __LINE__, __FUNCTION__, ##__VA_ARGS__); \
-		memset(buffer_send, 0, MAX_BUF_LEN); \
-		snprintf(buffer_send, MAX_BUF_LEN," %s %s:%d %s(): " fmt, get_time_string(timestamp_buf, TimeStamp_buff_len), __FILE__,  __LINE__, __FUNCTION__, ##__VA_ARGS__); \
-		ipacm_log_dump(buffer_send); \
-	} while (0)
-#define IPACMDBG_H(fmt, ...) \
-	do { \
-		memset(buffer_send, 0, MAX_BUF_LEN); \
-		snprintf(buffer_send,MAX_BUF_LEN,"%s:%d %s() " fmt, __FILE__,  __LINE__, __FUNCTION__, ##__VA_ARGS__); \
-		ipacm_log_send (buffer_send); \
-		printf("%s %s:%d %s() " fmt, get_time_string(timestamp_buf, TimeStamp_buff_len), __FILE__,  __LINE__, __FUNCTION__, ##__VA_ARGS__); \
-		memset(buffer_send, 0, MAX_BUF_LEN); \
-		snprintf(buffer_send, MAX_BUF_LEN," %s %s:%d %s(): " fmt, get_time_string(timestamp_buf, TimeStamp_buff_len), __FILE__,  __LINE__, __FUNCTION__, ##__VA_ARGS__); \
-		ipacm_log_dump(buffer_send); \
-	} while (0)
+#define IPACM_DLT_LOG(level, msg) \
+	do { } while (0)
 #endif
-#else
-#define PERROR(fmt)   perror(fmt)
-#define IPACMERR(fmt, ...)   printf("ERR: %s %s:%d %s() " fmt, get_time_string(timestamp_buf, TimeStamp_buff_len), __FILE__,  __LINE__, __FUNCTION__, ##__VA_ARGS__);
-#define IPACMDBG_H(fmt, ...) printf("%s %s:%d %s() " fmt, get_time_string(timestamp_buf, TimeStamp_buff_len), __FILE__,  __LINE__, __FUNCTION__, ##__VA_ARGS__);
-#endif
-#ifdef USE_DLT // DLT logs enable checks
-#define IPACMDBG(fmt, ...) \
+
+#define IPACM_LOG(incoming_log_level, fmt, ...) \
 	do { \
-		memset(buffer_send, 0, MAX_BUF_LEN); \
-		snprintf(buffer_send, MAX_BUF_LEN," %s %s:%d %s(): " fmt, get_time_string(timestamp_buf, TimeStamp_buff_len), __FILE__,  __LINE__, __FUNCTION__, ##__VA_ARGS__); \
-		ipacm_log_dump(buffer_send); \
-		DLT_LOG(ctx, DLT_LOG_DEBUG, DLT_CSTRING(buffer_send)); \
+		if ((incoming_log_level) > ipacm_global_log_level) break; \
+		char __ipacm_log_buffer_send[IPACM_LOG_MAX_BUF_LEN]; \
+		char __ipacm_log_core_buf[IPACM_LOG_MAX_CORE_BUF_LEN]; \
+		char __ipacm_log_timestamp_buf[IPACM_LOG_TIMESTAMP_BUF_LEN]; \
+		snprintf(__ipacm_log_core_buf, IPACM_LOG_MAX_CORE_BUF_LEN, "%s:%d %s() " fmt, __FILE__, __LINE__, __FUNCTION__, ##__VA_ARGS__); \
+		ipacm_send_log_to_qxdm(__ipacm_log_core_buf); \
+		if (ipacm_syslog_enabled && (incoming_log_level != IPACM_LOG_DEBUG)) syslog(LOG_USER | LOG_NOTICE, "%s", __ipacm_log_core_buf); \
+		snprintf(__ipacm_log_buffer_send, IPACM_LOG_MAX_BUF_LEN, "%s %s", get_time_string(__ipacm_log_timestamp_buf, IPACM_LOG_TIMESTAMP_BUF_LEN), __ipacm_log_core_buf); \
+		printf("%s\n", __ipacm_log_buffer_send); \
+		ipacm_send_log_to_file(__ipacm_log_buffer_send); \
+		IPACM_DLT_LOG((incoming_log_level) + 2, __ipacm_log_buffer_send); \
 	} while (0)
 
-#define IPACMLOG(fmt, ...) \
+#define IPACM_LOG_PRINT_IN_PLACE(fmt, ...) \
 	do { \
-		memset(buffer_send, 0, MAX_BUF_LEN); \
-		snprintf(buffer_send, MAX_BUF_LEN," %s %s:%d %s(): " fmt, get_time_string(timestamp_buf, TimeStamp_buff_len), __FILE__,  __LINE__, __FUNCTION__, ##__VA_ARGS__); \
-		ipacm_log_dump(buffer_send); \
-		DLT_LOG(ctx, DLT_LOG_INFO, DLT_CSTRING(buffer_send)); \
-	} while (0)
-#else
-#define IPACMDBG(fmt, ...) \
-	do { \
-		printf(" %s %s:%d %s() " fmt, get_time_string(timestamp_buf, TimeStamp_buff_len), __FILE__,  __LINE__, __FUNCTION__, ##__VA_ARGS__); \
-		memset(buffer_send, 0, MAX_BUF_LEN); \
-		snprintf(buffer_send, MAX_BUF_LEN," %s %s:%d %s(): " fmt, get_time_string(timestamp_buf, TimeStamp_buff_len), __FILE__,  __LINE__, __FUNCTION__, ##__VA_ARGS__); \
-		ipacm_log_dump(buffer_send); \
-	} while (0)
-
-#define IPACMLOG(fmt, ...) \
-	do { \
+		char __ipacm_log_buffer_send[IPACM_LOG_MAX_BUF_LEN]; \
+		char __ipacm_log_timestamp_buf[IPACM_LOG_TIMESTAMP_BUF_LEN]; \
 		printf(fmt, ##__VA_ARGS__); \
-		memset(buffer_send, 0, MAX_BUF_LEN); \
-		snprintf(buffer_send, MAX_BUF_LEN," %s %s:%d %s(): " fmt, get_time_string(timestamp_buf, TimeStamp_buff_len), __FILE__,  __LINE__, __FUNCTION__, ##__VA_ARGS__); \
-		ipacm_log_dump(buffer_send); \
-	} while (0)
-#endif
-
-inline void get_kernel_version(char *kernel_ver)
-{
-	struct utsname utsname;
-	int ret;
-	memset(kernel_ver, 0, KERNEL_VERSION_LENGTH);
-	ret = uname(&utsname);
-	if (ret)
-	{
-		IPACMERR("Error: uname %d (%s)\n",
-			ret, strerror(errno));
-		return;
-	}
-	memcpy(kernel_ver, utsname.release, KERNEL_VERSION_LENGTH - 1);
-	IPACMDBG_H("kernel_ver %s\n", kernel_ver);
-}
+		memset(__ipacm_log_buffer_send, 0, IPACM_LOG_MAX_BUF_LEN); \
+		snprintf(__ipacm_log_buffer_send, IPACM_LOG_MAX_BUF_LEN," %s %s:%d %s(): " fmt, get_time_string(__ipacm_log_timestamp_buf, IPACM_LOG_TIMESTAMP_BUF_LEN), __FILE__,  __LINE__, __FUNCTION__, ##__VA_ARGS__); \
+		ipacm_send_log_to_file(__ipacm_log_buffer_send); \
+		IPACM_DLT_LOG((IPACM_LOG_DEBUG) + 2, __ipacm_log_buffer_send); \
+	} while (0);
 
 #ifdef __cplusplus
 }
 #endif
 
-#endif /* IPACM_LOG_H */
+#endif

@@ -55,7 +55,7 @@ IPACM_Filtering::IPACM_Filtering()
 	fd = open(DEVICE_NAME, O_RDWR);
 	if (fd < 0)
 	{
-		IPACMERR("Failed opening %s.\n", DEVICE_NAME);
+		IPACM_LOG(IPACM_LOG_ERR, "Failed opening %s.\n", DEVICE_NAME);
 	}
 }
 
@@ -79,7 +79,7 @@ bool IPACM_Filtering::combine_flt_attribute(ipa_flt_rule_add *replicate_rule,
 
 	if (0 == fd)
 	{
-		IPACMERR("Failed opening %s.\n", IPA_DEVICE_NAME);
+		IPACM_LOG(IPACM_LOG_ERR, "Failed opening %s.\n", IPA_DEVICE_NAME);
 		return false;
 	}
 
@@ -89,7 +89,7 @@ bool IPACM_Filtering::combine_flt_attribute(ipa_flt_rule_add *replicate_rule,
 
 	if(0 != ioctl(fd, IPA_IOC_GENERATE_FLT_EQ, &flt_eq))
 	{
-		IPACMERR("Failed to get eq_attrib\n");
+		IPACM_LOG(IPACM_LOG_ERR, "Failed to get eq_attrib\n");
 		goto fail;
 	}
 
@@ -115,7 +115,7 @@ bool IPACM_Filtering::combine_flt_attribute(ipa_flt_rule_add *replicate_rule,
 	q_index = q6_rule->rule.eq_attrib.num_ihl_offset_range_16;
 	if ((r_index + q_index) > IPA_IPFLTR_NUM_IHL_RANGE_16_EQNS)
 	{
-		IPACMDBG_H ("num_ihl_offset_range_16  Max %d passed value %d + %d\n",
+		IPACM_LOG(IPACM_LOG_ERR, "num_ihl_offset_range_16  Max %d passed value %d + %d\n",
 				IPA_IPFLTR_NUM_IHL_RANGE_16_EQNS,
 				q_index, r_index);
 		goto fail;
@@ -135,7 +135,7 @@ bool IPACM_Filtering::combine_flt_attribute(ipa_flt_rule_add *replicate_rule,
 	q_index = q6_rule->rule.eq_attrib.num_offset_meq_32;
 	if ((r_index + q_index) > IPA_IPFLTR_NUM_MEQ_32_EQNS)
 	{
-		IPACMDBG_H ("num_offset_meq_32	Max %d passed value %d + %d\n",
+		IPACM_LOG(IPACM_LOG_ERR, "num_offset_meq_32	Max %d passed value %d + %d\n",
 				IPA_IPFLTR_NUM_MEQ_32_EQNS,
 				q_index, r_index);
 		goto fail;
@@ -190,7 +190,7 @@ bool IPACM_Filtering::combine_flt_attribute(ipa_flt_rule_add *replicate_rule,
 	q_index = q6_rule->rule.eq_attrib.num_ihl_offset_meq_32;
 	if ((r_index + q_index) > IPA_IPFLTR_NUM_IHL_MEQ_32_EQNS)
 	{
-		IPACMDBG_H ("num_ihl_offset_meq_32	Max %d passed value %d + %d\n",
+		IPACM_LOG(IPACM_LOG_ERR, "num_ihl_offset_meq_32	Max %d passed value %d + %d\n",
 				IPA_IPFLTR_NUM_IHL_MEQ_32_EQNS,
 				q_index, r_index);
 		goto fail;
@@ -211,7 +211,7 @@ bool IPACM_Filtering::combine_flt_attribute(ipa_flt_rule_add *replicate_rule,
 	q_index = q6_rule->rule.eq_attrib.num_offset_meq_128;
 	if ((r_index + q_index) > IPA_IPFLTR_NUM_MEQ_128_EQNS)
 	{
-		IPACMDBG_H ("num_offset_meq_128  Max %d passed value %d + %d\n",
+		IPACM_LOG(IPACM_LOG_ERR, "num_offset_meq_128  Max %d passed value %d + %d\n",
 				IPA_IPFLTR_NUM_MEQ_128_EQNS,
 				q_index, r_index);
 		goto fail;
@@ -261,23 +261,23 @@ bool IPACM_Filtering::addRules(struct ipa_ioc_add_flt_rule_v2 const *table) {
 	struct ipa_flt_rule_add_v2 *rulesPtr;
 	rulesPtr = reinterpret_cast<decltype(rulesPtr)>(table->rules);
 
-	IPACMDBG("ip: %d, num_rules=%d, ep=%d, global=%d, commit=%d\n", table->ip, table->num_rules, table->ep,table->global,
+	IPACM_LOG(IPACM_LOG_DEBUG, "ip: %d, num_rules=%d, ep=%d, global=%d, commit=%d\n", table->ip, table->num_rules, table->ep,table->global,
 		 table->commit);
 	for (int i = 0; i < table->num_rules; i++) {
-		IPACMDBG("Filter rule:%d attrib mask: 0x%x\n", i, rulesPtr[i].rule.attrib.attrib_mask);
+		IPACM_LOG(IPACM_LOG_DEBUG, "Filter rule:%d attrib mask: 0x%x\n", i, rulesPtr[i].rule.attrib.attrib_mask);
 	}
 	retval = ioctl(fd, IPA_IOC_ADD_FLT_RULE_V2, table);
 	if (retval != 0) {
-		IPACMDBG_H("IPA_IOC_ADD_FLT_RULE_V2 failed with retval=%d\n", retval);
+		IPACM_LOG(IPACM_LOG_DEBUG, "IPA_IOC_ADD_FLT_RULE_V2 failed with retval=%d\n", retval);
 		for (int i = 0; i < table->num_rules; i++)
 			if (rulesPtr[i].status != 0)
-				IPACMDBG_H("Adding Filter rule:%d failed with status:%d\n", i, rulesPtr[i].status);
+				IPACM_LOG(IPACM_LOG_DEBUG, "Adding Filter rule:%d failed with status:%d\n", i, rulesPtr[i].status);
 		return false;
 	}
 	for (int i = 0; i < table->num_rules; i++)
 		if (rulesPtr[i].status != 0)
-			IPACMERR("Adding Filter rule:%d failed with status:%d\n", i, rulesPtr[i].status);
-	IPACMDBG("Added Filtering rule %p\n", table);
+			IPACM_LOG(IPACM_LOG_ERR, "Adding Filter rule:%d failed with status:%d\n", i, rulesPtr[i].status);
+	IPACM_LOG(IPACM_LOG_DEBUG, "Added Filtering rule %p\n", table);
 	return true;
 }
 
@@ -285,21 +285,21 @@ bool IPACM_Filtering::AddFilteringRule(struct ipa_ioc_add_flt_rule const *ruleTa
 {
 	int retval = 0;
 
-	IPACMDBG("Printing filter add attributes\n");
-	IPACMDBG("ip type: %d\n", ruleTable->ip);
-	IPACMDBG("Number of rules: %d\n", ruleTable->num_rules);
-	IPACMDBG("End point: %d and global value: %d\n", ruleTable->ep, ruleTable->global);
-	IPACMDBG("commit value: %d\n", ruleTable->commit);
+	IPACM_LOG(IPACM_LOG_DEBUG,"Printing filter add attributes\n");
+	IPACM_LOG(IPACM_LOG_DEBUG,"ip type: %d\n", ruleTable->ip);
+	IPACM_LOG(IPACM_LOG_DEBUG,"Number of rules: %d\n", ruleTable->num_rules);
+	IPACM_LOG(IPACM_LOG_DEBUG,"End point: %d and global value: %d\n", ruleTable->ep, ruleTable->global);
+	IPACM_LOG(IPACM_LOG_DEBUG,"commit value: %d\n", ruleTable->commit);
 	for (int cnt=0; cnt<ruleTable->num_rules; cnt++)
 	{
 		if (ruleTable->rules[cnt].rule.eq_attrib_type)
 		{
-			IPACMDBG_H("Filter rule : %d eq attrib mask : 0x%x\n",
+			IPACM_LOG(IPACM_LOG_DEBUG, "Filter rule : %d eq attrib mask : 0x%x\n",
 				cnt, ruleTable->rules[cnt].rule.eq_attrib.rule_eq_bitmap);
 		}
 		else
 		{
-			IPACMDBG("Filter rule:%d attrib mask: 0x%x\n", cnt,
+			IPACM_LOG(IPACM_LOG_DEBUG,"Filter rule:%d attrib mask: 0x%x\n", cnt,
 				ruleTable->rules[cnt].rule.attrib.attrib_mask);
 		}
 	}
@@ -307,14 +307,15 @@ bool IPACM_Filtering::AddFilteringRule(struct ipa_ioc_add_flt_rule const *ruleTa
 	retval = ioctl(fd, IPA_IOC_ADD_FLT_RULE, ruleTable);
 	if (retval != 0)
 	{
-		IPACMERR("Failed adding Filtering rule %p\n", ruleTable);
-		PERROR("unable to add filter rule:");
+		IPACM_LOG(IPACM_LOG_ERR, "Failed adding Filtering rule %p\n", ruleTable);
+		perror("unable to add filter rule:");
+		IPACM_LOG(IPACM_LOG_ERR, "unable to add filter rule:\n");
 
 		for (int cnt = 0; cnt < ruleTable->num_rules; cnt++)
 		{
 			if (ruleTable->rules[cnt].status != 0)
 			{
-				IPACMERR("Adding Filter rule:%d failed with status:%d\n",
+				IPACM_LOG(IPACM_LOG_ERR, "Adding Filter rule:%d failed with status:%d\n",
 								 cnt, ruleTable->rules[cnt].status);
 			}
 		}
@@ -325,13 +326,13 @@ bool IPACM_Filtering::AddFilteringRule(struct ipa_ioc_add_flt_rule const *ruleTa
 	{
 		if(ruleTable->rules[cnt].status != 0)
 		{
-			IPACMERR("Adding Filter rule:%d failed with status:%d\n",
+			IPACM_LOG(IPACM_LOG_ERR, "Adding Filter rule:%d failed with status:%d\n",
 							 cnt, ruleTable->rules[cnt].status);
 		}
-		IPACMDBG("Added filter rule hdl %d\n", ruleTable->rules[cnt].flt_rule_hdl);
+		IPACM_LOG(IPACM_LOG_DEBUG, "Added filter rule hdl %d\n", ruleTable->rules[cnt].flt_rule_hdl);
 	}
 
-	IPACMDBG("Added Filtering rule %p\n", ruleTable);
+	IPACM_LOG(IPACM_LOG_INFO, "Added Filtering rule %p\n", ruleTable);
 	return true;
 }
 
@@ -340,11 +341,11 @@ bool IPACM_Filtering::AddFilteringRuleAfter(struct ipa_ioc_add_flt_rule_after co
 #ifdef FEATURE_IPA_V3
 	int retval = 0;
 
-	IPACMDBG("Printing filter add attributes\n");
-	IPACMDBG("ip type: %d\n", ruleTable->ip);
-	IPACMDBG("Number of rules: %d\n", ruleTable->num_rules);
-	IPACMDBG("End point: %d\n", ruleTable->ep);
-	IPACMDBG("commit value: %d\n", ruleTable->commit);
+	IPACM_LOG(IPACM_LOG_DEBUG,"Printing filter add attributes\n");
+	IPACM_LOG(IPACM_LOG_DEBUG,"ip type: %d\n", ruleTable->ip);
+	IPACM_LOG(IPACM_LOG_DEBUG,"Number of rules: %d\n", ruleTable->num_rules);
+	IPACM_LOG(IPACM_LOG_DEBUG,"End point: %d\n", ruleTable->ep);
+	IPACM_LOG(IPACM_LOG_DEBUG,"commit value: %d\n", ruleTable->commit);
 
 	retval = ioctl(fd, IPA_IOC_ADD_FLT_RULE_AFTER, ruleTable);
 
@@ -352,18 +353,18 @@ bool IPACM_Filtering::AddFilteringRuleAfter(struct ipa_ioc_add_flt_rule_after co
 	{
 		if(ruleTable->rules[cnt].status != 0)
 		{
-			IPACMERR("Adding Filter rule:%d failed with status:%d\n",
+			IPACM_LOG(IPACM_LOG_ERR, "Adding Filter rule:%d failed with status:%d\n",
 							 cnt, ruleTable->rules[cnt].status);
 		}
-		IPACMDBG("Added filter rule hdl %d\n", ruleTable->rules[cnt].flt_rule_hdl);
+		IPACM_LOG(IPACM_LOG_DEBUG, "Added filter rule hdl %d\n", ruleTable->rules[cnt].flt_rule_hdl);
 	}
 
 	if (retval != 0)
 	{
-		IPACMERR("Failed adding Filtering rule %p\n", ruleTable);
+		IPACM_LOG(IPACM_LOG_ERR, "Failed adding Filtering rule %p\n", ruleTable);
 		return false;
 	}
-	IPACMDBG("Added Filtering rule %p\n", ruleTable);
+	IPACM_LOG(IPACM_LOG_INFO, "Added Filtering rule %p\n", ruleTable);
 #endif
 	return true;
 }
@@ -375,11 +376,11 @@ bool IPACM_Filtering::DeleteFilteringRule(struct ipa_ioc_del_flt_rule *ruleTable
 	retval = ioctl(fd, IPA_IOC_DEL_FLT_RULE, ruleTable);
 	if (retval != 0)
 	{
-		IPACMERR("Failed deleting Filtering rule %p\n", ruleTable);
+		IPACM_LOG(IPACM_LOG_ERR, "Failed deleting Filtering rule %p\n", ruleTable);
 		return false;
 	}
 
-	IPACMDBG("Deleted Filtering rule %p\n", ruleTable);
+	IPACM_LOG(IPACM_LOG_INFO, "Deleted Filtering rule %p\n", ruleTable);
 	return true;
 }
 
@@ -390,11 +391,11 @@ bool IPACM_Filtering::Commit(enum ipa_ip_type ip)
 	retval = ioctl(fd, IPA_IOC_COMMIT_FLT, ip);
 	if (retval != 0)
 	{
-		IPACMERR("failed committing Filtering rules.\n");
+		IPACM_LOG(IPACM_LOG_ERR, "failed committing Filtering rules.\n");
 		return false;
 	}
 
-	IPACMDBG("Committed Filtering rules to IPA HW.\n");
+	IPACM_LOG(IPACM_LOG_INFO, "Committed Filtering rules to IPA HW.\n");
 	return true;
 }
 
@@ -406,11 +407,11 @@ bool IPACM_Filtering::Reset(enum ipa_ip_type ip)
 	retval |= ioctl(fd, IPA_IOC_COMMIT_FLT, ip);
 	if (retval)
 	{
-		IPACMERR("failed resetting Filtering block.\n");
+		IPACM_LOG(IPACM_LOG_ERR, "failed resetting Filtering block.\n");
 		return false;
 	}
 
-	IPACMDBG("Reset command issued to IPA Filtering block.\n");
+	IPACM_LOG(IPACM_LOG_INFO, "Reset command issued to IPA Filtering block.\n");
 	return true;
 }
 
@@ -430,7 +431,7 @@ bool IPACM_Filtering::DeleteFilteringHdls
 	flt_rule = (struct ipa_ioc_del_flt_rule *)malloc(len);
 	if (flt_rule == NULL)
 	{
-		IPACMERR("unable to allocate memory for del filter rule\n");
+		IPACM_LOG(IPACM_LOG_ERR, "unable to allocate memory for del filter rule\n");
 		return false;
 	}
 
@@ -443,18 +444,18 @@ bool IPACM_Filtering::DeleteFilteringHdls
 
 	    if (flt_rule_hdls[cnt] == 0)
 	    {
-		IPACMERR("invalid filter handle passed, ignoring it: %d\n", cnt);
+		   IPACM_LOG(IPACM_LOG_ERR, "invalid filter handle passed, ignoring it: %d\n", cnt);
 	    }
             else
 	    {
 
 		flt_rule->hdl[0].status = -1;
 		flt_rule->hdl[0].hdl = flt_rule_hdls[cnt];
-		IPACMDBG("Deleting filter hdl:(0x%x) with ip type: %d\n", flt_rule_hdls[cnt], ip);
+		IPACM_LOG(IPACM_LOG_DEBUG, "Deleting filter hdl:(0x%x) with ip type: %d\n", flt_rule_hdls[cnt], ip);
 
 		if (DeleteFilteringRule(flt_rule) == false)
 		{
-			PERROR("Filter rule deletion failed!\n");
+			IPACM_LOG(IPACM_LOG_ERR, "Filter rule deletion failed!\n");
 			res = false;
 			goto fail;
 		}
@@ -462,7 +463,7 @@ bool IPACM_Filtering::DeleteFilteringHdls
 		{
 			if (flt_rule->hdl[0].status != 0)
 			{
-				IPACMERR("Filter rule hdl 0x%x deletion failed with error:%d\n",
+				IPACM_LOG(IPACM_LOG_ERR, "Filter rule hdl 0x%x deletion failed with error:%d\n",
 					flt_rule->hdl[0].hdl, flt_rule->hdl[0].status);
 				res = false;
 				goto fail;
@@ -487,7 +488,7 @@ bool IPACM_Filtering::AddWanULFilteringRule(struct ipa_ioc_add_flt_rule const * 
 	int fd_wwan_ioctl = open(WWAN_QMI_IOCTL_DEVICE_NAME, O_RDWR);
 	if(fd_wwan_ioctl < 0)
 	{
-		IPACMERR("Failed to open %s.\n",WWAN_QMI_IOCTL_DEVICE_NAME);
+		IPACM_LOG(IPACM_LOG_ERR, "Failed to open %s.\n",WWAN_QMI_IOCTL_DEVICE_NAME);
 		return false;
 	}
 
@@ -495,18 +496,18 @@ bool IPACM_Filtering::AddWanULFilteringRule(struct ipa_ioc_add_flt_rule const * 
 	if(rule_table_v6 != NULL)
 	{
 		num_rules += rule_table_v6->num_rules;
-		IPACMDBG_H("Get %d WAN UL IPv6 filtering rules.\n", rule_table_v6->num_rules);
+		IPACM_LOG(IPACM_LOG_DEBUG, "Get %d WAN UL IPv6 filtering rules.\n", rule_table_v6->num_rules);
 	}
 	else
 	{
-		IPACMERR("Invalid filter table addr\n");
+		IPACM_LOG(IPACM_LOG_ERR, "Invalid filter table addr\n");
 		close(fd_wwan_ioctl);
 		return false;
 	}
 
 	if(num_rules > QMI_IPA_MAX_UL_FIREWALL_RULES_V01)
 	{
-		IPACMERR("The number of ul filtering rules exceed limit.\n");
+		IPACM_LOG(IPACM_LOG_ERR, "The number of ul filtering rules exceed limit.\n");
 		close(fd_wwan_ioctl);
 		return false;
 	}
@@ -514,7 +515,7 @@ bool IPACM_Filtering::AddWanULFilteringRule(struct ipa_ioc_add_flt_rule const * 
 	{
 		memset(&qmi_rule_msg, 0, sizeof(qmi_rule_msg));
 		qmi_rule_msg.firewall_rules_list_len = num_rules;
-		IPACMDBG_H("Get %d WAN UL filtering rules in total.\n", num_rules);
+		IPACM_LOG(IPACM_LOG_DEBUG, "Get %d WAN UL filtering rules in total.\n", num_rules);
 
 		if(rule_table_v6 != NULL)
 		{
@@ -530,7 +531,7 @@ bool IPACM_Filtering::AddWanULFilteringRule(struct ipa_ioc_add_flt_rule const * 
 				}
 				else
 				{
-					IPACMERR(" QMI only support max %d rules, current (%d)\n ", QMI_IPA_MAX_UL_FIREWALL_RULES_V01, pos);
+					IPACM_LOG(IPACM_LOG_ERR, " QMI only support max %d rules, current (%d)\n \n", QMI_IPA_MAX_UL_FIREWALL_RULES_V01, pos);
 				}
 			}
 
@@ -545,7 +546,7 @@ bool IPACM_Filtering::AddWanULFilteringRule(struct ipa_ioc_add_flt_rule const * 
 		ret = ioctl(fd_wwan_ioctl, WAN_IOC_ADD_UL_FLT_RULE, &qmi_rule_msg);
 		if (ret != 0)
 		{
-			IPACMERR("Failed adding Filtering rule %p with ret %d\n ", &qmi_rule_msg, ret);
+			IPACM_LOG(IPACM_LOG_ERR, "Failed adding Filtering rule %p with ret %d\n \n", &qmi_rule_msg, ret);
 			close(fd_wwan_ioctl);
 			return false;
 		}
@@ -571,7 +572,7 @@ bool IPACM_Filtering::AddWanDLFilteringRule(struct ipa_ioc_add_flt_rule const *r
 	int fd_wwan_ioctl = open(WWAN_QMI_IOCTL_DEVICE_NAME, O_RDWR);
 	if(fd_wwan_ioctl < 0)
 	{
-		IPACMERR("Failed to open %s.\n",WWAN_QMI_IOCTL_DEVICE_NAME);
+		IPACM_LOG(IPACM_LOG_ERR, "Failed to open %s.\n",WWAN_QMI_IOCTL_DEVICE_NAME);
 		return false;
 	}
 
@@ -580,24 +581,24 @@ bool IPACM_Filtering::AddWanDLFilteringRule(struct ipa_ioc_add_flt_rule const *r
 #ifdef FEATURE_VLAN_MPDN
 		if(!mux_id_v4)
 		{
-			IPACMERR("got NULL v4 mux IDs array\n");
+			IPACM_LOG(IPACM_LOG_ERR, "got NULL v4 mux IDs array\n");
 			return false;
 		}
 #endif
 		num_rules += rule_table_v4->num_rules;
-		IPACMDBG_H("Get %d WAN DL IPv4 filtering rules.\n", rule_table_v4->num_rules);
+		IPACM_LOG(IPACM_LOG_DEBUG, "Get %d WAN DL IPv4 filtering rules.\n", rule_table_v4->num_rules);
 	}
 	if(rule_table_v6 != NULL)
 	{
 #ifdef FEATURE_VLAN_MPDN
 		if(!mux_id_v6)
 		{
-			IPACMERR("got NULL v6 mux IDs array\n");
+			IPACM_LOG(IPACM_LOG_ERR, "got NULL v6 mux IDs array\n");
 			return false;
 		}
 #endif
 		num_rules += rule_table_v6->num_rules;
-		IPACMDBG_H("Get %d WAN DL IPv6 filtering rules.\n", rule_table_v6->num_rules);
+		IPACM_LOG(IPACM_LOG_DEBUG, "Get %d WAN DL IPv6 filtering rules.\n", rule_table_v6->num_rules);
 	}
 
 	/* if it is not IPA v3, use old QMI format */
@@ -605,7 +606,7 @@ bool IPACM_Filtering::AddWanDLFilteringRule(struct ipa_ioc_add_flt_rule const *r
 	/* if it is IPA v3, use new QMI format */
 	if(num_rules > QMI_IPA_MAX_FILTERS_EX_V01)
 	{
-		IPACMERR("The number of filtering rules exceed limit.\n");
+		IPACM_LOG(IPACM_LOG_ERR, "The number of filtering rules exceed limit.\n");
 		close(fd_wwan_ioctl);
 		return false;
 	}
@@ -624,7 +625,7 @@ bool IPACM_Filtering::AddWanDLFilteringRule(struct ipa_ioc_add_flt_rule const *r
 		qmi_rule_ex_msg.filter_spec_ex_list_len = num_rules;
 		qmi_rule_ex_msg.source_pipe_index_valid = 0;
 
-		IPACMDBG_H("Get %d WAN DL filtering rules in total.\n", num_rules);
+		IPACM_LOG(IPACM_LOG_DEBUG, "Get %d WAN DL filtering rules in total.\n", num_rules);
 
 		if(rule_table_v4 != NULL)
 		{
@@ -652,7 +653,7 @@ bool IPACM_Filtering::AddWanDLFilteringRule(struct ipa_ioc_add_flt_rule const *r
 				}
 				else
 				{
-					IPACMERR(" QMI only support max %d rules, current (%d)\n ",QMI_IPA_MAX_FILTERS_EX_V01, pos);
+					IPACM_LOG(IPACM_LOG_ERR, " QMI only support max %d rules, current (%d)\n \n",QMI_IPA_MAX_FILTERS_EX_V01, pos);
 				}
 			}
 		}
@@ -683,7 +684,7 @@ bool IPACM_Filtering::AddWanDLFilteringRule(struct ipa_ioc_add_flt_rule const *r
 				}
 				else
 				{
-					IPACMERR(" QMI only support max %d rules, current (%d)\n ",QMI_IPA_MAX_FILTERS_EX_V01, pos);
+					IPACM_LOG(IPACM_LOG_ERR, " QMI only support max %d rules, current (%d)\n \n",QMI_IPA_MAX_FILTERS_EX_V01, pos);
 				}
 			}
 		}
@@ -691,7 +692,7 @@ bool IPACM_Filtering::AddWanDLFilteringRule(struct ipa_ioc_add_flt_rule const *r
 		ret = ioctl(fd_wwan_ioctl, WAN_IOC_ADD_FLT_RULE_EX, &qmi_rule_ex_msg);
 		if (ret != 0)
 		{
-			IPACMERR("Failed adding Filtering rule %p with ret %d\n ", &qmi_rule_ex_msg, ret);
+			IPACM_LOG(IPACM_LOG_ERR, "Failed adding Filtering rule %p with ret %d\n \n", &qmi_rule_ex_msg, ret);
 			close(fd_wwan_ioctl);
 			return false;
 		}
@@ -708,19 +709,19 @@ bool IPACM_Filtering::SendFilteringRuleIndex(struct ipa_fltr_installed_notif_req
 	int fd_wwan_ioctl = open(WWAN_QMI_IOCTL_DEVICE_NAME, O_RDWR);
 	if(fd_wwan_ioctl < 0)
 	{
-		IPACMERR("Failed to open %s.\n",WWAN_QMI_IOCTL_DEVICE_NAME);
+		IPACM_LOG(IPACM_LOG_ERR, "Failed to open %s.\n",WWAN_QMI_IOCTL_DEVICE_NAME);
 		return false;
 	}
 
 	ret = ioctl(fd_wwan_ioctl, WAN_IOC_ADD_FLT_RULE_INDEX, table);
 	if (ret != 0)
 	{
-		IPACMERR("Failed adding filtering rule index %p with ret %d\n", table, ret);
+		IPACM_LOG(IPACM_LOG_ERR, "Failed adding filtering rule index %p with ret %d\n", table, ret);
 		close(fd_wwan_ioctl);
 		return false;
 	}
 
-	IPACMDBG("Added Filtering rule index %p\n", table);
+	IPACM_LOG(IPACM_LOG_DEBUG, "Added Filtering rule index %p\n", table);
 	close(fd_wwan_ioctl);
 	return true;
 }
@@ -750,18 +751,18 @@ bool IPACM_Filtering::ModifyFilteringRule(struct ipa_ioc_mdfy_flt_rule* ruleTabl
 {
 	int i, ret = 0;
 
-	IPACMDBG("Printing filtering add attributes\n");
-	IPACMDBG("IP type: %d Number of rules: %d commit value: %d\n", ruleTable->ip, ruleTable->num_rules, ruleTable->commit);
+	IPACM_LOG(IPACM_LOG_DEBUG,"Printing filtering add attributes\n");
+	IPACM_LOG(IPACM_LOG_DEBUG,"IP type: %d Number of rules: %d commit value: %d\n", ruleTable->ip, ruleTable->num_rules, ruleTable->commit);
 
 	if(!ruleTable->num_rules)
 	{
-		IPACMERR("0 rules to modify, iptype %s\n", ruleTable->ip == IPA_IP_v4 ? "v4" : "v6");
+		IPACM_LOG(IPACM_LOG_ERR, "0 rules to modify, iptype %s\n", ruleTable->ip == IPA_IP_v4 ? "v4" : "v6");
 		return false;
 	}
 
 	for (i=0; i<ruleTable->num_rules; i++)
 	{
-		IPACMDBG("Filter rule:%d attrib mask: 0x%x\n", i, ruleTable->rules[i].rule.attrib.attrib_mask);
+		IPACM_LOG(IPACM_LOG_DEBUG,"Filter rule:%d attrib mask: 0x%x\n", i, ruleTable->rules[i].rule.attrib.attrib_mask);
 	}
 
 	ret = ioctl(fd, IPA_IOC_MDFY_FLT_RULE, ruleTable);
@@ -770,17 +771,16 @@ bool IPACM_Filtering::ModifyFilteringRule(struct ipa_ioc_mdfy_flt_rule* ruleTabl
 	{
 		if (ruleTable->rules[i].status != 0)
 		{
-			IPACMERR("Modifying filter rule %d failed\n", i);
+			IPACM_LOG(IPACM_LOG_ERR, "Modifying filter rule %d failed\n", i);
 		}
 	}
 
 	if (ret != 0)
 	{
-		IPACMERR("Failed modifying filtering rule IOCTL for %pK\n", ruleTable);
+		IPACM_LOG(IPACM_LOG_ERR, "Failed modifying filtering rule IOCTL for %pK\n", ruleTable);
 		return false;
 	}
 
-	IPACMDBG("Modified filtering rule %p\n", ruleTable);
+	IPACM_LOG(IPACM_LOG_DEBUG, "Modified filtering rule %p\n", ruleTable);
 	return true;
 }
-

@@ -102,7 +102,7 @@ int NatApp::Init(void)
 	pConfig = IPACM_Config::GetInstance();
 	if(pConfig == NULL)
 	{
-		IPACMERR("Unable to get Config instance\n");
+		IPACM_LOG(IPACM_LOG_ERR, "Unable to get Config instance\n");
 		return -1;
 	}
 
@@ -114,10 +114,10 @@ int NatApp::Init(void)
 	cache = (nat_table_entry *)malloc(size);
 	if(cache == NULL)
 	{
-		IPACMERR("Unable to allocate memory for cache\n");
+		IPACM_LOG(IPACM_LOG_ERR, "Unable to allocate memory for cache\n");
 		goto fail;
 	}
-	IPACMDBG("Allocated %d bytes for config manager nat cache\n", size);
+	IPACM_LOG(IPACM_LOG_DEBUG,"Allocated %d bytes for config manager nat cache\n", size);
 	memset(cache, 0, size);
 
 	nALGPort = pConfig->GetAlgPortCnt();
@@ -126,21 +126,21 @@ int NatApp::Init(void)
 		pALGPorts = (ipacm_alg *)malloc(sizeof(ipacm_alg) * nALGPort);
 		if(pALGPorts == NULL)
 		{
-			IPACMERR("Unable to allocate memory for alg prots\n");
+			IPACM_LOG(IPACM_LOG_ERR, "Unable to allocate memory for alg prots\n");
 			goto fail;
 		}
 		memset(pALGPorts, 0, sizeof(ipacm_alg) * nALGPort);
 
 		if(pConfig->GetAlgPorts(nALGPort, pALGPorts) != 0)
 		{
-			IPACMERR("Unable to retrieve ALG prots\n");
+			IPACM_LOG(IPACM_LOG_ERR, "Unable to retrieve ALG prots\n");
 			goto fail;
 		}
 
-		IPACMDBG("Printing %d alg ports information\n", nALGPort);
+		IPACM_LOG(IPACM_LOG_DEBUG,"Printing %d alg ports information\n", nALGPort);
 		for(int cnt=0; cnt<nALGPort; cnt++)
 		{
-			IPACMDBG("%d: Proto[%d], port[%d]\n", cnt, pALGPorts[cnt].protocol, pALGPorts[cnt].port);
+			IPACM_LOG(IPACM_LOG_DEBUG,"%d: Proto[%d], port[%d]\n", cnt, pALGPorts[cnt].protocol, pALGPorts[cnt].port);
 		}
 	}
 
@@ -183,7 +183,7 @@ int NatApp::AddPdn(uint32_t pub_ip, uint8_t mux_id, bool is_sta, bool ip_pass)
 	ipa_nat_pdn_entry entry;
 	uint8_t pdn_index;
 	uint8_t pdn_count = 0;
-	IPACMDBG_H("%s() %d\n", __FUNCTION__, __LINE__);
+	IPACM_LOG(IPACM_LOG_DEBUG, "%s() %d\n", __FUNCTION__, __LINE__);
 
 	entry.dst_metadata = 0;
 	entry.public_ip = 0;
@@ -192,12 +192,12 @@ int NatApp::AddPdn(uint32_t pub_ip, uint8_t mux_id, bool is_sta, bool ip_pass)
 	ret = ipa_nat_get_pdn_count(&pdn_count);
 	if(ret)
 	{
-		IPACMERR("unable to get pdn count Error:%d\n", ret);
+		IPACM_LOG(IPACM_LOG_ERR, "unable to get pdn count Error:%d\n", ret);
 		return ret;
 	}
 
-	IPACMDBG_H("is_sta: %d, pdn_count: %d\n", is_sta, pdn_count);
-	IPACMDBG_H("ipv4 address PDN 0x%X\n", pub_ip);
+	IPACM_LOG(IPACM_LOG_DEBUG, "is_sta: %d, pdn_count: %d\n", is_sta, pdn_count);
+	IPACM_LOG(IPACM_LOG_DEBUG, "ipv4 address PDN 0x%X\n", pub_ip);
 
 	if(!pdn_count)
 	{
@@ -205,10 +205,10 @@ int NatApp::AddPdn(uint32_t pub_ip, uint8_t mux_id, bool is_sta, bool ip_pass)
 		ret = ipa_nat_add_ipv4_tbl(entry.public_ip, mem_type, max_entries, &nat_table_hdl);
 		if(ret)
 		{
-			IPACMERR("unable to create nat table Error:%d\n", ret);
+			IPACM_LOG(IPACM_LOG_ERR, "unable to create nat table Error:%d\n", ret);
 			return ret;
 		}
-		IPACMDBG_H("succeesfully created NAT table for ip 0x%X\n", pub_ip);
+		IPACM_LOG(IPACM_LOG_DEBUG, "succeesfully created NAT table for ip 0x%X\n", pub_ip);
 		entry.public_ip = pub_ip;
 		if(!is_sta)
 		{
@@ -220,7 +220,7 @@ int NatApp::AddPdn(uint32_t pub_ip, uint8_t mux_id, bool is_sta, bool ip_pass)
 		{
 			if(pdn_count_sta >= IPA_MAX_WLAN_STA_IFACES)
 			{
-				IPACMERR("Max STA PDNs (%d) already allocated\n", IPA_MAX_WLAN_STA_IFACES);
+				IPACM_LOG(IPACM_LOG_ERR, "Max STA PDNs (%d) already allocated\n", IPA_MAX_WLAN_STA_IFACES);
 				return IPACM_FAILURE;
 			}
 			pdn_index = pdn_count_sta;
@@ -231,13 +231,13 @@ int NatApp::AddPdn(uint32_t pub_ip, uint8_t mux_id, bool is_sta, bool ip_pass)
 		ret = ipa_nat_modify_pdn(nat_table_hdl, pdn_index, &entry);
 		if(ret)
 		{
-			IPACMERR("unable to modify PDN %d entry Error:%d\n", pdn_index, ret);
+			IPACM_LOG(IPACM_LOG_ERR, "unable to modify PDN %d entry Error:%d\n", pdn_index, ret);
 			return ret;
 		}
 		if(is_sta)
 		{
 			pdn_count_sta++;
-			IPACMDBG_H("STA PDN at index %d, pdn_count_sta=%d\n", pdn_index, pdn_count_sta);
+			IPACM_LOG(IPACM_LOG_DEBUG, "STA PDN at index %d, pdn_count_sta=%d\n", pdn_index, pdn_count_sta);
 		}
 	}
 	else
@@ -250,14 +250,14 @@ int NatApp::AddPdn(uint32_t pub_ip, uint8_t mux_id, bool is_sta, bool ip_pass)
 			 */
 			if(ipa_nat_get_pdn_index(pub_ip, &pdn_index) >= 0)
 			{
-				IPACMDBG_H("STA pdn already exists at index %d for ip 0x%X - reusing\n",
+				IPACM_LOG(IPACM_LOG_DEBUG, "STA pdn already exists at index %d for ip 0x%X - reusing\n",
 					pdn_index, pub_ip);
 			}
 			else
 			{
 				if(pdn_count_sta >= IPA_MAX_WLAN_STA_IFACES)
 				{
-					IPACMERR("Max STA PDNs (%d) already allocated, pdn_count_sta=%d, rejecting ip 0x%X\n",
+					IPACM_LOG(IPACM_LOG_ERR, "Max STA PDNs (%d) already allocated, pdn_count_sta=%d, rejecting ip 0x%X\n",
 						IPA_MAX_WLAN_STA_IFACES, pdn_count_sta, pub_ip);
 					return IPACM_FAILURE;
 				}
@@ -269,12 +269,12 @@ int NatApp::AddPdn(uint32_t pub_ip, uint8_t mux_id, bool is_sta, bool ip_pass)
 
 				if(ret)
 				{
-					IPACMERR("Unable to allocate PDN %d for STA ip 0x%X Error: %d\n",
+					IPACM_LOG(IPACM_LOG_ERR, "Unable to allocate PDN %d for STA ip 0x%X Error: %d\n",
 						pdn_index, pub_ip, ret);
 					return ret;
 				}
 				pdn_count_sta++;
-				IPACMDBG_H("STA PDN allocated at index %d, pdn_count_sta=%d\n",
+				IPACM_LOG(IPACM_LOG_DEBUG, "STA PDN allocated at index %d, pdn_count_sta=%d\n",
 					pdn_index, pdn_count_sta);
 			}
 		}
@@ -288,14 +288,14 @@ int NatApp::AddPdn(uint32_t pub_ip, uint8_t mux_id, bool is_sta, bool ip_pass)
 				ret = ipa_nat_alloc_pdn(&entry, &pdn_index);
 				if(ret)
 				{
-					IPACMERR("couldn't allocate a pdn index\n");
+					IPACM_LOG(IPACM_LOG_ERR, "couldn't allocate a pdn index\n");
 					return ret;
 				}
-				IPACMDBG_H("successfully allocated index %d for ip 0x%X\n", pdn_index, pub_ip);
+				IPACM_LOG(IPACM_LOG_DEBUG, "successfully allocated index %d for ip 0x%X\n", pdn_index, pub_ip);
 			}
 			else
 			{
-				IPACMDBG_H("pdn already exists with index %d\n", pdn_index);
+				IPACM_LOG(IPACM_LOG_DEBUG, "pdn already exists with index %d\n", pdn_index);
 			}
 		}
 	}
@@ -309,7 +309,7 @@ int NatApp::AddPdn(uint32_t pub_ip, uint8_t mux_id, bool is_sta, bool ip_pass)
 		{
 			if(is_sta && (isAlgPort(cache[cnt].protocol, cache[cnt].private_port) ||
 				isAlgPort(cache[cnt].protocol, cache[cnt].target_port))) {
-				IPACMERR("STA backhaul: connection using ALG Port, ignore\n");
+				IPACM_LOG(IPACM_LOG_ERR, "STA backhaul: connection using ALG Port, ignore\n");
 				memset(&cache[cnt], 0, sizeof(cache[cnt]));
 				curCnt--;
 				cur_nat_entries--;
@@ -317,7 +317,7 @@ int NatApp::AddPdn(uint32_t pub_ip, uint8_t mux_id, bool is_sta, bool ip_pass)
 			}
 
 			if (ip_pass && cache[cnt].dummy_nat) {
-				IPACMERR("IP Pass enabled: connection using dummy Nat, ignore\n");
+				IPACM_LOG(IPACM_LOG_ERR, "IP Pass enabled: connection using dummy Nat, ignore\n");
 				memset(&cache[cnt], 0, sizeof(cache[cnt]));
 				curCnt--;
 				cur_nat_entries--;
@@ -338,28 +338,28 @@ int NatApp::AddPdn(uint32_t pub_ip, uint8_t mux_id, bool is_sta, bool ip_pass)
 			cache[cnt].pdn_index = pdn_index;
 			if(cache[cnt].sw_allow)
 			{
-				IPACMDBG("SW allow entry so not adding to HW\n");
+				IPACM_LOG(IPACM_LOG_DEBUG, "SW allow entry so not adding to HW\n");
 			}
 			else
 			{
 				if(ipa_nat_add_ipv4_rule(nat_table_hdl, &nat_rule, &cache[cnt].rule_hdl) < 0)
 				{
-					IPACMERR("unable to add the rule delete from cache\n");
+					IPACM_LOG(IPACM_LOG_ERR, "unable to add the rule delete from cache\n");
 					memset(&cache[cnt], 0, sizeof(cache[cnt]));
 					curCnt--;
 					cur_nat_entries--;
 					continue;
 				}
-				IPACMDBG("cache entry %d rule handle %d\n", cnt, cache[cnt].rule_hdl);
+				IPACM_LOG(IPACM_LOG_DEBUG, "cache entry %d rule handle %d\n", cnt, cache[cnt].rule_hdl);
 				cache[cnt].enabled = true;
 
-				IPACMDBG("new pdn added below rule successfully\n");
+				IPACM_LOG(IPACM_LOG_DEBUG, "new pdn added below rule successfully\n");
 				iptodot("Private IP", nat_rule.private_ip);
 				iptodot("Target IP", nat_rule.target_ip);
-				IPACMDBG("Private Port:%d \t Target Port: %d\n", nat_rule.private_port, nat_rule.target_port);
-				IPACMDBG("Public Port:%d\n", nat_rule.public_port);
-				IPACMDBG("protocol: %d\n", nat_rule.protocol);
-				IPACMDBG("pdn index: %d\n", nat_rule.pdn_index);
+				IPACM_LOG(IPACM_LOG_DEBUG, "Private Port:%d \t Target Port: %d\n", nat_rule.private_port, nat_rule.target_port);
+				IPACM_LOG(IPACM_LOG_DEBUG, "Public Port:%d\n", nat_rule.public_port);
+				IPACM_LOG(IPACM_LOG_DEBUG, "protocol: %d\n", nat_rule.protocol);
+				IPACM_LOG(IPACM_LOG_DEBUG, "pdn index: %d\n", nat_rule.pdn_index);
 			}
 		}
 
@@ -373,13 +373,13 @@ int NatApp::AddTable(uint32_t pub_ip, uint8_t mux_id, bool is_sta)
 	int ret;
 	int cnt = 0;
 	ipa_nat_ipv4_rule nat_rule;
-	IPACMDBG_H("%s() %d\n", __FUNCTION__, __LINE__);
+	IPACM_LOG(IPACM_LOG_DEBUG, "Input params: IP: 0x%x, Mux: %d, is_sta %d\n", pub_ip, mux_id, is_sta);
 
 	/* Not reset the cache wait it timeout by destroy event */
 #if 0
 	if (pub_ip != pub_ip_addr_pre)
 	{
-		IPACMDBG("Reset the cache because NAT-ipv4 different\n");
+		IPACM_LOG(IPACM_LOG_DEBUG,"Reset the cache because NAT-ipv4 different\n");
 		memset(cache, 0, sizeof(nat_table_entry) * max_entries);
 		curCnt = 0;
 	}
@@ -387,7 +387,7 @@ int NatApp::AddTable(uint32_t pub_ip, uint8_t mux_id, bool is_sta)
 	ret = ipa_nat_add_ipv4_tbl(pub_ip, mem_type, max_entries, &nat_table_hdl);
 	if(ret)
 	{
-		IPACMERR("unable to create nat table Error:%d\n", ret);
+		IPACM_LOG(IPACM_LOG_ERR, "unable to create nat table Error:%d\n", ret);
 		return ret;
 	}
 
@@ -401,21 +401,21 @@ int NatApp::AddTable(uint32_t pub_ip, uint8_t mux_id, bool is_sta)
 		ret = ipa_nat_modify_pdn(nat_table_hdl, 0, &entry);
 		if(ret)
 		{
-			IPACMERR("unable to modify PDN 0 entry Error:%d INIT_HDR_METADATA register values will be used!\n", ret);
+			IPACM_LOG(IPACM_LOG_ERR, "unable to modify PDN 0 entry Error:%d INIT_HDR_METADATA register values will be used!\n", ret);
 		}
 	}
 
 	/* Add back the cached NAT-entry */
 	if (pub_ip == pub_ip_addr_pre)
 	{
-		IPACMDBG("Restore the cache to ipa NAT-table\n");
+		IPACM_LOG(IPACM_LOG_DEBUG, "Restore the cache to ipa NAT-table\n");
 		for(cnt = 0; cnt < max_entries; cnt++)
 		{
 			if((cache[cnt].private_ip !=0))
 			{
 				if(is_sta && (isAlgPort(cache[cnt].protocol, cache[cnt].private_port) ||
 					isAlgPort(cache[cnt].protocol, cache[cnt].target_port))) {
-					IPACMERR("STA backhaul: connection using ALG Port, ignore\n");
+					IPACM_LOG(IPACM_LOG_ERR, "STA backhaul: connection using ALG Port, ignore\n");
 					memset(&cache[cnt], 0, sizeof(cache[cnt]));
 					curCnt--;
 					cur_nat_entries--;
@@ -436,21 +436,21 @@ int NatApp::AddTable(uint32_t pub_ip, uint8_t mux_id, bool is_sta)
 
 				if(ipa_nat_add_ipv4_rule(nat_table_hdl, &nat_rule, &cache[cnt].rule_hdl) < 0)
 				{
-					IPACMERR("unable to add the rule delete from cache\n");
+					IPACM_LOG(IPACM_LOG_ERR, "unable to add the rule delete from cache\n");
 					memset(&cache[cnt], 0, sizeof(cache[cnt]));
 					curCnt--;
 					cur_nat_entries--;
 					continue;
 				}
-				IPACMDBG("cache entry %d rule handle %d\n", cnt, cache[cnt].rule_hdl);
+				IPACM_LOG(IPACM_LOG_DEBUG,"cache entry %d rule handle %d\n", cnt, cache[cnt].rule_hdl);
 				cache[cnt].enabled = true;
 
-				IPACMDBG("On wan-iface reset added below rule successfully\n");
+				IPACM_LOG(IPACM_LOG_DEBUG,"On wan-iface reset added below rule successfully\n");
 				iptodot("Private IP", nat_rule.private_ip);
 				iptodot("Target IP", nat_rule.target_ip);
-				IPACMDBG("Private Port:%d \t Target Port: %d\n", nat_rule.private_port, nat_rule.target_port);
-				IPACMDBG("Public Port:%d\n", nat_rule.public_port);
-				IPACMDBG("protocol: %d\n", nat_rule.protocol);
+				IPACM_LOG(IPACM_LOG_DEBUG,"Private Port:%d \t Target Port: %d\n", nat_rule.private_port, nat_rule.target_port);
+				IPACM_LOG(IPACM_LOG_DEBUG,"Public Port:%d\n", nat_rule.public_port);
+				IPACM_LOG(IPACM_LOG_DEBUG,"protocol: %d\n", nat_rule.protocol);
 			}
 		}
 	}
@@ -480,18 +480,17 @@ int NatApp::RemovePdn(uint32_t pub_ip)
 	uint8_t pdn_index;
 	uint8_t pdn_cnt;
 	ipa_nat_pdn_entry entry;
-	IPACMDBG_H("%s() %d\n", __FUNCTION__, __LINE__);
 
 	CHK_TBL_HDL();
 
-	IPACMDBG_H("Remove PDN IP: 0x%x\n", pub_ip);
+	IPACM_LOG(IPACM_LOG_DEBUG, "Remove PDN IP: 0x%x\n", pub_ip);
 	ret = ipa_nat_get_pdn_index(pub_ip, &pdn_index);
 	if(ret)
 	{
-		IPACMERR("pdn doesn't exist on pdn table\n");
+		IPACM_LOG(IPACM_LOG_ERR, "pdn doesn't exist on pdn table\n");
 		return IPACM_FAILURE;
 	}
-	IPACMDBG_H("pdn ip found at pdn_index:%d\n",pdn_index);
+	IPACM_LOG(IPACM_LOG_DEBUG, "pdn ip found at pdn_index:%d\n",pdn_index);
 	/* remove all PDN entries */
 	for(int cnt = 0; cnt < max_entries; cnt++)
 	{
@@ -500,7 +499,7 @@ int NatApp::RemovePdn(uint32_t pub_ip)
 		{
 			if(ipa_nat_del_ipv4_rule(nat_table_hdl, cache[cnt].rule_hdl) < 0)
 			{
-				IPACMERR("unable to delete rule with private ip 0x%X\n", cache[cnt].private_ip);
+				IPACM_LOG(IPACM_LOG_ERR, "unable to delete rule with private ip 0x%X\n", cache[cnt].private_ip);
 				continue;
 			}
 			memset(&cache[cnt], 0, sizeof(cache[cnt]));
@@ -509,30 +508,29 @@ int NatApp::RemovePdn(uint32_t pub_ip)
 	ret = ipa_nat_dealloc_pdn(pdn_index);
 	if(ret)
 	{
-		IPACMERR(" couldn't deallocate PDN in index %d\n",pdn_index);
+		IPACM_LOG(IPACM_LOG_ERR, " couldn't deallocate PDN in index %d\n",pdn_index);
 		return IPACM_FAILURE;
 	}
 
 	if(pdn_index < IPA_MAX_WLAN_STA_IFACES && pdn_count_sta > 0)
 	{
 		pdn_count_sta--;
-		IPACMDBG_H("STA PDN index %d removed, pdn_count_sta=%d\n", pdn_index, pdn_count_sta);
+		IPACM_LOG(IPACM_LOG_DEBUG, "STA PDN index %d removed, pdn_count_sta=%d\n", pdn_index, pdn_count_sta);
 	}
 
 	ret = ipa_nat_get_pdn_count(&pdn_cnt);
 	if(ret)
 	{
-		IPACMERR(" couldn't acquire number of PDNs\n");
+		IPACM_LOG(IPACM_LOG_ERR, " couldn't acquire number of PDNs\n");
 		return IPACM_FAILURE;
 	}
 
 	if(!pdn_cnt)
 	{
-		IPACMDBG_H("removing NAT table\n");
 		ret = ipa_nat_del_ipv4_tbl(nat_table_hdl);
 		if(ret)
 		{
-			IPACMERR("unable to delete nat table Error: %d\n", ret);;
+			IPACM_LOG(IPACM_LOG_ERR, "unable to delete nat table Error: %d\n", ret);;
 			return ret;
 		}
 
@@ -546,21 +544,20 @@ int NatApp::RemovePdn(uint32_t pub_ip)
 int NatApp::DeleteTable(uint32_t pub_ip)
 {
 	int ret;
-	IPACMDBG_H("%s() %d\n", __FUNCTION__, __LINE__);
+	IPACM_LOG(IPACM_LOG_DEBUG, "%s() %d\n", __FUNCTION__, __LINE__);
 
 	CHK_TBL_HDL();
 
 	if(pub_ip_addr != pub_ip)
 	{
-		IPACMDBG("Public ip address is not matching\n");
-		IPACMERR("unable to delete the nat table\n");
+		IPACM_LOG(IPACM_LOG_WARN, "unable to delete the nat table\n");
 		return -1;
 	}
 
 	ret = ipa_nat_del_ipv4_tbl(nat_table_hdl);
 	if(ret)
 	{
-		IPACMERR("unable to delete nat table Error: %d\n", ret);;
+		IPACM_LOG(IPACM_LOG_ERR, "unable to delete nat table Error: %d\n", ret);;
 		return ret;
 	}
 
@@ -573,7 +570,7 @@ int NatApp::DeleteTable(uint32_t pub_ip)
 bool NatApp::ChkForDup(const nat_table_entry *rule)
 {
 	int cnt = 0;
-	IPACMDBG("%s() %d\n", __FUNCTION__, __LINE__);
+	IPACM_LOG(IPACM_LOG_DEBUG,"%s() %d\n", __FUNCTION__, __LINE__);
 
 	for(; cnt < max_entries; cnt++)
 	{
@@ -600,16 +597,16 @@ bool NatApp::ChkSWAllow(const nat_table_entry *rule)
 	int i, j;
 	IPACM_extd_swallow_entry_conf_t entry;
 	IPACM_swallow_t sw_filter_cfg;
-	IPACMDBG("Entry\n");
+	IPACM_LOG(IPACM_LOG_DEBUG, "Entry\n");
 
 	if(!IPACM_Iface::ipacmcfg->ipacm_msgflt_enable)
 	{
-		IPACMERR("msg filtering feature is not enabled\n");
+		IPACM_LOG(IPACM_LOG_ERR, "msg filtering feature is not enabled\n");
 		return false;
 	}
 	if(!IPACM_Iface::ipacmcfg->sw_filter_cfg)
 	{
-		IPACMERR("SW Config not updated/pdn index not updated!\n");
+		IPACM_LOG(IPACM_LOG_ERR, "SW Config not updated/pdn index not updated!\n");
 		return false;
 	}
 	memcpy(&sw_filter_cfg, IPACM_Iface::ipacmcfg->sw_filter_cfg, sizeof(IPACM_swallow_t));
@@ -641,7 +638,7 @@ bool NatApp::ChkSWAllow(const nat_table_entry *rule)
 			}
 		}
 	}
-	IPACMDBG("Exit\n");
+	IPACM_LOG(IPACM_LOG_DEBUG, "Exit\n");
 	/* No pdn found */
 	return false;
 }
@@ -651,7 +648,7 @@ bool NatApp::ChkSWAllow(const nat_table_entry *rule)
 int NatApp::DeleteEntry(const nat_table_entry *rule)
 {
 	int cnt = 0;
-	IPACMDBG("%s() %d\n", __FUNCTION__, __LINE__);
+	IPACM_LOG(IPACM_LOG_DEBUG,"%s() %d\n", __FUNCTION__, __LINE__);
 
 	log_nat(rule->protocol,rule->private_ip,rule->target_ip,rule->private_port,\
 	rule->public_port,rule->target_port,rule->src_only,rule->dst_only,"for deletion\n");
@@ -674,20 +671,20 @@ int NatApp::DeleteEntry(const nat_table_entry *rule)
 						cache[cnt].public_port,cache[cnt].target_port,cache[cnt].src_only,cache[cnt].dst_only,"for deletion\n");
 				if(ipa_nat_del_ipv4_rule(nat_table_hdl, cache[cnt].rule_hdl) < 0)
 				{
-					IPACMERR("%s() %d deletion failed\n", __FUNCTION__, __LINE__);
+					IPACM_LOG(IPACM_LOG_ERR, "%s() %d deletion failed\n", __FUNCTION__, __LINE__);
 				}
 				else
 				{
-					IPACMDBG_H("Deleted Nat entry(%d) Successfully\n", cnt);
+					IPACM_LOG(IPACM_LOG_DEBUG, "Deleted Nat entry(%d) Successfully\n", cnt);
 				}
 			}
 			else
 			{
-				IPACMDBG_H("Deleted Nat entry(%d) only from cache\n", cnt);
+				IPACM_LOG(IPACM_LOG_DEBUG, "Deleted Nat entry(%d) only from cache\n", cnt);
 			}
 			if(cache[cnt].sw_allow && rule->sw_allow)
 			{
-				IPACMDBG_H("backup the sw allow Nat entry(%d) only from cache\n", cnt);
+				IPACM_LOG(IPACM_LOG_DEBUG, "backup the sw allow Nat entry(%d) only from cache\n", cnt);
 			}
 			else
 			{
@@ -731,10 +728,10 @@ void NatApp::restore_nat_for_sw_flt_entries(IPACM_extd_swallow_entry_conf_t extd
 		  		nat_rule.pdn_index = cache[i].pdn_index;
 				if(ipa_nat_add_ipv4_rule(nat_table_hdl, &nat_rule, &cache[i].rule_hdl) < 0)
 				{
-  					IPACMERR("unable to add the rule\n");
+  					IPACM_LOG(IPACM_LOG_ERR, "unable to add the rule\n");
 				}
   				cache[i].sw_allow = false;
-  				IPACMDBG_H("cache entry %d rule handle %d\n", i, cache[i].rule_hdl);
+  				IPACM_LOG(IPACM_LOG_DEBUG, "cache entry %d rule handle %d\n", i, cache[i].rule_hdl);
   				cache[i].enabled = true;
 			}
 		}
@@ -746,7 +743,7 @@ void NatApp::firewall_compare(IPACM_swallow_conf_t *backup_firewall_config, IPAC
 	int i,j;
 	if(backup_firewall_config->num_extd_swallow_entries == 0)
 	{
-		IPACMERR("backup firewall entry is zero, so no need to check further\n");
+		IPACM_LOG(IPACM_LOG_ERR, "backup firewall entry is zero, so no need to check further\n");
 		goto end;
 	}
 	for(i = 0; i < backup_firewall_config->num_extd_swallow_entries; i++)
@@ -773,23 +770,23 @@ void NatApp::firewall_compare(IPACM_swallow_conf_t *backup_firewall_config, IPAC
 				firewall_config->extd_swallow_entries[j].attrib.u.v4.src_addr == backup_firewall_config->extd_swallow_entries[i].attrib.u.v4.src_addr &&
 				firewall_config->extd_swallow_entries[j].attrib.u.v4.dst_addr == backup_firewall_config->extd_swallow_entries[i].attrib.u.v4.dst_addr)
 			{
-				IPACMDBG("firewall entry is matched\n");
+				IPACM_LOG(IPACM_LOG_DEBUG, "firewall entry is matched\n");
 				break;
 			}
 			else
 			{
-				IPACMDBG("firewall entry is not present\n");
+				IPACM_LOG(IPACM_LOG_DEBUG, "firewall entry is not present\n");
 				continue;
 			}
 		}
 		if((j == firewall_config->num_extd_swallow_entries) || (firewall_config->num_extd_swallow_entries == 0))
 		{
-			IPACMERR("flushing the deleted nat entry\n");
+			IPACM_LOG(IPACM_LOG_ERR, "flushing the deleted nat entry\n");
 			restore_nat_for_sw_flt_entries(backup_firewall_config->extd_swallow_entries[i]);
 		}
 	}
 end:
-	IPACMERR("reaching end of the firewall\n");
+	IPACM_LOG(IPACM_LOG_ERR, "reaching end of the firewall\n");
 }
 
 bool NatApp::firewall_tuple_match_with_nat(IPACM_extd_swallow_entry_conf_t extd_firewall_entries, const nat_table_entry *del_entry)
@@ -815,7 +812,7 @@ bool NatApp::firewall_tuple_match_with_nat(IPACM_extd_swallow_entry_conf_t extd_
 			!((extd_firewall_entries.attrib.src_port != 0) ^ (extd_firewall_entries.attrib.src_port ==  del_entry->private_port)) &&
 			!((extd_firewall_entries.attrib.dst_port != 0) ^ (extd_firewall_entries.attrib.dst_port ==  del_entry->target_port))))
 		{
-			IPACMERR("Matched in UL\n");
+			IPACM_LOG(IPACM_LOG_ERR, "Matched in UL\n");
 			return true;
 		}
 		else if(((extd_firewall_entries.attrib.u.v4.src_addr == 0)) &&
@@ -824,7 +821,7 @@ bool NatApp::firewall_tuple_match_with_nat(IPACM_extd_swallow_entry_conf_t extd_
 		(extd_firewall_entries.attrib.src_port == 0) &&
 		(extd_firewall_entries.attrib.dst_port == 0))
 		{
-			IPACMERR("Matched in UL wildcard entry\n");
+			IPACM_LOG(IPACM_LOG_ERR, "Matched in UL wildcard entry\n");
 			return true;
 		}
 	}
@@ -839,7 +836,7 @@ bool NatApp::firewall_tuple_match_with_nat(IPACM_extd_swallow_entry_conf_t extd_
 		!((extd_firewall_entries.attrib.src_port != 0) ^ (extd_firewall_entries.attrib.src_port ==  del_entry->target_port)) &&
 		!((extd_firewall_entries.attrib.dst_port != 0) ^ (extd_firewall_entries.attrib.dst_port ==  del_entry->private_port)))
 		{
-			IPACMERR("Matched in DL\n");
+			IPACM_LOG(IPACM_LOG_ERR, "Matched in DL\n");
 			return true;
 		}
 		else if(((extd_firewall_entries.attrib.u.v4.src_addr==0)) &&
@@ -848,7 +845,7 @@ bool NatApp::firewall_tuple_match_with_nat(IPACM_extd_swallow_entry_conf_t extd_
 		(extd_firewall_entries.attrib.src_port == 0) &&
 		(extd_firewall_entries.attrib.dst_port == 0))
 		{
-			IPACMERR("Matched in DL wildcard entry\n");
+			IPACM_LOG(IPACM_LOG_ERR, "Matched in DL wildcard entry\n");
 			return true;
 		}
 	}
@@ -860,11 +857,11 @@ void NatApp::HandleSWAllowEntries(void)
 	int i, j, cnt;
 	IPACM_swallow_conf_t entry;
 	const nat_table_entry *del_entry;
-	IPACMDBG("Entry\n");
+	IPACM_LOG(IPACM_LOG_DEBUG, "Entry\n");
 
 	if(!IPACM_Iface::ipacmcfg->sw_filter_cfg)
 	{
-		IPACMERR("SW Config not updated/pdn index not updated!\n");
+		IPACM_LOG(IPACM_LOG_ERR, "SW Config not updated/pdn index not updated!\n");
 		return;
 	}
 	memset(&backup_sw_filter_cfg, 0, sizeof(IPACM_swallow_t));
@@ -878,11 +875,11 @@ void NatApp::HandleSWAllowEntries(void)
 	}
 	for(i = 0; i < sw_filter_cfg.pdn_count; i++)
 	{
-		IPACMDBG("pdn_index_v4 %d\n", sw_filter_cfg.pdns[i].v4_up);
+		IPACM_LOG(IPACM_LOG_DEBUG, "pdn_index_v4 %d\n", sw_filter_cfg.pdns[i].v4_up);
 		/* PDN not up yet */
 		if(sw_filter_cfg.pdns[i].v4_up != TRUE)
 		{
-			IPACMERR("sw_filter_cfg.pdns[i].v4_up \n");
+			IPACM_LOG(IPACM_LOG_ERR, "sw_filter_cfg.pdns[i].v4_up \n");
 			continue;
 		}
 		for(j = 0; j < sw_filter_cfg.pdns[i].num_extd_swallow_entries;j++)
@@ -892,12 +889,12 @@ void NatApp::HandleSWAllowEntries(void)
 			/* Check if entry is v4 */
 			if(entry.extd_swallow_entries[j].ip_vsn != IP_V4)
 			{
-				IPACMERR("sw_filter_cfg.pdns[i].pdn is not v4 entry\n");
+				IPACM_LOG(IPACM_LOG_ERR, "sw_filter_cfg.pdns[i].pdn is not v4 entry\n");
 				continue;
 			}
 			else
 			{
-				IPACMERR("sw_filter_cfg.pdns[i].pdn is v4 entry\n");
+				IPACM_LOG(IPACM_LOG_ERR, "sw_filter_cfg.pdns[i].pdn is v4 entry\n");
 			}
 
 			for(cnt = 0; cnt < max_entries; cnt++)
@@ -921,7 +918,7 @@ void NatApp::HandleSWAllowEntries(void)
 			}
 		}
 	}
-	IPACMDBG("Exit\n");
+	IPACM_LOG(IPACM_LOG_DEBUG, "Exit\n");
 }
 
 /* Add new entry to the nat table on new connection */
@@ -934,7 +931,7 @@ int NatApp::AddEntry(const nat_table_entry *rule, bool isVlan)
 	uint8_t pdn_index;
 #endif
 
-	IPACMDBG("%s() %d\n", __FUNCTION__, __LINE__);
+	IPACM_LOG(IPACM_LOG_DEBUG,"%s() %d\n", __FUNCTION__, __LINE__);
 
 	CHK_TBL_HDL();
 	log_nat(rule->protocol,rule->private_ip,rule->target_ip,rule->private_port,\
@@ -946,7 +943,7 @@ int NatApp::AddEntry(const nat_table_entry *rule, bool isVlan)
 		 rule->target_port == 0 ||
 		 rule->protocol == 0)
 	{
-		IPACMERR("Invalid Connection, ignoring it\n");
+		IPACM_LOG(IPACM_LOG_ERR, "Invalid Connection, ignoring it\n");
 		return 0;
 	}
 #ifdef FEATURE_VLAN_MPDN
@@ -954,7 +951,7 @@ int NatApp::AddEntry(const nat_table_entry *rule, bool isVlan)
 	{
 		if(isVlan)
 		{
-			IPACMDBG_H("vlan iface doesn't have a valid pdn, only moving to cache");
+			IPACM_LOG(IPACM_LOG_DEBUG, "vlan iface doesn't have a valid pdn, only moving to cache\n");
 			iptodot("private ip", rule->private_ip);
 			iptodot("target ip", rule->target_ip);
 			iptodot("public ip", rule->public_ip);
@@ -962,7 +959,7 @@ int NatApp::AddEntry(const nat_table_entry *rule, bool isVlan)
 		}
 		else
 		{
-			IPACMERR("couldn't acquire PDN index for public ip 0x%X\n", rule->public_ip);
+			IPACM_LOG(IPACM_LOG_ERR, "couldn't acquire PDN index for public ip 0x%X\n", rule->public_ip);
 			return IPACM_FAILURE;
 		}
 	}
@@ -978,14 +975,14 @@ int NatApp::AddEntry(const nat_table_entry *rule, bool isVlan)
 				 cache[cnt].target_port == 0 &&
 				 cache[cnt].protocol == 0)
 			{
-				IPACMDBG_H("found free cache entry %d\n", cnt);
+				IPACM_LOG(IPACM_LOG_DEBUG, "found free cache entry %d\n", cnt);
 				break;
 			}
 		}
 
 		if(max_entries == cnt)
 		{
-			IPACMERR("Error: Unable to add, reached maximum rules\n");
+			IPACM_LOG(IPACM_LOG_ERR, "Error: Unable to add, reached maximum rules\n");
 			return -1;
 		}
 		else
@@ -1019,12 +1016,12 @@ int NatApp::AddEntry(const nat_table_entry *rule, bool isVlan)
 #ifdef FEATURE_VLAN_MPDN
 				if(cacheOnly)
 				{
-					IPACMDBG("only caching vlan rule\n");
+					IPACM_LOG(IPACM_LOG_DEBUG,"only caching vlan rule\n");
 				}
 				else
 #endif
 				{
-					IPACMDBG("Device is Power Save mode: Dont insert into nat table but cache\n");
+					IPACM_LOG(IPACM_LOG_DEBUG,"Device is Power Save mode: Dont insert into nat table but cache\n");
 				}
 				cache[cnt].enabled = false;
 				cache[cnt].rule_hdl = 0;
@@ -1038,10 +1035,10 @@ int NatApp::AddEntry(const nat_table_entry *rule, bool isVlan)
 			{
 				if(ipa_nat_add_ipv4_rule(nat_table_hdl, &nat_rule, &cache[cnt].rule_hdl) < 0)
 				{
-					IPACMERR("unable to add the rule\n");
+					IPACM_LOG(IPACM_LOG_ERR, "unable to add the rule\n");
 					return -1;
 				}
-				IPACMDBG_H("cache entry %d rule handle %d\n", cnt, cache[cnt].rule_hdl);
+				IPACM_LOG(IPACM_LOG_DEBUG, "cache entry %d rule handle %d\n", cnt, cache[cnt].rule_hdl);
 				cache[cnt].enabled = true;
 			}
 
@@ -1073,17 +1070,17 @@ int NatApp::AddEntry(const nat_table_entry *rule, bool isVlan)
 	}
 	else
 	{
-		IPACMERR("Duplicate rule. Ignore it\n");
+		IPACM_LOG(IPACM_LOG_WARN, "Duplicate rule. Ignore it\n");
 		return -1;
 	}
 
 	if(cache[cnt].enabled == true)
 	{
-		IPACMDBG_H("Added rule(%d) successfully handle (%d)\n", cnt, cache[cnt].rule_hdl);
+		IPACM_LOG(IPACM_LOG_DEBUG, "Added rule(%d) successfully handle (%d)\n", cnt, cache[cnt].rule_hdl);
 	}
   else
   {
-    IPACMDBG_H("Cached rule(%d) successfully\n", cnt);
+    IPACM_LOG(IPACM_LOG_DEBUG, "Cached rule(%d) successfully\n", cnt);
   }
 
 	return 0;
@@ -1095,14 +1092,15 @@ void NatApp::UpdateCTUdpTs(nat_table_entry *rule, uint32_t new_ts)
 
 	iptodot("Private IP:", rule->private_ip);
 	iptodot("Target IP:",  rule->target_ip);
-	IPACMDBG("Private Port: %d, Target Port: %d\n", rule->private_port, rule->target_port);
+	IPACM_LOG(IPACM_LOG_DEBUG,"Private Port: %d, Target Port: %d\n", rule->private_port, rule->target_port);
 
 	if(!ct_hdl)
 	{
 		ct_hdl = nfct_open(CONNTRACK, 0);
 		if(!ct_hdl)
 		{
-			PERROR("nfct_open");
+			perror("nfct_open");
+			IPACM_LOG(IPACM_LOG_ERR, "nfct_open\n");
 			return;
 		}
 	}
@@ -1112,7 +1110,8 @@ void NatApp::UpdateCTUdpTs(nat_table_entry *rule, uint32_t new_ts)
 		ct = nfct_new();
 		if(!ct)
 		{
-			PERROR("nfct_new");
+			perror("nfct_new");
+			IPACM_LOG(IPACM_LOG_ERR, "nfct_new\n");
 			return;
 		}
 	}
@@ -1137,7 +1136,7 @@ void NatApp::UpdateCTUdpTs(nat_table_entry *rule, uint32_t new_ts)
 		nfct_set_attr_u32(ct, ATTR_IPV4_DST, htonl(rule->target_ip));
 		nfct_set_attr_u16(ct, ATTR_PORT_DST, htons(rule->target_port));
 
-		IPACMDBG("dst nat is not set\n");
+		IPACM_LOG(IPACM_LOG_DEBUG,"dst nat is not set\n");
 	}
 	else
 	{
@@ -1151,27 +1150,27 @@ void NatApp::UpdateCTUdpTs(nat_table_entry *rule, uint32_t new_ts)
 
 		nfct_set_attr_u16(ct, ATTR_PORT_DST, htons(rule->public_port));
 
-		IPACMDBG("dst nat is set\n");
+		IPACM_LOG(IPACM_LOG_DEBUG,"dst nat is set\n");
 	}
 
 	iptodot("Source IP:", nfct_get_attr_u32(ct, ATTR_IPV4_SRC));
 	iptodot("Destination IP:",  nfct_get_attr_u32(ct, ATTR_IPV4_DST));
-	IPACMDBG("Source Port: %d, Destination Port: %d\n",
+	IPACM_LOG(IPACM_LOG_DEBUG,"Source Port: %d, Destination Port: %d\n",
 					 nfct_get_attr_u16(ct, ATTR_PORT_SRC), nfct_get_attr_u16(ct, ATTR_PORT_DST));
 
-	IPACMDBG("updating %d connection with time: %d\n",
+	IPACM_LOG(IPACM_LOG_DEBUG,"updating %d connection with time: %d\n",
 					 rule->protocol, nfct_get_attr_u32(ct, ATTR_TIMEOUT));
 
 	ret = nfct_query(ct_hdl, NFCT_Q_UPDATE, ct);
 	if(ret == -1)
 	{
-		IPACMERR("unable to update time stamp");
+		IPACM_LOG(IPACM_LOG_ERR, "unable to update time stamp\n");
 		DeleteEntry(rule);
 	}
 	else
 	{
 		rule->timestamp = new_ts;
-		IPACMDBG("Updated time stamp successfully\n");
+		IPACM_LOG(IPACM_LOG_DEBUG,"Updated time stamp successfully\n");
 	}
 
 	return;
@@ -1189,11 +1188,11 @@ void NatApp::UpdateUDPTimeStamp()
 
 	if ( keep_awake )
 	{
-		IPACMDBG("Voting clock on\n");
+		IPACM_LOG(IPACM_LOG_DEBUG, "Voting clock on\n");
 
 		if ( ipa_nat_vote_clock(IPA_APP_CLK_VOTE) != 0 )
 		{
-			IPACMERR("Voting clock on failed\n");
+			IPACM_LOG(IPACM_LOG_ERR, "Voting clock on failed\n");
 			return;
 		}
 	}
@@ -1206,22 +1205,21 @@ void NatApp::UpdateUDPTimeStamp()
 		   ((cache[cnt].private_ip != cache[cnt].public_ip) ||
 		   		(cache[cnt].ip_pass_entry)))
 		{
-			IPACMDBG("\n");
 			if(ipa_nat_query_timestamp_redirect(nat_table_hdl, cache[cnt].rule_hdl, &ts, &redirect) < 0)
 			{
-				IPACMERR("unable to retrieve timeout for rule handle: %d\n", cache[cnt].rule_hdl);
+				IPACM_LOG(IPACM_LOG_WARN, "unable to retrieve timeout for rule handle: %d\n", cache[cnt].rule_hdl);
 				continue;
 			}
 
 			if(redirect)
 			{
-				IPACMDBG("Got RST/FIN req for connection, NAT entry redirect flag is %d\n", redirect);
+				IPACM_LOG(IPACM_LOG_DEBUG,"Got RST/FIN req for connection, NAT entry redirect flag is %d\n", redirect);
 				continue;
 			}
 
 			if(cache[cnt].timestamp == ts)
 			{
-				IPACMDBG("No Change in Time Stamp: cahce:%d, ipahw:%d\n",
+				IPACM_LOG(IPACM_LOG_DEBUG,"No Change in Time Stamp: cahce:%d, ipahw:%d\n",
 								                  cache[cnt].timestamp, ts);
 				continue;
 			}
@@ -1238,11 +1236,11 @@ void NatApp::UpdateUDPTimeStamp()
 
 	if ( keep_awake )
 	{
-		IPACMDBG("Voting clock off\n");
+		IPACM_LOG(IPACM_LOG_DEBUG, "Voting clock off\n");
 
 		if ( ipa_nat_vote_clock(IPA_APP_CLK_DEVOTE) != 0 )
 		{
-			IPACMERR("Voting clock off failed\n");
+			IPACM_LOG(IPACM_LOG_ERR, "Voting clock off failed\n");
 		}
 	}
 }
@@ -1281,11 +1279,11 @@ bool NatApp::isPwrSaveIf(uint32_t ip_addr)
 int NatApp::UpdatePwrSaveIf(uint32_t client_lan_ip)
 {
 	int cnt;
-	IPACMDBG_H("Received IP address: 0x%x\n", client_lan_ip);
+	IPACM_LOG(IPACM_LOG_DEBUG, "Received IP address: 0x%x\n", client_lan_ip);
 
 	if(client_lan_ip == INVALID_IP_ADDR)
 	{
-		IPACMERR("Invalid ip address received\n");
+		IPACM_LOG(IPACM_LOG_ERR, "Invalid ip address received\n");
 		return -1;
 	}
 
@@ -1294,7 +1292,7 @@ int NatApp::UpdatePwrSaveIf(uint32_t client_lan_ip)
 	{
 		if(PwrSaveIfs[cnt] == client_lan_ip)
 		{
-			IPACMDBG("The client 0x%x is already in power save\n", client_lan_ip);
+			IPACM_LOG(IPACM_LOG_DEBUG,"The client 0x%x is already in power save\n", client_lan_ip);
 			return 0;
 		}
 	}
@@ -1315,7 +1313,7 @@ int NatApp::UpdatePwrSaveIf(uint32_t client_lan_ip)
 		{
 			if(ipa_nat_del_ipv4_rule(nat_table_hdl, cache[cnt].rule_hdl) < 0)
 			{
-				IPACMERR("unable to delete the rule\n");
+				IPACM_LOG(IPACM_LOG_ERR, "unable to delete the rule\n");
 				continue;
 			}
 
@@ -1333,11 +1331,11 @@ int NatApp::ResetPwrSaveIf(uint32_t client_lan_ip)
 	ipa_nat_ipv4_rule nat_rule;
 	uint8_t pdn_index;
 
-	IPACMDBG_H("Received ip address: 0x%x\n", client_lan_ip);
+	IPACM_LOG(IPACM_LOG_DEBUG, "Received ip address: 0x%x\n", client_lan_ip);
 
 	if(client_lan_ip == INVALID_IP_ADDR)
 	{
-		IPACMERR("Invalid ip address received\n");
+		IPACM_LOG(IPACM_LOG_ERR, "Invalid ip address received\n");
 		return -1;
 	}
 
@@ -1352,7 +1350,6 @@ int NatApp::ResetPwrSaveIf(uint32_t client_lan_ip)
 
 	for(cnt = 0; cnt < max_entries; cnt++)
 	{
-		IPACMDBG("cache (%d): enable %d, ip 0x%x\n", cnt, cache[cnt].enabled, cache[cnt].private_ip);
 
 		if(cache[cnt].private_ip == client_lan_ip &&
 			 cache[cnt].enabled == false)
@@ -1370,32 +1367,32 @@ int NatApp::ResetPwrSaveIf(uint32_t client_lan_ip)
 #ifdef FEATURE_VLAN_MPDN
 			if(ipa_nat_get_pdn_index(cache[cnt].public_ip, &pdn_index))
 			{
-				IPACMERR("Unable to extract the pdn index for 0x%x Not deleting the cache entry\n",
+				IPACM_LOG(IPACM_LOG_ERR, "Unable to extract the pdn index for 0x%x Not deleting the cache entry\n",
 								cache[cnt].public_ip);
 				continue;
 			}
-			IPACMDBG("Extracted pdn index %d for public ip 0x%x\n", pdn_index, cache[cnt].public_ip);
+			IPACM_LOG(IPACM_LOG_DEBUG, "Extracted pdn index %d for public ip 0x%x\n", pdn_index, cache[cnt].public_ip);
 			nat_rule.pdn_index = pdn_index;
 #endif
 
 			if(ipa_nat_add_ipv4_rule(nat_table_hdl, &nat_rule, &cache[cnt].rule_hdl) < 0)
 			{
-				IPACMERR("unable to add the rule delete from cache\n");
+				IPACM_LOG(IPACM_LOG_ERR, "unable to add the rule delete from cache\n");
 				memset(&cache[cnt], 0, sizeof(cache[cnt]));
 				curCnt--;
 				cur_nat_entries--;
 				continue;
 			}
 
-			IPACMDBG_H("cache entry %d rule handle %d\n", cnt, cache[cnt].rule_hdl);
+			IPACM_LOG(IPACM_LOG_DEBUG, "cache entry %d rule handle %d\n", cnt, cache[cnt].rule_hdl);
 			cache[cnt].enabled = true;
 
-			IPACMDBG("On power reset added below rule successfully\n");
+			IPACM_LOG(IPACM_LOG_DEBUG,"On power reset added below rule successfully\n");
 			iptodot("Private IP", nat_rule.private_ip);
 			iptodot("Target IP", nat_rule.target_ip);
-			IPACMDBG("Private Port:%d \t Target Port: %d\n", nat_rule.private_port, nat_rule.target_port);
-			IPACMDBG("Public Port:%d\n", nat_rule.public_port);
-			IPACMDBG("protocol: %d\n", nat_rule.protocol);
+			IPACM_LOG(IPACM_LOG_DEBUG,"Private Port:%d \t Target Port: %d\n", nat_rule.private_port, nat_rule.target_port);
+			IPACM_LOG(IPACM_LOG_DEBUG,"Public Port:%d\n", nat_rule.public_port);
+			IPACM_LOG(IPACM_LOG_DEBUG,"protocol: %d\n", nat_rule.protocol);
 
 		}
 	}
@@ -1407,11 +1404,11 @@ void NatApp::AddTempEntry(const nat_table_entry *new_entry)
 {
 	int cnt;
 
-	IPACMDBG("Received below Temp Nat entry\n");
+	IPACM_LOG(IPACM_LOG_DEBUG,"Received below Temp Nat entry\n");
 	iptodot("Private IP", new_entry->private_ip);
 	iptodot("Target IP", new_entry->target_ip);
-	IPACMDBG("Private Port: %d\t Target Port: %d\t", new_entry->private_port, new_entry->target_port);
-	IPACMDBG("protocol: %d\n", new_entry->protocol);
+	IPACM_LOG(IPACM_LOG_DEBUG,"Private Port: %d\t Target Port: %d\t\n", new_entry->private_port, new_entry->target_port);
+	IPACM_LOG(IPACM_LOG_DEBUG,"protocol: %d\n", new_entry->protocol);
 
 	if(ChkForDup(new_entry))
 	{
@@ -1426,7 +1423,7 @@ void NatApp::AddTempEntry(const nat_table_entry *new_entry)
 			 temp[cnt].target_port == new_entry->target_port &&
 			 temp[cnt].protocol == new_entry->protocol)
 		{
-			IPACMDBG("Received duplicate Temp entry\n");
+			IPACM_LOG(IPACM_LOG_DEBUG,"Received duplicate Temp entry\n");
 			return;
 		}
 	}
@@ -1441,12 +1438,12 @@ void NatApp::AddTempEntry(const nat_table_entry *new_entry)
 			{
 				temp[cnt].sw_allow = true;
 			}
-			IPACMDBG("Added Temp Entry\n");
+			IPACM_LOG(IPACM_LOG_DEBUG, "Added Temp Entry\n");
 			return;
 		}
 	}
 
-	IPACMDBG("Unable to add temp entry, cache full\n");
+	IPACM_LOG(IPACM_LOG_DEBUG,"Unable to add temp entry, cache full\n");
 	return;
 }
 
@@ -1454,11 +1451,11 @@ void NatApp::DeleteTempEntry(const nat_table_entry *entry)
 {
 	int cnt;
 
-	IPACMDBG("Received below nat entry\n");
+	IPACM_LOG(IPACM_LOG_DEBUG,"Received below nat entry\n");
 	iptodot("Private IP", entry->private_ip);
 	iptodot("Target IP", entry->target_ip);
-	IPACMDBG("Private Port: %d\t Target Port: %d\n", entry->private_port, entry->target_port);
-	IPACMDBG("protocol: %d\n", entry->protocol);
+	IPACM_LOG(IPACM_LOG_DEBUG,"Private Port: %d\t Target Port: %d\n", entry->private_port, entry->target_port);
+	IPACM_LOG(IPACM_LOG_DEBUG,"protocol: %d\n", entry->protocol);
 
 	for(cnt=0; cnt<MAX_TEMP_ENTRIES; cnt++)
 	{
@@ -1469,12 +1466,12 @@ void NatApp::DeleteTempEntry(const nat_table_entry *entry)
 			 temp[cnt].protocol == entry->protocol)
 		{
 			memset(&temp[cnt], 0, sizeof(nat_table_entry));
-			IPACMDBG("Delete Temp Entry\n");
+			IPACM_LOG(IPACM_LOG_DEBUG,"Delete Temp Entry\n");
 			return;
 		}
 	}
 
-	IPACMDBG("No Such Temp Entry exists\n");
+	IPACM_LOG(IPACM_LOG_DEBUG,"No Such Temp Entry exists\n");
 	return;
 }
 
@@ -1484,17 +1481,17 @@ void NatApp::FlushAndCacheVlanTempEntries(uint32_t ip_addr, bool *entry_exists, 
 	int cnt;
 	int ret;
 
-	IPACMDBG("searching temp entries for ");
+	IPACM_LOG(IPACM_LOG_DEBUG,"searching temp entries for \n");
 	iptodot("IP Address: ", ip_addr);
 	if(!entry_exists)
 	{
-		IPACMERR("got NULL for entry_exists\n");
+		IPACM_LOG(IPACM_LOG_ERR, "got NULL for entry_exists\n");
 		return;
 	}
 
 	if(!public_ip)
 	{
-		IPACMERR("got NULL for public_ip\n");
+		IPACM_LOG(IPACM_LOG_ERR, "got NULL for public_ip\n");
 		return;
 	}
 
@@ -1508,7 +1505,7 @@ void NatApp::FlushAndCacheVlanTempEntries(uint32_t ip_addr, bool *entry_exists, 
 			ret = AddEntry(&temp[cnt], true);
 			if(ret)
 			{
-				IPACMERR("unable to add temp entry: %d\n", ret);
+				IPACM_LOG(IPACM_LOG_ERR, "unable to add temp entry: %d\n", ret);
 				continue;
 			}
 			/* all entries should have the same public ip (each vlan mapped to single pdn) */
@@ -1528,7 +1525,7 @@ void NatApp::FlushTempEntries(uint32_t ip_addr, bool isAdd,
 	int cnt;
 	int ret;
 
-	IPACMDBG_H("Received below with isAdd:%d ", isAdd);
+	IPACM_LOG(IPACM_LOG_DEBUG, "Received below with isAdd:%d \n", isAdd);
 	iptodot("IP Address: ", ip_addr);
 
 	for(cnt=0; cnt<MAX_TEMP_ENTRIES; cnt++)
@@ -1554,14 +1551,14 @@ void NatApp::FlushTempEntries(uint32_t ip_addr, bool isAdd,
 						/* To avoild DL expections for non IPA path */
 						temp[cnt].private_ip = temp[cnt].public_ip;
 						temp[cnt].private_port = temp[cnt].public_port;
-						IPACMDBG("Flushing dummy temp rule");
+						IPACM_LOG(IPACM_LOG_DEBUG,"Flushing dummy temp rule\n");
 						iptodot("Private IP", temp[cnt].private_ip);
 					}
 
 					ret = AddEntry(&temp[cnt]);
 					if(ret)
 					{
-						IPACMERR("unable to add temp entry: %d\n", ret);
+						IPACM_LOG(IPACM_LOG_ERR, "unable to add temp entry: %d\n", ret);
 						continue;
 					}
 				}
@@ -1576,11 +1573,11 @@ void NatApp::FlushTempEntries(uint32_t ip_addr, bool isAdd,
 int NatApp::DelEntriesOnClntDiscon(uint32_t ip_addr)
 {
 	int cnt, tmp = 0;
-	IPACMDBG_H("Received IP address: 0x%x\n", ip_addr);
+	IPACM_LOG(IPACM_LOG_DEBUG, "Received IP address: 0x%x\n", ip_addr);
 
 	if(ip_addr == INVALID_IP_ADDR)
 	{
-		IPACMERR("Invalid ip address received\n");
+		IPACM_LOG(IPACM_LOG_ERR, "Invalid ip address received\n");
 		return -1;
 	}
 
@@ -1589,7 +1586,7 @@ int NatApp::DelEntriesOnClntDiscon(uint32_t ip_addr)
 		if(PwrSaveIfs[cnt] == ip_addr)
 		{
 			PwrSaveIfs[cnt] = 0;
-			IPACMDBG("Remove %d power save entry\n", cnt);
+			IPACM_LOG(IPACM_LOG_DEBUG,"Remove %d power save entry\n", cnt);
 			break;
 		}
 	}
@@ -1602,32 +1599,32 @@ int NatApp::DelEntriesOnClntDiscon(uint32_t ip_addr)
 			{
 				if(ipa_nat_del_ipv4_rule(nat_table_hdl, cache[cnt].rule_hdl) < 0)
 				{
-					IPACMERR("unable to delete the rule\n");
+					IPACM_LOG(IPACM_LOG_ERR, "unable to delete the rule\n");
 					continue;
 				}
 				else
 				{
-					IPACMDBG("won't delete the rule\n");
+					IPACM_LOG(IPACM_LOG_DEBUG,"won't delete the rule\n");
 					cache[cnt].enabled = false;
 					tmp++;
 				}
 			}
-			IPACMDBG("won't delete the rule for entry %d, enabled %d\n",cnt, cache[cnt].enabled);
+			IPACM_LOG(IPACM_LOG_DEBUG,"won't delete the rule for entry %d, enabled %d\n",cnt, cache[cnt].enabled);
 		}
 	}
 
-	IPACMDBG("Deleted (but cached) %d entries\n", tmp);
+	IPACM_LOG(IPACM_LOG_DEBUG,"Deleted (but cached) %d entries\n", tmp);
 	return 0;
 }
 
 int NatApp::DelDummyNatEntries(uint32_t ip_addr)
 {
 	int cnt, tmp = 0;
-	IPACMDBG_H("Received IP address: 0x%x\n", ip_addr);
+	IPACM_LOG(IPACM_LOG_DEBUG, "Received IP address: 0x%x\n", ip_addr);
 
 	if(ip_addr == INVALID_IP_ADDR)
 	{
-		IPACMERR("Invalid ip address received\n");
+		IPACM_LOG(IPACM_LOG_ERR, "Invalid ip address received\n");
 		return -1;
 	}
 
@@ -1639,23 +1636,23 @@ int NatApp::DelDummyNatEntries(uint32_t ip_addr)
 			{
 				if(ipa_nat_del_ipv4_rule(nat_table_hdl, cache[cnt].rule_hdl) < 0)
 				{
-					IPACMERR("unable to delete the rule\n");
+					IPACM_LOG(IPACM_LOG_ERR, "unable to delete the rule\n");
 					continue;
 				}
 				else
 				{
-					IPACMDBG("delete the rule\n");
+					IPACM_LOG(IPACM_LOG_DEBUG, "delete the rule\n");
 					memset(&cache[cnt], 0, sizeof(cache[cnt]));
 					curCnt--;
 					cur_nat_entries--;
 					tmp++;
 				}
 			}
-			IPACMDBG("won't delete the rule for entry %d, enabled %d, dummy %d\n",cnt, cache[cnt].enabled, cache[cnt].dummy_nat);
+			IPACM_LOG(IPACM_LOG_DEBUG, "won't delete the rule for entry %d, enabled %d, dummy %d\n",cnt, cache[cnt].enabled, cache[cnt].dummy_nat);
 		}
 	}
 
-	IPACMDBG("Deleted %d dummy nat entries for wan ip 0x%x\n", tmp, ip_addr);
+	IPACM_LOG(IPACM_LOG_DEBUG, "Deleted %d dummy nat entries for wan ip 0x%x\n", tmp, ip_addr);
 	return 0;
 }
 
@@ -1663,11 +1660,11 @@ int NatApp::DelDummyNatEntries(uint32_t ip_addr)
 int NatApp::DelEntriesOnSTAClntDiscon(uint32_t ip_addr)
 {
 	int cnt, tmp = curCnt;
-	IPACMDBG_H("Received IP address: 0x%x\n", ip_addr);
+	IPACM_LOG(IPACM_LOG_DEBUG, "Received IP address: 0x%x\n", ip_addr);
 
 	if(ip_addr == INVALID_IP_ADDR)
 	{
-		IPACMERR("Invalid ip address received\n");
+		IPACM_LOG(IPACM_LOG_ERR, "Invalid ip address received\n");
 		return -1;
 	}
 
@@ -1680,7 +1677,7 @@ int NatApp::DelEntriesOnSTAClntDiscon(uint32_t ip_addr)
 			{
 				if(ipa_nat_del_ipv4_rule(nat_table_hdl, cache[cnt].rule_hdl) < 0)
 				{
-					IPACMERR("unable to delete the rule\n");
+					IPACM_LOG(IPACM_LOG_ERR, "unable to delete the rule\n");
 					continue;
 				}
 			}
@@ -1691,7 +1688,7 @@ int NatApp::DelEntriesOnSTAClntDiscon(uint32_t ip_addr)
 		}
 	}
 
-	IPACMDBG("Deleted %d entries\n", (tmp - curCnt));
+	IPACM_LOG(IPACM_LOG_DEBUG,"Deleted %d entries\n", (tmp - curCnt));
 	return 0;
 }
 
@@ -1705,7 +1702,7 @@ void NatApp::CacheEntry(const nat_table_entry *rule)
 		 rule->target_port == 0 ||
 		 rule->protocol == 0)
 	{
-		IPACMERR("Invalid Connection, ignoring it\n");
+		IPACM_LOG(IPACM_LOG_ERR, "Invalid Connection, ignoring it\n");
 		return;
 	}
 
@@ -1725,7 +1722,7 @@ void NatApp::CacheEntry(const nat_table_entry *rule)
 
 		if(max_entries == cnt)
 		{
-			IPACMERR("Error: Unable to add, reached maximum rules\n");
+			IPACM_LOG(IPACM_LOG_ERR, "Error: Unable to add, reached maximum rules\n");
 			return;
 		}
 		else
@@ -1759,11 +1756,11 @@ void NatApp::CacheEntry(const nat_table_entry *rule)
 	}
 	else
 	{
-		IPACMERR("Duplicate rule. Ignore it\n");
+		IPACM_LOG(IPACM_LOG_ERR, "Duplicate rule. Ignore it\n");
 		return;
 	}
 
-	IPACMDBG("Cached rule(%d) successfully\n", cnt);
+	IPACM_LOG(IPACM_LOG_DEBUG,"Cached rule(%d) successfully\n", cnt);
 	return;
 }
 
@@ -1771,13 +1768,13 @@ void NatApp::Read_TcpUdp_Timeout(void) {
 #ifdef FEATURE_IPA_ANDROID
 	tcp_timeout = 432000;
 	udp_timeout = 180;
-	IPACMDBG_H("udp timeout value: %d\n", udp_timeout);
-	IPACMDBG_H("tcp timeout value: %d\n", tcp_timeout);
+	IPACM_LOG(IPACM_LOG_DEBUG, "udp timeout value: %d\n", udp_timeout);
+	IPACM_LOG(IPACM_LOG_DEBUG, "tcp timeout value: %d\n", tcp_timeout);
 #else
 	tcp_timeout = 3600;
 	udp_timeout = 60;
-	IPACMDBG_H("udp timeout value: %d\n", udp_timeout);
-	IPACMDBG_H("tcp timeout value: %d\n", tcp_timeout);
+	IPACM_LOG(IPACM_LOG_DEBUG, "udp timeout value: %d\n", udp_timeout);
+	IPACM_LOG(IPACM_LOG_DEBUG, "tcp timeout value: %d\n", tcp_timeout);
 	FILE *udp_fd = NULL, *tcp_fd = NULL;
 	char kernel_ver[KERNEL_VERSION_LENGTH];
 
@@ -1785,14 +1782,14 @@ void NatApp::Read_TcpUdp_Timeout(void) {
 
 		get_kernel_version(kernel_ver);
 
-		IPACMDBG_H("Kernel Version %s\n", kernel_ver);
+		IPACM_LOG(IPACM_LOG_DEBUG, "Kernel Version %s\n", kernel_ver);
 
 		is_kernel_ver_upgraded = is_kernel_version_newer_than(kernel_ver,
 		KERNEL_VERSION_4_9);
 
 		kernel_ver_updated = true;
 
-		IPACMDBG_H("Kernel Version %s compare to %s\n",
+		IPACM_LOG(IPACM_LOG_DEBUG, "Kernel Version %s compare to %s\n",
 			is_kernel_ver_upgraded?"upgraded":"non upgraded", KERNEL_VERSION_4_9);
 	}
 
@@ -1800,43 +1797,43 @@ void NatApp::Read_TcpUdp_Timeout(void) {
 		/* Read UDP timeout value */
 		udp_fd = fopen(IPACM_UDP_FULL_FILE_NAME_NEW, "r");
 		if (udp_fd == NULL) {
-			IPACMERR("unable to open %s\n", IPACM_UDP_FULL_FILE_NAME_NEW);
+			IPACM_LOG(IPACM_LOG_ERR, "unable to open %s\n", IPACM_UDP_FULL_FILE_NAME_NEW);
 			goto fail;
 		}
 	} else {
 		/* Read UDP timeout value */
 		udp_fd = fopen(IPACM_UDP_FULL_FILE_NAME, "r");
 		if (udp_fd == NULL) {
-			IPACMERR("unable to open %s\n", IPACM_UDP_FULL_FILE_NAME);
+			IPACM_LOG(IPACM_LOG_ERR, "unable to open %s\n", IPACM_UDP_FULL_FILE_NAME);
 			goto fail;
 		}
 	}
 
 	if (fscanf(udp_fd, "%d", &udp_timeout) != 1) {
-		IPACMERR("Error reading udp timeout\n");
+		IPACM_LOG(IPACM_LOG_ERR, "Error reading udp timeout\n");
 	}
-	IPACMDBG_H("udp timeout value: %d\n", udp_timeout);
+	IPACM_LOG(IPACM_LOG_DEBUG, "udp timeout value: %d\n", udp_timeout);
 
 	if (is_kernel_ver_upgraded) {
 		/* Read TCP timeout value */
 		tcp_fd = fopen(IPACM_TCP_FULL_FILE_NAME_NEW, "r");
 		if (tcp_fd == NULL) {
-			IPACMERR("unable to open %s\n", IPACM_TCP_FULL_FILE_NAME_NEW);
+			IPACM_LOG(IPACM_LOG_ERR, "unable to open %s\n", IPACM_TCP_FULL_FILE_NAME_NEW);
 			goto fail;
 		}
 	} else {
 		/* Read TCP timeout value */
 		tcp_fd = fopen(IPACM_TCP_FULL_FILE_NAME, "r");
 		if (tcp_fd == NULL) {
-			IPACMERR("unable to open %s\n", IPACM_TCP_FULL_FILE_NAME);
+			IPACM_LOG(IPACM_LOG_ERR, "unable to open %s\n", IPACM_TCP_FULL_FILE_NAME);
 			goto fail;
 		}
 	}
 
 	if (fscanf(tcp_fd, "%d", &tcp_timeout) != 1) {
-		IPACMERR("Error reading tcp timeout\n");
+		IPACM_LOG(IPACM_LOG_ERR, "Error reading tcp timeout\n");
 	}
-	IPACMDBG_H("tcp timeout value: %d\n", tcp_timeout);
+	IPACM_LOG(IPACM_LOG_DEBUG, "tcp timeout value: %d\n", tcp_timeout);
 
 fail:
 	if (udp_fd) {
@@ -1866,7 +1863,7 @@ bool Ipv6IpAddress::Compare(const IpAddress& other) const
 {
 	if (other.GetType() != IPA_IP_v6)
 	{
-		IPACMERR("Wrong IP type\n");
+		IPACM_LOG(IPACM_LOG_ERR, "Wrong IP type\n");
 		return false;
 	}
 
@@ -1877,40 +1874,37 @@ bool Ipv6IpAddress::Compare(const IpAddress& other) const
 
 bool Ipv6IpAddress::IsSameSubnet(const IpAddress& other) const
 {
-	IPACMDBG_H("\n");
 	if (other.GetType() != IPA_IP_v6)
 	{
-		IPACMERR("Wrong IP type\n");
+		IPACM_LOG(IPACM_LOG_ERR, "Wrong IP type\n");
 		return false;
 	}
 
 	const Ipv6IpAddress& ip = static_cast<const Ipv6IpAddress&>(other);
 	bool ret = m_msb == ip.m_msb;
-	IPACMDBG_H("return\n");
+	IPACM_LOG(IPACM_LOG_DEBUG, "return\n");
 	return ret;
 }
 
 void Ipv6IpAddress::Copy(const IpAddress& other)
 {
-	IPACMDBG_H("\n");
 	if (other.GetType() != IPA_IP_v6)
 	{
-		IPACMERR("Wrong IP type\n");
+		IPACM_LOG(IPACM_LOG_ERR, "Wrong IP type\n");
 		return;
 	}
 
 	const Ipv6IpAddress& ip = static_cast<const Ipv6IpAddress&>(other);
 	m_msb = ip.m_msb;
 	m_lsb = ip.m_lsb;
-	IPACMDBG_H("return\n");
+	IPACM_LOG(IPACM_LOG_DEBUG, "return\n");
 }
 
 void Ipv6IpAddress::Clear()
 {
-	IPACMDBG_H("\n");
 	m_msb = 0;
 	m_lsb = 0;
-	IPACMDBG_H("return\n");
+	IPACM_LOG(IPACM_LOG_DEBUG, "return\n");
 }
 
 bool Ipv6IpAddress::Valid() const
@@ -1920,18 +1914,16 @@ bool Ipv6IpAddress::Valid() const
 
 void Ipv6IpAddress::DebugDump(const char* msg_prefix) const
 {
-	IPACMDBG_H("%s IPv6 address 0x%llx%llx\n", msg_prefix, m_msb, m_lsb);
+	IPACM_LOG(IPACM_LOG_DEBUG, "%s IPv6 address 0x%llx%llx\n", msg_prefix, m_msb, m_lsb);
 }
 
 bool Ipv6IpAddress::IsSameSubnet(uint32_t* prefix) const
 {
-	IPACMDBG_H("\n");
 	return m_msb == Convert2x32to64(prefix, false);
 }
 
 void Ipv6IpAddress::CreateFromArray(const uint32_t* addr, bool inputNetworkEndianness)
 {
-	IPACMDBG_H("\n");
 	m_msb = Convert2x32to64(addr, inputNetworkEndianness);
 	m_lsb = Convert2x32to64(addr + 2, inputNetworkEndianness);
 	DebugDump("Ipv6IpAddress::CreateFromArray received");
@@ -1939,22 +1931,20 @@ void Ipv6IpAddress::CreateFromArray(const uint32_t* addr, bool inputNetworkEndia
 
 void Ipv6IpAddress::ToArray(uint32_t* addr, bool outputNetworkEndianness) const
 {
-	IPACMDBG_H("\n");
 	Convert64to2x32(m_msb, addr, outputNetworkEndianness);
 	Convert64to2x32(m_lsb, addr + 2, outputNetworkEndianness);
-	IPACMDBG_H("return\n");
+	IPACM_LOG(IPACM_LOG_DEBUG, "return\n");
 }
 
 uint64_t Ipv6IpAddress::Convert2x32to64(const uint32_t* pair32, bool inputNetworkEndianness)
 {
-	IPACMDBG_H("\n");
 	uint32_t msb = pair32[0], lsb = pair32[1];
 	if (inputNetworkEndianness)
 	{
 		msb = ntohl(msb);
 		lsb = ntohl(lsb);
 	}
-	IPACMDBG_H("return\n");
+	IPACM_LOG(IPACM_LOG_DEBUG, "return\n");
 	return static_cast<uint64_t>(msb) << 32 | lsb;
 }
 #ifdef FEATURE_IPV6_NAT
@@ -1965,7 +1955,6 @@ uint64_t Ipv6IpAddress::Get64EndianSwaped(uint64_t Addr) const
 #endif
 void Ipv6IpAddress::Convert64to2x32(uint64_t in, uint32_t* pair32, bool outputNetworkEndianness)
 {
-	IPACMDBG_H("\n");
 	pair32[0] = in >> 32;
 	pair32[1] = static_cast<uint32_t>(in);
 	if (outputNetworkEndianness)
@@ -1973,7 +1962,7 @@ void Ipv6IpAddress::Convert64to2x32(uint64_t in, uint32_t* pair32, bool outputNe
 		pair32[0] = htonl(pair32[0]);
 		pair32[1] = htonl(pair32[1]);
 	}
-	IPACMDBG_H("return\n");
+	IPACM_LOG(IPACM_LOG_DEBUG, "return\n");
 }
 
 bool Ipv6IpAddress::IsGlobalAddr() const
@@ -1986,13 +1975,13 @@ bool Ipv6IpAddress::IsGlobalAddr() const
 
 	if((m_msb & ipv6_link_local_prefix_mask) == (ipv6_link_local_prefix & ipv6_link_local_prefix_mask))
 	{
-		IPACMDBG_H("This IPv6 address is link local.\n");
+		IPACM_LOG(IPACM_LOG_DEBUG, "This IPv6 address is link local.\n");
 		return false;
 	}
 
 	if((m_msb & ipv6_ula_mask) == (ipv6_ula_prefix & ipv6_ula_mask))
 	{
-		IPACMDBG_H("This IPv6 address is unique local.\n");
+		IPACM_LOG(IPACM_LOG_DEBUG, "This IPv6 address is unique local.\n");
 		return false;
 	}
 
@@ -2021,7 +2010,7 @@ bool NatEntryBase::Compare(const NatEntryBase& other) const
 
 void NatEntryBase::Copy(const NatEntryBase& other)
 {
-	IPACMDBG_H("NatEntryBase\n");
+	IPACM_LOG(IPACM_LOG_DEBUG, "NatEntryBase\n");
 	m_timestamp = other.m_timestamp;
 	m_direction = other.m_direction;
 	m_ruleHandle = other.m_ruleHandle;
@@ -2031,13 +2020,12 @@ void NatEntryBase::Copy(const NatEntryBase& other)
 	m_uc_activation_index = other.m_uc_activation_index;
 	m_ucp = other.m_ucp;
 	m_s = other.m_s;
-	IPACMDBG_H("copied uc activation data: idx %d, ucp:%d s: %d", m_uc_activation_index, m_ucp, m_s);
-	IPACMDBG_H("return\n");
+	IPACM_LOG(IPACM_LOG_DEBUG, "copied uc activation data: idx %d, ucp:%d s: %d\n", m_uc_activation_index, m_ucp, m_s);
+	IPACM_LOG(IPACM_LOG_DEBUG, "return\n");
 }
 
 void NatEntryBase::Clear()
 {
-	IPACMDBG_H("\n");
 	m_timestamp = 0;
 	m_direction = DirectionUnknown;
 	m_ruleHandle = 0;
@@ -2047,12 +2035,12 @@ void NatEntryBase::Clear()
 	m_uc_activation_index = 0;
 	m_ucp = false;
 	m_s = false;
-	IPACMDBG_H("return\n");
+	IPACM_LOG(IPACM_LOG_DEBUG, "return\n");
 }
 
 void NatEntryBase::DebugDump(const char* msg_prefix) const
 {
-	IPACMDBG_H("%s protocol %d direction %s\n", msg_prefix, m_protocol, DirectionToStr(m_direction));
+	IPACM_LOG(IPACM_LOG_DEBUG, "%s protocol %d direction %s\n", msg_prefix, m_protocol, DirectionToStr(m_direction));
 }
 
 /*
@@ -2064,11 +2052,11 @@ bool NatEntryBase::UpdateDirection(const IpAddress& clientIp, bool isStaClientIp
 	/* Direction of IPV4 connections is generally known before the function is called. */
 	if (m_direction != DirectionUnknown)
 	{
-		IPACMDBG_H("The direction already specified. Nothing to do\n");
+		IPACM_LOG(IPACM_LOG_DEBUG, "The direction already specified. Nothing to do\n");
 		return true;
 	}
 
-	IPACMDBG_H("The received client is%s an STA client\n", (isStaClientIp) ? "" : " not");
+	IPACM_LOG(IPACM_LOG_DEBUG, "The received client is%s an STA client\n", (isStaClientIp) ? "" : " not");
 	clientIp.DebugDump("The received client\n");
 	DebugDump("Convert direction of the following entry according to the received client IP\n");
 
@@ -2101,7 +2089,7 @@ bool NatEntryBase::UpdateDirection(const IpAddress& clientIp, bool isStaClientIp
 		return false;
 	}
 
-	IPACMDBG_H("return\n");
+	IPACM_LOG(IPACM_LOG_DEBUG, "return\n");
 	return true;
 }
 
@@ -2116,7 +2104,7 @@ const char* NatEntryBase::DirectionToStr(NatEntryBase::Direction direction)
 	case DirectionInbound:
 		return "inbound";
 	default:
-		IPACMERR("Unsupported direction %d\n", direction);
+		IPACM_LOG(IPACM_LOG_ERR, "Unsupported direction %d\n", direction);
 	}
 	return "unknown";
 }
@@ -2125,10 +2113,9 @@ Ipv6ctEntry::Ipv6ctEntry() : NatEntryBase(IPA_IP_v6), m_dstPort(0), m_srcPort(0)
 
 bool Ipv6ctEntry::Compare(const NatEntryBase& other) const
 {
-	IPACMDBG_H("\n");
 	if (other.m_type != IPA_IP_v6)
 	{
-		IPACMERR("Wrong IP type\n");
+		IPACM_LOG(IPACM_LOG_ERR, "Wrong IP type\n");
 		return false;
 	}
 
@@ -2142,10 +2129,10 @@ bool Ipv6ctEntry::Compare(const NatEntryBase& other) const
 
 void Ipv6ctEntry::Copy(const NatEntryBase& other)
 {
-	IPACMDBG_H("Ipv6ctEntry\n");
+	IPACM_LOG(IPACM_LOG_DEBUG, "Ipv6ctEntry\n");
 	if (other.m_type != IPA_IP_v6)
 	{
-		IPACMERR("Wrong IP type\n");
+		IPACM_LOG(IPACM_LOG_ERR, "Wrong IP type\n");
 		return;
 	}
 
@@ -2157,19 +2144,18 @@ void Ipv6ctEntry::Copy(const NatEntryBase& other)
 	m_dstPort = entry.m_dstPort;
 	m_srcPort = entry.m_srcPort;
 	m_isDummy = entry.m_isDummy;
-	IPACMDBG_H("return\n");
+	IPACM_LOG(IPACM_LOG_DEBUG, "return\n");
 }
 
 void Ipv6ctEntry::Clear()
 {
-	IPACMDBG_H("\n");
 	NatEntryBase::Clear();
 
 	m_srcAddr.Clear();
 	m_dstAddr.Clear();
 	m_dstPort = 0;
 	m_srcPort = 0;
-	IPACMDBG_H("return\n");
+	IPACM_LOG(IPACM_LOG_DEBUG, "return\n");
 }
 
 bool Ipv6ctEntry::Valid() const
@@ -2182,8 +2168,8 @@ void Ipv6ctEntry::DebugDump(const char* msg_prefix) const
 	NatEntryBase::DebugDump(msg_prefix);
 	m_srcAddr.DebugDump("Source");
 	m_dstAddr.DebugDump("Destination");
-	IPACMDBG_H("Source port %d\n", m_srcPort);
-	IPACMDBG_H("Destination port %d\n", m_dstPort);
+	IPACM_LOG(IPACM_LOG_DEBUG, "Source port %d\n", m_srcPort);
+	IPACM_LOG(IPACM_LOG_DEBUG, "Destination port %d\n", m_dstPort);
 }
 
 void Ipv6ctEntry::InvertDirection()
@@ -2218,7 +2204,7 @@ bool Ipv6NatEntry::Compare(const NatEntryBase& other) const
 {
 	if(other.m_type != IPA_IP_v6)
 	{
-		IPACMERR("Wrong IP type\n");
+		IPACM_LOG(IPACM_LOG_ERR, "Wrong IP type\n");
 		return false;
 	}
 
@@ -2234,10 +2220,10 @@ bool Ipv6NatEntry::Compare(const NatEntryBase& other) const
 
 void Ipv6NatEntry::Copy(const NatEntryBase& other)
 {
-	IPACMDBG_H("Ipv6NatEntry\n");
+	IPACM_LOG(IPACM_LOG_DEBUG, "Ipv6NatEntry\n");
 	if(other.m_type != IPA_IP_v6)
 	{
-		IPACMERR("Wrong IP type\n");
+		IPACM_LOG(IPACM_LOG_ERR, "Wrong IP type\n");
 		return;
 	}
 
@@ -2246,7 +2232,7 @@ void Ipv6NatEntry::Copy(const NatEntryBase& other)
 	const Ipv6NatEntry& entry = static_cast<const Ipv6NatEntry&>(other);
 	m_public_address = entry.m_public_address;
 	m_publicPort = entry.m_publicPort;
-	IPACMDBG_H("return\n");
+	IPACM_LOG(IPACM_LOG_DEBUG, "return\n");
 }
 
 bool Ipv6NatEntry::Valid() const
@@ -2258,11 +2244,10 @@ bool Ipv6NatEntry::Valid() const
 
 void Ipv6NatEntry::Clear()
 {
-	IPACMDBG_H("\n");
 	Ipv6ctEntry::Clear();
 	m_public_address.Clear();
 	m_publicPort = 0;
-	IPACMDBG_H("return\n");
+	IPACM_LOG(IPACM_LOG_DEBUG, "return\n");
 }
 
 void Ipv6NatEntry::DebugDump(const char* msg_prefix) const
@@ -2271,14 +2256,14 @@ void Ipv6NatEntry::DebugDump(const char* msg_prefix) const
 	m_srcAddr.DebugDump("private");
 	m_public_address.DebugDump("public");
 	m_dstAddr.DebugDump("Destination");
-	IPACMDBG_H("Private port %d\n", m_srcPort);
-	IPACMDBG_H("Public port %d\n", m_publicPort);
-	IPACMDBG_H("Destination port %d\n", m_dstPort);
+	IPACM_LOG(IPACM_LOG_DEBUG, "Private port %d\n", m_srcPort);
+	IPACM_LOG(IPACM_LOG_DEBUG, "Public port %d\n", m_publicPort);
+	IPACM_LOG(IPACM_LOG_DEBUG, "Destination port %d\n", m_dstPort);
 }
 
 void Ipv6NatEntry::InvertDirection()
 {
-	IPACMERR("we shouldn't get here for IPv6 NAT\n");
+	IPACM_LOG(IPACM_LOG_ERR, "we shouldn't get here for IPv6 NAT\n");
 }
 
 const IpAddress& Ipv6NatEntry::GetPublicIp() const
@@ -2293,12 +2278,11 @@ const uint16_t& Ipv6NatEntry::GetPublicPort() const
 #endif
 CollectionBase::CollectionBase(int max_entries) : m_maxEntries(max_entries)
 {
-	IPACMDBG_H("max_entries %d\n", max_entries);
+	IPACM_LOG(IPACM_LOG_DEBUG, "max_entries %d\n", max_entries);
 }
 
 CollectionBase::~CollectionBase()
 {
-	IPACMDBG_H("\n");
 }
 
 uint32_t ConntrackTimestampUtil::tcp_timeout = 432000;
@@ -2312,14 +2296,13 @@ ConntrackTimestampUtil::~ConntrackTimestampUtil() {}
 
 void ConntrackTimestampUtil::Init()
 {
-	IPACMDBG_H("\n");
-
 	if (ct_hdl == NULL)
 	{
 		ct_hdl = nfct_open(CONNTRACK, 0);
 		if (ct_hdl == NULL)
 		{
-			PERROR("nfct_open");
+			perror("nfct_open");
+			IPACM_LOG(IPACM_LOG_ERR, "nfct_open\n");
 			return;
 		}
 	}
@@ -2329,12 +2312,13 @@ void ConntrackTimestampUtil::Init()
 		ct = nfct_new();
 		if (ct == NULL)
 		{
-			PERROR("nfct_new");
+			perror("nfct_new");
+			IPACM_LOG(IPACM_LOG_ERR, "nfct_new\n");
 			return;
 		}
 	}
 
-	IPACMDBG_H("return\n");
+	IPACM_LOG(IPACM_LOG_DEBUG, "return\n");
 }
 
 #ifndef FEATURE_IPA_ANDROID
@@ -2345,37 +2329,35 @@ void ConntrackTimestampUtil::Init()
  */
 void ConntrackTimestampUtil::ReadTcpUdpTimeout()
 {
-	IPACMDBG_H("\n");
-
 	FILE *udp_fd = NULL, *tcp_fd = NULL;
 
 	/* Read UDP timeout value */
 	udp_fd = fopen(IPACM_UDP_FULL_FILE_NAME_NEW, "r");
 	if (udp_fd == NULL)
 	{
-		IPACMERR("unable to open %s\n", IPACM_UDP_FULL_FILE_NAME_NEW);
+		IPACM_LOG(IPACM_LOG_ERR, "unable to open %s\n", IPACM_UDP_FULL_FILE_NAME_NEW);
 		goto bail;
 	}
 
 	if (fscanf(udp_fd, "%d", &udp_timeout) != 1)
 	{
-		IPACMERR("Error reading udp timeout\n");
+		IPACM_LOG(IPACM_LOG_ERR, "Error reading udp timeout\n");
 	}
-	IPACMDBG_H("udp timeout value: %d\n", udp_timeout);
+	IPACM_LOG(IPACM_LOG_DEBUG, "udp timeout value: %d\n", udp_timeout);
 
 	/* Read TCP timeout value */
 	tcp_fd = fopen(IPACM_TCP_FULL_FILE_NAME_NEW, "r");
 	if (tcp_fd == NULL)
 	{
-		IPACMERR("unable to open %s\n", IPACM_TCP_FULL_FILE_NAME_NEW);
+		IPACM_LOG(IPACM_LOG_ERR, "unable to open %s\n", IPACM_TCP_FULL_FILE_NAME_NEW);
 		goto bail;
 	}
 
 	if (fscanf(tcp_fd, "%d", &tcp_timeout) != 1)
 	{
-		IPACMERR("Error reading tcp timeout\n");
+		IPACM_LOG(IPACM_LOG_ERR, "Error reading tcp timeout\n");
 	}
-	IPACMDBG_H("tcp timeout value: %d\n", tcp_timeout);
+	IPACM_LOG(IPACM_LOG_DEBUG, "tcp timeout value: %d\n", tcp_timeout);
 
 bail:
 	if (udp_fd != NULL)
@@ -2387,13 +2369,12 @@ bail:
 		fclose(tcp_fd);
 	}
 
-	IPACMDBG_H("return\n");
+	IPACM_LOG(IPACM_LOG_DEBUG, "return\n");
 }
 #endif
 
 int ConntrackTimestampUtil::UpdateConntrackTimeStamp(const NatEntryBase& entry)
 {
-	IPACMDBG_H("\n");
 
 	entry.DebugDump("Going to update timestamp for following entry");
 
@@ -2404,16 +2385,15 @@ int ConntrackTimestampUtil::UpdateConntrackTimeStamp(const NatEntryBase& entry)
 
 	int ret = nfct_query(ct_hdl, NFCT_Q_UPDATE, ct);
 
-	IPACMDBG_H("return value %d\n", ret);
+	IPACM_LOG(IPACM_LOG_DEBUG, "return value %d\n", ret);
 	return ret;
 }
 
 void Ipv6ctConntrackTimestampUtil::SetConnectionDetails(const NatEntryBase& entry)
 {
-	IPACMDBG_H("\n");
 	if (entry.m_type != IPA_IP_v6)
 	{
-		IPACMERR("Wrong IP type\n");
+		IPACM_LOG(IPACM_LOG_ERR, "Wrong IP type\n");
 		return;
 	}
 
@@ -2433,7 +2413,7 @@ void Ipv6ctConntrackTimestampUtil::SetConnectionDetails(const NatEntryBase& entr
 #ifdef FEATURE_IPV6_NAT
 		if(entry.GetClientIp() != entry.GetPublicIp())
 		{
-			IPACMDBG_H("IPv6 NAT case, use public addresses\n");
+			IPACM_LOG(IPACM_LOG_DEBUG, "IPv6 NAT case, use public addresses\n");
 			static_cast<const Ipv6IpAddress&>(entry.GetPublicIp()).ToArray(attr_grp.dst, true);
 			dst_port = entry.GetPublicPort();
 		}
@@ -2448,7 +2428,7 @@ void Ipv6ctConntrackTimestampUtil::SetConnectionDetails(const NatEntryBase& entr
 		src_port = entry.GetDstPort();
 		break;
 	default:
-		IPACMERR("Unknown direction in an offloaded connection\n");
+		IPACM_LOG(IPACM_LOG_ERR, "Unknown direction in an offloaded connection\n");
 		entry.DebugDump("Unknown direction in following connection\n");
 		return;
 	}
@@ -2458,7 +2438,7 @@ void Ipv6ctConntrackTimestampUtil::SetConnectionDetails(const NatEntryBase& entr
 	nfct_set_attr_u16(ct, ATTR_PORT_SRC, htons(src_port));
 	nfct_set_attr_u16(ct, ATTR_PORT_DST, htons(dst_port));
 
-	IPACMDBG_H("return\n");
+	IPACM_LOG(IPACM_LOG_DEBUG, "return\n");
 }
 
 NatProxyBase::NatProxyBase() : m_tableHandle(0)
@@ -2470,12 +2450,11 @@ NatProxyBase::~NatProxyBase() {}
 
 int NatProxyBase::AddTable(uint16_t number_of_entries, const char* mem_type)
 {
-	IPACMDBG_H("\n");
 	uint32_t table_handle;
 
 	if(table_created)
 	{
-		IPACMDBG_H("Table already created return\n");
+		IPACM_LOG(IPACM_LOG_DEBUG, "Table already created return\n");
 		return 0;
 	}
 
@@ -2485,32 +2464,30 @@ int NatProxyBase::AddTable(uint16_t number_of_entries, const char* mem_type)
 		m_tableHandle = table_handle;
 		table_created = true;
 	}
-	IPACMDBG_H("return\n");
+	IPACM_LOG(IPACM_LOG_DEBUG, "return\n");
 	return ret;
 }
 
 int NatProxyBase::DeleteTable()
 {
-	IPACMDBG_H("\n");
 	if (!m_tableHandle)
 	{
-		IPACMERR("The table wasn't allocated by AddTable\n");
+		IPACM_LOG(IPACM_LOG_ERR, "The table wasn't allocated by AddTable\n");
 		return -EINVAL;
 	}
 
 	int ret = DoDeleteTable();
 	m_tableHandle = 0;
 	table_created = false;
-	IPACMDBG_H("return\n");
+	IPACM_LOG(IPACM_LOG_DEBUG, "return\n");
 	return ret;
 }
 
 int NatProxyBase::AddEntry(NatEntryBase& entry)
 {
-	IPACMDBG_H("\n");
 	if (!m_tableHandle)
 	{
-		IPACMERR("The table wasn't allocated by AddTable\n");
+		IPACM_LOG(IPACM_LOG_ERR, "The table wasn't allocated by AddTable\n");
 		return -EINVAL;
 	}
 
@@ -2538,16 +2515,15 @@ int NatProxyBase::AddEntry(NatEntryBase& entry)
 		}
 #endif
 	}
-	IPACMDBG_H("return\n");
+	IPACM_LOG(IPACM_LOG_DEBUG, "return\n");
 	return ret;
 }
 
 int NatProxyBase::DelEntry(NatEntryBase& entry)
 {
-	IPACMDBG_H("\n");
 	if (!m_tableHandle)
 	{
-		IPACMERR("The table wasn't allocated by AddTable\n");
+		IPACM_LOG(IPACM_LOG_ERR, "The table wasn't allocated by AddTable\n");
 		return -EINVAL;
 	}
 
@@ -2558,27 +2534,25 @@ int NatProxyBase::DelEntry(NatEntryBase& entry)
 	}
 	else
 	{
-		IPACMDBG_H("not deleting sw allow rule\n");
+		IPACM_LOG(IPACM_LOG_DEBUG, "not deleting sw allow rule\n");
 	}
 
-	IPACMDBG_H("return\n");
+	IPACM_LOG(IPACM_LOG_DEBUG, "return\n");
 	return ret;
 }
 
 int Ipv6ctProxy::DoAddTable(uint16_t number_of_entries, const char* mem_type, uint32_t& table_handle)
 {
-	IPACMDBG_H("\n");
 
 	int ret = ipa_ct_add_ipv6_tbl(number_of_entries, mem_type, &table_handle);
-	IPACMDBG_H("return\n");
+	IPACM_LOG(IPACM_LOG_DEBUG, "return\n");
 	return ret;
 }
 
 int Ipv6ctProxy::DoDeleteTable()
 {
-	IPACMDBG_H("\n");
 	int ret = ipa_ct_del_ipv6_tbl(m_tableHandle);
-	IPACMDBG_H("return\n");
+	IPACM_LOG(IPACM_LOG_DEBUG, "return\n");
 	return ret;
 }
 #ifdef FEATURE_IPV6_NAT
@@ -2596,14 +2570,14 @@ int Ipv6ctProxy::AddIpv6NatUcAct(uint16_t privatePort, Ipv6IpAddress privateIp,
 	u.ipv6_nat.private_port = htons(privatePort);
 	u.ipv6_nat.public_port = htons(publicPort);
 	if(ipa_ipv6ct_add_uc_act_entry(&u)) {
-		IPACMERR("failed adding IPv6 NAT uc activation entry\n");
+		IPACM_LOG(IPACM_LOG_ERR, "failed adding IPv6 NAT uc activation entry\n");
 		handle = -1;
 		return handle;
 	}
-	IPACMDBG_H("added uc activation entries with paramters: priv_lsb 0x%llX, priv_msb 0x%llX, pub_lsb 0x%llX, pub_msb 0x%llX, priv_port %u pub_port %u\n",
+	IPACM_LOG(IPACM_LOG_DEBUG, "added uc activation entries with paramters: priv_lsb 0x%llX, priv_msb 0x%llX, pub_lsb 0x%llX, pub_msb 0x%llX, priv_port %u pub_port %u\n",
 		u.ipv6_nat.private_address_lsb, u.ipv6_nat.private_address_msb, u.ipv6_nat.public_address_lsb, u.ipv6_nat.public_address_msb,
 		u.ipv6_nat.private_port, u.ipv6_nat.public_port);
-	IPACMDBG_H("uc activation index %d\n", u.ipv6_nat.index);
+	IPACM_LOG(IPACM_LOG_DEBUG, "uc activation index %d\n", u.ipv6_nat.index);
 	handle = u.ipv6_nat.index;
 
 	return handle;
@@ -2612,17 +2586,17 @@ int Ipv6ctProxy::AddIpv6NatUcAct(uint16_t privatePort, Ipv6IpAddress privateIp,
 void Ipv6ctProxy::DelIpv6NatUcAct(uint16_t handle)
 {
 
-	IPACMDBG_H("handle %d\n", handle);
+	IPACM_LOG(IPACM_LOG_DEBUG, "handle %d\n", handle);
 
 	if(ipa_ipv6ct_del_uc_act_entry(handle))
 	{
-		IPACMERR("failed deleting uc activation entry %d\n", handle);
+		IPACM_LOG(IPACM_LOG_ERR, "failed deleting uc activation entry %d\n", handle);
 	}
 	else
 	{
-		IPACMDBG_H("deleted entry in %d", handle);
+		IPACM_LOG(IPACM_LOG_DEBUG, "deleted entry in %d\n", handle);
 	}
-	IPACMDBG_H("return\n");
+	IPACM_LOG(IPACM_LOG_DEBUG, "return\n");
 }
 #endif
 
@@ -2632,10 +2606,9 @@ int Ipv6ctProxy::DoAddEntry(const NatEntryBase& entry, uint32_t& entry_handle,
 	int ret;
 	ipa_ipv6ct_rule rule;
 
-	IPACMDBG_H("\n");
 	if (entry.m_type != IPA_IP_v6)
 	{
-		IPACMERR("Wrong IP type\n");
+		IPACM_LOG(IPACM_LOG_ERR, "Wrong IP type\n");
 		return -EINVAL;
 	}
 
@@ -2647,9 +2620,9 @@ int Ipv6ctProxy::DoAddEntry(const NatEntryBase& entry, uint32_t& entry_handle,
 		(entry.GetPublicIp() == entry.GetClientIp()) || entry.m_isDummy)
 #endif
 	{
-		IPACMDBG_H("IPv6CT case\n");
-		IPACMDBG_H("ver %d\n", IPACM_Iface::ipacmcfg->GetIPAVer());
-		IPACMDBG_H("is dummy = %d\n", entry.m_isDummy);
+		IPACM_LOG(IPACM_LOG_DEBUG, "IPv6CT case\n");
+		IPACM_LOG(IPACM_LOG_DEBUG, "ver %d\n", IPACM_Iface::ipacmcfg->GetIPAVer());
+		IPACM_LOG(IPACM_LOG_DEBUG, "is dummy = %d\n", entry.m_isDummy);
 #ifdef FEATURE_IPV6_NAT
 		entry.GetPublicIp().DebugDump("public ip");
 #endif
@@ -2669,12 +2642,12 @@ int Ipv6ctProxy::DoAddEntry(const NatEntryBase& entry, uint32_t& entry_handle,
 			rule.ucp = entry.m_ucp;
 			rule.uc_activation_index = entry.m_uc_activation_index;
 			rule.s = entry.m_s;
-			IPACMDBG_H("ucp: en %d, idx %d, s %d\n", entry.m_ucp, entry.m_uc_activation_index, entry.m_s);
+			IPACM_LOG(IPACM_LOG_DEBUG, "ucp: en %d, idx %d, s %d\n", entry.m_ucp, entry.m_uc_activation_index, entry.m_s);
 		}
 
 		ret = ipa_ct_add_ipv6_rule(m_tableHandle, &rule, &entry_handle);
 
-		IPACMDBG("added ipv6CT entry, src_lsb 0x%llX, src_msb 0x%llX, src_port %u, dst_lsb 0x%llX, dst_msb 0x%llX, dst_port %u, dir %d, prot %d, handle %d\n",
+		IPACM_LOG(IPACM_LOG_DEBUG,"added ipv6CT entry, src_lsb 0x%llX, src_msb 0x%llX, src_port %u, dst_lsb 0x%llX, dst_msb 0x%llX, dst_port %u, dir %d, prot %d, handle %d\n",
 			rule.src_ipv6_lsb, rule.src_ipv6_msb, rule.src_port, rule.dest_ipv6_lsb, rule.dest_ipv6_msb, rule.dest_port, rule.direction_settings, rule.protocol, entry_handle);
 	}
 #ifdef FEATURE_IPV6_NAT
@@ -2682,20 +2655,20 @@ int Ipv6ctProxy::DoAddEntry(const NatEntryBase& entry, uint32_t& entry_handle,
 	else
 	{
 		const Ipv6NatEntry& ipv6nat_entry = static_cast<const Ipv6NatEntry&>(entry);
-		IPACMDBG_H("IPv6 NAT case\n");
-		IPACMDBG_H("ver %d\n", IPACM_Iface::ipacmcfg->GetIPAVer());
-		IPACMDBG_H("is dummy = %d\n", entry.m_isDummy);
+		IPACM_LOG(IPACM_LOG_DEBUG, "IPv6 NAT case\n");
+		IPACM_LOG(IPACM_LOG_DEBUG, "ver %d\n", IPACM_Iface::ipacmcfg->GetIPAVer());
+		IPACM_LOG(IPACM_LOG_DEBUG, "is dummy = %d\n", entry.m_isDummy);
 		entry.GetPublicIp().DebugDump("public ip");
 		entry.GetClientIp().DebugDump("client ip");
 		entry.GetTargetIp().DebugDump("target ip");
-		IPACMDBG_H("direction %d\n", entry.m_direction);
+		IPACM_LOG(IPACM_LOG_DEBUG, "direction %d\n", entry.m_direction);
 
 		/* first add uc activation rule, it shall be pointed by both IPv6ct rules*/
 		uc_act_handle = AddIpv6NatUcAct(ipv6nat_entry.m_srcPort, ipv6nat_entry.m_srcAddr,
 			ipv6nat_entry.m_publicPort, ipv6nat_entry.m_public_address);
 
 		if (uc_act_handle < 0) {
-			IPACMERR("failed adding IPv6 NAT uc activation entry\n");
+			IPACM_LOG(IPACM_LOG_ERR, "failed adding IPv6 NAT uc activation entry\n");
 			entry.DebugDump("failed IPv6NAT connection details: ");
 			return IPACM_FAILURE;
 		}
@@ -2718,11 +2691,11 @@ int Ipv6ctProxy::DoAddEntry(const NatEntryBase& entry, uint32_t& entry_handle,
 		ret = ipa_ct_add_ipv6_rule(m_tableHandle, &rule, &entry_handle);
 		if(ret)
 		{
-			IPACMERR("failed adding outbound rule, bail\n");
+			IPACM_LOG(IPACM_LOG_ERR, "failed adding outbound rule, bail\n");
 			goto clean_ucp;
 		}
 
-		IPACMDBG("added OUTBOUND IPv6 NAT entry, src_lsb 0x%llX, src_msb 0x%llX, src_port %u, dst_lsb 0x%llX, dst_msb 0x%llX, dst_port %u, dir %d, prot %d, handle %d\n",
+		IPACM_LOG(IPACM_LOG_DEBUG,"added OUTBOUND IPv6 NAT entry, src_lsb 0x%llX, src_msb 0x%llX, src_port %u, dst_lsb 0x%llX, dst_msb 0x%llX, dst_port %u, dir %d, prot %d, handle %d\n",
 			rule.src_ipv6_lsb, rule.src_ipv6_msb, rule.src_port,
 			rule.dest_ipv6_lsb, rule.dest_ipv6_msb, rule.dest_port,
 			rule.direction_settings, rule.protocol, entry_handle);
@@ -2740,17 +2713,17 @@ int Ipv6ctProxy::DoAddEntry(const NatEntryBase& entry, uint32_t& entry_handle,
 		ret = ipa_ct_add_ipv6_rule(m_tableHandle, &rule, &additional_entry_handle);
 		if(ret)
 		{
-			IPACMERR("failed adding outbound rule, bail\n");
+			IPACM_LOG(IPACM_LOG_ERR, "failed adding outbound rule, bail\n");
 			goto inbound_fail;
 		}
 
-		IPACMDBG("added INBOUND IPv6 NAT entry, src_lsb 0x%llX, src_msb 0x%llX, src_port %u, dst_lsb 0x%llX, dst_msb 0x%llX, dst_port %u, dir %d, prot %d, handle %d\n",
+		IPACM_LOG(IPACM_LOG_DEBUG,"added INBOUND IPv6 NAT entry, src_lsb 0x%llX, src_msb 0x%llX, src_port %u, dst_lsb 0x%llX, dst_msb 0x%llX, dst_port %u, dir %d, prot %d, handle %d\n",
 			rule.src_ipv6_lsb, rule.src_ipv6_msb, rule.src_port,
 			rule.dest_ipv6_lsb, rule.dest_ipv6_msb, rule.dest_port,
 			rule.direction_settings, rule.protocol, additional_entry_handle);
 	}
 #endif
-	IPACMDBG_H("return\n");
+	IPACM_LOG(IPACM_LOG_DEBUG, "return\n");
 	return ret;
 #ifdef FEATURE_IPV6_NAT
 inbound_fail:
@@ -2765,17 +2738,16 @@ int Ipv6ctProxy::DoDelEntry(const NatEntryBase& entry)
 {
 	int ret;
 
-	IPACMDBG_H("\n");
 	if (entry.m_type != IPA_IP_v6)
 	{
-		IPACMERR("Wrong IP type\n");
+		IPACM_LOG(IPACM_LOG_ERR, "Wrong IP type\n");
 		return -EINVAL;
 	}
 
 	ret = ipa_ct_del_ipv6_rule(m_tableHandle, entry.m_ruleHandle);
 	if(ret)
 	{
-		IPACMERR("failed deleting ipv6ct rule\n");
+		IPACM_LOG(IPACM_LOG_ERR, "failed deleting ipv6ct rule\n");
 	}
 #ifdef FEATURE_IPV6_NAT
 	if((IPACM_Iface::ipacmcfg->GetIPAVer() >= IPA_HW_v4_5))
@@ -2784,12 +2756,12 @@ int Ipv6ctProxy::DoDelEntry(const NatEntryBase& entry)
 		{
 			const Ipv6NatEntry &ipv6nat = static_cast<const Ipv6NatEntry&>(entry);
 
-			IPACMDBG_H("this is ipv6 nat entry, delete inbound rule\n");
+			IPACM_LOG(IPACM_LOG_DEBUG, "this is ipv6 nat entry, delete inbound rule\n");
 
 			ret = ipa_ct_del_ipv6_rule(m_tableHandle, ipv6nat.m_inboundRuleHandle);
 			if(ret)
 			{
-				IPACMERR("failed deleting inbound ipv6 nat rule\n");
+				IPACM_LOG(IPACM_LOG_ERR, "failed deleting inbound ipv6 nat rule\n");
 			}
 			DelIpv6NatUcAct(entry.m_uc_activation_index);
 		} else
@@ -2799,20 +2771,19 @@ int Ipv6ctProxy::DoDelEntry(const NatEntryBase& entry)
 		{
 			ret = ipa_ipv6ct_del_uc_act_entry(entry.m_uc_activation_index);
 			if(ret)
-				IPACMERR("failed deleting uc activation entry %d\n", entry.m_uc_activation_index);
+				IPACM_LOG(IPACM_LOG_ERR, "failed deleting uc activation entry %d\n", entry.m_uc_activation_index);
 		}
 	}
 #endif
-	IPACMDBG_H("return\n");
+	IPACM_LOG(IPACM_LOG_DEBUG, "return\n");
 	return ret;
 }
 
 int Ipv6ctProxy::QueryTimestamp(const NatEntryBase& entry, uint32_t& time_stamp) const
 {
-	IPACMDBG_H("\n");
 	if (entry.m_type != IPA_IP_v6)
 	{
-		IPACMERR("Wrong IP type\n");
+		IPACM_LOG(IPACM_LOG_ERR, "Wrong IP type\n");
 		return -EINVAL;
 	}
 
@@ -2820,7 +2791,7 @@ int Ipv6ctProxy::QueryTimestamp(const NatEntryBase& entry, uint32_t& time_stamp)
 #ifdef FEATURE_IPV6_NAT
 	if(ret)
 	{
-		IPACMERR("query failed, return\n");
+		IPACM_LOG(IPACM_LOG_ERR, "query failed, return\n");
 		return ret;
 	}
 	// since IPv6 NAT entry is actually two IPv6ct entries we need to take the latest of them
@@ -2829,74 +2800,65 @@ int Ipv6ctProxy::QueryTimestamp(const NatEntryBase& entry, uint32_t& time_stamp)
 		uint32_t additional_timestamp;
 		const Ipv6NatEntry &ipv6nat = static_cast<const Ipv6NatEntry&>(entry);
 
-		IPACMDBG_H("ipv6 nat entry, check inbound handle\n");
+		IPACM_LOG(IPACM_LOG_DEBUG, "ipv6 nat entry, check inbound handle\n");
 		ret = ipa_ct_query_timestamp(m_tableHandle, ipv6nat.m_inboundRuleHandle, &additional_timestamp);
 		if(ret)
 		{
-			IPACMERR(" inbound query failed, return\n");
+			IPACM_LOG(IPACM_LOG_ERR, " inbound query failed, return\n");
 			return ret;
 		}
 		if(additional_timestamp > time_stamp)
 		{
-			IPACMDBG_H("inbound handle (%u) later than outbound handle (%u), update\n", additional_timestamp, time_stamp);
+			IPACM_LOG(IPACM_LOG_DEBUG, "inbound handle (%u) later than outbound handle (%u), update\n", additional_timestamp, time_stamp);
 			time_stamp = additional_timestamp;
 		}
 	}
 #endif
-	IPACMDBG_H("return\n");
+	IPACM_LOG(IPACM_LOG_DEBUG, "return\n");
 	return ret;
 }
 
 void Ipv6ctProxy::DumpTable()
 {
-	IPACMDBG_H("\n");
 	ipa_ipv6ct_dump_table(m_tableHandle);
-	IPACMDBG_H("return\n");
+	IPACM_LOG(IPACM_LOG_DEBUG, "return\n");
 }
 
 NatObjectsGeneratorBase::NatObjectsGeneratorBase()
 {
-	IPACMDBG_H("\n");
 }
 
 NatObjectsGeneratorBase::~NatObjectsGeneratorBase()
 {
-	IPACMDBG_H("\n");
 }
 
 NatProxyBase& Ipv6ctObjectsGenerator::GetProxy() const
 {
-	IPACMDBG_H("\n");
 	return *new Ipv6ctProxy;
 }
 
 NatEntriesCollectionBase& Ipv6ctObjectsGenerator::GetEntriesCollection(int max_entries) const
 {
-	IPACMDBG_H("\n");
 	return *new Ipv6ctEntriesCollection(max_entries);
 }
 
 IpAddressesCollectionBase& Ipv6ctObjectsGenerator::GetIpAddressesCollection(int max_entries) const
 {
-	IPACMDBG_H("\n");
 	return *new Ipv6IpAddressesCollection(max_entries);
 }
 
 IpAddress& Ipv6ctObjectsGenerator::GetIpAddress() const
 {
-	IPACMDBG_H("\n");
 	return *new Ipv6IpAddress;
 }
 
 ConntrackTimestampUtil& Ipv6ctObjectsGenerator::GetConntrackTimestampUtil() const
 {
-	IPACMDBG_H("\n");
 	return *new Ipv6ctConntrackTimestampUtil;
 }
 #ifdef FEATURE_IPV6_NAT
 NatEntriesCollectionBase& Ipv6NatObjectsGenerator::GetEntriesCollection(int max_entries) const
 {
-	IPACMDBG_H("\n");
 	return *new Ipv6NatEntriesCollection(max_entries);
 }
 #endif
@@ -2914,19 +2876,17 @@ NatBase::NatBase(ipa_ip_type type, int max_entries, const char* mem_type, const 
 	m_previousWanAddress(objectsGenerator.GetIpAddress()),
 	ct_mem_type(mem_type)
 {
-	IPACMDBG_H("\n");
 }
 
 NatBase::~NatBase()
 {
-	IPACMDBG_H("\n");
 	delete &m_temp;
 	delete &m_pwrSaveIfs;
 	delete &m_proxy;
 	delete &m_ctTimestampUtil;
 	delete &m_cache;
 	delete &m_previousWanAddress;
-	IPACMDBG_H("return\n");
+	IPACM_LOG(IPACM_LOG_DEBUG, "return\n");
 }
 
 #ifdef FEATURE_IPV6_NAT
@@ -2938,7 +2898,7 @@ int NatBase::Init(void)
 	pConfig = IPACM_Config::GetInstance();
 	if(pConfig == NULL)
 	{
-		IPACMERR("Unable to get Config instance\n");
+		IPACM_LOG(IPACM_LOG_ERR, "Unable to get Config instance\n");
 		return IPACM_FAILURE;
 	}
 
@@ -2948,21 +2908,21 @@ int NatBase::Init(void)
 		pALGPorts = (ipacm_alg *)malloc(sizeof(ipacm_alg) * nALGPort);
 		if(pALGPorts == NULL)
 		{
-			IPACMERR("Unable to allocate memory for alg prots\n");
+			IPACM_LOG(IPACM_LOG_ERR, "Unable to allocate memory for alg prots\n");
 			goto fail;
 		}
 		memset(pALGPorts, 0, sizeof(ipacm_alg) * nALGPort);
 
 		if(pConfig->GetAlgPorts(nALGPort, pALGPorts) != 0)
 		{
-			IPACMERR("Unable to retrieve ALG prots\n");
+			IPACM_LOG(IPACM_LOG_ERR, "Unable to retrieve ALG prots\n");
 			goto fail;
 		}
 
-		IPACMDBG("Printing %d alg ports information\n", nALGPort);
+		IPACM_LOG(IPACM_LOG_DEBUG, "Printing %d alg ports information\n", nALGPort);
 		for(int cnt=0; cnt<nALGPort; cnt++)
 		{
-			IPACMDBG("%d: Proto[%d], port[%d]\n", cnt, pALGPorts[cnt].protocol, pALGPorts[cnt].port);
+			IPACM_LOG(IPACM_LOG_DEBUG, "%d: Proto[%d], port[%d]\n", cnt, pALGPorts[cnt].protocol, pALGPorts[cnt].port);
 		}
 	}
 
@@ -2981,27 +2941,26 @@ bool NatBase::isAlgPort(uint8_t proto, uint16_t port)
 		if(proto == pALGPorts[cnt].protocol &&
 			 port == pALGPorts[cnt].port)
 		{
-			IPACMDBG_H("%d %d\n",proto, port);
+			IPACM_LOG(IPACM_LOG_DEBUG, "%d %d\n",proto, port);
 			return true;
 		}
 	}
-	IPACMDBG_H("%d %d\n",proto, port);
+	IPACM_LOG(IPACM_LOG_DEBUG, "%d %d\n",proto, port);
 	return false;
 }
 #endif
 
 int NatBase::AddTable(const uint32_t v6_prefix[2])
 {
-	IPACMDBG_H("\n");
 	int ret = m_proxy.AddTable(m_maxEntries, ct_mem_type);
 	if (ret)
 	{
-		IPACMERR("unable to create the table Error:%d\n", ret);
+		IPACM_LOG(IPACM_LOG_ERR, "unable to create the table Error:%d\n", ret);
 		return ret;
 	}
 
 	/* Add back the cached NAT-entry */
-	IPACMDBG_H("Restore the cache to ipa NAT-table\n");
+	IPACM_LOG(IPACM_LOG_DEBUG, "Restore the cache to ipa NAT-table\n");
 	for (int cnt = 0; cnt < m_maxEntries; ++cnt)
 	{
 		NatEntryBase& entry = m_cache[cnt];
@@ -3033,7 +2992,7 @@ int NatBase::AddTable(const uint32_t v6_prefix[2])
 			{
 				if (m_proxy.AddEntry(entry))
 				{
-					IPACMERR("unable to add the rule delete from cache\n");
+					IPACM_LOG(IPACM_LOG_ERR, "unable to add the rule delete from cache\n");
 					entry.Clear();
 					--m_curCnt;
 					--cur_ct_entries;
@@ -3044,13 +3003,12 @@ int NatBase::AddTable(const uint32_t v6_prefix[2])
 		}
 	}
 
-	IPACMDBG_H("return\n");
+	IPACM_LOG(IPACM_LOG_DEBUG, "return\n");
 	return 0;
 }
 
 int NatBase::DeleteTable(const uint32_t v6_prefix[2],int num_v6_vlan_pdns)
 {
-	IPACMDBG_H("\n");
 
 	for (int cnt = 0; cnt < m_maxEntries; ++cnt)
 	{
@@ -3084,7 +3042,7 @@ int NatBase::DeleteTable(const uint32_t v6_prefix[2],int num_v6_vlan_pdns)
 			{
 				if (m_proxy.DelEntry(entry))
 				{
-					IPACMERR("unable to delete the rule delete from cache\n");
+					IPACM_LOG(IPACM_LOG_ERR, "unable to delete the rule delete from cache\n");
 					entry.Clear();
 					--m_curCnt;
 					--cur_ct_entries;
@@ -3101,14 +3059,14 @@ int NatBase::DeleteTable(const uint32_t v6_prefix[2],int num_v6_vlan_pdns)
 		int ret = m_proxy.DeleteTable();
 		if (ret)
 		{
-			IPACMERR("unable to delete the table Error: %d\n", ret);;
+			IPACM_LOG(IPACM_LOG_ERR, "unable to delete the table Error: %d\n", ret);;
 			return ret;
 		}
  
 		Reset();
 	}
 
-	IPACMDBG_H("return\n");
+	IPACM_LOG(IPACM_LOG_DEBUG, "return\n");
 	return 0;
 }
 
@@ -3135,14 +3093,13 @@ bool NatBase::is_SocksV5_CT(const NatEntryBase& entry)
 
 int NatBase::AddEntry(const NatEntryBase& entry)
 {
-	IPACMDBG_H("\n");
 	Ipv6ctEntry new_entry;
 	NatEntryBase* del_entry = NULL;
 	Ipv6ctEntry del;
 
 	if(entry.isSocksV5 && IPACM_Iface::ipacmcfg->ipacm_socksv5_enable)
 	{
-		IPACMDBG("Socks Entry to add\n");
+		IPACM_LOG(IPACM_LOG_DEBUG, "Socks Entry to add\n");
 
 		/* Clean up previous v6ct entries if v6ct comes 
 		 * before socksv5 events from tcp-splice 
@@ -3158,17 +3115,17 @@ int NatBase::AddEntry(const NatEntryBase& entry)
 
 		if (m_proxy.AddEntry(new_entry))
 		{
-			IPACMERR("unable to add the v6-ct entry\n");
+			IPACM_LOG(IPACM_LOG_ERR, "unable to add the v6-ct entry\n");
 			return -EPERM;
 		}
-		IPACMDBG_H("Added entry successfully handle (%d)\n", new_entry.m_ruleHandle);
+		IPACM_LOG(IPACM_LOG_DEBUG, "Added entry successfully handle (%d)\n", new_entry.m_ruleHandle);
 		socksv5_v6_conn.push_front(new_entry);
 	}
 	else
 	{
 		if (is_SocksV5_CT(entry))
 		{
-			IPACMERR("Socks V5 Connection do not add normal CT\n");
+			IPACM_LOG(IPACM_LOG_ERR, "Socks V5 Connection do not add normal CT\n");
 			return -EPERM;
 		}
 
@@ -3176,55 +3133,53 @@ int NatBase::AddEntry(const NatEntryBase& entry)
 
 		if (!entry.Valid())
 		{
-			IPACMERR("Invalid Connection, ignoring it\n");
+			IPACM_LOG(IPACM_LOG_ERR, "Invalid Connection, ignoring it\n");
 			return 0;
 		}
 
 		if (m_cache.Find(entry) != NULL)
 		{
-			IPACMERR("Duplicate rule. Ignore it\n");
+			IPACM_LOG(IPACM_LOG_ERR, "Duplicate rule. Ignore it\n");
 			return -EPERM;
 		}
 
 		NatEntryBase* new_entry = m_cache.GetFirstEmpty();
 		if(new_entry == NULL)
 		{
-			IPACMERR("Error: Unable to add, reached maximum rules\n");
+			IPACM_LOG(IPACM_LOG_ERR, "Error: Unable to add, reached maximum rules\n");
 			return -EPERM;
 		}
 
 		*new_entry = entry;
 		if (ChkSWAllow(entry))
 		{
-			IPACMERR("SwAllow Entry added swallow flag\n");
+			IPACM_LOG(IPACM_LOG_ERR, "SwAllow Entry added swallow flag\n");
 			new_entry->sw_allow = true;
 			new_entry->m_enabled = true;
 		}
 		else if(m_pwrSaveIfs.Find(new_entry->GetClientIp()) != NULL || m_pwrSaveIfs.Find(new_entry->GetTargetIp()) != NULL)
 		{
-			IPACMDBG_H("Device is Power Save mode: Don't send to HW but successfully cached\n");
+			IPACM_LOG(IPACM_LOG_DEBUG, "Device is Power Save mode: Don't send to HW but successfully cached\n");
 		}
 		else
 		{
 			if(m_proxy.AddEntry(*new_entry))
 			{
-				IPACMERR("unable to add the rule\n");
+				IPACM_LOG(IPACM_LOG_ERR, "unable to add the rule\n");
 				new_entry->Clear();
 				return -EPERM;
 			}
-			IPACMDBG_H("Added entry successfully\n");
+			IPACM_LOG(IPACM_LOG_DEBUG, "Added entry successfully\n");
 		}
 	}
-	IPACMDBG_H("\n");
 	++m_curCnt;
 	++cur_ct_entries;
-	IPACMDBG_H("return\n");
+	IPACM_LOG(IPACM_LOG_DEBUG, "return\n");
 	return 0;
 }
 
 void NatBase::DeleteEntry(const NatEntryBase& entry)
 {
-	IPACMDBG_H("\n");
 	if(entry.isSocksV5 && IPACM_Iface::ipacmcfg->ipacm_socksv5_enable)
 	{
 		Ipv6ctEntry new_entry;
@@ -3240,15 +3195,15 @@ void NatBase::DeleteEntry(const NatEntryBase& entry)
 				(it_mapping->m_protocol == new_entry.m_protocol))
 			{
 				new_entry.m_ruleHandle = it_mapping->m_ruleHandle;
-				IPACMDBG_H("Found the matched handle (%d)\n",
+				IPACM_LOG(IPACM_LOG_DEBUG, "Found the matched handle (%d)\n",
 					new_entry.m_ruleHandle);
 
 				if (m_proxy.DelEntry(new_entry))
 				{
-					IPACMERR("unable to delete the v6-ct entry\n");
+					IPACM_LOG(IPACM_LOG_ERR, "unable to delete the v6-ct entry\n");
 					return;
 				}
-				IPACMDBG_H("Deleted entry successfully\n");
+				IPACM_LOG(IPACM_LOG_DEBUG, "Deleted entry successfully\n");
 
 				/* delete the entry */
 				socksv5_v6_conn.erase(it_mapping);
@@ -3258,7 +3213,7 @@ void NatBase::DeleteEntry(const NatEntryBase& entry)
 
 		if (it_mapping == socksv5_v6_conn.end())
 		{
-			IPACMERR("Can't find the matched socksv5_v6_conn!\n");
+			IPACM_LOG(IPACM_LOG_ERR, "Can't find the matched socksv5_v6_conn!\n");
 		}
 	}
 	else
@@ -3268,23 +3223,23 @@ void NatBase::DeleteEntry(const NatEntryBase& entry)
 		NatEntryBase* entryDelete = m_cache.Find(entry);
 		if (entryDelete == NULL)
 		{
-			IPACMDBG_H("No Such Entry exists\n");
+			IPACM_LOG(IPACM_LOG_DEBUG, "No Such Entry exists\n");
 			return;
 		}
 		if (entryDelete->m_enabled)
 		{
 			if (m_proxy.DelEntry(*entryDelete))
 			{
-				IPACMERR("Deletion failed\n");
+				IPACM_LOG(IPACM_LOG_ERR, "Deletion failed\n");
 			}
 			else
 			{
-				IPACMDBG_H("Deleted NAT entry successfully\n");
+				IPACM_LOG(IPACM_LOG_DEBUG, "Deleted NAT entry successfully\n");
 			}
 		}
 		if(entryDelete->sw_allow && entry.sw_allow)
 		{
-			IPACMDBG_H("Don't Deleted NAT entry for swallow rule\n");
+			IPACM_LOG(IPACM_LOG_DEBUG, "Don't Deleted NAT entry for swallow rule\n");
 		}
 		else
 		{
@@ -3293,91 +3248,87 @@ void NatBase::DeleteEntry(const NatEntryBase& entry)
 			--cur_ct_entries;
 		}
 	}
-	IPACMDBG_H("return\n");
+	IPACM_LOG(IPACM_LOG_DEBUG, "return\n");
 }
 
 void NatBase::CacheEntry(const NatEntryBase& entry)
 {
-	IPACMDBG_H("\n");
 	entry.DebugDump("The new entry to cache");
 
 	if (!entry.Valid())
 	{
-		IPACMERR("Invalid Connection, ignoring it\n");
+		IPACM_LOG(IPACM_LOG_ERR, "Invalid Connection, ignoring it\n");
 		return;
 	}
 
 	if (m_cache.Find(entry) != NULL)
 	{
-		IPACMERR("Duplicate rule. Ignore it\n");
+		IPACM_LOG(IPACM_LOG_ERR, "Duplicate rule. Ignore it\n");
 		return;
 	}
 
 	if (ChkSWAllow(entry))
 	{
-		IPACMERR("SwAllow Entry. Ignore it\n");
+		IPACM_LOG(IPACM_LOG_ERR, "SwAllow Entry. Ignore it\n");
 		return;
 	}
 
 	NatEntryBase* new_entry = m_cache.GetFirstEmpty();
 	if (new_entry == NULL)
 	{
-		IPACMERR("Error: Unable to add, reached maximum rules\n");
+		IPACM_LOG(IPACM_LOG_ERR, "Error: Unable to add, reached maximum rules\n");
 		return;
 	}
 
 	*new_entry = entry;
 	++m_curCnt;
 	++cur_ct_entries;
-	IPACMDBG_H("Cached rule successfully\n");
+	IPACM_LOG(IPACM_LOG_DEBUG, "Cached rule successfully\n");
 }
 
 void NatBase::AddTempEntry(const NatEntryBase& entry)
 {
-	IPACMDBG_H("\n");
 	entry.DebugDump("Received Temp Nat entry to add\n");
 
 	if (m_cache.Find(entry) != NULL || m_temp.Find(entry) != NULL)
 	{
-		IPACMERR("Duplicate rule. Ignore it\n");
+		IPACM_LOG(IPACM_LOG_ERR, "Duplicate rule. Ignore it\n");
 		return;
 	}
 
 	if (ChkSWAllow(entry))
 	{
-		IPACMERR("SwAllow Entry. Ignore it\n");
+		IPACM_LOG(IPACM_LOG_ERR, "SwAllow Entry. Ignore it\n");
 		return;
 	}
 
 	NatEntryBase* new_entry = m_temp.GetFirstEmpty();
 	if (new_entry == NULL)
 	{
-		IPACMERR("Error: Unable to add, reached maximum temp rules\n");
+		IPACM_LOG(IPACM_LOG_ERR, "Error: Unable to add, reached maximum temp rules\n");
 		return;
 	}
 
 	*new_entry = entry;
-	IPACMDBG_H("Added Temp Entry\n");
+	IPACM_LOG(IPACM_LOG_DEBUG, "Added Temp Entry\n");
 }
 
 void NatBase::DeleteTempEntry(const NatEntryBase& entry)
 {
-	IPACMDBG_H("\n");
 	entry.DebugDump("Received Temp Nat entry to delete\n");
 
 	NatEntryBase* entryDelete = m_temp.Find(entry);
 	if (entryDelete == NULL)
 	{
-		IPACMDBG_H("No Such Temp Entry exists\n");
+		IPACM_LOG(IPACM_LOG_DEBUG, "No Such Temp Entry exists\n");
 		return;
 	}
 	entryDelete->Clear();
-	IPACMDBG_H("The Temp Entry successfully deleted\n");
+	IPACM_LOG(IPACM_LOG_DEBUG, "The Temp Entry successfully deleted\n");
 }
 
 void NatBase::FlushTempEntries(const IpAddress& clientIp, bool isAdd, bool isDummy, bool isStaClientIp)
 {
-	IPACMDBG_H("\n");
 	clientIp.DebugDump("Flush temp entries for");
 
 	for (int cnt = 0; cnt < MAX_TEMP_ENTRIES; ++cnt)
@@ -3393,27 +3344,26 @@ void NatBase::FlushTempEntries(const IpAddress& clientIp, bool isAdd, bool isDum
 		{
 			if (isDummy)
 			{
-				IPACMDBG("setting to dummy\n");
+				IPACM_LOG(IPACM_LOG_DEBUG,"setting to dummy\n");
 				curr.m_isDummy = true;
 			}
 
 			int ret = AddEntry(curr);
 			if (ret)
 			{
-				IPACMERR("unable to add temp entry: %d\n", ret);
+				IPACM_LOG(IPACM_LOG_ERR, "unable to add temp entry: %d\n", ret);
 				continue;
 			}
-			IPACMDBG_H("Successfully flushed the entry\n");
+			IPACM_LOG(IPACM_LOG_DEBUG, "Successfully flushed the entry\n");
 		}
 
 		curr.Clear();
 	}
-	IPACMDBG_H("return\n");
+	IPACM_LOG(IPACM_LOG_DEBUG, "return\n");
 }
 
 void NatBase::FlushAndCacheVlanTempEntries_v6(uint32_t* ipv6_addr, bool isAdd, bool isDummy, bool isStaClientIp)
 {
-	IPACMDBG_H("\n");
 	const IpAddress& clientIp = Ipv6IpAddress(ipv6_addr, false);
 	clientIp.DebugDump("Flush temp entries for");
 
@@ -3448,28 +3398,27 @@ void NatBase::FlushAndCacheVlanTempEntries_v6(uint32_t* ipv6_addr, bool isAdd, b
 		{
 			if (isDummy)
 			{
-				IPACMDBG("setting to dummy\n");
+				IPACM_LOG(IPACM_LOG_DEBUG, "setting to dummy\n");
 				curr.m_isDummy = true;
 			}
 
 			int ret = AddEntry(curr);
 			if (ret)
 			{
-				IPACMERR("unable to add temp entry: %d\n", ret);
+				IPACM_LOG(IPACM_LOG_ERR, "unable to add temp entry: %d\n", ret);
 				continue;
 			}
 
-			IPACMDBG_H("Successfully flushed the entry\n");
+			IPACM_LOG(IPACM_LOG_DEBUG, "Successfully flushed the entry\n");
 		}
 
 		curr.Clear();
 	}
-	IPACMDBG_H("return\n");
+	IPACM_LOG(IPACM_LOG_DEBUG, "return\n");
 }
 
 void NatBase::UpdateTcpUdpTimeStamps(bool& isTcpUdpTimeoutUpToDate)
 {
-	IPACMDBG_H("\n");
 	int ret;
 	uint32_t timestamp;
 	bool keep_awake;
@@ -3478,11 +3427,11 @@ void NatBase::UpdateTcpUdpTimeStamps(bool& isTcpUdpTimeoutUpToDate)
 
 	if ( keep_awake )
 	{
-		IPACMDBG("Voting clock on\n");
+		IPACM_LOG(IPACM_LOG_DEBUG, "Voting clock on\n");
 
 		if ( ipa_nat_vote_clock(IPA_APP_CLK_VOTE) != 0 )
 		{
-			IPACMERR("Voting clock on failed\n");
+			IPACM_LOG(IPACM_LOG_ERR, "Voting clock on failed\n");
 			return;
 		}
 	}
@@ -3497,7 +3446,7 @@ void NatBase::UpdateTcpUdpTimeStamps(bool& isTcpUdpTimeoutUpToDate)
 		}
 		if (m_proxy.QueryTimestamp(curr, timestamp))
 		{
-			IPACMERR("unable to retrieve timeout for rule handle: %d\n", curr.m_ruleHandle);
+			IPACM_LOG(IPACM_LOG_ERR, "unable to retrieve timeout for rule handle: %d\n", curr.m_ruleHandle);
 			continue;
 		}
 
@@ -3516,50 +3465,49 @@ void NatBase::UpdateTcpUdpTimeStamps(bool& isTcpUdpTimeoutUpToDate)
 		ret = m_ctTimestampUtil.UpdateConntrackTimeStamp(curr);
 		if (ret)
 		{
-			IPACMERR("unable to update time stamp");
+			IPACM_LOG(IPACM_LOG_ERR, "unable to update time stamp\n");
 			m_proxy.DelEntry(curr);
 			continue;
 		}
 
 		curr.m_timestamp = timestamp;
-		IPACMDBG("Updated time stamp successfully\n");
+		IPACM_LOG(IPACM_LOG_DEBUG,"Updated time stamp successfully\n");
 	}
 
 	if ( keep_awake )
 	{
-		IPACMDBG("Voting clock off\n");
+		IPACM_LOG(IPACM_LOG_DEBUG, "Voting clock off\n");
 
 		if ( ipa_nat_vote_clock(IPA_APP_CLK_DEVOTE) != 0 )
 		{
-			IPACMERR("Voting clock off failed\n");
+			IPACM_LOG(IPACM_LOG_ERR, "Voting clock off failed\n");
 		}
 	}
 
-	IPACMDBG_H("return\n");
+	IPACM_LOG(IPACM_LOG_DEBUG, "return\n");
 }
 
 int NatBase::UpdatePwrSaveIf(const IpAddress& client_lan_ip)
 {
-	IPACMDBG_H("\n");
 
 	client_lan_ip.DebugDump("Received");
 
 	if (!client_lan_ip.Valid())
 	{
-		IPACMERR("Invalid ip address received\n");
+		IPACM_LOG(IPACM_LOG_ERR, "Invalid ip address received\n");
 		return -EINVAL;
 	}
 
 	if (m_pwrSaveIfs.Find(client_lan_ip) != NULL)
 	{
-		IPACMDBG("The client is already in power save\n");
+		IPACM_LOG(IPACM_LOG_DEBUG,"The client is already in power save\n");
 		return 0;
 	}
 
 	IpAddress* entry = m_pwrSaveIfs.GetFirstEmpty();
 	if (entry == NULL)
 	{
-		IPACMERR("Power save clients collection is full\n");
+		IPACM_LOG(IPACM_LOG_ERR, "Power save clients collection is full\n");
 		return -EPERM;
 	}
 	*entry = client_lan_ip;
@@ -3576,25 +3524,24 @@ int NatBase::UpdatePwrSaveIf(const IpAddress& client_lan_ip)
 
 		if (m_proxy.DelEntry(curr))
 		{
-			IPACMERR("unable to delete the rule\n");
+			IPACM_LOG(IPACM_LOG_ERR, "unable to delete the rule\n");
 			continue;
 		}
 
 		curr.m_enabled = false;
 		curr.m_ruleHandle = 0;
 	}
-	IPACMDBG_H("return\n");
+	IPACM_LOG(IPACM_LOG_DEBUG, "return\n");
 	return 0;
 }
 
 int NatBase::ResetPwrSaveIf(const IpAddress& client_lan_ip)
 {
-	IPACMDBG_H("\n");
 	client_lan_ip.DebugDump("Received");
 
 	if (!client_lan_ip.Valid())
 	{
-		IPACMERR("Invalid ip address received\n");
+		IPACM_LOG(IPACM_LOG_ERR, "Invalid ip address received\n");
 		return -EINVAL;
 	}
 
@@ -3616,7 +3563,7 @@ int NatBase::ResetPwrSaveIf(const IpAddress& client_lan_ip)
 
 		if (m_proxy.AddEntry(curr))
 		{
-			IPACMERR("unable to add the rule delete from cache\n");
+			IPACM_LOG(IPACM_LOG_ERR, "unable to add the rule delete from cache\n");
 			curr.Clear();
 			--m_curCnt;
 			--cur_ct_entries;
@@ -3625,19 +3572,18 @@ int NatBase::ResetPwrSaveIf(const IpAddress& client_lan_ip)
 		curr.m_enabled = true;
 	}
 
-	IPACMDBG_H("return\n");
+	IPACM_LOG(IPACM_LOG_DEBUG, "return\n");
 	return 0;
 }
 
 int NatBase::DelEntriesOnClntDiscon(const IpAddress& client_lan_ip)
 {
-	IPACMDBG_H("\n");
 
 	client_lan_ip.DebugDump("Received");
 
 	if (!client_lan_ip.Valid())
 	{
-		IPACMERR("Invalid ip address received\n");
+		IPACM_LOG(IPACM_LOG_ERR, "Invalid ip address received\n");
 		return -EINVAL;
 	}
 
@@ -3645,7 +3591,7 @@ int NatBase::DelEntriesOnClntDiscon(const IpAddress& client_lan_ip)
 	if (entry != NULL)
 	{
 		entry->Clear();
-		IPACMDBG("Remove power save entry\n");
+		IPACM_LOG(IPACM_LOG_DEBUG,"Remove power save entry\n");
 	}
 
 	int tmp = 0;
@@ -3666,7 +3612,7 @@ int NatBase::DelEntriesOnClntDiscon(const IpAddress& client_lan_ip)
 
 		if (m_proxy.DelEntry(curr))
 		{
-			IPACMERR("unable to delete the rule\n");
+			IPACM_LOG(IPACM_LOG_ERR, "unable to delete the rule\n");
 			continue;
 		}
 
@@ -3674,19 +3620,18 @@ int NatBase::DelEntriesOnClntDiscon(const IpAddress& client_lan_ip)
 		++tmp;
 	}
 
-	IPACMDBG_H("Deleted (but cached) %d entries\n", tmp);
+	IPACM_LOG(IPACM_LOG_DEBUG, "Deleted (but cached) %d entries\n", tmp);
 	return 0;
 }
 
 int NatBase::DelEntriesOnSTAClntDiscon(const IpAddress& client_lan_ip)
 {
-	IPACMDBG_H("\n");
 
 	client_lan_ip.DebugDump("Received");
 
 	if (!client_lan_ip.Valid())
 	{
-		IPACMERR("Invalid ip address received\n");
+		IPACM_LOG(IPACM_LOG_ERR, "Invalid ip address received\n");
 		return -EINVAL;
 	}
 
@@ -3708,7 +3653,7 @@ int NatBase::DelEntriesOnSTAClntDiscon(const IpAddress& client_lan_ip)
 
 		if (m_proxy.DelEntry(curr))
 		{
-			IPACMERR("unable to delete the rule\n");
+			IPACM_LOG(IPACM_LOG_ERR, "unable to delete the rule\n");
 			continue;
 		}
 
@@ -3717,13 +3662,12 @@ int NatBase::DelEntriesOnSTAClntDiscon(const IpAddress& client_lan_ip)
 		--cur_ct_entries;
 	}
 
-	IPACMDBG_H("Deleted %d entries\n", (tmp - m_curCnt));
+	IPACM_LOG(IPACM_LOG_DEBUG, "Deleted %d entries\n", (tmp - m_curCnt));
 	return 0;
 }
 
 void NatBase::DelEntriesOnWanDown()
 {
-	IPACMDBG_H("\n");
 
 	int tmp = m_curCnt;
 	for(int cnt = 0; cnt < m_maxEntries; ++cnt)
@@ -3739,7 +3683,7 @@ void NatBase::DelEntriesOnWanDown()
 
 		if(m_proxy.DelEntry(curr))
 		{
-			IPACMERR("unable to delete the rule\n");
+			IPACM_LOG(IPACM_LOG_ERR, "unable to delete the rule\n");
 			continue;
 		}
 
@@ -3748,17 +3692,16 @@ void NatBase::DelEntriesOnWanDown()
 		--cur_ct_entries;
 	}
 
-	IPACMDBG_H("Deleted %d entries\n", (tmp - m_curCnt));
+	IPACM_LOG(IPACM_LOG_DEBUG, "Deleted %d entries\n", (tmp - m_curCnt));
 }
 
 void NatBase::Reset()
 {
-	IPACMDBG_H("\n");
 	for (int cnt = 0; cnt < m_maxEntries; ++cnt)
 	{
 		m_cache[cnt].m_enabled = false;
 	}
-	IPACMDBG_H("return\n");
+	IPACM_LOG(IPACM_LOG_DEBUG, "return\n");
 }
 
 bool NatBase::ChkSWAllow(const NatEntryBase& rule)
@@ -3766,16 +3709,16 @@ bool NatBase::ChkSWAllow(const NatEntryBase& rule)
 	int i, j;
 	uint64_t rule_ipv6_msb, fw_ipv6_msb;
 	Ipv6ctEntry rule_entry;
-	IPACMDBG("Entry\n");
+	IPACM_LOG(IPACM_LOG_DEBUG, "Entry\n");
 
 	if(!IPACM_Iface::ipacmcfg->ipacm_msgflt_enable)
 	{
-		IPACMERR("msg filtering feature is not enabled\n");
+		IPACM_LOG(IPACM_LOG_ERR, "msg filtering feature is not enabled\n");
 		return false;
 	}
 	if(!IPACM_Iface::ipacmcfg->sw_filter_cfg)
 	{
-		IPACMERR("SW Config not updated/pdn index not updated!\n");
+		IPACM_LOG(IPACM_LOG_ERR, "SW Config not updated/pdn index not updated!\n");
 		return false;
 	}
 
@@ -3812,14 +3755,14 @@ bool NatBase::ChkSWAllow(const NatEntryBase& rule)
 			{
 				((Ipv6IpAddress &)rule_entry.GetClientIp()).DebugDump("srcAddr (private ip):");
 				((Ipv6IpAddress &)rule_entry.GetTargetIp()).DebugDump("dstAddr (target ip):");
-				IPACMDBG_H("srcPort (private Port): %d\n", rule_entry.GetSrcPort());
-				IPACMDBG_H("dstPort (target Port): %d\n", rule_entry.GetDstPort());
-				IPACMDBG("SW Allow Rule - Do not add\n");
+				IPACM_LOG(IPACM_LOG_DEBUG, "srcPort (private Port): %d\n", rule_entry.GetSrcPort());
+				IPACM_LOG(IPACM_LOG_DEBUG, "dstPort (target Port): %d\n", rule_entry.GetDstPort());
+				IPACM_LOG(IPACM_LOG_DEBUG, "SW Allow Rule - Do not add\n");
 				return true;
 			}
 		}
 	}
-	IPACMDBG("Exit\n");
+	IPACM_LOG(IPACM_LOG_DEBUG, "Exit\n");
 	return false;
 }
 
@@ -3842,17 +3785,17 @@ void NatBase::restore_nat_for_sw_flt_entries(IPACM_extd_swallow_entry_conf_t ext
 				if(m_pwrSaveIfs.Find(m_cache[i].GetClientIp()) != NULL ||
 				m_pwrSaveIfs.Find(m_cache[i].GetTargetIp()) != NULL)
 				{
-					IPACMDBG_H("Device is Power Save mode: Don't send to HW but successfully cached\n");
+					IPACM_LOG(IPACM_LOG_DEBUG, "Device is Power Save mode: Don't send to HW but successfully cached\n");
 				}
 				else
 				{
 					m_cache[i].sw_allow = false;
 					if(m_proxy.AddEntry(m_cache[i]))
 					{
-						IPACMERR("unable to add the rule\n");
+						IPACM_LOG(IPACM_LOG_ERR, "unable to add the rule\n");
 						m_cache[i].Clear();
 					}
-					IPACMDBG_H("Added entry successfully\n");
+					IPACM_LOG(IPACM_LOG_DEBUG, "Added entry successfully\n");
 				}
 			}
 		}
@@ -3862,17 +3805,17 @@ void NatBase::restore_nat_for_sw_flt_entries(IPACM_extd_swallow_entry_conf_t ext
 void NatBase::firewall_compare(IPACM_swallow_conf_t *backup_firewall_config, IPACM_swallow_conf_t *firewall_config)
 {
 	int i,j;
-	IPACMDBG_H("enter\n");
+	IPACM_LOG(IPACM_LOG_DEBUG, "enter\n");
 	if(backup_firewall_config->num_extd_swallow_entries == 0)
 	{
-		IPACMERR("backup firewall entry is zero, so no need to check further\n");
+		IPACM_LOG(IPACM_LOG_ERR, "backup firewall entry is zero, so no need to check further\n");
 		goto end;
 	}
 	for(i = 0; i < backup_firewall_config->num_extd_swallow_entries; i++)
 	{
 		if(backup_firewall_config->extd_swallow_entries[i].ip_vsn != IP_V6)
 		{
-			IPACMDBG_H("not v6 rule\n");
+			IPACM_LOG(IPACM_LOG_DEBUG, "not v6 rule\n");
 			continue;
 		}
 		for(j = 0; j < firewall_config->num_extd_swallow_entries; j++)
@@ -3881,7 +3824,7 @@ void NatBase::firewall_compare(IPACM_swallow_conf_t *backup_firewall_config, IPA
 			(firewall_config->extd_swallow_entries[j].direction !=
 			(backup_firewall_config->extd_swallow_entries[i].direction)))
 			{
-				IPACMDBG_H("protocol direction is not match\n");
+				IPACM_LOG(IPACM_LOG_DEBUG, "protocol direction is not match\n");
 				continue;
 			}
 
@@ -3906,24 +3849,24 @@ void NatBase::firewall_compare(IPACM_swallow_conf_t *backup_firewall_config, IPA
 				backup_firewall_config->extd_swallow_entries[i].attrib.u.v6.dst_addr,
 				sizeof(backup_firewall_config->extd_swallow_entries[i].attrib.u.v6.dst_addr))))
 			{
-				IPACMDBG("firewall entry is matched\n");
+				IPACM_LOG(IPACM_LOG_DEBUG, "firewall entry is matched\n");
 				break;
 			}
 			else
 			{
-				IPACMDBG("firewall entry is not present\n");
+				IPACM_LOG(IPACM_LOG_DEBUG, "firewall entry is not present\n");
 				continue;
 			}
 		}
 		if((j == firewall_config->num_extd_swallow_entries) ||
 			(firewall_config->num_extd_swallow_entries == 0))
 		{
-			IPACMDBG_H("flushing\n");
+			IPACM_LOG(IPACM_LOG_DEBUG, "flushing\n");
 			restore_nat_for_sw_flt_entries(backup_firewall_config->extd_swallow_entries[i]);
 		}
 	}
 end:
-	IPACMERR("reaching end of the firewall\n");
+	IPACM_LOG(IPACM_LOG_ERR, "reaching end of the firewall\n");
 }
 void NatBase::GetIpAddress_firewall(uint64_t* src_ipv6_msb, uint64_t* src_ipv6_lsb, uint64_t* dst_ipv6_msb, uint64_t* dst_ipv6_lsb, struct ipa_rule_attrib attrib)
 {
@@ -3980,7 +3923,7 @@ bool NatBase::firewall_tuple_match_with_nat(IPACM_extd_swallow_entry_conf_t extd
 			(extd_firewall_entries.attrib.src_port == 0) &&
 			(extd_firewall_entries.attrib.dst_port == 0)))
 		{
-			IPACMERR("Matched in UL wildcard entry\n");
+			IPACM_LOG(IPACM_LOG_ERR, "Matched in UL wildcard entry\n");
 			return true;
 		}
 
@@ -3995,12 +3938,12 @@ bool NatBase::firewall_tuple_match_with_nat(IPACM_extd_swallow_entry_conf_t extd
 			!((extd_firewall_entries.attrib.src_port != 0) ^ (extd_firewall_entries.attrib.src_port ==  del_entry->GetSrcPort())) &&
 			!((extd_firewall_entries.attrib.dst_port != 0) ^ (extd_firewall_entries.attrib.dst_port ==  del_entry->GetDstPort())))
 		{
-			IPACMERR("Matched in UL\n");
+			IPACM_LOG(IPACM_LOG_ERR, "Matched in UL\n");
 			return true;
 		}
 		else
 		{
-			IPACMERR("not matching Matched in UL\n");
+			IPACM_LOG(IPACM_LOG_ERR, "not matching Matched in UL\n");
 		}
 	}
 	else if(extd_firewall_entries.direction == IPACM_MSGR_DL_FIREWALL &&
@@ -4012,7 +3955,7 @@ bool NatBase::firewall_tuple_match_with_nat(IPACM_extd_swallow_entry_conf_t extd
 			(extd_firewall_entries.attrib.src_port == 0) &&
 			(extd_firewall_entries.attrib.dst_port == 0))
 		{
-			IPACMERR("Matched in DL wildcard entry\n");
+			IPACM_LOG(IPACM_LOG_ERR, "Matched in DL wildcard entry\n");
 			return true;
 		}
 		else if((!((extd_firewall_entries.attrib.u.v6.src_addr[0] != 0) ^ ((memcmp(&src_ipv6_msb, &fsrc_ipv6_msb, sizeof(uint64_t))==0) &&
@@ -4026,12 +3969,12 @@ bool NatBase::firewall_tuple_match_with_nat(IPACM_extd_swallow_entry_conf_t extd
 			!((extd_firewall_entries.attrib.src_port != 0) ^ (extd_firewall_entries.attrib.src_port ==  del_entry->GetDstPort())) &&
 			!((extd_firewall_entries.attrib.dst_port != 0) ^ (extd_firewall_entries.attrib.dst_port ==  del_entry->GetSrcPort())))
 		{
-			IPACMERR("Matched in UL\n");
+			IPACM_LOG(IPACM_LOG_ERR, "Matched in UL\n");
 			return true;
 		}
 		else
 		{
-			IPACMERR("not matching Matched in UL\n");
+			IPACM_LOG(IPACM_LOG_ERR, "not matching Matched in UL\n");
 		}
 
 	}
@@ -4045,11 +3988,11 @@ void NatBase::HandleSWAllowEntries(void)
 	uint64_t src_ipv6_msb, src_ipv6_lsb, fsrc_ipv6_msb, fsrc_ipv6_lsb;
 	uint64_t dst_ipv6_msb, dst_ipv6_lsb;
 	Ipv6ctEntry new_entry;
-	IPACMDBG("Entry\n");
+	IPACM_LOG(IPACM_LOG_DEBUG, "Entry\n");
 
 	if(!IPACM_Iface::ipacmcfg->sw_filter_cfg)
 	{
-		IPACMERR("SW Config not updated/pdn index not updated!\n");
+		IPACM_LOG(IPACM_LOG_ERR, "SW Config not updated/pdn index not updated!\n");
 		return;
 	}
 	memset(&backup_sw_filter_cfg, 0, sizeof(backup_sw_filter_cfg));
@@ -4098,9 +4041,9 @@ void NatBase::HandleSWAllowEntries(void)
 				{
 					((Ipv6IpAddress &)new_entry.GetClientIp()).DebugDump("srcAddr (private ip):");
 					((Ipv6IpAddress &)new_entry.GetTargetIp()).DebugDump("dstAddr (target ip):");
-					IPACMDBG_H("srcPort (private Port): %d\n", new_entry.GetSrcPort());
-					IPACMDBG_H("dstPort (target Port): %d\n", new_entry.GetDstPort());
-					IPACMDBG("SW Allow V6 Rule - Deleting Rule\n");
+					IPACM_LOG(IPACM_LOG_DEBUG, "srcPort (private Port): %d\n", new_entry.GetSrcPort());
+					IPACM_LOG(IPACM_LOG_DEBUG, "dstPort (target Port): %d\n", new_entry.GetDstPort());
+					IPACM_LOG(IPACM_LOG_DEBUG, "SW Allow V6 Rule - Deleting Rule\n");
 					m_cache[cnt].sw_allow = true;
 					new_entry.sw_allow = true;
 					DeleteEntry(new_entry);
@@ -4108,19 +4051,18 @@ void NatBase::HandleSWAllowEntries(void)
 			}
 		}
 	}
-	IPACMDBG("Exit\n");
+	IPACM_LOG(IPACM_LOG_DEBUG, "Exit\n");
 }
 
 Ipv6ct* Ipv6ct::m_instance = NULL;
 
 NatBase* Ipv6ct::GetInstance()
 {
-	IPACMDBG_H("\n");
 
 	IPACM_Config *pConfig = IPACM_Config::GetInstance();
 	if (pConfig == NULL)
 	{
-		IPACMERR("Unable to get Config instance\n");
+		IPACM_LOG(IPACM_LOG_ERR, "Unable to get Config instance\n");
 		return NULL;
 	}
 #ifdef FEATURE_IPV6_NAT
@@ -4134,18 +4076,17 @@ NatBase* Ipv6ct::GetInstance()
 
 	if (!pConfig->IsIpv6CTEnabled())
 	{
-		IPACMDBG_H("IPv6 Connection tracking is disabled\n");
+		IPACM_LOG(IPACM_LOG_INFO, "IPv6 Connection tracking is disabled\n");
 		return NULL;
 	}
 
 	m_instance = new Ipv6ct(pConfig->GetIpv6CTMaxEntries(), pConfig->GetCTMemType());
-	IPACMDBG_H("return\n");
+	IPACM_LOG(IPACM_LOG_DEBUG, "return\n");
 	return m_instance;
 }
 
 Ipv6ct::Ipv6ct(int max_entries, const char* mem_type) : NatBase(IPA_IP_v6, max_entries, mem_type, Ipv6ctObjectsGenerator())
 {
-	IPACMDBG_H("\n");
 }
 
 #ifdef FEATURE_IPV6_NAT
@@ -4153,7 +4094,6 @@ Ipv6Nat* Ipv6Nat::m_instance = NULL;
 
 Ipv6Nat* Ipv6Nat::GetInstance()
 {
-	IPACMDBG_H("\n");
 	if(m_instance != NULL)
 	{
 		return m_instance;
@@ -4162,13 +4102,13 @@ Ipv6Nat* Ipv6Nat::GetInstance()
 	IPACM_Config *pConfig = IPACM_Config::GetInstance();
 	if(pConfig == NULL)
 	{
-		IPACMERR("Unable to get Config instance\n");
+		IPACM_LOG(IPACM_LOG_ERR, "Unable to get Config instance\n");
 		return NULL;
 	}
 
 	if(!pConfig->ipv6_nat_enable)
 	{
-		IPACMDBG_H("IPv6 Nat tracking is disabled\n");
+		IPACM_LOG(IPACM_LOG_INFO, "IPv6 Nat tracking is disabled\n");
 		return NULL;
 	}
 
@@ -4179,12 +4119,11 @@ Ipv6Nat* Ipv6Nat::GetInstance()
 		return NULL;
 	}
 
-	IPACMDBG_H("return\n");
+	IPACM_LOG(IPACM_LOG_DEBUG, "return\n");
 	return m_instance;
 }
 
 Ipv6Nat::Ipv6Nat(int max_entries, const char* mem_type) : NatBase(IPA_IP_v6, max_entries, mem_type, Ipv6NatObjectsGenerator())
 {
-	IPACMDBG_H("\n");
 }
 #endif

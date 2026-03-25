@@ -125,6 +125,23 @@ bool is_kernel_version_newer_than(
 	else
 		return false;
 }
+
+void get_kernel_version(char *kernel_ver)
+{
+	struct utsname utsname;
+	int ret;
+	memset(kernel_ver, 0, KERNEL_VERSION_LENGTH);
+	ret = uname(&utsname);
+	if (ret)
+	{
+		IPACM_LOG(IPACM_LOG_ERR, "Error: uname %d (%s)\n",
+			ret, strerror(errno));
+		return;
+	}
+	memcpy(kernel_ver, utsname.release, KERNEL_VERSION_LENGTH - 1);
+	IPACM_LOG(IPACM_LOG_DEBUG, "kernel_ver %s\n", kernel_ver);
+}
+
 /* start IPACMDIAG socket*/
 int create_socket(unsigned int *sockfd)
 {
@@ -142,7 +159,7 @@ int create_socket(unsigned int *sockfd)
 
   return IPACM_SUCCESS;
 }
-void ipacm_log_send( void * user_data)
+void ipacm_send_log_to_qxdm( void * user_data)
 {
 	ipacm_log_buffer_t ipacm_log_buffer;
 	int numBytes=0, len;
@@ -163,7 +180,7 @@ void ipacm_log_send( void * user_data)
 	strlcpy(ipacmlog_socket.sun_path, IPACMLOG_FILE,sizeof(ipacmlog_socket.sun_path));
 	len = strlen(ipacmlog_socket.sun_path) + sizeof(ipacmlog_socket.sun_family);
 
-	memcpy(ipacm_log_buffer.user_data, user_data, MAX_BUF_LEN);
+	memcpy(ipacm_log_buffer.user_data, user_data, IPACM_LOG_MAX_CORE_BUF_LEN);
 
         if ((numBytes = sendto(ipacm_log_sockfd, (void *)&ipacm_log_buffer, sizeof(ipacm_log_buffer.user_data), 0,
 			(struct sockaddr *)&ipacmlog_socket, len)) == -1)
@@ -178,7 +195,7 @@ char *get_time_string(char *buffer, int len)
    struct timeval tv;
    struct tm *tm;
    unsigned long long milliseconds = 0;
-   char timestamp_buf[TimeStamp_buff_len];
+   char timestamp_buf[IPACM_LOG_TIMESTAMP_BUF_LEN];
 
    if (!buffer || len <= 0)
      return NULL;
@@ -231,6 +248,28 @@ int log_init() {
 		printf("Logging already initiated, return\n");
 		return 0;
 	}
+
+	if(config->ipacm_debug_logs_enable == 1)
+	{
+		ipacm_global_log_level = IPACM_LOG_DEBUG;
+	}
+	else if (config->ipacm_debug_logs_enable == 0)
+	{
+		ipacm_global_log_level = IPACM_LOG_INFO;
+	}
+	else
+	{
+		printf("Logging level invalid\n");
+	}
+
+	if(config->ipacm_syslog_enable == 1 || config->ipacm_syslog_enable == 0)
+	{
+		ipacm_syslog_enabled = config->ipacm_syslog_enable;
+	}
+	else{
+		printf("Syslog Enable Set value is invalid\n");
+		ipacm_syslog_enabled = IPACM_DEF_SYSLOG_ENABLE;
+ 	}
 
 	if(access(dump_file, F_OK) == 0)
 	{
@@ -300,7 +339,7 @@ int log_init() {
 	/* Now log init is complete */
 	log_init_done = 1;
 
-	IPACMDBG_H("\nFound offset: %ld, mmap_addr[%p], write_addr[%p], sizeof(metadata)[%d]. \n",
+	IPACM_LOG(IPACM_LOG_DEBUG, "\nFound offset: %ld, mmap_addr[%p], write_addr[%p], sizeof(metadata)[%d]. \n",
 			metadata.write_addr, mmap_addr, write_addr, sizeof(ipacm_log_file_metadata_t));
 
 	return 0;
@@ -322,9 +361,9 @@ void log_deinit()
 #endif
 }
 
-void ipacm_log_dump(char* ipacm_log_data)
+void ipacm_send_log_to_file(char* ipacm_log_data)
 {
-        int input_len = 0;
+    int input_len = 0;
 	if(!log_init_done)
 	{
 		return;

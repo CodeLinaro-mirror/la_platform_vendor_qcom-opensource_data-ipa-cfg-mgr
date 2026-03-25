@@ -116,16 +116,16 @@ private:
 		ipacm_event_data_all *eventData = nullptr;
 		ipacm_cmd_q_data eventsQItem;
 
-		IPACMERR("interfaceIndex = %d\n", interfaceIndex);
+		IPACM_LOG(IPACM_LOG_ERR, "interfaceIndex = %d\n", interfaceIndex);
 		for (int i = 0; i < num_neighbor_client; i++) {
-			IPACMERR("iface_name = %s, iface_index = %d, v4_addr = %s, ipa_if_num = %d\n", neighbor_client[i].iface_name,
+			IPACM_LOG(IPACM_LOG_ERR, "iface_name = %s, iface_index = %d, v4_addr = %s, ipa_if_num = %d\n", neighbor_client[i].iface_name,
 				neighbor_client[i].iface_index, expandIpv4(neighbor_client[i].v4_addr).c_str(),
 				neighbor_client[i].ipa_if_num);
 			if (neighbor_client[i].iface_index == interfaceIndex) {
 				eventData = (ipacm_event_data_all *)malloc(sizeof(*eventData));
 				if (eventData == NULL)
 				{
-					IPACMERR("[ALERT] malloc failed: i = %d, Not sending IPA_DEL_NEIGH_EVENT\n", i);
+					IPACM_LOG(IPACM_LOG_ERR, "[ALERT] malloc failed: i = %d, Not sending IPA_DEL_NEIGH_EVENT\n", i);
 					continue;
 				}
 				memset(eventData, 0, sizeof(*eventData));
@@ -138,7 +138,7 @@ private:
 				}
 				eventsQItem.event = IPA_DEL_NEIGH_EVENT;
 				eventsQItem.evt_data = eventData;
-				IPACMERR("Posting %s\n", IPACM_Iface::ipacmcfg->getEventName(eventsQItem.event));
+				IPACM_LOG(IPACM_LOG_ERR, "Posting %s\n", IPACM_Iface::ipacmcfg->getEventName(eventsQItem.event));
 				IPACM_EvtDispatcher::PostEvt(&eventsQItem);
 			}
 		}

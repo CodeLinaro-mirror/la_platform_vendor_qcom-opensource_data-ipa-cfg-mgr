@@ -27,6 +27,10 @@ ifeq (, $(call is-board-platform-in-list2,$(BOARD_IPA_LOW_RAM_EXCP_LIST)))
 endif
 endif
 
+ifeq ($(TARGET_HAS_QTI_OPTIMIZATIONS),true)
+TARGET_DISABLE_IPACM := true
+endif
+
 ifneq ($(TARGET_DISABLE_IPACM),true)
 BOARD_PLATFORM_LIST := msm8909
 BOARD_PLATFORM_LIST += msm8916

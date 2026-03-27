@@ -127,7 +127,11 @@ int IPACM_ConntrackClient::IPAConntrackEventCB
 	IPACMDBG("Event callback called with msgtype is :%d\n",type);
 
 	/*Avoiding processing of tcp conntracks if state is not established, if not fin_wait, if msg type is not destroy*/
-	if((protocol == IPPROTO_TCP) && ((tcp_state != TCP_CONNTRACK_ESTABLISHED) && (tcp_state != TCP_CONNTRACK_FIN_WAIT) && (NFCT_T_DESTROY != type)))
+	if((protocol == IPPROTO_TCP) &&
+		((tcp_state != TCP_CONNTRACK_ESTABLISHED) &&
+		(tcp_state != TCP_CONNTRACK_FIN_WAIT) &&
+		(NFCT_T_DESTROY != type) &&
+		!(type == NFCT_T_UPDATE && nfct_attr_is_set(ct, ATTR_MARK))))
 	{
 		IPACMDBG("unexpected conntracks recieving protocol = %d  msg_type = %d\n", protocol,  type);
 		goto IGNORE;

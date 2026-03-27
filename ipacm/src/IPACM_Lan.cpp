@@ -9069,6 +9069,9 @@ int IPACM_Lan::handle_qos_route_rule_ext_v2(uint8_t *client_mac,
 					hdr_proc_ctx_table = (ipa_ioc_add_hdr_proc_ctx *)malloc(size);
 					if (hdr_proc_ctx_table == NULL) {
 						IPACMERR("Failed to allocate memory for hdr_proc_ctx.\n");
+						if (rt_rule->rules) {
+							free((void *)rt_rule->rules);
+						}
 						free(rt_rule);
 						return IPACM_FAILURE;
 					}
@@ -9089,6 +9092,9 @@ int IPACM_Lan::handle_qos_route_rule_ext_v2(uint8_t *client_mac,
 						IPACMERR("ioctl IPA_IOC_ADD_HDR_PROC_CTX for dscp marking failed: %d\n",
 							hdr_proc_ctx_table->proc_ctx[0].status);
 						free(hdr_proc_ctx_table);
+						if (rt_rule->rules) {
+							free((void *)rt_rule->rules);
+						}
 						free(rt_rule);
 						return IPACM_FAILURE;
 					}
@@ -9108,6 +9114,9 @@ int IPACM_Lan::handle_qos_route_rule_ext_v2(uint8_t *client_mac,
 				if (false == m_routing.AddRoutingRuleExt_v2(rt_rule))
 				{
 					IPACMERR("Routing rule addition failed!\n");
+					if (rt_rule->rules) {
+						free((void *)rt_rule->rules);
+					}
 					free(rt_rule);
 					return IPACM_FAILURE;
 				}
@@ -9290,6 +9299,9 @@ int IPACM_Lan::handle_qos_route_rule_ext_v2(uint8_t *client_mac,
 						hdr_proc_ctx_table = (ipa_ioc_add_hdr_proc_ctx *)malloc(size);
 						if (hdr_proc_ctx_table == NULL) {
 							IPACMERR("Failed to allocate memory for hdr_proc_ctx.\n");
+							if (rt_rule->rules) {
+								free((void *)rt_rule->rules);
+							}
 							free(rt_rule);
 							return IPACM_FAILURE;
 						}
@@ -9310,6 +9322,9 @@ int IPACM_Lan::handle_qos_route_rule_ext_v2(uint8_t *client_mac,
 							IPACMERR("ioctl IPA_IOC_ADD_HDR_PROC_CTX for v6 dscp marking failed: %d\n",
 								hdr_proc_ctx_table->proc_ctx[0].status);
 							free(hdr_proc_ctx_table);
+							if (rt_rule->rules) {
+								free((void *)rt_rule->rules);
+							}
 							free(rt_rule);
 							return IPACM_FAILURE;
 						}
@@ -9328,6 +9343,9 @@ int IPACM_Lan::handle_qos_route_rule_ext_v2(uint8_t *client_mac,
 					if (false == m_routing.AddRoutingRuleExt_v2(rt_rule))
 					{
 						IPACMERR("Routing rule addition failed!\n");
+						if (rt_rule->rules) {
+							free((void *)rt_rule->rules);
+						}
 						free(rt_rule);
 						return IPACM_FAILURE;
 					}
@@ -9359,6 +9377,9 @@ int IPACM_Lan::handle_qos_route_rule_ext_v2(uint8_t *client_mac,
 			}
 		} /* end of for loop */
 
+		if (rt_rule->rules) {
+			free((void *)rt_rule->rules);
+		}
 		free(rt_rule);
 	}
 	return IPACM_SUCCESS;

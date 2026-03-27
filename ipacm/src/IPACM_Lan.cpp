@@ -525,27 +525,26 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 #ifndef FEATURE_IPA_ANDROID
 			if(rx_prop != NULL)
 			{
-
-				for (j = 0; j < rx_prop->num_rx_props / 2 && j < IPA_MAX_NUM_PROPS; j++){	
-					/* Easymesh vlan/svap pipe condition need to install for in 2nd handle in array  and idx 2*/
+				for (j = 0; j < rx_prop->num_rx_props / 2 && j < IPA_MAX_NUM_PROPS; j++){
+					/* Easymesh vlan/svap pipe condition need to delete for in 2nd handle in array  and idx 2*/
 					if ((ipa_if_cate == WLAN_IF) && (is_if_svap || is_wlan_if_vlan) && (rx_prop->num_rx_props > 2)) {
 						if (j != 1) {
-							IPACMDBG_H("Interface is WLAN Svap or w-vlan, dont install rules on pipe %d..... continue\n", idx);
+							IPACMDBG_H("Interface is WLAN Svap or w-vlan, dont delete rules on pipe %d..... continue\n", idx);
 							continue;
 						} else {
 							idx = 2;
-							IPACMDBG_H("Interface is WLAN Svap or vlan, install rules on Rx1 pipe at idx %d \n", idx);
-						} /* Easymesh Not Vlan pipe condition need to install for 1st handle of array and idx 0 */
+							IPACMDBG_H("Interface is WLAN Svap or vlan, delete rules on Rx1 pipe at idx %d \n", idx);
+						} /* Easymesh Not Vlan pipe condition need to delete for 1st handle of array and idx 0 */
 					} else if ((ipa_if_cate == WLAN_IF) && (rx_prop->num_rx_props > 2)){
 						if (j == 0) {
 							idx = 0;
 						} else {
-							IPACMDBG_H("Interface is non vlan, dont install rule with index 2\n");
+							IPACMDBG_H("Interface is non vlan, dont delete rule with index 2\n");
 							continue;
 						}
 					} else {
 						idx = j * 2;
-						IPACMDBG_H("Install rules at idx %d\n", idx);
+						IPACMDBG_H("Delete rules at idx %d\n", idx);
 					}
 
 					if (IPACM_Iface::ipacmcfg->getFltRuleCount(rx_prop->rx[idx].src_pipe, IPA_IP_v4) != 0) {
@@ -2948,26 +2947,26 @@ int IPACM_Lan::del_ul_flt_rules(enum ipa_ip_type iptype)
 		return IPACM_SUCCESS;
 	}
 
-	for (j = 0; j < rx_prop->num_rx_props / 2 && j < IPA_MAX_NUM_PROPS; j++){	
-		/* Easymesh vlan/svap pipe condition need to install for in 2nd handle in array  and idx 2*/
+	for (j = 0; j < rx_prop->num_rx_props / 2 && j < IPA_MAX_NUM_PROPS; j++){
+		/* Easymesh vlan/svap pipe condition need to delete for in 2nd handle in array  and idx 2*/
 		if ((ipa_if_cate == WLAN_IF) && (is_if_svap || is_wlan_if_vlan) && (rx_prop->num_rx_props > 2)) {
 			if (j != 1) {
-				IPACMDBG_H("Interface is WLAN Svap or w-vlan, dont install rules on pipe %d..... continue\n", idx);
+				IPACMDBG_H("Interface is WLAN Svap or w-vlan, dont delete rules on pipe %d..... continue\n", idx);
 				continue;
 			} else {
 				idx = 2;
-				IPACMDBG_H("Interface is WLAN Svap or vlan, install rules on Rx1 pipe at idx %d \n", idx);
-			} /* Easymesh Not Vlan pipe condition need to install for 1st handle of array and idx 0 */
+				IPACMDBG_H("Interface is WLAN Svap or vlan, delete rules on Rx1 pipe at idx %d \n", idx);
+			} /* Easymesh Not Vlan pipe condition need to delete for 1st handle of array and idx 0 */
 		} else if ((ipa_if_cate == WLAN_IF) && (rx_prop->num_rx_props > 2)){
 			if (j == 0) {
 				idx = 0;
 			} else {
-				IPACMDBG_H("Interface is non vlan, dont install rule with index 2\n");
+				IPACMDBG_H("Interface is non vlan, dont delete rule with index 2\n");
 				continue;
 			}
 		} else {
 			idx = j * 2;
-			IPACMDBG_H("Install rules at idx %d\n", idx);
+			IPACMDBG_H("delete rules at idx %d\n", idx);
 		}
 
 		if (iptype == IPA_IP_v4) {
@@ -3873,26 +3872,26 @@ int IPACM_Lan::handle_wan_down(bool is_sta_mode)
 		return IPACM_SUCCESS;
 	}
 
-	for (j = 0; j < rx_prop->num_rx_props / 2 && j < IPA_MAX_NUM_PROPS; j++){	
-		/* Easymesh vlan/svap pipe condition need to install for in 2nd handle in array  and idx 2*/
+	for (j = 0; j < rx_prop->num_rx_props / 2 && j < IPA_MAX_NUM_PROPS; j++){
+		/* Easymesh vlan/svap pipe condition need to delete for in 2nd handle in array  and idx 2*/
 		if ((ipa_if_cate == WLAN_IF) && (is_if_svap || is_wlan_if_vlan) && (rx_prop->num_rx_props > 2)) {
 			if (j != 1) {
-				IPACMDBG_H("Interface is WLAN Svap or w-vlan, dont install rules on pipe %d..... continue\n", idx);
+				IPACMDBG_H("Interface is WLAN Svap or w-vlan, dont delete rules on pipe %d..... continue\n", idx);
 				continue;
 			} else {
 				idx = 2;
-				IPACMDBG_H("Interface is WLAN Svap or vlan, install rules on Rx1 pipe at idx %d \n", idx);
-			} /* Easymesh Not Vlan pipe condition need to install for 1st handle of array and idx 0 */
+				IPACMDBG_H("Interface is WLAN Svap or vlan, delete rules on Rx1 pipe at idx %d \n", idx);
+			} /* Easymesh Not Vlan pipe condition need to delete for 1st handle of array and idx 0 */
 		} else if ((ipa_if_cate == WLAN_IF) && (rx_prop->num_rx_props > 2)){
 			if (j == 0) {
 				idx = 0;
 			} else {
-				IPACMDBG_H("Interface is non vlan, dont install rule with index 2\n");
+				IPACMDBG_H("Interface is non vlan, dont delete rule with index 2\n");
 				continue;
 			}
 		} else {
 			idx = j * 2;
-			IPACMDBG_H("Install rules at idx %d\n", idx);
+			IPACMDBG_H("delete rules at idx %d\n", idx);
 		}
 
 		if (is_sta_mode == false) {
@@ -11756,25 +11755,25 @@ int IPACM_Lan::handle_down_evt()
 	}
 
 	for (j = 0; j < rx_prop->num_rx_props / 2 && j < IPA_MAX_NUM_PROPS; j++){
-		/* Easymesh vlan/svap pipe condition need to install for in 2nd handle in array  and idx 2*/
+		/* Easymesh vlan/svap pipe condition need to delete for in 2nd handle in array  and idx 2*/
 		if ((ipa_if_cate == WLAN_IF) && (is_if_svap || is_wlan_if_vlan) && (rx_prop->num_rx_props > 2)) {
 			if (j != 1) {
-				IPACMDBG_H("Interface is WLAN Svap or w-vlan, dont install rules on pipe %d..... continue\n", idx);
+				IPACMDBG_H("Interface is WLAN Svap or w-vlan, dont delete rules on pipe %d..... continue\n", idx);
 				continue;
 			} else {
 				idx = 2;
-				IPACMDBG_H("Interface is WLAN Svap or vlan, install rules on Rx1 pipe at idx %d \n", idx);
-			} /* Easymesh Not Vlan pipe condition need to install for 1st handle of array and idx 0 */
+				IPACMDBG_H("Interface is WLAN Svap or vlan, delete rules on Rx1 pipe at idx %d \n", idx);
+			} /* Easymesh Not Vlan pipe condition need to delete for 1st handle of array and idx 0 */
 		} else if ((ipa_if_cate == WLAN_IF) && (rx_prop->num_rx_props > 2)){
 			if (j == 0) {
 				idx = 0;
 			} else {
-				IPACMDBG_H("Interface is non vlan, dont install rule with index 2\n");
+				IPACMDBG_H("Interface is non vlan, dont delete rule with index 2\n");
 				continue;
 			}
 		} else {
 			idx = j * 2;
-			IPACMDBG_H("Install rules at idx %d\n", idx);
+			IPACMDBG_H("delete rules at idx %d\n", idx);
 		}
 
 		/* Delete v4 default filtering rules */
@@ -12892,26 +12891,26 @@ int IPACM_Lan::delete_uplink_filter_rule_ul(ul_firewall_t *ul_firewall)
 		return IPACM_SUCCESS;
 	}
 
-	for (j = 0; j < rx_prop->num_rx_props / 2 && j < IPA_MAX_NUM_PROPS; j++){	
-		/* Easymesh vlan/svap pipe condition need to install for in 2nd handle in array  and idx 2*/
+	for (j = 0; j < rx_prop->num_rx_props / 2 && j < IPA_MAX_NUM_PROPS; j++){
+		/* Easymesh vlan/svap pipe condition need to delete for in 2nd handle in array  and idx 2*/
 		if ((ipa_if_cate == WLAN_IF) && (is_if_svap || is_wlan_if_vlan) && (rx_prop->num_rx_props > 2)) {
 			if (j != 1) {
-				IPACMDBG_H("Interface is WLAN Svap or w-vlan, dont install rules on pipe %d..... continue\n", idx);
+				IPACMDBG_H("Interface is WLAN Svap or w-vlan, dont delete rules on pipe %d..... continue\n", idx);
 				continue;
 			} else {
 				idx = 2;
-				IPACMDBG_H("Interface is WLAN Svap or vlan, install rules on Rx1 pipe at idx %d \n", idx);
-			} /* Easymesh Not Vlan pipe condition need to install for 1st handle of array and idx 0 */
+				IPACMDBG_H("Interface is WLAN Svap or vlan, delete rules on Rx1 pipe at idx %d \n", idx);
+			} /* Easymesh Not Vlan pipe condition need to delete for 1st handle of array and idx 0 */
 		} else if ((ipa_if_cate == WLAN_IF) && (rx_prop->num_rx_props > 2)){
 			if (j == 0) {
 				idx = 0;
 			} else {
-				IPACMDBG_H("Interface is non vlan, dont install rule with index 2\n");
+				IPACMDBG_H("Interface is non vlan, dont delete rule with index 2\n");
 				continue;
 			}
 		} else {
 			idx = j * 2;
-			IPACMDBG_H("Install rules at idx %d\n", idx);
+			IPACMDBG_H("delete rules at idx %d\n", idx);
 		}
 
 		IPACMDBG_H("Deleting UL firewall rules for pipe (%d)\n", rx_prop->rx[idx].src_pipe);
@@ -12985,7 +12984,7 @@ int IPACM_Lan::install_wan_firewall_rule_ul(bool enable, int vid, int num_of_ul_
 		return IPACM_FAILURE;
 	}
 
-	for (j = 0; j < rx_prop->num_rx_props / 2 && j < IPA_MAX_NUM_PROPS; j++){	
+	for (j = 0; j < rx_prop->num_rx_props / 2 && j < IPA_MAX_NUM_PROPS; j++){
 		/* Easymesh vlan/svap pipe condition need to install for in 2nd handle in array  and idx 2*/
 		if ((ipa_if_cate == WLAN_IF) && (is_if_svap || is_wlan_if_vlan) && (rx_prop->num_rx_props > 2)) {
 			if (j != 1) {
@@ -13626,7 +13625,6 @@ int IPACM_Lan::config_dft_firewall_rules_ul_ex(IPACM_firewall_conf_t* firewall_c
 	}
 
 	for (j = 0; j < rx_prop->num_rx_props / 2 && j < IPA_MAX_NUM_PROPS; j++) {
-
 		if ((ipa_if_cate == WLAN_IF) && (is_if_svap || is_wlan_if_vlan) && (rx_prop->num_rx_props > 2)) {
 			if (j != 1) {
 				IPACMDBG_H("Interface is WLAN Svap or w-vlan, dont install rules on pipe %d..... continue\n", idx);
@@ -15448,25 +15446,25 @@ int IPACM_Lan::handle_wan_down_v6(bool is_sta_mode, bool is_support_mpdn)
 	}
 	else {
 		for (j = 0; j < rx_prop->num_rx_props / 2 && j < IPA_MAX_NUM_PROPS; j++) {
-			/* Easymesh vlan/svap pipe condition need to install for in 2nd handle in array  and idx 2*/
+			/* Easymesh vlan/svap pipe condition need to delete for in 2nd handle in array  and idx 2*/
 			if ((ipa_if_cate == WLAN_IF) && (is_if_svap || is_wlan_if_vlan) && (rx_prop->num_rx_props > 2)) {
 				if (j != 1) {
-					IPACMDBG_H("Interface is WLAN Svap or w-vlan, dont install rules on pipe %d..... continue\n", idx);
+					IPACMDBG_H("Interface is WLAN Svap or w-vlan, dont delete rules on pipe %d..... continue\n", idx);
 					continue;
 				} else {
 					idx = 2;
-					IPACMDBG_H("Interface is WLAN Svap or vlan, install rules on Rx1 pipe at idx %d \n", idx);
-				} /* Easymesh Not Vlan pipe condition need to install for 1st handle of array and idx 0 */
+					IPACMDBG_H("Interface is WLAN Svap or vlan, delete rules on Rx1 pipe at idx %d \n", idx);
+				} /* Easymesh Not Vlan pipe condition need to delete for 1st handle of array and idx 0 */
 			} else if ((ipa_if_cate == WLAN_IF) && (rx_prop->num_rx_props > 2)){
 				if (j == 0) {
 					idx = 0;
 				} else {
-					IPACMDBG_H("Interface is non vlan, dont install rule with index 2\n");
+					IPACMDBG_H("Interface is non vlan, dont delete rule with index 2\n");
 					continue;
 				}
 			} else {
 				idx = j * 2;
-				IPACMDBG_H("Install rules at idx %d\n", idx);
+				IPACMDBG_H("delete rules at idx %d\n", idx);
 			}
 
 			if (!m_filtering.DeleteFilteringHdls(&dft_v6fl_rule_hdl[j][m_ipv6_default_filterting_rules_count[j]], IPA_IP_v6, 1)) {
@@ -16808,7 +16806,7 @@ void IPACM_Lan::delete_ipv6_nat_ula_prefix_flt_rule()
 	}
 	if ((ipa_if_cate == WLAN_IF) && (is_if_svap || is_wlan_if_vlan) && (rx_prop && rx_prop->num_rx_props > 2)) {
 		idx = 2;
-		IPACMDBG_H("Interface is WLAN Svap or vlan, install rules on Rx pipe at idx %d \n", idx);
+		IPACMDBG_H("Interface is WLAN Svap or vlan, delete rules on Rx pipe at idx %d \n", idx);
 	}
 
 #ifdef FEATURE_STATIC_POLICY
@@ -20788,22 +20786,22 @@ int IPACM_Lan::delete_mdpn_ul_xlat_filter_rule(int mux_id)
 	{
 		if ((ipa_if_cate == WLAN_IF) && (is_if_svap || is_wlan_if_vlan) && (rx_prop->num_rx_props > 2)) {
 			if (j != 1) {
-				IPACMDBG_H("Interface is WLAN Svap or w-vlan, dont install rules on pipe %d..... continue\n", idx);
+				IPACMDBG_H("Interface is WLAN Svap or w-vlan, dont delete rules on pipe %d..... continue\n", idx);
 				continue;
 			} else {
 				idx = 2;
-				IPACMDBG_H("Interface is WLAN Svap or vlan, install rules on Rx1 pipe at idx %d \n", idx);
-			} /* Easymesh Not Vlan pipe condition need to install for 1st handle of array and idx 0 */
+				IPACMDBG_H("Interface is WLAN Svap or vlan, delete rules on Rx1 pipe at idx %d \n", idx);
+			} /* Easymesh Not Vlan pipe condition need to delete for 1st handle of array and idx 0 */
 		} else if ((ipa_if_cate == WLAN_IF) && (rx_prop->num_rx_props > 2)){
 			if (j == 0) {
 				idx = 0;
 			} else {
-				IPACMDBG_H("Interface is non vlan, dont install rule with index 2");
+				IPACMDBG_H("Interface is non vlan, dont delete rule with index 2");
 				continue;
 			}
 		} else {
 			idx = j * 2;
-			IPACMDBG_H("Install rules at idx %d\n", idx);
+			IPACMDBG_H("delete rules at idx %d\n", idx);
 		}
 
 		if (xlat_ctx.active_pdn_list[xlat_pdn_ctx_id].num_wan_mpdn_ul_xlat_fl_rule_v4[j] == 0)
@@ -20850,25 +20848,25 @@ int IPACM_Lan::delete_icmp_filter_rule(
 	}
 
 	for (j = 0; j < rx_prop->num_rx_props / 2 && j < IPA_MAX_NUM_PROPS; j++) {
-		/* Easymesh vlan/svap pipe condition need to install for in 2nd handle in array  and idx 2*/
+		/* Easymesh vlan/svap pipe condition need to delete for in 2nd handle in array  and idx 2*/
 		if ((ipa_if_cate == WLAN_IF) && (is_if_svap || is_wlan_if_vlan) && (rx_prop->num_rx_props > 2)) {
 			if (j != 1) {
-				IPACMDBG_H("Interface is WLAN Svap or w-vlan, dont install rules on pipe %d..... continue\n", idx);
+				IPACMDBG_H("Interface is WLAN Svap or w-vlan, dont delete rules on pipe %d..... continue\n", idx);
 				continue;
 			} else {
 				idx = 2;
-				IPACMDBG_H("Interface is WLAN Svap or vlan, install rules on Rx1 pipe at idx %d \n", idx);
-			} /* Easymesh Not Vlan pipe condition need to install for 1st handle of array and idx 0 */
+				IPACMDBG_H("Interface is WLAN Svap or vlan, delete rules on Rx1 pipe at idx %d \n", idx);
+			} /* Easymesh Not Vlan pipe condition need to delete for 1st handle of array and idx 0 */
 		} else if ((ipa_if_cate == WLAN_IF) && (rx_prop->num_rx_props > 2)){
 			if (j == 0) {
 				idx = 0;
 			} else {
-				IPACMDBG_H("Interface is non vlan, dont install rule with index 2\n");
+				IPACMDBG_H("Interface is non vlan, dont delete rule with index 2\n");
 				continue;
 			}
 		} else {
 			idx = j * 2;
-			IPACMDBG_H("Install rules at idx %d\n", idx);
+			IPACMDBG_H("delete rules at idx %d\n", idx);
 		}
 
 		if (iptype == IPA_IP_v4) {
@@ -22461,7 +22459,7 @@ int IPACM_Lan::handle_ext_router_del_evt(void)
 	}
 	if ((ipa_if_cate == WLAN_IF) && (is_if_svap || is_wlan_if_vlan) && (rx_prop->num_rx_props > 2)) {
 		idx = 2;
-		IPACMDBG_H("Interface is WLAN Svap or vlan, install rules on Rx pipe at idx %d \n", idx);
+		IPACMDBG_H("Interface is WLAN Svap or vlan, delete rules on Rx pipe at idx %d \n", idx);
 	}
 
 	if(ext_router_rmnet_ipv6_hdl)

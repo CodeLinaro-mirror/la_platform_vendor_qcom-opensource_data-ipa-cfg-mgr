@@ -27,7 +27,7 @@
 * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 *
 * Changes from Qualcomm Innovation Center are provided under the following license:
-* Copyright (c) 2023-2025 Qualcomm Innovation Center, Inc. All rights reserved.
+* Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
 * SPDX-License-Identifier: BSD-3-Clause-Clear
 */
 /*!
@@ -277,7 +277,7 @@ int IPACM_Iface::handle_software_routing_disable(void)
 
 	if ((ipa_if_cate == WLAN_IF) && (is_if_svap || is_wlan_if_vlan) && (rx_prop->num_rx_props > 2)) {
 		idx = 2;
-		IPACMDBG_H("Interface is WLAN Svap or vlan, install rules on Rx1 pipe at idx %d \n", idx);
+		IPACMDBG_H("Interface is WLAN Svap or vlan, delete rules on Rx1 pipe at idx %d \n", idx);
 	}
 
 	if (softwarerouting_act == false)

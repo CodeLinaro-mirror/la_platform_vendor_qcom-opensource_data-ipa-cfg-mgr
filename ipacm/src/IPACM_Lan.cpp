@@ -18951,7 +18951,7 @@ int IPACM_Lan::modify_private_subnet(bool eogre_enabled)
 #ifdef FEATURE_EoGRE  || defined(FEATURE_PMIPV6)
 		IPACMDBG("pmipv6 = %d\n", IPACM_Iface::ipacmcfg->pmip_details.pmipv6_enabled);	
 		/* if in GRE mode, also query MTU since WanUP flag is false but WAN is up */
-		if (IPACM_Iface::ipacmcfg->eogre_enabled) {
+		if (IPACM_Iface::ipacmcfg->eogre_enabled || IPACM_Iface::ipacmcfg->ipogre_enabled) {
 			/* re-calculate the ipv4 mtu based on GRE tunnel type*/
 			if (IPACM_Iface::ipacmcfg->eogre_info.iptype == IPA_IP_v4)
 				/* mtu_v4_new = mtu_v4 - 20(ipv4) - 4(gre) - 18(eth + VLAN) */
@@ -19319,7 +19319,7 @@ int IPACM_Lan::modify_ipv6_prefix_flt_rule(bool eogre_enabled)
 
 #ifdef FEATURE_EoGRE || defined(FEATURE_PMIPV6)
 		/* if in GRE mode, also query MTU since WANup_v6 flag is false but WANv6 is up*/
-		if (IPACM_Iface::ipacmcfg->eogre_enabled)
+		if (IPACM_Iface::ipacmcfg->eogre_enabled || IPACM_Iface::ipacmcfg->ipogre_enabled)
 		{
 			/* re-calculate the ipv6 mtu based on GRE tunnel type*/
 			if (IPACM_Iface::ipacmcfg->eogre_info.iptype == IPA_IP_v4)
@@ -24720,7 +24720,7 @@ void IPACM_Lan::gre_up(bool isPmipv6,bool ipogre_enabled)/*Reusing Gre function 
 	 * rules, the following will ensure some rules are deleted to aid
 	 * in this effort.
 	 */
-	if(!isPmipv6) /* We shouldn't delete default rules for PMIPV6 */
+	if(!isPmipv6 && !ipogre_enabled) /* We shouldn't delete default rules for PMIPV6 */
 	{
 		/*
 		* Create gre specific route rules...

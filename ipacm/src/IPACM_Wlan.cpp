@@ -7018,7 +7018,7 @@ int IPACM_Wlan::handle_down_evt()
 {
 	int res = IPACM_SUCCESS, i, num_private_subnet_fl_rule, idx = 0, j = 0;
 	int wlan_pipe_index;
-	uint32_t tcp_syn_filter_rule_hdl = 0;
+	uint32_t *tcp_syn_filter_rule_hdl_ptr = NULL;
 	uint32_t *private_flt_rule_hdl = NULL;
 	bool skip_flt_rule_del= false, process_prefix_rules = false;
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
@@ -7159,12 +7159,12 @@ int IPACM_Wlan::handle_down_evt()
 #endif
 		IPACMDBG_H("Deleted private subnet v4 filter rules successfully.\n");
 		if (ipa_if_cate == WLAN_IF && wlan_pipe_index<MAX_SUPPORTED_WLAN_PIPES ) {
-			tcp_syn_filter_rule_hdl = wlan_ap_dflt_rules[wlan_pipe_index].tcp_syn_flt_rule_hdl[idx/2][IPA_IP_v4];
+			tcp_syn_filter_rule_hdl_ptr = &wlan_ap_dflt_rules[wlan_pipe_index].tcp_syn_flt_rule_hdl[idx/2][IPA_IP_v4];
 		}else {
-			tcp_syn_filter_rule_hdl = tcp_syn_flt_rule_hdl[idx/2][IPA_IP_v4];
+			tcp_syn_filter_rule_hdl_ptr = &tcp_syn_flt_rule_hdl[idx/2][IPA_IP_v4];
 		}
 
-		if(m_filtering.DeleteFilteringHdls(&tcp_syn_filter_rule_hdl, IPA_IP_v4, 1) == false)
+		if(m_filtering.DeleteFilteringHdls(tcp_syn_filter_rule_hdl_ptr, IPA_IP_v4, 1) == false)
 		{
 			IPACMERR("Error deleting tcp syn flt rule, aborting...\n");
 			res = IPACM_FAILURE;
@@ -7230,12 +7230,12 @@ int IPACM_Wlan::handle_down_evt()
 		}
 
 		if (ipa_if_cate == WLAN_IF && wlan_pipe_index<MAX_SUPPORTED_WLAN_PIPES ) {
-			tcp_syn_filter_rule_hdl = wlan_ap_dflt_rules[wlan_pipe_index].tcp_syn_flt_rule_hdl[idx/2][IPA_IP_v6];
+			tcp_syn_filter_rule_hdl_ptr = &wlan_ap_dflt_rules[wlan_pipe_index].tcp_syn_flt_rule_hdl[idx/2][IPA_IP_v6];
 		} else {
-			tcp_syn_filter_rule_hdl = tcp_syn_flt_rule_hdl[idx/2][IPA_IP_v6];
+			tcp_syn_filter_rule_hdl_ptr = &tcp_syn_flt_rule_hdl[idx/2][IPA_IP_v6];
 		}
 
-		if(m_filtering.DeleteFilteringHdls(&tcp_syn_filter_rule_hdl, IPA_IP_v6, 1) == false)
+		if(m_filtering.DeleteFilteringHdls(tcp_syn_filter_rule_hdl_ptr, IPA_IP_v6, 1) == false)
 		{
 			IPACMERR("Error deleting tcp syn flt rule, aborting...\n");
 			res = IPACM_FAILURE;
@@ -10670,6 +10670,7 @@ int IPACM_Wlan::handle_refresh_filtering_rules(bool wlan_vlan_mpdn_enable)
 {
 	int res = IPACM_FAILURE;
 	int idx = vlan_enabled_ap ? 2 : 0;
+	uint32_t *tcp_syn_filter_rule_hdl_ptr = NULL;
 
 	IPACMDBG_H("Disabling/Enabling VLAN, vlan:%d, use pipe idx:%d\n",vlan_enabled_ap, idx);
 
@@ -10714,7 +10715,8 @@ int IPACM_Wlan::handle_refresh_filtering_rules(bool wlan_vlan_mpdn_enable)
 #endif
 		IPACMDBG_H("Deleted private subnet v4 filter rules successfully.\n");
 
-		if (m_filtering.DeleteFilteringHdls(&tcp_syn_flt_rule_hdl[0][IPA_IP_v4], IPA_IP_v4, 1) == false) {
+		tcp_syn_filter_rule_hdl_ptr = &tcp_syn_flt_rule_hdl[0][IPA_IP_v4];
+		if (m_filtering.DeleteFilteringHdls(tcp_syn_filter_rule_hdl_ptr, IPA_IP_v4, 1) == false) {
 			IPACMERR("Error deleting tcp syn flt rule, aborting...\n");
 			res = IPACM_FAILURE;
 			goto fail;
@@ -10738,7 +10740,8 @@ int IPACM_Wlan::handle_refresh_filtering_rules(bool wlan_vlan_mpdn_enable)
 			goto fail;
 		}
 
-		if (m_filtering.DeleteFilteringHdls(&tcp_syn_flt_rule_hdl[0][IPA_IP_v6], IPA_IP_v6, 1) == false) {
+		tcp_syn_filter_rule_hdl_ptr = &tcp_syn_flt_rule_hdl[0][IPA_IP_v6];
+		if (m_filtering.DeleteFilteringHdls(tcp_syn_filter_rule_hdl_ptr, IPA_IP_v6, 1) == false) {
 			IPACMERR("Error deleting tcp syn flt rule, aborting...\n");
 			res = IPACM_FAILURE;
 			goto fail;

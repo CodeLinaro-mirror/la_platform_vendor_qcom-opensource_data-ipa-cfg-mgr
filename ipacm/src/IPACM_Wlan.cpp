@@ -9760,6 +9760,7 @@ int IPACM_Wlan::handle_wlan_vlan_client_init(int client_idx, ipacm_bridge *bridg
 		pHeaderDescriptor = (struct ipa_ioc_add_hdr *)calloc(1, len);
 		if (pHeaderDescriptor == NULL) {
 			IPACMERR("calloc failed to allocate pHeaderDescriptor\n");
+			free(hdr_proc_ctx_table);
 			return IPACM_FAILURE;
 		}
 

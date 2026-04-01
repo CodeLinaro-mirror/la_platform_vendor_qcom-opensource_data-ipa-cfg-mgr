@@ -1329,9 +1329,51 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 									}
 									else if (strcmp(neighbor_client[i].iface_name, data->iface_name) != 0)
 									{
-										IPACMDBG_H("VLAN interface name (%s) is different (%s): keep looking\n",
-											neighbor_client[i].iface_name, data->iface_name);
-										continue;
+										size_t len = strlen(neighbor_client[i].iface_name);
+										/* Non vlan entry should not be the same as base of vlan interface */
+										if ((neighbor_client[i].ipa_if_num != -1) &&
+											(strncmp(data->iface_name, neighbor_client[i].iface_name, len) != 0 ||
+											 (data->iface_name[len] != '.' && data->iface_name[len] != '\0')))
+										{
+											/* Non-VLAN to VLAN transition: update kernel index */
+											IPACMDBG_H("Non-VLAN iface (%s) transitioning to VLAN iface (%s): updating kernel index\n",
+													   neighbor_client[i].iface_name, data->iface_name);
+											post_del_event(i);
+											neighbor_client[i].iface_index = data->if_index;
+											strlcpy(neighbor_client[i].iface_name, data->iface_name, sizeof(neighbor_client[i].iface_name));
+										}
+										else if ((neighbor_client[i].ipa_if_num == -1))
+										{
+											/* Current is VLAN: check if base name (before '.') matches */
+											char base_name[IPA_IFACE_NAME_LEN] = {0};
+											strlcpy(base_name, neighbor_client[i].iface_name, sizeof(base_name));
+											char *dot = strchr(base_name, '.');
+											if (dot != NULL)
+												*dot = '\0';
+											size_t base_len = strlen(base_name);
+											if (strncmp(data->iface_name, base_name, base_len) != 0 ||
+												(data->iface_name[base_len] != '.' && data->iface_name[base_len] != '\0'))
+											{
+												/* Base name doesn't match: update kernel index */
+												IPACMDBG_H("VLAN iface (%s) base name (%s) doesn't match new iface (%s): updating kernel index\n",
+														   neighbor_client[i].iface_name, base_name, data->iface_name);
+												post_del_event(i);
+												neighbor_client[i].iface_index = data->if_index;
+												strlcpy(neighbor_client[i].iface_name, data->iface_name, sizeof(neighbor_client[i].iface_name));
+											}
+											else
+											{
+												IPACMDBG_H("VLAN interface name (%s) is different (%s): keep looking\n",
+														   neighbor_client[i].iface_name, data->iface_name);
+												continue;
+											}
+										}
+										else
+										{
+											IPACMDBG_H("VLAN interface name (%s) is different (%s): keep looking\n",
+													   neighbor_client[i].iface_name, data->iface_name);
+											continue;
+										}
 									}
 								}
 #endif

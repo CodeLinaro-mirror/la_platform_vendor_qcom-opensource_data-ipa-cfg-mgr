@@ -5075,7 +5075,7 @@ int IPACM_Wan::config_dft_firewall_rules(ipa_ip_type iptype)
 					}
 				}
 	#ifdef FEATURE_IPA_V3
-				flt_rule_entry.rule.hashable = false;
+				flt_rule_entry.rule.hashable = true;
 	#endif
 				memcpy(&flt_rule_entry.rule.attrib,
 					&rx_prop->rx[idx].attrib,
@@ -5327,7 +5327,7 @@ int IPACM_Wan::config_dft_firewall_rules(ipa_ip_type iptype)
 				}
 			}
 #ifdef FEATURE_IPA_V3
-			flt_rule_entry.rule.hashable = false;
+			flt_rule_entry.rule.hashable = true;
 #endif
 			memcpy(&flt_rule_entry.rule.attrib,
 				&rx_prop->rx[idx].attrib,

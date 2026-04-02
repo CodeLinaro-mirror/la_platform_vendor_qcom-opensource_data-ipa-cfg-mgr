@@ -2236,10 +2236,15 @@ int v6_conntracks_callback(enum nf_conntrack_msg_type type,struct nf_conntrack *
 void* query_conntracks(void *arguments)
 {
 	int ret;
-	struct nfct_handle *handle;
+	struct nfct_handle *handle = NULL;
 	struct nf_conntrack *ct;
 	struct query_nl_conntrack *args = (struct query_nl_conntrack *)arguments;
 	int family;
+
+	if (args == NULL) {
+		IPACMERR("query_conntracks: NULL arguments\n");
+		goto exit;
+	}
 
 	IPACMDBG_H("quering ct for ipv4 %d \n",args->is_ipv4);
 	IPACMDBG_H("quering ct for ipv6 %d \n",args->is_ipv6);
@@ -2293,14 +2298,15 @@ void* query_conntracks(void *arguments)
 	nfct_close(handle);
 
 exit:
-	if(args->is_ipv4)
-		IPACMDBG_H("Exited the conntrack query thread created for IPv4: 0x%X\n", args->ipv4_addr);
-	else if(args->is_ipv6)
-		IPACMDBG("Exited the conntrack query thread created for IPv6: 0x%08x:%08x:%08x:%08x\n", args->ipv6_addr[0],
-						args->ipv6_addr[1], args->ipv6_addr[2],
-						args->ipv6_addr[3]);
-	if(args)
+	if (args) {
+		if(args->is_ipv4)
+			IPACMDBG_H("Exited the conntrack query thread created for IPv4: 0x%X\n", args->ipv4_addr);
+		else if(args->is_ipv6)
+			IPACMDBG("Exited the conntrack query thread created for IPv6: 0x%08x:%08x:%08x:%08x\n", args->ipv6_addr[0],
+							args->ipv6_addr[1], args->ipv6_addr[2], args->ipv6_addr[3]);
+
 		free(args);
+	}
 	pthread_exit((void*) 0);
 	return 0;
 }

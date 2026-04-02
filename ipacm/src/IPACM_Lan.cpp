@@ -117,9 +117,12 @@ IPACM_Lan::IPACM_Lan(char *iface_name, int iface_index) : IPACM_Iface(iface_name
 	int max_clients = IPA_MAX_NUM_ETH_CLIENTS;
 #endif
 #ifdef FEATURE_VLAN_MPDN
-	if(IPACM_Iface::ipacmcfg->ipacm_mpdn_enable)
+	if(IPACM_Iface::ipacmcfg->device_mode)
+		max_clients = IPA_MAX_NUM_WIFI_CLIENTS;
+	else if(IPACM_Iface::ipacmcfg->ipacm_mpdn_enable)
 		max_clients = IPA_MAX_NUM_VLAN_CLIENTS;
 #endif
+	IPACMDBG("max clients %d\n", max_clients);
 	Nat_App = NatApp::GetInstance();
 	if (Nat_App == NULL)
 	{
@@ -15998,7 +16001,7 @@ int IPACM_Lan::install_ipv6_icmp_flt_rule()
 		flt_rule_entry->status = -1;
 		flt_rule_entry->rule.action = IPA_PASS_TO_EXCEPTION;
 #ifdef FEATURE_IPA_V3
-		flt_rule_entry->rule.hashable = false;
+		flt_rule_entry->rule.hashable = true;
 #endif
 		flt_rule_entry->rule.close_aggr_irq_mod = true;
 
@@ -18007,6 +18010,7 @@ int IPACM_Lan::eth_bridge_add_flt_rule(uint8_t *mac, uint32_t rt_tbl_hdl, ipa_ip
 	struct ipa_flt_rule_add flt_rule_entry;
 	struct ipa_ioc_add_flt_rule_after *pFilteringTable = NULL;
 	int j = 0,wlan_pipe_index;
+	uint8_t prio_index = 0;
 
 #ifdef FEATURE_IPA_V3
 	if (rx_prop == NULL || tx_prop == NULL) {
@@ -18027,13 +18031,23 @@ int IPACM_Lan::eth_bridge_add_flt_rule(uint8_t *mac, uint32_t rt_tbl_hdl, ipa_ip
 					&& (strstr(dev_name,"ath")) && IPACM_Iface::ipacmcfg->iface_in_vlan_mode(dev_name))
 	{
 		idx = 2;
+                prio_index = 1;
 		IPACMDBG("STA-iface in sta-bridge vlan mode\n");
 	}
 	else if ((ipa_if_cate == WLAN_IF) && (is_if_svap || is_wlan_if_vlan) && (rx_prop && rx_prop->num_rx_props > 2)) {
 			idx = 2;
+			/* For vlan interfaces priority value gets incremented
+			 * at index 1.
+			 */
+			prio_index = 1;
 			IPACMDBG_H("Interface is WLAN Svap or vlan, install rules on Rx pipe at idx %d \n", idx);
 	} else {
 			idx = pipe_idx;
+
+			/* For non-vlan interfaces priority value gets incremented
+			 * at index 0.
+			 */
+			prio_index = 0;
 			IPACMDBG_H("Install rules on Rx pipe at idx %d \n", idx);
 	}
 	IPACMDBG_H("Install rules on Rx pipe at idx %d \n", idx);
@@ -18064,7 +18078,7 @@ int IPACM_Lan::eth_bridge_add_flt_rule(uint8_t *mac, uint32_t rt_tbl_hdl, ipa_ip
 	flt_rule_entry.rule.hashable = true;
 	flt_rule_entry.rule.rule_id = LAN2LAN_RULE_ID;
 
-	flt_rule_entry.rule.max_prio = fixed_mac_prio_val[idx][iptype];
+	flt_rule_entry.rule.max_prio = fixed_mac_prio_val[prio_index][iptype];
 	memcpy(&flt_rule_entry.rule.attrib, &rx_prop->rx[idx].attrib, sizeof(flt_rule_entry.rule.attrib));
 	switch (tx_prop->tx[idx].hdr_l2_type) {
 

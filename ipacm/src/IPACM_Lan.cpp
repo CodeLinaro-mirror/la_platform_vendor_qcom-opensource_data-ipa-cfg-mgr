@@ -11634,6 +11634,7 @@ int IPACM_Lan::handle_down_evt()
 {
 	int i, j,wlan_pipe_index;
 	int res = IPACM_SUCCESS, idx = 0;
+	bool iface_down_posted = false;
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
 /* Link down event */
 	struct wan_ioctl_lan_client_info *client_info;
@@ -11645,7 +11646,7 @@ int IPACM_Lan::handle_down_evt()
 	ipacm_event_vlan_pdn *wandown_vlan_data;
 	int if_index = 0;
 #endif
-	uint32_t tcp_syn_filter_rule_hdl = 0;
+	uint32_t *tcp_syn_filter_rule_hdl_ptr = NULL;
 	uint32_t *private_flt_rule_hdl = NULL;
 
 	IPACMDBG_H("lan handle_down_evt\n ");
@@ -11845,12 +11846,12 @@ int IPACM_Lan::handle_down_evt()
 			IPACMDBG_H("Deleted private subnet v4 filter rules successfully.\n");
 
 			if (ipa_if_cate == WLAN_IF && wlan_pipe_index<MAX_SUPPORTED_WLAN_PIPES ) {
-				tcp_syn_filter_rule_hdl = IPACM_Wlan::wlan_ap_dflt_rules[wlan_pipe_index].tcp_syn_flt_rule_hdl[j][IPA_IP_v4];
+				tcp_syn_filter_rule_hdl_ptr = &IPACM_Wlan::wlan_ap_dflt_rules[wlan_pipe_index].tcp_syn_flt_rule_hdl[j][IPA_IP_v4];
 			}else {
-				tcp_syn_filter_rule_hdl = tcp_syn_flt_rule_hdl[j][IPA_IP_v4];
+				tcp_syn_filter_rule_hdl_ptr = &tcp_syn_flt_rule_hdl[j][IPA_IP_v4];
 			}
 
-			if (m_filtering.DeleteFilteringHdls(&tcp_syn_filter_rule_hdl, IPA_IP_v4, 1) == false) {
+			if (m_filtering.DeleteFilteringHdls(tcp_syn_filter_rule_hdl_ptr, IPA_IP_v4, 1) == false) {
 				IPACMERR("Error deleting tcp syn flt rule, aborting...\n");
 				res = IPACM_FAILURE;
 				goto fail;
@@ -11912,12 +11913,12 @@ int IPACM_Lan::handle_down_evt()
 				goto fail;
 			}
 			if (ipa_if_cate == WLAN_IF && wlan_pipe_index<MAX_SUPPORTED_WLAN_PIPES ) {
-				tcp_syn_filter_rule_hdl = IPACM_Wlan::wlan_ap_dflt_rules[wlan_pipe_index].tcp_syn_flt_rule_hdl[j][IPA_IP_v6];
+				tcp_syn_filter_rule_hdl_ptr = &IPACM_Wlan::wlan_ap_dflt_rules[wlan_pipe_index].tcp_syn_flt_rule_hdl[j][IPA_IP_v6];
 			}else {
-				tcp_syn_filter_rule_hdl = tcp_syn_flt_rule_hdl[j][IPA_IP_v6];
+				tcp_syn_filter_rule_hdl_ptr = &tcp_syn_flt_rule_hdl[j][IPA_IP_v6];
 			}
 
-			if (m_filtering.DeleteFilteringHdls(&tcp_syn_filter_rule_hdl, IPA_IP_v6, 1) == false) {
+			if (m_filtering.DeleteFilteringHdls(tcp_syn_filter_rule_hdl_ptr, IPA_IP_v6, 1) == false) {
 				IPACMERR("Error deleting tcp syn flt rule, aborting...\n");
 				res = IPACM_FAILURE;
 				goto fail;
@@ -11982,6 +11983,7 @@ int IPACM_Lan::handle_down_evt()
 		}
 	}
 	eth_bridge_post_event(IPA_ETH_BRIDGE_IFACE_DOWN, IPA_IP_MAX, NULL, NULL, NULL);
+	iface_down_posted = true;
 	/* delete eth client mac rules if any */
 	delete_eth_mac_flt_rules();
 /* Delete private subnet*/
@@ -12331,6 +12333,13 @@ end:
 	{
 		free(eth_client);
 		eth_client = NULL;
+	}
+
+	if (iface_down_posted == false)
+	{
+		IPACMDBG_H("Posting IPA_ETH_BRIDGE_IFACE_DOWN from cleanup path.\n");
+		eth_bridge_post_event(IPA_ETH_BRIDGE_IFACE_DOWN, IPA_IP_MAX, NULL, NULL, NULL);
+		iface_down_posted = true;
 	}
 
 	is_active = false;

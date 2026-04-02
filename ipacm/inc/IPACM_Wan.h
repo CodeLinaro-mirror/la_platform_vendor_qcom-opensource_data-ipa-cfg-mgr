@@ -1161,6 +1161,10 @@ private:
 #endif // FEATURE_IPV6_NAT
 	int add_ipv6_frag_filtering_rule_ex(const struct ipa_rule_attrib& rx_prop_attrib,
 		struct ipa_flt_rule_add& flt_rule_add, int fltr_rule_number);
+
+	int add_ipogre_frag_flt_rule_ex(const struct ipa_rule_attrib& rx_prop_attrib,
+		struct ipa_flt_rule_add& flt_rule_add, int fltr_rule_number,
+		ipa_ip_type iptype, bool outer, bool last_frag = false);
 #ifndef FEATURE_VLAN_MPDN
 	int add_firewall_rules_ex(const IPACM_firewall_conf_t& firewall_config, ipa_ip_type iptype,
 		const struct ipa_rule_attrib& rx_prop_attrib, struct ipa_flt_rule_add *rules, int rules_size, int& pos);

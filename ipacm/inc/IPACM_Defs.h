@@ -147,6 +147,7 @@ extern "C"
 #define IPACM_MAC_FLT 1
 #define IPACM_SW_FLT 2
 
+#define IPA_MAX_VLAN_PER_BRIDGE 3
 /*---------------------------------------------------------------------------
 										Return values indicating error status
 ---------------------------------------------------------------------------*/
@@ -425,7 +426,7 @@ typedef struct
 	uint32_t bridge_netmask;
 	uint32_t bridge_ipv4_addr;
 	uint8_t bridge_mac[IPA_MAC_ADDR_SIZE];
-	uint32_t associate_VID;
+	uint32_t associate_VID[IPA_MAX_VLAN_PER_BRIDGE];
 }ipacm_bridge;
 
 typedef struct
@@ -466,6 +467,7 @@ typedef struct _ipacm_event_data_all
 	uint8_t mac_addr[IPA_MAC_ADDR_SIZE];
 	char iface_name[IPA_IFACE_NAME_LEN];
 	bool is_mld_enabled;
+	bool is_vlan_event;
 } ipacm_event_data_all;
 
 typedef struct _ipacm_event_new_neigh_vlan
@@ -488,6 +490,7 @@ typedef struct
 	ipa_ip_type iptype;
 	uint8_t mac_addr[6];
 	uint16_t VlanID;
+	uint16_t Outer_Vlanid;
 	char iface_name[IPA_IFACE_NAME_LEN];
 } ipacm_event_eth_bridge;
 
@@ -669,6 +672,8 @@ struct ipa_vlan_iface_info
 #define IPA_VLAN_PRIORITY
 	uint8_t priority;
 	uint16_t vlan_interface_index;
+	bool double_tag;
+	uint16_t outer_vlan_id;
 };
 
 struct vlan_iface_info
@@ -679,6 +684,8 @@ struct vlan_iface_info
 	uint8_t vlan_client_mac[6];
 	uint32_t vlan_client_ipv6_addr[4];
 	uint16_t vlan_interface_index;
+	uint16_t outer_vlan_id;
+	bool double_tag;
 };
 
 struct l2tp_vlan_mapping_info
@@ -712,16 +719,28 @@ struct ipa_bridge_vlan_mapping_info {
 	uint32_t subnet_mask;
 	uint8_t master_if_index;
 	uint8_t status;
+	uint16_t outer_vlan_id;
 };
 
+struct ipa_bridge_vlan_mapping_info_new {
+	char bridge_name[IPA_RESOURCE_NAME_MAX];
+	uint8_t lan2lan_sw;
+	uint32_t bridge_ipv4;
+	uint32_t subnet_mask;
+	uint8_t master_if_index;
+	uint8_t status;
+	uint16_t vlan_id[IPA_MAX_VLAN_PER_BRIDGE];
+};
 struct bridge_vlan_mapping_info
 {
 	char bridge_iface_name[IPA_RESOURCE_NAME_MAX];
-	uint32_t bridge_associated_VID;
+	uint16_t bridge_associated_VID;
+	uint16_t outer_vlan_id;
 	uint32_t bridge_ipv4;
 	uint32_t subnet_mask;
 	uint8_t bridge_if_index;
 	uint8_t status;
+	uint8_t bridge_mac[IPA_MAC_ADDR_SIZE];
 };
 
 struct l2tp_client_info
@@ -758,6 +777,7 @@ typedef struct _svap_vlan_hpc_hdl
 	uint16_t vlan_id;
 	ipa_hdr_l2_type peer_l2_type;
 	uint32_t hpc_hdr_hdl;
+	uint16_t outer_vlan_id;
 }svap_vlan_hpc_hdl;
 
 struct ext_router_prefix_info

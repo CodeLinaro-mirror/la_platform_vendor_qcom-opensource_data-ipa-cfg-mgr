@@ -6830,6 +6830,13 @@ int IPACM_Wan::config_dft_firewall_rules_ex(struct ipa_flt_rule_add *rules, int 
 			}
 
 			IPACMDBG_H("adding default rule for iface %s\n", curr_interface->dev_name);
+			if (IPACM_Iface::ipacmcfg->ipogre_enabled)
+			{
+				res = add_ipogre_frag_flt_rule_ex(curr_interface->rx_prop->rx[0].attrib,
+					rules[pos].flt_rule, pos, iptype, false);
+				rules[pos].mux_id = curr_interface->ext_prop->ext[0].mux_id;
+				++pos;
+			}
 			res = add_catchup_all_filtering_rule_each_pdn(iptype,
 				curr_interface->rx_prop->rx[0].attrib, rules[pos].flt_rule, pos, isPmipv6);
 			if((isPmipv6 || IPACM_Iface::ipacmcfg->ipogre_enabled) && iptype==IPACM_Iface::ipacmcfg->ipgre_info.iptype)
@@ -6901,6 +6908,19 @@ int IPACM_Wan::config_dft_firewall_rules_ex(struct ipa_flt_rule_add *rules, int 
 			IPACM_Wan* curr_interface = offloaded_pdns_v6[i]->pIface;
 			IPACMDBG_H("adding default rule for iface %s ip-type %d\n", curr_interface->dev_name, iptype);
 			/* for ipv6 nat case this shall be the 2nd pass catch all rule to send to v6 LAN RT table*/
+			/* Add IPoGRE frag filter rule when ipogre is enabled */
+			if (IPACM_Iface::ipacmcfg->ipogre_enabled)
+			{
+				res = add_ipogre_frag_flt_rule_ex(curr_interface->rx_prop->rx[0].attrib,
+					rules[pos].flt_rule, pos, iptype, true);
+				rules[pos].mux_id = curr_interface->ext_prop->ext[0].mux_id;
+				++pos;
+				res = add_ipogre_frag_flt_rule_ex(curr_interface->rx_prop->rx[0].attrib,
+					rules[pos].flt_rule, pos, iptype, false);
+				rules[pos].mux_id = curr_interface->ext_prop->ext[0].mux_id;
+				++pos;
+			}
+
 			res = add_catchup_all_filtering_rule_each_pdn(iptype,
 				curr_interface->rx_prop->rx[0].attrib, rules[pos].flt_rule, pos,true);
 			if(isPmipv6 || IPACM_Iface::ipacmcfg->ipogre_enabled)
@@ -13663,6 +13683,201 @@ int IPACM_Wan::add_ipv6_frag_filtering_rule_ex(const struct ipa_rule_attrib& rx_
 
 	++IPACM_Wan::num_v6_flt_rule;
 
+	return IPACM_SUCCESS;
+}
+
+int IPACM_Wan::add_ipogre_frag_flt_rule_ex(
+	const struct ipa_rule_attrib& rx_prop_attrib,
+	struct ipa_flt_rule_add& flt_rule_add,
+	int fltr_rule_number,
+	ipa_ip_type iptype, bool outer, bool last_frag)
+{
+	ipa_ipgre_info ipgre_info = IPACM_Iface::ipacmcfg->ipgre_info;
+	struct ipa_flt_rule_add flt_rule_entry;
+	ipa_ioc_generate_flt_eq flt_eq;
+	ipa_ioc_get_rt_tbl_indx rt_tbl_idx;
+
+	IPACMDBG_H("Adding IPoGRE frag filter rule for iptype %d at position %d, last_frag %d\n",
+		iptype, fltr_rule_number, last_frag);
+
+	if (fltr_rule_number >= IPA_MAX_FLT_RULE)
+	{
+		IPACMERR("Filtering table is full. Number of rules %d allowed %d\n",
+			fltr_rule_number + 1, IPA_MAX_FLT_RULE);
+		return IPACM_FAILURE;
+	}
+
+	memset(&flt_rule_entry, 0, sizeof(struct ipa_flt_rule_add));
+
+	flt_rule_entry.at_rear = false;
+	flt_rule_entry.flt_rule_hdl = -1;
+	flt_rule_entry.status = -1;
+	flt_rule_entry.rule.retain_hdr = 1;
+	flt_rule_entry.rule.to_uc = 0;
+	flt_rule_entry.rule.eq_attrib_type = 1;
+	flt_rule_entry.rule.action = IPA_PASS_TO_ROUTING;
+#ifdef FEATURE_IPA_V3
+	flt_rule_entry.rule.hashable = false;
+#endif
+
+	/* Set up src/dst address attributes matching the tunnel endpoints */
+	memcpy(&flt_rule_entry.rule.attrib, &rx_prop_attrib,
+		sizeof(flt_rule_entry.rule.attrib));
+	if(outer == true)
+	{
+		flt_rule_entry.rule.attrib.attrib_mask |= IPA_FLT_DST_ADDR;
+		flt_rule_entry.rule.attrib.attrib_mask |= IPA_FLT_SRC_ADDR;
+
+		if (iptype == IPA_IP_v6)
+		{
+			memset(flt_rule_entry.rule.attrib.u.v6.src_addr_mask, 0xFF,
+					sizeof(flt_rule_entry.rule.attrib.u.v6.src_addr_mask));
+			memcpy(flt_rule_entry.rule.attrib.u.v6.src_addr, ipgre_info.ipv6_dst,
+					sizeof(flt_rule_entry.rule.attrib.u.v6.src_addr));
+			memset(flt_rule_entry.rule.attrib.u.v6.dst_addr_mask, 0xFF,
+					sizeof(flt_rule_entry.rule.attrib.u.v6.dst_addr_mask));
+			memcpy(flt_rule_entry.rule.attrib.u.v6.dst_addr, ipgre_info.ipv6_src,
+					sizeof(flt_rule_entry.rule.attrib.u.v6.dst_addr));
+		}
+		else /* IPA_IP_v4 */
+		{
+			flt_rule_entry.rule.attrib.u.v4.src_addr_mask = 0xFFFFFFFF;
+			flt_rule_entry.rule.attrib.u.v4.src_addr      = ipgre_info.ipv4_dst;
+			flt_rule_entry.rule.attrib.u.v4.dst_addr_mask = 0xFFFFFFFF;
+			flt_rule_entry.rule.attrib.u.v4.dst_addr      = ipgre_info.ipv4_src;
+		}
+
+		/*
+		 * For IPv4 last-fragment rules, include IPA_FLT_FRAGMENT in the attrib
+		 * so that IPA_IOC_GENERATE_FLT_EQ generates the "any fragment" detection
+		 * equation (offset!=0 OR MF=1) together with the address equations in a
+		 * single call.  The MF=0 offset_meq_32 check added below then narrows
+		 * the match to last fragments only (offset!=0 AND MF=0).
+		 */
+		if (last_frag && iptype == IPA_IP_v4)
+		{
+			flt_rule_entry.rule.attrib.attrib_mask |= IPA_FLT_FRAGMENT;
+		}
+
+		/*
+		 * Generate equation attributes from the attrib structure.
+		 * For IPv6: converts src/dst tunnel addresses into offset_meq_128 entries.
+		 * For IPv4: converts src/dst tunnel addresses into offset_meq_32 entries.
+		 * Both are required when eq_attrib_type = 1.
+		 */
+		memset(&flt_eq, 0, sizeof(flt_eq));
+		memcpy(&flt_eq.attrib, &flt_rule_entry.rule.attrib, sizeof(flt_eq.attrib));
+		flt_eq.ip = iptype;
+		if (0 != ioctl(m_fd_ipa, IPA_IOC_GENERATE_FLT_EQ, &flt_eq))
+		{
+			IPACMERR("Failed to get eq_attrib for IPoGRE frag rule\n");
+			return IPACM_FAILURE;
+		}
+		memcpy(&flt_rule_entry.rule.eq_attrib, &flt_eq.eq_attrib,
+			sizeof(flt_rule_entry.rule.eq_attrib));
+	}
+	else if (last_frag && iptype == IPA_IP_v4)
+	{
+		/*
+		 * IPv4 last-fragment rule without outer tunnel endpoint matching.
+		 * Use IPA_FLT_FRAGMENT to detect any fragment (offset!=0 OR MF=1).
+		 * The MF=0 offset_meq_32 check added below narrows the match to
+		 * last fragments only (offset!=0 AND MF=0).
+		 */
+		flt_rule_entry.rule.attrib.attrib_mask |= IPA_FLT_FRAGMENT;
+
+		memset(&flt_eq, 0, sizeof(flt_eq));
+		memcpy(&flt_eq.attrib, &flt_rule_entry.rule.attrib, sizeof(flt_eq.attrib));
+		flt_eq.ip = iptype;
+		if (0 != ioctl(m_fd_ipa, IPA_IOC_GENERATE_FLT_EQ, &flt_eq))
+		{
+			IPACMERR("Failed to get eq_attrib for IPoGRE last-frag rule\n");
+			return IPACM_FAILURE;
+		}
+		memcpy(&flt_rule_entry.rule.eq_attrib, &flt_eq.eq_attrib,
+			sizeof(flt_rule_entry.rule.eq_attrib));
+	}
+
+	/*
+	 * Add fragment packet check on top of the generated equation attributes.
+	 * All checks use offset_meq_32 at offset 6 in the outer tunnel IP header.
+	 *
+	 * IPv6:
+	 *   Next Header field (byte 6) = 0x2C (44 = Fragment extension header).
+	 *   mask=0xFF000000, value=0x2C000000
+	 *
+	 * IPv4 non-last fragments (last_frag == false):
+	 *   More Fragments (MF) bit = bit 29 of the 32-bit word at offset 6.
+	 *   mask=0x20000000, value=0x20000000  (MF=1)
+	 *
+	 * IPv4 last fragments (last_frag == true):
+	 *   IPA_FLT_FRAGMENT already detects any fragment (offset!=0 OR MF=1).
+	 *   Adding MF=0 check excludes non-last fragments:
+	 *     (offset!=0 OR MF=1) AND MF=0  =>  offset!=0 AND MF=0  =  last fragment
+	 *   mask=0x20000000, value=0x00000000  (MF=0)
+	 */
+	if (iptype == IPA_IP_v6)
+	{
+		/* IPv6 Fragment extension header: Next Header = 0x2C at byte 6 */
+		if (flt_rule_entry.rule.eq_attrib.num_offset_meq_32 >= IPA_IPFLTR_NUM_MEQ_32_EQNS)
+		{
+			IPACMERR("Cannot add IPv6 fragment check: offset_meq_32 array full\n");
+			return IPACM_FAILURE;
+		}
+		flt_rule_entry.rule.eq_attrib.rule_eq_bitmap |= 0x20 << flt_rule_entry.rule.eq_attrib.num_offset_meq_32;
+		flt_rule_entry.rule.eq_attrib.offset_meq_32[flt_rule_entry.rule.eq_attrib.num_offset_meq_32].offset = 6;
+		flt_rule_entry.rule.eq_attrib.offset_meq_32[flt_rule_entry.rule.eq_attrib.num_offset_meq_32].mask  = 0xFF000000;
+		flt_rule_entry.rule.eq_attrib.offset_meq_32[flt_rule_entry.rule.eq_attrib.num_offset_meq_32].value = 0x2C000000;
+		flt_rule_entry.rule.eq_attrib.num_offset_meq_32++;
+	}
+	else /* IPA_IP_v4 */
+	{
+		if (flt_rule_entry.rule.eq_attrib.num_offset_meq_32 >= IPA_IPFLTR_NUM_MEQ_32_EQNS)
+		{
+			IPACMERR("Cannot add IPv4 fragment check: offset_meq_32 array full\n");
+			return IPACM_FAILURE;
+		}
+		flt_rule_entry.rule.eq_attrib.rule_eq_bitmap |= 0x20 << flt_rule_entry.rule.eq_attrib.num_offset_meq_32;
+		flt_rule_entry.rule.eq_attrib.offset_meq_32[flt_rule_entry.rule.eq_attrib.num_offset_meq_32].offset = 6;
+		flt_rule_entry.rule.eq_attrib.offset_meq_32[flt_rule_entry.rule.eq_attrib.num_offset_meq_32].mask  = 0x20000000;
+		if (!last_frag)
+		{
+			/* Non-last fragments: MF=1 */
+			flt_rule_entry.rule.eq_attrib.offset_meq_32[flt_rule_entry.rule.eq_attrib.num_offset_meq_32].value = 0x20000000;
+		}
+		else
+		{
+			/* Last fragments: MF=0 (combined with IPA_FLT_FRAGMENT for offset!=0) */
+			flt_rule_entry.rule.eq_attrib.offset_meq_32[flt_rule_entry.rule.eq_attrib.num_offset_meq_32].value = 0x00000000;
+		}
+		flt_rule_entry.rule.eq_attrib.num_offset_meq_32++;
+	}
+
+
+	/* Get routing table index */
+	memset(&rt_tbl_idx, 0, sizeof(rt_tbl_idx));
+	strlcpy(rt_tbl_idx.name, IPACM_Iface::ipacmcfg->rt_tbl_wan_dl.name, IPA_RESOURCE_NAME_MAX);
+	rt_tbl_idx.name[IPA_RESOURCE_NAME_MAX - 1] = '\0';
+	rt_tbl_idx.ip = iptype;
+	if (0 != ioctl(m_fd_ipa, IPA_IOC_QUERY_RT_TBL_INDEX, &rt_tbl_idx))
+	{
+		IPACMERR("Failed to get routing table index from name\n");
+		return IPACM_FAILURE;
+	}
+	flt_rule_entry.rule.rt_tbl_idx = rt_tbl_idx.idx;
+	IPACMDBG_H("IPoGRE frag rule routing table %s has index %d\n",
+		rt_tbl_idx.name, rt_tbl_idx.idx);
+	memcpy(&flt_rule_add, &flt_rule_entry, sizeof(struct ipa_flt_rule_add));
+	IPACMDBG_H("IPoGRE frag filter rule attrib mask: 0x%x, num_offset_meq_32: %d\n",
+		flt_rule_add.rule.attrib.attrib_mask,
+		flt_rule_add.rule.eq_attrib.num_offset_meq_32);
+
+	if(iptype == IPA_IP_v6)
+		IPACM_Wan::num_v6_flt_rule++;
+	else
+		IPACM_Wan::num_v4_flt_rule++;
+
+	IPACMDBG_H("IPoGRE frag filter rule added successfully\n");
 	return IPACM_SUCCESS;
 }
 

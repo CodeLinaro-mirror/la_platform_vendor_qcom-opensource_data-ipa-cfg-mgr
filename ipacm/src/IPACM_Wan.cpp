@@ -12073,6 +12073,13 @@ int IPACM_Wan::handle_ul_qos_route_rule(ipa_ip_type iptype,
 					rt_rule_entry->rule.attrib.u.v4.src_addr_mask = qos_param->ip_tup.src_sub_mask;
 				}
 
+				if (qos_param->ip_tup.dst_ip_addr)
+				{
+					rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_DST_ADDR;
+					rt_rule_entry->rule.attrib.u.v4.dst_addr = qos_param->ip_tup.dst_ip_addr;
+					rt_rule_entry->rule.attrib.u.v4.dst_addr_mask = qos_param->ip_tup.dst_sub_mask;
+				}
+
 				// If single port is provided
 				if (qos_param->ip_tup.sport_start && (qos_param->ip_tup.sport_start == qos_param->ip_tup.sport_end))
 				{
@@ -12216,6 +12223,28 @@ int IPACM_Wan::handle_ul_qos_route_rule(ipa_ip_type iptype,
 						qos_param->ip_tup.src_v6_sub_mask[2];
 					rt_rule_entry->rule.attrib.u.v6.src_addr_mask[3] =
 						qos_param->ip_tup.src_v6_sub_mask[3];
+				}
+
+				if (qos_param->ip_tup.dst_v6_ip_addr[0] ||
+					qos_param->ip_tup.dst_v6_ip_addr[1])
+				{
+					rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_DST_ADDR;
+					rt_rule_entry->rule.attrib.u.v6.dst_addr[0] =
+						qos_param->ip_tup.dst_v6_ip_addr[0];
+					rt_rule_entry->rule.attrib.u.v6.dst_addr[1] =
+						qos_param->ip_tup.dst_v6_ip_addr[1];
+					rt_rule_entry->rule.attrib.u.v6.dst_addr[2] =
+						qos_param->ip_tup.dst_v6_ip_addr[2];
+					rt_rule_entry->rule.attrib.u.v6.dst_addr[3] =
+						qos_param->ip_tup.dst_v6_ip_addr[3];
+					rt_rule_entry->rule.attrib.u.v6.dst_addr_mask[0] =
+						qos_param->ip_tup.dst_v6_sub_mask[0];
+					rt_rule_entry->rule.attrib.u.v6.dst_addr_mask[1] =
+						qos_param->ip_tup.dst_v6_sub_mask[1];
+					rt_rule_entry->rule.attrib.u.v6.dst_addr_mask[2] =
+						qos_param->ip_tup.dst_v6_sub_mask[2];
+					rt_rule_entry->rule.attrib.u.v6.dst_addr_mask[3] =
+						qos_param->ip_tup.dst_v6_sub_mask[3];
 				}
 
 				// If single port is provided

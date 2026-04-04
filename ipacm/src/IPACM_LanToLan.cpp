@@ -533,6 +533,22 @@ void IPACM_LanToLan::handle_new_iface_up(IPACM_LanToLan_Iface *new_iface, IPACM_
 		return;
 	}
 
+	if(!new_iface->get_iface_pointer() ||
+			!exist_iface->get_iface_pointer() ||
+			strlen(new_iface->get_iface_pointer()->dev_name) == 0 ||
+			strlen(exist_iface->get_iface_pointer()->dev_name) == 0)
+	{
+		IPACMERR("Incorrect iface pointer, dev name passed!\n");
+		return;
+	}
+	else
+	{
+		IPACMDBG_H("Populate peer info between: new_iface %s, existing iface %s\n",
+				new_iface->get_iface_pointer()->dev_name,
+				exist_iface->get_iface_pointer()->dev_name);
+	}
+	IPACMDBG_H("Num of tx props %d\n",new_iface->get_iface_pointer()->tx_prop->num_tx_props);
+
 	if (new_iface->is_spcl_iface()) {
 		num_prop = new_iface->get_iface_pointer()->rx_prop->num_rx_props;
 	}

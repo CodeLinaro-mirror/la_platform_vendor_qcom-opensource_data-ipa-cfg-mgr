@@ -7700,10 +7700,8 @@ int IPACM_Lan::handle_eth_client_ipaddr(ipacm_event_data_all *data)
 		}
 	}
 
-	if (sIface)
-		eth_index = get_eth_client_index(data->mac_addr, vlan_id);
-	else
-		eth_index = get_eth_client_index(data->mac_addr, data->vlanID);
+
+	eth_index = get_eth_client_index(data->mac_addr, vlan_id);
 
 	if (eth_index == IPACM_INVALID_INDEX)
 	{

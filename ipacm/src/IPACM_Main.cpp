@@ -1779,6 +1779,19 @@ int main(int argc, char **argv)
 	int ret;
 	pthread_t netlink_thread = 0, monitor_thread = 0, ipa_driver_thread = 0;
 	pthread_t cmd_queue_thread = 0;
+	pthread_t netlinks_query_thread = 0;
+
+	/* Allow toggling logs from init scripts:
+	 * - Command line: --logs=0 | --logs=1 | --disable-logs | --enable-logs
+	 * Do this before any logging macros are used.
+	 */
+	for (int i = 1; i < argc; ++i) {
+		if (strcmp(argv[i], "--logs=0") == 0 || strcmp(argv[i], "--disable-logs") == 0) {
+			ipacm_set_log_enabled(0);
+		} else if (strcmp(argv[i], "--logs=1") == 0 || strcmp(argv[i], "--enable-logs") == 0) {
+			ipacm_set_log_enabled(1);
+		}
+	}
 
 	/* check if ipacm is already running or not */
 	ipa_is_ipacm_running();

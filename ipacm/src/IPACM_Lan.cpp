@@ -21400,7 +21400,7 @@ void IPACM_Lan::gre_down(bool isPmipv6, bool ipogre_enabled)
 		IPACM_Iface::ipacmcfg->GetQmapId(), false, false);
 #endif
 	}
-	if(!isPmipv6)
+	if(!isPmipv6 && !ipogre_enabled)
 	{
 		del_ul_flt_rules(iptype);
 		if ( IPACM_Iface::ip_type == IPA_IP_v4 || IPACM_Iface::ip_type == IPA_IP_MAX )

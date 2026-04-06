@@ -4801,7 +4801,9 @@ int IPACM_Lan::handle_wan_down(bool is_sta_mode, uint8_t mux_id, uint16_t vid)
 		}
 	}
 	/* clean MTU rules if needed */
-	if(ipa_if_cate == ODU_IF && strncmp(dev_name, IPACM_Iface::ipacmcfg->eth_lan_wan_iface_name, sizeof(dev_name)) == 0 &&
+	if(ipa_if_cate == ODU_IF &&
+		IPACM_Iface::ipacmcfg->eth_lan_wan_iface_name != NULL &&
+		strncmp(dev_name, IPACM_Iface::ipacmcfg->eth_lan_wan_iface_name, sizeof(dev_name)) == 0 &&
 		num_wan_subnet_rules == 0)
 	{
 		IPACM_Iface::odu_subnet_fl_rule_hdl[IPA_IP_v4] = 0;
@@ -14251,7 +14253,9 @@ int IPACM_Lan::handle_down_evt()
 			}
 #endif
 		}
-		if(ipa_if_cate == ODU_IF && strncmp(dev_name, IPACM_Iface::ipacmcfg->eth_lan_wan_iface_name, sizeof(dev_name)))
+		if(ipa_if_cate == ODU_IF &&
+			IPACM_Iface::ipacmcfg->eth_lan_wan_iface_name != NULL &&
+			strncmp(dev_name, IPACM_Iface::ipacmcfg->eth_lan_wan_iface_name, sizeof(dev_name)))
 		{
 			memset(IPACM_Iface::odu_subnet_fl_rule_hdl, 0, IPA_IP_MAX);
 		}
@@ -18297,7 +18301,9 @@ int IPACM_Lan::handle_wan_down_v6(bool is_sta_mode, bool is_support_mpdn, uint16
 	if (is_support_mpdn == true)
 	{
 		modify_ipv6_prefix_flt_rule();
-		if(ipa_if_cate == ODU_IF && strncmp(dev_name, IPACM_Iface::ipacmcfg->eth_lan_wan_iface_name, sizeof(dev_name)) == 0 )
+		if(ipa_if_cate == ODU_IF &&
+			IPACM_Iface::ipacmcfg->eth_lan_wan_iface_name != NULL &&
+			strncmp(dev_name, IPACM_Iface::ipacmcfg->eth_lan_wan_iface_name, sizeof(dev_name)) == 0 )
 		{
 			IPACM_Iface::odu_subnet_fl_rule_hdl[IPA_IP_v6] = 0;
 		}
@@ -19134,7 +19140,9 @@ int IPACM_Lan::modify_private_subnet(bool eogre_enabled)
 			IPACMDBG("Adding filter hdl:(0x%x)\n", private_fl_rule_hdl[j][i]);
 		}
 
-		if(ipa_if_cate == ODU_IF && strncmp(dev_name, IPACM_Iface::ipacmcfg->eth_lan_wan_iface_name, sizeof(dev_name)) == 0 &&
+		if(ipa_if_cate == ODU_IF &&
+			IPACM_Iface::ipacmcfg->eth_lan_wan_iface_name != NULL &&
+			strncmp(dev_name, IPACM_Iface::ipacmcfg->eth_lan_wan_iface_name, sizeof(dev_name)) == 0 &&
 			num_wan_subnet_rules[j] > 0)
 		{
 			IPACM_Iface::odu_subnet_fl_rule_hdl[IPA_IP_v4] = private_fl_rule_hdl[j][num_wan_subnet_rules[j] - 1];
@@ -19251,7 +19259,10 @@ int IPACM_Lan::modify_ipv6_prefix_flt_rule(bool eogre_enabled)
 		}
 
 		if (IPACM_Iface::ipacmcfg->num_ipv6_prefixes == 0 && IPACM_Iface::ipacmcfg->num_no_offload_ipv6_prefix == 0) {
-			if(ipa_if_cate == ODU_IF && strncmp(dev_name, IPACM_Iface::ipacmcfg->eth_lan_wan_iface_name, sizeof(dev_name)) == 0 && m_ipv6_default_filterting_rules_count[j] > 0)
+			if(ipa_if_cate == ODU_IF &&
+				IPACM_Iface::ipacmcfg->eth_lan_wan_iface_name != NULL &&
+				strncmp(dev_name, IPACM_Iface::ipacmcfg->eth_lan_wan_iface_name, sizeof(dev_name)) == 0 &&
+				m_ipv6_default_filterting_rules_count[j] > 0)
 			{
 				IPACM_Iface::odu_subnet_fl_rule_hdl[IPA_IP_v6] = dft_v6fl_rule_hdl[j][m_ipv6_default_filterting_rules_count[j] - 1];
 				IPACMDBG_H("odu_subnet_fl_rule_hdl: %d\n", IPACM_Iface::odu_subnet_fl_rule_hdl[IPA_IP_v6]);
@@ -19534,7 +19545,9 @@ int IPACM_Lan::modify_ipv6_prefix_flt_rule(bool eogre_enabled)
 		for (i = 0; i < num_wan_prefix_rules[j]; i++)
 			ipv6_prefix_flt_rule_hdl[j][i] = pFilteringTable->rules[i].flt_rule_hdl;
 
-		if(ipa_if_cate == ODU_IF && strncmp(dev_name, IPACM_Iface::ipacmcfg->eth_lan_wan_iface_name, sizeof(dev_name)) == 0 &&
+		if(ipa_if_cate == ODU_IF &&
+			IPACM_Iface::ipacmcfg->eth_lan_wan_iface_name != NULL &&
+			strncmp(dev_name, IPACM_Iface::ipacmcfg->eth_lan_wan_iface_name, sizeof(dev_name)) == 0 &&
 			num_wan_prefix_rules[j] > 0)
 		{
 			IPACM_Iface::odu_subnet_fl_rule_hdl[IPA_IP_v6] = ipv6_prefix_flt_rule_hdl[j][num_wan_prefix_rules[j] - 1];

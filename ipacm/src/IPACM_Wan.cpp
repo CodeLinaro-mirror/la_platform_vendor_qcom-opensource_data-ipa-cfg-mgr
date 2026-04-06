@@ -6343,6 +6343,7 @@ int IPACM_Wan::config_dft_firewall_rules(ipa_ip_type iptype)
 #endif
 	IPACMDBG_H("dev_name %s, is_ppp_iface %d\n",dev_name, is_ppp_iface);
 	if(sta_vlan_id > 0 && IPACM_Iface::ipacmcfg->get_eth_vlan_wan_up(ipa_if_num) == IPACM_SUCCESS &&
+		IPACM_Iface::ipacmcfg->eth_lan_wan_iface_name != NULL &&
 		strncmp(dev_name, IPACM_Iface::ipacmcfg->eth_lan_wan_iface_name, sizeof(dev_name)) == 0 &&
 		IPACM_Iface::odu_subnet_fl_rule_hdl[IPA_IP_v4] && (IPACM_Iface::ipacmcfg->eth_wan_pppoe_enable == false))
 	{
@@ -6380,6 +6381,7 @@ int IPACM_Wan::config_dft_firewall_rules(ipa_ip_type iptype)
 				}
 				IPACMDBG_H("Installing offload filter rules at idx %d\n", idx);
 				if(sta_vlan_id > 0 && IPACM_Iface::ipacmcfg->get_eth_vlan_wan_up(ipa_if_num) == IPACM_SUCCESS &&
+					IPACM_Iface::ipacmcfg->eth_lan_wan_iface_name != NULL &&
 					strncmp(dev_name, IPACM_Iface::ipacmcfg->eth_lan_wan_iface_name, sizeof(dev_name)) == 0 &&
 					IPACM_Iface::odu_subnet_fl_rule_hdl[IPA_IP_v4] && (IPACM_Iface::ipacmcfg->eth_wan_pppoe_enable == false))
 				{
@@ -6430,6 +6432,7 @@ int IPACM_Wan::config_dft_firewall_rules(ipa_ip_type iptype)
 				flt_rule_entry.rule.attrib.u.v4.dst_addr_mask = 0x00000000;
 				flt_rule_entry.rule.attrib.u.v4.dst_addr = 0x00000000;
 				if(sta_vlan_id > 0 && IPACM_Iface::ipacmcfg->get_eth_vlan_wan_up(ipa_if_num) == IPACM_SUCCESS &&
+					IPACM_Iface::ipacmcfg->eth_lan_wan_iface_name != NULL &&
 					strncmp(dev_name, IPACM_Iface::ipacmcfg->eth_lan_wan_iface_name, sizeof(dev_name)) == 0 &&
 					IPACM_Iface::odu_subnet_fl_rule_hdl[IPA_IP_v4] && (IPACM_Iface::ipacmcfg->eth_wan_pppoe_enable == false))
 				{
@@ -6501,6 +6504,7 @@ int IPACM_Wan::config_dft_firewall_rules(ipa_ip_type iptype)
 				}
 				IPACMDBG_H("Installing offload filter rules at idx %d\n", idx);
 				if(sta_vlan_id > 0 && IPACM_Iface::ipacmcfg->get_eth_vlan_wan_up(ipa_if_num) == IPACM_SUCCESS &&
+					IPACM_Iface::ipacmcfg->eth_lan_wan_iface_name != NULL &&
 					strncmp(dev_name, IPACM_Iface::ipacmcfg->eth_lan_wan_iface_name, sizeof(dev_name)) == 0 &&
 					(IPACM_Iface::ipacmcfg->eth_wan_pppoe_enable == false))
 				{
@@ -6550,6 +6554,7 @@ int IPACM_Wan::config_dft_firewall_rules(ipa_ip_type iptype)
 				flt_rule_entry.rule.attrib.attrib_mask |= IPA_FLT_NEXT_HDR;
 				flt_rule_entry.rule.attrib.u.v6.next_hdr = (uint8_t)IPACM_FIREWALL_IPPROTO_ICMP6;
 				if(sta_vlan_id > 0 && IPACM_Iface::ipacmcfg->get_eth_vlan_wan_up(ipa_if_num) == IPACM_SUCCESS &&
+					IPACM_Iface::ipacmcfg->eth_lan_wan_iface_name != NULL &&
 					strncmp(dev_name, IPACM_Iface::ipacmcfg->eth_lan_wan_iface_name, sizeof(dev_name)) == 0 &&
 					(IPACM_Iface::ipacmcfg->eth_wan_pppoe_enable == false))
 				{
@@ -6650,6 +6655,7 @@ int IPACM_Wan::config_dft_firewall_rules(ipa_ip_type iptype)
 				flt_rule_entry.rule.attrib.u.v6.dst_addr[2] = 0x00000000;
 				flt_rule_entry.rule.attrib.u.v6.dst_addr[3] = 0X00000000;
 				if(sta_vlan_id > 0 && IPACM_Iface::ipacmcfg->get_eth_vlan_wan_up(ipa_if_num) == IPACM_SUCCESS &&
+					IPACM_Iface::ipacmcfg->eth_lan_wan_iface_name != NULL &&
 					strncmp(dev_name, IPACM_Iface::ipacmcfg->eth_lan_wan_iface_name, sizeof(dev_name)) == 0 &&
 					(IPACM_Iface::ipacmcfg->eth_wan_pppoe_enable == false))
 				{

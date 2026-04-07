@@ -1,7 +1,8 @@
 AM_CPPFLAGS = -I./../inc \
+              -I$(top_srcdir)/ipanat/inc \
 	      ${LIBXML_CFLAGS} \
 	      $(CFLAGS)
-AM_CPPFLAGS += -Wall -Wundef -Wno-trigraphs -I$(DATAIPA_STAGING_INCDIR)
+AM_CPPFLAGS += -Wall -Wundef -Wno-trigraphs
 
 if NO_L2TP
 AM_CPPFLAGS  += -DDEBUG -g -DFEATURE_ETH_BRIDGE_LE
@@ -35,7 +36,8 @@ ipacm_SOURCES =	IPACM_Main.cpp \
 bin_PROGRAMS  =  ipacm
 
 requiredlibs =  ${LIBXML_LIB} -lxml2 -lpthread -lnetfilter_conntrack \
-                -lnfnetlink -lipanat $(LIBNL_LIBS)
+                $(top_builddir)/ipanat/src/libipanat.la \
+                -lnfnetlink $(LIBNL_LIBS)
 
 AM_CPPFLAGS += "-std=c++0x"
 

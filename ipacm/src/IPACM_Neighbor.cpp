@@ -78,6 +78,7 @@ IPACM_Neighbor::IPACM_Neighbor()
 	IPACM_EvtDispatcher::registr(IPA_USB_LINK_UP_EVENT, this);
 	IPACM_EvtDispatcher::registr(IPA_LINK_DOWN_EVENT, this);
 	IPACM_EvtDispatcher::registr(IPA_WLAN_LINK_DOWN_EVENT, this);
+	IPACM_EvtDispatcher::registr(IPA_WLAN_CLIENT_DEL_EVENT, this);
 	return;
 }
 /* Extract interface name, IP adress, subnet with interface index value */
@@ -485,14 +486,32 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 
 		case IPA_LINK_DOWN_EVENT:
 		case IPA_WLAN_LINK_DOWN_EVENT:
+		case IPA_WLAN_CLIENT_DEL_EVENT:
 		{
-			ipacm_event_data_fid *data = (ipacm_event_data_fid *)param;
-			IPACM_LOG(IPACM_LOG_INFO, "Received IPA_LINK_DOWN_EVENT at Neighbour if_index :%d \n",data->if_index);
+			int evt_if_index;
+			uint8_t evt_mac_addr[IPA_MAC_ADDR_SIZE];
+			if(event == IPA_WLAN_CLIENT_DEL_EVENT)
+			{
+				ipacm_event_data_mac *data = (ipacm_event_data_mac *)param;
+				IPACM_LOG(IPACM_LOG_INFO, "Received IPA_WLAN_CLIENT_DEL_EVENT at Neighbour if_index :%d \n",data->if_index);
+				evt_if_index = data->if_index;
+				memcpy(evt_mac_addr, data->mac_addr, sizeof(evt_mac_addr));
+			}
+			else
+			{
+				ipacm_event_data_fid *data = (ipacm_event_data_fid *)param;
+				IPACM_LOG(IPACM_LOG_INFO, "Received IPA_LINK_DOWN_EVENT at Neighbour if_index :%d \n",data->if_index);
+				evt_if_index = data->if_index;
+				memset(evt_mac_addr, 0, sizeof(evt_mac_addr));
+			}
 			move_elements = false;
 			for (i = 0; i < num_neighbor_client_temp; i++)
 			{
 				/* find the client MAC */
-				if (neighbor_client[i].iface_index == data->if_index)
+				if ((neighbor_client[i].iface_index == evt_if_index) &&
+					(((event == IPA_WLAN_CLIENT_DEL_EVENT) &&
+					 !(memcmp(evt_mac_addr, neighbor_client[i].mac_addr,
+					sizeof(evt_mac_addr)))) || (event != IPA_WLAN_CLIENT_DEL_EVENT)))
 				{
 					IPACM_LOG(IPACM_LOG_DEBUG, "Neighbor if_index: %d, ipa_if_index = %d, name =  %s, ip4_addr = 0x%x\n",
 					neighbor_client[i].iface_index,neighbor_client[i].ipa_if_num, neighbor_client[i].iface_name,

@@ -917,6 +917,12 @@ void IPACM_Wlan::event_callback(ipa_cm_event_id event, void *param)
 			 */
 			if ((ipa_interface_index == ipa_if_num) && (get_wlan_client_index(data->mac_addr) != IPACM_INVALID_INDEX))
 			{
+				int wlan_index = get_wlan_client_index(data->mac_addr);
+				if (wlan_index == IPACM_INVALID_INDEX)
+				{
+					IPACM_LOG(IPACM_LOG_INFO,"wlan client not found/attached \n");
+					return;
+				}
 #ifdef IPA_VLAN_PRIORITY
 				if(IPACM_Iface::ipacmcfg->get_vlan_id(data->iface_name, &vlan_id, &priority))
 #else

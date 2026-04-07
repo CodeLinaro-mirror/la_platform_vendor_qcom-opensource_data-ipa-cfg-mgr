@@ -1146,6 +1146,7 @@ void IPACM_Wlan::event_callback(ipa_cm_event_id event, void *param)
 	}
 	break;
 	case IPA_CFG_CHANGE_EVENT:
+	case IPA_CFG_WLAN_MODE_CHANGE_EVENT:
 	{
 		IPACM_LOG(IPACM_LOG_DEBUG, "Received IPA_CFG_CHANGE_EVENT event for %s with new wlan-mode: %s old wlan-mode: %s\n",
 				IPACM_Iface::ipacmcfg->iface_table[ipa_if_num].iface_name,

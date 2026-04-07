@@ -483,12 +483,12 @@ void* ipa_driver_msg_notifier(void *param)
 			IPACM_LOG(IPACM_LOG_INFO, "WLAN_CLIENT_DISCONNECT : Mac Address %02x:%02x:%02x:%02x:%02x:%02x\n",
 							 event_wlan->mac_addr[0], event_wlan->mac_addr[1], event_wlan->mac_addr[2],
 							 event_wlan->mac_addr[3], event_wlan->mac_addr[4], event_wlan->mac_addr[5]);
-		        data = (ipacm_event_data_mac *)malloc(sizeof(ipacm_event_data_mac));
-		        if (data == NULL)
-		        {
-		    	        IPACM_LOG(IPACM_LOG_ERR, "unable to allocate memory for event_wlan data\n");
-		    	        return NULL;
-		        }
+			data = (ipacm_event_data_mac *)calloc(1, sizeof(ipacm_event_data_mac));
+			if (data == NULL)
+			{
+				IPACM_LOG(IPACM_LOG_ERR, "unable to allocate memory for event_wlan data\n");
+				return NULL;
+			}
 			memcpy(data->mac_addr,
 						 event_wlan->mac_addr,
 						 sizeof(event_wlan->mac_addr));

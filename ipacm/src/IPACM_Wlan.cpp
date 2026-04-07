@@ -922,14 +922,20 @@ void IPACM_Wlan::event_callback(ipa_cm_event_id event, void *param)
 			IPACM_LOG(IPACM_LOG_DEBUG, "check iface %s category: %d\n", dev_name, ipa_if_cate);
 			if (ipa_interface_index == ipa_if_num)
 			{
+				int wlan_index = get_wlan_client_index(data->mac_addr);
+				if (wlan_index == IPACM_INVALID_INDEX)
+				{
+					IPACM_LOG(IPACM_LOG_INFO,"wlan client not found/attached \n");
+					return;
+				}
 #ifdef IPA_VLAN_PRIORITY
 				if(IPACM_Iface::ipacmcfg->get_vlan_id(data->iface_name, &vlan_id, &priority))
 #else
 				if(IPACM_Iface::ipacmcfg->get_vlan_id(data->iface_name, &vlan_id))
 #endif
 				{
-			IPACM_LOG(IPACM_LOG_ERR, "Unable to find VLAN ID for Dev %s\n", data->iface_name);
-			eth_bridge_post_event(IPA_ETH_BRIDGE_CLIENT_ADD, IPA_IP_MAX, data->mac_addr, NULL, NULL);
+					IPACM_LOG(IPACM_LOG_ERR, "Unable to find VLAN ID for Dev %s\n", data->iface_name);
+					eth_bridge_post_event(IPA_ETH_BRIDGE_CLIENT_ADD, IPA_IP_MAX, data->mac_addr, NULL, NULL);
 				}
 				else
 				{

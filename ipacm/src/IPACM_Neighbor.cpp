@@ -78,6 +78,7 @@ IPACM_Neighbor::IPACM_Neighbor()
 	IPACM_EvtDispatcher::registr(IPA_USB_LINK_UP_EVENT, this);
 	IPACM_EvtDispatcher::registr(IPA_LINK_DOWN_EVENT, this);
 	IPACM_EvtDispatcher::registr(IPA_WLAN_LINK_DOWN_EVENT, this);
+	IPACM_EvtDispatcher::registr(IPA_WLAN_CLIENT_DEL_EVENT, this);
 	return;
 }
 
@@ -315,22 +316,37 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 			if(i == num_neighbor_client_temp)
 			{
 				IPACM_LOG(IPACM_LOG_DEBUG,"Check if client is added to the kernel neighbor table or not\n");
-				update_neigh_cache(iface_name, client_mac_addr, true);
+				update_neigh_cache(iface_name, client_mac_addr, true, data->if_index);
 			}
 		}
 		break;
 
 		case IPA_LINK_DOWN_EVENT:
 		case IPA_WLAN_LINK_DOWN_EVENT:
+		case IPA_WLAN_CLIENT_DEL_EVENT:
 		{
-			ipacm_event_data_fid *data = (ipacm_event_data_fid *)param;
-			IPACM_LOG(IPACM_LOG_INFO, "Received IPA_LINK_DOWN_EVENT at Neighbour if_index :%d \n",data->if_index);
+			ipacm_event_data_fid *data_fid = NULL;
+			ipacm_event_data_mac *data_mac = NULL;
+
+			if(event == IPA_WLAN_CLIENT_DEL_EVENT)
+			{
+				data_mac = (ipacm_event_data_mac *)param;
+				IPACM_LOG(IPACM_LOG_INFO, "Received IPA_WLAN_CLIENT_DEL_EVENT at Neighbour if_index :%d \n", data_mac->if_index);
+			}
+			else
+			{
+				data_fid = (ipacm_event_data_fid *)param;
+				IPACM_LOG(IPACM_LOG_INFO, "Received IPA_LINK_DOWN_EVENT at Neighbour if_index :%d \n", data_fid->if_index);
+			}
 			move_elements = false;
 			for (i = 0; i < num_neighbor_client_temp; i++)
 			{
-				/* find the client MAC */
-				if (neighbor_client[i].iface_index == data->if_index)
-				{
+				int current_if_index = (event == IPA_WLAN_CLIENT_DEL_EVENT) ? data_mac->if_index : data_fid->if_index;
+				if ((neighbor_client[i].iface_index == current_if_index) &&
+					(((event == IPA_WLAN_CLIENT_DEL_EVENT) &&
+					(memcmp(data_mac->mac_addr, neighbor_client[i].mac_addr, sizeof(neighbor_client[i].mac_addr)) == 0)) ||
+					(event != IPA_WLAN_CLIENT_DEL_EVENT)))
+                                {
 					IPACM_LOG(IPACM_LOG_INFO, "LINK_DOWN: Neighbor if_index: %d, ipa_if_index = %d,"
 						     "name =  %s, ip4_addr = 0x%x Clean %d-st "
 						     "Cached client-MAC %02x:%02x:%02x:%02x:%02x:%02x\n, total client: %d\n",
@@ -1657,7 +1673,7 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 	return;
 }
 
-void IPACM_Neighbor::update_neigh_cache(const char *iface_name, uint8_t *mac_addr, bool is_wlan_client_connect)
+void IPACM_Neighbor::update_neigh_cache(const char *iface_name, uint8_t *mac_addr, bool is_wlan_client_connect, int if_index)
 {
 	FILE *fp = NULL;
 	char *tok = NULL, *ptr = NULL;
@@ -1745,18 +1761,29 @@ void IPACM_Neighbor::update_neigh_cache(const char *iface_name, uint8_t *mac_add
 		/*IPACM resatrt supports for non default AP*/
 		if(!strncmp(rdev_name, "wlan", WLAN_LEN_LEN) && (strncmp(mdev_name, "bridge0", BRIDGE_LEN+1) && !strncmp(mdev_name, "bridge", BRIDGE_LEN)) && is_master_iface)
 		{
+			if(!is_wlan_client_connect)
+			{
+				IPACM_LOG(IPACM_LOG_ERR, "Error while getting interface index for %s device\n", rdev_name);
+				continue;
+			}
+			query_ifindex = -1;
+			if(IPACM_Iface::ipa_get_if_index(rdev_name, &query_ifindex))
+			{
+				IPACM_LOG(IPACM_LOG_ERR, "Error while getting interface index for %s device\n", rdev_name);
+				continue;
+			}
+
+			if(if_index != query_ifindex)
+			{
+				IPACM_LOG(IPACM_LOG_ERR, "Getting wrong wlan iface index %d Got ifindex  %d\n", if_index, query_ifindex);
+				continue;
+			}
 			/*Add the add dummy vlan mapped to the wlan ap interace
 			and add the dummy vlan to demand bridge mapping if wlan ap interface is
 			not available in vlan interface list*/
 			if(!IPACM_Iface::ipacmcfg->is_added_vlan_iface(rdev_name))
 			{
-				query_ifindex = -1;
 				IPACM_LOG(IPACM_LOG_INFO, " %s in on demand bridge is %s\n", rdev_name, mdev_name);
-				if(IPACM_Iface::ipa_get_if_index(rdev_name, &query_ifindex))
-				{
-					IPACM_LOG(IPACM_LOG_ERR, "Error while getting interface index for %s device\n", rdev_name);
-					continue;
-				}
 				if(IPACM_Iface::ipa_get_if_index(mdev_name, &master_ifindex))
 				{
 					IPACM_LOG(IPACM_LOG_ERR, "Error while getting interface index for %s device\n", rdev_name);
@@ -1822,16 +1849,53 @@ void IPACM_Neighbor::update_neigh_cache(const char *iface_name, uint8_t *mac_add
 							sizeof(neighbor_client[i].iface_name)) == 0)
 				{
 					bridge = IPACM_Iface::ipacmcfg->get_vlan_bridge(mdev_name);
-					if(!bridge)
+					/* checking if neigh on bridge recived the before neigh on self
+					to post the lan client event for wlan class to install the
+					lantolan rules */
+					if(bridge)
 					{
-						if(neighbor_client[i].bridge == bridge)
+						// Only dereference neighbor_client[i].bridge if it is non-null
+						if(neighbor_client[i].bridge &&
+						!(strncmp(neighbor_client[i].bridge->bridge_name, mdev_name,
+							sizeof(neighbor_client[i].bridge->bridge_name))))
 						{
+							query_ifindex = -1;
+							IPACM_LOG(IPACM_LOG_INFO, "updating the dev name %s\n", rdev_name);
 							strlcpy(neighbor_client[i].iface_name, rdev_name,
 									sizeof(neighbor_client[i].iface_name));
+							if(IPACM_Iface::ipa_get_if_index(rdev_name, &query_ifindex))
+							{
+								IPACM_LOG(IPACM_LOG_ERR, "Error while getting interface index for %s device\n", rdev_name);
+								continue;
+							}
+							neighbor_client[i].iface_index = query_ifindex;
 							is_client_cached = true;
 							break;
 						}
 						bridge = NULL;
+					}
+					/* if client mac address is presents in neighbour table and waiting for self neighn, then
+					post the IPA_LAN_CLIENT_ADD_EVENT to install the lantolan rules */
+					if((iface_name != NULL) && (!strncmp(rdev_name, iface_name , WLAN_LEN_LEN+1)) && is_wlan_client_connect)
+					{
+						if(!memcmp(mac_addr, mac_addr_fdb, sizeof(mac_addr_fdb)))
+						{
+							evt_data.event = IPA_LAN_CLIENT_ADD_EVENT;
+							data_all = (ipacm_event_data_all *)malloc(sizeof(ipacm_event_data_all));
+							if (data_all == NULL)
+							{
+								IPACM_LOG(IPACM_LOG_ERR, "Unable to allocate memory\n");
+								return;
+							}
+							memset(data_all, 0, sizeof(ipacm_event_data_all));
+							data_all->if_index = query_ifindex;
+							memcpy(data_all->mac_addr, mac_addr_fdb, sizeof(mac_addr_fdb));
+							memcpy(data_all->iface_name, iface_name, sizeof(data_all->iface_name));
+							evt_data.evt_data = (void *)data_all;
+							IPACM_EvtDispatcher::PostEvt(&evt_data);
+							IPACM_LOG(IPACM_LOG_INFO, "Posted event %d with %s\n",
+								evt_data.event, data_all->iface_name);
+						}
 					}
 				}
 			}

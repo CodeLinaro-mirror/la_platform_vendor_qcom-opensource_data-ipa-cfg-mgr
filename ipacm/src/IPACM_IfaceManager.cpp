@@ -682,7 +682,7 @@ int IPACM_IfaceManager::create_iface_instance(ipacm_ifacemgr_data *param)
 						if (w->rx_prop == NULL && w->tx_prop == NULL)
 						{
 							/* close the netdev instance if IPA not support*/
-							if (strcmp(IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].iface_name,"map-mape") == 0){
+							if (strcmp(IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].iface_name,MAPE_IFACE_NAME) == 0){
 								IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].ifi_flags = 0;
 							}
 							w->delete_iface();

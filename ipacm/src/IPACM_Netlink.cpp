@@ -1860,8 +1860,8 @@ static int ipa_nl_decode_nlmsg
 					IPACMDBG("GOT RTM_NEWROUTE event, br-wan enabled %d \n", IPACM_Iface::ipacmcfg->eth_wan_br_wan_enable);
 				}
 
-				if(strcmp(dev_name,"map-mape") == 0){
-					IPACMDBG_H(" Ignoring route on map-mape \n");
+				if(strcmp(dev_name,MAPE_IFACE_NAME) == 0){
+					IPACMDBG_H(" Ignoring route on %s \n",dev_name);
 					return IPACM_SUCCESS;
 				}
 				if(msg_ptr->nl_route_info.attr_info.param_mask & IPA_RTA_PARAM_DST)
@@ -2411,8 +2411,8 @@ process_v6:
 						IPACMERR("Error while getting interface name\n");
 						return IPACM_FAILURE;
 					}
-					if(strcmp(dev_name,"map-mape") == 0){
-						IPACMDBG_H(" Ignoring route on map-mape \n");
+					if(strcmp(dev_name,MAPE_IFACE_NAME) == 0){
+						IPACMDBG_H(" Ignoring route on %s \n",dev_name);
 						return IPACM_SUCCESS;
 					}
 
@@ -2454,8 +2454,8 @@ process_v6:
 						return IPACM_FAILURE;
 					}
 
-					if(strcmp(dev_name,"map-mape") == 0){
-						IPACMDBG_H(" Ignoring route on map-mape \n");
+					if(strcmp(dev_name,MAPE_IFACE_NAME) == 0){
+						IPACMDBG_H(" Ignoring route on %s \n",dev_name);
 						return IPACM_SUCCESS;
 					}
 
@@ -3175,8 +3175,8 @@ int ipa_nl_send_getroute(ipa_ip_type ip_type)
 				IPACM_NL_REPORT_ADDR( "gw", nl_route_info_get_route.attr_info.gateway_addr );
 				IPACMDBG("dev %s\n",dev_name );
 
-				if(strcmp(dev_name,"map-mape") == 0){
-					IPACMDBG_H(" Ignoring route on map-mape \n");
+				if(strcmp(dev_name,MAPE_IFACE_NAME) == 0){
+					IPACMDBG_H(" Ignoring route on %s  \n",dev_name);
 					free(buf);
 					close(nl_sock);
 					return IPACM_SUCCESS;
@@ -3222,8 +3222,8 @@ int ipa_nl_send_getroute(ipa_ip_type ip_type)
 					IPACMDBG_H("dev %s \n", dev_name);
 					IPACM_NL_REPORT_ADDR( "dstIP:\n", nl_route_info_get_route.attr_info.dst_addr );
 
-					if(strcmp(dev_name,"map-mape") == 0){
-						IPACMDBG_H(" Ignoring route on map-mape \n");
+					if(strcmp(dev_name,MAPE_IFACE_NAME) == 0){
+						IPACMDBG_H(" Ignoring route on %s \n",dev_name);
 						free(buf);
 						close(nl_sock);
 						return IPACM_SUCCESS;

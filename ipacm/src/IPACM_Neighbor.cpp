@@ -149,15 +149,21 @@ bool IPACM_Neighbor::validate_bridge_vid(char* iface_name, const ipacm_bridge* e
 int IPACM_Neighbor::parse_bridge_info(int index, struct ipa_bridge_vlan_mapping_info *data)
 {
 	int fd;
-        struct ifreq ifrr;
-        struct sockaddr_in *ipaddr;
+	struct ifreq ifrr;
+	struct sockaddr_in *ipaddr;
 
-        fd = socket(AF_INET, SOCK_DGRAM, 0);
-        if (fd < 0)
-        {
-                IPACMERR("unable to open socket");
-                return -1;
-        }
+	if (data == NULL)
+	{
+		IPACMERR("parse_bridge_info: invalid input data pointer\n");
+		return -1;
+	}
+
+	fd = socket(AF_INET, SOCK_DGRAM, 0);
+	if (fd < 0)
+	{
+			IPACMERR("unable to open socket");
+			return -1;
+	}
 	IPACMDBG("Interface index %d\n", index);
         memset(&ifrr, 0, sizeof(struct ifreq));
         ifrr.ifr_ifindex = index;
@@ -210,6 +216,12 @@ int IPACM_Neighbor::parse_bridge_name(int index, struct ipa_bridge_vlan_mapping_
 	int fd;
 	struct ifreq ifrr;
 	struct sockaddr_in *ipaddr;
+
+	if (data == NULL)
+	{
+		IPACMERR("parse_bridge_name: invalid input data pointer\n");
+		return -1;
+	}
 
 	fd = socket(AF_INET, SOCK_DGRAM, 0);
 	if (fd < 0)
@@ -385,6 +397,11 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 			struct ipa_bridge_vlan_mapping_info add_bridge_vlan_map;
 
 			data_all = (ipacm_event_data_all *)param;
+			if (data_all == NULL)
+			{
+				IPACMERR("IPA_ADD_BRIDGE_VLAN_PHY_INTF: NULL param\n");
+				return;
+			}
 			ret = config->find_matching_vlan(data_all->if_index, &vlan_data);
 			if(ret == IPACM_FAILURE)
 			{
@@ -415,6 +432,11 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 			struct ipa_bridge_vlan_mapping_info vlan_bridge_data;
 			int ret = 0;
 			data_all = (ipacm_event_data_all *)param;
+			if (data_all == NULL)
+			{
+				IPACMERR("IPA_ADD_BRIDGE_VLAN_BR_INTF: NULL param\n");
+				return;
+			}
 
 			ret = parse_bridge_info(data_all->if_index, &vlan_bridge_data);
 			if(ret == -1)
@@ -439,6 +461,11 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 		{
 				IPACMDBG("Handling %s\n", config->getEventName(IPA_CLEAN_NEIGHBOR_CACHE));
 				ipacm_event_data_all *data = (ipacm_event_data_all *)param;
+				if (data == NULL)
+				{
+					IPACMERR("IPA_CLEAN_NEIGHBOR_CACHE: NULL param\n");
+					return;
+				}
 				IPACMDBG("data->iface_name: %s, data->if_index: %d\n", data->iface_name, data->if_index);
 				handle_neigh_clients_ops(NEIGH_CLIENT_DEL, &(data->if_index));
 		}
@@ -448,6 +475,11 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 		case IPA_WLAN_LINK_DOWN_EVENT:
 		{
 			ipacm_event_data_fid *data = (ipacm_event_data_fid *)param;
+			if (data == NULL)
+			{
+				IPACMERR("LINK_DOWN_EVENT: NULL param\n");
+				return;
+			}
 			IPACMDBG_H("Received IPA_LINK_DOWN_EVENT at Neighbour if_index :%d \n",data->if_index);
 			for(it = neighbor_client.begin(); it != neighbor_client.end();)
 			{
@@ -468,6 +500,11 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 		{
 			/* check by netdev interface to post CLIENT_IP_ADDR_ADD for all clients */
 			ipacm_event_data_fid *data = (ipacm_event_data_fid *)param;
+			if (data == NULL)
+			{
+				IPACMERR("IPA_USB_LINK_UP_EVENT: NULL param\n");
+				return;
+			}
 			ipa_interface_index = IPACM_Iface::iface_ipa_index_query(data->if_index);
 			/* check for failure return */
 			if (IPACM_FAILURE == ipa_interface_index) {
@@ -811,13 +848,13 @@ void IPACM_Neighbor::handle_v4_neighbor(ipa_cm_event_id event, ipacm_event_data_
 	int bridge_index = 0;
 	IPACM_Config* config = IPACM_Config::GetInstance();
 
-	IPACMDBG_H("Got Neighbor event with ipv4 address: 0x%x \n", data->ipv4_addr);
-
-	if(data == NULL)
+	if (data == NULL || !data->ipv4_addr)
 	{
-		IPACMERR("Invalid data received\n");
+		IPACMERR("handle_v4_neighbor invalid input data pointer\n");
 		return;
 	}
+
+	IPACMDBG_H("Got Neighbor event with ipv4 address: 0x%x \n", data->ipv4_addr);
 
 	/* check if ipv4 address is link local(169.254.xxx.xxx) */
 	if ((data->ipv4_addr & IPV4_ADDR_LINKLOCAL_MASK) == IPV4_ADDR_LINKLOCAL)
@@ -1091,14 +1128,14 @@ void IPACM_Neighbor::handle_v6_neighbor(ipa_cm_event_id event, ipacm_event_data_
 	ipacm_bridge* dummy_vlan_bridge = NULL;
 	IPACM_Config* config = IPACM_Config::GetInstance();
 
-	IPACMDBG("Got New_Neighbor event with ipv6 addr [0x%x:%x:%x:%x] \n",
-		data->ipv6_addr[0], data->ipv6_addr[1], data->ipv6_addr[2], data->ipv6_addr[3]);
-
-	if(data == NULL)
+	if (data == NULL || !data->ipv6_addr)
 	{
-		IPACMERR("Invalid data received\n");
+		IPACMERR("handle_v6_neighbor invalid input data pointer\n");
 		return;
 	}
+
+	IPACMDBG("Got New_Neighbor event with ipv6 addr [0x%x:%x:%x:%x] \n",
+		data->ipv6_addr[0], data->ipv6_addr[1], data->ipv6_addr[2], data->ipv6_addr[3]);
 
 	/* check if iface is bridge interface*/
 #ifdef FEATURE_VLAN_MPDN
@@ -1319,6 +1356,12 @@ void IPACM_Neighbor::post_phys_iface_event(const char *iface_name, int ipa_if_nu
 	int phys_if_idx;
 	ipacm_event_data_fid *data_fid = NULL;
 	ipacm_cmd_q_data evt_data;
+
+	if (iface_name == NULL)
+	{
+		IPACMERR("post_phys_iface_event: NULL iface_name\n");
+		return;
+	}
 
 	/* Vlan client */
 	if (IPACM_FAILURE == ipa_if_num) {

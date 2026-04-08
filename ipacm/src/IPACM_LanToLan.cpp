@@ -163,6 +163,8 @@ IPACM_LanToLan::IPACM_LanToLan()
 	IPACM_EvtDispatcher::registr(IPA_ETH_BRIDGE_CLIENT_ADD, this);
 	IPACM_EvtDispatcher::registr(IPA_ETH_BRIDGE_CLIENT_DEL, this);
 	IPACM_EvtDispatcher::registr(IPA_ETH_BRIDGE_WLAN_SCC_MCC_SWITCH, this);
+	IPACM_EvtDispatcher::registr(IPA_QOS_RULE_ADD_EVENT, this);
+	IPACM_EvtDispatcher::registr(IPA_QOS_RULE_DEL_EVENT, this);
 #ifdef FEATURE_VLAN_MPDN
 	IPACM_EvtDispatcher::registr(IPA_ETH_BRIDGE_ADD_VLAN_ID, this);
 	IPACM_EvtDispatcher::registr(IPA_ETH_BRIDGE_DEL_VLAN_ID, this);
@@ -270,6 +272,24 @@ void IPACM_LanToLan::event_callback(ipa_cm_event_id event, void* param)
 			break;
 		}
 #endif
+		case IPA_QOS_RULE_ADD_EVENT:
+		{
+			qos_param_info *qos_param = (qos_param_info *)param;
+			IPACMDBG_H("Received IPA_QOS_RULE_ADD_EVENT in LanToLan\n");
+			if (IPACM_Iface::ipacmcfg->ipacm_qos_enable)
+				handle_qos_rule_add(qos_param);
+			break;
+		}
+
+		case IPA_QOS_RULE_DEL_EVENT:
+		{
+			qos_delete_param_info *qos_param = (qos_delete_param_info *)param;
+			IPACMDBG_H("Received IPA_QOS_RULE_DEL_EVENT in LanToLan\n");
+			if (IPACM_Iface::ipacmcfg->ipacm_qos_enable)
+				handle_qos_rule_del(qos_param);
+			break;
+		}
+
 		default:
 			break;
 	}
@@ -277,6 +297,146 @@ void IPACM_LanToLan::event_callback(ipa_cm_event_id event, void* param)
 		print_data_structure_info();
 	return;
 }
+
+/* Dispatch IPA_QOS_RULE_ADD_EVENT to all registered ETH LanToLan ifaces */
+void IPACM_LanToLan::handle_qos_rule_add(qos_param_info *qos_param)
+{
+	list<IPACM_LanToLan_Iface>::iterator it;
+
+	if (!qos_param)
+	{
+		IPACMERR("Invalid qos_param pointer\n");
+		return;
+	}
+
+	IPACMDBG_H("Dispatching QoS rule add to %zu LanToLan ifaces\n", m_iface.size());
+	for (it = m_iface.begin(); it != m_iface.end(); it++)
+	{
+		if ((!strncmp(it->get_iface_pointer()->dev_name, qos_param->iface_name, sizeof(it->get_iface_pointer()->dev_name))) && (it->get_iface_pointer()->tx_prop->num_tx_props>2))
+		{
+			IPACMDBG_H("Installing QoS priority MAC rules on ETH iface %s\n",
+				it->get_iface_pointer()->dev_name);
+			handle_qos_rule_del_all(it->get_iface_pointer()->dev_name);
+			it->handle_qos_rule_add(qos_param);
+		}
+	}
+}
+
+void IPACM_LanToLan::handle_qos_rule_del_all(char *iface_name)
+{
+	list<qos_param_info>::iterator qos_param;
+	list<qos_client_info>::iterator qos_client;
+
+	IPACMDBG_H("Deleting all client rules from qos config\n");
+
+	if(pthread_mutex_lock(&IPACM_Iface::ipacmcfg->qos_param_list_lock) != 0)
+	{
+		IPACMERR("Unable to lock the mutex\n");
+		return;
+	}
+
+
+	for (qos_param = IPACM_Iface::ipacmcfg->m_qos_params.begin(); qos_param != IPACM_Iface::ipacmcfg->m_qos_params.end(); qos_param++)
+	{
+		if(strcmp(qos_param->iface_name, iface_name))
+		{
+			IPACMDBG("Qos param is assosiated to %s iface is %s\n", qos_param->iface_name, iface_name);
+			continue;
+		}
+
+		for (qos_client = qos_param->qos_client_list.begin();
+			qos_client != qos_param->qos_client_list.end();)
+		{
+			IPACMDBG_H("QOS is v4 set %d for hdl 0x%x\n",
+				qos_client->route_rule_l2l_set_v4,
+				qos_client->qos_l2l_rt_rule_hdl_v4);
+
+			if (qos_client->route_rule_l2l_set_v4 &&
+				(IPACM_Iface::m_routing.DeleteRoutingHdl(
+					qos_client->qos_l2l_rt_rule_hdl_v4, IPA_IP_v4) == false))
+			{
+				IPACMERR("Failed to delete QoS v4 rt rule hdl 0x%x\n",
+					qos_client->qos_l2l_rt_rule_hdl_v4);
+				pthread_mutex_unlock(&IPACM_Iface::ipacmcfg->qos_param_list_lock);
+				return;
+			}
+
+			IPACMDBG_H("QOS is v6 set %d for hdl 0x%x\n",
+				qos_client->route_rule_l2l_set_v6,
+				qos_client->qos_l2l_rt_rule_hdl_v6);
+
+			if (qos_client->route_rule_l2l_set_v6 &&
+				(IPACM_Iface::m_routing.DeleteRoutingHdl(
+					qos_client->qos_l2l_rt_rule_hdl_v6, IPA_IP_v6) == false))
+			{
+				IPACMERR("Failed to delete QoS v6 rt rule hdl 0x%x\n",
+					qos_client->qos_l2l_rt_rule_hdl_v6);
+				pthread_mutex_unlock(&IPACM_Iface::ipacmcfg->qos_param_list_lock);
+				return;
+			}
+			/* In a single entry there would be either v4 or v6 entry details
+			 * not both.
+			 */
+			qos_client = qos_param->qos_client_list.erase(qos_client);
+			qos_param->client_cnt--;
+
+		}
+
+	}
+
+	IPACMDBG_H("Qos params list size after deleting client is now :%d \n", IPACM_Iface::ipacmcfg->m_qos_params.size());
+	pthread_mutex_unlock(&IPACM_Iface::ipacmcfg->qos_param_list_lock);
+	return;
+}
+
+/* Dispatch IPA_QOS_RULE_DEL_EVENT to all registered ETH LanToLan ifaces */
+void IPACM_LanToLan::handle_qos_rule_del(qos_delete_param_info *qos_param)
+{
+	if (!qos_param)
+	{
+		IPACMERR("Invalid qos_param pointer\n");
+		return;
+	}
+
+	if (qos_param->dir != IPA_QoS_UL_RULE)
+	{
+		IPACMDBG_H("DL qos rule delete request on LanToLan, ignoring\n");
+		return;
+	}
+
+	IPACMDBG_H("Deleting %d qos clients in LanToLan\n", qos_param->client_cnt);
+
+	for (uint32_t i = 0; i < qos_param->client_cnt; i++)
+	{
+		IPACMDBG_H("QOS is v4 set %d for hdl 0x%x\n",
+			qos_param->qos_client_list[i].route_rule_l2l_set_v4,
+			qos_param->qos_client_list[i].qos_l2l_rt_rule_hdl_v4);
+
+		if (qos_param->qos_client_list[i].route_rule_l2l_set_v4 &&
+			(IPACM_Iface::m_routing.DeleteRoutingHdl(
+				qos_param->qos_client_list[i].qos_l2l_rt_rule_hdl_v4, IPA_IP_v4) == false))
+		{
+			IPACMERR("Failed to delete QoS v4 rt rule hdl 0x%x\n",
+				qos_param->qos_client_list[i].qos_l2l_rt_rule_hdl_v4);
+			return;
+		}
+
+		IPACMDBG_H("QOS is v6 set %d for hdl 0x%x\n",
+			qos_param->qos_client_list[i].route_rule_l2l_set_v6,
+			qos_param->qos_client_list[i].qos_l2l_rt_rule_hdl_v6);
+
+		if (qos_param->qos_client_list[i].route_rule_l2l_set_v6 &&
+			(IPACM_Iface::m_routing.DeleteRoutingHdl(
+				qos_param->qos_client_list[i].qos_l2l_rt_rule_hdl_v6, IPA_IP_v6) == false))
+		{
+			IPACMERR("Failed to delete QoS v6 rt rule hdl 0x%x\n",
+				qos_param->qos_client_list[i].qos_l2l_rt_rule_hdl_v6);
+			return;
+		}
+
+	}
+}
+
 
 void IPACM_LanToLan::handle_iface_up(ipacm_event_eth_bridge *data)
 {
@@ -410,8 +570,14 @@ void IPACM_LanToLan::handle_iface_up(ipacm_event_eth_bridge *data)
 				/* add peer info only when both interfaces support inter-interface communication */
 				if(it->get_m_support_inter_iface_offload())
 				{
-					/* populate hdr_proc_ctx and routing table handle */
-					handle_new_iface_up(&front_iface, &(*it));
+					if ((IPACM_Iface::ipacmcfg->device_mode == DEVMODE_APBRIDGE) && (front_iface.get_iface_pointer()->ipa_if_cate == WLAN_IF) && (it->get_iface_pointer()->ipa_if_cate == WLAN_IF)) {
+						IPACMDBG("Avoid populating between mld peers\n");
+					}
+					else
+					{
+						/* populate hdr_proc_ctx and routing table handle */
+						handle_new_iface_up(&front_iface, &(*it));
+					}
 
 					/* add client specific routing rule on existing interface - regardless of vlan id*/
 					it->add_client_rt_rule_for_new_iface();
@@ -491,6 +657,7 @@ void IPACM_LanToLan::handle_iface_down(ipacm_event_eth_bridge *data)
 		return;
 	}
 
+	handle_qos_rule_del_all(data->p_iface->dev_name);
 	it_target_iface->handle_down_event();
 	m_iface.erase(it_target_iface);
 #ifdef FEATURE_L2TP
@@ -974,6 +1141,8 @@ void IPACM_LanToLan::handle_client_add(ipacm_event_eth_bridge *data)
 			}
 #endif //FEATURE_VLAN_MPDN
 			it_iface->handle_client_add(data->mac_addr, is_l2tp_client, mapping_info, data->VlanID, data->Outer_Vlanid);
+			if (IPACM_Iface::ipacmcfg->ipacm_qos_enable)
+				it_iface->install_all_qos_route_rule_l2l(data->mac_addr);
 			break;
 		}
 	}
@@ -1047,6 +1216,8 @@ void IPACM_LanToLan::handle_client_del(ipacm_event_eth_bridge *data, bool del_cl
 		{
 			IPACMDBG_H("Found the interface.\n");
 			it_iface->handle_client_del(data->mac_addr, data->VlanID, data->Outer_Vlanid);
+			if (IPACM_Iface::ipacmcfg->ipacm_qos_enable)
+				it_iface->delete_client_qos_rule_l2l(data->mac_addr);
 			break;
 		}
 	}
@@ -1402,7 +1573,7 @@ void IPACM_LanToLan_Iface::add_client_rt_rule(peer_iface_info *peer_info, client
 		}
 
 		client->inter_iface_rt_rule_hdl[peer_l2_hdr_type].num_hdl[IPA_IP_v4] = num_rt_rule;
-		IPACMDBG_H("Number of IPv4 routing rule is %d.\n", num_rt_rule);
+		IPACMDBG_H("Number of IPv4 routing rule is %d %d.\n", num_rt_rule, peer_l2_hdr_type);
 		for(i=0; i<num_rt_rule; i++)
 		{
 			IPACMDBG_H("Routing rule %d handle %d\n", i, rt_rule_hdl[i]);
@@ -1425,6 +1596,8 @@ void IPACM_LanToLan_Iface::add_client_rt_rule(peer_iface_info *peer_info, client
 			IPACMDBG_H("Routing rule %d handle %d\n", i, rt_rule_hdl[i]);
 			client->inter_iface_rt_rule_hdl[peer_l2_hdr_type].rule_hdl[IPA_IP_v6][i] = rt_rule_hdl[i];
 		}
+		if(IPACM_Iface::ipacmcfg->ipacm_qos_enable)
+			install_all_qos_route_rule_l2l(client->mac_addr);
 	}
 	else
 	{
@@ -1689,7 +1862,8 @@ void IPACM_LanToLan_Iface::add_client_flt_rule(peer_iface_info *peer, client_inf
 {
 	list<flt_rule_info>::iterator it_flt;
 	list<client_info>::iterator it;
-	uint32_t flt_rule_hdl = 0, l2tp_flt_rule_hdl = 0, l2tp_second_pass_flt_rule_hdl = 0;
+	uint32_t l2tp_flt_rule_hdl = 0, l2tp_second_pass_flt_rule_hdl = 0;
+	uint32_t flt_rule_hdl[MAX_PIPES] = {0, 0};;
 	list<uint32_t> flt_rule_hdls = std::list<uint32_t>();
 	flt_rule_info new_flt_info = {0};
 	ipa_ioc_get_rt_tbl rt_tbl;
@@ -1722,7 +1896,18 @@ void IPACM_LanToLan_Iface::add_client_flt_rule(peer_iface_info *peer, client_inf
 	{
 		if(it_flt != peer->flt_rule.end())
 		{
-			if (it_flt->flt_rule_hdl[iptype] && !is_spcl_iface()) {
+			/* In vlan cases handle gets stored in later index due to the
+			  loop logic in eth bridge add flt rule. */
+			if (it_flt->flt_rule_hdl[iptype][QOS_OR_VLAN_INDEX] && is_ap_iface_vlan_enabled())
+			{
+				IPACMDBG_H("already found client on vlan pipe 0x[%X][%X][%X][%X][%X][%X] vlan %d, iptype %d\n",
+					it_flt->p_client->mac_addr[0], it_flt->p_client->mac_addr[1], it_flt->p_client->mac_addr[2],
+					it_flt->p_client->mac_addr[3], it_flt->p_client->mac_addr[4], it_flt->p_client->mac_addr[5],
+					it_flt->p_client->vlan_id, iptype);
+				return;
+
+			}
+			else if (it_flt->flt_rule_hdl[iptype][BE_INDEX] && !is_spcl_iface()) {
 				IPACMDBG_H("not adding rule for already found client 0x[%X][%X][%X][%X][%X][%X] vlan %d, iptype %d\n",
 					it_flt->p_client->mac_addr[0], it_flt->p_client->mac_addr[1], it_flt->p_client->mac_addr[2],
 					it_flt->p_client->mac_addr[3], it_flt->p_client->mac_addr[4], it_flt->p_client->mac_addr[5],
@@ -1792,7 +1977,7 @@ void IPACM_LanToLan_Iface::add_client_flt_rule(peer_iface_info *peer, client_inf
 			}
 			else
 			{
-				flt_rule_hdl = 0;
+				memset(flt_rule_hdl, 0, sizeof(flt_rule_hdl));
 				m_p_iface->add_l2tp_udp_flt_rule(client->mac_addr,
 					it->mapping_info->vlan_iface_ipv6_addr, it->mapping_info->vlan_client_ipv6_addr,
 					it->mapping_info->dst_port, it->mapping_info->src_port,
@@ -1863,7 +2048,7 @@ void IPACM_LanToLan_Iface::add_client_flt_rule(peer_iface_info *peer, client_inf
 				if(double_tagging)
 				{
 					ret = m_p_iface->eth_bridge_add_flt_rule(client->mac_addr, rt_tbl.hdl,
-						iptype, &flt_rule_hdl, client->vlan_id, pipe_idx,outer_vlan_id);
+						iptype, flt_rule_hdl, client->vlan_id, pipe_idx,outer_vlan_id);
 					if(ret == IPACM_FAILURE)
 					{
 						IPACMERR("filter rule addition failed\n");
@@ -1874,7 +2059,7 @@ void IPACM_LanToLan_Iface::add_client_flt_rule(peer_iface_info *peer, client_inf
 				else
 				{
 					ret = m_p_iface->eth_bridge_add_flt_rule(client->mac_addr, rt_tbl.hdl,
-						iptype, &flt_rule_hdl, client->vlan_id, pipe_idx, 0);
+						iptype, flt_rule_hdl, client->vlan_id, pipe_idx, 0);
 					if(ret == IPACM_FAILURE)
 					{
 						IPACMERR("filter rule addition failed\n");
@@ -1889,7 +2074,7 @@ void IPACM_LanToLan_Iface::add_client_flt_rule(peer_iface_info *peer, client_inf
 
 	if(it_flt != peer->flt_rule.end())
 	{
-		it_flt->flt_rule_hdl[iptype] = flt_rule_hdl;
+		memcpy(it_flt->flt_rule_hdl[iptype], flt_rule_hdl, sizeof(flt_rule_hdl));
 		it_flt->l2tp_first_pass_flt_rule_hdl[iptype].flt_rule_hdls = flt_rule_hdls;
 		it_flt->l2tp_second_pass_flt_rule_hdl = l2tp_second_pass_flt_rule_hdl;
 	}
@@ -1897,7 +2082,7 @@ void IPACM_LanToLan_Iface::add_client_flt_rule(peer_iface_info *peer, client_inf
 	{
 		IPACMDBG_H("The client is not found in flt info list, insert a new one.\n");
 		new_flt_info.p_client = client;
-		new_flt_info.flt_rule_hdl[iptype] = flt_rule_hdl;
+		memcpy(new_flt_info.flt_rule_hdl[iptype], flt_rule_hdl, sizeof(flt_rule_hdl));
 		/* Create empty list. */
 		new_flt_info.l2tp_first_pass_flt_rule_hdl[IPA_IP_v4].flt_rule_hdls = std::list<uint32_t>();
 		new_flt_info.l2tp_first_pass_flt_rule_hdl[IPA_IP_v6].flt_rule_hdls = std::list<uint32_t>();
@@ -1965,8 +2150,13 @@ void IPACM_LanToLan_Iface::del_client_flt_rule(peer_iface_info *peer, client_inf
 					else
 #endif
 					{
-						m_p_iface->eth_bridge_del_flt_rule(it_flt->flt_rule_hdl[IPA_IP_v4], IPA_IP_v4);
-						IPACMDBG_H("Deleted IPv4 flt rule %d.\n", it_flt->flt_rule_hdl[IPA_IP_v4]);
+						m_p_iface->eth_bridge_del_flt_rule(it_flt->flt_rule_hdl[IPA_IP_v4][BE_INDEX], IPA_IP_v4);
+						IPACMDBG_H("Deleted IPv4 flt rule %d.\n", it_flt->flt_rule_hdl[IPA_IP_v4][BE_INDEX]);
+						if (it_flt->flt_rule_hdl[IPA_IP_v4][QOS_OR_VLAN_INDEX]) {
+							m_p_iface->eth_bridge_del_flt_rule(it_flt->flt_rule_hdl[IPA_IP_v4][QOS_OR_VLAN_INDEX], IPA_IP_v4);
+							IPACMDBG_H("Deleted IPA_IP_v4 flt rule handle[QOS_OR_VLAN_INDEX]=%d.\n", it_flt->flt_rule_hdl[IPA_IP_v4][QOS_OR_VLAN_INDEX]);
+						}
+
 					}
 				}
 			}
@@ -2009,8 +2199,13 @@ void IPACM_LanToLan_Iface::del_client_flt_rule(peer_iface_info *peer, client_inf
 					else
 #endif
 					{
-						m_p_iface->eth_bridge_del_flt_rule(it_flt->flt_rule_hdl[IPA_IP_v6], IPA_IP_v6);
-						IPACMDBG_H("Deleted IPv6 flt rule %d.\n", it_flt->flt_rule_hdl[IPA_IP_v6]);
+						m_p_iface->eth_bridge_del_flt_rule(it_flt->flt_rule_hdl[IPA_IP_v6][BE_INDEX], IPA_IP_v6);
+						IPACMDBG_H("Deleted IPv6 flt rule %d.\n", it_flt->flt_rule_hdl[IPA_IP_v6][BE_INDEX]);
+						if (it_flt->flt_rule_hdl[IPA_IP_v6][QOS_OR_VLAN_INDEX]) {
+							m_p_iface->eth_bridge_del_flt_rule(it_flt->flt_rule_hdl[IPA_IP_v6][QOS_OR_VLAN_INDEX], IPA_IP_v6);
+							IPACMDBG_H("Deleted IPA_IP_v6 flt rule handle[QOS_OR_VLAN_INDEX]=%d.\n", it_flt->flt_rule_hdl[IPA_IP_v6][QOS_OR_VLAN_INDEX]);
+						}
+
 					}
 				}
 			}
@@ -2090,7 +2285,10 @@ void IPACM_LanToLan_Iface::del_client_rt_rule(peer_iface_info *peer, client_info
 #endif
 		if(client->is_l2tp_client == false)
 		{
+
 			num_rules = client->inter_iface_rt_rule_hdl[peer_l2_hdr_type].num_hdl[IPA_IP_v4];
+			IPACMDBG("num rules %d %d\n", num_rules, peer_l2_hdr_type);
+			IPACMDBG_H("IPv4 rt rule %d \n", client->inter_iface_rt_rule_hdl[peer_l2_hdr_type].rule_hdl[IPA_IP_v4][0]);
 			for(i = 0; i < num_rules; i++)
 			{
 				m_p_iface->eth_bridge_del_rt_rule(client->inter_iface_rt_rule_hdl[peer_l2_hdr_type].rule_hdl[IPA_IP_v4][i], IPA_IP_v4);
@@ -2438,8 +2636,12 @@ void IPACM_LanToLan_Iface::clear_all_flt_rule_for_one_peer_iface(peer_iface_info
 				else
 #endif
 				{
-					m_p_iface->eth_bridge_del_flt_rule(it->flt_rule_hdl[IPA_IP_v4], IPA_IP_v4);
-					IPACMDBG_H("Deleted IPv4 flt rule %d.\n", it->flt_rule_hdl[IPA_IP_v4]);
+					m_p_iface->eth_bridge_del_flt_rule(it->flt_rule_hdl[IPA_IP_v4][BE_INDEX], IPA_IP_v4);
+					IPACMDBG_H("Deleted IPv4 flt rule %d.\n", it->flt_rule_hdl[IPA_IP_v4][BE_INDEX]);
+					if (it->flt_rule_hdl[IPA_IP_v4][QOS_OR_VLAN_INDEX]) {
+						m_p_iface->eth_bridge_del_flt_rule(it->flt_rule_hdl[IPA_IP_v4][QOS_OR_VLAN_INDEX], IPA_IP_v4);
+						IPACMDBG_H("Deleted IPA_IP_v4 flt rule handle[QOS_OR_VLAN_INDEX]=%d.\n", it->flt_rule_hdl[IPA_IP_v4][QOS_OR_VLAN_INDEX]);
+					}
 #ifdef FEATURE_VLAN_MPDN
 					if(m_is_vlan)
 					{
@@ -2488,8 +2690,13 @@ void IPACM_LanToLan_Iface::clear_all_flt_rule_for_one_peer_iface(peer_iface_info
 				else
 #endif
 				{
-					m_p_iface->eth_bridge_del_flt_rule(it->flt_rule_hdl[IPA_IP_v6], IPA_IP_v6);
-					IPACMDBG_H("Deleted IPv6 flt rule %d.\n", it->flt_rule_hdl[IPA_IP_v6]);
+					m_p_iface->eth_bridge_del_flt_rule(it->flt_rule_hdl[IPA_IP_v6][BE_INDEX], IPA_IP_v6);
+					IPACMDBG_H("Deleted IPv6 flt rule %d.\n", it->flt_rule_hdl[IPA_IP_v6][BE_INDEX]);
+					if (it->flt_rule_hdl[IPA_IP_v6][QOS_OR_VLAN_INDEX]) {
+						m_p_iface->eth_bridge_del_flt_rule(it->flt_rule_hdl[IPA_IP_v6][QOS_OR_VLAN_INDEX], IPA_IP_v6);
+						IPACMDBG_H("Deleted IPA_IP_v4 flt rule handle[QOS_OR_VLAN_INDEX]=%d.\n", it->flt_rule_hdl[IPA_IP_v6][QOS_OR_VLAN_INDEX]);
+					}
+
 #ifdef FEATURE_VLAN_MPDN
 					if(m_is_vlan)
 					{
@@ -3248,14 +3455,14 @@ void IPACM_LanToLan_Iface::print_peer_info(peer_iface_info *peer_info , bool int
 		IPACMDBG_H("Flt rule handle for client %p:\n", it_flt->p_client);
 		if(m_is_ip_addr_assigned[IPA_IP_v4])
 		{
-			IPACMDBG_H("IPv4 %d\n", it_flt->flt_rule_hdl[IPA_IP_v4]);
+			IPACMDBG_H("IPv4 handle[BE_INDEX]=%d handle[QOS_OR_VLAN_INDEX]=%d\n", it_flt->flt_rule_hdl[IPA_IP_v4][BE_INDEX], it_flt->flt_rule_hdl[IPA_IP_v4][QOS_OR_VLAN_INDEX]);
 			for (it_flt_hdl = it_flt->l2tp_first_pass_flt_rule_hdl[IPA_IP_v4].flt_rule_hdls.begin();
 				it_flt_hdl != it_flt->l2tp_first_pass_flt_rule_hdl[IPA_IP_v4].flt_rule_hdls.end(); ++it_flt_hdl)
 				IPACMDBG_H("IPv4 l2tp flt rule handle: %d\n", *it_flt_hdl);
 		}
 		if(m_is_ip_addr_assigned[IPA_IP_v6])
 		{
-			IPACMDBG_H("IPv6 %d\n", it_flt->flt_rule_hdl[IPA_IP_v6]);
+			IPACMDBG_H("IPv6 handle[BE_INDEX]=%d handle[QOS_OR_VLAN_INDEX]=%d\n", it_flt->flt_rule_hdl[IPA_IP_v6][BE_INDEX], it_flt->flt_rule_hdl[IPA_IP_v6][QOS_OR_VLAN_INDEX]);
 			for (it_flt_hdl = it_flt->l2tp_first_pass_flt_rule_hdl[IPA_IP_v6].flt_rule_hdls.begin();
 				it_flt_hdl != it_flt->l2tp_first_pass_flt_rule_hdl[IPA_IP_v6].flt_rule_hdls.end(); ++it_flt_hdl)
 				IPACMDBG_H("IPv6 l2tp flt rule handle: %d\n", *it_flt_hdl);
@@ -3390,14 +3597,21 @@ void IPACM_LanToLan_Iface::switch_to_l2tp_iface()
 		{
 			if(m_is_ip_addr_assigned[IPA_IP_v4])
 			{
-				m_p_iface->eth_bridge_del_flt_rule(it_flt->flt_rule_hdl[IPA_IP_v4], IPA_IP_v4);
-				IPACMDBG_H("Deleted IPv4 flt rule %d.\n", it_flt->flt_rule_hdl[IPA_IP_v4]);
+				m_p_iface->eth_bridge_del_flt_rule(it_flt->flt_rule_hdl[IPA_IP_v4][BE_INDEX], IPA_IP_v4);
+				IPACMDBG_H("Deleted IPA_IP_v4 flt rule handle[BE_INDEX]=%d.\n", it_flt->flt_rule_hdl[IPA_IP_v4][BE_INDEX]);
+				if (it_flt->flt_rule_hdl[IPA_IP_v4][QOS_OR_VLAN_INDEX]) {
+					m_p_iface->eth_bridge_del_flt_rule(it_flt->flt_rule_hdl[IPA_IP_v4][QOS_OR_VLAN_INDEX], IPA_IP_v4);
+					IPACMDBG_H("Deleted IPA_IP_v4 flt rule handle[QOS_OR_VLAN_INDEX]=%d.\n", it_flt->flt_rule_hdl[IPA_IP_v4][QOS_OR_VLAN_INDEX]);
+				}
 			}
 			if(m_is_ip_addr_assigned[IPA_IP_v6])
 			{
-				m_p_iface->eth_bridge_del_flt_rule(it_flt->flt_rule_hdl[IPA_IP_v6], IPA_IP_v6);
+				m_p_iface->eth_bridge_del_flt_rule(it_flt->flt_rule_hdl[IPA_IP_v6][BE_INDEX], IPA_IP_v6);
+				if (it_flt->flt_rule_hdl[IPA_IP_v6][QOS_OR_VLAN_INDEX]) {
+					m_p_iface->eth_bridge_del_flt_rule(it_flt->flt_rule_hdl[IPA_IP_v6][QOS_OR_VLAN_INDEX], IPA_IP_v6);
+				}
 				m_p_iface->add_l2tp_flt_rule(it_flt->p_client->mac_addr, &l2tp_flt_rule_hdl);
-				IPACMDBG_H("Deleted IPv6 flt rule %d.\n", it_flt->flt_rule_hdl[IPA_IP_v6]);
+				IPACMDBG_H("Deleted IPv6 flt rule %d.\n", it_flt->flt_rule_hdl[IPA_IP_v6][0]);
 				it_flt->l2tp_first_pass_flt_rule_hdl[IPA_IP_v6].flt_rule_hdls.push_front(l2tp_flt_rule_hdl);
 			}
 		}
@@ -3567,7 +3781,7 @@ int IPACM_LanToLan_Iface::del_wlan_svap_hpc_hdl(uint16_t vlan_id, ipa_hdr_l2_typ
 	return IPACM_SUCCESS;
 }
 
-uint32_t IPACM_LanToLan_Iface::is_entry_present_wlan_svap_hpc_hdl(uint16_t vlan_id, ipa_hdr_l2_type peer_l2_type, uint16_t outer_vlan_id, uint32_t *hdr_hdl, bool pcp_mrkng)
+uint32_t IPACM_LanToLan_Iface::is_entry_present_wlan_svap_hpc_hdl(uint16_t vlan_id, ipa_hdr_l2_type peer_l2_type, uint16_t outer_vlan_id, bool pcp_mrkng)
 {
 	uint32_t ret = false;
 
@@ -3589,18 +3803,573 @@ uint32_t IPACM_LanToLan_Iface::is_entry_present_wlan_svap_hpc_hdl(uint16_t vlan_
 			wlan_svap_hpc_hdls[i].peer_l2_type == peer_l2_type)
 		{
 			ret = wlan_svap_hpc_hdls[i].hpc_hdr_hdl;
-			if (hdr_hdl != NULL)
-			{
-
-				*hdr_hdl = wlan_svap_hpc_hdls[i].template_hdr_hdl;
-				IPACMDBG_H("Entry with vlan_id %d and peer %d, present, hpc: %d hdl: %d\n", vlan_id, peer_l2_type, ret, hdr_hdl);
-			}
-			else
-				IPACMDBG_H("Entry with vlan_id %d and peer %d, present, hpc: %d\n", vlan_id, peer_l2_type, ret);
+			IPACMDBG_H("Entry with vlan_id %d and peer %d, present, hpc: %d\n", vlan_id, peer_l2_type, ret);
 			return ret;
 		}
 	}
 	IPACMDBG_H("Entry with vlan_id %d and peer %d, absent\n", vlan_id, peer_l2_type);
 
 	return ret;
+}
+
+
+bool IPACM_LanToLan_Iface::is_client_qos_route_needed(uint8_t *mac_addr, list<qos_param_info>::iterator qos_param, ipa_hdr_l2_type peer_l2_hdr_type)
+{
+
+	list<qos_client_info>::iterator it_qos_client;
+	for (it_qos_client = qos_param->qos_client_list.begin();
+		it_qos_client != qos_param->qos_client_list.end();it_qos_client++)
+	{
+		IPACMDBG("0x%x 0x%x\n", mac_addr, it_qos_client->mac);
+		if ((memcmp(it_qos_client->mac, mac_addr, IPA_MAC_ADDR_SIZE) == 0) && (peer_l2_hdr_type == it_qos_client->peer_l2_hdr_type))
+		{
+			return false;
+		}
+	}
+
+	return true;
+}
+/*
+ * handle_qos_rule_add - Install QoS routing rules for all ETH clients on
+ * this LanToLan iface when IPA_QOS_RULE_ADD_EVENT is received.
+ *
+ * Mirrors add_client_rt_rule() logic:
+ *  - Derives peer_l2_hdr_type from the peer tx_prop (tx[2] for svap/vlan,
+ *    tx[0] otherwise) and validates it.
+ *  - Under FEATURE_VLAN_MPDN: checks mac_rt_rule_ref to avoid installing
+ *    duplicate routing rules for the same MAC+peer_l2_hdr_type combination;
+ *    for special interfaces (spcl_iface) copies existing handles instead.
+ *  - Selects hdr_proc_ctx: uses is_entry_present_wlan_svap_hpc_hdl() for
+ *    vlan/svap/spcl clients, hdr_proc_ctx_for_inter_interface[] otherwise.
+ *  - Calls eth_bridge_add_rt_rule() for IPv4 and IPv6 and stores the
+ *    returned handles in m_qos_rt_rules for cleanup on DEL.
+ */
+void IPACM_LanToLan_Iface::handle_qos_rule_add(qos_param_info *qos_param)
+{
+	list<client_info>::iterator it_client;
+	list<qos_param_info>::iterator it_qos_params;
+	list<peer_iface_info>::iterator it_peer;
+	list<peer_iface_info>::iterator itr;
+	qos_client_info new_client_info;
+	uint32_t rt_rule_hdl = 0;
+	int i, num_rt_rule = 0;
+	ipa_hdr_l2_type peer_l2_hdr_type, mac_ref_peer_l2_hdr_type;
+	int mac_found = 0;
+#ifdef FEATURE_VLAN_MPDN
+	std::array<uint8_t, 6> mac = {0};
+	std::map<std::array<uint8_t, 6>, int>::iterator it_mac;
+#endif
+
+	if (!qos_param)
+	{
+		IPACMERR("NULL qos_param\n");
+		return;
+	}
+
+	if (qos_param->dir != IPA_QoS_UL_RULE)
+	{
+		IPACMDBG_H("UL QoS rule add on LanToLan ETH iface %s, ignoring\n",
+			m_p_iface->dev_name);
+		return;
+	}
+
+	if (!m_p_iface->rx_prop || !m_p_iface->tx_prop)
+	{
+		IPACMERR("No rx/tx props on iface %s\n", m_p_iface->dev_name);
+		return;
+	}
+
+	if(pthread_mutex_lock(&IPACM_Iface::ipacmcfg->qos_param_list_lock) != 0)
+	{
+		IPACMERR("Unable to lock the mutex\n");
+		return;
+	}
+	/* Delete any stale QoS rt rules before re-installing */
+
+	IPACMDBG_H("Installing QoS rt rules on ETH iface %s for %zu clients, %zu peers\n",
+		m_p_iface->dev_name, m_client_info.size(), m_peer_iface_info.size());
+
+	for (it_qos_params = IPACM_Iface::ipacmcfg->m_qos_params.begin();
+		it_qos_params != IPACM_Iface::ipacmcfg->m_qos_params.end(); ++it_qos_params)
+	{
+
+		for (it_peer = m_peer_iface_info.begin(); it_peer != m_peer_iface_info.end(); it_peer++)
+		{
+			if (!it_peer->peer || !it_peer->peer->get_iface_pointer() ||
+				!it_peer->peer->get_iface_pointer()->tx_prop)
+			{
+				IPACMDBG_H("Peer has no tx_prop, skipping\n");
+				continue;
+			}
+
+			/* Derive peer_l2_hdr_type the same way add_client_rt_rule does */
+			if (it_peer->peer->m_is_svap_iface ||
+				(it_peer->peer->m_is_sIface && it_peer->is_vlan_peer) ||
+				it_peer->peer->is_ap_iface_vlan_enabled())
+			{
+				peer_l2_hdr_type = it_peer->peer->get_iface_pointer()->tx_prop->tx[2].hdr_l2_type;
+			}
+			else
+			{
+				peer_l2_hdr_type = it_peer->peer->get_iface_pointer()->tx_prop->tx[0].hdr_l2_type;
+			}
+			IPACMDBG_H("peer %s peer_l2_hdr_type: %d\n",
+			it_peer->peer->get_iface_pointer()->dev_name, peer_l2_hdr_type);
+
+			if (peer_l2_hdr_type >= IPA_HDR_L2_MAX || peer_l2_hdr_type < 0)
+		    {
+				IPACMDBG_H("Invalid peer_l2_hdr_type %d, skipping peer\n", peer_l2_hdr_type);
+		       	continue;
+		    }
+
+			for (it_client = m_client_info.begin(); it_client != m_client_info.end(); it_client++)
+	       	{
+	       		uint32_t hdr_proc_ctx_hdl;
+				mac_found = 0;
+				IPACMDBG_H("Client MAC %02x:%02x:%02x:%02x:%02x:%02x vlan_id %d\n",
+					it_client->mac_addr[0], it_client->mac_addr[1],
+					it_client->mac_addr[2], it_client->mac_addr[3],
+					it_client->mac_addr[4], it_client->mac_addr[5],
+					it_client->vlan_id);
+
+				if(!is_client_qos_route_needed(it_client->mac_addr, it_qos_params, peer_l2_hdr_type))
+				{
+					IPACMDBG("Client in this param is already installed\n");
+					continue;
+				}
+	       		if (m_is_vlan || is_svap_iface() || is_ap_iface_vlan_enabled() ||
+	       			(is_spcl_iface() && it_client->vlan_id))
+	       		{
+	       			hdr_proc_ctx_hdl = is_entry_present_wlan_svap_hpc_hdl(
+	       				it_client->vlan_id, peer_l2_hdr_type,
+	       				it_client->outer_vlan_id);
+	       		}
+	       		else
+	       		{
+	       			hdr_proc_ctx_hdl = hdr_proc_ctx_for_inter_interface[peer_l2_hdr_type];
+	       		}
+	       		IPACMDBG_H("hdr_proc_ctx_hdl 0x%x for client "
+	       			"%02x:%02x:%02x:%02x:%02x:%02x\n",
+	       			hdr_proc_ctx_hdl,
+	       			it_client->mac_addr[0], it_client->mac_addr[1],
+	       			it_client->mac_addr[2], it_client->mac_addr[3],
+	       			it_client->mac_addr[4], it_client->mac_addr[5]);
+
+	       		/* IPv4 */
+	       		num_rt_rule = 0;
+	       		if (m_p_iface->eth_bridge_add_qos_rt_rule(it_client->mac_addr,
+	       			it_peer->rt_tbl_name_for_rt[IPA_IP_v4],
+	       			hdr_proc_ctx_hdl, peer_l2_hdr_type,
+	       			IPA_IP_v4, &rt_rule_hdl, &num_rt_rule, it_qos_params) == IPACM_FAILURE)
+	       		{
+	       			IPACMERR("Failed to add QoS IPv4 rt rule for client "
+	       				"%02x:%02x:%02x:%02x:%02x:%02x\n",
+	       				it_client->mac_addr[0], it_client->mac_addr[1],
+	       				it_client->mac_addr[2], it_client->mac_addr[3],
+	       				it_client->mac_addr[4], it_client->mac_addr[5]);
+	       		}
+	       		else
+	       		{
+
+	       			/* copy ipv4 RT hdl */
+	       			memset(&new_client_info, 0 , sizeof(new_client_info));
+	       			new_client_info.qos_l2l_rt_rule_hdl_v4 = rt_rule_hdl;
+	       			new_client_info.route_rule_l2l_set_v4 = true;
+				new_client_info.peer_l2_hdr_type = peer_l2_hdr_type;
+	       			memcpy(new_client_info.mac, it_client->mac_addr, IPA_MAC_ADDR_SIZE);
+	       			strlcpy(new_client_info.iface_name, it_qos_params->iface_name, sizeof(new_client_info.iface_name));
+	       			it_qos_params->qos_client_list.push_front(new_client_info);
+	       			it_qos_params->client_cnt++;
+	       			IPACMDBG_H("rt rule hdl=%x client cnt %d iface %s\n",
+	       			new_client_info.qos_l2l_rt_rule_hdl_v4, it_qos_params->client_cnt, new_client_info.iface_name);
+
+	       		}
+	       		/* IPv6 */
+	       		num_rt_rule = 0;
+	       		if (m_p_iface->eth_bridge_add_qos_rt_rule(it_client->mac_addr,
+	       			it_peer->rt_tbl_name_for_rt[IPA_IP_v6],
+	       			hdr_proc_ctx_hdl, peer_l2_hdr_type,
+	       			IPA_IP_v6, &rt_rule_hdl, &num_rt_rule, it_qos_params) == IPACM_FAILURE)
+	       		{
+	       			IPACMERR("Failed to add QoS IPv6 rt rule for client "
+	       				"%02x:%02x:%02x:%02x:%02x:%02x\n",
+	       				it_client->mac_addr[0], it_client->mac_addr[1],
+	       				it_client->mac_addr[2], it_client->mac_addr[3],
+	       				it_client->mac_addr[4], it_client->mac_addr[5]);
+	       		}
+	       		else
+	       		{
+					/* copy ipv6 RT hdl */
+	       			memset(&new_client_info, 0 , sizeof(new_client_info));
+	       			new_client_info.qos_l2l_rt_rule_hdl_v6 = rt_rule_hdl;
+	       			new_client_info.route_rule_l2l_set_v6 = true;
+				new_client_info.peer_l2_hdr_type = peer_l2_hdr_type;
+	       			memcpy(new_client_info.mac, it_client->mac_addr, IPA_MAC_ADDR_SIZE);
+	       			strlcpy(new_client_info.iface_name, it_qos_params->iface_name, sizeof(new_client_info.iface_name));
+	       			it_qos_params->qos_client_list.push_front(new_client_info);
+	       			it_qos_params->client_cnt++;
+	       			IPACMDBG_H("rt rule hdl=%x client cnt %d iface %s\n",
+	       			new_client_info.qos_l2l_rt_rule_hdl_v6, it_qos_params->client_cnt, new_client_info.iface_name);
+	       		}
+
+	       	}
+	     }
+	}
+	pthread_mutex_unlock(&IPACM_Iface::ipacmcfg->qos_param_list_lock);
+	IPACMDBG_H("QoS rt rules installed on ETH iface %s\n",
+		m_p_iface->dev_name);
+}
+
+
+/*
+ * install_all_qos_route_rule_l2l - Install L2L QoS routing rules for a single
+ * newly-added client MAC across all active DL QoS parameter entries.
+ *
+ * Called from IPACM_LanToLan::handle_client_add() after the client has been
+ * registered on the iface so that any pre-existing QoS policies are applied
+ * immediately on ETH_BRIDGE_CLIENT_ADD.  Mirrors the per-client inner loop of
+ * handle_qos_rule_add() but iterates over m_qos_params instead of being
+ * driven by an incoming qos_param_info event.
+ */
+void IPACM_LanToLan_Iface::install_all_qos_route_rule_l2l(uint8_t *mac)
+{
+	list<qos_param_info>::iterator it_qos_params;
+	list<peer_iface_info>::iterator it_peer;
+	qos_client_info new_client_info_v4;
+	qos_client_info new_client_info_v6;
+
+	uint32_t rt_rule_hdl;
+	int num_rt_rule;
+	ipa_hdr_l2_type peer_l2_hdr_type;
+
+	if (!mac)
+	{
+		IPACMERR("NULL mac pointer\n");
+		return;
+	}
+
+	if (!m_p_iface->rx_prop || !m_p_iface->tx_prop)
+	{
+		IPACMERR("No rx/tx props on iface %s\n", m_p_iface->dev_name);
+		return;
+	}
+
+	if (m_peer_iface_info.empty())
+	{
+		IPACMDBG_H("No peers on iface %s, nothing to install\n",
+			m_p_iface->dev_name);
+		return;
+	}
+
+	if(pthread_mutex_lock(&IPACM_Iface::ipacmcfg->qos_param_list_lock) != 0)
+	{
+		IPACMERR("Unable to lock the mutex\n");
+		return;
+	}
+
+	IPACMDBG_H("Installing L2L QoS rt rules for client %02x:%02x:%02x:%02x:%02x:%02x "
+		"on iface %s\n",
+		mac[0], mac[1], mac[2], mac[3], mac[4], mac[5],
+		m_p_iface->dev_name);
+
+	for (it_qos_params = IPACM_Iface::ipacmcfg->m_qos_params.begin();
+		it_qos_params != IPACM_Iface::ipacmcfg->m_qos_params.end();
+		++it_qos_params)
+	{
+		if (it_qos_params->dir != IPA_QoS_UL_RULE)
+		{
+			IPACMDBG_H("Skipping non-UL QoS param entry\n");
+			continue;
+		}
+		if (strcmp(it_qos_params->iface_name,m_p_iface->dev_name))
+		{
+			IPACMDBG("qos param and instance iface mismatch%s\n",
+							m_p_iface->dev_name);
+			continue;
+		}
+		if(!it_qos_params->pcp)
+		{
+			IPACMDBG("qos param is not having pcp based filter\n");
+			continue;
+		}
+		if((get_iface_pointer()->tx_prop->num_tx_props < 2) &&
+						(get_iface_pointer()->ipa_if_cate != ODU_IF)){
+			IPACMDBG("Qos is not supported on this iface.\n");
+			continue;
+
+		}
+		for (it_peer = m_peer_iface_info.begin();
+			it_peer != m_peer_iface_info.end(); it_peer++)
+		{
+			if (!it_peer->peer || !it_peer->peer->get_iface_pointer() ||
+				!it_peer->peer->get_iface_pointer()->tx_prop)
+			{
+				IPACMDBG_H("Peer has no tx_prop, skipping\n");
+				continue;
+			}
+
+			/* Derive peer_l2_hdr_type the same way add_client_rt_rule does */
+			if (it_peer->peer->m_is_svap_iface ||
+				(it_peer->peer->m_is_sIface && it_peer->is_vlan_peer) ||
+				it_peer->peer->is_ap_iface_vlan_enabled())
+			{
+				peer_l2_hdr_type =
+					it_peer->peer->get_iface_pointer()->tx_prop->tx[2].hdr_l2_type;
+			}
+			else
+			{
+				peer_l2_hdr_type =
+					it_peer->peer->get_iface_pointer()->tx_prop->tx[0].hdr_l2_type;
+			}
+
+			if (peer_l2_hdr_type >= IPA_HDR_L2_MAX || peer_l2_hdr_type < 0)
+			{
+				IPACMDBG_H("Invalid peer_l2_hdr_type %d, skipping peer\n",
+					peer_l2_hdr_type);
+				continue;
+			}
+			if(!is_client_qos_route_needed(mac, it_qos_params, peer_l2_hdr_type))
+			{
+				IPACMDBG("Client in this param is already installed\n");
+				continue;
+			}
+
+			/* Select hdr_proc_ctx the same way handle_qos_rule_add does */
+			uint32_t hdr_proc_ctx_hdl;
+			uint16_t client_vlan_id = 0;
+			uint16_t client_outer_vlan_id = 0;
+
+			/* Locate the client entry to retrieve vlan ids */
+			list<client_info>::iterator it_client;
+			for (it_client = m_client_info.begin();
+				it_client != m_client_info.end(); it_client++)
+			{
+				if (memcmp(it_client->mac_addr, mac,
+					sizeof(it_client->mac_addr)) == 0)
+				{
+					client_vlan_id = it_client->vlan_id;
+					client_outer_vlan_id = it_client->outer_vlan_id;
+					break;
+				}
+			}
+
+			if (it_client == m_client_info.end())
+			{
+				IPACMDBG_H("Client %02x:%02x:%02x:%02x:%02x:%02x not found "
+					"in m_client_info, skipping\n",
+					mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+				continue;
+			}
+
+			if (m_is_vlan || is_svap_iface() || is_ap_iface_vlan_enabled() ||
+				(is_spcl_iface() && client_vlan_id))
+			{
+				hdr_proc_ctx_hdl = is_entry_present_wlan_svap_hpc_hdl(
+					client_vlan_id, peer_l2_hdr_type, client_outer_vlan_id);
+			}
+			else
+			{
+				hdr_proc_ctx_hdl =
+					hdr_proc_ctx_for_inter_interface[peer_l2_hdr_type];
+			}
+
+			IPACMDBG_H("hdr_proc_ctx_hdl 0x%x for client "
+				"%02x:%02x:%02x:%02x:%02x:%02x\n",
+				hdr_proc_ctx_hdl,
+				mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+
+			/* IPv4 */
+			num_rt_rule = 0;
+			rt_rule_hdl = 0;
+			if (m_p_iface->eth_bridge_add_qos_rt_rule(mac,
+				it_peer->rt_tbl_name_for_rt[IPA_IP_v4],
+				hdr_proc_ctx_hdl, peer_l2_hdr_type,
+				IPA_IP_v4, &rt_rule_hdl, &num_rt_rule,
+				it_qos_params) == IPACM_SUCCESS)
+			{
+				memset(&new_client_info_v4, 0, sizeof(new_client_info_v4));
+				new_client_info_v4.qos_l2l_rt_rule_hdl_v4 = rt_rule_hdl;
+				new_client_info_v4.route_rule_l2l_set_v4 = true;
+				new_client_info_v4.peer_l2_hdr_type = peer_l2_hdr_type;
+				memcpy(new_client_info_v4.mac, mac, IPA_MAC_ADDR_SIZE);
+				strlcpy(new_client_info_v4.iface_name,
+					m_p_iface->dev_name,
+					sizeof(new_client_info_v4.iface_name));
+				it_qos_params->qos_client_list.push_front(new_client_info_v4);
+				it_qos_params->client_cnt++;
+				IPACMDBG_H("L2L QoS IPv4 rt rule hdl 0x%x installed for "
+					"%02x:%02x:%02x:%02x:%02x:%02x on iface %s, "
+					"client_cnt %d\n",
+					new_client_info_v4.qos_l2l_rt_rule_hdl_v4,
+					new_client_info_v4.mac[0], new_client_info_v4.mac[1],
+					new_client_info_v4.mac[2], new_client_info_v4.mac[3],
+					new_client_info_v4.mac[4], new_client_info_v4.mac[5],
+					new_client_info_v4.iface_name,
+					it_qos_params->client_cnt);
+			}
+			else
+			{
+				IPACMERR("Failed to add L2L QoS IPv4 rt rule for client "
+					"%02x:%02x:%02x:%02x:%02x:%02x\n",
+					mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+			}
+
+			/* IPv6 */
+			num_rt_rule = 0;
+			rt_rule_hdl = 0;
+			if (m_p_iface->eth_bridge_add_qos_rt_rule(mac,
+				it_peer->rt_tbl_name_for_rt[IPA_IP_v6],
+				hdr_proc_ctx_hdl, peer_l2_hdr_type,
+				IPA_IP_v6, &rt_rule_hdl, &num_rt_rule,
+				it_qos_params) == IPACM_SUCCESS)
+			{
+				memset(&new_client_info_v6, 0, sizeof(new_client_info_v6));
+				new_client_info_v6.qos_l2l_rt_rule_hdl_v6 = rt_rule_hdl;
+				new_client_info_v6.route_rule_l2l_set_v6 = true;
+				new_client_info_v6.peer_l2_hdr_type = peer_l2_hdr_type;
+				memcpy(new_client_info_v6.mac, mac, IPA_MAC_ADDR_SIZE);
+				strlcpy(new_client_info_v6.iface_name,
+					m_p_iface->dev_name,
+					sizeof(new_client_info_v6.iface_name));
+				it_qos_params->qos_client_list.push_front(new_client_info_v6);
+				it_qos_params->client_cnt++;
+				IPACMDBG_H("L2L QoS IPv6 rt rule hdl 0x%x installed for "
+					"%02x:%02x:%02x:%02x:%02x:%02x on iface %s, "
+					"client_cnt %d\n",
+					new_client_info_v6.qos_l2l_rt_rule_hdl_v6,
+					mac[0], mac[1], mac[2], mac[3], mac[4], mac[5],
+					new_client_info_v6.iface_name,
+					it_qos_params->client_cnt);
+			}
+			else
+			{
+				IPACMERR("Failed to add L2L QoS IPv6 rt rule for client "
+					"%02x:%02x:%02x:%02x:%02x:%02x\n",
+					mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+			}
+		}
+	}
+
+	pthread_mutex_unlock(&IPACM_Iface::ipacmcfg->qos_param_list_lock);
+	IPACMDBG_H("L2L QoS rt rules installation done for client "
+		"%02x:%02x:%02x:%02x:%02x:%02x on iface %s\n",
+		mac[0], mac[1], mac[2], mac[3], mac[4], mac[5],
+		m_p_iface->dev_name);
+}
+
+/*
+ * delete_client_qos_rule_l2l - Delete L2L QoS routing rules for a single
+ * departing client MAC from all active QoS parameter entries.
+ *
+ * Called from IPACM_LanToLan::handle_client_del() on ETH_BRIDGE_CLIENT_DEL
+ * so that per-client L2L QoS route rules are cleaned up when a client leaves.
+ *
+ * For each qos_param entry the iface name is compared against this instance's
+ * dev_name first; only on a match is the qos_client_list scanned for entries
+ * whose MAC matches the supplied address.  Matching entries have their v4/v6
+ * L2L routing rule handles deleted and are removed from the list.
+ */
+void IPACM_LanToLan_Iface::delete_client_qos_rule_l2l(uint8_t *mac)
+{
+	list<qos_param_info>::iterator it_qos_params;
+	list<qos_client_info>::iterator it_qos_client;
+	bool qos_rule_del = false;
+
+	if (!mac)
+	{
+		IPACMERR("NULL mac pointer\n");
+		return;
+	}
+
+	if (pthread_mutex_lock(&IPACM_Iface::ipacmcfg->qos_param_list_lock) != 0)
+	{
+		IPACMERR("Unable to lock the mutex\n");
+		return;
+	}
+
+	IPACMDBG_H("Deleting L2L QoS rt rules for client %02x:%02x:%02x:%02x:%02x:%02x "
+		"on iface %s\n",
+		mac[0], mac[1], mac[2], mac[3], mac[4], mac[5],
+		m_p_iface->dev_name);
+
+	for (it_qos_params = IPACM_Iface::ipacmcfg->m_qos_params.begin();
+		it_qos_params != IPACM_Iface::ipacmcfg->m_qos_params.end();
+		++it_qos_params)
+	{
+		/* First compare the qos_param iface name with this instance's dev_name */
+		if (strncmp(it_qos_params->iface_name, m_p_iface->dev_name,
+			sizeof(it_qos_params->iface_name)) != 0)
+		{
+			IPACMDBG_H("qos_param iface %s does not match instance iface %s, skipping\n",
+				it_qos_params->iface_name, m_p_iface->dev_name);
+			continue;
+		}
+
+		IPACMDBG_H("Matched qos_param iface %s, scanning %d client entries\n",
+			it_qos_params->iface_name, it_qos_params->client_cnt);
+
+		for (it_qos_client = it_qos_params->qos_client_list.begin();
+			it_qos_client != it_qos_params->qos_client_list.end(); )
+		{
+			qos_rule_del = false;
+			IPACMDBG_H("Found L2L QoS client entry for %02x:%02x:%02x:%02x:%02x:%02x "
+				"on iface %s %d %d\n",
+				mac[0], mac[1], mac[2], mac[3], mac[4], mac[5],
+				it_qos_client->iface_name,it_qos_client->qos_l2l_rt_rule_hdl_v4,it_qos_client->qos_l2l_rt_rule_hdl_v6);
+
+			if (memcmp(it_qos_client->mac, mac, IPA_MAC_ADDR_SIZE) != 0)
+			{
+				IPACMDBG(" client mac  %02x:%02x:%02x:%02x:%02x:%02x\n",  it_qos_client->mac[0],
+					it_qos_client->mac[1], it_qos_client->mac[2], it_qos_client->mac[3], it_qos_client->mac[4], it_qos_client->mac[5]);
+				++it_qos_client;
+				continue;
+			}
+
+			IPACMDBG_H("Found L2L QoS client entry for %02x:%02x:%02x:%02x:%02x:%02x "
+				"on iface %si %d\n",
+				mac[0], mac[1], mac[2], mac[3], mac[4], mac[5],
+				it_qos_client->iface_name,it_qos_client->qos_l2l_rt_rule_hdl_v4);
+
+			/* Delete v4 L2L routing rule handle */
+			if (it_qos_client->route_rule_l2l_set_v4)
+			{
+				IPACMDBG_H("Deleting L2L QoS v4 rt rule hdl 0x%x\n",
+					it_qos_client->qos_l2l_rt_rule_hdl_v4);
+				if (IPACM_Iface::m_routing.DeleteRoutingHdl(
+					it_qos_client->qos_l2l_rt_rule_hdl_v4, IPA_IP_v4) == false)
+				{
+					IPACMERR("Failed to delete L2L QoS v4 rt rule hdl 0x%x\n",
+						it_qos_client->qos_l2l_rt_rule_hdl_v4);
+				}
+				qos_rule_del = true;
+			}
+			else if (it_qos_client->route_rule_l2l_set_v6)
+			{
+				IPACMDBG_H("Deleting L2L QoS v6 rt rule hdl 0x%x\n",
+					it_qos_client->qos_l2l_rt_rule_hdl_v6);
+				if (IPACM_Iface::m_routing.DeleteRoutingHdl(
+					it_qos_client->qos_l2l_rt_rule_hdl_v6, IPA_IP_v6) == false)
+				{
+					IPACMERR("Failed to delete L2L QoS v6 rt rule hdl 0x%x\n",
+						it_qos_client->qos_l2l_rt_rule_hdl_v6);
+				}
+				qos_rule_del = true;
+			}
+			if(qos_rule_del)
+			{
+				it_qos_client =
+					it_qos_params->qos_client_list.erase(it_qos_client);
+
+				it_qos_params->client_cnt--;
+			}
+			IPACMDBG_H("L2L QoS client entry removed, remaining client_cnt %d\n",
+				it_qos_params->client_cnt);
+		}
+	}
+
+	pthread_mutex_unlock(&IPACM_Iface::ipacmcfg->qos_param_list_lock);
+	IPACMDBG_H("L2L QoS rt rules deletion done for client "
+		"%02x:%02x:%02x:%02x:%02x:%02x on iface %s\n",
+		mac[0], mac[1], mac[2], mac[3], mac[4], mac[5],
+		m_p_iface->dev_name);
 }

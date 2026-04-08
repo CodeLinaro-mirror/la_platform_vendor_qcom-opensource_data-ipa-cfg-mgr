@@ -64,6 +64,8 @@ IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #endif
 
 #define MAX_SVAP_VLAN 5
+
+
 struct rt_rule_info
 {
 	int num_hdl[IPA_IP_MAX];	/* one client may need more than one routing rules on the same routing table depending on tx_prop */
@@ -99,7 +101,7 @@ struct lt2p_flt_rule_hdl{
 struct flt_rule_info
 {
 	client_info *p_client;
-	uint32_t flt_rule_hdl[IPA_IP_MAX];
+	uint32_t flt_rule_hdl[IPA_IP_MAX][MAX_PIPES];
 	struct lt2p_flt_rule_hdl l2tp_first_pass_flt_rule_hdl[IPA_IP_MAX];	/* L2TP filtering rules are destination MAC based */
 	uint32_t l2tp_second_pass_flt_rule_hdl;
 };
@@ -196,12 +198,18 @@ public:
 	int del_wlan_svap_hpc_hdl(uint16_t vlan_id, ipa_hdr_l2_type peer_l2_type,
 					uint32_t* hpc_hdl, uint16_t outer_vlan_id, bool pcp_marking=false);
 	uint32_t is_entry_present_wlan_svap_hpc_hdl(uint16_t vlan_id, ipa_hdr_l2_type peer_l2_type,
-					uint16_t outer_vlan_id=0, uint32_t *hdr_hdl = NULL, bool pcp_marking=false);
+					uint16_t outer_vlan_id=0, bool pcp_marking=false);
 	bool is_ap_iface_vlan_enabled();
 	bool is_spcl_iface();
 
 	int pipe_idx;
 
+	/* QoS routing rule management for ETH instances */
+	void handle_qos_rule_add(qos_param_info *qos_param);
+
+	void install_all_qos_route_rule_l2l(uint8_t *mac);
+	void delete_client_qos_rule_l2l(uint8_t *mac);
+	bool is_client_qos_route_needed(uint8_t *mac_addr, list<qos_param_info>::iterator qos_param, ipa_hdr_l2_type peer_l2_hdr_type);
 private:
 
 	uint16_t max_num_clients;
@@ -317,6 +325,10 @@ private:
 
 	void print_data_structure_info();
 
+	/* QoS routing rule handlers for ETH instances */
+	void handle_qos_rule_add(qos_param_info *qos_param);
+	void handle_qos_rule_del(qos_delete_param_info *qos_param);
+	void handle_qos_rule_del_all(char*);
 };
 
 #endif

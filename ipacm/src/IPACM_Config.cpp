@@ -4833,8 +4833,10 @@ void IPACM_Config::add_qos_params_info(ipa_ioc_qos_config *data)
 
 	new_qos_info.dscp = data->dscp;
 	new_qos_info.pcp = data->pcp;
+	new_qos_info.pcp_mask = data->pcp_mask;
 	new_qos_info.dscp_mark_val = data->dscp_mark_val;
 
+	IPACMDBG("added pcp val 0x%x mask 0x%x\n", new_qos_info.pcp, new_qos_info.pcp_mask);
 	m_qos_params.push_front(new_qos_info);
 	pthread_mutex_unlock(&qos_param_list_lock);
 
@@ -4922,15 +4924,20 @@ void IPACM_Config::delete_qos_params_info(ipa_ioc_qos_config *data)
 			}
 
 			qos_param->client_cnt = it_qos_params->qos_client_list.size();
+			strlcpy(qos_param->iface_name, it_qos_params->iface_name, sizeof(qos_param->iface_name));
 			for (it_qos_client = it_qos_params->qos_client_list.begin(); it_qos_client != it_qos_params->qos_client_list.end(); ++it_qos_client)
 			{
 				qos_param->dir = data->dir;
 				qos_param->qos_client_list[i].qos_rt_rule_hdl_v4 = it_qos_client->qos_rt_rule_hdl_v4;
+				qos_param->qos_client_list[i].qos_l2l_rt_rule_hdl_v4 = it_qos_client->qos_l2l_rt_rule_hdl_v4;
 				qos_param->qos_client_list[i].qos_rt_rule_hdl_v6 = it_qos_client->qos_rt_rule_hdl_v6;
+				qos_param->qos_client_list[i].qos_l2l_rt_rule_hdl_v6 = it_qos_client->qos_l2l_rt_rule_hdl_v6;
 				IPACMDBG("v6 rule to delete wan hdl %d\n",
 						qos_param->qos_client_list[i].qos_rt_rule_hdl_v6);
 				qos_param->qos_client_list[i].route_rule_set_v4 = it_qos_client->route_rule_set_v4;
+				qos_param->qos_client_list[i].route_rule_l2l_set_v4 = it_qos_client->route_rule_l2l_set_v4;
 				qos_param->qos_client_list[i].route_rule_set_v6 = it_qos_client->route_rule_set_v6;
+				qos_param->qos_client_list[i].route_rule_l2l_set_v6 = it_qos_client->route_rule_l2l_set_v6;
 
 				qos_param->qos_client_list[i].dscp_hpc_hdl_v4 = it_qos_client->dscp_hpc_hdl_v4;
 				qos_param->qos_client_list[i].dscp_hpc_hdl_v6 = it_qos_client->dscp_hpc_hdl_v6;

@@ -610,12 +610,14 @@ public:
 	int eth_bridge_add_rt_rule(uint8_t *mac, char *rt_tbl_name, uint32_t hdr_proc_ctx_hdl,
 		ipa_hdr_l2_type peer_l2_hdr_type, ipa_ip_type iptype, uint32_t *rt_rule_hdl, int *rt_rule_count);
 
+	int eth_bridge_add_qos_rt_rule(uint8_t*, char*, uint32_t, ipa_hdr_l2_type, ipa_ip_type, uint32_t*, int*, list<qos_param_info>::iterator);
 	/* modify routing rule*/
 	int eth_bridge_modify_rt_rule(uint8_t *mac, uint32_t hdr_proc_ctx_hdl,
 		ipa_hdr_l2_type peer_l2_hdr_type, ipa_ip_type iptype, uint32_t *rt_rule_hdl, int rt_rule_count);
 
-	/* add filtering rule and return handle to lan2lan controller */
-	int eth_bridge_add_flt_rule(uint8_t *mac, uint32_t rt_tbl_hdl, ipa_ip_type iptype, uint32_t *flt_rule_hdl, uint16_t vlan_id = 0, uint16_t pipe_idx = 0, uint16_t outer_vlan_id = 0);
+	/* add filtering rule and return handle to lan2lan controller 
+	   flt_rule_hdl[2] is to store 2 handles, as with qos enabled lan to lan cases, we need to install rules on BE & QOS cases*/
+	int eth_bridge_add_flt_rule(uint8_t *mac, uint32_t rt_tbl_hdl, ipa_ip_type iptype, uint32_t flt_rule_hdl[2], uint16_t vlan_id = 0, uint16_t pipe_idx = 0, uint16_t outer_vlan_id = 0);
 
 	/* delete filtering rule */
 	int eth_bridge_del_flt_rule(uint32_t flt_rule_hdl, ipa_ip_type iptype);

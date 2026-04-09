@@ -241,6 +241,7 @@ if (!(a)) {                                                 \
 #define IPACM_Wlan_Vlan_Mpdn_Enabled         "IPACMVlanMpdnEnabled"
 #define IPACMLOG_TAG                         "IPACMLog"
 #define IPACMFILEVAR_TAG                     "IPACMfilevar"
+#define IPACMDEBUG_TAG                       "IPACMDebug"
 
 #define Static_Policy_TAG                    "PolicyBasedRouting"
 #define Static_Policy_Enabled                "StaticPolicyEnabled"

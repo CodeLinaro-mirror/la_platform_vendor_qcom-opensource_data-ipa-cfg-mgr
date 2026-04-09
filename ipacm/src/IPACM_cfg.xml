@@ -11,6 +11,7 @@
 		<EnablePublicIpSupport>0</EnablePublicIpSupport>
 	</PublicIpSupport>
 	<IPACM>
+		<IPACMDebug>0</IPACMDebug>
 		<IPACMIface>
 			<Iface>
 			   <Name>rndis0</Name>

@@ -371,7 +371,7 @@ IPACM_Lan::IPACM_Lan(char *iface_name, int iface_index, bool is_ppp_iface) : IPA
 
 	if (IPACM_Iface::ipacmcfg->ipacm_emesh_enable && IPACM_Iface::ipacmcfg->ipacm_emesh_mode >= 2)
 	{
-		if (device_type == IPACM_CLIENT_DEVICE_TYPE_ETH && rx_prop && rx_prop->num_rx_props > 2)
+		if (!IPACM_Iface::ipacmcfg->ipacm_qos_enable && device_type == IPACM_CLIENT_DEVICE_TYPE_ETH && rx_prop && rx_prop->num_rx_props > 2)
 		{
 			sIface = true;
 			IPACM_Iface::ipacmcfg->SetSpclIface(dev_name);
@@ -741,7 +741,7 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 #endif
 #ifdef FEATURE_VLAN_MPDN
 						/* VLAN IFACES don't care about default route */
-						if(!(IPACM_Iface::ipacmcfg->iface_in_vlan_mode(dev_name)) ||
+						if(!(IPACM_Iface::ipacmcfg->iface_in_vlan_mode_v2(dev_name)) ||
 							(!(IPACM_Iface::ipacmcfg->iface_in_vlan_mode_v2(dev_name)) && IPACM_Iface::ipacmcfg->eth_wan_pppoe_enable && sIface))
 #endif
 						{
@@ -894,7 +894,7 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 							}
 						}
 						/* VLAN IFACES don't care about default route */
-						if(!(IPACM_Iface::ipacmcfg->iface_in_vlan_mode(dev_name)) ||
+						if(!(IPACM_Iface::ipacmcfg->iface_in_vlan_mode_v2(dev_name)) ||
 							(!(IPACM_Iface::ipacmcfg->iface_in_vlan_mode_v2(dev_name)) && IPACM_Iface::ipacmcfg->eth_wan_pppoe_enable && sIface))
 #endif //FEATURE_VLAN_MPDN
 						{
@@ -1251,9 +1251,12 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 			return;
 		}
 		IPACMDBG_H("Backhaul is sta mode?%d\n", data_wan->is_sta);
+		IPACMDBG_H("IPACM_Iface::ipacmcfg->iface_in_vlan_mode(dev_name)?%d\n", IPACM_Iface::ipacmcfg->iface_in_vlan_mode(dev_name));
+		IPACMDBG_H("IPACM_Iface::ipacmcfg->iface_in_vlan_mode_v2(dev_name)?%d\n", IPACM_Iface::ipacmcfg->iface_in_vlan_mode_v2(dev_name));
+		IPACMDBG_H("dev_name %s sIface()?%d\n", dev_name, sIface);
 #ifdef FEATURE_VLAN_MPDN
 		/* VLAN IFACES don't care about default route */
-		if((IPACM_Iface::ipacmcfg->iface_in_vlan_mode(dev_name)) &&
+		if((IPACM_Iface::ipacmcfg->iface_in_vlan_mode_v2(dev_name)) &&
 		   (IPACM_Iface::ipacmcfg->ipacm_mpdn_enable == TRUE) &&
 		   !sIface)
 		{

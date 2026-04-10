@@ -245,6 +245,7 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 						if(data->if_index != neighbor_client[i].iface_index)
 						{
 							IPACMERR("update new kernel iface index \n");
+							post_del_event(i);
 							neighbor_client[i].iface_index = data->if_index;
 						}
 
@@ -1335,14 +1336,17 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 								}
 #endif
 								/* use previous ipv4 first */
-								if(data->if_index != neighbor_client[i].iface_index)
-								{	/* no need to update new kernel intex in case of mld */
+								if (data->if_index != neighbor_client[i].iface_index)
+								{ /* no need to update new kernel intex in case of mld */
 									if (strncmp(data->iface_name, MLD_IFACE_NAME, strlen(MLD_IFACE_NAME)) != 0)
 									{
 										IPACMDBG_H("update new kernel iface index \n");
+										post_del_event(i);
 										neighbor_client[i].iface_index = data->if_index;
 										strlcpy(neighbor_client[i].iface_name, data->iface_name, sizeof(neighbor_client[i].iface_name));
-									} else {
+									}
+									else
+									{
 										IPACMDBG_H("MLD interface donot update if index and if name\n");
 									}
 								}
@@ -1828,22 +1832,27 @@ void IPACM_Neighbor::post_phys_iface_event(const char *iface_name, int ipa_if_nu
 	ipacm_cmd_q_data evt_data;
 
 	/* Vlan client */
-	if (IPACM_FAILURE == ipa_if_num) {
-		if (strstr(iface_name, STR_ETH0_IFACE)) {
+	if (IPACM_FAILURE == ipa_if_num)
+	{
+		if (strstr(iface_name, STR_ETH0_IFACE))
+		{
 			strlcpy(phys_iface_name, STR_ETH0_IFACE, IPA_IFACE_NAME_LEN);
 		}
-		else if (strstr(iface_name, STR_ETH1_IFACE)) {
+		else if (strstr(iface_name, STR_ETH1_IFACE))
+		{
 			strlcpy(phys_iface_name, STR_ETH1_IFACE, IPA_IFACE_NAME_LEN);
 		}
-		else if (strstr(iface_name, STR_RNDIS0_IFACE)) {
+		else if (strstr(iface_name, STR_RNDIS0_IFACE))
+		{
 			strlcpy(phys_iface_name, STR_RNDIS0_IFACE, IPA_IFACE_NAME_LEN);
 		}
-		else if (strstr(iface_name, STR_ECM0_IFACE)) {
+		else if (strstr(iface_name, STR_ECM0_IFACE))
+		{
 			strlcpy(phys_iface_name, STR_ECM0_IFACE, IPA_IFACE_NAME_LEN);
 		}
 		else
 			return;
-		if(IPACM_Iface::ipa_get_if_index(phys_iface_name, &phys_if_idx))
+		if (IPACM_Iface::ipa_get_if_index(phys_iface_name, &phys_if_idx))
 		{
 			IPACMERR("Error while getting interface index for %s device", phys_iface_name);
 			return;
@@ -1853,7 +1862,8 @@ void IPACM_Neighbor::post_phys_iface_event(const char *iface_name, int ipa_if_nu
 		phys_if_idx = if_idx;
 
 	data_fid = (ipacm_event_data_fid *)malloc(sizeof(ipacm_event_data_fid));
-	if (data_fid == NULL) {
+	if (data_fid == NULL)
+	{
 		IPACMERR("unable to allocate memory for event data_fid\n");
 		return;
 	}
@@ -1862,7 +1872,69 @@ void IPACM_Neighbor::post_phys_iface_event(const char *iface_name, int ipa_if_nu
 	evt_data.event = IPA_USB_LINK_UP_EVENT;
 	evt_data.evt_data = data_fid;
 	IPACMDBG_H("Posting usb IPA_LINK_UP_EVENT with if index: %d iface_name : %s\n",
-						 data_fid->if_index, iface_name);
+			   data_fid->if_index, iface_name);
 	IPACM_EvtDispatcher::PostEvt(&evt_data);
 }
 
+// Function to post appropriate delete event for a given neighbor client index
+void IPACM_Neighbor::post_del_event(int idx)
+{
+	// Ensure the index is within bounds
+	if (idx < 0 || idx >= IPA_MAX_NUM_NEIGHBOR_CLIENTS)
+	{
+		IPACMERR("Invalid neighbor client index %d", idx);
+		return;
+	}
+	// Print neighbor client info
+	IPACMDBG("Neighbor client %d: MAC %02x:%02x:%02x:%02x:%02x:%02x, iface %s, if_index %d, v4_addr 0x%x, ipa_if_num %d",
+			 idx,
+			 neighbor_client[idx].mac_addr[0], neighbor_client[idx].mac_addr[1], neighbor_client[idx].mac_addr[2],
+			 neighbor_client[idx].mac_addr[3], neighbor_client[idx].mac_addr[4], neighbor_client[idx].mac_addr[5],
+			 neighbor_client[idx].iface_name,
+			 neighbor_client[idx].iface_index,
+			 neighbor_client[idx].v4_addr,
+			 neighbor_client[idx].ipa_if_num);
+
+	// If IPv4 address is present, allocate and post neighbor delete event
+	if (neighbor_client[idx].v4_addr != 0)
+	{
+		ipacm_event_data_all *neigh_del_data = (ipacm_event_data_all *)malloc(sizeof(ipacm_event_data_all));
+		if (neigh_del_data == NULL)
+		{
+			IPACMERR("Unable to allocate memory for neighbor delete event");
+		}
+		else
+		{
+			neigh_del_data->iptype = IPA_IP_v4;
+			neigh_del_data->if_index = neighbor_client[idx].iface_index;
+			neigh_del_data->ipv4_addr = neighbor_client[idx].v4_addr;
+			memcpy(neigh_del_data->mac_addr, neighbor_client[idx].mac_addr, sizeof(neighbor_client[idx].mac_addr));
+			strlcpy(neigh_del_data->iface_name, neighbor_client[idx].iface_name, sizeof(neigh_del_data->iface_name));
+
+			ipacm_cmd_q_data neigh_evt;
+			neigh_evt.event = IPA_NEIGH_CLIENT_IP_ADDR_DEL_EVENT;
+			neigh_evt.evt_data = (void *)neigh_del_data;
+			IPACM_EvtDispatcher::PostEvt(&neigh_evt);
+		}
+	}
+
+	// Allocate a separate data structure for the LAN client delete event
+	ipacm_event_data_all *lan_del_data = (ipacm_event_data_all *)malloc(sizeof(ipacm_event_data_all));
+	if (lan_del_data == NULL)
+	{
+		IPACMERR("Unable to allocate memory for LAN delete event");
+		return;
+	}
+
+	lan_del_data->iptype = IPA_IP_v4;
+	lan_del_data->if_index = neighbor_client[idx].iface_index;
+	lan_del_data->ipv4_addr = neighbor_client[idx].v4_addr;
+	memcpy(lan_del_data->mac_addr, neighbor_client[idx].mac_addr, sizeof(neighbor_client[idx].mac_addr));
+	strlcpy(lan_del_data->iface_name, neighbor_client[idx].iface_name, sizeof(lan_del_data->iface_name));
+
+	// Post IPA_LAN_CLIENT_DEL_EVENT regardless of IPv4 presence
+	ipacm_cmd_q_data lan_evt;
+	lan_evt.event = IPA_LAN_CLIENT_DEL_EVENT;
+	lan_evt.evt_data = (void *)lan_del_data;
+	IPACM_EvtDispatcher::PostEvt(&lan_evt);
+}

@@ -77,6 +77,10 @@ IPACM_Iface::IPACM_Iface(char *iface_name, int iface_index)
 	tx_prop = NULL;
 	rx_prop = NULL;
 
+	/* Need to start the prio value with 1, As it is uint8
+	 * Can be memsetted with value 1 to reflect at all indexes.
+	 */
+	memset(prio, 1, sizeof(prio));
 	if((iface_name != NULL) && (strstr(iface_name, "mld") || strstr(iface_name, "wlan")))
 	{
 		strlcpy(dev_name, iface_name, IF_NAME_LEN);

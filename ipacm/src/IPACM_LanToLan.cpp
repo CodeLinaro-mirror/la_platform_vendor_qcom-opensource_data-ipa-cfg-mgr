@@ -96,7 +96,12 @@ IPACM_LanToLan_Iface::IPACM_LanToLan_Iface(IPACM_Lan *p_iface)
 		m_is_vlan_ap = true;
 		IPACMDBG_H("Interface %s vlan ap %d\n", p_iface->dev_name, m_is_vlan_ap);
 	}
-	if(p_iface->ipa_if_cate == WLAN_IF)
+
+	if(IPACM_Iface::ipacmcfg->device_mode)
+	{
+		max_num_clients = MAX_NUM_WLAN_CLIENT;
+	}
+	else if(p_iface->ipa_if_cate == WLAN_IF)
 	{
 		IPACMDBG_H("Interface %s is WLAN interface.\n", p_iface->dev_name);
 		m_support_intra_iface_offload = true;

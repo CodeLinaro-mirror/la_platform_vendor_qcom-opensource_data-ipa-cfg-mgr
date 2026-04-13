@@ -4644,6 +4644,83 @@ int IPACM_Config::SetSpclIface(char *event_iface_name) {
 	return ret;
 }
 
+void IPACM_Config::update_dscp_pcp_mapping_table()
+{
+	struct ipa_ioc_dscp_pcp_map_info dscp_pcp_map_info;
+	int fd;
+	dscp_pcp_map_info.add = IPACM_Iface::ipacmcfg->dscp_pcp_config.add;
+
+	/* Issue add/delete ioctl and update cache */
+	IPACMDBG_H("Issuing DSCP PCP %s command\n", (dscp_pcp_map_info.add)?"add":"delete");
+
+	memcpy(&(dscp_pcp_map_info.dscp_pcp_map[0]), IPACM_Iface::ipacmcfg->dscp_pcp_config.dscp_pcp_map,
+		sizeof(IPACM_Iface::ipacmcfg->dscp_pcp_config.dscp_pcp_map));
+	fd = open(IPA_DEVICE_NAME, O_RDWR);
+	if (fd < 0)
+	{
+		IPACMDBG_H("Failed to open IPA device\n");
+		return;
+	}
+	if (0 != ioctl(fd, IPA_IOC_ADD_DEL_DSCP_PCP_MAPPING, &dscp_pcp_map_info))
+	{
+		IPACMDBG_H("Failed ioctl IPA_IOC_ADD_DEL_DSCP_PCP_MAPPING\n");
+		close(fd);
+		return;
+	}
+	close(fd);
+
+	IPACM_Iface::ipacmcfg->dscp_pcp_config_cache.add = IPACM_Iface::ipacmcfg->dscp_pcp_config.add;
+	memcpy(IPACM_Iface::ipacmcfg->dscp_pcp_config_cache.dscp_pcp_map, IPACM_Iface::ipacmcfg->dscp_pcp_config.dscp_pcp_map,
+					sizeof(IPACM_Iface::ipacmcfg->dscp_pcp_config.dscp_pcp_map));
+
+}
+
+void IPACM_Config::add_dscp_pcp_mapping()
+{
+	int fd;
+	struct ipa_ioc_dscp_pcp_map_info dscp_pcp_map_info;
+
+	/* Ignoring DSCP PCP addition/deletion if it already issued and there is no change in config */
+	if((memcmp(&(IPACM_Iface::ipacmcfg->dscp_pcp_config), &(IPACM_Iface::ipacmcfg->dscp_pcp_config_cache),
+		sizeof(IPACM_Iface::ipacmcfg->dscp_pcp_config)) == 0))
+	{
+		IPACMDBG_H("Ignore Config file change as there is no change in the config\n");
+		return;
+	}
+
+	if (IPACM_Iface::ipacmcfg->dscp_pcp_config.add == 1)
+	{
+		/* Issue add ioctl and update cache */
+		IPACMDBG_H("Issuing DSCP PCP add command\n");
+		dscp_pcp_map_info.add = 1;
+		memcpy(&(dscp_pcp_map_info.dscp_pcp_map[0]), IPACM_Iface::ipacmcfg->dscp_pcp_config.dscp_pcp_map,
+			sizeof(IPACM_Iface::ipacmcfg->dscp_pcp_config.dscp_pcp_map));
+		fd = open(IPA_DEVICE_NAME, O_RDWR);
+		if (fd < 0)
+		{
+			IPACMDBG_H("Failed to open IPA device\n");
+			return;
+		}
+
+		if (0 != ioctl(fd, IPA_IOC_ADD_DEL_DSCP_PCP_MAPPING, &dscp_pcp_map_info))
+		{
+			IPACMDBG_H("Failed ioctl IPA_IOC_ADD_DEL_DSCP_PCP_MAPPING\n");
+			close(fd);
+			return;
+		}
+
+		IPACM_Iface::ipacmcfg->dscp_pcp_config_cache.add = 1;
+		memcpy(IPACM_Iface::ipacmcfg->dscp_pcp_config_cache.dscp_pcp_map, IPACM_Iface::ipacmcfg->dscp_pcp_config.dscp_pcp_map,
+			sizeof(IPACM_Iface::ipacmcfg->dscp_pcp_config.dscp_pcp_map));
+		close(fd);
+	}
+	else
+	{
+		IPACMDBG_H("Ignoring addition of DSCP PCP mapping\n");
+	}
+	return;
+}
+
 void IPACM_Config::add_qos_params_info(ipa_ioc_qos_config *data)
 {
 	list<qos_param_info>::iterator it_qos_params;

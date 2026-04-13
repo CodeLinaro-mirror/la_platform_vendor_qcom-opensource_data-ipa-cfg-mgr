@@ -194,7 +194,7 @@ IPACM_Wlan::IPACM_Wlan(char *iface_name, int iface_index, bool ast_update_needed
 		/* Update DSCP PCP mapping if the mesh R3 */
 		if(is_svap_iface() && IPACM_Iface::ipacmcfg->ipacm_emesh_mode >= 3)
 		{
-			add_dscp_pcp_mapping();
+			IPACM_Iface::ipacmcfg->add_dscp_pcp_mapping();
 		}
 	}
 	IPACMDBG_H("Svap interface %d for wlan ap index %d\n", is_svap_iface(), wlan_ap_index);
@@ -1417,24 +1417,6 @@ void IPACM_Wlan::event_callback(ipa_cm_event_id event, void *param)
 			IPACMDBG_H("Just storing the recent config change\n");
 			return;
 		}
-
-		/* Issue add/delete ioctl and update cache */
-		IPACMDBG_H("Issuing DSCP PCP %s command\n", (dscp_pcp_map_info.add)?"add":"delete");
-		dscp_pcp_map_info.add = IPACM_Iface::ipacmcfg->dscp_pcp_config.add;
-		memcpy(&(dscp_pcp_map_info.dscp_pcp_map[0]), IPACM_Iface::ipacmcfg->dscp_pcp_config.dscp_pcp_map,
-			sizeof(IPACM_Iface::ipacmcfg->dscp_pcp_config.dscp_pcp_map));
-		m_fd = open(IPA_DEVICE_NAME, O_RDWR);
-		if (0 != ioctl(m_fd, IPA_IOC_ADD_DEL_DSCP_PCP_MAPPING, &dscp_pcp_map_info))
-		{
-			IPACMDBG_H("Failed ioctl IPA_IOC_ADD_DEL_DSCP_PCP_MAPPING\n");
-			close(m_fd);
-			return;
-		}
-		close(m_fd);
-
-		IPACM_Iface::ipacmcfg->dscp_pcp_config_cache.add = IPACM_Iface::ipacmcfg->dscp_pcp_config.add;
-		memcpy(IPACM_Iface::ipacmcfg->dscp_pcp_config_cache.dscp_pcp_map, IPACM_Iface::ipacmcfg->dscp_pcp_config.dscp_pcp_map,
- 									sizeof(IPACM_Iface::ipacmcfg->dscp_pcp_config.dscp_pcp_map));
 		size = sizeof(ipa_ioc_add_hdr_proc_ctx) + sizeof(ipa_hdr_proc_ctx_add);
 		hdr_proc_ctx_table = (ipa_ioc_add_hdr_proc_ctx *)malloc(size);
 		if (hdr_proc_ctx_table == NULL) {
@@ -9631,45 +9613,6 @@ int IPACM_Wlan::delete_wlan_client_lan2lan_flt_rule(uint8_t *mac, ipa_ip_type ip
 	return IPACM_SUCCESS;
 }
 
-void IPACM_Wlan::add_dscp_pcp_mapping()
-{
-	int m_fd;
-	struct ipa_ioc_dscp_pcp_map_info dscp_pcp_map_info;
-
-	/* Ignoring DSCP PCP addition/deletion if it already issued and there is no change in config */
-	if((memcmp(&(IPACM_Iface::ipacmcfg->dscp_pcp_config), &(IPACM_Iface::ipacmcfg->dscp_pcp_config_cache),
-		sizeof(IPACM_Iface::ipacmcfg->dscp_pcp_config)) == 0))
-	{
-		IPACMDBG_H("Ignore Config file change as there is no change in the config\n");
-		return;
-	}
-
-	if (IPACM_Iface::ipacmcfg->dscp_pcp_config.add == 1)
-	{
-		/* Issue add ioctl and update cache */
-		IPACMDBG_H("Issuing DSCP PCP add command\n");
-		dscp_pcp_map_info.add = 1;
-		memcpy(&(dscp_pcp_map_info.dscp_pcp_map[0]), IPACM_Iface::ipacmcfg->dscp_pcp_config.dscp_pcp_map,
-			sizeof(IPACM_Iface::ipacmcfg->dscp_pcp_config.dscp_pcp_map));
-		m_fd = open(IPA_DEVICE_NAME, O_RDWR);
-		if (0 != ioctl(m_fd, IPA_IOC_ADD_DEL_DSCP_PCP_MAPPING, &dscp_pcp_map_info))
-		{
-			IPACMDBG_H("Failed ioctl IPA_IOC_ADD_DEL_DSCP_PCP_MAPPING\n");
-			close(m_fd);
-			return;
-		}
-
-		IPACM_Iface::ipacmcfg->dscp_pcp_config_cache.add = 1;
-		memcpy(IPACM_Iface::ipacmcfg->dscp_pcp_config_cache.dscp_pcp_map, IPACM_Iface::ipacmcfg->dscp_pcp_config.dscp_pcp_map,
-			sizeof(IPACM_Iface::ipacmcfg->dscp_pcp_config.dscp_pcp_map));
-		close(m_fd);
-	}
-	else
-	{
-		IPACMDBG_H("Ignoring addition of DSCP PCP mapping\n");
-	}
-	return;
-}
 
 void IPACM_Wlan::handle_hpc_rt_rules_for_easymesh_R3(struct ipa_ioc_add_hdr_proc_ctx *hdr_proc_ctx_table,
 	struct ipa_hdr_proc_ctx_add *hdr_proc_ctx,

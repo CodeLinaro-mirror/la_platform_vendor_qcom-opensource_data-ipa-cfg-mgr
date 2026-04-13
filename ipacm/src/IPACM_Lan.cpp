@@ -135,7 +135,18 @@ IPACM_Lan::IPACM_Lan(char *iface_name, int iface_index) : IPACM_Iface(iface_name
 	{
 		double_tagging = IPACM_Iface::ipacmcfg->iface_in_vlan_mode(iface_name);
 	}
+	if ((IPACM_Iface::ipacmcfg->device_mode == DEVMODE_STABRIDGE) && strstr(dev_name, "ath")
+					&& (IPACM_Iface::ipacmcfg->device_vlan_mode))
+	{
+		sta_bridge = true;
+		if(IPACM_Iface::ipacmcfg->dscp_pcp_config.add)
+		{
+			IPACM_Iface::ipacmcfg->add_dscp_pcp_mapping();
+			pcp_marking = true;
+		}
+	}
 	IPACMDBG_H("Iface is in double vlan tagging mode %d\n", double_tagging);
+	IPACMDBG("pcp marking %d\n", pcp_marking);
 	memset(num_wan_ul_fl_rule_v4, 0, sizeof(num_wan_ul_fl_rule_v4));
 	memset(num_wan_ul_fl_rule_v6, 0, sizeof(num_wan_ul_fl_rule_v6));
 	memset(num_wan_subnet_rules, 0, sizeof(num_wan_subnet_rules));
@@ -17712,7 +17723,7 @@ void IPACM_Lan::eth_bridge_post_event(ipa_cm_event_id evt, ipa_ip_type iptype, u
 }
 
 /* add header processing context and return handle to lan2lan controller */
-int IPACM_Lan::eth_bridge_add_hdr_proc_ctx(ipa_hdr_l2_type peer_l2_hdr_type, uint32_t *hdl, uint16_t vlan_id, uint16_t outer_vlan_id, uint32_t *hdr_hdl)
+int IPACM_Lan::eth_bridge_add_hdr_proc_ctx(ipa_hdr_l2_type peer_l2_hdr_type, uint32_t *hdl, uint16_t vlan_id, uint16_t outer_vlan_id, uint32_t *hdr_hdl, bool peer_pcp_marking)
 {
 	int len, res = IPACM_SUCCESS;
 	uint32_t hdr_template;
@@ -17725,7 +17736,8 @@ int IPACM_Lan::eth_bridge_add_hdr_proc_ctx(ipa_hdr_l2_type peer_l2_hdr_type, uin
 		return IPACM_FAILURE;
 	}
 
-	if ((IPACM_Iface::ipacmcfg->device_mode == DEVMODE_STABRIDGE) && strstr(dev_name, "ath")
+	IPACMDBG("vlan id %d outer vlan id %d pcp %d\n", vlan_id, outer_vlan_id, peer_pcp_marking);
+	if ((IPACM_Iface::ipacmcfg->device_mode == DEVMODE_STABRIDGE) && sta_bridge
 					&& (IPACM_Iface::ipacmcfg->device_vlan_mode))
 	{
 		t2_hdr = tx_prop->tx[2].hdr_l2_type;
@@ -17761,10 +17773,11 @@ int IPACM_Lan::eth_bridge_add_hdr_proc_ctx(ipa_hdr_l2_type peer_l2_hdr_type, uin
 		 * Add header proc context with output dscp_pcp_update irrespective of
 		 * DSCP PCP update needed or not for easy mesh R3
 		 */
-		if (ipa_if_cate == WLAN_IF && ((IPACM_Wlan *)this)->is_svap_iface() &&
-			(IPACM_Iface::ipacmcfg->ipacm_emesh_mode >= 3))
+		if ((ipa_if_cate == WLAN_IF && ((IPACM_Wlan *)this)->is_svap_iface() &&
+			(IPACM_Iface::ipacmcfg->ipacm_emesh_mode >= 3)) || peer_pcp_marking)
 		{
 			pHeaderProcTable->proc_ctx[0].generic_params.output_dscp_pcp_update = 1;
+			IPACMDBG("Pcp marking for this proc context is enabled\n");
 		}
 		eth_bridge_get_vlan_hdr_template_hdl(&hdr_template, vlan_id, outer_vlan_id);
 	}
@@ -18066,7 +18079,7 @@ int IPACM_Lan::eth_bridge_add_flt_rule(uint8_t *mac, uint32_t rt_tbl_hdl, ipa_ip
 	}
 
 	if((IPACM_Iface::ipacmcfg->device_mode == DEVMODE_STABRIDGE) && (IPACM_Iface::ipacmcfg->device_vlan_mode)
-					&& (strstr(dev_name,"ath")) && IPACM_Iface::ipacmcfg->iface_in_vlan_mode(dev_name))
+					&& sta_bridge && IPACM_Iface::ipacmcfg->iface_in_vlan_mode(dev_name))
 	{
 		idx = 2;
                 prio_index = 1;
@@ -22451,8 +22464,8 @@ int IPACM_Lan::eth_bridge_get_vlan_hdr_template_hdl(uint32_t* hdr_hdl, uint16_t 
 			for (j = 0; j < rx_prop->num_rx_props / 2 && j < IPA_MAX_NUM_PROPS; j++){
 					/* Easymesh vlan/svap pipe condition need to install for in 2nd handle in array  and idx 2*/
 					if (((ipa_if_cate == WLAN_IF) && (is_if_svap || is_wlan_if_vlan) && (rx_prop->num_rx_props > 2))
-									|| ((IPACM_Iface::ipacmcfg->device_mode == DEVMODE_APBRIDGE) && (IPACM_Iface::ipacmcfg->device_vlan_mode)
-											&& strstr(dev_name, "ath"))) {
+									|| ((IPACM_Iface::ipacmcfg->device_mode == DEVMODE_STABRIDGE) && (IPACM_Iface::ipacmcfg->device_vlan_mode)
+											&& sta_bridge)) {
 							if (j != 1) {
 									IPACMDBG_H("Interface is WLAN Svap or w-vlan, dont install rules on pipe %d..... continue\n", idx);
 									continue;

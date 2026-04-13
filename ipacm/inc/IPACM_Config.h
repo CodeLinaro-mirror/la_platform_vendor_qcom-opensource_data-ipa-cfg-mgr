@@ -626,6 +626,8 @@ public:
 	int get_vlan_id(char *iface_name, uint16_t *vlan_id);
 	void extract_mlo_base_iface(char *input_iface);
 	void get_vlan_mode_ifaces();
+	void add_dscp_pcp_mapping();
+	void update_dscp_pcp_mapping_table();
 #endif
 
 	bool is_svap_related(const char *phy_inf);

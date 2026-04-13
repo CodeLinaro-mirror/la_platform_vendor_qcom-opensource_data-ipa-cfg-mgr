@@ -332,6 +332,8 @@ public:
 	uint8_t hdr_len;
 
 	uint8_t double_tagging;
+	bool pcp_marking = false;
+	bool sta_bridge = false;
 
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
 	/* Clients which take HW path. */
@@ -602,7 +604,7 @@ public:
 	int install_ipv4_icmp_flt_rule();
 
 	/* add header processing context and return handle to lan2lan controller */
-	int eth_bridge_add_hdr_proc_ctx(ipa_hdr_l2_type peer_l2_hdr_type, uint32_t *hdl, uint16_t vlan_id, uint16_t outer_vlan_id=0, uint32_t *hdr_hdl = NULL);
+	int eth_bridge_add_hdr_proc_ctx(ipa_hdr_l2_type peer_l2_hdr_type, uint32_t *hdl, uint16_t vlan_id, uint16_t outer_vlan_id=0, uint32_t *hdr_hdl = NULL, bool peer_pcp_marking = false);
 
 	/* add routing rule and return handle to lan2lan controller */
 	int eth_bridge_add_rt_rule(uint8_t *mac, char *rt_tbl_name, uint32_t hdr_proc_ctx_hdl,

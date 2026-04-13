@@ -466,7 +466,6 @@ void IPACM_ConntrackListener::event_callback(ipa_cm_event_id evt,
 			IPACMDBG("Received IPA_HANDLE_RGIP_UP event\n");
 			uint32_t *rgip_data = (uint32_t *)data;
 			rgip_addr = *rgip_data;
-			rgip_addr = ntohl(rgip_addr);
 			nat_inst->AddPdn(rgip_addr, muxid, false,
 				(ip_pass_enable_default_pdn && !ip_pass_skip_nat_default_pdn));
 			break;

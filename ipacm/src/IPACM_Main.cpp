@@ -1409,6 +1409,7 @@ void* ipa_driver_msg_notifier(void *param)
 			}
 			ipv4_src = (struct rgip_info *)(buffer + sizeof(struct ipa_msg_meta));
 			IPACMDBG_H("Received IPA_IPoGRE_RGIP_EVENT withrgip iface %s\n",ipv4_src->rgip_iface_name);
+			ipv4_src->rgip_v4 =  ntohl(ipv4_src->rgip_v4);
 			memcpy(rgip_v4,&ipv4_src->rgip_v4,sizeof(rgip_v4));
 			if(*rgip_v4 == 0)
 			{
@@ -1418,7 +1419,6 @@ void* ipa_driver_msg_notifier(void *param)
 			{
 				evt_data.event    = IPA_HANDLE_RGIP_UP;
 				IPACM_Iface::ipacmcfg->rgip_ip = *rgip_v4;
-				IPACM_Iface::ipacmcfg->rgip_ip = ntohl(IPACM_Iface::ipacmcfg->rgip_ip);
 			}
 			evt_data.evt_data = rgip_v4;
 

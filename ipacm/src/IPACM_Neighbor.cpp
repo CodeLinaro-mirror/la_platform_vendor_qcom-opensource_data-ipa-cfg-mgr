@@ -1056,15 +1056,29 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 							IPACM_LOG(IPACM_LOG_ERR, "client %d name %s not real\n", i, data->iface_name);
 							return;
 						}
-
-						data_all = (ipacm_event_data_all *)malloc(sizeof(ipacm_event_data_all));
-						if (data_all == NULL)
+						if(IPACM_Iface::ipacmcfg->is_added_vlan_iface(data->iface_name))
 						{
-							IPACM_LOG(IPACM_LOG_ERR, "Unable to allocate memory\n");
-							return;
+							data_vlan = (ipacm_event_new_neigh_vlan *)malloc(sizeof(ipacm_event_new_neigh_vlan));
+							if(data_vlan == NULL)
+							{
+								IPACM_LOG(IPACM_LOG_ERR, "Unable to allocate memory\n");
+								return;
+							}
+							memcpy(&data_vlan->data_all, data, sizeof(ipacm_event_data_all));
+							data_vlan->bridge = NULL;
+							evt_data.evt_data = (void *)data_vlan;
 						}
-						memcpy(data_all, data, sizeof(ipacm_event_data_all));
-						evt_data.evt_data = (void *)data_all;
+						else
+						{
+							data_all = (ipacm_event_data_all *)malloc(sizeof(ipacm_event_data_all));
+							if (data_all == NULL)
+							{
+								IPACM_LOG(IPACM_LOG_ERR, "Unable to allocate memory\n");
+								return;
+							}
+							memcpy(data_all, data, sizeof(ipacm_event_data_all));
+							evt_data.evt_data = (void *)data_all;
+						}
 						IPACM_EvtDispatcher::PostEvt(&evt_data);
 						IPACM_LOG(IPACM_LOG_INFO, "Posted event %s with %s for ipv4\n",
 							IPACM_Iface::ipacmcfg->getEventName(evt_data.event),

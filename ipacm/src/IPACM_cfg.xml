@@ -713,5 +713,10 @@
 		<IPACMLog>
 			<IPACMfilevar>2097152</IPACMfilevar>
 		</IPACMLog>
+		<DeviceMode>
+			<IPACMDeviceMode>Default</IPACMDeviceMode>
+			<Vlan>Disable</Vlan>
+			<MgmtVlanId>0</MgmtVlanId>
+		</DeviceMode>
 	</IPACM>
 </system>

@@ -257,6 +257,11 @@ if (!(a)) {                                                 \
 #define EoGRE_v6options_enable_TAG           "IPACMv6optEnabled"
 #endif
 
+#define DEVICEMODE                           "DeviceMode"
+#define IPACMDEVICEMODE                      "IPACMDeviceMode"
+#define IPACMVLANMODE                        "Vlan"
+#define IPACMMGMNTVLANID                     "MgmtVlanId"
+
 /*---------------------------------------------------------------------------
       IP protocol numbers - use in dss_socket() to identify protocols.
       Also contains the extension header types for IPv6.
@@ -417,6 +422,10 @@ typedef struct  _IPACM_conf_t
 #ifdef FEATURE_STATIC_POLICY
 	uint32_t static_policy_dscp_mark_mode;
 #endif
+	ipa_device_mode device_mode;
+	bool device_vlan_mode;
+	uint16_t mgmnt_vlan_id;
+
 } IPACM_conf_t;
 
 typedef struct _IPACM_conf_ext_t

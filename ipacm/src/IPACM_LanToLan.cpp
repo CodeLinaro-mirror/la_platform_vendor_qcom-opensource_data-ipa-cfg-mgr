@@ -54,6 +54,7 @@ const char *ipa_l2_hdr_type[] = {
 	__stringify(802_1Q),
 	__stringify(ETH_II_AST),
 	__stringify(802_1Q_AST),
+	__stringify(802_Q_IN_Q),
 	__stringify(L2_MAX)
 };
 
@@ -62,12 +63,12 @@ IPACM_LanToLan* IPACM_LanToLan::p_instance;
 IPACM_LanToLan_Iface::IPACM_LanToLan_Iface(IPACM_Lan *p_iface)
 {
 	int i;
-
 	m_p_iface = p_iface;
 	memset(m_is_ip_addr_assigned, 0, sizeof(m_is_ip_addr_assigned));
 	m_support_inter_iface_offload = true;
 	m_support_intra_iface_offload = false;
 	m_intra_interface_info.is_vlan_peer = false;
+	double_tagging = ((IPACM_Lan*)p_iface)->double_tagging;
 	m_is_l2tp_iface = false;
 	m_is_svap_iface = false;
 #ifdef FEATURE_VLAN_MPDN
@@ -86,8 +87,15 @@ IPACM_LanToLan_Iface::IPACM_LanToLan_Iface(IPACM_Lan *p_iface)
 	num_of_wlan_svap_hpc_hdls = 0;
 	memset(wlan_svap_hpc_hdls, 0, MAX_SVAP_VLAN * sizeof(svap_vlan_hpc_hdl));
 
+	IPACMDBG("Iface is in double tagging %d\n", double_tagging);
 	m_is_vlan_ap = false;
 
+	if((IPACM_Iface::ipacmcfg->device_mode) && (IPACM_Iface::ipacmcfg->device_vlan_mode)
+					&&((p_iface->ipa_if_cate == WLAN_IF) ||(strstr(p_iface->dev_name, "ath"))))
+	{
+		m_is_vlan_ap = true;
+		IPACMDBG_H("Interface %s vlan ap %d\n", p_iface->dev_name, m_is_vlan_ap);
+	}
 	if(p_iface->ipa_if_cate == WLAN_IF)
 	{
 		IPACMDBG_H("Interface %s is WLAN interface.\n", p_iface->dev_name);
@@ -378,6 +386,7 @@ void IPACM_LanToLan::handle_iface_up(ipacm_event_eth_bridge *data)
 		if(IsVlan)
 		{
 			front_iface.set_is_vlan(true);
+			/*Avoiding checks with outer vlan id, as with inner id it is handled. */
 			if(IPACM_Iface::ipacmcfg->get_iface_vlan_ids(front_iface.get_iface_pointer()->dev_name, Ids))
 			{
 				IPACMERR("failed getting vlan ids for iface %s\n", front_iface.get_iface_pointer()->dev_name);
@@ -523,6 +532,22 @@ void IPACM_LanToLan::handle_new_iface_up(IPACM_LanToLan_Iface *new_iface, IPACM_
 		IPACMERR("Either new_iface or exist_iface is Invalid\n");
 		return;
 	}
+
+	if(!new_iface->get_iface_pointer() ||
+			!exist_iface->get_iface_pointer() ||
+			strlen(new_iface->get_iface_pointer()->dev_name) == 0 ||
+			strlen(exist_iface->get_iface_pointer()->dev_name) == 0)
+	{
+		IPACMERR("Incorrect iface pointer, dev name passed!\n");
+		return;
+	}
+	else
+	{
+		IPACMDBG_H("Populate peer info between: new_iface %s, existing iface %s\n",
+				new_iface->get_iface_pointer()->dev_name,
+				exist_iface->get_iface_pointer()->dev_name);
+	}
+	IPACMDBG_H("Num of tx props %d\n",new_iface->get_iface_pointer()->tx_prop->num_tx_props);
 
 	if (new_iface->is_spcl_iface()) {
 		num_prop = new_iface->get_iface_pointer()->rx_prop->num_rx_props;
@@ -782,13 +807,21 @@ void IPACM_LanToLan::handle_new_iface_up(IPACM_LanToLan_Iface *new_iface, IPACM_
 void IPACM_LanToLan::handle_vlan_id_add(ipacm_event_eth_bridge *data)
 {
 	list<IPACM_LanToLan_Iface>::iterator it;
+	char input_iface[32] = {'\0'};
 
-	IPACMDBG_H("got vlan_id add for %s, id %d\n", data->iface_name, data->VlanID);
+	IPACMDBG_H("got vlan_id add for %s, id %d %d\n", data->iface_name, data->VlanID, data->Outer_Vlanid);
 	/* find physical iface */
 	for(it = m_iface.begin(); it != m_iface.end(); it++)
 	{
+		strlcpy(input_iface, it->get_iface_pointer()->dev_name, sizeof(input_iface));
+		char *mld_bifercate = strchr(input_iface, '_');
+		IPACMDBG("%s\n", mld_bifercate);
+		if(mld_bifercate)
+		{
+			mld_bifercate[0] = '\0';
+		}
 		/* iface name from ioctl is vlan iface name, look for phys iface */
-		if (strstr(data->iface_name, it->get_iface_pointer()->dev_name))
+		if (strstr(data->iface_name, input_iface))
 		{
 			IPACMDBG("iface %s physical iface %s is found\n",
 				data->iface_name,
@@ -802,7 +835,7 @@ void IPACM_LanToLan::handle_vlan_id_add(ipacm_event_eth_bridge *data)
 			/* install inter-interface rules */
 			if(it->get_m_support_inter_iface_offload())
 			{
-				it->handle_vlan_id_add(data->VlanID);
+				it->handle_vlan_id_add(data);
 			}
 			break;
 		}
@@ -833,7 +866,7 @@ void IPACM_LanToLan::handle_vlan_id_del(ipacm_event_eth_bridge *data)
 				return;
 			}
 
-			it_to_del->handle_vlan_id_del(data->VlanID);
+			it_to_del->handle_vlan_id_del(data->VlanID, data->Outer_Vlanid);
 			break;
 		}
 	}
@@ -935,7 +968,7 @@ void IPACM_LanToLan::handle_client_add(ipacm_event_eth_bridge *data)
 				}
 			}
 #endif //FEATURE_VLAN_MPDN
-			it_iface->handle_client_add(data->mac_addr, is_l2tp_client, mapping_info, data->VlanID);
+			it_iface->handle_client_add(data->mac_addr, is_l2tp_client, mapping_info, data->VlanID, data->Outer_Vlanid);
 			break;
 		}
 	}
@@ -1008,7 +1041,7 @@ void IPACM_LanToLan::handle_client_del(ipacm_event_eth_bridge *data, bool del_cl
 		if(it_iface->get_iface_pointer() == data->p_iface)	//found the interface
 		{
 			IPACMDBG_H("Found the interface.\n");
-			it_iface->handle_client_del(data->mac_addr, data->VlanID);
+			it_iface->handle_client_del(data->mac_addr, data->VlanID, data->Outer_Vlanid);
 			break;
 		}
 	}
@@ -1222,7 +1255,7 @@ void IPACM_LanToLan_Iface::add_client_rt_rule(peer_iface_info *peer_info, client
 		return;
 	}
 
-	if (peer_info->peer->m_is_svap_iface || (peer_info->peer->m_is_sIface && peer_info->is_vlan_peer))
+	if (peer_info->peer->m_is_svap_iface || (peer_info->peer->m_is_sIface && peer_info->is_vlan_peer) || peer_info->peer->is_ap_iface_vlan_enabled())
 	{
 		peer_l2_hdr_type = peer_info->peer->get_iface_pointer()->tx_prop->tx[2].hdr_l2_type;
 	}
@@ -1337,7 +1370,12 @@ void IPACM_LanToLan_Iface::add_client_rt_rule(peer_iface_info *peer_info, client
 
 		/* Special interface needs to install hpc twice once during handle_iface_up for non-vlan clients
 		   and the again here for vlan clients */
-		if (is_svap_iface() || is_ap_iface_vlan_enabled() || (is_spcl_iface() && client->vlan_id)) {
+		if(client->outer_vlan_id)
+		{
+			IPACMDBG_H("Perform delayed add_hdr_proc_ctx for double tag clients \n");
+			add_hdr_proc_ctx_double_vlan(peer_l2_hdr_type, client->vlan_id, client->outer_vlan_id);
+		}
+		else if(m_is_vlan || is_svap_iface() || is_ap_iface_vlan_enabled() || (is_spcl_iface() && client->vlan_id)) {
 			IPACMDBG_H("Perform delayed add_hdr_proc_ctx for svap/spcl clients \n");
 			add_hdr_proc_ctx_vlan(peer_l2_hdr_type, client->vlan_id);
 		}
@@ -1346,9 +1384,9 @@ void IPACM_LanToLan_Iface::add_client_rt_rule(peer_iface_info *peer_info, client
 			peer_info->peer->get_iface_pointer()->dev_name,
 			client->mac_addr[0], client->mac_addr[1], client->mac_addr[2], client->mac_addr[3], client->mac_addr[4], client->mac_addr[5]);
 
-		if (is_svap_iface() || is_ap_iface_vlan_enabled() || (is_spcl_iface() && client->vlan_id)) {
-			m_p_iface->eth_bridge_add_rt_rule(client->mac_addr, peer_info->rt_tbl_name_for_rt[IPA_IP_v4], is_entry_present_wlan_svap_hpc_hdl(client->vlan_id, peer_l2_hdr_type),
-			peer_l2_hdr_type, IPA_IP_v4, rt_rule_hdl, &num_rt_rule);
+		if (m_is_vlan || is_svap_iface() || is_ap_iface_vlan_enabled() || (is_spcl_iface() && client->vlan_id)) {
+				m_p_iface->eth_bridge_add_rt_rule(client->mac_addr, peer_info->rt_tbl_name_for_rt[IPA_IP_v4], is_entry_present_wlan_svap_hpc_hdl(client->vlan_id, peer_l2_hdr_type, client->outer_vlan_id),
+				peer_l2_hdr_type, IPA_IP_v4, rt_rule_hdl, &num_rt_rule);
 		}
 		else {
 			m_p_iface->eth_bridge_add_rt_rule(client->mac_addr, peer_info->rt_tbl_name_for_rt[IPA_IP_v4], hdr_proc_ctx_for_inter_interface[peer_l2_hdr_type],
@@ -1363,9 +1401,9 @@ void IPACM_LanToLan_Iface::add_client_rt_rule(peer_iface_info *peer_info, client
 			client->inter_iface_rt_rule_hdl[peer_l2_hdr_type].rule_hdl[IPA_IP_v4][i] = rt_rule_hdl[i];
 		}
 
-		if (is_svap_iface() || is_ap_iface_vlan_enabled() || (is_spcl_iface() && client->vlan_id)) {
-			m_p_iface->eth_bridge_add_rt_rule(client->mac_addr, peer_info->rt_tbl_name_for_rt[IPA_IP_v6], is_entry_present_wlan_svap_hpc_hdl(client->vlan_id, peer_l2_hdr_type),
-			peer_l2_hdr_type, IPA_IP_v6, rt_rule_hdl, &num_rt_rule);
+		if (m_is_vlan || is_svap_iface() || is_ap_iface_vlan_enabled() || (is_spcl_iface() && client->vlan_id)) {
+				m_p_iface->eth_bridge_add_rt_rule(client->mac_addr, peer_info->rt_tbl_name_for_rt[IPA_IP_v6], is_entry_present_wlan_svap_hpc_hdl(client->vlan_id, peer_l2_hdr_type, client->outer_vlan_id),
+				peer_l2_hdr_type, IPA_IP_v6, rt_rule_hdl, &num_rt_rule);
 		}
 		else {
 			m_p_iface->eth_bridge_add_rt_rule(client->mac_addr, peer_info->rt_tbl_name_for_rt[IPA_IP_v6], hdr_proc_ctx_for_inter_interface[peer_l2_hdr_type],
@@ -1510,7 +1548,7 @@ void IPACM_LanToLan_Iface::add_l2tp_udp_client_rules_new_mapping(peer_iface_info
 #endif
 
 #ifdef FEATURE_VLAN_MPDN
-void IPACM_LanToLan_Iface::add_all_inter_interface_client_flt_rule_one_vlan_id(ipa_ip_type iptype, uint16_t vlan_id)
+void IPACM_LanToLan_Iface::add_all_inter_interface_client_flt_rule_one_vlan_id(ipa_ip_type iptype, uint16_t vlan_id, uint16_t Outer_vlanid)
 {
 	list<peer_iface_info>::iterator it_iface;
 	list<client_info>::iterator it_client;
@@ -1523,6 +1561,11 @@ void IPACM_LanToLan_Iface::add_all_inter_interface_client_flt_rule_one_vlan_id(i
 		/* look for specific client with this vlan id */
 		for(it_client = it_iface->peer->m_client_info.begin(); it_client != it_iface->peer->m_client_info.end(); it_client++)
 		{
+
+			if((double_tagging) && (Outer_vlanid != it_client->outer_vlan_id))
+			{
+				continue;
+			}
 			if ((vlan_id == it_client->vlan_id) || ((IPACM_Iface::ipacmcfg->ipacm_emesh_mode >= 2) && (it_iface->peer->get_m_support_inter_iface_offload())))
 				add_client_flt_rule(&(*it_iface), &(*it_client), iptype);
 		}
@@ -1644,12 +1687,19 @@ void IPACM_LanToLan_Iface::add_client_flt_rule(peer_iface_info *peer, client_inf
 	ipa_ioc_get_rt_tbl rt_tbl;
 	list<peer_iface_info>::iterator it_peer;
 	int ret = 0;
+	uint16_t Ids[IPA_MAX_NUM_OFFLOAD_VLANS] = {0};
+	uint16_t outer_vlan_id = 0;
 
 	if(m_is_l2tp_iface && iptype == IPA_IP_v4)
 	{
 		IPACMDBG_H("No need to install IPv4 flt rule on l2tp interface.\n");
 		return;
 	}
+	IPACMDBG_H("m_is_vlan: %d \n", m_is_vlan);
+	IPACMDBG_H("iptype: %d \n", iptype);
+	IPACMDBG_H("client_vlan_id: %d\n", client->vlan_id);
+	IPACMDBG_H("client_vlan_id: %d\n", client->outer_vlan_id);
+	IPACMDBG_H("m_p_iface->dev_name: %s\n", m_p_iface->dev_name);
 
 	for(it_flt = peer->flt_rule.begin(); it_flt != peer->flt_rule.end(); it_flt++)
 	{
@@ -1675,9 +1725,17 @@ void IPACM_LanToLan_Iface::add_client_flt_rule(peer_iface_info *peer, client_inf
 			IPACMDBG_H("flt rule is already present for other iptype (not %d), continue\n", iptype);
 		}
 
-		uint16_t Ids[IPA_MAX_NUM_OFFLOAD_VLANS];
 
-		if(IPACM_Iface::ipacmcfg->get_iface_vlan_ids(get_iface_pointer()->dev_name, Ids))
+		if(double_tagging)
+		{
+			if(IPACM_Iface::ipacmcfg->get_double_tagged_vlan_ids(m_p_iface->dev_name, Ids, &outer_vlan_id))
+			{
+				IPACMERR("Failed to extract the double tag vlan id's for %s\n",
+								get_iface_pointer()->dev_name);
+				return;
+			}
+		}
+		else if(IPACM_Iface::ipacmcfg->get_iface_vlan_ids(get_iface_pointer()->dev_name, Ids))
 		{
 			IPACMERR("failed getting vlan ids for iface %s\n", get_iface_pointer()->dev_name);
 			return;
@@ -1794,14 +1852,27 @@ void IPACM_LanToLan_Iface::add_client_flt_rule(peer_iface_info *peer, client_inf
 					return;
 				}
 
-				ret = m_p_iface->eth_bridge_add_flt_rule(client->mac_addr, rt_tbl.hdl,
-					iptype, &flt_rule_hdl, client->vlan_id, pipe_idx);
-				if(ret == IPACM_FAILURE)
+				if(double_tagging)
 				{
-					IPACMERR("filter rule addition failed\n");
-					return;
-				}
+					ret = m_p_iface->eth_bridge_add_flt_rule(client->mac_addr, rt_tbl.hdl,
+						iptype, &flt_rule_hdl, client->vlan_id, pipe_idx,outer_vlan_id);
+					if(ret == IPACM_FAILURE)
+					{
+						IPACMERR("filter rule addition failed\n");
+						return;
+					}
 
+				}
+				else
+				{
+					ret = m_p_iface->eth_bridge_add_flt_rule(client->mac_addr, rt_tbl.hdl,
+						iptype, &flt_rule_hdl, client->vlan_id, pipe_idx, 0);
+					if(ret == IPACM_FAILURE)
+					{
+						IPACMERR("filter rule addition failed\n");
+						return;
+					}
+				}
 				peer->peer->pipe_idx = true;
 			}
 			IPACMDBG_H("Installed flt rule for IP type %d: handle %d\n", iptype, flt_rule_hdl);
@@ -2025,9 +2096,11 @@ void IPACM_LanToLan_Iface::del_client_rt_rule(peer_iface_info *peer, client_info
 			}
 			client->inter_iface_rt_rule_hdl[peer_l2_hdr_type].num_hdl[IPA_IP_v6] = 0;
 
-			if (is_svap_iface() || is_ap_iface_vlan_enabled() || (is_spcl_iface() &&  client->vlan_id)) {
+			if (m_is_vlan || is_svap_iface() || is_ap_iface_vlan_enabled() || (is_spcl_iface() &&  client->vlan_id) ||
+							(double_tagging && client->vlan_id && client->outer_vlan_id))
+			{
 				IPACMDBG_H("Perform del_hdr_proc_ctx_vlan for svap/spcl clients \n");
-				del_hdr_proc_ctx_vlan(peer_l2_hdr_type, client->vlan_id);
+				del_hdr_proc_ctx_vlan(peer_l2_hdr_type, client->vlan_id, client->outer_vlan_id);
 			}
 #ifdef FEATURE_L2TP
 			if((IPACM_Iface::ipacmcfg->ipacm_l2tp_enable == IPACM_L2TP) &&
@@ -2268,20 +2341,25 @@ void IPACM_LanToLan_Iface::handle_down_event()
 }
 
 #ifdef FEATURE_VLAN_MPDN
-void IPACM_LanToLan_Iface::handle_vlan_id_add(uint16_t vlan_id)
+void IPACM_LanToLan_Iface::handle_vlan_id_add(ipacm_event_eth_bridge *data)
 {
 	list<peer_iface_info>::iterator it_peer_info;
 
-	IPACMDBG_H("adding vlan id %d to IF %s add flt rules for peers with matching vlan id\n",
-		vlan_id, get_iface_pointer()->dev_name);
+	IPACMDBG_H("adding vlan id %d %d to IF %s add flt rules for peers with matching vlan id\n",
+		data->VlanID, data->Outer_Vlanid,get_iface_pointer()->dev_name);
+	if((double_tagging)&&(data->Outer_Vlanid ==0))
+	{
+		IPACMDBG_H("Outer is missing for double tagging supported instance\n");
+		return;
+	}
 	if (get_m_is_ip_addr_assigned(IPA_IP_v4))
-		add_all_inter_interface_client_flt_rule_one_vlan_id(IPA_IP_v4, vlan_id);
+		add_all_inter_interface_client_flt_rule_one_vlan_id(IPA_IP_v4, data->VlanID, data->Outer_Vlanid);
 
 	if(get_m_is_ip_addr_assigned(IPA_IP_v6))
-		add_all_inter_interface_client_flt_rule_one_vlan_id(IPA_IP_v6, vlan_id);
+		add_all_inter_interface_client_flt_rule_one_vlan_id(IPA_IP_v6, data->VlanID, data->Outer_Vlanid);
 }
 
-void IPACM_LanToLan_Iface::handle_vlan_id_del(uint16_t vlan_id)
+void IPACM_LanToLan_Iface::handle_vlan_id_del(uint16_t vlan_id, uint16_t outer_vlan_id)
 {
 	list<client_info>::iterator it_client;
 
@@ -2293,13 +2371,13 @@ void IPACM_LanToLan_Iface::handle_vlan_id_del(uint16_t vlan_id)
 	it_client = m_client_info.begin();
 	while (it_client != m_client_info.end())
 	{
-		if(it_client->vlan_id == vlan_id)
+		if((it_client->vlan_id == vlan_id))
 		{
 			IPACMDBG_H("found client with MAC 0x[%X][%X][%X][%X][%X][%X] and vlan id %d, removing\n",
 				it_client->mac_addr[0], it_client->mac_addr[1], it_client->mac_addr[2],
 				it_client->mac_addr[3], it_client->mac_addr[4], it_client->mac_addr[5],
 				vlan_id);
-			it_client = handle_client_del(it_client->mac_addr, vlan_id);
+			it_client = handle_client_del(it_client->mac_addr, vlan_id, outer_vlan_id);
 		}
 		else
 		{
@@ -2625,7 +2703,7 @@ void IPACM_LanToLan_Iface::handle_new_iface_up(char rt_tbl_name_for_flt[][IPA_RE
 
 	increment_ref_cnt_peer_l2_hdr_type(peer_l2_hdr_type);
 	/* Skip adding hdr proc ctx for svap iface, will be performed during client add */
-	if (!is_svap_iface() && !is_ap_iface_vlan_enabled()) {
+	if (!is_svap_iface() && !is_ap_iface_vlan_enabled() && !m_is_vlan && !double_tagging) {
 		add_hdr_proc_ctx(peer_l2_hdr_type);
 	}
 
@@ -2644,7 +2722,7 @@ void IPACM_LanToLan_Iface::handle_new_iface_up(char rt_tbl_name_for_flt[][IPA_RE
 	return;
 }
 
-void IPACM_LanToLan_Iface::handle_client_add(uint8_t *mac, bool is_l2tp_client, l2tp_vlan_mapping_info *mapping_info, uint16_t vlan_id)
+void IPACM_LanToLan_Iface::handle_client_add(uint8_t *mac,bool is_l2tp_client, l2tp_vlan_mapping_info *mapping_info, uint16_t vlan_id, uint16_t outer_vlan_id)
 {
 	list<client_info>::iterator it_client;
 	list<peer_iface_info>::iterator it_peer_info;
@@ -2672,12 +2750,20 @@ void IPACM_LanToLan_Iface::handle_client_add(uint8_t *mac, bool is_l2tp_client, 
 		return;
 	}
 
-	IPACMDBG_H("is_l2tp_client: %d, mapping_info: %p, vlan id %d, is l2tp enable: %d\n", is_l2tp_client, mapping_info, vlan_id, IPACM_Iface::ipacmcfg->ipacm_l2tp_enable);
+	IPACMDBG_H("is_l2tp_client: %d, mapping_info: %p, vlan id %d,outer vlan %d is l2tp enable: %d\n", is_l2tp_client, mapping_info, vlan_id, outer_vlan_id, IPACM_Iface::ipacmcfg->ipacm_l2tp_enable);
 	memset(&new_client, 0, sizeof(new_client));
 	memcpy(new_client.mac_addr, mac, sizeof(new_client.mac_addr));
 	new_client.is_l2tp_client = is_l2tp_client;
 	new_client.mapping_info = mapping_info;
 	new_client.vlan_id = vlan_id;
+	IPACMDBG("Double tag %d %d %d\n", double_tagging, new_client.outer_vlan_id, outer_vlan_id);
+	if(double_tagging)
+	{
+		new_client.outer_vlan_id = outer_vlan_id;
+	}
+	IPACMDBG_H("Incoming New client MAC: 0x%02x%02x%02x%02x%02x%02x, on vlan_id %d %d\n",
+		new_client.mac_addr[0], new_client.mac_addr[1], new_client.mac_addr[2],new_client.mac_addr[3],
+		new_client.mac_addr[4], new_client.mac_addr[5], vlan_id, outer_vlan_id);
 	m_client_info.push_front(new_client);
 
 	client_info &front_client = m_client_info.front();
@@ -2755,7 +2841,7 @@ void IPACM_LanToLan_Iface::handle_client_add(uint8_t *mac, bool is_l2tp_client, 
 	return;
 }
 
-list<client_info>::iterator IPACM_LanToLan_Iface::handle_client_del(uint8_t *mac, uint16_t vlan_id)
+list<client_info>::iterator IPACM_LanToLan_Iface::handle_client_del(uint8_t *mac, uint16_t vlan_id, uint16_t outer_vlan_id)
 {
 	list<client_info>::iterator it_client;
 	list<peer_iface_info>::iterator it_peer_info;
@@ -2780,7 +2866,11 @@ list<client_info>::iterator IPACM_LanToLan_Iface::handle_client_del(uint8_t *mac
 #ifdef FEATURE_VLAN_MPDN
 			if(vlan_id)
 			{
-				if(it_client->vlan_id != vlan_id)
+				if((double_tagging)&&((it_client->vlan_id != vlan_id)||(it_client->outer_vlan_id != outer_vlan_id)))
+				{
+					continue;
+				}
+				else if(it_client->vlan_id != vlan_id)
 					continue;
 			}
 #endif
@@ -2903,6 +2993,20 @@ void IPACM_LanToLan_Iface::del_hdr_proc_ctx(ipa_hdr_l2_type peer_l2_type)
 	return;
 }
 
+
+void IPACM_LanToLan_Iface::add_hdr_proc_ctx_double_vlan(ipa_hdr_l2_type peer_l2_type, uint16_t vlan_id, uint16_t outer_vlan_id)
+{
+	uint32_t hdr_proc_ctx_hdl[IPA_MAX_NUM_PROPS] = {0};
+
+	if (!is_entry_present_wlan_svap_hpc_hdl(vlan_id, peer_l2_type, outer_vlan_id))
+	{
+		m_p_iface->eth_bridge_add_hdr_proc_ctx(peer_l2_type, hdr_proc_ctx_hdl, vlan_id, outer_vlan_id);
+		add_wlan_svap_hpc_hdl(vlan_id, peer_l2_type, hdr_proc_ctx_hdl, outer_vlan_id);
+		IPACMDBG_H("Installed inter-interface hdr proc ctx on iface %s: handle %d\n", m_p_iface->dev_name, hdr_proc_ctx_hdl);
+	}
+	return;
+
+}
 void IPACM_LanToLan_Iface::add_hdr_proc_ctx_vlan(ipa_hdr_l2_type peer_l2_type, uint16_t vlan_id)
 {
 	uint32_t hdr_proc_ctx_hdl[IPA_MAX_NUM_PROPS] = { 0 };
@@ -2916,14 +3020,14 @@ void IPACM_LanToLan_Iface::add_hdr_proc_ctx_vlan(ipa_hdr_l2_type peer_l2_type, u
 	return;
 }
 
-void IPACM_LanToLan_Iface::del_hdr_proc_ctx_vlan(ipa_hdr_l2_type peer_l2_type, uint16_t vlan_id)
+void IPACM_LanToLan_Iface::del_hdr_proc_ctx_vlan(ipa_hdr_l2_type peer_l2_type, uint16_t vlan_id, uint16_t outer_vlan_id)
 {
-	uint32_t hpc_hdl = is_entry_present_wlan_svap_hpc_hdl(vlan_id, peer_l2_type);
+	uint32_t hpc_hdl = is_entry_present_wlan_svap_hpc_hdl(vlan_id, peer_l2_type, outer_vlan_id);
 	if(hpc_hdl)
 	{
 		m_p_iface->eth_bridge_del_hdr_proc_ctx(hpc_hdl);
 		IPACMDBG_H("Hdr proc ctx with hdl %d is deleted.\n", hpc_hdl);
-		del_wlan_svap_hpc_hdl(vlan_id, peer_l2_type, &hpc_hdl);
+		del_wlan_svap_hpc_hdl(vlan_id, peer_l2_type, &hpc_hdl, outer_vlan_id);
 	}
 	return;
 }
@@ -3342,16 +3446,30 @@ void IPACM_LanToLan_Iface::handle_l2tp_disable()
 }
 #endif
 
-int IPACM_LanToLan_Iface::add_wlan_svap_hpc_hdl(uint16_t vlan_id, ipa_hdr_l2_type peer_l2_type, uint32_t* hpc_hdl)
+int IPACM_LanToLan_Iface::add_wlan_svap_hpc_hdl(uint16_t vlan_id, ipa_hdr_l2_type peer_l2_type, uint32_t* hpc_hdl, uint16_t outer_vlan_id)
 {
+	int ret;
 
 	if (num_of_wlan_svap_hpc_hdls >= MAX_SVAP_VLAN) {
 		IPACMDBG_H("Max number of entries %d, cannot add more \n", num_of_wlan_svap_hpc_hdls);
 		return IPACM_FAILURE;
 	}
 
+	IPACMDBG("Double_tagging %d\n", double_tagging);
 	for (int i = 0; i < num_of_wlan_svap_hpc_hdls; i++) {
-		if (wlan_svap_hpc_hdls[i].vlan_id == vlan_id &&
+
+		if (double_tagging)
+		{
+			if((wlan_svap_hpc_hdls[i].outer_vlan_id == outer_vlan_id) &&  (wlan_svap_hpc_hdls[i].vlan_id == vlan_id)
+							&& (wlan_svap_hpc_hdls[i].peer_l2_type == peer_l2_type))
+			{
+				ret = wlan_svap_hpc_hdls[i].hpc_hdr_hdl;
+				IPACMDBG_H("Entry with vlan_id:%d outer_vlan_id:%d and peer %d, present, hdl: %d\n", vlan_id,
+								outer_vlan_id, peer_l2_type, ret);
+				return ret;
+			}
+		}
+		else if (wlan_svap_hpc_hdls[i].vlan_id == vlan_id &&
 			wlan_svap_hpc_hdls[i].peer_l2_type == peer_l2_type)
 		{
 			IPACMDBG_H("Entry with vlan_id %d and peer %d, already exists\n", vlan_id, peer_l2_type);
@@ -3361,8 +3479,12 @@ int IPACM_LanToLan_Iface::add_wlan_svap_hpc_hdl(uint16_t vlan_id, ipa_hdr_l2_typ
 	}
 
 	// Entry not found create a new one
-	IPACMDBG_H("Entry with vlan_id %d and peer %d, absent, create a new entry\n", vlan_id, peer_l2_type);
+	IPACMDBG_H("Entry with vlan_id %d outer vlan id %d and peer %d, absent, create a new entry\n", vlan_id, outer_vlan_id, peer_l2_type);
 	wlan_svap_hpc_hdls[num_of_wlan_svap_hpc_hdls].vlan_id = vlan_id;
+	if(double_tagging)
+	{
+		wlan_svap_hpc_hdls[num_of_wlan_svap_hpc_hdls].outer_vlan_id = outer_vlan_id;
+	}
 	wlan_svap_hpc_hdls[num_of_wlan_svap_hpc_hdls].peer_l2_type = peer_l2_type;
 	wlan_svap_hpc_hdls[num_of_wlan_svap_hpc_hdls].hpc_hdr_hdl = hpc_hdl[0];
 
@@ -3371,7 +3493,7 @@ int IPACM_LanToLan_Iface::add_wlan_svap_hpc_hdl(uint16_t vlan_id, ipa_hdr_l2_typ
 	return IPACM_SUCCESS;
 }
 
-int IPACM_LanToLan_Iface::del_wlan_svap_hpc_hdl(uint16_t vlan_id, ipa_hdr_l2_type peer_l2_type, uint32_t* hpc_hdl)
+int IPACM_LanToLan_Iface::del_wlan_svap_hpc_hdl(uint16_t vlan_id, ipa_hdr_l2_type peer_l2_type, uint32_t* hpc_hdl, uint16_t outer_vlan_id)
 {
 
 	if (num_of_wlan_svap_hpc_hdls <= 0) {
@@ -3381,6 +3503,7 @@ int IPACM_LanToLan_Iface::del_wlan_svap_hpc_hdl(uint16_t vlan_id, ipa_hdr_l2_typ
 
 	for (int i = 0; i < num_of_wlan_svap_hpc_hdls; i++) {
 		if (wlan_svap_hpc_hdls[i].vlan_id == vlan_id &&
+			wlan_svap_hpc_hdls[i].outer_vlan_id == outer_vlan_id &&
 			wlan_svap_hpc_hdls[i].peer_l2_type == peer_l2_type)
 		{
 			IPACMDBG_H("Entry with vlan_id %d and peer %d, exists, delete entry\n", vlan_id, peer_l2_type);
@@ -3388,6 +3511,7 @@ int IPACM_LanToLan_Iface::del_wlan_svap_hpc_hdl(uint16_t vlan_id, ipa_hdr_l2_typ
 			{
 				wlan_svap_hpc_hdls[k].hpc_hdr_hdl = wlan_svap_hpc_hdls[k+1].hpc_hdr_hdl ;
 				wlan_svap_hpc_hdls[k].vlan_id = wlan_svap_hpc_hdls[k+1].vlan_id;
+				wlan_svap_hpc_hdls[k].outer_vlan_id = wlan_svap_hpc_hdls[k+1].outer_vlan_id;
 				wlan_svap_hpc_hdls[k].peer_l2_type = wlan_svap_hpc_hdls[k+1].peer_l2_type;
 			}
 			num_of_wlan_svap_hpc_hdls--;
@@ -3403,12 +3527,23 @@ int IPACM_LanToLan_Iface::del_wlan_svap_hpc_hdl(uint16_t vlan_id, ipa_hdr_l2_typ
 	return IPACM_SUCCESS;
 }
 
-uint32_t IPACM_LanToLan_Iface::is_entry_present_wlan_svap_hpc_hdl(uint16_t vlan_id, ipa_hdr_l2_type peer_l2_type)
+uint32_t IPACM_LanToLan_Iface::is_entry_present_wlan_svap_hpc_hdl(uint16_t vlan_id, ipa_hdr_l2_type peer_l2_type, uint16_t outer_vlan_id)
 {
 	uint32_t ret = false;
 
 	for (int i = 0; i < num_of_wlan_svap_hpc_hdls; i++) {
-		if (wlan_svap_hpc_hdls[i].vlan_id == vlan_id &&
+
+		if (double_tagging)
+		{
+			if((wlan_svap_hpc_hdls[i].outer_vlan_id == outer_vlan_id) && (wlan_svap_hpc_hdls[i].vlan_id == vlan_id)
+							&& (wlan_svap_hpc_hdls[i].peer_l2_type == peer_l2_type))
+			{
+				ret = wlan_svap_hpc_hdls[i].hpc_hdr_hdl;
+				IPACMDBG_H("Entry with vlan_id %d outer vlan id %d and peer %d, present, hdl: %d\n", vlan_id, outer_vlan_id, peer_l2_type, ret);
+				return ret;
+			}
+		}
+		else if (wlan_svap_hpc_hdls[i].vlan_id == vlan_id &&
 			wlan_svap_hpc_hdls[i].peer_l2_type == peer_l2_type)
 		{
 			ret = wlan_svap_hpc_hdls[i].hpc_hdr_hdl;

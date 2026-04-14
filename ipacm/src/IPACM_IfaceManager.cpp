@@ -202,6 +202,16 @@ void IPACM_IfaceManager::event_callback(ipa_cm_event_id event, void *param)
 				break;
 			}
 			strlcpy(ifmgr_data.iface_name, IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].iface_name, IPA_IFACE_NAME_LEN);
+
+                        /*In sta-bridge mode, treating wlan instance as lan instace
+                         * to avoid relying on WLAN_CLIENT_CONNECT_EX events. */
+			if (IPACM_Iface::ipacmcfg->device_mode == DEVMODE_STABRIDGE) {
+					IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].if_cat = ODU_IF;
+				    ifmgr_data.if_index = StaData->if_index;
+					ifmgr_data.if_type = Q6_WAN;
+					create_iface_instance(&ifmgr_data);
+					break;
+			}
 			/* change iface category from unknown to WAN_IF */
 			if(IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].if_cat == UNKNOWN_IF)
 			{
@@ -552,6 +562,8 @@ int IPACM_IfaceManager::create_iface_instance(ipacm_ifacemgr_data *param)
 				IPACM_EvtDispatcher::registr(IPA_ROUTE_DEL_EVENT, wl);
 				IPACM_EvtDispatcher::registr(IPA_WLAN_CLIENT_ADD_EVENT, wl);
 				IPACM_EvtDispatcher::registr(IPA_WLAN_CLIENT_ADD_EVENT_EX, wl);
+				IPACM_EvtDispatcher::registr(IPA_LAN_CLIENT_ADD_EVENT, wl);
+				IPACM_EvtDispatcher::registr(IPA_LAN_CLIENT_DEL_EVENT, wl);
 				IPACM_EvtDispatcher::registr(IPA_WLAN_CLIENT_DEL_EVENT, wl);
 				IPACM_EvtDispatcher::registr(IPA_WLAN_CLIENT_POWER_SAVE_EVENT, wl);
 				IPACM_EvtDispatcher::registr(IPA_WLAN_CLIENT_RECOVER_EVENT, wl);
@@ -722,11 +734,11 @@ int IPACM_IfaceManager::create_iface_instance(ipacm_ifacemgr_data *param)
 #endif
 					if(is_sta_mode == WLAN_WAN)
 					{
-						IPACM_EvtDispatcher::registr(IPA_WLAN_LINK_DOWN_EVENT, w); // for STA mode
 #ifndef FEATURE_IPA_ANDROID
 						IPACM_EvtDispatcher::registr(IPA_WLAN_SWITCH_TO_SCC, w);
 						IPACM_EvtDispatcher::registr(IPA_WLAN_SWITCH_TO_MCC, w);
 #endif
+						IPACM_EvtDispatcher::registr(IPA_WLAN_LINK_DOWN_EVENT, w); // for STA mode
 					}
 					else
 					{

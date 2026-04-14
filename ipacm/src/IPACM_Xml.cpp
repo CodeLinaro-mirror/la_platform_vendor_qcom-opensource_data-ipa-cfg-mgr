@@ -208,7 +208,8 @@ static int ipacm_cfg_xml_parse_tree
 						IPACM_util_icmp_string((char*)xml_node->name, IPACM_WLAN_VLAN_MPDN) == 0 ||
 						IPACM_util_icmp_string((char*)xml_node->name, Static_Policy_TAG) == 0 ||
 						IPACM_util_icmp_string((char*)xml_node->name, IPACM_QOS_TAG) == 0 ||
-						IPACM_util_icmp_string((char*)xml_node->name, IPACMLOG_TAG) == 0)
+						IPACM_util_icmp_string((char*)xml_node->name, IPACMLOG_TAG) == 0 ||
+						IPACM_util_icmp_string((char*)xml_node->name, DEVICEMODE) == 0)
 				{
 					if (0 == IPACM_util_icmp_string((char*)xml_node->name, IFACE_TAG))
 					{
@@ -904,6 +905,72 @@ static int ipacm_cfg_xml_parse_tree
 					} else {
 					}
 				}
+				else if (IPACM_util_icmp_string((char*)xml_node->name, IPACMDEVICEMODE) == 0)
+				{
+					IPACMDBG_H("inside IPacmDeviceMode\n");
+					content = IPACM_read_content_element(xml_node);
+					IPACMDBG_H("content %s\n", content);
+					if (content)
+					{
+						str_size = strlen(content);
+						memset(content_buf, 0, sizeof(content_buf));
+						strlcpy(content_buf, content, str_size+1);
+						IPACMDBG_H("content %s\n", content_buf);
+						if (0 == strncasecmp(content_buf, "apbridge", str_size))
+						{
+							config->device_mode = DEVMODE_APBRIDGE;
+						}
+						else  if (0 == strncasecmp(content_buf, "stabridge", str_size))
+						{
+							config->device_mode = DEVMODE_STABRIDGE;
+						}
+						else
+						{
+							config->device_mode = DEVMODE_DEFAULT;
+						}
+
+					}
+				}
+				else if (IPACM_util_icmp_string((char*)xml_node->name, IPACMVLANMODE) == 0)
+				{
+					IPACMDBG_H("inside IPacm vlan mode\n");
+					content = IPACM_read_content_element(xml_node);
+					IPACMDBG_H("content %s\n", content);
+					if (content)
+					{
+						str_size = strlen(content);
+						memset(content_buf, 0, sizeof(content_buf));
+						strlcpy(content_buf, content, str_size+1);
+						IPACMDBG_H("content %s\n", content_buf);
+						if (0 == strncasecmp(content_buf, "Enable", str_size))
+						{
+							config->device_vlan_mode = true;
+						}
+						else  if (0 == strncasecmp(content_buf, "Disable", str_size))
+						{
+							config->device_vlan_mode = false;
+						}
+
+					}
+				}
+				else if (IPACM_util_icmp_string((char*)xml_node->name, IPACMMGMNTVLANID) == 0)
+				{
+					IPACMDBG_H("Inside management vlan id extraction\n");
+					content = IPACM_read_content_element(xml_node);
+					if (content == NULL)
+					{
+						IPACMERR("Failed to read the content of the tag %s\n", IPACMMGMNTVLANID);
+					}
+					else
+					{
+						str_size = strlen(content);
+						memset(content_buf, 0, sizeof(content_buf));
+						strlcpy(content_buf, content, str_size+1);
+						config->mgmnt_vlan_id = atoi(content_buf);
+						IPACMDBG_H("IPACM management vlan id %d\n", atoi(content_buf));
+					}
+				}
+
 			}
 			break;
 		default:

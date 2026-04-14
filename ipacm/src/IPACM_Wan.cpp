@@ -26,8 +26,9 @@
  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * Changes from Qualcomm Innovation Center are provided under the following license:
- * Copyright (c) 2022-2025 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Changes from Qualcomm Technologies, Inc. are provided under the following license:
+ *
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 /*!
@@ -514,8 +515,12 @@ uint32_t IPACM_Wan::GetQCMAPhdrByName(char* pdn_name)
 
 	for(int i = 0; i < IPA_MAX_NUM_SW_PDNS; i++)
 	{
-		if(strncmp(pdn_name, ipv6_to_iface[i].pIface->dev_name, sizeof(pdn_name)) == 0)
+		if(ipv6_to_iface[i].pIface && strncmp(pdn_name, ipv6_to_iface[i].pIface->dev_name, sizeof(pdn_name)) == 0)
 		{
+			if (!ipv6_to_iface[i].pIface->tx_prop) {
+				IPACMERR("couldn't find PDN tx prop %s\n", pdn_name);
+				return 0;
+			}
 			strlcpy(hdr.name, ipv6_to_iface[i].pIface->tx_prop->tx[0].hdr_name, sizeof(hdr.name));
 			hdr.name[IPA_RESOURCE_NAME_MAX-1] = '\0';
 			if(m_header.GetHeaderHandle(&hdr) == false)
@@ -5070,7 +5075,7 @@ int IPACM_Wan::config_dft_firewall_rules(ipa_ip_type iptype)
 					}
 				}
 	#ifdef FEATURE_IPA_V3
-				flt_rule_entry.rule.hashable = false;
+				flt_rule_entry.rule.hashable = true;
 	#endif
 				memcpy(&flt_rule_entry.rule.attrib,
 					&rx_prop->rx[idx].attrib,
@@ -5322,7 +5327,7 @@ int IPACM_Wan::config_dft_firewall_rules(ipa_ip_type iptype)
 				}
 			}
 #ifdef FEATURE_IPA_V3
-			flt_rule_entry.rule.hashable = false;
+			flt_rule_entry.rule.hashable = true;
 #endif
 			memcpy(&flt_rule_entry.rule.attrib,
 				&rx_prop->rx[idx].attrib,
@@ -7026,6 +7031,28 @@ int IPACM_Wan::handle_route_del_evt(ipa_ip_type iptype)
 			{
 				memset(IPACM_Wan::wan_up_dev_name, 0, sizeof(IPACM_Wan::wan_up_dev_name));
 			}
+
+			if(m_is_sta_mode != Q6_WAN)
+			{
+				if(hdr_proc_hdl_dummy_v6)
+				{
+					if(m_header.DeleteHeaderProcCtx(hdr_proc_hdl_dummy_v6) == false)
+					{
+						IPACMERR("Failed to delete hdr_proc_hdl_dummy_v6\n");
+						return IPACM_FAILURE;
+					}
+					hdr_proc_hdl_dummy_v6 = 0;
+				}
+				if(hdr_hdl_dummy_v6)
+				{
+					if (m_header.DeleteHeaderHdl(hdr_hdl_dummy_v6) == false)
+					{
+						IPACMERR("Failed to delete hdr_hdl_dummy_v6\n");
+						return IPACM_FAILURE;
+					}
+					hdr_hdl_dummy_v6 = 0;
+				}
+			}
 		}
 	}
 	else
@@ -8270,6 +8297,12 @@ int IPACM_Wan::handle_down_evt_ex()
 			}
 			memset(vlandown_data, 0, sizeof(ipacm_event_vlan_pdn));
 
+			if (ipv4_to_iface[modem_ipv4_pdn_index].VID_cnt || ipv6_to_iface[modem_ipv6_pdn_index].VID_cnt)
+			{
+				num_offloaded_pdns--;
+				IPACMDBG_H("now num offloaded PDNs is %d\n", num_offloaded_pdns);
+			}
+
 			if(ipv4_to_iface[modem_ipv4_pdn_index].wan_up_vlan &&
 				ipv6_to_iface[modem_ipv6_pdn_index].wan_up_vlan_v6)
 			{
@@ -8304,12 +8337,6 @@ int IPACM_Wan::handle_down_evt_ex()
 				ipv6_to_iface[modem_ipv6_pdn_index].wan_up_vlan_v6 = false;
 				memset(ipv6_to_iface[modem_ipv6_pdn_index].associated_VIDs, 0, sizeof(ipv6_to_iface[modem_ipv6_pdn_index].associated_VIDs));
 				ipv6_to_iface[modem_ipv6_pdn_index].VID_cnt = 0;
-			}
-
-			if (ipv4_to_iface[modem_ipv4_pdn_index].VID_cnt || ipv6_to_iface[modem_ipv6_pdn_index].VID_cnt)
-			{
-				num_offloaded_pdns--;
-				IPACMDBG_H("now num offloaded PDNs is %d\n", num_offloaded_pdns);
 			}
 
 			vlandown_data->VlanID = associated_VID;
@@ -12068,6 +12095,13 @@ int IPACM_Wan::handle_ul_qos_route_rule(ipa_ip_type iptype,
 					rt_rule_entry->rule.attrib.u.v4.src_addr_mask = qos_param->ip_tup.src_sub_mask;
 				}
 
+				if (qos_param->ip_tup.dst_ip_addr)
+				{
+					rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_DST_ADDR;
+					rt_rule_entry->rule.attrib.u.v4.dst_addr = qos_param->ip_tup.dst_ip_addr;
+					rt_rule_entry->rule.attrib.u.v4.dst_addr_mask = qos_param->ip_tup.dst_sub_mask;
+				}
+
 				// If single port is provided
 				if (qos_param->ip_tup.sport_start && (qos_param->ip_tup.sport_start == qos_param->ip_tup.sport_end))
 				{
@@ -12213,6 +12247,28 @@ int IPACM_Wan::handle_ul_qos_route_rule(ipa_ip_type iptype,
 						qos_param->ip_tup.src_v6_sub_mask[3];
 				}
 
+				if (qos_param->ip_tup.dst_v6_ip_addr[0] ||
+					qos_param->ip_tup.dst_v6_ip_addr[1])
+				{
+					rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_DST_ADDR;
+					rt_rule_entry->rule.attrib.u.v6.dst_addr[0] =
+						qos_param->ip_tup.dst_v6_ip_addr[0];
+					rt_rule_entry->rule.attrib.u.v6.dst_addr[1] =
+						qos_param->ip_tup.dst_v6_ip_addr[1];
+					rt_rule_entry->rule.attrib.u.v6.dst_addr[2] =
+						qos_param->ip_tup.dst_v6_ip_addr[2];
+					rt_rule_entry->rule.attrib.u.v6.dst_addr[3] =
+						qos_param->ip_tup.dst_v6_ip_addr[3];
+					rt_rule_entry->rule.attrib.u.v6.dst_addr_mask[0] =
+						qos_param->ip_tup.dst_v6_sub_mask[0];
+					rt_rule_entry->rule.attrib.u.v6.dst_addr_mask[1] =
+						qos_param->ip_tup.dst_v6_sub_mask[1];
+					rt_rule_entry->rule.attrib.u.v6.dst_addr_mask[2] =
+						qos_param->ip_tup.dst_v6_sub_mask[2];
+					rt_rule_entry->rule.attrib.u.v6.dst_addr_mask[3] =
+						qos_param->ip_tup.dst_v6_sub_mask[3];
+				}
+
 				// If single port is provided
 				if (qos_param->ip_tup.sport_start &&
 					(qos_param->ip_tup.sport_start == qos_param->ip_tup.sport_end))
@@ -12245,6 +12301,12 @@ int IPACM_Wan::handle_ul_qos_route_rule(ipa_ip_type iptype,
 				if (qos_param->vlan_id)
 				{
 					IPACMERR("QOS param vlan no v6 route rule action from IPA in UL\n");
+				}
+
+				if (qos_param->ip_tup.protocol)
+				{
+					rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_NEXT_HDR;
+					rt_rule_entry->rule.attrib.u.v6.next_hdr = qos_param->ip_tup.protocol;
 				}
 
 				if (qos_param->dscp)

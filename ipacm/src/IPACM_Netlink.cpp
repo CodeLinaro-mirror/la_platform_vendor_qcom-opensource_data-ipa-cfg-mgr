@@ -660,6 +660,10 @@ static int populate_gre_details(struct ifinfomsg* ifi, int len, int type){
 		iptype=IPA_IP_v6;
 	}
 	IPACMDBG("IFI max: %d IFLA_MAX, %d len\n",IFLA_MAX,len);
+       if(pConfig->mape_enable) {
+               IPACMDBG_H(" MAPE is enabled \n");
+               return IPACM_SUCCESS;
+	}
 	getAttr(attrib, IFLA_MAX, IFLA_RTA(ifi), len,0,false);  // get attributes
     if (attrib[IFLA_IFNAME]) {  // validation
         IPACMDBG("ifname %s \n",(char*)RTA_DATA(attrib[IFLA_IFNAME]));

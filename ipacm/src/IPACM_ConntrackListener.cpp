@@ -2693,7 +2693,17 @@ int IPACM_ConntrackListener::AddORDeleteNatEntry(const nat_entry_bundle *input, 
 	if (IPPROTO_TCP == input->rule->protocol)
 	{
 		tcp_state = nfct_get_attr_u8(input->ct, ATTR_TCP_STATE);
-		if ((TCP_CONNTRACK_ESTABLISHED == tcp_state) &&
+		if (TCP_CONNTRACK_FIN_WAIT == tcp_state ||
+				   TCP_CONNTRACK_CLOSE == tcp_state ||
+				   input->type == NFCT_T_DESTROY)
+		{
+			IPACMDBG("TCP state (TCP_CONNTRACK_FIN_WAIT or TCP_CONNTRACK_CLOSE) (%d) "
+					 "or type NFCT_T_DESTROY(%d)\n", tcp_state, input->type);
+
+			nat_inst->DeleteEntry(input->rule);
+			nat_inst->DeleteTempEntry(input->rule);
+		}
+		else if ((TCP_CONNTRACK_ESTABLISHED == tcp_state) &&
                     (((pkt_threshld != 0) && (pkt_count >= pkt_threshld)) ||
                     (pkt_threshld == 0)))
 		{
@@ -2733,16 +2743,6 @@ int IPACM_ConntrackListener::AddORDeleteNatEntry(const nat_entry_bundle *input, 
 			{
 				nat_inst->AddEntry(input->rule);
 			}
-		}
-		else if (TCP_CONNTRACK_FIN_WAIT == tcp_state ||
-				   TCP_CONNTRACK_CLOSE == tcp_state ||
-				   input->type == NFCT_T_DESTROY)
-		{
-			IPACMDBG("TCP state (TCP_CONNTRACK_FIN_WAIT or TCP_CONNTRACK_CLOSE) (%d) "
-					 "or type NFCT_T_DESTROY(%d)\n", tcp_state, input->type);
-
-			nat_inst->DeleteEntry(input->rule);
-			nat_inst->DeleteTempEntry(input->rule);
 		}
 		else
 		{

@@ -3983,19 +3983,34 @@ int IPACM_Lan::handle_addr_evt(ipacm_event_data_addr *data)
 		IPACMDBG_H("Interface is WLAN Svap or vlan, install rules on Rx pipe at idx %d \n", idx);
 	}
 
+
 	if (data->iptype == IPA_IP_v4)
 	{
 		if(IPACM_Iface::ipacmcfg->iface_table[ipa_if_num].if_cat== WLAN_IF)
 		{
-			for(wlan_pipe_index=0;wlan_pipe_index<MAX_SUPPORTED_WLAN_PIPES;wlan_pipe_index++){
-				if (IPACM_Wlan::wlan_ap_dflt_rules[wlan_pipe_index].iface_cnt[IPA_IP_v4] == 0 ) {
+			for(wlan_pipe_index=0;wlan_pipe_index<MAX_SUPPORTED_WLAN_PIPES;wlan_pipe_index++) {
+				IPACMDBG(" iface_cnt %d indx %d src pipe %d\n", IPACM_Wlan::wlan_ap_dflt_rules[wlan_pipe_index].iface_cnt[IPA_IP_v4], wlan_pipe_index, IPACM_Wlan::wlan_ap_dflt_rules[wlan_pipe_index].src_pipe);
+				if ((IPACM_Wlan::wlan_ap_dflt_rules[wlan_pipe_index].iface_cnt[IPA_IP_v4] == 0 )
+					       && !IPACM_Wlan::wlan_ap_dflt_rules[wlan_pipe_index].src_pipe) {
 					IPACM_Wlan::wlan_ap_dflt_rules[wlan_pipe_index].src_pipe = rx_prop->rx[idx].src_pipe;
 					IPACM_Wlan::wlan_ap_dflt_rules[wlan_pipe_index].iface_cnt[IPA_IP_v4]++;
 					IPACMDBG("wlan_pipe_index %d src_pipe %d iface_cnt %d\n",
 								wlan_pipe_index, rx_prop->rx[idx].src_pipe,
 								IPACM_Wlan::wlan_ap_dflt_rules[wlan_pipe_index].iface_cnt[IPA_IP_v4]);
 					break;
-				} else {
+				}
+				else if ((rx_prop->rx[idx].src_pipe == IPACM_Wlan::wlan_ap_dflt_rules[wlan_pipe_index].src_pipe) && (IPACM_Wlan::wlan_ap_dflt_rules[wlan_pipe_index].iface_cnt[IPA_IP_v4] == 0)) {
+
+					IPACM_Wlan::wlan_ap_dflt_rules[wlan_pipe_index].iface_cnt[IPA_IP_v4]++;
+					IPACMDBG("v4 rules not present\n");
+					IPACMDBG("wlan_pipe_index %d src_pipe %d iface_cnt %d\n",
+								wlan_pipe_index, rx_prop->rx[idx].src_pipe,
+								IPACM_Wlan::wlan_ap_dflt_rules[wlan_pipe_index].iface_cnt[IPA_IP_v4]);
+					break;
+
+
+				}
+				else {
 					if(IPACM_Wlan::wlan_ap_dflt_rules[wlan_pipe_index].src_pipe == rx_prop->rx[idx].src_pipe){
 						if(ip_type != IPA_IP_MAX) {
 						IPACM_Wlan::wlan_ap_dflt_rules[wlan_pipe_index].iface_cnt[IPA_IP_v4]++;
@@ -4112,15 +4127,26 @@ int IPACM_Lan::handle_addr_evt(ipacm_event_data_addr *data)
 
 		if(IPACM_Iface::ipacmcfg->iface_table[ipa_if_num].if_cat== WLAN_IF)
 		{
-			for(wlan_pipe_index=0;wlan_pipe_index<MAX_SUPPORTED_WLAN_PIPES;wlan_pipe_index++){
-				if (IPACM_Wlan::wlan_ap_dflt_rules[wlan_pipe_index].iface_cnt[IPA_IP_v6] == 0 ) {
+			for(wlan_pipe_index=0;wlan_pipe_index<MAX_SUPPORTED_WLAN_PIPES;wlan_pipe_index++) {
+				if ((IPACM_Wlan::wlan_ap_dflt_rules[wlan_pipe_index].iface_cnt[IPA_IP_v6] == 0 )
+					       && !IPACM_Wlan::wlan_ap_dflt_rules[wlan_pipe_index].src_pipe) {
 					IPACM_Wlan::wlan_ap_dflt_rules[wlan_pipe_index].src_pipe = rx_prop->rx[idx].src_pipe;
 					IPACM_Wlan::wlan_ap_dflt_rules[wlan_pipe_index].iface_cnt[IPA_IP_v6]++;
 					IPACMDBG("wlan_pipe_index %d src_pipe %d iface_cnt %d\n",
 							wlan_pipe_index, rx_prop->rx[idx].src_pipe,
 							IPACM_Wlan::wlan_ap_dflt_rules[wlan_pipe_index].iface_cnt[IPA_IP_v6]);
 					break;
-				} else {
+				}
+				else if ((rx_prop->rx[idx].src_pipe == IPACM_Wlan::wlan_ap_dflt_rules[wlan_pipe_index].src_pipe) && (IPACM_Wlan::wlan_ap_dflt_rules[wlan_pipe_index].iface_cnt[IPA_IP_v6] == 0)) {
+
+					IPACM_Wlan::wlan_ap_dflt_rules[wlan_pipe_index].iface_cnt[IPA_IP_v6]++;
+					IPACMDBG("v4 present but not v6\n");
+					IPACMDBG("wlan_pipe_index %d src_pipe %d iface_cnt %d\n",
+								wlan_pipe_index, rx_prop->rx[idx].src_pipe,
+								IPACM_Wlan::wlan_ap_dflt_rules[wlan_pipe_index].iface_cnt[IPA_IP_v6]);
+					break;
+				}
+			       	else {
 					if(IPACM_Wlan::wlan_ap_dflt_rules[wlan_pipe_index].src_pipe == rx_prop->rx[idx].src_pipe){
 						if(ip_type != IPA_IP_MAX){
 						IPACM_Wlan::wlan_ap_dflt_rules[wlan_pipe_index].iface_cnt[data->iptype]++;

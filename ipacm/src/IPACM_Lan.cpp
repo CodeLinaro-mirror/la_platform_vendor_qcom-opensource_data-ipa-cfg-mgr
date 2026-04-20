@@ -23789,7 +23789,7 @@ int IPACM_Lan::construct_mtu_rule(struct ipa_flt_rule *rule, ipa_ip_type iptype,
 int IPACM_Lan::handle_mpdn_ul_xlat_filter_rule(ipacm_ext_prop * prop,
 				ipa_ip_type iptype, int pdn_mux_id, uint16_t vlan_id)
 {
-	int len = 0, fd, ret = IPACM_SUCCESS;
+	int len = 0, fd = -1, ret = IPACM_SUCCESS;
 	ipa_flt_rule_add flt_rule_entry;
 	ipa_ioc_add_flt_rule_after *pFilteringTable = NULL;
 	ipa_fltr_installed_notif_req_msg_v01 flt_index;
@@ -23866,7 +23866,8 @@ int IPACM_Lan::handle_mpdn_ul_xlat_filter_rule(ipacm_ext_prop * prop,
 		memset(&flt_index, 0, sizeof(flt_index));
 		if (rx_prop == NULL) {
 			IPACMERR("no rx props\n");
-			return IPACM_FAILURE;
+			ret = IPACM_FAILURE;
+			goto fail;
 		}
 		flt_index.source_pipe_index = ioctl(fd, IPA_IOC_QUERY_EP_MAPPING, rx_prop->rx[idx].src_pipe);
 		flt_index.install_status = IPA_QMI_RESULT_SUCCESS_V01;
@@ -24060,7 +24061,7 @@ int IPACM_Lan::handle_mpdn_ul_xlat_filter_rule(ipacm_ext_prop * prop,
 fail:
 	if (pFilteringTable != NULL)
 		free(pFilteringTable);
-	if(fd)
+	if(fd >= 0)
 		close(fd);
 	return ret;
 }
@@ -24068,7 +24069,7 @@ fail:
 int IPACM_Lan::handle_mpdn_ul_xlat_filter_rule_per_client(int client_num, ipacm_ext_prop * prop,
 				ipa_ip_type iptype, int pdn_mux_id, uint16_t vlan_id)
 {
-	int len = 0, fd, ret = IPACM_SUCCESS;
+	int len = 0, fd = -1, ret = IPACM_SUCCESS;
 	ipa_flt_rule_add flt_rule_entry;
 	ipa_ioc_add_flt_rule_after *pFilteringTable = NULL;
 	ipa_fltr_installed_notif_req_msg_v01 flt_index;
@@ -24114,7 +24115,8 @@ int IPACM_Lan::handle_mpdn_ul_xlat_filter_rule_per_client(int client_num, ipacm_
 	if (get_client_memptr(eth_client, client_num)->lan_stats_idx == -1)
 	{
 		IPACMERR("Invalid LAN Stats idx for ethernet client:%d \n", client_num);
-		return IPACM_FAILURE;
+		ret = IPACM_FAILURE;
+		goto fail;
 	}
 
 	xlat_pdn_ctx_id = get_pdn_xlat_ctx_per_client(client_num, pdn_mux_id, vlan_id);
@@ -24152,7 +24154,8 @@ int IPACM_Lan::handle_mpdn_ul_xlat_filter_rule_per_client(int client_num, ipacm_
 		memset(&flt_index, 0, sizeof(flt_index));
 		if (rx_prop == NULL) {
 			IPACMERR("no rx props\n");
-			return IPACM_FAILURE;
+			ret = IPACM_FAILURE;
+			goto fail;
 		}
 		flt_index.source_pipe_index = ioctl(fd, IPA_IOC_QUERY_EP_MAPPING, rx_prop->rx[idx].src_pipe);
 		flt_index.install_status = IPA_QMI_RESULT_SUCCESS_V01;
@@ -24398,7 +24401,7 @@ int IPACM_Lan::handle_mpdn_ul_xlat_filter_rule_per_client(int client_num, ipacm_
 fail:
 	if (pFilteringTable != NULL)
 		free(pFilteringTable);
-	if(fd)
+	if (fd >= 0)
 		close(fd);
 	return ret;
 }

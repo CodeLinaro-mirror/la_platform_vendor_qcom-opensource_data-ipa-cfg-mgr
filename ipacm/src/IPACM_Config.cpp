@@ -431,12 +431,18 @@ int IPACM_Config::ipacm_reset_hw_fnr_counters(const uint8_t start_id, const uint
 	int ret = IPACM_SUCCESS;
 	int num_counters, i;
 
-	int fd = open(DEVICE_NAME, O_RDWR);
-
-	if (fd < 0) {
-		IPACMERR("fnr: Failed to open /dev/ipa\n");
+	/* Reuse the persistent m_fd instead of opening a new FD each time */
+	if (m_fd < 0) {
+		IPACMERR("fnr: m_fd not initialized\n");
 		return IPACM_FAILURE;
 	}
+
+	/* Verify fd is still valid by checking with fcntl */
+	if (fcntl(m_fd, F_GETFD) == -1) {
+		IPACMERR("fnr: m_fd is invalid (errno: %d)\n", errno);
+		return IPACM_FAILURE;
+	}
+
 	query = (struct ipa_ioc_flt_rt_query *)malloc(sizeof(struct ipa_ioc_flt_rt_query));
 	if (!query)
 	{
@@ -460,9 +466,9 @@ int IPACM_Config::ipacm_reset_hw_fnr_counters(const uint8_t start_id, const uint
 		goto fail;
 	}
 	/* For now just query the stats and print it here */
-	if (fd  >= 0)
+	if (m_fd >= 0)
 	{
-		ret = ipacm_fnr_v2_ioctl(fd, IPA_IOC_FNR_COUNTER_QUERY, query);
+		ret = ipacm_fnr_v2_ioctl(m_fd, IPA_IOC_FNR_COUNTER_QUERY, query);
 		if (ret < 0)
 			IPACMERR("IOCTL %lu failed\n", IPA_IOC_FNR_COUNTER_QUERY);
 	}
@@ -470,7 +476,6 @@ int IPACM_Config::ipacm_reset_hw_fnr_counters(const uint8_t start_id, const uint
 	free((void *)query->stats);
 	free(query);
 fail:
-	close(fd);
 	return ret;
 }
 
@@ -506,11 +511,16 @@ int IPACM_Config::ipacm_alloc_fnr_counters(struct ipa_ioc_flt_rt_counter_alloc *
 
 {
 	int i, ret = 0;
-	int nfd = open(DEVICE_NAME, O_RDWR);
 	int counter_idx;
 
-	if (nfd < 0) {
-		IPACMERR("fnr: error opening device file\n");
+	if (m_fd < 0) {
+		IPACMERR("fnr: m_fd not initialized\n");
+		return IPACM_FAILURE;
+	}
+
+	/* Verify fd is still valid by checking with fcntl */
+	if (fcntl(m_fd, F_GETFD) == -1) {
+		IPACMERR("fnr: m_fd is invalid (errno: %d)\n", errno);
 		return IPACM_FAILURE;
 	}
 
@@ -520,7 +530,7 @@ int IPACM_Config::ipacm_alloc_fnr_counters(struct ipa_ioc_flt_rt_counter_alloc *
 	IPACMDBG_H("Allocating %d counters, with start id %d\n", fnr_counters->hw_counter.num_counters,
 		fnr_counters->hw_counter.start_id);
 	/* reset all the counters after allocation */
-	ret = ipacm_fnr_v2_ioctl(nfd, IPA_IOC_FNR_COUNTER_ALLOC, fnr_counters);
+	ret = ipacm_fnr_v2_ioctl(m_fd, IPA_IOC_FNR_COUNTER_ALLOC, fnr_counters);
 	if (ret < 0)
 	{
 		IPACMERR("Failed to execute ioctl %lu\n", IPA_IOC_FNR_COUNTER_ALLOC);
@@ -556,7 +566,6 @@ int IPACM_Config::ipacm_alloc_fnr_counters(struct ipa_ioc_flt_rt_counter_alloc *
 		counter_idx += 2;
 	}
 bail:
-	close(nfd);
 	return ret;
 }
 

@@ -1223,12 +1223,21 @@ protected:
 				memset(get_client_memptr(eth_client, client_num)->xlat_ctx.active_pdn_list[i].associated_VIDs, 0, IPA_MAX_NUM_SW_PDNS *
 					sizeof(get_client_memptr(eth_client, client_num)->xlat_ctx.active_pdn_list[i].associated_VIDs[0]));
 				get_client_memptr(eth_client, client_num)->xlat_ctx.active_pdn_list[i].active_vlan_count = 0;
-				IPACMDBG_H("Removing pdn from client_num: %d xlat ctx mux id %d total active xlat pdn:%d\n",
-					client_num, pdn_mux_id, get_client_memptr(eth_client, client_num)->xlat_ctx.active_pdn_count);
+				IPACMDBG_H("Removing pdn from client_num: %d MAC %02x:%02x:%02x:%02x:%02x:%02x xlat ctx mux id %d total active xlat pdn:%d\n",
+					client_num,
+					get_client_memptr(eth_client, client_num)->mac[0], get_client_memptr(eth_client, client_num)->mac[1],
+					get_client_memptr(eth_client, client_num)->mac[2], get_client_memptr(eth_client, client_num)->mac[3],
+					get_client_memptr(eth_client, client_num)->mac[4], get_client_memptr(eth_client, client_num)->mac[5],
+					pdn_mux_id, get_client_memptr(eth_client, client_num)->xlat_ctx.active_pdn_count);
 				return;
 			}
 		}
-		IPACMDBG_H("Pdn not found in ctx!\n");
+		IPACMDBG_H("Pdn not found in ctx for client_num: %d MAC %02x:%02x:%02x:%02x:%02x:%02x mux id %d\n",
+			client_num,
+			get_client_memptr(eth_client, client_num)->mac[0], get_client_memptr(eth_client, client_num)->mac[1],
+			get_client_memptr(eth_client, client_num)->mac[2], get_client_memptr(eth_client, client_num)->mac[3],
+			get_client_memptr(eth_client, client_num)->mac[4], get_client_memptr(eth_client, client_num)->mac[5],
+			pdn_mux_id);
 	}
 
 	inline int get_pdn_xlat_ctx(int pdn_mux_id, uint16_t vid)

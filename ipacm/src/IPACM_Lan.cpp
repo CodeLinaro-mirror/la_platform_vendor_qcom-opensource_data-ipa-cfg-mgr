@@ -18033,6 +18033,12 @@ int IPACM_Lan::eth_bridge_del_hdr_proc_ctx(uint32_t hdr_proc_ctx_hdl)
 /* check if the event is associated with vlan interface */
 bool IPACM_Lan::is_vlan_event(char *event_iface_name)
 {
+#ifdef FEATURE_PRPLWRT
+	// Check if interface name contains "wlan"
+	if (event_iface_name != NULL && strncmp(event_iface_name, "wlan", 4) == 0) {
+		return false;
+	}
+#endif
 	string selfDevName(dev_name), eventInterfaceName(event_iface_name);
 	if (eventInterfaceName.find(selfDevName) == std::string::npos) {
 		IPACMDBG("dev_name %s is not a substring of event_iface_name %s\n", dev_name, event_iface_name);

@@ -149,242 +149,242 @@
 			   <WlanMode>full</WlanMode>
 			</Iface>
 			<Iface>
-				<Name>wlan01</Name>
+				<Name>wlan0.1</Name>
 				<Category>UNKNOWN</Category>
 				<WlanMode>full</WlanMode>
 			</Iface>
 			<Iface>
-				<Name>wlan02</Name>
+				<Name>wlan0.2</Name>
 				<Category>UNKNOWN</Category>
 				<WlanMode>full</WlanMode>
 			</Iface>
 			<Iface>
-				<Name>wlan03</Name>
+				<Name>wlan0.3</Name>
 				<Category>UNKNOWN</Category>
 				<WlanMode>full</WlanMode>
 			</Iface>
 			<Iface>
-				<Name>wlan04</Name>
+				<Name>wlan0.4</Name>
 				<Category>UNKNOWN</Category>
 				<WlanMode>full</WlanMode>
 			</Iface>
 			<Iface>
-				<Name>wlan05</Name>
+				<Name>wlan0.5</Name>
 				<Category>UNKNOWN</Category>
 				<WlanMode>full</WlanMode>
 			</Iface>
 			<Iface>
-				<Name>wlan06</Name>
+				<Name>wlan0.6</Name>
 				<Category>UNKNOWN</Category>
 				<WlanMode>full</WlanMode>
 			</Iface>
 			<Iface>
-				<Name>wlan07</Name>
+				<Name>wlan0.7</Name>
 				<Category>UNKNOWN</Category>
 				<WlanMode>full</WlanMode>
 			</Iface>
 			<Iface>
-				<Name>wlan08</Name>
+				<Name>wlan0.8</Name>
 				<Category>UNKNOWN</Category>
 				<WlanMode>full</WlanMode>
 			</Iface>
 			<Iface>
-				<Name>wlan09</Name>
+				<Name>wlan0.9</Name>
 				<Category>UNKNOWN</Category>
 				<WlanMode>full</WlanMode>
 			</Iface>
 			<Iface>
-				<Name>wlan010</Name>
+				<Name>wlan0.10</Name>
 				<Category>UNKNOWN</Category>
 				<WlanMode>full</WlanMode>
 			</Iface>
 			<Iface>
-				<Name>wlan011</Name>
+				<Name>wlan0.11</Name>
 				<Category>UNKNOWN</Category>
 				<WlanMode>full</WlanMode>
 			</Iface>
 			<Iface>
-				<Name>wlan012</Name>
+				<Name>wlan0.12</Name>
 				<Category>UNKNOWN</Category>
 				<WlanMode>full</WlanMode>
 			</Iface>
 			<Iface>
-				<Name>wlan013</Name>
+				<Name>wlan0.13</Name>
 				<Category>UNKNOWN</Category>
 				<WlanMode>full</WlanMode>
 			</Iface>
 			<Iface>
-				<Name>wlan014</Name>
+				<Name>wlan0.14</Name>
 				<Category>UNKNOWN</Category>
 				<WlanMode>full</WlanMode>
 			</Iface>
 			<Iface>
-				<Name>wlan015</Name>
+				<Name>wlan0.15</Name>
 				<Category>UNKNOWN</Category>
 				<WlanMode>full</WlanMode>
 			</Iface>
 			<Iface>
-				<Name>wlan016</Name>
+				<Name>wlan0.16</Name>
 				<Category>UNKNOWN</Category>
 				<WlanMode>full</WlanMode>
 			</Iface>
 			<Iface>
-				<Name>wlan11</Name>
+				<Name>wlan1.1</Name>
 				<Category>UNKNOWN</Category>
 				<WlanMode>full</WlanMode>
 			</Iface>
 			<Iface>
-				<Name>wlan12</Name>
+				<Name>wlan1.2</Name>
 				<Category>UNKNOWN</Category>
 				<WlanMode>full</WlanMode>
 			</Iface>
 			<Iface>
-				<Name>wlan13</Name>
+				<Name>wlan1.3</Name>
 				<Category>UNKNOWN</Category>
 				<WlanMode>full</WlanMode>
 			</Iface>
 			<Iface>
-				<Name>wlan14</Name>
+				<Name>wlan1.4</Name>
 				<Category>UNKNOWN</Category>
 				<WlanMode>full</WlanMode>
 			</Iface>
 			<Iface>
-				<Name>wlan15</Name>
+				<Name>wlan1.5</Name>
 				<Category>UNKNOWN</Category>
 				<WlanMode>full</WlanMode>
 			</Iface>
 			<Iface>
-				<Name>wlan16</Name>
+				<Name>wlan1.6</Name>
 				<Category>UNKNOWN</Category>
 				<WlanMode>full</WlanMode>
 			</Iface>
 			<Iface>
-				<Name>wlan17</Name>
+				<Name>wlan1.7</Name>
 				<Category>UNKNOWN</Category>
 				<WlanMode>full</WlanMode>
 			</Iface>
 			<Iface>
-				<Name>wlan18</Name>
+				<Name>wlan1.8</Name>
 				<Category>UNKNOWN</Category>
 				<WlanMode>full</WlanMode>
 			</Iface>
 			<Iface>
-				<Name>wlan19</Name>
+				<Name>wlan1.9</Name>
 				<Category>UNKNOWN</Category>
 				<WlanMode>full</WlanMode>
 			</Iface>
 			<Iface>
-				<Name>wlan110</Name>
+				<Name>wlan1.10</Name>
 				<Category>UNKNOWN</Category>
 				<WlanMode>full</WlanMode>
 			</Iface>
 			<Iface>
-				<Name>wlan111</Name>
+				<Name>wlan1.11</Name>
 				<Category>UNKNOWN</Category>
 				<WlanMode>full</WlanMode>
 			</Iface>
 			<Iface>
-				<Name>wlan112</Name>
+				<Name>wlan1.12</Name>
 				<Category>UNKNOWN</Category>
 				<WlanMode>full</WlanMode>
 			</Iface>
 			<Iface>
-				<Name>wlan113</Name>
+				<Name>wlan1.13</Name>
 				<Category>UNKNOWN</Category>
 				<WlanMode>full</WlanMode>
 			</Iface>
 			<Iface>
-				<Name>wlan114</Name>
+				<Name>wlan1.14</Name>
 				<Category>UNKNOWN</Category>
 				<WlanMode>full</WlanMode>
 			</Iface>
 			<Iface>
-				<Name>wlan115</Name>
+				<Name>wlan1.15</Name>
 				<Category>UNKNOWN</Category>
 				<WlanMode>full</WlanMode>
 			</Iface>
 			<Iface>
-				<Name>wlan116</Name>
+				<Name>wlan1.16</Name>
 				<Category>UNKNOWN</Category>
 				<WlanMode>full</WlanMode>
 			</Iface>
 			<Iface>
-				<Name>wlan21</Name>
+				<Name>wlan2.1</Name>
 				<Category>UNKNOWN</Category>
 				<WlanMode>full</WlanMode>
 			</Iface>
 			<Iface>
-				<Name>wlan22</Name>
+				<Name>wlan2.2</Name>
 				<Category>UNKNOWN</Category>
 				<WlanMode>full</WlanMode>
 			</Iface>
 			<Iface>
-				<Name>wlan23</Name>
+				<Name>wlan2.3</Name>
 				<Category>UNKNOWN</Category>
 				<WlanMode>full</WlanMode>
 			</Iface>
 			<Iface>
-				<Name>wlan24</Name>
+				<Name>wlan2.4</Name>
 				<Category>UNKNOWN</Category>
 				<WlanMode>full</WlanMode>
 			</Iface>
 			<Iface>
-				<Name>wlan25</Name>
+				<Name>wlan2.5</Name>
 				<Category>UNKNOWN</Category>
 				<WlanMode>full</WlanMode>
 			</Iface>
 			<Iface>
-				<Name>wlan26</Name>
+				<Name>wlan2.6</Name>
 				<Category>UNKNOWN</Category>
 				<WlanMode>full</WlanMode>
 			</Iface>
 			<Iface>
-				<Name>wlan27</Name>
+				<Name>wlan2.7</Name>
 				<Category>UNKNOWN</Category>
 				<WlanMode>full</WlanMode>
 			</Iface>
 			<Iface>
-				<Name>wlan28</Name>
+				<Name>wlan2.8</Name>
 				<Category>UNKNOWN</Category>
 				<WlanMode>full</WlanMode>
 			</Iface>
 			<Iface>
-				<Name>wlan29</Name>
+				<Name>wlan2.9</Name>
 				<Category>UNKNOWN</Category>
 				<WlanMode>full</WlanMode>
 			</Iface>
 			<Iface>
-				<Name>wlan210</Name>
+				<Name>wlan2.10</Name>
 				<Category>UNKNOWN</Category>
 				<WlanMode>full</WlanMode>
 			</Iface>
 			<Iface>
-				<Name>wlan211</Name>
+				<Name>wlan2.11</Name>
 				<Category>UNKNOWN</Category>
 				<WlanMode>full</WlanMode>
 			</Iface>
 			<Iface>
-				<Name>wlan212</Name>
+				<Name>wlan2.12</Name>
 				<Category>UNKNOWN</Category>
 				<WlanMode>full</WlanMode>
 			</Iface>
 			<Iface>
-				<Name>wlan213</Name>
+				<Name>wlan2.13</Name>
 				<Category>UNKNOWN</Category>
 				<WlanMode>full</WlanMode>
 			</Iface>
 			<Iface>
-				<Name>wlan214</Name>
+				<Name>wlan2.14</Name>
 				<Category>UNKNOWN</Category>
 				<WlanMode>full</WlanMode>
 			</Iface>
 			<Iface>
-				<Name>wlan215</Name>
+				<Name>wlan2.15</Name>
 				<Category>UNKNOWN</Category>
 				<WlanMode>full</WlanMode>
 			</Iface>
 			<Iface>
-				<Name>wlan216</Name>
+				<Name>wlan2.16</Name>
 				<Category>UNKNOWN</Category>
 				<WlanMode>full</WlanMode>
 			</Iface>

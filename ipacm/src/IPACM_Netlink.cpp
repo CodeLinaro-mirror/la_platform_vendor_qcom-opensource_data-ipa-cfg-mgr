@@ -1297,29 +1297,73 @@ static int ipa_nl_decode_nlmsg
 						evt_data.event = IPA_LINK_UP_EVENT;
 						IPACMDBG_H("Posting IPA_LINK_UP_EVENT with if index: %d\n",
 							msg_ptr->nl_link_info.metainfo.ifi_index);
-					} else {
-						if (msg_ptr->nl_link_info.link_type == IPA_LINK_TYPE_MACSEC ||
-							IPACM_Iface::ipacmcfg->populateMacsecMap(msg_ptr->nl_link_info.metainfo.ifi_index,
-							&macsec_map)) {
-							if (IPACM_Iface::ipacmcfg->delMacsecMap(&macsec_map)) {
-								evt_data.event = IPA_HANDLE_MACSEC_DEL;
-								macsec_map_data = static_cast<decltype(macsec_map_data)>
-									(malloc(sizeof(*macsec_map_data)));
-								if (!macsec_map_data) {
-									IPACMERR("malloc failed\n");
-									return IPACM_FAILURE;
-								}
-								memcpy(macsec_map_data, &macsec_map, sizeof(macsec_map));
-								evt_data.evt_data = macsec_map_data;
-								IPACM_EvtDispatcher::PostEvt(&evt_data);
+#ifdef FEATURE_IPoGRE
+						if (strncmp(dev_name, IPACM_Iface::ipacmcfg->rgip_iface_name,
+							sizeof(IPACM_Iface::ipacmcfg->rgip_iface_name)) == 0 &&
+							IPACM_Iface::ipacmcfg->rgip_ip != 0)
+						{
+							IPACMDBG_H("RGIP iface %s link up, post IPA_HANDLE_RGIP_UP with stored ip 0x%x\n",
+								dev_name, IPACM_Iface::ipacmcfg->rgip_ip);
+							ipacm_cmd_q_data rgip_evt_data;
+							uint32_t *rgip_v4 = (uint32_t*) malloc(sizeof(uint32_t));
+							if(rgip_v4 == NULL)
+							{
+								IPACMERR("Memory not assigned to rgip\n");
+							}
+							else
+							{
+								*rgip_v4 = IPACM_Iface::ipacmcfg->rgip_ip;
+								memset(&rgip_evt_data, 0, sizeof(rgip_evt_data));
+								rgip_evt_data.event = IPA_HANDLE_RGIP_UP;
+								rgip_evt_data.evt_data = rgip_v4;
+								IPACM_EvtDispatcher::PostEvt(&rgip_evt_data);
 							}
 						}
-						IPACMDBG_H("Interface %s bring down with IP-family: %d \n", dev_name,
-							msg_ptr->nl_link_info.metainfo.ifi_family);
-						/* post link down to command queue */
-						evt_data.event = IPA_LINK_DOWN_EVENT;
-						IPACMDBG_H("Posting IPA_LINK_DOWN_EVENT with if index: %d\n",
-							data_fid->if_index);
+#endif
+					} else {
+					if (msg_ptr->nl_link_info.link_type == IPA_LINK_TYPE_MACSEC ||
+						IPACM_Iface::ipacmcfg->populateMacsecMap(msg_ptr->nl_link_info.metainfo.ifi_index,
+						&macsec_map)) {
+						if (IPACM_Iface::ipacmcfg->delMacsecMap(&macsec_map)) {
+							evt_data.event = IPA_HANDLE_MACSEC_DEL;
+							macsec_map_data = static_cast<decltype(macsec_map_data)>
+								(malloc(sizeof(*macsec_map_data)));
+							if (!macsec_map_data) {
+								IPACMERR("malloc failed\n");
+								return IPACM_FAILURE;
+							}
+							memcpy(macsec_map_data, &macsec_map, sizeof(macsec_map));
+							evt_data.evt_data = macsec_map_data;
+							IPACM_EvtDispatcher::PostEvt(&evt_data);
+						}
+					}
+#ifdef FEATURE_IPoGRE
+					if (strncmp(dev_name, IPACM_Iface::ipacmcfg->rgip_iface_name,
+						sizeof(IPACM_Iface::ipacmcfg->rgip_iface_name)) == 0)
+					{
+						IPACMDBG_H("RGIP iface %s link down, post IPA_HANDLE_RGIP_DEL\n", dev_name);
+						ipacm_cmd_q_data rgip_evt_data;
+						uint32_t *rgip_v4 = (uint32_t*) malloc(sizeof(uint32_t));
+						if(rgip_v4 == NULL)
+						{
+							IPACMERR("Memory not assigned to rgip\n");
+						}
+						else
+						{
+							memset(&rgip_evt_data, 0, sizeof(rgip_evt_data));
+							rgip_evt_data.event = IPA_HANDLE_RGIP_DEL;
+							*rgip_v4 = 0;
+							rgip_evt_data.evt_data = rgip_v4;
+							IPACM_EvtDispatcher::PostEvt(&rgip_evt_data);
+						}
+					}
+#endif
+					IPACMDBG_H("Interface %s bring down with IP-family: %d \n", dev_name,
+						msg_ptr->nl_link_info.metainfo.ifi_family);
+					/* post link down to command queue */
+					evt_data.event = IPA_LINK_DOWN_EVENT;
+					IPACMDBG_H("Posting IPA_LINK_DOWN_EVENT with if index: %d\n",
+						data_fid->if_index);
 					}
 					evt_data.evt_data = data_fid;
 					IPACM_EvtDispatcher::PostEvt(&evt_data);
@@ -1446,6 +1490,27 @@ static int ipa_nl_decode_nlmsg
 					/*--------------------------------------------------------------------------
 						Post LAN iface (ECM) link down event
 					---------------------------------------------------------------------------*/
+#ifdef FEATURE_IPoGRE
+					if (strncmp(dev_name, IPACM_Iface::ipacmcfg->rgip_iface_name,
+						sizeof(IPACM_Iface::ipacmcfg->rgip_iface_name)) == 0)
+					{
+						IPACMDBG_H("RGIP iface %s link down (lower), post IPA_HANDLE_RGIP_DEL\n", dev_name);
+						ipacm_cmd_q_data rgip_evt_data;
+						uint32_t *rgip_v4 = (uint32_t*) malloc(sizeof(uint32_t));
+						if(rgip_v4 == NULL)
+						{
+							IPACMERR("Memory not assigned to rgip\n");
+						}
+						else
+						{
+							memset(&rgip_evt_data, 0, sizeof(rgip_evt_data));
+							rgip_evt_data.event = IPA_HANDLE_RGIP_DEL;
+							*rgip_v4 = 0;
+							rgip_evt_data.evt_data = rgip_v4;
+							IPACM_EvtDispatcher::PostEvt(&rgip_evt_data);
+						}
+					}
+#endif
 					evt_data.event = IPA_LINK_DOWN_EVENT;
 					evt_data.evt_data = data_fid;
 					IPACMDBG_H("Posting usb IPA_LINK_DOWN_EVENT with if index: %d\n", data_fid->if_index);
@@ -1757,7 +1822,7 @@ static int ipa_nl_decode_nlmsg
 				else
 				{
 #ifdef FEATURE_IPoGRE
-					if (strncmp(dev_name, IPACM_Iface::ipacmcfg->rgip_iface_name, sizeof(IPACM_Iface::ipacmcfg->rgip_iface_name)) == 0)
+					if ((data_addr->iptype == IPA_IP_v4) && (strncmp(dev_name, IPACM_Iface::ipacmcfg->rgip_iface_name, sizeof(IPACM_Iface::ipacmcfg->rgip_iface_name)) == 0))
 					{
 						IPACMDBG_H("RGIP iface %s addr deleted, post IPA_HANDLE_RGIP_DEL\n", dev_name);
 						ipacm_cmd_q_data rgip_evt_del_data;

@@ -376,7 +376,7 @@ private:
 		return IPACM_INVALID_INDEX;
 	}
 
-	inline int get_wlan_client_ip4_addr(uint8_t *mac_addr, uint32_t &ip_addr, uint8_t vlan_id = 0)
+	inline int get_wlan_client_ip4_addr(uint8_t *mac_addr, uint32_t &ip_addr, uint16_t vlan_id = 0)
 	{
 		int clnt_indx;
 

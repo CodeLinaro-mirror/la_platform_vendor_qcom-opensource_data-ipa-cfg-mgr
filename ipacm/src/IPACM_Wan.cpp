@@ -146,8 +146,9 @@ int IPACM_Wan::num_firewall_v6_ul = 0;
 struct ipacm_pdn_flt_rule IPACM_Wan::pdn_flt_rule_v4[IPA_MAX_FLT_RULE];
 struct ipacm_pdn_flt_rule IPACM_Wan::pdn_flt_rule_v6[IPA_MAX_FLT_RULE];
 #endif
-
+#ifdef FEATURE_PMIPV6
 ipgre_route_data_t IPACM_Wan::ipgre_route_data[IPA_IP_MAX];
+#endif
 struct ipa_flt_rule_add IPACM_Wan::flt_rule_v4[IPA_MAX_FLT_RULE];
 struct ipa_flt_rule_add IPACM_Wan::flt_rule_v6[IPA_MAX_FLT_RULE];
 
@@ -471,7 +472,7 @@ IPACM_Wan::~IPACM_Wan()
 		close(m_fd_ipa);
 	return;
 }
-
+#ifdef FEATURE_PMIPV6
 void IPACM_Wan::ipgre_route_data_init(
 	enum ipa_ip_type iptype )
 {
@@ -485,7 +486,7 @@ void IPACM_Wan::ipgre_route_data_init(
 		   0,
 		   sizeof(ipgre_route_data_t));
 }
-
+#endif
 #ifdef FEATURE_VLAN_MPDN
 
 int IPACM_Wan::GetMuxByVid(uint16_t vlan_id, uint8_t *mux_id, ipa_ip_type iptype)
@@ -666,8 +667,12 @@ uint32_t IPACM_Wan::GetQCMAPhdrByName(char* pdn_name)
 
 	for(int i = 0; i < IPA_MAX_NUM_SW_PDNS; i++)
 	{
-		if(strncmp(pdn_name, ipv6_to_iface[i].pIface->dev_name, sizeof(pdn_name)) == 0)
+		if(ipv6_to_iface[i].pIface && strncmp(pdn_name, ipv6_to_iface[i].pIface->dev_name, sizeof(pdn_name)) == 0)
 		{
+			if (!ipv6_to_iface[i].pIface->tx_prop) {
+				IPACMERR("couldn't find PDN tx prop %s\n", pdn_name);
+				return 0;
+			}
 			strlcpy(hdr.name, ipv6_to_iface[i].pIface->tx_prop->tx[0].hdr_name, sizeof(hdr.name));
 			hdr.name[IPA_RESOURCE_NAME_MAX-1] = '\0';
 			if(m_header.GetHeaderHandle(&hdr) == false)
@@ -1061,7 +1066,7 @@ int IPACM_Wan::handle_addr_evt(ipacm_event_data_addr *data)
 
 		/* setup same rule for v6_wan table*/
 		strlcpy(rt_rule->rt_tbl_name, IPACM_Iface::ipacmcfg->rt_tbl_wan_v6.name, sizeof(rt_rule->rt_tbl_name));
-		if(IPACM_Iface::ipacmcfg->mape_enable && (strcmp(dev_name,"map-mape")==0)){
+		if(IPACM_Iface::ipacmcfg->mape_enable && (strcmp(dev_name,MAPE_IFACE_NAME)==0)){
 			 rt_rule_entry->rule.hdr_proc_ctx_hdl = v6_p_ctx_2use;
 		}
 		if (false == m_routing.AddRoutingRule(rt_rule))
@@ -1077,10 +1082,11 @@ int IPACM_Wan::handle_addr_evt(ipacm_event_data_addr *data)
 			goto fail;
 		}
 		dft_rt_rule_hdl[MAX_DEFAULT_v4_ROUTE_RULES + 2*num_dft_rt_v6+1] = rt_rule_entry->rt_rule_hdl;
-		if ( IPACM_Iface::ipacmcfg->mape_enable && (strcmp(dev_name,"map-mape")==0) && is_global_ipv6_addr(data->ipv6_addr)) {
+		if ( IPACM_Iface::ipacmcfg->mape_enable && (strcmp(dev_name,MAPE_IFACE_NAME)==0) && is_global_ipv6_addr(data->ipv6_addr)) {
 			mape_wan_rt_rule_hdl_v6 = rt_rule_entry->rt_rule_hdl;
 			IPACMDBG_H(" updating mape_wan_rt_rule_hdl_v6 0x%x \n",mape_wan_rt_rule_hdl_v6);
-	  	 }
+		}
+
 		IPACMDBG_H("ipv6 wan iface rt-rule hdl=0x%x hdl=0x%x, num_dft_rt_v6: %d \n",
 				dft_rt_rule_hdl[MAX_DEFAULT_v4_ROUTE_RULES + 2*num_dft_rt_v6],
 				dft_rt_rule_hdl[MAX_DEFAULT_v4_ROUTE_RULES + 2*num_dft_rt_v6+1],num_dft_rt_v6);
@@ -1168,7 +1174,7 @@ int IPACM_Wan::handle_addr_evt(ipacm_event_data_addr *data)
 			}
 #endif
 			/* Check to handle the race-cond, if route_add recevied before handle_addr_evt */
-			if(IPACM_Iface::ipacmcfg->mape_enable && (strcmp(dev_name,"map-mape")==0)){
+			if(IPACM_Iface::ipacmcfg->mape_enable && (strcmp(dev_name,MAPE_IFACE_NAME)==0)){
 				memcpy(IPACM_Wan::mape_wan_ipv6_addr, data->ipv6_addr, sizeof(data->ipv6_addr));
 			}
 			IPACMDBG_H("is_xlat :%d, active_v6: %d, wan_v6_addr_gw_set: %d \n", is_xlat, active_v6, wan_v6_addr_gw_set);
@@ -1560,7 +1566,7 @@ int IPACM_Wan::handle_addr_evt(ipacm_event_data_addr *data)
 		}
 
 		IPACMDBG_H("Received wan ipv4-addr:0x%x\n",wan_v4_addr);
-		if(IPACM_Iface::ipacmcfg->mape_enable && (strcmp(dev_name,"map-mape")==0)){
+		if(IPACM_Iface::ipacmcfg->mape_enable && (strcmp(dev_name,MAPE_IFACE_NAME)==0)){
 			IPACMDBG_H(" mape enabled updating mape_wan_ipv4_addr \n");
 			IPACM_Wan::mape_wan_ipv4_addr = wan_v4_addr;
 			IPACMDBG_H(" mape ipv4 addr 0x%x \n",IPACM_Wan::mape_wan_ipv4_addr);
@@ -1820,6 +1826,11 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 		qos_param_info *qos_param;
 		qos_param = (qos_param_info *)param;
 
+		if(strcmp(dev_name,MAPE_IFACE_NAME)==0){
+			IPACMDBG_H("Received event on MAPE Wan, handling this in physical iface so ignoring \n");
+			return;
+		}
+
 		if (qos_param->dir != IPA_QoS_UL_RULE)
 		{
 			IPACMDBG_H("DL qos rule add request on WAN iface, ignoring..\n");
@@ -1851,6 +1862,10 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 			qos_param = (qos_delete_param_info *)param;
 			IPACMDBG_H("Received and will process an IPA_QOS_RULE_DEL_EVENT\n");
 
+			if(strcmp(dev_name,MAPE_IFACE_NAME)==0){
+				IPACMDBG_H("Received event on MAPE Wan, handling this in physical iface so ignoring \n");
+				return;
+			}
 			if (qos_param->dir != IPA_QoS_UL_RULE)
 			{
 				 IPACMDBG_H("DL qos rule delete request on WAN iface, ignoring..\n");
@@ -2398,7 +2413,7 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 			ipa_interface_index = iface_ipa_index_query(data->if_index);
 			MapeFMR* fmr_rule;
 
-			if (IPACM_Iface::ipacmcfg->mape_enable && (strcmp(dev_name,"map-mape")==0) && !IPACM_Wan::mape_rules_initialized ) {
+			if (IPACM_Iface::ipacmcfg->mape_enable && (strcmp(dev_name,MAPE_IFACE_NAME)==0) && !IPACM_Wan::mape_rules_initialized ) {
 				IPACMDBG_H(" MAPE enabled reading from mape rules file \n");
 				IPACM_Wan::read_from_mape_rules_file();
 				IPACM_Wan::mape_rules_initialized = true;
@@ -2536,7 +2551,7 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 						IPACMERR("Failed to get FMR rule for IPv6 address\n");
 					} else {
 						int clnt_indx = get_wan_client_index_ipv6(data->ipv6_addr_gw);
-						IPACMDBG_H("VEERA clnt_indx %d \n",clnt_indx);
+						IPACMDBG_H(" clnt_indx %d \n",clnt_indx);
 						if (clnt_indx >= 0 && clnt_indx < IPACM_INVALID_INDEX) {
 							ipa_wan_client *client = get_client_memptr(wan_client, clnt_indx);
 							if (client != NULL) {
@@ -5691,10 +5706,12 @@ int IPACM_Wan::handle_route_add_evt(ipa_ip_type iptype)
 			close(fd_wwan_ioctl);
 #endif
 			install_wan_filtering_rule(false);
+#ifdef FEATURE_PMIPV6
 			if(IPACM_Iface::ipacmcfg->pmip_details.pmipv6_enabled)
 			{
 				gre_up();
 			}
+#endif
 #ifdef FEATURE_VLAN_MPDN
 			if(isVlanWanUP())
 				FullConfig = false;
@@ -5838,10 +5855,12 @@ int IPACM_Wan::handle_route_add_evt(ipa_ip_type iptype)
 			close(fd_wwan_ioctl);
 #endif
 			install_wan_filtering_rule(false);
+#ifdef FEATURE_PMIPV6
 			if(IPACM_Iface::ipacmcfg->pmip_details.pmipv6_enabled)
 			{
 				gre_up();
 			}
+#endif
 		}
 		else
 		{
@@ -6338,6 +6357,7 @@ int IPACM_Wan::config_dft_firewall_rules(ipa_ip_type iptype)
 #endif
 	IPACMDBG_H("dev_name %s, is_ppp_iface %d\n",dev_name, is_ppp_iface);
 	if(sta_vlan_id > 0 && IPACM_Iface::ipacmcfg->get_eth_vlan_wan_up(ipa_if_num) == IPACM_SUCCESS &&
+		IPACM_Iface::ipacmcfg->eth_lan_wan_iface_name != NULL &&
 		strncmp(dev_name, IPACM_Iface::ipacmcfg->eth_lan_wan_iface_name, sizeof(dev_name)) == 0 &&
 		IPACM_Iface::odu_subnet_fl_rule_hdl[IPA_IP_v4] && (IPACM_Iface::ipacmcfg->eth_wan_pppoe_enable == false))
 	{
@@ -6375,6 +6395,7 @@ int IPACM_Wan::config_dft_firewall_rules(ipa_ip_type iptype)
 				}
 				IPACMDBG_H("Installing offload filter rules at idx %d\n", idx);
 				if(sta_vlan_id > 0 && IPACM_Iface::ipacmcfg->get_eth_vlan_wan_up(ipa_if_num) == IPACM_SUCCESS &&
+					IPACM_Iface::ipacmcfg->eth_lan_wan_iface_name != NULL &&
 					strncmp(dev_name, IPACM_Iface::ipacmcfg->eth_lan_wan_iface_name, sizeof(dev_name)) == 0 &&
 					IPACM_Iface::odu_subnet_fl_rule_hdl[IPA_IP_v4] && (IPACM_Iface::ipacmcfg->eth_wan_pppoe_enable == false))
 				{
@@ -6425,6 +6446,7 @@ int IPACM_Wan::config_dft_firewall_rules(ipa_ip_type iptype)
 				flt_rule_entry.rule.attrib.u.v4.dst_addr_mask = 0x00000000;
 				flt_rule_entry.rule.attrib.u.v4.dst_addr = 0x00000000;
 				if(sta_vlan_id > 0 && IPACM_Iface::ipacmcfg->get_eth_vlan_wan_up(ipa_if_num) == IPACM_SUCCESS &&
+					IPACM_Iface::ipacmcfg->eth_lan_wan_iface_name != NULL &&
 					strncmp(dev_name, IPACM_Iface::ipacmcfg->eth_lan_wan_iface_name, sizeof(dev_name)) == 0 &&
 					IPACM_Iface::odu_subnet_fl_rule_hdl[IPA_IP_v4] && (IPACM_Iface::ipacmcfg->eth_wan_pppoe_enable == false))
 				{
@@ -6496,6 +6518,7 @@ int IPACM_Wan::config_dft_firewall_rules(ipa_ip_type iptype)
 				}
 				IPACMDBG_H("Installing offload filter rules at idx %d\n", idx);
 				if(sta_vlan_id > 0 && IPACM_Iface::ipacmcfg->get_eth_vlan_wan_up(ipa_if_num) == IPACM_SUCCESS &&
+					IPACM_Iface::ipacmcfg->eth_lan_wan_iface_name != NULL &&
 					strncmp(dev_name, IPACM_Iface::ipacmcfg->eth_lan_wan_iface_name, sizeof(dev_name)) == 0 &&
 					(IPACM_Iface::ipacmcfg->eth_wan_pppoe_enable == false))
 				{
@@ -6545,6 +6568,7 @@ int IPACM_Wan::config_dft_firewall_rules(ipa_ip_type iptype)
 				flt_rule_entry.rule.attrib.attrib_mask |= IPA_FLT_NEXT_HDR;
 				flt_rule_entry.rule.attrib.u.v6.next_hdr = (uint8_t)IPACM_FIREWALL_IPPROTO_ICMP6;
 				if(sta_vlan_id > 0 && IPACM_Iface::ipacmcfg->get_eth_vlan_wan_up(ipa_if_num) == IPACM_SUCCESS &&
+					IPACM_Iface::ipacmcfg->eth_lan_wan_iface_name != NULL &&
 					strncmp(dev_name, IPACM_Iface::ipacmcfg->eth_lan_wan_iface_name, sizeof(dev_name)) == 0 &&
 					(IPACM_Iface::ipacmcfg->eth_wan_pppoe_enable == false))
 				{
@@ -6645,6 +6669,7 @@ int IPACM_Wan::config_dft_firewall_rules(ipa_ip_type iptype)
 				flt_rule_entry.rule.attrib.u.v6.dst_addr[2] = 0x00000000;
 				flt_rule_entry.rule.attrib.u.v6.dst_addr[3] = 0X00000000;
 				if(sta_vlan_id > 0 && IPACM_Iface::ipacmcfg->get_eth_vlan_wan_up(ipa_if_num) == IPACM_SUCCESS &&
+					IPACM_Iface::ipacmcfg->eth_lan_wan_iface_name != NULL &&
 					strncmp(dev_name, IPACM_Iface::ipacmcfg->eth_lan_wan_iface_name, sizeof(dev_name)) == 0 &&
 					(IPACM_Iface::ipacmcfg->eth_wan_pppoe_enable == false))
 				{
@@ -9669,10 +9694,12 @@ int IPACM_Wan::handle_down_evt_ex()
 	mtu_v6 = DEFAULT_MTU_SIZE;
 	mtu_v6_set = false;
 #endif
+#ifdef FEATURE_IPOGRE
 	if(IPACM_Iface::ipacmcfg->ipogre_enabled == true)
 	{
 		gre_down();
 	}
+#endif
 	if(ip_type == IPA_IP_v4)
 	{
 		num_ipv4_modem_pdn--;
@@ -11502,6 +11529,16 @@ int IPACM_Wan::handle_wan_hdr_init(uint8_t *mac_addr, bool gw_addr)
 	}
 
 	IPACMDBG_H("WAN client number: %d\n", num_wan_client);
+	if (gw_addr && IPACM_Iface::ipacmcfg->mape_enable ) {
+		if (IPACM_Iface::ipacmcfg->mape_wan_iface_table_index >= IPA_MAX_IFACE_ENTRIES) {
+			IPACMERR("Invalid MAPE WAN interface table index: %d\n",
+			IPACM_Iface::ipacmcfg->mape_wan_iface_table_index);
+		} else if(strcmp(dev_name,IPACM_Iface::ipacmcfg->iface_table[IPACM_Iface::ipacmcfg->mape_wan_iface_table_index].phy_dev_name) == 0){
+			memcpy(IPACM_Wan::mape_rules.mac,
+				mac_addr,
+				sizeof(get_client_memptr(wan_client, num_wan_client)->mac));
+		}
+	}
 
 	memcpy(get_client_memptr(wan_client, num_wan_client)->mac,
 				 mac_addr,
@@ -13394,7 +13431,7 @@ int IPACM_Wan::add_catchup_all_filtering_rule_each_pdn(
 #else
 	bool compatible_eogre = false;
 #endif
-#ifdef FEATURE_IPoGRE
+#if defined(FEATURE_EoGRE) || defined(FEATURE_PMIPV6) || defined(FEATURE_IPoGRE)
 	bool           doing_ipgre = isPmipv6;
 	/*
 	 * If we're doing eogre and the iptype in the eogre matches what's
@@ -13474,8 +13511,8 @@ flt_rule_entry.rule.attrib.u.v4.dst_addr_mask = 0x00000000;
 					flt_rule_entry.rule.action = IPA_PASS_TO_DST_NAT;
 					rt_tbl_name = ipacmcfg->rt_tbl_lan_v4.name;
 				}
-		}
 #if defined(FEATURE_EoGRE) || defined(FEATURE_PMIPV6) || defined(FEATURE_IPoGRE)
+		}
 			if(isPmipv6 || doing_ipgre)
 			{
 				flt_rule_entry.rule.action = IPA_PASS_TO_DST_NAT;
@@ -13920,7 +13957,7 @@ int IPACM_Wan::query_mtu_size()
 
 	if(IPACM_Iface::ipacmcfg->mape_enable && (strcmp(dev_name,IPACM_Iface::ipacmcfg->iface_table[IPACM_Iface::ipacmcfg->mape_wan_iface_table_index].phy_dev_name) == 0))
 	{
-		strlcpy(if_mtu.ifr_name, "map-mape", IFNAMSIZ);
+		strlcpy(if_mtu.ifr_name, MAPE_IFACE_NAME, IFNAMSIZ);
 	} else {
 		strlcpy(if_mtu.ifr_name, dev_name, IFNAMSIZ);
 	}
@@ -14563,7 +14600,6 @@ int IPACM_Wan::handle_ul_qos_route_rule(ipa_ip_type iptype,
 					hdr_proc_ctx_table->num_proc_ctxs = 1;
 					hdr_proc_ctx = &hdr_proc_ctx_table->proc_ctx[0];
 					hdr_proc_ctx->type = IPA_HDR_PROC_MARK_DSCP;
-
 					hdr_proc_ctx->pdn_dscp_params.valid = 1;
 					hdr_proc_ctx->pdn_dscp_params.dscp_val = qos_param->dscp_mark_val;
 
@@ -14581,8 +14617,6 @@ int IPACM_Wan::handle_ul_qos_route_rule(ipa_ip_type iptype,
 					rt_rule_entry->rule.hdr_proc_ctx_hdl = hdr_proc_ctx_table->proc_ctx[0].proc_ctx_hdl;
 					IPACMDBG_H("rt->hdr_proc_ctx_hdl v4 0x%x\n", rt_rule_entry->rule.hdr_proc_ctx_hdl);
 					free(hdr_proc_ctx_table);
-				}else if(IPACM_Iface::ipacmcfg->mape_enable && (strcmp(dev_name,IPACM_Iface::ipacmcfg->iface_table[IPACM_Iface::ipacmcfg->mape_wan_iface_table_index].phy_dev_name) == 0)){
-					rt_rule_entry->rule.hdr_proc_ctx_hdl = v4_p_ctx_2use;
 				}
 				else
 				{
@@ -14603,7 +14637,9 @@ int IPACM_Wan::handle_ul_qos_route_rule(ipa_ip_type iptype,
 				new_client_info.route_rule_set_v4 = true;
 				new_client_info.v4_ip_addr = rt_rule_entry->rule.attrib.u.v4.src_addr;
 				new_client_info.client_iface = ipa_if_num;
-				new_client_info.dscp_hpc_hdl_v4 = rt_rule_entry->rule.hdr_proc_ctx_hdl;
+				if (qos_param->dscp_mark_val){
+					new_client_info.dscp_hpc_hdl_v4 = rt_rule_entry->rule.hdr_proc_ctx_hdl;
+				}
 
 				qos_param->qos_client_list.push_front(new_client_info);
 				qos_param->client_cnt++;
@@ -14902,7 +14938,6 @@ int IPACM_Wan::delete_all_UL_info_from_qos(list<qos_param_info>::iterator qos_pa
 				}
 			}
 		}
-
 		it_qos_client = qos_param->qos_client_list.erase(it_qos_client);
 		qos_param->client_cnt--;
 	}
@@ -15293,10 +15328,23 @@ int IPACM_Wan::mape_fmr_route_rule_add(uint32_t ip_addr)
 			}
 		}
 		if(!valid_mac){
-			IPACMDBG_H(" mac address is not valid \n");
-			return IPACM_SUCCESS;
+			bool gw_mac_valid = false;
+			for (int i = 0; i < 6; i++) {
+				if (IPACM_Wan::mape_rules.mac[i] != 0) {
+					gw_mac_valid = true;
+					break;
+				}
+			}
+			if (!gw_mac_valid) {
+				IPACMERR("Gateway MAC address not initialized, cannot install FMR rule\n");
+				return IPACM_FAILURE;
+			}
+			IPACMDBG_H("mac address is not valid, installing header with gw mac\n");
+			handle_mape_wan_fmr_hdr_init(IPACM_Wan::mape_rules.mac, fmr_rule);
+		} else {
+			IPACMDBG_H("mac address is valid installing fmr rule with mac\n");
+			handle_mape_wan_fmr_hdr_init(fmr_rule->mac, fmr_rule);
 		}
-		handle_mape_wan_fmr_hdr_init(fmr_rule->mac,fmr_rule);
 		if(mape_make_fmr_hdr_add_ctx(fmr_rule) != 0 ){
 			IPACMDBG_H(" header addition failed \n");
 			return IPACM_FAILURE;

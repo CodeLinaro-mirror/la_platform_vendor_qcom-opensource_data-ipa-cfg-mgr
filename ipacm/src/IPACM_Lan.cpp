@@ -371,7 +371,7 @@ IPACM_Lan::IPACM_Lan(char *iface_name, int iface_index, bool is_ppp_iface) : IPA
 
 	if (IPACM_Iface::ipacmcfg->ipacm_emesh_enable && IPACM_Iface::ipacmcfg->ipacm_emesh_mode >= 2)
 	{
-		if (device_type == IPACM_CLIENT_DEVICE_TYPE_ETH && rx_prop && rx_prop->num_rx_props > 2)
+		if (!IPACM_Iface::ipacmcfg->ipacm_qos_enable && device_type == IPACM_CLIENT_DEVICE_TYPE_ETH && rx_prop && rx_prop->num_rx_props > 2)
 		{
 			sIface = true;
 			IPACM_Iface::ipacmcfg->SetSpclIface(dev_name);
@@ -741,7 +741,7 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 #endif
 #ifdef FEATURE_VLAN_MPDN
 						/* VLAN IFACES don't care about default route */
-						if(!(IPACM_Iface::ipacmcfg->iface_in_vlan_mode(dev_name)) ||
+						if(!(IPACM_Iface::ipacmcfg->iface_in_vlan_mode_v2(dev_name)) ||
 							(!(IPACM_Iface::ipacmcfg->iface_in_vlan_mode_v2(dev_name)) && IPACM_Iface::ipacmcfg->eth_wan_pppoe_enable && sIface))
 #endif
 						{
@@ -894,7 +894,7 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 							}
 						}
 						/* VLAN IFACES don't care about default route */
-						if(!(IPACM_Iface::ipacmcfg->iface_in_vlan_mode(dev_name)) ||
+						if(!(IPACM_Iface::ipacmcfg->iface_in_vlan_mode_v2(dev_name)) ||
 							(!(IPACM_Iface::ipacmcfg->iface_in_vlan_mode_v2(dev_name)) && IPACM_Iface::ipacmcfg->eth_wan_pppoe_enable && sIface))
 #endif //FEATURE_VLAN_MPDN
 						{
@@ -1112,6 +1112,7 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 						gre_up(true);
 					}
 #endif
+#ifdef FEATURE_IPOGRE
 					if(IPACM_Iface::ipacmcfg->ipogre_enabled)
 					{
 						IPACMDBG_H(
@@ -1120,6 +1121,7 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 						gre_down(false,true);
 						gre_up(false,true);
 					}
+#endif
 					IPACMDBG_H("Finish handling IPA_ADDR_ADD_EVENT for ip-family(%d)\n", data->iptype);
 
 					/* checking if SW-RT_enable */
@@ -1249,9 +1251,12 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 			return;
 		}
 		IPACMDBG_H("Backhaul is sta mode?%d\n", data_wan->is_sta);
+		IPACMDBG_H("IPACM_Iface::ipacmcfg->iface_in_vlan_mode(dev_name)?%d\n", IPACM_Iface::ipacmcfg->iface_in_vlan_mode(dev_name));
+		IPACMDBG_H("IPACM_Iface::ipacmcfg->iface_in_vlan_mode_v2(dev_name)?%d\n", IPACM_Iface::ipacmcfg->iface_in_vlan_mode_v2(dev_name));
+		IPACMDBG_H("dev_name %s sIface()?%d\n", dev_name, sIface);
 #ifdef FEATURE_VLAN_MPDN
 		/* VLAN IFACES don't care about default route */
-		if((IPACM_Iface::ipacmcfg->iface_in_vlan_mode(dev_name)) &&
+		if((IPACM_Iface::ipacmcfg->iface_in_vlan_mode_v2(dev_name)) &&
 		   (IPACM_Iface::ipacmcfg->ipacm_mpdn_enable == TRUE) &&
 		   !sIface)
 		{
@@ -1443,9 +1448,9 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 
 #ifdef FEATURE_VLAN_MPDN
 		/* VLAN IFACES don't care about default route
-		 * If interface is VLAN and sIface is DISABLED then dont handle from here
-		 * else in non-vlan and siface case handle here */
-		if (IPACM_Iface::ipacmcfg->iface_in_vlan_mode_v2(dev_name) && !sIface &&
+		 * If interface is VLAN then dont handle from here
+		 */
+		if (IPACM_Iface::ipacmcfg->iface_in_vlan_mode_v2(dev_name) &&
 			(IPACM_Iface::ipacmcfg->ipacm_mpdn_enable == TRUE ||
 			 IPACM_Wan::isVlanWanUP()))
 		{
@@ -1489,13 +1494,13 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 
 #ifdef FEATURE_VLAN_MPDN
 		/* VLAN IFACES don't care about default route
-		 * If interface is VLAN and sIface is DISABLED then dont handle from here
-		 * else in non-vlan and siface case handle here */
-		if (IPACM_Iface::ipacmcfg->iface_in_vlan_mode_v2(dev_name) && !sIface &&
+		 * If interface is VLAN then dont handle from here
+		 */
+		if (IPACM_Iface::ipacmcfg->iface_in_vlan_mode_v2(dev_name) &&
 			(IPACM_Iface::ipacmcfg->ipacm_mpdn_enable == TRUE ||
 			 IPACM_Wan::isVlanWanUP_V6()))
 		{
-			IPACMDBG_H("IF %s is vlan IF, ignoring IPA_HANDLE_WAN_DOWN\n", dev_name);
+			IPACMDBG_H("IF %s is vlan IF, ignoring IPA_HANDLE_WAN_DOWN_V6\n", dev_name);
 			return;
 		}
 #endif
@@ -4755,10 +4760,12 @@ int IPACM_Lan::handle_wan_down(bool is_sta_mode, uint8_t mux_id, uint16_t vid)
 
 		if (is_sta_mode == false)
 		{
+#ifdef FEATURE_PMIPV6
 			if(IPACM_Iface::ipacmcfg->pmip_details.pmipv6_enabled)/*Delete GRE Filter rules on WAN_DOWN*/
 			{
 				gre_down(true);
 			}
+#endif
 			IPACMDBG_H("LTE mode - Wan_down for mux_id: %d\n", mux_id);
 			if (del_ul_flt_rules(IPA_IP_v4))
 				return IPACM_FAILURE;
@@ -4797,7 +4804,9 @@ int IPACM_Lan::handle_wan_down(bool is_sta_mode, uint8_t mux_id, uint16_t vid)
 		}
 	}
 	/* clean MTU rules if needed */
-	if(ipa_if_cate == ODU_IF && strncmp(dev_name, IPACM_Iface::ipacmcfg->eth_lan_wan_iface_name, sizeof(dev_name)) == 0 &&
+	if(ipa_if_cate == ODU_IF &&
+		IPACM_Iface::ipacmcfg->eth_lan_wan_iface_name != NULL &&
+		strncmp(dev_name, IPACM_Iface::ipacmcfg->eth_lan_wan_iface_name, sizeof(dev_name)) == 0 &&
 		num_wan_subnet_rules == 0)
 	{
 		IPACM_Iface::odu_subnet_fl_rule_hdl[IPA_IP_v4] = 0;
@@ -10765,6 +10774,9 @@ int IPACM_Lan::handle_qos_route_rule_ext_v2(uint8_t *client_mac,
 					hdr_proc_ctx_table = (ipa_ioc_add_hdr_proc_ctx *)malloc(size);
 					if (hdr_proc_ctx_table == NULL) {
 						IPACMERR("Failed to allocate memory for hdr_proc_ctx.\n");
+						if (rt_rule->rules) {
+							free((void *)rt_rule->rules);
+						}
 						free(rt_rule);
 						return IPACM_FAILURE;
 					}
@@ -10785,6 +10797,9 @@ int IPACM_Lan::handle_qos_route_rule_ext_v2(uint8_t *client_mac,
 						IPACMERR("ioctl IPA_IOC_ADD_HDR_PROC_CTX for dscp marking failed: %d\n",
 							hdr_proc_ctx_table->proc_ctx[0].status);
 						free(hdr_proc_ctx_table);
+						if (rt_rule->rules) {
+							free((void *)rt_rule->rules);
+						}
 						free(rt_rule);
 						return IPACM_FAILURE;
 					}
@@ -10804,6 +10819,9 @@ int IPACM_Lan::handle_qos_route_rule_ext_v2(uint8_t *client_mac,
 				if (false == m_routing.AddRoutingRuleExt_v2(rt_rule))
 				{
 					IPACMERR("Routing rule addition failed!\n");
+					if (rt_rule->rules) {
+						free((void *)rt_rule->rules);
+					}
 					free(rt_rule);
 					return IPACM_FAILURE;
 				}
@@ -10986,6 +11004,9 @@ int IPACM_Lan::handle_qos_route_rule_ext_v2(uint8_t *client_mac,
 						hdr_proc_ctx_table = (ipa_ioc_add_hdr_proc_ctx *)malloc(size);
 						if (hdr_proc_ctx_table == NULL) {
 							IPACMERR("Failed to allocate memory for hdr_proc_ctx.\n");
+							if (rt_rule->rules) {
+								free((void *)rt_rule->rules);
+							}
 							free(rt_rule);
 							return IPACM_FAILURE;
 						}
@@ -11006,6 +11027,9 @@ int IPACM_Lan::handle_qos_route_rule_ext_v2(uint8_t *client_mac,
 							IPACMERR("ioctl IPA_IOC_ADD_HDR_PROC_CTX for v6 dscp marking failed: %d\n",
 								hdr_proc_ctx_table->proc_ctx[0].status);
 							free(hdr_proc_ctx_table);
+							if (rt_rule->rules) {
+								free((void *)rt_rule->rules);
+							}
 							free(rt_rule);
 							return IPACM_FAILURE;
 						}
@@ -11024,6 +11048,9 @@ int IPACM_Lan::handle_qos_route_rule_ext_v2(uint8_t *client_mac,
 					if (false == m_routing.AddRoutingRuleExt_v2(rt_rule))
 					{
 						IPACMERR("Routing rule addition failed!\n");
+						if (rt_rule->rules) {
+							free((void *)rt_rule->rules);
+						}
 						free(rt_rule);
 						return IPACM_FAILURE;
 					}
@@ -11055,6 +11082,9 @@ int IPACM_Lan::handle_qos_route_rule_ext_v2(uint8_t *client_mac,
 			}
 		} /* end of for loop */
 
+		if (rt_rule->rules) {
+			free((void *)rt_rule->rules);
+		}
 		free(rt_rule);
 	}
 	return IPACM_SUCCESS;
@@ -14226,7 +14256,9 @@ int IPACM_Lan::handle_down_evt()
 			}
 #endif
 		}
-		if(ipa_if_cate == ODU_IF && strncmp(dev_name, IPACM_Iface::ipacmcfg->eth_lan_wan_iface_name, sizeof(dev_name)))
+		if(ipa_if_cate == ODU_IF &&
+			IPACM_Iface::ipacmcfg->eth_lan_wan_iface_name != NULL &&
+			strncmp(dev_name, IPACM_Iface::ipacmcfg->eth_lan_wan_iface_name, sizeof(dev_name)))
 		{
 			memset(IPACM_Iface::odu_subnet_fl_rule_hdl, 0, IPA_IP_MAX);
 		}
@@ -18272,7 +18304,9 @@ int IPACM_Lan::handle_wan_down_v6(bool is_sta_mode, bool is_support_mpdn, uint16
 	if (is_support_mpdn == true)
 	{
 		modify_ipv6_prefix_flt_rule();
-		if(ipa_if_cate == ODU_IF && strncmp(dev_name, IPACM_Iface::ipacmcfg->eth_lan_wan_iface_name, sizeof(dev_name)) == 0 )
+		if(ipa_if_cate == ODU_IF &&
+			IPACM_Iface::ipacmcfg->eth_lan_wan_iface_name != NULL &&
+			strncmp(dev_name, IPACM_Iface::ipacmcfg->eth_lan_wan_iface_name, sizeof(dev_name)) == 0 )
 		{
 			IPACM_Iface::odu_subnet_fl_rule_hdl[IPA_IP_v6] = 0;
 		}
@@ -18292,10 +18326,12 @@ int IPACM_Lan::handle_wan_down_v6(bool is_sta_mode, bool is_support_mpdn, uint16
 	if(is_sta_mode == false)
 	{
 		IPACMDBG_H("Deletion of LTE BH v6 rule\n");
+#ifdef FEATURE_PMIPV6
 		if(IPACM_Iface::ipacmcfg->pmip_details.pmipv6_enabled)/*Delete GRE Filter rules on WAN_DOWN*/
 		{
 			gre_down(true);
 		}
+#endif
 		if(del_ul_flt_rules(IPA_IP_v6))
 			return IPACM_FAILURE;
 
@@ -18918,7 +18954,7 @@ int IPACM_Lan::modify_private_subnet(bool eogre_enabled)
 #ifdef FEATURE_EoGRE  || defined(FEATURE_PMIPV6)
 		IPACMDBG("pmipv6 = %d\n", IPACM_Iface::ipacmcfg->pmip_details.pmipv6_enabled);	
 		/* if in GRE mode, also query MTU since WanUP flag is false but WAN is up */
-		if (IPACM_Iface::ipacmcfg->eogre_enabled) {
+		if (IPACM_Iface::ipacmcfg->eogre_enabled || IPACM_Iface::ipacmcfg->ipogre_enabled) {
 			/* re-calculate the ipv4 mtu based on GRE tunnel type*/
 			if (IPACM_Iface::ipacmcfg->eogre_info.iptype == IPA_IP_v4)
 				/* mtu_v4_new = mtu_v4 - 20(ipv4) - 4(gre) - 18(eth + VLAN) */
@@ -19107,7 +19143,9 @@ int IPACM_Lan::modify_private_subnet(bool eogre_enabled)
 			IPACMDBG("Adding filter hdl:(0x%x)\n", private_fl_rule_hdl[j][i]);
 		}
 
-		if(ipa_if_cate == ODU_IF && strncmp(dev_name, IPACM_Iface::ipacmcfg->eth_lan_wan_iface_name, sizeof(dev_name)) == 0 &&
+		if(ipa_if_cate == ODU_IF &&
+			IPACM_Iface::ipacmcfg->eth_lan_wan_iface_name != NULL &&
+			strncmp(dev_name, IPACM_Iface::ipacmcfg->eth_lan_wan_iface_name, sizeof(dev_name)) == 0 &&
 			num_wan_subnet_rules[j] > 0)
 		{
 			IPACM_Iface::odu_subnet_fl_rule_hdl[IPA_IP_v4] = private_fl_rule_hdl[j][num_wan_subnet_rules[j] - 1];
@@ -19224,7 +19262,10 @@ int IPACM_Lan::modify_ipv6_prefix_flt_rule(bool eogre_enabled)
 		}
 
 		if (IPACM_Iface::ipacmcfg->num_ipv6_prefixes == 0 && IPACM_Iface::ipacmcfg->num_no_offload_ipv6_prefix == 0) {
-			if(ipa_if_cate == ODU_IF && strncmp(dev_name, IPACM_Iface::ipacmcfg->eth_lan_wan_iface_name, sizeof(dev_name)) == 0 && m_ipv6_default_filterting_rules_count[j] > 0)
+			if(ipa_if_cate == ODU_IF &&
+				IPACM_Iface::ipacmcfg->eth_lan_wan_iface_name != NULL &&
+				strncmp(dev_name, IPACM_Iface::ipacmcfg->eth_lan_wan_iface_name, sizeof(dev_name)) == 0 &&
+				m_ipv6_default_filterting_rules_count[j] > 0)
 			{
 				IPACM_Iface::odu_subnet_fl_rule_hdl[IPA_IP_v6] = dft_v6fl_rule_hdl[j][m_ipv6_default_filterting_rules_count[j] - 1];
 				IPACMDBG_H("odu_subnet_fl_rule_hdl: %d\n", IPACM_Iface::odu_subnet_fl_rule_hdl[IPA_IP_v6]);
@@ -19281,7 +19322,7 @@ int IPACM_Lan::modify_ipv6_prefix_flt_rule(bool eogre_enabled)
 
 #ifdef FEATURE_EoGRE || defined(FEATURE_PMIPV6)
 		/* if in GRE mode, also query MTU since WANup_v6 flag is false but WANv6 is up*/
-		if (IPACM_Iface::ipacmcfg->eogre_enabled)
+		if (IPACM_Iface::ipacmcfg->eogre_enabled || IPACM_Iface::ipacmcfg->ipogre_enabled)
 		{
 			/* re-calculate the ipv6 mtu based on GRE tunnel type*/
 			if (IPACM_Iface::ipacmcfg->eogre_info.iptype == IPA_IP_v4)
@@ -19507,7 +19548,9 @@ int IPACM_Lan::modify_ipv6_prefix_flt_rule(bool eogre_enabled)
 		for (i = 0; i < num_wan_prefix_rules[j]; i++)
 			ipv6_prefix_flt_rule_hdl[j][i] = pFilteringTable->rules[i].flt_rule_hdl;
 
-		if(ipa_if_cate == ODU_IF && strncmp(dev_name, IPACM_Iface::ipacmcfg->eth_lan_wan_iface_name, sizeof(dev_name)) == 0 &&
+		if(ipa_if_cate == ODU_IF &&
+			IPACM_Iface::ipacmcfg->eth_lan_wan_iface_name != NULL &&
+			strncmp(dev_name, IPACM_Iface::ipacmcfg->eth_lan_wan_iface_name, sizeof(dev_name)) == 0 &&
 			num_wan_prefix_rules[j] > 0)
 		{
 			IPACM_Iface::odu_subnet_fl_rule_hdl[IPA_IP_v6] = ipv6_prefix_flt_rule_hdl[j][num_wan_prefix_rules[j] - 1];
@@ -24680,7 +24723,7 @@ void IPACM_Lan::gre_up(bool isPmipv6,bool ipogre_enabled)/*Reusing Gre function 
 	 * rules, the following will ensure some rules are deleted to aid
 	 * in this effort.
 	 */
-	if(!isPmipv6) /* We shouldn't delete default rules for PMIPV6 */
+	if(!isPmipv6 && !ipogre_enabled) /* We shouldn't delete default rules for PMIPV6 */
 	{
 		/*
 		* Create gre specific route rules...
@@ -24864,7 +24907,7 @@ void IPACM_Lan::gre_down(bool isPmipv6, bool ipogre_enabled)
 		IPACM_Iface::ipacmcfg->GetQmapId(), false, false);
 #endif
 	}
-	if(!isPmipv6)
+	if(!isPmipv6 && !ipogre_enabled)
 	{
 		del_ul_flt_rules(iptype);
 		if ( IPACM_Iface::ip_type == IPA_IP_v4 || IPACM_Iface::ip_type == IPA_IP_MAX )
@@ -25336,9 +25379,11 @@ uint32_t IPACM_Lan::gre_get_rt_tbl_hdl(
 		IPACMERR("Invalid IP type passed to function\n");
 		return 0;
 	}
+#ifdef FEATURE_PMIPV6
 	if(isPmipv6){
 		return IPACM_Wan::ipgre_get_rt_tbl_hdl(iptype);
 	}
+#endif
 	if ( gre_route_data[iptype].rt_tbl_hdl == 0 )
 	{
 		struct ipa_ioc_get_rt_tbl routing_table;
@@ -26016,7 +26061,10 @@ int IPACM_Lan::handle_ext_router_add_evt(char* pdn_name, uint8_t *mac_addr, uint
 	uint32_t wan_ipv6_addr[4];
 	memset(&hdr, 0, sizeof(hdr));
 
-	strlcpy(info.pdn_name, pdn_name, sizeof(info.pdn_name));
+	if (strlcpy(info.pdn_name, pdn_name, sizeof(info.pdn_name)) == 0) {
+		IPACMERR("Recevied NULL PDN name\n");
+		return IPACM_FAILURE;
+	}
 	if(IPACM_Iface::ipacmcfg->get_ext_router_info(&info) == IPACM_FAILURE)
 	{
 		IPACMERR("failed to get ext_router_info\n");
@@ -26123,6 +26171,7 @@ int IPACM_Lan::handle_ext_router_add_evt(char* pdn_name, uint8_t *mac_addr, uint
 	}
 	get_client_memptr(eth_client, eth_idx)->ext_router_prefix_rt_hdl =  rt_rule_entry->rt_rule_hdl;
 
+	IPACMDBG_H("set route/filter rule for v6_external router completed\n");
 	/* if in prefix sharing mode, need to add 1 more rt and flt exception rule as per design*/
 	if (IPACM_Iface::ipacmcfg->ext_router_mode == IPA_PREFIX_SHARING)
 	{

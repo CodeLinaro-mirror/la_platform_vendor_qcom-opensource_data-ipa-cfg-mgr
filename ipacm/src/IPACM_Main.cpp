@@ -1398,6 +1398,7 @@ void* ipa_driver_msg_notifier(void *param)
 
 			continue;
 #endif
+#ifdef FEATURE_IPoGRE
 		case IPA_RGIP_ADD_EVENT:
 			IPACMDBG_H("Received an IPA_IPoGRE_RGIP_EVENT\n");
 			rgip_v4 = (uint32_t*) malloc(sizeof(uint32_t));
@@ -1424,6 +1425,7 @@ void* ipa_driver_msg_notifier(void *param)
 			strlcpy(IPACM_Iface::ipacmcfg->rgip_iface_name,ipv4_src->rgip_iface_name, IPA_IFACE_NAME_LEN);
 
 			break;
+#endif
 		case IPA_MACSEC_ADD_EVENT:
 		case IPA_MACSEC_DEL_EVENT:
 			IPACMDBG_H("Received an %s\n",
@@ -1471,6 +1473,10 @@ void* ipa_driver_msg_notifier(void *param)
 				ext_router_info.ipv6_addr[0], ext_router_info.ipv6_addr[1], ext_router_info.ipv6_addr[2], ext_router_info.ipv6_addr[3],
 				ext_router_info.ipv6_mask[0], ext_router_info.ipv6_mask[1], ext_router_info.ipv6_mask[2], ext_router_info.ipv6_mask[3]);
 
+			if (!strlen(ext_router_info.pdn_name)){
+				IPACMERR("Received the null pdn name for IPA_SET_EXT_ROUTER_MODE_EVENT\n");
+				goto done;
+			}
 			if (IPACM_Iface::ipacmcfg->ext_router_mode == IPA_PREFIX_DISABLED && ext_router_info.mode == IPA_PREFIX_DISABLED )
 			{
 				IPACMERR("IPACM is already in ext_router disabled mode\n");
@@ -1777,6 +1783,19 @@ int main(int argc, char **argv)
 	int ret;
 	pthread_t netlink_thread = 0, monitor_thread = 0, ipa_driver_thread = 0;
 	pthread_t cmd_queue_thread = 0;
+	pthread_t netlinks_query_thread = 0;
+
+	/* Allow toggling logs from init scripts:
+	 * - Command line: --logs=0 | --logs=1 | --disable-logs | --enable-logs
+	 * Do this before any logging macros are used.
+	 */
+	for (int i = 1; i < argc; ++i) {
+		if (strcmp(argv[i], "--logs=0") == 0 || strcmp(argv[i], "--disable-logs") == 0) {
+			ipacm_set_log_enabled(0);
+		} else if (strcmp(argv[i], "--logs=1") == 0 || strcmp(argv[i], "--enable-logs") == 0) {
+			ipacm_set_log_enabled(1);
+		}
+	}
 
 	/* check if ipacm is already running or not */
 	ipa_is_ipacm_running();

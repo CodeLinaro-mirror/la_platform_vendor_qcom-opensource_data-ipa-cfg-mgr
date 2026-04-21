@@ -466,7 +466,7 @@ error:
 	return IPACM_FAILURE;
 }
 
-#ifdef FEATURE_EoGRE
+#if defined(FEATURE_EoGRE) || defined(FEATURE_PMIPV6) || defined(FEATURE_IPOGRE)
 static int get_eogre_tunnel_details(struct ifinfomsg* ifi, int len, int type)
 {
 	struct rtattr *attrib[IFLA_MAX + 1];
@@ -641,8 +641,7 @@ static int del_eogre_tunnel(struct ifinfomsg* ifi, int len, int type)
 	}
 return IPACM_SUCCESS;
 }
-#endif
-#ifdef FEATURE_PMIPV6
+
 static int populate_gre_details(struct ifinfomsg* ifi, int len, int type){
 	struct rtattr *attrib[IFLA_MAX + 1];
     struct rtattr *linkinfo[IFLA_INFO_MAX+1];
@@ -715,7 +714,7 @@ static int populate_gre_details(struct ifinfomsg* ifi, int len, int type){
 
 			memcpy(&(pConfig->ipgre_info),&ipgre_info,sizeof(ipa_ipgre_info));
 			IPACMDBG("GRE info, src addr: %x, dst addr %x, link %d\n", ipgre_info.ipv4_src,ipgre_info.ipv4_dst,link);
-
+#if defined(FEATURE_PMIPV6) || defined(FEATURE_IPOGRE)
 			if(pConfig->pmip_details.pmipv6_enabled)
 			{
 				/* Send GRE UP event */
@@ -742,8 +741,9 @@ static int populate_gre_details(struct ifinfomsg* ifi, int len, int type){
 				IPACMDBG_H("Posting IPA_HANDLE_IPOGRE_UP \n");
 				IPACM_EvtDispatcher::PostEvt(&evt_data);
 			}
+#endif
 		}
-}
+	}
 return IPACM_SUCCESS;
 }
 
@@ -774,6 +774,7 @@ static int tunnel_delete(struct ifinfomsg* ifi, int len, int type)
 		if (attrib[IFLA_IFNAME])
 		{
 			IPACMDBG("Tunnel Delete: ifname %s \n",(char*)RTA_DATA(attrib[IFLA_IFNAME]));
+#if defined(FEATURE_PMIPV6) || defined(FEATURE_IPOGRE)
 			if(strncmp(pConfig->pmip_details.tunnel_name, (char*)RTA_DATA(attrib[IFLA_IFNAME]), strlen(pConfig->pmip_details.tunnel_name)) == 0)
 			{
 				IPACMDBG("Tunnel name matched, Cleaning up\n");
@@ -800,6 +801,7 @@ static int tunnel_delete(struct ifinfomsg* ifi, int len, int type)
 					IPACM_EvtDispatcher::PostEvt(&evt_data);
 				}
 			}
+#endif
 		}
 	}
 	return IPACM_SUCCESS;
@@ -1469,14 +1471,16 @@ static int ipa_nl_decode_nlmsg
 				/* RTM_NEWLINK event with AF_BRIDGE family should be ignored in Android
 				 *    but this should be processed in case of MDM for Ehernet interface.
 				 */
-#ifdef FEATURE_EoGRE || FEATURE_PMIPV6 || FEATURE_IPoGRE
 				struct ifinfomsg *ifi2;
+#if defined(FEATURE_PMIPV6) || defined(FEATURE_IPOGRE)
 				if(msg_ptr->nl_link_info.metainfo.ifi_type == 778 || msg_ptr->nl_link_info.metainfo.ifi_type == 823 || msg_ptr->nl_link_info.metainfo.ifi_type == 769)
 				{//GRE tunnel
 						ifi2 = (struct ifinfomsg*) NLMSG_DATA(nlh);
 						tunnel_delete(ifi2, nlh->nlmsg_len,msg_ptr->nl_link_info.metainfo.ifi_type);
 						IPACMDBG("Tunnel Delete Done\n");
 				}
+#endif
+#ifdef FEATURE_EoGRE
 				if(msg_ptr->nl_link_info.metainfo.ifi_type == 1)
 				{
 					ifi2 = (struct ifinfomsg*) NLMSG_DATA(nlh);
@@ -1856,8 +1860,8 @@ static int ipa_nl_decode_nlmsg
 					IPACMDBG("GOT RTM_NEWROUTE event, br-wan enabled %d \n", IPACM_Iface::ipacmcfg->eth_wan_br_wan_enable);
 				}
 
-				if(strcmp(dev_name,"map-mape") == 0){
-					IPACMDBG_H(" Ignoring route on map-mape \n");
+				if(strcmp(dev_name,MAPE_IFACE_NAME) == 0){
+					IPACMDBG_H(" Ignoring route on %s \n",dev_name);
 					return IPACM_SUCCESS;
 				}
 				if(msg_ptr->nl_route_info.attr_info.param_mask & IPA_RTA_PARAM_DST)
@@ -2407,8 +2411,8 @@ process_v6:
 						IPACMERR("Error while getting interface name\n");
 						return IPACM_FAILURE;
 					}
-					if(strcmp(dev_name,"map-mape") == 0){
-						IPACMDBG_H(" Ignoring route on map-mape \n");
+					if(strcmp(dev_name,MAPE_IFACE_NAME) == 0){
+						IPACMDBG_H(" Ignoring route on %s \n",dev_name);
 						return IPACM_SUCCESS;
 					}
 
@@ -2450,8 +2454,8 @@ process_v6:
 						return IPACM_FAILURE;
 					}
 
-					if(strcmp(dev_name,"map-mape") == 0){
-						IPACMDBG_H(" Ignoring route on map-mape \n");
+					if(strcmp(dev_name,MAPE_IFACE_NAME) == 0){
+						IPACMDBG_H(" Ignoring route on %s \n",dev_name);
 						return IPACM_SUCCESS;
 					}
 
@@ -3171,8 +3175,8 @@ int ipa_nl_send_getroute(ipa_ip_type ip_type)
 				IPACM_NL_REPORT_ADDR( "gw", nl_route_info_get_route.attr_info.gateway_addr );
 				IPACMDBG("dev %s\n",dev_name );
 
-				if(strcmp(dev_name,"map-mape") == 0){
-					IPACMDBG_H(" Ignoring route on map-mape \n");
+				if(strcmp(dev_name,MAPE_IFACE_NAME) == 0){
+					IPACMDBG_H(" Ignoring route on %s  \n",dev_name);
 					free(buf);
 					close(nl_sock);
 					return IPACM_SUCCESS;
@@ -3218,8 +3222,8 @@ int ipa_nl_send_getroute(ipa_ip_type ip_type)
 					IPACMDBG_H("dev %s \n", dev_name);
 					IPACM_NL_REPORT_ADDR( "dstIP:\n", nl_route_info_get_route.attr_info.dst_addr );
 
-					if(strcmp(dev_name,"map-mape") == 0){
-						IPACMDBG_H(" Ignoring route on map-mape \n");
+					if(strcmp(dev_name,MAPE_IFACE_NAME) == 0){
+						IPACMDBG_H(" Ignoring route on %s \n",dev_name);
 						free(buf);
 						close(nl_sock);
 						return IPACM_SUCCESS;

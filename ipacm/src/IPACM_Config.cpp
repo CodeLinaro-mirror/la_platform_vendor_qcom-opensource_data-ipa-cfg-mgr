@@ -769,7 +769,7 @@ reread:
 		}
 	}
 
-	strlcpy(iface_table[mape_wan_iface_table_index].iface_name,"map-mape",strlen("map-mape")+1);
+	strlcpy(iface_table[mape_wan_iface_table_index].iface_name,MAPE_IFACE_NAME,strlen(MAPE_IFACE_NAME)+1);
 	IPACMDBG_H(" iface_name %s \n",iface_table[mape_wan_iface_table_index].iface_name);
 	iface_table[mape_wan_iface_table_index].if_cat = WAN_IF;
 	iface_table[mape_wan_iface_table_index].if_mode = ROUTER;

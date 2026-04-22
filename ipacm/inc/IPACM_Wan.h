@@ -117,6 +117,7 @@ struct MapRule {
 	std::vector<MapeFMR> fmr_rules;
 	uint32_t br_ipaddr[4];
 	uint8_t mac[IPA_MAC_ADDR_SIZE];
+	bool draft03;
 };
 
 class IPACM_Wan;

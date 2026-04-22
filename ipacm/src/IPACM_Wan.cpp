@@ -70,6 +70,7 @@
 #define GRE_PROTOCOL_TYPE_v6_WITH_KEY 0x200086DD
 #define GRE_PROTOCOL_TYPE_v4_WITH_KEY 0x20000800
 
+#define DRAFT03_ENABLE_BIT 0x80 /* First bit will represent whether draft03 is enabled or not for mape */
 
 const uint8_t IPACM_Wan::v4_gre_header[] = {
 	0x45, 0x00, 0x00, 0x00,
@@ -12127,6 +12128,9 @@ int IPACM_Wan::handle_mape_wan_fmr_hdr_init(uint8_t *mac_addr, MapeFMR* fmr_rule
 	pHeaderDescriptor->hdr[0].hdr[48] = fmr_rule->ipv4prefixlen;
 	pHeaderDescriptor->hdr[0].hdr[49] = fmr_rule->ipv6prefixlen;
 	pHeaderDescriptor->hdr[0].hdr[50] = fmr_rule->psid_len;
+	if (IPACM_Wan::mape_rules.draft03) {
+		pHeaderDescriptor->hdr[0].hdr[51] = DRAFT03_ENABLE_BIT;
+	}
 
 	if(sCopyHeader.is_eth2_ofst_valid == false)
 	{
@@ -15200,7 +15204,7 @@ void IPACM_Wan::read_from_mape_rules_file(void)
     int file_rule_count = 0;
     int bmr_rule = 0;
     struct in6_addr ip6_addr;
-    bool br_parsed = false;
+    bool br_parsed = false,draft03_parsed = false;
 
     IPACM_Wan::mape_rules.fmr_rules.clear();
     memset(IPACM_Wan::mape_rules.br_ipaddr, 0, sizeof(IPACM_Wan::mape_rules.br_ipaddr));
@@ -15219,6 +15223,15 @@ void IPACM_Wan::read_from_mape_rules_file(void)
             char *value = strchr(line, '=');
             if (value && isdigit(*(value + 1))) bmr_rule = atoi(value + 1);
         }
+
+	if (strstr(line, "draft03=1") != NULL) {
+		if (!draft03_parsed) {
+			IPACM_Wan::mape_rules.draft03 = 1;
+			IPACMDBG_H("draft03 %d \n",IPACM_Wan::mape_rules.draft03);
+	                draft03_parsed = true;
+		}
+		continue;
+	}
     }
 
     if (file_rule_count > 0) {

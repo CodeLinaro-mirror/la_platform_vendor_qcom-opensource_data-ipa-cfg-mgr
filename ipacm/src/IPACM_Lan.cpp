@@ -12248,6 +12248,27 @@ fail:
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
 			if (get_client_memptr(eth_client, i)->lan_stats_idx != -1)
 			{
+				IPACMDBG_H("Clearing the Q6 UL flt rules as IPA_LINK_DOWN\n");
+				if (IPACM_Iface::ipacmcfg->ipacm_lan_stats_enable == true)
+				{
+					if (get_client_memptr(eth_client, i)->ipv4_ul_rules_set == true)
+					{
+						if (delete_uplink_filter_rule_per_client(IPA_IP_v4, get_client_memptr(eth_client, i)->mac))
+						{
+							IPACMERR("unbale to delete uplink v4 filter rules for index:%d\n", i);
+							return IPACM_FAILURE;
+						}
+					}
+
+					if (get_client_memptr(eth_client, i)->ipv6_ul_rules_set == true)
+					{
+						if (delete_uplink_filter_rule_per_client(IPA_IP_v6, get_client_memptr(eth_client, i)->mac))
+						{
+							IPACMERR("unbale to delete uplink v6 filter rules for index:%d\n", i);
+							return IPACM_FAILURE;
+						}
+					}
+				}
 				/* Clear the lan client info. */
 				client_info = (struct wan_ioctl_lan_client_info *)malloc(sizeof(struct wan_ioctl_lan_client_info));
 				if (client_info == NULL)
@@ -14868,6 +14889,7 @@ int IPACM_Lan::install_uplink_filter_rule_per_client_v2
 						((struct ipa_flt_rule_add_v2 *)pFilteringTable->rules)[i].flt_rule_hdl;
 				}
 				get_client_memptr(eth_client, clnt_indx)->ipv4_ul_rules_set = true;
+				num_wan_ul_fl_rule_v4[idx/2] = pFilteringTable->num_rules;
 			}
 			else if(iptype == IPA_IP_v6)
 			{
@@ -14877,6 +14899,7 @@ int IPACM_Lan::install_uplink_filter_rule_per_client_v2
 						((struct ipa_flt_rule_add_v2 *)pFilteringTable->rules)[i].flt_rule_hdl;
 				}
 				get_client_memptr(eth_client, clnt_indx)->ipv6_ul_rules_set = true;
+				num_wan_ul_fl_rule_v6[idx/2] = pFilteringTable->num_rules;
 			}
 			else
 			{

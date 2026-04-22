@@ -410,6 +410,7 @@ public:
 	/* Store private subnet configuration from XML file */
 	ipa_private_subnet private_subnet_table[IPA_MAX_PRIVATE_SUBNET_ENTRIES + IPA_MAX_MTU_ENTRIES];
 
+
 #ifdef FEATURE_DUAL_BACKHAUL
 	/* Store the second backhaul info. Fetch gateway,enabled, and netdev details from XML file */
 	ipa_dual_backhaul_info second_backhaul_info;
@@ -745,6 +746,7 @@ public:
 	uint16_t pppoe_get_session_id(const char *pppoe_dev_name);
 	void get_pppoe_session_info(const char *pppoe_dev_name, const char *phy_dev_name = NULL, uint16_t vlan_id = 0);
 	void update_pppoe_session_info(const char *pppoe_dev_name, char *params[MAX_PPPOE_PARAM_CNT]);
+	int get_pppoe_vlan_pcp( uint16_t *vlan_id, uint8_t *pcp);
 	int get_pppoe_vlan_id(char *pppoe_dev_name, uint16_t *vlan_id);
 	int get_pppoe_indx(char *pppoe_dev_name);
 	int get_phy_name_from_bridge_iface(const char *p_dev_name, char phy_name[ETH_PHY_IFACE_LEN]);

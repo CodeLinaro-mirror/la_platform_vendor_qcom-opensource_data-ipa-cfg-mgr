@@ -738,6 +738,7 @@ struct vlan_iface_info
 	uint8_t vlan_client_mac[6];
 	uint32_t vlan_client_ipv6_addr[4];
 	uint16_t vlan_interface_index;
+	uint8_t priority;
 };
 
 struct l2tp_vlan_mapping_info

@@ -1132,6 +1132,62 @@ static int get_macsec_lower_interface_name(struct ipa_macsec_map *macsecMap, cha
 	return IPACM_SUCCESS;
 }
 
+/* Get vlan priority */
+static int ipa_nl_get_vlan_priority
+(
+	 ipa_vlan_iface_info   *vlan_info
+	 )
+{
+	char cmd[200] = {0};
+	FILE *fp = NULL;
+	uint32_t priority = 0;
+
+	/* Explicitly default priority to 0; updated only if PCP is configured.
+	 * This ensures the caller always gets a valid priority regardless of
+	 * whether the function succeeds or fails. */
+	vlan_info->priority = 0;
+
+	/* Validate interface name to prevent shell command injection.
+	 * Linux interface names must only contain alphanumeric characters,
+	 * '-', '.', or '_'. Any other character is rejected with an error.
+	 * priority is already set to 0 above, so the caller is safe on failure. */
+	for (int i = 0; vlan_info->name[i] != '\0'; i++)
+	{
+		char c = vlan_info->name[i];
+		if (!((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
+		      (c >= '0' && c <= '9') || c == '-' || c == '.' || c == '_'))
+		{
+			IPACMERR("Unsafe char in iface name '%s', aborting PCP lookup\n",
+				vlan_info->name);
+			return IPACM_FAILURE;
+		}
+	}
+
+	snprintf(cmd, 200, "ip -d -o link show dev %s | grep \"egress-qos-map\" | sed -n \"s/^.*egress-qos-map { [0-9]:\\s*\\(\\S*\\).*$/\\1/p\" > /tmp/pcp.txt", vlan_info->name);
+	system(cmd);
+	fp = fopen("/tmp/pcp.txt", "r");
+	if (!fp) {
+		IPACMERR("can't open /tmp/pcp.txt\n");
+		return IPACM_FAILURE;
+	}
+
+	if(fscanf(fp, "%d", &priority) > 0)
+	{
+		if(!(priority > 7))
+			vlan_info->priority = (uint8_t)priority;
+	}
+	else {
+		IPACMERR("Failed to read priority from /tmp/pcp.txt\n");
+		fclose(fp); 	// ← must close before returning
+		remove("/tmp/pcp.txt");
+		return IPACM_FAILURE;
+	}
+	IPACMDBG("Vlan ID %d, Priority %d\n", vlan_info->vlan_id, vlan_info->priority);
+	fclose(fp);
+	remove("/tmp/pcp.txt");
+	return IPACM_SUCCESS;
+}
+
 /* decode the ipa nl-message */
 static int ipa_nl_decode_nlmsg
 (
@@ -1241,6 +1297,13 @@ static int ipa_nl_decode_nlmsg
 					strlcpy(vlan_info.name, msg_ptr->nl_link_info.name, sizeof(vlan_info.name));
 					vlan_info.vlan_id = msg_ptr->nl_link_info.vlan_id;
 					vlan_info.vlan_interface_index = msg_ptr->nl_link_info.metainfo.ifi_index;
+
+					if(ipa_nl_get_vlan_priority(&vlan_info) != IPACM_SUCCESS)
+						IPACMDBG_H("Failed to fetch VLAN PCP");
+
+					IPACMDBG("Add vlan<->interface details with vlan: %d interface: %s interface index %d priority %d\n",
+						vlan_info.vlan_id, vlan_info.name, vlan_info.vlan_interface_index, vlan_info.priority);
+					IPACM_Iface::ipacmcfg->add_vlan_iface(&vlan_info);
 				}
 
 				if (msg_ptr->nl_link_info.link_type == IPA_LINK_TYPE_MACSEC) {
@@ -1510,6 +1573,9 @@ static int ipa_nl_decode_nlmsg
 					strlcpy(vlan_info.name, msg_ptr->nl_link_info.name, sizeof(vlan_info.name));
 					vlan_info.vlan_id = msg_ptr->nl_link_info.vlan_id;
 					vlan_info.vlan_interface_index = msg_ptr->nl_link_info.metainfo.ifi_index;
+
+					if(ipa_nl_get_vlan_priority(&vlan_info) != IPACM_SUCCESS)
+						IPACMDBG_H("Failed to fetch VLAN PCP");
 				}
 
 				if (msg_ptr->nl_link_info.link_type == IPA_LINK_TYPE_MACSEC) {

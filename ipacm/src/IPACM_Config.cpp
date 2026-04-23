@@ -26,11 +26,9 @@
  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * Changes from Qualcomm Technologies, Inc. are provided under the following license:
- *
- * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+ * Changes from Qualcomm Innovation Center are provided under the following license:
+ * Copyright (c) 2022-2025 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
- *
  */
 /*!
 		@file
@@ -170,6 +168,8 @@ const char *ipacm_event_name[] = {
 #ifdef FEATURE_EoGRE
 	__stringify(IPA_HANDLE_EoGRE_UP),                      /* Handle eogre enable event. */
 	__stringify(IPA_HANDLE_EoGRE_DOWN),                    /* Handle eogre disable event. */
+	__stringify(IPA_WAN_HANDLE_EoGRE_UP),                  /* Handle eogre enable event for WAN. */
+	__stringify(IPA_WAN_HANDLE_EoGRE_DOWN),                /* Handle eogre disable event for WAN. */
 #endif
 	__stringify(IPA_DSCP_PCP_CONFIG_CHANGE_EVENT),         /* NULL */
 	__stringify(IPA_HANDLE_MACSEC_ADD),                    /* Handle macsec map add event */

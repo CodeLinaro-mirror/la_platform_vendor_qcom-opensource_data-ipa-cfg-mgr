@@ -372,6 +372,8 @@ typedef enum
 #ifdef FEATURE_EoGRE
 	IPA_HANDLE_EoGRE_UP,                      /* ipa_ipgre_info */
 	IPA_HANDLE_EoGRE_DOWN,                    /* ipa_ipgre_info */
+	IPA_WAN_HANDLE_EoGRE_UP,
+	IPA_WAN_HANDLE_EoGRE_DOWN,
 #endif
 	IPA_DSCP_PCP_CONFIG_CHANGE_EVENT,         /* ipacm_event_change_dscp_pcp */
 	IPA_HANDLE_MACSEC_ADD,                    /* ipa_macsec_map */

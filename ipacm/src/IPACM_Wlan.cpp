@@ -295,6 +295,7 @@ void IPACM_Wlan::event_callback(ipa_cm_event_id event, void *param)
 				IPACM_Iface::ipacmcfg->DelNatIfaces(dev_name); // delete NAT-iface
 				IPACM_Wlan::total_num_wifi_clients = (IPACM_Wlan::total_num_wifi_clients) - \
                                                                      (num_wifi_client);
+				IPACM_Iface::ipacmcfg->iface_table[ipa_if_num].is_wlan_if_vlan = false;
 
 				return;
 			}

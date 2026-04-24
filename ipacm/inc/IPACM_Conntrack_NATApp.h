@@ -725,6 +725,7 @@ private:
 	uint32_t pub_ip_addr;
 	uint32_t pub_ip_addr_pre;
 	uint32_t nat_table_hdl;
+	uint8_t pdn_count_sta;
 
 	int curCnt, max_entries;
 

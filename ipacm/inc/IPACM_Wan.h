@@ -380,8 +380,8 @@ public:
 #ifdef FEATURE_VLAN_MPDN
 	static struct ipacm_pdn_flt_rule pdn_flt_rule_v4[IPA_MAX_FLT_RULE];
 	static struct ipacm_pdn_flt_rule pdn_flt_rule_v6[IPA_MAX_FLT_RULE];
-	static int wlan_v4_vlan_index;
-	static int wlan_v6_vlan_index;
+	static int wlan_v4_vlan_index[IPA_MAX_WLAN_STA_IFACES];
+	static int wlan_v6_vlan_index[IPA_MAX_WLAN_STA_IFACES];
 	static int eth_sta_v4_vlan_index;
 	static int eth_sta_v6_vlan_index;
 #endif

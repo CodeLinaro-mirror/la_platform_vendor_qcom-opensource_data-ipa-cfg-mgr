@@ -82,7 +82,7 @@ NatApp::NatApp()
 
 	nat_table_hdl = 0;
 	pub_ip_addr = 0;
-
+	pdn_count_sta = 0;
 	curCnt = 0;
 
 	pALGPorts = NULL;
@@ -213,13 +213,17 @@ int NatApp::AddPdn(uint32_t pub_ip, uint8_t mux_id, bool is_sta, bool ip_pass)
 		if(!is_sta)
 		{
 			entry.src_metadata = GenerateMetdata(mux_id);
-			/* Modify PDN 1 so it will hold the mux ID in the src metadata field */
-			pdn_index = 1;
+			/* WWAN PDNs start after STA-reserved slots 0..(IPA_MAX_WLAN_STA_IFACES-1) */
+			pdn_index = IPA_MAX_WLAN_STA_IFACES;
 		}
 		else
 		{
-			/* Modify PDN 0 so it will hold the mux ID in the src metadata field */
-			pdn_index = 0;
+			if(pdn_count_sta >= IPA_MAX_WLAN_STA_IFACES)
+			{
+				IPACMERR("Max STA PDNs (%d) already allocated\n", IPA_MAX_WLAN_STA_IFACES);
+				return IPACM_FAILURE;
+			}
+			pdn_index = pdn_count_sta;
 			entry.src_metadata = 0;
 			entry.is_sta = true;
 		}
@@ -230,12 +234,23 @@ int NatApp::AddPdn(uint32_t pub_ip, uint8_t mux_id, bool is_sta, bool ip_pass)
 			IPACMERR("unable to modify PDN %d entry Error:%d\n", pdn_index, ret);
 			return ret;
 		}
+		if(is_sta)
+		{
+			pdn_count_sta++;
+			IPACMDBG_H("STA PDN at index %d, pdn_count_sta=%d\n", pdn_index, pdn_count_sta);
+		}
 	}
 	else
 	{
 		if(is_sta)
 		{
-			pdn_index = 0;
+			if(pdn_count_sta >= IPA_MAX_WLAN_STA_IFACES)
+			{
+				IPACMERR("Max STA PDNs (%d) already allocated, rejecting ip 0x%X\n",
+					IPA_MAX_WLAN_STA_IFACES, pub_ip);
+				return IPACM_FAILURE;
+			}
+			pdn_index = pdn_count_sta;
 			entry.public_ip = pub_ip;
 			entry.src_metadata = 0;
 			entry.is_sta = true;
@@ -243,9 +258,13 @@ int NatApp::AddPdn(uint32_t pub_ip, uint8_t mux_id, bool is_sta, bool ip_pass)
 
 			if(ret)
 			{
-				IPACMERR("Unable to modify PDN 0 entry Error: %d\n", ret);
+				IPACMERR("Unable to allocate PDN %d for STA ip 0x%X Error: %d\n",
+					pdn_index, pub_ip, ret);
 				return ret;
 			}
+			pdn_count_sta++;
+			IPACMDBG_H("STA PDN allocated at index %d, pdn_count_sta=%d\n",
+				pdn_index, pdn_count_sta);
 		}
 		else
 		{
@@ -434,6 +453,7 @@ void NatApp::Reset()
 
 	nat_table_hdl = 0;
 	pub_ip_addr = 0;
+	pdn_count_sta = 0;
 	/* NAT tbl deleted, reset enabled bit */
 	for(cnt = 0; cnt < max_entries; cnt++)
 	{
@@ -479,6 +499,12 @@ int NatApp::RemovePdn(uint32_t pub_ip)
 	{
 		IPACMERR(" couldn't deallocate PDN in index %d\n",pdn_index);
 		return IPACM_FAILURE;
+	}
+
+	if(pdn_index < IPA_MAX_WLAN_STA_IFACES && pdn_count_sta > 0)
+	{
+		pdn_count_sta--;
+		IPACMDBG_H("STA PDN index %d removed, pdn_count_sta=%d\n", pdn_index, pdn_count_sta);
 	}
 
 	ret = ipa_nat_get_pdn_count(&pdn_cnt);

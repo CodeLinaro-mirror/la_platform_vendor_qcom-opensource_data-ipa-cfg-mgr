@@ -198,6 +198,9 @@ extern "C"
 
 extern bool ipacm_restarted;
 
+#ifndef IPA_MAX_WLAN_STA_IFACES
+#define IPA_MAX_WLAN_STA_IFACES 2
+#endif
 /*===========================================================================
 										 GLOBAL DEFINITIONS AND DECLARATIONS
 ===========================================================================*/

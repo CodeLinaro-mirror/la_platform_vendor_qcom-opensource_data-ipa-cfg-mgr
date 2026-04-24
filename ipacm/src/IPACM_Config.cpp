@@ -497,6 +497,26 @@ int IPACM_Config::Init(void)
 	}
 	IPACM_LOG(IPACM_LOG_DEBUG, "max_file_size %lld\n", max_file_size);
 
+	if(cfg->ipacm_log_level >= IPACM_LOG_DISABLED && cfg->ipacm_log_level < IPACM_LOG_LVL_MAX)
+	{
+		IPACM_LOG(IPACM_LOG_INFO, "ipacm log level Set to %d\n", cfg->ipacm_log_level);
+		ipacm_log_level = cfg->ipacm_log_level;
+	}
+	else {
+		IPACM_LOG(IPACM_LOG_ERR, "Invalid log level provided:%d, Setting default log level\n", cfg->ipacm_log_level);
+		ipacm_log_level = IPACM_DEF_LOG_LEVEL;
+	}
+
+	if(cfg->ipacm_syslog_level >= IPACM_SYSLOG_DISABLED && cfg->ipacm_syslog_level < IPACM_SYSLOG_LVL_MAX)
+	{
+		IPACM_LOG(IPACM_LOG_DEBUG, "ipacm syslog level Set to %d\n", cfg->ipacm_syslog_level);
+		ipacm_syslog_level = cfg->ipacm_syslog_level;
+	}
+	else{
+		IPACM_LOG(IPACM_LOG_ERR, "Invalid Syslog level provided:%d, Setting default log level\n", cfg->ipacm_syslog_level);
+		ipacm_syslog_level = IPACM_DEF_SYSLOG_LEVEL;
+ 	}
+
 	log_init();
 
 	/* Construct IPACM Iface table */

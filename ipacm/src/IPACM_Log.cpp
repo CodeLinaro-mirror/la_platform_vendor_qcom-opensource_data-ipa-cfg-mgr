@@ -67,6 +67,9 @@ int64_t max_filesize = 0;
 int log_init_done = 0;
 pthread_mutex_t file_lock;
 
+uint8_t ipacm_global_log_level    = IPACM_DEF_LOG_LEVEL;
+uint8_t ipacm_global_syslog_level = IPACM_DEF_SYSLOG_LEVEL;
+
 #define FILE_LOCK()   \
     do \
     { \
@@ -230,26 +233,21 @@ int log_init() {
 		printf("Logging already initiated, return\n");
 		return 0;
 	}
-	if(config->ipacm_debug_logs_enable == 1)
+	if(config->ipacm_log_level >= IPACM_LOG_DISABLED && config->ipacm_log_level < IPACM_LOG_LVL_MAX)
 	{
-		ipacm_global_log_level = IPACM_LOG_DEBUG;
-	}
-	else if (config->ipacm_debug_logs_enable == 0)
-	{
-		ipacm_global_log_level = IPACM_LOG_INFO;
+		ipacm_global_log_level = config->ipacm_log_level;
 	}
 	else
 	{
 		printf("Logging level invalid\n");
 	}
 
-	if(config->ipacm_syslog_enable == 1 || config->ipacm_syslog_enable == 0)
+	if(config->ipacm_syslog_level >= IPACM_SYSLOG_DISABLED && config->ipacm_syslog_level < IPACM_SYSLOG_LVL_MAX)
 	{
-		ipacm_syslog_enabled = config->ipacm_syslog_enable;
+		ipacm_global_syslog_level = config->ipacm_syslog_level;
 	}
 	else{
 		printf("Syslog Enable Set value is invalid\n");
-		ipacm_syslog_enabled = IPACM_DEF_SYSLOG_ENABLE;
  	}
 
 	if(access(dump_file, F_OK) == 0)

@@ -21107,6 +21107,7 @@ int IPACM_Lan::delete_icmp_filter_rule(
 		}
 
 		if (iptype == IPA_IP_v4) {
+			/* set icmp_flt_rule_hdl based on iface category */
 			if (ipa_if_cate == WLAN_IF) {
 				for(wlan_pipe_index=0;wlan_pipe_index<MAX_SUPPORTED_WLAN_PIPES;wlan_pipe_index++){
 					if(IPACM_Wlan::wlan_ap_dflt_rules[wlan_pipe_index].src_pipe == rx_prop->rx[idx].src_pipe){
@@ -21117,28 +21118,28 @@ int IPACM_Lan::delete_icmp_filter_rule(
 			else {
 				// assign handle array always, since it's statically allocated
 				icmp_flt_rule_hdl = ipv4_icmp_flt_rule_hdl[j];
-				IPACMDBG_H("Will try to delete icmp handle %d\n", icmp_flt_rule_hdl[0]);
-				// check for valid handle before use
-				if (icmp_flt_rule_hdl == NULL || icmp_flt_rule_hdl[0] == 0) {
-					IPACMERR("NULL v4 icmp filter rule hdl passed or, rules deleted already...\n");
-					return IPACM_SUCCESS;
-				}
+			}
+			IPACMDBG_H("Will try to delete icmp handle %d\n", icmp_flt_rule_hdl[0]);
+			// check for valid handle before use
+			if (icmp_flt_rule_hdl == NULL || icmp_flt_rule_hdl[0] == 0) {
+				IPACMERR("NULL v4 icmp filter rule hdl passed or, rules deleted already...\n");
+				return IPACM_SUCCESS;
+			}
 
-				IPACMDBG_H("Attempting to delete v4 icmp filter rule.\n");
-				if (m_filtering.DeleteFilteringHdls(
-						icmp_flt_rule_hdl, IPA_IP_v4, NUM_IPV4_ICMP_FLT_RULE) == true) {
-					IPACMDBG_H("Deleted v4 icmp filter rule successfully.\n");
-					IPACM_Iface::ipacmcfg->decreaseFltRuleCount(
-						rx_prop->rx[idx].src_pipe, IPA_IP_v4, NUM_IPV4_ICMP_FLT_RULE);
-					memset(
-						icmp_flt_rule_hdl,
-						0,
-						sizeof(uint32_t) * NUM_IPV4_ICMP_FLT_RULE);
-					ipv4_icmp_flt_rule_hdl[j][0] = 0;
-				} else {
-					IPACMERR("Error deleting v4 icmp filter rule...\n");
-					return IPACM_FAILURE;
-				}
+			IPACMDBG_H("Attempting to delete v4 icmp filter rule.\n");
+			if (m_filtering.DeleteFilteringHdls(
+				icmp_flt_rule_hdl, IPA_IP_v4, NUM_IPV4_ICMP_FLT_RULE) == true) {
+				IPACMDBG_H("Deleted v4 icmp filter rule successfully.\n");
+				IPACM_Iface::ipacmcfg->decreaseFltRuleCount(
+					rx_prop->rx[idx].src_pipe, IPA_IP_v4, NUM_IPV4_ICMP_FLT_RULE);
+				memset(
+					icmp_flt_rule_hdl,
+					0,
+					sizeof(uint32_t) * NUM_IPV4_ICMP_FLT_RULE);
+				ipv4_icmp_flt_rule_hdl[j][0] = 0;
+			} else {
+				IPACMERR("Error deleting v4 icmp filter rule...\n");
+				return IPACM_FAILURE;
 			}
 		} else { /* iptype == IPA_IP_v6 */
 			if (ipa_if_cate == WLAN_IF) {

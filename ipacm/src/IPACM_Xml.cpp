@@ -636,30 +636,34 @@ static int ipacm_cfg_xml_parse_tree
 							}
 						}
 				}
-				else if (0 == IPACM_util_icmp_string((char*)xml_node->name, IPACM_DEBUG_LEVEL_LOG_ENABLE_TAG))
+				else if (0 == IPACM_util_icmp_string((char*)xml_node->name, IPACM_LOG_LEVEL_TAG))
 				{
 					IPACM_LOG(IPACM_LOG_DEBUG, "inside ipacm logging level tag\n");
 					content = IPACM_read_content_element(xml_node);
+					config->ipacm_log_level = 0;
+
 					if (content!= NULL)
 					{
 						if(atoi(content)!=0)
 						{
-							config->ipacm_debug_logs_enable = atoi(content);
+							config->ipacm_log_level = atoi(content);
 						}
-						IPACM_LOG(IPACM_LOG_DEBUG, "IPACMDebugLogLevel %u \n",config->ipacm_debug_logs_enable);
+						IPACM_LOG(IPACM_LOG_DEBUG, "IPACMLogLevel %u \n",config->ipacm_log_level);
 					}
 				}
-				else if (0 == IPACM_util_icmp_string((char*)xml_node->name, IPACM_SYSLOG_ENABLE_TAG))
+				else if (0 == IPACM_util_icmp_string((char*)xml_node->name, IPACM_SYSLOG_LEVEL_TAG))
 				{
-					IPACM_LOG(IPACM_LOG_DEBUG, "inside ipacm syslog enable tag\n");
+					IPACM_LOG(IPACM_LOG_DEBUG, "inside ipacm syslog level tag\n");
 					content = IPACM_read_content_element(xml_node);
+					config->ipacm_syslog_level = 0;
+
 					if (content!= NULL)
 					{
 						if(atoi(content)!=0)
 						{
-							config->ipacm_syslog_enable = atoi(content);
+							config->ipacm_syslog_level = atoi(content);
 						}
-						IPACM_LOG(IPACM_LOG_DEBUG, "IPACMSyslogEnable %d \n",config->ipacm_syslog_enable);
+						IPACM_LOG(IPACM_LOG_DEBUG, "IPACMSyslogLevel %d \n",config->ipacm_syslog_level);
 					}
 				}
 				else if (IPACM_util_icmp_string((char*)xml_node->name, IPACM_MPDN_Enable_TAG) == 0)

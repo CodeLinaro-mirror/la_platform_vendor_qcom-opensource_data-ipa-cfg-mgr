@@ -193,10 +193,10 @@
 			<IPACMfileQuota>30</IPACMfileQuota>
 			<IPACMfilevar>0</IPACMfilevar>
 			<!-- 0 = disable file logging. 20971520 = enable file (size: 20MB) logging. -->
-			<IPACMDebugLogLevel>1</IPACMDebugLogLevel>
-			<!-- 0 = Hgh level logs(ERR,WARN,INFO), 1 = low level logs(ERR,WARN,INFO,DEBUG) -->
-			<IPACMSyslogEnable>1</IPACMSyslogEnable>
-			<!-- 0 = syslog disabled, 1 = 	enable redirect logs to syslog  -->
+			<IPACMLogLevel>8</IPACMLogLevel>
+			<!-- logging levels 4 = ERR, 6 = ERR+WARN, 7 = ERR+WARN+INFO, 8 = ERR+WARN+INFO+DEBUG, 0 = disabled -->
+			<IPACMSyslogLevel>7</IPACMSyslogLevel>
+			<!-- Syslog levels 4 = ERR, 6 = ERR+NOTICE, 7 = ERR+NOTICE+INFO, 8 = ERR+NOTICE+INFO+DEBUG, 0 = disabled -->
         </IPACMLog>
 	</IPACM>
 </system>

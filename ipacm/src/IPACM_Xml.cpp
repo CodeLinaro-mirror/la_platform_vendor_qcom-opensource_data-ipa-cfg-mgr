@@ -742,6 +742,36 @@ static int ipacm_cfg_xml_parse_tree
 							}
 						}
 				}
+				else if (0 == IPACM_util_icmp_string((char*)xml_node->name, IPACM_LOG_LEVEL_TAG))
+				{
+					IPACM_LOG(IPACM_LOG_DEBUG, "inside ipacm logging level tag\n");
+					content = IPACM_read_content_element(xml_node);
+					config->ipacm_log_level = 0;
+
+					if (content!= NULL)
+					{
+						if(atoi(content)!=0)
+						{
+							config->ipacm_log_level = atoi(content);
+						}
+						IPACM_LOG(IPACM_LOG_DEBUG, "IPACMLogLevel %u \n",config->ipacm_log_level);
+					}
+				}
+				else if (0 == IPACM_util_icmp_string((char*)xml_node->name, IPACM_SYSLOG_LEVEL_TAG))
+				{
+					IPACM_LOG(IPACM_LOG_DEBUG, "inside ipacm syslog level tag\n");
+					content = IPACM_read_content_element(xml_node);
+					config->ipacm_syslog_level = 0;
+
+					if (content!= NULL)
+					{
+						if(atoi(content)!=0)
+						{
+							config->ipacm_syslog_level = atoi(content);
+						}
+						IPACM_LOG(IPACM_LOG_DEBUG, "IPACMSyslogLevel %d \n",config->ipacm_syslog_level);
+					}
+				}
 				else if (IPACM_util_icmp_string((char*)xml_node->name, IPACM_MPDN_Enable_TAG) == 0)
 				{
 						IPACM_LOG(IPACM_LOG_INFO, "inside enable MPDN\n");

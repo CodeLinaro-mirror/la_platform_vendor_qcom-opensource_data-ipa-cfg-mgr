@@ -16993,6 +16993,8 @@ ipa_hdr_proc_type IPACM_Lan::eth_bridge_get_hdr_proc_type(ipa_hdr_l2_type t1,
 	ipa_hdr_l2_type t2,
 	struct ipa_eth_II_to_eth_II_ex_procparams &generic_params)
 {
+	bool use_dst_only = (IPACM_Iface::ipacmcfg->GetIPAVer() >= IPA_HW_v7_0);
+
 	switch(t1) {
 	case IPA_HDR_L2_ETHERNET_II:
 		if(t2 == IPA_HDR_L2_ETHERNET_II)
@@ -17000,8 +17002,10 @@ ipa_hdr_proc_type IPACM_Lan::eth_bridge_get_hdr_proc_type(ipa_hdr_l2_type t1,
 		if(t2 == IPA_HDR_L2_802_3)
 			return IPA_HDR_PROC_ETHII_TO_802_3;
 		if(t2 == IPA_HDR_L2_802_1Q) {
-			generic_params.input_ethhdr_negative_offset = 14;
 			generic_params.output_ethhdr_negative_offset = 18;
+			if (use_dst_only)
+				return IPA_HDR_PROC_ETHII_TO_ETHII_EX_DST;
+			generic_params.input_ethhdr_negative_offset = 14;
 			return IPA_HDR_PROC_ETHII_TO_ETHII_EX;
 		}
 
@@ -17009,8 +17013,10 @@ ipa_hdr_proc_type IPACM_Lan::eth_bridge_get_hdr_proc_type(ipa_hdr_l2_type t1,
 		if(t2 == IPA_HDR_L2_ETHERNET_II_AST)
 			return IPA_HDR_PROC_ETHII_TO_ETHII;
 		if (t2 == IPA_HDR_L2_802_1Q_AST) {
-			generic_params.input_ethhdr_negative_offset = 14;
 			generic_params.output_ethhdr_negative_offset = 18;
+			if (use_dst_only)
+				return IPA_HDR_PROC_ETHII_TO_ETHII_EX_DST;
+			generic_params.input_ethhdr_negative_offset = 14;
 			return IPA_HDR_PROC_ETHII_TO_ETHII_EX;
 		}
 #endif
@@ -17023,32 +17029,42 @@ ipa_hdr_proc_type IPACM_Lan::eth_bridge_get_hdr_proc_type(ipa_hdr_l2_type t1,
 		break;
 	case IPA_HDR_L2_802_1Q:
 		if(t2 == IPA_HDR_L2_802_1Q || t2 == IPA_HDR_L2_802_1Q_AST) {
-			generic_params.input_ethhdr_negative_offset = 18;
 			generic_params.output_ethhdr_negative_offset = 18;
+			if (use_dst_only)
+				return IPA_HDR_PROC_ETHII_TO_ETHII_EX_DST;
+			generic_params.input_ethhdr_negative_offset = 18;
 			return IPA_HDR_PROC_ETHII_TO_ETHII_EX;
 		}
 		if (t2 == IPA_HDR_L2_ETHERNET_II || t2 == IPA_HDR_L2_ETHERNET_II_AST) {
-			generic_params.input_ethhdr_negative_offset = 18;
 			generic_params.output_ethhdr_negative_offset = 14;
+			if (use_dst_only)
+				return IPA_HDR_PROC_ETHII_TO_ETHII_EX_DST;
+			generic_params.input_ethhdr_negative_offset = 18;
 			return IPA_HDR_PROC_ETHII_TO_ETHII_EX;
 		}
 		break;
 	case IPA_HDR_L2_ETHERNET_II_AST:
 		if(t2 == IPA_HDR_L2_ETHERNET_II || t2 == IPA_HDR_L2_ETHERNET_II_AST) {
-			generic_params.input_ethhdr_negative_offset = 14;
 			generic_params.output_ethhdr_negative_offset = 14;
+			if (use_dst_only)
+				return IPA_HDR_PROC_ETHII_TO_ETHII_EX_DST;
+			generic_params.input_ethhdr_negative_offset = 14;
 			return IPA_HDR_PROC_ETHII_TO_ETHII_EX;
 		}
 		else if(t2 == IPA_HDR_L2_802_1Q_AST){
-			generic_params.input_ethhdr_negative_offset = 14;
 			generic_params.output_ethhdr_negative_offset = 18;
+			if (use_dst_only)
+				return IPA_HDR_PROC_ETHII_TO_ETHII_EX_DST;
+			generic_params.input_ethhdr_negative_offset = 14;
 			return IPA_HDR_PROC_ETHII_TO_ETHII_EX;
 		}
 		break;
 	case IPA_HDR_L2_802_1Q_AST:
 		if (t2 == IPA_HDR_L2_ETHERNET_II || t2 == IPA_HDR_L2_ETHERNET_II_AST) {
-			generic_params.input_ethhdr_negative_offset = 18;
 			generic_params.output_ethhdr_negative_offset = 14;
+			if (use_dst_only)
+				return IPA_HDR_PROC_ETHII_TO_ETHII_EX_DST;
+			generic_params.input_ethhdr_negative_offset = 18;
 			return IPA_HDR_PROC_ETHII_TO_ETHII_EX;
 		}
 		break;

@@ -34,6 +34,17 @@ AC_ARG_WITH(ipanat-headers,
          [Specify the location of the ipanat headers]),
       [CPPFLAGS="$CPPFLAGS -idirafter $withval"])
 
+AC_ARG_WITH([dltlogging],
+        AC_HELP_STRING([--with-dltlogging], [with DLT logging enabled]))
+
+AM_CONDITIONAL(USE_DLT, test "x${with_dltlogging}" = "xyes")
+
+if (test "x${with_dltlogging}" = "xyes"); then
+        PKG_CHECK_MODULES([DLTLOG], [automotive-dlt])
+        AC_SUBST([DLTLOG_CFLAGS])
+        AC_SUBST([DLTLOG_LIBS])
+fi
+
 AC_ARG_WITH([glib],
       AC_HELP_STRING([--with-glib],
          [enable glib, building HLOS systems which use glib]))

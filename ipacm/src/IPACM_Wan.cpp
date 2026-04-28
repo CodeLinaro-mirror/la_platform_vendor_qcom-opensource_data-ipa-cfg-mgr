@@ -13134,14 +13134,26 @@ int IPACM_Wan::handle_wan_client_route_rule(uint8_t *mac_addr, ipa_ip_type iptyp
 					IPACMDBG_H("v4 rt_rule_entry->rule.hdr_hdl_v4 %x\n", rt_rule_entry->rule.hdr_hdl);
 				}
 				/*With Wan IP*/
-				rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_SRC_ADDR;
 				if (IPACM_Iface::ipacmcfg->mape_enable
-						&& (strcmp(dev_name,IPACM_Iface::ipacmcfg->iface_table[IPACM_Iface::ipacmcfg->mape_wan_iface_table_index].phy_dev_name) == 0)) {
+						&& (strcmp(dev_name,IPACM_Iface::ipacmcfg->iface_table[IPACM_Iface::ipacmcfg->mape_wan_iface_table_index].phy_dev_name) == 0))
+				{
+					rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_SRC_ADDR;
 					rt_rule_entry->rule.attrib.u.v4.src_addr = IPACM_Wan::mape_wan_ipv4_addr;
-				} else {
-				rt_rule_entry->rule.attrib.u.v4.src_addr = wan_v4_addr;
+					rt_rule_entry->rule.attrib.u.v4.src_addr_mask = 0xFFFFFFFF;
 				}
-				rt_rule_entry->rule.attrib.u.v4.src_addr_mask = 0xFFFFFFFF;
+				else if (IPACM_Iface::ipacmcfg->eth_wan_pppoe_enable && is_ppp_iface)
+				{
+					rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_SRC_ADDR;
+					rt_rule_entry->rule.attrib.u.v4.src_addr = wan_v4_addr;
+					rt_rule_entry->rule.attrib.u.v4.src_addr_mask = 0xFFFFFFFF;
+				}
+				else
+				{
+					rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_DST_ADDR;
+					rt_rule_entry->rule.attrib.u.v4.dst_addr = get_client_memptr(wan_client, wan_index)->v4_addr;
+					rt_rule_entry->rule.attrib.u.v4.dst_addr_mask = 0xFFFFFFFF;
+				}
+				
 
 #ifdef FEATURE_IPA_V3
 				rt_rule_entry->rule.hashable = true;

@@ -5136,6 +5136,20 @@ void IPACM_ConntrackListener::CreateIpv6ctEntryFromCtEventData(const ipacm_ct_ev
 		IPACMDBG("addresses aren't global, bail\n");
 		goto bail;
 	}
+	/*
+	 *  If either the source or the destination address shares
+	 * the same /64 subnet as wan_ipaddr_v6 (the rmnet_data v6 address), this
+	 * session does not belong to the WAN interface and must be ignored – do not
+	 * add a CT entry for it.
+	 */
+	if (wan_ipaddr_v6.Valid() && IPACM_Iface::ipacmcfg->ipogre_enabled == true)
+	{
+		if (wan_ipaddr_v6.IsSameSubnet(srcAddr) || wan_ipaddr_v6.IsSameSubnet(dstAddr))
+		{
+			IPACMDBG_H("v6 conntrack src/dst in rmnet_data v6 subnet, ignoring session\n");
+			goto bail;
+		}
+	}
 
 	if (nat_iface_ipv6_addr.Find(srcAddr) != NULL)
 	{

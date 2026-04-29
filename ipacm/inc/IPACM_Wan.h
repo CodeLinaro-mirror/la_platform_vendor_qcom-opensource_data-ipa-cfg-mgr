@@ -201,8 +201,11 @@ typedef struct ipgre_route_data_s
 	uint32_t ul_header_hdl_c; /* Complementary hdr handle. For v4 tunnel and v6 data, and v6 tunnel and v4 data */
 	uint32_t dl_header_hdl;
 	uint32_t proc_ctx_gre_add_hdl;
+	uint32_t proc_ctx_gre_add_hdl_rgip; /* v4 only: separate proc ctx for rgip src-based rule */
+	uint32_t proc_ctx_gre_add_hdl_wan_v4_addr; /* v4 only: separate proc ctx for wan_v4_addr src-based rule */
 	uint32_t proc_ctx_gre_rmv_hdl;
 	uint32_t rt_gre_add_hdl;
+	uint32_t rt_gre_add_hdl_rgip; /* v4 only: rule matching rgip src addr */
 	uint32_t rt_gre_rmv_hdl;
 	uint32_t rt_tbl_hdl;
 } ipgre_route_data_t;
@@ -316,6 +319,12 @@ public:
 	int ipgre_make_header_add_rt_rule(
 		ipa_ipgre_info& ipgre_info,
 		uint32_t        ctx_2use = 0);
+
+	int ipgre_add_rgip_rt_rule(
+		ipa_ipgre_info& ipgre_info);
+
+	int ipgre_add_wan_v4_addr_rt_rule(
+		ipa_ipgre_info& ipgre_info);
 
 	int ipgre_make_header_rmv_rt_rule(
 		ipa_ipgre_info& ipgre_info);

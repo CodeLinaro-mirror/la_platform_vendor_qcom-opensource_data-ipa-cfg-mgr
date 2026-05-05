@@ -339,6 +339,7 @@ public:
 	static uint32_t mape_fmr_hdr_hdl;
 	static pthread_mutex_t m_fmr_mutex;
 	static bool mape_rules_initialized;
+	uint32_t mape_wan_fl_hdl;
 
 	IPACM_Wan(int, ipacm_wan_iface_type, uint8_t *, bool is_ppp_iface = true);
 	virtual ~IPACM_Wan();

@@ -279,6 +279,7 @@ IPACM_Wan::IPACM_Wan(int iface_index,
 	proc_hdl_sta_v4 = 0;
 	hdr_hdl_sta_v6 = 0;
 	num_ipv6_dest_flt_rule = 0;
+	mape_wan_fl_hdl =0;
 	memset(ipv6_dest_flt_rule_hdl, 0, MAX_DEFAULT_v6_ROUTE_RULES*sizeof(uint32_t));
 	memset(dft_wan_fl_hdl, 0, IPA_NUM_DEFAULT_WAN_FILTER_RULES*sizeof(uint32_t));
 	memset(ipv6_prefix, 0, sizeof(ipv6_prefix));
@@ -1161,7 +1162,9 @@ int IPACM_Wan::handle_addr_evt(ipacm_event_data_addr *data)
 					if(sta_ipv6_pdn_index == -1)
 					{
 						//add this prefix to no_offload_ipv6_prefix
-						IPACM_Iface::ipacmcfg->add_no_offload_ipv6_prefix(ipv6_prefix);
+						if (!IPACM_Iface::ipacmcfg->mape_enable || strcmp(dev_name, MAPE_IFACE_NAME) != 0) {
+							IPACM_Iface::ipacmcfg->add_no_offload_ipv6_prefix(ipv6_prefix);
+						}
 						IPACMERR("No Free index available!\n");
 						res = IPACM_FAILURE;
 						goto fail;
@@ -1170,7 +1173,9 @@ int IPACM_Wan::handle_addr_evt(ipacm_event_data_addr *data)
 				memcpy(ipv6_to_iface[sta_ipv6_pdn_index].ipv6_prefix, data->ipv6_addr, sizeof(uint32_t) * 2);
 				ipv6_to_iface[sta_ipv6_pdn_index].pIface = this;
 				ipv6_to_iface[sta_ipv6_pdn_index].wan_up_vlan_v6 = false;
-				IPACM_Iface::ipacmcfg->add_no_offload_ipv6_prefix(ipv6_to_iface[sta_ipv6_pdn_index].ipv6_prefix);
+				if (!IPACM_Iface::ipacmcfg->mape_enable || strcmp(dev_name, MAPE_IFACE_NAME) != 0) {
+					IPACM_Iface::ipacmcfg->add_no_offload_ipv6_prefix(ipv6_to_iface[sta_ipv6_pdn_index].ipv6_prefix);
+				}
 				IPACMDBG_H("index %d prefix: 0x%08x%08x\n", sta_ipv6_pdn_index,
 					ipv6_to_iface[sta_ipv6_pdn_index].ipv6_prefix[0],
 					ipv6_to_iface[sta_ipv6_pdn_index].ipv6_prefix[1]);
@@ -6646,8 +6651,32 @@ int IPACM_Wan::config_dft_firewall_rules(ipa_ip_type iptype)
 #endif
 				{
 					flt_rule_entry.at_rear = true;
+					if (IPACM_Iface::ipacmcfg->mape_enable  && m_is_sta_mode == ECM_WAN
+							&& mape_wan_fl_hdl == 0 ) {
+						IPACMDBG_H(" Installing next hdr based filter rule \n");
+						memcpy(&flt_rule_entry.rule.attrib,
+								&rx_prop->rx[0].attrib,
+								sizeof(struct ipa_rule_attrib));
+						flt_rule_entry.rule.hashable = true;
+						flt_rule_entry.rule.attrib.attrib_mask |= IPA_FLT_NEXT_HDR;
+						flt_rule_entry.rule.attrib.u.v6.next_hdr = 4;
+						flt_rule_entry.rule.action = IPA_PASS_TO_ROUTING;
+						memcpy(&(m_pFilteringTable->rules[0]), &flt_rule_entry, sizeof(struct ipa_flt_rule_add));
+						if (false == m_filtering.AddFilteringRule(m_pFilteringTable))
+						{
+							IPACMERR("Error Adding Filtering rules, aborting...\n");
+							res = IPACM_FAILURE;
+							goto fail;
+						}
+						else
+						{
+							IPACM_Iface::ipacmcfg->increaseFltRuleCount(rx_prop->rx[idx].src_pipe, IPA_IP_v6, 1);
+							IPACMDBG_H("flt rule hdl0=0x%x, status=0x%x\n", m_pFilteringTable->rules[0].flt_rule_hdl, m_pFilteringTable->rules[0].status);
+						}
+						mape_wan_fl_hdl = m_pFilteringTable->rules[0].flt_rule_hdl;
+					}
 					if (IPACM_Iface::ipacmcfg->IsIpv6CTEnabled() &&
-						IPACM_Iface::ipacmcfg->iface_table[ipa_if_num].if_mode == ROUTER && !IPACM_Iface::ipacmcfg->mape_enable)
+						IPACM_Iface::ipacmcfg->iface_table[ipa_if_num].if_mode == ROUTER )
 					{
 						flt_rule_entry.rule.action = IPA_PASS_TO_DST_NAT;
 					}
@@ -8397,6 +8426,14 @@ int IPACM_Wan::del_dft_firewall_rules(ipa_ip_type iptype, bool wan_up_vlan)
 				return IPACM_FAILURE;
 			}
 			dft_wan_fl_hdl[idx] = 0;
+			if (mape_wan_fl_hdl != 0) {
+				if (m_filtering.DeleteFilteringHdls(&mape_wan_fl_hdl, IPA_IP_v6, 1) == false)
+				{
+					IPACMERR("Error Deleting Filtering rules, aborting...\n");
+					return IPACM_FAILURE;
+				}
+				mape_wan_fl_hdl = 0;
+			}
 			if(is_ppp_iface)
 			{
 				pppoe_route_rule_hdl_v6 = 0;

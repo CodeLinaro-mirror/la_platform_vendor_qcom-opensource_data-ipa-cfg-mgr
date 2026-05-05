@@ -23776,7 +23776,11 @@ int IPACM_Lan::construct_mtu_rule(struct ipa_flt_rule *rule, ipa_ip_type iptype,
 	{
 		rule->eq_attrib.ihl_offset_range_16[0].offset = 0x84;
 		//v6 uses payload length which doesnt include v6 header
+		if (IPACM_Iface::ipacmcfg->mape_enable) {
+			rule->eq_attrib.ihl_offset_range_16[0].range_low = mtu  + 1;
+		} else {
 		rule->eq_attrib.ihl_offset_range_16[0].range_low = mtu + 1 - IPV6_HEADER_SIZE;
+	}
 	}
 
 

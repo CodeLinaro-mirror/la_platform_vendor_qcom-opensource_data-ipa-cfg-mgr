@@ -1299,24 +1299,45 @@ static int ipa_nl_decode_nlmsg
 							msg_ptr->nl_link_info.metainfo.ifi_index);
 #ifdef FEATURE_IPoGRE
 						if (strncmp(dev_name, IPACM_Iface::ipacmcfg->rgip_iface_name,
-							sizeof(IPACM_Iface::ipacmcfg->rgip_iface_name)) == 0 &&
-							IPACM_Iface::ipacmcfg->rgip_ip != 0)
+							sizeof(IPACM_Iface::ipacmcfg->rgip_iface_name)) == 0)
 						{
-							IPACMDBG_H("RGIP iface %s link up, post IPA_HANDLE_RGIP_UP with stored ip 0x%x\n",
-								dev_name, IPACM_Iface::ipacmcfg->rgip_ip);
-							ipacm_cmd_q_data rgip_evt_data;
-							uint32_t *rgip_v4 = (uint32_t*) malloc(sizeof(uint32_t));
-							if(rgip_v4 == NULL)
+							/* Query the IP address currently assigned to the interface */
+							uint32_t queried_ip = 0;
+							int query_fd = socket(AF_INET, SOCK_DGRAM, 0);
+							if (query_fd >= 0)
 							{
-								IPACMERR("Memory not assigned to rgip\n");
+								struct ifreq ifr_query;
+								memset(&ifr_query, 0, sizeof(ifr_query));
+								strlcpy(ifr_query.ifr_name, dev_name, IFNAMSIZ);
+								if (ioctl(query_fd, SIOCGIFADDR, &ifr_query) == 0)
+								{
+									queried_ip = ntohl(((struct sockaddr_in *)&ifr_query.ifr_addr)->sin_addr.s_addr);
+								}
+								close(query_fd);
+							}
+							if (queried_ip != 0)
+							{
+								IPACMDBG_H("RGIP iface %s link up, queried ip 0x%x is non-zero, post IPA_HANDLE_RGIP_UP\n",
+									dev_name, queried_ip);
+								ipacm_cmd_q_data rgip_evt_data;
+								uint32_t *rgip_v4 = (uint32_t*) malloc(sizeof(uint32_t));
+								if(rgip_v4 == NULL)
+								{
+									IPACMERR("Memory not assigned to rgip\n");
+								}
+								else
+								{
+									*rgip_v4 = queried_ip;
+									memset(&rgip_evt_data, 0, sizeof(rgip_evt_data));
+									rgip_evt_data.event = IPA_HANDLE_RGIP_UP;
+									rgip_evt_data.evt_data = rgip_v4;
+									IPACM_EvtDispatcher::PostEvt(&rgip_evt_data);
+								}
 							}
 							else
 							{
-								*rgip_v4 = IPACM_Iface::ipacmcfg->rgip_ip;
-								memset(&rgip_evt_data, 0, sizeof(rgip_evt_data));
-								rgip_evt_data.event = IPA_HANDLE_RGIP_UP;
-								rgip_evt_data.evt_data = rgip_v4;
-								IPACM_EvtDispatcher::PostEvt(&rgip_evt_data);
+								IPACMDBG_H("RGIP iface %s link up but no IP assigned yet, skip IPA_HANDLE_RGIP_UP\n",
+									dev_name);
 							}
 						}
 #endif

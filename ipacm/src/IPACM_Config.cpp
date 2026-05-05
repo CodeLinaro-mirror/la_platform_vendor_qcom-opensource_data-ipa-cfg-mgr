@@ -2507,6 +2507,11 @@ uint8_t IPACM_Config::iface_in_dbl_vlan_mode(const char *interfaceName) {
 				IPACMDBG("eth0 vlan mode %d\n", vlan_devices[IPA_VLAN_IF_ETH0]);
 				return (vlan_devices[IPA_VLAN_IF_ETH0]);
 		}
+		if (strstr(nameToCheck.c_str(), "eth1")) {
+				IPACMDBG("eth1 vlan mode %d\n", vlan_devices[IPA_VLAN_IF_ETH1]);
+				return (vlan_devices[IPA_VLAN_IF_ETH1]);
+		}
+
 #endif
 		return false;
 }

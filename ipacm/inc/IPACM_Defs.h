@@ -790,6 +790,7 @@ typedef struct _svap_vlan_hpc_hdl
 	ipa_hdr_l2_type peer_l2_type;
 	uint32_t hpc_hdr_hdl;
 	uint16_t outer_vlan_id;
+	uint32_t template_hdr_hdl;
 }svap_vlan_hpc_hdl;
 
 struct ext_router_prefix_info

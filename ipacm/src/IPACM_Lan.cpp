@@ -389,6 +389,78 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 				IPACM_Iface::ipacmcfg->DelNatIfaces(dev_name); // delete NAT-iface
 				return;
 			}
+#ifdef FEATURE_L2TP
+			/* When an L2TP vlan interface (e.g. eth0.100) goes down,
+			 * IPACM_Neighbor clears that MAC from the neigh cache immediately.
+			 * The subsequent IPA_DEL_NEIGH_EVENT from the kernel then cannot
+			 * find the MAC and skips the IPA_NEIGH_CLIENT_IP_ADDR_DEL_EVENT
+			 * posting, leaving L2TP rules installed.
+			 *
+			 * Handle it here on the ODU parent by iterating eth_clients matched
+			 * by if_index and invoking the same cleanup as
+			 * IPA_NEIGH_CLIENT_IP_ADDR_DEL_EVENT would have done.
+			 *
+			 * Double-free is prevented because:
+			 * - uninstall_l2tp_rules() removes the eth_client entry from the
+			 *   array, so a second call (e.g. from a late NEIGH_IP_ADDR_DEL_EVENT)
+			 *   returns early (IPACM_INVALID_INDEX).
+			 * - eth_bridge_post_event(IPA_ETH_BRIDGE_CLIENT_DEL) is idempotent
+			 *   in IPACM_LanToLan. */
+			else if ((IPACM_Iface::ipacmcfg->ipacm_l2tp_enable == IPACM_L2TP ||
+				IPACM_Iface::ipacmcfg->ipacm_l2tp_enable == IPACM_L2TP_E2E) &&
+				ipa_if_cate == ODU_IF &&
+				IPACM_Iface::ipacmcfg->check_l2tp_iface(data->iface_name))
+			{
+				IPACMDBG_H("L2TP vlan iface %s link down on ODU iface %s, cleaning rules\n",
+					data->iface_name, dev_name);
+				/* Iterate in reverse: uninstall_l2tp_rules() may compact the
+				 * eth_client array (num_eth_client--), so reverse order avoids
+				 * skipping the element that shifts into the deleted slot. */
+				for (int cnt = num_eth_client - 1; cnt >= 0; cnt--)
+				{
+					if (get_client_memptr(eth_client, cnt)->if_index == data->if_index &&
+						get_client_memptr(eth_client, cnt)->if_index_set)
+					{
+						IPACMDBG_H("L2TP link down: clean rules for "
+							"eth_client[%d] MAC %02x:%02x:%02x:%02x:%02x:%02x\n", cnt,
+							get_client_memptr(eth_client, cnt)->mac[0],
+							get_client_memptr(eth_client, cnt)->mac[1],
+							get_client_memptr(eth_client, cnt)->mac[2],
+							get_client_memptr(eth_client, cnt)->mac[3],
+							get_client_memptr(eth_client, cnt)->mac[4],
+							get_client_memptr(eth_client, cnt)->mac[5]);
+						if (IPACM_Iface::ipacmcfg->ipacm_l2tp_enable == IPACM_L2TP)
+						{
+							/* IPACM_L2TP: cross-interface LanToLan rules are owned
+							 * by IPACM_LanToLan; uninstall via bridge event. */
+							eth_bridge_post_event(IPA_ETH_BRIDGE_CLIENT_DEL, IPA_IP_v4,
+								get_client_memptr(eth_client, cnt)->mac, NULL,
+								data->iface_name);
+						}
+						else /* IPACM_L2TP_E2E */
+						{
+							/* IPACM_L2TP_E2E: per-client DL first/second pass
+							 * headers and routing rules live on this ODU instance;
+							 * uninstall them directly. */
+							ipacm_event_data_all del_data;
+							memset(&del_data, 0, sizeof(del_data));
+							memcpy(del_data.mac_addr,
+								get_client_memptr(eth_client, cnt)->mac,
+								sizeof(del_data.mac_addr));
+							del_data.if_index = (uint8_t)data->if_index;
+							strlcpy(del_data.iface_name, data->iface_name,
+								sizeof(del_data.iface_name));
+#ifdef IPA_L2TP_TUNNEL_UDP
+							del_data.iptype = IPA_IP_MAX;
+#else
+							del_data.iptype = IPA_IP_v4;
+#endif
+							uninstall_l2tp_rules(&del_data);
+						}
+					}
+				}
+			}
+#endif /* FEATURE_L2TP */
 		}
 		break;
 

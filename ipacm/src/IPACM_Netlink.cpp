@@ -54,12 +54,14 @@ SPDX-License-Identifier: BSD-3-Clause-Clear
 #include "IPACM_Log.h"
 #include "IPACM_Iface.h"
 #include "IPACM_Config.h"
+#include "IPACM_ConntrackListener.h"
 
 #ifdef FEATURE_EoGRE
 #include <linux/ip.h>
 #include <linux/if_tunnel.h>
 #endif
 
+#define DUMMY_RGIP_ADDRESS 169
 int ipa_get_if_name(char *if_name, int if_index);
 int find_mask(int ip_v4_last, int *mask_value);
 IPACM_Config *pConfig;
@@ -1317,21 +1319,49 @@ static int ipa_nl_decode_nlmsg
 							}
 							if (queried_ip != 0)
 							{
-								IPACMDBG_H("RGIP iface %s link up, queried ip 0x%x is non-zero, post IPA_HANDLE_RGIP_UP\n",
-									dev_name, queried_ip);
-								ipacm_cmd_q_data rgip_evt_data;
-								uint32_t *rgip_v4 = (uint32_t*) malloc(sizeof(uint32_t));
-								if(rgip_v4 == NULL)
+								IPACM_Iface::ipacmcfg->rgip_ip = queried_ip;
+								/* Check whether rgip interface has dummy IP assigned, if yes post RGIP ADD with proper stored rgip */
+								if ((IPACM_Iface::ipacmcfg->rgip_ip >> 24) == DUMMY_RGIP_ADDRESS)
 								{
-									IPACMERR("Memory not assigned to rgip\n");
+									IPACMDBG_H("RGIP iface %s link up but stored ip 0x%x is dummy "
+											"(169.x.x.x), skip IPA_HANDLE_RGIP_UP\n",
+											dev_name, IPACM_Iface::ipacmcfg->rgip_ip);
+
+									IPACMDBG_H("RGIP iface %s link up, post IPA_HANDLE_RGIP_UP with stored ip 0x%x\n",
+										dev_name, IPACM_Iface::ipacmcfg->rgip_ip_ippt);
+									ipacm_cmd_q_data rgip_evt_data;
+									uint32_t *rgip_v4 = (uint32_t*) malloc(sizeof(uint32_t));
+									if(rgip_v4 == NULL)
+									{
+										IPACMERR("Memory not assigned to rgip\n");
+									}
+									else
+									{
+										*rgip_v4 = IPACM_Iface::ipacmcfg->rgip_ip_ippt;
+										memset(&rgip_evt_data, 0, sizeof(rgip_evt_data));
+										rgip_evt_data.event = IPA_HANDLE_RGIP_UP;
+										rgip_evt_data.evt_data = rgip_v4;
+										IPACM_EvtDispatcher::PostEvt(&rgip_evt_data);
+									}
 								}
 								else
 								{
-									*rgip_v4 = queried_ip;
-									memset(&rgip_evt_data, 0, sizeof(rgip_evt_data));
-									rgip_evt_data.event = IPA_HANDLE_RGIP_UP;
-									rgip_evt_data.evt_data = rgip_v4;
-									IPACM_EvtDispatcher::PostEvt(&rgip_evt_data);
+									IPACMDBG_H("RGIP iface %s link up, post IPA_HANDLE_RGIP_UP with stored ip 0x%x\n",
+										dev_name, IPACM_Iface::ipacmcfg->rgip_ip);
+									ipacm_cmd_q_data rgip_evt_data;
+									uint32_t *rgip_v4 = (uint32_t*) malloc(sizeof(uint32_t));
+									if(rgip_v4 == NULL)
+									{
+										IPACMERR("Memory not assigned to rgip\n");
+										}
+									else
+									{
+										*rgip_v4 = IPACM_Iface::ipacmcfg->rgip_ip;
+										memset(&rgip_evt_data, 0, sizeof(rgip_evt_data));
+										rgip_evt_data.event = IPA_HANDLE_RGIP_UP;
+										rgip_evt_data.evt_data = rgip_v4;
+										IPACM_EvtDispatcher::PostEvt(&rgip_evt_data);
+									}
 								}
 							}
 							else
@@ -1802,16 +1832,45 @@ static int ipa_nl_decode_nlmsg
 							uint32_t *rgip_v4 = (uint32_t*) malloc(sizeof(uint32_t));
 							if(rgip_v4 == NULL)
 							{
-								IPACMERR("Memory not assigned to rgip\n");
+								IPACMDBG_H("RGIP iface %s got dummy IP 0x%x (169.x.x.x), "
+										"skip IPA_HANDLE_RGIP_UP and rgip_ip update\n",
+										dev_name, data_addr->ipv4_addr);
+
+								IPACMDBG_H("RGIP iface %s link up, post IPA_HANDLE_RGIP_UP with stored ip 0x%x\n",
+									dev_name, IPACM_Iface::ipacmcfg->rgip_ip_ippt);
+								ipacm_cmd_q_data rgip_evt_data;
+								uint32_t *rgip_v4 = (uint32_t*) malloc(sizeof(uint32_t));
+								if(rgip_v4 == NULL)
+								{
+									IPACMERR("Memory not assigned to rgip\n");
+								}
+								else
+								{
+									*rgip_v4 = IPACM_Iface::ipacmcfg->rgip_ip_ippt;
+									memset(&rgip_evt_data, 0, sizeof(rgip_evt_data));
+									rgip_evt_data.event = IPA_HANDLE_RGIP_UP;
+									rgip_evt_data.evt_data = rgip_v4;
+									IPACM_EvtDispatcher::PostEvt(&rgip_evt_data);
+								}
 							}
 							else
 							{
-								memcpy(rgip_v4,&data_addr->ipv4_addr,sizeof(rgip_v4));
-								memset(&rgip_evt_data, 0, sizeof(rgip_evt_data));
-								rgip_evt_data.event = IPA_HANDLE_RGIP_UP;
-								rgip_evt_data.evt_data = rgip_v4;
-								IPACM_EvtDispatcher::PostEvt(&rgip_evt_data);
-								IPACM_Iface::ipacmcfg->rgip_ip = data_addr->ipv4_addr;
+								IPACMDBG_H("RGIP iface %s addr add, post IPA_HANDLE_RGIP_UP\n", dev_name);
+								ipacm_cmd_q_data rgip_evt_data;
+								uint32_t *rgip_v4 = (uint32_t*) malloc(sizeof(uint32_t));
+								if(rgip_v4 == NULL)
+								{
+									IPACMERR("Memory not assigned to rgip\n");
+								}
+								else
+								{
+									memcpy(rgip_v4,&data_addr->ipv4_addr,sizeof(rgip_v4));
+									memset(&rgip_evt_data, 0, sizeof(rgip_evt_data));
+									rgip_evt_data.event = IPA_HANDLE_RGIP_UP;
+									rgip_evt_data.evt_data = rgip_v4;
+									IPACM_EvtDispatcher::PostEvt(&rgip_evt_data);
+									IPACM_Iface::ipacmcfg->rgip_ip = data_addr->ipv4_addr;
+								}
 							}
 						}
 					}
@@ -2880,18 +2939,66 @@ process_v6:
                                  dev_name,
 								 data_all->if_index);
 			}
-			else
-		    {
-				/* Posting new_neigh events for all LAN/WAN clients */
-				evt_data.event = IPA_NEW_NEIGH_EVENT;
-				IPACMDBG_H("posting IPA_NEW_NEIGH_EVENT (%s):index:%d ip-family: %d\n",
-                                 dev_name, data_all->if_index,
-								 msg_ptr->nl_neigh_info.attr_info.local_addr.ss_family);
+		else
+	    {
+			/* Posting new_neigh events for all LAN/WAN clients */
+			evt_data.event = IPA_NEW_NEIGH_EVENT;
+			IPACMDBG_H("posting IPA_NEW_NEIGH_EVENT (%s):index:%d ip-family: %d\n",
+                             dev_name, data_all->if_index,
+							 msg_ptr->nl_neigh_info.attr_info.local_addr.ss_family);
+
+#ifdef FEATURE_IPoGRE
+			/*
+			 * RGIP passthrough: when a LAN client whose IPv4 address equals the
+			 * stored rgip_ip appears in the neighbor table, it means the RGIP
+			 * passthrough client is reachable on the LAN side.  Enable RGIP
+			 * passthrough so ConntrackListener installs no-op NAT entries
+			 * (private_ip == public_ip == rgip_addr) for its conntrack flows.
+			 */
+			if ((data_all->iptype == IPA_IP_v4) &&
+			    (IPACM_Iface::ipacmcfg->rgip_ip != 0) &&
+			    (data_all->ipv4_addr == IPACM_Iface::ipacmcfg->rgip_ip))
+			{
+				ipacm_cmd_q_data rgip_pass_evt;
+				ipacm_event_rgip_pass_info *rgip_pass_data =
+					(ipacm_event_rgip_pass_info *)malloc(sizeof(ipacm_event_rgip_pass_info));
+				if (rgip_pass_data)
+				{
+					rgip_pass_data->enable    = 1;
+					rgip_pass_data->rgip_addr = data_all->ipv4_addr;
+					rgip_pass_evt.event    = IPA_RGIP_PASS_UPDATE_EVENT;
+					rgip_pass_evt.evt_data = rgip_pass_data;
+				IPACMDBG_H("Posting IPA_RGIP_PASS_UPDATE_EVENT: enable, "
+				           "rgip=0x%x (neigh %s)\n",
+				           rgip_pass_data->rgip_addr, dev_name);
+					IPACM_EvtDispatcher::PostEvt(&rgip_pass_evt);
+					/* Also post IPA_HANDLE_RGIP_UP using the persistent
+					 * rgip_ip_ippt so ConntrackListener re-installs the
+					 * RGIP PDN entry whenever the RGIP passthrough client
+					 * reappears in the neighbor table. */
+					if (IPACM_Iface::ipacmcfg->rgip_ip_ippt != 0)
+					{
+						ipacm_cmd_q_data rgip_up_evt;
+						uint32_t *rgip_v4_up = (uint32_t *)malloc(sizeof(uint32_t));
+						if (rgip_v4_up)
+						{
+							*rgip_v4_up = IPACM_Iface::ipacmcfg->rgip_ip_ippt;
+							memset(&rgip_up_evt, 0, sizeof(rgip_up_evt));
+							rgip_up_evt.event = IPA_HANDLE_RGIP_UP;
+							rgip_up_evt.evt_data = rgip_v4_up;
+							IPACMDBG_H("Posting IPA_HANDLE_RGIP_UP with "
+							           "rgip_ip_ippt=0x%x\n", *rgip_v4_up);
+							IPACM_EvtDispatcher::PostEvt(&rgip_up_evt);
+						}
+					}
+				}
 			}
-		    evt_data.evt_data = data_all;
-					IPACM_EvtDispatcher::PostEvt(&evt_data);
-					/* finish command queue */
-			break;
+#endif /* FEATURE_IPoGRE */
+		}
+	    evt_data.evt_data = data_all;
+				IPACM_EvtDispatcher::PostEvt(&evt_data);
+				/* finish command queue */
+		break;
 
 		case RTM_DELNEIGH:
 			if(IPACM_SUCCESS != ipa_nl_decode_rtm_neigh(buffer, buflen, &(msg_ptr->nl_neigh_info)))
@@ -2966,7 +3073,34 @@ process_v6:
 							 msg_ptr->nl_neigh_info.attr_info.lladdr_hwaddr.sa_data,
 							 sizeof(data_all->mac_addr));
 		    evt_data.event = IPA_DEL_NEIGH_EVENT;
-				data_all->if_index = msg_ptr->nl_neigh_info.metainfo.ndm_ifindex;
+			data_all->if_index = msg_ptr->nl_neigh_info.metainfo.ndm_ifindex;
+
+#ifdef FEATURE_IPoGRE
+			/*
+			 * RGIP passthrough: when the LAN client whose IPv4 address equals
+			 * rgip_ip disappears from the neighbor table, disable RGIP
+			 * passthrough so ConntrackListener stops installing no-op NAT
+			 * entries for its flows.
+			 */
+			if ((data_all->iptype == IPA_IP_v4) &&
+			    (IPACM_Iface::ipacmcfg->rgip_ip != 0) &&
+			    (data_all->ipv4_addr == IPACM_Iface::ipacmcfg->rgip_ip))
+			{
+				ipacm_cmd_q_data rgip_pass_evt;
+				ipacm_event_rgip_pass_info *rgip_pass_data =
+					(ipacm_event_rgip_pass_info *)malloc(sizeof(ipacm_event_rgip_pass_info));
+				if (rgip_pass_data)
+				{
+					rgip_pass_data->enable    = 0;
+					rgip_pass_data->rgip_addr = 0;
+					rgip_pass_evt.event    = IPA_RGIP_PASS_UPDATE_EVENT;
+					rgip_pass_evt.evt_data = rgip_pass_data;
+					IPACMDBG_H("Posting IPA_RGIP_PASS_UPDATE_EVENT: disable "
+					           "(neigh %s departed)\n", dev_name);
+					IPACM_EvtDispatcher::PostEvt(&rgip_pass_evt);
+				}
+			}
+#endif /* FEATURE_IPoGRE */
 
 		    IPACMDBG_H("posting IPA_DEL_NEIGH_EVENT (%s):index:%d ip-family: %d\n",
                                  dev_name,

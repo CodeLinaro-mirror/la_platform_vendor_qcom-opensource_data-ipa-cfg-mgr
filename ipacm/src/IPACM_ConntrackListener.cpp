@@ -66,6 +66,8 @@ IPACM_ConntrackListener::IPACM_ConntrackListener() :
 	 ip_pass_enable_default_pdn = 0;
 	 ip_pass_dummy_ip_default_pdn = 0;
 	 ip_pass_skip_nat_default_pdn = 0;
+	 rgip_pass_enable = 0;
+	 IPACM_Iface::ipacmcfg->rgip_ip_ippt = 0;
 
 	 nat_inst = NatApp::GetInstance();
 
@@ -117,6 +119,7 @@ IPACM_ConntrackListener::IPACM_ConntrackListener() :
 	 IPACM_EvtDispatcher::registr(IPA_NEIGH_CLIENT_IP_ADDR_ADD_EVENT, this);
 	 IPACM_EvtDispatcher::registr(IPA_NEIGH_CLIENT_IP_ADDR_DEL_EVENT, this);
 	 IPACM_EvtDispatcher::registr(IPA_HANDLE_IP_PASS_PDN_INFO_UPDATE_EVENT, this);
+	 IPACM_EvtDispatcher::registr(IPA_RGIP_PASS_UPDATE_EVENT, this);
 #ifdef IPA_IOCTL_SET_PKT_THRESHOLD
 	 IPACM_EvtDispatcher::registr(IPA_PKT_THRESHOLD_UPDATE_EVENT, this);
 #endif
@@ -238,8 +241,13 @@ void IPACM_ConntrackListener::event_callback(ipa_cm_event_id evt,
 			if(IPACM_Iface::ipacmcfg->rgip_ip)
 			{
 				rgip_addr = IPACM_Iface::ipacmcfg->rgip_ip;
+				/* Persist the RGIP address for IPPT use-case; not cleared on RGIP down. */
+				IPACM_Iface::ipacmcfg->rgip_ip_ippt = IPACM_Iface::ipacmcfg->rgip_ip;
+				/* Enable NAT for RGIP PDN when RGIP passthrough is active, so that
+				 * no-op dummy NAT entries (private_ip == public_ip == rgip_addr)
+				 * can be installed for RGIP client traffic. */
 				nat_inst->AddPdn(rgip_addr, muxid, false,
-					(ip_pass_enable_default_pdn && !ip_pass_skip_nat_default_pdn));
+					(ip_pass_enable_default_pdn && !ip_pass_skip_nat_default_pdn) || rgip_pass_enable);
 			}
 #endif
 			break;
@@ -322,6 +330,27 @@ void IPACM_ConntrackListener::event_callback(ipa_cm_event_id evt,
 			IPACMDBG_H("Received IPA_HANDLE_IP_PASS_PDN_INFO_UPDATE_EVENT event\n");
 			HandleIPPassPDNInfoUpdate(data);
 			break;
+
+	 case IPA_RGIP_PASS_UPDATE_EVENT:
+		{
+			/* RGIP passthrough: the RGIP v4 address is assigned to the tethered client.
+			 * The modem keeps its own WAN IP. Traffic from the RGIP client gets a
+			 * no-op dummy NAT entry (private_ip == public_ip == rgip_addr). */
+			ipacm_event_rgip_pass_info *rgip_pass_data =
+				(ipacm_event_rgip_pass_info *)data;
+			IPACMDBG_H("Received IPA_RGIP_PASS_UPDATE_EVENT: enable=%d rgip=0x%x\n",
+				rgip_pass_data->enable, rgip_pass_data->rgip_addr);
+			rgip_pass_enable = rgip_pass_data->enable;
+			if (rgip_pass_enable && rgip_addr)
+			{
+				/* Flush any stale dummy entries for the RGIP so fresh ones
+				 * are installed with the correct no-op public_ip. */
+				nat_inst->DelDummyNatEntries(rgip_addr);
+				query_conntracks(AF_INET, rgip_addr, 0);
+			}
+			break;
+		}
+
 #ifdef IPA_IOCTL_SET_PKT_THRESHOLD
 	 case IPA_PKT_THRESHOLD_UPDATE_EVENT:
 			IPACMDBG_H("Received IPA_PKT_THRESHOLD_UPDATE_EVENT event\n");
@@ -458,8 +487,13 @@ void IPACM_ConntrackListener::event_callback(ipa_cm_event_id evt,
 			IPACMDBG("Received IPA_HANDLE_RGIP_UP event\n");
 			uint32_t *rgip_data = (uint32_t *)data;
 			rgip_addr = *rgip_data;
+			/* Persist the RGIP address for IPPT use-case; not cleared on RGIP down. */
+			IPACM_Iface::ipacmcfg->rgip_ip_ippt = *rgip_data;
+			/* Enable NAT for RGIP PDN when RGIP passthrough is active, so that
+			 * no-op dummy NAT entries (private_ip == public_ip == rgip_addr)
+			 * can be installed for RGIP client traffic. */
 			nat_inst->AddPdn(rgip_addr, muxid, false,
-				(ip_pass_enable_default_pdn && !ip_pass_skip_nat_default_pdn));
+				(ip_pass_enable_default_pdn && !ip_pass_skip_nat_default_pdn) || rgip_pass_enable);
 			break;
 		}
 
@@ -3687,26 +3721,32 @@ int IPACM_ConntrackListener::DetermineSrcorDstNAT(
 	 {
 		 IPACMDBG_H("Neither Destination nor Source nat flag Set\n");
 
-		if(orig_src_ip == wan_ipaddr)
+		if(orig_src_ip == wan_ipaddr || orig_src_ip == rgip_addr)
 		{
 			IPACMDBG_H("orig src ip:0x%x equal to wan ip\n",orig_src_ip);
 			params->status = IPS_SRC_NAT;
 #ifdef FEATURE_VLAN_MPDN
-			/* For IPPT case, need check if it's vlan on default pdn */
-			params->public_ip = wan_ipaddr;
+			/* For RGIP passthrough: public_ip = rgip_addr so private_ip == public_ip (no-op NAT).
+			 * For regular IPPT or embedded WAN: public_ip = wan_ipaddr. */
+			params->public_ip = (orig_src_ip == rgip_addr && rgip_pass_enable) ? rgip_addr : wan_ipaddr;
+			if (orig_src_ip == rgip_addr && rgip_pass_enable)
+				params->ip_pass_enable = 1;
 			params->embedded_vlan = true;
 			nat_entry->isVlan = IsVlanIPv4(orig_src_ip, &params->VlanID);
 			if (nat_entry->isVlan)
 				nat_entry->IsVlanUp = true;
 #endif
 		}
-		else if(orig_dst_ip == wan_ipaddr)
+		else if(orig_dst_ip == wan_ipaddr || orig_dst_ip == rgip_addr)
 		{
 			IPACMDBG_H("orig Dst IP:0x%x equal to wan ip\n",orig_dst_ip);
 			params->status = IPS_DST_NAT;
 #ifdef FEATURE_VLAN_MPDN
-			/* For IPPT case, need check if it's vlan on default pdn */
-			params->public_ip = wan_ipaddr;
+			/* For RGIP passthrough: public_ip = rgip_addr so private_ip == public_ip (no-op NAT).
+			 * For regular IPPT or embedded WAN: public_ip = wan_ipaddr. */
+			params->public_ip = (orig_dst_ip == rgip_addr && rgip_pass_enable) ? rgip_addr : wan_ipaddr;
+			if (orig_dst_ip == rgip_addr && rgip_pass_enable)
+				params->ip_pass_enable = 1;
 			params->embedded_vlan = true;
 			nat_entry->isVlan = IsVlanIPv4(orig_dst_ip, &params->VlanID);
 			if (nat_entry->isVlan)
@@ -3938,8 +3978,11 @@ void IPACM_ConntrackListener::ProcessTCPorUDPMsg(
 			IPACMDBG_H("orig src ip:0x%x equal to wan ip\n",orig_src_ip);
 			status = IPS_SRC_NAT;
 #ifdef FEATURE_VLAN_MPDN
-			/* For IPPT case, need check if it's vlan on default pdn */
-			public_ip = wan_ipaddr;
+			/* For RGIP passthrough: public_ip = rgip_addr so private_ip == public_ip (no-op NAT).
+			 * For regular IPPT or embedded WAN: public_ip = wan_ipaddr. */
+			public_ip = (orig_src_ip == rgip_addr && rgip_pass_enable) ? rgip_addr : wan_ipaddr;
+			if (orig_src_ip == rgip_addr && rgip_pass_enable)
+				ip_pass_enable = 1;
 			embedded_vlan = true;
 			nat_entry.isVlan = IsVlanIPv4(orig_src_ip, &VlanID);
 			if (nat_entry.isVlan)
@@ -3963,8 +4006,11 @@ void IPACM_ConntrackListener::ProcessTCPorUDPMsg(
 			IPACMDBG_H("orig Dst IP:0x%x equal to wan ip\n",orig_dst_ip);
 			status = IPS_DST_NAT;
 #ifdef FEATURE_VLAN_MPDN
-			/* For IPPT case, need check if it's vlan on default pdn */
-			public_ip = wan_ipaddr;
+			/* For RGIP passthrough: public_ip = rgip_addr so private_ip == public_ip (no-op NAT).
+			 * For regular IPPT or embedded WAN: public_ip = wan_ipaddr. */
+			public_ip = (orig_dst_ip == rgip_addr && rgip_pass_enable) ? rgip_addr : wan_ipaddr;
+			if (orig_dst_ip == rgip_addr && rgip_pass_enable)
+				ip_pass_enable = 1;
 			embedded_vlan = true;
 			nat_entry.isVlan = IsVlanIPv4(orig_dst_ip, &VlanID);
 			if (nat_entry.isVlan)

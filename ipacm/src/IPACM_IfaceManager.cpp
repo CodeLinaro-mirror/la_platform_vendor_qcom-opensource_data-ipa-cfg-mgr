@@ -675,7 +675,7 @@ int IPACM_IfaceManager::create_iface_instance(ipacm_ifacemgr_data *param)
 						if(param->is_ppp_iface &&
 							IPACM_Iface::ipacmcfg->eth_wan_pppoe_enable)
 						{
-							if(IPACM_Iface::ipacmcfg->get_pppoe_vlan_id(IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].iface_name,
+							if(IPACM_Iface::ipacmcfg->get_pppoe_vlan_id_from_proc(IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].iface_name,
 								&sta_vlan_id))
 							{
 								IPACMERR("failed to get iface vlan ID\n");

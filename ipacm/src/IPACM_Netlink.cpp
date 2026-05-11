@@ -2228,6 +2228,27 @@ process:
 								}
 							}
 
+							if(data_fid->is_ppp_iface == false)
+							{
+								IPACMDBG_H("wan dev name %s associated phy_name %s \n", dev_name,
+										IPACM_Iface::ipacmcfg->iface_table[instance_found].phy_dev_name);
+							}
+							else
+							{
+
+								IPACM_Iface::ipacmcfg->get_phy_name_from_proc(dev_name, phy_dev);
+								if(phy_dev != NULL)
+								{
+									IPACMDBG_H("wan dev name %s associated phy_name %s \n", dev_name, phy_dev);
+									strlcpy(IPACM_Iface::ipacmcfg->iface_table[instance_found].phy_dev_name, phy_dev, ETH_PHY_IFACE_LEN);
+								}
+								else
+								{
+									IPACMERR("Failed to get associated phy_name for wan dev name %s\n", dev_name);
+									free(data_fid);
+									return IPACM_FAILURE;
+								}
+							}
 							IPACMDBG_H("wan dev name %s associated phy_name %s \n", dev_name,
 									IPACM_Iface::ipacmcfg->iface_table[instance_found].phy_dev_name);
 							IPACMDBG("Posting IPA_USB_LINK_UP_EVENT with for dev_name %s \n", dev_name);
@@ -2495,9 +2516,27 @@ process_v6:
 								}
 							}
 						}
+						if(data_fid->is_ppp_iface == false)
+						{
+							IPACMDBG_H("wan dev name %s associated phy_name %s \n", dev_name,
+								IPACM_Iface::ipacmcfg->iface_table[instance_found].phy_dev_name);
+						}
+						else
+						{
 
-						IPACMDBG_H("wan dev name %s associated phy_name %s \n", dev_name,
-							IPACM_Iface::ipacmcfg->iface_table[instance_found].phy_dev_name);
+							IPACM_Iface::ipacmcfg->get_phy_name_from_proc(dev_name, phy_dev);
+							if(phy_dev != NULL)
+							{
+								IPACMDBG_H("wan dev name %s associated phy_name %s \n", dev_name, phy_dev);
+								strlcpy(IPACM_Iface::ipacmcfg->iface_table[instance_found].phy_dev_name, phy_dev, ETH_PHY_IFACE_LEN);
+							}
+							else
+							{
+								IPACMERR("Failed to get associated phy_name for wan dev name %s\n", dev_name);
+								free(data_fid);
+								return IPACM_FAILURE;
+							}
+						}
 						IPACMDBG("Posting IPA_USB_LINK_UP_EVENT with for dev_name %s \n", dev_name);
 						data_fid->if_index = msg_ptr->nl_route_info.attr_info.oif_index;
 						evt_data.event = IPA_USB_LINK_UP_EVENT;

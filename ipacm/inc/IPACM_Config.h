@@ -714,11 +714,15 @@ public:
 
 #ifdef FEATURE_PPPOE
 	uint16_t pppoe_get_session_id(const char *pppoe_dev_name);
+	uint16_t pppoe_get_session_id_from_proc(const char *pppoe_dev_name);
 	void get_pppoe_session_info(const char *pppoe_dev_name, const char *phy_dev_name = NULL, uint16_t vlan_id = 0);
 	void update_pppoe_session_info(const char *pppoe_dev_name, char *params[MAX_PPPOE_PARAM_CNT]);
 	int get_pppoe_vlan_id(char *pppoe_dev_name, uint16_t *vlan_id);
+	int get_pppoe_vlan_id_from_proc(const char *p_dev_name, uint16_t *vlan_id);
 	int get_pppoe_indx(char *pppoe_dev_name);
 	int get_phy_name_from_bridge_iface(const char *p_dev_name, char phy_name[ETH_PHY_IFACE_LEN]);
+	int get_phy_name_from_proc(const char *p_dev_name, char phy_name[ETH_PHY_IFACE_LEN]);
+	int get_mac_name_from_proc(const char *p_dev_name, uint8_t *mac_addr);
 #endif
 	bool is_svap_related(const char *phy_inf);
 
@@ -882,6 +886,40 @@ public:
 			}
 		}
 		IPACMERR("PPPoe devname %s not found\n", pppoe_dev_name);
+		return 0;
+	}
+
+	inline uint16_t pppoe_get_session_id_from_proc(char *pppoe_dev_name)
+	{
+		FILE *fp = NULL;
+		char line[256], session_id[32], mac[32], device[32], ppp_dev[32];
+		if(!pppoe_dev_name)
+			return 0;
+
+		fp = fopen("/proc/net/pppoe", "r");
+		if (!fp)
+		{
+			IPACMERR("Failed to open %s\n", "/proc/net/pppoe");
+			return 0;
+    }
+		/* Skip header line */
+		fgets(line, sizeof(line), fp);
+		while (fgets(line, sizeof(line), fp))
+		{
+			 /* Fields: Id(hex)  MAC(xx:xx:xx:xx:xx:xx)  Device  PPP-Device */
+			if (sscanf(line, "%15s %17s %15s %15s", session_id, mac, device, ppp_dev) != 4)
+					continue;
+			if (strcmp(ppp_dev, pppoe_dev_name) == 0)
+			{
+				uint16_t id = (uint16_t)strtol(session_id, NULL, 16);
+				IPACMDBG("PPPOE dev %s session_id found %d\n",
+						pppoe_dev_name, id);
+				fclose(fp);
+				return id;
+			}
+		}
+		IPACMERR("PPPoe devname %s not found\n", pppoe_dev_name);
+		fclose(fp);
 		return 0;
 	}
 #endif

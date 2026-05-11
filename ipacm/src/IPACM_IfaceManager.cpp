@@ -522,6 +522,7 @@ int IPACM_IfaceManager::create_iface_instance(ipacm_ifacemgr_data *param)
 				IPACM_EvtDispatcher::registr(IPA_TETHERING_STATS_UPDATE_EVENT, wl);
 #endif
 				IPACM_EvtDispatcher::registr(IPA_CRADLE_WAN_MODE_SWITCH, wl);
+				IPACM_EvtDispatcher::registr(IPA_CFG_WLAN_MODE_CHANGE_EVENT, wl);
 				IPACM_EvtDispatcher::registr(IPA_WLAN_LINK_DOWN_EVENT, wl);
 				/* IPA_LAN_DELETE_SELF should be always last */
 				IPACM_EvtDispatcher::registr(IPA_LAN_DELETE_SELF, wl);

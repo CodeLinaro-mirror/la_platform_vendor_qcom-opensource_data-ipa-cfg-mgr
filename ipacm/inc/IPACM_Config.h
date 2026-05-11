@@ -112,6 +112,11 @@ struct ipa_prefix_info {
 	uint16_t vlan_id;
 };
 
+struct CfgChanges {
+	bool requiresFullConfigReload = false;
+	bool onlyWlanModeChanged = false;
+};
+
 /* iface */
 class IPACM_Config
 {
@@ -243,6 +248,9 @@ public:
 
 	/* To return the instance */
 	static IPACM_Config* GetInstance();
+
+	void ipacm_reload_wlan_mode_config_inplace(const IPACM_conf_t& new_cfg);
+	void HandleCfgChangeFromFile();
 
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
 	/* list to capture mac addrs of clients for which stats are enabled */

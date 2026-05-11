@@ -165,7 +165,7 @@ void* firewall_monitor(void *param)
 	char buffer[INOTIFY_BUF_LEN];
 	int inotify_fd;
 	ipacm_cmd_q_data evt_data;
-	uint32_t mask = IN_MODIFY | IN_MOVE;
+	uint32_t mask = IN_CLOSE_WRITE | IN_MOVE; // IN_CLOSE_WRITE is correct flag to get the event when file write fully completes.
 
 	inotify_fd = inotify_init();
 	if (inotify_fd < 0)
@@ -205,7 +205,7 @@ void* firewall_monitor(void *param)
 
 		if (event->len > 0)
 		{
-			if ( (event->mask & IN_MODIFY) || (event->mask & IN_MOVE))
+			if ( (event->mask & IN_CLOSE_WRITE) || (event->mask & IN_MOVE))
 			{
 				if (event->mask & IN_ISDIR)
 				{
@@ -236,14 +236,20 @@ void* firewall_monitor(void *param)
 				}
 				else if (!strncmp(event->name, IPACM_CFG_FILE_NAME, event->len)) // IPACM_configuration change
 				{
-					IPACM_LOG(IPACM_LOG_INFO, "File \"%s\" was 0x%x\n", event->name, event->mask);
-					IPACM_LOG(IPACM_LOG_INFO, "The interested file %s .\n", IPACM_CFG_FILE_NAME);
+					IPACM_Config* cfg = IPACM_Config::GetInstance();
+					IPACM_LOG(IPACM_LOG_DEBUG, "File \"%s\" was 0x%x\n", event->name, event->mask);
+					IPACM_LOG(IPACM_LOG_INFO, "Detected change to %s processing IPACM_Config via HandleCfgChangeFromFile\n", IPACM_CFG_FILE_NAME);
 
-					evt_data.event = IPA_CFG_CHANGE_EVENT;
-					evt_data.evt_data = NULL;
-
-					/* Insert IPA_FIREWALL_CHANGE_EVENT to command queue */
-					IPACM_EvtDispatcher::PostEvt(&evt_data);
+					if (!cfg) {
+						IPACM_LOG(IPACM_LOG_DEBUG, "Unable to get or it is first Config instance; posting IPA_CFG_CHANGE_EVENT \n");
+						evt_data.event = IPA_CFG_CHANGE_EVENT;
+						evt_data.evt_data = NULL;
+						IPACM_EvtDispatcher::PostEvt(&evt_data);
+					}
+					else {
+						IPACM_LOG(IPACM_LOG_DEBUG, "Detected change to %s processing IPACM_Config via HandleCfgChangeFromFile\n", IPACM_CFG_FILE_NAME);
+						cfg->HandleCfgChangeFromFile();
+					}
 				}
 			}
 			IPACM_LOG(IPACM_LOG_DEBUG, "Received monitoring event %s.\n", event->name);

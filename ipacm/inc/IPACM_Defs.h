@@ -280,6 +280,7 @@ typedef enum
 	IPA_HANDLE_LAN_WAN_EXT_PROP_CHANGE,       /* NULL */
 	IPA_DUMMY_VLAN_DOWN_EVENT,               /* ipacm_event_route_vlan */
 	IPA_NOTIFY_VLAN_DOWN,                     /* vlan_iface_info */
+	IPA_CFG_WLAN_MODE_CHANGE_EVENT,           /* NULL */
 	IPACM_EVENT_MAX
 } ipa_cm_event_id;
 

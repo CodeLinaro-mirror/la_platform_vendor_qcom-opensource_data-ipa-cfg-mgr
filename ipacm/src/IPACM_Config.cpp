@@ -163,6 +163,7 @@ const char *ipacm_event_name[] = {
 	__stringify(IPA_HANDLE_LAN_WAN_EXT_PROP_CHANGE),      /* NULL */
 	__stringify(IPA_DUMMY_VLAN_DOWN_EVENT),              /* ipacm_event_route_vlan */
 	__stringify(IPA_NOTIFY_VLAN_DOWN),                    /* ipacm_event_data_vlan */
+	__stringify(IPA_CFG_WLAN_MODE_CHANGE_EVENT),         /* NULL */
 	__stringify(IPACM_EVENT_MAX),
 };
 
@@ -425,6 +426,118 @@ bail:
 }
 
 #endif //IPA_HW_FNR_STATS
+
+static bool ipacm_load_new_cfg_into_temp(IPACM_conf_t& cfg)
+{
+	memset(&cfg, 0, sizeof(cfg));
+	char xml_path[IPA_MAX_FILE_LEN];
+	strlcpy(xml_path, IPACM_CONFIG_FILE, sizeof(xml_path));
+	IPACM_LOG(IPACM_LOG_INFO, "XML path: %s\n", xml_path);
+	return (IPACM_SUCCESS == ipacm_read_cfg_xml(xml_path, &cfg));
+}
+
+static bool ipacm_is_only_wlanmode_change_to_internet(const ipa_ifi_dev_name_t* current_cfg_tbl,
+	 int current_cfg_iface_cnt, const ipa_ifi_dev_name_t* new_cfg_iface_tbl,  int new_cfg_iface_cnt)
+{
+	bool res = false;
+	if(current_cfg_iface_cnt != new_cfg_iface_cnt){
+		return false;
+	}
+	IPACM_LOG(IPACM_LOG_DEBUG, "Current iface cnt : %d\n", current_cfg_iface_cnt);
+	for (int i = 0; i < current_cfg_iface_cnt; ++i)
+	{
+		if (strncmp(current_cfg_tbl[i].iface_name, new_cfg_iface_tbl[i].iface_name, sizeof(current_cfg_tbl[i].iface_name)) == 0)
+		{
+			IPACM_LOG(IPACM_LOG_DEBUG, "Checking for iface : %s\n", current_cfg_tbl[i].iface_name);
+
+			if (current_cfg_tbl[i].wlan_mode != new_cfg_iface_tbl[i].wlan_mode)
+			{
+				if(new_cfg_iface_tbl[i].wlan_mode == INTERNET)
+				{
+					res = true;
+				}
+				else
+				{
+					return false;
+				}
+			}
+		}
+		else
+		{
+			return false;
+		}
+	}
+	return res;
+}
+
+static CfgChanges ipacm_compute_changes_in_new_cfg(const IPACM_conf_t& new_cfg, IPACM_Config* current_cfg)
+{
+	CfgChanges ch;
+
+	IPACM_LOG(IPACM_LOG_DEBUG, "checking ig only Wlan mode is changed:\n");
+	if (ipacm_is_only_wlanmode_change_to_internet( current_cfg->iface_table, current_cfg->ipa_num_ipa_interfaces,
+			new_cfg.iface_config.iface_entries,	new_cfg.iface_config.num_iface_entries))
+	{
+		ch.onlyWlanModeChanged = true;
+	}
+
+	return ch;
+}
+
+void IPACM_Config::ipacm_reload_wlan_mode_config_inplace(const IPACM_conf_t& new_cfg)
+{
+	for(int i =0; i< ipa_num_ipa_interfaces; ++i)
+	{
+		if (strncmp(iface_table[i].iface_name, new_cfg.iface_config.iface_entries[i].iface_name, sizeof(iface_table[i].iface_name)) == 0)
+		{
+			if (iface_table[i].wlan_mode != new_cfg.iface_config.iface_entries[i].wlan_mode)
+			{
+				if(new_cfg.iface_config.iface_entries[i].wlan_mode == INTERNET)
+				{
+					iface_table[i].wlan_mode = INTERNET;
+					IPACM_LOG(IPACM_LOG_INFO, "Wlan mode changed to INTERNET for iface : %s\n", iface_table[i].iface_name);
+				}
+			}
+		}
+	}
+	return;
+}
+
+void IPACM_Config::HandleCfgChangeFromFile()
+{
+	IPACM_conf_t new_cfg{};
+	if (!ipacm_load_new_cfg_into_temp(new_cfg))
+	{
+		IPACM_LOG(IPACM_LOG_ERR, "Config parse failed; posting full reload for safety\n");
+		ipacm_cmd_q_data evt{}; evt.event = IPA_CFG_CHANGE_EVENT;
+		IPACM_EvtDispatcher::PostEvt(&evt);
+		return;
+	}
+
+	CfgChanges ch = ipacm_compute_changes_in_new_cfg(new_cfg, this);
+
+	if(ch.onlyWlanModeChanged && !ch.requiresFullConfigReload){
+		ipacm_reload_wlan_mode_config_inplace(new_cfg);
+		ipacm_cmd_q_data evt{};
+		evt.event = IPA_CFG_WLAN_MODE_CHANGE_EVENT;
+		evt.evt_data = NULL;
+		IPACM_LOG(IPACM_LOG_INFO, "Posting IPA_CFG_WLAN_MODE_CHANGE_EVENT as only wlan mode config is changed)\n");
+		IPACM_EvtDispatcher::PostEvt(&evt);
+		return;
+	}
+
+	if (ch.requiresFullConfigReload)
+	{
+		ipacm_cmd_q_data evt{};
+		evt.event = IPA_CFG_CHANGE_EVENT;
+		evt.evt_data = NULL;
+		IPACM_LOG(IPACM_LOG_INFO, "Posting IPA_CFG_CHANGE_EVENT (topological or structural config changed)\n");
+		IPACM_EvtDispatcher::PostEvt(&evt);
+		return;
+	}
+
+	IPACM_LOG(IPACM_LOG_INFO, "No effective semantic change; nothing to do.\n");
+}
 
 int IPACM_Config::Init(void)
 {

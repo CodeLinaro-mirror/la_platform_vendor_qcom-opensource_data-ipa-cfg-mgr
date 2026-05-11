@@ -238,6 +238,8 @@ if (!(a)) {                                                 \
 #define IPACMLOG_TAG                         "IPACMLog"
 #define IPACMFILEQUOTA_TAG                   "IPACMfileQuota"
 #define IPACMFILEVAR_TAG                     "IPACMfilevar"
+#define IPACM_DEBUG_LEVEL_LOG_ENABLE_TAG     "IPACMDebugLogLevel"
+#define IPACM_SYSLOG_ENABLE_TAG              "IPACMSyslogEnable"
 
 /*---------------------------------------------------------------------------
       IP protocol numbers - use in dss_socket() to identify protocols.
@@ -365,6 +367,8 @@ typedef struct  _IPACM_conf_t
 #endif
 	int64_t max_file_size;
 	uint8_t max_file_size_quota;
+	bool ipacm_debug_logs_enable;
+	bool ipacm_syslog_enable;
 	bool ipv6_nat_enable;
 	int ipacm_l2tp_enable;
 	bool ipacm_mpdn_enable;

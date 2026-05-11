@@ -25,6 +25,10 @@ BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
 WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
 OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
 IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+Changes from Qualcomm Technologies, Inc. are provided under the following license:
+Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+SPDX-License-Identifier: BSD-3-Clause-Clear
 */
 /*!
 	@file
@@ -55,7 +59,7 @@ IPACM_Routing::IPACM_Routing()
 	m_fd = open(DEVICE_NAME, O_RDWR);
 	if (0 == m_fd)
 	{
-		IPACMERR("Failed opening %s.\n", DEVICE_NAME);
+		IPACM_LOG(IPACM_LOG_ERR, "Failed opening %s.\n", DEVICE_NAME);
 	}
 }
 
@@ -80,7 +84,7 @@ bool IPACM_Routing::AddRoutingRule(struct ipa_ioc_add_rt_rule *ruleTable)
 
 	if (!DeviceNodeIsOpened())
 	{
-		IPACMERR("Device is not opened\n");
+		IPACM_LOG(IPACM_LOG_ERR, "Device is not opened\n");
 		return false;
 	}
 
@@ -88,7 +92,7 @@ bool IPACM_Routing::AddRoutingRule(struct ipa_ioc_add_rt_rule *ruleTable)
 	{
 		if(ruleTable->rules[cnt].rule.dst > IPA_CLIENT_MAX)
 		{
-			IPACMERR("Invalid dst pipe, Rule:%d  dst_pipe:%d\n", cnt, ruleTable->rules[cnt].rule.dst);
+			IPACM_LOG(IPACM_LOG_ERR, "Invalid dst pipe, Rule:%d  dst_pipe:%d\n", cnt, ruleTable->rules[cnt].rule.dst);
 			isInvalid = true;
 		}
 	}
@@ -101,16 +105,16 @@ bool IPACM_Routing::AddRoutingRule(struct ipa_ioc_add_rt_rule *ruleTable)
 	retval = ioctl(m_fd, IPA_IOC_ADD_RT_RULE, ruleTable);
 	if (retval)
 	{
-		IPACMERR("Failed adding routing rule %p\n", ruleTable);
+		IPACM_LOG(IPACM_LOG_ERR, "Failed adding routing rule %p\n", ruleTable);
 		return false;
 	}
 
 	for(cnt=0; cnt<ruleTable->num_rules; cnt++)
 	{
-		IPACMDBG("Rule:%d  dst_pipe:%d\n", cnt, ruleTable->rules[cnt].rule.dst);
+		IPACM_LOG(IPACM_LOG_DEBUG, "Rule:%d  dst_pipe:%d\n", cnt, ruleTable->rules[cnt].rule.dst);
 	}
 
-	IPACMDBG_H("Added routing rule %p\n", ruleTable);
+	IPACM_LOG(IPACM_LOG_DEBUG, "Added routing rule %p\n", ruleTable);
 	return true;
 }
 
@@ -122,7 +126,7 @@ bool IPACM_Routing::AddRoutingRuleExt(struct ipa_ioc_add_rt_rule_ext *ruleTable)
 
 	if (!DeviceNodeIsOpened())
 	{
-		IPACMERR("Device is not opened\n");
+		IPACM_LOG(IPACM_LOG_ERR, "Device is not opened\n");
 		return false;
 	}
 
@@ -130,7 +134,7 @@ bool IPACM_Routing::AddRoutingRuleExt(struct ipa_ioc_add_rt_rule_ext *ruleTable)
 	{
 		if(ruleTable->rules[cnt].rule.dst > IPA_CLIENT_MAX)
 		{
-			IPACMERR("Invalid dst pipe, Rule:%d  dst_pipe:%d\n", cnt, ruleTable->rules[cnt].rule.dst);
+			IPACM_LOG(IPACM_LOG_ERR, "Invalid dst pipe, Rule:%d  dst_pipe:%d\n", cnt, ruleTable->rules[cnt].rule.dst);
 			isInvalid = true;
 		}
 	}
@@ -143,16 +147,16 @@ bool IPACM_Routing::AddRoutingRuleExt(struct ipa_ioc_add_rt_rule_ext *ruleTable)
 	retval = ioctl(m_fd, IPA_IOC_ADD_RT_RULE_EXT, ruleTable);
 	if (retval)
 	{
-		IPACMERR("Failed adding routing rule %p\n", ruleTable);
+		IPACM_LOG(IPACM_LOG_ERR, "Failed adding routing rule %p\n", ruleTable);
 		return false;
 	}
 
 	for(cnt=0; cnt<ruleTable->num_rules; cnt++)
 	{
-		IPACMDBG("Rule:%d  dst_pipe:%d\n", cnt, ruleTable->rules[cnt].rule.dst);
+		IPACM_LOG(IPACM_LOG_DEBUG, "Rule:%d  dst_pipe:%d\n", cnt, ruleTable->rules[cnt].rule.dst);
 	}
 
-	IPACMDBG_H("Added routing rule %p\n", ruleTable);
+	IPACM_LOG(IPACM_LOG_DEBUG, "Added routing rule %p\n", ruleTable);
 	return true;
 }
 #if defined(FEATURE_IPACM_PER_CLIENT_STATS) && defined(IPA_HW_FNR_STATS)
@@ -163,7 +167,7 @@ bool IPACM_Routing::AddRoutingRuleExt_v2(struct ipa_ioc_add_rt_rule_ext_v2 *rule
 
 	if (!DeviceNodeIsOpened())
 	{
-		IPACMERR("Device is not opened\n");
+		IPACM_LOG(IPACM_LOG_ERR, "Device is not opened\n");
 		return false;
 	}
 
@@ -171,7 +175,7 @@ bool IPACM_Routing::AddRoutingRuleExt_v2(struct ipa_ioc_add_rt_rule_ext_v2 *rule
 	{
 		if(((struct ipa_rt_rule_add_ext_v2 *)ruleTable->rules)[cnt].rule.dst > IPA_CLIENT_MAX)
 		{
-			IPACMERR("Invalid dst pipe, Rule:%d  dst_pipe:%d\n", cnt, ((struct ipa_rt_rule_add_ext_v2 *)ruleTable->rules)[cnt].rule.dst);
+			IPACM_LOG(IPACM_LOG_ERR, "Invalid dst pipe, Rule:%d  dst_pipe:%d\n", cnt, ((struct ipa_rt_rule_add_ext_v2 *)ruleTable->rules)[cnt].rule.dst);
 			isInvalid = true;
 		}
 	}
@@ -183,15 +187,15 @@ bool IPACM_Routing::AddRoutingRuleExt_v2(struct ipa_ioc_add_rt_rule_ext_v2 *rule
 	retval = ioctl(m_fd, IPA_IOC_ADD_RT_RULE_EXT_V2, ruleTable);
 	if (retval)
 	{
-		IPACMERR("Failed adding routing rule %p\n", ruleTable);
+		IPACM_LOG(IPACM_LOG_ERR, "Failed adding routing rule %p\n", ruleTable);
 		return false;
 	}
 	for(cnt=0; cnt<ruleTable->num_rules; cnt++)
 	{
-		IPACMDBG("Rule:%d  dst_pipe:%d\n", cnt, ((struct ipa_rt_rule_add_ext_v2 *)ruleTable->rules)[cnt].rule.dst);
+		IPACM_LOG(IPACM_LOG_DEBUG, "Rule:%d  dst_pipe:%d\n", cnt, ((struct ipa_rt_rule_add_ext_v2 *)ruleTable->rules)[cnt].rule.dst);
 	}
 
-	IPACMDBG_H("Added routing rule %p\n", ruleTable);
+	IPACM_LOG(IPACM_LOG_DEBUG, "Added routing rule %p\n", ruleTable);
 	return true;
 }
 #endif //IPA_HW_FNR_STATS
@@ -206,11 +210,11 @@ bool IPACM_Routing::DeleteRoutingRule(struct ipa_ioc_del_rt_rule *ruleTable)
 	retval = ioctl(m_fd, IPA_IOC_DEL_RT_RULE, ruleTable);
 	if (retval)
 	{
-		IPACMERR("Failed deleting routing rule table %p\n", ruleTable);
+		IPACM_LOG(IPACM_LOG_ERR, "Failed deleting routing rule table %p\n", ruleTable);
 		return false;
 	}
 
-	IPACMDBG_H("Deleted routing rule %p\n", ruleTable);
+	IPACM_LOG(IPACM_LOG_DEBUG, "Deleted routing rule %p\n", ruleTable);
 	return true;
 }
 
@@ -223,11 +227,11 @@ bool IPACM_Routing::Commit(enum ipa_ip_type ip)
 	retval = ioctl(m_fd, IPA_IOC_COMMIT_RT, ip);
 	if (retval)
 	{
-		IPACMERR("Failed commiting routing rules.\n");
+		IPACM_LOG(IPACM_LOG_ERR, "Failed commiting routing rules.\n");
 		return false;
 	}
 
-	IPACMDBG_H("Commited routing rules to IPA HW.\n");
+	IPACM_LOG(IPACM_LOG_DEBUG, "Commited routing rules to IPA HW.\n");
 	return true;
 }
 
@@ -241,11 +245,11 @@ bool IPACM_Routing::Reset(enum ipa_ip_type ip)
 	retval |= ioctl(m_fd, IPA_IOC_COMMIT_RT, ip);
 	if (retval)
 	{
-		IPACMERR("Failed resetting routing block.\n");
+		IPACM_LOG(IPACM_LOG_ERR, "Failed resetting routing block.\n");
 		return false;
 	}
 
-	IPACMDBG_H("Reset command issued to IPA routing block.\n");
+	IPACM_LOG(IPACM_LOG_DEBUG, "Reset command issued to IPA routing block.\n");
 	return true;
 }
 
@@ -258,10 +262,10 @@ bool IPACM_Routing::GetRoutingTable(struct ipa_ioc_get_rt_tbl *routingTable)
 	retval = ioctl(m_fd, IPA_IOC_GET_RT_TBL, routingTable);
 	if (retval)
 	{
-		IPACMERR("IPA_IOCTL_GET_RT_TBL ioctl failed, routingTable =0x%p, retval=0x%x.\n", routingTable, retval);
+		IPACM_LOG(IPACM_LOG_ERR, "IPA_IOCTL_GET_RT_TBL ioctl failed, routingTable =0x%p, retval=0x%x.\n", routingTable, retval);
 		return false;
 	}
-	IPACMDBG_H("IPA_IOCTL_GET_RT_TBL ioctl issued to IPA routing block.\n");
+	IPACM_LOG(IPACM_LOG_DEBUG, "IPA_IOCTL_GET_RT_TBL ioctl issued to IPA routing block.\n");
 	/* put routing table right after successfully get routing table */
 	PutRoutingTable(routingTable->hdl);
 
@@ -277,11 +281,11 @@ bool IPACM_Routing::PutRoutingTable(uint32_t routingTableHandle)
 	retval = ioctl(m_fd, IPA_IOC_PUT_RT_TBL, routingTableHandle);
 	if (retval)
 	{
-		IPACMERR("IPA_IOCTL_PUT_RT_TBL ioctl failed.\n");
+		IPACM_LOG(IPACM_LOG_ERR, "IPA_IOCTL_PUT_RT_TBL ioctl failed.\n");
 		return false;
 	}
 
-	IPACMDBG_H("IPA_IOCTL_PUT_RT_TBL ioctl issued to IPA routing block.\n");
+	IPACM_LOG(IPACM_LOG_DEBUG, "IPA_IOCTL_PUT_RT_TBL ioctl issued to IPA routing block.\n");
 	return true;
 }
 
@@ -295,7 +299,7 @@ bool IPACM_Routing::DeleteRoutingHdl(uint32_t rt_rule_hdl, ipa_ip_type ip)
 
 	if (rt_rule_hdl == 0)
 	{
-		IPACMERR(" No route handle passed. Ignoring it\n");
+		IPACM_LOG(IPACM_LOG_ERR, " No route handle passed. Ignoring it\n");
 		return res;
 	}
 
@@ -303,7 +307,7 @@ bool IPACM_Routing::DeleteRoutingHdl(uint32_t rt_rule_hdl, ipa_ip_type ip)
 	rt_rule = (struct ipa_ioc_del_rt_rule *)malloc(len);
 	if (rt_rule == NULL)
 	{
-		IPACMERR("unable to allocate memory for del route rule\n");
+		IPACM_LOG(IPACM_LOG_ERR, "unable to allocate memory for del route rule\n");
 		return false;
 	}
 
@@ -316,11 +320,12 @@ bool IPACM_Routing::DeleteRoutingHdl(uint32_t rt_rule_hdl, ipa_ip_type ip)
 	rt_rule_entry->status = -1;
 	rt_rule_entry->hdl = rt_rule_hdl;
 
-	IPACMDBG_H("Deleting Route hdl:(0x%x) with ip type: %d\n", rt_rule_entry->hdl, ip);
+	IPACM_LOG(IPACM_LOG_DEBUG, "Deleting Route hdl:(0x%x) with ip type: %d\n", rt_rule_entry->hdl, ip);
 	if ((false == DeleteRoutingRule(rt_rule)) ||
 			(rt_rule_entry->status))
 	{
-		PERROR("Routing rule deletion failed!\n");
+		IPACM_LOG(IPACM_LOG_ERR, "Routing rule deletion failed!");
+		perror("Routing rule deletion failed!\n");
 		goto fail;
 		res = false;
 	}
@@ -337,14 +342,14 @@ bool IPACM_Routing::ModifyRoutingRule(struct ipa_ioc_mdfy_rt_rule *mdfyRules)
 
 	if (!DeviceNodeIsOpened())
 	{
-		IPACMERR("Device is not opened\n");
+		IPACM_LOG(IPACM_LOG_ERR, "Device is not opened\n");
 		return false;
 	}
 
 	retval = ioctl(m_fd, IPA_IOC_MDFY_RT_RULE, mdfyRules);
 	if (retval)
 	{
-		IPACMERR("Failed modifying routing rules %p\n", mdfyRules);
+		IPACM_LOG(IPACM_LOG_ERR, "Failed modifying routing rules %p\n", mdfyRules);
 		return false;
 	}
 
@@ -352,10 +357,10 @@ bool IPACM_Routing::ModifyRoutingRule(struct ipa_ioc_mdfy_rt_rule *mdfyRules)
 	{
 		if(mdfyRules->rules[cnt].status != 0)
 		{
-			IPACMERR("Unable to modify rule: %d\n", cnt);
+			IPACM_LOG(IPACM_LOG_ERR, "Unable to modify rule: %d\n", cnt);
 		}
 	}
 
-	IPACMDBG_H("Modified routing rules %p\n", mdfyRules);
+	IPACM_LOG(IPACM_LOG_DEBUG, "Modified routing rules %p\n", mdfyRules);
 	return true;
 }

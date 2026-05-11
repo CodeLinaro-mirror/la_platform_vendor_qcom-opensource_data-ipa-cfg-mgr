@@ -1,6 +1,5 @@
 /*
  * Copyright (c) 2013, 2018, 2020, 2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -26,6 +25,10 @@
  * WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ * 
+ * Changes from Qualcomm Technologies, Inc. are provided under the following license:
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 /*!
   @file
@@ -81,7 +84,7 @@ IPACM_Iface::IPACM_Iface(int iface_index) : m_ipv6_default_filterting_rules_coun
 			sizeof(IPACM_Iface::ipacmcfg->iface_table[iface_index].physDevName));
 	}
 
-	IPACMDBG_H("dev_name: %s virtualIface: %s physDevName: %s \n",
+	IPACM_LOG(IPACM_LOG_DEBUG, "dev_name: %s virtualIface: %s physDevName: %s \n",
 		   dev_name, (virtualIface) ? "true" : "false", physDevName);
 
 	memset(dft_v4fl_rule_hdl, 0, sizeof(dft_v4fl_rule_hdl));
@@ -92,7 +95,7 @@ IPACM_Iface::IPACM_Iface(int iface_index) : m_ipv6_default_filterting_rules_coun
 	memset(ipv6_addr, 0, sizeof(ipv6_addr));
 
 	query_iface_property();
-	IPACMDBG_H(" create iface-index(%d) constructor\n", ipa_if_num);
+	IPACM_LOG(IPACM_LOG_DEBUG, " create iface-index(%d) constructor\n", ipa_if_num);
 	return;
 }
 
@@ -104,17 +107,17 @@ int IPACM_Iface::handle_software_routing_enable(void)
 	struct ipa_flt_rule_add flt_rule_entry;
 	ipa_ioc_add_flt_rule *m_pFilteringTable;
 
-	IPACMDBG("\n");
+	IPACM_LOG(IPACM_LOG_DEBUG, "\n");
 	if (softwarerouting_act == true)
 	{
-		IPACMDBG("already setup software_routing rule for (%s)iface ip-family %d\n",
+		IPACM_LOG(IPACM_LOG_DEBUG, "already setup software_routing rule for (%s)iface ip-family %d\n",
 						     IPACM_Iface::ipacmcfg->iface_table[ipa_if_num].iface_name, ip_type);
 		return IPACM_SUCCESS;
 	}
 
 	if(rx_prop == NULL)
 	{
-		IPACMDBG("No rx properties registered for iface %s\n", dev_name);
+		IPACM_LOG(IPACM_LOG_WARN, "No rx properties registered for iface %s\n", dev_name);
 		return IPACM_SUCCESS;
 	}
 
@@ -125,7 +128,7 @@ int IPACM_Iface::handle_software_routing_enable(void)
 						);
 	if (!m_pFilteringTable)
 	{
-		IPACMERR("Error Locate ipa_flt_rule_add memory...\n");
+		IPACM_LOG(IPACM_LOG_ERR, "Error Locate ipa_flt_rule_add memory...\n");
 		return IPACM_FAILURE;
 	}
 
@@ -158,19 +161,19 @@ int IPACM_Iface::handle_software_routing_enable(void)
 		m_pFilteringTable->ip = IPA_IP_v4;
 		if (false == m_filtering.AddFilteringRule(m_pFilteringTable))
 		{
-			IPACMERR("Error Adding Filtering rule, aborting...\n");
+			IPACM_LOG(IPACM_LOG_ERR, "Error Adding Filtering rule, aborting...\n");
 			res = IPACM_FAILURE;
 			goto fail;
 		}
 		else if (m_pFilteringTable->rules[0].status)
 		{
-			IPACMERR("adding flt rule failed status=0x%x\n", m_pFilteringTable->rules[0].status);
+			IPACM_LOG(IPACM_LOG_ERR, "adding flt rule failed status=0x%x\n", m_pFilteringTable->rules[0].status);
 			res = IPACM_FAILURE;
 			goto fail;
 		}
 
 		IPACM_Iface::ipacmcfg->increaseFltRuleCount(rx_prop->rx[0].src_pipe, IPA_IP_v4, 1);
-		IPACMDBG("soft-routing flt rule hdl0=0x%x\n", m_pFilteringTable->rules[0].flt_rule_hdl);
+		IPACM_LOG(IPACM_LOG_DEBUG, "soft-routing flt rule hdl0=0x%x\n", m_pFilteringTable->rules[0].flt_rule_hdl);
 		/* copy filter hdls */
 		software_routing_fl_rule_hdl[0] = m_pFilteringTable->rules[0].flt_rule_hdl;
 
@@ -179,19 +182,19 @@ int IPACM_Iface::handle_software_routing_enable(void)
 		m_pFilteringTable->ip = IPA_IP_v6;
 		if (false == m_filtering.AddFilteringRule(m_pFilteringTable))
 		{
-			IPACMERR("Error Adding Filtering rule, aborting...\n");
+			IPACM_LOG(IPACM_LOG_ERR, "Error Adding Filtering rule, aborting...\n");
 			res = IPACM_FAILURE;
 			goto fail;
 		}
 		else if (m_pFilteringTable->rules[0].status)
 		{
-			IPACMDBG("adding flt rule failed status=0x%x\n", m_pFilteringTable->rules[0].status);
+			IPACM_LOG(IPACM_LOG_DEBUG, "adding flt rule failed status=0x%x\n", m_pFilteringTable->rules[0].status);
 			res = IPACM_FAILURE;
 			goto fail;
 		}
 
 		IPACM_Iface::ipacmcfg->increaseFltRuleCount(rx_prop->rx[0].src_pipe, IPA_IP_v6, 1);
-		IPACMDBG("soft-routing flt rule hdl0=0x%x\n", m_pFilteringTable->rules[0].flt_rule_hdl);
+		IPACM_LOG(IPACM_LOG_DEBUG, "soft-routing flt rule hdl0=0x%x\n", m_pFilteringTable->rules[0].flt_rule_hdl);
 		/* copy filter hdls */
 		software_routing_fl_rule_hdl[1] = m_pFilteringTable->rules[0].flt_rule_hdl;
 		softwarerouting_act = true;
@@ -210,19 +213,19 @@ int IPACM_Iface::handle_software_routing_enable(void)
 
 		if (false == m_filtering.AddFilteringRule(m_pFilteringTable))
 		{
-			IPACMERR("Error Adding Filtering rule, aborting...\n");
+			IPACM_LOG(IPACM_LOG_ERR, "Error Adding Filtering rule, aborting...\n");
 			res = IPACM_FAILURE;
 			goto fail;
 		}
 		else if (m_pFilteringTable->rules[0].status)
 		{
-			IPACMERR("adding flt rule failed status=0x%x\n", m_pFilteringTable->rules[0].status);
+			IPACM_LOG(IPACM_LOG_ERR, "adding flt rule failed status=0x%x\n", m_pFilteringTable->rules[0].status);
 			res = IPACM_FAILURE;
 			goto fail;
 		}
 
 		IPACM_Iface::ipacmcfg->increaseFltRuleCount(rx_prop->rx[0].src_pipe, ip_type, 1);
-		IPACMDBG("soft-routing flt rule hdl0=0x%x\n", m_pFilteringTable->rules[0].flt_rule_hdl);
+		IPACM_LOG(IPACM_LOG_DEBUG, "soft-routing flt rule hdl0=0x%x\n", m_pFilteringTable->rules[0].flt_rule_hdl);
 		/* copy filter hdls */
 		if (ip_type == IPA_IP_v4)
 		{
@@ -251,13 +254,13 @@ int IPACM_Iface::handle_software_routing_disable(void)
 
 	if (rx_prop == NULL)
 	{
-		IPACMDBG("No rx properties registered for iface %s\n", dev_name);
+		IPACM_LOG(IPACM_LOG_WARN, "No rx properties registered for iface %s\n", dev_name);
 		return IPACM_SUCCESS;
 	}
 
 	if (softwarerouting_act == false)
 	{
-		IPACMDBG("already delete software_routing rule for (%s)iface ip-family %d\n", IPACM_Iface::ipacmcfg->iface_table[ipa_if_num].iface_name, ip_type);
+		IPACM_LOG(IPACM_LOG_DEBUG, "already delete software_routing rule for (%s)iface ip-family %d\n", IPACM_Iface::ipacmcfg->iface_table[ipa_if_num].iface_name, ip_type);
 		return IPACM_SUCCESS;
 	}
 
@@ -267,7 +270,7 @@ int IPACM_Iface::handle_software_routing_disable(void)
 		if (m_filtering.DeleteFilteringHdls(&software_routing_fl_rule_hdl[0],
 																				IPA_IP_v4, 1) == false)
 		{
-			IPACMERR("Error Adding Filtering rule, aborting...\n");
+			IPACM_LOG(IPACM_LOG_ERR, "Error Adding Filtering rule, aborting...\n");
 			res = IPACM_FAILURE;
 			goto fail;
 		}
@@ -277,7 +280,7 @@ int IPACM_Iface::handle_software_routing_disable(void)
 		if (m_filtering.DeleteFilteringHdls(&software_routing_fl_rule_hdl[1],
 																				IPA_IP_v6, 1) == false)
 		{
-			IPACMERR("Error Adding Filtering rule, aborting...\n");
+			IPACM_LOG(IPACM_LOG_ERR, "Error Adding Filtering rule, aborting...\n");
 			res = IPACM_FAILURE;
 			goto fail;
 		}
@@ -308,7 +311,7 @@ int IPACM_Iface::handle_software_routing_disable(void)
 
 		if (m_filtering.DeleteFilteringHdls(&flt_hdl, ip, 1) == false)
 		{
-			IPACMERR("Error Adding Filtering rule, aborting...\n");
+			IPACM_LOG(IPACM_LOG_ERR, "Error Adding Filtering rule, aborting...\n");
 			res = IPACM_FAILURE;
 			goto fail;
 		}
@@ -335,7 +338,7 @@ int IPACM_Iface::iface_ipa_index_query
 
 	if(IPACM_Iface::ipacmcfg->iface_table == NULL)
 	{
-		IPACMERR("Iface table in IPACM_Config is not available.\n");
+		IPACM_LOG(IPACM_LOG_ERR, "Iface table in IPACM_Config is not available.\n");
 		return link;
 	}
 
@@ -345,7 +348,7 @@ int IPACM_Iface::iface_ipa_index_query
 		if (interface_index == IPACM_Iface::ipacmcfg->iface_table[i].netlink_interface_index)
 		{
 			link = i;
-			IPACMDBG("Interface (%s) found: linux(%d) ipa(%d) \n",
+			IPACM_LOG(IPACM_LOG_DEBUG, "Interface (%s) found: linux(%d) ipa(%d) \n",
 							 IPACM_Iface::ipacmcfg->iface_table[i].iface_name,
 							 IPACM_Iface::ipacmcfg->iface_table[i].netlink_interface_index,
 							 link);
@@ -357,31 +360,33 @@ int IPACM_Iface::iface_ipa_index_query
 	/* Search/Configure linux interface-index and map it to IPA interface-index */
 	if ((fd = socket(AF_INET, SOCK_DGRAM, 0)) < 0)
 	{
-		PERROR("get interface name socket create failed");
+		IPACM_LOG(IPACM_LOG_ERR, "get interface name socket create failed\n");
+		perror("get interface name socket create failed");
 		return IPACM_FAILURE;
 	}
 
 	memset(&ifr, 0, sizeof(struct ifreq));
 
 	ifr.ifr_ifindex = interface_index;
-	IPACMDBG_H("Interface index %d\n", interface_index);
+	IPACM_LOG(IPACM_LOG_DEBUG, "Interface index %d\n", interface_index);
 
 	if (ioctl(fd, SIOCGIFNAME, &ifr) < 0)
 	{
-		PERROR("call_ioctl_on_dev: ioctl failed:");
+		IPACM_LOG(IPACM_LOG_ERR, "call_ioctl_on_dev: ioctl failed\n");
+		perror("call_ioctl_on_dev: ioctl failed:");
 		close(fd);
 		return IPACM_FAILURE;
 	}
 	close(fd);
 
-	IPACMDBG_H("Received interface name %s\n", ifr.ifr_name);
+	IPACM_LOG(IPACM_LOG_DEBUG, "Received interface name %s\n", ifr.ifr_name);
 	for (i = 0; i < IPACM_Iface::ipacmcfg->ipa_num_ipa_interfaces; i++)
 	{
 		if (strncmp(ifr.ifr_name,
 								IPACM_Iface::ipacmcfg->iface_table[i].iface_name,
 								sizeof(IPACM_Iface::ipacmcfg->iface_table[i].iface_name)) == 0)
 		{
-			IPACMDBG_H("Interface (%s) linux(%d) mapped to ipa(%d) \n", ifr.ifr_name,
+			IPACM_LOG(IPACM_LOG_DEBUG, "Interface (%s) linux(%d) mapped to ipa(%d) \n", ifr.ifr_name,
 							 IPACM_Iface::ipacmcfg->iface_table[i].netlink_interface_index, i);
 
 			link = i;
@@ -411,28 +416,30 @@ void IPACM_Iface::iface_addr_query
 	/* use linux interface-index to find interface name */
 	if ((fd = socket(AF_INET, SOCK_DGRAM, 0)) < 0)
 	{
-		PERROR("get interface name socket create failed");
+		IPACM_LOG(IPACM_LOG_ERR, "get interface name socket create failed\n");
+		perror("get interface name socket create failed");
 		return ;
 	}
 
 	memset(&ifr, 0, sizeof(struct ifreq));
 
 	ifr.ifr_ifindex = interface_index;
-	IPACMDBG_H("Interface index %d\n", interface_index);
+	IPACM_LOG(IPACM_LOG_DEBUG, "Interface index %d\n", interface_index);
 
 	if (ioctl(fd, SIOCGIFNAME, &ifr) < 0)
 	{
-		PERROR("call_ioctl_on_dev: ioctl failed:");
+		IPACM_LOG(IPACM_LOG_ERR, "call_ioctl_on_dev:ioctl failed\n");
+		perror("call_ioctl_on_dev: ioctl failed:");
 		close(fd);
 		return ;
 	}
-	IPACMDBG_H("Interface index %d name: %s\n", interface_index,ifr.ifr_name);
+	IPACM_LOG(IPACM_LOG_DEBUG, "Interface index %d name: %s\n", interface_index,ifr.ifr_name);
 	close(fd);
 
 	/* query ipv4/v6 address */
 	if(getifaddrs(&myaddrs) != 0)
 	{
-        	IPACMERR("getifaddrs");
+        	IPACM_LOG(IPACM_LOG_ERR, "getifaddrs");
 		return ;
 	}
 
@@ -445,21 +452,21 @@ void IPACM_Iface::iface_addr_query
 
 		if(strcmp(ifr.ifr_name,ifa->ifa_name) == 0) // find current iface
 		{
-			IPACMDBG_H("Internal post new_addr event for iface %s\n", ifa->ifa_name);
+			IPACM_LOG(IPACM_LOG_DEBUG, "Internal post new_addr event for iface %s\n", ifa->ifa_name);
 			switch (ifa->ifa_addr->sa_family)
 			{
 				case AF_INET:
 				{
 					struct sockaddr_in *s4 = (struct sockaddr_in *)ifa->ifa_addr;
-					IPACMDBG_H("ipv4 address %s\n",inet_ntoa(s4->sin_addr));
+					IPACM_LOG(IPACM_LOG_DEBUG, "ipv4 address %s\n",inet_ntoa(s4->sin_addr));
 					iface_ipv4 = s4->sin_addr;
 
 					if (curr_ip4_addr != NULL && (post_new_addr_event == false))
 					{
 						if(ntohl(iface_ipv4.s_addr) != (*curr_ip4_addr))
 						{
-							IPACMDBG_H("current_ip4_addr: (0x%x)\n", (*curr_ip4_addr));
-							IPACMDBG_H("iface ip4 address: (0x%x)\n", ntohl(iface_ipv4.s_addr));
+							IPACM_LOG(IPACM_LOG_DEBUG, "current_ip4_addr: (0x%x)\n", (*curr_ip4_addr));
+							IPACM_LOG(IPACM_LOG_DEBUG, "iface ip4 address: (0x%x)\n", ntohl(iface_ipv4.s_addr));
 
 							*curr_ip4_addr = ntohl(iface_ipv4.s_addr);
 							freeifaddrs(myaddrs);
@@ -467,19 +474,19 @@ void IPACM_Iface::iface_addr_query
 						}
 						else
 						{
-							IPACMDBG_H("curr_ip4_addr is same as iface addr\n");
+							IPACM_LOG(IPACM_LOG_DEBUG, "curr_ip4_addr is same as iface addr\n");
 							freeifaddrs(myaddrs);
 							return;
 						}
 					}
 					else if (post_new_addr_event)
 					{
-						IPACMDBG_H("Post IPA_NEW_ADDR_ADD_EVENT for v4\n");
+						IPACM_LOG(IPACM_LOG_DEBUG, "Post IPA_NEW_ADDR_ADD_EVENT for v4\n");
 						/* post new_addr event to command queue */
 						data_addr = (ipacm_event_data_addr *)malloc(sizeof(ipacm_event_data_addr));
 						if(data_addr == NULL)
 						{
-							IPACMERR("unable to allocate memory for event data_addr\n");
+							IPACM_LOG(IPACM_LOG_ERR, "unable to allocate memory for event data_addr\n");
 							freeifaddrs(myaddrs);
 							return;
 						}
@@ -489,7 +496,7 @@ void IPACM_Iface::iface_addr_query
 						data_addr->ipv4_addr = 	iface_ipv4.s_addr;
 						data_addr->ipv4_addr = ntohl(data_addr->ipv4_addr);
 						strlcpy(data_addr->iface_name, ifr.ifr_name, sizeof(data_addr->iface_name));
-						IPACMDBG_H("Posting IPA_ADDR_ADD_EVENT with if index:%d, if name:%s, ipv4 addr:0x%x\n",
+						IPACM_LOG(IPACM_LOG_DEBUG, "Posting IPA_ADDR_ADD_EVENT with if index:%d, if name:%s, ipv4 addr:0x%x\n",
 							data_addr->if_index,
 							data_addr->iface_name,
 							data_addr->ipv4_addr);
@@ -500,7 +507,7 @@ void IPACM_Iface::iface_addr_query
 					}
 					else
 					{
-						IPACMDBG_H("post_new_addr_event is false\n");
+						IPACM_LOG(IPACM_LOG_DEBUG, "post_new_addr_event is false\n");
 					}
 					break;
 				}
@@ -513,7 +520,7 @@ void IPACM_Iface::iface_addr_query
 						data_addr = (ipacm_event_data_addr *)malloc(sizeof(ipacm_event_data_addr));
 						if(data_addr == NULL)
 						{
-							IPACMERR("unable to allocate memory for event data_addr\n");
+							IPACM_LOG(IPACM_LOG_ERR, "unable to allocate memory for event data_addr\n");
 							freeifaddrs(myaddrs);
 							return;
 						}
@@ -528,7 +535,7 @@ void IPACM_Iface::iface_addr_query
 						data_addr->ipv6_addr[2] = ntohl(data_addr->ipv6_addr[2]);
 						data_addr->ipv6_addr[3] = ntohl(data_addr->ipv6_addr[3]);
 						strlcpy(data_addr->iface_name, ifr.ifr_name, sizeof(data_addr->iface_name));
-						IPACMDBG_H("Posting IPA_ADDR_ADD_EVENT with if index:%d, if name:%s, ipv6 addr:0x%x:%x:%x:%x\n",
+						IPACM_LOG(IPACM_LOG_DEBUG, "Posting IPA_ADDR_ADD_EVENT with if index:%d, if name:%s, ipv6 addr:0x%x:%x:%x:%x\n",
 							data_addr->if_index,
 							data_addr->iface_name,
 							data_addr->ipv6_addr[0], data_addr->ipv6_addr[1], data_addr->ipv6_addr[2], data_addr->ipv6_addr[3]);
@@ -539,7 +546,7 @@ void IPACM_Iface::iface_addr_query
 					}
 					else
 					{
-						IPACMDBG_H("post_new_addr_event is false\n");
+						IPACM_LOG(IPACM_LOG_DEBUG, "post_new_addr_event is false\n");
 					}
 					break;
 				}
@@ -562,10 +569,10 @@ int IPACM_Iface::query_iface_property(void)
 	size_t queriedNameSize;
 
 	fd = open(DEVICE_NAME, O_RDWR);
-	IPACMDBG("iface query-property \n");
+	IPACM_LOG(IPACM_LOG_DEBUG, "iface query-property \n");
 	if (0 == fd)
 	{
-		IPACMERR("Failed opening %s.\n", DEVICE_NAME);
+		IPACM_LOG(IPACM_LOG_ERR, "Failed opening %s.\n", DEVICE_NAME);
 		return IPACM_FAILURE;
 	}
 
@@ -573,15 +580,15 @@ int IPACM_Iface::query_iface_property(void)
 		 calloc(1, sizeof(struct ipa_ioc_query_intf));
 	if(iface_query == NULL)
 	{
-		IPACMERR("Unable to allocate iface_query memory.\n");
+		IPACM_LOG(IPACM_LOG_ERR, "Unable to allocate iface_query memory.\n");
 		close(fd);
 		return IPACM_FAILURE;
 	}
 
-	IPACMDBG_H("iface name %s\n", dev_name);
+	IPACM_LOG(IPACM_LOG_DEBUG, "iface name %s\n", dev_name);
 	if(virtualIface)
 	{
-		IPACMDBG_H("phy name %s\n", physDevName);
+		IPACM_LOG(IPACM_LOG_DEBUG, "phy name %s\n", physDevName);
 		queriedName = physDevName;
 		queriedNameSize = sizeof(physDevName);
 	}
@@ -594,7 +601,8 @@ int IPACM_Iface::query_iface_property(void)
 	memcpy(iface_query->name, queriedName, queriedNameSize);
 	if (ioctl(fd, IPA_IOC_QUERY_INTF, iface_query) < 0)
 	{
-		PERROR("ioctl IPA_IOC_QUERY_INTF failed\n");
+		IPACM_LOG(IPACM_LOG_ERR, "ioctl IPA_IOC_QUERY_INTF failed\n");
+		perror("ioctl IPA_IOC_QUERY_INTF failed\n");
 		/* iface_query memory will free when iface-down*/
 		res = IPACM_FAILURE;
 	}
@@ -606,7 +614,7 @@ int IPACM_Iface::query_iface_property(void)
 							iface_query->num_tx_props * sizeof(struct ipa_ioc_tx_intf_prop));
 		if(tx_prop == NULL)
 		{
-			IPACMERR("Unable to allocate tx_prop memory.\n");
+			IPACM_LOG(IPACM_LOG_ERR, "Unable to allocate tx_prop memory.\n");
 			close(fd);
 			return IPACM_FAILURE;
 		}
@@ -615,7 +623,8 @@ int IPACM_Iface::query_iface_property(void)
 
 		if (ioctl(fd, IPA_IOC_QUERY_INTF_TX_PROPS, tx_prop) < 0)
 		{
-			PERROR("ioctl IPA_IOC_QUERY_INTF_TX_PROPS failed\n");
+			IPACM_LOG(IPACM_LOG_ERR, "ioctl IPA_IOC_QUERY_INTF_TX_PROPS failed\n");
+			perror("ioctl IPA_IOC_QUERY_INTF_TX_PROPS failed\n");
 			/* tx_prop memory will free when iface-down*/
 			res = IPACM_FAILURE;
 		}
@@ -624,7 +633,7 @@ int IPACM_Iface::query_iface_property(void)
 		{
 			for (cnt = 0; cnt < tx_prop->num_tx_props; cnt++)
 			{
-				IPACMDBG_H("Tx(%d):attrib-mask:0x%x, ip-type: %d, dst_pipe: %d, alt_dst_pipe: %d, header: %s\n",
+				IPACM_LOG(IPACM_LOG_DEBUG, "Tx(%d):attrib-mask:0x%x, ip-type: %d, dst_pipe: %d, alt_dst_pipe: %d, header: %s\n",
 						cnt, tx_prop->tx[cnt].attrib.attrib_mask,
 						tx_prop->tx[cnt].ip, tx_prop->tx[cnt].dst_pipe,
 						tx_prop->tx[cnt].alt_dst_pipe,
@@ -632,7 +641,7 @@ int IPACM_Iface::query_iface_property(void)
 
 				if (tx_prop->tx[cnt].dst_pipe == 0)
 				{
-					IPACMERR("Tx(%d): wrong tx property: dst_pipe: 0.\n", cnt);
+					IPACM_LOG(IPACM_LOG_ERR, "Tx(%d): wrong tx property: dst_pipe: 0.\n", cnt);
 					close(fd);
 					return IPACM_FAILURE;
 				}
@@ -649,7 +658,7 @@ int IPACM_Iface::query_iface_property(void)
 							iface_query->num_rx_props * sizeof(struct ipa_ioc_rx_intf_prop));
 		if(rx_prop == NULL)
 		{
-			IPACMERR("Unable to allocate rx_prop memory.\n");
+			IPACM_LOG(IPACM_LOG_ERR, "Unable to allocate rx_prop memory.\n");
 			close(fd);
 			return IPACM_FAILURE;
 		}
@@ -658,7 +667,8 @@ int IPACM_Iface::query_iface_property(void)
 
 		if (ioctl(fd, IPA_IOC_QUERY_INTF_RX_PROPS, rx_prop) < 0)
 		{
-			PERROR("ioctl IPA_IOC_QUERY_INTF_RX_PROPS failed\n");
+			perror("ioctl IPA_IOC_QUERY_INTF_RX_PROPS failed\n");
+			IPACM_LOG(IPACM_LOG_ERR, "ioctl IPA_IOC_QUERY_INTF_RX_PROPS failed\n");
 			/* rx_prop memory will free when iface-down*/
 			res = IPACM_FAILURE;
 		}
@@ -667,7 +677,7 @@ int IPACM_Iface::query_iface_property(void)
 		{
 			for (cnt = 0; cnt < rx_prop->num_rx_props; cnt++)
 			{
-				IPACMDBG_H("Rx(%d):attrib-mask:0x%x, ip-type: %d, src_pipe: %d\n",
+				IPACM_LOG(IPACM_LOG_DEBUG, "Rx(%d):attrib-mask:0x%x, ip-type: %d, src_pipe: %d\n",
 								 cnt, rx_prop->rx[cnt].attrib.attrib_mask, rx_prop->rx[cnt].ip, rx_prop->rx[cnt].src_pipe);
 			}
 		}
@@ -676,7 +686,7 @@ int IPACM_Iface::query_iface_property(void)
 	/* Add Natting iface to IPACM_Config if there is  Rx/Tx property */
 	if (rx_prop != NULL || tx_prop != NULL)
 	{
-		IPACMDBG_H(" Has rx/tx properties registered for iface %s, add for NATTING \n", dev_name);
+		IPACM_LOG(IPACM_LOG_INFO, " Has rx/tx properties registered for iface %s, add for NATTING \n", dev_name);
         IPACM_Iface::ipacmcfg->AddNatIfaces(dev_name);
 	}
 
@@ -700,7 +710,7 @@ int IPACM_Iface::init_fl_rule(ipa_ip_type iptype)
     /* ADD corresponding ipa_rm_resource_name of RX-endpoint before adding all IPV4V6 FT-rules */
 	if((IPACM_Iface::ipacmcfg->iface_table[ipa_if_num].if_cat== WAN_IF) || (IPACM_Iface::ipacmcfg->iface_table[ipa_if_num].if_cat== EMBMS_IF))
 	{
-		IPACMDBG_H(" NOT add producer dependency on dev %s with registered rx-prop cat:%d \n", dev_name, IPACM_Iface::ipacmcfg->iface_table[ipa_if_num].if_cat);
+		IPACM_LOG(IPACM_LOG_DEBUG, " NOT add producer dependency on dev %s with registered rx-prop cat:%d \n", dev_name, IPACM_Iface::ipacmcfg->iface_table[ipa_if_num].if_cat);
 	}
 	else
 	{
@@ -708,8 +718,8 @@ int IPACM_Iface::init_fl_rule(ipa_ip_type iptype)
 		{
 			if(rx_prop != NULL)
 			{
-				IPACMDBG_H("dev %s add producer dependency\n", dev_name);
-				IPACMDBG_H("depend Got pipe %d rm index : %d \n", rx_prop->rx[0].src_pipe, IPACM_Iface::ipacmcfg->ipa_client_rm_map_tbl[rx_prop->rx[0].src_pipe]);
+				IPACM_LOG(IPACM_LOG_DEBUG, "dev %s add producer dependency\n", dev_name);
+				IPACM_LOG(IPACM_LOG_DEBUG, "depend Got pipe %d rm index : %d \n", rx_prop->rx[0].src_pipe, IPACM_Iface::ipacmcfg->ipa_client_rm_map_tbl[rx_prop->rx[0].src_pipe]);
 				IPACM_Iface::ipacmcfg->AddRmDepend(IPACM_Iface::ipacmcfg->ipa_client_rm_map_tbl[rx_prop->rx[0].src_pipe],false);
 			}
 			else
@@ -717,14 +727,14 @@ int IPACM_Iface::init_fl_rule(ipa_ip_type iptype)
 				/* only wlan may take software-path, not register Rx-property*/
 				if(strcmp(dev_name,dev_wlan0) == 0 || strcmp(dev_name,dev_wlan1) == 0)
 				{
-					IPACMDBG_H("dev %s add producer dependency\n", dev_name);
-					IPACMDBG_H("depend Got piperm index : %d \n", IPA_RM_RESOURCE_HSIC_PROD);
+					IPACM_LOG(IPACM_LOG_DEBUG, "dev %s add producer dependency\n", dev_name);
+					IPACM_LOG(IPACM_LOG_DEBUG, "depend Got piperm index : %d \n", IPA_RM_RESOURCE_HSIC_PROD);
 					IPACM_Iface::ipacmcfg->AddRmDepend(IPA_RM_RESOURCE_HSIC_PROD,true);
 				}
 				if(strcmp(dev_name,dev_ecm0) == 0)
 				{
-					IPACMDBG_H("dev %s add producer dependency\n", dev_name);
-					IPACMDBG_H("depend Got piperm index : %d \n", IPA_RM_RESOURCE_USB_PROD);
+					IPACM_LOG(IPACM_LOG_DEBUG, "dev %s add producer dependency\n", dev_name);
+					IPACM_LOG(IPACM_LOG_DEBUG, "depend Got piperm index : %d \n", IPA_RM_RESOURCE_USB_PROD);
 					IPACM_Iface::ipacmcfg->AddRmDepend(IPA_RM_RESOURCE_USB_PROD,true);
 				}
 			}
@@ -732,7 +742,7 @@ int IPACM_Iface::init_fl_rule(ipa_ip_type iptype)
 	}
 	if (rx_prop == NULL)
 	{
-		IPACMDBG_H("No rx properties registered for iface %s\n", dev_name);
+		IPACM_LOG(IPACM_LOG_WARN, "No rx properties registered for iface %s\n", dev_name);
 		return IPACM_SUCCESS;
 	}
 
@@ -745,7 +755,7 @@ int IPACM_Iface::init_fl_rule(ipa_ip_type iptype)
 		m_pFilteringTable = (struct ipa_ioc_add_flt_rule *)calloc(1, len);
 		if (!m_pFilteringTable)
 		{
-			IPACMERR("Error Locate ipa_flt_rule_add memory...\n");
+			IPACM_LOG(IPACM_LOG_ERR, "Error Locate ipa_flt_rule_add memory...\n");
 			return IPACM_FAILURE;
 		}
 
@@ -767,7 +777,7 @@ int IPACM_Iface::init_fl_rule(ipa_ip_type iptype)
 		flt_rule_entry.at_rear = false;
 		flt_rule_entry.rule.hashable = false;
 #endif
-		IPACMDBG_H("rx property attrib mask:0x%x\n", rx_prop->rx[0].attrib.attrib_mask);
+		IPACM_LOG(IPACM_LOG_DEBUG, "rx property attrib mask:0x%x\n", rx_prop->rx[0].attrib.attrib_mask);
 		memcpy(&flt_rule_entry.rule.attrib,
 					 &rx_prop->rx[0].attrib,
 					 sizeof(flt_rule_entry.rule.attrib));
@@ -799,7 +809,7 @@ int IPACM_Iface::init_fl_rule(ipa_ip_type iptype)
 
 		if (false == m_filtering.AddFilteringRule(m_pFilteringTable))
 		{
-			IPACMERR("Error Adding Filtering rule, aborting...\n");
+			IPACM_LOG(IPACM_LOG_ERR, "Error Adding Filtering rule, aborting...\n");
 			res = IPACM_FAILURE;
 			goto fail;
 		}
@@ -812,13 +822,14 @@ int IPACM_Iface::init_fl_rule(ipa_ip_type iptype)
 				if (m_pFilteringTable->rules[i].status == 0)
 				{
 					dft_v4fl_rule_hdl[i] = m_pFilteringTable->rules[i].flt_rule_hdl;
-					IPACMDBG_H("Default v4 filter Rule %d HDL:0x%x\n", i, dft_v4fl_rule_hdl[i]);
+					IPACM_LOG(IPACM_LOG_DEBUG, "Default v4 filter Rule %d HDL:0x%x\n", i, dft_v4fl_rule_hdl[i]);
 				}
 				else
 				{
-					IPACMERR("Failed adding default v4 Filtering rule %d\n", i);
+					IPACM_LOG(IPACM_LOG_ERR, "Failed adding default v4 Filtering rule %d\n", i);
 				}
 			}
+			IPACM_LOG(IPACM_LOG_INFO, "Added IPv4 default filter rules for %s\n", dev_name);
 		}
 	}
 	else
@@ -830,7 +841,7 @@ int IPACM_Iface::init_fl_rule(ipa_ip_type iptype)
 		m_pFilteringTable = (struct ipa_ioc_add_flt_rule *)calloc(1, len);
 		if (!m_pFilteringTable)
 		{
-			IPACMERR("Error Locate ipa_flt_rule_add memory...\n");
+			IPACM_LOG(IPACM_LOG_ERR, "Error Locate ipa_flt_rule_add memory...\n");
 			return IPACM_FAILURE;
 		}
 
@@ -847,7 +858,7 @@ int IPACM_Iface::init_fl_rule(ipa_ip_type iptype)
 		flt_rule_entry.status = -1;
 		flt_rule_entry.rule.action = IPA_PASS_TO_EXCEPTION;
 
-		IPACMDBG_H("rx property attrib mask:0x%x\n", rx_prop->rx[0].attrib.attrib_mask);
+		IPACM_LOG(IPACM_LOG_DEBUG, "rx property attrib mask:0x%x\n", rx_prop->rx[0].attrib.attrib_mask);
 
 		 /* always add ipv6 frag exception rule except for WLAN-backhaul */
 		if (ipa_if_cate != WAN_IF)
@@ -932,7 +943,7 @@ int IPACM_Iface::init_fl_rule(ipa_ip_type iptype)
 
 /* on socksv5 (v6->v4) need route syn/fin/rst to AP */
 #if defined(FEATURE_IPA_ANDROID) || defined(FEATURE_SOCKSv5)
-		IPACMDBG_H("Add TCP ctrl rules\n");
+		IPACM_LOG(IPACM_LOG_DEBUG, "Add TCP ctrl rules\n");
 		memset(&flt_rule_entry, 0, sizeof(struct ipa_flt_rule_add));
 
 		flt_rule_entry.at_rear = true;
@@ -980,11 +991,11 @@ int IPACM_Iface::init_fl_rule(ipa_ip_type iptype)
 		memcpy(&(m_pFilteringTable->rules[m_ipv6_default_filterting_rules_count++]),
 			&flt_rule_entry, sizeof(struct ipa_flt_rule_add));
 #endif
-		IPACMDBG_H("Total num %d\n", m_ipv6_default_filterting_rules_count);
+		IPACM_LOG(IPACM_LOG_DEBUG, "Total num %d\n", m_ipv6_default_filterting_rules_count);
 		m_pFilteringTable->num_rules = m_ipv6_default_filterting_rules_count;
 		if (m_filtering.AddFilteringRule(m_pFilteringTable) == false)
 		{
-			IPACMERR("Error Adding Filtering rule, aborting...\n");
+			IPACM_LOG(IPACM_LOG_ERR, "Error Adding Filtering rule, aborting...\n");
 			res = IPACM_FAILURE;
 			goto fail;
 		}
@@ -998,13 +1009,14 @@ int IPACM_Iface::init_fl_rule(ipa_ip_type iptype)
 				if (m_pFilteringTable->rules[i].status == 0)
 				{
 					dft_v6fl_rule_hdl[i] = m_pFilteringTable->rules[i].flt_rule_hdl;
-					IPACMDBG_H("Default v6 Filter Rule %d HDL:0x%x\n", i, dft_v6fl_rule_hdl[i]);
+					IPACM_LOG(IPACM_LOG_DEBUG, "Default v6 Filter Rule %d HDL:0x%x\n", i, dft_v6fl_rule_hdl[i]);
 				}
 				else
 				{
-					IPACMERR("Failing adding v6 default IPV6 rule %d\n", i);
+					IPACM_LOG(IPACM_LOG_ERR, "Failing adding v6 default IPV6 rule %d\n", i);
 				}
 			}
+			IPACM_LOG(IPACM_LOG_INFO, "Added IPv6 default filter rules for %s\n", dev_name);
 		}
 	}
 
@@ -1027,30 +1039,30 @@ int IPACM_Iface::ipa_get_if_index
 
 	if((fd = socket(AF_INET, SOCK_DGRAM, 0)) < 0)
 	{
-		IPACMERR("get interface index socket create failed \n");
+		IPACM_LOG(IPACM_LOG_ERR, "get interface index socket create failed \n");
 		return IPACM_FAILURE;
 	}
 
 	if(strlen(if_name) >= sizeof(ifr.ifr_name))
 	{
-		IPACMERR("interface name overflows: len %d\n", strlen(if_name));
+		IPACM_LOG(IPACM_LOG_ERR, "interface name overflows: len %d\n", strlen(if_name));
 		close(fd);
 		return IPACM_FAILURE;
 	}
 
 	memset(&ifr, 0, sizeof(struct ifreq));
 	(void)strlcpy(ifr.ifr_name, if_name, sizeof(ifr.ifr_name));
-	IPACMDBG_H("interface name (%s)\n", if_name);
+	IPACM_LOG(IPACM_LOG_DEBUG, "interface name (%s)\n", if_name);
 
 	if(ioctl(fd,SIOCGIFINDEX , &ifr) < 0)
 	{
-		IPACMERR("call_ioctl_on_dev: ioctl failed, interface name (%s):\n", ifr.ifr_name);
+		IPACM_LOG(IPACM_LOG_ERR, "call_ioctl_on_dev: ioctl failed, interface name (%s):\n", ifr.ifr_name);
 		close(fd);
 		return IPACM_FAILURE;
 	}
 
 	*if_index = ifr.ifr_ifindex;
-	IPACMDBG_H("Interface index %d\n", *if_index);
+	IPACM_LOG(IPACM_LOG_DEBUG, "Interface index %d\n", *if_index);
 	close(fd);
 	return IPACM_SUCCESS;
 }
@@ -1062,7 +1074,7 @@ void IPACM_Iface::config_ip_type(ipa_ip_type iptype)
 	{
 		if ((ip_type == IPA_IP_v4) || (ip_type == IPA_IP_MAX))
 		{
-			IPACMDBG_H(" interface(%s:%d) already in ip-type %d\n", dev_name, ipa_if_num, ip_type);
+			IPACM_LOG(IPACM_LOG_DEBUG, " interface(%s:%d) already in ip-type %d\n", dev_name, ipa_if_num, ip_type);
 			return;
 		}
 
@@ -1074,13 +1086,13 @@ void IPACM_Iface::config_ip_type(ipa_ip_type iptype)
 		{
 			ip_type = IPA_IP_v4;
 		}
-		IPACMDBG_H(" interface(%s:%d) now ip-type is %d\n", dev_name, ipa_if_num, ip_type);
+		IPACM_LOG(IPACM_LOG_DEBUG, " interface(%s:%d) now ip-type is %d\n", dev_name, ipa_if_num, ip_type);
 	}
 	else
 	{
 		if ((ip_type == IPA_IP_v6) || (ip_type == IPA_IP_MAX))
 		{
-			IPACMDBG_H(" interface(%s:%d) already in ip-type %d\n", dev_name, ipa_if_num, ip_type);
+			IPACM_LOG(IPACM_LOG_DEBUG, " interface(%s:%d) already in ip-type %d\n", dev_name, ipa_if_num, ip_type);
 			return;
 		}
 
@@ -1093,7 +1105,7 @@ void IPACM_Iface::config_ip_type(ipa_ip_type iptype)
 			ip_type = IPA_IP_v6;
 		}
 
-		IPACMDBG_H(" interface(%s:%d) now ip-type is %d\n", dev_name, ipa_if_num, ip_type);
+		IPACM_LOG(IPACM_LOG_DEBUG, " interface(%s:%d) now ip-type is %d\n", dev_name, ipa_if_num, ip_type);
 	}
 
 	return;
@@ -1101,7 +1113,7 @@ void IPACM_Iface::config_ip_type(ipa_ip_type iptype)
 
 void IPACM_Iface::delete_iface(void)
 {
-	IPACMDBG_H("netdev (%s):ipa_index (%d) instance close \n",
+	IPACM_LOG(IPACM_LOG_DEBUG, "netdev (%s):ipa_index (%d) instance close \n",
 			IPACM_Iface::ipacmcfg->iface_table[ipa_if_num].iface_name, ipa_if_num);
 	if(this->iface_query != NULL)
 		free(this->iface_query);
